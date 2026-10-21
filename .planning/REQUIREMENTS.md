@@ -53,7 +53,7 @@ MVP 요구사항. 핵심 흐름(방 만들기·참가 → 역할 확인 → 밤 
 
 - [ ] **DAY-01**: 낮 토론(90초) 동안 생존자 목록과 남은 시간이 보인다. 방장만 한 번 +30초 연장하거나 토론을 넘길 수 있다.
 - [ ] **VOTE-01**: 투표(20초)에서 생존자는 처형 후보 한 명을 고르거나 기권한다. 동률이거나 기권이 최다면 후보 없이 밤으로 넘어간다.
-- [ ] **VOTE-02**: 최후 변론(20초) 동안 최다 득표자가 모든 화면에 크게 보인다. 변론은 4페이즈의 변론 메시지(COMM-03)로 한다.
+- [ ] **VOTE-02**: 최후 변론(20초) 동안 최다 득표자가 모든 화면에 크게 보인다. 변론은 변론 메시지(COMM-03)로 한다.
 - [ ] **VOTE-03**: 찬반 투표(10초)에서 후보를 뺀 생존자가 처형 찬성·반대를 고른다. 시간 안에 고르지 않으면 기권으로 센다.
 - [ ] **VOTE-04**: 처형(5초) 단계에서 찬성이 반대보다 많으면 후보가 탈락하고, 같거나 적으면 살아남는다. 결과가 모든 화면에 발표된다.
 
@@ -164,17 +164,17 @@ MVP 이후 후보. 추적만 하고 현재 로드맵에는 넣지 않는다. 올
 | NIGHT-06 | Phase 2 | Pending |
 | ELIM-01 | Phase 2 | Pending |
 | DAY-01 | Phase 3 | Pending |
-| VOTE-01 | Phase 3 | Pending |
-| VOTE-02 | Phase 3 | Pending |
-| VOTE-03 | Phase 3 | Pending |
-| VOTE-04 | Phase 3 | Pending |
-| CONN-02 | Phase 3 | Pending |
-| END-01 | Phase 3 | Pending |
-| END-02 | Phase 3 | Pending |
-| COMM-01 | Phase 4 | Pending |
-| COMM-02 | Phase 4 | Pending |
+| COMM-01 | Phase 3 | Pending |
+| COMM-02 | Phase 3 | Pending |
+| COMM-04 | Phase 3 | Pending |
+| VOTE-01 | Phase 4 | Pending |
+| VOTE-02 | Phase 4 | Pending |
+| VOTE-03 | Phase 4 | Pending |
+| VOTE-04 | Phase 4 | Pending |
 | COMM-03 | Phase 4 | Pending |
-| COMM-04 | Phase 4 | Pending |
+| CONN-02 | Phase 4 | Pending |
+| END-01 | Phase 4 | Pending |
+| END-02 | Phase 4 | Pending |
 | LOOK-01 | Phase 5 | Pending |
 | CHAR-01 | Phase 5 | Pending |
 | UX-01 | Phase 5 | Pending |
