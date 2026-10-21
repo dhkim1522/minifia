@@ -1,0 +1,13 @@
+{
+  "source_path": "/Users/dhkim1522/personal/minifia/docs/decisions/0001-web-first.md",
+  "type": "ADR",
+  "confidence": "high",
+  "manifest_override": false,
+  "title": "0001 웹앱 먼저, 출시 때 같은 코드로 앱 감싸기",
+  "summary": "React+TypeScript PWA 웹앱을 먼저 만들고, 정식 출시 때 같은 코드를 Capacitor로 감싸 Android·iOS 앱으로 낸다.",
+  "scope": ["React", "TypeScript", "PWA", "Capacitor", "Android", "iOS", "web link participation"],
+  "cross_refs": [],
+  "locked": true,
+  "precedence": null,
+  "notes": "Filename-to-output name uses a placeholder suffix (UNHASHED) because the classifier toolset has no SHA-256 facility. Expected name is 0001-web-first-{first 8 hex of sha256('/Users/dhkim1522/personal/minifia/docs/decisions/0001-web-first.md')}.json. Rename once the hash is computed."
+}

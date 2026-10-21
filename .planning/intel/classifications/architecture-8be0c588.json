@@ -1,0 +1,13 @@
+{
+  "source_path": "/Users/dhkim1522/personal/minifia/docs/architecture.md",
+  "type": "SPEC",
+  "confidence": "medium",
+  "manifest_override": false,
+  "title": "설계서",
+  "summary": "Technical design for minifia: stack choices, Room Durable Object structure, per-player state disclosure, reconnection, test deployment, iOS Safari constraints, and release path.",
+  "scope": ["React", "TypeScript", "Vite", "PWA", "Cloudflare Workers", "Durable Objects", "WebSocket", "Capacitor", "Rive", "Lottie", "reconnection", "state disclosure", "iOS Safari", "wrangler deploy"],
+  "cross_refs": [],
+  "locked": false,
+  "precedence": null,
+  "notes": "Ambiguous between SPEC and DOC. SPEC signals: stack/contract table, server-to-client state disclosure rules, reconnect token contract, deployment and platform constraints. DOC signals: design-rationale prose, header marked as draft (초안), explicit deferrals (animation library undecided, reconnect policy deferred to phase 1 planning). Chose SPEC as the dominant signal. Source cites decisions 0001 and 0002 by number only in prose (e.g. '결정 0001'), with no file paths, so cross_refs is empty. Source is a draft; the file's content also marks several items as undecided. Output filename uses a placeholder suffix because the SHA-256 of the source path could not be computed (no shell tool available to the classifier); the caller must rename to architecture-{first 8 hex of sha256(source_path)}.json."
+}

@@ -1,0 +1,13 @@
+{
+  "source_path": "/Users/dhkim1522/personal/minifia/docs/product.md",
+  "type": "PRD",
+  "confidence": "medium",
+  "manifest_override": false,
+  "title": "기획서",
+  "summary": "미니피아 마피아 게임의 목표, 콘셉트, MVP 역할·진행·승리 규칙, 방 참가와 소리 요구사항을 정의한 기획서.",
+  "scope": ["마피아 게임", "방 참가 (링크·QR·4자리 코드)", "역할 (마피아·경찰·의사·시민)", "라운드 진행 흐름", "승리 조건", "탈락자 관전", "사운드", "재접속과 재시작"],
+  "cross_refs": [],
+  "locked": false,
+  "precedence": null,
+  "notes": "Signals: goals, MVP rules, phase tables, win conditions, and room requirements point to PRD. No user stories or acceptance criteria, and no status field, so confidence is medium. Could be read as DOC because of the concept section, but the rules are requirements. The source_hash filename could not be computed because no shell or hash tool is available to this classifier; the file is named product-nohash.json and needs renaming to product-<sha256(FILEPATH) first 8 hex>.json before the synthesizer reads it."
+}

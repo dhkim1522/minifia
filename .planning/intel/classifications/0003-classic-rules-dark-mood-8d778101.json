@@ -1,0 +1,20 @@
+{
+  "source_path": "/Users/dhkim1522/personal/minifia/docs/decisions/0003-classic-rules-dark-mood.md",
+  "type": "ADR",
+  "confidence": "high",
+  "manifest_override": false,
+  "title": "0003 정통 마피아 진행, 무거운 분위기, 특색 있는 캐릭터",
+  "summary": "정통 마피아 진행과 무거운 분위기를 채택하고, 캐릭터는 외형·성격이 드러나게 한다.",
+  "scope": [
+    "정통 마피아 진행",
+    "무거운 분위기 배경과 연출",
+    "캐릭터 외형과 성격",
+    "디자인 참고 자료"
+  ],
+  "cross_refs": [
+    "design/references/"
+  ],
+  "locked": true,
+  "precedence": null,
+  "notes": ""
+}

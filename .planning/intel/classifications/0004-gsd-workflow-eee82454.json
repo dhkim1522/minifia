@@ -1,0 +1,13 @@
+{
+  "source_path": "/Users/dhkim1522/personal/minifia/docs/decisions/0004-gsd-workflow.md",
+  "type": "ADR",
+  "confidence": "high",
+  "manifest_override": false,
+  "title": "0004 개발 진행은 GSD Core 와 gsd-addons 로 한다",
+  "summary": "Adopts GSD Core, unmodified, plus the gsd-addons plugin as the development workflow; GSD .planning/ becomes the source of requirements, roadmap, and progress.",
+  "scope": ["GSD Core", "gsd-addons", "development workflow", ".planning/", "docs/decisions/", "phase PRs", "1-phase Cloudflare deployment", "design reference materials"],
+  "cross_refs": ["docs/product.md", "docs/decisions/", ".planning/", "HANDOFF.md", "design/references/"],
+  "locked": true,
+  "precedence": null,
+  "notes": ""
+}

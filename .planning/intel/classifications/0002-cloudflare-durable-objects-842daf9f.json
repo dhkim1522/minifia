@@ -1,0 +1,13 @@
+{
+  "source_path": "/Users/dhkim1522/personal/minifia/docs/decisions/0002-cloudflare-durable-objects.md",
+  "type": "ADR",
+  "confidence": "high",
+  "manifest_override": false,
+  "title": "0002 실시간 서버는 Cloudflare Durable Objects",
+  "summary": "방 상태와 판정을 맡을 실시간 서버로 Cloudflare Workers와 Durable Objects(방당 1개, WebSocket)를 채택했다.",
+  "scope": ["Cloudflare Workers", "Durable Objects", "WebSocket", "실시간 서버", "게임 판정", "wrangler CLI"],
+  "cross_refs": [],
+  "locked": true,
+  "precedence": null,
+  "notes": ""
+}
