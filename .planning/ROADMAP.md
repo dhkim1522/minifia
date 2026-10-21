@@ -39,7 +39,7 @@ Decimal phases appear between their surrounding integers in numeric order.
   4. 방장이 시작하면 모든 폰에 "직업을 배정하고 있습니다…" 구간(약 3초)이 함께 나온 뒤 역할 확인 15초로 넘어가고, 카운트다운이 모든 폰에서 같은 시각에 끝나면 모든 폰이 "낮이 되었습니다" 화면으로 넘어간다(결정 0007). 폰 화면을 껐다 켜거나 탭을 새로고침해도 같은 자리·같은 역할로 돌아온다.
   5. 코드를 고치고 `wrangler deploy` 를 다시 하면 주소는 그대로이고 새 버전이 보인다.
 **Plans**: TBD
-**Notes**: 계획 전에 그리는 방식(실시간 3D 여부)을 `/gsd-spike` 로 정한다(01-CONTEXT D-23, 결정 0008 예정). 패키지와 버전은 계획에서 확정한다. 이탈 플레이어 처리(CONN-02)는 1페이즈 논의에서 확정했다. 화면 구성은 단순하게 두되, 이 구간의 몰입 요소(참가자 등장 액션, 배정 대기 연출, 카운트다운 강조)는 기본형으로 넣는다 (결정 0006). 전체 톤·캐릭터·연출 통일은 5페이즈.
+**Notes**: 화면은 실시간 3D 없이 2.5D(원근 타원 테이블, 그림자·조명 레이어)로 만든다(결정 0008). 패키지와 버전은 계획에서 확정한다. 이탈 플레이어 처리(CONN-02)는 1페이즈 논의에서 확정했다. 화면 구성은 단순하게 두되, 이 구간의 몰입 요소(참가자 등장 액션, 배정 대기 연출, 카운트다운 강조)는 기본형으로 넣는다 (결정 0006). 전체 톤·캐릭터·연출 통일은 5페이즈.
 
 ### Phase 2: 낮 토론
 **Goal**: 역할 확인(이후로는 아침) 뒤 낮이 되면 각자 직업을 공개하고, 낮 토론 동안 각자 다른 곳에 있는 생존자들이 빠른 메시지와 이모티콘으로 의심·직업 주장을 주고받아, 앱만으로 토론이 성립한다.
@@ -94,7 +94,7 @@ Decimal phases appear between their surrounding integers in numeric order.
   4. 폰 폭 360~430px 세로 화면에서 스크롤 없이 지금 할 일과 메시지 영역이 함께 보이고, PC 브라우저에서는 가운데에 폰 폭으로 보인다.
   5. 지원하는 기기에서는 게임 중 폰 화면이 저절로 꺼지지 않고, 지원하지 않는 기기에서도 게임은 정상적으로 돈다.
 **Plans**: TBD
-**Notes**: 사용자는 정적 2D 보다 완성도 높은 캐릭터(캐릭터별 프레임 PNG 애니메이션, 또는 가벼운 3D)를 원한다. 실시간 3D 여부는 1페이즈 계획 전 스파이크로 정하고(결정 0008 예정), 에셋 방식(3D 렌더링 프레임 PNG, 2D 프레임 PNG, 실시간 3D 모델)과 공개된 캐릭터 에셋 도구는 이 페이즈 논의에서 정한다. 캐릭터 수·외형은 8종 이상이면 된다. 직접 고르기·성격 문구·애니메이션 라이브러리(Rive 또는 Lottie)는 v2 로 미뤘다. 정적 2D 로 시작하고, 애니메이션 도입은 디자인 방향을 정한 뒤에 결정한다.
+**Notes**: 사용자는 정적 2D 보다 완성도 높은 캐릭터(캐릭터별 프레임 PNG 애니메이션, 또는 가벼운 3D)를 원한다. 실시간 3D 는 쓰지 않고 2.5D 로 간다(결정 0008). 캐릭터는 프레임 PNG 로 움직이며, 일러스트로 그릴지 3D 로 렌더링한 그림을 쓸지와 공개된 캐릭터 에셋 도구는 이 페이즈 논의에서 정한다. 캐릭터 수·외형은 8종 이상이면 된다. 직접 고르기·성격 문구·애니메이션 라이브러리(Rive 또는 Lottie)는 v2 로 미뤘다. 정적 2D 로 시작하고, 애니메이션 도입은 디자인 방향을 정한 뒤에 결정한다.
 **UI hint**: yes
 **참고 자료**: `design/references/character/` (main.jpeg, mafia_character.jpeg, Mortis Brawl Stars Spooky Graveyard Wallpaper.jpeg, Coin Master mobile game , a little Halloween quest in collaboration with Moon Active games_, Sheri Amouzad.jpeg, Crime Coast Character Designs 2 - Sanjay Charlton.jpeg, PATH OF GANGSTER _ slot game - Inkration Studio.jpeg, Wild Heist Cashout - PGSOFT.jpeg). 이미지별 메모는 `design/references/notes.md`. 1페이즈 논의에서 색 방향(밤 남색 + 회색 + 진홍)과 임시 정장 실루엣을 정했다 (01-CONTEXT D-20, D-21).
 
