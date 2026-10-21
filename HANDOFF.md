@@ -20,11 +20,15 @@
   - CONN-02 확정(서버 타이머 진행, 기권·행동 없음·말 안 함)
   - **결정 0008**: 실시간 3D 없이 2.5D. 원근 타원 테이블, 그림자·조명 레이어. 5페이즈에서 프레임 PNG 캐릭터(일러스트 vs 3D 렌더링, 에셋 도구 조사)
   - 디자인 참고 이미지 7장: `design/references/character/` (메모는 `design/references/notes.md`)
+  - **1페이즈 계획 완료** (2026-10-21, `/gsd-plan-phase 1`): 리서치(`01-RESEARCH.md`), 검증 전략(`01-VALIDATION.md`), 계획 10개·6웨이브(`01-01`~`01-10-PLAN.md`), `SKELETON.md`. 플랜 체커 통과(2회차), 요구사항 8/8·결정 25/25 반영
+    - 스택(리서치에서 버전 확인): React 19 + Vite 8 + `@cloudflare/vite-plugin`, Worker + Room Durable Object(WebSocket Hibernation, 알람 하나로 단계 마감·방 만료), zod, vitest 4 + `@cloudflare/vitest-plugin`(옛 이름 `vitest-pool-workers` 는 폐기됨)
+    - 주의: `compatibility_date` 는 `2026-10-12` 로 고정(오늘 날짜로 두면 `vite dev` 가 실패)
+    - 실행 중 사람이 할 일: 01-01 에서 Worker 이름(공개 주소가 됨)·DO 선언 방식(되돌릴 수 없음) 결정과 패키지 확인, 01-02 에서 개인 Cloudflare 계정으로 `npx wrangler login`·workers.dev 하위 도메인 설정, 01-10 에서 폰 2대 이상 실기기 확인
 
 ## 다음 할 일
 
-1. `/clear` 후 `/gsd-plan-phase 1` (MVP 모드·걷는 뼈대, 리서치부터).
-2. GSD 를 쓰며 불편했던 점은 기록해 두고, 반복되는 것만 gsd-addons 에 추가한다. 지금까지: 문서 분류 에이전트가 해시를 못 구해 결과 파일 이름 규칙을 어김(수동 수정), `ingest-docs` 는 `config.json` 을 만들지 않음, 한국어 페이즈 이름은 슬러그가 비어 `init.plan-phase` 가 페이즈 폴더 경로를 못 냄(영문 슬러그 폴더를 직접 만들어 해결), UI 게이트가 한국어 문구에서 프런트엔드 신호를 못 잡음.
+1. `/clear` 후 `/gsd-execute-phase 1`. 시작 전에 Node.js LTS 와 개인 Cloudflare 계정을 준비해 둔다.
+2. GSD 를 쓰며 불편했던 점은 기록해 두고, 반복되는 것만 gsd-addons 에 추가한다. 지금까지: 문서 분류 에이전트가 해시를 못 구해 결과 파일 이름 규칙을 어김(수동 수정), `ingest-docs` 는 `config.json` 을 만들지 않음, 한국어 페이즈 이름은 슬러그가 비어 `init.plan-phase` 가 페이즈 폴더 경로를 못 냄(영문 슬러그 폴더를 직접 만들어 해결), UI 게이트가 한국어 문구에서 프런트엔드 신호를 못 잡음(1페이즈 계획 때도 반복), 엣지 프로브가 한국어 요구사항을 하나도 분류하지 못함(8개 모두 unclassified), 첫 플랜 체커가 계획 본문을 읽지 않고 통과 수준으로 판단함(재검증 때 본문까지 읽게 지시), `state.planned-phase` 가 `.planning/state.json` 을 새로 만들지만 커밋 대상에 없음(미추적으로 둠).
 
 ## 환경 메모
 
