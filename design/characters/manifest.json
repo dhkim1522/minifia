@@ -1,0 +1,345 @@
+{
+ "version": 1,
+ "logical_size": [
+  72,
+  96
+ ],
+ "scales": [
+  "@2x",
+  "@4x"
+ ],
+ "states": {
+  "default": "원본",
+  "disconnected": "흑백 + 60%",
+  "dead": "흑백 + 30%"
+ },
+ "seat_colors": [
+  "#7a8fb8",
+  "#8e7ab8",
+  "#6fa59a",
+  "#b89a6f",
+  "#6f8fa8",
+  "#9aa86f",
+  "#b87a5c",
+  "#a9aebb"
+ ],
+ "assets": [
+  {
+   "group": "table",
+   "id": "fig1_boy_brown",
+   "label": "소년 갈색",
+   "states": [
+    "default",
+    "disconnected",
+    "dead"
+   ],
+   "size": "72x96"
+  },
+  {
+   "group": "table",
+   "id": "fig2_boy_black",
+   "label": "소년 검정",
+   "states": [
+    "default",
+    "disconnected",
+    "dead"
+   ],
+   "size": "72x96"
+  },
+  {
+   "group": "table",
+   "id": "fig3_boy_blonde",
+   "label": "소년 금발",
+   "states": [
+    "default",
+    "disconnected",
+    "dead"
+   ],
+   "size": "72x96"
+  },
+  {
+   "group": "table",
+   "id": "fig4_girl_brown",
+   "label": "소녀 갈색",
+   "states": [
+    "default",
+    "disconnected",
+    "dead"
+   ],
+   "size": "72x96"
+  },
+  {
+   "group": "table",
+   "id": "fig5_girl_black",
+   "label": "소녀 검정",
+   "states": [
+    "default",
+    "disconnected",
+    "dead"
+   ],
+   "size": "72x96"
+  },
+  {
+   "group": "table",
+   "id": "fig6_girl_auburn",
+   "label": "소녀 적갈색",
+   "states": [
+    "default",
+    "disconnected",
+    "dead"
+   ],
+   "size": "72x96"
+  },
+  {
+   "group": "table",
+   "id": "fig7_boy_blackhat",
+   "label": "소년 검은 중절모",
+   "states": [
+    "default",
+    "disconnected",
+    "dead"
+   ],
+   "size": "72x96"
+  },
+  {
+   "group": "table",
+   "id": "fig8_girl_tanhat",
+   "label": "소녀 갈색 중절모",
+   "states": [
+    "default",
+    "disconnected",
+    "dead"
+   ],
+   "size": "72x96"
+  },
+  {
+   "group": "roles",
+   "id": "mafia",
+   "label": "마피아",
+   "states": [
+    "default",
+    "disconnected",
+    "dead"
+   ],
+   "size": "72x96"
+  },
+  {
+   "group": "roles",
+   "id": "citizen",
+   "label": "시민",
+   "states": [
+    "default",
+    "disconnected",
+    "dead"
+   ],
+   "size": "72x96"
+  },
+  {
+   "group": "roles",
+   "id": "police",
+   "label": "경찰",
+   "states": [
+    "default",
+    "disconnected",
+    "dead"
+   ],
+   "size": "72x96"
+  },
+  {
+   "group": "roles",
+   "id": "doctor",
+   "label": "의사",
+   "states": [
+    "default",
+    "disconnected",
+    "dead"
+   ],
+   "size": "72x96"
+  },
+  {
+   "group": "extra",
+   "id": "mafia_b",
+   "label": "마피아 B",
+   "states": [
+    "default",
+    "disconnected",
+    "dead"
+   ],
+   "size": "72x96"
+  },
+  {
+   "group": "extra",
+   "id": "citizen_b",
+   "label": "시민 B",
+   "states": [
+    "default",
+    "disconnected",
+    "dead"
+   ],
+   "size": "72x96"
+  },
+  {
+   "group": "extra",
+   "id": "police_b",
+   "label": "경찰 B",
+   "states": [
+    "default",
+    "disconnected",
+    "dead"
+   ],
+   "size": "72x96"
+  },
+  {
+   "group": "extra",
+   "id": "woman_book",
+   "label": "책 든 여성",
+   "states": [
+    "default",
+    "disconnected",
+    "dead"
+   ],
+   "size": "72x96"
+  },
+  {
+   "group": "extra",
+   "id": "mafia_c",
+   "label": "마피아 C",
+   "states": [
+    "default",
+    "disconnected",
+    "dead"
+   ],
+   "size": "72x96"
+  },
+  {
+   "group": "extra",
+   "id": "detective",
+   "label": "탐정",
+   "states": [
+    "default",
+    "disconnected",
+    "dead"
+   ],
+   "size": "72x96"
+  },
+  {
+   "group": "extra",
+   "id": "police_doctor",
+   "label": "경찰 의사",
+   "states": [
+    "default",
+    "disconnected",
+    "dead"
+   ],
+   "size": "72x96"
+  },
+  {
+   "group": "extra",
+   "id": "doctor_b",
+   "label": "의사 B",
+   "states": [
+    "default",
+    "disconnected",
+    "dead"
+   ],
+   "size": "72x96"
+  },
+  {
+   "group": "extra",
+   "id": "spy",
+   "label": "스파이",
+   "states": [
+    "default",
+    "disconnected",
+    "dead"
+   ],
+   "size": "72x96"
+  },
+  {
+   "group": "extra",
+   "id": "medium_a",
+   "label": "영매 A",
+   "states": [
+    "default",
+    "disconnected",
+    "dead"
+   ],
+   "size": "72x96"
+  },
+  {
+   "group": "extra",
+   "id": "soldier_a",
+   "label": "군인 A",
+   "states": [
+    "default",
+    "disconnected",
+    "dead"
+   ],
+   "size": "72x96"
+  },
+  {
+   "group": "extra",
+   "id": "medium_b",
+   "label": "영매 B",
+   "states": [
+    "default",
+    "disconnected",
+    "dead"
+   ],
+   "size": "72x96"
+  },
+  {
+   "group": "extra",
+   "id": "mafia_d",
+   "label": "마피아 D",
+   "states": [
+    "default",
+    "disconnected",
+    "dead"
+   ],
+   "size": "72x96"
+  },
+  {
+   "group": "extra",
+   "id": "medium_c",
+   "label": "영매 C",
+   "states": [
+    "default",
+    "disconnected",
+    "dead"
+   ],
+   "size": "72x96"
+  },
+  {
+   "group": "extra",
+   "id": "soldier_b",
+   "label": "군인 B",
+   "states": [
+    "default",
+    "disconnected",
+    "dead"
+   ],
+   "size": "72x96"
+  },
+  {
+   "group": "extra",
+   "id": "thief_mask",
+   "label": "도둑",
+   "states": [
+    "default",
+    "disconnected",
+    "dead"
+   ],
+   "size": "72x96"
+  },
+  {
+   "group": "ghost",
+   "id": "ghost",
+   "label": "유령",
+   "states": [
+    "default"
+   ],
+   "size": "72x96"
+  }
+ ]
+}

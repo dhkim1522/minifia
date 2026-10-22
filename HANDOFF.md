@@ -44,10 +44,11 @@
   - 사람용 산출물은 클로드 아티팩트(Design System, Design 캔버스, 마지막에 Slides·Docs), AI 용 지침은 저장소. GSD 에이전트는 아티팩트를 못 읽어 승인 때 `design/` 에 사본(`tokens.json`, 화면 PNG)
   - 내보내기는 마지막 한 번(구간 끝에는 아티팩트 버전 이름표만). 구간 발표 자료·문제 해결 기록·PR 은 만들지 않음
   - gsd-addons 0.2.0: `docs/lifecycle.md`(구간별 산출물 지도), 원칙 3개 추가(산출물 두 종류, 디자인 먼저, 화면 페이즈 UI-SPEC 먼저). minifia `CLAUDE.md` 원칙 구역에도 반영
-- **디자인 시스템 아티팩트** (2026-10-22): https://claude.ai/artifact/Tp175mmuxLAHycMUtwZJ9Q — 버전 5 "디자인 시스템 초안 3 — 캐릭터 세트 C"
+- **디자인 시스템 아티팩트** (2026-10-22): https://claude.ai/artifact/Tp175mmuxLAHycMUtwZJ9Q — 버전 6 "디자인 시스템 초안 3.1 — 캐릭터 정본(@4x, 유령 1종)"
   - 토큰(색 46), 컴포넌트 20종(실제 동작 미리보기), 브랜드 문서(한국어), 표지. 소스는 세션 임시 폴더에 있었으므로 고칠 때는 아티팩트를 `read` 로 받아서 고친다
   - 사용자 피드백 "단색 배경만 있고 캐릭터가 밋밋하다" → 배경 장면 `Backdrop`(달빛 마을 광장 4종: lobby·night·day·verdict) 추가, 테이블 `bare`·두께 띠, 표지 교체. 진홍 예약 7곳, 반응은 SVG 8종
-  - 캐릭터 확정: 사용자가 클로드 데스크톱에서 만든 캔버스 "minifia 캐릭터 에셋"(https://claude.ai/artifact/4dYpe74vxJHSnA4WhFSLTM)의 세트 C. 원본 38장을 `design/characters/`(figures 8, ghosts 10, roles 4, extras 16)에 넣고, 디자인 시스템 `Figure` 를 그림으로 교체(72×96, 3:4), 탈락은 자리 색 유령, 역할 카드 앞면에 직업 그림. 직업 그림은 본인 카드·마피아 동료·경찰 결과·게임 끝 결과에만
+  - 캐릭터 확정: 사용자가 클로드 데스크톱에서 만든 캔버스 "minifia 캐릭터 에셋"(https://claude.ai/artifact/4dYpe74vxJHSnA4WhFSLTM)의 세트 C. 데스크톱에서 받은 `minifia-characters-C.zip` 정본(규격서 `ASSET_SPEC.md`, `manifest.json`, 상태 3종 × @2x/@4x, 확장 16종, 유령 SVG)을 `design/characters/` 에 풀고, 앱용 기본 상태 @2x/@4x 26장을 `public/characters/{table,roles,ghost}/` 에 넣었다. 72×96(3:4), 탈락은 유령 1종, 끊김·탈락 효과는 CSS. 직업 그림은 본인 카드·마피아 동료·경찰 결과·게임 끝 결과에만
+  - 계획 보정 추가(M16): `01-06-PLAN.md` 의 임시 실루엣·64×96·`public/characters/{id}/{state}_{frame}.png` 규칙은 낡았다. 다시 계획할 때 `Figure` 를 `public/characters/table/*_default@2x.png`(srcset @4x) 이미지로, 자리 폭 20%, 탈락은 `ghost` 로 바꾼다
   - 작업 분리(사용자 제안): 산출물·배경·캐릭터 에셋은 클로드 데스크톱 프로젝트에서 만들어 아티팩트로 넘기고, 이 저장소(클로드 코드)는 받아서 `design/` 사본·구현을 맡는다. 데스크톱은 로컬 폴더를 못 읽으므로(Filesystem 확장 미사용) 기획서 요약은 프로젝트 지식으로 준다. 디자인 시스템을 어느 쪽에서 고칠지는 아직 미정(코드 쪽 권장). 확정되면 결정 0011 과 gsd-addons `docs/lifecycle.md` 에 적는다
   - 빈 Design 캔버스 "미니피아 디자인"(https://claude.ai/artifact/WfSQefMVvy539aGW6dTJ9E)이 있다. MVP 화면 설계를 거기에 그릴지 사용자에게 확인
 
