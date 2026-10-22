@@ -44,7 +44,7 @@
   - 사람용 산출물은 클로드 아티팩트(Design System, Design 캔버스, 마지막에 Slides·Docs), AI 용 지침은 저장소. GSD 에이전트는 아티팩트를 못 읽어 승인 때 `design/` 에 사본(`tokens.json`, 화면 PNG)
   - 내보내기는 마지막 한 번(구간 끝에는 아티팩트 버전 이름표만). 구간 발표 자료·문제 해결 기록·PR 은 만들지 않음
   - gsd-addons 0.2.0: `docs/lifecycle.md`(구간별 산출물 지도), 원칙 3개 추가(산출물 두 종류, 디자인 먼저, 화면 페이즈 UI-SPEC 먼저). minifia `CLAUDE.md` 원칙 구역에도 반영
-- **디자인 시스템 아티팩트** (2026-10-22): https://claude.ai/artifact/Tp175mmuxLAHycMUtwZJ9Q — 버전 3 "디자인 시스템 초안 2 — 배경 장면"
+- **디자인 시스템 아티팩트** (2026-10-22): https://claude.ai/artifact/Tp175mmuxLAHycMUtwZJ9Q — 버전 4 "디자인 시스템 초안 2.1 — 테이블도 배경 위"
   - 토큰(색 46), 컴포넌트 20종(실제 동작 미리보기), 브랜드 문서(한국어), 표지. 소스는 세션 임시 폴더에 있었으므로 고칠 때는 아티팩트를 `read` 로 받아서 고친다
   - 사용자 피드백 "단색 배경만 있고 캐릭터가 밋밋하다" → 배경 장면 `Backdrop`(달빛 마을 광장 4종: lobby·night·day·verdict) 추가, 테이블 `bare`·두께 띠, 표지 교체. 진홍 예약 7곳, 반응은 SVG 8종
   - 캐릭터: 지금은 임시 실루엣. 사용자가 나중에 직접 만든 에셋을 `design/characters/` 에 넣으면 교체(규격은 그 폴더 README). 아직 사용자 승인 전
