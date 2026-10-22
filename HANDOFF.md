@@ -50,11 +50,11 @@
   - 캐릭터 확정: 사용자가 클로드 데스크톱에서 만든 캔버스 "minifia 캐릭터 에셋"(https://claude.ai/artifact/4dYpe74vxJHSnA4WhFSLTM)의 세트 C. 데스크톱에서 받은 `minifia-characters-C.zip` 정본(규격서 `ASSET_SPEC.md`, `manifest.json`, 상태 3종 × @2x/@4x, 확장 16종, 유령 SVG)을 `design/characters/` 에 풀고, 앱용 기본 상태 @2x/@4x 26장을 `public/characters/{table,roles,ghost}/` 에 넣었다. 72×96(3:4), 탈락은 유령 1종, 끊김·탈락 효과는 CSS. 직업 그림은 본인 카드·마피아 동료·경찰 결과·게임 끝 결과에만
   - 배경 확정: 데스크톱에서 받은 `minifia-assets-all.zip` 의 배경 A_cute(사용자 선택, 캐릭터와 화풍 같음) 8장. 원본(A_cute·B_system PNG/SVG, 규격서)은 `design/backgrounds/`, 앱용 SVG 8장은 `public/backgrounds/`. 같은 zip 의 유령 그림이 새로 그려져 `design/`·`public/characters/ghost/` 교체. 디자인 시스템 `Backdrop` 은 코드로 그리던 장면에서 이 그림(`layout` game/entry × `variant`)으로 바꿈
   - 계획 보정 추가(M16): `01-06-PLAN.md` 의 임시 실루엣·64×96·`public/characters/{id}/{state}_{frame}.png` 규칙은 낡았다. 다시 계획할 때 `Figure` 를 `public/characters/table/*_default@2x.png`(srcset @4x) 이미지로, 자리 폭 20%, 탈락은 `ghost` 로, 배경은 `public/backgrounds/bg_<game|entry>_<장면>.svg`(center top / cover)로 바꾼다
-  - 작업 분리 확정(결정 0011): 사람용 산출물·그림 에셋은 클로드 데스크톱, 디자인 시스템·저장소·구현은 클로드 코드. 정본 화면설계서 https://claude.ai/artifact/QtbQYhk7ezy4fV7H98bZJz (S-01~S-16, C-01~C-03), 화면 흐름 https://claude.ai/artifact/NzZBqoJD8ut16J2VUwpn64. IA 는 만들지 않음. 마피아 동료는 테이블에도 표시, 투표·찬반은 끝나면 누가 누구를 찍었는지 동시 공개(둘 다 설계서 수정 필요)
+  - 작업 분리 확정(결정 0011): 사람용 산출물·그림 에셋은 클로드 데스크톱, 디자인 시스템·저장소·구현은 클로드 코드. 정본 화면설계서 https://claude.ai/artifact/QtbQYhk7ezy4fV7H98bZJz (S-01~S-16, C-01~C-03), 화면 흐름 https://claude.ai/artifact/NzZBqoJD8ut16J2VUwpn64. IA 는 만들지 않음. 마피아 동료는 테이블에도 표시, 투표·찬반은 끝나면 누가 누구를 찍었는지 동시 공개(설계서 v0.2 에 반영: 07-1 결과 공개 보드 S-09b·S-11b 추가)
   - 디자인 시스템 버전 8: 그림을 `assets/` 파일로 두고 번들이 자기 옆 `assets/` 를 찾는다(캔버스 설치 가능), `tokens.css` 를 `tokens.json` 에서 생성. 코드 쪽에서 만들던 "미니피아 디자인" 캔버스는 설계서와 중복이라 삭제
 
 
-1. **디자인 구간 (결정 0010·0011)**: 데스크톱에서 화면설계서 수정(동료 표시를 테이블에도, S-09·S-11 에 결과 동시 공개 상태 추가) → 사용자 승인 → 아티팩트 버전 이름표 → 화면 PNG 를 `design/screens/` 에, 토큰 `tokens.json` 을 `design/` 에 사본 → 앱 `src/styles/tokens.css` 를 `tokens.json` 에서 만들기(디자인 시스템의 `tokens.css` 생성 방식과 같게)
+1. **디자인 구간 (결정 0010·0011)**: 화면설계서 v0.2(결정 0011 반영 완료) 사용자 승인 → 아티팩트 버전 이름표 → 화면 PNG 를 `design/screens/` 에, 토큰 `tokens.json` 을 `design/` 에 사본 → 앱 `src/styles/tokens.css` 를 `tokens.json` 에서 만들기(디자인 시스템의 `tokens.css` 생성 방식과 같게)
 2. 아티팩트 링크를 `CLAUDE.md` 문서 지도에 적는다
 3. `01-UI-SPEC.md` 를 설계 사본에 맞춰 고친 뒤 웨이브 3 이후를 `/gsd-plan-phase 1` 로 다시 계획한다(01-01~01-03 은 그대로). UI-SPEC 의 M1~M15 도 함께 반영
 4. `/clear` 후 `/gsd-execute-phase 1` 로 웨이브 3부터 재개
