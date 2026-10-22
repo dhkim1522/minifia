@@ -29,15 +29,22 @@
   - 01-02 방 만들기 트레이서와 **첫 배포: https://minifia.dhplay.workers.dev** (배포 주소 스모크 통과). 폰 실기기 확인은 검증 단계로 넘김
   - 01-03 순수 함수 5묶음(닉네임, 역할 배정, 자리 배치, 시계 오프셋, 공유)
   - 테스트 16파일 123개 통과
-  - **화면 설계를 먼저 하려고 여기서 멈춤.** 1페이즈는 `/gsd-ui-phase` 를 거치지 않아 UI-SPEC.md 가 없다. 웨이브 3(01-05 입장 화면, 01-06 2.5D 테이블)부터 화면 구현이라 그 전에 만든다
+  - 화면 설계를 먼저 하려고 웨이브 3 전에 멈췄다. 1페이즈는 `/gsd-ui-phase` 를 거치지 않아 UI-SPEC.md 가 없었다
   - `main` 직접 커밋을 허용하도록 `git.allow_default_branch_commits: true` 설정(실행자 가드가 `main` 을 보호 브랜치로 막아 페이즈 브랜치를 만들었던 것을 합침)
+- **1페이즈 화면 설계서 승인** (2026-10-22, `/gsd-ui-phase 1`): `.planning/phases/01-walking-skeleton/01-UI-SPEC.md`
+  - shadcn 없이 일반 CSS + `tokens.css` 변수(새 패키지 설치 없음 원칙 유지). 간격 4/8/16/24/32/48/64, 글자 14/16/24/36 · 굵기 400/700, 남색 60 · 회색 30 · 진홍 10(진홍은 5곳만, 버튼·포커스 링·방장 배지에 쓰지 않음)
+  - 참고 이미지 7장 반영(남색·달빛·진홍 포인트·이중 테두리 카드). 금테·따뜻한 불빛·보라 네온은 뺌
+  - UI 체커 1회차 통과(7개 중 5 PASS, 2 FLAG 비차단: 확인 시트 [취소] 문구, 화면별 시선 중심 한 줄)
+  - 상태 점검 75개 항목 처리(확정 63, 실기기 확인 6, 제외 6). 미정 1: 재연결이 오래 실패할 때 처리(계획은 "배너 유지하며 계속 재시도" 가정)
+  - 사용자 결정: 카카오톡 미리보기 임시 이미지 넣기(`public/og.png` 1200×630, `og:image` 절대 주소) → M15
+  - **계획과 계약서의 불일치 M1~M15** 를 아직 실행 안 한 계획(01-04~01-10)에 반영해야 한다. 큰 것: 글자 크기·굵기 정리(M1), 기존 `screens.css` 의 진홍 버튼·포커스 링 제거(M2, 두 계획의 `files_modified` 에 없음), `tokens.css` 보강 작업 추가(M3), 이름표를 크기 변환 바깥에(M6), 동료 표시를 어둡게 막 위층에(M7), ReconnectBanner 추가(M9), OG 이미지(M15)
 
 ## 다음 할 일
 
-1. `/clear` 후 `/gsd-ui-phase 1` 로 1페이즈 화면 설계서(UI-SPEC.md)를 만든다. 참고 이미지는 `design/references/` 와 `01-CONTEXT.md` 의 D-04~D-25. 필요하면 `/gsd-sketch` 로 HTML 시안도 본다.
-2. UI-SPEC 이 나오면 화면 계획(01-05, 01-06, 01-09)이 UI-SPEC 을 따르는지 확인하고, 다르면 계획을 고친다.
+1. `01-UI-SPEC.md` 의 "계획과 계약서의 불일치" 표(M1~M15)대로 01-05, 01-06, 01-09, 01-10 계획을 고친다(`files_modified` 에 `src/styles/screens.css`·`src/styles/tokens.css`·`public/og.png`·`index.html` 추가 포함). `/gsd-plan-phase 1` 로 다시 계획하거나 계획 파일을 직접 고친 뒤 플랜 체커를 돌린다.
+2. 원하면 UI 체커의 비차단 FLAG 2건(확인 시트 [취소] 문구, 화면별 시선 중심)을 UI-SPEC 에 반영한다.
 3. `/clear` 후 `/gsd-execute-phase 1` — 완료된 01-01~01-03 은 건너뛰고 웨이브 3부터 재개한다.
-4. GSD 를 쓰며 불편했던 점은 기록해 두고, 반복되는 것만 gsd-addons 에 추가한다. 지금까지: 문서 분류 에이전트가 해시를 못 구해 결과 파일 이름 규칙을 어김(수동 수정), `ingest-docs` 는 `config.json` 을 만들지 않음, 한국어 페이즈 이름은 슬러그가 비어 `init.plan-phase` 가 페이즈 폴더 경로를 못 냄(영문 슬러그 폴더를 직접 만들어 해결), UI 게이트가 한국어 문구에서 프런트엔드 신호를 못 잡음(1페이즈 계획 때도 반복 — 그 결과 `ui_phase: true` 인데도 UI-SPEC 없이 계획·실행까지 감), 엣지 프로브가 한국어 요구사항을 하나도 분류하지 못함(8개 모두 unclassified), 첫 플랜 체커가 계획 본문을 읽지 않고 통과 수준으로 판단함(재검증 때 본문까지 읽게 지시), `state.planned-phase` 가 `.planning/state.json` 을 새로 만들지만 커밋 대상에 없음(미추적으로 둠). 실행 단계에서 추가: `origin/HEAD` 가 없으면 워크트리 병렬 실행이 순차로 떨어지는데, 실행자 디스패치 가드는 매번 다시 워크트리를 요구해 디스패치 직전마다 `dispatch-isolation --force-isolation none` 을 다시 기록해야 했음(`git remote set-head origin -a` 로 해결될 것으로 보임), 실행자 커밋 가드가 `branching_strategy: none` 인데도 `main` 을 막고 페이즈 브랜치를 만듦, `.planning/milestone.lock` 도 미추적으로 생김.
+4. GSD 를 쓰며 불편했던 점은 기록해 두고, 반복되는 것만 gsd-addons 에 추가한다. 지금까지: 문서 분류 에이전트가 해시를 못 구해 결과 파일 이름 규칙을 어김(수동 수정), `ingest-docs` 는 `config.json` 을 만들지 않음, 한국어 페이즈 이름은 슬러그가 비어 `init.plan-phase` 가 페이즈 폴더 경로를 못 냄(영문 슬러그 폴더를 직접 만들어 해결), UI 게이트가 한국어 문구에서 프런트엔드 신호를 못 잡음, UI 상태 점검기도 한국어 요소는 `text_en` 영어 번역이 있어야 분류함(72~75개 항목이 나와 하나씩 묻기는 불가능해 일괄 처리)(1페이즈 계획 때도 반복 — 그 결과 `ui_phase: true` 인데도 UI-SPEC 없이 계획·실행까지 감), 엣지 프로브가 한국어 요구사항을 하나도 분류하지 못함(8개 모두 unclassified), 첫 플랜 체커가 계획 본문을 읽지 않고 통과 수준으로 판단함(재검증 때 본문까지 읽게 지시), `state.planned-phase` 가 `.planning/state.json` 을 새로 만들지만 커밋 대상에 없음(미추적으로 둠). 실행 단계에서 추가: `origin/HEAD` 가 없으면 워크트리 병렬 실행이 순차로 떨어지는데, 실행자 디스패치 가드는 매번 다시 워크트리를 요구해 디스패치 직전마다 `dispatch-isolation --force-isolation none` 을 다시 기록해야 했음(`git remote set-head origin -a` 로 해결될 것으로 보임), 실행자 커밋 가드가 `branching_strategy: none` 인데도 `main` 을 막고 페이즈 브랜치를 만듦, `.planning/milestone.lock` 도 미추적으로 생김.
 
 ## 환경 메모
 
