@@ -1,14 +1,16 @@
 # 설계서
 
-> 초안 (2026-10-21). 페이즈 1 구현 계획을 세울 때 패키지와 버전을 확정한다.
+> 초안 (2026-10-21). 패키지와 버전은 결정 0009 에서 확정했다.
 
 ## 기술 스택
 
 | 영역 | 선택 | 이유 |
 |---|---|---|
-| 클라이언트 | React + TypeScript + Vite, PWA | 링크로 바로 참가, 설치 불필요 (결정 0001) |
-| 실시간 서버 | Cloudflare Workers + Durable Objects | 방 하나 = Durable Object 하나, WebSocket (결정 0002) |
+| 클라이언트 | React 19.3.1 + TypeScript 7.0.2 + Vite 8.3.5 (PWA 는 5~6페이즈에서 판단) | 링크로 바로 참가, 설치 불필요 (결정 0001) |
+| 실시간 서버 | Cloudflare Workers + Durable Objects (wrangler 4.151.3, `@cloudflare/vite-plugin` 1.64.0, `Room` 클래스는 `exports` 로 선언) | 방 하나 = Durable Object 하나, WebSocket (결정 0002, 0009) |
 | 정적 파일 배포 | Cloudflare Workers 정적 에셋 | 서버와 같은 곳에서 배포 |
+| 테스트 | vitest 4.1.12 (unit / client / worker 세 프로젝트), `@cloudflare/vitest-plugin` 1.4.6, happy-dom 21.0.4 | 순수 규칙은 Node 에서, Durable Object 는 workerd 안에서 (결정 0009) |
+| 메시지 검증 | zod 4.6.7 | 서버가 클라이언트 입력을 값으로 검증 |
 | 캐릭터 애니메이션 | 미정 (Rive 또는 Lottie 후보) | 디자인 방향을 정한 뒤 결정 |
 | 앱 출시 | Capacitor 로 같은 웹 코드를 감쌈 | 정식 출시 단계에서 (결정 0001) |
 
@@ -25,6 +27,7 @@ Worker  ── 방 코드로 라우팅 ──▶  Room Durable Object (방마다
 ```
 
 - 저장소는 한 저장소에 웹과 서버를 둔다. 공통 타입(메시지, 게임 상태)은 함께 쓴다.
+- 디렉토리: `src/` 는 React 앱(화면·접속·스타일), `worker/` 는 Worker 진입점과 `Room` Durable Object, `shared/` 는 서버와 브라우저가 함께 쓰는 프로토콜과 순수 게임 규칙, `test/` 는 `unit`(Node)·`client`(happy-dom)·`worker`(workerd) 세 갈래 테스트다. `shared/` 는 앱과 워커 두 tsconfig 에 모두 들어가므로 DOM 전용·workerd 전용 API 를 쓰지 못한다. 이 규칙을 두 타입체크가 함께 강제한다.
 - 서버가 단계 전환과 타이머의 기준이다. 클라이언트 타이머는 서버가 보낸 마감 시각으로 표시만 한다.
 - Durable Object 의 WebSocket Hibernation API 를 써서 대기 중 비용을 줄인다.
 
