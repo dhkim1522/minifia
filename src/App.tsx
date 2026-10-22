@@ -1,12 +1,15 @@
-import { APP_VERSION } from "../shared/version";
+import { useCallback, useState } from "react";
+import { Home } from "./screens/Home";
+import { RoomScreen } from "./screens/RoomScreen";
+
+type Screen = { screen: "home" } | { screen: "room"; code: string; token: string };
 
 export function App() {
-  return (
-    <>
-      <main style={{ padding: "48px 20px 0" }}>
-        <h1 style={{ margin: 0, fontSize: 32, fontWeight: 800, letterSpacing: "0.02em" }}>minifia</h1>
-      </main>
-      <footer className="app-version">v{APP_VERSION}</footer>
-    </>
-  );
+  const [current, setCurrent] = useState<Screen>({ screen: "home" });
+  const goHome = useCallback(() => setCurrent({ screen: "home" }), []);
+
+  if (current.screen === "room") {
+    return <RoomScreen code={current.code} token={current.token} onExit={goHome} />;
+  }
+  return <Home onEnterRoom={(code, token) => setCurrent({ screen: "room", code, token })} />;
 }
