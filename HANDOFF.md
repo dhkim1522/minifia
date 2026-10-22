@@ -39,12 +39,20 @@
   - 사용자 결정: 카카오톡 미리보기 임시 이미지 넣기(`public/og.png` 1200×630, `og:image` 절대 주소) → M15
   - **계획과 계약서의 불일치 M1~M15** 를 아직 실행 안 한 계획(01-04~01-10)에 반영해야 한다. 큰 것: 글자 크기·굵기 정리(M1), 기존 `screens.css` 의 진홍 버튼·포커스 링 제거(M2, 두 계획의 `files_modified` 에 없음), `tokens.css` 보강 작업 추가(M3), 이름표를 크기 변환 바깥에(M6), 동료 표시를 어둡게 막 위층에(M7), ReconnectBanner 추가(M9), OG 이미지(M15)
 
+- **작업 방식 확정 — 결정 0010 디자인 먼저** (2026-10-22)
+  - 사용자 목적: 실무 제품개발 순서로 진행하며 구간별 산출물을 남기고, 그 흐름을 gsd-addons 스킬셋으로 번들화하고, 마지막에 포트폴리오로 짧게 정리한다(엔드투엔드 경험 + 대표 산출물 + 주요 문제·해결 몇 개)
+  - 사람용 산출물은 클로드 아티팩트(Design System, Design 캔버스, 마지막에 Slides·Docs), AI 용 지침은 저장소. GSD 에이전트는 아티팩트를 못 읽어 승인 때 `design/` 에 사본(`tokens.json`, 화면 PNG)
+  - 내보내기는 마지막 한 번(구간 끝에는 아티팩트 버전 이름표만). 구간 발표 자료·문제 해결 기록·PR 은 만들지 않음
+  - gsd-addons 0.2.0: `docs/lifecycle.md`(구간별 산출물 지도), 원칙 3개 추가(산출물 두 종류, 디자인 먼저, 화면 페이즈 UI-SPEC 먼저). minifia `CLAUDE.md` 원칙 구역에도 반영
+
 ## 다음 할 일
 
-1. `01-UI-SPEC.md` 의 "계획과 계약서의 불일치" 표(M1~M15)대로 01-05, 01-06, 01-09, 01-10 계획을 고친다(`files_modified` 에 `src/styles/screens.css`·`src/styles/tokens.css`·`public/og.png`·`index.html` 추가 포함). `/gsd-plan-phase 1` 로 다시 계획하거나 계획 파일을 직접 고친 뒤 플랜 체커를 돌린다.
-2. 원하면 UI 체커의 비차단 FLAG 2건(확인 시트 [취소] 문구, 화면별 시선 중심)을 UI-SPEC 에 반영한다.
-3. `/clear` 후 `/gsd-execute-phase 1` — 완료된 01-01~01-03 은 건너뛰고 웨이브 3부터 재개한다.
-4. GSD 를 쓰며 불편했던 점은 기록해 두고, 반복되는 것만 gsd-addons 에 추가한다. 지금까지: 문서 분류 에이전트가 해시를 못 구해 결과 파일 이름 규칙을 어김(수동 수정), `ingest-docs` 는 `config.json` 을 만들지 않음, 한국어 페이즈 이름은 슬러그가 비어 `init.plan-phase` 가 페이즈 폴더 경로를 못 냄(영문 슬러그 폴더를 직접 만들어 해결), UI 게이트가 한국어 문구에서 프런트엔드 신호를 못 잡음, UI 상태 점검기도 한국어 요소는 `text_en` 영어 번역이 있어야 분류함(72~75개 항목이 나와 하나씩 묻기는 불가능해 일괄 처리)(1페이즈 계획 때도 반복 — 그 결과 `ui_phase: true` 인데도 UI-SPEC 없이 계획·실행까지 감), 엣지 프로브가 한국어 요구사항을 하나도 분류하지 못함(8개 모두 unclassified), 첫 플랜 체커가 계획 본문을 읽지 않고 통과 수준으로 판단함(재검증 때 본문까지 읽게 지시), `state.planned-phase` 가 `.planning/state.json` 을 새로 만들지만 커밋 대상에 없음(미추적으로 둠). 실행 단계에서 추가: `origin/HEAD` 가 없으면 워크트리 병렬 실행이 순차로 떨어지는데, 실행자 디스패치 가드는 매번 다시 워크트리를 요구해 디스패치 직전마다 `dispatch-isolation --force-isolation none` 을 다시 기록해야 했음(`git remote set-head origin -a` 로 해결될 것으로 보임), 실행자 커밋 가드가 `branching_strategy: none` 인데도 `main` 을 막고 페이즈 브랜치를 만듦, `.planning/milestone.lock` 도 미추적으로 생김.
+1. **디자인 구간 (결정 0010)**: 디자인 시스템 아티팩트 → MVP 전체 화면 설계 캔버스(1~4페이즈 화면, 사용자 흐름 순서) → 사용자 검토·승인 → 아티팩트 버전 이름표 → `design/` 사본(`tokens.json`, 화면 PNG), `tokens.css` 를 `tokens.json` 에서 만들기. 출발점은 `01-UI-SPEC.md` 의 토큰·규칙과 `design/references/`
+2. 아티팩트 링크를 `CLAUDE.md` 문서 지도에 적는다
+3. `01-UI-SPEC.md` 를 설계 사본에 맞춰 고친 뒤 웨이브 3 이후를 `/gsd-plan-phase 1` 로 다시 계획한다(01-01~01-03 은 그대로). UI-SPEC 의 M1~M15 도 함께 반영
+4. `/clear` 후 `/gsd-execute-phase 1` 로 웨이브 3부터 재개
+5. 디자인 구간을 해 본 결과로 gsd-addons 에 디자인 구간 스킬을 만든다(`docs/lifecycle.md` 구간 3 상태 갱신). 페이즈가 끝날 때마다 `/gsd-extract-learnings`. 포트폴리오 명령 `/gsd-addons:portfolio`(선택 단계)는 나중에 만든다
+6. GSD 를 쓰며 불편했던 점은 기록해 두고 gsd-addons 에서 고친다(구간별 표준 산출물은 반복 여부와 상관없이 의도적으로 만든다). 지금까지: 문서 분류 에이전트가 해시를 못 구해 결과 파일 이름 규칙을 어김(수동 수정), `ingest-docs` 는 `config.json` 을 만들지 않음, 한국어 페이즈 이름은 슬러그가 비어 `init.plan-phase` 가 페이즈 폴더 경로를 못 냄(영문 슬러그 폴더를 직접 만들어 해결), UI 게이트가 한국어 문구에서 프런트엔드 신호를 못 잡음, UI 상태 점검기도 한국어 요소는 `text_en` 영어 번역이 있어야 분류함(72~75개 항목이 나와 하나씩 묻기는 불가능해 일괄 처리)(1페이즈 계획 때도 반복 — 그 결과 `ui_phase: true` 인데도 UI-SPEC 없이 계획·실행까지 감), 엣지 프로브가 한국어 요구사항을 하나도 분류하지 못함(8개 모두 unclassified), 첫 플랜 체커가 계획 본문을 읽지 않고 통과 수준으로 판단함(재검증 때 본문까지 읽게 지시), `state.planned-phase` 가 `.planning/state.json` 을 새로 만들지만 커밋 대상에 없음(미추적으로 둠). 실행 단계에서 추가: `origin/HEAD` 가 없으면 워크트리 병렬 실행이 순차로 떨어지는데, 실행자 디스패치 가드는 매번 다시 워크트리를 요구해 디스패치 직전마다 `dispatch-isolation --force-isolation none` 을 다시 기록해야 했음(`git remote set-head origin -a` 로 해결될 것으로 보임), 실행자 커밋 가드가 `branching_strategy: none` 인데도 `main` 을 막고 페이즈 브랜치를 만듦, `.planning/milestone.lock` 도 미추적으로 생김.
 
 ## 환경 메모
 
