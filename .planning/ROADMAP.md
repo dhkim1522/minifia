@@ -40,7 +40,7 @@ Decimal phases appear between their surrounding integers in numeric order.
   4. 방장이 시작하면 모든 폰에 "직업을 배정하고 있습니다…" 구간(약 3초)이 함께 나온 뒤 역할 확인 15초로 넘어가고, 카운트다운이 모든 폰에서 같은 시각에 끝나면 모든 폰이 "낮이 되었습니다" 화면으로 넘어간다(결정 0007). 폰 화면을 껐다 켜거나 탭을 새로고침해도 같은 자리·같은 역할로 돌아온다.
   5. 코드를 고치고 `wrangler deploy` 를 다시 하면 주소는 그대로이고 새 버전이 보인다.
 
-**Plans**: 1/10 plans executed
+**Plans**: 2/10 plans executed
 
 Plans:
 **Wave 1**
@@ -48,7 +48,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 - [ ] 01-02-PLAN.md — 트레이서: [방 만들기] → Room DO → WebSocket → 대기실, 개인 계정 첫 배포 (wave 2)
-- [ ] 01-03-PLAN.md — 순수 규칙: 닉네임·역할 배정·자리 배치·시계 오프셋·공유 (TDD, wave 2)
+- [x] 01-03-PLAN.md — 순수 규칙: 닉네임·역할 배정·자리 배치·시계 오프셋·공유 (TDD, wave 2)
 
 **Wave 3** *(blocked on Wave 2 completion)*
 - [ ] 01-04-PLAN.md — 대기실 규칙 코어: 참가·나가기·내보내기·연결 정합·시작 조건 (TDD, wave 3)
@@ -153,7 +153,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 (decimal phases
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 1. 걷는 뼈대 | v1.0 | 1/10 | In Progress | - |
+| 1. 걷는 뼈대 | v1.0 | 2/10 | In Progress | - |
 | 2. 낮 토론 | v1.0 | 0/TBD | Not started | - |
 | 3. 밤과 아침 | v1.0 | 0/TBD | Not started | - |
 | 4. 처형과 승패 | v1.0 | 0/TBD | Not started | - |

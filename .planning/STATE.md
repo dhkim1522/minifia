@@ -5,16 +5,16 @@ milestone_name: MVP
 current_phase: 01
 current_phase_name: 걷는 뼈대
 status: executing
-stopped_at: Completed 01-01-PLAN.md
-last_updated: "2026-10-22T01:13:24.861Z"
+stopped_at: Completed 01-03-PLAN.md (01-02 는 Task 2 human-action 에서 일시 정지)
+last_updated: "2026-10-22T01:30:13.374Z"
 last_activity: 2026-10-22
 last_activity_desc: Phase 01 execution started
-state_head: b1c33e2c85f20b9a7f4856a5c1007cf12e12f1ad
+state_head: 320b9366931d8db05961a97312b68ec00af56da5
 progress:
   total_phases: 6
   completed_phases: 0
   total_plans: 10
-  completed_plans: 1
+  completed_plans: 2
 ---
 
 # Project State
@@ -29,9 +29,9 @@ See: .planning/PROJECT.md (updated 2026-10-21)
 ## Current Position
 
 Phase: 01 (걷는 뼈대) — EXECUTING
-Plan: 2 of 10
-Status: Ready to execute
-Last activity: 2026-10-22 — Phase 01 execution started
+Plan: 01-01, 01-03 완료 / 01-02 진행 중 (Task 1 트레이서 커밋 완료, Task 2 Cloudflare 로그인 human-action 에서 정지) — 총 10개 중 2개 완료
+Status: 01-02 재개 대기 (웨이브 2 나머지 계획은 01-02 이후)
+Last activity: 2026-10-22 — 01-03 완료
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -58,6 +58,7 @@ Progress: [░░░░░░░░░░] 0%
 | Plan | Duration | Tasks | Files |
 |------|----------|-------|-------|
 | Phase 01 P01 | 3 min | 3 tasks | 21 files |
+| Phase 01 P03 | 3 min | 3 tasks | 11 files |
 
 ## Accumulated Context
 
@@ -75,6 +76,7 @@ Recent decisions affecting current work:
 - [Phase 1 논의]: CONN-02 확정(서버 타이머 진행, 기권·행동 없음·말 안 함, 끊긴 사람 흐릿하게). 1페이즈는 "낮이 되었습니다" 화면에서 멈춘다
 - [Roadmap]: 1페이즈 성공 기준에 배포 주소에서 폰 2대 이상이 같은 방에 들어가 역할을 받는 것을 넣었다. 정식 출시는 마지막 별도 마일스톤(v2.0)
 - [Phase 01]: Worker 이름 minifia + Durable Object exports 선언 (사용자 결정, 결정 0009). compatibility_date 2026-10-12 고정, 패키지는 정확한 버전으로 고정
+- [Phase 01]: [01-03] 닉네임 공백 압축은 \p{Zs}+ 만 — \s+ 면 줄바꿈이 통과함. assignRoles 는 중복 ID 도 RangeError
 
 ### Pending Todos
 
@@ -99,6 +101,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-22T01:13:24.840Z
-Stopped at: Completed 01-01-PLAN.md
+Last session: 2026-10-22T01:30:13.356Z
+Stopped at: Completed 01-03-PLAN.md (01-02 는 Task 2 human-action 에서 일시 정지)
 Resume file: None
