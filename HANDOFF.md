@@ -54,7 +54,7 @@
   - 디자인 시스템 버전 8: 그림을 `assets/` 파일로 두고 번들이 자기 옆 `assets/` 를 찾는다(캔버스 설치 가능), `tokens.css` 를 `tokens.json` 에서 생성. 코드 쪽에서 만들던 "미니피아 디자인" 캔버스는 설계서와 중복이라 삭제
 
 
-1. **디자인 구간 (결정 0010·0011)**: 투표 표수 공개 방식 결정 → 데스크톱에서 화면설계서 수정(동료 표시·표수) → 승인 → 화면 PNG 를 `design/screens/` 에 사본 → MVP 전체 화면 설계 캔버스(1~4페이즈 화면, 사용자 흐름 순서) → 사용자 검토·승인 → 아티팩트 버전 이름표 → `design/` 사본(`tokens.json`, 화면 PNG), `tokens.css` 를 `tokens.json` 에서 만들기. 출발점은 `01-UI-SPEC.md` 의 토큰·규칙과 `design/references/`
+1. **디자인 구간 (결정 0010·0011)**: 투표 표수 공개 방식 결정 → 데스크톱에서 화면설계서 수정(동료 표시·표수) → 사용자 승인 → 아티팩트 버전 이름표 → 화면 PNG 를 `design/screens/` 에, 토큰 `tokens.json` 을 `design/` 에 사본 → 앱 `src/styles/tokens.css` 를 `tokens.json` 에서 만들기(디자인 시스템의 `tokens.css` 생성 방식과 같게)
 2. 아티팩트 링크를 `CLAUDE.md` 문서 지도에 적는다
 3. `01-UI-SPEC.md` 를 설계 사본에 맞춰 고친 뒤 웨이브 3 이후를 `/gsd-plan-phase 1` 로 다시 계획한다(01-01~01-03 은 그대로). UI-SPEC 의 M1~M15 도 함께 반영
 4. `/clear` 후 `/gsd-execute-phase 1` 로 웨이브 3부터 재개
