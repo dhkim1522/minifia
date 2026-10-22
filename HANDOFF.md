@@ -24,11 +24,20 @@
     - 스택(리서치에서 버전 확인): React 19 + Vite 8 + `@cloudflare/vite-plugin`, Worker + Room Durable Object(WebSocket Hibernation, 알람 하나로 단계 마감·방 만료), zod, vitest 4 + `@cloudflare/vitest-plugin`(옛 이름 `vitest-pool-workers` 는 폐기됨)
     - 주의: `compatibility_date` 는 `2026-10-12` 로 고정(오늘 날짜로 두면 `vite dev` 가 실패)
     - 실행 중 사람이 할 일: 01-01 에서 Worker 이름(공개 주소가 됨)·DO 선언 방식(되돌릴 수 없음) 결정과 패키지 확인, 01-02 에서 개인 Cloudflare 계정으로 `npx wrangler login`·workers.dev 하위 도메인 설정, 01-10 에서 폰 2대 이상 실기기 확인
+- **1페이즈 실행 중 — 웨이브 2까지 완료, 3/10 계획** (2026-10-22, `/gsd-execute-phase 1`)
+  - 01-01 도구 세트·저장소 골격: Worker 이름 `minifia` + `exports` DO 선언(결정 0009), 리서치 버전 그대로 고정 설치
+  - 01-02 방 만들기 트레이서와 **첫 배포: https://minifia.dhplay.workers.dev** (배포 주소 스모크 통과). 폰 실기기 확인은 검증 단계로 넘김
+  - 01-03 순수 함수 5묶음(닉네임, 역할 배정, 자리 배치, 시계 오프셋, 공유)
+  - 테스트 16파일 123개 통과
+  - **화면 설계를 먼저 하려고 여기서 멈춤.** 1페이즈는 `/gsd-ui-phase` 를 거치지 않아 UI-SPEC.md 가 없다. 웨이브 3(01-05 입장 화면, 01-06 2.5D 테이블)부터 화면 구현이라 그 전에 만든다
+  - `main` 직접 커밋을 허용하도록 `git.allow_default_branch_commits: true` 설정(실행자 가드가 `main` 을 보호 브랜치로 막아 페이즈 브랜치를 만들었던 것을 합침)
 
 ## 다음 할 일
 
-1. `/clear` 후 `/gsd-execute-phase 1`. 시작 전에 Node.js LTS 와 개인 Cloudflare 계정을 준비해 둔다.
-2. GSD 를 쓰며 불편했던 점은 기록해 두고, 반복되는 것만 gsd-addons 에 추가한다. 지금까지: 문서 분류 에이전트가 해시를 못 구해 결과 파일 이름 규칙을 어김(수동 수정), `ingest-docs` 는 `config.json` 을 만들지 않음, 한국어 페이즈 이름은 슬러그가 비어 `init.plan-phase` 가 페이즈 폴더 경로를 못 냄(영문 슬러그 폴더를 직접 만들어 해결), UI 게이트가 한국어 문구에서 프런트엔드 신호를 못 잡음(1페이즈 계획 때도 반복), 엣지 프로브가 한국어 요구사항을 하나도 분류하지 못함(8개 모두 unclassified), 첫 플랜 체커가 계획 본문을 읽지 않고 통과 수준으로 판단함(재검증 때 본문까지 읽게 지시), `state.planned-phase` 가 `.planning/state.json` 을 새로 만들지만 커밋 대상에 없음(미추적으로 둠).
+1. `/clear` 후 `/gsd-ui-phase 1` 로 1페이즈 화면 설계서(UI-SPEC.md)를 만든다. 참고 이미지는 `design/references/` 와 `01-CONTEXT.md` 의 D-04~D-25. 필요하면 `/gsd-sketch` 로 HTML 시안도 본다.
+2. UI-SPEC 이 나오면 화면 계획(01-05, 01-06, 01-09)이 UI-SPEC 을 따르는지 확인하고, 다르면 계획을 고친다.
+3. `/clear` 후 `/gsd-execute-phase 1` — 완료된 01-01~01-03 은 건너뛰고 웨이브 3부터 재개한다.
+4. GSD 를 쓰며 불편했던 점은 기록해 두고, 반복되는 것만 gsd-addons 에 추가한다. 지금까지: 문서 분류 에이전트가 해시를 못 구해 결과 파일 이름 규칙을 어김(수동 수정), `ingest-docs` 는 `config.json` 을 만들지 않음, 한국어 페이즈 이름은 슬러그가 비어 `init.plan-phase` 가 페이즈 폴더 경로를 못 냄(영문 슬러그 폴더를 직접 만들어 해결), UI 게이트가 한국어 문구에서 프런트엔드 신호를 못 잡음(1페이즈 계획 때도 반복 — 그 결과 `ui_phase: true` 인데도 UI-SPEC 없이 계획·실행까지 감), 엣지 프로브가 한국어 요구사항을 하나도 분류하지 못함(8개 모두 unclassified), 첫 플랜 체커가 계획 본문을 읽지 않고 통과 수준으로 판단함(재검증 때 본문까지 읽게 지시), `state.planned-phase` 가 `.planning/state.json` 을 새로 만들지만 커밋 대상에 없음(미추적으로 둠). 실행 단계에서 추가: `origin/HEAD` 가 없으면 워크트리 병렬 실행이 순차로 떨어지는데, 실행자 디스패치 가드는 매번 다시 워크트리를 요구해 디스패치 직전마다 `dispatch-isolation --force-isolation none` 을 다시 기록해야 했음(`git remote set-head origin -a` 로 해결될 것으로 보임), 실행자 커밋 가드가 `branching_strategy: none` 인데도 `main` 을 막고 페이즈 브랜치를 만듦, `.planning/milestone.lock` 도 미추적으로 생김.
 
 ## 환경 메모
 
@@ -36,6 +45,8 @@
 - 개인 gh 로그인은 `gh auth login --hostname github.com --git-protocol ssh --insecure-storage` 로 했다. 토큰은 키체인이 아니라 `~/.config/gh-personal/hosts.yml` 에 둔다. 로그인 중 HTTPS 자격 증명 설정(전역 `~/.gitconfig` 변경)은 하지 않는다.
 - 집 Windows: 이 저장소를 clone 한 뒤 저장소 안에서 `git config user.email dhkim1522@naver.com` 을 설정한다.
 - 페이즈 1 전에 필요한 것: Node.js LTS, Cloudflare 계정, `wrangler` 로그인.
+- Cloudflare: 개인 계정(이메일 인증 완료), workers.dev 하위 도메인 `dhplay`(계정 전체 공용, 바꾸면 모든 Worker 주소가 바뀜). 배포는 `npm run deploy`, 배포 주소 스모크는 `node scripts/smoke.mjs --prod --stage create`.
+- 집 Windows 에서 배포하려면 그 PC 에서 `npx wrangler login` 을 한 번 한다(개인 계정).
 - GSD·gsd-addons 설치 (PC 마다 한 번):
   - Mac: `CLAUDE_CONFIG_DIR=~/.claude-personal npx @opengsd/gsd-core@latest --claude --global` (설정 폴더를 꼭 명시한다)
   - gsd-addons: `~/personal/gsd-addons` 에 clone 한 뒤 `claude plugin marketplace add ~/personal/gsd-addons`, `claude plugin install gsd-addons@gsd-addons --scope user`. 고친 뒤에는 `claude plugin marketplace update gsd-addons`.
