@@ -89,6 +89,12 @@ describe("assignRoles - 범위 밖 인원", () => {
   });
 });
 
+describe("assignRoles - 입력 검증", () => {
+  it("플레이어 ID 가 중복되면 RangeError", () => {
+    expect(() => assignRoles(["a", "b", "c", "a"], seededRandInt(1))).toThrow(RangeError);
+  });
+});
+
 describe("seededRandInt", () => {
   it("같은 시드는 같은 수열을 낸다", () => {
     const a = seededRandInt(99);
