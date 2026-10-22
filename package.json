@@ -12,7 +12,8 @@
     "test": "vitest run",
     "cf-typegen": "wrangler types",
     "typecheck": "wrangler types && tsc -p tsconfig.app.json --noEmit && tsc -p tsconfig.worker.json --noEmit",
-    "deploy": "vite build && wrangler deploy"
+    "deploy": "vite build && wrangler deploy",
+    "smoke": "node scripts/smoke.mjs"
   },
   "dependencies": {
     "react": "19.3.1",
