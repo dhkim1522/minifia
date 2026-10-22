@@ -5,16 +5,16 @@ milestone_name: MVP
 current_phase: 01
 current_phase_name: 걷는 뼈대
 status: executing
-stopped_at: Phase 1 context gathered
-last_updated: "2026-10-21T11:30:50.052Z"
-last_activity: 2026-10-21
-last_activity_desc: 결정 0005(비대면 전환) 반영, 페이즈를 게임 흐름 구간별로 재구성(6페이즈), 요구사항 35개
-state_head: fe7787a73eb7c6baee30990c0ccf16d9998666ca
+stopped_at: Completed 01-01-PLAN.md
+last_updated: "2026-10-22T01:13:24.861Z"
+last_activity: 2026-10-22
+last_activity_desc: Phase 01 execution started
+state_head: b1c33e2c85f20b9a7f4856a5c1007cf12e12f1ad
 progress:
   total_phases: 6
   completed_phases: 0
   total_plans: 10
-  completed_plans: 0
+  completed_plans: 1
 ---
 
 # Project State
@@ -24,14 +24,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-10-21)
 
 **Core value:** 링크 하나로 모인 친구들이 설명 없이 정통 마피아 한 판(6~10분)을 끝까지 마치는 것
-**Current focus:** Phase 1 걷는 뼈대
+**Current focus:** Phase 01 — 걷는 뼈대
 
 ## Current Position
 
-Phase: 01 (걷는 뼈대) — READY TO EXECUTE
-Plan: 0 of TBD in current phase
+Phase: 01 (걷는 뼈대) — EXECUTING
+Plan: 2 of 10
 Status: Ready to execute
-Last activity: 2026-10-21 — 결정 0005(비대면 전환) 반영, 페이즈를 게임 흐름 구간별로 재구성(6페이즈), 요구사항 35개
+Last activity: 2026-10-22 — Phase 01 execution started
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -53,6 +53,11 @@ Progress: [░░░░░░░░░░] 0%
 - Trend: -
 
 *Updated after each plan completion*
+**Per-Plan Metrics:**
+
+| Plan | Duration | Tasks | Files |
+|------|----------|-------|-------|
+| Phase 01 P01 | 3 min | 3 tasks | 21 files |
 
 ## Accumulated Context
 
@@ -69,6 +74,7 @@ Recent decisions affecting current work:
 - [결정 0008]: 실시간 3D 없이 2.5D(원근 타원 테이블, 그림자·조명 레이어), 5페이즈에서 프레임 PNG 캐릭터
 - [Phase 1 논의]: CONN-02 확정(서버 타이머 진행, 기권·행동 없음·말 안 함, 끊긴 사람 흐릿하게). 1페이즈는 "낮이 되었습니다" 화면에서 멈춘다
 - [Roadmap]: 1페이즈 성공 기준에 배포 주소에서 폰 2대 이상이 같은 방에 들어가 역할을 받는 것을 넣었다. 정식 출시는 마지막 별도 마일스톤(v2.0)
+- [Phase 01]: Worker 이름 minifia + Durable Object exports 선언 (사용자 결정, 결정 0009). compatibility_date 2026-10-12 고정, 패키지는 정확한 버전으로 고정
 
 ### Pending Todos
 
@@ -93,6 +99,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-21T10:20:25.166Z
-Stopped at: Phase 1 context gathered
-Resume file: .planning/phases/01-walking-skeleton/01-CONTEXT.md
+Last session: 2026-10-22T01:13:24.840Z
+Stopped at: Completed 01-01-PLAN.md
+Resume file: None
