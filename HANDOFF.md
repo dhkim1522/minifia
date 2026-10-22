@@ -52,14 +52,14 @@
   - 계획 보정 추가(M16): `01-06-PLAN.md` 의 임시 실루엣·64×96·`public/characters/{id}/{state}_{frame}.png` 규칙은 낡았다. 다시 계획할 때 `Figure` 를 `public/characters/table/*_default@2x.png`(srcset @4x) 이미지로, 자리 폭 20%, 탈락은 `ghost` 로, 배경은 `public/backgrounds/bg_<game|entry>_<장면>.svg`(center top / cover)로 바꾼다
   - 작업 분리 확정(결정 0011): 사람용 산출물·그림 에셋은 클로드 데스크톱, 디자인 시스템·저장소·구현은 클로드 코드. 정본 화면설계서 https://claude.ai/artifact/QtbQYhk7ezy4fV7H98bZJz (S-01~S-16, C-01~C-03), 화면 흐름 https://claude.ai/artifact/NzZBqoJD8ut16J2VUwpn64. IA 는 만들지 않음. 마피아 동료는 테이블에도 표시, 투표·찬반은 끝나면 누가 누구를 찍었는지 동시 공개(설계서 v0.2 에 반영: 07-1 결과 공개 보드 S-09b·S-11b 추가)
   - 디자인 시스템 버전 8: 그림을 `assets/` 파일로 두고 번들이 자기 옆 `assets/` 를 찾는다(캔버스 설치 가능), `tokens.css` 를 `tokens.json` 에서 생성. 코드 쪽에서 만들던 "미니피아 디자인" 캔버스는 설계서와 중복이라 삭제
+- **화면설계서 v0.2 승인** (2026-10-22): 아티팩트 버전 15 "v0.2 승인본"(S-11b 예시 표를 S-12 의 찬성 4·반대 1 과 맞춤). 보드 12장을 캔버스 크기 그대로 PNG 로 찍어 `design/screens/` 에 사본(`README.md` 에 보드별 화면 번호). 토큰 사본 `design/tokens.json`, `scripts/gen-tokens.mjs`(`npm run tokens`, `--check`)가 `src/styles/tokens.css` 를 만든다(디자인 시스템 `tokens.css` 와 같은 내용). 바탕 스타일은 `src/styles/base.css` 로 분리. 빌드·타입 검사·테스트 123개 통과
 
+## 다음 할 일
 
-1. **디자인 구간 (결정 0010·0011)**: 화면설계서 v0.2(결정 0011 반영 완료) 사용자 승인 → 아티팩트 버전 이름표 → 화면 PNG 를 `design/screens/` 에, 토큰 `tokens.json` 을 `design/` 에 사본 → 앱 `src/styles/tokens.css` 를 `tokens.json` 에서 만들기(디자인 시스템의 `tokens.css` 생성 방식과 같게)
-2. 아티팩트 링크를 `CLAUDE.md` 문서 지도에 적는다
-3. `01-UI-SPEC.md` 를 설계 사본에 맞춰 고친 뒤 웨이브 3 이후를 `/gsd-plan-phase 1` 로 다시 계획한다(01-01~01-03 은 그대로). UI-SPEC 의 M1~M15 도 함께 반영
-4. `/clear` 후 `/gsd-execute-phase 1` 로 웨이브 3부터 재개
-5. 디자인 구간을 해 본 결과로 gsd-addons 에 디자인 구간 스킬을 만든다(`docs/lifecycle.md` 구간 3 상태 갱신). 페이즈가 끝날 때마다 `/gsd-extract-learnings`. 포트폴리오 명령 `/gsd-addons:portfolio`(선택 단계)는 나중에 만든다
-6. GSD 를 쓰며 불편했던 점은 기록해 두고 gsd-addons 에서 고친다(구간별 표준 산출물은 반복 여부와 상관없이 의도적으로 만든다). 지금까지: 문서 분류 에이전트가 해시를 못 구해 결과 파일 이름 규칙을 어김(수동 수정), `ingest-docs` 는 `config.json` 을 만들지 않음, 한국어 페이즈 이름은 슬러그가 비어 `init.plan-phase` 가 페이즈 폴더 경로를 못 냄(영문 슬러그 폴더를 직접 만들어 해결), UI 게이트가 한국어 문구에서 프런트엔드 신호를 못 잡음, UI 상태 점검기도 한국어 요소는 `text_en` 영어 번역이 있어야 분류함(72~75개 항목이 나와 하나씩 묻기는 불가능해 일괄 처리)(1페이즈 계획 때도 반복 — 그 결과 `ui_phase: true` 인데도 UI-SPEC 없이 계획·실행까지 감), 엣지 프로브가 한국어 요구사항을 하나도 분류하지 못함(8개 모두 unclassified), 첫 플랜 체커가 계획 본문을 읽지 않고 통과 수준으로 판단함(재검증 때 본문까지 읽게 지시), `state.planned-phase` 가 `.planning/state.json` 을 새로 만들지만 커밋 대상에 없음(미추적으로 둠). 실행 단계에서 추가: `origin/HEAD` 가 없으면 워크트리 병렬 실행이 순차로 떨어지는데, 실행자 디스패치 가드는 매번 다시 워크트리를 요구해 디스패치 직전마다 `dispatch-isolation --force-isolation none` 을 다시 기록해야 했음(`git remote set-head origin -a` 로 해결될 것으로 보임), 실행자 커밋 가드가 `branching_strategy: none` 인데도 `main` 을 막고 페이즈 브랜치를 만듦, `.planning/milestone.lock` 도 미추적으로 생김.
+1. `01-UI-SPEC.md` 를 설계 사본(`design/screens/`, `design/tokens.json`, 디자인 시스템 컴포넌트)에 맞춰 고친 뒤 웨이브 3 이후를 `/gsd-plan-phase 1` 로 다시 계획한다(01-01~01-03 은 그대로). UI-SPEC 의 M1~M16 도 함께 반영
+2. `/clear` 후 `/gsd-execute-phase 1` 로 웨이브 3부터 재개
+3. 디자인 구간을 해 본 결과로 gsd-addons 에 디자인 구간 스킬을 만든다(`docs/lifecycle.md` 구간 3 상태 갱신). 페이즈가 끝날 때마다 `/gsd-extract-learnings`. 포트폴리오 명령 `/gsd-addons:portfolio`(선택 단계)는 나중에 만든다
+4. GSD 를 쓰며 불편했던 점은 기록해 두고 gsd-addons 에서 고친다(구간별 표준 산출물은 반복 여부와 상관없이 의도적으로 만든다). 지금까지: 문서 분류 에이전트가 해시를 못 구해 결과 파일 이름 규칙을 어김(수동 수정), `ingest-docs` 는 `config.json` 을 만들지 않음, 한국어 페이즈 이름은 슬러그가 비어 `init.plan-phase` 가 페이즈 폴더 경로를 못 냄(영문 슬러그 폴더를 직접 만들어 해결), UI 게이트가 한국어 문구에서 프런트엔드 신호를 못 잡음, UI 상태 점검기도 한국어 요소는 `text_en` 영어 번역이 있어야 분류함(72~75개 항목이 나와 하나씩 묻기는 불가능해 일괄 처리)(1페이즈 계획 때도 반복 — 그 결과 `ui_phase: true` 인데도 UI-SPEC 없이 계획·실행까지 감), 엣지 프로브가 한국어 요구사항을 하나도 분류하지 못함(8개 모두 unclassified), 첫 플랜 체커가 계획 본문을 읽지 않고 통과 수준으로 판단함(재검증 때 본문까지 읽게 지시), `state.planned-phase` 가 `.planning/state.json` 을 새로 만들지만 커밋 대상에 없음(미추적으로 둠). 실행 단계에서 추가: `origin/HEAD` 가 없으면 워크트리 병렬 실행이 순차로 떨어지는데, 실행자 디스패치 가드는 매번 다시 워크트리를 요구해 디스패치 직전마다 `dispatch-isolation --force-isolation none` 을 다시 기록해야 했음(`git remote set-head origin -a` 로 해결될 것으로 보임), 실행자 커밋 가드가 `branching_strategy: none` 인데도 `main` 을 막고 페이즈 브랜치를 만듦, `.planning/milestone.lock` 도 미추적으로 생김.
 
 ## 환경 메모
 

@@ -1,0 +1,46 @@
+/* 앱 바탕 스타일. 토큰 값은 tokens.css (design/tokens.json 에서 생성). */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  background: var(--night-950);
+  color: var(--gray-100);
+  font-family: var(--font-ui);
+}
+
+#root {
+  max-width: 430px;
+  margin: 0 auto;
+  min-height: 100dvh;
+  background: var(--night-900);
+  padding-top: env(safe-area-inset-top);
+  padding-right: env(safe-area-inset-right);
+  padding-bottom: env(safe-area-inset-bottom);
+  padding-left: env(safe-area-inset-left);
+  display: flex;
+  flex-direction: column;
+}
+
+.app-version {
+  margin-top: auto;
+  padding: 12px;
+  text-align: center;
+  font-size: 11px;
+  color: var(--gray-500);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
