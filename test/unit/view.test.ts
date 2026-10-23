@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { claimOptions, selectClaim } from "../../shared/game/claim";
+import { say } from "../../shared/game/chat";
+import type { SayInput } from "../../shared/game/chat";
+import { claimOptions, currentClaim, selectClaim } from "../../shared/game/claim";
+import { extendDiscussion } from "../../shared/game/discussion";
 import { ROOM_TTL_MS, attachConnection, createRoomState, joinRoom, startGame } from "../../shared/game/room";
 import type { Player, RoomState } from "../../shared/game/room";
 import { rolesInPlay } from "../../shared/game/roles";
@@ -120,11 +123,37 @@ function pick(state: RoomState, seat: number, claim: Claim): RoomState {
   return r.state;
 }
 
+/** 실제 전이(say)로 메시지 한 줄을 더한다. */
+function speak(state: RoomState, seat: number, input: SayInput, now: number): RoomState {
+  const r = say(state, seatId(state, seat), input, now);
+  if (!r.ok) throw new Error(`say failed: ${r.error}`);
+  return r.state;
+}
+
 // 낮 1일차 마감 시각(stateAt 의 연쇄와 같다): dayAnnounce 시작 = 역할 확인 마감, 이후 +2000 / +15000 / +2000 / +90000.
 const DAY1_START = START_AT + 3_000 + 15_000;
 const CLAIM_ENDS_AT = DAY1_START + 2_000 + 15_000;
 const REVEAL_ENDS_AT = CLAIM_ENDS_AT + 2_000;
 const DISCUSSION_ENDS_AT = REVEAL_ENDS_AT + 90_000;
+
+/**
+ * 낮 단계는 서로 다른 선택·메시지가 있는 상태를 실제 전이(selectClaim·tick·say)로 만든다 — 손으로 필드를 채우지 않는다.
+ * claim: seat%3===2 는 고르지 않고 나머지는 (seat+seed) 로 고른 서로 다른 값. claimReveal·discussion: 그 선택이 공개된 뒤.
+ * discussion: 메시지 3줄(그중 claimed 1줄). 낮이 아닌 단계는 stateAt 그대로다.
+ */
+function richStateAt(phase: PhaseId, n: number, seed: number): RoomState {
+  if (phase !== "claim" && phase !== "claimReveal" && phase !== "discussion") return stateAt(phase, n, seed);
+  const opts = claimOptions(n);
+  let s = stateAt("claim", n, seed);
+  for (const p of s.players) if (p.seat % 3 !== 2) s = pick(s, p.seat, opts[(p.seat + seed) % opts.length]!);
+  if (phase === "claim") return s;
+  s = tick(s, CLAIM_ENDS_AT);
+  if (phase === "claimReveal") return s;
+  s = tick(s, REVEAL_ENDS_AT);
+  s = speak(s, 0, { template: "suspect", target: 1 }, REVEAL_ENDS_AT + 1_000);
+  s = speak(s, 1, { template: "claimed", target: 2, claimedRole: rolesInPlay(n)[0]! }, REVEAL_ENDS_AT + 4_000);
+  return speak(s, 2, { template: "trust", target: 0 }, REVEAL_ENDS_AT + 7_000);
+}
 
 function mafiaSeatsOtherThan(state: RoomState, p: Player): number[] {
   return state.players
@@ -232,7 +261,7 @@ describe("buildView 전수 누출 검사 (T-01-23)", () => {
     for (const n of PLAYER_COUNTS) {
       for (const seed of SEEDS) {
         for (const phase of PHASES) {
-          const s = stateAt(phase, n, seed);
+          const s = richStateAt(phase, n, seed);
           for (const viewer of s.players) {
             views += 1;
             const tag = `${n}/${seed}/${phase}/seat${viewer.seat}`;
@@ -251,6 +280,18 @@ describe("buildView 전수 누출 검사 (T-01-23)", () => {
             for (const entry of view.players) {
               const keys = Object.keys(entry).sort().join(",");
               if (keys !== "connected,isHost,nickname,seat") violations.push(`${tag}: players[] keys ${keys}`);
+            }
+            // 서버 전용 필드 이름은 어느 경로에도 없다
+            for (const path of keyPaths(view)) {
+              if (["claimLast", "lastSendAt", "claimChoice", "claimShown", "claimChanged"].includes(lastKey(path))) {
+                violations.push(`${tag}: server-only key at ${path}`);
+              }
+            }
+            // me.claim 은 claim 단계의 본인 currentClaim 과 같고, 그 밖의 단계에는 없다
+            if (phase === "claim") {
+              if (view.me.claim !== currentClaim(viewer)) violations.push(`${tag}: me.claim ${view.me.claim} != own currentClaim`);
+            } else if ("claim" in view.me) {
+              violations.push(`${tag}: me.claim outside claim phase`);
             }
             // 역할·주장 값은 허용 경로(me.role, me.claim, day.roles[], day.claims[].claim, day.messages[].claimedRole)에만 있다
             for (const leak of roleValueLeaks(view)) violations.push(`${tag}: role-like value outside allowed paths: ${leak}`);
@@ -336,5 +377,88 @@ describe("buildView 낮 뷰 — 직업 공개 중(claim) 은 완료한 자리와
   it("일부만 고른 상태: claimDone 에는 고른 사람 seat 만, 오름차순으로 들어 있다", () => {
     const s = pick(pick(stateAt("claim", 6, 42), 4, "none"), 1, "mafia");
     expect(flat(buildView(s, seatId(s, 0), START_AT).day?.claimDone)).toBe("[1,4]");
+  });
+});
+
+describe("buildView 낮 뷰 — 공개 뒤·토론 (D-04, D-06, D-08, D-15, D-18)", () => {
+  it("claimReveal·discussion: day.claims 는 seat 오름차순 {seat, claim, changed} 이고 me 에 claim 키가 없다", () => {
+    const bad: string[] = [];
+    for (const phase of ["claimReveal", "discussion"] as const) {
+      const s = richStateAt(phase, 6, 42);
+      // 1일차 선택: seat%3===2 는 안 골라 none, 나머지는 (seat+42) 번째 선택지
+      const opts = claimOptions(6);
+      const want = [0, 1, 2, 3, 4, 5].map((seat) => ({
+        seat,
+        claim: seat % 3 === 2 ? "none" : opts[(seat + 42) % opts.length]!,
+        changed: false,
+      }));
+      for (const p of s.players) {
+        const view = buildView(s, p.id, START_AT);
+        if (flat(view.day?.claims) !== flat(want)) bad.push(`${phase}/seat${p.seat}:${flat(view.day?.claims)}`);
+        if ("claim" in view.me) bad.push(`${phase}/seat${p.seat}: me.claim`);
+        if ("claimDone" in (view.day ?? {})) bad.push(`${phase}/seat${p.seat}: claimDone`);
+      }
+    }
+    expect(bad.join(" ")).toBe("");
+  });
+
+  it("말 바꿈: 2일차에 어제와 다른 직업을 공개한 사람만 changed true 다", () => {
+    let s = pick(pick(stateAt("claim", 5, 1), 1, "police"), 2, "doctor");
+    s = tick(s, DISCUSSION_ENDS_AT + 2_000); // 2일차 claim
+    s = pick(s, 1, "doctor"); // police → doctor : 바꿈
+    s = pick(s, 2, "doctor"); // 같은 값 : 바꿈 아님
+    s = tick(s, DISCUSSION_ENDS_AT + 4_000 + 13_000 + 2_000); // 2일차 claimReveal 지나 discussion
+    expect(s.phase).toBe("discussion");
+    const claims = buildView(s, seatId(s, 0), START_AT).day?.claims ?? [];
+    expect(claims.map((c) => `${c.seat}:${c.claim}:${c.changed}`).join(" ")).toBe(
+      "0:none:false 1:doctor:true 2:doctor:false 3:none:false 4:none:false",
+    );
+  });
+
+  it("공개 필드가 없는 옛 플레이어는 {claim none, changed false} 로 실린다", () => {
+    const s = stateAt("claimReveal", 5, 1);
+    const old: RoomState = {
+      ...s,
+      players: s.players.map((p) => {
+        const { claimShown: _a, claimChanged: _b, claimLast: _c, claimChoice: _d, ...rest } = p;
+        return rest;
+      }),
+    };
+    const claims = buildView(old, seatId(old, 0), START_AT).day?.claims ?? [];
+    expect(claims.map((c) => `${c.seat}:${c.claim}:${c.changed}`).join(" ")).toBe(
+      "0:none:false 1:none:false 2:none:false 3:none:false 4:none:false",
+    );
+  });
+
+  it("claimReveal 에는 messages·extendUsed 키가 없다", () => {
+    const s = richStateAt("claimReveal", 5, 1);
+    const day = buildView(s, s.hostId, START_AT).day;
+    expect(Object.keys(day ?? {}).sort().join(",")).toBe("claims,n,roles");
+  });
+
+  it("discussion: day.messages 는 서버 보관 줄을 필드별로 복사하고 키 집합이 템플릿에 맞다", () => {
+    let s = stateAt("discussion", 5, 1);
+    s = speak(s, 0, { template: "suspect", target: 1 }, REVEAL_ENDS_AT + 1_000);
+    s = speak(s, 1, { template: "innocent" }, REVEAL_ENDS_AT + 4_000);
+    s = speak(s, 2, { template: "claimed", target: 3, claimedRole: "police" }, REVEAL_ENDS_AT + 7_000);
+    const day = buildView(s, seatId(s, 4), START_AT).day;
+    const keys = (day?.messages ?? []).map((m) => Object.keys(m).sort().join(","));
+    expect(keys.join(" | ")).toBe("at,seat,seq,target,template | at,seat,seq,template | at,claimedRole,seat,seq,target,template");
+    expect(day?.messages?.length).toBe(3);
+    expect(day?.messages?.[0] === s.messages?.[0]).toBe(false); // 저장 객체를 그대로 넘기지 않는다
+    expect(flat(day?.messages)).toBe(flat(s.messages));
+    expect(day?.extendUsed).toBe(false);
+    expect(Object.keys(day ?? {}).sort().join(",")).toBe("claims,extendUsed,messages,n,roles");
+  });
+
+  it("연장 전 phaseDurationMs 는 90000, 연장 뒤 120000 이고 extendUsed 가 true 다; claim 은 15000", () => {
+    const s = stateAt("discussion", 4, 1);
+    const before = buildView(s, s.hostId, START_AT);
+    const extended = extendDiscussion(s, s.hostId);
+    if (!extended.ok) throw new Error(extended.error);
+    const after = buildView(extended.state, s.hostId, START_AT);
+    expect(`${before.phaseDurationMs}:${before.day?.extendUsed}`).toBe("90000:false");
+    expect(`${after.phaseDurationMs}:${after.day?.extendUsed}`).toBe("120000:true");
+    expect(buildView(stateAt("claim", 4, 1), s.hostId, START_AT).phaseDurationMs).toBe(15000);
   });
 });
