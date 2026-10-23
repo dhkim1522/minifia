@@ -214,8 +214,10 @@ describe("S-05 역할 확인 (GAME-01, ROLE-02, D-13 개정, D-14, D-15, R12)", 
   });
 });
 
+// 단계 안내 영역은 방 화면 루트의 직접 자식이다. 낮 토론에는 메시지 로그·이모티콘 live 줄도 polite 라서
+// 문서 순서 첫 번째 [aria-live] 로는 더 이상 유일하게 찾을 수 없다(02-09).
 function liveRegion(container: HTMLElement): HTMLElement {
-  const el = container.querySelector<HTMLElement>('[aria-live="polite"]');
+  const el = container.querySelector<HTMLElement>('.mf-room > [aria-live="polite"]');
   expect(el, "aria-live=polite 영역").not.toBeNull();
   return el!;
 }
