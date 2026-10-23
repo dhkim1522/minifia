@@ -4,6 +4,7 @@
 // 서버는 문장을 만들지 않는다: 보관하는 것은 템플릿 ID·대상 seat·직업 값뿐이고 문장은 화면이 만든다(T-02-07).
 // 주장의 참·거짓은 보지 않는다(D-10): 이 파일은 플레이어의 실제 역할 필드를 읽지 않는다.
 // 보낸 사람은 입력이 아니라 actorId 로 서버 상태에서 찾는다(T-02-08).
+import { EMOJI_IDS } from "../protocol";
 import type { ChatLine, EmojiId, TemplateId } from "../protocol";
 import { isAlive } from "./alive";
 import type { RoleId } from "./roles";
@@ -98,12 +99,24 @@ export function say(
   };
 }
 
-// 이모티콘 뼈대 — RED 단계용. GREEN 에서 구현한다.
+/**
+ * 이모티콘(COMM-02). 앞부분(단계 → 보낸 사람 존재·생존)은 say 와 같은 senderOf 를 쓰고, 쿨다운도 같은 lastSendAt 하나를 본다(D-14 합산).
+ * 통과하면 보낸 사람 lastSendAt 만 바뀐 새 상태와 {seat, icon, at} 이벤트를 돌려준다.
+ * 이모티콘은 messages 에 남기지 않는다 — 재접속 복원이 없다(UI-SPEC S-08b). 쿨다운은 플레이어 단위 영속 필드라 재접속으로 풀리지 않는다.
+ */
 export function emote(
-  _state: RoomState,
-  _actorId: string,
-  _icon: EmojiId,
-  _now: number,
+  state: RoomState,
+  actorId: string,
+  icon: EmojiId,
+  now: number,
 ): { ok: true; state: RoomState; event: { seat: number; icon: EmojiId; at: number } } | { ok: false; error: ChatError } {
-  return { ok: false, error: "BAD_MESSAGE" };
+  const sender = senderOf(state, actorId);
+  if (typeof sender === "string") return { ok: false, error: sender };
+  if (!(EMOJI_IDS as readonly string[]).includes(icon)) return { ok: false, error: "BAD_MESSAGE" };
+  if (coolingDown(sender, now)) return { ok: false, error: "RATE_LIMITED" };
+  return {
+    ok: true,
+    event: { seat: sender.seat, icon, at: now },
+    state: { ...state, players: state.players.map((p) => (p.id === sender.id ? { ...p, lastSendAt: now } : p)) },
+  };
 }
