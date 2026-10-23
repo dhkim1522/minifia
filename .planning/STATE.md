@@ -4,13 +4,13 @@ milestone: v1.0
 milestone_name: MVP
 current_phase: 01
 current_phase_name: 걷는 뼈대
-current_plan: 16
+current_plan: 17
 status: executing
-stopped_at: 01-16 Task 3 실기기 확인 FAILED, G-01-9 open, 재진단 대기
-last_updated: "2026-10-23T10:49:09.457Z"
+stopped_at: Completed 01-17-PLAN.md (01-16 은 G-01-9 open, 재진단 대기)
+last_updated: "2026-10-23T10:53:08.801Z"
 last_activity: 2026-10-23
 last_activity_desc: Phase 01 execution started
-state_head: f7b4258e689fa131f4906268f2e9d37a380bd22c
+state_head: e5b43c953a8e08cdc60623f567cc9857a5af9ca3
 progress:
   total_phases: 6
   completed_phases: 0
@@ -30,10 +30,10 @@ See: .planning/PROJECT.md (updated 2026-10-21)
 ## Current Position
 
 Phase: 01 (걷는 뼈대) — EXECUTING
-Current Plan: 16
+Current Plan: 17
 Total Plans in Phase: 17
-Plan: 16 of 17
-Status: Executing Phase 01
+Plan: 17 of 17
+Status: Ready to execute
 Last activity: 2026-10-23 — Phase 01 execution started
 
 Progress: [░░░░░░░░░░] 0%
@@ -64,6 +64,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 01 P03 | 3 min | 3 tasks | 11 files |
 | Phase 01 P02 | 52 min | 3 tasks | 28 files |
 | Phase 01 P15 | 15min | 2 tasks | 4 files |
+| Phase 01 P17 | 8 min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -86,6 +87,8 @@ Recent decisions affecting current work:
 - [Phase 01]: 방 코드 충돌은 DO createRoom 이 CODE_TAKEN 거부, Worker 가 최대 8번 재시도 후 503 CODE_EXHAUSTED (01-02)
 - [Phase 01]: [01-15] 채움 문자 5개는 위치와 무관하게 INVALID_CHARS, ZWJ·변형 선택자·결합 문자는 표시 이름에 남기고 비교 키에서만 제거
 - [Phase 01]: 01-16: 실기기(iPhone Safari)에서 시트가 바닥보다 약 60px 위에 멈췄다가 0.2초 뒤 내려옴. 가설(첫 프레임) 일부만 일치, G-01-9 open, dvh/하단 기준선 변화로 재진단 필요
+- [Phase 01]: 01-17: 입력 화면 힌트는 gray-100 이 아니라 gray-300 불투명도 1 로 둔다(입력된 글자와 구분 유지). 구분선 선은 gray-500, 꺼진 버튼은 공통 불투명도 0.6
+- [Phase 01]: 01-17: CSS 값 테스트는 ?raw 대신 readFileSync 로 읽는다(vitest 가 CSS 를 처리해 빈 문자열이 됨)
 
 ### Pending Todos
 
@@ -111,6 +114,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-23T10:49:09.381Z
-Stopped at: 01-16 Task 3 실기기 확인 FAILED, G-01-9 open, 재진단 대기
-Resume file: .planning/phases/01-walking-skeleton/01-16-SUMMARY.md
+Last session: 2026-10-23T10:53:08.712Z
+Stopped at: Completed 01-17-PLAN.md (01-16 은 G-01-9 open, 재진단 대기)
+Resume file: None
