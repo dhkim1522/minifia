@@ -52,6 +52,13 @@ async function centered(input, top) {
   return { input, left: Math.round((W - width) / 2), top };
 }
 
+// 굵은 글자 모양이 없는 폰트라 같은 글자를 상하좌우로 몇 px 어긋나게 겹쳐 굵게 만든다(앱 제목의 글자 테두리와 같은 느낌).
+async function bold(input, top, spread = 3) {
+  const offsets = [[0, 0], [-spread, 0], [spread, 0], [0, -spread], [0, spread], [-2, -2], [2, -2], [-2, 2], [2, 2]];
+  const base = await centered(input, top);
+  return offsets.map(([dx, dy]) => ({ ...base, left: base.left + dx, top: base.top + dy }));
+}
+
 const title = await text("Minifia", 168, "#f1f2f5");
 const titleShadow = await text("Minifia", 168, "#000000");
 const sub = await text("친구들과 5분 만에 한 판, 마피아 게임", 44, "#e6e8ee");
@@ -78,8 +85,8 @@ const out = await sharp(background)
   .composite([
     { input: veil, left: 0, top: 0 },
     ...figLayers,
-    await centered(titleShadow, 108),
-    await centered(title, 100),
+    ...(await bold(titleShadow, 108)),
+    ...(await bold(title, 100)),
     await centered(subShadow, 322),
     await centered(sub, 320),
   ])

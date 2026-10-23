@@ -63,6 +63,8 @@
 .mf-entry__head { display: flex; flex-direction: column; align-items: center; gap: var(--space-xs); margin-bottom: var(--space-xl); text-align: center; }
 .mf-entry__head .mf-t-label { color: var(--gray-100); text-shadow: var(--shadow-text); }
 .mf-entry__head .mf-t-display { text-shadow: var(--shadow-text); }
+/* Gowun Dodum 은 굵은 글자 모양이 없어(브라우저가 흐리게 흉내만 냄) 같은 색 테두리로 굵게 만든다. */
+.mf-entry__head .mf-t-display { -webkit-text-stroke: 2px var(--gray-50); paint-order: stroke fill; letter-spacing: 0.02em; }
 /* 링크 참가 화면(S-02)의 카드 */
 .mf-entry__card {
   margin-top: auto; display: flex; flex-direction: column; gap: var(--space-md);
