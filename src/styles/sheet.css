@@ -1,7 +1,8 @@
 /* 하단 시트 틀(Sheet) · 확인 시트 · 공유 시트(C-03) · 아이콘 버튼.
    design/design-system/components/bundle.css 의 .mf-sheet* (85-89행)에서 옮기고, <dialog> 틀과 모션을 더했다.
    값은 tokens.css 변수만 쓴다(색 직접 지정 없음). 이 파일에는 강조색(붉은 계열)을 쓰지 않는다 — 그것은 처형·탈락 발표에 남긴다.
-   240ms 는 토큰에 없는 모션 길이라 지역 상수로 둔다(UI-SPEC 스타일 규칙, R18). */
+   240ms 는 토큰에 없는 모션 길이라 지역 상수로 둔다(UI-SPEC 스타일 규칙, R18).
+   진입은 열림 클래스(mf-dialog--open) 전환이고, 진입 전 초기 위치는 CSS 로 아래에 고정한다(G-01-9). */
 
 .mf-dialog {
   --mf-sheet-ms: 240ms;
@@ -14,21 +15,20 @@
 /* 막은 ::backdrop 이 아니라 안의 div 다(커스텀 속성 상속이 불확실, Pitfall 19). ::backdrop 은 투명으로 둔다. */
 .mf-dialog::backdrop { background: transparent; }
 
-.mf-sheet-scrim { position: absolute; inset: 0; background: var(--scrim); animation: mf-sheet-scrim-in var(--mf-sheet-ms) var(--ease-out) both; transition: opacity var(--mf-sheet-ms) var(--ease-out); }
-.mf-dialog--closing .mf-sheet-scrim { opacity: 0; animation: none; }
+.mf-sheet-scrim { position: absolute; inset: 0; background: var(--scrim); opacity: 0; transition: opacity var(--mf-sheet-ms) var(--ease-out); }
+.mf-dialog--open .mf-sheet-scrim { opacity: 1; }
+.mf-dialog--closing .mf-sheet-scrim { opacity: 0; }
 
 .mf-sheet {
   position: relative; display: flex; flex-direction: column; gap: var(--space-lg);
   width: 100%; max-width: 430px; margin: 0 auto; max-height: 80dvh; overflow-y: auto;
   padding: var(--space-lg); padding-bottom: calc(var(--space-lg) + env(safe-area-inset-bottom));
   background: var(--night-800); border-radius: var(--radius-lg) var(--radius-lg) 0 0; box-shadow: var(--shadow-card);
-  animation: mf-sheet-up var(--mf-sheet-ms) var(--ease-out) both;
+  transform: translateY(100%);
   transition: transform var(--mf-sheet-ms) var(--ease-out);
 }
-.mf-sheet--closing { transform: translateY(100%); animation: none; }
-
-@keyframes mf-sheet-up { from { transform: translateY(100%); } to { transform: translateY(0); } }
-@keyframes mf-sheet-scrim-in { from { opacity: 0; } to { opacity: 1; } }
+.mf-dialog--open .mf-sheet { transform: translateY(0); }
+.mf-sheet--closing { transform: translateY(100%); }
 
 /* 손잡이 막대: 끌기는 이 영역에만 건다. 보이는 막대는 40×4, 누르는 영역은 위아래로 넓힌다. */
 .mf-sheet__handle {
@@ -54,5 +54,5 @@
 .mf-share__block { display: flex; flex-direction: column; gap: var(--space-xs); }
 
 @media (prefers-reduced-motion: reduce) {
-  .mf-sheet, .mf-sheet-scrim { animation-duration: 0.01ms; transition-duration: 0.01ms; }
+  .mf-sheet, .mf-sheet-scrim { transition-duration: 0.01ms; }
 }

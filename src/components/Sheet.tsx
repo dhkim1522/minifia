@@ -35,6 +35,8 @@ export function Sheet({ label, onClose, initialFocusRef, showClose, children }: 
   const sheetRef = useRef<HTMLDivElement>(null);
   const closeBtnRef = useRef<HTMLButtonElement>(null);
   const [closing, setClosing] = useState(false);
+  // 열림 클래스(mf-dialog--open) 여부. 처음엔 false 라 첫 프레임은 CSS 의 시작 상태(화면 아래)로 그려진다.
+  const [entered, setEntered] = useState(false);
   const closingRef = useRef(false);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const onCloseRef = useRef(onClose);
@@ -60,7 +62,17 @@ export function Sheet({ label, onClose, initialFocusRef, showClose, children }: 
     // React autoFocus 는 대화상자가 열리기 전에 일어나므로 열린 직후 직접 준다.
     const first = initialFocusRef?.current ?? closeBtnRef.current ?? dlg.querySelector<HTMLElement>("button, [href], input, [tabindex]");
     first?.focus();
+    // 첫 프레임을 시작 상태로 그린 뒤 열림 — iOS Safari 에서 첫 프레임이 최종 위치로 그려지는 문제(G-01-9).
+    // requestAnimationFrame 콜백은 그 프레임이 그려지기 전에 실행되므로 한 번 더 요청해 시작 상태가 최소 한 번 그려지게 한다.
+    let frame2: number | undefined;
+    const frame1 = requestAnimationFrame(() => {
+      frame2 = requestAnimationFrame(() => {
+        if (!closingRef.current) setEntered(true);
+      });
+    });
     return () => {
+      cancelAnimationFrame(frame1);
+      if (frame2 !== undefined) cancelAnimationFrame(frame2);
       if (timer.current !== undefined) clearTimeout(timer.current);
       timer.current = undefined;
       if (dlg.open) dlg.close();
@@ -100,7 +112,7 @@ export function Sheet({ label, onClose, initialFocusRef, showClose, children }: 
   return (
     <dialog
       ref={dialogRef}
-      className={closing ? "mf-dialog mf-dialog--closing" : "mf-dialog"}
+      className={closing ? "mf-dialog mf-dialog--closing" : entered ? "mf-dialog mf-dialog--open" : "mf-dialog"}
       aria-label={label}
       onCancel={(e) => {
         // Esc 의 기본 동작은 즉시 닫아 종료 애니메이션이 사라진다. 막고 직접 닫는다.
