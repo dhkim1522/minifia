@@ -4,18 +4,18 @@ milestone: v1.0
 milestone_name: MVP
 current_phase: 02
 current_phase_name: 낮 토론
-current_plan: 10
+current_plan: 11
 status: executing
-stopped_at: Completed 02-05-PLAN.md
-last_updated: "2026-10-23T18:34:32.015Z"
+stopped_at: Completed 02-09-PLAN.md
+last_updated: "2026-10-23T18:42:34.450Z"
 last_activity: 2026-10-24
 last_activity_desc: Phase 02 execution started
-state_head: ad466f01d6f44d42e63b92eab89fbf5861467a32
+state_head: 506f3962b688051619ee66f7ac113b6e0a4118b7
 progress:
   total_phases: 6
   completed_phases: 1
   total_plans: 30
-  completed_plans: 28
+  completed_plans: 29
 ---
 
 # Project State
@@ -30,9 +30,9 @@ See: .planning/PROJECT.md (updated 2026-10-21)
 ## Current Position
 
 Phase: 02 (낮 토론) — EXECUTING
-Current Plan: 10
+Current Plan: 11
 Total Plans in Phase: 11
-Plan: 10 of 11
+Plan: 11 of 11
 Status: Ready to execute
 Last activity: 2026-10-24 — Phase 02 execution started
 
@@ -74,6 +74,7 @@ Progress: [██░░░░░░░░] 17%
 | Phase 02 P08 | 6min | 2 tasks | 5 files |
 | Phase 02 P10 | 4 min | 2 tasks | 5 files |
 | Phase 02 P05 | 5 min | 3 tasks | 4 files |
+| Phase 02 P09 | 9 min | 3 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -114,6 +115,9 @@ Recent decisions affecting current work:
 - [Phase 02]: 02-10: 미리보기 흐림은 알약 면이 아니라 안쪽 글자 span 에만 opacity .6 을 준다(UI-SPEC 글자 불투명도)
 - [Phase 02]: 02-05: 생성자는 normalizeStoredRoom 이 방을 실제로 바꿨을 때만 저장 + setAlarm(nextWakeAt) — 평소 대기 중 알람을 덮지 않는 규칙 유지
 - [Phase 02]: 02-05: 거절 응답 규칙 — claim·extend·skip 거절과 WRONG_PHASE say 는 error+state, RATE_LIMITED·BAD_MESSAGE 와 이모티콘 거절은 error 만
+- [Phase 02]: 쿨다운은 보낸 순간 로컬 시각 + 2000ms 단순안(서버 시각 전환은 6페이즈 실기기 오탐을 본 뒤 결정 0016 에 기록)
+- [Phase 02]: send 가 false(끊김)면 쿨다운·넘기기 잠금을 걸지 않는다
+- [Phase 02]: 낮 토론에서 polite live 영역이 늘어(MessageLog·이모티콘 live 줄) phaseScreens 안내 영역 선택자를 .mf-room 직계 자식으로 좁힘
 
 ### Pending Todos
 
@@ -139,6 +143,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-23T18:34:31.888Z
-Stopped at: Completed 02-05-PLAN.md
+Last session: 2026-10-23T18:42:34.325Z
+Stopped at: Completed 02-09-PLAN.md
 Resume file: None
