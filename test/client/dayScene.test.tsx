@@ -1,5 +1,6 @@
-import { cleanup, render } from "@testing-library/react";
+import { act, cleanup, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { CLAIM_REVEAL_MS } from "../../shared/game/phases";
 import type { RoleId } from "../../shared/game/roles";
 import type { Claim, PhaseId, RoomView, SeatClaim } from "../../shared/protocol";
 import type { RoomConnection } from "../../src/net/useRoomConnection";
@@ -115,5 +116,112 @@ describe("DayScene 직업 공개 (S-06b, D-01·D-03)", () => {
     const citizen = panelHtml(makeView({ phase: "claim", role: "citizen" }));
     expect(mafia).toContain("mf-chip");
     expect(mafia).toBe(citizen);
+  });
+});
+
+describe("DayScene 공개 연출 (S-06c, D-04·D-06·D-08)", () => {
+  const CLAIMS: SeatClaim[] = [
+    { seat: 0, claim: "police", changed: false },
+    { seat: 1, claim: "none", changed: false },
+    { seat: 2, claim: "mafia", changed: true },
+    { seat: 3, claim: "citizen", changed: false },
+  ];
+  const reveal = (claims: SeatClaim[] = CLAIMS, over: Partial<ViewOpts> = {}) =>
+    makeView({ phase: "claimReveal", claims, role: "citizen", ...over });
+
+  const bubbles = (c: HTMLElement) => [...c.querySelectorAll<HTMLElement>(".mf-float .mf-bubble--reveal")];
+  const tags = (c: HTMLElement) => [...c.querySelectorAll<HTMLElement>(".mf-tag__claim")];
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("claim 을 보던 화면이 claimReveal 을 받으면 모든 자리에 동시에 팝+흔들림 말풍선, 말 안 함은 흐림", () => {
+    const r = scene(makeView({ phase: "claim", claimDone: [0, 1, 2, 3] }));
+    expect(r.container.querySelectorAll(".mf-done").length).toBe(4);
+    r.rerender(reveal());
+    const b = bubbles(r.container);
+    expect(b.map((x) => x.textContent)).toEqual(["경찰", "말 안 함", "마피아", "시민"]);
+    expect(b.every((x) => x.classList.contains("mf-bubble--pop") && x.classList.contains("mf-bubble--shake"))).toBe(true);
+    expect(b.map((x) => x.classList.contains("mf-bubble--dim"))).toEqual([false, true, false, false]);
+    // 완료 알약은 사라진다
+    expect(r.container.querySelectorAll(".mf-done").length).toBe(0);
+  });
+
+  it("같은 순간 이름표 아래 주장 알약 넷, 말 바꿈 자리에만 '· 말 바꿈'", () => {
+    const r = scene(makeView({ phase: "claim" }));
+    r.rerender(reveal());
+    const t = tags(r.container);
+    expect(t.length).toBe(4);
+    expect(t.map((x) => x.querySelector("b")?.textContent)).toEqual(["경찰", "말 안 함", "마피아", "시민"]);
+    expect(t.map((x) => x.textContent?.includes("· 말 바꿈"))).toEqual([false, false, true, false]);
+  });
+
+  it("2000ms(CLAIM_REVEAL_MS) 뒤 말풍선은 사라지고 주장 알약은 남는다", () => {
+    vi.useFakeTimers();
+    const r = scene(makeView({ phase: "claim" }));
+    r.rerender(reveal());
+    expect(bubbles(r.container).length).toBe(4);
+    act(() => {
+      vi.advanceTimersByTime(CLAIM_REVEAL_MS - 1);
+    });
+    expect(bubbles(r.container).length).toBe(4);
+    act(() => {
+      vi.advanceTimersByTime(1);
+    });
+    expect(bubbles(r.container).length).toBe(0);
+    expect(tags(r.container).length).toBe(4);
+  });
+
+  it("claimReveal 로 처음 마운트(재접속)하면 말풍선 없이 주장 알약만 보인다", () => {
+    const r = scene(reveal());
+    expect(bubbles(r.container).length).toBe(0);
+    expect(tags(r.container).length).toBe(4);
+    expect(r.container.querySelectorAll(".mf-done").length).toBe(0);
+  });
+
+  it("claimReveal 패널: 제목·안내가 공개 문구로 바뀌고 칩은 내 공개 값이 선택된 채 모두 꺼지며 보내기 버튼이 없다", () => {
+    const r = scene(makeView({ phase: "claim", myClaim: "citizen" }));
+    r.rerender(reveal());
+    const panel = r.container.querySelector<HTMLElement>(".mf-dayscene__panel")!;
+    expect(within(panel).queryByText("주장이 공개됐어요")).not.toBeNull();
+    expect(within(panel).queryByText("곧 토론이 시작돼요")).not.toBeNull();
+    expect(within(panel).queryByText("주장할 직업을 고르세요")).toBeNull();
+    const chips = [...panel.querySelectorAll<HTMLButtonElement>(".mf-chip")];
+    expect(chips.map((c) => c.textContent)).toEqual(["마피아", "경찰", "시민", "말 안 함"]);
+    expect(chips.every((c) => c.disabled)).toBe(true);
+    // 내 자리(seat 0)의 공개 값 police 가 선택돼 있다
+    expect(chips.map((c) => c.getAttribute("aria-pressed"))).toEqual(["false", "true", "false", "false"]);
+    expect(within(panel).queryAllByRole("button").length).toBe(4);
+  });
+
+  it("claimReveal → discussion: 테이블은 같은 노드이고 주장 알약이 유지된다", () => {
+    const r = scene(makeView({ phase: "claim" }));
+    r.rerender(reveal());
+    const table = r.container.querySelector(".mf-table");
+    r.rerender(makeView({ phase: "discussion", claims: CLAIMS, role: "citizen" }));
+    expect(r.container.querySelector(".mf-table") === table).toBe(true);
+    expect(tags(r.container).length).toBe(4);
+    expect(bubbles(r.container).length).toBe(0);
+  });
+
+  it("1일차 전원 none → 말 안 함 말풍선 넷, 모두 흐림", () => {
+    const all: SeatClaim[] = [0, 1, 2, 3].map((seat) => ({ seat, claim: "none" as const, changed: false }));
+    const r = scene(makeView({ phase: "claim" }));
+    r.rerender(reveal(all));
+    const b = bubbles(r.container);
+    expect(b.map((x) => x.textContent)).toEqual(["말 안 함", "말 안 함", "말 안 함", "말 안 함"]);
+    expect(b.every((x) => x.classList.contains("mf-bubble--dim"))).toBe(true);
+  });
+
+  it("공개 연출 화면에도 내 역할에 따른 차이가 없다 (T-02-25)", () => {
+    const panelHtml = (v: RoomView) => {
+      const r = scene(v);
+      const html = r.container.querySelector(".mf-dayscene__panel")?.outerHTML ?? "";
+      cleanup();
+      return html;
+    };
+    expect(panelHtml(reveal(CLAIMS, { role: "mafia", allies: [2] }))).toBe(panelHtml(reveal(CLAIMS, { role: "citizen" })));
+    expect(screen.queryAllByRole("group").length).toBe(0);
   });
 });
