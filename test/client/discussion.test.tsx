@@ -377,3 +377,91 @@ describe("낮 토론 화면 — 이모티콘·합산 쿨다운·오류 (COMM-02�
     expect(css).toMatch(/\.mf-dayscene[^{]*\.mf-toast--top\s*\{[^}]*space-3xl[^}]*\}/);
   });
 });
+
+describe("낮 토론 화면 — 방장 줄 (DAY-01, D-18·D-19)", () => {
+  const extendBtn = () => screen.getByRole("button", { name: /\+30초 연장|이미 연장했어요/ }) as HTMLButtonElement;
+  const skipBtn = () => screen.getByRole("button", { name: "넘기기" }) as HTMLButtonElement;
+  const advance = (ms: number) =>
+    act(() => {
+      vi.advanceTimersByTime(ms);
+    });
+  const EXTENDED = { extendUsed: true, endsIn: 115_000, durationMs: 120_000 } as const;
+
+  it("방장(me.isHost)에게는 [+30초 연장]·[넘기기] 가 plus·skip 아이콘과 함께 있고, [+30초 연장] 이 {t:extend} 를 한 번 보낸다", () => {
+    const r = scene(makeView({ isHost: true }));
+    expect(extendBtn().textContent).toBe("+30초 연장");
+    expect(extendBtn().querySelector("svg")).not.toBeNull();
+    expect(skipBtn().querySelector("svg")).not.toBeNull();
+    expect(extendBtn().disabled).toBe(false);
+    fireEvent.click(extendBtn());
+    expect(r.conn.send).toHaveBeenCalledTimes(1);
+    expect(r.conn.send).toHaveBeenCalledWith({ t: "extend" });
+  });
+
+  it("방장 여부는 서버 view.me.isHost 만 따른다: players 의 isHost 가 나여도 me.isHost 가 거짓이면 줄이 없고, 그 반대면 있다 (T-02-29)", () => {
+    scene(makeView({ isHost: false, playerHostSeat: 0 }));
+    expect(screen.queryByRole("button", { name: /\+30초 연장/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: "넘기기" })).toBeNull();
+    cleanup();
+    scene(makeView({ isHost: true, playerHostSeat: 2 }));
+    expect(extendBtn()).toBeTruthy();
+    expect(skipBtn()).toBeTruthy();
+  });
+
+  it("같은 패널에서 extendUsed 가 true 로 바뀌면 버튼이 꺼지고 '이미 연장했어요'가 되며, 토스트가 한 번 뜨고 타이머가 늘어난다", () => {
+    const r = scene(makeView({ isHost: true }));
+    expect(screen.getByRole("timer").textContent).toBe("1:30");
+    r.rerender(makeView({ isHost: true, ...EXTENDED }));
+    expect(extendBtn().disabled).toBe(true);
+    expect(extendBtn().textContent).toBe("이미 연장했어요");
+    expect(screen.getByRole("status").textContent).toBe("방장이 30초를 늘렸어요");
+    expect(screen.getByRole("timer").textContent).toBe("1:55");
+    // 같은 값의 다음 view 가 와도 토스트를 다시 띄우지 않는다
+    advance(2_000);
+    expect(screen.queryByRole("status")).toBeNull();
+    r.rerender(makeView({ isHost: true, ...EXTENDED, serverNow: NOW + 2_000 }));
+    expect(screen.queryByRole("status")).toBeNull();
+  });
+
+  it("비방장 화면에도 연장 토스트가 뜨고 타이머가 늘어난다(방장 줄은 없다)", () => {
+    const r = scene(makeView());
+    r.rerender(makeView(EXTENDED));
+    expect(screen.getByRole("status").textContent).toBe("방장이 30초를 늘렸어요");
+    expect(screen.getByRole("timer").textContent).toBe("1:55");
+    expect(screen.queryByRole("button", { name: /연장/ })).toBeNull();
+  });
+
+  it("이미 연장된 상태로 처음 마운트(재접속)하면 '이미 연장했어요' 이고 토스트는 없다", () => {
+    scene(makeView({ isHost: true, ...EXTENDED }));
+    expect(extendBtn().textContent).toBe("이미 연장했어요");
+    expect(extendBtn().disabled).toBe(true);
+    expect(screen.queryByRole("status")).toBeNull();
+  });
+
+  it("[넘기기] 는 확인 시트 없이 {t:skip} 을 한 번 보내고 두 방장 버튼이 꺼진다", () => {
+    const r = scene(makeView({ isHost: true }));
+    fireEvent.click(skipBtn());
+    expect(document.querySelector("dialog")).toBeNull();
+    expect(r.conn.send).toHaveBeenCalledTimes(1);
+    expect(r.conn.send).toHaveBeenCalledWith({ t: "skip" });
+    expect(skipBtn().disabled).toBe(true);
+    expect(extendBtn().disabled).toBe(true);
+    fireEvent.click(skipBtn());
+    expect(r.conn.send).toHaveBeenCalledTimes(1);
+  });
+
+  it("다음 낮 토론(새 day.n, extendUsed false)이면 [+30초 연장] 이 다시 켜진다", () => {
+    const r = scene(makeView({ isHost: true, ...EXTENDED }));
+    expect(extendBtn().disabled).toBe(true);
+    r.rerender(makeView({ isHost: true, n: 2 }));
+    expect(extendBtn().disabled).toBe(false);
+    expect(extendBtn().textContent).toBe("+30초 연장");
+    expect(screen.queryByRole("status")).toBeNull();
+  });
+
+  it("끊긴 동안(canSend false)은 방장 버튼 둘도 꺼진다", () => {
+    scene(makeView({ isHost: true }), { canSend: false });
+    expect(extendBtn().disabled).toBe(true);
+    expect(skipBtn().disabled).toBe(true);
+  });
+});
