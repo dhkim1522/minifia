@@ -294,3 +294,56 @@ describe("Lobby — 입장·방장 변경 토스트와 자리 등장·퇴장 (D-
     expect(seatEl("하윤")?.classList.contains("mf-seat--enter")).toBe(false);
   });
 });
+
+describe("Lobby — [뒤로] 로 방 나가기 (D-17, R17)", () => {
+  const lobbyView = makeView([player(0, "민수"), player(1, "서준"), player(2, "하윤")], 0);
+  const leaveButton = () => screen.getByRole("button", { name: "나가기" }) as HTMLButtonElement;
+  const sheet = () => screen.getByRole("dialog", { name: "방에서 나갈까요?" });
+
+  it("위쪽 바에 [나가기](aria-label) 아이콘 버튼이 있고 시트는 닫혀 있다", () => {
+    render(<Lobby view={lobbyView} send={() => {}} />);
+    expect(leaveButton()).toBeTruthy();
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("[나가기] → '방에서 나갈까요?' → 시트의 [나가기] → send leave 와 onLeave 가 각각 한 번", () => {
+    const send = vi.fn();
+    const onLeave = vi.fn();
+    render(<Lobby view={lobbyView} send={send} onLeave={onLeave} />);
+    fireEvent.click(leaveButton());
+    expect(screen.getByRole("heading", { name: "방에서 나갈까요?" })).toBeTruthy();
+    expect(send).not.toHaveBeenCalled();
+    fireEvent.click(within(sheet()).getByRole("button", { name: "나가기" }));
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(send).toHaveBeenCalledWith({ t: "leave" });
+    expect(onLeave).toHaveBeenCalledTimes(1);
+  });
+
+  it("[취소] 는 아무것도 보내지 않고 시트가 닫힌다", () => {
+    vi.useFakeTimers();
+    const send = vi.fn();
+    const onLeave = vi.fn();
+    render(<Lobby view={lobbyView} send={send} onLeave={onLeave} />);
+    fireEvent.click(leaveButton());
+    fireEvent.click(within(sheet()).getByRole("button", { name: "취소" }));
+    act(() => {
+      vi.advanceTimersByTime(260);
+    });
+    expect(send).not.toHaveBeenCalled();
+    expect(onLeave).not.toHaveBeenCalled();
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("canSend 가 거짓이면 [나가기] 아이콘 버튼이 꺼진다", () => {
+    render(<Lobby view={lobbyView} send={() => {}} canSend={false} />);
+    expect(leaveButton().disabled).toBe(true);
+  });
+
+  it("참가자(방장 아님) 화면에서도 나갈 수 있다", () => {
+    const send = vi.fn();
+    render(<Lobby view={makeView([player(0, "민수"), player(1, "서준")], 1)} send={send} />);
+    fireEvent.click(leaveButton());
+    fireEvent.click(within(sheet()).getByRole("button", { name: "나가기" }));
+    expect(send).toHaveBeenCalledWith({ t: "leave" });
+  });
+});
