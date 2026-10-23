@@ -12,3 +12,20 @@
 .mf-timer--urgent .mf-timer__fill { background: var(--crimson-500); }
 .mf-timer--urgent .mf-timer__num { color: var(--crimson-400); animation: mf-timer-pop var(--mf-timer-pop) var(--ease-out); }
 @keyframes mf-timer-pop { from { transform: scale(1.35); } to { transform: scale(1); } }
+
+/* RoleCard — 폭 min(64vw, 240px), 높이는 52dvh 를 넘지 않는다(높이가 모자라면 폭이 줄어 2:3 을 지킨다). */
+.mf-card { --mf-card-rise: 300ms; position: relative; width: min(min(64vw, 240px), calc(52dvh * 2 / 3)); max-width: 100%; max-height: 52dvh; aspect-ratio: 2 / 3; perspective: 900px; cursor: pointer; animation: mf-card-rise var(--mf-card-rise) var(--ease-out); -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+.mf-card:focus-visible { outline: 2px solid var(--gray-100); outline-offset: 4px; border-radius: var(--radius-lg); }
+.mf-card__inner { position: absolute; inset: 0; transform-style: preserve-3d; transition: transform var(--dur-slow) var(--ease-out); }
+.mf-card--front .mf-card__inner { transform: rotateY(180deg); }
+.mf-card__face { position: absolute; inset: 0; backface-visibility: hidden; -webkit-backface-visibility: hidden; border-radius: var(--radius-lg); background: var(--night-800); box-shadow: var(--shadow-card); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-sm); padding: var(--space-lg); text-align: center; overflow: hidden; }
+.mf-card__face::before { content: ""; position: absolute; inset: 8px; border: 1px solid var(--gray-500); border-radius: var(--radius-md); pointer-events: none; }
+.mf-card__face::after { content: ""; position: absolute; inset: 14px; border: 1px solid var(--gray-700); border-radius: var(--radius-sm); pointer-events: none; }
+.mf-card__front { transform: rotateY(180deg); }
+.mf-card__diamond { width: 40%; aspect-ratio: 1; }
+/* 직업 그림은 표시 폭 150(3:4). 카드가 낮으면 그림이 먼저 줄어 글자가 잘리지 않는다. */
+.mf-card__art { width: 150px; max-width: 100%; height: auto; flex: 0 1 auto; min-height: 0; object-fit: contain; filter: drop-shadow(0 8px 12px var(--shadow)); }
+.mf-card__desc { font-size: 16px; line-height: 1.5; color: var(--gray-300); margin: 0; word-break: keep-all; }
+.mf-card__divider { flex: none; width: 100%; height: 1px; background: var(--gray-700); }
+.mf-card__mates { flex: none; font-size: 14px; line-height: 1.4; font-weight: 700; color: var(--crimson-300); margin: 0; word-break: keep-all; }
+@keyframes mf-card-rise { from { transform: translateY(24px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
