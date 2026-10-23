@@ -1,7 +1,8 @@
-import { useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { RemovedReason, RoomView } from "../../shared/protocol";
 import { Button } from "../components/Button";
 import { Icon } from "../components/Icon";
+import { MyRoleSheet } from "../components/MyRoleSheet";
 import { ReconnectBanner } from "../components/ReconnectBanner";
 import { preloadRoleAssets } from "../net/assets";
 import { useRoomConnection } from "../net/useRoomConnection";
@@ -41,6 +42,19 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
     if (phase === "lobby" || phase === "assigning") preloadRoleAssets();
   }, [phase]);
 
+  // [내 역할] 시트 열림과 "카드가 앞면이 된 적이 있는가" 는 단계 switch 밖에서 쥔다 —
+  // 단계 화면이 바뀌어도 시트가 살아 있어야 한다(Pitfall 19 ⑧, UI-SPEC E14 phase-change).
+  const [myRoleOpen, setMyRoleOpen] = useState(false);
+  const [seenFront, setSeenFront] = useState(false);
+  const onSeenFront = useCallback(() => setSeenFront(true), []);
+  // 새 판(대기실·배정)으로 돌아가면 앞면을 본 적 없는 상태로 되돌리고 시트를 닫는다.
+  useEffect(() => {
+    if (phase === "lobby" || phase === "assigning") {
+      setSeenFront(false);
+      setMyRoleOpen(false);
+    }
+  }, [phase]);
+
   // 쫓겨난 이유별 화면은 App 이 고른다(오류 화면·링크 참가 화면).
   useEffect(() => {
     if (status === "removed") onExit(removedReason ?? "room_closed");
@@ -48,7 +62,7 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
 
   // [내 역할] 버튼은 모든 역할·모든 시점에 같은 한 가지 마크업이다(D-19 개정, R14).
   const myRoleButton = (
-    <Button variant="secondary" compact icon={<Icon name="card" />}>
+    <Button variant="secondary" compact icon={<Icon name="card" />} onClick={() => setMyRoleOpen(true)}>
       내 역할
     </Button>
   );
@@ -57,6 +71,10 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
     <div className="mf-root mf-room">
       {view && banner !== "hidden" && <ReconnectBanner mode={banner} />}
       <div className="mf-room__body">{renderBody()}</div>
+      {view && myRoleOpen ? (
+        // 역할 확인에서 앞면을 본 적이 없을 때만 뒷면. 낮부터는 항상 앞면 내용이다(D-19 의 취지).
+        <MyRoleSheet view={view} showBack={view.phase === "roleReveal" && !seenFront} onClose={() => setMyRoleOpen(false)} />
+      ) : null}
       {view && (
         <p className="mf-sr-only" aria-live="polite">
           {PHASE_ANNOUNCE[view.phase]}
@@ -126,7 +144,7 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
         return <Assigning view={view} />;
       case "roleReveal":
         return (
-          <RoleReveal view={view} offset={connection.offset} myRoleButton={myRoleButton} onSeenFront={() => {}} />
+          <RoleReveal view={view} offset={connection.offset} myRoleButton={myRoleButton} onSeenFront={onSeenFront} />
         );
       case "day":
         return <Day myRoleButton={myRoleButton} />;

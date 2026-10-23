@@ -5,6 +5,7 @@ import { Backdrop } from "../components/Backdrop";
 import { PhaseBar } from "../components/PhaseBar";
 import { RoleCard } from "../components/RoleCard";
 import { Timer } from "../components/Timer";
+import { allyNicknames } from "../game/roleText";
 import { autoFlipDelayMs, initialCardState, onAutoTimer, onTap, sinceStartMs } from "../net/cardFace";
 import type { CardState } from "../net/cardFace";
 import "../styles/phase.css";
@@ -59,13 +60,7 @@ export function RoleReveal({ view, offset, myRoleButton, onSeenFront }: RoleReve
   }, [seenFront]);
 
   const front = card.face === "front" && hasRole;
-  const allies =
-    role === "mafia"
-      ? (view.me.allies ?? []).flatMap((seat) => {
-          const p = view.players.find((q) => q.seat === seat);
-          return p ? [p.nickname] : [];
-        })
-      : null;
+  const allies = allyNicknames(view);
 
   return (
     <Backdrop layout="game" variant="lobby" className="mf-reveal__backdrop">
