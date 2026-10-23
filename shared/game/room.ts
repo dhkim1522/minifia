@@ -1,7 +1,7 @@
 // 서버 내부 방 상태와 순수 전이 함수. 이 타입은 클라이언트로 보내지 않는다 — 공개 모양은 view.ts 의 buildView 가 만든다.
 // 모든 함수는 새 객체를 돌려주고 입력을 바꾸지 않는다. DOM·workerd 전용 API 를 쓰지 않는다(앱·워커 두 tsconfig 에 모두 들어감).
 import { validateNickname } from "../nickname";
-import { MAX_PLAYERS } from "../protocol";
+import { MAX_PLAYERS, MIN_PLAYERS } from "../protocol";
 import type { PhaseId } from "../protocol";
 
 export const ROOM_TTL_MS = 3 * 60 * 60 * 1000;
@@ -150,6 +150,24 @@ export function kickPlayer(
     state: { ...state, players: state.players.filter((p) => p.id !== target.id) },
     removedId: target.id,
   };
+}
+
+/** 연결 중인 사람 수. 서버(시작 판정)와 화면(인원·버튼)이 같은 함수를 쓴다 — 입력은 connected 만 있으면 된다. */
+export const connectedCount = (players: readonly { connected: boolean }[]): number =>
+  players.filter((p) => p.connected).length;
+
+export type StartError = "NOT_HOST" | "WRONG_PHASE" | "NOT_ENOUGH_PLAYERS";
+
+/**
+ * 시작할 수 있으면 null. 검사 순서는 NOT_HOST → WRONG_PHASE → NOT_ENOUGH_PLAYERS.
+ * 인원은 연결된 사람 기준이다(결정 0012): 끊긴 사람은 자리를 지키지만 세지 않는다.
+ * 입력은 서버 상태와 요청자 id 뿐이다 — 클라이언트가 보낸 방장 여부·인원·연결 상태는 쓰지 않는다.
+ */
+export function checkStart(state: RoomState, actorId: string): StartError | null {
+  if (actorId !== state.hostId) return "NOT_HOST";
+  if (state.phase !== "lobby") return "WRONG_PHASE";
+  if (connectedCount(state.players) < MIN_PLAYERS) return "NOT_ENOUGH_PLAYERS";
+  return null;
 }
 
 export function findPlayerByToken(state: RoomState, token: string): Player | undefined {
