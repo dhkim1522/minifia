@@ -40,7 +40,7 @@ Decimal phases appear between their surrounding integers in numeric order.
   4. 방장이 시작하면 모든 폰에 "직업을 배정하고 있습니다…" 구간(약 3초)이 함께 나온 뒤 역할 확인 15초로 넘어가고, 카운트다운이 모든 폰에서 같은 시각에 끝나면 모든 폰이 "낮이 되었습니다" 화면으로 넘어간다(결정 0007). 폰 화면을 껐다 켜거나 탭을 새로고침해도 같은 자리·같은 역할로 돌아온다.
   5. 코드를 고치고 `wrangler deploy` 를 다시 하면 주소는 그대로이고 새 버전이 보인다.
 
-**Plans**: 3/14 plans executed (01-04~01-14 는 2026-10-23 UI-SPEC 개정 2·결정 0012 기준으로 다시 계획)
+**Plans**: 5/14 plans executed (01-04~01-14 는 2026-10-23 UI-SPEC 개정 2·결정 0012 기준으로 다시 계획)
 
 Plans:
 **Wave 1**
@@ -51,8 +51,8 @@ Plans:
 - [x] 01-03-PLAN.md — 순수 규칙: 닉네임·역할 배정·자리 배치·시계 오프셋·공유 (TDD, wave 2)
 
 **Wave 3** *(blocked on Wave 2 completion)*
-- [ ] 01-04-PLAN.md — 서버 대기실 규칙 코어: 참가·나가기·내보내기·연결자 4명 시작 조건·미리보기 앉은 사람·와이어 타입 (TDD, wave 3)
-- [ ] 01-05-PLAN.md — 새 첫 화면(S-01)에서 방 만들기: 디자인 시스템 기본 부품·문구 매핑·그림 URL 헬퍼 (wave 3)
+- [x] 01-04-PLAN.md — 서버 대기실 규칙 코어: 참가·나가기·내보내기·연결자 4명 시작 조건·미리보기 앉은 사람·와이어 타입 (TDD, wave 3)
+- [x] 01-05-PLAN.md — 새 첫 화면(S-01)에서 방 만들기: 디자인 시스템 기본 부품·문구 매핑·그림 URL 헬퍼 (wave 3)
 
 **Wave 4** *(blocked on Wave 3 completion)*
 - [ ] 01-06-PLAN.md — 코드·링크로 참가: S-01 코드 줄·S-02 링크 참가(미리보기 폴링)·입장 정보 이어받기·오류 화면 (wave 4)
@@ -161,7 +161,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 (decimal phases
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 1. 걷는 뼈대 | v1.0 | 3/14 | In Progress | - |
+| 1. 걷는 뼈대 | v1.0 | 5/14 | In Progress | - |
 | 2. 낮 토론 | v1.0 | 0/TBD | Not started | - |
 | 3. 밤과 아침 | v1.0 | 0/TBD | Not started | - |
 | 4. 처형과 승패 | v1.0 | 0/TBD | Not started | - |
