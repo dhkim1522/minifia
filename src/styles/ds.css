@@ -23,7 +23,8 @@
 }
 .mf-btn:active:not(:disabled) { transform: scale(0.98); }
 .mf-btn:focus-visible { outline: 2px solid var(--gray-100); outline-offset: 2px; }
-.mf-btn:disabled { opacity: 0.4; cursor: default; }
+/* 꺼진 버튼도 읽히되 켜진 버튼보다 분명히 흐리게(글자 대비 4.5:1 이상, UAT G-01-1b) */
+.mf-btn:disabled { opacity: 0.6; cursor: default; }
 .mf-btn--block { width: 100%; }
 .mf-btn--primary { background: var(--gray-100); color: var(--night-900); }
 .mf-btn--secondary { background: var(--gray-800); color: var(--gray-50); border-color: var(--gray-700); }
@@ -41,7 +42,8 @@
   font: inherit; font-size: 16px; color: var(--gray-100);
   background: var(--night-800); border: 1px solid var(--gray-500); border-radius: var(--radius-md);
 }
-.mf-field__input::placeholder { color: var(--gray-300); opacity: 0.7; }
+/* 힌트는 입력된 글자(gray-100)와 구분되되 본문 기준 이상(UAT G-01-1b). 브라우저 기본 불투명도를 덮으려고 1 을 명시 */
+.mf-field__input::placeholder { color: var(--gray-300); opacity: 1; }
 .mf-field__input:focus-visible { outline: none; border-color: var(--gray-100); box-shadow: 0 0 0 1px var(--gray-100); }
 .mf-field__input--code { text-align: center; letter-spacing: 0.3em; font-variant-numeric: tabular-nums; font-weight: 700; }
 .mf-field--error .mf-field__input { border-width: 2px; border-color: var(--crimson-300); box-shadow: none; }
@@ -66,8 +68,8 @@
   padding: var(--space-lg); border-radius: var(--radius-lg);
   background: color-mix(in srgb, var(--night-800) 85%, transparent);
 }
-.mf-entry__divider { display: flex; align-items: center; gap: var(--space-md); font-size: 14px; line-height: 1.4; color: var(--gray-300); }
-.mf-entry__divider::before, .mf-entry__divider::after { content: ""; flex: 1; height: 1px; background: var(--gray-700); }
+.mf-entry__divider { display: flex; align-items: center; gap: var(--space-md); font-size: 14px; line-height: 1.4; color: var(--gray-100); }
+.mf-entry__divider::before, .mf-entry__divider::after { content: ""; flex: 1; height: 1px; background: var(--gray-500); }
 .mf-version { margin: var(--space-md) 0 0; font-size: 14px; line-height: 1.4; color: var(--gray-300); text-align: center; }
 
 /* Toast: 알약, 한 번에 하나, 2초. 진홍 없음. */
