@@ -133,7 +133,11 @@ blocked: 0
   missing: []
 - gap_id: G-01-9
   truth: "낮 화면에서 [내 역할]을 누르면 폰에서도 카드가 제자리에서 자연스럽게 열린다"
-  status: failed
+  status: resolved
+  resolved_by: e581bd8 (직접 수정, plan 없음)
+  resolved_at: 2026-10-23
+  fix: ".mf-dialog overflow: clip — 포커스 이동에 의한 다이얼로그 자동 스크롤 차단(01-18 계측 패널에서 shB 가 dlgB 위로 올라갔다 돌아오는 것으로 확인)"
+  device_check: "사용자 실기기 확인(2026-10-23, 배포 e581bd8): 증상 해결"
   reason: "User reported: 웹(PC)에서는 괜찮은데 폰에서는 카드가 위에 잠깐 떴다가 아래로 떨어진다"
   severity: minor
   note: "모바일 전용 증상. 시트 열림 애니메이션·dvh/주소창 높이·transform 기준 위치 등 모바일 브라우저 차이를 진단 대상으로"
