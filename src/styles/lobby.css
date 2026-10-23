@@ -1,0 +1,60 @@
+/* 대기실(S-03)과 2.5D 원근 테이블. design/design-system/components/bundle.css 의 .mf-table*, .mf-seat*, .mf-tag* 에서 옮겼다.
+   값은 tokens.css 변수만 쓴다(색 직접 지정 없음). 진홍은 마피아 동료 링·마름모의 --crimson-400 뿐이다.
+   이름표 본체(.mf-tag__name 알약)는 ds.css 에 있고 여기서는 테이블 위 배치 규칙만 더한다. */
+
+/* 테이블 장면: 배경 그림 위에 놓이는 bare 모양(장면 배경 없음). 달빛·그림자·판 층만. */
+.mf-table { position: relative; width: 100%; aspect-ratio: 4 / 5; isolation: isolate; }
+.mf-table__moon { position: absolute; left: 50%; top: 0; width: 90%; height: 70%; transform: translateX(-50%); background: radial-gradient(50% 50% at 50% 30%, var(--moonlight) 0%, transparent 100%); opacity: 0.6; pointer-events: none; }
+.mf-table__shadow { position: absolute; left: 50%; top: 52%; width: 70%; height: 30%; transform: translate(-50%, -50%); border-radius: 50%; background: var(--shadow); filter: blur(14px); }
+.mf-table__top { position: absolute; left: 50%; top: 48%; width: 64%; height: 30%; transform: translate(-50%, -50%); border-radius: 50%; background: linear-gradient(180deg, var(--felt-light) 0%, var(--felt-mid) 45%, var(--felt-dark) 100%); border: 3px solid var(--gray-700); box-shadow: inset 0 3px 0 var(--moonlight), 0 7px 0 var(--town-near), 0 18px 28px var(--shadow); }
+.mf-table__scrim { position: absolute; inset: 0; background: var(--scrim); z-index: 20; pointer-events: none; }
+
+/* 자리: 폭은 장면 폭의 20%, 발이 좌표에 닿는다. 크기 변환은 자리 층만, 이름표는 따로 층이라 변환 바깥. */
+.mf-seat { position: absolute; width: 20%; transform-origin: 50% 100%; }
+.mf-seat__body { position: relative; transform-origin: 50% 100%; }
+.mf-seat .mf-figure { width: 100%; height: auto; aspect-ratio: 3 / 4; }
+.mf-seat__btn { appearance: none; position: absolute; inset: -12% -20% -6%; min-width: var(--tap-min); min-height: var(--tap-min); background: transparent; border: 0; padding: 0; cursor: pointer; border-radius: var(--radius-md); }
+.mf-seat__btn:focus-visible { outline: 2px solid var(--gray-100); outline-offset: 2px; }
+.mf-seat__ring { position: absolute; left: 50%; bottom: -3%; width: 120%; height: 18%; transform: translate(-50%, 50%); border-radius: 50%; pointer-events: none; }
+.mf-seat__ring--me { border: 2px solid color-mix(in srgb, var(--gray-100) 30%, transparent); }
+.mf-seat__ring--mate { border: 3px solid var(--crimson-400); }
+.mf-seat__mark { position: absolute; top: 4%; width: 26%; aspect-ratio: 1; pointer-events: none; }
+.mf-seat__mark--mate { right: 8%; color: var(--crimson-400); }
+.mf-seat--ally { pointer-events: none; }
+
+/* 이름표 층: 항상 14px, 한 줄 말줄임(앞쪽 96px, 뒤쪽 72px). 방장 배지는 이름표 아래. */
+.mf-table .mf-tag { position: absolute; transform: translateX(-50%); pointer-events: none; z-index: 25; }
+.mf-table .mf-tag__name { max-width: 96px; gap: var(--space-xs); }
+.mf-table .mf-tag--back .mf-tag__name { max-width: 72px; }
+.mf-tag__off { width: 14px; height: 14px; flex: none; color: var(--gray-300); }
+.mf-badge { display: inline-flex; align-items: center; padding: 0 var(--space-sm); font-size: 14px; line-height: 1.4; font-weight: 400; color: var(--gray-100); background: var(--night-700); border-radius: var(--radius-pill); white-space: nowrap; }
+
+/* 대기실 틀: 폰 높이 안에서 세로 스크롤 없이 들어간다(360×640). 장면이 남는 높이만큼 줄어든다. */
+.mf-lobby__backdrop { flex: none; height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom)); }
+.mf-lobby { height: 100%; display: flex; flex-direction: column; overflow: hidden; }
+.mf-lobby__bar { flex: none; display: flex; flex-direction: column; align-items: center; padding: var(--space-md) var(--space-md) 0; text-align: center; }
+.mf-lobby__bar .mf-t-label { color: var(--gray-100); text-shadow: var(--shadow-text); }
+.mf-lobby__code { font-size: 36px; line-height: 1.2; font-weight: 700; letter-spacing: 0.12em; padding-left: 0.12em; font-variant-numeric: tabular-nums; color: var(--gray-50); margin: 0; text-shadow: var(--shadow-text); }
+.mf-lobby__scene { flex: 1; min-height: 0; padding: 0 var(--space-md); }
+.mf-lobby__scene .mf-table { width: auto; height: 100%; max-width: 100%; margin: 0 auto; }
+
+/* 하단 시트 */
+.mf-lobby__sheet { flex: none; display: flex; flex-direction: column; gap: var(--space-md); padding: var(--space-sm) var(--space-lg) var(--space-lg); background: var(--night-800); border-radius: var(--radius-lg) var(--radius-lg) 0 0; }
+.mf-lobby__sheet::before { content: ""; align-self: center; width: 40px; height: 4px; border-radius: var(--radius-pill); background: var(--gray-700); }
+.mf-lobby__status { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-md); }
+.mf-lobby__guide { margin: 0; font-size: 16px; line-height: 1.5; font-weight: 700; color: var(--gray-50); word-break: keep-all; }
+.mf-lobby__count { margin: 0; flex: none; font-size: 14px; line-height: 1.4; font-weight: 400; color: var(--gray-300); font-variant-numeric: tabular-nums; }
+
+/* 자리 등장·퇴장(결정 0006 기본형). 전이는 자리 층 안쪽 요소에 걸어 자리 크기 변환과 곱해진다. 이름표는 투명도만. */
+.mf-table { --seat-leave-ms: 320ms; }
+.mf-seat--enter > .mf-seat__body { animation: mf-seat-enter var(--dur-med) var(--ease-out) both; }
+.mf-seat--leave > .mf-seat__body { animation: mf-seat-leave var(--seat-leave-ms) var(--ease-out) both; }
+.mf-tag--enter { animation: mf-fade-in var(--dur-med) var(--ease-out) both; }
+.mf-tag--leave { animation: mf-fade-out var(--seat-leave-ms) var(--ease-out) both; }
+@keyframes mf-seat-enter { from { opacity: 0; transform: translateY(-14px) scale(0.6); } to { opacity: 1; transform: translateY(0) scale(1); } }
+@keyframes mf-seat-leave { from { opacity: 1; transform: translateY(0) scale(1); } to { opacity: 0; transform: translateY(6px) scale(0.85); } }
+@keyframes mf-fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes mf-fade-out { from { opacity: 1; } to { opacity: 0; } }
+
+/* 토스트는 방 코드 아래 가운데 */
+.mf-lobby__backdrop .mf-toast--top { top: calc(var(--space-md) + 64px + var(--space-sm) + env(safe-area-inset-top)); }

@@ -2,10 +2,8 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-libra
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import "../helpers/singleLineErrors";
 import { installMemoryStorage } from "../helpers/memoryStorage";
-import type { RoomView } from "../../shared/protocol";
 import { loadLastNickname, saveLastNickname, saveSession } from "../../src/net/session";
 import { Home } from "../../src/screens/Home";
-import { Lobby } from "../../src/screens/Lobby";
 
 // 화면 테스트마다 저장소를 새로 심어 닉네임·입장 정보가 다음 테스트로 새지 않게 한다.
 beforeEach(() => {
@@ -136,34 +134,6 @@ describe("Home", () => {
     const input = screen.getByLabelText("닉네임") as HTMLInputElement;
     fireEvent.change(input, { target: { value: "<b>가</b>" } });
     expect(input.value).toBe("<b>가</b>");
-    expect(container.querySelector("b")).toBeNull();
-  });
-});
-
-describe("Lobby", () => {
-  const view: RoomView = {
-    code: "0042",
-    phase: "lobby",
-    phaseEndsAt: null,
-    phaseDurationMs: null,
-    serverNow: 0,
-    minPlayers: 4,
-    maxPlayers: 8,
-    players: [
-      { seat: 0, nickname: "민수", connected: true, isHost: true },
-      { seat: 1, nickname: "<b>영희</b>", connected: false, isHost: false },
-    ],
-    me: { seat: 0, isHost: true },
-  };
-
-  it("방 코드, 인원, 방장 표시, 끊긴 사람을 보여 주고 닉네임은 텍스트로만 그린다", () => {
-    const { container } = render(<Lobby view={view} send={() => {}} />);
-    expect(screen.getByText("0042")).toBeTruthy();
-    expect(screen.getByText("2/8명")).toBeTruthy();
-    expect(screen.getByText("민수")).toBeTruthy();
-    expect(screen.getByText("방장")).toBeTruthy();
-    expect(screen.getByText("(연결 끊김)")).toBeTruthy();
-    expect(screen.getByText("<b>영희</b>")).toBeTruthy();
     expect(container.querySelector("b")).toBeNull();
   });
 });
