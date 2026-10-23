@@ -43,18 +43,21 @@ revised: "2026-10-23"
 
 | Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| TBD (planner fills) | — | — | ROOM-01 | — | 코드 `^\d{4}$`·충돌 재시도·응답 `code+token`. 공유 시트: `shareOnly`(취소 무시)·`copyLink`(실패 시 manual), [공유하기] 숨김 조건, 링크에 토큰 없음 | unit + client | `npx vitest run test/unit/share.test.ts test/client/shareSheet.test.tsx` | share ✅ / 시트 ❌ W0 | ⬜ pending |
-| TBD | — | — | ROOM-02 | — | 닉네임 규칙. 미리보기 `players` 키 집합 `["nickname","seat"]`·자리 순·lobby 아니면 `[]`·없는 방 404. S-02 폴링 10초·`hidden` 중단 | unit + worker + client | `npx vitest run test/unit/preview.test.ts test/worker/preview.test.ts test/worker/join.test.ts test/client/joinByLink.test.tsx` | ❌ W0 | ⬜ pending |
-| TBD | — | — | ROOM-03 | — | `connectedCount`·`checkStart`: 연결 4/자리 6 시작 가능·6명 배정, 연결 3/자리 8 거절, 비방장 거절, 정원 = 자리 수, 거절 시 최신 `state` 재전송. 화면: [게임 시작] 활성·안내 문구·"8 / 8명 · 가득 찼어요" | unit + worker + client | `npx vitest run test/unit/gameRoom.test.ts test/worker/start.test.ts test/client/lobby.test.tsx` | gameRoom ✅(확장) / 나머지 ❌ | ⬜ pending |
-| TBD | — | — | CONN-01 | — | `hello{token}` 로 같은 seat/role 복구, 잘못된 토큰 거부. 연결 상태기계: 띠 → "다시 연결됐어요" 2초 → 숨김, 30초 visible 연속 실패 → 포기 화면, `hidden` 시간은 세지 않음. 낡은 세션은 미리보기 404 로 삭제 | unit + worker + client | `npx vitest run test/unit/linkReducer.test.ts test/unit/session.test.ts test/worker/reconnect.test.ts test/client/useRoomConnection.test.tsx` | 일부 ✅ / 나머지 ❌ | ⬜ pending |
-| TBD | — | — | DEPLOY-01 | — | 배포 주소에서 생성→참가→시작→`day`, 재배포 후 주소 불변·새 버전, 에셋 URL 파일 존재·배포본 `%40` URL 200 | smoke + unit + manual | `node scripts/smoke.mjs --prod --stage full`; `npx vitest run test/unit/assets.test.ts` | ❌ W0 | ⬜ pending |
-| TBD | — | — | GAME-01 | — | `tick` 연쇄·알람 다중화. `formatMmSs`(15→`0:15`)·마지막 5초. 카드 면 전이: 5초 자동 한 번, 탭 토글, 5초 뒤 입장은 앞면 | unit + worker + client | `npx vitest run test/unit/tick.test.ts test/unit/countdown.test.ts test/unit/cardFace.test.ts test/worker/alarm.test.ts test/client/timer.test.tsx` | clock ✅ / 나머지 ❌ | ⬜ pending |
-| TBD | — | — | ROLE-01 | — | 4~8명 구성표, 끊긴 사람 포함 전원 배정 | unit | `npx vitest run test/unit/roles.test.ts test/unit/gameRoom.test.ts` | roles ✅ | ⬜ pending |
-| TBD | — | — | ROLE-02 | — | 타인 `role`/`token` 미포함, 마피아만 `allies`, 미리보기 누출 없음, 실제 소켓 프레임 전수. 카드 뒷면 DOM 이 역할마다 동일·뒷면에 역할 이름·직업 그림 없음 | unit + worker + client + smoke | `npx vitest run test/unit/view.test.ts test/worker/leak.test.ts test/client/roleCard.test.tsx` | ❌ W0 | ⬜ pending |
-| TBD | — | — | (UI) 시트 | — | `Sheet`: Esc·막·[닫기]로 닫힘, 닫기 폴백 타이머, 단계 변경 후에도 열린 채, ConfirmSheet 열면 [취소] 포커스 | client | `npx vitest run test/client/sheet.test.tsx test/client/confirmSheet.test.tsx` | ❌ W0 | ⬜ pending |
-| TBD | — | — | (UI) 토스트 | — | `diffRoomViews`: 처음·재연결 때 토스트 없음, 나 제외, 방장 변경 우선 | unit + client | `npx vitest run test/unit/roomDiff.test.ts test/client/toast.test.tsx` | ❌ W0 | ⬜ pending |
-| TBD | — | — | (UI) 테이블 | — | Table 입력에 역할 없음, 끊김 접근성 이름, 방장 배지 한 명, 동료 표시는 `allies` 일 때만 | unit + client | `npx vitest run test/unit/seatLayout.test.ts test/client/table.test.tsx` | seatLayout ✅ | ⬜ pending |
-| TBD | — | — | (문구) | — | `messageForApiError` 가 UI-SPEC Error state 표와 같은 문구·위치 | unit | `npx vitest run test/unit/copy.test.ts` | ❌ W0 | ⬜ pending |
+| 01-04-T1·T2·T3 | 01-04 | 3 | ROOM-02, ROOM-03, ROLE-02 | T-01-13~16 | 참가 거절 순서·정원 = 자리 수·방장 승계(연결된 사람 우선 joinSeq, 아무도 연결 안 됐으면 전체 joinSeq)·끊긴 사람만 내보내기·연결자 4명 시작 조건, 미리보기 `players` 키 `["nickname","seat"]`·lobby 에서만·누출 없음 | unit | `npx vitest run test/unit/gameRoom.test.ts test/unit/preview.test.ts` | gameRoom ✅(확장) / preview ❌ W0(T1 이 만듦) | ⬜ pending |
+| 01-05-T1 | 01-05 | 3 | ROOM-01 | T-01-17 | 새 S-01 방 만들기, ds.css 토큰·글자·진홍 규칙 | client | `npx vitest run test/client/screens.test.tsx test/client/app.test.tsx` | ✅(수정) | ⬜ pending |
+| 01-05-T2 | 01-05 | 3 | ROOM-01 (문구) | T-01-18 | `messageForApiError` 가 UI-SPEC Error state 표 전체와 같은 문구·위치, 토스트 한 번에 하나 2초 | unit + client | `npx vitest run test/unit/copy.test.ts test/client/screens.test.tsx` | copy ❌ W0(T2 가 만듦) | ⬜ pending |
+| 01-05-T3 | 01-05 | 3 | ROOM-01, DEPLOY-01 | — | 그림 URL `%40`·srcSet 밀도·모든 URL 이 public/ 실제 파일 | unit | `npx vitest run test/unit/assets.test.ts` | ❌ W0(T3 가 만듦) | ⬜ pending |
+| 01-06-T1·T2·T3 | 01-06 | 4 | ROOM-02, CONN-01 | T-01-19~22 | 링크·코드 참가, 입장 정보 한 칸·주소에 토큰 없음, 낡은 세션 미리보기 확인, S-02 폴링 10초·hidden 중단·직렬화, 나간 이유별 화면 | unit + client | `npx vitest run test/unit/session.test.ts test/client/joinByLink.test.tsx test/client/app.test.tsx test/client/screens.test.tsx` | ❌ W0(T1·T2 가 만듦) | ⬜ pending |
+| 01-07-T1·T2·T3 | 01-07 | 4 | GAME-01, ROLE-01, ROLE-02, ROOM-03 | T-01-23~25 | `tick` 연쇄·따라잡기·멱등, 연결 4/자리 6 시작 → 6명 배정, 뷰 전수 누출 검사(4~8명 × 4단계 × 전원) | unit | `npx vitest run test/unit/tick.test.ts test/unit/gameRoom.test.ts test/unit/view.test.ts` | ❌ W0(각 Task 가 만듦) | ⬜ pending |
+| 01-08-T1·T2·T3 | 01-08 | 4 | GAME-01, ROLE-02 | T-01-26~27 | `formatMmSs`(15→`0:15`)·마지막 5초, 카드 면 전이(5초 자동 한 번·탭 토글·5초 뒤 입장 앞면), 카드 뒷면 DOM 이 역할마다 동일·앞면 지연 마운트 | unit + client | `npx vitest run test/unit/countdown.test.ts test/unit/cardFace.test.ts test/client/timer.test.tsx test/client/roleCard.test.tsx` | ❌ W0(각 Task 가 만듦) | ⬜ pending |
+| 01-09-T1·T2·T3 | 01-09 | 5 | ROOM-02, ROOM-03, CONN-01, GAME-01, ROLE-01, ROLE-02 | T-01-28~35 | 미리보기·참가 라우트, leave·kick, 재접속·교체·evict, 연결 3 시작 거절 + state 재전송, 알람 진행, 실제 프레임 전수 누출 | worker | `npx vitest run test/worker` | http ✅ / 나머지 ❌ W0(각 Task 가 만듦) | ⬜ pending |
+| 01-10-T1·T2·T3 | 01-10 | 5 | ROOM-02, ROOM-03 | T-01-36~38 | Table 입력에 역할 없음·끊김 접근성 이름·방장 배지 한 명·빈 의자 없음, 연결자 기준 [게임 시작]·"8 / 8명 · 가득 찼어요", `diffRoomViews` 처음·재연결 토스트 없음·방장 변경 우선 | unit + client | `npx vitest run test/unit/roomDiff.test.ts test/client/table.test.tsx test/client/lobby.test.tsx test/client/screens.test.tsx` | ❌ W0(각 Task 가 만듦) | ⬜ pending |
+| 01-11-T1·T2·T3 | 01-11 | 5 | CONN-01, GAME-01 | T-01-39~41 | 띠 52px → "다시 연결됐어요" 2초, 백오프·복귀 점검, 30초 visible 연속 실패만 포기, 3번 실패 시 방 생존 확인, ping 표본 오프셋, epoch | unit + client | `npx vitest run test/unit/linkReducer.test.ts test/client/useRoomConnection.test.tsx test/client/roomScreen.test.tsx` | useRoomConnection ✅(교체) / 나머지 ❌ W0 | ⬜ pending |
+| 01-12-T1·T2 | 01-12 | 6 | ROOM-01, ROOM-03 | T-01-42~43 | `<dialog>` 시트(Esc·막·[닫기]·폴백 타이머·StrictMode), 확인 시트 [취소] 포커스, `shareOnly`·`copyLink`, [공유하기] 숨김 조건, 링크에 토큰 없음 | unit + client | `npx vitest run test/unit/share.test.ts test/client/sheet.test.tsx test/client/lobby.test.tsx` | share ✅(확장) / sheet ❌ W0 | ⬜ pending |
+| 01-12-T3 | 01-12 | 6 | (스타일 정리) | — | 01-02 임시 스타일 파일·옛 클래스 없음 | client + build | `npm run typecheck && npm run build && npx vitest run --project client` | ✅ | ⬜ pending |
+| 01-13-T1·T2·T3 | 01-13 | 7 | GAME-01, ROLE-02, CONN-01 | T-01-44~46 | 배정·[내 역할] 마크업이 역할과 무관, 5초 자동 앞면, 타이머 0 뒤 서버 낮 대기, 시트가 단계 변경에도 열린 채·앞면 본 적 없으면 뒷면·마운트 때부터 앞면(6초 경과 새로고침)이면 시트도 앞면 | client | `npx vitest run test/client/phaseScreens.test.tsx` | ❌ W0(T1 이 만듦) | ⬜ pending |
+| 01-14-T1·T2 | 01-14 | 8 | DEPLOY-01, ROOM-03, ROLE-01, ROLE-02, GAME-01, CONN-01 | T-01-47~49 | 배포본 다인원 한 판·연결 3 시작 거절·누출 전수·마감 동일·편차 < 500ms·재접속·재배포 버전 변경·`%40` 에셋 200·OG 메타 | smoke | `node scripts/smoke.mjs --prod --stage full --players 5` | ❌ W0(T1 이 만듦) | ⬜ pending |
+| 01-14-T3 | 01-14 | 8 | DEPLOY-01 | T-01-50~51 | HANDOFF·README push, 실기기 UAT(아래 Manual-Only) | manual + git | `git fetch origin && test "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)"` | — | ⬜ pending |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
@@ -65,7 +68,7 @@ revised: "2026-10-23"
 - [ ] 위 표의 ❌ 테스트 파일(서버 규칙·미리보기·연결·시트·카드·토스트·에셋·문구)
 - [ ] `package.json`: `"tokens:check": "node scripts/gen-tokens.mjs --check"`, `typecheck` 앞에 연결
 - [ ] `.gitattributes`: `src/styles/tokens.css text eol=lf`(Windows CRLF 로 `--check` 가 깨지지 않게)
-- [ ] `scripts/smoke.mjs` 에 `full` 단계(미리보기 키·연결자 4 시작 조건·재접속·누출 전수) — 01-10
+- [ ] `scripts/smoke.mjs` 에 `full` 단계(미리보기 키·연결자 4 시작 조건·재접속·누출 전수) — 01-14
 - [ ] 테스트 인프라 신규 설치 없음(happy-dom `<dialog>.showModal` 지원, `import.meta.glob` 으로 파일 존재 확인)
 
 ---
@@ -74,7 +77,7 @@ revised: "2026-10-23"
 
 | Behavior | Requirement | Why Manual | Test Instructions |
 |----------|-------------|------------|-------------------|
-| 폰 2대 이상이 배포 주소로 같은 방에 들어가 역할 확인 | DEPLOY-01, ROLE-02 | 실기기 브라우저·네트워크 | 배포 URL 을 폰 2대+ 에서 열고 방 생성·참가·시작 |
+| 연결된 4명 이상이 배포 주소로 같은 방에 들어가 역할 확인 | DEPLOY-01, ROLE-02 | 실기기 브라우저·네트워크 | 한 브라우저 프로필 = 한 사람(입장 정보 한 칸 — 같은 프로필 두 번째 탭은 첫 탭 자리를 이어받는다). 폰 4대, 또는 폰 2대+ 와 PC 의 서로 다른 브라우저·브라우저 프로필(시크릿 창은 브라우저마다 한 사람)로 방 생성·참가·시작 |
 | 360×640 급 iPhone Safari 에서 S-03~S-06 세로 스크롤 없음(재접속 띠 52px 포함), 이름표 겹침 | ROOM-02, ROLE-02 | 실기기 주소창·안전 영역 | 작은 폰에서 8명 방으로 각 단계 확인 |
 | S-02 에 8명이 앉았을 때 배치 | ROOM-02 | 폭 360px 실측 | 8명 방 링크를 작은 폰으로 열기 |
 | 시트 3종 포커스·막 누르기·끌어서 닫기·닫은 뒤 포커스 복귀 | CONN-01, ROLE-02 | 터치 동작 | 내 역할·공유·확인 시트를 각각 열고 닫기 |

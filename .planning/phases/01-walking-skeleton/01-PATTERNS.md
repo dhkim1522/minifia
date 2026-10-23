@@ -1,4 +1,6 @@
-# Phase 1: 걷는 뼈대 - Pattern Map (재계획 01-04 ~ 01-10)
+# Phase 1: 걷는 뼈대 - Pattern Map (재계획 01-04 ~ 01-14)
+
+> 번호 안내(2026-10-23 계획 개정): 이 지도는 리서치 제안 번호(04~10)로 처음 만들었다. 아래 절 제목과 본문의 계획 번호는 실제 계획 01-04~01-14 기준으로 고쳤다. 코드 주석을 그대로 인용한 곳(예: "01-08 이 붙인다")은 01-02 때 쓴 옛 번호라 인용은 두고 옆에 지금 번호를 적었다.
 
 **Mapped:** 2026-10-23
 **Files analyzed:** 52 (신규 약 40 + 수정 12)
@@ -10,7 +12,7 @@
 
 ## File Classification
 
-### A. 서버·공유 규칙 (01-04, 01-07, 01-08)
+### A. 서버·공유 규칙 (01-04, 01-07, 01-09)
 
 | 신규/수정 파일 | Role | Data Flow | Closest Analog | Match |
 |---|---|---|---|---|
@@ -25,7 +27,7 @@
 | `test/unit/gameRoom.test.ts` 확장 / `test/unit/phases.test.ts`, `tick.test.ts`, `startCondition.test.ts`, `preview.test.ts` (신규) | test | transform | `test/unit/gameRoom.test.ts`, `test/unit/roles.test.ts` | exact |
 | `test/worker/http.test.ts` 확장 / `test/worker/start.test.ts`, `preview.test.ts` (신규) | test | request-response + event-driven | `test/worker/http.test.ts` (`openSocket` 헬퍼 24-50) | exact |
 
-### B. 클라이언트 순수 로직·네트워크 (01-05)
+### B. 클라이언트 순수 로직·네트워크 (01-05, 01-06, 01-08, 01-10, 01-11, 01-12)
 
 | 신규/수정 파일 | Role | Data Flow | Closest Analog | Match |
 |---|---|---|---|---|
@@ -42,7 +44,7 @@
 | `test/unit/*.test.ts` (roomDiff, cardFace, linkReducer, copy, assets, countdown, share 확장) | test | transform | `test/unit/clock.test.ts`, `test/unit/share.test.ts`, `test/unit/seatLayout.test.ts` | exact |
 | `test/client/useRoomConnection.test.tsx` (수정) | test | streaming | 같은 파일 `FakeSocket` (6-34), `setup()` (45-54) | exact |
 
-### C. 디자인 시스템 부품 이식 (01-06, 01-09)
+### C. 디자인 시스템 부품 이식 (01-05, 01-06, 01-08, 01-10, 01-11, 01-12, 01-13)
 
 | 신규 파일 (`src/components/`) | Role | Data Flow | Reference (DS) | 기존 앱 파일 | Match |
 |---|---|---|---|---|---|
@@ -64,7 +66,7 @@
 | `src/styles/screens.css` (다시 씀), `base.css` (`.app-version` 수정) | config(스타일) | — | 기존 두 파일 (진홍 버튼·12/13/15/17/40/56px 제거) | 같은 파일 | rewrite |
 | `test/client/components.test.tsx` 등 | test | render | `test/client/screens.test.tsx` | — | exact |
 
-### D. 화면 (01-05, 01-06, 01-09)
+### D. 화면 (01-05, 01-06, 01-10, 01-11, 01-12, 01-13, 01-14)
 
 | 신규/수정 파일 | Role | Data Flow | Closest Analog (앱) | Reference (DS/UI) | Match |
 |---|---|---|---|---|---|
@@ -115,7 +117,7 @@ export function detachConnection(state: RoomState, playerId: string, connId: str
 **주의 (현재 코드와 어긋나는 곳):**
 - room.ts:36-42 의 `normalizeNickname` 은 임시 구현이고 주석(35)이 01-04 에서 `shared/nickname.ts` 로 교체하라고 한다. `shared/nickname.ts` 는 `validateNickname`, `nicknameKey`, `normalizeNickname`(23), `countGraphemes`(16, `Intl.Segmenter`) 를 export 한다. 교체 시 `createRoomState` 시그니처와 기존 `gameRoom.test.ts` 의 "9자 이상·줄바꿈 → NICKNAME_INVALID", "이모지 8개 통과" 케이스(코드 포인트가 아닌 grapheme 기준으로 바뀌므로 기대값 재확인)를 유지한다.
 - `nicknameKey` 필드가 이미 `Player` 에 있다 → 중복 검사는 `players.some(p => p.nicknameKey === key)` 로 `NICKNAME_TAKEN`.
-- `joinSeq`/`nextJoinSeq` 는 방장 승계("먼저 들어온 순서") 용으로 이미 있다 → `leave` 에서 방장이면 `joinSeq` 최소인 남은 사람이 새 방장.
+- `joinSeq`/`nextJoinSeq` 는 방장 승계("먼저 들어온 순서") 용으로 이미 있다 → `leave` 에서 방장이면 남은 사람 가운데 **연결된 사람의** `joinSeq` 최소가 새 방장, 연결된 사람이 없으면 전체 `joinSeq` 최소(01-04, D-17 구체화 — 시작할 수 있는 방장 우선).
 - 자리(`seat`)는 나간 뒤에도 재사용(가장 작은 빈 번호). 정원 판정은 `players.length`(끊긴 사람 포함, RS Pattern 8), 시작 조건은 `connectedCount`.
 
 **새로 더할 코드 (RS Code Examples, 설계안 그대로):**
@@ -182,7 +184,7 @@ const players: PublicPlayer[] = [...state.players]
 export interface RoomPreview {            // 28-35 현재
   code: string; hostNickname: string; playerCount: number; maxPlayers: number; phase: PhaseId;
 }
-export interface MyInfo { seat: number; isHost: boolean }   // 01-07 이 role?, allies? 를 더한다
+export interface MyInfo { seat: number; isHost: boolean }   // 01-07 이 role?, allies? 를 더한다 (코드 주석의 옛 번호 — 지금은 타입 01-04, 값 01-07)
 ```
 추가: `PreviewPlayer { seat; nickname }`, `RoomPreview.players: PreviewPlayer[]`, `MyInfo.role?: RoleId`, `MyInfo.allies?: number[]`. `RoleId` 타입은 `shared/game/roles.ts` 에서 `import type`.
 
@@ -205,12 +207,12 @@ async createRoom(input: { code: string; nickname: string; now: number }): Promis
 ```
 `join`/`preview` RPC 도 같은 모양. `join` 성공 직후 `await this.persistAndBroadcast()` 로 기존 소켓들에 방송해야 다른 사람 화면에 자리가 나타난다 (RS Pattern 6 마지막 항목). HTTP join 직후 `connected=false` 는 정상(RS Pitfall 24).
 
-**메시지 분기 확장 지점** (worker/room.ts:110-120): 현재 `default:` 가 `start`/`leave`/`kick` 을 `BAD_MESSAGE` 로 보낸다 — 주석("01-08 이 붙인다")이 정확히 이 자리다. `case "start"`, `"leave"`, `"kick"` 을 추가하고 `hello` 가 아닌 메시지는 `ws.deserializeAttachment()` 로 `playerId` 를 얻은 뒤 `checkStart` 등 순수 코어를 호출.
+**메시지 분기 확장 지점** (worker/room.ts:110-120): 현재 `default:` 가 `start`/`leave`/`kick` 을 `BAD_MESSAGE` 로 보낸다 — 주석("01-08 이 붙인다", 옛 번호 — 지금은 01-09)이 정확히 이 자리다. `case "start"`, `"leave"`, `"kick"` 을 추가하고 `hello` 가 아닌 메시지는 `ws.deserializeAttachment()` 로 `playerId` 를 얻은 뒤 `checkStart` 등 순수 코어를 호출.
 ```typescript
 switch (msg.t) {
   case "hello": await this.handleHello(ws, msg.token); return;
   case "ping":  this.sendTo(ws, { t: "pong", c: msg.c, serverNow: Date.now() }); return;
-  default: // 01-08 이 start·leave·kick 처리기를 붙인다
+  default: // 01-08 이 start·leave·kick 처리기를 붙인다  (옛 번호 — 지금은 01-09)
 ```
 **start 거절 시:** `sendTo(ws, { t:"error", code })` 에 더해 **그 소켓에 최신 `state` 를 다시 보낸다** (RS Pattern 8 ⑥, UI S-03 "시작이 거절되면 서버 view 대로 다시 그린다"). `buildView(room, att.playerId, now)` (broadcast 가 쓰는 형태, 208행)를 재사용.
 
@@ -486,17 +488,17 @@ useEffect(() => { if (status === "removed") onExit(removedReason ?? "room_closed
 …
 switch (view.phase) {
   case "lobby": return <Lobby view={view} send={connection.send} />;
-  // 아래 단계 화면은 01-09 가 붙일 자리다.
+  // 아래 단계 화면은 01-09 가 붙일 자리다.  (옛 번호 — 지금은 01-13)
   case "assigning": case "roleReveal": case "day":
     return <main className="screen" data-phase={view.phase} />;
 }
 ```
-**유지:** `status === "replaced"` 분기, `!view` → "연결 중…" 전체 화면, 단계 `switch`(빠짐없는 분기 — TS `noImplicitReturns` 에 의존하는 형태). 주석(18행)이 "쫓겨난 이유별 화면은 01-05 가 붙인다" 라고 한 자리 = `removed` → `ErrorScreen`.
+**유지:** `status === "replaced"` 분기, `!view` → "연결 중…" 전체 화면, 단계 `switch`(빠짐없는 분기 — TS `noImplicitReturns` 에 의존하는 형태). 주석(18행)이 "쫓겨난 이유별 화면은 01-05 가 붙인다"(옛 번호 — 지금은 ErrorScreen 01-06, RoomScreen 연결 01-11) 라고 한 자리 = `removed` → `ErrorScreen`.
 **더할 것:** `status ∈ {connecting, reconnecting}` + `view` 있음 → 맨 위 `ReconnectBanner`(내용 밂); `canSend = status === "open"` 를 하위 화면에 내려 서버 입력 버튼 비활성(현재 `send` 는 OPEN 이 아니면 조용히 버림 — useRoomConnection:107-110); `failed` → "연결할 수 없어요" 화면; 시트 열림 상태(`myRoleOpen`, `shareOpen`, `confirm`) 보유; `seenFront` 상태 보유(RS Pattern 10); `diffRoomViews` 소비(토스트·`useSeatTransitions`); 보이지 않는 `aria-live="polite"` 영역(단계 바뀔 때만 문구: UI 접근성 절).
 
 #### `src/screens/Lobby.tsx` — S-03 교체 (component, event-driven)
 
-**Analog:** 같은 파일의 **props 시그니처** `{ view: RoomView; send: (msg: ClientMessage) => void }` 와 테스트가 확인하는 불변식(닉네임을 React 텍스트로만 그림). 현재 구현은 목록(`ul.lobby-players`) 임시본이고 주석(8행)이 "2.5D 테이블은 01-06 이 이 파일을 교체한다" 고 명시.
+**Analog:** 같은 파일의 **props 시그니처** `{ view: RoomView; send: (msg: ClientMessage) => void }` 와 테스트가 확인하는 불변식(닉네임을 React 텍스트로만 그림). 현재 구현은 목록(`ul.lobby-players`) 임시본이고 주석(8행)이 "2.5D 테이블은 01-06 이 이 파일을 교체한다"(옛 번호 — 지금은 01-10) 고 명시.
 **교체 구조 (UI S-03):** 위쪽 바([뒤로] 아이콘 / "방 코드" + 코드 display / [공유] 아이콘) → `Backdrop` + `Table`(seats ← `view.players`, `mySeat = view.me.seat`) → 하단 시트(안내 + `connectedCount` 인원, 방장 [게임 시작] 또는 참가자 [링크 공유]).
 - 인원: `connectedCount(view.players)` + `view.maxPlayers` — **`shared/game/room.ts` 의 `connectedCount` 를 import** (서버와 같은 함수, RS Pattern 8). 기존 `view.players.length` (Lobby.tsx:17) 는 끊긴 사람을 센다 → 바꿔야 함.
 - 활성: `canStart = connectedCount >= view.minPlayers`(`minPlayers` 는 뷰에 이미 있음). 누르면 `send({ t:"start" })` + 2초 잠금.

@@ -40,7 +40,7 @@ Decimal phases appear between their surrounding integers in numeric order.
   4. 방장이 시작하면 모든 폰에 "직업을 배정하고 있습니다…" 구간(약 3초)이 함께 나온 뒤 역할 확인 15초로 넘어가고, 카운트다운이 모든 폰에서 같은 시각에 끝나면 모든 폰이 "낮이 되었습니다" 화면으로 넘어간다(결정 0007). 폰 화면을 껐다 켜거나 탭을 새로고침해도 같은 자리·같은 역할로 돌아온다.
   5. 코드를 고치고 `wrangler deploy` 를 다시 하면 주소는 그대로이고 새 버전이 보인다.
 
-**Plans**: 3/10 plans executed
+**Plans**: 3/14 plans executed (01-04~01-14 는 2026-10-23 UI-SPEC 개정 2·결정 0012 기준으로 다시 계획)
 
 Plans:
 **Wave 1**
@@ -51,19 +51,27 @@ Plans:
 - [x] 01-03-PLAN.md — 순수 규칙: 닉네임·역할 배정·자리 배치·시계 오프셋·공유 (TDD, wave 2)
 
 **Wave 3** *(blocked on Wave 2 completion)*
-- [ ] 01-04-PLAN.md — 대기실 규칙 코어: 참가·나가기·내보내기·연결 정합·시작 조건 (TDD, wave 3)
-- [ ] 01-05-PLAN.md — 입장 화면(코드·링크·오류)·세션 저장·재접속 훅 (wave 3)
-- [ ] 01-06-PLAN.md — 대기실 2.5D 원근 테이블·등장 애니메이션·공유·시작 버튼 (wave 3)
+- [ ] 01-04-PLAN.md — 서버 대기실 규칙 코어: 참가·나가기·내보내기·연결자 4명 시작 조건·미리보기 앉은 사람·와이어 타입 (TDD, wave 3)
+- [ ] 01-05-PLAN.md — 새 첫 화면(S-01)에서 방 만들기: 디자인 시스템 기본 부품·문구 매핑·그림 URL 헬퍼 (wave 3)
 
 **Wave 4** *(blocked on Wave 3 completion)*
-- [ ] 01-07-PLAN.md — 진행 코어: 단계 표·tick·게임 시작·플레이어별 뷰 필터링 (TDD, wave 4)
+- [ ] 01-06-PLAN.md — 코드·링크로 참가: S-01 코드 줄·S-02 링크 참가(미리보기 폴링)·입장 정보 이어받기·오류 화면 (wave 4)
+- [ ] 01-07-PLAN.md — 서버 단계 코어: 단계 표·tick·시작(끊긴 사람 포함 배정)·플레이어별 역할 뷰 (TDD, wave 4)
+- [ ] 01-08-PLAN.md — 역할 확인 부품: 공통 타이머(m:ss)·카드 면 전이·역할 카드·아이콘 (wave 4)
 
 **Wave 5** *(blocked on Wave 4 completion)*
-- [ ] 01-08-PLAN.md — Room DO 배선: 참가·재접속·시작·알람 다중화·프레임 누출 검사 (wave 5)
-- [ ] 01-09-PLAN.md — 배정 연출·역할 카드 뒤집기·공통 카운트다운·"낮이 되었습니다" (wave 5)
+- [ ] 01-09-PLAN.md — Room DO·HTTP 배선: 미리보기·참가·나가기·내보내기·재접속·시작·알람 다중화·프레임 누출 검사 (wave 5)
+- [ ] 01-10-PLAN.md — 대기실 S-03: 원근 테이블·연결자 기준 시작·입장/방장 토스트·등장 애니메이션 (wave 5)
+- [ ] 01-11-PLAN.md — 연결 끊김·재접속: 상태기계·52px 띠·30초 포기 화면·핑 표본 오프셋 (wave 5)
 
 **Wave 6** *(blocked on Wave 5 completion)*
-- [ ] 01-10-PLAN.md — 배포본 full 스모크·재배포 버전 확인·HANDOFF·실기기 UAT (wave 6)
+- [ ] 01-12-PLAN.md — 대기실 시트: 나가기·내보내기 확인 시트·공유 시트(C-03)·임시 스타일 정리 (wave 6)
+
+**Wave 7** *(blocked on Wave 6 completion)*
+- [ ] 01-13-PLAN.md — 배정 연출(S-04)·역할 확인(S-05)·낮 시작(S-06)·내 역할 시트(C-01) (wave 7)
+
+**Wave 8** *(blocked on Wave 7 completion)*
+- [ ] 01-14-PLAN.md — 배포본 full 스모크·OG·캐시·토큰 검사·재배포·HANDOFF·push·실기기 UAT (wave 8)
 
 **Notes**: 화면은 실시간 3D 없이 2.5D(원근 타원 테이블, 그림자·조명 레이어)로 만든다(결정 0008). 패키지와 버전은 계획에서 확정한다. 이탈 플레이어 처리(CONN-02)는 1페이즈 논의에서 확정했다. 화면 구성은 단순하게 두되, 이 구간의 몰입 요소(참가자 등장 액션, 배정 대기 연출, 카운트다운 강조)는 기본형으로 넣는다 (결정 0006). 전체 톤·캐릭터·연출 통일은 5페이즈.
 
@@ -153,7 +161,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 (decimal phases
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 1. 걷는 뼈대 | v1.0 | 3/10 | In Progress | - |
+| 1. 걷는 뼈대 | v1.0 | 3/14 | In Progress | - |
 | 2. 낮 토론 | v1.0 | 0/TBD | Not started | - |
 | 3. 밤과 아침 | v1.0 | 0/TBD | Not started | - |
 | 4. 처형과 승패 | v1.0 | 0/TBD | Not started | - |

@@ -6,7 +6,7 @@
 
 ## 개정 요약 (2026-10-23, 이전 연구 대비)
 
-01-01~01-03 은 실행 완료(코드 있음)이고 01-04~01-10 은 아래 변경을 기준으로 처음부터 다시 계획한다. 이전 연구에서 맞는 것은 그대로 두었고 바뀐 것만 고쳤다.
+01-01~01-03 은 실행 완료(코드 있음)이고 01-04 이후는 아래 변경을 기준으로 처음부터 다시 계획했다(결과: 01-04~01-14. 이 문서 안의 계획 번호는 2026-10-23 계획 개정 때 실제 번호로 고쳤다). 이전 연구에서 맞는 것은 그대로 두었고 바뀐 것만 고쳤다.
 
 | # | 바뀐 것 | 근거 | 이 문서의 어디 |
 |---|---------|------|----------------|
@@ -231,9 +231,9 @@ minifia/
 │   ├── _headers                # **신규** 에셋 캐시(Pitfall 15)
 │   ├── characters/{table,roles,ghost}/*_default@{2x,4x}.png   # 있음(세트 C)
 │   ├── backgrounds/bg_{entry,game}_{lobby,night,day,verdict}.svg   # 있음(A_cute)
-│   └── og.png                  # **신규** 임시 1200×630(UI-SPEC E13, 01-10)
+│   └── og.png                  # **신규** 임시 1200×630(UI-SPEC E13, 01-14)
 ├── shared/                     # 순수 코어(DOM/workerd 금지)
-│   ├── protocol.ts             # **RoomPreview.players 추가**, RoomView.me.role/allies(01-07)
+│   ├── protocol.ts             # **RoomPreview.players 추가**, RoomView.me.role/allies(타입 01-04, 값 01-07)
 │   ├── schemas.ts              # 서버 전용 zod
 │   ├── nickname.ts roomCode.ts seatLayout.ts   # 있음(01-03)
 │   └── game/ room.ts(join/leave/kick/start/canStart 추가) view.ts(+buildPreview) phases.ts tick.ts roles.ts
@@ -278,13 +278,13 @@ export const PHASE_DEFS = {
 01-02 에서 구현 완료(`worker/room.ts` 생성자가 `connId` 기준으로 `connected` 재계산).
 
 ### Pattern 4: 알람 하나로 단계 마감 + 방 만료 다중화 — 유지
-현재 `alarm()` 은 만료만 처리한다(01-02). 01-08 이 `nextWakeAt = min(phaseEndsAt ?? ∞, expiresAt)` 로 확장한다. 예외 시 재설정하지 않으면 6회 재시도 후 멈춘다 [CITED: .../durable-objects/api/alarms/].
+현재 `alarm()` 은 만료만 처리한다(01-02). 01-07 이 `nextWakeAt = min(phaseEndsAt ?? ∞, expiresAt)` 를 순수 함수로 만들고 01-09 가 DO 알람에 배선한다. 예외 시 재설정하지 않으면 6회 재시도 후 멈춘다 [CITED: .../durable-objects/api/alarms/].
 
 ### Pattern 5: 서버 시계 오프셋 — 구현 있음, 훅 연결이 남음
 `src/net/clock.ts` 의 `estimateOffset(samples)`·`remainingMs(deadline, offset, localNow)` 가 있다(01-03). 현재 `useRoomConnection` 은 상태 메시지마다 `serverNow - Date.now()` 한 점으로 오프셋을 정한다 [VERIFIED: useRoomConnection.ts:78 `setOffset(msg.view.serverNow - Date.now())`] — 편차가 네트워크 지연만큼 생긴다. 새 훅은 접속 직후·`visible` 복귀 때 `ping{c}` 3~5회로 최소 RTT 표본을 모아 `estimateOffset` 을 쓴다.
 
 ### Pattern 6: 방 만들기·참가·미리보기를 HTTP(RPC)로, 실시간은 WS `hello{token}` 으로 — 미리보기 확장
-현재 Worker 라우트는 `/api/health`, `POST /api/rooms`, `GET /api/rooms/:code/ws` 뿐이다 [VERIFIED: worker/index.ts:65-76]. 01-08 이 `GET /api/rooms/:code`(미리보기)와 `POST /api/rooms/:code/join` 을 더한다. `RoomPreview` 의 현재 모양과 개정:
+현재 Worker 라우트는 `/api/health`, `POST /api/rooms`, `GET /api/rooms/:code/ws` 뿐이다 [VERIFIED: worker/index.ts:65-76]. 01-09 가 `GET /api/rooms/:code`(미리보기)와 `POST /api/rooms/:code/join` 을 더한다. `RoomPreview` 의 현재 모양과 개정:
 ```typescript
 // shared/protocol.ts:29-35 (현재, 그대로 인용)
 export interface RoomPreview {
@@ -312,7 +312,7 @@ export interface RoomPreview { /* 위 필드 + */ players: PreviewPlayer[] }
 
 ### Pattern 8: 시작 조건 = 연결된 사람 ≥ 4, 정원 = 자리 수 (C1)
 **What:** 두 개념을 분리한다. 정원(`MAX_PLAYERS` = 8)은 `players.length`(끊긴 사람 포함, 나가기·내보내기로만 줄어듦). 시작 조건은 `connectedCount(players) >= MIN_PLAYERS`. 역할은 시작 순간 `players` **전원**에게 배정한다(자리 ≥ 연결자 ≥ 4 이므로 `ROLE_TABLE` 의 4~8 범위 안).
-**Where it lands:** 순수 규칙·테스트 = 01-04, `startGame` = 01-07, DO `start` 처리 = 01-08, 화면 = 01-06.
+**Where it lands:** 순수 규칙·테스트 = 01-04, `startGame` = 01-07, DO `start` 처리 = 01-09, 화면 = 01-10.
 **테스트 경계(꼭 넣을 케이스):** ① 연결 4 + 끊김 0 = 시작 가능 ② 연결 4 + 끊김 2(자리 6) = 시작 가능, 6인 구성표로 6명 모두 역할 ③ 연결 3 + 끊김 5(자리 8) = `NOT_ENOUGH_PLAYERS` ④ 비방장 `NOT_HOST` ⑤ lobby 아님 `WRONG_PHASE` ⑥ 시작 직전에 연결자가 3으로 줄면 서버가 거절하고 **그 소켓에 최신 `state` 를 다시 보낸다**(클라이언트 스냅샷이 권위, UI-SPEC "시작이 거절되면 서버 view 대로 다시 그린다") ⑦ 끊긴 사람이 `assigning`/`roleReveal` 도중 `hello` 로 돌아오면 같은 `phaseEndsAt` 와 자기 `me.role` 을 받는다 ⑧ 시작 후 `kick` 은 `CANNOT_KICK`.
 **공유 헬퍼:** `connectedCount(players: readonly {connected: boolean}[])` 를 `shared/game/room.ts` 에서 export 해 서버(`canStart`)와 클라이언트(`PublicPlayer[]`, 버튼·인원 표시)가 같은 함수를 쓴다.
 
@@ -361,7 +361,7 @@ export function diffRoomViews(prev: RoomView | null, next: RoomView): RoomDiff {
 - 자리 등장 애니메이션도 같은 diff: `joined`/`left` 로 `entering`/`leaving` 표시. `left` 는 320ms 동안 직전 뷰의 인물을 `leaving` 으로 남겨 두어야 사라지는 애니메이션이 보인다(훅 `useSeatTransitions`). 처음 그릴 때 이미 앉아 있던 사람은 애니메이션 없음(UI-SPEC Motion 규칙). 빈 자리는 비워 둔다(빈 의자 없음 — 참고 구현 `Chair` 는 쓰지 않는다).
 
 ### Pattern 12: 연결 상태기계 — 띠 52px·"다시 연결됐어요"·30초 포기 (C6)
-현재 훅: 1초 고정 재시도, 연속 5회 실패면 멈춤 [VERIFIED: useRoomConnection.ts:17-20 `const RETRY_DELAY_MS = 1000;` `const MAX_CONSECUTIVE_FAILURES = 5;`], 상태 `"connecting" | "open" | "reconnecting" | "replaced" | "removed"`(`:5`). 01-05 가 이를 교체한다. 권고 모양:
+현재 훅: 1초 고정 재시도, 연속 5회 실패면 멈춤 [VERIFIED: useRoomConnection.ts:17-20 `const RETRY_DELAY_MS = 1000;` `const MAX_CONSECUTIVE_FAILURES = 5;`], 상태 `"connecting" | "open" | "reconnecting" | "replaced" | "removed"`(`:5`). 01-11 이 이를 교체한다. 권고 모양:
 - 상태에 `"failed"`(30초 포기) 추가. 순수 리듀서(`linkReducer(state, event, now)`)로 `status`, `bannerMode: "hidden" | "reconnecting" | "restored"`, `failingSince`, `epoch` 를 관리하고 훅은 이벤트(`open`, `close`, `visible`, `hidden`, `online`, `tick`, `retryClicked`)만 넘긴다 → fake timer 없이 테스트.
 - 띠 규칙: `view` 가 있고 `status ∈ {connecting, reconnecting}` 이면 `reconnecting`. 다시 `open`+첫 `state` 를 받으면 `restored`(2초) → `hidden`. `view` 가 없으면 띠 대신 전체 화면 "연결 중…".
 - **30초는 "보이는 상태에서 실패한 시간"**: `failingSince` 는 **페이지가 visible 인 동안 첫 실패 시각**으로 정하고 `hidden` 에서는 흘려보내지 않거나 `visible` 복귀 때 리셋한다. 단순히 "끊긴 시각으로부터 30초" 로 하면 화면 잠금 2분 뒤 켜는 순간 곧바로 "연결할 수 없어요" 가 뜬다(Pitfall 21). 포기 후 [다시 시도] 는 `failingSince` 리셋 + 즉시 재연결.
@@ -440,7 +440,7 @@ CSS 정리: 기존 `src/styles/screens.css`(161줄)는 진홍 버튼·진홍 포
 
 ### Pitfall 3: 같은 사람의 탭 2개/재접속으로 낡은 소켓의 close 가 `connected=false` 를 덮는다 — 유지(01-02 구현됨: `connId`, 4001 replaced)
 
-### Pitfall 4: 알람 하나뿐인데 두 용도로 쓰다 서로 덮어쓴다 — 유지(01-08)
+### Pitfall 4: 알람 하나뿐인데 두 용도로 쓰다 서로 덮어쓴다 — 유지(01-09)
 
 ### Pitfall 5: `wrangler deploy` 시 DO 클래스 이름·선언을 바꾸면 되돌릴 수 없다 — 유지(결정 0009)
 
@@ -471,7 +471,7 @@ CSS 정리: 기존 `src/styles/screens.css`(161줄)는 진홍 버튼·진홍 포
 ### Pitfall 14: 에셋 파일명의 `@` 가 정적 에셋 서빙에서 307 리다이렉트된다 (C7)
 **What goes wrong:** `/characters/table/fig1_boy_brown_default@2x.png` 를 요청하면 `307 Temporary Redirect → location: /characters/table/fig1_boy_brown_default%402x.png` 가 오고 그 주소가 200 이다. 이미지마다 왕복이 한 번 늘어난다.
 **Evidence:** `vite build && vite preview` 스크래치 실행. `curl -I …default@2x.png` → `HTTP/1.1 307 Temporary Redirect … location: /characters/table/fig1_boy_brown_default%402x.png`, `curl -I …default%402x.png` → `HTTP/1.1 200 OK … content-type: image/png` [VERIFIED: 로컬 vite preview(miniflare) 출력]. 프로덕션(`workers.dev`)에서도 같은지는 이 세션에서 검증하지 못했다(에셋 미배포) — 같은 정적 에셋 서빙 코드를 쓸 것으로 추정 `[ASSUMED]`.
-**How to avoid:** 코드에서 에셋 URL 을 만들 때 `@` 를 `%40` 으로 쓴다(헬퍼 한 곳). 파일을 개명하지 않아도 되고 디자인 원본 규칙(`ASSET_SPEC.md`: `<id>_<상태>@2x.png`)과 `public/` 사본이 같게 유지된다. 01-10 배포 후 `curl -I https://minifia.dhplay.workers.dev/characters/table/fig1_boy_brown_default%402x.png` 가 200 이고 `@` 형태가 307 인지 확인해 가정을 닫는다.
+**How to avoid:** 코드에서 에셋 URL 을 만들 때 `@` 를 `%40` 으로 쓴다(헬퍼 한 곳). 파일을 개명하지 않아도 되고 디자인 원본 규칙(`ASSET_SPEC.md`: `<id>_<상태>@2x.png`)과 `public/` 사본이 같게 유지된다. 01-14 배포 후 `curl -I https://minifia.dhplay.workers.dev/characters/table/fig1_boy_brown_default%402x.png` 가 200 이고 `@` 형태가 307 인지 확인해 가정을 닫는다.
 **Warning signs:** 개발자 도구 Network 에 같은 이미지 요청이 307 + 200 두 줄.
 
 ### Pitfall 15: 인물 그림 `srcset` 밀도 선택 — UI-SPEC 의 `@4x 2x` 는 DPR 2 폰에 3배 용량을 보낸다 (C7)
@@ -481,7 +481,7 @@ CSS 정리: 기존 `src/styles/screens.css`(161줄)는 진홍 버튼·진홍 포
 
 ### Pitfall 16: 4:5 테이블 장면은 폰 높이 안에서 "줄어들어야" 하고, 참고 구현의 퍼센트 좌표는 4:5 일 때만 맞는다 (C7)
 **What goes wrong:** 참고 구현 `.mf-table` 은 `aspect-ratio: 4/5`, 인물 높이 `FIG_H = 21.33`(장면 높이 대비 %) 이다. 이 값은 자리 폭 20%·그림 3:4·장면 4:5 에서만 나온다 — 자리 폭 = 장면 폭의 20%, 인물 높이 = 폭 × 4/3 = 장면 폭의 26.67%, 장면 높이는 폭의 1.25배 → 26.67 / 1.25 = 21.33% [VERIFIED: 계산, bundle.js:236 근처 `var FIG_H = 21.33; /* 인물 높이: 장면 높이 대비 % (72x96, 자리 폭 20%, 장면 4:5) */`]. 장면 높이를 억지로 줄이면(세로로 찌그러뜨리면) 이름표·링 위치가 어긋난다.
-**크기 계산(추정):** 360×640 에서 위쪽 바(방 코드 display 36px + 라벨) 약 75~80px, 하단 시트 약 150~170px(방장) / 약 200px(참가자) → 장면에 남는 높이 약 390 / 340px. 재접속 띠 52px 가 더해지면 약 340 / 290px. 4:5 장면의 폭 = 높이 × 0.8 ≈ 310 / 270(띠 있을 때 270 / 230)px. [ASSUMED: 단위 추정, 01-10 실기기·폭 360 확인 대상 🧪]
+**크기 계산(추정):** 360×640 에서 위쪽 바(방 코드 display 36px + 라벨) 약 75~80px, 하단 시트 약 150~170px(방장) / 약 200px(참가자) → 장면에 남는 높이 약 390 / 340px. 재접속 띠 52px 가 더해지면 약 340 / 290px. 4:5 장면의 폭 = 높이 × 0.8 ≈ 310 / 270(띠 있을 때 270 / 230)px. [ASSUMED: 단위 추정, 01-14 실기기·폭 360 확인 대상 🧪]
 **How to avoid:** 장면 상자를 **높이 기준**으로 만든다: 부모는 `flex: 1; min-height: 0`, 장면은 `height: 100%; aspect-ratio: 4 / 5; max-width: 100%; margin: 0 auto`(폭이 모자라면 폭에 맞춰 줄고, 남으면 가운데). 인물·이름표는 장면 상자 안의 퍼센트 좌표를 그대로 쓴다. 이름표는 항상 14px 이므로 장면이 작아지면 서로 겹칠 수 있다 — 360×640(+띠) 에서 겹침이 보이면 이름표 최대 폭(96/72px)을 줄이거나 말줄임을 더 쓴다(Claude 재량, D-08). 배경 그림은 장면 상자가 아니라 화면 전체(`cover`, `center top`)에 깐다.
 **S-02 의 8명 한 줄은 360px 에서 안 들어간다(추정):** 좌우 여백 24 → 가용 312px / 8명 = 인물당 39px. 이름표(14px, 한글 3자 ≈ 42px)가 인물보다 넓다. 설계서는 3명 예시만 그렸다. 권고: 5명 이상이면 `flex-wrap` 으로 한 줄 4명씩 두 줄(인물 폭 56px 안팎)로 접는다 — UI-SPEC 의 "한 줄"과 다르므로 UAT(E2 overflow 🧪)에서 확정. [ASSUMED]
 
@@ -649,7 +649,7 @@ export function Sheet({ label, onClose, initialFocus, children }: SheetProps) {
 
 ## Runtime State Inventory
 
-해당 없음 — 신규(greenfield) 페이즈이며 이름 변경·리팩터·이관 작업이 아니다. 다만 개정으로 `RoomPreview` 형태가 바뀌므로 이미 배포된 `minifia.dhplay.workers.dev` 의 01-02 배포본에는 미리보기 라우트가 없고(현재 `GET /api/rooms/:code` 미구현) 01-08 배포 때 처음 생긴다 — 데이터 이관 없음.
+해당 없음 — 신규(greenfield) 페이즈이며 이름 변경·리팩터·이관 작업이 아니다. 다만 개정으로 `RoomPreview` 형태가 바뀌므로 이미 배포된 `minifia.dhplay.workers.dev` 의 01-02 배포본에는 미리보기 라우트가 없고(현재 `GET /api/rooms/:code` 미구현) 01-09 구현 뒤 첫 재배포(01-14) 때 처음 생긴다 — 데이터 이관 없음.
 
 ## Assumptions Log
 
@@ -669,27 +669,39 @@ export function Sheet({ label, onClose, initialFocus, children }: SheetProps) {
 | A12 | `<dialog>.showModal()` 이 iOS Safari 에서 포커스 가두기·Esc·배경 비활성을 기본 제공하고 닫을 때 이전 포커스를 복원한다 | Pattern 9 | 포커스 탈출 → 수동 포커스 관리 추가 |
 | A13 | React `autoFocus` 는 대화상자가 열리기 전 마운트 시점에 동작해 `showModal()` 이후 포커스를 보장하지 못한다 | Pattern 9 | 불필요한 명시 `focus()` (무해) |
 | A14 | iOS 는 `share()`/`clipboard.writeText()` 를 첫 `await` 앞에서 불러야 사용자 활성화를 유지하고, 읽기 전용 입력 선택에 `setSelectionRange` 가 필요 | Pitfall 6 | 공유·복사 실패율. 실기기 UAT |
-| A15 | 장면 높이 추정(360×640 에서 약 390/340px, 띠 있으면 약 290px)과 S-02 8명 한 줄 불가(인물당 39px) | Pitfall 16 | 레이아웃 수치 재조정. 01-10 실기기·폭 360 확인 |
+| A15 | 장면 높이 추정(360×640 에서 약 390/340px, 띠 있으면 약 290px)과 S-02 8명 한 줄 불가(인물당 39px) | Pitfall 16 | 레이아웃 수치 재조정. 01-14 실기기·폭 360 확인 |
 | A16 | `players` 를 `lobby` 에서만 채우고 시작된 방에서는 `[]` | Pattern 6 | S-02 가 시작된 방에서 앉은 사람을 보여 주고 싶다면 변경 |
 | A17 | 재연결 30초는 visible 상태 연속 실패 기준(화면 잠금 시간 제외) | Pattern 12, Pitfall 21 | 포기 화면이 너무 늦게/일찍 뜸. 30초 값 자체도 가정(결정 0012) |
 | A18 | 프로덕션 정적 에셋은 SPA 폴백에서 페이지 이동이 아닌 요청을 Worker 로 보내 없는 이미지가 404 가 된다 | Pitfall 26 | 없는 그림이 HTML 200 으로 나옴(어느 쪽이든 존재 검사 테스트가 방어) |
 | A19 | `.gitattributes` 없이 Windows 에서 `tokens.css` 가 CRLF 가 되어 `--check` 가 가짜 실패한다 | Pitfall 23 | 집 PC 에서 `typecheck` 가 이유 없이 실패 |
 
-## Open Questions
+## Open Questions (RESOLVED)
+
+> 2026-10-23 재계획(01-04~01-14)에서 모두 정했다. 각 항목 끝의 RESOLVED 가 결정과 그 결정을 쓰는 계획이다.
 
 1. **[내 역할] 시트가 `roleReveal` 이후에도 "앞면을 본 적 없으면 뒷면만" 인가?**
    - What we know: UI-SPEC C-01 "S-05 에서 카드를 한 번도 앞면으로 보지 않았으면 시트에도 카드 뒷면만 보인다(설계서 S-05 4번)", D-19 "역할 확인을 놓치고 돌아온 사람도 여기서 확인한다".
    - What's unclear: 두 문장이 `day` 에서 충돌한다(S-05 중에 카드를 못 뒤집은 채 15초가 끝난 사람).
    - Recommendation: `roleReveal` 동안만 `!seenFront` 면 뒷면, `day` 이후는 항상 앞면(구현·테스트가 단순). 계획에서 확정.
+   - RESOLVED: 역할 확인(roleReveal) 단계에서만 앞면을 본 적 없으면 시트도 뒷면, 낮부터는 항상 앞면(UI-SPEC C-01 문장과 같음). "앞면을 본 적" 에는 5초 뒤 입장·새로고침으로 카드가 마운트 때부터 앞면인 경우도 들어간다(RoleReveal 이 seenFront 값 effect 로 마운트 직후 알림) — 01-13 Task 1·3.
 2. **"1일차" 를 하드코딩할까 `view.dayNumber` 를 더할까?** — 권고: 1페이즈는 상수 "1일차"(D-03 정신: 미리 넣지 않음). 밤→낮 순환이 생기는 페이즈가 필드를 더한다.
+   - RESOLVED: 1페이즈는 상수 "1일차"(UI-SPEC S-06). 일차 번호 필드는 낮이 반복되는 페이즈가 뷰에 더한다 — 01-13 Task 2.
 3. **인물 `srcset` 을 UI-SPEC 문구(`@4x 2x`)가 아니라 `@2x 2x, @4x 4x` 로 둘까?** — 권고: 후자(Pitfall 15). UI-SPEC 은 승인본이므로 계획에서 의식적으로 편차를 결정하고 UI-SPEC 한 줄을 고친다.
+   - RESOLVED: src 는 @2x, 밀도 기술자는 파일 폭 ÷ 표시 폭(인물 72px: "@2x 2x, @4x 4x", 직업 그림 150px: "@2x 1x, @4x 2x"). UI-SPEC 개정 2 의 인물 srcset 문구와도 맞음 — 01-05 Task 3.
 4. **UI-SPEC 모션 길이(240/300/320/220ms, 배정 링 1s)·재접속 띠 52px 를 `design/tokens.json` 에 더할까 CSS 지역 상수로 둘까?** — 권고: 지역 상수 + HANDOFF 기록(Pitfall 23).
+   - RESOLVED: 부품 CSS 의 지역 상수로 두고(UI-SPEC 스타일 규칙) HANDOFF 에 토큰 승격 후보로 기록(R18) — 01-08·01-10·01-11·01-12·01-13, 기록은 01-14 Task 3.
 5. **미리보기 `players` 노출 범위와 속도 제한** — `lobby` 에서만, `no-store`, 폴링은 visible 일 때만(Pattern 6·Pitfall 17·18). Workers Rate Limiting 바인딩(키로 IP 는 권장되지 않음, 위치별 근사치 [CITED: developers.cloudflare.com/workers/runtime-apis/bindings/rate-limit/])은 정식 출시(LAUNCH) 마일스톤으로 미룬다. 사용자 확인 대상: 1페이즈에서 열거 방어 없이 가도 되는가.
+   - RESOLVED: 미리보기 players 는 대기실에서만 {seat, nickname}, no-store, S-02 폴링은 보일 때만 10초·직렬화. 4자리 코드 열거로 닉네임이 보이는 위험은 수용(threat T-01-15·T-01-35, low)하고 Workers Rate Limiting 은 정식 출시 마일스톤으로 — 01-04·01-06·01-09.
 6. **ROOM_TTL 3시간**(A2) — 사용자 확인 대상(재량 항목).
+   - RESOLVED: 3시간 유지(CONTEXT Claude 재량 "빈 방·끝난 방 정리 시점"), 시작 때 갱신 — 01-07 startGame.
 7. **죽은 피어 감지(좀비 `connected=true`)가 시작 조건에 미치는 영향** — 1페이즈는 이벤트 기반만, 실기기 UAT 에서 관찰, 문제면 4페이즈 CONN-02 에서 하트비트 보강.
-8. **OG 이미지 1200×630 PNG 를 새 패키지 없이 만드는 방법** — 후보: 디자인 PNG(`design/backgrounds/A_cute/bg_entry_lobby.png`)를 OS 도구로 자르고 글자를 얹어 한 번 커밋, 또는 사용자가 데스크톱에서 만들어 전달(CLAUDE.md "그림 에셋은 클로드 데스크톱에서"). 01-10 에서 정함.
+   - RESOLVED: 1페이즈는 이벤트 기반만 쓰고 하트비트를 넣지 않는다. 실기기 UAT 에서 관찰(01-14 Task 3 항목 3), 문제면 4페이즈 CONN-02 에서 보강.
+8. **OG 이미지 1200×630 PNG 를 새 패키지 없이 만드는 방법** — 후보: 디자인 PNG(`design/backgrounds/A_cute/bg_entry_lobby.png`)를 OS 도구로 자르고 글자를 얹어 한 번 커밋, 또는 사용자가 데스크톱에서 만들어 전달(CLAUDE.md "그림 에셋은 클로드 데스크톱에서"). 01-14 에서 정함.
+   - RESOLVED: 패키지 없이 node:zlib 로 PNG 를 쓰는 scripts/make-og.mjs 가 --night-900 바탕에 "미니피아" 를 도형 자모로 그린 임시 1200×630 이미지를 만든다(design-refs §4 임시 그림 규칙). 정식 이미지는 클로드 데스크톱에서 만들어 교체 — 01-14 Task 2.
 9. **게임 중 [나가기]** 는 1페이즈에 없음(시작 뒤 끊김만 존재), 4페이즈에서 정한다(이전 연구와 동일).
+   - RESOLVED: 게임 시작 뒤 나가기는 없다(leaveRoom 은 대기실에서만, WRONG_PHASE) — 01-04 Task 2.
 10. **"모든 폰에서 같은 시각" 허용 오차** — 합격 기준: 마감 시각 값이 모든 폰에서 동일 + 전환 편차 약 0.5초 미만(실측).
+   - RESOLVED: 합격 기준 = 모든 소켓의 roleReveal phaseEndsAt 동일 + day 도착 편차 500ms 미만(배포본 스모크) — 01-14 Task 1.
 
 ## Environment Availability
 
@@ -727,7 +739,7 @@ export function Sheet({ label, onClose, initialFocus, children }: SheetProps) {
 | ROOM-03 | `connectedCount`·`checkStart`: 연결 4/자리 6 시작 가능·6인 구성표로 6명 배정, 연결 3/자리 8 거절, 비방장·lobby 아님 거절, 정원 = 자리 수(끊긴 사람 포함 9번째 join `ROOM_FULL`), 거절 시 최신 `state` 재전송, 시작 후 kick `CANNOT_KICK`. 화면: [게임 시작] 활성 조건·안내 문구·"8 / 8명 · 가득 찼어요" | unit + worker + client | `npx vitest run test/unit/gameRoom.test.ts test/worker/start.test.ts test/client/lobby.test.tsx` | gameRoom ✅(확장) / 나머지 ❌ |
 | CONN-01 | `hello{token}` 로 같은 seat/role 복구(eviction·강제 종료 후), 잘못된 토큰 거부, 중복 소켓 교체(있음). **상태기계**: 끊김→띠 `reconnecting`→`restored` 2초→`hidden`, `view` 없으면 전체 화면, 30초 visible 연속 실패 → `failed`, `hidden` 120초 후 `visible` 은 포기 아님, 백오프 상한, 4001/4003 분기, `epoch` 증가. 세션: 단일 슬롯, 다른 방 링크는 이어받기 안 함, localStorage 예외 시 메모리 대체. **낡은 세션**: 재연결 연속 실패 시 미리보기 404 → 세션 삭제 | unit + worker + client | `npx vitest run test/unit/linkReducer.test.ts test/unit/session.test.ts test/worker/reconnect.test.ts test/client/useRoomConnection.test.tsx` | useRoomConnection 테스트 ✅(교체) / 나머지 ❌ |
 | DEPLOY-01 | 배포 주소에서 방 생성→참가→시작→`day`; 재배포 후 주소 불변·새 버전; **에셋**: `public/` 에 헬퍼가 만드는 모든 URL 의 파일 존재, `_headers` 규칙, 배포본 `%40` URL 이 200 | smoke + manual + unit | `node scripts/smoke.mjs --prod --stage full`; `npx vitest run test/unit/assets.test.ts` | ❌ Wave 0 |
-| GAME-01 | `tick` 연쇄·알람 다중화(01-07/08). `countdown`·`formatMmSs`(15→`0:15`, 마지막 5초 `urgent`)·`remainingMs`(있음), 카드 면 전이(`initialCardState`·`onTap`·`onAutoTimer`: 5초 안 탭 시 자동 없음, 5초 뒤 입장은 앞면, 앞면에서 탭하면 뒷면, 자동은 한 번만), Timer 마지막 5초 상태·`role="timer"` | unit + worker + client | `npx vitest run test/unit/tick.test.ts test/unit/countdown.test.ts test/unit/cardFace.test.ts test/worker/alarm.test.ts test/client/timer.test.tsx` | clock ✅ / 나머지 ❌ |
+| GAME-01 | `tick` 연쇄·알람 다중화(01-07/09). `countdown`·`formatMmSs`(15→`0:15`, 마지막 5초 `urgent`)·`remainingMs`(있음), 카드 면 전이(`initialCardState`·`onTap`·`onAutoTimer`: 5초 안 탭 시 자동 없음, 5초 뒤 입장은 앞면, 앞면에서 탭하면 뒷면, 자동은 한 번만), Timer 마지막 5초 상태·`role="timer"` | unit + worker + client | `npx vitest run test/unit/tick.test.ts test/unit/countdown.test.ts test/unit/cardFace.test.ts test/worker/alarm.test.ts test/client/timer.test.tsx` | clock ✅ / 나머지 ❌ |
 | ROLE-01 | 4~8명 각 구성표(있음, 01-03). 끊긴 사람 포함 전원 배정(Pattern 8) | unit | `npx vitest run test/unit/roles.test.ts test/unit/gameRoom.test.ts` | roles ✅ |
 | ROLE-02 | `buildView` 타인 `role`/`token`/`playerId` 미포함, 마피아만 `allies`, `roleReveal` 이전엔 `me.role` 없음(직렬화 스캔), **미리보기 누출 없음**, 실제 소켓 프레임 전수. **카드 뒷면 DOM**: 서로 다른 역할의 뒷면 `innerHTML` 동일·앞면 이전 DOM 에 역할 이름 없음·직업 그림 `<img>` 없음, 시트 `me.role` 없으면 "아직 역할이 없어요" | unit + worker + client + smoke | `npx vitest run test/unit/view.test.ts test/worker/leak.test.ts test/client/roleCard.test.tsx` | ❌ Wave 0 |
 | (UI) 시트 | `Sheet`: 열면 `dialog.open`, Esc(`cancel` 디스패치)·막 클릭·[닫기]로 닫힘, 닫기 애니메이션 폴백 타이머(fake timers), `aria-label`, 단계 변경 후에도 열린 채(상위 상태), StrictMode 이중 마운트 무해, ConfirmSheet 열면 [취소] 포커스 | client | `npx vitest run test/client/sheet.test.tsx test/client/confirmSheet.test.tsx` | ❌ Wave 0 |
@@ -745,7 +757,7 @@ export function Sheet({ label, onClose, initialFocus, children }: SheetProps) {
 - [ ] 위 표의 ❌ 테스트 파일들(서버 규칙·미리보기·연결·시트·카드·토스트·에셋·문구)
 - [ ] `package.json`: `"tokens:check": "node scripts/gen-tokens.mjs --check"` 추가, `typecheck` 앞에 연결 / `.gitattributes`: `src/styles/tokens.css text eol=lf`
 - [ ] `public/_headers`(선택 최적화), `src/styles/ds.css`(bundle.css 이식) — 코드 작업이지 테스트 인프라는 아님
-- [ ] `scripts/smoke.mjs` 에 `full` 단계(미리보기 키·연결자 4 시작 조건·재접속·누출 전수) — 01-10
+- [ ] `scripts/smoke.mjs` 에 `full` 단계(미리보기 키·연결자 4 시작 조건·재접속·누출 전수) — 01-14
 - [ ] 테스트 인프라 신규 설치 없음(happy-dom 이 `<dialog>.showModal` 지원, `import.meta.glob` 으로 파일 존재 확인)
 
 ## Security Domain
@@ -783,14 +795,14 @@ export function Sheet({ label, onClose, initialFocus, children }: SheetProps) {
 
 ## Suggested Plan Slicing (참고용 — 확정은 planner)
 
-01-01~03 완료. TDD 모드이므로 각 계획은 "순수 로직 테스트 먼저 → 구현 → 어댑터/화면" 순서다. 이전 번호(04~10)를 유지하되 개정 항목이 들어갈 곳을 표시했다. 계획 간 의존(순서): 04 → 07 → 08, 05·06 은 03 이후 병렬, 09 는 05·06·07 이후, 10 은 마지막.
-- **01-04 대기실 규칙(순수):** `join`(정원 = 자리 수, `GAME_STARTED`, 닉네임 `validateNickname`)·`leave`(방장 승계 = `joinSeq` 순)·`kick`(끊긴 사람만, lobby 만)·`connectedCount`·`checkStart`(**C1, R7**)·`buildPreview`(+`players`, **C2**) 와 누출 테스트. 시작 조건 경계 케이스 표(Pattern 8)를 그대로 테스트 목록으로.
-- **01-05 입장 흐름·연결 계층(클라이언트):** 라우팅(`/`, `/r/:code`), 세션(단일 슬롯·낡은 세션 미리보기 확인), `messageForApiError` 문구(**R16**), S-01·S-02(**R5·R6**, 폴링 10초), ErrorScreen, 연결 상태기계·띠 52px·30초 포기·핑 표본(**R15, Pattern 12**). 디자인 시스템 부품 중 Button·TextField·Icon·Toast·ReconnectBanner·Backdrop 이식(Pattern 14)을 이 계획이 먼저 깔고, 이후 계획이 재사용.
-- **01-06 대기실 + 테이블 + 시트:** Table/Figure(세트 C, `%40` 헬퍼·`srcSet`·장면 높이 기준 크기, **R3·R4·R8**), `diffRoomViews`·`useSeatTransitions`·토스트(**R9**), 하단 시트·시작 버튼·안내 문구·"가득 찼어요"(**R7·R8**), `Sheet`·`ConfirmSheet`·공유 시트(**R10, Pattern 9**), 방장 배지. `@types`·테스트 인프라는 그대로.
-- **01-07 서버 단계 코어(순수):** `PHASE_DEFS`·`tick`·`startGame`(끊긴 사람 포함 전원 배정, **R7**)·`nextWakeAt`·`buildView` 확장(`me.role`/`allies`/`phaseDurationMs`).
-- **01-08 DO·HTTP 배선:** 미리보기·참가 라우트(**R6**), leave·kick·start(거절 시 최신 `state` 재전송), 알람 다중화, `hello` 재접속, 워커 통합 테스트(누출·미리보기·시작 조건).
-- **01-09 배정·역할 확인·낮 + 시트:** Timer(`m:ss`)·PhaseBar·RoleCard(Pattern 10·Pitfall 20, **R12**)·[내 역할] 시트(**R14**)·S-04(**R11**)·S-06(**R13**), 에셋 프리로드(직업 4종·낮 배경), RoomScreen 단계 분기.
-- **01-10 스모크·배포 검증·UAT:** `full` 스모크(미리보기 키·연결자 4 시작·재접속·누출 전수), `public/_headers`, OG 이미지(**E13**), 재배포 후 `%40` 에셋 확인(Pitfall 14), 실기기 UAT(위 체크리스트), HANDOFF·README, 디자인 시스템 아티팩트 보정 항목(R18, 계획 범위 밖) 기록.
+01-01~03 완료. TDD 모드이므로 각 계획은 "순수 로직 테스트 먼저 → 구현 → 어댑터/화면" 순서다. 아래는 리서치 때의 제안(04~10)이고, 실제 계획은 01-04~01-14 로 나뉘었다 — 각 항목 앞에 "제안 번호 → 실제 계획" 을 적었다. 실제 웨이브: 3(01-04·01-05) → 4(01-06·01-07·01-08) → 5(01-09·01-10·01-11) → 6(01-12) → 7(01-13) → 8(01-14).
+- **제안 04 → 실제 01-04 대기실 규칙(순수):** `join`(정원 = 자리 수, `GAME_STARTED`, 닉네임 `validateNickname`)·`leave`(방장 승계 = 연결된 사람 우선 `joinSeq` 순, 아무도 연결 안 됐으면 전체 `joinSeq` 순)·`kick`(끊긴 사람만, lobby 만)·`connectedCount`·`checkStart`(**C1, R7**)·`buildPreview`(+`players`, **C2**) 와 누출 테스트. 시작 조건 경계 케이스 표(Pattern 8)를 그대로 테스트 목록으로.
+- **제안 05 → 실제 01-05(S-01·부품·문구·에셋)·01-06(라우팅·세션·S-02·ErrorScreen)·01-11(연결 상태기계·띠) 입장 흐름·연결 계층(클라이언트):** 라우팅(`/`, `/r/:code`), 세션(단일 슬롯·낡은 세션 미리보기 확인), `messageForApiError` 문구(**R16**), S-01·S-02(**R5·R6**, 폴링 10초), ErrorScreen, 연결 상태기계·띠 52px·30초 포기·핑 표본(**R15, Pattern 12**). 디자인 시스템 부품 중 Button·TextField·Icon·Toast·ReconnectBanner·Backdrop 이식(Pattern 14)을 이 계획이 먼저 깔고, 이후 계획이 재사용.
+- **제안 06 → 실제 01-06(Figure)·01-10(Table·Lobby·토스트)·01-12(시트·공유) 대기실 + 테이블 + 시트:** Table/Figure(세트 C, `%40` 헬퍼·`srcSet`·장면 높이 기준 크기, **R3·R4·R8**), `diffRoomViews`·`useSeatTransitions`·토스트(**R9**), 하단 시트·시작 버튼·안내 문구·"가득 찼어요"(**R7·R8**), `Sheet`·`ConfirmSheet`·공유 시트(**R10, Pattern 9**), 방장 배지. `@types`·테스트 인프라는 그대로.
+- **제안 07 → 실제 01-07 서버 단계 코어(순수):** `PHASE_DEFS`·`tick`·`startGame`(끊긴 사람 포함 전원 배정, **R7**)·`nextWakeAt`·`buildView` 확장(`me.role`/`allies`/`phaseDurationMs`).
+- **제안 08 → 실제 01-09 DO·HTTP 배선:** 미리보기·참가 라우트(**R6**), leave·kick·start(거절 시 최신 `state` 재전송), 알람 다중화, `hello` 재접속, 워커 통합 테스트(누출·미리보기·시작 조건).
+- **제안 09 → 실제 01-08(Timer·RoleCard·카드 면)·01-13(단계 화면·[내 역할] 시트) 배정·역할 확인·낮 + 시트:** Timer(`m:ss`)·PhaseBar·RoleCard(Pattern 10·Pitfall 20, **R12**)·[내 역할] 시트(**R14**)·S-04(**R11**)·S-06(**R13**), 에셋 프리로드(직업 4종·낮 배경), RoomScreen 단계 분기.
+- **제안 10 → 실제 01-14 스모크·배포 검증·UAT:** `full` 스모크(미리보기 키·연결자 4 시작·재접속·누출 전수), `public/_headers`, OG 이미지(**E13**), 재배포 후 `%40` 에셋 확인(Pitfall 14), 실기기 UAT(위 체크리스트), HANDOFF·README, 디자인 시스템 아티팩트 보정 항목(R18, 계획 범위 밖) 기록.
 
 ## Sources
 
