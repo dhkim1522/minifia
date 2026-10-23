@@ -451,3 +451,78 @@ describe("useRoomConnection + Lobby: 재연결 직후 토스트 (WR-03)", () => 
     expect(screen.getByText("지아님이 들어왔어요")).toBeTruthy();
   });
 });
+
+describe("useRoomConnection: 이벤트 구독 (emoji·error 프레임, Pitfall 6)", () => {
+  it("emoji 프레임을 onEvent 리스너가 한 번 받는다", () => {
+    const { sockets, hook } = setup();
+    openWithState(sockets[0]!);
+    const listener = vi.fn();
+    act(() => {
+      hook.result.current.onEvent(listener);
+    });
+    const frame = { t: "emoji", seat: 2, icon: "smile", at: 1 };
+    act(() => sockets[0]!.message(frame));
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(listener).toHaveBeenCalledWith(frame);
+  });
+
+  it("error 프레임도 리스너가 받는다", () => {
+    const { sockets, hook } = setup();
+    openWithState(sockets[0]!);
+    const listener = vi.fn();
+    act(() => {
+      hook.result.current.onEvent(listener);
+    });
+    act(() => sockets[0]!.message({ t: "error", code: "RATE_LIMITED" }));
+    expect(listener).toHaveBeenCalledWith({ t: "error", code: "RATE_LIMITED" });
+  });
+
+  it("해제 함수를 부른 뒤에는 받지 않는다", () => {
+    const { sockets, hook } = setup();
+    openWithState(sockets[0]!);
+    const listener = vi.fn();
+    let off = () => {};
+    act(() => {
+      off = hook.result.current.onEvent(listener);
+    });
+    act(() => off());
+    act(() => sockets[0]!.message({ t: "emoji", seat: 2, icon: "smile", at: 1 }));
+    expect(listener).not.toHaveBeenCalled();
+  });
+
+  it("리스너 둘을 등록하면 둘 다 받는다", () => {
+    const { sockets, hook } = setup();
+    openWithState(sockets[0]!);
+    const a = vi.fn();
+    const b = vi.fn();
+    act(() => {
+      hook.result.current.onEvent(a);
+      hook.result.current.onEvent(b);
+    });
+    act(() => sockets[0]!.message({ t: "emoji", seat: 1, icon: "heart", at: 5 }));
+    expect(a).toHaveBeenCalledTimes(1);
+    expect(b).toHaveBeenCalledTimes(1);
+  });
+
+  it("emoji 프레임은 view 를 바꾸지 않고 onEvent 참조도 안정적이다", () => {
+    const { sockets, hook } = setup();
+    openWithState(sockets[0]!);
+    const before = hook.result.current;
+    act(() => sockets[0]!.message({ t: "emoji", seat: 2, icon: "smile", at: 1 }));
+    expect(hook.result.current.view).toBe(before.view);
+    expect(hook.result.current.onEvent).toBe(before.onEvent);
+  });
+
+  it("알 수 없는 t 값은 리스너도 view 도 건드리지 않는다", () => {
+    const { sockets, hook } = setup();
+    openWithState(sockets[0]!);
+    const listener = vi.fn();
+    act(() => {
+      hook.result.current.onEvent(listener);
+    });
+    const before = hook.result.current.view;
+    act(() => sockets[0]!.message({ t: "chat", text: "hi" }));
+    expect(listener).not.toHaveBeenCalled();
+    expect(hook.result.current.view).toBe(before);
+  });
+});
