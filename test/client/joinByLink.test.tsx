@@ -2,6 +2,8 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-libra
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { RoomPreview } from "../../shared/protocol";
 import { App } from "../../src/App";
+import { loadLastNickname, saveLastNickname } from "../../src/net/session";
+import "../helpers/singleLineErrors";
 import { installMemoryStorage } from "../helpers/memoryStorage";
 
 // RoomScreen 이 진짜 소켓을 열지 않도록 가짜 WebSocket 을 심는다.
@@ -135,5 +137,46 @@ describe("링크 참가 화면 (S-02) 트레이서", () => {
     await waitFor(() => expect(button.disabled).toBe(true));
     fireEvent.click(button);
     expect(post).toBe(1);
+  });
+});
+
+describe("링크 참가 화면 닉네임 (D-06)", () => {
+  it("마지막으로 쓴 닉네임이 미리 채워지고, 열리면 칸에 포커스가 가며 글자가 전체 선택된다", async () => {
+    saveLastNickname("하윤");
+    vi.stubGlobal("fetch", vi.fn(async () => json(preview())));
+    render(<App />);
+    await see("2 / 8명이 모였어요");
+    const input = screen.getByLabelText("닉네임") as HTMLInputElement;
+    expect(input.value).toBe("하윤");
+    expect(document.activeElement).toBe(input);
+    expect(input.selectionStart).toBe(0);
+    expect(input.selectionEnd).toBe("하윤".length);
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect((screen.getByRole("button", { name: "참가하기" }) as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it("닉네임이 비어 있으면 [참가하기]가 꺼지고, 한 번 입력한 뒤 비우면 칸 아래 오류 문장이 나온다", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => json(preview())));
+    render(<App />);
+    await see("2 / 8명이 모였어요");
+    const input = screen.getByLabelText("닉네임");
+    expect((screen.getByRole("button", { name: "참가하기" }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.queryByRole("alert")).toBeNull();
+    fireEvent.change(input, { target: { value: "하" } });
+    fireEvent.change(input, { target: { value: "" } });
+    expect(screen.getByRole("alert").textContent).toBe("1~8자로 입력해 주세요");
+  });
+
+  it("참가에 성공하면 정규화한 닉네임이 마지막 닉네임으로 기억된다", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url: string, init?: RequestInit) => (init?.method === "POST" ? json({ token: TOKEN, seat: 2 }) : json(preview()))),
+    );
+    render(<App />);
+    await see("2 / 8명이 모였어요");
+    fireEvent.change(screen.getByLabelText("닉네임"), { target: { value: " 하윤 " } });
+    fireEvent.click(screen.getByRole("button", { name: "참가하기" }));
+    await see("연결 중…");
+    expect(loadLastNickname()).toBe("하윤");
   });
 });
