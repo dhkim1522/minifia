@@ -398,8 +398,8 @@ describe("checkStart", () => {
   });
 
   it("검사 순서는 NOT_HOST → WRONG_PHASE → NOT_ENOUGH_PLAYERS 다", () => {
-    expect(checkStart({ ...lobbyOf(2, 0), phase: "day" }, "p1")).toBe("NOT_HOST");
-    expect(checkStart({ ...lobbyOf(2, 0), phase: "day" }, "p0")).toBe("WRONG_PHASE");
+    expect(checkStart({ ...lobbyOf(2, 0), phase: "dayAnnounce" }, "p1")).toBe("NOT_HOST");
+    expect(checkStart({ ...lobbyOf(2, 0), phase: "dayAnnounce" }, "p0")).toBe("WRONG_PHASE");
     expect(checkStart(lobbyOf(2, 0), "p0")).toBe("NOT_ENOUGH_PLAYERS");
   });
 });

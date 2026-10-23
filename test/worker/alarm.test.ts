@@ -41,23 +41,54 @@ describe("알람", () => {
     expect(views.every((v) => v.phaseDurationMs === 15000)).toBe(true);
   });
 
-  it("roleReveal 마감 뒤 알람은 모두를 day 로 넘기고 phaseEndsAt 이 null 이며 다음 알람은 방 만료 시각이다", async () => {
+  it("roleReveal 마감 뒤 알람은 모두를 dayAnnounce 로 넘기고 마감은 이전 마감 + 2000, 다음 알람은 그 마감이다", async () => {
     const r = await startedRoom();
     await forceDue(r.code, "phaseEndsAt");
     await runDurableObjectAlarm(env.ROOM.getByName(r.code));
     await viewsOf(r, "roleReveal");
     // 첫 알람 뒤 마감은 다시 미래라, 두 번째 전이 앞에도 forceDue 가 필요하다.
     await forceDue(r.code, "phaseEndsAt");
+    const forced = (await storedRoom(r.code)).phaseEndsAt!;
     expect(await runDurableObjectAlarm(env.ROOM.getByName(r.code))).toBe(true);
 
-    const views = await viewsOf(r, "day");
-    expect(views.every((v) => v.phaseEndsAt === null)).toBe(true);
+    const views = await viewsOf(r, "dayAnnounce");
+    expect(views.every((v) => v.phaseEndsAt === forced + 2000)).toBe(true);
+    expect(views.every((v) => v.phaseDurationMs === 2000)).toBe(true);
     const room = await storedRoom(r.code);
-    expect(room.phase).toBe("day");
-    const expiresAt = await runInDurableObject(env.ROOM.getByName(r.code), async (_i, state) => {
-      return (await state.storage.get<{ expiresAt: number }>("room"))!.expiresAt;
-    });
-    expect(await alarmOf(r.code)).toBe(expiresAt);
+    expect(room.phase).toBe("dayAnnounce");
+    expect(room.phaseEndsAt).toBe(forced + 2000);
+    expect(await alarmOf(r.code)).toBe(forced + 2000);
+  });
+
+  it("낮 한 바퀴(dayAnnounce → claim → claimReveal → discussion → dayAnnounce)를 알람이 차례로 넘기고 저장된 일차는 2 가 된다", async () => {
+    const r = await startedRoom();
+    const stub = env.ROOM.getByName(r.code);
+    const advance = async (): Promise<number> => {
+      await forceDue(r.code, "phaseEndsAt");
+      const forced = (await storedRoom(r.code)).phaseEndsAt!;
+      expect(await runDurableObjectAlarm(stub)).toBe(true);
+      return forced;
+    };
+    await advance(); // assigning → roleReveal
+    await viewsOf(r, "roleReveal");
+    await advance(); // roleReveal → dayAnnounce
+    await viewsOf(r, "dayAnnounce");
+    expect((await storedRoom(r.code) as { day?: number }).day).toBe(1);
+
+    const steps: Array<[string, number]> = [
+      ["claim", 15_000],
+      ["claimReveal", 2_000],
+      ["discussion", 90_000],
+      ["dayAnnounce", 2_000],
+    ];
+    for (const [phase, ms] of steps) {
+      const forced = await advance();
+      const views = await viewsOf(r, phase);
+      expect(views.every((v) => v.phaseEndsAt === forced + ms)).toBe(true);
+      expect(views.every((v) => v.phaseDurationMs === ms)).toBe(true);
+      expect(await alarmOf(r.code)).toBe(forced + ms);
+    }
+    expect((await storedRoom(r.code) as { day?: number }).day).toBe(2);
   });
 
   it("방 만료 알람은 모든 소켓을 4003 'room_closed' 로 닫고 미리보기가 404 다", async () => {

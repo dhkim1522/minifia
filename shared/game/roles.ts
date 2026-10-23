@@ -21,6 +21,17 @@ function isSupportedCount(n: number): n is PlayerCount {
 }
 
 /**
+ * 이번 판에 나오는 직업 목록(공개 정보, D-07). ROLE_TABLE 에서만 파생해 개수가 0 보다 큰 직업을
+ * ROLE_IDS 순서(mafia·police·doctor·citizen)로 돌려준다. 지원하지 않는 인원은 예외 대신 빈 배열이다.
+ * 직업 칩·"[○○]는 [직업]이었어요"·서버 검증이 모두 이 목록을 쓴다 — 구성표 밖에 두 번째 목록을 만들지 않는다.
+ */
+export function rolesInPlay(playerCount: number): RoleId[] {
+  if (!isSupportedCount(playerCount)) return [];
+  const composition = ROLE_TABLE[playerCount];
+  return ROLE_IDS.filter((role) => composition[role] > 0);
+}
+
+/**
  * 인원에 맞는 역할 풀을 Fisher–Yates 로 섞어 입력 순서대로 나눠 준다.
  * randInt(k) 는 [0,k) 정수를 돌려줘야 하며, 그 밖의 값이 오면 RangeError 로 잘못된 난수원을 거부한다.
  */

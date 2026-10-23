@@ -1,4 +1,4 @@
-// 실제 소켓 프레임과 HTTP 응답 전수 누출 검사(ROLE-02): 6명 한 판(lobby → day)을 workerd 에서 돌리며 받은 모든 것을 모아 본다.
+// 실제 소켓 프레임과 HTTP 응답 전수 누출 검사(ROLE-02): 6명 한 판(lobby → dayAnnounce)을 workerd 에서 돌리며 받은 모든 것을 모아 본다.
 import { env, exports } from "cloudflare:workers";
 import { runDurableObjectAlarm } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
@@ -99,7 +99,7 @@ describe("6명 한 판 전수 누출 검사", () => {
 
     await forceDue(code, "phaseEndsAt");
     expect(await runDurableObjectAlarm(stub)).toBe(true);
-    await waitAll("day");
+    await waitAll("dayAnnounce");
     await probe(true);
 
     // ---- 검사 ----
@@ -138,7 +138,7 @@ describe("6명 한 판 전수 누출 검사", () => {
           expect(msg.view.me.allies).toBeUndefined();
         }
         if (msg.view.me.role !== undefined) roles.add(msg.view.me.role);
-        if (msg.view.phase === "day") finalViews.push(msg.view);
+        if (msg.view.phase === "dayAnnounce") finalViews.push(msg.view);
       }
       expect(roles.size).toBeLessThanOrEqual(1);
     }

@@ -8,7 +8,17 @@ import { seededRandInt } from "../helpers/seededRandom";
 
 const PLAYER_COUNTS = [4, 5, 6, 7, 8] as const;
 const SEEDS = [1, 42, 20260101] as const;
-const PHASES: readonly PhaseId[] = ["lobby", "assigning", "roleReveal", "day"];
+const PHASES: readonly PhaseId[] = [
+  "lobby",
+  "assigning",
+  "roleReveal",
+  "dayAnnounce",
+  "claim",
+  "claimReveal",
+  "discussion",
+];
+/** 역할 확인 이후 낮 단계들(본인 역할이 실리는 단계). */
+const REVEALING_PHASES = ["roleReveal", "dayAnnounce", "claim", "claimReveal", "discussion"] as const;
 const START_AT = 10_000;
 
 /** n 명이 모두 연결된 대기실. id·token 은 서로 부분 문자열이 아니도록 길고 고유하게 만든다. */
@@ -31,7 +41,7 @@ function lobbyOf(n: number): RoomState {
   return state;
 }
 
-/** 네 단계 상태를 실제 전이(startGame, tick)로 만든다. */
+/** 단계별 상태를 실제 전이(startGame, tick)로 만든다. */
 function stateAt(phase: PhaseId, n: number, seed: number): RoomState {
   const lobby = lobbyOf(n);
   if (phase === "lobby") return lobby;
@@ -41,7 +51,14 @@ function stateAt(phase: PhaseId, n: number, seed: number): RoomState {
   const revealAt = START_AT + 3_000;
   const reveal = tick(started.state, revealAt);
   if (phase === "roleReveal") return reveal;
-  return tick(reveal, revealAt + 15_000);
+  // 이후 단계는 마감을 연쇄로 넘긴다: dayAnnounce = 역할 확인 마감, claim = +2000, claimReveal = +15000, discussion = +2000.
+  const dayAnnounce = tick(reveal, revealAt + 15_000);
+  if (phase === "dayAnnounce") return dayAnnounce;
+  const claim = tick(dayAnnounce, revealAt + 15_000 + 2_000);
+  if (phase === "claim") return claim;
+  const claimReveal = tick(claim, revealAt + 15_000 + 2_000 + 15_000);
+  if (phase === "claimReveal") return claimReveal;
+  return tick(claimReveal, revealAt + 15_000 + 2_000 + 15_000 + 2_000);
 }
 
 /** 뷰를 깊이 훑어 모든 키 경로를 모은다. 배열 원소는 `[]` 로 접는다. */
@@ -72,14 +89,21 @@ describe("buildView 단계 길이 (D-15, 결정 0012)", () => {
       const v = buildView(s, s.hostId, 77_777);
       return `${phase}:${v.phaseDurationMs}:${v.phaseEndsAt === s.phaseEndsAt}:${v.serverNow}`;
     });
-    expect(got.join(" ")).toBe("lobby:null:true:77777 assigning:3000:true:77777 roleReveal:15000:true:77777 day:null:true:77777");
+    expect(got.join(" ")).toBe(
+      "lobby:null:true:77777 assigning:3000:true:77777 roleReveal:15000:true:77777 dayAnnounce:2000:true:77777 claim:15000:true:77777 claimReveal:2000:true:77777 discussion:90000:true:77777",
+    );
   });
 
-  it("assigning 은 마감이 시작 + 3000, roleReveal 은 시작 + 3000 + 15000 이다", () => {
+  it("마감은 이전 마감 + 단계 길이로 이어진다: assigning +3000, roleReveal +15000, dayAnnounce +2000, claim +15000, claimReveal +2000, discussion +90000", () => {
     const a = stateAt("assigning", 4, 1);
     const r = stateAt("roleReveal", 4, 1);
-    const d = stateAt("day", 4, 1);
-    expect(`${a.phaseEndsAt}/${r.phaseEndsAt}/${d.phaseEndsAt}`).toBe(`${START_AT + 3000}/${START_AT + 18000}/null`);
+    const ends = ["assigning", "roleReveal", "dayAnnounce", "claim", "claimReveal", "discussion"].map(
+      (phase) => stateAt(phase as PhaseId, 4, 1).phaseEndsAt,
+    );
+    expect(ends.join("/")).toBe(
+      [START_AT + 3000, START_AT + 18000, START_AT + 20000, START_AT + 35000, START_AT + 37000, START_AT + 127000].join("/"),
+    );
+    expect(r.phaseEndsAt).toBe(START_AT + 18000);
     expect(a.expiresAt).toBe(START_AT + ROOM_TTL_MS);
   });
 });
@@ -101,12 +125,12 @@ describe("buildView 내 역할·마피아 동료 (ROLE-02, D-14)", () => {
     expect(bad.join(",")).toBe("");
   });
 
-  it("roleReveal·day 에서 me.role 은 본인 역할이다", () => {
+  it("역할을 보여 주는 모든 단계(roleReveal·낮 네 단계)에서 me.role 은 본인 역할이다", () => {
     const bad: string[] = [];
     let checked = 0;
     for (const n of PLAYER_COUNTS) {
       for (const seed of SEEDS) {
-        for (const phase of ["roleReveal", "day"] as const) {
+        for (const phase of REVEALING_PHASES) {
           const s = stateAt(phase, n, seed);
           for (const p of s.players) {
             checked += 1;
@@ -126,7 +150,7 @@ describe("buildView 내 역할·마피아 동료 (ROLE-02, D-14)", () => {
     let soloChecks = 0;
     for (const n of PLAYER_COUNTS) {
       for (const seed of SEEDS) {
-        for (const phase of ["roleReveal", "day"] as const) {
+        for (const phase of REVEALING_PHASES) {
           const s = stateAt(phase, n, seed);
           for (const p of s.players) {
             const me = buildView(s, p.id, START_AT).me;
@@ -151,7 +175,7 @@ describe("buildView 내 역할·마피아 동료 (ROLE-02, D-14)", () => {
 });
 
 describe("buildView 전수 누출 검사 (T-01-23)", () => {
-  it("4~8명 × 네 단계 × 모든 플레이어 × 시드 3개: token·id 가 없고, role·allies 키는 me 아래에만 있으며, 공개 항목은 네 키뿐이다", () => {
+  it("4~8명 × 일곱 단계 × 모든 플레이어 × 시드 3개: token·id 가 없고, role·allies 키는 me 아래에만 있으며, 공개 항목은 네 키뿐이다", () => {
     const violations: string[] = [];
     let views = 0;
     for (const n of PLAYER_COUNTS) {
@@ -186,7 +210,7 @@ describe("buildView 전수 누출 검사 (T-01-23)", () => {
         }
       }
     }
-    expect(views).toBe(3 * 4 * (4 + 5 + 6 + 7 + 8));
+    expect(views).toBe(3 * 7 * (4 + 5 + 6 + 7 + 8));
     expect(violations.join("; ")).toBe("");
   });
 });
