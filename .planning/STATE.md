@@ -4,18 +4,18 @@ milestone: v1.0
 milestone_name: MVP
 current_phase: 02
 current_phase_name: 낮 토론
-current_plan: 5
+current_plan: 6
 status: executing
-stopped_at: Completed 02-06-PLAN.md
-last_updated: "2026-10-23T18:03:32.047Z"
+stopped_at: Completed 02-07-PLAN.md
+last_updated: "2026-10-23T18:10:36.377Z"
 last_activity: 2026-10-24
 last_activity_desc: Phase 02 execution started
-state_head: 475da69ecc53b2d436635141c35dc8a4a1974f54
+state_head: c96249d35a46fca3d07edad31aae0a8d82621039
 progress:
   total_phases: 6
   completed_phases: 1
   total_plans: 30
-  completed_plans: 23
+  completed_plans: 24
 ---
 
 # Project State
@@ -30,9 +30,9 @@ See: .planning/PROJECT.md (updated 2026-10-21)
 ## Current Position
 
 Phase: 02 (낮 토론) — EXECUTING
-Current Plan: 5
+Current Plan: 6
 Total Plans in Phase: 11
-Plan: 5 of 11
+Plan: 6 of 11
 Status: Ready to execute
 Last activity: 2026-10-24 — Phase 02 execution started
 
@@ -69,6 +69,7 @@ Progress: [██░░░░░░░░] 17%
 | Phase 02 P02 | 5 min | 2 tasks | 4 files |
 | Phase 02 P03 | 7min | 3 tasks | 5 files |
 | Phase 02 P06 | 3 min | 3 tasks | 8 files |
+| Phase 02 P07 | 6 min | 3 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -98,6 +99,9 @@ Recent decisions affecting current work:
 - [Phase 02]: 02-03: 쿨다운·형식 위반 거부는 상태 불변(A1), 연장 중복 ALREADY_EXTENDED(A2), 이 페이즈 탈락자 거부는 BAD_MESSAGE(A4) — 3페이즈가 확정
 - [Phase 02]: 02-03: skipDiscussion 은 별도 전이 코드 없이 tick 재호출로 진입 훅을 탄다; 마감이 바뀌는 extend·skip 뒤 알람 재설정은 DO(02-05)의 몫
 - [Phase 02]: 02-06: discussion 이 아닌 동안 도착한 emoji 이벤트는 SeatFloat 에 넣지 않고, discussion 을 벗어나면 본 seq 를 -1 로 되돌려 다음 토론은 3초 안 줄만 복원한다
+- [Phase 02]: 02-07: 공개된 주장의 props 이름은 job — Table 에 역할 키 없음(grep 게이트·타입 테스트)
+- [Phase 02]: 02-07: 머리 위 층 가로 위치는 --mf-float-left 변수(clamp)로 전달 — happy-dom 이 인라인 clamp() 를 버림
+- [Phase 02]: 02-07: 축소 모션에서는 mf-float-vanish(수명−지난 시간 지연 뒤 순간 전환)로 말풍선 수명을 유지
 
 ### Pending Todos
 
@@ -123,6 +127,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-23T18:03:31.935Z
-Stopped at: Completed 02-06-PLAN.md
+Last session: 2026-10-23T18:10:36.265Z
+Stopped at: Completed 02-07-PLAN.md
 Resume file: None
