@@ -435,3 +435,103 @@ describe("G-01-9 Sheet 열림 클래스 시점", () => {
     expect(isOpenClass(dlg)).toBe(true);
   });
 });
+
+describe("G-01-9 Sheet 안전장치", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  const plain = (onClose: () => void = () => {}) => (
+    <Sheet label="내 역할" onClose={onClose}>
+      <p>내용</p>
+    </Sheet>
+  );
+
+  it("G-01-9: 프레임이 오지 않아도 60ms 폴백으로 열림 클래스가 붙는다 (T-01-58)", () => {
+    vi.useFakeTimers();
+    stubFrames(); // 콜백을 쌓기만 하고 실행하지 않는다(숨겨진 탭 흉내)
+    const { container } = render(plain());
+    const dlg = dialogOf(container);
+    expect(isOpenClass(dlg)).toBe(false);
+    advance(59);
+    expect(isOpenClass(dlg)).toBe(false);
+    advance(1);
+    expect(isOpenClass(dlg)).toBe(true);
+  });
+
+  it("G-01-9: 열린 뒤 Esc 를 누르면 열림 클래스가 빠지고 닫는 중 클래스가 생기며 260ms 뒤 onClose 한 번", () => {
+    vi.useFakeTimers();
+    stubFrames();
+    const onClose = vi.fn();
+    const { container } = render(plain(onClose));
+    const dlg = dialogOf(container);
+    advance(60);
+    expect(isOpenClass(dlg)).toBe(true);
+    pressEsc(dlg);
+    expect(isOpenClass(dlg)).toBe(false);
+    expect(dlg.classList.contains("mf-dialog--closing")).toBe(true);
+    expect(container.querySelector(".mf-sheet--closing") !== null).toBe(true);
+    advance(260);
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("G-01-9: 열리기 전에 Esc 를 눌러도 열림 클래스는 한 번도 붙지 않고 260ms 뒤 onClose 한 번이다", () => {
+    vi.useFakeTimers();
+    const { runFrame } = stubFrames();
+    const onClose = vi.fn();
+    const { container } = render(plain(onClose));
+    const dlg = dialogOf(container);
+    pressEsc(dlg);
+    expect(isOpenClass(dlg)).toBe(false);
+    runFrame();
+    runFrame(); // 닫는 중에 프레임이 와도 무시한다
+    expect(isOpenClass(dlg)).toBe(false);
+    advance(260);
+    expect(onClose).toHaveBeenCalledTimes(1);
+    advance(1000);
+    expect(isOpenClass(dlg)).toBe(false);
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("G-01-9: 마운트 직후 언마운트하면 프레임 요청을 취소하고 남는 타이머가 없다", () => {
+    vi.useFakeTimers();
+    const { cancel } = stubFrames();
+    const { unmount } = render(plain());
+    unmount();
+    expect(cancel.mock.calls.length > 0).toBe(true);
+    expect(vi.getTimerCount()).toBe(0);
+    expect(() => advance(1000)).not.toThrow();
+  });
+
+  it("G-01-9: 열린 직후 포커스는 preventScroll 로 준다", () => {
+    stubFrames();
+    const focus = vi.spyOn(HTMLElement.prototype, "focus");
+    const { unmount } = render(
+      <Sheet label="a" onClose={() => {}} showClose>
+        <p>x</p>
+      </Sheet>,
+    );
+    expect(focus.mock.calls.length > 0).toBe(true);
+    expect(focus.mock.calls[0]?.[0]?.preventScroll).toBe(true);
+    unmount();
+    focus.mockClear();
+    render(<ConfirmSheet title="방에서 나갈까요?" confirmLabel="나가기" onConfirm={() => {}} onClose={() => {}} />);
+    expect(focus.mock.calls.length > 0).toBe(true);
+    expect(focus.mock.calls[0]?.[0]?.preventScroll).toBe(true);
+  });
+
+  it.each([
+    ["ConfirmSheet", () => <ConfirmSheet title="방에서 나갈까요?" confirmLabel="나가기" onConfirm={() => {}} onClose={() => {}} />],
+    ["ShareSheet", () => <ShareSheet code="0042" hostNickname="민수" full={false} onClose={() => {}} origin="https://x" nav={{}} />],
+  ])("G-01-9: %s 도 같은 틀이라 열린 직후엔 진입 전 상태이고 두 프레임 뒤 열림 클래스가 붙는다", (_name, make) => {
+    const { runFrame } = stubFrames();
+    const { container } = render(make());
+    const dlg = dialogOf(container);
+    expect(isOpenClass(dlg)).toBe(false);
+    runFrame();
+    expect(isOpenClass(dlg)).toBe(false);
+    runFrame();
+    expect(isOpenClass(dlg)).toBe(true);
+  });
+});
