@@ -1,20 +1,26 @@
 import { DurableObject } from "cloudflare:workers";
 import { CLOSE_CODES, MAX_FRAME_BYTES } from "../shared/protocol";
-import type { ApiErrorCode, ClientMessage, ServerMessage } from "../shared/protocol";
+import type { ApiErrorCode, ClientMessage, RoomPreview, ServerMessage } from "../shared/protocol";
 import {
   attachConnection,
   createRoomState,
   detachConnection,
   findPlayerByToken,
+  joinRoom,
 } from "../shared/game/room";
+import type { JoinError } from "../shared/game/room";
 import type { RoomState } from "../shared/game/room";
-import { buildView } from "../shared/game/view";
+import { buildPreview, buildView } from "../shared/game/view";
 import { ClientMessageSchema } from "../shared/schemas";
 import { randomToken } from "./random";
 
 export type CreateRoomRpcResult =
   | { ok: true; token: string; seat: number }
   | { ok: false; error: "CODE_TAKEN" | "NICKNAME_INVALID" };
+
+export type JoinRpcResult =
+  | { ok: true; token: string; seat: number }
+  | { ok: false; error: "ROOM_NOT_FOUND" | JoinError };
 
 /** 소켓에 붙는 첨부. hello 전 소켓은 첨부가 없다. */
 interface SocketAttachment {
@@ -73,6 +79,26 @@ export class Room extends DurableObject<Env> {
     await this.ctx.storage.put("room", this.room);
     await this.ctx.storage.setAlarm(this.room.expiresAt);
     return { ok: true, token, seat: 0 };
+  }
+
+  /** 비인증 미리보기. 없는·만료된 방은 null. */
+  async preview(now: number): Promise<RoomPreview | null> {
+    if (!this.room || now >= this.room.expiresAt) return null;
+    return buildPreview(this.room);
+  }
+
+  /** 링크·코드 참가. 성공하면 이미 연결된 소켓들이 새 자리를 곧바로 본다. 토큰은 응답으로만 나간다. */
+  async join(input: { nickname: string; now: number }): Promise<JoinRpcResult> {
+    if (!this.room || input.now >= this.room.expiresAt) return { ok: false, error: "ROOM_NOT_FOUND" };
+    const result = joinRoom(this.room, {
+      playerId: crypto.randomUUID(),
+      token: randomToken(),
+      nickname: input.nickname,
+    });
+    if (!result.ok) return { ok: false, error: result.error };
+    this.room = result.state;
+    await this.persistAndBroadcast();
+    return { ok: true, token: result.player.token, seat: result.player.seat };
   }
 
   async fetch(request: Request): Promise<Response> {
