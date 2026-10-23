@@ -1,6 +1,7 @@
 import { DurableObject } from "cloudflare:workers";
 import { CLOSE_CODES, MAX_FRAME_BYTES } from "../shared/protocol";
-import type { ApiErrorCode, ClientMessage, RemovedReason, RoomPreview, ServerMessage } from "../shared/protocol";
+import type { ApiErrorCode, ClientMessage, Claim, RemovedReason, RoomPreview, ServerMessage, WsErrorCode } from "../shared/protocol";
+import { selectClaim } from "../shared/game/claim";
 import {
   attachConnection,
   createRoomState,
@@ -174,6 +175,9 @@ export class Room extends DurableObject<Env> {
       case "start":
         await this.handleStart(ws);
         return;
+      case "claim":
+        await this.handleClaim(ws, msg.claim);
+        return;
     }
   }
 
@@ -268,6 +272,31 @@ export class Room extends DurableObject<Env> {
     this.room = result.state;
     await this.persistAndBroadcast();
     await this.reschedule();
+  }
+
+  // 직업 선택: 신원은 소켓 첨부의 playerId 뿐이다 — 메시지에서 seat 를 읽지 않는다(T-02-16).
+  // 마감이 바뀌지 않으니 reschedule 은 필요 없다. 같은 값을 다시 고르면 같은 객체라 저장·방송도 하지 않는다.
+  private async handleClaim(ws: WebSocket, claim: Claim): Promise<void> {
+    const att = this.attachmentOf(ws);
+    if (!att || !this.room) {
+      this.sendTo(ws, { t: "error", code: "BAD_MESSAGE" });
+      return;
+    }
+    const result = selectClaim(this.room, att.playerId, claim);
+    if (!result.ok) {
+      this.sendRejection(ws, att.playerId, result.error);
+      return;
+    }
+    if (result.state === this.room) return;
+    this.room = result.state;
+    await this.persistAndBroadcast();
+  }
+
+  // 거절되면 클라이언트가 서버 view 대로 다시 그리도록 error 뒤에 최신 state 를 보낸다(handleStart 선례).
+  private sendRejection(ws: WebSocket, playerId: string, code: WsErrorCode): void {
+    if (!this.room) return;
+    this.sendTo(ws, { t: "error", code });
+    this.sendTo(ws, { t: "state", view: buildView(this.room, playerId, Date.now()) });
   }
 
   /** 만료면 소켓을 닫고 지운다. 아니면 tick 으로 단계를 따라잡고, 바뀌면 저장 → 방송 → 알람 재설정. */

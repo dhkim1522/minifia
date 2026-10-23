@@ -13,4 +13,7 @@ export const ClientMessageSchema = z.discriminatedUnion("t", [
   z.object({ t: z.literal("start") }),
   z.object({ t: z.literal("leave") }),
   z.object({ t: z.literal("kick"), seat: z.number().int().min(0).max(7) }),
+  // 2페이즈 변형은 strictObject 다: 알 수 없는 키(text·seat·message 등)가 있으면 거부한다(T-02-15, D-16).
+  // ROLE_IDS 는 readonly 배열이라 z.enum 에는 튜플 리터럴을 쓴다.
+  z.strictObject({ t: z.literal("claim"), claim: z.enum(["mafia", "police", "doctor", "citizen", "none"]) }),
 ]) satisfies z.ZodType<ClientMessage>;
