@@ -37,10 +37,14 @@ function json(body: unknown, status = 200): Response {
 }
 
 // 화면에 글자가 나타나길 기다린다. 못 찾으면 한 줄짜리 단언 메시지로 실패한다(화면 전체 덤프 없음).
+// act 안에서 기다리면 갱신이 act 가 끝날 때까지 쌓여 화면이 바뀌지 않으므로, 짧게 act 로 흘려 보내며 다시 확인한다.
 async function see(text: string): Promise<void> {
-  await act(async () => {
-    await vi.waitFor(() => expect(screen.queryByText(text)).not.toBeNull());
-  });
+  for (let i = 0; i < 100 && screen.queryByText(text) === null; i += 1) {
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    });
+  }
+  expect(screen.queryByText(text)).not.toBeNull();
 }
 
 beforeEach(() => {
@@ -62,7 +66,8 @@ describe("링크 참가 화면 (S-02) 트레이서", () => {
     vi.stubGlobal("fetch", fetchMock);
     render(<App />);
 
-    await see("미니피아에 초대받았어요");
+    await see("2 / 8명이 모였어요");
+    expect(screen.getByText("미니피아에 초대받았어요")).toBeTruthy();
     expect(screen.getByRole("heading", { name: "방 0042" })).toBeTruthy();
     expect(screen.getByText("민수")).toBeTruthy();
     expect(screen.getByText("서준")).toBeTruthy();
@@ -94,7 +99,7 @@ describe("링크 참가 화면 (S-02) 트레이서", () => {
     vi.stubGlobal("fetch", fetchMock);
     render(<App />);
 
-    await see("미니피아에 초대받았어요");
+    await see("2 / 8명이 모였어요");
     fireEvent.change(screen.getByLabelText("닉네임"), { target: { value: "하윤" } });
     fireEvent.click(screen.getByRole("button", { name: "참가하기" }));
 
@@ -123,7 +128,7 @@ describe("링크 참가 화면 (S-02) 트레이서", () => {
       }),
     );
     render(<App />);
-    await see("미니피아에 초대받았어요");
+    await see("2 / 8명이 모였어요");
     fireEvent.change(screen.getByLabelText("닉네임"), { target: { value: "하윤" } });
     const button = screen.getByRole("button", { name: "참가하기" }) as HTMLButtonElement;
     fireEvent.click(button);
