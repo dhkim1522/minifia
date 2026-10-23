@@ -29,3 +29,21 @@
 .mf-card__divider { flex: none; width: 100%; height: 1px; background: var(--gray-700); }
 .mf-card__mates { flex: none; font-size: 14px; line-height: 1.4; font-weight: 700; color: var(--crimson-300); margin: 0; word-break: keep-all; }
 @keyframes mf-card-rise { from { transform: translateY(24px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+/* PhaseBar — 윗줄 왼쪽 제목+안내, 오른쪽 extra, 아랫줄 타이머(UI-SPEC S-05). */
+.mf-phasebar { flex: none; display: flex; flex-direction: column; gap: var(--space-sm); padding: var(--space-md); width: 100%; }
+.mf-phasebar__row { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-sm); }
+.mf-phasebar__text { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.mf-phasebar .mf-t-heading { text-shadow: var(--shadow-text); }
+.mf-phasebar__do { margin: 0; font-size: 14px; line-height: 1.4; font-weight: 400; color: var(--gray-300); word-break: keep-all; }
+.mf-phasebar__extra { flex: none; }
+
+/* S-05 역할 확인 — 대기 장면 위 어두운 막, 테이블 없음. 남는 높이를 카드 영역이 쓰고 카드는 52dvh 를 넘지 않는다. */
+.mf-reveal__backdrop { flex: 1 1 0; min-height: 0; height: auto; }
+.mf-reveal { position: relative; height: 100%; display: flex; flex-direction: column; overflow: hidden; }
+.mf-reveal__dim { position: absolute; inset: 0; background: var(--scrim); pointer-events: none; z-index: 0; }
+.mf-reveal > :not(.mf-reveal__dim) { position: relative; z-index: 1; }
+.mf-reveal__stage { flex: 1 1 0; min-height: 0; display: flex; align-items: center; justify-content: center; padding: 0 var(--space-md); }
+.mf-reveal__hints { flex: none; display: flex; flex-direction: column; align-items: center; gap: var(--space-xs); padding: var(--space-md) var(--space-lg) var(--space-xl); text-align: center; }
+.mf-reveal__hint { margin: 0; font-size: 16px; line-height: 1.5; font-weight: 700; color: var(--gray-50); word-break: keep-all; text-shadow: var(--shadow-text); }
+.mf-reveal__sub { margin: 0; font-size: 14px; line-height: 1.4; font-weight: 400; color: var(--gray-300); word-break: keep-all; text-shadow: var(--shadow-text); }

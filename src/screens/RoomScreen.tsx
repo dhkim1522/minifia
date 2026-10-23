@@ -1,9 +1,11 @@
 import { useEffect } from "react";
 import type { RemovedReason } from "../../shared/protocol";
 import { Button } from "../components/Button";
+import { Icon } from "../components/Icon";
 import { ReconnectBanner } from "../components/ReconnectBanner";
 import { useRoomConnection } from "../net/useRoomConnection";
 import { Lobby } from "./Lobby";
+import { RoleReveal } from "./RoleReveal";
 import "../styles/room.css";
 
 // gaveUp: 30초 연결 실패 뒤 [처음으로]. App 은 default 분기로 입장 정보를 지우지 않고 첫 화면으로 간다.
@@ -24,6 +26,13 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
   useEffect(() => {
     if (status === "removed") onExit(removedReason ?? "room_closed");
   }, [status, removedReason, onExit]);
+
+  // [내 역할] 버튼은 모든 역할·모든 시점에 같은 한 가지 마크업이다(D-19 개정, R14).
+  const myRoleButton = (
+    <Button variant="secondary" compact icon={<Icon name="card" />}>
+      내 역할
+    </Button>
+  );
 
   return (
     <div className="mf-root mf-room">
@@ -72,9 +81,17 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
     switch (view.phase) {
       case "lobby":
         return <Lobby view={view} send={connection.send} />;
-      // 아래 단계 화면은 01-13 이 붙일 자리다.
-      case "assigning":
       case "roleReveal":
+        return (
+          <RoleReveal
+            view={view}
+            offset={connection.offset}
+            myRoleButton={myRoleButton}
+            onSeenFront={() => {}}
+          />
+        );
+      // 배정·낮 화면은 아래 Task 에서 붙인다.
+      case "assigning":
       case "day":
         return <main className="mf-phase" data-phase={view.phase} />;
     }
