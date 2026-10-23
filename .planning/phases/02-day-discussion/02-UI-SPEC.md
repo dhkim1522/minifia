@@ -1,7 +1,8 @@
 ---
 phase: "02"
 slug: "day-discussion"
-status: draft
+status: approved
+reviewed_at: "2026-10-24"
 shadcn_initialized: false
 preset: none
 created: "2026-10-24"
@@ -419,7 +420,7 @@ UI 가 동작하기 위해 서버 뷰·이벤트가 실어야 하는 것의 목�
 
 > 상태 표기: ✅ covered · 🧪 backstop(실기기·폭 360px·폰 높이 640px 확인) · ⚠ unresolved(계획이 가정으로 두거나 사용자 확인). 빈 상태·오류 문구는 `## Copywriting Contract` 를 참조하고 여기서 다시 쓰지 않는다.
 
-Applicable state considerations resolved: 25 covered, 5 backstop, 4 unresolved.
+Applicable state considerations resolved: 28 covered, 5 backstop, 1 unresolved. (사용자 확인 2026-10-24: 은/는 조사, 4번 누름, 어제 선택 공개 3건 확정. 프로브 미분류 4건 E2·E3·E10·E11 은 위 행들(완료 알약·공개 연출·타이머·말풍선 층)이 수동 검토로 덮는다.)
 
 | Category | Element(s) | Status | Resolution / Reason |
 |----------|------------|--------|---------------------|
@@ -453,19 +454,19 @@ Applicable state considerations resolved: 25 covered, 5 backstop, 4 unresolved.
 | feedback | +30초 연장 | ✅ covered | 모두에게 토스트 + 타이머 막대·숫자가 늘어난다. 방장 버튼은 "이미 연장했어요" |
 | feedback | [넘기기] | ✅ covered | 즉시, 확인 없음. 누르면 두 버튼 꺼짐 후 서버 다음 단계로 |
 | a11y | reduced motion | ✅ covered | 팝·흔들림 없이 나타남, 상태 변화는 그대로 |
-| decision | 은/는 조사 — 한글이 아닌 닉네임 끝 글자 | ⚠ unresolved | "는"으로 둔다는 가정. 닉네임 규칙에 영문·숫자가 허용되므로 어색한 문장이 생길 수 있다 |
-| decision | "[○○]는 [직업]이었어요" 가 4번 누름(문구 → 대상 → 직업 → 보내기, 시트 열기 제외) | ⚠ unresolved | 성공 기준 6("세 번 이하")과 맞지 않는 유일한 문구. 첫 칩이 미리 선택돼 "의심돼요/믿어요/투표해요"는 대상 → 보내기 2번. 이 문구만 4번을 허용할지 사용자 확인 필요 |
-| decision | 2일차 이후 미리 선택된 어제 선택과 D-05(고르지 못하면 말 안 함)의 관계 | ⚠ unresolved | 가정: 연결된 사람이 가만히 있으면 미리 선택된 어제 선택이 공개된다(화면이 거짓말하지 않게). 끊긴 사람만 말 안 함. D-05 와 D-09 의 문구가 충돌해 확인 필요 |
+| decision | 은/는 조사 — 한글이 아닌 닉네임 끝 글자 | ✅ covered | 사용자 확정: "는"으로 둔다(예: "Kim는 마피아였어요"). 어색한 경우를 감수 |
+| decision | "[○○]는 [직업]이었어요" 가 4번 누름(문구 → 대상 → 직업 → 보내기, 시트 열기 제외) | ✅ covered | 사용자 확정: 이 문구만 4번 허용. 성공 기준 6 은 "대상·직업이 필요한 문구는 예외"로 고친다. 나머지 문구는 대상 → 보내기 2번 |
+| decision | 2일차 이후 미리 선택된 어제 선택과 D-05(고르지 못하면 말 안 함)의 관계 | ✅ covered | 사용자 확정: 연결된 사람이 가만히 있으면 미리 선택된 어제 선택이 공개된다. 끊긴 사람만 말 안 함(D-05) |
 | decision | 공개 연출 2초를 별도 서버 단계로 둘지 | ⚠ unresolved | UI 계약은 이 동안 낮 토론 타이머가 시작하지 않고 메시지가 거부된다는 것. 단계 분리 여부는 계획이 정한다 |
 
 ---
 
-## 확인 필요 (planner 가 계획 전에 사용자에게 묻거나 가정으로 기록)
+## 확인 필요 (1·2·4 는 2026-10-24 사용자 확정, 3 만 계획이 정한다)
 
-1. **"[○○]는 [직업]이었어요" 4번 누름**: 성공 기준 6 은 템플릿 → 대상·직업 → 보내기(3번)를 말한다. 대상과 직업이 둘 다 필요한 이 문구는 4번이다. 허용할지, 성공 기준 문구를 "대상·직업을 한 줄에 합친 문구"로 고칠지 정해야 한다.
-2. **2일차 이후 어제 선택**: D-09(미리 선택)와 D-05(고르지 못하면 말 안 함)를 이 문서는 "연결된 사람은 어제 선택 유지, 끊긴 사람은 말 안 함"으로 풀었다. 맞는지 확인.
+1. **[확정: 이 문구만 4번 허용] "[○○]는 [직업]이었어요" 4번 누름**: 성공 기준 6 은 템플릿 → 대상·직업 → 보내기(3번)를 말한다. 대상과 직업이 둘 다 필요한 이 문구는 4번이다. 허용할지, 성공 기준 문구를 "대상·직업을 한 줄에 합친 문구"로 고칠지 정해야 한다.
+2. **[확정] 2일차 이후 어제 선택**: D-09(미리 선택)와 D-05(고르지 못하면 말 안 함)를 이 문서는 "연결된 사람은 어제 선택 유지, 끊긴 사람은 말 안 함"으로 풀었다. 맞는지 확인.
 3. **공개 연출 단계**: `claimReveal` 을 서버 단계로 분리하는 안(권장, 모든 폰이 같은 시각에 시작·종료)과 낮 토론 시작 후 2초 동안 연출만 보여 주는 안 중 하나를 계획에서 정한다.
-4. **조사**: "[○○]는 [직업]이었어요" 의 은/는 에서 닉네임 끝 글자가 한글이 아니면 "는"으로 둔다(가정). 어색해도 괜찮은지 확인.
+4. **[확정: "는"으로 둠] 조사**: "[○○]는 [직업]이었어요" 의 은/는 에서 닉네임 끝 글자가 한글이 아니면 "는"으로 둔다(가정). 어색해도 괜찮은지 확인.
 5. **표기**: 템플릿 빈칸은 설계서와 REQUIREMENTS 의 "[○○]"(흰 동그라미)를 쓴다. CONTEXT 는 "[OO]" 로 적었는데 같은 뜻이다.
 
 ## 아티팩트 동기화 (디자인 세션 몫, 이 문서가 계획의 기준)
@@ -490,12 +491,12 @@ CONTEXT 의 "디자인 문서 동기화"는 2페이즈 UI 단계에서 같이 �
 
 ## Checker Sign-Off
 
-- [ ] Dimension 1 Copywriting: PASS
-- [ ] Dimension 2 Visuals: PASS
-- [ ] Dimension 3 Color: PASS
-- [ ] Dimension 4 Typography: PASS
-- [ ] Dimension 5 Spacing: PASS
-- [ ] Dimension 6 Registry Safety: PASS
-- [ ] Dimension 7 Inventory Provenance: PASS
+- [x] Dimension 1 Copywriting: PASS
+- [x] Dimension 2 Visuals: PASS
+- [x] Dimension 3 Color: PASS
+- [x] Dimension 4 Typography: PASS
+- [x] Dimension 5 Spacing: PASS
+- [x] Dimension 6 Registry Safety: PASS
+- [x] Dimension 7 Inventory Provenance: PASS
 
-**Approval:** pending
+**Approval:** approved 2026-10-24 (체커 VERIFIED, FLAG 3건은 비차단 권고: 1 CTA 문구, 2 화면별 시각 중심, 7 출처 표기)
