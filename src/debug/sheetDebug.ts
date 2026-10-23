@@ -5,7 +5,7 @@ import type { SheetMark, SheetProbe, SheetTrace, SheetTraceTarget } from "./shee
 
 type EvName = "before" | SheetMark;
 
-interface SheetSample {
+interface MiniSample {
   t: number;
   ev: EvName;
   vvH: number | null;
@@ -14,9 +14,76 @@ interface SheetSample {
   shB: number | null;
 }
 
+export const TRACE_MS = 1000;
+export const DISCARD_MS = 50;
+export const SHIFT_PX = 20;
+export const STEADY_PX = 4;
+export const UNIT_MATCH_PX = 2;
+export const MAX_TRACES = 12;
+export const TRACES_KEY = "minifia:sheetdebug:traces";
+export const SEQ_KEY = "minifia:sheetdebug:seq";
+export const CHANGE_ROWS = 8;
+
+export type SheetImgState = "none" | "pending" | "loaded" | "error";
+export type SheetVerdict = "A-svh" | "A-lvh" | "A-dvh" | "A-none" | "B" | "D" | "mixed" | "viewport" | "sheet-drift" | "stable";
+
+export interface SheetSample {
+  t: number;
+  ev: string;
+  vvH: number | null;
+  vvTop: number | null;
+  inH: number | null;
+  docH: number | null;
+  docSH: number | null;
+  scY: number | null;
+  dvh: number | null;
+  svh: number | null;
+  lvh: number | null;
+  pct: number | null;
+  ins: number | null;
+  safeB: number | null;
+  dlgT: number | null;
+  dlgB: number | null;
+  dlgH: number | null;
+  shT: number | null;
+  shB: number | null;
+  shH: number | null;
+  shTY: number | null;
+  cls: string;
+  img: SheetImgState;
+}
+
+export interface SheetTraceRecord {
+  n: number;
+  label: string;
+  screen: string;
+  ua: string;
+  dpr: number;
+  screenH: number;
+  standalone: boolean;
+  startedAt: string;
+  samples: SheetSample[];
+  verdict: SheetVerdict | "";
+}
+
+export interface SheetClassification {
+  verdict: SheetVerdict;
+  dlgShift: number;
+  shGrow: number;
+  vpShift: number;
+  shDrift: number;
+  unit: "svh" | "lvh" | "dvh" | null;
+  scrolled: boolean;
+}
+
+// RED 껍데기 — 판정 규칙은 GREEN 에서 채운다
+export function classifyTrace(_record: SheetTraceRecord): SheetClassification {
+  return { verdict: "stable", dlgShift: 0, shGrow: 0, vpShift: 0, shDrift: 0, unit: null, scrolled: false };
+}
+
 const r1 = (n: number) => Math.round(n * 10) / 10;
 
-function takeSample(t0: number, ev: EvName, target: SheetTraceTarget): SheetSample {
+function takeSample(t0: number, ev: EvName, target: SheetTraceTarget): MiniSample {
   const win = target.dialog.ownerDocument.defaultView;
   const vv = win?.visualViewport ?? null;
   return {
@@ -58,7 +125,7 @@ export function createSheetProbe(options: { doc?: Document; storage?: StorageLik
   return {
     start(target: SheetTraceTarget): SheetTrace {
       const t0 = Date.now();
-      const samples: SheetSample[] = [];
+      const samples: MiniSample[] = [];
       const render = () => {
         const rows = samples.map((s) => [s.t, s.ev, s.vvH, s.inH, s.dlgB, s.shB].map(cell).join(" "));
         pre.textContent = [`${target.label}`, "t ev vvH inH dlgB shB", ...rows].join("\n");

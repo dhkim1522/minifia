@@ -3,6 +3,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { RoleId } from "../../shared/game/roles";
 import type { PhaseId, RoomView } from "../../shared/protocol";
 import type { RoomConnection } from "../../src/net/useRoomConnection";
+import { MemoryStorage } from "../helpers/memoryStorage";
+import { createSheetProbe } from "../../src/debug/sheetDebug";
+import { setSheetProbe } from "../../src/debug/sheetProbe";
 
 // 연결 훅은 반환값을 테스트가 정한다(roomScreen.test 와 같은 방식). 단계 화면은 서버 view 만 따른다.
 const connectionMock = vi.hoisted(() => ({ current: null as unknown }));
@@ -491,5 +494,32 @@ describe("G-01-9 [내 역할] 시트 진입 — 낮 화면 한 경로", () => {
     runFrame();
     runFrame();
     expect(dialog.classList.contains("mf-dialog--open")).toBe(true);
+  });
+});
+
+// ---- G-01-9 시트 계측 — 낮 화면 [내 역할] 경로 (sheetdebug) ----
+describe("G-01-9 시트 계측 — 낮 화면 [내 역할] 경로 (sheetdebug)", () => {
+  afterEach(() => {
+    setSheetProbe(null);
+    vi.unstubAllGlobals();
+    document.querySelectorAll("[data-sheetdebug], .mf-sheetdebug-probes").forEach((el) => el.remove());
+  });
+
+  it("G-01-9: sheetdebug 패널이 시트 안에 뜨고 화면 종류가 day 로 기록되며 역할 글자는 없다", () => {
+    setSheetProbe(createSheetProbe({ storage: new MemoryStorage() }));
+    const frames: FrameRequestCallback[] = [];
+    vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => {
+      frames.push(cb);
+      return frames.length;
+    });
+    vi.stubGlobal("cancelAnimationFrame", vi.fn());
+    renderRoom(makeView({ phase: "day", role: "police" }));
+    const dialog = openMyRole();
+    const panel = dialog.querySelector("[data-sheetdebug]");
+    expect(panel !== null).toBe(true);
+    const text = panel?.textContent ?? "";
+    expect(text.includes("내 역할")).toBe(true);
+    expect(text.includes("day")).toBe(true);
+    expect(text.includes("경찰")).toBe(false);
   });
 });
