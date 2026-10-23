@@ -1,0 +1,82 @@
+/* 방 화면 틀(C-02 재접속 띠, 연결 중·포기·다른 창 전체 화면 문구). 값은 tokens.css 변수만 쓴다.
+   진홍은 쓰지 않는다(진홍 예약 목록은 phase.css 머리말 참고). 띠 높이 52px 는 토큰에 없는 값이라 지역 상수로 둔다. */
+
+.mf-room {
+  --mf-reconnect-h: 52px;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  overflow: hidden; /* 세로 스크롤 없음 — 띠가 생기면 본문(장면)이 그만큼 줄어든다 */
+}
+
+.mf-room__body {
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.mf-phase {
+  flex: 1;
+  min-height: 0;
+}
+
+/* 전체 화면 문구: 연결 중 · 연결할 수 없어요 · 다른 창 */
+.mf-room__notice {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-sm);
+  padding: var(--space-lg);
+  text-align: center;
+}
+
+.mf-room__notice .mf-t-heading {
+  margin-bottom: var(--space-md);
+}
+
+.mf-room__notice .mf-btn {
+  min-width: 200px;
+}
+
+/* ReconnectBanner — 흐름 안 띠(참고 구현 bundle.css 와 같은 구조, 높이·면·글자색만 UI-SPEC 으로 바꿈) */
+.mf-reconnect {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-sm);
+  width: 100%;
+  height: var(--mf-reconnect-h, 52px);
+  background: var(--night-700);
+  border-bottom: 1px solid var(--night-600);
+  font-size: 14px;
+  color: var(--gray-100);
+}
+
+.mf-reconnect__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--gray-100);
+  animation: mf-blink 1.4s ease-in-out infinite;
+}
+
+@keyframes mf-blink {
+  0%,
+  100% {
+    opacity: 0.2;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mf-reconnect__dot {
+    animation: none;
+  }
+}
