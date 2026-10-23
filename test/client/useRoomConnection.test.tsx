@@ -252,6 +252,22 @@ describe("useRoomConnection: 재연결 (CONN-01)", () => {
     expect(sockets.length).toBe(2);
   });
 
+  it.each([
+    [4001, "replaced"],
+    [4003, "kicked"],
+  ])("pong 을 기다리는 중 %i 로 닫히면(종료 상태) 기다림이 끝나도 새 소켓을 만들지 않는다 (WR-02)", (code, reason) => {
+    const { sockets, hook } = setup();
+    openWithState(sockets[0]!);
+    setVisibility("hidden");
+    setVisibility("visible"); // checkAlive: pong 대기 시작
+    act(() => sockets[0]!.serverClose(code, reason));
+    expect(["replaced", "removed"]).toContain(hook.result.current.status);
+    const status = hook.result.current.status;
+    advance(10_000);
+    expect(sockets.length).toBe(1);
+    expect(hook.result.current.status).toBe(status);
+  });
+
   it("복귀 ping 에 pong 이 오면 소켓을 그대로 둔다", () => {
     const { sockets } = setup();
     openWithState(sockets[0]!);

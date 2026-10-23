@@ -198,6 +198,8 @@ export function useRoomConnection(code: string, token: string, options?: RoomCon
       ws.addEventListener("close", (e: CloseEvent) => {
         if (disposed || socketRef.current !== ws) return;
         const next = emit({ type: "close", code: e.code, reason: e.reason, now: Date.now() });
+        // replaced·removed 로 끝났으면 pong 대기가 새 연결을 열지 못하게 푼다.
+        if (isTerminal(next.status)) clearPongWait();
         checkRoomOnce(next);
         scheduleRetry(next);
       });
@@ -210,7 +212,7 @@ export function useRoomConnection(code: string, token: string, options?: RoomCon
       pongTimer = setTimeout(() => {
         pongTimer = undefined;
         checkC = -1;
-        if (disposed || socketRef.current !== ws) return;
+        if (disposed || socketRef.current !== ws || isTerminal(linkRef.current.status)) return;
         checkRoomOnce(emit({ type: "close", code: 1006, reason: "stale", now: Date.now() }));
         ws.close();
         if (linkRef.current.visible) connect();
