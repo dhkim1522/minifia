@@ -4,18 +4,18 @@ milestone: v1.0
 milestone_name: MVP
 current_phase: 01
 current_phase_name: 걷는 뼈대
-current_plan: 5
+current_plan: 16
 status: executing
-stopped_at: Completed 01-15-PLAN.md
-last_updated: "2026-10-23T08:54:32.311Z"
+stopped_at: 01-16 Task 3 실기기 확인 FAILED, G-01-9 open, 재진단 대기
+last_updated: "2026-10-23T10:49:09.457Z"
 last_activity: 2026-10-23
 last_activity_desc: Phase 01 execution started
-state_head: 358065c2cd19cf056e0ec0f507eabf44e79750bd
+state_head: f7b4258e689fa131f4906268f2e9d37a380bd22c
 progress:
   total_phases: 6
   completed_phases: 0
-  total_plans: 15
-  completed_plans: 15
+  total_plans: 17
+  completed_plans: 16
 ---
 
 # Project State
@@ -29,11 +29,11 @@ See: .planning/PROJECT.md (updated 2026-10-21)
 
 ## Current Position
 
-Phase: 01 (걷는 뼈대) — READY TO EXECUTE
-Current Plan: 5
-Total Plans in Phase: 15
-Plan: 5 of 14
-Status: Ready to execute
+Phase: 01 (걷는 뼈대) — EXECUTING
+Current Plan: 16
+Total Plans in Phase: 17
+Plan: 16 of 17
+Status: Executing Phase 01
 Last activity: 2026-10-23 — Phase 01 execution started
 
 Progress: [░░░░░░░░░░] 0%
@@ -85,6 +85,7 @@ Recent decisions affecting current work:
 - [Phase 01]: 공개 주소는 Worker minifia + 계정 서브도메인 dhplay = https://minifia.dhplay.workers.dev (01-02)
 - [Phase 01]: 방 코드 충돌은 DO createRoom 이 CODE_TAKEN 거부, Worker 가 최대 8번 재시도 후 503 CODE_EXHAUSTED (01-02)
 - [Phase 01]: [01-15] 채움 문자 5개는 위치와 무관하게 INVALID_CHARS, ZWJ·변형 선택자·결합 문자는 표시 이름에 남기고 비교 키에서만 제거
+- [Phase 01]: 01-16: 실기기(iPhone Safari)에서 시트가 바닥보다 약 60px 위에 멈췄다가 0.2초 뒤 내려옴. 가설(첫 프레임) 일부만 일치, G-01-9 open, dvh/하단 기준선 변화로 재진단 필요
 
 ### Pending Todos
 
@@ -98,6 +99,7 @@ None yet.
 - [Phase 5] 캐릭터 수·성격·선택 방식은 미결정이다. v1 은 무작위 배정, 8종 이상. 결정 0008 로 실시간 3D 없이 2.5D, 캐릭터는 프레임 PNG. 일러스트 vs 3D 렌더링과 공개된 캐릭터 에셋 도구는 5페이즈 논의에서 정한다. 참고 자료는 `design/references/character/`
 - [v1.1] 사운드는 각자 폰에서 낸다(결정 0005). 무거운 분위기가 소리 없이 약하면 사운드를 앞당긴다. 자유 채팅(COMMX-01)은 플레이테스트 피드백으로 정한다
 - [v2.0] 수익화는 출시 전에 따로 정한다
+- G-01-9 열림: 01-16 실기기 확인 FAILED. 재진단 필요(1순위 dvh/하단 기준선 변화). 01-16-SUMMARY.md 참조
 
 ## Deferred Items
 
@@ -109,6 +111,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-23T08:54:32.280Z
-Stopped at: Completed 01-15-PLAN.md
-Resume file: None
+Last session: 2026-10-23T10:49:09.381Z
+Stopped at: 01-16 Task 3 실기기 확인 FAILED, G-01-9 open, 재진단 대기
+Resume file: .planning/phases/01-walking-skeleton/01-16-SUMMARY.md
