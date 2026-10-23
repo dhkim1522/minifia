@@ -466,3 +466,30 @@ describe("C-01 [내 역할] 시트", () => {
     expect(screen.queryByRole("button", { name: "내 역할" })).toBeNull();
   });
 });
+
+// ---- G-01-9 [내 역할] 시트 진입 — 낮 화면 한 경로 (UAT Test 9) ----
+describe("G-01-9 [내 역할] 시트 진입 — 낮 화면 한 경로", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("G-01-9: 낮 화면에서 [내 역할] 을 누르면 시트가 진입 전 상태로 열리고 두 프레임 뒤 올라온다", () => {
+    const frames: FrameRequestCallback[] = [];
+    vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => {
+      frames.push(cb);
+      return frames.length;
+    });
+    vi.stubGlobal("cancelAnimationFrame", vi.fn());
+    const runFrame = () =>
+      act(() => {
+        frames.shift()?.(0);
+      });
+    renderRoom(makeView({ phase: "day", role: "police" }));
+    const dialog = openMyRole();
+    expect(dialog.hasAttribute("open")).toBe(true);
+    expect(dialog.classList.contains("mf-dialog--open")).toBe(false);
+    // 내용은 진입을 기다리지 않고 이미 DOM 에 있다
+    expect(within(dialog).queryByRole("heading", { name: "경찰" }) !== null).toBe(true);
+    runFrame();
+    runFrame();
+    expect(dialog.classList.contains("mf-dialog--open")).toBe(true);
+  });
+});

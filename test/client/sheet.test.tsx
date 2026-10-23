@@ -1,4 +1,6 @@
+/// <reference types="node" />
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { readFileSync } from "node:fs";
 import { StrictMode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import "../helpers/singleLineErrors";
@@ -337,5 +339,99 @@ describe("진홍 금지 (파괴 동작·공유 시트)", () => {
       expect(src).not.toMatch(/crimson/i);
       expect(src).not.toMatch(/#[0-9a-fA-F]{3,8}\b/);
     }
+  });
+});
+
+// ---- G-01-9 시트 진입 모션 (UAT Test 9, D-19 개정) ----
+// 폰(iOS Safari)에서 [내 역할] 시트가 "위에 잠깐 떴다가 아래로 떨어지는" 증상.
+// 가설: showModal 직후 첫 프레임이 최종 위치로 그려진 뒤 animation 이 시작된다.
+// 고침: 진입 전 초기 위치를 CSS 로 아래에 고정하고, 두 프레임 뒤에 열림 클래스를 붙여 전환으로 올라오게 한다.
+
+// 위의 `sheet.css?raw` 는 vitest 가 CSS 를 처리하지 않아 빈 문자열이 된다(css.include 기본값). 규칙 값은 파일을 직접 읽어 본다.
+const sheetCssSource = readFileSync("src/styles/sheet.css", "utf8");
+
+/** 주석을 지운 CSS 에서 선택자가 규칙 시작부터 정확히 일치하는 블록의 선언 값을 찾는다. 없으면 undefined. */
+function cssDecl(selector: string, prop: string): string | undefined {
+  const css = sheetCssSource.replace(/\/\*[\s\S]*?\*\//g, "");
+  const re = /(?<=^|\})\s*([^{}]+?)\s*\{([^{}]*)\}/g;
+  for (const m of css.matchAll(re)) {
+    if (m[1] !== selector) continue;
+    for (const decl of m[2].split(";")) {
+      const at = decl.indexOf(":");
+      if (at < 0) continue;
+      if (decl.slice(0, at).trim() === prop) return decl.slice(at + 1).trim();
+    }
+  }
+  return undefined;
+}
+
+/** 규칙 안에 animation 으로 시작하는 선언이 하나라도 있는지. */
+function hasAnimationDecl(selector: string): boolean {
+  const css = sheetCssSource.replace(/\/\*[\s\S]*?\*\//g, "");
+  const re = /(?<=^|\})\s*([^{}]+?)\s*\{([^{}]*)\}/g;
+  for (const m of css.matchAll(re)) {
+    if (m[1] === selector && /(^|;)\s*animation[\w-]*\s*:/.test(m[2])) return true;
+  }
+  return false;
+}
+
+/** requestAnimationFrame 을 콜백 쌓기 가짜로 갈아 끼운다. 한 프레임씩 직접 실행한다. */
+function stubFrames() {
+  const frames: FrameRequestCallback[] = [];
+  const cancel = vi.fn();
+  vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => {
+    frames.push(cb);
+    return frames.length;
+  });
+  vi.stubGlobal("cancelAnimationFrame", cancel);
+  const runFrame = () =>
+    act(() => {
+      frames.shift()?.(0);
+    });
+  return { frames, cancel, runFrame };
+}
+
+const isOpenClass = (dlg: HTMLDialogElement) => dlg.classList.contains("mf-dialog--open");
+
+describe("G-01-9 시트 진입 모션 — CSS 값 규칙", () => {
+  it("G-01-9: sheet.css 를 실제로 읽었다(빈 문자열이 아니다)", () => {
+    expect(sheetCssSource.length > 0).toBe(true);
+  });
+
+  it("G-01-9: 시트의 진입 전 초기 위치는 CSS 로 아래에 고정된다", () => {
+    expect(cssDecl(".mf-sheet", "transform")).toBe("translateY(100%)");
+  });
+
+  it("G-01-9: 열림 클래스가 붙으면 시트는 제자리(0), 막은 불투명(1)이고 막의 기본은 투명(0)이다", () => {
+    expect(cssDecl(".mf-dialog--open .mf-sheet", "transform")).toBe("translateY(0)");
+    expect(cssDecl(".mf-dialog--open .mf-sheet-scrim", "opacity")).toBe("1");
+    expect(cssDecl(".mf-sheet-scrim", "opacity")).toBe("0");
+  });
+
+  it("G-01-9: 진입이 CSS animation 하나에 의존하지 않고 transform 전환으로 한다", () => {
+    expect(hasAnimationDecl(".mf-sheet")).toBe(false);
+    expect(hasAnimationDecl(".mf-sheet-scrim")).toBe(false);
+    expect((cssDecl(".mf-sheet", "transition") ?? "").includes("transform")).toBe(true);
+    expect(cssDecl(".mf-sheet--closing", "transform")).toBe("translateY(100%)");
+  });
+});
+
+describe("G-01-9 Sheet 열림 클래스 시점", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("G-01-9: 시트는 열린 직후 진입 전 상태이고 두 프레임 뒤 열림 클래스가 붙는다", () => {
+    const { runFrame } = stubFrames();
+    const { container } = render(
+      <Sheet label="내 역할" onClose={() => {}}>
+        <p>내용</p>
+      </Sheet>,
+    );
+    const dlg = dialogOf(container);
+    expect(dlg.open).toBe(true);
+    expect(isOpenClass(dlg)).toBe(false);
+    runFrame();
+    expect(isOpenClass(dlg)).toBe(false);
+    runFrame();
+    expect(isOpenClass(dlg)).toBe(true);
   });
 });
