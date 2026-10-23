@@ -109,9 +109,19 @@ export function collect(sock: TestSocket): string[] {
   return [...sock.frames];
 }
 
-export function closed(sock: TestSocket): Promise<{ code: number; reason: string }> {
-  return sock.closedPromise;
+/**
+ * 소켓이 닫힌 코드·사유를 "4003 left" 같은 한 줄 문자열로. 제한 시간(기본 3초) 안에 닫히지 않으면 "0 not_closed" 라
+ * 단언이 실패한다. 한 줄이어야 실패 보고(TAP)가 깨지지 않는다.
+ */
+export function closed(sock: TestSocket, limitMs = 3000): Promise<string> {
+  return Promise.race([
+    sock.closedPromise.then((c) => `${c.code} ${c.reason}`),
+    new Promise<string>((resolve) => setTimeout(() => resolve("0 not_closed"), limitMs)),
+  ]);
 }
+
+/** 서버 오류 프레임을 한 줄 문자열로 비교하기 위한 변환. */
+export const flat = (msg: ServerMessage): string => JSON.stringify(msg);
 
 /** 방 코드의 마지막 state 를 이어서 기다린다(이미 읽은 것 이후). */
 export function nextState(sock: TestSocket, limitMs = 3000): Promise<Extract<ServerMessage, { t: "state" }>> {
