@@ -339,6 +339,30 @@ describe("Lobby — [뒤로] 로 방 나가기 (D-17, R17)", () => {
     expect(leaveButton().disabled).toBe(true);
   });
 
+  it("시트를 연 뒤 연결이 끊기면 시트의 [나가기] 가 꺼져 leave 가 사라진 채 나가지 않는다 (WR-01)", () => {
+    const send = vi.fn();
+    const onLeave = vi.fn();
+    const { rerender } = render(<Lobby view={lobbyView} send={send} onLeave={onLeave} canSend />);
+    fireEvent.click(leaveButton());
+    rerender(<Lobby view={lobbyView} send={send} onLeave={onLeave} canSend={false} />);
+    const confirm = within(sheet()).getByRole("button", { name: "나가기" }) as HTMLButtonElement;
+    expect(confirm.disabled).toBe(true);
+    fireEvent.click(confirm);
+    expect(send).not.toHaveBeenCalled();
+    expect(onLeave).not.toHaveBeenCalled();
+  });
+
+  it("send 가 false 를 돌려주면(소켓이 이미 닫힘) onLeave 를 부르지 않고 토스트로 알린다 (WR-01)", () => {
+    const send = vi.fn(() => false);
+    const onLeave = vi.fn();
+    render(<Lobby view={lobbyView} send={send} onLeave={onLeave} />);
+    fireEvent.click(leaveButton());
+    fireEvent.click(within(sheet()).getByRole("button", { name: "나가기" }));
+    expect(send).toHaveBeenCalledWith({ t: "leave" });
+    expect(onLeave).not.toHaveBeenCalled();
+    expect(screen.getByText("연결이 불안정해요. 다시 시도해 주세요")).toBeTruthy();
+  });
+
   it("참가자(방장 아님) 화면에서도 나갈 수 있다", () => {
     const send = vi.fn();
     render(<Lobby view={makeView([player(0, "민수"), player(1, "서준")], 1)} send={send} />);

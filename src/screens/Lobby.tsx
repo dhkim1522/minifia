@@ -19,7 +19,8 @@ const START_LOCK_MS = 2000;
 
 interface LobbyProps {
   view: RoomView;
-  send: (msg: ClientMessage) => void;
+  /** 보냈으면 true, 소켓이 닫혀 못 보냈으면 false. 반환값이 없는 함수(void)는 보낸 것으로 본다 */
+  send: (msg: ClientMessage) => boolean | void;
   /** 연결이 열려 있어 서버로 보낼 수 있는가. 기본 true */
   canSend?: boolean;
   /** 소켓이 새로 열릴 때마다 바뀌는 번호. 기본 0 */
@@ -168,9 +169,11 @@ export function Lobby({ view, send, canSend = true, epoch = 0, onLeave }: LobbyP
         <ConfirmSheet
           title="방에서 나갈까요?"
           confirmLabel="나가기"
+          confirmDisabled={!canSend}
           onConfirm={() => {
-            send({ t: "leave" });
-            onLeave?.();
+            // leave 가 서버에 닿지 않았는데 입장 정보를 지우면 자리만 유령으로 남는다. 보냈을 때만 나간다.
+            if (send({ t: "leave" }) === false) show("연결이 불안정해요. 다시 시도해 주세요");
+            else onLeave?.();
           }}
           onClose={closeSheet}
         />
@@ -179,6 +182,7 @@ export function Lobby({ view, send, canSend = true, epoch = 0, onLeave }: LobbyP
         <ConfirmSheet
           title={`${sheet.nickname}님을 내보낼까요?`}
           confirmLabel="내보내기"
+          confirmDisabled={!canSend}
           onConfirm={() => send({ t: "kick", seat: sheet.seat })}
           onClose={closeSheet}
         />

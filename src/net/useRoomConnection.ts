@@ -19,7 +19,8 @@ export interface RoomConnection {
   removedReason: RemovedReason | null;
   /** 서버로 입력을 보낼 수 있는지(열려 있고 view 가 있음). 끊긴 동안은 거짓 */
   canSend: boolean;
-  send(msg: ClientMessage): void;
+  /** 보냈으면 true. 끊겨 있어 버려졌으면 false */
+  send(msg: ClientMessage): boolean;
   /** replaced 화면의 [다시 연결] */
   reconnect(): void;
   /** failed 화면의 [다시 시도] */
@@ -279,9 +280,11 @@ export function useRoomConnection(code: string, token: string, options?: RoomCon
   const canSendRef = useRef(canSend);
   canSendRef.current = canSend;
 
-  const send = useCallback((msg: ClientMessage) => {
+  const send = useCallback((msg: ClientMessage): boolean => {
     const ws = socketRef.current;
-    if (canSendRef.current && ws && ws.readyState === OPEN) ws.send(JSON.stringify(msg));
+    if (!canSendRef.current || !ws || ws.readyState !== OPEN) return false;
+    ws.send(JSON.stringify(msg));
+    return true;
   }, []);
   const retry = useCallback(() => restartRef.current?.(), []);
 

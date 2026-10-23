@@ -172,6 +172,21 @@ describe("useRoomConnection: 연결·핸드셰이크", () => {
     expect(sockets[0]!.sent.length).toBe(before + 1);
   });
 
+  it("send 는 보냈으면 true, 끊겨서 버렸으면 false 를 돌려준다 (WR-01)", () => {
+    const { sockets, hook } = setup();
+    openWithState(sockets[0]!);
+    let sent: boolean | undefined;
+    act(() => {
+      sent = hook.result.current.send({ t: "leave" });
+    });
+    expect(sent).toBe(true);
+    act(() => sockets[0]!.serverClose(1006));
+    act(() => {
+      sent = hook.result.current.send({ t: "leave" });
+    });
+    expect(sent).toBe(false);
+  });
+
   it("정리 때 소켓을 닫는다", () => {
     const { sockets, hook } = setup();
     act(() => sockets[0]!.open());
