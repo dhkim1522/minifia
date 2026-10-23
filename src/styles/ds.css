@@ -69,6 +69,19 @@
 .mf-entry__divider::before, .mf-entry__divider::after { content: ""; flex: 1; height: 1px; background: var(--gray-700); }
 .mf-version { margin: var(--space-md) 0 0; font-size: 14px; line-height: 1.4; color: var(--gray-300); text-align: center; }
 
+/* Toast: 알약, 한 번에 하나, 2초. 진홍 없음. */
+.mf-toast {
+  position: fixed; left: 0; right: 0; margin: 0 auto; width: fit-content;
+  max-width: calc(100vw - var(--space-lg) * 2); padding: var(--space-sm) var(--space-lg);
+  z-index: var(--z-overlay); pointer-events: none;
+  background: var(--gray-100); color: var(--night-900); border-radius: var(--radius-pill); box-shadow: var(--shadow-card);
+  font-size: 14px; line-height: 1.4; font-weight: 700; text-align: center; word-break: keep-all;
+  animation: mf-toast-in var(--dur-fast) var(--ease-out);
+}
+.mf-toast--top { top: calc(var(--space-lg) + env(safe-area-inset-top)); }
+.mf-toast--bottom { bottom: calc(var(--space-lg) + env(safe-area-inset-bottom)); }
+@keyframes mf-toast-in { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
+
 @media (prefers-reduced-motion: reduce) {
   .mf-btn { transition-duration: 0.01ms; }
 }
