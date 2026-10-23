@@ -1,13 +1,16 @@
 /// <reference types="node" />
+import { readFileSync } from "node:fs";
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import "../helpers/singleLineErrors";
 import { QuickMessageSheet } from "../../src/components/QuickMessageSheet";
 import type { SayPayload } from "../../src/components/QuickMessageSheet";
 import sourceText from "../../src/components/QuickMessageSheet.tsx?raw";
-import talkCss from "../../src/styles/talk.css?raw";
 import type { PublicPlayer } from "../../shared/protocol";
 import type { RoleId } from "../../shared/game/roles";
+
+// vitest 는 CSS 를 처리하지 않아 css?raw 가 빈 문자열이 된다 — 파일을 직접 읽는다.
+const talkCss = readFileSync("src/styles/talk.css", "utf8");
 
 afterEach(() => {
   cleanup();

@@ -1,0 +1,38 @@
+/* 빠른 메시지 시트(S-08a)와 이모티콘 트레이(S-08b). 값은 tokens.css 변수만 쓴다(색 직접 지정 없음).
+   칩 줄(.mf-chips)·칩(.mf-chip)은 chip.css 를 그대로 쓴다. 진홍은 쓰지 않는다. */
+
+/* ---- 빠른 메시지 시트 ---- */
+.mf-qm { display: flex; flex-direction: column; gap: var(--space-md); }
+.mf-qm .mf-sheet__title { margin: 0; }
+.mf-qm__section { display: flex; flex-direction: column; gap: var(--space-sm); }
+.mf-qm__label { margin: 0; font-size: 14px; line-height: 1.4; font-weight: 400; color: var(--gray-100); word-break: keep-all; }
+
+/* 미리보기 알약: .mf-bubble(seat.css) 모양을 시트 폭까지 허용한다 — 최대 폭 제한 해제 */
+.mf-qm__previewrow { display: flex; }
+.mf-qm__preview {
+  display: inline-block; max-width: none; min-width: 0; padding: var(--space-xs) var(--space-sm);
+  border-radius: var(--radius-md); background: var(--gray-100); color: var(--night-900);
+  font-size: 14px; line-height: 1.4; font-weight: 700; word-break: keep-all; overflow-wrap: anywhere;
+  box-shadow: var(--shadow-card);
+}
+/* 빈칸("[○○]"·"[직업]")이 남아 있으면 글자만 흐리게 — 알약 면은 그대로 */
+.mf-qm__preview--dim .mf-qm__text { opacity: .6; }
+
+.mf-qm__send { margin-top: var(--space-xs); }
+
+/* ---- 이모티콘 트레이 ---- */
+.mf-emojitray { display: flex; flex-direction: column; gap: var(--space-md); }
+.mf-emojitray .mf-sheet__title { margin: 0; }
+.mf-emojitray__grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-sm); }
+.mf-emojitray__cell {
+  appearance: none; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+  height: 52px; min-width: 0; padding: 0; font: inherit; font-size: 14px; line-height: 1.2; font-weight: 400;
+  color: var(--gray-100); background: var(--night-700); border: 1px solid var(--night-600);
+  border-radius: var(--radius-md); cursor: pointer; touch-action: manipulation;
+  transition: transform var(--dur-fast) var(--ease-out);
+}
+.mf-emojitray__cell:active:not(:disabled) { transform: scale(0.96); }
+.mf-emojitray__cell:focus-visible { outline: 2px solid var(--gray-100); outline-offset: 2px; }
+.mf-emojitray__cell:disabled { opacity: .6; cursor: default; }
+.mf-emojitray__cell svg { width: 22px; height: 22px; flex: none; }
+.mf-emojitray__hint { margin: 0; font-size: 14px; line-height: 1.4; font-weight: 400; color: var(--gray-300); word-break: keep-all; }
