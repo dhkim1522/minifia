@@ -63,13 +63,18 @@
 .mf-entry__head { display: flex; flex-direction: column; align-items: center; gap: var(--space-xs); margin-bottom: var(--space-xl); text-align: center; }
 .mf-entry__head .mf-t-label { color: var(--gray-100); text-shadow: var(--shadow-text); }
 .mf-entry__head .mf-t-display { text-shadow: var(--shadow-text); }
+/* 링크 참가 화면(S-02)의 카드 */
 .mf-entry__card {
   margin-top: auto; display: flex; flex-direction: column; gap: var(--space-md);
   padding: var(--space-lg); border-radius: var(--radius-lg);
   background: color-mix(in srgb, var(--night-800) 85%, transparent);
 }
-.mf-entry__divider { display: flex; align-items: center; gap: var(--space-md); font-size: 14px; line-height: 1.4; color: var(--gray-100); }
-.mf-entry__divider::before, .mf-entry__divider::after { content: ""; flex: 1; height: 1px; background: var(--gray-500); }
+
+/* 첫 화면 조작부: 카드 없이 배경 위에 버튼과 코드 칸만 둔다(결정 0014). 입력칸은 배경 위에서 읽히도록 어두운 반투명 면. */
+.mf-entry__actions { margin-top: auto; display: flex; flex-direction: column; gap: var(--space-md); }
+.mf-entry__actions .mf-field__label { color: var(--gray-50); text-shadow: var(--shadow-text); }
+.mf-entry__actions .mf-field__input { background: color-mix(in srgb, var(--night-900) 78%, transparent); }
+.mf-nick-sheet { display: flex; flex-direction: column; gap: var(--space-md); }
 
 /* Toast: 알약, 한 번에 하나, 2초. 진홍 없음. */
 .mf-toast {

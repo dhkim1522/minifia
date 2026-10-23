@@ -1,5 +1,5 @@
 /// <reference types="node" />
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import "../helpers/singleLineErrors";
@@ -95,6 +95,7 @@ function tokenColor(selector: string, prop: string): { name: string | null; rgb:
 describe("G-01-1b 첫 화면 입력 글자 대비", () => {
   it("G-01-1b: 입력 라벨은 본문 글자 단계(gray-100)이고 night-800 면 위에서 12:1 이상이다", () => {
     render(<Home onEnterRoom={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: "방 만들기" }));
     expect(screen.getByText("닉네임").classList.contains("mf-field__label")).toBe(true);
     const { name, rgb } = tokenColor(".mf-field__label", "color");
     expect(name).toBe("gray-100");
@@ -112,23 +113,14 @@ describe("G-01-1b 첫 화면 입력 글자 대비", () => {
     expect(contrast(composite(rgb as Rgb, SURFACE, opacity), SURFACE)).toBeGreaterThanOrEqual(7);
   });
 
-  it("G-01-1b: 구분선 글자는 gray-100 12:1 이상, 선은 gray-500 3:1 이상이다", () => {
-    render(<Home onEnterRoom={vi.fn()} />);
-    expect(screen.getByText("또는").classList.contains("mf-entry__divider")).toBe(true);
-    const text = tokenColor(".mf-entry__divider", "color");
-    expect(text.name).toBe("gray-100");
-    expect(contrast(text.rgb as Rgb, SURFACE)).toBeGreaterThanOrEqual(12);
-    const line = tokenColor(".mf-entry__divider::before, .mf-entry__divider::after", "background");
-    expect(line.name).toBe("gray-500");
-    expect(contrast(line.rgb as Rgb, SURFACE)).toBeGreaterThanOrEqual(3);
-  });
-
   it("G-01-1b: 꺼진 버튼은 켜진 버튼보다 분명히 흐리면서 글자 대비 4.5:1 이상이다", () => {
     render(<Home onEnterRoom={vi.fn()} />);
     const join = screen.getByRole("button", { name: "참가" }) as HTMLButtonElement;
-    const create = screen.getByRole("button", { name: "방 만들기" }) as HTMLButtonElement;
     expect(join.disabled).toBe(true);
     expect(join.classList.contains("mf-btn--secondary")).toBe(true);
+    // 닉네임 시트의 제출 버튼은 닉네임이 비어 있으면 꺼진 주 버튼이다.
+    fireEvent.click(screen.getByRole("button", { name: "방 만들기" }));
+    const create = screen.getByRole("button", { name: "만들기" }) as HTMLButtonElement;
     expect(create.disabled).toBe(true);
     expect(create.classList.contains("mf-btn--primary")).toBe(true);
     const alpha = Number(declsOf(dsCss, ".mf-btn:disabled")["opacity"]);

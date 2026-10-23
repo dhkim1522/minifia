@@ -4,6 +4,7 @@ import { validateNickname } from "../../shared/nickname";
 import { isRoomCode } from "../../shared/roomCode";
 import { Backdrop } from "../components/Backdrop";
 import { Button } from "../components/Button";
+import { NicknameSheet } from "../components/NicknameSheet";
 import { TextField } from "../components/TextField";
 import { Toast, useToast } from "../components/Toast";
 import { createRoom, joinRoom } from "../net/api";
@@ -15,11 +16,13 @@ interface HomeProps {
   onEnterRoom: (code: string, token: string) => void;
 }
 
-// S-01 첫 화면. 닉네임으로 방을 만들거나, 받은 4자리 코드로 들어온다.
+// S-01 첫 화면. 버튼과 코드 칸만 두고, 닉네임은 [방 만들기]·[참가] 를 누른 뒤 시트에서 묻는다(결정 0014).
 export function Home({ onEnterRoom }: HomeProps) {
   // 마지막으로 쓴 닉네임을 미리 채운다(D-06). 미리 채운 값은 입력한 것이 아니라서 오류 문장은 아직 없다.
   const [nickname, setNickname] = useState(loadLastNickname);
   const [code, setCode] = useState("");
+  // 닉네임 시트: 어느 버튼으로 열었는지. 닫혀 있으면 null.
+  const [sheet, setSheet] = useState<"create" | "join" | null>(null);
   // 처음 열었을 때는 오류 문장이 없다. 한 번 입력한 뒤부터 칸 아래에 보여 준다.
   const [touched, setTouched] = useState(false);
   // 서버가 거절한 이유는 한 번에 하나만, 해당 칸 아래에 둔다. 그 칸을 고치면 지운다.
@@ -36,7 +39,7 @@ export function Home({ onEnterRoom }: HomeProps) {
   const validation = validateNickname(nickname);
   const localError = touched && !validation.ok ? nicknameErrorText(validation.reason) : null;
   const nicknameError = serverNicknameError ?? localError;
-  const canJoin = validation.ok && isRoomCode(code) && !busy;
+  const codeReady = isRoomCode(code) && !busy;
 
   function handleNicknameChange(value: string) {
     setNickname(value);
@@ -49,8 +52,27 @@ export function Home({ onEnterRoom }: HomeProps) {
     setServerCodeError(null);
   }
 
-  async function handleCreate(e: FormEvent) {
+  function openCreate() {
+    setServerNicknameError(null);
+    setServerCodeError(null);
+    setSheet("create");
+  }
+
+  function openJoin(e: FormEvent) {
     e.preventDefault();
+    if (!codeReady) return;
+    // 이 브라우저가 이미 그 방의 토큰을 갖고 있으면 닉네임을 묻지 않고 같은 자리로 돌아간다(D-07).
+    const stored = loadSession();
+    if (stored && stored.code === code) {
+      onEnterRoom(code, stored.token);
+      return;
+    }
+    setServerNicknameError(null);
+    setServerCodeError(null);
+    setSheet("join");
+  }
+
+  async function handleCreate() {
     if (busy || !validation.ok) return;
     setBusy(true);
     setServerNicknameError(null);
@@ -64,19 +86,16 @@ export function Home({ onEnterRoom }: HomeProps) {
     }
     // 방 만들기에서 나올 수 있는 오류는 닉네임 칸 아래와 토스트뿐이다. 입력한 닉네임은 지우지 않는다.
     const message = messageForApiError(result.error, "create");
-    if (message.place === "nickname") setServerNicknameError(message.text);
-    else show(message.text);
+    if (message.place === "nickname") {
+      setServerNicknameError(message.text);
+    } else {
+      setSheet(null);
+      show(message.text);
+    }
   }
 
-  async function handleJoinCode(e: FormEvent) {
-    e.preventDefault();
-    if (!canJoin || !validation.ok) return;
-    // 이 브라우저가 이미 그 방의 토큰을 갖고 있으면 다시 참가하지 않고 같은 자리로 돌아간다(D-07).
-    const stored = loadSession();
-    if (stored && stored.code === code) {
-      onEnterRoom(code, stored.token);
-      return;
-    }
+  async function handleJoin() {
+    if (busy || !validation.ok || !isRoomCode(code)) return;
     setBusy(true);
     setServerNicknameError(null);
     setServerCodeError(null);
@@ -88,9 +107,14 @@ export function Home({ onEnterRoom }: HomeProps) {
       return;
     }
     // 입력한 닉네임·코드는 지우지 않는다. 문구와 자리는 copy.ts 가 정한다.
+    // 닉네임 오류는 열려 있는 시트 안에, 코드 오류와 그 밖의 오류는 시트를 닫고 첫 화면에 보여 준다.
     const message = messageForApiError(result.error, "home-code");
+    if (message.place === "nickname") {
+      setServerNicknameError(message.text);
+      return;
+    }
+    setSheet(null);
     if (message.place === "code") setServerCodeError(message.text);
-    else if (message.place === "nickname") setServerNicknameError(message.text);
     else show(message.text);
   }
 
@@ -101,21 +125,11 @@ export function Home({ onEnterRoom }: HomeProps) {
           <p className="mf-t-label">친구들과 한 판, 점심시간 마피아</p>
           <h1 className="mf-t-display">Minifia</h1>
         </header>
-        <div className="mf-entry__card">
-          <form className="mf-entry__form" onSubmit={handleCreate}>
-            <TextField
-              label="닉네임"
-              kind="nickname"
-              value={nickname}
-              onChange={handleNicknameChange}
-              error={nicknameError}
-            />
-            <Button variant="primary" block type="submit" disabled={!validation.ok || busy}>
-              방 만들기
-            </Button>
-          </form>
-          <p className="mf-entry__divider">또는</p>
-          <form className="mf-entry__form" onSubmit={handleJoinCode}>
+        <div className="mf-entry__actions">
+          <Button variant="primary" block type="button" onClick={openCreate} disabled={busy}>
+            방 만들기
+          </Button>
+          <form className="mf-entry__form" onSubmit={openJoin}>
             <TextField
               label="방 코드"
               kind="code"
@@ -124,7 +138,7 @@ export function Home({ onEnterRoom }: HomeProps) {
               placeholder="4자리 숫자"
               error={serverCodeError}
               trailing={
-                <Button variant="secondary" type="submit" disabled={!canJoin} className="mf-btn--field">
+                <Button variant="secondary" type="submit" disabled={!codeReady} className="mf-btn--field">
                   참가
                 </Button>
               }
@@ -132,6 +146,17 @@ export function Home({ onEnterRoom }: HomeProps) {
           </form>
         </div>
       </main>
+      {sheet ? (
+        <NicknameSheet
+          mode={sheet}
+          nickname={nickname}
+          onNicknameChange={handleNicknameChange}
+          error={nicknameError}
+          submitDisabled={!validation.ok || busy}
+          onSubmit={sheet === "create" ? handleCreate : handleJoin}
+          onClose={() => setSheet(null)}
+        />
+      ) : null}
       <Toast toast={toast} placement="bottom" />
     </Backdrop>
   );
