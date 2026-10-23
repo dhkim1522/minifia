@@ -3,12 +3,12 @@
 | 항목 | 심각도 | 처분 |
 |---|---|---|
 | CR-01 | BLOCKER | open — 닉네임 비교 키에서 보이지 않는 문자 제거 + 투명 문자 금지. 2페이즈 전 수정 권장 |
-| WR-01 | WARNING | open |
-| WR-02 | WARNING | open |
-| WR-03 | WARNING | open |
-| WR-04 | WARNING | open |
-| WR-05 | WARNING | open |
-| WR-06 | WARNING | open |
+| WR-01 | WARNING | fixed (9b89310) |
+| WR-02 | WARNING | fixed (2b308f4) |
+| WR-03 | WARNING | fixed (735ef3a) |
+| WR-04 | WARNING | fixed (efdf811) |
+| WR-05 | WARNING | fixed (6b298b5) |
+| WR-06 | WARNING | fixed (aaf0228) |
 | IN-01 | INFO | open |
 | IN-02 | INFO | open |
 | IN-03 | INFO | open |
