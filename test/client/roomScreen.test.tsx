@@ -33,6 +33,7 @@ function conn(over: Partial<RoomConnection>): RoomConnection {
     removedReason: null,
     canSend: true,
     send: vi.fn(),
+    onEvent: vi.fn(() => () => {}),
     reconnect: vi.fn(),
     retry: vi.fn(),
     ...over,
