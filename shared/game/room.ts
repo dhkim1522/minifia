@@ -3,7 +3,7 @@
 import { validateNickname } from "../nickname";
 import { MAX_PLAYERS, MIN_PLAYERS } from "../protocol";
 import type { ChatLine, Claim, PhaseId } from "../protocol";
-import { ASSIGNING_MS } from "./phases";
+import { ASSIGNING_MS, DAY_ANNOUNCE_MS } from "./phases";
 import { assignRoles } from "./roles";
 import type { RoleId } from "./roles";
 
@@ -233,6 +233,20 @@ export function startGame(
       players: state.players.map((p) => ({ ...p, role: roles.get(p.id) })),
     },
   };
+}
+
+/** 1페이즈가 저장한 종착 낮 단계 이름. 지금의 PhaseId 에는 없다. */
+const LEGACY_DAY_PHASE = "day";
+
+/**
+ * 저장소에서 읽은 방 상태를 새 코드에 맞춘다. 1페이즈에서 저장된 방은 phase 가 "day"(마감 없음)일 수 있는데,
+ * 이 값은 PhaseId 에 없어 buildView 가 PHASE_DEFS 를 조회하다 터진다. 방 수명이 3시간이라 배포 뒤에도 살아 있을 수 있으므로,
+ * 그런 방은 낮 시작 발표(dayAnnounce)로 옮기고 마감을 now + DAY_ANNOUNCE_MS, 일차를 1로 둔다. 그 밖의 상태는 같은 객체를 돌려준다.
+ * 새 optional 필드가 없는 옛 상태는 읽는 쪽 기본값이 받는다(RESEARCH Pattern 6). 순수 함수다 — 호출(DO 생성자)과 알람 재설정은 호출하는 쪽의 몫이다.
+ */
+export function normalizeStoredRoom(stored: RoomState, now: number): RoomState {
+  if ((stored.phase as string) !== LEGACY_DAY_PHASE) return stored;
+  return { ...stored, phase: "dayAnnounce", phaseEndsAt: now + DAY_ANNOUNCE_MS, day: 1 };
 }
 
 export function findPlayerByToken(state: RoomState, token: string): Player | undefined {
