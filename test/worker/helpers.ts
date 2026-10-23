@@ -142,3 +142,52 @@ export async function forceDue(code: string, field: "phaseEndsAt" | "expiresAt")
   });
   await evictDurableObject(stub);
 }
+
+// ---- 방 꾸미기·저장소 읽기 ----
+
+export interface Seated {
+  code: string;
+  host: TestSocket;
+  hostToken: string;
+  /** 연결된 참가자(소켓 있음). */
+  guests: Array<{ sock: TestSocket; token: string; seat: number }>;
+  /** HTTP 로만 참가한 미연결 참가자. */
+  offline: Array<{ token: string; seat: number }>;
+}
+
+/** 방장 + 연결 참가자 `connectedGuests` 명 + HTTP 로만 참가한 `offlineGuests` 명. */
+export async function seat(connectedGuests: number, offlineGuests: number): Promise<Seated> {
+  const { code, token } = await createRoom("방장");
+  const host = await connect(code);
+  await hello(host, token);
+  const guests: Seated["guests"] = [];
+  for (let i = 0; i < connectedGuests; i += 1) {
+    const j = await joinOk(code, `손님${i}`);
+    const sock = await connect(code);
+    await hello(sock, j.token);
+    guests.push({ sock, token: j.token, seat: j.seat });
+  }
+  const offline: Seated["offline"] = [];
+  for (let i = 0; i < offlineGuests; i += 1) offline.push(await joinOk(code, `유령${i}`));
+  return { code, host, hostToken: token, guests, offline };
+}
+
+export async function storedRoom(code: string): Promise<{
+  phase: string;
+  phaseEndsAt: number | null;
+  players: Array<{ role?: string }>;
+}> {
+  let room: unknown;
+  await runInDurableObject(env.ROOM.getByName(code), async (_i, state) => {
+    room = await state.storage.get("room");
+  });
+  return room as { phase: string; phaseEndsAt: number | null; players: Array<{ role?: string }> };
+}
+
+export async function alarmOf(code: string): Promise<number | null> {
+  let alarm: number | null = null;
+  await runInDurableObject(env.ROOM.getByName(code), async (_i, state) => {
+    alarm = await state.storage.getAlarm();
+  });
+  return alarm;
+}

@@ -1,58 +1,6 @@
-import { env } from "cloudflare:workers";
-import { runInDurableObject } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 import type { RoomView, ServerMessage } from "../../shared/protocol";
-import {
-  connect,
-  createRoom,
-  flat,
-  hello,
-  joinOk,
-  joinRoom,
-  nextFrame,
-  nextState,
-  send,
-} from "./helpers";
-import type { TestSocket } from "./helpers";
-
-interface Seated {
-  code: string;
-  host: TestSocket;
-  hostToken: string;
-  /** 연결된 참가자(소켓 있음). */
-  guests: Array<{ sock: TestSocket; token: string; seat: number }>;
-  /** HTTP 로만 참가한 미연결 참가자. */
-  offline: Array<{ token: string; seat: number }>;
-}
-
-/** 방장 + 연결 참가자 `connectedGuests` 명 + HTTP 로만 참가한 `offlineGuests` 명. */
-async function seat(connectedGuests: number, offlineGuests: number): Promise<Seated> {
-  const { code, token } = await createRoom("방장");
-  const host = await connect(code);
-  await hello(host, token);
-  const guests: Seated["guests"] = [];
-  for (let i = 0; i < connectedGuests; i += 1) {
-    const j = await joinOk(code, `손님${i}`);
-    const sock = await connect(code);
-    await hello(sock, j.token);
-    guests.push({ sock, token: j.token, seat: j.seat });
-  }
-  const offline: Seated["offline"] = [];
-  for (let i = 0; i < offlineGuests; i += 1) offline.push(await joinOk(code, `유령${i}`));
-  return { code, host, hostToken: token, guests, offline };
-}
-
-async function storedRoom(code: string): Promise<{
-  phase: string;
-  phaseEndsAt: number | null;
-  players: Array<{ role?: string }>;
-}> {
-  let room: unknown;
-  await runInDurableObject(env.ROOM.getByName(code), async (_i, state) => {
-    room = await state.storage.get("room");
-  });
-  return room as { phase: string; phaseEndsAt: number | null; players: Array<{ role?: string }> };
-}
+import { alarmOf, connect, flat, hello, joinRoom, nextFrame, nextState, seat, send, storedRoom } from "./helpers";
 
 const assigning = (m: ServerMessage): boolean => m.t === "state" && m.view.phase === "assigning";
 
@@ -69,11 +17,7 @@ describe("start", () => {
     expect(views).toHaveLength(4);
     expect(new Set(views.map((v) => v.phaseEndsAt)).size).toBe(1);
     expect(views.every((v) => v.phaseDurationMs === 3000)).toBe(true);
-    let alarm: number | null = null;
-    await runInDurableObject(env.ROOM.getByName(r.code), async (_i, state) => {
-      alarm = await state.storage.getAlarm();
-    });
-    expect(alarm).toBe(views[0]!.phaseEndsAt);
+    expect(await alarmOf(r.code)).toBe(views[0]!.phaseEndsAt);
   });
 
   it("연결 4 + HTTP 로만 참가한 2명(자리 6) 이면 시작되고 6명 모두 역할을 받아 개수가 2·1·1·2 다", async () => {
