@@ -99,14 +99,14 @@ Plans:
   5. 토론 단계가 아닐 때(직업 공개 중 등) 보낸 메시지, 자유 텍스트, 2초 안에 다시 보낸 메시지는 서버가 거부해 다른 폰에 나타나지 않는다. 탈락자·밤·아침 중 메시지 거부는 탈락과 밤이 생기는 3페이즈에서 확인한다.
   6. 폰 세로 화면에서 메시지를 고르고 보내는 데 세 번 이하로 누른다(템플릿 → 대상·직업 → 보내기).
 
-**Plans:** 1/11 plans executed
+**Plans:** 2/11 plans executed
 
 Plans:
 **Wave 1**
 - [x] 02-01-PLAN.md — 낮 루프 트레이서: 와이어 계약 전체·낮 네 단계(dayAnnounce·claim·claimReveal·discussion)·tick 진입 훅·임시 루프·rolesInPlay·기존 테스트 이전·낮 시작 발표 개정·DayScene 장면 뼈대 (wave 1)
 
 **Wave 2** *(blocked on Wave 1 completion)*
-- [ ] 02-02-PLAN.md — 직업 공개 규칙: 선택지·선택·이번 낮 초기화·마감 확정·말 바꿈(규칙표) (TDD, wave 2)
+- [x] 02-02-PLAN.md — 직업 공개 규칙: 선택지·선택·이번 낮 초기화·마감 확정·말 바꿈(규칙표) (TDD, wave 2)
 - [ ] 02-03-PLAN.md — 낮 토론 규칙: 빠른 메시지 5종 검증·보관 20·이모티콘·합산 2초 쿨다운·방장 연장/넘기기·isAlive (TDD, wave 2)
 - [ ] 02-06-PLAN.md — 클라이언트 net·문장: emoji 수신·onEvent·useSeatFloats(말풍선 3초·이모티콘 2초·재접속 복원)·messageText(은/는) (wave 2)
 - [ ] 02-07-PLAN.md — 테이블 위 표시 부품: 아이콘 11개·SeatFloat·ClaimTag(말 바꿈)·완료 알약·Chip (wave 2)
@@ -196,7 +196,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 (decimal phases
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 1. 걷는 뼈대 | v1.0 | 19/19 | Complete    | 2026-10-24 |
-| 2. 낮 토론 | v1.0 | 1/11 | In Progress | - |
+| 2. 낮 토론 | v1.0 | 2/11 | In Progress | - |
 | 3. 밤과 아침 | v1.0 | 0/TBD | Not started | - |
 | 4. 처형과 승패 | v1.0 | 0/TBD | Not started | - |
 | 5. 분위기와 캐릭터 | v1.0 | 0/TBD | Not started | - |
