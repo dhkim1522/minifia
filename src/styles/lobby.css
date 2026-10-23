@@ -44,3 +44,17 @@
 .mf-lobby__status { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-md); }
 .mf-lobby__guide { margin: 0; font-size: 16px; line-height: 1.5; font-weight: 700; color: var(--gray-50); word-break: keep-all; }
 .mf-lobby__count { margin: 0; flex: none; font-size: 14px; line-height: 1.4; font-weight: 400; color: var(--gray-300); font-variant-numeric: tabular-nums; }
+
+/* 자리 등장·퇴장(결정 0006 기본형). 전이는 자리 층 안쪽 요소에 걸어 자리 크기 변환과 곱해진다. 이름표는 투명도만. */
+.mf-table { --seat-leave-ms: 320ms; }
+.mf-seat--enter > .mf-seat__body { animation: mf-seat-enter var(--dur-med) var(--ease-out) both; }
+.mf-seat--leave > .mf-seat__body { animation: mf-seat-leave var(--seat-leave-ms) var(--ease-out) both; }
+.mf-tag--enter { animation: mf-fade-in var(--dur-med) var(--ease-out) both; }
+.mf-tag--leave { animation: mf-fade-out var(--seat-leave-ms) var(--ease-out) both; }
+@keyframes mf-seat-enter { from { opacity: 0; transform: translateY(-14px) scale(0.6); } to { opacity: 1; transform: translateY(0) scale(1); } }
+@keyframes mf-seat-leave { from { opacity: 1; transform: translateY(0) scale(1); } to { opacity: 0; transform: translateY(6px) scale(0.85); } }
+@keyframes mf-fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes mf-fade-out { from { opacity: 1; } to { opacity: 0; } }
+
+/* 토스트는 방 코드 아래 가운데 */
+.mf-lobby__backdrop .mf-toast--top { top: calc(var(--space-md) + 64px + var(--space-sm) + env(safe-area-inset-top)); }

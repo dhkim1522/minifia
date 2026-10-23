@@ -6,6 +6,9 @@ import { Backdrop } from "../components/Backdrop";
 import { Button } from "../components/Button";
 import { Table } from "../components/Table";
 import type { TableSeat } from "../components/Table";
+import { Toast, useToast } from "../components/Toast";
+import { diffRoomViews, toastForDiff } from "../net/roomDiff";
+import { useSeatTransitions } from "../net/useSeatTransitions";
 import "../styles/lobby.css";
 
 const START_LOCK_MS = 2000;
@@ -21,7 +24,24 @@ interface LobbyProps {
 
 // S-03 대기실: 대기 장면 위 원근 테이블, 위쪽 바(방 코드), 하단 시트.
 // 화면은 서버가 보낸 view 만으로 다시 그린다. 닉네임은 React 텍스트·title 로만 그린다.
-export function Lobby({ view, send, canSend = true }: LobbyProps) {
+export function Lobby({ view, send, canSend = true, epoch = 0 }: LobbyProps) {
+  // 입장·방장 변경 토스트: 서버가 보낸 스냅샷 두 개의 차이로만 만든다. 처음 열 때·epoch 가 바뀐 직후(재연결)에는
+  // 직전 스냅샷을 비워 지난 일을 다시 알리지 않는다.
+  const { toast, show } = useToast();
+  const prevView = useRef<RoomView | null>(null);
+  const prevEpoch = useRef(epoch);
+  useEffect(() => {
+    if (prevEpoch.current !== epoch) {
+      prevEpoch.current = epoch;
+      prevView.current = null;
+    }
+    const text = toastForDiff(diffRoomViews(prevView.current, view));
+    prevView.current = view;
+    if (text) show(text);
+  }, [view, epoch, show]);
+
+  const seated = useSeatTransitions(view.players, epoch);
+
   // [게임 시작] 2초 잠금 — 화면이 기억하는 상태는 이것뿐이다. 시작이 거절되면 서버가 다시 보낸 view 대로 그린다.
   const [locked, setLocked] = useState(false);
   const lockTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -59,8 +79,9 @@ export function Lobby({ view, send, canSend = true }: LobbyProps) {
 
   const allies = view.me.allies ?? [];
   const seats: (TableSeat | null)[] = Array.from({ length: SEAT_COUNT }, () => null);
-  for (const p of view.players) {
+  for (const p of seated) {
     seats[p.seat] = {
+      transition: p.transition,
       nickname: p.nickname,
       connected: p.connected,
       isHost: p.isHost,
@@ -93,6 +114,7 @@ export function Lobby({ view, send, canSend = true }: LobbyProps) {
           ) : null}
         </section>
       </main>
+      <Toast toast={toast} placement="top" />
     </Backdrop>
   );
 }
