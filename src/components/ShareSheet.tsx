@@ -19,7 +19,7 @@ export interface ShareSheetProps {
 }
 
 const COPIED_MS = 2000;
-const SHARE_TITLE = "미니피아";
+const SHARE_TITLE = "Minifia";
 
 // C-03 공유 시트 "친구 초대하기": 방 코드, 읽기 전용 초대 링크, [공유하기], [링크 복사].
 // 공유 데이터와 링크에는 title·text·url 뿐이다 — 플레이어 토큰이나 세션 값은 들어가지 않는다(T-01-42).

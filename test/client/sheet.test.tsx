@@ -269,7 +269,7 @@ describe("ShareSheet — C-03 친구 초대하기 (ROOM-01, R10)", () => {
     setup({ share });
     fireEvent.click(screen.getByRole("button", { name: "공유하기" }));
     expect(share).toHaveBeenCalledTimes(1);
-    expect(share).toHaveBeenCalledWith({ title: "미니피아", text: buildShareText("민수", "0042"), url: "https://x/r/0042" });
+    expect(share).toHaveBeenCalledWith({ title: "Minifia", text: buildShareText("민수", "0042"), url: "https://x/r/0042" });
   });
 
   it("공유를 취소해도(AbortError) 아무 표시도 없고 시트는 그대로다", async () => {

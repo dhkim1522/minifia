@@ -72,7 +72,7 @@ afterEach(() => {
 describe("App 첫 화면", () => {
   it("서비스 이름 제목을 보여 주고 빌드 버전은 화면에 보이지 않는다", () => {
     render(<App />);
-    expect(screen.getByRole("heading", { name: "미니피아" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Minifia" })).toBeTruthy();
     expect(screen.queryByText("vdev")).toBeNull();
   });
 });
@@ -98,7 +98,7 @@ describe("App 입장 정보 이어받기 (E1 resume, Pitfall 22)", () => {
     render(<App />);
     await see("친구들과 한 판, 점심시간 마피아");
     expect(stored()).toBe("null");
-    expect(screen.getByRole("heading", { name: "미니피아" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Minifia" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "방 만들기" })).toBeTruthy();
     expect(window.location.pathname).toBe("/");
   });
@@ -136,7 +136,7 @@ describe("App 입장 정보 이어받기 (E1 resume, Pitfall 22)", () => {
     const fetchMock = vi.fn(async () => ok());
     vi.stubGlobal("fetch", fetchMock);
     render(<App />);
-    await see("미니피아에 초대받았어요");
+    await see("Minifia에 초대받았어요");
     expect(screen.getByRole("heading", { name: "방 0042" })).toBeTruthy();
     expect((fetchMock.mock.calls[0] as unknown as [string])[0]).toBe("/api/rooms/0042");
     expect(stored()).toBe(storedAs("1111"));

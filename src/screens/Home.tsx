@@ -99,7 +99,7 @@ export function Home({ onEnterRoom }: HomeProps) {
       <main className="mf-root mf-entry">
         <header className="mf-entry__head">
           <p className="mf-t-label">친구들과 한 판, 점심시간 마피아</p>
-          <h1 className="mf-t-display">미니피아</h1>
+          <h1 className="mf-t-display">Minifia</h1>
         </header>
         <div className="mf-entry__card">
           <form className="mf-entry__form" onSubmit={handleCreate}>

@@ -19,7 +19,7 @@ afterEach(() => {
 describe("Home", () => {
   it("첫 화면 구성: 입장 배경, 소개와 서비스 이름, 닉네임 입력칸, [방 만들기]", () => {
     const { container } = render(<Home onEnterRoom={vi.fn()} />);
-    expect(screen.getByRole("heading", { name: "미니피아" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Minifia" })).toBeTruthy();
     expect(screen.getByText("친구들과 한 판, 점심시간 마피아")).toBeTruthy();
     expect(screen.getByLabelText("닉네임")).toBeTruthy();
     expect(screen.getByRole("button", { name: "방 만들기" })).toBeTruthy();

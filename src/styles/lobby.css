@@ -6,7 +6,7 @@
 .mf-table { position: relative; width: 100%; aspect-ratio: 4 / 5; isolation: isolate; }
 .mf-table__moon { position: absolute; left: 50%; top: 0; width: 90%; height: 70%; transform: translateX(-50%); background: radial-gradient(50% 50% at 50% 30%, var(--moonlight) 0%, transparent 100%); opacity: 0.6; pointer-events: none; }
 .mf-table__shadow { position: absolute; left: 50%; top: 52%; width: 70%; height: 30%; transform: translate(-50%, -50%); border-radius: 50%; background: var(--shadow); filter: blur(14px); }
-.mf-table__top { position: absolute; left: 50%; top: 48%; width: 64%; height: 30%; transform: translate(-50%, -50%); border-radius: 50%; background: linear-gradient(180deg, var(--felt-light) 0%, var(--felt-mid) 45%, var(--felt-dark) 100%); border: 3px solid var(--gray-700); box-shadow: inset 0 3px 0 var(--moonlight), 0 7px 0 var(--town-near), 0 18px 28px var(--shadow); }
+.mf-table__top { position: absolute; left: 50%; top: 48%; width: 64%; height: 30%; transform: translate(-50%, -50%); border-radius: 50%; background: linear-gradient(180deg, var(--felt-light) 0%, var(--felt-mid) 45%, var(--felt-dark) 100%); border: 3px solid var(--table-rim); box-shadow: inset 0 3px 0 var(--table-hi), 0 7px 0 var(--table-edge), 0 18px 28px var(--shadow); }
 .mf-table__scrim { position: absolute; inset: 0; background: var(--scrim); z-index: 20; pointer-events: none; }
 
 /* 자리: 폭은 장면 폭의 20%, 발이 좌표에 닿는다. 크기 변환은 자리 층만, 이름표는 따로 층이라 변환 바깥. */

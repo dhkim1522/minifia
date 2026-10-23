@@ -231,7 +231,7 @@ export function JoinByLink({ code, notice, onEnterRoom, onHome }: JoinByLinkProp
     <Backdrop layout="entry" variant="lobby">
       <main className="mf-root mf-entry mf-join">
         <header className="mf-entry__head">
-          <p className="mf-t-label">미니피아에 초대받았어요</p>
+          <p className="mf-t-label">Minifia에 초대받았어요</p>
           <h1 className="mf-t-display">{`방 ${code}`}</h1>
         </header>
         {body}

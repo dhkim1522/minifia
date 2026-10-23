@@ -86,7 +86,10 @@ blocked: 0
 
 - gap_id: G-01-1a
   truth: "전체 폰트가 마피아 감성의 동글동글 귀여운 폰트이고 크기가 충분히 크다"
-  status: failed
+  status: resolved
+  resolved_by: 결정 0013 (직접 수정, plan 없음)
+  resolved_at: 2026-10-23
+  fix: "Gowun Dodum 적용"
   reason: "User reported: 미니피아 폰트를 더 동글동글 귀여운 폰트로 바꾸고 싶다. 전체 폰트 테마를 마피아 감성에 맞게, 크기도 더 키워도 될 것 같다"
   severity: cosmetic
   scope: global
@@ -115,7 +118,10 @@ blocked: 0
 
 - gap_id: G-01-2
   truth: "대기실 원형 테이블이 배경과 구분되고 마피아 게임 분위기에 맞는다"
-  status: failed
+  status: resolved
+  resolved_by: 결정 0013 (직접 수정, plan 없음)
+  resolved_at: 2026-10-23
+  fix: "크림 대리석 테이블"
   reason: "User reported: 원형 테이블이 남색이라 배경과 겹친다. 마피아 게임에 적합하고 배경과 겹치지 않는 테이블 에셋을 새로 만들어 추가하면 좋겠다"
   severity: cosmetic
   note: "새 그림 에셋은 클로드 데스크톱에서 만들어 넘긴다 (결정 0010·0011)"
@@ -124,7 +130,10 @@ blocked: 0
   missing: []
 - gap_id: G-01-5
   truth: "링크 미리보기 OG 이미지가 앱 폰트와 통일되고 배경 에셋을 쓴 완성도 있는 모습이다"
-  status: failed
+  status: resolved
+  resolved_by: 결정 0013 (직접 수정, plan 없음)
+  resolved_at: 2026-10-23
+  fix: "OG 이미지 재생성"
   reason: "User reported: 단색 남색 바탕에 '미니피아' 글씨만 있어 너무 단순하다. 폰트를 나중에 적용할 앱 폰트로 통일하고 배경 에셋을 넣으면 좋겠다"
   severity: cosmetic
   note: "G-01-1a(전체 폰트) 가 정해진 뒤 같이 처리. 새 그림은 클로드 데스크톱에서 만들어 넘긴다"

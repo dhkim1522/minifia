@@ -15,9 +15,12 @@
   --crimson-400: #e0344b;
   --crimson-500: #c8102e;
   --crimson-700: #8e0b21;
-  --felt-light: #2c3550;
-  --felt-mid: #1a2036;
-  --felt-dark: #10142a;
+  --felt-light: #f2ecdc;
+  --felt-mid: #e0d8c4;
+  --felt-dark: #b9b09a;
+  --table-rim: #6b7180;
+  --table-hi: #ffffff;
+  --table-edge: #4a4f5c;
   --moonlight: rgba(230, 233, 245, 0.12);
   --morning: #3a4a6e;
   --sky-moonlit: #25375f;
@@ -45,7 +48,7 @@
   --seat-6: #9aa86f;
   --seat-7: #b87a5c;
   --seat-8: #a9aebb;
-  --font-ui: system-ui, -apple-system, "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", sans-serif;
+  --font-ui: "Gowun Dodum", system-ui, -apple-system, "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", sans-serif;
   --space-xs: 4px;
   --space-sm: 8px;
   --space-md: 16px;

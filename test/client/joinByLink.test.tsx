@@ -70,7 +70,7 @@ describe("링크 참가 화면 (S-02) 트레이서", () => {
     render(<App />);
 
     await see("2 / 8명이 모였어요");
-    expect(screen.getByText("미니피아에 초대받았어요")).toBeTruthy();
+    expect(screen.getByText("Minifia에 초대받았어요")).toBeTruthy();
     expect(screen.getByRole("heading", { name: "방 0042" })).toBeTruthy();
     expect(screen.getByText("민수")).toBeTruthy();
     expect(screen.getByText("서준")).toBeTruthy();
