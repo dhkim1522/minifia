@@ -125,6 +125,11 @@ describe("createRoomState", () => {
     }
   });
 
+  it("CR-01: 방장 닉네임이 채움 문자면 NICKNAME_INVALID", () => {
+    const r = createRoomState({ code: "0420", hostId: "h", hostToken: "t", hostNickname: "\u{3164}", now: 0 });
+    expect(r.ok ? "ok" : r.error).toBe("NICKNAME_INVALID");
+  });
+
   it("글자 수는 grapheme 으로 센다 (이모지 8개는 통과, 가족 이모지 8개도 통과)", () => {
     const emoji = createRoomState({ code: "0420", hostId: "h", hostToken: "t", hostNickname: "😀".repeat(8), now: 0 });
     expect(emoji.ok).toBe(true);
@@ -193,6 +198,19 @@ describe("joinRoom (거절 순서)", () => {
     expect(outcome(join(a, "b", "철\u{200D}수"))).toBe("NICKNAME_TAKEN");
     const b = room([{ id: "a", seat: 0, joinSeq: 0, nickname: "철\u{200D}수" }]);
     expect(outcome(join(b, "b", "철수"))).toBe("NICKNAME_TAKEN");
+  });
+
+  it("CR-01: 변형 선택자·결합 문자를 끼운 이름은 원래 이름과 같아 NICKNAME_TAKEN", () => {
+    const s = room([{ id: "a", seat: 0, joinSeq: 0, nickname: "철수" }]);
+    expect(outcome(join(s, "b", "철\u{FE0F}수"))).toBe("NICKNAME_TAKEN");
+    expect(outcome(join(s, "c", "철\u{0301}수"))).toBe("NICKNAME_TAKEN");
+    expect(outcome(join(s, "d", "영희"))).toBe("ok");
+  });
+
+  it("CR-01: 채움 문자 이름은 NICKNAME_INVALID", () => {
+    const s = room([{ id: "a", seat: 0, joinSeq: 0, nickname: "철수" }]);
+    expect(outcome(join(s, "b", "\u{3164}"))).toBe("NICKNAME_INVALID");
+    expect(outcome(join(s, "c", "\u{2800}"))).toBe("NICKNAME_INVALID");
   });
 
   it("빈 이름·줄바꿈은 NICKNAME_INVALID", () => {

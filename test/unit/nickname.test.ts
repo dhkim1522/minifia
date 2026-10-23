@@ -86,6 +86,66 @@ describe("CR-01 보이지 않는 문자", () => {
     expect(r.ok && r.nickname).toBe("철\u{200D}수");
     expect(r.ok && r.key).toBe(nicknameKey("철수"));
   });
+
+  it("CR-01: 변형 선택자(U+FE0F)를 끼운 이름은 원래 이름과 같은 키다", () => {
+    expect(nicknameKey("철\u{FE0F}수")).toBe(nicknameKey("철수"));
+  });
+
+  it("CR-01: 결합 문자(U+0301)를 끼운 이름은 원래 이름과 같은 키다", () => {
+    expect(nicknameKey("철\u{0301}수")).toBe(nicknameKey("철수"));
+  });
+
+  it("CR-01: 제거로 이웃하게 된 자모는 두 번째 NFKC 로 합쳐 같은 키다", () => {
+    expect(nicknameKey("\u{1112}\u{0301}\u{1161}")).toBe(nicknameKey("하"));
+  });
+
+  it("CR-01: 변형 선택자를 끼운 이름은 표시 이름을 그대로 둔다", () => {
+    const r = validateNickname("철\u{FE0F}수");
+    expect(r.ok && r.nickname).toBe("철\u{FE0F}수");
+  });
+
+  it.each([
+    ["U+3164", "\u{3164}"],
+    ["U+2800", "\u{2800}"],
+    ["U+115F", "\u{115F}"],
+    ["U+1160", "\u{1160}"],
+    ["U+FFA0", "\u{FFA0}"],
+    ["U+3164 앞뒤 공백", " \u{3164} "],
+    ["U+3164 가 글자 사이", "철\u{3164}수"],
+    ["U+2800 가 글자 사이", "민\u{2800}수"],
+    ["U+FF9E 반각 탁점 하나(키가 빔)", "\u{FF9E}"],
+    ["U+3164 9번 반복(TOO_LONG 아님)", "\u{3164}".repeat(9)],
+    ["U+FF9E 9번 반복(TOO_LONG 아님)", "\u{FF9E}".repeat(9)],
+  ])("CR-01: %s 는 INVALID_CHARS", (_name, raw) => {
+    const r = validateNickname(raw);
+    expect(r.ok ? "ok" : r.reason).toBe("INVALID_CHARS");
+  });
+
+  it("CR-01: 하트 이모지는 입력 그대로 받고 키는 변형 선택자 없는 하트와 같다", () => {
+    const r = validateNickname("\u{2764}\u{FE0F}");
+    expect(r.ok && r.nickname).toBe("\u{2764}\u{FE0F}");
+    expect(r.ok && r.key).toBe(nicknameKey("\u{2764}"));
+  });
+
+  it("CR-01: 무지개 깃발은 입력 그대로 받는다", () => {
+    const r = validateNickname("\u{1F3F3}\u{FE0F}\u{200D}\u{1F308}");
+    expect(r.ok && r.nickname).toBe("\u{1F3F3}\u{FE0F}\u{200D}\u{1F308}");
+  });
+
+  it("CR-01: 피부색 수정자는 키에서 지우지 않는다", () => {
+    const r = validateNickname("\u{1F44D}\u{1F3FD}");
+    expect(r.ok).toBe(true);
+    expect(r.ok && r.key === nicknameKey("\u{1F44D}")).toBe(false);
+  });
+
+  it("CR-01: 한글 음절은 결합 문자 제거의 영향을 받지 않는다", () => {
+    expect(nicknameKey("민수")).toBe("민수");
+    expect(nicknameKey("\u{1112}\u{1161}\u{11AB}")).toBe("\u{D55C}");
+  });
+
+  it("CR-01: 가족 이모지 8개는 글자 8개로 받는다", () => {
+    expect(validateNickname("\u{1F468}\u{200D}\u{1F469}\u{200D}\u{1F467}".repeat(8)).ok).toBe(true);
+  });
 });
 
 describe("nicknameKey", () => {
