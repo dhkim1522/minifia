@@ -1,0 +1,23 @@
+<!-- @dsCard group="Results" height=460 width=960 subtitle="탈락·처형 발표만 진홍" -->
+<!doctype html>
+<html lang="ko">
+<head><meta charset="utf-8"><title>Announcement</title>
+<style>
+html,body{margin:0;background:var(--night-900);}
+body{padding:16px;font-family:var(--font-ui);color:var(--gray-100);}
+.col{display:flex;flex-direction:column;gap:8px;max-width:360px;}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-start;}
+.cap{font-size:14px;color:var(--gray-300);margin:0 0 4px;}
+.cell{display:flex;flex-direction:column;gap:8px;align-items:center;}
+</style></head>
+<body>
+<div id="root" class="mf-root"></div>
+<script>
+var M = window.Minifia, h = React.createElement;
+ReactDOM.createRoot(document.getElementById('root')).render(h('div',{className:'row',style:{gap:'16px'}},
+ h('div',{style:{width:'300px',background:'var(--night-950)'}},h(M.Announcement,{icon:'moon',title:'밤이 되었습니다',sub:'눈을 감고 행동을 고르세요'})),
+ h('div',{style:{width:'300px',background:'var(--night-900)'}},h(M.Announcement,{tone:'danger',title:'서연님이 처형되었습니다',sub:'찬성 4 · 반대 2'})),
+ h('div',{style:{width:'300px',background:'var(--night-800)'}},h(M.Announcement,{icon:'sun',title:'아무 일도 없었습니다',sub:'지난밤 아무도 탈락하지 않았어요'}))));
+</script>
+</body>
+</html>

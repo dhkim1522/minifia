@@ -1,0 +1,22 @@
+<!-- @dsCard group="Table" height=250 width=980 subtitle="캐릭터 8종(세트 C)과 끊김·탈락 상태" -->
+<!doctype html>
+<html lang="ko">
+<head><meta charset="utf-8"><title>Figure</title>
+<style>
+html,body{margin:0;background:var(--night-900);}
+body{padding:16px;font-family:var(--font-ui);color:var(--gray-100);}
+.row{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-start;}
+.cap{font-size:14px;line-height:1.4;color:var(--gray-300);margin:0;text-align:center;word-break:keep-all;}
+.cell{display:flex;flex-direction:column;gap:8px;align-items:center;width:80px;}
+</style></head>
+<body>
+<div id="root" class="mf-root"></div>
+<script>
+var M = window.Minifia, h = React.createElement;
+ReactDOM.createRoot(document.getElementById('root')).render(h('div', { className: 'row' },
+  [0, 1, 2, 3, 4, 5, 6, 7].map(function (v) { return h('div', { key: v, className: 'cell' }, h(M.Figure, { variant: v }), h('p', { className: 'cap' }, (v + 1) + '. ' + M.FIGURE_NAMES[v])); }),
+  h('div', { className: 'cell' }, h(M.Figure, { variant: 2, state: 'disconnected' }), h('p', { className: 'cap' }, '끊김')),
+  h('div', { className: 'cell' }, h(M.Figure, { variant: 2, state: 'dead' }), h('p', { className: 'cap' }, '탈락(유령)'))));
+</script>
+</body>
+</html>

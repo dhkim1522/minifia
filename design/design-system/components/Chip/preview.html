@@ -1,0 +1,23 @@
+<!-- @dsCard group="Inputs" height=150 -->
+<!doctype html>
+<html lang="ko">
+<head><meta charset="utf-8"><title>Chip</title>
+<style>
+html,body{margin:0;background:var(--night-900);}
+body{padding:16px;font-family:var(--font-ui);color:var(--gray-100);}
+.col{display:flex;flex-direction:column;gap:8px;max-width:360px;}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-start;}
+.cap{font-size:14px;color:var(--gray-300);margin:0 0 4px;}
+.cell{display:flex;flex-direction:column;gap:8px;align-items:center;}
+</style></head>
+<body>
+<div id="root" class="mf-root"></div>
+<script>
+var M = window.Minifia, h = React.createElement;
+ReactDOM.createRoot(document.getElementById('root')).render(h('div',{className:'col'},
+ h('p',{className:'cap'},'직업 공개 선택지'),
+ h('div',{className:'row'},h(M.Chip,{icon:'police',selected:true},'경찰'),h(M.Chip,{icon:'doctor'},'의사'),h(M.Chip,{icon:'citizen'},'시민'),h(M.Chip,null,'말 안 함')),
+ h('div',{className:'row'},h(M.Chip,{disabled:true},'시간 끝남'))));
+</script>
+</body>
+</html>

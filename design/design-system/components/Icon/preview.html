@@ -1,0 +1,21 @@
+<!-- @dsCard group="Icons" height=240 width=760 subtitle="24 격자, 2px 선" -->
+<!doctype html>
+<html lang="ko">
+<head><meta charset="utf-8"><title>Icon</title>
+<style>
+html,body{margin:0;background:var(--night-900);}
+body{padding:16px;font-family:var(--font-ui);color:var(--gray-100);}
+.col{display:flex;flex-direction:column;gap:8px;max-width:360px;}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-start;}
+.cap{font-size:14px;color:var(--gray-300);margin:0 0 4px;}
+.cell{display:flex;flex-direction:column;gap:8px;align-items:center;}
+</style></head>
+<body>
+<div id="root" class="mf-root"></div>
+<script>
+var M = window.Minifia, h = React.createElement;
+ReactDOM.createRoot(document.getElementById('root')).render(h('div',{className:'row',style:{gap:'16px'}},
+ ['crown','diamond','disconnected','mafia','police','doctor','citizen','share','check','close','abstain','eye','moon','sun','lock'].concat(M.REACTIONS.map(function(r){return r.name;})).map(function(n){return h('div',{key:n,className:'cell',style:{width:'72px'}},h(M.Icon,{name:n,size:28}),h('p',{className:'cap',style:{fontSize:'14px'}},n.replace('react-','반응·')));})));
+</script>
+</body>
+</html>

@@ -1,0 +1,21 @@
+<!-- @dsCard group="Communication" height=200 -->
+<!doctype html>
+<html lang="ko">
+<head><meta charset="utf-8"><title>QuickMessagePanel</title>
+<style>
+html,body{margin:0;background:var(--night-900);}
+body{padding:16px;font-family:var(--font-ui);color:var(--gray-100);}
+.col{display:flex;flex-direction:column;gap:8px;max-width:360px;}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-start;}
+.cap{font-size:14px;color:var(--gray-300);margin:0 0 4px;}
+.cell{display:flex;flex-direction:column;gap:8px;align-items:center;}
+</style></head>
+<body>
+<div id="root" class="mf-root"></div>
+<script>
+var M = window.Minifia, h = React.createElement;
+ReactDOM.createRoot(document.getElementById('root')).render(h('div',{className:'col',style:{maxWidth:'390px'}},
+ h(M.QuickMessagePanel,{templates:['[○○] 의심돼요','[○○] 믿어요','저는 [직업]이에요','저 아니에요','[○○] 투표해요'],active:0,options:['서연','지호','하은','도윤','수아'],picked:'서연',preview:h('span',null,h('span',{className:'mf-qm__slot'},'서연'),' 의심돼요'),ready:true})));
+</script>
+</body>
+</html>

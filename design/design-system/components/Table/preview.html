@@ -1,0 +1,24 @@
+<!-- @dsCard group="Table" height=560 width=780 subtitle="배경 장면 위, 내 자리는 항상 맨 아래" -->
+<!doctype html>
+<html lang="ko">
+<head><meta charset="utf-8"><title>Table</title>
+<style>
+html,body{margin:0;background:var(--night-950);}
+body{padding:16px;font-family:var(--font-ui);color:var(--gray-100);}
+.row{display:flex;gap:24px;align-items:flex-start;}
+.cell{display:flex;flex-direction:column;gap:8px;width:360px;}
+.cap{font-size:14px;line-height:1.4;color:var(--gray-300);margin:0;}
+.scene{width:360px;height:480px;border-radius:20px;}
+.scene .mf-backdrop__content{padding:24px 0 0;}
+</style></head>
+<body>
+<div id="root" class="mf-root"></div>
+<script>
+var M = window.Minifia, h = React.createElement;
+var cell = function (cap, v, table) { return h('div', { className: 'cell' }, h('p', { className: 'cap' }, cap), h(M.Backdrop, { variant: v, position: 'center 42%', className: 'scene' }, h(M.Table, Object.assign({ bare: true }, table)))); };
+ReactDOM.createRoot(document.getElementById('root')).render(h('div', { className: 'row' },
+  cell('대기실 5명 — lobby', 'lobby', { mySeat: 0, seats: [{ name: '민준', host: true, me: true }, { name: '서연' }, null, { name: '지호', state: 'disconnected' }, { name: '하은' }, { name: '도윤' }, null, null], center: h('span', { className: 'mf-t-label' }, '5/8명') }),
+  cell('낮 — 직업 주장·말풍선·반응 (마피아 시점)', 'day', { mySeat: 0, morning: true, seats: [{ name: '민준', me: true, claim: '시민' }, { name: '서연', mate: true, claim: '의사' }, { name: '수아', reaction: 'react-eyes' }, { name: '지호', claim: '경찰', changed: true }, { name: '하은', bubble: '서연 의심돼요' }, { name: '도윤', state: 'dead' }, { name: '예준' }, { name: '유나', claim: '경찰' }] })));
+</script>
+</body>
+</html>

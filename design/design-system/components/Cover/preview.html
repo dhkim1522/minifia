@@ -1,0 +1,26 @@
+<!-- @dsCard height=288 -->
+<!doctype html>
+<html lang="ko">
+<head><meta charset="utf-8"><title>minifia — cover</title>
+<style>
+html,body{margin:0;background:var(--night-950);}
+.cover{position:relative;width:960px;height:288px;overflow:hidden;font-family:var(--font-ui);background:var(--night-900);display:flex;}
+.text{flex:1;display:flex;flex-direction:column;justify-content:flex-end;padding:0 48px 40px;}
+.name{margin:0;font-size:96px;line-height:.92;font-weight:700;color:var(--gray-50);letter-spacing:-0.01em;}
+.tag{margin:16px 0 0;font-size:14px;line-height:1.4;color:var(--gray-300);}
+.strip{display:flex;flex:none;}
+.panel{position:relative;width:133px;height:288px;}
+.cast{position:absolute;left:0;right:0;bottom:16px;display:flex;justify-content:center;gap:4px;}
+.cast .mf-figure{width:56px;}
+</style></head>
+<body>
+<div id="root" class="mf-root"></div>
+<script>
+var M = window.Minifia, h = React.createElement;
+var panel = function (v, cast) { return h(M.Backdrop, { key: v, layout: 'entry', variant: v, className: 'panel' }, cast ? h('div', { className: 'cast' }, cast.map(function (c) { return h(M.Figure, { key: c, variant: c }); })) : null); };
+ReactDOM.createRoot(document.getElementById('root')).render(h('div', { className: 'cover' },
+  h('div', { className: 'text' }, h('p', { className: 'name' }, 'minifia'), h('p', { className: 'tag' }, '링크로 모여 각자 폰으로 하는 마피아 한 판')),
+  h('div', { className: 'strip' }, panel('lobby', [0, 3]), panel('night', [6]), panel('day', [2, 5]), panel('verdict', [7]))));
+</script>
+</body>
+</html>
