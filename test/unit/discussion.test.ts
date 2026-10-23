@@ -114,8 +114,8 @@ describe("phaseDurationOf - 단계 길이 파생 (Pitfall 3)", () => {
       phaseDurationOf(room("claim", 1, { extendUsed: true })),
       phaseDurationOf(room("lobby", null)),
     ];
-    expect(rows.join(",")).toBe(`${DISCUSSION_MS},${DISCUSSION_MS},${DISCUSSION_MS + EXTEND_MS},${CLAIM_MS},${CLAIM_MS},null`);
-    expect(`${DISCUSSION_MS}/${EXTEND_MS}`).toBe("90000/30000");
+    expect(rows.map(String).join(",")).toBe(`${DISCUSSION_MS},${DISCUSSION_MS},${DISCUSSION_MS + EXTEND_MS},${CLAIM_MS},${CLAIM_MS},null`);
+    expect(`${DISCUSSION_MS}/${EXTEND_MS}`).toBe("90000/30000"); // 계획이 못 박은 값(연장 전 90000, 연장 뒤 120000)
   });
 
   it("연장 뒤 넘겨서 다음 낮 discussion 까지 가면 extendUsed false 에 90000 으로 돌아온다", () => {
