@@ -1,0 +1,58 @@
+/* 하단 시트 틀(Sheet) · 확인 시트 · 공유 시트(C-03) · 아이콘 버튼.
+   design/design-system/components/bundle.css 의 .mf-sheet* (85-89행)에서 옮기고, <dialog> 틀과 모션을 더했다.
+   값은 tokens.css 변수만 쓴다(색 직접 지정 없음). 이 파일에는 강조색(붉은 계열)을 쓰지 않는다 — 그것은 처형·탈락 발표에 남긴다.
+   240ms 는 토큰에 없는 모션 길이라 지역 상수로 둔다(UI-SPEC 스타일 규칙, R18). */
+
+.mf-dialog {
+  --mf-sheet-ms: 240ms;
+  /* top layer 로 올라가므로 #root 의 폭 제한이 닿지 않는다. 화면 전체를 덮고 안에서 시트 폭을 제한한다. */
+  position: fixed; inset: 0; width: 100%; height: 100%; max-width: none; max-height: none;
+  margin: 0; padding: 0; border: 0; background: transparent; color: var(--gray-100); font-family: var(--font-ui);
+  overflow: hidden;
+}
+.mf-dialog[open] { display: flex; flex-direction: column; justify-content: flex-end; }
+/* 막은 ::backdrop 이 아니라 안의 div 다(커스텀 속성 상속이 불확실, Pitfall 19). ::backdrop 은 투명으로 둔다. */
+.mf-dialog::backdrop { background: transparent; }
+
+.mf-sheet-scrim { position: absolute; inset: 0; background: var(--scrim); animation: mf-sheet-scrim-in var(--mf-sheet-ms) var(--ease-out) both; transition: opacity var(--mf-sheet-ms) var(--ease-out); }
+.mf-dialog--closing .mf-sheet-scrim { opacity: 0; animation: none; }
+
+.mf-sheet {
+  position: relative; display: flex; flex-direction: column; gap: var(--space-lg);
+  width: 100%; max-width: 430px; margin: 0 auto; max-height: 80dvh; overflow-y: auto;
+  padding: var(--space-lg); padding-bottom: calc(var(--space-lg) + env(safe-area-inset-bottom));
+  background: var(--night-800); border-radius: var(--radius-lg) var(--radius-lg) 0 0; box-shadow: var(--shadow-card);
+  animation: mf-sheet-up var(--mf-sheet-ms) var(--ease-out) both;
+  transition: transform var(--mf-sheet-ms) var(--ease-out);
+}
+.mf-sheet--closing { transform: translateY(100%); animation: none; }
+
+@keyframes mf-sheet-up { from { transform: translateY(100%); } to { transform: translateY(0); } }
+@keyframes mf-sheet-scrim-in { from { opacity: 0; } to { opacity: 1; } }
+
+/* 손잡이 막대: 끌기는 이 영역에만 건다. 보이는 막대는 40×4, 누르는 영역은 위아래로 넓힌다. */
+.mf-sheet__handle {
+  position: relative; align-self: center; flex: none; width: 40px; height: 4px; margin: calc(-1 * var(--space-sm)) 0 calc(-1 * var(--space-sm));
+  border-radius: var(--radius-pill); background: var(--gray-700); touch-action: none; cursor: grab;
+}
+.mf-sheet__handle::before { content: ""; position: absolute; inset: calc(-1 * var(--space-md)) calc(-1 * var(--space-lg)); }
+
+.mf-sheet__title { padding-right: calc(var(--tap-min) + var(--space-sm)); }
+.mf-sheet__actions { display: flex; flex-direction: column; gap: var(--space-sm); }
+.mf-sheet__close { position: absolute; top: var(--space-md); right: var(--space-md); }
+
+/* 아이콘 버튼: 44×44 정사각. 대기실 위쪽 바의 [뒤로]·[공유]와 시트의 [닫기]가 쓴다. */
+.mf-btn.mf-iconbtn { flex: none; width: var(--tap-min); height: var(--tap-min); min-height: var(--tap-min); padding: 0; border-radius: var(--radius-md); background: var(--night-800); border-color: var(--gray-700); color: var(--gray-50); }
+
+/* 공유 시트(C-03) */
+.mf-share { display: flex; flex-direction: column; gap: var(--space-md); }
+.mf-share__full { margin: 0; padding-right: calc(var(--tap-min) + var(--space-sm)); font-size: 14px; line-height: 1.4; color: var(--gray-300); word-break: keep-all; }
+.mf-share__code { margin: 0; font-size: 36px; line-height: 1.2; font-weight: 700; letter-spacing: 0.12em; font-variant-numeric: tabular-nums; color: var(--gray-50); }
+.mf-share__link { white-space: nowrap; overflow-x: auto; text-overflow: clip; }
+.mf-share__hint { margin: 0; font-size: 14px; line-height: 1.4; color: var(--gray-300); word-break: keep-all; }
+.mf-share__buttons { display: flex; flex-direction: column; gap: var(--space-sm); margin-top: var(--space-sm); }
+.mf-share__block { display: flex; flex-direction: column; gap: var(--space-xs); }
+
+@media (prefers-reduced-motion: reduce) {
+  .mf-sheet, .mf-sheet-scrim { animation-duration: 0.01ms; transition-duration: 0.01ms; }
+}

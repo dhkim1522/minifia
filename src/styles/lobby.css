@@ -32,7 +32,11 @@
 /* 대기실 틀: 폰 높이 안에서 세로 스크롤 없이 들어간다(360×640). 장면이 남는 높이만큼 줄어든다. */
 .mf-lobby__backdrop { flex: none; height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom)); }
 .mf-lobby { height: 100%; display: flex; flex-direction: column; overflow: hidden; }
-.mf-lobby__bar { flex: none; display: flex; flex-direction: column; align-items: center; padding: var(--space-md) var(--space-md) 0; text-align: center; }
+.mf-lobby__bar { flex: none; position: relative; padding: var(--space-md) var(--space-md) 0; text-align: center; }
+.mf-lobby__bar-center { display: flex; flex-direction: column; align-items: center; }
+.mf-lobby__bar-left, .mf-lobby__bar-right { position: absolute; top: var(--space-md); }
+.mf-lobby__bar-left { left: var(--space-md); }
+.mf-lobby__bar-right { right: var(--space-md); }
 .mf-lobby__bar .mf-t-label { color: var(--gray-100); text-shadow: var(--shadow-text); }
 .mf-lobby__code { font-size: 36px; line-height: 1.2; font-weight: 700; letter-spacing: 0.12em; padding-left: 0.12em; font-variant-numeric: tabular-nums; color: var(--gray-50); margin: 0; text-shadow: var(--shadow-text); }
 .mf-lobby__scene { flex: 1; min-height: 0; padding: 0 var(--space-md); }
@@ -43,6 +47,8 @@
 .mf-lobby__sheet::before { content: ""; align-self: center; width: 40px; height: 4px; border-radius: var(--radius-pill); background: var(--gray-700); }
 .mf-lobby__status { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-md); }
 .mf-lobby__guide { margin: 0; font-size: 16px; line-height: 1.5; font-weight: 700; color: var(--gray-50); word-break: keep-all; }
+.mf-lobby__resend { display: flex; flex-direction: column; gap: var(--space-sm); }
+.mf-lobby__resend-text { margin: 0; font-size: 14px; line-height: 1.4; font-weight: 400; color: var(--gray-300); word-break: keep-all; }
 .mf-lobby__count { margin: 0; flex: none; font-size: 14px; line-height: 1.4; font-weight: 400; color: var(--gray-300); font-variant-numeric: tabular-nums; }
 
 /* 자리 등장·퇴장(결정 0006 기본형). 전이는 자리 층 안쪽 요소에 걸어 자리 크기 변환과 곱해진다. 이름표는 투명도만. */
