@@ -2,16 +2,20 @@ import { useCallback, useEffect, useState } from "react";
 import { isRoomCode } from "../shared/roomCode";
 import { Backdrop } from "./components/Backdrop";
 import { getPreview } from "./net/api";
+import { exitReasonText } from "./net/copy";
 import { clearSession, loadSession, saveSession } from "./net/session";
+import { ErrorScreen } from "./screens/ErrorScreen";
 import { Home } from "./screens/Home";
 import { JoinByLink } from "./screens/JoinByLink";
 import { RoomScreen } from "./screens/RoomScreen";
+import type { ExitReason } from "./screens/RoomScreen";
 
 type Screen =
   | { screen: "home" }
   | { screen: "resuming"; code: string; token: string }
   | { screen: "join"; code: string; notice: string | null }
-  | { screen: "room"; code: string; token: string };
+  | { screen: "room"; code: string; token: string }
+  | { screen: "error"; message: string };
 
 // 라우터 라이브러리 없이 경로로 첫 화면을 정한다. 경로에는 `/r/{코드}` 만 쓰고 토큰은 넣지 않는다.
 function codeFromPath(pathname: string): string | null {
@@ -35,7 +39,7 @@ export function App() {
   const [current, setCurrent] = useState<Screen>(() => screenFromLocation(true));
 
   const goHome = useCallback(() => {
-    window.history.pushState(null, "", "/");
+    if (window.location.pathname !== "/") window.history.pushState(null, "", "/");
     setCurrent({ screen: "home" });
   }, []);
 
@@ -44,6 +48,36 @@ export function App() {
     window.history.replaceState(null, "", `/r/${code}`);
     setCurrent({ screen: "room", code, token });
   }, []);
+
+  // 방에서 나온 이유별로 화면과 입장 정보를 정한다. 새 이유가 늘어도(01-11 의 gaveUp 등) default 가 첫 화면으로 보낸다.
+  const handleExit = useCallback(
+    (reason: ExitReason) => {
+      switch (reason) {
+        case "left":
+          clearSession();
+          goHome();
+          return;
+        case "kicked":
+        case "room_closed":
+          clearSession();
+          window.history.replaceState(null, "", "/");
+          setCurrent({ screen: "error", message: exitReasonText(reason) });
+          return;
+        case "invalid_token":
+          clearSession();
+          setCurrent((prev) =>
+            prev.screen === "room"
+              ? { screen: "join", code: prev.code, notice: exitReasonText("invalid_token") }
+              : prev,
+          );
+          return;
+        default:
+          // replaced 등: 입장 정보는 그대로 두고 첫 화면으로. 이어받기는 페이지를 새로 열 때만 한다.
+          goHome();
+      }
+    },
+    [goHome],
+  );
 
   // 뒤로·앞으로 가기: 주소에 맞는 화면을 다시 정한다.
   useEffect(() => {
@@ -74,7 +108,10 @@ export function App() {
   }, [current]);
 
   if (current.screen === "room") {
-    return <RoomScreen code={current.code} token={current.token} onExit={goHome} />;
+    return <RoomScreen code={current.code} token={current.token} onExit={handleExit} />;
+  }
+  if (current.screen === "error") {
+    return <ErrorScreen message={current.message} onHome={goHome} />;
   }
   if (current.screen === "resuming") {
     return (

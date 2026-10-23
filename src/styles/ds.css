@@ -115,3 +115,15 @@
 
 /* 입장 정보를 확인하는 동안의 불러오는 중 화면 */
 .mf-entry__loading { margin: auto 0; text-align: center; text-shadow: var(--shadow-text); }
+
+/* 링크 참가 화면에서 들어갈 수 없는 방: 입력 카드 자리에 사유 한 문장과 [처음으로] */
+.mf-join__blocked {
+  margin-top: auto; display: flex; flex-direction: column; gap: var(--space-lg); text-align: center;
+  padding: var(--space-lg); border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--night-800) 85%, transparent);
+}
+
+/* 오류 화면(내보내짐·방 닫힘): 입장 배경 위 가운데 사유 한 문장 + [처음으로]. 진홍 없음. */
+.mf-error { justify-content: center; align-items: center; }
+.mf-error__body { width: 100%; max-width: 320px; display: flex; flex-direction: column; align-items: center; gap: var(--space-xl); text-align: center; }
+.mf-error__message { max-width: 320px; word-break: keep-all; text-shadow: var(--shadow-text); }
