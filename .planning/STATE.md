@@ -5,17 +5,17 @@ milestone_name: MVP
 current_phase: 02
 current_phase_name: 낮 토론
 current_plan: 11
-status: executing
-stopped_at: Completed 02-09-PLAN.md
-last_updated: "2026-10-23T18:42:34.450Z"
+status: verifying
+stopped_at: Completed 02-11-PLAN.md
+last_updated: "2026-10-23T18:52:10.149Z"
 last_activity: 2026-10-24
 last_activity_desc: Phase 02 execution started
-state_head: 506f3962b688051619ee66f7ac113b6e0a4118b7
+state_head: fab84a02066f966d5dbc2dd16f1dce0c33d39ddb
 progress:
   total_phases: 6
   completed_phases: 1
   total_plans: 30
-  completed_plans: 29
+  completed_plans: 30
 ---
 
 # Project State
@@ -33,7 +33,7 @@ Phase: 02 (낮 토론) — EXECUTING
 Current Plan: 11
 Total Plans in Phase: 11
 Plan: 11 of 11
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-10-24 — Phase 02 execution started
 
 Progress: [██░░░░░░░░] 17%
@@ -75,6 +75,7 @@ Progress: [██░░░░░░░░] 17%
 | Phase 02 P10 | 4 min | 2 tasks | 5 files |
 | Phase 02 P05 | 5 min | 3 tasks | 4 files |
 | Phase 02 P09 | 9 min | 3 tasks | 6 files |
+| Phase 02 P11 | 15 min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -118,6 +119,7 @@ Recent decisions affecting current work:
 - [Phase 02]: 쿨다운은 보낸 순간 로컬 시각 + 2000ms 단순안(서버 시각 전환은 6페이즈 실기기 오탐을 본 뒤 결정 0016 에 기록)
 - [Phase 02]: send 가 false(끊김)면 쿨다운·넘기기 잠금을 걸지 않는다
 - [Phase 02]: 낮 토론에서 polite live 영역이 늘어(MessageLog·이모티콘 live 줄) phaseScreens 안내 영역 선택자를 .mf-room 직계 자식으로 좁힘
+- [Phase 02]: 02-11: 스모크 순서 검사는 허용 전이 표(PHASE_NEXT)로, 마감 전 누출 검사는 값 문자열 경로(view.me.role·view.me.claim·view.day.roles[])로 한다. 구조 결정 7가지는 결정 0016 에 기록
 
 ### Pending Todos
 
@@ -143,6 +145,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-23T18:42:34.325Z
-Stopped at: Completed 02-09-PLAN.md
+Last session: 2026-10-23T18:52:10.021Z
+Stopped at: Completed 02-11-PLAN.md
 Resume file: None
