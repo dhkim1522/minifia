@@ -1,116 +1,52 @@
 ---
 phase: 01-walking-skeleton
-verified: 2026-10-23T11:00:00Z
-status: gaps_found
-score: 5/5 로드맵 성공 기준 코드 검증, UAT 사용자 합의 truth 4건 열림 (G-01-9 실기기 FAILED, G-01-1a·G-01-2·G-01-5 디자인 세션 몫)
-covered_files: [".planning/phases/01-walking-skeleton/01-01-PLAN.md",".planning/phases/01-walking-skeleton/01-01-SUMMARY.md",".planning/phases/01-walking-skeleton/01-02-PLAN.md",".planning/phases/01-walking-skeleton/01-02-SUMMARY.md",".planning/phases/01-walking-skeleton/01-03-PLAN.md",".planning/phases/01-walking-skeleton/01-03-SUMMARY.md",".planning/phases/01-walking-skeleton/01-04-PLAN.md",".planning/phases/01-walking-skeleton/01-04-SUMMARY.md",".planning/phases/01-walking-skeleton/01-05-PLAN.md",".planning/phases/01-walking-skeleton/01-05-SUMMARY.md",".planning/phases/01-walking-skeleton/01-06-PLAN.md",".planning/phases/01-walking-skeleton/01-06-SUMMARY.md",".planning/phases/01-walking-skeleton/01-07-PLAN.md",".planning/phases/01-walking-skeleton/01-07-SUMMARY.md",".planning/phases/01-walking-skeleton/01-08-PLAN.md",".planning/phases/01-walking-skeleton/01-08-SUMMARY.md",".planning/phases/01-walking-skeleton/01-09-PLAN.md",".planning/phases/01-walking-skeleton/01-09-SUMMARY.md",".planning/phases/01-walking-skeleton/01-10-PLAN.md",".planning/phases/01-walking-skeleton/01-10-SUMMARY.md",".planning/phases/01-walking-skeleton/01-11-PLAN.md",".planning/phases/01-walking-skeleton/01-11-SUMMARY.md",".planning/phases/01-walking-skeleton/01-12-PLAN.md",".planning/phases/01-walking-skeleton/01-12-SUMMARY.md",".planning/phases/01-walking-skeleton/01-13-PLAN.md",".planning/phases/01-walking-skeleton/01-13-SUMMARY.md",".planning/phases/01-walking-skeleton/01-14-PLAN.md",".planning/phases/01-walking-skeleton/01-14-SUMMARY.md",".planning/phases/01-walking-skeleton/01-15-PLAN.md",".planning/phases/01-walking-skeleton/01-15-SUMMARY.md",".planning/phases/01-walking-skeleton/01-16-PLAN.md",".planning/phases/01-walking-skeleton/01-16-SUMMARY.md",".planning/phases/01-walking-skeleton/01-17-PLAN.md",".planning/phases/01-walking-skeleton/01-17-SUMMARY.md","package.json","shared/game/room.ts","shared/nickname.ts","src/components/Sheet.tsx","src/styles/ds.css","src/styles/sheet.css","test/client/entryContrast.test.tsx","test/client/phaseScreens.test.tsx","test/client/sheet.test.tsx","test/unit/gameRoom.test.ts","test/unit/nickname.test.ts","test/worker/join.test.ts"]
-covered_digest: "v3:sha256:c3717bf63da061abc0ccbd89c2663a5f93696ca6617f9a2bab1a60cd84489892"
+verified: 2026-10-24T00:00:00Z
+status: passed
+score: 5/5 로드맵 성공 기준 검증, 이전 열린 갭 4건(G-01-9·G-01-1a·G-01-2·G-01-5) 모두 닫힘, UAT 11/11
+covered_files: [".planning/phases/01-walking-skeleton/01-01-PLAN.md",".planning/phases/01-walking-skeleton/01-01-SUMMARY.md",".planning/phases/01-walking-skeleton/01-02-PLAN.md",".planning/phases/01-walking-skeleton/01-02-SUMMARY.md",".planning/phases/01-walking-skeleton/01-03-PLAN.md",".planning/phases/01-walking-skeleton/01-03-SUMMARY.md",".planning/phases/01-walking-skeleton/01-04-PLAN.md",".planning/phases/01-walking-skeleton/01-04-SUMMARY.md",".planning/phases/01-walking-skeleton/01-05-PLAN.md",".planning/phases/01-walking-skeleton/01-05-SUMMARY.md",".planning/phases/01-walking-skeleton/01-06-PLAN.md",".planning/phases/01-walking-skeleton/01-06-SUMMARY.md",".planning/phases/01-walking-skeleton/01-07-PLAN.md",".planning/phases/01-walking-skeleton/01-07-SUMMARY.md",".planning/phases/01-walking-skeleton/01-08-PLAN.md",".planning/phases/01-walking-skeleton/01-08-SUMMARY.md",".planning/phases/01-walking-skeleton/01-09-PLAN.md",".planning/phases/01-walking-skeleton/01-09-SUMMARY.md",".planning/phases/01-walking-skeleton/01-10-PLAN.md",".planning/phases/01-walking-skeleton/01-10-SUMMARY.md",".planning/phases/01-walking-skeleton/01-11-PLAN.md",".planning/phases/01-walking-skeleton/01-11-SUMMARY.md",".planning/phases/01-walking-skeleton/01-12-PLAN.md",".planning/phases/01-walking-skeleton/01-12-SUMMARY.md",".planning/phases/01-walking-skeleton/01-13-PLAN.md",".planning/phases/01-walking-skeleton/01-13-SUMMARY.md",".planning/phases/01-walking-skeleton/01-14-PLAN.md",".planning/phases/01-walking-skeleton/01-14-SUMMARY.md",".planning/phases/01-walking-skeleton/01-15-PLAN.md",".planning/phases/01-walking-skeleton/01-15-SUMMARY.md",".planning/phases/01-walking-skeleton/01-16-PLAN.md",".planning/phases/01-walking-skeleton/01-16-SUMMARY.md",".planning/phases/01-walking-skeleton/01-17-PLAN.md",".planning/phases/01-walking-skeleton/01-17-SUMMARY.md",".planning/phases/01-walking-skeleton/01-18-PLAN.md",".planning/phases/01-walking-skeleton/01-18-SUMMARY.md",".planning/phases/01-walking-skeleton/01-19-PLAN.md",".planning/phases/01-walking-skeleton/01-19-SUMMARY.md","design/tokens.json","index.html","package.json","public/og.png","scripts/make-og.mjs","shared/game/room.ts","src/components/ConfirmSheet.tsx","src/components/NicknameSheet.tsx","src/components/ShareSheet.tsx","src/components/Sheet.tsx","src/debug/sheetDebug.ts","src/debug/sheetProbe.ts","src/main.tsx","src/net/linkReducer.ts","src/net/useRoomConnection.ts","src/screens/Home.tsx","src/screens/JoinByLink.tsx","src/screens/Lobby.tsx","src/styles/ds.css","src/styles/lobby.css","src/styles/sheet.css","src/styles/tokens.css","test/client/app.test.tsx","test/client/entryContrast.test.tsx","test/client/joinByLink.test.tsx","test/client/lobby.test.tsx","test/client/phaseScreens.test.tsx","test/client/screens.test.tsx","test/client/sheet.test.tsx","test/client/sheetDebug.test.tsx","test/client/useRoomConnection.test.tsx","test/unit/gameRoom.test.ts","test/unit/linkReducer.test.ts","test/worker/alarm.test.ts","test/worker/helpers.ts","vite.config.ts","worker/room.ts"]
+covered_digest: "v3:sha256:357d0360338a418370278df85874fbdcccd8b28eb2725fade9a22ce745058a42"
 behavior_unverified: 0
 overrides_applied: 0
 re_verification:
-  previous_status: human_needed
-  previous_score: "5/5 로드맵 성공 기준, 플랜 truth 전부, 실기기 UAT 10건 남음"
+  previous_status: gaps_found
+  previous_score: "5/5 로드맵 성공 기준 코드 검증, UAT 사용자 합의 truth 4건 열림"
   gaps_closed:
-    - "G-01-1b (글자 대비): 01-17 로 CSS 값과 대비 테스트까지 닫힘. 눈으로 보는 확인만 남음"
-  gaps_remaining:
-    - "G-01-9 (시트 진입 모션): 01-16 이 첫 프레임 증상은 바꿨으나 실기기 확인 FAILED, 열림"
-    - "G-01-1a (전체 폰트 테마·크기), G-01-2 (원형 테이블 에셋), G-01-5 (OG 이미지): 디자인 세션 몫, 코드 변경 없음"
+    - "G-01-9 (시트 진입 모션): e581bd8 로 .mf-dialog overflow: clip. 사용자 실기기 확인(2026-10-24)으로 닫힘"
+    - "G-01-1a (폰트): 결정 0013, Gowun Dodum. 사용자 확인"
+    - "G-01-2 (원형 테이블): 결정 0013, 크림 대리석 테이블. 사용자 확인"
+    - "G-01-5 (OG 이미지): 결정 0013, public/og.png 재생성. 카카오 미리보기 재확인은 캐시 만료 뒤"
+    - "G-01-1b (글자 대비): 사용자 눈 확인 통과(2026-10-23)"
+  gaps_remaining: []
   regressions: []
-gaps:
-  - truth: "낮 화면에서 [내 역할]을 누르면 폰에서도 카드가 제자리에서 자연스럽게 열린다 (G-01-9)"
-    status: failed
-    reason: "01-16 이 진입을 'CSS 시작 상태 고정 + 두 프레임 뒤 열림 클래스 + 60ms 폴백' 으로 바꿨고 자동 테스트는 통과하지만, iPhone Safari 실기기 확인이 FAILED 다(사용자: '여전합니다. 다만 중앙에 떴다 내려가네요'). 녹화 관찰: 시트가 바닥보다 약 60px 위에 멈췄다가 약 0.2초 뒤 바닥으로 툭 내려온다. 증상이 '첫 프레임 위치'에서 '열린 뒤 정지 위치 변화'로 옮겨 갔을 뿐 닫히지 않았다. 원인은 검증되지 않은 가설 단계"
-    artifacts:
-      - path: "src/styles/sheet.css"
-        issue: ".mf-dialog 는 height:100%(8행), .mf-sheet 는 max-height:80dvh(24행)로 뷰포트 단위가 서로 다르다. 열린 뒤 iOS 하단 툴바·visual viewport 갱신 시 하단 기준선이 움직일 수 있다는 1순위 가설"
-      - path: "src/components/Sheet.tsx"
-        issue: "두 프레임 뒤 열림·폴백 구조는 올바르게 들어갔으나 정지 위치 변화는 다루지 않음"
-    missing:
-      - "원격 웹 인스펙터로 열린 직후와 0.2초 뒤의 visualViewport.height / innerHeight / 다이얼로그 getBoundingClientRect() 값을 받아 원인 확정 (01-16-SUMMARY.md 재진단 후보 1~4순위)"
-      - "확정한 원인에 맞춘 수정 뒤 iOS Safari·Android Chrome 에서 [내 역할]·공유·나가기 확인 시트 세 개를 모두 실기기 확인"
-  - truth: "전체 폰트가 마피아 감성의 동글동글 귀여운 폰트이고 크기가 충분히 크다 (G-01-1a)"
-    status: failed
-    reason: "01-UAT.md 에서 사용자가 보고한 열린 갭. 폰트 결정과 크기 토큰 변경이 필요한 디자인 세션 몫이라 이 페이즈에서 어떤 plan 도 처리하지 않았다"
-    artifacts: []
-    missing:
-      - "디자인 세션에서 폰트 테마·글자 크기 결정 뒤 design/tokens.json 과 npm run tokens 로 반영"
-  - truth: "대기실 원형 테이블이 배경과 구분되고 마피아 게임 분위기에 맞는다 (G-01-2)"
-    status: failed
-    reason: "01-UAT.md 열린 갭. 새 그림 에셋은 클로드 데스크톱에서 만들어 넘겨야 한다(결정 0010·0011)"
-    artifacts: []
-    missing:
-      - "배경과 겹치지 않는 테이블 에셋을 받아 public/ 에 추가하고 대기실에 반영"
-  - truth: "링크 미리보기 OG 이미지가 앱 폰트와 통일되고 배경 에셋을 쓴 완성도 있는 모습이다 (G-01-5)"
-    status: failed
-    reason: "01-UAT.md 열린 갭. G-01-1a 폰트가 정해진 뒤 같이 처리하기로 했다. 현재 OG 이미지는 임시(남색 바탕에 글씨만)"
-    artifacts: []
-    missing:
-      - "폰트 확정 뒤 배경 에셋을 쓴 OG 이미지로 교체 (scripts/make-og.mjs)"
+gaps: []
 deferred: []
 behavior_unverified_items: []
 coincidental_reliance_items: []
-human_verification:
-  - test: "PC 에서 npm run dev 후 폰 폭(360×640) 또는 폰 브라우저(LAN 주소)로 / 와 /r/{방 코드} 를 연다 (G-01-1b)"
-    expected: "'닉네임'·'방 코드' 라벨과 '또는' 이 본문 글자처럼 또렷하고, 방 코드 칸의 '4자리 숫자' 힌트가 읽히면서 입력한 숫자와 구분되며, 꺼진 [참가]·[방 만들기] 가 읽히되 켜진 버튼보다 분명히 흐리다. '비활성처럼 느껴진다' 는 인상이 없다"
-    why_human: "화면 인상은 지각 판단이다. 비율(라벨 13.7:1, 힌트 7.56:1, 구분선 3.44:1, 꺼진 버튼 5.43~6.07:1)은 테스트가 증명하지만 '비활성 느낌' 은 눈으로만 닫힌다. 01-17-SUMMARY 가 단계 끝 UAT 로 넘긴 항목"
-  - test: "360×640 실기기에서 링크 참가, 대기실 8인, 역할 확인, 낮 화면을 연다"
-    expected: "세로 스크롤 없이 화면에 들어가고, 시민 역할 설명이 세 줄 이내다 (가정 A15)"
-    why_human: "실제 폰 뷰포트·글꼴 렌더링은 코드·스모크로 볼 수 없다 (UAT 6번은 Playwright 로 통과, 실기기는 사람 판단)"
-  - test: "방장 폰에서 [공유하기]·[링크 복사]를 누른다 / 공유·나가기 확인 시트가 G-01-9 와 같은 어긋남이 있는지 본다"
-    expected: "Web Share 시트가 열리거나 링크가 복사된다. 공유·나가기 시트도 아래에서만 올라와 바닥에 붙는다"
-    why_human: "브라우저 제스처 정책과 iOS 합성은 실기기에서만 확인된다 (UAT 4번 통과, 01-16 녹화에는 [내 역할] 시트만 있음)"
-  - test: "폰 2대 이상(연결된 사람 4명 이상은 폰 4대, 또는 폰+PC 의 서로 다른 브라우저)으로 한 판 시작하고 역할 확인 카운트다운을 같이 본다"
-    expected: "폰들이 0.5초 이내로 함께 '낮이 되었습니다' 로 넘어간다 (A1). 배포본 스모크 편차는 467ms(상한 500ms) 로 여유가 작았다"
-    why_human: "체감 동기와 실기기 시계 오프셋 (UAT 7번 자동 2.8ms 는 같은 PC 시계)"
-  - test: "연결이 끊긴 채 30초를 기다리고, 단절 직후 띠가 뜨기까지의 시간을 본다"
-    expected: "30초 뒤 포기 화면이 나온다 (A17). 자동 확인에서 띠가 약 10초 뒤에 떴으므로 실기기에서 조용한 단절 감지를 본다"
-    why_human: "실제 망 상태·타이머 체감"
-  - test: "게임 중 wrangler deploy 로 재배포한다 (UAT 10번, 사용자가 재배포 뒤로 미룸)"
-    expected: "소켓이 끊겼다가 자동 재접속되고 같은 자리·역할이다 (A5)"
-    why_human: "배포 중 소켓 끊김은 운영 환경에서만 확인된다"
-  - test: "느린 망에서 첫 대기실 채움 시간을 본다"
-    expected: "체감상 문제 없다 (UAT 11번에서 이 부분만 미확인)"
-    why_human: "체감 성능"
 ---
 
-# Phase 1: 걷는 뼈대 검증 보고서 (재검증, 갭 클로저 01-15~01-17 이후)
+# Phase 1: 걷는 뼈대 검증 보고서 (재검증, UAT 갭 4건 닫힘 이후)
 
 **Phase Goal:** As a 친구 모임의 플레이어, I want to 링크로 방에 모여 내 역할 카드만 받아 보기, so that 서로의 역할을 모른 채 각자 폰으로 한 판을 시작할 수 있다. (Mode: mvp)
-**Verified:** 2026-10-23
-**Status:** gaps_found
-**Re-verification:** 예 — 이전 상태 human_needed 이후 01-15, 01-16, 01-17 반영
+**Verified:** 2026-10-24
+**Status:** passed
+**Re-verification:** 예 — 이전 상태 gaps_found(2026-10-23T11:00Z) 이후 e581bd8, 결정 0013, 결정 0014, WR-01~06 수정 반영
 
 ## 한 줄 요약
 
-로드맵 성공 기준 5개와 요구사항 8개는 코드로 성립한다. 전체 테스트 41파일 635개와 타입 검사가 통과하고, 이전 검증 이후 코드 변경(닉네임 키, Sheet 진입, ds.css 대비)에서 회귀는 찾지 못했다. 그러나 사용자 UAT 가 연 갭 중 G-01-9(폰에서 [내 역할] 시트가 떴다 내려가는 모션)는 01-16 수정 뒤 iPhone 실기기 확인에서 FAILED 였고 아직 열려 있다. G-01-1a·G-01-2·G-01-5 도 코드 작업이 없어 열려 있다. 따라서 이전의 `human_needed` 가 아니라 `gaps_found` 로 낮춘다. G-01-1b 는 자동 검증으로 닫혔고 눈 확인만 남았다.
-
-## 열린 갭 정직 보고
-
-| 갭 | 상태 | 근거 | 성격 |
-| --- | --- | --- | --- |
-| G-01-9 시트 진입 모션 | 열림 (FAILED) | 01-16-SUMMARY `status: partial`, `gap_status: open`, 01-UAT.md `post_fix_report.result: failed` | 폰 한정 모션 결함, severity minor. 원인 미확정 |
-| G-01-1a 폰트 테마·크기 | 열림 | 01-UAT.md `status: failed`. 어떤 plan 도 다루지 않음 | 디자인 결정 필요, cosmetic |
-| G-01-2 원형 테이블 에셋 | 열림 | 같음 | 새 그림 에셋 필요(데스크톱 디자인 세션) |
-| G-01-5 OG 이미지 | 열림 | 같음. G-01-1a 이후 처리 | 새 그림·폰트 필요 |
-| G-01-1b 글자 대비 | 자동 검증 닫힘, 눈 확인 대기 | 01-17 COMPLETE, 대비 테스트 5건, 01-UAT.md 에는 아직 failed 로 남아 있음 | 사람 확인 후 UAT 갱신 필요 |
-
-로드맵상 Phase 5 가 "전체 톤·캐릭터·연출 통일"을 맡지만(Notes 및 LOOK-01) 폰트·테이블·OG 갭을 명시적으로 가져간다고 적힌 곳이 없어 `deferred` 로 옮기지 않았다.
+로드맵 성공 기준 5개와 요구사항 8개가 코드와 배포본에서 성립한다. 전체 테스트 42파일 675개와 타입 검사가 통과했고, 배포본(`e92e932`)에서 `smoke.mjs --prod --stage full` 이 통과했다(단 첫 시도 한 번이 POST /api/rooms 500 으로 실패, 아래 '주의' 참조). 이전에 열려 있던 갭 4건은 모두 닫혔다. 서버가 규칙과 판정을 정하고, 남의 역할과 토큰은 어떤 프레임·HTTP 응답에도 실리지 않는 구조를 코드와 누출 전수 테스트로 다시 확인했다. 비차단 항목(IN-01~09 INFO, 아티팩트 동기화 R18, 문서 정합, 실기기 잔여 관찰)은 아래 '비차단 항목'에 따로 적었다.
 
 ## 이번에 직접 확인한 것
 
 | 확인 | 방법 | 결과 |
 | --- | --- | --- |
-| 전체 테스트 | `npx vitest run` (한 번) | 41 files, 635 tests passed |
-| 타입 검사 | `npm run typecheck` (tokens:check 포함) | 종료 코드 0 |
-| 이전 검증 이후 코드 변경 범위 | `git diff --stat 59caa32 HEAD -- src worker shared index.html public scripts wrangler.jsonc design package.json` | 4파일: `shared/nickname.ts`, `src/components/Sheet.tsx`, `src/styles/ds.css`, `src/styles/sheet.css`. worker·역할 뷰·시계·재접속 경로 변경 없음 |
-| 역할 누출 경로 | `shared/game/view.ts` 40-50행: 내 역할은 `revealsOwnRole` 일 때만, 마피아 동료만 `allies` 로 추가. leak.test, view.test 통과 | 변경 없음, 통과 |
-| 디버트 마커 | 변경 파일 대상 `TBD/FIXME/XXX` grep | 없음 |
-| G-01-1b CSS 값 | `git diff` 로 ds.css 확인: 라벨·구분선 글자 gray-100, 힌트 opacity 1, 구분선 선 gray-500, 꺼진 버튼 opacity 0.6 | SUMMARY 표와 일치 |
-| G-01-9 코드 | `Sheet.tsx` 에 `entered` 상태, rAF 2회 + 60ms 폴백, 정리 함수의 `cancelEnter`, `focus({ preventScroll: true })`. `sheet.css` 의 `translateY(100%)` 초기값과 `.mf-dialog--open` 전환 | SUMMARY 와 일치. 단 실기기에서 효과 불충분 |
-| 배포본 버전 | `curl https://minifia.dhplay.workers.dev/api/health` | `2026-10-23T07:59:34Z+59caa32` — 배포본에 01-15·01-16·01-17 이 들어 있지 않다 |
-| 원격 동기 | `git ls-remote origin main` | `2fbade2`. 로컬 HEAD `62d3e73` 보다 뒤라 01-15 이후 UAT·01-16·01-17 커밋이 push 되지 않았다 |
-
-`scripts/smoke.mjs --print-version` 은 주소 없이 쓰면 로컬 값(`+f7b4258`)을 찍으므로 배포본 판정에 쓰지 않았다. 판정은 `/api/health` 로 했다.
+| 타입 검사 | `npm run typecheck` (tokens:check, wrangler types, tsc 앱·워커) | 종료 코드 0 |
+| 전체 테스트 | `npx vitest run` (한 번) | 42 files, 675 tests passed |
+| 배포본 스모크 | `node scripts/smoke.mjs --prod --stage full` | 첫 시도 `SMOKE FAIL: POST /api/rooms 상태 500`. 이어서 3회 연속, 다시 3회 연속 `SMOKE OK full players=5` (낮 전환 편차 11~78ms, 버전 `…+e92e932`) |
+| 방 만들기 반복 | `curl -X POST /api/rooms` 15회 | 15회 모두 201 |
+| 배포본 버전 | `curl /api/health` | `2026-10-23T15:17:14Z+e92e932`. 로컬 HEAD `7de9346` 는 e92e932 뒤 문서 커밋만 추가 |
+| 원격 동기 | `git ls-remote origin main` | `7de9346`, 로컬 HEAD 와 같음 (push 됨) |
+| 부채 마커 | 변경 소스 파일 `TBD/FIXME/XXX/TODO/HACK` grep | 없음 |
+| 이전 검증 이후 서버 쪽 변경 | `git diff 59caa32 HEAD -- worker shared` | `shared/nickname.ts`, `shared/game/room.ts`, `worker/room.ts` 3파일. 닉네임 키(01-15)와 WR-02·05·06 수정만. 역할 뷰·시계·단계 표 변경 없음 |
 
 ## Goal Achievement
 
@@ -118,47 +54,60 @@ human_verification:
 
 | # | Truth | Status | Evidence |
 | --- | --- | --- | --- |
-| 1 | Cloudflare 배포 주소로 폰 2대 이상이 같은 방에 들어가 역할을 받는다 | VERIFIED (실기기 참가는 human) | 이전 배포본 스모크 `SMOKE OK full players=6`, UAT 6번 Playwright 8창 통과(시민4·마피아2·경찰1·의사1). 배포본은 59caa32 이고 그 뒤 변경은 이 경로에 닿지 않음 |
-| 2 | 방 만들기에 4자리 코드와 참가 링크, 공유, 링크·코드로 닉네임만 입력해 대기실 진입 | VERIFIED (공유 제스처·카카오는 UAT 3·4·5번에서 사용자 확인) | join/preview/joinByLink/share 테스트 통과. UAT 3·4번 pass, 5번 미리보기 자체는 정상(OG 모양만 G-01-5) |
-| 3 | 4명 이상 시작, 인원 구성표대로 배정, 자기 카드만, 마피아는 동료도, 남의 역할은 네트워크에 없음 | VERIFIED | roles, view, leak 테스트 통과, view.ts 허용 목록 구조 확인 |
-| 4 | 배정 약 3초, 역할 확인 15초, 마감에 맞춰 낮 전환, 새로고침·재접속에도 같은 자리·역할 | VERIFIED (실기기 동기 체감은 human) | tick/alarm/reconnect/start 테스트 통과. UAT 9번 잠금 복귀 확인됨 |
-| 5 | 재배포해도 주소는 그대로, 새 버전이 보인다 | VERIFIED (이전 검증 사실. 이번에는 재배포 안 함) | 주소 `minifia.dhplay.workers.dev` 가 그대로 200. 단 배포본은 아직 59caa32 라 이번 수정들은 배포되지 않았다 |
-| P1 | 01-15: 같은 이름으로 보이는 입력은 같은 키, 보이는 글자 없는 값은 INVALID_CHARS | VERIFIED | `shared/nickname.ts` 변경 존재, nickname/gameRoom/join 테스트 통과(이전 검증에서 재현 입력으로 확인, 이후 변경 없음) |
-| P2 | 01-17: 라벨·힌트·구분선·꺼진 버튼이 WCAG 대비 이상 | VERIFIED (코드·테스트). 지각 판단은 human | `entryContrast.test.tsx` 5건 통과, ds.css 값 확인 |
-| P3 | 01-16: 시트가 폰에서 제자리에서 자연스럽게 열린다 | FAILED | 위 gaps 첫 항목. 자동 테스트는 통과하나 실기기 FAILED |
+| 1 | Cloudflare 배포 주소로 폰 2대 이상이 같은 방에 들어가 역할을 받는다 | VERIFIED | 배포본 `https://minifia.dhplay.workers.dev` 에서 full 스모크가 서로 다른 소켓 5명이 방 만들기·참가·시작·역할 수령까지 통과. UAT 10번에서 사용자가 폰 1 + PC 브라우저 3 으로 실제 한 판 확인 |
+| 2 | 방장이 방을 만들면 4자리 코드와 참가 링크, 공유 버튼, 링크·코드로 닉네임만 입력해 대기실 진입 | VERIFIED | `worker/allocate.ts` + `handleCreateRoom`(201, code·token·seat), `handleJoin`, 비인증 `buildPreview`. 새 첫 화면(`Home.tsx` → `NicknameSheet` → `createRoom`/`joinRoom`)을 app.test 가 덮음. UAT 3·4·5번 pass |
+| 3 | 4명 이상에서 시작하면 구성표대로 배정, 자기 카드만, 마피아는 동료도, 남의 역할은 네트워크에 없음 | VERIFIED | `shared/game/roles.ts` ROLE_TABLE(4~8명) 과 Fisher–Yates, `shared/game/view.ts` 허용 목록: `revealsOwnRole` 단계에서 `me.role` 만, 마피아에게만 동료 seat. `test/worker/leak.test.ts` 가 6명 한 판의 모든 소켓 프레임과 HTTP 응답에서 금지 키(token·id·playerId·connId·hostId 등)와 남의 역할을 검사하고 통과. 스모크 full 도 누출 전수 검사 포함 |
+| 4 | 배정 약 3초, 역할 확인 15초, 같은 시각 낮 전환, 새로고침·재접속에도 같은 자리·역할 | VERIFIED | `shared/game/phases.ts` PHASE_DEFS(assigning→roleReveal→day), 서버 알람 `worker/room.ts`, `serverNow`·`phaseEndsAt` 로 클라이언트는 남은 시간만 표시. alarm/tick/reconnect/start 테스트 통과(단일 전체 실행에 포함). 스모크 낮 전환 편차 11~78ms. UAT 9번(잠금 2분 뒤 복귀)·10번(게임 중 두 번 재배포 후 같은 자리·역할) 사용자 확인 |
+| 5 | 코드를 고치고 `wrangler deploy` 하면 주소는 그대로이고 새 버전이 보인다 | VERIFIED | 같은 주소가 이전 검증 때 `…+59caa32` 였고 지금 `…+e92e932`. UAT 10번에서 게임 중 재배포 2회 모두 같은 주소 유지 |
+| P1 | 01-15: 보이지 않는 문자로 닉네임 비교 우회 불가 | VERIFIED | `shared/nickname.ts`, nickname/gameRoom/join 테스트 통과 |
+| P2 | G-01-9: 폰에서 시트가 아래에서 올라와 그대로 멈춘다 | VERIFIED | `src/styles/sheet.css` 에 `.mf-dialog { overflow: clip }`(e581bd8). 실기기 패널 근거로 고쳤고 사용자가 폰에서 확인(UAT 9번 resolved_note) |
+| P3 | G-01-1a/2/5: 폰트·테이블·OG | VERIFIED | `index.html` 의 Gowun Dodum 링크, `tokens.css` `--font-ui`, 크림 테이블 토큰, `public/og.png` 295KB 재생성, `og:image` 절대 주소. 사용자 확인 |
+| P4 | 결정 0014: 첫 화면이 버튼+코드 칸, 닉네임은 시트 | VERIFIED | `Home.tsx`, `NicknameSheet.tsx`, app.test 통과. 이 브라우저에 입장 정보가 있으면 닉네임을 묻지 않고 복귀(D-07)도 `loadSession` 으로 유지 |
+| P5 | WR-01~06 수정이 연결·방 수명 계층에서 동작 | VERIFIED | 커밋 9b89310·2b308f4·735ef3a·efdf811·6b298b5·aaf0228, 각 변경에 대응하는 테스트 추가(useRoomConnection·linkReducer·lobby·alarm·gameRoom), 전체 통과 |
 
-**점수:** 로드맵 성공 기준 5/5. 플랜·UAT truth 는 P3 와 UAT 갭 3건이 열려 있어 완전하지 않다. PRESENT_BEHAVIOR_UNVERIFIED 는 0건이다 (P3 는 behavior 가 실기기에서 반증되었으므로 UNVERIFIED 가 아니라 FAILED).
+**점수:** 로드맵 성공 기준 5/5, 플랜·UAT truth 전부 VERIFIED. PRESENT_BEHAVIOR_UNVERIFIED 0건(상태 전이·재접속 불변식은 reconnect/alarm/leak 테스트가 직접 실행).
+
+### 역할 비누출·토큰 비누출 (결정 0002) 직접 확인
+
+- `shared/game/view.ts`: `buildView` 는 공개 목록을 `{seat, nickname, connected, isHost}` 네 키 객체 리터럴로만 만들고, `me` 에는 `revealsOwnRole` 단계에서만 `role`(과 마피아의 `allies` seat)을 넣는다. `buildPreview` 도 `{seat, nickname}` 허용 목록이고 대기실이 아닐 때는 빈 배열.
+- `worker/room.ts`: 모든 상태 전송은 `broadcast()` 에서 연결별 `buildView(room, att.playerId, now)` 로만 나간다. 토큰은 `createRoom`·`join` 의 HTTP 응답 본인 몫으로만 나가고, WebSocket 은 첫 `hello` 메시지로 토큰을 받으므로 주소(로그)에 토큰이 실리지 않는다. 서버 로그는 `console.error("room alarm failed", err.name)` 한 곳이고 토큰·역할을 찍지 않는다.
+- 클라이언트의 `sheetdebug` 계측(`src/debug/*`)은 `?sheetdebug=1` 일 때만 지연 로드되며 네트워크 호출이 없다.
 
 ### Required Artifacts
 
 | Artifact | Expected | Status | Details |
 | --- | --- | --- | --- |
-| `src/components/Sheet.tsx` | 두 프레임 뒤 열림, 폴백, preventScroll | VERIFIED (코드). 실기기 효과 부족 | 위 diff |
-| `src/styles/sheet.css` | 시작 상태 고정 + 열림 전환 | VERIFIED (코드) | keyframes 제거, transition 사용 |
-| `src/styles/ds.css` | 대비 값 | VERIFIED | 위 diff |
-| `shared/nickname.ts` | 비교 키 정규화 | VERIFIED | 이전 검증 |
-| `test/client/entryContrast.test.tsx` | 대비·가드 테스트 | VERIFIED | 존재, 통과 |
+| `shared/game/view.ts` | 허용 목록 뷰 | VERIFIED | 위 확인 |
+| `shared/game/roles.ts` | 구성표·배정 | VERIFIED | 4~8명 표, 중복 id·잘못된 난수 거부 |
+| `shared/game/phases.ts` | 단계 표 | VERIFIED | 3초·15초·낮 |
+| `worker/room.ts`, `worker/allocate.ts`, `worker/index.ts` | Room DO·라우트 | VERIFIED | 실제 DO 저장소·알람·소켓 배선, 코드 충돌 재시도 8회 |
+| `src/screens/Home.tsx`, `src/components/NicknameSheet.tsx` | 새 첫 화면 | VERIFIED | `createRoom`/`joinRoom` 호출과 오류 분기에 연결 |
+| `src/components/Sheet.tsx`, `src/styles/sheet.css` | 시트 | VERIFIED | WIRED, 실기기 확인 |
+| `public/og.png`, `index.html` OG 메타 | 링크 미리보기 | VERIFIED | 절대 주소, 1200×630 |
+| `design/tokens.json` → `src/styles/tokens.css` | 토큰 | VERIFIED | `tokens:check` 가 typecheck 안에서 통과 |
 
 ### Key Link Verification
 
 | From | To | Via | Status | Details |
-| --- | --- | --- | --- | --- |
-| `Sheet.tsx` | `sheet.css` | `mf-dialog--open` 클래스 | WIRED | className 분기와 `.mf-dialog--open .mf-sheet` 규칙 일치 |
-| `ds.css` | `tokens.css` | var(--gray-*) 토큰 | WIRED | tokens:check 통과 |
-| `view.ts` | 클라이언트 | 허용 목록 `myInfo` | WIRED | leak 테스트 |
+| ---- | -- | --- | ------ | ------- |
+| `worker/room.ts` broadcast | `shared/game/view.ts` buildView | 연결별 playerId | WIRED | 직접 읽어 확인, leak.test |
+| `worker/index.ts` | `worker/allocate.ts` → Room DO | `env.ROOM.getByName(code)` | WIRED | 스모크 201 |
+| `Home.tsx` | `net/api.ts` → `/api/rooms` | NicknameSheet 제출 | WIRED | app.test |
+| `Sheet.tsx` | `sheet.css` | `mf-dialog--open` | WIRED | sheet.test |
+| `tokens.json` | `tokens.css` | `npm run tokens` | WIRED | tokens:check |
 
 ### Data-Flow Trace (Level 4)
 
-변경분(Sheet, 대비 CSS, 닉네임 키)은 새 동적 데이터 경로가 없다. 역할 데이터 경로는 이전 검증과 같다.
+역할 데이터: 서버 `assignRoles`(cryptoRandInt) → 저장된 `RoomState.players[].role` → `buildView` 허용 목록 → 본인 소켓 `state` 프레임 → `RoleCard`. 정적 반환·하드코딩 없음. 시계: 서버 `serverNow` + 핑 표본 오프셋 → 카운트다운(WR-04 로 첫 pong 전에도 state 의 serverNow 사용).
 
 ### Behavioral Spot-Checks
 
 | Behavior | Command | Result | Status |
 | -------- | ------- | ------ | ------ |
-| 전체 테스트 | `npx vitest run` | 41 files, 635 passed | PASS |
+| 전체 테스트 | `npx vitest run` | 42 files, 675 passed | PASS |
 | 타입·토큰 | `npm run typecheck` | exit 0 | PASS |
-| 배포본 생존 | `curl /api/health` | `{"ok":true,"version":"…+59caa32"}` | PASS (구버전) |
-| 시트 폰 모션 | 실기기 녹화 | 정지 위치 어긋남 | FAIL (자동 불가, 사용자 실기기) |
+| 배포본 한 판 | `node scripts/smoke.mjs --prod --stage full` | 첫 시도 500, 이후 6회 OK | PASS (간헐 실패 1건, 비차단 항목 참조) |
+| 방 만들기 반복 | curl 15회 | 201 ×15 | PASS |
 
 ### Probe Execution
 
@@ -166,54 +115,67 @@ SKIPPED. 선언된 `probe-*.sh` 없음.
 
 ### Requirements Coverage
 
-PLAN frontmatter 의 요구사항 ID: ROOM-01, ROOM-02, ROOM-03, CONN-01, DEPLOY-01, GAME-01, ROLE-01, ROLE-02. REQUIREMENTS.md 의 Phase 1 매핑과 같다. 누락·ORPHANED 없음.
+PLAN 이 선언한 ID: ROOM-01, ROOM-02, ROOM-03, CONN-01, DEPLOY-01, GAME-01, ROLE-01, ROLE-02. REQUIREMENTS.md 의 Phase 1 매핑과 같고 ORPHANED 없음.
 
 | Requirement | 판정 | 근거 |
 | --- | --- | --- |
-| ROOM-01 | SATISFIED (공유 제스처는 UAT 4번 사용자 통과) | share/http 테스트, UAT 4번 pass |
-| ROOM-02 | SATISFIED | join 테스트, 닉네임 키 수정, UAT 3번 pass |
-| ROOM-03 | SATISFIED | start/gameRoom 테스트(4~8명, 연결자 4명 이상 시작) |
-| CONN-01 | SATISFIED | reconnect 테스트, UAT 9번 잠금 복귀 확인 |
-| DEPLOY-01 | SATISFIED (이전 검증) | 주소 고정, 배포본 200. 단 최신 코드는 미배포 |
-| GAME-01 | SATISFIED | tick/alarm 테스트, 배정 3초·확인 15초·낮 전환 |
-| ROLE-01 | SATISFIED | roles.test 구성표 |
-| ROLE-02 | SATISFIED (서버 누출 없음). 단 [내 역할] 시트의 폰 모션 결함 G-01-9 가 열려 있음 | leak/view 테스트. 사용자 경험상 결함이지 요구사항 미충족은 아님 |
-
-기록 불일치: `REQUIREMENTS.md` 는 ROOM-02 만 `[x]`/Complete 이고 나머지 7개가 Pending 이다. 이 검증은 REQUIREMENTS.md 를 갱신하지 않았다. 01-16 SUMMARY 는 ROLE-02·ROOM-01 을 `requirements-completed` 에서 의도적으로 뺐다.
+| ROOM-01 | SATISFIED | 방 만들기 201·링크·공유 시트, UAT 4번 사용자 통과 |
+| ROOM-02 | SATISFIED | 링크·코드 참가, 닉네임 키 규칙, UAT 3번 |
+| ROOM-03 | SATISFIED | 4~8명, 연결자 4명 이상 시작(결정 0012), 8명이면 ROOM_FULL |
+| CONN-01 | SATISFIED | reconnect 테스트, UAT 9·10번 |
+| DEPLOY-01 | SATISFIED | 고정 주소 재배포, 버전 변경 확인 |
+| GAME-01 | SATISFIED | 서버 단계 표·알람·마감 시각 |
+| ROLE-01 | SATISFIED | ROLE_TABLE 서버 한 곳 |
+| ROLE-02 | SATISFIED | view.ts 허용 목록, leak.test 전수 검사 |
 
 ### Anti-Patterns Found
 
 | File | Line | Pattern | Severity | Impact |
 | ---- | ---- | ------- | -------- | ------ |
-| `src/styles/sheet.css` | 8, 24 | `.mf-dialog` height:100% 와 `.mf-sheet` max-height:80dvh 가 다른 뷰포트 단위 | WARNING | G-01-9 의 1순위 가설. 확정 전 |
-| `src/screens/Lobby.tsx` | 168-176 | WR-01 (이월) | WARNING | 유령 자리 |
-| `src/net/useRoomConnection.ts` | 194-214 | WR-02 (이월) | WARNING | 두 창이 서로 쫓아냄 |
-| `src/net/linkReducer.ts` / `Lobby.tsx` | 55-57 / 39-47 | WR-03 (이월) | WARNING | 지난 토스트 재생 |
-| `src/screens/RoleReveal.tsx` / `useRoomConnection.ts` | 31-33 / 76-77 | WR-04 (이월) | WARNING | 시계가 빠른 폰에서 카드 초기 면 |
-| `worker/index.ts`, `worker/allocate.ts` | 43-96 | WR-05 (이월) | WARNING | HTTP 속도 제한 없음 |
-| `worker/room.ts` | 80-98 | WR-06 (이월) | WARNING | 만료 전 방 코드 덮어쓰기 |
-| 변경 파일 | - | `TBD/FIXME/XXX` | 없음 | - |
-
-WR-01~06 은 이전 검증과 같고 로드맵 성공 기준을 깨지 않는다. 2페이즈가 같은 연결 계층을 얹으므로 WR-01~04 는 그 전에 고치는 편이 안전하다 (`01-REVIEW-DISPOSITION.md`).
+| 변경 소스 파일 | - | `TBD/FIXME/XXX/TODO/HACK` | 없음 | - |
 
 ### Human Verification Required
 
-프런트매터 `human_verification` 7건. 첫 항목은 G-01-1b 눈 확인이다. 공유·나가기 시트가 G-01-9 와 같은 어긋남을 보이는지도 이번 재진단의 입력이 된다.
+없음. 사용자가 실기기·배포본에서 직접 확인한 UAT 11건이 모두 pass 다. 아래 비차단 항목의 '실기기 잔여 관찰'은 자동 확인으로 통과했고 사용자 UAT 에서도 문제가 보고되지 않은 것으로, 게이트가 아니라 모니터링 대상이다.
 
 ### Gaps Summary
 
-닫을 일이 있는 갭은 두 갈래다.
+닫을 갭 없음.
 
-1. **코드 재진단이 필요한 갭 — G-01-9.** 추측 수정은 같은 실기기 확인 루프를 반복하게 한다. 01-16-SUMMARY 의 권고대로 원격 웹 인스펙터로 열린 직후와 0.2초 뒤의 `visualViewport.height`, `innerHeight`, 다이얼로그 `getBoundingClientRect()` 값을 먼저 받는다. 1순위 가설은 `.mf-dialog` 높이(100%)와 `.mf-sheet` 높이 단위(dvh)가 열린 뒤 iOS 툴바 갱신으로 어긋나는 것이다. `/gsd-plan-phase 1 --gaps` 로 새 plan 을 만들거나 디버그 세션으로 넘긴다.
-2. **디자인 세션이 필요한 갭 — G-01-1a, G-01-2, G-01-5.** 폰트 결정, 새 테이블 그림, OG 그림은 클로드 데스크톱에서 만들어 넘기는 몫이다 (결정 0010·0011). G-01-5 는 G-01-1a 이후에 처리한다.
+## 비차단 항목
 
-추가 주의.
+### 주의 (다음 배포·2페이즈 전에 보면 좋음)
 
-- **배포본이 최신이 아니다.** 배포본은 59caa32 라 01-15(닉네임 규칙), 01-16(시트), 01-17(대비) 가 반영되지 않았다. G-01-9 와 G-01-1b 의 확정 확인, UAT 10번(배포 중 재접속)은 재배포 뒤에 한다. 01-17 도 G-01-9 재진단 뒤 재배포하기로 미뤄 두었다.
-- **push 되지 않은 커밋.** 원격 main 이 2fbade2 라 UAT 결과, 01-16, 01-17 커밋이 로컬에만 있다. 집 PC 와 오가며 작업하는 프로젝트라 push 가 필요하다 (이 검증은 push 하지 않았다).
-- **문서 정합.** ROADMAP 진행률(16/17)과 01-16 체크박스 `[ ]` 는 현재 상태와 맞다. `01-UAT.md` 의 G-01-1b 는 눈 확인 전까지 failed 로 남아 있어도 정상이다. REQUIREMENTS.md Traceability 는 갱신되지 않았다.
+1. **배포본 POST /api/rooms 간헐 500 한 건.** 이번 검증 첫 스모크 시도가 `POST /api/rooms 상태 500` 으로 실패했다. 이어진 스모크 6회와 curl 15회는 모두 성공해 재현하지 못했고 원인은 모른다(worker 코드 경로 `allocateRoom` → `createRoom` 에서 던질 만한 곳을 읽었으나 확정 못 함. 방이 한동안 놀다 처음 부르는 콜드 스타트나 Cloudflare 쪽 일시 오류 가능성). 클라이언트는 비정상 응답을 `NETWORK` 오류로 받아 재시도 가능한 오류 문구를 보인다. 간헐이 다시 보이면 `npx wrangler tail` 로 원인을 잡는다. 이 항목 때문에 상태를 낮추지 않은 이유: 로드맵 기준은 반복 시험에서 성립하고, 재현이 없으며, 사용자 UAT 에서 보고된 적이 없다.
+2. **IN-01~IN-09 (01-REVIEW.md INFO) 모두 open.** IN-01 hello 안 한 소켓 수명 제한 없음, IN-02 청크 전송 본문 상한 미적용, IN-03 방에서 빠진 플레이어의 소켓 메시지가 예외, IN-04 저장 상태 검증 없이 사용, IN-05 입장 정보 한 칸, IN-06 도메인 하드코딩·보안 헤더 없음, IN-07 ZWJ 리터럴(01-15 로 닉네임 쪽은 처리), IN-08 클라이언트가 서버 error 프레임을 버림, IN-09 알람 실패 시 1초 재시도 무한. 로드맵 성공 기준을 깨지 않는다. IN-03·IN-09 는 첫 항목의 500 과 연관될 가능성이 낮지만 같은 방 DO 경로라 함께 보는 것이 좋다.
+3. **외부 폰트 의존.** `index.html` 이 Google Fonts(`fonts.googleapis.com`)에서 Gowun Dodum 을 받는다. `display=swap` 과 시스템 한글 폰트 대체가 있어 실패해도 동작하지만 대체 글꼴이 먼저 보이다 바뀌는 순간 글자 폭이 달라진다. 정식 출시 마일스톤에서 자체 호스팅을 검토한다.
+
+### 문서 정합 (갱신 필요, 코드와 무관)
+
+- `HANDOFF.md` 현재 상태가 아직 "검증 gaps_found, G-01-9 재진단 필요" 와 "배포본은 옛 버전 59caa32" 로 적혀 있다. 지금은 모든 갭이 닫혔고 배포본은 `e92e932`.
+- `.planning/REQUIREMENTS.md` Traceability 가 ROOM-02 만 Complete 이고 나머지 7개가 Pending, 체크박스도 ROOM-02 만 `[x]`. 이 검증은 갱신하지 않았다.
+- `.planning/ROADMAP.md` 1페이즈 진행(16/19)과 01-16·01-18·01-19 체크박스 `[ ]` 가 현재(01-16 은 해결, 01-18 완료, 01-19 대체)와 어긋난다.
+- `01-REVIEW-DISPOSITION.md` 의 CR-01 이 `open` 으로 남아 있으나 01-15 로 닫혔다.
+- 결정 0013 과 0014 로 바뀐 화면(영문 Minifia, 크림 테이블, 닉네임 시트)은 아직 디자인 시스템·화면설계서 아티팩트에 반영되지 않았다.
+
+### 디자인 아티팩트 동기화 (R18)
+
+디자인 시스템 아티팩트에 아직 없는 것: "방장" 배지, 내 역할 시트, 공유 시트, 토스트, 52px 재접속 띠, 닉네임 시트, 모션 길이(220·240·300·320ms, 배정 링 1s)를 토큰으로 올릴지 여부. 아티팩트는 클로드 데스크톱 세션 몫(결정 0010·0011)이라 코드 페이즈를 막지 않는다.
+
+### 8인 · 360×640 폰 레이아웃 (CSS 로 추론)
+
+- 대기실 `.mf-lobby` 는 `height:100%`, `overflow:hidden`, 테이블 `height:100%; width:auto; max-width:100%`. 이름표는 `max-width: 96px`(뒷줄 72px)로 폭이 고정이라 폰트를 바꿔도 8인 배치의 가로·세로 크기는 변하지 않는다. 폰트 크기 토큰은 결정 0013 에서 그대로 두었다(글자만 바뀜).
+- 글리프 폭이 시스템 고딕과 달라질 수 있으나(실측하지 않음) 이름표 폭이 고정이라 이름이 길면 잘릴 뿐 겹치지는 않는다고 추론한다. 사용자가 대기실·첫 화면을 폰으로 확인한 UAT 2번 재확인(크림 테이블 포함)에서 문제를 보고하지 않았다.
+- 입장 화면 `.mf-entry` 는 `min-height:100dvh` 로 높이를 고정하지 않아 키패드가 올라와도 스크롤된다. 영문 제목에 `-webkit-text-stroke 2px` 가 들어가므로 아주 작은 화면에서 제목 폭은 한 줄을 유지한다(`Minifia` 7글자).
+- 360×640 에서 8인·역할 설명 세 줄 이내(A15)를 Playwright 로 확인한 것은 폰트 교체 이전이다. 폰트 교체 뒤 같은 자동 재확인은 이번에 하지 않았다(변경이 글리프뿐이라 위험 낮음).
+
+### 실기기 잔여 관찰 (게이트 아님)
+
+- 여러 폰 동시 낮 전환(A1): 자동 11~78ms, 이전 배포본 스모크 467ms 한 번(상한 500ms). 실기기 시계 오프셋 편차는 자동 시험이 같은 PC 시계라 반영되지 않았다.
+- 단절 직후 띠가 뜨기까지 약 10초(UAT 8번 노트), 느린 망 체감(UAT 11번).
+- WR-01~06 은 UAT 통과 뒤에 고쳤으므로 연결 계층 수정의 폰 확인은 테스트만으로 되어 있다.
 
 ---
 
-_Verified: 2026-10-23_
+_Verified: 2026-10-24_
 _Verifier: Claude (gsd-verifier)_
