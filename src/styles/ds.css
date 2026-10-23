@@ -70,7 +70,6 @@
 }
 .mf-entry__divider { display: flex; align-items: center; gap: var(--space-md); font-size: 14px; line-height: 1.4; color: var(--gray-100); }
 .mf-entry__divider::before, .mf-entry__divider::after { content: ""; flex: 1; height: 1px; background: var(--gray-500); }
-.mf-version { margin: var(--space-md) 0 0; font-size: 14px; line-height: 1.4; color: var(--gray-300); text-align: center; }
 
 /* Toast: 알약, 한 번에 하나, 2초. 진홍 없음. */
 .mf-toast {

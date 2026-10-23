@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
-import { APP_VERSION } from "../../shared/version";
 import { validateNickname } from "../../shared/nickname";
 import { isRoomCode } from "../../shared/roomCode";
 import { Backdrop } from "../components/Backdrop";
@@ -132,7 +131,6 @@ export function Home({ onEnterRoom }: HomeProps) {
             />
           </form>
         </div>
-        <p className="mf-version">v{APP_VERSION}</p>
       </main>
       <Toast toast={toast} placement="bottom" />
     </Backdrop>

@@ -17,7 +17,7 @@ afterEach(() => {
 });
 
 describe("Home", () => {
-  it("첫 화면 구성: 입장 배경, 소개와 서비스 이름, 닉네임 입력칸, [방 만들기], 버전", () => {
+  it("첫 화면 구성: 입장 배경, 소개와 서비스 이름, 닉네임 입력칸, [방 만들기]", () => {
     const { container } = render(<Home onEnterRoom={vi.fn()} />);
     expect(screen.getByRole("heading", { name: "미니피아" })).toBeTruthy();
     expect(screen.getByText("친구들과 한 판, 점심시간 마피아")).toBeTruthy();
@@ -25,7 +25,7 @@ describe("Home", () => {
     expect(screen.getByRole("button", { name: "방 만들기" })).toBeTruthy();
     const art = container.querySelector(".mf-backdrop__art") as HTMLElement | null;
     expect(art?.style.backgroundImage).toContain("/backgrounds/bg_entry_lobby.svg");
-    expect(screen.getByText(/^v/)).toBeTruthy();
+    expect(screen.queryByText(/^v/)).toBeNull();
   });
 
   it("닉네임을 넣고 [방 만들기]를 누르면 POST /api/rooms 결과로 방에 들어간다", async () => {

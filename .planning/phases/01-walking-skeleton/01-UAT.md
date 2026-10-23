@@ -95,7 +95,10 @@ blocked: 0
   missing: []
 - gap_id: G-01-1b
   truth: "닉네임·방 코드·참가 4자리 숫자 등이 어두운 남색 배경 위에서 또렷이 보이고 비활성처럼 느껴지지 않는다"
-  status: failed
+  status: resolved
+  resolved_by: 01-17-PLAN.md
+  resolved_at: 2026-10-23
+  eye_check: "사용자 확인(2026-10-23, 재배포 6e632a0): 다 또렷하게 보인다"
   reason: "User reported: 어두운 회색남색 배경 위 회색 계열이라 잘 안 보이고 비활성화처럼 느껴진다"
   severity: minor
   test: 1

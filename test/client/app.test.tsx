@@ -70,10 +70,10 @@ afterEach(() => {
 });
 
 describe("App 첫 화면", () => {
-  it("서비스 이름 제목과 빌드 버전을 보여 준다", () => {
+  it("서비스 이름 제목을 보여 주고 빌드 버전은 화면에 보이지 않는다", () => {
     render(<App />);
     expect(screen.getByRole("heading", { name: "미니피아" })).toBeTruthy();
-    expect(screen.getByText("vdev")).toBeTruthy();
+    expect(screen.queryByText("vdev")).toBeNull();
   });
 });
 
