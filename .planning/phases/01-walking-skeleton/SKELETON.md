@@ -27,11 +27,11 @@
 
 ## Stack Touched in Phase 1
 
-- [ ] Project scaffold — package.json(버전 고정), Vite·wrangler·vitest·tsconfig 설정, `npm run typecheck` / `npx vitest run` / `npm run build` (01-01)
-- [ ] Routing — Worker `/api/rooms`, `/api/rooms/:code`, `/api/rooms/:code/join`, `/api/rooms/:code/ws`, `/api/health` 와 SPA 폴백 `/r/:code` (01-02, 01-09)
-- [ ] Database — DO storage 에 방 쓰기(`createRoom` 의 `put("room")`)와 읽기(생성자 복구) (01-02, 01-09)
-- [ ] UI — [방 만들기] 버튼 → API → WebSocket 상태 → 대기실 화면 (01-02; 화면설계서 v0.2 기준 화면은 01-05·01-06·01-10~01-13)
-- [ ] Deployment — `wrangler deploy` 로 workers.dev 주소에 배포, `node scripts/smoke.mjs --prod` (01-02, 01-14)
+- [x] Project scaffold — package.json(버전 고정), Vite·wrangler·vitest·tsconfig 설정, `npm run typecheck`(맨 앞에서 `tokens:check`, 01-14) / `npx vitest run` / `npm run build` (01-01)
+- [x] Routing — Worker `/api/rooms`, `/api/rooms/:code`, `/api/rooms/:code/join`, `/api/rooms/:code/ws`, `/api/health` 와 SPA 폴백 `/r/:code` (01-02, 01-09)
+- [x] Database — DO storage 에 방 쓰기(`createRoom` 의 `put("room")`)와 읽기(생성자 복구) (01-02, 01-09)
+- [x] UI — [방 만들기] 버튼 → API → WebSocket 상태 → 대기실 화면 (01-02; 화면설계서 v0.2 기준 화면은 01-05·01-06·01-10~01-13)
+- [x] Deployment — `wrangler deploy` 로 workers.dev 주소에 배포, `node scripts/smoke.mjs --prod --stage full`(다인원 한 판·누출·편차·재접속·에셋, 01-14), 임시 OG 이미지·`_headers` (01-14)
 
 ## Out of Scope (Deferred to Later Slices)
 
