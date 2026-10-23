@@ -2,7 +2,7 @@
    값은 tokens.css 변수만 쓰고 애니메이션은 transform·opacity(와 개별 속성 scale·translate)만 쓴다. */
 
 /* 떠 있는 층: 위치(left·top·z-index)는 Table 이 인라인으로 준다. 이름표 층(25)보다 위. */
-.mf-float { position: absolute; left: var(--mf-float-left); transform: translate(-50%, -100%); pointer-events: none; }
+.mf-float, .mf-done-layer { position: absolute; left: var(--mf-float-left); transform: translate(-50%, -100%); pointer-events: none; }
 
 .mf-bubble {
   max-width: 140px; padding: var(--space-xs) var(--space-sm);
@@ -71,3 +71,21 @@
     animation-timing-function: linear !important;
   }
 }
+
+/* 완료 알약: 직업 공개 중 직접 고른 사람의 머리 위(말풍선 자리). 한 번 뜨면 마감까지 유지. */
+.mf-done {
+  display: inline-flex; align-items: center; padding: 0 var(--space-sm);
+  border-radius: var(--radius-pill); background: var(--gray-100); color: var(--night-900);
+  font-size: 14px; line-height: 1.4; font-weight: 700; white-space: nowrap;
+  animation: mf-claim-done-pop var(--dur-fast) var(--ease-out) both;
+}
+@keyframes mf-claim-done-pop { from { opacity: 0; transform: scale(0.6); } to { opacity: 1; transform: scale(1); } }
+
+/* 주장 알약: 이름표 바로 아래 줄(방장 배지가 있으면 그 아래). 진홍을 쓰지 않는다. */
+.mf-tag__claim {
+  display: inline-flex; align-items: center; gap: var(--space-xs); max-width: 112px; padding: 0 var(--space-sm);
+  border-radius: var(--radius-pill); background: var(--night-800); border: 1px solid var(--night-600);
+  font-size: 14px; line-height: 1.4; color: var(--gray-100); white-space: nowrap; overflow: hidden;
+}
+.mf-tag__claim b { font-weight: 700; color: var(--gray-50); overflow: hidden; text-overflow: ellipsis; }
+.mf-tag__changed { font-weight: 400; color: var(--gray-300); flex: none; }

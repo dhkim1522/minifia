@@ -339,10 +339,10 @@ describe("ClaimTag 주장 알약 (D-06, D-08)", () => {
 
   it("앞쪽 자리 이름표 top 은 claim 이 있어도 같다(발 아래)", () => {
     const { unmount } = render(<Table seats={seats()} mySeat={1} />);
-    const without = parseFloat(within(group()).getByTitle("서준 (나)").style.top);
+    const without = parseFloat(within(group()).getByTitle("서준").style.top);
     unmount();
     render(<Table seats={seats({ 1: { claim: { job: "police", changed: false } } })} mySeat={1} />);
-    expect(parseFloat(within(group()).getByTitle("서준 (나)").style.top)).toBeCloseTo(without, 5);
+    expect(parseFloat(within(group()).getByTitle("서준").style.top)).toBeCloseTo(without, 5);
   });
 
   it("진홍 클래스나 변수가 렌더에 없다", () => {

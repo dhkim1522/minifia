@@ -1,7 +1,8 @@
 import { seatLayout, SEAT_COUNT } from "../../shared/seatLayout";
-import type { EmojiId } from "../../shared/protocol";
+import type { Claim, EmojiId } from "../../shared/protocol";
 import "../styles/lobby.css";
 import "../styles/seat.css";
+import { ClaimTag, claimName } from "./ClaimTag";
 import { Figure } from "./Figure";
 import { Icon } from "./Icon";
 import { SeatFloat } from "./SeatFloat";
@@ -26,6 +27,10 @@ export interface TableSeat {
   transition?: "entering" | "leaving" | null;
   /** 누를 수 있는 자리(방장이 끊긴 사람을 내보낼 때) */
   pressable?: boolean;
+  /** 이번 낮 직업을 직접 골랐다(머리 위 "완료" 알약). 무엇을 골랐는지는 담지 않는다. */
+  done?: boolean;
+  /** 공개된 주장. job 은 그 사람이 주장한 직업이며 실제 직업이 아닐 수 있다. */
+  claim?: { job: Claim; changed: boolean } | null;
   /** 머리 위에 떠 있는 것 하나(자리마다 한 번에 하나) */
   float?: TableFloat | null;
 }
@@ -57,7 +62,8 @@ function floatStyle(x: number, top: number, z: number): React.CSSProperties {
 }
 
 function seatLabel(s: TableSeat): string {
-  return `${s.nickname}${s.isMe ? " (나)" : ""}${s.connected ? "" : ", 연결 끊김"}`;
+  const claim = s.claim ? `, 직업 주장 ${claimName(s.claim.job)}${s.claim.changed ? ", 말 바꿈" : ""}` : "";
+  return `${s.nickname}${s.isMe ? " (나)" : ""}${s.connected ? "" : ", 연결 끊김"}${s.done ? ", 선택 완료" : ""}${claim}`;
 }
 
 function transitionClass(base: string, t: TableSeat["transition"]): string {
@@ -69,6 +75,7 @@ export function Table({ seats, mySeat, dimmed, onSeatPress, label }: TableProps)
   const allyLayers: React.ReactNode[] = [];
   const tagLayers: React.ReactNode[] = [];
   const floatLayers: React.ReactNode[] = [];
+  const doneLayers: React.ReactNode[] = [];
 
   for (let i = 0; i < SEAT_COUNT; i++) {
     const s = seats[i];
@@ -120,9 +127,18 @@ export function Table({ seats, mySeat, dimmed, onSeatPress, label }: TableProps)
 
     // 이름표는 크기 변환 바깥에 둔다 — 자리 크기와 관계없이 항상 14px. 뒤쪽 자리는 머리 위, 앞쪽은 발 아래.
     const headTop = L.y - FIG_H * L.scale;
-    const tagTop = front ? L.y + 1.2 : headTop - 7.5 - (s.isHost ? 5 : 0);
+    // 뒤쪽 자리는 줄이 하나 늘 때마다(방장 배지, 주장 알약) 이름표가 머리 위로 5% 더 올라간다.
+    const tagTop = front ? L.y + 1.2 : headTop - 7.5 - (s.isHost ? 5 : 0) - (s.claim ? 5 : 0);
     // 떠 있는 것: 이름표와 같이 크기 변환 바깥. 가로는 말풍선 최대 폭 140 의 절반(70px)만큼 장면 안에 가둔다.
     const floatTop = headTop - (front ? 1 : 8);
+    // 완료 알약: 떠 있는 것과 같은 머리 위 자리. 공개 연출부터는 float 가 그 자리를 쓰고 done 은 화면이 끈다.
+    if (s.done) {
+      doneLayers.push(
+        <div key={`d${i}`} className="mf-done-layer" aria-hidden="true" style={floatStyle(L.x, floatTop, 0)}>
+          <span className="mf-done">완료</span>
+        </div>,
+      );
+    }
     if (s.float) {
       floatLayers.push(
         <div
@@ -148,6 +164,7 @@ export function Table({ seats, mySeat, dimmed, onSeatPress, label }: TableProps)
           {s.connected ? null : <Icon name="disconnected" size={14} className="mf-tag__off" />}
         </span>
         {s.isHost ? <span className="mf-badge">방장</span> : null}
+        {s.claim ? <ClaimTag job={s.claim.job} changed={s.claim.changed} /> : null}
       </div>,
     );
   }
@@ -161,6 +178,7 @@ export function Table({ seats, mySeat, dimmed, onSeatPress, label }: TableProps)
       {dimmed ? <div className="mf-table__scrim" /> : null}
       {allyLayers}
       {tagLayers}
+      {doneLayers}
       {floatLayers}
     </div>
   );
