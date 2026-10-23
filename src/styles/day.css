@@ -62,3 +62,6 @@
 .mf-discuss__talk { display: flex; gap: var(--space-sm); }
 .mf-discuss__quick { flex: 1; min-width: 0; }
 .mf-discuss__emoji { flex: none; width: var(--control-button); padding: 0; }
+
+/* 낮 화면 토스트(연장·오류)는 위쪽 바 아래에 둔다 — 1페이즈 기본(--space-lg)은 타이머를 가린다(UI-SPEC 토스트 위치) */
+.mf-dayscene .mf-toast--top { top: calc(var(--space-3xl) * 2 + env(safe-area-inset-top)); }

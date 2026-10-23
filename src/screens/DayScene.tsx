@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
-import type { RoomView } from "../../shared/protocol";
+import type { EmojiId, RoomView } from "../../shared/protocol";
 import { CLAIM_REVEAL_MS } from "../../shared/game/phases";
 import { SEAT_COUNT } from "../../shared/seatLayout";
 import { Backdrop } from "../components/Backdrop";
@@ -13,7 +13,7 @@ import { Table } from "../components/Table";
 import type { TableFloat, TableSeat } from "../components/Table";
 import { Timer } from "../components/Timer";
 import { Toast, useToast } from "../components/Toast";
-import { messageText } from "../game/messageText";
+import { EMOJI_TEXT, messageText } from "../game/messageText";
 import { useSeatFloats } from "../net/seatFloats";
 import type { SeatFloatState } from "../net/seatFloats";
 import type { RoomConnection } from "../net/useRoomConnection";
@@ -37,6 +37,15 @@ export function DayScene({ view, connection, myRoleButton }: DaySceneProps) {
   // 낮 토론의 말풍선·이모티콘(자리별 한 번에 하나). 단계가 discussion 이 아니면 훅이 비운다.
   const floats = useSeatFloats(view, connection.onEvent);
   const { toast, show: showToast } = useToast();
+  // 가장 최근 이모티콘 하나를 보이지 않는 live 줄이 읽는다(UI-SPEC 접근성)
+  const [lastEmoji, setLastEmoji] = useState<{ seat: number; icon: EmojiId } | null>(null);
+  const inDiscussion = view.phase === "discussion";
+  useEffect(() => {
+    if (!inDiscussion) return;
+    return connection.onEvent((e) => {
+      if (e.t === "emoji") setLastEmoji({ seat: e.seat, icon: e.icon });
+    });
+  }, [connection.onEvent, inDiscussion]);
 
   // 공개 연출(말풍선 팝)은 이 화면이 직전에 claim 을 보고 있다가 claimReveal 을 받았을 때만 켠다.
   // 서버 단계가 분리돼 있어 모든 폰이 같은 순간 시작한다. 재접속으로 claimReveal 에 바로 들어오면 켜지 않는다(알약만).
@@ -45,6 +54,7 @@ export function DayScene({ view, connection, myRoleButton }: DaySceneProps) {
   const [revealing, setRevealing] = useState(false);
   if (prevPhase !== view.phase) {
     setPrevPhase(view.phase);
+    setLastEmoji(null); // 이모티콘 live 줄은 토론이 끝나면 비운다(다음 토론에서 지난 것을 읽지 않게)
     setRevealing(prevPhase === "claim" && view.phase === "claimReveal");
   }
   useEffect(() => {
@@ -121,6 +131,11 @@ export function DayScene({ view, connection, myRoleButton }: DaySceneProps) {
             </>
           ) : null}
         </section>
+        {inDiscussion ? (
+          <p className="mf-sr-only" aria-live="polite">
+            {lastEmoji ? `${nicknameOf(lastEmoji.seat) ?? ""}: ${EMOJI_TEXT[lastEmoji.icon].name}` : ""}
+          </p>
+        ) : null}
         <Toast toast={toast} placement="top" />
       </main>
     </Backdrop>
