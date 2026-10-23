@@ -1,6 +1,7 @@
 // 연결별 공개 뷰. 공개 항목은 허용 목록(네 키 객체 리터럴)으로만 만든다 — Player 를 펼쳐 복사하지 않는다.
-import type { PreviewPlayer, PublicPlayer, RoomPreview, RoomView } from "../protocol";
+import type { MyInfo, PreviewPlayer, PublicPlayer, RoomPreview, RoomView } from "../protocol";
 import { MAX_PLAYERS, MIN_PLAYERS } from "../protocol";
+import { PHASE_DEFS } from "./phases";
 import { hostOf } from "./room";
 import type { RoomState } from "./room";
 
@@ -36,15 +37,29 @@ export function buildView(state: RoomState, playerId: string, now: number): Room
       isHost: p.id === state.hostId,
     }));
 
+  // 내 정보도 허용 목록으로만 만든다. role·allies 는 조건을 채울 때만 키 자체를 만든다(undefined 로 남기지 않는다).
+  const myInfo: MyInfo = { seat: me.seat, isHost: me.id === state.hostId };
+  const def = PHASE_DEFS[state.phase];
+  if (def.revealsOwnRole && me.role !== undefined) {
+    myInfo.role = me.role;
+    if (me.role === "mafia") {
+      // 마피아에게만 동료의 seat(오름차순)를 알려 준다. 혼자면 빈 배열 — 화면이 "혼자예요" 를 고른다(D-14).
+      myInfo.allies = state.players
+        .filter((p) => p.role === "mafia" && p.id !== me.id)
+        .map((p) => p.seat)
+        .sort((a, b) => a - b);
+    }
+  }
+
   return {
     code: state.code,
     phase: state.phase,
     phaseEndsAt: state.phaseEndsAt,
-    phaseDurationMs: null, // 01-07 이 단계 표로 채운다
+    phaseDurationMs: def.durationMs,
     serverNow: now,
     minPlayers: MIN_PLAYERS,
     maxPlayers: MAX_PLAYERS,
     players,
-    me: { seat: me.seat, isHost: me.id === state.hostId },
+    me: myInfo,
   };
 }
