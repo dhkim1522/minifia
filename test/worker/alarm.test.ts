@@ -139,3 +139,26 @@ describe("연결자가 없던 방의 짧은 수명 (WR-05)", () => {
     expect(await alarmOf(code)).toBe(room.expiresAt);
   });
 });
+
+describe("만료됐지만 아직 정리되지 않은 방 코드로 만들기 (WR-06)", () => {
+  it("알람이 울리기 전에 같은 코드로 만들면 옛 방의 소켓을 4003 room_closed 로 닫고 새 방을 만든다", async () => {
+    const r = await seat(1, 0);
+    await forceDue(r.code, "expiresAt"); // 알람은 아직 돌리지 않는다: 만료됐지만 정리 전
+    const stub = env.ROOM.getByName(r.code);
+
+    const created = await stub.createRoom({ code: r.code, nickname: "새방장", now: Date.now() });
+    expect(created.ok).toBe(true);
+    expect(await closed(r.host)).toBe("4003 room_closed");
+    expect(await closed(r.guests[0]!.sock)).toBe("4003 room_closed");
+    const room = await storedRoom(r.code);
+    expect(room.players.length).toBe(1);
+  });
+
+  it("만료 전이면 여전히 CODE_TAKEN 이고 옛 소켓은 그대로다", async () => {
+    const r = await seat(1, 0);
+    const stub = env.ROOM.getByName(r.code);
+    const result = await stub.createRoom({ code: r.code, nickname: "새방장", now: Date.now() });
+    expect(result).toEqual({ ok: false, error: "CODE_TAKEN" });
+    expect(await closed(r.host, 200)).toBe("0 not_closed");
+  });
+});

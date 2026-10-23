@@ -76,9 +76,11 @@ export class Room extends DurableObject<Env> {
     });
   }
 
-  /** Worker 가 부르는 RPC. 살아 있는 방이 있으면 덮어쓰지 않고 CODE_TAKEN 을 돌려준다. */
+  /** Worker 가 부르는 RPC. 살아 있는 방이 있으면 덮어쓰지 않고 CODE_TAKEN 을 돌려준다. 만료된 방은 정리하고 새로 만든다. */
   async createRoom(input: { code: string; nickname: string; now: number }): Promise<CreateRoomRpcResult> {
-    if (this.room && input.now < this.room.expiresAt) return { ok: false, error: "CODE_TAKEN" };
+    // 만료됐지만 알람이 아직 못 지운 방이면 먼저 정리한다(옛 소켓을 닫고 저장소를 비운다). 안 그러면 옛 소켓이 새 방에서 죽은 연결로 남는다.
+    await this.advance(input.now);
+    if (this.room) return { ok: false, error: "CODE_TAKEN" };
 
     const hostId = crypto.randomUUID();
     const token = randomToken();
