@@ -26,7 +26,7 @@
 
 ## 다음 할 일
 
-1. `/gsd-verify-work 1` — 실기기 UAT(연결된 4명 이상 = 폰 4대, 또는 폰 2대 이상 + PC 의 서로 다른 브라우저). 항목은 `.planning/phases/01-walking-skeleton/01-14-PLAN.md` Task 3 의 human-check: 공유·카카오톡 미리보기, 링크 참가, 끊긴 사람과 시작 조건(3명 꺼짐·4명 켜짐), 시작 연출과 역할 카드·[내 역할] 시트, 잠금 화면 복귀·새로고침, 360×640 폰 레이아웃(8인), 시트 3종 포커스, 느린 망, 버전 글자
+1. `/gsd-plan-phase 1 --gaps` 로 CR-01(+WR-01~04) 보완 플랜을 만들고 `/gsd-execute-phase 1 --gaps-only` 로 실행한 뒤 `/gsd-verify-work 1` 로 실기기 UAT
 2. `/gsd-discuss-phase 2` — 2페이즈 낮 토론(직업 공개·빠른 메시지·이모티콘) 논의
 3. 디자인 시스템 아티팩트 보정(R18, 위 목록) — 이 세션에서
 4. 정식 OG 이미지를 클로드 데스크톱에서 만들어 `public/og.png` 교체(정식 출시 마일스톤, 임시 이미지는 `scripts/make-og.mjs`). 교체 뒤 카카오 공유 디버거로 캐시 초기화
