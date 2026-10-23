@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { assignRoles, ROLE_IDS, ROLE_TABLE, type RoleId } from "../../shared/game/roles";
+import { assignRoles, ROLE_IDS, ROLE_TABLE, rolesInPlay, type RoleId } from "../../shared/game/roles";
 import { seededRandInt } from "../helpers/seededRandom";
 
 const ids = (n: number): string[] => Array.from({ length: n }, (_, i) => `p${i}`);
@@ -109,6 +109,27 @@ describe("seededRandInt", () => {
       expect(Number.isInteger(v)).toBe(true);
       expect(v).toBeGreaterThanOrEqual(0);
       expect(v).toBeLessThan(7);
+    }
+  });
+});
+
+describe("rolesInPlay - 이번 판 직업 목록 (D-07)", () => {
+  it("4명은 의사 없이 마피아·경찰·시민이다", () => {
+    expect(rolesInPlay(4)).toEqual(["mafia", "police", "citizen"]);
+  });
+
+  it.each([5, 6, 7, 8])("%i명은 마피아·경찰·의사·시민 넷 모두다", (n) => {
+    expect(rolesInPlay(n)).toEqual(["mafia", "police", "doctor", "citizen"]);
+  });
+
+  it.each([0, 3, 9, 4.5, -1, Number.NaN])("지원하지 않는 인원 %s 은 빈 배열이다", (n) => {
+    expect(rolesInPlay(n)).toEqual([]);
+  });
+
+  it("구성표에서만 파생한다 — 모든 지원 인원에서 개수가 0 보다 큰 직업과 정확히 같다", () => {
+    for (const n of [4, 5, 6, 7, 8] as const) {
+      const want = ROLE_IDS.filter((r) => ROLE_TABLE[n][r] > 0);
+      expect(rolesInPlay(n)).toEqual(want);
     }
   });
 });
