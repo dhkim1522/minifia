@@ -1,9 +1,9 @@
 ---
-status: diagnosed
+status: complete
 phase: 01-walking-skeleton
 source: 01-01-SUMMARY.md ~ 01-15-SUMMARY.md (human_judgment 항목 + 01-VERIFICATION.md human_verification)
 started: 2026-10-23T09:09:23Z
-updated: 2026-10-23T10:12:53.308Z
+updated: 2026-10-23T13:51:00.229Z
 ---
 
 ## Current Test
@@ -64,8 +64,8 @@ severity: minor
 
 ### 10. 배포 중 재접속
 expected: 게임 중 wrangler deploy 로 재배포하면 소켓이 끊겼다가 자동 재접속되고 같은 자리·역할이다 (참고: 배포본에는 닉네임 수정 01-15 가 아직 없음 — 재배포가 필요)
-result: skipped
-reason: "재배포가 필요해 수정 후 재배포할 때 함께 확인 (사용자 선택)"
+result: pass
+note: "사용자 실기기 확인(2026-10-23): 폰 1 + PC 브라우저 3, 게임 중 두 번 재배포(22:49·22:50 KST). 재연결 띠는 보이지 않았고(재접속이 빨라 띠 전에 복구됐을 가능성) 모두 같은 자리·같은 역할로 유지됨"
 
 ### 11. 이미지 해상도 선택과 느린 망
 expected: 네트워크 탭에서 @2x/@4x 그림이 화면 밀도에 맞게 선택되고, 느린 망에서도 대기실이 체감상 문제 없이 채워지며 첫 화면 버전 글자가 배포본 버전과 같다
@@ -76,10 +76,10 @@ note: "DPR 1·2 는 @2x, DPR 3 은 @4x 이미지 요청. 첫 화면 버전 v2026
 ## Summary
 
 total: 11
-passed: 6
+passed: 7
 issues: 4
 pending: 0
-skipped: 1
+skipped: 0
 blocked: 0
 
 ## Gaps
