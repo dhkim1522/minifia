@@ -4,6 +4,12 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import "../helpers/singleLineErrors";
 import { ConfirmSheet } from "../../src/components/ConfirmSheet";
 import { Sheet } from "../../src/components/Sheet";
+import { ShareSheet } from "../../src/components/ShareSheet";
+import { buildShareText } from "../../src/net/share";
+import type { ShareNavigator } from "../../src/net/share";
+import sheetCss from "../../src/styles/sheet.css?raw";
+import confirmSource from "../../src/components/ConfirmSheet.tsx?raw";
+import shareSource from "../../src/components/ShareSheet.tsx?raw";
 
 afterEach(() => {
   cleanup();
@@ -226,5 +232,110 @@ describe("ConfirmSheet — 파괴 동작 확인 시트 (R17)", () => {
     setup();
     expect(screen.getByRole("button", { name: "나가기" }).className).toContain("mf-btn--secondary");
     expect(screen.getByRole("button", { name: "취소" }).className).toContain("mf-btn--primary");
+  });
+});
+
+describe("ShareSheet — C-03 친구 초대하기 (ROOM-01, R10)", () => {
+  const flush = () =>
+    act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+  const setup = (nav: ShareNavigator, over: Partial<Parameters<typeof ShareSheet>[0]> = {}) => {
+    const onClose = vi.fn();
+    const utils = render(<ShareSheet code="0042" hostNickname="민수" full={false} onClose={onClose} origin="https://x" nav={nav} {...over} />);
+    return { onClose, ...utils };
+  };
+  const linkInput = () => screen.getByLabelText("초대 링크") as HTMLInputElement;
+
+  it("제목 '친구 초대하기', 방 코드 0042, 읽기 전용 링크 칸에 https://x/r/0042 (토큰·쿼리 없음)", () => {
+    setup({});
+    expect(screen.getByRole("heading", { name: "친구 초대하기" })).toBeTruthy();
+    expect(screen.getByText("0042")).toBeTruthy();
+    expect(linkInput().readOnly).toBe(true);
+    expect(linkInput().value).toBe("https://x/r/0042");
+    expect(linkInput().value).not.toMatch(/[?#]|token/i);
+  });
+
+  it("[닫기] 가 있다(showClose)", () => {
+    setup({});
+    expect(screen.getByRole("button", { name: "닫기" })).toBeTruthy();
+  });
+
+  it("nav.share 가 있으면 [공유하기] 를 누르는 즉시(첫 await 앞) share 가 title·text·url 만으로 한 번 불린다", () => {
+    const share = vi.fn().mockResolvedValue(undefined);
+    setup({ share });
+    fireEvent.click(screen.getByRole("button", { name: "공유하기" }));
+    expect(share).toHaveBeenCalledTimes(1);
+    expect(share).toHaveBeenCalledWith({ title: "미니피아", text: buildShareText("민수", "0042"), url: "https://x/r/0042" });
+  });
+
+  it("공유를 취소해도(AbortError) 아무 표시도 없고 시트는 그대로다", async () => {
+    const share = vi.fn().mockRejectedValue(Object.assign(new Error("x"), { name: "AbortError" }));
+    const { onClose } = setup({ share });
+    fireEvent.click(screen.getByRole("button", { name: "공유하기" }));
+    await flush();
+    expect(screen.queryByText("길게 눌러 복사하세요")).toBeNull();
+    expect(screen.queryByRole("status")).toBeNull();
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("nav.share 가 없으면 [공유하기] 가 없고 [링크 복사] 만 보인다", () => {
+    setup({ clipboard: { writeText: vi.fn() } });
+    expect(screen.queryByRole("button", { name: "공유하기" })).toBeNull();
+    expect(screen.getByRole("button", { name: "링크 복사" })).toBeTruthy();
+  });
+
+  it("[링크 복사] 성공 → 즉시 writeText(url), 버튼이 2초 동안 '복사했어요' 였다가 '링크 복사' 로 돌아오고 시트는 닫히지 않는다", async () => {
+    vi.useFakeTimers();
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    const { onClose } = setup({ clipboard: { writeText } });
+    fireEvent.click(screen.getByRole("button", { name: "링크 복사" }));
+    expect(writeText).toHaveBeenCalledTimes(1);
+    expect(writeText).toHaveBeenCalledWith("https://x/r/0042");
+    await flush();
+    expect(screen.getByRole("button", { name: "복사했어요" })).toBeTruthy();
+    advance(1999);
+    expect(screen.queryByRole("button", { name: "복사했어요" })).not.toBeNull();
+    advance(1);
+    expect(screen.queryByRole("button", { name: "링크 복사" })).not.toBeNull();
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("복사가 실패하면 링크 칸이 전체 선택되고 '길게 눌러 복사하세요' 가 보인다", async () => {
+    const writeText = vi.fn().mockRejectedValue(Object.assign(new Error("x"), { name: "NotAllowedError" }));
+    setup({ clipboard: { writeText } });
+    fireEvent.click(screen.getByRole("button", { name: "링크 복사" }));
+    await flush();
+    expect(screen.getByText("길게 눌러 복사하세요")).toBeTruthy();
+    const input = linkInput();
+    expect(document.activeElement).toBe(input);
+    expect(input.selectionStart).toBe(0);
+    expect(input.selectionEnd).toBe(input.value.length);
+  });
+
+  it("링크 칸에 포커스하면 전체 선택된다", () => {
+    setup({});
+    const input = linkInput();
+    fireEvent.focus(input);
+    expect(input.selectionStart).toBe(0);
+    expect(input.selectionEnd).toBe(input.value.length);
+  });
+
+  it("full 이면 맨 위에 '방이 가득 찼어요', 아니면 없다", () => {
+    const { unmount } = setup({}, { full: true });
+    expect(screen.getByText("방이 가득 찼어요")).toBeTruthy();
+    unmount();
+    setup({});
+    expect(screen.queryByText("방이 가득 찼어요")).toBeNull();
+  });
+});
+
+describe("진홍 금지 (파괴 동작·공유 시트)", () => {
+  it("sheet.css·ConfirmSheet·ShareSheet 소스에 진홍이나 hex 색이 없다", () => {
+    for (const src of [sheetCss, confirmSource, shareSource]) {
+      expect(src).not.toMatch(/crimson/i);
+      expect(src).not.toMatch(/#[0-9a-fA-F]{3,8}\b/);
+    }
   });
 });

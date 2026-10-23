@@ -347,3 +347,108 @@ describe("Lobby — [뒤로] 로 방 나가기 (D-17, R17)", () => {
     expect(send).toHaveBeenCalledWith({ t: "leave" });
   });
 });
+
+describe("Lobby — 공유 시트와 끊긴 사람 내보내기 (ROOM-01, D-16, R10)", () => {
+  const shareDialog = () => screen.getByRole("dialog", { name: "친구 초대하기" });
+
+  it("위쪽 바 [공유](aria-label) → '친구 초대하기' 시트(방 코드 포함), 방장도 참가자도 같다", () => {
+    render(<Lobby view={makeView([player(0, "민수"), player(1, "서준")], 0)} send={() => {}} />);
+    expect(screen.queryByRole("dialog")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "공유" }));
+    expect(within(shareDialog()).getByText("0042")).toBeTruthy();
+    expect(within(shareDialog()).getByRole("heading", { name: "친구 초대하기" })).toBeTruthy();
+  });
+
+  it("공유 시트의 링크 칸은 {origin}/r/{코드} 이다", () => {
+    render(<Lobby view={makeView([player(0, "민수")], 0)} send={() => {}} />);
+    fireEvent.click(screen.getByRole("button", { name: "공유" }));
+    const input = within(shareDialog()).getByLabelText("초대 링크") as HTMLInputElement;
+    expect(input.value).toBe(`${window.location.origin}/r/0042`);
+  });
+
+  it("참가자 화면: '친구가 더 오면 링크를 다시 보낼 수 있어요' + [링크 공유] → 같은 시트", () => {
+    render(<Lobby view={makeView([player(0, "민수"), player(1, "서준")], 1)} send={() => {}} />);
+    expect(screen.getByText("친구가 더 오면 링크를 다시 보낼 수 있어요")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "링크 공유" }));
+    expect(shareDialog()).toBeTruthy();
+  });
+
+  it("방장 화면에는 하단 [링크 공유] 와 그 안내가 없다", () => {
+    render(<Lobby view={makeView([player(0, "민수"), player(1, "서준")], 0)} send={() => {}} />);
+    expect(screen.queryByRole("button", { name: "링크 공유" })).toBeNull();
+    expect(screen.queryByText("친구가 더 오면 링크를 다시 보낼 수 있어요")).toBeNull();
+  });
+
+  it("자리 8개가 차면 공유 시트에 '방이 가득 찼어요'", () => {
+    const players = Array.from({ length: 8 }, (_, i) => player(i, `친구${i}`));
+    render(<Lobby view={makeView(players, 0)} send={() => {}} />);
+    fireEvent.click(screen.getByRole("button", { name: "공유" }));
+    expect(within(shareDialog()).getByText("방이 가득 찼어요")).toBeTruthy();
+  });
+
+  const kickView = () => makeView([player(0, "민수"), player(1, "서준", { connected: false }), player(2, "하윤")], 0);
+  const kickDialog = () => screen.getByRole("dialog", { name: "서준님을 내보낼까요?" });
+
+  it("방장이 끊긴 서준 자리를 누르면 '서준님을 내보낼까요?' → [내보내기] → send kick seat 1", () => {
+    const send = vi.fn();
+    render(<Lobby view={kickView()} send={send} />);
+    fireEvent.click(screen.getByRole("button", { name: "서준, 연결 끊김" }));
+    expect(within(kickDialog()).getByRole("heading", { name: "서준님을 내보낼까요?" })).toBeTruthy();
+    expect(send).not.toHaveBeenCalled();
+    fireEvent.click(within(kickDialog()).getByRole("button", { name: "내보내기" }));
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(send).toHaveBeenCalledWith({ t: "kick", seat: 1 });
+  });
+
+  it("[취소] 하면 kick 을 보내지 않는다", () => {
+    vi.useFakeTimers();
+    const send = vi.fn();
+    render(<Lobby view={kickView()} send={send} />);
+    fireEvent.click(screen.getByRole("button", { name: "서준, 연결 끊김" }));
+    fireEvent.click(within(kickDialog()).getByRole("button", { name: "취소" }));
+    act(() => {
+      vi.advanceTimersByTime(260);
+    });
+    expect(send).not.toHaveBeenCalled();
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("연결된 사람 자리·내 자리에는 누를 버튼이 없다", () => {
+    render(<Lobby view={kickView()} send={() => {}} />);
+    expect(screen.queryByRole("button", { name: "하윤" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "민수 (나)" })).toBeNull();
+  });
+
+  it("참가자 화면에서는 끊긴 자리도 누를 버튼이 없다", () => {
+    render(<Lobby view={makeView([player(0, "민수"), player(1, "서준", { connected: false }), player(2, "하윤")], 2)} send={() => {}} />);
+    expect(screen.queryByRole("button", { name: "서준, 연결 끊김" })).toBeNull();
+  });
+
+  it("canSend 가 거짓이면 끊긴 자리도 누를 버튼이 없다", () => {
+    render(<Lobby view={kickView()} send={() => {}} canSend={false} />);
+    expect(screen.queryByRole("button", { name: "서준, 연결 끊김" })).toBeNull();
+  });
+
+  it("내보내기를 눌렀는데 그사이 서준이 다시 연결됐으면 시트는 닫히고 화면은 새 view 대로 그린다", () => {
+    vi.useFakeTimers();
+    const send = vi.fn();
+    const players = [player(0, "민수"), player(1, "서준", { connected: false }), player(2, "하윤")];
+    const { rerender } = render(<Lobby view={makeView(players, 0)} send={send} />);
+    fireEvent.click(screen.getByRole("button", { name: "서준, 연결 끊김" }));
+    rerender(<Lobby view={makeView([players[0]!, player(1, "서준"), players[2]!], 0)} send={send} />);
+    fireEvent.click(within(kickDialog()).getByRole("button", { name: "내보내기" }));
+    act(() => {
+      vi.advanceTimersByTime(260);
+    });
+    expect(send).toHaveBeenCalledWith({ t: "kick", seat: 1 });
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(screen.getByRole("group", { name: "서준" })).toBeTruthy();
+  });
+
+  it("내보낼 사람의 닉네임이 길어도 말줄임 없이 제목에 그대로 들어간다", () => {
+    const long = "가나다라마바사아";
+    render(<Lobby view={makeView([player(0, "민수"), player(1, long, { connected: false })], 0)} send={() => {}} />);
+    fireEvent.click(screen.getByRole("button", { name: `${long}, 연결 끊김` }));
+    expect(screen.getByRole("heading", { name: `${long}님을 내보낼까요?` })).toBeTruthy();
+  });
+});
