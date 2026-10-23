@@ -10,8 +10,13 @@ import {
   joinRoom,
   kickPlayer,
   leaveRoom,
+  startGame,
 } from "../../shared/game/room";
 import type { RoomState } from "../../shared/game/room";
+import { ASSIGNING_MS } from "../../shared/game/phases";
+import { ROLE_IDS, ROLE_TABLE } from "../../shared/game/roles";
+import type { RoleId } from "../../shared/game/roles";
+import { seededRandInt } from "../helpers/seededRandom";
 import { buildView } from "../../shared/game/view";
 import { nicknameKey, validateNickname } from "../../shared/nickname";
 
@@ -427,5 +432,89 @@ describe("buildView", () => {
 
   it("방에 없는 playerId 는 던진다", () => {
     expect(() => buildView(newRoom(), "nobody", 0)).toThrow();
+  });
+});
+
+describe("startGame (ROLE-01, ROOM-03, 결정 0012)", () => {
+  /** 방장(p0)을 포함해 connected 명이 연결 중이고 disconnected 명이 끊긴 채 앉아 있는 대기실. */
+  function lobbyOf(connected: number, disconnected: number): RoomState {
+    const specs: Spec[] = [];
+    for (let i = 0; i < connected + disconnected; i += 1) {
+      specs.push({ id: `p${i}`, seat: i, joinSeq: i, connected: i < connected });
+    }
+    return room(specs);
+  }
+
+  /** 역할별 인원을 "mafia:1,police:1,..." 한 줄로 — 실패 보고서가 한 줄로 읽힌다. */
+  function counts(state: RoomState): string {
+    return ROLE_IDS.map((r) => `${r}:${state.players.filter((p) => p.role === r).length}`).join(",");
+  }
+  function expected(n: 4 | 5 | 6 | 7 | 8): string {
+    return ROLE_IDS.map((r) => `${r}:${ROLE_TABLE[n][r]}`).join(",");
+  }
+  function mustStart(state: RoomState, now: number, seed: number): RoomState {
+    const r = startGame(state, "p0", now, seededRandInt(seed));
+    if (!r.ok) throw new Error(`expected start ok, got ${r.error}`);
+    return r.state;
+  }
+
+  it("연결 3 → NOT_ENOUGH_PLAYERS, 방장 아님 → NOT_HOST, 이미 시작함 → WRONG_PHASE (checkStart 결과 그대로)", () => {
+    expect(outcome(startGame(lobbyOf(3, 0), "p0", 1000, seededRandInt(1)))).toBe("NOT_ENOUGH_PLAYERS");
+    expect(outcome(startGame(lobbyOf(4, 0), "p1", 1000, seededRandInt(1)))).toBe("NOT_HOST");
+    const started = mustStart(lobbyOf(4, 0), 1000, 1);
+    expect(outcome(startGame(started, "p0", 2000, seededRandInt(1)))).toBe("WRONG_PHASE");
+  });
+
+  it.each([4, 5, 6, 7, 8] as const)("연결 %i명 시작 — 전원에게 구성표대로 역할이 가고 단계·마감·만료가 바뀐다", (n) => {
+    const s = mustStart(lobbyOf(n, 0), 10_000, 7);
+    expect(counts(s)).toBe(expected(n));
+    expect(s.players.every((p) => p.role !== undefined)).toBe(true);
+    expect(s.phase).toBe("assigning");
+    expect(s.phaseEndsAt).toBe(10_000 + ASSIGNING_MS);
+    expect(s.expiresAt).toBe(10_000 + ROOM_TTL_MS);
+  });
+
+  it("연결 4 + 끊김 2(자리 6) — 끊긴 두 사람도 포함해 6인 구성표대로 6명 모두 역할을 받는다", () => {
+    const s = mustStart(lobbyOf(4, 2), 0, 3);
+    expect(counts(s)).toBe("mafia:2,police:1,doctor:1,citizen:2");
+    expect(counts(s)).toBe(expected(6));
+    const offline = s.players.filter((p) => !p.connected);
+    expect(offline.length).toBe(2);
+    expect(offline.every((p) => p.role !== undefined)).toBe(true);
+  });
+
+  it("같은 시드·같은 상태는 같은 배정이고 입력 상태는 바뀌지 않는다", () => {
+    const base = lobbyOf(6, 0);
+    const before = JSON.stringify(base);
+    const roles = (s: RoomState) => s.players.map((p) => p.role).join(",");
+    expect(roles(mustStart(base, 5, 99))).toBe(roles(mustStart(base, 5, 99)));
+    expect(JSON.stringify(base)).toBe(before);
+    expect(base.players.every((p) => p.role === undefined)).toBe(true);
+    // 시드를 바꾸면 어딘가에서 배정이 달라진다(난수원이 실제로 쓰인다)
+    const variety = new Set([1, 2, 3, 4, 5, 6].map((seed) => roles(mustStart(base, 5, seed))));
+    expect(variety.size > 1).toBe(true);
+  });
+
+  it("난수는 주입된 randInt 로만 — Fisher–Yates 라 n−1 번 부르고, 입력 id 순서는 seat 오름차순이다", () => {
+    // 자리 순서가 배열 순서와 다른 방: 배열은 seat 5,0,3,1 순
+    const specs: Spec[] = [5, 0, 3, 1].map((seat, i) => ({ id: `s${seat}`, seat, joinSeq: i, connected: true }));
+    const base = room(specs, { hostId: "s0" });
+    const calls: number[] = [];
+    const spy = (n: number): number => {
+      calls.push(n);
+      return 0;
+    };
+    const r = startGame(base, "s0", 0, spy);
+    expect(r.ok).toBe(true);
+    expect(calls.length).toBe(3);
+    // randInt 가 항상 0 이면 풀의 순서가 결정적이다 — 입력이 seat 오름차순(s0,s1,s3,s5)일 때만 이 배정이 나온다
+    const byId = new Map<string, RoleId | undefined>(
+      (r.ok ? r.state.players : []).map((p) => [p.id, p.role] as const),
+    );
+    const pool: RoleId[] = [];
+    for (const role of ROLE_IDS) for (let i = 0; i < ROLE_TABLE[4][role]; i += 1) pool.push(role);
+    for (let i = pool.length - 1; i >= 1; i -= 1) [pool[i], pool[0]] = [pool[0]!, pool[i]!];
+    const seatOrdered = ["s0", "s1", "s3", "s5"];
+    expect(seatOrdered.map((id) => byId.get(id)).join(",")).toBe(pool.join(","));
   });
 });

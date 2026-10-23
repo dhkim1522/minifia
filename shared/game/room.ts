@@ -3,6 +3,9 @@
 import { validateNickname } from "../nickname";
 import { MAX_PLAYERS, MIN_PLAYERS } from "../protocol";
 import type { PhaseId } from "../protocol";
+import { ASSIGNING_MS } from "./phases";
+import { assignRoles } from "./roles";
+import type { RoleId } from "./roles";
 
 export const ROOM_TTL_MS = 3 * 60 * 60 * 1000;
 
@@ -15,6 +18,8 @@ export interface Player {
   joinSeq: number;
   connected: boolean;
   connId: string | null;
+  /** 시작할 때 서버가 나눠 준 역할. 대기실에서는 없다. 뷰에는 본인에게만, 정해진 단계에서만 실린다(view.ts). */
+  role?: RoleId;
 }
 
 export interface RoomState {
@@ -168,6 +173,37 @@ export function checkStart(state: RoomState, actorId: string): StartError | null
   if (state.phase !== "lobby") return "WRONG_PHASE";
   if (connectedCount(state.players) < MIN_PLAYERS) return "NOT_ENOUGH_PLAYERS";
   return null;
+}
+
+/**
+ * 게임을 시작한다: checkStart 를 통과해야 하고(연결된 사람 4명 이상), 역할은 끊긴 사람을 포함해 앉아 있는 모두에게 준다
+ * (결정 0012, D-16 "돌아오면 자기 역할로 이어서"). 자리 수 ≥ 연결자 수 ≥ 4 이므로 assignRoles 의 4~8명 범위 안이다.
+ * 난수는 인자 randInt 로만 받는다(방 Durable Object 는 cryptoRandInt 를 넘긴다) — 이 파일에서 전역 난수나 시각 시드를 쓰지 않는다.
+ * 배정 입력은 seat 오름차순 id 라 같은 시드·같은 상태는 같은 배정을 낸다. now 는 서버 시각이다.
+ */
+export function startGame(
+  state: RoomState,
+  actorId: string,
+  now: number,
+  randInt: (n: number) => number,
+): { ok: true; state: RoomState } | { ok: false; error: StartError } {
+  const error = checkStart(state, actorId);
+  if (error !== null) return { ok: false, error };
+  const seated = [...state.players].sort((a, b) => a.seat - b.seat);
+  const roles = assignRoles(
+    seated.map((p) => p.id),
+    randInt,
+  );
+  return {
+    ok: true,
+    state: {
+      ...state,
+      phase: "assigning",
+      phaseEndsAt: now + ASSIGNING_MS,
+      expiresAt: now + ROOM_TTL_MS,
+      players: state.players.map((p) => ({ ...p, role: roles.get(p.id) })),
+    },
+  };
 }
 
 export function findPlayerByToken(state: RoomState, token: string): Player | undefined {
