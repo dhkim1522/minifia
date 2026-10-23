@@ -1,1 +1,18 @@
-/* RED 단계 자리표시자 */
+/* 토글 칩과 칩 줄(S-06b, S-08a). design/design-system/components/bundle.css 의 .mf-chip 에서 옮겼다.
+   꺼짐 불투명도는 bundle.css 의 .4 대신 1페이즈 공통 .6(01-17). 칩 줄은 줄바꿈하고 가로 스크롤을 쓰지 않는다. */
+.mf-chip {
+  appearance: none; display: inline-flex; align-items: center; gap: var(--space-xs); max-width: 100%;
+  min-height: var(--tap-min); padding: 0 var(--space-md);
+  font: inherit; font-size: 14px; line-height: 1.4; font-weight: 700; white-space: nowrap;
+  color: var(--gray-100); background: var(--night-700); border: 1px solid var(--night-600);
+  border-radius: var(--radius-pill); cursor: pointer; touch-action: manipulation;
+  transition: transform var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
+}
+.mf-chip:active:not(:disabled) { transform: scale(0.96); }
+.mf-chip:focus-visible { outline: 2px solid var(--gray-100); outline-offset: 2px; }
+.mf-chip[aria-pressed="true"] { background: var(--gray-100); color: var(--night-900); border-color: var(--gray-100); }
+.mf-chip:disabled { opacity: 0.6; cursor: default; }
+.mf-chip svg { width: 18px; height: 18px; flex: none; }
+.mf-chip__label { overflow: hidden; text-overflow: ellipsis; }
+
+.mf-chips { display: flex; flex-wrap: wrap; gap: var(--space-sm); }
