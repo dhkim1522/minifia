@@ -100,4 +100,57 @@ describe("G-01-1b 첫 화면 입력 글자 대비", () => {
     expect(name).toBe("gray-100");
     expect(contrast(rgb as Rgb, SURFACE)).toBeGreaterThanOrEqual(12);
   });
+
+  it("G-01-1b: 입력칸 힌트는 gray-300 불투명도 1 이고 면 위 7:1 이상이다", () => {
+    render(<Home onEnterRoom={vi.fn()} />);
+    expect(screen.getByPlaceholderText("4자리 숫자").classList.contains("mf-field__input")).toBe(true);
+    const selector = ".mf-field__input::placeholder";
+    const { name, rgb } = tokenColor(selector, "color");
+    expect(name).toBe("gray-300");
+    const opacity = Number(declsOf(dsCss, selector)["opacity"]);
+    expect(opacity).toBe(1);
+    expect(contrast(composite(rgb as Rgb, SURFACE, opacity), SURFACE)).toBeGreaterThanOrEqual(7);
+  });
+
+  it("G-01-1b: 구분선 글자는 gray-100 12:1 이상, 선은 gray-500 3:1 이상이다", () => {
+    render(<Home onEnterRoom={vi.fn()} />);
+    expect(screen.getByText("또는").classList.contains("mf-entry__divider")).toBe(true);
+    const text = tokenColor(".mf-entry__divider", "color");
+    expect(text.name).toBe("gray-100");
+    expect(contrast(text.rgb as Rgb, SURFACE)).toBeGreaterThanOrEqual(12);
+    const line = tokenColor(".mf-entry__divider::before, .mf-entry__divider::after", "background");
+    expect(line.name).toBe("gray-500");
+    expect(contrast(line.rgb as Rgb, SURFACE)).toBeGreaterThanOrEqual(3);
+  });
+
+  it("G-01-1b: 꺼진 버튼은 켜진 버튼보다 분명히 흐리면서 글자 대비 4.5:1 이상이다", () => {
+    render(<Home onEnterRoom={vi.fn()} />);
+    const join = screen.getByRole("button", { name: "참가" }) as HTMLButtonElement;
+    const create = screen.getByRole("button", { name: "방 만들기" }) as HTMLButtonElement;
+    expect(join.disabled).toBe(true);
+    expect(join.classList.contains("mf-btn--secondary")).toBe(true);
+    expect(create.disabled).toBe(true);
+    expect(create.classList.contains("mf-btn--primary")).toBe(true);
+    const alpha = Number(declsOf(dsCss, ".mf-btn:disabled")["opacity"]);
+    expect(alpha).toBeLessThan(1);
+    expect(alpha).toBeLessThanOrEqual(0.7);
+    for (const variant of [".mf-btn--primary", ".mf-btn--secondary"]) {
+      const fg = tokenColor(variant, "color").rgb as Rgb;
+      const bg = tokenColor(variant, "background").rgb as Rgb;
+      const enabled = contrast(fg, bg);
+      const disabled = contrast(composite(fg, SURFACE, alpha), composite(bg, SURFACE, alpha));
+      expect(disabled).toBeGreaterThanOrEqual(4.5);
+      expect(disabled).toBeLessThan(enabled);
+    }
+  });
+
+  it("G-01-1b 가드: ds.css 글자 크기는 14·16·24·36px 뿐이고 hex 색 리터럴이 없다(G-01-1a·UI-SPEC R1·R2 불변)", () => {
+    const css = stripComments(dsCss);
+    const sizes = [...css.matchAll(/font-size:\s*([^;}]+)/g)].map((m) => (m[1] as string).trim());
+    expect(sizes.length).toBeGreaterThan(0);
+    const outOfScale = sizes.filter((v) => !["14px", "16px", "24px", "36px"].includes(v));
+    expect(outOfScale.join(",")).toBe("");
+    const hexes = css.match(/#[0-9a-fA-F]{3,8}\b/g) ?? [];
+    expect(hexes.join(",")).toBe("");
+  });
 });
