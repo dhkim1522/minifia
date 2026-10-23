@@ -1,8 +1,11 @@
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import "../helpers/singleLineErrors";
+import { seatLayout } from "../../shared/seatLayout";
+import { Icon } from "../../src/components/Icon";
+import type { IconName } from "../../src/components/Icon";
 import { Table } from "../../src/components/Table";
-import type { TableSeat } from "../../src/components/Table";
+import type { TableFloat, TableSeat } from "../../src/components/Table";
 
 afterEach(cleanup);
 
@@ -155,5 +158,105 @@ describe("TableSeat 타입 (D-22, T-01-38)", () => {
     const withRole: TableSeat = { ...seat("민수"), role: "mafia" };
     expect("role" in seat("민수")).toBe(false);
     expect(withRole.nickname).toBe("민수");
+  });
+});
+
+// ---- 02-07 Task 1: 머리 위 말풍선·이모티콘·공개 말풍선 ----
+const FIG_H = 21.33;
+const NEW_ICONS: IconName[] = ["plus", "skip", "chat", "smile", "grin", "surprised", "suspicious", "angry", "sad", "heart", "exclaim"];
+const bubble = (text: string, over: Partial<Extract<TableFloat, { kind: "bubble" }>> = {}): TableFloat => ({
+  key: "b1",
+  z: 1,
+  kind: "bubble",
+  text,
+  ...over,
+});
+const floatLayers = () => Array.from(group().querySelectorAll<HTMLElement>(".mf-float"));
+
+describe("Icon 11개 추가 (D-16)", () => {
+  it.each(NEW_ICONS)("%s 는 24×24 svg 로 그려진다", (name) => {
+    const { container } = render(<Icon name={name} />);
+    const svg = container.querySelector("svg");
+    expect(svg?.getAttribute("viewBox")).toBe("0 0 24 24");
+    expect(svg?.querySelectorAll("path,circle,rect").length).toBeGreaterThan(0);
+  });
+});
+
+describe("SeatFloat 층 (D-04, D-16)", () => {
+  it("말풍선은 .mf-bubble 에 글자가 들어가고 층은 aria-hidden 이며 left 가 clamp 로 갇힌다", () => {
+    render(<Table seats={seats({ 3: { float: bubble("하윤 의심돼요") } })} mySeat={1} />);
+    const el = within(group()).getByText("하윤 의심돼요");
+    expect(el.classList.contains("mf-bubble")).toBe(true);
+    const layer = el.closest<HTMLElement>(".mf-float");
+    expect(layer?.getAttribute("aria-hidden")).toBe("true");
+    expect(layer?.style.left).toMatch(/^clamp\(70px, [\d.]+%, calc\(100% - 70px\)\)$/);
+  });
+
+  it("이모티콘은 .mf-react 안에 svg 하나다", () => {
+    render(<Table seats={seats({ 0: { float: { key: "e1", z: 1, kind: "emoji", icon: "heart" } } })} mySeat={1} />);
+    const react = group().querySelector(".mf-react");
+    expect(react?.querySelectorAll("svg").length).toBe(1);
+  });
+
+  it("공개 말풍선: dim 이면 흐림 클래스, animate 이면 팝·흔들림 클래스, animate false 면 팝 클래스가 없다", () => {
+    const reveal = (animate: boolean): TableFloat => ({ key: "r1", z: 1, kind: "reveal", text: "말 안 함", dim: true, animate });
+    const { unmount } = render(<Table seats={seats({ 3: { float: reveal(true) } })} mySeat={1} />);
+    const on = within(group()).getByText("말 안 함");
+    expect(on.classList.contains("mf-bubble--dim")).toBe(true);
+    expect(on.classList.contains("mf-bubble--pop")).toBe(true);
+    expect(on.classList.contains("mf-bubble--shake")).toBe(true);
+    unmount();
+    render(<Table seats={seats({ 3: { float: reveal(false) } })} mySeat={1} />);
+    const off = within(group()).getByText("말 안 함");
+    expect(off.classList.contains("mf-bubble--dim")).toBe(true);
+    expect(off.classList.contains("mf-bubble--pop")).toBe(false);
+    expect(off.classList.contains("mf-bubble--shake")).toBe(false);
+  });
+
+  it("공개 말풍선이 dim 이 아니면 흐림 클래스가 없다", () => {
+    const f: TableFloat = { key: "r1", z: 1, kind: "reveal", text: "경찰", dim: false, animate: true };
+    render(<Table seats={seats({ 3: { float: f } })} mySeat={1} />);
+    expect(within(group()).getByText("경찰").classList.contains("mf-bubble--dim")).toBe(false);
+  });
+
+  it("elapsedMs 1000 이면 애니메이션이 그 시점부터 이어진다(음수 animation-delay)", () => {
+    render(<Table seats={seats({ 3: { float: bubble("안녕", { elapsedMs: 1000 }) } })} mySeat={1} />);
+    expect(within(group()).getByText("안녕").style.animationDelay).toBe("-1000ms");
+  });
+
+  it("elapsedMs 가 없으면 animation-delay 를 쓰지 않는다", () => {
+    render(<Table seats={seats({ 3: { float: bubble("안녕") } })} mySeat={1} />);
+    expect(within(group()).getByText("안녕").style.animationDelay).toBe("");
+  });
+
+  it("z 큰 것이 위이고 둘 다 이름표 층(25)보다 위다", () => {
+    render(
+      <Table seats={seats({ 0: { float: bubble("가", { key: "a", z: 1 }) }, 3: { float: bubble("나", { key: "b", z: 2 }) } })} mySeat={1} />,
+    );
+    const [a, b] = ["가", "나"].map((t) => within(group()).getByText(t).closest<HTMLElement>(".mf-float")!);
+    expect(Number(b.style.zIndex)).toBeGreaterThan(Number(a.style.zIndex));
+    expect(Number(a.style.zIndex)).toBeGreaterThan(25);
+  });
+
+  it("층 top 은 앞쪽 자리 headTop − 1%, 뒤쪽 자리 headTop − 8%", () => {
+    const all = [0, 1, 2, 3, 4, 5, 6, 7].map((i) => (i === 1 ? seat("앞", { isMe: true, float: bubble("앞", { key: "f" }) }) : i === 5 ? seat("뒤", { float: bubble("뒤말", { key: "g" }) }) : null));
+    render(<Table seats={all} mySeat={1} />);
+    const top = (t: string) => parseFloat(within(group()).getByText(t).closest<HTMLElement>(".mf-float")!.style.top);
+    const front = seatLayout(1, 1);
+    const back = seatLayout(5, 1);
+    expect(front.depth).toBeGreaterThanOrEqual(0.5);
+    expect(back.depth).toBeLessThan(0.5);
+    expect(top("앞")).toBeCloseTo(front.y - FIG_H * front.scale - 1, 2);
+    expect(top("뒤말")).toBeCloseTo(back.y - FIG_H * back.scale - 8, 2);
+  });
+
+  it("float 없는 자리에는 층 요소가 없다", () => {
+    render(<Table seats={seats()} mySeat={1} />);
+    expect(floatLayers().length).toBe(0);
+  });
+
+  it("말풍선 글자는 텍스트로만 그려진다", () => {
+    render(<Table seats={seats({ 3: { float: bubble("<i>x</i>") } })} mySeat={1} />);
+    expect(group().querySelector("i") === null).toBe(true);
   });
 });
