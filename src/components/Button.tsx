@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { ReactNode, Ref } from "react";
 
 export interface ButtonProps {
   variant?: "primary" | "secondary" | "text";
@@ -10,6 +10,8 @@ export interface ButtonProps {
   onClick?: () => void;
   "aria-label"?: string;
   className?: string;
+  /** 첫 포커스·측정용(React 19: 함수 부품도 ref 를 prop 으로 받는다) */
+  ref?: Ref<HTMLButtonElement>;
   children?: ReactNode;
 }
 
@@ -24,13 +26,14 @@ export function Button({
   onClick,
   "aria-label": ariaLabel,
   className,
+  ref,
   children,
 }: ButtonProps) {
   const classes = ["mf-btn", `mf-btn--${variant}`, block && "mf-btn--block", compact && "mf-btn--compact", className]
     .filter(Boolean)
     .join(" ");
   return (
-    <button type={type} className={classes} disabled={disabled} onClick={onClick} aria-label={ariaLabel}>
+    <button ref={ref} type={type} className={classes} disabled={disabled} onClick={onClick} aria-label={ariaLabel}>
       {icon}
       {children}
     </button>
