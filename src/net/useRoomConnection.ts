@@ -14,7 +14,7 @@ export interface RoomConnection {
   view: RoomView | null;
   /** 서버시각 - 로컬시각(ms). 첫 pong 전에는 첫 state 의 serverNow 로 잡은 거친 값(state 전에는 0) */
   offset: number;
-  /** 소켓이 열릴 때마다 1씩 늘어난다(대기실 토스트가 재접속 직후 지난 변화를 알리지 않게 쓰는 값) */
+  /** 새 연결의 첫 state 마다 1씩 늘어난다(대기실 토스트가 재접속 직후 지난 변화를 알리지 않게 쓰는 값. view 와 함께 바뀐다) */
   epoch: number;
   removedReason: RemovedReason | null;
   /** 서버로 입력을 보낼 수 있는지(열려 있고 view 가 있음). 끊긴 동안은 거짓 */

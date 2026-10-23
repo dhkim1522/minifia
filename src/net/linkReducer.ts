@@ -13,8 +13,10 @@ export interface LinkState {
   /** 보이는 상태에서의 첫 실패 시각. 숨겨지면 null 로 비운다(화면이 꺼진 시간은 세지 않음) */
   failingSince: number | null;
   attempts: number;
-  /** 소켓이 열릴 때마다 1씩 늘어난다 */
+  /** 새 연결의 첫 state 를 받을 때마다 1씩 늘어난다(소켓이 열릴 때가 아니다 — 그때 view 는 끊기기 전의 낡은 값이다) */
   epoch: number;
+  /** open 뒤 아직 첫 state 를 받지 못했다. 첫 state 가 epoch 를 올린다 */
+  awaitingState: boolean;
   /** 서버 state 를 한 번이라도 받았는지 */
   hasView: boolean;
   restoredUntil: number | null;
@@ -44,6 +46,7 @@ export function initialLinkState(_now: number, visible: boolean): LinkState {
     failingSince: null,
     attempts: 0,
     epoch: 0,
+    awaitingState: false,
     hasView: false,
     restoredUntil: null,
     removedReason: null,
@@ -54,13 +57,15 @@ export function linkReducer(s: LinkState, e: LinkEvent): LinkState {
   switch (e.type) {
     case "open":
       if (s.status === "removed" || s.status === "replaced" || s.status === "failed") return s;
-      return { ...s, status: "open", attempts: 0, failingSince: null, epoch: s.epoch + 1 };
+      return { ...s, status: "open", attempts: 0, failingSince: null, awaitingState: true };
 
     case "state":
       if (s.status === "removed" || s.status === "replaced" || s.status === "failed") return s;
       return {
         ...s,
         hasView: true,
+        // 새 연결의 첫 state 가 화면 쪽의 새 기준선이다. view 와 epoch 가 같은 렌더에 함께 바뀐다.
+        ...(s.awaitingState ? { awaitingState: false, epoch: s.epoch + 1 } : {}),
         ...(s.banner === "reconnecting" ? { banner: "restored" as const, restoredUntil: e.now + RESTORED_MS } : {}),
       };
 

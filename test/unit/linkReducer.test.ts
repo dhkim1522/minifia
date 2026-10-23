@@ -18,13 +18,17 @@ describe("linkReducer: 기본 전이", () => {
     expect(s.hasView).toBe(false);
   });
 
-  it("open 은 open·attempts 0·epoch 1, state 는 hasView 를 참으로 한다", () => {
+  it("open 은 open·attempts 0 이고 epoch 는 그대로, 첫 state 가 hasView 를 참으로 하고 epoch 를 1 올린다 (WR-03)", () => {
     const opened = run([{ type: "open", now: 0 }]);
     expect(opened.status).toBe("open");
     expect(opened.attempts).toBe(0);
-    expect(opened.epoch).toBe(1);
+    expect(opened.epoch).toBe(0);
     expect(opened.hasView).toBe(false);
-    expect(linkReducer(opened, { type: "state", now: 10 }).hasView).toBe(true);
+    const first = linkReducer(opened, { type: "state", now: 10 });
+    expect(first.hasView).toBe(true);
+    expect(first.epoch).toBe(1);
+    // 같은 연결의 다음 state 는 epoch 를 올리지 않는다
+    expect(linkReducer(first, { type: "state", now: 20 }).epoch).toBe(1);
   });
 
   it("view 가 있는 채 close 1006 이면 reconnecting 띠, attempts 1, failingSince 는 그 시각", () => {
@@ -35,12 +39,13 @@ describe("linkReducer: 기본 전이", () => {
     expect(s.failingSince).toBe(500);
   });
 
-  it("다시 open 하면 epoch 2, 첫 state 가 오면 restored 띠가 2초 뒤 사라진다", () => {
+  it("다시 open 해도 epoch 는 그대로이고(낡은 view 가 기준선이 되지 않게), 새 연결의 첫 state 에서 2 가 되며 restored 띠가 2초 뒤 사라진다", () => {
     const dropped = linkReducer(connected(), { type: "close", code: 1006, reason: "", now: 500 });
     const reopened = linkReducer(dropped, { type: "open", now: 900 });
-    expect(reopened.epoch).toBe(2);
+    expect(reopened.epoch).toBe(1);
     expect(reopened.banner).toBe("reconnecting");
     const restored = linkReducer(reopened, { type: "state", now: 1000 });
+    expect(restored.epoch).toBe(2);
     expect(restored.banner).toBe("restored");
     expect(restored.restoredUntil).toBe(1000 + RESTORED_MS);
     expect(linkReducer(restored, { type: "tick", now: 2999 }).banner).toBe("restored");

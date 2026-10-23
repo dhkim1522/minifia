@@ -1,7 +1,8 @@
-import { act, cleanup, renderHook } from "@testing-library/react";
+import { act, cleanup, render, renderHook, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { RoomView } from "../../shared/protocol";
 import { useRoomConnection } from "../../src/net/useRoomConnection";
+import { Lobby } from "../../src/screens/Lobby";
 
 class FakeSocket extends EventTarget {
   readyState = 0;
@@ -135,14 +136,19 @@ describe("useRoomConnection: 연결·핸드셰이크", () => {
     expect(Math.abs(hook.result.current.offset - 7000)).toBeLessThan(50);
   });
 
-  it("소켓이 열릴 때마다 epoch 가 1씩 늘어난다", () => {
+  it("새 연결의 첫 state 가 올 때마다 epoch 가 1씩 늘어난다 (소켓이 열린 시점이 아니다, WR-03)", () => {
     const { sockets, hook } = setup();
     expect(hook.result.current.epoch).toBe(0);
     openWithState(sockets[0]!);
     expect(hook.result.current.epoch).toBe(1);
     act(() => sockets[0]!.serverClose(1006));
     advance(500);
-    openWithState(sockets[1]!);
+    act(() => sockets[1]!.open());
+    // 열렸지만 새 state 는 아직: view 는 끊기기 전 값이라 epoch 를 올리면 낡은 view 가 기준선이 된다
+    expect(hook.result.current.epoch).toBe(1);
+    act(() => sockets[1]!.message({ t: "state", view }));
+    expect(hook.result.current.epoch).toBe(2);
+    act(() => sockets[1]!.message({ t: "state", view }));
     expect(hook.result.current.epoch).toBe(2);
   });
 
@@ -398,5 +404,34 @@ describe("useRoomConnection: 낡은 세션 확인 (Pitfall 22)", () => {
     await flush();
     expect(hook.result.current.status).toBe("reconnecting");
     vi.unstubAllGlobals();
+  });
+});
+
+describe("useRoomConnection + Lobby: 재연결 직후 토스트 (WR-03)", () => {
+  it("끊긴 동안 들어온 사람은 재연결 뒤 첫 state 에서 토스트 없이 보이고, 그다음 입장에는 토스트가 난다", () => {
+    const sockets: FakeSocket[] = [];
+    const createSocket = (url: string) => {
+      const s = new FakeSocket(url);
+      sockets.push(s);
+      return s as unknown as WebSocket;
+    };
+    function Harness() {
+      const c = useRoomConnection("0042", "t".repeat(43), { createSocket, random: () => 0, checkRoom: async () => "alive" });
+      return c.view ? <Lobby view={c.view} send={c.send} canSend={c.canSend} epoch={c.epoch} /> : null;
+    }
+    const withPlayers = (names: string[]): RoomView => ({
+      ...view,
+      players: names.map((nickname, seat) => ({ seat, nickname, connected: true, isHost: seat === 0 })),
+    });
+    render(<Harness />);
+    act(() => sockets[0]!.open());
+    act(() => sockets[0]!.message({ t: "state", view: withPlayers(["민수", "서준"]) }));
+    act(() => sockets[0]!.serverClose(1006));
+    advance(500);
+    act(() => sockets[1]!.open());
+    act(() => sockets[1]!.message({ t: "state", view: withPlayers(["민수", "서준", "하윤"]) }));
+    expect(screen.queryByText("하윤님이 들어왔어요")).toBeNull();
+    act(() => sockets[1]!.message({ t: "state", view: withPlayers(["민수", "서준", "하윤", "지아"]) }));
+    expect(screen.getByText("지아님이 들어왔어요")).toBeTruthy();
   });
 });
