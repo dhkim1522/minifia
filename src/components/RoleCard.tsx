@@ -15,7 +15,8 @@ export interface RoleCardProps {
 }
 
 // 뒷면 마름모(design-system 의 Diamond). 역할과 무관하게 모든 사람에게 같은 마크업이다.
-function Diamond() {
+// [내 역할] 시트가 정적 뒷면 그림으로 같은 마름모를 쓰도록 내보낸다.
+export function Diamond() {
   return (
     <svg className="mf-card__diamond" viewBox="0 0 100 100" aria-hidden="true">
       <path d="M50 4 96 50 50 96 4 50z" fill="none" stroke="var(--gray-500)" strokeWidth={2} />

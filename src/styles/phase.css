@@ -29,3 +29,64 @@
 .mf-card__divider { flex: none; width: 100%; height: 1px; background: var(--gray-700); }
 .mf-card__mates { flex: none; font-size: 14px; line-height: 1.4; font-weight: 700; color: var(--crimson-300); margin: 0; word-break: keep-all; }
 @keyframes mf-card-rise { from { transform: translateY(24px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+/* PhaseBar — 윗줄 왼쪽 제목+안내, 오른쪽 extra, 아랫줄 타이머(UI-SPEC S-05). */
+.mf-phasebar { flex: none; display: flex; flex-direction: column; gap: var(--space-sm); padding: var(--space-md); width: 100%; }
+.mf-phasebar__row { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-sm); }
+.mf-phasebar__text { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.mf-phasebar .mf-t-heading { text-shadow: var(--shadow-text); }
+.mf-phasebar__do { margin: 0; font-size: 14px; line-height: 1.4; font-weight: 400; color: var(--gray-300); word-break: keep-all; }
+.mf-phasebar__extra { flex: none; }
+
+/* S-05 역할 확인 — 대기 장면 위 어두운 막, 테이블 없음. 남는 높이를 카드 영역이 쓰고 카드는 52dvh 를 넘지 않는다. */
+.mf-reveal__backdrop { flex: 1 1 0; min-height: 0; height: auto; }
+.mf-reveal { position: relative; height: 100%; display: flex; flex-direction: column; overflow: hidden; }
+.mf-reveal__dim { position: absolute; inset: 0; background: var(--scrim); pointer-events: none; z-index: 0; }
+.mf-reveal > :not(.mf-reveal__dim) { position: relative; z-index: 1; }
+.mf-reveal__stage { flex: 1 1 0; min-height: 0; display: flex; align-items: center; justify-content: center; padding: 0 var(--space-md); }
+.mf-reveal__hints { flex: none; display: flex; flex-direction: column; align-items: center; gap: var(--space-xs); padding: var(--space-md) var(--space-lg) var(--space-xl); text-align: center; }
+.mf-reveal__hint { margin: 0; font-size: 16px; line-height: 1.5; font-weight: 700; color: var(--gray-50); word-break: keep-all; text-shadow: var(--shadow-text); }
+.mf-reveal__sub { margin: 0; font-size: 14px; line-height: 1.4; font-weight: 400; color: var(--gray-300); word-break: keep-all; text-shadow: var(--shadow-text); }
+
+/* 단계 화면 전환(phase-enter, 300ms — 토큰에 없는 길이라 지역 상수). 단계 화면 루트는 남는 높이를 채운다. */
+.mf-phase-enter { --mf-phase-enter-ms: 300ms; flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; animation: mf-phase-enter var(--mf-phase-enter-ms) var(--ease-out) both; }
+@keyframes mf-phase-enter { from { opacity: 0; } to { opacity: 1; } }
+
+/* 화면에는 보이지 않고 보조 기술만 읽는 영역(단계 안내 aria-live) */
+.mf-sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
+
+/* S-04 역할 배정 — 대기 장면 테이블 위에 night-950 90% 막(420ms), 가운데 맥박 링 3겹. 1초는 지역 상수. */
+.mf-assign__backdrop { flex: 1 1 0; min-height: 0; height: auto; }
+.mf-assign { --mf-assign-pulse: 1s; position: relative; height: 100%; display: flex; flex-direction: column; overflow: hidden; }
+.mf-assign__scene { flex: 1; min-height: 0; padding: var(--space-md) var(--space-md) 0; }
+.mf-assign__scene .mf-table { width: auto; height: 100%; max-width: 100%; margin: 0 auto; }
+.mf-assign__veil { position: absolute; inset: 0; background: var(--night-950); opacity: 0.9; animation: mf-assign-veil var(--dur-med) var(--ease-out) both; pointer-events: none; }
+@keyframes mf-assign-veil { from { opacity: 0; } to { opacity: 0.9; } }
+.mf-assign__center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-sm); padding: var(--space-lg); text-align: center; }
+.mf-assign__center .mf-t-heading { margin-top: var(--space-lg); text-shadow: var(--shadow-text); }
+.mf-assign__pulse { position: relative; width: 120px; height: 120px; display: flex; align-items: center; justify-content: center; }
+.mf-assign__ring { position: absolute; inset: 0; border-radius: 50%; border: 2px solid var(--gray-300); opacity: 0; animation: mf-assign-ring var(--mf-assign-pulse) ease-out infinite; }
+.mf-assign__ring:nth-child(2) { animation-delay: 0.33s; }
+.mf-assign__ring:nth-child(3) { animation-delay: 0.66s; }
+@keyframes mf-assign-ring { from { transform: scale(0.6); opacity: 0.6; } to { transform: scale(1.6); opacity: 0; } }
+.mf-assign__core { position: relative; width: 72px; height: 72px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: var(--night-800); border: 1px solid var(--gray-700); color: var(--gray-50); }
+
+/* S-06 낮 시작 — 낮 장면 위에 morning 방사형 아침빛(800ms), 가운데 1일차 + 낮이 되었습니다(800ms 번짐). */
+.mf-day__backdrop { flex: 1 1 0; min-height: 0; height: auto; }
+.mf-day { position: relative; height: 100%; display: flex; flex-direction: column; overflow: hidden; }
+.mf-day__morning { position: absolute; inset: 0; background: radial-gradient(70% 55% at 50% 38%, var(--morning) 0%, transparent 100%); opacity: 1; animation: mf-day-morning var(--dur-slow) var(--ease-out) both; pointer-events: none; }
+@keyframes mf-day-morning { from { opacity: 0; } to { opacity: 1; } }
+.mf-day__top { position: relative; flex: none; display: flex; justify-content: flex-end; padding: var(--space-md); }
+.mf-day__center { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-sm); padding: 0 var(--space-lg) var(--space-3xl); text-align: center; }
+.mf-day__count { text-shadow: var(--shadow-text); }
+.mf-day__title { text-shadow: var(--shadow-text); animation: mf-day-title var(--dur-slow) var(--ease-out) both; }
+@keyframes mf-day-title { from { opacity: 0; transform: scale(1.04); } to { opacity: 1; transform: scale(1); } }
+
+/* C-01 [내 역할] 시트 안 배치 — 그림 왼쪽·글자 오른쪽, 좁으면 세로로 접힌다. 정적 뒷면은 카드와 같은 마름모. */
+.mf-myrole-sheet { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-md); }
+.mf-myrole-sheet__art { flex: 0 1 150px; max-width: 100%; height: auto; object-fit: contain; filter: drop-shadow(0 8px 12px var(--shadow)); }
+.mf-myrole-sheet__text { flex: 1 1 140px; min-width: 0; display: flex; flex-direction: column; gap: var(--space-sm); }
+.mf-myrole-sheet__desc { margin: 0; font-size: 16px; line-height: 1.5; color: var(--gray-300); word-break: keep-all; }
+.mf-myrole-sheet__mates { margin: 0; font-size: 14px; line-height: 1.4; font-weight: 700; color: var(--crimson-300); word-break: keep-all; }
+.mf-myrole-sheet__empty { margin: 0; font-size: 16px; line-height: 1.5; color: var(--gray-300); word-break: keep-all; }
+.mf-myrole-sheet__back { align-self: center; width: min(40vw, 150px); aspect-ratio: 2 / 3; max-height: 30dvh; display: flex; align-items: center; justify-content: center; background: var(--night-700); border: 1px solid var(--gray-700); border-radius: var(--radius-lg); }
