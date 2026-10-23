@@ -485,22 +485,22 @@ const remaining = BUBBLE_MS - (view.serverNow - entry.at); // > 0 이면 표시
 | A7 | 직업 공개 중 2일차 이후 `claim` 단계 화면에서 다른 사람 자리에 어제 주장 알약을 띄우지 않는다(`claimLast` 비노출). UI-SPEC 은 "직업 공개 중 알약"을 명시하지 않음 | Pattern 2 | 낮음. 어제 주장은 공개 정보라 보여 줘도 누출은 아니지만 "고른 사람" 구분과 겹침 |
 | A8 | `claimReveal` 서버 단계 분리가 비분리보다 낫다는 판단 | Standard Stack > Alternatives | 낮음. UI-SPEC 이 계획에 위임("확인 필요 3")하고 권장안이 분리 |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **`ALREADY_EXTENDED` 같은 새 `WsErrorCode` 를 둘지**
+1. **`ALREADY_EXTENDED` 같은 새 `WsErrorCode` 를 둘지** (RESOLVED: 권장안대로 `ALREADY_EXTENDED` 추가, 클라이언트는 무시하고 `state` 로 화면 복원 — 02-01·02-03·02-05 반영)
    - What we know: UI-SPEC 오류표가 `RATE_LIMITED`·`WRONG_PHASE`·`NOT_HOST`·`BAD_MESSAGE` 만 다룬다.
    - What's unclear: 연장 중복을 어느 코드로 돌릴지.
    - Recommendation: 새 코드를 추가하고(클라이언트는 무시), 거절 응답에 `state` 를 함께 보내 `handleStart` 처럼 화면을 서버 값으로 되돌린다.
 
-2. **전송 쿨다운의 클라이언트 기준 시각**
+2. **전송 쿨다운의 클라이언트 기준 시각** (RESOLVED: 보낸 순간 + 2000ms 단순안, 서버 한도 2000ms 유지, 오탐은 실기기에서 재평가 — 02-03·02-09 반영)
    - What we know: UI-SPEC 은 "보낸 직후 2초 흐림", 서버는 2000ms.
    - What's unclear: 지터로 인한 오탐 `RATE_LIMITED` 의 허용 여부(§Pitfall 5).
    - Recommendation: 단순안(보낸 시각 + 2000ms)으로 시작하고 6페이즈 실기기에서 오탐이 나오면 서버 시각 기준으로 바꾼다. 위험이 크면 서버 한도를 1800ms 로 완화하는 것도 성공 기준 5(2초 내 재전송 거부)와 테스트를 모두 통과한다.
 
-3. **문서 정정 항목**
+3. **문서 정정 항목** (RESOLVED: ROADMAP 성공 기준 3·6 정정을 02-11 Task 2 에서 수행)
    - 로드맵 성공 기준 3 의 "저는 [경찰]이에요" 예시와 성공 기준 6 의 "세 번 이하"(`claimed` 템플릿은 4번 — 사용자 확정, UI-SPEC 에 "성공 기준 6 은 '대상·직업이 필요한 문구는 예외'로 고친다"고 적혀 있음)를 ROADMAP.md 에서 고쳐야 한다. 계획의 문서 작업 한 줄로 넣는다.
 
-4. **말 바꿈의 하루 걸러 규칙(A3)**
+4. **말 바꿈의 하루 걸러 규칙(A3)** (RESOLVED: CONTEXT 권장안대로 구현, 테스트 이름에 규칙 명시 — 02-02 반영)
    - 사용자에게 다시 묻기보다 CONTEXT 권장안대로 구현하고 테스트 이름에 규칙을 명시한다.
 
 ## Environment Availability
