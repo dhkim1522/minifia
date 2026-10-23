@@ -351,3 +351,118 @@ describe("단계 전환은 서버 view 만 따른다 (T-01-46)", () => {
     expect(byRole("heading", "낮이 되었습니다")).toBeTruthy();
   });
 });
+
+// ---- [내 역할] 시트 (D-19 개정, 결정 0012, R14, E14, T-01-45) ----
+
+function openMyRole(): HTMLElement {
+  fireEvent.click(byRole("button", "내 역할"));
+  const dialog = document.querySelector<HTMLElement>('dialog[aria-label="내 역할"]');
+  expect(dialog, "내 역할 시트(dialog)").not.toBeNull();
+  return dialog!;
+}
+
+function sheetHas(dialog: HTMLElement, text: string): boolean {
+  return (dialog.textContent ?? "").includes(text);
+}
+
+describe("C-01 [내 역할] 시트", () => {
+  const mafiaReveal = (endsIn: number) => makeView({ phase: "roleReveal", endsIn, role: "mafia", allies: [2] });
+
+  it("카드를 뒤집지 않고 [내 역할] 을 누르면 시트에는 카드 뒷면만 있고 역할 글자·그림이 없다 (T-01-45)", () => {
+    renderRoom(mafiaReveal(15_000));
+    const dialog = openMyRole();
+    expect(dialog.querySelector(".mf-myrole-sheet__back")).not.toBeNull();
+    expect(dialog.querySelectorAll("img").length).toBe(0);
+    expect(sheetHas(dialog, "마피아")).toBe(false);
+    expect(sheetHas(dialog, "동료")).toBe(false);
+    expect(sheetHas(dialog, "내 역할")).toBe(true);
+  });
+
+  it("카드를 한 번 뒤집은 뒤 [내 역할] 을 누르면 직업 그림·마피아·한 줄 설명·동료 줄이 보인다", () => {
+    const { container } = renderRoom(mafiaReveal(15_000));
+    fireEvent.click(card(container));
+    const dialog = openMyRole();
+    const img = dialog.querySelector("img");
+    expect(img?.getAttribute("src") ?? "").toContain("mafia_default%402x.png");
+    expect(within(dialog).queryByRole("heading", { name: "마피아" })).not.toBeNull();
+    expect(sheetHas(dialog, "밤에 함께 한 명을 지목해요")).toBe(true);
+    expect(sheetHas(dialog, "동료 · 민지")).toBe(true);
+    expect(dialog.querySelector(".mf-myrole-sheet__back")).toBeNull();
+  });
+
+  it("시트를 연 채 서버가 day 를 보내면 시트는 열린 채 앞면 내용이고 뒤 화면은 낮이 된다", () => {
+    const r = renderRoom(mafiaReveal(15_000));
+    const dialog = openMyRole();
+    rerenderRoom(r.rerender, makeView({ phase: "day", role: "mafia", allies: [2] }));
+    const after = document.querySelector<HTMLElement>('dialog[aria-label="내 역할"]');
+    expect(after === dialog, "같은 dialog 요소").toBe(true);
+    expect(after?.hasAttribute("open")).toBe(true);
+    expect(sheetHas(after!, "마피아")).toBe(true);
+    expect(after!.querySelector(".mf-myrole-sheet__back")).toBeNull();
+    expect(r.container.querySelector("h1.mf-day__title")?.textContent).toBe("낮이 되었습니다");
+  });
+
+  it("역할 확인을 통째로 놓치고 day 에 처음 들어온 사람도 [내 역할] 에서 앞면 내용을 본다", () => {
+    renderRoom(makeView({ phase: "day", role: "police" }));
+    const dialog = openMyRole();
+    expect(within(dialog).queryByRole("heading", { name: "경찰" })).not.toBeNull();
+    expect(sheetHas(dialog, "밤마다 한 명을 조사해요")).toBe(true);
+    expect(dialog.querySelector(".mf-myrole-sheet__back")).toBeNull();
+  });
+
+  it("새로고침: 역할 확인 6초 뒤 처음 마운트해 카드를 누르지 않고 [내 역할] 을 눌러도 카드·시트 모두 앞면이다", () => {
+    const { container } = renderRoom(mafiaReveal(9_000));
+    expect(card(container).classList.contains("mf-card--front")).toBe(true);
+    const dialog = openMyRole();
+    expect(dialog.querySelectorAll("img").length).toBe(1);
+    expect(within(dialog).queryByRole("heading", { name: "마피아" })).not.toBeNull();
+    expect(sheetHas(dialog, "동료 · 민지")).toBe(true);
+    expect(dialog.querySelector(".mf-myrole-sheet__back")).toBeNull();
+  });
+
+  it("시작 직후 마운트하면 시트는 뒷면이고, 연 채 5초 자동 앞면이 되면 시트 내용이 앞면으로 바뀐다", () => {
+    renderRoom(mafiaReveal(15_000));
+    const dialog = openMyRole();
+    expect(dialog.querySelector(".mf-myrole-sheet__back")).not.toBeNull();
+    advance(5_000);
+    expect(dialog.querySelector(".mf-myrole-sheet__back")).toBeNull();
+    expect(dialog.querySelectorAll("img").length).toBe(1);
+    expect(within(dialog).queryByRole("heading", { name: "마피아" })).not.toBeNull();
+  });
+
+  it("me.role 이 없는 view 에서 [내 역할] 은 '아직 역할이 없어요'", () => {
+    renderRoom(makeView({ phase: "roleReveal", endsIn: 15_000 }));
+    const dialog = openMyRole();
+    expect(sheetHas(dialog, "아직 역할이 없어요")).toBe(true);
+    expect(dialog.querySelectorAll("img").length).toBe(0);
+  });
+
+  it("[닫기] 를 누르면 260ms 뒤 시트가 사라지고, 시트가 열려 있어도 타이머 숫자는 줄어든다", () => {
+    const { container } = renderRoom(mafiaReveal(15_000));
+    const dialog = openMyRole();
+    advance(3_000);
+    expect(container.querySelector('[role="timer"]')?.textContent).toContain("0:12");
+    const close = within(dialog).queryByRole("button", { name: "닫기" });
+    expect(close, "시트 [닫기]").not.toBeNull();
+    fireEvent.click(close!);
+    advance(260);
+    expect(document.querySelector('dialog[aria-label="내 역할"]')).toBeNull();
+  });
+
+  it("[내 역할] 버튼 마크업은 마피아·시민·역할 없음 view 에서 같고 대기실·배정에는 없다", () => {
+    const html = (view: RoomView) => {
+      renderRoom(view);
+      const out = byRole("button", "내 역할").outerHTML;
+      cleanup();
+      return out;
+    };
+    const mafia = html(mafiaReveal(15_000));
+    expect(html(makeView({ phase: "roleReveal", endsIn: 15_000, role: "citizen" }))).toBe(mafia);
+    expect(html(makeView({ phase: "roleReveal", endsIn: 15_000 }))).toBe(mafia);
+    renderRoom(makeView({ phase: "assigning" }));
+    expect(screen.queryByRole("button", { name: "내 역할" })).toBeNull();
+    cleanup();
+    renderRoom(makeView({ phase: "lobby", isHost: true }));
+    expect(screen.queryByRole("button", { name: "내 역할" })).toBeNull();
+  });
+});
