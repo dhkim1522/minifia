@@ -11,12 +11,21 @@ const TOKEN = "t".repeat(43);
 // RoomScreen 이 진짜 소켓을 열지 않도록 가짜 WebSocket 을 심는다.
 class FakeWebSocket extends EventTarget {
   static OPEN = 1;
+  static instances: FakeWebSocket[] = [];
   readyState = 0;
   constructor(public url: string) {
     super();
+    FakeWebSocket.instances.push(this);
   }
   send() {}
   close() {}
+  serverClose(code: number, reason = "") {
+    this.readyState = 3;
+    const e = new Event("close") as Event & { code: number; reason: string };
+    e.code = code;
+    e.reason = reason;
+    this.dispatchEvent(e);
+  }
 }
 
 function preview(): RoomPreview {
@@ -48,6 +57,7 @@ async function see(text: string): Promise<void> {
 }
 
 beforeEach(() => {
+  FakeWebSocket.instances = [];
   vi.stubGlobal("WebSocket", FakeWebSocket);
   installMemoryStorage();
 });
@@ -130,5 +140,59 @@ describe("App 입장 정보 이어받기 (E1 resume, Pitfall 22)", () => {
     expect(screen.getByRole("heading", { name: "방 0042" })).toBeTruthy();
     expect((fetchMock.mock.calls[0] as unknown as [string])[0]).toBe("/api/rooms/0042");
     expect(stored()).toBe(storedAs("1111"));
+  });
+});
+
+describe("방에서 나온 이유별 화면 (E3, D-07)", () => {
+  // 저장된 입장 정보로 방에 들어간 뒤, 서버가 소켓을 닫는 상황을 만든다.
+  async function enterRoomAndClose(code: number, reason: string) {
+    saveSession({ code: "0042", token: TOKEN });
+    window.history.replaceState(null, "", "/r/0042");
+    const fetchMock = vi.fn(async () => ok());
+    vi.stubGlobal("fetch", fetchMock);
+    render(<App />);
+    await see("연결 중…");
+    const socket = FakeWebSocket.instances[0]!;
+    await act(async () => {
+      socket.serverClose(code, reason);
+    });
+    return fetchMock;
+  }
+
+  it("내보내짐(kicked)은 오류 화면 '방장이 방에서 내보냈어요' + [처음으로]이고 입장 정보가 지워지며, [처음으로]로 첫 화면에 간다", async () => {
+    await enterRoomAndClose(4003, "kicked");
+    expect(screen.queryByRole("heading", { name: "방장이 방에서 내보냈어요" })).not.toBeNull();
+    expect(stored()).toBe("null");
+    act(() => screen.getByRole("button", { name: "처음으로" }).click());
+    expect(screen.queryByRole("button", { name: "방 만들기" })).not.toBeNull();
+    expect(window.location.pathname).toBe("/");
+  });
+
+  it("방 닫힘(room_closed)은 오류 화면 '방이 닫혔어요' + [처음으로]이고 입장 정보가 지워진다", async () => {
+    await enterRoomAndClose(4003, "room_closed");
+    expect(screen.queryByRole("heading", { name: "방이 닫혔어요" })).not.toBeNull();
+    expect(screen.queryByRole("button", { name: "처음으로" })).not.toBeNull();
+    expect(stored()).toBe("null");
+  });
+
+  it("입장 정보 무효(invalid_token)는 입장 정보를 지우고 같은 코드의 링크 참가 화면 + 토스트로 간다", async () => {
+    await enterRoomAndClose(4003, "invalid_token");
+    expect(screen.queryByRole("heading", { name: "방 0042" })).not.toBeNull();
+    expect(screen.getByRole("status").textContent).toBe("이 방의 입장 정보가 없어요. 다시 들어와 주세요");
+    expect(stored()).toBe("null");
+  });
+
+  it("스스로 나감(left)은 입장 정보를 지우고 첫 화면(\"/\")으로 간다", async () => {
+    await enterRoomAndClose(4003, "left");
+    expect(screen.queryByRole("button", { name: "방 만들기" })).not.toBeNull();
+    expect(stored()).toBe("null");
+    expect(window.location.pathname).toBe("/");
+  });
+
+  it("다른 창에서 접속(replaced)한 뒤 [처음으로]를 누르면 입장 정보는 그대로 두고 첫 화면으로 간다", async () => {
+    await enterRoomAndClose(4001, "");
+    act(() => screen.getByRole("button", { name: "처음으로" }).click());
+    expect(screen.queryByRole("button", { name: "방 만들기" })).not.toBeNull();
+    expect(stored()).toBe(storedAs("0042"));
   });
 });
