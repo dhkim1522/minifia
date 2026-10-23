@@ -19,3 +19,20 @@ export type BackdropVariant = "lobby" | "night" | "day" | "verdict";
 export function backdropUrl(layout: BackdropLayout, variant: BackdropVariant): string {
   return `/backgrounds/bg_${layout}_${variant}.svg`;
 }
+
+// RED 단계의 뼈대: 테스트가 로드되어 단언에서 실패하도록 빈 값을 돌려준다. GREEN 에서 채운다.
+export type PreloadItem = { href: string; imageSrcSet?: string };
+export function figureSrc(_seat: number): { src: string; srcSet: string } {
+  return { src: "", srcSet: "" };
+}
+export function roleArtSrc(_role: "mafia" | "police" | "doctor" | "citizen"): { src: string; srcSet: string } {
+  return { src: "", srcSet: "" };
+}
+export function entryPreloadList(): PreloadItem[] {
+  return [];
+}
+export function rolePreloadList(): PreloadItem[] {
+  return [];
+}
+export function preloadEntryAssets(): void {}
+export function preloadRoleAssets(): void {}
