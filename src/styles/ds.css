@@ -108,3 +108,10 @@
 .mf-join__count { margin: 0; font-size: 14px; line-height: 1.4; font-weight: 700; color: var(--gray-50); text-shadow: var(--shadow-text); text-align: center; }
 .mf-join .mf-entry__card { margin-top: var(--space-lg); }
 .mf-join__loading { margin-top: auto; text-align: center; text-shadow: var(--shadow-text); }
+
+/* S-01 입력 카드 안의 두 폼(방 만들기 / 코드 참가). 코드 줄의 [참가] 높이는 입력칸과 같은 48. */
+.mf-entry__form { display: flex; flex-direction: column; gap: var(--space-md); margin: 0; }
+.mf-btn--field { min-height: var(--control-input); flex: none; }
+
+/* 입장 정보를 확인하는 동안의 불러오는 중 화면 */
+.mf-entry__loading { margin: auto 0; text-align: center; text-shadow: var(--shadow-text); }

@@ -49,8 +49,6 @@ function read(key: string, storage: StorageLike): string | null {
 function write(key: string, value: string, storage: StorageLike): void {
   try {
     storage.setItem(key, value);
-    // 저장소가 받아 주면 예전 대체본은 필요 없다.
-    memory.delete(key);
   } catch {
     memory.set(key, value);
   }

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import type { RoomPreview } from "../../shared/protocol";
 import { validateNickname } from "../../shared/nickname";
@@ -8,6 +8,7 @@ import { Figure } from "../components/Figure";
 import { TextField } from "../components/TextField";
 import { getPreview, joinRoom } from "../net/api";
 import { nicknameErrorText } from "../net/copy";
+import { loadLastNickname, saveLastNickname } from "../net/session";
 
 interface JoinByLinkProps {
   code: string;
@@ -21,9 +22,23 @@ const MAX_SEATED = 8;
 // S-02 링크 참가. 링크로 열면 코드는 이미 정해져 있어 닉네임만 넣는다. 카드는 방 정보를 받은 뒤에 보인다.
 export function JoinByLink({ code, onEnterRoom, onHome }: JoinByLinkProps) {
   const [preview, setPreview] = useState<RoomPreview | null>(null);
-  const [nickname, setNickname] = useState("");
+  // 마지막으로 쓴 닉네임을 미리 채운다(D-06). 미리 채운 값은 입력한 것이 아니라서 오류 문장은 아직 없다.
+  const [nickname, setNickname] = useState(loadLastNickname);
   const [touched, setTouched] = useState(false);
   const [busy, setBusy] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const focused = useRef(false);
+
+  // 입력 카드가 나타나는 순간 칸에 포커스를 주고, 미리 채운 글자는 전체를 선택해 바로 덮어쓸 수 있게 한다.
+  const ready = preview !== null;
+  useEffect(() => {
+    const input = inputRef.current;
+    if (!ready || focused.current || !input) return;
+    focused.current = true;
+    input.focus();
+    input.select();
+    input.setSelectionRange(0, input.value.length);
+  }, [ready]);
 
   useEffect(() => {
     let cancelled = false;
@@ -49,7 +64,10 @@ export function JoinByLink({ code, onEnterRoom, onHome }: JoinByLinkProps) {
     setBusy(true);
     const result = await joinRoom(code, validation.nickname);
     setBusy(false);
-    if (result.ok) onEnterRoom(code, result.data.token);
+    if (result.ok) {
+      saveLastNickname(validation.nickname);
+      onEnterRoom(code, result.data.token);
+    }
   }
 
   const seated = preview ? [...preview.players].sort((a, b) => a.seat - b.seat).slice(0, MAX_SEATED) : [];
@@ -83,6 +101,7 @@ export function JoinByLink({ code, onEnterRoom, onHome }: JoinByLinkProps) {
                 value={nickname}
                 onChange={handleNicknameChange}
                 placeholder="1~8자로 입력"
+                inputRef={inputRef}
                 error={nicknameError}
               />
               <Button variant="primary" block type="submit" disabled={!validation.ok || busy}>
