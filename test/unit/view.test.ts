@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
+import { claimOptions, selectClaim } from "../../shared/game/claim";
 import { ROOM_TTL_MS, attachConnection, createRoomState, joinRoom, startGame } from "../../shared/game/room";
 import type { Player, RoomState } from "../../shared/game/room";
+import { rolesInPlay } from "../../shared/game/roles";
 import { tick } from "../../shared/game/tick";
 import { buildView } from "../../shared/game/view";
-import type { PhaseId } from "../../shared/protocol";
+import type { Claim, PhaseId, RoomView } from "../../shared/protocol";
 import { seededRandInt } from "../helpers/seededRandom";
 
 const PLAYER_COUNTS = [4, 5, 6, 7, 8] as const;
@@ -74,6 +76,55 @@ function keyPaths(value: unknown, prefix = ""): string[] {
 }
 
 const lastKey = (path: string): string => path.slice(path.lastIndexOf(".") + 1).replace(/\[\]$/, "");
+
+/** 뷰의 모든 문자열 잎을 `경로 → 값` 으로 모은다. 배열 원소는 `[]` 로 접는다. */
+function stringLeaves(value: unknown, prefix = ""): Array<[string, string]> {
+  if (typeof value === "string") return [[prefix, value]];
+  if (Array.isArray(value)) return value.flatMap((v) => stringLeaves(v, `${prefix}[]`));
+  if (value !== null && typeof value === "object") {
+    return Object.entries(value).flatMap(([k, v]) => stringLeaves(v, prefix === "" ? k : `${prefix}.${k}`));
+  }
+  return [];
+}
+
+/** 역할·주장 값으로 쓰이는 문자열. 이 값은 허용 경로에만 나올 수 있다(RESEARCH Pitfall 2). */
+const ROLE_LIKE_VALUES: ReadonlySet<string> = new Set(["mafia", "police", "doctor", "citizen", "none"]);
+/** 허용 경로: 본인 역할·본인 주장·이번 판 구성·공개된 주장·메시지의 직업 칸. 그 밖의 경로에 이 값이 있으면 누출이다. */
+const ALLOWED_ROLE_VALUE_PATHS: ReadonlySet<string> = new Set([
+  "me.role",
+  "me.claim",
+  "day.roles[]",
+  "day.claims[].claim",
+  "day.messages[].claimedRole",
+]);
+
+function roleValueLeaks(view: RoomView): string[] {
+  return stringLeaves(view)
+    .filter(([path, value]) => ROLE_LIKE_VALUES.has(value) && !ALLOWED_ROLE_VALUE_PATHS.has(path))
+    .map(([path, value]) => `${path}=${value}`);
+}
+
+/** 따옴표 없는 한 줄 JSON — 실패 보고(TAP)에 이스케이프된 따옴표가 끼지 않게 한다. */
+const flat = (value: unknown): string => (JSON.stringify(value) ?? "undefined").replaceAll('"', "");
+
+const seatId = (state: RoomState, seat: number): string => {
+  const p = state.players.find((q) => q.seat === seat);
+  if (!p) throw new Error(`no player at seat ${seat}`);
+  return p.id;
+};
+
+/** 실제 전이(selectClaim)로 그 자리의 직업 선택을 더한다. */
+function pick(state: RoomState, seat: number, claim: Claim): RoomState {
+  const r = selectClaim(state, seatId(state, seat), claim);
+  if (!r.ok) throw new Error(`selectClaim failed: ${r.error}`);
+  return r.state;
+}
+
+// 낮 1일차 마감 시각(stateAt 의 연쇄와 같다): dayAnnounce 시작 = 역할 확인 마감, 이후 +2000 / +15000 / +2000 / +90000.
+const DAY1_START = START_AT + 3_000 + 15_000;
+const CLAIM_ENDS_AT = DAY1_START + 2_000 + 15_000;
+const REVEAL_ENDS_AT = CLAIM_ENDS_AT + 2_000;
+const DISCUSSION_ENDS_AT = REVEAL_ENDS_AT + 90_000;
 
 function mafiaSeatsOtherThan(state: RoomState, p: Player): number[] {
   return state.players
@@ -201,16 +252,89 @@ describe("buildView 전수 누출 검사 (T-01-23)", () => {
               const keys = Object.keys(entry).sort().join(",");
               if (keys !== "connected,isHost,nickname,seat") violations.push(`${tag}: players[] keys ${keys}`);
             }
-            // 다른 사람의 역할은 어떤 경로로도 실리지 않는다: 뷰에 든 역할 값은 본인 것(me.role) 하나뿐이다
-            const roleValues = /"(mafia|police|doctor|citizen)"/g;
-            const found = text.match(roleValues) ?? [];
-            const allowed = view.me.role === undefined ? 0 : 1;
-            if (found.length !== allowed) violations.push(`${tag}: ${found.length} role values, allowed ${allowed}`);
+            // 역할·주장 값은 허용 경로(me.role, me.claim, day.roles[], day.claims[].claim, day.messages[].claimedRole)에만 있다
+            for (const leak of roleValueLeaks(view)) violations.push(`${tag}: role-like value outside allowed paths: ${leak}`);
           }
         }
       }
     }
     expect(views).toBe(3 * 7 * (4 + 5 + 6 + 7 + 8));
     expect(violations.join("; ")).toBe("");
+  });
+});
+
+describe("buildView 낮 뷰 — 직업 공개 중(claim) 은 완료한 자리와 내 선택만 (D-01, D-03, D-07, D-09)", () => {
+  const ROLES_5 = ["mafia", "police", "doctor", "citizen"];
+
+  it("5명 claim 단계: 모든 viewer 의 day 는 {n 1, roles, claimDone [1,2]} 뿐이고 claims·messages·extendUsed 키가 없다", () => {
+    const s = pick(pick(stateAt("claim", 5, 1), 1, "police"), 2, "doctor");
+    const want = flat({ n: 1, roles: ROLES_5, claimDone: [1, 2] });
+    const got = s.players.map((viewer) => `seat${viewer.seat}:${flat(buildView(s, viewer.id, START_AT).day)}`);
+    expect(got.join(" ")).toBe(s.players.map((viewer) => `seat${viewer.seat}:${want}`).join(" "));
+  });
+
+  it("me.claim 은 본인이 고른 값만이고, 1일차에 안 고른 사람 me 에는 claim 키가 없다", () => {
+    const s = pick(pick(stateAt("claim", 5, 1), 1, "police"), 2, "doctor");
+    const got = s.players.map((p) => {
+      const me = buildView(s, p.id, START_AT).me;
+      return `${p.seat}:${"claim" in me ? me.claim : "-"}`;
+    });
+    expect(got.join(" ")).toBe("0:- 1:police 2:doctor 3:- 4:-");
+  });
+
+  it("2일차 미리 선택: 어제 공개한 값이 내 me.claim 이고, 그 사람은 claimDone 에 들지 않는다", () => {
+    const day1 = pick(stateAt("claim", 5, 1), 3, "citizen");
+    // claim → claimReveal → discussion → (다음 낮) dayAnnounce → claim 을 실제 tick 으로 넘긴다
+    const day2 = tick(day1, DISCUSSION_ENDS_AT + 2_000);
+    expect(day2.phase).toBe("claim");
+    const v3 = buildView(day2, seatId(day2, 3), START_AT);
+    expect(v3.day?.n).toBe(2);
+    expect(v3.me.claim).toBe("citizen");
+    expect(flat(v3.day?.claimDone)).toBe("[]");
+    // 남의 어제 값은 me.claim 으로도 day 로도 실리지 않는다 — 다른 사람이 본 seat3 의 뷰에는 citizen 이 day.roles 에서만 나온다
+    const v0 = buildView(day2, seatId(day2, 0), START_AT);
+    expect(flat(v0.day)).toBe(flat({ n: 2, roles: ROLES_5, claimDone: [] }));
+  });
+
+  it("claim 단계 뷰에서 역할·주장 값 문자열은 me.role · me.claim · day.roles[] 에만 나온다", () => {
+    const bad: string[] = [];
+    for (const n of PLAYER_COUNTS) {
+      for (const seed of SEEDS) {
+        const opts = claimOptions(n);
+        let s = stateAt("claim", n, seed);
+        for (const p of s.players) if (p.seat % 3 !== 2) s = pick(s, p.seat, opts[(p.seat + seed) % opts.length]!);
+        for (const viewer of s.players) {
+          const view = buildView(s, viewer.id, START_AT);
+          for (const [path] of stringLeaves(view).filter(([, v]) => ROLE_LIKE_VALUES.has(v))) {
+            if (!["me.role", "me.claim", "day.roles[]"].includes(path)) bad.push(`${n}/${seed}/seat${viewer.seat}:${path}`);
+          }
+        }
+      }
+    }
+    expect(bad.join(" ")).toBe("");
+  });
+
+  it("lobby·assigning·roleReveal 뷰에는 day 키와 me.claim 키가 없다", () => {
+    const bad: string[] = [];
+    for (const phase of ["lobby", "assigning", "roleReveal"] as const) {
+      const s = stateAt(phase, 5, 1);
+      for (const p of s.players) {
+        const view = buildView(s, p.id, START_AT);
+        if ("day" in view || "claim" in view.me) bad.push(`${phase}/seat${p.seat}`);
+      }
+    }
+    expect(bad.join(",")).toBe("");
+  });
+
+  it("dayAnnounce 뷰의 day 는 {n, roles} 뿐이다", () => {
+    const s = stateAt("dayAnnounce", 5, 1);
+    for (const p of s.players) {
+      expect(flat(buildView(s, p.id, START_AT).day)).toBe(flat({ n: 1, roles: rolesInPlay(5) }));
+    }
+  });
+
+  it("일부만 고른 상태: claimDone 에는 고른 사람 seat 만, 오름차순으로 들어 있다", () => {
+    const s = pick(pick(stateAt("claim", 6, 42), 4, "none"), 1, "mafia");
+    expect(flat(buildView(s, seatId(s, 0), START_AT).day?.claimDone)).toBe("[1,4]");
   });
 });
