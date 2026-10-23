@@ -8,6 +8,8 @@ import { assignRoles } from "./roles";
 import type { RoleId } from "./roles";
 
 export const ROOM_TTL_MS = 3 * 60 * 60 * 1000;
+/** 만든 뒤 아무도 접속(hello)하지 않은 방의 수명. 방 만들기 HTTP 를 쏟아부어 4자리 코드를 말리는 공격의 효과를 줄인다(WR-05). */
+export const UNCONNECTED_ROOM_TTL_MS = 10 * 60 * 1000;
 
 export interface Player {
   id: string;
@@ -26,6 +28,11 @@ export interface RoomState {
   code: string;
   createdAt: number;
   expiresAt: number;
+  /**
+   * false 면 아직 아무도 접속한 적이 없다 — 만료가 UNCONNECTED_ROOM_TTL_MS 로 짧고 첫 attachConnection 이 늘린다.
+   * 이 필드가 없는 옛 상태(이미 살아 있던 방)는 접속한 것으로 본다.
+   */
+  everConnected?: boolean;
   phase: PhaseId;
   phaseEndsAt: number | null;
   hostId: string;
@@ -59,7 +66,8 @@ export function createRoomState(input: {
     state: {
       code: input.code,
       createdAt: input.now,
-      expiresAt: input.now + ROOM_TTL_MS,
+      expiresAt: input.now + UNCONNECTED_ROOM_TTL_MS,
+      everConnected: false,
       phase: "lobby",
       phaseEndsAt: null,
       hostId: input.hostId,
@@ -211,8 +219,11 @@ export function findPlayerByToken(state: RoomState, token: string): Player | und
 }
 
 export function attachConnection(state: RoomState, playerId: string, connId: string): RoomState {
+  // 첫 접속: 짧던 만료를 정상 수명(생성 시각 기준)으로 늘린다. 이미 더 늦은 만료는 줄이지 않는다.
+  const first = state.everConnected === false;
   return {
     ...state,
+    ...(first ? { everConnected: true, expiresAt: Math.max(state.expiresAt, state.createdAt + ROOM_TTL_MS) } : {}),
     players: state.players.map((p) => (p.id === playerId ? { ...p, connected: true, connId } : p)),
   };
 }

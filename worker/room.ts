@@ -350,6 +350,8 @@ export class Room extends DurableObject<Env> {
     ws.serializeAttachment(attachment);
     this.room = attachConnection(room, player.id, connId);
     await this.persistAndBroadcast();
+    // 첫 접속이면 만료가 늘었으니 알람도 따라 옮긴다.
+    if (this.room.expiresAt !== room.expiresAt) await this.reschedule();
   }
 
   private async handleDisconnect(ws: WebSocket): Promise<void> {

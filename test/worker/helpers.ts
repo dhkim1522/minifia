@@ -173,6 +173,8 @@ export async function seat(connectedGuests: number, offlineGuests: number): Prom
 }
 
 export async function storedRoom(code: string): Promise<{
+  createdAt: number;
+  expiresAt: number;
   phase: string;
   phaseEndsAt: number | null;
   players: Array<{ role?: string }>;
@@ -181,7 +183,7 @@ export async function storedRoom(code: string): Promise<{
   await runInDurableObject(env.ROOM.getByName(code), async (_i, state) => {
     room = await state.storage.get("room");
   });
-  return room as { phase: string; phaseEndsAt: number | null; players: Array<{ role?: string }> };
+  return room as { createdAt: number; expiresAt: number; phase: string; phaseEndsAt: number | null; players: Array<{ role?: string }> };
 }
 
 export async function alarmOf(code: string): Promise<number | null> {

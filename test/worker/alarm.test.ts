@@ -2,7 +2,8 @@ import { env, exports } from "cloudflare:workers";
 import { runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 import type { RoomView, ServerMessage } from "../../shared/protocol";
-import { alarmOf, closed, connect, forceDue, hello, nextFrame, seat, send, storedRoom } from "./helpers";
+import { ROOM_TTL_MS, UNCONNECTED_ROOM_TTL_MS } from "../../shared/game/room";
+import { alarmOf, closed, connect, createRoom, forceDue, hello, nextFrame, seat, send, storedRoom } from "./helpers";
 import type { Seated } from "./helpers";
 
 const phaseIs = (phase: string) => (m: ServerMessage) => m.t === "state" && m.view.phase === phase;
@@ -113,5 +114,28 @@ describe("알람", () => {
     expect((await storedRoom(r.code)).phase).toBe("roleReveal");
     const room = await storedRoom(r.code);
     expect(await alarmOf(r.code)).toBe(room.phaseEndsAt);
+  });
+});
+
+describe("연결자가 없던 방의 짧은 수명 (WR-05)", () => {
+  it("만들기만 하고 아무도 hello 하지 않은 방은 짧게 만료되고, 알람이 그 시각에 걸리며, 만료 알람이 방을 지운다", async () => {
+    const { code } = await createRoom("방장");
+    const room = await storedRoom(code);
+    expect(room.expiresAt - room.createdAt).toBe(UNCONNECTED_ROOM_TTL_MS);
+    expect(await alarmOf(code)).toBe(room.expiresAt);
+
+    await forceDue(code, "expiresAt");
+    expect(await runDurableObjectAlarm(env.ROOM.getByName(code))).toBe(true);
+    const res = await exports.default.fetch(`http://x/api/rooms/${code}`);
+    expect(res.status).toBe(404);
+  });
+
+  it("첫 hello 가 오면 만료가 생성 시각 + 3시간으로 늘고 알람도 그 시각으로 옮겨 간다", async () => {
+    const { code, token } = await createRoom("방장");
+    const sock = await connect(code);
+    await hello(sock, token);
+    const room = await storedRoom(code);
+    expect(room.expiresAt - room.createdAt).toBe(ROOM_TTL_MS);
+    expect(await alarmOf(code)).toBe(room.expiresAt);
   });
 });

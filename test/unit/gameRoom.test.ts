@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   ROOM_TTL_MS,
+  UNCONNECTED_ROOM_TTL_MS,
   attachConnection,
   checkStart,
   connectedCount,
@@ -95,7 +96,8 @@ describe("createRoomState", () => {
     const s = newRoom("  Alice  ");
     expect(s.phase).toBe("lobby");
     expect(s.phaseEndsAt).toBeNull();
-    expect(s.expiresAt).toBe(1000 + ROOM_TTL_MS);
+    // 연결자가 한 번도 없었던 방은 짧게 산다(WR-05) — 첫 attachConnection 이 ROOM_TTL_MS 로 늘린다.
+    expect(s.expiresAt).toBe(1000 + UNCONNECTED_ROOM_TTL_MS);
     expect(s.nextJoinSeq).toBe(1);
     const host = s.players[0]!;
     expect(host.seat).toBe(0);
@@ -403,6 +405,20 @@ describe("checkStart", () => {
 });
 
 describe("연결 붙이기·떼기", () => {
+  it("WR-05: 첫 attachConnection 이 만료를 생성 시각 + ROOM_TTL_MS 로 늘리고, 이후의 attach 는 만료를 건드리지 않는다", () => {
+    const created = newRoom();
+    expect(created.expiresAt).toBe(1000 + UNCONNECTED_ROOM_TTL_MS);
+    const first = attachConnection(created, "h1", "c1");
+    expect(first.expiresAt).toBe(1000 + ROOM_TTL_MS);
+    const again = attachConnection(first, "h1", "c2");
+    expect(again.expiresAt).toBe(first.expiresAt);
+  });
+
+  it("WR-05: 표시가 없는 옛 상태(이미 살아 있던 방)는 첫 attach 로 만료가 바뀌지 않는다", () => {
+    const legacy = room([{ id: "h1", seat: 0, joinSeq: 0 }], { expiresAt: 5_000 });
+    expect(attachConnection(legacy, "h1", "c1").expiresAt).toBe(5_000);
+  });
+
   it("attachConnection 은 새 객체를 돌려주고 입력을 바꾸지 않는다", () => {
     const s = newRoom();
     const a = attachConnection(s, "h1", "c1");
