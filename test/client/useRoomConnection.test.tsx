@@ -1,5 +1,5 @@
 import { act, cleanup, renderHook } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { RoomView } from "../../shared/protocol";
 import { useRoomConnection } from "../../src/net/useRoomConnection";
 
@@ -30,6 +30,10 @@ class FakeSocket extends EventTarget {
     e.reason = reason;
     this.dispatchEvent(e);
   }
+  /** 보낸 프레임 중 ping 의 c 값들 */
+  pings(): number[] {
+    return this.sent.map((f) => JSON.parse(f) as { t: string; c: number }).filter((m) => m.t === "ping").map((m) => m.c);
+  }
 }
 
 const view: RoomView = {
@@ -51,13 +55,44 @@ function setup() {
     sockets.push(s);
     return s as unknown as WebSocket;
   };
-  const hook = renderHook(() => useRoomConnection("0042", "t".repeat(43), { createSocket }));
-  return { sockets, hook };
+  const checkRoom = vi.fn(async () => "alive" as const);
+  const hook = renderHook(() =>
+    useRoomConnection("0042", "t".repeat(43), { createSocket, random: () => 0, checkRoom }),
+  );
+  return { sockets, hook, checkRoom };
 }
 
-afterEach(cleanup);
+function advance(ms: number) {
+  act(() => {
+    vi.advanceTimersByTime(ms);
+  });
+}
 
-describe("useRoomConnection", () => {
+function setVisibility(state: "visible" | "hidden") {
+  Object.defineProperty(document, "visibilityState", { configurable: true, get: () => state });
+  act(() => {
+    document.dispatchEvent(new Event("visibilitychange"));
+  });
+}
+
+/** 열고 첫 state 까지 받은 소켓 */
+function openWithState(s: FakeSocket) {
+  act(() => s.open());
+  act(() => s.message({ t: "state", view }));
+}
+
+beforeEach(() => {
+  vi.useFakeTimers();
+  setVisibility("visible");
+});
+
+afterEach(() => {
+  cleanup();
+  vi.useRealTimers();
+  Object.defineProperty(document, "visibilityState", { configurable: true, get: () => "visible" });
+});
+
+describe("useRoomConnection: 연결·핸드셰이크", () => {
   it("열리면 hello{token} 을 보내고, 토큰은 주소에 없다", () => {
     const { sockets } = setup();
     const s = sockets[0]!;
@@ -67,13 +102,36 @@ describe("useRoomConnection", () => {
     expect(JSON.parse(s.sent[0]!)).toEqual({ t: "hello", token: "t".repeat(43) });
   });
 
-  it("state 를 받으면 view 와 서버-로컬 시각 차이(offset)를 갱신한다", () => {
+  it("열린 직후 hello 다음에 서로 다른 c 의 ping 3개를 보낸다", () => {
+    const { sockets } = setup();
+    act(() => sockets[0]!.open());
+    const frames = sockets[0]!.sent.map((f) => JSON.parse(f) as { t: string; c?: number });
+    expect(frames.map((f) => f.t)).toEqual(["hello", "ping", "ping", "ping"]);
+    expect(new Set(sockets[0]!.pings()).size).toBe(3);
+  });
+
+  it("첫 pong 전에는 offset 0, pong 이 서버시각+5000 을 돌려주면 약 5000", () => {
     const { sockets, hook } = setup();
     act(() => sockets[0]!.open());
     act(() => sockets[0]!.message({ t: "state", view }));
     expect(hook.result.current.view?.code).toBe("0042");
     expect(hook.result.current.status).toBe("open");
-    expect(hook.result.current.offset).toBeGreaterThan(4000);
+    expect(hook.result.current.offset).toBe(0);
+    for (const c of sockets[0]!.pings()) {
+      act(() => sockets[0]!.message({ t: "pong", c, serverNow: Date.now() + 5000 }));
+    }
+    expect(Math.abs(hook.result.current.offset - 5000)).toBeLessThan(50);
+  });
+
+  it("소켓이 열릴 때마다 epoch 가 1씩 늘어난다", () => {
+    const { sockets, hook } = setup();
+    expect(hook.result.current.epoch).toBe(0);
+    openWithState(sockets[0]!);
+    expect(hook.result.current.epoch).toBe(1);
+    act(() => sockets[0]!.serverClose(1006));
+    advance(500);
+    openWithState(sockets[1]!);
+    expect(hook.result.current.epoch).toBe(2);
   });
 
   it("4003 닫힘은 removed 와 이유, 4001 은 replaced", () => {
@@ -90,12 +148,127 @@ describe("useRoomConnection", () => {
     expect(b.hook.result.current.status).toBe("replaced");
   });
 
-  it("그 밖의 닫힘은 reconnecting 이고, 정리 때 소켓을 닫는다", () => {
+  it("끊긴 동안(canSend 거짓)에는 입력을 보내지 않는다", () => {
+    const { sockets, hook } = setup();
+    openWithState(sockets[0]!);
+    const before = sockets[0]!.sent.length;
+    act(() => hook.result.current.send({ t: "ping", c: 99 }));
+    expect(sockets[0]!.sent.length).toBe(before + 1);
+    act(() => sockets[0]!.serverClose(1006));
+    expect(hook.result.current.canSend).toBe(false);
+    act(() => hook.result.current.send({ t: "ping", c: 100 }));
+    expect(sockets[0]!.sent.length).toBe(before + 1);
+  });
+
+  it("정리 때 소켓을 닫는다", () => {
     const { sockets, hook } = setup();
     act(() => sockets[0]!.open());
     act(() => sockets[0]!.serverClose(1006));
     expect(hook.result.current.status).toBe("reconnecting");
     hook.unmount();
     expect(sockets[0]!.closed).toBe(true);
+  });
+});
+
+describe("useRoomConnection: 재연결 (CONN-01)", () => {
+  it("state 를 받은 뒤 닫히면 0.5초, 1초, 2초 뒤 새 소켓(지수 백오프)", () => {
+    const { sockets } = setup();
+    openWithState(sockets[0]!);
+    act(() => sockets[0]!.serverClose(1006));
+    advance(499);
+    expect(sockets.length).toBe(1);
+    advance(1);
+    expect(sockets.length).toBe(2);
+
+    act(() => sockets[1]!.serverClose(1006));
+    advance(999);
+    expect(sockets.length).toBe(2);
+    advance(1);
+    expect(sockets.length).toBe(3);
+
+    act(() => sockets[2]!.serverClose(1006));
+    advance(1999);
+    expect(sockets.length).toBe(3);
+    advance(1);
+    expect(sockets.length).toBe(4);
+  });
+
+  it("화면이 숨겨진 동안 닫히면 새 소켓을 만들지 않다가, 다시 보이면 곧바로 만든다", () => {
+    const { sockets } = setup();
+    openWithState(sockets[0]!);
+    setVisibility("hidden");
+    act(() => sockets[0]!.serverClose(1006));
+    advance(20_000);
+    expect(sockets.length).toBe(1);
+    setVisibility("visible");
+    expect(sockets.length).toBe(2);
+  });
+
+  it("열린 소켓에서 화면이 돌아오면 ping 을 보내고, 2.5초 안에 pong 이 없으면 닫고 새 소켓", () => {
+    const { sockets } = setup();
+    openWithState(sockets[0]!);
+    const pingsBefore = sockets[0]!.pings().length;
+    setVisibility("hidden");
+    setVisibility("visible");
+    expect(sockets[0]!.pings().length).toBe(pingsBefore + 1);
+    advance(2499);
+    expect(sockets[0]!.closed).toBe(false);
+    expect(sockets.length).toBe(1);
+    advance(1);
+    expect(sockets[0]!.closed).toBe(true);
+    expect(sockets.length).toBe(2);
+  });
+
+  it("복귀 ping 에 pong 이 오면 소켓을 그대로 둔다", () => {
+    const { sockets } = setup();
+    openWithState(sockets[0]!);
+    setVisibility("hidden");
+    setVisibility("visible");
+    const c = sockets[0]!.pings().at(-1)!;
+    act(() => sockets[0]!.message({ t: "pong", c, serverNow: Date.now() }));
+    advance(5000);
+    expect(sockets[0]!.closed).toBe(false);
+    expect(sockets.length).toBe(1);
+  });
+
+  it("online 이벤트에 기다리지 않고 다시 시도한다", () => {
+    const { sockets } = setup();
+    openWithState(sockets[0]!);
+    act(() => sockets[0]!.serverClose(1006));
+    expect(sockets.length).toBe(1);
+    act(() => {
+      window.dispatchEvent(new Event("online"));
+    });
+    expect(sockets.length).toBe(2);
+  });
+
+  it("보이는 상태로 30초 연속 실패하면 failed 가 되고 더는 시도하지 않으며, retry() 로 다시 시작한다", () => {
+    const { sockets, hook } = setup();
+    openWithState(sockets[0]!);
+    act(() => sockets[0]!.serverClose(1006));
+    advance(29_000);
+    expect(hook.result.current.status).toBe("reconnecting");
+    advance(1_000);
+    expect(hook.result.current.status).toBe("failed");
+    const count = sockets.length;
+    advance(60_000);
+    expect(sockets.length).toBe(count);
+    act(() => hook.result.current.retry());
+    expect(sockets.length).toBe(count + 1);
+    expect(hook.result.current.status).toBe("connecting");
+  });
+
+  it("꺼져 있던 시간은 세지 않는다: 200초 숨겼다 켜도 곧바로 failed 가 되지 않는다", () => {
+    const { sockets, hook } = setup();
+    openWithState(sockets[0]!);
+    act(() => sockets[0]!.serverClose(1006));
+    setVisibility("hidden");
+    advance(200_000);
+    setVisibility("visible");
+    expect(hook.result.current.status).toBe("reconnecting");
+    advance(29_000);
+    expect(hook.result.current.status).toBe("reconnecting");
+    advance(1_000);
+    expect(hook.result.current.status).toBe("failed");
   });
 });

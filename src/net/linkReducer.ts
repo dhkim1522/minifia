@@ -106,3 +106,8 @@ export function linkReducer(s: LinkState, e: LinkEvent): LinkState {
       return s;
   }
 }
+
+/** 재연결 대기(ms): min(5000, 500·2^(attempts−1)) + 지터. RED 단계 뼈대. */
+export function retryDelayMs(_attempts: number, _rand01: number): number {
+  return 0;
+}

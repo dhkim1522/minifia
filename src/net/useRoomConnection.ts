@@ -49,7 +49,11 @@ const isVisible = () => typeof document === "undefined" || document.visibilitySt
 export function useRoomConnection(
   code: string,
   token: string,
-  options?: { createSocket?: (url: string) => WebSocket },
+  options?: {
+    createSocket?: (url: string) => WebSocket;
+    random?: () => number;
+    checkRoom?: (code: string) => Promise<"alive" | "gone" | "unknown">;
+  },
 ): RoomConnection {
   const [link, setLink] = useState<LinkState>(() => initialLinkState(Date.now(), isVisible()));
   const linkRef = useRef(link);
