@@ -1,3 +1,5 @@
+/// <reference types="node" />
+import { readFileSync } from "node:fs";
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import "../helpers/singleLineErrors";
@@ -247,5 +249,131 @@ describe("낮 토론 화면 — 로그·말하기 줄 (COMM-01, D-15·D-16·D-17
     expect(items()[0]?.querySelector(".mf-msglog__name")?.textContent).toBe("<img src=x>");
     expect(r.container.textContent).not.toContain("alert(1)");
     expect(r.container.querySelector(".mf-float .mf-bubble")?.textContent).toBe("하윤 의심돼요");
+  });
+});
+
+describe("낮 토론 화면 — 이모티콘·합산 쿨다운·오류 (COMM-02·COMM-04, D-14·D-16)", () => {
+  const emojiCells = () =>
+    [...screen.getByRole("group", { name: "이모티콘" }).querySelectorAll<HTMLButtonElement>("button")];
+  const advance = (ms: number) =>
+    act(() => {
+      vi.advanceTimersByTime(ms);
+    });
+
+  it("[이모티콘] → 트레이가 열리고, 좋아요 칸이 {t:emoji, icon:heart} 를 보내며 트레이는 열린 채 여덟 칸과 두 버튼이 꺼진다", () => {
+    const r = scene(makeView());
+    fireEvent.click(emojiBtn());
+    expect(dialog("이모티콘")).not.toBeNull();
+    expect(emojiCells().length).toBe(8);
+    expect(emojiCells().every((c) => !c.disabled)).toBe(true);
+    fireEvent.click(screen.getByRole("button", { name: "좋아요" }));
+    expect(r.conn.send).toHaveBeenCalledTimes(1);
+    expect(r.conn.send).toHaveBeenCalledWith({ t: "emoji", icon: "heart" });
+    expect(dialog("이모티콘")).not.toBeNull();
+    expect(emojiCells().every((c) => c.disabled)).toBe(true);
+    expect(quickBtn().disabled).toBe(true);
+    expect(emojiBtn().disabled).toBe(true);
+    // 꺼진 동안 눌러도 더 보내지 않는다
+    fireEvent.click(screen.getByRole("button", { name: "웃음" }));
+    expect(r.conn.send).toHaveBeenCalledTimes(1);
+  });
+
+  it("2000ms 뒤 트레이 칸과 두 버튼이 다시 켜진다", () => {
+    scene(makeView());
+    fireEvent.click(emojiBtn());
+    fireEvent.click(screen.getByRole("button", { name: "좋아요" }));
+    advance(1_999);
+    expect(emojiCells().every((c) => c.disabled)).toBe(true);
+    advance(1);
+    expect(emojiCells().every((c) => !c.disabled)).toBe(true);
+    expect(quickBtn().disabled).toBe(false);
+    expect(emojiBtn().disabled).toBe(false);
+  });
+
+  it("메시지를 보낸 직후도 같은 2초 잠금이다(합산)", () => {
+    scene(makeView());
+    fireEvent.click(quickBtn());
+    fireEvent.click(within(screen.getByRole("group", { name: "대상" })).getByRole("button", { name: "하윤" }));
+    fireEvent.click(screen.getByRole("button", { name: "보내기" }));
+    advance(300); // 시트가 닫힌다
+    expect(dialog("빠른 메시지")).toBeNull();
+    expect(quickBtn().disabled).toBe(true);
+    expect(emojiBtn().disabled).toBe(true);
+    advance(1_700);
+    expect(quickBtn().disabled).toBe(false);
+    expect(emojiBtn().disabled).toBe(false);
+  });
+
+  it("서버 RATE_LIMITED 는 표시 없이 지금부터 2초 다시 잠근다", () => {
+    const ev = emitter();
+    scene(makeView(), { onEvent: ev.onEvent });
+    expect(quickBtn().disabled).toBe(false);
+    ev.emit({ t: "error", code: "RATE_LIMITED" });
+    expect(quickBtn().disabled).toBe(true);
+    expect(emojiBtn().disabled).toBe(true);
+    expect(screen.queryByRole("status")).toBeNull();
+    advance(1_999);
+    expect(quickBtn().disabled).toBe(true);
+    advance(1);
+    expect(quickBtn().disabled).toBe(false);
+  });
+
+  it("보낸 뒤 1500ms 에 RATE_LIMITED 가 오면 그 시각부터 다시 2초 잠긴다", () => {
+    const ev = emitter();
+    scene(makeView(), { onEvent: ev.onEvent });
+    fireEvent.click(emojiBtn());
+    fireEvent.click(screen.getByRole("button", { name: "웃음" }));
+    advance(1_500);
+    ev.emit({ t: "error", code: "RATE_LIMITED" });
+    advance(1_999);
+    expect(emojiBtn().disabled).toBe(true);
+    advance(1);
+    expect(emojiBtn().disabled).toBe(false);
+  });
+
+  it("BAD_MESSAGE 는 토스트 '보내지 못했어요. 다시 시도해 주세요'(2초)를 띄운다", () => {
+    const ev = emitter();
+    scene(makeView(), { onEvent: ev.onEvent });
+    ev.emit({ t: "error", code: "BAD_MESSAGE" });
+    expect(screen.getByRole("status").textContent).toBe("보내지 못했어요. 다시 시도해 주세요");
+    expect(screen.getByRole("status").className).toContain("mf-toast--top");
+    advance(2_000);
+    expect(screen.queryByRole("status")).toBeNull();
+  });
+
+  it("WRONG_PHASE·NOT_HOST·ALREADY_EXTENDED 는 아무 표시도 하지 않고 잠그지도 않는다", () => {
+    const ev = emitter();
+    scene(makeView(), { onEvent: ev.onEvent });
+    ev.emit({ t: "error", code: "WRONG_PHASE" });
+    ev.emit({ t: "error", code: "NOT_HOST" });
+    ev.emit({ t: "error", code: "ALREADY_EXTENDED" });
+    expect(screen.queryByRole("status")).toBeNull();
+    expect(quickBtn().disabled).toBe(false);
+  });
+
+  it("emoji 이벤트(자리 3, 놀람) → 자리 3 머리 위 .mf-react 와 보이지 않는 live 줄 '도현: 놀람', 2초 뒤 사라지고 로그에는 남지 않는다", () => {
+    const ev = emitter();
+    const r = scene(makeView(), { onEvent: ev.onEvent });
+    ev.emit({ t: "emoji", seat: 3, icon: "surprised", at: NOW });
+    const layers = floatsOfSeat(r.container, 3);
+    expect(layers.length).toBe(1);
+    expect(layers[0]?.querySelector(".mf-react")).not.toBeNull();
+    const live = screen.getByText("도현: 놀람");
+    expect(live.className).toContain("mf-sr-only");
+    expect(live.getAttribute("aria-live")).toBe("polite");
+    expect(items().length).toBe(0);
+    advance(2_000);
+    expect(r.container.querySelectorAll(".mf-react").length).toBe(0);
+  });
+
+  it("끊긴 동안(canSend false)은 [빠른 메시지]·[이모티콘] 이 꺼진다", () => {
+    scene(makeView(), { canSend: false });
+    expect(quickBtn().disabled).toBe(true);
+    expect(emojiBtn().disabled).toBe(true);
+  });
+
+  it("낮 화면 토스트는 타이머를 가리지 않도록 top 을 덮어쓴다(CSS)", () => {
+    const css = readFileSync("src/styles/day.css", "utf8");
+    expect(css).toMatch(/\.mf-dayscene[^{]*\.mf-toast--top\s*\{[^}]*space-3xl[^}]*\}/);
   });
 });
