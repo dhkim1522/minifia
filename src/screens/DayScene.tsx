@@ -6,10 +6,16 @@ import { SEAT_COUNT } from "../../shared/seatLayout";
 import { Backdrop } from "../components/Backdrop";
 import { ClaimPanel } from "../components/ClaimPanel";
 import { claimName } from "../components/ClaimTag";
+import { DiscussionControls } from "../components/DiscussionControls";
+import { MessageLog } from "../components/MessageLog";
 import { PhaseBar } from "../components/PhaseBar";
 import { Table } from "../components/Table";
-import type { TableSeat } from "../components/Table";
+import type { TableFloat, TableSeat } from "../components/Table";
 import { Timer } from "../components/Timer";
+import { Toast, useToast } from "../components/Toast";
+import { messageText } from "../game/messageText";
+import { useSeatFloats } from "../net/seatFloats";
+import type { SeatFloatState } from "../net/seatFloats";
 import type { RoomConnection } from "../net/useRoomConnection";
 import "../styles/day.css";
 import "../styles/phase.css";
@@ -28,6 +34,9 @@ export interface DaySceneProps {
 // 화면은 스스로 단계를 넘기지 않는다(서버 view 만 따름). 역할 문자열을 화면에 쓰지 않는다.
 export function DayScene({ view, connection, myRoleButton }: DaySceneProps) {
   const n = view.day?.n ?? 1;
+  // 낮 토론의 말풍선·이모티콘(자리별 한 번에 하나). 단계가 discussion 이 아니면 훅이 비운다.
+  const floats = useSeatFloats(view, connection.onEvent);
+  const { toast, show: showToast } = useToast();
 
   // 공개 연출(말풍선 팝)은 이 화면이 직전에 claim 을 보고 있다가 claimReveal 을 받았을 때만 켠다.
   // 서버 단계가 분리돼 있어 모든 폰이 같은 순간 시작한다. 재접속으로 claimReveal 에 바로 들어오면 켜지 않는다(알약만).
@@ -50,6 +59,14 @@ export function DayScene({ view, connection, myRoleButton }: DaySceneProps) {
   const claimDone = view.phase === "claim" ? (view.day?.claimDone ?? []) : [];
   // 남의 주장은 서버가 공개한 claims 에서만 그린다(claimReveal·discussion).
   const claims = view.phase === "claimReveal" || view.phase === "discussion" ? (view.day?.claims ?? []) : [];
+  const nicknameOf = (seat: number): string | undefined => view.players.find((p) => p.seat === seat)?.nickname;
+  // 서버가 보낸 문장이 아니라 템플릿 ID·seat 로 화면이 만든 문장만 말풍선에 넣는다(T-02-31).
+  const discussionFloat = (f: SeatFloatState | undefined): TableFloat | null => {
+    if (view.phase !== "discussion" || f === undefined) return null;
+    return f.kind === "bubble"
+      ? { kind: "bubble", key: f.key, z: f.z, text: messageText(f.line, nicknameOf), elapsedMs: f.elapsedMs }
+      : { kind: "emoji", key: f.key, z: f.z, icon: f.icon, elapsedMs: f.elapsedMs };
+  };
   const seats: (TableSeat | null)[] = Array.from({ length: SEAT_COUNT }, () => null);
   for (const p of view.players) {
     const c = claims.find((x) => x.seat === p.seat);
@@ -71,7 +88,7 @@ export function DayScene({ view, connection, myRoleButton }: DaySceneProps) {
               dim: c.claim === "none",
               animate: true,
             }
-          : null,
+          : discussionFloat(floats[p.seat]),
     };
   }
 
@@ -97,8 +114,14 @@ export function DayScene({ view, connection, myRoleButton }: DaySceneProps) {
         <section key={`panel-${view.phase}`} className="mf-dayscene__panel mf-dayscene__enter">
           {view.phase === "claim" || view.phase === "claimReveal" ? (
             <ClaimPanel view={view} canSend={connection.canSend} send={connection.send} />
+          ) : view.phase === "discussion" ? (
+            <>
+              <MessageLog lines={view.day?.messages ?? []} players={view.players} mySeat={view.me.seat} />
+              <DiscussionControls view={view} connection={connection} showToast={showToast} />
+            </>
           ) : null}
         </section>
+        <Toast toast={toast} placement="top" />
       </main>
     </Backdrop>
   );

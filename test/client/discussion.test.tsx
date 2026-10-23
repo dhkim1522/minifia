@@ -109,11 +109,13 @@ const emojiBtn = () => screen.getByRole("button", { name: "이모티콘" }) as H
 const dialog = (name: string) => document.querySelector<HTMLDialogElement>(`dialog[aria-label="${name}"]`);
 
 const pct = (n: number): string => `${Math.round(n * 1000) / 1000}%`;
-/** 떠 있는 층이 어느 자리 머리 위인지: 가로 위치(--mf-float-left)가 그 자리의 x 와 같은 층 */
+/** 떠 있는 층이 어느 자리 머리 위인지: 가로(--mf-float-left)와 세로(top)가 그 자리 좌표(Table 의 FIG_H 21.33)와 같은 층. 마주 보는 자리는 x 가 같아 세로도 본다 */
 function floatsOfSeat(container: HTMLElement, seat: number, mySeat = 0): HTMLElement[] {
-  const x = pct(seatLayout(seat, mySeat).x);
-  return [...container.querySelectorAll<HTMLElement>(".mf-float")].filter((el) =>
-    (el.style.getPropertyValue("--mf-float-left") ?? "").includes(`, ${x},`),
+  const L = seatLayout(seat, mySeat);
+  const x = pct(L.x);
+  const top = pct(L.y - 21.33 * L.scale - (L.depth >= 0.5 ? 1 : 8));
+  return [...container.querySelectorAll<HTMLElement>(".mf-float")].filter(
+    (el) => (el.style.getPropertyValue("--mf-float-left") ?? "").includes(`, ${x},`) && el.style.top === top,
   );
 }
 
