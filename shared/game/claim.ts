@@ -17,6 +17,7 @@
 // 말 바꿈이 아니다 — "직전 낮이 말 안 함이면 처음 주장으로 본다"(D-08 권장안)의 직접 결과이며(A3), 결정 0016 에 기록한다.
 import type { Claim } from "../protocol";
 import type { Player, RoomState } from "./room";
+import { rolesInPlay } from "./roles";
 
 /** 마감 순간의 공개 값. 직접 고른 값이 있으면 그 값, 없으면 연결된 사람은 어제 값을 이어받고 끊긴 사람은 말 안 함(D-05, D-09). */
 function shownFor(p: Player): Claim {
@@ -45,21 +46,50 @@ export function enterClaimReveal(state: RoomState): RoomState {
   };
 }
 
-// RED 단계 뼈대 — GREEN 에서 구현한다.
+/** 이번 판 선택지: 이번 판에 나오는 직업 뒤에 말 안 함. 직업 목록은 rolesInPlay 한 곳에서만 나온다(D-07). */
+export function claimOptions(playerCount: number): Claim[] {
+  return [...rolesInPlay(playerCount), "none"];
+}
+
+/** 내 화면의 현재 선택 — 직접 고른 값, 없으면 어제 공개된 값(D-09). 둘 다 없으면 undefined. */
+export function currentClaim(p: Player): Claim | undefined {
+  return p.claimChoice ?? p.claimLast;
+}
+
 export type ClaimError = "WRONG_PHASE" | "BAD_MESSAGE";
-export function claimOptions(_playerCount: number): Claim[] {
-  return [];
-}
-export function currentClaim(_p: Player): Claim | undefined {
-  return undefined;
-}
+
+/**
+ * 직업 선택. 검사 순서가 계약이다: 단계(claim 아니면 WRONG_PHASE) → 방에 있는 사람 → claimOptions 포함(아니면 BAD_MESSAGE)
+ * → 같은 값이면 입력 상태 그대로 ok → 아니면 그 사람의 claimChoice 만 바꾼 새 상태.
+ * 입력은 서버 상태와 요청자 id 뿐이다(클라이언트가 보낸 seat 를 받지 않는다). 판정은 보낸 사람의 실제 역할과 무관하다(D-10, T-02-06).
+ * 탈락자 거부는 3페이즈(ELIM-01)가 이 함수에 isAlive 검사를 더한다.
+ */
 export function selectClaim(
-  _state: RoomState,
-  _actorId: string,
-  _claim: Claim,
+  state: RoomState,
+  actorId: string,
+  claim: Claim,
 ): { ok: true; state: RoomState } | { ok: false; error: ClaimError } {
-  return { ok: false, error: "BAD_MESSAGE" };
+  if (state.phase !== "claim") return { ok: false, error: "WRONG_PHASE" };
+  const actor = state.players.find((p) => p.id === actorId);
+  if (!actor) return { ok: false, error: "BAD_MESSAGE" };
+  if (!claimOptions(state.players.length).includes(claim)) return { ok: false, error: "BAD_MESSAGE" };
+  if (actor.claimChoice === claim) return { ok: true, state };
+  return {
+    ok: true,
+    state: { ...state, players: state.players.map((p) => (p.id === actorId ? { ...p, claimChoice: claim } : p)) },
+  };
 }
+
+/**
+ * claim 진입 훅: 모든 플레이어의 이번 낮 선택(claimChoice 키)을 지운다 — 직접 고른 값만 완료로 센다(D-03).
+ * claimLast·claimShown 은 남는다(D-09). undefined 값을 남기지 않고 키 자체를 뺀다.
+ */
 export function enterClaim(state: RoomState): RoomState {
-  return state;
+  return {
+    ...state,
+    players: state.players.map((p) => {
+      const { claimChoice: _dropped, ...rest } = p;
+      return rest;
+    }),
+  };
 }

@@ -6,7 +6,7 @@
 // 훅은 tick 루프 안에서만 부른다 — 알람이 늦어 여러 단계를 한 번에 따라잡아도 중간 단계 훅이 순서대로 모두 돈다.
 // 알람 핸들러나 DO 에서 훅을 직접 부르지 않는다. 3·4페이즈도 같은 표에 행을 더한다.
 import type { PhaseId } from "../protocol";
-import { enterClaimReveal } from "./claim";
+import { enterClaim, enterClaimReveal } from "./claim";
 import { PHASE_DEFS } from "./phases";
 import type { RoomState } from "./room";
 
@@ -17,6 +17,7 @@ export function enterDayAnnounce(state: RoomState): RoomState {
 
 const ON_ENTER: Partial<Record<PhaseId, (s: RoomState) => RoomState>> = {
   dayAnnounce: enterDayAnnounce,
+  claim: enterClaim,
   claimReveal: enterClaimReveal,
 };
 
