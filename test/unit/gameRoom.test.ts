@@ -11,10 +11,13 @@ import {
   joinRoom,
   kickPlayer,
   leaveRoom,
+  normalizeStoredRoom,
   startGame,
 } from "../../shared/game/room";
 import type { RoomState } from "../../shared/game/room";
-import { ASSIGNING_MS } from "../../shared/game/phases";
+import { ASSIGNING_MS, DAY_ANNOUNCE_MS, ROLE_REVEAL_MS } from "../../shared/game/phases";
+import { tick } from "../../shared/game/tick";
+import type { PhaseId } from "../../shared/protocol";
 import { ROLE_IDS, ROLE_TABLE } from "../../shared/game/roles";
 import type { RoleId } from "../../shared/game/roles";
 import { seededRandInt } from "../helpers/seededRandom";
@@ -557,5 +560,73 @@ describe("startGame (ROLE-01, ROOM-03, 결정 0012)", () => {
     for (let i = pool.length - 1; i >= 1; i -= 1) [pool[i], pool[0]] = [pool[0]!, pool[i]!];
     const seatOrdered = ["s0", "s1", "s3", "s5"];
     expect(seatOrdered.map((id) => byId.get(id)).join(",")).toBe(pool.join(","));
+  });
+});
+
+describe("normalizeStoredRoom — 저장된 옛 방 (RESEARCH Pattern 6, T-02-14)", () => {
+  /** 1페이즈가 저장한 모양: 종착 낮 단계 이름이 문자열 "day" 이고 마감·낮 필드가 없다. */
+  function legacyDayRoom(): RoomState {
+    const base = room(
+      Array.from({ length: 5 }, (_, i) => ({ id: `p${i}`, seat: i, joinSeq: i, connected: true })),
+      { phase: "day" as unknown as PhaseId, phaseEndsAt: null },
+    );
+    return { ...base, players: base.players.map((p, i) => ({ ...p, role: ROLE_IDS[i % ROLE_IDS.length] })) };
+  }
+
+  it("1페이즈 종착 낮 단계로 저장된 상태는 dayAnnounce · now+2000 · day 1 이 되고 나머지 필드·players 는 그대로다", () => {
+    const stored = legacyDayRoom();
+    const got = normalizeStoredRoom(stored, 5_000);
+    expect(`${got.phase}:${got.phaseEndsAt}:${got.day}`).toBe(`dayAnnounce:${5_000 + DAY_ANNOUNCE_MS}:1`);
+    expect(got.players === stored.players).toBe(true);
+    expect(`${got.code}/${got.hostId}/${got.expiresAt}/${got.createdAt}`).toBe(
+      `${stored.code}/${stored.hostId}/${stored.expiresAt}/${stored.createdAt}`,
+    );
+    expect(String(stored.phase)).toBe("day"); // 입력은 바꾸지 않는다
+  });
+
+  it("lobby·roleReveal·discussion 상태는 같은 객체를 돌려준다", () => {
+    const lobby = fullRoom([0, 1, 2, 3]);
+    const started = startGame(lobby, "p0", 0, seededRandInt(1));
+    if (!started.ok) throw new Error(started.error);
+    const roleReveal = tick(started.state, ASSIGNING_MS);
+    const discussion = tick(roleReveal, ASSIGNING_MS + ROLE_REVEAL_MS + DAY_ANNOUNCE_MS + 15_000 + 2_000);
+    const same = [lobby, roleReveal, discussion].map((r) => normalizeStoredRoom(r, 9_999) === r);
+    expect([lobby.phase, roleReveal.phase, discussion.phase].join(",")).toBe("lobby,roleReveal,discussion");
+    expect(same.join(",")).toBe("true,true,true");
+  });
+
+  it("새 optional 필드가 없는 1페이즈 모양 상태를 tick 으로 낮 단계까지 넘겨도 buildView 가 기본값으로 뷰를 만든다", () => {
+    const lobby = fullRoom([0, 1, 2, 3, 4]);
+    const started = startGame(lobby, "p0", 0, seededRandInt(7));
+    if (!started.ok) throw new Error(started.error);
+    // 1페이즈에서 저장된 방에는 claim*·lastSendAt·day·messages·extendUsed·nextMessageSeq 가 없다
+    const legacy: RoomState = {
+      ...started.state,
+      players: started.state.players.map((p) => {
+        const { alive: _a, claimChoice: _b, claimShown: _c, claimLast: _d, claimChanged: _e, lastSendAt: _f, ...rest } = p;
+        return rest;
+      }),
+    };
+    const line = [ASSIGNING_MS, ROLE_REVEAL_MS, DAY_ANNOUNCE_MS, 15_000, 2_000];
+    let at = 0;
+    const seen: string[] = [];
+    let state = legacy;
+    for (const ms of line) {
+      at += ms;
+      state = tick(state, at);
+      const view = buildView(state, "p1", at);
+      seen.push(`${state.phase}:${view.day === undefined ? "-" : view.day.n}`);
+    }
+    expect(seen.join(" ")).toBe("roleReveal:- dayAnnounce:1 claim:1 claimReveal:1 discussion:1");
+    const day = buildView(state, "p1", at).day;
+    expect(day?.claims?.map((c) => c.claim).join(",")).toBe(Array(8).fill("none").join(","));
+    expect(`${day?.messages?.length}:${day?.extendUsed}`).toBe("0:false");
+  });
+
+  it("day·messages·extendUsed 가 아예 없는 discussion 상태도 뷰가 예외 없이 기본값(day 1, messages [], extendUsed false)을 쥔다", () => {
+    const base = fullRoom([0, 1, 2, 3]);
+    const bare: RoomState = { ...base, phase: "discussion", phaseEndsAt: 100_000 };
+    const day = buildView(bare, "p2", 50_000).day;
+    expect(`${day?.n}:${day?.messages?.length}:${day?.extendUsed}:${day?.claims?.length}`).toBe("1:0:false:8");
   });
 });
