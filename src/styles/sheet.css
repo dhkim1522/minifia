@@ -9,7 +9,9 @@
   /* top layer 로 올라가므로 #root 의 폭 제한이 닿지 않는다. 화면 전체를 덮고 안에서 시트 폭을 제한한다. */
   position: fixed; inset: 0; width: 100%; height: 100%; max-width: none; max-height: none;
   margin: 0; padding: 0; border: 0; background: transparent; color: var(--gray-100); font-family: var(--font-ui);
-  overflow: hidden;
+  /* hidden 은 사용자 스크롤만 막는다. 시트가 아래에 숨어 있는 동안 생긴 스크롤 영역을 포커스 이동이 밀어 올려
+     시트가 떴다 내려앉는다(G-01-9 실기기 패널). clip 은 프로그램 스크롤까지 막는다. hidden 은 clip 을 모르는 브라우저용. */
+  overflow: hidden; overflow: clip;
 }
 .mf-dialog[open] { display: flex; flex-direction: column; justify-content: flex-end; }
 /* 막은 ::backdrop 이 아니라 안의 div 다(커스텀 속성 상속이 불확실, Pitfall 19). ::backdrop 은 투명으로 둔다. */

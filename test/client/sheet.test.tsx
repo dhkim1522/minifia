@@ -535,3 +535,11 @@ describe("G-01-9 Sheet 안전장치", () => {
     expect(isOpenClass(dlg)).toBe(true);
   });
 });
+
+describe("G-01-9 다이얼로그 자동 스크롤 차단 (실기기 패널: 시트 아래끝이 다이얼로그 아래끝보다 위로 갔다 돌아옴)", () => {
+  it(".mf-dialog 는 overflow: clip 으로 포커스 이동에 의한 스크롤을 막는다", () => {
+    const css = sheetCssSource.replace(/\/\*[\s\S]*?\*\//g, "");
+    const block = css.match(/\.mf-dialog\s*\{([^{}]*)\}/)?.[1] ?? "";
+    expect(block).toMatch(/overflow:\s*clip/);
+  });
+});
