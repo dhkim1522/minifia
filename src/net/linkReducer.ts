@@ -81,11 +81,17 @@ export function linkReducer(s: LinkState, e: LinkEvent): LinkState {
       };
     }
 
-    case "tick":
+    case "tick": {
+      // 화면이 보이는 동안의 연속 실패만 센다(Pitfall 21). 숨겨진 시간은 failingSince 에 들어오지 않는다.
+      const trying = s.status === "reconnecting" || s.status === "connecting";
+      if (trying && s.visible && s.failingSince !== null && e.now - s.failingSince >= FAIL_AFTER_MS) {
+        return { ...s, status: "failed", banner: "hidden", restoredUntil: null };
+      }
       if (s.banner === "restored" && s.restoredUntil !== null && e.now >= s.restoredUntil) {
         return { ...s, banner: "hidden", restoredUntil: null };
       }
       return s;
+    }
 
     // [다시 연결](replaced)·[다시 시도](failed): 처음부터 다시 연결한다.
     case "retry":
@@ -100,14 +106,24 @@ export function linkReducer(s: LinkState, e: LinkEvent): LinkState {
         removedReason: null,
       };
 
-    // 보이는 시간 30초 규칙·visibility·roomGone 은 Task 2 에서 채운다.
-    case "visibility":
+    case "visibility": {
+      if (!e.visible) {
+        return s.visible || s.failingSince !== null ? { ...s, visible: false, failingSince: null } : s;
+      }
+      // 다시 보이면 reconnecting 일 때 지금부터 새로 센다(벽시계 경과로 판단하지 않음).
+      if (s.status === "reconnecting" && s.failingSince === null) return { ...s, visible: true, failingSince: e.now };
+      return s.visible ? s : { ...s, visible: true };
+    }
+
+    // 방 생존 확인이 404 였다: 더 매달리지 않는다.
     case "roomGone":
-      return s;
+      if (s.status === "removed" || s.status === "replaced") return s;
+      return { ...s, status: "removed", banner: "hidden", restoredUntil: null, removedReason: "room_closed" };
   }
 }
 
-/** 재연결 대기(ms): min(5000, 500·2^(attempts−1)) + 지터. RED 단계 뼈대. */
-export function retryDelayMs(_attempts: number, _rand01: number): number {
-  return 0;
+/** 재연결 대기(ms): min(5000, 500·2^(attempts−1)) + 지터(0~249). 지터는 호출하는 쪽의 난수 [0,1). */
+export function retryDelayMs(attempts: number, rand01: number): number {
+  const exp = Math.max(0, attempts - 1);
+  return Math.min(5000, 500 * 2 ** exp) + Math.floor(rand01 * 250);
 }

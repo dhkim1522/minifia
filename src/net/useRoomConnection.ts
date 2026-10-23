@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ClientMessage, RemovedReason, RoomView, ServerMessage } from "../../shared/protocol";
+import type { ClockSample } from "./clock";
+import { estimateOffset } from "./clock";
 import type { BannerMode, LinkEvent, LinkState, LinkStatus } from "./linkReducer";
-import { initialLinkState, linkReducer } from "./linkReducer";
+import { initialLinkState, linkReducer, RESTORED_MS, retryDelayMs } from "./linkReducer";
 
 export type ConnectionStatus = LinkStatus;
 
@@ -9,22 +11,35 @@ export interface RoomConnection {
   status: ConnectionStatus;
   banner: BannerMode;
   view: RoomView | null;
-  /** 서버시각 - 로컬시각(ms) */
+  /** 서버시각 - 로컬시각(ms). 첫 pong 전에는 0 */
   offset: number;
-  /** 소켓이 열릴 때마다 1씩 늘어난다 */
+  /** 소켓이 열릴 때마다 1씩 늘어난다(대기실 토스트가 재접속 직후 지난 변화를 알리지 않게 쓰는 값) */
   epoch: number;
   removedReason: RemovedReason | null;
-  /** 서버로 입력을 보낼 수 있는지(열려 있고 view 가 있음) */
+  /** 서버로 입력을 보낼 수 있는지(열려 있고 view 가 있음). 끊긴 동안은 거짓 */
   canSend: boolean;
   send(msg: ClientMessage): void;
+  /** replaced 화면의 [다시 연결] */
   reconnect(): void;
+  /** failed 화면의 [다시 시도] */
   retry(): void;
 }
 
-const RETRY_DELAY_MS = 1000;
-// 임시 재시도(1초 고정, 5회 뒤 멈춤). 지수 백오프·화면 복귀 점검은 Task 2 에서 교체한다.
-const MAX_CONSECUTIVE_FAILURES = 5;
+export interface RoomConnectionOptions {
+  createSocket?: (url: string) => WebSocket;
+  /** 재시도 지터용 난수 [0,1) */
+  random?: () => number;
+  checkRoom?: (code: string) => Promise<"alive" | "gone" | "unknown">;
+}
 
+// 열린 척하는 소켓 대비(리서치 가정 A3): 화면 복귀 때 ping 을 보내고 이 안에 pong 이 없으면 닫는다.
+const PONG_WAIT_MS = 2_500;
+const INITIAL_PINGS = 3;
+const MAX_SAMPLES = 5;
+const TICK_MS = 1_000;
+
+// WebSocket.OPEN / CONNECTING 값. 가짜 소켓과 전역 WebSocket 이 없는 환경에서도 같은 값으로 비교한다.
+const CONNECTING = 0;
 const OPEN = 1;
 
 /** https -> wss, http -> ws. 토큰은 주소에 넣지 않는다 — hello 메시지 본문으로만 보낸다. */
@@ -45,31 +60,29 @@ function parseServerMessage(data: unknown): ServerMessage | null {
 }
 
 const isVisible = () => typeof document === "undefined" || document.visibilityState !== "hidden";
+const isTerminal = (s: LinkStatus) => s === "failed" || s === "replaced" || s === "removed";
 
-export function useRoomConnection(
-  code: string,
-  token: string,
-  options?: {
-    createSocket?: (url: string) => WebSocket;
-    random?: () => number;
-    checkRoom?: (code: string) => Promise<"alive" | "gone" | "unknown">;
-  },
-): RoomConnection {
+export function useRoomConnection(code: string, token: string, options?: RoomConnectionOptions): RoomConnection {
   const [link, setLink] = useState<LinkState>(() => initialLinkState(Date.now(), isVisible()));
   const linkRef = useRef(link);
   const [view, setView] = useState<RoomView | null>(null);
   const [offset, setOffset] = useState(0);
-  const [nonce, setNonce] = useState(0);
   const socketRef = useRef<WebSocket | null>(null);
-  const createSocketRef = useRef(options?.createSocket);
-  createSocketRef.current = options?.createSocket;
+  const restartRef = useRef<(() => void) | null>(null);
+  const optionsRef = useRef(options);
+  optionsRef.current = options;
 
   useEffect(() => {
     let disposed = false;
     let retryTimer: ReturnType<typeof setTimeout> | undefined;
-    let failures = 0;
+    let pongTimer: ReturnType<typeof setTimeout> | undefined;
+    let restoredTimer: ReturnType<typeof setTimeout> | undefined;
+    let pingCounter = 0;
+    let checkC = -1;
+    const pending = new Map<number, number>();
+    const samples: ClockSample[] = [];
 
-    // 리듀서는 순수하니 ref 로 최신 상태를 함께 들고, 전이 결과를 바로 읽어 재시도를 정한다.
+    // 리듀서는 순수하니 ref 로 최신 상태를 함께 들고, 전이 결과를 바로 읽어 다음 동작을 정한다.
     const emit = (e: LinkEvent): LinkState => {
       const next = linkReducer(linkRef.current, e);
       if (next !== linkRef.current) {
@@ -79,46 +92,162 @@ export function useRoomConnection(
       return next;
     };
 
-    const connect = () => {
+    const clearRetry = () => {
+      if (retryTimer !== undefined) clearTimeout(retryTimer);
+      retryTimer = undefined;
+    };
+    const clearPongWait = () => {
+      if (pongTimer !== undefined) clearTimeout(pongTimer);
+      pongTimer = undefined;
+      checkC = -1;
+    };
+
+    const sendPing = (ws: WebSocket): number => {
+      pingCounter += 1;
+      pending.set(pingCounter, Date.now());
+      ws.send(JSON.stringify({ t: "ping", c: pingCounter } satisfies ClientMessage));
+      return pingCounter;
+    };
+
+    const onPong = (c: number, serverNow: number) => {
+      const t0 = pending.get(c);
+      if (t0 === undefined) return;
+      pending.delete(c);
+      samples.push({ t0, t1: Date.now(), serverNow });
+      if (samples.length > MAX_SAMPLES) samples.shift();
+      setOffset(estimateOffset(samples));
+      if (c === checkC) clearPongWait();
+    };
+
+    // 포기(failed) 로 넘어가면 더 시도하지 않고, 매달려 있던 소켓과 예약을 정리한다.
+    const settle = (state: LinkState) => {
+      if (state.status !== "failed") return;
+      clearRetry();
+      clearPongWait();
+      const ws = socketRef.current;
+      socketRef.current = null; // 그 소켓의 close 는 무시된다
+      if (ws) ws.close();
+    };
+
+    const scheduleRetry = (state: LinkState) => {
+      // 숨겨진 동안에는 예약하지 않는다. 다시 보이면 visibilitychange 가 바로 연결한다.
+      if (state.status !== "reconnecting" || !state.visible) return;
+      const random = optionsRef.current?.random ?? Math.random;
+      retryTimer = setTimeout(() => {
+        retryTimer = undefined;
+        if (!disposed && linkRef.current.status === "reconnecting") connect();
+      }, retryDelayMs(state.attempts, random()));
+    };
+
+    function connect(): void {
+      clearRetry();
+      clearPongWait();
       const url = roomSocketUrl(window.location, code);
-      const ws = createSocketRef.current ? createSocketRef.current(url) : new WebSocket(url);
-      socketRef.current = ws;
+      const create = optionsRef.current?.createSocket;
+      const ws = create ? create(url) : new WebSocket(url);
+      const prev = socketRef.current;
+      socketRef.current = ws; // 먼저 바꿔 두어 이전 소켓의 close 가 무시되게 한다
+      if (prev) prev.close();
 
       ws.addEventListener("open", () => {
-        if (disposed) return;
+        if (disposed || socketRef.current !== ws) return;
         ws.send(JSON.stringify({ t: "hello", token } satisfies ClientMessage));
         emit({ type: "open", now: Date.now() });
+        // 접속 직후 시계 표본 3개: 왕복이 가장 짧은 값으로 오프셋을 정한다.
+        for (let i = 0; i < INITIAL_PINGS; i += 1) sendPing(ws);
       });
       ws.addEventListener("message", (e: MessageEvent) => {
-        if (disposed) return;
+        if (disposed || socketRef.current !== ws) return;
         const msg = parseServerMessage(e.data);
         if (msg?.t === "state") {
-          failures = 0;
           setView(msg.view);
-          setOffset(msg.view.serverNow - Date.now());
-          emit({ type: "state", now: Date.now() });
+          const next = emit({ type: "state", now: Date.now() });
+          if (next.banner === "restored") {
+            if (restoredTimer !== undefined) clearTimeout(restoredTimer);
+            restoredTimer = setTimeout(() => emit({ type: "tick", now: Date.now() }), RESTORED_MS);
+          }
+        } else if (msg?.t === "pong") {
+          onPong(msg.c, msg.serverNow);
         }
       });
       ws.addEventListener("close", (e: CloseEvent) => {
         if (disposed || socketRef.current !== ws) return;
-        const next = emit({ type: "close", code: e.code, reason: e.reason, now: Date.now() });
-        if (next.status === "reconnecting") {
-          failures += 1;
-          if (failures <= MAX_CONSECUTIVE_FAILURES) retryTimer = setTimeout(connect, RETRY_DELAY_MS);
-        }
+        scheduleRetry(emit({ type: "close", code: e.code, reason: e.reason, now: Date.now() }));
       });
+    }
+
+    // 열린 소켓이 정말 살아 있는지 ping 으로 확인한다. 2.5초 안에 pong 이 없으면 그 소켓을 버린다.
+    const checkAlive = (ws: WebSocket) => {
+      clearPongWait();
+      checkC = sendPing(ws);
+      pongTimer = setTimeout(() => {
+        pongTimer = undefined;
+        checkC = -1;
+        if (disposed || socketRef.current !== ws) return;
+        emit({ type: "close", code: 1006, reason: "stale", now: Date.now() });
+        ws.close();
+        if (linkRef.current.visible) connect();
+      }, PONG_WAIT_MS);
+    };
+
+    // 화면이 보이게 되거나 네트워크가 돌아왔다: 기다리지 않고 바로 확인·재시도한다.
+    const wake = () => {
+      const st = linkRef.current.status;
+      if (isTerminal(st)) return;
+      const ws = socketRef.current;
+      if (ws && ws.readyState === OPEN) {
+        checkAlive(ws);
+        return;
+      }
+      if (ws && ws.readyState === CONNECTING && st === "connecting") return; // 첫 연결 중
+      connect();
+    };
+
+    const onVisibility = () => {
+      const visible = isVisible();
+      emit({ type: "visibility", visible, now: Date.now() });
+      if (!visible) {
+        clearRetry();
+        return;
+      }
+      wake();
+    };
+    const onOnline = () => wake();
+
+    const tick = setInterval(() => {
+      const s = linkRef.current;
+      const trying = s.status === "reconnecting" || (s.status === "connecting" && s.failingSince !== null);
+      if (trying || s.banner === "restored") settle(emit({ type: "tick", now: Date.now() }));
+    }, TICK_MS);
+
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("pageshow", onVisibility);
+    window.addEventListener("online", onOnline);
+
+    restartRef.current = () => {
+      const st = linkRef.current.status;
+      if (st !== "failed" && st !== "replaced") return;
+      emit({ type: "retry", now: Date.now() });
+      connect();
     };
 
     connect();
     return () => {
       // StrictMode 가 effect 를 두 번 돌려도 소켓이 새지 않게 정리에서 닫는다.
       disposed = true;
-      if (retryTimer !== undefined) clearTimeout(retryTimer);
+      restartRef.current = null;
+      clearRetry();
+      clearPongWait();
+      if (restoredTimer !== undefined) clearTimeout(restoredTimer);
+      clearInterval(tick);
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("pageshow", onVisibility);
+      window.removeEventListener("online", onOnline);
       const ws = socketRef.current;
       socketRef.current = null;
       if (ws) ws.close();
     };
-  }, [code, token, nonce]);
+  }, [code, token]);
 
   const canSend = link.status === "open" && link.hasView;
   const canSendRef = useRef(canSend);
@@ -128,11 +257,7 @@ export function useRoomConnection(
     const ws = socketRef.current;
     if (canSendRef.current && ws && ws.readyState === OPEN) ws.send(JSON.stringify(msg));
   }, []);
-  const reconnect = useCallback(() => {
-    linkRef.current = linkReducer(linkRef.current, { type: "retry", now: Date.now() });
-    setLink(linkRef.current);
-    setNonce((n) => n + 1);
-  }, []);
+  const retry = useCallback(() => restartRef.current?.(), []);
 
   return {
     status: link.status,
@@ -143,7 +268,7 @@ export function useRoomConnection(
     removedReason: link.removedReason,
     canSend,
     send,
-    reconnect,
-    retry: reconnect,
+    reconnect: retry,
+    retry,
   };
 }
