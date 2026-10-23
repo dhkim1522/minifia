@@ -1,5 +1,5 @@
 ---
-status: complete
+status: diagnosed
 phase: 01-walking-skeleton
 source: 01-01-SUMMARY.md ~ 01-15-SUMMARY.md (human_judgment 항목 + 01-VERIFICATION.md human_verification)
 started: 2026-10-23T09:09:23Z
@@ -99,8 +99,17 @@ blocked: 0
   reason: "User reported: 어두운 회색남색 배경 위 회색 계열이라 잘 안 보이고 비활성화처럼 느껴진다"
   severity: minor
   test: 1
-  artifacts: []
-  missing: []
+  root_cause: "입력창 라벨·placeholder·구분선 글자가 --gray-300(#a9aebb) 14px 이고 placeholder 는 opacity 0.7 까지 더해 밤 남색 카드 위에서 흐려 보이며, 비활성 [참가] 버튼의 회색과 구분되지 않는다"
+  artifacts:
+    - path: "src/styles/ds.css"
+      issue: "35·43·68행: .mf-field__label / ::placeholder / .mf-entry__divider 가 gray-300, placeholder opacity 0.7"
+    - path: "src/styles/ds.css"
+      issue: "38-45행: 입력 글자·방 코드(.mf-field__input--code) 크기·대비 키울 여지"
+  missing:
+    - "라벨·placeholder 를 gray-100 계열로 올리고 placeholder opacity 를 높이며 글자 크기를 키운다"
+    - "비활성 [참가] 버튼은 활성 버튼과 구분되되 읽히도록 대비를 맞춘다"
+    - "토큰 변경이면 design/tokens.json 과 npm run tokens 로 맞추고 디자인 시스템 사본과의 차이를 기록한다"
+
 - gap_id: G-01-2
   truth: "대기실 원형 테이블이 배경과 구분되고 마피아 게임 분위기에 맞는다"
   status: failed
@@ -126,5 +135,13 @@ blocked: 0
   severity: minor
   note: "모바일 전용 증상. 시트 열림 애니메이션·dvh/주소창 높이·transform 기준 위치 등 모바일 브라우저 차이를 진단 대상으로"
   test: 9
-  artifacts: []
-  missing: []
+  root_cause: "가설(실기기 미확인): [내 역할] 시트는 <dialog> 안에서 mf-sheet-up(translateY 100%→0) 애니메이션으로 올라온다. iOS Safari 는 showModal 직후 첫 프레임을 최종 위치로 그린 뒤 애니메이션을 시작해, 시트가 위에 보였다가 아래로 내려갔다 올라오는 것처럼 보일 수 있다. PC 에서는 재현되지 않음"
+  artifacts:
+    - path: "src/styles/sheet.css"
+      issue: "25행 animation both + 28행 --closing transition: 시트 진입이 CSS animation 하나에만 의존"
+    - path: "src/components/Sheet.tsx"
+      issue: "showModal 호출과 열림 상태 클래스 부여 시점(첫 프레임 처리)"
+  missing:
+    - "진입 모션을 열림 직후 한 프레임 뒤에 시작하도록(예: 시작 클래스를 다음 프레임에 부여, 초기 transform 을 translateY(100%) 로 고정) 바꾼다"
+    - "실기기(iOS Safari·Android Chrome)에서 [내 역할]·공유 시트·나가기 시트가 모두 아래에서만 올라오는지 확인한다"
+    - "가설이 틀리면 실기기 화면 녹화나 증상 순서를 받아 원인을 다시 진단한다"
