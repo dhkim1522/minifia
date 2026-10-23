@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { enterClaimReveal } from "../../shared/game/claim";
+import { claimOptions, currentClaim, enterClaim, enterClaimReveal, selectClaim } from "../../shared/game/claim";
 import { CLAIM_MS, CLAIM_REVEAL_MS } from "../../shared/game/phases";
 import { ROOM_TTL_MS } from "../../shared/game/room";
 import type { Player, RoomState } from "../../shared/game/room";
 import { tick } from "../../shared/game/tick";
+import type { RoleId } from "../../shared/game/roles";
 import type { Claim, PhaseId } from "../../shared/protocol";
 
 type Extra = Partial<Pick<Player, "connected" | "claimChoice" | "claimShown" | "claimLast" | "claimChanged" | "role">>;
@@ -163,5 +164,127 @@ describe("tick - claim 마감에서 claimReveal 훅이 돈다", () => {
 
   it("CLAIM_MS 는 직업 공개 단계 길이다", () => {
     expect(CLAIM_MS).toBeGreaterThan(0);
+  });
+});
+
+/** n 명이 앉은 방(전원 연결). roles 를 주면 앞에서부터 실제 역할을 넣는다. */
+function roomOf(n: number, phase: PhaseId, roles: RoleId[] = []): RoomState {
+  const base = stateWith(phase, {}, { others: Array.from({ length: n - 1 }, () => ({})) });
+  return { ...base, players: base.players.map((p, i) => (roles[i] ? { ...p, role: roles[i] } : p)) };
+}
+
+describe("claimOptions - 이번 판 선택지 (D-07)", () => {
+  it("4명판은 마피아·경찰·시민·말 안 함(의사 없음)", () => {
+    expect(claimOptions(4).join(",")).toBe("mafia,police,citizen,none");
+  });
+
+  it("6명판은 의사까지 넣은 다섯 개", () => {
+    expect(claimOptions(6).join(",")).toBe("mafia,police,doctor,citizen,none");
+  });
+
+  it("5~8명은 모두 다섯 개이고 지원 밖 인원은 말 안 함 하나뿐이다", () => {
+    expect([5, 6, 7, 8].map((n) => claimOptions(n).length).join(",")).toBe("5,5,5,5");
+    expect(claimOptions(3).join(",")).toBe("none");
+  });
+});
+
+describe("selectClaim - 선택 검증 (D-03, D-10, T-02-05)", () => {
+  it("claim 단계가 아니면 WRONG_PHASE (공개 연출·토론·발표·대기실 포함)", () => {
+    const phases: PhaseId[] = ["lobby", "assigning", "roleReveal", "dayAnnounce", "claimReveal", "discussion"];
+    const got = phases.map((phase) => {
+      const r = selectClaim(roomOf(4, phase), "p0", "police");
+      return r.ok ? "ok" : r.error;
+    });
+    expect(got.join(",")).toBe(phases.map(() => "WRONG_PHASE").join(","));
+  });
+
+  it("방에 없는 id 는 BAD_MESSAGE", () => {
+    const r = selectClaim(roomOf(4, "claim"), "ghost", "police");
+    expect(r.ok ? "ok" : r.error).toBe("BAD_MESSAGE");
+  });
+
+  it("4명판에서 doctor 는 BAD_MESSAGE, 알 수 없는 값(king)도 BAD_MESSAGE", () => {
+    const s = roomOf(4, "claim");
+    const a = selectClaim(s, "p0", "doctor");
+    const b = selectClaim(s, "p0", "king" as unknown as Claim);
+    expect(`${a.ok ? "ok" : a.error},${b.ok ? "ok" : b.error}`).toBe("BAD_MESSAGE,BAD_MESSAGE");
+  });
+
+  it("검사 순서: 단계 → 방 소속 → 값. 단계가 틀리면 다른 검사에 앞서 WRONG_PHASE", () => {
+    const r = selectClaim(roomOf(4, "discussion"), "ghost", "king" as unknown as Claim);
+    expect(r.ok ? "ok" : r.error).toBe("WRONG_PHASE");
+  });
+
+  it("통과하면 그 사람의 claimChoice 만 바뀌고 입력은 그대로다", () => {
+    const s = roomOf(4, "claim");
+    const frozen = JSON.stringify(s);
+    const r = selectClaim(s, "p1", "police");
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(JSON.stringify(s)).toBe(frozen);
+    expect(r.state.players.map((p) => String(p.claimChoice)).join(",")).toBe("undefined,police,undefined,undefined");
+    // claimChoice 외 필드와 방 필드는 그대로
+    const strip = (x: RoomState) => JSON.stringify({ ...x, players: x.players.map(({ claimChoice: _c, ...rest }) => rest) });
+    expect(strip(r.state)).toBe(strip(s));
+    expect(r.state.players[0] === s.players[0]).toBe(true);
+  });
+
+  it("마감 전까지 다시 골라 바꿀 수 있고 마지막 값이 남는다", () => {
+    const s = roomOf(5, "claim");
+    const first = selectClaim(s, "p2", "police");
+    expect(first.ok).toBe(true);
+    if (!first.ok) return;
+    const second = selectClaim(first.state, "p2", "doctor");
+    expect(second.ok).toBe(true);
+    if (!second.ok) return;
+    expect(second.state.players[2]!.claimChoice).toBe("doctor");
+  });
+
+  it("같은 값을 다시 고르면 같은 상태 객체를 돌려준다", () => {
+    const s = roomOf(4, "claim");
+    const first = selectClaim(s, "p0", "none");
+    if (!first.ok) throw new Error("first select failed");
+    const again = selectClaim(first.state, "p0", "none");
+    expect(again.ok && again.state === first.state).toBe(true);
+  });
+
+  it("서버는 참·거짓을 보지 않는다: 네 역할 모두가 다섯 선택지를 전부 고를 수 있다 (D-10, T-02-06)", () => {
+    const roles: RoleId[] = ["mafia", "police", "doctor", "citizen", "citizen"];
+    const s = roomOf(5, "claim", roles);
+    const options = claimOptions(5);
+    const rows: string[] = [];
+    for (const [i, role] of roles.slice(0, 4).entries()) {
+      for (const claim of options) {
+        const r = selectClaim(s, `p${i}`, claim);
+        rows.push(`${role}:${claim}:${r.ok ? "ok" : r.error}`);
+      }
+    }
+    expect(rows.length).toBe(20);
+    expect(rows.filter((x) => !x.endsWith(":ok")).join("|")).toBe("");
+  });
+});
+
+describe("currentClaim - 내 화면 초기 선택 (D-09)", () => {
+  it("직접 고른 값이 먼저, 없으면 어제 공개 값, 둘 다 없으면 undefined", () => {
+    const a = currentClaim(player(0, { claimChoice: "citizen", claimLast: "police" }));
+    const b = currentClaim(player(0, { claimLast: "police" }));
+    const c = currentClaim(player(0));
+    expect(`${a},${b},${c}`).toBe("citizen,police,undefined");
+  });
+});
+
+describe("enterClaim - 이번 낮 선택 초기화 (D-03, D-09)", () => {
+  it("모든 플레이어에서 claimChoice 키가 사라지고 claimLast·claimShown 은 남는다", () => {
+    const s = stateWith(
+      "claim",
+      { claimChoice: "police", claimLast: "mafia", claimShown: "mafia" },
+      { others: [{ claimChoice: "none" }, { claimLast: "doctor" }, {}] },
+    );
+    const out = enterClaim(s);
+    expect(out.players.map((p) => "claimChoice" in p).join(",")).toBe("false,false,false,false");
+    expect(`${out.players[0]!.claimLast}/${out.players[0]!.claimShown}/${out.players[2]!.claimLast}`).toBe(
+      "mafia/mafia/doctor",
+    );
+    expect(s.players[0]!.claimChoice).toBe("police");
   });
 });

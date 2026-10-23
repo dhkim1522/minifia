@@ -44,3 +44,22 @@ export function enterClaimReveal(state: RoomState): RoomState {
     }),
   };
 }
+
+// RED 단계 뼈대 — GREEN 에서 구현한다.
+export type ClaimError = "WRONG_PHASE" | "BAD_MESSAGE";
+export function claimOptions(_playerCount: number): Claim[] {
+  return [];
+}
+export function currentClaim(_p: Player): Claim | undefined {
+  return undefined;
+}
+export function selectClaim(
+  _state: RoomState,
+  _actorId: string,
+  _claim: Claim,
+): { ok: true; state: RoomState } | { ok: false; error: ClaimError } {
+  return { ok: false, error: "BAD_MESSAGE" };
+}
+export function enterClaim(state: RoomState): RoomState {
+  return state;
+}

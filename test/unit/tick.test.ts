@@ -205,6 +205,31 @@ describe("enterDayAnnounce (낮 진입 훅)", () => {
   });
 });
 
+describe("tick - 늦은 알람의 따라잡기 훅 순서 (dayAnnounce → claim → claimReveal)", () => {
+  it("discussion 에서 한 번에 claimReveal 까지 따라잡아도 세 훅이 순서대로 돈다", () => {
+    const T = 100_000;
+    const base = stateIn("discussion", T);
+    const s: RoomState = {
+      ...base,
+      day: 1,
+      players: base.players.map((p, i) => {
+        if (i === 0) return { ...p, claimChoice: "police" as const, claimLast: "police" as const };
+        if (i === 1) return { ...p, claimLast: "doctor" as const, connected: false, connId: null };
+        return p;
+      }),
+    };
+    const out = tick(s, T + DAY_ANNOUNCE_MS + CLAIM_MS);
+    expect(`${out.phase}/${out.day}/${out.phaseEndsAt}`).toBe(
+      `claimReveal/2/${T + DAY_ANNOUNCE_MS + CLAIM_MS + CLAIM_REVEAL_MS}`,
+    );
+    // enterClaim 이 지난 낮 선택(A 의 police)을 지웠으므로 A 는 직접 고르지 않은 연결된 사람이다 → 어제 값 유지
+    expect(out.players.map((p) => "claimChoice" in p).join(",")).toBe("false,false,false,false");
+    expect(`${out.players[0]!.claimShown}/${out.players[0]!.claimChanged}`).toBe("police/false");
+    // B 는 끊겨 있어 말 안 함, 선택 없던 C·D 는 none
+    expect(out.players.map((p) => p.claimShown).join(",")).toBe("police,none,none,none");
+  });
+});
+
 describe("nextWakeAt (알람 하나로 단계 마감과 방 만료)", () => {
   it("lobby 는 방 만료 시각이다", () => {
     expect(nextWakeAt(stateIn("lobby", null))).toBe(ROOM_TTL_MS);
