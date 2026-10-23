@@ -85,3 +85,45 @@
 @media (prefers-reduced-motion: reduce) {
   .mf-btn { transition-duration: 0.01ms; }
 }
+
+/* Figure: 세트 C 인물 그림(논리 크기 72×96). 끊김은 그림 파일이 아니라 흑백 + 60% 로 나타낸다. */
+.mf-figure { display: block; width: 72px; height: 96px; object-fit: contain; -webkit-user-drag: none; user-select: none; }
+.mf-figure--disconnected { filter: grayscale(1); opacity: 0.6; }
+
+/* 이름표: 반투명 --night-900 알약. 자리 크기와 관계없이 14px/700, 한 줄 말줄임. 장면 위 절대 위치 변형은 테이블 부품이 더한다. */
+.mf-tag { display: flex; flex-direction: column; align-items: center; gap: 2px; margin: 0; padding: 0; list-style: none; }
+.mf-tag__name {
+  display: inline-flex; align-items: center; max-width: 72px; padding: 0 var(--space-sm);
+  font-size: 14px; line-height: 1.4; font-weight: 700; color: var(--gray-50); text-shadow: var(--shadow-text);
+  background: color-mix(in srgb, var(--night-900) 70%, transparent); border-radius: var(--radius-pill); white-space: nowrap;
+}
+.mf-tag__name > span { overflow: hidden; text-overflow: ellipsis; }
+
+/* S-02 링크 참가: 위쪽 초대 문구, 가운데 광장(앉은 사람), 아래 입력 카드. 5명 이상이면 한 줄 4명씩 접는다. */
+.mf-join__plaza { margin-top: auto; display: flex; flex-direction: column; align-items: center; gap: var(--space-sm); padding-bottom: var(--space-md); }
+.mf-join__seated {
+  display: flex; flex-wrap: wrap; justify-content: center; align-items: flex-end; gap: var(--space-sm);
+  max-width: calc(4 * 72px + 3 * var(--space-sm)); margin: 0; padding: 0; list-style: none;
+}
+.mf-join__count { margin: 0; font-size: 14px; line-height: 1.4; font-weight: 700; color: var(--gray-50); text-shadow: var(--shadow-text); text-align: center; }
+.mf-join .mf-entry__card { margin-top: var(--space-lg); }
+.mf-join__loading { margin-top: auto; text-align: center; text-shadow: var(--shadow-text); }
+
+/* S-01 입력 카드 안의 두 폼(방 만들기 / 코드 참가). 코드 줄의 [참가] 높이는 입력칸과 같은 48. */
+.mf-entry__form { display: flex; flex-direction: column; gap: var(--space-md); margin: 0; }
+.mf-btn--field { min-height: var(--control-input); flex: none; }
+
+/* 입장 정보를 확인하는 동안의 불러오는 중 화면 */
+.mf-entry__loading { margin: auto 0; text-align: center; text-shadow: var(--shadow-text); }
+
+/* 링크 참가 화면에서 들어갈 수 없는 방: 입력 카드 자리에 사유 한 문장과 [처음으로] */
+.mf-join__blocked {
+  margin-top: auto; display: flex; flex-direction: column; gap: var(--space-lg); text-align: center;
+  padding: var(--space-lg); border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--night-800) 85%, transparent);
+}
+
+/* 오류 화면(내보내짐·방 닫힘): 입장 배경 위 가운데 사유 한 문장 + [처음으로]. 진홍 없음. */
+.mf-error { justify-content: center; align-items: center; }
+.mf-error__body { width: 100%; max-width: 320px; display: flex; flex-direction: column; align-items: center; gap: var(--space-xl); text-align: center; }
+.mf-error__message { max-width: 320px; word-break: keep-all; text-shadow: var(--shadow-text); }
