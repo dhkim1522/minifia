@@ -7,7 +7,7 @@ export type NicknameError = "EMPTY" | "TOO_LONG" | "INVALID_CHARS";
 const segmenter = new Intl.Segmenter("ko", { granularity: "grapheme" });
 
 // 이모지를 잇는 U+200D(ZWJ)만 서식 문자(Cf) 중 예외로 허용한다.
-const ZWJ = "‍";
+const ZWJ = "\u{200D}";
 // 제어(Cc), 줄·문단 구분(Zl, Zp), 서식(Cf) 문자. 영폭 공백·방향 제어로 이름을 위장하는 것을 막는다.
 const FORBIDDEN = /[\p{Cc}\p{Zl}\p{Zp}\p{Cf}]/u;
 // 화면에 실제로 보이는 글자(글자·숫자·기호·구두점)가 하나라도 있어야 한다.
@@ -24,9 +24,13 @@ export function normalizeNickname(raw: string): string {
   return raw.normalize("NFC").trim().replace(/\p{Zs}+/gu, " ");
 }
 
-/** 중복 비교 키: NFKC 로 전각·호환 문자를 맞추고 소문자로. */
+// 비교 키에서만 지우는 문자. ZWJ 는 이모지 결합 때문에 표시 이름에는 남기고 비교 키에서만 뺀다(CR-01).
+// replace 전용 전역 정규식이라 .test() 에 쓰지 않는다(lastIndex 가 남는다).
+const KEY_IGNORED_CHARS = /[\u{200D}]/gu;
+
+/** 중복 비교 키: NFKC 로 전각·호환 문자를 맞추고, 보이지 않는 결합 문자를 지우고, 소문자로. */
 export function nicknameKey(nickname: string): string {
-  return nickname.normalize("NFKC").toLowerCase();
+  return nickname.normalize("NFKC").replace(KEY_IGNORED_CHARS, "").toLowerCase();
 }
 
 function hasForbiddenChar(s: string): boolean {
