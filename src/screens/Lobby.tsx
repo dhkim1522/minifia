@@ -1,10 +1,14 @@
+import { useEffect, useRef, useState } from "react";
 import type { ClientMessage, RoomView } from "../../shared/protocol";
 import { SEAT_COUNT } from "../../shared/seatLayout";
 import { connectedCount } from "../../shared/game/room";
 import { Backdrop } from "../components/Backdrop";
+import { Button } from "../components/Button";
 import { Table } from "../components/Table";
 import type { TableSeat } from "../components/Table";
 import "../styles/lobby.css";
+
+const START_LOCK_MS = 2000;
 
 interface LobbyProps {
   view: RoomView;
@@ -17,7 +21,42 @@ interface LobbyProps {
 
 // S-03 대기실: 대기 장면 위 원근 테이블, 위쪽 바(방 코드), 하단 시트.
 // 화면은 서버가 보낸 view 만으로 다시 그린다. 닉네임은 React 텍스트·title 로만 그린다.
-export function Lobby({ view }: LobbyProps) {
+export function Lobby({ view, send, canSend = true }: LobbyProps) {
+  // [게임 시작] 2초 잠금 — 화면이 기억하는 상태는 이것뿐이다. 시작이 거절되면 서버가 다시 보낸 view 대로 그린다.
+  const [locked, setLocked] = useState(false);
+  const lockTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(
+    () => () => {
+      if (lockTimer.current !== undefined) clearTimeout(lockTimer.current);
+    },
+    [],
+  );
+
+  const connected = connectedCount(view.players);
+  const isHost = view.me.isHost;
+  const hostConnected = view.players.find((p) => p.isHost)?.connected !== false;
+  const full = view.players.length >= view.maxPlayers;
+  // 서버 checkStart 와 같은 기준(연결된 사람 수)을 쓴다. 버튼 활성은 표시용이고 판정은 서버가 한다.
+  const enoughPlayers = connected >= view.minPlayers;
+  const guide = isHost
+    ? enoughPlayers
+      ? "모두 모였으면 시작하세요"
+      : `${view.minPlayers}명부터 시작할 수 있어요`
+    : hostConnected
+      ? "방장이 시작하길 기다리는 중이에요"
+      : "방장 연결을 기다리는 중이에요";
+  const countText = full ? `${view.maxPlayers} / ${view.maxPlayers}명 · 가득 찼어요` : `${connected} / ${view.maxPlayers}명`;
+
+  const start = () => {
+    if (!canSend || locked || !enoughPlayers) return;
+    send({ t: "start" });
+    setLocked(true);
+    lockTimer.current = setTimeout(() => {
+      lockTimer.current = undefined;
+      setLocked(false);
+    }, START_LOCK_MS);
+  };
+
   const allies = view.me.allies ?? [];
   const seats: (TableSeat | null)[] = Array.from({ length: SEAT_COUNT }, () => null);
   for (const p of view.players) {
@@ -44,8 +83,14 @@ export function Lobby({ view }: LobbyProps) {
         </div>
         <section className="mf-lobby__sheet">
           <div className="mf-lobby__status">
-            <p className="mf-lobby__count">{`${connectedCount(view.players)} / ${view.maxPlayers}명`}</p>
+            <p className="mf-lobby__guide">{guide}</p>
+            <p className="mf-lobby__count">{countText}</p>
           </div>
+          {isHost ? (
+            <Button variant="primary" block disabled={!enoughPlayers || !canSend || locked} onClick={start}>
+              게임 시작
+            </Button>
+          ) : null}
         </section>
       </main>
     </Backdrop>
