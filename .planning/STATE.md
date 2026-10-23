@@ -6,16 +6,16 @@ current_phase: 01
 current_phase_name: 걷는 뼈대
 current_plan: 5
 status: executing
-stopped_at: Phase 1 UI-SPEC approved
-last_updated: "2026-10-23T08:31:54.206Z"
+stopped_at: Completed 01-15-PLAN.md
+last_updated: "2026-10-23T08:54:32.311Z"
 last_activity: 2026-10-23
 last_activity_desc: Phase 01 execution started
-state_head: e69d4e12435ae71daf7cc13ea56b2b42d976b97c
+state_head: 358065c2cd19cf056e0ec0f507eabf44e79750bd
 progress:
   total_phases: 6
   completed_phases: 0
   total_plans: 15
-  completed_plans: 3
+  completed_plans: 15
 ---
 
 # Project State
@@ -30,9 +30,9 @@ See: .planning/PROJECT.md (updated 2026-10-21)
 ## Current Position
 
 Phase: 01 (걷는 뼈대) — READY TO EXECUTE
-Current Plan: 4
+Current Plan: 5
 Total Plans in Phase: 15
-Plan: 4 of 14
+Plan: 5 of 14
 Status: Ready to execute
 Last activity: 2026-10-23 — Phase 01 execution started
 
@@ -63,6 +63,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 01 P01 | 3 min | 3 tasks | 21 files |
 | Phase 01 P03 | 3 min | 3 tasks | 11 files |
 | Phase 01 P02 | 52 min | 3 tasks | 28 files |
+| Phase 01 P15 | 15min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -83,6 +84,7 @@ Recent decisions affecting current work:
 - [Phase 01]: [01-03] 닉네임 공백 압축은 \p{Zs}+ 만 — \s+ 면 줄바꿈이 통과함. assignRoles 는 중복 ID 도 RangeError
 - [Phase 01]: 공개 주소는 Worker minifia + 계정 서브도메인 dhplay = https://minifia.dhplay.workers.dev (01-02)
 - [Phase 01]: 방 코드 충돌은 DO createRoom 이 CODE_TAKEN 거부, Worker 가 최대 8번 재시도 후 503 CODE_EXHAUSTED (01-02)
+- [Phase 01]: [01-15] 채움 문자 5개는 위치와 무관하게 INVALID_CHARS, ZWJ·변형 선택자·결합 문자는 표시 이름에 남기고 비교 키에서만 제거
 
 ### Pending Todos
 
@@ -107,6 +109,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-22T02:29:15.289Z
-Stopped at: Phase 1 UI-SPEC approved
-Resume file: .planning/phases/01-walking-skeleton/01-UI-SPEC.md
+Last session: 2026-10-23T08:54:32.280Z
+Stopped at: Completed 01-15-PLAN.md
+Resume file: None
