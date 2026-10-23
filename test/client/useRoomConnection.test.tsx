@@ -48,14 +48,14 @@ const view: RoomView = {
   me: { seat: 0, isHost: true },
 };
 
-function setup() {
+function setup(checkRoomImpl?: () => Promise<"alive" | "gone" | "unknown">) {
   const sockets: FakeSocket[] = [];
   const createSocket = (url: string) => {
     const s = new FakeSocket(url);
     sockets.push(s);
     return s as unknown as WebSocket;
   };
-  const checkRoom = vi.fn(async () => "alive" as const);
+  const checkRoom = vi.fn(checkRoomImpl ?? (async () => "alive" as const));
   const hook = renderHook(() =>
     useRoomConnection("0042", "t".repeat(43), { createSocket, random: () => 0, checkRoom }),
   );
@@ -270,5 +270,106 @@ describe("useRoomConnection: 재연결 (CONN-01)", () => {
     expect(hook.result.current.status).toBe("reconnecting");
     advance(1_000);
     expect(hook.result.current.status).toBe("failed");
+  });
+});
+
+// 3번 연달아 닫혀 state 를 못 받은 채 한 묶음의 실패가 쌓인 상태까지 진행한다.
+function failThrice(sockets: FakeSocket[]) {
+  openWithState(sockets[0]!);
+  act(() => sockets[0]!.serverClose(1006)); // attempts 1
+  advance(500);
+  act(() => sockets[1]!.serverClose(1006)); // attempts 2
+  advance(1000);
+  act(() => sockets[2]!.serverClose(1006)); // attempts 3
+}
+
+async function flush() {
+  await act(async () => {
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+}
+
+describe("useRoomConnection: 낡은 세션 확인 (Pitfall 22)", () => {
+  it("3번 연달아 닫히면 checkRoom 이 한 번 불리고, gone 이면 removed·room_closed", async () => {
+    const { sockets, hook, checkRoom } = setup(async () => "gone");
+    failThrice(sockets);
+    expect(checkRoom).toHaveBeenCalledTimes(1);
+    expect(checkRoom).toHaveBeenCalledWith("0042");
+    await flush();
+    expect(hook.result.current.status).toBe("removed");
+    expect(hook.result.current.removedReason).toBe("room_closed");
+  });
+
+  it("alive 면 계속 재시도하고, 같은 묶음에서 다시 묻지 않는다", async () => {
+    const { sockets, hook, checkRoom } = setup();
+    failThrice(sockets);
+    await flush();
+    expect(hook.result.current.status).toBe("reconnecting");
+    advance(2000);
+    expect(sockets.length).toBe(4);
+    act(() => sockets[3]!.serverClose(1006)); // attempts 4
+    await flush();
+    expect(checkRoom).toHaveBeenCalledTimes(1);
+  });
+
+  it("unknown 이어도 계속 재시도한다", async () => {
+    const { sockets, hook } = setup(async () => "unknown");
+    failThrice(sockets);
+    await flush();
+    expect(hook.result.current.status).toBe("reconnecting");
+    advance(2000);
+    expect(sockets.length).toBe(4);
+  });
+
+  it("2번만 닫히면 묻지 않는다", () => {
+    const { sockets, checkRoom } = setup();
+    openWithState(sockets[0]!);
+    act(() => sockets[0]!.serverClose(1006));
+    advance(500);
+    act(() => sockets[1]!.serverClose(1006));
+    expect(checkRoom).not.toHaveBeenCalled();
+  });
+
+  it("기본 checkRoom 은 미리보기가 ROOM_NOT_FOUND 면 gone 으로 본다", async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ error: "ROOM_NOT_FOUND" }), { status: 404 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const sockets: FakeSocket[] = [];
+    const hook = renderHook(() =>
+      useRoomConnection("0042", "t".repeat(43), {
+        createSocket: (url) => {
+          const s = new FakeSocket(url);
+          sockets.push(s);
+          return s as unknown as WebSocket;
+        },
+        random: () => 0,
+      }),
+    );
+    failThrice(sockets);
+    await flush();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect((fetchMock.mock.calls[0] as unknown as [string])[0]).toBe("/api/rooms/0042");
+    expect(hook.result.current.status).toBe("removed");
+    expect(hook.result.current.removedReason).toBe("room_closed");
+    vi.unstubAllGlobals();
+  });
+
+  it("기본 checkRoom: 네트워크 실패는 unknown 이라 계속 재시도한다", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => { throw new TypeError("offline"); }));
+    const sockets: FakeSocket[] = [];
+    const hook = renderHook(() =>
+      useRoomConnection("0042", "t".repeat(43), {
+        createSocket: (url) => {
+          const s = new FakeSocket(url);
+          sockets.push(s);
+          return s as unknown as WebSocket;
+        },
+        random: () => 0,
+      }),
+    );
+    failThrice(sockets);
+    await flush();
+    expect(hook.result.current.status).toBe("reconnecting");
+    vi.unstubAllGlobals();
   });
 });
