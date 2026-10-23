@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { RoleId } from "../../shared/game/roles";
 import type { PhaseId, RoomView } from "../../shared/protocol";
@@ -8,6 +8,13 @@ import type { RoomConnection } from "../../src/net/useRoomConnection";
 const connectionMock = vi.hoisted(() => ({ current: null as unknown }));
 vi.mock("../../src/net/useRoomConnection", () => ({
   useRoomConnection: () => connectionMock.current,
+}));
+
+// 직업 그림 미리 받기는 호출 여부만 본다(요청 목록은 assets 단위 테스트의 몫). 나머지 assets 는 그대로 쓴다.
+const preloadMock = vi.hoisted(() => vi.fn());
+vi.mock("../../src/net/assets", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../src/net/assets")>()),
+  preloadRoleAssets: preloadMock,
 }));
 
 const { RoomScreen } = await import("../../src/screens/RoomScreen");
@@ -22,10 +29,13 @@ interface ViewOpts {
   durationMs?: number | null;
   role?: RoleId;
   allies?: number[];
+  isHost?: boolean;
+  /** 앞에서부터 이 수만큼의 사람만 앉힌다(기본 4) */
+  count?: number;
 }
 
 function makeView(o: ViewOpts): RoomView {
-  const me: RoomView["me"] = { seat: 0, isHost: false };
+  const me: RoomView["me"] = { seat: 0, isHost: o.isHost ?? false };
   if (o.role !== undefined) me.role = o.role;
   if (o.allies !== undefined) me.allies = o.allies;
   return {
@@ -41,7 +51,7 @@ function makeView(o: ViewOpts): RoomView {
       { seat: 1, nickname: "하윤", connected: true, isHost: false },
       { seat: 2, nickname: "민지", connected: true, isHost: false },
       { seat: 3, nickname: "도현", connected: true, isHost: false },
-    ],
+    ].slice(0, o.count ?? 4),
     me,
   };
 }
@@ -93,6 +103,7 @@ function byText(text: string): HTMLElement {
 }
 
 beforeEach(() => {
+  preloadMock.mockClear();
   vi.useFakeTimers();
   vi.setSystemTime(NOW);
 });
@@ -192,5 +203,151 @@ describe("S-05 역할 확인 (GAME-01, ROLE-02, D-13 개정, D-14, D-15, R12)", 
     expect(byRole("heading", "역할 확인")).toBeTruthy();
     expect(byRole("timer").textContent).toContain("0:00");
     expect(screen.queryByText("낮이 되었습니다")).toBeNull();
+  });
+});
+
+function liveRegion(container: HTMLElement): HTMLElement {
+  const el = container.querySelector<HTMLElement>('[aria-live="polite"]');
+  expect(el, "aria-live=polite 영역").not.toBeNull();
+  return el!;
+}
+
+function rerenderRoom(rerender: (ui: React.ReactElement) => void, view: RoomView, over: Partial<RoomConnection> = {}) {
+  connectionMock.current = conn(view, over);
+  rerender(<RoomScreen code="0042" token={"t".repeat(43)} onExit={vi.fn()} />);
+}
+
+describe("S-04 역할 배정 (GAME-01, D-12, R11, E7, T-01-44)", () => {
+  it("배정 화면: 문구 둘·테이블 위 막·맥박 링 3개가 있고 [내 역할] 은 없다", () => {
+    const { container } = renderRoom(makeView({ phase: "assigning" }));
+    expect(byText("직업을 배정하고 있습니다…")).toBeTruthy();
+    expect(byText("잠시만 기다려 주세요")).toBeTruthy();
+    expect(byRole("group", "테이블")).toBeTruthy();
+    expect(container.querySelectorAll(".mf-assign__veil").length).toBe(1);
+    expect(container.querySelectorAll(".mf-assign__ring").length).toBe(3);
+    expect(screen.queryByRole("button", { name: "내 역할" })).toBeNull();
+    expect(screen.queryByRole("timer")).toBeNull();
+  });
+
+  it("배정 화면 마크업은 역할을 읽지 않는다 — 마피아로 억지로 채운 view 와 역할 없는 view 의 innerHTML 이 같다", () => {
+    const withRole = renderRoom(makeView({ phase: "assigning", role: "mafia", allies: [2] }));
+    const html = withRole.container.innerHTML;
+    cleanup();
+    const withoutRole = renderRoom(makeView({ phase: "assigning" }));
+    expect(html.length).toBeGreaterThan(0);
+    expect(withoutRole.container.innerHTML).toBe(html);
+  });
+});
+
+describe("S-06 낮 시작 (D-01, D-02, R13, E9)", () => {
+  it("낮 화면: 1일차·낮이 되었습니다·[내 역할] 하나, 타이머·테이블 없음, 낮 배경", () => {
+    const { container } = renderRoom(makeView({ phase: "day", role: "mafia", allies: [2] }));
+    expect(byText("1일차")).toBeTruthy();
+    expect(byRole("heading", "낮이 되었습니다")).toBeTruthy();
+    expect(screen.queryAllByRole("button", { name: "내 역할" }).length).toBe(1);
+    expect(screen.queryByRole("timer")).toBeNull();
+    expect(screen.queryByRole("group")).toBeNull();
+    const art = container.querySelector<HTMLElement>(".mf-backdrop__art");
+    expect(art?.style.backgroundImage).toContain("/backgrounds/bg_game_day.svg");
+    expect(container.querySelector(".mf-day__morning")).not.toBeNull();
+  });
+
+  it("낮 화면의 [내 역할] 버튼 마크업은 마피아·시민·역할 없음에서 같다", () => {
+    const html = (view: RoomView) => {
+      renderRoom(view);
+      const out = byRole("button", "내 역할").outerHTML;
+      cleanup();
+      return out;
+    };
+    const mafia = html(makeView({ phase: "day", role: "mafia", allies: [2] }));
+    expect(html(makeView({ phase: "day", role: "citizen" }))).toBe(mafia);
+    expect(html(makeView({ phase: "day" }))).toBe(mafia);
+  });
+});
+
+describe("단계 안내 aria-live · 단계 전환 (UI-SPEC 접근성·Motion)", () => {
+  it("단계가 바뀔 때만 보이지 않는 aria-live 영역이 새 단계를 읽는다", () => {
+    const first = renderRoom(makeView({ phase: "lobby", isHost: true }));
+    expect(liveRegion(first.container).textContent).toBe("");
+    rerenderRoom(first.rerender, makeView({ phase: "assigning" }));
+    expect(liveRegion(first.container).textContent).toBe("직업을 배정하고 있습니다");
+    rerenderRoom(first.rerender, makeView({ phase: "roleReveal", endsIn: 15_000, role: "mafia", allies: [2] }));
+    expect(liveRegion(first.container).textContent).toBe("역할 확인");
+    // 같은 단계 안의 view 갱신에는 그대로
+    rerenderRoom(first.rerender, makeView({ phase: "roleReveal", endsIn: 14_000, role: "mafia", allies: [2] }));
+    expect(liveRegion(first.container).textContent).toBe("역할 확인");
+    rerenderRoom(first.rerender, makeView({ phase: "day", role: "mafia", allies: [2] }));
+    expect(liveRegion(first.container).textContent).toBe("낮이 되었습니다");
+  });
+
+  it("단계 화면 루트에 mf-phase-enter 가 있고 단계가 바뀌면 새 요소로 바뀐다", () => {
+    const r = renderRoom(makeView({ phase: "assigning" }));
+    const before = r.container.querySelector(".mf-phase-enter");
+    expect(before).not.toBeNull();
+    rerenderRoom(r.rerender, makeView({ phase: "roleReveal", endsIn: 15_000, role: "mafia", allies: [2] }));
+    const after = r.container.querySelector(".mf-phase-enter");
+    expect(after).not.toBeNull();
+    expect(after === before).toBe(false);
+    // 같은 단계 안 갱신은 같은 요소(다시 나타나지 않는다)
+    rerenderRoom(r.rerender, makeView({ phase: "roleReveal", endsIn: 14_000, role: "mafia", allies: [2] }));
+    expect(r.container.querySelector(".mf-phase-enter") === after).toBe(true);
+  });
+});
+
+describe("대기실 연결 (C-02, R9) · 미리 받기 (Pattern 13 ②)", () => {
+  const lobby = (count: number, over: Partial<ViewOpts> = {}) => makeView({ phase: "lobby", isHost: true, count, ...over });
+
+  it("canSend 가 거짓이면 [게임 시작]·[나가기] 가 꺼진다", () => {
+    renderRoom(lobby(4), { canSend: false });
+    expect((byRole("button", "게임 시작") as HTMLButtonElement).disabled).toBe(true);
+    expect((byRole("button", "나가기") as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("canSend 가 참이면 [게임 시작]·[나가기] 가 켜진다", () => {
+    renderRoom(lobby(4), { canSend: true });
+    expect((byRole("button", "게임 시작") as HTMLButtonElement).disabled).toBe(false);
+    expect((byRole("button", "나가기") as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it("[나가기] 확인 뒤 onExit('left') 가 불린다", () => {
+    const onExit = vi.fn();
+    renderRoom(lobby(4), {}, onExit);
+    fireEvent.click(byRole("button", "나가기"));
+    const dialog = screen.queryByRole("dialog", { name: "방에서 나갈까요?" });
+    expect(dialog, "나가기 확인 시트").not.toBeNull();
+    const confirm = within(dialog!).queryByRole("button", { name: "나가기" });
+    expect(confirm, "시트의 나가기").not.toBeNull();
+    fireEvent.click(confirm!);
+    expect(onExit.mock.calls.length, "onExit 호출 수").toBe(1);
+    expect(String(onExit.mock.calls[0]?.[0]), "onExit 이유").toBe("left");
+  });
+
+  it("epoch 가 바뀌며 사람이 더해진 view 는 토스트가 없고, 같은 epoch 의 변화에는 토스트가 난다", () => {
+    const r = renderRoom(lobby(2), { epoch: 1 });
+    rerenderRoom(r.rerender, lobby(3), { epoch: 2 });
+    expect(screen.queryByRole("status")?.textContent ?? "").toBe("");
+    rerenderRoom(r.rerender, lobby(4), { epoch: 2 });
+    expect(screen.queryByRole("status")?.textContent ?? "").toBe("도현님이 들어왔어요");
+  });
+
+  it("대기실과 배정 동안 preloadRoleAssets 를 부르고, 역할 확인에서는 새로 부르지 않는다", () => {
+    const r = renderRoom(lobby(4));
+    expect(preloadMock.mock.calls.length > 0, "preloadRoleAssets 호출").toBe(true);
+    preloadMock.mockClear();
+    rerenderRoom(r.rerender, makeView({ phase: "assigning" }));
+    expect(preloadMock.mock.calls.length > 0, "preloadRoleAssets 호출").toBe(true);
+    preloadMock.mockClear();
+    rerenderRoom(r.rerender, makeView({ phase: "roleReveal", endsIn: 15_000, role: "mafia", allies: [2] }));
+    expect(preloadMock.mock.calls.length, "preloadRoleAssets 호출 수").toBe(0);
+  });
+});
+
+describe("단계 전환은 서버 view 만 따른다 (T-01-46)", () => {
+  it("역할 확인 마감 뒤 서버가 day 를 보내면 그때 낮 화면으로 바뀐다", () => {
+    const r = renderRoom(makeView({ phase: "roleReveal", endsIn: 15_000, role: "mafia", allies: [2] }));
+    advance(16_000);
+    expect(screen.queryByRole("heading", { name: "낮이 되었습니다" })).toBeNull();
+    rerenderRoom(r.rerender, makeView({ phase: "day", role: "mafia", allies: [2] }));
+    expect(byRole("heading", "낮이 되었습니다")).toBeTruthy();
   });
 });
