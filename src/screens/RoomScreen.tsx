@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import type { RemovedReason, RoomView } from "../../shared/protocol";
+import type { PhaseId, RemovedReason, RoomView } from "../../shared/protocol";
 import { Button } from "../components/Button";
 import { Icon } from "../components/Icon";
 import { MyRoleSheet } from "../components/MyRoleSheet";
@@ -8,6 +8,7 @@ import { preloadRoleAssets } from "../net/assets";
 import { useRoomConnection } from "../net/useRoomConnection";
 import { Assigning } from "./Assigning";
 import { Day } from "./Day";
+import { DayScene } from "./DayScene";
 import { Lobby } from "./Lobby";
 import { RoleReveal } from "./RoleReveal";
 import "../styles/phase.css";
@@ -23,12 +24,21 @@ interface RoomScreenProps {
 }
 
 // 단계가 바뀔 때만 보이지 않는 aria-live 영역이 읽는 문구. 대기실은 읽을 것이 없다.
-const PHASE_ANNOUNCE = {
-  lobby: "",
-  assigning: "직업을 배정하고 있습니다",
-  roleReveal: "역할 확인",
-  day: "낮이 되었습니다",
-} as const;
+const PHASE_ANNOUNCE: Record<PhaseId, (view: RoomView) => string> = {
+  lobby: () => "",
+  assigning: () => "직업을 배정하고 있습니다",
+  roleReveal: () => "역할 확인",
+  dayAnnounce: (view) => `${view.day?.n ?? 1}일차 낮이 되었습니다`,
+  claim: () => "직업 공개. 주장할 직업을 고르세요",
+  claimReveal: () => "직업이 공개되었습니다",
+  discussion: () => "낮 토론",
+};
+
+// 장면 키: claim·claimReveal·discussion 은 같은 장면(DayScene)이라 같은 키를 쓴다 — 세 단계 사이에는
+// 래퍼와 장면이 다시 마운트되지 않고, 장면에 들어올 때만 mf-phase-enter 가 돈다. 그 밖은 단계 이름이 키다.
+function sceneKey(phase: PhaseId): string {
+  return phase === "claim" || phase === "claimReveal" || phase === "discussion" ? "dayScene" : phase;
+}
 
 // 방 화면 틀: 맨 위 재접속 띠(흐름 안, 본문을 밀어냄) + 본문. 단계 화면은 본문 자리에 붙는다.
 export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
@@ -77,7 +87,7 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
       ) : null}
       {view && (
         <p className="mf-sr-only" aria-live="polite">
-          {PHASE_ANNOUNCE[view.phase]}
+          {PHASE_ANNOUNCE[view.phase](view)}
         </p>
       )}
     </div>
@@ -120,9 +130,9 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
       );
     }
 
-    // 화면은 서버가 정한 단계만 따른다. key 가 단계라 단계가 바뀔 때만 새로 나타난다(phase-enter 300ms).
+    // 화면은 서버가 정한 단계만 따른다. key 가 장면이라 장면이 바뀔 때만 새로 나타난다(phase-enter 300ms).
     return (
-      <div key={view.phase} className="mf-phase-enter">
+      <div key={sceneKey(view.phase)} className="mf-phase-enter">
         {renderPhase(view)}
       </div>
     );
@@ -146,8 +156,12 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
         return (
           <RoleReveal view={view} offset={connection.offset} myRoleButton={myRoleButton} onSeenFront={onSeenFront} />
         );
-      case "day":
-        return <Day myRoleButton={myRoleButton} />;
+      case "dayAnnounce":
+        return <Day view={view} myRoleButton={myRoleButton} />;
+      case "claim":
+      case "claimReveal":
+      case "discussion":
+        return <DayScene view={view} connection={connection} myRoleButton={myRoleButton} />;
     }
   }
 }
