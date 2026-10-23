@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent, ReactNode, RefObject } from "react";
 import { Button } from "./Button";
 import { Icon } from "./Icon";
+import { getSheetProbe } from "../debug/sheetProbe";
+import type { SheetTrace } from "../debug/sheetProbe";
 import "../styles/sheet.css";
 
 // 하단 시트 틀(C-01 내 역할 · C-03 공유 · 확인 시트 공통). 네이티브 <dialog>.showModal() 위에 올린다:
@@ -45,12 +47,15 @@ export function Sheet({ label, onClose, initialFocusRef, showClose, children }: 
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
   const drag = useRef<Drag | null>(null);
+  // 계측기(?sheetdebug=1)가 있을 때만 기록한다. 없으면 아무 일도 하지 않는다(G-01-9 진단).
+  const traceRef = useRef<SheetTrace | null>(null);
 
   // 닫히는 중에는 몇 번을 눌러도 onClose 는 한 번이다.
   const requestClose = useCallback(() => {
     if (closingRef.current) return;
     closingRef.current = true;
     setClosing(true);
+    traceRef.current?.mark("close");
     timer.current = setTimeout(() => {
       timer.current = undefined;
       onCloseRef.current();
@@ -61,11 +66,18 @@ export function Sheet({ label, onClose, initialFocusRef, showClose, children }: 
     const dlg = dialogRef.current;
     if (!dlg) return;
     // StrictMode 는 effect 를 두 번 돌린다: 이미 열려 있으면 showModal 을 다시 부르지 않는다(부르면 예외).
-    if (!dlg.open) dlg.showModal();
+    let trace: SheetTrace | null = null;
+    if (!dlg.open) {
+      trace = getSheetProbe()?.start({ label, dialog: dlg, sheet: sheetRef.current }) ?? null;
+      dlg.showModal();
+      trace?.mark("shown");
+    }
+    traceRef.current = trace;
     // React autoFocus 는 대화상자가 열리기 전에 일어나므로 열린 직후 직접 준다.
     const first = initialFocusRef?.current ?? closeBtnRef.current ?? dlg.querySelector<HTMLElement>("button, [href], input, [tabindex]");
     // 시트가 화면 밖(translateY 100%)에 있는 순간의 포커스가 대화상자를 스크롤하지 않게 한다(G-01-9 후보 원인).
     first?.focus({ preventScroll: true });
+    trace?.mark("focused");
     // 첫 프레임을 시작 상태로 그린 뒤 열림 — iOS Safari 에서 첫 프레임이 최종 위치로 그려지는 문제(G-01-9).
     // requestAnimationFrame 콜백은 그 프레임이 그려지기 전에 실행되므로 한 번 더 요청해 시작 상태가 최소 한 번 그려지게 한다.
     // 프레임이 오지 않는 환경은 시간 폴백이 대신한다. 먼저 불린 쪽이 나머지 예약을 취소하고 한 번만 일한다.
@@ -80,13 +92,19 @@ export function Sheet({ label, onClose, initialFocusRef, showClose, children }: 
     };
     const enter = () => {
       cancelEnter();
-      if (!closingRef.current) setEntered(true);
+      if (!closingRef.current) {
+        setEntered(true);
+        // 열림 클래스 "요청" 시점이다. 클래스는 이 뒤 렌더에 붙는다.
+        traceRef.current?.mark("entered");
+      }
     };
     frame1 = requestAnimationFrame(() => {
       frame2 = requestAnimationFrame(enter);
     });
     fallback = setTimeout(enter, ENTER_FALLBACK_MS);
     return () => {
+      traceRef.current?.end();
+      traceRef.current = null;
       cancelEnter();
       if (timer.current !== undefined) clearTimeout(timer.current);
       timer.current = undefined;
