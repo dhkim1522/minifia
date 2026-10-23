@@ -40,7 +40,7 @@ Decimal phases appear between their surrounding integers in numeric order.
   4. 방장이 시작하면 모든 폰에 "직업을 배정하고 있습니다…" 구간(약 3초)이 함께 나온 뒤 역할 확인 15초로 넘어가고, 카운트다운이 모든 폰에서 같은 시각에 끝나면 모든 폰이 "낮이 되었습니다" 화면으로 넘어간다(결정 0007). 폰 화면을 껐다 켜거나 탭을 새로고침해도 같은 자리·같은 역할로 돌아온다.
   5. 코드를 고치고 `wrangler deploy` 를 다시 하면 주소는 그대로이고 새 버전이 보인다.
 
-**Plans**: 5/14 plans executed (01-04~01-14 는 2026-10-23 UI-SPEC 개정 2·결정 0012 기준으로 다시 계획)
+**Plans**: 8/14 plans executed (01-04~01-14 는 2026-10-23 UI-SPEC 개정 2·결정 0012 기준으로 다시 계획)
 
 Plans:
 **Wave 1**
@@ -55,9 +55,9 @@ Plans:
 - [x] 01-05-PLAN.md — 새 첫 화면(S-01)에서 방 만들기: 디자인 시스템 기본 부품·문구 매핑·그림 URL 헬퍼 (wave 3)
 
 **Wave 4** *(blocked on Wave 3 completion)*
-- [ ] 01-06-PLAN.md — 코드·링크로 참가: S-01 코드 줄·S-02 링크 참가(미리보기 폴링)·입장 정보 이어받기·오류 화면 (wave 4)
-- [ ] 01-07-PLAN.md — 서버 단계 코어: 단계 표·tick·시작(끊긴 사람 포함 배정)·플레이어별 역할 뷰 (TDD, wave 4)
-- [ ] 01-08-PLAN.md — 역할 확인 부품: 공통 타이머(m:ss)·카드 면 전이·역할 카드·아이콘 (wave 4)
+- [x] 01-06-PLAN.md — 코드·링크로 참가: S-01 코드 줄·S-02 링크 참가(미리보기 폴링)·입장 정보 이어받기·오류 화면 (wave 4)
+- [x] 01-07-PLAN.md — 서버 단계 코어: 단계 표·tick·시작(끊긴 사람 포함 배정)·플레이어별 역할 뷰 (TDD, wave 4)
+- [x] 01-08-PLAN.md — 역할 확인 부품: 공통 타이머(m:ss)·카드 면 전이·역할 카드·아이콘 (wave 4)
 
 **Wave 5** *(blocked on Wave 4 completion)*
 - [ ] 01-09-PLAN.md — Room DO·HTTP 배선: 미리보기·참가·나가기·내보내기·재접속·시작·알람 다중화·프레임 누출 검사 (wave 5)
@@ -161,7 +161,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 (decimal phases
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 1. 걷는 뼈대 | v1.0 | 5/14 | In Progress | - |
+| 1. 걷는 뼈대 | v1.0 | 8/14 | In Progress | - |
 | 2. 낮 토론 | v1.0 | 0/TBD | Not started | - |
 | 3. 밤과 아침 | v1.0 | 0/TBD | Not started | - |
 | 4. 처형과 승패 | v1.0 | 0/TBD | Not started | - |
