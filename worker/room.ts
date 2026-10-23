@@ -1,7 +1,9 @@
 import { DurableObject } from "cloudflare:workers";
 import { CLOSE_CODES, MAX_FRAME_BYTES } from "../shared/protocol";
-import type { ApiErrorCode, ClientMessage, Claim, RemovedReason, RoomPreview, ServerMessage, WsErrorCode } from "../shared/protocol";
+import type { ApiErrorCode, ClientMessage, Claim, EmojiId, RemovedReason, RoomPreview, ServerMessage, WsErrorCode } from "../shared/protocol";
 import { selectClaim } from "../shared/game/claim";
+import { emote, say } from "../shared/game/chat";
+import type { SayInput } from "../shared/game/chat";
 import {
   attachConnection,
   createRoomState,
@@ -178,6 +180,12 @@ export class Room extends DurableObject<Env> {
       case "claim":
         await this.handleClaim(ws, msg.claim);
         return;
+      case "say":
+        await this.handleSay(ws, { template: msg.template, target: msg.target, claimedRole: msg.claimedRole });
+        return;
+      case "emoji":
+        await this.handleEmoji(ws, msg.icon);
+        return;
     }
   }
 
@@ -272,6 +280,41 @@ export class Room extends DurableObject<Env> {
     this.room = result.state;
     await this.persistAndBroadcast();
     await this.reschedule();
+  }
+
+  // 빠른 메시지: 신원은 소켓 첨부의 playerId 뿐이고, 시각은 서버 Date.now() 다(T-02-16, D-13).
+  // WRONG_PHASE 만 최신 state 를 다시 보낸다 — 단계가 넘어간 화면이 서버 값으로 돌아가게. RATE_LIMITED·BAD_MESSAGE 는 error 뿐이다(UI-SPEC 오류표).
+  private async handleSay(ws: WebSocket, input: SayInput): Promise<void> {
+    const att = this.attachmentOf(ws);
+    if (!att || !this.room) {
+      this.sendTo(ws, { t: "error", code: "BAD_MESSAGE" });
+      return;
+    }
+    const result = say(this.room, att.playerId, input, Date.now());
+    if (!result.ok) {
+      if (result.error === "WRONG_PHASE") this.sendRejection(ws, att.playerId, result.error);
+      else this.sendTo(ws, { t: "error", code: result.error });
+      return;
+    }
+    this.room = result.state;
+    await this.persistAndBroadcast();
+  }
+
+  // 이모티콘: 저장은 lastSendAt(쿨다운)뿐이고 state 는 방송하지 않는다 — 화면에 보이는 값이 바뀌지 않았다. 이벤트만 앉은 모든 소켓에 보낸다(D-14).
+  private async handleEmoji(ws: WebSocket, icon: EmojiId): Promise<void> {
+    const att = this.attachmentOf(ws);
+    if (!att || !this.room) {
+      this.sendTo(ws, { t: "error", code: "BAD_MESSAGE" });
+      return;
+    }
+    const result = emote(this.room, att.playerId, icon, Date.now());
+    if (!result.ok) {
+      this.sendTo(ws, { t: "error", code: result.error });
+      return;
+    }
+    this.room = result.state;
+    await this.ctx.storage.put("room", this.room);
+    this.broadcastEvent({ t: "emoji", ...result.event });
   }
 
   // 직업 선택: 신원은 소켓 첨부의 playerId 뿐이다 — 메시지에서 seat 를 읽지 않는다(T-02-16).
@@ -411,6 +454,17 @@ export class Room extends DurableObject<Env> {
       const att = ws.deserializeAttachment() as SocketAttachment | null;
       if (!att || !room.players.some((p) => p.id === att.playerId)) continue;
       this.sendTo(ws, { t: "state", view: buildView(room, att.playerId, now) });
+    }
+  }
+
+  // 플레이어별 뷰가 아닌 공개 이벤트를 방에 앉은 모든 소켓에 그대로 보낸다(broadcast 와 같은 소켓 순회).
+  private broadcastEvent(msg: ServerMessage): void {
+    const room = this.room;
+    if (!room) return;
+    for (const ws of this.ctx.getWebSockets()) {
+      const att = ws.deserializeAttachment() as SocketAttachment | null;
+      if (!att || !room.players.some((p) => p.id === att.playerId)) continue;
+      this.sendTo(ws, msg);
     }
   }
 
