@@ -6,7 +6,8 @@ import { useRoomConnection } from "../net/useRoomConnection";
 import { Lobby } from "./Lobby";
 import "../styles/room.css";
 
-export type ExitReason = RemovedReason | "replaced";
+// gaveUp: 30초 연결 실패 뒤 [처음으로]. App 은 default 분기로 입장 정보를 지우지 않고 첫 화면으로 간다.
+export type ExitReason = RemovedReason | "replaced" | "gaveUp";
 
 interface RoomScreenProps {
   code: string;
@@ -40,6 +41,20 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
             다시 연결
           </Button>
           <Button variant="secondary" onClick={() => onExit("replaced")}>
+            처음으로
+          </Button>
+        </main>
+      );
+    }
+
+    if (status === "failed") {
+      return (
+        <main className="mf-room__notice">
+          <h1 className="mf-t-heading">연결할 수 없어요</h1>
+          <Button variant="primary" onClick={connection.retry}>
+            다시 시도
+          </Button>
+          <Button variant="secondary" onClick={() => onExit("gaveUp")}>
             처음으로
           </Button>
         </main>

@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ClientMessage, RemovedReason, RoomView, ServerMessage } from "../../shared/protocol";
+import { getPreview } from "./api";
 import type { ClockSample } from "./clock";
 import { estimateOffset } from "./clock";
 import type { BannerMode, LinkEvent, LinkState, LinkStatus } from "./linkReducer";
-import { initialLinkState, linkReducer, RESTORED_MS, retryDelayMs } from "./linkReducer";
+import { initialLinkState, linkReducer, RESTORED_MS, retryDelayMs, STALE_CHECK_AFTER } from "./linkReducer";
 
 export type ConnectionStatus = LinkStatus;
 
@@ -57,6 +58,13 @@ function parseServerMessage(data: unknown): ServerMessage | null {
     // 서버가 보낸 것이 아닌 프레임은 무시한다.
   }
   return null;
+}
+
+// 브라우저 WebSocket 은 업그레이드 실패(404)를 구분할 수 없어, 방이 사라졌는지는 미리보기 라우트로 확인한다.
+async function defaultCheckRoom(code: string): Promise<"alive" | "gone" | "unknown"> {
+  const result = await getPreview(code);
+  if (result.ok) return "alive";
+  return result.error === "ROOM_NOT_FOUND" ? "gone" : "unknown";
 }
 
 const isVisible = () => typeof document === "undefined" || document.visibilityState !== "hidden";
@@ -119,14 +127,27 @@ export function useRoomConnection(code: string, token: string, options?: RoomCon
       if (c === checkC) clearPongWait();
     };
 
-    // 포기(failed) 로 넘어가면 더 시도하지 않고, 매달려 있던 소켓과 예약을 정리한다.
+    // 포기(failed)·방 소멸(removed) 로 넘어가면 더 시도하지 않고, 매달려 있던 소켓과 예약을 정리한다.
     const settle = (state: LinkState) => {
-      if (state.status !== "failed") return;
+      if (state.status !== "failed" && state.status !== "removed") return;
       clearRetry();
       clearPongWait();
       const ws = socketRef.current;
       socketRef.current = null; // 그 소켓의 close 는 무시된다
       if (ws) ws.close();
+    };
+
+    // 연속 실패 한 묶음에 한 번(attempts 가 처음 STALE_CHECK_AFTER 에 닿을 때): 방이 아직 있는지 묻는다(Pitfall 22).
+    const checkRoomOnce = (state: LinkState) => {
+      if (state.status !== "reconnecting" || state.attempts !== STALE_CHECK_AFTER) return;
+      const check = optionsRef.current?.checkRoom ?? defaultCheckRoom;
+      void check(code)
+        .then((result) => {
+          if (!disposed && result === "gone") settle(emit({ type: "roomGone", now: Date.now() }));
+        })
+        .catch(() => {
+          // 확인이 실패하면 알 수 없는 것으로 보고 계속 재시도한다.
+        });
     };
 
     const scheduleRetry = (state: LinkState) => {
@@ -172,7 +193,9 @@ export function useRoomConnection(code: string, token: string, options?: RoomCon
       });
       ws.addEventListener("close", (e: CloseEvent) => {
         if (disposed || socketRef.current !== ws) return;
-        scheduleRetry(emit({ type: "close", code: e.code, reason: e.reason, now: Date.now() }));
+        const next = emit({ type: "close", code: e.code, reason: e.reason, now: Date.now() });
+        checkRoomOnce(next);
+        scheduleRetry(next);
       });
     }
 
@@ -184,7 +207,7 @@ export function useRoomConnection(code: string, token: string, options?: RoomCon
         pongTimer = undefined;
         checkC = -1;
         if (disposed || socketRef.current !== ws) return;
-        emit({ type: "close", code: 1006, reason: "stale", now: Date.now() });
+        checkRoomOnce(emit({ type: "close", code: 1006, reason: "stale", now: Date.now() }));
         ws.close();
         if (linkRef.current.visible) connect();
       }, PONG_WAIT_MS);
