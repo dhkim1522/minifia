@@ -1,0 +1,43 @@
+{
+  "contract": "1.0.0",
+  "flavor": "core",
+  "milestone": "v1.0 — MVP",
+  "phases": [
+    {
+      "number": "1",
+      "name": "걷는 뼈대",
+      "status": "in_progress"
+    },
+    {
+      "number": "2",
+      "name": "낮 토론",
+      "status": "pending"
+    },
+    {
+      "number": "3",
+      "name": "밤과 아침",
+      "status": "pending"
+    },
+    {
+      "number": "4",
+      "name": "처형과 승패",
+      "status": "pending"
+    },
+    {
+      "number": "5",
+      "name": "분위기와 캐릭터",
+      "status": "pending"
+    },
+    {
+      "number": "6",
+      "name": "친구 플레이테스트",
+      "status": "pending"
+    }
+  ],
+  "next": {
+    "command": "/gsd-progress --next",
+    "label": "Advance to the next step",
+    "reason": "Phase 1 of 6 · executing"
+  },
+  "updated_at": "2026-10-23T10:53:02.380Z"
+}

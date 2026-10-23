@@ -13,9 +13,9 @@ provides:
   - "실기기 수집용 폰 화면 패널, 콘솔 [sheetdebug] 줄, sessionStorage 기록 12개"
 affects: [01-19, G-01-9]
 
-status: partial
-gap_status: open
-branch: pending-device-measurement
+status: complete
+gap_status: closed
+branch: dialog-programmatic-scroll  # 실기기 패널 1장으로 확정: shB 가 dlgB 위로 올라갔다 돌아옴(포커스 이동에 의한 다이얼로그 자동 스크롤)
 actuals:
   tokens: 10000
   tasks: 2
