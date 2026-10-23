@@ -1,7 +1,16 @@
 import { seatLayout, SEAT_COUNT } from "../../shared/seatLayout";
+import type { EmojiId } from "../../shared/protocol";
 import "../styles/lobby.css";
+import "../styles/seat.css";
 import { Figure } from "./Figure";
 import { Icon } from "./Icon";
+import { SeatFloat } from "./SeatFloat";
+
+/** 자리 머리 위에 뜨는 것 하나(말풍선·공개 연출 말풍선·이모티콘). z 가 큰 것이 위. key 가 바뀌면 애니메이션이 새로 시작한다. */
+export type TableFloat =
+  | { key: string; z: number; kind: "bubble"; text: string; elapsedMs?: number }
+  | { key: string; z: number; kind: "reveal"; text: string; dim: boolean; animate: boolean }
+  | { key: string; z: number; kind: "emoji"; icon: EmojiId; elapsedMs?: number };
 
 // 대기 장면 위 2.5D 원근 테이블. 상태를 받아 그리기만 한다(D-22): 입력에 역할 필드가 없다.
 // 동료 표시는 서버가 마피아에게만 보낸 me.allies 에서 화면이 만든 isAlly 뿐이다.
@@ -17,6 +26,8 @@ export interface TableSeat {
   transition?: "entering" | "leaving" | null;
   /** 누를 수 있는 자리(방장이 끊긴 사람을 내보낼 때) */
   pressable?: boolean;
+  /** 머리 위에 떠 있는 것 하나(자리마다 한 번에 하나) */
+  float?: TableFloat | null;
 }
 
 export interface TableProps {
@@ -30,7 +41,20 @@ export interface TableProps {
 // 인물 높이: 장면 높이 대비 %. 자리 폭 20%·그림 3:4·장면 4:5 에서만 맞는 값이라 장면 상자는 4:5 로 고정한다(Pitfall 16).
 const FIG_H = 21.33;
 
+// 떠 있는 층 z 기준값: 이름표 층(25)보다 위. float.z 가 더해진다.
+const FLOAT_Z = 26;
+
 const pct = (n: number): string => `${Math.round(n * 1000) / 1000}%`;
+
+// 가로 위치는 --mf-float-left 변수로 넘기고 seat.css 의 .mf-float 가 left 에 쓴다.
+// (clamp() 를 left 에 바로 쓰면 happy-dom 이 값을 버려 테스트가 위치를 읽을 수 없다. 브라우저에서는 같은 결과다.)
+function floatStyle(x: number, top: number, z: number): React.CSSProperties {
+  return {
+    ["--mf-float-left" as string]: `clamp(70px, ${pct(x)}, calc(100% - 70px))`,
+    top: pct(top),
+    zIndex: FLOAT_Z + z,
+  };
+}
 
 function seatLabel(s: TableSeat): string {
   return `${s.nickname}${s.isMe ? " (나)" : ""}${s.connected ? "" : ", 연결 끊김"}`;
@@ -44,6 +68,7 @@ export function Table({ seats, mySeat, dimmed, onSeatPress, label }: TableProps)
   const seatLayers: React.ReactNode[] = [];
   const allyLayers: React.ReactNode[] = [];
   const tagLayers: React.ReactNode[] = [];
+  const floatLayers: React.ReactNode[] = [];
 
   for (let i = 0; i < SEAT_COUNT; i++) {
     const s = seats[i];
@@ -96,6 +121,21 @@ export function Table({ seats, mySeat, dimmed, onSeatPress, label }: TableProps)
     // 이름표는 크기 변환 바깥에 둔다 — 자리 크기와 관계없이 항상 14px. 뒤쪽 자리는 머리 위, 앞쪽은 발 아래.
     const headTop = L.y - FIG_H * L.scale;
     const tagTop = front ? L.y + 1.2 : headTop - 7.5 - (s.isHost ? 5 : 0);
+    // 떠 있는 것: 이름표와 같이 크기 변환 바깥. 가로는 말풍선 최대 폭 140 의 절반(70px)만큼 장면 안에 가둔다.
+    const floatTop = headTop - (front ? 1 : 8);
+    if (s.float) {
+      floatLayers.push(
+        <div
+          key={`f${i}:${s.float.key}`}
+          className="mf-float"
+          aria-hidden="true"
+          style={floatStyle(L.x, floatTop, s.float.z)}
+        >
+          <SeatFloat float={s.float} />
+        </div>,
+      );
+    }
+
     tagLayers.push(
       <div
         key={`t${i}`}
@@ -121,6 +161,7 @@ export function Table({ seats, mySeat, dimmed, onSeatPress, label }: TableProps)
       {dimmed ? <div className="mf-table__scrim" /> : null}
       {allyLayers}
       {tagLayers}
+      {floatLayers}
     </div>
   );
 }

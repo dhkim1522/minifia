@@ -189,7 +189,7 @@ describe("SeatFloat 층 (D-04, D-16)", () => {
     expect(el.classList.contains("mf-bubble")).toBe(true);
     const layer = el.closest<HTMLElement>(".mf-float");
     expect(layer?.getAttribute("aria-hidden")).toBe("true");
-    expect(layer?.style.left).toMatch(/^clamp\(70px, [\d.]+%, calc\(100% - 70px\)\)$/);
+    expect(layer?.style.getPropertyValue("--mf-float-left")).toMatch(/^clamp\(70px, [\d.]+%, calc\(100% - 70px\)\)$/);
   });
 
   it("이모티콘은 .mf-react 안에 svg 하나다", () => {
