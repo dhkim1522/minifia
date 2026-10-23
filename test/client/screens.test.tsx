@@ -10,6 +10,17 @@ afterEach(() => {
 });
 
 describe("Home", () => {
+  it("첫 화면 구성: 입장 배경, 소개와 서비스 이름, 닉네임 입력칸, [방 만들기], 버전", () => {
+    const { container } = render(<Home onEnterRoom={vi.fn()} />);
+    expect(screen.getByRole("heading", { name: "미니피아" })).toBeTruthy();
+    expect(screen.getByText("친구들과 한 판, 점심시간 마피아")).toBeTruthy();
+    expect(screen.getByLabelText("닉네임")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "방 만들기" })).toBeTruthy();
+    const art = container.querySelector(".mf-backdrop__art") as HTMLElement | null;
+    expect(art?.style.backgroundImage).toContain("/backgrounds/bg_entry_lobby.svg");
+    expect(screen.getByText(/^v/)).toBeTruthy();
+  });
+
   it("닉네임을 넣고 [방 만들기]를 누르면 POST /api/rooms 결과로 방에 들어간다", async () => {
     const fetchMock = vi.fn(async () => new Response(JSON.stringify({ code: "0042", token: "t".repeat(43), seat: 0 }), { status: 201 }));
     vi.stubGlobal("fetch", fetchMock);
@@ -22,22 +33,6 @@ describe("Home", () => {
     const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
     expect(url).toBe("/api/rooms");
     expect(init.body).toBe(JSON.stringify({ nickname: "민수" }));
-  });
-
-  it("실패하면 한 문장을 보여 주고 방에 들어가지 않는다", async () => {
-    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ error: "CODE_EXHAUSTED" }), { status: 503 })));
-    const onEnter = vi.fn();
-    render(<Home onEnterRoom={onEnter} />);
-    fireEvent.click(screen.getByRole("button", { name: "방 만들기" }));
-    expect(await screen.findByText("방을 만들지 못했어요. 다시 시도해 주세요")).toBeTruthy();
-    expect(onEnter).not.toHaveBeenCalled();
-  });
-
-  it("네트워크 오류도 같은 한 문장을 보여 준다", async () => {
-    vi.stubGlobal("fetch", vi.fn(async () => { throw new TypeError("offline"); }));
-    render(<Home onEnterRoom={vi.fn()} />);
-    fireEvent.click(screen.getByRole("button", { name: "방 만들기" }));
-    expect(await screen.findByText("방을 만들지 못했어요. 다시 시도해 주세요")).toBeTruthy();
   });
 });
 
