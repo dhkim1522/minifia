@@ -1,7 +1,9 @@
 // 낮 토론 워커 통합 테스트(02-05): 실제 소켓으로 직업 공개·빠른 메시지·이모티콘·연장·넘기기를 workerd 에서 확인한다.
 import { describe, expect, it } from "vitest";
 import type { RoomView, ServerMessage } from "../../shared/protocol";
-import { advanceTo, backdateSends, collect, flat, nextFrame, nextState, seat, send, storedRoom } from "./helpers";
+import { env } from "cloudflare:workers";
+import { evictDurableObject, runInDurableObject } from "cloudflare:test";
+import { advanceTo, alarmOf, backdateSends, collect, connect, flat, hello, nextFrame, nextState, seat, send, storedRoom } from "./helpers";
 import type { Seated, TestSocket } from "./helpers";
 
 const ROLE_VALUES = ["mafia", "police", "doctor", "citizen", "none"];
@@ -223,5 +225,88 @@ describe("이모티콘 (COMM-02, D-14)", () => {
     expect(await errorCode(g0.sock)).toBe(codeOf("BAD_MESSAGE"));
     await settle(g0.sock);
     for (const s of others) expect(collect(s).some((raw) => raw.includes('"t":"emoji"'))).toBe(false);
+  });
+});
+
+describe("방장 연장·넘기기 (D-18, D-19, DAY-01)", () => {
+  it("손님의 extend 는 NOT_HOST 와 state 를 받고 저장된 마감은 그대로다", async () => {
+    const r = await startedAt("discussion");
+    const g0 = r.guests[0]!;
+    const before = (await storedRoom(r.code)).phaseEndsAt;
+
+    send(g0.sock, { t: "extend" });
+    expect(await errorCode(g0.sock)).toBe(codeOf("NOT_HOST"));
+    const state = await nextState(g0.sock);
+    expect(state.view.phase).toBe("discussion");
+    expect((await storedRoom(r.code)).phaseEndsAt).toBe(before);
+    expect(await alarmOf(r.code)).toBe(before);
+  });
+
+  it("방장 extend 는 모든 소켓의 마감을 +30000, 길이 120000, extendUsed true 로 바꾸고 알람을 새 마감으로 다시 걸며, 두 번째는 ALREADY_EXTENDED 다", async () => {
+    const r = await startedAt("discussion");
+    const sockets = allSockets(r);
+    const before = (await storedRoom(r.code)).phaseEndsAt!;
+
+    send(r.host, { t: "extend" });
+    for (const s of sockets) {
+      const m = await nextFrame(s, (f) => f.t === "state" && f.view.day?.extendUsed === true);
+      if (m.t !== "state") throw new Error("state 가 아니다");
+      expect(`${m.view.phaseEndsAt}:${m.view.phaseDurationMs}`).toBe(`${before + 30_000}:120000`);
+    }
+    expect((await storedRoom(r.code)).phaseEndsAt).toBe(before + 30_000);
+    expect(await alarmOf(r.code)).toBe(before + 30_000);
+
+    send(r.host, { t: "extend" });
+    expect(await errorCode(r.host)).toBe(codeOf("ALREADY_EXTENDED"));
+    expect((await storedRoom(r.code)).phaseEndsAt).toBe(before + 30_000);
+  });
+
+  it("손님의 skip 은 NOT_HOST 이고 단계가 바뀌지 않으며, 방장 skip 은 모두에게 즉시 dayAnnounce(day.n 2)와 새 알람을 준다", async () => {
+    const r = await startedAt("discussion");
+    const sockets = allSockets(r);
+
+    send(r.guests[0]!.sock, { t: "skip" });
+    expect(await errorCode(r.guests[0]!.sock)).toBe(codeOf("NOT_HOST"));
+    expect((await storedRoom(r.code)).phase).toBe("discussion");
+
+    send(r.host, { t: "skip" });
+    for (const s of sockets) {
+      const m = await nextFrame(s, (f) => f.t === "state" && f.view.phase === "dayAnnounce");
+      if (m.t !== "state") throw new Error("state 가 아니다");
+      expect(m.view.day?.n).toBe(2);
+    }
+    const room = await storedRoom(r.code);
+    expect(room.phase).toBe("dayAnnounce");
+    expect(await alarmOf(r.code)).toBe(room.phaseEndsAt);
+  });
+
+  it("방장이 끊겨 있어도 낮 토론은 서버 타이머대로 dayAnnounce 로 넘어간다", async () => {
+    const r = await startedAt("discussion");
+    const guestSockets = r.guests.map((g) => g.sock);
+    r.host.ws.close(1000, "bye");
+    await nextFrame(guestSockets[0]!, (m) => m.t === "state" && m.view.players.find((p) => p.isHost)?.connected === false);
+
+    await advanceTo(r.code, guestSockets, "dayAnnounce");
+    expect((await storedRoom(r.code)).day).toBe(2);
+  });
+});
+
+describe("옛 저장 방 정규화 (RESEARCH Pattern 6)", () => {
+  it("1페이즈 종착 단계로 저장된 방은 깨어날 때 dayAnnounce·day 1 로 바뀌고 알람이 새 마감으로 걸린다", async () => {
+    const r = await startedAt("discussion");
+    const stub = env.ROOM.getByName(r.code);
+    await runInDurableObject(stub, async (_instance, state) => {
+      const room = await state.storage.get<Record<string, unknown>>("room");
+      if (!room) throw new Error("방이 없다");
+      await state.storage.put("room", { ...room, phase: "day", phaseEndsAt: null, day: undefined, messages: undefined, extendUsed: undefined });
+    });
+    await evictDurableObject(stub);
+
+    const sock = await connect(r.code);
+    const first = await hello(sock, r.hostToken);
+    expect(`${first.view.phase}:${first.view.day?.n}`).toBe("dayAnnounce:1");
+    const room = await storedRoom(r.code);
+    expect(room.phase).toBe("dayAnnounce");
+    expect(await alarmOf(r.code)).toBe(room.phaseEndsAt);
   });
 });
