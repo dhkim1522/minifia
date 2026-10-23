@@ -4,7 +4,7 @@
 // 서버는 문장을 만들지 않는다: 보관하는 것은 템플릿 ID·대상 seat·직업 값뿐이고 문장은 화면이 만든다(T-02-07).
 // 주장의 참·거짓은 보지 않는다(D-10): 이 파일은 플레이어의 실제 역할 필드를 읽지 않는다.
 // 보낸 사람은 입력이 아니라 actorId 로 서버 상태에서 찾는다(T-02-08).
-import type { ChatLine, TemplateId } from "../protocol";
+import type { ChatLine, EmojiId, TemplateId } from "../protocol";
 import { isAlive } from "./alive";
 import type { RoleId } from "./roles";
 import { rolesInPlay } from "./roles";
@@ -96,4 +96,14 @@ export function say(
       players: state.players.map((p) => (p.id === sender.id ? { ...p, lastSendAt: now } : p)),
     },
   };
+}
+
+// 이모티콘 뼈대 — RED 단계용. GREEN 에서 구현한다.
+export function emote(
+  _state: RoomState,
+  _actorId: string,
+  _icon: EmojiId,
+  _now: number,
+): { ok: true; state: RoomState; event: { seat: number; icon: EmojiId; at: number } } | { ok: false; error: ChatError } {
+  return { ok: false, error: "BAD_MESSAGE" };
 }

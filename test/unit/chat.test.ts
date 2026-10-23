@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { isAlive } from "../../shared/game/alive";
-import { MESSAGE_KEEP, QUICK_TEMPLATES, SEND_COOLDOWN_MS, say } from "../../shared/game/chat";
+import { MESSAGE_KEEP, QUICK_TEMPLATES, SEND_COOLDOWN_MS, emote, say } from "../../shared/game/chat";
 import type { SayInput } from "../../shared/game/chat";
 import { ROOM_TTL_MS } from "../../shared/game/room";
 import type { Player, RoomState } from "../../shared/game/room";
 import type { RoleId } from "../../shared/game/roles";
-import { TEMPLATE_IDS } from "../../shared/protocol";
-import type { PhaseId } from "../../shared/protocol";
+import { EMOJI_IDS, TEMPLATE_IDS } from "../../shared/protocol";
+import type { EmojiId, PhaseId } from "../../shared/protocol";
 
 type Extra = Partial<Pick<Player, "connected" | "alive" | "lastSendAt" | "role">>;
 
@@ -233,5 +233,83 @@ describe("say - 보관 (D-15, overflow)", () => {
       const r = say(state, "p1", { template: "claimed", target: 2, claimedRole: "doctor" }, NOW);
       expect(outcome(r)).toBe("ok");
     }
+  });
+});
+
+describe("emote - 이모티콘 (D-14, D-16, COMM-02)", () => {
+  it("통과하면 이벤트를 돌려주고 바뀐 것은 보낸 사람 lastSendAt 뿐이다", () => {
+    const state = room("discussion");
+    const r = emote(state, "p1", "smile", NOW);
+    expect(outcome(r)).toBe("ok");
+    if (!r.ok) return;
+    expect(JSON.stringify(r.event)).toBe(JSON.stringify({ seat: 1, icon: "smile", at: NOW }));
+    expect(r.state.players[1]!.lastSendAt).toBe(NOW);
+    expect(r.state.messages).toBe(state.messages);
+    expect(r.state.nextMessageSeq).toBe(state.nextMessageSeq);
+    const others = r.state.players.filter((p) => p.id !== "p1").map((p) => p.lastSendAt);
+    expect(others.every((v) => v === undefined)).toBe(true);
+  });
+
+  it("여덟 아이콘이 모두 통과한다", () => {
+    const results = EMOJI_IDS.map((icon, i) => outcome(emote(room("discussion"), "p1", icon, NOW + i)));
+    expect(results.join(",")).toBe(EMOJI_IDS.map(() => "ok").join(","));
+  });
+
+  it("알 수 없는 아이콘은 BAD_MESSAGE", () => {
+    expect(outcome(emote(room("discussion"), "p1", "fire" as EmojiId, NOW))).toBe("BAD_MESSAGE");
+    expect(outcome(emote(room("discussion"), "p1", "constructor" as EmojiId, NOW))).toBe("BAD_MESSAGE");
+  });
+
+  it.each(["lobby", "dayAnnounce", "claim", "claimReveal"] as PhaseId[])("%s 에서는 WRONG_PHASE", (phase) => {
+    expect(outcome(emote(room(phase), "p1", "smile", NOW))).toBe("WRONG_PHASE");
+  });
+
+  it("탈락자·방에 없는 사람은 BAD_MESSAGE", () => {
+    const dead = room("discussion", { overrides: { 1: { alive: false } } });
+    expect(outcome(emote(dead, "p1", "smile", NOW))).toBe("BAD_MESSAGE");
+    expect(outcome(emote(room("discussion"), "ghost", "smile", NOW))).toBe("BAD_MESSAGE");
+  });
+
+  it("입력 상태를 바꾸지 않는다", () => {
+    const state = room("discussion");
+    const before = JSON.stringify(state);
+    emote(state, "p1", "heart", NOW);
+    expect(JSON.stringify(state)).toBe(before);
+  });
+});
+
+describe("메시지·이모티콘 합산 쿨다운 (D-14)", () => {
+  it("say 뒤 1999ms 에 emote 는 RATE_LIMITED, 2000ms 에는 통과", () => {
+    const sent = say(room("discussion"), "p1", { template: "innocent" }, 10_000);
+    if (!sent.ok) throw new Error("setup");
+    expect(outcome(emote(sent.state, "p1", "smile", 10_000 + SEND_COOLDOWN_MS - 1))).toBe("RATE_LIMITED");
+    expect(outcome(emote(sent.state, "p1", "smile", 10_000 + SEND_COOLDOWN_MS))).toBe("ok");
+  });
+
+  it("emote 뒤 1999ms 에 say 는 RATE_LIMITED, 2000ms 에는 통과", () => {
+    const sent = emote(room("discussion"), "p1", "smile", 10_000);
+    if (!sent.ok) throw new Error("setup");
+    expect(outcome(say(sent.state, "p1", { template: "innocent" }, 10_000 + SEND_COOLDOWN_MS - 1))).toBe("RATE_LIMITED");
+    expect(outcome(say(sent.state, "p1", { template: "innocent" }, 10_000 + SEND_COOLDOWN_MS))).toBe("ok");
+  });
+
+  it("거부된 요청은 lastSendAt 을 바꾸지 않는다: t0 성공, t0+1000 거부, t0+2000 통과", () => {
+    const t0 = 10_000;
+    const first = emote(room("discussion"), "p1", "smile", t0);
+    if (!first.ok) throw new Error("setup");
+    const rejected = emote(first.state, "p1", "smile", t0 + 1_000);
+    expect(outcome(rejected)).toBe("RATE_LIMITED");
+    expect(first.state.players[1]!.lastSendAt).toBe(t0);
+    const sayRejected = say(first.state, "p1", { template: "innocent" }, t0 + 1_000);
+    expect(outcome(sayRejected)).toBe("RATE_LIMITED");
+    expect(first.state.players[1]!.lastSendAt).toBe(t0);
+    expect(outcome(emote(first.state, "p1", "smile", t0 + 2_000))).toBe("ok");
+  });
+
+  it("다른 사람의 쿨다운은 독립이다: A 가 보낸 직후 B 는 보낼 수 있다", () => {
+    const a = say(room("discussion"), "p1", { template: "innocent" }, 10_000);
+    if (!a.ok) throw new Error("setup");
+    expect(outcome(emote(a.state, "p2", "smile", 10_001))).toBe("ok");
+    expect(outcome(say(a.state, "p3", { template: "innocent" }, 10_001))).toBe("ok");
   });
 });
