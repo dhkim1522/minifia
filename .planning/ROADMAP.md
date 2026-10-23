@@ -99,11 +99,11 @@ Plans:
   5. 토론 단계가 아닐 때(직업 공개 중 등) 보낸 메시지, 자유 텍스트, 2초 안에 다시 보낸 메시지는 서버가 거부해 다른 폰에 나타나지 않는다. 탈락자·밤·아침 중 메시지 거부는 탈락과 밤이 생기는 3페이즈에서 확인한다.
   6. 폰 세로 화면에서 메시지를 고르고 보내는 데 세 번 이하로 누른다(템플릿 → 대상·직업 → 보내기).
 
-**Plans:** 11 plans
+**Plans:** 1/11 plans executed
 
 Plans:
 **Wave 1**
-- [ ] 02-01-PLAN.md — 낮 루프 트레이서: 와이어 계약 전체·낮 네 단계(dayAnnounce·claim·claimReveal·discussion)·tick 진입 훅·임시 루프·rolesInPlay·기존 테스트 이전·낮 시작 발표 개정·DayScene 장면 뼈대 (wave 1)
+- [x] 02-01-PLAN.md — 낮 루프 트레이서: 와이어 계약 전체·낮 네 단계(dayAnnounce·claim·claimReveal·discussion)·tick 진입 훅·임시 루프·rolesInPlay·기존 테스트 이전·낮 시작 발표 개정·DayScene 장면 뼈대 (wave 1)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 - [ ] 02-02-PLAN.md — 직업 공개 규칙: 선택지·선택·이번 낮 초기화·마감 확정·말 바꿈(규칙표) (TDD, wave 2)
@@ -122,6 +122,7 @@ Plans:
 
 **Wave 5** *(blocked on Wave 4 completion)*
 - [ ] 02-11-PLAN.md — 배포본 full 스모크(낮 한 바퀴·누출·거부)·재배포·결정 0016·ROADMAP 성공 기준 정정·HANDOFF·push·실기기 확인 모음 (wave 5)
+
 **Notes**: 3페이즈가 생기기 전까지는 토론이 끝나면 다음 낮(직업 공개)으로 돌려 말 바꿈 표시를 검증한다. 직업 공개 방식(실시간·동시 공개), 선택지 범위(이번 판에 있는 직업만?), 단계 시간, 빠른 메시지 "저는 [직업]이에요" 템플릿과의 관계는 논의 단계에서 정한다(결정 0007). 템플릿 목록과 문구는 논의 단계에서 정한다. 자유 채팅은 v2 COMMX-01 (플레이테스트 피드백으로 결정), 마피아 밤 비밀 메시지는 v2 COMMX-02.
 **UI hint**: yes
 
@@ -195,7 +196,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 (decimal phases
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 1. 걷는 뼈대 | v1.0 | 19/19 | Complete    | 2026-10-24 |
-| 2. 낮 토론 | v1.0 | 0/11 | Planned | - |
+| 2. 낮 토론 | v1.0 | 1/11 | In Progress | - |
 | 3. 밤과 아침 | v1.0 | 0/TBD | Not started | - |
 | 4. 처형과 승패 | v1.0 | 0/TBD | Not started | - |
 | 5. 분위기와 캐릭터 | v1.0 | 0/TBD | Not started | - |
