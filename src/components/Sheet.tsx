@@ -10,6 +10,9 @@ import "../styles/sheet.css";
 
 // 닫는 애니메이션(240ms)은 animationend 에 기대지 않는다. 숨겨진 탭에서는 이벤트가 오지 않으므로 시간 폴백(+여유)으로 끝낸다.
 const CLOSE_MS = 260;
+// 진입(열림 클래스)도 같은 이유로 프레임에만 기대지 않는다. 숨겨진 탭·절전에서 requestAnimationFrame 이 멈춰도
+// 60ms(60Hz 기준 세 프레임 안팎) 안에 열림 상태가 되어 시트가 화면 밖에 영영 남지 않게 한다(T-01-58).
+const ENTER_FALLBACK_MS = 60;
 const DRAG_CLOSE_PX = 96;
 const DRAG_CLOSE_SPEED = 0.5; // px/ms
 
@@ -61,18 +64,30 @@ export function Sheet({ label, onClose, initialFocusRef, showClose, children }: 
     if (!dlg.open) dlg.showModal();
     // React autoFocus 는 대화상자가 열리기 전에 일어나므로 열린 직후 직접 준다.
     const first = initialFocusRef?.current ?? closeBtnRef.current ?? dlg.querySelector<HTMLElement>("button, [href], input, [tabindex]");
-    first?.focus();
+    // 시트가 화면 밖(translateY 100%)에 있는 순간의 포커스가 대화상자를 스크롤하지 않게 한다(G-01-9 후보 원인).
+    first?.focus({ preventScroll: true });
     // 첫 프레임을 시작 상태로 그린 뒤 열림 — iOS Safari 에서 첫 프레임이 최종 위치로 그려지는 문제(G-01-9).
     // requestAnimationFrame 콜백은 그 프레임이 그려지기 전에 실행되므로 한 번 더 요청해 시작 상태가 최소 한 번 그려지게 한다.
+    // 프레임이 오지 않는 환경은 시간 폴백이 대신한다. 먼저 불린 쪽이 나머지 예약을 취소하고 한 번만 일한다.
+    let frame1: number | undefined;
     let frame2: number | undefined;
-    const frame1 = requestAnimationFrame(() => {
-      frame2 = requestAnimationFrame(() => {
-        if (!closingRef.current) setEntered(true);
-      });
-    });
-    return () => {
-      cancelAnimationFrame(frame1);
+    let fallback: ReturnType<typeof setTimeout> | undefined;
+    const cancelEnter = () => {
+      if (frame1 !== undefined) cancelAnimationFrame(frame1);
       if (frame2 !== undefined) cancelAnimationFrame(frame2);
+      if (fallback !== undefined) clearTimeout(fallback);
+      frame1 = frame2 = fallback = undefined;
+    };
+    const enter = () => {
+      cancelEnter();
+      if (!closingRef.current) setEntered(true);
+    };
+    frame1 = requestAnimationFrame(() => {
+      frame2 = requestAnimationFrame(enter);
+    });
+    fallback = setTimeout(enter, ENTER_FALLBACK_MS);
+    return () => {
+      cancelEnter();
       if (timer.current !== undefined) clearTimeout(timer.current);
       timer.current = undefined;
       if (dlg.open) dlg.close();
