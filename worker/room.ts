@@ -3,6 +3,7 @@ import { CLOSE_CODES, MAX_FRAME_BYTES } from "../shared/protocol";
 import type { ApiErrorCode, ClientMessage, Claim, EmojiId, RemovedReason, RoomPreview, ServerMessage, WsErrorCode } from "../shared/protocol";
 import { selectClaim } from "../shared/game/claim";
 import { emote, say } from "../shared/game/chat";
+import { extendDiscussion, skipDiscussion } from "../shared/game/discussion";
 import type { SayInput } from "../shared/game/chat";
 import {
   attachConnection,
@@ -12,6 +13,7 @@ import {
   joinRoom,
   kickPlayer,
   leaveRoom,
+  normalizeStoredRoom,
   startGame,
 } from "../shared/game/room";
 import type { JoinError } from "../shared/game/room";
@@ -61,10 +63,12 @@ export class Room extends DurableObject<Env> {
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
-    // 알람은 여기서 설정하지 않는다 — 대기 중인 알람을 덮어쓴다.
+    // 알람은 평소에 여기서 설정하지 않는다 — 대기 중인 알람을 덮어쓴다. 예외는 옛 저장 방 정규화로 마감이 바뀐 경우뿐이다(아래).
     ctx.blockConcurrencyWhile(async () => {
       const stored = (await ctx.storage.get<RoomState>("room")) ?? null;
       if (stored) {
+        // 1페이즈 종착 단계로 저장된 방은 낮 시작 발표로 옮긴다(RESEARCH Pattern 6). 바뀌지 않으면 같은 객체다.
+        const normalized = normalizeStoredRoom(stored, Date.now());
         // 깨어날 때마다 살아 있는 소켓 기준으로 connected 를 다시 계산한다(배포·크래시로 소켓이 사라진 경우 보정).
         const live = new Set<string>();
         for (const ws of ctx.getWebSockets()) {
@@ -72,9 +76,14 @@ export class Room extends DurableObject<Env> {
           if (att) live.add(att.connId);
         }
         this.room = {
-          ...stored,
-          players: stored.players.map((p) => (p.connId !== null && live.has(p.connId) ? p : { ...p, connected: false, connId: null })),
+          ...normalized,
+          players: normalized.players.map((p) => (p.connId !== null && live.has(p.connId) ? p : { ...p, connected: false, connId: null })),
         };
+        if (normalized !== stored) {
+          // 정규화로 생긴 이른 마감(now + 2초)이 기존 만료 알람(90초 뒤 등)보다 먼저 깨어나야 하므로 이 경우에만 여기서 알람을 건다.
+          await ctx.storage.put("room", this.room);
+          await ctx.storage.setAlarm(nextWakeAt(this.room));
+        }
       }
     });
   }
@@ -185,6 +194,12 @@ export class Room extends DurableObject<Env> {
         return;
       case "emoji":
         await this.handleEmoji(ws, msg.icon);
+        return;
+      case "extend":
+        await this.handleExtend(ws);
+        return;
+      case "skip":
+        await this.handleSkip(ws);
         return;
     }
   }
@@ -315,6 +330,40 @@ export class Room extends DurableObject<Env> {
     this.room = result.state;
     await this.ctx.storage.put("room", this.room);
     this.broadcastEvent({ t: "emoji", ...result.event });
+  }
+
+  // 방장 연장: 판정은 규칙 함수의 hostId 비교가 한다(T-02-20). 마감이 바뀌므로 성공 뒤 반드시 알람을 다시 건다(Pitfall 4).
+  private async handleExtend(ws: WebSocket): Promise<void> {
+    const att = this.attachmentOf(ws);
+    if (!att || !this.room) {
+      this.sendTo(ws, { t: "error", code: "BAD_MESSAGE" });
+      return;
+    }
+    const result = extendDiscussion(this.room, att.playerId);
+    if (!result.ok) {
+      this.sendRejection(ws, att.playerId, result.error);
+      return;
+    }
+    this.room = result.state;
+    await this.persistAndBroadcast();
+    await this.reschedule();
+  }
+
+  // 방장 넘기기: 마감이 바로 다음 단계로 옮겨지므로 성공 뒤 반드시 알람을 다시 건다(Pitfall 4).
+  private async handleSkip(ws: WebSocket): Promise<void> {
+    const att = this.attachmentOf(ws);
+    if (!att || !this.room) {
+      this.sendTo(ws, { t: "error", code: "BAD_MESSAGE" });
+      return;
+    }
+    const result = skipDiscussion(this.room, att.playerId, Date.now());
+    if (!result.ok) {
+      this.sendRejection(ws, att.playerId, result.error);
+      return;
+    }
+    this.room = result.state;
+    await this.persistAndBroadcast();
+    await this.reschedule();
   }
 
   // 직업 선택: 신원은 소켓 첨부의 playerId 뿐이다 — 메시지에서 seat 를 읽지 않는다(T-02-16).
