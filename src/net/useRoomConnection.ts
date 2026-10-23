@@ -12,7 +12,7 @@ export interface RoomConnection {
   status: ConnectionStatus;
   banner: BannerMode;
   view: RoomView | null;
-  /** 서버시각 - 로컬시각(ms). 첫 pong 전에는 0 */
+  /** 서버시각 - 로컬시각(ms). 첫 pong 전에는 첫 state 의 serverNow 로 잡은 거친 값(state 전에는 0) */
   offset: number;
   /** 소켓이 열릴 때마다 1씩 늘어난다(대기실 토스트가 재접속 직후 지난 변화를 알리지 않게 쓰는 값) */
   epoch: number;
@@ -181,6 +181,9 @@ export function useRoomConnection(code: string, token: string, options?: RoomCon
         if (disposed || socketRef.current !== ws) return;
         const msg = parseServerMessage(e.data);
         if (msg?.t === "state") {
+          // 첫 pong 은 첫 state 보다 늦다. 표본이 없는 동안은 view.serverNow 로 거친 오프셋을 먼저 정해 둔다
+          // (한쪽 방향 지연만큼만 틀린다). 안 그러면 시계가 빠른 폰에서 역할 카드가 눌리기도 전에 앞면으로 열린다.
+          if (samples.length === 0) setOffset(msg.view.serverNow - Date.now());
           setView(msg.view);
           const next = emit({ type: "state", now: Date.now() });
           if (next.banner === "restored") {

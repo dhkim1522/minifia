@@ -110,17 +110,29 @@ describe("useRoomConnection: 연결·핸드셰이크", () => {
     expect(new Set(sockets[0]!.pings()).size).toBe(3);
   });
 
-  it("첫 pong 전에는 offset 0, pong 이 서버시각+5000 을 돌려주면 약 5000", () => {
+  it("첫 pong 전에도 첫 state 의 serverNow 로 거친 offset 을 정하고, pong 이 오면 그 값으로 다듬는다 (WR-04)", () => {
     const { sockets, hook } = setup();
     act(() => sockets[0]!.open());
-    act(() => sockets[0]!.message({ t: "state", view }));
+    expect(hook.result.current.offset).toBe(0);
+    act(() => sockets[0]!.message({ t: "state", view: { ...view, serverNow: Date.now() + 5000 } }));
     expect(hook.result.current.view?.code).toBe("0042");
     expect(hook.result.current.status).toBe("open");
-    expect(hook.result.current.offset).toBe(0);
-    for (const c of sockets[0]!.pings()) {
-      act(() => sockets[0]!.message({ t: "pong", c, serverNow: Date.now() + 5000 }));
-    }
+    // pong 이 하나도 오기 전: 0 이 아니라 view.serverNow - 로컬시각 으로 추정한다
     expect(Math.abs(hook.result.current.offset - 5000)).toBeLessThan(50);
+    for (const c of sockets[0]!.pings()) {
+      act(() => sockets[0]!.message({ t: "pong", c, serverNow: Date.now() + 7000 }));
+    }
+    expect(Math.abs(hook.result.current.offset - 7000)).toBeLessThan(50);
+  });
+
+  it("표본이 생긴 뒤의 state 는 offset 을 덮어쓰지 않는다 (WR-04)", () => {
+    const { sockets, hook } = setup();
+    act(() => sockets[0]!.open());
+    for (const c of sockets[0]!.pings()) {
+      act(() => sockets[0]!.message({ t: "pong", c, serverNow: Date.now() + 7000 }));
+    }
+    act(() => sockets[0]!.message({ t: "state", view: { ...view, serverNow: Date.now() + 1 } }));
+    expect(Math.abs(hook.result.current.offset - 7000)).toBeLessThan(50);
   });
 
   it("소켓이 열릴 때마다 epoch 가 1씩 늘어난다", () => {
