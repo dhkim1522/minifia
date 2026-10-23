@@ -1,8 +1,11 @@
+import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import type { RoomView } from "../../shared/protocol";
+import { CLAIM_REVEAL_MS } from "../../shared/game/phases";
 import { SEAT_COUNT } from "../../shared/seatLayout";
 import { Backdrop } from "../components/Backdrop";
 import { ClaimPanel } from "../components/ClaimPanel";
+import { claimName } from "../components/ClaimTag";
 import { PhaseBar } from "../components/PhaseBar";
 import { Table } from "../components/Table";
 import type { TableSeat } from "../components/Table";
@@ -25,13 +28,31 @@ export interface DaySceneProps {
 // 화면은 스스로 단계를 넘기지 않는다(서버 view 만 따름). 역할 문자열을 화면에 쓰지 않는다.
 export function DayScene({ view, connection, myRoleButton }: DaySceneProps) {
   const n = view.day?.n ?? 1;
+
+  // 공개 연출(말풍선 팝)은 이 화면이 직전에 claim 을 보고 있다가 claimReveal 을 받았을 때만 켠다.
+  // 서버 단계가 분리돼 있어 모든 폰이 같은 순간 시작한다. 재접속으로 claimReveal 에 바로 들어오면 켜지 않는다(알약만).
+  // 렌더 중 상태 조정(이전 단계 기억)이라 효과 없이 첫 커밋부터 말풍선이 보인다.
+  const [prevPhase, setPrevPhase] = useState(view.phase);
+  const [revealing, setRevealing] = useState(false);
+  if (prevPhase !== view.phase) {
+    setPrevPhase(view.phase);
+    setRevealing(prevPhase === "claim" && view.phase === "claimReveal");
+  }
+  useEffect(() => {
+    if (!revealing) return;
+    const timer = setTimeout(() => setRevealing(false), CLAIM_REVEAL_MS);
+    return () => clearTimeout(timer);
+  }, [revealing]);
   const title = view.phase === "discussion" ? "낮 · 토론" : "낮 · 직업 공개";
 
   const allies = view.me.allies ?? [];
   // 완료 알약은 서버가 보낸 claimDone 에서만 만든다 — 무엇을 골랐는지는 서버가 보내지 않는다(D-01).
   const claimDone = view.phase === "claim" ? (view.day?.claimDone ?? []) : [];
+  // 남의 주장은 서버가 공개한 claims 에서만 그린다(claimReveal·discussion).
+  const claims = view.phase === "claimReveal" || view.phase === "discussion" ? (view.day?.claims ?? []) : [];
   const seats: (TableSeat | null)[] = Array.from({ length: SEAT_COUNT }, () => null);
   for (const p of view.players) {
+    const c = claims.find((x) => x.seat === p.seat);
     seats[p.seat] = {
       nickname: p.nickname,
       connected: p.connected,
@@ -39,6 +60,18 @@ export function DayScene({ view, connection, myRoleButton }: DaySceneProps) {
       isMe: p.seat === view.me.seat,
       isAlly: allies.includes(p.seat),
       done: claimDone.includes(p.seat),
+      claim: c ? { job: c.claim, changed: c.changed } : null,
+      float:
+        c && revealing && view.phase === "claimReveal"
+          ? {
+              kind: "reveal",
+              key: `reveal-${n}-${p.seat}`,
+              z: 0,
+              text: claimName(c.claim),
+              dim: c.claim === "none",
+              animate: true,
+            }
+          : null,
     };
   }
 
@@ -62,7 +95,7 @@ export function DayScene({ view, connection, myRoleButton }: DaySceneProps) {
           <Table seats={seats} mySeat={view.me.seat} />
         </div>
         <section key={`panel-${view.phase}`} className="mf-dayscene__panel mf-dayscene__enter">
-          {view.phase === "claim" ? (
+          {view.phase === "claim" || view.phase === "claimReveal" ? (
             <ClaimPanel view={view} canSend={connection.canSend} send={connection.send} />
           ) : null}
         </section>
