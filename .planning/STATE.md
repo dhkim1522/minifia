@@ -4,18 +4,18 @@ milestone: v1.0
 milestone_name: MVP
 current_phase: 02
 current_phase_name: 낮 토론
-current_plan: 9
+current_plan: 10
 status: executing
-stopped_at: Completed 02-10-PLAN.md
-last_updated: "2026-10-23T18:27:43.954Z"
+stopped_at: Completed 02-05-PLAN.md
+last_updated: "2026-10-23T18:34:32.015Z"
 last_activity: 2026-10-24
 last_activity_desc: Phase 02 execution started
-state_head: ccb79d9dd217cf9bf425130a5a7e6e7a5e10dad3
+state_head: ad466f01d6f44d42e63b92eab89fbf5861467a32
 progress:
   total_phases: 6
   completed_phases: 1
   total_plans: 30
-  completed_plans: 27
+  completed_plans: 28
 ---
 
 # Project State
@@ -30,9 +30,9 @@ See: .planning/PROJECT.md (updated 2026-10-21)
 ## Current Position
 
 Phase: 02 (낮 토론) — EXECUTING
-Current Plan: 9
+Current Plan: 10
 Total Plans in Phase: 11
-Plan: 9 of 11
+Plan: 10 of 11
 Status: Ready to execute
 Last activity: 2026-10-24 — Phase 02 execution started
 
@@ -73,6 +73,7 @@ Progress: [██░░░░░░░░] 17%
 | Phase 02 P04 | 8 min | 3 tasks | 4 files |
 | Phase 02 P08 | 6min | 2 tasks | 5 files |
 | Phase 02 P10 | 4 min | 2 tasks | 5 files |
+| Phase 02 P05 | 5 min | 3 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -111,6 +112,8 @@ Recent decisions affecting current work:
 - [Phase 02]: 02-08: 공개 연출 시작은 이전 단계를 렌더 중 상태 조정(useState)으로 기억해 claim -> claimReveal 에서만 켠다 — 재접속은 알약만 보이고, 효과 없이 첫 커밋부터 말풍선이 보인다
 - [Phase 02]: 02-10: 문구를 바꾸면 필요 없는 칸만 버리고 필요한 칸의 기존 선택은 유지한다 — 누르기 횟수가 늘지 않는다
 - [Phase 02]: 02-10: 미리보기 흐림은 알약 면이 아니라 안쪽 글자 span 에만 opacity .6 을 준다(UI-SPEC 글자 불투명도)
+- [Phase 02]: 02-05: 생성자는 normalizeStoredRoom 이 방을 실제로 바꿨을 때만 저장 + setAlarm(nextWakeAt) — 평소 대기 중 알람을 덮지 않는 규칙 유지
+- [Phase 02]: 02-05: 거절 응답 규칙 — claim·extend·skip 거절과 WRONG_PHASE say 는 error+state, RATE_LIMITED·BAD_MESSAGE 와 이모티콘 거절은 error 만
 
 ### Pending Todos
 
@@ -136,6 +139,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-23T18:27:43.832Z
-Stopped at: Completed 02-10-PLAN.md
+Last session: 2026-10-23T18:34:31.888Z
+Stopped at: Completed 02-05-PLAN.md
 Resume file: None

@@ -99,7 +99,7 @@ Plans:
   5. 토론 단계가 아닐 때(직업 공개 중 등) 보낸 메시지, 자유 텍스트, 2초 안에 다시 보낸 메시지는 서버가 거부해 다른 폰에 나타나지 않는다. 탈락자·밤·아침 중 메시지 거부는 탈락과 밤이 생기는 3페이즈에서 확인한다.
   6. 폰 세로 화면에서 메시지를 고르고 보내는 데 세 번 이하로 누른다(템플릿 → 대상·직업 → 보내기).
 
-**Plans:** 8/11 plans executed
+**Plans:** 9/11 plans executed
 
 Plans:
 **Wave 1**
@@ -117,7 +117,7 @@ Plans:
 - [x] 02-10-PLAN.md — 빠른 메시지 시트(문구→대상→직업→보내기, 미리보기)·이모티콘 4×2 트레이 (wave 3)
 
 **Wave 4** *(blocked on Wave 3 completion)*
-- [ ] 02-05-PLAN.md — Room DO 배선: strict 스키마·claim/say/emoji/extend/skip 핸들러·이모티콘 방송·알람 재설정·생성자 정규화·워커 통합 테스트 (wave 4)
+- [x] 02-05-PLAN.md — Room DO 배선: strict 스키마·claim/say/emoji/extend/skip 핸들러·이모티콘 방송·알람 재설정·생성자 정규화·워커 통합 테스트 (wave 4)
 - [ ] 02-09-PLAN.md — 낮 토론 화면: MessageLog·DiscussionControls(합산 쿨다운·오류 이벤트·방장 연장/넘기기·토스트)·말풍선/이모티콘 배선 (wave 4)
 
 **Wave 5** *(blocked on Wave 4 completion)*
@@ -196,7 +196,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 (decimal phases
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 1. 걷는 뼈대 | v1.0 | 19/19 | Complete    | 2026-10-24 |
-| 2. 낮 토론 | v1.0 | 8/11 | In Progress | - |
+| 2. 낮 토론 | v1.0 | 9/11 | In Progress | - |
 | 3. 밤과 아침 | v1.0 | 0/TBD | Not started | - |
 | 4. 처형과 승패 | v1.0 | 0/TBD | Not started | - |
 | 5. 분위기와 캐릭터 | v1.0 | 0/TBD | Not started | - |
