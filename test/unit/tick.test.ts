@@ -139,9 +139,15 @@ describe("tick (순수 단계 진행)", () => {
   it("한 바퀴를 한 번에 따라잡아도 일차가 정확히 한 번만 늘어난다", () => {
     const T = 100_000;
     const s: RoomState = { ...stateIn("discussion", T), day: 1 };
-    const next = tick(s, T + 2000 + 15000 + 2000 + 90000);
+    // 마감: dayAnnounce T+2000 → claim T+17000 → claimReveal T+19000 → discussion T+109000.
+    const next = tick(s, T + 20_000);
     expect(next.phase).toBe("discussion");
     expect(next.day).toBe(2);
+    expect(next.phaseEndsAt).toBe(T + 109_000);
+    // 한 바퀴가 정확히 끝나는 순간에는 다음 낮이 시작된다.
+    const nextDay = tick(s, T + 109_000);
+    expect(nextDay.phase).toBe("dayAnnounce");
+    expect(nextDay.day).toBe(3);
   });
 
   it("아주 늦게 불리면 여러 단계를 한 번에 따라잡는다", () => {
