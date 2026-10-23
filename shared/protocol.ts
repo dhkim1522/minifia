@@ -2,6 +2,10 @@
 // 클라이언트(src/)가 이 파일의 값을 import 해도 번들에 스키마 라이브러리가 들어가지 않게 하기 위해서다.
 // 서버 전용 검증 스키마는 shared/schemas.ts 에 있고 Worker 만 import 한다.
 
+// 타입 import·재수출이라 값 import 가 아니다 — 클라이언트 번들에는 아무것도 들어가지 않는다.
+import type { RoleId } from "./game/roles";
+export type { RoleId } from "./game/roles";
+
 export const MIN_PLAYERS = 4;
 export const MAX_PLAYERS = 8;
 export const MAX_FRAME_BYTES = 1024; // WebSocket 프레임 상한
@@ -26,12 +30,18 @@ export interface JoinRoomResponse {
   token: string;
   seat: number;
 }
+// 비인증 미리보기의 앉은 사람. seat·nickname 두 키뿐이다 — 연결 상태·내부 id·토큰·역할은 싣지 않는다.
+export interface PreviewPlayer {
+  seat: number;
+  nickname: string;
+}
 export interface RoomPreview {
   code: string;
   hostNickname: string;
   playerCount: number;
   maxPlayers: number;
   phase: PhaseId;
+  players: PreviewPlayer[]; // 대기실에서만 채운다. 그 밖의 단계는 빈 배열
 }
 export type ApiErrorCode =
   | "BAD_REQUEST"
@@ -65,7 +75,9 @@ export interface PublicPlayer {
 export interface MyInfo {
   seat: number;
   isHost: boolean;
-} // 01-07 이 role?, allies? 를 더한다
+  role?: RoleId; // 내 역할 — 채우는 일은 01-07
+  allies?: number[]; // 같은 마피아 동료의 seat — 채우는 일은 01-07
+}
 export interface RoomView {
   code: string;
   phase: PhaseId;
