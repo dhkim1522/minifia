@@ -188,6 +188,13 @@ describe("joinRoom (거절 순서)", () => {
     expect(outcome(join(s, "c", "ＭＩＮＳＵ"))).toBe("NICKNAME_TAKEN");
   });
 
+  it("CR-01: ZWJ 를 끼운 이름은 원래 이름과 같아 NICKNAME_TAKEN (순서 무관)", () => {
+    const a = room([{ id: "a", seat: 0, joinSeq: 0, nickname: "철수" }]);
+    expect(outcome(join(a, "b", "철\u{200D}수"))).toBe("NICKNAME_TAKEN");
+    const b = room([{ id: "a", seat: 0, joinSeq: 0, nickname: "철\u{200D}수" }]);
+    expect(outcome(join(b, "b", "철수"))).toBe("NICKNAME_TAKEN");
+  });
+
   it("빈 이름·줄바꿈은 NICKNAME_INVALID", () => {
     const s = newRoom();
     expect(outcome(join(s, "b", ""))).toBe("NICKNAME_INVALID");

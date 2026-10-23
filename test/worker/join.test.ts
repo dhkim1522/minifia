@@ -60,6 +60,13 @@ describe("POST /api/rooms/{code}/join", () => {
     expect(await errorOf(res)).toBe("NICKNAME_TAKEN");
   });
 
+  it("CR-01: ZWJ 를 끼운 이름은 원래 이름과 같아 409 NICKNAME_TAKEN", async () => {
+    const { code } = await createRoom("철수");
+    const res = await joinRoom(code, "철\u{200D}수");
+    expect(res.status).toBe(409);
+    expect(await errorOf(res)).toBe("NICKNAME_TAKEN");
+  });
+
   it("빈 닉네임은 400 NICKNAME_INVALID", async () => {
     const { code } = await createRoom();
     const res = await joinRoom(code, "");

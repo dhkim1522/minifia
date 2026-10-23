@@ -76,6 +76,18 @@ describe("validateNickname - 거부", () => {
   });
 });
 
+describe("CR-01 보이지 않는 문자", () => {
+  it("CR-01: ZWJ 를 끼운 이름은 원래 이름과 같은 키다", () => {
+    expect(nicknameKey("철\u{200D}수")).toBe(nicknameKey("철수"));
+  });
+
+  it("CR-01: ZWJ 를 끼운 이름은 표시 이름을 그대로 두고 키만 원래 이름과 같다", () => {
+    const r = validateNickname("철\u{200D}수");
+    expect(r.ok && r.nickname).toBe("철\u{200D}수");
+    expect(r.ok && r.key).toBe(nicknameKey("철수"));
+  });
+});
+
 describe("nicknameKey", () => {
   it("대소문자와 전각 문자를 같은 키로 만든다", () => {
     const k = nicknameKey("Minsu");
