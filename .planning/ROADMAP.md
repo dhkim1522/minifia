@@ -40,7 +40,7 @@ Decimal phases appear between their surrounding integers in numeric order.
   4. 방장이 시작하면 모든 폰에 "직업을 배정하고 있습니다…" 구간(약 3초)이 함께 나온 뒤 역할 확인 15초로 넘어가고, 카운트다운이 모든 폰에서 같은 시각에 끝나면 모든 폰이 "낮이 되었습니다" 화면으로 넘어간다(결정 0007). 폰 화면을 껐다 켜거나 탭을 새로고침해도 같은 자리·같은 역할로 돌아온다.
   5. 코드를 고치고 `wrangler deploy` 를 다시 하면 주소는 그대로이고 새 버전이 보인다.
 
-**Plans**: 13/14 plans executed (01-04~01-14 는 2026-10-23 UI-SPEC 개정 2·결정 0012 기준으로 다시 계획)
+**Plans**: 14/15 plans executed (01-04~01-14 는 2026-10-23 UI-SPEC 개정 2·결정 0012 기준으로 다시 계획, 01-15 는 검증 GAP-1 갭 클로저)
 
 Plans:
 **Wave 1**
@@ -71,7 +71,10 @@ Plans:
 - [x] 01-13-PLAN.md — 배정 연출(S-04)·역할 확인(S-05)·낮 시작(S-06)·내 역할 시트(C-01) (wave 7)
 
 **Wave 8** *(blocked on Wave 7 completion)*
-- [ ] 01-14-PLAN.md — 배포본 full 스모크·OG·캐시·토큰 검사·재배포·HANDOFF·push·실기기 UAT (wave 8)
+- [x] 01-14-PLAN.md — 배포본 full 스모크·OG·캐시·토큰 검사·재배포·HANDOFF·push·실기기 UAT (wave 8)
+
+**Gap closure** *(01-VERIFICATION.md GAP-1)*
+- [ ] 01-15-PLAN.md — CR-01·IN-07: 닉네임 비교 키에서 보이지 않는 문자(ZWJ·변형 선택자·결합 문자) 무시, 채움 문자·빈 키 거부, 서버 참가 우회 차단 (TDD, gap_closure, wave 1)
 
 **Notes**: 화면은 실시간 3D 없이 2.5D(원근 타원 테이블, 그림자·조명 레이어)로 만든다(결정 0008). 패키지와 버전은 계획에서 확정한다. 이탈 플레이어 처리(CONN-02)는 1페이즈 논의에서 확정했다. 화면 구성은 단순하게 두되, 이 구간의 몰입 요소(참가자 등장 액션, 배정 대기 연출, 카운트다운 강조)는 기본형으로 넣는다 (결정 0006). 전체 톤·캐릭터·연출 통일은 5페이즈.
 
@@ -161,7 +164,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 (decimal phases
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 1. 걷는 뼈대 | v1.0 | 13/14 | In Progress | - |
+| 1. 걷는 뼈대 | v1.0 | 14/15 | In Progress | - |
 | 2. 낮 토론 | v1.0 | 0/TBD | Not started | - |
 | 3. 밤과 아침 | v1.0 | 0/TBD | Not started | - |
 | 4. 처형과 승패 | v1.0 | 0/TBD | Not started | - |
