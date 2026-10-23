@@ -32,7 +32,8 @@
 
 /* TextField */
 .mf-field { display: flex; flex-direction: column; gap: var(--space-sm); width: 100%; }
-.mf-field__label { font-size: 14px; line-height: 1.4; color: var(--gray-300); }
+/* 입력 라벨은 본문 글자 단계(UAT G-01-1b) */
+.mf-field__label { font-size: 14px; line-height: 1.4; color: var(--gray-100); }
 .mf-field__row { display: flex; align-items: flex-start; gap: var(--space-sm); }
 .mf-field__row > .mf-field__input { flex: 1; min-width: 0; }
 .mf-field__input {
