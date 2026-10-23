@@ -40,7 +40,7 @@ Decimal phases appear between their surrounding integers in numeric order.
   4. 방장이 시작하면 모든 폰에 "직업을 배정하고 있습니다…" 구간(약 3초)이 함께 나온 뒤 역할 확인 15초로 넘어가고, 카운트다운이 모든 폰에서 같은 시각에 끝나면 모든 폰이 "낮이 되었습니다" 화면으로 넘어간다(결정 0007). 폰 화면을 껐다 켜거나 탭을 새로고침해도 같은 자리·같은 역할로 돌아온다.
   5. 코드를 고치고 `wrangler deploy` 를 다시 하면 주소는 그대로이고 새 버전이 보인다.
 
-**Plans**: 12/14 plans executed (01-04~01-14 는 2026-10-23 UI-SPEC 개정 2·결정 0012 기준으로 다시 계획)
+**Plans**: 13/14 plans executed (01-04~01-14 는 2026-10-23 UI-SPEC 개정 2·결정 0012 기준으로 다시 계획)
 
 Plans:
 **Wave 1**
@@ -68,7 +68,7 @@ Plans:
 - [x] 01-12-PLAN.md — 대기실 시트: 나가기·내보내기 확인 시트·공유 시트(C-03)·임시 스타일 정리 (wave 6)
 
 **Wave 7** *(blocked on Wave 6 completion)*
-- [ ] 01-13-PLAN.md — 배정 연출(S-04)·역할 확인(S-05)·낮 시작(S-06)·내 역할 시트(C-01) (wave 7)
+- [x] 01-13-PLAN.md — 배정 연출(S-04)·역할 확인(S-05)·낮 시작(S-06)·내 역할 시트(C-01) (wave 7)
 
 **Wave 8** *(blocked on Wave 7 completion)*
 - [ ] 01-14-PLAN.md — 배포본 full 스모크·OG·캐시·토큰 검사·재배포·HANDOFF·push·실기기 UAT (wave 8)
@@ -161,7 +161,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 (decimal phases
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 1. 걷는 뼈대 | v1.0 | 12/14 | In Progress | - |
+| 1. 걷는 뼈대 | v1.0 | 13/14 | In Progress | - |
 | 2. 낮 토론 | v1.0 | 0/TBD | Not started | - |
 | 3. 밤과 아침 | v1.0 | 0/TBD | Not started | - |
 | 4. 처형과 승패 | v1.0 | 0/TBD | Not started | - |
