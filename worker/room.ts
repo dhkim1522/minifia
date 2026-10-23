@@ -9,13 +9,14 @@ import {
   joinRoom,
   kickPlayer,
   leaveRoom,
+  startGame,
 } from "../shared/game/room";
 import type { JoinError } from "../shared/game/room";
 import type { RoomState } from "../shared/game/room";
-import { nextWakeAt } from "../shared/game/tick";
+import { nextWakeAt, tick } from "../shared/game/tick";
 import { buildPreview, buildView } from "../shared/game/view";
 import { ClientMessageSchema } from "../shared/schemas";
-import { randomToken } from "./random";
+import { cryptoRandInt, randomToken } from "./random";
 
 export type CreateRoomRpcResult =
   | { ok: true; token: string; seat: number }
@@ -92,19 +93,21 @@ export class Room extends DurableObject<Env> {
 
     this.room = created.state;
     await this.ctx.storage.put("room", this.room);
-    await this.ctx.storage.setAlarm(this.room.expiresAt);
+    await this.reschedule();
     return { ok: true, token, seat: 0 };
   }
 
   /** 비인증 미리보기. 없는·만료된 방은 null. */
   async preview(now: number): Promise<RoomPreview | null> {
-    if (!this.room || now >= this.room.expiresAt) return null;
+    await this.advance(now);
+    if (!this.room) return null;
     return buildPreview(this.room);
   }
 
   /** 링크·코드 참가. 성공하면 이미 연결된 소켓들이 새 자리를 곧바로 본다. 토큰은 응답으로만 나간다. */
   async join(input: { nickname: string; now: number }): Promise<JoinRpcResult> {
-    if (!this.room || input.now >= this.room.expiresAt) return { ok: false, error: "ROOM_NOT_FOUND" };
+    await this.advance(input.now);
+    if (!this.room) return { ok: false, error: "ROOM_NOT_FOUND" };
     const result = joinRoom(this.room, {
       playerId: crypto.randomUUID(),
       token: randomToken(),
@@ -117,7 +120,8 @@ export class Room extends DurableObject<Env> {
   }
 
   async fetch(request: Request): Promise<Response> {
-    if (!this.room || Date.now() >= this.room.expiresAt) return jsonError("ROOM_NOT_FOUND", 404);
+    await this.advance(Date.now());
+    if (!this.room) return jsonError("ROOM_NOT_FOUND", 404);
     if (request.headers.get("Upgrade")?.toLowerCase() !== "websocket") {
       return new Response("Expected a WebSocket upgrade", { status: 426 });
     }
@@ -149,6 +153,9 @@ export class Room extends DurableObject<Env> {
     }
     const msg: ClientMessage = result.data;
 
+    // 모든 진입점은 먼저 만료 확인과 tick 을 거친다(늦은 알람·재시도에도 멱등).
+    await this.advance(Date.now());
+
     switch (msg.t) {
       case "hello":
         await this.handleHello(ws, msg.token);
@@ -162,9 +169,9 @@ export class Room extends DurableObject<Env> {
       case "kick":
         await this.handleKick(ws, msg.seat);
         return;
-      default:
-        // start 처리기는 Task 3 이 붙인다.
-        this.sendTo(ws, { t: "error", code: "BAD_MESSAGE" });
+      case "start":
+        await this.handleStart(ws);
+        return;
     }
   }
 
@@ -241,6 +248,50 @@ export class Room extends DurableObject<Env> {
     await this.persistAndBroadcast();
   }
 
+  // 시작: 판정은 서버 상태와 소켓 첨부의 playerId 로만 한다(연결자 4명 이상, 방장만).
+  private async handleStart(ws: WebSocket): Promise<void> {
+    const att = this.attachmentOf(ws);
+    if (!att || !this.room) {
+      this.sendTo(ws, { t: "error", code: "BAD_MESSAGE" });
+      return;
+    }
+    const now = Date.now();
+    const result = startGame(this.room, att.playerId, now, cryptoRandInt);
+    if (!result.ok) {
+      // 거절되면 클라이언트가 서버 view 대로 다시 그리도록 최신 state 를 함께 보낸다.
+      this.sendTo(ws, { t: "error", code: result.error });
+      this.sendTo(ws, { t: "state", view: buildView(this.room, att.playerId, now) });
+      return;
+    }
+    this.room = result.state;
+    await this.persistAndBroadcast();
+    await this.reschedule();
+  }
+
+  /** 만료면 소켓을 닫고 지운다. 아니면 tick 으로 단계를 따라잡고, 바뀌면 저장 → 방송 → 알람 재설정. */
+  private async advance(now: number): Promise<void> {
+    const room = this.room;
+    if (!room) return;
+    if (now >= room.expiresAt) {
+      for (const ws of this.ctx.getWebSockets()) {
+        try {
+          ws.close(CLOSE_CODES.REMOVED, "room_closed");
+        } catch {
+          // 이미 닫힌 소켓은 무시한다.
+        }
+      }
+      await this.ctx.storage.deleteAlarm();
+      await this.ctx.storage.deleteAll();
+      this.room = null;
+      return;
+    }
+    const next = tick(room, now);
+    if (next === room) return;
+    this.room = next;
+    await this.persistAndBroadcast();
+    await this.reschedule();
+  }
+
   // 알람은 DO 당 하나라 단계 마감과 방 만료를 여기서만 설정한다.
   private async reschedule(): Promise<void> {
     if (!this.room) return;
@@ -256,21 +307,14 @@ export class Room extends DurableObject<Env> {
   }
 
   async alarm(): Promise<void> {
-    const now = Date.now();
-    if (!this.room) return;
-    if (now < this.room.expiresAt) {
-      await this.ctx.storage.setAlarm(this.room.expiresAt);
-      return;
+    try {
+      await this.advance(Date.now());
+      await this.reschedule();
+    } catch (err) {
+      // 토큰 없는 짧은 로그만 남기고, 예외로 재시도 한도가 소진되어 알람이 멈추지 않게 1초 뒤 다시 건다.
+      console.error("room alarm failed", err instanceof Error ? err.name : "unknown");
+      await this.ctx.storage.setAlarm(Date.now() + 1000);
     }
-    for (const ws of this.ctx.getWebSockets()) {
-      try {
-        ws.close(CLOSE_CODES.REMOVED, "room_closed");
-      } catch {
-        // 이미 닫힌 소켓은 무시한다.
-      }
-    }
-    await this.ctx.storage.deleteAll();
-    this.room = null;
   }
 
   private async handleHello(ws: WebSocket, token: string): Promise<void> {
