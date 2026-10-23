@@ -45,8 +45,8 @@
 .mf-btn.mf-iconbtn { flex: none; width: var(--tap-min); height: var(--tap-min); min-height: var(--tap-min); padding: 0; border-radius: var(--radius-md); background: var(--night-800); border-color: var(--gray-700); color: var(--gray-50); }
 
 /* 공유 시트(C-03) */
-.mf-share { display: flex; flex-direction: column; gap: var(--space-sm); }
-.mf-share__full { margin: 0; font-size: 14px; line-height: 1.4; color: var(--gray-300); word-break: keep-all; }
+.mf-share { display: flex; flex-direction: column; gap: var(--space-md); }
+.mf-share__full { margin: 0; padding-right: calc(var(--tap-min) + var(--space-sm)); font-size: 14px; line-height: 1.4; color: var(--gray-300); word-break: keep-all; }
 .mf-share__code { margin: 0; font-size: 36px; line-height: 1.2; font-weight: 700; letter-spacing: 0.12em; font-variant-numeric: tabular-nums; color: var(--gray-50); }
 .mf-share__link { white-space: nowrap; overflow-x: auto; text-overflow: clip; }
 .mf-share__hint { margin: 0; font-size: 14px; line-height: 1.4; color: var(--gray-300); word-break: keep-all; }
