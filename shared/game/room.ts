@@ -3,6 +3,7 @@
 import { validateNickname } from "../nickname";
 import { MAX_PLAYERS, MIN_PLAYERS } from "../protocol";
 import type { PhaseId } from "../protocol";
+import type { RoleId } from "./roles";
 
 export const ROOM_TTL_MS = 3 * 60 * 60 * 1000;
 
@@ -15,6 +16,8 @@ export interface Player {
   joinSeq: number;
   connected: boolean;
   connId: string | null;
+  /** 시작할 때 서버가 나눠 준 역할. 대기실에서는 없다. 뷰에는 본인에게만, 정해진 단계에서만 실린다(view.ts). */
+  role?: RoleId;
 }
 
 export interface RoomState {
@@ -168,6 +171,18 @@ export function checkStart(state: RoomState, actorId: string): StartError | null
   if (state.phase !== "lobby") return "WRONG_PHASE";
   if (connectedCount(state.players) < MIN_PLAYERS) return "NOT_ENOUGH_PLAYERS";
   return null;
+}
+
+/** RED 단계용 임시 뼈대 — GREEN 에서 구현한다. */
+export function startGame(
+  state: RoomState,
+  actorId: string,
+  _now: number,
+  _randInt: (n: number) => number,
+): { ok: true; state: RoomState } | { ok: false; error: StartError } {
+  const error = checkStart(state, actorId);
+  if (error !== null) return { ok: false, error };
+  return { ok: true, state };
 }
 
 export function findPlayerByToken(state: RoomState, token: string): Player | undefined {
