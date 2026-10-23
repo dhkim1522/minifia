@@ -260,3 +260,104 @@ describe("SeatFloat 층 (D-04, D-16)", () => {
     expect(group().querySelector("i") === null).toBe(true);
   });
 });
+
+// ---- 02-07 Task 2: 완료 알약과 이름표 아래 주장 알약·말 바꿈 ----
+describe("완료 알약 (D-01, D-03)", () => {
+  it("done 인 자리에만 '완료' 알약이 있고 접근성 이름에 ', 선택 완료' 가 붙는다", () => {
+    render(<Table seats={seats({ 3: { done: true } })} mySeat={1} />);
+    expect(group().querySelectorAll(".mf-done").length).toBe(1);
+    expect(within(group()).getByText("완료").classList.contains("mf-done")).toBe(true);
+    expect(screen.getByRole("group", { name: "하윤, 선택 완료" })).toBeTruthy();
+    expect(screen.getByRole("group", { name: "민수" })).toBeTruthy();
+  });
+
+  it("done 이 없으면 알약이 없다", () => {
+    render(<Table seats={seats()} mySeat={1} />);
+    expect(group().querySelector(".mf-done") === null).toBe(true);
+  });
+
+  it("끊긴 자리에도 완료 알약이 그대로 있다", () => {
+    render(<Table seats={seats({ 3: { done: true, connected: false } })} mySeat={1} />);
+    expect(group().querySelectorAll(".mf-done").length).toBe(1);
+    expect(screen.getByRole("group", { name: "하윤, 연결 끊김, 선택 완료" })).toBeTruthy();
+  });
+});
+
+describe("ClaimTag 주장 알약 (D-06, D-08)", () => {
+  it("claim 직업 이름이 이름표 안 .mf-tag__claim 에 보이고 접근성 이름에 ', 직업 주장 경찰' 이 붙는다", () => {
+    render(<Table seats={seats({ 3: { claim: { job: "police", changed: false } } })} mySeat={1} />);
+    const pill = within(group()).getByText("경찰");
+    expect(pill.closest(".mf-tag__claim")).not.toBeNull();
+    expect(pill.closest(".mf-tag")).toBe(within(group()).getByTitle("하윤"));
+    expect(screen.getByRole("group", { name: "하윤, 직업 주장 경찰" })).toBeTruthy();
+  });
+
+  it("job none 은 '말 안 함'", () => {
+    render(<Table seats={seats({ 3: { claim: { job: "none", changed: false } } })} mySeat={1} />);
+    expect(within(group()).getByText("말 안 함").closest(".mf-tag__claim")).not.toBeNull();
+  });
+
+  it("말 바꿈이면 같은 알약 안에 '· 말 바꿈' 이 함께 있고 접근성 이름 끝에 ', 말 바꿈' 이 붙는다", () => {
+    render(<Table seats={seats({ 3: { claim: { job: "mafia", changed: true } } })} mySeat={1} />);
+    const changed = within(group()).getByText("· 말 바꿈");
+    expect(changed.classList.contains("mf-tag__changed")).toBe(true);
+    expect(changed.closest(".mf-tag__claim")).toBe(within(group()).getByText("마피아").closest(".mf-tag__claim"));
+    expect(screen.getByRole("group", { name: "하윤, 직업 주장 마피아, 말 바꿈" })).toBeTruthy();
+  });
+
+  it("말 바꿈이 아니면 '말 바꿈' 글자가 없다", () => {
+    render(<Table seats={seats({ 3: { claim: { job: "citizen", changed: false } } })} mySeat={1} />);
+    expect(within(group()).queryByText(/말 바꿈/) === null).toBe(true);
+  });
+
+  it("방장 배지가 있는 자리는 배지 다음에 주장 알약이 온다(DOM 순서)", () => {
+    render(<Table seats={seats({ 0: { isHost: true, claim: { job: "doctor", changed: false } } })} mySeat={1} />);
+    const tag = within(group()).getByTitle("민수");
+    const kids = Array.from(tag.children);
+    const badge = kids.findIndex((k) => k.classList.contains("mf-badge"));
+    const claim = kids.findIndex((k) => k.classList.contains("mf-tag__claim"));
+    expect(badge).toBeGreaterThanOrEqual(0);
+    expect(claim).toBeGreaterThan(badge);
+  });
+
+  it("끊긴 자리에도 주장 알약이 그대로 있다", () => {
+    render(<Table seats={seats({ 3: { connected: false, claim: { job: "police", changed: false } } })} mySeat={1} />);
+    expect(within(group()).getByText("경찰")).toBeTruthy();
+    expect(screen.getByRole("group", { name: "하윤, 연결 끊김, 직업 주장 경찰" })).toBeTruthy();
+  });
+
+  it("뒤쪽 자리에 claim 이 있으면 이름표 top 이 claim 없을 때보다 5 작다", () => {
+    const back = (claim: TableSeat["claim"]) =>
+      [0, 1, 2, 3, 4, 5, 6, 7].map((i) => (i === 1 ? seat("앞", { isMe: true }) : i === 5 ? seat("뒤", { claim }) : null));
+    const { unmount } = render(<Table seats={back(null)} mySeat={1} />);
+    const without = parseFloat(within(group()).getByTitle("뒤").style.top);
+    unmount();
+    render(<Table seats={back({ job: "police", changed: false })} mySeat={1} />);
+    const withClaim = parseFloat(within(group()).getByTitle("뒤").style.top);
+    expect(without - withClaim).toBeCloseTo(5, 2);
+  });
+
+  it("앞쪽 자리 이름표 top 은 claim 이 있어도 같다(발 아래)", () => {
+    const { unmount } = render(<Table seats={seats()} mySeat={1} />);
+    const without = parseFloat(within(group()).getByTitle("서준 (나)").style.top);
+    unmount();
+    render(<Table seats={seats({ 1: { claim: { job: "police", changed: false } } })} mySeat={1} />);
+    expect(parseFloat(within(group()).getByTitle("서준 (나)").style.top)).toBeCloseTo(without, 5);
+  });
+
+  it("진홍 클래스나 변수가 렌더에 없다", () => {
+    const { container } = render(
+      <Table
+        seats={seats({ 0: { done: true }, 3: { claim: { job: "mafia", changed: true }, float: { key: "r", z: 1, kind: "reveal", text: "마피아", dim: false, animate: true } } })}
+        mySeat={1}
+      />,
+    );
+    expect(container.innerHTML).not.toMatch(/crimson/i);
+  });
+
+  it("TableSeat 의 claim 에는 job 만 있고 역할 키가 없다", () => {
+    const s = seat("민수", { claim: { job: "police", changed: false } });
+    expect(Object.keys(s.claim ?? {}).sort()).toEqual(["changed", "job"]);
+    expect("role" in s).toBe(false);
+  });
+});
