@@ -1,8 +1,8 @@
 // 워커 통합 테스트 도우미. 테스트마다 만들기 응답의 새 코드를 쓴다(고정 코드 재사용 금지).
 import { env, exports } from "cloudflare:workers";
-import { evictDurableObject, runInDurableObject } from "cloudflare:test";
+import { evictDurableObject, runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
 import { expect } from "vitest";
-import type { CreateRoomResponse, ServerMessage } from "../../shared/protocol";
+import type { ChatLine, CreateRoomResponse, PhaseId, ServerMessage } from "../../shared/protocol";
 
 export interface TestSocket {
   ws: WebSocket;
@@ -172,18 +172,23 @@ export async function seat(connectedGuests: number, offlineGuests: number): Prom
   return { code, host, hostToken: token, guests, offline };
 }
 
-export async function storedRoom(code: string): Promise<{
+export interface StoredRoom {
   createdAt: number;
   expiresAt: number;
   phase: string;
   phaseEndsAt: number | null;
-  players: Array<{ role?: string }>;
-}> {
+  day?: number;
+  messages?: ChatLine[];
+  extendUsed?: boolean;
+  players: Array<{ role?: string; claimChoice?: string; lastSendAt?: number }>;
+}
+
+export async function storedRoom(code: string): Promise<StoredRoom> {
   let room: unknown;
   await runInDurableObject(env.ROOM.getByName(code), async (_i, state) => {
     room = await state.storage.get("room");
   });
-  return room as { createdAt: number; expiresAt: number; phase: string; phaseEndsAt: number | null; players: Array<{ role?: string }> };
+  return room as StoredRoom;
 }
 
 export async function alarmOf(code: string): Promise<number | null> {
@@ -192,4 +197,33 @@ export async function alarmOf(code: string): Promise<number | null> {
     alarm = await state.storage.getAlarm();
   });
   return alarm;
+}
+
+const isPhase = (phase: PhaseId) => (m: ServerMessage): boolean => m.t === "state" && m.view.phase === phase;
+
+/**
+ * 낮 단계로 한 단계씩 넘긴다: 저장된 단계가 목표가 될 때까지 forceDue + runDurableObjectAlarm 을 반복하고(전이 한 번마다
+ * 마감이 다시 미래가 되므로 매번 필요하다), 모든 소켓이 그 단계 state 를 받을 때까지 기다린다(지나간 단계의 프레임은 nextFrame 이 건너뛴다).
+ * 호출 전에 방이 시작되어(assigning 이상) 있어야 한다.
+ */
+export async function advanceTo(code: string, sockets: TestSocket[], phase: PhaseId): Promise<void> {
+  const stub = env.ROOM.getByName(code);
+  for (let i = 0; i < 12 && (await storedRoom(code)).phase !== phase; i += 1) {
+    await forceDue(code, "phaseEndsAt");
+    expect(await runDurableObjectAlarm(stub)).toBe(true);
+  }
+  expect((await storedRoom(code)).phase).toBe(phase);
+  for (const s of sockets) await nextFrame(s, isPhase(phase));
+}
+
+/** 저장된 모든 플레이어의 lastSendAt 을 msAgo 전으로 옮기고 evict 한다 — 테스트가 2초 쿨다운을 실제로 기다리지 않게 한다. */
+export async function backdateSends(code: string, msAgo = 5000): Promise<void> {
+  const stub = env.ROOM.getByName(code);
+  await runInDurableObject(stub, async (_instance, state) => {
+    const room = await state.storage.get<{ players: Array<Record<string, unknown>> }>("room");
+    if (!room) throw new Error("backdateSends: 방이 없다");
+    const players = room.players.map((p) => (p.lastSendAt === undefined ? p : { ...p, lastSendAt: Date.now() - msAgo }));
+    await state.storage.put("room", { ...room, players });
+  });
+  await evictDurableObject(stub);
 }
