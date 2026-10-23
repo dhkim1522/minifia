@@ -2,6 +2,7 @@
 import type { DayView, MyInfo, PhaseId, PreviewPlayer, PublicPlayer, RoomPreview, RoomView } from "../protocol";
 import { MAX_PLAYERS, MIN_PLAYERS } from "../protocol";
 import { currentClaim } from "./claim";
+import { phaseDurationOf } from "./discussion";
 import { PHASE_DEFS } from "./phases";
 import { rolesInPlay } from "./roles";
 import { hostOf } from "./room";
@@ -22,6 +23,24 @@ function buildDay(state: RoomState): DayView {
       .filter((p) => p.claimChoice !== undefined)
       .map((p) => p.seat)
       .sort((a, b) => a - b);
+  }
+  if (state.phase === "claimReveal" || state.phase === "discussion") {
+    // 공개 뒤에는 모두에게 같은 값이 간다. 값은 공개 필드(claimShown·claimChanged)만 읽고, 옛 플레이어는 기본값을 쥔다(D-04, D-06, D-08).
+    day.claims = [...state.players]
+      .sort((a, b) => a.seat - b.seat)
+      .map((p) => ({ seat: p.seat, claim: p.claimShown ?? "none", changed: p.claimChanged ?? false }));
+  }
+  if (state.phase === "discussion") {
+    // 저장 객체를 펼치지 않고 필드별로 복사한다 — target·claimedRole 은 있을 때만 키를 만든다(D-15, T-02-07).
+    day.messages = (state.messages ?? []).map((m) => ({
+      seq: m.seq,
+      seat: m.seat,
+      template: m.template,
+      ...(m.target !== undefined ? { target: m.target } : {}),
+      ...(m.claimedRole !== undefined ? { claimedRole: m.claimedRole } : {}),
+      at: m.at,
+    }));
+    day.extendUsed = state.extendUsed ?? false;
   }
   return day;
 }
@@ -82,7 +101,7 @@ export function buildView(state: RoomState, playerId: string, now: number): Room
     code: state.code,
     phase: state.phase,
     phaseEndsAt: state.phaseEndsAt,
-    phaseDurationMs: def.durationMs,
+    phaseDurationMs: phaseDurationOf(state), // 연장 반영 — 타이머 막대 비율이 맞도록 단계 표 길이가 아니라 파생 값(Pitfall 3)
     serverNow: now,
     minPlayers: MIN_PLAYERS,
     maxPlayers: MAX_PLAYERS,
