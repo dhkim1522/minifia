@@ -1,4 +1,5 @@
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { StrictMode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import "../helpers/singleLineErrors";
 import type { PublicPlayer, RoomView } from "../../shared/protocol";
@@ -181,5 +182,115 @@ describe("Lobby — 하단 시트: 연결된 인원·안내·[게임 시작] (RO
     render(<Lobby view={hostView(0)} send={() => {}} />);
     expect(screen.getByText("0042").textContent?.length).toBe(4);
     expect(screen.getByText("4명부터 시작할 수 있어요").textContent).not.toContain("\n");
+  });
+});
+
+describe("Lobby — 입장·방장 변경 토스트와 자리 등장·퇴장 (D-10, R9)", () => {
+  const base = [player(0, "민수"), player(1, "서준")];
+  const advance = (ms: number) =>
+    act(() => {
+      vi.advanceTimersByTime(ms);
+    });
+  const seatEl = (name: string) => screen.queryByRole("group", { name }) as HTMLElement | null;
+
+  it("처음 render 에는 토스트가 없고, StrictMode 이중 effect 에서도 없다", () => {
+    render(
+      <StrictMode>
+        <Lobby view={makeView(base, 0)} send={() => {}} />
+      </StrictMode>,
+    );
+    expect(screen.queryByRole("status") === null).toBe(true);
+  });
+
+  it("같은 epoch 로 하윤이 더해진 view 가 오면 토스트 '하윤님이 들어왔어요' 가 2초 보이고 사라진다", () => {
+    vi.useFakeTimers();
+    const { rerender } = render(<Lobby view={makeView(base, 0)} send={() => {}} epoch={0} />);
+    rerender(<Lobby view={makeView([...base, player(2, "하윤")], 0)} send={() => {}} epoch={0} />);
+    expect(screen.getByRole("status").textContent).toBe("하윤님이 들어왔어요");
+    advance(1999);
+    expect(screen.queryByRole("status") !== null).toBe(true);
+    advance(1);
+    expect(screen.queryByRole("status") === null).toBe(true);
+  });
+
+  it("epoch 를 바꾸며 사람이 더해진 view 를 주면(재연결 직후) 토스트가 없다", () => {
+    const { rerender } = render(<Lobby view={makeView(base, 0)} send={() => {}} epoch={0} />);
+    rerender(<Lobby view={makeView([...base, player(2, "하윤")], 0)} send={() => {}} epoch={1} />);
+    expect(screen.queryByRole("status") === null).toBe(true);
+  });
+
+  it("재연결 뒤 같은 epoch 의 다음 변화에는 다시 토스트가 난다", () => {
+    const { rerender } = render(<Lobby view={makeView(base, 0)} send={() => {}} epoch={0} />);
+    rerender(<Lobby view={makeView([...base, player(2, "하윤")], 0)} send={() => {}} epoch={1} />);
+    rerender(<Lobby view={makeView([...base, player(2, "하윤"), player(3, "지아")], 0)} send={() => {}} epoch={1} />);
+    expect(screen.getByRole("status").textContent).toBe("지아님이 들어왔어요");
+  });
+
+  it("방장이 바뀌면 '서준님이 새 방장이 되었어요' 토스트", () => {
+    const { rerender } = render(<Lobby view={makeView(base, 0)} send={() => {}} />);
+    rerender(
+      <Lobby view={makeView([player(0, "민수", { isHost: false }), player(1, "서준", { isHost: true })], 0)} send={() => {}} />,
+    );
+    expect(screen.getByRole("status").textContent).toBe("서준님이 새 방장이 되었어요");
+  });
+
+  it("같은 변화에 입장과 방장 변경이 함께면 방장 변경을 보인다", () => {
+    const { rerender } = render(<Lobby view={makeView(base, 0)} send={() => {}} />);
+    rerender(
+      <Lobby
+        view={makeView([player(0, "민수", { isHost: false }), player(1, "서준", { isHost: true }), player(2, "하윤")], 0)}
+        send={() => {}}
+      />,
+    );
+    expect(screen.getByRole("status").textContent).toBe("서준님이 새 방장이 되었어요");
+  });
+
+  it("나 자신이 새로 앉은 변화에는 토스트가 없다", () => {
+    const { rerender } = render(<Lobby view={makeView([player(0, "민수")], 0)} send={() => {}} />);
+    rerender(<Lobby view={makeView([player(0, "민수"), player(1, "서준")], 1)} send={() => {}} />);
+    expect(screen.queryByRole("status") === null).toBe(true);
+  });
+
+  it("처음 그릴 때 이미 있던 자리에는 전이 클래스가 없다", () => {
+    const { container } = render(<Lobby view={makeView(base, 0)} send={() => {}} />);
+    expect(container.querySelector(".mf-seat--enter") === null).toBe(true);
+    expect(container.querySelector(".mf-seat--leave") === null).toBe(true);
+  });
+
+  it("입장한 자리에 .mf-seat--enter 가 420ms 동안 붙고 그 뒤 빠진다", () => {
+    vi.useFakeTimers();
+    const { rerender } = render(<Lobby view={makeView(base, 0)} send={() => {}} />);
+    rerender(<Lobby view={makeView([...base, player(2, "하윤")], 0)} send={() => {}} />);
+    expect(seatEl("하윤")?.classList.contains("mf-seat--enter")).toBe(true);
+    expect(seatEl("서준")?.classList.contains("mf-seat--enter")).toBe(false);
+    advance(419);
+    expect(seatEl("하윤")?.classList.contains("mf-seat--enter")).toBe(true);
+    advance(1);
+    expect(seatEl("하윤")?.classList.contains("mf-seat--enter")).toBe(false);
+  });
+
+  it("나간 사람은 320ms 동안 .mf-seat--leave 로 남았다가 사라진다", () => {
+    vi.useFakeTimers();
+    const { rerender } = render(<Lobby view={makeView([...base, player(2, "하윤")], 0)} send={() => {}} />);
+    rerender(<Lobby view={makeView(base, 0)} send={() => {}} />);
+    expect(seatEl("하윤")?.classList.contains("mf-seat--leave")).toBe(true);
+    advance(319);
+    expect(seatEl("하윤") !== null).toBe(true);
+    advance(1);
+    expect(seatEl("하윤") === null).toBe(true);
+  });
+
+  it("나간 자리에 다른 사람이 바로 앉으면 남긴 사람을 바로 빼고 새 사람이 등장한다", () => {
+    vi.useFakeTimers();
+    const { rerender } = render(<Lobby view={makeView(base, 0)} send={() => {}} />);
+    rerender(<Lobby view={makeView([player(0, "민수"), player(1, "지아")], 0)} send={() => {}} />);
+    expect(seatEl("서준") === null).toBe(true);
+    expect(seatEl("지아")?.classList.contains("mf-seat--enter")).toBe(true);
+  });
+
+  it("epoch 가 바뀐 직후의 변화는 전이 없이 보인다", () => {
+    const { rerender } = render(<Lobby view={makeView(base, 0)} send={() => {}} epoch={0} />);
+    rerender(<Lobby view={makeView([...base, player(2, "하윤")], 0)} send={() => {}} epoch={1} />);
+    expect(seatEl("하윤")?.classList.contains("mf-seat--enter")).toBe(false);
   });
 });
