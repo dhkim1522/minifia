@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   ROOM_TTL_MS,
   attachConnection,
+  checkStart,
+  connectedCount,
   createRoomState,
   detachConnection,
   findPlayerByToken,
@@ -322,6 +324,51 @@ describe("kickPlayer", () => {
     const again = join(r.state, "E", "서준");
     if (!again.ok) throw new Error("expected rejoin ok");
     expect(again.player.seat).toBe(2);
+  });
+});
+
+describe("connectedCount", () => {
+  it("connected 가 참인 사람 수를 센다", () => {
+    expect(connectedCount([{ connected: true }, { connected: false }, { connected: true }])).toBe(2);
+    expect(connectedCount([])).toBe(0);
+  });
+});
+
+describe("checkStart", () => {
+  /** 방장(자리 0, 연결 중)을 포함해 연결 connected 명 + 끊김 disconnected 명이 앉은 대기실. */
+  function lobbyOf(connected: number, disconnected: number): RoomState {
+    const specs: Spec[] = [];
+    for (let i = 0; i < connected + disconnected; i += 1) {
+      specs.push({ id: `p${i}`, seat: i, joinSeq: i, connected: i < connected });
+    }
+    return room(specs);
+  }
+
+  it("연결 4 + 끊김 0 이면 시작할 수 있다", () => {
+    expect(checkStart(lobbyOf(4, 0), "p0")).toBeNull();
+  });
+
+  it("연결 4 + 끊김 2(자리 6)도 시작할 수 있다 — 끊긴 사람은 자리를 지키지만 세지 않는다", () => {
+    expect(checkStart(lobbyOf(4, 2), "p0")).toBeNull();
+  });
+
+  it("연결 3 + 끊김 5(자리 8)는 NOT_ENOUGH_PLAYERS", () => {
+    expect(checkStart(lobbyOf(3, 5), "p0")).toBe("NOT_ENOUGH_PLAYERS");
+  });
+
+  it("참가만 하고 아직 hello 전인 4번째 사람은 세지 않는다 (연결 3 + 끊김 1)", () => {
+    expect(checkStart(lobbyOf(3, 1), "p0")).toBe("NOT_ENOUGH_PLAYERS");
+  });
+
+  it("방장이 아니면 NOT_HOST, 대기실이 아니면 WRONG_PHASE", () => {
+    expect(checkStart(lobbyOf(4, 0), "p1")).toBe("NOT_HOST");
+    expect(checkStart({ ...lobbyOf(4, 0), phase: "roleReveal" }, "p0")).toBe("WRONG_PHASE");
+  });
+
+  it("검사 순서는 NOT_HOST → WRONG_PHASE → NOT_ENOUGH_PLAYERS 다", () => {
+    expect(checkStart({ ...lobbyOf(2, 0), phase: "day" }, "p1")).toBe("NOT_HOST");
+    expect(checkStart({ ...lobbyOf(2, 0), phase: "day" }, "p0")).toBe("WRONG_PHASE");
+    expect(checkStart(lobbyOf(2, 0), "p0")).toBe("NOT_ENOUGH_PLAYERS");
   });
 });
 
