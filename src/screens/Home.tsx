@@ -126,9 +126,6 @@ export function Home({ onEnterRoom }: HomeProps) {
           <h1 className="mf-t-display">Minifia</h1>
         </header>
         <div className="mf-entry__actions">
-          <Button variant="primary" block type="button" onClick={openCreate} disabled={busy}>
-            방 만들기
-          </Button>
           <form className="mf-entry__form" onSubmit={openJoin}>
             <TextField
               label="방 코드"
@@ -144,6 +141,9 @@ export function Home({ onEnterRoom }: HomeProps) {
               }
             />
           </form>
+          <Button variant="primary" block type="button" onClick={openCreate} disabled={busy}>
+            방 만들기
+          </Button>
         </div>
       </main>
       {sheet ? (

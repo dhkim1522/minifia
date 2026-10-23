@@ -316,3 +316,74 @@ describe("Home 코드 참가 시트", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 });
+
+describe("Home 닉네임 시트 키패드 대응 (폰)", () => {
+  it("첫 화면은 방 코드 칸이 위, [방 만들기]가 아래(엄지가 닿는 쪽)에 있다", () => {
+    render(<Home onEnterRoom={vi.fn()} />);
+    const order = codeInput().compareDocumentPosition(createRoomButton());
+    expect(order & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("쓸 수 있는 닉네임이 미리 채워져 있으면 포커스가 제출 버튼에 가서 키패드가 저절로 뜨지 않는다", async () => {
+    saveLastNickname("민수");
+    render(<Home onEnterRoom={vi.fn()} />);
+    fireEvent.click(createRoomButton());
+    await waitFor(() => expect(document.activeElement).toBe(submitCreate()));
+  });
+
+  it("닉네임이 비어 있으면 포커스가 입력칸에 간다", async () => {
+    render(<Home onEnterRoom={vi.fn()} />);
+    fireEvent.click(createRoomButton());
+    await waitFor(() => expect(document.activeElement).toBe(nicknameInput()));
+  });
+
+  it("입력칸에 포커스가 있을 때 배경을 누르면 키패드만 내리고 시트는 닫히지 않는다", async () => {
+    render(<Home onEnterRoom={vi.fn()} />);
+    fireEvent.click(createRoomButton());
+    await waitFor(() => expect(document.activeElement).toBe(nicknameInput()));
+    type(nicknameInput(), "민수");
+    fireEvent.click(document.querySelector(".mf-sheet-scrim") as HTMLElement);
+    expect(document.activeElement).not.toBe(nicknameInput());
+    expect(nicknameInput().value).toBe("민수");
+    expect(document.querySelector("dialog")).not.toBeNull();
+    // 포커스가 입력칸에 없으면 배경 누르기는 시트를 닫는다.
+    vi.useFakeTimers();
+    fireEvent.click(document.querySelector(".mf-sheet-scrim") as HTMLElement);
+    act(() => {
+      vi.advanceTimersByTime(300);
+    });
+    expect(document.querySelector("dialog")).toBeNull();
+  });
+
+  it("키패드가 올라오면(visualViewport 가 줄면) 대화상자 아래 여백 --mf-kb 가 그 높이가 되고, 내려가면 0 이 된다", async () => {
+    const listeners: Record<string, Array<() => void>> = {};
+    const vv = {
+      height: 800,
+      offsetTop: 0,
+      addEventListener: (t: string, f: () => void) => ((listeners[t] ??= []).push(f)),
+      removeEventListener: () => {},
+    };
+    vi.stubGlobal("visualViewport", vv);
+    Object.defineProperty(window, "visualViewport", { value: vv, configurable: true });
+    const clientHeight = vi.spyOn(HTMLElement.prototype, "clientHeight", "get").mockReturnValue(800);
+    try {
+      render(<Home onEnterRoom={vi.fn()} />);
+      fireEvent.click(createRoomButton());
+      await waitFor(() => expect(document.activeElement).toBe(nicknameInput()));
+      const dlg = document.querySelector("dialog") as HTMLDialogElement;
+      vv.height = 480; // 키패드 320px
+      act(() => listeners["resize"]?.forEach((f) => f()));
+      expect(dlg.style.getPropertyValue("--mf-kb")).toBe("320px");
+      vv.height = 800;
+      act(() => listeners["resize"]?.forEach((f) => f()));
+      expect(dlg.style.getPropertyValue("--mf-kb")).toBe("0px");
+      // 주소창 정도의 작은 변화는 키패드로 보지 않는다.
+      vv.height = 740;
+      act(() => listeners["resize"]?.forEach((f) => f()));
+      expect(dlg.style.getPropertyValue("--mf-kb")).toBe("0px");
+    } finally {
+      clientHeight.mockRestore();
+      Object.defineProperty(window, "visualViewport", { value: undefined, configurable: true });
+    }
+  });
+});

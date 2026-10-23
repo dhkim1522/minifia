@@ -15,6 +15,8 @@ const CLOSE_MS = 260;
 // 진입(열림 클래스)도 같은 이유로 프레임에만 기대지 않는다. 숨겨진 탭·절전에서 requestAnimationFrame 이 멈춰도
 // 60ms(60Hz 기준 세 프레임 안팎) 안에 열림 상태가 되어 시트가 화면 밖에 영영 남지 않게 한다(T-01-58).
 const ENTER_FALLBACK_MS = 60;
+// 이 높이(px)보다 작게 줄어든 뷰포트는 키패드로 보지 않는다(주소창·하단 툴바 변화).
+const KEYBOARD_MIN_PX = 120;
 const DRAG_CLOSE_PX = 96;
 const DRAG_CLOSE_SPEED = 0.5; // px/ms
 
@@ -34,6 +36,8 @@ interface Drag {
   startAt: number;
   dy: number;
 }
+
+const isTextInput = (el: HTMLElement) => el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement;
 
 export function Sheet({ label, onClose, initialFocusRef, showClose, children }: SheetProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
@@ -114,6 +118,42 @@ export function Sheet({ label, onClose, initialFocusRef, showClose, children }: 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // 입력칸에 포커스가 있으면(폰 키패드가 떠 있는 동안) 배경 누르기는 키패드만 내린다. 시트까지 닫으면 입력하던 것을 잃는다.
+  const onScrimClick = () => {
+    const active = document.activeElement;
+    if (active instanceof HTMLElement && dialogRef.current?.contains(active) && isTextInput(active)) {
+      active.blur();
+      return;
+    }
+    requestClose();
+  };
+
+  // 폰 키패드가 올라와도 시트가 가려지지 않게 대화상자 아래 여백(--mf-kb)을 키패드 높이만큼 준다.
+  // iOS Safari 는 키패드가 떠도 레이아웃 뷰포트를 줄이지 않고 visualViewport 만 줄인다.
+  // 입력칸에 포커스가 있을 때만 적용한다. 주소창이 접히는 것으로 시트가 떠오르지 않게(G-01-9).
+  useEffect(() => {
+    const dlg = dialogRef.current;
+    const vv = window.visualViewport;
+    if (!dlg || !vv) return;
+    const update = () => {
+      const active = document.activeElement;
+      const typing = active instanceof HTMLElement && dlg.contains(active) && isTextInput(active);
+      const kb = typing ? Math.round(dlg.clientHeight - vv.height - vv.offsetTop) : 0;
+      dlg.style.setProperty("--mf-kb", `${kb > KEYBOARD_MIN_PX ? kb : 0}px`);
+    };
+    vv.addEventListener("resize", update);
+    vv.addEventListener("scroll", update);
+    dlg.addEventListener("focusin", update);
+    dlg.addEventListener("focusout", update);
+    update();
+    return () => {
+      vv.removeEventListener("resize", update);
+      vv.removeEventListener("scroll", update);
+      dlg.removeEventListener("focusin", update);
+      dlg.removeEventListener("focusout", update);
+    };
+  }, []);
+
   // 손잡이 막대에만 끌기를 건다(본문은 스크롤된다). 놓을 때 96px 넘게 끌었거나 0.5px/ms 보다 빨랐으면 닫는다.
   const onPointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
     if (closingRef.current) return;
@@ -153,7 +193,7 @@ export function Sheet({ label, onClose, initialFocusRef, showClose, children }: 
         requestClose();
       }}
     >
-      <div className="mf-sheet-scrim" onClick={requestClose} />
+      <div className="mf-sheet-scrim" onClick={onScrimClick} />
       <div ref={sheetRef} className={closing ? "mf-sheet mf-sheet--closing" : "mf-sheet"}>
         <div
           className="mf-sheet__handle"

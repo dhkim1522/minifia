@@ -12,6 +12,8 @@
   /* hidden 은 사용자 스크롤만 막는다. 시트가 아래에 숨어 있는 동안 생긴 스크롤 영역을 포커스 이동이 밀어 올려
      시트가 떴다 내려앉는다(G-01-9 실기기 패널). clip 은 프로그램 스크롤까지 막는다. hidden 은 clip 을 모르는 브라우저용. */
   overflow: hidden; overflow: clip;
+  /* 폰 키패드가 떠 있는 동안 Sheet.tsx 가 --mf-kb 를 키패드 높이로 둔다. 시트가 키패드 위로 올라온다. */
+  box-sizing: border-box; padding-bottom: var(--mf-kb, 0px);
 }
 .mf-dialog[open] { display: flex; flex-direction: column; justify-content: flex-end; }
 /* 막은 ::backdrop 이 아니라 안의 div 다(커스텀 속성 상속이 불확실, Pitfall 19). ::backdrop 은 투명으로 둔다. */
