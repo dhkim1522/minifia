@@ -1,0 +1,87 @@
+/* minifia 디자인 시스템 부품 스타일. design/design-system/components/bundle.css 에서 옮겼다.
+   값은 tokens.css 변수만 쓴다(색 직접 지정 없음). 글자 크기는 14/16/24/36, 굵기는 400/700 뿐이다.
+   진홍은 입력 오류에만 쓴다. 표·자리·카드·타이머·시트·재접속 띠는 그 부품을 만드는 계획이 옮긴다. */
+.mf-root, .mf-root * { box-sizing: border-box; }
+:where(.mf-icon) { display: inline-block; width: 24px; height: 24px; flex: none; }
+.mf-root { font-family: var(--font-ui); color: var(--gray-100); -webkit-font-smoothing: antialiased; }
+
+/* 글자 */
+.mf-t-display { font-size: 36px; line-height: 1.2; font-weight: 700; color: var(--gray-50); margin: 0; word-break: keep-all; text-wrap: balance; }
+.mf-t-heading { font-size: 24px; line-height: 1.2; font-weight: 700; color: var(--gray-50); margin: 0; word-break: keep-all; text-wrap: balance; }
+.mf-t-body { font-size: 16px; line-height: 1.5; font-weight: 400; margin: 0; word-break: keep-all; }
+.mf-t-label { font-size: 14px; line-height: 1.4; font-weight: 400; color: var(--gray-300); margin: 0; word-break: keep-all; }
+.mf-t-muted { color: var(--gray-300); }
+
+/* Button */
+.mf-btn {
+  appearance: none; display: inline-flex; align-items: center; justify-content: center; gap: var(--space-sm);
+  min-height: var(--control-button); padding: 0 var(--space-md);
+  font: inherit; font-size: 16px; line-height: 1.5; font-weight: 700;
+  border-radius: var(--radius-md); border: 1px solid transparent; cursor: pointer;
+  touch-action: manipulation; -webkit-tap-highlight-color: transparent;
+  transition: transform var(--dur-fast) var(--ease-out);
+}
+.mf-btn:active:not(:disabled) { transform: scale(0.98); }
+.mf-btn:focus-visible { outline: 2px solid var(--gray-100); outline-offset: 2px; }
+.mf-btn:disabled { opacity: 0.4; cursor: default; }
+.mf-btn--block { width: 100%; }
+.mf-btn--primary { background: var(--gray-100); color: var(--night-900); }
+.mf-btn--secondary { background: var(--gray-800); color: var(--gray-50); border-color: var(--gray-700); }
+.mf-btn--text { background: transparent; color: var(--gray-300); min-height: var(--tap-min); font-size: 14px; font-weight: 400; }
+.mf-btn--compact { min-height: var(--tap-min); }
+
+/* TextField */
+.mf-field { display: flex; flex-direction: column; gap: var(--space-sm); width: 100%; }
+.mf-field__label { font-size: 14px; line-height: 1.4; color: var(--gray-300); }
+.mf-field__row { display: flex; align-items: flex-start; gap: var(--space-sm); }
+.mf-field__row > .mf-field__input { flex: 1; min-width: 0; }
+.mf-field__input {
+  width: 100%; height: var(--control-input); padding: 0 var(--space-md);
+  font: inherit; font-size: 16px; color: var(--gray-100);
+  background: var(--night-800); border: 1px solid var(--gray-500); border-radius: var(--radius-md);
+}
+.mf-field__input::placeholder { color: var(--gray-300); opacity: 0.7; }
+.mf-field__input:focus-visible { outline: none; border-color: var(--gray-100); box-shadow: 0 0 0 1px var(--gray-100); }
+.mf-field__input--code { text-align: center; letter-spacing: 0.3em; font-variant-numeric: tabular-nums; font-weight: 700; }
+.mf-field--error .mf-field__input { border-width: 2px; border-color: var(--crimson-300); box-shadow: none; }
+.mf-field__error { font-size: 14px; line-height: 1.4; color: var(--crimson-300); margin: 0; word-break: keep-all; }
+
+/* Backdrop: 화면 뒤 배경 장면 */
+:where(.mf-backdrop) { width: 100%; height: 100%; }
+.mf-backdrop { position: relative; overflow: hidden; background: var(--night-900); isolation: isolate; }
+.mf-backdrop__art { position: absolute; inset: 0; z-index: -1; pointer-events: none; background-size: cover; background-repeat: no-repeat; transition: background-image var(--dur-slow) var(--ease-out); }
+.mf-backdrop__content { position: relative; height: 100%; }
+
+/* 입장 화면(S-01, S-02): 세로 한 열. 높이를 고정하지 않아 키보드가 올라오면 스크롤된다. */
+.mf-entry {
+  display: flex; flex-direction: column; min-height: 100dvh;
+  padding: var(--space-2xl) var(--space-lg) var(--space-lg);
+}
+.mf-entry__head { display: flex; flex-direction: column; align-items: center; gap: var(--space-xs); margin-bottom: var(--space-xl); text-align: center; }
+.mf-entry__head .mf-t-label { color: var(--gray-100); text-shadow: var(--shadow-text); }
+.mf-entry__head .mf-t-display { text-shadow: var(--shadow-text); }
+.mf-entry__card {
+  margin-top: auto; display: flex; flex-direction: column; gap: var(--space-md);
+  padding: var(--space-lg); border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--night-800) 85%, transparent);
+}
+.mf-entry__divider { display: flex; align-items: center; gap: var(--space-md); font-size: 14px; line-height: 1.4; color: var(--gray-300); }
+.mf-entry__divider::before, .mf-entry__divider::after { content: ""; flex: 1; height: 1px; background: var(--gray-700); }
+.mf-version { margin: var(--space-md) 0 0; font-size: 14px; line-height: 1.4; color: var(--gray-300); text-align: center; }
+
+/* Toast: 알약, 한 번에 하나, 2초. 진홍 없음. */
+.mf-toast {
+  position: fixed; left: 0; right: 0; margin: 0 auto; width: fit-content;
+  max-width: calc(100vw - var(--space-lg) * 2); padding: var(--space-sm) var(--space-lg);
+  z-index: var(--z-overlay); pointer-events: none;
+  background: var(--gray-100); color: var(--night-900); border-radius: var(--radius-pill); box-shadow: var(--shadow-card);
+  font-size: 14px; line-height: 1.4; font-weight: 700; text-align: center; word-break: keep-all;
+  animation: mf-toast-in var(--dur-fast) var(--ease-out);
+}
+.mf-toast--top { top: calc(var(--space-lg) + env(safe-area-inset-top)); }
+.mf-toast--bottom { bottom: calc(var(--space-lg) + env(safe-area-inset-bottom)); }
+@keyframes mf-toast-in { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .mf-btn { transition-duration: 0.01ms; }
+}
