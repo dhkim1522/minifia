@@ -1,0 +1,20 @@
+# 01 코드 리뷰 처분
+
+| 항목 | 심각도 | 처분 |
+|---|---|---|
+| CR-01 | BLOCKER | open — 닉네임 비교 키에서 보이지 않는 문자 제거 + 투명 문자 금지. 2페이즈 전 수정 권장 |
+| WR-01 | WARNING | open |
+| WR-02 | WARNING | open |
+| WR-03 | WARNING | open |
+| WR-04 | WARNING | open |
+| WR-05 | WARNING | open |
+| WR-06 | WARNING | open |
+| IN-01 | INFO | open |
+| IN-02 | INFO | open |
+| IN-03 | INFO | open |
+| IN-04 | INFO | open |
+| IN-05 | INFO | open |
+| IN-06 | INFO | open |
+| IN-07 | INFO | open |
+| IN-08 | INFO | open |
+| IN-09 | INFO | open |
