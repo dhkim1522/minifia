@@ -4,18 +4,18 @@ milestone: v1.0
 milestone_name: MVP
 current_phase: 02
 current_phase_name: 낮 토론
-current_plan: 6
+current_plan: 7
 status: executing
-stopped_at: Completed 02-07-PLAN.md
-last_updated: "2026-10-23T18:10:36.377Z"
+stopped_at: Completed 02-04-PLAN.md
+last_updated: "2026-10-23T18:18:20.918Z"
 last_activity: 2026-10-24
 last_activity_desc: Phase 02 execution started
-state_head: c96249d35a46fca3d07edad31aae0a8d82621039
+state_head: 8b6ad7c92a2fde80a6b99cf7a4a9d528ca110b7e
 progress:
   total_phases: 6
   completed_phases: 1
   total_plans: 30
-  completed_plans: 24
+  completed_plans: 25
 ---
 
 # Project State
@@ -30,9 +30,9 @@ See: .planning/PROJECT.md (updated 2026-10-21)
 ## Current Position
 
 Phase: 02 (낮 토론) — EXECUTING
-Current Plan: 6
+Current Plan: 7
 Total Plans in Phase: 11
-Plan: 6 of 11
+Plan: 7 of 11
 Status: Ready to execute
 Last activity: 2026-10-24 — Phase 02 execution started
 
@@ -70,6 +70,7 @@ Progress: [██░░░░░░░░] 17%
 | Phase 02 P03 | 7min | 3 tasks | 5 files |
 | Phase 02 P06 | 3 min | 3 tasks | 8 files |
 | Phase 02 P07 | 6 min | 3 tasks | 9 files |
+| Phase 02 P04 | 8 min | 3 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -102,6 +103,8 @@ Recent decisions affecting current work:
 - [Phase 02]: 02-07: 공개된 주장의 props 이름은 job — Table 에 역할 키 없음(grep 게이트·타입 테스트)
 - [Phase 02]: 02-07: 머리 위 층 가로 위치는 --mf-float-left 변수(clamp)로 전달 — happy-dom 이 인라인 clamp() 를 버림
 - [Phase 02]: 02-07: 축소 모션에서는 mf-float-vanish(수명−지난 시간 지연 뒤 순간 전환)로 말풍선 수명을 유지
+- [Phase 02]: 02-04: claim 단계 뷰는 claimDone·본인 me.claim 만 — 남의 선택·claimLast 는 어떤 키로도 싣지 않음(A7). me.claim 은 claim 단계에서만, 어제 말 안 함이면 none — D-01 서버 쪽 마지막 관문. 키 자체를 만들지 않아 화면 은닉에 기대지 않는다
+- [Phase 02]: 02-04: 누출 검사는 역할·주장 값 문자열의 경로를 허용 목록(me.role, me.claim, day.roles[], day.claims[].claim, day.messages[].claimedRole)과 대조하는 방식으로 교체. normalizeStoredRoom 은 저장 phase 가 day 일 때만 dayAnnounce 로 정규화(호출은 02-05) — 개수 세기는 합법적 공개 값에 깨지고, 느슨하게 만들면 진짜 누출을 못 잡는다(Pitfall 2)
 
 ### Pending Todos
 
@@ -127,6 +130,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-23T18:10:36.265Z
-Stopped at: Completed 02-07-PLAN.md
+Last session: 2026-10-23T18:18:20.789Z
+Stopped at: Completed 02-04-PLAN.md
 Resume file: None
