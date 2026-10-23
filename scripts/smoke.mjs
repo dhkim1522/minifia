@@ -425,6 +425,22 @@ async function stageFull(url, args) {
   if (spread >= DAY_SPREAD_LIMIT_MS) fail(`day 전환 도착 편차 ${spread}ms 가 ${DAY_SPREAD_LIMIT_MS}ms 이상`);
 
   for (const c of clients) await closeSocket(c);
+
+  // 에셋: 인물 그림 %40 주소(200 image/png + 하루 캐시)와 OG 이미지
+  const figPath = "/characters/table/fig1_boy_brown_default%402x.png";
+  const fig = await fetch(`${origin}${figPath}`);
+  if (fig.status !== 200) fail(`${figPath} 상태 ${fig.status}`);
+  if (!(fig.headers.get("content-type") ?? "").includes("image/png")) fail(`${figPath} 가 image/png 가 아님`);
+  if (!(fig.headers.get("cache-control") ?? "").includes("max-age=86400")) fail(`${figPath} 의 Cache-Control 에 max-age=86400 이 없음: ${fig.headers.get("cache-control")}`);
+  await fig.arrayBuffer();
+  // 가정 A10 기록용: @ 주소는 리다이렉트를 따르지 않고 응답 코드만 출력한다(실패 조건 아님).
+  const atRes = await fetch(`${origin}/characters/table/fig1_boy_brown_default@2x.png`, { redirect: "manual" });
+  console.log(`  info: @ 주소 응답 ${atRes.status}`);
+  const og = await fetch(`${origin}/og.png`);
+  if (og.status !== 200) fail(`/og.png 상태 ${og.status}`);
+  if (!(og.headers.get("content-type") ?? "").includes("image/png")) fail("/og.png 가 image/png 가 아님");
+  await og.arrayBuffer();
+
   console.log(`SMOKE OK full code=${code} players=${N} spread=${spread}ms version=${version}`);
 }
 

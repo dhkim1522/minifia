@@ -11,10 +11,11 @@
     "preview": "vite preview",
     "test": "vitest run",
     "cf-typegen": "wrangler types",
-    "typecheck": "wrangler types && tsc -p tsconfig.app.json --noEmit && tsc -p tsconfig.worker.json --noEmit",
+    "typecheck": "npm run tokens:check && wrangler types && tsc -p tsconfig.app.json --noEmit && tsc -p tsconfig.worker.json --noEmit",
     "deploy": "vite build && wrangler deploy",
     "smoke": "node scripts/smoke.mjs",
-    "tokens": "node scripts/gen-tokens.mjs"
+    "tokens": "node scripts/gen-tokens.mjs",
+    "tokens:check": "node scripts/gen-tokens.mjs --check"
   },
   "dependencies": {
     "react": "19.3.1",
