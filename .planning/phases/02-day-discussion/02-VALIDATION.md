@@ -44,8 +44,8 @@ created: "2026-10-24"
 | 02-01 · T2 | DAY-02 | rolesInPlay·새 루프 회귀(view·alarm·leak) | unit + worker | `npx vitest run test/unit/roles.test.ts test/unit/view.test.ts` · `npx vitest run test/worker/alarm.test.ts test/worker/leak.test.ts` | ✅ 수정 | ⬜ pending |
 | 02-01 · T3 | DAY-01, DAY-02 | 낮 시작 발표·DayScene 장면 유지 | client | `npx vitest run test/client/phaseScreens.test.tsx` | ✅ 수정 | ⬜ pending |
 | 02-02 · T1–T2 | DAY-02 | 마감 확정 규칙표·말 바꿈·선택 검증 | unit | `npx vitest run test/unit/claim.test.ts test/unit/tick.test.ts` | ❌ W0(claim) | ⬜ pending |
-| 02-03 · T1–T2 | COMM-01, COMM-02, COMM-04 | 템플릿 검증·보관 20·이모티콘·쿨다운 1999/2000 | unit | `npx vitest run test/unit/chat.test.ts` | ❌ W0 | ⬜ pending |
-| 02-03 · T3 | DAY-01 | 방장 연장 1회/낮·넘기기·단계 길이 | unit | `npx vitest run test/unit/discussion.test.ts` | ❌ W0 | ⬜ pending |
+| 02-03 · T1–T2 | COMM-01, COMM-02, COMM-04 | 템플릿 검증·보관 20·이모티콘·쿨다운 1999/2000 (02-12·02-15 로 대체) | unit | `npx vitest run test/unit/chat.test.ts` | ❌ W0 | ⬜ pending |
+| 02-03 · T3 | DAY-01 | 방장 연장 1회/낮·넘기기·단계 길이 (02-12·02-15 로 대체) | unit | `npx vitest run test/unit/discussion.test.ts` | ❌ W0 | ⬜ pending |
 | 02-04 · T1–T3 | DAY-02, DAY-01, COMM-01 | claim 단계 비공개·허용 경로 전수 누출·옛 방 정규화 | unit | `npx vitest run test/unit/view.test.ts test/unit/gameRoom.test.ts` | ✅ 수정 | ⬜ pending |
 | 02-05 · T1–T3 | 전부 | 소켓 동시 공개·거부 매트릭스·이모티콘 방송·연장 알람 | worker | `npx vitest run test/worker/day.test.ts` | ❌ W0 | ⬜ pending |
 | 02-06 · T1 | COMM-02 | emoji 수신·onEvent | client | `npx vitest run test/client/useRoomConnection.test.tsx` | ✅ 수정 | ⬜ pending |
@@ -54,8 +54,18 @@ created: "2026-10-24"
 | 02-07 · T1–T3 | DAY-02, COMM-01, COMM-02 | 말풍선·이모티콘 층·주장 알약·완료 알약·칩 | client | `npx vitest run test/client/table.test.tsx test/client/chip.test.tsx` | ✅/❌ W0(chip) | ⬜ pending |
 | 02-08 · T1–T2 | DAY-02 | 칩 낙관적 선택·완료 알약·공개 연출 | client | `npx vitest run test/client/claimPanel.test.tsx test/client/dayScene.test.tsx` | ❌ W0 | ⬜ pending |
 | 02-10 · T1–T2 | COMM-01, COMM-02 | 시트 누르기 횟수·payload·트레이 | client | `npx vitest run test/client/quickMessageSheet.test.tsx test/client/emojiTraySheet.test.tsx` | ❌ W0 | ⬜ pending |
-| 02-09 · T1–T3 | DAY-01, COMM-01, COMM-02, COMM-04 | 로그·말풍선·합산 쿨다운·오류 표시·방장 줄 | client | `npx vitest run test/client/discussion.test.tsx` | ❌ W0 | ⬜ pending |
+| 02-09 · T1–T3 | DAY-01, COMM-01, COMM-02, COMM-04 | 로그·말풍선·합산 쿨다운·오류 표시·방장 줄 (02-12·02-15 로 대체) | client | `npx vitest run test/client/discussion.test.tsx` | ❌ W0 | ⬜ pending |
 | 02-11 · T1 | 전부 | 배포본 낮 한 바퀴(5명·4명) | smoke | `node scripts/smoke.mjs --prod --stage full` · `--players 4` | ✅ 수정 | ⬜ pending |
+| 02-12 · T1 | COMM-01, COMM-04 | chat 프레임 키 집합·state 미방송 | worker + client | `npx vitest run test/worker/day.test.ts test/client/useRoomConnection.test.tsx` | ✅ 수정 | ✅ green |
+| 02-12 · T2 | COMM-01, COMM-04 | 서버 전송 한도 1799 거부·1800 통과·뷰에 messages 없음 | unit | `npx vitest run test/unit/chat.test.ts test/unit/view.test.ts` | ✅ 수정 | ✅ green |
+| 02-12 · T3 | COMM-01, COMM-04 | 옛 messages 정리(옛 방 정규화) | unit | `npx vitest run test/unit/gameRoom.test.ts` | ✅ 수정 | ✅ green |
+| 02-13 · T1 | DAY-02, COMM-01 | 닉네임 6자 거부(최대 5자) | unit + worker | `npx vitest run test/unit/nickname.test.ts test/worker/join.test.ts` | ✅ 수정 | ✅ green |
+| 02-14 · T1–T2 | DAY-01, DAY-02, COMM-02 | 고정 테이블 폭 352~406·높이 300~460 배치 검사·DayTable | unit + client | `npx vitest run test/unit/dayTable.test.ts test/client/dayTable.test.tsx` | ✅ 신규 | ✅ green |
+| 02-15 · T1–T3 | DAY-01 | extend·skip BAD_MESSAGE·방장 줄 없음·타이머만으로 진행 | worker + client + unit | `npx vitest run test/worker/day.test.ts test/client/discussion.test.tsx test/unit/discussion.test.ts test/unit/tick.test.ts` | ✅ 수정 | ✅ green |
+| 02-16 · T1–T3 | DAY-01, DAY-02, COMM-01, COMM-02 | 장면 DayTable·이벤트 기반 이름표 반전·채팅 메모리·장면 높이 배선 | client | `npx vitest run test/client/dayScene.test.tsx test/client/seatFloats.test.tsx test/client/discussion.test.tsx` | ✅ 수정 | ✅ green |
+| 02-17 · T1–T3 | DAY-02, COMM-01, COMM-02 | 하단 157 고정·한 줄 칩·채팅 내역 모달·말하기 한 줄 | client | `npx vitest run test/client/claimPanel.test.tsx test/client/discussion.test.tsx` | ✅ 수정 | ✅ green |
+| 02-18 · T1 | DAY-01, COMM-01, COMM-04 | 배포본 full 스모크(5명·8명): chat 프레임·extend/skip BAD_MESSAGE·타이머로 2일차 | smoke | `node scripts/smoke.mjs --prod --stage full` · `--players 8` | ✅ 수정 | ✅ green |
+| 02-18 · T2 | COMM-02, COMM-04 | 배포본 봇 UAT(5명·8명): 2000ms 간격 오탐 0, 받아들인 줄 chat 프레임으로 도착 | smoke | `node scripts/uat-day.mjs --prod --players 5` · `--players 8` | ✅ 수정 | ⬜ pending |
 
 모든 tdd 작업은 해당 테스트 파일을 먼저 만들어(RED) 실패를 확인한 뒤 구현한다 — 위 ❌ W0 파일은 그 작업의 첫 커밋이 만든다. 연속 세 작업이 자동 검증 없이 이어지는 구간은 없다.
 
@@ -77,7 +87,7 @@ created: "2026-10-24"
 
 | Behavior | Requirement | Why Manual | Test Instructions |
 |----------|-------------|------------|-------------------|
-| 8명 360px 알약 겹침, 360×640 스크롤 없음, 말풍선 클램프, 주장 알약 최대 폭 | DAY-01, COMM-01 | 실기기 레이아웃 | UI-SPEC backstop 5건을 실기기에서 확인 |
+| 8명 360px·짧은 화면 이름표 겹침·잘림 시각 확인, 공개 팝·이모티콘·반전 애니메이션(배치 수치는 자동 검사) | DAY-01, COMM-01 | 실기기 레이아웃·렌더링 | UI-SPEC backstop 5건과 결정 0017 화면을 실기기에서 확인 |
 
 ---
 
