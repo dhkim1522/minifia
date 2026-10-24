@@ -5,6 +5,7 @@ import { Button } from "../components/Button";
 import { Icon } from "../components/Icon";
 import { MyRoleSheet } from "../components/MyRoleSheet";
 import { ReconnectBanner } from "../components/ReconnectBanner";
+import { morningCardText } from "../game/eliminationText";
 import { preloadRoleAssets } from "../net/assets";
 import { useRoomConnection } from "../net/useRoomConnection";
 import { Assigning } from "./Assigning";
@@ -34,8 +35,15 @@ const PHASE_ANNOUNCE: Record<PhaseId, (view: RoomView) => string> = {
   claimReveal: () => "직업이 공개되었습니다",
   discussion: () => "낮 토론",
   night: nightAnnounce,
-  morning: () => "", // 03-10 이 카드 제목까지 붙인다
+  morning: morningAnnounce,
 };
+
+// 아침 안내: "아침이 밝았습니다. " + 카드 제목(무사면 '아무 일도 없었습니다. 모두 무사해요'). 카드와 같은 출처에서 만든다.
+function morningAnnounce(view: RoomView): string {
+  const nicknameOf = (seat: number) => view.players.find((p) => p.seat === seat)?.nickname;
+  const { title, sub } = morningCardText(view.day?.morning, nicknameOf);
+  return `아침이 밝았습니다. ${title}${sub ? `. ${sub}` : ""}`;
+}
 
 // 밤 안내: "{N}일차 밤. " 뒤에 내 처지에 맞는 한 줄. 탈락한 사람은 역할과 무관하게 관전 문구다(결정 0021).
 function nightAnnounce(view: RoomView): string {
