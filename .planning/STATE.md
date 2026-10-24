@@ -4,18 +4,18 @@ milestone: v1.0
 milestone_name: MVP
 current_phase: 03
 current_phase_name: 밤과 아침
-current_plan: 2
+current_plan: 3
 status: executing
-stopped_at: Completed 03-01-PLAN.md
-last_updated: "2026-10-24T15:27:01.064Z"
+stopped_at: Completed 03-02-PLAN.md
+last_updated: "2026-10-24T15:32:35.089Z"
 last_activity: 2026-10-25
 last_activity_desc: Phase 03 execution started
-state_head: 82ffa0dd5445c5f2d0a7aa04ed540ce175efeaba
+state_head: 565fb6ca617f0abca782ad8d7e96190e8b0cc28e
 progress:
   total_phases: 6
   completed_phases: 1
   total_plans: 49
-  completed_plans: 38
+  completed_plans: 39
 ---
 
 # Project State
@@ -30,9 +30,9 @@ See: .planning/PROJECT.md (updated 2026-10-21)
 ## Current Position
 
 Phase: 03 (밤과 아침) — EXECUTING
-Current Plan: 2
+Current Plan: 3
 Total Plans in Phase: 12
-Plan: 2 of 12
+Plan: 3 of 12
 Status: Ready to execute
 Last activity: 2026-10-25 — Phase 03 execution started
 
@@ -84,6 +84,7 @@ Progress: [██░░░░░░░░] 17%
 | Phase 02 P17 | 10min | 3 tasks | 9 files |
 | Phase 02 P18 | 25min | 3 tasks | 12 files |
 | Phase 03 P01 | 10 min | 3 tasks | 11 files |
+| Phase 03 P02 | 6min | 3 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -142,6 +143,8 @@ Recent decisions affecting current work:
 - [Phase 02]: 02-18: 높이 적응 세로 위치(장면 높이<359 → cy=max(177,H−149))를 SPEC 과의 의도적 차이로 기록
 - [Phase 03]: 루프 discussion → night(30s) → morning(5s) → dayAnnounce, 일차는 dayAnnounce 진입 훅에서만 증가. tick 의 randInt 기본값 NO_RANDOM 은 불리면 즉시 오류
 - [Phase 03]: 관전 타입 직업 키는 role 이 아니라 job, 밤 채팅 줄 번호는 낮 nextMessageSeq 와 분리한 nextNightSeq
+- [Phase 03]: 03-02: 동사·관전 배지·실제 직업은 장면이 넘기는 값이고 부품에 역할 이름을 넣지 않는다(pickVerb 기본 '선택', real 줄은 job 키)
+- [Phase 03]: 03-02: 탈락 표시는 유령 그림이며 흐림은 연결 끊김 전용(유령 그림에도 끊김 흐림만 더한다)
 
 ### Pending Todos
 
@@ -167,6 +170,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-24T15:27:00.814Z
-Stopped at: Completed 03-01-PLAN.md
+Last session: 2026-10-24T15:32:34.856Z
+Stopped at: Completed 03-02-PLAN.md
 Resume file: None

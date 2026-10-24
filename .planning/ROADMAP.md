@@ -156,12 +156,12 @@ Plans:
   3. 모두가 일찍 골라도 밤은 30초가 다 지나야 끝난다.
   4. 아침 5초 동안 모든 화면에 탈락자 이름 또는 "아무 일도 없었습니다"가 나온다. 탈락한 사람은 선택 화면 대신 "탈락" 화면과 공개된 진행만 본다.
 
-**Plans:** 1/12 plans executed (결정 0018·0019·0021 승인 시안 `design/screens/night-v1/` 기준)
+**Plans:** 2/12 plans executed (결정 0018·0019·0021 승인 시안 `design/screens/night-v1/` 기준)
 
 Plans:
 **Wave 1**
 - [x] 03-01-PLAN.md — 트레이서: 단계 night 30초·morning 5초와 낮 토론 → 밤 → 아침 → 다음 낮 루프(tick 난수 주입), 3페이즈 와이어 타입(pick·alive·pick/allyPicks/records·morning·spectate), 방 화면 라우팅·밤 안내, 기존 회귀 이전 (TDD, wave 1)
-- [ ] 03-02-PLAN.md — 고정 테이블 밤 확장: 캐릭터 직접 탭 버튼·내 선택 링/배지, 유령 그림 탈락 표시, 관전 실제 직업 줄, 역할별 표적 배지 (TDD, wave 1)
+- [x] 03-02-PLAN.md — 고정 테이블 밤 확장: 캐릭터 직접 탭 버튼·내 선택 링/배지, 유령 그림 탈락 표시, 관전 실제 직업 줄, 역할별 표적 배지 (TDD, wave 1)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 - [ ] 03-03-PLAN.md — 밤 판정 규칙 night.ts: pickTarget 검사 순서, 다수·동률 무작위·고른 표만(A2)·의사 보호·경찰 기록·동시 해결(A1)·문구 번호 연속 반복 없음, 받는 사람(행위자·관전자) (TDD, wave 2)
@@ -244,7 +244,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 (decimal phases
 |-------|-----------|----------------|--------|-----------|
 | 1. 걷는 뼈대 | v1.0 | 19/19 | Complete    | 2026-10-24 |
 | 2. 낮 토론 | v1.0 | 18/18 | In Progress | - |
-| 3. 밤과 아침 | v1.0 | 1/12 | In Progress | - |
+| 3. 밤과 아침 | v1.0 | 2/12 | In Progress | - |
 | 4. 처형과 승패 | v1.0 | 0/TBD | Not started | - |
 | 5. 분위기와 캐릭터 | v1.0 | 0/TBD | Not started | - |
 | 6. 친구 플레이테스트 | v1.0 | 0/TBD | Not started | - |
