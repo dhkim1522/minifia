@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ReactElement } from "react";
 import { SEND_COOLDOWN_MS } from "../../shared/game/chat";
-import type { ClientMessage, EmojiId, RoomView } from "../../shared/protocol";
+import type { ClientMessage, EmojiId, RoomView, TemplateId } from "../../shared/protocol";
 import type { RoomConnection } from "../net/useRoomConnection";
 import { Button } from "./Button";
 import { EmojiTraySheet } from "./EmojiTraySheet";
@@ -15,6 +15,8 @@ export interface DiscussionControlsProps {
   connection: RoomConnection;
   /** 낮 화면 토스트(DayScene 이 쥔다) */
   showToast: (text: string) => void;
+  /** 빠른 메시지 시트의 문구 모음. 밤에는 NIGHT_TEMPLATE_ORDER(D-17), 없으면 낮 문구 */
+  templates?: readonly TemplateId[];
 }
 
 // 낮 토론 하단 패널의 조작 줄(S-07, 시안 R9-5): [빠른 메시지](주 버튼, 남은 폭) [이모티콘](44×44 아이콘만) 한 줄뿐이다(결정 0017-6).
@@ -27,7 +29,7 @@ export interface DiscussionControlsProps {
 // 해제는 setTimeout 하나이고 언마운트 때 정리한다. 방장 전용 조작(연장·넘기기)은 결정 0017-5 로 없앴다.
 const ERROR_TOAST = "보내지 못했어요. 다시 시도해 주세요";
 
-export function DiscussionControls({ view, connection, showToast }: DiscussionControlsProps): ReactElement {
+export function DiscussionControls({ view, connection, showToast, templates }: DiscussionControlsProps): ReactElement {
   const [sheet, setSheet] = useState<"quick" | "emoji" | null>(null);
   const [coolingDown, setCoolingDown] = useState(false);
   const coolTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -91,6 +93,7 @@ export function DiscussionControls({ view, connection, showToast }: DiscussionCo
           mySeat={view.me.seat}
           roles={view.day?.roles ?? []}
           canSend={connection.canSend}
+          templates={templates}
           onSend={sendSay}
           onClose={() => setSheet(null)}
         />

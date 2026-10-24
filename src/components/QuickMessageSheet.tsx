@@ -21,15 +21,18 @@ export interface QuickMessageSheetProps {
   /** 이번 판 직업 목록(서버가 준 구성). 직업 칩은 이 목록 그대로다 */
   roles: RoleId[];
   canSend: boolean;
+  /** 보여 줄 문구와 순서(기본 낮 TEMPLATE_ORDER). 밤에는 장면이 NIGHT_TEMPLATE_ORDER 를 넘긴다(D-17) */
+  templates?: readonly TemplateId[];
   onSend: (payload: SayPayload) => void;
   onClose: () => void;
 }
 
 // 빠른 메시지 시트(S-08a): 문구 → 대상 → (직업) → 보내기. 고른 값은 이 부품의 지역 상태라 시트가 닫히면(언마운트) 버려진다.
 // 입력칸이 없다 — 보낼 수 있는 것은 템플릿 ID·seat·직업뿐이다(자유 채팅은 v2). 소켓은 모르고 값만 onSend 로 넘긴다.
-export function QuickMessageSheet({ players, mySeat, roles, canSend, onSend, onClose }: QuickMessageSheetProps): ReactElement {
+// 밤에는 장면이 NIGHT_TEMPLATE_ORDER 를 넘긴다(D-17) — 문구가 쓸 수 있는 때는 서버가 검사한다. 대상·직업 칸 규칙은 QUICK_TEMPLATES 그대로(밤 문구는 직업 칸이 없다).
+export function QuickMessageSheet({ players, mySeat, roles, canSend, templates = TEMPLATE_ORDER, onSend, onClose }: QuickMessageSheetProps): ReactElement {
   // 처음엔 첫 문구가 선택돼 있고 해제할 수 없다
-  const [template, setTemplate] = useState<TemplateId>(TEMPLATE_ORDER[0] ?? "suspect");
+  const [template, setTemplate] = useState<TemplateId>(templates[0] ?? "suspect");
   const [target, setTarget] = useState<number | undefined>(undefined);
   const [claimedRole, setClaimedRole] = useState<RoleId | undefined>(undefined);
 
@@ -77,7 +80,7 @@ export function QuickMessageSheet({ players, mySeat, roles, canSend, onSend, onC
           <div className="mf-qm__section">
             <p className="mf-qm__label">무슨 말을 할까요?</p>
             <div className="mf-chips" role="group" aria-label="문구">
-              {TEMPLATE_ORDER.map((id) => (
+              {templates.map((id) => (
                 <Chip key={id} selected={template === id} onPress={() => pickTemplate(id)}>
                   {TEMPLATE_CHIP[id]}
                 </Chip>
