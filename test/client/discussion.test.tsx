@@ -15,7 +15,6 @@ const NOW = 10_000;
 interface ViewOpts {
   phase?: PhaseId;
   n?: number;
-  messages?: ChatLine[];
   isHost?: boolean;
   endsIn?: number;
   durationMs?: number;
@@ -46,12 +45,12 @@ function makeView(o: ViewOpts = {}): RoomView {
       n: o.n ?? 1,
       roles: ["mafia", "police", "citizen"],
       claims: [0, 1, 2, 3].map((seat) => ({ seat, claim: "none" as const, changed: false })),
-      messages: o.messages ?? [],
     },
   };
 }
 
-const line = (seq: number, seat: number, target: number | undefined, at: number, template: ChatLine["template"] = "suspect"): ChatLine => ({
+const line = (seq: number, seat: number, target: number | undefined, at: number, template: ChatLine["template"] = "suspect"): RoomEvent => ({
+  t: "chat",
   seq,
   seat,
   template,
@@ -59,7 +58,7 @@ const line = (seq: number, seat: number, target: number | undefined, at: number,
   at,
 });
 
-/** 서버 emoji·error 프레임을 흉내 내는 발행기 */
+/** 서버 chat·emoji·error 프레임을 흉내 내는 발행기 */
 function emitter() {
   const listeners = new Set<(e: RoomEvent) => void>();
   return {
@@ -152,13 +151,11 @@ describe("낮 토론 화면 — 로그·말하기 줄 (COMM-01, D-15·D-16·D-17
     expect(dialog("빠른 메시지")).toBeNull();
   });
 
-  it("새 줄(민지 → 하윤 의심돼요)이 오면 로그 마지막 줄이 그 문장이고 자리 2 이름표가 반전(--spoke)되며 말풍선은 없고, 내 줄은 '나'로 보인다", () => {
-    const r = scene(makeView());
-    r.rerender(
-      makeView({
-        messages: [line(1, 0, 1, NOW - 500, "trust"), line(2, 2, 1, NOW)],
-      }),
-    );
+  it("chat 이벤트(민지 → 하윤 의심돼요)가 오면 로그 마지막 줄이 그 문장이고 자리 2 이름표가 반전(--spoke)되며 말풍선은 없고, 내 줄은 '나'로 보인다", () => {
+    const ev = emitter();
+    const r = scene(makeView(), { onEvent: ev.onEvent });
+    ev.emit(line(1, 0, 1, NOW - 500, "trust"));
+    ev.emit(line(2, 2, 1, NOW));
     const rows = items();
     expect(rows.length).toBe(2);
     const last = rows[1]!;
@@ -170,14 +167,16 @@ describe("낮 토론 화면 — 로그·말하기 줄 (COMM-01, D-15·D-16·D-17
     expect(mine?.getAttribute("title")).toBe("지우");
     // 구분 점은 자리 색 변수
     expect(last.querySelector<HTMLElement>(".mf-msglog__dot")?.getAttribute("style")).toContain("--seat-3");
-    // 보낸 사람(자리 2) 이름표 윗줄만 반전, 머리 위 말풍선은 없다
+    // 보낸 사람 이름표 윗줄만 반전(자리 0 과 2), 다른 자리는 아니고 머리 위 말풍선은 없다
     expect(tagOf(r.container, 2)?.classList.contains("mf-dt__tag--spoke")).toBe(true);
+    expect(tagOf(r.container, 1)?.classList.contains("mf-dt__tag--spoke")).toBe(false);
     expect(r.container.querySelectorAll(".mf-bubble, .mf-float").length).toBe(0);
   });
 
   it("3000ms 뒤 반전(--spoke)은 사라지고 로그 줄은 남는다", () => {
-    const r = scene(makeView());
-    r.rerender(makeView({ messages: [line(1, 2, 1, NOW)] }));
+    const ev = emitter();
+    const r = scene(makeView(), { onEvent: ev.onEvent });
+    ev.emit(line(1, 2, 1, NOW));
     expect(r.container.querySelectorAll(".mf-dt__tag--spoke").length).toBe(1);
     act(() => {
       vi.advanceTimersByTime(2_999);
@@ -190,15 +189,32 @@ describe("낮 토론 화면 — 로그·말하기 줄 (COMM-01, D-15·D-16·D-17
     expect(items().length).toBe(1);
   });
 
-  it("메시지 4줄이면 로그 항목이 4개이고 마지막 줄만 밝은 글자 클래스다", () => {
-    scene(
-      makeView({
-        messages: [1, 2, 3, 4].map((seq) => line(seq, (seq % 3) + 1, 0, NOW - 60_000 - seq)),
-      }),
-    );
+  it("네 줄이 오면 로그 항목이 4개이고 마지막 줄만 밝은 글자 클래스다", () => {
+    const ev = emitter();
+    scene(makeView(), { onEvent: ev.onEvent });
+    for (const seq of [1, 2, 3, 4]) ev.emit(line(seq, (seq % 3) + 1, 0, NOW));
     const rows = items();
     expect(rows.length).toBe(4);
-    expect(rows.map((el) => el.classList.contains("mf-msglog__item--latest"))).toEqual([false, false, false, true]);
+    expect(rows.map((el) => (el.classList.contains("mf-msglog__item--latest") ? "1" : "0")).join("")).toBe("0001");
+  });
+
+  it("처음 마운트(재접속)에는 로그가 '아직 메시지가 없어요' 이고 --spoke 가 없다 — 서버가 지난 줄을 보내지 않고 뷰의 옛 messages 키도 읽지 않는다 (결정 0017-7)", () => {
+    const base = makeView();
+    const legacy = { ...base, day: { ...base.day!, messages: [{ seq: 1, seat: 2, template: "suspect", target: 1, at: NOW }] } } as unknown as RoomView;
+    const r = scene(legacy);
+    expect(items().length).toBe(0);
+    expect(within(log()).getByText("아직 메시지가 없어요")).toBeTruthy();
+    expect(r.container.querySelectorAll(".mf-dt__tag--spoke").length).toBe(0);
+  });
+
+  it("다음 낮 토론 view(day.n 2)로 바뀌면 로그가 비어 있다", () => {
+    const ev = emitter();
+    const r = scene(makeView({ n: 1 }), { onEvent: ev.onEvent });
+    ev.emit(line(1, 2, 1, NOW));
+    expect(items().length).toBe(1);
+    r.rerender(makeView({ n: 2 }));
+    expect(items().length).toBe(0);
+    expect(within(log()).getByText("아직 메시지가 없어요")).toBeTruthy();
   });
 
   it("시트를 연 채 다음 낮 발표(dayAnnounce) view 로 바뀌면 시트가 문서에서 사라진다", () => {
@@ -210,17 +226,12 @@ describe("낮 토론 화면 — 로그·말하기 줄 (COMM-01, D-15·D-16·D-17
     expect(screen.queryByRole("log")).toBeNull();
   });
 
-  it("서버가 보낸 문장·HTML 은 그려지지 않는다: 닉네임은 텍스트로만, 줄의 알 수 없는 text 필드는 무시한다 (T-02-31)", () => {
-    const base = makeView({ messages: [] });
-    const evil = {
-      ...base,
-      players: base.players.map((p) => (p.seat === 2 ? { ...p, nickname: "<img src=x>" } : p)),
-      day: {
-        ...base.day!,
-        messages: [{ ...line(1, 2, 1, NOW), text: "<script>alert(1)</script>" } as ChatLine],
-      },
-    } satisfies RoomView;
-    const r = scene(evil);
+  it("프레임의 알 수 없는 text 필드와 HTML 은 그려지지 않는다, 닉네임은 텍스트로만 (T-02-31)", () => {
+    const ev = emitter();
+    const base = makeView();
+    const evil = { ...base, players: base.players.map((p) => (p.seat === 2 ? { ...p, nickname: "<img src=x>" } : p)) } satisfies RoomView;
+    const r = scene(evil, { onEvent: ev.onEvent });
+    ev.emit({ ...line(1, 2, 1, NOW), text: "<script>alert(1)</script>" } as RoomEvent);
     expect(r.container.querySelector("img[src=\"x\"]")).toBeNull();
     expect(r.container.querySelector("script")).toBeNull();
     expect(items()[0]?.querySelector(".mf-msglog__name")?.textContent).toBe("<img src=x>");
