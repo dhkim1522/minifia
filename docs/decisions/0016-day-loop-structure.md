@@ -20,6 +20,6 @@
 
 ## 결과
 
-- 3·4페이즈는 `PHASE_DEFS`(단계 표, 데이터만)와 `ON_ENTER`(진입 훅 표)에 행을 더해 단계를 늘린다. 새 경로를 만들지 않는다. `selectClaim`·`say`·`emote` 에는 탈락자 거부(`isAlive`)를 3페이즈가 확정한다(지금 거부 코드는 `BAD_MESSAGE`, A4).
+- 3·4페이즈는 `PHASE_DEFS`(단계 표, 데이터만)와 `ON_ENTER`(진입 훅 표)에 행을 더해 단계를 늘린다. 새 경로를 만들지 않는다. `selectClaim`·`say`·`emote` 에는 탈락자 거부(`isAlive`)를 3페이즈가 확정한다(지금 거부 코드는 `BAD_MESSAGE`, A4)(3페이즈에서 확정: 결정 0020).
 - 6페이즈 플레이테스트에서 조정할 수치: 단계 시간 상수(`ASSIGNING_MS`·`ROLE_REVEAL_MS`·`DAY_ANNOUNCE_MS`·`CLAIM_MS`·`CLAIM_REVEAL_MS`·`DISCUSSION_MS`)는 `shared/game/phases.ts` 한 곳, 쿨다운 `SEND_COOLDOWN_MS`(클라이언트 잠금)·서버 한도 `SERVER_MIN_SEND_GAP_MS` 는 `shared/game/chat.ts`.
 - `scripts/smoke.mjs` 의 full 단계는 낮 루프(`discussion` → `dayAnnounce`)를 허용하는 전이 표로 바뀌어 배포본에서 낮 한 바퀴를 끝까지 돈다. 이후 페이즈가 단계를 더하면 이 표(`PHASE_NEXT`)도 같이 고친다.

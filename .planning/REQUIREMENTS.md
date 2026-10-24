@@ -220,7 +220,7 @@ MVP 이후 후보. 추적만 하고 현재 로드맵에는 넣지 않는다. 올
 | REQ-win-conditions | v1: END-01, END-02 |
 | REQ-night-anonymity | v1: NIGHT-04 |
 | REQ-night-timer-hold | v1: NIGHT-05 |
-| REQ-spectator | v2: WATCH-01. v1 의 탈락자는 ELIM-01 (공개된 진행만 봄) |
+| REQ-spectator | v2: WATCH-01(전체 관전 화면 별도). v1 의 탈락자는 ELIM-01 (유령 + 게임 전체 관전, 결정 0021) |
 | REQ-sound | v2: SOUND-01~04 |
 | REQ-room-create-join | v1: ROOM-01, ROOM-02 |
 | REQ-reconnect | v1: CONN-01~03 (기본 재접속). 방장 이양·이탈자 정리는 v2 CONNX-01, CONNX-02 |
@@ -230,4 +230,4 @@ MVP 이후 후보. 추적만 하고 현재 로드맵에는 넣지 않는다. 올
 
 ---
 *Requirements defined: 2026-10-21*
-*Last updated: 2026-10-24 after 2페이즈 갭 클로저 (DAY-01·COMM-01·COMM-04 문장을 결정 0017·G-02-2 의 동작에 맞춤; 이전 2026-10-21 1페이즈 논의 — 결정 0007 낮 먼저·직업 공개, CONN-02 확정)*
+*Last updated: 2026-10-25 after 3페이즈 결정 0021 반영 (REQ-spectator·ELIM-01: 탈락자는 유령 + 게임 전체 관전); 이전 2026-10-24 2페이즈 갭 클로저 (DAY-01·COMM-01·COMM-04 문장을 결정 0017·G-02-2 의 동작에 맞춤; 이전 2026-10-21 1페이즈 논의 — 결정 0007 낮 먼저·직업 공개, CONN-02 확정)*
