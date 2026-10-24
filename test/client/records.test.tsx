@@ -291,6 +291,70 @@ describe("열린 시트와 새 판 (03-11)", () => {
   });
 });
 
+describe("알림·흐름 (03-11)", () => {
+  const toastEl = (): HTMLElement | null => document.querySelector<HTMLElement>(".mf-records-toast");
+  const dotOn = (): boolean => recordsBtn()?.querySelector(".mf-records-btn__dot") != null;
+
+  it("경찰 night(records []) → morning(records 1개) 같은 epoch: 알림이 뜨고 2000ms 뒤 사라지며 점이 켜진다", () => {
+    const r = renderRoom(makeView({ phase: "night", records: [] }));
+    expect(toastEl() === null ? "없음" : "있음").toBe("없음");
+    feed(r, makeView({ phase: "morning", records: [{ n: 1, target: 2, isMafia: true }] }));
+    const t = toastEl();
+    expect(t === null ? "(알림 없음)" : t.textContent).toBe("수사 기록이 추가됐어요");
+    expect(t?.getAttribute("role") ?? "(role 없음)").toBe("status");
+    expect(t?.querySelector("svg") === null ? "아이콘 없음" : "아이콘 있음").toBe("아이콘 있음");
+    expect(t?.parentElement?.classList.contains("mf-dayscene") ? "장면 직계" : "장면 밖").toBe("장면 직계");
+    expect(dotOn() ? "점 켜짐" : "점 꺼짐").toBe("점 켜짐");
+    act(() => {
+      vi.advanceTimersByTime(1900);
+    });
+    expect(toastEl() === null ? "사라짐" : "있음").toBe("있음");
+    act(() => {
+      vi.advanceTimersByTime(200);
+    });
+    expect(toastEl() === null ? "사라짐" : "있음").toBe("사라짐");
+  });
+
+  it("morning 으로 처음 마운트(records 1개)하면 알림이 없다", () => {
+    renderRoom(makeView({ phase: "morning", records: [{ n: 1, target: 2, isMafia: true }] }));
+    expect(toastEl() === null ? "없음" : "있음").toBe("없음");
+    expect(dotOn() ? "점 켜짐" : "점 꺼짐").toBe("점 켜짐");
+  });
+
+  it("epoch 가 바뀐 view(재접속)로 records 가 늘어도 알림이 없다", () => {
+    const r = renderRoom(makeView({ phase: "night", records: [] }), { epoch: 1 });
+    feed(r, makeView({ phase: "morning", records: [{ n: 1, target: 2, isMafia: true }] }), { epoch: 2 });
+    expect(toastEl() === null ? "없음" : "있음").toBe("없음");
+  });
+
+  it("records 길이가 그대로면(경찰이 안 골랐다) 알림도 점도 없다", () => {
+    const r = renderRoom(makeView({ phase: "night", records: [{ n: 1, target: 1, isMafia: false }] }));
+    openSheet();
+    closeSheet();
+    feed(r, makeView({ phase: "morning", n: 2, records: [{ n: 1, target: 1, isMafia: false }] }));
+    expect(toastEl() === null ? "없음" : "있음").toBe("없음");
+    expect(dotOn() ? "점 켜짐" : "점 꺼짐").toBe("점 꺼짐");
+  });
+
+  it("경찰이 아니면 records 가 있어도(있을 수 없지만) 알림이 없다", () => {
+    const r = renderRoom(makeView({ role: "citizen", phase: "night" }));
+    const v = makeView({ role: "citizen", phase: "morning" });
+    v.me.records = [{ n: 1, target: 2, isMafia: true }];
+    feed(r, v);
+    expect(toastEl() === null ? "없음" : "있음").toBe("없음");
+  });
+});
+
+describe("머리말 버튼 간격 (03-11)", () => {
+  const css = existsSync("src/styles/phase.css") ? readFileSync("src/styles/phase.css", "utf8") : "";
+  const rule = (sel: string) => css.match(new RegExp(`(^|\\n)${sel.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*\\{([^}]*)\\}`))?.[2] ?? "";
+  it(".mf-phasebar__extra 와 .mf-day__top 에 gap var(--space-sm)", () => {
+    expect(/gap:\s*var\(--space-sm\)/.test(rule(".mf-phasebar__extra"))).toBe(true);
+    expect(/display:\s*flex/.test(rule(".mf-phasebar__extra"))).toBe(true);
+    expect(/gap:\s*var\(--space-sm\)/.test(rule(".mf-day__top"))).toBe(true);
+  });
+});
+
 describe("records.css (03-11)", () => {
   const css = existsSync("src/styles/records.css") ? readFileSync("src/styles/records.css", "utf8") : "";
   const rule = (sel: string) => css.match(new RegExp(`(^|\\n)${sel.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*\\{([^}]*)\\}`))?.[2] ?? "";
