@@ -3,6 +3,8 @@ import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import "../helpers/singleLineErrors";
 import { DayTable } from "../../src/components/DayTable";
+import { Icon } from "../../src/components/Icon";
+import type { IconName } from "../../src/components/Icon";
 import type { DayTableSeat } from "../../src/components/DayTable";
 import { daySeatLayout, px } from "../../src/game/dayTable";
 import { claimName } from "../../src/game/roleText";
@@ -250,5 +252,131 @@ describe("claimName (src/game/roleText.ts 가 단일 출처)", () => {
   it("none 은 '말 안 함', police 는 '경찰'", () => {
     expect(claimName("none")).toBe("말 안 함");
     expect(claimName("police")).toBe("경찰");
+  });
+});
+
+// ---- 02-14 Task 3: 배지·링·동료·보낸 사람 반전·머리 위 이모티콘 ----
+const seatEl = (c: HTMLElement, n: number) => c.querySelector<HTMLElement>(`.mf-dt__seat[data-seat="${n}"]`)!;
+const changedClaim = { kind: "claim", job: "mafia", changed: true, pop: false } as const;
+
+describe("DayTable: 말 바꿈 ↺ 배지 (결정 0017-3)", () => {
+  it("changed true 인 자리의 아랫줄 안에만 .mf-dt__chg[role=img][aria-label=말 바꿈] 이 있고 svg 를 담는다", () => {
+    const seats = five({ 1: { row: changedClaim }, 2: { row: { kind: "claim", job: "police", changed: false, pop: false } } });
+    const { container } = render(<DayTable seats={seats} mySeat={0} width={366} />);
+    const chg = container.querySelectorAll<HTMLElement>(".mf-dt__chg");
+    expect(chg.length).toBe(1);
+    expect(chg[0]?.getAttribute("role")).toBe("img");
+    expect(chg[0]?.getAttribute("aria-label")).toBe("말 바꿈");
+    expect(chg[0]?.querySelectorAll("svg").length).toBe(1);
+    expect(chg[0]?.closest(".mf-dt__claim")?.parentElement?.getAttribute("data-seat")).toBe("1");
+  });
+
+  it("자리 접근성 이름 끝에 ', 말 바꿈'", () => {
+    render(<DayTable seats={five({ 1: { row: changedClaim } })} mySeat={0} width={366} />);
+    expect(screen.getByRole("group", { name: "가나다라마, 직업 주장 마피아, 말 바꿈" })).toBeTruthy();
+  });
+});
+
+describe("DayTable: 왕관·링·동료·끊김·보낸 사람", () => {
+  it("방장 자리의 캐릭터 상자 안에만 .mf-dt__crown[role=img][aria-label=방장] 이 하나 있다, 방장이 없으면 없다", () => {
+    const { container } = render(<DayTable seats={five({ 2: { isHost: true } })} mySeat={0} width={366} />);
+    const crowns = container.querySelectorAll<HTMLElement>(".mf-dt__crown");
+    expect(crowns.length).toBe(1);
+    expect(crowns[0]?.getAttribute("role")).toBe("img");
+    expect(crowns[0]?.getAttribute("aria-label")).toBe("방장");
+    expect(seatEl(container, 2).contains(crowns[0] ?? null)).toBe(true);
+    cleanup();
+    const none = render(<DayTable seats={five()} mySeat={0} width={366} />);
+    expect(none.container.querySelectorAll(".mf-dt__crown").length).toBe(0);
+  });
+
+  it("내 자리 상자에만 .mf-dt__ring--me, 내 이름표에만 .mf-dt__tag--me", () => {
+    const { container } = render(<DayTable seats={five()} mySeat={0} width={366} />);
+    expect(container.querySelectorAll(".mf-dt__ring--me").length).toBe(1);
+    expect(seatEl(container, 0).querySelectorAll(".mf-dt__ring--me").length).toBe(1);
+    expect(container.querySelectorAll(".mf-dt__tag--me").length).toBe(1);
+    expect(tagEl(container, 0).classList.contains("mf-dt__tag--me")).toBe(true);
+  });
+
+  it("isAlly 자리에만 .mf-dt__ring--mate 와 aria-label 동료 표시, 아무도 동료가 아니면 없다", () => {
+    const { container } = render(<DayTable seats={five({ 3: { isAlly: true } })} mySeat={0} width={366} />);
+    expect(container.querySelectorAll(".mf-dt__ring--mate").length).toBe(1);
+    expect(seatEl(container, 3).querySelectorAll(".mf-dt__ring--mate").length).toBe(1);
+    const mark = container.querySelectorAll(".mf-dt__mark");
+    expect(mark.length).toBe(1);
+    expect(mark[0]?.getAttribute("aria-label")).toBe("동료");
+    cleanup();
+    const none = render(<DayTable seats={five()} mySeat={0} width={366} />);
+    expect(none.container.querySelectorAll(".mf-dt__ring--mate").length).toBe(0);
+    expect(none.container.querySelectorAll(".mf-dt__mark").length).toBe(0);
+  });
+
+  it("동료이면서 나인 자리는 동료 링이 우선이다 (나 링 없음)", () => {
+    const { container } = render(<DayTable seats={five({ 0: { isAlly: true } })} mySeat={0} width={366} />);
+    expect(seatEl(container, 0).querySelectorAll(".mf-dt__ring--mate").length).toBe(1);
+    expect(seatEl(container, 0).querySelectorAll(".mf-dt__ring--me").length).toBe(0);
+  });
+
+  it("끊긴 자리의 그림은 mf-figure--disconnected 이고 아랫줄(주장)은 그대로 있다", () => {
+    const seats = five({ 2: { connected: false, row: { kind: "claim", job: "citizen", changed: false, pop: false } } });
+    const { container } = render(<DayTable seats={seats} mySeat={0} width={366} />);
+    expect(seatEl(container, 2).querySelector("img")?.classList.contains("mf-figure--disconnected")).toBe(true);
+    expect(seatEl(container, 1).querySelector("img")?.classList.contains("mf-figure--disconnected")).toBe(false);
+    expect(claimEl(container, 2)?.textContent).toBe("시민");
+  });
+
+  it("spoke true 인 자리의 이름표에만 .mf-dt__tag--spoke", () => {
+    const { container } = render(<DayTable seats={five({ 4: { spoke: true } })} mySeat={0} width={366} />);
+    expect(container.querySelectorAll(".mf-dt__tag--spoke").length).toBe(1);
+    expect(tagEl(container, 4).classList.contains("mf-dt__tag--spoke")).toBe(true);
+  });
+});
+
+describe("DayTable: 머리 위 이모티콘 (결정 0017-2)", () => {
+  it("emoji 가 있는 자리에 .mf-dt__emoji[data-seat] 하나(aria-hidden, svg 하나), 좌표는 배치 결과의 emojiLeft·emojiTop, z-index 60 + z", () => {
+    const seats = five({ 1: { emoji: { key: "a", icon: "smile", z: 3 } } });
+    const { container } = render(<DayTable seats={seats} mySeat={0} width={366} />);
+    const list = container.querySelectorAll<HTMLElement>(".mf-dt__emoji");
+    expect(list.length).toBe(1);
+    const el = list[0]!;
+    const L = daySeatLayout(seats, 0, 366).find((p) => p.seat === 1)!;
+    expect(el.dataset.seat).toBe("1");
+    expect(el.getAttribute("aria-hidden")).toBe("true");
+    expect(el.querySelectorAll("svg").length).toBe(1);
+    expect(el.style.left).toBe(px(L.x - 16));
+    expect(el.style.top).toBe(px(Math.max(0, L.y - 96 * L.scale - 36)));
+    expect(el.style.zIndex).toBe("63");
+  });
+
+  it("key 가 바뀌면 다른 DOM 노드다, emoji 없는 자리에는 없다", () => {
+    const first = five({ 1: { emoji: { key: "a", icon: "smile", z: 1 } } });
+    const { container, rerender } = render(<DayTable seats={first} mySeat={0} width={366} />);
+    const before = container.querySelector(".mf-dt__emoji");
+    rerender(<DayTable seats={five({ 1: { emoji: { key: "b", icon: "smile", z: 1 } } })} mySeat={0} width={366} />);
+    const after = container.querySelector(".mf-dt__emoji");
+    expect(after === before).toBe(false);
+    rerender(<DayTable seats={five()} mySeat={0} width={366} />);
+    expect(container.querySelectorAll(".mf-dt__emoji").length).toBe(0);
+  });
+});
+
+describe("Icon 3개 추가", () => {
+  it.each(["changed", "crown", "chevronUp"])("%s 는 24×24 viewBox svg 로 그려진다", (name) => {
+    const { container } = render(<Icon name={name as IconName} />);
+    expect(container.querySelector("svg")?.getAttribute("viewBox")).toBe("0 0 24 24");
+  });
+});
+
+describe("daytable.css: 배지·이모티콘 크기", () => {
+  const css = readFileSync("src/styles/daytable.css", "utf8");
+  it(".mf-dt__emoji 는 32px 원·z-index 60·::after 꼬리 5px", () => {
+    expect(cssHas(css, /\.mf-dt__emoji\s*\{[^}]*width:\s*32px/)).toBe(true);
+    expect(cssHas(css, /\.mf-dt__emoji\s*\{[^}]*height:\s*32px/)).toBe(true);
+    expect(cssHas(css, /\.mf-dt__emoji\s*\{[^}]*z-index:\s*60/)).toBe(true);
+    expect(cssHas(css, /\.mf-dt__emoji::after\s*\{[^}]*border:\s*5px solid transparent/)).toBe(true);
+  });
+  it(".mf-dt__crown 은 22px, .mf-dt__chg 는 18px", () => {
+    expect(cssHas(css, /\.mf-dt__crown\s*\{[^}]*width:\s*22px/)).toBe(true);
+    expect(cssHas(css, /\.mf-dt__chg\s*\{[^}]*width:\s*18px/)).toBe(true);
   });
 });
