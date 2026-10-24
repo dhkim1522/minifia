@@ -59,10 +59,14 @@ describe("isAlive - 생존 판정 한 곳", () => {
 });
 
 describe("QUICK_TEMPLATES - 템플릿 표 (D-11, COMM-01)", () => {
-  it("TEMPLATE_IDS 와 같은 다섯 키이고 칸 요구가 표대로다", () => {
+  it("TEMPLATE_IDS 와 같은 여덟 키이고 칸·때가 표대로다 (D-17, 결정 0019-2)", () => {
     expect(Object.keys(QUICK_TEMPLATES).sort().join(",")).toBe([...TEMPLATE_IDS].sort().join(","));
-    const rows = TEMPLATE_IDS.map((id) => `${id}:${QUICK_TEMPLATES[id]?.target}/${QUICK_TEMPLATES[id]?.role}`).join(" ");
-    expect(rows).toBe("suspect:true/false trust:true/false claimed:true/true innocent:false/false vote:true/false");
+    expect(TEMPLATE_IDS.length).toBe(8);
+    const rows = TEMPLATE_IDS.map((id) => `${id}:${QUICK_TEMPLATES[id]?.target}/${QUICK_TEMPLATES[id]?.role}/${QUICK_TEMPLATES[id]?.when}`).join(" ");
+    expect(rows).toBe(
+      "suspect:true/false/day trust:true/false/day claimed:true/true/day innocent:false/false/day vote:true/false/day " +
+        "nightTarget:true/false/night nightAgree:false/false/night nightOther:false/false/night",
+    );
   });
 
   it("서버 한도 SERVER_MIN_SEND_GAP_MS 는 1800, 클라이언트 잠금 SEND_COOLDOWN_MS 는 2000 이고 서버 한도가 더 짧다 (G-02-2)", () => {
@@ -336,5 +340,40 @@ describe("메시지·이모티콘 합산 서버 한도 (D-14, G-02-2)", () => {
     if (!a.ok) throw new Error("setup");
     expect(outcome(emote(a.state, "p2", "smile", 10_001))).toBe("ok");
     expect(outcome(say(a.state, "p3", { template: "innocent" }, 10_001))).toBe("ok");
+  });
+});
+
+describe("밤 빠른 메시지 - 살아 있는 마피아 (D-17, 결정 0019, COMM-04)", () => {
+  /** seat 1·2 가 마피아인 5명 밤 방 */
+  const night = (overrides: Record<number, Extra> = {}): RoomState =>
+    room("night", { overrides: { 1: { role: "mafia" }, 2: { role: "mafia" }, ...overrides } });
+
+  it("마피아(seat 1)의 nightTarget 은 target 만 담은 한 줄이 된다", () => {
+    const r = say(night(), "p1", { template: "nightTarget", target: 3 }, NOW);
+    expect(outcome(r)).toBe("ok");
+    if (!r.ok) return;
+    expect(keys(r.line)).toBe("at,seat,seq,target,template");
+    expect(r.line.seat).toBe(1);
+    expect(r.line.template).toBe("nightTarget");
+    expect(r.line.target).toBe(3);
+  });
+
+  it("nightAgree·nightOther 는 칸 없이 통과하고 target 을 붙이면 BAD_MESSAGE", () => {
+    const rows = (["nightAgree", "nightOther"] as const).map((template) => {
+      const plain = outcome(say(night(), "p1", { template }, NOW));
+      const withTarget = outcome(say(night(), "p1", { template, target: 3 }, NOW));
+      return `${template}:${plain}/${withTarget}`;
+    });
+    expect(rows.join(" ")).toBe("nightAgree:ok/BAD_MESSAGE nightOther:ok/BAD_MESSAGE");
+  });
+
+  it("nightTarget 대상으로 동료 마피아(seat 2)도 된다", () => {
+    expect(outcome(say(night(), "p1", { template: "nightTarget", target: 2 }, NOW))).toBe("ok");
+  });
+
+  it("밤 emote 는 살아 있는 마피아에게 통과하고 이벤트 seat 는 1 이다", () => {
+    const r = emote(night(), "p1", "smile", NOW);
+    expect(outcome(r)).toBe("ok");
+    expect(r.ok && r.event.seat).toBe(1);
   });
 });
