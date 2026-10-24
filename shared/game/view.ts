@@ -1,6 +1,19 @@
 // 연결별 공개 뷰. 공개 항목은 허용 목록(다섯 키 객체 리터럴, alive 는 공개 정보)으로만 만든다 — Player 를 펼쳐 복사하지 않는다.
+// 관전(결정 0021): 탈락한 본인에게만 모든 실제 직업과 그 밤의 행동 대상. 살아 있는 사람에게는 어떤 키로도 싣지 않는다 —
+// 결정 0002 를 "살아 있는 사람에게는 보내지 않는다" 로 좁혀 유지. 직업 키 이름은 role 이 아니라 job 이다(누출 검사가 role 키를 me 밖에서 금지).
 // 밤 필드 받는 사람: pick 본인(생존·밤), allyPicks 생존 마피아(밤), records 경찰 본인(역할 공개 단계 전체), morning 모두(아침만).
-import type { DayView, MorningView, MyInfo, PhaseId, PreviewPlayer, PublicPlayer, RoomPreview, RoomView } from "../protocol";
+import type {
+  DayView,
+  MorningView,
+  MyInfo,
+  PhaseId,
+  PreviewPlayer,
+  PublicPlayer,
+  RoomPreview,
+  RoomView,
+  SpectatePicks,
+  SpectateSeat,
+} from "../protocol";
 import { MAX_PLAYERS, MIN_PLAYERS } from "../protocol";
 import { isAlive } from "./alive";
 import { currentClaim } from "./claim";
@@ -141,5 +154,26 @@ export function buildView(state: RoomState, playerId: string, now: number): Room
     me: myInfo,
   };
   if (DAY_PHASES.has(state.phase)) view.day = buildDay(state);
+
+  // 본인이 탈락했고 역할을 싣는 단계일 때만 키를 만든다(살아 있으면 undefined 로도 남기지 않는다).
+  if (def.revealsOwnRole && !isAlive(me)) {
+    const seats: SpectateSeat[] = [];
+    for (const p of [...state.players].sort((a, b) => a.seat - b.seat)) {
+      if (p.role !== undefined) seats.push({ seat: p.seat, job: p.role });
+    }
+    view.spectate = { seats };
+    if (state.phase === "night") {
+      // 살아 있는 각 역할이 지금 고른 대상만(탈락자의 남은 값은 제외) — 중복 없이 오름차순.
+      const picksOf = (role: "mafia" | "police" | "doctor"): number[] => {
+        const picked = new Set<number>();
+        for (const p of state.players) {
+          if (p.role === role && isAlive(p) && p.nightPick !== undefined) picked.add(p.nightPick);
+        }
+        return [...picked].sort((a, b) => a - b);
+      };
+      const picks: SpectatePicks = { mafia: picksOf("mafia"), police: picksOf("police"), doctor: picksOf("doctor") };
+      view.spectate.picks = picks;
+    }
+  }
   return view;
 }
