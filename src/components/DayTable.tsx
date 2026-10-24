@@ -2,7 +2,9 @@ import { useLayoutEffect, useRef, useState } from "react";
 import type { ReactElement } from "react";
 import type { Claim, EmojiId } from "../../shared/protocol";
 import { DAY_SCENE_H, DAY_SCENE_W, FIG_H, FIG_W, dayTableGeometry, daySeatLayout, px } from "../game/dayTable";
+import { claimName } from "../game/roleText";
 import { Figure } from "./Figure";
+import { Icon } from "./Icon";
 import "../styles/daytable.css";
 
 // 낮 화면 고정 테이블(결정 0017-1). 받은 공개 값만 그린다 — 입력에 역할 필드가 없다.
@@ -39,8 +41,26 @@ export interface DayTableProps {
   label?: string;
 }
 
+// 지금 앱의 Table seatLabel 과 같은 형식: "{닉네임}{ (나)}{, 연결 끊김}{, 선택 완료}{, 직업 주장 X}"
 function seatLabel(s: DayTableSeat): string {
-  return `${s.nickname}${s.isMe ? " (나)" : ""}${s.connected ? "" : ", 연결 끊김"}`;
+  const row = s.row?.kind === "done" ? ", 선택 완료" : s.row?.kind === "claim" ? `, 직업 주장 ${claimName(s.row.job)}` : "";
+  return `${s.nickname}${s.isMe ? " (나)" : ""}${s.connected ? "" : ", 연결 끊김"}${row}`;
+}
+
+/** 이름표 아랫줄: 고르는 중 …, 고름 ✓ 완료(반전), 주장 직업(말 안 함은 -). 직업 이름은 말줄임하지 않는다. */
+function TagRow({ row }: { row: DayTagRow }): ReactElement {
+  if (row.kind === "wait") return <span className="mf-dt__claim mf-dt__claim--wait">…</span>;
+  if (row.kind === "done") {
+    return (
+      <span className="mf-dt__claim mf-dt__claim--done">
+        <Icon name="check" size={14} />
+        완료
+      </span>
+    );
+  }
+  const none = row.job === "none";
+  const cls = `mf-dt__claim${none ? " mf-dt__claim--none" : ""}${row.pop ? " mf-dt__claim--pop" : ""}`;
+  return <span className={cls}>{none ? "-" : claimName(row.job)}</span>;
 }
 
 export function DayTable({ seats, mySeat, width, height, label = "테이블" }: DayTableProps): ReactElement {
@@ -112,6 +132,7 @@ export function DayTable({ seats, mySeat, width, height, label = "테이블" }: 
               <i className="mf-dt__dot" style={{ background: `var(--seat-${(p.seat % 8) + 1})` }} />
               <span>{s.nickname}</span>
             </span>
+            {s.row ? <TagRow row={s.row} /> : null}
           </div>
         );
       })}

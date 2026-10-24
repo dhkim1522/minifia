@@ -1,6 +1,6 @@
 import type { ReactElement } from "react";
 import type { Claim } from "../../shared/protocol";
-import { ROLE_TEXT } from "../game/roleText";
+import { claimName } from "../game/roleText";
 import "../styles/seat.css";
 
 // 이름표 아래 주장 알약. 받은 값을 그리기만 한다 — job 은 공개된 주장이지 그 사람의 실제 직업이 아니다(거짓일 수 있다).
@@ -10,10 +10,8 @@ export interface ClaimTagProps {
   changed: boolean;
 }
 
-/** 주장의 화면 이름. 공개 말풍선·접근성 이름과 같은 글자를 쓰도록 한 곳에 둔다. */
-export function claimName(job: Claim): string {
-  return job === "none" ? "말 안 함" : ROLE_TEXT[job].name;
-}
+// 주장 이름의 단일 출처는 game/roleText.ts 다. 지금 이 경로로 가져오는 화면이 컴파일되게 다시 내보내 둔다(이 파일은 02-16 이 지운다).
+export { claimName } from "../game/roleText";
 
 export function ClaimTag({ job, changed }: ClaimTagProps): ReactElement {
   return (

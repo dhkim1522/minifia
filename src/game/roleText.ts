@@ -1,6 +1,6 @@
 // 역할 이름·한 줄 설명·동료 줄 문구의 단일 출처. 구성표·배정은 shared/game/roles.ts, 화면 문구는 여기(roles.ts 주석 4행).
 import type { RoleId } from "../../shared/game/roles";
-import type { RoomView } from "../../shared/protocol";
+import type { Claim, RoomView } from "../../shared/protocol";
 
 export const ROLE_TEXT: Readonly<Record<RoleId, { name: string; desc: string }>> = {
   mafia: { name: "마피아", desc: "밤에 함께 한 명을 지목해요" },
@@ -8,6 +8,11 @@ export const ROLE_TEXT: Readonly<Record<RoleId, { name: string; desc: string }>>
   doctor: { name: "의사", desc: "밤에 한 명을 살려요" },
   citizen: { name: "시민", desc: "대화와 투표로 마피아를 찾아요" },
 };
+
+/** 주장의 화면 이름("말 안 함" 또는 역할 이름). 이름표·접근성 이름·하단 패널이 같은 글자를 쓰도록 이 한 곳에 둔다. */
+export function claimName(job: Claim): string {
+  return job === "none" ? "말 안 함" : ROLE_TEXT[job].name;
+}
 
 /** 마피아 동료 줄. 동료가 없으면 "혼자예요". */
 export function alliesText(names: readonly string[]): string {

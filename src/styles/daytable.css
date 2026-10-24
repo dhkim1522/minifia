@@ -23,12 +23,41 @@
   display: flex; flex-direction: column; align-items: center; gap: 2px;
   pointer-events: none;
 }
-.mf-dt__name {
+.mf-dt__name, .mf-dt__claim {
   position: relative; display: inline-flex; align-items: center; gap: 4px;
-  height: 22px; padding: 0 8px 0 7px; border-radius: var(--radius-pill);
+  height: 22px; padding: 0 8px; border-radius: var(--radius-pill);
   background: color-mix(in srgb, var(--night-900) 86%, transparent);
   border: 1px solid color-mix(in srgb, var(--night-600) 90%, transparent);
   font-size: 14px; line-height: 20px; font-weight: 700; color: var(--gray-50); white-space: nowrap;
 }
+.mf-dt__name { padding-left: 7px; }
 .mf-dt__dot { flex: none; width: 8px; height: 8px; border-radius: var(--radius-pill); }
 .mf-dt__tag--me .mf-dt__name { border-color: var(--gray-100); }
+
+/* 이름표 아랫줄: 윗줄과 같은 알약. 직업은 말줄임하지 않는다. */
+.mf-dt__claim { min-width: 36px; justify-content: center; }
+.mf-dt__claim--none { color: var(--gray-300); font-weight: 400; }
+/* 직업 공개 중: 고르는 중 "…", 고름 "완료"(반전 + 체크) */
+.mf-dt__claim--wait { color: var(--gray-300); font-weight: 400; letter-spacing: 1px; }
+.mf-dt__claim--done { background: var(--gray-100); color: var(--night-900); border-color: var(--gray-100); gap: 2px; padding-left: 6px; }
+.mf-dt__claim .mf-icon { stroke-width: 3; }
+/* 공개 연출: 아랫줄이 주장으로 바뀌며 팝 360ms + 흔들림 400ms(seat.css 의 기존 값). 팝은 개별 속성 scale, 흔들림은 translate 라 서로 다투지 않는다. */
+.mf-dt__claim--pop {
+  border-color: var(--gray-50);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--gray-50) 35%, transparent), 0 0 12px color-mix(in srgb, var(--gray-50) 45%, transparent);
+  animation: mf-dt-pop 360ms var(--ease-out) backwards, mf-dt-shake 400ms linear 360ms backwards;
+}
+@keyframes mf-dt-pop { 0% { opacity: 0; scale: 0.6; } 66% { opacity: 1; scale: 1.1; } 100% { opacity: 1; scale: 1; } }
+@keyframes mf-dt-shake {
+  0% { translate: 0 0; }
+  25% { translate: -3px 0; }
+  50% { translate: 3px 0; }
+  75% { translate: -2px 0; }
+  90% { translate: 2px 0; }
+  100% { translate: 0 0; }
+}
+
+/* 축소 모션: 팝·흔들림을 끈다(밝은 테두리와 빛 상태는 남는다) */
+@media (prefers-reduced-motion: reduce) {
+  .mf-dt__claim--pop { animation: none; }
+}
