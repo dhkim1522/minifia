@@ -8,11 +8,11 @@ updated: 2026-10-24T09:00:00Z
 
 ## Current Test
 
-number: 8
-name: 결정 요청 — ROADMAP 성공 기준 1 문구와 구현의 차이
+number: 7
+name: iPhone Safari·Android Chrome 에서 낮 한 바퀴 (봇 확인분 통과, 실기기 애니메이션만 남음)
 expected: |
-  2일차 이후 시간이 넘으면 어제 주장이 이어지는 동작(봇으로 확인)을 채택하고 문구를 맞출지, 구현을 바꿀지 정한다
-awaiting: user response
+  G-02-1·G-02-2 갭 닫기 뒤 새 화면으로 테스트 1~5 와 함께 실기기에서 확인한다
+awaiting: gap closure
 
 ## Tests
 
@@ -56,15 +56,16 @@ note: "봇 확인(5명·8명, 배포본): 단계 전환·이모티콘 도착 차
 ### 8. 결정 요청 — ROADMAP 성공 기준 1 문구와 구현의 차이
 expected: |
   2일차 이후 시간이 넘으면 "말 안 함" 이 아니라 어제 주장이 이어지는 동작(CONTEXT D-09, 결정 0015)을 계속 채택하고 ROADMAP SC1·REQUIREMENTS DAY-02 문구를 맞출지, 구현을 바꿀지 정한다
-result: [pending]
+result: pass
+resolution: "사용자 결정: 지금 동작(2일차부터 시간이 넘으면 어제 주장 유지) 채택. ROADMAP Phase 2 SC1, REQUIREMENTS DAY-02·CONN-02 문구를 맞춤"
 note: "봇 확인: 2일차에 고르지 않으면 어제 주장(police)이 그대로 공개되고, 이틀 다 안 고르면 none"
 
 ## Summary
 
 total: 8
-passed: 0
+passed: 1
 issues: 2
-pending: 2
+pending: 1
 skipped: 4
 blocked: 0
 
