@@ -9,18 +9,18 @@ updated: 2026-10-24T09:00:00Z
 ## Current Test
 
 number: 7
-name: iPhone Safari·Android Chrome 에서 낮 한 바퀴 (봇 확인분 통과, 실기기 애니메이션만 남음)
+name: iPhone Safari·Android Chrome 에서 낮 한 바퀴
 expected: |
-  G-02-1·G-02-2 갭 닫기(02-12~02-18) 완료 — 새 화면으로 테스트 1~5·7 을 실기기에서 다시 확인
-awaiting: human re-verification
+  두 기기 모두 같은 시각에 단계가 넘어가고 이모티콘 2초, 공개 팝·흔들림이 부드럽다 (봇 동기화 확인은 통과, 두 기종 실기기 확인만 남음)
+awaiting: user response
 
 ## Tests
 
 ### 1. 360px 폰, 8명 방에서 직업 공개와 낮 토론 화면
 expected: 이웃 자리의 완료·주장 알약이 겹치지 않고, 앞쪽 자리 3줄이 하단 패널에 가려지지 않는다
-result: issue
+result: pass
 reported: "8명이 테이블에 놓였을 때 이름, 직업, 말풍선, 알약 등의 가시성이 떨어진다. 알약도 각자 자리의 정확한 위치에 뜨는 느낌이 아니고 조금씩 어긋난다. 원형 테이블 구도를 시작 전에만 쓰거나 폐기하고, 카트라이더 로비처럼 캐릭터를 격자로 나란히 두고 칸 안에 이름·직업·방장 표시·알약·말풍선·이모티콘을 정해진 위치에 표시하자. 메시지 공간과 낮 토론 역할 UI/UX 도 다시 잡아야 할 수 있다."
-severity: major
+resolution: "갭 닫기 02-12~02-18 후 배포본, 봇 7명 + 사용자 폰 1대(8명 방)에서 사용자가 \'통과\' 확인(2026-10-24). 폰 크기·기종은 기록하지 않음"
 
 ### 2. 가장자리 자리 말풍선과 동시 전송 (실기기 확인 2)
 expected: 말풍선이 화면 밖으로 잘리지 않고(clamp), 동시에 뜨면 나중 것이 위에 보인다. 3초 뒤 사라진다
@@ -44,9 +44,9 @@ reason: "결정 0017 로 대상이 바뀜(8자 닉네임 대상 없음 — 닉�
 
 ### 6. 빠른 메시지를 2초 간격으로 연달아 전송 (결정 0016-6, 리뷰 WR-02)
 expected: 정상 간격에서 RATE_LIMITED 오탐으로 메시지가 표시 없이 사라지지 않는다
-result: issue
+result: pass
 reported: "봇 시나리오(scripts/uat-day.mjs --prod)로 확인: 보낸 순간 + 2000ms 간격(클라이언트 잠금이 풀리는 가장 이른 시각)으로 보내면 5명판 3/16, 8명판 7/28 이 RATE_LIMITED 로 거부됨. 2050·2150ms 간격은 0건. 클라이언트는 RATE_LIMITED 를 표시 없이 다시 잠그므로 메시지가 말없이 사라짐"
-severity: major
+resolution: "서버 한도 1800ms 로 수정 후 배포본 봇 시나리오에서 2000ms 간격 오탐 0/16(5명)·0/28(8명), 오케스트레이터가 재실행해 5명 0/16 재확인"
 note: "02-12(서버 한도 1800ms) 뒤 봇 재확인(배포 2026-10-24T11:54:33Z+59c3363, 2026-10-24): 5명 2000ms 오탐 0/16, 8명 0/28 (2050·2150ms 도 각 0), 받아들인 줄 모두 도착(빠진 줄 0)"
 
 ### 7. iPhone Safari·Android Chrome 에서 낮 한 바퀴
@@ -64,8 +64,8 @@ note: "봇 확인: 2일차에 고르지 않으면 어제 주장(police)이 그�
 ## Summary
 
 total: 8
-passed: 1
-issues: 2
+passed: 3
+issues: 0
 pending: 1
 skipped: 4
 blocked: 0
@@ -74,7 +74,7 @@ blocked: 0
 
 - gap_id: G-02-1
   truth: "8명 방에서 이름·직업(주장)·방장 표시·완료·말풍선·이모티콘이 자리마다 정해진 위치에 겹침 없이 읽힌다"
-  status: failed
+  status: resolved
   reason: "User reported: 가시성이 떨어지고 알약이 자리에서 조금씩 어긋난다. 시안 6차례 비교 후 테이블 유지 개선안(결정 0017)으로 확정"
   severity: major
   test: 1
@@ -95,7 +95,7 @@ blocked: 0
 
 - gap_id: G-02-2
   truth: "정상 간격(잠금이 풀린 직후)으로 보낸 빠른 메시지·이모티콘이 표시 없이 사라지지 않는다"
-  status: failed
+  status: resolved
   reason: "봇 시나리오: 2000ms 간격 전송의 약 19~25% 가 RATE_LIMITED"
   severity: major
   test: 6
