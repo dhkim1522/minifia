@@ -14,12 +14,12 @@
 2. **단계 진입 전이는 tick 루프 안의 `ON_ENTER` 표(`shared/game/tick.ts`)에서만 한다.** 알람 핸들러나 DO 에서 훅을 직접 부르지 않는다. 늦은 알람이 여러 단계를 따라잡아도 중간 훅이 순서대로 한 번씩 돈다. 3페이즈(밤·아침)·4페이즈(투표·처형)는 같은 표에 행을 더하고, 임시 루프의 `discussion.next`(`shared/game/phases.ts`) 한 줄만 `dayAnnounce` 에서 밤으로 바꾼다.
 3. **1페이즈의 종착 단계 `day` 를 `dayAnnounce` 로 이름을 바꾸고, 저장된 방은 `normalizeStoredRoom` 으로 옮긴다.** 저장된 단계가 문자열 `"day"` 일 때만 바꾸며, DO 생성자가 호출한다. 정규화가 방을 실제로 바꿨을 때만 저장하고 알람을 다시 건다.
 4. **하루 걸러 말 바꿈 규칙(RESEARCH A3).** 마감 때 공개 값이 `claimLast` 를 덮으므로, 어제 직업 R → 오늘 말 안 함 → 내일 직업 R' 는 말 바꿈이 아니다("직전 낮이 말 안 함이면 처음 주장으로 본다"). 말 안 함을 끼워 표시를 피할 수 있음을 알고 채택한다. 플레이테스트에서 이 전략이 문제로 보이면 직전 직업 주장을 따로 보관하는 방식으로 바꾼다.
-5. **연장 중복은 `ALREADY_EXTENDED`, 거부된 전송은 쿨다운을 늘리지 않는다(A1·A2).** 도배가 잠금을 연장하지 못하게 `RATE_LIMITED`·`BAD_MESSAGE` 요청은 `lastSendAt` 을 바꾸지 않는다. 연장 중복은 `WRONG_PHASE` 를 재사용하지 않고 새 코드로 두며, 클라이언트는 이 오류를 무시하고 서버 state 를 따른다.
-6. **클라이언트 쿨다운은 보낸 순간 + 2초의 단순안이다.** 서버 한도는 2000ms 이고 쿨다운은 플레이어 단위 영속 필드라 재접속으로 풀리지 않는다. 실기기에서 지터로 인한 오탐 `RATE_LIMITED` 가 보이면 서버 시각 기준으로 바꾼다(또는 서버 한도를 1800ms 로 완화).
-7. **메시지 한 줄의 키는 `seq` 이고 이모티콘은 저장·복원하지 않는다.** `id` 는 누출 검사의 금지 키라 쓰지 않고, `role` 키는 `view.me.role` 에만 있어야 하므로 직업은 `claimedRole` 로 쓴다. 이모티콘은 `emoji` 프레임으로 방송만 하고 `messages` 에 남기지 않는다. 메시지는 낮마다 최근 20개만 보관하고 `nextMessageSeq` 는 날이 바뀌어도 줄지 않는다.
+5. **연장 중복은 `ALREADY_EXTENDED`, 거부된 전송은 쿨다운을 늘리지 않는다(A1·A2).** 도배가 잠금을 연장하지 못하게 `RATE_LIMITED`·`BAD_MESSAGE` 요청은 `lastSendAt` 을 바꾸지 않는다. 연장 중복은 `WRONG_PHASE` 를 재사용하지 않고 새 코드로 두며, 클라이언트는 이 오류를 무시하고 서버 state 를 따른다. (2026-10-24 결정 0017-5 로 연장 부분을 폐기했다. ALREADY_EXTENDED 는 없다)
+6. **클라이언트 쿨다운은 보낸 순간 + 2초의 단순안이다.** 서버 한도는 2000ms 이고 쿨다운은 플레이어 단위 영속 필드라 재접속으로 풀리지 않는다. 실기기에서 지터로 인한 오탐 `RATE_LIMITED` 가 보이면 서버 시각 기준으로 바꾼다(또는 서버 한도를 1800ms 로 완화). (2026-10-24 G-02-2: 봇 시나리오에서 2000ms 간격 19~25% 오탐을 보고 서버 한도를 1800ms(`SERVER_MIN_SEND_GAP_MS`)로 줄였다. 클라이언트 잠금은 2000ms 그대로)
+7. **메시지 한 줄의 키는 `seq` 이고 이모티콘은 저장·복원하지 않는다.** `id` 는 누출 검사의 금지 키라 쓰지 않고, `role` 키는 `view.me.role` 에만 있어야 하므로 직업은 `claimedRole` 로 쓴다. 이모티콘은 `emoji` 프레임으로 방송만 하고 `messages` 에 남기지 않는다. 메시지는 낮마다 최근 20개만 보관하고 `nextMessageSeq` 는 날이 바뀌어도 줄지 않는다. (2026-10-24 결정 0017-7 로 messages 보관을 폐기했다. 메시지는 chat 이벤트로 방송만 하고 seq·키 규칙은 그대로다)
 
 ## 결과
 
 - 3·4페이즈는 `PHASE_DEFS`(단계 표, 데이터만)와 `ON_ENTER`(진입 훅 표)에 행을 더해 단계를 늘린다. 새 경로를 만들지 않는다. `selectClaim`·`say`·`emote` 에는 탈락자 거부(`isAlive`)를 3페이즈가 확정한다(지금 거부 코드는 `BAD_MESSAGE`, A4).
-- 6페이즈 플레이테스트에서 조정할 수치: 단계 시간 상수(`ASSIGNING_MS`·`ROLE_REVEAL_MS`·`DAY_ANNOUNCE_MS`·`CLAIM_MS`·`CLAIM_REVEAL_MS`·`DISCUSSION_MS`·`EXTEND_MS`)는 `shared/game/phases.ts` 한 곳, 쿨다운 `SEND_COOLDOWN_MS`·보관 개수 `MESSAGE_KEEP` 는 `shared/game/chat.ts`.
+- 6페이즈 플레이테스트에서 조정할 수치: 단계 시간 상수(`ASSIGNING_MS`·`ROLE_REVEAL_MS`·`DAY_ANNOUNCE_MS`·`CLAIM_MS`·`CLAIM_REVEAL_MS`·`DISCUSSION_MS`)는 `shared/game/phases.ts` 한 곳, 쿨다운 `SEND_COOLDOWN_MS`(클라이언트 잠금)·서버 한도 `SERVER_MIN_SEND_GAP_MS` 는 `shared/game/chat.ts`.
 - `scripts/smoke.mjs` 의 full 단계는 낮 루프(`discussion` → `dayAnnounce`)를 허용하는 전이 표로 바뀌어 배포본에서 낮 한 바퀴를 끝까지 돈다. 이후 페이즈가 단계를 더하면 이 표(`PHASE_NEXT`)도 같이 고친다.
