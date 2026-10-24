@@ -4,6 +4,7 @@ import type { ReactElement } from "react";
 // 인라인 SVG. 이모지·아이콘 폰트 대신 쓴다. 24×24 viewBox, stroke 2, round.
 // 경로는 design/design-system/components/bundle.js 의 ICONS 에서 옮겼다(share·close·check·diamond·disconnected).
 // back·copy·card·plus·skip·chat 은 참고 구현에 없어 같은 규격으로 새로 그렸다.
+// changed·crown·chevronUp 은 낮 화면 승인 시안 9차(design/screens/day-v3/R9-5.dc.html)의 경로를 그대로 옮겼다.
 export type IconName =
   | "back"
   | "share"
@@ -23,7 +24,10 @@ export type IconName =
   | "angry"
   | "sad"
   | "heart"
-  | "exclaim";
+  | "exclaim"
+  | "changed"
+  | "crown"
+  | "chevronUp";
 
 type Part = readonly [tag: "path" | "circle" | "rect", attrs: Readonly<Record<string, string | number>>];
 
@@ -96,6 +100,17 @@ const ICONS: Readonly<Record<IconName, readonly Part[]>> = {
     ["path", { d: "M12 4.5v10" }],
     ["circle", { cx: 12, cy: 19, r: 1.3, fill: "currentColor", stroke: "none" }],
   ],
+  // 말 바꿈 ↺ (시안 R9-5)
+  changed: [
+    ["path", { d: "M4 12a8 8 0 0 1 14-5.3L20 9" }],
+    ["path", { d: "M20 4v5h-5" }],
+    ["path", { d: "M20 12a8 8 0 0 1-14 5.3L4 15" }],
+    ["path", { d: "M4 20v-5h5" }],
+  ],
+  // 방장 왕관 (시안 R9-5)
+  crown: [["path", { d: "M3 8l4 4 5-7 5 7 4-4-2 11H5z" }]],
+  // 채팅 내역 크게 보기 ^ 버튼 (시안 R9-5)
+  chevronUp: [["path", { d: "M6 15l6-6 6 6" }]],
 };
 
 export interface IconProps {

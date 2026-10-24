@@ -2,7 +2,7 @@ import { useState } from "react";
 import type { ReactElement } from "react";
 import type { Claim, ClientMessage, RoomView } from "../../shared/protocol";
 import { Chip } from "./Chip";
-import { claimName } from "./ClaimTag";
+import { claimName } from "../game/roleText";
 import "../styles/chip.css";
 import "../styles/day.css";
 

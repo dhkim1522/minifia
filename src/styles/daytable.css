@@ -33,6 +33,8 @@
 .mf-dt__name { padding-left: 7px; }
 .mf-dt__dot { flex: none; width: 8px; height: 8px; border-radius: var(--radius-pill); }
 .mf-dt__tag--me .mf-dt__name { border-color: var(--gray-100); }
+/* 방금 빠른 메시지를 보낸 사람: 윗줄 반전 */
+.mf-dt__tag--spoke .mf-dt__name { background: var(--gray-100); border-color: var(--gray-100); color: var(--night-900); }
 
 /* 이름표 아랫줄: 윗줄과 같은 알약. 직업은 말줄임하지 않는다. */
 .mf-dt__claim { min-width: 36px; justify-content: center; }
@@ -57,7 +59,48 @@
   100% { translate: 0 0; }
 }
 
-/* 축소 모션: 팝·흔들림을 끈다(밝은 테두리와 빛 상태는 남는다) */
+/* 말 바꿈 배지: 주장 알약 오른쪽 위 18px 원(↺) */
+.mf-dt__chg {
+  position: absolute; right: -7px; top: -7px; width: 18px; height: 18px; border-radius: 50%;
+  background: var(--gray-50); color: var(--night-900); display: grid; place-items: center;
+  box-shadow: 0 2px 6px color-mix(in srgb, var(--shadow) 91%, transparent);
+}
+
+/* 캐릭터 상자 안: 나·동료 링, 동료 마름모, 방장 왕관 배지 */
+.mf-dt__ring {
+  position: absolute; left: 50%; bottom: -4px; width: 120%; height: 18%;
+  transform: translate(-50%, 50%); border-radius: 50%; pointer-events: none;
+}
+.mf-dt__ring--me { border: 2px solid color-mix(in srgb, var(--gray-100) 60%, transparent); }
+.mf-dt__ring--mate { border: 3px solid var(--crimson-400); }
+.mf-dt__mark { position: absolute; top: 4%; right: 8%; width: 26%; height: auto; aspect-ratio: 1; color: var(--crimson-400); pointer-events: none; }
+.mf-dt__crown {
+  position: absolute; left: -6px; top: -6px; width: 22px; height: 22px; border-radius: 50%;
+  background: var(--night-900); border: 1px solid var(--gray-300); color: var(--gray-50);
+  display: grid; place-items: center;
+}
+.mf-dt__crown .mf-icon { stroke-width: 2.2; }
+
+/* 머리 위 이모티콘: 32px 원 + 아래로 5px 꼬리. 이름표(z 20~30)보다 위. 약 2초 등장·퇴장 */
+.mf-dt__emoji {
+  position: absolute; z-index: 60; width: 32px; height: 32px; border-radius: 50%;
+  background: var(--gray-100); color: var(--night-900); display: grid; place-items: center;
+  box-shadow: 0 6px 16px color-mix(in srgb, var(--shadow) 82%, transparent); pointer-events: none;
+  animation: mf-dt-emoji 2000ms var(--ease-out) both;
+}
+.mf-dt__emoji::after {
+  content: ""; position: absolute; bottom: -5px; left: 50%; margin-left: -5px;
+  border: 5px solid transparent; border-bottom: 0; border-top-color: var(--gray-100);
+}
+@keyframes mf-dt-emoji {
+  0% { opacity: 0; transform: translateY(6px) scale(0.8); }
+  9% { opacity: 1; transform: translateY(0) scale(1); }
+  91% { opacity: 1; transform: translateY(0) scale(1); }
+  100% { opacity: 0; transform: translateY(0) scale(1); }
+}
+
+/* 축소 모션: 팝·흔들림·이모티콘 애니메이션을 끈다(밝은 테두리와 빛 상태는 남고, 이모티콘의 표시·사라짐은 상태가 맡는다) */
 @media (prefers-reduced-motion: reduce) {
   .mf-dt__claim--pop { animation: none; }
+  .mf-dt__emoji { animation: none; }
 }

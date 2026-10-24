@@ -42,8 +42,16 @@ export interface DayTableProps {
 }
 
 // 지금 앱의 Table seatLabel 과 같은 형식: "{닉네임}{ (나)}{, 연결 끊김}{, 선택 완료}{, 직업 주장 X}"
+/** 이모티콘 층 z 기준값: 이름표(최대 30)보다 위. emoji.z 가 더해진다. */
+const EMOJI_Z = 60;
+
 function seatLabel(s: DayTableSeat): string {
-  const row = s.row?.kind === "done" ? ", 선택 완료" : s.row?.kind === "claim" ? `, 직업 주장 ${claimName(s.row.job)}` : "";
+  const row =
+    s.row?.kind === "done"
+      ? ", 선택 완료"
+      : s.row?.kind === "claim"
+        ? `, 직업 주장 ${claimName(s.row.job)}${s.row.changed ? ", 말 바꿈" : ""}`
+        : "";
   return `${s.nickname}${s.isMe ? " (나)" : ""}${s.connected ? "" : ", 연결 끊김"}${row}`;
 }
 
@@ -60,7 +68,16 @@ function TagRow({ row }: { row: DayTagRow }): ReactElement {
   }
   const none = row.job === "none";
   const cls = `mf-dt__claim${none ? " mf-dt__claim--none" : ""}${row.pop ? " mf-dt__claim--pop" : ""}`;
-  return <span className={cls}>{none ? "-" : claimName(row.job)}</span>;
+  return (
+    <span className={cls}>
+      {none ? "-" : claimName(row.job)}
+      {row.changed ? (
+        <span className="mf-dt__chg" role="img" aria-label="말 바꿈">
+          <Icon name="changed" size={12} />
+        </span>
+      ) : null}
+    </span>
+  );
 }
 
 export function DayTable({ seats, mySeat, width, height, label = "테이블" }: DayTableProps): ReactElement {
@@ -114,6 +131,19 @@ export function DayTable({ seats, mySeat, width, height, label = "테이블" }: 
             }}
           >
             <Figure seat={p.seat} disconnected={!s.connected} />
+            {s.isAlly ? (
+              <>
+                <span className="mf-dt__ring mf-dt__ring--mate" />
+                <Icon name="diamond" label="동료" className="mf-dt__mark" />
+              </>
+            ) : s.isMe ? (
+              <span className="mf-dt__ring mf-dt__ring--me" />
+            ) : null}
+            {s.isHost ? (
+              <span className="mf-dt__crown" role="img" aria-label="방장">
+                <Icon name="crown" size={13} />
+              </span>
+            ) : null}
           </div>
         );
       })}
@@ -123,7 +153,7 @@ export function DayTable({ seats, mySeat, width, height, label = "테이블" }: 
         return (
           <div
             key={`t${p.seat}`}
-            className="mf-dt__tag"
+            className={`mf-dt__tag${s.isMe ? " mf-dt__tag--me" : ""}${s.spoke ? " mf-dt__tag--spoke" : ""}`}
             data-seat={p.seat}
             title={s.nickname}
             style={{ left: px(p.tagLeft), top: px(p.tagTop), zIndex: p.tagZ }}
@@ -133,6 +163,22 @@ export function DayTable({ seats, mySeat, width, height, label = "테이블" }: 
               <span>{s.nickname}</span>
             </span>
             {s.row ? <TagRow row={s.row} /> : null}
+          </div>
+        );
+      })}
+      {places.map((p) => {
+        const emoji = bySeat.get(p.seat)?.emoji;
+        if (!emoji) return null;
+        // 머리 위에는 이모티콘만 뜬다. 가로로 가두지 않고, key 가 바뀌면 새 노드라 애니메이션이 다시 시작한다.
+        return (
+          <div
+            key={`e${p.seat}:${emoji.key}`}
+            className="mf-dt__emoji"
+            data-seat={p.seat}
+            aria-hidden="true"
+            style={{ left: px(p.emojiLeft), top: px(p.emojiTop), zIndex: EMOJI_Z + emoji.z }}
+          >
+            <Icon name={emoji.icon} size={22} />
           </div>
         );
       })}
