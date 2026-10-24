@@ -1,5 +1,6 @@
 // 연결별 공개 뷰. 공개 항목은 허용 목록(다섯 키 객체 리터럴, alive 는 공개 정보)으로만 만든다 — Player 를 펼쳐 복사하지 않는다.
-import type { DayView, MyInfo, PhaseId, PreviewPlayer, PublicPlayer, RoomPreview, RoomView } from "../protocol";
+// 밤 필드 받는 사람: pick 본인(생존·밤), allyPicks 생존 마피아(밤), records 경찰 본인(역할 공개 단계 전체), morning 모두(아침만).
+import type { DayView, MorningView, MyInfo, PhaseId, PreviewPlayer, PublicPlayer, RoomPreview, RoomView } from "../protocol";
 import { MAX_PLAYERS, MIN_PLAYERS } from "../protocol";
 import { isAlive } from "./alive";
 import { currentClaim } from "./claim";
@@ -42,6 +43,16 @@ function buildDay(state: RoomState): DayView {
     day.claims = [...state.players]
       .sort((a, b) => a.seat - b.seat)
       .map((p) => ({ seat: p.seat, claim: p.claimShown ?? "none", changed: p.claimChanged ?? false }));
+  }
+  if (state.phase === "morning") {
+    // 아침 결과는 모두에게 같은 값이다. 탈락자가 있을 때만 키를 만들고, 값은 필드별로 복사한다(의사 구출·지목 없음은 둘 다 {}, D-13).
+    const morning: MorningView = {};
+    const result = state.morning;
+    if (result?.eliminated !== undefined) {
+      morning.eliminated = result.eliminated;
+      if (result.phrase !== undefined) morning.phrase = result.phrase;
+    }
+    day.morning = morning;
   }
   return day;
 }
@@ -96,6 +107,20 @@ export function buildView(state: RoomState, playerId: string, now: number): Room
   // 본인 선택은 본인에게만(D-06) — 남의 nightPick 은 어떤 키로도 싣지 않는다. 밤에 살아 있는 본인이 고른 값이 있을 때만 키를 만든다.
   if (state.phase === "night" && isAlive(me) && me.nightPick !== undefined) {
     myInfo.pick = me.nightPick;
+  }
+
+  // 동료가 고른 대상은 밤에 살아 있는 마피아에게만, 대상 seat 집합으로만(누가 골랐는지는 없다, D-07). 탈락한 마피아는 allies 만 받는다(A3).
+  if (state.phase === "night" && isAlive(me) && me.role === "mafia") {
+    const picked = new Set<number>();
+    for (const q of state.players) {
+      if (q.role === "mafia" && q.id !== me.id && isAlive(q) && q.nightPick !== undefined) picked.add(q.nightPick);
+    }
+    myInfo.allyPicks = [...picked].sort((a, b) => a - b);
+  }
+
+  // 수사 기록은 경찰 본인에게만, 역할을 싣는 모든 단계에서 탈락한 뒤에도(D-09, D-11). 세 키씩 복사한다 — isMafia 는 불리언 한 비트다.
+  if (def.revealsOwnRole && me.role === "police") {
+    myInfo.records = (me.investigations ?? []).map((r) => ({ n: r.n, target: r.target, isMafia: r.isMafia }));
   }
 
   // 내 주장은 claim 단계에서만, 본인 값만 싣는다. 본인 값도 currentClaim(직접 고른 값 → 어제 공개 값)을 거쳐서만 읽는다(D-09).

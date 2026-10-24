@@ -682,7 +682,8 @@ describe("buildView 수사 기록 (D-09·D-11)", () => {
     const citizen = seatOfRole(s, "citizen");
     const mafia = seatOfRole(s, "mafia");
     s = actAt(s, police, citizen);
-    s = advanceTo(s, "night", 1); // 아침·2일차 낮을 거쳐 2일차 밤
+    s = advanceTo(advanceTo(s, "morning", 1), "dayAnnounce", 1); // 1일차 아침을 지나 2일차 낮
+    s = advanceTo(s, "night", 1); // 2일차 밤
     s = actAt(s, police, mafia);
     s = advanceTo(s, "morning", 1);
     expect(flat(recordsOf(s, police))).toBe(
