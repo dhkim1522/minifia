@@ -5,8 +5,10 @@ import { Button } from "../components/Button";
 import { Icon } from "../components/Icon";
 import { MyRoleSheet } from "../components/MyRoleSheet";
 import { ReconnectBanner } from "../components/ReconnectBanner";
+import { RecordsButton, RecordsSheet } from "../components/RecordsSheet";
 import { morningCardText } from "../game/eliminationText";
 import { preloadRoleAssets } from "../net/assets";
+import { loadSeenCount, saveSeenCount, unseenCount } from "../net/recordsSeen";
 import { useRoomConnection } from "../net/useRoomConnection";
 import { Assigning } from "./Assigning";
 import { Day } from "./Day";
@@ -14,6 +16,7 @@ import { DayScene } from "./DayScene";
 import { Lobby } from "./Lobby";
 import { RoleReveal } from "./RoleReveal";
 import "../styles/phase.css";
+import "../styles/records.css";
 import "../styles/room.css";
 
 // gaveUp: 30초 연결 실패 뒤 [처음으로]. App 은 default 분기로 입장 정보를 지우지 않고 첫 화면으로 간다.
@@ -87,13 +90,44 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
   const [myRoleOpen, setMyRoleOpen] = useState(false);
   const [seenFront, setSeenFront] = useState(false);
   const onSeenFront = useCallback(() => setSeenFront(true), []);
+
+  // 경찰 [수사 기록] 시트: 열림·NEW 도 단계 switch 밖에서 쥔다 — 밤 → 아침 → 낮으로 바뀌어도 열린 채다(UI-SPEC N-5).
+  // seen 은 "열어서 본 기록 수". 기록 내용은 서버 view(me.records) 에서만 오고, 폰에는 이 개수만 남긴다(가정 A4).
+  const records = view?.me.records ?? [];
+  const recordsLen = records.length;
+  const [seen, setSeen] = useState(() => loadSeenCount(code));
+  const [recordsOpen, setRecordsOpen] = useState(false);
+  const [newestIsNew, setNewestIsNew] = useState(false);
+  const openRecords = () => {
+    setNewestIsNew(unseenCount(recordsLen, seen) > 0);
+    setSeen(recordsLen);
+    saveSeenCount(code, recordsLen);
+    setRecordsOpen(true);
+  };
+  const closeRecords = () => {
+    setRecordsOpen(false);
+    setNewestIsNew(false);
+  };
+  // 연 채 새 기록이 오면 NEW 는 새 맨 위 줄로 옮겨 가고 점은 켜지지 않는다(이미 본 것으로 센다).
+  useEffect(() => {
+    if (!recordsOpen || recordsLen <= seen) return;
+    setNewestIsNew(true);
+    setSeen(recordsLen);
+    saveSeenCount(code, recordsLen);
+  }, [recordsOpen, recordsLen, seen, code]);
+
   // 새 판(대기실·배정)으로 돌아가면 앞면을 본 적 없는 상태로 되돌리고 시트를 닫는다.
+  // 본 기록 수도 0 으로 되돌린다 — 같은 방 코드로 새 판이 열려도 옛 값이 남지 않는다.
   useEffect(() => {
     if (phase === "lobby" || phase === "assigning") {
       setSeenFront(false);
       setMyRoleOpen(false);
+      setRecordsOpen(false);
+      setNewestIsNew(false);
+      setSeen(0);
+      saveSeenCount(code, 0);
     }
-  }, [phase]);
+  }, [phase, code]);
 
   // 쫓겨난 이유별 화면은 App 이 고른다(오류 화면·링크 참가 화면).
   useEffect(() => {
@@ -107,6 +141,17 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
     </Button>
   );
 
+  // 경찰에게만 [수사 기록] 이 [내 역할] 왼쪽에 놓인다(낮 시작 발표부터 아침까지, 탈락한 경찰 포함). 다른 역할 화면에는 이 노드가 없다.
+  const showRecords = view?.me.role === "police";
+  const headerExtra = showRecords ? (
+    <>
+      <RecordsButton hasNew={unseenCount(recordsLen, seen) > 0} onOpen={openRecords} />
+      {myRoleButton}
+    </>
+  ) : (
+    myRoleButton
+  );
+
   return (
     <div className="mf-root mf-room">
       {view && banner !== "hidden" && <ReconnectBanner mode={banner} />}
@@ -114,6 +159,9 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
       {view && myRoleOpen ? (
         // 역할 확인에서 앞면을 본 적이 없을 때만 뒷면. 낮부터는 항상 앞면 내용이다(D-19 의 취지).
         <MyRoleSheet view={view} showBack={view.phase === "roleReveal" && !seenFront} onClose={() => setMyRoleOpen(false)} />
+      ) : null}
+      {view && showRecords && recordsOpen ? (
+        <RecordsSheet records={records} players={view.players} newestIsNew={newestIsNew} onClose={closeRecords} />
       ) : null}
       {view && (
         <p className="mf-sr-only" aria-live="polite">
@@ -190,13 +238,13 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
           <RoleReveal view={view} offset={connection.offset} myRoleButton={myRoleButton} onSeenFront={onSeenFront} />
         );
       case "dayAnnounce":
-        return <Day view={view} myRoleButton={myRoleButton} />;
+        return <Day view={view} myRoleButton={headerExtra} />;
       case "claim":
       case "claimReveal":
       case "discussion":
       case "night":
       case "morning":
-        return <DayScene view={view} connection={connection} myRoleButton={myRoleButton} />;
+        return <DayScene view={view} connection={connection} myRoleButton={headerExtra} />;
       default:
         return connecting();
     }
