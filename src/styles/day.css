@@ -4,12 +4,16 @@
 /* S-06a 보조 문구 — 제목과 같은 800ms 번짐 */
 .mf-day__sub { margin: 0; font-size: 16px; line-height: 1.5; font-weight: 400; color: var(--gray-100); word-break: keep-all; text-shadow: var(--shadow-text); animation: mf-day-title var(--dur-slow) var(--ease-out) both; }
 
-/* DayScene — 위쪽 바 flex none, 장면 flex 1 에서 4:5 테이블이 남는 높이에 맞춰 줄어듦, 패널 flex none.
+/* DayScene — 위쪽 바 flex none, 장면 flex 1 에서 고정 테이블(DayTable)이 남는 높이를 재서 배치, 패널 flex none.
    360x640 에서 세로 스크롤이 생기지 않는다(UI-SPEC 높이 계산). */
 .mf-dayscene__backdrop { flex: 1 1 0; min-height: 0; height: auto; }
 .mf-dayscene { --mf-dayscene-enter-ms: 300ms; height: 100%; display: flex; flex-direction: column; overflow: hidden; }
-.mf-dayscene__scene { flex: 1; min-height: 0; padding: 0 var(--space-md); }
-.mf-dayscene__scene .mf-table { width: auto; height: 100%; max-width: 100%; margin: 0 auto; }
+/* 장면 상자: 시안 장면 366×407(390 폰, 좌우 12px)·352×383(360 폰, 좌우 4px) — R9-5·R9-small. 가로로 자르지 않는다.
+   flex 1·min-height 0 으로 위쪽 바와 하단 패널 사이 남는 높이를 확정 높이로 갖고, DayTable 루트(100%×100%)가 그 크기를 잰다. */
+.mf-dayscene__scene { position: relative; flex: 1; min-height: 0; padding: 0 12px; }
+@media (max-width: 389px) {
+  .mf-dayscene__scene { padding: 0 4px; }
+}
 
 /* 위쪽 바·하단 패널 진입 페이드(mf-phase-enter 와 같은 키프레임 재사용) */
 .mf-dayscene__enter { animation: mf-phase-enter var(--mf-dayscene-enter-ms) var(--ease-out) both; }

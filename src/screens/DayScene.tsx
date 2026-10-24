@@ -2,20 +2,17 @@ import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import type { EmojiId, RoomView } from "../../shared/protocol";
 import { CLAIM_REVEAL_MS } from "../../shared/game/phases";
-import { SEAT_COUNT } from "../../shared/seatLayout";
 import { Backdrop } from "../components/Backdrop";
 import { ClaimPanel } from "../components/ClaimPanel";
-import { claimName } from "../components/ClaimTag";
+import { DayTable } from "../components/DayTable";
+import type { DayTableSeat, DayTagRow } from "../components/DayTable";
 import { DiscussionControls } from "../components/DiscussionControls";
 import { MessageLog } from "../components/MessageLog";
 import { PhaseBar } from "../components/PhaseBar";
-import { Table } from "../components/Table";
-import type { TableFloat, TableSeat } from "../components/Table";
 import { Timer } from "../components/Timer";
 import { Toast, useToast } from "../components/Toast";
-import { EMOJI_TEXT, messageText } from "../game/messageText";
+import { EMOJI_TEXT } from "../game/messageText";
 import { useSeatFloats } from "../net/seatFloats";
-import type { SeatFloatState } from "../net/seatFloats";
 import type { RoomConnection } from "../net/useRoomConnection";
 import "../styles/day.css";
 import "../styles/phase.css";
@@ -28,13 +25,14 @@ export interface DaySceneProps {
 }
 
 // 낮 세 단계(claim·claimReveal·discussion)가 공유하는 장면. S-06b·S-06c·S-07.
+// 세 단계는 DayTable 하나를 공유한다(결정 0017-1). 머리 위는 이모티콘만(0017-2), 완료·공개는 이름표 아랫줄(0017-6).
 // 테이블은 키가 없는 장면 상자 안에 있어 세 단계 사이에 다시 마운트되지 않는다(깜빡임·인물 재등장 없음, Pitfall 7·11).
 // 위쪽 바와 하단 패널만 단계가 든 key(bar-·panel- 접두어로 서로 겹치지 않게)라 단계마다 새 요소가 되어 한 번 페이드된다.
 // 패널 내용은 02-08(직업 공개 ClaimPanel, 아래)·02-09(낮 토론 MessageLog·DiscussionControls)가 이 section 에 넣는다.
 // 화면은 스스로 단계를 넘기지 않는다(서버 view 만 따름). 역할 문자열을 화면에 쓰지 않는다.
 export function DayScene({ view, connection, myRoleButton }: DaySceneProps) {
   const n = view.day?.n ?? 1;
-  // 낮 토론의 말풍선·이모티콘(자리별 한 번에 하나). 단계가 discussion 이 아니면 훅이 비운다.
+  // 낮 토론의 보낸 사람 반전·이모티콘(자리별 한 번에 하나). 단계가 discussion 이 아니면 훅이 비운다.
   const floats = useSeatFloats(view, connection.onEvent);
   const { toast, show: showToast } = useToast();
   // 가장 최근 이모티콘 하나를 보이지 않는 live 줄이 읽는다(UI-SPEC 접근성)
@@ -47,9 +45,9 @@ export function DayScene({ view, connection, myRoleButton }: DaySceneProps) {
     });
   }, [connection.onEvent, inDiscussion]);
 
-  // 공개 연출(말풍선 팝)은 이 화면이 직전에 claim 을 보고 있다가 claimReveal 을 받았을 때만 켠다.
-  // 서버 단계가 분리돼 있어 모든 폰이 같은 순간 시작한다. 재접속으로 claimReveal 에 바로 들어오면 켜지 않는다(알약만).
-  // 렌더 중 상태 조정(이전 단계 기억)이라 효과 없이 첫 커밋부터 말풍선이 보인다.
+  // 공개 연출(아랫줄 팝+흔들림)은 이 화면이 직전에 claim 을 보고 있다가 claimReveal 을 받았을 때만 켠다.
+  // 서버 단계가 분리돼 있어 모든 폰이 같은 순간 시작한다. 재접속으로 claimReveal 에 바로 들어오면 켜지 않는다(주장만 보인다).
+  // 렌더 중 상태 조정(이전 단계 기억)이라 효과 없이 첫 커밋부터 팝이 보인다.
   const [prevPhase, setPrevPhase] = useState(view.phase);
   const [revealing, setRevealing] = useState(false);
   if (prevPhase !== view.phase) {
@@ -65,42 +63,32 @@ export function DayScene({ view, connection, myRoleButton }: DaySceneProps) {
   const title = view.phase === "discussion" ? "낮 · 토론" : "낮 · 직업 공개";
 
   const allies = view.me.allies ?? [];
-  // 완료 알약은 서버가 보낸 claimDone 에서만 만든다 — 무엇을 골랐는지는 서버가 보내지 않는다(D-01).
+  // 아랫줄 완료는 서버가 보낸 claimDone 에서만 만든다 — 무엇을 골랐는지는 서버가 보내지 않는다(D-01).
   const claimDone = view.phase === "claim" ? (view.day?.claimDone ?? []) : [];
   // 남의 주장은 서버가 공개한 claims 에서만 그린다(claimReveal·discussion).
   const claims = view.phase === "claimReveal" || view.phase === "discussion" ? (view.day?.claims ?? []) : [];
   const nicknameOf = (seat: number): string | undefined => view.players.find((p) => p.seat === seat)?.nickname;
-  // 서버가 보낸 문장이 아니라 템플릿 ID·seat 로 화면이 만든 문장만 말풍선에 넣는다(T-02-31).
-  const discussionFloat = (f: SeatFloatState | undefined): TableFloat | null => {
-    if (view.phase !== "discussion" || f === undefined) return null;
-    return f.kind === "bubble"
-      ? { kind: "bubble", key: f.key, z: f.z, text: messageText(f.line, nicknameOf), elapsedMs: f.elapsedMs }
-      : { kind: "emoji", key: f.key, z: f.z, icon: f.icon, elapsedMs: f.elapsedMs };
+  const rowOf = (seat: number): DayTagRow | null => {
+    if (view.phase === "claim") return claimDone.includes(seat) ? { kind: "done" } : { kind: "wait" };
+    const c = claims.find((x) => x.seat === seat);
+    return c ? { kind: "claim", job: c.claim, changed: c.changed, pop: revealing && view.phase === "claimReveal" } : null;
   };
-  const seats: (TableSeat | null)[] = Array.from({ length: SEAT_COUNT }, () => null);
-  for (const p of view.players) {
-    const c = claims.find((x) => x.seat === p.seat);
-    seats[p.seat] = {
-      nickname: p.nickname,
-      connected: p.connected,
-      isHost: p.isHost,
-      isMe: p.seat === view.me.seat,
-      isAlly: allies.includes(p.seat),
-      done: claimDone.includes(p.seat),
-      claim: c ? { job: c.claim, changed: c.changed } : null,
-      float:
-        c && revealing && view.phase === "claimReveal"
-          ? {
-              kind: "reveal",
-              key: `reveal-${n}-${p.seat}`,
-              z: 0,
-              text: claimName(c.claim),
-              dim: c.claim === "none",
-              animate: true,
-            }
-          : discussionFloat(floats[p.seat]),
-    };
-  }
+  const seats: DayTableSeat[] = [...view.players]
+    .sort((x, y) => x.seat - y.seat)
+    .map((p) => {
+      const f = floats[p.seat];
+      return {
+        seat: p.seat,
+        nickname: p.nickname,
+        connected: p.connected,
+        isHost: p.isHost,
+        isMe: p.seat === view.me.seat,
+        isAlly: allies.includes(p.seat),
+        row: rowOf(p.seat),
+        spoke: f?.kind === "bubble",
+        emoji: f?.kind === "emoji" ? { key: f.key, icon: f.icon, z: f.z } : null,
+      };
+    });
 
   const endsAt = view.phaseEndsAt;
   const durationMs = view.phaseDurationMs;
@@ -119,7 +107,7 @@ export function DayScene({ view, connection, myRoleButton }: DaySceneProps) {
           <PhaseBar title={title} instruction={`${n}일차`} extra={myRoleButton} timer={timer} />
         </div>
         <div className="mf-dayscene__scene">
-          <Table seats={seats} mySeat={view.me.seat} />
+          <DayTable seats={seats} mySeat={view.me.seat} />
         </div>
         <section key={`panel-${view.phase}`} className="mf-dayscene__panel mf-dayscene__enter">
           {view.phase === "claim" || view.phase === "claimReveal" ? (

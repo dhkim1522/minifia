@@ -346,7 +346,7 @@ describe("S-06b·S-06c·S-07 한 장면 DayScene (DAY-01, UI-SPEC 장면)", () =
     expect(screen.queryAllByRole("timer").length).toBe(1);
     expect(byRole("timer").textContent).toContain("0:15");
     expect(screen.queryAllByRole("group", { name: "테이블" }).length).toBe(1);
-    expect(container.querySelectorAll(".mf-seat").length).toBe(4);
+    expect(container.querySelectorAll(".mf-dt__seat").length).toBe(4);
     expect(screen.queryAllByRole("button", { name: "내 역할" }).length).toBe(1);
     const art = container.querySelector<HTMLElement>(".mf-backdrop__art");
     expect(art?.style.backgroundImage).toContain("/backgrounds/bg_game_day.svg");
@@ -369,21 +369,21 @@ describe("S-06b·S-06c·S-07 한 장면 DayScene (DAY-01, UI-SPEC 장면)", () =
 
   it("claim → claimReveal → discussion: 테이블은 같은 노드이고 위쪽 바·하단 패널은 단계마다 새 노드다", () => {
     const r = renderRoom(claim());
-    const table = r.container.querySelector(".mf-table");
+    const table = r.container.querySelector(".mf-dt");
     const bar = r.container.querySelector(".mf-dayscene__enter");
     const panel = r.container.querySelector(".mf-dayscene__panel");
     expect(table).not.toBeNull();
     expect(bar).not.toBeNull();
     expect(panel).not.toBeNull();
     rerenderRoom(r.rerender, reveal());
-    const table2 = r.container.querySelector(".mf-table");
+    const table2 = r.container.querySelector(".mf-dt");
     const bar2 = r.container.querySelector(".mf-dayscene__enter");
     const panel2 = r.container.querySelector(".mf-dayscene__panel");
     expect(table2 === table, "claimReveal 테이블 같은 노드").toBe(true);
     expect(bar2 === bar, "claimReveal 위쪽 바 새 노드").toBe(false);
     expect(panel2 === panel, "claimReveal 패널 새 노드").toBe(false);
     rerenderRoom(r.rerender, discussion());
-    expect(r.container.querySelector(".mf-table") === table, "discussion 테이블 같은 노드").toBe(true);
+    expect(r.container.querySelector(".mf-dt") === table, "discussion 테이블 같은 노드").toBe(true);
     expect(r.container.querySelector(".mf-dayscene__enter") === bar2, "discussion 위쪽 바 새 노드").toBe(false);
     expect(r.container.querySelector(".mf-dayscene__panel") === panel2, "discussion 패널 새 노드").toBe(false);
   });
@@ -414,8 +414,8 @@ describe("S-06b·S-06c·S-07 한 장면 DayScene (DAY-01, UI-SPEC 장면)", () =
   it("마피아(allies [2])와 시민의 claim 화면은 동료 링·마름모를 뺀 나머지가 같고 역할 글자가 없다", () => {
     const strip = (html: string) =>
       html
-        .replace(/<div class="mf-seat__ring mf-seat__ring--mate"><\/div>/g, "")
-        .replace(/<svg[^>]*mf-seat__mark--mate[\s\S]*?<\/svg>/g, "");
+        .replace(/<span class="mf-dt__ring mf-dt__ring--mate"><\/span>/g, "")
+        .replace(/<svg[^>]*mf-dt__mark[\s\S]*?<\/svg>/g, "");
     const mafia = renderRoom(claim({ role: "mafia", allies: [2] })).container.innerHTML;
     cleanup();
     const citizen = renderRoom(claim({ role: "citizen" })).container.innerHTML;

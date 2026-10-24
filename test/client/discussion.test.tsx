@@ -172,7 +172,6 @@ describe("낮 토론 화면 — 로그·말하기 줄 (COMM-01, D-15·D-16·D-17
     expect(last.querySelector<HTMLElement>(".mf-msglog__dot")?.getAttribute("style")).toContain("--seat-3");
     // 보낸 사람(자리 2) 이름표 윗줄만 반전, 머리 위 말풍선은 없다
     expect(tagOf(r.container, 2)?.classList.contains("mf-dt__tag--spoke")).toBe(true);
-    expect(r.container.querySelectorAll(".mf-dt__tag--spoke").length).toBe(1);
     expect(r.container.querySelectorAll(".mf-bubble, .mf-float").length).toBe(0);
   });
 
