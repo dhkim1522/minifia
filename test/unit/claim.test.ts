@@ -7,7 +7,7 @@ import { tick } from "../../shared/game/tick";
 import type { RoleId } from "../../shared/game/roles";
 import type { Claim, PhaseId } from "../../shared/protocol";
 
-type Extra = Partial<Pick<Player, "connected" | "claimChoice" | "claimShown" | "claimLast" | "claimChanged" | "role">>;
+type Extra = Partial<Pick<Player, "connected" | "claimChoice" | "claimShown" | "claimLast" | "claimChanged" | "role" | "alive">>;
 
 function player(i: number, extra: Extra = {}): Player {
   const connected = extra.connected ?? true;
@@ -190,7 +190,7 @@ describe("claimOptions - 이번 판 선택지 (D-07)", () => {
 
 describe("selectClaim - 선택 검증 (D-03, D-10, T-02-05)", () => {
   it("claim 단계가 아니면 WRONG_PHASE (공개 연출·토론·발표·대기실 포함)", () => {
-    const phases: PhaseId[] = ["lobby", "assigning", "roleReveal", "dayAnnounce", "claimReveal", "discussion"];
+    const phases: PhaseId[] = ["lobby", "assigning", "roleReveal", "dayAnnounce", "claimReveal", "discussion", "night", "morning"];
     const got = phases.map((phase) => {
       const r = selectClaim(roomOf(4, phase), "p0", "police");
       return r.ok ? "ok" : r.error;
@@ -213,6 +213,31 @@ describe("selectClaim - 선택 검증 (D-03, D-10, T-02-05)", () => {
   it("검사 순서: 단계 → 방 소속 → 값. 단계가 틀리면 다른 검사에 앞서 WRONG_PHASE", () => {
     const r = selectClaim(roomOf(4, "discussion"), "ghost", "king" as unknown as Claim);
     expect(r.ok ? "ok" : r.error).toBe("WRONG_PHASE");
+  });
+
+  /** p0 가 탈락자인 4명판 */
+  const withDeadP0 = (phase: PhaseId): RoomState => {
+    const base = roomOf(4, phase);
+    return { ...base, players: base.players.map((p) => (p.id === "p0" ? { ...p, alive: false } : p)) };
+  };
+  const result = (r: { ok: true } | { ok: false; error: string }): string => (r.ok ? "ok" : r.error);
+
+  it("claim 단계에서 탈락자(alive false)의 selectClaim 은 BAD_MESSAGE 이고 상태는 그대로다 (ELIM-01)", () => {
+    const s = withDeadP0("claim");
+    const frozen = JSON.stringify(s);
+    expect(result(selectClaim(s, "p0", "police"))).toBe("BAD_MESSAGE");
+    expect(JSON.stringify(s)).toBe(frozen);
+  });
+
+  it("검사 순서: 단계가 틀리면 탈락자여도 WRONG_PHASE, 방에 없는 id 는 BAD_MESSAGE, 탈락자는 선택지 밖 값이어도 BAD_MESSAGE (단계 → 방 소속 → 생존 → 값)", () => {
+    const wrongPhases = (["discussion", "night", "morning"] as PhaseId[]).map((phase) => `${phase}:${result(selectClaim(withDeadP0(phase), "p0", "police"))}`);
+    expect(wrongPhases.join(" ")).toBe("discussion:WRONG_PHASE night:WRONG_PHASE morning:WRONG_PHASE");
+    expect(result(selectClaim(withDeadP0("claim"), "ghost", "police"))).toBe("BAD_MESSAGE");
+    expect(result(selectClaim(withDeadP0("claim"), "p0", "king" as unknown as Claim))).toBe("BAD_MESSAGE");
+  });
+
+  it("살아 있는 사람의 선택은 탈락자가 있어도 그대로 통과한다", () => {
+    expect(result(selectClaim(withDeadP0("claim"), "p1", "police"))).toBe("ok");
   });
 
   it("통과하면 그 사람의 claimChoice 만 바뀌고 입력은 그대로다", () => {

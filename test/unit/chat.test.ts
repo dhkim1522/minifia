@@ -129,7 +129,7 @@ describe("say - 통과한 메시지 (D-15)", () => {
 });
 
 describe("say - 단계 (D-13, 성공 기준 5)", () => {
-  it.each(["lobby", "assigning", "roleReveal", "dayAnnounce", "claim", "claimReveal"] as PhaseId[])(
+  it.each(["lobby", "assigning", "roleReveal", "dayAnnounce", "claim", "claimReveal", "morning"] as PhaseId[])(
     "%s 에서는 WRONG_PHASE",
     (phase) => {
       expect(outcome(say(room(phase), "p1", { template: "innocent" }, NOW))).toBe("WRONG_PHASE");
@@ -289,7 +289,7 @@ describe("emote - 이모티콘 (D-14, D-16, COMM-02)", () => {
     expect(outcome(emote(room("discussion"), "p1", "constructor" as EmojiId, NOW))).toBe("BAD_MESSAGE");
   });
 
-  it.each(["lobby", "dayAnnounce", "claim", "claimReveal"] as PhaseId[])("%s 에서는 WRONG_PHASE", (phase) => {
+  it.each(["lobby", "dayAnnounce", "claim", "claimReveal", "morning"] as PhaseId[])("%s 에서는 WRONG_PHASE", (phase) => {
     expect(outcome(emote(room(phase), "p1", "smile", NOW))).toBe("WRONG_PHASE");
   });
 
@@ -375,5 +375,95 @@ describe("밤 빠른 메시지 - 살아 있는 마피아 (D-17, 결정 0019, COM
     const r = emote(night(), "p1", "smile", NOW);
     expect(outcome(r)).toBe("ok");
     expect(r.ok && r.event.seat).toBe(1);
+  });
+});
+
+describe("거부 코드는 규칙 하나 - 단계 → 보낸 사람 → 템플릿·값 (ELIM-01, COMM-04, 결정 0016)", () => {
+  /** seat 1 이 탈락자(role 지정), seat 2 가 살아 있는 마피아인 방 */
+  const withDead = (phase: PhaseId, deadRole: RoleId): RoomState =>
+    room(phase, { overrides: { 1: { alive: false, role: deadRole }, 2: { role: "mafia" } } });
+  /** seat 1 이 살아 있는 비마피아, seat 2 가 마피아인 밤 방 */
+  const nightWith = (role: RoleId): RoomState => room("night", { overrides: { 1: { role }, 2: { role: "mafia" } } });
+
+  it("탈락자의 say(innocent): morning·claim → WRONG_PHASE, discussion → BAD_MESSAGE", () => {
+    const rows = (["morning", "claim", "discussion"] as PhaseId[]).map(
+      (phase) => `${phase}:${outcome(say(withDead(phase, "citizen"), "p1", { template: "innocent" }, NOW))}`,
+    );
+    expect(rows.join(" ")).toBe("morning:WRONG_PHASE claim:WRONG_PHASE discussion:BAD_MESSAGE");
+  });
+
+  it("탈락자의 emoji: morning → WRONG_PHASE, discussion → BAD_MESSAGE", () => {
+    const rows = (["morning", "discussion"] as PhaseId[]).map((phase) => `${phase}:${outcome(emote(withDead(phase, "citizen"), "p1", "smile", NOW))}`);
+    expect(rows.join(" ")).toBe("morning:WRONG_PHASE discussion:BAD_MESSAGE");
+  });
+
+  it("밤에 탈락자는 마피아였든 시민이었든 say(nightAgree)·emoji 모두 BAD_MESSAGE", () => {
+    const rows = (["mafia", "citizen"] as RoleId[]).flatMap((role) => [
+      `${role}:say:${outcome(say(withDead("night", role), "p1", { template: "nightAgree" }, NOW))}`,
+      `${role}:emoji:${outcome(emote(withDead("night", role), "p1", "smile", NOW))}`,
+    ]);
+    expect(rows.join(" ")).toBe("mafia:say:BAD_MESSAGE mafia:emoji:BAD_MESSAGE citizen:say:BAD_MESSAGE citizen:emoji:BAD_MESSAGE");
+  });
+
+  it("밤에 살아 있는 시민·경찰·의사의 say(nightAgree)·emoji 는 WRONG_PHASE", () => {
+    const rows = (["citizen", "police", "doctor"] as RoleId[]).flatMap((role) => [
+      `${role}:say:${outcome(say(nightWith(role), "p1", { template: "nightAgree" }, NOW))}`,
+      `${role}:emoji:${outcome(emote(nightWith(role), "p1", "smile", NOW))}`,
+    ]);
+    expect(rows.join(" ")).toBe(
+      "citizen:say:WRONG_PHASE citizen:emoji:WRONG_PHASE police:say:WRONG_PHASE police:emoji:WRONG_PHASE doctor:say:WRONG_PHASE doctor:emoji:WRONG_PHASE",
+    );
+  });
+
+  it("밤에 마피아가 낮 문구를 보내면 BAD_MESSAGE", () => {
+    const night = nightWith("mafia");
+    const rows = [
+      outcome(say(night, "p1", { template: "innocent" }, NOW)),
+      outcome(say(night, "p1", { template: "suspect", target: 3 }, NOW)),
+      outcome(say(night, "p1", { template: "vote", target: 3 }, NOW)),
+    ];
+    expect(rows.join(",")).toBe("BAD_MESSAGE,BAD_MESSAGE,BAD_MESSAGE");
+  });
+
+  it("낮 토론에서 생존자가 밤 문구를 보내면 BAD_MESSAGE", () => {
+    const day = room("discussion");
+    const rows = [
+      outcome(say(day, "p1", { template: "nightAgree" }, NOW)),
+      outcome(say(day, "p1", { template: "nightTarget", target: 3 }, NOW)),
+      outcome(say(day, "p1", { template: "nightOther" }, NOW)),
+    ];
+    expect(rows.join(",")).toBe("BAD_MESSAGE,BAD_MESSAGE,BAD_MESSAGE");
+  });
+
+  it("밤 nightTarget 대상이 본인·빈 자리·탈락자면 BAD_MESSAGE", () => {
+    const night = room("night", { overrides: { 1: { role: "mafia" }, 2: { role: "mafia" }, 3: { alive: false } } });
+    const rows = [1, 6, 3].map((target) => outcome(say(night, "p1", { template: "nightTarget", target }, NOW)));
+    expect(rows.join(",")).toBe("BAD_MESSAGE,BAD_MESSAGE,BAD_MESSAGE");
+  });
+
+  it("낮 토론에서 보낸 직후 같은 사람이 밤에 보내도 lastSendAt 하나를 본다: 1799ms RATE_LIMITED, 1800ms ok", () => {
+    const sent = say(room("discussion", { overrides: { 1: { role: "mafia" } } }), "p1", { template: "innocent" }, 10_000);
+    if (!sent.ok) throw new Error("setup");
+    const nightState: RoomState = { ...sent.state, phase: "night" };
+    const early = outcome(say(nightState, "p1", { template: "nightAgree" }, 10_000 + 1_799));
+    const onTime = outcome(say(nightState, "p1", { template: "nightAgree" }, 10_000 + 1_800));
+    expect(`${early},${onTime}`).toBe("RATE_LIMITED,ok");
+    expect(outcome(emote(nightState, "p1", "smile", 10_000 + 1_799))).toBe("RATE_LIMITED");
+  });
+
+  it("거부는 상태를 바꾸지 않는다(밤 거부 경로들)", () => {
+    const night = room("night", { overrides: { 1: { role: "mafia", lastSendAt: NOW }, 2: { role: "citizen" }, 3: { alive: false, role: "mafia" } } });
+    const before = JSON.stringify(night);
+    const results = [
+      outcome(say(night, "p2", { template: "nightAgree" }, NOW)), // 비마피아
+      outcome(say(night, "p3", { template: "nightAgree" }, NOW)), // 탈락자
+      outcome(say(night, "p1", { template: "innocent" }, NOW)), // 낮 문구
+      outcome(say(night, "p1", { template: "nightTarget" }, NOW + 5_000)), // 칸 없음
+      outcome(say(night, "p1", { template: "nightAgree" }, NOW + 1)), // 쿨다운
+      outcome(emote(night, "p2", "smile", NOW)),
+      outcome(emote(night, "p1", "smile", NOW + 1)),
+    ];
+    expect(results.join(",")).toBe("WRONG_PHASE,BAD_MESSAGE,BAD_MESSAGE,BAD_MESSAGE,RATE_LIMITED,WRONG_PHASE,RATE_LIMITED");
+    expect(JSON.stringify(night)).toBe(before);
   });
 });
