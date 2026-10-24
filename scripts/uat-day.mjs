@@ -1,5 +1,6 @@
 // 2페이즈 UAT 를 봇으로 대신 도는 시나리오. 봇이 방을 만들고 채워 낮 두 바퀴를 돌며 결과 표를 낸다.
-// 방장 넘기기는 없다(결정 0017-5): 1일차 토론이 서버 타이머(90초)로 끝나기를 기다려 2일차로 간다.
+// 방장 넘기기는 없다(결정 0017-5): 1일차 토론(90초)·밤(30초)·아침(5초)이 서버 타이머로 지나 2일차로 간다.
+// 이 스크립트의 봇은 밤에 행동하지 않아 탈락자가 없다 — 밤·아침은 단계 도착 차이 표에만 나온다(밤 시나리오는 uat-night.mjs).
 // 빠른 메시지는 state 가 아니라 chat 프레임으로 온다(결정 0017-7).
 //   테스트 6: 빠른 메시지를 2초 간격(2000·2050·2150ms)으로 연달아 보낼 때 RATE_LIMITED 오탐 수, 받은 줄이 모든 폰에 가는지
 //   테스트 7(일부): 단계 전환·이모티콘 도착 시각 차이(같은 PC 에서 잰 값), 이모티콘이 chat 프레임이 아니고 state 에 messages 가 없는지
@@ -152,10 +153,10 @@ async function main() {
   check(7, "이모티콘은 chat 프레임이 아니고 state 의 day 에 messages 키가 없음", !emojiAsChat && !hasMessagesKey, "");
 
   // 넘기기는 없다: 토론 90초가 서버 타이머로 끝나기를 기다려 2일차로 간다
-  console.log("서버 타이머로 토론이 끝나기를 기다림(최대 130초)");
+  console.log("서버 타이머로 토론·밤·아침이 지나 2일차가 되기를 기다림(최대 180초)");
 
   // ---- 2일차 ----
-  await waitUntil(() => clients.every((c) => firstState(c, (v) => v.phase === "claim" && v.day?.n === 2)), 130_000, "2일차 claim");
+  await waitUntil(() => clients.every((c) => firstState(c, (v) => v.phase === "claim" && v.day?.n === 2)), 180_000, "2일차 claim");
   // 1번: 다른 직업(말 바꿈 기대), 2번: 고르지 않음(어제 roles[1]), 3번: 같은 직업
   send(clients[1], { t: "claim", claim: roles[2] });
   send(clients[3], { t: "claim", claim: roles[0] });
@@ -171,7 +172,7 @@ async function main() {
 
   // 테스트 7: 단계 전환 도착 차이(1일차 dayAnnounce 부터 2일차 discussion 까지)
   await waitUntil(() => clients.every((c) => firstState(c, (v) => v.phase === "discussion" && v.day?.n === 2)), 30_000, "2일차 discussion");
-  const phases = [["dayAnnounce", 1], ["claim", 1], ["claimReveal", 1], ["discussion", 1], ["dayAnnounce", 2], ["claim", 2], ["claimReveal", 2], ["discussion", 2]];
+  const phases = [["dayAnnounce", 1], ["claim", 1], ["claimReveal", 1], ["discussion", 1], ["night", 1], ["morning", 1], ["dayAnnounce", 2], ["claim", 2], ["claimReveal", 2], ["discussion", 2]];
   const worst = [];
   for (const [ph, n] of phases) {
     const ats = clients.map((c) => firstState(c, (v) => v.phase === ph && v.day?.n === n).at);
