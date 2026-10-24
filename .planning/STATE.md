@@ -4,18 +4,18 @@ milestone: v1.0
 milestone_name: MVP
 current_phase: 02
 current_phase_name: 낮 토론
-current_plan: 17
+current_plan: 18
 status: executing
-stopped_at: Completed 02-16-PLAN.md
-last_updated: "2026-10-24T11:45:24.673Z"
+stopped_at: Completed 02-17-PLAN.md
+last_updated: "2026-10-24T11:52:32.292Z"
 last_activity: 2026-10-24
 last_activity_desc: Phase 02 execution started
-state_head: affb23b6258cd76fc9c40cbca7e0ab6cd4ac498a
+state_head: 9eec2a58e9fd8b42d76fc9fda996d76f97f7e702
 progress:
   total_phases: 6
   completed_phases: 1
   total_plans: 37
-  completed_plans: 35
+  completed_plans: 36
 ---
 
 # Project State
@@ -30,9 +30,9 @@ See: .planning/PROJECT.md (updated 2026-10-21)
 ## Current Position
 
 Phase: 02 (낮 토론) — EXECUTING
-Current Plan: 17
+Current Plan: 18
 Total Plans in Phase: 18
-Plan: 17 of 18
+Plan: 18 of 18
 Status: Ready to execute
 Last activity: 2026-10-24 — Phase 02 execution started
 
@@ -81,6 +81,7 @@ Progress: [██░░░░░░░░] 17%
 | Phase 02 P14 | 7 min | 3 tasks | 9 files |
 | Phase 02 P15 | 9min | 3 tasks | 15 files |
 | Phase 02 P16 | 20min | 3 tasks | 14 files |
+| Phase 02 P17 | 10min | 3 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -132,6 +133,9 @@ Recent decisions affecting current work:
 - [Phase 02]: [02-15] phaseDurationOf 는 단계 표 길이만 돌려주는 한 줄 함수로 남긴다 (3·4페이즈 길이 파생 한 곳)
 - [Phase 02]: [02-16] 채팅 줄·보낸 사람 반전·이모티콘은 이 폰이 discussion 중 받은 chat·emoji 이벤트로만 만든다 (복원 없음, 일차가 바뀌면 비움, 결정 0017-7)
 - [Phase 02]: [02-16] 직업 공개 아랫줄 완료는 서버 claimDone 만으로 정한다 (2일차 미리 선택돼도 직접 누르기 전엔 …, T-02-44)
+- [Phase 02]: 02-17: 하단 패널은 height 로 157 고정(최소 높이 아님), max-height 미디어 여백 줄임 삭제 — 세 단계 같은 높이
+- [Phase 02]: 02-17: 패널 안 채팅은 마지막 세 줄만 그리고 지난 줄은 ^ 버튼의 채팅 내역 모달(폰이 받은 줄만)에서 본다 — ChatLineItem 공유
+- [Phase 02]: 02-17: 직업 칩은 공용 Chip 대신 패널 전용 .mf-seg__b 한 줄 버튼(체크 배지) — 공용 Chip 은 빠른 메시지 시트 전용으로 유지
 
 ### Pending Todos
 
@@ -157,6 +161,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-24T11:45:24.443Z
-Stopped at: Completed 02-16-PLAN.md
+Last session: 2026-10-24T11:52:32.063Z
+Stopped at: Completed 02-17-PLAN.md
 Resume file: None
