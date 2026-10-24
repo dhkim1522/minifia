@@ -268,6 +268,93 @@ describe("밤 — 오류·끊김·탈락 표시", () => {
   });
 });
 
+describe("관전 (N-6, 결정 0021)", () => {
+  // 나(seat 0)는 탈락. 서버가 탈락자에게만 보낸 spectate: 0 시민·1 마피아·2 시민·3 경찰·4 의사
+  const spectate: SpectateView = {
+    seats: [
+      { seat: 0, job: "citizen" },
+      { seat: 1, job: "mafia" },
+      { seat: 2, job: "citizen" },
+      { seat: 3, job: "police" },
+      { seat: 4, job: "doctor" },
+    ],
+    picks: { mafia: [4], police: [1], doctor: [2] },
+  };
+  const dead0 = (o: ViewOpts = {}) => makeView({ role: "citizen", dead: [0], spectate, ...o });
+  const rowText = (c: HTMLElement, seat: number) => c.querySelector(`.mf-dt__tag[data-seat="${seat}"] .mf-dt__claim`)?.textContent ?? "(없음)";
+  const rowClass = (c: HTMLElement, seat: number) => c.querySelector(`.mf-dt__tag[data-seat="${seat}"] .mf-dt__claim`)?.className ?? "";
+
+  it("밤: 내 자리 유령 + '탈락', 다른 자리 아랫줄 실제 직업(--real, 마피아만 --mafia), 마피아 링·마름모, 역할별 배지, 버튼 0 개", () => {
+    const { container } = scene(dead0());
+    expect(seatEl(container, 0)!.querySelector("img")?.getAttribute("src")).toContain("/characters/ghost/");
+    expect([0, 1, 2, 3, 4].map((n) => rowText(container, n)).join("|")).toBe("탈락|마피아|시민|경찰|의사");
+    expect([1, 2, 3, 4].map((n) => (rowClass(container, n).includes("mf-dt__claim--real") ? "1" : "0")).join("")).toBe("1111");
+    expect([1, 2, 3, 4].map((n) => (rowClass(container, n).includes("mf-dt__claim--mafia") ? "1" : "0")).join("")).toBe("1000");
+    expect(seatEl(container, 1)!.querySelector(".mf-dt__ring--mate") !== null).toBe(true);
+    expect(seatEl(container, 1)!.querySelector('[role="img"][aria-label="마피아"]') !== null).toBe(true);
+    expect(seatEl(container, 4)!.querySelector('.mf-dt__pick--ally[role="img"][aria-label="마피아 지목 대상"]') !== null).toBe(true);
+    expect(seatEl(container, 1)!.querySelector('.mf-dt__pick--police[role="img"][aria-label="경찰 조사 대상"]') !== null).toBe(true);
+    expect(seatEl(container, 2)!.querySelector('.mf-dt__pick--doctor[role="img"][aria-label="의사 보호 대상"]') !== null).toBe(true);
+    expect(container.querySelectorAll(".mf-dt button").length).toBe(0);
+  });
+
+  it("밤 하단: 로그 '마피아 채팅(관전)', 첫 줄 '관전 중 · 마피아 채팅', ^ 없음, p.mf-ro, 보내기 줄·제목 없음", () => {
+    const { container } = scene(dead0());
+    const log = screen.getByRole("log", { name: "마피아 채팅(관전)" });
+    expect(log.querySelector(".mf-msglog__item")?.textContent).toBe("관전 중 · 마피아 채팅");
+    expect(screen.queryByRole("button", { name: "채팅 내역 크게 보기" }) === null).toBe(true);
+    const ro = panel(container)!.querySelector("p.mf-ro");
+    expect(ro?.textContent).toBe("탈락했어요 · 볼 수만 있어요");
+    expect(screen.queryByRole("button", { name: "빠른 메시지" }) === null).toBe(true);
+    expect(screen.queryByRole("button", { name: "이모티콘" }) === null).toBe(true);
+    expect(panel(container)!.querySelector("h2") === null).toBe(true);
+    expect(panel(container)!.querySelectorAll("button").length).toBe(0);
+  });
+
+  it("밤 중 chat 이벤트(마피아 자리 1 의 nightAgree) → 로그에 '하윤'·'동의해요'", () => {
+    const em = emitter();
+    scene(dead0(), { onEvent: em.onEvent });
+    em.emit({ t: "chat", seq: 1, seat: 1, template: "nightAgree", at: NOW });
+    const text = screen.getByRole("log", { name: "마피아 채팅(관전)" }).textContent ?? "";
+    expect(text.includes("하윤") && text.includes("동의해요")).toBe(true);
+  });
+
+  it("낮 토론: 하단 '최근 채팅' 로그(빈 상태, ^ 있음) + .mf-ro, [빠른 메시지] 없음, 이름표는 실제 직업 줄", () => {
+    const { container } = scene(dead0({ phase: "discussion", spectate: { seats: spectate.seats } }));
+    expect(within(screen.getByRole("log", { name: "최근 채팅" })).getByText("아직 메시지가 없어요") !== null).toBe(true);
+    expect(screen.getByRole("button", { name: "채팅 내역 크게 보기" }) !== null).toBe(true);
+    expect(panel(container)!.querySelector("p.mf-ro")?.textContent).toBe("탈락했어요 · 볼 수만 있어요");
+    expect(screen.queryByRole("button", { name: "빠른 메시지" }) === null).toBe(true);
+    expect([0, 1, 2, 3, 4].map((n) => rowText(container, n)).join("|")).toBe("탈락|마피아|시민|경찰|의사");
+    expect(container.querySelectorAll(".mf-dt__pick").length).toBe(0);
+  });
+
+  it("직업 공개(claim): 칩 줄이 없고 하단은 로그 + .mf-ro, 이름표에 …·완료가 없다", () => {
+    const { container } = scene(dead0({ phase: "claim", spectate: { seats: spectate.seats } }));
+    expect(container.querySelectorAll(".mf-seg__b").length).toBe(0);
+    expect(panel(container)!.querySelector("p.mf-ro") !== null).toBe(true);
+    expect(panel(container)!.querySelector('[role="log"]') !== null).toBe(true);
+    expect([0, 1, 2, 3, 4].map((n) => rowText(container, n)).join("|")).toBe("탈락|마피아|시민|경찰|의사");
+  });
+
+  it("살아 있는 경찰 화면(dead [4], spectate 없음): 자리 4 는 유령 + '탈락', 관전 클래스가 렌더 HTML 에 없다", () => {
+    const { container } = scene(makeView({ role: "police", dead: [4] }));
+    expect(seatEl(container, 4)!.querySelector("img")?.getAttribute("src")).toContain("/characters/ghost/");
+    expect(rowText(container, 4)).toBe("탈락");
+    const found = [".mf-dt__claim--real", ".mf-dt__pick--police", ".mf-dt__pick--doctor", ".mf-ro"].filter((sel) => container.querySelector(sel) !== null);
+    expect(found.join(",")).toBe("");
+  });
+
+  it("탈락했지만 spectate 가 없는 view(옛 서버): 하단은 관전 하단, 이름표는 탈락 표시만(실제 직업 줄 없음)", () => {
+    const { container } = scene(makeView({ role: "citizen", dead: [0] }));
+    expect(panel(container)!.querySelector("p.mf-ro") !== null).toBe(true);
+    expect(screen.getByRole("log", { name: "마피아 채팅(관전)" }) !== null).toBe(true);
+    expect(rowText(container, 0)).toBe("탈락");
+    expect(container.querySelectorAll(".mf-dt__claim--real").length).toBe(0);
+    expect(container.querySelectorAll(".mf-dt button").length).toBe(0);
+  });
+});
+
 describe("night.css: 선택 알약 (03-08)", () => {
   const css = readCss("src/styles/night.css");
   const rule = (sel: string) => css.match(new RegExp(`(^|\\n)${sel.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*\\{([^}]*)\\}`))?.[2] ?? "";
