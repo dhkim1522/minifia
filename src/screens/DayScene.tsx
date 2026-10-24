@@ -10,11 +10,13 @@ import { DayTable } from "../components/DayTable";
 import type { DayTableSeat, DayTagRow, SpectatorPick } from "../components/DayTable";
 import { DiscussionControls } from "../components/DiscussionControls";
 import { MessageLog } from "../components/MessageLog";
+import { MorningCard } from "../components/MorningCard";
 import { NIGHT_PANEL_TEXT, NightPanel, NoticePill, PickPill } from "../components/NightPanel";
 import { PhaseBar } from "../components/PhaseBar";
 import { ReadOnlyRow } from "../components/ReadOnlyRow";
 import { Timer } from "../components/Timer";
 import { Toast, useToast } from "../components/Toast";
+import { morningCardText } from "../game/eliminationText";
 import { EMOJI_TEXT, NIGHT_TEMPLATE_ORDER } from "../game/messageText";
 import { CHAT_PHASES, useDayChat, useSeatFloats } from "../net/seatFloats";
 import type { RoomConnection } from "../net/useRoomConnection";
@@ -72,7 +74,8 @@ export function DayScene({ view, connection, myRoleButton }: DaySceneProps) {
     return () => clearTimeout(timer);
   }, [revealing]);
   const isNight = view.phase === "night";
-  const title = isNight ? "밤" : view.phase === "discussion" ? "낮 · 토론" : "낮 · 직업 공개";
+  const isMorning = view.phase === "morning";
+  const title = isNight ? "밤" : isMorning ? "아침" : view.phase === "discussion" ? "낮 · 토론" : "낮 · 직업 공개";
 
   // 밤 대상 선택(D-01·D-06). 행위자 = 살아 있는 마피아·경찰·의사. 누를 수 있는 자리는 살아 있는 사람이다(역할별 제외는 아래).
   // 낙관적 선택: ClaimPanel 과 같이 어느 view 를 보고 있을 때 눌렀는지 함께 기억한다. 새 서버 view(다른 객체)가 오면 버려
@@ -183,7 +186,7 @@ export function DayScene({ view, connection, myRoleButton }: DaySceneProps) {
     <Backdrop layout="game" variant={isNight ? "night" : "day"} className="mf-dayscene__backdrop">
       <main className="mf-root mf-dayscene">
         <div key={`bar-${view.phase}`} className="mf-dayscene__enter">
-          <PhaseBar title={title} instruction={mafiaNight ? `${n}일차 · 함께 지목하세요` : `${n}일차`} extra={myRoleButton} timer={timer} />
+          <PhaseBar title={title} instruction={mafiaNight ? `${n}일차 · 함께 지목하세요` : isMorning ? `${n + 1}일차` : `${n}일차`} extra={myRoleButton} timer={timer} />
         </div>
         <div className="mf-dayscene__scene">
           <DayTable
@@ -194,8 +197,12 @@ export function DayScene({ view, connection, myRoleButton }: DaySceneProps) {
             {...(spectate !== undefined ? { allyMarkLabel: "마피아" } : {})}
           />
         </div>
+        {isMorning ? <MorningCard {...morningCardText(view.day?.morning, nicknameOf)} /> : null}
         <section key={`panel-${view.phase}`} className="mf-dayscene__panel mf-dayscene__enter">
-          {meDead && view.phase !== "morning" ? (
+          {isMorning ? (
+            // 아침 하단(UI-SPEC M): 살아 있는 사람·탈락자·관전자 모두 같은 제목+안내. 알약·채팅·버튼 없음.
+            <NightPanel title={NIGHT_PANEL_TEXT.morning.title} guide={NIGHT_PANEL_TEXT.morning.guide} />
+          ) : meDead ? (
             // 관전 하단(UI-SPEC N-6): 채팅 읽기 전용 + 읽기 전용 안내 줄. 보내기 줄·직업 공개 칩 줄은 그리지 않는다.
             <>
               {isNight ? (
