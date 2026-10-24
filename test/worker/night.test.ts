@@ -2,7 +2,7 @@
 // 실패 출력은 한 줄이어야 해서(TAP) 프레임 목록은 summary() 한 줄 문자열로 비교한다.
 import { describe, expect, it } from "vitest";
 import type { RoomView, RoleId, ServerMessage } from "../../shared/protocol";
-import { advanceTo, alarmOf, backdateSends, collect, nextFrame, seat, send, storedRoom } from "./helpers";
+import { advanceTo, alarmOf, backdateSends, collect, connect, forceDue, hello, nextFrame, seat, send, storedRoom } from "./helpers";
 import type { Seated, TestSocket } from "./helpers";
 
 interface Actor {
@@ -270,5 +270,139 @@ describe("낮 방송 회귀", () => {
     const said = await sendAndSettle(speaker, { t: "say", template: "innocent" }, rest);
     expect(summary(said.own)).toBe("[chat]");
     for (const x of rest) expect(summary(said.seen.get(x)!)).toBe("[chat]");
+  });
+});
+
+interface FirstNight {
+  r: Seated;
+  actors: Actor[];
+  dead: Actor;
+  mafia: [Actor, Actor];
+  police: Actor;
+  doctor: Actor;
+  /** 살아남은 시민. */
+  living: Actor;
+  alive: Actor[];
+}
+
+/** 6명 방 1일차 밤: 마피아 둘이 시민 하나를 고르고 의사가 자신을 지킨다. 아침이 되면 그 시민이 탈락해 있다. */
+async function diedFirstNight(): Promise<FirstNight> {
+  const r = await startedAtNight(6);
+  const actors = actorsOf(r);
+  const [a, b] = withRole(actors, "mafia") as [Actor, Actor];
+  const police = withRole(actors, "police")[0]!;
+  const doctor = withRole(actors, "doctor")[0]!;
+  const [dead, living] = withRole(actors, "citizen") as [Actor, Actor];
+  await pick(a, dead.seat);
+  await pick(b, dead.seat);
+  await pick(doctor, doctor.seat);
+  await pick(police, a.seat);
+  await advanceTo(r.code, allSockets(r), "morning");
+  return { r, actors, dead, mafia: [a, b], police, doctor, living, alive: actors.filter((x) => x !== dead) };
+}
+
+const stateOf = (m: ServerMessage | undefined): RoomView => (m as Extract<ServerMessage, { t: "state" }>).view;
+const hasSpectate = (sock: TestSocket): boolean => collect(sock).some((raw) => raw.includes('"spectate"'));
+
+describe("관전 (결정 0021)", () => {
+  it("탈락한 시민의 소켓만 탈락한 아침 state 부터 모든 직업(spectate.seats)을 받는다", async () => {
+    const { actors, dead, alive } = await diedFirstNight();
+
+    const morning = viewsIn(dead.sock, "morning").at(-1)!;
+    const expected = [...actors].sort((x, y) => x.seat - y.seat).map((x) => ({ seat: x.seat, job: x.role }));
+    expect(JSON.stringify(morning.spectate?.seats)).toBe(JSON.stringify(expected));
+    // 탈락 전(밤 이하)의 프레임에는 spectate 키가 없다.
+    const beforeMorning = collect(dead.sock).filter((raw) => !raw.includes('"phase":"morning"'));
+    expect(String(beforeMorning.some((raw) => raw.includes('"spectate"')))).toBe("false");
+    for (const x of alive) expect(String(hasSpectate(x.sock))).toBe("false");
+  });
+
+  it("다음 밤에 마피아·경찰의 선택 state 는 행위자 쪽과 관전자 소켓에만 가고 살아 있는 시민은 프레임을 받지 않는다", async () => {
+    const { r, dead, mafia, police, doctor, living, alive } = await diedFirstNight();
+    const [a, b] = mafia;
+    await advanceTo(r.code, allSockets(r), "night");
+
+    const mafiaPick = await sendAndSettle(a, { t: "pick", target: living.seat }, [b, dead, police, doctor, living]);
+    expect(summary(mafiaPick.own)).toBe("[state:night]");
+    expect(summary(mafiaPick.seen.get(b)!)).toBe("[state:night]");
+    expect(JSON.stringify(stateOf(mafiaPick.seen.get(b)![0]).me.allyPicks)).toBe(`[${living.seat}]`);
+    expect(summary(mafiaPick.seen.get(dead)!)).toBe("[state:night]");
+    expect(JSON.stringify(stateOf(mafiaPick.seen.get(dead)![0]).spectate?.picks?.mafia)).toBe(`[${living.seat}]`);
+    for (const x of [police, doctor, living]) expect(summary(mafiaPick.seen.get(x)!)).toBe("[]");
+
+    const policePick = await sendAndSettle(police, { t: "pick", target: a.seat }, [a, b, doctor, living, dead]);
+    expect(summary(policePick.own)).toBe("[state:night]");
+    expect(summary(policePick.seen.get(dead)!)).toBe("[state:night]");
+    expect(JSON.stringify(stateOf(policePick.seen.get(dead)![0]).spectate?.picks?.police)).toBe(`[${a.seat}]`);
+    for (const x of [a, b, doctor, living]) expect(summary(policePick.seen.get(x)!)).toBe("[]");
+    expect(alive.length).toBe(5);
+  });
+
+  it("다음 밤 마피아 say 는 마피아 둘과 관전자 소켓에만 chat 이 가고 살아 있는 비마피아는 0개다", async () => {
+    const { r, dead, mafia, police, doctor, living } = await diedFirstNight();
+    const [a, b] = mafia;
+    await advanceTo(r.code, allSockets(r), "night");
+
+    const said = await sendAndSettle(a, { t: "say", template: "nightTarget", target: living.seat }, [b, dead, police, doctor, living]);
+    expect(summary(said.own)).toBe("[chat]");
+    expect(summary(said.seen.get(b)!)).toBe("[chat]");
+    expect(summary(said.seen.get(dead)!)).toBe("[chat]");
+    for (const x of [police, doctor, living]) expect(summary(said.seen.get(x)!)).toBe("[]");
+  });
+
+  it("재접속한 탈락자의 첫 state 에 spectate 가 있다", async () => {
+    const { r, dead } = await diedFirstNight();
+    const fresh = await connect(r.code);
+    const first = await hello(fresh, dead.token);
+    expect(String(first.view.spectate?.seats.length)).toBe("6");
+  });
+});
+
+describe("탈락자 거부 (ELIM-01)", () => {
+  it("탈락자의 pick 은 BAD_MESSAGE + state, say·emoji 는 BAD_MESSAGE 뿐이고 아무 소켓에도 chat·emoji 가 가지 않는다", async () => {
+    const { r, dead, mafia, police, doctor, living } = await diedFirstNight();
+    const [a, b] = mafia;
+    await advanceTo(r.code, allSockets(r), "night");
+    const watchers = [a, b, police, doctor, living];
+
+    const picked = await sendAndSettle(dead, { t: "pick", target: living.seat }, watchers);
+    expect(summary(picked.own)).toBe("[error:BAD_MESSAGE,state:night]");
+    const said = await sendAndSettle(dead, { t: "say", template: "nightAgree" }, watchers);
+    expect(summary(said.own)).toBe("[error:BAD_MESSAGE]");
+    const emoted = await sendAndSettle(dead, { t: "emoji", icon: "smile" }, watchers);
+    expect(summary(emoted.own)).toBe("[error:BAD_MESSAGE]");
+    for (const x of watchers) {
+      expect(summary(picked.seen.get(x)!)).toBe("[]");
+      expect(summary(said.seen.get(x)!)).toBe("[]");
+      expect(summary(emoted.seen.get(x)!)).toBe("[]");
+    }
+  });
+
+  it("2일차 직업 공개 단계에서 탈락자의 claim 은 BAD_MESSAGE + state 다", async () => {
+    const { r, dead, alive } = await diedFirstNight();
+    await advanceTo(r.code, allSockets(r), "claim");
+    const rejected = await sendAndSettle(dead, { t: "claim", claim: "citizen" }, alive);
+    expect(summary(rejected.own)).toBe("[error:BAD_MESSAGE,state:claim]");
+    for (const x of alive) expect(summary(rejected.seen.get(x)!)).toBe("[]");
+  });
+});
+
+describe("마감 뒤 행동", () => {
+  it("마감 시각이 지난 뒤(알람 전) 도착한 pick 은 먼저 아침으로 넘기고 WRONG_PHASE 다", async () => {
+    const r = await startedAtNight(5);
+    const actors = actorsOf(r);
+    const police = withRole(actors, "police")[0]!;
+    const target = withRole(actors, "citizen")[0]!;
+    const others = actors.filter((x) => x !== police);
+    const marks = new Map(actors.map((x) => [x, mark(x.sock)]));
+
+    await forceDue(r.code, "phaseEndsAt");
+    send(police.sock, { t: "pick", target: target.seat });
+    await nextFrame(police.sock, (m) => m.t === "error");
+    await nextFrame(police.sock, (m) => m.t === "state");
+
+    expect(summary(await settle(police.sock, marks.get(police)!))).toBe("[state:morning,error:WRONG_PHASE,state:morning]");
+    for (const x of others) expect(summary(await settle(x.sock, marks.get(x)!))).toBe("[state:morning]");
+    expect((await storedRoom(r.code)).phase).toBe("morning");
   });
 });
