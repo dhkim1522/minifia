@@ -1,0 +1,41 @@
+/* 6차: 상단(지금 앱) + F 테이블 + 채팅 미리보기 1줄 + M 버튼 줄. 390×664, 장면 366×448. v2.css 의 .ph·.hd·.btn 를 쓴다 */
+.st { position: absolute; left: 12px; top: 0; width: 366px; height: 448px; }
+.ft { position: absolute; left: 43px; width: 280px; height: 170px; border-radius: 50%; background: linear-gradient(#f2ecdc, #e0d8c4 55%, #b9b09a); border: 2px solid #6b7180; box-shadow: 0 7px 0 #4a4f5c, 0 18px 24px rgba(0, 0, 0, 0.45); }
+.sf { position: absolute; transform-origin: 50% 100%; }
+.sf img { width: 100%; height: 100%; display: block; }
+.sf__ring { position: absolute; left: 50%; bottom: -4px; width: 120%; height: 18%; transform: translate(-50%, 50%); border-radius: 50%; border: 2px solid rgba(230, 232, 238, 0.6); }
+.sf__crown { position: absolute; left: -6px; top: -6px; width: 22px; height: 22px; border-radius: 50%; background: var(--night-900); border: 1px solid var(--gray-300); color: var(--gray-50); display: grid; place-items: center; }
+.tg { position: absolute; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.tg__n, .tg__c { position: relative; display: inline-flex; align-items: center; gap: 4px; height: 22px; padding: 0 8px; border-radius: 999px; background: rgba(14, 19, 38, 0.86); border: 1px solid rgba(42, 55, 96, 0.9); font-size: 14px; line-height: 20px; white-space: nowrap; }
+.tg__n { font-weight: 700; color: var(--gray-50); padding-left: 7px; }
+.tg__n i { flex: none; width: 8px; height: 8px; border-radius: 999px; }
+.tg__c { min-width: 36px; justify-content: center; font-weight: 700; color: var(--gray-50); }
+.tg__c--none { color: var(--gray-300); font-weight: 400; }
+/* 말 바꿈 표시: 주장 알약 오른쪽 위에 붙는 밝은 원 배지(↺). 글자 대신 */
+.tg__chg { position: absolute; right: -7px; top: -7px; width: 18px; height: 18px; border-radius: 50%; background: var(--gray-50); color: var(--night-900); display: grid; place-items: center; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5); }
+.tg--me .tg__n { border-color: var(--gray-100); }
+.tg--new .tg__n { background: var(--gray-100); color: var(--night-900); border-color: var(--gray-100); }
+.ej { position: absolute; z-index: 60; width: 32px; height: 32px; border-radius: 50%; background: var(--gray-100); color: var(--night-900); display: grid; place-items: center; box-shadow: 0 6px 16px rgba(0, 0, 0, 0.45); }
+.ej::after { content: ""; position: absolute; bottom: -5px; left: 50%; margin-left: -5px; border: 5px solid transparent; border-bottom: 0; border-top-color: var(--gray-100); }
+/* 하단: 채팅 미리보기(기존 MessageLog 모양, 1줄) + 확장 버튼, 그 아래 M 버튼 줄 */
+.bt { flex: none; background: var(--night-800); border-radius: 20px 20px 0 0; padding: 10px 16px 12px; display: flex; flex-direction: column; gap: 8px; }
+.pv { display: flex; align-items: center; gap: 8px; height: 40px; padding: 0 4px 0 16px; background: var(--night-700); border-radius: 14px; }
+.pv__line { flex: 1; min-width: 0; display: flex; gap: 8px; font-size: 14px; line-height: 1.4; color: var(--gray-100); }
+.pv__who { flex: none; display: inline-flex; align-items: center; gap: 4px; font-weight: 700; }
+.pv__who i { width: 8px; height: 8px; border-radius: 999px; }
+.pv__tx { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pv__more { flex: none; width: 44px; height: 36px; border: 0; background: transparent; color: var(--gray-100); display: grid; place-items: center; padding: 0; border-radius: 10px; }
+.bt .r .btn { flex: 1; }
+.bt .r .btn--sq { flex: none; }
+/* 채팅 내역 모달: 앱 Sheet + MessageLog 모양 그대로, 높이만 늘림 */
+.mscrim { position: absolute; inset: 0; background: rgba(10, 14, 28, 0.6); z-index: 80; }
+.msheet { position: absolute; left: 0; right: 0; bottom: 0; z-index: 90; height: 500px; display: flex; flex-direction: column; gap: 24px; padding: 24px; background: var(--night-800); border-radius: 20px 20px 0 0; box-shadow: 0 16px 40px rgba(0, 0, 0, 0.55); }
+.msheet__h { align-self: center; flex: none; width: 40px; height: 4px; margin: -8px 0; border-radius: 999px; background: var(--gray-700); }
+.msheet__t { margin: 0; font-size: 24px; line-height: 1.2; font-weight: 700; color: var(--gray-50); }
+.msheet__x { position: absolute; top: 16px; right: 16px; width: 44px; height: 44px; padding: 0; border-radius: 14px; background: var(--night-800); border: 1px solid var(--gray-700); color: var(--gray-50); display: grid; place-items: center; }
+.mlog { flex: 1; min-height: 0; list-style: none; margin: 0; padding: 8px 16px; display: flex; flex-direction: column; gap: 4px; overflow: hidden; background: var(--night-700); border-radius: 14px; }
+.mlog li { display: flex; gap: 8px; min-width: 0; font-size: 14px; line-height: 1.4; color: var(--gray-300); }
+.mlog li.latest { color: var(--gray-100); }
+.mlog .who { flex: none; display: inline-flex; align-items: center; gap: 4px; font-weight: 700; }
+.mlog .who i { width: 8px; height: 8px; border-radius: 999px; }
+.mlog .tx { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

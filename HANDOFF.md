@@ -4,6 +4,8 @@
 
 ## 현재 상태
 
+- **2페이즈 UAT 진행 중**(2026-10-24, `02-UAT.md`). 테스트 1(8명 360px)이 issue → gap **G-02-1**. 낮 화면을 Design 캔버스(https://claude.ai/artifact/P67TWk9cq6v27W4nwr7Fks, 6차 S·T·U)에서 다시 그려 **결정 0017** 로 승인: 둘러앉은 테이블 유지(장면 픽셀 좌표·인원별 반지름 표), 이름표 2줄(색깔점+이름 / 주장, 말 안 함 "-", 말 바꿈 ↺ 배지), 빠른 메시지 말풍선 제거(이모티콘만), 하단은 채팅 미리보기 1줄 + 채팅 내역 모달 + [빠른 메시지][이모티콘], 방장 연장·넘기기 제거, 채팅 서버 저장 제거, 닉네임 최대 5자. 승인본 사본 `design/screens/day-v3/SPEC.md`. 테스트 2~5 는 0017 로 대상이 바뀌어 skipped, 6·7(실기기)·8(ROADMAP SC1 문구 결정)이 남음. 직업 공개 화면·4/6/7명 배치는 아직 시안 없음 — 계획 전에 시안 먼저(코드 전에 항상 시안·승인).
+  - 수동 시험용 봇: `node scripts/bots.mjs <방코드> --prod [--count N] [--quiet]` — 방장이 방을 만들면 봇이 들어와 직업 공개·빠른 메시지·이모티콘을 보낸다. Ctrl+C 로 나가기.
 - **2페이즈(낮 토론) 실행 완료·검증 대기**(2026-10-24, 계획 02-01~02-11 모두 실행, `/gsd-verify-work 2` 전). 1페이즈는 완료·검증 통과(`01-VERIFICATION.md` passed, UAT 11/11).
   - 배포 주소: **https://minifia.dhplay.workers.dev** (Worker 이름 = 주소, 결정 0009). 최신 배포 버전 `2026-10-23T18:47:24Z+1ca2b41`(02-11 에서 재배포, 이전 `e92e932`). 코드 기준은 `main` 의 최신 커밋.
   - 배포본 스모크: `node scripts/smoke.mjs --prod --stage full`(5명)과 `--players 4` 모두 `SMOKE OK full`(낮 시작 발표 → 직업 공개 → 공개 연출 → 토론(메시지·이모티콘·연장) → 방장 넘기기 → 다음 낮; dayAnnounce 도착 편차 8ms·1ms, claimReveal 26ms·0ms). 공개 마감 전 역할·주장 문자열은 허용 경로(`view.me.role`·`view.me.claim`·`view.day.roles[]`)에만 있고 `claims` 키가 없음을 경로 단위로 확인한다. 개발 서버(`localhost`)에서는 스모크의 마지막 에셋 캐시 헤더 단언(`max-age=86400`)만 실패한다(개발 서버가 no-cache) — 낮 루프까지는 통과.
@@ -32,7 +34,7 @@
 
 ## 다음 할 일
 
-1. `/gsd-verify-work 2` — 2페이즈 검증(위 실기기 확인 항목 포함)
+1. `/gsd-verify-work 2` 이어서 — 테스트 6·7·8. 그다음 직업 공개 화면·4/6/7명 시안 → 승인 → `/gsd-plan-phase 2 --gaps`(G-02-1, 결정 0017) → 실행 → 테스트 1~5 재확인
 2. `/gsd-secure-phase 2`, `/gsd-validate-phase 2`, `/gsd-extract-learnings 2`(페이즈가 끝날 때마다). 1페이즈 몫도 남음: `/gsd-secure-phase 1`, `/gsd-validate-phase 1`
 3. `/gsd-discuss-phase 3` — 3페이즈 밤과 아침. 각 페이즈는 몰입·이펙트·액션을 기본형으로 함께 만든다(결정 0006). 3페이즈는 `discussion.next`(임시 루프)를 밤으로 바꾸고 ON_ENTER 표에 행을 더하며, 탈락자 거부(`isAlive`, 지금은 `BAD_MESSAGE`)를 확정한다(결정 0016)
 4. 디자인 아티팩트 동기화(위 목록) — 디자인 세션에서. 3페이즈 화면을 설계할 때 같이 하는 것이 효율적
