@@ -9,6 +9,7 @@
 <link rel="stylesheet" href="f4.css">
 <link rel="stylesheet" href="f5.css">
 <link rel="stylesheet" href="f6.css">
+<link rel="stylesheet" href="f8.css">
 </head>
 <body>
 <x-dc>
@@ -70,7 +71,7 @@ class Component extends DCLogic {
       const FH = o.FW * 4 / 3;
       const x = o.cx + o.rx * Math.cos(th), y = o.cy + o.ry * Math.sin(th);
       const z = Math.round(depth * 10);
-      seats.push({ fig: F[i], me: !!b.me, host: !!b.host, cls: 'sf' + (b.dead ? ' sf--off' : ''), mate: !!b.mate, sel: !!b.sel, pick: !!b.pick, pickCls: 'sf__pick sf__pick--' + (b.pick || 'me'),
+      seats.push({ fig: (b.dead ? '/_blob/c745c4be89187bf02bd11941249983c2' : F[i]), me: !!b.me, host: !!b.host, cls: 'sf' + (b.dead ? ' sf--off' : ''), mate: !!b.mate, dead: !!b.dead, sel: !!b.sel, pick: !!b.pick, pickCls: 'sf__pick sf__pick--' + (b.pick || 'me'),
         style: 'left:' + (x - o.FW / 2).toFixed(1) + 'px;top:' + (y - FH).toFixed(1) + 'px;width:' + o.FW + 'px;height:' + FH.toFixed(1) + 'px;transform:scale(' + s.toFixed(3) + ');z-index:' + z });
       tags.push({ name: b.name, claim: b.claim, chg: !!b.chg, done: !!b.done, dot: 'background:' + C[i],
         cls: 'tg' + (b.me ? ' tg--me' : '') + (b.dead ? ' tg--dead' : '') + (b.fresh ? ' tg--new' : ''),

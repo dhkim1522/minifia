@@ -1,0 +1,8 @@
+/* 탈락자 = 유령 그림으로 교체(디자인 시스템: 탈락하면 인물이 유령 하나로 바뀐다). 흐림은 연결 끊김 전용 */
+.sf--off img { filter: none; opacity: 1; object-fit: contain; }
+/* 관전(탈락자): 이름표 아랫줄에 실제 직업(점선 테두리), 밤 행동 표적 배지(직업별), 읽기 전용 줄 */
+.tg__c--real { border-style: dashed; border-color: var(--gray-300); }
+.tg__c--real.tg__c--mafia { color: #e0344b; border-color: #e0344b; }
+.sf__pick--police { background: var(--night-900); color: var(--gray-50); border: 2px solid var(--gray-50); }
+.sf__pick--doctor { background: var(--night-900); color: #6fa59a; border: 2px solid #6fa59a; margin-left: -4px; }
+.ro { display: flex; align-items: center; justify-content: center; min-height: 44px; border-radius: 14px; background: var(--night-700); color: var(--gray-300); font-size: 14px; line-height: 20px; }

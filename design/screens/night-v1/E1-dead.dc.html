@@ -2,13 +2,14 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<title>E1 탈락자</title>
+<title>E1 탈락자 관전</title>
 <script src="./support.js"></script>
 <link rel="stylesheet" href="v2.css">
 <link rel="stylesheet" href="f3.css">
 <link rel="stylesheet" href="f4.css">
 <link rel="stylesheet" href="f5.css">
 <link rel="stylesheet" href="f6.css">
+<link rel="stylesheet" href="f8.css">
 </head>
 <body>
 <x-dc>
@@ -47,9 +48,14 @@ body{margin:0}
     </div>
   </div>
   <div class="bt">
-    <h2 class="ct">탈락했어요</h2>
-    <p class="gd">남은 진행을 지켜볼 수 있어요. 메시지는 보낼 수 없고, 다른 사람의 직업은 게임이 끝나야 볼 수 있어요</p>
-    
+    <div class="lg">
+      <ol role="log" aria-label="마피아 채팅">
+        <li class="sys"><span class="tx">관전 중 · 마피아 채팅</span></li>
+        <li><span class="who"><i style="background:#8e7ab8"></i>가나다라마</span><span class="tx">서연 지목해요</span></li>
+        <li class="latest"><span class="who"><i style="background:#8e7ab8"></i>가나다라마</span><span class="tx">동의해요</span></li>
+      </ol>
+    </div>
+    <div class="ro">탈락했어요 · 볼 수만 있어요</div>
   </div>
   
 </div>
@@ -59,7 +65,7 @@ class Component extends DCLogic {
   renderVals() {
     const F = ["/_blob/3aa695b4c0db99eea9f6335a79c9a166", "/_blob/e6e038c578e0c85f8b8c147f830ac93f", "/_blob/52576e650f45690da60943f32d96eb06", "/_blob/970ae6ce6e86178f0300fd105909b763", "/_blob/c65cd6c77ba97e966113a9b5c097bccb", "/_blob/ce7ade166113b9ac82822228a2481802", "/_blob/0bc9e0edacd6459706b339d7541a4e3e", "/_blob/b8db2f4c3ab5ffcf6356c05c63ee28cd"];
     const C = ['#7a8fb8','#8e7ab8','#6fa59a','#b89a6f','#6f8fa8','#9aa86f','#b87a5c','#a9aebb'];
-    const base = [{"name": "동현", "claim": "탈락", "none": true, "host": true, "me": true, "dead": true}, {"name": "가나다라마", "claim": "마피아", "chg": true}, {"name": "지호", "claim": "시민"}, {"name": "하늘", "claim": "경찰"}, {"name": "서연", "claim": "의사"}];
+    const base = [{"name": "동현", "claim": "탈락", "none": true, "host": true, "me": true, "dead": true}, {"name": "가나다라마", "claim": "마피아", "real": true, "mafia": true, "pick": "police", "mate": true}, {"name": "지호", "claim": "시민", "real": true, "pick": "doctor"}, {"name": "하늘", "claim": "경찰", "real": true}, {"name": "서연", "claim": "의사", "real": true, "pick": "ally"}];
     // 좌표 검사(이름표 14px 고정, 캐릭터·이웃 이름표·화면 끝 겹침 0) 결과. 장면 366×407
     const o = {"cx": 183, "W": 366, "rx": 132, "ry": 100, "cy": 210, "FW": 72, "k0": 0.8, "felt": [280, 108, 150]};
     const n = base.length, seats = [], tags = [], emos = [];
@@ -70,7 +76,7 @@ class Component extends DCLogic {
       const FH = o.FW * 4 / 3;
       const x = o.cx + o.rx * Math.cos(th), y = o.cy + o.ry * Math.sin(th);
       const z = Math.round(depth * 10);
-      seats.push({ fig: F[i], me: !!b.me, host: !!b.host, cls: 'sf' + (b.dead ? ' sf--off' : ''), mate: !!b.mate, sel: !!b.sel, pick: !!b.pick, pickCls: 'sf__pick sf__pick--' + (b.pick || 'me'),
+      seats.push({ fig: (b.dead ? '/_blob/c745c4be89187bf02bd11941249983c2' : F[i]), me: !!b.me, host: !!b.host, cls: 'sf' + (b.dead ? ' sf--off' : ''), mate: !!b.mate, dead: !!b.dead, sel: !!b.sel, pick: !!b.pick, pickCls: 'sf__pick sf__pick--' + (b.pick || 'me'),
         style: 'left:' + (x - o.FW / 2).toFixed(1) + 'px;top:' + (y - FH).toFixed(1) + 'px;width:' + o.FW + 'px;height:' + FH.toFixed(1) + 'px;transform:scale(' + s.toFixed(3) + ');z-index:' + z });
       tags.push({ name: b.name, claim: b.claim, chg: !!b.chg, done: !!b.done, dot: 'background:' + C[i],
         cls: 'tg' + (b.me ? ' tg--me' : '') + (b.dead ? ' tg--dead' : '') + (b.fresh ? ' tg--new' : ''),
