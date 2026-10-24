@@ -2,7 +2,7 @@
 // 모든 함수는 새 객체를 돌려주고 입력을 바꾸지 않는다. DOM·workerd 전용 API 를 쓰지 않는다(앱·워커 두 tsconfig 에 모두 들어감).
 import { validateNickname } from "../nickname";
 import { MAX_PLAYERS, MIN_PLAYERS } from "../protocol";
-import type { ChatLine, Claim, PhaseId } from "../protocol";
+import type { Claim, PhaseId } from "../protocol";
 import { ASSIGNING_MS, DAY_ANNOUNCE_MS } from "./phases";
 import { assignRoles } from "./roles";
 import type { RoleId } from "./roles";
@@ -50,10 +50,6 @@ export interface RoomState {
   phaseEndsAt: number | null;
   /** 일차(1부터). dayAnnounce 진입 때 tick 의 진입 훅이 올린다. 없으면 아직 낮이 시작되지 않았다. 뷰에는 DayView.n 으로 실린다. */
   day?: number;
-  /** 이번 낮 연장(D-18)을 이미 썼는지. 낮 시작 발표에서 false 로 돌아간다. 없으면 false. */
-  extendUsed?: boolean;
-  /** 이번 낮 토론 메시지, 최근 20개(D-15). 낮 시작 발표에서 비운다. 없으면 빈 목록. discussion 뷰에만 실린다. */
-  messages?: ChatLine[];
   /** 방 수명 동안 줄지 않는 다음 메시지 번호 — 날이 바뀌어도 줄지 않아 클라이언트가 새 줄을 번호로 가린다. 없으면 1. */
   nextMessageSeq?: number;
   hostId: string;

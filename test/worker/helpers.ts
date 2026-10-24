@@ -2,7 +2,7 @@
 import { env, exports } from "cloudflare:workers";
 import { evictDurableObject, runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
 import { expect } from "vitest";
-import type { ChatLine, CreateRoomResponse, PhaseId, ServerMessage } from "../../shared/protocol";
+import type { CreateRoomResponse, PhaseId, ServerMessage } from "../../shared/protocol";
 
 export interface TestSocket {
   ws: WebSocket;
@@ -178,8 +178,6 @@ export interface StoredRoom {
   phase: string;
   phaseEndsAt: number | null;
   day?: number;
-  messages?: ChatLine[];
-  extendUsed?: boolean;
   players: Array<{ role?: string; claimChoice?: string; lastSendAt?: number }>;
 }
 
