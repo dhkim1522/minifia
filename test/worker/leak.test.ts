@@ -131,7 +131,7 @@ describe("6명 한 판 전수 누출 검사", () => {
         }
         if (msg.t !== "state") continue;
         for (const pl of msg.view.players) {
-          expect(Object.keys(pl).sort()).toEqual(["connected", "isHost", "nickname", "seat"]);
+          expect(Object.keys(pl).sort()).toEqual(["alive", "connected", "isHost", "nickname", "seat"]);
         }
         if (msg.view.phase === "lobby" || msg.view.phase === "assigning") {
           expect(msg.view.me.role).toBeUndefined();

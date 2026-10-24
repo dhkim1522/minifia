@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { say } from "../../shared/game/chat";
 import type { SayInput } from "../../shared/game/chat";
 import { claimOptions, currentClaim, selectClaim } from "../../shared/game/claim";
+import { pickTarget } from "../../shared/game/night";
 import { MORNING_MS, NIGHT_MS } from "../../shared/game/phases";
 import { ROOM_TTL_MS, attachConnection, createRoomState, joinRoom, startGame } from "../../shared/game/room";
 import type { Player, RoomState } from "../../shared/game/room";
@@ -63,7 +64,13 @@ function stateAt(phase: PhaseId, n: number, seed: number): RoomState {
   if (phase === "claim") return claim;
   const claimReveal = tick(claim, revealAt + 15_000 + 2_000 + 15_000);
   if (phase === "claimReveal") return claimReveal;
-  return tick(claimReveal, revealAt + 15_000 + 2_000 + 15_000 + 2_000);
+  const discussion = tick(claimReveal, revealAt + 15_000 + 2_000 + 15_000 + 2_000);
+  if (phase === "discussion") return discussion;
+  // 밤은 토론 마감, 아침은 밤 마감(판정에 난수가 필요할 수 있어 시드 난수를 넘긴다).
+  const discussionEndsAt = revealAt + 15_000 + 2_000 + 15_000 + 2_000 + 90_000;
+  const night = tick(discussion, discussionEndsAt);
+  if (phase === "night") return night;
+  return tick(night, discussionEndsAt + NIGHT_MS, seededRandInt(seed));
 }
 
 /** 뷰를 깊이 훑어 모든 키 경로를 모은다. 배열 원소는 `[]` 로 접는다. */
@@ -121,6 +128,19 @@ function pick(state: RoomState, seat: number, claim: Claim): RoomState {
   if (!r.ok) throw new Error(`selectClaim failed: ${r.error}`);
   return r.state;
 }
+
+/** 실제 전이(pickTarget)로 밤 행동 한 번을 더한다. */
+function actAt(state: RoomState, seat: number, target: number): RoomState {
+  const r = pickTarget(state, seatId(state, seat), target);
+  if (!r.ok) throw new Error(`pickTarget failed: ${r.error}`);
+  return r.state;
+}
+
+const seatOfRole = (state: RoomState, role: string, nth = 0): number => {
+  const p = state.players.filter((q) => q.role === role).sort((a, b) => a.seat - b.seat)[nth];
+  if (!p) throw new Error(`no ${role} #${nth}`);
+  return p.seat;
+};
 
 /** 실제 전이(say)로 메시지 한 줄을 더한다. */
 function speak(state: RoomState, seat: number, input: SayInput, now: number): RoomState {
@@ -454,5 +474,51 @@ describe("buildView 낮 뷰 — 공개 뒤·토론 (D-04, D-06, D-08, D-15, D-18
     expect(buildView(s, s.hostId, START_AT).phaseDurationMs).toBe(90_000);
     expect(buildView(old, s.hostId, START_AT).phaseDurationMs).toBe(90_000);
     expect(buildView(stateAt("claim", 4, 1), s.hostId, START_AT).phaseDurationMs).toBe(15000);
+  });
+});
+
+describe("buildView 밤 — 생존·본인 선택 (ELIM-01, D-06)", () => {
+  it("night view: day 의 키는 claims,n,roles 이고 players[] 키는 alive,connected,isHost,nickname,seat, 모두 alive true", () => {
+    const s = stateAt("night", 5, 1);
+    const dayKeys = s.players.map((p) => Object.keys(buildView(s, p.id, START_AT).day ?? {}).sort().join(","));
+    expect(`[${dayKeys.join(" ")}]`).toBe("[claims,n,roles claims,n,roles claims,n,roles claims,n,roles claims,n,roles]");
+    const got = s.players.map((p) => {
+      const v = buildView(s, p.id, START_AT);
+      return v.players.map((e) => `${Object.keys(e).sort().join(",")}:${String(e.alive)}`).join("|");
+    });
+    const one = Array(5).fill("alive,connected,isHost,nickname,seat:true").join("|");
+    expect(got.join(" ")).toBe(Array(5).fill(one).join(" "));
+  });
+
+  it("5명 판 경찰이 seat X 를 고른 뒤: 경찰 view 의 me.pick === X, 다른 네 사람 view 의 me 에는 pick 키가 없다", () => {
+    let s = stateAt("night", 5, 1);
+    const police = seatOfRole(s, "police");
+    const x = police === 0 ? 1 : 0;
+    s = actAt(s, police, x);
+    const got = s.players.map((p) => {
+      const me = buildView(s, p.id, START_AT).me;
+      return `${p.seat}:${"pick" in me ? String(me.pick) : "-"}`;
+    });
+    expect(got.join(" ")).toBe(s.players.map((p) => `${p.seat}:${p.seat === police ? x : "-"}`).join(" "));
+  });
+
+  it("탈락자(아침 뒤 상태)는 모든 viewer 의 players[] 에서 alive false 다", () => {
+    let s = stateAt("night", 5, 1);
+    const victim = seatOfRole(s, "citizen");
+    s = actAt(s, seatOfRole(s, "mafia"), victim);
+    s = tick(s, DISCUSSION_ENDS_AT + NIGHT_MS, seededRandInt(1));
+    expect(s.phase).toBe("morning");
+    const got = s.players.map((p) => {
+      const v = buildView(s, p.id, START_AT);
+      return v.players.map((e) => `${e.seat}:${String(e.alive)}`).join(",");
+    });
+    const want = s.players.map((q) => q.seat).map((seat) => `${seat}:${String(seat !== victim)}`).join(",");
+    expect(got.join(" ")).toBe(Array(5).fill(want).join(" "));
+  });
+
+  it("lobby view 의 players[] 도 alive 키가 있다(true)", () => {
+    const s = stateAt("lobby", 4, 1);
+    const got = buildView(s, s.hostId, START_AT).players.map((e) => String(e.alive));
+    expect(got.join(",")).toBe("true,true,true,true");
   });
 });

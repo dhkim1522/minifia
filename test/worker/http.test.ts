@@ -112,8 +112,8 @@ describe("GET /api/rooms/{code}/ws", () => {
     expect(msg.view.code).toBe(code);
     expect(msg.view.phase).toBe("lobby");
     expect(msg.view.phaseEndsAt).toBeNull();
-    expect(msg.view.players).toEqual([{ seat: 0, nickname: "민수", connected: true, isHost: true }]);
-    expect(Object.keys(msg.view.players[0]!).sort()).toEqual(["connected", "isHost", "nickname", "seat"]);
+    expect(msg.view.players).toEqual([{ seat: 0, nickname: "민수", connected: true, isHost: true, alive: true }]);
+    expect(Object.keys(msg.view.players[0]!).sort()).toEqual(["alive", "connected", "isHost", "nickname", "seat"]);
     expect(msg.view.me).toEqual({ seat: 0, isHost: true });
     sock.ws.close();
   });
