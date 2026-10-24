@@ -1,0 +1,16 @@
+/* 밤·아침 하단 패널(03-08). 시안 night-v1/f6.css 의 .pk 를 토큰 변수로 옮겼다(UI-SPEC "시안 값 → 토큰 대응표"). 색 값은 변수만 쓴다.
+   제목·안내는 직업 공개 패널의 .mf-claimpanel__title/__guide 를 그대로 쓴다. */
+
+/* 제목 + 안내 + 알약 세로 쌓기 — 직업 공개 패널(.mf-claimpanel)과 같은 간격 */
+.mf-nightpanel { display: flex; flex-direction: column; gap: var(--space-sm); }
+
+/* 선택 알약(시안 .pk): 높이 min 44·좌우 16·모서리 14·night-700·14px/20px gray-100·안 간격 8 */
+.mf-pk {
+  display: flex; align-items: center; gap: var(--space-sm); min-height: var(--tap-min); margin: 0; padding: 0 var(--space-md);
+  border-radius: var(--radius-md); background: var(--night-700); font-size: 14px; line-height: 20px; color: var(--gray-100);
+}
+/* 이름은 굵게 gray-50, 앞에 자리 색 점 8px(오른쪽 4) */
+.mf-pk b { display: inline-flex; align-items: center; font-weight: 700; color: var(--gray-50); }
+.mf-pk__dot { display: inline-block; flex: none; width: 8px; height: 8px; margin-right: var(--space-xs); border-radius: var(--radius-pill); }
+/* 선택 전·행동 없음 */
+.mf-pk--empty { color: var(--gray-300); }
