@@ -36,7 +36,7 @@
 .mf-phasebar__text { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .mf-phasebar .mf-t-heading { text-shadow: var(--shadow-text); }
 .mf-phasebar__do { margin: 0; font-size: 14px; line-height: 1.4; font-weight: 400; color: var(--gray-300); word-break: keep-all; }
-.mf-phasebar__extra { flex: none; }
+.mf-phasebar__extra { flex: none; display: flex; gap: var(--space-sm); }
 
 /* S-05 역할 확인 — 대기 장면 위 어두운 막, 테이블 없음. 남는 높이를 카드 영역이 쓰고 카드는 52dvh 를 넘지 않는다. */
 .mf-reveal__backdrop { flex: 1 1 0; min-height: 0; height: auto; }
@@ -76,7 +76,7 @@
 .mf-day { position: relative; height: 100%; display: flex; flex-direction: column; overflow: hidden; }
 .mf-day__morning { position: absolute; inset: 0; background: radial-gradient(70% 55% at 50% 38%, var(--morning) 0%, transparent 100%); opacity: 1; animation: mf-day-morning var(--dur-slow) var(--ease-out) both; pointer-events: none; }
 @keyframes mf-day-morning { from { opacity: 0; } to { opacity: 1; } }
-.mf-day__top { position: relative; flex: none; display: flex; justify-content: flex-end; padding: var(--space-md); }
+.mf-day__top { position: relative; flex: none; display: flex; justify-content: flex-end; gap: var(--space-sm); padding: var(--space-md); }
 .mf-day__center { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-sm); padding: 0 var(--space-lg) var(--space-3xl); text-align: center; }
 .mf-day__count { text-shadow: var(--shadow-text); }
 .mf-day__title { text-shadow: var(--shadow-text); animation: mf-day-title var(--dur-slow) var(--ease-out) both; }

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import type { EmojiId, RoomView } from "../../shared/protocol";
 import { isAlive } from "../../shared/game/alive";
@@ -13,6 +13,7 @@ import { MessageLog } from "../components/MessageLog";
 import { MorningCard } from "../components/MorningCard";
 import { NIGHT_PANEL_TEXT, NightPanel, NoticePill, PickPill } from "../components/NightPanel";
 import { PhaseBar } from "../components/PhaseBar";
+import { RecordsToast } from "../components/RecordsToast";
 import { ReadOnlyRow } from "../components/ReadOnlyRow";
 import { Timer } from "../components/Timer";
 import { Toast, useToast } from "../components/Toast";
@@ -47,6 +48,17 @@ export function DayScene({ view, connection, myRoleButton }: DaySceneProps) {
   // 채팅 줄은 이 폰이 그날 받은 chat 이벤트에서만 만든다(서버 뷰에 메시지가 없다, 결정 0017-7)
   const chatLines = useDayChat(view, connection.onEvent);
   const { toast, show: showToast } = useToast();
+  // 밤이 끝나 새 수사 기록이 생길 때만 2초 알림(경찰 전용, D-10). 처음 마운트·재접속(epoch 가 바뀜)·길이 불변에는 알리지 않는다(UI-SPEC N-5).
+  const recordsToast = useToast(2000);
+  const showRecordsToast = recordsToast.show;
+  const isPolice = view.me.role === "police";
+  const recordsLen = view.me.records?.length ?? 0;
+  const prevRecords = useRef({ epoch: connection.epoch, len: recordsLen });
+  useEffect(() => {
+    const prev = prevRecords.current;
+    prevRecords.current = { epoch: connection.epoch, len: recordsLen };
+    if (isPolice && prev.epoch === connection.epoch && recordsLen > prev.len) showRecordsToast("수사 기록이 추가됐어요");
+  }, [connection.epoch, recordsLen, isPolice, showRecordsToast]);
   // 가장 최근 이모티콘 하나를 보이지 않는 live 줄이 읽는다(UI-SPEC 접근성)
   const [lastEmoji, setLastEmoji] = useState<{ seat: number; icon: EmojiId } | null>(null);
   // 채팅·이모티콘을 받는 단계(낮 토론·밤). 밤 이벤트는 서버가 살아 있는 마피아에게만 보낸다.
@@ -254,6 +266,7 @@ export function DayScene({ view, connection, myRoleButton }: DaySceneProps) {
           </p>
         ) : null}
         <Toast toast={toast} placement="top" />
+        <RecordsToast toast={recordsToast.toast} />
       </main>
     </Backdrop>
   );
