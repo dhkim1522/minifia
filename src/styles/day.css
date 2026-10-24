@@ -82,12 +82,11 @@
   display: flex; flex-direction: column; gap: var(--space-xs); background: var(--night-700); border-radius: var(--radius-md);
 }
 
+/* 말하기 줄(시안 9차 .r): [빠른 메시지] 가 남은 폭 전부, [이모티콘] 은 44×44 정사각(compact 높이 --tap-min). 방장 줄은 없다(결정 0017-5·0017-6). */
 .mf-discuss { display: flex; flex-direction: column; gap: var(--space-sm); }
-.mf-discuss__host { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-sm); }
-.mf-discuss__host .mf-btn { min-width: 0; padding: 0 var(--space-sm); }
 .mf-discuss__talk { display: flex; gap: var(--space-sm); }
 .mf-discuss__quick { flex: 1; min-width: 0; }
-.mf-discuss__emoji { flex: none; width: var(--control-button); padding: 0; }
+.mf-discuss__emoji { flex: none; width: var(--tap-min); height: var(--tap-min); padding: 0; }
 
 /* 낮 화면 토스트(연장·오류)는 위쪽 바 아래에 둔다 — 1페이즈 기본(--space-lg)은 타이머를 가린다(UI-SPEC 토스트 위치) */
 .mf-dayscene .mf-toast--top { top: calc(var(--space-3xl) * 2 + env(safe-area-inset-top)); }

@@ -17,7 +17,8 @@ export interface DiscussionControlsProps {
   showToast: (text: string) => void;
 }
 
-// 낮 토론 하단 패널의 조작 줄(S-07). 시트 열림 상태는 이 부품이 쥔다 — 단계가 바뀌어 패널이 언마운트되면
+// 낮 토론 하단 패널의 조작 줄(S-07, 시안 R9-5): [빠른 메시지](주 버튼, 남은 폭) [이모티콘](44×44 아이콘만) 한 줄뿐이다(결정 0017-6).
+// 시트 열림 상태는 이 부품이 쥔다 — 단계가 바뀌어 패널이 언마운트되면
 // 열려 있던 시트도 같이 닫히고 고른 내용은 버려진다(D-19, 1페이즈 [내 역할] 시트와 반대 규칙, Pitfall 11).
 // 보내는 것은 템플릿 ID·seat·직업뿐이다. 판정(쿨다운·방장·단계)은 서버가 하고 여기는 편의일 뿐이다.
 //
@@ -71,20 +72,15 @@ export function DiscussionControls({ view, connection, showToast }: DiscussionCo
   return (
     <div className="mf-discuss">
       <div className="mf-discuss__talk">
-        <Button
-          variant="primary"
-          className="mf-discuss__quick"
-          icon={<Icon name="chat" />}
-          disabled={blocked}
-          onClick={() => setSheet("quick")}
-        >
+        <Button variant="primary" compact className="mf-discuss__quick" disabled={blocked} onClick={() => setSheet("quick")}>
           빠른 메시지
         </Button>
         <Button
           variant="secondary"
+          compact
           className="mf-discuss__emoji"
           aria-label="이모티콘"
-          icon={<Icon name="smile" />}
+          icon={<Icon name="smile" size={22} />}
           disabled={blocked}
           onClick={() => setSheet("emoji")}
         />
