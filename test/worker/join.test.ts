@@ -36,8 +36,8 @@ describe("POST /api/rooms/{code}/join", () => {
 
     const state = await nextState(host);
     expect(state.view.players).toEqual([
-      { seat: 0, nickname: "방장", connected: true, isHost: true },
-      { seat: 1, nickname: "철수", connected: false, isHost: false },
+      { seat: 0, nickname: "방장", connected: true, isHost: true, alive: true },
+      { seat: 1, nickname: "철수", connected: false, isHost: false, alive: true },
     ]);
     // 방장 프레임에 새 참가자의 토큰이 없다.
     expect(host.frames.join("\n")).not.toContain(body.token);

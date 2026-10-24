@@ -298,7 +298,7 @@ describe("buildView 전수 누출 검사 (T-01-23)", () => {
             }
             for (const entry of view.players) {
               const keys = Object.keys(entry).sort().join(",");
-              if (keys !== "connected,isHost,nickname,seat") violations.push(`${tag}: players[] keys ${keys}`);
+              if (keys !== "alive,connected,isHost,nickname,seat") violations.push(`${tag}: players[] keys ${keys}`);
             }
             // 서버 전용 필드 이름은 어느 경로에도 없다
             for (const path of keyPaths(view)) {

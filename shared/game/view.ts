@@ -1,6 +1,7 @@
-// 연결별 공개 뷰. 공개 항목은 허용 목록(네 키 객체 리터럴)으로만 만든다 — Player 를 펼쳐 복사하지 않는다.
+// 연결별 공개 뷰. 공개 항목은 허용 목록(다섯 키 객체 리터럴, alive 는 공개 정보)으로만 만든다 — Player 를 펼쳐 복사하지 않는다.
 import type { DayView, MyInfo, PhaseId, PreviewPlayer, PublicPlayer, RoomPreview, RoomView } from "../protocol";
 import { MAX_PLAYERS, MIN_PLAYERS } from "../protocol";
+import { isAlive } from "./alive";
 import { currentClaim } from "./claim";
 import { phaseDurationOf } from "./discussion";
 import { PHASE_DEFS } from "./phases";
@@ -8,8 +9,15 @@ import { rolesInPlay } from "./roles";
 import { hostOf } from "./room";
 import type { RoomState } from "./room";
 
-/** view.day 가 생기는 단계. 이 밖의 단계 뷰에는 day 키 자체가 없다(D-07). */
-const DAY_PHASES: ReadonlySet<PhaseId> = new Set(["dayAnnounce", "claim", "claimReveal", "discussion"]);
+/** view.day 가 생기는 단계: 낮 네 단계와 밤·아침. 이 밖의 단계 뷰에는 day 키 자체가 없다(D-07). */
+const DAY_PHASES: ReadonlySet<PhaseId> = new Set([
+  "dayAnnounce",
+  "claim",
+  "claimReveal",
+  "discussion",
+  "night",
+  "morning",
+]);
 
 /**
  * 낮 정보. 단계 조건부 허용 목록 리터럴로만 만든다 — 조건을 채울 때만 키를 만들고, 서버 전용 필드(Player 의 선택·직전 공개 값)는
@@ -24,7 +32,12 @@ function buildDay(state: RoomState): DayView {
       .map((p) => p.seat)
       .sort((a, b) => a - b);
   }
-  if (state.phase === "claimReveal" || state.phase === "discussion") {
+  if (
+    state.phase === "claimReveal" ||
+    state.phase === "discussion" ||
+    state.phase === "night" ||
+    state.phase === "morning"
+  ) {
     // 공개 뒤에는 모두에게 같은 값이 간다. 값은 공개 필드(claimShown·claimChanged)만 읽고, 옛 플레이어는 기본값을 쥔다(D-04, D-06, D-08).
     day.claims = [...state.players]
       .sort((a, b) => a.seat - b.seat)
@@ -63,6 +76,7 @@ export function buildView(state: RoomState, playerId: string, now: number): Room
       nickname: p.nickname,
       connected: p.connected,
       isHost: p.id === state.hostId,
+      alive: isAlive(p), // 탈락 여부는 공개 정보다(ELIM-01)
     }));
 
   // 내 정보도 허용 목록으로만 만든다. role·allies 는 조건을 채울 때만 키 자체를 만든다(undefined 로 남기지 않는다).
@@ -77,6 +91,11 @@ export function buildView(state: RoomState, playerId: string, now: number): Room
         .map((p) => p.seat)
         .sort((a, b) => a - b);
     }
+  }
+
+  // 본인 선택은 본인에게만(D-06) — 남의 nightPick 은 어떤 키로도 싣지 않는다. 밤에 살아 있는 본인이 고른 값이 있을 때만 키를 만든다.
+  if (state.phase === "night" && isAlive(me) && me.nightPick !== undefined) {
+    myInfo.pick = me.nightPick;
   }
 
   // 내 주장은 claim 단계에서만, 본인 값만 싣는다. 본인 값도 currentClaim(직접 고른 값 → 어제 공개 값)을 거쳐서만 읽는다(D-09).
