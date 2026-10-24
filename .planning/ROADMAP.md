@@ -156,7 +156,35 @@ Plans:
   3. 모두가 일찍 골라도 밤은 30초가 다 지나야 끝난다.
   4. 아침 5초 동안 모든 화면에 탈락자 이름 또는 "아무 일도 없었습니다"가 나온다. 탈락한 사람은 선택 화면 대신 "탈락" 화면과 공개된 진행만 본다.
 
-**Plans**: TBD
+**Plans:** 12 plans (결정 0018·0019·0021 승인 시안 `design/screens/night-v1/` 기준)
+
+Plans:
+**Wave 1**
+- [ ] 03-01-PLAN.md — 트레이서: 단계 night 30초·morning 5초와 낮 토론 → 밤 → 아침 → 다음 낮 루프(tick 난수 주입), 3페이즈 와이어 타입(pick·alive·pick/allyPicks/records·morning·spectate), 방 화면 라우팅·밤 안내, 기존 회귀 이전 (TDD, wave 1)
+- [ ] 03-02-PLAN.md — 고정 테이블 밤 확장: 캐릭터 직접 탭 버튼·내 선택 링/배지, 유령 그림 탈락 표시, 관전 실제 직업 줄, 역할별 표적 배지 (TDD, wave 1)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+- [ ] 03-03-PLAN.md — 밤 판정 규칙 night.ts: pickTarget 검사 순서, 다수·동률 무작위·고른 표만(A2)·의사 보호·경찰 기록·동시 해결(A1)·문구 번호 연속 반복 없음, 받는 사람(행위자·관전자) (TDD, wave 2)
+- [ ] 03-04-PLAN.md — 밤 채팅·탈락자 거부 규칙: 생존 마피아만 밤 문구 3개, 밤 비마피아 WRONG_PHASE, 탈락자 BAD_MESSAGE(직업 공개 포함), 화면 문장 표 (TDD, wave 2)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+- [ ] 03-05-PLAN.md — 플레이어별 밤·아침 뷰: players[].alive, me.pick·allyPicks·records, day.morning, 탈락자 전용 spectate, 아홉 단계 전수 누출 검사 (TDD, wave 3)
+- [ ] 03-06-PLAN.md — 채팅 부품 밤·관전 모드: 수집 단계 일반화·단계가 바뀌면 비움, 안내 줄·로그 이름·^ 끄기, 밤 문구 시트, 읽기 전용 줄 (TDD, wave 3)
+
+**Wave 4** *(blocked on Wave 3 completion)*
+- [ ] 03-07-PLAN.md — Room DO 배선: pick 핸들러, 행위자·관전자 한정 state 전송, 마피아·관전자 한정 밤 chat·emoji, 마감·탈락 거부, workerd 통합 테스트 (TDD, wave 4)
+- [ ] 03-08-PLAN.md — 밤 화면: 역할별 하단(마피아 채팅·경찰/의사 선택 알약·시민 안내), 테이블 직접 탭·낙관적 선택, 관전 화면(E1), 밤 배경·유령 미리 받기 (TDD, wave 4)
+
+**Wave 5** *(blocked on Wave 4 completion)*
+- [ ] 03-09-PLAN.md — 두 밤·두 아침·관전 전수 누출 검사, 결정 0020(밤·아침 와이어 계약·판정 규칙), ROADMAP·REQUIREMENTS·기획서 탈락자 문장을 결정 0021 에 맞춤 (wave 5)
+- [ ] 03-10-PLAN.md — 아침 발표: 테이블 위 카드·탈락 문구 8개('님이')·무사 문구, 아침 헤더·하단, 진홍 없는 5초 타이머, 아침 안내 (TDD, wave 5)
+
+**Wave 6** *(blocked on Wave 5 completion)*
+- [ ] 03-11-PLAN.md — 경찰 수사 기록: [수사 기록] 버튼·새 기록 점(폰 메모리)·밤 끝 알림·시트(NEW·빈 상태) (TDD, wave 6)
+
+**Wave 7** *(blocked on Wave 6 completion)*
+- [ ] 03-12-PLAN.md — 스모크·봇 스크립트(밤·아침·관전, uat-night 신설) → 개인 계정 배포 → 배포본 스모크 4·5·8명·봇 밤 시나리오 5·8명·낮 회귀 → HANDOFF·push·실기기 확인 목록 (wave 7)
+
 **Notes**: 4페이즈가 생기기 전까지는 낮 토론 다음 바로 밤, 아침 다음 다시 낮(직업 공개)으로 돌린다. 4페이즈가 낮 토론과 밤 사이에 투표·처형을 끼운다. 아침 중 메시지 거부와 밤의 마피아 전용 채팅(COMM-04, 결정 0019)은 이 페이즈에서 확인한다. 아침에 탈락자의 역할을 공개하는지는 원천에 없어서 비공개로 둔다.
 **UI hint**: yes
 
@@ -216,7 +244,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 (decimal phases
 |-------|-----------|----------------|--------|-----------|
 | 1. 걷는 뼈대 | v1.0 | 19/19 | Complete    | 2026-10-24 |
 | 2. 낮 토론 | v1.0 | 18/18 | In Progress | - |
-| 3. 밤과 아침 | v1.0 | 0/TBD | Not started | - |
+| 3. 밤과 아침 | v1.0 | 0/12 | Planned | - |
 | 4. 처형과 승패 | v1.0 | 0/TBD | Not started | - |
 | 5. 분위기와 캐릭터 | v1.0 | 0/TBD | Not started | - |
 | 6. 친구 플레이테스트 | v1.0 | 0/TBD | Not started | - |
