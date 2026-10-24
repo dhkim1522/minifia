@@ -99,7 +99,7 @@ Plans:
   5. 토론 단계가 아닐 때(직업 공개 중 등) 보낸 메시지, 자유 텍스트, 2초 안에 다시 보낸 메시지(화면은 2초 잠금, 서버는 1.8초 한도 — 결정 0016-6)는 서버가 거부해 다른 폰에 나타나지 않는다. 탈락자·밤·아침 중 메시지 거부는 탈락과 밤이 생기는 3페이즈에서 확인한다.
   6. 폰 세로 화면에서 메시지를 고르고 보내는 데 세 번 이하로 누른다(템플릿 → 대상·직업 → 보내기). 단 대상과 직업이 모두 필요한 '[○○]는 [직업]이었어요' 만 네 번(템플릿 → 대상 → 직업 → 보내기, 사용자 확정).
 
-**Plans:** 17/18 plans executed (02-12~02-18 은 UAT 갭 클로저 G-02-1·G-02-2, 결정 0017 승인 시안 `design/screens/day-v3/SPEC.md` 기준)
+**Plans:** 18/18 plans executed (02-12~02-18 은 UAT 갭 클로저 G-02-1·G-02-2, 결정 0017 승인 시안 `design/screens/day-v3/SPEC.md` 기준)
 
 Plans:
 **Wave 1**
@@ -140,7 +140,7 @@ Plans:
 - [x] 02-17-PLAN.md — 하단 패널 세 단계 같은 높이 157, 직업 공개 한 줄 칩(체크 배지), 채팅 세 줄 + ^ "채팅 내역" 모달, [빠른 메시지][이모티콘] 한 줄 (TDD, gap_closure, wave 4)
 
 **Wave 5** *(blocked on 02-13, 02-17)*
-- [ ] 02-18-PLAN.md — 스모크·봇 시나리오를 chat 이벤트·타이머 대기로 고치고 배포, 배포본 full 스모크 5·8명·봇 UAT 5·8명(2000ms 오탐 0), ROADMAP·REQUIREMENTS·결정 0016·UI-SPEC 정정, UAT 메모·HANDOFF·push, 실기기 확인 목록 (gap_closure, wave 5)
+- [x] 02-18-PLAN.md — 스모크·봇 시나리오를 chat 이벤트·타이머 대기로 고치고 배포, 배포본 full 스모크 5·8명·봇 UAT 5·8명(2000ms 오탐 0), ROADMAP·REQUIREMENTS·결정 0016·UI-SPEC 정정, UAT 메모·HANDOFF·push, 실기기 확인 목록 (gap_closure, wave 5)
 
 **Notes**: 3페이즈가 생기기 전까지는 토론이 끝나면 다음 낮(직업 공개)으로 돌려 말 바꿈 표시를 검증한다. 직업 공개 방식(실시간·동시 공개), 선택지 범위(이번 판에 있는 직업만?), 단계 시간, 빠른 메시지 "저는 [직업]이에요" 템플릿과의 관계는 논의 단계에서 정한다(결정 0007). 템플릿 목록과 문구는 논의 단계에서 정한다. 자유 채팅은 v2 COMMX-01 (플레이테스트 피드백으로 결정), 마피아 밤 비밀 메시지는 v2 COMMX-02.
 **UI hint**: yes
@@ -215,7 +215,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 (decimal phases
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 1. 걷는 뼈대 | v1.0 | 19/19 | Complete    | 2026-10-24 |
-| 2. 낮 토론 | v1.0 | 17/18 | In Progress | - |
+| 2. 낮 토론 | v1.0 | 18/18 | In Progress | - |
 | 3. 밤과 아침 | v1.0 | 0/TBD | Not started | - |
 | 4. 처형과 승패 | v1.0 | 0/TBD | Not started | - |
 | 5. 분위기와 캐릭터 | v1.0 | 0/TBD | Not started | - |

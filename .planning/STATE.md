@@ -5,17 +5,17 @@ milestone_name: MVP
 current_phase: 02
 current_phase_name: 낮 토론
 current_plan: 18
-status: executing
-stopped_at: Completed 02-17-PLAN.md
-last_updated: "2026-10-24T11:52:32.292Z"
+status: verifying
+stopped_at: Completed 02-18-PLAN.md
+last_updated: "2026-10-24T12:07:55.949Z"
 last_activity: 2026-10-24
 last_activity_desc: Phase 02 execution started
-state_head: 9eec2a58e9fd8b42d76fc9fda996d76f97f7e702
+state_head: ea924cf1ea9ac0c5e239eef9a20a7dc9ffd61297
 progress:
   total_phases: 6
   completed_phases: 1
   total_plans: 37
-  completed_plans: 36
+  completed_plans: 37
 ---
 
 # Project State
@@ -33,7 +33,7 @@ Phase: 02 (낮 토론) — EXECUTING
 Current Plan: 18
 Total Plans in Phase: 18
 Plan: 18 of 18
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-10-24 — Phase 02 execution started
 
 Progress: [██░░░░░░░░] 17%
@@ -82,6 +82,7 @@ Progress: [██░░░░░░░░] 17%
 | Phase 02 P15 | 9min | 3 tasks | 15 files |
 | Phase 02 P16 | 20min | 3 tasks | 14 files |
 | Phase 02 P17 | 10min | 3 tasks | 9 files |
+| Phase 02 P18 | 25min | 3 tasks | 12 files |
 
 ## Accumulated Context
 
@@ -136,6 +137,8 @@ Recent decisions affecting current work:
 - [Phase 02]: 02-17: 하단 패널은 height 로 157 고정(최소 높이 아님), max-height 미디어 여백 줄임 삭제 — 세 단계 같은 높이
 - [Phase 02]: 02-17: 패널 안 채팅은 마지막 세 줄만 그리고 지난 줄은 ^ 버튼의 채팅 내역 모달(폰이 받은 줄만)에서 본다 — ChatLineItem 공유
 - [Phase 02]: 02-17: 직업 칩은 공용 Chip 대신 패널 전용 .mf-seg__b 한 줄 버튼(체크 배지) — 공용 Chip 은 빠른 메시지 시트 전용으로 유지
+- [Phase 02]: 02-18: 스모크 한도 240초, 5명·8명 두 번, UAT result 필드는 그대로(봇 수치는 note)
+- [Phase 02]: 02-18: 높이 적응 세로 위치(장면 높이<359 → cy=max(177,H−149))를 SPEC 과의 의도적 차이로 기록
 
 ### Pending Todos
 
@@ -161,6 +164,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-24T11:52:32.063Z
-Stopped at: Completed 02-17-PLAN.md
+Last session: 2026-10-24T12:07:55.746Z
+Stopped at: Completed 02-18-PLAN.md
 Resume file: None
