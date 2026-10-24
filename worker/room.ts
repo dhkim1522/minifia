@@ -17,7 +17,7 @@ import {
 } from "../shared/game/room";
 import type { JoinError } from "../shared/game/room";
 import type { RoomState } from "../shared/game/room";
-import { pickRecipientIds, pickTarget } from "../shared/game/night";
+import { nightChatRecipientIds, pickRecipientIds, pickTarget } from "../shared/game/night";
 import { nextWakeAt, tick } from "../shared/game/tick";
 import { buildPreview, buildView } from "../shared/game/view";
 import { ClientMessageSchema } from "../shared/schemas";
@@ -312,7 +312,10 @@ export class Room extends DurableObject<Env> {
     }
     this.room = result.state;
     await this.ctx.storage.put("room", this.room);
-    this.broadcastEvent({ t: "chat", ...result.line });
+    // 밤 채팅은 살아 있는 마피아와 관전자 소켓에만 — 다른 소켓에 보내고 화면이 거르는 방식은 쓰지 않는다(결정 0002·0019·0021).
+    const chat: ServerMessage = { t: "chat", ...result.line };
+    if (this.room.phase === "night") this.broadcastEventTo(chat, nightChatRecipientIds(this.room));
+    else this.broadcastEvent(chat);
   }
 
   // 이모티콘: 저장은 lastSendAt(쿨다운)뿐이고 state 는 방송하지 않는다 — 화면에 보이는 값이 바뀌지 않았다. 이벤트만 앉은 모든 소켓에 보낸다(D-14).
@@ -329,7 +332,10 @@ export class Room extends DurableObject<Env> {
     }
     this.room = result.state;
     await this.ctx.storage.put("room", this.room);
-    this.broadcastEvent({ t: "emoji", ...result.event });
+    // 밤 이모티콘도 같은 범위다(밤 채팅과 한 규칙).
+    const emoji: ServerMessage = { t: "emoji", ...result.event };
+    if (this.room.phase === "night") this.broadcastEventTo(emoji, nightChatRecipientIds(this.room));
+    else this.broadcastEvent(emoji);
   }
 
   // 직업 선택: 신원은 소켓 첨부의 playerId 뿐이다 — 메시지에서 seat 를 읽지 않는다(T-02-16).
@@ -514,6 +520,17 @@ export class Room extends DurableObject<Env> {
     for (const ws of this.ctx.getWebSockets()) {
       const att = ws.deserializeAttachment() as SocketAttachment | null;
       if (!att || !room.players.some((p) => p.id === att.playerId)) continue;
+      this.sendTo(ws, msg);
+    }
+  }
+
+  // broadcastEvent 와 같은 소켓 순회에서 첨부 playerId 가 ids 에 있는 소켓에만 보낸다(밤 채팅·이모티콘).
+  private broadcastEventTo(msg: ServerMessage, ids: ReadonlySet<string>): void {
+    const room = this.room;
+    if (!room) return;
+    for (const ws of this.ctx.getWebSockets()) {
+      const att = ws.deserializeAttachment() as SocketAttachment | null;
+      if (!att || !ids.has(att.playerId) || !room.players.some((p) => p.id === att.playerId)) continue;
       this.sendTo(ws, msg);
     }
   }
