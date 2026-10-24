@@ -10,6 +10,7 @@ import "../styles/daytable.css";
 // 낮 화면 고정 테이블(결정 0017-1). 받은 공개 값만 그린다 — 입력에 역할 필드가 없다.
 // 주장(row.job)은 공개된 주장이지 그 사람의 실제 역할이 아니다(거짓일 수 있다). 동료 표시(isAlly)는 서버가 마피아에게만 보낸
 // me.allies 에서 화면이 만든 값이다.
+// 밤에는 onPick 이 있는 자리만 버튼(UI-SPEC C1). 누를 수 있는지·동사는 장면이 정한다.
 // 캐릭터 상자·이름표·이모티콘의 좌표는 game/dayTable.ts 의 daySeatLayout 한 번의 결과에서 나온다(떠 있는 층을 따로 가두지 않는다).
 
 /** 이름표 아랫줄. null 이면 아랫줄이 없다. 서버 값 연결은 낮 장면(02-16)이 한다. */
@@ -30,6 +31,10 @@ export interface DayTableSeat {
   spoke?: boolean;
   /** 머리 위에 떠 있는 이모티콘 하나. key 가 바뀌면 애니메이션이 새로 시작한다. */
   emoji?: { key: string; icon: EmojiId; z: number } | null;
+  /** 밤 선택 표시. mine = 내가 고른 대상(발밑 링 + 표적 배지) */
+  pick?: { mine?: boolean };
+  /** 있으면 이 자리가 대상 버튼이 된다(밤). 없으면 지금 그대로의 group 노드 */
+  onPick?: () => void;
 }
 
 export interface DayTableProps {
@@ -39,6 +44,10 @@ export interface DayTableProps {
   width?: number;
   height?: number;
   label?: string;
+  /** 대상 버튼의 동사("조사"·"지목"·"보호"). 장면이 넘긴다 — 부품은 역할을 모른다. 기본 "선택" */
+  pickVerb?: string;
+  /** 연결이 끊겨 보낼 수 없을 때 모든 대상 버튼을 끈다 */
+  pickDisabled?: boolean;
 }
 
 // 지금 앱의 Table seatLabel 과 같은 형식: "{닉네임}{ (나)}{, 연결 끊김}{, 선택 완료}{, 직업 주장 X}"
@@ -80,7 +89,7 @@ function TagRow({ row }: { row: DayTagRow }): ReactElement {
   );
 }
 
-export function DayTable({ seats, mySeat, width, height, label = "테이블" }: DayTableProps): ReactElement {
+export function DayTable({ seats, mySeat, width, height, label = "테이블", pickVerb = "선택", pickDisabled }: DayTableProps): ReactElement {
   const rootRef = useRef<HTMLDivElement>(null);
   const [measured, setMeasured] = useState({ w: DAY_SCENE_W, h: DAY_SCENE_H });
   const needMeasure = width === undefined || height === undefined;
@@ -114,22 +123,16 @@ export function DayTable({ seats, mySeat, width, height, label = "테이블" }: 
       {places.map((p) => {
         const s = bySeat.get(p.seat);
         if (!s) return null;
-        return (
-          <div
-            key={`s${p.seat}`}
-            className="mf-dt__seat"
-            data-seat={p.seat}
-            role="group"
-            aria-label={seatLabel(s)}
-            style={{
-              left: px(p.figLeft),
-              top: px(p.figTop),
-              width: FIG_W,
-              height: FIG_H,
-              transform: `scale(${Math.round(p.scale * 1000) / 1000})`,
-              zIndex: p.z,
-            }}
-          >
+        const style = {
+          left: px(p.figLeft),
+          top: px(p.figTop),
+          width: FIG_W,
+          height: FIG_H,
+          transform: `scale(${Math.round(p.scale * 1000) / 1000})`,
+          zIndex: p.z,
+        };
+        const inner = (
+          <>
             <Figure seat={p.seat} disconnected={!s.connected} />
             {s.isAlly ? (
               <>
@@ -144,6 +147,36 @@ export function DayTable({ seats, mySeat, width, height, label = "테이블" }: 
                 <Icon name="crown" size={13} />
               </span>
             ) : null}
+            {s.pick?.mine ? (
+              <>
+                <span className="mf-dt__sel" />
+                <span className="mf-dt__pick mf-dt__pick--me" aria-hidden="true">
+                  <Icon name="target" size={16} />
+                </span>
+              </>
+            ) : null}
+          </>
+        );
+        if (s.onPick) {
+          return (
+            <button
+              key={`s${p.seat}`}
+              type="button"
+              className="mf-dt__seat mf-dt__seat--pick"
+              data-seat={p.seat}
+              aria-pressed={!!s.pick?.mine}
+              aria-label={`${s.nickname}${s.isMe ? " (나)" : ""}, ${pickVerb} 대상`}
+              disabled={pickDisabled}
+              onClick={s.onPick}
+              style={style}
+            >
+              {inner}
+            </button>
+          );
+        }
+        return (
+          <div key={`s${p.seat}`} className="mf-dt__seat" data-seat={p.seat} role="group" aria-label={seatLabel(s)} style={style}>
+            {inner}
           </div>
         );
       })}

@@ -17,6 +17,14 @@
 .mf-dt__seat { position: absolute; transform-origin: 50% 100%; }
 .mf-dt__seat .mf-figure { width: 100%; height: 100%; display: block; }
 
+/* 밤 대상 버튼(UI-SPEC C1): 버튼 기본 모양을 지우고 캐릭터 상자 그대로 눌린다 */
+.mf-dt__seat--pick {
+  padding: 0; border: 0; background: none; color: inherit; font: inherit;
+  cursor: pointer; -webkit-tap-highlight-color: transparent;
+}
+.mf-dt__seat--pick:focus-visible { outline: 2px solid var(--gray-100); outline-offset: 2px; }
+.mf-dt__seat--pick:disabled { cursor: default; }
+
 /* 이름표: 발 아래 가운데, 두 알약이 세로로 2px 간격. 클릭을 가로채지 않는다. */
 .mf-dt__tag {
   position: absolute; transform: translateX(-50%);
@@ -80,6 +88,24 @@
   display: grid; place-items: center;
 }
 .mf-dt__crown .mf-icon { stroke-width: 2.2; }
+
+/* 밤: 내가 고른 대상 — 발밑 굵은 밝은 링 + 머리 위 26px 표적 배지(시안 N1~N3 .sf__sel·.sf__pick--me) */
+.mf-dt__sel {
+  position: absolute; left: 50%; bottom: -4px; width: 124%; height: 20%;
+  transform: translate(-50%, 50%); border-radius: 50%;
+  border: 3px solid var(--gray-50);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--gray-50) 55%, transparent);
+  pointer-events: none; z-index: 4;
+}
+.mf-dt__pick {
+  position: absolute; left: 50%; top: -26px; margin-left: -13px; width: 26px; height: 26px;
+  box-sizing: border-box; border-radius: 50%; display: grid; place-items: center; pointer-events: none;
+}
+.mf-dt__pick .mf-icon { stroke-width: 2.4; }
+.mf-dt__pick--me {
+  background: var(--gray-50); color: var(--night-900);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--shadow) 91%, transparent); z-index: 5;
+}
 
 /* 머리 위 이모티콘: 32px 원 + 아래로 5px 꼬리. 이름표(z 20~30)보다 위. 약 2초 등장·퇴장 */
 .mf-dt__emoji {
