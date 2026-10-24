@@ -4,11 +4,10 @@ import { act, cleanup, fireEvent, render, screen, within } from "@testing-librar
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import "../helpers/singleLineErrors";
 import type { ChatLine, PhaseId, RoomView } from "../../shared/protocol";
-import { seatLayout } from "../../shared/seatLayout";
 import type { RoomConnection, RoomEvent } from "../../src/net/useRoomConnection";
 import { DayScene } from "../../src/screens/DayScene";
 
-// 낮 토론 화면 통합 테스트(S-07): MessageLog·DiscussionControls·말풍선·이모티콘 층을 DayScene 으로 만난다.
+// 낮 토론 화면 통합 테스트(S-07): MessageLog·DiscussionControls·보낸 사람 반전·이모티콘을 DayScene 으로 만난다(결정 0017-2).
 // 서버와는 view 픽스처와 이벤트 발행기로만 만난다.
 
 const NOW = 10_000;
@@ -108,16 +107,8 @@ const quickBtn = () => screen.getByRole("button", { name: "빠른 메시지" }) 
 const emojiBtn = () => screen.getByRole("button", { name: "이모티콘" }) as HTMLButtonElement;
 const dialog = (name: string) => document.querySelector<HTMLDialogElement>(`dialog[aria-label="${name}"]`);
 
-const pct = (n: number): string => `${Math.round(n * 1000) / 1000}%`;
-/** 떠 있는 층이 어느 자리 머리 위인지: 가로(--mf-float-left)와 세로(top)가 그 자리 좌표(Table 의 FIG_H 21.33)와 같은 층. 마주 보는 자리는 x 가 같아 세로도 본다 */
-function floatsOfSeat(container: HTMLElement, seat: number, mySeat = 0): HTMLElement[] {
-  const L = seatLayout(seat, mySeat);
-  const x = pct(L.x);
-  const top = pct(L.y - 21.33 * L.scale - (L.depth >= 0.5 ? 1 : 8));
-  return [...container.querySelectorAll<HTMLElement>(".mf-float")].filter(
-    (el) => (el.style.getPropertyValue("--mf-float-left") ?? "").includes(`, ${x},`) && el.style.top === top,
-  );
-}
+const tagOf = (container: HTMLElement, seat: number) => container.querySelector<HTMLElement>(`.mf-dt__tag[data-seat="${seat}"]`);
+const emojiOf = (container: HTMLElement, seat: number) => container.querySelectorAll(`.mf-dt__emoji[data-seat="${seat}"]`);
 
 beforeEach(() => {
   vi.useFakeTimers();
@@ -161,7 +152,7 @@ describe("낮 토론 화면 — 로그·말하기 줄 (COMM-01, D-15·D-16·D-17
     expect(dialog("빠른 메시지")).toBeNull();
   });
 
-  it("새 줄(민지 → 하윤 의심돼요)이 오면 로그 마지막 줄과 자리 2 머리 위 말풍선이 같은 문장이고, 내 줄은 '나'로 보인다", () => {
+  it("새 줄(민지 → 하윤 의심돼요)이 오면 로그 마지막 줄이 그 문장이고 자리 2 이름표가 반전(--spoke)되며 말풍선은 없고, 내 줄은 '나'로 보인다", () => {
     const r = scene(makeView());
     r.rerender(
       makeView({
@@ -179,24 +170,24 @@ describe("낮 토론 화면 — 로그·말하기 줄 (COMM-01, D-15·D-16·D-17
     expect(mine?.getAttribute("title")).toBe("지우");
     // 구분 점은 자리 색 변수
     expect(last.querySelector<HTMLElement>(".mf-msglog__dot")?.getAttribute("style")).toContain("--seat-3");
-    // 말풍선: 자리 2 머리 위, 같은 문장
-    const bubbles = floatsOfSeat(r.container, 2);
-    expect(bubbles.length).toBe(1);
-    expect(bubbles[0]?.querySelector(".mf-bubble")?.textContent).toBe("하윤 의심돼요");
+    // 보낸 사람(자리 2) 이름표 윗줄만 반전, 머리 위 말풍선은 없다
+    expect(tagOf(r.container, 2)?.classList.contains("mf-dt__tag--spoke")).toBe(true);
+    expect(r.container.querySelectorAll(".mf-dt__tag--spoke").length).toBe(1);
+    expect(r.container.querySelectorAll(".mf-bubble, .mf-float").length).toBe(0);
   });
 
-  it("3000ms 뒤 말풍선은 사라지고 로그 줄은 남는다", () => {
+  it("3000ms 뒤 반전(--spoke)은 사라지고 로그 줄은 남는다", () => {
     const r = scene(makeView());
     r.rerender(makeView({ messages: [line(1, 2, 1, NOW)] }));
-    expect(r.container.querySelectorAll(".mf-float .mf-bubble").length).toBe(1);
+    expect(r.container.querySelectorAll(".mf-dt__tag--spoke").length).toBe(1);
     act(() => {
       vi.advanceTimersByTime(2_999);
     });
-    expect(r.container.querySelectorAll(".mf-float .mf-bubble").length).toBe(1);
+    expect(r.container.querySelectorAll(".mf-dt__tag--spoke").length).toBe(1);
     act(() => {
       vi.advanceTimersByTime(1);
     });
-    expect(r.container.querySelectorAll(".mf-float .mf-bubble").length).toBe(0);
+    expect(r.container.querySelectorAll(".mf-dt__tag--spoke").length).toBe(0);
     expect(items().length).toBe(1);
   });
 
@@ -209,17 +200,6 @@ describe("낮 토론 화면 — 로그·말하기 줄 (COMM-01, D-15·D-16·D-17
     const rows = items();
     expect(rows.length).toBe(4);
     expect(rows.map((el) => el.classList.contains("mf-msglog__item--latest"))).toEqual([false, false, false, true]);
-  });
-
-  it("재접속: 처음 마운트할 때 1초 전 줄은 말풍선이 바로 보이고, 3초 넘게 지난 줄은 말풍선이 없다", () => {
-    const r = scene(
-      makeView({
-        messages: [line(1, 1, 2, NOW - 5_000, "trust"), line(2, 3, 1, NOW - 1_000)],
-      }),
-    );
-    expect(floatsOfSeat(r.container, 3).length).toBe(1);
-    expect(floatsOfSeat(r.container, 1).length).toBe(0);
-    expect(items().length).toBe(2);
   });
 
   it("시트를 연 채 다음 낮 발표(dayAnnounce) view 로 바뀌면 시트가 문서에서 사라진다", () => {
@@ -246,7 +226,7 @@ describe("낮 토론 화면 — 로그·말하기 줄 (COMM-01, D-15·D-16·D-17
     expect(r.container.querySelector("script")).toBeNull();
     expect(items()[0]?.querySelector(".mf-msglog__name")?.textContent).toBe("<img src=x>");
     expect(r.container.textContent).not.toContain("alert(1)");
-    expect(r.container.querySelector(".mf-float .mf-bubble")?.textContent).toBe("하윤 의심돼요");
+    expect(r.container.querySelectorAll(".mf-bubble").length).toBe(0);
   });
 });
 
@@ -348,19 +328,18 @@ describe("낮 토론 화면 — 이모티콘·합산 쿨다운·오류 (COMM-02�
     expect(quickBtn().disabled).toBe(false);
   });
 
-  it("emoji 이벤트(자리 3, 놀람) → 자리 3 머리 위 .mf-react 와 보이지 않는 live 줄 '도현: 놀람', 2초 뒤 사라지고 로그에는 남지 않는다", () => {
+  it("emoji 이벤트(자리 3, 놀람) → 자리 3 머리 위 .mf-dt__emoji 와 보이지 않는 live 줄 '도현: 놀람', 2초 뒤 사라지고 로그에는 남지 않는다", () => {
     const ev = emitter();
     const r = scene(makeView(), { onEvent: ev.onEvent });
     ev.emit({ t: "emoji", seat: 3, icon: "surprised", at: NOW });
-    const layers = floatsOfSeat(r.container, 3);
-    expect(layers.length).toBe(1);
-    expect(layers[0]?.querySelector(".mf-react")).not.toBeNull();
+    expect(emojiOf(r.container, 3).length).toBe(1);
+    expect(emojiOf(r.container, 0).length + emojiOf(r.container, 1).length + emojiOf(r.container, 2).length).toBe(0);
     const live = screen.getByText("도현: 놀람");
     expect(live.className).toContain("mf-sr-only");
     expect(live.getAttribute("aria-live")).toBe("polite");
     expect(items().length).toBe(0);
     advance(2_000);
-    expect(r.container.querySelectorAll(".mf-react").length).toBe(0);
+    expect(r.container.querySelectorAll(".mf-dt__emoji").length).toBe(0);
   });
 
   it("끊긴 동안(canSend false)은 [빠른 메시지]·[이모티콘] 이 꺼진다", () => {
