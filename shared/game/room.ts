@@ -2,7 +2,7 @@
 // 모든 함수는 새 객체를 돌려주고 입력을 바꾸지 않는다. DOM·workerd 전용 API 를 쓰지 않는다(앱·워커 두 tsconfig 에 모두 들어감).
 import { validateNickname } from "../nickname";
 import { MAX_PLAYERS, MIN_PLAYERS } from "../protocol";
-import type { Claim, PhaseId } from "../protocol";
+import type { Claim, InvestigationRecord, MorningView, PhaseId } from "../protocol";
 import { ASSIGNING_MS, DAY_ANNOUNCE_MS } from "./phases";
 import { assignRoles } from "./roles";
 import type { RoleId } from "./roles";
@@ -35,6 +35,11 @@ export interface Player {
   claimChanged?: boolean;
   /** 마지막으로 메시지·이모티콘을 보낸 서버 시각 — 합산 2초 쿨다운 기준(D-14). 없으면 보낸 적 없다. */
   lastSendAt?: number;
+  // ---- 3페이즈 밤 상태(타입만 — 쓰는 코드는 03-03·03-04). 모두 optional — 옛 방도 읽힌다. ----
+  /** 이번 밤 고른 대상 seat — enterNight 가 비우고 enterMorning 이 쓰고 지운다. 뷰에는 본인(과 관전)에게만 실린다. */
+  nightPick?: number;
+  /** 경찰만 누적하는 수사 기록 — 뷰에는 경찰 본인에게만 실린다. */
+  investigations?: InvestigationRecord[];
 }
 
 export interface RoomState {
@@ -52,6 +57,15 @@ export interface RoomState {
   day?: number;
   /** 방 수명 동안 줄지 않는 다음 메시지 번호 — 날이 바뀌어도 줄지 않아 클라이언트가 새 줄을 번호로 가린다. 없으면 1. */
   nextMessageSeq?: number;
+  /** 지난밤 결과 한 곳 — enterMorning 이 쓰고 enterNight 가 지운다. 없으면 아직 아침이 오지 않았다(3페이즈, 모두 optional). */
+  morning?: MorningView;
+  /** 마지막 탈락 문구 번호 — 판 내내 유지해 같은 문구가 연달아 나오지 않게 한다(3페이즈). */
+  lastPhrase?: number;
+  /**
+   * 밤 마피아 채팅 줄 번호 — 낮 채팅의 nextMessageSeq 와 따로 센다. 낮 번호를 밤에 쓰면 살아 있는 사람이
+   * 낮 chat 프레임 seq 간격으로 밤 메시지 수를 알 수 있다. 밤마다 1부터, enterNight 가 지운다(3페이즈).
+   */
+  nextNightSeq?: number;
   hostId: string;
   nextJoinSeq: number;
   players: Player[];

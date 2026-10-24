@@ -370,7 +370,8 @@ export class Room extends DurableObject<Env> {
       this.room = null;
       return;
     }
-    const next = tick(room, now);
+    // 난수는 여기서만 넣는다 — 아침 판정(03-03)의 동률·문구 추첨
+    const next = tick(room, now, cryptoRandInt);
     if (next === room) return;
     this.room = next;
     await this.persistAndBroadcast();
