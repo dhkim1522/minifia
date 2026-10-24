@@ -14,7 +14,7 @@ export type NightError = "WRONG_PHASE" | "BAD_MESSAGE";
 /**
  * 밤 행동(지목·조사·보호) 한 번. 행동 종류는 메시지가 아니라 보낸 사람의 서버 저장 역할이 정한다.
  * 검사 순서가 계약이다: 단계(night 아니면 WRONG_PHASE) → 행위자(방에 있고 생존, 아니면 BAD_MESSAGE)
- * → 역할(마피아·경찰·의사) → 대상(정수·앉은 생존자) → 같은 값이면 입력 상태 그대로 ok → 그 사람의 nightPick 만 바꾼 새 상태.
+ * → 역할(마피아·경찰·의사) → 대상(정수·앉은 생존자) → 마피아가 고른 대상이 마피아(자신·동료)면 BAD_MESSAGE → 같은 값이면 입력 상태 그대로 ok → 그 사람의 nightPick 만 바꾼 새 상태.
  */
 export function pickTarget(
   state: RoomState,
@@ -29,6 +29,8 @@ export function pickTarget(
   }
   const chosen = Number.isInteger(target) ? state.players.find((p) => p.seat === target) : undefined;
   if (!chosen || !isAlive(chosen)) return { ok: false, error: "BAD_MESSAGE" };
+  // 마피아는 자신·동료를 고를 수 없다. 화면이 막아 두지만 서버가 방어선이다(D-02).
+  if (actor.role === "mafia" && chosen.role === "mafia") return { ok: false, error: "BAD_MESSAGE" };
   if (actor.nightPick === target) return { ok: true, state };
   return {
     ok: true,
@@ -87,10 +89,26 @@ export function enterMorning(state: RoomState, randInt: RandInt): RoomState {
   return result.phrase === undefined ? next : { ...next, lastPhrase: result.phrase };
 }
 
-export function pickRecipientIds(_state: RoomState, _actorId: string): string[] {
-  return [];
+const bySeat = (a: Player, b: Player): number => a.seat - b.seat;
+
+/**
+ * 밤 행동 뒤 state 를 받는 사람 — 행위자 쪽과 관전자(탈락자, 결정 0021). 행위자가 마피아면 생존 마피아 전원, 아니면 본인뿐이다.
+ * 살아 있는 다른 사람에게 보내면 '누군가 행동했다' 는 프레임 타이밍이 샌다(RESEARCH Pitfall 1). 중복 없이 seat 오름차순.
+ */
+export function pickRecipientIds(state: RoomState, actorId: string): string[] {
+  const actor = state.players.find((p) => p.id === actorId);
+  const actorSide =
+    actor?.role === "mafia" ? state.players.filter((p) => p.role === "mafia" && isAlive(p)) : actor ? [actor] : [];
+  const spectators = state.players.filter((p) => !isAlive(p));
+  const seen = new Map<string, Player>();
+  for (const p of [...actorSide, ...spectators]) seen.set(p.id, p);
+  return [...seen.values()].sort(bySeat).map((p) => p.id);
 }
 
-export function nightChatRecipientIds(_state: RoomState): ReadonlySet<string> {
-  return new Set();
+/**
+ * 밤 채팅·이모티콘을 받는 소켓 — 살아 있는 마피아와 관전자(결정 0019·0021). 단계 판단은 부르는 쪽(워커)이 한다.
+ * 탈락한 마피아는 관전자로 든다(보낼 수는 없다).
+ */
+export function nightChatRecipientIds(state: RoomState): ReadonlySet<string> {
+  return new Set(state.players.filter((p) => !isAlive(p) || p.role === "mafia").map((p) => p.id));
 }
