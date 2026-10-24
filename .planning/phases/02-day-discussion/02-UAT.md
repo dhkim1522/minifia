@@ -1,5 +1,5 @@
 ---
-status: testing
+status: complete
 phase: 02-day-discussion
 source: [02-VERIFICATION.md]
 started: 2026-10-23T19:03:45Z
@@ -8,11 +8,7 @@ updated: 2026-10-24T09:00:00Z
 
 ## Current Test
 
-number: 7
-name: iPhone Safari·Android Chrome 에서 낮 한 바퀴
-expected: |
-  두 기기 모두 같은 시각에 단계가 넘어가고 이모티콘 2초, 공개 팝·흔들림이 부드럽다 (봇 동기화 확인은 통과, 두 기종 실기기 확인만 남음)
-awaiting: user response
+[testing complete]
 
 ## Tests
 
@@ -51,7 +47,8 @@ note: "02-12(서버 한도 1800ms) 뒤 봇 재확인(배포 2026-10-24T11:54:33Z
 
 ### 7. iPhone Safari·Android Chrome 에서 낮 한 바퀴
 expected: 두 기기 모두 같은 시각에 단계가 넘어가고, 이모티콘이 약 2초 떴다 사라지며, 공개 팝·흔들림이 부드럽다
-result: [pending]
+result: skipped
+reason: "사용자 결정(2026-10-24): 모든 페이즈를 끝낸 뒤 추가 개선·요구사항을 모아 처리. 두 기종 실기기 확인은 6페이즈 친구 플레이테스트(iPhone Safari·Android Chrome)에서 한다. 봇 동기화 확인은 통과"
 note: "봇 확인(5명·8명, 배포본): 단계 전환·이모티콘 도착 차이 0~23ms, phaseEndsAt 모든 폰 같음, 이모티콘은 메시지 목록에 없음. 남은 것은 실기기에서만 볼 수 있는 애니메이션 부드러움과 실제 폰 시계 차이"
 
 ### 8. 결정 요청 — ROADMAP 성공 기준 1 문구와 구현의 차이
@@ -66,8 +63,8 @@ note: "봇 확인: 2일차에 고르지 않으면 어제 주장(police)이 그�
 total: 8
 passed: 3
 issues: 0
-pending: 1
-skipped: 4
+pending: 0
+skipped: 5
 blocked: 0
 
 ## Gaps
