@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import "../helpers/singleLineErrors";
 import { DayTable } from "../../src/components/DayTable";
@@ -378,5 +378,127 @@ describe("daytable.css: 배지·이모티콘 크기", () => {
   it(".mf-dt__crown 은 22px, .mf-dt__chg 는 18px", () => {
     expect(cssHas(css, /\.mf-dt__crown\s*\{[^}]*width:\s*22px/)).toBe(true);
     expect(cssHas(css, /\.mf-dt__chg\s*\{[^}]*width:\s*18px/)).toBe(true);
+  });
+});
+
+// ---- 03-02 Task 1: 밤 대상 선택 (D-01·D-02, UI-SPEC N-1) ----
+describe("DayTable: 밤 대상 선택 (D-01·D-02, UI-SPEC N-1)", () => {
+  const pickSeats = (onPicks: Record<number, () => void>, over: Partial<Record<number, Partial<DayTableSeat>>> = {}) =>
+    five({
+      1: { onPick: onPicks[1], ...over[1] },
+      2: { onPick: onPicks[2], ...over[2] },
+      3: { onPick: onPicks[3], ...over[3] },
+      4: { ...over[4] },
+      0: { ...over[0] },
+    });
+
+  it("onPick 을 준 자리만 .mf-dt__seat 가 button[type=button] 이고 aria-pressed='false'. 나머지 자리는 role=group div 다", () => {
+    const seats = pickSeats({ 1: vi.fn(), 2: vi.fn(), 3: vi.fn() });
+    const { container } = render(<DayTable seats={seats} mySeat={0} width={366} />);
+    const buttons = container.querySelectorAll<HTMLElement>("button.mf-dt__seat");
+    expect(buttons.length).toBe(3);
+    for (const b of Array.from(buttons)) {
+      expect(b.getAttribute("type")).toBe("button");
+      expect(b.getAttribute("aria-pressed")).toBe("false");
+    }
+    expect(seatEl(container, 0).tagName).toBe("DIV");
+    expect(seatEl(container, 0).getAttribute("role")).toBe("group");
+    expect(seatEl(container, 4).tagName).toBe("DIV");
+  });
+
+  it("pickVerb '조사' 이면 접근성 이름이 '지호, 조사 대상', 내 자리는 '동현 (나), 조사 대상'. pickVerb 가 없으면 '지호, 선택 대상'", () => {
+    const seats = pickSeats({ 2: vi.fn() }, { 0: { onPick: vi.fn() } });
+    render(<DayTable seats={seats} mySeat={0} width={366} pickVerb="조사" />);
+    expect(screen.getByRole("button", { name: "지호, 조사 대상" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "동현 (나), 조사 대상" })).toBeTruthy();
+    cleanup();
+    render(<DayTable seats={pickSeats({ 2: vi.fn() })} mySeat={0} width={366} />);
+    expect(screen.getByRole("button", { name: "지호, 선택 대상" })).toBeTruthy();
+  });
+
+  it("버튼을 누르면 그 자리의 onPick 이 한 번 불린다", () => {
+    const a = vi.fn();
+    const b = vi.fn();
+    render(<DayTable seats={pickSeats({ 1: a, 2: b })} mySeat={0} width={366} />);
+    fireEvent.click(screen.getByRole("button", { name: "지호, 선택 대상" }));
+    expect(b).toHaveBeenCalledTimes(1);
+    expect(a).not.toHaveBeenCalled();
+  });
+
+  it("pick.mine 인 자리: aria-pressed='true', 상자 안에 .mf-dt__sel 하나와 .mf-dt__pick--me 하나(svg 하나, aria-hidden). 다른 자리에는 없다", () => {
+    const seats = pickSeats({ 1: vi.fn(), 2: vi.fn() }, { 2: { pick: { mine: true } } });
+    const { container } = render(<DayTable seats={seats} mySeat={0} width={366} />);
+    const el = seatEl(container, 2);
+    expect(el.getAttribute("aria-pressed")).toBe("true");
+    expect(el.querySelectorAll(".mf-dt__sel").length).toBe(1);
+    const badge = el.querySelectorAll<HTMLElement>(".mf-dt__pick.mf-dt__pick--me");
+    expect(badge.length).toBe(1);
+    expect(badge[0]?.getAttribute("aria-hidden")).toBe("true");
+    expect(badge[0]?.querySelectorAll("svg").length).toBe(1);
+    expect(container.querySelectorAll(".mf-dt__sel").length).toBe(1);
+    expect(container.querySelectorAll(".mf-dt__pick").length).toBe(1);
+    expect(seatEl(container, 1).getAttribute("aria-pressed")).toBe("false");
+  });
+
+  it("pickDisabled 면 모든 대상 버튼에 disabled 가 있고 눌러도 onPick 이 불리지 않는다", () => {
+    const a = vi.fn();
+    const { container } = render(<DayTable seats={pickSeats({ 1: a, 2: vi.fn() })} mySeat={0} width={366} pickDisabled />);
+    const buttons = Array.from(container.querySelectorAll<HTMLButtonElement>("button.mf-dt__seat"));
+    expect(buttons.length).toBe(2);
+    expect(buttons.every((b) => b.disabled)).toBe(true);
+    fireEvent.click(buttons[0]!);
+    expect(a).not.toHaveBeenCalled();
+  });
+
+  it("새 필드를 하나도 주지 않은 다섯 자리 테이블의 innerHTML 에 button·mf-dt__sel·mf-dt__pick 이 없다", () => {
+    const { container } = render(<DayTable seats={five()} mySeat={0} width={366} />);
+    const html = container.innerHTML;
+    expect(html.includes("<button")).toBe(false);
+    expect(html.includes("mf-dt__sel")).toBe(false);
+    expect(html.includes("mf-dt__pick")).toBe(false);
+    expect(html.includes("aria-pressed")).toBe(false);
+  });
+});
+
+describe("Icon target·notebook (03-02)", () => {
+  it.each(["target", "notebook"])("%s 는 24×24 viewBox svg 로 그려진다", (name) => {
+    const { container } = render(<Icon name={name as IconName} />);
+    expect(container.querySelector("svg")?.getAttribute("viewBox")).toBe("0 0 24 24");
+  });
+  it("target 의 첫 요소는 circle(r 7), notebook 은 path 두 개다", () => {
+    const t = render(<Icon name={"target" as IconName} />).container.querySelector("svg")!;
+    expect(t.firstElementChild?.tagName.toLowerCase()).toBe("circle");
+    expect(t.firstElementChild?.getAttribute("r")).toBe("7");
+    cleanup();
+    const n = render(<Icon name={"notebook" as IconName} />).container.querySelector("svg")!;
+    expect(n.querySelectorAll("path").length).toBe(2);
+  });
+});
+
+describe("daytable.css: 밤 선택 표시 (03-02)", () => {
+  const css = readFileSync("src/styles/daytable.css", "utf8");
+  it(".mf-dt__sel 은 124%×20%·3px gray-50 링·빛·pointer-events none", () => {
+    expect(cssHas(css, /\.mf-dt__sel\s*\{[^}]*width:\s*124%/)).toBe(true);
+    expect(cssHas(css, /\.mf-dt__sel\s*\{[^}]*height:\s*20%/)).toBe(true);
+    expect(cssHas(css, /\.mf-dt__sel\s*\{[^}]*border:\s*3px solid var\(--gray-50\)/)).toBe(true);
+    expect(cssHas(css, /\.mf-dt__sel\s*\{[^}]*pointer-events:\s*none/)).toBe(true);
+    expect(cssHas(css, /\.mf-dt__sel\s*\{[^}]*box-shadow:[^;]*color-mix\(in srgb, var\(--gray-50\) 55%, transparent\)/)).toBe(true);
+  });
+  it(".mf-dt__pick 은 26px·top -26px·margin-left -13px, --me 는 gray-50 면·night-900 글자", () => {
+    expect(cssHas(css, /\.mf-dt__pick\s*\{[^}]*width:\s*26px/)).toBe(true);
+    expect(cssHas(css, /\.mf-dt__pick\s*\{[^}]*top:\s*-26px/)).toBe(true);
+    expect(cssHas(css, /\.mf-dt__pick\s*\{[^}]*margin-left:\s*-13px/)).toBe(true);
+    expect(cssHas(css, /\.mf-dt__pick--me\s*\{[^}]*background:\s*var\(--gray-50\)/)).toBe(true);
+    expect(cssHas(css, /\.mf-dt__pick--me\s*\{[^}]*color:\s*var\(--night-900\)/)).toBe(true);
+  });
+  it(".mf-dt__seat--pick:focus-visible 에 outline 2px solid var(--gray-100)", () => {
+    expect(cssHas(css, /\.mf-dt__seat--pick:focus-visible\s*\{[^}]*outline:\s*2px solid var\(--gray-100\)/)).toBe(true);
+  });
+  it("daytable.css 의 코드 줄에는 # 으로 시작하는 색 값이 없다", () => {
+    const code = css
+      .split("\n")
+      .filter((l) => !/^\s*\/?\*/.test(l))
+      .join("\n");
+    expect(/#[0-9a-fA-F]{3,6}\b/.test(code)).toBe(false);
   });
 });
