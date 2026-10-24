@@ -1,5 +1,6 @@
 // 스모크: 배포(또는 로컬) 주소에서 방 만들기 → WebSocket hello → 대기실 상태까지 확인한다.
-// full 단계는 한 판 시작부터 낮 한 바퀴(낮 시작 발표 → 직업 공개 → 공개 연출 → 낮 토론 → 방장 넘기기 → 다음 낮 시작 발표)까지 돈다.
+// full 단계는 한 판 시작부터 낮 한 바퀴(낮 시작 발표 → 직업 공개 → 공개 연출 → 낮 토론 90초 → 서버 타이머로 다음 낮 시작 발표)까지 돈다.
+// 방장 연장·넘기기는 없다(결정 0017-5). 빠른 메시지는 state 가 아니라 chat 프레임으로 온다(결정 0017-7).
 // Node 22.12+ 내장 fetch·전역 WebSocket 만 쓴다. 셸 명령·외부 패키지 없음 (Windows 에서도 같은 명령).
 //
 // 사용법:
@@ -14,7 +15,11 @@ import { fileURLToPath } from "node:url";
 
 const TOTAL_LIMIT_MS = 30_000;
 const STATE_LIMIT_MS = 10_000;
-const FULL_TOTAL_LIMIT_MS = 120_000;
+const FULL_TOTAL_LIMIT_MS = 240_000;
+// 토론 90초 + 여유: 넘기기 없이 서버 타이머가 낮을 넘기는 것을 기다린다.
+const DISCUSSION_WAIT_MS = 90_000 + STATE_LIMIT_MS;
+const CHAT_FRAME_KEYS = ["at", "seat", "seq", "t", "target", "template"];
+const CHAT_ALLOWED_KEYS = new Set(["t", "seq", "seat", "template", "target", "claimedRole", "at"]);
 const ALLOWED_PLAYER_KEYS = ["connected", "isHost", "nickname", "seat"];
 const PREVIEW_PLAYER_KEYS = ["nickname", "seat"];
 const DAY_SPREAD_LIMIT_MS = 500;
@@ -415,7 +420,7 @@ async function stageFull(url, args) {
     }
   }
 
-  // (13) 낮 토론: 빠른 메시지·거부·이모티콘·연장·넘기기
+  // (13) 낮 토론: 빠른 메시지(chat 프레임)·거부·이모티콘·연장/넘기기 거부·타이머로 다음 낮
   await waitUntil(() => clients.every((c) => firstState(c, "discussion")), STATE_LIMIT_MS, "모든 클라이언트가 discussion 을 받지 못함");
   const discEnds = new Set(clients.map((c) => firstState(c, "discussion").msg.view.phaseEndsAt));
   if (discEnds.size !== 1) fail(`discussion 의 phaseEndsAt 이 클라이언트마다 다름 (${discEnds.size}종)`);
@@ -423,13 +428,16 @@ async function stageFull(url, args) {
   const durBefore = firstState(host, "discussion").msg.view.phaseDurationMs;
   if (durBefore !== 90_000) fail(`discussion phaseDurationMs 가 90000 이 아님: ${durBefore}`);
 
-  // 메시지: seat = 보낸 사람, 모든 클라이언트 day.messages 에 나타난다
+  // 메시지: seat = 보낸 사람, 모든 클라이언트가 chat 프레임을 받는다(state 로는 오지 않는다)
+  const isSuspectChat = (f) => f.msg?.t === "chat" && f.msg.seat === clients[1].seat && f.msg.template === "suspect" && f.msg.target === clients[2].seat;
   clients[1].ws.send(JSON.stringify({ t: "say", template: "suspect", target: clients[2].seat }));
   await waitUntil(
-    () => clients.every((c) => (lastView(c)?.day?.messages ?? []).some((m) => m.seat === clients[1].seat && m.template === "suspect" && m.target === clients[2].seat)),
+    () => clients.every((c) => c.frames.some(isSuspectChat)),
     STATE_LIMIT_MS,
-    "빠른 메시지가 모든 클라이언트 day.messages 에 나타나지 않음",
+    "빠른 메시지 chat 프레임이 모든 클라이언트에 오지 않음",
   );
+  const chatKeys = Object.keys(host.frames.find(isSuspectChat).msg).sort().join(",");
+  if (chatKeys !== CHAT_FRAME_KEYS.join(",")) fail(`chat 프레임 키 집합이 다름: ${chatKeys} (기대 ${CHAT_FRAME_KEYS.join(",")})`);
   // 거부: 2초 안의 두 번째 say → RATE_LIMITED, 모르는 키(text)가 붙은 say → BAD_MESSAGE
   await expectError(clients[1], { t: "say", template: "trust", target: clients[2].seat }, "RATE_LIMITED", "2초 안의 두 번째 say");
   await expectError(clients[1], { t: "say", template: "suspect", target: clients[2].seat, text: REJECT_MARKER }, "BAD_MESSAGE", "text 키가 붙은 say");
@@ -441,27 +449,24 @@ async function stageFull(url, args) {
     STATE_LIMIT_MS,
     "이모티콘 emoji 프레임이 모든 클라이언트에 오지 않음",
   );
-  // 거부된 요청은 메시지를 남기지 않는다(성공한 한 줄뿐)
-  const nMsgs = lastView(host).day.messages.length;
-  if (nMsgs !== 1) fail(`거부 뒤 day.messages 길이가 1 이 아님: ${nMsgs}`);
+  // 거부된 요청은 메시지를 남기지 않는다: 방장이 받은 clients[1] 의 chat 프레임은 정확히 하나
+  const nChats = host.frames.filter((f) => f.msg?.t === "chat" && f.msg.seat === clients[1].seat).length;
+  if (nChats !== 1) fail(`거부 뒤 방장이 받은 clients[1] 의 chat 프레임이 하나가 아님: ${nChats}`);
 
-  // 연장: 손님 → NOT_HOST, 방장 → 모든 클라이언트 +30000·phaseDurationMs 120000, 두 번째는 ALREADY_EXTENDED
-  await expectError(clients[1], { t: "extend" }, "NOT_HOST", "손님 extend");
-  host.ws.send(JSON.stringify({ t: "extend" }));
-  await waitUntil(
-    () => clients.every((c) => {
-      const v = lastView(c);
-      return v?.phase === "discussion" && v.phaseEndsAt === endsBefore + 30_000 && v.phaseDurationMs === 120_000 && v.day?.extendUsed === true;
-    }),
-    STATE_LIMIT_MS,
-    "방장 extend 뒤 phaseEndsAt +30000·phaseDurationMs 120000 이 모든 클라이언트에 반영되지 않음",
-  );
-  await expectError(host, { t: "extend" }, "ALREADY_EXTENDED", "두 번째 extend");
+  // 연장·넘기기는 스키마에 없다(결정 0017-5): 손님·방장 모두 BAD_MESSAGE, 마감은 그대로
+  await expectError(clients[1], { t: "extend" }, "BAD_MESSAGE", "손님 extend");
+  await expectError(clients[1], { t: "skip" }, "BAD_MESSAGE", "손님 skip");
+  await expectError(host, { t: "extend" }, "BAD_MESSAGE", "방장 extend");
+  await expectError(host, { t: "skip" }, "BAD_MESSAGE", "방장 skip");
+  await sleep(500);
+  for (const c of clients) {
+    const v = lastView(c);
+    if (v.phase !== "discussion") fail(`${c.nickname} 가 extend·skip 거부 뒤 discussion 이 아님: ${v.phase}`);
+    if (v.phaseEndsAt !== endsBefore || v.phaseDurationMs !== 90_000) fail(`${c.nickname} 의 discussion 마감이 extend·skip 시도 뒤 바뀜: ${v.phaseEndsAt} / ${v.phaseDurationMs}`);
+  }
 
-  // 넘기기: 손님 → NOT_HOST, 방장 → 모든 클라이언트 다음 낮 dayAnnounce(day.n 2)
-  await expectError(clients[1], { t: "skip" }, "NOT_HOST", "손님 skip");
-  host.ws.send(JSON.stringify({ t: "skip" }));
-  await waitUntil(() => clients.every((c) => firstState(c, "dayAnnounce", (v) => v.day?.n === 2)), STATE_LIMIT_MS, "방장 skip 뒤 dayAnnounce(day.n 2) 가 모든 클라이언트에 오지 않음");
+  // 타이머: 넘기기 없이 토론 마감 뒤 모든 클라이언트가 dayAnnounce(day.n 2) 를 받는다
+  await waitUntil(() => clients.every((c) => firstState(c, "dayAnnounce", (v) => v.day?.n === 2)), DISCUSSION_WAIT_MS, "토론 마감 뒤 dayAnnounce(day.n 2) 가 모든 클라이언트에 오지 않음");
   for (const c of clients) if (c.unexpectedClose !== null) fail(`${c.nickname} 소켓이 예상 밖으로 닫힘 (code ${c.unexpectedClose})`);
 
   // ---- 단언 ----
@@ -562,6 +567,22 @@ async function stageFull(url, args) {
       if (claimsPaths.length > 0) fail(`${c.nickname} 의 claimReveal 전 프레임에 claims 키가 있음`);
       const myClaim = f.msg.view?.me?.claim;
       if (myClaim !== undefined && myClaim !== (picks.get(c) ?? undefined)) fail(`${c.nickname} 의 claimReveal 전 me.claim 이 본인 선택이 아님: ${myClaim}`);
+    }
+  }
+  // 결정 0017-7: state 어디에도 messages·extendUsed 키가 없고, chat 프레임은 허용 키만 쓰며 id·role·token 이 없다(T-02-48)
+  for (const c of clients) {
+    for (const f of states(c)) {
+      for (const key of ["messages", "extendUsed"]) {
+        const paths = [];
+        collectKeyPaths(f.msg, key, "", paths);
+        if (paths.length > 0) fail(`${c.nickname} 의 state 프레임에 ${key} 키가 있음: ${paths.join(",")}`);
+      }
+    }
+    for (const f of c.frames) {
+      if (f.msg?.t !== "chat") continue;
+      const bad = Object.keys(f.msg).filter((k) => !CHAT_ALLOWED_KEYS.has(k));
+      if (bad.length > 0) fail(`${c.nickname} 의 chat 프레임에 허용 밖 키가 있음: ${bad.join(",")}`);
+      for (const key of ["id", "role", "token"]) if (key in f.msg) fail(`${c.nickname} 의 chat 프레임에 ${key} 키가 있음`);
     }
   }
   // 거부된 요청의 표식은 다른 클라이언트의 어떤 프레임에도 없다(COMM-04)
