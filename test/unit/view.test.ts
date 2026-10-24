@@ -110,16 +110,57 @@ const ALLOWED_ROLE_VALUE_PATHS: ReadonlySet<string> = new Set([
   "day.claims[].claim",
 ]);
 
-function roleValueLeaks(view: RoomView): string[] {
+/** 탈락한 viewer 에게만 더해지는 허용 경로(결정 0021): 모든 사람의 실제 직업. */
+const SPECTATE_ROLE_VALUE_PATH = "spectate.seats[].job";
+
+function roleValueLeaks(view: RoomView, spectator = false): string[] {
   return stringLeaves(view)
-    .filter(([path, value]) => ROLE_LIKE_VALUES.has(value) && !ALLOWED_ROLE_VALUE_PATHS.has(path))
+    .filter(
+      ([path, value]) =>
+        ROLE_LIKE_VALUES.has(value) &&
+        !ALLOWED_ROLE_VALUE_PATHS.has(path) &&
+        !(spectator && path === SPECTATE_ROLE_VALUE_PATH),
+    )
     .map(([path, value]) => `${path}=${value}`);
 }
 
 /** view 최상위에 올 수 있는 키(허용 목록). */
 const TOP_KEYS: ReadonlySet<string> = new Set([
-  "code", "phase", "phaseEndsAt", "phaseDurationMs", "serverNow", "minPlayers", "maxPlayers", "players", "me", "day",
+  "code", "phase", "phaseEndsAt", "phaseDurationMs", "serverNow", "minPlayers", "maxPlayers", "players", "me", "day", "spectate",
 ]);
+
+/** 그 밤에 살아 있는 각 역할이 지금 고른 대상 seat(중복 없음·오름차순). */
+function livePicksOf(s: RoomState, role: "mafia" | "police" | "doctor"): number[] {
+  return [
+    ...new Set(
+      s.players.filter((q) => q.role === role && isAlive(q) && q.nightPick !== undefined).map((q) => q.nightPick as number),
+    ),
+  ].sort((a, b) => a - b);
+}
+
+/**
+ * 관전(결정 0021) 규칙 한 곳: 탈락한 본인이고 역할을 싣는 단계에서만 spectate 가 있다.
+ * seats 는 모든 사람의 실제 직업({seat, job}, seat 오름차순), picks 는 밤에만 {mafia, police, doctor}.
+ * 같은 규칙으로 역할 값 누출도 검사해, 살아 있는 viewer 에게는 spectate 경로 허용이 없다.
+ */
+function spectateViolations(s: RoomState, viewer: Player, view: RoomView, phase: PhaseId, tag: string): string[] {
+  const out: string[] = [];
+  const want = !isAlive(viewer) && PHASE_DEFS[phase].revealsOwnRole;
+  if (("spectate" in view) !== want) return [`${tag}: spectate presence ${"spectate" in view} want ${want}`];
+  if (want && view.spectate) {
+    const seats = [...s.players].sort((a, b) => a.seat - b.seat).map((q) => ({ seat: q.seat, job: q.role }));
+    if (flat(view.spectate.seats) !== flat(seats)) out.push(`${tag}: spectate.seats ${flat(view.spectate.seats)}`);
+    for (const e of view.spectate.seats) if (Object.keys(e).sort().join(",") !== "job,seat") out.push(`${tag}: spectate seat keys`);
+    const wantKeys = phase === "night" ? "picks,seats" : "seats";
+    if (Object.keys(view.spectate).sort().join(",") !== wantKeys) out.push(`${tag}: spectate keys ${Object.keys(view.spectate).join(",")}`);
+    if (phase === "night") {
+      const picks = { mafia: livePicksOf(s, "mafia"), police: livePicksOf(s, "police"), doctor: livePicksOf(s, "doctor") };
+      if (flat(view.spectate.picks) !== flat(picks)) out.push(`${tag}: spectate.picks ${flat(view.spectate.picks)}`);
+    }
+  }
+  for (const leak of roleValueLeaks(view, want)) out.push(`${tag}: role-like value outside allowed paths: ${leak}`);
+  return out;
+}
 
 /** 따옴표 없는 한 줄 JSON — 실패 보고(TAP)에 이스케이프된 따옴표가 끼지 않게 한다. */
 const flat = (value: unknown): string => (JSON.stringify(value) ?? "undefined").replaceAll('"', "");
@@ -164,6 +205,20 @@ function advanceTo(state: RoomState, phase: PhaseId, seed: number): RoomState {
 const nonMafiaSeats = (state: RoomState): number[] =>
   state.players.filter((q) => q.role !== "mafia").map((q) => q.seat).sort((a, b) => a - b);
 
+/** 밤 상태에서 살아 있는 마피아·경찰·의사가 각자 행동한다(실제 pickTarget). 지목 대상은 살아 있는 첫 비마피아다. */
+function nightActions(state: RoomState): RoomState {
+  const living = state.players.filter(isAlive).sort((a, b) => a.seat - b.seat);
+  const target = living.find((p) => p.role !== "mafia")!.seat;
+  const mafiaSeat = living.find((p) => p.role === "mafia")!.seat;
+  let s = state;
+  for (const p of living) {
+    if (p.role === "mafia") s = actAt(s, p.seat, target);
+    else if (p.role === "police") s = actAt(s, p.seat, living[0]!.seat);
+    else if (p.role === "doctor") s = actAt(s, p.seat, p.seat !== target ? p.seat : mafiaSeat);
+  }
+  return s;
+}
+
 /** 실제 전이(say)로 메시지 한 줄을 더한다. */
 function speak(state: RoomState, seat: number, input: SayInput, now: number): RoomState {
   const r = say(state, seatId(state, seat), input, now);
@@ -184,14 +239,8 @@ const DISCUSSION_ENDS_AT = REVEAL_ENDS_AT + 90_000;
  */
 function richStateAt(phase: PhaseId, n: number, seed: number): RoomState {
   if (phase === "night" || phase === "morning") {
-    // 밤: 마피아 → 가장 작은 비마피아 seat, 경찰 → seat 0, 의사 → 자신. 아침은 그 밤 뒤.
-    let s = tick(richStateAt("discussion", n, seed), DISCUSSION_ENDS_AT);
-    const target = nonMafiaSeats(s)[0]!;
-    for (const p of s.players) {
-      if (p.role === "mafia") s = actAt(s, p.seat, target);
-      else if (p.role === "police") s = actAt(s, p.seat, 0);
-      else if (p.role === "doctor") s = actAt(s, p.seat, p.seat);
-    }
+    // 밤: 마피아 → 가장 작은 살아 있는 비마피아 seat, 경찰 → 살아 있는 첫 seat, 의사 → 자신(지목된 사람이면 마피아). 아침은 그 밤 뒤(한 명 탈락).
+    const s = nightActions(tick(richStateAt("discussion", n, seed), DISCUSSION_ENDS_AT));
     if (phase === "night") return s;
     return tick(s, DISCUSSION_ENDS_AT + NIGHT_MS, seededRandInt(seed));
   }
@@ -387,7 +436,7 @@ describe("buildView 전수 누출 검사 (T-01-23)", () => {
               violations.push(`${tag}: me.claim outside claim phase`);
             }
             // 역할·주장 값은 허용 경로(me.role, me.claim, day.roles[], day.claims[].claim)에만 있다
-            for (const leak of roleValueLeaks(view)) violations.push(`${tag}: role-like value outside allowed paths: ${leak}`);
+            violations.push(...spectateViolations(s, viewer, view, phase, tag));
           }
         }
       }
@@ -769,5 +818,126 @@ describe("buildView 밤·아침 주장 줄 (C6)", () => {
       for (const p of s.players) if ("claims" in (buildView(s, p.id, START_AT).day ?? {})) bad.push(`${phase}/seat${p.seat}`);
     }
     expect(`[${bad.join(",")}]`).toBe("[]");
+  });
+});
+
+describe("buildView 관전 (결정 0021)", () => {
+  /** n명 판 1일차 밤: 마피아가 첫 비마피아 X 를 지목해 아침이 된 상태(의사는 보호하지 않는다 — 4명 판은 의사가 없다). */
+  function morningWithVictim(n: number, seed: number) {
+    const s0 = stateAt("night", n, seed);
+    const x = nonMafiaSeats(s0)[0]!;
+    const picked = actAt(s0, seatOfRole(s0, "mafia"), x);
+    return { s: tick(picked, DISCUSSION_ENDS_AT + NIGHT_MS, seededRandInt(seed)), x };
+  }
+  const viewOf = (s: RoomState, seat: number) => buildView(s, seatId(s, seat), START_AT);
+
+  it("1일차 밤 뒤 X 가 탈락한 morning: X 의 spectate.seats 는 모든 사람의 {seat, job}(키 job,seat; seat 오름차순; 실제 역할)이고 picks 키는 없다", () => {
+    const { s, x } = morningWithVictim(5, 1);
+    expect(isAlive(s.players.find((p) => p.seat === x)!)).toBe(false);
+    const sp = viewOf(s, x).spectate;
+    const want = [...s.players].sort((a, b) => a.seat - b.seat).map((p) => ({ seat: p.seat, job: p.role }));
+    expect(flat(sp?.seats)).toBe(flat(want));
+    expect(Object.keys(sp?.seats[0] ?? {}).sort().join(",")).toBe("job,seat");
+    expect(Object.keys(sp ?? {}).join(",")).toBe("seats");
+  });
+
+  it("같은 morning 의 살아 있는 viewer 전원 view 에는 spectate 키가 없다", () => {
+    const { s, x } = morningWithVictim(5, 1);
+    const bad = s.players.filter((p) => p.seat !== x && "spectate" in viewOf(s, p.seat)).map((p) => p.seat);
+    expect(`[${bad.join(",")}]`).toBe("[]");
+  });
+
+  it("탈락하기 전(같은 판의 1일차 night) X 의 view 에는 spectate 키가 없다", () => {
+    const s0 = stateAt("night", 5, 1);
+    const x = nonMafiaSeats(s0)[0]!;
+    expect(String("spectate" in viewOf(actAt(s0, seatOfRole(s0, "mafia"), x), x))).toBe("false");
+  });
+
+  it("2일차 night: 마피아 → Y, 경찰 → Z, 의사 → 자신(W) 일 때 X 의 spectate.picks 는 {mafia:[Y], police:[Z], doctor:[W]}; 아무도 안 고른 역할은 빈 배열", () => {
+    const { s: m, x } = morningWithVictim(5, 1);
+    const night = advanceTo(advanceTo(m, "dayAnnounce", 1), "night", 1);
+    const y = nonMafiaSeats(night).find((q) => q !== x && q !== seatOfRole(night, "police") && q !== seatOfRole(night, "doctor"))!;
+    const z = seatOfRole(night, "mafia");
+    const w = seatOfRole(night, "doctor");
+    const none = viewOf(night, x).spectate?.picks;
+    expect(flat(none)).toBe(flat({ mafia: [], police: [], doctor: [] }));
+    let s = actAt(night, seatOfRole(night, "mafia"), y);
+    s = actAt(s, seatOfRole(night, "police"), z);
+    s = actAt(s, w, w);
+    expect(flat(viewOf(s, x).spectate?.picks)).toBe(flat({ mafia: [y], police: [z], doctor: [w] }));
+    expect(`${viewOf(s, x).spectate?.picks ? Object.keys(viewOf(s, x).spectate!).sort().join(",") : "-"}`).toBe("picks,seats");
+  });
+
+  it("6명 판 마피아 둘이 Y·V 를 고르면 picks.mafia 는 [작은 seat, 큰 seat] 중복 없음(같은 대상이면 하나)", () => {
+    const { s: m, x } = morningWithVictim(6, 1);
+    const night = advanceTo(advanceTo(m, "dayAnnounce", 1), "night", 1);
+    const [a, b] = [seatOfRole(night, "mafia", 0), seatOfRole(night, "mafia", 1)];
+    const open = nonMafiaSeats(night).filter((q) => q !== x);
+    const [y, v] = [open[open.length - 1]!, open[0]!];
+    const two = actAt(actAt(night, a, y), b, v);
+    expect(flat(viewOf(two, x).spectate?.picks?.mafia)).toBe(flat([v, y].sort((p, q) => p - q)));
+    const one = actAt(actAt(night, a, y), b, y);
+    expect(flat(viewOf(one, x).spectate?.picks?.mafia)).toBe(flat([y]));
+  });
+
+  it("탈락한 마피아가 고른 값은 picks 에 들지 않는다(살아 있는 사람의 현재 선택만) — 상태를 직접 만들어 확인", () => {
+    const s0 = stateAt("night", 6, 1);
+    const [a, b] = [seatOfRole(s0, "mafia", 0), seatOfRole(s0, "mafia", 1)];
+    const [x, y] = nonMafiaSeats(s0);
+    const s: RoomState = {
+      ...actAt(s0, a, y!),
+      players: actAt(s0, a, y!).players.map((p) =>
+        p.seat === b ? { ...p, alive: false, nightPick: y! } : p.seat === x ? { ...p, alive: false } : p,
+      ),
+    };
+    expect(flat(viewOf(s, x!).spectate?.picks)).toBe(flat({ mafia: [y], police: [], doctor: [] }));
+    const s2: RoomState = { ...s, players: s.players.map((p) => (p.seat === a ? { ...p, nightPick: undefined } : p)) };
+    expect(flat(viewOf(s2, x!).spectate?.picks?.mafia)).toBe("[]");
+  });
+
+  it("탈락한 경찰의 view: records 와 spectate 가 함께 있고, spectate 의 키는 seats·picks 뿐이다(지난 정보 없음)", () => {
+    const s0 = stateAt("night", 5, 1);
+    const police = seatOfRole(s0, "police");
+    const mafia = seatOfRole(s0, "mafia");
+    const dead = tick(actAt(actAt(s0, police, mafia), mafia, police), DISCUSSION_ENDS_AT + NIGHT_MS, seededRandInt(1));
+    const v = viewOf(dead, police);
+    expect(`${flat(v.me.records)} ${Object.keys(v.spectate ?? {}).join(",")}`).toBe(`${flat([{ n: 1, target: mafia, isMafia: true }])} seats`);
+    const night2 = advanceTo(advanceTo(dead, "dayAnnounce", 1), "night", 1);
+    expect(Object.keys(viewOf(night2, police).spectate ?? {}).sort().join(",")).toBe("picks,seats");
+  });
+
+  it("탈락자 view 의 me 에는 pick·allyPicks 가 없다(관전자는 행동하지 않는다) — 남은 nightPick 이 있어도", () => {
+    const s0 = stateAt("night", 6, 1);
+    const [a, b] = [seatOfRole(s0, "mafia", 0), seatOfRole(s0, "mafia", 1)];
+    const police = seatOfRole(s0, "police");
+    const y = nonMafiaSeats(s0)[0]!;
+    const s: RoomState = {
+      ...s0,
+      players: s0.players.map((p) => (p.seat === b || p.seat === police ? { ...p, alive: false, nightPick: y } : p)),
+    };
+    const bad = [b, police].filter((seat) => "pick" in viewOf(s, seat).me || "allyPicks" in viewOf(s, seat).me);
+    expect(`[${bad.join(",")}] ${a}`).toBe(`[] ${a}`);
+    expect(Object.keys(viewOf(s, b).spectate ?? {}).sort().join(",")).toBe("picks,seats");
+  });
+
+  it("2일차 night(1일차 밤에 한 명 탈락): 4~8명 × 시드 3개 × 모든 viewer — 살아 있으면 spectate 경로가 없고 탈락했으면 직업 허용 경로가 더해진다", () => {
+    const violations: string[] = [];
+    let views = 0;
+    for (const n of PLAYER_COUNTS) {
+      for (const seed of SEEDS) {
+        const { s: m } = morningWithVictim(n, seed);
+        const s = nightActions(advanceTo(advanceTo(m, "dayAnnounce", seed), "night", seed));
+        for (const viewer of s.players) {
+          views += 1;
+          const view = buildView(s, viewer.id, START_AT);
+          violations.push(...spectateViolations(s, viewer, view, "night", `${n}/${seed}/seat${viewer.seat}`));
+          for (const path of keyPaths(view)) {
+            if (lastKey(path) === "role" && path !== "me.role") violations.push(`${n}/${seed}/seat${viewer.seat}: role at ${path}`);
+          }
+        }
+      }
+    }
+    expect(views).toBe(3 * (4 + 5 + 6 + 7 + 8));
+    expect(violations.join("; ")).toBe("");
   });
 });
