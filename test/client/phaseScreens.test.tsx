@@ -1,7 +1,7 @@
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { RoleId } from "../../shared/game/roles";
-import type { PhaseId, RoomView } from "../../shared/protocol";
+import type { MorningView, PhaseId, RoomView } from "../../shared/protocol";
 import type { RoomConnection } from "../../src/net/useRoomConnection";
 import { MemoryStorage } from "../helpers/memoryStorage";
 import { createSheetProbe } from "../../src/debug/sheetDebug";
@@ -39,13 +39,18 @@ interface ViewOpts {
   day?: number;
   /** false 면 내 자리(seat 0)의 players[].alive 를 false 로 싣는다(탈락 — 결정 0021) */
   meAlive?: boolean;
+  /** morning 단계의 아침 결과(day.morning). day 가 있어야 싣는다 */
+  morning?: MorningView;
 }
 
 function makeView(o: ViewOpts): RoomView {
   const me: RoomView["me"] = { seat: 0, isHost: o.isHost ?? false };
   if (o.role !== undefined) me.role = o.role;
   if (o.allies !== undefined) me.allies = o.allies;
-  const day: Pick<RoomView, "day"> = o.day === undefined ? {} : { day: { n: o.day, roles: ["mafia", "police", "citizen"] } };
+  const day: Pick<RoomView, "day"> =
+    o.day === undefined
+      ? {}
+      : { day: { n: o.day, roles: ["mafia", "police", "citizen"], ...(o.morning !== undefined ? { morning: o.morning } : {}) } };
   return {
     ...day,
     code: "0042",
@@ -335,6 +340,16 @@ describe("밤·아침 라우팅과 안내 (UI-SPEC C5·접근성, RESEARCH A6)",
     rerenderRoom(r.rerender, morning());
     expect(r.container.querySelector(".mf-phase-enter") === scene, "morning 래퍼 유지").toBe(true);
     expect(r.container.querySelector(".mf-dt") === table, "morning 테이블 유지").toBe(true);
+  });
+
+  it("morning view(eliminated 2, phrase 1) → 안내 '아침이 밝았습니다. 민지님이 이슬이 되어 사라졌습니다'", () => {
+    const r = renderRoom(morning({ morning: { eliminated: 2, phrase: 1 } }));
+    expect(liveRegion(r.container).textContent).toBe("아침이 밝았습니다. 민지님이 이슬이 되어 사라졌습니다");
+  });
+
+  it("morning view({}) → '아침이 밝았습니다. 아무 일도 없었습니다. 모두 무사해요'", () => {
+    const r = renderRoom(morning({ morning: {} }));
+    expect(liveRegion(r.container).textContent).toBe("아침이 밝았습니다. 아무 일도 없었습니다. 모두 무사해요");
   });
 
   it("night view, 마피아(allies [2]) 생존 → 안내 '1일차 밤. 함께 지목하세요'", () => {
