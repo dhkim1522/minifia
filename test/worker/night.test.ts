@@ -2,7 +2,7 @@
 // 실패 출력은 한 줄이어야 해서(TAP) 프레임 목록은 summary() 한 줄 문자열로 비교한다.
 import { describe, expect, it } from "vitest";
 import type { RoomView, RoleId, ServerMessage } from "../../shared/protocol";
-import { advanceTo, collect, nextFrame, seat, send, storedRoom } from "./helpers";
+import { advanceTo, alarmOf, backdateSends, collect, nextFrame, seat, send, storedRoom } from "./helpers";
 import type { Seated, TestSocket } from "./helpers";
 
 interface Actor {
@@ -146,5 +146,129 @@ describe("밤 행동 한 줄 (NIGHT-02)", () => {
     for (const a of actors.filter((x) => x !== police)) {
       expect(Object.hasOwn(viewsIn(a.sock, "morning").at(-1)!.me, "records")).toBe(false);
     }
+  });
+});
+
+/** 행동을 보내고, 받은 소켓(들)과 못 받아야 하는 소켓(들)의 프레임 요약을 돌려준다. */
+async function sendAndSettle(
+  from: Actor,
+  msg: unknown,
+  watchers: Actor[],
+): Promise<{ own: ServerMessage[]; seen: Map<Actor, ServerMessage[]> }> {
+  const marks = new Map(watchers.map((a) => [a, mark(a.sock)]));
+  const ownMark = mark(from.sock);
+  send(from.sock, msg);
+  const own = await settle(from.sock, ownMark);
+  const seen = new Map<Actor, ServerMessage[]>();
+  for (const a of watchers) seen.set(a, await settle(a.sock, marks.get(a)!));
+  return { own, seen };
+}
+
+describe("마피아 밤 (NIGHT-01·D-07)", () => {
+  it("마피아 A 의 pick 은 살아 있는 마피아 둘에게만 state 로 가고 나머지 네 소켓은 프레임을 받지 않는다", async () => {
+    const r = await startedAtNight(6);
+    const actors = actorsOf(r);
+    const [a, b] = withRole(actors, "mafia") as [Actor, Actor];
+    const victim = withRole(actors, "citizen")[0]!;
+    const rest = actors.filter((x) => x.role !== "mafia");
+
+    const { own, seen } = await sendAndSettle(a, { t: "pick", target: victim.seat }, [b, ...rest]);
+    expect(summary(own)).toBe("[state:night]");
+    expect(String((own[0] as Extract<ServerMessage, { t: "state" }>).view.me.pick)).toBe(String(victim.seat));
+    expect(summary(seen.get(b)!)).toBe("[state:night]");
+    expect(JSON.stringify((seen.get(b)![0] as Extract<ServerMessage, { t: "state" }>).view.me.allyPicks)).toBe(`[${victim.seat}]`);
+    for (const x of rest) expect(summary(seen.get(x)!)).toBe("[]");
+  });
+});
+
+describe("밤 채팅 (D-17·COMM-04)", () => {
+  it("마피아의 밤 say·emoji 는 살아 있는 마피아 둘에게만 가고 비마피아 네 소켓은 chat·emoji 프레임을 받지 않는다", async () => {
+    const r = await startedAtNight(6);
+    const actors = actorsOf(r);
+    const [a, b] = withRole(actors, "mafia") as [Actor, Actor];
+    const victim = withRole(actors, "citizen")[0]!;
+    const rest = actors.filter((x) => x.role !== "mafia");
+
+    const said = await sendAndSettle(a, { t: "say", template: "nightTarget", target: victim.seat }, [b, ...rest]);
+    expect(summary(said.own)).toBe("[chat]");
+    expect(summary(said.seen.get(b)!)).toBe("[chat]");
+    expect(Object.keys(said.own[0]!).sort().join(",")).toBe("at,seat,seq,t,target,template");
+    for (const x of rest) expect(summary(said.seen.get(x)!)).toBe("[]");
+
+    await backdateSends(r.code);
+    const emoted = await sendAndSettle(a, { t: "emoji", icon: "smile" }, [b, ...rest]);
+    expect(summary(emoted.own)).toBe("[emoji]");
+    expect(summary(emoted.seen.get(b)!)).toBe("[emoji]");
+    for (const x of rest) expect(summary(emoted.seen.get(x)!)).toBe("[]");
+  });
+
+  it("살아 있는 시민의 밤 say 는 그 소켓만 WRONG_PHASE + state 를 받고, 마피아의 낮 문구는 BAD_MESSAGE 뿐이다", async () => {
+    const r = await startedAtNight(6);
+    const actors = actorsOf(r);
+    const [a, b] = withRole(actors, "mafia") as [Actor, Actor];
+    const citizen = withRole(actors, "citizen")[0]!;
+    const rest = actors.filter((x) => x !== citizen);
+
+    const wrong = await sendAndSettle(citizen, { t: "say", template: "nightAgree" }, rest);
+    expect(summary(wrong.own)).toBe("[error:WRONG_PHASE,state:night]");
+    for (const x of rest) expect(summary(wrong.seen.get(x)!)).toBe("[]");
+
+    const day = await sendAndSettle(a, { t: "say", template: "innocent" }, [b, citizen]);
+    expect(summary(day.own)).toBe("[error:BAD_MESSAGE]");
+    expect(summary(day.seen.get(b)!)).toBe("[]");
+    expect(summary(day.seen.get(citizen)!)).toBe("[]");
+  });
+
+  it("밤 say 는 메시지를 저장하지 않고 낮 번호는 그대로이며 밤 번호만 오른다", async () => {
+    const r = await startedAtNight(6);
+    const actors = actorsOf(r);
+    const [a] = withRole(actors, "mafia") as [Actor, Actor];
+    const victim = withRole(actors, "citizen")[0]!;
+    const before = (await storedRoom(r.code)) as unknown as Record<string, unknown>;
+
+    await sendAndSettle(a, { t: "say", template: "nightTarget", target: victim.seat }, []);
+    const after = (await storedRoom(r.code)) as unknown as Record<string, unknown>;
+    expect(Object.hasOwn(after, "messages")).toBe(false);
+    expect(JSON.stringify(after).includes("nightTarget")).toBe(false);
+    expect(String(after.nextMessageSeq)).toBe(String(before.nextMessageSeq));
+    expect(String(before.nextNightSeq)).toBe("undefined");
+    expect(String(after.nextNightSeq)).toBe("2");
+  });
+});
+
+describe("마감 (NIGHT-05)", () => {
+  it("모든 행동 역할이 고른 뒤에도 밤은 진입 때 마감·알람 그대로 남는다", async () => {
+    const r = await startedAtNight(6);
+    const actors = actorsOf(r);
+    const endsAt = lastView(r.host).phaseEndsAt;
+    const [a, b] = withRole(actors, "mafia") as [Actor, Actor];
+    const police = withRole(actors, "police")[0]!;
+    const doctor = withRole(actors, "doctor")[0]!;
+    const victim = withRole(actors, "citizen")[0]!;
+
+    await pick(a, victim.seat);
+    await pick(b, victim.seat);
+    await pick(police, a.seat);
+    await pick(doctor, doctor.seat);
+
+    const stored = await storedRoom(r.code);
+    expect(stored.phase).toBe("night");
+    expect(String(stored.phaseEndsAt)).toBe(String(endsAt));
+    expect(String(await alarmOf(r.code))).toBe(String(endsAt));
+  });
+});
+
+describe("낮 방송 회귀", () => {
+  it("낮 토론 say 는 지금처럼 모든 소켓에 간다", async () => {
+    const r = await seat(4, 0);
+    send(r.host, { t: "start" });
+    for (const s of allSockets(r)) await nextFrame(s, (m) => m.t === "state" && m.view.phase === "assigning");
+    await advanceTo(r.code, allSockets(r), "discussion");
+    const actors = actorsOf(r);
+    const [speaker, ...rest] = actors as [Actor, ...Actor[]];
+
+    const said = await sendAndSettle(speaker, { t: "say", template: "innocent" }, rest);
+    expect(summary(said.own)).toBe("[chat]");
+    for (const x of rest) expect(summary(said.seen.get(x)!)).toBe("[chat]");
   });
 });
