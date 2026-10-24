@@ -1,0 +1,6 @@
+/* 수사 기록 줄 배치(f6.css 의 .nb 규칙을 덮어씀): 일차 · 이름 · 결과를 왼쪽으로 모으고 NEW 만 오른쪽 끝 */
+.nb li { display: grid; grid-template-columns: 52px 84px minmax(0, 1fr) 48px; column-gap: 6px; align-items: center; }
+.nb .d { width: auto; }
+.nb .w { display: inline-flex; align-items: center; gap: 6px; min-width: 0; flex: none; }
+.nb .rz { margin-left: 0; justify-self: start; }
+.nb .nw { justify-self: end; }
