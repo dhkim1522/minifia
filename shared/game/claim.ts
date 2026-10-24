@@ -16,6 +16,7 @@
 // 공개 뒤 claimLast = 공개 값. claimLast 가 매일 공개 값으로 덮이므로 어제 R → 오늘 none → 내일 R' 는
 // 말 바꿈이 아니다 — "직전 낮이 말 안 함이면 처음 주장으로 본다"(D-08 권장안)의 직접 결과이며(A3), 결정 0016 에 기록한다.
 import type { Claim } from "../protocol";
+import { isAlive } from "./alive";
 import type { Player, RoomState } from "./room";
 import { rolesInPlay } from "./roles";
 
@@ -59,10 +60,10 @@ export function currentClaim(p: Player): Claim | undefined {
 export type ClaimError = "WRONG_PHASE" | "BAD_MESSAGE";
 
 /**
- * 직업 선택. 검사 순서가 계약이다: 단계(claim 아니면 WRONG_PHASE) → 방에 있는 사람 → claimOptions 포함(아니면 BAD_MESSAGE)
- * → 같은 값이면 입력 상태 그대로 ok → 아니면 그 사람의 claimChoice 만 바꾼 새 상태.
+ * 직업 선택. 검사 순서가 계약이다: 단계(claim 아니면 누구든 WRONG_PHASE) → 방에 있는 사람 → 생존(탈락자는 BAD_MESSAGE)
+ * → claimOptions 포함(아니면 BAD_MESSAGE) → 같은 값이면 입력 상태 그대로 ok → 아니면 그 사람의 claimChoice 만 바꾼 새 상태.
  * 입력은 서버 상태와 요청자 id 뿐이다(클라이언트가 보낸 seat 를 받지 않는다). 판정은 보낸 사람의 실제 역할과 무관하다(D-10, T-02-06).
- * 탈락자 거부는 3페이즈(ELIM-01)가 이 함수에 isAlive 검사를 더한다.
+ * 탈락자는 BAD_MESSAGE(ELIM-01, 결정 0016 결과 — 3페이즈 확정). 맞는 단계 안의 거부 규칙이고 틀린 단계는 탈락자도 WRONG_PHASE 다.
  */
 export function selectClaim(
   state: RoomState,
@@ -71,7 +72,7 @@ export function selectClaim(
 ): { ok: true; state: RoomState } | { ok: false; error: ClaimError } {
   if (state.phase !== "claim") return { ok: false, error: "WRONG_PHASE" };
   const actor = state.players.find((p) => p.id === actorId);
-  if (!actor) return { ok: false, error: "BAD_MESSAGE" };
+  if (!actor || !isAlive(actor)) return { ok: false, error: "BAD_MESSAGE" };
   if (!claimOptions(state.players.length).includes(claim)) return { ok: false, error: "BAD_MESSAGE" };
   if (actor.claimChoice === claim) return { ok: true, state };
   return {

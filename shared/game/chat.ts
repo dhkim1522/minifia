@@ -37,8 +37,9 @@ export type SayInput = { template: TemplateId; target?: number; claimedRole?: Ro
 export type ChatError = "WRONG_PHASE" | "BAD_MESSAGE" | "RATE_LIMITED";
 
 /**
- * 보낸 사람 규칙(단계 × 역할). discussion 은 방에 있는 생존자 누구나, night 는 살아 있는 마피아만(결정 0019-1).
- * 방에 없거나 탈락한 사람은 BAD_MESSAGE, 밤의 살아 있는 비마피아와 그 밖의 단계는 WRONG_PHASE.
+ * 거부 규칙 하나(3페이즈 확정, 결정 0016 결과·0019): 틀린 단계 → WRONG_PHASE(누구든, 탈락자도), 맞는 단계(discussion·night)의
+ * 방에 없거나 탈락한 보낸 사람 → BAD_MESSAGE, 밤의 살아 있는 비마피아 → WRONG_PHASE(그 단계에 보낼 수 없는 사람이라는 뜻일 뿐 역할 정보를 주지 않는다).
+ * discussion 은 방에 있는 생존자 누구나, night 는 살아 있는 마피아만(결정 0019-1).
  */
 function senderOf(state: RoomState, actorId: string): ChatError | Player {
   if (state.phase !== "discussion" && state.phase !== "night") return "WRONG_PHASE";
