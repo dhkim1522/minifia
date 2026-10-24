@@ -4,18 +4,18 @@ milestone: v1.0
 milestone_name: MVP
 current_phase: 02
 current_phase_name: 낮 토론
-current_plan: 13
+current_plan: 14
 status: executing
-stopped_at: Completed 02-12-PLAN.md
-last_updated: "2026-10-24T11:19:45.860Z"
+stopped_at: Completed 02-13-PLAN.md
+last_updated: "2026-10-24T11:22:09.736Z"
 last_activity: 2026-10-24
 last_activity_desc: Phase 02 execution started
-state_head: 556ce767009682ec8d188e188b6164613fdddc05
+state_head: 5f2608a20205c63b802d9b106ec1c23b904105e8
 progress:
   total_phases: 6
   completed_phases: 1
   total_plans: 37
-  completed_plans: 31
+  completed_plans: 32
 ---
 
 # Project State
@@ -30,9 +30,9 @@ See: .planning/PROJECT.md (updated 2026-10-21)
 ## Current Position
 
 Phase: 02 (낮 토론) — EXECUTING
-Current Plan: 13
+Current Plan: 14
 Total Plans in Phase: 18
-Plan: 13 of 18
+Plan: 14 of 18
 Status: Ready to execute
 Last activity: 2026-10-24 — Phase 02 execution started
 
@@ -77,6 +77,7 @@ Progress: [██░░░░░░░░] 17%
 | Phase 02 P09 | 9 min | 3 tasks | 6 files |
 | Phase 02 P11 | 15 min | 2 tasks | 4 files |
 | Phase 02 P12 | 10min | 3 tasks | 11 files |
+| Phase 02 P13 | 10min | 2 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -122,6 +123,7 @@ Recent decisions affecting current work:
 - [Phase 02]: 낮 토론에서 polite live 영역이 늘어(MessageLog·이모티콘 live 줄) phaseScreens 안내 영역 선택자를 .mf-room 직계 자식으로 좁힘
 - [Phase 02]: 02-11: 스모크 순서 검사는 허용 전이 표(PHASE_NEXT)로, 마감 전 누출 검사는 값 문자열 경로(view.me.role·view.me.claim·view.day.roles[])로 한다. 구조 결정 7가지는 결정 0016 에 기록
 - [Phase 02]: 02-12: 빠른 메시지는 상태에 보관하지 않고 chat 이벤트로만 방송, 서버 한도 SERVER_MIN_SEND_GAP_MS 1800 (결정 0017-7, G-02-2)
+- [Phase 02]: 닉네임 최대 길이 8 → 5 그래핌 (결정 0017-4), 규칙은 shared/nickname.ts 한 곳
 
 ### Pending Todos
 
@@ -147,6 +149,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-24T11:19:45.638Z
-Stopped at: Completed 02-12-PLAN.md
+Last session: 2026-10-24T11:22:09.548Z
+Stopped at: Completed 02-13-PLAN.md
 Resume file: None
