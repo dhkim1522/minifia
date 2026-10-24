@@ -2,7 +2,8 @@
 // DOM·workerd API 를 쓰지 않으며, 입력 상태는 바꾸지 않는다.
 //
 // 서버는 문장을 만들지 않는다: 방송하는 것은 템플릿 ID·대상 seat·직업 값뿐이고 문장은 화면이 만든다(T-02-07).
-// 통과한 한 줄은 돌려주기만 하고 상태에 저장하지 않는다(결정 0017-7) — 저장되는 것은 보낸 사람 lastSendAt 과 nextMessageSeq 뿐이다.
+// 통과한 한 줄은 돌려주기만 하고 상태에 저장하지 않는다(결정 0017-7) — 저장되는 것은 보낸 사람 lastSendAt 과 줄 번호뿐이다
+// (낮 nextMessageSeq, 밤 nextNightSeq — 밤 번호는 낮과 따로라 낮 chat 프레임 seq 로 밤 메시지 수를 알 수 없다, 밤마다 enterNight 가 지운다).
 // 주장의 참·거짓은 보지 않는다(D-10) — 역할은 밤 보낸 사람 규칙(살아 있는 마피아만, 결정 0019)에서만 읽는다.
 // 보낸 사람은 입력이 아니라 actorId 로 서버 상태에서 찾는다(T-02-08).
 import { EMOJI_IDS } from "../protocol";
@@ -90,7 +91,9 @@ export function say(
   if (coolingDown(sender, now)) return { ok: false, error: "RATE_LIMITED" };
 
   // 필드를 하나씩 써서 만든다 — 입력 객체를 펼쳐 복사하지 않아 알 수 없는 키가 끼어들 수 없다(T-02-07).
-  const seq = state.nextMessageSeq ?? 1;
+  // 밤 줄 번호는 낮 번호와 따로 센다(D-17, PLAN-CHECK W3): 낮 nextMessageSeq 는 밤에 바뀌지 않는다.
+  const isNight = state.phase === "night";
+  const seq = (isNight ? state.nextNightSeq : state.nextMessageSeq) ?? 1;
   const line: ChatLine = {
     seq,
     seat: sender.seat,
@@ -104,7 +107,7 @@ export function say(
     line,
     state: {
       ...state,
-      nextMessageSeq: seq + 1,
+      ...(isNight ? { nextNightSeq: seq + 1 } : { nextMessageSeq: seq + 1 }),
       players: state.players.map((p) => (p.id === sender.id ? { ...p, lastSendAt: now } : p)),
     },
   };
