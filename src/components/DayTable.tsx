@@ -24,6 +24,16 @@ export type DayTagRow =
   /** 관전 화면 전용: 실제 직업(공개 주장 알약과 모양이 다르다). 값은 장면이 탈락자 전용 서버 값으로만 만든다 */
   | { kind: "real"; job: RoleId };
 
+/** 관전 화면에서 표적 배지를 다는 역할 종류. 살아 있는 사람 화면에는 넘어오지 않는다 */
+export type SpectatorPick = "mafia" | "police" | "doctor";
+
+// 관전 배지 읽기 이름(문구는 이 표 한 곳)
+const SPECTATOR_PICK_LABEL: Readonly<Record<SpectatorPick, string>> = {
+  mafia: "마피아 지목 대상",
+  police: "경찰 조사 대상",
+  doctor: "의사 보호 대상",
+};
+
 export interface DayTableSeat {
   seat: number;
   nickname: string;
@@ -36,8 +46,10 @@ export interface DayTableSeat {
   spoke?: boolean;
   /** 머리 위에 떠 있는 이모티콘 하나. key 가 바뀌면 애니메이션이 새로 시작한다. */
   emoji?: { key: string; icon: EmojiId; z: number } | null;
-  /** 밤 선택 표시. mine = 내가 고른 대상(발밑 링 + 표적 배지) */
-  pick?: { mine?: boolean };
+  /** 밤 선택 표시. mine = 내가 고른 대상(발밑 링 + 표적 배지), ally = 마피아 화면의 동료 선택(장식 배지) */
+  pick?: { mine?: boolean; ally?: boolean };
+  /** 관전 화면 전용: 이 자리를 고른 역할별 표적 배지. 장면이 view.spectate 로만 만든다(결정 0021) */
+  spectatorPicks?: readonly SpectatorPick[];
   /** 탈락: 유령 그림·회색 이름표. 탈락 때문에 흐리게 하지 않는다 */
   dead?: boolean;
   /** 있으면 이 자리가 대상 버튼이 된다(밤). 없으면 지금 그대로의 group 노드 */
@@ -108,6 +120,20 @@ function TagRow({ row }: { row: DayTagRow }): ReactElement {
   );
 }
 
+/** 머리 위 26px 표적 배지. label 이 있으면 role=img 로 읽히고, 없으면 장식 */
+function PickBadge({ kind, label }: { kind: "me" | "ally" | "police" | "doctor"; label?: string }): ReactElement {
+  return (
+    <span
+      className={`mf-dt__pick mf-dt__pick--${kind}`}
+      role={label ? "img" : undefined}
+      aria-label={label}
+      aria-hidden={label ? undefined : "true"}
+    >
+      <Icon name="target" size={16} />
+    </span>
+  );
+}
+
 export function DayTable({ seats, mySeat, width, height, label = "테이블", pickVerb = "선택", pickDisabled, allyMarkLabel = "동료" }: DayTableProps): ReactElement {
   const rootRef = useRef<HTMLDivElement>(null);
   const [measured, setMeasured] = useState({ w: DAY_SCENE_W, h: DAY_SCENE_H });
@@ -166,12 +192,18 @@ export function DayTable({ seats, mySeat, width, height, label = "테이블", pi
                 <Icon name="crown" size={13} />
               </span>
             ) : null}
+            {/* 배지 쌓기: 경찰 → 의사 → 마피아 → 내 링 → 내 배지(내 것이 위) */}
+            {s.spectatorPicks?.includes("police") ? <PickBadge kind="police" label={SPECTATOR_PICK_LABEL.police} /> : null}
+            {s.spectatorPicks?.includes("doctor") ? <PickBadge kind="doctor" label={SPECTATOR_PICK_LABEL.doctor} /> : null}
+            {s.spectatorPicks?.includes("mafia") ? (
+              <PickBadge kind="ally" label={SPECTATOR_PICK_LABEL.mafia} />
+            ) : s.pick?.ally ? (
+              <PickBadge kind="ally" />
+            ) : null}
             {s.pick?.mine ? (
               <>
                 <span className="mf-dt__sel" />
-                <span className="mf-dt__pick mf-dt__pick--me" aria-hidden="true">
-                  <Icon name="target" size={16} />
-                </span>
+                <PickBadge kind="me" />
               </>
             ) : null}
           </>

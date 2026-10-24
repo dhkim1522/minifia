@@ -115,6 +115,11 @@
   background: var(--gray-50); color: var(--night-900);
   box-shadow: 0 2px 8px color-mix(in srgb, var(--shadow) 91%, transparent); z-index: 5;
 }
+/* 종류별 배지(시안 f6 --ally, f8 --police·--doctor). 겹치면 내 배지(z 5)가 가장 위.
+   진홍은 동료·마피아 선택 배지에만(UI-SPEC 진홍 예약). 의사의 초록은 값이 같은 기존 토큰 --seat-3(UI-SPEC 확인 필요 8). */
+.mf-dt__pick--ally { background: var(--night-900); color: var(--crimson-400); border: 2px solid var(--crimson-400); margin-left: 4px; z-index: 3; }
+.mf-dt__pick--police { background: var(--night-900); color: var(--gray-50); border: 2px solid var(--gray-50); z-index: 1; }
+.mf-dt__pick--doctor { background: var(--night-900); color: var(--seat-3); border: 2px solid var(--seat-3); margin-left: -4px; z-index: 2; }
 
 /* 머리 위 이모티콘: 32px 원 + 아래로 5px 꼬리. 이름표(z 20~30)보다 위. 약 2초 등장·퇴장 */
 .mf-dt__emoji {
