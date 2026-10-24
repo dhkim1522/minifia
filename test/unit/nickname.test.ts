@@ -26,9 +26,15 @@ describe("validateNickname - 정상 입력", () => {
     expect(r.ok && r.nickname).toBe("김 민수");
   });
 
-  it("8글자는 받는다", () => {
-    expect(NICKNAME_MAX_GRAPHEMES).toBe(8);
-    expect(validateNickname("가나다라마바사아").ok).toBe(true);
+  it("5글자는 받는다 (결정 0017-4)", () => {
+    expect(NICKNAME_MAX_GRAPHEMES).toBe(5);
+    expect(validateNickname("가나다라마").ok).toBe(true);
+  });
+
+  it("가족 이모지 5개(그래핌 5)는 받고 6개는 TOO_LONG", () => {
+    expect(countGraphemes(FAMILY.repeat(5))).toBe(5);
+    expect(validateNickname(FAMILY.repeat(5)).ok).toBe(true);
+    expect(validateNickname(FAMILY.repeat(6))).toEqual({ ok: false, reason: "TOO_LONG" });
   });
 
   it("가족 이모지는 글자 1개로 세고 받는다", () => {
@@ -50,8 +56,8 @@ describe("validateNickname - 정상 입력", () => {
 });
 
 describe("validateNickname - 거부", () => {
-  it("9글자는 TOO_LONG", () => {
-    expect(validateNickname("가나다라마바사아자")).toEqual({ ok: false, reason: "TOO_LONG" });
+  it("6글자는 TOO_LONG", () => {
+    expect(validateNickname("가나다라마바")).toEqual({ ok: false, reason: "TOO_LONG" });
   });
 
   it("빈 값은 EMPTY", () => {

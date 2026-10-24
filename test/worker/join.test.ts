@@ -81,6 +81,15 @@ describe("POST /api/rooms/{code}/join", () => {
     expect(await errorOf(res)).toBe("NICKNAME_INVALID");
   });
 
+  it("6글자 닉네임 참가는 400 NICKNAME_INVALID, 5글자는 통과 (결정 0017-4)", async () => {
+    const { code } = await createRoom();
+    const tooLong = await joinRoom(code, "가나다라마바");
+    expect(tooLong.status).toBe(400);
+    expect(await errorOf(tooLong)).toBe("NICKNAME_INVALID");
+    const ok = await joinRoom(code, "가나다라마");
+    expect([200, 201]).toContain(ok.status);
+  });
+
   it("빈 닉네임은 400 NICKNAME_INVALID", async () => {
     const { code } = await createRoom();
     const res = await joinRoom(code, "");
