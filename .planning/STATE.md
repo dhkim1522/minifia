@@ -4,18 +4,18 @@ milestone: v1.0
 milestone_name: MVP
 current_phase: 02
 current_phase_name: 낮 토론
-current_plan: 16
+current_plan: 17
 status: executing
-stopped_at: Completed 02-15-PLAN.md
-last_updated: "2026-10-24T11:37:14.413Z"
+stopped_at: Completed 02-16-PLAN.md
+last_updated: "2026-10-24T11:45:24.673Z"
 last_activity: 2026-10-24
 last_activity_desc: Phase 02 execution started
-state_head: 7deecdf0078b222c043706c14c5119075434aa53
+state_head: affb23b6258cd76fc9c40cbca7e0ab6cd4ac498a
 progress:
   total_phases: 6
   completed_phases: 1
   total_plans: 37
-  completed_plans: 34
+  completed_plans: 35
 ---
 
 # Project State
@@ -30,9 +30,9 @@ See: .planning/PROJECT.md (updated 2026-10-21)
 ## Current Position
 
 Phase: 02 (낮 토론) — EXECUTING
-Current Plan: 16
+Current Plan: 17
 Total Plans in Phase: 18
-Plan: 16 of 18
+Plan: 17 of 18
 Status: Ready to execute
 Last activity: 2026-10-24 — Phase 02 execution started
 
@@ -80,6 +80,7 @@ Progress: [██░░░░░░░░] 17%
 | Phase 02 P13 | 10min | 2 tasks | 9 files |
 | Phase 02 P14 | 7 min | 3 tasks | 9 files |
 | Phase 02 P15 | 9min | 3 tasks | 15 files |
+| Phase 02 P16 | 20min | 3 tasks | 14 files |
 
 ## Accumulated Context
 
@@ -129,6 +130,8 @@ Recent decisions affecting current work:
 - [Phase 02]: 02-14: 낮 화면 전용 DayTable 을 새로 만들고 대기실·배정 공용 Table 은 그대로 둔다. 장면이 짧으면 테이블 전체를 올리고(cy 177~210) 326 미만은 겹침을 받아들인다(결정 0017-1)
 - [Phase 02]: [02-15] extend·skip 은 스키마에서 빠져 BAD_MESSAGE 가 된다 — 별도 오류 코드·핸들러 없음 (결정 0017-5)
 - [Phase 02]: [02-15] phaseDurationOf 는 단계 표 길이만 돌려주는 한 줄 함수로 남긴다 (3·4페이즈 길이 파생 한 곳)
+- [Phase 02]: [02-16] 채팅 줄·보낸 사람 반전·이모티콘은 이 폰이 discussion 중 받은 chat·emoji 이벤트로만 만든다 (복원 없음, 일차가 바뀌면 비움, 결정 0017-7)
+- [Phase 02]: [02-16] 직업 공개 아랫줄 완료는 서버 claimDone 만으로 정한다 (2일차 미리 선택돼도 직접 누르기 전엔 …, T-02-44)
 
 ### Pending Todos
 
@@ -154,6 +157,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-24T11:37:14.194Z
-Stopped at: Completed 02-15-PLAN.md
+Last session: 2026-10-24T11:45:24.443Z
+Stopped at: Completed 02-16-PLAN.md
 Resume file: None
