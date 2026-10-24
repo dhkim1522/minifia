@@ -10,7 +10,7 @@ type Message = { place: MessagePlace; text: string };
 type Context = "create" | "home-code" | "link";
 
 const NETWORK_TEXT = "연결이 불안정해요. 다시 시도해 주세요";
-const NICKNAME_RANGE_TEXT = "1~8자로 입력해 주세요";
+const NICKNAME_RANGE_TEXT = "1~5자로 입력해 주세요";
 
 const NETWORK_MESSAGE: Message = { place: "toast", text: NETWORK_TEXT };
 

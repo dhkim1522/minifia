@@ -135,10 +135,10 @@ describe("createRoomState", () => {
     expect(r.ok ? "ok" : r.error).toBe("NICKNAME_INVALID");
   });
 
-  it("글자 수는 grapheme 으로 센다 (이모지 8개는 통과, 가족 이모지 8개도 통과)", () => {
-    const emoji = createRoomState({ code: "0420", hostId: "h", hostToken: "t", hostNickname: "😀".repeat(8), now: 0 });
+  it("글자 수는 grapheme 으로 센다 (이모지 5개는 통과, 가족 이모지 5개도 통과)", () => {
+    const emoji = createRoomState({ code: "0420", hostId: "h", hostToken: "t", hostNickname: "😀".repeat(5), now: 0 });
     expect(emoji.ok).toBe(true);
-    const family = createRoomState({ code: "0420", hostId: "h", hostToken: "t", hostNickname: "👨‍👩‍👧".repeat(8), now: 0 });
+    const family = createRoomState({ code: "0420", hostId: "h", hostToken: "t", hostNickname: "👨‍👩‍👧".repeat(5), now: 0 });
     expect(family.ok).toBe(true);
   });
 });

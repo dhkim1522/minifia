@@ -210,7 +210,7 @@ export function JoinByLink({ code, notice, onEnterRoom, onHome }: JoinByLinkProp
             kind="nickname"
             value={nickname}
             onChange={handleNicknameChange}
-            placeholder="1~8자로 입력"
+            placeholder="1~5자로 입력"
             inputRef={inputRef}
             error={nicknameError}
           />
