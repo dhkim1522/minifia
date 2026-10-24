@@ -50,36 +50,75 @@ export function enterNight(state: RoomState): RoomState {
   };
 }
 
-/** 마피아 표 집계: 생존 마피아가 고른 앉은 생존 비마피아만 센다. 최다가 하나일 때만 그 seat. */
-function mafiaTarget(state: RoomState): number | undefined {
-  const votes = new Map<number, number>();
-  for (const p of state.players) {
-    if (p.role !== "mafia" || !isAlive(p) || p.nightPick === undefined) continue;
-    const t = state.players.find((q) => q.seat === p.nightPick);
-    if (!t || !isAlive(t) || t.role === "mafia") continue;
-    votes.set(t.seat, (votes.get(t.seat) ?? 0) + 1);
-  }
-  const top = Math.max(0, ...votes.values());
-  const tied = [...votes].filter(([, c]) => c === top && top > 0).map(([seat]) => seat);
-  return tied.length === 1 ? tied[0] : undefined;
-}
-
-/** 그 밤의 판정. 상태는 바꾸지 않고 결과만 돌려준다. */
+/**
+ * 판정 규칙표(결정 0020). 모든 행동은 밤 시작 시점의 생존자 기준으로 동시에 해결한다.
+ *   마피아 아무도 안 고름           → 지목 없음, 탈락 없음, morning {} (D-08)
+ *   마피아 일부만 고름              → 고른 사람의 표만 센다 (A2)
+ *   최다 대상 하나                  → 그 대상
+ *   최다 동률                       → seat 오름차순 목록에서 tied[randInt(tied.length)] (D-07)
+ *   저장된 지목이 탈락자·마피아     → 집계에서 뺀다(방어적 재검증)
+ *   의사 보호 = 최종 지목           → 탈락 없음, morning {} — 지목 없음과 구별되지 않는다 (D-13). 자기 보호 허용
+ *   경찰 조사                       → { n: day ?? 1, target, isMafia } 를 그 경찰의 investigations 끝에 (D-09). 자기 조사 = false
+ *   그 밤에 지목되는 경찰·의사      → 조사·보호는 그대로 적용 — 동시 해결 (A1)
+ *   문구                            → 탈락자가 있을 때만 1..MORNING_PHRASE_COUNT 에서 lastPhrase 를 뺀 오름차순 후보 중 하나 (D-18)
+ * 동시 해결(A1)·고른 표만 센다(A2)는 사용자가 바꿀 수 있는 기본값이다 — 바뀌면 이 표와 테스트만 고친다(결정 0020).
+ * 난수 호출 순서 계약: 동률일 때 한 번(randInt(동률 수)), 탈락자가 있을 때 한 번(randInt(후보 문구 수)).
+ * 필요 없으면 부르지 않는다 — 인자 0 호출은 없다(cryptoRandInt(0) 은 RangeError).
+ */
 export function resolveNight(
   state: RoomState,
   randInt: RandInt,
 ): { eliminated?: number; phrase?: number; records: Array<{ playerId: string; record: InvestigationRecord }> } {
-  const eliminated = mafiaTarget(state);
-  if (eliminated === undefined) return { records: [] };
-  return { eliminated, phrase: 1 + randInt(MORNING_PHRASE_COUNT), records: [] };
+  const seated = (seat: number | undefined): Player | undefined =>
+    seat === undefined ? undefined : state.players.find((q) => q.seat === seat);
+  const living = state.players.filter(isAlive);
+
+  // 마피아 표: 생존 마피아가 고른 앉은 생존 비마피아만 센다(A2).
+  const votes = new Map<number, number>();
+  for (const p of living) {
+    if (p.role !== "mafia") continue;
+    const t = seated(p.nightPick);
+    if (!t || !isAlive(t) || t.role === "mafia") continue;
+    votes.set(t.seat, (votes.get(t.seat) ?? 0) + 1);
+  }
+  const top = Math.max(0, ...votes.values());
+  const tied = [...votes]
+    .filter(([, count]) => count === top && top > 0)
+    .map(([seat]) => seat)
+    .sort((a, b) => a - b);
+  const target = tied.length <= 1 ? tied[0] : tied[randInt(tied.length)];
+
+  // 의사 보호: 밤 시작 시점의 생존 의사 중 최종 지목을 고른 사람이 있으면 탈락 없음(A1: 지목되는 의사의 보호도 적용).
+  const saved = target !== undefined && living.some((p) => p.role === "doctor" && p.nightPick === target);
+  const eliminated = target !== undefined && !saved ? target : undefined;
+
+  // 경찰 조사: 밤 시작 시점의 생존 경찰마다 고른 앉은 생존자의 마피아 여부 한 비트(A1: 지목되는 경찰의 조사도 기록).
+  const records: Array<{ playerId: string; record: InvestigationRecord }> = [];
+  for (const p of living) {
+    if (p.role !== "police") continue;
+    const t = seated(p.nightPick);
+    if (!t || !isAlive(t)) continue;
+    records.push({ playerId: p.id, record: { n: state.day ?? 1, target: t.seat, isMafia: t.role === "mafia" } });
+  }
+
+  if (eliminated === undefined) return { records };
+  const candidates: number[] = [];
+  for (let n = 1; n <= MORNING_PHRASE_COUNT; n += 1) if (n !== state.lastPhrase) candidates.push(n);
+  return { eliminated, phrase: candidates[randInt(candidates.length)], records };
 }
 
-/** morning 진입 훅: resolveNight 결과를 한 번의 새 상태로 적용한다. 모든 nightPick 키를 지운다. */
+/**
+ * morning 진입 훅: resolveNight 결과를 한 번의 새 상태로 적용한다 — 탈락자 alive false(직업은 싣지 않는다),
+ * 경찰 investigations 뒤에 추가, morning 은 탈락자가 있으면 { eliminated, phrase } 없으면 {}, 탈락자가 있으면 lastPhrase 갱신,
+ * 모든 nightPick 키 제거(아침 뷰에 선택 흔적이 남지 않는다).
+ */
 export function enterMorning(state: RoomState, randInt: RandInt): RoomState {
   const result = resolveNight(state, randInt);
   const players: Player[] = state.players.map((p) => {
     const { nightPick: _nightPick, ...kept } = p;
-    return result.eliminated === p.seat ? { ...kept, alive: false } : kept;
+    const added = result.records.filter((r) => r.playerId === p.id).map((r) => r.record);
+    const withRecords = added.length > 0 ? { ...kept, investigations: [...(kept.investigations ?? []), ...added] } : kept;
+    return result.eliminated === p.seat ? { ...withRecords, alive: false } : withRecords;
   });
   const next: RoomState = {
     ...state,
