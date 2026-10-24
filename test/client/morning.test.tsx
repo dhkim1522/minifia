@@ -161,3 +161,69 @@ describe("night.css: 아침 카드 (03-10)", () => {
     expect(/color:\s*var\(--gray-300\)/.test(s)).toBe(true);
   });
 });
+
+describe("무사·타이머·표시 소멸·탈락 순간 (03-10)", () => {
+  const spectate: SpectateView = {
+    seats: [
+      { seat: 0, job: "citizen" },
+      { seat: 1, job: "mafia" },
+      { seat: 2, job: "citizen" },
+      { seat: 3, job: "police" },
+      { seat: 4, job: "doctor" },
+    ],
+    picks: { mafia: [], police: [], doctor: [] },
+  };
+  const seatEl = (c: HTMLElement, seat: number) => c.querySelector<HTMLElement>(`.mf-dt__seat[data-seat="${seat}"]`);
+  const rowText = (c: HTMLElement, seat: number) => c.querySelector(`.mf-dt__tag[data-seat="${seat}"] .mf-dt__claim`)?.textContent ?? "(없음)";
+  const urgent = (c: HTMLElement) => c.querySelector(".mf-timer")?.classList.contains("mf-timer--urgent") ?? false;
+
+  it("morning {} → 카드 제목 '아무 일도 없었습니다', 보조 '모두 무사해요'", () => {
+    const { container } = scene(makeView({ morning: {} }));
+    expect(container.querySelector(".mf-morningcard__t")?.textContent).toBe("아무 일도 없었습니다");
+    expect(container.querySelector(".mf-morningcard__s")?.textContent).toBe("모두 무사해요");
+  });
+
+  it("아침 Timer(남은 4초)에 mf-timer--urgent 가 없다. 같은 남은 4초의 night Timer 에는 있다", () => {
+    const morning = scene(makeView({ morning: {}, endsIn: 4_000 }));
+    expect(urgent(morning.container)).toBe(false);
+    cleanup();
+    const night = scene(makeView({ phase: "night", role: "citizen", endsIn: 4_000 }));
+    expect(urgent(night.container)).toBe(true);
+  });
+
+  it("night 의 선택 링·표적·동료 배지가 morning 에서 사라지고 대상 button 은 0 개다 (경찰)", () => {
+    const r = scene(makeView({ phase: "night", role: "police", pick: 2 }));
+    expect(r.container.querySelectorAll(".mf-dt__sel, .mf-dt__pick").length > 0).toBe(true);
+    expect(r.container.querySelectorAll(".mf-dt button").length).toBe(5);
+    r.rerender(makeView({ phase: "morning", role: "police", pick: 2, morning: {} }));
+    expect(r.container.querySelectorAll(".mf-dt__sel, .mf-dt__pick").length).toBe(0);
+    expect(r.container.querySelectorAll(".mf-dt button").length).toBe(0);
+  });
+
+  it("마피아 화면: 선택·동료 배지는 사라지고 동료 링·마름모는 남는다", () => {
+    const night = makeView({ phase: "night", role: "mafia", allies: [1], pick: 2, allyPicks: [3] });
+    const r = scene(night);
+    expect(r.container.querySelectorAll(".mf-dt__pick--ally, .mf-dt__pick--me").length > 0).toBe(true);
+    r.rerender(makeView({ phase: "morning", role: "mafia", allies: [1], pick: 2, allyPicks: [3], morning: {} }));
+    expect(r.container.querySelectorAll(".mf-dt__sel, .mf-dt__pick").length).toBe(0);
+    expect(r.container.querySelectorAll(".mf-dt button").length).toBe(0);
+    expect(seatEl(r.container, 1)!.querySelector(".mf-dt__ring--mate") !== null).toBe(true);
+  });
+
+  it("살아 있는 사람의 morning(eliminated 2, players[2].alive false): 자리 2 는 유령 그림 + 아랫줄 '탈락', 직업 글자 없음", () => {
+    const { container } = scene(makeView({ role: "citizen", dead: [2], morning: { eliminated: 2, phrase: 1 } }));
+    expect(seatEl(container, 2)!.querySelector("img")?.getAttribute("src")).toContain("/characters/ghost/");
+    expect(rowText(container, 2)).toBe("탈락");
+    expect(container.querySelector(".mf-dt__claim--real") === null).toBe(true);
+    expect(container.querySelector(".mf-ro") === null).toBe(true);
+  });
+
+  it("방금 탈락한 나(seat 0)의 morning: 다른 자리 아랫줄이 실제 직업(--real), 하단은 '아침이 밝았습니다'(관전 .mf-ro 없음), 카드는 같은 문구", () => {
+    const { container } = scene(makeView({ role: "citizen", dead: [0], spectate, morning: { eliminated: 0, phrase: 1 } }));
+    expect([0, 1, 2, 3, 4].map((n) => rowText(container, n)).join("|")).toBe("탈락|마피아|시민|경찰|의사");
+    expect(container.querySelectorAll(".mf-dt__claim--real").length).toBe(4);
+    expect(panel(container)!.querySelector("h2")?.textContent).toBe("아침이 밝았습니다");
+    expect(container.querySelector(".mf-ro") === null).toBe(true);
+    expect(container.querySelector(".mf-morningcard__t")?.textContent).toBe("지우님이 이슬이 되어 사라졌습니다");
+  });
+});

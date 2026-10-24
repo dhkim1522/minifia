@@ -43,6 +43,16 @@ describe("Timer", () => {
     expect(root.className).toContain("mf-timer--urgent");
   });
 
+  it("calm 이면 남은 4초여도 mf-timer--urgent 가 없다. calm 이 없으면 지금처럼 urgent", () => {
+    vi.setSystemTime(ENDS - 4_000);
+    const calm = render(<Timer endsAt={ENDS} durationMs={DUR} offset={0} calm />);
+    expect(screen.getByRole("timer").className.includes("mf-timer--urgent")).toBe(false);
+    expect(screen.getByRole("timer").textContent).toBe("0:04");
+    calm.unmount();
+    render(<Timer endsAt={ENDS} durationMs={DUR} offset={0} />);
+    expect(screen.getByRole("timer").className.includes("mf-timer--urgent")).toBe(true);
+  });
+
   it("마감 뒤에는 0:00 과 빈 막대(scaleX(0))로 머물고 urgent 가 아니다", () => {
     render(<Timer endsAt={ENDS} durationMs={DUR} offset={0} />);
     act(() => {
