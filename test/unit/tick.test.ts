@@ -96,31 +96,27 @@ describe("tick (순수 단계 진행)", () => {
     expect(next.phaseEndsAt).toBe(19000);
   });
 
-  it("역할 확인 마감에 낮 시작 발표로 넘어가고 일차 1·빈 메시지·연장 미사용이 된다 (D-19, D-20)", () => {
+  it("역할 확인 마감에 낮 시작 발표로 넘어가고 일차 1 이 된다 — 진입 훅은 day 말고 새 키를 더하지 않는다(결과 키 목록에 messages·extendUsed 가 없다) (결정 0017-5·0017-7)", () => {
     const s = stateIn("roleReveal", 19000);
     const next = tick(s, 19000);
     expect(next.phase).toBe("dayAnnounce");
     expect(next.phaseEndsAt).toBe(21000);
     expect(next.day).toBe(1);
-    expect(next.messages).toEqual([]);
-    expect(next.extendUsed).toBe(false);
+    expect(Object.keys(next).includes("messages")).toBe(false);
+    expect(Object.keys(next).includes("extendUsed")).toBe(false);
   });
 
-  it("토론 마감에 다음 낮 시작 발표로 돌아가고 일차가 1 늘며 메시지·연장이 초기화된다 (임시 낮 루프)", () => {
+  it("토론 마감에 다음 낮 시작 발표로 돌아가 일차가 1 늘고 nextMessageSeq 는 그대로다 (임시 낮 루프)", () => {
     const T = 100_000;
-    const line = (seq: number) => ({ seq, seat: 0, template: "suspect" as const, at: 1 });
     const s: RoomState = {
       ...stateIn("discussion", T),
       day: 1,
-      messages: [line(1), line(2), line(3)],
-      extendUsed: true,
       nextMessageSeq: 4,
     };
     const next = tick(s, T);
     expect(next.phase).toBe("dayAnnounce");
     expect(next.day).toBe(2);
-    expect(next.messages).toEqual([]);
-    expect(next.extendUsed).toBe(false);
+    expect(Object.keys(next).includes("messages") || Object.keys(next).includes("extendUsed")).toBe(false);
     expect(next.phaseEndsAt).toBe(T + 2000);
     expect(next.nextMessageSeq).toBe(4); // 메시지 번호는 날이 바뀌어도 줄지 않는다
   });
@@ -189,12 +185,11 @@ describe("tick (순수 단계 진행)", () => {
 });
 
 describe("enterDayAnnounce (낮 진입 훅)", () => {
-  it("일차가 없으면 1, 있으면 +1 이고 다른 필드는 그대로다", () => {
+  it("enterDayAnnounce: 일차가 없으면 1, 있으면 +1, 다른 필드는 같은 참조, 결과에 messages·extendUsed 키가 없다", () => {
     const base = stateIn("dayAnnounce", 21000);
     const first = enterDayAnnounce(base);
     expect(first.day).toBe(1);
-    expect(first.messages).toEqual([]);
-    expect(first.extendUsed).toBe(false);
+    expect(Object.keys(first).includes("messages") || Object.keys(first).includes("extendUsed")).toBe(false);
     const fourth = enterDayAnnounce({ ...base, day: 4 });
     expect(fourth.day).toBe(5);
     expect(fourth.players).toBe(base.players);
