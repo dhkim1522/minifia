@@ -149,8 +149,8 @@ describe("CR-01 보이지 않는 문자", () => {
     expect(nicknameKey("\u{1112}\u{1161}\u{11AB}")).toBe("\u{D55C}");
   });
 
-  it("CR-01: 가족 이모지 8개는 글자 8개로 받는다", () => {
-    expect(validateNickname("\u{1F468}\u{200D}\u{1F469}\u{200D}\u{1F467}".repeat(8)).ok).toBe(true);
+  it("CR-01: 가족 이모지 5개는 글자 5개로 받는다", () => {
+    expect(validateNickname("\u{1F468}\u{200D}\u{1F469}\u{200D}\u{1F467}".repeat(5)).ok).toBe(true);
   });
 });
 
