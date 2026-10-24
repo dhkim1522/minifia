@@ -31,15 +31,6 @@ function buildDay(state: RoomState): DayView {
       .map((p) => ({ seat: p.seat, claim: p.claimShown ?? "none", changed: p.claimChanged ?? false }));
   }
   if (state.phase === "discussion") {
-    // 저장 객체를 펼치지 않고 필드별로 복사한다 — target·claimedRole 은 있을 때만 키를 만든다(D-15, T-02-07).
-    day.messages = (state.messages ?? []).map((m) => ({
-      seq: m.seq,
-      seat: m.seat,
-      template: m.template,
-      ...(m.target !== undefined ? { target: m.target } : {}),
-      ...(m.claimedRole !== undefined ? { claimedRole: m.claimedRole } : {}),
-      at: m.at,
-    }));
     day.extendUsed = state.extendUsed ?? false;
   }
   return day;
