@@ -32,6 +32,8 @@ const PHASE_ANNOUNCE: Record<PhaseId, (view: RoomView) => string> = {
   claim: () => "직업 공개. 주장할 직업을 고르세요",
   claimReveal: () => "직업이 공개되었습니다",
   discussion: () => "낮 토론",
+  night: () => "", // 문구는 Task 3 이 정한다
+  morning: () => "", // 03-10 이 카드 제목까지 붙인다
 };
 
 // 장면 키: claim·claimReveal·discussion 은 같은 장면(DayScene)이라 같은 키를 쓴다 — 세 단계 사이에는

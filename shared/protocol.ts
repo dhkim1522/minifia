@@ -3,6 +3,7 @@
 // 2페이즈 계약은 02-01 에서 한 번에 정한다 — 후속 계획이 같은 이름·모양을 그대로 쓴다.
 // 방장 연장·넘기기는 결정 0017-5 로 없앴다(extend·skip 메시지, 연장 중복 오류 코드, DayView 의 연장 표시가 없다).
 // 서버 전용 검증 스키마는 shared/schemas.ts 에 있고 Worker 만 import 한다.
+// 3페이즈 밤·아침 계약도 이 파일이다 — 밤 행동 메시지·아침 결과·수사 기록·탈락자 관전 타입을 03-01 에서 한 번에 정한다(채우는 일은 03-03·03-05).
 
 // 타입 import·재수출이라 값 import 가 아니다 — 클라이언트 번들에는 아무것도 들어가지 않는다.
 import type { RoleId } from "./game/roles";
@@ -13,9 +14,41 @@ export const MAX_PLAYERS = 8;
 export const MAX_FRAME_BYTES = 1024; // WebSocket 프레임 상한
 export const MAX_BODY_BYTES = 1024; // HTTP 본문 상한
 
-// 낮 네 단계(dayAnnounce·claim·claimReveal·discussion)는 단계 표(shared/game/phases.ts)의 한 줄씩이다.
+// 낮 네 단계(dayAnnounce·claim·claimReveal·discussion)와 밤·아침(night·morning)은 단계 표(shared/game/phases.ts)의 한 줄씩이다.
 // claimReveal 은 공개 연출 2초짜리 별도 서버 단계다 — 모든 폰이 같은 마감으로 시작·종료한다(D-04).
-export type PhaseId = "lobby" | "assigning" | "roleReveal" | "dayAnnounce" | "claim" | "claimReveal" | "discussion";
+export type PhaseId =
+  | "lobby" | "assigning" | "roleReveal" | "dayAnnounce" | "claim" | "claimReveal" | "discussion"
+  | "night" | "morning";
+
+// ---- 밤·아침 계약(3페이즈) ----
+/** 아침 탈락 문구 번호는 1..MORNING_PHRASE_COUNT (D-18). 서버(문구 추첨)와 화면(문장 표)이 같은 값을 읽는다. */
+export const MORNING_PHRASE_COUNT = 8;
+/** 경찰 본인에게만 보이는 수사 기록 한 줄: 그 밤의 일차·대상 seat·마피아인지 불리언 하나. 직업 이름은 싣지 않는다. */
+export interface InvestigationRecord {
+  n: number;
+  target: number;
+  isMafia: boolean;
+}
+/** 아침 결과. 키 없는 객체는 지난밤 무사(D-12·D-13: 의사 구출도 무사로 보인다). */
+export interface MorningView {
+  eliminated?: number; // 탈락한 seat
+  phrase?: number; // 탈락 문구 번호 1..MORNING_PHRASE_COUNT
+}
+/** 탈락자 전용 관전 정보(결정 0021): 한 사람의 실제 직업. 키 이름은 role 이 아니라 job 이다(누출 테스트 불변식). */
+export interface SpectateSeat {
+  seat: number;
+  job: RoleId;
+}
+/** 그 밤에 각 역할이 고른 대상 seat — 오름차순·중복 없음. 누가 골랐는지는 seats 로 안다. */
+export interface SpectatePicks {
+  mafia: number[];
+  police: number[];
+  doctor: number[];
+}
+export interface SpectateView {
+  seats: SpectateSeat[];
+  picks?: SpectatePicks; // 밤에만
+}
 
 // ---- 낮 토론 계약(2페이즈) ----
 /** 공개된 직업 주장. 그 사람의 실제 역할이 아니다. */
@@ -48,7 +81,8 @@ export interface DayView {
   n: number; // 일차(1부터)
   roles: RoleId[]; // 이번 판 직업(구성표 순서, 공개 정보)
   claimDone?: number[]; // claim 단계에서만: 이번 낮 직접 고른 seat 오름차순
-  claims?: SeatClaim[]; // claimReveal·discussion 에서만: 공개된 주장 seat 오름차순
+  claims?: SeatClaim[]; // claimReveal·discussion·night·morning 에서만: 공개된 주장 seat 오름차순
+  morning?: MorningView; // morning 단계에서만
 }
 
 // ---- HTTP ----
@@ -102,7 +136,8 @@ export type ClientMessage =
   | { t: "kick"; seat: number }
   | { t: "claim"; claim: Claim }
   | { t: "say"; template: TemplateId; target?: number; claimedRole?: RoleId }
-  | { t: "emoji"; icon: EmojiId };
+  | { t: "emoji"; icon: EmojiId }
+  | { t: "pick"; target: number }; // 밤 행동 — 행동 종류는 보내지 않는다(서버 저장 역할이 정한다)
 
 // ---- 서버 -> 클라이언트 ----
 // 공개 식별자는 seat 뿐이다. 내부 id·토큰·역할 자리는 타입에도 없다.
@@ -111,6 +146,7 @@ export interface PublicPlayer {
   nickname: string;
   connected: boolean;
   isHost: boolean;
+  alive?: boolean; // 서버는 항상 싣는다(공개 정보, 03-05). 없으면 생존
 }
 export interface MyInfo {
   seat: number;
@@ -118,6 +154,9 @@ export interface MyInfo {
   role?: RoleId; // 내 역할 — 채우는 일은 01-07
   allies?: number[]; // 같은 마피아 동료의 seat — 채우는 일은 01-07
   claim?: Claim; // claim 단계에서만: 내가 이번 낮 고른 주장
+  pick?: number; // 밤에 본인이 고른 seat(본인에게만)
+  allyPicks?: number[]; // 생존 마피아에게만: 동료들이 고른 대상 seat 오름차순·중복 없음(누가 골랐는지는 싣지 않는다)
+  records?: InvestigationRecord[]; // 경찰 본인에게만
 }
 export interface RoomView {
   code: string;
@@ -129,7 +168,8 @@ export interface RoomView {
   maxPlayers: number;
   players: PublicPlayer[];
   me: MyInfo;
-  day?: DayView; // 낮 네 단계에서만
+  day?: DayView; // 낮 네 단계와 밤·아침에서
+  spectate?: SpectateView; // 탈락한 본인 view 에만(결정 0021). 살아 있는 사람 view 에는 키 자체가 없다
 }
 export type WsErrorCode =
   | "BAD_MESSAGE"

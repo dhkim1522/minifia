@@ -5,6 +5,7 @@
 // 진입 훅 표(ON_ENTER)의 규칙: 어떤 단계에 들어갈 때 일어나야 하는 상태 변화는 이 표에 한 줄로 둔다.
 // 훅은 tick 루프 안에서만 부른다 — 알람이 늦어 여러 단계를 한 번에 따라잡아도 중간 단계 훅이 순서대로 모두 돈다.
 // 알람 핸들러나 DO 에서 훅을 직접 부르지 않는다. 3·4페이즈도 같은 표에 행을 더한다.
+// 난수는 세 번째 인자로만 받는다 — 방 DO 는 cryptoRandInt, 테스트는 seededRandInt.
 import type { PhaseId } from "../protocol";
 import { enterClaim, enterClaimReveal } from "./claim";
 import { PHASE_DEFS } from "./phases";
@@ -15,7 +16,15 @@ export function enterDayAnnounce(state: RoomState): RoomState {
   return { ...state, day: (state.day ?? 0) + 1 };
 }
 
-const ON_ENTER: Partial<Record<PhaseId, (s: RoomState) => RoomState>> = {
+/** [0, n) 정수를 돌려주는 난수 함수. roles.ts 의 randInt 와 같은 계약이다. */
+export type RandInt = (n: number) => number;
+
+/** 기본값: 난수가 필요한 진입을 난수 없이 부르면 조용히 틀리지 않고 바로 오류를 던진다. */
+const NO_RANDOM: RandInt = () => {
+  throw new Error("tick: randInt is required to resolve the night");
+};
+
+const ON_ENTER: Partial<Record<PhaseId, (s: RoomState, randInt: RandInt) => RoomState>> = {
   dayAnnounce: enterDayAnnounce,
   claim: enterClaim,
   claimReveal: enterClaimReveal,
@@ -26,7 +35,7 @@ const ON_ENTER: Partial<Record<PhaseId, (s: RoomState) => RoomState>> = {
  * 알람이 늦게 와도 마감이 밀리지 않고 모든 폰이 같은 마감 시각을 받는다(GAME-01).
  * 늦게 불리면 여러 단계를 한 번에 따라잡는다. 바뀐 게 없으면 입력 객체를 그대로 돌려준다.
  */
-export function tick(state: RoomState, now: number): RoomState {
+export function tick(state: RoomState, now: number, randInt: RandInt = NO_RANDOM): RoomState {
   let current = state;
   while (current.phaseEndsAt !== null && now >= current.phaseEndsAt) {
     const next = PHASE_DEFS[current.phase].next;
@@ -38,7 +47,7 @@ export function tick(state: RoomState, now: number): RoomState {
       phaseEndsAt: duration === null ? null : current.phaseEndsAt + duration,
     };
     const hook = ON_ENTER[next];
-    current = hook ? hook(entered) : entered;
+    current = hook ? hook(entered, randInt) : entered;
   }
   return current;
 }
