@@ -37,6 +37,8 @@ interface ViewOpts {
   count?: number;
   /** 서버가 주는 일차. 없으면 view.day 자체가 없다(02-04 이전 서버) */
   day?: number;
+  /** false 면 내 자리(seat 0)의 players[].alive 를 false 로 싣는다(탈락 — 결정 0021) */
+  meAlive?: boolean;
 }
 
 function makeView(o: ViewOpts): RoomView {
@@ -58,7 +60,9 @@ function makeView(o: ViewOpts): RoomView {
       { seat: 1, nickname: "하윤", connected: true, isHost: false },
       { seat: 2, nickname: "민지", connected: true, isHost: false },
       { seat: 3, nickname: "도현", connected: true, isHost: false },
-    ].slice(0, o.count ?? 4),
+    ]
+      .slice(0, o.count ?? 4)
+      .map((p) => (p.seat === 0 && o.meAlive === false ? { ...p, alive: false } : p)),
     me,
   };
 }
@@ -308,6 +312,66 @@ describe("단계 안내 aria-live · 단계 전환 (UI-SPEC 접근성·Motion)",
     // 같은 단계 안 갱신은 같은 요소(다시 나타나지 않는다)
     rerenderRoom(r.rerender, makeView({ phase: "roleReveal", endsIn: 14_000, role: "mafia", allies: [2] }));
     expect(r.container.querySelector(".mf-phase-enter") === after).toBe(true);
+  });
+});
+
+describe("밤·아침 라우팅과 안내 (UI-SPEC C5·접근성, RESEARCH A6)", () => {
+  const night = (over: Partial<ViewOpts> = {}) =>
+    makeView({ phase: "night", endsIn: 30_000, durationMs: 30_000, role: "citizen", day: 1, ...over });
+  const morning = (over: Partial<ViewOpts> = {}) =>
+    makeView({ phase: "morning", endsIn: 5_000, durationMs: 5_000, role: "citizen", day: 1, ...over });
+  const discussion = () =>
+    makeView({ phase: "discussion", endsIn: 90_000, durationMs: 90_000, role: "citizen", day: 1 });
+
+  it("discussion → night → morning: 장면 래퍼(.mf-phase-enter)와 테이블 루트(.mf-dt)가 같은 DOM 노드다 (C5)", () => {
+    const r = renderRoom(discussion());
+    const scene = r.container.querySelector(".mf-phase-enter");
+    const table = r.container.querySelector(".mf-dt");
+    expect(scene, "장면 래퍼").not.toBeNull();
+    expect(table, "테이블").not.toBeNull();
+    rerenderRoom(r.rerender, night());
+    expect(r.container.querySelector(".mf-phase-enter") === scene, "night 래퍼 유지").toBe(true);
+    expect(r.container.querySelector(".mf-dt") === table, "night 테이블 유지").toBe(true);
+    rerenderRoom(r.rerender, morning());
+    expect(r.container.querySelector(".mf-phase-enter") === scene, "morning 래퍼 유지").toBe(true);
+    expect(r.container.querySelector(".mf-dt") === table, "morning 테이블 유지").toBe(true);
+  });
+
+  it("night view, 마피아(allies [2]) 생존 → 안내 '1일차 밤. 함께 지목하세요'", () => {
+    const r = renderRoom(night({ role: "mafia", allies: [2] }));
+    expect(liveRegion(r.container).textContent).toBe("1일차 밤. 함께 지목하세요");
+  });
+
+  it("night view, 경찰·의사·시민 → 역할별 안내, 일차는 view.day.n 을 따른다", () => {
+    const say = (over: Partial<ViewOpts>) => {
+      const r = renderRoom(night(over));
+      const text = liveRegion(r.container).textContent;
+      cleanup();
+      return text;
+    };
+    expect(say({ role: "police" })).toBe("1일차 밤. 조사할 사람을 고르세요");
+    expect(say({ role: "doctor" })).toBe("1일차 밤. 지킬 사람을 고르세요");
+    expect(say({ role: "citizen" })).toBe("1일차 밤. 밤이 되었어요");
+    expect(say({ role: "police", day: 2 })).toBe("2일차 밤. 조사할 사람을 고르세요");
+  });
+
+  it("night view 에서 내 자리 players[].alive 가 false 면 역할과 무관하게 '1일차 밤. 탈락했어요, 관전 중'", () => {
+    const say = (role: RoleId) => {
+      const r = renderRoom(night({ role, allies: role === "mafia" ? [2] : undefined, meAlive: false }));
+      const text = liveRegion(r.container).textContent;
+      cleanup();
+      return text;
+    };
+    expect(say("mafia")).toBe("1일차 밤. 탈락했어요, 관전 중");
+    expect(say("police")).toBe("1일차 밤. 탈락했어요, 관전 중");
+    expect(say("citizen")).toBe("1일차 밤. 탈락했어요, 관전 중");
+  });
+
+  it("phase 가 알 수 없는 문자열('vote')인 view 를 받으면 예외 없이 '연결 중…' 을 그리고 안내 영역은 빈 문자열이다 (A6)", () => {
+    const unknown = { ...makeView({ phase: "discussion", endsIn: 90_000, role: "citizen", day: 1 }), phase: "vote" } as unknown as RoomView;
+    const r = renderRoom(unknown);
+    expect(byText("연결 중…")).toBeTruthy();
+    expect(liveRegion(r.container).textContent).toBe("");
   });
 });
 
