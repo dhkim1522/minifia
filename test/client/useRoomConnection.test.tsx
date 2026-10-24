@@ -452,7 +452,7 @@ describe("useRoomConnection + Lobby: 재연결 직후 토스트 (WR-03)", () => 
   });
 });
 
-describe("useRoomConnection: 이벤트 구독 (emoji·error 프레임, Pitfall 6)", () => {
+describe("useRoomConnection: 이벤트 구독 (emoji·chat·error 프레임, Pitfall 6)", () => {
   it("emoji 프레임을 onEvent 리스너가 한 번 받는다", () => {
     const { sockets, hook } = setup();
     openWithState(sockets[0]!);
@@ -464,6 +464,32 @@ describe("useRoomConnection: 이벤트 구독 (emoji·error 프레임, Pitfall 6
     act(() => sockets[0]!.message(frame));
     expect(listener).toHaveBeenCalledTimes(1);
     expect(listener).toHaveBeenCalledWith(frame);
+  });
+
+  it("chat 프레임을 onEvent 리스너가 한 번 받고 view 는 바뀌지 않는다 (결정 0017-7)", () => {
+    const { sockets, hook } = setup();
+    openWithState(sockets[0]!);
+    const listener = vi.fn();
+    act(() => {
+      hook.result.current.onEvent(listener);
+    });
+    const before = hook.result.current.view;
+    const frame = { t: "chat", seq: 3, seat: 1, template: "suspect", target: 2, at: 5 };
+    act(() => sockets[0]!.message(frame));
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(listener).toHaveBeenCalledWith(frame);
+    expect(hook.result.current.view).toBe(before);
+  });
+
+  it("t 가 chatx 같은 알 수 없는 프레임은 리스너에 가지 않는다", () => {
+    const { sockets, hook } = setup();
+    openWithState(sockets[0]!);
+    const listener = vi.fn();
+    act(() => {
+      hook.result.current.onEvent(listener);
+    });
+    act(() => sockets[0]!.message({ t: "chatx", seq: 3, seat: 1, template: "suspect", at: 5 }));
+    expect(listener).not.toHaveBeenCalled();
   });
 
   it("error 프레임도 리스너가 받는다", () => {
@@ -521,7 +547,7 @@ describe("useRoomConnection: 이벤트 구독 (emoji·error 프레임, Pitfall 6
       hook.result.current.onEvent(listener);
     });
     const before = hook.result.current.view;
-    act(() => sockets[0]!.message({ t: "chat", text: "hi" }));
+    act(() => sockets[0]!.message({ t: "unknown", text: "hi" }));
     expect(listener).not.toHaveBeenCalled();
     expect(hook.result.current.view).toBe(before);
   });

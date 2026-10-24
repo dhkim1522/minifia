@@ -98,9 +98,30 @@ describe("직업 공개 동시 공개 (D-01, D-03, D-05)", () => {
 const errorCode = async (sock: TestSocket): Promise<string> => flat(await nextFrame(sock, (m) => m.t === "error"));
 const codeOf = (code: string): string => JSON.stringify({ t: "error", code });
 
-/** 모든 소켓이 messages 가 n 줄인 discussion state 를 받을 때까지 기다린다. */
-async function waitMessages(sockets: TestSocket[], n: number): Promise<void> {
-  for (const s of sockets) await nextFrame(s, (m) => m.t === "state" && m.view.day?.messages?.length === n);
+type RawFrame = { t: string } & Record<string, unknown>;
+
+/** 소켓이 지금까지 받은 chat 이벤트 프레임(원문 JSON). 뷰(state)가 아니라 이벤트다(결정 0017-7). */
+const chatFrames = (sock: TestSocket): RawFrame[] =>
+  collect(sock)
+    .map((raw) => JSON.parse(raw) as RawFrame)
+    .filter((m) => m.t === "chat");
+
+/** 모든 소켓이 chat 프레임을 n 개 받을 때까지 기다린다(제한 3초). */
+async function waitChat(sockets: TestSocket[], n: number): Promise<void> {
+  const deadline = Date.now() + 3000;
+  for (const s of sockets) {
+    while (chatFrames(s).length < n) {
+      if (Date.now() > deadline) throw new Error(`waitChat: chat 프레임 ${n}개가 오지 않았다`);
+      await new Promise<void>((resolve) => setTimeout(resolve, 10));
+    }
+  }
+}
+
+/** 저장된 방에 남은 messages 줄 수. 타입 필드로 읽지 않는다 — 키가 없으면 0. */
+async function storedMessageCount(code: string): Promise<number> {
+  const room = (await storedRoom(code)) as unknown as Record<string, unknown>;
+  const kept = room["messages"];
+  return Array.isArray(kept) ? kept.length : 0;
 }
 
 /** 서버가 앞선 요청을 모두 처리해 다른 소켓에 보낼 것을 보냈다고 볼 수 있을 때까지 보낸 소켓의 ping 왕복과 짧은 대기. */
@@ -110,7 +131,7 @@ async function settle(sock: TestSocket): Promise<void> {
   await new Promise<void>((resolve) => setTimeout(resolve, 50));
 }
 
-const lastMessages = (s: TestSocket): number => viewsIn(s, "discussion").at(-1)?.day?.messages?.length ?? -1;
+const keysOf = (frame: RawFrame): string => Object.keys(frame).sort().join(",");
 
 describe("빠른 메시지 (COMM-01, COMM-04, D-13)", () => {
   it("claim·claimReveal 단계의 say 는 WRONG_PHASE 이고 다른 소켓 프레임에 메시지가 없다", async () => {
@@ -128,26 +149,46 @@ describe("빠른 메시지 (COMM-01, COMM-04, D-13)", () => {
     expect(await errorCode(g0.sock)).toBe(codeOf("WRONG_PHASE"));
     await settle(g0.sock);
     for (const s of others) expect(collect(s).some((raw) => raw.includes('"template"'))).toBe(false);
-    expect((await storedRoom(r.code)).messages ?? []).toHaveLength(0);
+    for (const s of allSockets(r)) expect(chatFrames(s).length).toBe(0);
+    expect(await storedMessageCount(r.code)).toBe(0);
   });
 
-  it("discussion 에서 보낸 suspect 는 모든 소켓의 day.messages 한 줄(seat = 보낸 소켓의 자리)이 되고, 즉시 두 번째는 RATE_LIMITED 다", async () => {
+  it("discussion 에서 보낸 suspect 는 모든 소켓(보낸 소켓 포함)에 chat 프레임 하나로 가고(seat = 보낸 소켓의 자리), 즉시 두 번째는 RATE_LIMITED 이며 chat 프레임이 더 오지 않는다", async () => {
     const r = await startedAt("discussion");
     const [g0, g1] = r.guests as [Seated["guests"][number], Seated["guests"][number], ...Seated["guests"]];
     const sockets = allSockets(r);
 
     send(g0.sock, { t: "say", template: "suspect", target: g1.seat });
-    await waitMessages(sockets, 1);
+    await waitChat(sockets, 1);
     for (const s of sockets) {
-      const line = viewsIn(s, "discussion").at(-1)!.day!.messages![0]!;
-      expect(`${line.seat}:${line.template}:${line.target}`).toBe(`${g0.seat}:suspect:${g1.seat}`);
+      const frame = chatFrames(s)[0]!;
+      expect(`${frame.seat}:${frame.template}:${frame.target}`).toBe(`${g0.seat}:suspect:${g1.seat}`);
+      expect(keysOf(frame)).toBe("at,seat,seq,t,target,template");
     }
 
     send(g0.sock, { t: "say", template: "trust", target: g1.seat });
     expect(await errorCode(g0.sock)).toBe(codeOf("RATE_LIMITED"));
     await settle(g0.sock);
-    for (const s of sockets) expect(lastMessages(s)).toBe(1);
-    expect((await storedRoom(r.code)).messages).toHaveLength(1);
+    for (const s of sockets) expect(chatFrames(s).length).toBe(1);
+  });
+
+  it("say 가 통과해도 state 프레임은 방송되지 않는다 — say 직전 이후 프레임이 chat, emoji 순서뿐이다 (결정 0017-7)", async () => {
+    const r = await startedAt("discussion");
+    const g0 = r.guests[0]!;
+    const sockets = allSockets(r);
+    for (const s of sockets) await settle(s); // 앞선 state 프레임이 모두 도착한 뒤에 경계를 잡는다
+    const marks = sockets.map((s) => s.frames.length);
+
+    send(g0.sock, { t: "say", template: "innocent" });
+    await waitChat(sockets, 1);
+    await backdateSends(r.code);
+    send(g0.sock, { t: "emoji", icon: "smile" });
+    for (const s of sockets) await nextFrame(s, (m) => m.t === "emoji");
+
+    sockets.forEach((s, i) => {
+      const kinds = s.frames.slice(marks[i]!).map((raw) => (JSON.parse(raw) as RawFrame).t);
+      expect(kinds.join(",")).toBe("chat,emoji");
+    });
   });
 
   it("text 키가 붙은 say·seat 키로 방장 자리를 넣은 say 는 BAD_MESSAGE 이고 다른 소켓에 나타나지 않는다", async () => {
@@ -164,24 +205,26 @@ describe("빠른 메시지 (COMM-01, COMM-04, D-13)", () => {
     await settle(g1.sock);
     for (const s of sockets) {
       expect(collect(s).some((raw) => raw.includes(marker))).toBe(false);
-      expect(lastMessages(s)).toBe(0);
+      expect(chatFrames(s).length).toBe(0);
     }
-    expect((await storedRoom(r.code)).messages ?? []).toHaveLength(0);
+    expect(await storedMessageCount(r.code)).toBe(0);
   });
 
-  it("쿨다운이 지난 뒤 거짓 주장(claimed, 아무 직업)도 그대로 모든 소켓에 보내진다", async () => {
+  it("쿨다운이 지난 뒤 거짓 주장(claimed, 아무 직업)도 그대로 모든 소켓의 chat 프레임이 되고 키는 id·role 이 아니다", async () => {
     const r = await startedAt("discussion");
     const [g0, g1, g2] = r.guests as [Seated["guests"][number], Seated["guests"][number], Seated["guests"][number], ...Seated["guests"]];
     const sockets = allSockets(r);
 
     send(g0.sock, { t: "say", template: "innocent" });
-    await waitMessages(sockets, 1);
+    await waitChat(sockets, 1);
     await backdateSends(r.code);
     send(g0.sock, { t: "say", template: "claimed", target: g2.seat, claimedRole: "police" });
-    await waitMessages(sockets, 2);
+    await waitChat(sockets, 2);
     for (const s of sockets) {
-      const line = viewsIn(s, "discussion").at(-1)!.day!.messages![1]!;
-      expect(`${line.seat}:${line.template}:${line.target}:${line.claimedRole}`).toBe(`${g0.seat}:claimed:${g2.seat}:police`);
+      const frame = chatFrames(s)[1]!;
+      expect(`${frame.seat}:${frame.template}:${frame.target}:${frame.claimedRole}`).toBe(`${g0.seat}:claimed:${g2.seat}:police`);
+      expect(keysOf(frame)).toBe("at,claimedRole,seat,seq,t,target,template");
+      expect(Object.keys(frame).some((k) => k === "id" || k === "role")).toBe(false);
     }
     expect(g1.seat).not.toBe(g2.seat);
   });
@@ -194,7 +237,7 @@ describe("이모티콘 (COMM-02, D-14)", () => {
     const sockets = allSockets(r);
 
     send(g0.sock, { t: "say", template: "innocent" });
-    await waitMessages(sockets, 1);
+    await waitChat(sockets, 1);
     await backdateSends(r.code);
 
     send(g0.sock, { t: "emoji", icon: "smile" });
@@ -202,14 +245,14 @@ describe("이모티콘 (COMM-02, D-14)", () => {
       const m = await nextFrame(s, (f) => f.t === "emoji");
       expect(m.t === "emoji" && `${m.seat}:${m.icon}:${typeof m.at}`).toBe(`${g0.seat}:smile:number`);
     }
-    expect((await storedRoom(r.code)).messages).toHaveLength(1);
+    for (const s of sockets) expect(chatFrames(s).length).toBe(1);
 
     send(g0.sock, { t: "say", template: "suspect", target: g1.seat });
     expect(await errorCode(g0.sock)).toBe(codeOf("RATE_LIMITED"));
     send(g0.sock, { t: "emoji", icon: "heart" });
     expect(await errorCode(g0.sock)).toBe(codeOf("RATE_LIMITED"));
     await settle(g0.sock);
-    for (const s of sockets) expect(lastMessages(s)).toBe(1);
+    for (const s of sockets) expect(chatFrames(s).length).toBe(1);
   });
 
   it("단계 밖 emoji 는 WRONG_PHASE, 모르는 아이콘이나 덧붙은 키는 BAD_MESSAGE 이고 아무에게도 가지 않는다", async () => {
