@@ -8,10 +8,10 @@ updated: 2026-10-24T09:00:00Z
 
 ## Current Test
 
-number: 6
-name: 빠른 메시지를 2초 간격으로 연달아 전송 (결정 0016-6, 리뷰 WR-02)
+number: 8
+name: 결정 요청 — ROADMAP 성공 기준 1 문구와 구현의 차이
 expected: |
-  정상 간격에서 RATE_LIMITED 오탐으로 메시지가 표시 없이 사라지지 않는다
+  2일차 이후 시간이 넘으면 어제 주장이 이어지는 동작(봇으로 확인)을 채택하고 문구를 맞출지, 구현을 바꿀지 정한다
 awaiting: user response
 
 ## Tests
@@ -44,23 +44,27 @@ reason: "결정 0017 로 대상이 바뀜(8자 닉네임 대상 없음 — 닉�
 
 ### 6. 빠른 메시지를 2초 간격으로 연달아 전송 (결정 0016-6, 리뷰 WR-02)
 expected: 정상 간격에서 RATE_LIMITED 오탐으로 메시지가 표시 없이 사라지지 않는다
-result: [pending]
+result: issue
+reported: "봇 시나리오(scripts/uat-day.mjs --prod)로 확인: 보낸 순간 + 2000ms 간격(클라이언트 잠금이 풀리는 가장 이른 시각)으로 보내면 5명판 3/16, 8명판 7/28 이 RATE_LIMITED 로 거부됨. 2050·2150ms 간격은 0건. 클라이언트는 RATE_LIMITED 를 표시 없이 다시 잠그므로 메시지가 말없이 사라짐"
+severity: major
 
 ### 7. iPhone Safari·Android Chrome 에서 낮 한 바퀴
 expected: 두 기기 모두 같은 시각에 단계가 넘어가고, 이모티콘이 약 2초 떴다 사라지며, 공개 팝·흔들림이 부드럽다
 result: [pending]
+note: "봇 확인(5명·8명, 배포본): 단계 전환·이모티콘 도착 차이 0~23ms, phaseEndsAt 모든 폰 같음, 이모티콘은 메시지 목록에 없음. 남은 것은 실기기에서만 볼 수 있는 애니메이션 부드러움과 실제 폰 시계 차이"
 
 ### 8. 결정 요청 — ROADMAP 성공 기준 1 문구와 구현의 차이
 expected: |
   2일차 이후 시간이 넘으면 "말 안 함" 이 아니라 어제 주장이 이어지는 동작(CONTEXT D-09, 결정 0015)을 계속 채택하고 ROADMAP SC1·REQUIREMENTS DAY-02 문구를 맞출지, 구현을 바꿀지 정한다
 result: [pending]
+note: "봇 확인: 2일차에 고르지 않으면 어제 주장(police)이 그대로 공개되고, 이틀 다 안 고르면 none"
 
 ## Summary
 
 total: 8
 passed: 0
-issues: 1
-pending: 3
+issues: 2
+pending: 2
 skipped: 4
 blocked: 0
 
@@ -84,4 +88,21 @@ blocked: 0
     - "하단: 채팅 미리보기 1줄 + 확장 모달(채팅 내역) + [빠른 메시지][이모티콘], 방장 연장·넘기기 제거(서버 extend/skip 포함)"
     - "채팅 서버 저장 제거(messages 보관 대신 방송만), 닉네임 최대 5자"
     - "직업 공개 화면·4/6/7명 배치는 시안 승인 후 계획에 포함"
+  debug_session: ""
+
+- gap_id: G-02-2
+  truth: "정상 간격(잠금이 풀린 직후)으로 보낸 빠른 메시지·이모티콘이 표시 없이 사라지지 않는다"
+  status: failed
+  reason: "봇 시나리오: 2000ms 간격 전송의 약 19~25% 가 RATE_LIMITED"
+  severity: major
+  test: 6
+  root_cause: "클라이언트 잠금(보낸 순간 + 2000ms)과 서버 한도(도착 간격 2000ms)가 같아, 앞 요청보다 뒤 요청이 네트워크에서 조금이라도 빨리 도착하면 서버가 거부. 클라이언트는 RATE_LIMITED 를 표시 없이 다시 잠금(DiscussionControls)"
+  artifacts:
+    - path: "shared/game/chat.ts"
+      issue: "SEND_COOLDOWN_MS 2000 을 서버 판정과 클라이언트 잠금이 함께 씀"
+    - path: "src/components/DiscussionControls.tsx"
+      issue: "RATE_LIMITED 를 표시 없이 다시 잠금"
+  missing:
+    - "서버 한도를 클라이언트 잠금보다 짧게(결정 0016-6 의 대안: 서버 1800ms, 클라이언트 2000ms 유지)"
+    - "scripts/uat-day.mjs 의 2000ms 간격 오탐 0 을 회귀 확인으로 사용"
   debug_session: ""
