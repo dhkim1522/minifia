@@ -231,7 +231,7 @@ describe("낮 토론 화면 — 로그·말하기 줄 (COMM-01, D-15·D-16·D-17
     const base = makeView();
     const evil = { ...base, players: base.players.map((p) => (p.seat === 2 ? { ...p, nickname: "<img src=x>" } : p)) } satisfies RoomView;
     const r = scene(evil, { onEvent: ev.onEvent });
-    ev.emit({ ...line(1, 2, 1, NOW), text: "<script>alert(1)</script>" } as RoomEvent);
+    ev.emit({ ...line(1, 2, 1, NOW), text: "<script>alert(1)</script>" } as unknown as RoomEvent);
     expect(r.container.querySelector("img[src=\"x\"]")).toBeNull();
     expect(r.container.querySelector("script")).toBeNull();
     expect(items()[0]?.querySelector(".mf-msglog__name")?.textContent).toBe("<img src=x>");

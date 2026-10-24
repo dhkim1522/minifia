@@ -12,7 +12,7 @@ import { PhaseBar } from "../components/PhaseBar";
 import { Timer } from "../components/Timer";
 import { Toast, useToast } from "../components/Toast";
 import { EMOJI_TEXT } from "../game/messageText";
-import { useSeatFloats } from "../net/seatFloats";
+import { useDayChat, useSeatFloats } from "../net/seatFloats";
 import type { RoomConnection } from "../net/useRoomConnection";
 import "../styles/day.css";
 import "../styles/phase.css";
@@ -34,6 +34,8 @@ export function DayScene({ view, connection, myRoleButton }: DaySceneProps) {
   const n = view.day?.n ?? 1;
   // 낮 토론의 보낸 사람 반전·이모티콘(자리별 한 번에 하나). 단계가 discussion 이 아니면 훅이 비운다.
   const floats = useSeatFloats(view, connection.onEvent);
+  // 채팅 줄은 이 폰이 그날 받은 chat 이벤트에서만 만든다(서버 뷰에 메시지가 없다, 결정 0017-7)
+  const chatLines = useDayChat(view, connection.onEvent);
   const { toast, show: showToast } = useToast();
   // 가장 최근 이모티콘 하나를 보이지 않는 live 줄이 읽는다(UI-SPEC 접근성)
   const [lastEmoji, setLastEmoji] = useState<{ seat: number; icon: EmojiId } | null>(null);
@@ -76,7 +78,7 @@ export function DayScene({ view, connection, myRoleButton }: DaySceneProps) {
   const seats: DayTableSeat[] = [...view.players]
     .sort((x, y) => x.seat - y.seat)
     .map((p) => {
-      const f = floats[p.seat];
+      const e = floats.emoji[p.seat];
       return {
         seat: p.seat,
         nickname: p.nickname,
@@ -85,8 +87,8 @@ export function DayScene({ view, connection, myRoleButton }: DaySceneProps) {
         isMe: p.seat === view.me.seat,
         isAlly: allies.includes(p.seat),
         row: rowOf(p.seat),
-        spoke: f?.kind === "bubble",
-        emoji: f?.kind === "emoji" ? { key: f.key, icon: f.icon, z: f.z } : null,
+        spoke: floats.spoke[p.seat] !== undefined,
+        emoji: e ? { key: e.key, icon: e.icon, z: e.z } : null,
       };
     });
 
@@ -114,7 +116,7 @@ export function DayScene({ view, connection, myRoleButton }: DaySceneProps) {
             <ClaimPanel view={view} canSend={connection.canSend} send={connection.send} />
           ) : view.phase === "discussion" ? (
             <>
-              <MessageLog lines={view.day?.messages ?? []} players={view.players} mySeat={view.me.seat} />
+              <MessageLog lines={chatLines} players={view.players} mySeat={view.me.seat} />
               <DiscussionControls view={view} connection={connection} showToast={showToast} />
             </>
           ) : null}

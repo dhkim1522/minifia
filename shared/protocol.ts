@@ -49,7 +49,6 @@ export interface DayView {
   roles: RoleId[]; // 이번 판 직업(구성표 순서, 공개 정보)
   claimDone?: number[]; // claim 단계에서만: 이번 낮 직접 고른 seat 오름차순
   claims?: SeatClaim[]; // claimReveal·discussion 에서만: 공개된 주장 seat 오름차순
-  messages?: ChatLine[]; // discussion 에서만: 최근 20개
 }
 
 // ---- HTTP ----
