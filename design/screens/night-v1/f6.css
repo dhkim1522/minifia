@@ -31,3 +31,19 @@
 .rs .btn { align-self: stretch; }
 /* 마피아 밤 채팅: 안내 줄 */
 .lg li.sys { color: var(--gray-500); }
+/* 경찰 조사 수첩: 헤더 버튼 + 새 기록 알림 + 시트 */
+.hd__r1 .nbbtn { margin-right: 0; }
+.nb-toast { position: absolute; z-index: 85; left: 50%; top: 108px; transform: translateX(-50%); display: inline-flex; align-items: center; gap: 8px; padding: 8px 16px; border-radius: 999px; background: rgba(14, 19, 38, 0.94); border: 1px solid var(--gray-100); font-size: 14px; line-height: 20px; font-weight: 700; color: var(--gray-50); white-space: nowrap; box-shadow: 0 8px 20px rgba(0, 0, 0, 0.5); }
+.nb-sub { margin: -12px 0 0; font-size: 14px; line-height: 20px; color: var(--gray-300); }
+.nb { flex: 1; min-height: 0; list-style: none; margin: 0; padding: 8px 16px; display: flex; flex-direction: column; gap: 0; overflow: hidden; background: var(--night-700); border-radius: 14px; }
+.nb li { display: flex; align-items: center; gap: 8px; min-height: 52px; padding: 8px 0; border-bottom: 1px dashed var(--night-600); font-size: 14px; line-height: 20px; color: var(--gray-300); }
+.nb li:last-child { border-bottom: 0; }
+.nb .d { flex: none; width: 64px; }
+.nb .w { flex: 1; min-width: 0; display: inline-flex; align-items: center; gap: 6px; font-weight: 700; color: var(--gray-50); }
+.nb .w i { width: 8px; height: 8px; border-radius: 999px; }
+.nb .st { flex: none; padding: 2px 10px; border-radius: 8px; border: 2px solid var(--gray-300); color: var(--gray-300); font-weight: 700; transform: rotate(-3deg); }
+.nb .st--mafia { border-color: #e0344b; color: #e0344b; }
+.nb .new { flex: none; margin-left: 2px; padding: 0 6px; border-radius: 999px; background: var(--gray-50); color: var(--night-900); font-size: 12px; line-height: 18px; font-weight: 700; }
+/* 수사 기록: 도장 없이 글자로 결과 */
+.nb .st { padding: 0; border: 0; border-radius: 0; transform: none; font-weight: 400; color: var(--gray-300); }
+.nb .st--mafia { color: #e0344b; font-weight: 700; }

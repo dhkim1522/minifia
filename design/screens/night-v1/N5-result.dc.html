@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<title>N5 경찰 결과</title>
+<title>N5 경찰 새 기록</title>
 <script src="./support.js"></script>
 <link rel="stylesheet" href="v2.css">
 <link rel="stylesheet" href="f3.css">
@@ -25,6 +25,7 @@ body{margin:0}
     <div class="hd__r1">
       <div><div class="hd__t">밤</div><div class="hd__s">16일차</div></div>
       <span class="sp"></span>
+      <button class="btn nbbtn" type="button" aria-label="수사 기록"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h11a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6z"/><path d="M6 3v18M10 8h5M10 12h5"/></svg>수사 기록<span class="dot"></span></button>
       <button class="btn" type="button"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="3" width="12" height="18" rx="3"/><path d="M12 9l2 3-2 3-2-3z"/></svg>내 역할</button>
     </div>
     <div class="hd__r2"><div class="prog"><i style="width:0%"></i></div><span class="tm">0:00</span></div>
@@ -51,13 +52,7 @@ body{margin:0}
     <p class="gd">결과는 밤이 끝날 때 알려 드려요 · 마감까지 바꿀 수 있어요</p>
     <div class="pk"><span>선택</span> <b><i style="background:#6fa59a"></i>지호</b></div>
   </div>
-  <div class="rs-scrim"></div>
-  <div class="rs" role="dialog" aria-label="조사 결과">
-    <p class="rs__k">조사 결과</p>
-    <div class="rs__who"><i style="background:#6fa59a"></i>지호</div>
-    <p class="rs__v">마피아입니다</p>
-    <button class="btn btn--main" type="button">확인</button>
-  </div>
+  <div class="nb-toast"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h11a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6z"/><path d="M6 3v18M10 8h5M10 12h5"/></svg>수사 기록이 추가됐어요</div>
 </div>
 </x-dc>
 <script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":664}}'>
