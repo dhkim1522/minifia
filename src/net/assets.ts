@@ -21,7 +21,7 @@ export type BackdropVariant = "lobby" | "night" | "day" | "verdict";
 export type PreloadItem = { href: string; imageSrcSet?: string };
 
 // 파일 이름의 @ 는 URL 에서 %40 으로 쓴다.
-function png(dir: "table" | "roles", id: string, scale: 2 | 4): string {
+function png(dir: "table" | "roles" | "ghost", id: string, scale: 2 | 4): string {
   return `/characters/${dir}/${id}_default%40${scale}x.png`;
 }
 
@@ -30,6 +30,11 @@ function png(dir: "table" | "roles", id: string, scale: 2 | 4): string {
 export function figureSrc(seat: number): { src: string; srcSet: string } {
   const id = FIGURE_IDS[((seat % FIGURE_IDS.length) + FIGURE_IDS.length) % FIGURE_IDS.length]!;
   return { src: png("table", id, 2), srcSet: `${png("table", id, 2)} 2x, ${png("table", id, 4)} 4x` };
+}
+
+// 탈락한 사람의 자리에 인물 대신 쓰는 유령 그림(ASSET_SPEC §6, 결정 0021). 좌석별 유형 없음. 72px 표시 기준 밀도.
+export function ghostSrc(): { src: string; srcSet: string } {
+  return { src: png("ghost", "ghost", 2), srcSet: `${png("ghost", "ghost", 2)} 2x, ${png("ghost", "ghost", 4)} 4x` };
 }
 
 // 직업 그림은 150px 로 표시한다. @2x 파일은 1x, @4x 파일은 2x. 역할을 보낼 수 있는 화면에서만 쓴다.

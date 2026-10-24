@@ -16,6 +16,8 @@
 /* 캐릭터 상자: 72×96, 발 기준으로 크기만 바꾼다 */
 .mf-dt__seat { position: absolute; transform-origin: 50% 100%; }
 .mf-dt__seat .mf-figure { width: 100%; height: 100%; display: block; }
+/* 탈락 = 유령 그림(시안 f8 .sf--off img). 필터·투명도 지정 없음 — 흐림은 연결 끊김 전용(.mf-figure--disconnected) */
+.mf-figure--ghost { object-fit: contain; }
 
 /* 밤 대상 버튼(UI-SPEC C1): 버튼 기본 모양을 지우고 캐릭터 상자 그대로 눌린다 */
 .mf-dt__seat--pick {
@@ -44,6 +46,9 @@
 /* 방금 빠른 메시지를 보낸 사람: 윗줄 반전 */
 .mf-dt__tag--spoke .mf-dt__name { background: var(--gray-100); border-color: var(--gray-100); color: var(--night-900); }
 
+/* 탈락 이름표: 윗줄 gray-500, 아랫줄 '탈락'(보통 굵기·night-900 70% 면). gray-500 글자는 시안 승인 예외(UI-SPEC C3) */
+.mf-dt__tag--dead .mf-dt__name { color: var(--gray-500); }
+
 /* 이름표 아랫줄: 윗줄과 같은 알약. 직업은 말줄임하지 않는다. */
 .mf-dt__claim { min-width: 36px; justify-content: center; }
 .mf-dt__claim--none { color: var(--gray-300); font-weight: 400; }
@@ -51,6 +56,10 @@
 .mf-dt__claim--wait { color: var(--gray-300); font-weight: 400; letter-spacing: 1px; }
 .mf-dt__claim--done { background: var(--gray-100); color: var(--night-900); border-color: var(--gray-100); gap: 2px; padding-left: 6px; }
 .mf-dt__claim .mf-icon { stroke-width: 3; }
+.mf-dt__claim--dead { color: var(--gray-500); font-weight: 400; background: color-mix(in srgb, var(--night-900) 70%, transparent); }
+/* 관전 화면: 실제 직업은 점선이라 공개 주장 알약과 다르다. 마피아의 진홍은 관전 화면의 실제 직업 한정(UI-SPEC 진홍 예약 5) */
+.mf-dt__claim--real { border-style: dashed; border-color: var(--gray-300); }
+.mf-dt__claim--real.mf-dt__claim--mafia { color: var(--crimson-400); border-color: var(--crimson-400); }
 /* 공개 연출: 아랫줄이 주장으로 바뀌며 팝 360ms + 흔들림 400ms(seat.css 의 기존 값). 팝은 개별 속성 scale, 흔들림은 translate 라 서로 다투지 않는다. */
 .mf-dt__claim--pop {
   border-color: var(--gray-50);
