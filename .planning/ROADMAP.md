@@ -99,7 +99,7 @@ Plans:
   5. 토론 단계가 아닐 때(직업 공개 중 등) 보낸 메시지, 자유 텍스트, 2초 안에 다시 보낸 메시지는 서버가 거부해 다른 폰에 나타나지 않는다. 탈락자·밤·아침 중 메시지 거부는 탈락과 밤이 생기는 3페이즈에서 확인한다.
   6. 폰 세로 화면에서 메시지를 고르고 보내는 데 세 번 이하로 누른다(템플릿 → 대상·직업 → 보내기). 단 대상과 직업이 모두 필요한 '[○○]는 [직업]이었어요' 만 네 번(템플릿 → 대상 → 직업 → 보내기, 사용자 확정).
 
-**Plans:** 11/11 plans executed
+**Plans:** 11/18 plans executed (02-12~02-18 은 UAT 갭 클로저 G-02-1·G-02-2, 결정 0017 승인 시안 `design/screens/day-v3/SPEC.md` 기준)
 
 Plans:
 **Wave 1**
@@ -122,6 +122,25 @@ Plans:
 
 **Wave 5** *(blocked on Wave 4 completion)*
 - [x] 02-11-PLAN.md — 배포본 full 스모크(낮 한 바퀴·누출·거부)·재배포·결정 0016·ROADMAP 성공 기준 정정·HANDOFF·push·실기기 확인 모음 (wave 5)
+
+**Gap closure** *(02-UAT.md 갭 G-02-1 낮 화면 재설계·결정 0017, G-02-2 RATE_LIMITED 오탐)*
+
+**Wave 1**
+- [ ] 02-12-PLAN.md — 빠른 메시지는 서버에 보관하지 않고 chat 이벤트로 방송만(state 방송 없음·뷰에 messages 없음·옛 저장 방 정리), 서버 전송 한도 1800ms(클라이언트 잠금 2000ms 유지) (TDD, gap_closure, wave 1)
+- [ ] 02-13-PLAN.md — 닉네임 최대 5자(NICKNAME_MAX_GRAPHEMES, 서버 API 거부)와 "1~5자" 안내 문구 (TDD, gap_closure, wave 1)
+- [ ] 02-14-PLAN.md — 고정 테이블 배치 함수(280×108·rx132/124·ry100·캐릭터 72, 같은 픽셀 좌표)와 자동 배치 검사, DayTable 부품(2줄 이름표·…/✓ 완료/주장/-·↺·왕관·반전·이모티콘) (TDD, gap_closure, wave 1)
+
+**Wave 2** *(blocked on 02-12)*
+- [ ] 02-15-PLAN.md — 방장 +30초 연장·넘기기 제거: 화면 방장 줄·서버 extend/skip(BAD_MESSAGE)·extendUsed·ALREADY_EXTENDED·진입 훅 정리 (TDD, gap_closure, wave 2)
+
+**Wave 3** *(blocked on 02-12, 02-14, 02-15)*
+- [ ] 02-16-PLAN.md — 낮 세 단계 장면을 DayTable 로 교체(머리 위는 이모티콘만·보낸 사람 반전·아랫줄 공개 연출), 채팅 줄은 폰 메모리(useDayChat, 복원 없음), 옛 낮 전용 층·SeatFloat·ClaimTag·seat.css 삭제 (TDD, gap_closure, wave 3)
+
+**Wave 4** *(blocked on 02-16)*
+- [ ] 02-17-PLAN.md — 하단 패널 세 단계 같은 높이 157, 직업 공개 한 줄 칩(체크 배지), 채팅 세 줄 + ^ "채팅 내역" 모달, [빠른 메시지][이모티콘] 한 줄 (TDD, gap_closure, wave 4)
+
+**Wave 5** *(blocked on 02-13, 02-17)*
+- [ ] 02-18-PLAN.md — 스모크·봇 시나리오를 chat 이벤트·타이머 대기로 고치고 배포, 배포본 full 스모크 5·8명·봇 UAT 5·8명(2000ms 오탐 0), ROADMAP·REQUIREMENTS·결정 0016·UI-SPEC 정정, UAT 메모·HANDOFF·push, 실기기 확인 목록 (gap_closure, wave 5)
 
 **Notes**: 3페이즈가 생기기 전까지는 토론이 끝나면 다음 낮(직업 공개)으로 돌려 말 바꿈 표시를 검증한다. 직업 공개 방식(실시간·동시 공개), 선택지 범위(이번 판에 있는 직업만?), 단계 시간, 빠른 메시지 "저는 [직업]이에요" 템플릿과의 관계는 논의 단계에서 정한다(결정 0007). 템플릿 목록과 문구는 논의 단계에서 정한다. 자유 채팅은 v2 COMMX-01 (플레이테스트 피드백으로 결정), 마피아 밤 비밀 메시지는 v2 COMMX-02.
 **UI hint**: yes
