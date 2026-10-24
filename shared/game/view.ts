@@ -30,9 +30,6 @@ function buildDay(state: RoomState): DayView {
       .sort((a, b) => a.seat - b.seat)
       .map((p) => ({ seat: p.seat, claim: p.claimShown ?? "none", changed: p.claimChanged ?? false }));
   }
-  if (state.phase === "discussion") {
-    day.extendUsed = state.extendUsed ?? false;
-  }
   return day;
 }
 
@@ -92,7 +89,7 @@ export function buildView(state: RoomState, playerId: string, now: number): Room
     code: state.code,
     phase: state.phase,
     phaseEndsAt: state.phaseEndsAt,
-    phaseDurationMs: phaseDurationOf(state), // 연장 반영 — 타이머 막대 비율이 맞도록 단계 표 길이가 아니라 파생 값(Pitfall 3)
+    phaseDurationMs: phaseDurationOf(state), // 단계 표 길이 — 파생은 한 곳(discussion.ts)
     serverNow: now,
     minPlayers: MIN_PLAYERS,
     maxPlayers: MAX_PLAYERS,

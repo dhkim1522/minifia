@@ -5,7 +5,6 @@ import {
   CLAIM_REVEAL_MS,
   DAY_ANNOUNCE_MS,
   DISCUSSION_MS,
-  EXTEND_MS,
   PHASE_DEFS,
   ROLE_REVEAL_MS,
 } from "../../shared/game/phases";
@@ -74,7 +73,6 @@ describe("PHASE_DEFS (단계 표, D-01·D-02·D-19·D-20)", () => {
     expect(CLAIM_MS).toBe(15000);
     expect(CLAIM_REVEAL_MS).toBe(2000);
     expect(DISCUSSION_MS).toBe(90000);
-    expect(EXTEND_MS).toBe(30000);
   });
 });
 

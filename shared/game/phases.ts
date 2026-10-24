@@ -21,7 +21,6 @@ export const DAY_ANNOUNCE_MS = 2_000; // D-20
 export const CLAIM_MS = 15_000; // D-02
 export const CLAIM_REVEAL_MS = 2_000; // D-04 의 약 2초
 export const DISCUSSION_MS = 90_000; // DAY-01
-export const EXTEND_MS = 30_000; // D-18
 
 export const PHASE_DEFS: Readonly<Record<PhaseId, PhaseDef>> = Object.freeze({
   lobby: Object.freeze({ durationMs: null, next: null, revealsOwnRole: false }), // start 로만 나간다
