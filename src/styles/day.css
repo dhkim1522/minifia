@@ -44,15 +44,18 @@
 /* 고른 칩 오른쪽 위 체크 배지(시안 .seg__ok) — right −4px·top −6px 는 시안 값 */
 .mf-seg__ok { position: absolute; right: -4px; top: -6px; width: 18px; height: 18px; border-radius: var(--radius-pill); background: var(--night-900); border: 1px solid var(--gray-100); color: var(--gray-50); display: grid; place-items: center; }
 
-/* 낮 토론 하단 패널(S-07) — 최근 메시지 로그 · 방장 줄 · 말하기 줄. 180ms 는 토큰에 없는 길이라 지역 상수. */
+/* 낮 토론 하단 패널(S-07) — 채팅 세 줄 + ^ 버튼 · 말하기 줄. 180ms 는 토큰에 없는 길이라 지역 상수.
+   채팅 면은 시안 9차 .lg: night-700·모서리 14·여백 8 4 8 16·간격 4, 줄은 14px gray-300(최신 gray-100), 오른쪽 44폭 ^ 버튼. */
 .mf-msglog {
   --mf-msglog-fade: 180ms;
-  flex: none; box-sizing: border-box; list-style: none; margin: 0; padding: var(--space-sm) var(--space-md);
+  flex: none; box-sizing: border-box; display: flex; align-items: center; gap: var(--space-xs);
+  padding: 8px 4px 8px 16px; background: var(--night-700); border-radius: var(--radius-md);
+}
+/* 세 줄 높이 고정(UI-SPEC): 줄이 적어도 줄이지 않아 화면이 출렁이지 않는다. 안에서 스크롤하지 않는다(지난 줄은 모달) */
+.mf-msglog__list {
+  flex: 1; min-width: 0; margin: 0; padding: 0; list-style: none; overflow: hidden;
   display: flex; flex-direction: column; gap: var(--space-xs);
-  /* 3줄 높이 고정(UI-SPEC): 줄이 적어도 줄이지 않아 화면이 출렁이지 않는다. 더 많으면 안에서 스크롤 */
-  height: calc(3 * 1.4 * 14px + 2 * var(--space-xs) + 2 * var(--space-sm));
-  overflow-y: auto; overscroll-behavior: contain;
-  background: var(--night-700); border-radius: var(--radius-md);
+  height: calc(3 * 1.4 * 14px + 2 * var(--space-xs));
 }
 .mf-msglog__item, .mf-msglog__empty { flex: none; display: flex; gap: var(--space-sm); min-width: 0; font-size: 14px; line-height: 1.4; font-weight: 400; color: var(--gray-300); }
 .mf-msglog__item { animation: mf-msglog-in var(--mf-msglog-fade) var(--ease-out) both; }
@@ -60,9 +63,23 @@
 .mf-msglog__who { flex: none; display: inline-flex; align-items: center; gap: var(--space-xs); font-weight: 700; }
 .mf-msglog__dot { flex: none; width: 8px; height: 8px; border-radius: var(--radius-pill); }
 .mf-msglog__text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* ^ 버튼: 44폭, 로그 높이만큼 늘어난다. 모서리 10px 는 토큰에 없는 시안 값(.pv__more) */
+.mf-msglog__more {
+  appearance: none; flex: none; align-self: stretch; width: 44px; margin: 0; padding: 0; display: grid; place-items: center;
+  color: var(--gray-100); background: transparent; border: 0; border-radius: 10px; cursor: pointer;
+  touch-action: manipulation; -webkit-tap-highlight-color: transparent;
+}
+.mf-msglog__more:focus-visible { outline: 2px solid var(--gray-100); outline-offset: 2px; }
 @keyframes mf-msglog-in { from { opacity: 0; } to { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) {
   .mf-msglog__item { animation: none; }
+}
+
+/* 채팅 내역 모달(시안 6차 U .msheet·.mlog): 앱 Sheet 틀 그대로, 높이 500(작은 화면은 80dvh), 목록은 세 줄과 같은 모양으로 높이만 늘린다. */
+.mf-sheet.mf-sheet--chat { height: min(500px, 80dvh); }
+.mf-chatlog {
+  flex: 1; min-height: 0; margin: 0; padding: var(--space-sm) var(--space-md); list-style: none; overflow-y: auto; overscroll-behavior: contain;
+  display: flex; flex-direction: column; gap: var(--space-xs); background: var(--night-700); border-radius: var(--radius-md);
 }
 
 .mf-discuss { display: flex; flex-direction: column; gap: var(--space-sm); }

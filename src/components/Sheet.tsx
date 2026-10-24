@@ -26,6 +26,8 @@ export interface SheetProps {
   /** 열린 뒤 포커스를 줄 요소. 없으면 [닫기], 그것도 없으면 시트 첫 포커스 가능 요소 */
   initialFocusRef?: RefObject<HTMLElement | null>;
   showClose?: boolean;
+  /** 시트 본체(.mf-sheet)에 덧붙일 클래스. 시트별 높이 같은 모양 차이에 쓴다 */
+  className?: string;
   /** 함수면 requestClose 와 닫히는 중 여부를 받는다 */
   children: ReactNode | ((requestClose: () => void, closing: boolean) => ReactNode);
 }
@@ -39,7 +41,7 @@ interface Drag {
 
 const isTextInput = (el: HTMLElement) => el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement;
 
-export function Sheet({ label, onClose, initialFocusRef, showClose, children }: SheetProps) {
+export function Sheet({ label, onClose, initialFocusRef, showClose, className, children }: SheetProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const sheetRef = useRef<HTMLDivElement>(null);
   const closeBtnRef = useRef<HTMLButtonElement>(null);
@@ -194,7 +196,10 @@ export function Sheet({ label, onClose, initialFocusRef, showClose, children }: 
       }}
     >
       <div className="mf-sheet-scrim" onClick={onScrimClick} />
-      <div ref={sheetRef} className={closing ? "mf-sheet mf-sheet--closing" : "mf-sheet"}>
+      <div
+        ref={sheetRef}
+        className={[closing ? "mf-sheet mf-sheet--closing" : "mf-sheet", className].filter(Boolean).join(" ")}
+      >
         <div
           className="mf-sheet__handle"
           onPointerDown={onPointerDown}

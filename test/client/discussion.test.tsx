@@ -274,7 +274,7 @@ describe("낮 토론 화면 — 채팅 세 줄 + 채팅 내역 모달 (결정 00
     const mine = rows[3]!.querySelector(".mf-msglog__name");
     expect(mine?.getAttribute("title")).toBe("지우");
     expect(rows[1]!.querySelector<HTMLElement>(".mf-msglog__dot")?.getAttribute("style")).toContain("--seat-3");
-    expect(rows[1]!.querySelector(".mf-msglog__text")?.textContent).toBe("하윤 의심돼요");
+    expect(rows[1]!.querySelector(".mf-msglog__text")?.textContent).toBe("민지 의심돼요");
     expect(dlg.querySelector(".mf-sheet")?.classList.contains("mf-sheet--chat")).toBe(true);
     expect(dlg.querySelector('[aria-label="닫기"]') === null).toBe(false);
     expect(dlg.querySelector('ol[role="log"]')?.getAttribute("aria-label")).toBe("채팅 내역");
