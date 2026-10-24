@@ -322,12 +322,14 @@ describe("방장 연장·넘기기는 없다 (결정 0017-5, DAY-01)", () => {
     expect(await alarmOf(r.code)).toBe(before);
   });
 
-  it("방장이 끊겨 있어도 낮 토론은 서버 타이머대로 dayAnnounce 로 넘어간다", async () => {
+  it("방장이 끊겨 있어도 낮 토론·밤·아침은 서버 타이머대로 다음 낮(dayAnnounce)으로 넘어간다", async () => {
     const r = await startedAt("discussion");
     const guestSockets = r.guests.map((g) => g.sock);
     r.host.ws.close(1000, "bye");
     await nextFrame(guestSockets[0]!, (m) => m.t === "state" && m.view.players.find((p) => p.isHost)?.connected === false);
 
+    await advanceTo(r.code, guestSockets, "night");
+    await advanceTo(r.code, guestSockets, "morning");
     await advanceTo(r.code, guestSockets, "dayAnnounce");
     expect((await storedRoom(r.code)).day).toBe(2);
   });

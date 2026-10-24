@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { say } from "../../shared/game/chat";
 import type { SayInput } from "../../shared/game/chat";
 import { claimOptions, currentClaim, selectClaim } from "../../shared/game/claim";
+import { MORNING_MS, NIGHT_MS } from "../../shared/game/phases";
 import { ROOM_TTL_MS, attachConnection, createRoomState, joinRoom, startGame } from "../../shared/game/room";
 import type { Player, RoomState } from "../../shared/game/room";
 import { rolesInPlay } from "../../shared/game/roles";
@@ -324,8 +325,8 @@ describe("buildView 낮 뷰 — 직업 공개 중(claim) 은 완료한 자리와
 
   it("2일차 미리 선택: 어제 공개한 값이 내 me.claim 이고, 그 사람은 claimDone 에 들지 않는다", () => {
     const day1 = pick(stateAt("claim", 5, 1), 3, "citizen");
-    // claim → claimReveal → discussion → (다음 낮) dayAnnounce → claim 을 실제 tick 으로 넘긴다
-    const day2 = tick(day1, DISCUSSION_ENDS_AT + 2_000);
+    // claim → claimReveal → discussion → night → morning → (다음 낮) dayAnnounce → claim 을 실제 tick 으로 넘긴다
+    const day2 = tick(day1, DISCUSSION_ENDS_AT + NIGHT_MS + MORNING_MS + 2_000);
     expect(day2.phase).toBe("claim");
     const v3 = buildView(day2, seatId(day2, 3), START_AT);
     expect(v3.day?.n).toBe(2);
@@ -403,10 +404,10 @@ describe("buildView 낮 뷰 — 공개 뒤·토론 (D-04, D-06, D-08, D-15, D-18
 
   it("말 바꿈: 2일차에 어제와 다른 직업을 공개한 사람만 changed true 다", () => {
     let s = pick(pick(stateAt("claim", 5, 1), 1, "police"), 2, "doctor");
-    s = tick(s, DISCUSSION_ENDS_AT + 2_000); // 2일차 claim
+    s = tick(s, DISCUSSION_ENDS_AT + NIGHT_MS + MORNING_MS + 2_000); // 2일차 claim
     s = pick(s, 1, "doctor"); // police → doctor : 바꿈
     s = pick(s, 2, "doctor"); // 같은 값 : 바꿈 아님
-    s = tick(s, DISCUSSION_ENDS_AT + 4_000 + 13_000 + 2_000); // 2일차 claimReveal 지나 discussion
+    s = tick(s, DISCUSSION_ENDS_AT + NIGHT_MS + MORNING_MS + 4_000 + 13_000 + 2_000); // 2일차 claimReveal 지나 discussion
     expect(s.phase).toBe("discussion");
     const claims = buildView(s, seatId(s, 0), START_AT).day?.claims ?? [];
     expect(claims.map((c) => `${c.seat}:${c.claim}:${c.changed}`).join(" ")).toBe(
