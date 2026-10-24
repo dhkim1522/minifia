@@ -1,15 +1,16 @@
 import { useState } from "react";
 import type { ReactElement } from "react";
 import type { Claim, ClientMessage, RoomView } from "../../shared/protocol";
-import { Chip } from "./Chip";
+import { Icon } from "./Icon";
 import { claimName } from "../game/roleText";
-import "../styles/chip.css";
 import "../styles/day.css";
 
-// 직업 공개 하단 패널(S-06b). 칩 목록은 서버가 준 이번 판 구성(view.day.roles) 뒤에 "말 안 함" 을 붙인 것이다 —
+// 직업 공개 하단 패널(S-06b, 시안 R9-claim·결정 0017-6): 제목 + 안내 + 같은 폭 한 줄 칩(.mf-seg). 고른 칩은 반전 + 오른쪽 위 체크 배지.
+// 공용 Chip(앞 체크 아이콘, 줄바꿈)은 빠른 메시지 시트가 쓰고, 이 패널은 한 줄 전용 버튼(.mf-seg__b)을 쓴다.
+// 칩 목록은 서버가 준 이번 판 구성(view.day.roles) 뒤에 "말 안 함" 을 붙인 것이다 —
 // 클라이언트가 직업 목록을 따로 만들지 않고(D-07), 내 실제 역할로 칩이나 문구를 바꾸지 않는다(T-02-25).
 const GUIDE_FIRST_DAY = "거짓말도 괜찮아요. 시간이 끝나면 모두에게 한꺼번에 공개돼요";
-const GUIDE_LATER_DAY = "거짓말도 괜찮아요. 바꾸지 않으면 어제 선택이 그대로 공개돼요";
+const GUIDE_LATER_DAY = "거짓말도 괜찮아요. 바꾸지 않으면 어제 선택이 공개돼요";
 const TITLE_CLAIM = "주장할 직업을 고르세요";
 const TITLE_REVEALED = "주장이 공개됐어요";
 const GUIDE_REVEALED = "곧 토론이 시작돼요";
@@ -44,11 +45,23 @@ export function ClaimPanel({ view, canSend, send }: ClaimPanelProps): ReactEleme
     <div className="mf-claimpanel">
       <h2 className="mf-claimpanel__title">{revealed ? TITLE_REVEALED : TITLE_CLAIM}</h2>
       <p className="mf-claimpanel__guide">{guide}</p>
-      <div className="mf-chips" role="group" aria-label="주장할 직업">
+      <div className="mf-seg" role="group" aria-label="주장할 직업">
         {options.map((claim) => (
-          <Chip key={claim} selected={selected === claim} disabled={revealed || !canSend} onPress={() => press(claim)}>
+          <button
+            key={claim}
+            type="button"
+            className="mf-seg__b"
+            aria-pressed={selected === claim}
+            disabled={revealed || !canSend}
+            onClick={() => press(claim)}
+          >
             {claimName(claim)}
-          </Chip>
+            {selected === claim ? (
+              <span className="mf-seg__ok" aria-hidden="true">
+                <Icon name="check" size={12} />
+              </span>
+            ) : null}
+          </button>
         ))}
       </div>
     </div>

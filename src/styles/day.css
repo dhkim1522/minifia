@@ -19,25 +19,30 @@
 .mf-dayscene__enter { animation: mf-phase-enter var(--mf-dayscene-enter-ms) var(--ease-out) both; }
 .mf-dayscene > .mf-dayscene__enter:first-child { flex: none; }
 
-/* 하단 패널 틀 — 면 night-800, 위 모서리 radius-lg, 손잡이 막대. 내용은 02-08·02-09 가 넣는다. */
-.mf-dayscene__panel { flex: none; display: flex; flex-direction: column; gap: var(--space-md); padding: var(--space-sm) var(--space-lg) var(--space-lg); background: var(--night-800); border-radius: var(--radius-lg) var(--radius-lg) 0 0; }
-.mf-dayscene__panel::before { content: ""; align-self: center; width: 40px; height: 4px; border-radius: var(--radius-pill); background: var(--gray-700); }
+/* 하단 패널 — 높이는 직업 공개·공개 연출·낮 토론 세 단계가 같다(시안 9차 .bt 157, 결정 0017-6). 단계가 바뀌어도 테이블이 움직이지 않는다.
+   flex none·높이 고정이라 장면(flex 1·min-height 0)만 줄어든다. 10px·12px 여백은 토큰에 없는 시안 값(UI-SPEC R18 방식). 손잡이 막대는 시안에 없다. */
+.mf-dayscene__panel { flex: none; box-sizing: border-box; height: calc(157px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: var(--space-sm); padding: 10px var(--space-md) calc(12px + env(safe-area-inset-bottom)); background: var(--night-800); border-radius: var(--radius-lg) var(--radius-lg) 0 0; }
 
-/* 직업 공개 패널(S-06b·c) — 제목 heading --gray-50, 안내 label --gray-300, 구역 간격 --space-md.
-   패널 틀(.mf-dayscene__panel)의 안쪽 여백에 아래 safe-area 를 더한다. */
-.mf-claimpanel { display: flex; flex-direction: column; gap: var(--space-md); }
-.mf-claimpanel__title { margin: 0; font-size: 24px; line-height: 1.2; font-weight: 700; color: var(--gray-50); word-break: keep-all; text-wrap: balance; }
-.mf-claimpanel__guide { margin: 0; font-size: 14px; line-height: 1.4; font-weight: 400; color: var(--gray-300); word-break: keep-all; }
-.mf-dayscene__panel { padding-bottom: calc(var(--space-lg) + env(safe-area-inset-bottom)); }
-
-/* 360x640 처럼 낮은 폰: 장면이 줄어 스크롤이 생기면 패널 안쪽 여백을 --space-lg → --space-md 로 먼저 줄이고,
-   그래도 모자라면 패널 안 구역 간격을 줄인다(UI-SPEC 높이 계산). 장면은 flex 로 남는 높이를 쓰므로 스크롤은 생기지 않는다. */
-@media (max-height: 680px) {
-  .mf-dayscene__panel { padding-bottom: calc(var(--space-md) + env(safe-area-inset-bottom)); }
+/* 직업 공개 패널(S-06b·c) — 시안 R9-claim·f4.css·f5.css: 제목(.ct 24px 굵게 gray-50) + 안내(.gd 14px/20px gray-300) + 한 줄 칩(.seg). */
+.mf-claimpanel { display: flex; flex-direction: column; gap: var(--space-sm); }
+.mf-claimpanel__title { margin: 0; font-size: 24px; line-height: 1.2; font-weight: 700; color: var(--gray-50); word-break: keep-all; }
+.mf-claimpanel__guide { margin: 0; min-height: 20px; font-size: 14px; line-height: 20px; font-weight: 400; color: var(--gray-300); word-break: keep-all; }
+/* 칩 한 줄: 이번 판 직업 + 말 안 함을 같은 폭으로 나눈다(줄바꿈 없음). 간격 6px·칩 안쪽 여백 4px 는 토큰에 없는 시안 값 */
+.mf-seg { display: flex; gap: 6px; }
+.mf-seg__b {
+  appearance: none; position: relative; flex: 1; min-width: 0; height: var(--tap-min); margin: 0; padding: 0 4px;
+  font-family: inherit; font-size: 14px; line-height: 1.4; font-weight: 700; white-space: nowrap;
+  color: var(--gray-100); background: var(--night-700); border: 1px solid var(--night-600); border-radius: var(--radius-pill);
+  cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent;
+  transition: transform var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
 }
-@media (max-height: 600px) {
-  .mf-claimpanel { gap: var(--space-sm); }
-}
+.mf-seg__b:active:not(:disabled) { transform: scale(0.96); }
+.mf-seg__b:focus-visible { outline: 2px solid var(--gray-100); outline-offset: 2px; }
+.mf-seg__b[aria-pressed="true"] { background: var(--gray-100); color: var(--night-900); border-color: var(--gray-100); }
+.mf-seg__b:disabled { opacity: 0.6; cursor: default; }
+.mf-seg__b:disabled[aria-pressed="true"] { opacity: 1; }
+/* 고른 칩 오른쪽 위 체크 배지(시안 .seg__ok) — right −4px·top −6px 는 시안 값 */
+.mf-seg__ok { position: absolute; right: -4px; top: -6px; width: 18px; height: 18px; border-radius: var(--radius-pill); background: var(--night-900); border: 1px solid var(--gray-100); color: var(--gray-50); display: grid; place-items: center; }
 
 /* 낮 토론 하단 패널(S-07) — 최근 메시지 로그 · 방장 줄 · 말하기 줄. 180ms 는 토큰에 없는 길이라 지역 상수. */
 .mf-msglog {
