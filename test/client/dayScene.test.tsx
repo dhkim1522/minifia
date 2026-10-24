@@ -7,6 +7,7 @@ import type { RoleId } from "../../shared/game/roles";
 import type { Claim, PhaseId, RoomView, SeatClaim } from "../../shared/protocol";
 import type { RoomConnection } from "../../src/net/useRoomConnection";
 import { DayScene } from "../../src/screens/DayScene";
+import { TABLE_FIT_MIN_H, TAG_H } from "../../src/game/dayTable";
 
 // 낮 장면 단위 테스트: 직업 공개(S-06b)·공개 연출(S-06c). 세 단계는 DayTable 하나를 쓴다(결정 0017-1·0017-6).
 // 서버와는 view 픽스처로만 만난다.
@@ -94,7 +95,7 @@ describe("DayScene 직업 공개 (S-06b, D-01·D-03, 결정 0017-6)", () => {
     const { container } = scene(makeView({ phase: "claim" }));
     const panel = container.querySelector(".mf-dayscene__panel");
     expect(panel?.textContent).toContain("주장할 직업을 고르세요");
-    expect(panel?.querySelectorAll(".mf-chip").length).toBe(4);
+    expect(panel?.querySelectorAll(".mf-seg__b").length).toBe(4);
   });
 
   it("claimDone [1,3] → 자리 1·3 아랫줄만 ✓ 완료(--done), 0·2 는 …(--wait). 옛 알약·말풍선 요소가 없다", () => {
@@ -122,7 +123,7 @@ describe("DayScene 직업 공개 (S-06b, D-01·D-03, 결정 0017-6)", () => {
     };
     const mafia = panelHtml(makeView({ phase: "claim", role: "mafia", allies: [2] }));
     const citizen = panelHtml(makeView({ phase: "claim", role: "citizen" }));
-    expect(mafia).toContain("mf-chip");
+    expect(mafia).toContain("mf-seg__b");
     expect(mafia).toBe(citizen);
   });
 
@@ -200,7 +201,7 @@ describe("DayScene 공개 연출 (S-06c, D-04·D-06·D-08, 결정 0017-6)", () =
     expect(within(panel).queryByText("주장이 공개됐어요")).not.toBeNull();
     expect(within(panel).queryByText("곧 토론이 시작돼요")).not.toBeNull();
     expect(within(panel).queryByText("주장할 직업을 고르세요")).toBeNull();
-    const chips = [...panel.querySelectorAll<HTMLButtonElement>(".mf-chip")];
+    const chips = [...panel.querySelectorAll<HTMLButtonElement>(".mf-seg__b")];
     expect(chips.map((c) => c.textContent).join("|")).toBe("마피아|경찰|시민|말 안 함");
     expect(chips.every((c) => c.disabled)).toBe(true);
     // 내 자리(seat 0)의 공개 값 police 가 선택돼 있다
@@ -273,5 +274,57 @@ describe("DayScene 장면 상자 (SPEC 판 구성, 결정 0017-1)", () => {
     }
     const normal = scene(makeView({ phase: "claim" }));
     expect(felt(normal.container).style.top).toBe("150px");
+  });
+});
+
+describe("DayScene 하단 패널 (SPEC 하단, 결정 0017-6)", () => {
+  const css = readFileSync("src/styles/day.css", "utf8");
+  const panelRule = /\.mf-dayscene__panel\s*\{([^}]*)\}/.exec(css)?.[1] ?? "";
+  const CLAIMS: SeatClaim[] = [0, 1, 2, 3].map((seat) => ({ seat, claim: "none" as const, changed: false }));
+  const views: [string, RoomView][] = [
+    ["claim", makeView({ phase: "claim" })],
+    ["claimReveal", makeView({ phase: "claimReveal", claims: CLAIMS })],
+    ["discussion", makeView({ phase: "discussion", claims: CLAIMS })],
+  ];
+
+  it.each(views)("%s: 패널 section 의 클래스는 mf-dayscene__panel 이다", (_name, view) => {
+    const { container } = scene(view);
+    expect(container.querySelectorAll("section.mf-dayscene__panel").length).toBe(1);
+  });
+
+  it("패널 높이 CSS: calc(157px + 아래 안전 영역)·flex none·border-box·night-800, 안쪽 여백 10px 16px calc(12px + 안전 영역), 간격 8", () => {
+    expect(/height:\s*calc\(157px \+ env\(safe-area-inset-bottom\)\)/.test(panelRule)).toBe(true);
+    expect(/flex:\s*none/.test(panelRule)).toBe(true);
+    expect(/box-sizing:\s*border-box/.test(panelRule)).toBe(true);
+    expect(/gap:\s*var\(--space-sm\)/.test(panelRule)).toBe(true);
+    expect(/padding:\s*10px var\(--space-md\) calc\(12px \+ env\(safe-area-inset-bottom\)\)/.test(panelRule)).toBe(true);
+    expect(/background:\s*var\(--night-800\)/.test(panelRule)).toBe(true);
+    expect(/border-radius:\s*var\(--radius-lg\) var\(--radius-lg\) 0 0/.test(panelRule)).toBe(true);
+  });
+
+  it("패널 손잡이(::before) 규칙과 max-height 미디어의 패널·칩 여백 줄임 규칙이 없다 (세 단계 같은 높이)", () => {
+    expect(css.includes(".mf-dayscene__panel::before")).toBe(false);
+    expect(/@media \(max-height/.test(css)).toBe(false);
+  });
+
+  it("짧은 화면: 장면 상자를 352×340 으로 재면 내 자리(맨 앞) 이름표의 top + 46 이 340 이하 — 패널이 맨 앞 이름표를 가리지 않는다 (TABLE_FIT_MIN_H 이상)", () => {
+    expect(TABLE_FIT_MIN_H <= 340).toBe(true);
+    class FakeRO {
+      constructor(private cb: (entries: { contentRect: { width: number; height: number } }[]) => void) {}
+      observe(): void {
+        this.cb([{ contentRect: { width: 352, height: 340 } }]);
+      }
+      unobserve(): void {}
+      disconnect(): void {}
+    }
+    try {
+      vi.stubGlobal("ResizeObserver", FakeRO);
+      const short = scene(makeView({ phase: "discussion", claims: CLAIMS }));
+      const tag = short.container.querySelector<HTMLElement>('.mf-dt__tag[data-seat="0"]')!;
+      expect(parseFloat(tag.style.top) + TAG_H <= 340).toBe(true);
+      cleanup();
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });

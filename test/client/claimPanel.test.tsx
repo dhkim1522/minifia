@@ -1,5 +1,8 @@
+/// <reference types="node" />
+import { readFileSync } from "node:fs";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import "../helpers/singleLineErrors";
 import type { RoleId } from "../../shared/game/roles";
 import type { Claim, ClientMessage, PhaseId, RoomView, SeatClaim } from "../../shared/protocol";
 import { ClaimPanel } from "../../src/components/ClaimPanel";
@@ -80,6 +83,14 @@ describe("ClaimPanel 직업 공개 (S-06b, D-03·D-07·D-09)", () => {
     expect(chips().every((c) => c.getAttribute("aria-pressed") === "false")).toBe(true);
   });
 
+  it("4명판: 칩 그룹은 .mf-seg 한 줄이고 버튼 넷이 모두 .mf-seg__b 이며 체크 배지(.mf-seg__ok)가 없다 (결정 0017-6)", () => {
+    const { container } = panel(makeView());
+    expect(chipRow().classList.contains("mf-seg")).toBe(true);
+    expect(chips().map((c) => (c.classList.contains("mf-seg__b") ? "1" : "0")).join("")).toBe("1111");
+    expect(container.querySelectorAll(".mf-seg__ok").length).toBe(0);
+    expect(container.querySelectorAll(".mf-chip, .mf-chips").length).toBe(0);
+  });
+
   it("5명판: view.day.roles 4개 → 칩 5개(마피아·경찰·의사·시민·말 안 함)", () => {
     panel(makeView({ roles: ["mafia", "police", "doctor", "citizen"] }));
     expect(chips().map((c) => c.textContent)).toEqual(["마피아", "경찰", "의사", "시민", "말 안 함"]);
@@ -91,6 +102,9 @@ describe("ClaimPanel 직업 공개 (S-06b, D-03·D-07·D-09)", () => {
     expect(send).toHaveBeenCalledTimes(1);
     expect(send).toHaveBeenLastCalledWith({ t: "claim", claim: "police" });
     expect(chip("경찰").getAttribute("aria-pressed")).toBe("true");
+    // 고른 칩에만 체크 배지 하나
+    expect(chips().map((c) => c.querySelectorAll(".mf-seg__ok").length).join("")).toBe("0100");
+    expect(chipRow().querySelectorAll(".mf-seg__ok").length).toBe(1);
     fireEvent.click(chip("경찰"));
     expect(send).toHaveBeenCalledTimes(1);
     expect(chip("경찰").getAttribute("aria-pressed")).toBe("true");
@@ -99,6 +113,7 @@ describe("ClaimPanel 직업 공개 (S-06b, D-03·D-07·D-09)", () => {
     expect(send).toHaveBeenLastCalledWith({ t: "claim", claim: "citizen" });
     expect(chip("시민").getAttribute("aria-pressed")).toBe("true");
     expect(chip("경찰").getAttribute("aria-pressed")).toBe("false");
+    expect(chips().map((c) => c.querySelectorAll(".mf-seg__ok").length).join("")).toBe("0010");
   });
 
   it("말 안 함 칩은 {claim: none} 을 보낸다", () => {
@@ -124,7 +139,7 @@ describe("ClaimPanel 직업 공개 (S-06b, D-03·D-07·D-09)", () => {
 
   it("2일차 이후: me.claim(어제 값)이 처음부터 선택돼 있고 안내는 2일차 문구", () => {
     panel(makeView({ n: 2, roles: ["mafia", "police", "doctor", "citizen"], myClaim: "doctor" }));
-    expect(screen.queryByText("거짓말도 괜찮아요. 바꾸지 않으면 어제 선택이 그대로 공개돼요")).not.toBeNull();
+    expect(screen.queryByText("거짓말도 괜찮아요. 바꾸지 않으면 어제 선택이 공개돼요")).not.toBeNull();
     expect(chip("의사").getAttribute("aria-pressed")).toBe("true");
     expect(chip("마피아").getAttribute("aria-pressed")).toBe("false");
   });
@@ -136,11 +151,49 @@ describe("ClaimPanel 직업 공개 (S-06b, D-03·D-07·D-09)", () => {
     expect(send).not.toHaveBeenCalled();
   });
 
+  it("공개 연출: 제목 '주장이 공개됐어요'·안내 '곧 토론이 시작돼요', 모든 칩 disabled, 내 공개 값(경찰) 칩만 눌려 있고 그 칩에만 배지 (D-04, 결정 0017-6)", () => {
+    const claims: SeatClaim[] = [
+      { seat: 0, claim: "police", changed: false },
+      { seat: 1, claim: "none", changed: false },
+    ];
+    panel(makeView({ phase: "claimReveal", claims, myClaim: "citizen" }));
+    expect(screen.queryByText("주장이 공개됐어요")).not.toBeNull();
+    expect(screen.queryByText("곧 토론이 시작돼요")).not.toBeNull();
+    expect(screen.queryByText("주장할 직업을 고르세요")).toBeNull();
+    expect(chips().every((c) => c.disabled)).toBe(true);
+    expect(chips().map((c) => c.getAttribute("aria-pressed")).join("|")).toBe("false|true|false|false");
+    expect(chips().map((c) => c.querySelectorAll(".mf-seg__ok").length).join("")).toBe("0100");
+  });
+
   it("마피아(allies [2])와 시민 화면의 패널 HTML 이 같다 — 칩 목록은 이번 판 구성이라 모두 같다 (T-02-25)", () => {
     const mafia = panel(makeView({ role: "mafia", allies: [2] })).container.innerHTML;
     cleanup();
     const citizen = panel(makeView({ role: "citizen" })).container.innerHTML;
     expect(mafia).toBe(citizen);
     expect(mafia.length).toBeGreaterThan(0);
+  });
+});
+
+describe("직업 칩 한 줄 CSS (시안 f4.css .seg, 결정 0017-6)", () => {
+  const css = readFileSync("src/styles/day.css", "utf8");
+  const rule = (sel: string): string => {
+    const esc = sel.replace(/[.\[\]"=:()]/g, "\\$&");
+    return new RegExp(`(?:^|\\})\\s*${esc}\\s*\\{([^}]*)\\}`, "m").exec(css)?.[1] ?? "";
+  };
+
+  it(".mf-seg__b 는 flex 1·높이 44(--tap-min)·알약, .mf-seg 는 간격 6px 한 줄", () => {
+    expect(/flex:\s*1[;\s]/.test(rule(".mf-seg__b"))).toBe(true);
+    expect(/height:\s*(44px|var\(--tap-min\))/.test(rule(".mf-seg__b"))).toBe(true);
+    expect(/border-radius:\s*var\(--radius-pill\)/.test(rule(".mf-seg__b"))).toBe(true);
+    expect(/display:\s*flex/.test(rule(".mf-seg"))).toBe(true);
+    expect(/gap:\s*6px/.test(rule(".mf-seg"))).toBe(true);
+    expect(/flex-wrap:\s*wrap/.test(rule(".mf-seg"))).toBe(false);
+  });
+
+  it(".mf-seg__b:disabled 는 opacity .6, 눌린 채 꺼진 칩은 opacity 1, .mf-seg__ok 는 18px", () => {
+    expect(/opacity:\s*0?\.6/.test(rule(".mf-seg__b:disabled"))).toBe(true);
+    expect(/opacity:\s*1[;\s]/.test(rule('.mf-seg__b:disabled[aria-pressed="true"]'))).toBe(true);
+    expect(/width:\s*18px/.test(rule(".mf-seg__ok"))).toBe(true);
+    expect(/height:\s*18px/.test(rule(".mf-seg__ok"))).toBe(true);
   });
 });
