@@ -608,3 +608,85 @@ describe("daytable.css: 탈락과 관전 아랫줄 (03-02)", () => {
     expect(cssHas(css, /\.mf-dt__claim--real\.mf-dt__claim--mafia\s*\{[^}]*border-color:\s*var\(--crimson-400\)/)).toBe(true);
   });
 });
+
+// ---- 03-02 Task 3: 종류별 표적 배지 (D-07, 결정 0021, UI-SPEC C4·N-6) ----
+describe("DayTable: 종류별 표적 배지", () => {
+  it("pick.ally 자리에만 .mf-dt__pick--ally 하나(aria-hidden, 장식 — 마피아 화면)", () => {
+    const { container } = render(<DayTable seats={five({ 2: { pick: { ally: true } } })} mySeat={0} width={366} />);
+    const list = container.querySelectorAll<HTMLElement>(".mf-dt__pick");
+    expect(list.length).toBe(1);
+    expect(list[0]?.classList.contains("mf-dt__pick--ally")).toBe(true);
+    expect(list[0]?.getAttribute("aria-hidden")).toBe("true");
+    expect(seatEl(container, 2).contains(list[0] ?? null)).toBe(true);
+  });
+
+  it("spectatorPicks 경찰·의사·마피아는 각각 --police('경찰 조사 대상')·--doctor('의사 보호 대상')·--ally('마피아 지목 대상') role=img 배지, svg 하나", () => {
+    const seats = five({
+      1: { spectatorPicks: ["police"] },
+      2: { spectatorPicks: ["doctor"] },
+      3: { spectatorPicks: ["mafia"] },
+    });
+    const { container } = render(<DayTable seats={seats} mySeat={0} width={366} />);
+    const cases: [number, string, string][] = [
+      [1, "mf-dt__pick--police", "경찰 조사 대상"],
+      [2, "mf-dt__pick--doctor", "의사 보호 대상"],
+      [3, "mf-dt__pick--ally", "마피아 지목 대상"],
+    ];
+    for (const [n, cls, name] of cases) {
+      const b = seatEl(container, n).querySelectorAll<HTMLElement>(".mf-dt__pick");
+      expect(b.length).toBe(1);
+      expect(b[0]?.classList.contains(cls)).toBe(true);
+      expect(b[0]?.getAttribute("role")).toBe("img");
+      expect(b[0]?.getAttribute("aria-label")).toBe(name);
+      expect(b[0]?.querySelectorAll("svg").length).toBe(1);
+    }
+  });
+
+  it("ally·spectatorPicks 가 하나도 없으면 렌더 HTML 에 crimson 이 없다", () => {
+    const { container } = render(
+      <DayTable seats={five({ 1: { pick: { mine: true } }, 2: { spectatorPicks: ["police", "doctor"] } })} mySeat={0} width={366} />,
+    );
+    expect(container.innerHTML.includes("crimson")).toBe(false);
+  });
+
+  it("관전 마피아와 pick.ally 가 함께 오면 --ally 배지는 하나만 그린다", () => {
+    const { container } = render(<DayTable seats={five({ 2: { pick: { ally: true }, spectatorPicks: ["mafia"] } })} mySeat={0} width={366} />);
+    expect(container.querySelectorAll(".mf-dt__pick--ally").length).toBe(1);
+  });
+
+  it("한 자리에 pick.mine·spectatorPicks 셋이 모두 있으면 배지 넷이 DOM 순서 --police, --doctor, --ally, --me 다", () => {
+    const seats = five({ 2: { pick: { mine: true }, spectatorPicks: ["mafia", "doctor", "police"] } });
+    const { container } = render(<DayTable seats={seats} mySeat={0} width={366} />);
+    const order = Array.from(seatEl(container, 2).querySelectorAll<HTMLElement>(".mf-dt__pick")).map((e) =>
+      ["police", "doctor", "ally", "me"].find((k) => e.classList.contains(`mf-dt__pick--${k}`)),
+    );
+    // 배열 비교의 여러 줄 diff 는 TAP 보고서를 깨뜨리므로 한 줄 문자열로 비교한다.
+    expect(order.join(">")).toBe("police>doctor>ally>me");
+  });
+});
+
+describe("daytable.css: 종류별 배지 (03-02)", () => {
+  const css = readFileSync("src/styles/daytable.css", "utf8");
+  it("--ally: night-900 면·crimson-400 글자·2px 윤곽·margin-left 4px", () => {
+    expect(cssHas(css, /\.mf-dt__pick--ally\s*\{[^}]*background:\s*var\(--night-900\)/)).toBe(true);
+    expect(cssHas(css, /\.mf-dt__pick--ally\s*\{[^}]*color:\s*var\(--crimson-400\)/)).toBe(true);
+    expect(cssHas(css, /\.mf-dt__pick--ally\s*\{[^}]*border:\s*2px solid var\(--crimson-400\)/)).toBe(true);
+    expect(cssHas(css, /\.mf-dt__pick--ally\s*\{[^}]*margin-left:\s*4px/)).toBe(true);
+  });
+  it("--police: night-900 면·gray-50 글자·2px gray-50 윤곽", () => {
+    expect(cssHas(css, /\.mf-dt__pick--police\s*\{[^}]*background:\s*var\(--night-900\)/)).toBe(true);
+    expect(cssHas(css, /\.mf-dt__pick--police\s*\{[^}]*color:\s*var\(--gray-50\)/)).toBe(true);
+    expect(cssHas(css, /\.mf-dt__pick--police\s*\{[^}]*border:\s*2px solid var\(--gray-50\)/)).toBe(true);
+  });
+  it("--doctor: seat-3 글자·2px seat-3 윤곽·margin-left -4px", () => {
+    expect(cssHas(css, /\.mf-dt__pick--doctor\s*\{[^}]*background:\s*var\(--night-900\)/)).toBe(true);
+    expect(cssHas(css, /\.mf-dt__pick--doctor\s*\{[^}]*color:\s*var\(--seat-3\)/)).toBe(true);
+    expect(cssHas(css, /\.mf-dt__pick--doctor\s*\{[^}]*border:\s*2px solid var\(--seat-3\)/)).toBe(true);
+    expect(cssHas(css, /\.mf-dt__pick--doctor\s*\{[^}]*margin-left:\s*-4px/)).toBe(true);
+  });
+  it("--me 의 z-index 가 다른 세 배지보다 크다", () => {
+    const z = (k: string): number => Number(new RegExp(`\\.mf-dt__pick--${k}\\s*\\{[^}]*z-index:\\s*(\\d+)`).exec(css)?.[1] ?? "-1");
+    expect(z("me")).toBeGreaterThan(Math.max(z("ally"), z("police"), z("doctor")));
+    expect(Math.min(z("ally"), z("police"), z("doctor"))).toBeGreaterThan(0);
+  });
+});
