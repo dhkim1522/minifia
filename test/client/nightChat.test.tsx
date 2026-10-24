@@ -22,6 +22,12 @@ const players: PublicPlayer[] = ["지호", "서연", "하늘", "민수"].map((ni
 }));
 const L = (seq: number, seat: number): ChatLine => ({ seq, seat, template: "nightAgree", at: 1 });
 
+// ReadOnlyRow 는 GREEN 에서 생긴다 — RED 에서는 파일이 없어도 이 파일이 로드되도록 glob 으로 읽는다(없으면 빈 객체).
+const rowMods = import.meta.glob<{ ReadOnlyRow?: () => React.ReactElement; READ_ONLY_TEXT?: string }>("../../src/components/ReadOnlyRow.tsx", { eager: true });
+const rowMod = Object.values(rowMods)[0];
+const ReadOnlyRow = rowMod?.ReadOnlyRow ?? (() => null);
+const READ_ONLY_TEXT = rowMod?.READ_ONLY_TEXT;
+
 const SYS = "마피아끼리만 보여요";
 const css = readFileSync("src/styles/day.css", "utf8");
 
@@ -109,5 +115,63 @@ describe("밤 조작 줄·모달", () => {
     fireEvent.click(screen.getByRole("button", { name: "빠른 메시지" }));
     const chips = within(screen.getByRole("group", { name: "문구" })).getAllByRole("button");
     expect(chips.map((b) => b.textContent).join("|")).toBe("[○○] 지목해요|동의해요|다른 사람을 지목해요");
+  });
+});
+
+describe("모달 안내 줄·관전 하단 부품 (결정 0021)", () => {
+  const history = () => document.querySelector<HTMLDialogElement>('dialog[aria-label="채팅 내역"]');
+  const rule = (sel: string): string => {
+    const esc = sel.replace(/[.\[\]"=:()]/g, "\\$&");
+    return new RegExp(`(?:^|\\})\\s*${esc}\\s*\\{([^}]*)\\}`, "m").exec(css)?.[1] ?? "";
+  };
+
+  it("systemLine 을 주고 ^ 를 누르면 채팅 내역 모달 목록의 첫 li 가 안내 줄이고 그 뒤에 받은 줄 전부가 있다", () => {
+    render(<MessageLog lines={[L(1, 1), L(2, 2), L(3, 3), L(4, 0)]} players={players} mySeat={0} systemLine={SYS} label="마피아 채팅" />);
+    fireEvent.click(screen.getByRole("button", { name: "채팅 내역 크게 보기" }));
+    const items = [...history()!.querySelectorAll<HTMLElement>(".mf-chatlog li")];
+    expect(items.map((li) => (li.className.includes("mf-msglog__item--sys") ? "S" : "L")).join("")).toBe("SLLLL");
+    expect(items[0]!.textContent).toBe(SYS);
+  });
+
+  it("줄이 없어도 모달에 '아직 메시지가 없어요' 가 없고 안내 줄만 있다", () => {
+    render(<MessageLog lines={[]} players={players} mySeat={0} systemLine={SYS} label="마피아 채팅" />);
+    fireEvent.click(screen.getByRole("button", { name: "채팅 내역 크게 보기" }));
+    expect([...history()!.querySelectorAll(".mf-chatlog li")].map((li) => li.textContent).join("|")).toBe(SYS);
+  });
+
+  it("MessageLog more={false} 면 ^ 버튼(.mf-msglog__more)이 없다. 기본은 있다", () => {
+    const a = render(<MessageLog lines={[]} players={players} mySeat={0} more={false} />);
+    expect(a.container.querySelectorAll(".mf-msglog__more").length).toBe(0);
+    a.unmount();
+    const b = render(<MessageLog lines={[]} players={players} mySeat={0} />);
+    expect(b.container.querySelectorAll(".mf-msglog__more").length).toBe(1);
+  });
+
+  it("MessageLog label '마피아 채팅(관전)'·systemLine '관전 중 · 마피아 채팅' → role=log 이름과 안내 줄이 그 글자", () => {
+    render(<MessageLog lines={[]} players={players} mySeat={0} label="마피아 채팅(관전)" systemLine="관전 중 · 마피아 채팅" more={false} />);
+    const items = lis("마피아 채팅(관전)");
+    expect(items.map((li) => li.textContent).join("|")).toBe("관전 중 · 마피아 채팅");
+  });
+
+  it("ReadOnlyRow 는 p.mf-ro 하나이고 글자가 '탈락했어요 · 볼 수만 있어요'(READ_ONLY_TEXT), 버튼·포커스 가능한 요소가 없다", () => {
+    const { container } = render(<ReadOnlyRow />);
+    const root = container.firstElementChild as HTMLElement | null;
+    expect(`${root?.tagName}.${root?.className}|${container.children.length}`).toBe("P.mf-ro|1");
+    expect(root?.textContent).toBe("탈락했어요 · 볼 수만 있어요");
+    expect(READ_ONLY_TEXT).toBe("탈락했어요 · 볼 수만 있어요");
+    expect(container.querySelectorAll("button, a, input, [tabindex]").length).toBe(0);
+  });
+
+  it("CSS: .mf-ro 에 min-height 44px(--tap-min)·background var(--night-700)·color var(--gray-300)·font-size 14px·border-radius var(--radius-md)·justify-content center", () => {
+    const r = rule(".mf-ro");
+    const ok = [
+      /min-height:\s*var\(--tap-min\)/,
+      /background:\s*var\(--night-700\)/,
+      /color:\s*var\(--gray-300\)/,
+      /font-size:\s*14px/,
+      /border-radius:\s*var\(--radius-md\)/,
+      /justify-content:\s*center/,
+    ].map((re) => (re.test(r) ? "1" : "0"));
+    expect(ok.join("")).toBe("111111");
   });
 });
