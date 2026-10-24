@@ -467,3 +467,67 @@ describe("거부 코드는 규칙 하나 - 단계 → 보낸 사람 → 템플�
     expect(JSON.stringify(night)).toBe(before);
   });
 });
+
+describe("밤 채팅 번호 (PLAN-CHECK W3, D-17, 결정 0002·0019)", () => {
+  const nightRoom = (extra: { nextMessageSeq?: number; nextNightSeq?: number } = {}): RoomState => ({
+    ...room("night", { overrides: { 1: { role: "mafia" }, 2: { role: "mafia" } } }),
+    ...extra,
+  });
+  /** 마피아 seat 1 이 밤에 n 줄을 1800ms 간격으로 보낸 뒤의 상태와 줄 번호들 */
+  const sendNight = (start: RoomState, n: number): { state: RoomState; seqs: string } => {
+    let state = start;
+    const seqs: number[] = [];
+    for (let i = 0; i < n; i += 1) {
+      const r = say(state, "p1", { template: "nightAgree" }, NOW + i * 1_800);
+      if (!r.ok) throw new Error(`setup: ${r.error}`);
+      seqs.push(r.line.seq);
+      state = r.state;
+    }
+    return { state, seqs: seqs.join(",") };
+  };
+
+  it("night 의 첫 마피아 say 는 seq 1 이고 결과의 nextNightSeq 는 2, nextMessageSeq 는 입력 그대로다", () => {
+    const r = say(nightRoom({ nextMessageSeq: 5 }), "p1", { template: "nightAgree" }, NOW);
+    if (!r.ok) throw new Error("setup");
+    expect(`${r.line.seq}/${r.state.nextNightSeq}/${r.state.nextMessageSeq}`).toBe("1/2/5");
+  });
+
+  it("night 에 마피아가 세 줄을 보내면 seq 1·2·3, nextMessageSeq 는 한 번도 바뀌지 않는다", () => {
+    const { state, seqs } = sendNight(nightRoom({ nextMessageSeq: 5 }), 3);
+    expect(`${seqs}/${state.nextNightSeq}/${state.nextMessageSeq}`).toBe("1,2,3/4/5");
+  });
+
+  it("같은 일차에 낮 nextMessageSeq 가 5 였다면 밤 세 줄 뒤 다음 낮 첫 say 의 seq 도 5 다 — 밤 채팅이 없던 경우와 같다", () => {
+    const start = nightRoom({ nextMessageSeq: 5 });
+    const nextDaySeq = (state: RoomState): string => {
+      const day: RoomState = { ...state, phase: "discussion" };
+      const r = say(day, "p3", { template: "innocent" }, NOW + 60_000);
+      return r.ok ? String(r.line.seq) : r.error;
+    };
+    const withChat = nextDaySeq(sendNight(start, 3).state);
+    const withoutChat = nextDaySeq(start);
+    expect(`${withChat}/${withoutChat}`).toBe("5/5");
+  });
+
+  it("discussion 의 say 는 nextNightSeq 를 바꾸지 않는다", () => {
+    const day: RoomState = { ...room("discussion", { nextMessageSeq: 5 }), nextNightSeq: 3 };
+    const r = say(day, "p1", { template: "innocent" }, NOW);
+    if (!r.ok) throw new Error("setup");
+    expect(`${r.line.seq}/${r.state.nextMessageSeq}/${r.state.nextNightSeq}`).toBe("5/6/3");
+    const plain = say(room("discussion"), "p1", { template: "innocent" }, NOW);
+    expect(plain.ok ? String(plain.state.nextNightSeq) : plain.error).toBe("undefined");
+  });
+
+  it("nextNightSeq 가 없는 밤 상태의 첫 seq 는 1, 있으면 그 값에서 이어진다", () => {
+    const first = say(nightRoom(), "p1", { template: "nightAgree" }, NOW);
+    const resumed = say(nightRoom({ nextNightSeq: 7 }), "p1", { template: "nightAgree" }, NOW);
+    expect(`${first.ok ? first.line.seq : first.error}/${resumed.ok ? resumed.line.seq : resumed.error}`).toBe("1/7");
+  });
+
+  it("밤 emote 는 두 번호 모두 바꾸지 않는다", () => {
+    const start = nightRoom({ nextMessageSeq: 5, nextNightSeq: 3 });
+    const r = emote(start, "p1", "smile", NOW);
+    if (!r.ok) throw new Error("setup");
+    expect(`${r.state.nextMessageSeq}/${r.state.nextNightSeq}`).toBe("5/3");
+  });
+});
