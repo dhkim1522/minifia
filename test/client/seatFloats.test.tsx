@@ -1,7 +1,7 @@
 import { act, cleanup, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { PhaseId, RoomView } from "../../shared/protocol";
-import { EMOJI_MS, SPOKE_MS, useDayChat, useSeatFloats } from "../../src/net/seatFloats";
+import { CHAT_PHASES, EMOJI_MS, SPOKE_MS, useDayChat, useSeatFloats } from "../../src/net/seatFloats";
 import type { RoomEvent } from "../../src/net/useRoomConnection";
 
 // 낮 토론의 보낸 사람 반전(3초)·이모티콘(2초)·그날 채팅 줄은 chat·emoji 이벤트에서만 만든다(결정 0017-2·0017-7).
@@ -229,5 +229,84 @@ describe("useDayChat: 그날 받은 chat 이벤트로만 만드는 줄 (결정 0
     const { hook, emit } = setupChat(viewOf({}, "claimReveal"));
     emit(chat(1, 1));
     expect(hook.result.current.length).toBe(0);
+  });
+});
+
+describe("밤 수집 (D-17, 결정 0019, RESEARCH Pitfall 4)", () => {
+  const seqs = (lines: readonly { seq: number }[]) => lines.map((l) => l.seq).join(",");
+  const count = (f: { spoke: object; emoji: object }) => Object.keys(f.spoke).length + Object.keys(f.emoji).length;
+
+  it("CHAT_PHASES 는 discussion·night 두 개다", () => {
+    expect([...(CHAT_PHASES ?? [])].sort().join(",")).toBe("discussion,night");
+  });
+
+  it("night 중 chat 이벤트는 useDayChat 줄이 된다", () => {
+    const { hook, emit } = setupChat(viewOf({}, "night"));
+    emit(chat(1, 1, { template: "nightAgree" }));
+    expect(seqs(hook.result.current)).toBe("1");
+  });
+
+  it("night 중 emoji 이벤트는 useSeatFloats 이모티콘이 되고 chat 은 반전이 된다", () => {
+    const { hook, emit } = setup(viewOf({}, "night"));
+    emit({ t: "emoji", seat: 2, icon: "heart", at: 1 });
+    emit(chat(1, 1, { template: "nightAgree" }));
+    expect(`${hook.result.current.emoji[2]?.icon}:${hook.result.current.spoke[1] !== undefined}`).toBe("heart:true");
+  });
+
+  it("discussion 에서 받은 줄은 같은 일차의 night 로 바뀌면 보이지 않는다", () => {
+    const { hook, emit, update } = setupChat(viewOf({}, "discussion", 1));
+    emit(chat(1, 1));
+    emit(chat(2, 2));
+    expect(seqs(hook.result.current)).toBe("1,2");
+    update(viewOf({}, "night", 1));
+    expect(seqs(hook.result.current)).toBe("");
+    emit(chat(1, 1, { template: "nightAgree" }));
+    expect(seqs(hook.result.current)).toBe("1");
+  });
+
+  it("discussion 의 반전·이모티콘도 같은 일차의 night 로 바뀌면 비운다", () => {
+    const { hook, emit, update } = setup(viewOf({}, "discussion", 1));
+    emit(chat(1, 1));
+    emit({ t: "emoji", seat: 2, icon: "smile", at: 1 });
+    expect(count(hook.result.current)).toBe(2);
+    update(viewOf({}, "night", 1));
+    expect(count(hook.result.current)).toBe(0);
+  });
+
+  it("night → morning 으로 바뀌면 줄이 비워진다", () => {
+    const { hook, emit, update } = setupChat(viewOf({}, "night", 1));
+    emit(chat(1, 1, { template: "nightAgree" }));
+    expect(seqs(hook.result.current)).toBe("1");
+    update(viewOf({}, "morning", 1));
+    expect(seqs(hook.result.current)).toBe("");
+  });
+
+  it("night → morning 으로 바뀌면 반전·이모티콘이 모두 비워진다", () => {
+    const { hook, emit, update } = setup(viewOf({}, "night", 1));
+    emit(chat(1, 1, { template: "nightAgree" }));
+    emit({ t: "emoji", seat: 2, icon: "smile", at: 1 });
+    expect(count(hook.result.current)).toBe(2);
+    update(viewOf({}, "morning", 1));
+    expect(count(hook.result.current)).toBe(0);
+  });
+
+  it("morning·claim 중 온 chat·emoji 는 버린다", () => {
+    for (const phase of ["morning", "claimReveal"] as const) {
+      const c = setupChat(viewOf({}, phase));
+      c.emit(chat(1, 1));
+      const f = setup(viewOf({}, phase));
+      f.emit(chat(1, 1));
+      f.emit({ t: "emoji", seat: 2, icon: "smile", at: 1 });
+      expect(`${phase}:${c.hook.result.current.length}:${count(f.hook.result.current)}`).toBe(`${phase}:0:0`);
+    }
+  });
+
+  it("밤 줄 번호는 낮과 따로 1부터 다시 센다 — 낮 seq 7 뒤에도 night seq 1·2 를 받는다", () => {
+    const { hook, emit, update } = setupChat(viewOf({}, "discussion", 1));
+    emit(chat(7, 1));
+    update(viewOf({}, "night", 1));
+    emit(chat(1, 1, { template: "nightAgree" }));
+    emit(chat(2, 2, { template: "nightOther" }));
+    expect(seqs(hook.result.current)).toBe("1,2");
   });
 });
