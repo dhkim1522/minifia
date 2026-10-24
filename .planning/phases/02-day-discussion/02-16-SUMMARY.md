@@ -149,7 +149,7 @@ Task 3 은 `refactor(02-16)` 한 커밋이다(tdd 아님). REFACTOR 커밋은 �
 - **실기기 확인(backstop, 사람)**: iPhone Safari·Android Chrome 에서 공개 팝·흔들림과 이모티콘 2초·이름표 반전 3초가 모든 폰에서 같은 때 부드럽게 보이는지, 주소창 때문에 장면이 짧을 때 맨 앞 이름표가 하단 패널 위에 남는지. 자동 테스트는 happy-dom 의 가짜 ResizeObserver 로 높이 배선(폭 352·높이 300 → 면 top 117px)만 확인했고, `.mf-dt { height: 100% }` 가 flex 1 장면 상자 높이로 풀리는 실제 레이아웃은 브라우저에서만 확인된다.
 - **02-17**: 하단 패널(높이 157·칩 한 줄·채팅 세 줄·채팅 내역 모달·[빠른 메시지][이모티콘] 한 줄)이 이어서 `useDayChat` 의 줄을 쓴다.
 - **02-18**: `scripts/smoke.mjs`·`uat-day.mjs` 는 아직 extend·skip 을 보내므로 02-18 전에 돌리지 않는다. 배포와 `git push` 는 02-18.
-- push: 이 계획의 HANDOFF 갱신 커밋 뒤 `git push` 결과는 아래 "Push 결과"에 적는다.
+- push: HANDOFF 갱신 커밋(b2412bc) 뒤 `git push` 성공 (SSH 원격, e4dc0ec..b2412bc → main). 배포는 하지 않았다(02-18).
 
 ## Self-Check: PASSED
 
