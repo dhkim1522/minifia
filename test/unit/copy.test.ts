@@ -6,9 +6,9 @@ const NETWORK_TEXT = "연결이 불안정해요. 다시 시도해 주세요";
 // UI-SPEC Copywriting Contract 의 Error state 표를 한 행씩 옮긴 것.
 describe("messageForApiError (Error state 표)", () => {
   it.each([
-    ["NICKNAME_INVALID", "create", "nickname", "1~8자로 입력해 주세요"],
-    ["NICKNAME_INVALID", "home-code", "nickname", "1~8자로 입력해 주세요"],
-    ["NICKNAME_INVALID", "link", "nickname", "1~8자로 입력해 주세요"],
+    ["NICKNAME_INVALID", "create", "nickname", "1~5자로 입력해 주세요"],
+    ["NICKNAME_INVALID", "home-code", "nickname", "1~5자로 입력해 주세요"],
+    ["NICKNAME_INVALID", "link", "nickname", "1~5자로 입력해 주세요"],
     ["NICKNAME_TAKEN", "home-code", "nickname", "같은 이름이 이미 있어요"],
     ["NICKNAME_TAKEN", "link", "nickname", "같은 이름이 이미 있어요"],
     ["ROOM_NOT_FOUND", "home-code", "code", "방을 찾을 수 없어요. 코드를 다시 확인해 주세요"],
@@ -35,8 +35,8 @@ describe("messageForApiError (Error state 표)", () => {
 
 describe("nicknameErrorText", () => {
   it.each([
-    ["EMPTY", "1~8자로 입력해 주세요"],
-    ["TOO_LONG", "1~8자로 입력해 주세요"],
+    ["EMPTY", "1~5자로 입력해 주세요"],
+    ["TOO_LONG", "1~5자로 입력해 주세요"],
     ["INVALID_CHARS", "쓸 수 없는 글자가 있어요"],
   ] as const)("%s → %s", (reason, text) => {
     expect(nicknameErrorText(reason)).toBe(text);
