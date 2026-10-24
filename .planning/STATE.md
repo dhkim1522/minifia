@@ -5,17 +5,17 @@ milestone_name: MVP
 current_phase: 03
 current_phase_name: 밤과 아침
 current_plan: 12
-status: executing
-stopped_at: Completed 03-11-PLAN.md
-last_updated: "2026-10-24T16:32:46.890Z"
+status: verifying
+stopped_at: Completed 03-12-PLAN.md
+last_updated: "2026-10-24T17:00:37.343Z"
 last_activity: 2026-10-25
 last_activity_desc: Phase 03 execution started
-state_head: 354777e6a6a18bce78cacc042ab880b4370d19a5
+state_head: 7f144ef3c561a2b7a4a71b1c072af4e9a8d7534d
 progress:
   total_phases: 6
   completed_phases: 1
   total_plans: 49
-  completed_plans: 48
+  completed_plans: 49
 ---
 
 # Project State
@@ -33,7 +33,7 @@ Phase: 03 (밤과 아침) — EXECUTING
 Current Plan: 12
 Total Plans in Phase: 12
 Plan: 12 of 12
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-10-25 — Phase 03 execution started
 
 Progress: [██░░░░░░░░] 17%
@@ -94,6 +94,7 @@ Progress: [██░░░░░░░░] 17%
 | Phase 03 P09 | 20min | 3 tasks | 6 files |
 | Phase 03 P10 | 12min | 3 tasks | 10 files |
 | Phase 03 P11 | 15min | 2 tasks | 10 files |
+| Phase 03 P12 | 25 min | 3 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -168,6 +169,8 @@ Recent decisions affecting current work:
 - [Phase 03]: 03-10: 아침 안내(PHASE_ANNOUNCE.morning)는 카드와 같은 morningCardText 에서 문장을 만든다
 - [Phase 03]: 03-10: Timer calm 속성으로 아침 5초는 진홍(urgent)을 쓰지 않는다
 - [Phase 03]: 03-11: 본 기록 개수만 폰 메모리(minifia:records:{방코드})에 저장, 기록 내용·토큰은 저장하지 않음. 시트 열림·NEW 는 RoomScreen 이 쥐고 알림은 DayScene(같은 epoch 에서 길이가 늘 때만)
+- [Phase 03]: 03-12: uat-night 의 의사는 항상 자신을 보호한다 — 8명판 동률 추첨에서 의사 구출이 끼어 탈락자가 사라지지 않게
+- [Phase 03]: 03-12: 배포본 스모크(4·5·8명)·uat-night(5·8명)·uat-day(5명) 통과, 새 배포 버전 2026-10-24T16:35:44Z+696c1d2
 
 ### Pending Todos
 
@@ -193,6 +196,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-24T16:32:46.615Z
-Stopped at: Completed 03-11-PLAN.md
+Last session: 2026-10-24T17:00:37.083Z
+Stopped at: Completed 03-12-PLAN.md
 Resume file: None
