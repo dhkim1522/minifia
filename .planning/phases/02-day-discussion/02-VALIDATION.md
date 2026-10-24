@@ -65,7 +65,7 @@ created: "2026-10-24"
 | 02-16 · T1–T3 | DAY-01, DAY-02, COMM-01, COMM-02 | 장면 DayTable·이벤트 기반 이름표 반전·채팅 메모리·장면 높이 배선 | client | `npx vitest run test/client/dayScene.test.tsx test/client/seatFloats.test.tsx test/client/discussion.test.tsx` | ✅ 수정 | ✅ green |
 | 02-17 · T1–T3 | DAY-02, COMM-01, COMM-02 | 하단 157 고정·한 줄 칩·채팅 내역 모달·말하기 한 줄 | client | `npx vitest run test/client/claimPanel.test.tsx test/client/discussion.test.tsx` | ✅ 수정 | ✅ green |
 | 02-18 · T1 | DAY-01, COMM-01, COMM-04 | 배포본 full 스모크(5명·8명): chat 프레임·extend/skip BAD_MESSAGE·타이머로 2일차 | smoke | `node scripts/smoke.mjs --prod --stage full` · `--players 8` | ✅ 수정 | ✅ green |
-| 02-18 · T2 | COMM-02, COMM-04 | 배포본 봇 UAT(5명·8명): 2000ms 간격 오탐 0, 받아들인 줄 chat 프레임으로 도착 | smoke | `node scripts/uat-day.mjs --prod --players 5` · `--players 8` | ✅ 수정 | ⬜ pending |
+| 02-18 · T2 | COMM-02, COMM-04 | 배포본 봇 UAT(5명·8명): 2000ms 간격 오탐 0, 받아들인 줄 chat 프레임으로 도착 | smoke | `node scripts/uat-day.mjs --prod --players 5` · `--players 8` | ✅ 수정 | ✅ green |
 
 모든 tdd 작업은 해당 테스트 파일을 먼저 만들어(RED) 실패를 확인한 뒤 구현한다 — 위 ❌ W0 파일은 그 작업의 첫 커밋이 만든다. 연속 세 작업이 자동 검증 없이 이어지는 구간은 없다.
 
