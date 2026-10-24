@@ -147,7 +147,7 @@ Plans:
 
 ### Phase 3: 밤과 아침
 
-**Goal**: 낮 다음 밤이 되면 모든 폰이 같은 모양의 선택 화면을 보이고, 마피아·경찰·의사의 행동이 서로 모르게 처리되어 아침에 결과가 발표된다.
+**Goal**: 낮 다음 밤이 되면 각 폰이 역할에 맞는 선택 화면을 보이고(마피아는 전용 채팅 포함), 마피아·경찰·의사의 행동이 서로 모르게 처리되어 아침에 결과가 발표된다.
 **Depends on**: Phase 2
 **Requirements**: NIGHT-01, NIGHT-02, NIGHT-03, NIGHT-04, NIGHT-05, NIGHT-06, ELIM-01
 **Success Criteria** (what must be TRUE):
