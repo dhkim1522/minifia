@@ -1,6 +1,8 @@
 // 2페이즈 UAT 를 봇으로 대신 도는 시나리오. 봇이 방을 만들고 채워 낮 두 바퀴를 돌며 결과 표를 낸다.
+// 방장 넘기기는 없다(결정 0017-5): 1일차 토론이 서버 타이머(90초)로 끝나기를 기다려 2일차로 간다.
+// 빠른 메시지는 state 가 아니라 chat 프레임으로 온다(결정 0017-7).
 //   테스트 6: 빠른 메시지를 2초 간격(2000·2050·2150ms)으로 연달아 보낼 때 RATE_LIMITED 오탐 수, 받은 줄이 모든 폰에 가는지
-//   테스트 7(일부): 단계 전환·이모티콘 도착 시각 차이(같은 PC 에서 잰 값), 이모티콘이 메시지 목록에 남지 않는지
+//   테스트 7(일부): 단계 전환·이모티콘 도착 시각 차이(같은 PC 에서 잰 값), 이모티콘이 chat 프레임이 아니고 state 에 messages 가 없는지
 //   테스트 8(사실 확인): 2일차에 고르지 않은 사람의 공개 값(말 안 함인지 어제 주장인지), 다른 직업이면 changed
 // 화면 모양·애니메이션 부드러움·실제 폰 시계 차이는 봇으로 볼 수 없다.
 //
@@ -61,8 +63,9 @@ const firstState = (c, pred) => states(c).find((f) => pred(f.msg.view));
 const send = (c, m) => c.ws.send(JSON.stringify(m));
 const spread = (xs) => Math.round(Math.max(...xs) - Math.min(...xs));
 
-// 모든 클라이언트가 받은 state 의 메시지 seq 합집합(보관 20개 제한을 피해 프레임 전체를 본다)
-const seenSeqs = (c) => new Set(states(c).flatMap((f) => (f.msg.view.day?.messages ?? []).map((m) => m.seq)));
+// 클라이언트가 받은 chat 프레임의 seq 집합(서버는 메시지를 보관하지 않고 chat 이벤트로 방송만 한다)
+const chats = (c) => c.frames.filter((f) => f.msg.t === "chat");
+const seenSeqs = (c) => new Set(chats(c).map((f) => f.msg.seq));
 
 // 한 사람이 gap 간격으로 count 번 say 를 보낸다. 보낸 순간 기준 gap 마다(클라이언트 쿨다운과 같은 기준).
 async function burst(c, others, gap, count) {
@@ -77,16 +80,15 @@ async function burst(c, others, gap, count) {
     const target = others[k % others.length].seat;
     send(c, { t: "say", template: k % 2 ? "trust" : "suspect", target });
     out.sent++;
-    // 내 줄이 state 로 돌아오거나 error 가 오면 판정
-    await waitUntil(() => c.frames.slice(before).some((f) => f.msg.t === "error" || (f.msg.t === "state" && (f.msg.view.day?.messages ?? []).some((m) => m.seat === c.seat && m.at && !out.okSeqs.includes(m.seq) && m.target === target)))
-      , 5000, `${c.nickname} say 응답 없음`);
+    // 내 줄이 chat 프레임으로 돌아오거나 error 가 오면 판정
+    const isMine = (f) => f.msg.t === "chat" && f.msg.seat === c.seat && f.msg.target === target && !out.okSeqs.includes(f.msg.seq);
+    await waitUntil(() => c.frames.slice(before).some((f) => f.msg.t === "error" || isMine(f)), 5000, `${c.nickname} say 응답 없음`);
     const fr = c.frames.slice(before);
     const err = fr.find((f) => f.msg.t === "error");
-    const st = fr.find((f) => f.msg.t === "state" && (f.msg.view.day?.messages ?? []).some((m) => m.seat === c.seat && !out.okSeqs.includes(m.seq) && m.target === target));
+    const st = fr.find(isMine);
     if (st && (!err || st.at < err.at)) {
-      const mine = st.msg.view.day.messages.filter((m) => m.seat === c.seat && !out.okSeqs.includes(m.seq) && m.target === target).at(-1);
       out.ok++;
-      out.okSeqs.push(mine.seq);
+      out.okSeqs.push(st.msg.seq);
     } else if (err?.msg.code === "RATE_LIMITED") out.limited++;
     else throw new Error(`${c.nickname} say 오류 ${err?.msg.code}`);
   }
@@ -145,14 +147,15 @@ async function main() {
   await waitUntil(() => clients.every((c) => c.frames.some((f) => f.at >= t0 && f.msg.t === "emoji" && f.msg.seat === emoSender.seat)), 5000, "이모티콘 도착");
   const emoAt = clients.map((c) => c.frames.find((f) => f.at >= t0 && f.msg.t === "emoji").at);
   check(7, "이모티콘이 모든 폰에 도착", true, `보낸 뒤 ${Math.round(Math.max(...emoAt) - t0)}ms 안, 폰 사이 차이 ${spread(emoAt)}ms`);
-  const msgs = lastView(host).day.messages;
-  check(7, "이모티콘은 메시지 목록에 없음", msgs.every((m) => !("icon" in m)), "");
+  const emojiAsChat = clients.some((c) => chats(c).some((f) => "icon" in f.msg));
+  const hasMessagesKey = clients.some((c) => states(c).some((f) => JSON.stringify(f.msg).includes('"messages"')));
+  check(7, "이모티콘은 chat 프레임이 아니고 state 의 day 에 messages 키가 없음", !emojiAsChat && !hasMessagesKey, "");
 
-  // 넘기기 → 2일차
-  send(host, { t: "skip" });
+  // 넘기기는 없다: 토론 90초가 서버 타이머로 끝나기를 기다려 2일차로 간다
+  console.log("서버 타이머로 토론이 끝나기를 기다림(최대 130초)");
 
   // ---- 2일차 ----
-  await waitUntil(() => clients.every((c) => firstState(c, (v) => v.phase === "claim" && v.day?.n === 2)), 30_000, "2일차 claim");
+  await waitUntil(() => clients.every((c) => firstState(c, (v) => v.phase === "claim" && v.day?.n === 2)), 130_000, "2일차 claim");
   // 1번: 다른 직업(말 바꿈 기대), 2번: 고르지 않음(어제 roles[1]), 3번: 같은 직업
   send(clients[1], { t: "claim", claim: roles[2] });
   send(clients[3], { t: "claim", claim: roles[0] });
