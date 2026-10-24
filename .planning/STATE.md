@@ -4,18 +4,18 @@ milestone: v1.0
 milestone_name: MVP
 current_phase: 03
 current_phase_name: 밤과 아침
-current_plan: 6
+current_plan: 7
 status: executing
-stopped_at: Completed 03-05-PLAN.md
-last_updated: "2026-10-24T15:53:16.229Z"
+stopped_at: Completed 03-06-PLAN.md
+last_updated: "2026-10-24T15:58:31.273Z"
 last_activity: 2026-10-25
 last_activity_desc: Phase 03 execution started
-state_head: d3197c8c005789680fe31e5b0ae7033287ea9d25
+state_head: 411190cb9c7638af52fe70f7a2363f4265edba8d
 progress:
   total_phases: 6
   completed_phases: 1
   total_plans: 49
-  completed_plans: 42
+  completed_plans: 43
 ---
 
 # Project State
@@ -30,9 +30,9 @@ See: .planning/PROJECT.md (updated 2026-10-21)
 ## Current Position
 
 Phase: 03 (밤과 아침) — EXECUTING
-Current Plan: 6
+Current Plan: 7
 Total Plans in Phase: 12
-Plan: 6 of 12
+Plan: 7 of 12
 Status: Ready to execute
 Last activity: 2026-10-25 — Phase 03 execution started
 
@@ -88,6 +88,7 @@ Progress: [██░░░░░░░░] 17%
 | Phase 03 P03 | 25min | 3 tasks | 3 files |
 | Phase 03 P04 | 약 20분 | 3 tasks | 7 files |
 | Phase 03 P05 | 45min | 3 tasks | 6 files |
+| Phase 03 P06 | 25m | 3 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -153,6 +154,8 @@ Recent decisions affecting current work:
 - [Phase 03]: 거부 코드 규칙 하나: 틀린 단계 WRONG_PHASE(누구든), 맞는 단계의 탈락자 BAD_MESSAGE, 밤의 생존 비마피아 WRONG_PHASE
 - [Phase 03]: 밤 채팅 줄 번호는 nextNightSeq, 낮 nextMessageSeq 는 밤에 불변 (낮 seq 간격으로 밤 메시지 수 추정 방지)
 - [Phase 03]: 03-05: alive 는 항상 싣고(A7), 탈락한 마피아는 allies 만 받으며(A3), spectate 직업 키는 job — 필드 이름·spectate 모양은 와이어 계약(결정 0020, 03-09)
+- [Phase 03]: 03-06: 훅 이름은 그대로 두고 수집 단계를 CHAT_PHASES(discussion·night)로 넓히고 비움 열쇠를 (일차:단계)로 넓혔다
+- [Phase 03]: 03-06: 시스템 안내 줄은 화면 문구(seq 없음)이고 MessageLog·ChatHistorySheet 가 SystemLineItem 을 공유하며 안내가 있으면 빈 상태 문구를 쓰지 않는다
 
 ### Pending Todos
 
@@ -178,6 +181,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-24T15:53:15.976Z
-Stopped at: Completed 03-05-PLAN.md
+Last session: 2026-10-24T15:58:31.010Z
+Stopped at: Completed 03-06-PLAN.md
 Resume file: None
