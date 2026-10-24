@@ -179,7 +179,8 @@ export function DayScene({ view, connection, myRoleButton }: DaySceneProps) {
     view.phase === "claimReveal" ? (
       <Timer endsAt={0} durationMs={durationMs ?? 1} offset={0} />
     ) : endsAt !== null && durationMs !== null ? (
-      <Timer endsAt={endsAt} durationMs={durationMs} offset={connection.offset} />
+      // 아침 5초는 전체가 마지막 5초라 진홍을 쓰지 않는다(calm, UI-SPEC 확인 필요 10)
+      <Timer endsAt={endsAt} durationMs={durationMs} offset={connection.offset} calm={isMorning} />
     ) : null;
 
   return (
