@@ -3,7 +3,6 @@ import { CLOSE_CODES, MAX_FRAME_BYTES } from "../shared/protocol";
 import type { ApiErrorCode, ClientMessage, Claim, EmojiId, RemovedReason, RoomPreview, ServerMessage, WsErrorCode } from "../shared/protocol";
 import { selectClaim } from "../shared/game/claim";
 import { emote, say } from "../shared/game/chat";
-import { extendDiscussion, skipDiscussion } from "../shared/game/discussion";
 import type { SayInput } from "../shared/game/chat";
 import {
   attachConnection,
@@ -196,12 +195,6 @@ export class Room extends DurableObject<Env> {
       case "emoji":
         await this.handleEmoji(ws, msg.icon);
         return;
-      case "extend":
-        await this.handleExtend(ws);
-        return;
-      case "skip":
-        await this.handleSkip(ws);
-        return;
     }
   }
 
@@ -333,40 +326,6 @@ export class Room extends DurableObject<Env> {
     this.room = result.state;
     await this.ctx.storage.put("room", this.room);
     this.broadcastEvent({ t: "emoji", ...result.event });
-  }
-
-  // 방장 연장: 판정은 규칙 함수의 hostId 비교가 한다(T-02-20). 마감이 바뀌므로 성공 뒤 반드시 알람을 다시 건다(Pitfall 4).
-  private async handleExtend(ws: WebSocket): Promise<void> {
-    const att = this.attachmentOf(ws);
-    if (!att || !this.room) {
-      this.sendTo(ws, { t: "error", code: "BAD_MESSAGE" });
-      return;
-    }
-    const result = extendDiscussion(this.room, att.playerId);
-    if (!result.ok) {
-      this.sendRejection(ws, att.playerId, result.error);
-      return;
-    }
-    this.room = result.state;
-    await this.persistAndBroadcast();
-    await this.reschedule();
-  }
-
-  // 방장 넘기기: 마감이 바로 다음 단계로 옮겨지므로 성공 뒤 반드시 알람을 다시 건다(Pitfall 4).
-  private async handleSkip(ws: WebSocket): Promise<void> {
-    const att = this.attachmentOf(ws);
-    if (!att || !this.room) {
-      this.sendTo(ws, { t: "error", code: "BAD_MESSAGE" });
-      return;
-    }
-    const result = skipDiscussion(this.room, att.playerId, Date.now());
-    if (!result.ok) {
-      this.sendRejection(ws, att.playerId, result.error);
-      return;
-    }
-    this.room = result.state;
-    await this.persistAndBroadcast();
-    await this.reschedule();
   }
 
   // 직업 선택: 신원은 소켓 첨부의 playerId 뿐이다 — 메시지에서 seat 를 읽지 않는다(T-02-16).

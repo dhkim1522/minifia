@@ -25,6 +25,4 @@ export const ClientMessageSchema = z.discriminatedUnion("t", [
     claimedRole: z.enum(["mafia", "police", "doctor", "citizen"]).optional(),
   }),
   z.strictObject({ t: z.literal("emoji"), icon: z.enum(EMOJI_IDS) }),
-  z.strictObject({ t: z.literal("extend") }),
-  z.strictObject({ t: z.literal("skip") }),
 ]) satisfies z.ZodType<ClientMessage>;
