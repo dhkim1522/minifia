@@ -210,6 +210,10 @@ exit=0
 - Task 2: `scripts/uat-night.mjs` 존재, `spectate` 16(2 이상), `t: "pick"` (bots) 1, `180_000` (uat-day) 1, `console.log` 에 token 0, uat-night 5·8명·uat-day 5명 결과 표와 종료 코드 0 — 모두 통과.
 - Task 3: 위 grep 통과, `git status --porcelain HANDOFF.md` 빈 출력, push 는 아래 "Push".
 
+## Push
+
+`git push`(개인 SSH 원격 `git@github.com:dhkim1522/minifia.git`) 성공 — `1a1cad1..ce3d336 main -> main`, 인증 실패 없음. `git log origin/main -1` 이 로컬 HEAD 와 같았다.
+
 ## Deviations from Plan
 
 None - plan executed exactly as written. (계획 범위 안의 보강: 스모크에 시민의 밤 say → `WRONG_PHASE` 확인과 모든 프레임 역할 문자열 경로 검사, uat-night 에 낮2 탈락자 claim 거부·시민 state 1개·끝까지 spectate/토큰 검사를 더했다. 앱 코드 수정과 재배포는 필요 없었다 — 배포는 한 번.)
