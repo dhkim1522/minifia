@@ -60,6 +60,8 @@
 .mf-msglog__item, .mf-msglog__empty { flex: none; display: flex; gap: var(--space-sm); min-width: 0; font-size: 14px; line-height: 1.4; font-weight: 400; color: var(--gray-300); }
 .mf-msglog__item { animation: mf-msglog-in var(--mf-msglog-fade) var(--ease-out) both; }
 .mf-msglog__item--latest { color: var(--gray-100); }
+/* 시스템 안내 줄(시안 .lg li.sys): 최신이어도 밝아지지 않는다 — 규칙 순서로 --latest 를 이긴다(UI-SPEC C3 승인 예외) */
+.mf-msglog__item--sys { color: var(--gray-500); }
 .mf-msglog__who { flex: none; display: inline-flex; align-items: center; gap: var(--space-xs); font-weight: 700; }
 .mf-msglog__dot { flex: none; width: 8px; height: 8px; border-radius: var(--radius-pill); }
 .mf-msglog__text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

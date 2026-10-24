@@ -1,16 +1,26 @@
-// 낮 토론에서 폰이 받은 chat·emoji 이벤트로만 만드는 화면 상태 훅 묶음(결정 0017-2·0017-7). 서버 뷰에는 메시지가 없다.
+// 낮 토론과 밤에 폰이 받은 chat·emoji 이벤트로만 만드는 화면 상태 훅 묶음(결정 0017-2·0017-7·0019). 서버 뷰에는 메시지가 없다.
 // 규칙:
 //  - 이벤트에서만 만든다. 재접속·새로고침으로 처음 마운트하면 지난 줄·반전·이모티콘은 복원되지 않는다.
-//  - 단계가 discussion 일 때 온 이벤트만 받는다. discussion 을 벗어나면 모두 비운다.
+//  - 단계가 discussion·night(CHAT_PHASES)일 때 온 이벤트만 받는다. 밤 이벤트는 서버가 살아 있는 마피아와 관전자에게만 보낸다 —
+//    화면은 역할로 다시 거르지 않는다(결정 0002·0021). 단계나 일차가 바뀌면(낮 → 밤, 밤 → 아침) 줄·반전·이모티콘을 모두 비운다.
 //  - 보낸 사람 반전(spoke)은 chat 이벤트 후 SPOKE_MS, 이모티콘은 emoji 이벤트 후 EMOJI_MS. 받은 순간의 로컬 시각 기준이다.
 //  - 반전과 이모티콘은 서로 지우지 않는다(하나는 이름표, 하나는 머리 위). 같은 자리 새 이벤트는 이전 것을 바꾸고
 //    key 가 달라져 애니메이션이 새로 시작한다. 나중에 처리한 것의 z 가 더 크다.
-//  - 채팅 줄(useDayChat)은 허용 키만 필드별로 복사하고, 본 최대 seq 이하·모르는 템플릿은 버리며, 일차(view.day.n)가 바뀌면 비운다.
+//  - 채팅 줄(useDayChat)은 허용 키만 필드별로 복사하고, 본 최대 seq 이하·모르는 템플릿은 버리며, 일차(view.day.n)나 단계가 바뀌면 비운다.
+//    밤 줄 번호는 낮과 따로 1부터 다시 센다(서버 nextNightSeq) — 단계마다 중복 제거 기준(maxSeq)이 따로다.
 import { useEffect, useRef, useState } from "react";
 import { ROLE_IDS } from "../../shared/game/roles";
 import { TEMPLATE_IDS } from "../../shared/protocol";
-import type { ChatLine, EmojiId, RoomView } from "../../shared/protocol";
+import type { ChatLine, EmojiId, PhaseId, RoomView } from "../../shared/protocol";
 import type { RoomConnection } from "./useRoomConnection";
+
+/** chat·emoji 이벤트를 받는 단계: 낮 토론과 밤(D-17). 그 밖의 단계에서 온 이벤트는 버린다 */
+export const CHAT_PHASES: ReadonlySet<PhaseId> = new Set<PhaseId>(["discussion", "night"]);
+
+/** 수집 단계일 때만 있는 열쇠 `${일차}:${단계}`. 열쇠가 바뀌면(단계·일차) 지난 줄·반전·이모티콘을 비운다 */
+function chatKey(view: RoomView | null): string | undefined {
+  return view !== null && CHAT_PHASES.has(view.phase) ? `${view.day?.n}:${view.phase}` : undefined;
+}
 
 /** 보낸 사람 이름표 윗줄이 반전되어 있는 시간 */
 export const SPOKE_MS = 3_000;
@@ -50,19 +60,19 @@ function expire(prev: SeatFloats, now: number): SeatFloats {
 export function useSeatFloats(view: RoomView | null, onEvent: RoomConnection["onEvent"]): SeatFloats {
   const [floats, setFloats] = useState<SeatFloats>(EMPTY);
   const zRef = useRef(0);
-  const inDiscussion = view?.phase === "discussion";
-  const inDiscussionRef = useRef(inDiscussion);
-  inDiscussionRef.current = inDiscussion;
+  const key = chatKey(view);
+  const collecting = useRef(key !== undefined);
+  collecting.current = key !== undefined;
 
-  // 단계 전환 정리: discussion 을 벗어나면 모두 비운다
+  // 단계·일차 전환 정리: 수집 열쇠가 바뀌거나 수집 단계를 벗어나면 모두 비운다(낮 → 밤, 밤 → 아침)
   useEffect(() => {
-    if (!inDiscussion) setFloats((prev) => (isEmpty(prev) ? prev : EMPTY));
-  }, [inDiscussion]);
+    setFloats((prev) => (isEmpty(prev) ? prev : EMPTY));
+  }, [key]);
 
   // chat → 보낸 사람 반전, emoji → 머리 위 이모티콘. 상태로 쌓지 않고 훅 안에서만 받는다.
   useEffect(() => {
     return onEvent((e) => {
-      if (!inDiscussionRef.current) return;
+      if (!collecting.current) return;
       if (e.t === "chat") {
         zRef.current += 1;
         const spoke: SeatSpoke = { key: `spoke-${zRef.current}`, until: Date.now() + SPOKE_MS };
@@ -90,7 +100,7 @@ export function useSeatFloats(view: RoomView | null, onEvent: RoomConnection["on
 }
 
 interface DayChatState {
-  n: number | undefined;
+  key: string | undefined;
   maxSeq: number;
   lines: ChatLine[];
 }
@@ -106,28 +116,26 @@ function toChatLine(e: { seq?: unknown; seat?: unknown; template?: unknown; targ
   return line;
 }
 
-/** 이 폰이 그날 discussion 중에 받은 chat 이벤트의 줄. 재접속·새로고침 때는 빈 목록에서 시작한다. */
+/** 이 폰이 그 일차 그 단계(낮 토론·밤)에 받은 chat 이벤트의 줄. 재접속·새로고침 때는 빈 목록에서 시작하고, 단계가 바뀌면 비운다. */
 export function useDayChat(view: RoomView | null, onEvent: RoomConnection["onEvent"]): ChatLine[] {
-  const n = view?.day?.n;
-  const [state, setState] = useState<DayChatState>({ n, maxSeq: -1, lines: [] });
-  const nRef = useRef(n);
-  nRef.current = n;
-  const inDiscussionRef = useRef(view?.phase === "discussion");
-  inDiscussionRef.current = view?.phase === "discussion";
+  const key = chatKey(view);
+  const [state, setState] = useState<DayChatState>({ key, maxSeq: -1, lines: [] });
+  const keyRef = useRef(key);
+  keyRef.current = key;
 
   useEffect(() => {
     return onEvent((e) => {
-      if (e.t !== "chat" || !inDiscussionRef.current) return;
+      if (e.t !== "chat" || keyRef.current === undefined) return;
       const line = toChatLine(e);
       if (!line) return;
       setState((prev) => {
-        const base: DayChatState = prev.n === nRef.current ? prev : { n: nRef.current, maxSeq: -1, lines: [] };
+        const base: DayChatState = prev.key === keyRef.current ? prev : { key: keyRef.current, maxSeq: -1, lines: [] };
         if (line.seq <= base.maxSeq) return base === prev ? prev : base;
-        return { n: base.n, maxSeq: line.seq, lines: [...base.lines, line] };
+        return { key: base.key, maxSeq: line.seq, lines: [...base.lines, line] };
       });
     });
   }, [onEvent]);
 
-  // 일차가 바뀌었는데 아직 새 이벤트가 없으면 이전 일차의 줄을 보이지 않는다
-  return state.n === n ? (state.lines) : [];
+  // 열쇠가 바뀌었는데 아직 새 이벤트가 없으면 이전 단계의 줄을 보이지 않는다
+  return key !== undefined && state.key === key ? state.lines : [];
 }

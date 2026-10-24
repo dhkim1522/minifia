@@ -11,6 +11,10 @@ export interface MessageLogProps {
   lines: ChatLine[];
   players: PublicPlayer[];
   mySeat: number;
+  /** 첫 줄 시스템 안내(화면 문구라 seq 가 없다). 점·이름 없이 본문만, 글자는 늘 gray-500(UI-SPEC N-2) */
+  systemLine?: string;
+  /** 로그 이름(aria-label). 기본 "최근 채팅" — 밤 마피아 "마피아 채팅", 관전 "마피아 채팅(관전)" */
+  label?: string;
 }
 
 /** 패널에 그리는 최근 줄 수(시안 9차 .lg 세 줄). 지난 줄은 ^ 버튼의 채팅 내역 모달에서 본다 */
@@ -44,18 +48,26 @@ export function ChatLineItem({ line, latest, players, mySeat }: ChatLineItemProp
 
 // 낮 토론 하단의 채팅 면(S-07, 시안 R9-5 .lg): 최근 세 줄 + 오른쪽 ^ 버튼. 세 줄 높이는 고정이라 줄이 적어도 출렁이지 않는다.
 // ^ 버튼이 열림 상태를 쥐고 같은 lines 를 채팅 내역 모달에 넘긴다 — 단계가 바뀌어 패널이 언마운트되면 모달도 같이 닫힌다(UI-SPEC phase-change).
-export function MessageLog({ lines, players, mySeat }: MessageLogProps): ReactElement {
+// systemLine 이 있으면 창은 [안내, ...줄] 의 마지막 3줄이라 줄이 쌓이면 안내가 창 밖으로 밀린다. 안내가 있으면 빈 상태 문구는 쓰지 않는다.
+export function MessageLog({ lines, players, mySeat, systemLine, label = "최근 채팅" }: MessageLogProps): ReactElement {
   const [open, setOpen] = useState(false);
-  const recent = lines.slice(-RECENT_LINES);
+  const entries: (ChatLine | null)[] = systemLine !== undefined ? [null, ...lines] : lines;
+  const recent = entries.slice(-RECENT_LINES);
 
   return (
     <>
       <div className="mf-msglog">
-        <ol className="mf-msglog__list" role="log" aria-label="최근 채팅" aria-live="polite" aria-relevant="additions">
+        <ol className="mf-msglog__list" role="log" aria-label={label} aria-live="polite" aria-relevant="additions">
           {recent.length === 0 ? <li className="mf-msglog__empty">아직 메시지가 없어요</li> : null}
-          {recent.map((l, i) => (
-            <ChatLineItem key={l.seq} line={l} latest={i === recent.length - 1} players={players} mySeat={mySeat} />
-          ))}
+          {recent.map((l, i) =>
+            l === null ? (
+              <li key="system-line" className="mf-msglog__item mf-msglog__item--sys">
+                <span className="mf-msglog__text">{systemLine}</span>
+              </li>
+            ) : (
+              <ChatLineItem key={l.seq} line={l} latest={i === recent.length - 1} players={players} mySeat={mySeat} />
+            ),
+          )}
         </ol>
         <button type="button" className="mf-msglog__more" aria-label="채팅 내역 크게 보기" onClick={() => setOpen(true)}>
           <Icon name="chevronUp" size={22} />
