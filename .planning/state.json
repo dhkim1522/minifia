@@ -11,12 +11,12 @@
     {
       "number": "2",
       "name": "낮 토론",
-      "status": "pending"
+      "status": "in_progress"
     },
     {
       "number": "3",
       "name": "밤과 아침",
-      "status": "pending"
+      "status": "in_progress"
     },
     {
       "number": "4",
@@ -36,8 +36,8 @@
   ],
   "next": {
     "command": "/gsd-progress --next",
-    "label": "Advance to the next step (plan phase 2)",
-    "reason": "Phase 2 of 6 — needs a plan"
+    "label": "Advance to the next step",
+    "reason": "Phase 3 of 6 · executing"
   },
-  "updated_at": "2026-10-23T15:45:50.619Z"
+  "updated_at": "2026-10-24T15:26:59.378Z"
 }

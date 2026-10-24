@@ -2,20 +2,20 @@
 gsd_state_version: "1.0"
 milestone: v1.0
 milestone_name: MVP
-current_phase: 02
-current_phase_name: 낮 토론
-current_plan: 18
-status: verifying
-stopped_at: Phase 3 UI-SPEC approved
-last_updated: "2026-10-24T13:58:49.970Z"
-last_activity: 2026-10-24
-last_activity_desc: Phase 02 execution started
-state_head: 67f8d0cf17aba3c92746ebd3b5499c6f2be60246
+current_phase: 03
+current_phase_name: 밤과 아침
+current_plan: 2
+status: executing
+stopped_at: Completed 03-01-PLAN.md
+last_updated: "2026-10-24T15:27:01.064Z"
+last_activity: 2026-10-25
+last_activity_desc: Phase 03 execution started
+state_head: 82ffa0dd5445c5f2d0a7aa04ed540ce175efeaba
 progress:
   total_phases: 6
   completed_phases: 1
-  total_plans: 37
-  completed_plans: 37
+  total_plans: 49
+  completed_plans: 38
 ---
 
 # Project State
@@ -25,16 +25,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-10-21)
 
 **Core value:** 링크 하나로 모인 친구들이 설명 없이 정통 마피아 한 판(6~10분)을 끝까지 마치는 것
-**Current focus:** Phase 02 — 낮 토론
+**Current focus:** Phase 03 — 밤과 아침
 
 ## Current Position
 
-Phase: 02 (낮 토론) — EXECUTING
-Current Plan: 18
-Total Plans in Phase: 18
-Plan: 18 of 18
-Status: Phase complete — ready for verification
-Last activity: 2026-10-24 — Phase 02 execution started
+Phase: 03 (밤과 아침) — EXECUTING
+Current Plan: 2
+Total Plans in Phase: 12
+Plan: 2 of 12
+Status: Ready to execute
+Last activity: 2026-10-25 — Phase 03 execution started
 
 Progress: [██░░░░░░░░] 17%
 
@@ -83,6 +83,7 @@ Progress: [██░░░░░░░░] 17%
 | Phase 02 P16 | 20min | 3 tasks | 14 files |
 | Phase 02 P17 | 10min | 3 tasks | 9 files |
 | Phase 02 P18 | 25min | 3 tasks | 12 files |
+| Phase 03 P01 | 10 min | 3 tasks | 11 files |
 
 ## Accumulated Context
 
@@ -139,6 +140,8 @@ Recent decisions affecting current work:
 - [Phase 02]: 02-17: 직업 칩은 공용 Chip 대신 패널 전용 .mf-seg__b 한 줄 버튼(체크 배지) — 공용 Chip 은 빠른 메시지 시트 전용으로 유지
 - [Phase 02]: 02-18: 스모크 한도 240초, 5명·8명 두 번, UAT result 필드는 그대로(봇 수치는 note)
 - [Phase 02]: 02-18: 높이 적응 세로 위치(장면 높이<359 → cy=max(177,H−149))를 SPEC 과의 의도적 차이로 기록
+- [Phase 03]: 루프 discussion → night(30s) → morning(5s) → dayAnnounce, 일차는 dayAnnounce 진입 훅에서만 증가. tick 의 randInt 기본값 NO_RANDOM 은 불리면 즉시 오류
+- [Phase 03]: 관전 타입 직업 키는 role 이 아니라 job, 밤 채팅 줄 번호는 낮 nextMessageSeq 와 분리한 nextNightSeq
 
 ### Pending Todos
 
@@ -164,6 +167,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-24T13:58:49.536Z
-Stopped at: Phase 3 UI-SPEC approved
-Resume file: .planning/phases/03-night-morning/03-UI-SPEC.md
+Last session: 2026-10-24T15:27:00.814Z
+Stopped at: Completed 03-01-PLAN.md
+Resume file: None
