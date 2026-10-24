@@ -156,7 +156,7 @@ Plans:
   3. 모두가 일찍 골라도 밤은 30초가 다 지나야 끝난다.
   4. 아침 5초 동안 모든 화면에 탈락자 이름 또는 "아무 일도 없었습니다"가 나온다. 탈락한 사람은 선택 화면 대신 "탈락" 화면과 공개된 진행만 본다.
 
-**Plans:** 3/12 plans executed (결정 0018·0019·0021 승인 시안 `design/screens/night-v1/` 기준)
+**Plans:** 4/12 plans executed (결정 0018·0019·0021 승인 시안 `design/screens/night-v1/` 기준)
 
 Plans:
 **Wave 1**
@@ -165,7 +165,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 - [x] 03-03-PLAN.md — 밤 판정 규칙 night.ts: pickTarget 검사 순서, 다수·동률 무작위·고른 표만(A2)·의사 보호·경찰 기록·동시 해결(A1)·문구 번호 연속 반복 없음, 받는 사람(행위자·관전자) (TDD, wave 2)
-- [ ] 03-04-PLAN.md — 밤 채팅·탈락자 거부 규칙: 생존 마피아만 밤 문구 3개, 밤 비마피아 WRONG_PHASE, 탈락자 BAD_MESSAGE(직업 공개 포함), 화면 문장 표 (TDD, wave 2)
+- [x] 03-04-PLAN.md — 밤 채팅·탈락자 거부 규칙: 생존 마피아만 밤 문구 3개, 밤 비마피아 WRONG_PHASE, 탈락자 BAD_MESSAGE(직업 공개 포함), 화면 문장 표 (TDD, wave 2)
 
 **Wave 3** *(blocked on Wave 2 completion)*
 - [ ] 03-05-PLAN.md — 플레이어별 밤·아침 뷰: players[].alive, me.pick·allyPicks·records, day.morning, 탈락자 전용 spectate, 아홉 단계 전수 누출 검사 (TDD, wave 3)
@@ -244,7 +244,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 (decimal phases
 |-------|-----------|----------------|--------|-----------|
 | 1. 걷는 뼈대 | v1.0 | 19/19 | Complete    | 2026-10-24 |
 | 2. 낮 토론 | v1.0 | 18/18 | In Progress | - |
-| 3. 밤과 아침 | v1.0 | 3/12 | In Progress | - |
+| 3. 밤과 아침 | v1.0 | 4/12 | In Progress | - |
 | 4. 처형과 승패 | v1.0 | 0/TBD | Not started | - |
 | 5. 분위기와 캐릭터 | v1.0 | 0/TBD | Not started | - |
 | 6. 친구 플레이테스트 | v1.0 | 0/TBD | Not started | - |

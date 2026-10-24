@@ -4,18 +4,18 @@ milestone: v1.0
 milestone_name: MVP
 current_phase: 03
 current_phase_name: 밤과 아침
-current_plan: 4
+current_plan: 5
 status: executing
-stopped_at: Completed 03-03-PLAN.md
-last_updated: "2026-10-24T15:39:28.966Z"
+stopped_at: Completed 03-04-PLAN.md
+last_updated: "2026-10-24T15:45:30.332Z"
 last_activity: 2026-10-25
 last_activity_desc: Phase 03 execution started
-state_head: e37576df34af479f3d375571633e4975ecb3e8df
+state_head: 20e04b0500f01ff8283f2b109555f6886a568d36
 progress:
   total_phases: 6
   completed_phases: 1
   total_plans: 49
-  completed_plans: 40
+  completed_plans: 41
 ---
 
 # Project State
@@ -30,9 +30,9 @@ See: .planning/PROJECT.md (updated 2026-10-21)
 ## Current Position
 
 Phase: 03 (밤과 아침) — EXECUTING
-Current Plan: 4
+Current Plan: 5
 Total Plans in Phase: 12
-Plan: 4 of 12
+Plan: 5 of 12
 Status: Ready to execute
 Last activity: 2026-10-25 — Phase 03 execution started
 
@@ -86,6 +86,7 @@ Progress: [██░░░░░░░░] 17%
 | Phase 03 P01 | 10 min | 3 tasks | 11 files |
 | Phase 03 P02 | 6min | 3 tasks | 6 files |
 | Phase 03 P03 | 25min | 3 tasks | 3 files |
+| Phase 03 P04 | 약 20분 | 3 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -147,6 +148,9 @@ Recent decisions affecting current work:
 - [Phase 03]: 03-02: 동사·관전 배지·실제 직업은 장면이 넘기는 값이고 부품에 역할 이름을 넣지 않는다(pickVerb 기본 '선택', real 줄은 job 키)
 - [Phase 03]: 03-02: 탈락 표시는 유령 그림이며 흐림은 연결 끊김 전용(유령 그림에도 끊김 흐림만 더한다)
 - [Phase 03]: 03-03: 밤 판정은 동시 해결(A1)·고른 표만 센다(A2)·의사 구출은 지목 없음과 같은 morning {} — 규칙표는 결정 0020(03-09)에 기록
+- [Phase 03]: 밤 템플릿 ID 는 nightTarget·nightAgree·nightOther (와이어 값, 결정 0020 에 03-09 가 기록)
+- [Phase 03]: 거부 코드 규칙 하나: 틀린 단계 WRONG_PHASE(누구든), 맞는 단계의 탈락자 BAD_MESSAGE, 밤의 생존 비마피아 WRONG_PHASE
+- [Phase 03]: 밤 채팅 줄 번호는 nextNightSeq, 낮 nextMessageSeq 는 밤에 불변 (낮 seq 간격으로 밤 메시지 수 추정 방지)
 
 ### Pending Todos
 
@@ -172,6 +176,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-24T15:39:28.727Z
-Stopped at: Completed 03-03-PLAN.md
+Last session: 2026-10-24T15:45:30.086Z
+Stopped at: Completed 03-04-PLAN.md
 Resume file: None
