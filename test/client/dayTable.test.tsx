@@ -502,3 +502,109 @@ describe("daytable.css: 밤 선택 표시 (03-02)", () => {
     expect(/#[0-9a-fA-F]{3,6}\b/.test(code)).toBe(false);
   });
 });
+
+// ---- 03-02 Task 2: 탈락(유령 그림)과 관전 아랫줄 (D-15·결정 0021) ----
+const imgEl = (c: HTMLElement, n: number) => seatEl(c, n).querySelector<HTMLImageElement>("img")!;
+const deadRow = { kind: "dead" } as const;
+
+describe("DayTable: 탈락과 관전 아랫줄 (D-15·결정 0021)", () => {
+  it("dead 자리: 그림은 유령(@2x src, srcset 4x), mf-figure--ghost, 연결돼 있으면 mf-figure--disconnected 없음. 이름표에 .mf-dt__tag--dead", () => {
+    const { container } = render(<DayTable seats={five({ 4: { dead: true, row: deadRow } })} mySeat={0} width={366} />);
+    const img = imgEl(container, 4);
+    expect(img.getAttribute("src")).toBe("/characters/ghost/ghost_default%402x.png");
+    expect(img.getAttribute("srcset")?.includes("ghost_default%404x.png 4x")).toBe(true);
+    expect(img.classList.contains("mf-figure--ghost")).toBe(true);
+    expect(img.classList.contains("mf-figure--disconnected")).toBe(false);
+    expect(tagEl(container, 4).classList.contains("mf-dt__tag--dead")).toBe(true);
+    expect(container.querySelectorAll(".mf-figure--ghost").length).toBe(1);
+    expect(container.querySelectorAll(".mf-dt__tag--dead").length).toBe(1);
+  });
+
+  it("끊긴 dead 자리는 유령 그림 + mf-figure--disconnected 가 함께 있다", () => {
+    const { container } = render(<DayTable seats={five({ 4: { dead: true, connected: false, row: deadRow } })} mySeat={0} width={366} />);
+    const img = imgEl(container, 4);
+    expect(img.classList.contains("mf-figure--ghost")).toBe(true);
+    expect(img.classList.contains("mf-figure--disconnected")).toBe(true);
+  });
+
+  it("dead 가 아닌 끊긴 자리는 지금처럼 인물 그림 + mf-figure--disconnected 다", () => {
+    const { container } = render(<DayTable seats={five({ 2: { connected: false } })} mySeat={0} width={366} />);
+    const img = imgEl(container, 2);
+    expect(img.classList.contains("mf-figure--ghost")).toBe(false);
+    expect(img.classList.contains("mf-figure--disconnected")).toBe(true);
+    expect((img.getAttribute("src") ?? "").includes("/characters/table/")).toBe(true);
+  });
+
+  it("row {kind:'dead'} 는 아랫줄 '탈락' 하나(.mf-dt__claim--dead), 체크·↺ 없음", () => {
+    const { container } = render(<DayTable seats={five({ 4: { dead: true, row: deadRow } })} mySeat={0} width={366} />);
+    const el = claimEl(container, 4)!;
+    expect(el.textContent).toBe("탈락");
+    expect(el.classList.contains("mf-dt__claim--dead")).toBe(true);
+    expect(el.querySelectorAll("svg").length).toBe(0);
+    expect(tagEl(container, 4).querySelectorAll(".mf-dt__claim").length).toBe(1);
+  });
+
+  it("dead 자리 접근성 이름: '서연, 탈락', 내 자리는 '동현 (나), 탈락', 끊긴 dead 는 '서연, 탈락, 연결 끊김'", () => {
+    render(<DayTable seats={five({ 0: { dead: true, row: deadRow }, 4: { dead: true, row: deadRow } })} mySeat={0} width={366} />);
+    expect(screen.getByRole("group", { name: "서연, 탈락" })).toBeTruthy();
+    expect(screen.getByRole("group", { name: "동현 (나), 탈락" })).toBeTruthy();
+    cleanup();
+    render(<DayTable seats={five({ 4: { dead: true, connected: false, row: deadRow } })} mySeat={0} width={366} />);
+    expect(screen.getByRole("group", { name: "서연, 탈락, 연결 끊김" })).toBeTruthy();
+  });
+
+  it("row real police 는 아랫줄 '경찰'(.mf-dt__claim--real), mafia 면 '마피아' 이고 --mafia 가 함께 있다. 접근성 이름 '하늘, 경찰', dead+real 은 '서연, 의사, 탈락'", () => {
+    const seats = five({
+      3: { row: { kind: "real", job: "police" } },
+      1: { row: { kind: "real", job: "mafia" } },
+      4: { dead: true, row: { kind: "real", job: "doctor" } },
+    });
+    const { container } = render(<DayTable seats={seats} mySeat={0} width={366} />);
+    const police = claimEl(container, 3)!;
+    expect(police.textContent).toBe("경찰");
+    expect(police.classList.contains("mf-dt__claim--real")).toBe(true);
+    expect(police.classList.contains("mf-dt__claim--mafia")).toBe(false);
+    const mafia = claimEl(container, 1)!;
+    expect(mafia.textContent).toBe("마피아");
+    expect(mafia.classList.contains("mf-dt__claim--real")).toBe(true);
+    expect(mafia.classList.contains("mf-dt__claim--mafia")).toBe(true);
+    expect(screen.getByRole("group", { name: "하늘, 경찰" })).toBeTruthy();
+    expect(screen.getByRole("group", { name: "서연, 의사, 탈락" })).toBeTruthy();
+  });
+
+  it("allyMarkLabel '마피아' 를 넘기면 isAlly 자리의 마름모 aria-label 이 '마피아', 넘기지 않으면 '동료'", () => {
+    const { container } = render(<DayTable seats={five({ 3: { isAlly: true } })} mySeat={0} width={366} allyMarkLabel="마피아" />);
+    expect(container.querySelector(".mf-dt__mark")?.getAttribute("aria-label")).toBe("마피아");
+    cleanup();
+    const d = render(<DayTable seats={five({ 3: { isAlly: true } })} mySeat={0} width={366} />);
+    expect(d.container.querySelector(".mf-dt__mark")?.getAttribute("aria-label")).toBe("동료");
+  });
+
+  it("isAlly 이면서 dead 인 자리는 동료 링·마름모가 그대로 있다", () => {
+    const { container } = render(<DayTable seats={five({ 3: { isAlly: true, dead: true, row: deadRow } })} mySeat={0} width={366} />);
+    expect(seatEl(container, 3).querySelectorAll(".mf-dt__ring--mate").length).toBe(1);
+    expect(seatEl(container, 3).querySelectorAll(".mf-dt__mark").length).toBe(1);
+  });
+});
+
+describe("daytable.css: 탈락과 관전 아랫줄 (03-02)", () => {
+  const css = readFileSync("src/styles/daytable.css", "utf8");
+  it(".mf-figure--ghost 는 object-fit contain, filter·opacity 지정 없음", () => {
+    expect(cssHas(css, /\.mf-figure--ghost\s*\{[^}]*object-fit:\s*contain/)).toBe(true);
+    expect(cssHas(css, /\.mf-figure--ghost\s*\{[^}]*(filter|opacity)\s*:/)).toBe(false);
+  });
+  it(".mf-dt__tag--dead .mf-dt__name 의 color var(--gray-500)", () => {
+    expect(cssHas(css, /\.mf-dt__tag--dead \.mf-dt__name\s*\{[^}]*color:\s*var\(--gray-500\)/)).toBe(true);
+  });
+  it(".mf-dt__claim--dead: gray-500 글자·400·night-900 70% 면", () => {
+    expect(cssHas(css, /\.mf-dt__claim--dead\s*\{[^}]*color:\s*var\(--gray-500\)/)).toBe(true);
+    expect(cssHas(css, /\.mf-dt__claim--dead\s*\{[^}]*font-weight:\s*400/)).toBe(true);
+    expect(cssHas(css, /\.mf-dt__claim--dead\s*\{[^}]*background:\s*color-mix\(in srgb, var\(--night-900\) 70%, transparent\)/)).toBe(true);
+  });
+  it(".mf-dt__claim--real 은 점선·gray-300, 마피아는 진홍 글자·테두리", () => {
+    expect(cssHas(css, /\.mf-dt__claim--real\s*\{[^}]*border-style:\s*dashed/)).toBe(true);
+    expect(cssHas(css, /\.mf-dt__claim--real\s*\{[^}]*border-color:\s*var\(--gray-300\)/)).toBe(true);
+    expect(cssHas(css, /\.mf-dt__claim--real\.mf-dt__claim--mafia\s*\{[^}]*color:\s*var\(--crimson-400\)/)).toBe(true);
+    expect(cssHas(css, /\.mf-dt__claim--real\.mf-dt__claim--mafia\s*\{[^}]*border-color:\s*var\(--crimson-400\)/)).toBe(true);
+  });
+});
