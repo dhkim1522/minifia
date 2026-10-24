@@ -48,7 +48,7 @@ key-decisions:
   - "recordsSeen 의 저장 실패 대체 메모리는 저장 성공 시 해당 키를 지운다 — 저장소가 나중에 비워져도 옛 메모리 값이 되살아나지 않는다"
   - "lobby·assigning 초기화에 seen 0 저장을 더해, 같은 방 코드로 새 판이 열려도 옛 본 개수가 남지 않는다(가정 A4)"
 
-requirements-completed: [NIGHT-02]
+requirements-completed: []   # NIGHT-02 는 03-12(배포본 확인)도 선언해 requirements.ready-ids 가 blocked 로 답했다 — 마지막 선언 계획이 끝날 때 체크한다
 
 coverage:
   - id: C1

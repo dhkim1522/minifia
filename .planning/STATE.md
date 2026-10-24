@@ -4,18 +4,18 @@ milestone: v1.0
 milestone_name: MVP
 current_phase: 03
 current_phase_name: 밤과 아침
-current_plan: 11
+current_plan: 12
 status: executing
-stopped_at: Completed 03-10-PLAN.md
-last_updated: "2026-10-24T16:26:52.075Z"
+stopped_at: Completed 03-11-PLAN.md
+last_updated: "2026-10-24T16:32:46.890Z"
 last_activity: 2026-10-25
 last_activity_desc: Phase 03 execution started
-state_head: 31623e315415f2ba0fe1536d065af6cb86ee6633
+state_head: 354777e6a6a18bce78cacc042ab880b4370d19a5
 progress:
   total_phases: 6
   completed_phases: 1
   total_plans: 49
-  completed_plans: 47
+  completed_plans: 48
 ---
 
 # Project State
@@ -30,9 +30,9 @@ See: .planning/PROJECT.md (updated 2026-10-21)
 ## Current Position
 
 Phase: 03 (밤과 아침) — EXECUTING
-Current Plan: 11
+Current Plan: 12
 Total Plans in Phase: 12
-Plan: 11 of 12
+Plan: 12 of 12
 Status: Ready to execute
 Last activity: 2026-10-25 — Phase 03 execution started
 
@@ -93,6 +93,7 @@ Progress: [██░░░░░░░░] 17%
 | Phase 03 P08 | 15min | 3 tasks | 6 files |
 | Phase 03 P09 | 20min | 3 tasks | 6 files |
 | Phase 03 P10 | 12min | 3 tasks | 10 files |
+| Phase 03 P11 | 15min | 2 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -166,6 +167,7 @@ Recent decisions affecting current work:
 - [Phase 03]: 03-10: 탈락 문구 표는 src/game/eliminationText.ts 한 곳, 이름 뒤 항상 님이, 범위 밖 번호는 첫 문구
 - [Phase 03]: 03-10: 아침 안내(PHASE_ANNOUNCE.morning)는 카드와 같은 morningCardText 에서 문장을 만든다
 - [Phase 03]: 03-10: Timer calm 속성으로 아침 5초는 진홍(urgent)을 쓰지 않는다
+- [Phase 03]: 03-11: 본 기록 개수만 폰 메모리(minifia:records:{방코드})에 저장, 기록 내용·토큰은 저장하지 않음. 시트 열림·NEW 는 RoomScreen 이 쥐고 알림은 DayScene(같은 epoch 에서 길이가 늘 때만)
 
 ### Pending Todos
 
@@ -191,6 +193,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-24T16:26:51.794Z
-Stopped at: Completed 03-10-PLAN.md
+Last session: 2026-10-24T16:32:46.615Z
+Stopped at: Completed 03-11-PLAN.md
 Resume file: None
