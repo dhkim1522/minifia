@@ -171,6 +171,103 @@ describe("밤 — 경찰 (N-3)", () => {
   });
 });
 
+describe("밤 — 마피아 (N-2)", () => {
+  const mafia = (o: ViewOpts = {}) => makeView({ role: "mafia", allies: [2], ...o });
+
+  it("안내 '1일차 · 함께 지목하세요', 자신·동료는 버튼이 아니고 나머지는 '지목 대상' 버튼, 동료에 마피아 링", () => {
+    const { container } = scene(mafia());
+    expect(container.querySelector(".mf-phasebar__do")?.textContent).toBe("1일차 · 함께 지목하세요");
+    const isButton = (n: number) => seatEl(container, n)?.tagName === "BUTTON";
+    expect([0, 1, 2, 3, 4].map((n) => (isButton(n) ? "1" : "0")).join("")).toBe("01011");
+    expect(screen.getByRole("button", { name: "하윤, 지목 대상" }) !== null).toBe(true);
+    expect(seatEl(container, 2)!.querySelector(".mf-dt__ring--mate") !== null).toBe(true);
+  });
+
+  it("allyPicks [3] → 자리 3 에 --ally. 내가 3 을 고르면 --ally 와 --me 둘 다", () => {
+    const r = scene(mafia({ allyPicks: [3] }));
+    expect(seatEl(r.container, 3)!.querySelector(".mf-dt__pick--ally") !== null).toBe(true);
+    expect(seatEl(r.container, 3)!.querySelector(".mf-dt__pick--me") === null).toBe(true);
+    fireEvent.click(seatEl(r.container, 3)!);
+    expect(sent(r.conn)).toBe('[[{"t":"pick","target":3}]]');
+    expect(seatEl(r.container, 3)!.querySelector(".mf-dt__pick--ally") !== null).toBe(true);
+    expect(seatEl(r.container, 3)!.querySelector(".mf-dt__pick--me") !== null).toBe(true);
+  });
+
+  it("하단: 로그 '마피아 채팅' 첫 줄 '마피아끼리만 보여요', [이모티콘] 있음, 제목 없음, [빠른 메시지] 칩은 밤 세 개", () => {
+    const { container } = scene(mafia());
+    const log = screen.getByRole("log", { name: "마피아 채팅" });
+    expect(log.querySelector(".mf-msglog__item")?.textContent).toBe("마피아끼리만 보여요");
+    expect(screen.getByRole("button", { name: "이모티콘" }) !== null).toBe(true);
+    expect(panel(container)!.querySelector("h2") === null).toBe(true);
+    fireEvent.click(screen.getByRole("button", { name: "빠른 메시지" }));
+    const chips = within(screen.getByRole("group", { name: "문구" })).getAllByRole("button");
+    expect(chips.map((b) => b.textContent).join("|")).toBe("[○○] 지목해요|동의해요|다른 사람을 지목해요");
+  });
+
+  it("night 중 emoji 이벤트(자리 2) → 머리 위 이모티콘, chat 이벤트(2 → 3) → 로그에 '도현 지목해요'", () => {
+    const em = emitter();
+    const r = scene(mafia(), { onEvent: em.onEvent });
+    em.emit({ t: "emoji", seat: 2, icon: "smile", at: NOW });
+    expect(r.container.querySelectorAll('.mf-dt__emoji[data-seat="2"]').length).toBe(1);
+    em.emit({ t: "chat", seq: 1, seat: 2, template: "nightTarget", target: 3, at: NOW });
+    const log = screen.getByRole("log", { name: "마피아 채팅" });
+    expect(log.textContent).toContain("도현 지목해요");
+  });
+
+  it("마피아 하단 HTML 에 역할 이름이 없다 (허용 문구 '마피아끼리만 보여요'·'마피아 채팅' 제외)", () => {
+    const { container } = scene(mafia());
+    const html = panel(container)!.innerHTML.replaceAll("마피아끼리만 보여요", "").replaceAll("마피아 채팅", "");
+    expect(/마피아|경찰|의사|시민/.test(html)).toBe(false);
+  });
+});
+
+describe("밤 — 의사·시민 (N-3·N-4)", () => {
+  it("의사: 자기 자리 버튼 '지우 (나), 보호 대상', 누르면 알약 '선택 나' 와 제목 '지킬 사람을 고르세요'", () => {
+    const r = scene(makeView({ role: "doctor" }));
+    expect(panel(r.container)!.querySelector("h2")?.textContent).toBe("지킬 사람을 고르세요");
+    fireEvent.click(screen.getByRole("button", { name: "지우 (나), 보호 대상" }));
+    expect(sent(r.conn)).toBe('[[{"t":"pick","target":0}]]');
+    expect(within(panel(r.container)!).getByRole("status").textContent).toBe("선택 나");
+  });
+
+  it("시민: 테이블에 button 이 0 개, 하단 '밤이 되었어요'·안내·'이번 밤에는 할 수 있는 행동이 없어요'", () => {
+    const { container } = scene(makeView({ role: "citizen" }));
+    expect(container.querySelectorAll(".mf-dt button").length).toBe(0);
+    const p = panel(container)!;
+    expect(p.querySelector("h2")?.textContent).toBe("밤이 되었어요");
+    expect(p.querySelector(".mf-claimpanel__guide")?.textContent).toBe("다른 사람들이 행동하는 중이에요. 마감까지 기다려 주세요");
+    expect(p.querySelector(".mf-pk")?.textContent).toBe("이번 밤에는 할 수 있는 행동이 없어요");
+    expect(/마피아|경찰|의사|시민/.test(p.innerHTML)).toBe(false);
+  });
+});
+
+describe("밤 — 오류·끊김·탈락 표시", () => {
+  it("경찰 화면에 error BAD_MESSAGE → 토스트, WRONG_PHASE → 토스트 없음", () => {
+    const em = emitter();
+    scene(makeView({ role: "police" }), { onEvent: em.onEvent });
+    em.emit({ t: "error", code: "WRONG_PHASE" });
+    expect(screen.queryByText("보내지 못했어요. 다시 시도해 주세요") === null).toBe(true);
+    em.emit({ t: "error", code: "BAD_MESSAGE" });
+    expect(screen.getByText("보내지 못했어요. 다시 시도해 주세요") !== null).toBe(true);
+  });
+
+  it("canSend false → 대상 버튼이 모두 disabled, 눌러도 send 없음", () => {
+    const r = scene(makeView({ role: "police" }), { canSend: false });
+    const buttons = [...r.container.querySelectorAll<HTMLButtonElement>(".mf-dt button.mf-dt__seat")];
+    expect(buttons.map((b) => (b.disabled ? "1" : "0")).join("")).toBe("11111");
+    fireEvent.click(buttons[2]!);
+    expect(vi.mocked(r.conn.send).mock.calls.length).toBe(0);
+  });
+
+  it("탈락한 자리(dead [4])는 살아 있는 경찰 화면에서 버튼이 아니고 유령 그림 + 아랫줄 '탈락'", () => {
+    const { container } = scene(makeView({ role: "police", dead: [4] }));
+    expect(seatEl(container, 4)!.tagName).toBe("DIV");
+    expect(container.querySelectorAll(".mf-dt button.mf-dt__seat").length).toBe(4);
+    expect(seatEl(container, 4)!.querySelector("img")?.getAttribute("src")).toContain("/characters/ghost/");
+    expect(container.querySelector('.mf-dt__tag[data-seat="4"] .mf-dt__claim')?.textContent).toBe("탈락");
+  });
+});
+
 describe("night.css: 선택 알약 (03-08)", () => {
   const css = readCss("src/styles/night.css");
   const rule = (sel: string) => css.match(new RegExp(`(^|\\n)${sel.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*\\{([^}]*)\\}`))?.[2] ?? "";
