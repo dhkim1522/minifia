@@ -4,6 +4,7 @@
 
 ## 현재 상태
 
+- **3페이즈(밤과 아침) 실행 중**: 03-01 완료(서버 루프 낮 토론 → 밤 30초 → 아침 5초 → 다음 낮, 난수 주입 `tick(state, now, randInt)`, 3페이즈 와이어 타입, 방 화면 night·morning 라우팅·밤 안내·모르는 단계 폴백). 다음은 03-02. 배포는 03-12 에서.
 - **2페이즈 갭 클로저 G-02-1·G-02-2 실행 완료(02-12~02-18, 2026-10-24) — 실기기 UAT 재확인 대기**(`/gsd-verify-work 2` 전). 새 배포 버전 `2026-10-24T11:54:33Z+59c3363`(이전 `2026-10-23T18:47:24Z+1ca2b41`).
   - 배포본 확인: `node scripts/smoke.mjs --prod --stage full`(5명)·`--players 8` 모두 `SMOKE OK full`(5명 spread 0ms·reveal 0ms, 8명 spread 7ms·reveal 32ms). 낮 한 바퀴를 방장 넘기기 없이 서버 타이머로 돌아 2일차 dayAnnounce 까지 가고, 빠른 메시지는 chat 프레임(키 `at,seat,seq,t,target,template`)으로만 오며 state 에 `messages`·`extendUsed` 가 없고, 2초 안 두 번째는 `RATE_LIMITED`, `text` 키는 `BAD_MESSAGE`, 방장·손님의 `extend`·`skip` 은 `BAD_MESSAGE` 이고 마감은 그대로다. 봇 UAT `node scripts/uat-day.mjs --prod --players 5|8` 종료 코드 0: 2000ms 간격 오탐 **5명 0/16, 8명 0/28**(2050·2150ms 도 0), 받아들인 줄 모두 도착(G-02-2 회귀 확인).
   - 바뀐 것: 고정 테이블(280×108, 인원과 상관없이 하나)·이름표 2줄(색깔점+이름 / 주장, 말 안 함 "-", 말 바꿈 ↺ 배지)·이모티콘만 머리 위·보낸 사람 이름표 반전·하단 157 고정(세 단계 같은 높이)·채팅 세 줄 + 채팅 내역 모달·방장 연장·넘기기 제거(서버 extend/skip 포함)·채팅 서버 저장 제거(방송만)·닉네임 최대 5자·서버 전송 한도 1800ms(클라이언트 잠금 2000ms). 근거는 결정 0017·0016 의 갱신 줄, 화면 기준은 `design/screens/day-v3/SPEC.md`.
