@@ -80,9 +80,10 @@ export class Room extends DurableObject<Env> {
           players: normalized.players.map((p) => (p.connId !== null && live.has(p.connId) ? p : { ...p, connected: false, connId: null })),
         };
         if (normalized !== stored) {
-          // 정규화로 생긴 이른 마감(now + 2초)이 기존 만료 알람(90초 뒤 등)보다 먼저 깨어나야 하므로 이 경우에만 여기서 알람을 건다.
           await ctx.storage.put("room", this.room);
-          await ctx.storage.setAlarm(nextWakeAt(this.room));
+          // 정규화로 생긴 이른 마감(now + 2초)이 기존 만료 알람(90초 뒤 등)보다 먼저 깨어나야 하므로 마감이 바뀐 경우에만 여기서 알람을 건다.
+          // 옛 messages 키만 지운 경우(결정 0017-7)는 마감이 그대로라 대기 중인 알람을 건드리지 않는다.
+          if (normalized.phaseEndsAt !== stored.phaseEndsAt) await ctx.storage.setAlarm(nextWakeAt(this.room));
         }
       }
     });
