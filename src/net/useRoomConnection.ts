@@ -9,7 +9,7 @@ import { initialLinkState, linkReducer, RESTORED_MS, retryDelayMs, STALE_CHECK_A
 export type ConnectionStatus = LinkStatus;
 
 /** 상태로 쌓지 않고 구독자에게만 흘리는 서버 프레임. 이모티콘 폭주가 전체 화면 렌더로 번지지 않게 한다(T-02-22). */
-export type RoomEvent = Extract<ServerMessage, { t: "emoji" | "error" }>;
+export type RoomEvent = Extract<ServerMessage, { t: "emoji" | "error" | "chat" }>;
 
 export interface RoomConnection {
   status: ConnectionStatus;
@@ -20,7 +20,7 @@ export interface RoomConnection {
   /** 새 연결의 첫 state 마다 1씩 늘어난다(대기실 토스트가 재접속 직후 지난 변화를 알리지 않게 쓰는 값. view 와 함께 바뀐다) */
   epoch: number;
   removedReason: RemovedReason | null;
-  /** emoji·error 서버 프레임 구독. 돌려준 함수로 해제한다. 참조는 렌더 사이에 안정적이다 */
+  /** emoji·chat·error 서버 프레임 구독. 돌려준 함수로 해제한다. 참조는 렌더 사이에 안정적이다 */
   onEvent(listener: (e: RoomEvent) => void): () => void;
   /** 서버로 입력을 보낼 수 있는지(열려 있고 view 가 있음). 끊긴 동안은 거짓 */
   canSend: boolean;
@@ -59,7 +59,7 @@ function parseServerMessage(data: unknown): ServerMessage | null {
   if (typeof data !== "string") return null;
   try {
     const v = JSON.parse(data) as { t?: unknown };
-    if (v && (v.t === "state" || v.t === "pong" || v.t === "error" || v.t === "emoji")) return v as ServerMessage;
+    if (v && (v.t === "state" || v.t === "pong" || v.t === "error" || v.t === "emoji" || v.t === "chat")) return v as ServerMessage;
   } catch {
     // 서버가 보낸 것이 아닌 프레임은 무시한다.
   }
@@ -199,7 +199,7 @@ export function useRoomConnection(code: string, token: string, options?: RoomCon
           }
         } else if (msg?.t === "pong") {
           onPong(msg.c, msg.serverNow);
-        } else if (msg?.t === "emoji" || msg?.t === "error") {
+        } else if (msg?.t === "emoji" || msg?.t === "chat" || msg?.t === "error") {
           for (const listener of [...listenersRef.current]) listener(msg);
         }
       });

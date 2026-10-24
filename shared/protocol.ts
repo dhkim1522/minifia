@@ -24,7 +24,7 @@ export type TemplateId = (typeof TEMPLATE_IDS)[number];
 export const EMOJI_IDS = ["smile", "grin", "surprised", "suspicious", "angry", "sad", "heart", "exclaim"] as const;
 export type EmojiId = (typeof EMOJI_IDS)[number];
 /**
- * 낮 토론 메시지 한 줄(서버 보관·뷰 공통). 키 이름에 id·role 을 쓰지 않는다:
+ * 서버가 방송만 하는 빠른 메시지 한 줄(저장하지 않는다, 결정 0017-7). 키 이름에 id·role 을 쓰지 않는다:
  * test/worker/leak.test.ts 의 FORBIDDEN_KEYS 에 id 가 있고, role 키는 view.me.role 에만 있다는 불변식이 있다.
  * 직업 이름이 필요하면 claimedRole 처럼 다른 이름을 쓴다.
  */
@@ -36,6 +36,8 @@ export interface ChatLine {
   claimedRole?: RoleId;
   at: number;
 }
+/** 통과한 빠른 메시지 한 줄을 방에 앉은 모든 소켓에 보내는 이벤트 프레임(상태가 아니다). */
+export type ChatEvent = { t: "chat" } & ChatLine;
 export interface SeatClaim {
   seat: number;
   claim: Claim;
@@ -144,6 +146,7 @@ export type ServerMessage =
   | { t: "state"; view: RoomView }
   | { t: "pong"; c: number; serverNow: number }
   | { t: "error"; code: WsErrorCode }
-  | { t: "emoji"; seat: number; icon: EmojiId; at: number };
+  | { t: "emoji"; seat: number; icon: EmojiId; at: number }
+  | ChatEvent;
 export const CLOSE_CODES = { REPLACED: 4001, REMOVED: 4003 } as const;
 export type RemovedReason = "left" | "kicked" | "invalid_token" | "room_closed";

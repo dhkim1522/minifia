@@ -298,6 +298,7 @@ export class Room extends DurableObject<Env> {
   }
 
   // 빠른 메시지: 신원은 소켓 첨부의 playerId 뿐이고, 시각은 서버 Date.now() 다(T-02-16, D-13).
+  // 통과한 한 줄은 저장하지 않고 chat 이벤트로 방송만 한다(결정 0017-7). 저장은 쿨다운용 lastSendAt·nextMessageSeq 뿐이고 state 는 방송하지 않는다.
   // WRONG_PHASE 만 최신 state 를 다시 보낸다 — 단계가 넘어간 화면이 서버 값으로 돌아가게. RATE_LIMITED·BAD_MESSAGE 는 error 뿐이다(UI-SPEC 오류표).
   private async handleSay(ws: WebSocket, input: SayInput): Promise<void> {
     const att = this.attachmentOf(ws);
@@ -312,7 +313,8 @@ export class Room extends DurableObject<Env> {
       return;
     }
     this.room = result.state;
-    await this.persistAndBroadcast();
+    await this.ctx.storage.put("room", this.room);
+    this.broadcastEvent({ t: "chat", ...result.line });
   }
 
   // 이모티콘: 저장은 lastSendAt(쿨다운)뿐이고 state 는 방송하지 않는다 — 화면에 보이는 값이 바뀌지 않았다. 이벤트만 앉은 모든 소켓에 보낸다(D-14).
