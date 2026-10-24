@@ -86,3 +86,11 @@ export function enterMorning(state: RoomState, randInt: RandInt): RoomState {
   };
   return result.phrase === undefined ? next : { ...next, lastPhrase: result.phrase };
 }
+
+export function pickRecipientIds(_state: RoomState, _actorId: string): string[] {
+  return [];
+}
+
+export function nightChatRecipientIds(_state: RoomState): ReadonlySet<string> {
+  return new Set();
+}

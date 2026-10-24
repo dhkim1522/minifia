@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { enterMorning, enterNight, pickTarget } from "../../shared/game/night";
+import { enterMorning, enterNight, nightChatRecipientIds, pickRecipientIds, pickTarget } from "../../shared/game/night";
 import { attachConnection, createRoomState, joinRoom, startGame } from "../../shared/game/room";
 import type { Player, RoomState } from "../../shared/game/room";
 import type { RoleId } from "../../shared/game/roles";
 import { tick } from "../../shared/game/tick";
 import { MORNING_PHRASE_COUNT } from "../../shared/protocol";
+import type { PhaseId } from "../../shared/protocol";
 import { seededRandInt } from "../helpers/seededRandom";
 
 const START_AT = 10_000;
@@ -133,5 +134,225 @@ describe("밤 → 아침 한 줄 (NIGHT-01, NIGHT-06, D-08)", () => {
     const before = JSON.stringify(picked);
     enterMorning(picked, seededRandInt(3));
     expect(JSON.stringify(picked) === before).toBe(true);
+  });
+});
+
+// ---- Task 2: 검사 순서와 받는 사람 ----
+
+/** 어떤 단계든 실제 전이로 만든다(lobby 는 대기실 그대로). */
+function stateAtPhase(phase: PhaseId, n: number, seed: number): RoomState {
+  const lobby = lobbyOf(n);
+  if (phase === "lobby") return lobby;
+  const started = startGame(lobby, lobby.hostId, START_AT, seededRandInt(seed));
+  if (!started.ok) throw new Error(`startGame failed: ${started.error}`);
+  let state = started.state;
+  while (state.phase !== phase) {
+    if (state.phaseEndsAt === null) throw new Error("phase has no deadline");
+    state = tick(state, state.phaseEndsAt, seededRandInt(seed));
+  }
+  return state;
+}
+
+function outcome(r: { ok: true; state: RoomState } | { ok: false; error: string }): string {
+  return r.ok ? "ok" : r.error;
+}
+
+/** 지정한 사람들을 탈락시킨 새 상태. */
+function kill(state: RoomState, ...dead: Player[]): RoomState {
+  const ids = new Set(dead.map((p) => p.id));
+  return { ...state, players: state.players.map((p) => (ids.has(p.id) ? { ...p, alive: false } : p)) };
+}
+
+function seatsOf(state: RoomState, ids: Iterable<string>): string {
+  const set = new Set(ids);
+  return state.players
+    .filter((p) => set.has(p.id))
+    .map((p) => p.seat)
+    .sort((a, b) => a - b)
+    .join(",");
+}
+
+describe("pickTarget 검사 순서 (D-02, ELIM-01)", () => {
+  const OTHER_PHASES: readonly PhaseId[] = [
+    "lobby",
+    "assigning",
+    "roleReveal",
+    "dayAnnounce",
+    "claim",
+    "claimReveal",
+    "discussion",
+    "morning",
+  ];
+
+  it("night 가 아닌 여덟 단계에서는 WRONG_PHASE 다", () => {
+    for (const phase of OTHER_PHASES) {
+      const state = stateAtPhase(phase, 6, 11);
+      const actor = state.players[0]!;
+      const result = pickTarget(state, actor.id, state.players[1]!.seat);
+      expect(`${phase}:${outcome(result)}`).toBe(`${phase}:WRONG_PHASE`);
+    }
+  });
+
+  it("탈락한 행위자도 night 가 아니면 WRONG_PHASE 다(단계 검사가 먼저)", () => {
+    const night = nightOf(6, 11);
+    const mafia = withRole(night, "mafia")[0]!;
+    const victim = withRole(night, "citizen")[0]!;
+    const morning = tick(pickAs(night, mafia, victim), night.phaseEndsAt ?? 0, seededRandInt(2));
+    expect(morning.phase).toBe("morning");
+    expect(outcome(pickTarget(morning, victim.id, mafia.seat))).toBe("WRONG_PHASE");
+  });
+
+  it("night 에서 방에 없는 actorId 는 BAD_MESSAGE 다", () => {
+    const night = nightOf(6, 11);
+    expect(outcome(pickTarget(night, "nobody-in-this-room", 0))).toBe("BAD_MESSAGE");
+  });
+
+  it("night 에서 탈락한 마피아·경찰·의사와 살아 있는 시민은 BAD_MESSAGE 다", () => {
+    const night = nightOf(6, 11);
+    const target = withRole(night, "citizen")[0]!;
+    const out: string[] = [];
+    for (const role of ["mafia", "police", "doctor"] as const) {
+      const actor = withRole(night, role)[0]!;
+      const dead = kill(night, actor);
+      out.push(`${role}:${outcome(pickTarget(dead, actor.id, target.seat))}`);
+    }
+    const citizen = withRole(night, "citizen")[1]!;
+    out.push(`citizen:${outcome(pickTarget(night, citizen.id, target.seat))}`);
+    expect(out.join(" ")).toBe("mafia:BAD_MESSAGE police:BAD_MESSAGE doctor:BAD_MESSAGE citizen:BAD_MESSAGE");
+  });
+
+  it("대상이 정수가 아니거나 앉지 않은 seat 이거나 탈락자면 BAD_MESSAGE 다", () => {
+    const night = nightOf(6, 11);
+    const police = withRole(night, "police")[0]!;
+    const deadOne = withRole(night, "citizen")[0]!;
+    const state = kill(night, deadOne);
+    const out = [1.5, Number.NaN, 7, -1, deadOne.seat].map((t) => outcome(pickTarget(state, police.id, t)));
+    expect(out.join(" ")).toBe("BAD_MESSAGE BAD_MESSAGE BAD_MESSAGE BAD_MESSAGE BAD_MESSAGE");
+  });
+
+  it("마피아가 자신 또는 동료를 고르면 BAD_MESSAGE 다(6명 판)", () => {
+    const night = nightOf(6, 11);
+    const [m1, m2] = withRole(night, "mafia") as [Player, Player];
+    const out = [
+      outcome(pickTarget(night, m1.id, m1.seat)),
+      outcome(pickTarget(night, m1.id, m2.seat)),
+      outcome(pickTarget(night, m2.id, m1.seat)),
+    ];
+    expect(out.join(" ")).toBe("BAD_MESSAGE BAD_MESSAGE BAD_MESSAGE");
+  });
+
+  it("경찰·의사는 자신을 고를 수 있다", () => {
+    const night = nightOf(6, 11);
+    const police = withRole(night, "police")[0]!;
+    const doctor = withRole(night, "doctor")[0]!;
+    const out = [outcome(pickTarget(night, police.id, police.seat)), outcome(pickTarget(night, doctor.id, doctor.seat))];
+    expect(out.join(" ")).toBe("ok ok");
+  });
+
+  it("단계가 틀리면 다른 위반이 있어도 WRONG_PHASE, 탈락한 시민이 탈락자를 고르면 BAD_MESSAGE 다", () => {
+    const day = stateAtPhase("dayAnnounce", 6, 11);
+    expect(outcome(pickTarget(day, "nobody-in-this-room", Number.NaN))).toBe("WRONG_PHASE");
+    const night = nightOf(6, 11);
+    const [c1, c2] = withRole(night, "citizen") as [Player, Player];
+    const state = kill(night, c1, c2);
+    expect(outcome(pickTarget(state, c1.id, c2.seat))).toBe("BAD_MESSAGE");
+  });
+
+  it("같은 대상을 다시 고르면 결과 state 가 입력과 같은 객체다", () => {
+    const night = nightOf(6, 11);
+    const police = withRole(night, "police")[0]!;
+    const victim = withRole(night, "citizen")[0]!;
+    const first = pickAs(night, police, victim);
+    const again = pickTarget(first, police.id, victim.seat);
+    expect(again.ok && again.state === first).toBe(true);
+  });
+
+  it("다른 대상으로 바꾸면 그 사람의 nightPick 만 바뀌고 마감은 그대로이며 입력은 변하지 않는다", () => {
+    const night = nightOf(6, 11);
+    const doctor = withRole(night, "doctor")[0]!;
+    const [c1, c2] = withRole(night, "citizen") as [Player, Player];
+    const first = pickAs(night, doctor, c1);
+    const before = JSON.stringify(first);
+    const changed = pickTarget(first, doctor.id, c2.seat);
+    expect(changed.ok).toBe(true);
+    if (!changed.ok) return;
+    expect(JSON.stringify(first) === before).toBe(true);
+    expect(changed.state.players.find((p) => p.id === doctor.id)?.nightPick).toBe(c2.seat);
+    expect(changed.state.phase).toBe("night");
+    expect(changed.state.phaseEndsAt).toBe(first.phaseEndsAt);
+    const others = (s: RoomState) => JSON.stringify(s.players.filter((p) => p.id !== doctor.id));
+    expect(others(changed.state) === others(first)).toBe(true);
+  });
+
+  it("모두 골라도 phase 는 night 이고 마감은 그대로다(NIGHT-05)", () => {
+    let state = nightOf(6, 11);
+    const endsAt = state.phaseEndsAt;
+    const target = withRole(state, "citizen")[0]!;
+    for (const p of state.players) {
+      if (p.role === "citizen") continue;
+      const t = p.role === "mafia" ? target : p;
+      state = pickAs(state, p, t);
+    }
+    expect(state.phase).toBe("night");
+    expect(state.phaseEndsAt).toBe(endsAt);
+  });
+
+  it("거부는 입력 상태를 바꾸지 않는다", () => {
+    const night = nightOf(6, 11);
+    const mafia = withRole(night, "mafia")[0]!;
+    const before = JSON.stringify(night);
+    pickTarget(night, mafia.id, mafia.seat);
+    pickTarget(night, "nobody-in-this-room", 0);
+    expect(JSON.stringify(night) === before).toBe(true);
+  });
+});
+
+describe("받는 사람 (D-17, 결정 0021)", () => {
+  it("경찰·의사의 행동 뒤 state 는 본인만 받고, 탈락자가 있으면 탈락자도 받는다", () => {
+    const night = nightOf(6, 11);
+    const police = withRole(night, "police")[0]!;
+    const doctor = withRole(night, "doctor")[0]!;
+    const [c1, c2] = withRole(night, "citizen") as [Player, Player];
+    expect(seatsOf(night, pickRecipientIds(night, police.id))).toBe(String(police.seat));
+    expect(seatsOf(night, pickRecipientIds(night, doctor.id))).toBe(String(doctor.seat));
+    const dead = kill(night, c1, c2);
+    const want = [police.seat, c1.seat, c2.seat].sort((a, b) => a - b).join(",");
+    expect(seatsOf(dead, pickRecipientIds(dead, police.id))).toBe(want);
+  });
+
+  it("마피아의 행동 뒤 state 는 생존 마피아 전원과 탈락자가 받는다(탈락한 마피아는 탈락자로 든다)", () => {
+    const night = nightOf(6, 11);
+    const [m1, m2] = withRole(night, "mafia") as [Player, Player];
+    const mafiaSeats = [m1.seat, m2.seat].sort((a, b) => a - b).join(",");
+    expect(seatsOf(night, pickRecipientIds(night, m1.id))).toBe(mafiaSeats);
+    const citizen = withRole(night, "citizen")[0]!;
+    const oneDead = kill(night, m2, citizen);
+    const want = [m1.seat, m2.seat, citizen.seat].sort((a, b) => a - b).join(",");
+    expect(seatsOf(oneDead, pickRecipientIds(oneDead, m1.id))).toBe(want);
+  });
+
+  it("받는 사람 목록에는 중복이 없고 seat 오름차순이다", () => {
+    const night = nightOf(6, 11);
+    const [m1, m2] = withRole(night, "mafia") as [Player, Player];
+    const citizen = withRole(night, "citizen")[0]!;
+    const state = kill(night, m2, citizen);
+    const ids = pickRecipientIds(state, m1.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    const seats = ids.map((id) => state.players.find((p) => p.id === id)?.seat ?? -1);
+    expect(seats.join(",")).toBe([...seats].sort((a, b) => a - b).join(","));
+    expect(seats.length).toBe(3);
+  });
+
+  it("밤 채팅은 생존 마피아와 탈락자만 받는다 — 살아 있는 시민·경찰·의사는 들지 않는다", () => {
+    const night = nightOf(6, 11);
+    const [m1, m2] = withRole(night, "mafia") as [Player, Player];
+    const mafiaSeats = [m1.seat, m2.seat].sort((a, b) => a - b).join(",");
+    expect(seatsOf(night, nightChatRecipientIds(night))).toBe(mafiaSeats);
+    const citizen = withRole(night, "citizen")[0]!;
+    const state = kill(night, m2, citizen);
+    const want = [m1.seat, m2.seat, citizen.seat].sort((a, b) => a - b).join(",");
+    expect(seatsOf(state, nightChatRecipientIds(state))).toBe(want);
+    const police = withRole(night, "police")[0]!;
+    expect(nightChatRecipientIds(state).has(police.id)).toBe(false);
   });
 });
