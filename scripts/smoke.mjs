@@ -1,5 +1,6 @@
 // 스모크: 배포(또는 로컬) 주소에서 방 만들기 → WebSocket hello → 대기실 상태까지 확인한다.
-// full 단계는 한 판 시작부터 낮 한 바퀴(낮 시작 발표 → 직업 공개 → 공개 연출 → 낮 토론 90초 → 서버 타이머로 다음 낮 시작 발표)까지 돈다.
+// full 단계는 한 판 시작부터 낮 한 바퀴(낮 시작 발표 → 직업 공개 → 공개 연출 → 낮 토론 90초) → 밤 30초(역할별 행동·마피아 채팅)
+// → 아침 5초(탈락 발표) → 서버 타이머로 2일차 낮 시작 발표까지 돈다. 탈락한 클라이언트는 그 아침부터 관전 정보(spectate)를 받는다(결정 0021).
 // 방장 연장·넘기기는 없다(결정 0017-5). 빠른 메시지는 state 가 아니라 chat 프레임으로 온다(결정 0017-7).
 // Node 22.12+ 내장 fetch·전역 WebSocket 만 쓴다. 셸 명령·외부 패키지 없음 (Windows 에서도 같은 명령).
 //
@@ -15,12 +16,15 @@ import { fileURLToPath } from "node:url";
 
 const TOTAL_LIMIT_MS = 30_000;
 const STATE_LIMIT_MS = 10_000;
-const FULL_TOTAL_LIMIT_MS = 240_000;
+const FULL_TOTAL_LIMIT_MS = 300_000; // 시작 → 2일차 dayAnnounce 약 162초 + 여유
 // 토론 90초 + 여유: 넘기기 없이 서버 타이머가 낮을 넘기는 것을 기다린다.
 const DISCUSSION_WAIT_MS = 90_000 + STATE_LIMIT_MS;
+// 밤 30초, 아침 5초 + 여유
+const NIGHT_WAIT_MS = 30_000 + STATE_LIMIT_MS;
+const MORNING_WAIT_MS = 5_000 + STATE_LIMIT_MS;
 const CHAT_FRAME_KEYS = ["at", "seat", "seq", "t", "target", "template"];
 const CHAT_ALLOWED_KEYS = new Set(["t", "seq", "seat", "template", "target", "claimedRole", "at"]);
-const ALLOWED_PLAYER_KEYS = ["connected", "isHost", "nickname", "seat"];
+const ALLOWED_PLAYER_KEYS = ["alive", "connected", "isHost", "nickname", "seat"];
 const PREVIEW_PLAYER_KEYS = ["nickname", "seat"];
 const DAY_SPREAD_LIMIT_MS = 500;
 // shared/game/roles.ts 의 ROLE_TABLE 과 같은 값 (마피아·경찰·의사·시민)
@@ -31,7 +35,7 @@ const EXPECTED_ROLES = {
   7: { mafia: 2, police: 1, doctor: 1, citizen: 3 },
   8: { mafia: 2, police: 1, doctor: 1, citizen: 4 },
 };
-// 허용 전이 표(shared/game/phases.ts 의 next 와 같다). 낮 루프라 끝이 없다: discussion 다음은 다시 dayAnnounce.
+// 허용 전이 표(shared/game/phases.ts 의 next 와 같다). 낮 루프라 끝이 없다: discussion → night → morning → 다시 dayAnnounce.
 const PHASE_NEXT = {
   lobby: ["assigning"],
   assigning: ["roleReveal"],
@@ -39,9 +43,11 @@ const PHASE_NEXT = {
   dayAnnounce: ["claim"],
   claim: ["claimReveal"],
   claimReveal: ["discussion"],
-  discussion: ["dayAnnounce"],
+  discussion: ["night"],
+  night: ["morning"],
+  morning: ["dayAnnounce"],
 };
-const DAY_PHASES = ["dayAnnounce", "claim", "claimReveal", "discussion"];
+const DAY_PHASES = ["dayAnnounce", "claim", "claimReveal", "discussion", "night", "morning"];
 const ROLE_IDS = ["mafia", "police", "doctor", "citizen"];
 // 주장 값으로 쓰일 수 있는 문자열(직업 + 말 안 함). claimReveal 전에는 허용 경로 밖에 나오면 안 된다.
 const CLAIM_STRINGS = new Set([...ROLE_IDS, "none"]);
@@ -465,8 +471,53 @@ async function stageFull(url, args) {
     if (v.phaseEndsAt !== endsBefore || v.phaseDurationMs !== 90_000) fail(`${c.nickname} 의 discussion 마감이 extend·skip 시도 뒤 바뀜: ${v.phaseEndsAt} / ${v.phaseDurationMs}`);
   }
 
-  // 타이머: 넘기기 없이 토론 마감 뒤 모든 클라이언트가 dayAnnounce(day.n 2) 를 받는다
-  await waitUntil(() => clients.every((c) => firstState(c, "dayAnnounce", (v) => v.day?.n === 2)), DISCUSSION_WAIT_MS, "토론 마감 뒤 dayAnnounce(day.n 2) 가 모든 클라이언트에 오지 않음");
+  // (14) 밤: 토론 마감 뒤 모든 클라이언트가 night 를 받는다(넘기기 없이 서버 타이머)
+  await waitUntil(() => clients.every((c) => firstState(c, "night")), DISCUSSION_WAIT_MS, "토론 마감 뒤 night 가 모든 클라이언트에 오지 않음");
+  for (const c of clients) {
+    const nv = firstState(c, "night").msg.view;
+    if (nv.day?.n !== 1) fail(`${c.nickname} 의 night 의 day.n 이 1 이 아님: ${nv.day?.n}`);
+    if (nv.phaseDurationMs !== 30_000) fail(`${c.nickname} 의 night phaseDurationMs 가 30000 이 아님: ${nv.phaseDurationMs}`);
+    c.role = nv.me.role; // 스크립트는 전지적이다: 자기 view.me.role 로 행동시킨다
+    if (!ROLE_IDS.includes(c.role)) fail(`${c.nickname} 의 night view 에 me.role 이 없음`);
+  }
+  const mafiaClients = clients.filter((c) => c.role === "mafia");
+  const policeClient = clients.find((c) => c.role === "police");
+  const doctorClient = clients.find((c) => c.role === "doctor");
+  const citizenClients = clients.filter((c) => c.role === "citizen");
+  if (mafiaClients.length < 1 || !policeClient || citizenClients.length < 2) fail("밤 시작 때 역할 구성이 이상함");
+  if ((doctorClient !== undefined) !== (N >= 5)) fail(`의사 유무가 인원(${N})과 맞지 않음`);
+  // 결정적 행동: 마피아 전원 → 가장 작은 시민 seat X, 경찰 → 가장 작은 마피아 seat, 의사 → 자신
+  const targetX = Math.min(...citizenClients.map((c) => c.seat));
+  const xClient = clients.find((c) => c.seat === targetX);
+  const policeTarget = Math.min(...mafiaClients.map((c) => c.seat));
+  const nightStartAt = (c) => firstState(c, "night").at;
+  const hasPicked = (c, seat) => lastView(c)?.phase === "night" && lastView(c).me.pick === seat;
+  for (const m of mafiaClients) m.ws.send(JSON.stringify({ t: "pick", target: targetX }));
+  policeClient.ws.send(JSON.stringify({ t: "pick", target: policeTarget }));
+  if (doctorClient) doctorClient.ws.send(JSON.stringify({ t: "pick", target: doctorClient.seat }));
+  const actors = [...mafiaClients.map((m) => [m, targetX]), [policeClient, policeTarget], ...(doctorClient ? [[doctorClient, doctorClient.seat]] : [])];
+  await waitUntil(() => actors.every(([c, seat]) => hasPicked(c, seat)), STATE_LIMIT_MS, "밤 행동 뒤 본인 선택(me.pick)이 행위자 화면에 오지 않음");
+  // 마피아 한 명이 밤 채팅 → 2초 뒤 이모티콘. 살아 있는 비마피아에게는 chat·emoji 프레임이 가지 않는다.
+  const talker = mafiaClients[0];
+  talker.ws.send(JSON.stringify({ t: "say", template: "nightTarget", target: targetX }));
+  await waitUntil(
+    () => mafiaClients.every((m) => m.frames.some((f) => f.at >= nightStartAt(m) && f.msg?.t === "chat" && f.msg.template === "nightTarget" && f.msg.target === targetX)),
+    STATE_LIMIT_MS,
+    "밤 마피아 채팅 chat 프레임이 마피아 클라이언트에 오지 않음",
+  );
+  // 마피아가 아닌 사람의 밤 say 는 WRONG_PHASE (살아 있는 비마피아, 결정 0020-7)
+  await expectError(citizenClients[0], { t: "say", template: "nightAgree" }, "WRONG_PHASE", "밤 시민의 say");
+  await sleep(2100);
+  talker.ws.send(JSON.stringify({ t: "emoji", icon: "smile" }));
+  await waitUntil(
+    () => mafiaClients.every((m) => m.frames.some((f) => f.at >= nightStartAt(m) && f.msg?.t === "emoji" && f.msg.seat === talker.seat)),
+    STATE_LIMIT_MS,
+    "밤 마피아 이모티콘 emoji 프레임이 마피아 클라이언트에 오지 않음",
+  );
+
+  // (15) 아침: 모든 클라이언트가 morning 을, 그다음 2일차 dayAnnounce 를 서버 타이머로 받는다
+  await waitUntil(() => clients.every((c) => firstState(c, "morning")), NIGHT_WAIT_MS, "밤 마감 뒤 morning 이 모든 클라이언트에 오지 않음");
+  await waitUntil(() => clients.every((c) => firstState(c, "dayAnnounce", (v) => v.day?.n === 2)), MORNING_WAIT_MS, "아침 마감 뒤 dayAnnounce(day.n 2) 가 모든 클라이언트에 오지 않음");
   for (const c of clients) if (c.unexpectedClose !== null) fail(`${c.nickname} 소켓이 예상 밖으로 닫힘 (code ${c.unexpectedClose})`);
 
   // ---- 단언 ----
@@ -516,7 +567,9 @@ async function stageFull(url, args) {
       if (!(PHASE_NEXT[seq[k - 1]] ?? []).includes(seq[k])) fail(`${c.nickname} 의 단계 순서가 이상함: ${seq.join(" → ")}`);
     }
     const iDisc = seq.indexOf("discussion");
-    if (iDisc < 0 || seq[iDisc + 1] !== "dayAnnounce") fail(`${c.nickname} 가 discussion → dayAnnounce 낮 루프를 거치지 않음: ${seq.join(" → ")}`);
+    if (iDisc < 0 || seq[iDisc + 1] !== "night") fail(`${c.nickname} 의 discussion 다음이 night 가 아님: ${seq.join(" → ")}`);
+    if (seq[iDisc + 2] !== "morning") fail(`${c.nickname} 의 night 다음이 morning 이 아님: ${seq.join(" → ")}`);
+    if (seq[iDisc + 3] !== "dayAnnounce") fail(`${c.nickname} 의 morning 다음이 dayAnnounce 가 아님: ${seq.join(" → ")}`);
   }
   // me.allies 는 마피아에게만, 다른 마피아의 seat 와 같다
   for (const c of clients) {
@@ -590,6 +643,99 @@ async function stageFull(url, args) {
     if (i === 1) return;
     for (const f of c.frames) if (f.raw.includes(REJECT_MARKER)) fail(`${c.nickname} 의 프레임에 거부된 요청의 표식이 있음`);
   });
+
+  // ---- 밤·아침·관전 단언 (NIGHT-01·02·04·05·06, ELIM-01, 결정 0020·0021) ----
+  const framesBetween = (c, fromPhase, toPhase) => {
+    const from = firstState(c, fromPhase).at;
+    const to = firstState(c, toPhase).at;
+    return c.frames.filter((f) => f.at >= from && f.at < to);
+  };
+  // (a) 밤에 받은 chat·emoji 프레임: 살아 있는 비마피아 0, 마피아 1 이상
+  for (const c of clients) {
+    const n = framesBetween(c, "night", "morning").filter((f) => f.msg?.t === "chat" || f.msg?.t === "emoji").length;
+    if (c.role === "mafia") {
+      if (n < 1) fail(`마피아 ${c.nickname} 가 밤 chat·emoji 프레임을 받지 못함`);
+    } else if (n !== 0) {
+      fail(`마피아가 아닌 ${c.nickname} 가 밤 chat·emoji 프레임 ${n}개를 받음`);
+    }
+  }
+  // (b) allyPicks 는 마피아 프레임에만, records 는 경찰 프레임에만 (둘 다 view.me 아래)
+  for (const c of clients) {
+    for (const f of c.frames) {
+      if (!f.msg) continue;
+      const ap = [];
+      collectKeyPaths(f.msg, "allyPicks", "", ap);
+      if (ap.some((p) => p !== "view.me.allyPicks")) fail(`${c.nickname} 의 프레임에 view.me.allyPicks 밖의 allyPicks 키가 있음`);
+      if (ap.length > 0 && c.role !== "mafia") fail(`마피아가 아닌 ${c.nickname} 가 allyPicks 를 받음`);
+      const rec = [];
+      collectKeyPaths(f.msg, "records", "", rec);
+      if (rec.some((p) => p !== "view.me.records")) fail(`${c.nickname} 의 프레임에 view.me.records 밖의 records 키가 있음`);
+      if (rec.length > 0 && c.role !== "police") fail(`경찰이 아닌 ${c.nickname} 가 records 를 받음`);
+    }
+  }
+  // (c) 아침 day.morning 은 모든 클라이언트가 같고, 탈락자는 지목한 사람이며 players[].alive 와 맞다
+  const morningViews = clients.map((c) => firstState(c, "morning").msg.view);
+  const morningJson = JSON.stringify(morningViews[0].day.morning);
+  morningViews.forEach((v, i) => {
+    if (JSON.stringify(v.day?.morning) !== morningJson) fail(`${clients[i].nickname} 의 day.morning 이 다른 클라이언트와 다름`);
+  });
+  const morning = morningViews[0].day.morning;
+  if (morning.eliminated !== targetX) fail(`아침 탈락자가 지목한 seat(${targetX})가 아님: ${morning.eliminated}`);
+  if (!Number.isInteger(morning.phrase) || morning.phrase < 1 || morning.phrase > 8) fail(`아침 문구 번호가 1..8 정수가 아님: ${morning.phrase}`);
+  morningViews.forEach((v, i) => {
+    for (const p of v.players) {
+      if (p.alive !== (p.seat !== targetX)) fail(`${clients[i].nickname} 의 아침 players seat ${p.seat} 의 alive 가 ${p.seat !== targetX} 가 아님: ${p.alive}`);
+    }
+  });
+  // (d) 경찰 아침 view 의 수사 기록 마지막 항목
+  const lastRecord = firstState(policeClient, "morning").msg.view.me.records?.at(-1);
+  if (!lastRecord || lastRecord.n !== 1 || lastRecord.target !== policeTarget || lastRecord.isMafia !== true || Object.keys(lastRecord).sort().join(",") !== "isMafia,n,target") {
+    fail(`경찰 아침 수사 기록이 {n:1, target:${policeTarget}, isMafia:true} 가 아님: ${JSON.stringify(lastRecord)}`);
+  }
+  // (e) 관전: 탈락한 X 는 morning 이전 프레임에 spectate 키가 없고 그 아침부터 받으며, 각 job 이 그 seat 클라이언트의 me.role 과 같다. 그 밖의 클라이언트에는 spectate 가 없다.
+  const xMorningAt = firstState(xClient, "morning").at;
+  for (const f of xClient.frames) {
+    if (!f.msg || f.msg.t !== "state") continue;
+    const sp = [];
+    collectKeyPaths(f.msg, "spectate", "", sp);
+    if (f.at < xMorningAt && sp.length > 0) fail(`탈락 전(${xClient.nickname}) 프레임에 spectate 키가 있음`);
+    if (f.at >= xMorningAt) {
+      if (sp.length !== 1 || sp[0] !== "view.spectate") fail(`탈락한 ${xClient.nickname} 의 아침 이후 state 에 view.spectate 가 하나가 아님: ${sp.join(",")}`);
+      const seatsList = f.msg.view.spectate.seats;
+      if (!Array.isArray(seatsList) || seatsList.length !== N) fail(`spectate.seats 길이가 ${N} 이 아님`);
+      for (const sj of seatsList) {
+        const owner = clients.find((c) => c.seat === sj.seat);
+        if (!owner || sj.job !== owner.role) fail(`spectate seat ${sj.seat} 의 job(${sj.job})이 그 클라이언트의 역할(${owner?.role})과 다름`);
+      }
+    }
+  }
+  for (const c of clients) {
+    if (c === xClient) continue;
+    for (const f of c.frames) {
+      const sp = [];
+      if (f.msg) collectKeyPaths(f.msg, "spectate", "", sp);
+      if (sp.length > 0) fail(`살아 있는 ${c.nickname} 의 프레임에 spectate 키가 있음`);
+    }
+  }
+  // (f) 역할 문자열은 허용 경로에만: 모든 프레임에서 view.me.role·view.me.claim·view.day.roles[]·공개 주장(view.day.claims[].claim), 탈락한 X 의 아침 이후에는 view.spectate.seats[].job 도 허용.
+  //     마피아 동료 seat·records 의 isMafia 는 숫자·불리언이라 문자열 검사에 걸리지 않는다.
+  const ROLE_ALLOWED_ALWAYS = new Set([...ALLOWED_CLAIM_STRING_PATHS, "view.day.claims[].claim"]);
+  for (const c of clients) {
+    for (const f of c.frames) {
+      if (!f.msg) continue;
+      const leaves = [];
+      collectClaimStringPaths(f.msg, "", leaves);
+      const allowSpectate = c === xClient && f.at >= xMorningAt;
+      const bad = leaves.filter((l) => !ROLE_ALLOWED_ALWAYS.has(l.path) && !(allowSpectate && l.path === "view.spectate.seats[].job"));
+      if (bad.length > 0) fail(`${c.nickname} 의 프레임에 허용 경로 밖 역할 문자열이 있음: ${[...new Set(bad.map((l) => l.path))].join(",")}`);
+    }
+  }
+  // 밤·아침 단계 길이와 아침 마감 일치
+  const nightEnds = new Set(clients.map((c) => firstState(c, "night").msg.view.phaseEndsAt));
+  if (nightEnds.size !== 1) fail(`night 의 phaseEndsAt 이 클라이언트마다 다름 (${nightEnds.size}종)`);
+  const morningEnds = new Set(morningViews.map((v) => v.phaseEndsAt));
+  if (morningEnds.size !== 1) fail(`morning 의 phaseEndsAt 이 클라이언트마다 다름 (${morningEnds.size}종)`);
+  if (morningViews.some((v) => v.phaseDurationMs !== 5_000)) fail("morning phaseDurationMs 가 5000 이 아님");
 
   for (const c of clients) await closeSocket(c);
 
