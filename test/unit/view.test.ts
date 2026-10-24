@@ -2,8 +2,9 @@ import { describe, expect, it } from "vitest";
 import { say } from "../../shared/game/chat";
 import type { SayInput } from "../../shared/game/chat";
 import { claimOptions, currentClaim, selectClaim } from "../../shared/game/claim";
+import { isAlive } from "../../shared/game/alive";
 import { pickTarget } from "../../shared/game/night";
-import { MORNING_MS, NIGHT_MS } from "../../shared/game/phases";
+import { MORNING_MS, NIGHT_MS, PHASE_DEFS } from "../../shared/game/phases";
 import { ROOM_TTL_MS, attachConnection, createRoomState, joinRoom, startGame } from "../../shared/game/room";
 import type { Player, RoomState } from "../../shared/game/room";
 import { rolesInPlay } from "../../shared/game/roles";
@@ -22,9 +23,11 @@ const PHASES: readonly PhaseId[] = [
   "claim",
   "claimReveal",
   "discussion",
+  "night",
+  "morning",
 ];
 /** 역할 확인 이후 낮 단계들(본인 역할이 실리는 단계). */
-const REVEALING_PHASES = ["roleReveal", "dayAnnounce", "claim", "claimReveal", "discussion"] as const;
+const REVEALING_PHASES = ["roleReveal", "dayAnnounce", "claim", "claimReveal", "discussion", "night", "morning"] as const;
 const START_AT = 10_000;
 
 /** n 명이 모두 연결된 대기실. id·token 은 서로 부분 문자열이 아니도록 길고 고유하게 만든다. */
@@ -113,6 +116,11 @@ function roleValueLeaks(view: RoomView): string[] {
     .map(([path, value]) => `${path}=${value}`);
 }
 
+/** view 최상위에 올 수 있는 키(허용 목록). */
+const TOP_KEYS: ReadonlySet<string> = new Set([
+  "code", "phase", "phaseEndsAt", "phaseDurationMs", "serverNow", "minPlayers", "maxPlayers", "players", "me", "day",
+]);
+
 /** 따옴표 없는 한 줄 JSON — 실패 보고(TAP)에 이스케이프된 따옴표가 끼지 않게 한다. */
 const flat = (value: unknown): string => (JSON.stringify(value) ?? "undefined").replaceAll('"', "");
 
@@ -142,6 +150,20 @@ const seatOfRole = (state: RoomState, role: string, nth = 0): number => {
   return p.seat;
 };
 
+/** 마감을 연쇄로 넘겨 목표 단계까지 간다(밤 판정에는 시드 난수를 넘긴다). */
+function advanceTo(state: RoomState, phase: PhaseId, seed: number): RoomState {
+  let s = state;
+  for (let guard = 0; s.phase !== phase; guard += 1) {
+    if (s.phaseEndsAt === null || guard > 20) throw new Error(`advanceTo ${phase} failed at ${s.phase}`);
+    s = tick(s, s.phaseEndsAt, seededRandInt(seed));
+  }
+  return s;
+}
+
+/** 마피아가 아닌 seat 들(오름차순). */
+const nonMafiaSeats = (state: RoomState): number[] =>
+  state.players.filter((q) => q.role !== "mafia").map((q) => q.seat).sort((a, b) => a - b);
+
 /** 실제 전이(say)로 메시지 한 줄을 더한다. */
 function speak(state: RoomState, seat: number, input: SayInput, now: number): RoomState {
   const r = say(state, seatId(state, seat), input, now);
@@ -161,6 +183,18 @@ const DISCUSSION_ENDS_AT = REVEAL_ENDS_AT + 90_000;
  * discussion: 메시지 3줄(그중 claimed 1줄). 낮이 아닌 단계는 stateAt 그대로다.
  */
 function richStateAt(phase: PhaseId, n: number, seed: number): RoomState {
+  if (phase === "night" || phase === "morning") {
+    // 밤: 마피아 → 가장 작은 비마피아 seat, 경찰 → seat 0, 의사 → 자신. 아침은 그 밤 뒤.
+    let s = tick(richStateAt("discussion", n, seed), DISCUSSION_ENDS_AT);
+    const target = nonMafiaSeats(s)[0]!;
+    for (const p of s.players) {
+      if (p.role === "mafia") s = actAt(s, p.seat, target);
+      else if (p.role === "police") s = actAt(s, p.seat, 0);
+      else if (p.role === "doctor") s = actAt(s, p.seat, p.seat);
+    }
+    if (phase === "night") return s;
+    return tick(s, DISCUSSION_ENDS_AT + NIGHT_MS, seededRandInt(seed));
+  }
   if (phase !== "claim" && phase !== "claimReveal" && phase !== "discussion") return stateAt(phase, n, seed);
   const opts = claimOptions(n);
   let s = stateAt("claim", n, seed);
@@ -189,18 +223,18 @@ describe("buildView 단계 길이 (D-15, 결정 0012)", () => {
       return `${phase}:${v.phaseDurationMs}:${v.phaseEndsAt === s.phaseEndsAt}:${v.serverNow}`;
     });
     expect(got.join(" ")).toBe(
-      "lobby:null:true:77777 assigning:3000:true:77777 roleReveal:15000:true:77777 dayAnnounce:2000:true:77777 claim:15000:true:77777 claimReveal:2000:true:77777 discussion:90000:true:77777",
+      "lobby:null:true:77777 assigning:3000:true:77777 roleReveal:15000:true:77777 dayAnnounce:2000:true:77777 claim:15000:true:77777 claimReveal:2000:true:77777 discussion:90000:true:77777 night:30000:true:77777 morning:5000:true:77777",
     );
   });
 
   it("마감은 이전 마감 + 단계 길이로 이어진다: assigning +3000, roleReveal +15000, dayAnnounce +2000, claim +15000, claimReveal +2000, discussion +90000", () => {
     const a = stateAt("assigning", 4, 1);
     const r = stateAt("roleReveal", 4, 1);
-    const ends = ["assigning", "roleReveal", "dayAnnounce", "claim", "claimReveal", "discussion"].map(
+    const ends = ["assigning", "roleReveal", "dayAnnounce", "claim", "claimReveal", "discussion", "night", "morning"].map(
       (phase) => stateAt(phase as PhaseId, 4, 1).phaseEndsAt,
     );
     expect(ends.join("/")).toBe(
-      [START_AT + 3000, START_AT + 18000, START_AT + 20000, START_AT + 35000, START_AT + 37000, START_AT + 127000].join("/"),
+      [START_AT + 3000, START_AT + 18000, START_AT + 20000, START_AT + 35000, START_AT + 37000, START_AT + 127000, START_AT + 157000, START_AT + 162000].join("/"),
     );
     expect(r.phaseEndsAt).toBe(START_AT + 18000);
     expect(a.expiresAt).toBe(START_AT + ROOM_TTL_MS);
@@ -274,7 +308,7 @@ describe("buildView 내 역할·마피아 동료 (ROLE-02, D-14)", () => {
 });
 
 describe("buildView 전수 누출 검사 (T-01-23)", () => {
-  it("4~8명 × 일곱 단계 × 모든 플레이어 × 시드 3개: token·id 가 없고, role·allies 키는 me 아래에만 있으며, 공개 항목은 네 키뿐이다", () => {
+  it("4~8명 × 아홉 단계 × 모든 플레이어 × 시드 3개: token·id 가 없고, role·allies 키는 me 아래에만 있으며, 공개 항목은 다섯 키뿐이다", () => {
     const violations: string[] = [];
     let views = 0;
     for (const n of PLAYER_COUNTS) {
@@ -302,10 +336,50 @@ describe("buildView 전수 누출 검사 (T-01-23)", () => {
             }
             // 서버 전용 필드 이름은 어느 경로에도 없다
             for (const path of keyPaths(view)) {
-              if (["claimLast", "lastSendAt", "claimChoice", "claimShown", "claimChanged"].includes(lastKey(path))) {
+              if (
+                [
+                  "claimLast", "lastSendAt", "claimChoice", "claimShown", "claimChanged",
+                  "nightPick", "investigations", "lastPhrase", "nextNightSeq",
+                ].includes(lastKey(path))
+              ) {
                 violations.push(`${tag}: server-only key at ${path}`);
               }
             }
+            // 최상위 키는 허용 목록뿐이다
+            for (const key of Object.keys(view)) {
+              if (!TOP_KEYS.has(key)) violations.push(`${tag}: top-level key ${key}`);
+            }
+            // 밤 필드는 받을 사람에게만: pick 은 밤·생존 본인, allyPicks 는 밤·생존 마피아, records 는 경찰 본인(역할 공개 단계 전체)
+            for (const path of keyPaths(view)) {
+              if (["pick", "allyPicks", "records"].includes(lastKey(path)) && !path.startsWith("me.")) {
+                violations.push(`${tag}: night field outside me at ${path}`);
+              }
+            }
+            const isNight = phase === "night";
+            const wantPick = isNight && isAlive(viewer) && viewer.nightPick !== undefined;
+            if ("pick" in view.me !== wantPick) violations.push(`${tag}: me.pick presence ${"pick" in view.me}`);
+            else if (wantPick && view.me.pick !== viewer.nightPick) violations.push(`${tag}: me.pick value`);
+            const wantAlly = isNight && isAlive(viewer) && viewer.role === "mafia";
+            if ("allyPicks" in view.me !== wantAlly) violations.push(`${tag}: me.allyPicks presence ${"allyPicks" in view.me}`);
+            else if (wantAlly) {
+              const want = [
+                ...new Set(
+                  s.players
+                    .filter((q) => q.role === "mafia" && q.id !== viewer.id && isAlive(q) && q.nightPick !== undefined)
+                    .map((q) => q.nightPick as number),
+                ),
+              ].sort((a, b) => a - b);
+              if (flat(view.me.allyPicks) !== flat(want)) violations.push(`${tag}: me.allyPicks value ${flat(view.me.allyPicks)}`);
+            }
+            const wantRecords = viewer.role === "police" && PHASE_DEFS[phase].revealsOwnRole;
+            if ("records" in view.me !== wantRecords) violations.push(`${tag}: me.records presence ${"records" in view.me}`);
+            else if (wantRecords) {
+              for (const r of view.me.records ?? []) {
+                const keys = Object.keys(r).sort().join(",");
+                if (keys !== "isMafia,n,target") violations.push(`${tag}: records keys ${keys}`);
+              }
+            }
+            if ("morning" in (view.day ?? {}) !== (phase === "morning")) violations.push(`${tag}: day.morning presence`);
             // me.claim 은 claim 단계의 본인 currentClaim 과 같고, 그 밖의 단계에는 없다
             if (phase === "claim") {
               if (view.me.claim !== currentClaim(viewer)) violations.push(`${tag}: me.claim ${view.me.claim} != own currentClaim`);
@@ -318,7 +392,7 @@ describe("buildView 전수 누출 검사 (T-01-23)", () => {
         }
       }
     }
-    expect(views).toBe(3 * 7 * (4 + 5 + 6 + 7 + 8));
+    expect(views).toBe(3 * 9 * (4 + 5 + 6 + 7 + 8));
     expect(violations.join("; ")).toBe("");
   });
 });
@@ -520,5 +594,179 @@ describe("buildView 밤 — 생존·본인 선택 (ELIM-01, D-06)", () => {
     const s = stateAt("lobby", 4, 1);
     const got = buildView(s, s.hostId, START_AT).players.map((e) => String(e.alive));
     expect(got.join(",")).toBe("true,true,true,true");
+  });
+});
+
+describe("buildView 밤 — 동료 선택 (D-07)", () => {
+  /** 6명 판 1일차 밤. 마피아 A<B, 비마피아 X<Y 를 함께 돌려준다. */
+  function night6(seed: number) {
+    const s = stateAt("night", 6, seed);
+    const [a, b] = [seatOfRole(s, "mafia", 0), seatOfRole(s, "mafia", 1)];
+    const [x, y] = nonMafiaSeats(s);
+    return { s, a, b, x: x!, y: y! };
+  }
+  const meOf = (s: RoomState, seat: number) => buildView(s, seatId(s, seat), START_AT).me;
+
+  it("마피아 A 가 X 를 고르면 A: pick X·allyPicks [], B: allyPicks [X]·pick 키 없음", () => {
+    const { s: s0, a, b, x } = night6(1);
+    const s = actAt(s0, a, x);
+    const ma = meOf(s, a);
+    const mb = meOf(s, b);
+    expect(`pick=${ma.pick} ally=${flat(ma.allyPicks)}`).toBe(`pick=${x} ally=[]`);
+    expect(`pick=${"pick" in mb ? mb.pick : "-"} ally=${flat(mb.allyPicks)}`).toBe(`pick=- ally=[${x}]`);
+  });
+
+  it("둘 다 X 면 서로 allyPicks [X](중복 없음), A 는 X·B 는 Y(X<Y) 면 A 는 [Y], B 는 [X]", () => {
+    const { s: s0, a, b, x, y } = night6(1);
+    const same = actAt(actAt(s0, a, x), b, x);
+    expect(`${flat(meOf(same, a).allyPicks)} ${flat(meOf(same, b).allyPicks)}`).toBe(`[${x}] [${x}]`);
+    const split = actAt(actAt(s0, a, x), b, y);
+    expect(`${flat(meOf(split, a).allyPicks)} ${flat(meOf(split, b).allyPicks)}`).toBe(`[${y}] [${x}]`);
+  });
+
+  it("비마피아 view 의 me 에는 allyPicks 키가 없다(마피아가 골랐어도). 혼자인 마피아(5명 판)는 night 에서 allyPicks [] (키 있음)", () => {
+    const { s: s0, a, x } = night6(1);
+    const s = actAt(s0, a, x);
+    const bad = s.players.filter((p) => p.role !== "mafia").filter((p) => "allyPicks" in meOf(s, p.seat)).map((p) => p.seat);
+    expect(`[${bad.join(",")}]`).toBe("[]");
+    const solo = stateAt("night", 5, 1);
+    const m = meOf(solo, seatOfRole(solo, "mafia"));
+    expect(`${"allyPicks" in m} ${flat(m.allyPicks)}`).toBe("true []");
+  });
+
+  it("탈락한 마피아 view: allies 는 있고 allyPicks·pick 키는 없다. 살아 있는 동료 allyPicks 에 탈락자의 값은 들지 않는다 (A3)", () => {
+    const { s: s0, a, b, x } = night6(1);
+    const s: RoomState = {
+      ...s0,
+      players: s0.players.map((p) => (p.seat === b ? { ...p, alive: false, nightPick: x } : p)),
+    };
+    const mb = meOf(s, b);
+    expect(`allies=${flat(mb.allies)} ally=${"allyPicks" in mb} pick=${"pick" in mb}`).toBe(`allies=[${a}] ally=false pick=false`);
+    expect(flat(meOf(s, a).allyPicks)).toBe("[]");
+  });
+
+  it("night 가 아닌 단계에는 어떤 viewer 에도 pick·allyPicks 키가 없다(남은 nightPick 이 있어도)", () => {
+    const bad: string[] = [];
+    for (const phase of ["roleReveal", "dayAnnounce", "claim", "claimReveal", "discussion", "morning"] as const) {
+      const base = stateAt(phase, 6, 1);
+      const s: RoomState = { ...base, players: base.players.map((p) => ({ ...p, nightPick: 0 })) };
+      for (const p of s.players) {
+        const me = meOf(s, p.seat);
+        if ("pick" in me || "allyPicks" in me) bad.push(`${phase}/seat${p.seat}`);
+      }
+    }
+    expect(`[${bad.join(",")}]`).toBe("[]");
+  });
+});
+
+describe("buildView 수사 기록 (D-09·D-11)", () => {
+  const recordsOf = (s: RoomState, seat: number) => buildView(s, seatId(s, seat), START_AT).me.records;
+
+  it("경찰 view 는 roleReveal 부터 records 가 있고 첫 밤 동안은 [], 아침부터 [{n:1, target, isMafia}](키 정확히 isMafia,n,target)", () => {
+    const early = stateAt("roleReveal", 5, 1);
+    expect(flat(recordsOf(early, seatOfRole(early, "police")))).toBe("[]");
+    let s = stateAt("night", 5, 1);
+    const police = seatOfRole(s, "police");
+    const mafia = seatOfRole(s, "mafia");
+    s = actAt(s, police, mafia);
+    expect(flat(recordsOf(s, police))).toBe("[]");
+    s = tick(s, DISCUSSION_ENDS_AT + NIGHT_MS, seededRandInt(1));
+    const got = recordsOf(s, police) ?? [];
+    expect(flat(got)).toBe(flat([{ n: 1, target: mafia, isMafia: true }]));
+    expect(Object.keys(got[0] ?? {}).sort().join(",")).toBe("isMafia,n,target");
+  });
+
+  it("2일차 밤 뒤에는 두 개(n 1, 2 순서)다", () => {
+    let s = stateAt("night", 5, 1);
+    const police = seatOfRole(s, "police");
+    const citizen = seatOfRole(s, "citizen");
+    const mafia = seatOfRole(s, "mafia");
+    s = actAt(s, police, citizen);
+    s = advanceTo(s, "night", 1); // 아침·2일차 낮을 거쳐 2일차 밤
+    s = actAt(s, police, mafia);
+    s = advanceTo(s, "morning", 1);
+    expect(flat(recordsOf(s, police))).toBe(
+      flat([{ n: 1, target: citizen, isMafia: false }, { n: 2, target: mafia, isMafia: true }]),
+    );
+  });
+
+  it("탈락한 경찰도 records 를 받는다", () => {
+    let s = stateAt("night", 5, 1);
+    const police = seatOfRole(s, "police");
+    const mafia = seatOfRole(s, "mafia");
+    s = actAt(actAt(s, police, mafia), mafia, police); // 동시 해결: 조사는 적용되고 경찰은 탈락
+    s = tick(s, DISCUSSION_ENDS_AT + NIGHT_MS, seededRandInt(1));
+    const v = buildView(s, seatId(s, police), START_AT);
+    expect(`${String(v.players.find((p) => p.seat === police)?.alive)} ${flat(v.me.records)}`).toBe(
+      `false ${flat([{ n: 1, target: mafia, isMafia: true }])}`,
+    );
+  });
+
+  it("경찰이 아닌 view 에는 어떤 단계에서도 records 키가 없다", () => {
+    const bad: string[] = [];
+    for (const phase of PHASES) {
+      const s = richStateAt(phase, 6, 42);
+      for (const p of s.players) {
+        if (p.role !== "police" && "records" in buildView(s, p.id, START_AT).me) bad.push(`${phase}/seat${p.seat}`);
+      }
+    }
+    expect(`[${bad.join(",")}]`).toBe("[]");
+  });
+});
+
+describe("buildView 아침 결과 (NIGHT-06·D-13)", () => {
+  const morningsOf = (s: RoomState): string[] => s.players.map((p) => flat(buildView(s, p.id, START_AT).day?.morning));
+  const toMorning = (s: RoomState): RoomState => tick(s, DISCUSSION_ENDS_AT + NIGHT_MS, seededRandInt(1));
+
+  it("마피아가 시민 X 지목 → 모든 viewer 의 day.morning 이 같은 {eliminated: X, phrase: 1..8}", () => {
+    const s0 = stateAt("night", 5, 1);
+    const x = seatOfRole(s0, "citizen");
+    const s = toMorning(actAt(s0, seatOfRole(s0, "mafia"), x));
+    const got = morningsOf(s);
+    expect(new Set(got).size).toBe(1);
+    const m = buildView(s, s.hostId, START_AT).day?.morning ?? {};
+    expect(`${Object.keys(m).sort().join(",")} ${m.eliminated} ${(m.phrase ?? 0) >= 1 && (m.phrase ?? 0) <= 8}`).toBe(`eliminated,phrase ${x} true`);
+  });
+
+  it("의사가 X 를 지킴 → {}, 아무도 안 고름 → {}", () => {
+    const s0 = stateAt("night", 5, 1);
+    const x = seatOfRole(s0, "citizen");
+    const saved = toMorning(actAt(actAt(s0, seatOfRole(s0, "mafia"), x), seatOfRole(s0, "doctor"), x));
+    expect(`${morningsOf(saved).join(" ")}`).toBe(Array(5).fill("{}").join(" "));
+    const quiet = toMorning(s0);
+    expect(`${morningsOf(quiet).join(" ")}`).toBe(Array(5).fill("{}").join(" "));
+  });
+
+  it("morning 이 아닌 단계(다음 dayAnnounce 포함)에는 day.morning 키가 없다", () => {
+    let s = stateAt("night", 5, 1);
+    const bad: string[] = [];
+    const check = (tag: string) => {
+      for (const p of s.players) if ("morning" in (buildView(s, p.id, START_AT).day ?? {})) bad.push(`${tag}/seat${p.seat}`);
+    };
+    check("night");
+    s = advanceTo(s, "morning", 1);
+    s = advanceTo(s, "dayAnnounce", 1);
+    check("dayAnnounce");
+    s = advanceTo(s, "discussion", 1);
+    check("discussion");
+    expect(`[${bad.join(",")}]`).toBe("[]");
+  });
+});
+
+describe("buildView 밤·아침 주장 줄 (C6)", () => {
+  it("night·morning 의 day.claims 는 그날 discussion 의 claims 와 같고, dayAnnounce·claim 에는 claims 키가 없다", () => {
+    const disc = richStateAt("discussion", 6, 42);
+    const want = flat(buildView(disc, disc.hostId, START_AT).day?.claims);
+    const night = tick(disc, DISCUSSION_ENDS_AT);
+    const morning = tick(night, DISCUSSION_ENDS_AT + NIGHT_MS, seededRandInt(1));
+    expect(`${flat(buildView(night, night.hostId, START_AT).day?.claims) === want} ${flat(buildView(morning, morning.hostId, START_AT).day?.claims) === want} ${want.length > 10}`).toBe(
+      "true true true",
+    );
+    const bad: string[] = [];
+    for (const phase of ["dayAnnounce", "claim"] as const) {
+      const s = richStateAt(phase, 6, 42);
+      for (const p of s.players) if ("claims" in (buildView(s, p.id, START_AT).day ?? {})) bad.push(`${phase}/seat${p.seat}`);
+    }
+    expect(`[${bad.join(",")}]`).toBe("[]");
   });
 });
