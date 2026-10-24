@@ -128,7 +128,7 @@ Plans:
 **Wave 1**
 - [ ] 02-12-PLAN.md — 빠른 메시지는 서버에 보관하지 않고 chat 이벤트로 방송만(state 방송 없음·뷰에 messages 없음·옛 저장 방 정리), 서버 전송 한도 1800ms(클라이언트 잠금 2000ms 유지) (TDD, gap_closure, wave 1)
 - [ ] 02-13-PLAN.md — 닉네임 최대 5자(NICKNAME_MAX_GRAPHEMES, 서버 API 거부)와 "1~5자" 안내 문구 (TDD, gap_closure, wave 1)
-- [ ] 02-14-PLAN.md — 고정 테이블 배치 함수(280×108·rx132/124·ry100·캐릭터 72, 같은 픽셀 좌표)와 자동 배치 검사, DayTable 부품(2줄 이름표·…/✓ 완료/주장/-·↺·왕관·반전·이모티콘) (TDD, gap_closure, wave 1)
+- [ ] 02-14-PLAN.md — 고정 테이블 배치 함수(280×108·rx132/124·ry100·캐릭터 72, 같은 픽셀 좌표, 짧은 장면은 높이에 맞춰 위로)와 자동 배치 검사(폭 352~406·높이 300~460), DayTable 부품(2줄 이름표·…/✓ 완료/주장/-·↺·왕관·반전·이모티콘) (TDD, gap_closure, wave 1)
 
 **Wave 2** *(blocked on 02-12)*
 - [ ] 02-15-PLAN.md — 방장 +30초 연장·넘기기 제거: 화면 방장 줄·서버 extend/skip(BAD_MESSAGE)·extendUsed·ALREADY_EXTENDED·진입 훅 정리 (TDD, gap_closure, wave 2)
