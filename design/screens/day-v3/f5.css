@@ -1,0 +1,14 @@
+/* 9차: Y 테이블 고정 + 채팅 세 줄. 채팅은 지금 앱 메시지 로그(.mf-msglog) 모양 그대로, 오른쪽에 확장 버튼 */
+.lg { display: flex; align-items: center; gap: 4px; padding: 8px 4px 8px 16px; background: var(--night-700); border-radius: 14px; }
+.lg ol { flex: 1; min-width: 0; list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.lg li { display: flex; gap: 8px; min-width: 0; font-size: 14px; line-height: 1.4; color: var(--gray-300); }
+.lg li.latest { color: var(--gray-100); }
+.lg .who { flex: none; display: inline-flex; align-items: center; gap: 4px; font-weight: 700; }
+.lg .who i { width: 8px; height: 8px; border-radius: 999px; }
+.lg .tx { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lg .pv__more { align-self: stretch; height: auto; }
+/* 직업 공개 하단: 제목 + 안내 + 한 줄 칩 (낮 토론 하단과 같은 높이) */
+.ct { margin: 0; font-size: 24px; line-height: 1.2; font-weight: 700; color: var(--gray-50); }
+.bt .gd { min-height: 20px; }
+/* 두 단계 하단 높이를 같게(테이블이 움직이지 않게) */
+.bt { min-height: 157px; }

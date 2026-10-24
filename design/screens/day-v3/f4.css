@@ -1,0 +1,14 @@
+/* 7차: 직업 공개·공개 연출 + 인원별·작은 폰. f3.css 위에 덧붙인다 */
+/* 직업 공개 중 이름표 아랫줄: 고르는 중 "…", 고름 "완료"(반전 + 체크) */
+.tg__c--wait { color: var(--gray-300); font-weight: 400; letter-spacing: 1px; }
+.tg__c--done { background: var(--gray-100); color: var(--night-900); border-color: var(--gray-100); gap: 2px; padding-left: 6px; }
+/* 공개 연출: 아랫줄이 주장으로 바뀌며 팝 + 흔들림(시안에선 밝은 테두리로 표시) */
+.tg__c--pop { border-color: var(--gray-50); box-shadow: 0 0 0 2px rgba(241, 242, 245, 0.35), 0 0 12px rgba(241, 242, 245, 0.45); }
+/* 직업 공개 하단: 안내 1~2줄 + 한 줄 칩. 높이는 낮 토론 하단과 같다(테이블이 움직이지 않게) */
+.gd { margin: 0; min-height: 40px; display: flex; align-items: center; font-size: 14px; line-height: 20px; color: var(--gray-300); word-break: keep-all; }
+.seg { display: flex; gap: 6px; }
+.seg__b { position: relative; flex: 1; min-width: 0; height: 44px; padding: 0 4px; border-radius: 999px; border: 1px solid var(--night-600); background: var(--night-700); color: var(--gray-100); font: 700 14px/1.4 var(--font-ui); white-space: nowrap; }
+.seg__b[aria-pressed="true"] { background: var(--gray-100); color: var(--night-900); border-color: var(--gray-100); }
+.seg__b:disabled { opacity: 0.6; }
+.seg__b:disabled[aria-pressed="true"] { opacity: 1; }
+.seg__ok { position: absolute; right: -4px; top: -6px; width: 18px; height: 18px; border-radius: 50%; background: var(--night-900); border: 1px solid var(--gray-100); color: var(--gray-50); display: grid; place-items: center; }
