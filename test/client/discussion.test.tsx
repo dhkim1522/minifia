@@ -17,7 +17,6 @@ interface ViewOpts {
   phase?: PhaseId;
   n?: number;
   messages?: ChatLine[];
-  extendUsed?: boolean;
   isHost?: boolean;
   endsIn?: number;
   durationMs?: number;
@@ -49,7 +48,6 @@ function makeView(o: ViewOpts = {}): RoomView {
       roles: ["mafia", "police", "citizen"],
       claims: [0, 1, 2, 3].map((seat) => ({ seat, claim: "none" as const, changed: false })),
       messages: o.messages ?? [],
-      extendUsed: o.extendUsed ?? false,
     },
   };
 }
@@ -341,12 +339,11 @@ describe("낮 토론 화면 — 이모티콘·합산 쿨다운·오류 (COMM-02�
     expect(screen.queryByRole("status")).toBeNull();
   });
 
-  it("WRONG_PHASE·NOT_HOST·ALREADY_EXTENDED 는 아무 표시도 하지 않고 잠그지도 않는다", () => {
+  it("WRONG_PHASE·NOT_HOST 는 아무 표시도 하지 않고 잠그지도 않는다", () => {
     const ev = emitter();
     scene(makeView(), { onEvent: ev.onEvent });
     ev.emit({ t: "error", code: "WRONG_PHASE" });
     ev.emit({ t: "error", code: "NOT_HOST" });
-    ev.emit({ t: "error", code: "ALREADY_EXTENDED" });
     expect(screen.queryByRole("status")).toBeNull();
     expect(quickBtn().disabled).toBe(false);
   });
@@ -378,90 +375,31 @@ describe("낮 토론 화면 — 이모티콘·합산 쿨다운·오류 (COMM-02�
   });
 });
 
-describe("낮 토론 화면 — 방장 줄 (DAY-01, D-18·D-19)", () => {
-  const extendBtn = () => screen.getByRole("button", { name: /\+30초 연장|이미 연장했어요/ }) as HTMLButtonElement;
-  const skipBtn = () => screen.getByRole("button", { name: "넘기기" }) as HTMLButtonElement;
+describe("낮 토론 화면 — 방장 전용 줄 없음 (결정 0017-5, DAY-01)", () => {
   const advance = (ms: number) =>
     act(() => {
       vi.advanceTimersByTime(ms);
     });
-  const EXTENDED = { extendUsed: true, endsIn: 115_000, durationMs: 120_000 } as const;
 
-  it("방장(me.isHost)에게는 [+30초 연장]·[넘기기] 가 plus·skip 아이콘과 함께 있고, [+30초 연장] 이 {t:extend} 를 한 번 보낸다", () => {
+  it("방장(me.isHost true)에게도 연장·넘기기 버튼이 없고(이름 '+30초 연장'·'넘기기'·'이미 연장했어요' 버튼 없음), 화면은 extend·skip 을 보내지 않는다 (결정 0017-5)", () => {
     const r = scene(makeView({ isHost: true }));
-    expect(extendBtn().textContent).toBe("+30초 연장");
-    expect(extendBtn().querySelector("svg")).not.toBeNull();
-    expect(skipBtn().querySelector("svg")).not.toBeNull();
-    expect(extendBtn().disabled).toBe(false);
-    fireEvent.click(extendBtn());
-    expect(r.conn.send).toHaveBeenCalledTimes(1);
-    expect(r.conn.send).toHaveBeenCalledWith({ t: "extend" });
+    const labels = [...r.container.querySelectorAll("button")].map((b) => b.textContent ?? "").join("|");
+    expect(/\+30초 연장|넘기기|이미 연장했어요/.test(labels)).toBe(false);
+    expect(r.container.querySelectorAll(".mf-discuss__host").length).toBe(0);
+    expect(`${quickBtn().textContent}:${emojiBtn().getAttribute("aria-label")}`).toBe("빠른 메시지:이모티콘");
+    fireEvent.click(quickBtn());
+    fireEvent.click(screen.getByRole("button", { name: "닫기" }));
+    const sentTypes = (r.conn.send as ReturnType<typeof vi.fn>).mock.calls.map((c) => (c[0] as { t: string }).t);
+    expect(sentTypes.filter((t) => t === "extend" || t === "skip").length).toBe(0);
   });
 
-  it("방장 여부는 서버 view.me.isHost 만 따른다: players 의 isHost 가 나여도 me.isHost 가 거짓이면 줄이 없고, 그 반대면 있다 (T-02-29)", () => {
-    scene(makeView({ isHost: false, playerHostSeat: 0 }));
-    expect(screen.queryByRole("button", { name: /\+30초 연장/ })).toBeNull();
-    expect(screen.queryByRole("button", { name: "넘기기" })).toBeNull();
-    cleanup();
-    scene(makeView({ isHost: true, playerHostSeat: 2 }));
-    expect(extendBtn()).toBeTruthy();
-    expect(skipBtn()).toBeTruthy();
-  });
-
-  it("같은 패널에서 extendUsed 가 true 로 바뀌면 버튼이 꺼지고 '이미 연장했어요'가 되며, 토스트가 한 번 뜨고 타이머가 늘어난다", () => {
+  it("view 가 바뀌어도 '방장이 30초를 늘렸어요' 토스트가 없다", () => {
     const r = scene(makeView({ isHost: true }));
-    expect(screen.getByRole("timer").textContent).toBe("1:30");
-    r.rerender(makeView({ isHost: true, ...EXTENDED }));
-    expect(extendBtn().disabled).toBe(true);
-    expect(extendBtn().textContent).toBe("이미 연장했어요");
-    expect(screen.getByRole("status").textContent).toBe("방장이 30초를 늘렸어요");
-    expect(screen.getByRole("timer").textContent).toBe("1:55");
-    // 같은 값의 다음 view 가 와도 토스트를 다시 띄우지 않는다
-    advance(2_000);
-    expect(screen.queryByRole("status")).toBeNull();
-    r.rerender(makeView({ isHost: true, ...EXTENDED, serverNow: NOW + 2_000 }));
-    expect(screen.queryByRole("status")).toBeNull();
-  });
-
-  it("비방장 화면에도 연장 토스트가 뜨고 타이머가 늘어난다(방장 줄은 없다)", () => {
-    const r = scene(makeView());
-    r.rerender(makeView(EXTENDED));
-    expect(screen.getByRole("status").textContent).toBe("방장이 30초를 늘렸어요");
-    expect(screen.getByRole("timer").textContent).toBe("1:55");
-    expect(screen.queryByRole("button", { name: /연장/ })).toBeNull();
-  });
-
-  it("이미 연장된 상태로 처음 마운트(재접속)하면 '이미 연장했어요' 이고 토스트는 없다", () => {
-    scene(makeView({ isHost: true, ...EXTENDED }));
-    expect(extendBtn().textContent).toBe("이미 연장했어요");
-    expect(extendBtn().disabled).toBe(true);
-    expect(screen.queryByRole("status")).toBeNull();
-  });
-
-  it("[넘기기] 는 확인 시트 없이 {t:skip} 을 한 번 보내고 두 방장 버튼이 꺼진다", () => {
-    const r = scene(makeView({ isHost: true }));
-    fireEvent.click(skipBtn());
-    expect(document.querySelector("dialog")).toBeNull();
-    expect(r.conn.send).toHaveBeenCalledTimes(1);
-    expect(r.conn.send).toHaveBeenCalledWith({ t: "skip" });
-    expect(skipBtn().disabled).toBe(true);
-    expect(extendBtn().disabled).toBe(true);
-    fireEvent.click(skipBtn());
-    expect(r.conn.send).toHaveBeenCalledTimes(1);
-  });
-
-  it("다음 낮 토론(새 day.n, extendUsed false)이면 [+30초 연장] 이 다시 켜진다", () => {
-    const r = scene(makeView({ isHost: true, ...EXTENDED }));
-    expect(extendBtn().disabled).toBe(true);
-    r.rerender(makeView({ isHost: true, n: 2 }));
-    expect(extendBtn().disabled).toBe(false);
-    expect(extendBtn().textContent).toBe("+30초 연장");
-    expect(screen.queryByRole("status")).toBeNull();
-  });
-
-  it("끊긴 동안(canSend false)은 방장 버튼 둘도 꺼진다", () => {
-    scene(makeView({ isHost: true }), { canSend: false });
-    expect(extendBtn().disabled).toBe(true);
-    expect(skipBtn().disabled).toBe(true);
+    // 옛 서버가 보내던 연장 표시를 키로만 넣는다(타입 선언에 기대지 않는다)
+    const old = makeView({ isHost: true, endsIn: 115_000, durationMs: 120_000 });
+    r.rerender({ ...old, day: { ...old.day!, extendUsed: true } } as unknown as RoomView);
+    advance(100);
+    expect(screen.queryAllByRole("status").length).toBe(0);
+    expect(r.container.textContent).not.toContain("30초를 늘렸어요");
   });
 });

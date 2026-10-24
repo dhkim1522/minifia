@@ -271,56 +271,55 @@ describe("이모티콘 (COMM-02, D-14)", () => {
   });
 });
 
-describe("방장 연장·넘기기 (D-18, D-19, DAY-01)", () => {
-  it("손님의 extend 는 NOT_HOST 와 state 를 받고 저장된 마감은 그대로다", async () => {
+describe("방장 연장·넘기기는 없다 (결정 0017-5, DAY-01)", () => {
+  /** 단계·마감·일차를 한 줄로 */
+  const stamp = async (code: string): Promise<string> => {
+    const room = await storedRoom(code);
+    return `${room.phase}:${room.phaseEndsAt}:${room.day}`;
+  };
+
+  it("discussion 에서 방장·손님이 extend 나 skip 을 보내면 보낸 소켓만 error BAD_MESSAGE 를 받고(state 없음), 저장된 phase·phaseEndsAt·day 가 그대로다 (결정 0017-5)", async () => {
     const r = await startedAt("discussion");
-    const g0 = r.guests[0]!;
+    const sockets = allSockets(r);
+    const before = await stamp(r.code);
+    const sent: Array<[TestSocket, string]> = [
+      [r.host, "extend"],
+      [r.host, "skip"],
+      [r.guests[0]!.sock, "extend"],
+      [r.guests[0]!.sock, "skip"],
+    ];
+    const countsBefore = sockets.map((s) => collect(s).length);
+
+    for (const [sock, t] of sent) {
+      send(sock, { t });
+      expect(await errorCode(sock)).toBe(codeOf("BAD_MESSAGE"));
+    }
+    for (const s of sockets) await settle(s);
+
+    expect(await stamp(r.code)).toBe(before);
+    // 보낸 소켓(방장·첫 손님)은 error 두 개만 받고(settle 의 pong 은 뺀다), 나머지 소켓은 아무 프레임도 받지 않았다
+    const typesAfter = (s: TestSocket, i: number): string =>
+      collect(s)
+        .slice(countsBefore[i]!)
+        .map((raw) => (JSON.parse(raw) as { t: string }).t)
+        .filter((t) => t !== "pong")
+        .join(",");
+    const seen = sockets.map((s, i) => typesAfter(s, i));
+    const want = sockets.map((s) => (s === r.host || s === r.guests[0]!.sock ? "error,error" : ""));
+    expect(seen.join("|")).toBe(want.join("|"));
+  });
+
+  it("extend·skip 뒤에도 알람은 원래 마감 그대로다", async () => {
+    const r = await startedAt("discussion");
     const before = (await storedRoom(r.code)).phaseEndsAt;
 
-    send(g0.sock, { t: "extend" });
-    expect(await errorCode(g0.sock)).toBe(codeOf("NOT_HOST"));
-    const state = await nextState(g0.sock);
-    expect(state.view.phase).toBe("discussion");
+    send(r.host, { t: "extend" });
+    expect(await errorCode(r.host)).toBe(codeOf("BAD_MESSAGE"));
+    send(r.host, { t: "skip" });
+    expect(await errorCode(r.host)).toBe(codeOf("BAD_MESSAGE"));
+    await settle(r.host);
     expect((await storedRoom(r.code)).phaseEndsAt).toBe(before);
     expect(await alarmOf(r.code)).toBe(before);
-  });
-
-  it("방장 extend 는 모든 소켓의 마감을 +30000, 길이 120000, extendUsed true 로 바꾸고 알람을 새 마감으로 다시 걸며, 두 번째는 ALREADY_EXTENDED 다", async () => {
-    const r = await startedAt("discussion");
-    const sockets = allSockets(r);
-    const before = (await storedRoom(r.code)).phaseEndsAt!;
-
-    send(r.host, { t: "extend" });
-    for (const s of sockets) {
-      const m = await nextFrame(s, (f) => f.t === "state" && f.view.day?.extendUsed === true);
-      if (m.t !== "state") throw new Error("state 가 아니다");
-      expect(`${m.view.phaseEndsAt}:${m.view.phaseDurationMs}`).toBe(`${before + 30_000}:120000`);
-    }
-    expect((await storedRoom(r.code)).phaseEndsAt).toBe(before + 30_000);
-    expect(await alarmOf(r.code)).toBe(before + 30_000);
-
-    send(r.host, { t: "extend" });
-    expect(await errorCode(r.host)).toBe(codeOf("ALREADY_EXTENDED"));
-    expect((await storedRoom(r.code)).phaseEndsAt).toBe(before + 30_000);
-  });
-
-  it("손님의 skip 은 NOT_HOST 이고 단계가 바뀌지 않으며, 방장 skip 은 모두에게 즉시 dayAnnounce(day.n 2)와 새 알람을 준다", async () => {
-    const r = await startedAt("discussion");
-    const sockets = allSockets(r);
-
-    send(r.guests[0]!.sock, { t: "skip" });
-    expect(await errorCode(r.guests[0]!.sock)).toBe(codeOf("NOT_HOST"));
-    expect((await storedRoom(r.code)).phase).toBe("discussion");
-
-    send(r.host, { t: "skip" });
-    for (const s of sockets) {
-      const m = await nextFrame(s, (f) => f.t === "state" && f.view.phase === "dayAnnounce");
-      if (m.t !== "state") throw new Error("state 가 아니다");
-      expect(m.view.day?.n).toBe(2);
-    }
-    const room = await storedRoom(r.code);
-    expect(room.phase).toBe("dayAnnounce");
-    expect(await alarmOf(r.code)).toBe(room.phaseEndsAt);
   });
 
   it("방장이 끊겨 있어도 낮 토론은 서버 타이머대로 dayAnnounce 로 넘어간다", async () => {
