@@ -6,7 +6,8 @@ import "../helpers/singleLineErrors";
 import { QuickMessageSheet } from "../../src/components/QuickMessageSheet";
 import type { SayPayload } from "../../src/components/QuickMessageSheet";
 import sourceText from "../../src/components/QuickMessageSheet.tsx?raw";
-import type { PublicPlayer } from "../../shared/protocol";
+import type { PublicPlayer, TemplateId } from "../../shared/protocol";
+import { NIGHT_TEMPLATE_ORDER } from "../../src/game/messageText";
 import type { RoleId } from "../../shared/game/roles";
 
 // vitest 는 CSS 를 처리하지 않아 css?raw 가 빈 문자열이 된다 — 파일을 직접 읽는다.
@@ -28,6 +29,7 @@ interface Opts {
   roles?: RoleId[];
   canSend?: boolean;
   mySeat?: number;
+  templates?: readonly TemplateId[];
 }
 const setup = (o: Opts = {}) => {
   const onSend = vi.fn<(p: SayPayload) => void>();
@@ -38,6 +40,7 @@ const setup = (o: Opts = {}) => {
       mySeat={o.mySeat ?? 0}
       roles={o.roles ?? ROLES5}
       canSend={o.canSend ?? true}
+      {...(o.templates ? { templates: o.templates } : {})}
       onSend={onSend}
       onClose={onClose}
     />,
@@ -252,5 +255,46 @@ describe("QuickMessageSheet — 문구 → 대상 → (직업) → 보내기 (S-
   it("talk.css: 흐린 미리보기 글자 불투명도 .6, 미리보기 알약은 시트 폭까지 늘어난다", () => {
     expect(talkCss).toMatch(/\.mf-qm__preview--dim[^}]*opacity:\s*0?\.6/);
     expect(talkCss).toMatch(/\.mf-qm__preview[^}]*max-width:\s*none/);
+  });
+});
+
+describe("QuickMessageSheet — 밤 문구 (D-17)", () => {
+  const names = (n: string) => chipNames(n).join("|");
+  const pressedOf = () => group("문구").getAllByRole("button").map((b) => b.getAttribute("aria-pressed")).join(",");
+
+  it("templates NIGHT_TEMPLATE_ORDER 를 넘기면 칩이 '[○○] 지목해요'·'동의해요'·'다른 사람을 지목해요' 순서로 셋이고 첫 칩이 선택돼 있다. 낮 문구 칩은 없다", () => {
+    setup({ templates: NIGHT_TEMPLATE_ORDER });
+    expect(names("문구")).toBe("[○○] 지목해요|동의해요|다른 사람을 지목해요");
+    expect(pressedOf()).toBe("true,false,false");
+    expect(screen.queryByRole("button", { name: "[○○] 의심돼요" })).toBeNull();
+  });
+
+  it("'[○○] 지목해요' 대상 칩은 나를 뺀 생존자(동료 포함)이고 직업 줄이 없다. 대상을 고르고 보내면 {template:'nightTarget', target} 만 담긴다", () => {
+    vi.useFakeTimers();
+    const { onSend } = setup({ templates: NIGHT_TEMPLATE_ORDER });
+    expect(names("대상")).toBe("하윤|서준|도현|지아");
+    expect(screen.queryByRole("group", { name: "직업" }) === null).toBe(true);
+    expect(sendBtn().disabled).toBe(true);
+    tap(group("대상").getByRole("button", { name: "서준" }));
+    tap(sendBtn());
+    expect(onSend).toHaveBeenCalledTimes(1);
+    const payload = onSend.mock.calls[0]![0];
+    expect(`${payload.template}:${payload.target}:${Object.keys(payload).sort().join(",")}`).toBe("nightTarget:2:target,template");
+  });
+
+  it("'동의해요' 를 고르면 대상 줄이 사라지고 {template:'nightAgree'} 만 보낸다", () => {
+    vi.useFakeTimers();
+    const { onSend } = setup({ templates: NIGHT_TEMPLATE_ORDER });
+    tap(group("문구").getByRole("button", { name: "동의해요" }));
+    expect(screen.queryByRole("group", { name: "대상" }) === null).toBe(true);
+    expect(sendBtn().disabled).toBe(false);
+    tap(sendBtn());
+    const payload = onSend.mock.calls[0]![0];
+    expect(`${payload.template}:${Object.keys(payload).join(",")}`).toBe("nightAgree:template");
+  });
+
+  it("templates 를 주지 않으면 지금처럼 낮 다섯 칩이다", () => {
+    setup();
+    expect(names("문구")).toBe("[○○] 의심돼요|[○○] 믿어요|저 아니에요|[○○]는 [직업]이었어요|[○○] 투표해요");
   });
 });
