@@ -464,6 +464,39 @@ describe("낮 토론 화면 — 이모티콘·합산 쿨다운·오류 (COMM-02�
   });
 });
 
+describe("낮 토론 화면 — 말하기 한 줄 (결정 0017-6, SPEC 하단)", () => {
+  it("말하기 줄에는 버튼이 둘뿐이다: [빠른 메시지](primary·compact, 아이콘 없음)와 [이모티콘](aria-label, compact, 아이콘 하나, 글자 없음)", () => {
+    const r = scene(makeView());
+    const talk = r.container.querySelector(".mf-discuss__talk")!;
+    const buttons = [...talk.querySelectorAll("button")];
+    expect(buttons.length).toBe(2);
+    const [quick, emoji] = buttons as [HTMLButtonElement, HTMLButtonElement];
+    expect(quick.textContent).toBe("빠른 메시지");
+    expect(quick.classList.contains("mf-btn--primary") && quick.classList.contains("mf-btn--compact")).toBe(true);
+    expect(quick.classList.contains("mf-discuss__quick")).toBe(true);
+    expect(quick.querySelectorAll("svg").length).toBe(0);
+    expect(emoji.getAttribute("aria-label")).toBe("이모티콘");
+    expect(emoji.classList.contains("mf-btn--compact")).toBe(true);
+    expect(emoji.classList.contains("mf-discuss__emoji")).toBe(true);
+    expect(emoji.querySelectorAll("svg").length).toBe(1);
+    expect(emoji.textContent).toBe("");
+    // 말하기 줄 밖에 다른 버튼이 이 조작 부품에 없다(방장 줄·채팅 내역 별도 버튼 없음)
+    expect(r.container.querySelectorAll(".mf-discuss button").length).toBe(2);
+  });
+
+  it("CSS: .mf-discuss__emoji 는 폭 var(--tap-min), .mf-discuss__quick 은 flex 1, .mf-discuss__host 규칙이 없다", () => {
+    const css = readFileSync("src/styles/day.css", "utf8");
+    const rule = (sel: string): string => {
+      const esc = sel.replace(/[.\[\]"=:()]/g, "\\$&");
+      return new RegExp(`(?:^|\\})\\s*${esc}\\s*\\{([^}]*)\\}`, "m").exec(css)?.[1] ?? "";
+    };
+    expect(/(^|[^-])width:\s*var\(--tap-min\)/.test(rule(".mf-discuss__emoji"))).toBe(true);
+    expect(/flex:\s*1[;\s]/.test(rule(".mf-discuss__quick"))).toBe(true);
+    expect(/gap:\s*var\(--space-sm\)/.test(rule(".mf-discuss__talk"))).toBe(true);
+    expect(css.includes("mf-discuss__host")).toBe(false);
+  });
+});
+
 describe("낮 토론 화면 — 방장 전용 줄 없음 (결정 0017-5, DAY-01)", () => {
   const advance = (ms: number) =>
     act(() => {
