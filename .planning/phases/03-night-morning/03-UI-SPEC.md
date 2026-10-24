@@ -196,7 +196,7 @@ Enumerated by `ls src/components/*.tsx | wc -l` — 24 components — react@19.3
 | `.dot` 테두리 `var(--gray-800)` | `var(--gray-800)` (버튼 면과 같은 색으로 점을 도려낸 모양) |
 | `border-radius` 14 / 16 / 20 | `var(--radius-md)` / (16: 토큰 없음, 시안 값 지역 상수) / `var(--radius-lg)` |
 | 탈락 윗줄 글자 / 탈락 아랫줄 글자 | `var(--gray-500)` / `var(--gray-500)` (시안 승인 예외 C3) |
-| 유령 그림 `.sf--off img { filter: none; opacity: 1; object-fit: contain }` | 그림 파일만 교체. `filter`·`opacity` 지정 없음(끊김의 `mf-figure--disconnected` 와 겹치면 유령 쪽이 이긴다) |
+| 유령 그림 `.sf--off img { filter: none; opacity: 1; object-fit: contain }` | 그림 파일만 교체. 탈락 때문에 `filter`·`opacity` 를 지정하지 않는다. 탈락한 사람이 끊기면 유령 그림에 끊김의 `mf-figure--disconnected`(흑백 + 60%) 흐림을 그대로 더한다(흐림은 끊김 전용, 아래 장면과 그림·UI Considerations 와 같은 규칙) |
 | 실제 직업 줄 `.tg__c--real` `border-style: dashed; border-color: var(--gray-300)` | `.mf-dt__claim--real { border-style: dashed; border-color: var(--gray-300); }` |
 | 마피아 직업 줄 `.tg__c--real.tg__c--mafia` `#e0344b` | `.mf-dt__claim--real.mf-dt__claim--mafia { color: var(--crimson-400); border-color: var(--crimson-400); }` |
 | 경찰 배지 `.sf__pick--police` | 면 `var(--night-900)`, 아이콘 `var(--gray-50)`, `2px solid var(--gray-50)`, `margin-left`: 기본 −13 그대로 |
@@ -431,7 +431,7 @@ Enumerated by `ls src/components/*.tsx | wc -l` — 24 components — react@19.3
 - 대상 캐릭터는 `<button aria-pressed>`(밤·행동 역할·누를 수 있는 생존자만). 마피아 화면의 자신·동료, 탈락자, 시민, 아침, 낮에는 눌리지 않는 노드(포커스 순서에도 없음).
 - 하단 `.pk` 는 `role="status"` 로 선택 변화를 읽는다. 마피아 채팅 로그는 `role="log"`.
 - [수사 기록] 버튼은 `aria-label="수사 기록"`(새 기록이 있으면 `수사 기록, 새 기록`), 점은 `aria-hidden`. 알림은 `role="status"`. 시트는 `Sheet`(`<dialog>`)의 기본 접근성(포커스 가두기·Esc)을 따르고 목록은 줄마다 `{N}일차 밤, {이름}, {결과}`를 읽는다.
-- 탈락 이름표는 자리 그룹 `aria-label` 에 `, 탈락` 을 더한다(예 "서연, 탈락"). 유령 그림은 장식이라 `alt=""`. 선택 대상은 `, 선택됨`을 더하지 않고 `aria-pressed` 가 읽는다.
+- 탈락 이름표는 자리 그룹 `aria-label` 에 `, 탈락` 을 더한다(예 "서연, 탈락"). 탈락한 사람이 끊기면 `, 연결 끊김` 도 남긴다(예 "서연, 탈락, 연결 끊김"). 유령 그림은 장식이라 `alt=""`. 선택 대상은 `, 선택됨`을 더하지 않고 `aria-pressed` 가 읽는다.
 - **관전 화면**: 자리 `aria-label` 은 `{닉네임}{ (나)}, {실제 직업}`(예 "가나다라마, 마피아", 나는 "동현 (나), 탈락"). 표적 배지는 `role="img"` + `aria-label="{행위자 직업} 지목|조사|보호 대상"`(예 "마피아 지목 대상"). `.ro` 는 일반 문단으로 읽힌다. 마피아 채팅 로그는 `role="log" aria-label="마피아 채팅(관전)"`. 직업이 색만으로 구분되지 않도록 모두 글자로 쓴다(진홍은 마피아 강조일 뿐).
 - 대비: 승인 시안이 정한 `--gray-500` 글자(마피아 안내 줄, 탈락 이름표)는 `#6b7180` 대 `#1e2847`·`#0e1326` 으로 4.5:1 에 못 미친다(시안 승인 예외, 정보는 `aria-label`/`aria-live` 로도 전달). 나머지 글자는 `--gray-300` 이상.
 - 역할 비노출: 밤 화면이 역할마다 다른 것은 결정 0018 이 허용한다. **서버는 살아 있는 사람에게 남의 역할을 보내지 않고** 마피아 동료 seat 만 마피아에게 보낸다. **탈락자에게만** 모든 사람의 실제 직업·밤 행동·마피아 채팅을 보낸다(결정 0021). **살아 있는 사람 화면의 컴포넌트에 남의 역할 필드를 넘기지 않는다**(관전 입력 `real`·`spectatorPicks` 는 탈락자 화면에서만 채워진다). 조사 결과·동료 선택·밤 채팅은 각각 본인·마피아 소켓에서만 온 값으로 그린다.
