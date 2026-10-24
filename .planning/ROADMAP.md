@@ -99,7 +99,7 @@ Plans:
   5. 토론 단계가 아닐 때(직업 공개 중 등) 보낸 메시지, 자유 텍스트, 2초 안에 다시 보낸 메시지는 서버가 거부해 다른 폰에 나타나지 않는다. 탈락자·밤·아침 중 메시지 거부는 탈락과 밤이 생기는 3페이즈에서 확인한다.
   6. 폰 세로 화면에서 메시지를 고르고 보내는 데 세 번 이하로 누른다(템플릿 → 대상·직업 → 보내기). 단 대상과 직업이 모두 필요한 '[○○]는 [직업]이었어요' 만 네 번(템플릿 → 대상 → 직업 → 보내기, 사용자 확정).
 
-**Plans:** 13/18 plans executed (02-12~02-18 은 UAT 갭 클로저 G-02-1·G-02-2, 결정 0017 승인 시안 `design/screens/day-v3/SPEC.md` 기준)
+**Plans:** 14/18 plans executed (02-12~02-18 은 UAT 갭 클로저 G-02-1·G-02-2, 결정 0017 승인 시안 `design/screens/day-v3/SPEC.md` 기준)
 
 Plans:
 **Wave 1**
@@ -128,7 +128,7 @@ Plans:
 **Wave 1**
 - [x] 02-12-PLAN.md — 빠른 메시지는 서버에 보관하지 않고 chat 이벤트로 방송만(state 방송 없음·뷰에 messages 없음·옛 저장 방 정리), 서버 전송 한도 1800ms(클라이언트 잠금 2000ms 유지) (TDD, gap_closure, wave 1)
 - [x] 02-13-PLAN.md — 닉네임 최대 5자(NICKNAME_MAX_GRAPHEMES, 서버 API 거부)와 "1~5자" 안내 문구 (TDD, gap_closure, wave 1)
-- [ ] 02-14-PLAN.md — 고정 테이블 배치 함수(280×108·rx132/124·ry100·캐릭터 72, 같은 픽셀 좌표, 짧은 장면은 높이에 맞춰 위로)와 자동 배치 검사(폭 352~406·높이 300~460), DayTable 부품(2줄 이름표·…/✓ 완료/주장/-·↺·왕관·반전·이모티콘) (TDD, gap_closure, wave 1)
+- [x] 02-14-PLAN.md — 고정 테이블 배치 함수(280×108·rx132/124·ry100·캐릭터 72, 같은 픽셀 좌표, 짧은 장면은 높이에 맞춰 위로)와 자동 배치 검사(폭 352~406·높이 300~460), DayTable 부품(2줄 이름표·…/✓ 완료/주장/-·↺·왕관·반전·이모티콘) (TDD, gap_closure, wave 1)
 
 **Wave 2** *(blocked on 02-12)*
 - [ ] 02-15-PLAN.md — 방장 +30초 연장·넘기기 제거: 화면 방장 줄·서버 extend/skip(BAD_MESSAGE)·extendUsed·ALREADY_EXTENDED·진입 훅 정리 (TDD, gap_closure, wave 2)
@@ -215,7 +215,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 (decimal phases
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 1. 걷는 뼈대 | v1.0 | 19/19 | Complete    | 2026-10-24 |
-| 2. 낮 토론 | v1.0 | 13/18 | In Progress | - |
+| 2. 낮 토론 | v1.0 | 14/18 | In Progress | - |
 | 3. 밤과 아침 | v1.0 | 0/TBD | Not started | - |
 | 4. 처형과 승패 | v1.0 | 0/TBD | Not started | - |
 | 5. 분위기와 캐릭터 | v1.0 | 0/TBD | Not started | - |

@@ -4,18 +4,18 @@ milestone: v1.0
 milestone_name: MVP
 current_phase: 02
 current_phase_name: 낮 토론
-current_plan: 14
+current_plan: 15
 status: executing
-stopped_at: Completed 02-13-PLAN.md
-last_updated: "2026-10-24T11:22:09.736Z"
+stopped_at: Completed 02-14-PLAN.md
+last_updated: "2026-10-24T11:30:40.663Z"
 last_activity: 2026-10-24
 last_activity_desc: Phase 02 execution started
-state_head: 5f2608a20205c63b802d9b106ec1c23b904105e8
+state_head: 80c6e75bc5ed69336cdf77806544a2791e848bca
 progress:
   total_phases: 6
   completed_phases: 1
   total_plans: 37
-  completed_plans: 32
+  completed_plans: 33
 ---
 
 # Project State
@@ -30,9 +30,9 @@ See: .planning/PROJECT.md (updated 2026-10-21)
 ## Current Position
 
 Phase: 02 (낮 토론) — EXECUTING
-Current Plan: 14
+Current Plan: 15
 Total Plans in Phase: 18
-Plan: 14 of 18
+Plan: 15 of 18
 Status: Ready to execute
 Last activity: 2026-10-24 — Phase 02 execution started
 
@@ -78,6 +78,7 @@ Progress: [██░░░░░░░░] 17%
 | Phase 02 P11 | 15 min | 2 tasks | 4 files |
 | Phase 02 P12 | 10min | 3 tasks | 11 files |
 | Phase 02 P13 | 10min | 2 tasks | 9 files |
+| Phase 02 P14 | 7 min | 3 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -124,6 +125,7 @@ Recent decisions affecting current work:
 - [Phase 02]: 02-11: 스모크 순서 검사는 허용 전이 표(PHASE_NEXT)로, 마감 전 누출 검사는 값 문자열 경로(view.me.role·view.me.claim·view.day.roles[])로 한다. 구조 결정 7가지는 결정 0016 에 기록
 - [Phase 02]: 02-12: 빠른 메시지는 상태에 보관하지 않고 chat 이벤트로만 방송, 서버 한도 SERVER_MIN_SEND_GAP_MS 1800 (결정 0017-7, G-02-2)
 - [Phase 02]: 닉네임 최대 길이 8 → 5 그래핌 (결정 0017-4), 규칙은 shared/nickname.ts 한 곳
+- [Phase 02]: 02-14: 낮 화면 전용 DayTable 을 새로 만들고 대기실·배정 공용 Table 은 그대로 둔다. 장면이 짧으면 테이블 전체를 올리고(cy 177~210) 326 미만은 겹침을 받아들인다(결정 0017-1)
 
 ### Pending Todos
 
@@ -149,6 +151,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-24T11:22:09.548Z
-Stopped at: Completed 02-13-PLAN.md
+Last session: 2026-10-24T11:30:40.451Z
+Stopped at: Completed 02-14-PLAN.md
 Resume file: None
