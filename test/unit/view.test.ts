@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import { say } from "../../shared/game/chat";
 import type { SayInput } from "../../shared/game/chat";
 import { claimOptions, currentClaim, selectClaim } from "../../shared/game/claim";
-import { extendDiscussion } from "../../shared/game/discussion";
 import { ROOM_TTL_MS, attachConnection, createRoomState, joinRoom, startGame } from "../../shared/game/room";
 import type { Player, RoomState } from "../../shared/game/room";
 import { rolesInPlay } from "../../shared/game/roles";
@@ -306,8 +305,9 @@ describe("buildView 전수 누출 검사 (T-01-23)", () => {
 describe("buildView 낮 뷰 — 직업 공개 중(claim) 은 완료한 자리와 내 선택만 (D-01, D-03, D-07, D-09)", () => {
   const ROLES_5 = ["mafia", "police", "doctor", "citizen"];
 
-  it("5명 claim 단계: 모든 viewer 의 day 는 {n 1, roles, claimDone [1,2]} 뿐이고 claims·messages·extendUsed 키가 없다", () => {
+  it("5명 claim 단계: 모든 viewer 의 day 는 {n 1, roles, claimDone [1,2]} 뿐이고 claims·messages·extendUsed 키가 없다(키 목록 claimDone,n,roles)", () => {
     const s = pick(pick(stateAt("claim", 5, 1), 1, "police"), 2, "doctor");
+    expect(Object.keys(buildView(s, s.hostId, START_AT).day ?? {}).sort().join(",")).toBe("claimDone,n,roles");
     const want = flat({ n: 1, roles: ROLES_5, claimDone: [1, 2] });
     const got = s.players.map((viewer) => `seat${viewer.seat}:${flat(buildView(s, viewer.id, START_AT).day)}`);
     expect(got.join(" ")).toBe(s.players.map((viewer) => `seat${viewer.seat}:${want}`).join(" "));
@@ -435,26 +435,23 @@ describe("buildView 낮 뷰 — 공개 뒤·토론 (D-04, D-06, D-08, D-15, D-18
     expect(Object.keys(day ?? {}).sort().join(",")).toBe("claims,n,roles");
   });
 
-  it("discussion: 여러 번 say 한 뒤에도 day 의 키는 claims,extendUsed,n,roles 이고 messages 키가 없다 (결정 0017-7)", () => {
+  it("discussion: 여러 번 say 한 뒤에도 day 의 키는 claims,n,roles 이고 messages·extendUsed 키가 없다 (결정 0017-5·0017-7)", () => {
     let s = stateAt("discussion", 5, 1);
     s = speak(s, 0, { template: "suspect", target: 1 }, REVEAL_ENDS_AT + 1_000);
     s = speak(s, 1, { template: "innocent" }, REVEAL_ENDS_AT + 4_000);
     s = speak(s, 2, { template: "claimed", target: 3, claimedRole: "police" }, REVEAL_ENDS_AT + 7_000);
     for (const viewer of s.players) {
       const view = buildView(s, viewer.id, START_AT);
-      expect(Object.keys(view.day ?? {}).sort().join(",")).toBe("claims,extendUsed,n,roles");
+      expect(Object.keys(view.day ?? {}).sort().join(",")).toBe("claims,n,roles");
       expect(roleValueLeaks(view).join(";")).toBe("");
     }
   });
 
-  it("연장 전 phaseDurationMs 는 90000, 연장 뒤 120000 이고 extendUsed 가 true 다; claim 은 15000", () => {
+  it("discussion phaseDurationMs 는 90000 이다(옛 상태의 연장 표시와 무관); claim 은 15000", () => {
     const s = stateAt("discussion", 4, 1);
-    const before = buildView(s, s.hostId, START_AT);
-    const extended = extendDiscussion(s, s.hostId);
-    if (!extended.ok) throw new Error(extended.error);
-    const after = buildView(extended.state, s.hostId, START_AT);
-    expect(`${before.phaseDurationMs}:${before.day?.extendUsed}`).toBe("90000:false");
-    expect(`${after.phaseDurationMs}:${after.day?.extendUsed}`).toBe("120000:true");
+    const old = { ...s, extendUsed: true } as RoomState; // 옛 저장 방: 키로만 넣는다(타입 선언에 기대지 않는다)
+    expect(buildView(s, s.hostId, START_AT).phaseDurationMs).toBe(90_000);
+    expect(buildView(old, s.hostId, START_AT).phaseDurationMs).toBe(90_000);
     expect(buildView(stateAt("claim", 4, 1), s.hostId, START_AT).phaseDurationMs).toBe(15000);
   });
 });
