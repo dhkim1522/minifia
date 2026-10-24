@@ -4,18 +4,18 @@ milestone: v1.0
 milestone_name: MVP
 current_phase: 03
 current_phase_name: 밤과 아침
-current_plan: 7
+current_plan: 8
 status: executing
-stopped_at: Completed 03-06-PLAN.md
-last_updated: "2026-10-24T15:58:31.273Z"
+stopped_at: Completed 03-07-PLAN.md
+last_updated: "2026-10-24T16:05:17.490Z"
 last_activity: 2026-10-25
 last_activity_desc: Phase 03 execution started
-state_head: 411190cb9c7638af52fe70f7a2363f4265edba8d
+state_head: fec060d90bd76fda29ec95f4ade3544602ecc08d
 progress:
   total_phases: 6
   completed_phases: 1
   total_plans: 49
-  completed_plans: 43
+  completed_plans: 44
 ---
 
 # Project State
@@ -30,9 +30,9 @@ See: .planning/PROJECT.md (updated 2026-10-21)
 ## Current Position
 
 Phase: 03 (밤과 아침) — EXECUTING
-Current Plan: 7
+Current Plan: 8
 Total Plans in Phase: 12
-Plan: 7 of 12
+Plan: 8 of 12
 Status: Ready to execute
 Last activity: 2026-10-25 — Phase 03 execution started
 
@@ -89,6 +89,7 @@ Progress: [██░░░░░░░░] 17%
 | Phase 03 P04 | 약 20분 | 3 tasks | 7 files |
 | Phase 03 P05 | 45min | 3 tasks | 6 files |
 | Phase 03 P06 | 25m | 3 tasks | 10 files |
+| Phase 03 P07 | 25 min | 3 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -156,6 +157,7 @@ Recent decisions affecting current work:
 - [Phase 03]: 03-05: alive 는 항상 싣고(A7), 탈락한 마피아는 allies 만 받으며(A3), spectate 직업 키는 job — 필드 이름·spectate 모양은 와이어 계약(결정 0020, 03-09)
 - [Phase 03]: 03-06: 훅 이름은 그대로 두고 수집 단계를 CHAT_PHASES(discussion·night)로 넓히고 비움 열쇠를 (일차:단계)로 넓혔다
 - [Phase 03]: 03-06: 시스템 안내 줄은 화면 문구(seq 없음)이고 MessageLog·ChatHistorySheet 가 SystemLineItem 을 공유하며 안내가 있으면 빈 상태 문구를 쓰지 않는다
+- [Phase 03]: 03-07: 거부된 pick 은 보낸 소켓에만 error + 최신 state, 밤 chat·emoji 단계 판단은 워커가 하고 nightChatRecipientIds 는 순수 함수로 둔다
 
 ### Pending Todos
 
@@ -181,6 +183,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-24T15:58:31.010Z
-Stopped at: Completed 03-06-PLAN.md
+Last session: 2026-10-24T16:05:17.225Z
+Stopped at: Completed 03-07-PLAN.md
 Resume file: None

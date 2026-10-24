@@ -156,7 +156,7 @@ Plans:
   3. 모두가 일찍 골라도 밤은 30초가 다 지나야 끝난다.
   4. 아침 5초 동안 모든 화면에 탈락자 이름 또는 "아무 일도 없었습니다"가 나온다. 탈락한 사람은 선택 화면 대신 "탈락" 화면과 공개된 진행만 본다.
 
-**Plans:** 6/12 plans executed (결정 0018·0019·0021 승인 시안 `design/screens/night-v1/` 기준)
+**Plans:** 7/12 plans executed (결정 0018·0019·0021 승인 시안 `design/screens/night-v1/` 기준)
 
 Plans:
 **Wave 1**
@@ -172,7 +172,7 @@ Plans:
 - [x] 03-06-PLAN.md — 채팅 부품 밤·관전 모드: 수집 단계 일반화·단계가 바뀌면 비움, 안내 줄·로그 이름·^ 끄기, 밤 문구 시트, 읽기 전용 줄 (TDD, wave 3)
 
 **Wave 4** *(blocked on Wave 3 completion)*
-- [ ] 03-07-PLAN.md — Room DO 배선: pick 핸들러, 행위자·관전자 한정 state 전송, 마피아·관전자 한정 밤 chat·emoji, 마감·탈락 거부, workerd 통합 테스트 (TDD, wave 4)
+- [x] 03-07-PLAN.md — Room DO 배선: pick 핸들러, 행위자·관전자 한정 state 전송, 마피아·관전자 한정 밤 chat·emoji, 마감·탈락 거부, workerd 통합 테스트 (TDD, wave 4)
 - [ ] 03-08-PLAN.md — 밤 화면: 역할별 하단(마피아 채팅·경찰/의사 선택 알약·시민 안내), 테이블 직접 탭·낙관적 선택, 관전 화면(E1), 밤 배경·유령 미리 받기 (TDD, wave 4)
 
 **Wave 5** *(blocked on Wave 4 completion)*
@@ -244,7 +244,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 (decimal phases
 |-------|-----------|----------------|--------|-----------|
 | 1. 걷는 뼈대 | v1.0 | 19/19 | Complete    | 2026-10-24 |
 | 2. 낮 토론 | v1.0 | 18/18 | In Progress | - |
-| 3. 밤과 아침 | v1.0 | 6/12 | In Progress | - |
+| 3. 밤과 아침 | v1.0 | 7/12 | In Progress | - |
 | 4. 처형과 승패 | v1.0 | 0/TBD | Not started | - |
 | 5. 분위기와 캐릭터 | v1.0 | 0/TBD | Not started | - |
 | 6. 친구 플레이테스트 | v1.0 | 0/TBD | Not started | - |
