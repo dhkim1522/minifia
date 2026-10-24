@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>N2 밤 경찰</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="v2.css">
+<link rel="stylesheet" href="f3.css">
+<link rel="stylesheet" href="f4.css">
+<link rel="stylesheet" href="f5.css">
+<link rel="stylesheet" href="f6.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.ph{background:#0e1326 url(/_blob/d6ce9dcca42a1b007264c80946e29556) center/cover no-repeat;width:390px;height:664px}
+.st{left:12px;width:366px;height:407px}
+</style>
+</helmet>
+<div class="ph">
+  <div class="hd">
+    <div class="hd__r1">
+      <div><div class="hd__t">밤</div><div class="hd__s">16일차</div></div>
+      <span class="sp"></span>
+      <button class="btn" type="button"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="3" width="12" height="18" rx="3"/><path d="M12 9l2 3-2 3-2-3z"/></svg>내 역할</button>
+    </div>
+    <div class="hd__r2"><div class="prog"><i style="width:30%"></i></div><span class="tm">0:21</span></div>
+  </div>
+  <div class="sc">
+    <div class="st">
+      <div class="ft" style="{{feltStyle}}"></div>
+      <sc-for list="{{seats}}" as="s" hint-placeholder-count="5">
+        <div class="{{s.cls}}" style="{{s.style}}"><img src="{{s.fig}}" alt=""><sc-if value="{{s.mate}}" hint-placeholder-val="{{false}}"><span class="sf__mate"></span><svg class="sf__dia" viewBox="0 0 24 24" fill="currentColor" aria-label="동료" role="img"><path d="M12 2l8 10-8 10-8-10z"/></svg></sc-if><sc-if value="{{s.sel}}" hint-placeholder-val="{{false}}"><span class="sf__sel"></span></sc-if><sc-if value="{{s.pick}}" hint-placeholder-val="{{false}}"><span class="{{s.pickCls}}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="7"/><path d="M12 2v5M12 17v5M2 12h5M17 12h5"/></svg></span></sc-if><sc-if value="{{s.me}}" hint-placeholder-val="{{false}}"><span class="sf__ring"></span></sc-if><sc-if value="{{s.host}}" hint-placeholder-val="{{false}}"><span class="sf__crown"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-label="방장" role="img"><path d="M3 8l4 4 5-7 5 7 4-4-2 11H5z"/></svg></span></sc-if></div>
+      </sc-for>
+      <sc-for list="{{tags}}" as="t" hint-placeholder-count="5">
+        <div class="{{t.cls}}" style="{{t.style}}">
+          <span class="tg__n"><i style="{{t.dot}}"></i>{{t.name}}</span>
+          <span class="{{t.cCls}}"><sc-if value="{{t.done}}" hint-placeholder-val="{{false}}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg></sc-if>{{t.claim}}<sc-if value="{{t.chg}}" hint-placeholder-val="{{false}}"><span class="tg__chg" role="img" aria-label="말 바꿈"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12a8 8 0 0 1 14-5.3L20 9"/><path d="M20 4v5h-5"/><path d="M20 12a8 8 0 0 1-14 5.3L4 15"/><path d="M4 20v-5h5"/></svg></span></sc-if></span>
+        </div>
+      </sc-for>
+      <sc-for list="{{emos}}" as="e" hint-placeholder-count="1">
+        <div class="ej" style="{{e.style}}"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="9" cy="10" r="1"/><circle cx="15" cy="10" r="1"/><path d="M9 16c2-1.2 4-1.2 6 0"/></svg></div>
+      </sc-for>
+    </div>
+  </div>
+  <div class="bt">
+    <h2 class="ct">조사할 사람을 고르세요</h2>
+    <p class="gd">결과는 밤이 끝날 때 알려 드려요 · 마감까지 바꿀 수 있어요</p>
+    <div class="pk"><span>선택</span> <b><i style="background:#6fa59a"></i>지호</b></div>
+  </div>
+  
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":664}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const F = ["/_blob/3aa695b4c0db99eea9f6335a79c9a166", "/_blob/e6e038c578e0c85f8b8c147f830ac93f", "/_blob/52576e650f45690da60943f32d96eb06", "/_blob/970ae6ce6e86178f0300fd105909b763", "/_blob/c65cd6c77ba97e966113a9b5c097bccb", "/_blob/ce7ade166113b9ac82822228a2481802", "/_blob/0bc9e0edacd6459706b339d7541a4e3e", "/_blob/b8db2f4c3ab5ffcf6356c05c63ee28cd"];
+    const C = ['#7a8fb8','#8e7ab8','#6fa59a','#b89a6f','#6f8fa8','#9aa86f','#b87a5c','#a9aebb'];
+    const base = [{"name": "동현", "claim": "경찰", "none": false, "host": true, "me": true}, {"name": "가나다라마", "claim": "마피아", "chg": true}, {"name": "지호", "claim": "시민", "sel": true, "pick": "me"}, {"name": "하늘", "claim": "경찰"}, {"name": "서연", "claim": "의사"}];
+    // 좌표 검사(이름표 14px 고정, 캐릭터·이웃 이름표·화면 끝 겹침 0) 결과. 장면 366×407
+    const o = {"cx": 183, "W": 366, "rx": 132, "ry": 100, "cy": 210, "FW": 72, "k0": 0.8, "felt": [280, 108, 150]};
+    const n = base.length, seats = [], tags = [], emos = [];
+    base.forEach((b, i) => {
+      const th = Math.PI / 2 + (i / n) * Math.PI * 2;
+      const depth = (Math.sin(th) + 1) / 2;
+      const s = o.k0 + (1 - o.k0) * depth;
+      const FH = o.FW * 4 / 3;
+      const x = o.cx + o.rx * Math.cos(th), y = o.cy + o.ry * Math.sin(th);
+      const z = Math.round(depth * 10);
+      seats.push({ fig: F[i], me: !!b.me, host: !!b.host, cls: 'sf' + (b.dead ? ' sf--off' : ''), mate: !!b.mate, sel: !!b.sel, pick: !!b.pick, pickCls: 'sf__pick sf__pick--' + (b.pick || 'me'),
+        style: 'left:' + (x - o.FW / 2).toFixed(1) + 'px;top:' + (y - FH).toFixed(1) + 'px;width:' + o.FW + 'px;height:' + FH.toFixed(1) + 'px;transform:scale(' + s.toFixed(3) + ');z-index:' + z });
+      tags.push({ name: b.name, claim: b.claim, chg: !!b.chg, done: !!b.done, dot: 'background:' + C[i],
+        cls: 'tg' + (b.me ? ' tg--me' : '') + (b.dead ? ' tg--dead' : '') + (b.fresh ? ' tg--new' : ''),
+        cCls: 'tg__c' + (b.none ? ' tg__c--none' : '') + (b.wait ? ' tg__c--wait' : '') + (b.done ? ' tg__c--done' : '') + (b.pop ? ' tg__c--pop' : ''),
+        style: 'left:' + x.toFixed(1) + 'px;top:' + (y + 3).toFixed(1) + 'px;z-index:' + (z + 20) });
+      if (b.emoji) emos.push({ style: 'left:' + (x - 16).toFixed(1) + 'px;top:' + Math.max(0, y - FH * s - 36).toFixed(1) + 'px' });
+    });
+    // 테이블 면: 가로는 좌석 반지름에 맞추고(최대 280), 세로는 ry 에 비례
+    const [fw, fh, ft] = o.felt;
+    const feltStyle = 'left:' + ((o.W - fw) / 2).toFixed(1) + 'px;width:' + fw + 'px;height:' + fh + 'px;top:' + ft + 'px';
+    return { seats, tags, emos, feltStyle };
+  }
+}
+</script>
+</body>
+</html>
