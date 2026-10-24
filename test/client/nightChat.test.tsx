@@ -6,6 +6,7 @@ import "../helpers/singleLineErrors";
 import type { ChatLine, PublicPlayer, RoomView } from "../../shared/protocol";
 import { DiscussionControls } from "../../src/components/DiscussionControls";
 import { MessageLog } from "../../src/components/MessageLog";
+import { READ_ONLY_TEXT, ReadOnlyRow } from "../../src/components/ReadOnlyRow";
 import { NIGHT_TEMPLATE_ORDER } from "../../src/game/messageText";
 import type { RoomConnection } from "../../src/net/useRoomConnection";
 
@@ -21,12 +22,6 @@ const players: PublicPlayer[] = ["지호", "서연", "하늘", "민수"].map((ni
   isHost: seat === 0,
 }));
 const L = (seq: number, seat: number): ChatLine => ({ seq, seat, template: "nightAgree", at: 1 });
-
-// ReadOnlyRow 는 GREEN 에서 생긴다 — RED 에서는 파일이 없어도 이 파일이 로드되도록 glob 으로 읽는다(없으면 빈 객체).
-const rowMods = import.meta.glob<{ ReadOnlyRow?: () => React.ReactElement; READ_ONLY_TEXT?: string }>("../../src/components/ReadOnlyRow.tsx", { eager: true });
-const rowMod = Object.values(rowMods)[0];
-const ReadOnlyRow = rowMod?.ReadOnlyRow ?? (() => null);
-const READ_ONLY_TEXT = rowMod?.READ_ONLY_TEXT;
 
 const SYS = "마피아끼리만 보여요";
 const css = readFileSync("src/styles/day.css", "utf8");

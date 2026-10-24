@@ -84,6 +84,12 @@
   display: flex; flex-direction: column; gap: var(--space-xs); background: var(--night-700); border-radius: var(--radius-md);
 }
 
+/* 관전자(탈락자) 하단 읽기 전용 안내 줄(시안 E1 .ro, 결정 0021): 보내기 줄 대신. 높이 계산 83 + 8 + 44 + 10 + 12 ≈ 157(UI-SPEC Spacing) */
+.mf-ro {
+  flex: none; display: flex; align-items: center; justify-content: center; min-height: var(--tap-min); margin: 0;
+  border-radius: var(--radius-md); background: var(--night-700); color: var(--gray-300); font-size: 14px; line-height: 20px;
+}
+
 /* 말하기 줄(시안 9차 .r): [빠른 메시지] 가 남은 폭 전부, [이모티콘] 은 44×44 정사각(compact 높이 --tap-min). 방장 줄은 없다(결정 0017-5·0017-6). */
 .mf-discuss { display: flex; flex-direction: column; gap: var(--space-sm); }
 .mf-discuss__talk { display: flex; gap: var(--space-sm); }
