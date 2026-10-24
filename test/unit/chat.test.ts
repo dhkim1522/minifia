@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { isAlive } from "../../shared/game/alive";
-import { MESSAGE_KEEP, QUICK_TEMPLATES, SEND_COOLDOWN_MS, emote, say } from "../../shared/game/chat";
+import { QUICK_TEMPLATES, SEND_COOLDOWN_MS, SERVER_MIN_SEND_GAP_MS, emote, say } from "../../shared/game/chat";
 import type { SayInput } from "../../shared/game/chat";
 import { ROOM_TTL_MS } from "../../shared/game/room";
 import type { Player, RoomState } from "../../shared/game/room";
@@ -65,9 +65,10 @@ describe("QUICK_TEMPLATES - 템플릿 표 (D-11, COMM-01)", () => {
     expect(rows).toBe("suspect:true/false trust:true/false claimed:true/true innocent:false/false vote:true/false");
   });
 
-  it("보관 상수는 20개, 쿨다운은 2초다", () => {
-    expect(MESSAGE_KEEP).toBe(20);
+  it("서버 한도 SERVER_MIN_SEND_GAP_MS 는 1800, 클라이언트 잠금 SEND_COOLDOWN_MS 는 2000 이고 서버 한도가 더 짧다 (G-02-2)", () => {
+    expect(SERVER_MIN_SEND_GAP_MS).toBe(1_800);
     expect(SEND_COOLDOWN_MS).toBe(2_000);
+    expect(SERVER_MIN_SEND_GAP_MS < SEND_COOLDOWN_MS).toBe(true);
   });
 });
 
@@ -78,7 +79,6 @@ describe("say - 통과한 메시지 (D-15)", () => {
     if (!r.ok) return;
     expect(JSON.stringify(r.line)).toBe(JSON.stringify({ seq: 1, seat: 1, template: "suspect", target: 2, at: NOW }));
     expect(keys(r.line)).toBe("at,seat,seq,target,template");
-    expect(JSON.stringify(r.state.messages)).toBe(JSON.stringify([r.line]));
     expect(r.state.nextMessageSeq).toBe(2);
     expect(r.state.players[1]!.lastSendAt).toBe(NOW);
   });
@@ -187,35 +187,60 @@ describe("say - 형식·대상 위반은 BAD_MESSAGE (D-12, D-13, COMM-04)", () 
   });
 });
 
-describe("say - 쿨다운 경계 (D-14)", () => {
+describe("say - 전송 간격 경계 (D-14, G-02-2)", () => {
   const cooling = (): RoomState => room("discussion", { overrides: { 1: { lastSendAt: 10_000 } } });
 
-  it("직전 성공 뒤 1999ms 는 RATE_LIMITED", () => {
-    expect(outcome(say(cooling(), "p1", { template: "innocent" }, 10_000 + SEND_COOLDOWN_MS - 1))).toBe("RATE_LIMITED");
+  it("직전 성공 뒤 1799ms 는 RATE_LIMITED", () => {
+    expect(outcome(say(cooling(), "p1", { template: "innocent" }, 10_000 + 1_799))).toBe("RATE_LIMITED");
   });
 
-  it("2000ms 는 통과한다", () => {
+  it("1800ms 는 통과한다", () => {
+    expect(outcome(say(cooling(), "p1", { template: "innocent" }, 10_000 + 1_800))).toBe("ok");
+  });
+
+  it("클라이언트 잠금 간격(2000ms)으로 보낸 요청은 서버 한도에 걸리지 않는다", () => {
     expect(outcome(say(cooling(), "p1", { template: "innocent" }, 10_000 + SEND_COOLDOWN_MS))).toBe("ok");
   });
 });
 
-describe("say - 보관 (D-15, overflow)", () => {
-  it("25개를 차례로 보내면 최근 20개만 남고 seq 는 1씩 증가한다", () => {
+describe("say - 보관 없음 (결정 0017-7)", () => {
+  it("통과해도 결과 상태에 messages 키가 생기지 않고 nextMessageSeq 는 1 늘며 보낸 사람 lastSendAt 만 바뀐다", () => {
+    const state = room("discussion");
+    const r = say(state, "p1", { template: "innocent" }, NOW);
+    expect(outcome(r)).toBe("ok");
+    if (!r.ok) return;
+    expect(Object.hasOwn(r.state, "messages")).toBe(false);
+    expect(r.state.nextMessageSeq).toBe(2);
+    expect(r.state.players[1]!.lastSendAt).toBe(NOW);
+    const others = r.state.players.filter((p) => p.id !== "p1").map((p) => p.lastSendAt);
+    expect(others.every((v) => v === undefined)).toBe(true);
+  });
+
+  it("입력 상태에 있던 옛 messages 값은 그대로 넘어간다(정리는 normalizeStoredRoom 이 한다)", () => {
+    const old = { ...room("discussion"), messages: [] } as RoomState;
+    const r = say(old, "p1", { template: "innocent" }, NOW);
+    if (!r.ok) throw new Error("setup");
+    const input = old as unknown as Record<string, unknown>;
+    const output = r.state as unknown as Record<string, unknown>;
+    expect(output["messages"] === input["messages"]).toBe(true); // 한 줄 보고서를 위해 객체 비교를 피한다
+  });
+
+  it("25개를 차례로 보내면(1800ms 간격) line.seq 가 1..25 로 1씩 늘어난다", () => {
     let state = room("discussion");
     const before = JSON.stringify(state);
     const first = state;
+    const seqs: number[] = [];
     for (let i = 0; i < 25; i += 1) {
-      const r = say(state, "p1", { template: "innocent" }, NOW + i * SEND_COOLDOWN_MS);
+      const r = say(state, "p1", { template: "innocent" }, NOW + i * 1_800);
       expect(outcome(r)).toBe("ok");
       if (!r.ok) return;
+      seqs.push(r.line.seq);
       state = r.state;
     }
     expect(JSON.stringify(first)).toBe(before);
-    expect(state.messages).toHaveLength(MESSAGE_KEEP);
-    expect(state.messages![0]!.seq).toBe(6);
-    const seqs = state.messages!.map((m) => m.seq);
-    expect(seqs.join(",")).toBe(Array.from({ length: 20 }, (_, i) => 6 + i).join(","));
+    expect(seqs.join(",")).toBe(Array.from({ length: 25 }, (_, i) => 1 + i).join(","));
     expect(state.nextMessageSeq).toBe(26);
+    expect(Object.hasOwn(state, "messages")).toBe(false);
   });
 
   it("nextMessageSeq 가 없는 상태의 첫 seq 는 1, 있으면 그 값에서 이어진다", () => {
@@ -244,7 +269,7 @@ describe("emote - 이모티콘 (D-14, D-16, COMM-02)", () => {
     if (!r.ok) return;
     expect(JSON.stringify(r.event)).toBe(JSON.stringify({ seat: 1, icon: "smile", at: NOW }));
     expect(r.state.players[1]!.lastSendAt).toBe(NOW);
-    expect(r.state.messages).toBe(state.messages);
+    expect(Object.hasOwn(r.state, "messages")).toBe(false);
     expect(r.state.nextMessageSeq).toBe(state.nextMessageSeq);
     const others = r.state.players.filter((p) => p.id !== "p1").map((p) => p.lastSendAt);
     expect(others.every((v) => v === undefined)).toBe(true);
@@ -278,22 +303,22 @@ describe("emote - 이모티콘 (D-14, D-16, COMM-02)", () => {
   });
 });
 
-describe("메시지·이모티콘 합산 쿨다운 (D-14)", () => {
-  it("say 뒤 1999ms 에 emote 는 RATE_LIMITED, 2000ms 에는 통과", () => {
+describe("메시지·이모티콘 합산 서버 한도 (D-14, G-02-2)", () => {
+  it("say 뒤 1799ms 에 emote 는 RATE_LIMITED, 1800ms 에는 통과", () => {
     const sent = say(room("discussion"), "p1", { template: "innocent" }, 10_000);
     if (!sent.ok) throw new Error("setup");
-    expect(outcome(emote(sent.state, "p1", "smile", 10_000 + SEND_COOLDOWN_MS - 1))).toBe("RATE_LIMITED");
-    expect(outcome(emote(sent.state, "p1", "smile", 10_000 + SEND_COOLDOWN_MS))).toBe("ok");
+    expect(outcome(emote(sent.state, "p1", "smile", 10_000 + 1_799))).toBe("RATE_LIMITED");
+    expect(outcome(emote(sent.state, "p1", "smile", 10_000 + 1_800))).toBe("ok");
   });
 
-  it("emote 뒤 1999ms 에 say 는 RATE_LIMITED, 2000ms 에는 통과", () => {
+  it("emote 뒤 1799ms 에 say 는 RATE_LIMITED, 1800ms 에는 통과", () => {
     const sent = emote(room("discussion"), "p1", "smile", 10_000);
     if (!sent.ok) throw new Error("setup");
-    expect(outcome(say(sent.state, "p1", { template: "innocent" }, 10_000 + SEND_COOLDOWN_MS - 1))).toBe("RATE_LIMITED");
-    expect(outcome(say(sent.state, "p1", { template: "innocent" }, 10_000 + SEND_COOLDOWN_MS))).toBe("ok");
+    expect(outcome(say(sent.state, "p1", { template: "innocent" }, 10_000 + 1_799))).toBe("RATE_LIMITED");
+    expect(outcome(say(sent.state, "p1", { template: "innocent" }, 10_000 + 1_800))).toBe("ok");
   });
 
-  it("거부된 요청은 lastSendAt 을 바꾸지 않는다: t0 성공, t0+1000 거부, t0+2000 통과", () => {
+  it("거부된 요청은 lastSendAt 을 바꾸지 않는다: t0 성공, t0+1000 거부, t0+1800 통과", () => {
     const t0 = 10_000;
     const first = emote(room("discussion"), "p1", "smile", t0);
     if (!first.ok) throw new Error("setup");
@@ -303,7 +328,7 @@ describe("메시지·이모티콘 합산 쿨다운 (D-14)", () => {
     const sayRejected = say(first.state, "p1", { template: "innocent" }, t0 + 1_000);
     expect(outcome(sayRejected)).toBe("RATE_LIMITED");
     expect(first.state.players[1]!.lastSendAt).toBe(t0);
-    expect(outcome(emote(first.state, "p1", "smile", t0 + 2_000))).toBe("ok");
+    expect(outcome(emote(first.state, "p1", "smile", t0 + 1_800))).toBe("ok");
   });
 
   it("다른 사람의 쿨다운은 독립이다: A 가 보낸 직후 B 는 보낼 수 있다", () => {

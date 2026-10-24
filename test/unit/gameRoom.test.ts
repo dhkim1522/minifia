@@ -599,7 +599,7 @@ describe("normalizeStoredRoom — 저장된 옛 방 (RESEARCH Pattern 6, T-02-14
     const lobby = fullRoom([0, 1, 2, 3, 4]);
     const started = startGame(lobby, "p0", 0, seededRandInt(7));
     if (!started.ok) throw new Error(started.error);
-    // 1페이즈에서 저장된 방에는 claim*·lastSendAt·day·messages·extendUsed·nextMessageSeq 가 없다
+    // 1페이즈에서 저장된 방에는 claim*·lastSendAt·day·nextMessageSeq 가 없다
     const legacy: RoomState = {
       ...started.state,
       players: started.state.players.map((p) => {
@@ -620,13 +620,13 @@ describe("normalizeStoredRoom — 저장된 옛 방 (RESEARCH Pattern 6, T-02-14
     expect(seen.join(" ")).toBe("roleReveal:- dayAnnounce:1 claim:1 claimReveal:1 discussion:1");
     const day = buildView(state, "p1", at).day;
     expect(day?.claims?.map((c) => c.claim).join(",")).toBe(Array(8).fill("none").join(","));
-    expect(`${day?.messages?.length}:${day?.extendUsed}`).toBe("0:false");
+    expect(Object.keys(day ?? {}).includes("messages")).toBe(false);
   });
 
-  it("day·messages·extendUsed 가 아예 없는 discussion 상태도 뷰가 예외 없이 기본값(day 1, messages [], extendUsed false)을 쥔다", () => {
+  it("day 가 아예 없는 discussion 상태도 뷰가 예외 없이 기본값(day 1, claims 여덟 칸)을 쥐고 messages 키는 없다", () => {
     const base = fullRoom([0, 1, 2, 3]);
     const bare: RoomState = { ...base, phase: "discussion", phaseEndsAt: 100_000 };
     const day = buildView(bare, "p2", 50_000).day;
-    expect(`${day?.n}:${day?.messages?.length}:${day?.extendUsed}:${day?.claims?.length}`).toBe("1:0:false:8");
+    expect(`${day?.n}:${day?.claims?.length}:${Object.keys(day ?? {}).includes("messages")}`).toBe("1:8:false");
   });
 });

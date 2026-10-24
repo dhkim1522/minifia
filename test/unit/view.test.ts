@@ -92,13 +92,12 @@ function stringLeaves(value: unknown, prefix = ""): Array<[string, string]> {
 
 /** 역할·주장 값으로 쓰이는 문자열. 이 값은 허용 경로에만 나올 수 있다(RESEARCH Pitfall 2). */
 const ROLE_LIKE_VALUES: ReadonlySet<string> = new Set(["mafia", "police", "doctor", "citizen", "none"]);
-/** 허용 경로: 본인 역할·본인 주장·이번 판 구성·공개된 주장·메시지의 직업 칸. 그 밖의 경로에 이 값이 있으면 누출이다. */
+/** 허용 경로: 본인 역할·본인 주장·이번 판 구성·공개된 주장. 그 밖의 경로에 이 값이 있으면 누출이다(채팅은 뷰에 없다, 결정 0017-7). */
 const ALLOWED_ROLE_VALUE_PATHS: ReadonlySet<string> = new Set([
   "me.role",
   "me.claim",
   "day.roles[]",
   "day.claims[].claim",
-  "day.messages[].claimedRole",
 ]);
 
 function roleValueLeaks(view: RoomView): string[] {
@@ -293,7 +292,7 @@ describe("buildView 전수 누출 검사 (T-01-23)", () => {
             } else if ("claim" in view.me) {
               violations.push(`${tag}: me.claim outside claim phase`);
             }
-            // 역할·주장 값은 허용 경로(me.role, me.claim, day.roles[], day.claims[].claim, day.messages[].claimedRole)에만 있다
+            // 역할·주장 값은 허용 경로(me.role, me.claim, day.roles[], day.claims[].claim)에만 있다
             for (const leak of roleValueLeaks(view)) violations.push(`${tag}: role-like value outside allowed paths: ${leak}`);
           }
         }
@@ -436,19 +435,16 @@ describe("buildView 낮 뷰 — 공개 뒤·토론 (D-04, D-06, D-08, D-15, D-18
     expect(Object.keys(day ?? {}).sort().join(",")).toBe("claims,n,roles");
   });
 
-  it("discussion: day.messages 는 서버 보관 줄을 필드별로 복사하고 키 집합이 템플릿에 맞다", () => {
+  it("discussion: 여러 번 say 한 뒤에도 day 의 키는 claims,extendUsed,n,roles 이고 messages 키가 없다 (결정 0017-7)", () => {
     let s = stateAt("discussion", 5, 1);
     s = speak(s, 0, { template: "suspect", target: 1 }, REVEAL_ENDS_AT + 1_000);
     s = speak(s, 1, { template: "innocent" }, REVEAL_ENDS_AT + 4_000);
     s = speak(s, 2, { template: "claimed", target: 3, claimedRole: "police" }, REVEAL_ENDS_AT + 7_000);
-    const day = buildView(s, seatId(s, 4), START_AT).day;
-    const keys = (day?.messages ?? []).map((m) => Object.keys(m).sort().join(","));
-    expect(keys.join(" | ")).toBe("at,seat,seq,target,template | at,seat,seq,template | at,claimedRole,seat,seq,target,template");
-    expect(day?.messages?.length).toBe(3);
-    expect(day?.messages?.[0] === s.messages?.[0]).toBe(false); // 저장 객체를 그대로 넘기지 않는다
-    expect(flat(day?.messages)).toBe(flat(s.messages));
-    expect(day?.extendUsed).toBe(false);
-    expect(Object.keys(day ?? {}).sort().join(",")).toBe("claims,extendUsed,messages,n,roles");
+    for (const viewer of s.players) {
+      const view = buildView(s, viewer.id, START_AT);
+      expect(Object.keys(view.day ?? {}).sort().join(",")).toBe("claims,extendUsed,n,roles");
+      expect(roleValueLeaks(view).join(";")).toBe("");
+    }
   });
 
   it("연장 전 phaseDurationMs 는 90000, 연장 뒤 120000 이고 extendUsed 가 true 다; claim 은 15000", () => {
