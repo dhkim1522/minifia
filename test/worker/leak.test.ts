@@ -47,6 +47,20 @@ async function flush(sock: TestSocket): Promise<void> {
   await nextFrame(sock, (m) => m.t === "pong" && m.c === c);
 }
 
+/** JSON 을 걸어 내려가며 (경로, 문자열 값) 을 모은다. 배열 칸은 [] 로 접는다. */
+function stringPaths(value: unknown, path = ""): Array<[string, string]> {
+  if (Array.isArray(value)) return value.flatMap((v) => stringPaths(v, `${path}[]`));
+  if (value !== null && typeof value === "object") {
+    return Object.entries(value as Record<string, unknown>).flatMap(([k, v]) => stringPaths(v, `${path}.${k}`));
+  }
+  return typeof value === "string" ? [[path, value]] : [];
+}
+
+const ROLE_WORDS = new Set(["mafia", "police", "doctor", "citizen", "none"]);
+/** 살아 있는 소켓이 역할·주장 값 문자열을 받아도 되는 경로. 탈락 뒤에는 여기에 관전 직업 경로가 더해진다(결정 0021). */
+const ROLE_PATHS_ALIVE = [".view.me.role", ".view.me.claim", ".view.day.roles[]", ".view.day.claims[].claim"];
+const ROLE_PATHS_DEAD = [...ROLE_PATHS_ALIVE, ".view.spectate.seats[].job"];
+
 const phaseOf = (phase: string) => (m: ServerMessage) => m.t === "state" && m.view.phase === phase;
 
 describe("6명 한 판(두 밤·두 아침, 행동·마피아 채팅·탈락·관전 포함) 전수 누출 검사", () => {
@@ -235,5 +249,155 @@ describe("6명 한 판(두 밤·두 아침, 행동·마피아 채팅·탈락·�
       }
     }
     expect(finalViews.length).toBeGreaterThan(0);
+
+    // ---- 밤·관전 불변식 (결정 0021, D-07, D-17, NIGHT-02, COMM-04) ----
+    // 이 시나리오에서 누가 어느 밤에 무엇을 골랐는지(일차 → seat → 대상).
+    const pickedIn: Record<number, Map<number, number>> = {
+      1: new Map([
+        [mafiaA.seat, victimX.seat],
+        [mafiaB.seat, victimX.seat],
+        [police.seat, mafiaA.seat],
+        [doctor.seat, doctor.seat],
+      ]),
+      2: new Map([
+        [mafiaA.seat, victimY.seat],
+        [mafiaB.seat, victimY.seat],
+        [police.seat, mafiaB.seat],
+      ]),
+    };
+    const allSeats = [...actors].sort((x, y) => x.seat - y.seat).map((x) => ({ seat: x.seat, job: x.role }));
+    const diedAt = new Map<number, string>(); // seat → 탈락 state 의 "단계 일차"
+    const dayLines = new Map<number, number[]>(); // seat → 살아 있는 동안 받은 낮 chat seq
+    const nightLines = new Map<number, string>(); // seat → "일차:seq,…" 밤 chat
+    const nightEmojis = new Map<number, number>(); // seat → 밤 emoji 프레임 수
+    const morningsByDay = new Map<number, Set<string>>(); // 일차 → day.morning JSON 모음
+    const morningSeen = new Map<number, Set<number>>(); // 일차 → 아침 state 를 받은 seat
+    const saw = { ally: new Set<number>(), records: new Set<number>(), pick: new Set<number>(), spectatePicksX: false };
+
+    for (const a of actors) {
+      let dead = false;
+      let phase = "";
+      let day = 0;
+      const lines: number[] = [];
+      const nights: string[] = [];
+      let emojis = 0;
+      for (const raw of collect(a.sock)) {
+        const msg = JSON.parse(raw) as ServerMessage;
+        // 서버가 거부한 행동이 없다 — 시나리오의 모든 행동은 받아들여졌다.
+        expect(msg.t === "error").toBe(false);
+        const paths = keyPaths(msg);
+        if (msg.t === "state") {
+          const v = msg.view;
+          phase = v.phase;
+          if (v.day) day = v.day.n;
+          if (v.players.find((pl) => pl.seat === a.seat)?.alive === false && !dead) {
+            dead = true;
+            diedAt.set(a.seat, `${phase} ${day}`);
+          }
+        }
+        // (1)(2) spectate: 살아 있는 동안은 경로 어디에도 없고, 탈락한 뒤에는 모든 state 에 있다.
+        const hasSpectate = paths.some((pth) => pth === ".view.spectate" || pth.startsWith(".view.spectate."));
+        expect(hasSpectate).toBe(dead && msg.t === "state");
+        if (msg.t === "state" && dead) {
+          const spectate = msg.view.spectate!;
+          expect(JSON.stringify(spectate.seats)).toBe(JSON.stringify(allSeats));
+          // 지난 밤 정보 없음: picks 는 밤 state 에만 있다.
+          expect(spectate.picks !== undefined).toBe(phase === "night");
+          if (phase === "night" && a.seat === victimX.seat && day === 2 && spectate.picks!.mafia.includes(victimY.seat)) {
+            saw.spectatePicksX = true;
+          }
+        }
+        // (3) 비공개 키는 받을 사람에게만.
+        if (paths.includes(".view.me.records")) {
+          expect(a.role).toBe("police");
+          saw.records.add(a.seat);
+        }
+        if (paths.includes(".view.me.allyPicks")) {
+          expect(a.role).toBe("mafia");
+          expect(dead).toBe(false);
+          saw.ally.add(a.seat);
+        }
+        if (msg.t === "state" && msg.view.me.pick !== undefined) {
+          expect(phase).toBe("night");
+          expect(String(msg.view.me.pick)).toBe(String(pickedIn[day]?.get(a.seat)));
+          saw.pick.add(a.seat);
+        }
+        // (4) 역할·주장 값 문자열은 허용 경로에만.
+        const allowed = dead ? ROLE_PATHS_DEAD : ROLE_PATHS_ALIVE;
+        for (const [pth, value] of stringPaths(msg)) {
+          if (ROLE_WORDS.has(value)) expect(allowed.includes(pth)).toBe(true);
+        }
+        // (1)(6) 밤 chat·emoji 는 살아 있는 마피아와 탈락자에게만. 낮 chat 은 살아 있는 동안 받은 번호를 센다.
+        if (msg.t === "chat" || msg.t === "emoji") {
+          if (phase === "night") {
+            if (!dead) expect(a.role).toBe("mafia");
+            if (msg.t === "chat") nights.push(`${day}:${msg.seq}`);
+            else emojis += 1;
+          } else if (msg.t === "chat" && !dead) {
+            lines.push(msg.seq);
+          }
+        }
+        // (5) 아침 결과.
+        if (msg.t === "state" && msg.view.phase === "morning") {
+          const set = morningsByDay.get(day) ?? new Set<string>();
+          set.add(JSON.stringify(msg.view.day?.morning));
+          morningsByDay.set(day, set);
+          const seen = morningSeen.get(day) ?? new Set<number>();
+          seen.add(a.seat);
+          morningSeen.set(day, seen);
+        }
+      }
+      dayLines.set(a.seat, lines);
+      nightLines.set(a.seat, nights.join(","));
+      nightEmojis.set(a.seat, emojis);
+    }
+
+    // 누가 어느 아침에 탈락했는가: X 는 1일차 아침, Y 는 2일차 아침에 처음 탈락 state 를 받는다. 나머지는 끝까지 살아 있다.
+    expect([...diedAt.entries()].sort((x, y) => x[0] - y[0])).toEqual(
+      [[victimX.seat, "morning 1"], [victimY.seat, "morning 2"]].sort((x, y) => (x[0] as number) - (y[0] as number)),
+    );
+    // (2) 관전자 X 는 2일차 밤에 마피아 선택(spectate.picks.mafia ∋ Y)을 봤다.
+    expect(saw.spectatePicksX).toBe(true);
+    // (3) 받을 사람은 실제로 받았다 — 아무도 못 받는 검사가 되지 않게.
+    expect([...saw.records]).toEqual([police.seat]);
+    expect([...saw.ally].sort()).toEqual([mafiaA.seat, mafiaB.seat].sort());
+    expect([...saw.pick].sort()).toEqual([mafiaA.seat, mafiaB.seat, police.seat, doctor.seat].sort());
+
+    // (5) 두 아침 각각 모든 소켓이 같은 day.morning 이고 첫 아침은 {eliminated: X, phrase: 1..8}.
+    for (const day of [1, 2]) {
+      expect(morningsByDay.get(day)!.size).toBe(1);
+      expect(morningSeen.get(day)!.size).toBe(6);
+    }
+    const morning1 = JSON.parse([...morningsByDay.get(1)!][0]!) as { eliminated?: number; phrase?: number };
+    const morning2 = JSON.parse([...morningsByDay.get(2)!][0]!) as { eliminated?: number; phrase?: number };
+    expect(Object.keys(morning1).sort()).toEqual(["eliminated", "phrase"]);
+    expect(morning1.eliminated).toBe(victimX.seat);
+    expect(morning1.phrase! >= 1 && morning1.phrase! <= 8).toBe(true);
+    expect(morning2.eliminated).toBe(victimY.seat);
+    expect(morning2.phrase).not.toBe(morning1.phrase); // 문구 연속 반복 없음
+
+    // 경찰만 수사 기록을 받는다: 두 밤의 기록이 쌓여 있다.
+    const policeLast = lastViews[actors.findIndex((x) => x === police)]!;
+    expect(JSON.stringify(policeLast.me.records)).toBe(
+      JSON.stringify([
+        { n: 1, target: mafiaA.seat, isMafia: true },
+        { n: 2, target: mafiaB.seat, isMafia: true },
+      ]),
+    );
+
+    // (6) 낮 chat 번호는 밤 마피아 채팅 수와 무관하게 이어진다(PLAN-CHECK W3, 결정 0020).
+    const day1Seq = dayLines.get(police.seat)![0]!;
+    expect(dayLines.get(police.seat)).toEqual([day1Seq, day1Seq + 1]); // 1일차 밤 마피아 채팅이 끼어도 +1
+    for (const a of actors) {
+      if (a === victimX) expect(dayLines.get(a.seat)).toEqual([day1Seq]); // 1일차 아침에 탈락 — 2일차 줄은 관전자로 받는다
+      else expect(dayLines.get(a.seat)).toEqual([day1Seq, day1Seq + 1]);
+    }
+    // 밤 chat 번호는 밤마다 1부터다: 마피아 둘은 두 밤 모두, 관전자 X 는 자기가 탈락한 뒤의 2일차 밤만, 나머지는 0줄.
+    for (const a of actors) {
+      const expected = a.role === "mafia" ? "1:1,2:1" : a === victimX ? "2:1" : "";
+      expect(nightLines.get(a.seat)).toBe(expected);
+      // 밤 emoji 는 1일차 밤 마피아 A 의 한 번: 살아 있던 마피아 둘만 받는다.
+      expect(nightEmojis.get(a.seat)).toBe(a.role === "mafia" ? 1 : 0);
+    }
   });
 });
