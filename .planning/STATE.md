@@ -4,18 +4,18 @@ milestone: v1.0
 milestone_name: MVP
 current_phase: 03
 current_phase_name: 밤과 아침
-current_plan: 9
+current_plan: 10
 status: executing
-stopped_at: Completed 03-08-PLAN.md
-last_updated: "2026-10-24T16:14:01.819Z"
+stopped_at: Completed 03-09-PLAN.md
+last_updated: "2026-10-24T16:21:15.495Z"
 last_activity: 2026-10-25
 last_activity_desc: Phase 03 execution started
-state_head: b84af9bea362905e585547f1c9ce82db5f2c089a
+state_head: c6a63a3f3706892b5dd48819711bb92828aacef1
 progress:
   total_phases: 6
   completed_phases: 1
   total_plans: 49
-  completed_plans: 45
+  completed_plans: 46
 ---
 
 # Project State
@@ -30,9 +30,9 @@ See: .planning/PROJECT.md (updated 2026-10-21)
 ## Current Position
 
 Phase: 03 (밤과 아침) — EXECUTING
-Current Plan: 9
+Current Plan: 10
 Total Plans in Phase: 12
-Plan: 9 of 12
+Plan: 10 of 12
 Status: Ready to execute
 Last activity: 2026-10-25 — Phase 03 execution started
 
@@ -91,6 +91,7 @@ Progress: [██░░░░░░░░] 17%
 | Phase 03 P06 | 25m | 3 tasks | 10 files |
 | Phase 03 P07 | 25 min | 3 tasks | 3 files |
 | Phase 03 P08 | 15min | 3 tasks | 6 files |
+| Phase 03 P09 | 20min | 3 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -160,6 +161,7 @@ Recent decisions affecting current work:
 - [Phase 03]: 03-06: 시스템 안내 줄은 화면 문구(seq 없음)이고 MessageLog·ChatHistorySheet 가 SystemLineItem 을 공유하며 안내가 있으면 빈 상태 문구를 쓰지 않는다
 - [Phase 03]: 03-07: 거부된 pick 은 보낸 소켓에만 error + 최신 state, 밤 chat·emoji 단계 판단은 워커가 하고 nightChatRecipientIds 는 순수 함수로 둔다
 - [Phase 03]: 03-08: 관전 표시 입력은 meDead && view.spectate 한 곳에서만 만들고, spectate 없는 탈락자 view 는 이름표 탈락 표시 + 관전 하단만 그린다
+- [Phase 03]: 결정 0020: 밤·아침 와이어 계약·판정 규칙(A1·A2)을 03-12 직전에 한 곳에 기록, 되돌리기 비용 명시
 
 ### Pending Todos
 
@@ -185,6 +187,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-24T16:14:01.547Z
-Stopped at: Completed 03-08-PLAN.md
+Last session: 2026-10-24T16:21:15.221Z
+Stopped at: Completed 03-09-PLAN.md
 Resume file: None

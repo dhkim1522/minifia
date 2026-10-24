@@ -156,7 +156,7 @@ Plans:
   3. 모두가 일찍 골라도 밤은 30초가 다 지나야 끝난다.
   4. 아침 5초 동안 모든 화면에 탈락자 이름 또는 "아무 일도 없었습니다"가 나온다. 탈락한 사람은 유령이 되어 아무 행동·메시지도 못 하지만 게임 전체(모든 실제 직업·밤 행동·마피아 밤 채팅)를 관전한다 — 서버는 이를 탈락자에게만 보내고 살아 있는 사람에게는 보내지 않는다(결정 0021).
 
-**Plans:** 8/12 plans executed (결정 0018·0019·0021 승인 시안 `design/screens/night-v1/` 기준)
+**Plans:** 9/12 plans executed (결정 0018·0019·0021 승인 시안 `design/screens/night-v1/` 기준)
 
 Plans:
 **Wave 1**
@@ -176,7 +176,7 @@ Plans:
 - [x] 03-08-PLAN.md — 밤 화면: 역할별 하단(마피아 채팅·경찰/의사 선택 알약·시민 안내), 테이블 직접 탭·낙관적 선택, 관전 화면(E1), 밤 배경·유령 미리 받기 (TDD, wave 4)
 
 **Wave 5** *(blocked on Wave 4 completion)*
-- [ ] 03-09-PLAN.md — 두 밤·두 아침·관전 전수 누출 검사, 결정 0020(밤·아침 와이어 계약·판정 규칙), ROADMAP·REQUIREMENTS·기획서 탈락자 문장을 결정 0021 에 맞춤 (wave 5)
+- [x] 03-09-PLAN.md — 두 밤·두 아침·관전 전수 누출 검사, 결정 0020(밤·아침 와이어 계약·판정 규칙), ROADMAP·REQUIREMENTS·기획서 탈락자 문장을 결정 0021 에 맞춤 (wave 5)
 - [ ] 03-10-PLAN.md — 아침 발표: 테이블 위 카드·탈락 문구 8개('님이')·무사 문구, 아침 헤더·하단, 진홍 없는 5초 타이머, 아침 안내 (TDD, wave 5)
 
 **Wave 6** *(blocked on Wave 5 completion)*
@@ -244,7 +244,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 (decimal phases
 |-------|-----------|----------------|--------|-----------|
 | 1. 걷는 뼈대 | v1.0 | 19/19 | Complete    | 2026-10-24 |
 | 2. 낮 토론 | v1.0 | 18/18 | In Progress | - |
-| 3. 밤과 아침 | v1.0 | 8/12 | In Progress | - |
+| 3. 밤과 아침 | v1.0 | 9/12 | In Progress | - |
 | 4. 처형과 승패 | v1.0 | 0/TBD | Not started | - |
 | 5. 분위기와 캐릭터 | v1.0 | 0/TBD | Not started | - |
 | 6. 친구 플레이테스트 | v1.0 | 0/TBD | Not started | - |
