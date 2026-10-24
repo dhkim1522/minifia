@@ -7,7 +7,7 @@
 .mf-qm__section { display: flex; flex-direction: column; gap: var(--space-sm); }
 .mf-qm__label { margin: 0; font-size: 14px; line-height: 1.4; font-weight: 400; color: var(--gray-100); word-break: keep-all; }
 
-/* 미리보기 알약: .mf-bubble(seat.css) 모양을 시트 폭까지 허용한다 — 최대 폭 제한 해제 */
+/* 미리보기 알약: 옛 머리 위 말풍선과 같은 모양(밝은 면·어두운 글자)을 시트 폭까지 허용한다 */
 .mf-qm__previewrow { display: flex; }
 .mf-qm__preview {
   display: inline-block; max-width: none; min-width: 0; padding: var(--space-xs) var(--space-sm);
