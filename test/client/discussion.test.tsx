@@ -100,7 +100,7 @@ function scene(view: RoomView, over: Partial<RoomConnection> = {}) {
   return { ...utils, rerender, conn: c };
 }
 
-const log = () => screen.getByRole("log");
+const log = () => screen.getByRole("log", { name: "최근 채팅" });
 const items = () => [...log().querySelectorAll<HTMLElement>(".mf-msglog__item")];
 const quickBtn = () => screen.getByRole("button", { name: "빠른 메시지" }) as HTMLButtonElement;
 const emojiBtn = () => screen.getByRole("button", { name: "이모티콘" }) as HTMLButtonElement;
@@ -189,15 +189,6 @@ describe("낮 토론 화면 — 로그·말하기 줄 (COMM-01, D-15·D-16·D-17
     expect(items().length).toBe(1);
   });
 
-  it("네 줄이 오면 로그 항목이 4개이고 마지막 줄만 밝은 글자 클래스다", () => {
-    const ev = emitter();
-    scene(makeView(), { onEvent: ev.onEvent });
-    for (const seq of [1, 2, 3, 4]) ev.emit(line(seq, (seq % 3) + 1, 0, NOW));
-    const rows = items();
-    expect(rows.length).toBe(4);
-    expect(rows.map((el) => (el.classList.contains("mf-msglog__item--latest") ? "1" : "0")).join("")).toBe("0001");
-  });
-
   it("처음 마운트(재접속)에는 로그가 '아직 메시지가 없어요' 이고 --spoke 가 없다 — 서버가 지난 줄을 보내지 않고 뷰의 옛 messages 키도 읽지 않는다 (결정 0017-7)", () => {
     const base = makeView();
     const legacy = { ...base, day: { ...base.day!, messages: [{ seq: 1, seat: 2, template: "suspect", target: 1, at: NOW }] } } as unknown as RoomView;
@@ -237,6 +228,115 @@ describe("낮 토론 화면 — 로그·말하기 줄 (COMM-01, D-15·D-16·D-17
     expect(items()[0]?.querySelector(".mf-msglog__name")?.textContent).toBe("<img src=x>");
     expect(r.container.textContent).not.toContain("alert(1)");
     expect(r.container.querySelectorAll(".mf-bubble").length).toBe(0);
+  });
+});
+
+describe("낮 토론 화면 — 채팅 세 줄 + 채팅 내역 모달 (결정 0017-6·0017-7, SPEC 하단·U-chat)", () => {
+  const SEATS = [1, 2, 3, 0, 1]; // 하윤·민지·도현·나·하윤
+  const send5 = (ev: ReturnType<typeof emitter>) => SEATS.forEach((seat, i) => ev.emit(line(i + 1, seat, 2, NOW)));
+  const moreBtn = () => screen.getByRole("button", { name: "채팅 내역 크게 보기" });
+  const history = () => dialog("채팅 내역");
+  const nameOf = (el: Element) => el.querySelector(".mf-msglog__name")?.textContent ?? "";
+
+  it("chat 이벤트 다섯 줄을 받으면 패널 로그(최근 채팅)에는 마지막 세 줄만 있고 마지막 줄만 밝다", () => {
+    const ev = emitter();
+    scene(makeView(), { onEvent: ev.onEvent });
+    send5(ev);
+    const rows = items();
+    expect(rows.length).toBe(3);
+    expect(rows.map(nameOf).join("|")).toBe("도현|나|하윤");
+    expect(rows.map((el) => (el.classList.contains("mf-msglog__item--latest") ? "1" : "0")).join("")).toBe("001");
+  });
+
+  it("로그 오른쪽에 '채팅 내역 크게 보기' 버튼이 있다(메시지가 없어도)", () => {
+    scene(makeView());
+    expect(items().length).toBe(0);
+    expect(moreBtn().getAttribute("type")).toBe("button");
+    expect(moreBtn().querySelectorAll("svg").length).toBe(1);
+    // 패널 로그 면(.mf-msglog) 안에 로그와 버튼이 함께 있다
+    expect(moreBtn().parentElement?.classList.contains("mf-msglog")).toBe(true);
+    expect(log().parentElement === moreBtn().parentElement).toBe(true);
+  });
+
+  it("그 버튼을 누르면 dialog[aria-label=채팅 내역] 이 열리고 제목 '채팅 내역', 받은 다섯 줄이 같은 줄 모양(점·이름·문장, 내 줄은 '나')으로 모두 있다", () => {
+    const ev = emitter();
+    scene(makeView(), { onEvent: ev.onEvent });
+    send5(ev);
+    expect(history()).toBeNull();
+    fireEvent.click(moreBtn());
+    const dlg = history()!;
+    expect(dlg === null).toBe(false);
+    expect(dlg.querySelector("h2")?.textContent).toBe("채팅 내역");
+    const rows = [...dlg.querySelectorAll<HTMLElement>(".mf-msglog__item")];
+    expect(rows.length).toBe(5);
+    expect(rows.map(nameOf).join("|")).toBe("하윤|민지|도현|나|하윤");
+    expect(rows.map((el) => (el.classList.contains("mf-msglog__item--latest") ? "1" : "0")).join("")).toBe("00001");
+    const mine = rows[3]!.querySelector(".mf-msglog__name");
+    expect(mine?.getAttribute("title")).toBe("지우");
+    expect(rows[1]!.querySelector<HTMLElement>(".mf-msglog__dot")?.getAttribute("style")).toContain("--seat-3");
+    expect(rows[1]!.querySelector(".mf-msglog__text")?.textContent).toBe("하윤 의심돼요");
+    expect(dlg.querySelector(".mf-sheet")?.classList.contains("mf-sheet--chat")).toBe(true);
+    expect(dlg.querySelector('[aria-label="닫기"]') === null).toBe(false);
+    expect(dlg.querySelector('ol[role="log"]')?.getAttribute("aria-label")).toBe("채팅 내역");
+  });
+
+  it("모달을 연 뒤 새 줄이 와도 같은 줄 모양으로 늘어나고, 닫으면 문서에서 사라진다", () => {
+    const ev = emitter();
+    scene(makeView(), { onEvent: ev.onEvent });
+    ev.emit(line(1, 1, 2, NOW));
+    fireEvent.click(moreBtn());
+    ev.emit(line(2, 2, 1, NOW));
+    expect(history()!.querySelectorAll(".mf-msglog__item").length).toBe(2);
+    fireEvent.click(within(history()!).getByRole("button", { name: "닫기" }));
+    act(() => {
+      vi.advanceTimersByTime(300);
+    });
+    expect(history()).toBeNull();
+  });
+
+  it("줄이 없을 때 모달은 '아직 메시지가 없어요'", () => {
+    scene(makeView());
+    fireEvent.click(moreBtn());
+    const dlg = history()!;
+    expect(dlg.querySelectorAll(".mf-msglog__item").length).toBe(0);
+    expect(within(dlg).getByText("아직 메시지가 없어요")).toBeTruthy();
+  });
+
+  it("모달을 연 채 다음 낮 시작 발표(dayAnnounce) view 로 바뀌면 모달이 문서에서 사라진다", () => {
+    const r = scene(makeView());
+    fireEvent.click(moreBtn());
+    expect(history() === null).toBe(false);
+    r.rerender(makeView({ phase: "dayAnnounce", n: 2 }));
+    expect(history()).toBeNull();
+  });
+
+  it("모달 줄의 닉네임·문장은 텍스트로만 그려진다 (T-02-47)", () => {
+    const ev = emitter();
+    const base = makeView();
+    const evil = { ...base, players: base.players.map((p) => (p.seat === 2 ? { ...p, nickname: "<img src=x>" } : p)) } satisfies RoomView;
+    scene(evil, { onEvent: ev.onEvent });
+    ev.emit({ ...line(1, 2, 1, NOW), text: "<script>alert(1)</script>" } as unknown as RoomEvent);
+    fireEvent.click(moreBtn());
+    const dlg = history()!;
+    expect(dlg.querySelector('img[src="x"]')).toBeNull();
+    expect(dlg.querySelector("script")).toBeNull();
+    expect(nameOf(dlg.querySelector(".mf-msglog__item")!)).toBe("<img src=x>");
+    expect(dlg.textContent).not.toContain("alert(1)");
+  });
+
+  it("CSS: .mf-msglog 는 night-700·모서리 --radius-md·여백 8px 4px 8px 16px, .mf-msglog__more 는 폭 44px, .mf-sheet--chat 높이 min(500px, 80dvh)", () => {
+    const css = readFileSync("src/styles/day.css", "utf8");
+    const rule = (sel: string): string => {
+      const esc = sel.replace(/[.\[\]"=:()]/g, "\\$&");
+      return new RegExp(`(?:^|\\})\\s*${esc}\\s*\\{([^}]*)\\}`, "m").exec(css)?.[1] ?? "";
+    };
+    expect(/background:\s*var\(--night-700\)/.test(rule(".mf-msglog"))).toBe(true);
+    expect(/border-radius:\s*var\(--radius-md\)/.test(rule(".mf-msglog"))).toBe(true);
+    expect(/padding:\s*8px 4px 8px 16px/.test(rule(".mf-msglog"))).toBe(true);
+    expect(/width:\s*44px/.test(rule(".mf-msglog__more"))).toBe(true);
+    expect(/height:\s*calc\(3 \* 1\.4 \* 14px \+ 2 \* var\(--space-xs\)\)/.test(rule(".mf-msglog__list"))).toBe(true);
+    expect(/height:\s*min\(500px, 80dvh\)/.test(rule(".mf-sheet.mf-sheet--chat"))).toBe(true);
+    expect(/background:\s*var\(--night-700\)/.test(rule(".mf-chatlog"))).toBe(true);
   });
 });
 
