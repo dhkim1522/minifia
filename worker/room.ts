@@ -17,6 +17,7 @@ import {
 } from "../shared/game/room";
 import type { JoinError } from "../shared/game/room";
 import type { RoomState } from "../shared/game/room";
+import { pickRecipientIds, pickTarget } from "../shared/game/night";
 import { nextWakeAt, tick } from "../shared/game/tick";
 import { buildPreview, buildView } from "../shared/game/view";
 import { ClientMessageSchema } from "../shared/schemas";
@@ -195,6 +196,9 @@ export class Room extends DurableObject<Env> {
       case "emoji":
         await this.handleEmoji(ws, msg.icon);
         return;
+      case "pick":
+        await this.handlePick(ws, msg.target);
+        return;
     }
   }
 
@@ -346,6 +350,26 @@ export class Room extends DurableObject<Env> {
     await this.persistAndBroadcast();
   }
 
+  // 밤 행동: 신원은 소켓 첨부의 playerId 뿐이고 행동 종류는 서버 저장 역할이 정한다(T-03-22).
+  // 마감이 바뀌지 않으니 reschedule 은 필요 없다(NIGHT-05). 같은 값을 다시 고르면 같은 객체라 저장·전송도 하지 않는다.
+  // 받아들여지면 전원 방송 대신 받는 사람에게만 state 를 보낸다 — 전원 방송은 행동 타이밍을 흘린다(RESEARCH Pitfall 1).
+  private async handlePick(ws: WebSocket, target: number): Promise<void> {
+    const att = this.attachmentOf(ws);
+    if (!att || !this.room) {
+      this.sendTo(ws, { t: "error", code: "BAD_MESSAGE" });
+      return;
+    }
+    const result = pickTarget(this.room, att.playerId, target);
+    if (!result.ok) {
+      this.sendRejection(ws, att.playerId, result.error);
+      return;
+    }
+    if (result.state === this.room) return;
+    this.room = result.state;
+    await this.ctx.storage.put("room", this.room);
+    this.sendViewTo(pickRecipientIds(this.room, att.playerId));
+  }
+
   // 거절되면 클라이언트가 서버 view 대로 다시 그리도록 error 뒤에 최신 state 를 보낸다(handleStart 선례).
   private sendRejection(ws: WebSocket, playerId: string, code: WsErrorCode): void {
     if (!this.room) return;
@@ -465,6 +489,20 @@ export class Room extends DurableObject<Env> {
     for (const ws of this.ctx.getWebSockets()) {
       const att = ws.deserializeAttachment() as SocketAttachment | null;
       if (!att || !room.players.some((p) => p.id === att.playerId)) continue;
+      this.sendTo(ws, { t: "state", view: buildView(room, att.playerId, now) });
+    }
+  }
+
+  // 밤 행동 뒤 state 는 행위자 쪽과 관전자에게만 — 전원 방송은 행동 타이밍을 흘린다(RESEARCH Pitfall 1).
+  // broadcast 와 같은 소켓 순회에서 첨부 playerId 가 ids 에 있는 소켓에만 그 사람의 뷰를 보낸다.
+  private sendViewTo(ids: Iterable<string>): void {
+    const room = this.room;
+    if (!room) return;
+    const allowed = new Set(ids);
+    const now = Date.now();
+    for (const ws of this.ctx.getWebSockets()) {
+      const att = ws.deserializeAttachment() as SocketAttachment | null;
+      if (!att || !allowed.has(att.playerId) || !room.players.some((p) => p.id === att.playerId)) continue;
       this.sendTo(ws, { t: "state", view: buildView(room, att.playerId, now) });
     }
   }

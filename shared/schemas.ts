@@ -25,4 +25,6 @@ export const ClientMessageSchema = z.discriminatedUnion("t", [
     claimedRole: z.enum(["mafia", "police", "doctor", "citizen"]).optional(),
   }),
   z.strictObject({ t: z.literal("emoji"), icon: z.enum(EMOJI_IDS) }),
+  // 밤 행동은 대상 seat 하나뿐이다. 행동 종류는 보내지 않는다 — 서버 저장 역할이 정한다(T-03-06).
+  z.strictObject({ t: z.literal("pick"), target: z.number().int().min(0).max(7) }),
 ]) satisfies z.ZodType<ClientMessage>;
