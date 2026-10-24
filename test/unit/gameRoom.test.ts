@@ -584,15 +584,45 @@ describe("normalizeStoredRoom — 저장된 옛 방 (RESEARCH Pattern 6, T-02-14
     expect(String(stored.phase)).toBe("day"); // 입력은 바꾸지 않는다
   });
 
-  it("lobby·roleReveal·discussion 상태는 같은 객체를 돌려준다", () => {
+  it("lobby·roleReveal·discussion 상태는 messages 키가 없으면 같은 객체를 돌려준다", () => {
     const lobby = fullRoom([0, 1, 2, 3]);
     const started = startGame(lobby, "p0", 0, seededRandInt(1));
     if (!started.ok) throw new Error(started.error);
     const roleReveal = tick(started.state, ASSIGNING_MS);
-    const discussion = tick(roleReveal, ASSIGNING_MS + ROLE_REVEAL_MS + DAY_ANNOUNCE_MS + 15_000 + 2_000);
+    const ticked = tick(roleReveal, ASSIGNING_MS + ROLE_REVEAL_MS + DAY_ANNOUNCE_MS + 15_000 + 2_000);
+    // tick 의 낮 시작 훅이 아직 옛 messages 빈 배열을 쓴다(02-15 가 지운다) — 이 테스트는 그 키가 없는 상태의 동일성을 본다.
+    const { messages: _old, ...bare } = ticked as RoomState & { messages?: unknown };
+    const discussion = bare as RoomState;
     const same = [lobby, roleReveal, discussion].map((r) => normalizeStoredRoom(r, 9_999) === r);
     expect([lobby.phase, roleReveal.phase, discussion.phase].join(",")).toBe("lobby,roleReveal,discussion");
     expect(same.join(",")).toBe("true,true,true");
+  });
+
+  /** 1·2페이즈 초기가 저장한 옛 모양: 채팅 줄을 방 상태에 쥐고 있다. 필드 선언이 사라져도 컴파일되게 단언 캐스트로 만든다. */
+  const withOldMessages = (state: RoomState, lines: unknown[] = []): RoomState => ({ ...state, messages: lines }) as unknown as RoomState;
+
+  it("저장된 방에 messages 키가 있으면(빈 배열이어도) 그 키만 지운 새 객체를 돌려주고 다른 필드·단계·마감은 그대로다 (결정 0017-7)", () => {
+    const base = { ...fullRoom([0, 1, 2, 3]), phase: "discussion" as PhaseId, phaseEndsAt: 77_000, nextMessageSeq: 9 };
+    for (const stored of [withOldMessages(base), withOldMessages(base, [{ seq: 1, seat: 0, template: "innocent", at: 1 }])]) {
+      const got = normalizeStoredRoom(stored, 5_000);
+      expect(got === stored).toBe(false);
+      expect(Object.hasOwn(got, "messages")).toBe(false);
+      expect(`${got.phase}:${got.phaseEndsAt}:${got.nextMessageSeq}:${got.day}`).toBe(`discussion:77000:9:${base.day}`);
+      expect(got.players === stored.players).toBe(true);
+      expect(Object.hasOwn(stored, "messages")).toBe(true); // 입력은 바꾸지 않는다
+    }
+  });
+
+  it("phase 가 day 이고 messages 도 있으면 dayAnnounce 정규화와 messages 정리가 함께 된다", () => {
+    const stored = withOldMessages(legacyDayRoom(), [{ seq: 1, seat: 0, template: "innocent", at: 1 }]);
+    const got = normalizeStoredRoom(stored, 5_000);
+    expect(`${got.phase}:${got.phaseEndsAt}:${got.day}`).toBe(`dayAnnounce:${5_000 + DAY_ANNOUNCE_MS}:1`);
+    expect(Object.hasOwn(got, "messages")).toBe(false);
+  });
+
+  it("messages 키가 없고 phase 가 day 가 아니면 같은 객체를 돌려준다", () => {
+    const lobby = fullRoom([0, 1, 2]);
+    expect(normalizeStoredRoom(lobby, 1) === lobby).toBe(true);
   });
 
   it("새 optional 필드가 없는 1페이즈 모양 상태를 tick 으로 낮 단계까지 넘겨도 buildView 가 기본값으로 뷰를 만든다", () => {

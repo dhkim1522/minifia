@@ -334,6 +334,34 @@ describe("방장 연장·넘기기 (D-18, D-19, DAY-01)", () => {
   });
 });
 
+describe("채팅은 서버에 저장하지 않는다 (결정 0017-7)", () => {
+  it("통과한 say 뒤 저장된 방의 messages 는 비어 있다(줄을 저장하지 않는다)", async () => {
+    const r = await startedAt("discussion");
+    const sockets = allSockets(r);
+    send(r.guests[0]!.sock, { t: "say", template: "innocent" });
+    await waitChat(sockets, 1);
+    expect(await storedMessageCount(r.code)).toBe(0);
+  });
+
+  it("옛 방 저장소에 messages 줄이 남아 있으면 깨어날 때 지워진다", async () => {
+    const r = await startedAt("discussion");
+    const stub = env.ROOM.getByName(r.code);
+    await runInDurableObject(stub, async (_instance, state) => {
+      const room = await state.storage.get<Record<string, unknown>>("room");
+      if (!room) throw new Error("방이 없다");
+      await state.storage.put("room", { ...room, messages: [{ seq: 1, seat: 1, template: "innocent", at: 1 }] });
+    });
+    expect(await storedMessageCount(r.code)).toBe(1);
+    await evictDurableObject(stub);
+
+    const sock = await connect(r.code);
+    await hello(sock, r.hostToken);
+    const stored = (await storedRoom(r.code)) as unknown as Record<string, unknown>;
+    expect(Object.keys(stored).includes("messages")).toBe(false);
+    expect(await alarmOf(r.code)).toBe((await storedRoom(r.code)).phaseEndsAt);
+  });
+});
+
 describe("옛 저장 방 정규화 (RESEARCH Pattern 6)", () => {
   it("1페이즈 종착 단계로 저장된 방은 깨어날 때 dayAnnounce·day 1 로 바뀌고 알람이 새 마감으로 걸린다", async () => {
     const r = await startedAt("discussion");
