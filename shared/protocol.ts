@@ -53,7 +53,11 @@ export interface SpectateView {
 // ---- 낮 토론 계약(2페이즈) ----
 /** 공개된 직업 주장. 그 사람의 실제 역할이 아니다. */
 export type Claim = RoleId | "none";
-export const TEMPLATE_IDS = ["suspect", "trust", "claimed", "innocent", "vote"] as const;
+// 낮 다섯 + 밤 전용 세 개(결정 0019-2) — 쓸 수 있는 때는 shared/game/chat.ts QUICK_TEMPLATES.when
+export const TEMPLATE_IDS = [
+  "suspect", "trust", "claimed", "innocent", "vote",
+  "nightTarget", "nightAgree", "nightOther",
+] as const;
 export type TemplateId = (typeof TEMPLATE_IDS)[number];
 export const EMOJI_IDS = ["smile", "grin", "surprised", "suspicious", "angry", "sad", "heart", "exclaim"] as const;
 export type EmojiId = (typeof EMOJI_IDS)[number];

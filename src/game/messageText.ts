@@ -11,6 +11,9 @@ const BLANK_ROLE = "[직업]";
 /** 시트의 문구 칩 순서(고정). */
 export const TEMPLATE_ORDER: readonly TemplateId[] = ["suspect", "trust", "innocent", "claimed", "vote"];
 
+/** 밤 시트의 문구 칩 순서(고정, N-2). 낮 칩은 TEMPLATE_ORDER. */
+export const NIGHT_TEMPLATE_ORDER: readonly TemplateId[] = ["nightTarget", "nightAgree", "nightOther"];
+
 /** 문구 칩 글자. */
 export const TEMPLATE_CHIP: Readonly<Record<TemplateId, string>> = {
   suspect: "[○○] 의심돼요",
@@ -18,6 +21,9 @@ export const TEMPLATE_CHIP: Readonly<Record<TemplateId, string>> = {
   innocent: "저 아니에요",
   claimed: "[○○]는 [직업]이었어요",
   vote: "[○○] 투표해요",
+  nightTarget: "[○○] 지목해요",
+  nightAgree: "동의해요",
+  nightOther: "다른 사람을 지목해요",
 };
 
 /** 이모티콘 화면 읽기용 이름과 트레이 칸 글자. */
@@ -61,6 +67,12 @@ export function messageText(
       return `${who} 투표해요`;
     case "innocent":
       return "저 아니에요";
+    case "nightTarget":
+      return `${who} 지목해요`;
+    case "nightAgree":
+      return "동의해요";
+    case "nightOther":
+      return "다른 사람을 지목해요";
     case "claimed": {
       // 닉네임이 없어 "[○○]" 인 경우의 조사는 칩 문구와 같게 "는"
       const josa = nick !== undefined && hasBatchim(lastUnit(nick)) ? "은" : "는";
