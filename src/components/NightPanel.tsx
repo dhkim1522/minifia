@@ -18,6 +18,8 @@ export const NIGHT_PANEL_TEXT = {
   morning: { title: "아침이 밝았습니다", guide: "곧 낮 토론이 시작돼요" },
   /** 마피아 밤 채팅 로그의 첫 줄(시스템 안내) */
   mafiaChatNotice: "마피아끼리만 보여요",
+  /** 대상 선택이 서버에서 거부됐을 때(BAD_MESSAGE) 토스트 */
+  pickError: "보내지 못했어요. 다시 시도해 주세요",
 } as const;
 
 export interface NightPanelProps {

@@ -10,12 +10,12 @@ import { DayTable } from "../components/DayTable";
 import type { DayTableSeat, DayTagRow } from "../components/DayTable";
 import { DiscussionControls } from "../components/DiscussionControls";
 import { MessageLog } from "../components/MessageLog";
-import { NIGHT_PANEL_TEXT, NightPanel, PickPill } from "../components/NightPanel";
+import { NIGHT_PANEL_TEXT, NightPanel, NoticePill, PickPill } from "../components/NightPanel";
 import { PhaseBar } from "../components/PhaseBar";
 import { Timer } from "../components/Timer";
 import { Toast, useToast } from "../components/Toast";
-import { EMOJI_TEXT } from "../game/messageText";
-import { useDayChat, useSeatFloats } from "../net/seatFloats";
+import { EMOJI_TEXT, NIGHT_TEMPLATE_ORDER } from "../game/messageText";
+import { CHAT_PHASES, useDayChat, useSeatFloats } from "../net/seatFloats";
 import type { RoomConnection } from "../net/useRoomConnection";
 import "../styles/day.css";
 import "../styles/night.css";
@@ -46,13 +46,14 @@ export function DayScene({ view, connection, myRoleButton }: DaySceneProps) {
   const { toast, show: showToast } = useToast();
   // 가장 최근 이모티콘 하나를 보이지 않는 live 줄이 읽는다(UI-SPEC 접근성)
   const [lastEmoji, setLastEmoji] = useState<{ seat: number; icon: EmojiId } | null>(null);
-  const inDiscussion = view.phase === "discussion";
+  // 채팅·이모티콘을 받는 단계(낮 토론·밤). 밤 이벤트는 서버가 살아 있는 마피아에게만 보낸다.
+  const inChatPhase = CHAT_PHASES.has(view.phase);
   useEffect(() => {
-    if (!inDiscussion) return;
+    if (!inChatPhase) return;
     return connection.onEvent((e) => {
       if (e.t === "emoji") setLastEmoji({ seat: e.seat, icon: e.icon });
     });
-  }, [connection.onEvent, inDiscussion]);
+  }, [connection.onEvent, inChatPhase]);
 
   // 공개 연출(아랫줄 팝+흔들림)은 이 화면이 직전에 claim 을 보고 있다가 claimReveal 을 받았을 때만 켠다.
   // 서버 단계가 분리돼 있어 모든 폰이 같은 순간 시작한다. 재접속으로 claimReveal 에 바로 들어오면 켜지 않는다(주장만 보인다).
@@ -79,6 +80,19 @@ export function DayScene({ view, connection, myRoleButton }: DaySceneProps) {
   const meAlive = myPlayer ? isAlive(myPlayer) : true;
   const pickVerb = view.me.role ? PICK_VERB[view.me.role] : undefined;
   const actor = isNight && meAlive && pickVerb !== undefined;
+  const myRole = view.me.role;
+  const mafiaNight = isNight && meAlive && myRole === "mafia";
+  // 경찰·의사의 하단은 NightPanel(눌리지 않는 알약). 선택 거부 토스트는 이 하단일 때만 이 장면이 구독한다 —
+  // 마피아 하단은 DiscussionControls 가 같은 토스트를 이미 띄운다(중복 구독 없음).
+  const pickPanelRole = isNight && meAlive && (myRole === "police" || myRole === "doctor") ? myRole : null;
+  const hasPickPanel = pickPanelRole !== null;
+  const { onEvent } = connection;
+  useEffect(() => {
+    if (!hasPickPanel) return;
+    return onEvent((e) => {
+      if (e.t === "error" && e.code === "BAD_MESSAGE") showToast(NIGHT_PANEL_TEXT.pickError);
+    });
+  }, [onEvent, hasPickPanel, showToast]);
   const [pending, setPending] = useState<{ view: RoomView; target: number } | null>(null);
   const shownPick = pending !== null && pending.view === view ? pending.target : view.me.pick;
   const pressPick = (target: number): void => {
@@ -88,6 +102,8 @@ export function DayScene({ view, connection, myRoleButton }: DaySceneProps) {
   };
 
   const allies = view.me.allies ?? [];
+  // 동료가 고른 대상(마피아 화면만, D-07). 서버가 생존 마피아에게만 보낸 값이다.
+  const allyPicks = view.me.allyPicks ?? [];
   // 아랫줄 완료는 서버가 보낸 claimDone 에서만 만든다 — 무엇을 골랐는지는 서버가 보내지 않는다(D-01).
   const claimDone = view.phase === "claim" ? (view.day?.claimDone ?? []) : [];
   // 남의 주장은 서버가 공개한 claims 에서만 그린다(claimReveal·discussion, 밤·아침에는 그날 낮의 주장을 유지 — UI-SPEC C6).
@@ -112,11 +128,18 @@ export function DayScene({ view, connection, myRoleButton }: DaySceneProps) {
         isHost: p.isHost,
         isMe: p.seat === view.me.seat,
         isAlly: allies.includes(p.seat),
-        row: rowOf(p.seat),
+        dead: !isAlive(p),
+        // 탈락자는 어느 화면에서나 직업 없이 '탈락' 뿐이다(관전 화면의 실제 직업 줄은 spectate 가 있을 때만, 03-08 Task 3)
+        row: !isAlive(p) ? { kind: "dead" } : rowOf(p.seat),
         spoke: floats.spoke[p.seat] !== undefined,
         emoji: e ? { key: e.key, icon: e.icon, z: e.z } : null,
-        ...(actor && isAlive(p) ? { onPick: () => pressPick(p.seat) } : {}),
-        ...(actor && shownPick === p.seat ? { pick: { mine: true } } : {}),
+        // 누를 수 있는 자리: 살아 있는 사람. 마피아 화면은 자신·동료도 눌리지 않는 이전 마크업이다(D-02 개정).
+        ...(actor && isAlive(p) && !(myRole === "mafia" && (p.seat === view.me.seat || allies.includes(p.seat)))
+          ? { onPick: () => pressPick(p.seat) }
+          : {}),
+        ...(actor && (shownPick === p.seat || (mafiaNight && allyPicks.includes(p.seat)))
+          ? { pick: { ...(shownPick === p.seat ? { mine: true } : {}), ...(mafiaNight && allyPicks.includes(p.seat) ? { ally: true } : {}) } }
+          : {}),
       };
     });
 
@@ -141,7 +164,7 @@ export function DayScene({ view, connection, myRoleButton }: DaySceneProps) {
     <Backdrop layout="game" variant={isNight ? "night" : "day"} className="mf-dayscene__backdrop">
       <main className="mf-root mf-dayscene">
         <div key={`bar-${view.phase}`} className="mf-dayscene__enter">
-          <PhaseBar title={title} instruction={`${n}일차`} extra={myRoleButton} timer={timer} />
+          <PhaseBar title={title} instruction={mafiaNight ? `${n}일차 · 함께 지목하세요` : `${n}일차`} extra={myRoleButton} timer={timer} />
         </div>
         <div className="mf-dayscene__scene">
           <DayTable seats={seats} mySeat={view.me.seat} pickVerb={pickVerb} pickDisabled={!connection.canSend} />
@@ -154,13 +177,28 @@ export function DayScene({ view, connection, myRoleButton }: DaySceneProps) {
               <MessageLog lines={chatLines} players={view.players} mySeat={view.me.seat} />
               <DiscussionControls view={view} connection={connection} showToast={showToast} />
             </>
-          ) : isNight && (view.me.role === "police" || view.me.role === "doctor") ? (
-            <NightPanel title={NIGHT_PANEL_TEXT[view.me.role].title} guide={NIGHT_PANEL_TEXT[view.me.role].guide}>
+          ) : mafiaNight ? (
+            <>
+              <MessageLog
+                lines={chatLines}
+                players={view.players}
+                mySeat={view.me.seat}
+                label="마피아 채팅"
+                systemLine={NIGHT_PANEL_TEXT.mafiaChatNotice}
+              />
+              <DiscussionControls view={view} connection={connection} showToast={showToast} templates={NIGHT_TEMPLATE_ORDER} />
+            </>
+          ) : pickPanelRole ? (
+            <NightPanel title={NIGHT_PANEL_TEXT[pickPanelRole].title} guide={NIGHT_PANEL_TEXT[pickPanelRole].guide}>
               <PickPill pick={pickPillOf()} />
+            </NightPanel>
+          ) : isNight && meAlive ? (
+            <NightPanel title={NIGHT_PANEL_TEXT.citizen.title} guide={NIGHT_PANEL_TEXT.citizen.guide}>
+              <NoticePill text={NIGHT_PANEL_TEXT.citizen.pill} />
             </NightPanel>
           ) : null}
         </section>
-        {inDiscussion ? (
+        {inChatPhase ? (
           <p className="mf-sr-only" aria-live="polite">
             {lastEmoji ? `${nicknameOf(lastEmoji.seat) ?? ""}: ${EMOJI_TEXT[lastEmoji.icon].name}` : ""}
           </p>
