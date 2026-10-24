@@ -7,11 +7,12 @@ import type { RoleId } from "../../shared/game/roles";
 import { Backdrop } from "../components/Backdrop";
 import { ClaimPanel } from "../components/ClaimPanel";
 import { DayTable } from "../components/DayTable";
-import type { DayTableSeat, DayTagRow } from "../components/DayTable";
+import type { DayTableSeat, DayTagRow, SpectatorPick } from "../components/DayTable";
 import { DiscussionControls } from "../components/DiscussionControls";
 import { MessageLog } from "../components/MessageLog";
 import { NIGHT_PANEL_TEXT, NightPanel, NoticePill, PickPill } from "../components/NightPanel";
 import { PhaseBar } from "../components/PhaseBar";
+import { ReadOnlyRow } from "../components/ReadOnlyRow";
 import { Timer } from "../components/Timer";
 import { Toast, useToast } from "../components/Toast";
 import { EMOJI_TEXT, NIGHT_TEMPLATE_ORDER } from "../game/messageText";
@@ -81,6 +82,15 @@ export function DayScene({ view, connection, myRoleButton }: DaySceneProps) {
   const pickVerb = view.me.role ? PICK_VERB[view.me.role] : undefined;
   const actor = isNight && meAlive && pickVerb !== undefined;
   const myRole = view.me.role;
+  // 관전 표시는 서버가 탈락자에게만 보낸 view.spectate 에서만 만든다(결정 0021) — 살아 있는 사람 화면에는 이 입력이 없다.
+  // 내가 탈락했는데 spectate 가 없으면(옛 서버) 테이블은 탈락 표시만, 하단은 관전 하단 그대로 그린다.
+  const meDead = !meAlive;
+  const spectate = meDead ? view.spectate : undefined;
+  const jobOf = (seat: number): RoleId | undefined => spectate?.seats.find((x) => x.seat === seat)?.job;
+  const spectatorPicksOf = (seat: number): SpectatorPick[] => {
+    const picks = isNight ? spectate?.picks : undefined;
+    return picks ? (["mafia", "police", "doctor"] as const).filter((k) => picks[k].includes(seat)) : [];
+  };
   const mafiaNight = isNight && meAlive && myRole === "mafia";
   // 경찰·의사의 하단은 NightPanel(눌리지 않는 알약). 선택 거부 토스트는 이 하단일 때만 이 장면이 구독한다 —
   // 마피아 하단은 DiscussionControls 가 같은 토스트를 이미 띄운다(중복 구독 없음).
@@ -117,6 +127,14 @@ export function DayScene({ view, connection, myRoleButton }: DaySceneProps) {
     const c = claims.find((x) => x.seat === seat);
     return c ? { kind: "claim", job: c.claim, changed: c.changed, pop: revealing && view.phase === "claimReveal" } : null;
   };
+  // 이름표 아랫줄. 관전 화면: 나는 '탈락', 다른 자리는 서버가 보낸 실제 직업. 살아 있는 사람 화면: 탈락자는 직업 없이 '탈락' 뿐이다.
+  const tagRowOf = (p: { seat: number; alive?: boolean }): DayTagRow | null => {
+    if (spectate !== undefined && p.seat !== view.me.seat) {
+      const job = jobOf(p.seat);
+      if (job !== undefined) return { kind: "real", job };
+    }
+    return isAlive(p) ? rowOf(p.seat) : { kind: "dead" };
+  };
   const seats: DayTableSeat[] = [...view.players]
     .sort((x, y) => x.seat - y.seat)
     .map((p) => {
@@ -127,10 +145,11 @@ export function DayScene({ view, connection, myRoleButton }: DaySceneProps) {
         connected: p.connected,
         isHost: p.isHost,
         isMe: p.seat === view.me.seat,
-        isAlly: allies.includes(p.seat),
+        // 관전 화면은 모든 마피아에 링·마름모를 그린다(job 이 mafia 인 다른 자리)
+        isAlly: allies.includes(p.seat) || (spectate !== undefined && p.seat !== view.me.seat && jobOf(p.seat) === "mafia"),
         dead: !isAlive(p),
-        // 탈락자는 어느 화면에서나 직업 없이 '탈락' 뿐이다(관전 화면의 실제 직업 줄은 spectate 가 있을 때만, 03-08 Task 3)
-        row: !isAlive(p) ? { kind: "dead" } : rowOf(p.seat),
+        row: tagRowOf(p),
+        ...(spectatorPicksOf(p.seat).length > 0 ? { spectatorPicks: spectatorPicksOf(p.seat) } : {}),
         spoke: floats.spoke[p.seat] !== undefined,
         emoji: e ? { key: e.key, icon: e.icon, z: e.z } : null,
         // 누를 수 있는 자리: 살아 있는 사람. 마피아 화면은 자신·동료도 눌리지 않는 이전 마크업이다(D-02 개정).
@@ -167,10 +186,33 @@ export function DayScene({ view, connection, myRoleButton }: DaySceneProps) {
           <PhaseBar title={title} instruction={mafiaNight ? `${n}일차 · 함께 지목하세요` : `${n}일차`} extra={myRoleButton} timer={timer} />
         </div>
         <div className="mf-dayscene__scene">
-          <DayTable seats={seats} mySeat={view.me.seat} pickVerb={pickVerb} pickDisabled={!connection.canSend} />
+          <DayTable
+            seats={seats}
+            mySeat={view.me.seat}
+            pickVerb={pickVerb}
+            pickDisabled={!connection.canSend}
+            {...(spectate !== undefined ? { allyMarkLabel: "마피아" } : {})}
+          />
         </div>
         <section key={`panel-${view.phase}`} className="mf-dayscene__panel mf-dayscene__enter">
-          {view.phase === "claim" || view.phase === "claimReveal" ? (
+          {meDead && view.phase !== "morning" ? (
+            // 관전 하단(UI-SPEC N-6): 채팅 읽기 전용 + 읽기 전용 안내 줄. 보내기 줄·직업 공개 칩 줄은 그리지 않는다.
+            <>
+              {isNight ? (
+                <MessageLog
+                  lines={chatLines}
+                  players={view.players}
+                  mySeat={view.me.seat}
+                  label="마피아 채팅(관전)"
+                  systemLine="관전 중 · 마피아 채팅"
+                  more={false}
+                />
+              ) : (
+                <MessageLog lines={chatLines} players={view.players} mySeat={view.me.seat} />
+              )}
+              <ReadOnlyRow />
+            </>
+          ) : view.phase === "claim" || view.phase === "claimReveal" ? (
             <ClaimPanel view={view} canSend={connection.canSend} send={connection.send} />
           ) : view.phase === "discussion" ? (
             <>

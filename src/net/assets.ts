@@ -56,15 +56,16 @@ export function entryPreloadList(): PreloadItem[] {
 }
 
 /**
- * 대기실·배정 동안 미리 받는다: 직업 그림 4종 전부와 낮 배경.
- * 어떤 역할인지와 무관하게 같은 목록이라 요청 패턴으로 역할이 드러나지 않는다.
+ * 대기실·배정 동안 미리 받는다: 직업 그림 4종 전부와 낮·밤 배경, 유령 그림(탈락 순간 깜빡임 방지).
+ * 어떤 역할이든 같은 목록 — 요청 패턴으로 역할이 드러나지 않는다(Pitfall 20).
  */
 export function rolePreloadList(): PreloadItem[] {
   const arts = ROLE_IDS.map((role) => {
     const { src, srcSet } = roleArtSrc(role);
     return { href: src, imageSrcSet: srcSet };
   });
-  return [...arts, { href: backdropUrl("game", "day") }];
+  const ghost = ghostSrc();
+  return [...arts, { href: backdropUrl("game", "day") }, { href: backdropUrl("game", "night") }, { href: ghost.src, imageSrcSet: ghost.srcSet }];
 }
 
 function preloadImages(list: PreloadItem[]): void {
