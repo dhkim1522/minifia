@@ -60,7 +60,8 @@ function canon(value: unknown): string {
 }
 
 const sortedKeys = (o: object): string => Object.keys(o).sort().join(",");
-const SKIPPABLE: PhaseId[] = ["assigning", "roleReveal", "dayAnnounce", "claim", "claimReveal", "discussion", "night", "morning"];
+// claim 은 한 번에 한 차례만 넘어가므로 아래 별도 묶음에서 다룬다(결정 0023).
+const SKIPPABLE: PhaseId[] = ["assigning", "roleReveal", "dayAnnounce", "discussion", "night", "morning"];
 
 describe("createRoomState testMode", () => {
   it("testMode true 를 주면 state.testMode 가 true 다", () => {
@@ -177,6 +178,33 @@ describe("skipPhase 동작", () => {
     });
   }
 
+  it("claim 중 넘기기는 차례 단위다: 지금 차례가 말 안 함으로 쌓이고 단계는 그대로이며 마감은 now + 8000, 마지막 차례면 discussion 이다", () => {
+    let state = stateAt(6, 7, "claim");
+    const n = state.players.length;
+    for (let i = 0; i < n; i += 1) {
+      const turnSeat = state.claimOrder![state.claimIdx ?? 0]!;
+      const now = state.phaseEndsAt! - 500;
+      const r = skipPhase(state, state.hostId, now, seededRandInt(9));
+      if (!r.ok) throw new Error(`skipPhase failed: ${r.error}`);
+      expect(r.state.claimLog!.at(-1)).toEqual({ n: 1, seat: turnSeat, claim: "none" });
+      if (i < n - 1) {
+        expect(`${r.state.phase}/${r.state.claimIdx}/${r.state.phaseEndsAt}`).toBe(`claim/${i + 1}/${now + 8000}`);
+      } else {
+        expect(`${r.state.phase}/${r.state.claimLog!.length}/${r.state.phaseEndsAt}`).toBe(`discussion/${n}/${now + 90_000}`);
+      }
+      state = r.state;
+    }
+  });
+
+  it("claim 중 넘기기 결과는 정상 마감 tick 과 마감 시각만 다르다", () => {
+    const state = stateAt(6, 7, "claim");
+    const now = state.phaseEndsAt! - 500;
+    const r = skipPhase(state, state.hostId, now, seededRandInt(9));
+    if (!r.ok) throw new Error(`skipPhase failed: ${r.error}`);
+    const normal = tick(state, state.phaseEndsAt!, seededRandInt(9));
+    expect(canon({ ...r.state, phaseEndsAt: 0 })).toBe(canon({ ...normal, phaseEndsAt: 0 }));
+  });
+
   it("밤에 마피아가 시민을 고른 뒤 넘기면 아침에 그 시민이 탈락하고 문구가 있다", () => {
     const night = stateAt(6, 4, "night");
     const mafia = night.players.find((p) => p.role === "mafia")!;
@@ -243,6 +271,16 @@ describe("resetToLobby", () => {
     const lobby = lobbyOf(5);
     const c = resetToLobby(lobby, lobby.hostId);
     expect(c.ok ? "ok" : c.error).toBe("WRONG_PHASE");
+  });
+
+  it("대기실로 돌아온 방에는 차례 상태(claimOrder·claimIdx·claimStart·claimPick·claimLog)가 하나도 없다", () => {
+    const before = dayTwoNight();
+    expect(Object.hasOwn(before, "claimOrder") && Object.hasOwn(before, "claimLog")).toBe(true); // 비어 있는 시험이 아니다
+    const r = resetToLobby(before, before.hostId);
+    if (!r.ok) throw new Error(`resetToLobby failed: ${r.error}`);
+    for (const key of ["claimOrder", "claimIdx", "claimStart", "claimPick", "claimLog"]) {
+      expect(`${key}:${Object.hasOwn(r.state, key)}`).toBe(`${key}:false`);
+    }
   });
 
   it("최상위 키는 허용 목록뿐이고 phase 는 lobby, phaseEndsAt 은 null 이다", () => {
