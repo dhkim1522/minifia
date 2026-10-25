@@ -4,7 +4,7 @@
 // 이 파일이 플레이어의 role 을 읽는 이유는 행동 종류(지목·조사·보호)·마피아 표·조사 결과가 서버 판정이기 때문이다.
 // 읽은 역할 값은 어디에도 내보내지 않는다(결정 0002): 반환값에는 isMafia 불리언 하나와 seat 뿐이다.
 import { MORNING_PHRASE_COUNT } from "../protocol";
-import type { InvestigationRecord } from "../protocol";
+import type { AssassinationRecord, InvestigationRecord, TreatmentRecord } from "../protocol";
 import { isAlive } from "./alive";
 import type { Player, RoomState } from "./room";
 import type { RandInt } from "./tick";
@@ -50,6 +50,18 @@ export function enterNight(state: RoomState): RoomState {
   };
 }
 
+/** resolveNight 의 결과. 일지 줄에는 숫자·불리언뿐이고 직업 이름은 없다. */
+export interface ResolvedNight {
+  eliminated?: number;
+  phrase?: number;
+  /** 경찰 수사일지 줄 */
+  records: Array<{ playerId: string; record: InvestigationRecord }>;
+  /** 마피아 암살일지 줄 — 팀 기록이라 생존 마피아마다 같은 줄 */
+  assassinations: Array<{ playerId: string; record: AssassinationRecord }>;
+  /** 의사 치료일지 줄 */
+  treatments: Array<{ playerId: string; record: TreatmentRecord }>;
+}
+
 /**
  * 판정 규칙표(결정 0020). 모든 행동은 밤 시작 시점의 생존자 기준으로 동시에 해결한다.
  *   마피아 아무도 안 고름           → 지목 없음, 탈락 없음, morning {} (D-08)
@@ -60,15 +72,18 @@ export function enterNight(state: RoomState): RoomState {
  *   의사 보호 = 최종 지목           → 탈락 없음, morning {} — 지목 없음과 구별되지 않는다 (D-13). 자기 보호 허용
  *   경찰 조사                       → { n: day ?? 1, target, isMafia } 를 그 경찰의 investigations 끝에 (D-09). 자기 조사 = false
  *   그 밤에 지목되는 경찰·의사      → 조사·보호는 그대로 적용 — 동시 해결 (A1)
+ *   마피아 암살일지                 → 그 밤 마피아 팀의 최종 지목이 있으면 밤 시작 때 생존 마피아 모두에게 같은 { n: day ?? 1, target, died } 한 줄(안 고른 동료 포함). 의사가 막으면 died false. 지목이 없으면 줄이 없다 (D-09·D-10)
+ *   의사 치료일지                   → 밤 시작 때 생존 의사마다 고른 앉은 생존자가 있으면 { n, target } 한 줄(자기 포함, 구출 여부 키 없음) (D-10)
  *   문구                            → 탈락자가 있을 때만 1..MORNING_PHRASE_COUNT 에서 lastPhrase 를 뺀 오름차순 후보 중 하나 (D-18)
  * 동시 해결(A1)·고른 표만 센다(A2)는 사용자가 바꿀 수 있는 기본값이다 — 바뀌면 이 표와 테스트만 고친다(결정 0020).
+ * 일지는 새 정보를 만들지 않는다 — 막은 사실을 마피아에게 알리지 않는다(결정 0026-4): died false 는 '지목했는데 아무도 죽지 않았다' 뿐이다.
  * 난수 호출 순서 계약: 동률일 때 한 번(randInt(동률 수)), 탈락자가 있을 때 한 번(randInt(후보 문구 수)).
  * 필요 없으면 부르지 않는다 — 인자 0 호출은 없다(cryptoRandInt(0) 은 RangeError).
  */
 export function resolveNight(
   state: RoomState,
   randInt: RandInt,
-): { eliminated?: number; phrase?: number; records: Array<{ playerId: string; record: InvestigationRecord }> } {
+): ResolvedNight {
   const seated = (seat: number | undefined): Player | undefined =>
     seat === undefined ? undefined : state.players.find((q) => q.seat === seat);
   const living = state.players.filter(isAlive);
@@ -101,15 +116,33 @@ export function resolveNight(
     records.push({ playerId: p.id, record: { n: state.day ?? 1, target: t.seat, isMafia: t.role === "mafia" } });
   }
 
-  if (eliminated === undefined) return { records };
+  // 마피아 암살일지: 팀의 최종 지목이 있을 때만, 밤 시작 때 살아 있던 마피아 모두에게 같은 줄(안 고른 동료 포함).
+  const assassinations: ResolvedNight["assassinations"] = [];
+  if (target !== undefined) {
+    for (const p of living) {
+      if (p.role !== "mafia") continue;
+      assassinations.push({ playerId: p.id, record: { n: state.day ?? 1, target, died: eliminated === target } });
+    }
+  }
+
+  // 의사 치료일지: 밤 시작 때 생존 의사마다 고른 앉은 생존자(자기 포함). 구출 성공 여부는 싣지 않는다.
+  const treatments: ResolvedNight["treatments"] = [];
+  for (const p of living) {
+    if (p.role !== "doctor") continue;
+    const t = seated(p.nightPick);
+    if (!t || !isAlive(t)) continue;
+    treatments.push({ playerId: p.id, record: { n: state.day ?? 1, target: t.seat } });
+  }
+
+  if (eliminated === undefined) return { records, assassinations, treatments };
   const candidates: number[] = [];
   for (let n = 1; n <= MORNING_PHRASE_COUNT; n += 1) if (n !== state.lastPhrase) candidates.push(n);
-  return { eliminated, phrase: candidates[randInt(candidates.length)], records };
+  return { eliminated, phrase: candidates[randInt(candidates.length)], records, assassinations, treatments };
 }
 
 /**
  * morning 진입 훅: resolveNight 결과를 한 번의 새 상태로 적용한다 — 탈락자 alive false(직업은 싣지 않는다),
- * 경찰 investigations 뒤에 추가, morning 은 탈락자가 있으면 { eliminated, phrase } 없으면 {}, 탈락자가 있으면 lastPhrase 갱신,
+ * 경찰 investigations·마피아 assassinations·의사 treatments 뒤에 추가, morning 은 탈락자가 있으면 { eliminated, phrase } 없으면 {}, 탈락자가 있으면 lastPhrase 갱신,
  * 모든 nightPick 키 제거(아침 뷰에 선택 흔적이 남지 않는다).
  */
 export function enterMorning(state: RoomState, randInt: RandInt): RoomState {
@@ -117,7 +150,14 @@ export function enterMorning(state: RoomState, randInt: RandInt): RoomState {
   const players: Player[] = state.players.map((p) => {
     const { nightPick: _nightPick, ...kept } = p;
     const added = result.records.filter((r) => r.playerId === p.id).map((r) => r.record);
-    const withRecords = added.length > 0 ? { ...kept, investigations: [...(kept.investigations ?? []), ...added] } : kept;
+    const killed = result.assassinations.filter((r) => r.playerId === p.id).map((r) => r.record);
+    const healed = result.treatments.filter((r) => r.playerId === p.id).map((r) => r.record);
+    const withRecords: Player = {
+      ...kept,
+      ...(added.length > 0 ? { investigations: [...(kept.investigations ?? []), ...added] } : {}),
+      ...(killed.length > 0 ? { assassinations: [...(kept.assassinations ?? []), ...killed] } : {}),
+      ...(healed.length > 0 ? { treatments: [...(kept.treatments ?? []), ...healed] } : {}),
+    };
     return result.eliminated === p.seat ? { ...withRecords, alive: false } : withRecords;
   });
   const next: RoomState = {

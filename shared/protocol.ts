@@ -32,6 +32,19 @@ export interface InvestigationRecord {
   target: number;
   isMafia: boolean;
 }
+/** 마피아 팀 암살일지 한 줄: 그 밤의 일차·마피아 팀의 최종 지목 seat·그 사람이 죽었는지 불리언 하나(의사가 막으면 false). 직업 이름은 싣지 않는다. */
+export interface AssassinationRecord {
+  n: number;
+  target: number;
+  died: boolean;
+}
+/** 의사 치료일지 한 줄: 그 밤의 일차·보호한 seat. 구출 성공 여부는 싣지 않는다. 직업 이름은 싣지 않는다. */
+export interface TreatmentRecord {
+  n: number;
+  target: number;
+}
+/** 본인 역할의 일지 한 줄 — 줄 모양은 키로 구별되고 화면은 me.role 로 해석한다(결정 0027). */
+export type RoleRecord = InvestigationRecord | AssassinationRecord | TreatmentRecord;
 /** 아침 결과. 키 없는 객체는 지난밤 무사(D-12·D-13: 의사 구출도 무사로 보인다). */
 export interface MorningView {
   eliminated?: number; // 탈락한 seat
@@ -175,7 +188,7 @@ export interface MyInfo {
   allies?: number[]; // 같은 마피아 동료의 seat — 채우는 일은 01-07
   pick?: number; // 밤에 본인이 고른 seat(본인에게만)
   allyPicks?: number[]; // 생존 마피아에게만: 동료들이 고른 대상 seat 오름차순·중복 없음(누가 골랐는지는 싣지 않는다)
-  records?: InvestigationRecord[]; // 경찰 본인에게만
+  records?: RoleRecord[]; // 본인 역할의 일지 하나(경찰 수사·마피아 암살·의사 치료), 본인에게만
   testMode?: true; // 테스트 방 방장 본인만(결정 0022). 손님·일반 방·미리보기에는 키 자체가 없다
   testRole?: RoleId; // 그 방장의 대기실 view 에서만, 고른 직업이 있을 때(없으면 무작위, 결정 0022)
   testBots?: number; // 그 방장의 대기실 view 에서만, 서버 봇 수(0 포함, 결정 0024). 손님·일반 방·게임 중에는 키 자체가 없다

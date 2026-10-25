@@ -2,7 +2,7 @@
 // 모든 함수는 새 객체를 돌려주고 입력을 바꾸지 않는다. DOM·workerd 전용 API 를 쓰지 않는다(앱·워커 두 tsconfig 에 모두 들어감).
 import { validateNickname } from "../nickname";
 import { MAX_PLAYERS, MIN_PLAYERS } from "../protocol";
-import type { Claim, ClaimLogEntry, InvestigationRecord, MorningView, PhaseId } from "../protocol";
+import type { AssassinationRecord, Claim, ClaimLogEntry, InvestigationRecord, MorningView, PhaseId, TreatmentRecord } from "../protocol";
 import type { BotPlan } from "./bots";
 import { enterClaim } from "./claim";
 import { ASSIGNING_MS, CLAIM_TURN_MS, DAY_ANNOUNCE_MS, DISCUSSION_MS } from "./phases";
@@ -34,6 +34,10 @@ export interface Player {
   nightPick?: number;
   /** 경찰만 누적하는 수사 기록 — 뷰에는 경찰 본인에게만 실린다. */
   investigations?: InvestigationRecord[];
+  /** 마피아 팀 암살일지의 사본 — 밤 시작 때 살아 있던 마피아 각자에게 같은 줄이 쌓인다. 뷰에는 그 마피아 본인에게만 실린다. */
+  assassinations?: AssassinationRecord[];
+  /** 의사 본인의 치료일지 — 뷰에는 그 의사 본인에게만 실린다. */
+  treatments?: TreatmentRecord[];
   /**
    * 서버 전용(결정 0024). 테스트 방 서버 봇 표시 — 토큰은 빈 문자열, connId 는 null, connected 는 true 로 고정이고
    * 소켓이 없다. view·미리보기·어떤 프레임에도 싣지 않는다(허용 목록 리터럴이라 저절로 빠진다).
