@@ -48,6 +48,18 @@
   --seat-6: #9aa86f;
   --seat-7: #b87a5c;
   --seat-8: #a9aebb;
+  --amber-400: #f2b84b;
+  --journal-police-bg: #16213d;
+  --journal-police-head: #1d2c52;
+  --journal-police-edge: #34456f;
+  --journal-police-ink: #9ec2ff;
+  --journal-mafia-bg: #241420;
+  --journal-mafia-head: #3a1a26;
+  --journal-mafia-edge: #5a2434;
+  --journal-doctor-bg: #10241f;
+  --journal-doctor-head: #15332b;
+  --journal-doctor-edge: #26503f;
+  --journal-doctor-ink: #8fd0bf;
   --font-ui: "Gowun Dodum", system-ui, -apple-system, "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", sans-serif;
   --space-xs: 4px;
   --space-sm: 8px;

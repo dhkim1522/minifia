@@ -42,6 +42,18 @@ export function roleArtSrc(role: RoleId): { src: string; srcSet: string } {
   return { src: png("roles", role, 2), srcSet: `${png("roles", role, 2)} 1x, ${png("roles", role, 4)} 2x` };
 }
 
+export type JournalRole = "police" | "mafia" | "doctor";
+export type JournalSlot = "cover" | "page" | "icon";
+
+const JOURNAL_ROLES: readonly JournalRole[] = ["police", "mafia", "doctor"];
+const JOURNAL_SLOTS: readonly JournalSlot[] = ["cover", "page", "icon"];
+
+// 일지 그림은 이 함수로만 가져온다. 래스터로 바뀌면 여기서 srcSet 만 더한다(규칙 `<id>_<상태>@2x.png`).
+// SVG 는 해상도와 무관해서 지금은 srcSet 이 없다.
+export function journalArt(role: JournalRole, slot: JournalSlot): { src: string; srcSet?: string } {
+  return { src: `/journals/journal_${role}_${slot}.svg` };
+}
+
 export function backdropUrl(layout: BackdropLayout, variant: BackdropVariant): string {
   return `/backgrounds/bg_${layout}_${variant}.svg`;
 }
@@ -56,7 +68,7 @@ export function entryPreloadList(): PreloadItem[] {
 }
 
 /**
- * 대기실·배정 동안 미리 받는다: 직업 그림 4종 전부와 낮·밤 배경, 유령 그림(탈락 순간 깜빡임 방지).
+ * 대기실·배정 동안 미리 받는다: 직업 그림 4종 전부와 낮·밤 배경, 유령 그림(탈락 순간 깜빡임 방지), 일지 SVG 9종.
  * 어떤 역할이든 같은 목록 — 요청 패턴으로 역할이 드러나지 않는다(Pitfall 20).
  */
 export function rolePreloadList(): PreloadItem[] {
@@ -65,7 +77,15 @@ export function rolePreloadList(): PreloadItem[] {
     return { href: src, imageSrcSet: srcSet };
   });
   const ghost = ghostSrc();
-  return [...arts, { href: backdropUrl("game", "day") }, { href: backdropUrl("game", "night") }, { href: ghost.src, imageSrcSet: ghost.srcSet }];
+  // 일지 그림 아홉 개도 역할과 무관하게 모두 받는다(요청 패턴으로 역할이 드러나지 않게, T-03.1-18).
+  const journals = JOURNAL_ROLES.flatMap((role) => JOURNAL_SLOTS.map((slot) => ({ href: journalArt(role, slot).src })));
+  return [
+    ...arts,
+    { href: backdropUrl("game", "day") },
+    { href: backdropUrl("game", "night") },
+    { href: ghost.src, imageSrcSet: ghost.srcSet },
+    ...journals,
+  ];
 }
 
 function preloadImages(list: PreloadItem[]): void {
