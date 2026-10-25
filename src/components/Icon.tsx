@@ -3,7 +3,7 @@ import type { ReactElement } from "react";
 
 // 인라인 SVG. 이모지·아이콘 폰트 대신 쓴다. 24×24 viewBox, stroke 2, round.
 // 경로는 design/design-system/components/bundle.js 의 ICONS 에서 옮겼다(share·close·check·diamond·disconnected).
-// back·copy·card·plus·skip·chat 은 참고 구현에 없어 같은 규격으로 새로 그렸다.
+// back·copy·card·plus·minus·skip·chat 은 참고 구현에 없어 같은 규격으로 새로 그렸다.
 // changed·crown·chevronUp 은 낮 화면 승인 시안 9차(design/screens/day-v3/R9-5.dc.html)의 경로를 그대로 옮겼다.
 // target·notebook 은 밤 시안 10차(design/screens/night-v1)의 경로를 그대로 옮겼다.
 export type IconName =
@@ -16,6 +16,7 @@ export type IconName =
   | "diamond"
   | "disconnected"
   | "plus"
+  | "minus"
   | "skip"
   | "chat"
   | "smile"
@@ -54,6 +55,7 @@ const ICONS: Readonly<Record<IconName, readonly Part[]>> = {
     ["circle", { cx: 12, cy: 19.5, r: 1, fill: "currentColor" }],
   ],
   plus: [["path", { d: "M12 5v14M5 12h14" }]],
+  minus: [["path", { d: "M5 12h14" }]],
   skip: [["path", { d: "M6 5l9 7-9 7zM19 5v14" }]],
   chat: [["path", { d: "M5 5h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-7l-5 4v-4H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z" }]],
   // 임시 형태 시안 — 최종 그림은 캐릭터 톤에 맞춰 교체(D-16). 아래 이모티콘 여덟 항목만 바꾸면 트레이·반응 원이 따라온다.
