@@ -327,10 +327,21 @@ describe("6명 한 판(두 밤·두 아침, 행동·마피아 채팅·탈락·�
           }
         }
         // (3) 비공개 키는 받을 사람에게만.
+        // 일지(D-10): 경찰·마피아·의사 본인만, 역할마다 줄 키가 다르다. 시민(탈락한 시민 관전 소켓 포함)에게는 어떤 프레임에도 없다.
         if (paths.includes(".view.me.records")) {
-          expect(a.role).toBe("police");
+          expect(["police", "mafia", "doctor"].includes(a.role)).toBe(true);
           saw.records.add(a.seat);
         }
+        const lineKeys = paths.filter((pth) => pth.startsWith(".view.me.records[].")).map((pth) => pth.slice(".view.me.records[].".length));
+        for (const key of lineKeys) {
+          expect(["n", "target", "isMafia", "died"].includes(key)).toBe(true);
+          if (key === "isMafia") expect(a.role).toBe("police"); // 수사일지의 키는 경찰 프레임에만
+          if (key === "died") expect(a.role).toBe("mafia"); // 암살일지의 키는 마피아 프레임에만
+        }
+        if (a.role === "doctor") expect(lineKeys.every((key) => key === "n" || key === "target")).toBe(true); // 치료일지에는 n,target 뿐
+        if (a.role === "citizen") expect(paths.some((pth) => pth.startsWith(".view.me.records"))).toBe(false);
+        // 일지 줄 안에는 문자열이 없다 — 숫자·불리언뿐이다.
+        if (msg.t === "state") for (const r of msg.view.me.records ?? []) for (const v of Object.values(r)) expect(typeof v === "string").toBe(false);
         if (paths.includes(".view.me.allyPicks")) {
           expect(a.role).toBe("mafia");
           expect(dead).toBe(false);
@@ -378,7 +389,7 @@ describe("6명 한 판(두 밤·두 아침, 행동·마피아 채팅·탈락·�
     // (2) 관전자 X 는 2일차 밤에 마피아 선택(spectate.picks.mafia ∋ Y)을 봤다.
     expect(saw.spectatePicksX).toBe(true);
     // (3) 받을 사람은 실제로 받았다 — 아무도 못 받는 검사가 되지 않게.
-    expect([...saw.records]).toEqual([police.seat]);
+    expect([...saw.records].sort()).toEqual([police.seat, mafiaA.seat, mafiaB.seat, doctor.seat].sort());
     expect([...saw.ally].sort()).toEqual([mafiaA.seat, mafiaB.seat].sort());
     expect([...saw.pick].sort()).toEqual([mafiaA.seat, mafiaB.seat, police.seat, doctor.seat].sort());
 
@@ -394,6 +405,18 @@ describe("6명 한 판(두 밤·두 아침, 행동·마피아 채팅·탈락·�
     expect(morning1.phrase! >= 1 && morning1.phrase! <= 8).toBe(true);
     expect(morning2.eliminated).toBe(victimY.seat);
     expect(morning2.phrase).not.toBe(morning1.phrase); // 문구 연속 반복 없음
+
+    // 일지는 본인 역할의 것만: 마피아 둘은 같은 암살일지(두 밤 모두 died true), 의사는 자기 치료일지, 시민은 키 없음.
+    const lastOf = (a: Actor) => lastViews[actors.findIndex((x) => x === a)]!;
+    const assassination = JSON.stringify([
+      { n: 1, target: victimX.seat, died: true },
+      { n: 2, target: victimY.seat, died: true },
+    ]);
+    expect(JSON.stringify(lastOf(mafiaA).me.records)).toBe(assassination);
+    expect(JSON.stringify(lastOf(mafiaB).me.records)).toBe(assassination);
+    expect(JSON.stringify(lastOf(doctor).me.records)).toBe(JSON.stringify([{ n: 1, target: doctor.seat }]));
+    // 탈락한 시민 X·Y 는 관전자가 되어도 일지가 없다(spectate 는 직업·지목만, 일지는 역할의 몫).
+    for (const a of [victimX, victimY]) expect("records" in lastOf(a).me).toBe(false);
 
     // 경찰만 수사 기록을 받는다: 두 밤의 기록이 쌓여 있다.
     const policeLast = lastViews[actors.findIndex((x) => x === police)]!;
