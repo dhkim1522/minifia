@@ -56,3 +56,42 @@
   background: var(--amber-400); color: var(--night-900); font-size: 12px; line-height: 18px; font-weight: 700;
 }
 .mf-journal__empty { padding: var(--space-sm) 0; font-size: 14px; line-height: 20px; color: var(--gray-300); }
+
+/* ---- 역할 카드 시트(RoleCardSheet) ---- */
+/* 높이는 시트가 정한다: 일지가 비어도 내용이 많아도 탭을 바꿀 때 시트가 출렁이지 않는다. */
+.mf-sheet.mf-sheet--rolecard { height: min(420px, 80dvh); }
+
+/* 탭 줄(시안 CSS 없음 — UI-SPEC D 계약): 2열, 간격 8 */
+.mf-rolecard__tabs { flex: none; display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-sm); }
+.mf-rolecard__tab {
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--space-xs);
+  min-height: var(--tap-min); padding: 0 var(--space-md); border-radius: var(--radius-md);
+  background: var(--night-800); border: 1px solid var(--night-600); color: var(--gray-300);
+  font: inherit; font-size: 14px; line-height: 20px; font-weight: 700; cursor: pointer;
+}
+.mf-rolecard__tab[aria-selected="true"] { background: var(--night-700); border-color: var(--gray-300); color: var(--gray-50); }
+.mf-rolecard__tab:focus-visible { outline: 2px solid var(--gray-100); outline-offset: 2px; }
+/* 안 읽은 기록 점: 앰버는 "읽지 않음" 하나만 뜻한다(UI-SPEC 앰버 예약 2번) */
+.mf-rolecard__dot { flex: none; width: 10px; height: 10px; margin-left: var(--space-xs); border-radius: 50%; background: var(--amber-400); }
+
+/* 탭 본문: 남는 높이를 채운다(일지가 안에서 스크롤) */
+.mf-rolecard__panel { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+
+/* 내 역할 본문(시안 .cs): 가로 배치, 간격 16, 세로 가운데, 안쪽 16, 면 night-700 */
+.mf-rolecard__body {
+  display: flex; align-items: center; gap: var(--space-md); padding: var(--space-md);
+  background: var(--night-700); border-radius: var(--radius-md);
+}
+.mf-rolecard__body--back { justify-content: center; }
+.mf-rolecard__art, .mf-rolecard__back {
+  flex: none; box-sizing: border-box; width: 128px; height: 160px; padding: 8px; border-radius: 12px;
+  background: var(--night-800); border: 1px solid var(--night-600);
+}
+.mf-rolecard__art { object-fit: contain; }
+.mf-rolecard__back { display: flex; align-items: center; justify-content: center; }
+.mf-rolecard__back .mf-card__diamond { width: 64px; }
+.mf-rolecard__t { flex: 1; min-width: 0; }
+.mf-rolecard__name { margin: 0; font-size: 24px; line-height: 1.2; font-weight: 700; color: var(--gray-50); }
+.mf-rolecard__desc { margin: var(--space-xs) 0 0; font-size: 14px; line-height: 20px; color: var(--gray-300); word-break: keep-all; }
+.mf-rolecard__mates { margin: var(--space-sm) 0 0; font-size: 14px; line-height: 1.4; font-weight: 700; color: var(--crimson-300); word-break: keep-all; }
+.mf-rolecard__empty { margin: 0; font-size: 16px; line-height: 1.5; color: var(--gray-300); word-break: keep-all; }

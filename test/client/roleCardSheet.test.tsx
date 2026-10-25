@@ -317,7 +317,8 @@ describe("RoleCardSheet 활동 기록 본문", () => {
     expect(document.querySelector(".mf-journal")?.className).toContain(`mf-journal--${role}`);
     // players 에서 이름을 찾고(경찰: 하윤, 의사: 민지), 내 자리(0)는 `나` 다(마피아 기록의 대상이 0).
     const who = document.querySelector(".mf-journal__w b")?.textContent;
-    expect(who).toBe({ police: "하윤", mafia: "나", doctor: "민지" }[role]);
+    const expected: Record<RoleId, string> = { police: "하윤", mafia: "나", doctor: "민지", citizen: "" };
+    expect(who).toBe(expected[role]);
   });
 
   it("records 가 없으면(me.records 키 없음) 빈 문구다", () => {
