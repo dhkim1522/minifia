@@ -1,0 +1,11 @@
+/* 17차: 후광·말하는 중 말풍선·배경 전환(정지 장면) */
+.sf--glow.sf--white img { filter: drop-shadow(0 0 2px rgba(255, 255, 255, 0.95)) drop-shadow(0 0 9px rgba(241, 242, 245, 0.75)); }
+.sf--glow.sf--crimson img { filter: drop-shadow(0 0 2px rgba(224, 52, 75, 0.95)) drop-shadow(0 0 9px rgba(224, 52, 75, 0.7)); }
+.sf__bub { position: absolute; left: 50%; top: -30px; transform: translateX(-50%); height: 26px; padding: 0 11px; border-radius: 13px; background: var(--gray-50); display: flex; align-items: center; gap: 4px; box-shadow: 0 4px 10px rgba(0, 0, 0, 0.45); }
+.sf__bub::after { content: ""; position: absolute; left: 50%; bottom: -5px; margin-left: -5px; border: 5px solid transparent; border-bottom: 0; border-top-color: var(--gray-50); }
+.sf__bub i { width: 6px; height: 6px; border-radius: 50%; background: var(--night-900); opacity: 0.3; }
+.sf__bub i:nth-child(1) { opacity: 1; }
+.sf__bub i:nth-child(2) { opacity: 0.6; }
+.bgx-sun { position: absolute; border-radius: 50%; pointer-events: none; z-index: 2; }
+.bgx-txt { position: absolute; left: 0; right: 0; text-align: center; z-index: 90; pointer-events: none; }
+.bgx-txt p { margin: 0; }
