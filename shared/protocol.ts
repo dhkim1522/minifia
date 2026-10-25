@@ -11,6 +11,8 @@ export type { RoleId } from "./game/roles";
 
 export const MIN_PLAYERS = 4;
 export const MAX_PLAYERS = 8;
+/** 테스트 방 방장이 한 번에 요청할 수 있는 봇 수의 상한(결정 0024). 서버가 총 인원 MAX_PLAYERS 로 한 번 더 자른다. */
+export const MAX_TEST_BOTS = 7;
 export const MAX_FRAME_BYTES = 1024; // WebSocket 프레임 상한
 export const MAX_BODY_BYTES = 1024; // HTTP 본문 상한
 

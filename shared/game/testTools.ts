@@ -85,3 +85,8 @@ export function setTestRole(state: RoomState, actorId: string, role: RoleId | nu
   }
   return { ok: true, state: { ...state, testRole: role } };
 }
+
+/** RED 자리 표시 — GREEN 커밋에서 실제 구현으로 바뀐다. */
+export function setBotCount(_state: RoomState, _actorId: string, _count: number, _makeId: () => string): TestToolResult {
+  throw new Error("not implemented");
+}
