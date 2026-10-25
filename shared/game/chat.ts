@@ -16,10 +16,10 @@ import type { Player, RoomState } from "./room";
 
 /**
  * 템플릿 표(D-11). 문구를 늘리려면 TEMPLATE_IDS(protocol.ts)와 이 표에 행을 더한다.
- * target: 대상 칸이 필요한가, role: 직업 칸이 필요한가, when: 쓸 수 있는 때(day = 낮 토론, night = 밤 마피아 채팅 — 결정 0019-2).
+ * target: 대상 칸이 필요한가, role: 직업 칸이 필요한가, when: 쓸 수 있는 때(day = 낮 토론, night = 밤 마피아 채팅 — 결정 0019-2, claim = 표시 전용으로 서버는 받지 않는다 — 결정 0027-7).
  * 주석은 화면 문장이고 서버는 만들지 않는다.
  */
-export const QUICK_TEMPLATES: Readonly<Record<TemplateId, { target: boolean; role: boolean; when: "day" | "night" }>> = Object.freeze({
+export const QUICK_TEMPLATES: Readonly<Record<TemplateId, { target: boolean; role: boolean; when: "day" | "night" | "claim" }>> = Object.freeze({
   suspect: Object.freeze({ target: true, role: false, when: "day" as const }), // "{닉네임} 의심돼요"
   trust: Object.freeze({ target: true, role: false, when: "day" as const }), // "{닉네임} 믿어요"
   claimed: Object.freeze({ target: true, role: true, when: "day" as const }), // "{닉네임}은/는 {직업}이었어요"
@@ -28,6 +28,9 @@ export const QUICK_TEMPLATES: Readonly<Record<TemplateId, { target: boolean; rol
   nightTarget: Object.freeze({ target: true, role: false, when: "night" as const }), // "{닉네임} 지목해요"
   nightAgree: Object.freeze({ target: false, role: false, when: "night" as const }), // "동의해요"
   nightOther: Object.freeze({ target: false, role: false, when: "night" as const }), // "다른 사람을 지목해요"
+  // 표시 전용(결정 0027-7): 화면이 claimLog 에서 만드는 주장 줄. when "claim" 은 say 의 때 검사(day|night)에 걸려 서버가 받지 않는다.
+  claimRole: Object.freeze({ target: false, role: true, when: "claim" as const }), // "저는 {직업}이에요"
+  claimNone: Object.freeze({ target: false, role: false, when: "claim" as const }), // "말하지 않았어요"
 });
 
 /** 클라이언트 잠금(보낸 순간 + 2초). 서버 한도는 지터 여유로 더 짧다(G-02-2, 결정 0016-6 의 대안). */

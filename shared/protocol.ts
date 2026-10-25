@@ -69,12 +69,18 @@ export interface SpectateView {
 // ---- 낮 토론 계약(2페이즈) ----
 /** 공개된 직업 주장. 그 사람의 실제 역할이 아니다. */
 export type Claim = RoleId | "none";
-// 낮 다섯 + 밤 전용 세 개(결정 0019-2) — 쓸 수 있는 때는 shared/game/chat.ts QUICK_TEMPLATES.when
+// 낮 다섯 + 밤 전용 세 개(결정 0019-2) + 표시 전용 두 개(결정 0027-7) — 쓸 수 있는 때는 shared/game/chat.ts QUICK_TEMPLATES.when
 export const TEMPLATE_IDS = [
   "suspect", "trust", "claimed", "innocent", "vote",
   "nightTarget", "nightAgree", "nightOther",
+  "claimRole", "claimNone",
 ] as const;
 export type TemplateId = (typeof TEMPLATE_IDS)[number];
+/**
+ * 표시 전용(결정 0027-7): 화면이 claimLog 에서 만드는 주장 줄에만 쓰고 서버는 chat 프레임으로도 say 로도 쓰지 않는다.
+ * 빠른 메시지 칩 순서 목록(TEMPLATE_ORDER·NIGHT_TEMPLATE_ORDER)에 넣지 않는다.
+ */
+export const DISPLAY_ONLY_TEMPLATE_IDS = ["claimRole", "claimNone"] as const;
 export const EMOJI_IDS = ["smile", "grin", "surprised", "suspicious", "angry", "sad", "heart", "exclaim"] as const;
 export type EmojiId = (typeof EMOJI_IDS)[number];
 /**

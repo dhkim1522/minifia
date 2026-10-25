@@ -2,7 +2,7 @@
 // 문자열만 만든다 — HTML 을 만들지 않고, 호출하는 쪽이 React 텍스트로만 그린다(T-02-21).
 import type { RoleId } from "../../shared/game/roles";
 import type { EmojiId, TemplateId } from "../../shared/protocol";
-import { ROLE_TEXT } from "./roleText";
+import { CLAIM_LINE, CLAIM_NONE_LINE, ROLE_TEXT } from "./roleText";
 
 /** 빈 대상 자리(흰 동그라미 두 개). 시트 미리보기와 칩이 같은 글자를 쓴다 */
 const BLANK_TARGET = "[○○]";
@@ -24,6 +24,9 @@ export const TEMPLATE_CHIP: Readonly<Record<TemplateId, string>> = {
   nightTarget: "[○○] 지목해요",
   nightAgree: "동의해요",
   nightOther: "다른 사람을 지목해요",
+  // 표시 전용(결정 0027-7): 주장 줄에만 쓰고 칩 목록(TEMPLATE_ORDER·NIGHT_TEMPLATE_ORDER)에는 쓰이지 않는다
+  claimRole: "저는 [직업]이에요",
+  claimNone: "말하지 않았어요",
 };
 
 /** 이모티콘 화면 읽기용 이름과 트레이 칸 글자. */
@@ -73,6 +76,10 @@ export function messageText(
       return "동의해요";
     case "nightOther":
       return "다른 사람을 지목해요";
+    case "claimRole":
+      return msg.claimedRole === undefined ? CLAIM_NONE_LINE : CLAIM_LINE[msg.claimedRole];
+    case "claimNone":
+      return CLAIM_NONE_LINE;
     case "claimed": {
       // 닉네임이 없어 "[○○]" 인 경우의 조사는 칩 문구와 같게 "는"
       const josa = nick !== undefined && hasBatchim(lastUnit(nick)) ? "은" : "는";
