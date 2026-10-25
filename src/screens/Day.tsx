@@ -10,7 +10,7 @@ import "../styles/phase.css";
 export function Day({ view, myRoleButton }: { view: RoomView; myRoleButton: ReactNode }) {
   const n = view.day?.n ?? 1;
   return (
-    <Backdrop layout="game" variant="day" className="mf-day__backdrop">
+    <Backdrop layout="game" scene="day" className="mf-day__backdrop">
       <main className="mf-root mf-day">
         <div className="mf-day__morning" aria-hidden="true" />
         <div className="mf-day__top">{myRoleButton}</div>

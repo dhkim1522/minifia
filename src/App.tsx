@@ -118,7 +118,7 @@ export function App() {
   }
   if (current.screen === "resuming") {
     return (
-      <Backdrop layout="entry" variant="lobby">
+      <Backdrop layout="entry" scene="lobby">
         <main className="mf-root mf-entry">
           <p className="mf-t-body mf-t-muted mf-entry__loading">방 정보를 불러오는 중…</p>
         </main>

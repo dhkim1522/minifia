@@ -14,8 +14,8 @@ const H = 630;
 const FONT = root("design/fonts/GowunDodum-og-subset.ttf");
 const FONT_FAMILY = "Gowun Dodum";
 
-// 입장 배경(SVG)을 1200×630 으로 채우고 위아래를 어둡게 가린다(제목·인물이 읽히도록).
-const background = await sharp(root("public/backgrounds/bg_entry_lobby.svg"), { density: 144 })
+// 입장 배경(원본 SVG, design/backgrounds/A_cute — 앱 그림은 WebP 로 바뀌었다)을 1200×630 으로 채우고 위아래를 어둡게 가린다(제목·인물이 읽히도록).
+const background = await sharp(root("design/backgrounds/A_cute/bg_entry_lobby.svg"), { density: 144 })
   .resize(W, H, { fit: "cover", position: "centre" })
   .png()
   .toBuffer();

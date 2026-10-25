@@ -20,7 +20,7 @@ export function Assigning({ view }: { view: RoomView }) {
   }));
 
   return (
-    <Backdrop layout="game" variant="lobby" className="mf-assign__backdrop">
+    <Backdrop layout="game" scene="lobby" className="mf-assign__backdrop">
       <main className="mf-root mf-assign">
         <header className="mf-assign__bar">
           <h1 className="mf-t-heading">역할 배정</h1>

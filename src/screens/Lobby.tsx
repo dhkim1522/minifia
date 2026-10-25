@@ -112,7 +112,7 @@ export function Lobby({ view, send, canSend = true, epoch = 0, onLeave, testButt
   });
 
   return (
-    <Backdrop layout="game" variant="lobby" className="mf-lobby__backdrop">
+    <Backdrop layout="game" scene="lobby" className="mf-lobby__backdrop">
       <main className="mf-root mf-lobby">
         <header className="mf-lobby__bar">
           <Button

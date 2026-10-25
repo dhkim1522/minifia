@@ -3,6 +3,8 @@
 import { preload } from "react-dom";
 import { ROLE_IDS } from "../../shared/game/roles";
 import type { RoleId } from "../../shared/game/roles";
+import { SCENES } from "../game/scenes";
+import type { SceneId } from "../game/scenes";
 
 // design/design-system/components/bundle.js 의 FIGURE_IDS 와 같다. 자리 번호 → 인물.
 export const FIGURE_IDS = [
@@ -17,7 +19,8 @@ export const FIGURE_IDS = [
 ] as const;
 
 export type BackdropLayout = "entry" | "game";
-export type BackdropVariant = "lobby" | "night" | "day" | "verdict";
+/** entry(입구) 구도 그림은 lobby 장면 하나뿐이다. */
+export type EntryScene = "lobby";
 export type PreloadItem = { href: string; imageSrcSet?: string };
 
 // 파일 이름의 @ 는 URL 에서 %40 으로 쓴다.
@@ -54,11 +57,14 @@ export function journalArt(role: JournalRole, slot: JournalSlot): { src: string;
   return { src: `/journals/journal_${role}_${slot}.svg` };
 }
 
-export function backdropUrl(layout: BackdropLayout, variant: BackdropVariant): string {
-  return `/backgrounds/bg_${layout}_${variant}.svg`;
+/** 배경 그림 주소의 단일 출처: /backgrounds/bg_{layout}_{장면 파일 조각}.webp. 장면 목록은 src/game/scenes.ts. */
+export function backdropUrl(layout: "entry", scene: EntryScene): string;
+export function backdropUrl(layout: "game", scene: SceneId): string;
+export function backdropUrl(layout: BackdropLayout, scene: SceneId): string {
+  return `/backgrounds/bg_${layout}_${SCENES[scene].file}.webp`;
 }
 
-/** 입장 화면에서 미리 받는다: 입장·대기실 배경, 인물 8종(대기실 첫 그림이 비어 보이지 않게). */
+/** 입장 화면에서 미리 받는다: 입장·대기실 배경(WebP 약 99KB), 인물 8종(대기실 첫 그림이 비어 보이지 않게). */
 export function entryPreloadList(): PreloadItem[] {
   const figures = FIGURE_IDS.map((_, seat) => {
     const { src, srcSet } = figureSrc(seat);
@@ -68,7 +74,8 @@ export function entryPreloadList(): PreloadItem[] {
 }
 
 /**
- * 대기실·배정 동안 미리 받는다: 직업 그림 4종 전부와 낮·밤 배경, 유령 그림(탈락 순간 깜빡임 방지), 일지 SVG 9종.
+ * 대기실·배정 동안 미리 받는다: 직업 그림 4종 전부와 아침·낮·밤 배경(WebP 약 74KB), 유령 그림(탈락 순간 깜빡임 방지), 일지 SVG 9종.
+ * 해질녘·투표·처형 배경은 어떤 목록에도 없다 — 그 장면이 처음 쓰일 때 불러온다(4페이즈).
  * 어떤 역할이든 같은 목록 — 요청 패턴으로 역할이 드러나지 않는다(Pitfall 20).
  */
 export function rolePreloadList(): PreloadItem[] {
@@ -81,6 +88,7 @@ export function rolePreloadList(): PreloadItem[] {
   const journals = JOURNAL_ROLES.flatMap((role) => JOURNAL_SLOTS.map((slot) => ({ href: journalArt(role, slot).src })));
   return [
     ...arts,
+    { href: backdropUrl("game", "morning") },
     { href: backdropUrl("game", "day") },
     { href: backdropUrl("game", "night") },
     { href: ghost.src, imageSrcSet: ghost.srcSet },

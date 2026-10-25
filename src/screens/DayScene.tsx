@@ -19,6 +19,7 @@ import { TurnPanel } from "../components/TurnPanel";
 import { UserRecordSheet } from "../components/UserRecordSheet";
 import { Toast, useToast } from "../components/Toast";
 import { morningCardText } from "../game/eliminationText";
+import { sceneOfPhase } from "../game/scenes";
 import { EMOJI_TEXT, NIGHT_TEMPLATE_ORDER } from "../game/messageText";
 import { claimLinesOf } from "../net/claimLines";
 import { FLOAT_PHASES, useDayChat, useSeatFloats } from "../net/seatFloats";
@@ -197,7 +198,7 @@ export function DayScene({ view, connection, myRoleButton, testButton }: DayScen
     ) : null;
 
   return (
-    <Backdrop layout="game" variant={isNight ? "night" : "day"} className="mf-dayscene__backdrop">
+    <Backdrop layout="game" scene={sceneOfPhase(view.phase)} className="mf-dayscene__backdrop">
       <main className="mf-root mf-dayscene">
         <div key={`bar-${view.phase}`} className="mf-dayscene__enter">
           <PhaseBar title={title} instruction={mafiaNight ? `${n}일차 · 함께 지목하세요` : isMorning ? `${n + 1}일차` : `${n}일차`} extra={myRoleButton} timer={timer} />

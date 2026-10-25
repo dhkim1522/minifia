@@ -16,7 +16,8 @@
     "smoke": "node scripts/smoke.mjs",
     "e2e": "node scripts/e2e/run.mjs",
     "tokens": "node scripts/gen-tokens.mjs",
-    "tokens:check": "node scripts/gen-tokens.mjs --check"
+    "tokens:check": "node scripts/gen-tokens.mjs --check",
+    "backdrops": "node scripts/make-backdrops.mjs"
   },
   "dependencies": {
     "react": "19.3.1",

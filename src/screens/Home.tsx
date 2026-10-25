@@ -119,7 +119,7 @@ export function Home({ onEnterRoom }: HomeProps) {
   }
 
   return (
-    <Backdrop layout="entry" variant="lobby">
+    <Backdrop layout="entry" scene="lobby">
       <main className="mf-root mf-entry">
         <header className="mf-entry__head">
           <p className="mf-t-label">친구들과 한 판, 점심시간 마피아</p>

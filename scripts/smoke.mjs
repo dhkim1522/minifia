@@ -852,6 +852,17 @@ async function stageFull(url, args) {
   if (og.status !== 200) fail(`/og.png 상태 ${og.status}`);
   if (!(og.headers.get("content-type") ?? "").includes("image/png")) fail("/og.png 가 image/png 가 아님");
   await og.arrayBuffer();
+  // 배경 WebP(결정 0030): 없는 경로는 SPA 가 index.html 을 200 으로 주므로 content-type·RIFF/WEBP 머리로 파일 존재를 증명한다. 상한은 scenes.test.ts 와 같다.
+  for (const [path, maxKB] of [["/backgrounds/bg_game_night.webp", 48], ["/backgrounds/bg_entry_lobby.webp", 64]]) {
+    const bg = await fetch(`${origin}${path}`);
+    if (bg.status !== 200) fail(`${path} 상태 ${bg.status}`);
+    if (!(bg.headers.get("content-type") ?? "").includes("image/webp")) fail(`${path} 가 image/webp 가 아님: ${bg.headers.get("content-type")}`);
+    if (!(bg.headers.get("cache-control") ?? "").includes("max-age=86400")) fail(`${path} 의 Cache-Control 에 max-age=86400 이 없음: ${bg.headers.get("cache-control")}`);
+    const bytes = new Uint8Array(await bg.arrayBuffer());
+    const head = (from, to) => String.fromCharCode(...bytes.subarray(from, to));
+    if (head(0, 4) !== "RIFF" || head(8, 12) !== "WEBP") fail(`${path} 가 RIFF…WEBP 머리가 아님`);
+    if (bytes.length > maxKB * 1024) fail(`${path} 용량 ${(bytes.length / 1024).toFixed(1)}KB > 상한 ${maxKB}KB`);
+  }
 
   console.log(`SMOKE OK full code=${code} players=${N} spread=${spread}ms discSpread=${discSpread}ms version=${version}`);
 }

@@ -63,7 +63,7 @@ export function RoleReveal({ view, offset, myRoleButton, onSeenFront }: RoleReve
   const allies = allyNicknames(view);
 
   return (
-    <Backdrop layout="game" variant="lobby" className="mf-reveal__backdrop">
+    <Backdrop layout="game" scene="lobby" className="mf-reveal__backdrop">
       <main className="mf-root mf-reveal">
         <div className="mf-reveal__dim" aria-hidden="true" />
         <PhaseBar
