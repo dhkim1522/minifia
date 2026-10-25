@@ -161,6 +161,9 @@ export function DayScene({ view, connection, myRoleButton, testButton }: DayScen
         dead: !isAlive(p),
         ...(spectatorPicksOf(p.seat).length > 0 ? { spectatorPicks: spectatorPicksOf(p.seat) } : {}),
         spoke: floats.spoke[p.seat] !== undefined,
+        // roleArt 는 meDead && spectate 한 곳(spectate 상수)에서만 만든다 — 살아 있는 사람 화면에는 이 입력과 코드 경로가 없다(결정 0021·0002).
+        // 살아 있는 다른 자리만 직업 캐릭터로 그리고, 탈락한 자리와 내 자리는 DayTable 이 유령으로 그린다.
+        ...(spectate !== undefined && p.seat !== view.me.seat && isAlive(p) && jobOf(p.seat) !== undefined ? { roleArt: jobOf(p.seat)! } : {}),
         turn: p.seat === turnSeat,
         // 아침: 방금 탈락한 한 자리는 어둡게 층 위(z 31)에 남고, 밤 → 아침을 직접 본 경우에만 400ms 맥동한다(재접속은 z 만).
         ...(eliminatedSeat !== undefined && p.seat === eliminatedSeat ? { spotlit: true, ...(sawNightToMorning ? { pulse: true } : {}) } : {}),

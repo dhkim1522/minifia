@@ -571,7 +571,7 @@ describe("DayScene 낮 캐릭터 탭 → 유저 기록 카드 (03.1-08, D-06·D-
       picks: { mafia: [], police: [], doctor: [] },
     };
     const { container } = scene(makeView({ phase: "discussion", dead: [0], spectate, role: "citizen", claimLog }));
-    fireEvent.click(within(container).getByRole("button", { name: "민지, 주장 기록 보기" }));
+    fireEvent.click(within(container).getByRole("button", { name: "민지, 의사, 주장 기록 보기" }));
     expect(rowsOf("민지 기록")).toEqual(["1일차말하지 않았어요"]);
     expect(sheet("민지 기록")?.textContent?.includes("의사")).toBe(false);
   });
