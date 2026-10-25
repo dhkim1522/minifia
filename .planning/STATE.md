@@ -7,12 +7,12 @@ current_phase_name: 밤과 아침
 current_plan: 12
 status: verifying
 stopped_at: Completed 03-12-PLAN.md
-last_updated: "2026-10-24T17:00:37.343Z"
+last_updated: "2026-10-25T04:22:19.938Z"
 last_activity: 2026-10-25
 last_activity_desc: Phase 03 execution started
-state_head: 7f144ef3c561a2b7a4a71b1c072af4e9a8d7534d
+state_head: 215949d77da980d542b08e49735ec8c74a88f59d
 progress:
-  total_phases: 6
+  total_phases: 7
   completed_phases: 1
   total_plans: 49
   completed_plans: 49
@@ -185,6 +185,10 @@ None yet.
 - [v1.1] 사운드는 각자 폰에서 낸다(결정 0005). 무거운 분위기가 소리 없이 약하면 사운드를 앞당긴다. 자유 채팅(COMMX-01)은 플레이테스트 피드백으로 정한다
 - [v2.0] 수익화는 출시 전에 따로 정한다
 - G-01-9 열림: 01-16 실기기 확인 FAILED. 재진단 필요(1순위 dvh/하단 기준선 변화). 01-16-SUMMARY.md 참조
+
+### Roadmap Evolution
+
+- Phase 03.1 inserted after Phase 3: 순차 주장(결정 0023)과 역할 카드·일지(결정 0026) 구현, E2E 결함 해소
 
 ## Deferred Items
 
