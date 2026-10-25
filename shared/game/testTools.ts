@@ -6,9 +6,11 @@
 // 결정 0017-5(방장 연장·넘기기 제거)와 0020 은 일반 방에서 그대로다. 이 도구는 테스트 방 전용 예외다.
 import { validateNickname } from "../nickname";
 import { MAX_PLAYERS, MAX_TEST_BOTS } from "../protocol";
-import { BOT_NAMES, botCount, isBot } from "./bots";
+import { isAlive } from "./alive";
+import { BOT_NAMES, botCount, botNightTarget, isBot } from "./bots";
 import { testRoleOptions } from "./roles";
 import type { RoleId } from "./roles";
+import { pickTarget } from "./night";
 import { lowestFreeSeat } from "./room";
 import type { Player, RoomState } from "./room";
 import { tick } from "./tick";
@@ -33,7 +35,24 @@ export function skipPhase(state: RoomState, actorId: string, now: number, randIn
   const denied = checkTestHost(state, actorId);
   if (denied !== null) return { ok: false, error: denied };
   if (state.phase === "lobby" || state.phaseEndsAt === null) return { ok: false, error: "WRONG_PHASE" };
-  return { ok: true, state: tick({ ...state, phaseEndsAt: now }, now, randInt) };
+  const ready = state.phase === "night" ? botsPickNow(state, randInt) : state;
+  return { ok: true, state: tick({ ...ready, phaseEndsAt: now }, now, randInt) };
+}
+
+/**
+ * 밤을 당겨 끝내면 봇이 알람으로 지목하기 전에 판정이 나 마피아가 아무도 지목하지 않은 밤이 된다.
+ * 그래서 아직 고르지 않은 살아 있는 봇(마피아·경찰·의사)이 지금 바로 한 번 고른다 — 사람의 선택은 건드리지 않는다.
+ * 같은 순수 규칙(botNightTarget·pickTarget)이라 정상 마감과 같은 판정 경로를 탄다.
+ */
+function botsPickNow(state: RoomState, randInt: RandInt): RoomState {
+  let next = state;
+  for (const bot of state.players.filter((p) => isBot(p) && isAlive(p) && p.nightPick === undefined).sort((a, b) => a.seat - b.seat)) {
+    const target = botNightTarget(next, bot, randInt);
+    if (target === undefined) continue;
+    const picked = pickTarget(next, bot.id, target);
+    if (picked.ok) next = picked.state;
+  }
+  return next;
 }
 
 /**

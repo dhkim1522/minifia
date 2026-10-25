@@ -7,6 +7,7 @@ import type { RoleId } from "../../shared/game/roles";
 import { attachConnection, createRoomState, joinRoom, startGame } from "../../shared/game/room";
 import type { RoomState } from "../../shared/game/room";
 import { pickTarget } from "../../shared/game/night";
+import { isAlive } from "../../shared/game/alive";
 import { resetToLobby, setTestRole, skipPhase } from "../../shared/game/testTools";
 import { tick } from "../../shared/game/tick";
 import { buildPreview, buildView } from "../../shared/game/view";
@@ -483,5 +484,40 @@ describe("buildView / buildPreview 공개 범위", () => {
     const json = JSON.stringify(buildView(state, state.hostId, 1));
     const roleKeys = json.match(/"role":/g) ?? [];
     expect(String(roleKeys.length)).toBe("1");
+  });
+});
+
+describe("skipPhase: 밤을 넘길 때 봇이 먼저 행동한다", () => {
+  // 사람은 방장 한 명이고 나머지는 봇. 방장이 마피아가 아니고 마피아 봇이 있는 씨앗을 고른다.
+  function nightWithBots(): RoomState {
+    for (let seed = 1; seed < 60; seed += 1) {
+      const base = stateAt(5, seed, "night");
+      const host = base.players.find((p) => p.id === base.hostId)!;
+      if (host.role === "mafia") continue;
+      return { ...base, players: base.players.map((p) => (p.id === base.hostId ? p : { ...p, isBot: true as const })) };
+    }
+    throw new Error("no seed");
+  }
+  it("넘기기 즉시 아침이 되어도 마피아 봇의 지목이 반영되어 누군가 탈락하거나 의사가 막은 기록이 남는다", () => {
+    const state = nightWithBots();
+    const r = skipPhase(state, state.hostId, START_AT, seededRandInt(7));
+    if (!r.ok) throw new Error(r.error);
+    expect(r.state.phase).toBe("morning");
+    const dead = r.state.players.filter((p) => !isAlive(p)).length;
+    const blocked = r.state.players.some((p) => p.role === "mafia" && (p.assassinations ?? []).some((a) => a.died === false));
+    expect(dead === 1 || blocked).toBe(true);
+  });
+  it("사람의 지목은 봇이 덮어쓰지 않는다", () => {
+    const state = nightWithBots();
+    const host = state.players.find((p) => p.id === state.hostId)!;
+    if (host.role !== "police" && host.role !== "doctor") return;
+    const target = state.players.find((p) => p.id !== host.id && isAlive(p))!.seat;
+    const picked = pickTarget(state, host.id, target);
+    if (!picked.ok) throw new Error(picked.error);
+    const r = skipPhase(picked.state, state.hostId, START_AT, seededRandInt(7));
+    if (!r.ok) throw new Error(r.error);
+    const after = r.state.players.find((p) => p.id === host.id)!;
+    const rec = host.role === "police" ? after.investigations : after.treatments;
+    expect(JSON.stringify(rec)).toContain(`"target":${target}`);
   });
 });
