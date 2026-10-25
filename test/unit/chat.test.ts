@@ -5,7 +5,7 @@ import type { SayInput } from "../../shared/game/chat";
 import { ROOM_TTL_MS } from "../../shared/game/room";
 import type { Player, RoomState } from "../../shared/game/room";
 import type { RoleId } from "../../shared/game/roles";
-import { EMOJI_IDS, TEMPLATE_IDS } from "../../shared/protocol";
+import { DISPLAY_ONLY_TEMPLATE_IDS, EMOJI_IDS, TEMPLATE_IDS } from "../../shared/protocol";
 import type { EmojiId, PhaseId } from "../../shared/protocol";
 
 type Extra = Partial<Pick<Player, "connected" | "alive" | "lastSendAt" | "role">>;
@@ -59,14 +59,26 @@ describe("isAlive - 생존 판정 한 곳", () => {
 });
 
 describe("QUICK_TEMPLATES - 템플릿 표 (D-11, COMM-01)", () => {
-  it("TEMPLATE_IDS 와 같은 여덟 키이고 칸·때가 표대로다 (D-17, 결정 0019-2)", () => {
+  it("TEMPLATE_IDS 와 같은 열 키이고 칸·때가 표대로다 (D-17, 결정 0019-2, 0027-7)", () => {
     expect(Object.keys(QUICK_TEMPLATES).sort().join(",")).toBe([...TEMPLATE_IDS].sort().join(","));
-    expect(TEMPLATE_IDS.length).toBe(8);
+    expect(TEMPLATE_IDS.length).toBe(10);
     const rows = TEMPLATE_IDS.map((id) => `${id}:${QUICK_TEMPLATES[id]?.target}/${QUICK_TEMPLATES[id]?.role}/${QUICK_TEMPLATES[id]?.when}`).join(" ");
     expect(rows).toBe(
       "suspect:true/false/day trust:true/false/day claimed:true/true/day innocent:false/false/day vote:true/false/day " +
-        "nightTarget:true/false/night nightAgree:false/false/night nightOther:false/false/night",
+        "nightTarget:true/false/night nightAgree:false/false/night nightOther:false/false/night " +
+        "claimRole:false/true/claim claimNone:false/false/claim",
     );
+  });
+
+  it("표시 전용 템플릿은 claimRole·claimNone 둘뿐이고 TEMPLATE_IDS 에 있으며 때가 claim 이다. 나머지 여덟은 day/night (결정 0027-7)", () => {
+    expect([...DISPLAY_ONLY_TEMPLATE_IDS].join(",")).toBe("claimRole,claimNone");
+    for (const id of DISPLAY_ONLY_TEMPLATE_IDS) {
+      expect((TEMPLATE_IDS as readonly string[]).includes(id)).toBe(true);
+      expect(QUICK_TEMPLATES[id].when).toBe("claim");
+    }
+    const others = TEMPLATE_IDS.filter((id) => !(DISPLAY_ONLY_TEMPLATE_IDS as readonly string[]).includes(id));
+    expect(others.length).toBe(8);
+    expect(others.every((id) => QUICK_TEMPLATES[id].when === "day" || QUICK_TEMPLATES[id].when === "night")).toBe(true);
   });
 
   it("서버 한도 SERVER_MIN_SEND_GAP_MS 는 1800, 클라이언트 잠금 SEND_COOLDOWN_MS 는 2000 이고 서버 한도가 더 짧다 (G-02-2)", () => {
@@ -550,5 +562,36 @@ describe("밤 채팅 번호 (PLAN-CHECK W3, D-17, 결정 0002·0019)", () => {
     const r = emote(start, "p1", "smile", NOW);
     if (!r.ok) throw new Error("setup");
     expect(`${r.state.nextMessageSeq}/${r.state.nextNightSeq}`).toBe("5/3");
+  });
+});
+
+describe("say - 표시 전용 템플릿(claimRole·claimNone)은 서버가 받지 않는다 (D-05, 결정 0027-7, T-03.1-25)", () => {
+  const inputs: SayInput[] = [{ template: "claimRole", claimedRole: "police" }, { template: "claimNone" }];
+
+  it("토론 중에는 BAD_MESSAGE 이고 상태가 변하지 않는다", () => {
+    for (const input of inputs) {
+      const state = room("discussion");
+      const before = JSON.stringify(state);
+      expect(outcome(say(state, "p1", input, NOW))).toBe("BAD_MESSAGE");
+      expect(JSON.stringify(state)).toBe(before);
+    }
+  });
+
+  it("claim 단계에서는 누구든 WRONG_PHASE 이고 상태가 변하지 않는다", () => {
+    for (const input of inputs) {
+      const state = room("claim");
+      const before = JSON.stringify(state);
+      expect(outcome(say(state, "p1", input, NOW))).toBe("WRONG_PHASE");
+      expect(JSON.stringify(state)).toBe(before);
+    }
+  });
+
+  it("밤에 살아 있는 마피아가 보내도 BAD_MESSAGE 이고 상태가 변하지 않는다", () => {
+    for (const input of inputs) {
+      const state = room("night", { overrides: { 1: { role: "mafia" } } });
+      const before = JSON.stringify(state);
+      expect(outcome(say(state, "p1", input, NOW))).toBe("BAD_MESSAGE");
+      expect(JSON.stringify(state)).toBe(before);
+    }
   });
 });

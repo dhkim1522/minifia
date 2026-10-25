@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { EMOJI_IDS, TEMPLATE_IDS } from "../../shared/protocol";
+import { DISPLAY_ONLY_TEMPLATE_IDS, EMOJI_IDS, TEMPLATE_IDS } from "../../shared/protocol";
 import { EMOJI_TEXT, hasBatchim, messageText, NIGHT_TEMPLATE_ORDER, TEMPLATE_CHIP, TEMPLATE_ORDER } from "../../src/game/messageText";
 
 const NAMES: Record<number, string> = {
@@ -65,19 +65,39 @@ describe("messageText: 템플릿 → 문장", () => {
   });
 });
 
-describe("문구 칩·이모티콘 이름", () => {
-  it("TEMPLATE_ORDER 는 낮 다섯 그대로, NIGHT_TEMPLATE_ORDER 는 밤 세 개이고 둘을 합치면 TEMPLATE_IDS 와 같다", () => {
-    expect(String(TEMPLATE_ORDER)).toBe("suspect,trust,innocent,claimed,vote");
-    expect(String(NIGHT_TEMPLATE_ORDER)).toBe("nightTarget,nightAgree,nightOther");
-    expect([...TEMPLATE_ORDER, ...(NIGHT_TEMPLATE_ORDER ?? [])].sort().join(",")).toBe([...TEMPLATE_IDS].sort().join(","));
+describe("주장 줄 문장 (D-04)", () => {
+  it("claimRole 은 직업별 고정 문장이다", () => {
+    const rows = (["mafia", "police", "doctor", "citizen"] as const).map((claimedRole) => messageText({ template: "claimRole", claimedRole }, nick));
+    expect(rows.join(" | ")).toBe("저는 마피아예요 | 저는 경찰이에요 | 저는 의사예요 | 저는 시민이에요");
   });
 
-  it("TEMPLATE_CHIP 글자는 UI-SPEC 문구 칩과 같고 밤 칩 세 개가 더해진다 (N-2)", () => {
+  it("claimNone 은 '말하지 않았어요', claimRole 인데 직업이 없으면 같은 문장(방어)", () => {
+    expect(messageText({ template: "claimNone" }, nick)).toBe("말하지 않았어요");
+    expect(messageText({ template: "claimRole" }, nick)).toBe("말하지 않았어요");
+  });
+
+  it("기존 문장은 그대로다", () => {
+    expect(messageText({ template: "suspect", target: 3 }, nick)).toBe("지우 의심돼요");
+    expect(messageText({ template: "innocent" }, nick)).toBe("저 아니에요");
+  });
+});
+
+describe("문구 칩·이모티콘 이름", () => {
+  it("TEMPLATE_ORDER 는 낮 다섯 그대로, NIGHT_TEMPLATE_ORDER 는 밤 세 개이고 둘을 합치면 표시 전용을 뺀 TEMPLATE_IDS 와 같다", () => {
+    expect(String(TEMPLATE_ORDER)).toBe("suspect,trust,innocent,claimed,vote");
+    expect(String(NIGHT_TEMPLATE_ORDER)).toBe("nightTarget,nightAgree,nightOther");
+    expect([...TEMPLATE_ORDER, ...(NIGHT_TEMPLATE_ORDER ?? [])].sort().join(",")).toBe(
+      TEMPLATE_IDS.filter((id) => !(DISPLAY_ONLY_TEMPLATE_IDS as readonly string[]).includes(id)).sort().join(","),
+    );
+  });
+
+  it("TEMPLATE_CHIP 글자는 UI-SPEC 문구 칩과 같고 밤 칩 세 개가 더해진다 (N-2). 표시 전용 둘은 칩 목록에 쓰이지 않는다", () => {
     // 객체 toEqual 의 여러 줄 diff 는 TAP 증거를 깨뜨린다 — 칩은 한 줄 문자열로 비교한다.
     const chips = TEMPLATE_IDS.map((id) => `${id}=${TEMPLATE_CHIP[id]}`).join(" | ");
     expect(chips).toBe(
       "suspect=[○○] 의심돼요 | trust=[○○] 믿어요 | claimed=[○○]는 [직업]이었어요 | innocent=저 아니에요 | vote=[○○] 투표해요 | " +
-        "nightTarget=[○○] 지목해요 | nightAgree=동의해요 | nightOther=다른 사람을 지목해요",
+        "nightTarget=[○○] 지목해요 | nightAgree=동의해요 | nightOther=다른 사람을 지목해요 | " +
+        "claimRole=저는 [직업]이에요 | claimNone=말하지 않았어요",
     );
   });
 

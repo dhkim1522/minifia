@@ -297,4 +297,14 @@ describe("QuickMessageSheet — 밤 문구 (D-17)", () => {
     setup();
     expect(names("문구")).toBe("[○○] 의심돼요|[○○] 믿어요|저 아니에요|[○○]는 [직업]이었어요|[○○] 투표해요");
   });
+
+  it("표시 전용 문장(저는 [직업]이에요·말하지 않았어요)은 낮·밤 어느 칩에도 없다 (D-05, 결정 0027-7)", () => {
+    for (const templates of [undefined, NIGHT_TEMPLATE_ORDER]) {
+      const { unmount } = setup(templates ? { templates } : {});
+      const text = group("문구").getAllByRole("button").map((b) => b.textContent).join("|");
+      expect(text.includes("저는 [직업]이에요")).toBe(false);
+      expect(text.includes("말하지 않았어요")).toBe(false);
+      unmount();
+    }
+  });
 });

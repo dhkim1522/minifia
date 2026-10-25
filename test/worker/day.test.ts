@@ -308,6 +308,21 @@ describe("빠른 메시지 (COMM-01, COMM-04, D-13)", () => {
     expect(await storedMessageCount(r.code)).toBe(0);
   });
 
+  it("표시 전용 템플릿(claimNone·claimRole)을 토론 중 소켓으로 보내면 보낸 소켓만 error BAD_MESSAGE 를 받고 다른 소켓에는 chat 프레임이 가지 않는다 (결정 0027-7)", async () => {
+    const r = await startedAt("discussion");
+    const [g0] = r.guests as [Seated["guests"][number], ...Seated["guests"]];
+    const sockets = allSockets(r);
+
+    send(g0.sock, { t: "say", template: "claimNone" });
+    expect(await errorCode(g0.sock)).toBe(codeOf("BAD_MESSAGE"));
+    await backdateSends(r.code);
+    send(g0.sock, { t: "say", template: "claimRole", claimedRole: "police" });
+    expect(await errorCode(g0.sock)).toBe(codeOf("BAD_MESSAGE"));
+    await settle(g0.sock);
+    for (const s of sockets) expect(chatFrames(s).length).toBe(0);
+    expect(await storedMessageCount(r.code)).toBe(0);
+  });
+
   it("쿨다운이 지난 뒤 거짓 주장(claimed, 아무 직업)도 그대로 모든 소켓의 chat 프레임이 되고 키는 id·role 이 아니다", async () => {
     const r = await startedAt("discussion");
     const [g0, g1, g2] = r.guests as [Seated["guests"][number], Seated["guests"][number], Seated["guests"][number], ...Seated["guests"]];
