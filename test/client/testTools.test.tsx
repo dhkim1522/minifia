@@ -31,6 +31,7 @@ interface Opts {
   isHost?: boolean;
   testMode?: boolean;
   testRole?: "mafia" | "police" | "doctor" | "citizen";
+  testBots?: number;
 }
 
 function makeView(o: Opts = {}): RoomView {
@@ -40,6 +41,7 @@ function makeView(o: Opts = {}): RoomView {
   if (phase !== "lobby" && phase !== "assigning") me.role = "citizen";
   if (o.testMode) me.testMode = true;
   if (o.testRole) me.testRole = o.testRole;
+  if (o.testBots !== undefined) me.testBots = o.testBots;
   const inDay = phase !== "lobby" && phase !== "assigning" && phase !== "roleReveal";
   return {
     code: "0042",
@@ -294,5 +296,90 @@ describe("Home: ?test=1 방 만들기 (U-01)", () => {
 
   it("test 값이 1 이 아니면 일반 방이다", async () => {
     expect(await createWith("/?test=true")).toBe(JSON.stringify({ nickname: "민수" }));
+  });
+});
+
+describe("대기실: 시트의 봇 줄 (U-10)", () => {
+  const openSheet = (o: Opts, over: Partial<RoomConnection> = {}) => {
+    const utils = open({ testMode: true, ...o }, over);
+    fireEvent.click(testBtn() as HTMLElement);
+    return utils;
+  };
+  const sent = (c: RoomConnection): string => JSON.stringify((c.send as ReturnType<typeof vi.fn>).mock.calls);
+  const dec = () => within(sheet()).getByRole("button", { name: "봇 줄이기" }) as HTMLButtonElement;
+  const inc = () => within(sheet()).getByRole("button", { name: "봇 늘리기" }) as HTMLButtonElement;
+  const fill = () => within(sheet()).getByRole("button", { name: "5명 채우기" }) as HTMLButtonElement;
+
+  it("사람 혼자·봇 0 이면 '봇' 제목과 '0명'이 있고 줄이기는 꺼져 있으며 늘리기는 count 1 을 보낸다", () => {
+    const { conn: c } = openSheet({ players: 1, testBots: 0 });
+    expect(within(sheet()).getByText("봇").textContent).toBe("봇");
+    expect(within(sheet()).getByText("0명").textContent).toBe("0명");
+    expect(String(dec().disabled)).toBe("true");
+    fireEvent.click(inc());
+    expect(sent(c)).toBe('[[{"t":"testBots","count":1}]]');
+  });
+
+  it("[5명 채우기] 는 사람 혼자일 때 count 4 를 보낸다", () => {
+    const { conn: c } = openSheet({ players: 1, testBots: 0 });
+    fireEvent.click(fill());
+    expect(sent(c)).toBe('[[{"t":"testBots","count":4}]]');
+  });
+
+  it("인원 4·봇 3 이면 '3명'이고 줄이기는 count 2, 늘리기는 count 4, 채우기는 count 4 를 보낸다", () => {
+    const { conn: c } = openSheet({ players: 4, testBots: 3 });
+    expect(within(sheet()).getByText("3명").textContent).toBe("3명");
+    fireEvent.click(dec());
+    fireEvent.click(inc());
+    fireEvent.click(fill());
+    expect(sent(c)).toBe(
+      '[[{"t":"testBots","count":2}],[{"t":"testBots","count":4}],[{"t":"testBots","count":4}]]',
+    );
+  });
+
+  it("인원 8·봇 7 이면 늘리기가 꺼져 있다", () => {
+    openSheet({ players: 8, testBots: 7 });
+    expect(String(inc().disabled)).toBe("true");
+    expect(String(dec().disabled)).toBe("false");
+  });
+
+  it("인원 8·봇 2(사람 6)도 늘리기가 꺼져 있다", () => {
+    openSheet({ players: 8, testBots: 2 });
+    expect(String(inc().disabled)).toBe("true");
+  });
+
+  it("인원이 5명 이상이면 [5명 채우기] 가 꺼져 있고 4명이면 켜져 있다", () => {
+    openSheet({ players: 5, testBots: 2 });
+    expect(String(fill().disabled)).toBe("true");
+    cleanup();
+    openSheet({ players: 4, testBots: 3 });
+    expect(String(fill().disabled)).toBe("false");
+  });
+
+  it("me.testBots 가 없는 view 는 '0명' 으로 보인다", () => {
+    openSheet({ players: 3 });
+    expect(within(sheet()).getByText("0명").textContent).toBe("0명");
+  });
+
+  it("canSend 가 false 면 세 버튼 모두 꺼져 있다", () => {
+    openSheet({ players: 4, testBots: 2 }, { canSend: false });
+    expect([dec(), inc(), fill()].map((b) => b.disabled).join(",")).toBe("true,true,true");
+  });
+
+  it("discussion 단계 시트에는 봇 줄이 없다", () => {
+    open({ testMode: true, phase: "discussion" });
+    fireEvent.click(testBtn() as HTMLElement);
+    expect(String(within(sheet()).queryByRole("button", { name: "봇 늘리기" }))).toBe("null");
+  });
+
+  it("아이콘 버튼이라 글자 대신 aria-label 이름을 가지고 값은 aria-live 영역이다", () => {
+    openSheet({ players: 4, testBots: 3 });
+    expect(within(sheet()).getByText("3명").getAttribute("aria-live")).toBe("polite");
+  });
+
+  it("CSS 에 hex 색이 없고 mf-tt-sheet__step 규칙과 var(--tap-min) 이 있다", () => {
+    const css = readFileSync("src/styles/testtools.css", "utf8");
+    expect(String(/#[0-9a-fA-F]{3,8}\b/.test(css))).toBe("false");
+    expect(String(css.includes("mf-tt-sheet__step"))).toBe("true");
+    expect(String(css.includes("var(--tap-min)"))).toBe("true");
   });
 });
