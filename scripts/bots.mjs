@@ -84,9 +84,16 @@ function onState(bot, view) {
     if (bot.talkTimer) { clearInterval(bot.talkTimer); bot.talkTimer = null; }
     return;
   }
+  // 대기실·배정에 있으면(새 판 시작 전, 테스트 방의 대기실 복귀 포함) 낮·밤에 한 번만 행동하는 기록을 비운다 — 새 판 1일차에도 행동한다.
+  if (view.phase === "lobby" || view.phase === "assigning") {
+    if (bot.talkTimer) { clearInterval(bot.talkTimer); bot.talkTimer = null; }
+    bot.claimKey = null;
+    bot.nightKey = null;
+    return;
+  }
   if (view.phase === "claim") {
-    // 낮마다 한 번만 보낸다. 직업 공개 후보(view.day.roles) 중 아무거나, 가끔 "말 안 함".
-    const key = `${view.day?.number ?? view.day?.dayNumber ?? "d"}:${view.phase}`;
+    // 낮마다 한 번만 보낸다(키 = `${일차}:claim`). 직업 공개 후보(view.day.roles) 중 아무거나, 가끔 "말 안 함".
+    const key = `${view.day?.n ?? "d"}:${view.phase}`;
     if (bot.claimKey === key) return;
     bot.claimKey = key;
     const roles = view.day?.roles ?? [];
