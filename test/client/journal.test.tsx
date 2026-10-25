@@ -72,9 +72,10 @@ describe("Journal 머리", () => {
     expect(JOURNAL_TEXT.police.name).toBe("수사일지");
     expect(JOURNAL_TEXT.mafia.name).toBe("암살일지");
     expect(JOURNAL_TEXT.doctor.name).toBe("치료일지");
-    expect(JOURNAL_TEXT.police.notice).toBe("수사일지가 추가됐어요 · 눌러서 보기");
-    expect(JOURNAL_TEXT.mafia.notice).toBe("암살일지가 추가됐어요 · 눌러서 보기");
-    expect(JOURNAL_TEXT.doctor.notice).toBe("치료일지가 추가됐어요 · 눌러서 보기");
+    // 밤 끝 알림이 없어졌으므로 항목의 키는 name·empty 둘뿐이다 (결정 0028)
+    for (const role of ["police", "mafia", "doctor"] as const) {
+      expect(Object.keys(JOURNAL_TEXT[role]).sort().join(",")).toBe("empty,name");
+    }
   });
 
   it("그림이 로드에 실패하면 그 img 만 숨기고 글자는 그대로다", () => {

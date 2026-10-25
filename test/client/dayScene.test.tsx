@@ -1,5 +1,5 @@
 /// <reference types="node" />
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { act, cleanup, fireEvent, render, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { RoleId } from "../../shared/game/roles";
@@ -659,7 +659,7 @@ describe("DayScene 아침 어둡게 층·유령 강조 (03.1-10, D-15, UI-SPEC F
   });
 });
 
-describe("DayScene 눌리는 밤 끝 알림 (03.1-11, D-12, UI-SPEC D·R6)", () => {
+describe("DayScene 밤 끝 알림 없음 (결정 0028, UI-SPEC D·R6)", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.setSystemTime(NOW);
@@ -669,140 +669,32 @@ describe("DayScene 눌리는 밤 끝 알림 (03.1-11, D-12, UI-SPEC D·R6)", () 
   });
 
   const withRecords = (view: RoomView, records: RoomView["me"]["records"]): RoomView => ({ ...view, me: { ...view.me, records } });
-  const toast = (): HTMLElement | null => document.querySelector<HTMLElement>(".mf-rolecard-toast");
-
-  function renderNotice(role: RoleId, props: { roleCardOpen?: boolean; onOpenActivity?: () => void } = {}) {
-    const c = conn(makeView({ phase: "night", role }));
-    const ui = (v: RoomView, p: typeof props) => (
-      <DayScene
-        view={v}
-        connection={{ ...c, view: v }}
-        myRoleButton={<button type="button">역할 카드</button>}
-        roleCardOpen={p.roleCardOpen ?? false}
-        onOpenActivity={p.onOpenActivity ?? (() => {})}
-      />
-    );
-    const utils = render(ui(withRecords(makeView({ phase: "night", role }), []), props));
-    return {
-      ...utils,
-      grow: (record: NonNullable<RoomView["me"]["records"]>[number], p: typeof props = props) =>
-        utils.rerender(ui(withRecords(makeView({ phase: "morning", role, morning: {} }), [record]), p)),
-      reprops: (p: typeof props) => utils.rerender(ui(withRecords(makeView({ phase: "morning", role, morning: {} }), [{ n: 1, target: 2, isMafia: true }]), p)),
-    };
+  // 알림 전용 선택 props 를 하나도 넘기지 않는다(밤 → 아침으로 기록이 늘어도 알림이 없어야 한다)
+  function renderGrow(role: RoleId, record: NonNullable<RoomView["me"]["records"]>[number]) {
+    const night = withRecords(makeView({ phase: "night", role }), []);
+    const morning = withRecords(makeView({ phase: "morning", role, morning: {} }), [record]);
+    const ui = (v: RoomView) => <DayScene view={v} connection={{ ...conn(v), view: v }} myRoleButton={<button type="button">역할 카드</button>} />;
+    const utils = render(ui(night));
+    utils.rerender(ui(morning));
+    return utils;
   }
+  const statusTexts = (): string[] => Array.from(document.querySelectorAll('[role="status"]')).map((el) => el.textContent ?? "");
 
   it.each([
-    ["police", { n: 1, target: 2, isMafia: true }, "수사일지가 추가됐어요 · 눌러서 보기"],
-    ["mafia", { n: 1, target: 2, died: false }, "암살일지가 추가됐어요 · 눌러서 보기"],
-    ["doctor", { n: 1, target: 2 }, "치료일지가 추가됐어요 · 눌러서 보기"],
-  ] as const)("%s: 같은 접속에서 기록이 늘면 눌리는 알림이 뜬다", (role, rec, text) => {
-    const r = renderNotice(role);
-    r.grow(rec);
-    expect(toast()?.textContent ?? "(알림 없음)").toBe(text);
-    expect(toast()?.parentElement?.getAttribute("role") ?? "(role 없음)").toBe("status");
+    ["police", { n: 1, target: 2, isMafia: true }],
+    ["mafia", { n: 1, target: 2, died: false }],
+    ["doctor", { n: 1, target: 2 }],
+  ] as const)("%s: 밤 -> 아침으로 기록이 늘어도 일지 알림(role=status)과 알림 버튼이 없다", (role, rec) => {
+    renderGrow(role, rec);
+    expect(statusTexts().filter((t) => t.includes("일지")).length).toBe(0);
+    const buttons = Array.from(document.querySelectorAll("button")).map((b) => b.textContent ?? "");
+    expect(buttons.filter((t) => t.includes("일지") || t.includes("눌러서 보기")).length).toBe(0);
+    expect(document.querySelector(".mf-rolecard-toast")).toBeNull();
+    expect(document.body.textContent?.includes("눌러서 보기") ? "있음" : "없음").toBe("없음");
   });
 
-  it("시민에게는 알림이 없다", () => {
-    const r = renderNotice("citizen");
-    r.grow({ n: 1, target: 2, isMafia: true });
-    expect(toast() === null ? "없음" : "있음").toBe("없음");
-  });
-
-  it("누르면 onOpenActivity 가 한 번 불리고 알림이 사라진다", () => {
-    const onOpenActivity = vi.fn();
-    const r = renderNotice("police", { onOpenActivity });
-    r.grow({ n: 1, target: 2, isMafia: true });
-    fireEvent.click(toast()!);
-    expect(onOpenActivity).toHaveBeenCalledTimes(1);
-    expect(toast() === null ? "사라짐" : "있음").toBe("사라짐");
-  });
-
-  it("시트가 열려 있으면 알림이 없고, 알림이 떠 있다가 시트가 열리면 사라진다", () => {
-    const open = renderNotice("police", { roleCardOpen: true });
-    open.grow({ n: 1, target: 2, isMafia: true });
-    expect(toast() === null ? "없음" : "있음").toBe("없음");
-    cleanup();
-    const r = renderNotice("police");
-    r.grow({ n: 1, target: 2, isMafia: true });
-    expect(toast() === null ? "없음" : "있음").toBe("있음");
-    r.reprops({ roleCardOpen: true });
-    expect(toast() === null ? "없음" : "있음").toBe("없음");
-  });
-
-  it("4000ms 뒤 사라진다(3999 에는 있다)", () => {
-    const r = renderNotice("doctor");
-    r.grow({ n: 1, target: 2 });
-    act(() => {
-      vi.advanceTimersByTime(3_999);
-    });
-    expect(toast() === null ? "없음" : "있음").toBe("있음");
-    act(() => {
-      vi.advanceTimersByTime(1);
-    });
-    expect(toast() === null ? "없음" : "있음").toBe("없음");
-  });
-
-  it("옛 알림 `수사 기록이 추가됐어요` 가 없고 알림은 새 알림 하나뿐이다", () => {
-    const r = renderNotice("police");
-    r.grow({ n: 1, target: 2, isMafia: true });
-    expect(document.body.textContent?.includes("수사 기록이 추가됐어요") ? "있음" : "없음").toBe("없음");
-    expect(Array.from(document.querySelectorAll('[role="status"]')).map((el) => el.className)).toEqual(["mf-rolecard-toast-wrap"]);
+  it("알림 컴포넌트 파일과 알림 CSS 파일이 저장소에 없다", () => {
+    expect(existsSync("src/components/RoleCardToast.tsx")).toBe(false);
+    expect(existsSync("src/styles/rolecard-toast.css")).toBe(false);
   });
 });
-
-describe("rolecard-toast.css 알림 규약 (03.1-11, UI-SPEC D·R6)", () => {
-  const css = readFileSync("src/styles/rolecard-toast.css", "utf8");
-  const rule = (sel: string): string => {
-    const at = css.indexOf(`\n${sel} {`);
-    return at < 0 ? "" : css.slice(css.indexOf("{", at) + 1, css.indexOf("}", at));
-  };
-
-  it(".mf-rolecard-toast: 눌리는 알약 - 높이 44 이상, 한 줄, 폭 상한, 색은 변수", () => {
-    const r = rule(".mf-rolecard-toast");
-    expect(/min-height:\s*var\(--tap-min\)/.test(r)).toBe(true);
-    expect(/white-space:\s*nowrap/.test(r)).toBe(true);
-    expect(/max-width:\s*calc\(100% - 32px\)/.test(r)).toBe(true);
-    expect(/background:\s*color-mix\(in srgb, var\(--night-900\) 94%, transparent\)/.test(r)).toBe(true);
-    expect(/border:\s*1px solid var\(--gray-100\)/.test(r)).toBe(true);
-    expect(/border-radius:\s*var\(--radius-pill\)/.test(r)).toBe(true);
-    expect(/font-size:\s*14px/.test(r)).toBe(true);
-    expect(/font-weight:\s*700/.test(r)).toBe(true);
-    expect(/color:\s*var\(--gray-50\)/.test(r)).toBe(true);
-    expect(/padding:\s*12px 16px/.test(r)).toBe(true);
-    expect(/pointer-events:\s*auto/.test(r)).toBe(true);
-    expect(/animation:[^;]*var\(--dur-fast\)/.test(r)).toBe(true);
-  });
-
-  it(".mf-rolecard-toast-wrap: 헤더 아래 top 127, 클릭을 막지 않는다", () => {
-    const r = rule(".mf-rolecard-toast-wrap");
-    expect(/top:\s*127px/.test(r)).toBe(true);
-    expect(/pointer-events:\s*none/.test(r)).toBe(true);
-    expect(/position:\s*absolute/.test(r)).toBe(true);
-  });
-
-  it("좁은 폭(< 390): 좌우 안쪽 여백 8·아이콘 간격 4 로 줄여 360 폭에서 [테스트] 가운데 점을 6px 이상 비운다 (UI-SPEC S13)", () => {
-    const m = /@media \(max-width:\s*389px\)\s*\{\s*\.mf-rolecard-toast\s*\{([^}]*)\}/.exec(css);
-    const body = m?.[1] ?? "";
-    const pad = /padding:\s*12px (\d+)px/.exec(body);
-    const gap = /gap:\s*(\d+)px/.exec(body);
-    expect(pad && gap ? "있음" : "좁은 폭 규칙 없음").toBe("있음");
-    const padX = Number(pad![1]);
-    const gapPx = Number(gap![1]);
-    expect(padX % 4).toBe(0);
-    expect(gapPx % 4).toBe(0);
-    // 폭 = 글자 211(E2E 실측: 기본 폭 269 = 테두리 2 + 여백 32 + 아이콘 16 + 간격 8 + 글자 211) + 아이콘 16 + 간격 + 좌우 여백 + 테두리 2
-    const width = 211 + 16 + gapPx + 2 * padX + 2;
-    const left = (360 - width) / 2;
-    const ttCenter = 4 + 87.7 / 2; // [테스트] 가운데 x (360 폭: 왼쪽 4, 폭 87.7)
-    expect(left - ttCenter).toBeGreaterThanOrEqual(6);
-    expect(width).toBeLessThanOrEqual(264);
-    // 390 이상의 기준값은 그대로
-    expect(/padding:\s*12px 16px/.test(rule(".mf-rolecard-toast"))).toBe(true);
-    expect(/gap:\s*8px/.test(rule(".mf-rolecard-toast"))).toBe(true);
-  });
-
-  it("줄이는 모션 설정에서는 animation 이 없다", () => {
-    expect(/prefers-reduced-motion:\s*reduce[\s\S]*\.mf-rolecard-toast\s*\{[^}]*animation:\s*none/.test(css)).toBe(true);
-  });
-});
-

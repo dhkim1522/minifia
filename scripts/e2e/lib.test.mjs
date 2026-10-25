@@ -19,7 +19,7 @@ import {
   journalChecks,
   livingRoleArtChecks,
   morningGoneChecks,
-  noticeChecks,
+  noNightNoticeChecks,
   roleCardButtonChecks,
   roleCardTabChecks,
   smallTextIssues,
@@ -715,7 +715,7 @@ test("inspectChecks X1: 낮에는 {닉네임} 기록 카드가 열리고 밤에�
 // ---- 역할 카드(R1~R6) ----
 
 const rcBtn = (over = {}) => ({ label: "역할 카드", rect: rect(250, 16, 90, 44), dotRect: null, hit: true, ...over });
-const rcSnap = (over = {}) => ({ legacyRecordsBtn: false, roleCard: { button: rcBtn(), sheet: null, notice: null }, ...over });
+const rcSnap = (over = {}) => ({ legacyRecordsBtn: false, roleCard: { button: rcBtn(), sheet: null, noticeTexts: [] }, ...over });
 
 test("roleCardButtonChecks R1: 새 기록이면 label 에 새 기록 + 점 지름 12 이상, 없으면 점 없음", () => {
   const none = roleCardButtonChecks(rcSnap(), { job: "police", unread: false });
@@ -849,47 +849,22 @@ test("journalChecks R4: 시트를 닫은 뒤 NEW 가 사라진다(시트 없음 
   assert.equal(journalChecks(journalView("police"), { job: "police", mode: "closed" }).ok, false);
 });
 
-const notice = (over = {}) => ({ rect: rect(20, 127, 320, 44), text: "수사일지가 추가됐어요 · 눌러서 보기", isButton: true, role: "status", ...over });
-
-test("noticeChecks R6: 역할에 맞는 문구·높이 44 이상·버튼·role status", () => {
-  const texts = { police: "수사일지가 추가됐어요 · 눌러서 보기", mafia: "암살일지가 추가됐어요 · 눌러서 보기", doctor: "치료일지가 추가됐어요 · 눌러서 보기" };
-  for (const job of ["police", "mafia", "doctor"]) {
-    const s = rcSnap();
-    s.roleCard.notice = notice({ text: texts[job] });
-    const r = noticeChecks(s, { job });
-    assert.equal(r.id, "R6");
-    assert.equal(r.ok, true, `${job}: ${r.detail}`);
-  }
-  const base = () => {
-    const s = rcSnap();
-    s.roleCard.notice = notice();
-    return s;
-  };
-  const wrong = base();
-  wrong.roleCard.notice.text = "암살일지가 추가됐어요 · 눌러서 보기";
-  assert.equal(noticeChecks(wrong, { job: "police" }).ok, false);
-  const short = base();
-  short.roleCard.notice.rect = rect(20, 127, 320, 40);
-  assert.equal(noticeChecks(short, { job: "police" }).ok, false);
-  const nobtn = base();
-  nobtn.roleCard.notice.isButton = false;
-  assert.equal(noticeChecks(nobtn, { job: "police" }).ok, false);
-  const role = base();
-  role.roleCard.notice.role = null;
-  assert.equal(noticeChecks(role, { job: "police" }).ok, false);
-  assert.equal(noticeChecks(rcSnap(), { job: "police" }).ok, false);
-});
-
-test("noticeChecks R6: 누른 뒤에는 시트의 선택 탭이 활동 기록이어야 한다", () => {
-  const ok = journalView("police");
-  assert.equal(noticeChecks(ok, { job: "police", clicked: true }).ok, true);
-  const bad = journalView("police");
-  bad.roleCard.sheet.tabs = [
-    { text: "내 역할", selected: true, dotRect: null },
-    { text: "활동 기록", selected: false, dotRect: null },
-  ];
-  assert.equal(noticeChecks(bad, { job: "police", clicked: true }).ok, false);
-  assert.equal(noticeChecks(rcSnap(), { job: "police", clicked: true }).ok, false);
+test("noNightNoticeChecks R6: 밤 끝 알림이 화면에 없음 (noticeTexts 가 빈 배열이어야 통과)", () => {
+  const ok = noNightNoticeChecks(rcSnap());
+  assert.equal(ok.id, "R6");
+  assert.equal(ok.ok, true, ok.detail);
+  const shown = rcSnap();
+  shown.roleCard.noticeTexts = ["수사일지가 추가됐어요 · 눌러서 보기"];
+  const bad = noNightNoticeChecks(shown);
+  assert.equal(bad.ok, false);
+  assert.match(bad.detail, /수사일지가 추가됐어요 · 눌러서 보기/);
+  // 측정값 필드가 없으면 조용히 통과시키지 않는다(G7 의 smallText 와 같은 방식)
+  const missing = rcSnap();
+  delete missing.roleCard.noticeTexts;
+  const m = noNightNoticeChecks(missing);
+  assert.equal(m.ok, false);
+  assert.match(m.detail, /측정값 없음/);
+  assert.equal(noNightNoticeChecks({ legacyRecordsBtn: false }).ok, false);
 });
 
 // ---- 관전자(V1)·살아 있는 사람(V2) ----
