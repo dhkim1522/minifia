@@ -180,3 +180,15 @@ export function exitCodeOf(results, aborted) {
   if (aborted) return 2;
   return results.some((r) => !r.ok) ? 1 : 0;
 }
+
+// (RED 뼈대: 과제 2 규칙은 아직 구현 전)
+export const ONE_LINE_FACTOR = 0;
+export const FACE_RATIO = 0;
+export const PANEL_H = 0;
+export function isOneLine() {}
+export function lineCount() {}
+export function faceRegion() {}
+export function dayChecks() { return []; }
+export function morningCardIssues() { return {}; }
+export function feltStable() { return {}; }
+export function tagsOverlap() { return {}; }
