@@ -201,7 +201,7 @@ Plans:
   4. 360×640·390×664·430×932 에서 헤더 제목 줄바꿈, [테스트] 버튼·아침 카드가 좌석을 가리는 문제, 이름표 겹침이 없고 `npm run e2e` 가 모두 통과한다.
   5. 봇이 차례 진행에 맞게 주장하고, 배포본에서 봇 시나리오와 E2E 가 통과한다.
 
-**Plans:** 11/14 plans executed (결정 0023·0026·0027, 승인 시안 `design/screens/claim-turns-v1/`·`role-card-v1/`, UI 계약 `03.1-UI-SPEC.md`)
+**Plans:** 12/14 plans executed (결정 0023·0026·0027, 승인 시안 `design/screens/claim-turns-v1/`·`role-card-v1/`, UI 계약 `03.1-UI-SPEC.md`)
 **UI hint**: yes
 
 Plans:
@@ -231,7 +231,7 @@ Plans:
 - [x] 03.1-10-PLAN.md — 아침 카드 팝/퇴장·어둡게 층·유령 맥동, 관전자 테이블(직업 캐릭터), 헤더 nowrap·패널 여백·칩 간격 (TDD, wave 7)
 
 **Wave 8** *(blocked on Wave 7 completion)*
-- [ ] 03.1-11-PLAN.md — 역할 카드 통합: 헤더 [역할 카드] 하나·앰버 점·읽음 개수(폰 메모리)·눌리는 밤 끝 알림, 옛 [내 역할]/[수사 기록] 제거 (TDD, wave 8)
+- [x] 03.1-11-PLAN.md — 역할 카드 통합: 헤더 [역할 카드] 하나·앰버 점·읽음 개수(폰 메모리)·눌리는 밤 끝 알림, 옛 [내 역할]/[수사 기록] 제거 (TDD, wave 8)
 
 **Wave 9** *(blocked on Wave 8 completion)*
 - [ ] 03.1-12-PLAN.md — E2E 흐름 6개(spec4 관전자 신설)를 새 계약으로 다시 쓰고 로컬 서버에서 `npm run e2e` 전부 통과 (wave 9)
@@ -296,7 +296,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 (decimal phases
 | 1. 걷는 뼈대 | v1.0 | 19/19 | Complete    | 2026-10-24 |
 | 2. 낮 토론 | v1.0 | 18/18 | In Progress | - |
 | 3. 밤과 아침 | v1.0 | 12/12 | In Progress | - |
-| 3.1. 순차 주장과 역할 카드 | v1.0 | 11/14 | In Progress | - |
+| 3.1. 순차 주장과 역할 카드 | v1.0 | 12/14 | In Progress | - |
 | 4. 처형과 승패 | v1.0 | 0/TBD | Not started | - |
 | 5. 분위기와 캐릭터 | v1.0 | 0/TBD | Not started | - |
 | 6. 친구 플레이테스트 | v1.0 | 0/TBD | Not started | - |

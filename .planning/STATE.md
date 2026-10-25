@@ -6,16 +6,16 @@ current_phase: 03
 current_phase_name: 밤과 아침
 current_plan: 12
 status: verifying
-stopped_at: Completed 03.1-10-PLAN.md
-last_updated: "2026-10-25T07:56:51.709Z"
+stopped_at: Completed 03.1-11-PLAN.md
+last_updated: "2026-10-25T08:05:46.007Z"
 last_activity: 2026-10-25
 last_activity_desc: Phase 03 execution started
-state_head: ccdb6faba29321d1498b799614dae8b45f581a15
+state_head: 1a1164031a6cf74bfeba796b520e61e67dd3dc46
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 63
-  completed_plans: 60
+  completed_plans: 61
 ---
 
 # Project State
@@ -106,6 +106,7 @@ Progress: [██░░░░░░░░] 17%
 | Phase 03.1 P13 | 75min | 3 tasks | 6 files |
 | Phase 03.1 P08 | 25min | 2 tasks | 7 files |
 | Phase 03.1 P10 | 30min | 3 tasks | 12 files |
+| Phase 03.1 P11 | 약 40분 | 3 tasks | 17 files |
 
 ## Accumulated Context
 
@@ -195,6 +196,8 @@ Recent decisions affecting current work:
 - [Phase 03.1]: 03.1-13: 스모크·UAT 응답기는 스크립트마다 자기 안에 두고, 거부·이모티콘 시험은 clients[3] 의 8초 시간 초과 창에서 한다
 - [Phase 03.1]: 03.1-08: 낮 기록 카드는 claim·discussion·morning 모든 자리(탈락 viewer·끊김 포함)에 읽기 전용 onInspect 를 주고 밤에는 주지 않으며, 밤이 되면 렌더 중 상태 조정으로 닫는다
 - [Phase 03.1]: 03.1-10: 아침 퇴장 지연은 남은 시간-300ms(0 하한)를 마감 시각이 바뀔 때 한 번 정해 카드와 층이 공유, roleArt 는 meDead && spectate 한 곳에서만 만든다
+- [Phase 03.1]: 알림 CSS 는 rolecard-toast.css 로 분리한다(rolecard.css 는 animation 금지 테스트가 있다)
+- [Phase 03.1]: DayScene 의 roleCardOpen·onOpenActivity 는 선택 props 로 두고 RoomScreen 이 명시해 넘긴다
 
 ### Pending Todos
 
@@ -224,6 +227,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-25T07:56:51.393Z
-Stopped at: Completed 03.1-10-PLAN.md
+Last session: 2026-10-25T08:05:45.714Z
+Stopped at: Completed 03.1-11-PLAN.md
 Resume file: None
