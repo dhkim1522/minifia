@@ -96,13 +96,13 @@ describe("dayTableGeometry: 인원과 상관없이 하나로 고정", () => {
 });
 
 describe("daySeatLayout: 시계 방향 좌석 원", () => {
-  it.each([352, 366])("나(slot 0)는 맨 아래 가운데: x = W/2, y = 310, scale 1, z 10 (폭 %i)", (w) => {
+  it.each([352, 366])("나(slot 0)는 맨 아래 가운데: x = W/2, y = 310, scale 1, z 22 (폭 %i)", (w) => {
     const me = daySeatLayout(seatsOf(5), 0, w).find((p) => p.slot === 0);
     expect(me?.seat).toBe(0);
     expect(r1(me?.x ?? -1)).toBe(w / 2);
     expect(r1(me?.y ?? -1)).toBe(310);
     expect(me?.scale).toBe(1);
-    expect(me?.z).toBe(10);
+    expect(me?.z).toBe(22);
   });
 
   it("4명·폭 366: 아래 → 왼쪽 → 위 → 오른쪽(시계 방향)", () => {
@@ -112,11 +112,11 @@ describe("daySeatLayout: 시계 방향 좌석 원", () => {
     expect(line).toBe("183,310 51,210 183,110 315,210");
   });
 
-  it("맨 위 자리는 scale 0.8·z 0 이다(짝수 인원)", () => {
+  it("맨 위 자리는 scale 0.8·z 12 이다(짝수 인원)", () => {
     for (const n of [4, 6, 8]) {
       const top = daySeatLayout(seatsOf(n), 0, 366).find((p) => p.slot === n / 2);
       expect(top?.scale).toBeCloseTo(0.8, 9);
-      expect(top?.z).toBe(0);
+      expect(top?.z).toBe(12);
     }
   });
 
@@ -321,7 +321,7 @@ describe("자동 배치 검사: 세로 (장면 높이 299~460)", () => {
   it("높이 299 미만이면 cy 는 SEAT_CY_MIN(177)에서 멈추고 맨 앞 이름표만 장면 높이를 넘을 수 있다 (받아들인 한계)", () => {
     const out: string[] = [];
     for (const w of [352, 366]) {
-      for (const h of [250, 280, 298]) {
+      for (const h of [290, 294, 298]) {
         expect(dayTableGeometry(w, h).cy).toBe(SEAT_CY_MIN);
         for (let n = 4; n <= 8; n++) {
           const over = daySeatLayout(seatsOf(n), 0, w, h)

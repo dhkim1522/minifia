@@ -3,6 +3,9 @@
 // 공식은 승인 시안 9차(design/screens/day-v3/R9-*.dc.html 의 좌석 계산 스크립트, SPEC.md "테이블과 좌석")를 그대로 옮겼다.
 // - 테이블 면과 좌석 원은 인원과 상관없이 하나로 고정이다. 장면 폭에 따라 가로 반지름만 줄인다(글자·캐릭터·장면은 배율로 줄이지 않는다).
 // - 캐릭터 상자·이름표·이모티콘은 모두 같은 (x, y)(발 위치)에서 계산한다. 떠 있는 층을 따로 가두는(clamp) 계산은 없다.
+// - 이름표는 이름 한 줄(높이 22)이고 발 y 에 바로 붙는다(간격 0). 이름표 층(z 1~11)은 항상 캐릭터 층(z 12~22) 아래다:
+//   이름표는 어떤 캐릭터의 얼굴도 덮지 못하고, 가까운 캐릭터가 먼 사람의 이름표를 덮을 수는 있다
+//   (가려질 수 있는 쪽은 이름표다 — 사용자 결정 F2, 3.1 UI-SPEC).
 // - 세로: 장면 높이가 시안보다 짧은 실제 폰(주소창·툴바)에서는 테이블 전체(면과 좌석 원)를 같은 만큼 올린다.
 //   그러면 테이블과 좌석의 관계는 그대로이고, 맨 앞 이름표가 장면 안에 든다(높이 TABLE_FIT_MIN_H 이상).
 
@@ -19,10 +22,10 @@ export const SEAT_RY = 100;
 export const SEAT_CY = 210;
 /** 세로 중심의 최소. 맨 뒤 캐릭터 머리 위(cy − ry − 96·0.8 = cy − 176.8)가 0 아래로 나가지 않는 값. */
 export const SEAT_CY_MIN = 177;
-/** 이 높이부터 맨 앞 이름표 아래 끝(cy + ry + 3 + 46 = cy + 149)이 장면 안이다: SEAT_CY_MIN + 149. */
-export const TABLE_FIT_MIN_H = 326;
-/** 맨 앞 이름표 아래 끝까지의 거리: ry 100 + 이름표 간격 3 + 이름표 높이 46. */
-const FRONT_TAG_BELOW_CY = 149;
+/** 이 높이부터 맨 앞 이름표 아래 끝(cy + ry + 0 + 22 = cy + 122)이 장면 안이다: SEAT_CY_MIN + 122. */
+export const TABLE_FIT_MIN_H = SEAT_CY_MIN + 122;
+/** 맨 앞 이름표 아래 끝까지의 거리: ry 100 + 이름표 간격 0 + 이름표 높이 22. */
+const FRONT_TAG_BELOW_CY = 122;
 
 /** 테이블 면 위 = cy − 60 (cy 210 에서 150). */
 export const FELT_CY_OFFSET = 60;
@@ -35,10 +38,10 @@ export const FIG_W = 72;
 export const FIG_H = 96;
 /** 맨 뒤 자리의 배율 */
 export const DEPTH_K0 = 0.8;
-/** 이름표 위 = 발 y + 3 */
-export const TAG_GAP_Y = 3;
-/** 이름표 두 줄 높이: 22 + 간격 2 + 22 */
-export const TAG_H = 46;
+/** 이름표 위 = 발 y + 0 (이름표 상자의 윗면이 발 y) */
+export const TAG_GAP_Y = 0;
+/** 이름표 한 줄 높이(테두리 포함) */
+export const TAG_H = 22;
 /**
  * 이름표 상자 폭 상한(배치 검사의 기준). 5글자 닉네임 윗줄의 설계 값이다:
  * 테두리 1 + 여백 7 + 점 8 + 간격 4 + 글자 70(14px × 5) + 여백 8 + 테두리 1 = 99.
@@ -115,7 +118,9 @@ export function daySeatLayout(
     const scale = DEPTH_K0 + (1 - DEPTH_K0) * depth;
     const x = cx + rx * Math.cos(theta);
     const y = cy + ry * Math.sin(theta);
-    const z = Math.round(depth * 10);
+    // 캐릭터 12~22, 이름표 1~11: 최소 캐릭터 12 > 최대 이름표 11 이라 이름표는 항상 캐릭터 아래다.
+    const z = 12 + Math.round(depth * 10);
+    const tagZ = 1 + Math.round(depth * 10);
     return {
       seat,
       slot,
@@ -128,7 +133,7 @@ export function daySeatLayout(
       figTop: y - FIG_H,
       tagLeft: x,
       tagTop: y + TAG_GAP_Y,
-      tagZ: z + 20,
+      tagZ,
       emojiLeft: x - EMOJI_SIZE / 2,
       emojiTop: Math.max(0, y - FIG_H * scale - EMOJI_LIFT),
     };
