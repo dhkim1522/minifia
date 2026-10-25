@@ -1,6 +1,6 @@
 /// <reference types="node" />
 import { readFileSync } from "node:fs";
-import { act, cleanup, render, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { RoleId } from "../../shared/game/roles";
 import type { ClaimLogEntry, PhaseId, RoomView, SpectateView } from "../../shared/protocol";
@@ -468,5 +468,108 @@ describe("DayScene claim 중 이모티콘 (결정 0023-2)", () => {
     const heart = document.querySelector<HTMLButtonElement>('dialog button[aria-label="좋아요"]')!;
     act(() => heart.click());
     expect(r.conn.send).toHaveBeenCalledWith({ t: "emoji", icon: "heart" });
+  });
+});
+
+describe("DayScene 낮 캐릭터 탭 → 유저 기록 카드 (03.1-08, D-06·D-19)", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  const claimLog: ClaimLogEntry[] = [
+    { n: 1, seat: 0, claim: "citizen" },
+    { n: 1, seat: 1, claim: "police" },
+    { n: 1, seat: 2, claim: "none" },
+    { n: 2, seat: 1, claim: "mafia" },
+  ];
+  const inspect = (c: HTMLElement) => [...c.querySelectorAll<HTMLButtonElement>(".mf-dt button.mf-dt__seat--inspect")];
+  const sheet = (name: string) => document.querySelector(`dialog[aria-label="${name}"]`);
+  const rowsOf = (name: string) => [...(sheet(name)?.querySelectorAll(".mf-urecord__row") ?? [])].map((li) => li.textContent);
+
+  it("claim·discussion·morning: 모든 자리가 button 이고 이름이 `{닉네임}, 주장 기록 보기` 로 끝난다(내 자리는 (나) 포함)", () => {
+    for (const phase of ["claim", "discussion", "morning"] as const) {
+      const { container } = scene(makeView({ phase, claimLog }));
+      const names = inspect(container).map((b) => b.getAttribute("aria-label") ?? "");
+      expect(`${phase}:${names.length}`).toBe(`${phase}:4`);
+      expect(names.every((n) => n.endsWith(", 주장 기록 보기"))).toBe(true);
+      expect(names.some((n) => n.startsWith("지우 (나)"))).toBe(true);
+      expect(container.querySelectorAll('.mf-dt [role="group"][data-seat]').length).toBe(0);
+      cleanup();
+    }
+  });
+
+  it("자리를 누르면 `{닉네임} 기록` 시트가 열리고 그 사람의 오늘·지난 줄이 최신 위로 보인다", () => {
+    const { container } = scene(makeView({ phase: "discussion", claimLog }));
+    expect(sheet("하윤 기록")).toBeNull();
+    fireEvent.click(within(container).getByRole("button", { name: "하윤, 주장 기록 보기" }));
+    expect(sheet("하윤 기록") !== null).toBe(true);
+    expect(rowsOf("하윤 기록")).toEqual(["2일차마피아라고 주장했어요", "1일차경찰이라고 주장했어요"]);
+  });
+
+  it("내 자리를 누르면 내 기록이 열린다", () => {
+    const { container } = scene(makeView({ phase: "claim", turn: 2, claimLog }));
+    fireEvent.click(inspect(container).find((b) => b.dataset.seat === "0")!);
+    expect(sheet("지우 기록") !== null).toBe(true);
+    expect(rowsOf("지우 기록")).toEqual(["1일차시민이라고 주장했어요"]);
+  });
+
+  it("기록이 없는 사람은 빈 상태 문구가 보인다", () => {
+    const { container } = scene(makeView({ phase: "discussion", claimLog }));
+    fireEvent.click(within(container).getByRole("button", { name: "도현, 주장 기록 보기" }));
+    expect(sheet("도현 기록")?.textContent).toContain("아직 주장 기록이 없어요");
+  });
+
+  it("아침(morning)에도 열린다", () => {
+    const { container } = scene(makeView({ phase: "morning", claimLog }));
+    fireEvent.click(within(container).getByRole("button", { name: "하윤, 주장 기록 보기" }));
+    expect(sheet("하윤 기록") !== null).toBe(true);
+  });
+
+  it("탈락한 viewer(spectate 있음)도 낮에 같은 카드를 연다 — 주장 기록만, 직업 정보 줄이 더해지지 않는다", () => {
+    const spectate: SpectateView = {
+      seats: [0, 1, 2, 3].map((seat) => ({ seat, job: seat === 1 ? ("mafia" as const) : ("citizen" as const) })),
+      picks: { mafia: [], police: [], doctor: [] },
+    };
+    const { container } = scene(makeView({ phase: "discussion", dead: [0], spectate, role: "citizen", claimLog }));
+    const btn = inspect(container).find((b) => b.dataset.seat === "1")!;
+    expect(btn.getAttribute("aria-label")?.endsWith(", 주장 기록 보기")).toBe(true);
+    fireEvent.click(btn);
+    const dlg = sheet("하윤 기록")!;
+    expect(dlg !== null).toBe(true);
+    expect(dlg.querySelectorAll("li").length).toBe(2);
+    expect(rowsOf("하윤 기록")).toEqual(["2일차마피아라고 주장했어요", "1일차경찰이라고 주장했어요"]);
+    // 카드의 글자는 제목·닫기·주장 문장뿐이다(관전자에게만 오는 실제 직업 줄이 없다)
+  });
+
+  it("연결이 끊겨도(canSend false) 기록 카드는 열리고 서버 요청은 없다", () => {
+    const r = scene(makeView({ phase: "discussion", claimLog }), { canSend: false, status: "closed" });
+    fireEvent.click(within(r.container).getByRole("button", { name: "하윤, 주장 기록 보기" }));
+    expect(sheet("하윤 기록") !== null).toBe(true);
+    expect(vi.mocked(r.conn.send).mock.calls.length).toBe(0);
+  });
+
+  it("닫기를 누르면 닫는다", () => {
+    const { container } = scene(makeView({ phase: "discussion", claimLog }));
+    fireEvent.click(within(container).getByRole("button", { name: "하윤, 주장 기록 보기" }));
+    fireEvent.click(within(sheet("하윤 기록") as HTMLElement).getByRole("button", { name: "닫기" }));
+    act(() => {
+      vi.advanceTimersByTime(400);
+    });
+    expect(sheet("하윤 기록")).toBeNull();
+  });
+
+  it("카드 입력은 claimLog 뿐이다 — 주장 문장이 DayScene 이 만드는 채팅 줄과 같은 표를 쓰고 view.spectate 직업은 카드에 나오지 않는다", () => {
+    const spectate: SpectateView = {
+      seats: [0, 1, 2, 3].map((seat) => ({ seat, job: seat === 2 ? ("doctor" as const) : ("citizen" as const) })),
+      picks: { mafia: [], police: [], doctor: [] },
+    };
+    const { container } = scene(makeView({ phase: "discussion", dead: [0], spectate, role: "citizen", claimLog }));
+    fireEvent.click(within(container).getByRole("button", { name: "민지, 주장 기록 보기" }));
+    expect(rowsOf("민지 기록")).toEqual(["1일차말하지 않았어요"]);
+    expect(sheet("민지 기록")?.textContent?.includes("의사")).toBe(false);
   });
 });

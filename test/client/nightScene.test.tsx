@@ -4,7 +4,7 @@ import { act, cleanup, fireEvent, render, screen, within } from "@testing-librar
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import "../helpers/singleLineErrors";
 import type { RoleId } from "../../shared/game/roles";
-import type { PhaseId, RoomView, SpectateView } from "../../shared/protocol";
+import type { ClaimLogEntry, PhaseId, RoomView, SpectateView } from "../../shared/protocol";
 import type { RoomConnection, RoomEvent } from "../../src/net/useRoomConnection";
 import { DayScene } from "../../src/screens/DayScene";
 
@@ -24,6 +24,8 @@ interface ViewOpts {
   /** 탈락한 자리들 */
   dead?: number[];
   spectate?: SpectateView;
+  /** 공개된 주장 기록 (기본 비어 있음) */
+  claimLog?: ClaimLogEntry[];
 }
 
 function makeView(o: ViewOpts = {}): RoomView {
@@ -46,7 +48,7 @@ function makeView(o: ViewOpts = {}): RoomView {
     day: {
       n: o.n ?? 1,
       roles: ["mafia", "police", "doctor", "citizen"],
-      claimLog: [],
+      claimLog: o.claimLog ?? [],
     },
   };
   if (o.spectate) view.spectate = o.spectate;
@@ -375,5 +377,56 @@ describe("night.css: 선택 알약 (03-08)", () => {
     expect(/color:\s*var\(--gray-300\)/.test(rule(".mf-pk--empty"))).toBe(true);
     const code = css.split("\n").filter((l) => !/^\s*\/?\*/.test(l)).join("\n");
     expect(css.length > 0 && !/#[0-9a-fA-F]{3,6}/.test(code)).toBe(true);
+  });
+});
+
+describe("밤에는 기록 카드가 열리지 않는다 (03.1-08, D-06)", () => {
+  const inspectBtns = (c: HTMLElement) => c.querySelectorAll(".mf-dt button.mf-dt__seat--inspect");
+  const spectate: SpectateView = {
+    seats: NAMES.map((_, seat) => ({ seat, job: "citizen" as const })),
+    picks: { mafia: [], police: [], doctor: [] },
+  };
+
+  it("행동자(경찰·의사·마피아)는 기존 `… 대상` 버튼만 있고 `주장 기록 보기` 버튼은 없다", () => {
+    for (const role of ["police", "doctor", "mafia"] as const) {
+      const { container } = scene(makeView(role === "mafia" ? { role, allies: [1] } : { role }));
+      expect(`${role}:${inspectBtns(container).length}`).toBe(`${role}:0`);
+      expect(`${role}:${screen.queryAllByRole("button", { name: /주장 기록 보기/ }).length}`).toBe(`${role}:0`);
+      expect(container.querySelectorAll(".mf-dt button.mf-dt__seat").length > 0).toBe(true);
+      cleanup();
+    }
+    const { container } = scene(makeView({ role: "police" }));
+    expect(screen.getByRole("button", { name: "하윤, 조사 대상" }) !== null).toBe(true);
+    expect(container.querySelectorAll(".mf-dt button.mf-dt__seat").length).toBe(5);
+  });
+
+  it("시민·탈락한 viewer(관전자)의 자리는 버튼이 아니라 group 이다", () => {
+    const citizen = scene(makeView({ role: "citizen" }));
+    expect(citizen.container.querySelectorAll(".mf-dt button").length).toBe(0);
+    expect(citizen.container.querySelectorAll('.mf-dt [role="group"][data-seat]').length).toBe(5);
+    cleanup();
+    const dead = scene(makeView({ role: "citizen", dead: [0], spectate }));
+    expect(dead.container.querySelectorAll(".mf-dt button").length).toBe(0);
+    expect(dead.container.querySelectorAll('.mf-dt [role="group"][data-seat]').length).toBe(5);
+  });
+
+  it("낮에 연 기록 카드는 밤이 되면 닫히고, 다시 낮이 되어도 다시 열리지 않는다", () => {
+    const claimLog: ClaimLogEntry[] = [{ n: 1, seat: 1, claim: "police" }];
+    const r = scene(makeView({ phase: "discussion", role: "citizen", claimLog }));
+    fireEvent.click(screen.getByRole("button", { name: /^하윤, 주장 기록 보기$/ }));
+    expect(r.container.querySelector('dialog[aria-label="하윤 기록"]') !== null).toBe(true);
+    r.rerender(makeView({ phase: "night", role: "citizen", claimLog }));
+    expect(r.container.querySelector("dialog") === null).toBe(true);
+    expect(inspectBtns(r.container).length).toBe(0);
+    r.rerender(makeView({ phase: "discussion", n: 2, role: "citizen", claimLog }));
+    expect(r.container.querySelector("dialog") === null).toBe(true);
+    expect(inspectBtns(r.container).length).toBe(5);
+  });
+
+  it("밤 행동자의 대상 버튼을 눌러도 기록 카드는 열리지 않고 pick 이 간다", () => {
+    const r = scene(makeView({ role: "police" }));
+    fireEvent.click(screen.getByRole("button", { name: "하윤, 조사 대상" }));
+    expect(r.container.querySelector("dialog") === null).toBe(true);
+    expect(sent(r.conn)).toContain('"t":"pick"');
   });
 });

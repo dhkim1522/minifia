@@ -198,7 +198,9 @@ describe("무사·타이머·표시 소멸·탈락 순간 (03-10)", () => {
     expect(r.container.querySelectorAll(".mf-dt button").length).toBe(5);
     r.rerender(makeView({ phase: "morning", role: "police", pick: 2, morning: {} }));
     expect(r.container.querySelectorAll(".mf-dt__sel, .mf-dt__pick").length).toBe(0);
-    expect(r.container.querySelectorAll(".mf-dt button").length).toBe(0);
+    // 아침의 자리 버튼은 읽기 전용 기록 카드 버튼(03.1-08)뿐이다 — 밤의 대상 버튼(`… 대상`)은 없다
+    expect(r.container.querySelectorAll('.mf-dt button[aria-label$="대상"]').length).toBe(0);
+    expect(r.container.querySelectorAll(".mf-dt button:not(.mf-dt__seat--inspect)").length).toBe(0);
   });
 
   it("마피아 화면: 선택·동료 배지는 사라지고 동료 링·마름모는 남는다", () => {
@@ -207,7 +209,8 @@ describe("무사·타이머·표시 소멸·탈락 순간 (03-10)", () => {
     expect(r.container.querySelectorAll(".mf-dt__pick--ally, .mf-dt__pick--me").length > 0).toBe(true);
     r.rerender(makeView({ phase: "morning", role: "mafia", allies: [1], pick: 2, allyPicks: [3], morning: {} }));
     expect(r.container.querySelectorAll(".mf-dt__sel, .mf-dt__pick").length).toBe(0);
-    expect(r.container.querySelectorAll(".mf-dt button").length).toBe(0);
+    expect(r.container.querySelectorAll('.mf-dt button[aria-label$="대상"]').length).toBe(0);
+    expect(r.container.querySelectorAll(".mf-dt button:not(.mf-dt__seat--inspect)").length).toBe(0);
     expect(seatEl(r.container, 1)!.querySelector(".mf-dt__ring--mate") !== null).toBe(true);
   });
 
