@@ -186,13 +186,13 @@ describe("DayScene 순차 주장 하단 (03.1 UI-SPEC B, D-03·D-04)", () => {
     }
   });
 
-  it("마피아 화면에서만 동료 자리(2)에 .mf-dt__ring--mate", () => {
+  it("마피아 화면에서만 동료 자리(2)의 그림에 진홍 후광(mf-figure--halo-crimson)", () => {
     const mafia = scene(makeView({ phase: "claim", role: "mafia", allies: [2] }));
-    expect(mafia.container.querySelector('.mf-dt__seat[data-seat="2"] .mf-dt__ring--mate')).not.toBeNull();
-    expect(mafia.container.querySelectorAll(".mf-dt__ring--mate").length).toBe(1);
+    expect(mafia.container.querySelector('.mf-dt__seat[data-seat="2"] img.mf-figure--halo-crimson')).not.toBeNull();
+    expect(mafia.container.querySelectorAll(".mf-figure--halo-crimson").length).toBe(1);
     cleanup();
     const citizen = scene(makeView({ phase: "claim", role: "citizen" }));
-    expect(citizen.container.querySelectorAll(".mf-dt__ring--mate").length).toBe(0);
+    expect(citizen.container.querySelectorAll(".mf-figure--halo-crimson").length).toBe(0);
   });
 
   it("끊긴 자리도 접근성 이름에 연결 끊김이 있고 이름표는 한 줄이다", () => {
@@ -332,28 +332,34 @@ describe("DayScene 차례 강조 (D-03)", () => {
     vi.useRealTimers();
   });
 
-  it("claim: day.turn.seat 한 자리에만 발밑 링·말풍선 배지·이름표 반전이 하나씩 있고, 차례가 넘어가면 다음 자리로 옮겨 간다", () => {
+  it("claim: day.turn.seat 한 자리에만 흰 후광·'…' 말풍선이 하나씩 있고, 차례가 넘어가면 다음 자리로 옮겨 간다", () => {
     const r = scene(makeView({ phase: "claim", turn: 2 }));
-    expect(r.container.querySelectorAll(".mf-dt__spot").length).toBe(1);
-    expect(r.container.querySelectorAll(".mf-dt__turn").length).toBe(1);
-    expect(r.container.querySelectorAll(".mf-dt__tag--turn").length).toBe(1);
-    expect(seatsWith(r.container, ".mf-dt__spot")).toBe("2");
-    expect(r.container.querySelector('.mf-dt__tag--turn')?.getAttribute("data-seat")).toBe("2");
+    expect(r.container.querySelectorAll(".mf-figure--halo-white").length).toBe(1);
+    expect(r.container.querySelectorAll(".mf-dt__bubble--turn").length).toBe(1);
+    expect(seatsWith(r.container, ".mf-figure--halo-white")).toBe("2");
+    expect(seatsWith(r.container, ".mf-dt__bubble--turn")).toBe("2");
     r.rerender(makeView({ phase: "claim", turn: 3 }));
-    expect(r.container.querySelectorAll(".mf-dt__spot").length).toBe(1);
-    expect(seatsWith(r.container, ".mf-dt__spot")).toBe("3");
-    expect(r.container.querySelector('.mf-dt__tag--turn')?.getAttribute("data-seat")).toBe("3");
+    expect(r.container.querySelectorAll(".mf-figure--halo-white").length).toBe(1);
+    expect(seatsWith(r.container, ".mf-figure--halo-white")).toBe("3");
+    expect(seatsWith(r.container, ".mf-dt__bubble--turn")).toBe("3");
   });
 
   it("내 차례여도 내 자리에 켜진다", () => {
     const r = scene(makeView({ phase: "claim", turn: 0 }));
-    expect(seatsWith(r.container, ".mf-dt__spot")).toBe("0");
+    expect(seatsWith(r.container, ".mf-figure--halo-white")).toBe("0");
+    expect(seatsWith(r.container, ".mf-dt__bubble--turn")).toBe("0");
   });
 
-  it("discussion·night·morning 에는 셋 모두 없다", () => {
+  it("discussion·night·morning 에는 차례 후광·말풍선이 없고, 발밑 원·옛 배지·이름표 반전은 어느 단계에도 없다", () => {
     for (const phase of ["discussion", "night", "morning"] as const) {
       const r = scene(makeView({ phase, role: "citizen" }));
-      expect(`${phase}:${r.container.querySelectorAll(".mf-dt__spot, .mf-dt__turn, .mf-dt__tag--turn").length}`).toBe(`${phase}:0`);
+      expect(`${phase}:${r.container.querySelectorAll(".mf-figure--halo-white, .mf-dt__bubble").length}`).toBe(`${phase}:0`);
+      cleanup();
+    }
+    for (const phase of ["claim", "discussion", "night", "morning"] as const) {
+      const r = scene(makeView({ phase, role: "citizen", turn: 2 }));
+      expect(`${phase}:${r.container.querySelectorAll(".mf-dt__spot, .mf-dt__ring, .mf-dt__sel, .mf-dt__turn, .mf-dt__tag--turn, .mf-dt__tag--spoke").length}`).toBe(`${phase}:0`);
+      expect(`${phase}:${r.container.querySelectorAll('[aria-label="방장"]').length}`).toBe(`${phase}:0`);
       cleanup();
     }
   });

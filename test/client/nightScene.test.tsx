@@ -134,12 +134,13 @@ describe("밤 — 경찰 (N-3)", () => {
     expect(screen.getByRole("button", { name: "지우 (나), 조사 대상" }) !== null).toBe(true);
   });
 
-  it("자리 2 를 누르면 {t:'pick', target:2} 한 번 — 링·배지·aria-pressed·알약 '선택 민지' 가 즉시 바뀐다", () => {
+  it("자리 2 를 누르면 {t:'pick', target:2} 한 번 — 흰 후광·배지·aria-pressed·알약 '선택 민지' 가 즉시 바뀐다", () => {
     const r = scene(makeView({ role: "police" }));
     fireEvent.click(seatEl(r.container, 2)!);
     expect(sent(r.conn)).toBe('[[{"t":"pick","target":2}]]');
     const s = seatEl(r.container, 2)!;
-    expect(s.querySelector(".mf-dt__sel") !== null).toBe(true);
+    expect(s.querySelector("img.mf-figure--halo-white") !== null).toBe(true);
+    expect(s.querySelector(".mf-dt__sel") === null).toBe(true);
     expect(s.querySelector(".mf-dt__pick--me") !== null).toBe(true);
     expect(s.getAttribute("aria-pressed")).toBe("true");
     const pill = within(panel(r.container)!).getByRole("status");
@@ -155,12 +156,12 @@ describe("밤 — 경찰 (N-3)", () => {
     expect(vi.mocked(r.conn.send).mock.calls.length).toBe(1);
   });
 
-  it("새 view(me.pick 3)가 오면 링이 자리 3 으로 가고 알약 '선택 도현' — 서버 값이 이긴다", () => {
+  it("새 view(me.pick 3)가 오면 후광이 자리 3 으로 가고 알약 '선택 도현' — 서버 값이 이긴다", () => {
     const r = scene(makeView({ role: "police" }));
     fireEvent.click(seatEl(r.container, 2)!);
     r.rerender(makeView({ role: "police", pick: 3 }));
-    expect(seatEl(r.container, 2)!.querySelector(".mf-dt__sel") === null).toBe(true);
-    expect(seatEl(r.container, 3)!.querySelector(".mf-dt__sel") !== null).toBe(true);
+    expect(seatEl(r.container, 2)!.querySelector(".mf-figure--halo-white") === null).toBe(true);
+    expect(seatEl(r.container, 3)!.querySelector("img.mf-figure--halo-white") !== null).toBe(true);
     expect(within(panel(r.container)!).getByRole("status").textContent).toBe("선택 도현");
   });
 
@@ -176,13 +177,13 @@ describe("밤 — 경찰 (N-3)", () => {
 describe("밤 — 마피아 (N-2)", () => {
   const mafia = (o: ViewOpts = {}) => makeView({ role: "mafia", allies: [2], ...o });
 
-  it("안내 '1일차 · 함께 지목하세요', 자신·동료는 버튼이 아니고 나머지는 '지목 대상' 버튼, 동료에 마피아 링", () => {
+  it("안내 '1일차 · 함께 지목하세요', 자신·동료는 버튼이 아니고 나머지는 '지목 대상' 버튼, 동료에 진홍 후광", () => {
     const { container } = scene(mafia());
     expect(container.querySelector(".mf-phasebar__do")?.textContent).toBe("1일차 · 함께 지목하세요");
     const isButton = (n: number) => seatEl(container, n)?.tagName === "BUTTON";
     expect([0, 1, 2, 3, 4].map((n) => (isButton(n) ? "1" : "0")).join("")).toBe("01011");
     expect(screen.getByRole("button", { name: "하윤, 지목 대상" }) !== null).toBe(true);
-    expect(seatEl(container, 2)!.querySelector(".mf-dt__ring--mate") !== null).toBe(true);
+    expect(seatEl(container, 2)!.querySelector("img.mf-figure--halo-crimson") !== null).toBe(true);
   });
 
   it("allyPicks [3] → 자리 3 에 --ally. 내가 3 을 고르면 --ally 와 --me 둘 다", () => {
@@ -288,12 +289,12 @@ describe("관전 (N-6, 결정 0021)", () => {
   // 이름표는 이름 한 줄이라 아랫줄(.mf-dt__claim)이 어디에도 없다. 다른 자리의 실제 직업 그림(roleArt)은 03.1-10 이 연결하고 그 단언도 거기서 더한다.
   const claimRowCount = (c: HTMLElement) => c.querySelectorAll(".mf-dt__claim").length;
 
-  it("밤: 내 자리 유령 + 탈락 이름표, 이름표 아랫줄 없음, 마피아 링·마름모, 역할별 배지, 버튼 0 개", () => {
+  it("밤: 내 자리 유령 + 탈락 이름표, 이름표 아랫줄 없음, 마피아 진홍 후광·마름모, 역할별 배지, 버튼 0 개", () => {
     const { container } = scene(dead0());
     expect(seatEl(container, 0)!.querySelector("img")?.getAttribute("src")).toContain("/characters/ghost/");
     expect(container.querySelector('.mf-dt__tag[data-seat="0"]')?.classList.contains("mf-dt__tag--dead")).toBe(true);
     expect(claimRowCount(container)).toBe(0);
-    expect(seatEl(container, 1)!.querySelector(".mf-dt__ring--mate") !== null).toBe(true);
+    expect(seatEl(container, 1)!.querySelector("img.mf-figure--halo-crimson") !== null).toBe(true);
     expect(seatEl(container, 1)!.querySelector('[role="img"][aria-label="마피아"]') !== null).toBe(true);
     expect(seatEl(container, 4)!.querySelector('.mf-dt__pick--ally[role="img"][aria-label="마피아 지목 대상"]') !== null).toBe(true);
     expect(seatEl(container, 1)!.querySelector('.mf-dt__pick--police[role="img"][aria-label="경찰 조사 대상"]') !== null).toBe(true);
@@ -468,9 +469,9 @@ describe("관전자 테이블: 직업 캐릭터는 탈락한 본인에게만 (03
     expect(seatEl(container, 4)!.getAttribute("aria-label")?.startsWith("서연, 의사")).toBe(true);
   });
 
-  it("마피아 직업 자리는 진홍 링·마름모(`마피아`)가 그대로이고 밤 표적 배지도 그대로다", () => {
+  it("마피아 직업 자리는 진홍 후광·마름모(`마피아`)가 그대로이고 밤 표적 배지도 그대로다", () => {
     const { container } = scene(viewOf("night"));
-    expect(seatEl(container, 1)!.querySelector(".mf-dt__ring--mate") !== null).toBe(true);
+    expect(seatEl(container, 1)!.querySelector("img.mf-figure--halo-crimson") !== null).toBe(true);
     expect(seatEl(container, 1)!.querySelector('[role="img"][aria-label="마피아"]') !== null).toBe(true);
     expect(seatEl(container, 4)!.querySelector('.mf-dt__pick--ally[role="img"]') !== null).toBe(true);
   });
@@ -489,9 +490,9 @@ describe("관전자 테이블: 직업 캐릭터는 탈락한 본인에게만 (03
     }
   });
 
-  it("마피아 viewer 의 동료 표시는 링·마름모뿐이고 직업 그림이 아니다", () => {
+  it("마피아 viewer 의 동료 표시는 진홍 후광·마름모뿐이고 직업 그림이 아니다", () => {
     const { container } = scene(makeView({ phase: "night", role: "mafia", allies: [1] }));
-    expect(seatEl(container, 1)!.querySelector(".mf-dt__ring--mate") !== null).toBe(true);
+    expect(seatEl(container, 1)!.querySelector("img.mf-figure--halo-crimson") !== null).toBe(true);
     expect(rolesImgs(container)).toBe(0);
   });
 
@@ -499,7 +500,7 @@ describe("관전자 테이블: 직업 캐릭터는 탈락한 본인에게만 (03
     for (const phase of ["claim", "discussion", "night", "morning"] as const) {
       const { container } = scene(makeView({ phase, role: "citizen", dead: [3], spectate: spectateOf() }));
       expect(`${phase}:${rolesImgs(container)}`).toBe(`${phase}:0`);
-      expect(container.querySelector(".mf-dt__ring--mate") === null).toBe(true);
+      expect(container.querySelector(".mf-figure--halo-crimson") === null).toBe(true);
       cleanup();
     }
   });

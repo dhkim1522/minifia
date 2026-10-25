@@ -101,14 +101,15 @@ describe("Lobby — 대기실 (S-03) 테이블", () => {
     expect(screen.getByRole("group", { name: "하윤" }).querySelector('[aria-label="동료"]')).not.toBeNull();
   });
 
-  it("내 자리가 방장이 아니어도 내 자리가 맨 아래 가운데에 놓이고 내 링이 있다", () => {
+  it("내 자리가 방장이 아니어도 내 자리가 맨 아래 가운데에 놓이고 내 표시는 이름표 테두리뿐이다(발밑 원·후광 없음)", () => {
     const { container } = render(<Lobby view={makeView([player(0, "민수"), player(1, "지우")], 1)} send={() => {}} />);
     const mine = screen.getByRole("group", { name: "지우 (나)" });
     const geo = dayTableGeometry(366, 407, 12);
     expect(parseFloat(mine.style.left) + FIG_W / 2).toBeCloseTo(geo.cx, 0);
     expect(parseFloat(mine.style.top) + FIG_H).toBeCloseTo(geo.cy + geo.ry, 0);
-    expect(mine.querySelector(".mf-dt__ring--me")).not.toBeNull();
-    expect(container.querySelectorAll(".mf-dt__ring--me").length).toBe(1);
+    expect(container.querySelectorAll(".mf-dt__ring").length).toBe(0);
+    expect(container.querySelectorAll(".mf-figure--halo-white, .mf-figure--halo-crimson").length).toBe(0);
+    expect(container.querySelectorAll(".mf-dt__tag--me").length).toBe(1);
   });
 });
 

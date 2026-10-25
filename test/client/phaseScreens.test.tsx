@@ -268,6 +268,12 @@ describe("S-04 역할 배정 (GAME-01, D-12, R11, E7, T-01-44)", () => {
     expect(screen.queryByRole("timer")).toBeNull();
   });
 
+  it("배정 화면에는 방장 왕관이 없고(방장 자리가 있어도 0개) 발밑 원·후광도 없다 (결정 0030)", () => {
+    const { container } = renderRoom(makeView({ phase: "assigning" }));
+    expect(container.querySelectorAll('[aria-label="방장"], .mf-dt__crown').length).toBe(0);
+    expect(container.querySelectorAll(".mf-dt__ring, .mf-dt__sel, .mf-figure--halo-white, .mf-figure--halo-crimson").length).toBe(0);
+  });
+
   it("배정 화면 마크업은 역할을 읽지 않는다 — 마피아로 억지로 채운 view 와 역할 없는 view 의 innerHTML 이 같다", () => {
     const withRole = renderRoom(makeView({ phase: "assigning", role: "mafia", allies: [2] }));
     const html = withRole.container.innerHTML;
@@ -546,10 +552,10 @@ describe("S-06b·S-06c·S-07 한 장면 DayScene (DAY-01, UI-SPEC 장면)", () =
     expect(r.container.querySelector(".mf-phase-enter") === scene, "discussion 래퍼 유지").toBe(true);
   });
 
-  it("마피아(allies [2])와 시민의 claim 화면은 동료 링·마름모를 뺀 나머지가 같고 역할 글자가 없다", () => {
+  it("마피아(allies [2])와 시민의 claim 화면은 동료 후광·마름모를 뺀 나머지가 같고 역할 글자가 없다", () => {
     const strip = (html: string) =>
       html
-        .replace(/<span class="mf-dt__ring mf-dt__ring--mate"><\/span>/g, "")
+        .replace(/ mf-figure--halo-crimson/g, "")
         .replace(/<svg[^>]*mf-dt__mark[\s\S]*?<\/svg>/g, "");
     // 남의 차례 하단(직업 칩이 없는 쪽)으로 비교해 직업 이름 글자가 화면에 없음을 확인한다
     const mafia = renderRoom(claim({ role: "mafia", allies: [2], turn: 1 })).container.innerHTML;

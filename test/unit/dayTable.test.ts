@@ -1,8 +1,18 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
+  BUBBLE_H,
+  BUBBLE_TAIL,
+  BUBBLE_TOP,
+  BUBBLE_W,
   DAY_SCENE_H,
   DEPTH_K0,
   FELT_SIDE,
+  FIG_H,
+  FIG_W,
+  HALO_BLUR_PX,
+  HALO_CORE_BLUR_PX,
+  HALO_MAX_SIMULTANEOUS,
   RX_TAG_HALF,
   SCENE_PAD_DEFAULT,
   SCENE_PAD_NARROW,
@@ -485,5 +495,172 @@ describe("px", () => {
     expect(px(110)).toBe("110px");
     expect(px(110.46)).toBe("110.5px");
     expect(px(0)).toBe("0px");
+  });
+});
+
+// ---- quick 261025-unr 과제 1: 후광(드롭섀도)·'…' 말풍선 산술 (결정 0030) ----
+const FOUR_SCENES = [
+  { w: 352, h: 387.8, pad: 4 },
+  { w: 367, h: 387.8, pad: 4 },
+  { w: 366, h: 387.8, pad: 12 },
+  { w: 406, h: 387.8, pad: 12 },
+] as const;
+
+describe("후광·말풍선 상수 (결정 0030)", () => {
+  it("후광 번짐 안쪽 2px·바깥 9px, 한 화면 최대 3개, 말풍선 48×26·꼬리 5·위 26", () => {
+    expect(HALO_CORE_BLUR_PX).toBe(2);
+    expect(HALO_BLUR_PX).toBe(9);
+    expect(HALO_MAX_SIMULTANEOUS).toBe(3);
+    expect(BUBBLE_W).toBe(48);
+    expect(BUBBLE_H).toBe(26);
+    expect(BUBBLE_TAIL).toBe(5);
+    expect(BUBBLE_TOP).toBe(26);
+    // 말풍선 폭 = 좌우 11×2 + 점 6×3 + 간격 4×2
+    expect(BUBBLE_W).toBe(11 * 2 + 6 * 3 + 4 * 2);
+  });
+});
+
+describe("후광 번짐: 장면 안에 든다 (캐릭터 상자 + 9px × 배율)", () => {
+  it.each(FOUR_SCENES)("폭 $w(여백 $pad): 1~8명 번짐 상자의 좌우가 폰 가장자리 안, 위가 장면 안(높이 387.8)", (sc) => {
+    for (let n = 1; n <= 8; n++) {
+      for (const p of daySeatLayout(seatsOf(n), 0, sc.w, sc.h, sc.pad)) {
+        const half = (FIG_W * p.scale) / 2 + HALO_BLUR_PX * p.scale;
+        expect(p.x - half, `${sc.w}/${n}명/자리 ${p.seat} 왼쪽`).toBeGreaterThanOrEqual(-sc.pad);
+        expect(p.x + half, `${sc.w}/${n}명/자리 ${p.seat} 오른쪽`).toBeLessThanOrEqual(sc.w + sc.pad);
+        const top = p.y - (FIG_H + HALO_BLUR_PX) * p.scale;
+        expect(top, `${sc.w}/${n}명/자리 ${p.seat} 위`).toBeGreaterThanOrEqual(0);
+      }
+    }
+  });
+
+  it.each(FOUR_SCENES)("폭 $w: 가장 낮은 장면 높이(299.8)에서도 번짐이 장면 위로 16px(헤더 아래 안쪽 여백)를 넘지 않는다", (sc) => {
+    for (let n = 1; n <= 8; n++) {
+      for (const p of daySeatLayout(seatsOf(n), 0, sc.w, 299.8, sc.pad)) {
+        const top = p.y - (FIG_H + HALO_BLUR_PX) * p.scale;
+        expect(top, `${sc.w}/${n}명/자리 ${p.seat}`).toBeGreaterThanOrEqual(-16);
+      }
+    }
+  });
+});
+
+describe("후광 알파: 이름표 글자를 가리지 않는다", () => {
+  // 가우시안 블러 후광: σ = 반지름/2, 윤곽에서 d 만큼 떨어진 곳의 알파 = 계수 × 0.5 × erfc(d / (σ√2))
+  // (Abramowitz-Stegun 7.1.26 근사)
+  const erfc = (x: number): number => {
+    const t = 1 / (1 + 0.3275911 * Math.abs(x));
+    const y = 1 - ((((1.061405429 * t - 1.453152027) * t + 1.421413741) * t - 0.284496736) * t + 0.254829592) * t * Math.exp(-x * x);
+    return x >= 0 ? 1 - y : 1 + y;
+  };
+  const layerAlpha = (d: number, radius: number, coef: number): number => coef * 0.5 * erfc(d / ((radius / 2) * Math.SQRT2));
+  /** 흰 후광(안쪽 2px 95% + 바깥 9px 75%)이 윤곽에서 d 만큼 떨어진 곳에 두는 합성 알파 */
+  const haloAlpha = (d: number): number =>
+    1 - (1 - layerAlpha(d, HALO_CORE_BLUR_PX, 0.95)) * (1 - layerAlpha(d, HALO_BLUR_PX, 0.75));
+  const tokens = readFileSync("src/styles/tokens.css", "utf8");
+  const hexOf = (name: string): [number, number, number] => {
+    const m = new RegExp(`--${name}:\\s*#([0-9a-fA-F]{6})`).exec(tokens);
+    if (!m) throw new Error(`토큰 --${name} 없음`);
+    const v = parseInt(m[1]!, 16);
+    return [(v >> 16) & 255, (v >> 8) & 255, v & 255];
+  };
+  const lum = ([r, g, b]: [number, number, number]): number => {
+    const f = (c: number): number => {
+      const s = c / 255;
+      return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+    };
+    return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
+  };
+  const contrast = (a: [number, number, number], b: [number, number, number]): number => {
+    const [hi, lo] = [lum(a), lum(b)].sort((x, y) => y - x) as [number, number];
+    return (hi + 0.05) / (lo + 0.05);
+  };
+
+  it("윤곽에서 4px 에 알파 ≤ 0.15, 9px 에 ≤ 0.02 (보이는 번짐은 9px 이하)", () => {
+    expect(haloAlpha(4)).toBeLessThanOrEqual(0.15);
+    expect(haloAlpha(9)).toBeLessThanOrEqual(0.02);
+    expect(haloAlpha(2)).toBeGreaterThan(haloAlpha(4));
+  });
+
+  it("그 알파를 night-900 이름표 면에 흰(gray-50) 후광으로 겹쳐도 gray-50 글자의 대비가 9:1 이상이다", () => {
+    const night = hexOf("night-900");
+    const white = hexOf("gray-50");
+    for (const d of [4, 9]) {
+      const a = haloAlpha(d);
+      const face = night.map((c, i) => c * (1 - a) + white[i]! * a) as [number, number, number];
+      expect(contrast(white, face), `d=${d}px`).toBeGreaterThanOrEqual(9);
+    }
+  });
+});
+
+describe("말풍선 기하: 이웃 얼굴을 덮지 않고 장면 안에 든다 (위 −26px)", () => {
+  // 말풍선은 자리 상자 안(상자 위 BUBBLE_TOP)에 있고 상자와 함께 배율 k 로 줄어든다. 몸통은 상자 위 [26, 0]·가운데 폭 48,
+  // 꼬리(폭 10·높이 5)는 상자 위 면 아래로 5. 얼굴 = 이웃 상자의 위 45%.
+  // 시안(f12.css)은 위 −30px 이지만 8명판 자리 1·7 의 말풍선이 이웃 얼굴을 4.1px 덮어 −26 으로 정했다.
+  type Box = { x0: number; x1: number; y0: number; y1: number };
+  const overlap = (a: Box, b: Box): number => {
+    const w = Math.min(a.x1, b.x1) - Math.max(a.x0, b.x0);
+    const h = Math.min(a.y1, b.y1) - Math.max(a.y0, b.y0);
+    return w > 0 && h > 0 ? Math.min(w, h) : 0;
+  };
+  const bubbleBoxes = (p: { x: number; y: number; scale: number }, top: number): Box[] => {
+    const k = p.scale;
+    const faceTop = p.y - FIG_H * k;
+    return [
+      { x0: p.x - (BUBBLE_W / 2) * k, x1: p.x + (BUBBLE_W / 2) * k, y0: faceTop - top * k, y1: faceTop },
+      { x0: p.x - BUBBLE_TAIL * k, x1: p.x + BUBBLE_TAIL * k, y0: faceTop, y1: faceTop + BUBBLE_TAIL * k },
+    ];
+  };
+  const faceBox = (p: { x: number; y: number; scale: number }): Box => ({
+    x0: p.x - (FIG_W / 2) * p.scale,
+    x1: p.x + (FIG_W / 2) * p.scale,
+    y0: p.y - FIG_H * p.scale,
+    y1: p.y - FIG_H * p.scale + 0.45 * FIG_H * p.scale,
+  });
+  const fullBox = (p: { x: number; y: number; scale: number }): Box => ({
+    x0: p.x - (FIG_W / 2) * p.scale,
+    x1: p.x + (FIG_W / 2) * p.scale,
+    y0: p.y - FIG_H * p.scale,
+    y1: p.y,
+  });
+  const worstFace = (n: number, sc: { w: number; h: number; pad: number }, top: number): number => {
+    const places = daySeatLayout(seatsOf(n), 0, sc.w, sc.h, sc.pad);
+    let worst = 0;
+    for (const a of places) for (const b of places) if (a !== b) for (const box of bubbleBoxes(a, top)) worst = Math.max(worst, overlap(box, faceBox(b)));
+    return worst;
+  };
+
+  it("BUBBLE_TOP 26: 4~8명 × 네 장면 폭에서 말풍선(꼬리 포함)과 이웃 얼굴의 겹침이 0.5px 이하", () => {
+    for (const sc of FOUR_SCENES) for (let n = 4; n <= 8; n++) expect(worstFace(n, sc, BUBBLE_TOP), `${sc.w}/${n}명`).toBeLessThanOrEqual(0.5);
+  });
+
+  it("시안의 −30 이면 8명판이 이웃 얼굴을 약 4.1px 덮는다(그래서 −26 이다)", () => {
+    expect(worstFace(8, FOUR_SCENES[2], 30)).toBeGreaterThan(4);
+    expect(worstFace(8, FOUR_SCENES[2], 30)).toBeLessThan(4.2);
+  });
+
+  it("자기보다 z 가 높은 이웃의 상자에 말풍선이 가려지지 않는다", () => {
+    for (const sc of FOUR_SCENES) {
+      for (let n = 4; n <= 8; n++) {
+        const places = daySeatLayout(seatsOf(n), 0, sc.w, sc.h, sc.pad);
+        for (const a of places) {
+          for (const b of places) {
+            if (a === b || b.z <= a.z) continue;
+            for (const box of bubbleBoxes(a, BUBBLE_TOP)) expect(overlap(box, fullBox(b)), `${sc.w}/${n}명 ${a.seat}←${b.seat}`).toBeLessThanOrEqual(0.5);
+          }
+        }
+      }
+    }
+  });
+
+  it("말풍선 가로가 장면 안이고, 장면 높이 387.8 에서 맨 위가 0 이상이다", () => {
+    for (const sc of FOUR_SCENES) {
+      for (let n = 4; n <= 8; n++) {
+        for (const p of daySeatLayout(seatsOf(n), 0, sc.w, sc.h, sc.pad)) {
+          const [body] = bubbleBoxes(p, BUBBLE_TOP) as [Box];
+          expect(body.x0, `${sc.w}/${n}명/자리 ${p.seat}`).toBeGreaterThanOrEqual(0);
+          expect(body.x1, `${sc.w}/${n}명/자리 ${p.seat}`).toBeLessThanOrEqual(sc.w);
+          expect(body.y0, `${sc.w}/${n}명/자리 ${p.seat}`).toBeGreaterThanOrEqual(0);
+        }
+      }
+    }
   });
 });

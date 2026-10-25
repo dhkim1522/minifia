@@ -167,35 +167,37 @@ describe("낮 토론 화면 — 로그·말하기 줄 (COMM-01, D-15·D-16·D-17
     expect(mine?.getAttribute("title")).toBe("지우");
     // 구분 점은 자리 색 변수
     expect(last.querySelector<HTMLElement>(".mf-msglog__dot")?.getAttribute("style")).toContain("--seat-3");
-    // 보낸 사람 이름표 윗줄만 반전(자리 0 과 2), 다른 자리는 아니고 머리 위 말풍선은 없다
-    expect(tagOf(r.container, 2)?.classList.contains("mf-dt__tag--spoke")).toBe(true);
-    expect(tagOf(r.container, 1)?.classList.contains("mf-dt__tag--spoke")).toBe(false);
+    // 보낸 사람(자리 2)만 머리 위 '…' 말풍선이고 이름표 반전은 없다(후광도 없다)
+    expect(r.container.querySelector('.mf-dt__seat[data-seat="2"] .mf-dt__bubble--spoke')).not.toBeNull();
+    expect(r.container.querySelector('.mf-dt__seat[data-seat="1"] .mf-dt__bubble')).toBeNull();
+    expect(tagOf(r.container, 2)?.className).toBe("mf-dt__tag");
+    expect(r.container.querySelectorAll(".mf-figure--halo-white").length).toBe(0);
     expect(r.container.querySelectorAll(".mf-bubble, .mf-float").length).toBe(0);
   });
 
-  it("3000ms 뒤 반전(--spoke)은 사라지고 로그 줄은 남는다", () => {
+  it("3000ms 뒤 말풍선(--spoke)은 사라지고 로그 줄은 남는다", () => {
     const ev = emitter();
     const r = scene(makeView(), { onEvent: ev.onEvent });
     ev.emit(line(1, 2, 1, NOW));
-    expect(r.container.querySelectorAll(".mf-dt__tag--spoke").length).toBe(1);
+    expect(r.container.querySelectorAll(".mf-dt__bubble--spoke").length).toBe(1);
     act(() => {
       vi.advanceTimersByTime(2_999);
     });
-    expect(r.container.querySelectorAll(".mf-dt__tag--spoke").length).toBe(1);
+    expect(r.container.querySelectorAll(".mf-dt__bubble--spoke").length).toBe(1);
     act(() => {
       vi.advanceTimersByTime(1);
     });
-    expect(r.container.querySelectorAll(".mf-dt__tag--spoke").length).toBe(0);
+    expect(r.container.querySelectorAll(".mf-dt__bubble--spoke").length).toBe(0);
     expect(items().length).toBe(1);
   });
 
-  it("처음 마운트(재접속)에는 로그가 '아직 메시지가 없어요' 이고 --spoke 가 없다 — 서버가 지난 줄을 보내지 않고 뷰의 옛 messages 키도 읽지 않는다 (결정 0017-7)", () => {
+  it("처음 마운트(재접속)에는 로그가 '아직 메시지가 없어요' 이고 말풍선(--spoke)이 없다 — 서버가 지난 줄을 보내지 않고 뷰의 옛 messages 키도 읽지 않는다 (결정 0017-7)", () => {
     const base = makeView();
     const legacy = { ...base, day: { ...base.day!, messages: [{ seq: 1, seat: 2, template: "suspect", target: 1, at: NOW }] } } as unknown as RoomView;
     const r = scene(legacy);
     expect(items().length).toBe(0);
     expect(within(log()).getByText("아직 메시지가 없어요")).toBeTruthy();
-    expect(r.container.querySelectorAll(".mf-dt__tag--spoke").length).toBe(0);
+    expect(r.container.querySelectorAll(".mf-dt__bubble--spoke").length).toBe(0);
   });
 
   it("다음 낮 토론 view(day.n 2)로 바뀌면 로그가 비어 있다", () => {

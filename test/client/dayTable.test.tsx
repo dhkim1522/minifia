@@ -6,7 +6,7 @@ import { DayTable } from "../../src/components/DayTable";
 import { Icon } from "../../src/components/Icon";
 import type { IconName } from "../../src/components/Icon";
 import type { DayTableSeat } from "../../src/components/DayTable";
-import { daySeatLayout, px } from "../../src/game/dayTable";
+import { HALO_MAX_SIMULTANEOUS, daySeatLayout, px } from "../../src/game/dayTable";
 import { claimName } from "../../src/game/roleText";
 
 afterEach(() => {
@@ -207,57 +207,78 @@ describe("claimName (src/game/roleText.ts 가 단일 출처)", () => {
 const seatEl = (c: HTMLElement, n: number) => c.querySelector<HTMLElement>(`.mf-dt__seat[data-seat="${n}"]`)!;
 const changedClaim = { kind: "claim", job: "mafia", changed: true, pop: false } as const;
 
-describe("DayTable: 왕관·링·동료·끊김·보낸 사람", () => {
-  it("방장 자리의 캐릭터 상자 안에만 .mf-dt__crown[role=img][aria-label=방장] 이 하나 있다, 방장이 없으면 없다", () => {
-    const { container } = render(<DayTable seats={five({ 2: { isHost: true } })} mySeat={0} width={366} />);
+describe("DayTable: 왕관·후광·동료·끊김·보낸 사람", () => {
+  it("hostCrown 이 있을 때만 방장 자리의 캐릭터 상자 안에 .mf-dt__crown[role=img][aria-label=방장] 이 하나 있다, 방장이 없으면 없다", () => {
+    const { container } = render(<DayTable seats={five({ 2: { isHost: true } })} mySeat={0} width={366} hostCrown />);
     const crowns = container.querySelectorAll<HTMLElement>(".mf-dt__crown");
     expect(crowns.length).toBe(1);
     expect(crowns[0]?.getAttribute("role")).toBe("img");
     expect(crowns[0]?.getAttribute("aria-label")).toBe("방장");
     expect(seatEl(container, 2).contains(crowns[0] ?? null)).toBe(true);
     cleanup();
-    const none = render(<DayTable seats={five()} mySeat={0} width={366} />);
+    const none = render(<DayTable seats={five()} mySeat={0} width={366} hostCrown />);
     expect(none.container.querySelectorAll(".mf-dt__crown").length).toBe(0);
   });
 
-  it("내 자리 상자에만 .mf-dt__ring--me, 내 이름표에만 .mf-dt__tag--me", () => {
+  it("hostCrown 이 없으면(기본: 역할 배정·낮·밤·아침) isHost 자리가 있어도 왕관이 0개다", () => {
+    const { container } = render(<DayTable seats={five({ 2: { isHost: true } })} mySeat={0} width={366} />);
+    expect(container.querySelectorAll(".mf-dt__crown").length).toBe(0);
+    expect(container.querySelectorAll('[aria-label="방장"]').length).toBe(0);
+  });
+
+  it("내 자리는 후광도 발밑 원도 없고(내 표시는 이름표 테두리 .mf-dt__tag--me 뿐), 내 이름표에만 --me", () => {
     const { container } = render(<DayTable seats={five()} mySeat={0} width={366} />);
-    expect(container.querySelectorAll(".mf-dt__ring--me").length).toBe(1);
-    expect(seatEl(container, 0).querySelectorAll(".mf-dt__ring--me").length).toBe(1);
+    expect(container.querySelectorAll(".mf-dt__ring").length).toBe(0);
+    expect(container.querySelectorAll(".mf-figure--halo-white, .mf-figure--halo-crimson").length).toBe(0);
     expect(container.querySelectorAll(".mf-dt__tag--me").length).toBe(1);
     expect(tagEl(container, 0).classList.contains("mf-dt__tag--me")).toBe(true);
   });
 
-  it("isAlly 자리에만 .mf-dt__ring--mate 와 aria-label 동료 표시, 아무도 동료가 아니면 없다", () => {
+  it("isAlly 자리의 그림 img 에만 진홍 후광과 aria-label 동료 마름모, 아무도 동료가 아니면 없다", () => {
     const { container } = render(<DayTable seats={five({ 3: { isAlly: true } })} mySeat={0} width={366} />);
-    expect(container.querySelectorAll(".mf-dt__ring--mate").length).toBe(1);
-    expect(seatEl(container, 3).querySelectorAll(".mf-dt__ring--mate").length).toBe(1);
+    expect(container.querySelectorAll(".mf-figure--halo-crimson").length).toBe(1);
+    const halo = seatEl(container, 3).querySelector("img.mf-figure--halo-crimson");
+    expect(halo).not.toBeNull();
+    expect(container.querySelectorAll("img.mf-figure--halo-crimson").length).toBe(1);
     const mark = container.querySelectorAll(".mf-dt__mark");
     expect(mark.length).toBe(1);
     expect(mark[0]?.getAttribute("aria-label")).toBe("동료");
+    // 후광 클래스는 그림 img 에만 붙는다(자리·이름표·마름모에는 안 붙는다)
+    expect(seatEl(container, 3).className).not.toMatch(/halo/);
+    expect(tagEl(container, 3).className).not.toMatch(/halo/);
+    expect(mark[0]?.getAttribute("class") ?? "").not.toMatch(/halo/);
     cleanup();
     const none = render(<DayTable seats={five()} mySeat={0} width={366} />);
-    expect(none.container.querySelectorAll(".mf-dt__ring--mate").length).toBe(0);
+    expect(none.container.querySelectorAll(".mf-figure--halo-crimson").length).toBe(0);
     expect(none.container.querySelectorAll(".mf-dt__mark").length).toBe(0);
   });
 
-  it("동료이면서 나인 자리는 동료 링이 우선이다 (나 링 없음)", () => {
+  it("동료이면서 나인 자리는 진홍 후광이다(내 표시는 이름표 --me 뿐)", () => {
     const { container } = render(<DayTable seats={five({ 0: { isAlly: true } })} mySeat={0} width={366} />);
-    expect(seatEl(container, 0).querySelectorAll(".mf-dt__ring--mate").length).toBe(1);
-    expect(seatEl(container, 0).querySelectorAll(".mf-dt__ring--me").length).toBe(0);
+    expect(seatEl(container, 0).querySelectorAll("img.mf-figure--halo-crimson").length).toBe(1);
+    expect(tagEl(container, 0).classList.contains("mf-dt__tag--me")).toBe(true);
   });
 
-  it("끊긴 자리의 그림은 mf-figure--disconnected 이다", () => {
-    const seats = five({ 2: { connected: false } });
+  it("끊긴 자리의 그림은 mf-figure--disconnected 이고, 후광이 함께 있어도 둘 다 남는다", () => {
+    const seats = five({ 2: { connected: false }, 3: { connected: false, isAlly: true } });
     const { container } = render(<DayTable seats={seats} mySeat={0} width={366} />);
     expect(seatEl(container, 2).querySelector("img")?.classList.contains("mf-figure--disconnected")).toBe(true);
     expect(seatEl(container, 1).querySelector("img")?.classList.contains("mf-figure--disconnected")).toBe(false);
+    const both = seatEl(container, 3).querySelector("img")!;
+    expect(both.classList.contains("mf-figure--disconnected")).toBe(true);
+    expect(both.classList.contains("mf-figure--halo-crimson")).toBe(true);
   });
 
-  it("spoke true 인 자리의 이름표에만 .mf-dt__tag--spoke", () => {
+  it("spoke true 인 자리에는 .mf-dt__bubble--spoke 하나(aria-hidden, 점 셋)뿐이고 이름표 반전도 후광도 없다", () => {
     const { container } = render(<DayTable seats={five({ 4: { spoke: true } })} mySeat={0} width={366} />);
-    expect(container.querySelectorAll(".mf-dt__tag--spoke").length).toBe(1);
-    expect(tagEl(container, 4).classList.contains("mf-dt__tag--spoke")).toBe(true);
+    const bubbles = container.querySelectorAll<HTMLElement>(".mf-dt__bubble");
+    expect(bubbles.length).toBe(1);
+    expect(bubbles[0]?.classList.contains("mf-dt__bubble--spoke")).toBe(true);
+    expect(bubbles[0]?.getAttribute("aria-hidden")).toBe("true");
+    expect(bubbles[0]?.querySelectorAll("i").length).toBe(3);
+    expect(seatEl(container, 4).contains(bubbles[0] ?? null)).toBe(true);
+    expect(tagEl(container, 4).className).toBe("mf-dt__tag");
+    expect(container.querySelectorAll(".mf-figure--halo-white").length).toBe(0);
   });
 });
 
@@ -353,17 +374,18 @@ describe("DayTable: 밤 대상 선택 (D-01·D-02, UI-SPEC N-1)", () => {
     expect(a).not.toHaveBeenCalled();
   });
 
-  it("pick.mine 인 자리: aria-pressed='true', 상자 안에 .mf-dt__sel 하나와 .mf-dt__pick--me 하나(svg 하나, aria-hidden). 다른 자리에는 없다", () => {
+  it("pick.mine 인 자리: aria-pressed='true', 그림 img 에 흰 후광 하나와 .mf-dt__pick--me 하나(svg 하나, aria-hidden). 다른 자리에는 없다", () => {
     const seats = pickSeats({ 1: vi.fn(), 2: vi.fn() }, { 2: { pick: { mine: true } } });
     const { container } = render(<DayTable seats={seats} mySeat={0} width={366} />);
     const el = seatEl(container, 2);
     expect(el.getAttribute("aria-pressed")).toBe("true");
-    expect(el.querySelectorAll(".mf-dt__sel").length).toBe(1);
+    expect(el.querySelectorAll("img.mf-figure--halo-white").length).toBe(1);
+    expect(el.querySelectorAll(".mf-dt__sel").length).toBe(0);
     const badge = el.querySelectorAll<HTMLElement>(".mf-dt__pick.mf-dt__pick--me");
     expect(badge.length).toBe(1);
     expect(badge[0]?.getAttribute("aria-hidden")).toBe("true");
     expect(badge[0]?.querySelectorAll("svg").length).toBe(1);
-    expect(container.querySelectorAll(".mf-dt__sel").length).toBe(1);
+    expect(container.querySelectorAll(".mf-figure--halo-white").length).toBe(1);
     expect(container.querySelectorAll(".mf-dt__pick").length).toBe(1);
     expect(seatEl(container, 1).getAttribute("aria-pressed")).toBe("false");
   });
@@ -378,11 +400,11 @@ describe("DayTable: 밤 대상 선택 (D-01·D-02, UI-SPEC N-1)", () => {
     expect(a).not.toHaveBeenCalled();
   });
 
-  it("새 필드를 하나도 주지 않은 다섯 자리 테이블의 innerHTML 에 button·mf-dt__sel·mf-dt__pick 이 없다", () => {
+  it("새 필드를 하나도 주지 않은 다섯 자리 테이블의 innerHTML 에 button·후광·mf-dt__pick 이 없다", () => {
     const { container } = render(<DayTable seats={five()} mySeat={0} width={366} />);
     const html = container.innerHTML;
     expect(html.includes("<button")).toBe(false);
-    expect(html.includes("mf-dt__sel")).toBe(false);
+    expect(html.includes("halo")).toBe(false);
     expect(html.includes("mf-dt__pick")).toBe(false);
     expect(html.includes("aria-pressed")).toBe(false);
   });
@@ -403,14 +425,10 @@ describe("Icon target·notebook (03-02)", () => {
   });
 });
 
-describe("daytable.css: 밤 선택 표시 (03-02)", () => {
+describe("daytable.css: 밤 선택 표시 (03-02, 결정 0030: 발밑 원 없음)", () => {
   const css = readFileSync("src/styles/daytable.css", "utf8");
-  it(".mf-dt__sel 은 124%×20%·3px gray-50 링·빛·pointer-events none", () => {
-    expect(cssHas(css, /\.mf-dt__sel\s*\{[^}]*width:\s*124%/)).toBe(true);
-    expect(cssHas(css, /\.mf-dt__sel\s*\{[^}]*height:\s*20%/)).toBe(true);
-    expect(cssHas(css, /\.mf-dt__sel\s*\{[^}]*border:\s*3px solid var\(--gray-50\)/)).toBe(true);
-    expect(cssHas(css, /\.mf-dt__sel\s*\{[^}]*pointer-events:\s*none/)).toBe(true);
-    expect(cssHas(css, /\.mf-dt__sel\s*\{[^}]*box-shadow:[^;]*color-mix\(in srgb, var\(--gray-50\) 55%, transparent\)/)).toBe(true);
+  it("발밑 원 규칙(.mf-dt__sel)이 CSS 에 없다", () => {
+    expect(cssHas(css, /\.mf-dt__sel\b/)).toBe(false);
   });
   it(".mf-dt__pick 은 26px·top -26px·margin-left -13px, --me 는 gray-50 면·night-900 글자", () => {
     expect(cssHas(css, /\.mf-dt__pick\s*\{[^}]*width:\s*26px/)).toBe(true);
@@ -487,9 +505,9 @@ describe("DayTable: 탈락과 관전 아랫줄 (D-15·결정 0021)", () => {
     expect(d.container.querySelector(".mf-dt__mark")?.getAttribute("aria-label")).toBe("동료");
   });
 
-  it("isAlly 이면서 dead 인 자리는 동료 링·마름모가 그대로 있다", () => {
+  it("isAlly 이면서 dead 인 자리는 진홍 후광·마름모가 그대로 있다", () => {
     const { container } = render(<DayTable seats={five({ 3: { isAlly: true, dead: true } })} mySeat={0} width={366} />);
-    expect(seatEl(container, 3).querySelectorAll(".mf-dt__ring--mate").length).toBe(1);
+    expect(seatEl(container, 3).querySelectorAll("img.mf-figure--halo-crimson").length).toBe(1);
     expect(seatEl(container, 3).querySelectorAll(".mf-dt__mark").length).toBe(1);
   });
 });
@@ -590,8 +608,9 @@ describe("daytable.css: 종류별 배지 (03-02)", () => {
 // ---- 03.1-05 Task 2: 한 줄 이름표·차례·낮 탭·관전 그림·아침 층 (D-03·D-06·D-14·D-15·D-17) ----
 const eight = (over: Partial<Record<number, Partial<DayTableSeat>>> = {}): DayTableSeat[] =>
   Array.from({ length: 8 }, (_, i) => seat(i, `이름${i}`, { isMe: i === 0, ...over[i] }));
-const spotEls = (c: HTMLElement) => Array.from(c.querySelectorAll<HTMLElement>(".mf-dt__spot"));
-const turnEls = (c: HTMLElement) => Array.from(c.querySelectorAll<HTMLElement>(".mf-dt__turn"));
+const haloWhite = (c: HTMLElement) => Array.from(c.querySelectorAll<HTMLElement>("img.mf-figure--halo-white"));
+const bubbleEls = (c: HTMLElement) => Array.from(c.querySelectorAll<HTMLElement>(".mf-dt__bubble"));
+const OLD_SELECTORS = ".mf-dt__spot, .mf-dt__spot-arc, .mf-dt__ring, .mf-dt__sel, .mf-dt__turn, .mf-dt__tag--turn, .mf-dt__tag--spoke";
 
 describe("DayTable: 한 줄 이름표와 층 (D-04·D-14)", () => {
   it("모든 이름표는 자식으로 .mf-dt__name 하나만 갖고(점 + 닉네임), .mf-dt__claim·.mf-dt__chg 가 어디에도 없다", () => {
@@ -619,40 +638,68 @@ describe("DayTable: 한 줄 이름표와 층 (D-04·D-14)", () => {
   });
 });
 
-describe("DayTable: 지금 주장하는 차례 (D-03)", () => {
-  it("turn 인 자리에 .mf-dt__spot 하나와 .mf-dt__turn(svg 아이콘) 하나, 그 이름표에 --turn", () => {
+describe("DayTable: 지금 주장하는 차례 (D-03, 결정 0030: 후광 + '…' 말풍선)", () => {
+  it("turn 인 자리 그림에 흰 후광 하나와 그 자리 안에 .mf-dt__bubble--turn 하나(aria-hidden, 점 셋), 이름표 반전은 없다", () => {
     const { container } = render(<DayTable seats={five({ 2: { turn: true } })} mySeat={0} width={366} />);
-    expect(spotEls(container).length).toBe(1);
-    expect(turnEls(container).length).toBe(1);
-    expect(seatEl(container, 2).contains(spotEls(container)[0] ?? null)).toBe(true);
-    expect(seatEl(container, 2).contains(turnEls(container)[0] ?? null)).toBe(true);
-    expect(turnEls(container)[0]?.querySelectorAll("svg").length).toBe(1);
-    expect(container.querySelectorAll(".mf-dt__tag--turn").length).toBe(1);
-    expect(tagEl(container, 2).classList.contains("mf-dt__tag--turn")).toBe(true);
+    expect(haloWhite(container).length).toBe(1);
+    expect(seatEl(container, 2).contains(haloWhite(container)[0] ?? null)).toBe(true);
+    expect(bubbleEls(container).length).toBe(1);
+    const bubble = bubbleEls(container)[0]!;
+    expect(bubble.className).toBe("mf-dt__bubble mf-dt__bubble--turn");
+    expect(bubble.getAttribute("aria-hidden")).toBe("true");
+    expect(bubble.querySelectorAll("i").length).toBe(3);
+    expect(seatEl(container, 2).contains(bubble)).toBe(true);
+    expect(tagEl(container, 2).className).toBe("mf-dt__tag");
   });
 
-  it("링 묶음 .mf-dt__spot 한 개 안에 뒤쪽 호(--back)·앞쪽 호(--front)가 이 순서로 있고, 캐릭터 그림이 묶음보다 앞 순서다 (결정 0028)", () => {
-    const { container } = render(<DayTable seats={five({ 2: { turn: true } })} mySeat={0} width={366} />);
-    const spot = spotEls(container)[0]!;
-    expect(spot.className).toBe("mf-dt__spot");
-    expect(Array.from(spot.children).map((c) => c.className)).toEqual([
-      "mf-dt__spot-arc mf-dt__spot-arc--back",
-      "mf-dt__spot-arc mf-dt__spot-arc--front",
-    ]);
-    const fig = seatEl(container, 2).querySelector<HTMLElement>("img.mf-figure")!;
-    expect(fig).toBeTruthy();
-    expect(fig.compareDocumentPosition(spot) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    // 묶음에 aria-hidden 을 새로 달지 않는다(E2E G2 가 보는 요소 집합을 줄이지 않는다)
-    expect(spot.getAttribute("aria-hidden")).toBeNull();
+  it("후광 클래스는 그림 img 에만 붙는다(자리·이름표·말풍선·마름모에는 없다)", () => {
+    const { container } = render(<DayTable seats={five({ 2: { turn: true }, 3: { isAlly: true }, 4: { pick: { mine: true } } })} mySeat={0} width={366} />);
+    const withHalo = Array.from(container.querySelectorAll<HTMLElement>('[class*="halo"]'));
+    expect(withHalo.length).toBe(3);
+    for (const el of withHalo) expect(el.tagName).toBe("IMG");
   });
 
-  it("차례 자리의 인라인 z-index 는 배치 결과(12~22) 그대로, 탈락 강조는 31", () => {
+  it("옛 발밑 원·내 링·동료 링·선택 링·머리 위 배지·이름표 반전 요소가 어디에도 없다", () => {
+    const { container } = render(
+      <DayTable seats={five({ 0: { turn: true }, 2: { turn: true, spoke: true }, 3: { isAlly: true }, 4: { pick: { mine: true } } })} mySeat={0} width={366} />,
+    );
+    expect(container.querySelectorAll(OLD_SELECTORS).length).toBe(0);
+  });
+
+  it("후광 우선순위: 차례이면서 동료이면 흰 후광(진홍은 없다), 마름모는 그대로", () => {
+    const { container } = render(<DayTable seats={five({ 3: { turn: true, isAlly: true } })} mySeat={0} width={366} />);
+    const img = seatEl(container, 3).querySelector("img")!;
+    expect(img.classList.contains("mf-figure--halo-white")).toBe(true);
+    expect(img.classList.contains("mf-figure--halo-crimson")).toBe(false);
+    expect(seatEl(container, 3).querySelectorAll(".mf-dt__mark").length).toBe(1);
+  });
+
+  it("내 자리가 차례면 흰 후광이 붙는다(내 자리라는 이유만으로는 붙지 않는다)", () => {
+    const { container } = render(<DayTable seats={five({ 0: { turn: true } })} mySeat={0} width={366} />);
+    expect(seatEl(container, 0).querySelectorAll("img.mf-figure--halo-white").length).toBe(1);
+    expect(bubbleEls(container).length).toBe(1);
+    expect(tagEl(container, 0).className).toBe("mf-dt__tag mf-dt__tag--me");
+  });
+
+  it("같은 자리에 emoji 가 있으면 말풍선이 없고(이모티콘이 대신), emoji 가 없어지면 다시 나온다. 후광은 그대로", () => {
+    const emoji = { key: "k1", icon: "smile", z: 0 } as const;
+    const withEmoji = render(<DayTable seats={five({ 2: { turn: true, emoji } })} mySeat={0} width={366} />);
+    expect(bubbleEls(withEmoji.container).length).toBe(0);
+    expect(withEmoji.container.querySelectorAll(".mf-dt__emoji").length).toBe(1);
+    expect(haloWhite(withEmoji.container).length).toBe(1);
+    withEmoji.rerender(<DayTable seats={five({ 2: { turn: true, emoji: null } })} mySeat={0} width={366} />);
+    expect(bubbleEls(withEmoji.container).length).toBe(1);
+    cleanup();
+    const spoke = render(<DayTable seats={five({ 4: { spoke: true, emoji } })} mySeat={0} width={366} />);
+    expect(bubbleEls(spoke.container).length).toBe(0);
+  });
+
+  it("차례 자리의 인라인 z-index 는 배치 결과(12~22) 그대로, 탈락 강조는 31 — 후광·말풍선이 있어도 같다", () => {
     const { container } = render(<DayTable seats={five({ 2: { turn: true }, 3: { spotlit: true, dead: true } })} mySeat={0} width={366} />);
     const z2 = Number(seatEl(container, 2).style.zIndex);
     expect(z2 >= 12 && z2 <= 22).toBe(true);
     expect(seatEl(container, 3).style.zIndex).toBe("31");
-    // 호는 인라인 z-index 를 갖지 않는다(층은 CSS 의 -1 과 마크업 순서가 정한다)
-    for (const a of Array.from(container.querySelectorAll<HTMLElement>(".mf-dt__spot, .mf-dt__spot-arc"))) expect(a.style.zIndex).toBe("");
+    for (const el of Array.from(container.querySelectorAll<HTMLElement>(".mf-dt__bubble, img.mf-figure--halo-white"))) expect(el.style.zIndex).toBe("");
   });
 
   it.each([4, 5, 6, 7, 8])("%i명 차례 자리가 있어도 이름표 z 최댓값 < 자리 z 최솟값 (D3a 단위 버전)", (n) => {
@@ -660,27 +707,21 @@ describe("DayTable: 지금 주장하는 차례 (D-03)", () => {
     const { container } = render(<DayTable seats={seats} mySeat={0} width={366} />);
     const tagZ = Array.from(container.querySelectorAll<HTMLElement>(".mf-dt__tag")).map((e) => Number(e.style.zIndex));
     const seatZ = seatEls(container).map((e) => Number(e.style.zIndex));
-    expect(spotEls(container).length).toBe(1);
+    expect(haloWhite(container).length).toBe(1);
     expect(Math.max(...tagZ) < Math.min(...seatZ)).toBe(true);
   });
 
-  it("차례 자리가 없으면 링·배지·반전이 0개", () => {
+  it("차례 자리가 없으면 후광·말풍선이 0개", () => {
     const { container } = render(<DayTable seats={five()} mySeat={0} width={366} />);
-    expect(spotEls(container).length).toBe(0);
-    expect(turnEls(container).length).toBe(0);
-    expect(container.querySelectorAll(".mf-dt__tag--turn").length).toBe(0);
+    expect(haloWhite(container).length).toBe(0);
+    expect(bubbleEls(container).length).toBe(0);
+    expect(container.querySelectorAll(OLD_SELECTORS).length).toBe(0);
   });
 
   it("두 자리에 turn 을 주어도 입력 그대로 둘 다 그린다 (한 번에 한 자리는 장면이 보장한다)", () => {
     const { container } = render(<DayTable seats={five({ 1: { turn: true }, 3: { turn: true } })} mySeat={0} width={366} />);
-    expect(spotEls(container).length).toBe(2);
-    expect(turnEls(container).length).toBe(2);
-  });
-
-  it("내 자리가 차례면 .mf-dt__ring--me 와 .mf-dt__spot 이 둘 다 있다", () => {
-    const { container } = render(<DayTable seats={five({ 0: { turn: true } })} mySeat={0} width={366} />);
-    expect(seatEl(container, 0).querySelectorAll(".mf-dt__ring--me").length).toBe(1);
-    expect(seatEl(container, 0).querySelectorAll(".mf-dt__spot").length).toBe(1);
+    expect(haloWhite(container).length).toBe(2);
+    expect(bubbleEls(container).length).toBe(2);
   });
 
   it("차례 자리 aria-label 에 '지금 주장하는 차례'가 든다 (내 자리는 '(나)' 뒤)", () => {
@@ -689,6 +730,29 @@ describe("DayTable: 지금 주장하는 차례 (D-03)", () => {
     cleanup();
     render(<DayTable seats={five({ 0: { turn: true } })} mySeat={0} width={366} />);
     expect(screen.getByRole("group", { name: "동현 (나), 지금 주장하는 차례" })).toBeTruthy();
+  });
+});
+
+describe("DayTable: 한 화면의 후광은 최대 3개 (HALO_MAX_SIMULTANEOUS)", () => {
+  it("마피아 보는 밤: 동료 1 + 내 선택 1 = 2개", () => {
+    const seats = eight({ 3: { isAlly: true }, 5: { pick: { mine: true }, onPick: vi.fn() } });
+    const { container } = render(<DayTable seats={seats} mySeat={0} width={366} />);
+    expect(container.querySelectorAll('img[class*="halo"]').length).toBe(2);
+    expect(container.querySelectorAll("img.mf-figure--halo-crimson").length).toBe(1);
+    expect(container.querySelectorAll("img.mf-figure--halo-white").length).toBe(1);
+  });
+
+  it("관전자 낮: 마피아 둘 + 차례 1 = 3개 이하", () => {
+    const seats = eight({ 2: { isAlly: true }, 6: { isAlly: true }, 4: { turn: true } });
+    const { container } = render(<DayTable seats={seats} mySeat={0} width={366} allyMarkLabel="마피아" />);
+    expect(container.querySelectorAll('img[class*="halo"]').length).toBe(HALO_MAX_SIMULTANEOUS);
+    expect(container.querySelectorAll("img.mf-figure--halo-crimson").length).toBe(2);
+  });
+
+  it("한 자리가 차례이면서 마피아면 후광은 그 자리 하나뿐이다", () => {
+    const seats = eight({ 2: { isAlly: true, turn: true }, 6: { isAlly: true } });
+    const { container } = render(<DayTable seats={seats} mySeat={0} width={366} />);
+    expect(container.querySelectorAll('img[class*="halo"]').length).toBe(2);
   });
 });
 
@@ -810,12 +874,9 @@ describe("DayTable: 아침 어둡게 층과 강조 (D-15)", () => {
   });
 });
 
-describe("daytable.css: 03.1-05 (이름표 한 줄·차례·층)", () => {
+describe("daytable.css: 03.1-05 (이름표 한 줄·층) + 결정 0030 (후광·말풍선)", () => {
   const css = readFileSync("src/styles/daytable.css", "utf8");
-  const code = css
-    .split("\n")
-    .filter((l) => !/^\s*(\/\*|\*|\/\/)/.test(l))
-    .join("\n");
+  const code = css.replace(/\/\*[\s\S]*?\*\//g, "");
   it("옛 아랫줄 규칙(.mf-dt__claim·.mf-dt__chg·mf-dt-pop·mf-dt-shake)이 CSS 에 없다", () => {
     expect(cssHas(css, /mf-dt__claim|mf-dt__chg|mf-dt-pop|mf-dt-shake/)).toBe(false);
   });
@@ -824,49 +885,57 @@ describe("daytable.css: 03.1-05 (이름표 한 줄·차례·층)", () => {
     expect(cssHas(css, /\.mf-dt__tag\s*\{[^}]*pointer-events:\s*none/)).toBe(true);
     expect(cssHas(css, /\.mf-dt__tag\s*\{[^}]*flex-direction/)).toBe(false);
   });
-  it(".mf-dt__tag--turn .mf-dt__name 은 반전(gray-100 면·night-900 글자)", () => {
-    expect(cssHas(css, /\.mf-dt__tag--turn \.mf-dt__name\s*\{[^}]*background:\s*var\(--gray-100\)/)).toBe(true);
-    expect(cssHas(css, /\.mf-dt__tag--turn \.mf-dt__name\s*\{[^}]*color:\s*var\(--night-900\)/)).toBe(true);
+  it("이름표 반전·발밑 원(링 묶음·호·내 링·동료 링·선택 링)·머리 위 배지 규칙이 CSS 에 없다", () => {
+    expect(cssHas(code, /\.mf-dt__tag--(turn|spoke)\b/)).toBe(false);
+    expect(cssHas(code, /\.mf-dt__(spot|ring|sel|turn)\b/)).toBe(false);
+    expect(cssHas(code, /mf-dt__spot-arc/)).toBe(false);
   });
-  it(".mf-dt__spot 묶음: 폭 140%·높이 24%·left -20%·bottom calc(-4px - 12%)·pointer-events none, 쌓임 맥락을 만들지 않는다", () => {
-    expect(cssHas(css, /\.mf-dt__spot\s*\{[^}]*width:\s*140%/)).toBe(true);
-    expect(cssHas(css, /\.mf-dt__spot\s*\{[^}]*height:\s*24%/)).toBe(true);
-    expect(cssHas(css, /\.mf-dt__spot\s*\{[^}]*left:\s*-20%/)).toBe(true);
-    expect(cssHas(css, /\.mf-dt__spot\s*\{[^}]*bottom:\s*calc\(-4px - 12%\)/)).toBe(true);
-    expect(cssHas(css, /\.mf-dt__spot\s*\{[^}]*pointer-events:\s*none/)).toBe(true);
-    const m = /\.mf-dt__spot\s*\{([^}]*)\}/.exec(code);
-    expect(m).toBeTruthy();
-    expect(/(^|[;\s])(transform|z-index|opacity|filter|isolation|animation|will-change|clip-path)\s*:/.test(m![1]!)).toBe(false);
+  it("후광 값은 .mf-dt 의 사용자 지정 속성 두 개에 한 번만 적는다: 안쪽 2px 95% + 바깥 9px 75%(흰 = gray-50), 진홍 = crimson-400 95%·70%", () => {
+    expect(cssHas(code, /\.mf-dt\s*\{[^}]*--mf-halo-white:\s*drop-shadow\(0 0 2px color-mix\(in srgb, var\(--gray-50\) 95%, transparent\)\) drop-shadow\(0 0 9px color-mix\(in srgb, var\(--gray-50\) 75%, transparent\)\)/)).toBe(true);
+    expect(cssHas(code, /\.mf-dt\s*\{[^}]*--mf-halo-crimson:\s*drop-shadow\(0 0 2px color-mix\(in srgb, var\(--crimson-400\) 95%, transparent\)\) drop-shadow\(0 0 9px color-mix\(in srgb, var\(--crimson-400\) 70%, transparent\)\)/)).toBe(true);
+    expect((code.match(/--mf-halo-white:/g) ?? []).length).toBe(1);
+    expect((code.match(/--mf-halo-crimson:/g) ?? []).length).toBe(1);
   });
-  // clip-path 바깥 방향 여백 24px 는 빛(18px)이 잘리지 않게 하려는 값이다(반원 경계선 쪽만 50% 로 자른다)
-  it("두 호: 3px gray-50 링·빛 18px·원형·페이드·pointer-events none", () => {
-    expect(cssHas(css, /\.mf-dt__spot-arc\s*\{[^}]*border:\s*3px solid var\(--gray-50\)/)).toBe(true);
-    expect(cssHas(css, /\.mf-dt__spot-arc\s*\{[^}]*box-shadow:\s*0 0 18px color-mix\(in srgb, var\(--gray-50\) 75%, transparent\)/)).toBe(true);
-    expect(cssHas(css, /\.mf-dt__spot-arc\s*\{[^}]*border-radius:\s*50%/)).toBe(true);
-    expect(cssHas(css, /\.mf-dt__spot-arc\s*\{[^}]*position:\s*absolute/)).toBe(true);
-    expect(cssHas(css, /\.mf-dt__spot-arc\s*\{[^}]*inset:\s*0/)).toBe(true);
-    expect(cssHas(css, /\.mf-dt__spot-arc\s*\{[^}]*pointer-events:\s*none/)).toBe(true);
-    expect(cssHas(css, /\.mf-dt__spot-arc\s*\{[^}]*animation:\s*mf-dt-fade var\(--dur-fast\) var\(--ease-out\) both/)).toBe(true);
+  it("후광 클래스는 filter: var(--mf-halo-…) 이고, 끊김과 함께면 grayscale(1) 다음에 후광이 온다", () => {
+    expect(cssHas(code, /\.mf-dt__seat \.mf-figure--halo-white\s*\{[^}]*filter:\s*var\(--mf-halo-white\)/)).toBe(true);
+    expect(cssHas(code, /\.mf-dt__seat \.mf-figure--halo-crimson\s*\{[^}]*filter:\s*var\(--mf-halo-crimson\)/)).toBe(true);
+    expect(cssHas(code, /\.mf-dt__seat \.mf-figure--disconnected\.mf-figure--halo-white\s*\{[^}]*filter:\s*grayscale\(1\) var\(--mf-halo-white\)/)).toBe(true);
+    expect(cssHas(code, /\.mf-dt__seat \.mf-figure--disconnected\.mf-figure--halo-crimson\s*\{[^}]*filter:\s*grayscale\(1\) var\(--mf-halo-crimson\)/)).toBe(true);
   });
-  it("뒤쪽 호는 z-index -1 + 위쪽 반만, 앞쪽 호는 음수 z-index 없이 아래쪽 반만 보인다", () => {
-    expect(cssHas(css, /\.mf-dt__spot-arc--back\s*\{[^}]*z-index:\s*-1/)).toBe(true);
-    expect(cssHas(css, /\.mf-dt__spot-arc--back\s*\{[^}]*clip-path:\s*inset\(-24px -24px 50% -24px\)/)).toBe(true);
-    expect(cssHas(css, /\.mf-dt__spot-arc--front\s*\{[^}]*clip-path:\s*inset\(50% -24px -24px -24px\)/)).toBe(true);
-    const m = /\.mf-dt__spot-arc--front\s*\{([^}]*)\}/.exec(code);
-    expect(m).toBeTruthy();
-    expect(/z-index\s*:/.test(m![1]!)).toBe(false);
+  it("후광은 애니메이션하지 않고 그림에 filter 전이만 둔다(--dur-fast)", () => {
+    expect(cssHas(code, /\.mf-dt__seat \.mf-figure\s*\{[^}]*transition:\s*filter var\(--dur-fast\) var\(--ease-out\)/)).toBe(true);
+    expect(cssHas(code, /halo[^{]*\{[^}]*animation/)).toBe(false);
   });
-  it("축소 모션 규칙이 호의 animation 을 끈다", () => {
-    expect(cssHas(css, /prefers-reduced-motion: reduce\)\s*\{[^@]*?\.mf-dt__spot-arc[^{]*\{[^}]*animation:\s*none/)).toBe(true);
+  it(".mf-dt__bubble: 높이 26·좌우 11·모서리 13·gray-50 면·위 -26px·가운데·pointer-events none, 꼬리 5px(::after), 점 6px night-900", () => {
+    expect(cssHas(code, /\.mf-dt__bubble\s*\{[^}]*position:\s*absolute/)).toBe(true);
+    expect(cssHas(code, /\.mf-dt__bubble\s*\{[^}]*top:\s*-26px/)).toBe(true);
+    expect(cssHas(code, /\.mf-dt__bubble\s*\{[^}]*left:\s*50%/)).toBe(true);
+    expect(cssHas(code, /\.mf-dt__bubble\s*\{[^}]*translateX\(-50%\)/)).toBe(true);
+    expect(cssHas(code, /\.mf-dt__bubble\s*\{[^}]*height:\s*26px/)).toBe(true);
+    expect(cssHas(code, /\.mf-dt__bubble\s*\{[^}]*padding:\s*0 11px/)).toBe(true);
+    expect(cssHas(code, /\.mf-dt__bubble\s*\{[^}]*border-radius:\s*13px/)).toBe(true);
+    expect(cssHas(code, /\.mf-dt__bubble\s*\{[^}]*background:\s*var\(--gray-50\)/)).toBe(true);
+    expect(cssHas(code, /\.mf-dt__bubble\s*\{[^}]*gap:\s*4px/)).toBe(true);
+    expect(cssHas(code, /\.mf-dt__bubble\s*\{[^}]*pointer-events:\s*none/)).toBe(true);
+    expect(cssHas(code, /\.mf-dt__bubble::after\s*\{[^}]*border:\s*5px solid transparent/)).toBe(true);
+    expect(cssHas(code, /\.mf-dt__bubble::after\s*\{[^}]*border-top-color:\s*var\(--gray-50\)/)).toBe(true);
+    expect(cssHas(code, /\.mf-dt__bubble i\s*\{[^}]*width:\s*6px/)).toBe(true);
+    expect(cssHas(code, /\.mf-dt__bubble i\s*\{[^}]*height:\s*6px/)).toBe(true);
+    expect(cssHas(code, /\.mf-dt__bubble i\s*\{[^}]*background:\s*var\(--night-900\)/)).toBe(true);
   });
-  it(".mf-dt__turn: 28px 원·top -24px·gray-50 면·night-900 글자·pointer-events none, 아이콘 선 2.4", () => {
-    expect(cssHas(css, /\.mf-dt__turn\s*\{[^}]*width:\s*28px/)).toBe(true);
-    expect(cssHas(css, /\.mf-dt__turn\s*\{[^}]*height:\s*28px/)).toBe(true);
-    expect(cssHas(css, /\.mf-dt__turn\s*\{[^}]*top:\s*-24px/)).toBe(true);
-    expect(cssHas(css, /\.mf-dt__turn\s*\{[^}]*background:\s*var\(--gray-50\)/)).toBe(true);
-    expect(cssHas(css, /\.mf-dt__turn\s*\{[^}]*color:\s*var\(--night-900\)/)).toBe(true);
-    expect(cssHas(css, /\.mf-dt__turn\s*\{[^}]*pointer-events:\s*none/)).toBe(true);
-    expect(cssHas(css, /\.mf-dt__turn \.mf-icon\s*\{[^}]*stroke-width:\s*2\.4/)).toBe(true);
+  it("말풍선 점: 1200ms 순환 mf-dt-dot 키프레임이 0/200/400ms 지연으로 차례대로 깜박이고, 정지 불투명도는 1/.6/.3", () => {
+    expect(cssHas(code, /@keyframes mf-dt-dot\b/)).toBe(true);
+    expect(cssHas(code, /\.mf-dt__bubble i\s*\{[^}]*animation:\s*mf-dt-dot 1200ms/)).toBe(true);
+    expect(cssHas(code, /\.mf-dt__bubble i:nth-child\(1\)\s*\{[^}]*animation-delay:\s*0ms/)).toBe(true);
+    expect(cssHas(code, /\.mf-dt__bubble i:nth-child\(2\)\s*\{[^}]*animation-delay:\s*200ms/)).toBe(true);
+    expect(cssHas(code, /\.mf-dt__bubble i:nth-child\(3\)\s*\{[^}]*animation-delay:\s*400ms/)).toBe(true);
+    expect(cssHas(code, /\.mf-dt__bubble i:nth-child\(1\)\s*\{[^}]*opacity:\s*1\b/)).toBe(true);
+    expect(cssHas(code, /\.mf-dt__bubble i:nth-child\(2\)\s*\{[^}]*opacity:\s*0?\.6\b/)).toBe(true);
+    expect(cssHas(code, /\.mf-dt__bubble i:nth-child\(3\)\s*\{[^}]*opacity:\s*0?\.3\b/)).toBe(true);
+  });
+  it("축소 모션에서는 말풍선과 점의 animation 이 none 이라 점이 정지 불투명도로 남는다", () => {
+    expect(cssHas(code, /prefers-reduced-motion: reduce\)\s*\{[^@]*?\.mf-dt__bubble[^{]*\{[^}]*animation:\s*none/)).toBe(true);
+    expect(cssHas(code, /prefers-reduced-motion: reduce\)\s*\{[^@]*?\.mf-dt__bubble i[^{]*\{[^}]*animation:\s*none/)).toBe(true);
   });
   it(".mf-dt__dim: z-index 30·pointer-events none(탭 통과)·좌우 여백까지 연장·night-900 45%", () => {
     expect(cssHas(css, /\.mf-dt__dim\s*\{[^}]*z-index:\s*30/)).toBe(true);
