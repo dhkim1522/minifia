@@ -6,16 +6,16 @@ current_phase: 03
 current_phase_name: 밤과 아침
 current_plan: 12
 status: verifying
-stopped_at: Completed 03.1-11-PLAN.md
-last_updated: "2026-10-25T08:05:46.007Z"
+stopped_at: Completed 03.1-12-PLAN.md
+last_updated: "2026-10-25T08:31:03.796Z"
 last_activity: 2026-10-25
 last_activity_desc: Phase 03 execution started
-state_head: 1a1164031a6cf74bfeba796b520e61e67dd3dc46
+state_head: f6fa55c066ccc6dfab7b28c3a75fa3fa204cd3a0
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 63
-  completed_plans: 61
+  completed_plans: 62
 ---
 
 # Project State
@@ -107,6 +107,7 @@ Progress: [██░░░░░░░░] 17%
 | Phase 03.1 P08 | 25min | 2 tasks | 7 files |
 | Phase 03.1 P10 | 30min | 3 tasks | 12 files |
 | Phase 03.1 P11 | 약 40분 | 3 tasks | 17 files |
+| Phase 03.1 P12 | 약 2시간 | 3 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -198,6 +199,7 @@ Recent decisions affecting current work:
 - [Phase 03.1]: 03.1-10: 아침 퇴장 지연은 남은 시간-300ms(0 하한)를 마감 시각이 바뀔 때 한 번 정해 카드와 층이 공유, roleArt 는 meDead && spectate 한 곳에서만 만든다
 - [Phase 03.1]: 알림 CSS 는 rolecard-toast.css 로 분리한다(rolecard.css 는 animation 금지 테스트가 있다)
 - [Phase 03.1]: DayScene 의 roleCardOpen·onOpenActivity 는 선택 props 로 두고 RoomScreen 이 명시해 넘긴다
+- [Phase 03.1]: 03.1-12: 밤 끝 알림은 폭 < 390 에서 좌우 안쪽 여백 8·아이콘 간격 4 (UI-SPEC S13) — D4 완화 없이 360 폭의 [테스트] 가운데 점을 비움
 
 ### Pending Todos
 
@@ -227,6 +229,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-25T08:05:45.714Z
-Stopped at: Completed 03.1-11-PLAN.md
+Last session: 2026-10-25T08:31:03.500Z
+Stopped at: Completed 03.1-12-PLAN.md
 Resume file: None
