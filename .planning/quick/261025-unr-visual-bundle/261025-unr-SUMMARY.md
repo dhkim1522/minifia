@@ -5,16 +5,16 @@ status: incomplete
 subsystem: screens-day-table
 tags: [day-table, halo, speech-bubble, host-crown, bot-names, decision-0030]
 requirements: [QUICK-261025-unr]
-completed_tasks: [1]
-remaining_tasks: [2, 3, 4, 5, 6]
-commits: 3
+completed_tasks: [1, 2]
+remaining_tasks: [3, 4, 5, 6]
+commits: 6
 plan_head_before: 97ce65598ce58ba8c5e54a38aa44753826efe5e6
-plan_head_after: f8a8ca80ac09f5835d3658134ac33e89a9727258
+plan_head_after: b8a6b0efc990fe1005d069b8e06e2c09dfd67eeb
 ---
 
-# 퀵 261025-unr 진행 체크포인트 (패스 A: 과제 1 완료)
+# 퀵 261025-unr 진행 체크포인트 (패스 A: 과제 1 완료 · 패스 B: 과제 2 완료)
 
-> 상태: **미완료** (과제 6개 중 1개 완료). 이 파일은 패스마다 갱신하고 마지막 패스(E)에서 최종본으로 바꾼다.
+> 상태: **미완료** (과제 6개 중 2개 완료). 이 파일은 패스마다 갱신하고 마지막 패스(E)에서 최종본으로 바꾼다.
 
 ## 완료한 과제
 
@@ -23,12 +23,13 @@ plan_head_after: f8a8ca80ac09f5835d3658134ac33e89a9727258
 | 1-가 | 5글자 봇 이름 7개 커밋 (`shared/game/bots.ts`, `scripts/bots.mjs`, `scripts/uat-test-bots.mjs`, `test/unit/bots.test.ts`) | `9a00474` |
 | 1-나 | RED: 후광·말풍선·왕관 기준 테스트 (실패 61개를 확인하고 커밋) | `1bd0ef5` |
 | 1-다 | GREEN: 발밑 원·이름표 반전·머리 위 배지 제거, 후광, `…` 말풍선, 왕관은 `hostCrown`(대기실)만 | `f8a8ca8` |
+| 2-가 | RED: E2E K1·K4 개정, W1 신설 단위 테스트 (모듈 가져오기 실패로 실패 확인) | `341a50f` |
+| 2-나 | GREEN: `lib.mjs` `haloChecks`·`crownChecks`·`turnChecks`, `browser.mjs` 측정(`turn`·`halo`·`crowns`), `flows.mjs` 선택 후광·W1 + 부분 로컬 E2E | `b8a6b0e` |
 
 ## 남은 과제
 
 | 과제 | 패스 | 비고 |
 |------|------|------|
-| 2 | B | E2E K1·K4·W1 개정. 지금 `scripts/e2e/lib.mjs`(차례 링 묶음 검사 K1)·`browser.mjs`(`.mf-dt__spot`·`.mf-dt__turn`·`.mf-dt__tag--turn`·`.mf-dt__sel` 측정)·`flows.mjs`(`.mf-dt__sel`)가 옛 선택자를 읽으므로 라이브 E2E 는 과제 2 전까지 통과하지 않는다 (단위·클라이언트 테스트는 모두 초록) |
 | 3 | B | 배경 장면·WebP·Backdrop |
 | 4 | C | Day 화면 제거·SceneIntro·크로스페이드 |
 | 5 | D | E2E H1·B1·N8·N9 + 오프라인 대비 |
@@ -40,6 +41,13 @@ plan_head_after: f8a8ca80ac09f5835d3658134ac33e89a9727258
 - `src/components/DayTable.tsx`: 후광 클래스는 그림 `img` 에만 붙는다 — 흰(`s.turn || s.pick?.mine`) > 진홍(`s.isAlly`). 차례·빠른 메시지 자리는 `span.mf-dt__bubble--turn|--spoke`(aria-hidden, 점 셋), 이모티콘이 있으면 말풍선 없음. 왕관은 `hostCrown && isHost`. `Lobby` 만 `hostCrown` 을 준다.
 - `src/styles/daytable.css`: 후광 값은 `.mf-dt` 사용자 지정 속성 두 개(`--mf-halo-white`·`--mf-halo-crimson`)에 한 번만 적고, 끊김과 함께면 `grayscale(1)` 뒤에 후광. 말풍선·점 깜박임(1200ms, 0/200/400ms 지연), 축소 모션에서 `animation: none` + 정지 불투명도 1/.6/.3. 옛 링·선택 링·배지·이름표 반전 규칙 삭제.
 - 계획의 확인 필요 기본값을 그대로 따랐다: 말풍선 위 −26px, 왕관은 대기실만(역할 배정에서도 없앰), 빠른 메시지 보낸 사람은 말풍선만(후광 없음).
+
+## 패스 B 과제 2 결과 (E2E K1·K4·W1, 부분 로컬 E2E)
+
+- 부분 로컬 E2E (dev 서버 5173, 세 크기 360x640·390x664·430x932): `mafia8` 110/110 · `citizen4` 105/105 · `lobby` 21/21, 모두 `E2E OK`. 5글자 이름표 8명판(방장 `화면검사기` + 봇 7명)에서 D2·G2(폰 가장자리 −0.5 칼날)·D3a·D3b(바닥 55%)·D9·D4·T1·T2 도 모두 통과 — 임계값은 하나도 낮추지 않았다.
+- 첫 실행에서 `claim-other` K4 만 세 크기 모두 실패: 차례가 막 바뀐 순간의 후광 `filter` 계산값이 180ms 전환 중간값(`0.74px` 등)이었다. 앱 결함이 아니라 측정 시점 오류라서 `browser.mjs` 가 후광 요소의 진행 중인 CSS 전환만 끝내고(`CSSTransition.finish()`) 끝 상태를 읽게 고쳤다. 판정 기준(두 겹 drop-shadow, 9px, 3개 이하, 발밑 원 0)은 그대로.
+- 단위 테스트: `node --test scripts/e2e/lib.test.mjs` 88 통과 (이전 86), `npm run typecheck` 통과. 옛 선택자 grep(`lib.mjs`·`flows.mjs`) 0건.
+- 불변: `OVERLAP_EPS`·`ONE_LINE_FACTOR`·`FACE_RATIO`·`TAP_MIN`·`PANEL_H`·`TEXT_SIZE_ALLOW`·`DECORATIVE_ALLOW`·`TAP_ALLOW` 줄은 `97ce655` 대비 diff 0.
 
 ## 측정 숫자 (계획 값과 일치)
 
