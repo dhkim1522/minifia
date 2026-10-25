@@ -1,6 +1,6 @@
 // 서버 전용 입력 검증 스키마(zod 값 import). Worker 만 이 파일을 import 한다 — src/ 가 import 하면 클라이언트 번들에 zod 가 들어간다.
 import { z } from "zod";
-import { EMOJI_IDS, TEMPLATE_IDS } from "./protocol";
+import { EMOJI_IDS, MAX_TEST_BOTS, TEMPLATE_IDS } from "./protocol";
 import type { ClientMessage, CreateRoomBody, JoinRoomBody } from "./protocol";
 
 const nickname = z.string().max(64);
@@ -31,4 +31,6 @@ export const ClientMessageSchema = z.discriminatedUnion("t", [
   z.strictObject({ t: z.literal("testSkip") }),
   z.strictObject({ t: z.literal("testReset") }),
   z.strictObject({ t: z.literal("testRole"), role: z.enum(["mafia", "police", "doctor", "citizen"]).nullable() }),
+  // 서버 봇 수(결정 0024): 정수 0..MAX_TEST_BOTS. 총 인원 8명 제한은 서버 규칙(setBotCount)이 한 번 더 자른다.
+  z.strictObject({ t: z.literal("testBots"), count: z.number().int().min(0).max(MAX_TEST_BOTS) }),
 ]) satisfies z.ZodType<ClientMessage>;

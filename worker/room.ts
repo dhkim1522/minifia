@@ -1,6 +1,8 @@
 import { DurableObject } from "cloudflare:workers";
 import { CLOSE_CODES, MAX_FRAME_BYTES } from "../shared/protocol";
 import type { ApiErrorCode, ClientMessage, Claim, EmojiId, RemovedReason, RoomPreview, ServerMessage, WsErrorCode } from "../shared/protocol";
+import { botWakeAt, isBot, syncBotPlan, takeDueBotSteps } from "../shared/game/bots";
+import type { BotStep } from "../shared/game/bots";
 import { selectClaim } from "../shared/game/claim";
 import { emote, say } from "../shared/game/chat";
 import type { SayInput } from "../shared/game/chat";
@@ -18,7 +20,7 @@ import {
 import type { JoinError } from "../shared/game/room";
 import type { RoomState } from "../shared/game/room";
 import { nightChatRecipientIds, pickRecipientIds, pickTarget } from "../shared/game/night";
-import { resetToLobby, setTestRole, skipPhase } from "../shared/game/testTools";
+import { resetToLobby, setBotCount, setTestRole, skipPhase } from "../shared/game/testTools";
 import type { RoleId } from "../shared/game/roles";
 import { nextWakeAt, tick } from "../shared/game/tick";
 import { buildPreview, buildView } from "../shared/game/view";
@@ -79,7 +81,10 @@ export class Room extends DurableObject<Env> {
         }
         this.room = {
           ...normalized,
-          players: normalized.players.map((p) => (p.connId !== null && live.has(p.connId) ? p : { ...p, connected: false, connId: null })),
+          // 서버 봇은 소켓이 없는 채로 항상 연결된 상태다(결정 0024) — 안 그러면 깨어날 때마다 끊김이 되어 시작 규칙이 깨진다.
+          players: normalized.players.map((p) =>
+            isBot(p) || (p.connId !== null && live.has(p.connId)) ? p : { ...p, connected: false, connId: null },
+          ),
         };
         if (normalized !== stored) {
           await ctx.storage.put("room", this.room);
@@ -211,6 +216,9 @@ export class Room extends DurableObject<Env> {
       case "testRole":
         await this.handleTestRole(ws, msg.role);
         return;
+      case "testBots":
+        await this.handleTestBots(ws, msg.count);
+        return;
     }
   }
 
@@ -307,8 +315,11 @@ export class Room extends DurableObject<Env> {
     await this.reschedule();
   }
 
+  // 빠른 메시지·이모티콘·직업 선택·밤 행동은 "소켓 껍데기(handleX)" 와 "본체(applyX)" 로 나뉜다(결정 0024).
+  // 껍데기는 소켓 첨부에서 playerId 를 얻고 거부를 그 소켓에 알린다. 본체는 같은 규칙 함수·같은 저장·방송을 하고 실패 코드를 돌려준다.
+  // 서버 봇은 본체만 부른다 — 사람과 같은 검증을 거치고(특권 없음), 거부는 알릴 소켓이 없어 버린다.
+
   // 빠른 메시지: 신원은 소켓 첨부의 playerId 뿐이고, 시각은 서버 Date.now() 다(T-02-16, D-13).
-  // 통과한 한 줄은 저장하지 않고 chat 이벤트로 방송만 한다(결정 0017-7). 저장은 쿨다운용 lastSendAt·nextMessageSeq 뿐이고 state 는 방송하지 않는다.
   // WRONG_PHASE 만 최신 state 를 다시 보낸다 — 단계가 넘어간 화면이 서버 값으로 돌아가게. RATE_LIMITED·BAD_MESSAGE 는 error 뿐이다(UI-SPEC 오류표).
   private async handleSay(ws: WebSocket, input: SayInput): Promise<void> {
     const att = this.attachmentOf(ws);
@@ -316,76 +327,123 @@ export class Room extends DurableObject<Env> {
       this.sendTo(ws, { t: "error", code: "BAD_MESSAGE" });
       return;
     }
-    const result = say(this.room, att.playerId, input, Date.now());
-    if (!result.ok) {
-      if (result.error === "WRONG_PHASE") this.sendRejection(ws, att.playerId, result.error);
-      else this.sendTo(ws, { t: "error", code: result.error });
-      return;
-    }
+    const error = await this.applySay(att.playerId, input);
+    if (error === null) return;
+    if (error === "WRONG_PHASE") this.sendRejection(ws, att.playerId, error);
+    else this.sendTo(ws, { t: "error", code: error });
+  }
+
+  // 통과한 한 줄은 저장하지 않고 chat 이벤트로 방송만 한다(결정 0017-7). 저장은 쿨다운용 lastSendAt·nextMessageSeq 뿐이고 state 는 방송하지 않는다.
+  private async applySay(playerId: string, input: SayInput): Promise<WsErrorCode | null> {
+    if (!this.room) return "BAD_MESSAGE";
+    const result = say(this.room, playerId, input, Date.now());
+    if (!result.ok) return result.error;
     this.room = result.state;
     await this.ctx.storage.put("room", this.room);
     // 밤 채팅은 살아 있는 마피아와 관전자 소켓에만 — 다른 소켓에 보내고 화면이 거르는 방식은 쓰지 않는다(결정 0002·0019·0021).
     const chat: ServerMessage = { t: "chat", ...result.line };
     if (this.room.phase === "night") this.broadcastEventTo(chat, nightChatRecipientIds(this.room));
     else this.broadcastEvent(chat);
+    return null;
   }
 
-  // 이모티콘: 저장은 lastSendAt(쿨다운)뿐이고 state 는 방송하지 않는다 — 화면에 보이는 값이 바뀌지 않았다. 이벤트만 앉은 모든 소켓에 보낸다(D-14).
   private async handleEmoji(ws: WebSocket, icon: EmojiId): Promise<void> {
     const att = this.attachmentOf(ws);
     if (!att || !this.room) {
       this.sendTo(ws, { t: "error", code: "BAD_MESSAGE" });
       return;
     }
-    const result = emote(this.room, att.playerId, icon, Date.now());
-    if (!result.ok) {
-      this.sendTo(ws, { t: "error", code: result.error });
-      return;
-    }
+    const error = await this.applyEmoji(att.playerId, icon);
+    if (error !== null) this.sendTo(ws, { t: "error", code: error });
+  }
+
+  // 이모티콘: 저장은 lastSendAt(쿨다운)뿐이고 state 는 방송하지 않는다 — 화면에 보이는 값이 바뀌지 않았다. 이벤트만 앉은 모든 소켓에 보낸다(D-14).
+  private async applyEmoji(playerId: string, icon: EmojiId): Promise<WsErrorCode | null> {
+    if (!this.room) return "BAD_MESSAGE";
+    const result = emote(this.room, playerId, icon, Date.now());
+    if (!result.ok) return result.error;
     this.room = result.state;
     await this.ctx.storage.put("room", this.room);
     // 밤 이모티콘도 같은 범위다(밤 채팅과 한 규칙).
     const emoji: ServerMessage = { t: "emoji", ...result.event };
     if (this.room.phase === "night") this.broadcastEventTo(emoji, nightChatRecipientIds(this.room));
     else this.broadcastEvent(emoji);
+    return null;
   }
 
   // 직업 선택: 신원은 소켓 첨부의 playerId 뿐이다 — 메시지에서 seat 를 읽지 않는다(T-02-16).
-  // 마감이 바뀌지 않으니 reschedule 은 필요 없다. 같은 값을 다시 고르면 같은 객체라 저장·방송도 하지 않는다.
   private async handleClaim(ws: WebSocket, claim: Claim): Promise<void> {
     const att = this.attachmentOf(ws);
     if (!att || !this.room) {
       this.sendTo(ws, { t: "error", code: "BAD_MESSAGE" });
       return;
     }
-    const result = selectClaim(this.room, att.playerId, claim);
-    if (!result.ok) {
-      this.sendRejection(ws, att.playerId, result.error);
-      return;
-    }
-    if (result.state === this.room) return;
+    const error = await this.applyClaim(att.playerId, claim);
+    if (error !== null) this.sendRejection(ws, att.playerId, error);
+  }
+
+  // 마감이 바뀌지 않으니 reschedule 은 필요 없다. 같은 값을 다시 고르면 같은 객체라 저장·방송도 하지 않는다.
+  private async applyClaim(playerId: string, claim: Claim): Promise<WsErrorCode | null> {
+    if (!this.room) return "BAD_MESSAGE";
+    const result = selectClaim(this.room, playerId, claim);
+    if (!result.ok) return result.error;
+    if (result.state === this.room) return null;
     this.room = result.state;
     await this.persistAndBroadcast();
+    return null;
   }
 
   // 밤 행동: 신원은 소켓 첨부의 playerId 뿐이고 행동 종류는 서버 저장 역할이 정한다(T-03-22).
-  // 마감이 바뀌지 않으니 reschedule 은 필요 없다(NIGHT-05). 같은 값을 다시 고르면 같은 객체라 저장·전송도 하지 않는다.
-  // 받아들여지면 전원 방송 대신 받는 사람에게만 state 를 보낸다 — 전원 방송은 행동 타이밍을 흘린다(RESEARCH Pitfall 1).
   private async handlePick(ws: WebSocket, target: number): Promise<void> {
     const att = this.attachmentOf(ws);
     if (!att || !this.room) {
       this.sendTo(ws, { t: "error", code: "BAD_MESSAGE" });
       return;
     }
-    const result = pickTarget(this.room, att.playerId, target);
-    if (!result.ok) {
-      this.sendRejection(ws, att.playerId, result.error);
-      return;
-    }
-    if (result.state === this.room) return;
+    const error = await this.applyPick(att.playerId, target);
+    if (error !== null) this.sendRejection(ws, att.playerId, error);
+  }
+
+  // 마감이 바뀌지 않으니 reschedule 은 필요 없다(NIGHT-05). 같은 값을 다시 고르면 같은 객체라 저장·전송도 하지 않는다.
+  // 받아들여지면 전원 방송 대신 받는 사람에게만 state 를 보낸다 — 전원 방송은 행동 타이밍을 흘린다(RESEARCH Pitfall 1).
+  private async applyPick(playerId: string, target: number): Promise<WsErrorCode | null> {
+    if (!this.room) return "BAD_MESSAGE";
+    const result = pickTarget(this.room, playerId, target);
+    if (!result.ok) return result.error;
+    if (result.state === this.room) return null;
     this.room = result.state;
     await this.ctx.storage.put("room", this.room);
-    this.sendViewTo(pickRecipientIds(this.room, att.playerId));
+    this.sendViewTo(pickRecipientIds(this.room, playerId));
+    return null;
+  }
+
+  // 서버 봇 행동 실행(결정 0024): 때가 된 행동을 꺼내 남은 계획을 먼저 저장하고, 봇 id 로 같은 apply* 를 부른다.
+  // 거부(RATE_LIMITED 포함)는 버린다 — 알릴 소켓이 없을 뿐 사람 메시지가 거부된 것과 같다.
+  private async runDueBots(now: number): Promise<void> {
+    if (!this.room) return;
+    const { state, due } = takeDueBotSteps(this.room, now);
+    if (due.length === 0) return;
+    this.room = state;
+    await this.ctx.storage.put("room", this.room);
+    for (const step of due) await this.actAsBot(step);
+  }
+
+  private async actAsBot(step: BotStep): Promise<void> {
+    const act = step.act;
+    switch (act.t) {
+      case "claim":
+        await this.applyClaim(step.botId, act.claim);
+        return;
+      case "say":
+        await this.applySay(step.botId, { template: act.template, target: act.target, claimedRole: act.claimedRole });
+        return;
+      case "emoji":
+        await this.applyEmoji(step.botId, act.icon);
+        return;
+      case "pick":
+        await this.applyPick(step.botId, act.target);
+        return;
+    }
   }
 
   // 테스트 방 방장 도구(결정 0022). 신원은 소켓 첨부의 playerId 뿐이다 — 메시지에서 seat·방장 여부를 읽지 않는다.
@@ -448,6 +506,24 @@ export class Room extends DurableObject<Env> {
     this.sendViewTo([att.playerId]);
   }
 
+  // 서버 봇 수 맞추기(결정 0024): 대기실 인원이 바뀌므로 모든 소켓이 각자 view 를 받는다. 같은 수(잘린 결과가 지금과 같음)면 저장·전송하지 않는다.
+  private async handleTestBots(ws: WebSocket, count: number): Promise<void> {
+    const att = this.attachmentOf(ws);
+    if (!att || !this.room) {
+      this.sendTo(ws, { t: "error", code: "BAD_MESSAGE" });
+      return;
+    }
+    const result = setBotCount(this.room, att.playerId, count, () => crypto.randomUUID());
+    if (!result.ok) {
+      this.rejectTestTool(ws, att.playerId, result.error);
+      return;
+    }
+    if (result.state === this.room) return;
+    this.room = result.state;
+    await this.persistAndBroadcast();
+    await this.reschedule();
+  }
+
   // 거절되면 클라이언트가 서버 view 대로 다시 그리도록 error 뒤에 최신 state 를 보낸다(handleStart 선례).
   private sendRejection(ws: WebSocket, playerId: string, code: WsErrorCode): void {
     if (!this.room) return;
@@ -480,10 +556,19 @@ export class Room extends DurableObject<Env> {
     await this.reschedule();
   }
 
-  // 알람은 DO 당 하나라 단계 마감과 방 만료를 여기서만 설정한다.
+  // 알람은 DO 당 하나라 단계 마감·방 만료·다음 봇 행동 중 가장 이른 시각을 여기서만 설정한다.
+  // 단계가 바뀌는 모든 경로(advance·start·testSkip·testReset·leave)가 이 함수를 지나므로 봇 계획도 여기서 지금 단계에 맞춘다(결정 0024).
+  // 봇이 없는 방은 syncBotPlan 이 같은 객체를 돌려주고 botWakeAt 이 null 이라 알람이 예전과 같다.
   private async reschedule(): Promise<void> {
     if (!this.room) return;
-    await this.ctx.storage.setAlarm(nextWakeAt(this.room));
+    const synced = syncBotPlan(this.room, Date.now(), cryptoRandInt);
+    if (synced !== this.room) {
+      this.room = synced;
+      await this.ctx.storage.put("room", this.room);
+    }
+    const botAt = botWakeAt(this.room);
+    const wake = nextWakeAt(this.room);
+    await this.ctx.storage.setAlarm(botAt === null ? wake : Math.min(wake, botAt));
   }
 
   async webSocketClose(ws: WebSocket): Promise<void> {
@@ -497,6 +582,7 @@ export class Room extends DurableObject<Env> {
   async alarm(): Promise<void> {
     try {
       await this.advance(Date.now());
+      await this.runDueBots(Date.now());
       await this.reschedule();
     } catch (err) {
       // 토큰 없는 짧은 로그만 남기고, 예외로 재시도 한도가 소진되어 알람이 멈추지 않게 1초 뒤 다시 건다.

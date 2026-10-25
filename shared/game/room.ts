@@ -3,6 +3,7 @@
 import { validateNickname } from "../nickname";
 import { MAX_PLAYERS, MIN_PLAYERS } from "../protocol";
 import type { Claim, InvestigationRecord, MorningView, PhaseId } from "../protocol";
+import type { BotPlan } from "./bots";
 import { ASSIGNING_MS, DAY_ANNOUNCE_MS } from "./phases";
 import { assignRoles, giveRoleTo, rolesInPlay } from "./roles";
 import type { RoleId } from "./roles";
@@ -40,6 +41,11 @@ export interface Player {
   nightPick?: number;
   /** 경찰만 누적하는 수사 기록 — 뷰에는 경찰 본인에게만 실린다. */
   investigations?: InvestigationRecord[];
+  /**
+   * 서버 전용(결정 0024). 테스트 방 서버 봇 표시 — 토큰은 빈 문자열, connId 는 null, connected 는 true 로 고정이고
+   * 소켓이 없다. view·미리보기·어떤 프레임에도 싣지 않는다(허용 목록 리터럴이라 저절로 빠진다).
+   */
+  isBot?: true;
 }
 
 export interface RoomState {
@@ -73,6 +79,8 @@ export interface RoomState {
   testMode?: true;
   /** 서버 전용(결정 0022). 테스트 방 방장이 고른 다음 판 직업. 대기실 복귀 뒤에도 남아 새 판마다 다시 쓰인다. 없으면 무작위. */
   testRole?: RoleId;
+  /** 서버 전용(결정 0024). 지금 단계의 봇 행동 계획(단계:마감 키 + 행동 시각 목록). 단계가 바뀌면 낡아 버려진다. 어떤 view 에도 싣지 않는다. */
+  botPlan?: BotPlan;
 }
 
 export type CreateRoomStateResult = { ok: true; state: RoomState } | { ok: false; error: "NICKNAME_INVALID" };
@@ -123,7 +131,7 @@ export function hostOf(state: RoomState): Player {
 export type JoinError = "GAME_STARTED" | "ROOM_FULL" | "NICKNAME_INVALID" | "NICKNAME_TAKEN";
 
 /** 비어 있는 가장 낮은 자리 번호(0~MAX_PLAYERS-1). 앉은 자리는 나갈 때까지 바뀌지 않는다(D-09). */
-function lowestFreeSeat(players: readonly Player[]): number {
+export function lowestFreeSeat(players: readonly Player[]): number {
   const taken = new Set(players.map((p) => p.seat));
   let seat = 0;
   while (taken.has(seat)) seat += 1;
@@ -167,6 +175,7 @@ export type LeaveError = "WRONG_PHASE" | "NOT_IN_ROOM"; // NOT_IN_ROOM 은 내�
 /**
  * 대기실에서만 나갈 수 있다(게임 중 나가기는 1페이즈 범위 밖). 마지막 사람이 나가면 state 는 null 이다.
  * 방장이 나가면 연결된 사람 가운데 joinSeq 가 가장 작은 사람이 이어받는다 — 연결된 사람이 없으면 전체에서 가장 작은 사람.
+ * 이어받는 후보는 봇이 아닌 사람뿐이고(결정 0024), 사람이 아무도 남지 않으면(봇만 남으면) 방을 지운다(state null).
  * 방장이 끊긴 것만으로는 바뀌지 않는다(자동 이양은 v2).
  */
 export function leaveRoom(
@@ -176,10 +185,11 @@ export function leaveRoom(
   if (state.phase !== "lobby") return { ok: false, error: "WRONG_PHASE" };
   if (!state.players.some((p) => p.id === playerId)) return { ok: false, error: "NOT_IN_ROOM" };
   const remaining = state.players.filter((p) => p.id !== playerId);
-  if (remaining.length === 0) return { ok: true, state: null };
+  const humans = remaining.filter((p) => p.isBot !== true);
+  if (remaining.length === 0 || humans.length === 0) return { ok: true, state: null };
   if (playerId !== state.hostId) return { ok: true, state: { ...state, players: remaining } };
-  const connected = remaining.filter((p) => p.connected);
-  const successor = earliestJoined(connected.length > 0 ? connected : remaining);
+  const connected = humans.filter((p) => p.connected);
+  const successor = earliestJoined(connected.length > 0 ? connected : humans);
   return { ok: true, state: { ...state, hostId: successor.id, players: remaining } };
 }
 
@@ -275,7 +285,8 @@ export function normalizeStoredRoom(stored: RoomState, now: number): RoomState {
 }
 
 export function findPlayerByToken(state: RoomState, token: string): Player | undefined {
-  return state.players.find((p) => p.token === token);
+  // 봇은 토큰이 없어(빈 문자열) 어떤 hello 로도 붙을 수 없다(결정 0024).
+  return state.players.find((p) => p.isBot !== true && p.token === token);
 }
 
 export function attachConnection(state: RoomState, playerId: string, connId: string): RoomState {

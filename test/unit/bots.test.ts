@@ -18,6 +18,7 @@ import type { BotStep } from "../../shared/game/bots";
 import { claimOptions, selectClaim } from "../../shared/game/claim";
 import { emote, say } from "../../shared/game/chat";
 import { pickTarget } from "../../shared/game/night";
+import { PHASE_DEFS } from "../../shared/game/phases";
 import { rolesInPlay } from "../../shared/game/roles";
 import {
   attachConnection,
@@ -410,7 +411,8 @@ describe("botNightTarget", () => {
 });
 
 const stepsOf = (s: RoomState): BotStep[] => s.botPlan?.steps ?? [];
-const NOW = 100_000;
+/** 단계가 막 시작한 시각(마감 - 단계 길이). 대기실처럼 마감이 없으면 0. */
+const nowOf = (s: RoomState): number => (s.phaseEndsAt === null ? 0 : s.phaseEndsAt - (PHASE_DEFS[s.phase].durationMs ?? 0));
 
 describe("botPlanKey·syncBotPlan·planBotSteps", () => {
   it("claim·discussion·night 만 단계 이름과 마감을 이은 키를 낸다", () => {
@@ -427,21 +429,21 @@ describe("botPlanKey·syncBotPlan·planBotSteps", () => {
   it("봇 없는 방은 모든 단계에서 입력 그대로이고 randInt 를 부르지 않는다", () => {
     for (const phase of ["claim", "discussion", "night", "morning", "claimReveal"] as const) {
       const state = stateAt(4, 0, 3, phase);
-      expect(syncBotPlan(state, NOW, THROWING) === state).toBe(true);
+      expect(syncBotPlan(state, nowOf(state), THROWING) === state).toBe(true);
     }
     const lobby = lobbyOf(3);
-    expect(syncBotPlan(lobby, NOW, THROWING) === lobby).toBe(true);
+    expect(syncBotPlan(lobby, nowOf(lobby), THROWING) === lobby).toBe(true);
   });
 
   it("봇이 없는데 botPlan 이 남아 있으면 키를 뺀다", () => {
     const state = { ...stateAt(4, 0, 3, "claim"), botPlan: { key: "x", steps: [] } };
-    expect(Object.hasOwn(syncBotPlan(state, NOW, THROWING), "botPlan")).toBe(false);
+    expect(Object.hasOwn(syncBotPlan(state, nowOf(state), THROWING), "botPlan")).toBe(false);
   });
 
   it("봇 계획이 필요 없는 단계에서는 botPlan 키가 없다", () => {
     for (const phase of ["lobby", "assigning", "roleReveal", "dayAnnounce", "claimReveal", "morning"] as const) {
       const base = phase === "lobby" ? withBots(lobbyOf(1), 4) : stateAt(1, 4, 3, phase);
-      const result = syncBotPlan({ ...base, botPlan: { key: "old", steps: [] } }, NOW, seededRandInt(1));
+      const result = syncBotPlan({ ...base, botPlan: { key: "old", steps: [] } }, nowOf(base), seededRandInt(1));
       expect(`${phase}:${Object.hasOwn(result, "botPlan")}`).toBe(`${phase}:false`);
     }
   });
@@ -449,11 +451,11 @@ describe("botPlanKey·syncBotPlan·planBotSteps", () => {
   it("claim 은 살아 있는 봇마다 claim 하나이고 시각이 범위 안이며 selectClaim 에 모두 통과한다", () => {
     for (let seed = 1; seed <= 20; seed += 1) {
       let state = markDead(stateAt(1, 5, seed, "claim"), 2);
-      const steps = planBotSteps(state, NOW, seededRandInt(seed));
+      const steps = planBotSteps(state, nowOf(state), seededRandInt(seed));
       const alive = botsOf(state).filter((b) => b.alive !== false);
       expect(`${seed}:${steps.length}`).toBe(`${seed}:${alive.length}`);
       expect(steps.every((s) => s.act.t === "claim")).toBe(true);
-      expect(steps.every((s) => s.at > NOW && s.at < state.phaseEndsAt! - 500)).toBe(true);
+      expect(steps.every((s) => s.at > nowOf(state) && s.at < state.phaseEndsAt! - 500)).toBe(true);
       expect(new Set(steps.map((s) => s.botId)).size).toBe(alive.length);
       for (const s of steps) {
         if (s.act.t !== "claim") continue;
@@ -467,7 +469,7 @@ describe("botPlanKey·syncBotPlan·planBotSteps", () => {
   it("discussion 은 살아 있는 봇마다 1~2개이고 같은 봇 간격이 2000 이상이며 say·emote 에 모두 통과한다", () => {
     for (let seed = 1; seed <= 20; seed += 1) {
       let state = markDead(stateAt(1, 5, seed, "discussion"), 3);
-      const steps = planBotSteps(state, NOW, seededRandInt(seed));
+      const steps = planBotSteps(state, nowOf(state), seededRandInt(seed));
       for (const bot of botsOf(state)) {
         const mine = steps.filter((s) => s.botId === bot.id);
         const expected = bot.alive === false ? 0 : -1;
@@ -475,7 +477,7 @@ describe("botPlanKey·syncBotPlan·planBotSteps", () => {
         else expect(`${seed}:${mine.length >= 1 && mine.length <= 2}`).toBe(`${seed}:true`);
         if (mine.length === 2) expect(mine[1]!.at - mine[0]!.at >= 2000).toBe(true);
       }
-      expect(steps.every((s) => s.at < state.phaseEndsAt! - 500 && s.at > NOW)).toBe(true);
+      expect(steps.every((s) => s.at < state.phaseEndsAt! - 500 && s.at > nowOf(state))).toBe(true);
       for (const s of steps) {
         const r =
           s.act.t === "say"
@@ -492,7 +494,7 @@ describe("botPlanKey·syncBotPlan·planBotSteps", () => {
   it("night 는 살아 있는 마피아·경찰·의사 봇마다 pick 하나이고 pickTarget 에 통과하며 시민은 pick 이 없다", () => {
     for (let seed = 1; seed <= 30; seed += 1) {
       let state = markDead(stateAt(1, 5, seed, "night"), 4);
-      const steps = planBotSteps(state, NOW, seededRandInt(seed));
+      const steps = planBotSteps(state, nowOf(state), seededRandInt(seed));
       for (const bot of botsOf(state)) {
         const picks = steps.filter((s) => s.botId === bot.id && s.act.t === "pick");
         const acting = bot.alive !== false && bot.role !== "citizen";
@@ -501,7 +503,7 @@ describe("botPlanKey·syncBotPlan·planBotSteps", () => {
           expect(`${seed}:${bot.seat}:${steps.filter((s) => s.botId === bot.id).length}`).toBe(`${seed}:${bot.seat}:${acting ? 1 : 0}`);
         }
       }
-      expect(steps.every((s) => s.at < state.phaseEndsAt! - 500 && s.at > NOW)).toBe(true);
+      expect(steps.every((s) => s.at < state.phaseEndsAt! - 500 && s.at > nowOf(state))).toBe(true);
       for (const s of steps) {
         const r =
           s.act.t === "pick"
@@ -521,7 +523,7 @@ describe("botPlanKey·syncBotPlan·planBotSteps", () => {
     for (const phase of ["claim", "discussion", "night"] as const) {
       const base = stateAt(1, 5, 11, phase);
       const state = markDead(base, ...botsOf(base).map((b) => b.seat));
-      expect(`${phase}:${planBotSteps(state, NOW, seededRandInt(1)).length}`).toBe(`${phase}:0`);
+      expect(`${phase}:${planBotSteps(state, nowOf(state), seededRandInt(1)).length}`).toBe(`${phase}:0`);
     }
   });
 
@@ -529,46 +531,47 @@ describe("botPlanKey·syncBotPlan·planBotSteps", () => {
     for (const phase of ["claim", "discussion", "night"] as const) {
       const base = stateAt(2, 4, 6, phase);
       const state: RoomState = { ...base, players: base.players.map((p) => (isBot(p) ? p : { ...p, connected: false })) };
-      expect(`${phase}:${planBotSteps(state, NOW, THROWING).length}`).toBe(`${phase}:0`);
+      expect(`${phase}:${planBotSteps(state, nowOf(state), THROWING).length}`).toBe(`${phase}:0`);
     }
   });
 
   it("같은 시드·같은 now 는 같은 계획이다", () => {
     for (const phase of ["claim", "discussion", "night"] as const) {
       const state = stateAt(1, 5, 8, phase);
-      expect(canon(planBotSteps(state, NOW, seededRandInt(42)))).toBe(canon(planBotSteps(state, NOW, seededRandInt(42))));
+      expect(canon(planBotSteps(state, nowOf(state), seededRandInt(42)))).toBe(canon(planBotSteps(state, nowOf(state), seededRandInt(42))));
     }
   });
 
   it("같은 단계 키로 다시 부르면 입력 그대로이고 tick 으로 다음 단계에 가면 새 키의 계획이다", () => {
-    const claim = syncBotPlan(stateAt(1, 4, 3, "claim"), NOW, seededRandInt(1));
+    const claim0 = stateAt(1, 4, 3, "claim");
+    const claim = syncBotPlan(claim0, nowOf(claim0), seededRandInt(1));
     expect(Object.hasOwn(claim, "botPlan")).toBe(true);
-    expect(syncBotPlan(claim, NOW + 5, THROWING) === claim).toBe(true);
+    expect(syncBotPlan(claim, nowOf(claim) + 5, THROWING) === claim).toBe(true);
     const reveal = tick(claim, claim.phaseEndsAt!, seededRandInt(2));
     const discussion = tick(reveal, reveal.phaseEndsAt!, seededRandInt(2));
     expect(discussion.phase).toBe("discussion");
-    const next = syncBotPlan(discussion, NOW, seededRandInt(5));
+    const next = syncBotPlan(discussion, nowOf(discussion), seededRandInt(5));
     expect(String(next.botPlan?.key)).toBe(`discussion:${discussion.phaseEndsAt}`);
     expect(stepsOf(next).length > 0).toBe(true);
   });
 
   it("행동은 at 오름차순이다", () => {
     const state = stateAt(1, 7, 8, "discussion");
-    const ats = planBotSteps(state, NOW, seededRandInt(3)).map((s) => s.at);
+    const ats = planBotSteps(state, nowOf(state), seededRandInt(3)).map((s) => s.at);
     expect(ats.join(",")).toBe([...ats].sort((a, b) => a - b).join(","));
   });
 
   it("claim 계획의 호출 순서가 시드 계약과 같다(15% 말 안 함 → 직업 → 지연)", () => {
-    const state = stateAt(1, 2, 3, "claim");
+    const state = stateAt(1, 3, 3, "claim");
     const calls: number[] = [];
     const recorder = (n: number): number => {
       calls.push(n);
-      return 0;
+      return n === 100 ? 99 : 0; // 말 안 함 15% 를 피해 직업 추첨까지 가게 한다
     };
-    planBotSteps(state, NOW, recorder);
-    // 봇 둘 × (randInt(100) → randInt(역할 수) → randInt(3000))
+    planBotSteps(state, nowOf(state), recorder);
+    // 봇 셋 × (randInt(100) → randInt(역할 수) → randInt(3000))
     const roles = rolesInPlay(state.players.length).length;
-    expect(calls.join(",")).toBe([100, roles, 3000, 100, roles, 3000].join(","));
+    expect(calls.join(",")).toBe([100, roles, 3000, 100, roles, 3000, 100, roles, 3000].join(","));
   });
 });
 

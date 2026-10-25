@@ -16,6 +16,7 @@ import type {
 } from "../protocol";
 import { MAX_PLAYERS, MIN_PLAYERS } from "../protocol";
 import { isAlive } from "./alive";
+import { botCount } from "./bots";
 import { currentClaim } from "./claim";
 import { phaseDurationOf } from "./discussion";
 import { PHASE_DEFS } from "./phases";
@@ -122,6 +123,8 @@ export function buildView(state: RoomState, playerId: string, now: number): Room
   if (state.testMode === true && me.id === state.hostId) {
     myInfo.testMode = true;
     if (state.phase === "lobby" && state.testRole !== undefined) myInfo.testRole = state.testRole;
+    // 서버 봇 수는 시트의 '봇' 줄이 있는 대기실에서만, 0 포함 항상 숫자로(결정 0024). isBot·botPlan·봇 id 는 어디에도 싣지 않는다.
+    if (state.phase === "lobby") myInfo.testBots = botCount(state);
   }
 
   // 본인 선택은 본인에게만(D-06) — 남의 nightPick 은 어떤 키로도 싣지 않는다. 밤에 살아 있는 본인이 고른 값이 있을 때만 키를 만든다.

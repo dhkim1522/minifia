@@ -149,7 +149,9 @@ export type ClientMessage =
   // 테스트 방 방장 도구(결정 0022). 일반 방은 BAD_MESSAGE 로 거부한다. role null = 무작위.
   | { t: "testSkip" }
   | { t: "testReset" }
-  | { t: "testRole"; role: RoleId | null };
+  | { t: "testRole"; role: RoleId | null }
+  // 원하는 봇 수(절대값, 0..MAX_TEST_BOTS). 서버가 사람 + 봇 <= MAX_PLAYERS 로 잘라 정확히 그만큼 둔다(결정 0024).
+  | { t: "testBots"; count: number };
 
 // ---- 서버 -> 클라이언트 ----
 // 공개 식별자는 seat 뿐이다. 내부 id·토큰·역할 자리는 타입에도 없다.
@@ -171,6 +173,7 @@ export interface MyInfo {
   records?: InvestigationRecord[]; // 경찰 본인에게만
   testMode?: true; // 테스트 방 방장 본인만(결정 0022). 손님·일반 방·미리보기에는 키 자체가 없다
   testRole?: RoleId; // 그 방장의 대기실 view 에서만, 고른 직업이 있을 때(없으면 무작위, 결정 0022)
+  testBots?: number; // 그 방장의 대기실 view 에서만, 서버 봇 수(0 포함, 결정 0024). 손님·일반 방·게임 중에는 키 자체가 없다
 }
 export interface RoomView {
   code: string;
