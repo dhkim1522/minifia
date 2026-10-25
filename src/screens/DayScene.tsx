@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import type { EmojiId, RoomView } from "../../shared/protocol";
 import { isAlive } from "../../shared/game/alive";
-import { CLAIM_REVEAL_MS } from "../../shared/game/phases";
 import type { RoleId } from "../../shared/game/roles";
 import { Backdrop } from "../components/Backdrop";
 import { ClaimPanel } from "../components/ClaimPanel";
@@ -16,6 +15,7 @@ import { PhaseBar } from "../components/PhaseBar";
 import { RecordsToast } from "../components/RecordsToast";
 import { ReadOnlyRow } from "../components/ReadOnlyRow";
 import { Timer } from "../components/Timer";
+import { TurnPanel } from "../components/TurnPanel";
 import { Toast, useToast } from "../components/Toast";
 import { morningCardText } from "../game/eliminationText";
 import { EMOJI_TEXT, NIGHT_TEMPLATE_ORDER } from "../game/messageText";
@@ -38,12 +38,12 @@ export interface DaySceneProps {
   testButton?: ReactNode;
 }
 
-// 낮 세 단계(claim·claimReveal·discussion)가 공유하는 장면. S-06b·S-06c·S-07.
-// 세 단계는 DayTable 하나를 공유한다(결정 0017-1). 머리 위는 이모티콘만(0017-2), 완료·공개는 이름표 아랫줄(0017-6).
-// 테이블은 키가 없는 장면 상자 안에 있어 세 단계 사이에 다시 마운트되지 않는다(깜빡임·인물 재등장 없음, Pitfall 7·11).
+// 낮 두 단계(claim·discussion)와 밤·아침이 공유하는 장면. 순차 주장(결정 0023)·S-07.
+// 단계는 DayTable 하나를 공유한다(결정 0017-1). 머리 위는 이모티콘만(0017-2). 이름표 아랫줄(완료·주장·탈락)은 주장 단계에 없다(0023-3).
+// 테이블은 키가 없는 장면 상자 안에 있어 단계 사이에 다시 마운트되지 않는다(깜빡임·인물 재등장 없음, Pitfall 7·11).
 // 위쪽 바와 하단 패널만 단계가 든 key(bar-·panel- 접두어로 서로 겹치지 않게)라 단계마다 새 요소가 되어 한 번 페이드된다.
-// 패널 내용은 02-08(직업 공개 ClaimPanel, 아래)·02-09(낮 토론 MessageLog·DiscussionControls)가 이 section 에 넣는다.
-// 화면은 스스로 단계를 넘기지 않는다(서버 view 만 따름). 역할 문자열을 화면에 쓰지 않는다.
+// claim 하단: 서버가 정한 지금 차례(view.day.turn.seat)가 나면 직업 칩(ClaimPanel), 남이면 "…님이 주장하는 중 · N초"(TurnPanel).
+// 낮 토론은 MessageLog·DiscussionControls. 화면은 스스로 단계나 차례를 넘기지 않는다(서버 view 만 따름). 역할 문자열을 화면에 쓰지 않는다.
 export function DayScene({ view, connection, myRoleButton, testButton }: DaySceneProps) {
   const n = view.day?.n ?? 1;
   // 낮 토론의 보낸 사람 반전·이모티콘(자리별 한 번에 하나). 단계가 discussion 이 아니면 훅이 비운다.
@@ -73,21 +73,12 @@ export function DayScene({ view, connection, myRoleButton, testButton }: DayScen
     });
   }, [connection.onEvent, inChatPhase]);
 
-  // 공개 연출(아랫줄 팝+흔들림)은 이 화면이 직전에 claim 을 보고 있다가 claimReveal 을 받았을 때만 켠다.
-  // 서버 단계가 분리돼 있어 모든 폰이 같은 순간 시작한다. 재접속으로 claimReveal 에 바로 들어오면 켜지 않는다(주장만 보인다).
-  // 렌더 중 상태 조정(이전 단계 기억)이라 효과 없이 첫 커밋부터 팝이 보인다.
+  // 이모티콘 live 줄은 단계가 바뀌면 비운다(다음 단계에서 지난 것을 읽지 않게). 렌더 중 상태 조정이라 효과 없이 첫 커밋부터 맞는다.
   const [prevPhase, setPrevPhase] = useState(view.phase);
-  const [revealing, setRevealing] = useState(false);
   if (prevPhase !== view.phase) {
     setPrevPhase(view.phase);
-    setLastEmoji(null); // 이모티콘 live 줄은 토론이 끝나면 비운다(다음 토론에서 지난 것을 읽지 않게)
-    setRevealing(prevPhase === "claim" && view.phase === "claimReveal");
+    setLastEmoji(null);
   }
-  useEffect(() => {
-    if (!revealing) return;
-    const timer = setTimeout(() => setRevealing(false), CLAIM_REVEAL_MS);
-    return () => clearTimeout(timer);
-  }, [revealing]);
   const isNight = view.phase === "night";
   const isMorning = view.phase === "morning";
   const title = isNight ? "밤" : isMorning ? "아침" : view.phase === "discussion" ? "낮 · 토론" : "낮 · 직업 공개";
@@ -132,26 +123,16 @@ export function DayScene({ view, connection, myRoleButton, testButton }: DayScen
   const allies = view.me.allies ?? [];
   // 동료가 고른 대상(마피아 화면만, D-07). 서버가 생존 마피아에게만 보낸 값이다.
   const allyPicks = view.me.allyPicks ?? [];
-  // 아랫줄 완료는 서버가 보낸 claimDone 에서만 만든다 — 무엇을 골랐는지는 서버가 보내지 않는다(D-01).
-  const claimDone = view.phase === "claim" ? (view.day?.claimDone ?? []) : [];
-  // 남의 주장은 서버가 공개한 claims 에서만 그린다(claimReveal·discussion, 밤·아침에는 그날 낮의 주장을 유지 — UI-SPEC C6).
-  const claims =
-    view.phase === "claimReveal" || view.phase === "discussion" || view.phase === "night" || view.phase === "morning"
-      ? (view.day?.claims ?? [])
-      : [];
   const nicknameOf = (seat: number): string | undefined => view.players.find((p) => p.seat === seat)?.nickname;
-  const rowOf = (seat: number): DayTagRow | null => {
-    if (view.phase === "claim") return claimDone.includes(seat) ? { kind: "done" } : { kind: "wait" };
-    const c = claims.find((x) => x.seat === seat);
-    return c ? { kind: "claim", job: c.claim, changed: c.changed, pop: revealing && view.phase === "claimReveal" } : null;
-  };
-  // 이름표 아랫줄. 관전 화면: 나는 '탈락', 다른 자리는 서버가 보낸 실제 직업. 살아 있는 사람 화면: 탈락자는 직업 없이 '탈락' 뿐이다.
+  // 이름표 아랫줄. claim 단계에는 없다. 관전 화면: 다른 자리는 서버가 보낸 실제 직업, 살아 있는 사람 화면: 탈락자는 '탈락' 뿐이다.
+  // 완료·주장·말 바꿈 줄은 없어졌다 — 남의 주장은 채팅에서만 본다(결정 0023-3). 필드 자체는 03.1-05 가 지운다.
   const tagRowOf = (p: { seat: number; alive?: boolean }): DayTagRow | null => {
+    if (view.phase === "claim") return null;
     if (spectate !== undefined && p.seat !== view.me.seat) {
       const job = jobOf(p.seat);
       if (job !== undefined) return { kind: "real", job };
     }
-    return isAlive(p) ? rowOf(p.seat) : { kind: "dead" };
+    return isAlive(p) ? null : { kind: "dead" };
   };
   const seats: DayTableSeat[] = [...view.players]
     .sort((x, y) => x.seat - y.seat)
@@ -189,13 +170,11 @@ export function DayScene({ view, connection, myRoleButton, testButton }: DayScen
 
   const endsAt = view.phaseEndsAt;
   const durationMs = view.phaseDurationMs;
-  // claimReveal 의 타이머는 0:00 과 빈 막대로 머문다 — 남은 시간 0 고정(endsAt 0, offset 0, RESEARCH Pattern 7).
+  // claim 의 타이머는 지금 차례의 남은 시간(8초 → 0)이고 calm 이다 — 8초 중 마지막 5초가 늘 진홍이면 경고처럼 보인다.
+  // 아침 5초도 전체가 마지막 5초라 진홍을 쓰지 않는다(calm, UI-SPEC 확인 필요 10).
   const timer =
-    view.phase === "claimReveal" ? (
-      <Timer endsAt={0} durationMs={durationMs ?? 1} offset={0} />
-    ) : endsAt !== null && durationMs !== null ? (
-      // 아침 5초는 전체가 마지막 5초라 진홍을 쓰지 않는다(calm, UI-SPEC 확인 필요 10)
-      <Timer endsAt={endsAt} durationMs={durationMs} offset={connection.offset} calm={isMorning} />
+    endsAt !== null && durationMs !== null ? (
+      <Timer endsAt={endsAt} durationMs={durationMs} offset={connection.offset} calm={isMorning || view.phase === "claim"} />
     ) : null;
 
   return (
@@ -236,8 +215,12 @@ export function DayScene({ view, connection, myRoleButton, testButton }: DayScen
               )}
               <ReadOnlyRow />
             </>
-          ) : view.phase === "claim" || view.phase === "claimReveal" ? (
-            <ClaimPanel view={view} canSend={connection.canSend} send={connection.send} />
+          ) : view.phase === "claim" ? (
+            view.day?.turn?.seat === view.me.seat ? (
+              <ClaimPanel view={view} canSend={connection.canSend} send={connection.send} />
+            ) : (
+              <TurnPanel view={view} offset={connection.offset} />
+            )
           ) : view.phase === "discussion" ? (
             <>
               <MessageLog lines={chatLines} players={view.players} mySeat={view.me.seat} />

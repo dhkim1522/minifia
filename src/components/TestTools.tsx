@@ -22,7 +22,6 @@ export const TEST_PHASE_LABEL: Readonly<Record<PhaseId, string>> = {
   roleReveal: "역할 확인",
   dayAnnounce: "낮 시작 발표",
   claim: "직업 공개",
-  claimReveal: "공개 연출",
   discussion: "낮 토론",
   night: "밤",
   morning: "아침",

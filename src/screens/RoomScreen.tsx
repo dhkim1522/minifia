@@ -36,12 +36,21 @@ const PHASE_ANNOUNCE: Record<PhaseId, (view: RoomView) => string> = {
   assigning: () => "직업을 배정하고 있습니다",
   roleReveal: () => "역할 확인",
   dayAnnounce: (view) => `${view.day?.n ?? 1}일차 낮이 되었습니다`,
-  claim: () => "직업 공개. 주장할 직업을 고르세요",
-  claimReveal: () => "직업이 공개되었습니다",
+  claim: claimAnnounce,
   discussion: () => "낮 토론",
   night: nightAnnounce,
   morning: morningAnnounce,
 };
+
+// 주장 차례 안내: 내 차례면 `내 차례예요`, 남이면 `{닉네임}님 차례`. 차례나 닉네임을 못 찾으면 빈 문자열(`님 차례` 만 읽히지 않게).
+// 차례가 바뀌어 이 글자가 달라질 때마다 보이지 않는 aria-live 영역이 다시 읽는다.
+function claimAnnounce(view: RoomView): string {
+  const seat = view.day?.turn?.seat;
+  if (seat === undefined) return "";
+  if (seat === view.me.seat) return "내 차례예요";
+  const nickname = view.players.find((p) => p.seat === seat)?.nickname;
+  return nickname === undefined ? "" : `${nickname}님 차례`;
+}
 
 // 아침 안내: "아침이 밝았습니다. " + 카드 제목(무사면 '아무 일도 없었습니다. 모두 무사해요'). 카드와 같은 출처에서 만든다.
 function morningAnnounce(view: RoomView): string {
@@ -67,10 +76,10 @@ function nightAnnounce(view: RoomView): string {
   }
 }
 
-// 장면 키: 낮 세 단계와 밤·아침은 같은 장면(DayScene)이라 같은 키를 쓴다 — 테이블을 다시 마운트하지 않는다(UI-SPEC C5).
+// 장면 키: 낮 두 단계와 밤·아침은 같은 장면(DayScene)이라 같은 키를 쓴다 — 테이블을 다시 마운트하지 않는다(UI-SPEC C5).
 // 래퍼와 장면은 장면에 들어올 때만 mf-phase-enter 가 돈다. 그 밖은 단계 이름이 키다.
 function sceneKey(phase: PhaseId): string {
-  return phase === "claim" || phase === "claimReveal" || phase === "discussion" || phase === "night" || phase === "morning"
+  return phase === "claim" || phase === "discussion" || phase === "night" || phase === "morning"
     ? "dayScene"
     : phase;
 }
@@ -263,7 +272,6 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
       case "dayAnnounce":
         return <Day view={view} myRoleButton={withTest(headerExtra)} />;
       case "claim":
-      case "claimReveal":
       case "discussion":
       case "night":
       case "morning":

@@ -1,7 +1,7 @@
 /// <reference types="node" />
 import { readFileSync } from "node:fs";
 import { cleanup, render, within } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { RoleId } from "../../shared/game/roles";
 import type { PhaseId, RoomView, SpectateView } from "../../shared/protocol";
 import type { RoomConnection } from "../../src/net/useRoomConnection";
@@ -91,6 +91,15 @@ const turnText = (c: HTMLElement) => c.querySelector(".st-row .stat")?.textConte
 afterEach(cleanup);
 
 describe("DayScene 순차 주장 하단 (03.1 UI-SPEC B, D-03·D-04)", () => {
+  // 남은 초는 시각에서 나오므로 현재 시각을 픽스처의 NOW 에 고정한다
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("claim 에서 day.turn.seat === me.seat 이면 직업 칩 줄(group 주장할 직업)이 있고 `…님이 주장하는 중` 은 없다", () => {
     const { container } = scene(makeView({ phase: "claim", turn: 0 }));
     const panel = container.querySelector(".mf-dayscene__panel");

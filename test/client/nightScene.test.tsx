@@ -329,12 +329,12 @@ describe("관전 (N-6, 결정 0021)", () => {
     expect(container.querySelectorAll(".mf-dt__pick").length).toBe(0);
   });
 
-  it("직업 공개(claim): 칩 줄이 없고 하단은 로그 + .mf-ro, 이름표에 …·완료가 없다", () => {
+  it("직업 공개(claim): 칩 줄이 없고 하단은 로그 + .mf-ro, 이름표 아랫줄이 하나도 없다 (결정 0023-3, 탈락·실제 직업 줄 포함)", () => {
     const { container } = scene(dead0({ phase: "claim", spectate: { seats: spectate.seats } }));
     expect(container.querySelectorAll(".mf-seg__b").length).toBe(0);
     expect(panel(container)!.querySelector("p.mf-ro") !== null).toBe(true);
     expect(panel(container)!.querySelector('[role="log"]') !== null).toBe(true);
-    expect([0, 1, 2, 3, 4].map((n) => rowText(container, n)).join("|")).toBe("탈락|마피아|시민|경찰|의사");
+    expect([0, 1, 2, 3, 4].map((n) => rowText(container, n)).join("|")).toBe("(없음)|(없음)|(없음)|(없음)|(없음)");
   });
 
   it("살아 있는 경찰 화면(dead [4], spectate 없음): 자리 4 는 유령 + '탈락', 관전 클래스가 렌더 HTML 에 없다", () => {

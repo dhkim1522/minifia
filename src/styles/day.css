@@ -23,6 +23,11 @@
    flex none·높이 고정이라 장면(flex 1·min-height 0)만 줄어든다. 10px·12px 여백은 토큰에 없는 시안 값(UI-SPEC R18 방식). 손잡이 막대는 시안에 없다. */
 .mf-dayscene__panel { flex: none; box-sizing: border-box; height: calc(157px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: var(--space-sm); padding: 10px var(--space-md) calc(12px + env(safe-area-inset-bottom)); background: var(--night-800); border-radius: var(--radius-lg) var(--radius-lg) 0 0; }
 
+/* 남의 차례 하단 최소형(03.1 UI-SPEC B, 시안 K2·f9.css): 닉네임 + 남은 초를 한 줄 알약 모양 면에 둔다. 03.1-07 이 채팅 줄·이모티콘 버튼을 더한다 */
+.st-row { display: flex; gap: var(--space-sm); }
+.st-row .stat { flex: 1; min-width: 0; display: flex; align-items: center; justify-content: space-between; gap: var(--space-sm); min-height: var(--tap-min); margin: 0; padding: 0 var(--space-md); box-sizing: border-box; border-radius: var(--radius-md); background: var(--night-700); font-size: 14px; line-height: 20px; color: var(--gray-100); word-break: keep-all; }
+.st-row .stat b { font-weight: 700; color: var(--gray-50); }
+.st-row .stat span { color: var(--gray-300); font-variant-numeric: tabular-nums; white-space: nowrap; }
 /* 직업 공개 패널(S-06b·c) — 시안 R9-claim·f4.css·f5.css: 제목(.ct 24px 굵게 gray-50) + 안내(.gd 14px/20px gray-300) + 한 줄 칩(.seg). */
 .mf-claimpanel { display: flex; flex-direction: column; gap: var(--space-sm); }
 .mf-claimpanel__title { margin: 0; font-size: 24px; line-height: 1.2; font-weight: 700; color: var(--gray-50); word-break: keep-all; }
