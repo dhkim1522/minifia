@@ -27,6 +27,19 @@
   background: color-mix(in srgb, var(--night-900) 92%, transparent);
   border: 1px solid var(--night-600); text-align: center; word-break: keep-all;
   box-shadow: 0 10px 28px var(--shadow);
+  /* 클릭을 막지 않는다. 등장: scale .92→1 + opacity (개별 속성 scale 이라 가운데 맞춤 transform 을 건드리지 않는다).
+     퇴장: 마지막 300ms 에 opacity 1→0. 지연은 단계 남은 시간 − 300ms 로 MorningCard 가 변수에 싣는다(UI-SPEC F, D-15) */
+  pointer-events: none;
+  animation:
+    mf-morning-pop 300ms var(--ease-out) both,
+    mf-morning-out 300ms linear var(--mf-morning-exit-delay, 4700ms) forwards;
+}
+@keyframes mf-morning-pop { from { opacity: 0; scale: 0.92; } to { opacity: 1; scale: 1; } }
+@keyframes mf-morning-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes mf-morning-out { from { opacity: 1; } to { opacity: 0; } }
+/* 축소 모션: scale 없이 opacity 만 (D-15) */
+@media (prefers-reduced-motion: reduce) {
+  .mf-morningcard { animation: mf-morning-fade 300ms var(--ease-out) both, mf-morning-out 300ms linear var(--mf-morning-exit-delay, 4700ms) forwards; }
 }
 .mf-morningcard__t { margin: 0; font-size: 24px; line-height: 1.2; font-weight: 700; color: var(--gray-50); }
 .mf-morningcard__s { margin: 4px 0 0; font-size: 14px; line-height: 20px; color: var(--gray-300); }

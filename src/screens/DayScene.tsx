@@ -9,7 +9,7 @@ import { DayTable } from "../components/DayTable";
 import type { DayTableSeat, SpectatorPick } from "../components/DayTable";
 import { DiscussionControls } from "../components/DiscussionControls";
 import { MessageLog } from "../components/MessageLog";
-import { MorningCard } from "../components/MorningCard";
+import { MorningCard, exitDelayOf } from "../components/MorningCard";
 import { NIGHT_PANEL_TEXT, NightPanel, NoticePill, PickPill } from "../components/NightPanel";
 import { PhaseBar } from "../components/PhaseBar";
 import { RecordsToast } from "../components/RecordsToast";
@@ -80,13 +80,23 @@ export function DayScene({ view, connection, myRoleButton, testButton }: DayScen
   }, [connection.onEvent, inFloatPhase]);
 
   // 이모티콘 live 줄은 단계가 바뀌면 비운다(다음 단계에서 지난 것을 읽지 않게). 렌더 중 상태 조정이라 효과 없이 첫 커밋부터 맞는다.
+  // 같은 조정에서 "밤 → 아침 전환을 이 화면이 직접 봤는가"(sawNightToMorning)를 기억한다 — 유령 맥동 조건(D-15). 아침을 벗어나면 초기화한다.
   const [prevPhase, setPrevPhase] = useState(view.phase);
+  const [sawNightToMorning, setSawNightToMorning] = useState(false);
   if (prevPhase !== view.phase) {
     setPrevPhase(view.phase);
     setLastEmoji(null);
+    setSawNightToMorning(prevPhase === "night" && view.phase === "morning");
   }
   const isNight = view.phase === "night";
   const isMorning = view.phase === "morning";
+  // 아침 퇴장 지연: 아침 마감 시각이 바뀔 때(= 아침이 시작될 때) 한 번 정해 카드와 층이 같은 값을 쓴다(렌더마다 다시 계산하면 애니메이션이 흔들린다).
+  const [morningExit, setMorningExit] = useState<{ ends: number | null; delay: number }>({ ends: null, delay: 0 });
+  if (isMorning && view.phaseEndsAt !== null && morningExit.ends !== view.phaseEndsAt) {
+    setMorningExit({ ends: view.phaseEndsAt, delay: exitDelayOf(view.phaseEndsAt - (Date.now() + connection.offset)) });
+  }
+  // 방금 탈락한 자리(서버 view.day.morning.eliminated, 공개 정보). 아침에만 의미가 있다.
+  const eliminatedSeat = isMorning ? view.day?.morning?.eliminated : undefined;
   // 낮 캐릭터 탭 → 유저 기록 카드(D-06). 보고 있는 자리를 쥐고, 밤이 되면 닫는다(렌더 중 상태 조정이라 낮 → 밤 → 낮을 돌아와도 다시 열리지 않는다).
   const [inspectSeat, setInspectSeat] = useState<number | null>(null);
   if (isNight && inspectSeat !== null) setInspectSeat(null);
@@ -152,6 +162,8 @@ export function DayScene({ view, connection, myRoleButton, testButton }: DayScen
         ...(spectatorPicksOf(p.seat).length > 0 ? { spectatorPicks: spectatorPicksOf(p.seat) } : {}),
         spoke: floats.spoke[p.seat] !== undefined,
         turn: p.seat === turnSeat,
+        // 아침: 방금 탈락한 한 자리는 어둡게 층 위(z 31)에 남고, 밤 → 아침을 직접 본 경우에만 400ms 맥동한다(재접속은 z 만).
+        ...(eliminatedSeat !== undefined && p.seat === eliminatedSeat ? { spotlit: true, ...(sawNightToMorning ? { pulse: true } : {}) } : {}),
         emoji: e ? { key: e.key, icon: e.icon, z: e.z } : null,
         // 누를 수 있는 자리: 살아 있는 사람. 마피아 화면은 자신·동료도 눌리지 않는 이전 마크업이다(D-02 개정).
         ...(actor && isAlive(p) && !(myRole === "mafia" && (p.seat === view.me.seat || allies.includes(p.seat)))
@@ -196,9 +208,10 @@ export function DayScene({ view, connection, myRoleButton, testButton }: DayScen
             pickVerb={pickVerb}
             pickDisabled={!connection.canSend}
             {...(spectate !== undefined ? { allyMarkLabel: "마피아" } : {})}
+            {...(isMorning ? { dim: { exitDelayMs: morningExit.delay } } : {})}
           />
         </div>
-        {isMorning ? <MorningCard {...morningCardText(view.day?.morning, nicknameOf)} /> : null}
+        {isMorning ? <MorningCard {...morningCardText(view.day?.morning, nicknameOf)} exitDelayMs={morningExit.delay} /> : null}
         <section key={`panel-${view.phase}`} className="mf-dayscene__panel mf-dayscene__enter">
           {isMorning ? (
             // 아침 하단(UI-SPEC M): 살아 있는 사람·탈락자·관전자 모두 같은 제목+안내. 알약·채팅·버튼 없음.
