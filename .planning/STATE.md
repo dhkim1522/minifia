@@ -6,16 +6,16 @@ current_phase: 03
 current_phase_name: 밤과 아침
 current_plan: 12
 status: verifying
-stopped_at: Completed 03.1-08-PLAN.md
-last_updated: "2026-10-25T07:51:14.420Z"
+stopped_at: Completed 03.1-10-PLAN.md
+last_updated: "2026-10-25T07:56:51.709Z"
 last_activity: 2026-10-25
 last_activity_desc: Phase 03 execution started
-state_head: ba2c549fdf0203107c115b24d9a9663ad0051422
+state_head: ccdb6faba29321d1498b799614dae8b45f581a15
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 63
-  completed_plans: 59
+  completed_plans: 60
 ---
 
 # Project State
@@ -105,6 +105,7 @@ Progress: [██░░░░░░░░] 17%
 | Phase 03.1 P09 | 35min | 2 tasks | 4 files |
 | Phase 03.1 P13 | 75min | 3 tasks | 6 files |
 | Phase 03.1 P08 | 25min | 2 tasks | 7 files |
+| Phase 03.1 P10 | 30min | 3 tasks | 12 files |
 
 ## Accumulated Context
 
@@ -193,6 +194,7 @@ Recent decisions affecting current work:
 - [Phase 03.1]: 03.1-07: 표시 전용 템플릿 claimRole/claimNone 은 when:claim 이라 say 의 때 검사가 서버 거부를 만든다(스키마 불변, 결정 0027-7)
 - [Phase 03.1]: 03.1-13: 스모크·UAT 응답기는 스크립트마다 자기 안에 두고, 거부·이모티콘 시험은 clients[3] 의 8초 시간 초과 창에서 한다
 - [Phase 03.1]: 03.1-08: 낮 기록 카드는 claim·discussion·morning 모든 자리(탈락 viewer·끊김 포함)에 읽기 전용 onInspect 를 주고 밤에는 주지 않으며, 밤이 되면 렌더 중 상태 조정으로 닫는다
+- [Phase 03.1]: 03.1-10: 아침 퇴장 지연은 남은 시간-300ms(0 하한)를 마감 시각이 바뀔 때 한 번 정해 카드와 층이 공유, roleArt 는 meDead && spectate 한 곳에서만 만든다
 
 ### Pending Todos
 
@@ -222,6 +224,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-25T07:51:14.106Z
-Stopped at: Completed 03.1-08-PLAN.md
+Last session: 2026-10-25T07:56:51.393Z
+Stopped at: Completed 03.1-10-PLAN.md
 Resume file: None
