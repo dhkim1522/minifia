@@ -6,16 +6,16 @@ current_phase: 03
 current_phase_name: 밤과 아침
 current_plan: 12
 status: verifying
-stopped_at: Completed 03.1-06-PLAN.md
-last_updated: "2026-10-25T07:08:44.006Z"
+stopped_at: Completed 03.1-07-PLAN.md
+last_updated: "2026-10-25T07:15:32.680Z"
 last_activity: 2026-10-25
 last_activity_desc: Phase 03 execution started
-state_head: 9ab4c6986da94fb58ec73e7990f769507c3c072e
+state_head: e435837ecd7469d263925593740508f2b9b369eb
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 63
-  completed_plans: 55
+  completed_plans: 56
 ---
 
 # Project State
@@ -101,6 +101,7 @@ Progress: [██░░░░░░░░] 17%
 | Phase 03.1 P04 | 25min | 3 tasks | 9 files |
 | Phase 03.1 P05 | 35min | 3 tasks | 11 files |
 | Phase 03.1 P06 | 45min | 3 tasks | 20 files |
+| Phase 03.1 P07 | 30min | 2 tasks | 19 files |
 
 ## Accumulated Context
 
@@ -185,6 +186,8 @@ Recent decisions affecting current work:
 - [Phase 03.1]: 03.1-04: 암살일지는 마피아 팀의 최종 지목 하나를 밤 시작 때 생존 마피아 전원에게 같은 줄로, 치료일지는 {n,target} 두 키뿐(구출 여부 키 없음)
 - [Phase 03.1]: 03.1-05: 이름표 한 줄(높이 22, 간격 0)·캐릭터 z 12~22 > 이름표 z 1~11, 어둡게 층은 --mf-scene-pad 로 좌우 연장, 자리 마크업 onPick > onInspect > group
 - [Phase 03.1]: 03.1-06: 일지 그림 경로는 journalArt(role, slot) 한 곳, RoleCardSheet 는 tab·unread·newCount 를 받는 제어 컴포넌트, 새 시트 테스트는 대소문자 충돌을 피해 roleCardSheet.test.tsx
+- [Phase 03.1]: 03.1-07: claim 중 chat 이벤트는 반전을 켜지 않는다(FLOAT_PHASES 에 claim 이 있어도 반전은 CHAT_PHASES 일 때만)
+- [Phase 03.1]: 03.1-07: 표시 전용 템플릿 claimRole/claimNone 은 when:claim 이라 say 의 때 검사가 서버 거부를 만든다(스키마 불변, 결정 0027-7)
 
 ### Pending Todos
 
@@ -214,6 +217,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-25T07:08:43.703Z
-Stopped at: Completed 03.1-06-PLAN.md
+Last session: 2026-10-25T07:15:32.378Z
+Stopped at: Completed 03.1-07-PLAN.md
 Resume file: None
