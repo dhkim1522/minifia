@@ -1,28 +1,18 @@
 import { useLayoutEffect, useRef, useState } from "react";
-import type { ReactElement } from "react";
-import type { Claim, EmojiId, RoleId } from "../../shared/protocol";
+import type { CSSProperties, ReactElement } from "react";
+import type { EmojiId, RoleId } from "../../shared/protocol";
 import { DAY_SCENE_H, DAY_SCENE_W, FIG_H, FIG_W, dayTableGeometry, daySeatLayout, px } from "../game/dayTable";
-import { claimName } from "../game/roleText";
+import { ROLE_TEXT } from "../game/roleText";
 import { Figure } from "./Figure";
 import { Icon } from "./Icon";
 import "../styles/daytable.css";
 
 // 낮 화면 고정 테이블(결정 0017-1). 받은 공개 값만 그린다 — 입력에 역할 필드가 없다.
-// 주장(row.job)은 공개된 주장이지 그 사람의 실제 역할이 아니다(거짓일 수 있다). 동료 표시(isAlly)는 서버가 마피아에게만 보낸
+// 이름표는 이름 한 줄이다(남의 주장은 이름표가 아니라 채팅에서만 본다, 결정 0023). 동료 표시(isAlly)는 서버가 마피아에게만 보낸
 // me.allies 에서 화면이 만든 값이다.
-// 밤에는 onPick 이 있는 자리만 버튼(UI-SPEC C1). 누를 수 있는지·동사는 장면이 정한다.
-// real 아랫줄·관전 배지는 장면이 탈락자 전용 서버 값으로만 만든다(결정 0021).
+// 한 자리는 밤에는 onPick 이 있으면 대상 버튼, 낮에는 onInspect 가 있으면 기록 카드 버튼이다(둘이 함께 있으면 onPick 이 이긴다).
+// roleArt(직업 그림)는 탈락한 본인(관전자) 화면만 만든다 — 살아 있는 사람의 입력에는 이 값이 없다(결정 0021).
 // 캐릭터 상자·이름표·이모티콘의 좌표는 game/dayTable.ts 의 daySeatLayout 한 번의 결과에서 나온다(떠 있는 층을 따로 가두지 않는다).
-
-/** 이름표 아랫줄. null 이면 아랫줄이 없다. 서버 값 연결은 낮 장면(02-16)이 한다. */
-export type DayTagRow =
-  | { kind: "wait" }
-  | { kind: "done" }
-  | { kind: "claim"; job: Claim; changed: boolean; pop: boolean }
-  /** 탈락한 사람의 아랫줄 */
-  | { kind: "dead" }
-  /** 관전 화면 전용: 실제 직업(공개 주장 알약과 모양이 다르다). 값은 장면이 탈락자 전용 서버 값으로만 만든다 */
-  | { kind: "real"; job: RoleId };
 
 /** 관전 화면에서 표적 배지를 다는 역할 종류. 살아 있는 사람 화면에는 넘어오지 않는다 */
 export type SpectatorPick = "mafia" | "police" | "doctor";
@@ -41,7 +31,6 @@ export interface DayTableSeat {
   isHost: boolean;
   isMe: boolean;
   isAlly: boolean;
-  row: DayTagRow | null;
   /** 방금 빠른 메시지를 보낸 사람(윗줄 반전) */
   spoke?: boolean;
   /** 머리 위에 떠 있는 이모티콘 하나. key 가 바뀌면 애니메이션이 새로 시작한다. */
@@ -54,6 +43,16 @@ export interface DayTableSeat {
   dead?: boolean;
   /** 있으면 이 자리가 대상 버튼이 된다(밤). 없으면 지금 그대로의 group 노드 */
   onPick?: () => void;
+  /** 지금 주장하는 차례인 자리(한 번에 한 자리는 장면이 보장한다): 발밑 링·머리 위 말풍선 배지·이름표 반전 */
+  turn?: boolean;
+  /** 낮: 자리 전체가 주장 기록 카드 버튼이 된다. onPick 이 있으면 onPick 이 이긴다 */
+  onInspect?: () => void;
+  /** 관전자 전용: 이 살아 있는 자리를 중립 인물 대신 이 직업 그림으로 그린다. 장면이 탈락한 본인의 서버 값으로만 만든다(결정 0021) */
+  roleArt?: RoleId;
+  /** 아침: 어둡게 층(z 30) 위(z 31)로 올려 어두워지지 않게 한다. 방금 탈락한 자리 */
+  spotlit?: boolean;
+  /** spotlit 일 때만 의미: 400ms 맥동을 한 번 돈다(밤 → 아침을 직접 본 경우에만 켠다) */
+  pulse?: boolean;
 }
 
 export interface DayTableProps {
@@ -69,55 +68,21 @@ export interface DayTableProps {
   pickDisabled?: boolean;
   /** 동료 마름모의 읽기 이름. 기본 "동료", 관전 화면은 "마피아" */
   allyMarkLabel?: string;
+  /** 아침 어둡게 층. exitDelayMs 는 퇴장 페이드를 시작하기까지의 지연(아침 길이 − 300ms) */
+  dim?: { exitDelayMs: number };
 }
 
-// 지금 앱의 Table seatLabel 과 같은 형식: "{닉네임}{ (나)}{, 연결 끊김}{, 선택 완료}{, 직업 주장 X}"
-/** 이모티콘 층 z 기준값: 이름표(최대 30)보다 위. emoji.z 가 더해진다. */
+/** 이모티콘 층 z 기준값: 이름표(최대 11)·캐릭터(최대 22)·어둡게 층(30)·강조(31)보다 위. emoji.z 가 더해진다. */
 const EMOJI_Z = 60;
+/** 어둡게 층 위로 올라온 자리(방금 탈락한 유령)의 z-index */
+const SPOTLIT_Z = 31;
 
+/** 자리 읽기 이름: "{닉네임}{ (나)}{, 직업 | , 탈락}{, 연결 끊김}{, 지금 주장하는 차례}" (낮 기록 버튼이면 ", 주장 기록 보기" 가 더해진다) */
 function seatLabel(s: DayTableSeat): string {
   const who = `${s.nickname}${s.isMe ? " (나)" : ""}`;
-  const off = s.connected ? "" : ", 연결 끊김";
-  if (s.row?.kind === "real") return `${who}, ${claimName(s.row.job)}${s.dead ? ", 탈락" : ""}${off}`;
-  if (s.dead) return `${who}, 탈락${off}`;
-  const row =
-    s.row?.kind === "done"
-      ? ", 선택 완료"
-      : s.row?.kind === "claim"
-        ? `, 직업 주장 ${claimName(s.row.job)}${s.row.changed ? ", 말 바꿈" : ""}`
-        : "";
-  return `${who}${off}${row}`;
-}
-
-/** 이름표 아랫줄: 고르는 중 …, 고름 ✓ 완료(반전), 주장 직업(말 안 함은 -), 탈락, 관전용 실제 직업. 직업 이름은 말줄임하지 않는다. */
-function TagRow({ row }: { row: DayTagRow }): ReactElement {
-  if (row.kind === "wait") return <span className="mf-dt__claim mf-dt__claim--wait">…</span>;
-  if (row.kind === "done") {
-    return (
-      <span className="mf-dt__claim mf-dt__claim--done">
-        <Icon name="check" size={14} />
-        완료
-      </span>
-    );
-  }
-  if (row.kind === "dead") return <span className="mf-dt__claim mf-dt__claim--dead">탈락</span>;
-  if (row.kind === "real") {
-    return (
-      <span className={`mf-dt__claim mf-dt__claim--real${row.job === "mafia" ? " mf-dt__claim--mafia" : ""}`}>{claimName(row.job)}</span>
-    );
-  }
-  const none = row.job === "none";
-  const cls = `mf-dt__claim${none ? " mf-dt__claim--none" : ""}${row.pop ? " mf-dt__claim--pop" : ""}`;
-  return (
-    <span className={cls}>
-      {none ? "-" : claimName(row.job)}
-      {row.changed ? (
-        <span className="mf-dt__chg" role="img" aria-label="말 바꿈">
-          <Icon name="changed" size={12} />
-        </span>
-      ) : null}
-    </span>
-  );
+  const art = s.dead ? undefined : s.roleArt;
+  const lead = art !== undefined ? `${who}, ${ROLE_TEXT[art].name}` : s.dead ? `${who}, 탈락` : who;
+  return `${lead}${s.connected ? "" : ", 연결 끊김"}${s.turn ? ", 지금 주장하는 차례" : ""}`;
 }
 
 /** 머리 위 26px 표적 배지. label 이 있으면 role=img 로 읽히고, 없으면 장식 */
@@ -134,7 +99,17 @@ function PickBadge({ kind, label }: { kind: "me" | "ally" | "police" | "doctor";
   );
 }
 
-export function DayTable({ seats, mySeat, width, height, label = "테이블", pickVerb = "선택", pickDisabled, allyMarkLabel = "동료" }: DayTableProps): ReactElement {
+export function DayTable({
+  seats,
+  mySeat,
+  width,
+  height,
+  label = "테이블",
+  pickVerb = "선택",
+  pickDisabled,
+  allyMarkLabel = "동료",
+  dim,
+}: DayTableProps): ReactElement {
   const rootRef = useRef<HTMLDivElement>(null);
   const [measured, setMeasured] = useState({ w: DAY_SCENE_W, h: DAY_SCENE_H });
   const needMeasure = width === undefined || height === undefined;
@@ -174,11 +149,14 @@ export function DayTable({ seats, mySeat, width, height, label = "테이블", pi
           width: FIG_W,
           height: FIG_H,
           transform: `scale(${Math.round(p.scale * 1000) / 1000})`,
-          zIndex: p.z,
+          zIndex: s.spotlit ? SPOTLIT_Z : p.z,
         };
+        const art = s.dead ? undefined : s.roleArt;
+        const seatClass = `mf-dt__seat${s.spotlit ? " mf-dt__seat--spotlit" : ""}${s.spotlit && s.pulse ? " mf-dt__seat--pulse" : ""}`;
         const inner = (
           <>
-            <Figure seat={p.seat} disconnected={!s.connected} ghost={s.dead} />
+            {/* key: 직업 그림으로 바뀌는 자리는 노드가 새로 만들어져 300ms 페이드가 한 번 돈다 */}
+            <Figure key={art !== undefined ? "role" : "fig"} seat={p.seat} disconnected={!s.connected} ghost={s.dead} {...(art !== undefined ? { roleArt: art } : {})} />
             {s.isAlly ? (
               <>
                 <span className="mf-dt__ring mf-dt__ring--mate" />
@@ -191,6 +169,14 @@ export function DayTable({ seats, mySeat, width, height, label = "테이블", pi
               <span className="mf-dt__crown" role="img" aria-label="방장">
                 <Icon name="crown" size={13} />
               </span>
+            ) : null}
+            {s.turn ? (
+              <>
+                <span className="mf-dt__spot" />
+                <span className="mf-dt__turn" aria-hidden="true">
+                  <Icon name="speech" size={16} />
+                </span>
+              </>
             ) : null}
             {/* 배지 쌓기: 경찰 → 의사 → 마피아 → 내 링 → 내 배지(내 것이 위) */}
             {s.spectatorPicks?.includes("police") ? <PickBadge kind="police" label={SPECTATOR_PICK_LABEL.police} /> : null}
@@ -213,7 +199,7 @@ export function DayTable({ seats, mySeat, width, height, label = "테이블", pi
             <button
               key={`s${p.seat}`}
               type="button"
-              className="mf-dt__seat mf-dt__seat--pick"
+              className={`${seatClass} mf-dt__seat--pick`}
               data-seat={p.seat}
               aria-pressed={!!s.pick?.mine}
               aria-label={`${s.nickname}${s.isMe ? " (나)" : ""}, ${pickVerb} 대상`}
@@ -225,8 +211,23 @@ export function DayTable({ seats, mySeat, width, height, label = "테이블", pi
             </button>
           );
         }
+        if (s.onInspect) {
+          return (
+            <button
+              key={`s${p.seat}`}
+              type="button"
+              className={`${seatClass} mf-dt__seat--pick mf-dt__seat--inspect`}
+              data-seat={p.seat}
+              aria-label={`${seatLabel(s)}, 주장 기록 보기`}
+              onClick={s.onInspect}
+              style={style}
+            >
+              {inner}
+            </button>
+          );
+        }
         return (
-          <div key={`s${p.seat}`} className="mf-dt__seat" data-seat={p.seat} role="group" aria-label={seatLabel(s)} style={style}>
+          <div key={`s${p.seat}`} className={seatClass} data-seat={p.seat} role="group" aria-label={seatLabel(s)} style={style}>
             {inner}
           </div>
         );
@@ -237,7 +238,7 @@ export function DayTable({ seats, mySeat, width, height, label = "테이블", pi
         return (
           <div
             key={`t${p.seat}`}
-            className={`mf-dt__tag${s.isMe ? " mf-dt__tag--me" : ""}${s.dead ? " mf-dt__tag--dead" : ""}${s.spoke ? " mf-dt__tag--spoke" : ""}`}
+            className={`mf-dt__tag${s.isMe ? " mf-dt__tag--me" : ""}${s.dead ? " mf-dt__tag--dead" : ""}${s.spoke ? " mf-dt__tag--spoke" : ""}${s.turn ? " mf-dt__tag--turn" : ""}`}
             data-seat={p.seat}
             title={s.nickname}
             style={{ left: px(p.tagLeft), top: px(p.tagTop), zIndex: p.tagZ }}
@@ -246,7 +247,6 @@ export function DayTable({ seats, mySeat, width, height, label = "테이블", pi
               <i className="mf-dt__dot" style={{ background: `var(--seat-${(p.seat % 8) + 1})` }} />
               <span>{s.nickname}</span>
             </span>
-            {s.row ? <TagRow row={s.row} /> : null}
           </div>
         );
       })}
@@ -266,6 +266,9 @@ export function DayTable({ seats, mySeat, width, height, label = "테이블", pi
           </div>
         );
       })}
+      {dim ? (
+        <div className="mf-dt__dim" aria-hidden="true" style={{ "--mf-dim-exit-delay": `${dim.exitDelayMs}ms` } as CSSProperties} />
+      ) : null}
     </div>
   );
 }
