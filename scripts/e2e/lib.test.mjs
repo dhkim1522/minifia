@@ -36,6 +36,7 @@ import {
   formatTables,
   genericIssues,
   isOneLine,
+  lobbyShapeChecks,
   lineCount,
   morningCardIssues,
   parseArgs,
@@ -744,6 +745,50 @@ test("stageStable T1: 내 자리가 spotlit 이면 내 캐릭터 비교만 건�
   ]);
   assert.equal(spot.ok, true);
   assert.equal(stageStable([]).ok, false);
+});
+
+// ---- L6 대기실 자리 모양 (결정 0028) ----
+// 390폭 장면: 내 발 (183+12, 460) 아래 가운데. 발 = 상자 아래 가운데.
+const footSeat = (seat, x, y) => ({ seat, rect: rect(x - 36, y - 96, 72, 96), spotlit: false });
+
+test("lobbyShapeChecks L6: 둘이면 마주 본다 — 상대의 발 가로 중심이 내 발과 ±0.5 같고 80px 이상 위면 통과", () => {
+  const stage = stageOf({ seats: [footSeat(0, 195, 508), footSeat(1, 195.3, 308)] });
+  const r = lobbyShapeChecks(stage, { n: 2, mySeat: 0 });
+  assert.equal(r.id, "L6");
+  assert.match(r.label, /대기실 자리: 둘이면 마주 봄·셋이면 삼각/);
+  assert.equal(r.ok, true, r.detail);
+});
+
+test("lobbyShapeChecks L6: 둘인데 가로가 어긋나거나(1px) 세로로 80px 미만이면 실패하고 이유를 말한다", () => {
+  const side = lobbyShapeChecks(stageOf({ seats: [footSeat(0, 195, 508), footSeat(1, 196.5, 308)] }), { n: 2, mySeat: 0 });
+  assert.equal(side.ok, false);
+  assert.match(side.detail, /가로/);
+  const near = lobbyShapeChecks(stageOf({ seats: [footSeat(0, 195, 508), footSeat(1, 195, 440)] }), { n: 2, mySeat: 0 });
+  assert.equal(near.ok, false);
+  assert.match(near.detail, /80/);
+});
+
+test("lobbyShapeChecks L6: 셋이면 세 발이 삼각이다 — 외적 > 100 이고 쌍별 거리 > 60", () => {
+  const ok = lobbyShapeChecks(stageOf({ seats: [footSeat(0, 195, 508), footSeat(1, 110, 380), footSeat(2, 280, 380)] }), { n: 3, mySeat: 0 });
+  assert.equal(ok.ok, true, ok.detail);
+  const line = lobbyShapeChecks(stageOf({ seats: [footSeat(0, 195, 508), footSeat(1, 195, 420), footSeat(2, 195, 330)] }), { n: 3, mySeat: 0 });
+  assert.equal(line.ok, false);
+  assert.match(line.detail, /직선|삼각/);
+  const close = lobbyShapeChecks(stageOf({ seats: [footSeat(0, 195, 508), footSeat(1, 110, 380), footSeat(2, 130, 380)] }), { n: 3, mySeat: 0 });
+  assert.equal(close.ok, false);
+});
+
+test("lobbyShapeChecks L6: 1명이거나 4명 이상이면 건너뛰고 통과한다", () => {
+  assert.equal(lobbyShapeChecks(stageOf(), { n: 1, mySeat: 0 }).ok, true);
+  assert.equal(lobbyShapeChecks(stageOf(), { n: 5, mySeat: 0 }).ok, true);
+  assert.equal(lobbyShapeChecks(null, { n: 4, mySeat: 0 }).ok, true);
+});
+
+test("lobbyShapeChecks L6: 둘·셋인데 측정값이 없거나 자리 수가 안 맞으면 조용히 통과하지 않고 실패한다", () => {
+  assert.equal(lobbyShapeChecks(null, { n: 2, mySeat: 0 }).ok, false);
+  assert.equal(lobbyShapeChecks(stageOf({ seats: [footSeat(0, 195, 508)] }), { n: 2, mySeat: 0 }).ok, false);
+  assert.equal(lobbyShapeChecks(stageOf({ seats: [footSeat(1, 195, 308), footSeat(2, 195, 308)] }), { n: 2, mySeat: 0 }).ok, false);
+  assert.match(lobbyShapeChecks(null, { n: 3, mySeat: 0 }).detail, /측정값 없음/);
 });
 
 // ---- 차례(K1·K2)·주장 채팅(K3)·기록 카드(X1) ----

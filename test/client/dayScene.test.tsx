@@ -220,12 +220,11 @@ describe("DayScene 장면 상자 (SPEC 판 구성, 결정 0017-1)", () => {
   const css = readFileSync("src/styles/day.css", "utf8");
   const has = (re: RegExp): boolean => re.test(css);
 
-  it("장면 상자 좌우 여백은 12px, max-width 389px 에서 4px, 같은 규칙에 flex 1·min-height 0 이 있고 .mf-table 규칙은 없다", () => {
+  it("장면 상자 좌우 여백은 12px, max-width 389px 에서 4px, 같은 규칙에 flex 1·min-height 0 이 있다", () => {
     expect(has(/\.mf-dayscene__scene\s*\{[^}]*flex:\s*1[;\s][^}]*\}/)).toBe(true);
     expect(has(/\.mf-dayscene__scene\s*\{[^}]*min-height:\s*0/)).toBe(true);
     expect(has(/\.mf-dayscene__scene\s*\{[^}]*padding:\s*0 12px/)).toBe(true);
     expect(has(/@media \(max-width: 389px\)\s*\{[^@]*\.mf-dayscene__scene\s*\{[^}]*padding:\s*0 4px/)).toBe(true);
-    expect(has(/\.mf-dayscene__scene \.mf-table/)).toBe(false);
   });
 
   it("장면이 짧으면 테이블이 올라간다: 잰 폭 352·높이 300 에서 테이블 면 top 118px (높이 407 기본이면 150px)", () => {

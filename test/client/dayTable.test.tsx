@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import "../helpers/singleLineErrors";
 import { DayTable } from "../../src/components/DayTable";
@@ -887,6 +887,115 @@ describe("daytable.css: 03.1-05 (이름표 한 줄·차례·층)", () => {
     expect(cssHas(css, /prefers-reduced-motion: reduce\)\s*\{[^@]*?\.mf-dt__seat--pulse\s*\{[^}]*animation:\s*none/)).toBe(true);
   });
   it("코드 줄에 # 색 값이 없다 (토큰 변수만)", () => {
+    expect(/#[0-9a-fA-F]{3,8}\b/.test(code)).toBe(false);
+  });
+});
+
+// ---- 결정 0028: 대기실·역할 배정이 같은 부품을 쓴다 (입장/퇴장 전이 · 누르기 · 미끄러짐) ----
+describe("DayTable 대기실 확장", () => {
+  const css = readFileSync("src/styles/daytable.css", "utf8");
+  const code = css.replace(/\/\*[\s\S]*?\*\//g, "");
+  const seatBy = (c: HTMLElement, n: number) => c.querySelector<HTMLElement>(`.mf-dt__seat[data-seat="${n}"]`)!;
+
+  it("transition 이 entering/leaving 이면 자리에 .mf-dt__seat--enter/--leave, 이름표에 .mf-dt__tag--enter/--leave 가 붙고 없으면 안 붙는다", () => {
+    const seats = [
+      seat(0, "동현", { isMe: true }),
+      seat(1, "지호", { transition: "entering" }),
+      seat(2, "하늘", { transition: "leaving" }),
+      seat(3, "서연", { transition: null }),
+    ];
+    const { container } = render(<DayTable seats={seats} mySeat={0} width={366} />);
+    expect(seatBy(container, 1).classList.contains("mf-dt__seat--enter")).toBe(true);
+    expect(tagEl(container, 1).classList.contains("mf-dt__tag--enter")).toBe(true);
+    expect(seatBy(container, 2).classList.contains("mf-dt__seat--leave")).toBe(true);
+    expect(tagEl(container, 2).classList.contains("mf-dt__tag--leave")).toBe(true);
+    for (const n of [0, 3]) {
+      expect(seatBy(container, n).className).not.toMatch(/--(enter|leave)/);
+      expect(tagEl(container, n).className).not.toMatch(/--(enter|leave)/);
+    }
+  });
+
+  it("onPress 가 있는 자리는 button.mf-dt__seat 이고 이름은 자리 읽기 이름(연결 끊김 포함)·aria-pressed 없음·누르면 호출된다", () => {
+    const onPress = vi.fn();
+    const seats = [seat(0, "동현", { isMe: true }), seat(1, "지호", { connected: false, onPress }), seat(2, "하늘")];
+    const { container } = render(<DayTable seats={seats} mySeat={0} width={366} />);
+    const btn = screen.getByRole("button", { name: "지호, 연결 끊김" });
+    expect(btn.tagName).toBe("BUTTON");
+    expect(btn.classList.contains("mf-dt__seat")).toBe(true);
+    expect(btn.hasAttribute("aria-pressed")).toBe(false);
+    expect(btn.getAttribute("aria-label")).not.toMatch(/대상|주장 기록 보기/);
+    expect(container.querySelectorAll("button").length).toBe(1);
+    fireEvent.click(btn);
+    expect(onPress).toHaveBeenCalledTimes(1);
+  });
+
+  it("핸들러 우선순위는 onPick > onInspect > onPress 이다", () => {
+    const onPick = vi.fn();
+    const onInspect = vi.fn();
+    const onPress = vi.fn();
+    const mk = (extra: Partial<DayTableSeat>) => [seat(0, "동현", { isMe: true }), seat(1, "지호", extra)];
+    const a = render(<DayTable seats={mk({ onPick, onInspect, onPress })} mySeat={0} width={366} />);
+    expect(seatBy(a.container, 1).getAttribute("aria-label")).toContain("대상");
+    fireEvent.click(seatBy(a.container, 1));
+    expect([onPick.mock.calls.length, onInspect.mock.calls.length, onPress.mock.calls.length]).toEqual([1, 0, 0]);
+    cleanup();
+    const b = render(<DayTable seats={mk({ onInspect, onPress })} mySeat={0} width={366} />);
+    expect(seatBy(b.container, 1).getAttribute("aria-label")).toContain("주장 기록 보기");
+    fireEvent.click(seatBy(b.container, 1));
+    expect([onPick.mock.calls.length, onInspect.mock.calls.length, onPress.mock.calls.length]).toEqual([1, 1, 0]);
+    cleanup();
+    const c = render(<DayTable seats={mk({ onPress })} mySeat={0} width={366} />);
+    fireEvent.click(seatBy(c.container, 1));
+    expect([onPick.mock.calls.length, onInspect.mock.calls.length, onPress.mock.calls.length]).toEqual([1, 1, 1]);
+  });
+
+  it("slide 가 켜진 루트의 .mf-dt--slide 는 마운트 직후에는 없고 한 프레임 뒤(rAF)에 생긴다, slide 가 없으면 끝까지 없다", () => {
+    const queue: FrameRequestCallback[] = [];
+    vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => queue.push(cb));
+    vi.stubGlobal("cancelAnimationFrame", () => {});
+    const { container } = render(<DayTable seats={five()} mySeat={0} width={366} slide />);
+    expect(root(container).classList.contains("mf-dt--slide")).toBe(false);
+    act(() => {
+      for (const cb of queue.splice(0)) cb(0);
+    });
+    expect(root(container).classList.contains("mf-dt--slide")).toBe(true);
+    cleanup();
+    const plain = render(<DayTable seats={five()} mySeat={0} width={366} />);
+    act(() => {
+      for (const cb of queue.splice(0)) cb(0);
+    });
+    expect(root(plain.container).classList.contains("mf-dt--slide")).toBe(false);
+  });
+
+  it("slide: 언마운트하면 대기 중인 프레임을 취소한다", () => {
+    const cancel = vi.fn();
+    vi.stubGlobal("requestAnimationFrame", () => 7);
+    vi.stubGlobal("cancelAnimationFrame", cancel);
+    const { unmount } = render(<DayTable seats={five()} mySeat={0} width={366} slide />);
+    unmount();
+    expect(cancel).toHaveBeenCalledWith(7);
+  });
+
+  it("CSS: 미끄러짐은 자리 left·top·transform 과 이름표 left·top 전이(--dur-med·--ease-out)이고 축소 모션에서는 전이가 없다", () => {
+    expect(cssHas(code, /\.mf-dt--slide \.mf-dt__seat\s*\{[^}]*transition:[^;}]*left var\(--dur-med\) var\(--ease-out\)/)).toBe(true);
+    expect(cssHas(code, /\.mf-dt--slide \.mf-dt__seat\s*\{[^}]*transition:[^;}]*top var\(--dur-med\) var\(--ease-out\)/)).toBe(true);
+    expect(cssHas(code, /\.mf-dt--slide \.mf-dt__seat\s*\{[^}]*transition:[^;}]*transform var\(--dur-med\) var\(--ease-out\)/)).toBe(true);
+    expect(cssHas(code, /\.mf-dt--slide \.mf-dt__tag\s*\{[^}]*transition:[^;}]*left var\(--dur-med\) var\(--ease-out\)/)).toBe(true);
+    expect(cssHas(code, /\.mf-dt--slide \.mf-dt__tag\s*\{[^}]*transition:[^;}]*top var\(--dur-med\) var\(--ease-out\)/)).toBe(true);
+    expect(cssHas(code, /prefers-reduced-motion: reduce\)\s*\{[^@]*?\.mf-dt--slide[^{]*\{[^}]*transition:\s*none/)).toBe(true);
+  });
+
+  it("CSS: 입장·퇴장 키프레임은 그림만 움직이고(자리 scale 과 곱해지지 않게) 입장은 --dur-med, 퇴장은 지역 상수 320ms, 이름표는 페이드, 축소 모션에서 꺼진다", () => {
+    expect(cssHas(code, /\.mf-dt\s*\{[^}]*--mf-seat-leave-ms:\s*320ms/)).toBe(true);
+    expect(cssHas(code, /\.mf-dt__seat--enter \.mf-figure\s*\{[^}]*animation:\s*mf-dt-seat-enter var\(--dur-med\) var\(--ease-out\)/)).toBe(true);
+    expect(cssHas(code, /\.mf-dt__seat--leave \.mf-figure\s*\{[^}]*animation:\s*mf-dt-seat-leave var\(--mf-seat-leave-ms\) var\(--ease-out\)/)).toBe(true);
+    expect(cssHas(code, /\.mf-dt__tag--enter\s*\{[^}]*animation:\s*mf-dt-fade var\(--dur-med\)/)).toBe(true);
+    expect(cssHas(code, /\.mf-dt__tag--leave\s*\{[^}]*animation:\s*mf-dt-fade-out var\(--mf-seat-leave-ms\)/)).toBe(true);
+    for (const k of ["mf-dt-seat-enter", "mf-dt-seat-leave", "mf-dt-fade-out"]) expect(cssHas(code, new RegExp(`@keyframes ${k}\\b`))).toBe(true);
+    expect(cssHas(code, /prefers-reduced-motion: reduce\)\s*\{[^@]*?\.mf-dt__seat--enter \.mf-figure[^{]*\{[^}]*animation:\s*none/)).toBe(true);
+  });
+
+  it("CSS: 코드 줄에 # 색 값이 없다", () => {
     expect(/#[0-9a-fA-F]{3,8}\b/.test(code)).toBe(false);
   });
 });

@@ -255,6 +255,13 @@ describe("S-04 역할 배정 (GAME-01, D-12, R11, E7, T-01-44)", () => {
     expect(byText("직업을 배정하고 있습니다…")).toBeTruthy();
     expect(byText("잠시만 기다려 주세요")).toBeTruthy();
     expect(byRole("group", "테이블")).toBeTruthy();
+    // 결정 0028: 낮과 같은 DayTable 이 같은 장면 상자(머리 .mf-assign__bar · 빈 패널 .mf-assign__panel) 안에 있다
+    expect(container.querySelectorAll(".mf-assign__scene > .mf-dt").length).toBe(1);
+    expect(container.querySelector(".mf-table, .mf-seat, .mf-badge")).toBeNull();
+    expect(container.querySelector(".mf-assign__bar h1")?.textContent).toBe("역할 배정");
+    const panel = container.querySelector(".mf-assign__panel");
+    expect(panel).not.toBeNull();
+    expect(panel?.children.length).toBe(0);
     expect(container.querySelectorAll(".mf-assign__veil").length).toBe(1);
     expect(container.querySelectorAll(".mf-assign__ring").length).toBe(3);
     expect(screen.queryByRole("button", { name: "역할 카드" })).toBeNull();

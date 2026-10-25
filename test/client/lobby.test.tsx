@@ -3,6 +3,10 @@ import { StrictMode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import "../helpers/singleLineErrors";
 import type { PublicPlayer, RoomView } from "../../shared/protocol";
+import { readFileSync } from "node:fs";
+import { DayTable } from "../../src/components/DayTable";
+import type { DayTableSeat } from "../../src/components/DayTable";
+import { dayTableGeometry, FIG_H, FIG_W } from "../../src/game/dayTable";
 import { Lobby } from "../../src/screens/Lobby";
 
 afterEach(() => {
@@ -39,9 +43,10 @@ describe("Lobby — 대기실 (S-03) 테이블", () => {
     expect(screen.getByText("방 코드")).toBeTruthy();
     expect(screen.getByText("0042")).toBeTruthy();
     const table = screen.getByRole("group", { name: "테이블" });
-    expect(within(table).getByText("민수 (나)")).toBeTruthy();
+    expect(within(table).getByText("민수")).toBeTruthy();
     expect(within(table).getByText("<b>영희</b>")).toBeTruthy();
     expect(within(table).getByText("서준")).toBeTruthy();
+    expect(screen.getByRole("group", { name: "민수 (나)" })).toBeTruthy();
     expect(container.querySelector("b") === null).toBe(true);
   });
 
@@ -57,6 +62,12 @@ describe("Lobby — 대기실 (S-03) 테이블", () => {
     expect(art?.style.backgroundImage).toContain("/backgrounds/bg_game_lobby.svg");
   });
 
+  it("테이블은 낮과 같은 DayTable 이다(.mf-dt)이고 옛 대기실 테이블 요소는 없다", () => {
+    const { container } = render(<Lobby view={view} send={() => {}} />);
+    expect(container.querySelectorAll(".mf-lobby__scene > .mf-dt").length).toBe(1);
+    expect(container.querySelector(".mf-table, .mf-seat, .mf-badge") === null).toBe(true);
+  });
+
   it("방장 혼자면 테이블에 인물 1개뿐이고 빈 자리 그림은 없다", () => {
     render(<Lobby view={makeView([player(0, "민수")], 0)} send={() => {}} />);
     const table = screen.getByRole("group", { name: "테이블" });
@@ -67,19 +78,125 @@ describe("Lobby — 대기실 (S-03) 테이블", () => {
     render(<Lobby view={makeView([player(0, "민수"), player(1, "하윤", { connected: false })], 0)} send={() => {}} />);
     const seatEl = screen.getByRole("group", { name: "하윤, 연결 끊김" });
     expect(seatEl.querySelector("img")?.classList.contains("mf-figure--disconnected")).toBe(true);
+    expect(screen.getByRole("group", { name: "테이블" }).querySelectorAll("img.mf-figure--disconnected").length).toBe(1);
   });
 
-  it("방장 배지 '방장' 이 하나 보이고, 동료 표시는 없다(대기실에는 동료가 없다)", () => {
+  it("방장 왕관(role=img, 이름 '방장')이 정확히 하나 보이고, 동료 표시는 없다(대기실에는 동료가 없다)", () => {
     render(<Lobby view={view} send={() => {}} />);
     const table = screen.getByRole("group", { name: "테이블" });
-    expect(within(table).getAllByText("방장").length).toBe(1);
+    expect(within(table).getAllByRole("img", { name: "방장" }).length).toBe(1);
+    expect(screen.getByRole("group", { name: "민수 (나)" }).querySelector('[role="img"][aria-label="방장"]')).not.toBeNull();
     expect(table.querySelector('[aria-label="동료"]') === null).toBe(true);
   });
 
-  it("내 자리가 방장이 아니어도 내 자리가 맨 아래 가운데에 '(나)' 로 놓인다", () => {
-    render(<Lobby view={makeView([player(0, "민수"), player(1, "지우")], 1)} send={() => {}} />);
+  it("마피아 동료가 있는 view(me.allies)면 그 자리에만 동료 표시가 있다 — 서버가 보낸 값에서만 만든다", () => {
+    const v = makeView([player(0, "민수"), player(1, "서준"), player(2, "하윤")], 0, { me: { seat: 0, isHost: true, allies: [2] } });
+    render(<Lobby view={v} send={() => {}} />);
+    const table = screen.getByRole("group", { name: "테이블" });
+    expect(table.querySelectorAll('[aria-label="동료"]').length).toBe(1);
+    expect(screen.getByRole("group", { name: "하윤" }).querySelector('[aria-label="동료"]')).not.toBeNull();
+  });
+
+  it("내 자리가 방장이 아니어도 내 자리가 맨 아래 가운데에 놓이고 내 링이 있다", () => {
+    const { container } = render(<Lobby view={makeView([player(0, "민수"), player(1, "지우")], 1)} send={() => {}} />);
     const mine = screen.getByRole("group", { name: "지우 (나)" });
-    expect(parseFloat(mine.style.left)).toBeCloseTo(50, 5);
+    const geo = dayTableGeometry(366, 407, 12);
+    expect(parseFloat(mine.style.left) + FIG_W / 2).toBeCloseTo(geo.cx, 0);
+    expect(parseFloat(mine.style.top) + FIG_H).toBeCloseTo(geo.cy + geo.ry, 0);
+    expect(mine.querySelector(".mf-dt__ring--me")).not.toBeNull();
+    expect(container.querySelectorAll(".mf-dt__ring--me").length).toBe(1);
+  });
+});
+
+describe("Lobby — 낮과 같은 기하: 좌석 번호 순서 등간격 (결정 0028)", () => {
+  const geo = dayTableGeometry(366, 407, 12);
+  const names = ["가나", "다라", "마바", "사아", "자차", "카타", "파하", "거너"];
+  const make = (seatsList: number[], mySeat: number) =>
+    makeView(
+      seatsList.map((n, i) => player(n, names[i]!)),
+      mySeat,
+    );
+  /** 자리 번호 -> 발 위치(좌표는 인라인 left·top 에서) */
+  const feet = (container: HTMLElement): Map<number, { x: number; y: number }> => {
+    const out = new Map<number, { x: number; y: number }>();
+    for (const el of container.querySelectorAll<HTMLElement>(".mf-dt__seat[data-seat]")) {
+      out.set(Number(el.dataset.seat), { x: parseFloat(el.style.left) + FIG_W / 2, y: parseFloat(el.style.top) + FIG_H });
+    }
+    return out;
+  };
+  const angleOf = (p: { x: number; y: number }): number => Math.atan2((p.y - geo.cy) / geo.ry, (p.x - geo.cx) / geo.rx);
+
+  it.each([1, 2, 3, 4, 5, 6, 7, 8])("%i명: 발이 모두 같은 타원 위에 있고 번호 순서로 각 간격이 2π/n 이며 내가 맨 아래 가운데다", (n) => {
+    const seatNums = Array.from({ length: n }, (_, i) => i);
+    const mySeat = seatNums[Math.min(1, n - 1)]!;
+    const { container } = render(<Lobby view={make(seatNums, mySeat)} send={() => {}} />);
+    const f = feet(container);
+    expect(f.size).toBe(n);
+    for (const p of f.values()) {
+      const e = ((p.x - geo.cx) / geo.rx) ** 2 + ((p.y - geo.cy) / geo.ry) ** 2;
+      expect(e).toBeCloseTo(1, 1);
+    }
+    const me = f.get(mySeat)!;
+    expect(me.x).toBeCloseTo(geo.cx, 0);
+    expect(me.y).toBeCloseTo(geo.cy + geo.ry, 0);
+    if (n < 2) return;
+    // 내 자리부터 번호 순서(원형)로 각이 2π/n 씩 늘어난다
+    const order = [...seatNums.slice(seatNums.indexOf(mySeat)), ...seatNums.slice(0, seatNums.indexOf(mySeat))];
+    for (let i = 1; i < order.length; i += 1) {
+      const a = angleOf(f.get(order[i - 1]!)!);
+      const b = angleOf(f.get(order[i]!)!);
+      const d = (((b - a) % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
+      expect(d).toBeCloseTo((2 * Math.PI) / n, 1);
+    }
+  });
+
+  it("자리 번호에 빈칸이 있어도(0·3·5) 세 명이 고르게 앉는다", () => {
+    const { container } = render(<Lobby view={make([0, 3, 5], 3)} send={() => {}} />);
+    const f = feet(container);
+    const d = (a: number, b: number) => Math.hypot(f.get(a)!.x - f.get(b)!.x, (f.get(a)!.y - f.get(b)!.y) * (geo.rx / geo.ry));
+    expect(d(0, 3)).toBeCloseTo(d(3, 5), -1);
+    expect(d(3, 5)).toBeCloseTo(d(5, 0), -1);
+  });
+
+  it("2명은 마주 본다: 상대의 가로 중심이 내 가로 중심과 같고 세로로 위쪽이다", () => {
+    const { container } = render(<Lobby view={make([0, 1], 0)} send={() => {}} />);
+    const f = feet(container);
+    expect(f.get(1)!.x).toBeCloseTo(f.get(0)!.x, 0);
+    expect(f.get(0)!.y - f.get(1)!.y).toBeGreaterThan(80);
+  });
+
+  it("3명은 한 직선 위에 있지 않다(삼각)", () => {
+    const { container } = render(<Lobby view={make([0, 1, 2], 0)} send={() => {}} />);
+    const f = feet(container);
+    const [a, b, c] = [f.get(0)!, f.get(1)!, f.get(2)!];
+    const cross = (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+    expect(Math.abs(cross)).toBeGreaterThan(100);
+  });
+
+  it("화면이 자기 기하를 따로 갖지 않는다: 같은 입력의 DayTable 직접 렌더와 자리 인라인 left·top·transform·z-index 가 같다", () => {
+    const players = [player(0, "민수"), player(1, "서준", { connected: false }), player(2, "하윤"), player(4, "지아")];
+    const lobby = render(<Lobby view={makeView(players, 2)} send={() => {}} />);
+    const direct: DayTableSeat[] = players.map((p) => ({
+      seat: p.seat,
+      nickname: p.nickname,
+      connected: p.connected,
+      isHost: p.isHost,
+      isMe: p.seat === 2,
+      isAlly: false,
+    }));
+    const table = render(<DayTable seats={direct} mySeat={2} />);
+    const styleOf = (c: HTMLElement) =>
+      [...c.querySelectorAll<HTMLElement>(".mf-dt__seat[data-seat]")].map((e) => [e.dataset.seat, e.style.left, e.style.top, e.style.transform, e.style.zIndex].join("|"));
+    expect(styleOf(lobby.container)).toEqual(styleOf(table.container));
+    const tagOf = (c: HTMLElement) => [...c.querySelectorAll<HTMLElement>(".mf-dt__tag")].map((e) => [e.dataset.seat, e.style.left, e.style.top, e.style.zIndex].join("|"));
+    expect(tagOf(lobby.container)).toEqual(tagOf(table.container));
+  });
+
+  it("대기실 CSS 는 장면 상자를 낮과 같이 잡는다: 높이는 100dvh 로 따로 계산하지 않고, 옛 퍼센트 기하 규칙이 없다", () => {
+    const css = readFileSync("src/styles/lobby.css", "utf8");
+    expect(/100dvh/.test(css)).toBe(false);
+    expect(/\.mf-table|\.mf-seat\b|\.mf-seat__|aspect-ratio:\s*4\s*\/\s*5/.test(css)).toBe(false);
+    expect(/\.mf-lobby__bar\s*\{[^}]*height:\s*119\.2px/.test(css)).toBe(true);
   });
 });
 
@@ -253,27 +370,27 @@ describe("Lobby — 입장·방장 변경 토스트와 자리 등장·퇴장 (D-
 
   it("처음 그릴 때 이미 있던 자리에는 전이 클래스가 없다", () => {
     const { container } = render(<Lobby view={makeView(base, 0)} send={() => {}} />);
-    expect(container.querySelector(".mf-seat--enter") === null).toBe(true);
-    expect(container.querySelector(".mf-seat--leave") === null).toBe(true);
+    expect(container.querySelector(".mf-dt__seat--enter") === null).toBe(true);
+    expect(container.querySelector(".mf-dt__seat--leave") === null).toBe(true);
   });
 
-  it("입장한 자리에 .mf-seat--enter 가 420ms 동안 붙고 그 뒤 빠진다", () => {
+  it("입장한 자리에 .mf-dt__seat--enter 가 420ms 동안 붙고 그 뒤 빠진다", () => {
     vi.useFakeTimers();
     const { rerender } = render(<Lobby view={makeView(base, 0)} send={() => {}} />);
     rerender(<Lobby view={makeView([...base, player(2, "하윤")], 0)} send={() => {}} />);
-    expect(seatEl("하윤")?.classList.contains("mf-seat--enter")).toBe(true);
-    expect(seatEl("서준")?.classList.contains("mf-seat--enter")).toBe(false);
+    expect(seatEl("하윤")?.classList.contains("mf-dt__seat--enter")).toBe(true);
+    expect(seatEl("서준")?.classList.contains("mf-dt__seat--enter")).toBe(false);
     advance(419);
-    expect(seatEl("하윤")?.classList.contains("mf-seat--enter")).toBe(true);
+    expect(seatEl("하윤")?.classList.contains("mf-dt__seat--enter")).toBe(true);
     advance(1);
-    expect(seatEl("하윤")?.classList.contains("mf-seat--enter")).toBe(false);
+    expect(seatEl("하윤")?.classList.contains("mf-dt__seat--enter")).toBe(false);
   });
 
-  it("나간 사람은 320ms 동안 .mf-seat--leave 로 남았다가 사라진다", () => {
+  it("나간 사람은 320ms 동안 .mf-dt__seat--leave 로 남았다가 사라진다", () => {
     vi.useFakeTimers();
     const { rerender } = render(<Lobby view={makeView([...base, player(2, "하윤")], 0)} send={() => {}} />);
     rerender(<Lobby view={makeView(base, 0)} send={() => {}} />);
-    expect(seatEl("하윤")?.classList.contains("mf-seat--leave")).toBe(true);
+    expect(seatEl("하윤")?.classList.contains("mf-dt__seat--leave")).toBe(true);
     advance(319);
     expect(seatEl("하윤") !== null).toBe(true);
     advance(1);
@@ -285,13 +402,13 @@ describe("Lobby — 입장·방장 변경 토스트와 자리 등장·퇴장 (D-
     const { rerender } = render(<Lobby view={makeView(base, 0)} send={() => {}} />);
     rerender(<Lobby view={makeView([player(0, "민수"), player(1, "지아")], 0)} send={() => {}} />);
     expect(seatEl("서준") === null).toBe(true);
-    expect(seatEl("지아")?.classList.contains("mf-seat--enter")).toBe(true);
+    expect(seatEl("지아")?.classList.contains("mf-dt__seat--enter")).toBe(true);
   });
 
   it("epoch 가 바뀐 직후의 변화는 전이 없이 보인다", () => {
     const { rerender } = render(<Lobby view={makeView(base, 0)} send={() => {}} epoch={0} />);
     rerender(<Lobby view={makeView([...base, player(2, "하윤")], 0)} send={() => {}} epoch={1} />);
-    expect(seatEl("하윤")?.classList.contains("mf-seat--enter")).toBe(false);
+    expect(seatEl("하윤")?.classList.contains("mf-dt__seat--enter")).toBe(false);
   });
 });
 
