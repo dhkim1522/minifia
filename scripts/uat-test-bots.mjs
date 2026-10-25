@@ -1,6 +1,8 @@
 // 테스트 방 서버 봇(결정 0024) 배포본 확인: testBots 로 봇을 앉히고 빼고, 봇이 주장·토론 메시지·밤 pick 을 저절로 하며,
 // 어떤 프레임에도 봇 표시(isBot·botPlan·token)가 새지 않고, 일반 방·손님·시작 뒤에는 거부되는지 증명한다.
 // 방장 1명(+ 사람 손님 1명)만 사람이고 나머지는 서버 봇이라 외부 봇 스크립트 없이 한 판의 모든 단계가 돈다(전체 약 2분).
+// 직업 주장은 한 명씩 차례로 한다(결정 0023·0027): 방장이 자기 차례에 말 안 함을 보내면 봇 네 자리가 자기 차례에 주장해 day.claimLog 에 쌓인다.
+// claim 단계의 [넘기기](testSkip)는 차례 하나씩이라(결정 0027-9) 단계를 넘기는 도우미가 목표 단계에 닿을 때까지 되풀이한다.
 // 스크립트는 전지적이다: 각 클라이언트의 view 로 확인한다. 토큰은 어떤 출력에도 찍지 않는다. Node 22 내장 fetch·WebSocket 만 쓴다.
 //
 // 사용법: node scripts/uat-test-bots.mjs [--prod | <기준 주소>] [--previous-version V]
@@ -34,7 +36,8 @@ const OVERALL_LIMIT_MS = 240_000;
 // 서버는 연결당 1초에 20개를 넘는 메시지를 처리하지 않는다(RATE_LIMITED). 빠른 서버에서도 넘지 않도록 요청 사이를 띄운다.
 const RATE_PAUSE_MS = 150;
 const SKIP_WAIT_MS = 3000; // 단계 넘기기 한 번 뒤 소켓이 새 단계를 받아야 하는 시간
-const CLAIM_WAIT_MS = 6000; // 봇 주장은 단계 진입 0.5~3.5초 뒤
+const CLAIM_WAIT_MS = 4 * 4000 + 4000; // 봇 넷의 차례 주장: 한 차례에 0.5~3.5초 뒤 보내므로 넷이면 최대 14초 + 여유
+const MAX_SKIPS = 24; // 목표 단계에 닿기까지 testSkip 최대 횟수(8명 판이 claim 차례 여덟 + 나머지 단계)
 const DISCUSSION_WAIT_MS = 15_000; // 봇 첫 토론 행동은 단계 진입 2~12초 뒤
 const NIGHT_PICK_WAIT_MS = 8000; // 봇 밤 pick 은 단계 진입 1~6초 뒤
 const MAX_NIGHTS = 5;
@@ -141,6 +144,21 @@ async function waitPhase(clients, phase, ms, label) {
   await waitUntil(() => clients.every((c) => lastView(c)?.phase === phase), ms, label);
 }
 
+/**
+ * 목표 단계에 닿을 때까지 testSkip 을 되풀이한다(최대 MAX_SKIPS 번). claim 은 차례 하나씩 넘어가므로 여러 번 누르게 된다.
+ * 매번 단계 또는 마감이 바뀔 때까지 기다린다.
+ */
+async function skipPhase(c, next, label) {
+  const stamp = () => `${lastView(c)?.phase}:${lastView(c)?.phaseEndsAt}:${lastView(c)?.day?.turn?.seat}`;
+  for (let i = 0; i < MAX_SKIPS && lastView(c)?.phase !== next; i++) {
+    await sleep(RATE_PAUSE_MS);
+    const before = stamp();
+    send(c, { t: "testSkip" });
+    await waitUntil(() => stamp() !== before, SKIP_WAIT_MS, `넘기기(${label ?? next})`);
+  }
+  await waitPhase([c], next, SKIP_WAIT_MS, `넘기기(${label ?? next})`);
+}
+
 const lobbySize = (c, n) => lastView(c)?.phase === "lobby" && lastView(c).players.length === n;
 const botSeatsOf = (host) => lastView(host).players.filter((p) => p.seat !== host.seat).map((p) => p.seat).sort((a, b) => a - b);
 const closeAll = (clients) => {
@@ -211,20 +229,24 @@ async function main() {
   check("d", "방장 + 봇 4 로 시작이 통함(봇은 연결된 사람으로 센다)", lastView(host).phase === "assigning" && lastView(host).players.length === 5, String(lastView(host).players.length));
   const duringStart = summary(await act(host, { t: "testBots", count: 2 }));
   check("d", "시작 뒤(배정) 방장 testBots → WRONG_PHASE + state", duringStart === "[error:WRONG_PHASE,state:assigning]", duringStart);
-  const skipTo = async (next) => {
-    await sleep(RATE_PAUSE_MS);
-    send(host, { t: "testSkip" });
-    await waitPhase([host], next, SKIP_WAIT_MS, `넘기기(${next})`);
-  };
+  const skipTo = (next) => skipPhase(host, next);
   await skipTo("roleReveal");
   check("d", "roleReveal: 방장 me.role 이 citizen, 인원 5", lastView(host).me.role === "citizen" && lastView(host).players.length === 5, String(lastView(host).me.role));
   await skipTo("dayAnnounce");
   await skipTo("claim");
   const botSeats = botSeatsOf(host);
-  const claimed = await becomes(() => botSeats.every((s) => lastView(host).day?.claimDone?.includes(s)), CLAIM_WAIT_MS);
-  check("d", "claim: 6초 안에 봇 네 자리가 모두 직업을 골랐다(day.claimDone)", claimed && botSeats.length === 4, `봇 ${botSeats.join(",")} 완료 ${(lastView(host).day?.claimDone ?? []).join(",")}`);
-  await skipTo("claimReveal");
-  check("d", "claimReveal: 봇이 고른 주장이 공개됨(day.claims 에 봇 네 자리)", botSeats.every((s) => lastView(host).day?.claims?.some((cl) => cl.seat === s)), "");
+  const roles1 = lastView(host).day?.roles ?? [];
+  check("d", "claim: 첫 차례는 방장 (day.turn.seat 가 방장 seat)", lastView(host).day?.turn?.seat === host.seat, String(lastView(host).day?.turn?.seat));
+  // 방장(사람 소켓)이 자기 차례에 말 안 함을 보낸다. 이어 봇 네 자리가 자기 차례에 저절로 주장한다.
+  await sleep(RATE_PAUSE_MS);
+  send(host, { t: "claim", claim: "none" });
+  const claimedAll = await becomes(() => botSeats.every((s) => lastView(host).day?.claimLog?.some((e) => e.n === 1 && e.seat === s)), CLAIM_WAIT_MS);
+  const log1 = lastView(host).day?.claimLog ?? [];
+  check("d", "claim: 봇 네 자리가 자기 차례에 주장해 day.claimLog 에 쌓였다", claimedAll && botSeats.length === 4, `봇 ${botSeats.join(",")} 기록 ${log1.map((e) => `${e.seat}:${e.claim}`).join(" ")}`);
+  check("d", "claimLog: 봇이 고른 값은 이번 판 직업 또는 none 이고 같은 seat 가 두 번 나오지 않음",
+    log1.every((e) => e.claim === "none" || roles1.includes(e.claim)) && new Set(log1.map((e) => e.seat)).size === log1.length, `후보 ${roles1.join(",")}`);
+  check("d", "claimLog: 방장이 보낸 none 이 첫 줄", log1[0]?.seat === host.seat && log1[0]?.claim === "none", JSON.stringify(log1[0] ?? null));
+  await waitPhase([host], "discussion", SKIP_WAIT_MS, "마지막 차례 뒤 discussion");
   const discMark = host.frames.length;
   await skipTo("discussion");
   const talked = await becomes(() => host.frames.slice(discMark).some((f) => (f.msg.t === "chat" || f.msg.t === "emoji") && botSeats.includes(f.msg.seat)), DISCUSSION_WAIT_MS);
@@ -246,7 +268,7 @@ async function main() {
     if (n === 1) check("d", "아침 결과가 옴(day.morning 이 있음)", morning !== undefined, JSON.stringify(morning));
     if (morning?.eliminated !== undefined) eliminated = morning.eliminated;
     if (eliminated === null && n < MAX_NIGHTS) {
-      for (const phase of ["dayAnnounce", "claim", "claimReveal", "discussion", "night"]) await skipTo(phase);
+      for (const phase of ["dayAnnounce", "claim", "discussion", "night"]) await skipTo(phase);
     }
   }
   check("d", `봇 마피아의 밤 pick 이 저절로 일어났다(탈락자가 나옴, ${nightsTried}번째 밤)`, eliminated !== null, eliminated === null ? "5밤 모두 구출" : `탈락 seat ${eliminated}`);
@@ -255,8 +277,9 @@ async function main() {
   // ---- e. 누출 없음 ----
   const hostText = host.frames.map((f) => f.raw).join("\n");
   const guestText = guest.frames.map((f) => f.raw).join("\n");
-  check("e", "방장·손님 프레임 원문에 isBot·botPlan·따옴표 붙은 token 키가 없음",
-    ![hostText, guestText].some((t) => t.includes("isBot") || t.includes("botPlan") || t.includes('"token"')), "");
+  const LEAK_NEEDLES = ["isBot", "botPlan", '"token"', "claimPick", "claimOrder", "claimIdx", "claimStart"];
+  check("e", "방장·손님 프레임 원문에 isBot·botPlan·따옴표 붙은 token 키·서버 전용 주장 키(claimPick 등)가 없음",
+    ![hostText, guestText].some((t) => LEAK_NEEDLES.some((needle) => t.includes(needle))), "");
   check("e", "손님 프레임에 testBots 가 없음", !guestText.includes("testBots"), "");
   const badKeys = [host, guest].flatMap((c) => states(c).flatMap((f) => f.msg.view.players.filter((p) => Object.keys(p).sort().join(",") !== PLAYER_KEYS)));
   check("e", "모든 state 의 players 항목 키가 alive·connected·isHost·nickname·seat 다섯", badKeys.length === 0, String(badKeys.length));
@@ -288,12 +311,12 @@ async function main() {
   await act(h2, { t: "testRole", role: "mafia" });
   send(h2, { t: "start" });
   await waitPhase([h2], "assigning", 5000, "R2 배정");
-  const skip2 = async (next) => {
-    await sleep(RATE_PAUSE_MS);
-    send(h2, { t: "testSkip" });
-    await waitPhase([h2], next, SKIP_WAIT_MS, `R2 넘기기(${next})`);
-  };
-  for (const phase of ["roleReveal", "dayAnnounce", "claim", "claimReveal", "discussion", "night"]) await skip2(phase);
+  // claim 은 차례 하나씩 넘기기라 여섯 번 누른다(방장 + 봇 다섯). 이 방은 [넘기기] 경로를, R1 은 봇이 스스로 주장하는 경로를 본다.
+  const skip2 = (next) => skipPhase(h2, next, `R2 ${next}`);
+  for (const phase of ["roleReveal", "dayAnnounce", "claim", "discussion", "night"]) await skip2(phase);
+  const log2 = lastView(h2).day?.claimLog ?? [];
+  check("g", "claim 차례 넘기기 여섯 번: 여섯 자리가 claimLog 에 한 번씩 (방장부터 seat 오름차순)",
+    log2.length === 6 && log2.every((e, k) => e.n === 1 && e.seat === k), log2.map((e) => `${e.seat}:${e.claim}`).join(" "));
   check("g", "방장 me.role 이 mafia, 동료(me.allies)가 봇 한 자리", lastView(h2).me.role === "mafia" && lastView(h2).me.allies?.length === 1, `${lastView(h2).me.role} ${JSON.stringify(lastView(h2).me.allies)}`);
   const picked = await becomes(() => (lastView(h2).me.allyPicks?.length ?? 0) > 0, NIGHT_PICK_WAIT_MS);
   const ap = lastView(h2).me.allyPicks ?? [];

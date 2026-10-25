@@ -1,6 +1,7 @@
 // 테스트 방 방장 도구(결정 0022) 배포본 확인: 단계 넘기기·대기실 복귀·내 직업 지정과 손님·일반 방·시작 뒤 거부를 증명한다.
 // 방장 1명 + 봇 3명(모두 연결)으로 테스트 방(POST /api/rooms 본문 testMode true)을 만들어 단계를 testSkip 으로 넘기므로
-// 토론 90초·밤 30초를 기다리지 않는다(전체 약 1분). 일반 방(본문 nickname 만)에서는 세 요청이 모두 거부되는지도 본다.
+// 토론 90초·밤 30초를 기다리지 않는다(전체 약 1분). claim 단계의 넘기기는 직업 주장 차례 하나씩이다(결정 0027-9).
+// 일반 방(본문 nickname 만)에서는 세 요청이 모두 거부되는지도 본다.
 // 스크립트는 전지적이다: 각 클라이언트의 view 로 확인한다. 토큰은 어떤 출력에도 찍지 않는다. Node 22 내장 fetch·WebSocket 만 쓴다.
 //
 // 사용법: node scripts/uat-test-room.mjs [--prod | <기준 주소>] [--previous-version V]
@@ -175,20 +176,47 @@ async function main() {
   check("d", "역할 확인에서 방장 testRole → WRONG_PHASE", revealRole === "[error:WRONG_PHASE,state:roleReveal]", revealRole);
 
   // ---- e. 단계를 거듭 넘기기 ----
-  const PHASE_NEXT = { roleReveal: "dayAnnounce", dayAnnounce: "claim", claim: "claimReveal", claimReveal: "discussion", discussion: "night", night: "morning", morning: "dayAnnounce" };
+  const PHASE_NEXT = { roleReveal: "dayAnnounce", dayAnnounce: "claim", claim: "discussion", discussion: "night", night: "morning", morning: "dayAnnounce" };
   const order = [];
   let current = "roleReveal";
   let orderOk = true;
   const t0 = performance.now();
-  for (const next of ["dayAnnounce", "claim", "claimReveal", "discussion", "night"]) {
+  const skipTo = async (next) => {
     if (PHASE_NEXT[current] !== next) orderOk = false;
     await sleep(RATE_PAUSE_MS);
     send(host, { t: "testSkip" });
     await waitAllPhase(clients, next, SKIP_WAIT_MS, `${current} 넘기기(${next})`);
     order.push(next);
     current = next;
+  };
+  await skipTo("dayAnnounce");
+  await skipTo("claim");
+  // claim 중 넘기기는 차례 하나씩: 같은 claim 단계에 머물며 day.turn.seat 가 방장부터 seat 오름차순으로 바뀌고, 마지막 차례를 넘기면 discussion 이다.
+  const seatsSorted = clients.map((c) => c.seat).sort((a, b) => a - b);
+  const startAt = seatsSorted.indexOf(host.seat);
+  const wantTurns = [...seatsSorted.slice(startAt), ...seatsSorted.slice(0, startAt)];
+  const turnSeats = [lastView(host).day?.turn?.seat];
+  let turnStepsOk = true;
+  for (let k = 1; k < wantTurns.length; k++) {
+    await sleep(RATE_PAUSE_MS);
+    send(host, { t: "testSkip" });
+    const moved = await waitUntil(
+      () => clients.every((c) => lastView(c)?.phase === "claim" && lastView(c).day?.turn?.seat !== turnSeats.at(-1)),
+      SKIP_WAIT_MS,
+      `claim 차례 ${k} 넘기기`,
+    ).then(() => true, () => false);
+    if (!moved) { turnStepsOk = false; break; }
+    turnSeats.push(lastView(host).day.turn.seat);
   }
-  check("e", "roleReveal → dayAnnounce → claim → claimReveal → discussion → night 를 네 소켓 모두 3초 안에 받음",
+  const claimTurnsOk = turnStepsOk && same(turnSeats, wantTurns) && clients.every((c) => same(lastView(c).day.turn, lastView(host).day.turn));
+  if (!claimTurnsOk) orderOk = false;
+  await skipTo("discussion");
+  const claimLog = lastView(host).day?.claimLog ?? [];
+  check("e", "claim 중 넘기기는 차례 하나씩 (차례 순서대로 같은 단계에 머물다 마지막에 discussion)",
+    claimTurnsOk && claimLog.length === wantTurns.length && same(claimLog.map((e) => e.seat), wantTurns) && claimLog.every((e) => e.n === 1 && e.claim === "none"),
+    `차례 [${turnSeats}] → claimLog ${claimLog.map((e) => `${e.seat}:${e.claim}`).join(" ")}`);
+  await skipTo("night");
+  check("e", "roleReveal → dayAnnounce → claim(차례 하나씩) → discussion → night 를 네 소켓 모두 3초 안에 받음",
     orderOk, `${order.join(" → ")} (${Math.round(performance.now() - t0)}ms, 토론 90초·밤 30초를 기다리지 않음)`);
   const victim = guests[0];
   await act(host, { t: "pick", target: victim.seat });
