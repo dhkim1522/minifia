@@ -9,7 +9,7 @@
 | 클라이언트 | React 19.3.1 + TypeScript 7.0.2 + Vite 8.3.5 (PWA 는 5~6페이즈에서 판단) | 링크로 바로 참가, 설치 불필요 (결정 0001) |
 | 실시간 서버 | Cloudflare Workers + Durable Objects (wrangler 4.151.3, `@cloudflare/vite-plugin` 1.64.0, `Room` 클래스는 `exports` 로 선언) | 방 하나 = Durable Object 하나, WebSocket (결정 0002, 0009) |
 | 정적 파일 배포 | Cloudflare Workers 정적 에셋 | 서버와 같은 곳에서 배포 |
-| 테스트 | vitest 4.1.12 (unit / client / worker 세 프로젝트), `@cloudflare/vitest-plugin` 1.4.6, happy-dom 21.0.4 | 순수 규칙은 Node 에서, Durable Object 는 workerd 안에서 (결정 0009) |
+| 테스트 | vitest 4.1.12 (unit / client / worker 세 프로젝트), `@cloudflare/vitest-plugin` 1.4.6, happy-dom 21.0.4, playwright-core 1.64.1(화면 E2E — 시스템 Chrome, dev 전용, 결정 0025) | 순수 규칙은 Node 에서, Durable Object 는 workerd 안에서 (결정 0009) |
 | 메시지 검증 | zod 4.6.7 | 서버가 클라이언트 입력을 값으로 검증 |
 | 캐릭터 애니메이션 | 미정 (Rive 또는 Lottie 후보) | 디자인 방향을 정한 뒤 결정 |
 | 앱 출시 | Capacitor 로 같은 웹 코드를 감쌈 | 정식 출시 단계에서 (결정 0001) |
