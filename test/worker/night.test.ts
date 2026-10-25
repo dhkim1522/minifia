@@ -122,7 +122,7 @@ describe("밤 행동 한 줄 (NIGHT-02)", () => {
     for (const a of others) expect(summary(await settle(a.sock, marks.get(a)!))).toBe("[]");
   });
 
-  it("밤 마감 뒤 모든 소켓이 같은 day.morning 을 받고 경찰만 수사 기록(me.records)을 받는다", async () => {
+  it("밤 마감 뒤 모든 소켓이 같은 day.morning 을 받고 본인 역할의 일지(me.records)를 경찰·마피아·의사만 받는다", async () => {
     const r = await startedAtNight(5);
     const actors = actorsOf(r);
     const mafia = withRole(actors, "mafia")[0]!;
@@ -143,7 +143,14 @@ describe("밤 행동 한 줄 (NIGHT-02)", () => {
     const policeView = viewsIn(police.sock, "morning").at(-1)!;
     expect(String(policeView.me.records?.length)).toBe("1");
     expect(JSON.stringify(policeView.me.records?.[0])).toBe(JSON.stringify({ n: 1, target: mafia.seat, isMafia: true }));
-    for (const a of actors.filter((x) => x !== police)) {
+    // 마피아는 암살일지(그 밤 지목한 시민이 죽음), 의사는 치료일지(자기 보호)를 받고 시민은 키가 없다(D-10).
+    expect(JSON.stringify(viewsIn(mafia.sock, "morning").at(-1)!.me.records)).toBe(
+      JSON.stringify([{ n: 1, target: victim.seat, died: true }]),
+    );
+    expect(JSON.stringify(viewsIn(doctor.sock, "morning").at(-1)!.me.records)).toBe(
+      JSON.stringify([{ n: 1, target: doctor.seat }]),
+    );
+    for (const a of actors.filter((x) => x.role === "citizen")) {
       expect(Object.hasOwn(viewsIn(a.sock, "morning").at(-1)!.me, "records")).toBe(false);
     }
   });

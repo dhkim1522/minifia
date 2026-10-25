@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { isAlive } from "../../shared/game/alive";
-import type { PhaseId, RemovedReason, RoomView } from "../../shared/protocol";
+import type { InvestigationRecord, PhaseId, RemovedReason, RoomView } from "../../shared/protocol";
 import { Button } from "../components/Button";
 import { Icon } from "../components/Icon";
 import { MyRoleSheet } from "../components/MyRoleSheet";
@@ -104,8 +104,10 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
 
   // 경찰 [수사 기록] 시트: 열림·NEW 도 단계 switch 밖에서 쥔다 — 밤 → 아침 → 낮으로 바뀌어도 열린 채다(UI-SPEC N-5).
   // seen 은 "열어서 본 기록 수". 기록 내용은 서버 view(me.records) 에서만 오고, 폰에는 이 개수만 남긴다(가정 A4).
-  const records = view?.me.records ?? [];
-  const recordsLen = records.length;
+  // 03.1-11 이 헤더 버튼·시트를 역할 카드로 통째로 바꾼다. 그때까지의 임시 다리: me.records 는 역할별 일지의 합집합이라 경찰일 때만 수사일지로 좁힌다.
+  const policeRecords: InvestigationRecord[] =
+    view?.me.role === "police" ? ((view.me.records ?? []) as InvestigationRecord[]) : [];
+  const recordsLen = policeRecords.length;
   const [seen, setSeen] = useState(() => loadSeenCount(code));
   const [recordsOpen, setRecordsOpen] = useState(false);
   const [newestIsNew, setNewestIsNew] = useState(false);
@@ -189,7 +191,7 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
         <MyRoleSheet view={view} showBack={view.phase === "roleReveal" && !seenFront} onClose={() => setMyRoleOpen(false)} />
       ) : null}
       {view && showRecords && recordsOpen ? (
-        <RecordsSheet records={records} players={view.players} newestIsNew={newestIsNew} onClose={closeRecords} />
+        <RecordsSheet records={policeRecords} players={view.players} newestIsNew={newestIsNew} onClose={closeRecords} />
       ) : null}
       {view && testTools && testOpen ? (
         <TestToolsSheet view={view} canSend={connection.canSend} send={connection.send} onClose={() => setTestOpen(false)} />
