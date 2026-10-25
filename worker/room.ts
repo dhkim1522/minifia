@@ -18,6 +18,8 @@ import {
 import type { JoinError } from "../shared/game/room";
 import type { RoomState } from "../shared/game/room";
 import { nightChatRecipientIds, pickRecipientIds, pickTarget } from "../shared/game/night";
+import { resetToLobby, setTestRole, skipPhase } from "../shared/game/testTools";
+import type { RoleId } from "../shared/game/roles";
 import { nextWakeAt, tick } from "../shared/game/tick";
 import { buildPreview, buildView } from "../shared/game/view";
 import { ClientMessageSchema } from "../shared/schemas";
@@ -90,7 +92,7 @@ export class Room extends DurableObject<Env> {
   }
 
   /** Worker 가 부르는 RPC. 살아 있는 방이 있으면 덮어쓰지 않고 CODE_TAKEN 을 돌려준다. 만료된 방은 정리하고 새로 만든다. */
-  async createRoom(input: { code: string; nickname: string; now: number }): Promise<CreateRoomRpcResult> {
+  async createRoom(input: { code: string; nickname: string; now: number; testMode?: boolean }): Promise<CreateRoomRpcResult> {
     // 만료됐지만 알람이 아직 못 지운 방이면 먼저 정리한다(옛 소켓을 닫고 저장소를 비운다). 안 그러면 옛 소켓이 새 방에서 죽은 연결로 남는다.
     await this.advance(input.now);
     if (this.room) return { ok: false, error: "CODE_TAKEN" };
@@ -103,6 +105,7 @@ export class Room extends DurableObject<Env> {
       hostToken: token,
       hostNickname: input.nickname,
       now: input.now,
+      testMode: input.testMode === true,
     });
     if (!created.ok) return { ok: false, error: created.error };
 
@@ -198,6 +201,15 @@ export class Room extends DurableObject<Env> {
         return;
       case "pick":
         await this.handlePick(ws, msg.target);
+        return;
+      case "testSkip":
+        await this.handleTestSkip(ws);
+        return;
+      case "testReset":
+        await this.handleTestReset(ws);
+        return;
+      case "testRole":
+        await this.handleTestRole(ws, msg.role);
         return;
     }
   }
@@ -374,6 +386,66 @@ export class Room extends DurableObject<Env> {
     this.room = result.state;
     await this.ctx.storage.put("room", this.room);
     this.sendViewTo(pickRecipientIds(this.room, att.playerId));
+  }
+
+  // 테스트 방 방장 도구(결정 0022). 신원은 소켓 첨부의 playerId 뿐이다 — 메시지에서 seat·방장 여부를 읽지 않는다.
+  // 일반 방은 error 프레임만(state·저장·방송 없음): 이 기능이 없는 방에서는 알 수 없는 메시지와 같게 보인다.
+  // 그 밖의 거부는 sendRejection(오류 + 그 소켓에만 최신 state).
+  private rejectTestTool(ws: WebSocket, playerId: string, code: WsErrorCode): void {
+    if (code === "BAD_MESSAGE" && this.room?.testMode !== true) this.sendTo(ws, { t: "error", code });
+    else this.sendRejection(ws, playerId, code);
+  }
+
+  // 다음 단계로 넘기기: 마감을 지금으로 당겨 tick 으로 정상 마감과 같은 경로를 탄다. 모든 소켓이 각자 view 를 받고 알람이 새 마감으로 옮겨진다.
+  private async handleTestSkip(ws: WebSocket): Promise<void> {
+    const att = this.attachmentOf(ws);
+    if (!att || !this.room) {
+      this.sendTo(ws, { t: "error", code: "BAD_MESSAGE" });
+      return;
+    }
+    const result = skipPhase(this.room, att.playerId, Date.now(), cryptoRandInt);
+    if (!result.ok) {
+      this.rejectTestTool(ws, att.playerId, result.error);
+      return;
+    }
+    this.room = result.state;
+    await this.persistAndBroadcast();
+    await this.reschedule();
+  }
+
+  // 대기실로 되돌리기: 같은 방·같은 사람(소켓은 닫지 않는다). 알람은 방 만료로 옮겨진다.
+  private async handleTestReset(ws: WebSocket): Promise<void> {
+    const att = this.attachmentOf(ws);
+    if (!att || !this.room) {
+      this.sendTo(ws, { t: "error", code: "BAD_MESSAGE" });
+      return;
+    }
+    const result = resetToLobby(this.room, att.playerId);
+    if (!result.ok) {
+      this.rejectTestTool(ws, att.playerId, result.error);
+      return;
+    }
+    this.room = result.state;
+    await this.persistAndBroadcast();
+    await this.reschedule();
+  }
+
+  // 내 직업 고르기: 성공하면 방장 소켓에만 state 를 보낸다(대기실의 다른 사람 view 는 바뀌지 않는다). 같은 값이면 저장·전송하지 않는다.
+  private async handleTestRole(ws: WebSocket, role: RoleId | null): Promise<void> {
+    const att = this.attachmentOf(ws);
+    if (!att || !this.room) {
+      this.sendTo(ws, { t: "error", code: "BAD_MESSAGE" });
+      return;
+    }
+    const result = setTestRole(this.room, att.playerId, role);
+    if (!result.ok) {
+      this.rejectTestTool(ws, att.playerId, result.error);
+      return;
+    }
+    if (result.state === this.room) return;
+    this.room = result.state;
+    await this.ctx.storage.put("room", this.room);
+    this.sendViewTo([att.playerId]);
   }
 
   // 거절되면 클라이언트가 서버 view 대로 다시 그리도록 error 뒤에 최신 state 를 보낸다(handleStart 선례).

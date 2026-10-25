@@ -92,6 +92,8 @@ export interface DayView {
 // ---- HTTP ----
 export interface CreateRoomBody {
   nickname: string;
+  /** true 일 때만 테스트 방이다(결정 0022). 방을 만들 때만 정해지고 바꿀 수 없다. */
+  testMode?: boolean;
 }
 export interface JoinRoomBody {
   nickname: string;
@@ -141,7 +143,11 @@ export type ClientMessage =
   | { t: "claim"; claim: Claim }
   | { t: "say"; template: TemplateId; target?: number; claimedRole?: RoleId }
   | { t: "emoji"; icon: EmojiId }
-  | { t: "pick"; target: number }; // 밤 행동 — 행동 종류는 보내지 않는다(서버 저장 역할이 정한다)
+  | { t: "pick"; target: number } // 밤 행동 — 행동 종류는 보내지 않는다(서버 저장 역할이 정한다)
+  // 테스트 방 방장 도구(결정 0022). 일반 방은 BAD_MESSAGE 로 거부한다. role null = 무작위.
+  | { t: "testSkip" }
+  | { t: "testReset" }
+  | { t: "testRole"; role: RoleId | null };
 
 // ---- 서버 -> 클라이언트 ----
 // 공개 식별자는 seat 뿐이다. 내부 id·토큰·역할 자리는 타입에도 없다.
@@ -161,6 +167,8 @@ export interface MyInfo {
   pick?: number; // 밤에 본인이 고른 seat(본인에게만)
   allyPicks?: number[]; // 생존 마피아에게만: 동료들이 고른 대상 seat 오름차순·중복 없음(누가 골랐는지는 싣지 않는다)
   records?: InvestigationRecord[]; // 경찰 본인에게만
+  testMode?: true; // 테스트 방 방장 본인만(결정 0022). 손님·일반 방·미리보기에는 키 자체가 없다
+  testRole?: RoleId; // 그 방장의 대기실 view 에서만, 고른 직업이 있을 때(없으면 무작위, 결정 0022)
 }
 export interface RoomView {
   code: string;

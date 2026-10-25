@@ -60,3 +60,33 @@ export function assignRoles(playerIds: readonly string[], randInt: (n: number) =
   playerIds.forEach((id, index) => assigned.set(id, pool[index]!));
   return assigned;
 }
+
+/**
+ * 테스트 방 방장이 시작 전에 고를 수 있는 직업(결정 0022). 인원을 4~8 로 잘라 rolesInPlay 를 돌려준다 —
+ * 1~3명 대기실은 4명 구성(의사 없음)으로 본다. 시작할 때는 실제 앉은 인원으로 다시 확인한다.
+ */
+export function testRoleOptions(playerCount: number): RoleId[] {
+  return rolesInPlay(Math.min(8, Math.max(4, playerCount)));
+}
+
+/**
+ * 배정 결과에서 target 이 role 을 받도록 맞바꾼 새 Map 을 돌려준다(결정 0022): target 이 이미 그 직업이면 같은 내용이고,
+ * 아니면 orderedIds 순서(seat 오름차순)로 그 직업을 받은 첫 사람과 직업을 서로 바꿔 직업 수를 그대로 둔다. 난수를 쓰지 않는다.
+ * 그 직업을 받은 사람이 없으면 RangeError — 호출 쪽이 구성(rolesInPlay) 확인을 먼저 한다.
+ */
+export function giveRoleTo(
+  assigned: ReadonlyMap<string, RoleId>,
+  orderedIds: readonly string[],
+  targetId: string,
+  role: RoleId,
+): Map<string, RoleId> {
+  const out = new Map(assigned);
+  const mine = assigned.get(targetId);
+  if (mine === undefined) throw new RangeError("giveRoleTo: 대상이 배정에 없다");
+  if (mine === role) return out;
+  const partner = orderedIds.find((id) => id !== targetId && assigned.get(id) === role);
+  if (partner === undefined) throw new RangeError(`giveRoleTo: ${role} 을 받은 사람이 없다`);
+  out.set(partner, mine);
+  out.set(targetId, role);
+  return out;
+}

@@ -117,6 +117,13 @@ export function buildView(state: RoomState, playerId: string, now: number): Room
     }
   }
 
+  // 테스트 방 방장 본인에게만(결정 0022): testMode 는 버튼을 그리는 방장만 알면 되고, testRole 은 시트의 '내 직업' 칸이 있는 대기실에서만 실린다.
+  // 손님 view·미리보기에는 키 자체가 없다 — 불리언과 방장 본인의 선택뿐이라 역할·토큰과 무관하다.
+  if (state.testMode === true && me.id === state.hostId) {
+    myInfo.testMode = true;
+    if (state.phase === "lobby" && state.testRole !== undefined) myInfo.testRole = state.testRole;
+  }
+
   // 본인 선택은 본인에게만(D-06) — 남의 nightPick 은 어떤 키로도 싣지 않는다. 밤에 살아 있는 본인이 고른 값이 있을 때만 키를 만든다.
   if (state.phase === "night" && isAlive(me) && me.nightPick !== undefined) {
     myInfo.pick = me.nightPick;

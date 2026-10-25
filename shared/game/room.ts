@@ -4,7 +4,7 @@ import { validateNickname } from "../nickname";
 import { MAX_PLAYERS, MIN_PLAYERS } from "../protocol";
 import type { Claim, InvestigationRecord, MorningView, PhaseId } from "../protocol";
 import { ASSIGNING_MS, DAY_ANNOUNCE_MS } from "./phases";
-import { assignRoles } from "./roles";
+import { assignRoles, giveRoleTo, rolesInPlay } from "./roles";
 import type { RoleId } from "./roles";
 
 export const ROOM_TTL_MS = 3 * 60 * 60 * 1000;
@@ -69,6 +69,10 @@ export interface RoomState {
   hostId: string;
   nextJoinSeq: number;
   players: Player[];
+  /** 서버 전용(결정 0022). 방을 만들 때만 정해지는 테스트 방 표시 — true 일 때만 키가 있다. 테스트 방 방장 도구의 문이다. */
+  testMode?: true;
+  /** 서버 전용(결정 0022). 테스트 방 방장이 고른 다음 판 직업. 대기실 복귀 뒤에도 남아 새 판마다 다시 쓰인다. 없으면 무작위. */
+  testRole?: RoleId;
 }
 
 export type CreateRoomStateResult = { ok: true; state: RoomState } | { ok: false; error: "NICKNAME_INVALID" };
@@ -79,6 +83,7 @@ export function createRoomState(input: {
   hostToken: string;
   hostNickname: string;
   now: number;
+  testMode?: boolean;
 }): CreateRoomStateResult {
   const checked = validateNickname(input.hostNickname);
   if (!checked.ok) return { ok: false, error: "NICKNAME_INVALID" };
@@ -104,6 +109,7 @@ export function createRoomState(input: {
       hostId: input.hostId,
       nextJoinSeq: 1,
       players: [host],
+      ...(input.testMode === true ? { testMode: true as const } : {}),
     },
   };
 }
@@ -229,10 +235,13 @@ export function startGame(
   const error = checkStart(state, actorId);
   if (error !== null) return { ok: false, error };
   const seated = [...state.players].sort((a, b) => a.seat - b.seat);
-  const roles = assignRoles(
-    seated.map((p) => p.id),
-    randInt,
-  );
+  const orderedIds = seated.map((p) => p.id);
+  const shuffled = assignRoles(orderedIds, randInt);
+  // 테스트 방(결정 0022): 방장이 고른 직업이 지금 인원 구성에 있을 때만 방장과 그 직업 보유자를 맞바꾼다. 없으면 무작위 그대로.
+  const roles =
+    state.testMode === true && state.testRole !== undefined && rolesInPlay(seated.length).includes(state.testRole)
+      ? giveRoleTo(shuffled, orderedIds, state.hostId, state.testRole)
+      : shuffled;
   return {
     ok: true,
     state: {

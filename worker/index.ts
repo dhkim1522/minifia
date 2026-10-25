@@ -51,6 +51,7 @@ async function handleCreateRoom(request: Request, env: Env): Promise<Response> {
     parsed.data.nickname,
     cryptoRandInt,
     Date.now(),
+    parsed.data.testMode === true,
   );
   switch (result.kind) {
     case "created": {

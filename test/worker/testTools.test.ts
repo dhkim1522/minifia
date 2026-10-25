@@ -26,6 +26,13 @@ async function settle(sock: TestSocket, from: number): Promise<ServerMessage[]> 
 }
 
 const mark = (sock: TestSocket): number => sock.frames.length;
+
+/** 방 꾸미기 중 늦게 도착하는 입장 방송을 모든 소켓에서 다 받은 뒤 시작하게 한다(ping/pong 으로 흘려 보낸다). */
+async function seatQuiet(guests: number, options?: { testMode?: boolean }): Promise<Seated> {
+  const r = await seat(guests, 0, options);
+  for (const sock of allSockets(r)) await settle(sock, mark(sock));
+  return r;
+}
 const isPhase = (phase: PhaseId) => (m: ServerMessage): boolean => m.t === "state" && m.view.phase === phase;
 
 /** 보낸 소켓이 받은 프레임을 돌려준다. */
@@ -120,11 +127,11 @@ describe("일반 방은 세 요청을 거부한다", () => {
   }
 
   it("대기실에서 방장·손님 모두 오류 프레임 하나뿐이고 방 상태가 그대로다", async () => {
-    await expectRejected(await seat(3, 0), "lobby");
+    await expectRejected(await seatQuiet(3), "lobby");
   });
 
   it("discussion 에서도 방장·손님 모두 오류 프레임 하나뿐이고 방 상태가 그대로다", async () => {
-    const r = await seat(3, 0);
+    const r = await seatQuiet(3);
     await start(r);
     await advanceTo(r.code, allSockets(r), "discussion");
     await expectRejected(r, "discussion");
@@ -133,7 +140,7 @@ describe("일반 방은 세 요청을 거부한다", () => {
 
 describe("테스트 방 거부", () => {
   it("손님의 세 요청은 NOT_HOST 와 그 소켓에만 state 가 간다", async () => {
-    const r = await seat(3, 0, { testMode: true });
+    const r = await seatQuiet(3, { testMode: true });
     const guest = r.guests[0]!;
     const hostMark = mark(r.host);
     for (const msg of [{ t: "testSkip" }, { t: "testReset" }, { t: "testRole", role: "mafia" }]) {
@@ -144,13 +151,13 @@ describe("테스트 방 거부", () => {
   });
 
   it("방장의 대기실 testSkip·testReset 은 WRONG_PHASE 다", async () => {
-    const r = await seat(3, 0, { testMode: true });
+    const r = await seatQuiet(3, { testMode: true });
     expect(summary(await sendAndSettle(r.host, { t: "testSkip" }))).toBe("[error:WRONG_PHASE,state:lobby]");
     expect(summary(await sendAndSettle(r.host, { t: "testReset" }))).toBe("[error:WRONG_PHASE,state:lobby]");
   });
 
   it("알 수 없는 키가 붙은 요청은 BAD_MESSAGE 오류뿐이다", async () => {
-    const r = await seat(3, 0, { testMode: true });
+    const r = await seatQuiet(3, { testMode: true });
     expect(summary(await sendAndSettle(r.host, { t: "testSkip", extra: 1 }))).toBe("[error:BAD_MESSAGE]");
     expect(summary(await sendAndSettle(r.host, { t: "testRole", role: "wizard" }))).toBe("[error:BAD_MESSAGE]");
   });
@@ -158,7 +165,7 @@ describe("테스트 방 거부", () => {
 
 describe("testRole", () => {
   it("마피아를 고르면 방장 소켓에만 me.testRole mafia state 가 가고 손님 소켓에는 프레임이 없다", async () => {
-    const r = await seat(3, 0, { testMode: true });
+    const r = await seatQuiet(3, { testMode: true });
     const marks = r.guests.map((g) => mark(g.sock));
     const own = await sendAndSettle(r.host, { t: "testRole", role: "mafia" });
     expect(summary(own)).toBe("[state:lobby]");
@@ -168,7 +175,7 @@ describe("testRole", () => {
   });
 
   it("같은 값을 다시 고르면 프레임이 없고, null 은 testRole 을 지운다", async () => {
-    const r = await seat(3, 0, { testMode: true });
+    const r = await seatQuiet(3, { testMode: true });
     await sendAndSettle(r.host, { t: "testRole", role: "police" });
     expect(summary(await sendAndSettle(r.host, { t: "testRole", role: "police" }))).toBe("[]");
     const cleared = await sendAndSettle(r.host, { t: "testRole", role: null });
@@ -178,7 +185,7 @@ describe("testRole", () => {
   });
 
   it("4명 대기실에서 doctor 는 BAD_MESSAGE 와 방장 state 뿐이다", async () => {
-    const r = await seat(3, 0, { testMode: true });
+    const r = await seatQuiet(3, { testMode: true });
     expect(summary(await sendAndSettle(r.host, { t: "testRole", role: "doctor" }))).toBe("[error:BAD_MESSAGE,state:lobby]");
     expect(Object.hasOwn(await stored(r.code), "testRole")).toBe(false);
   });
@@ -186,7 +193,7 @@ describe("testRole", () => {
 
 describe("testSkip", () => {
   it("assigning 에서 넘기면 모든 소켓이 각자 view 의 roleReveal 을 받고 방장이 마피아다", async () => {
-    const r = await seat(3, 0, { testMode: true });
+    const r = await seatQuiet(3, { testMode: true });
     await sendAndSettle(r.host, { t: "testRole", role: "mafia" });
     await start(r);
     send(r.host, { t: "testSkip" });
@@ -206,7 +213,7 @@ describe("testSkip", () => {
   }, 30_000);
 
   it("밤에 마피아가 시민을 고른 뒤 넘기면 모든 소켓이 같은 아침을 받고 다시 넘기면 2일차 낮 시작 발표다", async () => {
-    const r = await seat(3, 0, { testMode: true });
+    const r = await seatQuiet(3, { testMode: true });
     await sendAndSettle(r.host, { t: "testRole", role: "mafia" });
     await start(r);
     await skipUntil(r, "night");
@@ -238,7 +245,7 @@ describe("testReset", () => {
   ];
 
   async function resetFrom(phase: PhaseId): Promise<void> {
-    const r = await seat(3, 0, { testMode: true });
+    const r = await seatQuiet(3, { testMode: true });
     await sendAndSettle(r.host, { t: "testRole", role: "mafia" });
     await start(r);
     await skipUntil(r, phase);
