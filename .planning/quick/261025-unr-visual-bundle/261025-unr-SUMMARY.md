@@ -5,16 +5,16 @@ status: incomplete
 subsystem: screens-day-table
 tags: [day-table, halo, speech-bubble, host-crown, bot-names, decision-0030]
 requirements: [QUICK-261025-unr]
-completed_tasks: [1, 2, 3]
-remaining_tasks: [4, 5, 6]
-commits: 9
+completed_tasks: [1, 2, 3, 4]
+remaining_tasks: [5, 6]
+commits: 12
 plan_head_before: 97ce65598ce58ba8c5e54a38aa44753826efe5e6
-plan_head_after: 3043681a917aa463057646780b10835f1e286052
+plan_head_after: 618f57d9f991b4fca13ba019ab12402d6d1484c4
 ---
 
-# 퀵 261025-unr 진행 체크포인트 (패스 A: 과제 1 완료 · 패스 B: 과제 2·3 완료)
+# 퀵 261025-unr 진행 체크포인트 (패스 A: 과제 1 · 패스 B: 과제 2·3 · 패스 C: 과제 4 완료)
 
-> 상태: **미완료** (과제 6개 중 3개 완료). 이 파일은 패스마다 갱신하고 마지막 패스(E)에서 최종본으로 바꾼다.
+> 상태: **미완료** (과제 6개 중 4개 완료). **열린 문제 1건: 5명판 E2E D3b (아래 「패스 C 열린 문제」).** 이 파일은 패스마다 갱신하고 마지막 패스(E)에서 최종본으로 바꾼다.
 
 ## 완료한 과제
 
@@ -27,16 +27,49 @@ plan_head_after: 3043681a917aa463057646780b10835f1e286052
 | 2-나 | GREEN: `lib.mjs` `haloChecks`·`crownChecks`·`turnChecks`, `browser.mjs` 측정(`turn`·`halo`·`crowns`), `flows.mjs` 선택 후광·W1 + 부분 로컬 E2E | `b8a6b0e` |
 | 3-나 | RED: 장면 목록·WebP 예산·Backdrop 층 규칙·URL 개정 테스트 (모듈 없음·SVG 로 실패 확인, 7개 실패 + 3파일 로드 실패) | `f430930` |
 | 3-다 | GREEN: `scenes.ts`, `make-backdrops.mjs`+WebP 7개, 옛 SVG 8개 제거, `assets.ts`, 크로스페이드 `Backdrop`, `ds.css`, 호출처, smoke WebP 검사 | `3043681` |
+| 4-가 | RED: `sceneIntro.test.tsx`(옛 nightIntro 를 `git mv` 후 확장)·`phaseArrival.test.tsx`·`scenes.test.ts` PHASE_INTRO·낮 시작 단언 이전·E2E `sceneIntroChecks` (실패 30개 + 모듈 없음 1파일을 확인하고 커밋) | `e296fe0` |
+| 4-나 | GREEN: `Day.tsx`·`NightIntro.tsx` 삭제, `SceneIntro`·`PHASE_INTRO`·`SCENE_INTRO_MS`, `usePhaseArrival`, `DayScene`(arrivedFrom·instant·fromScene), `RoomScreen`, CSS 정리, E2E 이름 맞춤 | `618f57d` |
 
 ## 남은 과제
 
 | 과제 | 패스 | 비고 |
 |------|------|------|
-| 4 | C | Day 화면 제거·SceneIntro·크로스페이드 |
 | 5 | D | E2E H1·B1·N8·N9 + 오프라인 대비 |
 | 6 | E | 문서·전체 검증·배포·push |
 
-## 이번 패스의 구현 요약
+## 패스 C 과제 4 결과 (낮 시작 화면 제거·SceneIntro·도착 훅)
+
+- 구조: `src/screens/Day.tsx` 삭제. `RoomScreen.sceneKey` 가 `dayAnnounce` 를 `dayScene` 으로 묶어 claim·discussion·night·morning 과 같은 `DayScene` 이 그린다(제목 h1 `낮`, 안내 `N일차`, calm 타이머, 하단 패널 높이 157 — 살아 있는 사람은 비어 있고 탈락자는 관전 하단, 자리는 누를 수 없음, `inspectable` 아님). 배경 장면은 `day`.
+- `SceneIntro`(`NightIntro` 를 `git mv`): `SceneIntro({ n, intro, onDone })`, `PHASE_INTRO` 는 `night`·`dayAnnounce` 두 행(`tone`·`title`·`sub?`), `SCENE_INTRO_MS = DAY_ANNOUNCE_MS`(2000). 막은 같은 방사형(70% 55% at 50% 38%, night-950) 에 톤별 `--mf-sceneintro-veil` 밤 85%·낮 70%, 보조줄은 옛 낮 시작 보조줄 값(16px/1.5·gray-100). z 40·pointer-events none·aria-hidden·h1 아님. 해제 타이머는 마운트 때 한 번만 건다.
+- `usePhaseArrival(phase, epoch)`(`src/net/phaseArrival.ts`): 같은 epoch 에서 단계가 바뀐 뒤에는 직전 단계, 처음·epoch 변화 렌더에서는 null, 다음 변화까지 유지. `RoomScreen` 이 `arrivedFrom` 을 `DayScene` 에 넘긴다.
+- `DayScene`: `prevPhase` 초기값 = `arrivedFrom ?? view.phase` 라 역할 확인 직후 새로 마운트돼도 첫 렌더가 단계 변화로 처리되어 낮 문구가 한 번 뜨고, 배경은 `fromScene`(직전 단계의 장면 = lobby)에서 day 로 크로스페이드한다. 재접속(epoch 변화와 함께 바뀐 단계)은 `instant` 로 한 층·문구 없음.
+- 계획과 다른 구현 선택 하나: `instant` 를 `epochChanged` 에서 바로 계산하지 않고 상태로 쥔다. 렌더 중 상태 조정이 `prevEpoch` 를 먼저 맞추기 때문에 최종 렌더의 `epochChanged` 는 항상 거짓이 되어 `Backdrop` 이 `instant` 를 못 본다 — 단계가 바뀌는 조정에서 `setInstant(epochChanged)` 로 그 값을 남긴다(테스트 「단계와 epoch 가 함께 바뀌면 곧바로 한 층」이 닫는다).
+- `sheetDebug.screenKind` 는 `main.mf-day` 가 사라져 `main.mf-dayscene` → `"day"` 로 바꿨다(낮 시작 외에 claim·밤·아침도 `day` 로 기록된다. 계측 도구 한정, 테스트 「화면 종류가 day」는 그대로 통과).
+- E2E 는 이름만 맞췄다: `readNightIntro` → `readSceneIntro`(톤 `kind` 도 읽음), `nightIntroChecks` → `sceneIntroChecks(intro, { kind })`(night 만 지원, 낮은 과제 5). 임계값·허용 목록은 `97ce655` 대비 diff 0.
+- 검증: `npx vitest run` 79 파일 / 1865 테스트 통과(이전 78 / 1835), `npm run typecheck` 오류 없음, `node --test scripts/e2e/lib.test.mjs` 88 통과, `! grep -rnE "mf-day__|mf-nightintro|NightIntro" src scripts/e2e` 통과, `Day.tsx`·`NightIntro.tsx`·`nightIntro.test.tsx` 없음, `git diff --name-only 97ce655 -- shared worker` = `shared/game/bots.ts` 한 줄.
+
+### 패스 C 라이브 로컬 E2E (dev 서버 5173, 전 흐름·세 크기 한 번)
+
+| 흐름 | 360x640 | 390x664 | 430x932 |
+|------|---------|---------|---------|
+| lobby | 21/21 | 21/21 | 21/21 |
+| citizen4 | 105/105 | 105/105 | 105/105 |
+| mafia8 | 110/110 | 110/110 | 110/110 |
+| police5 | 113/113 | **111/113** | 113/113 |
+| doctor5 | **107/109** | 109/109 | 109/109 |
+| spec4 | 50/50 | 50/50 | 50/50 |
+
+낮 시작이 DayScene 위에서 지나가도 D7·D9·T1·K·N6·N7 은 모두 통과했다. 실패 4건은 모두 **D3b**(5명판 이름표 보이는 비율, 바닥 99.9%): `police5/morning`·`police5/next-day`(390, 자리 2 이름표 99.9%), `doctor5/morning`·`doctor5/next-day`(360, 자리 2 또는 3 이름표 99.5~99.6%).
+
+### 패스 C 열린 문제 — 5명판 D3b (과제 4 의 변경과 무관, 패스 A 의 5글자 이름이 원인)
+
+- 재현은 무작위 탈락에 달려 있다: police5@390 을 두 번 다시 돌리면 둘 다 통과했고 doctor5@360 은 여섯 번 중 한 번(+디버그 반복의 첫 판에서 또 한 번) 실패했다. 실패한 판의 공통점은 **앞쪽 옆자리(5명판 자리 1 또는 4)가 탈락해 유령 그림**이라는 것.
+- 원인(측정으로 확정): 유령 PNG 는 일반 인물보다 머리 윗부분이 상자 위쪽까지 차 있어, 뒤쪽 이웃(자리 2·3)의 이름표 알약 아래쪽 3.3px 를 알파 > 40 픽셀로 덮는다. 이름표 알약 폭이 94.3px(5글자 + 점 + 여백)이면 알약 왼/오른끝(x 62~90)이 앞 유령의 머리 위와 겹치고, 4글자(약 83px 이하)에서는 겹침이 99.9% 근처에서 멈췄다. 오프라인 모델(`dayTable.ts` 의 실제 배치 + 실제 유령/인물 PNG 알파, E2E 와 같은 0.5px 격자·알파 40)이 브라우저 측정과 소수점까지 같다: 360폭 자리 1 탈락 → 자리 2 이름표 99.60%, 자리 4 탈락 → 자리 3 99.59%, 390폭 99.91%. 탈락이 없거나 뒤쪽 자리가 탈락하면 100%.
+- 이름표 요소 사각형은 알약 위에 4px 여유를 더한 26px 높이지만, 알약은 그 상자의 아래 22px 에 놓이므로(실측: 알약 top = 이름표 top + 4) 겹침은 알약에 실제로 생기는 것이다(측정 착시가 아님).
+- 5글자 봇 이름(V-07, 패스 A 첫 커밋)이 5명판에서 처음 이 조합을 만들었다. 패스 A·B 의 부분 E2E 는 citizen4·mafia8·lobby 만 돌아서 걸리지 않았다.
+- 임계값(D3b 5명판 99.9%)은 낮추지 않았다. 앱에서 풀려면 유령 그림 처리(크기·위치) 또는 5명판 이름표 배치 변경이 필요한데 둘 다 결정 0028 기하·ASSET_SPEC §6 에 닿으므로 이 패스에서 임의로 건드리지 않았다. 선택지는 반환 메시지에 적었다.
+
+## 이번 패스의 구현 요약 (패스 A)
 
 - `src/game/dayTable.ts`: `HALO_CORE_BLUR_PX` 2, `HALO_BLUR_PX` 9, `HALO_MAX_SIMULTANEOUS` 3, `BUBBLE_W` 48, `BUBBLE_H` 26, `BUBBLE_TAIL` 5, `BUBBLE_TOP` 26 (좌표·z 규칙은 불변).
 - `src/components/DayTable.tsx`: 후광 클래스는 그림 `img` 에만 붙는다 — 흰(`s.turn || s.pick?.mine`) > 진홍(`s.isAlly`). 차례·빠른 메시지 자리는 `span.mf-dt__bubble--turn|--spoke`(aria-hidden, 점 셋), 이모티콘이 있으면 말풍선 없음. 왕관은 `hostCrown && isHost`. `Lobby` 만 `hostCrown` 을 준다.
@@ -94,7 +127,13 @@ plan_head_after: 3043681a917aa463057646780b10835f1e286052
 
 없음.
 
-## 다음 패스(C) 인계 (패스 B 는 과제 2·3 으로 끝)
+## 다음 패스(D) 인계 (패스 C 는 과제 4 로 끝, 위 D3b 열린 문제가 먼저 풀려야 한다)
+
+- 과제 5 시작 전 결정할 것: 5명판 D3b(유령 + 5글자 이름표). 해결 방식이 정해지면 `police5`·`doctor5` 를 세 크기 모두 여러 번 돌려 통과를 확인한다.
+- 과제 5 가 이어서 할 것: `sceneIntroChecks(intro, { kind: "day" })`(N8)·N9, `readSceneIntro` 는 이미 톤 `kind` 를 읽는다. 낮 시작 직후 상태를 `ctx.dayStates` 에 넣어 D7·D9·T1 에 dayAnnounce 를 포함. 낮 시작 문구는 `.mf-sceneintro--day`, 텍스트 `[N일차, 낮이 되었습니다, 토론 전에 먼저 직업을 공개해요]`.
+- 커밋 원장 `.git/gsd-plan-head-before-quick-261025-unr-01` (= `97ce655`) 는 그대로 쓴다.
+
+## 이전 인계 (패스 B → C, 참고)
 
 - 시작 때 `git status --short` 와 직전 커밋(이 체크포인트 커밋 직전은 `3043681`)을 확인한다. `.planning/milestone.lock` 은 추적하지 않는다.
 - 커밋 원장: `.git/gsd-plan-head-before-quick-261025-unr-01` (= `97ce655`). 최종 SUMMARY 의 `commits` 는 이 원장에서 측정한다.
