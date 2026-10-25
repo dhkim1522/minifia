@@ -6,16 +6,16 @@ current_phase: 03
 current_phase_name: 밤과 아침
 current_plan: 12
 status: verifying
-stopped_at: Completed 03.1-05-PLAN.md
-last_updated: "2026-10-25T07:00:05.513Z"
+stopped_at: Completed 03.1-06-PLAN.md
+last_updated: "2026-10-25T07:08:44.006Z"
 last_activity: 2026-10-25
 last_activity_desc: Phase 03 execution started
-state_head: bdb44f62c907a1b52fb91c816b523f04593fdc5c
+state_head: 9ab4c6986da94fb58ec73e7990f769507c3c072e
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 63
-  completed_plans: 54
+  completed_plans: 55
 ---
 
 # Project State
@@ -100,6 +100,7 @@ Progress: [██░░░░░░░░] 17%
 | Phase 03.1 P03 | 약 1시간 | 2 tasks | 16 files |
 | Phase 03.1 P04 | 25min | 3 tasks | 9 files |
 | Phase 03.1 P05 | 35min | 3 tasks | 11 files |
+| Phase 03.1 P06 | 45min | 3 tasks | 20 files |
 
 ## Accumulated Context
 
@@ -183,6 +184,7 @@ Recent decisions affecting current work:
 - [Phase 03.1]: 03.1-03: claim 헤더 타이머는 calm, 차례 안내는 내 차례예요 / {닉네임}님 차례 (못 찾으면 빈 문자열)
 - [Phase 03.1]: 03.1-04: 암살일지는 마피아 팀의 최종 지목 하나를 밤 시작 때 생존 마피아 전원에게 같은 줄로, 치료일지는 {n,target} 두 키뿐(구출 여부 키 없음)
 - [Phase 03.1]: 03.1-05: 이름표 한 줄(높이 22, 간격 0)·캐릭터 z 12~22 > 이름표 z 1~11, 어둡게 층은 --mf-scene-pad 로 좌우 연장, 자리 마크업 onPick > onInspect > group
+- [Phase 03.1]: 03.1-06: 일지 그림 경로는 journalArt(role, slot) 한 곳, RoleCardSheet 는 tab·unread·newCount 를 받는 제어 컴포넌트, 새 시트 테스트는 대소문자 충돌을 피해 roleCardSheet.test.tsx
 
 ### Pending Todos
 
@@ -212,6 +214,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-25T07:00:05.240Z
-Stopped at: Completed 03.1-05-PLAN.md
+Last session: 2026-10-25T07:08:43.703Z
+Stopped at: Completed 03.1-06-PLAN.md
 Resume file: None
