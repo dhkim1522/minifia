@@ -3,6 +3,7 @@ import { isRoomCode } from "../shared/roomCode";
 import { Backdrop } from "./components/Backdrop";
 import { getPreview } from "./net/api";
 import { exitReasonText } from "./net/copy";
+import { testModeFromSearch } from "./net/api";
 import { clearSession, loadSession, saveSession } from "./net/session";
 import { ErrorScreen } from "./screens/ErrorScreen";
 import { Home } from "./screens/Home";
@@ -28,6 +29,8 @@ function screenFromLocation(resume: boolean): Screen {
   const code = codeFromPath(window.location.pathname);
   const stored = loadSession();
   if (code === null) {
+    // 테스트 방을 만들려는 주소(?test=1)는 저장된 입장 정보로 이전 방에 들어가지 않고 첫 화면을 보인다(새 방을 만들면 입장 정보가 덮어써진다).
+    if (testModeFromSearch(window.location.search)) return { screen: "home" };
     return resume && stored ? { screen: "resuming", code: stored.code, token: stored.token } : { screen: "home" };
   }
   // 한 칸뿐인 입장 정보라 다른 방 링크는 이어받지 않고 그 방의 링크 참가 화면을 보인다.

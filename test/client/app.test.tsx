@@ -91,6 +91,17 @@ describe("App 입장 정보 이어받기 (E1 resume, Pitfall 22)", () => {
     expect(stored()).toBe(storedAs("0042"));
   });
 
+  it("'/?test=1' 이면 저장된 입장 정보가 있어도 이전 방에 들어가지 않고 첫 화면을 보이며 입장 정보는 그대로 둔다", () => {
+    saveSession({ code: "0042", token: TOKEN });
+    window.history.replaceState(null, "", "/?test=1");
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    render(<App />);
+    expect(screen.getByRole("button", { name: "방 만들기" })).toBeTruthy();
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(stored()).toBe(storedAs("0042"));
+  });
+
   it("방이 없어졌으면(404) 입장 정보를 지우고 첫 화면을 보여 준다", async () => {
     saveSession({ code: "0042", token: TOKEN });
     window.history.replaceState(null, "", "/");
