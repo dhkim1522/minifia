@@ -1,0 +1,58 @@
+/* 역할 카드 시트(탭 + 내 역할 본문 + 활동 기록 일지). 값은 승인 시안 design/screens/role-card-v1 의 f10.css 를
+   UI-SPEC "시안 값 → 토큰 대응표"대로 tokens.css 변수로 옮긴 것이다. 색은 변수만 쓴다. 전환·애니메이션 없음. */
+
+/* ---- 일지(Journal) ---- */
+.mf-journal {
+  flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden;
+  border-radius: var(--radius-md); border: 1px solid var(--jr-edge); background: var(--jr-bg);
+}
+.mf-journal--police {
+  --jr-bg: var(--journal-police-bg); --jr-head: var(--journal-police-head);
+  --jr-edge: var(--journal-police-edge); --jr-ink: var(--journal-police-ink);
+}
+.mf-journal--mafia {
+  --jr-bg: var(--journal-mafia-bg); --jr-head: var(--journal-mafia-head);
+  --jr-edge: var(--journal-mafia-edge); --jr-ink: var(--crimson-300);
+}
+.mf-journal--doctor {
+  --jr-bg: var(--journal-doctor-bg); --jr-head: var(--journal-doctor-head);
+  --jr-edge: var(--journal-doctor-edge); --jr-ink: var(--journal-doctor-ink);
+}
+
+/* 머리: 높이 44, 아이콘 20 + 간격 8 + 이름. 머리 띠 그림은 뒤에 깔고(왼쪽 60% 는 그림이 비어 있다) 글자는 그 위. */
+.mf-journal__h {
+  position: relative; flex: none; display: flex; align-items: center; gap: var(--space-sm);
+  height: 44px; padding: 0 var(--space-md); overflow: hidden; background: var(--jr-head); color: var(--jr-ink);
+}
+.mf-journal__cover {
+  position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: right center; pointer-events: none;
+}
+.mf-journal__icon { position: relative; flex: none; width: 20px; height: 20px; }
+.mf-journal__h b { position: relative; font-size: 16px; line-height: 24px; font-weight: 700; }
+
+/* 목록: 넘치면 안에서 스크롤. 종이 줄 그림은 52px 높이 타일을 세로로 반복(줄 높이와 같다). */
+.mf-journal__l {
+  flex: 1; min-height: 0; margin: 0; padding: 0 var(--space-md); list-style: none; overflow-y: auto; overscroll-behavior: contain;
+  background-repeat: repeat-y; background-size: 100% 52px;
+}
+/* 줄: 일차 52 · 이름 84 · 결과 남는 폭 · NEW 48 의 4열(f7.css), 열 간격 4(S1), 아래 점선 구분(마지막 줄 없음) */
+.mf-journal__row {
+  display: grid; grid-template-columns: 52px 84px minmax(0, 1fr) 48px; column-gap: 4px; align-items: center;
+  min-height: 52px; border-bottom: 1px dashed var(--jr-edge);
+  font-size: 14px; line-height: 20px; color: var(--gray-300);
+}
+.mf-journal__row:last-child { border-bottom: 0; }
+.mf-journal__d { white-space: nowrap; }
+.mf-journal__w { display: inline-flex; align-items: center; gap: var(--space-xs); min-width: 0; color: var(--gray-50); }
+.mf-journal__w b { font-weight: 700; }
+.mf-journal__dot { flex: none; width: 8px; height: 8px; border-radius: 50%; }
+/* 결과: 도장·테두리·회전 없이 글자만 */
+.mf-journal__rz--bad { color: var(--crimson-300); font-weight: 700; }
+.mf-journal__rz--ok { color: var(--gray-50); font-weight: 400; }
+.mf-journal__rz--heal { color: var(--journal-doctor-ink); font-weight: 700; }
+.mf-journal__nw { justify-self: end; }
+.mf-journal__new {
+  display: inline-block; padding: 0 6px; border-radius: var(--radius-pill);
+  background: var(--amber-400); color: var(--night-900); font-size: 12px; line-height: 18px; font-weight: 700;
+}
+.mf-journal__empty { padding: var(--space-sm) 0; font-size: 14px; line-height: 20px; color: var(--gray-300); }
