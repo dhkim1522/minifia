@@ -780,6 +780,27 @@ describe("rolecard-toast.css 알림 규약 (03.1-11, UI-SPEC D·R6)", () => {
     expect(/position:\s*absolute/.test(r)).toBe(true);
   });
 
+  it("좁은 폭(< 390): 좌우 안쪽 여백 8·아이콘 간격 4 로 줄여 360 폭에서 [테스트] 가운데 점을 6px 이상 비운다 (UI-SPEC S13)", () => {
+    const m = /@media \(max-width:\s*389px\)\s*\{\s*\.mf-rolecard-toast\s*\{([^}]*)\}/.exec(css);
+    const body = m?.[1] ?? "";
+    const pad = /padding:\s*12px (\d+)px/.exec(body);
+    const gap = /gap:\s*(\d+)px/.exec(body);
+    expect(pad && gap ? "있음" : "좁은 폭 규칙 없음").toBe("있음");
+    const padX = Number(pad![1]);
+    const gapPx = Number(gap![1]);
+    expect(padX % 4).toBe(0);
+    expect(gapPx % 4).toBe(0);
+    // 폭 = 글자 211(E2E 실측: 기본 폭 269 = 테두리 2 + 여백 32 + 아이콘 16 + 간격 8 + 글자 211) + 아이콘 16 + 간격 + 좌우 여백 + 테두리 2
+    const width = 211 + 16 + gapPx + 2 * padX + 2;
+    const left = (360 - width) / 2;
+    const ttCenter = 4 + 87.7 / 2; // [테스트] 가운데 x (360 폭: 왼쪽 4, 폭 87.7)
+    expect(left - ttCenter).toBeGreaterThanOrEqual(6);
+    expect(width).toBeLessThanOrEqual(264);
+    // 390 이상의 기준값은 그대로
+    expect(/padding:\s*12px 16px/.test(rule(".mf-rolecard-toast"))).toBe(true);
+    expect(/gap:\s*8px/.test(rule(".mf-rolecard-toast"))).toBe(true);
+  });
+
   it("줄이는 모션 설정에서는 animation 이 없다", () => {
     expect(/prefers-reduced-motion:\s*reduce[\s\S]*\.mf-rolecard-toast\s*\{[^}]*animation:\s*none/.test(css)).toBe(true);
   });

@@ -17,6 +17,11 @@
 .mf-rolecard-toast:focus-visible { outline: 2px solid var(--gray-100); outline-offset: 2px; }
 .mf-rolecard-toast__icon { flex: none; width: 16px; height: 16px; }
 @keyframes mf-rolecard-toast-in { from { opacity: 0; } to { opacity: 1; } }
+/* 좁은 폭(< 390, 장면 여백 4): 기본 폭 269 가 [테스트] 가운데 점(x 47.8)을 1.8px 덮으므로 좌우 안쪽 여백 16 → 8, 아이콘 간격 8 → 4 로 줄인다.
+   폭 249 → 왼쪽 55.5, 가운데 점과 7.7px 간격(UI-SPEC S13). 390 이상은 위 기본값 그대로. */
+@media (max-width: 389px) {
+  .mf-rolecard-toast { padding: 12px 8px; gap: 4px; }
+}
 @media (prefers-reduced-motion: reduce) {
   .mf-rolecard-toast { animation: none; }
 }
