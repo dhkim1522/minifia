@@ -9,9 +9,22 @@ import {
   OVERLAP_EPS,
   TAP_ALLOW,
   TAP_MIN,
+  TEXT_SIZE_ALLOW,
   UsageError,
   chromeCandidates,
+  claimChatIssues,
   dayChecks,
+  dimChecks,
+  inspectChecks,
+  journalChecks,
+  livingRoleArtChecks,
+  morningGoneChecks,
+  noticeChecks,
+  roleCardButtonChecks,
+  roleCardTabChecks,
+  smallTextIssues,
+  spectatorChecks,
+  turnChecks,
   exitCodeOf,
   faceRegion,
   feltStable,
@@ -154,12 +167,13 @@ const cleanSnap = () => ({
   elements: [{ desc: "div.a", rect: rect(0, 0, 360, 100) }],
   interactive: [{ desc: "button.b", rect: rect(10, 10, 44, 44), hit: true }],
   issues: { console: [], failed: [], offOrigin: [] },
+  smallText: [],
 });
 const byId = (list, id) => list.find((x) => x.id === id);
 
-test("genericIssues: 이상 없으면 G1~G6 모두 통과", () => {
+test("genericIssues: 이상 없으면 G1~G7 일곱 개가 같은 순서로 모두 통과", () => {
   const list = genericIssues(cleanSnap(), { w: 360, h: 640 });
-  assert.deepEqual(list.map((x) => x.id), ["G1", "G2", "G3", "G4", "G5", "G6"]);
+  assert.deepEqual(list.map((x) => x.id), ["G1", "G2", "G3", "G4", "G5", "G6", "G7"]);
   assert.ok(list.every((x) => x.ok), JSON.stringify(list));
 });
 
@@ -203,6 +217,43 @@ test("허용 목록: 모든 항목에 이유가 있고 알려진 결함 요소�
       assert.ok(!item.selector.includes(banned), `${item.selector} 에 ${banned}`);
     }
   }
+});
+
+test("TEXT_SIZE_ALLOW: .mf-journal__new 하나로 시작하고, 더할 수 있는 것은 테스트 도구(.mf-tt*)뿐, 이유 필수", () => {
+  assert.ok(TEXT_SIZE_ALLOW.some((i) => i.selector === ".mf-journal__new"));
+  for (const item of TEXT_SIZE_ALLOW) {
+    assert.ok(typeof item.reason === "string" && item.reason.trim().length > 0, JSON.stringify(item));
+    for (const sel of item.selector.split(",").map((x) => x.trim())) {
+      assert.ok(sel === ".mf-journal__new" || sel.startsWith(".mf-tt"), `허용되지 않는 글자 크기 허용 선택자: ${sel}`);
+      for (const banned of [".mf-phasebar", ".mf-dt__", ".mf-rolecard", ".mf-journal__row"]) {
+        assert.ok(!sel.includes(banned), `${sel} 에 ${banned}`);
+      }
+    }
+  }
+});
+
+test("기준 수치는 낮추지 않았다(0.5px·1.6배·45%·44·157)", () => {
+  assert.equal(OVERLAP_EPS, 0.5);
+  assert.equal(ONE_LINE_FACTOR, 1.6);
+  assert.equal(FACE_RATIO, 0.45);
+  assert.equal(TAP_MIN, 44);
+  assert.equal(PANEL_H, 157);
+});
+
+test("G7 smallTextIssues: 14px 미만 글자는 실패, 허용된 줄은 통과, 필드가 없으면 실패", () => {
+  assert.equal(smallTextIssues([]).ok, true);
+  assert.equal(smallTextIssues([{ desc: "span.x", size: 14 }]).ok, true);
+  const bad = smallTextIssues([{ desc: "span.x", size: 12 }]);
+  assert.equal(bad.ok, false);
+  assert.match(bad.detail, /span\.x/);
+  assert.equal(smallTextIssues([{ desc: "span.mf-journal__new", size: 12, allowed: true }]).ok, true);
+  assert.equal(smallTextIssues(undefined).ok, false);
+  const s = cleanSnap();
+  s.smallText = [{ desc: "p.tiny", size: 12 }];
+  assert.equal(byId(genericIssues(s, { w: 360, h: 640 }), "G7").ok, false);
+  const s2 = cleanSnap();
+  delete s2.smallText;
+  assert.equal(byId(genericIssues(s2, { w: 360, h: 640 }), "G7").ok, false);
 });
 
 test("redact: 모든 곳을 가리고 빈 목록은 그대로", () => {
@@ -268,7 +319,7 @@ test("faceRegion: 상자 위 45%", () => {
   assert.equal(f.right, 72);
 });
 
-/** 이상 없는 낮 장면 고정물(360x640). 자리 1·2 는 서로 떨어져 있다. */
+/** 이상 없는 낮 장면 고정물(360x640, 3명판). 이름표 z 1~3 < 캐릭터 z 12~14. */
 const daySnap = () => ({
   vw: 360,
   vh: 640,
@@ -277,27 +328,37 @@ const daySnap = () => ({
   bodyW: 360,
   h1: { rect: rect(16, 20, 200, 28.8), lineHeight: 28.8, text: "낮 · 토론" },
   extra: { rect: rect(220, 16, 130, 44), children: [rect(220, 16, 60, 44), rect(290, 16, 60, 44)] },
+  header: rect(0, 0, 360, 119.2),
   scene: rect(0, 100, 360, 383),
   panel: { rect: rect(0, 483, 360, 157), text: "", children: [] },
   tt: { rect: rect(8, 108, 100, 44), hit: true },
   seats: [
-    { seat: 0, rect: rect(150, 400, 72, 96), isButton: false, sel: false, pressed: false, reachable: true },
-    { seat: 1, rect: rect(20, 200, 72, 96), isButton: false, sel: false, pressed: false, reachable: true },
-    { seat: 2, rect: rect(270, 200, 72, 96), isButton: false, sel: false, pressed: false, reachable: true },
+    { seat: 0, rect: rect(150, 400, 72, 96), z: 14, isButton: false, sel: false, pressed: false, reachable: true, imgSrc: "/characters/figures/fig1.png", spotlit: false },
+    { seat: 1, rect: rect(20, 200, 72, 96), z: 12, isButton: false, sel: false, pressed: false, reachable: true, imgSrc: "/characters/figures/fig2.png", spotlit: false },
+    { seat: 2, rect: rect(270, 200, 72, 96), z: 12, isButton: false, sel: false, pressed: false, reachable: true, imgSrc: "/characters/figures/fig3.png", spotlit: false },
   ],
   tags: [
-    { seat: 0, rect: rect(150, 440, 72, 36) },
-    { seat: 1, rect: rect(20, 300, 72, 36) },
-    { seat: 2, rect: rect(270, 300, 72, 36) },
+    { seat: 0, rect: rect(150, 440, 72, 22), z: 3, lines: 1, hasDot: true },
+    { seat: 1, rect: rect(20, 300, 72, 22), z: 1, lines: 1, hasDot: true },
+    { seat: 2, rect: rect(270, 300, 72, 22), z: 1, lines: 1, hasDot: true },
+  ],
+  tagVisibility: [
+    { seat: 0, ratio: 1 },
+    { seat: 1, ratio: 1 },
+    { seat: 2, ratio: 1 },
   ],
 });
 const size = { w: 360, h: 640, mySeat: 0 };
 const dayById = (list, id) => list.find((x) => x.id === id);
 
-test("dayChecks: 이상 없는 고정물은 D1~D6·D8 통과", () => {
+test("dayChecks: 이상 없는 고정물은 D1·D2·D3a·D3b·D4·D5·D6·D8 통과", () => {
   const list = dayChecks(daySnap(), size);
-  assert.deepEqual(list.map((x) => x.id), ["D1", "D2", "D3", "D4", "D5", "D6", "D8"]);
+  assert.deepEqual(list.map((x) => x.id), ["D1", "D2", "D3a", "D3b", "D4", "D5", "D6", "D8"]);
   assert.ok(list.every((x) => x.ok), JSON.stringify(list.filter((x) => !x.ok)));
+  assert.equal(dayById(list, "D3a").label, "이름표가 캐릭터 아래 층");
+  assert.equal(dayById(list, "D3b").label, "이름표 보이는 비율");
+  assert.equal(dayById(list, "D4").label, "[테스트]가 얼굴·이름표를 안 가리고 눌림");
+  assert.equal(dayById(list, "D3"), undefined);
 });
 
 test("dayChecks D1: 제목 3줄이면 실패, 내용에 3줄", () => {
@@ -310,36 +371,103 @@ test("dayChecks D1: 제목 3줄이면 실패, 내용에 3줄", () => {
 
 test("dayChecks D2: 이름표가 장면 밖으로 나가거나 패널과 겹치면 실패", () => {
   const s = daySnap();
-  s.tags[1].rect = rect(20, 300, 342, 36); // right 362, 장면 right 360 보다 2 큼
+  s.tags[1].rect = rect(20, 300, 342, 22); // right 362, 장면 right 360 보다 2 큼
   const d2 = dayById(dayChecks(s, size), "D2");
   assert.equal(d2.ok, false);
   assert.match(d2.detail, /1/);
   const s2 = daySnap();
-  s2.tags[1].rect = rect(20, 470, 72, 36); // 패널(top 483)과 교차
+  s2.tags[1].rect = rect(20, 470, 72, 22); // 패널(top 483)과 교차
   assert.equal(dayById(dayChecks(s2, size), "D2").ok, false);
 });
 
-test("dayChecks D3: 이름표가 남의 얼굴 위 45% 를 가리면 실패, 아래 55% 만이면 통과, 자기 얼굴은 안 센다", () => {
+test("dayChecks D3a: 이름표 z 최댓값 < 캐릭터 z 최솟값이면 통과, 같거나 크거나 NaN 이면 실패", () => {
   const s = daySnap();
-  s.tags[1].rect = rect(20, 210, 72, 36); // 자리 1 이름표가 자리 1 자기 얼굴(20,200 상자 위 45%) 위에 있다
-  assert.equal(dayById(dayChecks(s, size), "D3").ok, true);
-  const s1 = daySnap();
-  s1.tags[1].rect = rect(270, 210, 72, 36); // 자리 1 이름표가 자리 2 얼굴(top 200~243.2)과 교차
-  const d3 = dayById(dayChecks(s1, size), "D3");
-  assert.equal(d3.ok, false);
-  assert.match(d3.detail, /1→2/);
-  const s2 = daySnap();
-  s2.tags[1].rect = rect(270, 260, 72, 30); // 자리 2 상자 아래 55%(243.2~296) 안
-  assert.equal(dayById(dayChecks(s2, size), "D3").ok, true);
+  s.tags[0].z = 11;
+  s.seats[1].z = 12;
+  assert.equal(dayById(dayChecks(s, size), "D3a").ok, true);
+  s.tags[0].z = 12; // 같음
+  const same = dayById(dayChecks(s, size), "D3a");
+  assert.equal(same.ok, false);
+  assert.match(same.detail, /12/);
+  s.tags[0].z = 20; // 큼
+  assert.equal(dayById(dayChecks(s, size), "D3a").ok, false);
+  const n = daySnap();
+  n.tags[1].z = Number.NaN;
+  assert.equal(dayById(dayChecks(n, size), "D3a").ok, false);
 });
 
-test("dayChecks D4: [테스트] 가 자리 상자와 2px 겹치면 실패, 맞닿으면 통과, 버튼이 없으면 실패", () => {
+test("dayChecks D3b: 인원별 바닥(4·5명 100%, 6명 85%, 7명 50%, 8명 55%)", () => {
+  const withN = (n, ratio, lowSeat = 1) => {
+    const s = daySnap();
+    s.tagVisibility = Array.from({ length: n }, (_, i) => ({ seat: i, ratio: i === lowSeat ? ratio : 1 }));
+    return dayById(dayChecks(s, size), "D3b");
+  };
+  assert.equal(withN(4, 1).ok, true);
+  assert.equal(withN(4, 0.99).ok, false);
+  assert.equal(withN(5, 1).ok, true);
+  assert.equal(withN(5, 0.95).ok, false);
+  assert.equal(withN(6, 0.85).ok, true);
+  assert.equal(withN(6, 0.84).ok, false);
+  assert.equal(withN(7, 0.5).ok, true);
+  assert.equal(withN(7, 0.49).ok, false);
+  assert.equal(withN(8, 0.55).ok, true);
+  assert.equal(withN(8, 0.54).ok, false);
+  const low = withN(8, 0.4, 5);
+  assert.match(low.detail, /5/);
+  assert.match(low.detail, /0\.4|40/);
+});
+
+test("dayChecks D3b: 이미지 미로드(ratio null)는 조용히 통과하지 않고 실패", () => {
   const s = daySnap();
-  s.tt.rect = rect(20, 108, 100, 94); // bottom 202 > 자리 1 top 200
-  assert.equal(dayById(dayChecks(s, size), "D4").ok, false);
+  s.tagVisibility[2].ratio = null;
+  const d = dayById(dayChecks(s, size), "D3b");
+  assert.equal(d.ok, false);
+  assert.match(d.detail, /로드/);
   const s2 = daySnap();
-  s2.tt.rect = rect(20, 156, 100, 44); // bottom 200 == 자리 1 top
-  assert.equal(dayById(dayChecks(s2, size), "D4").ok, true);
+  s2.tagVisibility = undefined;
+  assert.equal(dayById(dayChecks(s2, size), "D3b").ok, false);
+});
+
+test("dayChecks D4: 세로 깊이 1.5·3.0 통과, 3.1 실패, 가로 겹침 0.5 이하면 깊이 무관", () => {
+  const depth = (d) => {
+    const s = daySnap();
+    s.tt.rect = rect(20, 200 + d - 44, 100, 44); // 자리 1 상자 top 200 과 d 만큼 겹침
+    return dayById(dayChecks(s, size), "D4");
+  };
+  assert.equal(depth(1.5).ok, true, depth(1.5).detail);
+  assert.equal(depth(3).ok, true, depth(3).detail);
+  const bad = depth(3.1);
+  assert.equal(bad.ok, false);
+  assert.match(bad.detail, /3\.1/);
+  const s = daySnap();
+  s.tt.rect = rect(91.7, 150, 100, 100); // 자리 1 과 가로 0.3 만 겹침, 세로로는 깊이 큼
+  s.seats[1].rect = rect(20, 200, 72, 96);
+  s.seats[2].rect = rect(270, 200, 72, 96);
+  // 가로 91.7~191.7 와 자리 0(150~222, 400~) 의 가로는 겹치지만 세로는 안 겹침
+  assert.equal(dayById(dayChecks(s, size), "D4").ok, true);
+});
+
+test("dayChecks D4: 얼굴 가운데 점이나 이름표를 가리면 실패", () => {
+  const s = daySnap();
+  // 자리 1 얼굴 영역 가운데 = (56, 200 + 96*0.45/2 = 221.6)
+  s.tt.rect = rect(30, 180, 60, 60);
+  const d = dayById(dayChecks(s, size), "D4");
+  assert.equal(d.ok, false);
+  const s2 = daySnap();
+  s2.tt.rect = rect(10, 290, 100, 44); // 자리 1 이름표(20,300) 와 교차, 자리 상자(200~296)와 깊이 6 → 이름표 사유도 나와야
+  s2.tags[1].rect = rect(20, 300, 72, 22);
+  const d2 = dayById(dayChecks(s2, size), "D4");
+  assert.equal(d2.ok, false);
+  assert.match(d2.detail, /이름표/);
+  const s3 = daySnap();
+  s3.tt.rect = rect(10, 296, 100, 44); // 상자 아래에 닿음(깊이 0)이지만 이름표(300~322)와 겹침
+  assert.equal(dayById(dayChecks(s3, size), "D4").ok, false);
+});
+
+test("dayChecks D4: 눌림(hit)이 false 거나 버튼이 없으면 실패", () => {
+  const s = daySnap();
+  s.tt.hit = false;
+  assert.equal(dayById(dayChecks(s, size), "D4").ok, false);
   const s3 = daySnap();
   s3.tt = null;
   assert.equal(dayById(dayChecks(s3, size), "D4").ok, false);
@@ -364,49 +492,138 @@ const morningSnap = () => {
   const s = daySnap();
   s.card = rect(54, 168, 252, 100);
   s.seats = [
-    { seat: 0, rect: rect(150, 400, 72, 96), isButton: false, sel: false, pressed: false, reachable: true },
-    { seat: 1, rect: rect(20, 330, 72, 96), isButton: false, sel: false, pressed: false, reachable: true },
-    { seat: 2, rect: rect(270, 330, 72, 96), isButton: false, sel: false, pressed: false, reachable: true },
+    { ...daySnap().seats[0], rect: rect(150, 400, 72, 96) },
+    { ...daySnap().seats[1], rect: rect(20, 330, 72, 96) },
+    { ...daySnap().seats[2], rect: rect(270, 330, 72, 96) },
   ];
   s.tags = [
-    { seat: 0, rect: rect(150, 440, 72, 36) },
-    { seat: 1, rect: rect(20, 420, 72, 36) },
-    { seat: 2, rect: rect(270, 420, 72, 36) },
+    { ...daySnap().tags[0], rect: rect(150, 496, 72, 22) },
+    { ...daySnap().tags[1], rect: rect(20, 426, 72, 22) },
+    { ...daySnap().tags[2], rect: rect(270, 426, 72, 22) },
   ];
   return s;
 };
 
-test("morningCardIssues: 허용 범위 안이면 통과", () => {
+test("morningCardIssues M1: 위치·크기·뷰포트 안이고 패널/내 캐릭터/내 이름표와 안 겹치면 통과", () => {
   assert.equal(morningCardIssues(morningSnap(), size).ok, true);
 });
 
-test("morningCardIssues: 패널·남의 얼굴·내 자리/이름표와 겹치거나 화면 밖이거나 카드가 없으면 실패", () => {
-  const a = morningSnap();
-  a.card = rect(54, 440, 252, 100); // 패널(top 483) 교차
-  assert.equal(morningCardIssues(a, size).ok, false);
-  const b = morningSnap();
-  b.card = rect(54, 300, 252, 100); // 자리 1 얼굴(330~373.2) 교차
-  assert.equal(morningCardIssues(b, size).ok, false);
-  const c = morningSnap();
-  c.card = rect(100, 380, 120, 40); // 내 자리(0) 상자 top 400 과 교차, 남의 얼굴은 아님
-  assert.equal(morningCardIssues(c, size).ok, false);
-  const d = morningSnap();
-  d.card = rect(54, 435, 252, 40); // 내 이름표(440~476) 교차, 상자(400~)와도 교차
-  assert.equal(morningCardIssues(d, size).ok, false);
-  const e = morningSnap();
-  e.card = rect(200, 168, 252, 100); // right 452 > 360
-  assert.equal(morningCardIssues(e, size).ok, false);
-  const f = morningSnap();
-  f.card = null;
-  assert.equal(morningCardIssues(f, size).ok, false);
+test("morningCardIssues M1: 남의 얼굴과 겹쳐도 통과(승인된 완화, UI-SPEC F7)", () => {
+  const s = morningSnap();
+  s.seats[1].rect = rect(60, 150, 72, 96); // 카드(54~306, 168~268)가 자리 1 얼굴을 덮음
+  assert.equal(morningCardIssues(s, size).ok, true);
 });
 
-test("morningCardIssues: 뒷자리 이름표만 덮는 것은 허용", () => {
+test("morningCardIssues M1: 위치 어긋남은 각각 다른 사유로 실패", () => {
+  const top = morningSnap();
+  top.card = rect(54, 170, 252, 100);
+  const t = morningCardIssues(top, size);
+  assert.equal(t.ok, false);
+  assert.match(t.detail, /168/);
+  const cx = morningSnap();
+  cx.card = rect(60, 168, 252, 100); // 가운데 어긋남 6
+  const c = morningCardIssues(cx, size);
+  assert.equal(c.ok, false);
+  assert.match(c.detail, /가운데/);
+  const wd = morningSnap();
+  wd.card = rect(60, 168, 240, 100); // 가운데는 맞고 폭 240
+  const w = morningCardIssues(wd, size);
+  assert.equal(w.ok, false);
+  assert.match(w.detail, /폭/);
+  assert.notEqual(t.detail, c.detail);
+  assert.notEqual(c.detail, w.detail);
+});
+
+test("morningCardIssues M1: 뷰포트 밖·패널·내 캐릭터·내 이름표와 겹치거나 카드가 없으면 실패", () => {
+  const out = morningSnap();
+  out.card = rect(54, 168, 252, 500); // 뷰포트 아래로 나감(패널과도 겹침)
+  assert.equal(morningCardIssues(out, { ...size, h: 640 }).ok, false);
+  const a = morningSnap();
+  a.card = rect(54, 168, 252, 400); // 패널 top 483 은 안 넘지만 내 캐릭터(400~)와 겹침
+  const ra = morningCardIssues(a, size);
+  assert.equal(ra.ok, false);
+  assert.match(ra.detail, /내 캐릭터|내 자리/);
+  const b = morningSnap();
+  b.seats[0].rect = rect(150, 520, 72, 96);
+  b.card = rect(54, 168, 252, 330); // 패널 top 483 과 겹침
+  assert.match(morningCardIssues(b, size).detail, /패널/);
+  const c = morningSnap();
+  c.seats[0].rect = rect(150, 540, 72, 96); // 캐릭터는 카드 밖
+  c.tags[0].rect = rect(150, 250, 72, 22); // 내 이름표만 카드 안(카드 168~268)
+  const rc = morningCardIssues(c, size);
+  assert.equal(rc.ok, false);
+  assert.match(rc.detail, /이름표/);
+  const d = morningSnap();
+  d.card = null;
+  assert.equal(morningCardIssues(d, size).ok, false);
+});
+
+test("dimChecks M3: 장면 상자 + 좌우 여백과 같고 헤더·패널과 안 겹치고 pointer-events none 이면 통과", () => {
   const s = morningSnap();
-  s.card = rect(54, 380, 252, 50); // 380~430: 자리 1·2 상자(330~426)의 아래 55%(373~426)와 이름표(420~456)만 덮음, 내 자리 top 400 은 x 54~306 과 겹침
-  s.seats[0].rect = rect(150, 440, 72, 96); // 내 자리를 카드 아래로
-  s.tags[0].rect = rect(150, 480, 72, 36);
-  assert.equal(morningCardIssues(s, size).ok, true, morningCardIssues(s, size).detail);
+  s.dim = { rect: rect(0, 100, 360, 383), z: 30, pointerEvents: "none" };
+  const r = dimChecks(s, { w: 360 });
+  assert.equal(r.id, "M3");
+  assert.equal(r.ok, true, r.detail);
+});
+
+test("dimChecks M3: 없음·모양 다름·헤더/패널 침범·pointer-events·탈락자 z 역전은 실패", () => {
+  const base = () => {
+    const s = morningSnap();
+    s.dim = { rect: rect(0, 100, 360, 383), z: 30, pointerEvents: "none" };
+    return s;
+  };
+  const none = base();
+  none.dim = null;
+  assert.equal(dimChecks(none, { w: 360 }).ok, false);
+  const narrow = base();
+  narrow.dim.rect = rect(12, 100, 336, 383);
+  assert.equal(dimChecks(narrow, { w: 360 }).ok, false);
+  const tall = base();
+  tall.dim.rect = rect(0, 80, 360, 403); // 헤더(0~119.2)를 침범
+  assert.equal(dimChecks(tall, { w: 360 }).ok, false);
+  const pe = base();
+  pe.dim.pointerEvents = "auto";
+  assert.equal(dimChecks(pe, { w: 360 }).ok, false);
+  const spot = base();
+  spot.seats[1].spotlit = true;
+  spot.seats[1].z = 31;
+  assert.equal(dimChecks(spot, { w: 360, expectSpotlit: true }).ok, true);
+  spot.seats[1].z = 30; // 층과 같음
+  const bad = dimChecks(spot, { w: 360, expectSpotlit: true });
+  assert.equal(bad.ok, false);
+  assert.match(bad.detail, /30/);
+  const missing = base();
+  assert.equal(dimChecks(missing, { w: 360, expectSpotlit: true }).ok, false); // 탈락자가 있어야 하는데 강조 자리 없음
+});
+
+test("morningGoneChecks M4: 카드·층이 모두 없으면 통과, 하나라도 있으면 실패", () => {
+  const s = daySnap();
+  s.card = null;
+  s.dim = null;
+  const ok = morningGoneChecks(s);
+  assert.equal(ok.id, "M4");
+  assert.equal(ok.ok, true);
+  const a = daySnap();
+  a.card = rect(54, 168, 252, 100);
+  a.dim = null;
+  assert.equal(morningGoneChecks(a).ok, false);
+  const b = daySnap();
+  b.card = null;
+  b.dim = { rect: rect(0, 100, 360, 383), z: 30, pointerEvents: "none" };
+  assert.equal(morningGoneChecks(b).ok, false);
+});
+
+test("tagsOverlap D9: 라벨이 인원을 말하지 않고, 겹치지 않으면 통과, 겹치면 자리 쌍을 말한다", () => {
+  const ok = tagsOverlap([0, 1, 2, 3, 4, 5, 6, 7].map((i) => ({ seat: i, rect: rect(i * 40, 0, 36, 22) })));
+  assert.equal(ok.ok, true);
+  assert.equal(ok.label, "이름표끼리 안 겹침");
+  assert.ok(!ok.label.includes("4명"));
+  const bad = tagsOverlap([
+    { seat: 0, rect: rect(0, 0, 72, 22) },
+    { seat: 1, rect: rect(60, 10, 72, 22) },
+  ]);
+  assert.equal(bad.ok, false);
+  assert.match(bad.detail, /0.*1/);
 });
 
 test("feltStable: 같으면 통과, 1px 옮겨지면 실패하고 상태 이름을 말한다", () => {
@@ -417,13 +634,339 @@ test("feltStable: 같으면 통과, 1px 옮겨지면 실패하고 상태 이름�
   assert.match(bad.detail, /discussion/);
 });
 
-test("tagsOverlap: 겹치지 않으면 통과, 겹치면 자리 쌍을 말한다", () => {
-  const ok = tagsOverlap([0, 1, 2, 3].map((i) => ({ seat: i, rect: rect(i * 80, 0, 72, 36) })));
-  assert.equal(ok.ok, true);
-  const bad = tagsOverlap([
-    { seat: 0, rect: rect(0, 0, 72, 36) },
-    { seat: 1, rect: rect(60, 10, 72, 36) },
-  ]);
-  assert.equal(bad.ok, false);
-  assert.match(bad.detail, /0.*1/);
+// ---- 차례(K1·K2)·주장 채팅(K3)·기록 카드(X1) ----
+
+const turnPanel = (over = {}) => ({ rect: rect(0, 483, 360, 157), text: "", stRow: false, emojiBtn: false, quickBtn: false, chips: [], ...over });
+
+test("turnChecks K1: 차례 표식 spot·badge·tagTurn 이 정확히 1, 이름표 아랫줄 0 이면 통과", () => {
+  const s = daySnap();
+  s.panel = turnPanel({ stRow: true, emojiBtn: true });
+  s.turn = { spot: 1, badge: 1, tagTurn: 1, legacyRows: 0 };
+  const list = turnChecks(s, { myTurn: false, jobs: ["마피아", "경찰"] });
+  assert.equal(dayById(list, "K1").ok, true, dayById(list, "K1").detail);
+  for (const bad of [{ spot: 0 }, { badge: 2 }, { tagTurn: 0 }, { legacyRows: 1 }]) {
+    const t = { ...s, turn: { ...s.turn, ...bad } };
+    assert.equal(dayById(turnChecks(t, { myTurn: false, jobs: [] }), "K1").ok, false, JSON.stringify(bad));
+  }
+});
+
+test("turnChecks K1: 차례 없는 단계(expectNone)는 세 값이 모두 0 이어야 통과하고 K2 는 돌리지 않는다", () => {
+  const s = daySnap();
+  s.turn = { spot: 0, badge: 0, tagTurn: 0, legacyRows: 0 };
+  const list = turnChecks(s, { expectNone: true });
+  assert.deepEqual(list.map((x) => x.id), ["K1"]);
+  assert.equal(list[0].ok, true);
+  s.turn.spot = 1;
+  assert.equal(turnChecks(s, { expectNone: true })[0].ok, false);
+});
+
+test("turnChecks K2: 내 차례는 이번 판 직업 + 말 안 함 칩 · stRow/이모티콘 없음 · 높이 157", () => {
+  const s = daySnap();
+  s.turn = { spot: 1, badge: 1, tagTurn: 1, legacyRows: 0 };
+  s.panel = turnPanel({ chips: ["마피아", "경찰", "시민", "말 안 함"] });
+  const ok = dayById(turnChecks(s, { myTurn: true, jobs: ["마피아", "경찰", "시민"] }), "K2");
+  assert.equal(ok.ok, true, ok.detail);
+  s.panel = turnPanel({ chips: ["경찰", "마피아", "시민", "말 안 함"] }); // 순서 다름
+  assert.equal(dayById(turnChecks(s, { myTurn: true, jobs: ["마피아", "경찰", "시민"] }), "K2").ok, false);
+  s.panel = turnPanel({ chips: ["마피아", "경찰", "시민", "말 안 함"], stRow: true });
+  assert.equal(dayById(turnChecks(s, { myTurn: true, jobs: ["마피아", "경찰", "시민"] }), "K2").ok, false);
+  s.panel = turnPanel({ chips: ["마피아", "경찰", "시민", "말 안 함"], emojiBtn: true });
+  assert.equal(dayById(turnChecks(s, { myTurn: true, jobs: ["마피아", "경찰", "시민"] }), "K2").ok, false);
+  s.panel = turnPanel({ chips: ["마피아", "경찰", "시민", "말 안 함"], rect: rect(0, 490, 360, 150) });
+  assert.equal(dayById(turnChecks(s, { myTurn: true, jobs: ["마피아", "경찰", "시민"] }), "K2").ok, false);
+});
+
+test("turnChecks K2: 남의 차례는 stRow·이모티콘 있고 빠른 메시지·칩 없음 · 높이 157", () => {
+  const s = daySnap();
+  s.turn = { spot: 1, badge: 1, tagTurn: 1, legacyRows: 0 };
+  s.panel = turnPanel({ stRow: true, emojiBtn: true });
+  assert.equal(dayById(turnChecks(s, { myTurn: false, jobs: [] }), "K2").ok, true);
+  for (const over of [{ stRow: false }, { emojiBtn: false }, { quickBtn: true }, { chips: ["경찰"] }, { rect: rect(0, 480, 360, 160) }]) {
+    s.panel = turnPanel({ stRow: true, emojiBtn: true, ...over });
+    assert.equal(dayById(turnChecks(s, { myTurn: false, jobs: [] }), "K2").ok, false, JSON.stringify(over));
+  }
+});
+
+test("claimChatIssues K3: 주장 문장 또는 말하지 않았어요만, 대괄호 없음, 줄 수 = 살아 있는 인원", () => {
+  const lines = ["저는 마피아예요", "저는 경찰이에요", "저는 의사예요", "저는 시민이에요", "말하지 않았어요"];
+  const r = claimChatIssues(lines, { alive: 5 });
+  assert.equal(r.id, "K3");
+  assert.equal(r.ok, true, r.detail);
+  assert.equal(claimChatIssues(["하하: 저는 경찰이에요", "저는 시민이에요"], { alive: 2 }).ok, true);
+  assert.equal(claimChatIssues(["[경찰] 저는 경찰이에요"], { alive: 1 }).ok, false);
+  assert.equal(claimChatIssues(["안녕하세요"], { alive: 1 }).ok, false);
+  const few = claimChatIssues(lines.slice(0, 3), { alive: 5 });
+  assert.equal(few.ok, false);
+  assert.match(few.detail, /3.*5|5.*3/);
+  assert.equal(claimChatIssues([...lines, "저는 시민이에요"], { alive: 5 }).ok, false);
+});
+
+test("inspectChecks X1: 낮에는 {닉네임} 기록 카드가 열리고 밤에는 아무것도 안 열린다", () => {
+  const day = inspectChecks({ dialogs: [{ label: "하하 기록", title: "하하" }] }, { nick: "하하", night: false });
+  assert.equal(day.id, "X1");
+  assert.equal(day.ok, true, day.detail);
+  assert.equal(inspectChecks({ dialogs: [] }, { nick: "하하", night: false }).ok, false);
+  assert.equal(inspectChecks({ dialogs: [{ label: "하하 기록", title: "다른" }] }, { nick: "하하", night: false }).ok, false);
+  assert.equal(inspectChecks({ dialogs: [{ label: "역할 카드", title: "하하" }] }, { nick: "하하", night: false }).ok, false);
+  assert.equal(inspectChecks({ dialogs: [] }, { nick: "하하", night: true }).ok, true);
+  assert.equal(inspectChecks({ dialogs: [{ label: "하하 기록", title: "하하" }] }, { nick: "하하", night: true }).ok, false);
+});
+
+// ---- 역할 카드(R1~R6) ----
+
+const rcBtn = (over = {}) => ({ label: "역할 카드", rect: rect(250, 16, 90, 44), dotRect: null, hit: true, ...over });
+const rcSnap = (over = {}) => ({ legacyRecordsBtn: false, roleCard: { button: rcBtn(), sheet: null, notice: null }, ...over });
+
+test("roleCardButtonChecks R1: 새 기록이면 label 에 새 기록 + 점 지름 12 이상, 없으면 점 없음", () => {
+  const none = roleCardButtonChecks(rcSnap(), { job: "police", unread: false });
+  assert.equal(none.id, "R1");
+  assert.equal(none.ok, true, none.detail);
+  const withDot = rcSnap();
+  withDot.roleCard.button = rcBtn({ label: "역할 카드, 새 기록", dotRect: rect(330, 10, 12, 12) });
+  assert.equal(roleCardButtonChecks(withDot, { job: "police", unread: true }).ok, true);
+  const small = rcSnap();
+  small.roleCard.button = rcBtn({ label: "역할 카드, 새 기록", dotRect: rect(330, 10, 10, 10) });
+  assert.equal(roleCardButtonChecks(small, { job: "police", unread: true }).ok, false);
+  assert.equal(roleCardButtonChecks(withDot, { job: "police", unread: false }).ok, false); // 점이 남음
+  assert.equal(roleCardButtonChecks(rcSnap(), { job: "police", unread: true }).ok, false); // 점이 없음
+});
+
+test("roleCardButtonChecks R1: 시민도 버튼이 있고, 버튼이 없거나 수사 기록 버튼이 있으면 실패", () => {
+  assert.equal(roleCardButtonChecks(rcSnap(), { job: "citizen", unread: false }).ok, true);
+  const nobtn = rcSnap();
+  nobtn.roleCard.button = null;
+  assert.equal(roleCardButtonChecks(nobtn, { job: "doctor", unread: false }).ok, false);
+  assert.equal(roleCardButtonChecks(rcSnap({ legacyRecordsBtn: true }), { job: "police", unread: false }).ok, false);
+  const nullCard = rcSnap({ roleCard: null });
+  assert.equal(roleCardButtonChecks(nullCard, { job: "police", unread: false }).ok, false);
+});
+
+const sheetOf = (over = {}) => ({
+  tabs: [
+    { text: "내 역할", selected: true, dotRect: null },
+    { text: "활동 기록", selected: false, dotRect: null },
+  ],
+  journalName: null,
+  rows: [],
+  emptyText: null,
+  hasBody: true,
+  ...over,
+});
+
+test("roleCardTabChecks R2: 경찰·마피아·의사는 탭 둘, 안 읽음이면 활동 기록 탭 점 지름 10 이상", () => {
+  const s = rcSnap();
+  s.roleCard.sheet = sheetOf();
+  const r = roleCardTabChecks(s, { job: "police", unread: false });
+  assert.equal(r.id, "R2");
+  assert.equal(r.ok, true, r.detail);
+  const dot = rcSnap();
+  dot.roleCard.sheet = sheetOf({
+    tabs: [
+      { text: "내 역할", selected: true, dotRect: null },
+      { text: "활동 기록", selected: false, dotRect: rect(100, 4, 10, 10) },
+    ],
+  });
+  assert.equal(roleCardTabChecks(dot, { job: "mafia", unread: true }).ok, true);
+  assert.equal(roleCardTabChecks(dot, { job: "mafia", unread: false }).ok, false);
+  assert.equal(roleCardTabChecks(s, { job: "mafia", unread: true }).ok, false);
+  dot.roleCard.sheet.tabs[1].dotRect = rect(100, 4, 8, 8);
+  assert.equal(roleCardTabChecks(dot, { job: "doctor", unread: true }).ok, false);
+  const one = rcSnap();
+  one.roleCard.sheet = sheetOf({ tabs: [{ text: "내 역할", selected: true, dotRect: null }] });
+  assert.equal(roleCardTabChecks(one, { job: "police", unread: false }).ok, false);
+  const nosheet = rcSnap();
+  assert.equal(roleCardTabChecks(nosheet, { job: "police", unread: false }).ok, false);
+});
+
+test("roleCardTabChecks R5: 시민은 탭 줄 없음·점 없음·본문 존재", () => {
+  const s = rcSnap();
+  s.roleCard.sheet = sheetOf({ tabs: [] });
+  const r = roleCardTabChecks(s, { job: "citizen", unread: false });
+  assert.equal(r.id, "R5");
+  assert.equal(r.ok, true, r.detail);
+  s.roleCard.sheet = sheetOf();
+  assert.equal(roleCardTabChecks(s, { job: "citizen", unread: false }).ok, false);
+  s.roleCard.sheet = sheetOf({ tabs: [], hasBody: false });
+  assert.equal(roleCardTabChecks(s, { job: "citizen", unread: false }).ok, false);
+});
+
+const journalView = (job, over = {}) => {
+  const names = { police: "수사일지", mafia: "암살일지", doctor: "치료일지" };
+  const results = { police: "마피아 아님", mafia: "사망", doctor: "보호" };
+  const s = rcSnap();
+  s.roleCard.sheet = sheetOf({
+    tabs: [
+      { text: "내 역할", selected: false, dotRect: null },
+      { text: "활동 기록", selected: true, dotRect: null },
+    ],
+    journalName: names[job],
+    rows: [{ day: "1일차 밤", who: "하하", result: results[job], hasNew: true }],
+    ...over,
+  });
+  return s;
+};
+
+test("journalChecks R3: 역할별 일지 이름·N일차 밤·결과 단어·첫 줄 NEW, 점이 모두 사라짐", () => {
+  for (const job of ["police", "mafia", "doctor"]) {
+    const r = journalChecks(journalView(job), { job, mode: "viewing" });
+    assert.equal(r.id, "R3");
+    assert.equal(r.ok, true, `${job}: ${r.detail}`);
+  }
+  const wrongName = journalView("police", { journalName: "암살일지" });
+  assert.equal(journalChecks(wrongName, { job: "police", mode: "viewing" }).ok, false);
+  const wrongResult = journalView("mafia", { rows: [{ day: "1일차 밤", who: "하하", result: "보호", hasNew: true }] });
+  assert.equal(journalChecks(wrongResult, { job: "mafia", mode: "viewing" }).ok, false);
+  const wrongDay = journalView("doctor", { rows: [{ day: "1일차", who: "하하", result: "보호", hasNew: true }] });
+  assert.equal(journalChecks(wrongDay, { job: "doctor", mode: "viewing" }).ok, false);
+  const noNew = journalView("police", { rows: [{ day: "1일차 밤", who: "하하", result: "마피아", hasNew: false }] });
+  assert.equal(journalChecks(noNew, { job: "police", mode: "viewing" }).ok, false);
+  const btnDot = journalView("police");
+  btnDot.roleCard.button = rcBtn({ label: "역할 카드, 새 기록", dotRect: rect(330, 10, 12, 12) });
+  assert.equal(journalChecks(btnDot, { job: "police", mode: "viewing" }).ok, false);
+  const tabDot = journalView("police");
+  tabDot.roleCard.sheet.tabs[1].dotRect = rect(100, 4, 10, 10);
+  assert.equal(journalChecks(tabDot, { job: "police", mode: "viewing" }).ok, false);
+});
+
+test("journalChecks R3: 줄이 없으면 역할별 빈 상태 문구여야 통과", () => {
+  const ok = journalView("police", { rows: [], emptyText: "아직 조사한 사람이 없어요" });
+  assert.equal(journalChecks(ok, { job: "police", mode: "viewing" }).ok, true);
+  const mafia = journalView("mafia", { rows: [], emptyText: "아직 지목한 사람이 없어요" });
+  assert.equal(journalChecks(mafia, { job: "mafia", mode: "viewing" }).ok, true);
+  const doctor = journalView("doctor", { rows: [], emptyText: "아직 보호한 사람이 없어요" });
+  assert.equal(journalChecks(doctor, { job: "doctor", mode: "viewing" }).ok, true);
+  const wrong = journalView("police", { rows: [], emptyText: "아직 지목한 사람이 없어요" });
+  assert.equal(journalChecks(wrong, { job: "police", mode: "viewing" }).ok, false);
+});
+
+test("journalChecks R4: 시트를 닫은 뒤 NEW 가 사라진다(시트 없음 또는 hasNew 모두 false)", () => {
+  const closed = rcSnap();
+  const r = journalChecks(closed, { job: "police", mode: "closed" });
+  assert.equal(r.id, "R4");
+  assert.equal(r.ok, true);
+  const reopened = journalView("police", { rows: [{ day: "1일차 밤", who: "하하", result: "마피아", hasNew: false }] });
+  assert.equal(journalChecks(reopened, { job: "police", mode: "closed" }).ok, true);
+  assert.equal(journalChecks(journalView("police"), { job: "police", mode: "closed" }).ok, false);
+});
+
+const notice = (over = {}) => ({ rect: rect(20, 127, 320, 44), text: "수사일지가 추가됐어요 · 눌러서 보기", isButton: true, role: "status", ...over });
+
+test("noticeChecks R6: 역할에 맞는 문구·높이 44 이상·버튼·role status", () => {
+  const texts = { police: "수사일지가 추가됐어요 · 눌러서 보기", mafia: "암살일지가 추가됐어요 · 눌러서 보기", doctor: "치료일지가 추가됐어요 · 눌러서 보기" };
+  for (const job of ["police", "mafia", "doctor"]) {
+    const s = rcSnap();
+    s.roleCard.notice = notice({ text: texts[job] });
+    const r = noticeChecks(s, { job });
+    assert.equal(r.id, "R6");
+    assert.equal(r.ok, true, `${job}: ${r.detail}`);
+  }
+  const base = () => {
+    const s = rcSnap();
+    s.roleCard.notice = notice();
+    return s;
+  };
+  const wrong = base();
+  wrong.roleCard.notice.text = "암살일지가 추가됐어요 · 눌러서 보기";
+  assert.equal(noticeChecks(wrong, { job: "police" }).ok, false);
+  const short = base();
+  short.roleCard.notice.rect = rect(20, 127, 320, 40);
+  assert.equal(noticeChecks(short, { job: "police" }).ok, false);
+  const nobtn = base();
+  nobtn.roleCard.notice.isButton = false;
+  assert.equal(noticeChecks(nobtn, { job: "police" }).ok, false);
+  const role = base();
+  role.roleCard.notice.role = null;
+  assert.equal(noticeChecks(role, { job: "police" }).ok, false);
+  assert.equal(noticeChecks(rcSnap(), { job: "police" }).ok, false);
+});
+
+test("noticeChecks R6: 누른 뒤에는 시트의 선택 탭이 활동 기록이어야 한다", () => {
+  const ok = journalView("police");
+  assert.equal(noticeChecks(ok, { job: "police", clicked: true }).ok, true);
+  const bad = journalView("police");
+  bad.roleCard.sheet.tabs = [
+    { text: "내 역할", selected: true, dotRect: null },
+    { text: "활동 기록", selected: false, dotRect: null },
+  ];
+  assert.equal(noticeChecks(bad, { job: "police", clicked: true }).ok, false);
+  assert.equal(noticeChecks(rcSnap(), { job: "police", clicked: true }).ok, false);
+});
+
+// ---- 관전자(V1)·살아 있는 사람(V2) ----
+
+const specSeats = [
+  { seat: 0, job: "citizen", alive: false }, // 나(탈락)
+  { seat: 1, job: "mafia", alive: true },
+  { seat: 2, job: "police", alive: true },
+  { seat: 3, job: "citizen", alive: false },
+];
+const specSnap = () => {
+  const s = daySnap();
+  s.seats = [
+    { ...s.seats[0], seat: 0, imgSrc: "/characters/ghost/ghost_default@2x.png" },
+    { ...s.seats[1], seat: 1, imgSrc: "/characters/roles/mafia_default@2x.png" },
+    { ...s.seats[2], seat: 2, imgSrc: "/characters/roles/police_default@2x.png" },
+    { ...s.seats[2], seat: 3, imgSrc: "/characters/ghost/ghost_default@2x.png" },
+  ];
+  s.tags = [0, 1, 2, 3].map((seat) => ({ ...daySnap().tags[1], seat }));
+  return s;
+};
+
+test("spectatorChecks V1: 살아 있는 다른 자리는 직업 그림, 탈락·내 자리는 유령, 이름표는 한 줄 + 점", () => {
+  const r = spectatorChecks(specSnap(), { spectate: specSeats, mySeat: 0 });
+  assert.equal(r.id, "V1");
+  assert.equal(r.ok, true, r.detail);
+  const wrongJob = specSnap();
+  wrongJob.seats[1].imgSrc = "/characters/roles/doctor_default@2x.png";
+  assert.equal(spectatorChecks(wrongJob, { spectate: specSeats, mySeat: 0 }).ok, false);
+  const neutral = specSnap();
+  neutral.seats[2].imgSrc = "/characters/figures/fig3.png";
+  assert.equal(spectatorChecks(neutral, { spectate: specSeats, mySeat: 0 }).ok, false);
+  const deadRole = specSnap();
+  deadRole.seats[3].imgSrc = "/characters/roles/citizen_default@2x.png";
+  assert.equal(spectatorChecks(deadRole, { spectate: specSeats, mySeat: 0 }).ok, false);
+  const meRole = specSnap();
+  meRole.seats[0].imgSrc = "/characters/roles/citizen_default@2x.png";
+  assert.equal(spectatorChecks(meRole, { spectate: specSeats, mySeat: 0 }).ok, false);
+  const twoLines = specSnap();
+  twoLines.tags[2].lines = 2;
+  assert.equal(spectatorChecks(twoLines, { spectate: specSeats, mySeat: 0 }).ok, false);
+  const noDot = specSnap();
+  noDot.tags[1].hasDot = false;
+  assert.equal(spectatorChecks(noDot, { spectate: specSeats, mySeat: 0 }).ok, false);
+});
+
+test("livingRoleArtChecks V2: 테이블 안에 역할 그림 0 개, 시트·공개 화면에만 내 역할 하나", () => {
+  const ok = livingRoleArtChecks(
+    { roleImgs: [{ src: "/characters/roles/police_default@2x.png", inTable: false, inDialog: true, inReveal: false }] },
+    { myJob: "police" },
+  );
+  assert.equal(ok.id, "V2");
+  assert.equal(ok.ok, true, ok.detail);
+  assert.equal(livingRoleArtChecks({ roleImgs: [] }, { myJob: "police" }).ok, true);
+  const inTable = livingRoleArtChecks(
+    { roleImgs: [{ src: "/characters/roles/mafia_default@2x.png", inTable: true, inDialog: false, inReveal: false }] },
+    { myJob: "police" },
+  );
+  assert.equal(inTable.ok, false);
+  const elsewhere = livingRoleArtChecks(
+    { roleImgs: [{ src: "/characters/roles/police_default@2x.png", inTable: false, inDialog: false, inReveal: false }] },
+    { myJob: "police" },
+  );
+  assert.equal(elsewhere.ok, false);
+  const other = livingRoleArtChecks(
+    { roleImgs: [{ src: "/characters/roles/mafia_default@2x.png", inTable: false, inDialog: true, inReveal: false }] },
+    { myJob: "police" },
+  );
+  assert.equal(other.ok, false);
+  const two = livingRoleArtChecks(
+    {
+      roleImgs: [
+        { src: "/characters/roles/police_default@2x.png", inTable: false, inDialog: true, inReveal: false },
+        { src: "/characters/roles/doctor_default@2x.png", inTable: false, inReveal: true, inDialog: false },
+      ],
+    },
+    { myJob: "police" },
+  );
+  assert.equal(two.ok, false);
 });

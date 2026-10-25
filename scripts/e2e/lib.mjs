@@ -302,3 +302,19 @@ export function tagsOverlap(tags) {
     for (let j = i + 1; j < tags.length; j++) if (rectsOverlap(tags[i].rect, tags[j].rect)) bad.push(`${tags[i].seat}-${tags[j].seat}`);
   return result("D9", "4명 이름표 안 겹침", bad);
 }
+
+// ---- RED 단계 임시 껍데기: 단언으로 실패하게 하려는 자리 표시. GREEN 커밋에서 실제 구현으로 바뀐다. ----
+const todo = (id) => ({ id, label: "미구현", ok: false, detail: "미구현" });
+export const TEXT_SIZE_ALLOW = [];
+export const dimChecks = () => todo("M3");
+export const morningGoneChecks = () => todo("M4");
+export const turnChecks = () => [todo("K1")];
+export const claimChatIssues = () => todo("K3");
+export const inspectChecks = () => todo("X1");
+export const roleCardButtonChecks = () => todo("R1");
+export const roleCardTabChecks = () => todo("R2");
+export const journalChecks = () => todo("R3");
+export const noticeChecks = () => todo("R6");
+export const spectatorChecks = () => todo("V1");
+export const livingRoleArtChecks = () => todo("V2");
+export const smallTextIssues = () => todo("G7");
