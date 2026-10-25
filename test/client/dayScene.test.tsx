@@ -265,12 +265,12 @@ describe("DayScene 하단 패널 (SPEC 하단, 결정 0017-6)", () => {
     expect(container.querySelectorAll("section.mf-dayscene__panel").length).toBe(1);
   });
 
-  it("패널 높이 CSS: calc(157px + 아래 안전 영역)·flex none·border-box·night-800, 안쪽 여백 10px 16px calc(12px + 안전 영역), 간격 8", () => {
+  it("패널 높이 CSS: calc(157px + 아래 안전 영역)·flex none·border-box·night-800, 안쪽 여백 8px 16px calc(12px + 안전 영역), 간격 8", () => {
     expect(/height:\s*calc\(157px \+ env\(safe-area-inset-bottom\)\)/.test(panelRule)).toBe(true);
     expect(/flex:\s*none/.test(panelRule)).toBe(true);
     expect(/box-sizing:\s*border-box/.test(panelRule)).toBe(true);
     expect(/gap:\s*var\(--space-sm\)/.test(panelRule)).toBe(true);
-    expect(/padding:\s*10px var\(--space-md\) calc\(12px \+ env\(safe-area-inset-bottom\)\)/.test(panelRule)).toBe(true);
+    expect(/padding:\s*8px var\(--space-md\) calc\(12px \+ env\(safe-area-inset-bottom\)\)/.test(panelRule)).toBe(true);
     expect(/background:\s*var\(--night-800\)/.test(panelRule)).toBe(true);
     expect(/border-radius:\s*var\(--radius-lg\) var\(--radius-lg\) 0 0/.test(panelRule)).toBe(true);
   });

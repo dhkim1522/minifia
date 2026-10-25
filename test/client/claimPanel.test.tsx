@@ -155,12 +155,12 @@ describe("직업 칩 한 줄 CSS (시안 f4.css .seg, 결정 0017-6)", () => {
     return new RegExp(`(?:^|\\})\\s*${esc}\\s*\\{([^}]*)\\}`, "m").exec(css)?.[1] ?? "";
   };
 
-  it(".mf-seg__b 는 flex 1·높이 44(--tap-min)·알약, .mf-seg 는 간격 6px 한 줄", () => {
+  it(".mf-seg__b 는 flex 1·높이 44(--tap-min)·알약, .mf-seg 는 간격 var(--space-xs) 한 줄", () => {
     expect(/flex:\s*1[;\s]/.test(rule(".mf-seg__b"))).toBe(true);
     expect(/height:\s*(44px|var\(--tap-min\))/.test(rule(".mf-seg__b"))).toBe(true);
     expect(/border-radius:\s*var\(--radius-pill\)/.test(rule(".mf-seg__b"))).toBe(true);
     expect(/display:\s*flex/.test(rule(".mf-seg"))).toBe(true);
-    expect(/gap:\s*6px/.test(rule(".mf-seg"))).toBe(true);
+    expect(/gap:\s*var\(--space-xs\)/.test(rule(".mf-seg"))).toBe(true);
     expect(/flex-wrap:\s*wrap/.test(rule(".mf-seg"))).toBe(false);
   });
 

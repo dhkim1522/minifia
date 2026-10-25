@@ -418,6 +418,6 @@ describe("[테스트] 닻과 아침 어둡게 층 (03.1-10, D-16, UI-SPEC E)", (
     const anchor = btn.closest(".mf-tt-anchor") as HTMLElement;
     expect(String((anchor.compareDocumentPosition(dim as Node) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0)).toBe("true");
     expect(getComputedStyle(btn).pointerEvents).not.toBe("none");
-    expect(String(btn.disabled)).toBe("false");
+    expect(String((btn as HTMLButtonElement).disabled)).toBe("false");
   });
 });

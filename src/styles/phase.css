@@ -32,9 +32,12 @@
 
 /* PhaseBar — 윗줄 왼쪽 제목+안내, 오른쪽 extra, 아랫줄 타이머(UI-SPEC S-05). */
 .mf-phasebar { flex: none; display: flex; flex-direction: column; gap: var(--space-sm); padding: var(--space-md); width: 100%; }
-.mf-phasebar__row { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-sm); }
+/* 윗줄 최소 높이 50.4 = 제목 28.8 + 간격 2 + 안내 19.6 — 모든 낮 단계에서 헤더 높이가 같다(119.2 = 16 + 50.4 + 8 + 28.8 + 16). */
+.mf-phasebar__row { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-sm); min-height: 50.4px; }
 .mf-phasebar__text { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .mf-phasebar .mf-t-heading { text-shadow: var(--shadow-text); }
+/* 제목·안내는 줄바꿈하지 않는다. 제목 열이 줄어들 일이 없도록 폭을 계산해 둔 값(UI-SPEC A): 360폭 윗줄 가용 328, 버튼 최대 120, 제목 열 ≥ 198 vs 필요 ≈ 150 */
+.mf-phasebar .mf-t-heading, .mf-phasebar__do { white-space: nowrap; }
 .mf-phasebar__do { margin: 0; font-size: 14px; line-height: 1.4; font-weight: 400; color: var(--gray-300); word-break: keep-all; }
 .mf-phasebar__extra { flex: none; display: flex; gap: var(--space-sm); }
 

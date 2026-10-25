@@ -12,7 +12,8 @@
 .mf-tt:focus-visible { outline: 2px solid var(--gray-100); outline-offset: 2px; }
 .mf-tt svg { width: 18px; height: 18px; flex: none; }
 
-/* 장면 상자 왼쪽 위(대기실·낮 장면): 닻은 높이 0 이라 테이블 배치를 밀지 않고, 버튼만 장면 위에 떠 있다. */
+/* 장면 상자 왼쪽 위(대기실·낮 장면): 닻은 높이 0 이라 테이블 배치를 밀지 않고, 버튼만 장면 위에 떠 있다.
+   [테스트] 는 시안 T1 왼쪽 위 유지 — 사용자 결정 F3, D4 는 깊이 ≤ 3px 로 완화됨. 닻은 DayTable 밖이라 어둡게 층·캐릭터와 숫자로 비교하지 않고 쌓임 순서(z-overlay 50)로 위에 둔다. */
 .mf-tt-anchor { position: relative; height: 0; z-index: var(--z-overlay); }
 .mf-tt-anchor .mf-tt { position: absolute; top: var(--space-sm); left: 0; }
 
