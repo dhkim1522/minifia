@@ -15,6 +15,7 @@ Thumbs.db
 # Node·빌드
 node_modules/
 dist/
+scripts/e2e/out/
 .wrangler/
 *.log
 worker-configuration.d.ts
