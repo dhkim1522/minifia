@@ -1,7 +1,7 @@
 // 연결별 공개 뷰. 공개 항목은 허용 목록(다섯 키 객체 리터럴, alive 는 공개 정보)으로만 만든다 — Player 를 펼쳐 복사하지 않는다.
 // 관전(결정 0021): 탈락한 본인에게만 모든 실제 직업과 그 밤의 행동 대상. 살아 있는 사람에게는 어떤 키로도 싣지 않는다 —
 // 결정 0002 를 "살아 있는 사람에게는 보내지 않는다" 로 좁혀 유지. 직업 키 이름은 role 이 아니라 job 이다(누출 검사가 role 키를 me 밖에서 금지).
-// 밤 필드 받는 사람: pick 본인(생존·밤), allyPicks 생존 마피아(밤), records 경찰 본인(역할 공개 단계 전체), morning 모두(아침만).
+// 밤 필드 받는 사람: pick 본인(생존·밤), allyPicks 생존 마피아(밤), records 경찰(수사)·마피아(암살)·의사(치료) 본인 중 본인 역할 일지 하나(역할 공개 단계 전체), morning 모두(아침만).
 import type {
   DayView,
   MorningView,
@@ -132,9 +132,14 @@ export function buildView(state: RoomState, playerId: string, now: number): Room
     myInfo.allyPicks = [...picked].sort((a, b) => a - b);
   }
 
-  // 수사 기록은 경찰 본인에게만, 역할을 싣는 모든 단계에서 탈락한 뒤에도(D-09, D-11). 세 키씩 복사한다 — isMafia 는 불리언 한 비트다.
+  // 일지는 본인 역할의 것 하나만, 본인에게만, 역할을 싣는 모든 단계에서 탈락한 뒤에도(D-09·D-10·D-11, 결정 0026-7).
+  // 줄마다 키를 하나씩 써서 만든다(펼쳐 복사 금지): 경찰 isMafia·마피아 died 는 불리언 한 비트, 직업 이름은 어느 줄에도 없다.
   if (def.revealsOwnRole && me.role === "police") {
     myInfo.records = (me.investigations ?? []).map((r) => ({ n: r.n, target: r.target, isMafia: r.isMafia }));
+  } else if (def.revealsOwnRole && me.role === "mafia") {
+    myInfo.records = (me.assassinations ?? []).map((r) => ({ n: r.n, target: r.target, died: r.died }));
+  } else if (def.revealsOwnRole && me.role === "doctor") {
+    myInfo.records = (me.treatments ?? []).map((r) => ({ n: r.n, target: r.target }));
   }
 
   const view: RoomView = {
