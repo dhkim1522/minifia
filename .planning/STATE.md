@@ -7,10 +7,10 @@ current_phase_name: 밤과 아침
 current_plan: 12
 status: verifying
 stopped_at: Completed 03.1-14-PLAN.md
-last_updated: "2026-10-25T08:58:14.570Z"
+last_updated: "2026-10-25T12:03:44.175Z"
 last_activity: 2026-10-25
 last_activity_desc: Phase 03 execution started
-state_head: 3ce5846c65eaaa35384e9a03a4861f6b8eb79749
+state_head: c39247ed434ba49db72e1879d26211d9e5f391a8
 progress:
   total_phases: 7
   completed_phases: 2
@@ -215,6 +215,12 @@ None yet.
 - [v1.1] 사운드는 각자 폰에서 낸다(결정 0005). 무거운 분위기가 소리 없이 약하면 사운드를 앞당긴다. 자유 채팅(COMMX-01)은 플레이테스트 피드백으로 정한다
 - [v2.0] 수익화는 출시 전에 따로 정한다
 - G-01-9 열림: 01-16 실기기 확인 FAILED. 재진단 필요(1순위 dvh/하단 기준선 변화). 01-16-SUMMARY.md 참조
+
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Directory |
+|---|-------------|------|--------|-----------|
+| 261025-qvx | 테스트 피드백 4건 수정(밤 끝 알림 제거·차례 링 앞뒤 층·밤 시작 문구)과 테이블 기하 P2 고정, 결정 0028, 배포 2026-10-25T11:40:42Z+d2af5a9 | 2026-10-25 | c39247e | [261025-qvx-test-feedback-fixes](./quick/261025-qvx-test-feedback-fixes/) |
 
 ### Roadmap Evolution
 
