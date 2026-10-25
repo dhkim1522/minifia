@@ -14,11 +14,16 @@ export interface TestSocket {
   closedPromise: Promise<{ code: number; reason: string }>;
 }
 
-export async function createRoom(nickname = "방장"): Promise<{ code: string; token: string }> {
+export interface RoomOptions {
+  /** true 일 때만 본문에 testMode: true 를 싣는다(테스트 방, 결정 0022). 기본 본문은 nickname 하나뿐이다. */
+  testMode?: boolean;
+}
+
+export async function createRoom(nickname = "방장", options: RoomOptions = {}): Promise<{ code: string; token: string }> {
   const res = await exports.default.fetch("http://x/api/rooms", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ nickname }),
+    body: JSON.stringify(options.testMode === true ? { nickname, testMode: true } : { nickname }),
   });
   expect(res.status).toBe(201);
   const body = (await res.json()) as CreateRoomResponse;
@@ -156,8 +161,8 @@ export interface Seated {
 }
 
 /** 방장 + 연결 참가자 `connectedGuests` 명 + HTTP 로만 참가한 `offlineGuests` 명. */
-export async function seat(connectedGuests: number, offlineGuests: number): Promise<Seated> {
-  const { code, token } = await createRoom("방장");
+export async function seat(connectedGuests: number, offlineGuests: number, options: RoomOptions = {}): Promise<Seated> {
+  const { code, token } = await createRoom("방장", options);
   const host = await connect(code);
   await hello(host, token);
   const guests: Seated["guests"] = [];
