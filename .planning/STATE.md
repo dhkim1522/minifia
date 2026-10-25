@@ -6,16 +6,16 @@ current_phase: 03
 current_phase_name: 밤과 아침
 current_plan: 12
 status: verifying
-stopped_at: Completed 03.1-02-PLAN.md
-last_updated: "2026-10-25T06:40:22.682Z"
+stopped_at: Completed 03.1-03-PLAN.md
+last_updated: "2026-10-25T06:46:44.749Z"
 last_activity: 2026-10-25
 last_activity_desc: Phase 03 execution started
-state_head: ba19f1522fe37be18c21792c89760e0503eafff7
+state_head: b3e503bf474cb0752c4da44c7391f99b03b420f0
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 63
-  completed_plans: 51
+  completed_plans: 52
 ---
 
 # Project State
@@ -97,6 +97,7 @@ Progress: [██░░░░░░░░] 17%
 | Phase 03 P12 | 25 min | 3 tasks | 5 files |
 | Phase 03.1 P01 | 80min | 3 tasks | 19 files |
 | Phase 03.1 P02 | 70min | 3 tasks | 10 files |
+| Phase 03.1 P03 | 약 1시간 | 2 tasks | 16 files |
 
 ## Accumulated Context
 
@@ -176,6 +177,8 @@ Recent decisions affecting current work:
 - [Phase 03.1]: [03.1-01] 1일차 claim 시작 자리는 방장(살아 있으면), 이후 낮마다 직전 시작 다음 생존 seat 로 한 칸 이동·탈락자 건너뜀; 시간 초과는 이월 없는 none
 - [Phase 03.1]: [03.1-01] 공개 연출 단계는 PhaseId·단계 표에서 삭제, 옛 이름은 normalizeStoredRoom 한 곳에만 남김 (D-07, 결정 0027 에 기록 예정)
 - [Phase 03.1]: 03.1-02: applyClaim = selectClaim(now) -> tick -> 전원 방송 -> reschedule; 봇 계획 키 claim:{마감}:{차례}; testSkip 은 claim 중 차례 단위; 와이어는 결정 0027
+- [Phase 03.1]: 03.1-03: claim 단계는 이름표 아랫줄을 관전자 실제 직업 줄·탈락 줄까지 모두 끈다(밤·토론·아침의 관전 줄은 03.1-05 까지 유지)
+- [Phase 03.1]: 03.1-03: claim 헤더 타이머는 calm, 차례 안내는 내 차례예요 / {닉네임}님 차례 (못 찾으면 빈 문자열)
 
 ### Pending Todos
 
@@ -205,6 +208,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-25T06:40:22.391Z
-Stopped at: Completed 03.1-02-PLAN.md
+Last session: 2026-10-25T06:46:44.454Z
+Stopped at: Completed 03.1-03-PLAN.md
 Resume file: None
