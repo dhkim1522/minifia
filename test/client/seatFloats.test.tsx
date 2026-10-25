@@ -1,7 +1,7 @@
 import { act, cleanup, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { PhaseId, RoomView } from "../../shared/protocol";
-import { CHAT_PHASES, EMOJI_MS, SPOKE_MS, useDayChat, useSeatFloats } from "../../src/net/seatFloats";
+import { CHAT_PHASES, EMOJI_MS, FLOAT_PHASES, SPOKE_MS, useDayChat, useSeatFloats } from "../../src/net/seatFloats";
 import type { RoomEvent } from "../../src/net/useRoomConnection";
 
 // 낮 토론의 보낸 사람 반전(3초)·이모티콘(2초)·그날 채팅 줄은 chat·emoji 이벤트에서만 만든다(결정 0017-2·0017-7).
@@ -141,11 +141,32 @@ describe("useSeatFloats: 이모티콘", () => {
 });
 
 describe("useSeatFloats: 정리", () => {
-  it("discussion 이 아닌 동안 온 chat·emoji 는 무시한다", () => {
+  it("claim 단계에서 온 emoji 이벤트는 floats.emoji 에 쌓이고 spoke 는 쌓이지 않는다(chat 이벤트가 오지 않는 단계)", () => {
     const { hook, emit } = setup(viewOf({}, "claim"));
-    emit(chat(1, 1));
     emit({ t: "emoji", seat: 2, icon: "smile", at: 1 });
-    expect(Object.keys(hook.result.current.spoke).length + Object.keys(hook.result.current.emoji).length).toBe(0);
+    expect(Object.keys(hook.result.current.emoji).join(",")).toBe("2");
+    expect(hook.result.current.emoji[2]?.icon).toBe("smile");
+    expect(Object.keys(hook.result.current.spoke).length).toBe(0);
+    // 이 단계에서는 chat 이벤트가 와도 반전을 켜지 않는다
+    emit(chat(1, 1));
+    expect(Object.keys(hook.result.current.spoke).length).toBe(0);
+  });
+
+  it("lobby·dayAnnounce·morning 에서 온 chat·emoji 는 무시한다", () => {
+    for (const phase of ["lobby", "dayAnnounce", "morning"] as const) {
+      const { hook, emit } = setup(viewOf({}, phase));
+      emit(chat(1, 1));
+      emit({ t: "emoji", seat: 2, icon: "smile", at: 1 });
+      expect(`${phase}:${Object.keys(hook.result.current.spoke).length + Object.keys(hook.result.current.emoji).length}`).toBe(`${phase}:0`);
+    }
+  });
+
+  it("claim → discussion 전환 때 floats 가 비워진다(열쇠 변경)", () => {
+    const { hook, emit, update } = setup(viewOf({}, "claim"));
+    emit({ t: "emoji", seat: 2, icon: "smile", at: 1 });
+    expect(Object.keys(hook.result.current.emoji).length).toBe(1);
+    update(viewOf({}, "discussion"));
+    expect(Object.keys(hook.result.current.emoji).length).toBe(0);
   });
 
   it("discussion 을 벗어나면 모두 비운다", () => {
@@ -225,7 +246,7 @@ describe("useDayChat: 그날 받은 chat 이벤트로만 만드는 줄 (결정 0
     expect(seqs(hook.result.current)).toBe("1");
   });
 
-  it("discussion 이 아닌 단계의 chat 은 버린다", () => {
+  it("claim 단계의 chat 은 버린다(수집 단계는 discussion·night 그대로)", () => {
     const { hook, emit } = setupChat(viewOf({}, "claim"));
     emit(chat(1, 1));
     expect(hook.result.current.length).toBe(0);
@@ -290,14 +311,18 @@ describe("밤 수집 (D-17, 결정 0019, RESEARCH Pitfall 4)", () => {
     expect(count(hook.result.current)).toBe(0);
   });
 
-  it("morning·claim 중 온 chat·emoji 는 버린다", () => {
+  it("FLOAT_PHASES 는 claim·discussion·night 세 개다(반전·이모티콘은 claim 부터, 결정 0023-2)", () => {
+    expect([...(FLOAT_PHASES ?? [])].sort().join(",")).toBe("claim,discussion,night");
+  });
+
+  it("morning 중 온 chat·emoji 는 버리고, claim 중에는 chat 줄은 버리되 emoji 는 받는다", () => {
     for (const phase of ["morning", "claim"] as const) {
       const c = setupChat(viewOf({}, phase));
       c.emit(chat(1, 1));
       const f = setup(viewOf({}, phase));
       f.emit(chat(1, 1));
       f.emit({ t: "emoji", seat: 2, icon: "smile", at: 1 });
-      expect(`${phase}:${c.hook.result.current.length}:${count(f.hook.result.current)}`).toBe(`${phase}:0:0`);
+      expect(`${phase}:${c.hook.result.current.length}:${count(f.hook.result.current)}`).toBe(phase === "claim" ? "claim:0:1" : "morning:0:0");
     }
   });
 
