@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { isAlive } from "../../shared/game/alive";
-import type { InvestigationRecord, PhaseId, RemovedReason, RoomView } from "../../shared/protocol";
+import type { PhaseId, RemovedReason, RoomView } from "../../shared/protocol";
 import { Button } from "../components/Button";
-import { Icon } from "../components/Icon";
-import { MyRoleSheet } from "../components/MyRoleSheet";
 import { ReconnectBanner } from "../components/ReconnectBanner";
-import { RecordsButton, RecordsSheet } from "../components/RecordsSheet";
+import { RoleCardButton } from "../components/RoleCardButton";
+import { RoleCardSheet } from "../components/RoleCardSheet";
+import type { RoleCardTab } from "../components/RoleCardSheet";
 import { TestToolsButton, TestToolsSheet } from "../components/TestTools";
 import { morningCardText } from "../game/eliminationText";
 import { preloadRoleAssets } from "../net/assets";
@@ -18,7 +18,6 @@ import { DayScene } from "./DayScene";
 import { Lobby } from "./Lobby";
 import { RoleReveal } from "./RoleReveal";
 import "../styles/phase.css";
-import "../styles/records.css";
 import "../styles/room.css";
 
 // gaveUp: 30초 연결 실패 뒤 [처음으로]. App 은 default 분기로 입장 정보를 지우지 않고 첫 화면으로 간다.
@@ -96,47 +95,41 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
     if (phase === "lobby" || phase === "assigning") preloadRoleAssets();
   }, [phase]);
 
-  // [내 역할] 시트 열림과 "카드가 앞면이 된 적이 있는가" 는 단계 switch 밖에서 쥔다 —
-  // 단계 화면이 바뀌어도 시트가 살아 있어야 한다(Pitfall 19 ⑧, UI-SPEC E14 phase-change).
-  const [myRoleOpen, setMyRoleOpen] = useState(false);
+  // 역할 카드 시트(결정 0026): 열림·선택 탭과 "카드가 앞면이 된 적이 있는가" 는 단계 switch 밖에서 쥔다 —
+  // 단계 화면이 바뀌어도 시트가 살아 있어야 한다(Pitfall 19 ⑧, UI-SPEC D).
+  const [roleCard, setRoleCard] = useState<{ open: boolean; tab: RoleCardTab }>({ open: false, tab: "role" });
   const [seenFront, setSeenFront] = useState(false);
   const onSeenFront = useCallback(() => setSeenFront(true), []);
 
-  // 경찰 [수사 기록] 시트: 열림·NEW 도 단계 switch 밖에서 쥔다 — 밤 → 아침 → 낮으로 바뀌어도 열린 채다(UI-SPEC N-5).
-  // seen 은 "열어서 본 기록 수". 기록 내용은 서버 view(me.records) 에서만 오고, 폰에는 이 개수만 남긴다(가정 A4).
-  // 03.1-11 이 헤더 버튼·시트를 역할 카드로 통째로 바꾼다. 그때까지의 임시 다리: me.records 는 역할별 일지의 합집합이라 경찰일 때만 수사일지로 좁힌다.
-  const policeRecords: InvestigationRecord[] =
-    view?.me.role === "police" ? ((view.me.records ?? []) as InvestigationRecord[]) : [];
-  const recordsLen = policeRecords.length;
+  // 읽은 일지 수: 폰에는 이 개수만 남긴다. 기록 내용은 서버 view(me.records) 에서만 온다(가정 A4, T-03.1-32).
+  // 활동 기록 탭이 보이는 순간 현재 길이로 올려 버튼 점·탭 점이 함께 사라지고, 그때 안 읽었던 만큼이 이 시트를 닫을 때까지 NEW 로 남는다(D-11).
+  const recordsLen = view?.me.records?.length ?? 0;
   const [seen, setSeen] = useState(() => loadSeenCount(code));
-  const [recordsOpen, setRecordsOpen] = useState(false);
-  const [newestIsNew, setNewestIsNew] = useState(false);
-  const openRecords = () => {
-    setNewestIsNew(unseenCount(recordsLen, seen) > 0);
-    setSeen(recordsLen);
-    saveSeenCount(code, recordsLen);
-    setRecordsOpen(true);
-  };
-  const closeRecords = () => {
-    setRecordsOpen(false);
-    setNewestIsNew(false);
-  };
-  // 연 채 새 기록이 오면 NEW 는 새 맨 위 줄로 옮겨 가고 점은 켜지지 않는다(이미 본 것으로 센다).
+  const [newCount, setNewCount] = useState(0);
+  const showBack = view?.phase === "roleReveal" && !seenFront;
+  const activityVisible = roleCard.open && roleCard.tab === "activity" && !showBack;
+  // 탭이 보이는 동안은 안 읽은 것이 없다(효과가 읽음으로 올리기 전 한 번의 그리기에도 점이 깜빡이지 않게).
+  const unread = activityVisible ? 0 : unseenCount(recordsLen, seen);
   useEffect(() => {
-    if (!recordsOpen || recordsLen <= seen) return;
-    setNewestIsNew(true);
+    if (!activityVisible) return;
+    const fresh = unseenCount(recordsLen, seen);
+    if (fresh === 0) return;
+    setNewCount((c) => c + fresh);
     setSeen(recordsLen);
     saveSeenCount(code, recordsLen);
-  }, [recordsOpen, recordsLen, seen, code]);
+  }, [activityVisible, recordsLen, seen, code]);
+  const closeRoleCard = () => {
+    setRoleCard({ open: false, tab: "role" });
+    setNewCount(0);
+  };
 
   // 새 판(대기실·배정)으로 돌아가면 앞면을 본 적 없는 상태로 되돌리고 시트를 닫는다.
-  // 본 기록 수도 0 으로 되돌린다 — 같은 방 코드로 새 판이 열려도 옛 값이 남지 않는다.
+  // 읽은 개수도 0 으로 되돌린다 — 같은 방 코드로 새 판이 열려도 옛 값이 남지 않는다.
   useEffect(() => {
     if (phase === "lobby" || phase === "assigning") {
       setSeenFront(false);
-      setMyRoleOpen(false);
-      setRecordsOpen(false);
-      setNewestIsNew(false);
+      setRoleCard({ open: false, tab: "role" });
+      setNewCount(0);
       setSeen(0);
       saveSeenCount(code, 0);
     }
@@ -152,25 +145,11 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
     if (status === "removed") onExit(removedReason ?? "room_closed");
   }, [status, removedReason, onExit]);
 
-  // [내 역할] 버튼은 모든 역할·모든 시점에 같은 한 가지 마크업이다(D-19 개정, R14).
-  const myRoleButton = (
-    <Button variant="secondary" compact icon={<Icon name="card" />} onClick={() => setMyRoleOpen(true)}>
-      내 역할
-    </Button>
-  );
+  // 헤더 오른쪽 슬롯은 모든 역할·모든 시점에 [역할 카드] 하나다(D-08). 안 읽은 일지가 있으면 앰버 점이 붙는다.
+  // 화면들이 받는 prop 이름은 myRoleButton 그대로다.
+  const myRoleButton = <RoleCardButton unread={unread > 0} onOpen={() => setRoleCard({ open: true, tab: "role" })} />;
 
-  // 경찰에게만 [수사 기록] 이 [내 역할] 왼쪽에 놓인다(낮 시작 발표부터 아침까지, 탈락한 경찰 포함). 다른 역할 화면에는 이 노드가 없다.
-  const showRecords = view?.me.role === "police";
-  const headerExtra = showRecords ? (
-    <>
-      <RecordsButton hasNew={unseenCount(recordsLen, seen) > 0} onOpen={openRecords} />
-      {myRoleButton}
-    </>
-  ) : (
-    myRoleButton
-  );
-
-  // 위쪽 바·낮 시작 발표처럼 장면에 빈 왼쪽 위가 없는 단계에서는 [테스트] 가 [내 역할] 왼쪽 같은 칸에 놓인다.
+  // 위쪽 바·낮 시작 발표처럼 장면에 빈 왼쪽 위가 없는 단계에서는 [테스트] 가 [역할 카드] 왼쪽 같은 칸에 놓인다.
   const testButton = testTools ? <TestToolsButton onOpen={() => setTestOpen(true)} /> : null;
   const withTest = (buttons: ReactNode) =>
     testButton ? (
@@ -186,12 +165,17 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
     <div className="mf-root mf-room">
       {view && banner !== "hidden" && <ReconnectBanner mode={banner} />}
       <div className="mf-room__body">{renderBody()}</div>
-      {view && myRoleOpen ? (
+      {view && roleCard.open ? (
         // 역할 확인에서 앞면을 본 적이 없을 때만 뒷면. 낮부터는 항상 앞면 내용이다(D-19 의 취지).
-        <MyRoleSheet view={view} showBack={view.phase === "roleReveal" && !seenFront} onClose={() => setMyRoleOpen(false)} />
-      ) : null}
-      {view && showRecords && recordsOpen ? (
-        <RecordsSheet records={policeRecords} players={view.players} newestIsNew={newestIsNew} onClose={closeRecords} />
+        <RoleCardSheet
+          view={view}
+          showBack={showBack}
+          tab={roleCard.tab}
+          onTab={(tab) => setRoleCard((s) => ({ ...s, tab }))}
+          unread={unread}
+          newCount={newCount}
+          onClose={closeRoleCard}
+        />
       ) : null}
       {view && testTools && testOpen ? (
         <TestToolsSheet view={view} canSend={connection.canSend} send={connection.send} onClose={() => setTestOpen(false)} />
@@ -272,12 +256,12 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
           <RoleReveal view={view} offset={connection.offset} myRoleButton={withTest(myRoleButton)} onSeenFront={onSeenFront} />
         );
       case "dayAnnounce":
-        return <Day view={view} myRoleButton={withTest(headerExtra)} />;
+        return <Day view={view} myRoleButton={withTest(myRoleButton)} />;
       case "claim":
       case "discussion":
       case "night":
       case "morning":
-        return <DayScene view={view} connection={connection} myRoleButton={headerExtra} testButton={testButton} />;
+        return <DayScene view={view} connection={connection} myRoleButton={myRoleButton} testButton={testButton} />;
       default:
         return connecting();
     }
