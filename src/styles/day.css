@@ -28,6 +28,10 @@
 .st-row .stat { flex: 1; min-width: 0; display: flex; align-items: center; justify-content: space-between; gap: var(--space-sm); min-height: var(--tap-min); margin: 0; padding: 0 var(--space-md); box-sizing: border-box; border-radius: var(--radius-md); background: var(--night-700); font-size: 14px; line-height: 20px; color: var(--gray-100); word-break: keep-all; }
 .st-row .stat b { font-weight: 700; color: var(--gray-50); }
 .st-row .stat span { color: var(--gray-300); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.st-row .mf-btn { flex: none; width: var(--tap-min); height: var(--tap-min); padding: 0; }
+
+/* 남의 차례 하단(시안 K2): 채팅 세 줄 + stat 줄. 높이 산술(UI-SPEC S6): 위 8 + 채팅 82.8 + 간격 8 + 44 + 아래 12 = 154.8 ≤ 157 — 패널 높이는 03.1-10 이 맞춘다 */
+.mf-turnpanel { display: flex; flex-direction: column; gap: var(--space-sm); }
 /* 직업 공개 패널(S-06b·c) — 시안 R9-claim·f4.css·f5.css: 제목(.ct 24px 굵게 gray-50) + 안내(.gd 14px/20px gray-300) + 한 줄 칩(.seg). */
 .mf-claimpanel { display: flex; flex-direction: column; gap: var(--space-sm); }
 .mf-claimpanel__title { margin: 0; font-size: 24px; line-height: 1.2; font-weight: 700; color: var(--gray-50); word-break: keep-all; }

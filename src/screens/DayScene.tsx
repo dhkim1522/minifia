@@ -19,7 +19,8 @@ import { TurnPanel } from "../components/TurnPanel";
 import { Toast, useToast } from "../components/Toast";
 import { morningCardText } from "../game/eliminationText";
 import { EMOJI_TEXT, NIGHT_TEMPLATE_ORDER } from "../game/messageText";
-import { CHAT_PHASES, useDayChat, useSeatFloats } from "../net/seatFloats";
+import { claimLinesOf } from "../net/claimLines";
+import { FLOAT_PHASES, useDayChat, useSeatFloats } from "../net/seatFloats";
 import type { RoomConnection } from "../net/useRoomConnection";
 import "../styles/day.css";
 import "../styles/night.css";
@@ -64,14 +65,17 @@ export function DayScene({ view, connection, myRoleButton, testButton }: DayScen
   }, [connection.epoch, recordsLen, isPolice, showRecordsToast]);
   // 가장 최근 이모티콘 하나를 보이지 않는 live 줄이 읽는다(UI-SPEC 접근성)
   const [lastEmoji, setLastEmoji] = useState<{ seat: number; icon: EmojiId } | null>(null);
-  // 채팅·이모티콘을 받는 단계(낮 토론·밤). 밤 이벤트는 서버가 살아 있는 마피아에게만 보낸다.
-  const inChatPhase = CHAT_PHASES.has(view.phase);
+  // 이모티콘을 받는 단계(claim·낮 토론·밤). 밤 이벤트는 서버가 살아 있는 마피아에게만 보낸다.
+  const inFloatPhase = FLOAT_PHASES.has(view.phase);
+  // 주장 줄(claim·discussion)은 서버가 공개한 claimLog 에서 화면이 만든다 — 재접속해도 복원되고 일차가 바뀌면 사라진다(D-05).
+  // 주장 단계가 토론보다 먼저라 주장 줄이 받은 채팅 줄 앞이다. 밤에는 마피아 채팅만 있다.
+  const dayLines = view.phase === "claim" || view.phase === "discussion" ? [...claimLinesOf(view), ...chatLines] : chatLines;
   useEffect(() => {
-    if (!inChatPhase) return;
+    if (!inFloatPhase) return;
     return connection.onEvent((e) => {
       if (e.t === "emoji") setLastEmoji({ seat: e.seat, icon: e.icon });
     });
-  }, [connection.onEvent, inChatPhase]);
+  }, [connection.onEvent, inFloatPhase]);
 
   // 이모티콘 live 줄은 단계가 바뀌면 비운다(다음 단계에서 지난 것을 읽지 않게). 렌더 중 상태 조정이라 효과 없이 첫 커밋부터 맞는다.
   const [prevPhase, setPrevPhase] = useState(view.phase);
@@ -124,6 +128,8 @@ export function DayScene({ view, connection, myRoleButton, testButton }: DayScen
   // 동료가 고른 대상(마피아 화면만, D-07). 서버가 생존 마피아에게만 보낸 값이다.
   const allyPicks = view.me.allyPicks ?? [];
   const nicknameOf = (seat: number): string | undefined => view.players.find((p) => p.seat === seat)?.nickname;
+  // 차례 강조(D-03): 서버 view 의 지금 차례 한 자리에만 발밑 링·말풍선 배지·이름표 반전. 차례가 넘어가면 다음 자리로 옮겨 간다.
+  const turnSeat = view.phase === "claim" ? view.day?.turn?.seat : undefined;
   const seats: DayTableSeat[] = [...view.players]
     .sort((x, y) => x.seat - y.seat)
     .map((p) => {
@@ -139,6 +145,7 @@ export function DayScene({ view, connection, myRoleButton, testButton }: DayScen
         dead: !isAlive(p),
         ...(spectatorPicksOf(p.seat).length > 0 ? { spectatorPicks: spectatorPicksOf(p.seat) } : {}),
         spoke: floats.spoke[p.seat] !== undefined,
+        turn: p.seat === turnSeat,
         emoji: e ? { key: e.key, icon: e.icon, z: e.z } : null,
         // 누를 수 있는 자리: 살아 있는 사람. 마피아 화면은 자신·동료도 눌리지 않는 이전 마크업이다(D-02 개정).
         ...(actor && isAlive(p) && !(myRole === "mafia" && (p.seat === view.me.seat || allies.includes(p.seat)))
@@ -200,7 +207,7 @@ export function DayScene({ view, connection, myRoleButton, testButton }: DayScen
                   more={false}
                 />
               ) : (
-                <MessageLog lines={chatLines} players={view.players} mySeat={view.me.seat} />
+                <MessageLog lines={dayLines} players={view.players} mySeat={view.me.seat} />
               )}
               <ReadOnlyRow />
             </>
@@ -208,11 +215,11 @@ export function DayScene({ view, connection, myRoleButton, testButton }: DayScen
             view.day?.turn?.seat === view.me.seat ? (
               <ClaimPanel view={view} canSend={connection.canSend} send={connection.send} />
             ) : (
-              <TurnPanel view={view} offset={connection.offset} />
+              <TurnPanel view={view} connection={connection} showToast={showToast} lines={dayLines} />
             )
           ) : view.phase === "discussion" ? (
             <>
-              <MessageLog lines={chatLines} players={view.players} mySeat={view.me.seat} />
+              <MessageLog lines={dayLines} players={view.players} mySeat={view.me.seat} />
               <DiscussionControls view={view} connection={connection} showToast={showToast} />
             </>
           ) : mafiaNight ? (
@@ -236,7 +243,7 @@ export function DayScene({ view, connection, myRoleButton, testButton }: DayScen
             </NightPanel>
           ) : null}
         </section>
-        {inChatPhase ? (
+        {inFloatPhase ? (
           <p className="mf-sr-only" aria-live="polite">
             {lastEmoji ? `${nicknameOf(lastEmoji.seat) ?? ""}: ${EMOJI_TEXT[lastEmoji.icon].name}` : ""}
           </p>

@@ -1,7 +1,8 @@
 // 낮 토론과 밤에 폰이 받은 chat·emoji 이벤트로만 만드는 화면 상태 훅 묶음(결정 0017-2·0017-7·0019). 서버 뷰에는 메시지가 없다.
+// 반전·이모티콘은 claim 부터(FLOAT_PHASES, 결정 0023-2), 채팅 줄은 discussion·night(CHAT_PHASES) — claim 에는 chat 이벤트가 오지 않는다.
 // 규칙:
 //  - 이벤트에서만 만든다. 재접속·새로고침으로 처음 마운트하면 지난 줄·반전·이모티콘은 복원되지 않는다.
-//  - 단계가 discussion·night(CHAT_PHASES)일 때 온 이벤트만 받는다. 밤 이벤트는 서버가 살아 있는 마피아와 관전자에게만 보낸다 —
+//  - 단계가 위 수집 단계일 때 온 이벤트만 받는다. 밤 이벤트는 서버가 살아 있는 마피아와 관전자에게만 보낸다 —
 //    화면은 역할로 다시 거르지 않는다(결정 0002·0021). 단계나 일차가 바뀌면(낮 → 밤, 밤 → 아침) 줄·반전·이모티콘을 모두 비운다.
 //  - 보낸 사람 반전(spoke)은 chat 이벤트 후 SPOKE_MS, 이모티콘은 emoji 이벤트 후 EMOJI_MS. 받은 순간의 로컬 시각 기준이다.
 //  - 반전과 이모티콘은 서로 지우지 않는다(하나는 이름표, 하나는 머리 위). 같은 자리 새 이벤트는 이전 것을 바꾸고
@@ -17,10 +18,14 @@ import type { RoomConnection } from "./useRoomConnection";
 /** chat·emoji 이벤트를 받는 단계: 낮 토론과 밤(D-17). 그 밖의 단계에서 온 이벤트는 버린다 */
 export const CHAT_PHASES: ReadonlySet<PhaseId> = new Set<PhaseId>(["discussion", "night"]);
 
+/** 반전·이모티콘을 받는 단계: claim 부터(결정 0023-2). 채팅 줄은 CHAT_PHASES 그대로 */
+export const FLOAT_PHASES: ReadonlySet<PhaseId> = new Set<PhaseId>(["claim", "discussion", "night"]);
+
 /** 수집 단계일 때만 있는 열쇠 `${일차}:${단계}`. 열쇠가 바뀌면(단계·일차) 지난 줄·반전·이모티콘을 비운다 */
-function chatKey(view: RoomView | null): string | undefined {
-  return view !== null && CHAT_PHASES.has(view.phase) ? `${view.day?.n}:${view.phase}` : undefined;
+function collectKey(view: RoomView | null, phases: ReadonlySet<PhaseId>): string | undefined {
+  return view !== null && phases.has(view.phase) ? `${view.day?.n}:${view.phase}` : undefined;
 }
+const chatKey = (view: RoomView | null): string | undefined => collectKey(view, CHAT_PHASES);
 
 /** 보낸 사람 이름표 윗줄이 반전되어 있는 시간 */
 export const SPOKE_MS = 3_000;
@@ -60,9 +65,12 @@ function expire(prev: SeatFloats, now: number): SeatFloats {
 export function useSeatFloats(view: RoomView | null, onEvent: RoomConnection["onEvent"]): SeatFloats {
   const [floats, setFloats] = useState<SeatFloats>(EMPTY);
   const zRef = useRef(0);
-  const key = chatKey(view);
+  const key = collectKey(view, FLOAT_PHASES);
   const collecting = useRef(key !== undefined);
   collecting.current = key !== undefined;
+  // chat 반전은 채팅 단계에서만 켠다(claim 에는 chat 이벤트가 오지 않는다)
+  const chatting = useRef(view !== null && CHAT_PHASES.has(view.phase));
+  chatting.current = view !== null && CHAT_PHASES.has(view.phase);
 
   // 단계·일차 전환 정리: 수집 열쇠가 바뀌거나 수집 단계를 벗어나면 모두 비운다(낮 → 밤, 밤 → 아침)
   useEffect(() => {
@@ -74,6 +82,7 @@ export function useSeatFloats(view: RoomView | null, onEvent: RoomConnection["on
     return onEvent((e) => {
       if (!collecting.current) return;
       if (e.t === "chat") {
+        if (!chatting.current) return;
         zRef.current += 1;
         const spoke: SeatSpoke = { key: `spoke-${zRef.current}`, until: Date.now() + SPOKE_MS };
         setFloats((prev) => ({ ...prev, spoke: { ...prev.spoke, [e.seat]: spoke } }));
