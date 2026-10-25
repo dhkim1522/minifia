@@ -1,5 +1,5 @@
 // 스모크: 배포(또는 로컬) 주소에서 방 만들기 → WebSocket hello → 대기실 상태까지 확인한다.
-// full 단계는 한 판 시작부터 낮 한 바퀴(낮 시작 발표 → 직업 공개 → 공개 연출 → 낮 토론 90초) → 밤 30초(역할별 행동·마피아 채팅)
+// full 단계는 한 판 시작부터 낮 한 바퀴(낮 시작 발표 → 직업 주장 차례 한 바퀴(한 명 8초, 결정 0023·0027) → 낮 토론 90초) → 밤 30초(역할별 행동·마피아 채팅)
 // → 아침 5초(탈락 발표) → 서버 타이머로 2일차 낮 시작 발표까지 돈다. 탈락한 클라이언트는 그 아침부터 관전 정보(spectate)를 받는다(결정 0021).
 // 방장 연장·넘기기는 없다(결정 0017-5). 빠른 메시지는 state 가 아니라 chat 프레임으로 온다(결정 0017-7).
 // Node 22.12+ 내장 fetch·전역 WebSocket 만 쓴다. 셸 명령·외부 패키지 없음 (Windows 에서도 같은 명령).
@@ -16,7 +16,7 @@ import { fileURLToPath } from "node:url";
 
 const TOTAL_LIMIT_MS = 30_000;
 const STATE_LIMIT_MS = 10_000;
-const FULL_TOTAL_LIMIT_MS = 300_000; // 시작 → 2일차 dayAnnounce 약 162초 + 여유
+const FULL_TOTAL_LIMIT_MS = 420_000; // 시작 → 2일차 dayAnnounce 약 170초 + 여유 (claim 은 최대 인원 × 8초)
 // 토론 90초 + 여유: 넘기기 없이 서버 타이머가 낮을 넘기는 것을 기다린다.
 const DISCUSSION_WAIT_MS = 90_000 + STATE_LIMIT_MS;
 // 밤 30초, 아침 5초 + 여유
@@ -41,18 +41,26 @@ const PHASE_NEXT = {
   assigning: ["roleReveal"],
   roleReveal: ["dayAnnounce"],
   dayAnnounce: ["claim"],
-  claim: ["claimReveal"],
-  claimReveal: ["discussion"],
+  claim: ["discussion"],
   discussion: ["night"],
   night: ["morning"],
   morning: ["dayAnnounce"],
 };
-const DAY_PHASES = ["dayAnnounce", "claim", "claimReveal", "discussion", "night", "morning"];
+const DAY_PHASES = ["dayAnnounce", "claim", "discussion", "night", "morning"];
 const ROLE_IDS = ["mafia", "police", "doctor", "citizen"];
-// 주장 값으로 쓰일 수 있는 문자열(직업 + 말 안 함). claimReveal 전에는 허용 경로 밖에 나오면 안 된다.
+// 주장 값으로 쓰일 수 있는 문자열(직업 + 말 안 함). 허용 경로 밖에 나오면 안 된다.
 const CLAIM_STRINGS = new Set([...ROLE_IDS, "none"]);
-// claimReveal 전 프레임에서 역할·주장 문자열이 나와도 되는 경로(배열 칸은 [] 로 줄여 비교한다).
-const ALLOWED_CLAIM_STRING_PATHS = new Set(["view.me.role", "view.me.claim", "view.day.roles[]"]);
+// 역할·주장 문자열이 나와도 되는 경로(배열 칸은 [] 로 줄여 비교한다, 결정 0027-6).
+// 차례가 끝나기 전에는 day.claimLog 에 그 차례 줄이 없으므로 고른 값은 어느 프레임에도 이 경로로 새지 않는다.
+// 탈락자의 view.spectate.seats[].job 은 탈락 뒤 프레임에서만 따로 허용한다.
+const ALLOWED_CLAIM_STRING_PATHS = new Set(["view.me.role", "view.day.roles[]", "view.day.claimLog[].claim"]);
+// 서버 전용 상태 키(결정 0027-3): 어떤 프레임에도 이름이 나오면 안 된다. claims 와 옛 완료 표시 키는 삭제된 옛 키다.
+// 옛 이름이 scripts 에 문자열로 남지 않았는지 grep 으로 확인하므로 옛 완료 표시 키는 조각으로 잇는다.
+const SERVER_ONLY_KEYS = ["claimPick", "claimOrder", "claimIdx", "claimStart", "claim" + "Done", "claims"];
+// 직업 주장 차례 하나의 길이(shared/game/phases.ts CLAIM_TURN_MS)
+const CLAIM_TURN_MS = 8_000;
+// 역할별 일지 줄의 키 집합(결정 0027-11)
+const RECORD_KEYS = { police: "isMafia,n,target", mafia: "died,n,target", doctor: "n,target" };
 const REJECT_MARKER = "SMOKE_REJECT_MARKER_7f3a";
 
 function fail(reason) {
@@ -267,12 +275,17 @@ function collectClaimStringPaths(value, path, out) {
 }
 
 // 요청을 보내 error 프레임이 오고 그 코드가 기대와 같은지 본다.
-async function expectError(client, msg, code, label) {
+// withState 이면 거부 뒤에 최신 state 가 이어서 온다는 것(결정 0027-4)도 본다.
+async function expectError(client, msg, code, label, withState = false) {
   const before = client.frames.length;
   client.ws.send(JSON.stringify(msg));
   await waitUntil(() => client.frames.slice(before).some((f) => f.msg?.t === "error"), STATE_LIMIT_MS, `${label} 의 error 프레임이 오지 않음`);
-  const err = client.frames.slice(before).find((f) => f.msg?.t === "error");
+  const errIdx = before + client.frames.slice(before).findIndex((f) => f.msg?.t === "error");
+  const err = client.frames[errIdx];
   if (err.msg.code !== code) fail(`${label} 의 error 가 ${code} 가 아님: ${err.msg.code}`);
+  if (withState) {
+    await waitUntil(() => client.frames.slice(errIdx + 1).some((f) => f.msg?.t === "state"), STATE_LIMIT_MS, `${label} 거부 뒤 state 가 이어서 오지 않음`);
+  }
 }
 
 const firstState = (c, phase, pred = () => true) => states(c).find((f) => f.msg.view.phase === phase && pred(f.msg.view));
@@ -366,6 +379,23 @@ async function stageFull(url, args) {
     return v && v.players.length === N && v.players.every((p) => p.connected === true);
   }, STATE_LIMIT_MS, `${N}명이 모두 connected 가 되지 않음`);
 
+  // 직업 주장 응답기(결정 0023): 상태 프레임에서 claim 단계이고 day.turn.seat 가 내 seat 이면 한 번만 보낸다(키 = 일차:seat).
+  //   방장·4번째부터는 즉시 말 안 함(none), clients[1]·clients[2] 는 서로 다른 직업, clients[3] 은 일부러 보내지 않아 8초 시간 초과(none)를 건넌다.
+  //   보낸 시각은 일찍 고른 차례가 2초 안에 다음 차례로 넘어가는지 보는 데 쓴다.
+  const claimSent = new Map(); // `${n}:${seat}` → { at, claim, idx }
+  const claimDriver = setInterval(() => {
+    clients.forEach((c, idx) => {
+      const v = lastView(c);
+      if (!v || v.phase !== "claim" || v.day?.turn?.seat !== c.seat) return;
+      const key = `${v.day.n}:${c.seat}`;
+      if (claimSent.has(key) || idx === 3) return; // idx 3 은 시간 초과 경로라 보내지 않는다
+      if (!c.ws || c.ws.readyState !== WebSocket.OPEN) return;
+      const claim = idx === 1 ? v.day.roles[0] : idx === 2 ? v.day.roles[1] : "none";
+      claimSent.set(key, { at: performance.now(), claim, idx });
+      c.ws.send(JSON.stringify({ t: "claim", claim }));
+    });
+  }, 50);
+
   // (7) 시작
   host.ws.send(JSON.stringify({ t: "start" }));
 
@@ -391,43 +421,83 @@ async function stageFull(url, args) {
     if (c.unexpectedClose !== null) fail(`${c.nickname} 소켓이 예상 밖으로 닫힘 (code ${c.unexpectedClose})`);
   }
 
-  // (10) 직업 공개(claim): 서로 다른 직업 둘을 고른다. 4명판은 의사 없이 고른다.
+  // (10) 직업 주장 차례 한 바퀴(claim): 방장부터 seat 오름차순으로 한 명씩, 한 차례 8초(결정 0023·0027)
   await waitUntil(() => clients.every((c) => firstState(c, "claim")), STATE_LIMIT_MS + 5000, "모든 클라이언트가 claim 을 받지 못함");
   const roleList = firstState(clients[1], "claim").msg.view.day.roles;
   if (roleList.includes("doctor") !== (N >= 5)) fail(`day.roles 의 의사 포함 여부가 인원(${N})과 맞지 않음: ${roleList.join(",")}`);
   if (roleList.length < 3) fail(`day.roles 가 너무 짧음: ${roleList.join(",")}`);
   const pick1 = roleList[0];
   const pick2 = roleList[1];
+  // 차례 순서: 방장 seat 에서 시작해 seat 오름차순(끝에서 처음으로 이어짐), 1일차는 전원 생존
+  const allSeats = clients.map((c) => c.seat).sort((a, b) => a - b);
+  const startAt = allSeats.indexOf(host.seat);
+  const expectedOrder = [...allSeats.slice(startAt), ...allSeats.slice(0, startAt)];
+  const firstTurn = firstState(host, "claim").msg.view.day?.turn?.seat;
+  if (firstTurn !== host.seat) fail(`1일차 첫 차례 seat 가 방장(${host.seat})이 아님: ${firstTurn}`);
+  // clients[3] 의 차례(응답기가 보내지 않아 8초 시간 초과)에서 거부·이모티콘을 시험한다. 그 차례는 8초 동안 이어진다.
+  await waitUntil(() => {
+    const v = lastView(host);
+    return v?.phase === "claim" && v.day?.turn?.seat === clients[3].seat;
+  }, STATE_LIMIT_MS + 5000, "방장 화면에 스모크4 의 차례가 오지 않음");
+  // 차례가 지난 사람(clients[1])·아직 오지 않은 사람(5명 이상이면 clients[4])의 claim 은 WRONG_PHASE 이고 이어 state 가 온다
+  await expectError(clients[1], { t: "claim", claim: pick1 }, "WRONG_PHASE", "차례가 지난 사람의 claim", true);
+  if (N >= 5) await expectError(clients[4], { t: "claim", claim: pick1 }, "WRONG_PHASE", "차례가 오지 않은 사람의 claim", true);
   // claim 단계의 say 는 WRONG_PHASE
   await expectError(clients[0], { t: "say", template: "innocent" }, "WRONG_PHASE", "claim 단계 say");
-  clients[1].ws.send(JSON.stringify({ t: "claim", claim: pick1 }));
-  clients[2].ws.send(JSON.stringify({ t: "claim", claim: pick2 }));
-  await waitUntil(() => {
-    const done = lastView(host)?.day?.claimDone;
-    return Array.isArray(done) && done.includes(clients[1].seat) && done.includes(clients[2].seat);
-  }, STATE_LIMIT_MS, "claim 완료 표시(claimDone)가 방장 화면에 오지 않음");
+  // claim 중 이모티콘은 보낼 수 있고 모두에게 방송된다(차례와 무관, 결정 0027-8)
+  const claimEmojiAt = performance.now();
+  clients[2].ws.send(JSON.stringify({ t: "emoji", icon: "heart" }));
+  await waitUntil(
+    () => clients.every((c) => c.frames.some((f) => f.at >= claimEmojiAt && f.msg?.t === "emoji" && f.msg.seat === clients[2].seat && f.msg.icon === "heart")),
+    STATE_LIMIT_MS,
+    "claim 중 이모티콘 emoji 프레임이 모든 클라이언트에 오지 않음",
+  );
 
   // (11) 낮 중 참가는 409 GAME_STARTED, 미리보기는 낮 단계 + players 빈 배열
   const late = await http(null, "POST", `/api/rooms/${code}/join`, { nickname: "늦은사람" });
   if (late.status !== 409 || late.data?.error !== "GAME_STARTED") fail(`시작 뒤 참가가 409 GAME_STARTED 가 아님: ${late.status} ${late.data?.error}`);
   const pvDay = await http(null, "GET", `/api/rooms/${code}`);
-  if (!DAY_PHASES.includes(pvDay.data?.phase)) fail(`낮 미리보기 phase 가 낮 네 단계 중 하나가 아님: ${pvDay.data?.phase}`);
+  if (!DAY_PHASES.includes(pvDay.data?.phase)) fail(`낮 미리보기 phase 가 낮 단계 중 하나가 아님: ${pvDay.data?.phase}`);
   if (!Array.isArray(pvDay.data?.players) || pvDay.data.players.length !== 0) fail("낮 미리보기 players 가 빈 배열이 아님");
 
-  // (12) 공개 연출(claimReveal): 고른 두 값과 나머지 none
-  await waitUntil(() => clients.every((c) => firstState(c, "claimReveal")), STATE_LIMIT_MS + 10_000, "모든 클라이언트가 claimReveal 을 받지 못함");
-  for (const c of clients) {
-    const claims = firstState(c, "claimReveal").msg.view.day?.claims;
-    if (!Array.isArray(claims) || claims.length !== N) fail(`${c.nickname} 의 claimReveal claims 길이가 ${N} 이 아님`);
-    for (const sc of claims) {
-      const expected = sc.seat === clients[1].seat ? pick1 : sc.seat === clients[2].seat ? pick2 : "none";
-      if (sc.claim !== expected) fail(`${c.nickname} 의 claimReveal seat ${sc.seat} 주장이 ${expected} 가 아님: ${sc.claim}`);
-      if (sc.changed !== false) fail(`${c.nickname} 의 claimReveal seat ${sc.seat} 가 첫 낮인데 changed 임`);
-    }
+  // (12) discussion 진입: 모든 클라이언트의 day.claimLog 가 같고 기대값(고른 값·시간 초과 none)이다
+  await waitUntil(() => clients.every((c) => firstState(c, "discussion")), CLAIM_TURN_MS * N + STATE_LIMIT_MS, "모든 클라이언트가 discussion 을 받지 못함");
+  const discLogs = clients.map((c) => firstState(c, "discussion").msg.view.day?.claimLog);
+  const claimLog = discLogs[0];
+  discLogs.forEach((lg, i) => {
+    if (JSON.stringify(lg) !== JSON.stringify(claimLog)) fail(`${clients[i].nickname} 의 discussion claimLog 가 방장과 다름`);
+  });
+  if (!Array.isArray(claimLog) || claimLog.length !== N) fail(`discussion claimLog 길이가 ${N} 이 아님: ${claimLog?.length}`);
+  claimLog.forEach((e, k) => {
+    if (Object.keys(e).sort().join(",") !== "claim,n,seat") fail(`claimLog 줄 키 집합이 다름: ${Object.keys(e).sort().join(",")}`);
+    if (e.n !== 1) fail(`claimLog ${k}번째 줄의 n 이 1 이 아님: ${e.n}`);
+    if (e.seat !== expectedOrder[k]) fail(`claimLog ${k}번째 줄 seat ${e.seat} 가 차례 순서 ${expectedOrder[k]} 와 다름`);
+    const idx = clients.findIndex((c) => c.seat === e.seat);
+    const expected = idx === 1 ? pick1 : idx === 2 ? pick2 : "none"; // clients[3] 은 시간 초과라 none
+    if (e.claim !== expected) fail(`claimLog seat ${e.seat}(스모크${idx + 1}) 주장이 ${expected} 가 아님: ${e.claim}`);
+  });
+  // 호스트 프레임으로 본 차례: 순서가 기대와 같고, 시간 초과 차례는 실제로 8초 가까이 걸렸고, 일찍 고른 차례는 송신 후 2초 안에 다음으로 넘어갔다
+  const hostClaimStates = states(host).filter((f) => f.msg.view.phase === "claim" && f.msg.view.day?.n === 1);
+  const seenOrder = [];
+  for (const f of hostClaimStates) if (seenOrder.at(-1) !== f.msg.view.day.turn.seat) seenOrder.push(f.msg.view.day.turn.seat);
+  if (seenOrder.join(",") !== expectedOrder.join(",")) fail(`방장이 본 차례 순서 [${seenOrder}] 가 기대 [${expectedOrder}] 와 다름`);
+  const timeoutStartAt = hostClaimStates.find((f) => f.msg.view.day.turn.seat === clients[3].seat).at;
+  const afterTimeout = states(host).find((f) => f.at > timeoutStartAt && (f.msg.view.phase !== "claim" || f.msg.view.day.turn.seat !== clients[3].seat));
+  const timeoutMs = Math.round(afterTimeout.at - timeoutStartAt);
+  if (timeoutMs < CLAIM_TURN_MS - 1000) fail(`시간 초과 차례가 ${timeoutMs}ms 만에 끝남 (기대 약 ${CLAIM_TURN_MS}ms)`);
+  let slowestEarly = 0;
+  for (const [key, sent] of claimSent) {
+    if (!key.startsWith("1:")) continue;
+    const seat = Number(key.split(":")[1]);
+    const next = states(host).find((f) => f.at >= sent.at && f.msg.view.day?.claimLog?.some((e) => e.n === 1 && e.seat === seat));
+    if (!next) fail(`seat ${seat} 가 고른 뒤 claimLog 에 그 줄이 든 state 가 방장에게 오지 않음`);
+    const lag = Math.round(next.at - sent.at);
+    if (lag >= 2000) fail(`seat ${seat} 가 일찍 고른 뒤 ${lag}ms 가 지나서야 다음 차례 state 가 옴 (2초 안이어야 함)`);
+    slowestEarly = Math.max(slowestEarly, lag);
   }
+  console.log(`  info: 차례 순서 [${seenOrder}], 시간 초과 차례 ${timeoutMs}ms, 일찍 고른 뒤 다음 state 최대 ${slowestEarly}ms`);
 
   // (13) 낮 토론: 빠른 메시지(chat 프레임)·거부·이모티콘·연장/넘기기 거부·타이머로 다음 낮
-  await waitUntil(() => clients.every((c) => firstState(c, "discussion")), STATE_LIMIT_MS, "모든 클라이언트가 discussion 을 받지 못함");
   const discEnds = new Set(clients.map((c) => firstState(c, "discussion").msg.view.phaseEndsAt));
   if (discEnds.size !== 1) fail(`discussion 의 phaseEndsAt 이 클라이언트마다 다름 (${discEnds.size}종)`);
   const endsBefore = [...discEnds][0];
@@ -451,7 +521,7 @@ async function stageFull(url, args) {
   await sleep(2100);
   clients[2].ws.send(JSON.stringify({ t: "emoji", icon: "smile" }));
   await waitUntil(
-    () => clients.every((c) => c.frames.some((f) => f.msg?.t === "emoji" && f.msg.seat === clients[2].seat && f.msg.icon === "smile")),
+    () => clients.every((c) => c.frames.some((f) => f.at >= firstState(c, "discussion").at && f.msg?.t === "emoji" && f.msg.seat === clients[2].seat && f.msg.icon === "smile")),
     STATE_LIMIT_MS,
     "이모티콘 emoji 프레임이 모든 클라이언트에 오지 않음",
   );
@@ -518,6 +588,7 @@ async function stageFull(url, args) {
   // (15) 아침: 모든 클라이언트가 morning 을, 그다음 2일차 dayAnnounce 를 서버 타이머로 받는다
   await waitUntil(() => clients.every((c) => firstState(c, "morning")), NIGHT_WAIT_MS, "밤 마감 뒤 morning 이 모든 클라이언트에 오지 않음");
   await waitUntil(() => clients.every((c) => firstState(c, "dayAnnounce", (v) => v.day?.n === 2)), MORNING_WAIT_MS, "아침 마감 뒤 dayAnnounce(day.n 2) 가 모든 클라이언트에 오지 않음");
+  clearInterval(claimDriver); // 2일차 claim 은 시험하지 않는다(uat-day.mjs 가 본다)
   for (const c of clients) if (c.unexpectedClose !== null) fail(`${c.nickname} 소켓이 예상 밖으로 닫힘 (code ${c.unexpectedClose})`);
 
   // ---- 단언 ----
@@ -595,31 +666,45 @@ async function stageFull(url, args) {
   const ends = new Set();
   for (const c of clients) for (const f of states(c)) if (f.msg.view.phase === "roleReveal") ends.add(f.msg.view.phaseEndsAt);
   if (ends.size !== 1) fail(`roleReveal 의 phaseEndsAt 이 클라이언트마다 다름 (${ends.size}종)`);
-  // 낮 시작 발표·공개 연출 도착 편차
+  // 낮 시작 발표·discussion 진입 도착 편차
   const spreadOf = (phase) => {
     const at = clients.map((c) => firstState(c, phase).at);
     return Math.round(Math.max(...at) - Math.min(...at));
   };
   const spread = spreadOf("dayAnnounce");
-  const revealSpread = spreadOf("claimReveal");
+  const discSpread = spreadOf("discussion");
   if (spread >= DAY_SPREAD_LIMIT_MS) fail(`dayAnnounce 도착 편차 ${spread}ms 가 ${DAY_SPREAD_LIMIT_MS}ms 이상`);
-  if (revealSpread >= DAY_SPREAD_LIMIT_MS) fail(`claimReveal 도착 편차 ${revealSpread}ms 가 ${DAY_SPREAD_LIMIT_MS}ms 이상`);
+  if (discSpread >= DAY_SPREAD_LIMIT_MS) fail(`discussion 도착 편차 ${discSpread}ms 가 ${DAY_SPREAD_LIMIT_MS}ms 이상`);
 
-  // 직업 공개 마감 전 누출(T-02-32): claimReveal 을 받기 전의 모든 프레임에서 역할·주장 문자열은 허용 경로에만 있고 claims 키가 없다.
-  const picks = new Map([[clients[1], pick1], [clients[2], pick2]]);
+  // 직업 주장 누출(T-03.1-41, 결정 0027-3·6): 서버 전용 키는 어떤 프레임에도 없고, claim 단계 프레임에서는
+  // 역할·주장 문자열이 허용 경로에만 있으며 day.claimLog 는 지금 차례보다 앞선 차례들의 줄뿐이다(끝나지 않은 차례의 선택은 없다).
   for (const c of clients) {
-    const revealIdx = c.frames.findIndex((f) => f.msg?.t === "state" && f.msg.view.phase === "claimReveal");
-    if (revealIdx < 0) fail(`${c.nickname} 가 claimReveal 을 받지 못함`);
-    for (const f of c.frames.slice(0, revealIdx)) {
+    for (const f of c.frames) {
+      if (!f.msg) continue;
+      for (const key of SERVER_ONLY_KEYS) {
+        const kp = [];
+        collectKeyPaths(f.msg, key, "", kp);
+        if (kp.length > 0) fail(`${c.nickname} 의 프레임에 서버 전용·삭제된 키 ${key} 가 있음: ${kp.join(",")}`);
+      }
+    }
+    for (const f of states(c)) {
+      const v = f.msg.view;
+      if (v.phase !== "claim") {
+        if (v.day?.turn !== undefined) fail(`${c.nickname} 의 ${v.phase} 프레임에 day.turn 이 있음 (claim 단계에서만)`);
+        continue;
+      }
+      if (v.phaseDurationMs !== CLAIM_TURN_MS) fail(`${c.nickname} 의 claim phaseDurationMs 가 ${CLAIM_TURN_MS} 가 아님: ${v.phaseDurationMs}`);
       const leaves = [];
       collectClaimStringPaths(f.msg, "", leaves);
       const bad = leaves.filter((l) => !ALLOWED_CLAIM_STRING_PATHS.has(l.path));
-      if (bad.length > 0) fail(`${c.nickname} 의 claimReveal 전 프레임에 허용 경로 밖 역할·주장 문자열이 있음: ${bad.map((l) => l.path).join(",")}`);
-      const claimsPaths = [];
-      collectKeyPaths(f.msg, "claims", "", claimsPaths);
-      if (claimsPaths.length > 0) fail(`${c.nickname} 의 claimReveal 전 프레임에 claims 키가 있음`);
-      const myClaim = f.msg.view?.me?.claim;
-      if (myClaim !== undefined && myClaim !== (picks.get(c) ?? undefined)) fail(`${c.nickname} 의 claimReveal 전 me.claim 이 본인 선택이 아님: ${myClaim}`);
+      if (bad.length > 0) fail(`${c.nickname} 의 claim 프레임에 허용 경로 밖 역할·주장 문자열이 있음: ${bad.map((l) => l.path).join(",")}`);
+      if (v.day?.n !== 1) continue;
+      const turnIdx = expectedOrder.indexOf(v.day.turn?.seat);
+      if (turnIdx < 0) fail(`${c.nickname} 의 claim 프레임 day.turn.seat 가 차례 순서 밖: ${v.day.turn?.seat}`);
+      const loggedSeats = (v.day.claimLog ?? []).filter((e) => e.n === 1).map((e) => e.seat);
+      if (loggedSeats.join(",") !== expectedOrder.slice(0, turnIdx).join(",")) {
+        fail(`${c.nickname} 의 claim 프레임 claimLog seat [${loggedSeats}] 가 지금 차례(${v.day.turn.seat}) 앞선 차례들 [${expectedOrder.slice(0, turnIdx)}] 와 다름`);
+      }
     }
   }
   // 결정 0017-7: state 어디에도 messages·extendUsed 키가 없고, chat 프레임은 허용 키만 쓰며 id·role·token 이 없다(T-02-48)
@@ -659,7 +744,7 @@ async function stageFull(url, args) {
       fail(`마피아가 아닌 ${c.nickname} 가 밤 chat·emoji 프레임 ${n}개를 받음`);
     }
   }
-  // (b) allyPicks 는 마피아 프레임에만, records 는 경찰 프레임에만 (둘 다 view.me 아래)
+  // (b) allyPicks 는 마피아 프레임에만, records 는 경찰·마피아·의사 본인 프레임에만 (둘 다 view.me 아래), 줄 키는 역할별(결정 0027-11)
   for (const c of clients) {
     for (const f of c.frames) {
       if (!f.msg) continue;
@@ -670,7 +755,10 @@ async function stageFull(url, args) {
       const rec = [];
       collectKeyPaths(f.msg, "records", "", rec);
       if (rec.some((p) => p !== "view.me.records")) fail(`${c.nickname} 의 프레임에 view.me.records 밖의 records 키가 있음`);
-      if (rec.length > 0 && c.role !== "police") fail(`경찰이 아닌 ${c.nickname} 가 records 를 받음`);
+      if (rec.length > 0 && !(c.role in RECORD_KEYS)) fail(`일지가 없는 역할(${c.role}) ${c.nickname} 가 records 를 받음`);
+      for (const line of f.msg.view?.me?.records ?? []) {
+        if (Object.keys(line).sort().join(",") !== RECORD_KEYS[c.role]) fail(`${c.nickname}(${c.role}) records 줄 키가 ${RECORD_KEYS[c.role]} 가 아님: ${Object.keys(line).sort().join(",")}`);
+      }
     }
   }
   // (c) 아침 day.morning 은 모든 클라이언트가 같고, 탈락자는 지목한 사람이며 players[].alive 와 맞다
@@ -687,10 +775,21 @@ async function stageFull(url, args) {
       if (p.alive !== (p.seat !== targetX)) fail(`${clients[i].nickname} 의 아침 players seat ${p.seat} 의 alive 가 ${p.seat !== targetX} 가 아님: ${p.alive}`);
     }
   });
-  // (d) 경찰 아침 view 의 수사 기록 마지막 항목
-  const lastRecord = firstState(policeClient, "morning").msg.view.me.records?.at(-1);
+  // (d) 아침 view 의 역할별 일지 마지막 줄: 경찰 수사, 마피아 암살(전원 같은 줄, died true), 의사 치료(고른 seat)
+  const lastRecordOf = (c) => firstState(c, "morning").msg.view.me.records?.at(-1);
+  const expectLine = (c, want) => {
+    const got = lastRecordOf(c);
+    if (JSON.stringify(got) !== JSON.stringify(want)) fail(`${c.nickname}(${c.role}) 아침 일지 마지막 줄이 ${JSON.stringify(want)} 가 아님: ${JSON.stringify(got)}`);
+  };
+  const lastRecord = lastRecordOf(policeClient);
   if (!lastRecord || lastRecord.n !== 1 || lastRecord.target !== policeTarget || lastRecord.isMafia !== true || Object.keys(lastRecord).sort().join(",") !== "isMafia,n,target") {
     fail(`경찰 아침 수사 기록이 {n:1, target:${policeTarget}, isMafia:true} 가 아님: ${JSON.stringify(lastRecord)}`);
+  }
+  for (const m of mafiaClients) expectLine(m, { n: 1, target: targetX, died: true });
+  if (doctorClient) expectLine(doctorClient, { n: 1, target: doctorClient.seat });
+  if (mafiaClients.length > 1) {
+    const lines = mafiaClients.map((m) => JSON.stringify(firstState(m, "morning").msg.view.me.records));
+    if (new Set(lines).size !== 1) fail("마피아 둘의 아침 일지가 서로 다름 (같은 팀 기록이어야 함)");
   }
   // (e) 관전: 탈락한 X 는 morning 이전 프레임에 spectate 키가 없고 그 아침부터 받으며, 각 job 이 그 seat 클라이언트의 me.role 과 같다. 그 밖의 클라이언트에는 spectate 가 없다.
   const xMorningAt = firstState(xClient, "morning").at;
@@ -717,9 +816,9 @@ async function stageFull(url, args) {
       if (sp.length > 0) fail(`살아 있는 ${c.nickname} 의 프레임에 spectate 키가 있음`);
     }
   }
-  // (f) 역할 문자열은 허용 경로에만: 모든 프레임에서 view.me.role·view.me.claim·view.day.roles[]·공개 주장(view.day.claims[].claim), 탈락한 X 의 아침 이후에는 view.spectate.seats[].job 도 허용.
-  //     마피아 동료 seat·records 의 isMafia 는 숫자·불리언이라 문자열 검사에 걸리지 않는다.
-  const ROLE_ALLOWED_ALWAYS = new Set([...ALLOWED_CLAIM_STRING_PATHS, "view.day.claims[].claim"]);
+  // (f) 역할 문자열은 허용 경로에만: 모든 프레임에서 view.me.role·view.day.roles[]·view.day.claimLog[].claim, 탈락한 X 의 아침 이후에는 view.spectate.seats[].job 도 허용.
+  //     마피아 동료 seat·records 의 isMafia·died 는 숫자·불리언이라 문자열 검사에 걸리지 않는다.
+  const ROLE_ALLOWED_ALWAYS = ALLOWED_CLAIM_STRING_PATHS;
   for (const c of clients) {
     for (const f of c.frames) {
       if (!f.msg) continue;
@@ -754,7 +853,7 @@ async function stageFull(url, args) {
   if (!(og.headers.get("content-type") ?? "").includes("image/png")) fail("/og.png 가 image/png 가 아님");
   await og.arrayBuffer();
 
-  console.log(`SMOKE OK full code=${code} players=${N} spread=${spread}ms reveal=${revealSpread}ms version=${version}`);
+  console.log(`SMOKE OK full code=${code} players=${N} spread=${spread}ms discSpread=${discSpread}ms version=${version}`);
 }
 
 const args = parseArgs(process.argv.slice(2));

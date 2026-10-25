@@ -1,10 +1,14 @@
 // 2페이즈 UAT 를 봇으로 대신 도는 시나리오. 봇이 방을 만들고 채워 낮 두 바퀴를 돌며 결과 표를 낸다.
+// 직업 주장은 한 명씩 차례로(결정 0023·0027): 한 차례 8초, 일찍 고르면 곧바로 다음 차례. 스크립트 안의 응답기가
+// 상태 프레임에서 자기 차례(claim 단계 + day.turn.seat)가 오면 한 번 보낸다.
 // 방장 넘기기는 없다(결정 0017-5): 1일차 토론(90초)·밤(30초)·아침(5초)이 서버 타이머로 지나 2일차로 간다.
 // 이 스크립트의 봇은 밤에 행동하지 않아 탈락자가 없다 — 밤·아침은 단계 도착 차이 표에만 나온다(밤 시나리오는 uat-night.mjs).
 // 빠른 메시지는 state 가 아니라 chat 프레임으로 온다(결정 0017-7).
 //   테스트 6: 빠른 메시지를 2초 간격(2000·2050·2150ms)으로 연달아 보낼 때 RATE_LIMITED 오탐 수, 받은 줄이 모든 폰에 가는지
 //   테스트 7(일부): 단계 전환·이모티콘 도착 시각 차이(같은 PC 에서 잰 값), 이모티콘이 chat 프레임이 아니고 state 에 messages 가 없는지
-//   테스트 8(사실 확인): 2일차에 고르지 않은 사람의 공개 값(말 안 함인지 어제 주장인지), 다른 직업이면 changed
+//   테스트 3: 차례 순서(방장부터 seat 오름차순)·모든 폰의 day.claimLog 가 같고 기대값(고른 값·시간 초과 none)이다,
+//             2일차 시작 자리가 방장 다음 seat 로 한 칸 이동한다
+//   테스트 8: 어제 주장은 이월되지 않는다 — 2일차에 안 고른 사람의 줄은 none 이고 1일차 줄은 그대로다
 // 화면 모양·애니메이션 부드러움·실제 폰 시계 차이는 봇으로 볼 수 없다.
 //
 // 사용법: node scripts/uat-day.mjs [--prod | <기준 주소>] [--players 4~8]
@@ -63,6 +67,9 @@ const lastView = (c) => states(c).at(-1)?.msg.view ?? null;
 const firstState = (c, pred) => states(c).find((f) => pred(f.msg.view));
 const send = (c, m) => c.ws.send(JSON.stringify(m));
 const spread = (xs) => Math.round(Math.max(...xs) - Math.min(...xs));
+const CLAIM_TURN_MS = 8_000;
+// 차례 대기 한도: 최대 인원 × 8초(모두 시간 초과일 때)
+const CLAIM_WAIT_MS = CLAIM_TURN_MS * N;
 
 // 클라이언트가 받은 chat 프레임의 seq 집합(서버는 메시지를 보관하지 않고 chat 이벤트로 방송만 한다)
 const chats = (c) => c.frames.filter((f) => f.msg.t === "chat");
@@ -111,17 +118,42 @@ async function main() {
   }
   for (const c of clients) await connect(c, code);
   await waitUntil(() => lastView(host)?.players.every((p) => p.connected), 10_000, "모두 연결");
+  // 차례 응답기: 자기 차례(claim 단계 + day.turn.seat === 내 seat)가 오면 일차마다 한 번만 보낸다.
+  //   1일차: 1번 roles[0], 2번 roles[1], 3번 roles[0], 나머지(방장 포함)는 안 고름(8초 시간 초과)
+  //   2일차: 1번만 안 고르고(시간 초과) 나머지는 말 안 함(none)을 바로 보낸다 — 어제 주장이 이월되지 않는지 본다
+  const claimPlan = (day, idx, roles) => {
+    if (day === 1) return idx === 1 ? roles[0] : idx === 2 ? roles[1] : idx === 3 ? roles[0] : null;
+    return idx === 1 ? null : "none";
+  };
+  const claimSent = new Set();
+  const driver = setInterval(() => {
+    clients.forEach((c, idx) => {
+      const v = lastView(c);
+      if (!v || v.phase !== "claim" || v.day?.turn?.seat !== c.seat) return;
+      const key = `${v.day.n}:${c.seat}`;
+      if (claimSent.has(key)) return;
+      const claim = claimPlan(v.day.n, idx, v.day.roles);
+      claimSent.add(key);
+      if (claim !== null && c.ws.readyState === WebSocket.OPEN) send(c, { t: "claim", claim });
+    });
+  }, 50);
   console.log(`방 ${code} — 시작`);
   send(host, { t: "start" });
 
   // ---- 1일차 ----
   await waitUntil(() => clients.every((c) => firstState(c, (v) => v.phase === "claim")), 40_000, "1일차 claim");
   const roles = lastView(clients[1]).day.roles;
-  // 1번: roles[0], 2번: roles[1], 3번: roles[0], 나머지는 고르지 않음
-  send(clients[1], { t: "claim", claim: roles[0] });
-  send(clients[2], { t: "claim", claim: roles[1] });
-  send(clients[3], { t: "claim", claim: roles[0] });
-  await waitUntil(() => clients.every((c) => firstState(c, (v) => v.phase === "discussion")), 30_000, "1일차 discussion");
+  const allSeats = clients.map((c) => c.seat).sort((a, b) => a - b);
+  const startIdx = allSeats.indexOf(host.seat);
+  const order1 = [...allSeats.slice(startIdx), ...allSeats.slice(0, startIdx)];
+  await waitUntil(() => clients.every((c) => firstState(c, (v) => v.phase === "discussion")), CLAIM_WAIT_MS + 30_000, "1일차 discussion");
+  const logs1 = clients.map((c) => firstState(c, (v) => v.phase === "discussion").msg.view.day.claimLog);
+  const expect1 = order1.map((seat) => {
+    const idx = clients.findIndex((c) => c.seat === seat);
+    return { n: 1, seat, claim: claimPlan(1, idx, roles) ?? "none" };
+  });
+  check(3, "차례 순서: 방장부터 seat 오름차순", JSON.stringify(logs1[0].map((e) => e.seat)) === JSON.stringify(order1), `[${logs1[0].map((e) => e.seat)}]`);
+  check(3, "공개 기록 일치: 모든 폰의 claimLog 가 같고 기대값", logs1.every((lg) => JSON.stringify(lg) === JSON.stringify(expect1)), expect1.map((e) => `${e.seat}:${e.claim}`).join(" "));
   console.log("1일차 토론 — 연속 전송 시험");
 
   // 테스트 6: 손님 전원이 동시에 각자 간격으로 연달아 보낸다
@@ -157,22 +189,24 @@ async function main() {
 
   // ---- 2일차 ----
   await waitUntil(() => clients.every((c) => firstState(c, (v) => v.phase === "claim" && v.day?.n === 2)), 180_000, "2일차 claim");
-  // 1번: 다른 직업(말 바꿈 기대), 2번: 고르지 않음(어제 roles[1]), 3번: 같은 직업
-  send(clients[1], { t: "claim", claim: roles[2] });
-  send(clients[3], { t: "claim", claim: roles[0] });
-  await waitUntil(() => clients.every((c) => firstState(c, (v) => v.phase === "claimReveal" && v.day?.n === 2)), 30_000, "2일차 claimReveal");
-  const claims = clients.map((c) => firstState(c, (v) => v.phase === "claimReveal" && v.day?.n === 2).msg.view.day.claims);
-  const bySeat = (cl, seat) => cl.find((x) => x.seat === seat);
-  check(3, "다른 직업 → 모든 폰에 changed", claims.every((cl) => bySeat(cl, clients[1].seat).changed === true), `${roles[0]} → ${roles[2]}`);
-  check(3, "같은 직업 → changed 아님", claims.every((cl) => bySeat(cl, clients[3].seat).changed === false), "");
-  const carried = bySeat(claims[0], clients[2].seat);
-  check(8, "2일차에 안 고른 사람의 공개 값", true, `어제 ${roles[1]} → 오늘 ${carried.claim}${carried.changed ? " (changed)" : ""}`);
-  const neverPicked = bySeat(claims[0], clients[4].seat);
-  check(8, "이틀 다 안 고른 사람의 공개 값", true, neverPicked.claim);
+  const firstTurn2 = firstState(host, (v) => v.phase === "claim" && v.day?.n === 2).msg.view.day.turn.seat;
+  const wantStart2 = allSeats[(startIdx + 1) % N];
+  check(3, "시작 자리 한 칸 이동 (2일차 첫 차례 = 방장 다음 seat)", firstTurn2 === wantStart2, `1일차 시작 ${host.seat} → 2일차 시작 ${firstTurn2} (기대 ${wantStart2})`);
+  await waitUntil(() => clients.every((c) => firstState(c, (v) => v.phase === "discussion" && v.day?.n === 2)), CLAIM_WAIT_MS + 30_000, "2일차 discussion");
+  const logs2 = clients.map((c) => firstState(c, (v) => v.phase === "discussion" && v.day?.n === 2).msg.view.day.claimLog);
+  const day1Lines = logs2[0].filter((e) => e.n === 1);
+  const day2Lines = logs2[0].filter((e) => e.n === 2);
+  check(3, "2일차 기록이 모든 폰에서 같음", logs2.every((lg) => JSON.stringify(lg) === JSON.stringify(logs2[0])), `${logs2[0].length}줄`);
+  check(8, "1일차 줄은 2일차에도 그대로", JSON.stringify(day1Lines) === JSON.stringify(expect1), "");
+  const idx1Line = day2Lines.find((e) => e.seat === clients[1].seat);
+  check(8, "어제 주장 이월 없음: 어제 주장한 1번이 오늘 안 고르면 none", idx1Line?.claim === "none", `어제 ${roles[0]} → 오늘 ${idx1Line?.claim}`);
+  const day2Order = day2Lines.map((e) => e.seat);
+  const order2 = [...allSeats.slice((startIdx + 1) % N), ...allSeats.slice(0, (startIdx + 1) % N)];
+  check(3, "2일차 차례 순서: 시작 자리부터 seat 오름차순", JSON.stringify(day2Order) === JSON.stringify(order2), `[${day2Order}]`);
 
   // 테스트 7: 단계 전환 도착 차이(1일차 dayAnnounce 부터 2일차 discussion 까지)
-  await waitUntil(() => clients.every((c) => firstState(c, (v) => v.phase === "discussion" && v.day?.n === 2)), 30_000, "2일차 discussion");
-  const phases = [["dayAnnounce", 1], ["claim", 1], ["claimReveal", 1], ["discussion", 1], ["night", 1], ["morning", 1], ["dayAnnounce", 2], ["claim", 2], ["claimReveal", 2], ["discussion", 2]];
+  clearInterval(driver);
+  const phases = [["dayAnnounce", 1], ["claim", 1], ["discussion", 1], ["night", 1], ["morning", 1], ["dayAnnounce", 2], ["claim", 2], ["discussion", 2]];
   const worst = [];
   for (const [ph, n] of phases) {
     const ats = clients.map((c) => firstState(c, (v) => v.phase === ph && v.day?.n === n).at);
