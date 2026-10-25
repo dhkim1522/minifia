@@ -123,3 +123,11 @@ describe("RoomScreen: 포기·나가게 된 이유 (C-02, Pitfall 22)", () => {
   });
 });
 
+describe("RoomScreen: 헤더 역할 카드 버튼 (03.1-11, D-08)", () => {
+  it("대기실에는 `역할 카드`·`내 역할`·`수사 기록` 버튼이 없다", () => {
+    render(<RoomScreen code="0042" token={"t".repeat(43)} onExit={vi.fn()} />);
+    expect(document.querySelector(".mf-rolecard-btn") === null ? "없음" : "있음").toBe("없음");
+    expect(screen.queryByRole("button", { name: "내 역할" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /수사 기록/ })).toBeNull();
+  });
+});

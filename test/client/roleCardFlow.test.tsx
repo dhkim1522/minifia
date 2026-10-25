@@ -1,0 +1,357 @@
+import { act, cleanup, fireEvent, render } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import "../helpers/singleLineErrors";
+import type { RoleId } from "../../shared/game/roles";
+import type { PhaseId, RoleRecord, RoomView } from "../../shared/protocol";
+import type { RoomConnection } from "../../src/net/useRoomConnection";
+import { installMemoryStorage } from "../helpers/memoryStorage";
+import type { MemoryStorage } from "../helpers/memoryStorage";
+
+// 역할 카드 흐름(03.1-11, 결정 0026, UI-SPEC A·D): 헤더 [역할 카드] 하나, 앰버 점, 읽음·NEW, 밤 끝 알림을
+// RoomScreen 으로 만난다. 옛 records.test.tsx(03-11)의 시나리오를 새 계약으로 옮긴 것이다.
+// 실패 보고서가 한 줄이 되도록 단언은 문자열·불리언·숫자로 둔다.
+
+const connectionMock = vi.hoisted(() => ({ current: null as unknown }));
+vi.mock("../../src/net/useRoomConnection", () => ({
+  useRoomConnection: () => connectionMock.current,
+}));
+vi.mock("../../src/net/assets", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../src/net/assets")>()),
+  preloadRoleAssets: vi.fn(),
+}));
+
+const { RoomScreen } = await import("../../src/screens/RoomScreen");
+
+const NOW = 1_700_000_000_000;
+const KEY = "minifia:records:0042";
+
+interface ViewOpts {
+  phase?: PhaseId;
+  role?: RoleId;
+  records?: RoleRecord[];
+  meAlive?: boolean;
+  n?: number;
+}
+
+const POLICE_ONE: RoleRecord[] = [{ n: 1, target: 1, isMafia: false }];
+const POLICE_TWO: RoleRecord[] = [...POLICE_ONE, { n: 2, target: 2, isMafia: true }];
+
+function makeView(o: ViewOpts = {}): RoomView {
+  const role = o.role ?? "police";
+  const me: RoomView["me"] = { seat: 0, isHost: false, role };
+  if (role === "mafia") me.allies = [1];
+  if (o.records !== undefined) me.records = o.records;
+  const phase = o.phase ?? "discussion";
+  const names = ["지우", "하윤", "민지", "도현"];
+  const roleReveal = phase === "roleReveal";
+  return {
+    code: "0042",
+    phase,
+    phaseEndsAt: roleReveal ? NOW + 15_000 : NOW + 20_000,
+    phaseDurationMs: roleReveal ? 15_000 : phase === "morning" ? 5_000 : 30_000,
+    serverNow: NOW,
+    minPlayers: 4,
+    maxPlayers: 8,
+    players: names.map((nickname, seat) => ({
+      seat,
+      nickname,
+      connected: true,
+      isHost: seat === 0,
+      ...(seat === 0 && o.meAlive === false ? { alive: false } : {}),
+    })),
+    me,
+    day: {
+      n: o.n ?? 1,
+      roles: ["mafia", "police", "doctor", "citizen"],
+      ...(phase === "claim" ? { turn: { seat: 1 } } : {}),
+      claimLog: [],
+      ...(phase === "morning" ? { morning: {} } : {}),
+    },
+  };
+}
+
+function conn(view: RoomView, over: Partial<RoomConnection> = {}): RoomConnection {
+  return {
+    status: "open",
+    banner: "hidden",
+    view,
+    offset: 0,
+    epoch: 1,
+    removedReason: null,
+    canSend: true,
+    send: vi.fn(),
+    onEvent: vi.fn(() => () => {}),
+    reconnect: vi.fn(),
+    retry: vi.fn(),
+    ...over,
+  };
+}
+
+function renderRoom(view: RoomView, over: Partial<RoomConnection> = {}) {
+  connectionMock.current = conn(view, over);
+  return render(<RoomScreen code="0042" token={"t".repeat(43)} onExit={vi.fn()} />);
+}
+
+// 같은 RoomScreen 에 새 view 를 준다(연결 mock 의 값을 바꾸고 다시 그린다)
+function feed(r: ReturnType<typeof renderRoom>, view: RoomView, over: Partial<RoomConnection> = {}) {
+  connectionMock.current = conn(view, over);
+  r.rerender(<RoomScreen code="0042" token={"t".repeat(43)} onExit={vi.fn()} />);
+}
+
+const advance = (ms: number): void => {
+  act(() => {
+    vi.advanceTimersByTime(ms);
+  });
+};
+
+const headBtn = (): HTMLElement | null => document.querySelector<HTMLElement>(".mf-rolecard-btn");
+const headDot = (): boolean => headBtn()?.querySelector(".mf-rolecard-btn__dot") != null;
+const sheet = (): HTMLElement | null => document.querySelector<HTMLElement>('dialog[aria-label="역할 카드"]');
+const tabs = (): HTMLElement[] => Array.from(document.querySelectorAll<HTMLElement>('dialog[aria-label="역할 카드"] [role="tab"]'));
+const tabNamed = (label: string): HTMLElement | null => tabs().find((t) => t.textContent?.startsWith(label)) ?? null;
+const selectedTab = (): string => tabs().find((t) => t.getAttribute("aria-selected") === "true")?.textContent ?? "(선택 없음)";
+const tabDot = (): boolean => document.querySelector(".mf-rolecard__tab .mf-rolecard__dot") != null;
+const rows = (): HTMLElement[] => Array.from(document.querySelectorAll<HTMLElement>("dialog .mf-journal__row"));
+const newMarks = (): string[] => rows().map((r) => (r.querySelector(".mf-journal__new") ? "NEW" : "-"));
+const toastEl = (): HTMLElement | null => document.querySelector<HTMLElement>(".mf-rolecard-toast");
+const toastWrap = (): HTMLElement | null => document.querySelector<HTMLElement>(".mf-rolecard-toast-wrap");
+
+function openSheet() {
+  const b = headBtn();
+  expect(b === null ? "(버튼 없음)" : "버튼").toBe("버튼");
+  fireEvent.click(b!);
+}
+function openActivity() {
+  const t = tabNamed("활동 기록");
+  expect(t === null ? "(활동 기록 탭 없음)" : "탭").toBe("탭");
+  fireEvent.click(t!);
+}
+function closeSheet() {
+  const x = document.querySelector<HTMLElement>('dialog[aria-label="역할 카드"] .mf-sheet__close');
+  expect(x === null ? "(닫기 없음)" : "닫기").toBe("닫기");
+  fireEvent.click(x!);
+  advance(400);
+}
+
+let storage: MemoryStorage;
+beforeEach(() => {
+  vi.useFakeTimers();
+  vi.setSystemTime(NOW);
+  storage = installMemoryStorage();
+});
+afterEach(() => {
+  cleanup();
+  vi.useRealTimers();
+  vi.unstubAllGlobals();
+});
+
+describe("헤더 [역할 카드] 버튼 하나 (D-08)", () => {
+  const ROLES: RoleId[] = ["police", "mafia", "doctor", "citizen"];
+  const PHASES: PhaseId[] = ["roleReveal", "dayAnnounce", "claim", "discussion", "night", "morning"];
+
+  it.each(ROLES)("%s: 모든 단계에서 `역할 카드` 버튼이 정확히 하나, `수사 기록`·`내 역할` 이름의 버튼은 없다", (role) => {
+    for (const phase of PHASES) {
+      const r = renderRoom(makeView({ role, phase }));
+      const buttons = Array.from(document.querySelectorAll<HTMLElement>("button"));
+      const names = buttons.map((b) => b.getAttribute("aria-label") ?? b.textContent ?? "");
+      const head = buttons.filter((b) => b.classList.contains("mf-rolecard-btn"));
+      expect(`${phase}:${head.length}`).toBe(`${phase}:1`);
+      expect(`${phase}:${head[0]!.textContent}`).toBe(`${phase}:역할 카드`);
+      expect(`${phase}:${names.some((x) => x.includes("수사 기록"))}`).toBe(`${phase}:false`);
+      expect(`${phase}:${names.some((x) => x === "내 역할")}`).toBe(`${phase}:false`);
+      r.unmount();
+    }
+  });
+
+  it("버튼에는 아이콘 20 이 있고 글자는 `역할 카드` 뿐이다", () => {
+    renderRoom(makeView({ phase: "discussion" }));
+    const svg = headBtn()?.querySelector("svg");
+    expect(svg?.getAttribute("width") ?? "(아이콘 없음)").toBe("20");
+    expect(headBtn()?.textContent).toBe("역할 카드");
+  });
+});
+
+describe("앰버 점과 읽음 (D-11)", () => {
+  it("경찰이 기록 2개·읽은 개수 0: 이름 `역할 카드, 새 기록`, 점 1개(aria-hidden)", () => {
+    renderRoom(makeView({ phase: "discussion", records: POLICE_TWO }));
+    expect(headBtn()?.getAttribute("aria-label")).toBe("역할 카드, 새 기록");
+    const dots = headBtn()!.querySelectorAll(".mf-rolecard-btn__dot");
+    expect(dots.length).toBe(1);
+    expect(dots[0]!.getAttribute("aria-hidden")).toBe("true");
+  });
+
+  it("기록 0개 또는 모두 읽음이면 이름 `역할 카드`, 점 없음", () => {
+    renderRoom(makeView({ records: [] }));
+    expect(headBtn()?.getAttribute("aria-label")).toBe("역할 카드");
+    expect(headDot()).toBe(false);
+    cleanup();
+    storage.setItem(KEY, "2");
+    renderRoom(makeView({ records: POLICE_TWO }));
+    expect(headBtn()?.getAttribute("aria-label")).toBe("역할 카드");
+    expect(headDot()).toBe(false);
+  });
+
+  it("시민·기록 없는 view 는 점이 없다", () => {
+    renderRoom(makeView({ role: "citizen" }));
+    expect(headDot()).toBe(false);
+    expect(headBtn()?.getAttribute("aria-label")).toBe("역할 카드");
+  });
+
+  it("누르면 dialog `역할 카드` 가 `내 역할` 탭으로 열리고 점은 그대로이며 탭에 `활동 기록, 새 기록` 점이 있다", () => {
+    renderRoom(makeView({ records: POLICE_TWO }));
+    openSheet();
+    expect(sheet() === null ? "닫힘" : "열림").toBe("열림");
+    expect(selectedTab()).toBe("내 역할");
+    expect(headDot()).toBe(true);
+    expect(tabNamed("활동 기록")?.getAttribute("aria-label")).toBe("활동 기록, 새 기록");
+    expect(tabDot()).toBe(true);
+    expect(storage.getItem(KEY) ?? "(저장 없음)").toBe("(저장 없음)");
+  });
+
+  it("`활동 기록` 탭을 보면 두 점이 함께 사라지고 저장값이 `2`, 이번에 새로 본 2줄에 NEW 가 붙는다", () => {
+    renderRoom(makeView({ records: POLICE_TWO }));
+    openSheet();
+    openActivity();
+    expect(selectedTab()).toBe("활동 기록");
+    expect(headDot()).toBe(false);
+    expect(headBtn()?.getAttribute("aria-label")).toBe("역할 카드");
+    expect(tabDot()).toBe(false);
+    expect(storage.getItem(KEY)).toBe("2");
+    expect(newMarks()).toEqual(["NEW", "NEW"]);
+  });
+
+  it("시트를 닫으면 NEW 가 사라지고 다시 열어도 점도 NEW 도 없다", () => {
+    renderRoom(makeView({ records: POLICE_TWO }));
+    openSheet();
+    openActivity();
+    closeSheet();
+    expect(sheet() === null ? "닫힘" : "열림").toBe("닫힘");
+    openSheet();
+    expect(tabDot()).toBe(false);
+    expect(headDot()).toBe(false);
+    openActivity();
+    expect(rows().length).toBe(2);
+    expect(newMarks()).toEqual(["-", "-"]);
+  });
+
+  it("저장소에는 방 코드 키 하나뿐이고 값은 숫자 문자열이다(기록 내용·토큰 없음)", () => {
+    renderRoom(makeView({ records: POLICE_TWO }));
+    openSheet();
+    openActivity();
+    expect(storage.length).toBe(1);
+    expect(storage.key(0)).toBe(KEY);
+    expect(/^\d+$/.test(storage.getItem(KEY) ?? "")).toBe(true);
+    expect(JSON.stringify(Object.keys(storage)).includes("tttt")).toBe(false);
+  });
+
+  it("재마운트(새로고침): 읽은 뒤에는 점이 없고, 안 읽고 나가면 점이 그대로 복원된다", () => {
+    const first = renderRoom(makeView({ records: POLICE_TWO }));
+    first.unmount();
+    renderRoom(makeView({ records: POLICE_TWO }));
+    expect(headDot()).toBe(true);
+    openSheet();
+    openActivity();
+    cleanup();
+    renderRoom(makeView({ records: POLICE_TWO }));
+    expect(headDot()).toBe(false);
+  });
+
+  it("활동 기록 탭을 보는 중 기록이 하나 늘면 점은 생기지 않고(즉시 읽음) 새 줄에 NEW 가 더해지고 저장값이 오른다", () => {
+    const r = renderRoom(makeView({ phase: "night", records: POLICE_ONE }));
+    openSheet();
+    openActivity();
+    expect(newMarks()).toEqual(["NEW"]);
+    feed(r, makeView({ phase: "morning", records: POLICE_TWO }));
+    expect(headDot()).toBe(false);
+    expect(tabDot()).toBe(false);
+    expect(newMarks()).toEqual(["NEW", "NEW"]);
+    expect(storage.getItem(KEY)).toBe("2");
+  });
+
+  it("`내 역할` 탭을 보는 중 기록이 늘면 읽음 처리하지 않고 점이 켜진다", () => {
+    const r = renderRoom(makeView({ phase: "night", records: [] }));
+    openSheet();
+    feed(r, makeView({ phase: "morning", records: POLICE_ONE }));
+    expect(selectedTab()).toBe("내 역할");
+    expect(headDot()).toBe(true);
+    expect(storage.getItem(KEY) ?? "(저장 없음)").toBe("(저장 없음)");
+  });
+});
+
+describe("단계가 바뀌어도, 새 판에서 (Pitfall 19 ⑧, D-11)", () => {
+  it("night → morning → dayAnnounce 로 바뀌어도 열린 시트와 선택한 탭이 유지된다", () => {
+    const r = renderRoom(makeView({ phase: "night", records: POLICE_ONE }));
+    openSheet();
+    openActivity();
+    feed(r, makeView({ phase: "morning", records: POLICE_ONE }));
+    expect(sheet() === null ? "닫힘" : "열림").toBe("열림");
+    expect(selectedTab()).toBe("활동 기록");
+    feed(r, makeView({ phase: "dayAnnounce", n: 2, records: POLICE_ONE }));
+    expect(sheet() === null ? "닫힘" : "열림").toBe("열림");
+    expect(selectedTab()).toBe("활동 기록");
+    expect(headBtn() === null ? "버튼 없음" : "버튼 있음").toBe("버튼 있음");
+  });
+
+  it("lobby·assigning view 를 받으면 시트가 닫히고 읽은 개수가 0 으로 저장된다", () => {
+    for (const phase of ["lobby", "assigning"] as const) {
+      storage.setItem(KEY, "3");
+      const r = renderRoom(makeView({ phase: "discussion", records: POLICE_ONE }));
+      openSheet();
+      feed(r, { ...makeView({ phase }), me: { seat: 0, isHost: true } });
+      expect(`${phase}:${storage.getItem(KEY)}`).toBe(`${phase}:0`);
+      expect(`${phase}:${sheet() === null ? "닫힘" : "열림"}`).toBe(`${phase}:닫힘`);
+      r.unmount();
+    }
+  });
+});
+
+describe("역할 확인에서 앞면을 본 적이 없으면 뒷면만", () => {
+  it("앞면을 보기 전에는 탭·직업 글자·그림이 없는 뒷면이고, 앞면을 본 뒤에는 앞면 본문과 탭이 보인다", () => {
+    renderRoom(makeView({ phase: "roleReveal", role: "police", records: [] }));
+    openSheet();
+    expect(tabs().length).toBe(0);
+    expect(sheet()?.querySelectorAll("img").length).toBe(0);
+    expect(sheet()?.textContent?.includes("경찰") ? "직업 글자 있음" : "직업 글자 없음").toBe("직업 글자 없음");
+    expect(sheet()?.querySelector(".mf-rolecard__back") === null ? "뒷면 없음" : "뒷면").toBe("뒷면");
+    closeSheet();
+    advance(5_000);
+    openSheet();
+    expect(tabs().length).toBe(2);
+    expect(sheet()?.querySelector(".mf-rolecard__name")?.textContent).toBe("경찰");
+    expect(sheet()?.querySelector(".mf-rolecard__back") === null ? "뒷면 없음" : "뒷면").toBe("뒷면 없음");
+  });
+});
+
+describe("탈락한 사람과 역할별 일지", () => {
+  it.each(["police", "mafia", "doctor"] as const)("탈락한 %s 도 같은 버튼·탭·일지를 본다", (role) => {
+    const records: RoleRecord[] =
+      role === "police" ? POLICE_ONE : role === "mafia" ? [{ n: 1, target: 2, died: true }] : [{ n: 1, target: 2 }];
+    renderRoom(makeView({ role, phase: "night", meAlive: false, records }));
+    openSheet();
+    expect(tabs().length).toBe(2);
+    openActivity();
+    expect(rows().length).toBe(1);
+  });
+
+  it("마피아 일지는 팀 암살일지 줄(`사망`/`생존`)로, 의사 일지는 `보호` 줄로 그려진다", () => {
+    renderRoom(
+      makeView({
+        role: "mafia",
+        records: [
+          { n: 1, target: 2, died: true },
+          { n: 2, target: 3, died: false },
+        ],
+      }),
+    );
+    openSheet();
+    openActivity();
+    expect(document.querySelector(".mf-journal--mafia") === null ? "암살일지 아님" : "암살일지").toBe("암살일지");
+    expect(rows().map((x) => x.querySelector(".mf-journal__rz")?.textContent)).toEqual(["생존", "사망"]);
+    cleanup();
+    renderRoom(makeView({ role: "doctor", records: [{ n: 1, target: 2 }] }));
+    openSheet();
+    openActivity();
+    expect(document.querySelector(".mf-journal--doctor") === null ? "치료일지 아님" : "치료일지").toBe("치료일지");
+    expect(rows().map((x) => x.querySelector(".mf-journal__rz")?.textContent)).toEqual(["보호"]);
+  });
+});
