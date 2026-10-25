@@ -255,7 +255,6 @@ export async function collectSnapshot(page) {
       const dim = q(".mf-dt__dim");
       const rcBtn = q(".mf-rolecard-btn");
       const rcSheet = q('dialog[aria-label="역할 카드"][open]');
-      const rcToast = q(".mf-rolecard-toast");
       const zOf = (el) => {
         const z = parseInt(getComputedStyle(el).zIndex, 10);
         return Number.isFinite(z) ? z : Number.NaN;
@@ -444,14 +443,11 @@ export async function collectSnapshot(page) {
                 hasBody: !!rcSheet.querySelector(".mf-rolecard__body"),
               }
             : null,
-          notice: rcToast
-            ? {
-                rect: rectOf(rcToast),
-                text: (rcToast.textContent || "").replace(/\s+/g, " ").trim(),
-                isButton: rcToast.tagName === "BUTTON" || !!rcToast.querySelector("button"),
-                role: rcToast.closest("[role]")?.getAttribute("role") ?? rcToast.querySelector("[role]")?.getAttribute("role") ?? null,
-              }
-            : null,
+          // 밤 끝 알림이 없음을 증명하는 측정값: 보이는 [role="status"] 중 옛 알림 문구가 든 것의 글자(요소 클래스에 기대지 않는다)
+          noticeTexts: [...document.querySelectorAll('[role="status"]')]
+            .filter(visible)
+            .map((e) => (e.textContent || "").replace(/\s+/g, " ").trim())
+            .filter((t) => t.includes("일지가 추가됐어요") || t.includes("눌러서 보기")),
         },
         roleImgs: [...document.querySelectorAll('img[src*="/characters/roles/"]')].map((im) => ({
           src: im.getAttribute("src") ?? "",
@@ -606,13 +602,6 @@ export async function selectRoleCardTab(page, name) {
 
 export async function closeRoleCard(page) {
   await closeSheet(page, "역할 카드");
-}
-
-/** 밤 끝 알림(.mf-rolecard-toast)을 누른다. */
-export async function clickNotice(page) {
-  await page.locator(".mf-rolecard-toast").click();
-  await page.locator('dialog[aria-label="역할 카드"].mf-dialog--open').waitFor({ state: "attached", timeout: 5000 });
-  await page.waitForTimeout(300);
 }
 
 /** 채팅 줄 오른쪽 ^ 버튼으로 채팅 내역 시트를 연다. */

@@ -550,27 +550,11 @@ export function journalChecks(snap, { job, mode }) {
   return result("R3", "일지 내용과 점 소멸", bad);
 }
 
-/** R6 밤 끝 알림. clicked 면 알림이 아니라 누른 뒤 시트의 선택 탭이 「활동 기록」인지 본다. */
-export function noticeChecks(snap, { job, clicked = false }) {
-  const rc = rcOf(snap);
-  const bad = [];
-  if (clicked) {
-    const sel = rc?.sheet?.tabs.find((t) => t.selected);
-    if (!rc?.sheet) bad.push("알림을 눌렀는데 시트가 열리지 않음");
-    else if (sel?.text !== "활동 기록") bad.push(`선택 탭 "${sel?.text ?? "없음"}" ≠ "활동 기록"`);
-    return result("R6", "알림을 누르면 활동 기록 탭", bad);
-  }
-  const spec = JOURNAL[job];
-  const n = rc?.notice;
-  if (!n) bad.push("알림 없음");
-  else {
-    const want = spec ? `${spec.name}가 추가됐어요 · 눌러서 보기` : "(알림이 없어야 하는 역할)";
-    if (n.text !== want) bad.push(`문구 "${n.text}" ≠ "${want}"`);
-    if (n.rect.height + 0.5 < TAP_MIN) bad.push(`높이 ${rd(n.rect.height)} < ${TAP_MIN}`);
-    if (!n.isButton) bad.push("누르는 버튼이 아님");
-    if (n.role !== "status") bad.push(`role ${n.role} ≠ status`);
-  }
-  return result("R6", "밤 끝 알림", bad);
+/** R6 밤 끝 알림이 화면에 없음(결정 0028). 측정값(roleCard.noticeTexts)이 없으면 조용히 통과시키지 않는다. */
+export function noNightNoticeChecks(snap) {
+  const texts = rcOf(snap)?.noticeTexts;
+  if (!Array.isArray(texts)) return result("R6", "밤 끝 알림 없음", ["밤 끝 알림 측정값 없음(noticeTexts)"]);
+  return result("R6", "밤 끝 알림 없음", texts.map((t) => `알림이 보임: "${t}"`));
 }
 
 // ---- 관전자(V1)·살아 있는 사람(V2) ----

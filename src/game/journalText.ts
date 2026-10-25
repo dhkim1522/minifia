@@ -2,10 +2,10 @@
 import type { RoleRecord } from "../../shared/protocol";
 import type { JournalRole } from "../net/assets";
 
-export const JOURNAL_TEXT: Readonly<Record<JournalRole, { name: string; empty: string; notice: string }>> = {
-  police: { name: "수사일지", empty: "아직 조사한 사람이 없어요", notice: "수사일지가 추가됐어요 · 눌러서 보기" },
-  mafia: { name: "암살일지", empty: "아직 지목한 사람이 없어요", notice: "암살일지가 추가됐어요 · 눌러서 보기" },
-  doctor: { name: "치료일지", empty: "아직 보호한 사람이 없어요", notice: "치료일지가 추가됐어요 · 눌러서 보기" },
+export const JOURNAL_TEXT: Readonly<Record<JournalRole, { name: string; empty: string }>> = {
+  police: { name: "수사일지", empty: "아직 조사한 사람이 없어요" },
+  mafia: { name: "암살일지", empty: "아직 지목한 사람이 없어요" },
+  doctor: { name: "치료일지", empty: "아직 보호한 사람이 없어요" },
 };
 
 export type JournalTone = "bad" | "ok" | "heal";

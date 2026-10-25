@@ -6,7 +6,6 @@ import {
   SetupError,
   chooseRole,
   clickInDialog,
-  clickNotice,
   clickTopmostPoint,
   closeRoleCard,
   closeSheet,
@@ -42,7 +41,7 @@ import {
   livingRoleArtChecks,
   morningCardIssues,
   morningGoneChecks,
-  noticeChecks,
+  noNightNoticeChecks,
   rectInside,
   rectsOverlap,
   roleCardButtonChecks,
@@ -376,17 +375,12 @@ async function claimDone(ctx, id) {
   await closeSheet(page, `${bot.nickname} 기록`);
 }
 
-/** 아침 직후 역할 카드 버튼·알림(R1·R6a). 같은 스냅숏에서 읽으므로 알림 4초 창에 걸리지 않는다. */
+/** 아침 직후 역할 카드 버튼(R1)과 밤 끝 알림이 없음(R6, 모든 역할). */
 function morningRoleChecks(ctx, id, role, snap) {
   const rec = recorder(ctx);
   const sc = `${id}/morning`;
-  if (role === "citizen") {
-    recOne(rec, sc, roleCardButtonChecks(snap, { unread: false }));
-    rec(sc, "R6", "시민에게는 밤 끝 알림 없음", snap.roleCard?.notice === null, `알림 "${snap.roleCard?.notice?.text ?? ""}"`);
-    return;
-  }
-  recOne(rec, sc, roleCardButtonChecks(snap, { unread: true }));
-  recOne(rec, sc, noticeChecks(snap, { job: role }));
+  recOne(rec, sc, roleCardButtonChecks(snap, { unread: role !== "citizen" }));
+  recOne(rec, sc, noNightNoticeChecks(snap));
 }
 
 /** 경찰·의사: 버튼으로 열어 R2 → 활동 기록 탭 R3 → 시트 G → 닫고 R4. */
@@ -406,27 +400,6 @@ async function roleCardViaButton(ctx, id, role) {
   recOne(rec, sc, journalChecks(closed, { job: role, mode: "closed" }));
   const b = roleCardButtonChecks(closed, { unread: false });
   rec(sc, "R4", "시트를 닫으면 버튼 점 소멸", b.ok, b.detail);
-}
-
-/** 마피아: 알림을 눌러 활동 기록 탭이 열림(R6b) → R3 → 닫고 R4, 다시 열어 탭 둘·점 없음(R2). */
-async function roleCardViaNotice(ctx, id, role) {
-  const rec = recorder(ctx);
-  const { page } = ctx.host;
-  const sc = `${id}/rolecard`;
-  await clickNotice(page);
-  recOne(rec, sc, noticeChecks(await collectSnapshot(page), { job: role, clicked: true }));
-  const snap = await checkState(ctx, id, "rolecard");
-  recOne(rec, sc, journalChecks(snap, { job: role, mode: "viewing" }));
-  recOne(rec, sc, livingRoleArtChecks(snap, { myJob: role }));
-  await closeRoleCard(page);
-  await frames(page);
-  const closed = await collectSnapshot(page);
-  recOne(rec, sc, journalChecks(closed, { job: role, mode: "closed" }));
-  const b = roleCardButtonChecks(closed, { unread: false });
-  rec(sc, "R4", "시트를 닫으면 버튼 점 소멸", b.ok, b.detail);
-  await openRoleCard(page);
-  recOne(rec, sc, roleCardTabChecks(await collectSnapshot(page), { job: role, unread: false }));
-  await closeRoleCard(page);
 }
 
 /** 시민: 버튼에 점이 없고, 열면 탭 없이 본문(R5). */
@@ -510,7 +483,6 @@ async function gameFlow(ctx, { id, players, role, states }) {
       recOne(rec, `${id}/morning`, dimChecks(snap, { w: ctx.size.w, expectSpotlit: elim !== undefined && elim !== null }));
       morningRoleChecks(ctx, id, role, snap);
     } else if (state === "rolecard-btn") await roleCardViaButton(ctx, id, role);
-    else if (state === "rolecard-notice") await roleCardViaNotice(ctx, id, role);
     else if (state === "rolecard-citizen") await roleCardCitizen(ctx, id);
     else if (state === "next-day") {
       // 아침이 끝난 뒤 첫 낮 장면: 카드·어둡게 층이 없고(M4) 고정물 검사가 그대로 통과한다
@@ -628,7 +600,7 @@ export const FLOWS = [
   { id: "lobby", run: lobbyFlow },
   { id: "police5", run: game("police5", 5, "police", [...CLAIMS, "chat", "night", "morning", "rolecard-btn", "next-day"]) },
   { id: "citizen4", run: game("citizen4", 4, "citizen", [...CLAIMS, "night", "morning", "rolecard-citizen", "next-day"]) },
-  { id: "mafia8", run: game("mafia8", 8, "mafia", [...CLAIMS, "night", "morning", "rolecard-notice", "next-day"]) },
+  { id: "mafia8", run: game("mafia8", 8, "mafia", [...CLAIMS, "night", "morning", "rolecard-btn", "next-day"]) },
   { id: "doctor5", run: game("doctor5", 5, "doctor", [...CLAIMS, "night", "morning", "rolecard-btn", "next-day"]) },
   { id: "spec4", run: specFlow },
 ];

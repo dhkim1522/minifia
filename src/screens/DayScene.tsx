@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import type { EmojiId, RoomView } from "../../shared/protocol";
 import { isAlive } from "../../shared/game/alive";
@@ -12,14 +12,12 @@ import { MessageLog } from "../components/MessageLog";
 import { MorningCard, exitDelayOf } from "../components/MorningCard";
 import { NIGHT_PANEL_TEXT, NightPanel, NoticePill, PickPill } from "../components/NightPanel";
 import { PhaseBar } from "../components/PhaseBar";
-import { RoleCardToast } from "../components/RoleCardToast";
 import { ReadOnlyRow } from "../components/ReadOnlyRow";
 import { Timer } from "../components/Timer";
 import { TurnPanel } from "../components/TurnPanel";
 import { UserRecordSheet } from "../components/UserRecordSheet";
 import { Toast, useToast } from "../components/Toast";
 import { morningCardText } from "../game/eliminationText";
-import { JOURNAL_TEXT } from "../game/journalText";
 import { EMOJI_TEXT, NIGHT_TEMPLATE_ORDER } from "../game/messageText";
 import { claimLinesOf } from "../net/claimLines";
 import { FLOAT_PHASES, useDayChat, useSeatFloats } from "../net/seatFloats";
@@ -38,10 +36,6 @@ export interface DaySceneProps {
   connection: RoomConnection;
   /** [역할 카드] 버튼. 모양은 RoomScreen 이 한 가지로 만들어 넘긴다 */
   myRoleButton: ReactNode;
-  /** 역할 카드 시트가 열려 있는가. 열려 있으면 밤 끝 알림을 띄우지 않고 떠 있던 것도 지운다 */
-  roleCardOpen?: boolean;
-  /** 밤 끝 알림을 누르면 부른다. RoomScreen 이 역할 카드를 활동 기록 탭으로 연다 */
-  onOpenActivity?: () => void;
   /** 테스트 방 방장의 [테스트] 버튼(결정 0022). 있으면 장면 상자 왼쪽 위에 놓는다 */
   testButton?: ReactNode;
 }
@@ -52,33 +46,13 @@ export interface DaySceneProps {
 // 위쪽 바와 하단 패널만 단계가 든 key(bar-·panel- 접두어로 서로 겹치지 않게)라 단계마다 새 요소가 되어 한 번 페이드된다.
 // claim 하단: 서버가 정한 지금 차례(view.day.turn.seat)가 나면 직업 칩(ClaimPanel), 남이면 "…님이 주장하는 중 · N초"(TurnPanel).
 // 낮 토론은 MessageLog·DiscussionControls. 화면은 스스로 단계나 차례를 넘기지 않는다(서버 view 만 따름). 역할 문자열을 화면에 쓰지 않는다.
-export function DayScene({ view, connection, myRoleButton, roleCardOpen = false, onOpenActivity, testButton }: DaySceneProps) {
+export function DayScene({ view, connection, myRoleButton, testButton }: DaySceneProps) {
   const n = view.day?.n ?? 1;
   // 낮 토론의 보낸 사람 반전·이모티콘(자리별 한 번에 하나). 단계가 discussion 이 아니면 훅이 비운다.
   const floats = useSeatFloats(view, connection.onEvent);
   // 채팅 줄은 이 폰이 그날 받은 chat 이벤트에서만 만든다(서버 뷰에 메시지가 없다, 결정 0017-7)
   const chatLines = useDayChat(view, connection.onEvent);
   const { toast, show: showToast } = useToast();
-  // 밤이 끝나 새 일지가 생길 때만 4초 눌리는 알림(경찰·마피아·의사, D-12). 처음 마운트·재접속(epoch 가 바뀜)·길이 불변·시트가 열려 있을 때는 알리지 않는다(UI-SPEC D).
-  // 문구는 본인 역할의 일지 이름 하나뿐이다(T-03.1-34). 시민에게는 어떤 길이 변화에도 없다.
-  const roleToast = useToast(4000);
-  const showRoleToast = roleToast.show;
-  const dismissRoleToast = roleToast.dismiss;
-  const role = view.me.role;
-  const journalRole = role === "police" || role === "mafia" || role === "doctor" ? role : undefined;
-  const recordsLen = view.me.records?.length ?? 0;
-  const prevRecords = useRef({ epoch: connection.epoch, len: recordsLen });
-  useEffect(() => {
-    const prev = prevRecords.current;
-    prevRecords.current = { epoch: connection.epoch, len: recordsLen };
-    if (journalRole !== undefined && prev.epoch === connection.epoch && recordsLen > prev.len && !roleCardOpen) {
-      showRoleToast(JOURNAL_TEXT[journalRole].notice);
-    }
-  }, [connection.epoch, recordsLen, journalRole, roleCardOpen, showRoleToast]);
-  // 시트가 열리면 떠 있던 알림은 할 일을 마쳤다.
-  useEffect(() => {
-    if (roleCardOpen) dismissRoleToast();
-  }, [roleCardOpen, dismissRoleToast]);
   // 가장 최근 이모티콘 하나를 보이지 않는 live 줄이 읽는다(UI-SPEC 접근성)
   const [lastEmoji, setLastEmoji] = useState<{ seat: number; icon: EmojiId } | null>(null);
   // 이모티콘을 받는 단계(claim·낮 토론·밤). 밤 이벤트는 서버가 살아 있는 마피아에게만 보낸다.
@@ -288,16 +262,6 @@ export function DayScene({ view, connection, myRoleButton, roleCardOpen = false,
           </p>
         ) : null}
         <Toast toast={toast} placement="top" />
-        {journalRole !== undefined ? (
-          <RoleCardToast
-            toast={roleToast.toast}
-            role={journalRole}
-            onOpen={() => {
-              dismissRoleToast();
-              onOpenActivity?.();
-            }}
-          />
-        ) : null}
         {inspectSeat !== null ? (
           <UserRecordSheet
             seat={inspectSeat}
