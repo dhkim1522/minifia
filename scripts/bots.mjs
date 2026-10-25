@@ -10,7 +10,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 const EMOJIS = ["smile", "grin", "surprised", "suspicious", "angry", "sad", "heart", "exclaim"];
-const NAMES = ["봇가나", "봇다라", "봇마바", "봇사아", "봇자차", "봇카타", "봇파하"];
+const NAMES = ["봇가나다라", "봇마바사아", "봇자차카타", "봇파하갸냐", "봇더러머버", "봇서어저처", "봇커터퍼허"];
 
 function parseArgs(argv) {
   const args = { code: null, count: 3, base: null, prod: false, quiet: false };

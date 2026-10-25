@@ -41,7 +41,7 @@ const MAX_SKIPS = 24; // 목표 단계에 닿기까지 testSkip 최대 횟수(8�
 const DISCUSSION_WAIT_MS = 15_000; // 봇 첫 토론 행동은 단계 진입 2~12초 뒤
 const NIGHT_PICK_WAIT_MS = 8000; // 봇 밤 pick 은 단계 진입 1~6초 뒤
 const MAX_NIGHTS = 5;
-const BOT_NAMES = ["봇가나", "봇다라", "봇마바", "봇사아", "봇자차", "봇카타", "봇파하"];
+const BOT_NAMES = ["봇가나다라", "봇마바사아", "봇자차카타", "봇파하갸냐", "봇더러머버", "봇서어저처", "봇커터퍼허"];
 const PLAYER_KEYS = "alive,connected,isHost,nickname,seat";
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const results = [];

@@ -220,7 +220,7 @@ describe("setBotCount 추가·제거", () => {
     expect(zero.ok && zero.state.players.length === 1).toBe(true);
   });
 
-  it("사람 닉네임이 봇가나면 봇은 봇다라부터 쓰고 비교 키가 겹치지 않는다", () => {
+  it("사람 닉네임이 첫 봇 이름이면 봇은 둘째 이름부터 쓰고 비교 키가 겹치지 않는다", () => {
     const created = createRoomState({
       code: "0420", hostId: HOST_ID, hostToken: "token-secret-0000-aaaa-0123456789", hostNickname: BOT_NAMES[0]!, now: 0, testMode: true,
     });

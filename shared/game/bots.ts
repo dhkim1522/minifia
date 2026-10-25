@@ -19,7 +19,8 @@ import type { Player, RoomState } from "./room";
 import type { RandInt } from "./tick";
 
 /** 봇 닉네임(5자 이하 고정 목록, scripts/bots.mjs 의 NAMES 와 같다). */
-export const BOT_NAMES: readonly string[] = ["봇가나", "봇다라", "봇마바", "봇사아", "봇자차", "봇카타", "봇파하"];
+// 봇 이름은 모두 닉네임 최대 길이(5자)로 채운다 — 이름표가 가장 넓은 최악 경우를 E2E·실기기 테스트가 늘 시험하게 한다(결정 0028 칼날 경계).
+export const BOT_NAMES: readonly string[] = ["봇가나다라", "봇마바사아", "봇자차카타", "봇파하갸냐", "봇더러머버", "봇서어저처", "봇커터퍼허"];
 
 /** 단계 마감 이만큼 전보다 늦은 행동은 계획에서 버린다(마감 직전에 실행되어 거부되는 일을 줄인다). */
 export const BOT_END_MARGIN_MS = 500;
