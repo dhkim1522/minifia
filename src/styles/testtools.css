@@ -1,0 +1,27 @@
+/* 테스트 방 방장 도구(결정 0022): 점선 [테스트] 버튼 + 시트. 값은 승인 시안 design/screens/night-v1 의
+   T1-testbtn·T2-testsheet·f8.css(.tt, .tt-sheet__*)에서 옮기고 색은 tokens.css 변수로만 쓴다. */
+
+/* 버튼(T1): 점선 1px, 모서리 14, 높이 44, 좌우 12, 글자 14px 굵게, 반투명 밤색 바탕. 흐름 안(위쪽 바·낮 시작 발표)에서는 일반 버튼이다. */
+.mf-tt {
+  appearance: none; flex: none; display: inline-flex; align-items: center; gap: 6px;
+  min-width: var(--tap-min); min-height: var(--tap-min); padding: 0 12px;
+  border-radius: var(--radius-md); border: 1px dashed var(--gray-300);
+  background: color-mix(in srgb, var(--night-900) 86%, transparent); color: var(--gray-100);
+  font: 700 14px/1.4 var(--font-ui); cursor: pointer; touch-action: manipulation;
+}
+.mf-tt:focus-visible { outline: 2px solid var(--gray-100); outline-offset: 2px; }
+.mf-tt svg { width: 18px; height: 18px; flex: none; }
+
+/* 장면 상자 왼쪽 위(대기실·낮 장면): 닻은 높이 0 이라 테이블 배치를 밀지 않고, 버튼만 장면 위에 떠 있다. */
+.mf-tt-anchor { position: relative; height: 0; z-index: var(--z-overlay); }
+.mf-tt-anchor .mf-tt { position: absolute; top: var(--space-sm); left: 0; }
+
+/* 시트(T2): 제목 아래 안내 한 줄 → (대기실만) 내 직업 칸 → 두 동작 버튼. */
+.mf-tt-sheet__note { margin: calc(-1 * var(--space-md)) 0 0; font-size: 14px; line-height: 20px; color: var(--gray-300); word-break: keep-all; }
+.mf-tt-sheet__roles { display: flex; flex-direction: column; gap: var(--space-sm); }
+.mf-tt-sheet__label { margin: 0; font-size: 14px; line-height: 20px; font-weight: 700; color: var(--gray-100); }
+.mf-tt-sheet__list { display: flex; flex-direction: column; gap: var(--space-sm); }
+.mf-tt-sheet__list .mf-btn { justify-content: space-between; width: 100%; min-height: var(--control-button); padding: 0 var(--space-md); }
+.mf-tt-sheet__list small { font-size: 12px; line-height: 16px; font-weight: 400; color: var(--gray-300); }
+/* 밝은 면의 [다음 단계로 넘기기] 아랫줄은 회색 300 이면 읽기 어려워 어두운 회색을 쓴다. */
+.mf-tt-sheet__list .mf-btn--primary small { color: var(--gray-700); }

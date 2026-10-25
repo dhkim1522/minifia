@@ -1,0 +1,109 @@
+import { useState } from "react";
+import type { ReactElement } from "react";
+import { ROLE_IDS, testRoleOptions } from "../../shared/game/roles";
+import type { RoleId } from "../../shared/game/roles";
+import type { ClientMessage, PhaseId, RoomView } from "../../shared/protocol";
+import { ROLE_TEXT } from "../game/roleText";
+import { Button } from "./Button";
+import { Chip } from "./Chip";
+import { Icon } from "./Icon";
+import { Sheet } from "./Sheet";
+import "../styles/chip.css";
+import "../styles/testtools.css";
+
+// 테스트 방 방장 도구(결정 0022, 시안 design/screens/night-v1 T1·T2): 점선 [테스트] 버튼과 '테스트 도구' 시트.
+// 화면은 요청만 보낸다 — 단계를 넘기거나 직업을 정하는 판단은 서버가 한다(결정 0002). 이 부품은 방장 + testMode 일 때만 마운트된다.
+
+/** 아랫줄 '지금: …' 의 단계 이름. PhaseId 를 모두 키로 두어 4페이즈가 단계를 더하면 타입 오류로 알게 한다. */
+export const TEST_PHASE_LABEL: Readonly<Record<PhaseId, string>> = {
+  lobby: "대기실",
+  assigning: "직업 배정",
+  roleReveal: "역할 확인",
+  dayAnnounce: "낮 시작 발표",
+  claim: "직업 공개",
+  claimReveal: "공개 연출",
+  discussion: "낮 토론",
+  night: "밤",
+  morning: "아침",
+};
+
+export interface TestToolsButtonProps {
+  onOpen: () => void;
+}
+
+export function TestToolsButton({ onOpen }: TestToolsButtonProps): ReactElement {
+  return (
+    <button type="button" className="mf-tt" aria-haspopup="dialog" onClick={onOpen}>
+      <Icon name="wrench" size={18} />
+      테스트
+    </button>
+  );
+}
+
+export interface TestToolsSheetProps {
+  view: RoomView;
+  canSend: boolean;
+  send: (msg: ClientMessage) => boolean | void;
+  onClose: () => void;
+}
+
+/** 칩이 고르는 값: null = 랜덤. */
+type Pick = RoleId | null;
+
+export function TestToolsSheet({ view, canSend, send, onClose }: TestToolsSheetProps): ReactElement {
+  const isLobby = view.phase === "lobby";
+  // 낙관적 선택: 누른 view 와 함께 기억해, 새 view 객체가 오면 버리고 서버 값(me.testRole)을 따른다(ClaimPanel 선례).
+  const [pending, setPending] = useState<{ view: RoomView; role: Pick } | null>(null);
+  const selected: Pick = pending !== null && pending.view === view ? pending.role : (view.me.testRole ?? null);
+  const options = testRoleOptions(view.players.length);
+
+  const choose = (role: Pick) => {
+    if (!canSend || role === selected) return;
+    setPending({ view, role });
+    send({ t: "testRole", role });
+  };
+
+  return (
+    <Sheet label="테스트 도구" showClose onClose={onClose} className="mf-tt-sheet">
+      {(requestClose) => (
+        <>
+          <h2 className="mf-t-heading mf-sheet__title">테스트 도구</h2>
+          <p className="mf-tt-sheet__note">테스트 방에서만 보이는 방장 도구예요</p>
+          {isLobby ? (
+            <section className="mf-tt-sheet__roles">
+              <p className="mf-tt-sheet__label">내 직업</p>
+              <div className="mf-chips">
+                <Chip selected={selected === null} disabled={!canSend} onPress={() => choose(null)}>
+                  랜덤
+                </Chip>
+                {ROLE_IDS.map((role) => (
+                  <Chip key={role} selected={selected === role} disabled={!canSend || !options.includes(role)} onPress={() => choose(role)}>
+                    {ROLE_TEXT[role].name}
+                  </Chip>
+                ))}
+              </div>
+            </section>
+          ) : null}
+          <div className="mf-tt-sheet__list">
+            <Button variant="primary" block disabled={!canSend || isLobby} onClick={() => send({ t: "testSkip" })}>
+              다음 단계로 넘기기
+              <small>{`지금: ${TEST_PHASE_LABEL[view.phase]}`}</small>
+            </Button>
+            <Button
+              variant="secondary"
+              block
+              disabled={!canSend || isLobby}
+              onClick={() => {
+                send({ t: "testReset" });
+                requestClose();
+              }}
+            >
+              대기실로 되돌리기
+              <small>인원 유지, 새 판</small>
+            </Button>
+          </div>
+        </>
+      )}
+    </Sheet>
+  );
+}

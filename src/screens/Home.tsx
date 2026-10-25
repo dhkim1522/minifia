@@ -7,7 +7,7 @@ import { Button } from "../components/Button";
 import { NicknameSheet } from "../components/NicknameSheet";
 import { TextField } from "../components/TextField";
 import { Toast, useToast } from "../components/Toast";
-import { createRoom, joinRoom } from "../net/api";
+import { createRoom, joinRoom, testModeFromSearch } from "../net/api";
 import { preloadEntryAssets } from "../net/assets";
 import { messageForApiError, nicknameErrorText } from "../net/copy";
 import { loadLastNickname, loadSession, saveLastNickname } from "../net/session";
@@ -77,7 +77,7 @@ export function Home({ onEnterRoom }: HomeProps) {
     setBusy(true);
     setServerNicknameError(null);
     setServerCodeError(null);
-    const result = await createRoom(validation.nickname);
+    const result = await createRoom(validation.nickname, { testMode: testModeFromSearch(window.location.search) });
     setBusy(false);
     if (result.ok) {
       saveLastNickname(validation.nickname);

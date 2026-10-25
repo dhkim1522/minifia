@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import type { ReactNode } from "react";
 import { isAlive } from "../../shared/game/alive";
 import type { PhaseId, RemovedReason, RoomView } from "../../shared/protocol";
 import { Button } from "../components/Button";
@@ -6,6 +7,7 @@ import { Icon } from "../components/Icon";
 import { MyRoleSheet } from "../components/MyRoleSheet";
 import { ReconnectBanner } from "../components/ReconnectBanner";
 import { RecordsButton, RecordsSheet } from "../components/RecordsSheet";
+import { TestToolsButton, TestToolsSheet } from "../components/TestTools";
 import { morningCardText } from "../game/eliminationText";
 import { preloadRoleAssets } from "../net/assets";
 import { loadSeenCount, saveSeenCount, unseenCount } from "../net/recordsSeen";
@@ -129,6 +131,11 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
     }
   }, [phase, code]);
 
+  // 테스트 방 방장 도구(결정 0022): 방장 본인 view 의 me.testMode 가 있을 때만 [테스트] 버튼과 시트가 있다.
+  // 시트는 대기실에서도 쓰므로(내 직업 고르기) 대기실·배정 진입 효과에서 닫지 않는다 — 단계가 바뀌어도 열린 채다.
+  const [testOpen, setTestOpen] = useState(false);
+  const testTools = view !== null && view.me.isHost && view.me.testMode === true;
+
   // 쫓겨난 이유별 화면은 App 이 고른다(오류 화면·링크 참가 화면).
   useEffect(() => {
     if (status === "removed") onExit(removedReason ?? "room_closed");
@@ -152,6 +159,18 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
     myRoleButton
   );
 
+  // 위쪽 바·낮 시작 발표처럼 장면에 빈 왼쪽 위가 없는 단계에서는 [테스트] 가 [내 역할] 왼쪽 같은 칸에 놓인다.
+  const testButton = testTools ? <TestToolsButton onOpen={() => setTestOpen(true)} /> : null;
+  const withTest = (buttons: ReactNode) =>
+    testButton ? (
+      <>
+        {testButton}
+        {buttons}
+      </>
+    ) : (
+      buttons
+    );
+
   return (
     <div className="mf-root mf-room">
       {view && banner !== "hidden" && <ReconnectBanner mode={banner} />}
@@ -162,6 +181,9 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
       ) : null}
       {view && showRecords && recordsOpen ? (
         <RecordsSheet records={records} players={view.players} newestIsNew={newestIsNew} onClose={closeRecords} />
+      ) : null}
+      {view && testTools && testOpen ? (
+        <TestToolsSheet view={view} canSend={connection.canSend} send={connection.send} onClose={() => setTestOpen(false)} />
       ) : null}
       {view && (
         <p className="mf-sr-only" aria-live="polite">
@@ -229,22 +251,23 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
             canSend={connection.canSend}
             epoch={connection.epoch}
             onLeave={() => onExit("left")}
+            testButton={testButton}
           />
         );
       case "assigning":
         return <Assigning view={view} />;
       case "roleReveal":
         return (
-          <RoleReveal view={view} offset={connection.offset} myRoleButton={myRoleButton} onSeenFront={onSeenFront} />
+          <RoleReveal view={view} offset={connection.offset} myRoleButton={withTest(myRoleButton)} onSeenFront={onSeenFront} />
         );
       case "dayAnnounce":
-        return <Day view={view} myRoleButton={headerExtra} />;
+        return <Day view={view} myRoleButton={withTest(headerExtra)} />;
       case "claim":
       case "claimReveal":
       case "discussion":
       case "night":
       case "morning":
-        return <DayScene view={view} connection={connection} myRoleButton={headerExtra} />;
+        return <DayScene view={view} connection={connection} myRoleButton={headerExtra} testButton={testButton} />;
       default:
         return connecting();
     }

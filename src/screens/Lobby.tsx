@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import type { ReactNode } from "react";
 import type { ClientMessage, RoomView } from "../../shared/protocol";
 import { SEAT_COUNT } from "../../shared/seatLayout";
 import { connectedCount } from "../../shared/game/room";
@@ -14,6 +15,7 @@ import { diffRoomViews, toastForDiff } from "../net/roomDiff";
 import { useSeatTransitions } from "../net/useSeatTransitions";
 import "../styles/lobby.css";
 import "../styles/sheet.css";
+import "../styles/testtools.css";
 
 const START_LOCK_MS = 2000;
 
@@ -27,11 +29,13 @@ interface LobbyProps {
   epoch?: number;
   /** [나가기] 확인 뒤 불린다. 방을 나간 결과와 관계없이 첫 화면으로 간다(01-13 의 RoomScreen 이 onExit("left") 를 넘긴다) */
   onLeave?: () => void;
+  /** 테스트 방 방장의 [테스트] 버튼(결정 0022). 있으면 장면 상자 왼쪽 위에 놓는다 */
+  testButton?: ReactNode;
 }
 
 // S-03 대기실: 대기 장면 위 원근 테이블, 위쪽 바(방 코드), 하단 시트.
 // 화면은 서버가 보낸 view 만으로 다시 그린다. 닉네임은 React 텍스트·title 로만 그린다.
-export function Lobby({ view, send, canSend = true, epoch = 0, onLeave }: LobbyProps) {
+export function Lobby({ view, send, canSend = true, epoch = 0, onLeave, testButton }: LobbyProps) {
   // 입장·방장 변경 토스트: 서버가 보낸 스냅샷 두 개의 차이로만 만든다. 처음 열 때·epoch 가 바뀐 직후(재연결)에는
   // 직전 스냅샷을 비워 지난 일을 다시 알리지 않는다.
   const { toast, show } = useToast();
@@ -136,6 +140,7 @@ export function Lobby({ view, send, canSend = true, epoch = 0, onLeave }: LobbyP
           ) : null}
         </header>
         <div className="mf-lobby__scene">
+          {testButton ? <div className="mf-tt-anchor">{testButton}</div> : null}
           <Table
             seats={seats}
             mySeat={view.me.seat}

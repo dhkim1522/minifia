@@ -24,6 +24,7 @@ import type { RoomConnection } from "../net/useRoomConnection";
 import "../styles/day.css";
 import "../styles/night.css";
 import "../styles/phase.css";
+import "../styles/testtools.css";
 
 // 밤 대상 버튼의 동사(접근성 이름 "{닉네임}, {동사} 대상"). 부품은 역할을 모르므로 장면이 값으로 넘긴다.
 const PICK_VERB: Readonly<Partial<Record<RoleId, string>>> = { police: "조사", doctor: "보호", mafia: "지목" };
@@ -33,6 +34,8 @@ export interface DaySceneProps {
   connection: RoomConnection;
   /** [내 역할] 버튼. 모양은 RoomScreen 이 한 가지로 만들어 넘긴다 */
   myRoleButton: ReactNode;
+  /** 테스트 방 방장의 [테스트] 버튼(결정 0022). 있으면 장면 상자 왼쪽 위에 놓는다 */
+  testButton?: ReactNode;
 }
 
 // 낮 세 단계(claim·claimReveal·discussion)가 공유하는 장면. S-06b·S-06c·S-07.
@@ -41,7 +44,7 @@ export interface DaySceneProps {
 // 위쪽 바와 하단 패널만 단계가 든 key(bar-·panel- 접두어로 서로 겹치지 않게)라 단계마다 새 요소가 되어 한 번 페이드된다.
 // 패널 내용은 02-08(직업 공개 ClaimPanel, 아래)·02-09(낮 토론 MessageLog·DiscussionControls)가 이 section 에 넣는다.
 // 화면은 스스로 단계를 넘기지 않는다(서버 view 만 따름). 역할 문자열을 화면에 쓰지 않는다.
-export function DayScene({ view, connection, myRoleButton }: DaySceneProps) {
+export function DayScene({ view, connection, myRoleButton, testButton }: DaySceneProps) {
   const n = view.day?.n ?? 1;
   // 낮 토론의 보낸 사람 반전·이모티콘(자리별 한 번에 하나). 단계가 discussion 이 아니면 훅이 비운다.
   const floats = useSeatFloats(view, connection.onEvent);
@@ -202,6 +205,7 @@ export function DayScene({ view, connection, myRoleButton }: DaySceneProps) {
           <PhaseBar title={title} instruction={mafiaNight ? `${n}일차 · 함께 지목하세요` : isMorning ? `${n + 1}일차` : `${n}일차`} extra={myRoleButton} timer={timer} />
         </div>
         <div className="mf-dayscene__scene">
+          {testButton ? <div className="mf-tt-anchor">{testButton}</div> : null}
           <DayTable
             seats={seats}
             mySeat={view.me.seat}

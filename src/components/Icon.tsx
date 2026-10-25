@@ -30,7 +30,8 @@ export type IconName =
   | "crown"
   | "chevronUp"
   | "target"
-  | "notebook";
+  | "notebook"
+  | "wrench";
 
 type Part = readonly [tag: "path" | "circle" | "rect", attrs: Readonly<Record<string, string | number>>];
 
@@ -124,6 +125,8 @@ const ICONS: Readonly<Record<IconName, readonly Part[]>> = {
     ["path", { d: "M6 3h11a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6z" }],
     ["path", { d: "M6 3v18M10 8h5M10 12h5" }],
   ],
+  // 테스트 방 방장 도구 [테스트] 버튼 (시안 T1, 결정 0022)
+  wrench: [["path", { d: "M14.7 6.3a4 4 0 0 0-5.4 5.1L3 17.7 6.3 21l6.3-6.3a4 4 0 0 0 5.1-5.4l-2.6 2.6-2.5-.7-.7-2.5z" }]],
 };
 
 export interface IconProps {

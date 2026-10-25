@@ -51,8 +51,14 @@ function getJson<T>(path: string): Promise<ApiResult<T>> {
   return request<T>(path, { method: "GET" });
 }
 
-export function createRoom(nickname: string): Promise<ApiResult<CreateRoomResponse>> {
-  return postJson<CreateRoomResponse>("/api/rooms", { nickname });
+/** 주소의 ?test=1 (정확히 "1") 일 때만 true — 테스트 방 만들기 표시(결정 0022). 참가 링크에는 쓰지 않는다. */
+export function testModeFromSearch(search: string): boolean {
+  return new URLSearchParams(search).get("test") === "1";
+}
+
+// testMode 는 true 일 때만 본문에 싣는다 — 일반 방 본문은 nickname 하나로 그대로다.
+export function createRoom(nickname: string, options: { testMode?: boolean } = {}): Promise<ApiResult<CreateRoomResponse>> {
+  return postJson<CreateRoomResponse>("/api/rooms", options.testMode === true ? { nickname, testMode: true } : { nickname });
 }
 
 // 비인증 미리보기. 4자리 코드로 누구나 받는 응답이고, 앉은 사람의 자리·닉네임만 들어 있다.
