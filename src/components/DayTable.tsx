@@ -1,7 +1,7 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import type { CSSProperties, ReactElement } from "react";
 import type { EmojiId, RoleId } from "../../shared/protocol";
-import { DAY_SCENE_H, DAY_SCENE_W, FIG_H, FIG_W, dayTableGeometry, daySeatLayout, px } from "../game/dayTable";
+import { DAY_SCENE_H, DAY_SCENE_W, FIG_H, FIG_W, SCENE_PAD_DEFAULT, dayTableGeometry, daySeatLayout, px } from "../game/dayTable";
 import { ROLE_TEXT } from "../game/roleText";
 import { Figure } from "./Figure";
 import { Icon } from "./Icon";
@@ -12,6 +12,8 @@ import "../styles/daytable.css";
 // me.allies 에서 화면이 만든 값이다.
 // 한 자리는 밤에는 onPick 이 있으면 대상 버튼, 낮에는 onInspect 가 있으면 기록 카드 버튼이다(둘이 함께 있으면 onPick 이 이긴다).
 // roleArt(직업 그림)는 탈락한 본인(관전자) 화면만 만든다 — 살아 있는 사람의 입력에는 이 값이 없다(결정 0021).
+// 테이블·캐릭터 기하는 모든 상황에서 시안 P2 값으로 고정이다(결정 0028): 390폭 면 216×108, rx 146, 다른 폭은 game/dayTable.ts 의 규칙.
+// 장면 여백(scenePad)은 prop, 없으면 루트의 CSS 변수 --mf-scene-pad(daytable.css 한 곳), 비었으면 12.
 // 차례 링(.mf-dt__spot)은 뒤쪽 호(캐릭터 뒤)와 앞쪽 호(캐릭터 앞) 둘로 나뉜다 — 마크업 순서가 Figure 다음이라 앞쪽 호가 그림 위에 그려진다(결정 0028).
 // 캐릭터 상자·이름표·이모티콘의 좌표는 game/dayTable.ts 의 daySeatLayout 한 번의 결과에서 나온다(떠 있는 층을 따로 가두지 않는다).
 
@@ -62,6 +64,8 @@ export interface DayTableProps {
   /** 장면 폭·높이. 안 주면 루트(장면 상자를 100%×100% 로 채운다)를 잰다. */
   width?: number;
   height?: number;
+  /** 장면 상자 좌우 여백(px). 안 주면 루트의 CSS 변수 --mf-scene-pad 를 읽고, 비었으면 12 */
+  scenePad?: number;
   label?: string;
   /** 대상 버튼의 동사("조사"·"지목"·"보호"). 장면이 넘긴다 — 부품은 역할을 모른다. 기본 "선택" */
   pickVerb?: string;
@@ -100,11 +104,18 @@ function PickBadge({ kind, label }: { kind: "me" | "ally" | "police" | "doctor";
   );
 }
 
+/** 루트의 계산된 --mf-scene-pad. 숫자가 아니면 기본 12 */
+function readScenePad(el: Element): number {
+  const v = Number.parseFloat(getComputedStyle(el).getPropertyValue("--mf-scene-pad"));
+  return Number.isFinite(v) ? v : SCENE_PAD_DEFAULT;
+}
+
 export function DayTable({
   seats,
   mySeat,
   width,
   height,
+  scenePad,
   label = "테이블",
   pickVerb = "선택",
   pickDisabled,
@@ -112,26 +123,43 @@ export function DayTable({
   dim,
 }: DayTableProps): ReactElement {
   const rootRef = useRef<HTMLDivElement>(null);
-  const [measured, setMeasured] = useState({ w: DAY_SCENE_W, h: DAY_SCENE_H });
+  const [measured, setMeasured] = useState({ w: DAY_SCENE_W, h: DAY_SCENE_H, pad: SCENE_PAD_DEFAULT });
   const needMeasure = width === undefined || height === undefined;
 
-  // 장면 상자를 재서 얻는다. ResizeObserver 가 없거나 0 이면 시안 기준 크기를 쓴다.
+  // 장면 상자를 마운트 직후 한 번 동기로 재고(첫 페인트부터 실제 크기), 이후 ResizeObserver 로 따라간다.
+  // 재지 못하거나 0 이면 시안 기준 크기를 쓴다. 여백은 prop 이 없을 때만 CSS 변수에서 읽는다.
   useLayoutEffect(() => {
     const el = rootRef.current;
-    if (!needMeasure || !el || typeof ResizeObserver === "undefined") return;
+    if (!el) return;
+    const apply = (w: number | null, h: number | null): void => {
+      const pad = scenePad ?? readScenePad(el);
+      setMeasured((prev) => {
+        const next = { w: w ?? prev.w, h: h ?? prev.h, pad };
+        return prev.w === next.w && prev.h === next.h && prev.pad === next.pad ? prev : next;
+      });
+    };
+    if (!needMeasure) {
+      apply(null, null);
+      return;
+    }
+    const rect = el.getBoundingClientRect();
+    if (rect.width > 0 && rect.height > 0) apply(rect.width, rect.height);
+    else apply(null, null);
+    if (typeof ResizeObserver === "undefined") return;
     const ro = new ResizeObserver((entries) => {
-      const rect = entries[entries.length - 1]?.contentRect;
-      if (!rect || rect.width <= 0 || rect.height <= 0) return;
-      setMeasured((prev) => (prev.w === rect.width && prev.h === rect.height ? prev : { w: rect.width, h: rect.height }));
+      const r = entries[entries.length - 1]?.contentRect;
+      if (!r || r.width <= 0 || r.height <= 0) return;
+      apply(r.width, r.height);
     });
     ro.observe(el);
     return () => ro.disconnect();
-  }, [needMeasure]);
+  }, [needMeasure, scenePad]);
 
   const sceneW = width ?? measured.w;
   const sceneH = height ?? measured.h;
-  const geo = dayTableGeometry(sceneW, sceneH);
-  const places = daySeatLayout(seats, mySeat, sceneW, sceneH);
+  const pad = scenePad ?? measured.pad;
+  const geo = dayTableGeometry(sceneW, sceneH, pad);
+  const places = daySeatLayout(seats, mySeat, sceneW, sceneH, pad);
   const bySeat = new Map(seats.map((s) => [s.seat, s]));
 
   return (

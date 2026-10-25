@@ -199,6 +199,10 @@ export const ONE_LINE_FACTOR = 1.6;
 export const FACE_RATIO = 0.45;
 /** 낮 장면 하단 패널 높이(결정 0017). */
 export const PANEL_H = 157;
+/** 양옆 캐릭터와 테이블 면 사이 가로 간격 하한(px, T2). P2 계산 최소는 6.2. */
+export const SIDE_GAP_MIN = 4;
+/** 장면 상자 위의 머리 높이(실측 119.2, T1). */
+export const HEADER_H = 119.2;
 /** 직업 이름(시트 칩 글자). */
 export const ROLE_NAME = { mafia: "마피아", police: "경찰", doctor: "의사", citizen: "시민" };
 
@@ -395,6 +399,69 @@ export function tagsOverlap(tags) {
   for (let i = 0; i < tags.length; i++)
     for (let j = i + 1; j < tags.length; j++) if (rectsOverlap(tags[i].rect, tags[j].rect)) bad.push(`${tags[i].seat}-${tags[j].seat}`);
   return result("D9", "이름표끼리 안 겹침", bad);
+}
+
+/**
+ * T2 (결정 0028): 발 줄이 테이블 면의 세로 범위에 드는 캐릭터는 그 줄의 면(타원 현)과 가로로 SIDE_GAP_MIN 이상 떨어진다.
+ * stage = browser.readStage 결과 { felt, seats: [{ seat, rect }] }. 측정값이 없으면 조용히 통과시키지 않고 실패한다.
+ */
+export function feltGapChecks(stage) {
+  const label = "양옆 캐릭터가 테이블 면 바깥";
+  const felt = stage?.felt;
+  const seats = stage?.seats;
+  if (!felt || !Array.isArray(seats) || seats.length === 0) return result("T2", label, ["측정값 없음(테이블 면 또는 캐릭터)"]);
+  const a = felt.width / 2;
+  const b = felt.height / 2;
+  const cx = felt.left + a;
+  const cy = felt.top + b;
+  const bad = [];
+  for (const s of seats) {
+    const foot = bottom(s.rect);
+    const t = (foot - cy) / b;
+    if (Math.abs(t) > 1) continue;
+    const half = a * Math.sqrt(1 - t * t);
+    const mid = s.rect.left + s.rect.width / 2;
+    const gap = mid < cx ? cx - half - right(s.rect) : s.rect.left - (cx + half);
+    if (gap < SIDE_GAP_MIN - 1e-6) bad.push(`자리 ${s.seat} 테이블 면과 간격 ${rd(gap)}px < ${SIDE_GAP_MIN}px`);
+  }
+  return result("T2", label, bad);
+}
+
+/**
+ * T1 (결정 0028): 단계가 바뀌어도(같은 인원) 장면 상자·테이블 면·내 캐릭터가 ±0.5 같고, 머리 119.2·하단 패널 157,
+ * 패널 위 = 장면 아래. entries = [{ state, stage, mySeat }]. 내 자리가 spotlit(방금 탈락)이면 내 캐릭터 비교만 건너뛴다.
+ */
+export function stageStable(entries) {
+  const label = "단계가 바뀌어도 장면 상자·테이블·내 캐릭터·패널이 그대로";
+  if (!Array.isArray(entries) || entries.length === 0) return result("T1", label, ["측정값 없음(항목 없음)"]);
+  const bad = [];
+  const same = (r, base) => ["left", "top", "width", "height"].every((k) => Math.abs(r[k] - base[k]) <= OVERLAP_EPS);
+  const fmt = (r) => `${rd(r.left)},${rd(r.top)} ${rd(r.width)}x${rd(r.height)}`;
+  const mine = (e) => e.stage?.seats?.find((x) => x.seat === e.mySeat);
+  for (const e of entries) {
+    const st = e.stage;
+    if (!st || !st.scene || !st.felt || !st.header || !st.panel) {
+      bad.push(`${e.state}: 측정값 없음(장면·테이블·머리·패널 중 하나)`);
+      continue;
+    }
+    if (Math.abs(st.header.height - HEADER_H) > OVERLAP_EPS) bad.push(`${e.state}: 머리 높이 ${rd(st.header.height)} ≠ ${HEADER_H}`);
+    if (Math.abs(st.panel.height - PANEL_H) > OVERLAP_EPS) bad.push(`${e.state}: 패널 높이 ${rd(st.panel.height)} ≠ ${PANEL_H}`);
+    if (Math.abs(st.panel.top - bottom(st.scene)) > OVERLAP_EPS) bad.push(`${e.state}: 패널 위 ${rd(st.panel.top)} ≠ 장면 아래 ${rd(bottom(st.scene))}`);
+  }
+  const base = entries[0];
+  if (base.stage?.scene && base.stage.felt) {
+    for (const e of entries.slice(1)) {
+      const st = e.stage;
+      if (!st?.scene || !st.felt) continue;
+      if (!same(st.scene, base.stage.scene)) bad.push(`${e.state} 에서 장면 상자가 ${base.state} 와 다름 (${fmt(st.scene)} ↔ ${fmt(base.stage.scene)})`);
+      if (!same(st.felt, base.stage.felt)) bad.push(`${e.state} 에서 테이블이 ${base.state} 와 다름 (${fmt(st.felt)} ↔ ${fmt(base.stage.felt)})`);
+      const me = mine(e);
+      const baseMe = mine(base);
+      if (me && baseMe && !me.spotlit && !baseMe.spotlit && !same(me.rect, baseMe.rect))
+        bad.push(`${e.state} 에서 내 캐릭터가 ${base.state} 와 다름 (${fmt(me.rect)} ↔ ${fmt(baseMe.rect)})`);
+    }
+  }
+  return result("T1", label, bad);
 }
 
 // ---- 차례(K1·K2)·주장 채팅(K3)·기록 카드(X1) ----

@@ -214,6 +214,40 @@ export function shot(page, path) {
   return page.screenshot({ path });
 }
 
+/**
+ * 장면 상자·머리·하단 패널·테이블 면·캐릭터·이름표 사각형을 한 번의 evaluate 로 읽는다(T1·T2, 결정 0028).
+ * 낮·밤·아침(.mf-dayscene), 대기실(.mf-lobby), 역할 배정(.mf-assign) 어느 화면이든 같은 모양이다 — 없으면 null.
+ * 글자·토큰·프레임은 싣지 않는다.
+ */
+export async function readStage(page) {
+  return page.evaluate(() => {
+    const rect = (el) => {
+      if (!el) return null;
+      const r = el.getBoundingClientRect();
+      return { left: r.left, top: r.top, width: r.width, height: r.height, right: r.right, bottom: r.bottom };
+    };
+    const first = (...sels) => {
+      for (const sel of sels) {
+        const el = document.querySelector(sel);
+        if (el) return el;
+      }
+      return null;
+    };
+    return {
+      scene: rect(first(".mf-dayscene__scene", ".mf-lobby__scene", ".mf-assign__scene")),
+      header: rect(first(".mf-phasebar", ".mf-lobby__bar", ".mf-assign__bar")),
+      panel: rect(first(".mf-dayscene__panel", ".mf-lobby__sheet", ".mf-assign__panel")),
+      felt: rect(document.querySelector(".mf-dt__felt")),
+      seats: [...document.querySelectorAll(".mf-dt__seat")].map((el) => ({
+        seat: Number(el.getAttribute("data-seat")),
+        rect: rect(el),
+        spotlit: el.classList.contains("mf-dt__seat--spotlit"),
+      })),
+      tags: [...document.querySelectorAll(".mf-dt__tag")].map((el) => ({ seat: Number(el.getAttribute("data-seat")), rect: rect(el) })),
+    };
+  });
+}
+
 /** 보이는 화면을 한 번의 evaluate 로 좌표 스냅숏으로 만든다. 입력 값은 싣지 않는다. */
 export async function collectSnapshot(page) {
   const decorative = DECORATIVE_ALLOW.map((d) => d.selector).join(", ");

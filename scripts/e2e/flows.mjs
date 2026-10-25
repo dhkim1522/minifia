@@ -19,6 +19,7 @@ import {
   openTestSheet,
   pickChip,
   readNightIntro,
+  readStage,
   resetAndLeave,
   selectRoleCardTab,
   setBots,
@@ -34,6 +35,7 @@ import {
   claimChatIssues,
   dayChecks,
   dimChecks,
+  feltGapChecks,
   feltStable,
   genericIssues,
   inspectChecks,
@@ -49,6 +51,7 @@ import {
   roleCardButtonChecks,
   roleCardTabChecks,
   spectatorChecks,
+  stageStable,
   tagsOverlap,
   turnChecks,
 } from "./lib.mjs";
@@ -175,13 +178,16 @@ async function lobbyFlow(ctx) {
 
 // ---- 게임 흐름(과제 2) ----
 
-/** 낮 장면 상태(claim·discussion·night·morning) 한 장: 스냅숏 + G + D1~D6·D8. 테이블 면·이름표는 흐름 끝의 D7·D9 용으로 모아 둔다. */
+/** 낮 장면 상태(claim·discussion·night·morning) 한 장: 스냅숏 + G + D1~D6·D8 + T2. 테이블 면·이름표·장면 상자는 흐름 끝의 D7·D9·T1 용으로 모아 둔다. */
 async function dayState(ctx, flowId, state) {
   const rec = recorder(ctx);
   const snap = await checkState(ctx, flowId, state);
   const mySeat = ctx.host.tracker.last()?.me?.seat ?? -1;
   for (const r of dayChecks(snap, { w: ctx.size.w, h: ctx.size.h })) rec(`${flowId}/${state}`, r.id, r.label, r.ok, r.detail);
-  (ctx.dayStates ??= []).push({ state, felt: snap.felt, tags: snap.tags });
+  const stage = await readStage(ctx.host.page);
+  const t2 = feltGapChecks(stage);
+  rec(`${flowId}/${state}`, t2.id, t2.label, t2.ok, t2.detail);
+  (ctx.dayStates ??= []).push({ state, felt: snap.felt, tags: snap.tags, stage, mySeat });
   return { snap, mySeat };
 }
 
@@ -512,6 +518,8 @@ async function gameFlow(ctx, { id, players, role, states }) {
   }
   const bad = days.map((d) => ({ d, r: tagsOverlap(d.tags) })).filter((x) => !x.r.ok);
   rec(`${id}/table`, "D9", "이름표끼리 안 겹침", bad.length === 0, bad.map((x) => `${x.d.state}: ${x.r.detail}`).join("; "));
+  const t1 = stageStable(days.map((d) => ({ state: d.state, stage: d.stage, mySeat: d.mySeat })));
+  rec(`${id}/table`, t1.id, t1.label, t1.ok, t1.detail);
   const fin = await collectSnapshot(page);
   recOne(rec, `${id}/table`, livingRoleArtChecks(fin, { myJob: role }));
   rec(`${id}/table`, "V3", "살아 있는 사람 view 에 spectate 없음", tracker.last()?.spectate === undefined, "spectate 키가 있음");
@@ -600,6 +608,8 @@ async function specFlow(ctx) {
   }
   const bad = days.map((d) => ({ d, r: tagsOverlap(d.tags) })).filter((x) => !x.r.ok);
   rec(`${id}/table`, "D9", "이름표끼리 안 겹침", bad.length === 0, bad.map((x) => `${x.d.state}: ${x.r.detail}`).join("; "));
+  const t1 = stageStable(days.map((d) => ({ state: d.state, stage: d.stage, mySeat: d.mySeat })));
+  rec(`${id}/table`, t1.id, t1.label, t1.ok, t1.detail);
   rec(`${id}/setup`, "S4", "단계 도달", true);
   await resetAndLeave(page, tracker);
 }
