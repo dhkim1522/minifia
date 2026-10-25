@@ -644,3 +644,119 @@ describe("따라잡기", () => {
     expect(caught.players.some((p) => "nightPick" in p)).toBe(false);
   });
 });
+
+describe("역할별 일지 쌓기 (D-09·D-10)", () => {
+  const recOf = (state: RoomState, p: Player, field: "assassinations" | "treatments" | "investigations"): string =>
+    JSON.stringify(state.players.find((q) => q.id === p.id)?.[field]);
+  const has = (state: RoomState, p: Player, field: "assassinations" | "treatments" | "investigations"): boolean =>
+    state.players.find((q) => q.id === p.id) !== undefined && field in (state.players.find((q) => q.id === p.id) ?? {});
+
+  it("마피아 둘이 시민을 지목하고 의사가 다른 사람을 보호하면 마피아 둘은 died true 암살일지를, 의사는 치료일지를 받고 시민은 세 필드 모두 없다", () => {
+    const { night, m1, m2, police, doctor, c1, c2 } = cast6();
+    const out = enterMorning(picks(night, [m1, c1], [m2, c1], [doctor, c2], [police, m1]), spyRandInt().randInt);
+    const kill = JSON.stringify([{ n: 1, target: c1.seat, died: true }]);
+    expect(recOf(out, m1, "assassinations")).toBe(kill);
+    expect(recOf(out, m2, "assassinations")).toBe(kill);
+    expect(recOf(out, doctor, "treatments")).toBe(JSON.stringify([{ n: 1, target: c2.seat }]));
+    expect(recOf(out, police, "investigations")).toBe(JSON.stringify([{ n: 1, target: m1.seat, isMafia: true }]));
+    for (const p of [c1, c2]) {
+      for (const f of ["assassinations", "treatments", "investigations"] as const) expect(has(out, p, f)).toBe(false);
+    }
+    expect(has(out, doctor, "assassinations")).toBe(false);
+    expect(has(out, m1, "treatments")).toBe(false);
+  });
+
+  it("의사가 최종 지목을 막으면 탈락 없음 morning {} 이고 마피아 둘은 died false, 의사 줄은 키가 정확히 n,target 이다", () => {
+    const { night, m1, m2, doctor, c1 } = cast6();
+    const out = enterMorning(picks(night, [m1, c1], [m2, c1], [doctor, c1]), spyRandInt().randInt);
+    expect(Object.keys(out.morning ?? { x: 1 }).length).toBe(0);
+    const miss = JSON.stringify([{ n: 1, target: c1.seat, died: false }]);
+    expect(recOf(out, m1, "assassinations")).toBe(miss);
+    expect(recOf(out, m2, "assassinations")).toBe(miss);
+    expect(recOf(out, doctor, "treatments")).toBe(JSON.stringify([{ n: 1, target: c1.seat }]));
+    const line = out.players.find((p) => p.id === doctor.id)?.treatments?.[0] ?? {};
+    expect(Object.keys(line).sort().join(",")).toBe("n,target");
+  });
+
+  it("의사가 자기 자신을 보호하면 치료일지 target 이 자기 seat 이다", () => {
+    const { night, doctor } = cast6();
+    const out = enterMorning(picks(night, [doctor, doctor]), spyRandInt().randInt);
+    expect(recOf(out, doctor, "treatments")).toBe(JSON.stringify([{ n: 1, target: doctor.seat }]));
+  });
+
+  it("마피아가 아무도 안 고르면 암살일지 줄이 없고, 의사가 안 고르면 치료일지 줄이 없고, 경찰만 골랐으면 경찰 줄만 쌓인다", () => {
+    const { night, m1, m2, police, doctor, c1 } = cast6();
+    const out = enterMorning(picks(night, [police, c1]), spyRandInt().randInt);
+    expect(has(out, m1, "assassinations") || has(out, m2, "assassinations")).toBe(false);
+    expect(has(out, doctor, "treatments")).toBe(false);
+    expect(recOf(out, police, "investigations")).toBe(JSON.stringify([{ n: 1, target: c1.seat, isMafia: false }]));
+    const mafiaOnly = enterMorning(picks(night, [m1, c1]), spyRandInt().randInt);
+    expect(has(mafiaOnly, doctor, "treatments")).toBe(false);
+    expect(has(mafiaOnly, police, "investigations")).toBe(false);
+  });
+
+  it("마피아 일부만 고르면(A2) 최종 대상 하나가 안 고른 동료에게도 같은 줄로 쌓인다", () => {
+    const { night, m1, m2, c2 } = cast6();
+    const out = enterMorning(picks(night, [m1, c2]), spyRandInt().randInt);
+    const kill = JSON.stringify([{ n: 1, target: c2.seat, died: true }]);
+    expect(recOf(out, m1, "assassinations")).toBe(kill);
+    expect(recOf(out, m2, "assassinations")).toBe(kill);
+  });
+
+  it("동률이면 두 마피아의 줄이 같고 기존 규칙의 최종 대상이며 난수는 동률 한 번 + 문구 한 번뿐이다", () => {
+    const { night, m1, m2, c1, c2 } = cast6();
+    const tied = picks(night, [m1, c1], [m2, c2]);
+    const spy = spyRandInt();
+    const out = enterMorning(tied, spy.randInt);
+    expect(`[${spy.calls.join(",")}]`).toBe(`[2,${String(MORNING_PHRASE_COUNT)}]`);
+    const final = Math.min(c1.seat, c2.seat);
+    const kill = JSON.stringify([{ n: 1, target: final, died: true }]);
+    expect(recOf(out, m1, "assassinations")).toBe(kill);
+    expect(recOf(out, m2, "assassinations")).toBe(kill);
+    const high = enterMorning(tied, (n) => n - 1);
+    expect(recOf(high, m1, "assassinations")).toBe(recOf(high, m2, "assassinations"));
+    expect(recOf(high, m1, "assassinations")).toBe(JSON.stringify([{ n: 1, target: Math.max(c1.seat, c2.seat), died: true }]));
+  });
+
+  it("밤 시작 때 이미 탈락한 마피아에게는 새 줄이 쌓이지 않고 기존 줄은 그대로 남는다", () => {
+    const { night, m1, m2, c1 } = cast6();
+    const old = [{ n: 0, target: 99, died: false }];
+    const seeded: RoomState = {
+      ...night,
+      players: night.players.map((p) => (p.id === m2.id ? { ...p, alive: false, assassinations: old } : p)),
+    };
+    const out = enterMorning(picks(seeded, [m1, c1]), spyRandInt().randInt);
+    expect(recOf(out, m2, "assassinations")).toBe(JSON.stringify(old));
+    expect(recOf(out, m1, "assassinations")).toBe(JSON.stringify([{ n: 1, target: c1.seat, died: true }]));
+  });
+
+  it("두 밤을 돌리면 줄이 n 1, 2 순서로 쌓이고 n 은 그 밤의 일차다", () => {
+    const rng = seededRandInt(5);
+    const first = cast6();
+    const m1Morning = tick(picks(first.night, [first.m1, first.c1], [first.m2, first.c1], [first.doctor, first.c2]), first.night.phaseEndsAt ?? 0, rng);
+    let s = m1Morning;
+    while (s.phase !== "night") s = tick(s, s.phaseEndsAt ?? 0, rng);
+    expect(s.day).toBe(2);
+    const alive = (p: Player): boolean => s.players.find((q) => q.id === p.id)?.alive !== false;
+    const victim = alive(first.c2) ? first.c2 : first.police;
+    s = picks(s, [first.m1, victim], [first.m2, victim], [first.doctor, first.doctor]);
+    s = tick(s, s.phaseEndsAt ?? 0, rng);
+    const m1After = s.players.find((p) => p.id === first.m1.id)?.assassinations ?? [];
+    expect(m1After.map((r) => r.n).join(",")).toBe("1,2");
+    expect(m1After.map((r) => r.target).join(",")).toBe(`${String(first.c1.seat)},${String(victim.seat)}`);
+    const doc = s.players.find((p) => p.id === first.doctor.id)?.treatments ?? [];
+    expect(doc.map((r) => r.n).join(",")).toBe("1,2");
+  });
+
+  it("enterMorning 은 입력 상태를 바꾸지 않고 결과의 어느 줄에도 직업 문자열이 없다", () => {
+    const { night, m1, m2, police, doctor, c1 } = cast6();
+    const input = picks(night, [m1, c1], [m2, c1], [doctor, c1], [police, m1]);
+    const before = JSON.stringify(input);
+    const out = enterMorning(input, spyRandInt().randInt);
+    expect(JSON.stringify(input)).toBe(before);
+    for (const p of out.players) {
+      const lines = JSON.stringify([p.assassinations ?? [], p.treatments ?? [], p.investigations ?? []]);
+      expect(/mafia|police|doctor|citizen/.test(lines)).toBe(false);
+    }
+  });
+});
