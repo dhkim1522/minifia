@@ -21,7 +21,6 @@ const seat = (n: number, nickname: string, extra: Partial<DayTableSeat> = {}): D
   isHost: false,
   isMe: false,
   isAlly: false,
-  row: null,
   ...extra,
 });
 
@@ -55,13 +54,13 @@ describe("DayTable: 좌표는 daySeatLayout 하나에서 나온다", () => {
     }
   });
 
-  it("이름표 .mf-dt__tag 는 left x·top y+3·z-index z+20 이고 title 은 닉네임이다", () => {
+  it("이름표 .mf-dt__tag 는 left x·top y(간격 0)·z-index tagZ 이고 title 은 닉네임이다", () => {
     const { container } = render(<DayTable seats={five()} mySeat={0} width={366} />);
     for (const L of daySeatLayout(five(), 0, 366)) {
       const tag = tagEl(container, L.seat);
       expect(tag.style.left).toBe(px(L.x));
-      expect(tag.style.top).toBe(px(L.y + 3));
-      expect(tag.style.zIndex).toBe(String(L.z + 20));
+      expect(tag.style.top).toBe(px(L.y));
+      expect(tag.style.zIndex).toBe(String(L.tagZ));
     }
     expect(tagEl(container, 1).getAttribute("title")).toBe("가나다라마");
   });
@@ -88,15 +87,15 @@ describe("DayTable: 좌표는 daySeatLayout 하나에서 나온다", () => {
     expect(felt(b.container).style.height).toBe("108px");
   });
 
-  it("height 340 을 주면 테이블 면 top 131px 이고 내 자리(맨 아래) 이름표 top 이 px(191 + 100 + 3) 이다", () => {
-    const { container } = render(<DayTable seats={five()} mySeat={0} width={366} height={340} />);
-    expect(felt(container).style.top).toBe("131px");
-    expect(tagEl(container, 0).style.top).toBe(px(191 + 100 + 3));
+  it("height 320 을 주면 테이블 면 top 138px 이고 내 자리(맨 아래) 이름표 top 이 px(198 + 100) 이다", () => {
+    const { container } = render(<DayTable seats={five()} mySeat={0} width={366} height={320} />);
+    expect(felt(container).style.top).toBe("138px");
+    expect(tagEl(container, 0).style.top).toBe(px(198 + 100));
   });
 });
 
 describe("DayTable: 장면 크기 재기", () => {
-  it("ResizeObserver 가 있으면 루트를 재서 쓴다 (폭 352·높이 300 → 면 left 44px·top 117px), 언마운트하면 disconnect", () => {
+  it("ResizeObserver 가 있으면 루트를 재서 쓴다 (폭 352·높이 300 → 면 left 44px·top 118px), 언마운트하면 disconnect", () => {
     const disconnect = vi.fn();
     class FakeRO {
       constructor(private cb: (entries: { contentRect: { width: number; height: number } }[]) => void) {}
@@ -111,7 +110,7 @@ describe("DayTable: 장면 크기 재기", () => {
     vi.stubGlobal("ResizeObserver", FakeRO);
     const { container, unmount } = render(<DayTable seats={five()} mySeat={0} />);
     expect(felt(container).style.left).toBe("44px");
-    expect(felt(container).style.top).toBe("117px");
+    expect(felt(container).style.top).toBe("118px");
     unmount();
     expect(disconnect).toHaveBeenCalled();
   });
@@ -152,101 +151,8 @@ describe("DayTable: 안전", () => {
   });
 });
 
-// ---- 02-14 Task 2: 이름표 아랫줄 ----
-const claimEl = (c: HTMLElement, n: number) => tagEl(c, n).querySelector<HTMLElement>(".mf-dt__claim");
-
-describe("DayTable: 이름표 아랫줄 (결정 0017-3·0017-6)", () => {
-  it("row wait 은 아랫줄 '…' (클래스 --wait)", () => {
-    const { container } = render(<DayTable seats={five({ 1: { row: { kind: "wait" } } })} mySeat={0} width={366} />);
-    expect(claimEl(container, 1)?.textContent).toBe("…");
-    expect(claimEl(container, 1)?.classList.contains("mf-dt__claim--wait")).toBe(true);
-  });
-
-  it("row done 은 '완료' 와 체크 svg 하나 (클래스 --done)", () => {
-    const { container } = render(<DayTable seats={five({ 1: { row: { kind: "done" } } })} mySeat={0} width={366} />);
-    const el = claimEl(container, 1);
-    expect(el?.textContent).toBe("완료");
-    expect(el?.querySelectorAll("svg").length).toBe(1);
-    expect(el?.classList.contains("mf-dt__claim--done")).toBe(true);
-  });
-
-  it("row claim police 는 '경찰', none 은 '-' (클래스 --none)", () => {
-    const rows = {
-      1: { row: { kind: "claim", job: "police", changed: false, pop: false } },
-      2: { row: { kind: "claim", job: "none", changed: false, pop: false } },
-    } as const;
-    const { container } = render(<DayTable seats={five({ 1: rows[1], 2: rows[2] })} mySeat={0} width={366} />);
-    expect(claimEl(container, 1)?.textContent).toBe("경찰");
-    expect(claimEl(container, 2)?.textContent).toBe("-");
-    expect(claimEl(container, 2)?.classList.contains("mf-dt__claim--none")).toBe(true);
-    expect(claimEl(container, 1)?.classList.contains("mf-dt__claim--none")).toBe(false);
-  });
-
-  it.each([
-    ["mafia", "마피아"],
-    ["police", "경찰"],
-    ["doctor", "의사"],
-    ["citizen", "시민"],
-  ] as const)("직업 이름은 잘리지 않는다: %s → %s", (job, text) => {
-    const { container } = render(
-      <DayTable seats={five({ 1: { row: { kind: "claim", job, changed: false, pop: false } } })} mySeat={0} width={366} />,
-    );
-    expect(claimEl(container, 1)?.textContent).toBe(text);
-  });
-
-  it("pop true 인 자리에만 클래스 --pop 이 있다", () => {
-    const seats = five({
-      1: { row: { kind: "claim", job: "mafia", changed: false, pop: true } },
-      2: { row: { kind: "claim", job: "citizen", changed: false, pop: false } },
-    });
-    const { container } = render(<DayTable seats={seats} mySeat={0} width={366} />);
-    expect(claimEl(container, 1)?.classList.contains("mf-dt__claim--pop")).toBe(true);
-    expect(claimEl(container, 2)?.classList.contains("mf-dt__claim--pop")).toBe(false);
-  });
-
-  it("row null 이면 아랫줄 요소가 없다", () => {
-    const { container } = render(<DayTable seats={five()} mySeat={0} width={366} />);
-    expect(container.querySelectorAll(".mf-dt__claim").length).toBe(0);
-  });
-
-  it("자리 접근성 이름: done 이면 ', 선택 완료', claim 이면 ', 직업 주장 경찰' / ', 직업 주장 말 안 함'", () => {
-    const seats = five({
-      1: { row: { kind: "done" } },
-      2: { row: { kind: "claim", job: "police", changed: false, pop: false } },
-      3: { row: { kind: "claim", job: "none", changed: false, pop: false } },
-    });
-    render(<DayTable seats={seats} mySeat={0} width={366} />);
-    expect(screen.getByRole("group", { name: "가나다라마, 선택 완료" })).toBeTruthy();
-    expect(screen.getByRole("group", { name: "지호, 직업 주장 경찰" })).toBeTruthy();
-    expect(screen.getByRole("group", { name: "하늘, 직업 주장 말 안 함" })).toBeTruthy();
-  });
-
-  it("동료가 아닌 자리에는 진홍(crimson)이 렌더 HTML 에 없다", () => {
-    const seats = five({ 1: { row: { kind: "claim", job: "mafia", changed: true, pop: true } } });
-    const { container } = render(<DayTable seats={seats} mySeat={0} width={366} />);
-    expect(container.innerHTML.includes("crimson")).toBe(false);
-  });
-});
-
 // CSS 는 정규식으로 한 줄 결과(true/false)만 단언한다 — toMatch 는 실패 때 CSS 전체를 보고서에 쏟아 TAP 을 깨뜨린다.
 const cssHas = (css: string, re: RegExp): boolean => re.test(css);
-
-describe("daytable.css: 아랫줄 상태", () => {
-  const css = readFileSync("src/styles/daytable.css", "utf8");
-  it(".mf-dt__claim--done 은 바탕 var(--gray-100)·글자 var(--night-900) (반전)", () => {
-    expect(cssHas(css, /\.mf-dt__claim--done\s*\{[^}]*background:\s*var\(--gray-100\)/)).toBe(true);
-    expect(cssHas(css, /\.mf-dt__claim--done\s*\{[^}]*color:\s*var\(--night-900\)/)).toBe(true);
-  });
-  it(".mf-dt__claim--pop 의 animation 에 팝·흔들림 두 키프레임 이름이 있다", () => {
-    expect(cssHas(css, /\.mf-dt__claim--pop\s*\{[^}]*animation:[^;]*mf-dt-pop/)).toBe(true);
-    expect(cssHas(css, /\.mf-dt__claim--pop\s*\{[^}]*animation:[^;]*mf-dt-shake/)).toBe(true);
-    expect(cssHas(css, /@keyframes mf-dt-pop/)).toBe(true);
-    expect(cssHas(css, /@keyframes mf-dt-shake/)).toBe(true);
-  });
-  it("축소 모션 미디어 규칙이 --pop 애니메이션을 끈다", () => {
-    expect(cssHas(css, /prefers-reduced-motion: reduce\)\s*\{[^@]*?\.mf-dt__claim--pop\s*\{[^}]*animation:\s*none/)).toBe(true);
-  });
-});
 
 describe("claimName (src/game/roleText.ts 가 단일 출처)", () => {
   it("none 은 '말 안 함', police 는 '경찰'", () => {
@@ -258,24 +164,6 @@ describe("claimName (src/game/roleText.ts 가 단일 출처)", () => {
 // ---- 02-14 Task 3: 배지·링·동료·보낸 사람 반전·머리 위 이모티콘 ----
 const seatEl = (c: HTMLElement, n: number) => c.querySelector<HTMLElement>(`.mf-dt__seat[data-seat="${n}"]`)!;
 const changedClaim = { kind: "claim", job: "mafia", changed: true, pop: false } as const;
-
-describe("DayTable: 말 바꿈 ↺ 배지 (결정 0017-3)", () => {
-  it("changed true 인 자리의 아랫줄 안에만 .mf-dt__chg[role=img][aria-label=말 바꿈] 이 있고 svg 를 담는다", () => {
-    const seats = five({ 1: { row: changedClaim }, 2: { row: { kind: "claim", job: "police", changed: false, pop: false } } });
-    const { container } = render(<DayTable seats={seats} mySeat={0} width={366} />);
-    const chg = container.querySelectorAll<HTMLElement>(".mf-dt__chg");
-    expect(chg.length).toBe(1);
-    expect(chg[0]?.getAttribute("role")).toBe("img");
-    expect(chg[0]?.getAttribute("aria-label")).toBe("말 바꿈");
-    expect(chg[0]?.querySelectorAll("svg").length).toBe(1);
-    expect(chg[0]?.closest(".mf-dt__claim")?.parentElement?.getAttribute("data-seat")).toBe("1");
-  });
-
-  it("자리 접근성 이름 끝에 ', 말 바꿈'", () => {
-    render(<DayTable seats={five({ 1: { row: changedClaim } })} mySeat={0} width={366} />);
-    expect(screen.getByRole("group", { name: "가나다라마, 직업 주장 마피아, 말 바꿈" })).toBeTruthy();
-  });
-});
 
 describe("DayTable: 왕관·링·동료·끊김·보낸 사람", () => {
   it("방장 자리의 캐릭터 상자 안에만 .mf-dt__crown[role=img][aria-label=방장] 이 하나 있다, 방장이 없으면 없다", () => {
@@ -317,12 +205,11 @@ describe("DayTable: 왕관·링·동료·끊김·보낸 사람", () => {
     expect(seatEl(container, 0).querySelectorAll(".mf-dt__ring--me").length).toBe(0);
   });
 
-  it("끊긴 자리의 그림은 mf-figure--disconnected 이고 아랫줄(주장)은 그대로 있다", () => {
-    const seats = five({ 2: { connected: false, row: { kind: "claim", job: "citizen", changed: false, pop: false } } });
+  it("끊긴 자리의 그림은 mf-figure--disconnected 이다", () => {
+    const seats = five({ 2: { connected: false } });
     const { container } = render(<DayTable seats={seats} mySeat={0} width={366} />);
     expect(seatEl(container, 2).querySelector("img")?.classList.contains("mf-figure--disconnected")).toBe(true);
     expect(seatEl(container, 1).querySelector("img")?.classList.contains("mf-figure--disconnected")).toBe(false);
-    expect(claimEl(container, 2)?.textContent).toBe("시민");
   });
 
   it("spoke true 인 자리의 이름표에만 .mf-dt__tag--spoke", () => {
@@ -361,7 +248,7 @@ describe("DayTable: 머리 위 이모티콘 (결정 0017-2)", () => {
 });
 
 describe("Icon 3개 추가", () => {
-  it.each(["changed", "crown", "chevronUp"])("%s 는 24×24 viewBox svg 로 그려진다", (name) => {
+  it.each(["changed", "crown", "chevronUp", "speech"])("%s 는 24×24 viewBox svg 로 그려진다", (name) => {
     const { container } = render(<Icon name={name as IconName} />);
     expect(container.querySelector("svg")?.getAttribute("viewBox")).toBe("0 0 24 24");
   });
@@ -375,9 +262,8 @@ describe("daytable.css: 배지·이모티콘 크기", () => {
     expect(cssHas(css, /\.mf-dt__emoji\s*\{[^}]*z-index:\s*60/)).toBe(true);
     expect(cssHas(css, /\.mf-dt__emoji::after\s*\{[^}]*border:\s*5px solid transparent/)).toBe(true);
   });
-  it(".mf-dt__crown 은 22px, .mf-dt__chg 는 18px", () => {
+  it(".mf-dt__crown 은 22px", () => {
     expect(cssHas(css, /\.mf-dt__crown\s*\{[^}]*width:\s*22px/)).toBe(true);
-    expect(cssHas(css, /\.mf-dt__chg\s*\{[^}]*width:\s*18px/)).toBe(true);
   });
 });
 
@@ -505,11 +391,10 @@ describe("daytable.css: 밤 선택 표시 (03-02)", () => {
 
 // ---- 03-02 Task 2: 탈락(유령 그림)과 관전 아랫줄 (D-15·결정 0021) ----
 const imgEl = (c: HTMLElement, n: number) => seatEl(c, n).querySelector<HTMLImageElement>("img")!;
-const deadRow = { kind: "dead" } as const;
 
 describe("DayTable: 탈락과 관전 아랫줄 (D-15·결정 0021)", () => {
   it("dead 자리: 그림은 유령(@2x src, srcset 4x), mf-figure--ghost, 연결돼 있으면 mf-figure--disconnected 없음. 이름표에 .mf-dt__tag--dead", () => {
-    const { container } = render(<DayTable seats={five({ 4: { dead: true, row: deadRow } })} mySeat={0} width={366} />);
+    const { container } = render(<DayTable seats={five({ 4: { dead: true } })} mySeat={0} width={366} />);
     const img = imgEl(container, 4);
     expect(img.getAttribute("src")).toBe("/characters/ghost/ghost_default%402x.png");
     expect(img.getAttribute("srcset")?.includes("ghost_default%404x.png 4x")).toBe(true);
@@ -521,7 +406,7 @@ describe("DayTable: 탈락과 관전 아랫줄 (D-15·결정 0021)", () => {
   });
 
   it("끊긴 dead 자리는 유령 그림 + mf-figure--disconnected 가 함께 있다", () => {
-    const { container } = render(<DayTable seats={five({ 4: { dead: true, connected: false, row: deadRow } })} mySeat={0} width={366} />);
+    const { container } = render(<DayTable seats={five({ 4: { dead: true, connected: false } })} mySeat={0} width={366} />);
     const img = imgEl(container, 4);
     expect(img.classList.contains("mf-figure--ghost")).toBe(true);
     expect(img.classList.contains("mf-figure--disconnected")).toBe(true);
@@ -535,41 +420,21 @@ describe("DayTable: 탈락과 관전 아랫줄 (D-15·결정 0021)", () => {
     expect((img.getAttribute("src") ?? "").includes("/characters/table/")).toBe(true);
   });
 
-  it("row {kind:'dead'} 는 아랫줄 '탈락' 하나(.mf-dt__claim--dead), 체크·↺ 없음", () => {
-    const { container } = render(<DayTable seats={five({ 4: { dead: true, row: deadRow } })} mySeat={0} width={366} />);
-    const el = claimEl(container, 4)!;
-    expect(el.textContent).toBe("탈락");
-    expect(el.classList.contains("mf-dt__claim--dead")).toBe(true);
-    expect(el.querySelectorAll("svg").length).toBe(0);
-    expect(tagEl(container, 4).querySelectorAll(".mf-dt__claim").length).toBe(1);
+  it("탈락 이름표는 한 줄(.mf-dt__name 하나)이고 '탈락' 글자·.mf-dt__claim 이 없다", () => {
+    const { container } = render(<DayTable seats={five({ 4: { dead: true } })} mySeat={0} width={366} />);
+    const tag = tagEl(container, 4);
+    expect(tag.children.length).toBe(1);
+    expect(tag.textContent).toBe("서연");
+    expect(tag.textContent?.includes("탈락")).toBe(false);
   });
 
   it("dead 자리 접근성 이름: '서연, 탈락', 내 자리는 '동현 (나), 탈락', 끊긴 dead 는 '서연, 탈락, 연결 끊김'", () => {
-    render(<DayTable seats={five({ 0: { dead: true, row: deadRow }, 4: { dead: true, row: deadRow } })} mySeat={0} width={366} />);
+    render(<DayTable seats={five({ 0: { dead: true }, 4: { dead: true } })} mySeat={0} width={366} />);
     expect(screen.getByRole("group", { name: "서연, 탈락" })).toBeTruthy();
     expect(screen.getByRole("group", { name: "동현 (나), 탈락" })).toBeTruthy();
     cleanup();
-    render(<DayTable seats={five({ 4: { dead: true, connected: false, row: deadRow } })} mySeat={0} width={366} />);
+    render(<DayTable seats={five({ 4: { dead: true, connected: false } })} mySeat={0} width={366} />);
     expect(screen.getByRole("group", { name: "서연, 탈락, 연결 끊김" })).toBeTruthy();
-  });
-
-  it("row real police 는 아랫줄 '경찰'(.mf-dt__claim--real), mafia 면 '마피아' 이고 --mafia 가 함께 있다. 접근성 이름 '하늘, 경찰', dead+real 은 '서연, 의사, 탈락'", () => {
-    const seats = five({
-      3: { row: { kind: "real", job: "police" } },
-      1: { row: { kind: "real", job: "mafia" } },
-      4: { dead: true, row: { kind: "real", job: "doctor" } },
-    });
-    const { container } = render(<DayTable seats={seats} mySeat={0} width={366} />);
-    const police = claimEl(container, 3)!;
-    expect(police.textContent).toBe("경찰");
-    expect(police.classList.contains("mf-dt__claim--real")).toBe(true);
-    expect(police.classList.contains("mf-dt__claim--mafia")).toBe(false);
-    const mafia = claimEl(container, 1)!;
-    expect(mafia.textContent).toBe("마피아");
-    expect(mafia.classList.contains("mf-dt__claim--real")).toBe(true);
-    expect(mafia.classList.contains("mf-dt__claim--mafia")).toBe(true);
-    expect(screen.getByRole("group", { name: "하늘, 경찰" })).toBeTruthy();
-    expect(screen.getByRole("group", { name: "서연, 의사, 탈락" })).toBeTruthy();
   });
 
   it("allyMarkLabel '마피아' 를 넘기면 isAlly 자리의 마름모 aria-label 이 '마피아', 넘기지 않으면 '동료'", () => {
@@ -581,7 +446,7 @@ describe("DayTable: 탈락과 관전 아랫줄 (D-15·결정 0021)", () => {
   });
 
   it("isAlly 이면서 dead 인 자리는 동료 링·마름모가 그대로 있다", () => {
-    const { container } = render(<DayTable seats={five({ 3: { isAlly: true, dead: true, row: deadRow } })} mySeat={0} width={366} />);
+    const { container } = render(<DayTable seats={five({ 3: { isAlly: true, dead: true } })} mySeat={0} width={366} />);
     expect(seatEl(container, 3).querySelectorAll(".mf-dt__ring--mate").length).toBe(1);
     expect(seatEl(container, 3).querySelectorAll(".mf-dt__mark").length).toBe(1);
   });
@@ -595,17 +460,6 @@ describe("daytable.css: 탈락과 관전 아랫줄 (03-02)", () => {
   });
   it(".mf-dt__tag--dead .mf-dt__name 의 color var(--gray-500)", () => {
     expect(cssHas(css, /\.mf-dt__tag--dead \.mf-dt__name\s*\{[^}]*color:\s*var\(--gray-500\)/)).toBe(true);
-  });
-  it(".mf-dt__claim--dead: gray-500 글자·400·night-900 70% 면", () => {
-    expect(cssHas(css, /\.mf-dt__claim--dead\s*\{[^}]*color:\s*var\(--gray-500\)/)).toBe(true);
-    expect(cssHas(css, /\.mf-dt__claim--dead\s*\{[^}]*font-weight:\s*400/)).toBe(true);
-    expect(cssHas(css, /\.mf-dt__claim--dead\s*\{[^}]*background:\s*color-mix\(in srgb, var\(--night-900\) 70%, transparent\)/)).toBe(true);
-  });
-  it(".mf-dt__claim--real 은 점선·gray-300, 마피아는 진홍 글자·테두리", () => {
-    expect(cssHas(css, /\.mf-dt__claim--real\s*\{[^}]*border-style:\s*dashed/)).toBe(true);
-    expect(cssHas(css, /\.mf-dt__claim--real\s*\{[^}]*border-color:\s*var\(--gray-300\)/)).toBe(true);
-    expect(cssHas(css, /\.mf-dt__claim--real\.mf-dt__claim--mafia\s*\{[^}]*color:\s*var\(--crimson-400\)/)).toBe(true);
-    expect(cssHas(css, /\.mf-dt__claim--real\.mf-dt__claim--mafia\s*\{[^}]*border-color:\s*var\(--crimson-400\)/)).toBe(true);
   });
 });
 
@@ -688,5 +542,251 @@ describe("daytable.css: 종류별 배지 (03-02)", () => {
     const z = (k: string): number => Number(new RegExp(`\\.mf-dt__pick--${k}\\s*\\{[^}]*z-index:\\s*(\\d+)`).exec(css)?.[1] ?? "-1");
     expect(z("me")).toBeGreaterThan(Math.max(z("ally"), z("police"), z("doctor")));
     expect(Math.min(z("ally"), z("police"), z("doctor"))).toBeGreaterThan(0);
+  });
+});
+
+// ---- 03.1-05 Task 2: 한 줄 이름표·차례·낮 탭·관전 그림·아침 층 (D-03·D-06·D-14·D-15·D-17) ----
+const eight = (over: Partial<Record<number, Partial<DayTableSeat>>> = {}): DayTableSeat[] =>
+  Array.from({ length: 8 }, (_, i) => seat(i, `이름${i}`, { isMe: i === 0, ...over[i] }));
+const spotEls = (c: HTMLElement) => Array.from(c.querySelectorAll<HTMLElement>(".mf-dt__spot"));
+const turnEls = (c: HTMLElement) => Array.from(c.querySelectorAll<HTMLElement>(".mf-dt__turn"));
+
+describe("DayTable: 한 줄 이름표와 층 (D-04·D-14)", () => {
+  it("모든 이름표는 자식으로 .mf-dt__name 하나만 갖고(점 + 닉네임), .mf-dt__claim·.mf-dt__chg 가 어디에도 없다", () => {
+    const { container } = render(<DayTable seats={five({ 4: { dead: true } })} mySeat={0} width={366} />);
+    const tags = Array.from(container.querySelectorAll<HTMLElement>(".mf-dt__tag"));
+    expect(tags.length).toBe(5);
+    for (const t of tags) {
+      expect(t.children.length).toBe(1);
+      expect(t.children[0]?.classList.contains("mf-dt__name")).toBe(true);
+      expect(t.querySelectorAll("i.mf-dt__dot").length).toBe(1);
+    }
+    expect(container.querySelectorAll(".mf-dt__claim, .mf-dt__chg").length).toBe(0);
+    expect(tagEl(container, 4).classList.contains("mf-dt__tag--dead")).toBe(true);
+    expect(tagEl(container, 4).textContent?.includes("탈락")).toBe(false);
+  });
+
+  it.each([4, 5, 6, 7, 8])("%i명: 모든 이름표의 인라인 z-index 최댓값 < 모든 자리의 인라인 z-index 최솟값", (n) => {
+    const seats = Array.from({ length: n }, (_, i) => seat(i, `이${i}`, { isMe: i === 0 }));
+    const { container } = render(<DayTable seats={seats} mySeat={0} width={366} />);
+    const tagZ = Array.from(container.querySelectorAll<HTMLElement>(".mf-dt__tag")).map((e) => Number(e.style.zIndex));
+    const seatZ = seatEls(container).map((e) => Number(e.style.zIndex));
+    expect(tagZ.length).toBe(n);
+    expect(seatZ.length).toBe(n);
+    expect(Math.max(...tagZ) < Math.min(...seatZ)).toBe(true);
+  });
+});
+
+describe("DayTable: 지금 주장하는 차례 (D-03)", () => {
+  it("turn 인 자리에 .mf-dt__spot 하나와 .mf-dt__turn(svg 아이콘) 하나, 그 이름표에 --turn", () => {
+    const { container } = render(<DayTable seats={five({ 2: { turn: true } })} mySeat={0} width={366} />);
+    expect(spotEls(container).length).toBe(1);
+    expect(turnEls(container).length).toBe(1);
+    expect(seatEl(container, 2).contains(spotEls(container)[0] ?? null)).toBe(true);
+    expect(seatEl(container, 2).contains(turnEls(container)[0] ?? null)).toBe(true);
+    expect(turnEls(container)[0]?.querySelectorAll("svg").length).toBe(1);
+    expect(container.querySelectorAll(".mf-dt__tag--turn").length).toBe(1);
+    expect(tagEl(container, 2).classList.contains("mf-dt__tag--turn")).toBe(true);
+  });
+
+  it("차례 자리가 없으면 링·배지·반전이 0개", () => {
+    const { container } = render(<DayTable seats={five()} mySeat={0} width={366} />);
+    expect(spotEls(container).length).toBe(0);
+    expect(turnEls(container).length).toBe(0);
+    expect(container.querySelectorAll(".mf-dt__tag--turn").length).toBe(0);
+  });
+
+  it("두 자리에 turn 을 주어도 입력 그대로 둘 다 그린다 (한 번에 한 자리는 장면이 보장한다)", () => {
+    const { container } = render(<DayTable seats={five({ 1: { turn: true }, 3: { turn: true } })} mySeat={0} width={366} />);
+    expect(spotEls(container).length).toBe(2);
+    expect(turnEls(container).length).toBe(2);
+  });
+
+  it("내 자리가 차례면 .mf-dt__ring--me 와 .mf-dt__spot 이 둘 다 있다", () => {
+    const { container } = render(<DayTable seats={five({ 0: { turn: true } })} mySeat={0} width={366} />);
+    expect(seatEl(container, 0).querySelectorAll(".mf-dt__ring--me").length).toBe(1);
+    expect(seatEl(container, 0).querySelectorAll(".mf-dt__spot").length).toBe(1);
+  });
+
+  it("차례 자리 aria-label 에 '지금 주장하는 차례'가 든다 (내 자리는 '(나)' 뒤)", () => {
+    render(<DayTable seats={five({ 2: { turn: true }, 0: {} })} mySeat={0} width={366} />);
+    expect(screen.getByRole("group", { name: "지호, 지금 주장하는 차례" })).toBeTruthy();
+    cleanup();
+    render(<DayTable seats={five({ 0: { turn: true } })} mySeat={0} width={366} />);
+    expect(screen.getByRole("group", { name: "동현 (나), 지금 주장하는 차례" })).toBeTruthy();
+  });
+});
+
+describe("DayTable: 낮 기록 카드 버튼 (D-06)", () => {
+  it("onInspect 가 있는 자리는 button.mf-dt__seat(aria-pressed 없음), 라벨 '{닉네임}, 주장 기록 보기', 내 자리는 '(나)'", () => {
+    const f = vi.fn();
+    const { container } = render(<DayTable seats={five({ 1: { onInspect: f }, 0: { onInspect: vi.fn() } })} mySeat={0} width={366} />);
+    const buttons = container.querySelectorAll<HTMLElement>("button.mf-dt__seat");
+    expect(buttons.length).toBe(2);
+    for (const b of Array.from(buttons)) {
+      expect(b.getAttribute("type")).toBe("button");
+      expect(b.hasAttribute("aria-pressed")).toBe(false);
+    }
+    expect(screen.getByRole("button", { name: "가나다라마, 주장 기록 보기" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "동현 (나), 주장 기록 보기" })).toBeTruthy();
+  });
+
+  it("클릭하면 그 자리의 onInspect 가 한 번 불린다", () => {
+    const a = vi.fn();
+    const b = vi.fn();
+    render(<DayTable seats={five({ 1: { onInspect: a }, 2: { onInspect: b } })} mySeat={0} width={366} />);
+    fireEvent.click(screen.getByRole("button", { name: "지호, 주장 기록 보기" }));
+    expect(b).toHaveBeenCalledTimes(1);
+    expect(a).not.toHaveBeenCalled();
+  });
+
+  it("onPick 이 onInspect 를 이긴다: 밤 버튼(aria-pressed 있음), 눌러도 onInspect 는 불리지 않는다", () => {
+    const pick = vi.fn();
+    const inspect = vi.fn();
+    render(<DayTable seats={five({ 2: { onPick: pick, onInspect: inspect } })} mySeat={0} width={366} />);
+    const btn = screen.getByRole("button", { name: "지호, 선택 대상" });
+    expect(btn.getAttribute("aria-pressed")).toBe("false");
+    fireEvent.click(btn);
+    expect(pick).toHaveBeenCalledTimes(1);
+    expect(inspect).not.toHaveBeenCalled();
+  });
+
+  it("onPick·onInspect 둘 다 없으면 div[role=group]", () => {
+    const { container } = render(<DayTable seats={five()} mySeat={0} width={366} />);
+    expect(container.querySelectorAll("button").length).toBe(0);
+    expect(seatEl(container, 1).tagName).toBe("DIV");
+    expect(seatEl(container, 1).getAttribute("role")).toBe("group");
+  });
+
+  it("차례이면서 onInspect 면 '{닉네임}, 지금 주장하는 차례, 주장 기록 보기'", () => {
+    render(<DayTable seats={five({ 2: { turn: true, onInspect: vi.fn() } })} mySeat={0} width={366} />);
+    expect(screen.getByRole("button", { name: "지호, 지금 주장하는 차례, 주장 기록 보기" })).toBeTruthy();
+  });
+});
+
+describe("DayTable: 관전자 직업 그림 (D-17, T-03.1-15)", () => {
+  it("roleArt 가 있는 살아 있는 자리: src @2x, srcSet 에 @4x 2x, alt 빈 문자열, mf-figure--role", () => {
+    const { container } = render(<DayTable seats={five({ 2: { roleArt: "mafia" } })} mySeat={0} width={366} />);
+    const img = imgEl(container, 2);
+    expect(img.getAttribute("src")).toBe("/characters/roles/mafia_default%402x.png");
+    expect(img.getAttribute("srcset")?.includes("mafia_default%404x.png 2x")).toBe(true);
+    expect(img.getAttribute("alt")).toBe("");
+    expect(img.classList.contains("mf-figure--role")).toBe(true);
+    expect(container.querySelectorAll('img[src*="/characters/roles/"]').length).toBe(1);
+  });
+
+  it("같은 입력의 dead 자리는 유령 그림이다 (roleArt 무시)", () => {
+    const { container } = render(<DayTable seats={five({ 2: { roleArt: "police", dead: true } })} mySeat={0} width={366} />);
+    expect(imgEl(container, 2).getAttribute("src")).toBe("/characters/ghost/ghost_default%402x.png");
+    expect(container.querySelectorAll('img[src*="/characters/roles/"]').length).toBe(0);
+  });
+
+  it("roleArt 가 하나도 없는 렌더(4~8명)에서는 /characters/roles/ 를 가리키는 img 가 0개", () => {
+    for (const seats of [five(), five({ 3: { dead: true }, 1: { turn: true } }), eight()]) {
+      const { container } = render(<DayTable seats={seats} mySeat={0} width={366} />);
+      expect(container.querySelectorAll('img[src*="/characters/roles/"]').length).toBe(0);
+      expect(container.innerHTML.includes("/characters/roles/")).toBe(false);
+      expect(container.innerHTML.includes("srcset=\"/characters/roles/")).toBe(false);
+      cleanup();
+    }
+  });
+
+  it("roleArt 자리의 aria-label 은 '{닉네임}, {직업 이름}'", () => {
+    render(<DayTable seats={five({ 1: { roleArt: "doctor" }, 3: { roleArt: "citizen" } })} mySeat={0} width={366} />);
+    expect(screen.getByRole("group", { name: "가나다라마, 의사" })).toBeTruthy();
+    expect(screen.getByRole("group", { name: "하늘, 시민" })).toBeTruthy();
+  });
+
+  it("roleArt 가 바뀌면 그림 노드가 교체된다 (key 가 달라 페이드가 한 번 돈다)", () => {
+    const { container, rerender } = render(<DayTable seats={five()} mySeat={0} width={366} />);
+    const before = imgEl(container, 2);
+    rerender(<DayTable seats={five({ 2: { roleArt: "mafia" } })} mySeat={0} width={366} />);
+    expect(imgEl(container, 2) === before).toBe(false);
+  });
+});
+
+describe("DayTable: 아침 어둡게 층과 강조 (D-15)", () => {
+  it("dim 이 있으면 .mf-dt__dim 이 정확히 하나(aria-hidden, 변수 --mf-dim-exit-delay: 4700ms), 없으면 0개", () => {
+    const { container } = render(<DayTable seats={five()} mySeat={0} width={366} dim={{ exitDelayMs: 4700 }} />);
+    const dims = container.querySelectorAll<HTMLElement>(".mf-dt__dim");
+    expect(dims.length).toBe(1);
+    expect(dims[0]?.getAttribute("aria-hidden")).toBe("true");
+    expect(dims[0]?.style.getPropertyValue("--mf-dim-exit-delay")).toBe("4700ms");
+    cleanup();
+    const none = render(<DayTable seats={five()} mySeat={0} width={366} />);
+    expect(none.container.querySelectorAll(".mf-dt__dim").length).toBe(0);
+  });
+
+  it("spotlit 자리는 클래스 --spotlit 와 인라인 z-index 31, 다른 자리는 22 이하, --pulse 는 pulse 일 때만", () => {
+    const { container } = render(<DayTable seats={five({ 3: { spotlit: true, dead: true } })} mySeat={0} width={366} />);
+    expect(seatEl(container, 3).classList.contains("mf-dt__seat--spotlit")).toBe(true);
+    expect(seatEl(container, 3).style.zIndex).toBe("31");
+    expect(seatEl(container, 3).classList.contains("mf-dt__seat--pulse")).toBe(false);
+    for (const e of seatEls(container).filter((x) => x.dataset.seat !== "3")) {
+      expect(Number(e.style.zIndex)).toBeLessThanOrEqual(22);
+      expect(e.classList.contains("mf-dt__seat--spotlit")).toBe(false);
+    }
+    cleanup();
+    const pulsed = render(<DayTable seats={five({ 3: { spotlit: true, pulse: true, dead: true } })} mySeat={0} width={366} />);
+    expect(seatEl(pulsed.container, 3).classList.contains("mf-dt__seat--pulse")).toBe(true);
+    cleanup();
+    const onlyPulse = render(<DayTable seats={five({ 3: { pulse: true } })} mySeat={0} width={366} />);
+    expect(seatEl(onlyPulse.container, 3).classList.contains("mf-dt__seat--pulse")).toBe(false);
+  });
+});
+
+describe("daytable.css: 03.1-05 (이름표 한 줄·차례·층)", () => {
+  const css = readFileSync("src/styles/daytable.css", "utf8");
+  const code = css
+    .split("\n")
+    .filter((l) => !/^\s*(\/\*|\*|\/\/)/.test(l))
+    .join("\n");
+  it("옛 아랫줄 규칙(.mf-dt__claim·.mf-dt__chg·mf-dt-pop·mf-dt-shake)이 CSS 에 없다", () => {
+    expect(cssHas(css, /mf-dt__claim|mf-dt__chg|mf-dt-pop|mf-dt-shake/)).toBe(false);
+  });
+  it(".mf-dt__tag 는 absolute·translateX(-50%)·pointer-events none, 세로 배치 없음", () => {
+    expect(cssHas(css, /\.mf-dt__tag\s*\{[^}]*position:\s*absolute/)).toBe(true);
+    expect(cssHas(css, /\.mf-dt__tag\s*\{[^}]*pointer-events:\s*none/)).toBe(true);
+    expect(cssHas(css, /\.mf-dt__tag\s*\{[^}]*flex-direction/)).toBe(false);
+  });
+  it(".mf-dt__tag--turn .mf-dt__name 은 반전(gray-100 면·night-900 글자)", () => {
+    expect(cssHas(css, /\.mf-dt__tag--turn \.mf-dt__name\s*\{[^}]*background:\s*var\(--gray-100\)/)).toBe(true);
+    expect(cssHas(css, /\.mf-dt__tag--turn \.mf-dt__name\s*\{[^}]*color:\s*var\(--night-900\)/)).toBe(true);
+  });
+  it(".mf-dt__spot: 폭 140%·높이 24%·3px gray-50 링·pointer-events none", () => {
+    expect(cssHas(css, /\.mf-dt__spot\s*\{[^}]*width:\s*140%/)).toBe(true);
+    expect(cssHas(css, /\.mf-dt__spot\s*\{[^}]*height:\s*24%/)).toBe(true);
+    expect(cssHas(css, /\.mf-dt__spot\s*\{[^}]*border:\s*3px solid var\(--gray-50\)/)).toBe(true);
+    expect(cssHas(css, /\.mf-dt__spot\s*\{[^}]*pointer-events:\s*none/)).toBe(true);
+  });
+  it(".mf-dt__turn: 28px 원·top -24px·gray-50 면·night-900 글자·pointer-events none, 아이콘 선 2.4", () => {
+    expect(cssHas(css, /\.mf-dt__turn\s*\{[^}]*width:\s*28px/)).toBe(true);
+    expect(cssHas(css, /\.mf-dt__turn\s*\{[^}]*height:\s*28px/)).toBe(true);
+    expect(cssHas(css, /\.mf-dt__turn\s*\{[^}]*top:\s*-24px/)).toBe(true);
+    expect(cssHas(css, /\.mf-dt__turn\s*\{[^}]*background:\s*var\(--gray-50\)/)).toBe(true);
+    expect(cssHas(css, /\.mf-dt__turn\s*\{[^}]*color:\s*var\(--night-900\)/)).toBe(true);
+    expect(cssHas(css, /\.mf-dt__turn\s*\{[^}]*pointer-events:\s*none/)).toBe(true);
+    expect(cssHas(css, /\.mf-dt__turn \.mf-icon\s*\{[^}]*stroke-width:\s*2\.4/)).toBe(true);
+  });
+  it(".mf-dt__dim: z-index 30·pointer-events none(탭 통과)·좌우 여백까지 연장·night-900 45%", () => {
+    expect(cssHas(css, /\.mf-dt__dim\s*\{[^}]*z-index:\s*30/)).toBe(true);
+    expect(cssHas(css, /\.mf-dt__dim\s*\{[^}]*pointer-events:\s*none/)).toBe(true);
+    expect(cssHas(css, /\.mf-dt__dim\s*\{[^}]*left:\s*calc\(-1 \* var\(--mf-scene-pad\)\)/)).toBe(true);
+    expect(cssHas(css, /\.mf-dt__dim\s*\{[^}]*right:\s*calc\(-1 \* var\(--mf-scene-pad\)\)/)).toBe(true);
+    expect(cssHas(css, /\.mf-dt__dim\s*\{[^}]*color-mix\(in srgb, var\(--night-900\) 45%, transparent\)/)).toBe(true);
+    expect(cssHas(css, /\.mf-dt__dim\s*\{[^}]*mf-dim-exit-delay/)).toBe(true);
+  });
+  it("--mf-scene-pad: 기본 12px, 폭 389px 이하 4px", () => {
+    expect(cssHas(css, /\.mf-dt\s*\{[^}]*--mf-scene-pad:\s*12px/)).toBe(true);
+    expect(cssHas(css, /@media \(max-width: 389px\)\s*\{\s*\.mf-dt\s*\{\s*--mf-scene-pad:\s*4px/)).toBe(true);
+  });
+  it("맥동·밝기·페이드 키프레임이 있고 축소 모션에서 pulse 가 꺼진다", () => {
+    for (const k of ["mf-dt-fade", "mf-dt-dim-in", "mf-dt-dim-out", "mf-dt-pulse", "mf-dt-bright"]) {
+      expect(cssHas(css, new RegExp(`@keyframes ${k}\\b`))).toBe(true);
+    }
+    expect(cssHas(css, /prefers-reduced-motion: reduce\)\s*\{[^@]*?\.mf-dt__seat--pulse\s*\{[^}]*animation:\s*none/)).toBe(true);
+  });
+  it("코드 줄에 # 색 값이 없다 (토큰 변수만)", () => {
+    expect(/#[0-9a-fA-F]{3,8}\b/.test(code)).toBe(false);
   });
 });
