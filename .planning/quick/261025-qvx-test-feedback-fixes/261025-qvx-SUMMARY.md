@@ -2,18 +2,18 @@
 phase: quick-261025-qvx
 plan: 01
 status: incomplete
-progress: "3/5 과제 완료 (과제 1·2·3 완료, 과제 4~5 남음)"
-commits: 11
+progress: "4/5 과제 완료 (과제 1·2·3·4 완료, 과제 5 남음)"
+commits: 14
 plan_head_before: bce014ff68c209d8221bf38a92679a63e4743981
-plan_head_after: 64826259212b6370bdc919d562a0cc4fee625e47
-completed_tasks: [1, 2, 3]
-remaining_tasks: [4, 5]
+plan_head_after: a82e401f26050a3e54decb5d9bcd1db1dc276d00
+completed_tasks: [1, 2, 3, 4]
+remaining_tasks: [5]
 requirements: [QUICK-261025-qvx]
 ---
 
-# Quick 261025-qvx: 테스트 피드백 4건 수정 - 진행 체크포인트 (3/5)
+# Quick 261025-qvx: 테스트 피드백 4건 수정 - 진행 체크포인트 (4/5)
 
-> status: incomplete. 이 파일은 3회차까지(과제 1·2·3)의 진행 기록이다. 계획은 사용자 개정(2026-10-25)으로 5과제가 되었다(옛 과제 3 비트반전 슬롯 안 폐기 → 과제 3 기하 고정, 과제 4 대기실·배정 통일, 과제 5 문서·검증·배포). 모든 과제가 끝나면 최종 SUMMARY 로 다시 쓴다.
+> status: incomplete. 이 파일은 4회차까지(과제 1·2·3·4)의 진행 기록이다. 계획은 사용자 개정(2026-10-25)으로 5과제가 되었다(옛 과제 3 비트반전 슬롯 안 폐기 → 과제 3 기하 고정, 과제 4 대기실·배정 통일, 과제 5 문서·검증·배포). 모든 과제가 끝나면 최종 SUMMARY 로 다시 쓴다.
 
 ## 완료한 과제
 
@@ -71,12 +71,44 @@ RED 시점: `test/unit/dayTable.test.ts` 13건 실패(새 API 부재), `lib.test
 
 D1~D9·D3a·D3b·D4·G·T1·T2·M·K·N6·N7·R6 전부 통과했다. 이 회차에서 K4·N6·N7 이 처음 실제 브라우저로 확인됐다(통과). 이름표 보이는 비율 바닥(4·5명 100 %, 6명 85 %, 7명 50 %, 8명 55 %)과 D3a 는 한 번도 완화하지 않았고 실패도 없었다. 이 단계에서 T1 은 낮·밤·아침만 비교한다(대기실·배정은 과제 4 에서 더한다). 로컬 dev 서버는 PID 로 종료했고 5173 포트를 비웠다.
 
+### 과제 4: 대기실·역할 배정을 같은 DayTable·장면 상자로 통일 (U-04, 2/2)
+
+| 단계 | 커밋 | 내용 |
+|------|------|------|
+| RED | 19946de | `test(qvx): 대기실·배정을 같은 테이블과 장면 상자로 통일하는 기준` |
+| GREEN | a82e401 | `feat(qvx): 대기실·역할 배정도 같은 테이블과 장면 상자를 쓴다 (결정 0028)` |
+
+RED 시점: vitest 37건(DayTable 확장 7·`lobby.test.tsx`·`phaseScreens` S-04·`stageBox.test.tsx` 의 CSS 값)이 의도한 이유(전이 클래스·`onPress`·`slide`·옛 Table 마크업·CSS 값 부재)로 실패했고, `lib.test.mjs` 는 `lobbyShapeChecks` export 부재로 파일 전체가 실패했으며 typecheck 는 새 prop·필드 부재로 실패했다. 옛 `table.test.tsx`·`test/unit/seatLayout.test.ts` 는 RED 커밋에서 삭제하고(Icon 11건은 `icon.test.tsx` 로 이동, `Table` 단언은 DayTable·로비 테스트로 이동) `DayTableSeat` 역할 키 타입 테스트는 이미 있어 유지했다.
+
+- `src/components/DayTable.tsx`: 자리 입력에 `transition?: "entering" | "leaving" | null`·`onPress?` 와 prop `slide?` 를 더했다. 전이는 자리에 `mf-dt__seat--enter/--leave`, 이름표에 `mf-dt__tag--enter/--leave` 를 붙이고, `onPress` 자리는 `button.mf-dt__seat.mf-dt__seat--pick`(읽기 이름 = 자리 읽기 이름, `aria-pressed` 없음)이다. 핸들러 우선순위는 `onPick` > `onInspect` > `onPress`. `slide` 는 마운트 직후 첫 프레임에는 켜지 않고 `requestAnimationFrame` 한 번 뒤에 루트에 `mf-dt--slide` 를 붙인다(언마운트 때 취소).
+- `src/styles/daytable.css`: 옛 대기실의 입장(`--dur-med`)·퇴장(지역 상수 `--mf-seat-leave-ms` 320ms) 키프레임을 옮겨 왔다(그림 `.mf-figure` 만 움직여 자리 scale 과 곱해지지 않고 이름표는 페이드). `.mf-dt--slide` 에서 자리 left·top·transform, 이름표 left·top 을 `var(--dur-med) var(--ease-out)` 로 전이한다. 축소 모션에서는 입장·퇴장 애니메이션·미끄러짐 전이가 모두 꺼진다.
+- `src/screens/Lobby.tsx`: 옛 `Table`·`SEAT_COUNT` 대신 `DayTable`(`slide`)을 쓴다. 자리 입력은 `useSeatTransitions` 가 돌려준 `seated`(퇴장 중 포함)에서 만든다 — 좌석·닉네임·연결·방장·나·동료(`me.allies`)·`transition`, 방장이 끊긴 다른 사람(퇴장 중 아님) 자리에만 `onPress`(기존 내보내기 확인 시트). 서버 좌석 번호·낮 차례 순서는 바뀌지 않았다(n 명이 번호 순서로 고르게 앉는 것은 `daySeatLayout` 의 기존 규칙).
+- `src/screens/Assigning.tsx`: 머리 `.mf-assign__bar`(제목 `역할 배정` 하나), 장면 상자 `.mf-assign__scene` 안 `DayTable`(역할·동료 없음), 빈 패널 `.mf-assign__panel` 을 둔다. 어두운 막·맥박 링·안내는 그대로 화면 전체 위. 마크업은 여전히 역할을 읽지 않는다(innerHTML 동일 테스트 통과).
+- 장면 상자 CSS: 대기실 머리 `height: 119.2px`, `.mf-lobby__scene`·`.mf-assign__scene` 는 낮과 같은 `position: relative; flex: 1; min-height: 0; padding: 0 12px`(폭 389 이하 `0 4px`), 대기실 시트·배정 패널은 `calc(157px + env(safe-area-inset-bottom))`·낮 패널과 같은 면·모서리·안쪽 여백·간격(대기실 시트의 손잡이 막대는 없앴다), 대기실 배경은 `flex: 1 1 0` 로 바꿔 `100dvh` 계산을 없앴다(배정 배경은 원래 같은 값). `stageBox.test.tsx` 가 낮·대기실·배정 CSS 의 이 숫자를 교차 확인한다.
+- 삭제: `src/components/Table.tsx`, `shared/seatLayout.ts`, `lobby.css` 의 `.mf-table*`·`.mf-seat*`·`.mf-tag` 배치·`.mf-badge`·`.mf-tag__off`·퍼센트 기하·옛 키프레임(`.mf-tag__name` 은 `ds.css` 에 있고 링크 참가 화면이 쓰므로 남김), `phase.css` 의 `.mf-assign__scene .mf-table`. 옛 식별자 grep(`components/Table|shared/seatLayout|SEAT_COUNT|mf-table|mf-seat__`, src·test·scripts·worker·shared) 0건. 옛 클래스 이름이 없다는 테스트는 이름을 조각으로 만들어 grep 0건을 지킨다.
+- E2E: `lib.mjs` 에 `lobbyShapeChecks(stage, { n, mySeat })`(L6, 둘이면 마주 봄·셋이면 삼각, 1명·4명 이상은 건너뜀, 둘·셋에서 측정값 없으면 실패)를 더하고 `feltStable`(D7)이 측정값 없는 항목에서 예외 대신 실패하게 했다. `browser.mjs` 의 `startGame(page, tracker, { onAssigning })` 은 [게임 시작] 뒤 `assigning` 이 보이고 장면 테이블이 그려진 뒤 300ms 에 한 번 `onAssigning()` 을 부르고 `roleReveal` 까지 기다린다(배정이 이미 지났으면 건너뜀). `flows.mjs` `lobbyFlow` 는 인원 1 → [봇 늘리기] 2 → 3 → [5명 채우기] 5 에서 `readStage` 로 T2·L6 를 기록하고 마지막에 T1 을 기록한다(시나리오 이름 `lobby/stage`, 기존 `lobby/sheet` 의 T1·T2 와 구분). `gameFlow` 는 [게임 시작] 직전 대기실과 `onAssigning` 의 배정 화면을 `ctx.dayStates` 에 더해 D7·D9·T1 이 대기실 → 배정 → 낮 → 밤 → 아침을 한 번에 본다.
+- 검사 기준 수치(OVERLAP_EPS 0.5, ONE_LINE_FACTOR 1.6, FACE_RATIO 0.45, TAP_MIN 44, PANEL_H 157)·`TEXT_SIZE_ALLOW`·D3a/D3b 바닥·D4 완화는 바뀌지 않았다(코드 변경은 위 목록뿐이고 `lib.mjs` 의 기존 판정 상수에 손대지 않았다).
+
+로컬 E2E(`npm run dev` 5173, 개발 서버 PID 로 종료·포트 비움): 부분(`--only lobby`, `--only citizen4`)에 이어 전체 `npm run e2e -- --url http://localhost:5173` 를 돌렸다 — 152초, E2E OK, 실패 0.
+
+| 흐름 | 360x640 | 390x664 | 430x932 |
+|------|---------|---------|---------|
+| lobby | 20/20 | 20/20 | 20/20 |
+| citizen4 | 96/96 | 96/96 | 96/96 |
+| police5 | 104/104 | 104/104 | 104/104 |
+| mafia8 | 101/101 | 101/101 | 101/101 |
+| doctor5 | 100/100 | 100/100 | 100/100 |
+| spec4 | 47/47 | 47/47 | 47/47 |
+
+대기실 T1(인원 1·2·3·5)·L6·T2 와 게임 흐름 T1(대기실·배정 포함)·D7·D9·D1~D9·D3a·D3b·D4·G·K·N·R·M 이 전부 통과했다. 임시 로그로 citizen4 의 대기실·배정 두 상태가 세 크기 모두에서 실제로 `ctx.dayStates` 에 들어가는 것을 확인했다(배정 창이 잡힘; 로그는 되돌림). 한 번 보인 재시도는 원래부터 있던 「방장이 첫 밤에 탈락」 준비 실패 재시도였다(임시 로그로 원인 확인).
+
 ### D4 단순화 확인 (사용자 지시)
 
 `scripts/e2e/lib.mjs` 의 `d4TestButton` 에는 알림 전용 예외 분기가 원래 없었다(코드로 확인, 수정 없음). 알림 때문에 생긴 360폭 좁은 폭 규칙(`@media (max-width: 389px)`)은 `rolecard-toast.css` 삭제로 사라졌다. `src`, `scripts/e2e`, `src/styles/testtools.css` 에서 `알림`·`S13`·`389px` 검색 결과 알림 때문에 남은 조건 없음(남은 `알림` 단어는 새 R6 주석·라벨뿐). D4 기준(깊이 <= 3px, 가운데 점 눌림)은 건드리지 않았다.
 
 ## 검증
 
+- 과제 4 시점: `npx vitest run` 76 파일 1770 통과(옛 Table·seatLayout·Icon 파일을 정리하고 DayTable·로비·배정·stageBox 테스트를 더한 뒤의 총수), `node --test scripts/e2e/lib.test.mjs` 86 통과(+5: L6), `npm run typecheck` 통과, `test ! -e src/components/Table.tsx`·`test ! -e shared/seatLayout.ts`·옛 식별자 grep 0건·`git diff --quiet bce014f -- shared/game worker` 변경 없음(`shared/seatLayout.ts` 삭제만 `shared` 안의 변경), 대소문자만 다른 테스트 파일 이름 중복 없음.
 - 과제 3 시점: `npx vitest run` 76 파일 1772 통과(+12: 기하 불변식·산술 표·scenePad·동기 측정 등), `node --test scripts/e2e/lib.test.mjs` 81 통과(+10: T1·T2·상수), `npm run typecheck` 통과. `git diff --quiet bce014f -- shared worker` 변경 없음(과제 2 의 `src/game/dayTable.ts` 불변 검사는 의도대로 더는 유효하지 않다).
 - 과제 1 시점: `npx vitest run` 75 파일 1739 통과, `lib.test.mjs` 67 통과, typecheck 통과.
 - 과제 2 시점: `npx vitest run` 76 파일 1760 통과(+21: dayTable 구조·CSS 규약, nightIntro 신규 파일 11, 그 밖 기존 갱신), `node --test scripts/e2e/lib.test.mjs` 71 통과(K4 3, N6 1 추가), `npm run typecheck` 통과.
@@ -85,13 +117,13 @@ D1~D9·D3a·D3b·D4·G·T1·T2·M·K·N6·N7·R6 전부 통과했다. 이 회차
 
 ## 남은 과제 (이 회차에서 시작하지 않음)
 
-- 과제 4: 대기실·역할 배정을 `DayTable` 로 통일(머리 119.2·패널 157 장면 상자, 좌석 번호 순서 등간격, 인원 변화 시 미끄러짐), 옛 `Table`·`shared/seatLayout.ts` 정리, `stageBox.test.tsx`, E2E L6 과 T1 의 대기실·배정 확장 (U-04, 2/2) - RED -> GREEN
-- 과제 5: 결정 0028 문서, UI-SPEC·HANDOFF 갱신, 전체 검증(로컬 e2e, 배포본 e2e·smoke), 배포, push
+- 과제 5: 결정 0028 문서(`docs/decisions/0028-test-feedback-fixes.md`), UI-SPEC·HANDOFF 갱신, 전체 검증(로컬 e2e, 배포본 e2e·smoke), 배포, push. 이 회차까지 배포·push 는 하지 않았다.
 
 ## 편차
 
 - [Rule 1 - Bug] 과제 2 U-03: RED 커밋(8de3ac4)의 `night.css` 규약 테스트 정규식 두 개가 잘못돼 있었다(퇴장 지연 단언이 `var(--mf-nightintro-exit-delay, 1700ms)` 의 기본값 쉼표를 못 읽음, 축소 모션 단언이 다른 @media 블록을 건너 멀리 있는 `.mf-nightintro` 에 걸림). 구현을 바꾸지 않고 테스트 정규식(쉼표 허용, @media 블록 중괄호를 세어 본문만 검사)만 GREEN 커밋(133e1c5)에서 고쳤다. 기준 의미는 같다.
-- `commits: 11` 은 측정값이다(`git rev-list --count`, 과제 3 GREEN 6482625 까지). 이 가운데 8e80abd(`docs(design): approved table geometry P2`)는 이 계획 밖에서 들어온 사용자의 디자인 문서 커밋이다(design/screens/table-v1 6개 파일, 코드 무관).
+- 과제 4: 계획 밖 변경 없음. RED 커밋에서 삭제한 두 테스트 파일은 단언을 옮겼고(Icon → `icon.test.tsx`, `Table` 단언 → DayTable·로비 테스트) 약해진 것이 없다. GREEN 커밋에 테스트 두 개를 더 고쳤다: ① `lobby.test.tsx` 「끊긴 사람」 테스트는 방장 화면에서 끊긴 자리가 `button` 이 되어(내보내기 버튼 = 자리 자체) `group` 으로 찾을 수 없으므로 방장이 아닌 사람 화면으로 바꿨다(방장 화면의 button 은 내보내기 테스트가 이미 본다). ② 옛 식별자 grep 0건 기준을 지키려고 옛 클래스 이름 확인을 이름 조각 합성으로 썼다. 둘 다 의미는 같다.
+- `commits: 14` 는 측정값이다(`git rev-list --count`, 과제 4 GREEN a82e401 까지, 과제 진행 체크포인트 문서 커밋 제외). 앞 판의 `commits: 11` 은 과제 3 GREEN 6482625 까지였다. 이 가운데 8e80abd(`docs(design): approved table geometry P2`)는 이 계획 밖에서 들어온 사용자의 디자인 문서 커밋이다(design/screens/table-v1 6개 파일, 코드 무관).
 
 ## 알려진 스텁
 
@@ -99,6 +131,6 @@ D1~D9·D3a·D3b·D4·G·T1·T2·M·K·N6·N7·R6 전부 통과했다. 이 회차
 
 ## Self-Check: PASSED
 
-- FOUND: 129767c, b068558, 4f9589b, aa077bc, 8de3ac4, 133e1c5, 6f15452, 6482625 (HEAD 의 조상)
-- 삭제 확인: RoleCardToast.tsx, rolecard-toast.css
-- 생성 확인: src/components/NightIntro.tsx, test/client/nightIntro.test.tsx
+- FOUND: 129767c, b068558, 4f9589b, aa077bc, 8de3ac4, 133e1c5, 6f15452, 6482625, 19946de, a82e401 (HEAD 의 조상)
+- 삭제 확인: RoleCardToast.tsx, rolecard-toast.css, Table.tsx, shared/seatLayout.ts, table.test.tsx, seatLayout.test.ts
+- 생성 확인: src/components/NightIntro.tsx, test/client/nightIntro.test.tsx, test/client/stageBox.test.tsx, test/client/icon.test.tsx
