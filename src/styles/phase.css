@@ -80,14 +80,3 @@
 .mf-assign__ring:nth-child(3) { animation-delay: 0.66s; }
 @keyframes mf-assign-ring { from { transform: scale(0.6); opacity: 0.6; } to { transform: scale(1.6); opacity: 0; } }
 .mf-assign__core { position: relative; width: 72px; height: 72px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: var(--night-800); border: 1px solid var(--gray-700); color: var(--gray-50); }
-
-/* S-06 낮 시작 — 낮 장면 위에 morning 방사형 아침빛(800ms), 가운데 1일차 + 낮이 되었습니다(800ms 번짐). */
-.mf-day__backdrop { flex: 1 1 0; min-height: 0; height: auto; }
-.mf-day { position: relative; height: 100%; display: flex; flex-direction: column; overflow: hidden; }
-.mf-day__morning { position: absolute; inset: 0; background: radial-gradient(70% 55% at 50% 38%, var(--morning) 0%, transparent 100%); opacity: 1; animation: mf-day-morning var(--dur-slow) var(--ease-out) both; pointer-events: none; }
-@keyframes mf-day-morning { from { opacity: 0; } to { opacity: 1; } }
-.mf-day__top { position: relative; flex: none; display: flex; justify-content: flex-end; gap: var(--space-sm); padding: var(--space-md); }
-.mf-day__center { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-sm); padding: 0 var(--space-lg) var(--space-3xl); text-align: center; }
-.mf-day__count { text-shadow: var(--shadow-text); }
-.mf-day__title { text-shadow: var(--shadow-text); animation: mf-day-title var(--dur-slow) var(--ease-out) both; }
-@keyframes mf-day-title { from { opacity: 0; transform: scale(1.04); } to { opacity: 1; transform: scale(1); } }

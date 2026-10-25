@@ -10,10 +10,10 @@ import type { RoleCardTab } from "../components/RoleCardSheet";
 import { TestToolsButton, TestToolsSheet } from "../components/TestTools";
 import { morningCardText } from "../game/eliminationText";
 import { preloadRoleAssets } from "../net/assets";
+import { usePhaseArrival } from "../net/phaseArrival";
 import { loadSeenCount, saveSeenCount, unseenCount } from "../net/recordsSeen";
 import { useRoomConnection } from "../net/useRoomConnection";
 import { Assigning } from "./Assigning";
-import { Day } from "./Day";
 import { DayScene } from "./DayScene";
 import { Lobby } from "./Lobby";
 import { RoleReveal } from "./RoleReveal";
@@ -75,10 +75,10 @@ function nightAnnounce(view: RoomView): string {
   }
 }
 
-// 장면 키: 낮 두 단계와 밤·아침은 같은 장면(DayScene)이라 같은 키를 쓴다 — 테이블을 다시 마운트하지 않는다(UI-SPEC C5).
-// 래퍼와 장면은 장면에 들어올 때만 mf-phase-enter 가 돈다. 그 밖은 단계 이름이 키다.
+// 장면 키: 낮 시작(dayAnnounce)·낮 두 단계와 밤·아침은 같은 장면(DayScene)이라 같은 키를 쓴다 — 테이블을 다시 마운트하지 않는다(UI-SPEC C5).
+// 낮 시작 전용 화면은 없다(결정 0030). 래퍼와 장면은 장면에 들어올 때만 mf-phase-enter 가 돈다. 그 밖은 단계 이름이 키다.
 function sceneKey(phase: PhaseId): string {
-  return phase === "claim" || phase === "discussion" || phase === "night" || phase === "morning"
+  return phase === "dayAnnounce" || phase === "claim" || phase === "discussion" || phase === "night" || phase === "morning"
     ? "dayScene"
     : phase;
 }
@@ -91,6 +91,8 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
   // 대기실·배정 동안 직업 그림 4종 전부와 낮 배경을 미리 받아 둔다.
   // 어떤 역할인지와 무관하게 같은 요청 패턴이다(Pattern 13 ②, Pitfall 20).
   const phase = view?.phase;
+  // 같은 접속에서 단계가 바뀌어 온 직전 단계. 역할 확인 → 낮 시작으로 DayScene 이 새로 마운트될 때 문구·배경 전환의 근거다(재접속·처음엔 null).
+  const arrivedFrom = usePhaseArrival(phase, connection.epoch);
   useEffect(() => {
     if (phase === "lobby" || phase === "assigning") preloadRoleAssets();
   }, [phase]);
@@ -149,7 +151,7 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
   // 화면들이 받는 prop 이름은 myRoleButton 그대로다.
   const myRoleButton = <RoleCardButton unread={unread > 0} onOpen={() => setRoleCard({ open: true, tab: "role" })} />;
 
-  // 위쪽 바·낮 시작 발표처럼 장면에 빈 왼쪽 위가 없는 단계에서는 [테스트] 가 [역할 카드] 왼쪽 같은 칸에 놓인다.
+  // 위쪽 바처럼 장면에 빈 왼쪽 위가 없는 단계(역할 확인)에서는 [테스트] 가 [역할 카드] 왼쪽 같은 칸에 놓인다.
   const testButton = testTools ? <TestToolsButton onOpen={() => setTestOpen(true)} /> : null;
   const withTest = (buttons: ReactNode) =>
     testButton ? (
@@ -256,7 +258,6 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
           <RoleReveal view={view} offset={connection.offset} myRoleButton={withTest(myRoleButton)} onSeenFront={onSeenFront} />
         );
       case "dayAnnounce":
-        return <Day view={view} myRoleButton={withTest(myRoleButton)} />;
       case "claim":
       case "discussion":
       case "night":
@@ -267,6 +268,7 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
             connection={connection}
             myRoleButton={myRoleButton}
             testButton={testButton}
+            arrivedFrom={arrivedFrom}
           />
         );
       default:

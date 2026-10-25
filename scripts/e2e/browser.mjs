@@ -195,14 +195,16 @@ export async function settle(page) {
   await page.waitForTimeout(350);
 }
 
-/** 밤 시작 문구(.mf-nightintro) 한 번 읽기. 없으면 null. */
-export async function readNightIntro(page) {
+/** 밤·낮 시작 문구(.mf-sceneintro) 한 번 읽기. 없으면 null. kind = 톤(night|day, 클래스 mf-sceneintro--{kind}). */
+export async function readSceneIntro(page) {
   return page.evaluate(() => {
-    const el = document.querySelector(".mf-nightintro");
+    const el = document.querySelector(".mf-sceneintro");
     if (!el) return null;
     const r = el.getBoundingClientRect();
+    const tone = /\bmf-sceneintro--(night|day)\b/.exec(el.className);
     return {
       texts: [...el.querySelectorAll("p")].map((p) => (p.textContent || "").trim()),
+      kind: tone ? tone[1] : null,
       pointerEvents: getComputedStyle(el).pointerEvents,
       ariaHidden: el.getAttribute("aria-hidden") === "true",
       rect: { left: r.left, top: r.top, width: r.width, height: r.height },

@@ -1,8 +1,5 @@
-/* 낮 화면(S-06a 낮 시작 발표 보조 문구, S-06b·c·S-07 DayScene 배치). 값은 tokens.css 변수만 쓴다(색 직접 지정 없음).
+/* 낮 화면(S-06b·c·S-07 DayScene 배치. 낮 시작 발표도 이 장면 위에서 그려지고 문구는 night.css 의 .mf-sceneintro). 값은 tokens.css 변수만 쓴다(색 직접 지정 없음).
    애니메이션은 opacity·transform 만. 진홍은 쓰지 않는다. 300ms 는 토큰에 없는 길이라 지역 상수로 둔다. */
-
-/* S-06a 보조 문구 — 제목과 같은 800ms 번짐 */
-.mf-day__sub { margin: 0; font-size: 16px; line-height: 1.5; font-weight: 400; color: var(--gray-100); word-break: keep-all; text-shadow: var(--shadow-text); animation: mf-day-title var(--dur-slow) var(--ease-out) both; }
 
 /* DayScene — 위쪽 바 flex none, 장면 flex 1 에서 고정 테이블(DayTable)이 남는 높이를 재서 배치, 패널 flex none.
    360x640 에서 세로 스크롤이 생기지 않는다(UI-SPEC 높이 계산). */

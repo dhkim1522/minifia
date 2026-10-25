@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
-import type { EmojiId, RoomView } from "../../shared/protocol";
+import type { EmojiId, PhaseId, RoomView } from "../../shared/protocol";
 import { isAlive } from "../../shared/game/alive";
 import type { RoleId } from "../../shared/game/roles";
 import { Backdrop } from "../components/Backdrop";
@@ -10,16 +10,17 @@ import type { DayTableSeat, SpectatorPick } from "../components/DayTable";
 import { DiscussionControls } from "../components/DiscussionControls";
 import { MessageLog } from "../components/MessageLog";
 import { MorningCard, exitDelayOf } from "../components/MorningCard";
-import { NightIntro } from "../components/NightIntro";
 import { NIGHT_PANEL_TEXT, NightPanel, NoticePill, PickPill } from "../components/NightPanel";
 import { PhaseBar } from "../components/PhaseBar";
 import { ReadOnlyRow } from "../components/ReadOnlyRow";
+import { SceneIntro } from "../components/SceneIntro";
 import { Timer } from "../components/Timer";
 import { TurnPanel } from "../components/TurnPanel";
 import { UserRecordSheet } from "../components/UserRecordSheet";
 import { Toast, useToast } from "../components/Toast";
 import { morningCardText } from "../game/eliminationText";
-import { sceneOfPhase } from "../game/scenes";
+import { PHASE_INTRO, sceneOfPhase } from "../game/scenes";
+import type { SceneId } from "../game/scenes";
 import { EMOJI_TEXT, NIGHT_TEMPLATE_ORDER } from "../game/messageText";
 import { claimLinesOf } from "../net/claimLines";
 import { FLOAT_PHASES, useDayChat, useSeatFloats } from "../net/seatFloats";
@@ -40,15 +41,22 @@ export interface DaySceneProps {
   myRoleButton: ReactNode;
   /** 테스트 방 방장의 [테스트] 버튼(결정 0022). 있으면 장면 상자 왼쪽 위에 놓는다 */
   testButton?: ReactNode;
+  /**
+   * 같은 접속에서 이 화면으로 오기 직전 단계(RoomScreen 의 usePhaseArrival). 역할 확인 → 낮 시작처럼 이 화면이 새로 마운트될 때
+   * 첫 렌더를 '단계가 바뀐 렌더' 로 처리하게 한다 — 낮 시작 문구가 뜨고 배경이 직전 장면에서 크로스페이드한다. 재접속·처음 마운트는 null/없음.
+   */
+  arrivedFrom?: PhaseId | null | undefined;
 }
 
-// 낮 두 단계(claim·discussion)와 밤·아침이 공유하는 장면. 순차 주장(결정 0023)·S-07.
+// 낮 시작(dayAnnounce)·낮 두 단계(claim·discussion)와 밤·아침이 공유하는 장면. 순차 주장(결정 0023)·S-07.
+// 낮 시작 전용 화면은 없다(결정 0030): 서버 단계 dayAnnounce 도 이 장면(테이블·헤더·패널 위치가 claim 과 같다)이고, 'N일차 / 낮이 되었습니다' 는 SceneIntro 가 그 위에 얹힌다.
+// 해·달은 배경 이미지에 그려져 있어 따로 그리거나 움직이지 않는다 — 장면이 바뀌면 Backdrop 이 0.8초 크로스페이드할 뿐이라 이중 표시가 없다.
 // 단계는 DayTable 하나를 공유한다(결정 0017-1). 머리 위는 이모티콘만(0017-2). 이름표 아랫줄(완료·주장·탈락)은 주장 단계에 없다(0023-3).
 // 테이블은 키가 없는 장면 상자 안에 있어 단계 사이에 다시 마운트되지 않는다(깜빡임·인물 재등장 없음, Pitfall 7·11).
 // 위쪽 바와 하단 패널만 단계가 든 key(bar-·panel- 접두어로 서로 겹치지 않게)라 단계마다 새 요소가 되어 한 번 페이드된다.
 // claim 하단: 서버가 정한 지금 차례(view.day.turn.seat)가 나면 직업 칩(ClaimPanel), 남이면 "…님이 주장하는 중 · N초"(TurnPanel).
 // 낮 토론은 MessageLog·DiscussionControls. 화면은 스스로 단계나 차례를 넘기지 않는다(서버 view 만 따름). 역할 문자열을 화면에 쓰지 않는다.
-export function DayScene({ view, connection, myRoleButton, testButton }: DaySceneProps) {
+export function DayScene({ view, connection, myRoleButton, testButton, arrivedFrom }: DaySceneProps) {
   const n = view.day?.n ?? 1;
   // 낮 토론의 보낸 사람 말풍선·이모티콘(자리별 한 번에 하나). 단계가 discussion 이 아니면 훅이 비운다.
   const floats = useSeatFloats(view, connection.onEvent);
@@ -71,22 +79,28 @@ export function DayScene({ view, connection, myRoleButton, testButton }: DayScen
 
   // 이모티콘 live 줄은 단계가 바뀌면 비운다(다음 단계에서 지난 것을 읽지 않게). 렌더 중 상태 조정이라 효과 없이 첫 커밋부터 맞는다.
   // 같은 조정에서 "밤 → 아침 전환을 이 화면이 직접 봤는가"(sawNightToMorning)를 기억한다 — 유령 맥동 조건(D-15). 아침을 벗어나면 초기화한다.
-  // 밤 시작 문구(결정 0028): 같은 접속(epoch 불변)에서 비밤 → 밤으로 넘어가는 렌더에서만 켠다. 처음 마운트(prevPhase 초기값이 현재 단계)·
-  // 재접속(epoch 변화)·밤 안의 다시 그리기·밤을 벗어난 뒤에는 켜지 않고, 단계나 epoch 가 바뀌면 끈다.
-  const [prevPhase, setPrevPhase] = useState(view.phase);
+  // 단계 시작 문구(결정 0028 → 0030): 같은 접속(epoch 불변)에서 문구가 있는 단계(PHASE_INTRO: 밤·낮 시작)로 넘어가는 렌더에서만 켠다.
+  // 처음 마운트(prevPhase 초기값이 현재 단계)·재접속(epoch 변화)·같은 단계 안의 다시 그리기·그 단계를 벗어난 뒤에는 켜지 않고, 단계나 epoch 가 바뀌면 끈다.
+  // 역할 확인 → 낮 시작처럼 이 화면이 새로 마운트되는 경우는 arrivedFrom 이 prevPhase 의 초기값이라 첫 렌더가 단계 변화로 처리된다.
+  const [prevPhase, setPrevPhase] = useState<PhaseId>(arrivedFrom ?? view.phase);
   const [prevEpoch, setPrevEpoch] = useState(connection.epoch);
-  const [nightIntroN, setNightIntroN] = useState<number | null>(null);
+  const [introN, setIntroN] = useState<number | null>(null);
+  // 배경: 마운트 때 한 번 정한 '처음에 보이던 장면'(직전 단계의 장면)과, 재접속으로 단계가 건너뛴 렌더의 전환 없음(instant).
+  // instant 는 Backdrop 이 렌더 중 한 번만 읽으므로 상태에 둔다(epoch 조정 렌더가 지나가면 epochChanged 는 곧 거짓이 된다).
+  const [fromScene] = useState<SceneId | undefined>(() => (arrivedFrom ? sceneOfPhase(arrivedFrom) : undefined));
+  const [instant, setInstant] = useState(false);
   const [sawNightToMorning, setSawNightToMorning] = useState(false);
   const epochChanged = prevEpoch !== connection.epoch;
   if (epochChanged) {
     setPrevEpoch(connection.epoch);
-    setNightIntroN(null);
+    setIntroN(null);
   }
   if (prevPhase !== view.phase) {
     setPrevPhase(view.phase);
     setLastEmoji(null);
     setSawNightToMorning(prevPhase === "night" && view.phase === "morning");
-    setNightIntroN(view.phase === "night" && !epochChanged ? n : null);
+    setIntroN(PHASE_INTRO[view.phase] !== undefined && !epochChanged ? n : null);
+    setInstant(epochChanged);
   }
   const isNight = view.phase === "night";
   const isMorning = view.phase === "morning";
@@ -101,7 +115,7 @@ export function DayScene({ view, connection, myRoleButton, testButton }: DayScen
   const [inspectSeat, setInspectSeat] = useState<number | null>(null);
   if (isNight && inspectSeat !== null) setInspectSeat(null);
   const inspectable = view.phase === "claim" || view.phase === "discussion" || isMorning;
-  const title = isNight ? "밤" : isMorning ? "아침" : view.phase === "discussion" ? "낮 · 토론" : "낮 · 직업 공개";
+  const title = isNight ? "밤" : isMorning ? "아침" : view.phase === "discussion" ? "낮 · 토론" : view.phase === "claim" ? "낮 · 직업 공개" : "낮";
 
   // 밤 대상 선택(D-01·D-06). 행위자 = 살아 있는 마피아·경찰·의사. 누를 수 있는 자리는 살아 있는 사람이다(역할별 제외는 아래).
   // 낙관적 선택: ClaimPanel 과 같이 어느 view 를 보고 있을 때 눌렀는지 함께 기억한다. 새 서버 view(다른 객체)가 오면 버려
@@ -191,14 +205,20 @@ export function DayScene({ view, connection, myRoleButton, testButton }: DayScen
   const endsAt = view.phaseEndsAt;
   const durationMs = view.phaseDurationMs;
   // claim 의 타이머는 지금 차례의 남은 시간(8초 → 0)이고 calm 이다 — 8초 중 마지막 5초가 늘 진홍이면 경고처럼 보인다.
-  // 아침 5초도 전체가 마지막 5초라 진홍을 쓰지 않는다(calm, UI-SPEC 확인 필요 10).
+  // 아침 5초·낮 시작 2초도 전체가 마지막 5초라 진홍을 쓰지 않는다(calm, UI-SPEC 확인 필요 10).
   const timer =
     endsAt !== null && durationMs !== null ? (
-      <Timer endsAt={endsAt} durationMs={durationMs} offset={connection.offset} calm={isMorning || view.phase === "claim"} />
+      <Timer endsAt={endsAt} durationMs={durationMs} offset={connection.offset} calm={isMorning || view.phase === "claim" || view.phase === "dayAnnounce"} />
     ) : null;
 
   return (
-    <Backdrop layout="game" scene={sceneOfPhase(view.phase)} className="mf-dayscene__backdrop">
+    <Backdrop
+      layout="game"
+      scene={sceneOfPhase(view.phase)}
+      instant={instant}
+      {...(fromScene !== undefined ? { fromScene } : {})}
+      className="mf-dayscene__backdrop"
+    >
       <main className="mf-root mf-dayscene">
         <div key={`bar-${view.phase}`} className="mf-dayscene__enter">
           <PhaseBar title={title} instruction={mafiaNight ? `${n}일차 · 함께 지목하세요` : isMorning ? `${n + 1}일차` : `${n}일차`} extra={myRoleButton} timer={timer} />
@@ -274,7 +294,7 @@ export function DayScene({ view, connection, myRoleButton, testButton }: DayScen
           </p>
         ) : null}
         <Toast toast={toast} placement="top" />
-        {nightIntroN !== null ? <NightIntro n={nightIntroN} onDone={() => setNightIntroN(null)} /> : null}
+        {introN !== null && PHASE_INTRO[view.phase] ? <SceneIntro n={introN} intro={PHASE_INTRO[view.phase]!} onDone={() => setIntroN(null)} /> : null}
         {inspectSeat !== null ? (
           <UserRecordSheet
             seat={inspectSeat}

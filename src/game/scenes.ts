@@ -8,6 +8,7 @@
 //   따로 그리거나 움직이지 않고 배경 크로스페이드에 맡긴다. 이중으로 보일 수 없다(결정 0030, 확인 필요 1).
 // - 아침·낮은 set1(밝은 하늘)이라 헤더 위쪽에 어두운 막이 필요하다(HEADER_SCRIM_STOPS). 4.5:1 은 오프라인 단위 테스트
 //   (test/unit/backdropContrast.test.ts)와 E2E H1 이 같은 값으로 잰다. 값을 바꾸려면 이 상수 한 곳만 고친다.
+import { DAY_ANNOUNCE_MS } from "../../shared/game/phases";
 import type { PhaseId } from "../../shared/protocol";
 
 export const SCENE_IDS = ["lobby", "night", "morning", "day", "dusk", "verdictDusk"] as const;
@@ -45,6 +46,27 @@ export const PHASE_SCENE: Readonly<Record<PhaseId, SceneId>> = Object.freeze({
 export function sceneOfPhase(phase: PhaseId): SceneId {
   return PHASE_SCENE[phase];
 }
+
+// - 단계 시작 문구(PHASE_INTRO): 밤과 낮 시작(dayAnnounce)만 'N일차 / 밤·낮이 되었습니다' 를 2초 보여 준다. 같은 부품(SceneIntro)이 두 장면에 쓰인다.
+//   낮 시작 전용 화면은 없다 — dayAnnounce 도 테이블 장면(DayScene) 위에서 그려지고 문구가 그 위에 얹힌다(서버 규칙·시간·와이어 불변).
+//   4페이즈: 투표·처형 시작 문구가 생기면 이 표에 행을 더한다.
+export type IntroTone = "night" | "day";
+export interface SceneIntroDef {
+  /** 막의 톤: 밤은 짙게(중앙 85%), 낮은 옅게(70%) */
+  tone: IntroTone;
+  /** 가운데 큰 제목 */
+  title: string;
+  /** 제목 아래 보조줄(선택) */
+  sub?: string;
+}
+
+export const PHASE_INTRO: Readonly<Partial<Record<PhaseId, SceneIntroDef>>> = Object.freeze({
+  night: Object.freeze({ tone: "night", title: "밤이 되었습니다" } as const),
+  dayAnnounce: Object.freeze({ tone: "day", title: "낮이 되었습니다", sub: "토론 전에 먼저 직업을 공개해요" } as const),
+});
+
+/** 시작 문구가 떠 있는 시간. 서버 낮 시작 단계(DAY_ANNOUNCE_MS)와 한 곳에서 같다. */
+export const SCENE_INTRO_MS = DAY_ANNOUNCE_MS;
 
 /** 크로스페이드 길이. src/styles/tokens.css 의 --dur-slow(800ms)와 같다. */
 export const SCENE_FADE_MS = 800;

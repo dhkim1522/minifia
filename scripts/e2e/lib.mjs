@@ -501,13 +501,19 @@ export function stageStable(entries) {
 
 // ---- 차례(K1·K2)·주장 채팅(K3)·기록 카드(X1) ----
 
-/** N6 밤 시작 문구(결정 0028). intro = browser.readNightIntro 결과: 없으면 null, 있으면 { texts, pointerEvents, ariaHidden, rect } */
-export function nightIntroChecks(intro) {
+/**
+ * N6 밤 시작 문구(결정 0028 → 0030: 낮·밤 한 부품 SceneIntro). intro = browser.readSceneIntro 결과: 없으면 null,
+ * 있으면 { texts, kind, pointerEvents, ariaHidden, rect }. kind 는 기대 톤(기본 night) — 낮 시작 문구(N8)는 과제 5 가 더한다.
+ */
+export function sceneIntroChecks(intro, { kind = "night" } = {}) {
   const bad = [];
-  if (!intro) bad.push("밤 시작 문구(.mf-nightintro) 없음");
+  const title = { night: "밤이 되었습니다" }[kind];
+  if (title === undefined) return result("N6", "밤 시작 문구가 한 번 보임", [`지원하지 않는 톤 ${kind}`]);
+  if (!intro) bad.push("시작 문구(.mf-sceneintro) 없음");
   else {
     const t = intro.texts ?? [];
-    if (!(t.length === 2 && /^\d+일차$/.test(t[0]) && t[1] === "밤이 되었습니다")) bad.push(`글자 [${t.join(" / ")}] ≠ [N일차 / 밤이 되었습니다]`);
+    if (!(t.length === 2 && /^\d+일차$/.test(t[0]) && t[1] === title)) bad.push(`글자 [${t.join(" / ")}] ≠ [N일차 / ${title}]`);
+    if (intro.kind !== kind) bad.push(`톤 ${intro.kind} ≠ ${kind}`);
     if (intro.pointerEvents !== "none") bad.push(`pointer-events ${intro.pointerEvents} ≠ none`);
     if (intro.ariaHidden !== true) bad.push("aria-hidden 이 아님");
   }
