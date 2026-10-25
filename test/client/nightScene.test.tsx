@@ -430,3 +430,99 @@ describe("밤에는 기록 카드가 열리지 않는다 (03.1-08, D-06)", () =>
     expect(sent(r.conn)).toContain('"t":"pick"');
   });
 });
+
+describe("관전자 테이블: 직업 캐릭터는 탈락한 본인에게만 (03.1-10, D-17·D-19, 결정 0021)", () => {
+  const JOBS = ["citizen", "mafia", "citizen", "police", "doctor"] as const;
+  const spectateOf = (): SpectateView => ({
+    seats: JOBS.map((job, seat) => ({ seat, job })),
+    picks: { mafia: [4], police: [1], doctor: [2] },
+  });
+  const roleSrc = (job: RoleId) => `/characters/roles/${job}_default%402x.png`;
+  const imgOf = (c: HTMLElement, seat: number) => seatEl(c, seat)!.querySelector("img");
+  const rolesImgs = (c: HTMLElement) => c.querySelectorAll('.mf-dt img[src*="/characters/roles/"]').length;
+  /** 본인(0)이 탈락, 3 도 탈락. 살아 있는 다른 자리: 1 마피아·2 시민·4 의사 */
+  const viewOf = (phase: PhaseId): RoomView => {
+    const morning = phase === "morning" ? { morning: { eliminated: 3, phrase: 1 } } : {};
+    const v = makeView({ phase, role: "citizen", dead: [0, 3], spectate: spectateOf() });
+    if (v.day && morning.morning) v.day.morning = morning.morning;
+    return v;
+  };
+
+  it("내가 탈락했고 spectate 가 있는 claim·discussion·night·morning: 살아 있는 다른 자리는 직업 캐릭터, 탈락한 자리(내 자리 포함)는 유령", () => {
+    for (const phase of ["claim", "discussion", "night", "morning"] as const) {
+      const { container } = scene(viewOf(phase));
+      const got = [1, 2, 4].map((s) => imgOf(container, s)?.getAttribute("src")).join("|");
+      expect(`${phase}:${got}`).toBe(`${phase}:${[roleSrc("mafia"), roleSrc("citizen"), roleSrc("doctor")].join("|")}`);
+      expect(imgOf(container, 1)?.getAttribute("srcset")?.includes("%404x.png 2x")).toBe(true);
+      expect(imgOf(container, 0)?.getAttribute("src")).toContain("/characters/ghost/");
+      expect(imgOf(container, 3)?.getAttribute("src")).toContain("/characters/ghost/");
+      cleanup();
+    }
+  });
+
+  it("모든 이름표는 한 줄이고 .mf-dt__dot 이 있다. 살아 있는 다른 자리의 aria-label 은 `{닉네임}, {직업 이름}`", () => {
+    const { container } = scene(viewOf("discussion"));
+    expect(container.querySelectorAll(".mf-dt__claim").length).toBe(0);
+    expect(container.querySelectorAll(".mf-dt__tag .mf-dt__dot").length).toBe(5);
+    expect(seatEl(container, 1)!.getAttribute("aria-label")?.startsWith("하윤, 마피아")).toBe(true);
+    expect(seatEl(container, 4)!.getAttribute("aria-label")?.startsWith("서연, 의사")).toBe(true);
+  });
+
+  it("마피아 직업 자리는 진홍 링·마름모(`마피아`)가 그대로이고 밤 표적 배지도 그대로다", () => {
+    const { container } = scene(viewOf("night"));
+    expect(seatEl(container, 1)!.querySelector(".mf-dt__ring--mate") !== null).toBe(true);
+    expect(seatEl(container, 1)!.querySelector('[role="img"][aria-label="마피아"]') !== null).toBe(true);
+    expect(seatEl(container, 4)!.querySelector('.mf-dt__pick--ally[role="img"]') !== null).toBe(true);
+  });
+
+  it("살아 있는 viewer: 4~8명, 낮·밤·아침 단계, 네 역할 모두 DayTable 안에 roles 그림이 0개", () => {
+    for (const count of [4, 5, 6, 7, 8]) {
+      for (const phase of ["claim", "discussion", "night", "morning"] as const) {
+        for (const role of ["mafia", "police", "doctor", "citizen"] as const) {
+          const v = makeView({ phase, role, ...(role === "mafia" ? { allies: [1] } : {}) });
+          v.players = Array.from({ length: count }, (_, seat) => ({ seat, nickname: `P${seat}`, connected: true, isHost: seat === 0, alive: true }));
+          const { container } = scene(v);
+          expect(`${count}/${phase}/${role}:${rolesImgs(container)}`).toBe(`${count}/${phase}/${role}:0`);
+          cleanup();
+        }
+      }
+    }
+  });
+
+  it("마피아 viewer 의 동료 표시는 링·마름모뿐이고 직업 그림이 아니다", () => {
+    const { container } = scene(makeView({ phase: "night", role: "mafia", allies: [1] }));
+    expect(seatEl(container, 1)!.querySelector(".mf-dt__ring--mate") !== null).toBe(true);
+    expect(rolesImgs(container)).toBe(0);
+  });
+
+  it("방어: me 가 살아 있는데 view.spectate 가 잘못 실려 있어도 roles 그림 0개", () => {
+    for (const phase of ["claim", "discussion", "night", "morning"] as const) {
+      const { container } = scene(makeView({ phase, role: "citizen", dead: [3], spectate: spectateOf() }));
+      expect(`${phase}:${rolesImgs(container)}`).toBe(`${phase}:0`);
+      expect(container.querySelector(".mf-dt__ring--mate") === null).toBe(true);
+      cleanup();
+    }
+  });
+
+  it("탈락했지만 spectate 가 없는 옛 서버 view: 유령 + 중립 인물, roles 그림 없음, 하단은 관전 하단", () => {
+    const { container } = scene(makeView({ phase: "discussion", role: "citizen", dead: [0, 3] }));
+    expect(rolesImgs(container)).toBe(0);
+    expect(imgOf(container, 1)?.getAttribute("src")).toContain("/characters/");
+    expect(imgOf(container, 0)?.getAttribute("src")).toContain("/characters/ghost/");
+    expect(panel(container)!.querySelector("p.mf-ro") !== null).toBe(true);
+  });
+
+  it("관전자도 낮에 자리를 누르면 기록 카드(주장 기록만), 밤에는 어떤 자리도 눌리지 않는다", () => {
+    const day = scene(viewOf("discussion"));
+    fireEvent.click(within(day.container).getByRole("button", { name: /^하윤, 마피아, 주장 기록 보기$/ }));
+    expect(day.container.querySelector('dialog[aria-label="하윤 기록"]') !== null).toBe(true);
+    cleanup();
+    const night = scene(viewOf("night"));
+    expect(night.container.querySelectorAll(".mf-dt button").length).toBe(0);
+  });
+
+  it("reconnect: 처음부터 spectate 가 있는 view 로 마운트해도 직업 그림이 그려진다", () => {
+    const { container } = scene(viewOf("discussion"));
+    expect(rolesImgs(container)).toBe(3);
+  });
+});
