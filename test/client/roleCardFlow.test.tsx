@@ -1,3 +1,5 @@
+/// <reference types="node" />
+import { readFileSync } from "node:fs";
 import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import "../helpers/singleLineErrors";
@@ -278,6 +280,76 @@ describe("앰버 점과 읽음 (D-11)", () => {
   });
 });
 
+describe("옛 [수사 기록] 시나리오 이전 (03.1-11 Task 3)", () => {
+  it("기록 0개: 활동 기록 탭은 빈 문구 `아직 조사한 사람이 없어요` 이고 줄이 없다", () => {
+    renderRoom(makeView({ records: [] }));
+    openSheet();
+    openActivity();
+    expect(document.querySelector("dialog .mf-journal__empty")?.textContent ?? "(빈 문구 없음)").toBe("아직 조사한 사람이 없어요");
+    expect(rows().length).toBe(0);
+  });
+
+  it("view.me.records 가 없는 경찰(옛 서버)도 깨지지 않고 빈 상태다", () => {
+    renderRoom(makeView({}));
+    expect(headDot()).toBe(false);
+    openSheet();
+    openActivity();
+    expect(document.querySelector("dialog .mf-journal__empty") === null ? "빈 문구 없음" : "빈 문구").toBe("빈 문구");
+  });
+
+  it("읽은 개수 1 + 기록 2개면 점이 켜지고, 활동 기록 탭에서 모자란 한 줄(맨 위)만 NEW 다", () => {
+    storage.setItem(KEY, "1");
+    renderRoom(makeView({ records: POLICE_TWO }));
+    expect(headBtn()?.getAttribute("aria-label")).toBe("역할 카드, 새 기록");
+    openSheet();
+    openActivity();
+    expect(newMarks()).toEqual(["NEW", "-"]);
+    expect(storage.getItem(KEY)).toBe("2");
+  });
+
+  it("읽은 개수가 기록 수보다 커도(위조·새 판) 점이 켜지지 않는다", () => {
+    storage.setItem(KEY, "99");
+    renderRoom(makeView({ records: POLICE_ONE }));
+    expect(headDot()).toBe(false);
+  });
+});
+
+describe("css 규약: 머리말 간격과 [역할 카드] 버튼 (UI-SPEC A·S5)", () => {
+  const phaseCss = readFileSync("src/styles/phase.css", "utf8");
+  const roleCss = readFileSync("src/styles/rolecard.css", "utf8");
+  const rule = (css: string, sel: string): string => {
+    const at = css.indexOf(`\n${sel} {`);
+    return at < 0 ? "" : css.slice(css.indexOf("{", at) + 1, css.indexOf("}", at));
+  };
+
+  it(".mf-phasebar__extra 와 .mf-day__top 에 gap var(--space-sm)", () => {
+    expect(/gap:\s*var\(--space-sm\)/.test(rule(phaseCss, ".mf-phasebar__extra"))).toBe(true);
+    expect(/display:\s*flex/.test(rule(phaseCss, ".mf-phasebar__extra"))).toBe(true);
+    expect(/gap:\s*var\(--space-sm\)/.test(rule(phaseCss, ".mf-day__top"))).toBe(true);
+  });
+
+  it("버튼은 14px 굵게·안쪽 12·아이콘 간격 8·줄바꿈 없음·점이 밖으로 나오도록 overflow visible", () => {
+    const r = rule(roleCss, ".mf-rolecard-btn");
+    expect(/position:\s*relative/.test(r)).toBe(true);
+    expect(/overflow:\s*visible/.test(r)).toBe(true);
+    expect(/padding:\s*0 12px/.test(r)).toBe(true);
+    expect(/gap:\s*8px/.test(r)).toBe(true);
+    expect(/font-size:\s*14px/.test(r)).toBe(true);
+    expect(/font-weight:\s*700/.test(r)).toBe(true);
+    expect(/white-space:\s*nowrap/.test(r)).toBe(true);
+  });
+
+  it("점은 안쪽 12 + 테두리 2 night-900, 오른쪽 위 -4, 앰버 면, 전환·애니메이션 없음", () => {
+    const d = rule(roleCss, ".mf-rolecard-btn__dot");
+    expect(/width:\s*12px/.test(d) && /height:\s*12px/.test(d)).toBe(true);
+    expect(/right:\s*-4px/.test(d) && /top:\s*-4px/.test(d)).toBe(true);
+    expect(/background:\s*var\(--amber-400\)/.test(d)).toBe(true);
+    expect(/border:\s*2px solid var\(--night-900\)/.test(d)).toBe(true);
+    expect(/box-sizing:\s*content-box/.test(d)).toBe(true);
+    expect(/transition|animation/.test(d)).toBe(false);
+  });
+});
+
 describe("단계가 바뀌어도, 새 판에서 (Pitfall 19 ⑧, D-11)", () => {
   it("night → morning → dayAnnounce 로 바뀌어도 열린 시트와 선택한 탭이 유지된다", () => {
     const r = renderRoom(makeView({ phase: "night", records: POLICE_ONE }));
@@ -439,9 +511,9 @@ describe("눌리는 밤 끝 알림 (D-12, UI-SPEC D·R6)", () => {
     expect(toastWrap() === null ? "래퍼 없음" : "래퍼").toBe("래퍼");
   });
 
-  it("옛 알림 `수사 기록이 추가됐어요` 와 `.mf-records-toast` 는 어디에도 없다", () => {
+  it("옛 알림 `수사 기록이 추가됐어요` 는 어디에도 없고 알림은 새 알림 하나뿐이다", () => {
     nightEnd("police", { n: 1, target: 2, isMafia: true });
     expect(document.body.textContent?.includes("수사 기록이 추가됐어요") ? "있음" : "없음").toBe("없음");
-    expect(document.querySelector(".mf-records-toast") === null ? "없음" : "있음").toBe("없음");
+    expect(Array.from(document.querySelectorAll('[role="status"]')).map((el) => el.className)).toEqual(["mf-rolecard-toast-wrap"]);
   });
 });

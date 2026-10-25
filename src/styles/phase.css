@@ -84,12 +84,3 @@
 .mf-day__count { text-shadow: var(--shadow-text); }
 .mf-day__title { text-shadow: var(--shadow-text); animation: mf-day-title var(--dur-slow) var(--ease-out) both; }
 @keyframes mf-day-title { from { opacity: 0; transform: scale(1.04); } to { opacity: 1; transform: scale(1); } }
-
-/* C-01 [내 역할] 시트 안 배치 — 그림 왼쪽·글자 오른쪽, 좁으면 세로로 접힌다. 정적 뒷면은 카드와 같은 마름모. */
-.mf-myrole-sheet { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-md); }
-.mf-myrole-sheet__art { flex: 0 1 150px; max-width: 100%; height: auto; object-fit: contain; filter: drop-shadow(0 8px 12px var(--shadow)); }
-.mf-myrole-sheet__text { flex: 1 1 140px; min-width: 0; display: flex; flex-direction: column; gap: var(--space-sm); }
-.mf-myrole-sheet__desc { margin: 0; font-size: 16px; line-height: 1.5; color: var(--gray-300); word-break: keep-all; }
-.mf-myrole-sheet__mates { margin: 0; font-size: 14px; line-height: 1.4; font-weight: 700; color: var(--crimson-300); word-break: keep-all; }
-.mf-myrole-sheet__empty { margin: 0; font-size: 16px; line-height: 1.5; color: var(--gray-300); word-break: keep-all; }
-.mf-myrole-sheet__back { align-self: center; width: min(40vw, 150px); aspect-ratio: 2 / 3; max-height: 30dvh; display: flex; align-items: center; justify-content: center; background: var(--night-700); border: 1px solid var(--gray-700); border-radius: var(--radius-lg); }

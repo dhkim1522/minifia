@@ -742,11 +742,11 @@ describe("DayScene 눌리는 밤 끝 알림 (03.1-11, D-12, UI-SPEC D·R6)", () 
     expect(toast() === null ? "없음" : "있음").toBe("없음");
   });
 
-  it("옛 알림 `수사 기록이 추가됐어요`, `.mf-records-toast` 가 없다", () => {
+  it("옛 알림 `수사 기록이 추가됐어요` 가 없고 알림은 새 알림 하나뿐이다", () => {
     const r = renderNotice("police");
     r.grow({ n: 1, target: 2, isMafia: true });
     expect(document.body.textContent?.includes("수사 기록이 추가됐어요") ? "있음" : "없음").toBe("없음");
-    expect(document.querySelector(".mf-records-toast") === null ? "없음" : "있음").toBe("없음");
+    expect(Array.from(document.querySelectorAll('[role="status"]')).map((el) => el.className)).toEqual(["mf-rolecard-toast-wrap"]);
   });
 });
 
