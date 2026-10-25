@@ -2,7 +2,8 @@
    시안의 색 값은 02-14-PLAN 참고 자료 표의 대응대로 tokens.css 변수만 쓴다(여기에는 색 값을 직접 적지 않는다).
    위치·크기는 DayTable 이 game/dayTable.ts 의 결과를 인라인으로 준다.
    z-index(루트 isolation 안): 테이블 면 auto · 이름표 1~11 · 캐릭터 12~22(최소 12 > 이름표 최대 11 이라 이름표는 어떤 캐릭터도 덮지 못한다)
-   · 어둡게 층 30 · 방금 탈락한 유령 31 · 이모티콘 60+. 값은 모두 daySeatLayout 이 정하고 DayTable 이 인라인으로 준다. */
+   · 어둡게 층 30 · 방금 탈락한 유령 31 · 이모티콘 60+. 값은 모두 daySeatLayout 이 정하고 DayTable 이 인라인으로 준다.
+   발밑 링(.mf-dt__spot)은 자리 안 쌓임 맥락에서 뒤쪽 호 z -1, 앞쪽 호는 그림 위. 바깥 규칙(이름표 1~11·캐릭터 12~22·어둡게 층 30·유령 31·이모티콘 60+)은 불변(결정 0028). */
 
 /* 장면 상자를 100%×100% 로 채운다. 가로로 자르지 않는다(이름표·이모티콘이 장면 밖으로 조금 나가도 보인다). */
 .mf-dt { position: relative; width: 100%; height: 100%; isolation: isolate; --mf-scene-pad: 12px; }
@@ -70,15 +71,24 @@
 }
 .mf-dt__crown .mf-icon { stroke-width: 2.2; }
 
-/* 지금 주장하는 차례(UI-SPEC B): 발밑 링 140% + 머리 위 28px 말풍선 배지. 내 링(120%)과 겹쳐 둘 다 보인다 */
+/* 지금 주장하는 차례(UI-SPEC B): 발밑 링 140% + 머리 위 28px 말풍선 배지. 내 링(120%)과 겹쳐 둘 다 보인다.
+   링은 뒤쪽 호(캐릭터 뒤)·앞쪽 호(캐릭터 앞)로 나뉜다. 묶음은 쌓임 맥락을 만들지 않아(transform·z-index·opacity·animation 없음)
+   뒤쪽 호의 z -1 이 자리(.mf-dt__seat)의 쌓임 맥락에서 그림 뒤로 간다. 앞쪽 호는 그림 다음 마크업 순서라 그림 위다.
+   위치: left -20% = 50% − 폭 140%/2, bottom = 옛 -4px 과 translateY(50%)(높이 24% 의 절반 = 12%)의 합. */
 .mf-dt__spot {
-  position: absolute; left: 50%; bottom: -4px; width: 140%; height: 24%;
-  transform: translate(-50%, 50%); border-radius: 50%;
+  position: absolute; left: -20%; bottom: calc(-4px - 12%); width: 140%; height: 24%;
+  pointer-events: none;
+}
+/* 바깥 방향 -24px 여백은 빛(18px)이 잘리지 않게 하려는 값이다. 가운데 선(50%)에서만 자른다 */
+.mf-dt__spot-arc {
+  position: absolute; inset: 0; border-radius: 50%;
   border: 3px solid var(--gray-50);
   box-shadow: 0 0 18px color-mix(in srgb, var(--gray-50) 75%, transparent);
   pointer-events: none;
   animation: mf-dt-fade var(--dur-fast) var(--ease-out) both;
 }
+.mf-dt__spot-arc--back { z-index: -1; clip-path: inset(-24px -24px 50% -24px); }
+.mf-dt__spot-arc--front { clip-path: inset(50% -24px -24px -24px); }
 .mf-dt__turn {
   position: absolute; left: 50%; top: -24px; margin-left: -14px; width: 28px; height: 28px; border-radius: 50%;
   background: var(--gray-50); color: var(--night-900);
@@ -155,5 +165,5 @@
   .mf-dt__seat--pulse { animation: none; }
   .mf-dt__seat--pulse .mf-figure { animation: none; }
   .mf-figure--role { animation: none; }
-  .mf-dt__spot, .mf-dt__turn, .mf-dt__tag--turn .mf-dt__name { animation: none; }
+  .mf-dt__spot-arc, .mf-dt__turn, .mf-dt__tag--turn .mf-dt__name { animation: none; }
 }

@@ -12,6 +12,7 @@ import "../styles/daytable.css";
 // me.allies 에서 화면이 만든 값이다.
 // 한 자리는 밤에는 onPick 이 있으면 대상 버튼, 낮에는 onInspect 가 있으면 기록 카드 버튼이다(둘이 함께 있으면 onPick 이 이긴다).
 // roleArt(직업 그림)는 탈락한 본인(관전자) 화면만 만든다 — 살아 있는 사람의 입력에는 이 값이 없다(결정 0021).
+// 차례 링(.mf-dt__spot)은 뒤쪽 호(캐릭터 뒤)와 앞쪽 호(캐릭터 앞) 둘로 나뉜다 — 마크업 순서가 Figure 다음이라 앞쪽 호가 그림 위에 그려진다(결정 0028).
 // 캐릭터 상자·이름표·이모티콘의 좌표는 game/dayTable.ts 의 daySeatLayout 한 번의 결과에서 나온다(떠 있는 층을 따로 가두지 않는다).
 
 /** 관전 화면에서 표적 배지를 다는 역할 종류. 살아 있는 사람 화면에는 넘어오지 않는다 */
@@ -172,7 +173,10 @@ export function DayTable({
             ) : null}
             {s.turn ? (
               <>
-                <span className="mf-dt__spot" />
+                <span className="mf-dt__spot">
+                  <span className="mf-dt__spot-arc mf-dt__spot-arc--back" />
+                  <span className="mf-dt__spot-arc mf-dt__spot-arc--front" />
+                </span>
                 <span className="mf-dt__turn" aria-hidden="true">
                   <Icon name="speech" size={16} />
                 </span>

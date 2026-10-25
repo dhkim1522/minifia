@@ -415,6 +415,32 @@ export async function collectSnapshot(page) {
           badge: document.querySelectorAll(".mf-dt__turn").length,
           tagTurn: document.querySelectorAll(".mf-dt__tag--turn").length,
           legacyRows: document.querySelectorAll(".mf-dt__claim").length,
+          ring: (() => {
+            // K4: 첫 차례 링 묶음과 두 호의 계산된 값. 문자열·값만 싣는다.
+            const spotEl = q(".mf-dt__spot");
+            if (!spotEl) return null;
+            const cs = getComputedStyle(spotEl);
+            const plain =
+              cs.position === "absolute" && cs.zIndex === "auto" && cs.transform === "none" && cs.opacity === "1" && cs.filter === "none" &&
+              cs.isolation === "auto" && cs.clipPath === "none" && cs.animationName === "none" && cs.willChange === "auto" && cs.mixBlendMode === "normal";
+            const arc = (el) => {
+              if (!el) return null;
+              const a = getComputedStyle(el);
+              const z = parseInt(a.zIndex, 10);
+              return { z: Number.isFinite(z) ? z : null, position: a.position, clip: a.clipPath };
+            };
+            const seatEl = spotEl.closest(".mf-dt__seat");
+            const front = spotEl.querySelector(".mf-dt__spot-arc--front");
+            const fig = seatEl ? seatEl.querySelector("img.mf-figure") : null;
+            const seatZ = seatEl ? parseInt(getComputedStyle(seatEl).zIndex, 10) : Number.NaN;
+            return {
+              plain,
+              back: arc(spotEl.querySelector(".mf-dt__spot-arc--back")),
+              front: arc(front),
+              figBeforeFront: !!fig && !!front && !!(fig.compareDocumentPosition(front) & Node.DOCUMENT_POSITION_FOLLOWING),
+              seatContext: Number.isFinite(seatZ),
+            };
+          })(),
         },
         dim: dim ? { rect: rectOf(dim), z: zOf(dim), pointerEvents: getComputedStyle(dim).pointerEvents } : null,
         card: rectOf(card),

@@ -399,8 +399,41 @@ export function tagsOverlap(tags) {
 
 // ---- 차례(K1·K2)·주장 채팅(K3)·기록 카드(X1) ----
 
+/** clip-path 의 inset(...) 을 위·오른쪽·아래·왼쪽 네 값으로 펼친다(브라우저가 1~3개 값으로 줄여 돌려줘도 읽는다). 아니면 null */
+function insetSides(clip) {
+  const m = /^inset\(([^)]*?)(?:\s+round\s+[^)]*)?\)$/.exec(String(clip ?? "").trim());
+  if (!m) return null;
+  const v = m[1].trim().split(/\s+/);
+  if (v.length < 1 || v.length > 4) return null;
+  const [top, right = top, bottom = top, left = right] = v;
+  return { top, right, bottom, left };
+}
+
+/** K4 차례 링이 캐릭터 뒤(위쪽 반)·앞(아래쪽 반) 두 층으로 갈라져 있다 (결정 0028). ring = 스냅숏 turn.ring */
+export function ringChecks(ring) {
+  const bad = [];
+  if (!ring) bad.push("측정값 없음(차례 링 묶음 .mf-dt__spot 을 못 찾음)");
+  else {
+    if (!ring.plain) bad.push("링 묶음이 평범하지 않음(쌓임 맥락·변형·애니메이션이 있음)");
+    if (!ring.back) bad.push("뒤쪽 호 없음");
+    else if (!(typeof ring.back.z === "number" && ring.back.z < 0)) bad.push(`뒤쪽 호 z-index ${ring.back.z} 가 음수가 아님`);
+    if (!ring.front) bad.push("앞쪽 호 없음");
+    else {
+      if (typeof ring.front.z === "number" && ring.front.z < 0) bad.push(`앞쪽 호 z-index ${ring.front.z} 가 음수`);
+      if (ring.front.position !== "absolute") bad.push(`앞쪽 호 position ${ring.front.position} ≠ absolute`);
+    }
+    if (!ring.figBeforeFront) bad.push("앞쪽 호가 캐릭터 그림보다 앞 순서(그림 위로 오지 않음)");
+    const b = ring.back && insetSides(ring.back.clip);
+    if (ring.back && !(b && b.bottom === "50%" && b.top !== "50%")) bad.push(`뒤쪽 호 clip-path "${ring.back.clip}" 가 위쪽 반만 보이는 꼴이 아님`);
+    const f = ring.front && insetSides(ring.front.clip);
+    if (ring.front && !(f && f.top === "50%" && f.bottom !== "50%")) bad.push(`앞쪽 호 clip-path "${ring.front.clip}" 가 아래쪽 반만 보이는 꼴이 아님`);
+    if (!ring.seatContext) bad.push("자리(.mf-dt__seat)가 쌓임 맥락이 아님(z-index 없음)");
+  }
+  return result("K4", "차례 링이 캐릭터 뒤·앞 반으로 갈라짐", bad);
+}
+
 /**
- * K1·K2. expectNone: 차례 없는 단계(토론·밤·아침)라 표식 세 값이 모두 0 이어야 하고 K2 는 돌리지 않는다.
+ * K1·K4·K2. 차례가 있으면 K4(링 앞뒤 층)도 돌린다. expectNone: 차례 없는 단계(토론·밤·아침)라 표식 세 값이 모두 0 이어야 하고 K2 는 돌리지 않는다.
  * myTurn(true/false)이 있으면 K2 도 돌린다. jobs = 이번 판 직업 칩 글자(내 차례일 때 + 「말 안 함」과 순서까지 비교).
  */
 export function turnChecks(snap, { expectNone = false, myTurn, jobs = [] } = {}) {
@@ -412,7 +445,9 @@ export function turnChecks(snap, { expectNone = false, myTurn, jobs = [] } = {})
   }
   if (t.legacyRows !== 0) k1.push(`이름표 아랫줄(.mf-dt__claim) ${t.legacyRows}개 ≠ 0`);
   const out = [result("K1", expectNone ? "차례 표식 없음" : "차례 표식이 정확히 한 자리", k1)];
-  if (expectNone || typeof myTurn !== "boolean") return out;
+  if (expectNone) return out;
+  out.push(ringChecks(t.ring));
+  if (typeof myTurn !== "boolean") return out;
 
   const p = snap.panel;
   const k2 = [];
