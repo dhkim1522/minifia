@@ -17,46 +17,37 @@ import type {
 import { MAX_PLAYERS, MIN_PLAYERS } from "../protocol";
 import { isAlive } from "./alive";
 import { botCount } from "./bots";
-import { currentClaim } from "./claim";
+import { currentClaimSeat } from "./claim";
 import { phaseDurationOf } from "./discussion";
 import { PHASE_DEFS } from "./phases";
 import { rolesInPlay } from "./roles";
 import { hostOf } from "./room";
 import type { RoomState } from "./room";
 
-/** view.day 가 생기는 단계: 낮 네 단계와 밤·아침. 이 밖의 단계 뷰에는 day 키 자체가 없다(D-07). */
+/** view.day 가 생기는 단계: 낮 세 단계와 밤·아침. 이 밖의 단계 뷰에는 day 키 자체가 없다(D-07). */
 const DAY_PHASES: ReadonlySet<PhaseId> = new Set([
   "dayAnnounce",
   "claim",
-  "claimReveal",
   "discussion",
   "night",
   "morning",
 ]);
 
 /**
- * 낮 정보. 단계 조건부 허용 목록 리터럴로만 만든다 — 조건을 채울 때만 키를 만들고, 서버 전용 필드(Player 의 선택·직전 공개 값)는
- * 펼쳐 복사하지 않는다. claim 단계에는 직접 고른 사람의 seat(claimDone)만 싣는다: 마감 전 남의 선택은 어떤 키로도 나가지 않는다(D-01, D-03).
+ * 낮 정보. 허용 목록 리터럴로만 만든다 — 조건을 채울 때만 키를 만들고, 서버 전용 필드(claimOrder·claimIdx·claimStart·claimPick)는 싣지 않는다.
+ * claimLog 는 공개 정보라 낮 단계마다 모두에게 같게 가고, 줄마다 {n, seat, claim} 세 키로 복사한다(펼쳐 복사 금지).
+ * claim 단계에는 지금 차례의 seat(turn)만 싣는다: 끝나지 않은 차례의 선택(claimPick)은 어떤 키로도 나가지 않는다(D-05, T-03.1-01).
  * 읽는 쪽이 기본값을 쥔다: 일차 없으면 1(RESEARCH Pattern 6).
  */
 function buildDay(state: RoomState): DayView {
-  const day: DayView = { n: state.day ?? 1, roles: rolesInPlay(state.players.length) };
+  const day: DayView = {
+    n: state.day ?? 1,
+    roles: rolesInPlay(state.players.length),
+    claimLog: (state.claimLog ?? []).map((entry) => ({ n: entry.n, seat: entry.seat, claim: entry.claim })),
+  };
   if (state.phase === "claim") {
-    day.claimDone = state.players
-      .filter((p) => p.claimChoice !== undefined)
-      .map((p) => p.seat)
-      .sort((a, b) => a - b);
-  }
-  if (
-    state.phase === "claimReveal" ||
-    state.phase === "discussion" ||
-    state.phase === "night" ||
-    state.phase === "morning"
-  ) {
-    // 공개 뒤에는 모두에게 같은 값이 간다. 값은 공개 필드(claimShown·claimChanged)만 읽고, 옛 플레이어는 기본값을 쥔다(D-04, D-06, D-08).
-    day.claims = [...state.players]
-      .sort((a, b) => a.seat - b.seat)
-      .map((p) => ({ seat: p.seat, claim: p.claimShown ?? "none", changed: p.claimChanged ?? false }));
+    const seat = currentClaimSeat(state);
+    if (seat !== undefined) day.turn = { seat };
   }
   if (state.phase === "morning") {
     // 아침 결과는 모두에게 같은 값이다. 탈락자가 있을 때만 키를 만들고, 값은 필드별로 복사한다(의사 구출·지목 없음은 둘 다 {}, D-13).
@@ -144,12 +135,6 @@ export function buildView(state: RoomState, playerId: string, now: number): Room
   // 수사 기록은 경찰 본인에게만, 역할을 싣는 모든 단계에서 탈락한 뒤에도(D-09, D-11). 세 키씩 복사한다 — isMafia 는 불리언 한 비트다.
   if (def.revealsOwnRole && me.role === "police") {
     myInfo.records = (me.investigations ?? []).map((r) => ({ n: r.n, target: r.target, isMafia: r.isMafia }));
-  }
-
-  // 내 주장은 claim 단계에서만, 본인 값만 싣는다. 본인 값도 currentClaim(직접 고른 값 → 어제 공개 값)을 거쳐서만 읽는다(D-09).
-  if (state.phase === "claim") {
-    const mine = currentClaim(me);
-    if (mine !== undefined) myInfo.claim = mine;
   }
 
   const view: RoomView = {

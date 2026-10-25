@@ -1,6 +1,7 @@
 // 단계 정의 표. 코드 분기 대신 데이터 한 곳에 둔다(roles.ts 의 ROLE_TABLE 과 같은 원칙) —
 // 이후 페이즈는 이 표에 행을 더하는 방식으로만 단계를 늘린다(D-01).
-// 역할 확인(roleReveal) 뒤에는 낮 네 단계(dayAnnounce → claim → claimReveal → discussion)가 돈다.
+// 역할 확인(roleReveal) 뒤에는 낮 세 단계(dayAnnounce → claim → discussion)가 돈다.
+// claim 의 마감은 차례 하나의 마감이다. 차례가 남아 있으면 tick 의 ON_DEADLINE 이 같은 단계에 머물게 한다(결정 0023, 0027).
 // discussion 다음은 밤(night), 밤 다음 아침(morning), 아침 다음 다시 낮 시작 발표 —
 // 4페이즈가 discussion 과 night 사이에 투표·처형을 끼운다.
 // 단계 길이는 이 파일 한 곳에서만 정한다(6페이즈 플레이테스트가 여기만 고친다).
@@ -19,8 +20,7 @@ export interface PhaseDef {
 export const ASSIGNING_MS = 3_000;
 export const ROLE_REVEAL_MS = 15_000;
 export const DAY_ANNOUNCE_MS = 2_000; // D-20
-export const CLAIM_MS = 15_000; // D-02
-export const CLAIM_REVEAL_MS = 2_000; // D-04 의 약 2초
+export const CLAIM_TURN_MS = 8_000; // 한 사람의 주장 차례(결정 0023, D-02)
 export const DISCUSSION_MS = 90_000; // DAY-01
 export const NIGHT_MS = 30_000; // NIGHT-05
 export const MORNING_MS = 5_000; // NIGHT-06
@@ -30,8 +30,7 @@ export const PHASE_DEFS: Readonly<Record<PhaseId, PhaseDef>> = Object.freeze({
   assigning: Object.freeze({ durationMs: ASSIGNING_MS, next: "roleReveal", revealsOwnRole: false }),
   roleReveal: Object.freeze({ durationMs: ROLE_REVEAL_MS, next: "dayAnnounce", revealsOwnRole: true }),
   dayAnnounce: Object.freeze({ durationMs: DAY_ANNOUNCE_MS, next: "claim", revealsOwnRole: true }),
-  claim: Object.freeze({ durationMs: CLAIM_MS, next: "claimReveal", revealsOwnRole: true }),
-  claimReveal: Object.freeze({ durationMs: CLAIM_REVEAL_MS, next: "discussion", revealsOwnRole: true }),
+  claim: Object.freeze({ durationMs: CLAIM_TURN_MS, next: "discussion", revealsOwnRole: true }),
   discussion: Object.freeze({ durationMs: DISCUSSION_MS, next: "night", revealsOwnRole: true }), // 4페이즈가 이 사이에 투표·처형을 끼운다
   night: Object.freeze({ durationMs: NIGHT_MS, next: "morning", revealsOwnRole: true }),
   morning: Object.freeze({ durationMs: MORNING_MS, next: "dayAnnounce", revealsOwnRole: true }),

@@ -2,7 +2,7 @@
 // 모든 함수는 새 객체를 돌려주고 입력을 바꾸지 않는다. DOM·workerd 전용 API 를 쓰지 않는다(앱·워커 두 tsconfig 에 모두 들어감).
 import { validateNickname } from "../nickname";
 import { MAX_PLAYERS, MIN_PLAYERS } from "../protocol";
-import type { Claim, InvestigationRecord, MorningView, PhaseId } from "../protocol";
+import type { Claim, ClaimLogEntry, InvestigationRecord, MorningView, PhaseId } from "../protocol";
 import type { BotPlan } from "./bots";
 import { ASSIGNING_MS, DAY_ANNOUNCE_MS } from "./phases";
 import { assignRoles, giveRoleTo, rolesInPlay } from "./roles";
@@ -26,14 +26,6 @@ export interface Player {
   // ---- 2페이즈 낮 토론 상태. 모두 optional — 저장된 옛 방도 읽히고(everConnected? 선례), 읽는 쪽이 기본값을 쥔다. ----
   /** 3페이즈가 탈락 때 false 로 만든다. 없으면 생존으로 본다. */
   alive?: boolean;
-  /** 이번 낮 직접 고른 값 — 마감 전 다른 사람 뷰에 실리지 않는다(D-01). 없으면 고르지 않은 것이다. */
-  claimChoice?: Claim;
-  /** 이번 낮 공개된 값(claimReveal 에서 확정) — claimReveal·discussion 뷰에 실린다. 없으면 공개 전이다. */
-  claimShown?: Claim;
-  /** 직전 낮 공개 값 — 어떤 뷰에도 직접 싣지 않는다(바뀜 여부 계산용). */
-  claimLast?: Claim;
-  /** 직전 낮과 다르게 공개했는지 — claimReveal·discussion 뷰의 SeatClaim.changed 로 실린다. 없으면 false. */
-  claimChanged?: boolean;
   /** 마지막으로 메시지·이모티콘을 보낸 서버 시각 — 합산 2초 쿨다운 기준(D-14). 없으면 보낸 적 없다. */
   lastSendAt?: number;
   // ---- 3페이즈 밤 상태(타입만 — 쓰는 코드는 03-03·03-04). 모두 optional — 옛 방도 읽힌다. ----
@@ -72,6 +64,17 @@ export interface RoomState {
    * 낮 chat 프레임 seq 간격으로 밤 메시지 수를 알 수 있다. 밤마다 1부터, enterNight 가 지운다(3페이즈).
    */
   nextNightSeq?: number;
+  // ---- 순차 주장 상태(결정 0023). 모두 optional — 옛 저장 방도 읽힌다. 서버 전용이고 view 에는 허용 목록으로만 실린다. ----
+  /** 이번 낮 주장 차례 순서(seat). claim 진입 훅(enterClaim)이 만든다. 탈락자는 들지 않는다. */
+  claimOrder?: number[];
+  /** 지금 차례 위치(claimOrder 의 인덱스). 차례가 끝날 때마다 resolveClaimTurn 이 올린다. */
+  claimIdx?: number;
+  /** 직전(이번) 낮 시작 seat — 다음 낮 시작 자리를 한 칸 옮기는 기억. */
+  claimStart?: number;
+  /** 지금 차례인 사람이 일찍 고른 값. 차례가 끝나면 지운다. 어떤 view 에도 싣지 않는다. */
+  claimPick?: Claim;
+  /** 공개 주장 기록. 차례가 끝나는 순간 한 줄씩 쌓이고 판 내내 남는다(공개 정보). */
+  claimLog?: ClaimLogEntry[];
   hostId: string;
   nextJoinSeq: number;
   players: Player[];

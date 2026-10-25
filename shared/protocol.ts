@@ -16,10 +16,11 @@ export const MAX_TEST_BOTS = 7;
 export const MAX_FRAME_BYTES = 1024; // WebSocket 프레임 상한
 export const MAX_BODY_BYTES = 1024; // HTTP 본문 상한
 
-// 낮 네 단계(dayAnnounce·claim·claimReveal·discussion)와 밤·아침(night·morning)은 단계 표(shared/game/phases.ts)의 한 줄씩이다.
-// claimReveal 은 공개 연출 2초짜리 별도 서버 단계다 — 모든 폰이 같은 마감으로 시작·종료한다(D-04).
+// 낮 세 단계(dayAnnounce·claim·discussion)와 밤·아침(night·morning)은 단계 표(shared/game/phases.ts)의 한 줄씩이다.
+// claim 은 직업 주장을 한 명씩 차례로 하는 단계다(결정 0023). 한 차례(8초)의 마감이 곧 단계 마감이고, 남은 차례가 있으면
+// 서버가 같은 단계에 머물며 마감만 한 차례 뒤로 옮긴다 — 모든 폰이 같은 마감을 받는다. 옛 공개 연출 단계는 없어졌다(결정 0027).
 export type PhaseId =
-  | "lobby" | "assigning" | "roleReveal" | "dayAnnounce" | "claim" | "claimReveal" | "discussion"
+  | "lobby" | "assigning" | "roleReveal" | "dayAnnounce" | "claim" | "discussion"
   | "night" | "morning";
 
 // ---- 밤·아침 계약(3페이즈) ----
@@ -78,16 +79,21 @@ export interface ChatLine {
 }
 /** 통과한 빠른 메시지 한 줄을 방에 앉은 모든 소켓에 보내는 이벤트 프레임(상태가 아니다). */
 export type ChatEvent = { t: "chat" } & ChatLine;
-export interface SeatClaim {
+/** 공개된 주장 한 줄: 그 일차에 그 자리가 한 말. 차례가 끝나는 순간 모두에게 같게 실린다(공개 정보, 결정 0023-5). */
+export interface ClaimLogEntry {
+  n: number; // 일차
   seat: number;
   claim: Claim;
-  changed: boolean;
+}
+/** claim 단계의 지금 차례. 끝나지 않은 차례의 선택은 어떤 키로도 싣지 않는다. */
+export interface ClaimTurn {
+  seat: number;
 }
 export interface DayView {
   n: number; // 일차(1부터)
   roles: RoleId[]; // 이번 판 직업(구성표 순서, 공개 정보)
-  claimDone?: number[]; // claim 단계에서만: 이번 낮 직접 고른 seat 오름차순
-  claims?: SeatClaim[]; // claimReveal·discussion·night·morning 에서만: 공개된 주장 seat 오름차순
+  turn?: ClaimTurn; // claim 단계에서만: 지금 주장할 차례인 seat
+  claimLog: ClaimLogEntry[]; // 낮 단계마다 항상: 지금까지 공개된 주장(일차 오름차순, 같은 일차는 차례 순서)
   morning?: MorningView; // morning 단계에서만
 }
 
@@ -167,7 +173,6 @@ export interface MyInfo {
   isHost: boolean;
   role?: RoleId; // 내 역할 — 채우는 일은 01-07
   allies?: number[]; // 같은 마피아 동료의 seat — 채우는 일은 01-07
-  claim?: Claim; // claim 단계에서만: 내가 이번 낮 고른 주장
   pick?: number; // 밤에 본인이 고른 seat(본인에게만)
   allyPicks?: number[]; // 생존 마피아에게만: 동료들이 고른 대상 seat 오름차순·중복 없음(누가 골랐는지는 싣지 않는다)
   records?: InvestigationRecord[]; // 경찰 본인에게만
@@ -185,7 +190,7 @@ export interface RoomView {
   maxPlayers: number;
   players: PublicPlayer[];
   me: MyInfo;
-  day?: DayView; // 낮 네 단계와 밤·아침에서
+  day?: DayView; // 낮 세 단계(dayAnnounce·claim·discussion)와 밤·아침에서
   spectate?: SpectateView; // 탈락한 본인 view 에만(결정 0021). 살아 있는 사람 view 에는 키 자체가 없다
 }
 export type WsErrorCode =

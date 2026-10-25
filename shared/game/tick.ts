@@ -5,10 +5,12 @@
 // 진입 훅 표(ON_ENTER)의 규칙: 어떤 단계에 들어갈 때 일어나야 하는 상태 변화는 이 표에 한 줄로 둔다.
 // 훅은 tick 루프 안에서만 부른다 — 알람이 늦어 여러 단계를 한 번에 따라잡아도 중간 단계 훅이 순서대로 모두 돈다.
 // 알람 핸들러나 DO 에서 훅을 직접 부르지 않는다. 3·4페이즈도 같은 표에 행을 더한다.
-// night: 선택·지난 아침 비움, morning: 판정(난수 사용).
+// claim: 이번 낮 차례 순서·시작 자리, night: 선택·지난 아침 비움, morning: 판정(난수 사용).
+// 마감 훅(ON_DEADLINE): 같은 단계에 머무는 단계(claim 의 차례)의 마감 처리. 진입 훅과 같이 tick 루프 안에서만 부른다(결정 0016-2).
+// 훅이 stay 를 돌려주면 다음 단계로 가지 않고 같은 단계에서 마감만 "이전 마감 + 단계 길이" 로 옮긴다.
 // 난수는 세 번째 인자로만 받는다 — 방 DO 는 cryptoRandInt, 테스트는 seededRandInt.
 import type { PhaseId } from "../protocol";
-import { enterClaim, enterClaimReveal } from "./claim";
+import { enterClaim, resolveClaimTurn } from "./claim";
 import { enterMorning, enterNight } from "./night";
 import { PHASE_DEFS } from "./phases";
 import type { RoomState } from "./room";
@@ -29,9 +31,13 @@ const NO_RANDOM: RandInt = () => {
 const ON_ENTER: Partial<Record<PhaseId, (s: RoomState, randInt: RandInt) => RoomState>> = {
   dayAnnounce: enterDayAnnounce,
   claim: enterClaim,
-  claimReveal: enterClaimReveal,
   night: enterNight,
   morning: enterMorning,
+};
+
+/** 마감 훅. stay 면 같은 단계에 머문다(claim 의 다음 차례). 상태만 바꾸고 시각은 tick 이 정한다. */
+const ON_DEADLINE: Partial<Record<PhaseId, (s: RoomState) => { state: RoomState; stay: boolean }>> = {
+  claim: resolveClaimTurn,
 };
 
 /**
@@ -42,13 +48,25 @@ const ON_ENTER: Partial<Record<PhaseId, (s: RoomState, randInt: RandInt) => Room
 export function tick(state: RoomState, now: number, randInt: RandInt = NO_RANDOM): RoomState {
   let current = state;
   while (current.phaseEndsAt !== null && now >= current.phaseEndsAt) {
-    const next = PHASE_DEFS[current.phase].next;
+    const deadline = current.phaseEndsAt;
+    const onDeadline = ON_DEADLINE[current.phase];
+    let closing = current;
+    if (onDeadline !== undefined) {
+      const resolved = onDeadline(current);
+      const turnMs = PHASE_DEFS[current.phase].durationMs;
+      if (resolved.stay && turnMs !== null) {
+        current = { ...resolved.state, phaseEndsAt: deadline + turnMs };
+        continue;
+      }
+      closing = resolved.state;
+    }
+    const next = PHASE_DEFS[closing.phase].next;
     if (next === null) break;
     const duration = PHASE_DEFS[next].durationMs;
     const entered: RoomState = {
-      ...current,
+      ...closing,
       phase: next,
-      phaseEndsAt: duration === null ? null : current.phaseEndsAt + duration,
+      phaseEndsAt: duration === null ? null : deadline + duration,
     };
     const hook = ON_ENTER[next];
     current = hook ? hook(entered, randInt) : entered;
