@@ -6,7 +6,7 @@ import type { RoleId } from "../../shared/game/roles";
 import { Backdrop } from "../components/Backdrop";
 import { ClaimPanel } from "../components/ClaimPanel";
 import { DayTable } from "../components/DayTable";
-import type { DayTableSeat, DayTagRow, SpectatorPick } from "../components/DayTable";
+import type { DayTableSeat, SpectatorPick } from "../components/DayTable";
 import { DiscussionControls } from "../components/DiscussionControls";
 import { MessageLog } from "../components/MessageLog";
 import { MorningCard } from "../components/MorningCard";
@@ -124,16 +124,6 @@ export function DayScene({ view, connection, myRoleButton, testButton }: DayScen
   // 동료가 고른 대상(마피아 화면만, D-07). 서버가 생존 마피아에게만 보낸 값이다.
   const allyPicks = view.me.allyPicks ?? [];
   const nicknameOf = (seat: number): string | undefined => view.players.find((p) => p.seat === seat)?.nickname;
-  // 이름표 아랫줄. claim 단계에는 없다. 관전 화면: 다른 자리는 서버가 보낸 실제 직업, 살아 있는 사람 화면: 탈락자는 '탈락' 뿐이다.
-  // 완료·주장·말 바꿈 줄은 없어졌다 — 남의 주장은 채팅에서만 본다(결정 0023-3). 필드 자체는 03.1-05 가 지운다.
-  const tagRowOf = (p: { seat: number; alive?: boolean }): DayTagRow | null => {
-    if (view.phase === "claim") return null;
-    if (spectate !== undefined && p.seat !== view.me.seat) {
-      const job = jobOf(p.seat);
-      if (job !== undefined) return { kind: "real", job };
-    }
-    return isAlive(p) ? null : { kind: "dead" };
-  };
   const seats: DayTableSeat[] = [...view.players]
     .sort((x, y) => x.seat - y.seat)
     .map((p) => {
@@ -147,7 +137,6 @@ export function DayScene({ view, connection, myRoleButton, testButton }: DayScen
         // 관전 화면은 모든 마피아에 링·마름모를 그린다(job 이 mafia 인 다른 자리)
         isAlly: allies.includes(p.seat) || (spectate !== undefined && p.seat !== view.me.seat && jobOf(p.seat) === "mafia"),
         dead: !isAlive(p),
-        row: tagRowOf(p),
         ...(spectatorPicksOf(p.seat).length > 0 ? { spectatorPicks: spectatorPicksOf(p.seat) } : {}),
         spoke: floats.spoke[p.seat] !== undefined,
         emoji: e ? { key: e.key, icon: e.icon, z: e.z } : null,

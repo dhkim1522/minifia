@@ -174,7 +174,8 @@ describe("무사·타이머·표시 소멸·탈락 순간 (03-10)", () => {
     picks: { mafia: [], police: [], doctor: [] },
   };
   const seatEl = (c: HTMLElement, seat: number) => c.querySelector<HTMLElement>(`.mf-dt__seat[data-seat="${seat}"]`);
-  const rowText = (c: HTMLElement, seat: number) => c.querySelector(`.mf-dt__tag[data-seat="${seat}"] .mf-dt__claim`)?.textContent ?? "(없음)";
+  // 이름표는 이름 한 줄(아랫줄 없음). 관전자의 실제 직업 그림(roleArt)은 03.1-10 이 연결하고 그 단언도 거기서 더한다.
+  const claimRowCount = (c: HTMLElement) => c.querySelectorAll(".mf-dt__claim").length;
   const urgent = (c: HTMLElement) => c.querySelector(".mf-timer")?.classList.contains("mf-timer--urgent") ?? false;
 
   it("morning {} → 카드 제목 '아무 일도 없었습니다', 보조 '모두 무사해요'", () => {
@@ -210,18 +211,19 @@ describe("무사·타이머·표시 소멸·탈락 순간 (03-10)", () => {
     expect(seatEl(r.container, 1)!.querySelector(".mf-dt__ring--mate") !== null).toBe(true);
   });
 
-  it("살아 있는 사람의 morning(eliminated 2, players[2].alive false): 자리 2 는 유령 그림 + 아랫줄 '탈락', 직업 글자 없음", () => {
+  it("살아 있는 사람의 morning(eliminated 2, players[2].alive false): 자리 2 는 유령 그림 + 한 줄 탈락 이름표, 직업 그림 없음", () => {
     const { container } = scene(makeView({ role: "citizen", dead: [2], morning: { eliminated: 2, phrase: 1 } }));
     expect(seatEl(container, 2)!.querySelector("img")?.getAttribute("src")).toContain("/characters/ghost/");
-    expect(rowText(container, 2)).toBe("탈락");
-    expect(container.querySelector(".mf-dt__claim--real") === null).toBe(true);
+    expect(container.querySelector('.mf-dt__tag[data-seat="2"]')?.classList.contains("mf-dt__tag--dead")).toBe(true);
+    expect(claimRowCount(container)).toBe(0);
+    expect(container.querySelectorAll('.mf-dt img[src*="/characters/roles/"]').length).toBe(0);
     expect(container.querySelector(".mf-ro") === null).toBe(true);
   });
 
-  it("방금 탈락한 나(seat 0)의 morning: 다른 자리 아랫줄이 실제 직업(--real), 하단은 '아침이 밝았습니다'(관전 .mf-ro 없음), 카드는 같은 문구", () => {
+  it("방금 탈락한 나(seat 0)의 morning: 내 이름표는 탈락, 이름표 아랫줄 없음, 하단은 '아침이 밝았습니다'(관전 .mf-ro 없음), 카드는 같은 문구", () => {
     const { container } = scene(makeView({ role: "citizen", dead: [0], spectate, morning: { eliminated: 0, phrase: 1 } }));
-    expect([0, 1, 2, 3, 4].map((n) => rowText(container, n)).join("|")).toBe("탈락|마피아|시민|경찰|의사");
-    expect(container.querySelectorAll(".mf-dt__claim--real").length).toBe(4);
+    expect(container.querySelector('.mf-dt__tag[data-seat="0"]')?.classList.contains("mf-dt__tag--dead")).toBe(true);
+    expect(claimRowCount(container)).toBe(0);
     expect(panel(container)!.querySelector("h2")?.textContent).toBe("아침이 밝았습니다");
     expect(container.querySelector(".mf-ro") === null).toBe(true);
     expect(container.querySelector(".mf-morningcard__t")?.textContent).toBe("지우님이 이슬이 되어 사라졌습니다");

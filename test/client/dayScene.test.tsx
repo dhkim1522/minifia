@@ -84,7 +84,7 @@ function scene(view: RoomView, over: Partial<RoomConnection> = {}) {
   return { ...utils, rerender, conn: c };
 }
 
-const claimRows = (c: HTMLElement) => c.querySelectorAll(".mf-dt__claim").length;
+const claimRows = (c: HTMLElement) => c.querySelectorAll(".mf-dt__claim").length; // 옛 아랫줄이 어디에도 없음을 세는 용도
 const chipGroup = () => within(document.body).queryByRole("group", { name: "주장할 직업" });
 const turnText = (c: HTMLElement) => c.querySelector(".st-row .stat")?.textContent ?? "";
 
@@ -127,14 +127,18 @@ describe("DayScene 순차 주장 하단 (03.1 UI-SPEC B, D-03·D-04)", () => {
     expect(container.querySelector(".st-row .stat b b")).toBeNull();
   });
 
-  it("claim 의 테이블 이름표에 아랫줄(.mf-dt__claim)이 하나도 없다 — 탈락자 포함 (D-04)", () => {
+  it("claim 의 테이블 이름표는 모두 이름 한 줄이다 — 탈락자 포함, '탈락' 글자 없음, 유령 그림 (D-04)", () => {
     const { container } = scene(makeView({ phase: "claim", turn: 0 }));
-    expect(claimRows(container)).toBe(0);
+    const oneLine = (c: HTMLElement): boolean => [...c.querySelectorAll(".mf-dt__tag")].every((t) => t.children.length === 1 && t.firstElementChild?.classList.contains("mf-dt__name"));
+    expect(oneLine(container)).toBe(true);
     cleanup();
     // 살아 있는 사람 화면에 탈락자(seat 3)가 있어도 `탈락` 줄이 없다
     const withDead = scene(makeView({ phase: "claim", turn: 2, dead: [3] }));
-    expect(claimRows(withDead.container)).toBe(0);
-    expect(withDead.container.querySelectorAll(".mf-dt__claim--done, .mf-dt__claim--wait, .mf-dt__claim--dead").length).toBe(0);
+    expect(oneLine(withDead.container)).toBe(true);
+    const tag = withDead.container.querySelector('.mf-dt__tag[data-seat="3"]');
+    expect(tag?.classList.contains("mf-dt__tag--dead")).toBe(true);
+    expect(tag?.textContent?.includes("탈락")).toBe(false);
+    expect(withDead.container.querySelector('.mf-dt__seat[data-seat="3"] img')?.getAttribute("src")).toContain("/characters/ghost/");
   });
 
   it("claim 의 헤더 타이머는 마지막 5초여도 .mf-timer--urgent 가 아니다(calm), 숫자는 지금 차례의 남은 시간", () => {
@@ -186,7 +190,7 @@ describe("DayScene 순차 주장 하단 (03.1 UI-SPEC B, D-03·D-04)", () => {
     expect(citizen.container.querySelectorAll(".mf-dt__ring--mate").length).toBe(0);
   });
 
-  it("끊긴 자리도 접근성 이름에 연결 끊김이 있고 아랫줄은 없다", () => {
+  it("끊긴 자리도 접근성 이름에 연결 끊김이 있고 이름표는 한 줄이다", () => {
     const v = makeView({ phase: "claim", turn: 0 });
     const off: RoomView = { ...v, players: v.players.map((p) => (p.seat === 1 ? { ...p, connected: false } : p)) };
     const { container } = scene(off);
@@ -219,7 +223,7 @@ describe("DayScene 장면 상자 (SPEC 판 구성, 결정 0017-1)", () => {
     expect(has(/\.mf-dayscene__scene \.mf-table/)).toBe(false);
   });
 
-  it("장면이 짧으면 테이블이 올라간다: 잰 폭 352·높이 300 에서 테이블 면 top 117px (높이 407 기본이면 150px)", () => {
+  it("장면이 짧으면 테이블이 올라간다: 잰 폭 352·높이 300 에서 테이블 면 top 118px (높이 407 기본이면 150px)", () => {
     class FakeRO {
       constructor(private cb: (entries: { contentRect: { width: number; height: number } }[]) => void) {}
       observe(): void {
@@ -232,7 +236,7 @@ describe("DayScene 장면 상자 (SPEC 판 구성, 결정 0017-1)", () => {
     try {
       vi.stubGlobal("ResizeObserver", FakeRO);
       const short = scene(makeView({ phase: "claim" }));
-      expect(felt(short.container).style.top).toBe("117px");
+      expect(felt(short.container).style.top).toBe("118px");
       cleanup();
     } finally {
       vi.unstubAllGlobals();

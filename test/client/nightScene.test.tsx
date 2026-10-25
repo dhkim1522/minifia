@@ -259,12 +259,14 @@ describe("밤 — 오류·끊김·탈락 표시", () => {
     expect(vi.mocked(r.conn.send).mock.calls.length).toBe(0);
   });
 
-  it("탈락한 자리(dead [4])는 살아 있는 경찰 화면에서 버튼이 아니고 유령 그림 + 아랫줄 '탈락'", () => {
+  it("탈락한 자리(dead [4])는 살아 있는 경찰 화면에서 버튼이 아니고 유령 그림 + 한 줄 탈락 이름표('탈락' 글자 없음)", () => {
     const { container } = scene(makeView({ role: "police", dead: [4] }));
     expect(seatEl(container, 4)!.tagName).toBe("DIV");
     expect(container.querySelectorAll(".mf-dt button.mf-dt__seat").length).toBe(4);
     expect(seatEl(container, 4)!.querySelector("img")?.getAttribute("src")).toContain("/characters/ghost/");
-    expect(container.querySelector('.mf-dt__tag[data-seat="4"] .mf-dt__claim')?.textContent).toBe("탈락");
+    const tag = container.querySelector('.mf-dt__tag[data-seat="4"]');
+    expect(tag?.classList.contains("mf-dt__tag--dead")).toBe(true);
+    expect(tag?.textContent?.includes("탈락")).toBe(false);
   });
 });
 
@@ -281,15 +283,14 @@ describe("관전 (N-6, 결정 0021)", () => {
     picks: { mafia: [4], police: [1], doctor: [2] },
   };
   const dead0 = (o: ViewOpts = {}) => makeView({ role: "citizen", dead: [0], spectate, ...o });
-  const rowText = (c: HTMLElement, seat: number) => c.querySelector(`.mf-dt__tag[data-seat="${seat}"] .mf-dt__claim`)?.textContent ?? "(없음)";
-  const rowClass = (c: HTMLElement, seat: number) => c.querySelector(`.mf-dt__tag[data-seat="${seat}"] .mf-dt__claim`)?.className ?? "";
+  // 이름표는 이름 한 줄이라 아랫줄(.mf-dt__claim)이 어디에도 없다. 다른 자리의 실제 직업 그림(roleArt)은 03.1-10 이 연결하고 그 단언도 거기서 더한다.
+  const claimRowCount = (c: HTMLElement) => c.querySelectorAll(".mf-dt__claim").length;
 
-  it("밤: 내 자리 유령 + '탈락', 다른 자리 아랫줄 실제 직업(--real, 마피아만 --mafia), 마피아 링·마름모, 역할별 배지, 버튼 0 개", () => {
+  it("밤: 내 자리 유령 + 탈락 이름표, 이름표 아랫줄 없음, 마피아 링·마름모, 역할별 배지, 버튼 0 개", () => {
     const { container } = scene(dead0());
     expect(seatEl(container, 0)!.querySelector("img")?.getAttribute("src")).toContain("/characters/ghost/");
-    expect([0, 1, 2, 3, 4].map((n) => rowText(container, n)).join("|")).toBe("탈락|마피아|시민|경찰|의사");
-    expect([1, 2, 3, 4].map((n) => (rowClass(container, n).includes("mf-dt__claim--real") ? "1" : "0")).join("")).toBe("1111");
-    expect([1, 2, 3, 4].map((n) => (rowClass(container, n).includes("mf-dt__claim--mafia") ? "1" : "0")).join("")).toBe("1000");
+    expect(container.querySelector('.mf-dt__tag[data-seat="0"]')?.classList.contains("mf-dt__tag--dead")).toBe(true);
+    expect(claimRowCount(container)).toBe(0);
     expect(seatEl(container, 1)!.querySelector(".mf-dt__ring--mate") !== null).toBe(true);
     expect(seatEl(container, 1)!.querySelector('[role="img"][aria-label="마피아"]') !== null).toBe(true);
     expect(seatEl(container, 4)!.querySelector('.mf-dt__pick--ally[role="img"][aria-label="마피아 지목 대상"]') !== null).toBe(true);
@@ -319,13 +320,13 @@ describe("관전 (N-6, 결정 0021)", () => {
     expect(text.includes("하윤") && text.includes("동의해요")).toBe(true);
   });
 
-  it("낮 토론: 하단 '최근 채팅' 로그(빈 상태, ^ 있음) + .mf-ro, [빠른 메시지] 없음, 이름표는 실제 직업 줄", () => {
+  it("낮 토론: 하단 '최근 채팅' 로그(빈 상태, ^ 있음) + .mf-ro, [빠른 메시지] 없음, 이름표 아랫줄 없음", () => {
     const { container } = scene(dead0({ phase: "discussion", spectate: { seats: spectate.seats } }));
     expect(within(screen.getByRole("log", { name: "최근 채팅" })).getByText("아직 메시지가 없어요") !== null).toBe(true);
     expect(screen.getByRole("button", { name: "채팅 내역 크게 보기" }) !== null).toBe(true);
     expect(panel(container)!.querySelector("p.mf-ro")?.textContent).toBe("탈락했어요 · 볼 수만 있어요");
     expect(screen.queryByRole("button", { name: "빠른 메시지" }) === null).toBe(true);
-    expect([0, 1, 2, 3, 4].map((n) => rowText(container, n)).join("|")).toBe("탈락|마피아|시민|경찰|의사");
+    expect(claimRowCount(container)).toBe(0);
     expect(container.querySelectorAll(".mf-dt__pick").length).toBe(0);
   });
 
@@ -334,23 +335,24 @@ describe("관전 (N-6, 결정 0021)", () => {
     expect(container.querySelectorAll(".mf-seg__b").length).toBe(0);
     expect(panel(container)!.querySelector("p.mf-ro") !== null).toBe(true);
     expect(panel(container)!.querySelector('[role="log"]') !== null).toBe(true);
-    expect([0, 1, 2, 3, 4].map((n) => rowText(container, n)).join("|")).toBe("(없음)|(없음)|(없음)|(없음)|(없음)");
+    expect(claimRowCount(container)).toBe(0);
   });
 
-  it("살아 있는 경찰 화면(dead [4], spectate 없음): 자리 4 는 유령 + '탈락', 관전 클래스가 렌더 HTML 에 없다", () => {
+  it("살아 있는 경찰 화면(dead [4], spectate 없음): 자리 4 는 유령 + 탈락 이름표, 관전 클래스·직업 그림이 렌더 HTML 에 없다", () => {
     const { container } = scene(makeView({ role: "police", dead: [4] }));
     expect(seatEl(container, 4)!.querySelector("img")?.getAttribute("src")).toContain("/characters/ghost/");
-    expect(rowText(container, 4)).toBe("탈락");
-    const found = [".mf-dt__claim--real", ".mf-dt__pick--police", ".mf-dt__pick--doctor", ".mf-ro"].filter((sel) => container.querySelector(sel) !== null);
+    expect(container.querySelector('.mf-dt__tag[data-seat="4"]')?.classList.contains("mf-dt__tag--dead")).toBe(true);
+    expect(container.querySelectorAll('.mf-dt img[src*="/characters/roles/"]').length).toBe(0);
+    const found = [".mf-dt__claim", ".mf-dt__pick--police", ".mf-dt__pick--doctor", ".mf-ro"].filter((sel) => container.querySelector(sel) !== null);
     expect(found.join(",")).toBe("");
   });
 
-  it("탈락했지만 spectate 가 없는 view(옛 서버): 하단은 관전 하단, 이름표는 탈락 표시만(실제 직업 줄 없음)", () => {
+  it("탈락했지만 spectate 가 없는 view(옛 서버): 하단은 관전 하단, 이름표는 탈락 표시만(직업 그림 없음)", () => {
     const { container } = scene(makeView({ role: "citizen", dead: [0] }));
     expect(panel(container)!.querySelector("p.mf-ro") !== null).toBe(true);
     expect(screen.getByRole("log", { name: "마피아 채팅(관전)" }) !== null).toBe(true);
-    expect(rowText(container, 0)).toBe("탈락");
-    expect(container.querySelectorAll(".mf-dt__claim--real").length).toBe(0);
+    expect(container.querySelector('.mf-dt__tag[data-seat="0"]')?.classList.contains("mf-dt__tag--dead")).toBe(true);
+    expect(container.querySelectorAll('.mf-dt img[src*="/characters/roles/"]').length).toBe(0);
     expect(container.querySelectorAll(".mf-dt button").length).toBe(0);
   });
 });
