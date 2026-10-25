@@ -328,7 +328,7 @@ const daySnap = () => ({
   bodyW: 360,
   h1: { rect: rect(16, 20, 200, 28.8), lineHeight: 28.8, text: "낮 · 토론" },
   extra: { rect: rect(220, 16, 130, 44), children: [rect(220, 16, 60, 44), rect(290, 16, 60, 44)] },
-  header: rect(0, 0, 360, 119.2),
+  header: rect(0, 0, 360, 100),
   scene: rect(0, 100, 360, 383),
   panel: { rect: rect(0, 483, 360, 157), text: "", children: [] },
   tt: { rect: rect(8, 108, 100, 44), hit: true },
@@ -579,7 +579,7 @@ test("dimChecks M3: 없음·모양 다름·헤더/패널 침범·pointer-events�
   narrow.dim.rect = rect(12, 100, 336, 383);
   assert.equal(dimChecks(narrow, { w: 360 }).ok, false);
   const tall = base();
-  tall.dim.rect = rect(0, 80, 360, 403); // 헤더(0~119.2)를 침범
+  tall.dim.rect = rect(0, 80, 360, 403); // 헤더(0~100)를 침범
   assert.equal(dimChecks(tall, { w: 360 }).ok, false);
   const pe = base();
   pe.dim.pointerEvents = "auto";
