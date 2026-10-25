@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   DAY_SCENE_H,
+  DEPTH_K0,
+  TAG_GAP_Y,
+  TAG_H,
   DAY_SCENE_W,
   NAME_TAG_MAX_W,
   NARROW_SCENE_BELOW,
@@ -14,7 +17,6 @@ import {
 // 낮 화면 고정 테이블 배치(결정 0017-1). 공식은 승인 시안 9차(design/screens/day-v3/SPEC.md).
 const seatsOf = (n: number): { seat: number }[] => Array.from({ length: n }, (_, i) => ({ seat: i }));
 const r1 = (v: number): number => Math.round(v * 10) / 10;
-const TAG_H = 46;
 
 describe("상수", () => {
   it("시안 기준 값을 그대로 둔다", () => {
@@ -22,8 +24,11 @@ describe("상수", () => {
     expect(DAY_SCENE_H).toBe(407);
     expect(NARROW_SCENE_BELOW).toBe(366);
     expect(SEAT_CY_MIN).toBe(177);
-    expect(TABLE_FIT_MIN_H).toBe(326);
+    expect(TABLE_FIT_MIN_H).toBe(299);
     expect(NAME_TAG_MAX_W).toBe(100);
+    expect(TAG_GAP_Y).toBe(0);
+    expect(TAG_H).toBe(22);
+    expect(DEPTH_K0).toBe(0.8);
   });
 });
 
@@ -61,26 +66,32 @@ describe("dayTableGeometry: 인원과 상관없이 하나로 고정", () => {
     expect(g.felt.height).toBe(108);
   });
 
-  it("높이 359 는 cy 210 (맨 앞 이름표 아래 끝이 정확히 장면 끝)", () => {
-    expect(dayTableGeometry(366, 359).cy).toBe(210);
+  it("높이 332 이상은 cy 210, 331 은 209 (맨 앞 이름표 아래 끝 = cy + 122)", () => {
+    expect(dayTableGeometry(366, 332).cy).toBe(210);
+    expect(dayTableGeometry(366, 331).cy).toBe(209);
   });
 
-  it("높이 340 은 cy 191·면 top 131", () => {
-    const g = dayTableGeometry(366, 340);
-    expect(g.cy).toBe(191);
-    expect(g.felt.top).toBe(131);
+  it("높이 320 은 cy 198·면 top 138", () => {
+    const g = dayTableGeometry(366, 320);
+    expect(g.cy).toBe(198);
+    expect(g.felt.top).toBe(138);
   });
 
-  it("높이 326 은 cy 177", () => {
-    expect(dayTableGeometry(366, 326).cy).toBe(177);
+  it("높이 299 는 cy 177", () => {
+    expect(dayTableGeometry(366, 299).cy).toBe(177);
   });
 
-  it("높이 300 은 cy 177 (최소에서 멈춘다)", () => {
-    expect(dayTableGeometry(366, 300).cy).toBe(177);
+  it("높이 298 도 cy 177 (최소에서 멈춘다)", () => {
+    expect(dayTableGeometry(366, 298).cy).toBe(177);
   });
 
   it("높이 460 은 cy 210 (최대에서 멈춘다)", () => {
     expect(dayTableGeometry(366, 460).cy).toBe(210);
+  });
+
+  it("폭 352·366·406 의 rx·felt 폭은 예전과 같다", () => {
+    expect([352, 366, 406].map((w) => dayTableGeometry(w).rx).join(",")).toBe("124,132,132");
+    expect([352, 366, 406].map((w) => dayTableGeometry(w).felt.width).join(",")).toBe("264,280,280");
   });
 });
 
@@ -117,11 +128,39 @@ describe("daySeatLayout: 시계 방향 좌석 원", () => {
           p.figLeft === p.x - 36 &&
           p.figTop === p.y - 96 &&
           p.tagLeft === p.x &&
-          p.tagTop === p.y + 3 &&
-          p.tagZ === p.z + 20 &&
+          p.tagTop === p.y &&
+          p.z - p.tagZ === 11 &&
           p.emojiLeft === p.x - 16 &&
           p.emojiTop === Math.max(0, p.y - 96 * p.scale - 36);
         if (!ok) bad.push(`n${n}:seat${p.seat}`);
+      }
+    }
+    expect(bad.join(",")).toBe("");
+  });
+
+  it("층 순서: 캐릭터 z 12~22·이름표 tagZ 1~11 정수, 모든 이름표가 모든 캐릭터 아래 (4~8명)", () => {
+    const bad: string[] = [];
+    for (let n = 4; n <= 8; n++) {
+      for (const w of [352, 366, 406]) {
+        const places = daySeatLayout(seatsOf(n), 0, w);
+        for (const p of places) {
+          if (!Number.isInteger(p.z) || p.z < 12 || p.z > 22) bad.push(`z:n${n}:seat${p.seat}=${p.z}`);
+          if (!Number.isInteger(p.tagZ) || p.tagZ < 1 || p.tagZ > 11) bad.push(`tagZ:n${n}:seat${p.seat}=${p.tagZ}`);
+        }
+        if (Math.max(...places.map((p) => p.tagZ)) >= Math.min(...places.map((p) => p.z))) bad.push(`order:n${n}w${w}`);
+      }
+    }
+    expect(bad.join(",")).toBe("");
+  });
+
+  it("가까운(깊이가 큰) 자리의 이름표가 먼 자리의 이름표 위(tagZ 이상)다", () => {
+    const bad: string[] = [];
+    for (let n = 4; n <= 8; n++) {
+      const places = daySeatLayout(seatsOf(n), 0, 366);
+      for (const a of places) {
+        for (const b of places) {
+          if (a.depth > b.depth && a.tagZ < b.tagZ) bad.push(`n${n}:${a.seat}>${b.seat}`);
+        }
       }
     }
     expect(bad.join(",")).toBe("");
@@ -198,28 +237,60 @@ describe("자동 배치 검사: 가로 (이름표 상한 NAME_TAG_MAX_W 100)", (
     expect(out.join(",")).toBe("");
   });
 
-  it.each([352, 366])("4명은 폭 %i 에서 이름표 상자끼리 겹치지 않는다", (w) => {
-    const places = daySeatLayout(seatsOf(4), 0, w);
+  it("4~8명 × 장면 폭 352~406 모든 정수 폭에서 이름표 상자끼리 겹치지 않는다 (0.5px 허용, D9)", () => {
     const pairs: string[] = [];
-    for (let i = 0; i < places.length; i++) {
-      for (let j = i + 1; j < places.length; j++) {
-        if (overlap(tagBox(places[i]!), tagBox(places[j]!))) pairs.push(`${i}-${j}`);
+    for (let w = 352; w <= 406; w++) {
+      for (let n = 4; n <= 8; n++) {
+        const places = daySeatLayout(seatsOf(n), 0, w);
+        for (let i = 0; i < places.length; i++) {
+          for (let j = i + 1; j < places.length; j++) {
+            const a = tagBox(places[i]!);
+            const b = tagBox(places[j]!);
+            const shrink = (x: Box): Box => ({ l: x.l + 0.5, r: x.r - 0.5, t: x.t + 0.5, b: x.b - 0.5 });
+            if (overlap(shrink(a), shrink(b))) pairs.push(`w${w}n${n}:${i}-${j}`);
+          }
+        }
       }
     }
     expect(pairs.join(",")).toBe("");
   });
 
-  it("맨 아래 이름표의 아래 끝(y + 3 + 46 = 359)은 360×640 장면 높이 383 안이다", () => {
-    const me = daySeatLayout(seatsOf(8), 0, 352, 383).find((p) => p.slot === 0)!;
-    expect(r1(me.tagTop + TAG_H)).toBe(359);
-    expect(me.tagTop + TAG_H <= 383).toBe(true);
+  it("맨 왼쪽 이름표 왼쪽 ≥ 1.0, 맨 오른쪽 이름표 오른쪽 ≤ 장면 폭 (D2)", () => {
+    const out: string[] = [];
+    for (let w = 352; w <= 406; w++) {
+      for (let n = 4; n <= 8; n++) {
+        const boxes = daySeatLayout(seatsOf(n), 0, w).map(tagBox);
+        if (Math.min(...boxes.map((b) => b.l)) < 1.0) out.push(`L w${w}n${n}`);
+        if (Math.max(...boxes.map((b) => b.r)) > w) out.push(`R w${w}n${n}`);
+      }
+    }
+    expect(out.join(",")).toBe("");
+  });
+
+  it("맨 아래 이름표의 아래 끝(y + 0 + 22 = 332)은 360×640 장면 높이 363.8 안이다", () => {
+    const me = daySeatLayout(seatsOf(8), 0, 352, 363.8).find((p) => p.slot === 0)!;
+    expect(r1(me.tagTop + TAG_H)).toBe(332);
+    expect(me.tagTop + TAG_H <= 363.8).toBe(true);
+  });
+
+  it.each([
+    [352, 363.8],
+    [366, 387.8],
+    [406, 655.8],
+  ])("보장 크기 %i×%f: 5·8명 맨 앞 이름표 아래 끝이 장면 안, cy 210", (w, h) => {
+    expect(dayTableGeometry(w, h).cy).toBe(210);
+    for (const n of [5, 8]) {
+      for (const p of daySeatLayout(seatsOf(n), 0, w, h)) {
+        expect(p.tagTop + TAG_H).toBeLessThanOrEqual(h);
+      }
+    }
   });
 });
 
-describe("자동 배치 검사: 세로 (장면 높이 300~460)", () => {
-  const heights = Array.from({ length: 161 }, (_, i) => 300 + i);
+describe("자동 배치 검사: 세로 (장면 높이 299~460)", () => {
+  const heights = Array.from({ length: 162 }, (_, i) => 299 + i);
 
-  it("4~8명, 폭 352·366, 높이 300~460 의 모든 정수 높이에서 머리 위(y − 96·scale)가 0 이상이다", () => {
+  it("4~8명, 폭 352·366, 높이 299~460 의 모든 정수 높이에서 머리 위(y − 96·scale)가 0 이상이다", () => {
     const out: string[] = [];
     for (const w of [352, 366]) {
       for (const h of heights) {
@@ -233,7 +304,7 @@ describe("자동 배치 검사: 세로 (장면 높이 300~460)", () => {
     expect(out.join(",")).toBe("");
   });
 
-  it("높이 TABLE_FIT_MIN_H(326) 이상이면 모든 이름표 아래 끝(tagTop + 46)이 장면 높이 이하다", () => {
+  it("높이 TABLE_FIT_MIN_H(299) 이상이면 모든 이름표 아래 끝(tagTop + 22)이 장면 높이 이하다", () => {
     const out: string[] = [];
     for (const w of [352, 366]) {
       for (const h of heights.filter((v) => v >= TABLE_FIT_MIN_H)) {
@@ -247,16 +318,16 @@ describe("자동 배치 검사: 세로 (장면 높이 300~460)", () => {
     expect(out.join(",")).toBe("");
   });
 
-  it("높이 326 미만이면 cy 는 SEAT_CY_MIN(177)이고 맨 앞 이름표만 장면 높이를 넘는다 (받아들인 겹침 — 글자를 줄이지 않는다)", () => {
+  it("높이 299 미만이면 cy 는 SEAT_CY_MIN(177)에서 멈추고 맨 앞 이름표만 장면 높이를 넘을 수 있다 (받아들인 한계)", () => {
     const out: string[] = [];
     for (const w of [352, 366]) {
-      for (const h of heights.filter((v) => v < TABLE_FIT_MIN_H)) {
+      for (const h of [250, 280, 298]) {
         expect(dayTableGeometry(w, h).cy).toBe(SEAT_CY_MIN);
         for (let n = 4; n <= 8; n++) {
           const over = daySeatLayout(seatsOf(n), 0, w, h)
             .filter((p) => p.tagTop + TAG_H > h)
             .map((p) => p.slot);
-          if (over.join(",") !== "0") out.push(`w${w}h${h}n${n}:[${over.join(",")}]`);
+          if (over.length > 0 && over.join(",") !== "0") out.push(`w${w}h${h}n${n}:[${over.join(",")}]`);
         }
       }
     }
