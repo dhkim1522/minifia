@@ -21,7 +21,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 1: 걷는 뼈대** - 배포된 주소에서 폰 여러 대가 같은 방에 들어가 각자 자기 역할만 받는다 (completed 2026-10-24)
 - [ ] **Phase 2: 낮 토론** - 낮마다 직업을 공개하고, 빠른 메시지와 이모티콘으로 의심·직업 주장을 주고받으며 토론한다
 - [ ] **Phase 3: 밤과 아침** - 마피아·경찰·의사가 정체를 들키지 않고 밤 행동을 하고 아침에 결과가 발표된다
-- [ ] **Phase 3.1: 순차 주장과 역할 카드** (INSERTED) - 한 명씩 직업 주장, 평문 채팅, 유저 기록 카드, 역할 카드·역할별 일지
+- [x] **Phase 3.1: 순차 주장과 역할 카드** (INSERTED) - 한 명씩 직업 주장, 평문 채팅, 유저 기록 카드, 역할 카드·역할별 일지 (completed 2026-10-25)
 - [ ] **Phase 4: 처형과 승패** - 투표·최후 변론·찬반·처형을 거쳐 한 판이 승패로 끝난다
 - [ ] **Phase 5: 분위기와 캐릭터** - 무거운 분위기와 특색 있는 캐릭터, 세로 폰 화면에서 설명 없이 따라올 수 있는 안내
 - [ ] **Phase 6: 친구 플레이테스트** - 친구들이 실제로 한 판을 끝까지 하고 다시 하고 싶은지 확인해 규칙을 조정한다
@@ -201,7 +201,7 @@ Plans:
   4. 360×640·390×664·430×932 에서 헤더 제목 줄바꿈, [테스트] 버튼·아침 카드가 좌석을 가리는 문제, 이름표 겹침이 없고 `npm run e2e` 가 모두 통과한다.
   5. 봇이 차례 진행에 맞게 주장하고, 배포본에서 봇 시나리오와 E2E 가 통과한다.
 
-**Plans:** 13/14 plans executed (결정 0023·0026·0027, 승인 시안 `design/screens/claim-turns-v1/`·`role-card-v1/`, UI 계약 `03.1-UI-SPEC.md`)
+**Plans:** 14/14 plans executed (결정 0023·0026·0027, 승인 시안 `design/screens/claim-turns-v1/`·`role-card-v1/`, UI 계약 `03.1-UI-SPEC.md`)
 **UI hint**: yes
 
 Plans:
@@ -237,7 +237,7 @@ Plans:
 - [x] 03.1-12-PLAN.md — E2E 흐름 6개(spec4 관전자 신설)를 새 계약으로 다시 쓰고 로컬 서버에서 `npm run e2e` 전부 통과 (wave 9)
 
 **Wave 10** *(blocked on Wave 9 completion)*
-- [ ] 03.1-14-PLAN.md — 개인 계정 배포 → 배포본 스모크 4·5·8명·봇 UAT·E2E → HANDOFF·ROADMAP·REQUIREMENTS·push·실기기 확인 목록 (wave 10)
+- [x] 03.1-14-PLAN.md — 개인 계정 배포 → 배포본 스모크 4·5·8명·봇 UAT·E2E → HANDOFF·ROADMAP·REQUIREMENTS·push·실기기 확인 목록 (wave 10)
 
 ### Phase 4: 처형과 승패
 
@@ -296,7 +296,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 (decimal phases
 | 1. 걷는 뼈대 | v1.0 | 19/19 | Complete    | 2026-10-24 |
 | 2. 낮 토론 | v1.0 | 18/18 | In Progress | - |
 | 3. 밤과 아침 | v1.0 | 12/12 | In Progress | - |
-| 3.1. 순차 주장과 역할 카드 | v1.0 | 13/14 | In Progress | - |
+| 3.1. 순차 주장과 역할 카드 | v1.0 | 14/14 | Complete | 2026-10-25 |
 | 4. 처형과 승패 | v1.0 | 0/TBD | Not started | - |
 | 5. 분위기와 캐릭터 | v1.0 | 0/TBD | Not started | - |
 | 6. 친구 플레이테스트 | v1.0 | 0/TBD | Not started | - |
