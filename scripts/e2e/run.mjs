@@ -11,6 +11,7 @@ import {
   MAX_PARALLEL,
   OVERALL_LIMIT_MS,
   TAP_ALLOW,
+  TEXT_SIZE_ALLOW,
   USAGE,
   UsageError,
   exitCodeOf,
@@ -101,7 +102,7 @@ try {
 emit(`대상 ${origin} · 버전 ${version}`);
 emit(`Chrome ${chromePath}`);
 const allow = (list) => (list.length === 0 ? "(없음)" : list.map((a) => `${a.selector} — ${a.reason}`).join("; "));
-emit(`허용 목록 — 장식(G2): ${allow(DECORATIVE_ALLOW)} / 탭 대상(G3): ${allow(TAP_ALLOW)}`);
+emit(`허용 목록 — 장식(G2): ${allow(DECORATIVE_ALLOW)} / 탭 대상(G3): ${allow(TAP_ALLOW)} / 글자 크기(G7): ${allow(TEXT_SIZE_ALLOW)}`);
 emit(`크기 ${args.sizes.map((s) => s.label).join(", ")} · 흐름 ${flows.map((f) => f.id).join(", ")}${args.shots ? " · 사진 저장(scripts/e2e/out/)" : ""}`);
 
 let browser;

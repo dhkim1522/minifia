@@ -2,7 +2,7 @@
 // 방장 소켓은 브라우저 페이지가 쥔다(스크립트가 쥐면 앱이 앞 소켓을 4001 로 대체한다).
 // 토큰은 createTestRoom 결과와 addInitScript 인자에만 머문다. 페이지가 받은 state 프레임만 읽고 보낸 프레임은 구독하지 않는다.
 import { chromium } from "playwright-core";
-import { DECORATIVE_ALLOW, FONT_HOSTS, ROLE_NAME, TAP_ALLOW, redact } from "./lib.mjs";
+import { DECORATIVE_ALLOW, FONT_HOSTS, ROLE_NAME, TAP_ALLOW, TEXT_SIZE_ALLOW, redact } from "./lib.mjs";
 
 /** 준비 단계의 실패(연결·단계 도달·선택자 대기 시간 초과). 한 번 새 방으로 다시 돈다. 검사 실패와 다르다. */
 export class SetupError extends Error {
@@ -12,7 +12,7 @@ export class SetupError extends Error {
   }
 }
 
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 /** HTTP 로 테스트 방을 만든다. 실패는 상태 코드만 담는다(본문·토큰을 싣지 않는다). */
 export async function createTestRoom(origin, nickname) {
@@ -203,8 +203,9 @@ export function shot(page, path) {
 export async function collectSnapshot(page) {
   const decorative = DECORATIVE_ALLOW.map((d) => d.selector).join(", ");
   const tapAllow = TAP_ALLOW.map((d) => d.selector).join(", ");
+  const textAllow = TEXT_SIZE_ALLOW.map((d) => d.selector).join(", ");
   return page.evaluate(
-    ({ decorative: deco, tapAllow: tapSel }) => {
+    ({ decorative: deco, tapAllow: tapSel, textAllow: textSel }) => {
       const toRect = (r) => ({ left: r.left, top: r.top, width: r.width, height: r.height, right: r.right, bottom: r.bottom });
       const rectOf = (el) => (el ? toRect(el.getBoundingClientRect()) : null);
       const visible = (el) => {
@@ -251,7 +252,15 @@ export async function collectSnapshot(page) {
       const panel = q(".mf-dayscene__panel");
       const guide = q(".mf-claimpanel__guide");
       const card = q(".mf-morningcard");
-      const recBtn = q("button.mf-records-btn");
+      const dim = q(".mf-dt__dim");
+      const rcBtn = q(".mf-rolecard-btn");
+      const rcSheet = q('dialog[aria-label="역할 카드"][open]');
+      const rcToast = q(".mf-rolecard-toast");
+      const zOf = (el) => {
+        const z = parseInt(getComputedStyle(el).zIndex, 10);
+        return Number.isFinite(z) ? z : Number.NaN;
+      };
+      const chatTexts = (root) => [...root.querySelectorAll(".mf-msglog__item:not(.mf-msglog__item--sys) .mf-msglog__text")].map((e) => (e.textContent || "").trim());
       const stepper = q(".mf-tt-sheet__stepper");
       const ttSheet = q(".mf-tt-sheet");
       const stepBtn = (label) => {
@@ -280,8 +289,94 @@ export async function collectSnapshot(page) {
           sel: !!el.querySelector(".mf-dt__sel"),
           pressed: el.getAttribute("aria-pressed") === "true",
           reachable,
+          z: zOf(el),
+          imgSrc: el.querySelector("img")?.getAttribute("src") ?? null,
+          spotlit: el.classList.contains("mf-dt__seat--spotlit"),
         };
       });
+
+      const tagEls = [...document.querySelectorAll(".mf-dt__tag")];
+      const tags = tagEls.map((el) => ({
+        seat: Number(el.getAttribute("data-seat")),
+        rect: rectOf(el),
+        z: zOf(el),
+        lines: el.children.length,
+        hasDot: !!el.querySelector(".mf-dt__dot"),
+      }));
+
+      // D3b: 캐릭터 그림(.mf-dt__seat img)을 오프스크린 canvas 에 그려 알파 > 40 픽셀을 읽고, 이름표 사각형을 0.5px 격자(중심점)로 훑어
+      // 어떤 그림의 불투명 픽셀 위에 놓인 점을 센다. 로드 안 된 그림이 하나라도 있거나 canvas 를 못 읽으면 ratio 는 null(조용히 통과시키지 않는다).
+      const figs = [...document.querySelectorAll(".mf-dt__seat img")];
+      const allLoaded = figs.length > 0 && figs.every((im) => im.complete && im.naturalWidth > 0);
+      const alphaOf = new Map();
+      if (allLoaded) {
+        for (const im of figs) {
+          try {
+            const c = document.createElement("canvas");
+            c.width = im.naturalWidth;
+            c.height = im.naturalHeight;
+            const g = c.getContext("2d");
+            g.drawImage(im, 0, 0, c.width, c.height);
+            alphaOf.set(im, g.getImageData(0, 0, c.width, c.height));
+          } catch {
+            alphaOf.clear();
+            break;
+          }
+        }
+      }
+      const measurable = allLoaded && alphaOf.size === figs.length;
+      const figBoxes = measurable
+        ? figs.map((im) => {
+            const r = im.getBoundingClientRect();
+            const iw = im.naturalWidth;
+            const ih = im.naturalHeight;
+            // object-fit: contain 이면 그림은 상자 안에 비율을 지켜 가운데에 놓인다
+            const contain = getComputedStyle(im).objectFit === "contain";
+            const k = contain ? Math.min(r.width / iw, r.height / ih) : null;
+            const dw = contain ? iw * k : r.width;
+            const dh = contain ? ih * k : r.height;
+            const ox = r.left + (r.width - dw) / 2;
+            const oy = r.top + (r.height - dh) / 2;
+            return { data: alphaOf.get(im), iw, ih, ox, oy, dw, dh };
+          })
+        : [];
+      const tagVisibility = tagEls.map((el) => {
+        const seat = Number(el.getAttribute("data-seat"));
+        if (!measurable) return { seat, ratio: null };
+        const r = el.getBoundingClientRect();
+        const near = figBoxes.filter((b) => b.ox < r.right && b.ox + b.dw > r.left && b.oy < r.bottom && b.oy + b.dh > r.top);
+        let total = 0;
+        let covered = 0;
+        for (let y = r.top + 0.25; y < r.bottom; y += 0.5) {
+          for (let x = r.left + 0.25; x < r.right; x += 0.5) {
+            total += 1;
+            for (const b of near) {
+              if (x < b.ox || x >= b.ox + b.dw || y < b.oy || y >= b.oy + b.dh) continue;
+              const u = Math.min(b.iw - 1, Math.floor(((x - b.ox) / b.dw) * b.iw));
+              const v = Math.min(b.ih - 1, Math.floor(((y - b.oy) / b.dh) * b.ih));
+              if (b.data.data[(v * b.iw + u) * 4 + 3] > 40) {
+                covered += 1;
+                break;
+              }
+            }
+          }
+        }
+        return { seat, ratio: total === 0 ? null : 1 - covered / total };
+      });
+
+      // G7: 보이는 글자 중 14px 미만(허용 선택자 제외). 읽기 전용 안내(.mf-sr-only)는 화면에 보이지 않으므로 뺀다.
+      const smallText = [];
+      for (const el of document.body.querySelectorAll("*")) {
+        if (el.tagName === "SCRIPT" || el.tagName === "STYLE") continue;
+        if (el.closest(".mf-sr-only")) continue;
+        if (textSel && el.matches(textSel)) continue;
+        if (![...el.childNodes].some((n) => n.nodeType === 3 && (n.textContent || "").trim() !== "")) continue;
+        if (!visible(el)) continue;
+        const size = parseFloat(getComputedStyle(el).fontSize);
+        if (size < 14) smallText.push({ desc: desc(el), size });
+      }
+
+      const stEmoji = panel?.querySelector('.st-row [aria-label="이모티콘"]') ?? null;
 
       return {
         vw: window.innerWidth,
@@ -292,7 +387,10 @@ export async function collectSnapshot(page) {
         elements,
         interactive,
         tt: tt ? { rect: rectOf(tt), hit: hitOf(tt, tt.getBoundingClientRect()) } : null,
-        dialogs: [...document.querySelectorAll("dialog[open]")].map((d) => d.getAttribute("aria-label") ?? ""),
+        dialogs: [...document.querySelectorAll("dialog[open]")].map((d) => ({
+          label: d.getAttribute("aria-label") ?? "",
+          title: (d.querySelector("h2, h3, .mf-sheet__title")?.textContent || "").trim(),
+        })),
         h1: h1 ? { rect: rectOf(h1), lineHeight: lineHeightOf(h1), text: (h1.textContent || "").trim() } : null,
         extra: extra ? { rect: rectOf(extra), children: [...extra.children].map((c) => rectOf(c)) } : null,
         scene: rectOf(q(".mf-dayscene__scene")),
@@ -301,14 +399,67 @@ export async function collectSnapshot(page) {
               rect: rectOf(panel),
               text: (panel.innerText || "").replace(/\s+/g, " ").trim(),
               children: [...panel.querySelectorAll("*")].filter(visible).map((c) => ({ desc: desc(c), rect: rectOf(c) })),
+              chips: [...panel.querySelectorAll('[aria-label="주장할 직업"] button')].map((b) => (b.textContent || "").replace(/\s+/g, " ").trim()),
+              stRow: !!panel.querySelector(".st-row"),
+              emojiBtn: stEmoji ? { rect: rectOf(stEmoji) } : null,
+              quickBtn: [...panel.querySelectorAll("button")].some((b) => /빠른 메시지/.test(`${b.getAttribute("aria-label") ?? ""} ${b.textContent ?? ""}`)),
             }
           : null,
         guide: guide ? { rect: rectOf(guide), lineHeight: lineHeightOf(guide), text: (guide.textContent || "").trim() } : null,
         felt: rectOf(q(".mf-dt__felt")),
         seats,
-        tags: [...document.querySelectorAll(".mf-dt__tag")].map((el) => ({ seat: Number(el.getAttribute("data-seat")), rect: rectOf(el) })),
+        header: rectOf(q(".mf-phasebar")),
+        tags,
+        tagVisibility,
+        turn: {
+          spot: document.querySelectorAll(".mf-dt__spot").length,
+          badge: document.querySelectorAll(".mf-dt__turn").length,
+          tagTurn: document.querySelectorAll(".mf-dt__tag--turn").length,
+          legacyRows: document.querySelectorAll(".mf-dt__claim").length,
+        },
+        dim: dim ? { rect: rectOf(dim), z: zOf(dim), pointerEvents: getComputedStyle(dim).pointerEvents } : null,
         card: rectOf(card),
-        records: recBtn ? { label: recBtn.getAttribute("aria-label") ?? "", dot: !!recBtn.querySelector(".mf-records-btn__dot") } : null,
+        chatLines: chatTexts(document),
+        chatHistory: chatTexts(q('dialog[aria-label="채팅 내역"][open]') ?? document.createElement("div")),
+        legacyRecordsBtn: !!q("button.mf-records-btn") || [...document.querySelectorAll("button")].some((b) => /^수사 기록/.test(b.getAttribute("aria-label") ?? "")),
+        roleCard: {
+          button: rcBtn
+            ? { label: rcBtn.getAttribute("aria-label") ?? "", rect: rectOf(rcBtn), dotRect: rectOf(rcBtn.querySelector(".mf-rolecard-btn__dot")), hit: hitOf(rcBtn, rcBtn.getBoundingClientRect()) }
+            : null,
+          sheet: rcSheet
+            ? {
+                tabs: [...rcSheet.querySelectorAll('[role="tab"]')].map((t) => ({
+                  text: (t.textContent || "").replace(/\s+/g, " ").trim(),
+                  selected: t.getAttribute("aria-selected") === "true",
+                  dotRect: rectOf(t.querySelector(".mf-rolecard__dot")),
+                })),
+                journalName: (rcSheet.querySelector(".mf-journal__h b")?.textContent || "").trim() || null,
+                rows: [...rcSheet.querySelectorAll(".mf-journal__row")].map((r) => ({
+                  day: (r.querySelector(".mf-journal__d")?.textContent || "").trim(),
+                  who: (r.querySelector(".mf-journal__w")?.textContent || "").trim(),
+                  result: (r.querySelector(".mf-journal__rz")?.textContent || "").trim(),
+                  hasNew: !!r.querySelector(".mf-journal__new"),
+                })),
+                emptyText: (rcSheet.querySelector(".mf-journal__empty")?.textContent || "").trim() || null,
+                hasBody: !!rcSheet.querySelector(".mf-rolecard__body"),
+              }
+            : null,
+          notice: rcToast
+            ? {
+                rect: rectOf(rcToast),
+                text: (rcToast.textContent || "").replace(/\s+/g, " ").trim(),
+                isButton: rcToast.tagName === "BUTTON" || !!rcToast.querySelector("button"),
+                role: rcToast.closest("[role]")?.getAttribute("role") ?? rcToast.querySelector("[role]")?.getAttribute("role") ?? null,
+              }
+            : null,
+        },
+        roleImgs: [...document.querySelectorAll('img[src*="/characters/roles/"]')].map((im) => ({
+          src: im.getAttribute("src") ?? "",
+          inTable: !!im.closest(".mf-dt"),
+          inDialog: !!im.closest("dialog"),
+          inReveal: !!im.closest(".mf-reveal"),
+        })),
+        smallText,
         buttonTexts: [...document.querySelectorAll("button")].filter(visible).map((b) => (b.textContent || "").replace(/\s+/g, " ").trim()),
         mafiaLog: !!q('[aria-label="마피아 채팅"]'),
         lobbyCount: (q(".mf-lobby__count")?.textContent || "").trim(),
@@ -323,7 +474,7 @@ export async function collectSnapshot(page) {
           : null,
       };
     },
-    { decorative, tapAllow },
+    { decorative, tapAllow, textAllow },
   );
 }
 
@@ -375,17 +526,38 @@ export async function startGame(page, tracker) {
   await tracker.waitFor((v) => v.phase === "roleReveal", 8000, "역할 확인 도달");
 }
 
-/** 시트를 열어 둔 채 [다음 단계로 넘기기] 를 눌러 목표 단계까지 간다(단계마다 3초 안). 끝나면 시트를 닫는다. */
+/**
+ * 시트를 열어 둔 채 [다음 단계로 넘기기] 를 눌러 목표 단계까지 간다. claim 에서 한 번은 차례 한 번이다(결정 0027-9)라
+ * 진행 신호를 「단계 또는 마감 시각이 바뀜」으로 잡고 상한을 24 로 둔다(8명판 8차례 + 다른 단계). 끝나면 시트를 닫는다.
+ */
 export async function skipTo(page, tracker, phase) {
   await openTestSheet(page);
-  for (let i = 0; i < 8; i++) {
+  for (let i = 0; i < 24; i++) {
     const before = tracker.last()?.phase;
+    const beforeEnds = tracker.last()?.phaseEndsAt;
     if (before === phase) break;
     await clickInDialog(page, TT_LABEL, "다음 단계로 넘기기");
-    await tracker.waitFor((v) => v.phase !== before, 3000, `${before} 다음 단계 (목표 ${phase})`);
+    await tracker.waitFor((v) => v.phase !== before || v.phaseEndsAt !== beforeEnds, 3000, `${before} 다음 단계 (목표 ${phase})`);
   }
   if (tracker.last()?.phase !== phase) throw new SetupError(`목표 단계 ${phase} 에 도달하지 못함 (지금 ${tracker.last()?.phase})`);
   await closeSheet(page);
+}
+
+/** claim 에서 차례가 그 자리로 올 때까지 기다린다(받은 state 의 day.turn.seat 기준). */
+export function waitTurnSeat(tracker, seat, ms = 15_000) {
+  return tracker.waitFor((v) => v.phase === "claim" && v.day?.turn?.seat === seat, ms, `자리 ${seat} 차례`);
+}
+
+/** 내 차례 하단 칩을 글자로 눌러 차례나 단계가 넘어가길 기다린다. */
+export async function pickChip(page, tracker, label) {
+  const v = tracker.last();
+  const before = { phase: v?.phase, seat: v?.day?.turn?.seat, ends: v?.phaseEndsAt };
+  await page.locator('[aria-label="주장할 직업"]').getByRole("button", { name: label, exact: true }).click();
+  await tracker.waitFor(
+    (n) => n.phase !== before.phase || n.day?.turn?.seat !== before.seat || n.phaseEndsAt !== before.ends,
+    4000,
+    `칩 ${label} 뒤 다음 차례`,
+  );
 }
 
 /** 대상 자리 버튼을 실제로 누른다. 다른 요소에 가려지면 Playwright 실행 가능성 검사가 실패를 낸다. */
@@ -414,10 +586,47 @@ export async function clickTopmostPoint(page, seat) {
   await page.mouse.click(pt.x, pt.y);
 }
 
+/** 낮 자리를 눌러 기록 카드를 연다(밤이면 아무것도 안 열리는 것이 정상). 그 자리에서 맨 위인 점을 누른다. */
+export async function inspectSeat(page, seat) {
+  await clickTopmostPoint(page, seat);
+  await page.waitForTimeout(350);
+}
+
+export async function openRoleCard(page) {
+  if ((await dialogOf(page, "역할 카드").count()) === 0) await page.locator(".mf-rolecard-btn").click();
+  await page.locator('dialog[aria-label="역할 카드"].mf-dialog--open').waitFor({ state: "attached", timeout: 5000 });
+  await page.waitForTimeout(300);
+}
+
+/** 열린 역할 카드의 탭을 이름(부분 일치: 점이 있으면 「활동 기록, 새 기록」)으로 누른다. */
+export async function selectRoleCardTab(page, name) {
+  await dialogOf(page, "역할 카드").getByRole("tab", { name }).click();
+  await page.waitForTimeout(300);
+}
+
+export async function closeRoleCard(page) {
+  await closeSheet(page, "역할 카드");
+}
+
+/** 밤 끝 알림(.mf-rolecard-toast)을 누른다. */
+export async function clickNotice(page) {
+  await page.locator(".mf-rolecard-toast").click();
+  await page.locator('dialog[aria-label="역할 카드"].mf-dialog--open').waitFor({ state: "attached", timeout: 5000 });
+  await page.waitForTimeout(300);
+}
+
+/** 채팅 줄 오른쪽 ^ 버튼으로 채팅 내역 시트를 연다. */
+export async function openChatHistory(page) {
+  await page.locator('[aria-label="채팅 내역 크게 보기"]').click();
+  await page.locator('dialog[aria-label="채팅 내역"].mf-dialog--open').waitFor({ state: "attached", timeout: 5000 });
+  await page.waitForTimeout(300);
+}
+
 /** 최선 노력: 열린 시트를 닫고 [대기실로 되돌리기] → 대기실에서 [나가기]. 실패는 무시한다. */
 export async function resetAndLeave(page, tracker) {
   try {
-    for (const label of ["수사 기록", "채팅 내역"]) await closeSheet(page, label).catch(() => {});
+    const open = await page.evaluate(() => [...document.querySelectorAll("dialog[open]")].map((d) => d.getAttribute("aria-label") ?? ""));
+    for (const label of open) if (label === "역할 카드" || label === "채팅 내역" || label.endsWith(" 기록")) await closeSheet(page, label).catch(() => {});
     await openTestSheet(page);
     await clickInDialog(page, TT_LABEL, "대기실로 되돌리기");
     await tracker.waitFor((v) => v.phase === "lobby", 3000, "대기실 복귀");

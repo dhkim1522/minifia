@@ -27,7 +27,11 @@ export const TAP_ALLOW = [];
  * G7 이 보지 않는 작은 글자(14px 미만). `.mf-journal__new` 하나로 시작한다.
  * 더할 수 있는 것은 테스트 도구 선택자(`.mf-tt*`, 제품 UI 아님)뿐이다 — 단위 테스트가 그 밖 선택자를 거부한다(D-18).
  */
-export const TEXT_SIZE_ALLOW = [{ selector: ".mf-journal__new", reason: "NEW 알약 12px — 03 에서 허용된 캡션(UI-SPEC 타이포)" }];
+export const TEXT_SIZE_ALLOW = [
+  { selector: ".mf-journal__new", reason: "NEW 알약 12px — 03 에서 허용된 캡션(UI-SPEC 타이포)" },
+  // 테스트 도구 선택자(.mf-tt*)는 제품 UI 가 아니라 허용할 수 있다. 테스트 방 방장 전용 [테스트] 시트의 12px 보조 줄(testtools.css) 한 곳만.
+  { selector: ".mf-tt-sheet__list small", reason: "[테스트] 시트의 12px 보조 줄(지금 단계·인원 유지) — 테스트 방 전용 도구, 제품 UI 아님" },
+];
 
 export class UsageError extends Error {
   constructor(message) {
