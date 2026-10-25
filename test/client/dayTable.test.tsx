@@ -589,6 +589,39 @@ describe("DayTable: 지금 주장하는 차례 (D-03)", () => {
     expect(tagEl(container, 2).classList.contains("mf-dt__tag--turn")).toBe(true);
   });
 
+  it("링 묶음 .mf-dt__spot 한 개 안에 뒤쪽 호(--back)·앞쪽 호(--front)가 이 순서로 있고, 캐릭터 그림이 묶음보다 앞 순서다 (결정 0028)", () => {
+    const { container } = render(<DayTable seats={five({ 2: { turn: true } })} mySeat={0} width={366} />);
+    const spot = spotEls(container)[0]!;
+    expect(spot.className).toBe("mf-dt__spot");
+    expect(Array.from(spot.children).map((c) => c.className)).toEqual([
+      "mf-dt__spot-arc mf-dt__spot-arc--back",
+      "mf-dt__spot-arc mf-dt__spot-arc--front",
+    ]);
+    const fig = seatEl(container, 2).querySelector<HTMLElement>("img.mf-figure")!;
+    expect(fig).toBeTruthy();
+    expect(fig.compareDocumentPosition(spot) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // 묶음에 aria-hidden 을 새로 달지 않는다(E2E G2 가 보는 요소 집합을 줄이지 않는다)
+    expect(spot.getAttribute("aria-hidden")).toBeNull();
+  });
+
+  it("차례 자리의 인라인 z-index 는 배치 결과(12~22) 그대로, 탈락 강조는 31", () => {
+    const { container } = render(<DayTable seats={five({ 2: { turn: true }, 3: { spotlit: true, dead: true } })} mySeat={0} width={366} />);
+    const z2 = Number(seatEl(container, 2).style.zIndex);
+    expect(z2 >= 12 && z2 <= 22).toBe(true);
+    expect(seatEl(container, 3).style.zIndex).toBe("31");
+    // 호는 인라인 z-index 를 갖지 않는다(층은 CSS 의 -1 과 마크업 순서가 정한다)
+    for (const a of Array.from(container.querySelectorAll<HTMLElement>(".mf-dt__spot, .mf-dt__spot-arc"))) expect(a.style.zIndex).toBe("");
+  });
+
+  it.each([4, 5, 6, 7, 8])("%i명 차례 자리가 있어도 이름표 z 최댓값 < 자리 z 최솟값 (D3a 단위 버전)", (n) => {
+    const seats = Array.from({ length: n }, (_, i) => seat(i, `이${i}`, { isMe: i === 0, turn: i === 1 }));
+    const { container } = render(<DayTable seats={seats} mySeat={0} width={366} />);
+    const tagZ = Array.from(container.querySelectorAll<HTMLElement>(".mf-dt__tag")).map((e) => Number(e.style.zIndex));
+    const seatZ = seatEls(container).map((e) => Number(e.style.zIndex));
+    expect(spotEls(container).length).toBe(1);
+    expect(Math.max(...tagZ) < Math.min(...seatZ)).toBe(true);
+  });
+
   it("차례 자리가 없으면 링·배지·반전이 0개", () => {
     const { container } = render(<DayTable seats={five()} mySeat={0} width={366} />);
     expect(spotEls(container).length).toBe(0);
@@ -753,11 +786,36 @@ describe("daytable.css: 03.1-05 (이름표 한 줄·차례·층)", () => {
     expect(cssHas(css, /\.mf-dt__tag--turn \.mf-dt__name\s*\{[^}]*background:\s*var\(--gray-100\)/)).toBe(true);
     expect(cssHas(css, /\.mf-dt__tag--turn \.mf-dt__name\s*\{[^}]*color:\s*var\(--night-900\)/)).toBe(true);
   });
-  it(".mf-dt__spot: 폭 140%·높이 24%·3px gray-50 링·pointer-events none", () => {
+  it(".mf-dt__spot 묶음: 폭 140%·높이 24%·left -20%·bottom calc(-4px - 12%)·pointer-events none, 쌓임 맥락을 만들지 않는다", () => {
     expect(cssHas(css, /\.mf-dt__spot\s*\{[^}]*width:\s*140%/)).toBe(true);
     expect(cssHas(css, /\.mf-dt__spot\s*\{[^}]*height:\s*24%/)).toBe(true);
-    expect(cssHas(css, /\.mf-dt__spot\s*\{[^}]*border:\s*3px solid var\(--gray-50\)/)).toBe(true);
+    expect(cssHas(css, /\.mf-dt__spot\s*\{[^}]*left:\s*-20%/)).toBe(true);
+    expect(cssHas(css, /\.mf-dt__spot\s*\{[^}]*bottom:\s*calc\(-4px - 12%\)/)).toBe(true);
     expect(cssHas(css, /\.mf-dt__spot\s*\{[^}]*pointer-events:\s*none/)).toBe(true);
+    const m = /\.mf-dt__spot\s*\{([^}]*)\}/.exec(code);
+    expect(m).toBeTruthy();
+    expect(/(^|[;\s])(transform|z-index|opacity|filter|isolation|animation|will-change|clip-path)\s*:/.test(m![1]!)).toBe(false);
+  });
+  // clip-path 바깥 방향 여백 24px 는 빛(18px)이 잘리지 않게 하려는 값이다(반원 경계선 쪽만 50% 로 자른다)
+  it("두 호: 3px gray-50 링·빛 18px·원형·페이드·pointer-events none", () => {
+    expect(cssHas(css, /\.mf-dt__spot-arc\s*\{[^}]*border:\s*3px solid var\(--gray-50\)/)).toBe(true);
+    expect(cssHas(css, /\.mf-dt__spot-arc\s*\{[^}]*box-shadow:\s*0 0 18px color-mix\(in srgb, var\(--gray-50\) 75%, transparent\)/)).toBe(true);
+    expect(cssHas(css, /\.mf-dt__spot-arc\s*\{[^}]*border-radius:\s*50%/)).toBe(true);
+    expect(cssHas(css, /\.mf-dt__spot-arc\s*\{[^}]*position:\s*absolute/)).toBe(true);
+    expect(cssHas(css, /\.mf-dt__spot-arc\s*\{[^}]*inset:\s*0/)).toBe(true);
+    expect(cssHas(css, /\.mf-dt__spot-arc\s*\{[^}]*pointer-events:\s*none/)).toBe(true);
+    expect(cssHas(css, /\.mf-dt__spot-arc\s*\{[^}]*animation:\s*mf-dt-fade var\(--dur-fast\) var\(--ease-out\) both/)).toBe(true);
+  });
+  it("뒤쪽 호는 z-index -1 + 위쪽 반만, 앞쪽 호는 음수 z-index 없이 아래쪽 반만 보인다", () => {
+    expect(cssHas(css, /\.mf-dt__spot-arc--back\s*\{[^}]*z-index:\s*-1/)).toBe(true);
+    expect(cssHas(css, /\.mf-dt__spot-arc--back\s*\{[^}]*clip-path:\s*inset\(-24px -24px 50% -24px\)/)).toBe(true);
+    expect(cssHas(css, /\.mf-dt__spot-arc--front\s*\{[^}]*clip-path:\s*inset\(50% -24px -24px -24px\)/)).toBe(true);
+    const m = /\.mf-dt__spot-arc--front\s*\{([^}]*)\}/.exec(code);
+    expect(m).toBeTruthy();
+    expect(/z-index\s*:/.test(m![1]!)).toBe(false);
+  });
+  it("축소 모션 규칙이 호의 animation 을 끈다", () => {
+    expect(cssHas(css, /prefers-reduced-motion: reduce\)\s*\{[^@]*?\.mf-dt__spot-arc[^{]*\{[^}]*animation:\s*none/)).toBe(true);
   });
   it(".mf-dt__turn: 28px 원·top -24px·gray-50 면·night-900 글자·pointer-events none, 아이콘 선 2.4", () => {
     expect(cssHas(css, /\.mf-dt__turn\s*\{[^}]*width:\s*28px/)).toBe(true);

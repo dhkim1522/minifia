@@ -660,6 +660,64 @@ test("turnChecks K1: 차례 없는 단계(expectNone)는 세 값이 모두 0 이
   assert.equal(turnChecks(s, { expectNone: true })[0].ok, false);
 });
 
+// ---- K4 차례 링의 앞뒤 층 (결정 0028) ----
+const goodRing = () => ({
+  plain: true,
+  back: { z: -1, position: "absolute", clip: "inset(-24px -24px 50%)" },
+  front: { z: null, position: "absolute", clip: "inset(50% -24px -24px)" },
+  figBeforeFront: true,
+  seatContext: true,
+});
+const ringSnap = (ring) => {
+  const s = daySnap();
+  s.panel = turnPanel({ stRow: true, emojiBtn: true });
+  s.turn = { spot: 1, badge: 1, tagTurn: 1, legacyRows: 0, ring };
+  return s;
+};
+
+test("turnChecks K4: 묶음이 평범하고 뒤쪽 호 z<0, 앞쪽 호가 그림 뒤 순서이며 clip-path 가 위/아래 반이면 통과 (브라우저가 줄여 쓴 inset 도 읽는다)", () => {
+  const list = turnChecks(ringSnap(goodRing()), { myTurn: false, jobs: [] });
+  assert.deepEqual(list.map((x) => x.id), ["K1", "K4", "K2"]);
+  assert.equal(dayById(list, "K4").ok, true, dayById(list, "K4").detail);
+  const full = goodRing();
+  full.back.clip = "inset(-24px -24px 50% -24px)";
+  full.front.clip = "inset(50% -24px -24px -24px)";
+  assert.equal(dayById(turnChecks(ringSnap(full), { myTurn: false }), "K4").ok, true);
+});
+
+test("turnChecks K4: 어긋남마다 실패하고 이유를 말한다", () => {
+  const cases = [
+    ["묶음이 평범하지 않음", (r) => { r.plain = false; }, /묶음/],
+    ["뒤쪽 호 z 가 0", (r) => { r.back.z = 0; }, /뒤쪽 호/],
+    ["뒤쪽 호 z 없음", (r) => { r.back.z = null; }, /뒤쪽 호/],
+    ["앞쪽 호가 음수 z", (r) => { r.front.z = -1; }, /앞쪽 호/],
+    ["앞쪽 호가 absolute 아님", (r) => { r.front.position = "static"; }, /앞쪽 호/],
+    ["앞쪽 호가 그림보다 앞 순서", (r) => { r.figBeforeFront = false; }, /순서/],
+    ["clip 이 반대(뒤쪽이 아래 반)", (r) => { r.back.clip = "inset(50% -24px -24px)"; }, /뒤쪽 호 clip/],
+    ["clip 이 반대(앞쪽이 위 반)", (r) => { r.front.clip = "inset(-24px -24px 50%)"; }, /앞쪽 호 clip/],
+    ["clip 없음", (r) => { r.front.clip = "none"; }, /앞쪽 호 clip/],
+    ["자리가 쌓임 맥락이 아님", (r) => { r.seatContext = false; }, /자리/],
+  ];
+  for (const [name, mut, re] of cases) {
+    const r = goodRing();
+    mut(r);
+    const k4 = dayById(turnChecks(ringSnap(r), { myTurn: false }), "K4");
+    assert.equal(k4.ok, false, name);
+    assert.match(k4.detail, re, name);
+  }
+  for (const ring of [null, undefined]) {
+    const k4 = dayById(turnChecks(ringSnap(ring), { myTurn: false }), "K4");
+    assert.equal(k4.ok, false);
+    assert.match(k4.detail, /측정값 없음/);
+  }
+});
+
+test("turnChecks K4: 차례가 없는 상태(expectNone)에서는 돌리지 않는다", () => {
+  const s = daySnap();
+  s.turn = { spot: 0, badge: 0, tagTurn: 0, legacyRows: 0, ring: null };
+  assert.deepEqual(turnChecks(s, { expectNone: true }).map((x) => x.id), ["K1"]);
+});
+
 test("turnChecks K2: 내 차례는 이번 판 직업 + 말 안 함 칩 · stRow/이모티콘 없음 · 높이 157", () => {
   const s = daySnap();
   s.turn = { spot: 1, badge: 1, tagTurn: 1, legacyRows: 0 };
