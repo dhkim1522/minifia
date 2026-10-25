@@ -1,14 +1,18 @@
 // 3페이즈 밤·아침 UAT 를 봇으로 대신 도는 시나리오. 봇이 방을 만들고 채워 밤 두 번을 돌며 결과 표를 낸다.
 // 스크립트는 전지적이다: 각 클라이언트의 view.me.role 로 역할을 알고 그 역할대로 행동시킨다.
-// 1일차 낮은 아무것도 하지 않고 서버 타이머(직업 공개 15초·토론 90초)로 넘긴다. 전체 약 5분.
+// 낮은 직업 주장 차례(결정 0023·0027)에 자기 차례가 오면 말 안 함(none)을 바로 보내고 토론 90초는 서버 타이머로 넘긴다. 전체 약 5분.
+// 역할별 일지(결정 0026·0027-11)를 본다: 경찰 수사 {n,target,isMafia}, 마피아 암살 {n,target,died}, 의사 치료 {n,target}.
 //
 //   밤1: 마피아 전원 → 시민 X 지목, 경찰 → 마피아 조사, 의사 → 자신 보호, 마피아 한 명이 밤 채팅(nightTarget).
 //        마피아가 둘(6명 이상)이면 서로 다른 시민 A·B 를 골라 동률 추첨을 본다(탈락자는 둘 중 하나).
 //   아침1: 모든 폰이 같은 day.morning(탈락자 = 지목한 사람, 문구 1..8), players[].alive 일치, 경찰 기록 1건·isMafia true,
-//          비경찰에는 records 키 없음, 살아 있는 비마피아는 밤 chat·emoji 0, 탈락자만 spectate(모든 직업), 아침 중 pick → WRONG_PHASE.
+//          마피아 전원 같은 암살일지 1건(target = 탈락자, died true), 의사 치료일지 1건(target = 자신),
+//          그 역할 밖 프레임에는 records 키 없음·줄 키는 역할별, 살아 있는 비마피아는 밤 chat·emoji 0,
+//          탈락자만 spectate(모든 직업), 아침 중 pick → WRONG_PHASE.
 //   밤2: 탈락자(관전자)가 밤 행동 state(spectate.picks)·마피아 채팅·이모티콘을 받고, 자기 pick·say·emoji 는 BAD_MESSAGE.
 //        마피아 → 시민 Z, 의사 → Z 보호(의사 없는 4명판은 탈락).
-//   아침2: 의사 구출이면 모든 폰의 morning 이 {} 로 같고(구출 비공개), 경찰 기록은 2건.
+//   아침2: 의사 구출이면 모든 폰의 morning 이 {} 로 같고(구출 비공개), 경찰 기록은 2건,
+//          마피아 전원의 마지막 암살일지는 died false(구출), 의사 마지막 치료일지는 구한 seat.
 //
 // 사용법: node scripts/uat-night.mjs [--prod | <기준 주소>] [--players 4~8]
 // 화면 모양·애니메이션·실제 폰 시계 차이는 봇으로 볼 수 없다. 토큰은 어떤 출력에도 찍지 않는다.
@@ -32,7 +36,11 @@ const N = args.players;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const results = [];
 const check = (test, label, ok, detail = "") => results.push({ test, label, ok, detail });
-const OVERALL_LIMIT_MS = 540_000;
+const CLAIM_TURN_MS = 8_000;
+const CLAIM_WAIT_MS = CLAIM_TURN_MS * N; // 차례 대기 한도: 모두 시간 초과일 때 최대 인원 × 8초
+const OVERALL_LIMIT_MS = 540_000 + CLAIM_WAIT_MS;
+// 역할별 일지 줄의 키 집합
+const RECORD_KEYS = { police: "isMafia,n,target", mafia: "died,n,target", doctor: "n,target" };
 
 async function waitUntil(pred, ms, label) {
   const start = performance.now();
@@ -107,12 +115,27 @@ async function main() {
   }
   for (const c of clients) await connect(c, code);
   await waitUntil(() => lastView(host)?.players.every((p) => p.connected), 10_000, "모두 연결");
+  // 차례 응답기: 자기 차례(claim 단계 + day.turn.seat === 내 seat)가 오면 일차마다 한 번 none 을 보낸다(키 = 일차:seat).
+  // 2일차 첫 차례는 탈락자 claim 거부 시험이 끝날 때까지 붙든다(차례가 빨리 지나가 claim 단계가 끝나면 WRONG_PHASE 가 되어 시험이 틀어진다).
+  let holdDay2Claims = true;
+  const claimSent = new Set();
+  const claimDriver = setInterval(() => {
+    for (const c of clients) {
+      const v = lastView(c);
+      if (!v || v.phase !== "claim" || v.day?.turn?.seat !== c.seat) continue;
+      if (v.day.n === 2 && holdDay2Claims) continue;
+      const key = `${v.day.n}:${c.seat}`;
+      if (claimSent.has(key)) continue;
+      claimSent.add(key);
+      if (c.ws.readyState === WebSocket.OPEN) send(c, { t: "claim", claim: "none" });
+    }
+  }, 50);
   console.log(`방 ${code} — 시작`);
   send(host, { t: "start" });
 
-  // ---- 1일차 낮: 아무것도 하지 않고 서버 타이머로 밤까지 (약 127초) ----
+  // ---- 1일차 낮: 차례마다 none 을 보내고 토론은 서버 타이머로 밤까지 (약 100초) ----
   console.log("1일차 낮을 타이머로 넘기는 중(약 2분)");
-  await waitUntil(() => clients.every((c) => stateAt(c, "night", 1)), 170_000, "1일차 밤");
+  await waitUntil(() => clients.every((c) => stateAt(c, "night", 1)), 170_000 + CLAIM_WAIT_MS, "1일차 밤");
   for (const c of clients) c.role = stateAt(c, "night", 1).msg.view.me.role;
   const byRole = (r) => clients.filter((c) => c.role === r);
   const mafias = byRole("mafia").sort((a, b) => a.seat - b.seat);
@@ -162,8 +185,21 @@ async function main() {
   const xClient = bySeatClient(X);
   const rec1 = stateAt(police, "morning", 1).msg.view.me.records;
   check("아침1", "경찰 수사 기록 1건 (n 1, isMafia true)", Array.isArray(rec1) && rec1.length === 1 && same(rec1[0], { n: 1, target: policeTarget1, isMafia: true }), JSON.stringify(rec1));
-  const recKeyOthers = clients.filter((c) => c !== police).some((c) => c.frames.some((f) => f.raw.includes('"records"')));
-  check("아침1", "비경찰 프레임에 records 키 없음", !recKeyOthers, "");
+  const recOf = (c, n) => stateAt(c, "morning", n).msg.view.me.records;
+  const lineIs = (line, want) => !!line && same(Object.entries(line).sort(), Object.entries(want).sort());
+  const mafiaRec1 = mafias.map((m) => recOf(m, 1));
+  check("아침1", "마피아 전원이 같은 암살일지 1건 (target = 탈락자, died true)", mafiaRec1.every((r) => Array.isArray(r) && r.length === 1 && lineIs(r[0], { n: 1, target: X, died: true })), JSON.stringify(mafiaRec1[0]));
+  if (doctor) {
+    const docRec1 = recOf(doctor, 1);
+    check("아침1", "의사 치료일지 1건 (n 1, target = 자신, 키 n·target 뿐)", Array.isArray(docRec1) && docRec1.length === 1 && lineIs(docRec1[0], { n: 1, target: doctor.seat }), JSON.stringify(docRec1));
+  }
+  // records 는 본인 역할 프레임에만, 줄 키는 역할별. 시민 등 그 밖 역할의 프레임에는 키 자체가 없다.
+  const recLeak = clients.filter((c) => !(c.role in RECORD_KEYS)).some((c) => c.frames.some((f) => f.raw.includes('"records"')));
+  check("아침1", "일지가 없는 역할(시민)의 프레임에 records 키 없음", !recLeak, "");
+  const recKeyBad = clients.filter((c) => c.role in RECORD_KEYS).flatMap((c) => c.frames
+    .filter((f) => f.msg.t === "state")
+    .flatMap((f) => (f.msg.view.me.records ?? []).map((line) => Object.keys(line).sort().join(",")).filter((k) => k !== RECORD_KEYS[c.role])));
+  check("아침1", "일지 줄 키가 역할별 (경찰 isMafia·마피아 died·의사 n,target)", recKeyBad.length === 0, recKeyBad.join(" | "));
   const nonMafiaAlive = clients.filter((c) => c.role !== "mafia");
   const leak1 = nonMafiaAlive.map((c) => nightCounts(c, 1)).reduce((a, k) => a + k.chat + k.emoji, 0);
   const mafiaGot1 = mafias.every((m) => nightCounts(m, 1).chat >= 1);
@@ -184,10 +220,11 @@ async function main() {
 
   // ---- 2일차 낮 (탈락자 거부) ----
   console.log("2일차 낮 — 탈락자 claim 거부 확인 후 타이머로 밤까지");
-  await waitUntil(() => stateAt(xClient, "claim", 2), 40_000, "2일차 claim");
+  await waitUntil(() => stateAt(xClient, "claim", 2), 40_000 + CLAIM_WAIT_MS, "2일차 claim");
   const claimCode = await requestError(xClient, { t: "claim", claim: "none" });
   check("낮2", "탈락자의 claim → BAD_MESSAGE", claimCode === "BAD_MESSAGE", claimCode);
-  await waitUntil(() => clients.every((c) => stateAt(c, "night", 2)), 150_000, "2일차 밤");
+  holdDay2Claims = false;
+  await waitUntil(() => clients.every((c) => stateAt(c, "night", 2)), 150_000 + CLAIM_WAIT_MS, "2일차 밤");
 
   // ---- 밤2 ----
   console.log("2일차 밤 — 관전자 수신·구출");
@@ -244,6 +281,14 @@ async function main() {
   }
   const rec2 = stateAt(police, "morning", 2).msg.view.me.records;
   check("아침2", "경찰 수사 기록 2건 (n 1 마피아 · n 2 시민)", Array.isArray(rec2) && rec2.length === 2 && same(rec2[0], rec1[0]) && same(rec2[1], { n: 2, target: policeTarget2, isMafia: false }), JSON.stringify(rec2));
+  // 마피아 암살일지 2건: 의사가 막으면 died false(마피아 전원 같은 줄), 의사 없는 판은 died true
+  const mafiaRec2 = mafias.map((m) => recOf(m, 2));
+  check("아침2", doctor ? "의사 구출: 마피아 전원의 마지막 암살일지 died false" : "의사 없는 판: 마피아 전원의 마지막 암살일지 died true",
+    mafiaRec2.every((r) => Array.isArray(r) && r.length === 2 && lineIs(r[0], { n: 1, target: X, died: true }) && lineIs(r[1], { n: 2, target: Z, died: !doctor })), JSON.stringify(mafiaRec2[0]));
+  if (doctor) {
+    const docRec2 = recOf(doctor, 2);
+    check("아침2", "의사 치료일지 2건 (마지막 = 구한 seat, 구출 여부 키 없음)", Array.isArray(docRec2) && docRec2.length === 2 && lineIs(docRec2[0], { n: 1, target: doctor.seat }) && lineIs(docRec2[1], { n: 2, target: Z }), JSON.stringify(docRec2));
+  }
 
   // ---- 끝: 전체 프레임 검사 ----
   const specAll = clients.filter((c) => c !== xClient).some((c) => c.frames.some((f) => f.raw.includes('"spectate"')));
@@ -253,6 +298,7 @@ async function main() {
   const tokenLeak = clients.some((c) => clients.some((o) => o !== c && c.frames.some((f) => f.raw.includes(o.token))));
   check("전체", "다른 사람의 토큰이 프레임에 없음", !tokenLeak, "");
 
+  clearInterval(claimDriver);
   for (const c of clients) { c.leaving = true; try { send(c, { t: "leave" }); c.ws.close(); } catch { /* 닫힘 */ } }
 
   console.log("\n테스트 | 항목 | 결과 | 내용");

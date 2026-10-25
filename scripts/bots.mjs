@@ -1,5 +1,5 @@
 // 수동 확인용 봇: 사람이 만든 방에 가짜 플레이어를 채워 넣는다. 방장은 브라우저에서 직접 [시작] 을 누른다.
-// 봇은 직업 공개 단계에서 알아서 주장을 고르고, 낮 토론에서 가끔 이모티콘·"결백" 메시지를 보낸다.
+// 봇은 직업 주장을 한 명씩 차례로 한다(결정 0023): 자기 차례(day.turn.seat)가 오면 알아서 주장을 고르고, 낮 토론에서 가끔 이모티콘·"결백" 메시지를 보낸다.
 // 밤에는 역할대로 행동한다: 마피아·경찰·의사 봇은 살아 있는 사람 중 하나를 pick 하고(마피아는 동료 제외), 마피아 봇은 가끔 밤 채팅·이모티콘을 보낸다. 탈락한 봇은 멈춘다.
 //
 // 사용법:
@@ -92,8 +92,10 @@ function onState(bot, view) {
     return;
   }
   if (view.phase === "claim") {
-    // 낮마다 한 번만 보낸다(키 = `${일차}:claim`). 직업 공개 후보(view.day.roles) 중 아무거나, 가끔 "말 안 함".
-    const key = `${view.day?.n ?? "d"}:${view.phase}`;
+    // 차례 주장: 지금 차례가 내 seat 일 때만, 낮마다 한 번만 보낸다(키 = `${일차}:${seat}:claim`).
+    // 직업 후보(view.day.roles) 중 아무거나, 가끔 "말 안 함". 한 차례는 8초라 0.5~3.5초 뒤에 보내면 늘 시간 안이다.
+    if (view.day?.turn?.seat !== bot.seat) return;
+    const key = `${view.day?.n ?? "d"}:${bot.seat}:claim`;
     if (bot.claimKey === key) return;
     bot.claimKey = key;
     const roles = view.day?.roles ?? [];
