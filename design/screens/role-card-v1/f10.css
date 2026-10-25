@@ -1,0 +1,29 @@
+/* 14차: 역할 카드(헤더 버튼 + 시트 탭) / 활동 기록(수사·처형·치료 일지) / 알림 배지(앰버) */
+:root { --amber-400: #f2b84b; --police-ink: #9ec2ff; --heal-400: #6fa59a; }
+.cbtn { position: relative; overflow: visible; }
+.ntb { position: absolute; right: -4px; top: -4px; width: 12px; height: 12px; border-radius: 999px; background: var(--amber-400); border: 2px solid var(--night-900); box-shadow: 0 0 0 1px rgba(242, 184, 75, .5); box-sizing: content-box; }
+.tabs__n { width: 10px; height: 10px; border-radius: 999px; background: var(--amber-400); }
+.cs { flex: 1; min-height: 0; display: flex; gap: 16px; align-items: center; padding: 16px; border-radius: 14px; background: var(--night-700); }
+.cs img { width: 128px; height: 160px; flex: none; display: block; object-fit: contain; padding: 8px; box-sizing: border-box; border-radius: 12px; background: var(--night-800); border: 1px solid var(--night-600); }
+.cs__t { min-width: 0; flex: 1; }
+.cs__n { margin: 0; font-size: 24px; line-height: 1.2; font-weight: 700; color: var(--gray-50); }
+.cs__d { margin: 4px 0 0; font-size: 14px; line-height: 20px; color: var(--gray-300); }
+/* 일지 공통 */
+.jr { flex: 1; min-height: 0; display: flex; flex-direction: column; border-radius: 14px; overflow: hidden; border: 1px solid var(--jr-edge); background: var(--jr-bg); }
+.jr__h { display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 16px; background: var(--jr-head); color: var(--jr-ink); font-size: 14px; line-height: 20px; font-weight: 700; }
+.jr__h b { font-size: 16px; }
+.jr__l { list-style: none; margin: 0; padding: 0 16px; display: flex; flex-direction: column; }
+.jr__l li { display: grid; grid-template-columns: 52px 84px minmax(0, 1fr) 48px; column-gap: 6px; align-items: center; min-height: 52px; font-size: 14px; line-height: 20px; color: var(--gray-300); border-bottom: 1px dashed var(--jr-edge); background-image: none; }
+.jr__l li:last-child { border-bottom: 0; }
+.jr__l .w { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; color: var(--gray-50); }
+.jr__l .w i { width: 8px; height: 8px; border-radius: 999px; }
+.jr__l .nw { justify-self: end; }
+.jr__l .new { padding: 0 6px; border-radius: 999px; background: var(--amber-400); color: var(--night-900); font-size: 12px; line-height: 18px; font-weight: 700; }
+.jr--police { --jr-bg: #16213d; --jr-head: #1d2c52; --jr-ink: var(--police-ink); --jr-edge: #34456f; }
+.jr--mafia { --jr-bg: #241420; --jr-head: #3a1a26; --jr-ink: #f2556a; --jr-edge: #5a2434; }
+.jr--doctor { --jr-bg: #10241f; --jr-head: #15332b; --jr-ink: #8fd0bf; --jr-edge: #26503f; }
+.jr--police .jr__l li { background-image: repeating-linear-gradient(transparent 0 25px, rgba(158, 194, 255, .07) 25px 26px); }
+.jr__tab { position: relative; }
+.rz--bad { color: #f2556a; font-weight: 700; }
+.rz--ok { color: var(--gray-50); }
+.rz--heal { color: #8fd0bf; font-weight: 700; }
