@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ROLE_IDS } from "../../shared/game/roles";
 
@@ -10,6 +11,7 @@ import {
   entryPreloadList,
   figureSrc,
   ghostSrc,
+  journalArt,
   preloadEntryAssets,
   preloadRoleAssets,
   roleArtSrc,
@@ -55,6 +57,49 @@ describe("그림 URL 헬퍼", () => {
   });
 });
 
+const JOURNAL_ROLES = ["police", "mafia", "doctor"] as const;
+const JOURNAL_SLOTS = ["cover", "page", "icon"] as const;
+
+describe("일지 그림 슬롯", () => {
+  it("journalArt(role, slot) 은 /journals/journal_${role}_${slot}.svg 를 돌려주고 srcSet 이 없다", () => {
+    expect(journalArt("police", "icon")).toEqual({ src: "/journals/journal_police_icon.svg" });
+    expect(journalArt("mafia", "cover").src).toBe("/journals/journal_mafia_cover.svg");
+    expect(journalArt("doctor", "page").src).toBe("/journals/journal_doctor_page.svg");
+    for (const role of JOURNAL_ROLES) for (const slot of JOURNAL_SLOTS) expect("srcSet" in journalArt(role, slot)).toBe(false);
+  });
+});
+
+describe("일지 색 토큰 (UI-SPEC 새 토큰 12개)", () => {
+  const tokens = JSON.parse(readFileSync("design/tokens.json", "utf8")) as {
+    color: { tokens: { name: string; value: string }[] };
+  };
+  const expected: [string, string][] = [
+    ["amber-400", "#f2b84b"],
+    ["journal-police-bg", "#16213d"],
+    ["journal-police-head", "#1d2c52"],
+    ["journal-police-edge", "#34456f"],
+    ["journal-police-ink", "#9ec2ff"],
+    ["journal-mafia-bg", "#241420"],
+    ["journal-mafia-head", "#3a1a26"],
+    ["journal-mafia-edge", "#5a2434"],
+    ["journal-doctor-bg", "#10241f"],
+    ["journal-doctor-head", "#15332b"],
+    ["journal-doctor-edge", "#26503f"],
+    ["journal-doctor-ink", "#8fd0bf"],
+  ];
+
+  it("color.tokens 맨 끝 12개가 순서와 값 그대로 들어 있다", () => {
+    const last = tokens.color.tokens.slice(-12).map((t) => [t.name, t.value]);
+    expect(last).toEqual(expected);
+  });
+
+  it("tokens.css 가 새 토큰을 :root 변수로 가진다", () => {
+    const css = readFileSync("src/styles/tokens.css", "utf8");
+    expect(css).toContain("--amber-400: #f2b84b;");
+    for (const [name, value] of expected) expect(css).toContain(`--${name}: ${value};`);
+  });
+});
+
 describe("미리 받기 목록", () => {
   it("입장 화면 목록: 입장·대기실 배경과 인물 8종", () => {
     const hrefs = entryPreloadList().map((item) => item.href);
@@ -70,8 +115,15 @@ describe("미리 받기 목록", () => {
     expect(hrefs).toContain("/backgrounds/bg_game_day.svg");
     expect(hrefs).toContain("/backgrounds/bg_game_night.svg");
     expect(hrefs).toContain(ghostSrc().src);
-    expect(hrefs).toHaveLength(7);
+    expect(hrefs).toHaveLength(16);
     expect(rolePreloadList()).toEqual(rolePreloadList());
+  });
+
+  it("역할 화면 목록은 역할과 무관한 한 목록이고 일지 SVG 아홉 개가 들어 있다 (T-03.1-18)", () => {
+    const hrefs = rolePreloadList().map((item) => item.href);
+    const journals = hrefs.filter((href) => href.startsWith("/journals/"));
+    expect(journals).toHaveLength(9);
+    for (const role of JOURNAL_ROLES) for (const slot of JOURNAL_SLOTS) expect(journals).toContain(journalArt(role, slot).src);
   });
 
   describe("react-dom preload 호출", () => {
@@ -86,7 +138,7 @@ describe("미리 받기 목록", () => {
       }
       vi.mocked(preload).mockClear();
       preloadRoleAssets();
-      expect(preload).toHaveBeenCalledTimes(7);
+      expect(preload).toHaveBeenCalledTimes(16);
     });
   });
 });
@@ -108,8 +160,10 @@ describe("실제 파일과의 일치", () => {
       if (item.imageSrcSet) urls.push(...urlsOfSrcSet(item.imageSrcSet));
     }
 
-    expect(urls.length).toBeGreaterThan(30);
-    for (const url of urls) {
+    // 일지 SVG(/journals/)의 실제 파일 존재는 journalAssets.test.ts 가 확인한다(03.1-06 Task 2).
+    const nonJournal = urls.filter((url) => !url.startsWith("/journals/"));
+    expect(nonJournal.length).toBeGreaterThan(30);
+    for (const url of nonJournal) {
       const path = decodeURIComponent(url);
       const files = path.startsWith("/backgrounds/") ? backdropFiles : characterFiles;
       expect(files.has(`/public${path}`), `${url} → /public${path}`).toBe(true);
