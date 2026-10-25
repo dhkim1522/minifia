@@ -18,6 +18,7 @@ import {
   openRoleCard,
   openTestSheet,
   pickChip,
+  readNightIntro,
   resetAndLeave,
   selectRoleCardTab,
   setBots,
@@ -41,6 +42,7 @@ import {
   livingRoleArtChecks,
   morningCardIssues,
   morningGoneChecks,
+  nightIntroChecks,
   noNightNoticeChecks,
   rectInside,
   rectsOverlap,
@@ -458,6 +460,9 @@ async function gameFlow(ctx, { id, players, role, states }) {
       rec(`${id}/chat`, "C2", "채팅 내역 모달 닫힘", c2.ok, c2.detail);
     } else if (state === "night") {
       await skipTo(page, tracker, "night");
+      // N6: 밤에 막 들어선 직후(settle 전)에는 '밤이 되었습니다' 문구가 떠 있다. 아래 밤 검사는 문구가 아직 떠 있을 수 있는 시점에도 그대로 돌려
+      // 문구가 터치·검사를 방해하지 않는 것을 함께 증명한다(pointer-events none).
+      recOne(rec, `${id}/night`, nightIntroChecks(await readNightIntro(page)));
       await settle(page);
       const { snap, mySeat } = await dayState(ctx, id, "night");
       recAll(rec, `${id}/night`, turnChecks(snap, { expectNone: true }));
@@ -465,6 +470,12 @@ async function gameFlow(ctx, { id, players, role, states }) {
       await nightActions(ctx, id, role, snap, mySeat);
       // X1(밤): 어떤 자리를 눌러도 기록 카드가 열리지 않는다(행위자는 선택만 됨)
       recOne(rec, `${id}/night`, inspectChecks(await collectSnapshot(page), { night: true }));
+      // N7: 문구는 2초 뒤 사라진다(여유를 두어 3.5초 안에 DOM 에서 없어지면 통과)
+      const n7 = await attempt(async () => {
+        await page.waitForSelector(".mf-nightintro", { state: "detached", timeout: 3500 });
+        return true;
+      });
+      rec(`${id}/night`, "N7", "밤 시작 문구가 사라짐", n7.ok, n7.detail);
     } else if (state === "morning") {
       // 아침은 5초라 넘긴 직후 바로 닫고 찍는다. 앞뒤 단계가 morning 이 아니면 준비 실패(재시도).
       await skipTo(page, tracker, "morning");

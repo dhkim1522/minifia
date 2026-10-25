@@ -10,6 +10,7 @@ import type { DayTableSeat, SpectatorPick } from "../components/DayTable";
 import { DiscussionControls } from "../components/DiscussionControls";
 import { MessageLog } from "../components/MessageLog";
 import { MorningCard, exitDelayOf } from "../components/MorningCard";
+import { NightIntro } from "../components/NightIntro";
 import { NIGHT_PANEL_TEXT, NightPanel, NoticePill, PickPill } from "../components/NightPanel";
 import { PhaseBar } from "../components/PhaseBar";
 import { ReadOnlyRow } from "../components/ReadOnlyRow";
@@ -69,12 +70,22 @@ export function DayScene({ view, connection, myRoleButton, testButton }: DayScen
 
   // 이모티콘 live 줄은 단계가 바뀌면 비운다(다음 단계에서 지난 것을 읽지 않게). 렌더 중 상태 조정이라 효과 없이 첫 커밋부터 맞는다.
   // 같은 조정에서 "밤 → 아침 전환을 이 화면이 직접 봤는가"(sawNightToMorning)를 기억한다 — 유령 맥동 조건(D-15). 아침을 벗어나면 초기화한다.
+  // 밤 시작 문구(결정 0028): 같은 접속(epoch 불변)에서 비밤 → 밤으로 넘어가는 렌더에서만 켠다. 처음 마운트(prevPhase 초기값이 현재 단계)·
+  // 재접속(epoch 변화)·밤 안의 다시 그리기·밤을 벗어난 뒤에는 켜지 않고, 단계나 epoch 가 바뀌면 끈다.
   const [prevPhase, setPrevPhase] = useState(view.phase);
+  const [prevEpoch, setPrevEpoch] = useState(connection.epoch);
+  const [nightIntroN, setNightIntroN] = useState<number | null>(null);
   const [sawNightToMorning, setSawNightToMorning] = useState(false);
+  const epochChanged = prevEpoch !== connection.epoch;
+  if (epochChanged) {
+    setPrevEpoch(connection.epoch);
+    setNightIntroN(null);
+  }
   if (prevPhase !== view.phase) {
     setPrevPhase(view.phase);
     setLastEmoji(null);
     setSawNightToMorning(prevPhase === "night" && view.phase === "morning");
+    setNightIntroN(view.phase === "night" && !epochChanged ? n : null);
   }
   const isNight = view.phase === "night";
   const isMorning = view.phase === "morning";
@@ -262,6 +273,7 @@ export function DayScene({ view, connection, myRoleButton, testButton }: DayScen
           </p>
         ) : null}
         <Toast toast={toast} placement="top" />
+        {nightIntroN !== null ? <NightIntro n={nightIntroN} onDone={() => setNightIntroN(null)} /> : null}
         {inspectSeat !== null ? (
           <UserRecordSheet
             seat={inspectSeat}

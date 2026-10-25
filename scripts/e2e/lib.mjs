@@ -409,6 +409,19 @@ function insetSides(clip) {
   return { top, right, bottom, left };
 }
 
+/** N6 밤 시작 문구(결정 0028). intro = browser.readNightIntro 결과: 없으면 null, 있으면 { texts, pointerEvents, ariaHidden, rect } */
+export function nightIntroChecks(intro) {
+  const bad = [];
+  if (!intro) bad.push("밤 시작 문구(.mf-nightintro) 없음");
+  else {
+    const t = intro.texts ?? [];
+    if (!(t.length === 2 && /^\d+일차$/.test(t[0]) && t[1] === "밤이 되었습니다")) bad.push(`글자 [${t.join(" / ")}] ≠ [N일차 / 밤이 되었습니다]`);
+    if (intro.pointerEvents !== "none") bad.push(`pointer-events ${intro.pointerEvents} ≠ none`);
+    if (intro.ariaHidden !== true) bad.push("aria-hidden 이 아님");
+  }
+  return result("N6", "밤 시작 문구가 한 번 보임", bad);
+}
+
 /** K4 차례 링이 캐릭터 뒤(위쪽 반)·앞(아래쪽 반) 두 층으로 갈라져 있다 (결정 0028). ring = 스냅숏 turn.ring */
 export function ringChecks(ring) {
   const bad = [];

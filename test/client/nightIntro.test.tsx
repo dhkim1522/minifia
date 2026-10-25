@@ -182,7 +182,7 @@ describe("night.css: .mf-nightintro (낮 시작 발표와 같은 방식)", () =>
   });
 
   it("퇴장 지연은 인라인 변수에서 받고, 막과 제목 번짐은 --dur-slow·--ease-out 이다", () => {
-    expect(/animation:[^;]*var\(--mf-nightintro-exit-delay\)/.test(rule(".mf-nightintro"))).toBe(true);
+    expect(/animation:[^;]*var\(--mf-nightintro-exit-delay[,)]/.test(rule(".mf-nightintro"))).toBe(true);
     expect(/animation:[^;]*var\(--dur-slow\)\s+var\(--ease-out\)/.test(rule(".mf-nightintro__veil"))).toBe(true);
     expect(/animation:[^;]*var\(--dur-slow\)\s+var\(--ease-out\)/.test(rule(".mf-nightintro__title"))).toBe(true);
     expect(/@keyframes mf-nightintro-\w+/.test(css)).toBe(true);
@@ -190,7 +190,14 @@ describe("night.css: .mf-nightintro (낮 시작 발표와 같은 방식)", () =>
 
   it("축소 모션 개별 규칙이 없고(전역 규칙에 맡김) 그 전역 규칙이 있다", () => {
     expect(blocks.length).toBeGreaterThan(0);
-    expect(/@media[^{]*prefers-reduced-motion[^{]*\{[^@]*mf-nightintro/.test(css)).toBe(false);
+    // 축소 모션 @media 블록마다 중괄호를 세어 본문을 잘라 그 안에 mf-nightintro 가 없는지 본다
+    const re = /@media[^{]*prefers-reduced-motion[^{]*\{/g;
+    for (let m = re.exec(css); m; m = re.exec(css)) {
+      let depth = 1;
+      let i = re.lastIndex;
+      for (; i < css.length && depth > 0; i++) depth += css[i] === "{" ? 1 : css[i] === "}" ? -1 : 0;
+      expect(css.slice(re.lastIndex, i).includes("mf-nightintro")).toBe(false);
+    }
     const base = readFileSync("src/styles/base.css", "utf8");
     expect(/prefers-reduced-motion:\s*reduce\)\s*\{[^@]*animation-duration:\s*0\.01ms\s*!important/.test(base)).toBe(true);
   });

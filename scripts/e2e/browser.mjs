@@ -195,6 +195,21 @@ export async function settle(page) {
   await page.waitForTimeout(350);
 }
 
+/** 밤 시작 문구(.mf-nightintro) 한 번 읽기. 없으면 null. */
+export async function readNightIntro(page) {
+  return page.evaluate(() => {
+    const el = document.querySelector(".mf-nightintro");
+    if (!el) return null;
+    const r = el.getBoundingClientRect();
+    return {
+      texts: [...el.querySelectorAll("p")].map((p) => (p.textContent || "").trim()),
+      pointerEvents: getComputedStyle(el).pointerEvents,
+      ariaHidden: el.getAttribute("aria-hidden") === "true",
+      rect: { left: r.left, top: r.top, width: r.width, height: r.height },
+    };
+  });
+}
+
 export function shot(page, path) {
   return page.screenshot({ path });
 }
