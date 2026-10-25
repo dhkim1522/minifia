@@ -55,6 +55,7 @@ import {
   stageStable,
   tagsOverlap,
   turnChecks,
+  crownChecks,
 } from "./lib.mjs";
 
 export const OUT_DIR = new URL("./out/", import.meta.url).pathname;
@@ -121,6 +122,7 @@ async function lobbyFlow(ctx) {
 
   // 대기실, 시트 닫힘
   const s1 = await checkState(ctx, "lobby", "lobby");
+  recOne(rec, "lobby/lobby", crownChecks(s1, { expect: 1 })); // W1: 방장 왕관은 대기실에만 정확히 하나
   const tt = s1.tt;
   rec("lobby/lobby", "L1", "[테스트] 버튼이 보임", !!tt && tt.rect.width > 0 && tt.rect.height > 0 && rectInside(tt.rect, { left: 0, top: 0, width: w, height: h }) && tt.hit, tt ? `rect ${Math.round(tt.rect.left)},${Math.round(tt.rect.top)} ${Math.round(tt.rect.width)}x${Math.round(tt.rect.height)}, hit ${tt.hit}` : "버튼 없음");
   const clashes = tt ? s1.interactive.filter((e) => !sameRect(e.rect, tt.rect) && rectsOverlap(e.rect, tt.rect)).map((e) => e.desc) : ["버튼 없음"];
@@ -212,6 +214,7 @@ async function dayState(ctx, flowId, state) {
   const snap = await checkState(ctx, flowId, state);
   const mySeat = ctx.host.tracker.last()?.me?.seat ?? -1;
   for (const r of dayChecks(snap, { w: ctx.size.w, h: ctx.size.h })) rec(`${flowId}/${state}`, r.id, r.label, r.ok, r.detail);
+  recOne(rec, `${flowId}/${state}`, crownChecks(snap, { expect: 0 })); // W1: 게임 중에는 왕관이 없다
   const stage = await readStage(ctx.host.page);
   const t2 = feltGapChecks(stage);
   rec(`${flowId}/${state}`, t2.id, t2.label, t2.ok, t2.detail);
@@ -260,11 +263,11 @@ function nightStaticChecks(ctx, flowId, role, snap) {
 async function selState(page, seat) {
   return page.evaluate((n) => {
     const el = document.querySelector(`.mf-dt__seat[data-seat="${n}"]`);
-    return { sel: !!el?.querySelector(".mf-dt__sel"), pressed: el?.getAttribute("aria-pressed") === "true", total: document.querySelectorAll(".mf-dt__sel").length, pill: (document.querySelector(".mf-pk")?.textContent ?? "").replace(/\s+/g, " ").trim() };
+    return { sel: !!el?.querySelector("img.mf-figure--halo-white"), pressed: el?.getAttribute("aria-pressed") === "true", total: document.querySelectorAll("img.mf-figure--halo-white").length, pill: (document.querySelector(".mf-pk")?.textContent ?? "").replace(/\s+/g, " ").trim() };
   }, seat);
 }
 
-/** 밤 선택 동작(N2·N3). 행위자는 자리를 눌러 선택 링을 보고, 시민은 아무 반응이 없어야 한다. */
+/** 밤 선택 동작(N2·N3). 행위자는 자리를 눌러 선택 후광을 보고, 시민은 아무 반응이 없어야 한다. */
 async function nightActions(ctx, flowId, role, snap, mySeat) {
   const rec = recorder(ctx);
   const sc = `${flowId}/night`;
@@ -284,7 +287,7 @@ async function nightActions(ctx, flowId, role, snap, mySeat) {
         await clickTopmostPoint(page, seat);
         await sleep(700);
         const st = await selState(page, seat);
-        if (st.total !== 0 || view().me.pick != null) return { ok: false, detail: `자리 ${seat} 를 눌렀더니 선택 링 ${st.total}개, me.pick ${view().me.pick}` };
+        if (st.total !== 0 || view().me.pick != null) return { ok: false, detail: `자리 ${seat} 를 눌렀더니 선택 후광 ${st.total}개, me.pick ${view().me.pick}` };
       }
       return true;
     });
@@ -298,9 +301,9 @@ async function nightActions(ctx, flowId, role, snap, mySeat) {
       await clickTopmostPoint(page, other.seat);
       await sleep(700);
       const st = await selState(page, other.seat);
-      return st.total === 0 && view().me.pick == null ? true : { ok: false, detail: `선택 링 ${st.total}개, me.pick ${view().me.pick}` };
+      return st.total === 0 && view().me.pick == null ? true : { ok: false, detail: `선택 후광 ${st.total}개, me.pick ${view().me.pick}` };
     });
-    rec(sc, "N2", "자리를 누르면 선택 링", n2.ok, n2.detail);
+    rec(sc, "N2", "자리를 누르면 선택 후광(흰)", n2.ok, n2.detail);
     return;
   }
 
@@ -309,13 +312,13 @@ async function nightActions(ctx, flowId, role, snap, mySeat) {
   const n2 = await attempt(async () => {
     if (target < 0 || !buttonSeats.includes(target)) return { ok: false, detail: `대상 자리 ${target} 가 버튼이 아님 (버튼 ${buttonSeats.join(",")})` };
     await tapSeat(page, target);
-    await page.waitForFunction((n) => !!document.querySelector(`.mf-dt__seat[data-seat="${n}"] .mf-dt__sel`), target, { timeout: 2000 });
+    await page.waitForFunction((n) => !!document.querySelector(`.mf-dt__seat[data-seat="${n}"] img.mf-figure--halo-white`), target, { timeout: 2000 });
     const st = await selState(page, target);
     await tracker.waitFor((v) => v.me.pick === target, 2000, `me.pick ${target}`);
     const pillOk = role === "mafia" || (st.pill.includes("선택") && !st.pill.includes("선택 안 함"));
     return st.pressed && pillOk ? true : { ok: false, detail: `aria-pressed ${st.pressed}, 알약 "${st.pill}"` };
   });
-  rec(sc, "N2", "자리를 누르면 선택 링", n2.ok, n2.detail);
+  rec(sc, "N2", "자리를 누르면 선택 후광(흰)", n2.ok, n2.detail);
 }
 
 

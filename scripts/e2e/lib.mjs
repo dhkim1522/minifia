@@ -218,6 +218,7 @@ export function faceRegion(r) {
 }
 
 const rd = (n) => Math.round(n * 10) / 10;
+const HALO_MAX = 3; // 한 화면 후광 img 상한(src/game/dayTable.ts 의 HALO_MAX_SIMULTANEOUS 와 같은 값)
 /** 겹친 크기를 사람이 판단할 수 있게 내용 칸에 적는다(기준은 바꾸지 않는다). */
 const overlapText = (a, b) =>
   `가로 ${rd(Math.min(right(a), right(b)) - Math.max(a.left, b.left))}px·세로 ${rd(Math.min(bottom(a), bottom(b)) - Math.max(a.top, b.top))}px`;
@@ -500,16 +501,6 @@ export function stageStable(entries) {
 
 // ---- 차례(K1·K2)·주장 채팅(K3)·기록 카드(X1) ----
 
-/** clip-path 의 inset(...) 을 위·오른쪽·아래·왼쪽 네 값으로 펼친다(브라우저가 1~3개 값으로 줄여 돌려줘도 읽는다). 아니면 null */
-function insetSides(clip) {
-  const m = /^inset\(([^)]*?)(?:\s+round\s+[^)]*)?\)$/.exec(String(clip ?? "").trim());
-  if (!m) return null;
-  const v = m[1].trim().split(/\s+/);
-  if (v.length < 1 || v.length > 4) return null;
-  const [top, right = top, bottom = top, left = right] = v;
-  return { top, right, bottom, left };
-}
-
 /** N6 밤 시작 문구(결정 0028). intro = browser.readNightIntro 결과: 없으면 null, 있으면 { texts, pointerEvents, ariaHidden, rect } */
 export function nightIntroChecks(intro) {
   const bad = [];
@@ -523,44 +514,66 @@ export function nightIntroChecks(intro) {
   return result("N6", "밤 시작 문구가 한 번 보임", bad);
 }
 
-/** K4 차례 링이 캐릭터 뒤(위쪽 반)·앞(아래쪽 반) 두 층으로 갈라져 있다 (결정 0028). ring = 스냅숏 turn.ring */
-export function ringChecks(ring) {
+/**
+ * K4 후광은 윤곽을 따르는 filter 이고 발밑 원이 없다 (결정 0030). halo = 스냅숏 halo { items: [{ seat, cls, filter, seatContext, onImg }], max },
+ * circles = 발밑 원 요소 수(turn.legacyCircles). 후광 img 는 한 화면 3개 이하, 각각 계산된 filter 에 drop-shadow 두 겹과 9px 반지름이 있고
+ * 후광 클래스는 img 에만 있으며 자리는 쌓임 맥락(z-index 있음)이다. expectNone 이 아니면(차례가 있는 claim) 흰 후광이 차례 말풍선과 같은 자리다.
+ */
+export function haloChecks(halo, { circles, bubbleSeats, whiteSeats, expectNone }) {
   const bad = [];
-  if (!ring) bad.push("측정값 없음(차례 링 묶음 .mf-dt__spot 을 못 찾음)");
+  if (!halo || !Array.isArray(halo.items)) bad.push("측정값 없음(후광 halo)");
   else {
-    if (!ring.plain) bad.push("링 묶음이 평범하지 않음(쌓임 맥락·변형·애니메이션이 있음)");
-    if (!ring.back) bad.push("뒤쪽 호 없음");
-    else if (!(typeof ring.back.z === "number" && ring.back.z < 0)) bad.push(`뒤쪽 호 z-index ${ring.back.z} 가 음수가 아님`);
-    if (!ring.front) bad.push("앞쪽 호 없음");
-    else {
-      if (typeof ring.front.z === "number" && ring.front.z < 0) bad.push(`앞쪽 호 z-index ${ring.front.z} 가 음수`);
-      if (ring.front.position !== "absolute") bad.push(`앞쪽 호 position ${ring.front.position} ≠ absolute`);
+    if (typeof halo.max !== "number" || halo.max > HALO_MAX) bad.push(`후광 img ${halo.max}개 > ${HALO_MAX}`);
+    for (const h of halo.items) {
+      const f = String(h.filter ?? "");
+      const layers = f.split("drop-shadow(").length - 1;
+      if (layers !== 2) bad.push(`자리 ${h.seat} 후광 filter 에 drop-shadow ${layers}겹 ≠ 2 ("${f.slice(0, 60)}")`);
+      else if (!/\b9px\b/.test(f)) bad.push(`자리 ${h.seat} 후광 filter 에 9px 반지름 없음 ("${f.slice(0, 60)}")`);
+      if (h.onImg !== true) bad.push(`자리 ${h.seat} 후광 클래스가 img 가 아닌 요소에 있음`);
+      if (h.seatContext !== true) bad.push(`자리 ${h.seat} 가 쌓임 맥락이 아님(z-index 없음)`);
     }
-    if (!ring.figBeforeFront) bad.push("앞쪽 호가 캐릭터 그림보다 앞 순서(그림 위로 오지 않음)");
-    const b = ring.back && insetSides(ring.back.clip);
-    if (ring.back && !(b && b.bottom === "50%" && b.top !== "50%")) bad.push(`뒤쪽 호 clip-path "${ring.back.clip}" 가 위쪽 반만 보이는 꼴이 아님`);
-    const f = ring.front && insetSides(ring.front.clip);
-    if (ring.front && !(f && f.top === "50%" && f.bottom !== "50%")) bad.push(`앞쪽 호 clip-path "${ring.front.clip}" 가 아래쪽 반만 보이는 꼴이 아님`);
-    if (!ring.seatContext) bad.push("자리(.mf-dt__seat)가 쌓임 맥락이 아님(z-index 없음)");
   }
-  return result("K4", "차례 링이 캐릭터 뒤·앞 반으로 갈라짐", bad);
+  if (typeof circles !== "number") bad.push("측정값 없음(발밑 원 요소 수)");
+  else if (circles !== 0) bad.push(`발밑 원 요소 ${circles}개 ≠ 0`);
+  if (!expectNone && Array.isArray(bubbleSeats) && Array.isArray(whiteSeats)) {
+    const b = [...bubbleSeats].sort().join(",");
+    const w = [...whiteSeats].sort().join(",");
+    if (b !== w) bad.push(`흰 후광 자리 [${w}] 가 차례 말풍선 자리 [${b}] 와 다름`);
+  }
+  return result("K4", "후광은 윤곽을 따르는 filter, 발밑 원 없음", bad);
+}
+
+/** W1 방장 왕관(결정 0030): 대기실은 정확히 1개, 그 밖(배정·낮·밤·아침)은 0개. snap.crowns = .mf-dt__crown 수. 측정값이 없으면 실패. */
+export function crownChecks(snap, { expect }) {
+  const label = expect === 1 ? "대기실 방장 왕관 1개" : "게임 중 방장 왕관 없음";
+  const n = snap?.crowns;
+  if (typeof n !== "number") return result("W1", label, ["측정값 없음(왕관 수 crowns)"]);
+  return result("W1", label, n === expect ? [] : [`방장 왕관 ${n}개 ≠ ${expect}`]);
 }
 
 /**
- * K1·K4·K2. 차례가 있으면 K4(링 앞뒤 층)도 돌린다. expectNone: 차례 없는 단계(토론·밤·아침)라 표식 세 값이 모두 0 이어야 하고 K2 는 돌리지 않는다.
+ * K1·K4·K2. K1: 차례 말풍선(--turn)이 정확히 한 자리이고 흰 후광이 같은 자리 하나, 발밑 원·이름표 반전·아랫줄은 0 개.
+ * expectNone: 차례 없는 단계(토론·밤·아침)라 차례 말풍선이 0 개(토론의 빠른 메시지 말풍선은 세지 않고, 밤 선택의 흰 후광은 허용). K4 는 항상 돌린다.
  * myTurn(true/false)이 있으면 K2 도 돌린다. jobs = 이번 판 직업 칩 글자(내 차례일 때 + 「말 안 함」과 순서까지 비교).
  */
 export function turnChecks(snap, { expectNone = false, myTurn, jobs = [] } = {}) {
-  const t = snap.turn ?? { spot: 0, badge: 0, tagTurn: 0, legacyRows: 0 };
+  const t = snap.turn ?? {};
+  const bubbles = Array.isArray(t.bubbleTurnSeats) ? t.bubbleTurnSeats : null;
+  const whites = Array.isArray(t.haloWhiteSeats) ? t.haloWhiteSeats : null;
   const k1 = [];
-  const want = expectNone ? 0 : 1;
-  for (const [key, name] of [["spot", "강조 자리(.mf-dt__spot)"], ["badge", "차례 배지(.mf-dt__turn)"], ["tagTurn", "반전 이름표(.mf-dt__tag--turn)"]]) {
-    if (t[key] !== want) k1.push(`${name} ${t[key]}개 ≠ ${want}`);
+  if (!bubbles || !whites) k1.push("측정값 없음(차례 말풍선·흰 후광 자리)");
+  else if (expectNone) {
+    if (bubbles.length !== 0) k1.push(`차례 말풍선 ${bubbles.length}개 ≠ 0 (자리 ${bubbles.join(",")})`);
+  } else {
+    if (bubbles.length !== 1) k1.push(`차례 말풍선 ${bubbles.length}개 ≠ 1`);
+    if (whites.length !== 1) k1.push(`차례 흰 후광 ${whites.length}개 ≠ 1`);
+    else if (bubbles.length === 1 && whites[0] !== bubbles[0]) k1.push(`흰 후광 자리 ${whites[0]} 가 말풍선 자리 ${bubbles[0]} 와 다름`);
   }
-  if (t.legacyRows !== 0) k1.push(`이름표 아랫줄(.mf-dt__claim) ${t.legacyRows}개 ≠ 0`);
+  if (t.legacyCircles !== 0) k1.push(`발밑 원 요소 ${t.legacyCircles}개 ≠ 0`);
+  if (t.tagInverted !== 0) k1.push(`이름표 반전 ${t.tagInverted}개 ≠ 0`);
+  if (t.legacyRows !== 0) k1.push(`이름표 아랫줄 ${t.legacyRows}개 ≠ 0`);
   const out = [result("K1", expectNone ? "차례 표식 없음" : "차례 표식이 정확히 한 자리", k1)];
-  if (expectNone) return out;
-  out.push(ringChecks(t.ring));
+  out.push(haloChecks(snap.halo, { circles: t.legacyCircles, bubbleSeats: bubbles, whiteSeats: whites, expectNone }));
   if (typeof myTurn !== "boolean") return out;
 
   const p = snap.panel;

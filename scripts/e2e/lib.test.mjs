@@ -896,7 +896,9 @@ test("turnChecks K4: 어긋남마다 실패하고 이유를 말한다", () => {
   assert.match(k4d.detail, /말풍선/);
   // 측정값 없음은 조용히 통과하지 않는다
   for (const halo of [null, undefined]) {
-    const k4 = dayById(turnChecks(turnSnap({ halo }), { myTurn: false }), "K4");
+    const snap = turnSnap();
+    snap.halo = halo; // turnSnap 의 기본값 대신 null/undefined 를 그대로 넣는다
+    const k4 = dayById(turnChecks(snap, { myTurn: false }), "K4");
     assert.equal(k4.ok, false);
     assert.match(k4.detail, /측정값 없음/);
   }

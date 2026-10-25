@@ -334,7 +334,7 @@ export async function collectSnapshot(page) {
           seat: Number(el.getAttribute("data-seat")),
           rect: toRect(r),
           isButton: el.tagName === "BUTTON",
-          sel: !!el.querySelector(".mf-dt__sel"),
+          sel: !!el.querySelector("img.mf-figure--halo-white"),
           pressed: el.getAttribute("aria-pressed") === "true",
           reachable,
           z: zOf(el),
@@ -459,38 +459,34 @@ export async function collectSnapshot(page) {
         header: rectOf(q(".mf-phasebar")),
         tags,
         tagVisibility,
-        turn: {
-          spot: document.querySelectorAll(".mf-dt__spot").length,
-          badge: document.querySelectorAll(".mf-dt__turn").length,
-          tagTurn: document.querySelectorAll(".mf-dt__tag--turn").length,
-          legacyRows: document.querySelectorAll(".mf-dt__claim").length,
-          ring: (() => {
-            // K4: 첫 차례 링 묶음과 두 호의 계산된 값. 문자열·값만 싣는다.
-            const spotEl = q(".mf-dt__spot");
-            if (!spotEl) return null;
-            const cs = getComputedStyle(spotEl);
-            const plain =
-              cs.position === "absolute" && cs.zIndex === "auto" && cs.transform === "none" && cs.opacity === "1" && cs.filter === "none" &&
-              cs.isolation === "auto" && cs.clipPath === "none" && cs.animationName === "none" && cs.willChange === "auto" && cs.mixBlendMode === "normal";
-            const arc = (el) => {
-              if (!el) return null;
-              const a = getComputedStyle(el);
-              const z = parseInt(a.zIndex, 10);
-              return { z: Number.isFinite(z) ? z : null, position: a.position, clip: a.clipPath };
-            };
-            const seatEl = spotEl.closest(".mf-dt__seat");
-            const front = spotEl.querySelector(".mf-dt__spot-arc--front");
-            const fig = seatEl ? seatEl.querySelector("img.mf-figure") : null;
-            const seatZ = seatEl ? parseInt(getComputedStyle(seatEl).zIndex, 10) : Number.NaN;
+        // 차례·후광 측정(결정 0030): 말풍선 자리, 후광 img 와 계산된 filter 값만 싣는다. 옛 발밑 원 선택자는 0 임을 증명하려고 여기서만 센다.
+        turn: (() => {
+          const seatOf = (el) => Number(el.closest(".mf-dt__seat")?.getAttribute("data-seat"));
+          return {
+            bubbleTurnSeats: [...document.querySelectorAll(".mf-dt__bubble--turn")].map(seatOf),
+            haloWhiteSeats: [...document.querySelectorAll("img.mf-figure--halo-white")].map(seatOf),
+            legacyCircles: document.querySelectorAll(".mf-dt__spot, .mf-dt__ring, .mf-dt__ring--me, .mf-dt__ring--mate, .mf-dt__sel").length,
+            tagInverted: document.querySelectorAll(".mf-dt__tag--turn, .mf-dt__tag--spoke").length,
+            legacyRows: document.querySelectorAll(".mf-dt__claim").length,
+          };
+        })(),
+        halo: (() => {
+          const haloEls = [...document.querySelectorAll(".mf-figure--halo-white, .mf-figure--halo-crimson")];
+          const items = haloEls.map((el) => {
+            // 후광 filter 는 180ms 전환(transition)이라 차례가 막 바뀐 순간의 계산값은 중간값(0.74px 등)이다. 끝 상태를 읽으려고 진행 중인 전환만 끝낸다(보이는 결과는 같다).
+            for (const a of el.getAnimations()) if (a instanceof CSSTransition) a.finish();
+            const seatEl = el.closest(".mf-dt__seat");
             return {
-              plain,
-              back: arc(spotEl.querySelector(".mf-dt__spot-arc--back")),
-              front: arc(front),
-              figBeforeFront: !!fig && !!front && !!(fig.compareDocumentPosition(front) & Node.DOCUMENT_POSITION_FOLLOWING),
-              seatContext: Number.isFinite(seatZ),
+              seat: Number(seatEl?.getAttribute("data-seat")),
+              cls: el.classList.contains("mf-figure--halo-white") ? "white" : "crimson",
+              filter: getComputedStyle(el).filter,
+              seatContext: !!seatEl && Number.isFinite(parseInt(getComputedStyle(seatEl).zIndex, 10)),
+              onImg: el.tagName === "IMG",
             };
-          })(),
-        },
+          });
+          return { items, max: items.length };
+        })(),
+        crowns: document.querySelectorAll(".mf-dt__crown").length,
         dim: dim ? { rect: rectOf(dim), z: zOf(dim), pointerEvents: getComputedStyle(dim).pointerEvents } : null,
         card: rectOf(card),
         chatLines: chatTexts(document),
