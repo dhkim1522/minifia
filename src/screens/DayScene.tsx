@@ -16,6 +16,7 @@ import { RecordsToast } from "../components/RecordsToast";
 import { ReadOnlyRow } from "../components/ReadOnlyRow";
 import { Timer } from "../components/Timer";
 import { TurnPanel } from "../components/TurnPanel";
+import { UserRecordSheet } from "../components/UserRecordSheet";
 import { Toast, useToast } from "../components/Toast";
 import { morningCardText } from "../game/eliminationText";
 import { EMOJI_TEXT, NIGHT_TEMPLATE_ORDER } from "../game/messageText";
@@ -26,6 +27,7 @@ import "../styles/day.css";
 import "../styles/night.css";
 import "../styles/phase.css";
 import "../styles/testtools.css";
+import "../styles/urecord.css";
 
 // 밤 대상 버튼의 동사(접근성 이름 "{닉네임}, {동사} 대상"). 부품은 역할을 모르므로 장면이 값으로 넘긴다.
 const PICK_VERB: Readonly<Partial<Record<RoleId, string>>> = { police: "조사", doctor: "보호", mafia: "지목" };
@@ -85,6 +87,10 @@ export function DayScene({ view, connection, myRoleButton, testButton }: DayScen
   }
   const isNight = view.phase === "night";
   const isMorning = view.phase === "morning";
+  // 낮 캐릭터 탭 → 유저 기록 카드(D-06). 보고 있는 자리를 쥐고, 밤이 되면 닫는다(렌더 중 상태 조정이라 낮 → 밤 → 낮을 돌아와도 다시 열리지 않는다).
+  const [inspectSeat, setInspectSeat] = useState<number | null>(null);
+  if (isNight && inspectSeat !== null) setInspectSeat(null);
+  const inspectable = view.phase === "claim" || view.phase === "discussion" || isMorning;
   const title = isNight ? "밤" : isMorning ? "아침" : view.phase === "discussion" ? "낮 · 토론" : "낮 · 직업 공개";
 
   // 밤 대상 선택(D-01·D-06). 행위자 = 살아 있는 마피아·경찰·의사. 누를 수 있는 자리는 살아 있는 사람이다(역할별 제외는 아래).
@@ -154,6 +160,9 @@ export function DayScene({ view, connection, myRoleButton, testButton }: DayScen
         ...(actor && (shownPick === p.seat || (mafiaNight && allyPicks.includes(p.seat)))
           ? { pick: { ...(shownPick === p.seat ? { mine: true } : {}), ...(mafiaNight && allyPicks.includes(p.seat) ? { ally: true } : {}) } }
           : {}),
+        // 낮(claim·discussion·morning): 탈락한 viewer 포함 모든 자리가 읽기 전용 기록 카드 버튼이다. 연결 상태와 무관하고 서버 요청이 없다.
+        // 밤에는 주지 않는다 — 밤 onPick 과 한 자리에 함께 켜지지 않는다.
+        ...(inspectable ? { onInspect: () => setInspectSeat(p.seat) } : {}),
       };
     });
 
@@ -250,6 +259,14 @@ export function DayScene({ view, connection, myRoleButton, testButton }: DayScen
         ) : null}
         <Toast toast={toast} placement="top" />
         <RecordsToast toast={recordsToast.toast} />
+        {inspectSeat !== null ? (
+          <UserRecordSheet
+            seat={inspectSeat}
+            nickname={nicknameOf(inspectSeat) ?? ""}
+            claimLog={view.day?.claimLog ?? []}
+            onClose={() => setInspectSeat(null)}
+          />
+        ) : null}
       </main>
     </Backdrop>
   );

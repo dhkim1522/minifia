@@ -546,7 +546,7 @@ describe("DayScene 낮 캐릭터 탭 → 유저 기록 카드 (03.1-08, D-06·D-
   });
 
   it("연결이 끊겨도(canSend false) 기록 카드는 열리고 서버 요청은 없다", () => {
-    const r = scene(makeView({ phase: "discussion", claimLog }), { canSend: false, status: "closed" });
+    const r = scene(makeView({ phase: "discussion", claimLog }), { canSend: false, status: "reconnecting", banner: "reconnecting" });
     fireEvent.click(within(r.container).getByRole("button", { name: "하윤, 주장 기록 보기" }));
     expect(sheet("하윤 기록") !== null).toBe(true);
     expect(vi.mocked(r.conn.send).mock.calls.length).toBe(0);
