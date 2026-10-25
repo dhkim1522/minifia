@@ -57,21 +57,23 @@ interface BotRaw { id: string; seat: number; isBot?: boolean; token: string; con
 const stored = async (code: string): Promise<Raw> => (await storedRoom(code)) as unknown as Raw;
 const playersOf = async (code: string): Promise<BotRaw[]> => (await stored(code)).players as BotRaw[];
 const botsOf = async (code: string): Promise<BotRaw[]> => (await playersOf(code)).filter((p) => p.isBot === true).sort((a, b) => a.seat - b.seat);
-const PHASE_ORDER: PhaseId[] = ["roleReveal", "dayAnnounce", "claim", "claimReveal", "discussion", "night", "morning"];
 
 async function start(r: Seated): Promise<void> {
   send(r.host, { t: "start" });
   for (const s of allSockets(r)) await nextFrame(s, isPhase("assigning"));
 }
 
+/**
+ * testSkip 을 거듭해 phase 에 닿는다. claim 은 차례 하나가 한 번의 넘기기라 같은 단계 state 가 여러 번 온다 —
+ * 저장된 단계를 보고 반복하고, 매번 소켓마다 다음 state 프레임 하나를 기다린다(보내기 전에 읽을 위치를 끝으로 옮긴다).
+ */
 async function skipUntil(r: Seated, phase: PhaseId): Promise<void> {
-  const order: PhaseId[] = ["assigning", ...PHASE_ORDER];
-  const current = (await stored(r.code)).phase as PhaseId;
-  for (let i = order.indexOf(current); i < order.indexOf(phase); i += 1) {
-    const next = order[i + 1]!;
+  for (let i = 0; i < 40 && (await stored(r.code)).phase !== phase; i += 1) {
+    for (const s of allSockets(r)) s.cursor = s.frames.length;
     send(r.host, { t: "testSkip" });
-    for (const s of allSockets(r)) await nextFrame(s, isPhase(next));
+    for (const s of allSockets(r)) await nextFrame(s, (m) => m.t === "state");
   }
+  expect((await stored(r.code)).phase).toBe(phase);
 }
 
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
@@ -184,21 +186,6 @@ describe("testBots 추가·제거", () => {
 });
 
 describe("봇 행동", () => {
-  it("직업 공개: 봇이 모두 주장해 손님 state 의 day.claimDone 이 봇 자리를 모두 담는다", async () => {
-    const r = await seatQuiet(1, { testMode: true });
-    send(r.host, { t: "testBots", count: 3 });
-    await nextFrame(r.host, lobbyOf(5));
-    await start(r);
-    await skipUntil(r, "claim");
-    const botSeats = (await botsOf(r.code)).map((b) => b.seat);
-    await forceBotsDue(r.code);
-    const done = (await nextFrame(r.guests[0]!.sock, (m) => {
-      if (m.t !== "state" || m.view.day?.claimDone === undefined) return false;
-      return botSeats.every((s) => m.view.day!.claimDone!.includes(s));
-    })) as State;
-    expect(botSeats.every((s) => done.view.day!.claimDone!.includes(s))).toBe(true);
-  }, 30_000);
-
   it("낮 토론: 손님이 봇 자리에서 온 chat 또는 emoji 를 받고 오류 프레임은 없다", async () => {
     const r = await seatQuiet(1, { testMode: true });
     send(r.host, { t: "testBots", count: 3 });

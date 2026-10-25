@@ -211,13 +211,13 @@ export async function alarmOf(code: string): Promise<number | null> {
 const isPhase = (phase: PhaseId) => (m: ServerMessage): boolean => m.t === "state" && m.view.phase === phase;
 
 /**
- * 낮 단계로 한 단계씩 넘긴다: 저장된 단계가 목표가 될 때까지 forceDue + runDurableObjectAlarm 을 반복하고(전이 한 번마다
+ * 낮 단계로 한 단계(claim 은 한 차례)씩 넘긴다: 저장된 단계가 목표가 될 때까지 forceDue + runDurableObjectAlarm 을 반복하고(전이 한 번마다
  * 마감이 다시 미래가 되므로 매번 필요하다), 모든 소켓이 그 단계 state 를 받을 때까지 기다린다(지나간 단계의 프레임은 nextFrame 이 건너뛴다).
  * 호출 전에 방이 시작되어(assigning 이상) 있어야 한다.
  */
 export async function advanceTo(code: string, sockets: TestSocket[], phase: PhaseId): Promise<void> {
   const stub = env.ROOM.getByName(code);
-  for (let i = 0; i < 12 && (await storedRoom(code)).phase !== phase; i += 1) {
+  for (let i = 0; i < 40 && (await storedRoom(code)).phase !== phase; i += 1) {
     await forceDue(code, "phaseEndsAt");
     expect(await runDurableObjectAlarm(stub)).toBe(true);
   }

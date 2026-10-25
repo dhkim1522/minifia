@@ -178,7 +178,7 @@ describe("차례 한 바퀴 (DAY-02)", () => {
 
   it("마감 전 모든 프레임에서 역할·주장 문자열은 허용 경로에만 있고 서버 전용 키는 없다", async () => {
     const r = await claimRoom();
-    send(r.host, { t: "claim", claim: "doctor" });
+    send(r.host, { t: "claim", claim: "mafia" });
     for (const s of allSockets(r)) await waitTurn(s, 1);
     for (const s of allSockets(r)) {
       for (const raw of collect(s)) {

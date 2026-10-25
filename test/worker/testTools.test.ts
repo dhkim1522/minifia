@@ -53,7 +53,6 @@ function lastView(sock: TestSocket): RoomView {
 
 type Raw = Record<string, unknown>;
 const stored = async (code: string): Promise<Raw> => (await storedRoom(code)) as unknown as Raw;
-const PHASE_ORDER: PhaseId[] = ["roleReveal", "dayAnnounce", "claim", "discussion", "night", "morning"];
 
 /** 방장이 시작하고 assigning 을 모든 소켓이 받을 때까지. */
 async function start(r: Seated): Promise<void> {

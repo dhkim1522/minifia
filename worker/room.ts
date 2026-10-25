@@ -382,14 +382,18 @@ export class Room extends DurableObject<Env> {
     if (error !== null) this.sendRejection(ws, att.playerId, error);
   }
 
-  // 마감이 바뀌지 않으니 reschedule 은 필요 없다. 같은 값을 다시 고르면 같은 객체라 저장·방송도 하지 않는다.
+  // 직업 주장 본체(결정 0023, 0027): selectClaim 이 차례·값을 검사하고 마감을 now 로 당기면, 그 위에서 tick 을 한 번 더 불러
+  // 정상 마감과 같은 경로(ON_DEADLINE → 다음 차례, 마지막이면 낮 토론)로 넘긴다. 공개 주장은 모두에게 같은 정보라 전원에게 방송한다.
+  // claim 은 마감을 바꾼다(차례가 끝나므로): 결정 0020 의 pick(마감 불변)과 다르다. 그래서 reschedule 로 알람을 새 마감으로 옮기고,
+  // 다음 차례가 봇이면 봇 계획도 그 차례 키로 새로 선다. 사람과 봇이 같은 본체를 쓴다(결정 0024-6).
   private async applyClaim(playerId: string, claim: Claim): Promise<WsErrorCode | null> {
     if (!this.room) return "BAD_MESSAGE";
-    const result = selectClaim(this.room, playerId, claim);
+    const now = Date.now();
+    const result = selectClaim(this.room, playerId, claim, now);
     if (!result.ok) return result.error;
-    if (result.state === this.room) return null;
-    this.room = result.state;
+    this.room = tick(result.state, now, cryptoRandInt);
     await this.persistAndBroadcast();
+    await this.reschedule();
     return null;
   }
 
