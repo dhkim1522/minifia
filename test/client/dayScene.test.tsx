@@ -703,3 +703,31 @@ describe("DayScene 밤 끝 알림 없음 (결정 0028, UI-SPEC D·R6)", () => {
     expect(existsSync("src/styles/rolecard-toast.css")).toBe(false);
   });
 });
+
+describe("DayScene 배경 장면 (단계 → 장면 규칙표 PHASE_SCENE, 결정 0030)", () => {
+  const sceneOfMount = (view: RoomView) => {
+    const { container } = scene(view);
+    const arts = [...container.querySelectorAll<HTMLElement>(".mf-backdrop__art")];
+    return { arts, root: container.querySelector(".mf-backdrop")! };
+  };
+
+  it("claim·discussion 은 낮, 밤은 밤, 아침은 아침 장면이다 (처음 마운트는 층 하나가 바로 current)", () => {
+    for (const [phase, expected] of [
+      ["claim", "day"],
+      ["discussion", "day"],
+      ["night", "night"],
+      ["morning", "morning"],
+    ] as const) {
+      const { arts, root } = sceneOfMount(makeView({ phase, role: "citizen", ...(phase === "morning" ? { morning: { phrase: 1 } } : {}) }));
+      expect(arts.map((a) => `${a.dataset.scene}:${a.dataset.state}`), phase).toEqual([`${expected}:current`]);
+      expect(root.classList.contains(`mf-backdrop--${expected}`), phase).toBe(true);
+    }
+  });
+
+  it("아침·낮 층에만 헤더 막이 있고 밤 층에는 없다", () => {
+    const style = (phase: PhaseId) => sceneOfMount(makeView({ phase, role: "citizen", ...(phase === "morning" ? { morning: { phrase: 1 } } : {}) })).arts[0]!.style.getPropertyValue("--mf-scrim");
+    expect(style("claim")).not.toBe("");
+    expect(style("morning")).not.toBe("");
+    expect(style("night")).toBe("");
+  });
+});

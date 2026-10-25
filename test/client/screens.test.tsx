@@ -40,7 +40,7 @@ describe("Home 첫 화면 (S-01, 결정 0014)", () => {
     expect(screen.queryByText("또는")).toBeNull();
     expect(container.querySelector(".mf-entry__card")).toBeNull();
     const art = container.querySelector(".mf-backdrop__art") as HTMLElement | null;
-    expect(art?.style.backgroundImage).toContain("/backgrounds/bg_entry_lobby.svg");
+    expect(art?.style.backgroundImage).toContain("/backgrounds/bg_entry_lobby.webp");
     expect(screen.queryByText(/^v/)).toBeNull();
   });
 

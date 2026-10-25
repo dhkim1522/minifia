@@ -1,0 +1,191 @@
+// 배경 장면 목록·단계→장면 규칙표·WebP 예산(결정 0030, 사용자 지시 V-04).
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { describe, expect, it } from "vitest";
+import { PHASE_DEFS } from "../../shared/game/phases";
+import type { PhaseId } from "../../shared/protocol";
+import {
+  HEADER_SCRIM_LENGTH_PX,
+  HEADER_SCRIM_STOPS,
+  PHASE_SCENE,
+  SCENES,
+  SCENE_FADE_MS,
+  SCENE_IMAGE_WAIT_MS,
+  SCENE_IDS,
+  headerScrimGradient,
+  sceneOfPhase,
+} from "../../src/game/scenes";
+// 타입 선언이 없는 .mjs 다(allowJs 없음). 모양은 아래 SourceRow 로 직접 적는다.
+// @ts-expect-error -- 선언 없는 스크립트 모듈
+import * as backdropScript from "../../scripts/make-backdrops.mjs";
+
+interface SourceRow {
+  out: string;
+  src: string;
+  quality: number;
+  maxKB: number;
+}
+const SOURCES = (backdropScript as { SOURCES: SourceRow[] }).SOURCES;
+
+const KB = 1024;
+const PHASES = Object.keys(PHASE_DEFS) as PhaseId[];
+
+describe("장면 목록(SCENES)", () => {
+  it("장면 여섯 개: lobby·night·morning·day·dusk·verdictDusk, 파일 이름 조각이 정해져 있다", () => {
+    expect([...SCENE_IDS]).toEqual(["lobby", "night", "morning", "day", "dusk", "verdictDusk"]);
+    expect(Object.keys(SCENES).sort()).toEqual([...SCENE_IDS].sort());
+    expect(SCENES.lobby.file).toBe("lobby");
+    expect(SCENES.night.file).toBe("night");
+    expect(SCENES.morning.file).toBe("morning");
+    expect(SCENES.day.file).toBe("day");
+    expect(SCENES.dusk.file).toBe("dusk");
+    expect(SCENES.verdictDusk.file).toBe("verdict_dusk");
+  });
+
+  it("헤더 위쪽 어두운 막은 아침·낮만(set1), entry 구도는 lobby 만 갖는다", () => {
+    expect(SCENE_IDS.filter((id) => SCENES[id].scrim)).toEqual(["morning", "day"]);
+    expect(SCENE_IDS.filter((id) => SCENES[id].entry)).toEqual(["lobby"]);
+  });
+});
+
+describe("단계 → 장면 규칙표(PHASE_SCENE)", () => {
+  it("모든 단계를 덮는다 (4페이즈는 PhaseId 와 함께 행을 더하면 타입 오류가 알려 준다)", () => {
+    expect(Object.keys(PHASE_SCENE).sort()).toEqual([...PHASES].sort());
+  });
+
+  it("대기실·배정·역할 확인은 lobby, 낮 시작·주장·토론은 day, 밤은 night, 아침은 morning", () => {
+    expect(PHASE_SCENE).toEqual({
+      lobby: "lobby",
+      assigning: "lobby",
+      roleReveal: "lobby",
+      dayAnnounce: "day",
+      claim: "day",
+      discussion: "day",
+      night: "night",
+      morning: "morning",
+    });
+    for (const phase of PHASES) expect(sceneOfPhase(phase)).toBe(PHASE_SCENE[phase]);
+  });
+
+  it("dusk·verdictDusk 는 등록만 되고 어떤 단계도 가리키지 않는다 (4페이즈가 행을 더한다)", () => {
+    const used = new Set(Object.values(PHASE_SCENE));
+    expect(used.has("dusk")).toBe(false);
+    expect(used.has("verdictDusk")).toBe(false);
+    expect(SCENE_IDS).toContain("dusk");
+    expect(SCENE_IDS).toContain("verdictDusk");
+  });
+});
+
+describe("전환 상수와 헤더 막", () => {
+  it("크로스페이드 0.8초(--dur-slow 와 같다), 새 그림을 기다리는 상한 1.2초", () => {
+    expect(SCENE_FADE_MS).toBe(800);
+    expect(SCENE_IMAGE_WAIT_MS).toBe(1200);
+    expect(readFileSync("src/styles/tokens.css", "utf8")).toContain("--dur-slow: 800ms;");
+  });
+
+  it("HEADER_SCRIM_STOPS: 시안 .66/.42/.18/0 에서 .70/.58/.40/0 으로 올렸다 (사용자 규칙 4.5:1, 길이 150px 은 그대로)", () => {
+    expect(HEADER_SCRIM_STOPS).toEqual([
+      [0, 0.7],
+      [60, 0.58],
+      [110, 0.4],
+      [150, 0],
+    ]);
+    expect(HEADER_SCRIM_LENGTH_PX).toBe(150);
+    expect(HEADER_SCRIM_STOPS.at(-1)![0]).toBe(HEADER_SCRIM_LENGTH_PX);
+  });
+
+  it("headerScrimGradient(): night-900 토큰 color-mix 를 쓰고 150px 끝이 투명이다", () => {
+    expect(headerScrimGradient()).toBe(
+      "linear-gradient(to bottom, " +
+        "color-mix(in srgb, var(--night-900) 70%, transparent) 0px, " +
+        "color-mix(in srgb, var(--night-900) 58%, transparent) 60px, " +
+        "color-mix(in srgb, var(--night-900) 40%, transparent) 110px, " +
+        "color-mix(in srgb, var(--night-900) 0%, transparent) 150px)",
+    );
+    expect(headerScrimGradient()).not.toMatch(/#[0-9a-f]{3,8}/i);
+  });
+});
+
+// ---- WebP 파일과 용량 예산 ----
+
+const EXPECTED_FILES = [
+  "bg_entry_lobby.webp",
+  "bg_game_day.webp",
+  "bg_game_dusk.webp",
+  "bg_game_lobby.webp",
+  "bg_game_morning.webp",
+  "bg_game_night.webp",
+  "bg_game_verdict_dusk.webp",
+];
+const LIMIT_KB: Record<string, number> = {
+  "bg_game_lobby.webp": 48,
+  "bg_game_night.webp": 48,
+  "bg_game_dusk.webp": 48,
+  "bg_game_verdict_dusk.webp": 48,
+  "bg_game_morning.webp": 24,
+  "bg_game_day.webp": 24,
+  "bg_entry_lobby.webp": 64,
+};
+const TOTAL_LIMIT_KB = 260;
+
+describe("public/backgrounds (WebP 일곱 개, 옛 SVG 는 없다)", () => {
+  it("정확히 WebP 일곱 개뿐이고 SVG 는 없다 (원본은 design/ 에만)", () => {
+    expect(readdirSync("public/backgrounds").sort()).toEqual(EXPECTED_FILES);
+  });
+
+  it("각 파일은 RIFF…WEBP 머리를 갖는다", () => {
+    for (const name of EXPECTED_FILES) {
+      const head = readFileSync(`public/backgrounds/${name}`).subarray(0, 12);
+      expect(head.subarray(0, 4).toString("latin1"), `${name} RIFF`).toBe("RIFF");
+      expect(head.subarray(8, 12).toString("latin1"), `${name} WEBP`).toBe("WEBP");
+    }
+  });
+
+  it("장면 하나 ≤ 상한(set2 game 48KB · set1 24KB · entry 64KB), 합계 ≤ 260KB", () => {
+    let total = 0;
+    for (const name of EXPECTED_FILES) {
+      const size = statSync(`public/backgrounds/${name}`).size;
+      total += size;
+      expect(size, `${name} ${(size / KB).toFixed(1)}KB`).toBeLessThanOrEqual(LIMIT_KB[name]! * KB);
+    }
+    expect(total / KB).toBeLessThanOrEqual(TOTAL_LIMIT_KB);
+  });
+
+  it("원본(design/backgrounds/A_cute 와 v2)은 그대로 남아 있다", () => {
+    expect(existsSync("design/backgrounds/A_cute/bg_entry_lobby.svg")).toBe(true);
+    expect(existsSync("design/backgrounds/v2/set2/bg_game_night.png")).toBe(true);
+    expect(existsSync("design/backgrounds/v2/set1/bg_game_day.jpg")).toBe(true);
+  });
+});
+
+describe("scripts/make-backdrops.mjs (SOURCES)", () => {
+  const expectedNames = [...SCENE_IDS.map((id) => `bg_game_${SCENES[id].file}.webp`), "bg_entry_lobby.webp"].sort();
+
+  it("출력 이름이 장면 목록과 일치한다 (game 여섯 + entry lobby)", () => {
+    expect(SOURCES.map((s) => s.out).sort()).toEqual(expectedNames);
+    expect(SOURCES.map((s) => s.out).sort()).toEqual(EXPECTED_FILES);
+  });
+
+  it("원본이 모두 design/backgrounds/v2 안에 있고 파일이 존재한다. 아침·낮은 set1, 나머지는 set2", () => {
+    for (const s of SOURCES) {
+      expect(s.src.startsWith("design/backgrounds/v2/"), s.src).toBe(true);
+      expect(existsSync(s.src), s.src).toBe(true);
+      const isSet1 = s.out === "bg_game_morning.webp" || s.out === "bg_game_day.webp";
+      expect(s.src.includes("/set1/"), s.src).toBe(isSet1);
+      expect(s.src.includes("/set2/"), s.src).toBe(!isSet1);
+    }
+  });
+
+  it("품질 90, 상한은 장면별 예산과 같다", () => {
+    for (const s of SOURCES) {
+      expect(s.quality).toBe(90);
+      expect(s.maxKB, s.out).toBe(LIMIT_KB[s.out]);
+    }
+  });
+});
+
+describe("캐시 규칙", () => {
+  it("public/_headers 에 /backgrounds/* 규칙과 max-age=86400 이 있다 (.webp 에도 적용)", () => {
+    const headers = readFileSync("public/_headers", "utf8");
+    expect(headers).toMatch(/\/backgrounds\/\*\s+Cache-Control: public, max-age=86400/);
+  });
+});

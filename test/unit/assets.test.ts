@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ROLE_IDS } from "../../shared/game/roles";
+import { SCENE_IDS } from "../../src/game/scenes";
 
 vi.mock("react-dom", () => ({ preload: vi.fn() }));
 
@@ -20,10 +21,8 @@ import {
 
 // node:fs 대신 Vite 의 import.meta.glob 으로 public/ 의 실제 파일 목록을 얻는다.
 const characterFiles = new Set(Object.keys(import.meta.glob("/public/characters/**/*.png")));
-const backdropFiles = new Set(Object.keys(import.meta.glob("/public/backgrounds/*.svg")));
+const backdropFiles = new Set(Object.keys(import.meta.glob("/public/backgrounds/*.webp")));
 
-const LAYOUTS = ["entry", "game"] as const;
-const VARIANTS = ["lobby", "night", "day", "verdict"] as const;
 
 /** srcSet "a 2x, b 4x" 에서 URL 만 뽑는다. */
 function urlsOfSrcSet(srcSet: string): string[] {
@@ -51,9 +50,16 @@ describe("그림 URL 헬퍼", () => {
     expect(art.srcSet).toBe("/characters/roles/mafia_default%402x.png 1x, /characters/roles/mafia_default%404x.png 2x");
   });
 
-  it("배경: /backgrounds/bg_{layout}_{variant}.svg", () => {
-    expect(backdropUrl("game", "day")).toBe("/backgrounds/bg_game_day.svg");
-    expect(backdropUrl("entry", "lobby")).toBe("/backgrounds/bg_entry_lobby.svg");
+  it("배경: /backgrounds/bg_{layout}_{장면 파일 조각}.webp", () => {
+    expect(backdropUrl("game", "day")).toBe("/backgrounds/bg_game_day.webp");
+    expect(backdropUrl("game", "night")).toBe("/backgrounds/bg_game_night.webp");
+    expect(backdropUrl("game", "verdictDusk")).toBe("/backgrounds/bg_game_verdict_dusk.webp");
+    expect(backdropUrl("entry", "lobby")).toBe("/backgrounds/bg_entry_lobby.webp");
+  });
+
+  it("배경: entry 구도는 lobby 장면만 받는다 (타입)", () => {
+    // @ts-expect-error -- entry 구도에는 lobby 가 아닌 장면이 없다
+    expect(backdropUrl("entry", "night")).toBe("/backgrounds/bg_entry_night.webp");
   });
 });
 
@@ -101,22 +107,31 @@ describe("일지 색 토큰 (UI-SPEC 새 토큰 12개)", () => {
 });
 
 describe("미리 받기 목록", () => {
-  it("입장 화면 목록: 입장·대기실 배경과 인물 8종", () => {
+  it("입장 화면 목록: 입장·대기실 배경(WebP)과 인물 8종", () => {
     const hrefs = entryPreloadList().map((item) => item.href);
-    expect(hrefs).toContain("/backgrounds/bg_entry_lobby.svg");
-    expect(hrefs).toContain("/backgrounds/bg_game_lobby.svg");
+    expect(hrefs).toContain("/backgrounds/bg_entry_lobby.webp");
+    expect(hrefs).toContain("/backgrounds/bg_game_lobby.webp");
+    expect(hrefs.some((h) => h.endsWith(".svg"))).toBe(false);
     for (let seat = 0; seat < FIGURE_IDS.length; seat++) expect(hrefs).toContain(figureSrc(seat).src);
     expect(hrefs).toHaveLength(10);
   });
 
-  it("역할 화면 목록: 직업 그림 4종 전부와 낮·밤 배경, 유령 그림(역할과 무관하게 같은 목록)", () => {
+  it("역할 화면 목록: 직업 그림 4종 전부와 아침·낮·밤 배경, 유령 그림(역할과 무관하게 같은 목록)", () => {
     const hrefs = rolePreloadList().map((item) => item.href);
     for (const role of ROLE_IDS) expect(hrefs).toContain(roleArtSrc(role).src);
-    expect(hrefs).toContain("/backgrounds/bg_game_day.svg");
-    expect(hrefs).toContain("/backgrounds/bg_game_night.svg");
+    expect(hrefs).toContain("/backgrounds/bg_game_morning.webp");
+    expect(hrefs).toContain("/backgrounds/bg_game_day.webp");
+    expect(hrefs).toContain("/backgrounds/bg_game_night.webp");
     expect(hrefs).toContain(ghostSrc().src);
-    expect(hrefs).toHaveLength(16);
+    expect(hrefs).toHaveLength(17);
     expect(rolePreloadList()).toEqual(rolePreloadList());
+  });
+
+  it("해질녘·투표·처형 배경은 어떤 미리 받기 목록에도 없다 (처음 쓰일 때 불러온다)", () => {
+    const hrefs = [...entryPreloadList(), ...rolePreloadList()].map((item) => item.href);
+    expect(hrefs).not.toContain(backdropUrl("game", "dusk"));
+    expect(hrefs).not.toContain(backdropUrl("game", "verdictDusk"));
+    expect(hrefs.filter((h) => h.endsWith(".svg") && h.startsWith("/backgrounds/"))).toEqual([]);
   });
 
   it("역할 화면 목록은 역할과 무관한 한 목록이고 일지 SVG 아홉 개가 들어 있다 (T-03.1-18)", () => {
@@ -138,7 +153,7 @@ describe("미리 받기 목록", () => {
       }
       vi.mocked(preload).mockClear();
       preloadRoleAssets();
-      expect(preload).toHaveBeenCalledTimes(16);
+      expect(preload).toHaveBeenCalledTimes(17);
     });
   });
 });
@@ -154,7 +169,8 @@ describe("실제 파일과의 일치", () => {
       const art = roleArtSrc(role);
       urls.push(art.src, ...urlsOfSrcSet(art.srcSet));
     }
-    for (const layout of LAYOUTS) for (const variant of VARIANTS) urls.push(backdropUrl(layout, variant));
+    for (const scene of SCENE_IDS) urls.push(backdropUrl("game", scene));
+    urls.push(backdropUrl("entry", "lobby"));
     for (const item of [...entryPreloadList(), ...rolePreloadList()]) {
       urls.push(item.href);
       if (item.imageSrcSet) urls.push(...urlsOfSrcSet(item.imageSrcSet));

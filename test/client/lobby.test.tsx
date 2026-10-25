@@ -59,10 +59,10 @@ describe("Lobby — 대기실 (S-03) 테이블", () => {
     expect(container.querySelector(".lobby-players") === null).toBe(true);
   });
 
-  it("대기 장면(bg_game_lobby.svg) 위에 그려진다", () => {
+  it("대기 장면(bg_game_lobby.webp) 위에 그려진다", () => {
     const { container } = render(<Lobby view={view} send={() => {}} />);
     const art = container.querySelector(".mf-backdrop__art") as HTMLElement | null;
-    expect(art?.style.backgroundImage).toContain("/backgrounds/bg_game_lobby.svg");
+    expect(art?.style.backgroundImage).toContain("/backgrounds/bg_game_lobby.webp");
   });
 
   it("테이블은 낮과 같은 DayTable 이다(.mf-dt)이고 옛 대기실 테이블 요소는 없다", () => {

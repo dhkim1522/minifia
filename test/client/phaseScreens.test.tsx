@@ -294,7 +294,7 @@ describe("S-06 낮 시작 (D-01, D-02, R13, E9)", () => {
     expect(screen.queryByRole("timer")).toBeNull();
     expect(screen.queryByRole("group")).toBeNull();
     const art = container.querySelector<HTMLElement>(".mf-backdrop__art");
-    expect(art?.style.backgroundImage).toContain("/backgrounds/bg_game_day.svg");
+    expect(art?.style.backgroundImage).toContain("/backgrounds/bg_game_day.webp");
     expect(container.querySelector(".mf-day__morning")).not.toBeNull();
   });
 
@@ -499,7 +499,7 @@ describe("S-06b·S-06c·S-07 한 장면 DayScene (DAY-01, UI-SPEC 장면)", () =
     expect(container.querySelectorAll(".mf-dt__seat").length).toBe(4);
     expect(screen.queryAllByRole("button", { name: "역할 카드" }).length).toBe(1);
     const art = container.querySelector<HTMLElement>(".mf-backdrop__art");
-    expect(art?.style.backgroundImage).toContain("/backgrounds/bg_game_day.svg");
+    expect(art?.style.backgroundImage).toContain("/backgrounds/bg_game_day.webp");
   });
 
   it("claim 타이머는 지금 차례의 남은 시간이고 마지막 5초여도 진홍(urgent) 표시가 없다 (calm)", () => {
