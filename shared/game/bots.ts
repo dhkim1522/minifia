@@ -5,13 +5,14 @@
 // 행동의 실행과 검증은 방 DO 가 사람과 같은 처리기(selectClaim·say·emote·pickTarget)로 한다 — 봇은 특권이 없다.
 // 단계가 바뀌면 계획 키(단계:마감)가 달라져 남은 행동은 저절로 버려지고 새 단계 계획이 선다.
 //
-// 결정 0023(차례 주장)을 구현할 때 봇 주장은 botClaimChoice 만 바꾼다(그 봇 차례가 아니면 null을 돌려주고,
-// 차례마다 새 계획이 서게 botPlanKey 에 차례 번호를 더한다). 나머지 규칙은 그대로다.
+// 구현됨(결정 0023, 0027-10): 봇은 자기 차례에만 주장한다. botClaimChoice 는 그 봇 차례가 아니면 난수 없이 null 을 돌려주고,
+// 차례마다 새 계획이 서도록 botPlanKey 에 차례 번호가 들어 있다. 나머지 규칙은 그대로다.
 //
 // 난수 호출 순서가 계약이다(시드 테스트가 고정한다). randInt(0) 호출은 어디에도 없다(cryptoRandInt(0) 은 RangeError).
 import { EMOJI_IDS } from "../protocol";
 import type { Claim, EmojiId, TemplateId } from "../protocol";
 import { isAlive } from "./alive";
+import { currentClaimSeat } from "./claim";
 import { rolesInPlay } from "./roles";
 import type { RoleId } from "./roles";
 import type { Player, RoomState } from "./room";
@@ -51,7 +52,7 @@ export interface BotStep {
   botId: string;
   act: BotAct;
 }
-/** key = 계획을 세운 단계("단계:마감"). 지금 단계 키와 다르면 낡은 계획이다. */
+/** key = 계획을 세운 단계("단계:마감", claim 은 "claim:마감:차례 번호"). 지금 단계 키와 다르면 낡은 계획이다. */
 export interface BotPlan {
   key: string;
   steps: BotStep[];
@@ -63,16 +64,16 @@ export const botCount = (state: RoomState): number => state.players.filter(isBot
 const bySeat = (a: Player, b: Player): number => a.seat - b.seat;
 
 /**
- * 직업 공개에서 이 봇이 낼 주장과 지연. 지금은 살아 있는 봇이면 항상 값을 돌려주고, 돌려줄 값이 없으면 null.
- * randInt(100) < 15 이면 말 안 함, 아니면 이번 판 직업 중 randInt(길이)번째, 그다음 delayMs = 500 + randInt(3000).
- * 결정 0023 의 차례 주장에서 "그 봇 차례가 아님" 은 null 로 나타낸다 — 바꿀 곳은 이 함수 하나다.
+ * 직업 주장에서 이 봇이 낼 주장과 지연. claim 단계가 아니거나, 탈락했거나, 지금 차례(currentClaimSeat)가 이 봇이 아니면 null —
+ * 이 검사가 맨 앞이라 난수를 한 번도 부르지 않는다. 차례이면 randInt(100) < 15 이면 말 안 함, 아니면 이번 판 직업 중
+ * randInt(길이)번째, 그다음 delayMs = 500 + randInt(3000).
  */
 export function botClaimChoice(
   state: RoomState,
   bot: Player,
   randInt: RandInt,
 ): { claim: Claim; delayMs: number } | null {
-  if (!isAlive(bot)) return null;
+  if (state.phase !== "claim" || !isAlive(bot) || currentClaimSeat(state) !== bot.seat) return null;
   let claim: Claim = "none";
   if (randInt(100) >= NONE_PERCENT) {
     const roles = rolesInPlay(state.players.length);
@@ -97,9 +98,13 @@ export function botNightTarget(state: RoomState, bot: Player, randInt: RandInt):
   return candidates[randInt(candidates.length)]!.seat;
 }
 
-/** 봇 계획이 필요한 단계(claim·discussion·night)의 키. 그 밖은 null. */
+/**
+ * 봇 계획이 필요한 단계(claim·discussion·night)의 키. 그 밖은 null. claim 은 차례마다 계획이 새로 서야 하므로
+ * "claim:마감:차례 번호" 다 — 마감이 우연히 같아져도(테스트 넘기기 연타) 차례 번호가 달라 낡은 계획이 살아남지 않는다(D-20).
+ */
 export function botPlanKey(state: RoomState): string | null {
-  if (state.phase !== "claim" && state.phase !== "discussion" && state.phase !== "night") return null;
+  if (state.phase === "claim") return `claim:${state.phaseEndsAt}:${state.claimIdx ?? 0}`;
+  if (state.phase !== "discussion" && state.phase !== "night") return null;
   return `${state.phase}:${state.phaseEndsAt}`;
 }
 
