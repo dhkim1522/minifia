@@ -392,3 +392,32 @@ describe("대기실: 시트의 봇 줄 (U-10)", () => {
     expect(String(css.includes("var(--tap-min)"))).toBe("true");
   });
 });
+
+describe("[테스트] 닻과 아침 어둡게 층 (03.1-10, D-16, UI-SPEC E)", () => {
+  const css = readFileSync("src/styles/testtools.css", "utf8");
+  const tokens = readFileSync("src/styles/tokens.css", "utf8");
+
+  it("닻 규칙 불변: .mf-tt-anchor 는 height 0·z-index var(--z-overlay), .mf-tt 는 top var(--space-sm)·left 0, --z-overlay 는 50", () => {
+    const anchor = css.match(/\.mf-tt-anchor \{([^}]*)\}/)?.[1] ?? "";
+    const button = css.match(/\.mf-tt-anchor \.mf-tt \{([^}]*)\}/)?.[1] ?? "";
+    expect(/height:\s*0\b/.test(anchor) && /z-index:\s*var\(--z-overlay\)/.test(anchor)).toBe(true);
+    expect(/top:\s*var\(--space-sm\)/.test(button) && /left:\s*0\b/.test(button)).toBe(true);
+    expect(/--z-overlay:\s*50;/.test(tokens)).toBe(true);
+    // 닻은 DayTable 밖이라 숫자 비교가 아니라 쌓임 순서가 근거다 — 근거 주석이 있다
+    expect(css.includes("시안 T1 왼쪽 위 유지")).toBe(true);
+  });
+
+  it("아침(어둡게 층 있음)에도 [테스트] 버튼은 장면 상자 안 닻에 있고 층(.mf-dt__dim)을 가리지 않는다", () => {
+    open({ phase: "morning", testMode: true });
+    const btn = testBtn() as HTMLElement;
+    const scene = btn.closest(".mf-dayscene__scene");
+    expect(String(scene !== null)).toBe("true");
+    const dim = scene!.querySelector(".mf-dt__dim");
+    expect(String(dim !== null)).toBe("true");
+    // 닻이 테이블(층 포함)보다 문서 순서상 앞이고, 층과 버튼 어느 쪽도 pointer-events 가 막혀 있지 않다
+    const anchor = btn.closest(".mf-tt-anchor") as HTMLElement;
+    expect(String((anchor.compareDocumentPosition(dim as Node) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0)).toBe("true");
+    expect(getComputedStyle(btn).pointerEvents).not.toBe("none");
+    expect(String(btn.disabled)).toBe("false");
+  });
+});

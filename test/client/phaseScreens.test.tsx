@@ -1,3 +1,5 @@
+/// <reference types="node" />
+import { readFileSync } from "node:fs";
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { RoleId } from "../../shared/game/roles";
@@ -776,5 +778,48 @@ describe("G-01-9 시트 계측 — 낮 화면 [내 역할] 경로 (sheetdebug)",
     expect(text.includes("내 역할")).toBe(true);
     expect(text.includes("day")).toBe(true);
     expect(text.includes("경찰")).toBe(false);
+  });
+});
+
+describe("헤더 줄바꿈 금지·패널 여백·칩 간격 (03.1-10, D-16, UI-SPEC A·S3·S6)", () => {
+  const phaseCss = readFileSync("src/styles/phase.css", "utf8");
+  const dayCss = readFileSync("src/styles/day.css", "utf8");
+  const bodyOf = (css: string, selector: string) => {
+    const at = css.indexOf(`${selector} {`);
+    return at < 0 ? "" : css.slice(css.indexOf("{", at) + 1, css.indexOf("}", at));
+  };
+
+  it("phase.css: 헤더 제목과 안내는 nowrap 이고 윗줄 최소 높이는 50.4px 이다", () => {
+    const rule = phaseCss.split("\n").find((l) => l.includes(".mf-phasebar .mf-t-heading") && l.includes(".mf-phasebar__do") && l.includes("white-space: nowrap")) ?? "";
+    expect(rule !== "").toBe(true);
+    expect(/min-height:\s*50\.4px/.test(bodyOf(phaseCss, ".mf-phasebar__row"))).toBe(true);
+  });
+
+  it("day.css: 하단 패널 padding 은 8px 위, 높이 157 그대로이고 .mf-seg 간격은 var(--space-xs)", () => {
+    const panel = bodyOf(dayCss, ".mf-dayscene__panel");
+    expect(panel.includes("padding: 8px var(--space-md) calc(12px + env(safe-area-inset-bottom))")).toBe(true);
+    expect(panel.includes("height: calc(157px + env(safe-area-inset-bottom))")).toBe(true);
+    expect(/gap:\s*var\(--space-xs\)/.test(bodyOf(dayCss, ".mf-seg"))).toBe(true);
+  });
+
+  it("헤더 제목·안내 문구표: 모든 역할에서 같은 제목이다", () => {
+    const table: Array<[PhaseId, string, (n: number) => string]> = [
+      ["claim", "낮 · 직업 공개", (n) => `${n}일차`],
+      ["discussion", "낮 · 토론", (n) => `${n}일차`],
+      ["night", "밤", (n) => `${n}일차`],
+      ["morning", "아침", (n) => `${n + 1}일차`],
+    ];
+    for (const [phase, heading, guide] of table) {
+      for (const role of ["police", "mafia", "doctor", "citizen"] as const) {
+        const r = renderRoom(
+          makeView({ phase, endsIn: 8_000, durationMs: 8_000, role, day: 1, ...(phase === "claim" ? { turn: 1 } : {}), ...(phase === "morning" ? { morning: {} } : {}) }),
+        );
+        const mafiaNight = phase === "night" && role === "mafia";
+        const expected = mafiaNight ? "1일차 · 함께 지목하세요" : guide(1);
+        const got = `${r.container.querySelector("h1")?.textContent}/${r.container.querySelector(".mf-phasebar__do")?.textContent}`;
+        expect(`${phase}:${role}:${got}`).toBe(`${phase}:${role}:${heading}/${expected}`);
+        cleanup();
+      }
+    }
   });
 });
