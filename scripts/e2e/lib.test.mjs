@@ -27,6 +27,7 @@ import {
   smallTextIssues,
   spectatorChecks,
   turnChecks,
+  crownChecks,
   nightIntroChecks,
   exitCodeOf,
   faceRegion,
@@ -795,84 +796,132 @@ test("lobbyShapeChecks L6: 둘·셋인데 측정값이 없거나 자리 수가 �
 
 const turnPanel = (over = {}) => ({ rect: rect(0, 483, 360, 157), text: "", stRow: false, emojiBtn: false, quickBtn: false, chips: [], ...over });
 
-test("turnChecks K1: 차례 표식 spot·badge·tagTurn 이 정확히 1, 이름표 아랫줄 0 이면 통과", () => {
-  const s = daySnap();
-  s.panel = turnPanel({ stRow: true, emojiBtn: true });
-  s.turn = { spot: 1, badge: 1, tagTurn: 1, legacyRows: 0 };
-  const list = turnChecks(s, { myTurn: false, jobs: ["마피아", "경찰"] });
-  assert.equal(dayById(list, "K1").ok, true, dayById(list, "K1").detail);
-  for (const bad of [{ spot: 0 }, { badge: 2 }, { tagTurn: 0 }, { legacyRows: 1 }]) {
-    const t = { ...s, turn: { ...s.turn, ...bad } };
-    assert.equal(dayById(turnChecks(t, { myTurn: false, jobs: [] }), "K1").ok, false, JSON.stringify(bad));
-  }
+const FILTER_WHITE = "drop-shadow(rgba(241, 242, 245, 0.95) 0px 0px 2px) drop-shadow(rgba(241, 242, 245, 0.75) 0px 0px 9px)";
+const FILTER_CRIMSON = "drop-shadow(rgba(224, 52, 75, 0.95) 0px 0px 2px) drop-shadow(rgba(224, 52, 75, 0.7) 0px 0px 9px)";
+const goodTurn = (over = {}) => ({ bubbleTurnSeats: [3], haloWhiteSeats: [3], legacyCircles: 0, tagInverted: 0, legacyRows: 0, ...over });
+const goodHalo = () => ({
+  items: [
+    { seat: 3, cls: "white", filter: FILTER_WHITE, seatContext: true, onImg: true },
+    { seat: 5, cls: "crimson", filter: FILTER_CRIMSON, seatContext: true, onImg: true },
+  ],
+  max: 2,
 });
-
-test("turnChecks K1: 차례 없는 단계(expectNone)는 세 값이 모두 0 이어야 통과하고 K2 는 돌리지 않는다", () => {
+const turnSnap = ({ turn = goodTurn(), halo = goodHalo(), panel = turnPanel({ stRow: true, emojiBtn: true }) } = {}) => {
   const s = daySnap();
-  s.turn = { spot: 0, badge: 0, tagTurn: 0, legacyRows: 0 };
-  const list = turnChecks(s, { expectNone: true });
-  assert.deepEqual(list.map((x) => x.id), ["K1"]);
-  assert.equal(list[0].ok, true);
-  s.turn.spot = 1;
-  assert.equal(turnChecks(s, { expectNone: true })[0].ok, false);
-});
-
-// ---- K4 차례 링의 앞뒤 층 (결정 0028) ----
-const goodRing = () => ({
-  plain: true,
-  back: { z: -1, position: "absolute", clip: "inset(-24px -24px 50%)" },
-  front: { z: null, position: "absolute", clip: "inset(50% -24px -24px)" },
-  figBeforeFront: true,
-  seatContext: true,
-});
-const ringSnap = (ring) => {
-  const s = daySnap();
-  s.panel = turnPanel({ stRow: true, emojiBtn: true });
-  s.turn = { spot: 1, badge: 1, tagTurn: 1, legacyRows: 0, ring };
+  s.panel = panel;
+  s.turn = turn;
+  s.halo = halo;
   return s;
 };
 
-test("turnChecks K4: 묶음이 평범하고 뒤쪽 호 z<0, 앞쪽 호가 그림 뒤 순서이며 clip-path 가 위/아래 반이면 통과 (브라우저가 줄여 쓴 inset 도 읽는다)", () => {
-  const list = turnChecks(ringSnap(goodRing()), { myTurn: false, jobs: [] });
-  assert.deepEqual(list.map((x) => x.id), ["K1", "K4", "K2"]);
-  assert.equal(dayById(list, "K4").ok, true, dayById(list, "K4").detail);
-  const full = goodRing();
-  full.back.clip = "inset(-24px -24px 50% -24px)";
-  full.front.clip = "inset(50% -24px -24px -24px)";
-  assert.equal(dayById(turnChecks(ringSnap(full), { myTurn: false }), "K4").ok, true);
+test("turnChecks K1: 차례 말풍선이 정확히 한 자리, 흰 후광이 같은 자리 하나, 발밑 원·이름표 반전·이름표 아랫줄 0 이면 통과", () => {
+  const list = turnChecks(turnSnap(), { myTurn: false, jobs: ["마피아", "경찰"] });
+  assert.equal(dayById(list, "K1").ok, true, dayById(list, "K1").detail);
+  const cases = [
+    ["말풍선 없음", { bubbleTurnSeats: [] }, /말풍선/],
+    ["말풍선 둘", { bubbleTurnSeats: [3, 4] }, /말풍선/],
+    ["흰 후광 없음", { haloWhiteSeats: [] }, /흰 후광/],
+    ["흰 후광이 다른 자리", { haloWhiteSeats: [4] }, /같은 자리|다름/],
+    ["발밑 원 남음", { legacyCircles: 1 }, /발밑 원/],
+    ["이름표 반전 남음", { tagInverted: 1 }, /반전/],
+    ["이름표 아랫줄 남음", { legacyRows: 1 }, /아랫줄/],
+  ];
+  for (const [name, over, re] of cases) {
+    const k1 = dayById(turnChecks(turnSnap({ turn: goodTurn(over) }), { myTurn: false }), "K1");
+    assert.equal(k1.ok, false, name);
+    assert.match(k1.detail, re, name);
+  }
+});
+
+test("turnChecks K1: 차례 없는 단계(expectNone)는 차례 말풍선 0 이어야 통과하고, 토론 빠른 메시지 말풍선(--spoke)은 세지 않는다", () => {
+  const s = turnSnap({ turn: goodTurn({ bubbleTurnSeats: [], haloWhiteSeats: [] }) });
+  const list = turnChecks(s, { expectNone: true });
+  assert.deepEqual(list.map((x) => x.id), ["K1", "K4"]);
+  assert.equal(dayById(list, "K1").ok, true, dayById(list, "K1").detail);
+  // 밤에 내가 고른 대상의 흰 후광은 차례가 아니므로 expectNone 을 실패시키지 않는다
+  s.turn.haloWhiteSeats = [2];
+  assert.equal(dayById(turnChecks(s, { expectNone: true }), "K1").ok, true);
+  // 차례 말풍선이 있으면 실패
+  s.turn.bubbleTurnSeats = [1];
+  assert.equal(dayById(turnChecks(s, { expectNone: true }), "K1").ok, false);
+});
+
+test("turnChecks: K1 과 K4 는 항상, myTurn 이 불리언이면 K2 도 돌려준다", () => {
+  assert.deepEqual(turnChecks(turnSnap(), { myTurn: false, jobs: [] }).map((x) => x.id), ["K1", "K4", "K2"]);
+  assert.deepEqual(turnChecks(turnSnap(), {}).map((x) => x.id), ["K1", "K4"]);
+  assert.deepEqual(turnChecks(turnSnap(), { expectNone: true }).map((x) => x.id), ["K1", "K4"]);
+});
+
+// ---- K4 후광은 윤곽을 따르는 filter 이고 발밑 원이 없음 (결정 0030) ----
+
+test("turnChecks K4: 후광 img 에 두 겹 drop-shadow(9px 포함)·자리 쌓임 맥락이 있고 발밑 원이 없으며 3개 이하면 통과", () => {
+  const k4 = dayById(turnChecks(turnSnap(), { myTurn: false }), "K4");
+  assert.equal(k4.ok, true, k4.detail);
+  // 후광이 하나도 없는 상태(차례 없음, 선택 없음)도 통과
+  const none = dayById(turnChecks(turnSnap({ turn: goodTurn({ bubbleTurnSeats: [], haloWhiteSeats: [] }), halo: { items: [], max: 0 } }), { expectNone: true }), "K4");
+  assert.equal(none.ok, true, none.detail);
+  // 끊긴 자리: grayscale 뒤에 후광이 붙어도 통과
+  const gray = goodHalo();
+  gray.items[0].filter = `grayscale(1) ${FILTER_WHITE}`;
+  assert.equal(dayById(turnChecks(turnSnap({ halo: gray }), { myTurn: false }), "K4").ok, true);
 });
 
 test("turnChecks K4: 어긋남마다 실패하고 이유를 말한다", () => {
+  const four = goodHalo();
+  four.items = [3, 5, 6, 7].map((seat) => ({ seat, cls: seat === 3 ? "white" : "crimson", filter: FILTER_CRIMSON, seatContext: true, onImg: true }));
+  four.max = 4;
   const cases = [
-    ["묶음이 평범하지 않음", (r) => { r.plain = false; }, /묶음/],
-    ["뒤쪽 호 z 가 0", (r) => { r.back.z = 0; }, /뒤쪽 호/],
-    ["뒤쪽 호 z 없음", (r) => { r.back.z = null; }, /뒤쪽 호/],
-    ["앞쪽 호가 음수 z", (r) => { r.front.z = -1; }, /앞쪽 호/],
-    ["앞쪽 호가 absolute 아님", (r) => { r.front.position = "static"; }, /앞쪽 호/],
-    ["앞쪽 호가 그림보다 앞 순서", (r) => { r.figBeforeFront = false; }, /순서/],
-    ["clip 이 반대(뒤쪽이 아래 반)", (r) => { r.back.clip = "inset(50% -24px -24px)"; }, /뒤쪽 호 clip/],
-    ["clip 이 반대(앞쪽이 위 반)", (r) => { r.front.clip = "inset(-24px -24px 50%)"; }, /앞쪽 호 clip/],
-    ["clip 없음", (r) => { r.front.clip = "none"; }, /앞쪽 호 clip/],
-    ["자리가 쌓임 맥락이 아님", (r) => { r.seatContext = false; }, /자리/],
+    ["후광 img 4개", { halo: four }, /3/],
+    ["drop-shadow 한 겹뿐", (h) => { h.items[0].filter = "drop-shadow(rgba(241, 242, 245, 0.75) 0px 0px 9px)"; }, /drop-shadow/],
+    ["9px 없음", (h) => { h.items[0].filter = "drop-shadow(rgba(241, 242, 245, 0.95) 0px 0px 2px) drop-shadow(rgba(241, 242, 245, 0.75) 0px 0px 4px)"; }, /9px/],
+    ["filter 없음", (h) => { h.items[1].filter = "none"; }, /drop-shadow/],
+    ["후광 클래스가 img 가 아님", (h) => { h.items[0].onImg = false; }, /img/],
+    ["자리가 쌓임 맥락이 아님", (h) => { h.items[1].seatContext = false; }, /쌓임/],
   ];
-  for (const [name, mut, re] of cases) {
-    const r = goodRing();
-    mut(r);
-    const k4 = dayById(turnChecks(ringSnap(r), { myTurn: false }), "K4");
+  for (const [name, change, re] of cases) {
+    let halo = goodHalo();
+    if (typeof change === "function") change(halo);
+    else halo = change.halo;
+    const k4 = dayById(turnChecks(turnSnap({ halo }), { myTurn: false }), "K4");
     assert.equal(k4.ok, false, name);
     assert.match(k4.detail, re, name);
   }
-  for (const ring of [null, undefined]) {
-    const k4 = dayById(turnChecks(ringSnap(ring), { myTurn: false }), "K4");
+  // 발밑 원 요소가 남아 있음
+  const k4c = dayById(turnChecks(turnSnap({ turn: goodTurn({ legacyCircles: 2 }) }), { myTurn: false }), "K4");
+  assert.equal(k4c.ok, false);
+  assert.match(k4c.detail, /발밑 원/);
+  // claim 인데 흰 후광이 말풍선 자리와 다름
+  const k4d = dayById(turnChecks(turnSnap({ turn: goodTurn({ bubbleTurnSeats: [5] }) }), { myTurn: false }), "K4");
+  assert.equal(k4d.ok, false);
+  assert.match(k4d.detail, /말풍선/);
+  // 측정값 없음은 조용히 통과하지 않는다
+  for (const halo of [null, undefined]) {
+    const k4 = dayById(turnChecks(turnSnap({ halo }), { myTurn: false }), "K4");
     assert.equal(k4.ok, false);
     assert.match(k4.detail, /측정값 없음/);
   }
 });
 
-test("turnChecks K4: 차례가 없는 상태(expectNone)에서는 돌리지 않는다", () => {
-  const s = daySnap();
-  s.turn = { spot: 0, badge: 0, tagTurn: 0, legacyRows: 0, ring: null };
-  assert.deepEqual(turnChecks(s, { expectNone: true }).map((x) => x.id), ["K1"]);
+test("turnChecks K4: 차례가 없는 단계(expectNone)에서는 말풍선과 흰 후광의 자리 일치를 따지지 않는다(밤 선택 후광)", () => {
+  const s = turnSnap({ turn: goodTurn({ bubbleTurnSeats: [], haloWhiteSeats: [3] }) });
+  assert.equal(dayById(turnChecks(s, { expectNone: true }), "K4").ok, true);
+});
+
+// ---- W1 방장 왕관은 대기실만 (결정 0030) ----
+
+test("crownChecks W1: expect 1 이면 왕관 1개 통과·0개 실패, expect 0 이면 0개 통과·1개 실패, 측정값 없으면 실패", () => {
+  const r = crownChecks({ crowns: 1 }, { expect: 1 });
+  assert.equal(r.id, "W1");
+  assert.equal(r.ok, true, r.detail);
+  assert.equal(crownChecks({ crowns: 0 }, { expect: 1 }).ok, false);
+  assert.equal(crownChecks({ crowns: 2 }, { expect: 1 }).ok, false);
+  assert.equal(crownChecks({ crowns: 0 }, { expect: 0 }).ok, true);
+  assert.equal(crownChecks({ crowns: 1 }, { expect: 0 }).ok, false);
+  for (const snap of [{}, { crowns: undefined }, { crowns: null }, null]) {
+    const m = crownChecks(snap, { expect: 0 });
+    assert.equal(m.ok, false);
+    assert.match(m.detail, /측정값 없음/);
+  }
 });
 
 // ---- N6 밤 시작 문구 (결정 0028) ----
@@ -898,7 +947,8 @@ test("nightIntroChecks N6: `N일차`+`밤이 되었습니다`, pointer-events no
 
 test("turnChecks K2: 내 차례는 이번 판 직업 + 말 안 함 칩 · stRow/이모티콘 없음 · 높이 157", () => {
   const s = daySnap();
-  s.turn = { spot: 1, badge: 1, tagTurn: 1, legacyRows: 0 };
+  s.turn = goodTurn();
+  s.halo = goodHalo();
   s.panel = turnPanel({ chips: ["마피아", "경찰", "시민", "말 안 함"] });
   const ok = dayById(turnChecks(s, { myTurn: true, jobs: ["마피아", "경찰", "시민"] }), "K2");
   assert.equal(ok.ok, true, ok.detail);
@@ -914,7 +964,8 @@ test("turnChecks K2: 내 차례는 이번 판 직업 + 말 안 함 칩 · stRow/
 
 test("turnChecks K2: 남의 차례는 stRow·이모티콘 있고 빠른 메시지·칩 없음 · 높이 157", () => {
   const s = daySnap();
-  s.turn = { spot: 1, badge: 1, tagTurn: 1, legacyRows: 0 };
+  s.turn = goodTurn();
+  s.halo = goodHalo();
   s.panel = turnPanel({ stRow: true, emojiBtn: true });
   assert.equal(dayById(turnChecks(s, { myTurn: false, jobs: [] }), "K2").ok, true);
   for (const over of [{ stRow: false }, { emojiBtn: false }, { quickBtn: true }, { chips: ["경찰"] }, { rect: rect(0, 480, 360, 160) }]) {
