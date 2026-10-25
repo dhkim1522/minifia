@@ -2,7 +2,7 @@
 // 방장 소켓은 브라우저 페이지가 쥔다(스크립트가 쥐면 앱이 앞 소켓을 4001 로 대체한다).
 // 토큰은 createTestRoom 결과와 addInitScript 인자에만 머문다. 페이지가 받은 state 프레임만 읽고 보낸 프레임은 구독하지 않는다.
 import { chromium } from "playwright-core";
-import { DECORATIVE_ALLOW, FONT_HOSTS, TAP_ALLOW, redact } from "./lib.mjs";
+import { DECORATIVE_ALLOW, FONT_HOSTS, ROLE_NAME, TAP_ALLOW, redact } from "./lib.mjs";
 
 /** 준비 단계의 실패(연결·단계 도달·선택자 대기 시간 초과). 한 번 새 방으로 다시 돈다. 검사 실패와 다르다. */
 export class SetupError extends Error {
@@ -310,6 +310,7 @@ export async function collectSnapshot(page) {
         card: rectOf(card),
         records: recBtn ? { label: recBtn.getAttribute("aria-label") ?? "", dot: !!recBtn.querySelector(".mf-records-btn__dot") } : null,
         buttonTexts: [...document.querySelectorAll("button")].filter(visible).map((b) => (b.textContent || "").replace(/\s+/g, " ").trim()),
+        mafiaLog: !!q('[aria-label="마피아 채팅"]'),
         lobbyCount: (q(".mf-lobby__count")?.textContent || "").trim(),
         testSheet: ttSheet
           ? {
@@ -335,4 +336,94 @@ export async function leaveLobby(page) {
   } catch {
     /* 정리 실패는 결과에 넣지 않는다 */
   }
+}
+
+// ---- 게임 흐름 조작(과제 2) ----
+
+const stepTo = async (tracker, pred, label) => tracker.waitFor(pred, 3000, label);
+
+/** 시트가 열려 있어야 한다. [5명 채우기] 뒤 [+]/[−] 로 봇 수를 맞추며 매번 추적 me.testBots 변화를 기다린다. */
+export async function setBots(page, tracker, count) {
+  let cur = tracker.last()?.me?.testBots ?? 0;
+  if (cur < 4 && count >= 3) {
+    await clickInDialog(page, TT_LABEL, "5명 채우기");
+    await stepTo(tracker, (v) => v.me.testBots === 4, "봇 4명(5명 채우기)");
+    cur = 4;
+  }
+  while (cur < count) {
+    await clickInDialog(page, TT_LABEL, "봇 늘리기");
+    cur += 1;
+    await stepTo(tracker, (v) => v.me.testBots === cur, `봇 ${cur}명`);
+  }
+  while (cur > count) {
+    await clickInDialog(page, TT_LABEL, "봇 줄이기");
+    cur -= 1;
+    await stepTo(tracker, (v) => v.me.testBots === cur, `봇 ${cur}명`);
+  }
+}
+
+/** 시트가 열려 있어야 한다. 내 직업 칩을 눌러 me.testRole 을 확인한다. */
+export async function chooseRole(page, tracker, role) {
+  await page.locator(".mf-tt-sheet__roles").getByRole("button", { name: ROLE_NAME[role], exact: true }).click();
+  await stepTo(tracker, (v) => v.me.testRole === role, `내 직업 ${role} 지정`);
+}
+
+/** 시트를 닫고 [게임 시작] 을 눌러 역할 확인(roleReveal)까지 기다린다. */
+export async function startGame(page, tracker) {
+  await closeSheet(page);
+  await page.locator(".mf-lobby__sheet").getByRole("button", { name: "게임 시작" }).click();
+  await tracker.waitFor((v) => v.phase === "roleReveal", 8000, "역할 확인 도달");
+}
+
+/** 시트를 열어 둔 채 [다음 단계로 넘기기] 를 눌러 목표 단계까지 간다(단계마다 3초 안). 끝나면 시트를 닫는다. */
+export async function skipTo(page, tracker, phase) {
+  await openTestSheet(page);
+  for (let i = 0; i < 8; i++) {
+    const before = tracker.last()?.phase;
+    if (before === phase) break;
+    await clickInDialog(page, TT_LABEL, "다음 단계로 넘기기");
+    await tracker.waitFor((v) => v.phase !== before, 3000, `${before} 다음 단계 (목표 ${phase})`);
+  }
+  if (tracker.last()?.phase !== phase) throw new SetupError(`목표 단계 ${phase} 에 도달하지 못함 (지금 ${tracker.last()?.phase})`);
+  await closeSheet(page);
+}
+
+/** 대상 자리 버튼을 실제로 누른다. 다른 요소에 가려지면 Playwright 실행 가능성 검사가 실패를 낸다. */
+export async function tapSeat(page, seat) {
+  await page.locator(`button.mf-dt__seat--pick[data-seat="${seat}"]`).click({ timeout: 4000 });
+}
+
+/** 그 자리 상자 안에서 맨 위 요소가 그 자리인 점을 찾아 누른다(없으면 가운데). */
+export async function clickTopmostPoint(page, seat) {
+  const pt = await page.evaluate((n) => {
+    const el = document.querySelector(`.mf-dt__seat[data-seat="${n}"]`);
+    if (!el) return null;
+    const r = el.getBoundingClientRect();
+    let best = null;
+    for (let j = 0; j < 12 && !best; j++) {
+      for (let i = 0; i < 9 && !best; i++) {
+        const x = r.left + (r.width * (i + 0.5)) / 9;
+        const y = r.top + (r.height * (j + 0.5)) / 12;
+        const top = document.elementFromPoint(x, y);
+        if (top && el.contains(top)) best = { x, y };
+      }
+    }
+    return best ?? { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+  }, seat);
+  if (!pt) throw new Error(`자리 ${seat} 없음`);
+  await page.mouse.click(pt.x, pt.y);
+}
+
+/** 최선 노력: 열린 시트를 닫고 [대기실로 되돌리기] → 대기실에서 [나가기]. 실패는 무시한다. */
+export async function resetAndLeave(page, tracker) {
+  try {
+    for (const label of ["수사 기록", "채팅 내역"]) await closeSheet(page, label).catch(() => {});
+    await openTestSheet(page);
+    await clickInDialog(page, TT_LABEL, "대기실로 되돌리기");
+    await tracker.waitFor((v) => v.phase === "lobby", 3000, "대기실 복귀");
+    await page.waitForTimeout(300);
+  } catch {
+    /* 정리 실패는 결과에 넣지 않는다 */
+  }
+  await leaveLobby(page);
 }

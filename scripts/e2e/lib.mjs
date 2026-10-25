@@ -181,14 +181,124 @@ export function exitCodeOf(results, aborted) {
   return results.some((r) => !r.ok) ? 1 : 0;
 }
 
-// (RED 뼈대: 과제 2 규칙은 아직 구현 전)
-export const ONE_LINE_FACTOR = 0;
-export const FACE_RATIO = 0;
-export const PANEL_H = 0;
-export function isOneLine() {}
-export function lineCount() {}
-export function faceRegion() {}
-export function dayChecks() { return []; }
-export function morningCardIssues() { return {}; }
-export function feltStable() { return {}; }
-export function tagsOverlap() { return {}; }
+// ---- 낮 장면·아침·테이블 검사 규칙(과제 2). 알려진 결함 D1·D4 도 다른 단언과 똑같이 판정한다 — 예외 분기를 두지 않는다. ----
+
+/** 제목 한 줄 판정 배율(줄 높이의 1.6배까지). 낮추지 않는다(D1). */
+export const ONE_LINE_FACTOR = 1.6;
+/** 얼굴 = 캐릭터 상자의 위 45%. */
+export const FACE_RATIO = 0.45;
+/** 낮 장면 하단 패널 높이(결정 0017). */
+export const PANEL_H = 157;
+/** 직업 이름(시트 칩 글자). */
+export const ROLE_NAME = { mafia: "마피아", police: "경찰", doctor: "의사", citizen: "시민" };
+
+export function isOneLine(height, lineHeight) {
+  return height <= lineHeight * ONE_LINE_FACTOR + 1e-6;
+}
+export function lineCount(height, lineHeight) {
+  return Math.round(height / lineHeight);
+}
+/** 캐릭터 상자의 얼굴 영역(위 45%). */
+export function faceRegion(r) {
+  return { left: r.left, right: right(r), top: r.top, bottom: r.top + r.height * FACE_RATIO };
+}
+
+const rd = (n) => Math.round(n * 10) / 10;
+/** 겹친 크기를 사람이 판단할 수 있게 내용 칸에 적는다(기준은 바꾸지 않는다). */
+const overlapText = (a, b) =>
+  `가로 ${rd(Math.min(right(a), right(b)) - Math.max(a.left, b.left))}px·세로 ${rd(Math.min(bottom(a), bottom(b)) - Math.max(a.top, b.top))}px`;
+const result = (id, label, bad) => ({ id, label, ok: bad.length === 0, detail: bad.length === 0 ? "" : bad.join("; ") });
+
+/** 낮 장면(직업 공개·토론·밤·아침)의 고정물 검사 D1·D2·D3·D4·D5·D6·D8. */
+export function dayChecks(snap, { w, h }) {
+  // D1 위쪽 제목이 한 줄
+  const d1 = [];
+  if (!snap.h1) d1.push("제목 없음");
+  else if (!isOneLine(snap.h1.rect.height, snap.h1.lineHeight))
+    d1.push(`"${snap.h1.text}" ${lineCount(snap.h1.rect.height, snap.h1.lineHeight)}줄 (높이 ${rd(snap.h1.rect.height)}, 줄 높이 ${rd(snap.h1.lineHeight)})`);
+
+  // D2 이름표가 장면 안·패널 밖
+  const d2 = [];
+  for (const t of snap.tags) {
+    if (snap.scene && !rectInside(t.rect, snap.scene)) d2.push(`자리 ${t.seat} 이름표가 장면 밖`);
+    if (snap.panel && rectsOverlap(t.rect, snap.panel.rect)) d2.push(`자리 ${t.seat} 이름표가 하단 패널과 겹침`);
+  }
+
+  // D3 이름표가 다른 자리의 얼굴을 안 가림
+  const d3 = [];
+  for (const t of snap.tags) {
+    for (const s of snap.seats) {
+      if (s.seat === t.seat) continue;
+      if (rectsOverlap(t.rect, faceRegion(s.rect))) d3.push(`${t.seat}→${s.seat} (${overlapText(t.rect, faceRegion(s.rect))})`);
+    }
+  }
+
+  // D4 [테스트] 가 캐릭터와 안 겹침
+  const d4 = [];
+  if (!snap.tt) d4.push("[테스트] 버튼 없음");
+  else for (const s of snap.seats) if (rectsOverlap(snap.tt.rect, s.rect)) d4.push(`자리 ${s.seat} 캐릭터 상자와 겹침 (${overlapText(snap.tt.rect, s.rect)})`);
+
+  // D5 세로 스크롤 없음
+  const d5 = snap.docH > h ? [`문서 높이 ${rd(snap.docH)} > ${h}`] : [];
+
+  // D6 하단 패널 높이 157
+  const d6 = [];
+  if (!snap.panel) d6.push("하단 패널 없음");
+  else if (Math.abs(snap.panel.rect.height - PANEL_H) > 0.5) d6.push(`패널 높이 ${rd(snap.panel.rect.height)} ≠ ${PANEL_H}`);
+
+  // D8 위쪽 바 버튼이 한 줄
+  const d8 = [];
+  if (!snap.extra) d8.push("위쪽 바 버튼 칸 없음");
+  else {
+    const tops = snap.extra.children.map((c) => c.top);
+    if (tops.length > 0 && Math.max(...tops) - Math.min(...tops) > 1) d8.push(`버튼 top ${tops.map(rd).join("/")}`);
+    if (!rectInside(snap.extra.rect, { left: 0, top: 0, width: w, height: h })) d8.push("버튼 칸이 화면 밖");
+  }
+
+  return [
+    result("D1", "위쪽 제목이 한 줄", d1),
+    result("D2", "이름표가 장면 안·패널 밖", d2),
+    result("D3", "이름표가 다른 얼굴을 안 가림", d3),
+    result("D4", "[테스트]가 캐릭터와 안 겹침", d4),
+    result("D5", "세로 스크롤 없음", d5),
+    result("D6", "하단 패널 높이 157", d6),
+    result("D8", "위쪽 바 버튼이 한 줄", d8),
+  ];
+}
+
+/** M1 아침 카드 허용 범위. 뒷자리 이름표를 덮는 것은 허용(night-v1 SPEC M1)이라 이름표는 내 것만 본다. */
+export function morningCardIssues(snap, { w, mySeat }) {
+  const card = snap.card;
+  if (!card) return { id: "M1", label: "아침 카드 허용 범위", ok: false, detail: "아침 카드 없음" };
+  const bad = [];
+  if (card.left < -0.5 || right(card) > w + 0.5) bad.push(`카드가 화면 밖 (${rd(card.left)}~${rd(right(card))})`);
+  if (snap.panel && rectsOverlap(card, snap.panel.rect)) bad.push("하단 패널과 겹침");
+  for (const s of snap.seats) {
+    if (s.seat === mySeat) {
+      if (rectsOverlap(card, s.rect)) bad.push("내 자리 캐릭터와 겹침");
+    } else if (rectsOverlap(card, faceRegion(s.rect))) bad.push(`자리 ${s.seat} 얼굴과 겹침 (${overlapText(card, faceRegion(s.rect))})`);
+  }
+  const myTag = snap.tags.find((t) => t.seat === mySeat);
+  if (myTag && rectsOverlap(card, myTag.rect)) bad.push("내 이름표와 겹침");
+  return result("M1", "아침 카드 허용 범위", bad);
+}
+
+/** D7: 흐름의 모든 낮 장면 상태에서 테이블 면(.mf-dt__felt)이 같다. entries = [{ state, rect }]. */
+export function feltStable(entries) {
+  const bad = [];
+  const base = entries[0];
+  for (const e of entries.slice(1)) {
+    const r = e.rect;
+    const same = ["left", "top", "width", "height"].every((k) => Math.abs(r[k] - base.rect[k]) <= 0.5);
+    if (!same) bad.push(`${e.state} 에서 테이블이 ${base.state} 와 다름 (${rd(r.left)},${rd(r.top)} ${rd(r.width)}x${rd(r.height)} ↔ ${rd(base.rect.left)},${rd(base.rect.top)} ${rd(base.rect.width)}x${rd(base.rect.height)})`);
+  }
+  return result("D7", "단계가 바뀌어도 테이블 그대로", bad);
+}
+
+/** D9: 이름표끼리 겹치지 않는다. tags = [{ seat, rect }]. */
+export function tagsOverlap(tags) {
+  const bad = [];
+  for (let i = 0; i < tags.length; i++)
+    for (let j = i + 1; j < tags.length; j++) if (rectsOverlap(tags[i].rect, tags[j].rect)) bad.push(`${tags[i].seat}-${tags[j].seat}`);
+  return result("D9", "4명 이름표 안 겹침", bad);
+}
