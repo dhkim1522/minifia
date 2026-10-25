@@ -200,12 +200,12 @@ Plans:
   3. [역할 카드] 시트에 `내 역할 | 활동 기록` 탭이 있고, 경찰은 수사일지, 마피아는 암살일지(사망/생존), 의사는 치료일지를 본인에게만 받아 본다. 안 읽은 기록은 앰버 점으로 알리고 탭을 열면 사라진다.
   4. 360×640·390×664·430×932 에서 헤더 제목 줄바꿈, [테스트] 버튼·아침 카드가 좌석을 가리는 문제, 이름표 겹침이 없고 `npm run e2e` 가 모두 통과한다.
   5. 봇이 차례 진행에 맞게 주장하고, 배포본에서 봇 시나리오와 E2E 가 통과한다.
-**Plans:** 0/13 plans executed (결정 0023·0026·0027, 승인 시안 `design/screens/claim-turns-v1/`·`role-card-v1/`, UI 계약 `03.1-UI-SPEC.md`)
+**Plans:** 0/14 plans executed (결정 0023·0026·0027, 승인 시안 `design/screens/claim-turns-v1/`·`role-card-v1/`, UI 계약 `03.1-UI-SPEC.md`)
 **UI hint**: yes
 
 Plans:
 **Wave 1**
-- [ ] 03.1-01-PLAN.md — 트레이서: 서버 순수 규칙 — 차례 순서·시작 자리 이동·8초 차례(tick ON_DEADLINE)·일찍 고르기·시간 초과 = 말 안 함(이월 없음)·claimLog·옛 방 정규화·claim 중 이모티콘, 공개 연출 단계 삭제 (TDD, wave 1)
+- [ ] 03.1-01-PLAN.md — 트레이서: 서버 순수 규칙 — 차례 순서·시작 자리 이동·8초 차례(tick ON_DEADLINE)·일찍 고르기·시간 초과 = 말 안 함(이월 없음)·claimLog·옛 방 정규화·claim 중 이모티콘, 공개 연출 단계 삭제, 범위 좁힌 타입 검사 도구 `scripts/tsc-scoped.mjs` (TDD, wave 1)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 - [ ] 03.1-02-PLAN.md — 방 DO 배선(일찍 고르기 → tick → 방송 → 알람)·봇이 자기 차례에만 주장·6명 전수 누출 검사 경로 갱신·결정 0027(와이어 계약) (TDD, wave 2)
@@ -218,22 +218,25 @@ Plans:
 - [ ] 03.1-05-PLAN.md — DayTable 개편: 이름표 한 줄·캐릭터 아래 층(z 1~11 < 12~22)·차례 링/배지/반전·낮 기록 카드 버튼·관전자 roleArt·아침 dim/spotlit (TDD, wave 4)
 
 **Wave 5** *(blocked on Wave 4 completion)*
-- [ ] 03.1-06-PLAN.md — 역할 카드 부품: 새 토큰 12개·일지 SVG 9종·journalArt·Journal 3종·RoleCardSheet(탭·앰버 탭 점) (TDD, wave 5)
-- [ ] 03.1-07-PLAN.md — 순차 주장 화면 완성: 주장 채팅 줄(claimLog)·남의 차례 하단(채팅 세 줄 + 이모티콘)·차례 강조 연결·유저 기록 카드 (TDD, wave 5)
-- [ ] 03.1-08-PLAN.md — E2E 규칙·스냅숏: D3a/D3b·D4/M1 완화(승인 3건)·D9·M3·M4·K/X/R/V/G7 순수 규칙과 브라우저 도우미 (TDD, wave 5)
-- [ ] 03.1-12-PLAN.md — 소켓 스크립트(smoke·uat-day·uat-night·bots·uat-test-bots·uat-test-room)를 차례 주장·claimLog·역할별 일지에 맞춰 로컬 통과 (wave 5)
+- [ ] 03.1-06-PLAN.md — 역할 카드 부품: 새 토큰 12개·journalArt, 일지 SVG 9종(별도 태스크), Journal 3종 + RoleCardSheet(탭·앰버 탭 점) (TDD, wave 5)
+- [ ] 03.1-07-PLAN.md — 순차 주장 화면(앞): 주장 채팅 줄(claimLog, 표시 전용 템플릿)·남의 차례 하단(채팅 세 줄 + 이모티콘)·차례 강조 연결 (TDD, wave 5)
+- [ ] 03.1-09-PLAN.md — E2E 규칙·스냅숏: D3a/D3b·D4/M1 완화(승인 3건)·D9·M3·M4·K/X/R/V/G7 순수 규칙과 브라우저 도우미 (TDD, wave 5)
+- [ ] 03.1-13-PLAN.md — 소켓 스크립트(smoke·uat-day·uat-night·bots·uat-test-bots·uat-test-room)를 차례 주장·claimLog·역할별 일지에 맞춰 로컬 통과 (wave 5)
 
 **Wave 6** *(blocked on Wave 5 completion)*
-- [ ] 03.1-09-PLAN.md — 아침 카드 팝/퇴장·어둡게 층·유령 맥동, 관전자 테이블(직업 캐릭터), 헤더 nowrap·패널 여백·칩 간격 (TDD, wave 6)
+- [ ] 03.1-08-PLAN.md — 순차 주장 화면(뒤): 낮 캐릭터 탭 → 유저 기록 카드(UserRecordSheet), 밤에는 열리지 않음 (TDD, wave 6)
 
 **Wave 7** *(blocked on Wave 6 completion)*
-- [ ] 03.1-10-PLAN.md — 역할 카드 통합: 헤더 [역할 카드] 하나·앰버 점·읽음 개수(폰 메모리)·눌리는 밤 끝 알림, 옛 [내 역할]/[수사 기록] 제거 (TDD, wave 7)
+- [ ] 03.1-10-PLAN.md — 아침 카드 팝/퇴장·어둡게 층·유령 맥동, 관전자 테이블(직업 캐릭터), 헤더 nowrap·패널 여백·칩 간격 (TDD, wave 7)
 
 **Wave 8** *(blocked on Wave 7 completion)*
-- [ ] 03.1-11-PLAN.md — E2E 흐름 6개(spec4 관전자 신설)를 새 계약으로 다시 쓰고 로컬 서버에서 `npm run e2e` 전부 통과 (wave 8)
+- [ ] 03.1-11-PLAN.md — 역할 카드 통합: 헤더 [역할 카드] 하나·앰버 점·읽음 개수(폰 메모리)·눌리는 밤 끝 알림, 옛 [내 역할]/[수사 기록] 제거 (TDD, wave 8)
 
 **Wave 9** *(blocked on Wave 8 completion)*
-- [ ] 03.1-13-PLAN.md — 개인 계정 배포 → 배포본 스모크 4·5·8명·봇 UAT·E2E → HANDOFF·ROADMAP·REQUIREMENTS·push·실기기 확인 목록 (wave 9)
+- [ ] 03.1-12-PLAN.md — E2E 흐름 6개(spec4 관전자 신설)를 새 계약으로 다시 쓰고 로컬 서버에서 `npm run e2e` 전부 통과 (wave 9)
+
+**Wave 10** *(blocked on Wave 9 completion)*
+- [ ] 03.1-14-PLAN.md — 개인 계정 배포 → 배포본 스모크 4·5·8명·봇 UAT·E2E → HANDOFF·ROADMAP·REQUIREMENTS·push·실기기 확인 목록 (wave 10)
 
 ### Phase 4: 처형과 승패
 
@@ -292,7 +295,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 (decimal phases
 | 1. 걷는 뼈대 | v1.0 | 19/19 | Complete    | 2026-10-24 |
 | 2. 낮 토론 | v1.0 | 18/18 | In Progress | - |
 | 3. 밤과 아침 | v1.0 | 12/12 | In Progress | - |
-| 3.1. 순차 주장과 역할 카드 | v1.0 | 0/13 | Planned | - |
+| 3.1. 순차 주장과 역할 카드 | v1.0 | 0/14 | Planned | - |
 | 4. 처형과 승패 | v1.0 | 0/TBD | Not started | - |
 | 5. 분위기와 캐릭터 | v1.0 | 0/TBD | Not started | - |
 | 6. 친구 플레이테스트 | v1.0 | 0/TBD | Not started | - |
