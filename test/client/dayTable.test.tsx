@@ -75,16 +75,47 @@ describe("DayTable: 좌표는 daySeatLayout 하나에서 나온다", () => {
     expect(dot3.getAttribute("style") ?? "").toContain("var(--seat-3)");
   });
 
-  it("테이블 면은 width 352 에서 left 44px·width 264px, 366 에서 left 43px·width 280px, top 150px·height 108px (height 생략 = 407)", () => {
-    const a = render(<DayTable seats={five()} mySeat={0} width={352} />);
-    expect(felt(a.container).style.left).toBe("44px");
-    expect(felt(a.container).style.width).toBe("264px");
+  it("테이블 면은 width 366(390폰)에서 left 75px·width 216px·top 150px·height 108px (height 생략 = 407), width 352 + scenePad 4(360폰)에서 left 83px·width 186px", () => {
+    const a = render(<DayTable seats={five()} mySeat={0} width={352} scenePad={4} />);
+    expect(felt(a.container).style.left).toBe("83px");
+    expect(felt(a.container).style.width).toBe("186px");
     cleanup();
     const b = render(<DayTable seats={five()} mySeat={0} width={366} />);
-    expect(felt(b.container).style.left).toBe("43px");
-    expect(felt(b.container).style.width).toBe("280px");
+    expect(felt(b.container).style.left).toBe("75px");
+    expect(felt(b.container).style.width).toBe("216px");
     expect(felt(b.container).style.top).toBe("150px");
     expect(felt(b.container).style.height).toBe("108px");
+  });
+
+  it("scenePad 가 자리 좌표에도 쓰인다: 폭 352 에서 여백 4 는 rx 131, 여백 12 는 rx 139 (4명판 맨 오른쪽 자리 발 x)", () => {
+    const four = [seat(0, "나", { isMe: true }), seat(1, "가"), seat(2, "나나"), seat(3, "다")];
+    const a = render(<DayTable seats={four} mySeat={0} width={352} height={364} scenePad={4} />);
+    expect(tagEl(a.container, 3).style.left).toBe(px(176 + 131));
+    cleanup();
+    const b = render(<DayTable seats={four} mySeat={0} width={352} height={364} scenePad={12} />);
+    expect(tagEl(b.container, 3).style.left).toBe(px(176 + 139));
+  });
+
+  it("scenePad 가 없으면 루트의 CSS 변수 --mf-scene-pad 를 읽고, 비었거나 숫자가 아니면 12", () => {
+    const real = window.getComputedStyle.bind(window);
+    const spy = vi.spyOn(window, "getComputedStyle").mockImplementation((el: Element, pseudo?: string | null) => {
+      const cs = real(el, pseudo);
+      if (!(el as HTMLElement).classList?.contains("mf-dt")) return cs;
+      return new Proxy(cs, {
+        get(target, key) {
+          if (key === "getPropertyValue") return (name: string) => (name === "--mf-scene-pad" ? " 4px" : target.getPropertyValue(name));
+          const v = Reflect.get(target, key) as unknown;
+          return typeof v === "function" ? (v as (...a: unknown[]) => unknown).bind(target) : v;
+        },
+      });
+    });
+    const a = render(<DayTable seats={five()} mySeat={0} width={352} />);
+    expect(felt(a.container).style.width).toBe("186px");
+    cleanup();
+    spy.mockRestore();
+    // 테스트 환경은 CSS 를 싣지 않아 변수가 비어 있다 → 기본 12 (352 → rx 139, 면 폭 202)
+    const b = render(<DayTable seats={five()} mySeat={0} width={352} />);
+    expect(felt(b.container).style.width).toBe("202px");
   });
 
   it("height 320 을 주면 테이블 면 top 138px 이고 내 자리(맨 아래) 이름표 top 이 px(198 + 100) 이다", () => {
@@ -95,7 +126,7 @@ describe("DayTable: 좌표는 daySeatLayout 하나에서 나온다", () => {
 });
 
 describe("DayTable: 장면 크기 재기", () => {
-  it("ResizeObserver 가 있으면 루트를 재서 쓴다 (폭 352·높이 300 → 면 left 44px·top 118px), 언마운트하면 disconnect", () => {
+  it("ResizeObserver 가 있으면 루트를 재서 쓴다 (폭 352·높이 300, 여백 기본 12 → 면 left 75px·top 118px), 언마운트하면 disconnect", () => {
     const disconnect = vi.fn();
     class FakeRO {
       constructor(private cb: (entries: { contentRect: { width: number; height: number } }[]) => void) {}
@@ -109,15 +140,26 @@ describe("DayTable: 장면 크기 재기", () => {
     }
     vi.stubGlobal("ResizeObserver", FakeRO);
     const { container, unmount } = render(<DayTable seats={five()} mySeat={0} />);
-    expect(felt(container).style.left).toBe("44px");
+    expect(felt(container).style.left).toBe("75px");
     expect(felt(container).style.top).toBe("118px");
     unmount();
     expect(disconnect).toHaveBeenCalled();
   });
 
+  it("마운트 직후 한 번 동기로 재서 첫 페인트부터 실제 크기로 그린다 (관측 콜백이 오기 전에도 같은 렌더 묶음 안에서 반영)", () => {
+    const rect = vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
+      const r = this.classList.contains("mf-dt") ? { width: 352, height: 300 } : { width: 0, height: 0 };
+      return { ...r, left: 0, top: 0, right: r.width, bottom: r.height, x: 0, y: 0, toJSON: () => ({}) } as DOMRect;
+    });
+    const { container } = render(<DayTable seats={five()} mySeat={0} scenePad={4} />);
+    rect.mockRestore();
+    expect(felt(container).style.left).toBe("83px");
+    expect(felt(container).style.top).toBe("118px");
+  });
+
   it("재지 못하면 시안 기준 366×407 을 쓴다", () => {
     const { container } = render(<DayTable seats={five()} mySeat={0} />);
-    expect(felt(container).style.left).toBe("43px");
+    expect(felt(container).style.left).toBe("75px");
     expect(felt(container).style.top).toBe("150px");
   });
 });

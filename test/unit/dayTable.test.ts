@@ -2,19 +2,26 @@ import { describe, expect, it } from "vitest";
 import {
   DAY_SCENE_H,
   DEPTH_K0,
+  FELT_SIDE,
+  RX_TAG_HALF,
+  SCENE_PAD_DEFAULT,
+  SCENE_PAD_NARROW,
+  SEAT_RX_MAX,
+  SEAT_RX_MIN,
   TAG_GAP_Y,
   TAG_H,
   DAY_SCENE_W,
   NAME_TAG_MAX_W,
-  NARROW_SCENE_BELOW,
   SEAT_CY_MIN,
   TABLE_FIT_MIN_H,
   dayTableGeometry,
   daySeatLayout,
+  feltWidthOf,
   px,
+  seatRx,
 } from "../../src/game/dayTable";
 
-// 낮 화면 고정 테이블 배치(결정 0017-1). 공식은 승인 시안 9차(design/screens/day-v3/SPEC.md).
+// 고정 테이블 배치(결정 0017-1, 0028). 기하는 승인 시안 P2(design/screens/table-v1/SPEC.md)로 고정한다.
 const seatsOf = (n: number): { seat: number }[] => Array.from({ length: n }, (_, i) => ({ seat: i }));
 const r1 = (v: number): number => Math.round(v * 10) / 10;
 
@@ -22,7 +29,12 @@ describe("상수", () => {
   it("시안 기준 값을 그대로 둔다", () => {
     expect(DAY_SCENE_W).toBe(366);
     expect(DAY_SCENE_H).toBe(407);
-    expect(NARROW_SCENE_BELOW).toBe(366);
+    expect(SEAT_RX_MIN).toBe(124);
+    expect(SEAT_RX_MAX).toBe(150);
+    expect(RX_TAG_HALF).toBe(49);
+    expect(FELT_SIDE).toBe(38);
+    expect(SCENE_PAD_DEFAULT).toBe(12);
+    expect(SCENE_PAD_NARROW).toBe(4);
     expect(SEAT_CY_MIN).toBe(177);
     expect(TABLE_FIT_MIN_H).toBe(299);
     expect(NAME_TAG_MAX_W).toBe(100);
@@ -32,29 +44,45 @@ describe("상수", () => {
   });
 });
 
-describe("dayTableGeometry: 인원과 상관없이 하나로 고정", () => {
-  it("폭 366·높이 407 은 cx 183·rx 132·테이블 면 left 43·width 280", () => {
-    const g = dayTableGeometry(366, 407);
-    expect(g.cx).toBe(183);
-    expect(g.rx).toBe(132);
-    expect(g.felt.left).toBe(43);
-    expect(g.felt.width).toBe(280);
+// 실제 폰 장면 네 가지(장면 폭 = 폰 폭 − 2·여백): 360(여백 4)·375(여백 4)·390(여백 12)·430(여백 12)
+const SCENES = [
+  { phone: 360, w: 352, h: 363.8, pad: 4, rx: 131, felt: 186, left: 83 },
+  { phone: 375, w: 367, h: 390.8, pad: 4, rx: 138, felt: 200, left: 83.5 },
+  { phone: 390, w: 366, h: 387.8, pad: 12, rx: 146, felt: 216, left: 75 },
+  { phone: 430, w: 406, h: 655.8, pad: 12, rx: 150, felt: 224, left: 91 },
+] as const;
+
+describe("dayTableGeometry: 인원과 상관없이 하나로 고정 (P2 승인값)", () => {
+  it.each(SCENES)("폰 $phone: 장면 $w×$h(여백 $pad) → rx $rx·면 폭 $felt·면 left $left", (sc) => {
+    const g = dayTableGeometry(sc.w, sc.h, sc.pad);
+    expect(g.cx).toBe(sc.w / 2);
+    expect(g.rx).toBe(sc.rx);
+    expect(g.felt.width).toBe(sc.felt);
+    expect(g.felt.left).toBe(sc.left);
+    expect(seatRx(sc.w, sc.pad)).toBe(sc.rx);
+    expect(feltWidthOf(sc.rx)).toBe(sc.felt);
   });
 
-  it("폭 352·높이 383 은 cx 176·rx 124·left 44·width 264", () => {
-    const g = dayTableGeometry(352, 383);
-    expect(g.cx).toBe(176);
-    expect(g.rx).toBe(124);
-    expect(g.felt.left).toBe(44);
-    expect(g.felt.width).toBe(264);
+  it("390폭(장면 366, 여백 12)은 승인값 그대로: 면 216×108·위 150, cy 210·rx 146·ry 100", () => {
+    const g = dayTableGeometry(366, 407, 12);
+    expect(g.felt).toEqual({ left: 75, top: 150, width: 216, height: 108 });
+    expect([g.cy, g.rx, g.ry]).toEqual([210, 146, 100]);
   });
 
-  it("폭 406 은 rx 132·left 63", () => {
-    const g = dayTableGeometry(406, 407);
-    expect(g.rx).toBe(132);
-    expect(g.felt.left).toBe(63);
+  it("여백을 안 주면 12 로 본다", () => {
+    expect(dayTableGeometry(366, 407).rx).toBe(146);
+    expect(seatRx(366)).toBe(146);
   });
 
+  it("클램프: 장면 폭 300(여백 4)은 rx 124, 700(여백 12)은 rx 150", () => {
+    expect(seatRx(300, 4)).toBe(124);
+    expect(seatRx(700, 12)).toBe(150);
+    expect(dayTableGeometry(300, 380, 4).felt.width).toBe(2 * (124 - 38));
+    expect(dayTableGeometry(700, 380, 12).felt.width).toBe(2 * (150 - 38));
+  });
+});
+
+describe("dayTableGeometry: 세로 규칙은 그대로", () => {
   it.each([
     ["366×407", dayTableGeometry(366, 407)],
     ["352×383", dayTableGeometry(352, 383)],
@@ -88,11 +116,6 @@ describe("dayTableGeometry: 인원과 상관없이 하나로 고정", () => {
   it("높이 460 은 cy 210 (최대에서 멈춘다)", () => {
     expect(dayTableGeometry(366, 460).cy).toBe(210);
   });
-
-  it("폭 352·366·406 의 rx·felt 폭은 예전과 같다", () => {
-    expect([352, 366, 406].map((w) => dayTableGeometry(w).rx).join(",")).toBe("124,132,132");
-    expect([352, 366, 406].map((w) => dayTableGeometry(w).felt.width).join(",")).toBe("264,280,280");
-  });
 });
 
 describe("daySeatLayout: 시계 방향 좌석 원", () => {
@@ -109,7 +132,7 @@ describe("daySeatLayout: 시계 방향 좌석 원", () => {
     const line = daySeatLayout(seatsOf(4), 0, 366)
       .map((p) => `${r1(p.x)},${r1(p.y)}`)
       .join(" ");
-    expect(line).toBe("183,310 51,210 183,110 315,210");
+    expect(line).toBe("183,310 37,210 183,110 329,210");
   });
 
   it("맨 위 자리는 scale 0.8·z 12 이다(짝수 인원)", () => {
@@ -197,57 +220,86 @@ describe("daySeatLayout: 시계 방향 좌석 원", () => {
   });
 });
 
-// ---- 자동 배치 검사(호출자 지시) ----
+// ---- 자동 배치 검사 ----
 interface Box {
   l: number;
   r: number;
   t: number;
   b: number;
 }
-const tagBox = (p: { tagLeft: number; tagTop: number }): Box => ({
-  l: p.tagLeft - NAME_TAG_MAX_W / 2,
-  r: p.tagLeft + NAME_TAG_MAX_W / 2,
+const tagBox = (p: { tagLeft: number; tagTop: number }, w: number = NAME_TAG_MAX_W): Box => ({
+  l: p.tagLeft - w / 2,
+  r: p.tagLeft + w / 2,
   t: p.tagTop,
   b: p.tagTop + TAG_H,
 });
-const overlap = (a: Box, b: Box): boolean => a.l < b.r && b.l < a.r && a.t < b.b && b.t < a.b;
+/** 겹침이 가로·세로 모두 eps 보다 크면 겹침(변이 맞닿거나 eps 이하로 겹친 것은 겹침이 아니다 — E2E OVERLAP_EPS 와 같은 뜻) */
+const overlapsBy = (a: Box, b: Box, eps: number): boolean =>
+  Math.min(a.r, b.r) - Math.max(a.l, b.l) > eps && Math.min(a.b, b.b) - Math.max(a.t, b.t) > eps;
+/** 캐릭터 상자: 발 (x, y) 에서 아래 가운데 기준으로 scale 만큼 줄어든 72×96 */
+const figBox = (p: { x: number; y: number; scale: number }): Box => ({
+  l: p.x - 36 * p.scale,
+  r: p.x + 36 * p.scale,
+  t: p.y - 96 * p.scale,
+  b: p.y,
+});
+/** 발 줄이 테이블 면 세로 범위에 드는 캐릭터의 가로 간격(타원 현 기준). 범위 밖이면 null. 간격은 현에서 캐릭터 상자까지 */
+function feltGap(p: { x: number; y: number; scale: number }, g: ReturnType<typeof dayTableGeometry>): number | null {
+  const mid = g.felt.top + g.felt.height / 2;
+  const t = (p.y - mid) / (g.felt.height / 2);
+  if (Math.abs(t) > 1) return null;
+  const half = (g.felt.width / 2) * Math.sqrt(1 - t * t);
+  const box = figBox(p);
+  return p.x < g.cx ? g.cx - half - box.r : box.l - (g.cx + half);
+}
+
+/** 장면 폭 구간: 폰 폭 = 장면 폭 + 2·여백 이 CSS 의 389px 경계와 맞는 모든 정수 폭 (여백 4 쪽은 폰 348~389, 여백 12 쪽은 폰 390~430) */
+const WIDTH_RUNS: readonly { pad: number; from: number; to: number }[] = [
+  { pad: 4, from: 340, to: 381 },
+  { pad: 12, from: 366, to: 406 },
+];
+const HEIGHTS = [299.8, 363.8, 387.8, 655.8];
 
 describe("자동 배치 검사: 가로 (이름표 상한 NAME_TAG_MAX_W 100)", () => {
-  it.each([352, 366])("4~8명, 폭 %i 에서 모든 이름표 상자가 장면 가로 안이다", (w) => {
+  it("실제 폰 네 가지 × 4~8명: 99px 이름표 상자가 폰 가장자리 안이다 (허용 −0.5, E2E G2·D2 와 같은 기준)", () => {
+    // 4·8명판의 양옆 자리 5글자(99px) 이름표는 장면 상자 밖(최대 −13)으로 나가지만 폰 가장자리 안이다. 이름표 여유 49 가 칼날 경계(−0.5).
     const out: string[] = [];
-    for (let n = 4; n <= 8; n++) {
-      for (const p of daySeatLayout(seatsOf(n), 0, w)) {
-        const b = tagBox(p);
-        if (b.l < 0 || b.r > w) out.push(`n${n}:seat${p.seat}[${r1(b.l)},${r1(b.r)}]`);
-      }
-    }
-    expect(out.join(",")).toBe("");
-  });
-
-  it("같은 검사를 폭 352~406 의 모든 정수 폭에서", () => {
-    const out: string[] = [];
-    for (let w = 352; w <= 406; w++) {
+    for (const sc of SCENES) {
       for (let n = 4; n <= 8; n++) {
-        for (const p of daySeatLayout(seatsOf(n), 0, w)) {
-          const b = tagBox(p);
-          if (b.l < 0 || b.r > w) out.push(`w${w}n${n}:seat${p.seat}`);
+        for (const p of daySeatLayout(seatsOf(n), 0, sc.w, sc.h, sc.pad)) {
+          const b = tagBox(p, 99);
+          if (b.l + sc.pad < -0.5 - 1e-6 || b.r + sc.pad > sc.w + 2 * sc.pad + 0.5 + 1e-6) out.push(`${sc.phone}n${n}:seat${p.seat}`);
         }
       }
     }
     expect(out.join(",")).toBe("");
   });
 
-  it("4~8명 × 장면 폭 352~406 모든 정수 폭에서 이름표 상자끼리 겹치지 않는다 (0.5px 허용, D9)", () => {
+  it("같은 검사를 두 구간의 모든 정수 폭 × 1~8명에서", () => {
+    const out: string[] = [];
+    for (const { pad, from, to } of WIDTH_RUNS) {
+      for (let w = from; w <= to; w++) {
+        for (let n = 1; n <= 8; n++) {
+          for (const p of daySeatLayout(seatsOf(n), 0, w, 400, pad)) {
+            const b = tagBox(p, 99);
+            if (b.l + pad < -0.5 - 1e-6 || b.r + pad > w + 2 * pad + 0.5 + 1e-6) out.push(`p${pad}w${w}n${n}:seat${p.seat}`);
+          }
+        }
+      }
+    }
+    expect(out.join(",")).toBe("");
+  });
+
+  it("모든 정수 폭 × 4~8명에서 100px 이름표 상자끼리 겹치지 않는다 (0.5px 허용, D9)", () => {
     const pairs: string[] = [];
-    for (let w = 352; w <= 406; w++) {
-      for (let n = 4; n <= 8; n++) {
-        const places = daySeatLayout(seatsOf(n), 0, w);
-        for (let i = 0; i < places.length; i++) {
-          for (let j = i + 1; j < places.length; j++) {
-            const a = tagBox(places[i]!);
-            const b = tagBox(places[j]!);
-            const shrink = (x: Box): Box => ({ l: x.l + 0.5, r: x.r - 0.5, t: x.t + 0.5, b: x.b - 0.5 });
-            if (overlap(shrink(a), shrink(b))) pairs.push(`w${w}n${n}:${i}-${j}`);
+    for (const { pad, from, to } of WIDTH_RUNS) {
+      for (let w = from; w <= to; w++) {
+        for (let n = 1; n <= 8; n++) {
+          const places = daySeatLayout(seatsOf(n), 0, w, 400, pad);
+          for (let i = 0; i < places.length; i++) {
+            for (let j = i + 1; j < places.length; j++) {
+              if (overlapsBy(tagBox(places[i]!), tagBox(places[j]!), 0.5)) pairs.push(`p${pad}w${w}n${n}:${i}-${j}`);
+            }
           }
         }
       }
@@ -255,35 +307,128 @@ describe("자동 배치 검사: 가로 (이름표 상한 NAME_TAG_MAX_W 100)", (
     expect(pairs.join(",")).toBe("");
   });
 
-  it("맨 왼쪽 이름표 왼쪽 ≥ 1.0, 맨 오른쪽 이름표 오른쪽 ≤ 장면 폭 (D2)", () => {
+  it("모든 캐릭터 상자(72×scale)가 장면 안이다: 네 폰 × 네 높이 × 1~8명", () => {
     const out: string[] = [];
-    for (let w = 352; w <= 406; w++) {
-      for (let n = 4; n <= 8; n++) {
-        const boxes = daySeatLayout(seatsOf(n), 0, w).map(tagBox);
-        if (Math.min(...boxes.map((b) => b.l)) < 1.0) out.push(`L w${w}n${n}`);
-        if (Math.max(...boxes.map((b) => b.r)) > w) out.push(`R w${w}n${n}`);
+    for (const sc of SCENES) {
+      for (const h of HEIGHTS) {
+        for (let n = 1; n <= 8; n++) {
+          for (const p of daySeatLayout(seatsOf(n), 0, sc.w, h, sc.pad)) {
+            const b = figBox(p);
+            if (b.l < 0 || b.r > sc.w || b.t < -1e-9 || b.b > h) out.push(`${sc.phone}h${h}n${n}:seat${p.seat}`);
+          }
+        }
       }
     }
     expect(out.join(",")).toBe("");
   });
 
+  it("양옆 캐릭터는 발 줄에서 테이블 면과 4px 이상 떨어진다 (계산 최소 6.2): 네 폰 × 네 높이 × 1~8명", () => {
+    const out: string[] = [];
+    let min = Infinity;
+    for (const sc of SCENES) {
+      for (const h of HEIGHTS) {
+        const g = dayTableGeometry(sc.w, h, sc.pad);
+        for (let n = 1; n <= 8; n++) {
+          for (const p of daySeatLayout(seatsOf(n), 0, sc.w, h, sc.pad)) {
+            const gap = feltGap(p, g);
+            if (gap === null) continue;
+            min = Math.min(min, gap);
+            if (gap < 4) out.push(`${sc.phone}h${h}n${n}:seat${p.seat}=${r1(gap)}`);
+          }
+        }
+      }
+    }
+    expect(out.join(",")).toBe("");
+    // 계획 산술 표(4·8명판 6.2~6.3, 7명판 7.4 이상)와 같은 숫자
+    expect(r1(min)).toBeGreaterThanOrEqual(6.2);
+    expect(r1(min)).toBeLessThanOrEqual(6.3);
+  });
+
+  it("모든 정수 폭에서도 간격 ≥ 4", () => {
+    const out: string[] = [];
+    for (const { pad, from, to } of WIDTH_RUNS) {
+      for (let w = from; w <= to; w++) {
+        const g = dayTableGeometry(w, 400, pad);
+        for (let n = 1; n <= 8; n++) {
+          for (const p of daySeatLayout(seatsOf(n), 0, w, 400, pad)) {
+            const gap = feltGap(p, g);
+            if (gap !== null && gap < 4) out.push(`p${pad}w${w}n${n}:seat${p.seat}=${r1(gap)}`);
+          }
+        }
+      }
+    }
+    expect(out.join(",")).toBe("");
+  });
+
+  it("산술 표: 장면 안 최소 여백 — 360 12.6 · 375 13.1 · 390 4.6 · 430 20.6", () => {
+    const want: Record<number, number> = { 360: 12.6, 375: 13.1, 390: 4.6, 430: 20.6 };
+    for (const sc of SCENES) {
+      let min = Infinity;
+      for (let n = 1; n <= 8; n++) {
+        for (const p of daySeatLayout(seatsOf(n), 0, sc.w, sc.h, sc.pad)) {
+          const b = figBox(p);
+          min = Math.min(min, b.l, sc.w - b.r);
+        }
+      }
+      expect(r1(min)).toBe(want[sc.phone]);
+    }
+  });
+
+  it("산술 표: 99px 이름표의 폰 가장자리 여유 — 360 −0.5 · 375 0.0 · 390 −0.5 · 430 15.5 (4·8명판)", () => {
+    const want: Record<number, number> = { 360: -0.5, 375: 0, 390: -0.5, 430: 15.5 };
+    for (const sc of SCENES) {
+      let min = Infinity;
+      for (const n of [4, 8]) {
+        for (const p of daySeatLayout(seatsOf(n), 0, sc.w, sc.h, sc.pad)) {
+          const b = tagBox(p, 99);
+          min = Math.min(min, b.l + sc.pad, sc.w + 2 * sc.pad - (b.r + sc.pad));
+        }
+      }
+      expect(r1(min)).toBe(want[sc.phone]);
+    }
+  });
+
   it("맨 아래 이름표의 아래 끝(y + 0 + 22 = 332)은 360×640 장면 높이 363.8 안이다", () => {
-    const me = daySeatLayout(seatsOf(8), 0, 352, 363.8).find((p) => p.slot === 0)!;
+    const me = daySeatLayout(seatsOf(8), 0, 352, 363.8, 4).find((p) => p.slot === 0)!;
     expect(r1(me.tagTop + TAG_H)).toBe(332);
     expect(me.tagTop + TAG_H <= 363.8).toBe(true);
   });
 
-  it.each([
-    [352, 363.8],
-    [366, 387.8],
-    [406, 655.8],
-  ])("보장 크기 %i×%f: 5·8명 맨 앞 이름표 아래 끝이 장면 안, cy 210", (w, h) => {
-    expect(dayTableGeometry(w, h).cy).toBe(210);
-    for (const n of [5, 8]) {
-      for (const p of daySeatLayout(seatsOf(n), 0, w, h)) {
-        expect(p.tagTop + TAG_H).toBeLessThanOrEqual(h);
+  it.each(SCENES)("보장 크기 폰 $phone: 1~8명 맨 앞 이름표 아래 끝이 장면 안, cy 210", (sc) => {
+    expect(dayTableGeometry(sc.w, sc.h, sc.pad).cy).toBe(210);
+    for (let n = 1; n <= 8; n++) {
+      for (const p of daySeatLayout(seatsOf(n), 0, sc.w, sc.h, sc.pad)) {
+        expect(p.tagTop + TAG_H).toBeLessThanOrEqual(sc.h);
       }
     }
+  });
+});
+
+describe("원 위의 자리 배치", () => {
+  it("1~8명: 내 자리는 맨 아래 가운데, 자리 사이 각도는 모두 2π/n", () => {
+    for (let n = 1; n <= 8; n++) {
+      const g = dayTableGeometry(366, 407, 12);
+      const places = daySeatLayout(seatsOf(n), 0, 366, 407, 12).sort((a, b) => a.slot - b.slot);
+      expect(r1(places[0]!.x)).toBe(g.cx);
+      expect(r1(places[0]!.y)).toBe(g.cy + g.ry);
+      const ang = places.map((p) => Math.atan2((p.y - g.cy) / g.ry, (p.x - g.cx) / g.rx));
+      for (let i = 0; i < n; i++) {
+        const next = ang[(i + 1) % n]!;
+        let d = next - ang[i]!;
+        d = ((d % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
+        if (n > 1) expect(d).toBeCloseTo((2 * Math.PI) / n, 9);
+      }
+    }
+  });
+
+  it("2명은 마주 본다(맨 아래와 맨 위), 3명은 한 직선이 아니다(삼각)", () => {
+    const g = dayTableGeometry(366, 407, 12);
+    const two = daySeatLayout(seatsOf(2), 0, 366, 407, 12).sort((a, b) => a.slot - b.slot);
+    expect(r1(two[1]!.x)).toBe(g.cx);
+    expect(r1(two[1]!.y)).toBe(g.cy - g.ry);
+    const [a, b, c] = daySeatLayout(seatsOf(3), 0, 366, 407, 12);
+    const cross = (b!.x - a!.x) * (c!.y - a!.y) - (b!.y - a!.y) * (c!.x - a!.x);
+    expect(Math.abs(cross)).toBeGreaterThan(1000);
   });
 });
 
@@ -295,7 +440,7 @@ describe("자동 배치 검사: 세로 (장면 높이 299~460)", () => {
     for (const w of [352, 366]) {
       for (const h of heights) {
         for (let n = 4; n <= 8; n++) {
-          for (const p of daySeatLayout(seatsOf(n), 0, w, h)) {
+          for (const p of daySeatLayout(seatsOf(n), 0, w, h, w === 352 ? 4 : 12)) {
             if (p.y - 96 * p.scale < -1e-9) out.push(`w${w}h${h}n${n}:seat${p.seat}`);
           }
         }
@@ -309,7 +454,7 @@ describe("자동 배치 검사: 세로 (장면 높이 299~460)", () => {
     for (const w of [352, 366]) {
       for (const h of heights.filter((v) => v >= TABLE_FIT_MIN_H)) {
         for (let n = 4; n <= 8; n++) {
-          for (const p of daySeatLayout(seatsOf(n), 0, w, h)) {
+          for (const p of daySeatLayout(seatsOf(n), 0, w, h, w === 352 ? 4 : 12)) {
             if (p.tagTop + TAG_H > h + 1e-9) out.push(`w${w}h${h}n${n}:seat${p.seat}`);
           }
         }
@@ -324,7 +469,7 @@ describe("자동 배치 검사: 세로 (장면 높이 299~460)", () => {
       for (const h of [290, 294, 298]) {
         expect(dayTableGeometry(w, h).cy).toBe(SEAT_CY_MIN);
         for (let n = 4; n <= 8; n++) {
-          const over = daySeatLayout(seatsOf(n), 0, w, h)
+          const over = daySeatLayout(seatsOf(n), 0, w, h, w === 352 ? 4 : 12)
             .filter((p) => p.tagTop + TAG_H > h)
             .map((p) => p.slot);
           if (over.length > 0 && over.join(",") !== "0") out.push(`w${w}h${h}n${n}:[${over.join(",")}]`);

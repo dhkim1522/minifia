@@ -4,9 +4,11 @@ import assert from "node:assert/strict";
 import {
   DECORATIVE_ALLOW,
   FACE_RATIO,
+  HEADER_H,
   ONE_LINE_FACTOR,
   PANEL_H,
   OVERLAP_EPS,
+  SIDE_GAP_MIN,
   TAP_ALLOW,
   TAP_MIN,
   TEXT_SIZE_ALLOW,
@@ -28,6 +30,7 @@ import {
   nightIntroChecks,
   exitCodeOf,
   faceRegion,
+  feltGapChecks,
   feltStable,
   findChrome,
   formatTables,
@@ -40,6 +43,7 @@ import {
   rectsOverlap,
   redact,
   resolveTarget,
+  stageStable,
   tagsOverlap,
 } from "./lib.mjs";
 
@@ -633,6 +637,113 @@ test("feltStable: 같으면 통과, 1px 옮겨지면 실패하고 상태 이름�
   const bad = feltStable([{ state: "claim", rect: r }, { state: "discussion", rect: rect(10, 21, 300, 200) }]);
   assert.equal(bad.ok, false);
   assert.match(bad.detail, /discussion/);
+});
+
+// ---- 테이블 기하 고정(T1·T2, 결정 0028) ----
+
+test("T1·T2 상수: 양옆 간격 하한 4, 머리 높이 119.2 — 기존 기준 수치는 그대로", () => {
+  assert.equal(SIDE_GAP_MIN, 4);
+  assert.equal(HEADER_H, 119.2);
+  assert.equal(OVERLAP_EPS, 0.5);
+  assert.equal(ONE_LINE_FACTOR, 1.6);
+  assert.equal(FACE_RATIO, 0.45);
+  assert.equal(TAP_MIN, 44);
+  assert.equal(PANEL_H, 157);
+});
+
+// 390×664: 장면 366 폭(여백 12) · 면 216×108 (left 87, top 270 = 헤더 119.2 + 150.8) · 8명판 양옆 자리
+const stageOf = (over = {}) => ({
+  scene: rect(0, 119.2, 390, 387.8),
+  header: rect(0, 0, 390, 119.2),
+  panel: rect(0, 507, 390, 157),
+  felt: rect(87, 270, 216, 108),
+  seats: [
+    // 맨 왼쪽(4·8명판 양옆): 발 y = 면 중심 y − 6 = 318, 상자 오른쪽 끝 = 면 현 왼쪽 − 6.3
+    { seat: 1, rect: rect(12, 222, 64.8, 86.4), spotlit: false },
+    { seat: 2, rect: rect(313.2, 222, 64.8, 86.4), spotlit: false },
+    { seat: 0, rect: rect(159, 412, 72, 96), spotlit: false },
+  ],
+  ...over,
+});
+const sideSeat = (right, y = 324) => ({ seat: 1, rect: rect(right - 64.8, y - 86.4, 64.8, 86.4), spotlit: false });
+
+test("feltGapChecks T2: 발 줄이 면 세로 범위에 드는 양옆 캐릭터가 면 현과 4px 이상 떨어지면 통과", () => {
+  // 면 중심 (195, 324), 발 줄 y=324 에서 현 왼쪽 = 87, 오른쪽 = 303. 왼쪽 캐릭터 상자 오른쪽 끝 80.7 → 간격 6.3
+  const stage = stageOf({ seats: [sideSeat(80.7), { seat: 2, rect: rect(309.3, 324 - 86.4, 64.8, 86.4), spotlit: false }] });
+  const r = feltGapChecks(stage);
+  assert.equal(r.id, "T2");
+  assert.match(r.label, /양옆 캐릭터가 테이블 면 바깥/);
+  assert.equal(r.ok, true);
+});
+
+test("feltGapChecks T2: 간격 3.9 면 실패하고 자리와 간격이 내용 칸에 나온다", () => {
+  const stage = stageOf({ seats: [sideSeat(83.1), { seat: 2, rect: rect(309.3, 324 - 86.4, 64.8, 86.4), spotlit: false }] });
+  const r = feltGapChecks(stage);
+  assert.equal(r.ok, false);
+  assert.match(r.detail, /자리 1/);
+  assert.match(r.detail, /3\.9/);
+});
+
+test("feltGapChecks T2: 면과 겹치면(음수 간격) 실패하고, 발 줄이 면 세로 범위 밖인 자리는 건너뛴다", () => {
+  const overlap = feltGapChecks(stageOf({ seats: [sideSeat(100)] }));
+  assert.equal(overlap.ok, false);
+  const outside = feltGapChecks(stageOf({ seats: [sideSeat(100, 200)] }));
+  assert.equal(outside.ok, true);
+  const back = feltGapChecks(stageOf({ seats: [{ seat: 3, rect: rect(160, 158, 57.6, 76.8), spotlit: false }] }));
+  assert.equal(back.ok, true);
+});
+
+test("feltGapChecks T2: 면 높이 방향 끝 가까운 발 줄은 현이 짧아진다(타원)", () => {
+  // 발 y = 면 아래 끝 근처(y=376): 현 반폭이 108 보다 훨씬 작아 80.7 에 있는 상자와의 간격이 커진다
+  const r = feltGapChecks(stageOf({ seats: [sideSeat(80.7, 376)] }));
+  assert.equal(r.ok, true);
+});
+
+test("feltGapChecks T2: stage.felt 또는 stage.seats 가 없으면 조용히 통과하지 않고 실패한다", () => {
+  assert.equal(feltGapChecks(stageOf({ felt: null })).ok, false);
+  assert.equal(feltGapChecks(stageOf({ seats: undefined })).ok, false);
+  assert.equal(feltGapChecks(stageOf({ seats: [] })).ok, false);
+  assert.equal(feltGapChecks(null).ok, false);
+  assert.match(feltGapChecks(stageOf({ felt: null })).detail, /측정값 없음/);
+});
+
+const entry = (state, over = {}, mySeat = 0) => ({ state, stage: stageOf(over), mySeat });
+
+test("stageStable T1: 상태가 달라도 장면 상자·면·내 캐릭터가 ±0.5 같고 머리 119.2·패널 157·패널 위 = 장면 아래면 통과", () => {
+  const r = stageStable([entry("claim"), entry("night"), entry("morning")]);
+  assert.equal(r.id, "T1");
+  assert.match(r.label, /단계가 바뀌어도 장면 상자·테이블·내 캐릭터·패널이 그대로/);
+  assert.equal(r.ok, true);
+  const near = stageStable([entry("claim"), entry("night", { felt: rect(87.4, 270.4, 216, 108) })]);
+  assert.equal(near.ok, true);
+});
+
+test("stageStable T1: 1px 다르면 실패하고 상태 이름을 말한다", () => {
+  const scene = stageStable([entry("claim"), entry("night", { scene: rect(0, 119.2, 390, 386.8) })]);
+  assert.equal(scene.ok, false);
+  assert.match(scene.detail, /night/);
+  const felt = stageStable([entry("claim"), entry("morning", { felt: rect(87, 271, 216, 108) })]);
+  assert.equal(felt.ok, false);
+  assert.match(felt.detail, /morning/);
+  const me = stageStable([entry("claim"), entry("night", { seats: [{ seat: 0, rect: rect(159, 413, 72, 96), spotlit: false }] })]);
+  assert.equal(me.ok, false);
+  assert.match(me.detail, /night/);
+});
+
+test("stageStable T1: 머리 높이 ≠ 119.2, 패널 높이 ≠ 157, 패널 위 ≠ 장면 아래면 실패한다", () => {
+  assert.equal(stageStable([entry("claim", { header: rect(0, 0, 390, 100) })]).ok, false);
+  assert.equal(stageStable([entry("claim", { panel: rect(0, 507, 390, 150) })]).ok, false);
+  assert.equal(stageStable([entry("claim", { panel: rect(0, 520, 390, 157) })]).ok, false);
+  assert.equal(stageStable([entry("claim", { header: null })]).ok, false);
+});
+
+test("stageStable T1: 내 자리가 spotlit 이면 내 캐릭터 비교만 건너뛰고, 항목이 비면 실패한다", () => {
+  const spot = stageStable([
+    entry("night"),
+    entry("morning", { seats: [{ seat: 0, rect: rect(100, 300, 72, 96), spotlit: true }] }),
+  ]);
+  assert.equal(spot.ok, true);
+  assert.equal(stageStable([]).ok, false);
 });
 
 // ---- 차례(K1·K2)·주장 채팅(K3)·기록 카드(X1) ----
