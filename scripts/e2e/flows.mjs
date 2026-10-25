@@ -6,22 +6,51 @@ import {
   SetupError,
   chooseRole,
   clickInDialog,
+  clickNotice,
   clickTopmostPoint,
+  closeRoleCard,
   closeSheet,
   collectSnapshot,
   createTestRoom,
+  inspectSeat,
   leaveLobby,
+  openChatHistory,
   openHostPage,
+  openRoleCard,
   openTestSheet,
+  pickChip,
   resetAndLeave,
+  selectRoleCardTab,
   setBots,
   settle,
   shot,
   skipTo,
+  sleep,
   startGame,
   tapSeat,
 } from "./browser.mjs";
-import { dayChecks, feltStable, genericIssues, lineCount, morningCardIssues, rectInside, rectsOverlap, tagsOverlap } from "./lib.mjs";
+import {
+  ROLE_NAME,
+  claimChatIssues,
+  dayChecks,
+  dimChecks,
+  feltStable,
+  genericIssues,
+  inspectChecks,
+  journalChecks,
+  lineCount,
+  livingRoleArtChecks,
+  morningCardIssues,
+  morningGoneChecks,
+  noticeChecks,
+  rectInside,
+  rectsOverlap,
+  roleCardButtonChecks,
+  roleCardTabChecks,
+  spectatorChecks,
+  tagsOverlap,
+  turnChecks,
+} from "./lib.mjs";
 
 export const OUT_DIR = new URL("./out/", import.meta.url).pathname;
 const HOST_NICK = "화면검사기";
@@ -145,8 +174,6 @@ async function lobbyFlow(ctx) {
 
 // ---- 게임 흐름(과제 2) ----
 
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-
 /** 낮 장면 상태(claim·discussion·night·morning) 한 장: 스냅숏 + G + D1~D6·D8. 테이블 면·이름표는 흐름 끝의 D7·D9 용으로 모아 둔다. */
 async function dayState(ctx, flowId, state) {
   const rec = recorder(ctx);
@@ -248,6 +275,172 @@ async function nightActions(ctx, flowId, role, snap, mySeat) {
   rec(sc, "N2", "자리를 누르면 선택 링", n2.ok, n2.detail);
 }
 
+
+// ---- 새 계약 도우미(03.1) ----
+
+const mySeatOf = (tracker) => tracker.last()?.me?.seat ?? -1;
+const nickOf = (view, seat) => view?.players.find((p) => p.seat === seat)?.nickname ?? "";
+const jobNames = (view) => (view?.day?.roles ?? []).map((r) => ROLE_NAME[r]);
+const isDeadView = (view) => view?.players.find((p) => p.seat === view.me.seat)?.alive === false;
+const recOne = (rec, scenario, r) => rec(scenario, r.id, r.label, r.ok, r.detail);
+const recAll = (rec, scenario, list) => {
+  for (const r of list) recOne(rec, scenario, r);
+};
+/** 렌더 두 프레임만 기다린다(짧은 봇 차례 안에서 찍을 때). */
+const frames = (page) => page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+
+/** 내 차례: 첫 차례는 방장이다(결정 0027-3). K1·K2, 칩 하나를 눌러 잠김(K2b)을 확인한다. */
+async function claimMine(ctx, id, role) {
+  const rec = recorder(ctx);
+  const { page, tracker } = ctx.host;
+  const sc = `${id}/claim-mine`;
+  await skipTo(page, tracker, "claim");
+  await settle(page);
+  const mySeat = mySeatOf(tracker);
+  const v = tracker.last();
+  if (v.phase !== "claim" || v.day?.turn?.seat !== mySeat) throw new SetupError(`첫 차례가 내 자리가 아님 (단계 ${v.phase}, 차례 ${v.day?.turn?.seat}, 내 자리 ${mySeat})`);
+  const { snap } = await dayState(ctx, id, "claim-mine");
+  recAll(rec, sc, turnChecks(snap, { myTurn: true, jobs: jobNames(v) }));
+  const after = tracker.last();
+  if (after.phase !== "claim" || after.day?.turn?.seat !== mySeat) throw new SetupError("내 차례 스냅숏 중에 차례가 넘어감");
+
+  // 누른 직후(React 갱신 직후, 서버 답이 오기 전)의 칩 상태를 문서 수준 리스너가 붙잡아 둔다
+  await page.evaluate(() => {
+    window.__chipAfter = null;
+    document.addEventListener(
+      "click",
+      () => {
+        queueMicrotask(() => {
+          window.__chipAfter = [...document.querySelectorAll('[aria-label="주장할 직업"] button')].map((b) => ({ t: (b.textContent || "").trim(), p: b.getAttribute("aria-pressed") === "true", d: b.disabled }));
+        });
+      },
+      { once: true, capture: false },
+    );
+  });
+  const label = role === "citizen" ? ROLE_NAME.citizen : jobNames(v)[0];
+  const k2b = await attempt(async () => {
+    await pickChip(page, tracker, label);
+    const chips = await page.evaluate(() => window.__chipAfter);
+    if (!chips || chips.length === 0) return { ok: false, detail: "눌린 직후 칩 상태를 읽지 못함" };
+    const pressed = chips.filter((c) => c.p).map((c) => c.t);
+    const enabled = chips.filter((c) => !c.d).map((c) => c.t);
+    return pressed.length === 1 && pressed[0] === label && enabled.length === 0 ? true : { ok: false, detail: `눌린 칩 [${pressed.join(",")}] (기대 ${label}), 켜진 칩 [${enabled.join(",")}]` };
+  });
+  rec(sc, "K2b", "칩 잠금", k2b.ok, k2b.detail);
+}
+
+/** 남의 차례: 봇 차례(0.5~3.5초)가 끝나기 전에 찍는다. 찍는 동안 차례가 넘어갔으면 그 결과를 버리고 다음 남의 차례에서 다시 찍는다. */
+async function claimOther(ctx, id) {
+  const rec = recorder(ctx);
+  const { page, tracker } = ctx.host;
+  const mySeat = mySeatOf(tracker);
+  const sc = `${id}/claim-other`;
+  for (let tries = 0; tries < 3; tries++) {
+    const v = await tracker.waitFor((n) => n.phase === "claim" && n.day?.turn !== undefined && n.day.turn.seat !== mySeat, 15_000, "남의 차례");
+    const seat = v.day.turn.seat;
+    const ends = v.phaseEndsAt;
+    const mark = ctx.results.length;
+    const dmark = (ctx.dayStates ??= []).length;
+    await frames(page);
+    const { snap } = await dayState(ctx, id, "claim-other");
+    recAll(rec, sc, turnChecks(snap, { myTurn: false }));
+    const now = tracker.last();
+    if (now.phase === "claim" && now.day?.turn?.seat === seat && now.phaseEndsAt === ends) return;
+    ctx.results.length = mark;
+    ctx.dayStates.length = dmark;
+  }
+  throw new SetupError("남의 차례 스냅숏이 매번 차례 전환과 겹침");
+}
+
+/** 한 바퀴가 끝난 직후(토론 진입): 채팅 내역 줄(K3), 낮에 캐릭터를 누르면 기록 카드(X1). */
+async function claimDone(ctx, id) {
+  const rec = recorder(ctx);
+  const { page, tracker } = ctx.host;
+  const sc = `${id}/claim-done`;
+  await skipTo(page, tracker, "discussion");
+  await settle(page);
+  const v = tracker.last();
+  if (v.phase !== "discussion") throw new SetupError(`토론 진입 실패 (지금 ${v.phase})`);
+  const alive = v.players.filter((p) => p.alive !== false).length;
+  await openChatHistory(page);
+  const snap = await collectSnapshot(page);
+  // 청크 순서: 주장이 먼저 올라오고 토론 말이 그 뒤에 온다 — 앞의 alive 줄만 본다(토론 중 봇의 줄은 K3 의 대상이 아니다)
+  recOne(rec, sc, claimChatIssues(snap.chatHistory.slice(0, alive), { alive }));
+  await closeSheet(page, "채팅 내역");
+
+  const mySeat = mySeatOf(tracker);
+  const bot = v.players.find((p) => p.seat !== mySeat && p.alive !== false);
+  await inspectSeat(page, bot.seat);
+  const s2 = await collectSnapshot(page);
+  recOne(rec, sc, inspectChecks(s2, { nick: bot.nickname, night: false }));
+  await closeSheet(page, `${bot.nickname} 기록`);
+}
+
+/** 아침 직후 역할 카드 버튼·알림(R1·R6a). 같은 스냅숏에서 읽으므로 알림 4초 창에 걸리지 않는다. */
+function morningRoleChecks(ctx, id, role, snap) {
+  const rec = recorder(ctx);
+  const sc = `${id}/morning`;
+  if (role === "citizen") {
+    recOne(rec, sc, roleCardButtonChecks(snap, { unread: false }));
+    rec(sc, "R6", "시민에게는 밤 끝 알림 없음", snap.roleCard?.notice === null, `알림 "${snap.roleCard?.notice?.text ?? ""}"`);
+    return;
+  }
+  recOne(rec, sc, roleCardButtonChecks(snap, { unread: true }));
+  recOne(rec, sc, noticeChecks(snap, { job: role }));
+}
+
+/** 경찰·의사: 버튼으로 열어 R2 → 활동 기록 탭 R3 → 시트 G → 닫고 R4. */
+async function roleCardViaButton(ctx, id, role) {
+  const rec = recorder(ctx);
+  const { page } = ctx.host;
+  const sc = `${id}/rolecard`;
+  await openRoleCard(page);
+  recOne(rec, sc, roleCardTabChecks(await collectSnapshot(page), { job: role, unread: true }));
+  await selectRoleCardTab(page, "활동 기록");
+  const snap = await checkState(ctx, id, "rolecard");
+  recOne(rec, sc, journalChecks(snap, { job: role, mode: "viewing" }));
+  recOne(rec, sc, livingRoleArtChecks(snap, { myJob: role }));
+  await closeRoleCard(page);
+  await frames(page);
+  const closed = await collectSnapshot(page);
+  recOne(rec, sc, journalChecks(closed, { job: role, mode: "closed" }));
+  const b = roleCardButtonChecks(closed, { unread: false });
+  rec(sc, "R4", "시트를 닫으면 버튼 점 소멸", b.ok, b.detail);
+}
+
+/** 마피아: 알림을 눌러 활동 기록 탭이 열림(R6b) → R3 → 닫고 R4, 다시 열어 탭 둘·점 없음(R2). */
+async function roleCardViaNotice(ctx, id, role) {
+  const rec = recorder(ctx);
+  const { page } = ctx.host;
+  const sc = `${id}/rolecard`;
+  await clickNotice(page);
+  recOne(rec, sc, noticeChecks(await collectSnapshot(page), { job: role, clicked: true }));
+  const snap = await checkState(ctx, id, "rolecard");
+  recOne(rec, sc, journalChecks(snap, { job: role, mode: "viewing" }));
+  recOne(rec, sc, livingRoleArtChecks(snap, { myJob: role }));
+  await closeRoleCard(page);
+  await frames(page);
+  const closed = await collectSnapshot(page);
+  recOne(rec, sc, journalChecks(closed, { job: role, mode: "closed" }));
+  const b = roleCardButtonChecks(closed, { unread: false });
+  rec(sc, "R4", "시트를 닫으면 버튼 점 소멸", b.ok, b.detail);
+  await openRoleCard(page);
+  recOne(rec, sc, roleCardTabChecks(await collectSnapshot(page), { job: role, unread: false }));
+  await closeRoleCard(page);
+}
+
+/** 시민: 버튼에 점이 없고, 열면 탭 없이 본문(R5). */
+async function roleCardCitizen(ctx, id) {
+  const rec = recorder(ctx);
+  const { page } = ctx.host;
+  const sc = `${id}/rolecard`;
+  await openRoleCard(page);
+  const snap = await checkState(ctx, id, "rolecard");
+  recOne(rec, sc, roleCardTabChecks(snap, { job: "citizen", unread: false }));
+  recOne(rec, sc, livingRoleArtChecks(snap, { myJob: "citizen" }));
+  await closeRoleCard(page);
+}
+
 async function gameFlow(ctx, { id, players, role, states }) {
   const rec = recorder(ctx);
   const host = await startHost(ctx, id);
@@ -265,23 +458,21 @@ async function gameFlow(ctx, { id, players, role, states }) {
   rec(`${id}/setup`, "S3", "인원·지정 직업", s3Ok, `인원 ${v0.players.length}/${players}, 직업 ${v0.me.role}/${role}`);
 
   for (const state of states) {
-    if (state === "claim") {
-      await skipTo(page, tracker, "claim");
-      await settle(page);
-      await dayState(ctx, id, "claim");
-    } else if (state === "discussion") {
+    if (state === "claim-mine") await claimMine(ctx, id, role);
+    else if (state === "claim-other") await claimOther(ctx, id);
+    else if (state === "claim-done") await claimDone(ctx, id);
+    else if (state === "discussion") {
       await skipTo(page, tracker, "discussion");
       await settle(page);
       const { snap } = await dayState(ctx, id, "discussion");
+      recAll(rec, `${id}/discussion`, turnChecks(snap, { expectNone: true }));
       if (id === "police5") {
         const bad = snap.buttonTexts.filter((t) => /연장|넘기기/.test(t));
         rec(`${id}/discussion`, "C3", "연장·넘기기 버튼 없음", bad.length === 0, `버튼 ${bad.join(", ")}`);
       }
     } else if (state === "chat") {
       const c1 = await attempt(async () => {
-        await page.locator('[aria-label="채팅 내역 크게 보기"]').click();
-        await page.locator('dialog[aria-label="채팅 내역"].mf-dialog--open').waitFor({ state: "attached", timeout: 3000 });
-        await page.waitForTimeout(300);
+        await openChatHistory(page);
         const title = await page.locator('dialog[aria-label="채팅 내역"] h2').first().textContent();
         return title?.trim() === "채팅 내역" ? true : { ok: false, detail: `제목 "${title?.trim()}"` };
       });
@@ -296,71 +487,149 @@ async function gameFlow(ctx, { id, players, role, states }) {
       await skipTo(page, tracker, "night");
       await settle(page);
       const { snap, mySeat } = await dayState(ctx, id, "night");
+      recAll(rec, `${id}/night`, turnChecks(snap, { expectNone: true }));
       nightStaticChecks(ctx, id, role, snap);
       await nightActions(ctx, id, role, snap, mySeat);
+      // X1(밤): 어떤 자리를 눌러도 기록 카드가 열리지 않는다(행위자는 선택만 됨)
+      recOne(rec, `${id}/night`, inspectChecks(await collectSnapshot(page), { night: true }));
     } else if (state === "morning") {
       // 아침은 5초라 넘긴 직후 바로 닫고 찍는다. 앞뒤 단계가 morning 이 아니면 준비 실패(재시도).
       await skipTo(page, tracker, "morning");
       await settle(page);
       if (tracker.last()?.phase !== "morning") throw new SetupError("아침 스냅숏 전에 아침이 끝남");
       const { snap, mySeat } = await dayState(ctx, id, "morning");
-      if (tracker.last()?.phase !== "morning") throw new SetupError("아침 스냅숏 중에 아침이 끝남");
+      const v = tracker.last();
+      if (v?.phase !== "morning") throw new SetupError("아침 스냅숏 중에 아침이 끝남");
+      if (isDeadView(v)) throw new SetupError("방장이 첫 밤에 탈락해 살아 있는 사람 흐름이 아님");
+      recAll(rec, `${id}/morning`, turnChecks(snap, { expectNone: true }));
       const m1 = morningCardIssues(snap, { w: ctx.size.w, mySeat });
       rec(`${id}/morning`, "M1", m1.label, m1.ok, m1.detail);
       const t = snap.panel?.text ?? "";
       rec(`${id}/morning`, "M2", "하단 '곧 낮 토론이 시작돼요'", t.includes("아침이 밝았습니다") && t.includes("곧 낮 토론이 시작돼요"), `패널 글자 "${t.slice(0, 60)}"`);
-      if (role === "police") {
-        const r = snap.records;
-        rec(`${id}/morning`, "R1", "[수사 기록] 점", !!r && r.label === "수사 기록, 새 기록" && r.dot, r ? `aria-label "${r.label}", 점 ${r.dot}` : "수사 기록 버튼 없음");
-      }
-    } else if (state === "records") {
-      const r2 = await attempt(async () => {
-        await page.locator("button.mf-records-btn").click();
-        await page.locator('dialog[aria-label="수사 기록"].mf-dialog--open').waitFor({ state: "attached", timeout: 3000 });
-        await page.waitForFunction(() => document.querySelectorAll(".mf-records__row").length >= 1, null, { timeout: 3000 });
-        await page.waitForTimeout(300);
-        const row = await page.evaluate(() => {
-          const r = document.querySelector(".mf-records__row");
-          return { d: r?.querySelector(".mf-records__d")?.textContent?.trim(), rz: r?.querySelector(".mf-records__rz")?.textContent?.trim(), nw: !!r?.querySelector(".mf-records__new") };
-        });
-        const ok = row.d === "1일차 밤" && (row.rz === "마피아" || row.rz === "마피아 아님") && row.nw;
-        return ok ? true : { ok: false, detail: `첫 줄 ${JSON.stringify(row)}` };
-      });
-      rec(`${id}/records`, "R2", "시트에 기록 줄", r2.ok, r2.detail);
-      await checkState(ctx, id, "records");
-      const r3 = await attempt(async () => {
-        await closeSheet(page, "수사 기록");
-        const b = await page.evaluate(() => {
-          const btn = document.querySelector("button.mf-records-btn");
-          return { label: btn?.getAttribute("aria-label"), dot: !!btn?.querySelector(".mf-records-btn__dot") };
-        });
-        return b.label === "수사 기록" && !b.dot ? true : { ok: false, detail: `aria-label "${b.label}", 점 ${b.dot}` };
-      });
-      rec(`${id}/records`, "R3", "시트 닫힘·점 꺼짐", r3.ok, r3.detail);
+      const elim = v.day?.morning?.eliminated;
+      recOne(rec, `${id}/morning`, dimChecks(snap, { w: ctx.size.w, expectSpotlit: elim !== undefined && elim !== null }));
+      morningRoleChecks(ctx, id, role, snap);
+    } else if (state === "rolecard-btn") await roleCardViaButton(ctx, id, role);
+    else if (state === "rolecard-notice") await roleCardViaNotice(ctx, id, role);
+    else if (state === "rolecard-citizen") await roleCardCitizen(ctx, id);
+    else if (state === "next-day") {
+      // 아침이 끝난 뒤 첫 낮 장면: 카드·어둡게 층이 없고(M4) 고정물 검사가 그대로 통과한다
+      await tracker.waitFor((n) => n.phase === "claim" && (n.day?.n ?? 0) >= 2, 25_000, "다음 낮 직업 공개");
+      await settle(page);
+      const { snap } = await dayState(ctx, id, "next-day");
+      recOne(rec, `${id}/next-day`, morningGoneChecks(snap));
     }
   }
 
-  // 흐름 끝: D7(테이블 그대로)·D9(4명 이름표)
+  // 흐름 끝: 낮 장면 상태 전부의 D7(테이블 그대로)·D9(모든 인원 이름표), 살아 있는 사람 V2·V3
   const days = ctx.dayStates ?? [];
   if (days.length >= 2) {
     const f = feltStable(days.map((d) => ({ state: d.state, rect: d.felt })));
     rec(`${id}/table`, "D7", f.label, f.ok, f.detail);
   }
-  if (id === "citizen4") {
-    const bad = days.map((d) => ({ d, r: tagsOverlap(d.tags) })).filter((x) => !x.r.ok);
-    rec(`${id}/table`, "D9", "4명 이름표 안 겹침", bad.length === 0, bad.map((x) => `${x.d.state}: ${x.r.detail}`).join("; "));
+  const bad = days.map((d) => ({ d, r: tagsOverlap(d.tags) })).filter((x) => !x.r.ok);
+  rec(`${id}/table`, "D9", "이름표끼리 안 겹침", bad.length === 0, bad.map((x) => `${x.d.state}: ${x.r.detail}`).join("; "));
+  const fin = await collectSnapshot(page);
+  recOne(rec, `${id}/table`, livingRoleArtChecks(fin, { myJob: role }));
+  rec(`${id}/table`, "V3", "살아 있는 사람 view 에 spectate 없음", tracker.last()?.spectate === undefined, "spectate 키가 있음");
+  rec(`${id}/setup`, "S4", "단계 도달", true);
+  await resetAndLeave(page, tracker);
+}
+
+// ---- 관전자 흐름(탈락한 방장) ----
+
+/** 4명판(방장 시민 + 봇 3)에서 방장이 탈락할 때까지 밤을 넘기고, 관전자 화면(V1·M1·M3·X1)을 본다. */
+async function specFlow(ctx) {
+  const id = "spec4";
+  const rec = recorder(ctx);
+  const host = await startHost(ctx, id);
+  const { page, tracker } = host;
+  await settle(page);
+  await openTestSheet(page);
+  await setBots(page, tracker, 3);
+  await chooseRole(page, tracker, "citizen");
+  await startGame(page, tracker);
+  ctx.stage = "play";
+  const v0 = tracker.last();
+  const mySeat = v0.me.seat;
+  rec(`${id}/setup`, "S3", "인원·지정 직업", v0.players.length === 4 && v0.me.role === "citizen", `인원 ${v0.players.length}/4, 직업 ${v0.me.role}/citizen`);
+
+  let dead = false;
+  for (let day = 1; day <= 4 && !dead; day++) {
+    await skipTo(page, tracker, "claim");
+    await skipTo(page, tracker, "discussion");
+    await skipTo(page, tracker, "night");
+    await sleep(7000); // 봇 밤 지목(1~6초)이 끝나도록
+    await skipTo(page, tracker, "morning");
+    await settle(page);
+    if (tracker.last()?.phase !== "morning") throw new SetupError("아침 스냅숏 전에 아침이 끝남");
+    dead = isDeadView(tracker.last());
+    if (!dead) continue;
+
+    const sc = `${id}/morning`;
+    const { snap } = await dayState(ctx, id, "morning");
+    const v = tracker.last();
+    if (v?.phase !== "morning") throw new SetupError("아침 스냅숏 중에 아침이 끝남");
+    rec(sc, "V1", "관전자 view 에 spectate 있음", !!v.spectate, "spectate 키가 없음");
+    const spectate = (v.spectate?.seats ?? []).map((s) => ({ seat: s.seat, job: s.job, alive: v.players.find((p) => p.seat === s.seat)?.alive !== false }));
+    recOne(rec, sc, spectatorChecks(snap, { spectate, mySeat }));
+    const m1 = morningCardIssues(snap, { w: ctx.size.w, mySeat });
+    rec(sc, "M1", m1.label, m1.ok, m1.detail);
+    recOne(rec, sc, dimChecks(snap, { w: ctx.size.w, expectSpotlit: true }));
+    const mine = snap.seats.find((s) => s.seat === mySeat);
+    rec(sc, "M3", "탈락한 방장 자리가 강조됨", !!mine?.spotlit, `내 자리 spotlit ${mine?.spotlit}`);
   }
+  if (!dead) throw new SetupError("4일 안에 방장이 탈락하지 않음");
+
+  const specOf = (v) => (v.spectate?.seats ?? []).map((s) => ({ seat: s.seat, job: s.job, alive: v.players.find((p) => p.seat === s.seat)?.alive !== false }));
+  const aliveBot = () => tracker.last().players.find((p) => p.seat !== mySeat && p.alive !== false);
+
+  // 낮: 관전자 테이블 + 캐릭터를 누르면 기록 카드
+  await skipTo(page, tracker, "discussion");
+  await settle(page);
+  {
+    const sc = `${id}/discussion`;
+    const { snap } = await dayState(ctx, id, "discussion");
+    recOne(rec, sc, spectatorChecks(snap, { spectate: specOf(tracker.last()), mySeat }));
+    const bot = aliveBot();
+    await inspectSeat(page, bot.seat);
+    recOne(rec, sc, inspectChecks(await collectSnapshot(page), { nick: bot.nickname, night: false }));
+    await closeSheet(page, `${bot.nickname} 기록`);
+  }
+
+  // 밤: 관전자는 어떤 자리도 버튼이 아니고 눌러도 아무 카드가 안 열린다
+  await skipTo(page, tracker, "night");
+  await settle(page);
+  {
+    const sc = `${id}/night`;
+    const { snap } = await dayState(ctx, id, "night");
+    recOne(rec, sc, spectatorChecks(snap, { spectate: specOf(tracker.last()), mySeat }));
+    const buttons = snap.seats.filter((s) => s.isButton).map((s) => s.seat);
+    rec(sc, "V1", "관전자 밤에는 어떤 자리도 버튼이 아님", buttons.length === 0, `버튼 자리 ${buttons.join(",")}`);
+    await inspectSeat(page, aliveBot().seat);
+    recOne(rec, sc, inspectChecks(await collectSnapshot(page), { night: true }));
+  }
+
+  const days = ctx.dayStates ?? [];
+  if (days.length >= 2) {
+    const f = feltStable(days.map((d) => ({ state: d.state, rect: d.felt })));
+    rec(`${id}/table`, "D7", f.label, f.ok, f.detail);
+  }
+  const bad = days.map((d) => ({ d, r: tagsOverlap(d.tags) })).filter((x) => !x.r.ok);
+  rec(`${id}/table`, "D9", "이름표끼리 안 겹침", bad.length === 0, bad.map((x) => `${x.d.state}: ${x.r.detail}`).join("; "));
   rec(`${id}/setup`, "S4", "단계 도달", true);
   await resetAndLeave(page, tracker);
 }
 
 const game = (id, players, role, states) => (ctx) => gameFlow(ctx, { id, players, role, states });
+const CLAIMS = ["claim-mine", "claim-other", "claim-done", "discussion"];
 
 export const FLOWS = [
   { id: "lobby", run: lobbyFlow },
-  { id: "police5", run: game("police5", 5, "police", ["claim", "discussion", "chat", "night", "morning", "records"]) },
-  { id: "citizen4", run: game("citizen4", 4, "citizen", ["claim", "discussion", "night", "morning"]) },
-  { id: "mafia8", run: game("mafia8", 8, "mafia", ["claim", "discussion", "night", "morning"]) },
-  { id: "doctor5", run: game("doctor5", 5, "doctor", ["claim", "discussion", "night", "morning"]) },
+  { id: "police5", run: game("police5", 5, "police", [...CLAIMS, "chat", "night", "morning", "rolecard-btn", "next-day"]) },
+  { id: "citizen4", run: game("citizen4", 4, "citizen", [...CLAIMS, "night", "morning", "rolecard-citizen", "next-day"]) },
+  { id: "mafia8", run: game("mafia8", 8, "mafia", [...CLAIMS, "night", "morning", "rolecard-notice", "next-day"]) },
+  { id: "doctor5", run: game("doctor5", 5, "doctor", [...CLAIMS, "night", "morning", "rolecard-btn", "next-day"]) },
+  { id: "spec4", run: specFlow },
 ];
 export { SetupError };
