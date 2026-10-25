@@ -143,7 +143,7 @@ export function Lobby({ view, send, canSend = true, epoch = 0, onLeave, testButt
         </header>
         <div className="mf-lobby__scene">
           {testButton ? <div className="mf-tt-anchor">{testButton}</div> : null}
-          <DayTable seats={seats} mySeat={view.me.seat} slide />
+          <DayTable seats={seats} mySeat={view.me.seat} slide hostCrown />
         </div>
         <section className="mf-lobby__sheet">
           <div className="mf-lobby__status">

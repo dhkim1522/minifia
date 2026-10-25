@@ -16,7 +16,9 @@ import "../styles/daytable.css";
 // roleArt(직업 그림)는 탈락한 본인(관전자) 화면만 만든다 — 살아 있는 사람의 입력에는 이 값이 없다(결정 0021).
 // 테이블·캐릭터 기하는 모든 상황에서 시안 P2 값으로 고정이다(결정 0028): 390폭 면 216×108, rx 146, 다른 폭은 game/dayTable.ts 의 규칙.
 // 장면 여백(scenePad)은 prop, 없으면 루트의 CSS 변수 --mf-scene-pad(daytable.css 한 곳), 비었으면 12.
-// 차례 링(.mf-dt__spot)은 뒤쪽 호(캐릭터 뒤)와 앞쪽 호(캐릭터 앞) 둘로 나뉜다 — 마크업 순서가 Figure 다음이라 앞쪽 호가 그림 위에 그려진다(결정 0028).
+// 발밑 원과 이름표 반전은 없다(결정 0030). 말하는 차례·내가 밤에 고른 대상은 그림의 흰 후광, 마피아 동료(관전자 화면의 모든 마피아)는 진홍 후광이고
+// 한 자리가 둘 다면 흰 후광이 이긴다. 내 표시는 후광 없이 내 이름표 테두리뿐이다. 말하는 중(주장 차례·빠른 메시지 3초)은 머리 위 '…' 말풍선이고,
+// 같은 자리에 이모티콘이 있으면 말풍선 대신 이모티콘만 보인다. 방장 왕관은 hostCrown(대기실)일 때만 그린다.
 // 캐릭터 상자·이름표·이모티콘의 좌표는 game/dayTable.ts 의 daySeatLayout 한 번의 결과에서 나온다(떠 있는 층을 따로 가두지 않는다).
 
 /** 관전 화면에서 표적 배지를 다는 역할 종류. 살아 있는 사람 화면에는 넘어오지 않는다 */
@@ -36,11 +38,11 @@ export interface DayTableSeat {
   isHost: boolean;
   isMe: boolean;
   isAlly: boolean;
-  /** 방금 빠른 메시지를 보낸 사람(윗줄 반전) */
+  /** 방금 빠른 메시지를 보낸 사람(머리 위 '…' 말풍선, 후광 없음) */
   spoke?: boolean;
   /** 머리 위에 떠 있는 이모티콘 하나. key 가 바뀌면 애니메이션이 새로 시작한다. */
   emoji?: { key: string; icon: EmojiId; z: number } | null;
-  /** 밤 선택 표시. mine = 내가 고른 대상(발밑 링 + 표적 배지), ally = 마피아 화면의 동료 선택(장식 배지) */
+  /** 밤 선택 표시. mine = 내가 고른 대상(흰 후광 + 표적 배지), ally = 마피아 화면의 동료 선택(장식 배지) */
   pick?: { mine?: boolean; ally?: boolean };
   /** 관전 화면 전용: 이 자리를 고른 역할별 표적 배지. 장면이 view.spectate 로만 만든다(결정 0021) */
   spectatorPicks?: readonly SpectatorPick[];
@@ -48,7 +50,7 @@ export interface DayTableSeat {
   dead?: boolean;
   /** 있으면 이 자리가 대상 버튼이 된다(밤). 없으면 지금 그대로의 group 노드 */
   onPick?: () => void;
-  /** 지금 주장하는 차례인 자리(한 번에 한 자리는 장면이 보장한다): 발밑 링·머리 위 말풍선 배지·이름표 반전 */
+  /** 지금 주장하는 차례인 자리(한 번에 한 자리는 장면이 보장한다): 흰 후광 + 머리 위 '…' 말풍선 */
   turn?: boolean;
   /** 낮: 자리 전체가 주장 기록 카드 버튼이 된다. onPick 이 있으면 onPick 이 이긴다 */
   onInspect?: () => void;
@@ -81,6 +83,8 @@ export interface DayTableProps {
   allyMarkLabel?: string;
   /** 대기실: 인원이 바뀌면 나머지 자리가 짧은 CSS 전이로 새 자리로 미끄러진다. 마운트 직후 첫 프레임에는 켜지 않는다 */
   slide?: boolean;
+  /** 방장 왕관을 그린다. 대기실만 켠다(역할 배정·낮·밤·아침은 왕관이 없다, 결정 0030) */
+  hostCrown?: boolean;
   /** 아침 어둡게 층. exitDelayMs 는 퇴장 페이드를 시작하기까지의 지연(아침 길이 − 300ms) */
   dim?: { exitDelayMs: number };
 }
@@ -128,6 +132,7 @@ export function DayTable({
   pickVerb = "선택",
   pickDisabled,
   allyMarkLabel = "동료",
+  hostCrown,
   dim,
   slide,
 }: DayTableProps): ReactElement {
@@ -204,35 +209,33 @@ export function DayTable({
         const seatClass = `mf-dt__seat${s.spotlit ? " mf-dt__seat--spotlit" : ""}${s.spotlit && s.pulse ? " mf-dt__seat--pulse" : ""}${
           s.transition === "entering" ? " mf-dt__seat--enter" : s.transition === "leaving" ? " mf-dt__seat--leave" : ""
         }`;
+        // 후광은 그림 img 하나에만 붙는다: 흰(차례·내가 고른 대상) > 진홍(동료)
+        const haloClass = s.turn || s.pick?.mine ? "mf-figure--halo-white" : s.isAlly ? "mf-figure--halo-crimson" : undefined;
         const inner = (
           <>
             {/* key: 직업 그림으로 바뀌는 자리는 노드가 새로 만들어져 300ms 페이드가 한 번 돈다 */}
-            <Figure key={art !== undefined ? "role" : "fig"} seat={p.seat} disconnected={!s.connected} ghost={s.dead} {...(art !== undefined ? { roleArt: art } : {})} />
-            {s.isAlly ? (
-              <>
-                <span className="mf-dt__ring mf-dt__ring--mate" />
-                <Icon name="diamond" label={allyMarkLabel} className="mf-dt__mark" />
-              </>
-            ) : s.isMe ? (
-              <span className="mf-dt__ring mf-dt__ring--me" />
-            ) : null}
-            {s.isHost ? (
+            <Figure
+              key={art !== undefined ? "role" : "fig"}
+              seat={p.seat}
+              disconnected={!s.connected}
+              ghost={s.dead}
+              {...(art !== undefined ? { roleArt: art } : {})}
+              {...(haloClass ? { className: haloClass } : {})}
+            />
+            {s.isAlly ? <Icon name="diamond" label={allyMarkLabel} className="mf-dt__mark" /> : null}
+            {hostCrown && s.isHost ? (
               <span className="mf-dt__crown" role="img" aria-label="방장">
                 <Icon name="crown" size={13} />
               </span>
             ) : null}
-            {s.turn ? (
-              <>
-                <span className="mf-dt__spot">
-                  <span className="mf-dt__spot-arc mf-dt__spot-arc--back" />
-                  <span className="mf-dt__spot-arc mf-dt__spot-arc--front" />
-                </span>
-                <span className="mf-dt__turn" aria-hidden="true">
-                  <Icon name="speech" size={16} />
-                </span>
-              </>
+            {(s.turn || s.spoke) && !s.emoji ? (
+              <span className={`mf-dt__bubble mf-dt__bubble--${s.turn ? "turn" : "spoke"}`} aria-hidden="true">
+                <i />
+                <i />
+                <i />
+              </span>
             ) : null}
-            {/* 배지 쌓기: 경찰 → 의사 → 마피아 → 내 링 → 내 배지(내 것이 위) */}
+            {/* 배지 쌓기: 경찰 → 의사 → 마피아 → 내 배지(내 것이 위) */}
             {s.spectatorPicks?.includes("police") ? <PickBadge kind="police" label={SPECTATOR_PICK_LABEL.police} /> : null}
             {s.spectatorPicks?.includes("doctor") ? <PickBadge kind="doctor" label={SPECTATOR_PICK_LABEL.doctor} /> : null}
             {s.spectatorPicks?.includes("mafia") ? (
@@ -240,12 +243,7 @@ export function DayTable({
             ) : s.pick?.ally ? (
               <PickBadge kind="ally" />
             ) : null}
-            {s.pick?.mine ? (
-              <>
-                <span className="mf-dt__sel" />
-                <PickBadge kind="me" />
-              </>
-            ) : null}
+            {s.pick?.mine ? <PickBadge kind="me" /> : null}
           </>
         );
         if (s.onPick) {
@@ -307,7 +305,7 @@ export function DayTable({
         return (
           <div
             key={`t${p.seat}`}
-            className={`mf-dt__tag${s.isMe ? " mf-dt__tag--me" : ""}${s.dead ? " mf-dt__tag--dead" : ""}${s.spoke ? " mf-dt__tag--spoke" : ""}${s.turn ? " mf-dt__tag--turn" : ""}${
+            className={`mf-dt__tag${s.isMe ? " mf-dt__tag--me" : ""}${s.dead ? " mf-dt__tag--dead" : ""}${
               s.transition === "entering" ? " mf-dt__tag--enter" : s.transition === "leaving" ? " mf-dt__tag--leave" : ""
             }`}
             data-seat={p.seat}

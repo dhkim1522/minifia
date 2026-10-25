@@ -61,6 +61,22 @@ export const TAG_H = 22;
  */
 export const NAME_TAG_MAX_W = 100;
 
+// 후광·말풍선(결정 0030). 후광은 그림 img 하나의 filter drop-shadow 두 겹이다(안쪽 2px + 바깥 9px, 가우시안 σ = 반지름/2).
+// 윤곽 바깥 알파는 4px 에서 0.14, 9px 에서 0.017 이라 보이는 번짐은 9px(배율 0.8~1 적용 7.2~9px)이고, 번짐을 더한 캐릭터 상자는 네 폰 × 1~8명 모두
+// 폰 가장자리 안, 위쪽은 장면 높이 299.8 에서도 헤더 아래 안쪽 여백 16px 안이다. 필터는 한 화면 최대 3개(마피아 ≤ 2명 + 차례·선택 1개).
+/** 후광 안쪽 층 번짐 반지름(px) */
+export const HALO_CORE_BLUR_PX = 2;
+/** 후광 바깥 층 번짐 반지름(px) = 보이는 번짐의 끝 */
+export const HALO_BLUR_PX = 9;
+/** 한 화면에 동시에 켜지는 후광 수의 상한 */
+export const HALO_MAX_SIMULTANEOUS = 3;
+/** '…' 말풍선: 폭 = 좌우 11×2 + 점 6×3 + 간격 4×2, 높이, 꼬리 높이 */
+export const BUBBLE_W = 48;
+export const BUBBLE_H = 26;
+export const BUBBLE_TAIL = 5;
+/** 말풍선이 자리 상자 위로 올라가는 거리(배율 적용). 승인 시안(f12.css)은 30 이지만 8명판 자리 1·7 의 말풍선이 이웃 얼굴을 4.1px 덮어 26 으로 정했다. */
+export const BUBBLE_TOP = 26;
+
 export const EMOJI_SIZE = 32;
 /** 이모티콘은 머리 위에서 이만큼 더 위에 뜬다 */
 export const EMOJI_LIFT = 36;

@@ -3,10 +3,16 @@
    위치·크기는 DayTable 이 game/dayTable.ts 의 결과를 인라인으로 준다.
    z-index(루트 isolation 안): 테이블 면 auto · 이름표 1~11 · 캐릭터 12~22(최소 12 > 이름표 최대 11 이라 이름표는 어떤 캐릭터도 덮지 못한다)
    · 어둡게 층 30 · 방금 탈락한 유령 31 · 이모티콘 60+. 값은 모두 daySeatLayout 이 정하고 DayTable 이 인라인으로 준다.
-   발밑 링(.mf-dt__spot)은 자리 안 쌓임 맥락에서 뒤쪽 호 z -1, 앞쪽 호는 그림 위. 바깥 규칙(이름표 1~11·캐릭터 12~22·어둡게 층 30·유령 31·이모티콘 60+)은 불변(결정 0028). */
+   발밑 원은 없다(결정 0030). 후광은 자리 안 그림 하나의 filter 라 자리 쌓임 맥락(12~22)을 벗어나지 않고, 말풍선도 자리 안이다.
+   바깥 규칙(이름표 1~11·캐릭터 12~22·어둡게 층 30·유령 31·이모티콘 60+)은 불변(결정 0028). */
 
 /* 장면 상자를 100%×100% 로 채운다. 가로로 자르지 않는다(이름표·이모티콘이 장면 밖으로 조금 나가도 보인다). */
-.mf-dt { position: relative; width: 100%; height: 100%; isolation: isolate; --mf-scene-pad: 12px; --mf-seat-leave-ms: 320ms; }
+.mf-dt {
+  position: relative; width: 100%; height: 100%; isolation: isolate; --mf-scene-pad: 12px; --mf-seat-leave-ms: 320ms;
+  /* 후광(승인 시안 17차 값): 그림 윤곽을 따르는 안쪽 2px + 바깥 9px 두 겹. 한 곳에만 적고 아래 클래스가 var() 로 쓴다 */
+  --mf-halo-white: drop-shadow(0 0 2px color-mix(in srgb, var(--gray-50) 95%, transparent)) drop-shadow(0 0 9px color-mix(in srgb, var(--gray-50) 75%, transparent));
+  --mf-halo-crimson: drop-shadow(0 0 2px color-mix(in srgb, var(--crimson-400) 95%, transparent)) drop-shadow(0 0 9px color-mix(in srgb, var(--crimson-400) 70%, transparent));
+}
 /* 장면 상자 좌우 여백(장면 상자의 padding 값과 같은 수): 어둡게 층이 이만큼 밖으로 나가 페이지 폭 전체를 덮는다 */
 @media (max-width: 389px) { .mf-dt { --mf-scene-pad: 4px; } }
 
@@ -20,7 +26,13 @@
 
 /* 캐릭터 상자: 72×96, 발 기준으로 크기만 바꾼다 */
 .mf-dt__seat { position: absolute; transform-origin: 50% 100%; }
-.mf-dt__seat .mf-figure { width: 100%; height: 100%; display: block; }
+.mf-dt__seat .mf-figure { width: 100%; height: 100%; display: block; transition: filter var(--dur-fast) var(--ease-out); }
+/* 후광: 흰 = 말하는 차례 + 내가 밤에 고른 대상, 진홍 = 마피아 동료(마름모는 따로 남는다). 필터 값은 애니메이션하지 않는다.
+   끊김(흑백)과 함께면 흑백을 먼저 적용하고 그 뒤에 후광을 붙인다(후광 색이 회색이 되지 않는다) */
+.mf-dt__seat .mf-figure--halo-white { filter: var(--mf-halo-white); }
+.mf-dt__seat .mf-figure--halo-crimson { filter: var(--mf-halo-crimson); }
+.mf-dt__seat .mf-figure--disconnected.mf-figure--halo-white { filter: grayscale(1) var(--mf-halo-white); }
+.mf-dt__seat .mf-figure--disconnected.mf-figure--halo-crimson { filter: grayscale(1) var(--mf-halo-crimson); }
 /* 탈락 = 유령 그림(시안 f8 .sf--off img). 필터·투명도 지정 없음 — 흐림은 연결 끊김 전용(.mf-figure--disconnected) */
 .mf-figure--ghost { object-fit: contain; }
 
@@ -45,24 +57,13 @@
   font-size: 14px; line-height: 20px; font-weight: 700; color: var(--gray-50); white-space: nowrap;
 }
 .mf-dt__dot { flex: none; width: 8px; height: 8px; border-radius: var(--radius-pill); }
+/* 내 표시는 후광 없이 이름표 테두리뿐이다 */
 .mf-dt__tag--me .mf-dt__name { border-color: var(--gray-100); }
-/* 방금 빠른 메시지를 보낸 사람 · 지금 주장하는 차례인 사람: 이름표 반전 */
-.mf-dt__tag--spoke .mf-dt__name { background: var(--gray-100); border-color: var(--gray-100); color: var(--night-900); }
-.mf-dt__tag--turn .mf-dt__name {
-  background: var(--gray-100); border-color: var(--gray-100); color: var(--night-900);
-  animation: mf-dt-fade var(--dur-fast) var(--ease-out) both;
-}
 
 /* 탈락 이름표: gray-500 글자는 시안 승인 예외(UI-SPEC C3). 아랫줄 '탈락'은 없다 */
 .mf-dt__tag--dead .mf-dt__name { color: var(--gray-500); }
 
-/* 캐릭터 상자 안: 나·동료 링, 동료 마름모, 방장 왕관 배지 */
-.mf-dt__ring {
-  position: absolute; left: 50%; bottom: -4px; width: 120%; height: 18%;
-  transform: translate(-50%, 50%); border-radius: 50%; pointer-events: none;
-}
-.mf-dt__ring--me { border: 2px solid color-mix(in srgb, var(--gray-100) 60%, transparent); }
-.mf-dt__ring--mate { border: 3px solid var(--crimson-400); }
+/* 캐릭터 상자 안: 동료 마름모, 방장 왕관 배지(대기실만) */
 .mf-dt__mark { position: absolute; top: 4%; right: 8%; width: 26%; height: auto; aspect-ratio: 1; color: var(--crimson-400); pointer-events: none; }
 .mf-dt__crown {
   position: absolute; left: -6px; top: -6px; width: 22px; height: 22px; border-radius: 50%;
@@ -71,41 +72,30 @@
 }
 .mf-dt__crown .mf-icon { stroke-width: 2.2; }
 
-/* 지금 주장하는 차례(UI-SPEC B): 발밑 링 140% + 머리 위 28px 말풍선 배지. 내 링(120%)과 겹쳐 둘 다 보인다.
-   링은 뒤쪽 호(캐릭터 뒤)·앞쪽 호(캐릭터 앞)로 나뉜다. 묶음은 쌓임 맥락을 만들지 않아(transform·z-index·opacity·animation 없음)
-   뒤쪽 호의 z -1 이 자리(.mf-dt__seat)의 쌓임 맥락에서 그림 뒤로 간다. 앞쪽 호는 그림 다음 마크업 순서라 그림 위다.
-   위치: left -20% = 50% − 폭 140%/2, bottom = 옛 -4px 과 translateY(50%)(높이 24% 의 절반 = 12%)의 합. */
-.mf-dt__spot {
-  position: absolute; left: -20%; bottom: calc(-4px - 12%); width: 140%; height: 24%;
-  pointer-events: none;
-}
-/* 바깥 방향 -24px 여백은 빛(18px)이 잘리지 않게 하려는 값이다. 가운데 선(50%)에서만 자른다 */
-.mf-dt__spot-arc {
-  position: absolute; inset: 0; border-radius: 50%;
-  border: 3px solid var(--gray-50);
-  box-shadow: 0 0 18px color-mix(in srgb, var(--gray-50) 75%, transparent);
-  pointer-events: none;
+/* 말하는 중(주장 차례·빠른 메시지 3초): 머리 위 '…' 말풍선. 자리 상자 안이라 상자와 함께 줄어들고 자리 쌓임 맥락(12~22)을 벗어나지 않는다.
+   높이 26·좌우 11·모서리 13·꼬리 5, 위 -26px(승인 시안은 -30 이지만 8명판 이웃 얼굴을 덮어 -26). 점 셋은 차례로 깜박인다.
+   같은 자리에 이모티콘이 오면 DayTable 이 말풍선을 그리지 않는다. */
+.mf-dt__bubble {
+  position: absolute; left: 50%; top: -26px; transform: translateX(-50%);
+  box-sizing: border-box; height: 26px; padding: 0 11px; border-radius: 13px;
+  background: var(--gray-50); display: flex; align-items: center; gap: 4px; pointer-events: none;
+  box-shadow: 0 4px 10px color-mix(in srgb, var(--shadow) 82%, transparent);
   animation: mf-dt-fade var(--dur-fast) var(--ease-out) both;
 }
-.mf-dt__spot-arc--back { z-index: -1; clip-path: inset(-24px -24px 50% -24px); }
-.mf-dt__spot-arc--front { clip-path: inset(50% -24px -24px -24px); }
-.mf-dt__turn {
-  position: absolute; left: 50%; top: -24px; margin-left: -14px; width: 28px; height: 28px; border-radius: 50%;
-  background: var(--gray-50); color: var(--night-900);
-  box-shadow: 0 2px 8px color-mix(in srgb, var(--shadow) 91%, transparent);
-  display: grid; place-items: center; pointer-events: none;
-  animation: mf-dt-fade var(--dur-fast) var(--ease-out) both;
+.mf-dt__bubble::after {
+  content: ""; position: absolute; left: 50%; bottom: -5px; margin-left: -5px;
+  border: 5px solid transparent; border-bottom: 0; border-top-color: var(--gray-50);
 }
-.mf-dt__turn .mf-icon { stroke-width: 2.4; }
+.mf-dt__bubble i {
+  width: 6px; height: 6px; border-radius: 50%; background: var(--night-900); opacity: 0.3;
+  animation: mf-dt-dot 1200ms linear infinite;
+}
+/* 정지 불투명도 1 / .6 / .3 (축소 모션에서는 애니메이션이 없어 이 값으로 남는다) */
+.mf-dt__bubble i:nth-child(1) { opacity: 1; animation-delay: 0ms; }
+.mf-dt__bubble i:nth-child(2) { opacity: 0.6; animation-delay: 200ms; }
+.mf-dt__bubble i:nth-child(3) { opacity: 0.3; animation-delay: 400ms; }
 
-/* 밤: 내가 고른 대상 — 발밑 굵은 밝은 링 + 머리 위 26px 표적 배지(시안 N1~N3 .sf__sel·.sf__pick--me) */
-.mf-dt__sel {
-  position: absolute; left: 50%; bottom: -4px; width: 124%; height: 20%;
-  transform: translate(-50%, 50%); border-radius: 50%;
-  border: 3px solid var(--gray-50);
-  box-shadow: 0 0 12px color-mix(in srgb, var(--gray-50) 55%, transparent);
-  pointer-events: none; z-index: 4;
-}
+/* 밤: 내가 고른 대상 — 그림의 흰 후광 + 머리 위 26px 표적 배지(시안 N1~N3 .sf__pick--me) */
 .mf-dt__pick {
   position: absolute; left: 50%; top: -26px; margin-left: -13px; width: 26px; height: 26px;
   box-sizing: border-box; border-radius: 50%; display: grid; place-items: center; pointer-events: none;
@@ -168,18 +158,20 @@
 .mf-dt--slide .mf-dt__tag { transition: left var(--dur-med) var(--ease-out), top var(--dur-med) var(--ease-out); }
 
 @keyframes mf-dt-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes mf-dt-dot { 0% { opacity: 0.3; } 20% { opacity: 1; } 50% { opacity: 0.3; } 100% { opacity: 0.3; } }
 @keyframes mf-dt-dim-in { from { opacity: 0; } to { opacity: 1; } }
 @keyframes mf-dt-dim-out { from { opacity: 1; } to { opacity: 0; } }
 @keyframes mf-dt-pulse { 0% { scale: 1; } 40% { scale: 1.12; } 100% { scale: 1; } }
 @keyframes mf-dt-bright { 0% { filter: brightness(1); } 40% { filter: brightness(1.3); } 100% { filter: brightness(1); } }
 
-/* 축소 모션: 이모티콘·맥동·밝기·페이드를 끈다(상태와 z-index 는 남는다). 어둡게 층은 전역 규칙으로 즉시 전환된다 */
+/* 축소 모션: 이모티콘·말풍선 점·맥동·밝기·페이드를 끈다(상태와 z-index 는 남는다). 어둡게 층은 전역 규칙으로 즉시 전환된다 */
 @media (prefers-reduced-motion: reduce) {
   .mf-dt__emoji { animation: none; }
   .mf-dt__seat--pulse { animation: none; }
   .mf-dt__seat--pulse .mf-figure { animation: none; }
   .mf-figure--role { animation: none; }
-  .mf-dt__spot-arc, .mf-dt__turn, .mf-dt__tag--turn .mf-dt__name { animation: none; }
+  .mf-dt__bubble, .mf-dt__bubble i { animation: none; }
+  .mf-dt__seat .mf-figure { transition: none; }
   .mf-dt__seat--enter .mf-figure, .mf-dt__seat--leave .mf-figure, .mf-dt__tag--enter, .mf-dt__tag--leave { animation: none; }
   .mf-dt--slide .mf-dt__seat, .mf-dt--slide .mf-dt__tag { transition: none; }
 }

@@ -49,7 +49,7 @@ export interface DaySceneProps {
 // 낮 토론은 MessageLog·DiscussionControls. 화면은 스스로 단계나 차례를 넘기지 않는다(서버 view 만 따름). 역할 문자열을 화면에 쓰지 않는다.
 export function DayScene({ view, connection, myRoleButton, testButton }: DaySceneProps) {
   const n = view.day?.n ?? 1;
-  // 낮 토론의 보낸 사람 반전·이모티콘(자리별 한 번에 하나). 단계가 discussion 이 아니면 훅이 비운다.
+  // 낮 토론의 보낸 사람 말풍선·이모티콘(자리별 한 번에 하나). 단계가 discussion 이 아니면 훅이 비운다.
   const floats = useSeatFloats(view, connection.onEvent);
   // 채팅 줄은 이 폰이 그날 받은 chat 이벤트에서만 만든다(서버 뷰에 메시지가 없다, 결정 0017-7)
   const chatLines = useDayChat(view, connection.onEvent);
@@ -143,7 +143,7 @@ export function DayScene({ view, connection, myRoleButton, testButton }: DayScen
   // 동료가 고른 대상(마피아 화면만, D-07). 서버가 생존 마피아에게만 보낸 값이다.
   const allyPicks = view.me.allyPicks ?? [];
   const nicknameOf = (seat: number): string | undefined => view.players.find((p) => p.seat === seat)?.nickname;
-  // 차례 강조(D-03): 서버 view 의 지금 차례 한 자리에만 발밑 링·말풍선 배지·이름표 반전. 차례가 넘어가면 다음 자리로 옮겨 간다.
+  // 차례 강조(D-03): 서버 view 의 지금 차례 한 자리에만 흰 후광·머리 위 말풍선. 차례가 넘어가면 다음 자리로 옮겨 간다.
   const turnSeat = view.phase === "claim" ? view.day?.turn?.seat : undefined;
   const seats: DayTableSeat[] = [...view.players]
     .sort((x, y) => x.seat - y.seat)
@@ -155,7 +155,7 @@ export function DayScene({ view, connection, myRoleButton, testButton }: DayScen
         connected: p.connected,
         isHost: p.isHost,
         isMe: p.seat === view.me.seat,
-        // 관전 화면은 모든 마피아에 링·마름모를 그린다(job 이 mafia 인 다른 자리)
+        // 관전 화면은 모든 마피아에 진홍 후광·마름모를 그린다(job 이 mafia 인 다른 자리)
         isAlly: allies.includes(p.seat) || (spectate !== undefined && p.seat !== view.me.seat && jobOf(p.seat) === "mafia"),
         dead: !isAlive(p),
         ...(spectatorPicksOf(p.seat).length > 0 ? { spectatorPicks: spectatorPicksOf(p.seat) } : {}),
