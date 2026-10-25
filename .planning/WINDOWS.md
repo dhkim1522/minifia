@@ -1,10 +1,10 @@
 ---
 schema_version: 1
-open_count: 1
+open_count: 2
 waived_count: 0
 fixed_count: 2
-total_count: 3
-last_updated: 2026-10-23T18:52:20.198Z
+total_count: 4
+last_updated: 2026-10-25T07:46:32.367Z
 ---
 
 # Broken Windows Ledger
@@ -18,6 +18,7 @@ last_updated: 2026-10-23T18:52:20.198Z
 | 1 | 01 | unrun-verify | test/client/entryContrast.test.tsx |  | 01-17 G-01-1b 눈 확인(폰에서 입력 카드가 비활성처럼 느껴지지 않는지)은 단계 끝 UAT 로 미룸 | open |  | 2026-10-23T10:53:22.098Z |  |
 | 2 | 02 | stub | src/screens/DayScene.tsx |  | DayScene 하단 패널 section 이 비어 있다 — 02-08(직업 공개 ClaimPanel)·02-09(낮 토론 MessageLog·DiscussionControls)가 채운다 | fixed |  | 2026-10-23T17:46:29.875Z | 2026-10-23T18:52:20.198Z |
 | 3 | 02 | todo | scripts/smoke.mjs | 28 | smoke.mjs 가 종착 단계 day 를 가정한다(PHASE_ORDER·모든 클라이언트 day 확인). 02-01 로 day 단계가 사라져 배포 뒤 낮 루프(dayAnnounce 이후) 기준으로 고쳐야 한다 | fixed |  | 2026-10-23T17:46:38.278Z | 2026-10-23T18:52:19.977Z |
+| 4 | 03.1 | deviation | scripts/smoke.mjs |  | 로컬 개발 서버(no-cache)에서는 스모크 마지막 에셋 캐시 헤더 단언이 실패한다 — 배포본에서만 통과(기존 한계, 03.1-14 가 배포본으로 확인) | open |  | 2026-10-25T07:46:32.367Z |  |
 
 ````json
 [
@@ -58,6 +59,19 @@ last_updated: 2026-10-23T18:52:20.198Z
     "reason": "",
     "recorded_at": "2026-10-23T17:46:38.278Z",
     "resolved_at": "2026-10-23T18:52:19.977Z",
+    "milestone": "v1.0"
+  },
+  {
+    "id": 4,
+    "kind": "deviation",
+    "phase": "03.1",
+    "file": "scripts/smoke.mjs",
+    "line": null,
+    "description": "로컬 개발 서버(no-cache)에서는 스모크 마지막 에셋 캐시 헤더 단언이 실패한다 — 배포본에서만 통과(기존 한계, 03.1-14 가 배포본으로 확인)",
+    "status": "open",
+    "reason": "",
+    "recorded_at": "2026-10-25T07:46:32.367Z",
+    "resolved_at": null,
     "milestone": "v1.0"
   }
 ]
