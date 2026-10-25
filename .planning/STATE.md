@@ -6,16 +6,16 @@ current_phase: 03
 current_phase_name: 밤과 아침
 current_plan: 12
 status: verifying
-stopped_at: Completed 03.1-04-PLAN.md
-last_updated: "2026-10-25T06:53:20.287Z"
+stopped_at: Completed 03.1-05-PLAN.md
+last_updated: "2026-10-25T07:00:05.513Z"
 last_activity: 2026-10-25
 last_activity_desc: Phase 03 execution started
-state_head: 844a58eb7d07f4efb5f6d83cd8adedc59a3b9290
+state_head: bdb44f62c907a1b52fb91c816b523f04593fdc5c
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 63
-  completed_plans: 53
+  completed_plans: 54
 ---
 
 # Project State
@@ -99,6 +99,7 @@ Progress: [██░░░░░░░░] 17%
 | Phase 03.1 P02 | 70min | 3 tasks | 10 files |
 | Phase 03.1 P03 | 약 1시간 | 2 tasks | 16 files |
 | Phase 03.1 P04 | 25min | 3 tasks | 9 files |
+| Phase 03.1 P05 | 35min | 3 tasks | 11 files |
 
 ## Accumulated Context
 
@@ -181,6 +182,7 @@ Recent decisions affecting current work:
 - [Phase 03.1]: 03.1-03: claim 단계는 이름표 아랫줄을 관전자 실제 직업 줄·탈락 줄까지 모두 끈다(밤·토론·아침의 관전 줄은 03.1-05 까지 유지)
 - [Phase 03.1]: 03.1-03: claim 헤더 타이머는 calm, 차례 안내는 내 차례예요 / {닉네임}님 차례 (못 찾으면 빈 문자열)
 - [Phase 03.1]: 03.1-04: 암살일지는 마피아 팀의 최종 지목 하나를 밤 시작 때 생존 마피아 전원에게 같은 줄로, 치료일지는 {n,target} 두 키뿐(구출 여부 키 없음)
+- [Phase 03.1]: 03.1-05: 이름표 한 줄(높이 22, 간격 0)·캐릭터 z 12~22 > 이름표 z 1~11, 어둡게 층은 --mf-scene-pad 로 좌우 연장, 자리 마크업 onPick > onInspect > group
 
 ### Pending Todos
 
@@ -210,6 +212,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-25T06:53:19.991Z
-Stopped at: Completed 03.1-04-PLAN.md
+Last session: 2026-10-25T07:00:05.240Z
+Stopped at: Completed 03.1-05-PLAN.md
 Resume file: None
