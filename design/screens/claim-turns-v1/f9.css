@@ -1,0 +1,29 @@
+/* 11차: 이름표는 이름 한 줄만, 주장 직업은 카드(A') 또는 배지(B)로 */
+.tg__c { display: none; }
+.jc { position: absolute; left: 50%; bottom: calc(30% - 15px); width: 22px; height: 30px; margin-left: -11px; border-radius: 4px; background: var(--gray-50); color: var(--night-900); border: 1px solid var(--gray-300); display: grid; place-items: center; box-shadow: 0 2px 6px rgba(0, 0, 0, .5); z-index: 5; }
+.jc--mafia { background: #2a1620; color: #f2556a; border-color: #e0344b; }
+.jc--back { background: repeating-linear-gradient(45deg, var(--night-700) 0 4px, var(--night-600) 4px 8px); border-color: var(--gray-300); }
+.jc--sm { width: 18px; height: 24px; margin-left: -9px; bottom: calc(30% - 12px); }
+.jc__chg { position: absolute; right: -8px; top: -8px; width: 16px; height: 16px; border-radius: 50%; background: var(--gray-50); color: var(--night-900); display: grid; place-items: center; box-shadow: 0 1px 4px rgba(0, 0, 0, .6); }
+.jb { position: absolute; right: -4px; bottom: 6px; width: 24px; height: 24px; border-radius: 50%; background: var(--gray-50); color: var(--night-900); border: 2px solid var(--night-900); display: grid; place-items: center; box-shadow: 0 2px 6px rgba(0, 0, 0, .5); z-index: 5; }
+.jb--mafia { background: #e0344b; color: var(--gray-50); }
+.jb__chg { position: absolute; left: -7px; top: -7px; width: 14px; height: 14px; border-radius: 50%; background: var(--night-900); color: var(--gray-50); border: 1px solid var(--gray-50); display: grid; place-items: center; }
+/* 12차: 한 명씩 직업 주장 — 차례 강조, 채팅 [직업], 캐릭터 탭 확인 */
+.sf__spot { position: absolute; left: 50%; bottom: -4px; width: 140%; height: 24%; transform: translate(-50%, 50%); border-radius: 50%; border: 3px solid var(--gray-50); box-shadow: 0 0 18px rgba(241, 242, 245, .75); pointer-events: none; }
+.sf__turn { position: absolute; left: 50%; top: -28px; margin-left: -14px; width: 28px; height: 28px; border-radius: 50%; background: var(--gray-50); color: var(--night-900); display: grid; place-items: center; box-shadow: 0 2px 8px rgba(0, 0, 0, .5); }
+.br { font-weight: 400; color: var(--gray-300); }
+.lg li.latest .br { color: var(--gray-100); }
+.st-row { display: flex; gap: 8px; }
+.st-row .stat { flex: 1; min-width: 0; display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 44px; padding: 0 16px; border-radius: 14px; background: var(--night-700); font-size: 14px; line-height: 20px; color: var(--gray-100); }
+.st-row .stat b { font-weight: 700; color: var(--gray-50); }
+.st-row .stat span { color: var(--gray-300); font-variant-numeric: tabular-nums; }
+.pkb { position: absolute; z-index: 70; transform: translateX(-50%); padding: 4px 12px; border-radius: 999px; background: var(--gray-100); color: var(--night-900); font-size: 14px; line-height: 20px; font-weight: 700; white-space: nowrap; box-shadow: 0 6px 16px rgba(0, 0, 0, .45); }
+.pkb::after { content: ""; position: absolute; left: 50%; bottom: -5px; margin-left: -5px; border: 5px solid transparent; border-bottom: 0; border-top-color: var(--gray-100); }
+/* 유저 기록 카드: 탭하면 열리는 시트, 날짜별 주장 기록 */
+.rc { flex: 1; min-height: 0; list-style: none; margin: 0; padding: 8px 16px; display: flex; flex-direction: column; background: var(--night-700); border-radius: 14px; overflow: hidden; }
+.rc li { display: grid; grid-template-columns: 64px minmax(0, 1fr); column-gap: 8px; align-items: center; min-height: 48px; padding: 8px 0; border-bottom: 1px dashed var(--night-600); font-size: 14px; line-height: 20px; color: var(--gray-300); }
+.rc li:last-child { border-bottom: 0; }
+.rc b { font-weight: 700; color: var(--gray-50); }
+.rc .none { color: var(--gray-300); }
+.rc-title { display: inline-flex; align-items: center; gap: 8px; }
+.rc-title i { width: 12px; height: 12px; border-radius: 999px; }
