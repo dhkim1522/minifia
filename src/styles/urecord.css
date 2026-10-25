@@ -1,0 +1,32 @@
+/* 유저 기록 카드 시트(03.1 UI-SPEC C, 시안 K3 .rc*). 색·모서리는 토큰만 쓴다.
+   시트 틀(.mf-sheet)은 sheet.css, 높이만 여기서 정한다. */
+.mf-sheet.mf-sheet--urecord { height: min(360px, 70dvh); }
+
+/* 제목: 색깔점 12px + 닉네임 24px 굵게, 한 줄. 닫기 버튼 자리는 .mf-sheet__title 의 오른쪽 여백이 지킨다. */
+.mf-urecord__title {
+  display: flex; align-items: center; gap: 8px; margin: 0;
+  font-size: 24px; line-height: 1.2; font-weight: 700; white-space: nowrap;
+}
+.mf-urecord__title { overflow: hidden; text-overflow: ellipsis; }
+.mf-urecord__dot { flex: none; display: inline-block; width: 12px; height: 12px; border-radius: 999px; }
+
+/* 목록 면: 남는 높이를 채우고 넘치면 안에서만 세로 스크롤 */
+.mf-urecord__list {
+  flex: 1; min-height: 0; margin: 0; padding: 8px 16px; list-style: none; overflow-y: auto; overscroll-behavior: contain;
+  background: var(--night-700); border-radius: var(--radius-md);
+}
+
+/* 행: `N일차` 64px | 문장. 점선 구분은 마지막 줄만 없다 */
+.mf-urecord__row {
+  display: grid; grid-template-columns: 64px minmax(0, 1fr); column-gap: 8px; align-items: center;
+  min-height: 48px; padding: 8px 0; border-bottom: 1px dashed var(--night-600);
+  font-size: 14px; line-height: 20px; color: var(--gray-300);
+}
+.mf-urecord__row:last-child { border-bottom: 0; }
+.mf-urecord__row b { font-weight: 700; color: var(--gray-50); }
+.mf-urecord__row--none { color: var(--gray-300); }
+
+.mf-urecord__empty {
+  display: flex; align-items: center; min-height: 48px; padding: 8px 0;
+  font-size: 14px; line-height: 20px; color: var(--gray-300);
+}

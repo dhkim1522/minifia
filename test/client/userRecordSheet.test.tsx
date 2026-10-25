@@ -1,9 +1,10 @@
+/// <reference types="node" />
+import { readFileSync } from "node:fs";
 import { cleanup, fireEvent, render, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import "../helpers/singleLineErrors";
 import type { ClaimLogEntry } from "../../shared/protocol";
 import { UserRecordSheet } from "../../src/components/UserRecordSheet";
-import urecordCss from "../../src/styles/urecord.css?raw";
 import sheetSource from "../../src/components/UserRecordSheet.tsx?raw";
 
 // 유저 기록 카드(03.1 UI-SPEC C, D-06). 입력은 공개 정보 claimLog 와 그 사람의 seat·닉네임뿐이다(D-19).
@@ -141,7 +142,7 @@ describe("UserRecordSheet — 빈 상태·금지", () => {
     const { container } = open({ nickname: "<img src=x onerror=alert(1)>" });
     expect(container.querySelector(".mf-urecord__title img")).toBeNull();
     expect(container.querySelector("h2")?.textContent).toBe("<img src=x onerror=alert(1)>");
-    expect(container.querySelectorAll(".mf-urecord__text b").length).toBe(3);
+    expect(container.querySelectorAll(".mf-urecord__text b").length).toBe(2); // 주장이 있는 두 줄(경찰·의사)
   });
 });
 
@@ -156,7 +157,8 @@ describe("UserRecordSheet — 입력은 공개 정보뿐 (D-19, T-03.1-22)", () 
 });
 
 describe("urecord.css 규약 (UI-SPEC C)", () => {
-  const css = urecordCss;
+  // vitest 는 CSS 를 처리하지 않아 css?raw 가 빈 문자열이 된다 — 파일을 직접 읽는다.
+  const css = readFileSync("src/styles/urecord.css", "utf8");
   const noComments = css.replace(/\/\*[\s\S]*?\*\//g, "");
 
   it("행 격자 64px minmax(0, 1fr), 열 간격 8px, 최소 높이 48px, 안쪽 위아래 8px, 점선 구분(마지막 줄 없음)", () => {
