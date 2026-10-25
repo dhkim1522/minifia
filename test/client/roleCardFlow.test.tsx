@@ -355,3 +355,93 @@ describe("탈락한 사람과 역할별 일지", () => {
     expect(rows().map((x) => x.querySelector(".mf-journal__rz")?.textContent)).toEqual(["보호"]);
   });
 });
+
+describe("눌리는 밤 끝 알림 (D-12, UI-SPEC D·R6)", () => {
+  const nightEnd = (role: RoleId, rec: RoleRecord) => {
+    const r = renderRoom(makeView({ role, phase: "night", records: [] }));
+    feed(r, makeView({ role, phase: "morning", records: [rec] }));
+    return r;
+  };
+
+  it.each([
+    ["police", { n: 1, target: 2, isMafia: true }, "수사일지가 추가됐어요 · 눌러서 보기"],
+    ["mafia", { n: 1, target: 2, died: true }, "암살일지가 추가됐어요 · 눌러서 보기"],
+    ["doctor", { n: 1, target: 2 }, "치료일지가 추가됐어요 · 눌러서 보기"],
+  ] as const)("%s: 같은 접속에서 기록이 늘면 일지 이름의 알림이 뜬다", (role, rec, text) => {
+    nightEnd(role, rec as RoleRecord);
+    expect(toastEl()?.textContent ?? "(알림 없음)").toBe(text);
+  });
+
+  it("구조: div[role=status] 안의 눌리는 button, 앞에 일지 아이콘 img 16×16(alt 빈 문자열)", () => {
+    nightEnd("police", { n: 1, target: 2, isMafia: true });
+    const t = toastEl();
+    expect(t?.tagName ?? "(없음)").toBe("BUTTON");
+    expect(t?.parentElement?.getAttribute("role") ?? "(role 없음)").toBe("status");
+    const img = t?.querySelector("img");
+    expect(img?.getAttribute("width") ?? "(img 없음)").toBe("16");
+    expect(img?.getAttribute("height")).toBe("16");
+    expect(img?.getAttribute("alt")).toBe("");
+    expect(img?.getAttribute("src") ?? "").toContain("journal_police_icon");
+    expect(t?.previousElementSibling ?? null).toBeNull();
+  });
+
+  it("시민에게는 어떤 길이 변화에도 알림이 없다", () => {
+    const r = renderRoom(makeView({ role: "citizen", phase: "night" }));
+    const v = makeView({ role: "citizen", phase: "morning" });
+    v.me.records = [{ n: 1, target: 2, isMafia: true }];
+    feed(r, v);
+    expect(toastEl() === null ? "없음" : "있음").toBe("없음");
+  });
+
+  it("처음 마운트·epoch 변화(재접속)·길이 불변에는 알림이 없다", () => {
+    renderRoom(makeView({ phase: "morning", records: POLICE_ONE }));
+    expect(toastEl() === null ? "없음" : "있음").toBe("없음");
+    cleanup();
+    const r = renderRoom(makeView({ phase: "night", records: [] }), { epoch: 1 });
+    feed(r, makeView({ phase: "morning", records: POLICE_ONE }), { epoch: 2 });
+    expect(toastEl() === null ? "없음" : "있음").toBe("없음");
+    cleanup();
+    const s = renderRoom(makeView({ phase: "night", records: POLICE_ONE }));
+    feed(s, makeView({ phase: "morning", n: 2, records: POLICE_ONE }));
+    expect(toastEl() === null ? "없음" : "있음").toBe("없음");
+  });
+
+  it("시트가 열려 있을 때는 알림이 없다", () => {
+    const r = renderRoom(makeView({ phase: "night", records: [] }));
+    openSheet();
+    feed(r, makeView({ phase: "morning", records: POLICE_ONE }));
+    expect(toastEl() === null ? "없음" : "있음").toBe("없음");
+  });
+
+  it("수명 4000ms: 3999 에는 있고 4000 에는 없다", () => {
+    nightEnd("police", { n: 1, target: 2, isMafia: true });
+    advance(3_999);
+    expect(toastEl() === null ? "없음" : "있음").toBe("있음");
+    advance(1);
+    expect(toastEl() === null ? "없음" : "있음").toBe("없음");
+  });
+
+  it("누르면 알림이 사라지고 시트가 `활동 기록` 탭으로 열리며 점이 사라지고 새 줄에 NEW 가 붙는다", () => {
+    nightEnd("police", { n: 1, target: 2, isMafia: true });
+    expect(headDot()).toBe(true);
+    fireEvent.click(toastEl()!);
+    expect(toastEl() === null ? "사라짐" : "있음").toBe("사라짐");
+    expect(sheet() === null ? "닫힘" : "열림").toBe("열림");
+    expect(selectedTab()).toBe("활동 기록");
+    expect(headDot()).toBe(false);
+    expect(tabDot()).toBe(false);
+    expect(newMarks()).toEqual(["NEW"]);
+    expect(storage.getItem(KEY)).toBe("1");
+  });
+
+  it("알림 래퍼는 클릭을 막지 않는다(pointer-events 는 CSS 규약, 래퍼 클래스 확인)", () => {
+    nightEnd("police", { n: 1, target: 2, isMafia: true });
+    expect(toastWrap() === null ? "래퍼 없음" : "래퍼").toBe("래퍼");
+  });
+
+  it("옛 알림 `수사 기록이 추가됐어요` 와 `.mf-records-toast` 는 어디에도 없다", () => {
+    nightEnd("police", { n: 1, target: 2, isMafia: true });
+    expect(document.body.textContent?.includes("수사 기록이 추가됐어요") ? "있음" : "없음").toBe("없음");
+    expect(document.querySelector(".mf-records-toast") === null ? "없음" : "있음").toBe("없음");
+  });
+});
