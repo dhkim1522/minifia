@@ -750,8 +750,8 @@ describe("DayScene 눌리는 밤 끝 알림 (03.1-11, D-12, UI-SPEC D·R6)", () 
   });
 });
 
-describe("rolecard.css 알림 규약 (03.1-11, UI-SPEC D·R6)", () => {
-  const css = readFileSync("src/styles/rolecard.css", "utf8");
+describe("rolecard-toast.css 알림 규약 (03.1-11, UI-SPEC D·R6)", () => {
+  const css = readFileSync("src/styles/rolecard-toast.css", "utf8");
   const rule = (sel: string): string => {
     const at = css.indexOf(`\n${sel} {`);
     return at < 0 ? "" : css.slice(css.indexOf("{", at) + 1, css.indexOf("}", at));

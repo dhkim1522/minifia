@@ -118,6 +118,7 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
     setSeen(recordsLen);
     saveSeenCount(code, recordsLen);
   }, [activityVisible, recordsLen, seen, code]);
+  const onOpenActivity = () => setRoleCard({ open: true, tab: "activity" });
   const closeRoleCard = () => {
     setRoleCard({ open: false, tab: "role" });
     setNewCount(0);
@@ -261,7 +262,16 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
       case "discussion":
       case "night":
       case "morning":
-        return <DayScene view={view} connection={connection} myRoleButton={myRoleButton} testButton={testButton} />;
+        return (
+          <DayScene
+            view={view}
+            connection={connection}
+            myRoleButton={myRoleButton}
+            roleCardOpen={roleCard.open}
+            onOpenActivity={onOpenActivity}
+            testButton={testButton}
+          />
+        );
       default:
         return connecting();
     }

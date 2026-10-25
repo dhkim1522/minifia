@@ -1,0 +1,22 @@
+/* 눌리는 밤 끝 알림(역할 카드, UI-SPEC D·R6). 시트·일지 규칙(rolecard.css)은 전환·애니메이션이 없어야 해서(03.1-06 테스트)
+   알림의 페이드(--dur-fast)만 이 파일에 따로 둔다. 색은 변수만 쓴다. */
+/* 래퍼는 헤더 아래 로컬 위치(top 127 = 헤더 119.2 + 8)에서 가운데 정렬만 하고 클릭을 막지 않는다. 눌리는 것은 버튼뿐이다. */
+.mf-rolecard-toast-wrap {
+  position: absolute; z-index: 85; left: 0; right: 0; top: 127px;
+  display: flex; justify-content: center; pointer-events: none;
+}
+.mf-rolecard-toast {
+  display: inline-flex; align-items: center; gap: 8px; box-sizing: border-box;
+  min-height: var(--tap-min); max-width: calc(100% - 32px); padding: 12px 16px;
+  background: color-mix(in srgb, var(--night-900) 94%, transparent); border: 1px solid var(--gray-100);
+  border-radius: var(--radius-pill); box-shadow: 0 8px 20px color-mix(in srgb, var(--shadow) 91%, transparent);
+  color: var(--gray-50); font: inherit; font-size: 14px; line-height: 20px; font-weight: 700; white-space: nowrap;
+  pointer-events: auto; cursor: pointer;
+  animation: mf-rolecard-toast-in var(--dur-fast) var(--ease-out);
+}
+.mf-rolecard-toast:focus-visible { outline: 2px solid var(--gray-100); outline-offset: 2px; }
+.mf-rolecard-toast__icon { flex: none; width: 16px; height: 16px; }
+@keyframes mf-rolecard-toast-in { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  .mf-rolecard-toast { animation: none; }
+}
