@@ -28,7 +28,7 @@ import {
   spectatorChecks,
   turnChecks,
   crownChecks,
-  nightIntroChecks,
+  sceneIntroChecks,
   exitCodeOf,
   faceRegion,
   feltGapChecks,
@@ -926,25 +926,28 @@ test("crownChecks W1: expect 1 이면 왕관 1개 통과·0개 실패, expect 0 
   }
 });
 
-// ---- N6 밤 시작 문구 (결정 0028) ----
-test("nightIntroChecks N6: `N일차`+`밤이 되었습니다`, pointer-events none, aria-hidden 이면 통과하고 어긋남마다 실패한다", () => {
-  const good = { texts: ["1일차", "밤이 되었습니다"], pointerEvents: "none", ariaHidden: true };
-  const ok = nightIntroChecks(good);
+// ---- N6 밤 시작 문구 (결정 0028 → 0030: 낮·밤 한 부품 SceneIntro) ----
+test("sceneIntroChecks N6: `N일차`+`밤이 되었습니다`, 톤 night, pointer-events none, aria-hidden 이면 통과하고 어긋남마다 실패한다", () => {
+  const good = { texts: ["1일차", "밤이 되었습니다"], kind: "night", pointerEvents: "none", ariaHidden: true };
+  const ok = sceneIntroChecks(good);
   assert.equal(ok.id, "N6");
   assert.equal(ok.ok, true, ok.detail);
-  assert.equal(nightIntroChecks({ ...good, texts: ["12일차", "밤이 되었습니다"] }).ok, true);
+  assert.equal(sceneIntroChecks(good, { kind: "night" }).ok, true);
+  assert.equal(sceneIntroChecks({ ...good, texts: ["12일차", "밤이 되었습니다"] }).ok, true);
   for (const bad of [
     null,
     undefined,
     { ...good, texts: ["1일차", "낮이 되었습니다"] },
     { ...good, texts: ["밤이 되었습니다"] },
     { ...good, texts: ["일차", "밤이 되었습니다"] },
+    { ...good, kind: "day" },
     { ...good, pointerEvents: "auto" },
     { ...good, ariaHidden: false },
   ]) {
-    assert.equal(nightIntroChecks(bad).ok, false, JSON.stringify(bad));
+    assert.equal(sceneIntroChecks(bad).ok, false, JSON.stringify(bad));
   }
-  assert.match(nightIntroChecks(null).detail, /없음/);
+  assert.match(sceneIntroChecks(null).detail, /없음/);
+  assert.match(sceneIntroChecks(null).detail, /\.mf-sceneintro/);
 });
 
 test("turnChecks K2: 내 차례는 이번 판 직업 + 말 안 함 칩 · stRow/이모티콘 없음 · 높이 157", () => {

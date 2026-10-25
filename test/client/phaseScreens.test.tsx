@@ -285,17 +285,19 @@ describe("S-04 역할 배정 (GAME-01, D-12, R11, E7, T-01-44)", () => {
 });
 
 describe("S-06 낮 시작 (D-01, D-02, R13, E9)", () => {
-  it("낮 시작 발표: 1일차(view.day 없음)·낮이 되었습니다·직업 공개 안내·[역할 카드] 하나, 타이머·테이블 없음, 낮 배경", () => {
-    const { container } = renderRoom(makeView({ phase: "dayAnnounce", role: "mafia", allies: [2] }));
+  it("낮 시작 발표: 테이블 장면(DayScene) 위 — 제목 `낮`·1일차(view.day 없음)·[역할 카드] 하나·타이머·테이블·하단 패널, 낮 배경, 처음 마운트라 문구 없음", () => {
+    const { container } = renderRoom(makeView({ phase: "dayAnnounce", role: "mafia", allies: [2], endsIn: 2_000, durationMs: 2_000 }));
+    expect(byRole("heading", "낮")).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: "낮이 되었습니다" })).toBeNull();
     expect(byText("1일차")).toBeTruthy();
-    expect(byRole("heading", "낮이 되었습니다")).toBeTruthy();
-    expect(byText("토론 전에 먼저 직업을 공개해요")).toBeTruthy();
     expect(screen.queryAllByRole("button", { name: "역할 카드" }).length).toBe(1);
-    expect(screen.queryByRole("timer")).toBeNull();
-    expect(screen.queryByRole("group")).toBeNull();
+    expect(byRole("timer").textContent).toContain("0:02");
+    expect(container.querySelector(".mf-dt")).not.toBeNull();
+    expect(container.querySelector(".mf-dayscene__panel")).not.toBeNull();
+    expect(container.querySelector(".mf-sceneintro"), "처음 마운트에는 문구 없음").toBeNull();
+    expect(container.querySelector("[class*='mf-day__'], .mf-day"), "옛 낮 시작 화면 클래스").toBeNull();
     const art = container.querySelector<HTMLElement>(".mf-backdrop__art");
     expect(art?.style.backgroundImage).toContain("/backgrounds/bg_game_day.webp");
-    expect(container.querySelector(".mf-day__morning")).not.toBeNull();
   });
 
   it("낮 화면의 [역할 카드] 버튼 마크업은 마피아·시민·역할 없음에서 같다", () => {
@@ -542,14 +544,31 @@ describe("S-06b·S-06c·S-07 한 장면 DayScene (DAY-01, UI-SPEC 장면)", () =
     expect(r.container.querySelector(".mf-dayscene__panel") === panel).toBe(true);
   });
 
-  it("dayAnnounce → claim: 장면 바깥 래퍼(mf-phase-enter)가 새 노드이고, claim → discussion 사이에는 같은 노드다", () => {
-    const r = renderRoom(makeView({ phase: "dayAnnounce", role: "citizen", day: 1 }));
+  it("dayAnnounce → claim: 장면 바깥 래퍼(mf-phase-enter)가 같은 노드이고, 새 노드는 roleReveal → dayAnnounce 에서 생긴다", () => {
+    const r = renderRoom(makeView({ phase: "roleReveal", endsIn: 15_000, role: "citizen", day: 1 }));
+    const reveal = r.container.querySelector(".mf-phase-enter");
+    rerenderRoom(r.rerender, makeView({ phase: "dayAnnounce", role: "citizen", day: 1 }));
     const announce = r.container.querySelector(".mf-phase-enter");
+    expect(announce === reveal, "역할 확인 → 낮 시작은 새 래퍼").toBe(false);
     rerenderRoom(r.rerender, claim());
+    expect(r.container.querySelector(".mf-phase-enter") === announce, "낮 시작 → claim 은 같은 래퍼").toBe(true);
     const scene = r.container.querySelector(".mf-phase-enter");
-    expect(scene === announce, "장면 진입 때 새 래퍼").toBe(false);
     rerenderRoom(r.rerender, discussion());
     expect(r.container.querySelector(".mf-phase-enter") === scene, "discussion 래퍼 유지").toBe(true);
+  });
+
+  it("역할 확인 → 낮 시작: 새로 마운트돼도 낮 문구가 한 번 뜨고(aria-hidden, 제목 요소 아님), 2초 뒤 사라지며, lobby 그림에서 day 그림으로 크로스페이드한다", async () => {
+    const r = renderRoom(makeView({ phase: "roleReveal", endsIn: 15_000, role: "citizen", day: 1 }));
+    expect(r.container.querySelector(".mf-sceneintro")).toBeNull();
+    rerenderRoom(r.rerender, makeView({ phase: "dayAnnounce", endsIn: 2_000, durationMs: 2_000, role: "citizen", day: 1 }));
+    const intro = r.container.querySelector<HTMLElement>(".mf-sceneintro--day");
+    expect(intro).not.toBeNull();
+    expect(intro!.getAttribute("aria-hidden")).toBe("true");
+    expect(Array.from(intro!.querySelectorAll("p")).map((p) => p.textContent)).toEqual(["1일차", "낮이 되었습니다", "토론 전에 먼저 직업을 공개해요"]);
+    expect(intro!.querySelector("h1")).toBeNull();
+    expect(Array.from(r.container.querySelectorAll<HTMLElement>(".mf-backdrop__art")).map((el) => el.dataset.scene)).toEqual(["lobby", "day"]);
+    advance(2_000);
+    expect(r.container.querySelector(".mf-sceneintro")).toBeNull();
   });
 
   it("마피아(allies [2])와 시민의 claim 화면은 동료 후광·마름모를 뺀 나머지가 같고 역할 글자가 없다", () => {
@@ -619,9 +638,9 @@ describe("단계 전환은 서버 view 만 따른다 (T-01-46)", () => {
   it("역할 확인 마감 뒤 서버가 day 를 보내면 그때 낮 화면으로 바뀐다", () => {
     const r = renderRoom(makeView({ phase: "roleReveal", endsIn: 15_000, role: "mafia", allies: [2] }));
     advance(16_000);
-    expect(screen.queryByRole("heading", { name: "낮이 되었습니다" })).toBeNull();
+    expect(screen.queryByRole("heading", { name: "낮" })).toBeNull();
     rerenderRoom(r.rerender, makeView({ phase: "dayAnnounce", role: "mafia", allies: [2] }));
-    expect(byRole("heading", "낮이 되었습니다")).toBeTruthy();
+    expect(byRole("heading", "낮")).toBeTruthy();
   });
 });
 
@@ -672,7 +691,8 @@ describe("C-01 [역할 카드] 시트", () => {
     expect(after?.hasAttribute("open")).toBe(true);
     expect(sheetHas(after!, "마피아")).toBe(true);
     expect(after!.querySelector(".mf-rolecard__back")).toBeNull();
-    expect(r.container.querySelector("h1.mf-day__title")?.textContent).toBe("낮이 되었습니다");
+    expect(r.container.querySelector("h1")?.textContent).toBe("낮");
+    expect(r.container.querySelector(".mf-sceneintro__title")?.textContent).toBe("낮이 되었습니다");
   });
 
   it("역할 확인을 통째로 놓치고 day 에 처음 들어온 사람도 [역할 카드] 에서 앞면 내용을 본다", () => {

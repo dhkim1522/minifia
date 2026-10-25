@@ -320,10 +320,10 @@ describe("css 규약: 머리말 간격과 [역할 카드] 버튼 (UI-SPEC A·S5)
     return at < 0 ? "" : css.slice(css.indexOf("{", at) + 1, css.indexOf("}", at));
   };
 
-  it(".mf-phasebar__extra 와 .mf-day__top 에 gap var(--space-sm)", () => {
+  it(".mf-phasebar__extra 에 gap var(--space-sm) (옛 낮 시작 상단 줄은 없다)", () => {
     expect(/gap:\s*var\(--space-sm\)/.test(rule(phaseCss, ".mf-phasebar__extra"))).toBe(true);
     expect(/display:\s*flex/.test(rule(phaseCss, ".mf-phasebar__extra"))).toBe(true);
-    expect(/gap:\s*var\(--space-sm\)/.test(rule(phaseCss, ".mf-day__top"))).toBe(true);
+    expect(rule(phaseCss, ".mf-day__top")).toBe("");
   });
 
   it("버튼은 14px 굵게·안쪽 12·아이콘 간격 8·줄바꿈 없음·점이 밖으로 나오도록 overflow visible", () => {

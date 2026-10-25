@@ -1,15 +1,17 @@
 // 배경 장면 목록·단계→장면 규칙표·WebP 예산(결정 0030, 사용자 지시 V-04).
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { PHASE_DEFS } from "../../shared/game/phases";
+import { DAY_ANNOUNCE_MS, PHASE_DEFS } from "../../shared/game/phases";
 import type { PhaseId } from "../../shared/protocol";
 import {
   HEADER_SCRIM_LENGTH_PX,
   HEADER_SCRIM_STOPS,
+  PHASE_INTRO,
   PHASE_SCENE,
   SCENES,
   SCENE_FADE_MS,
   SCENE_IMAGE_WAIT_MS,
+  SCENE_INTRO_MS,
   SCENE_IDS,
   headerScrimGradient,
   sceneOfPhase,
@@ -72,6 +74,25 @@ describe("단계 → 장면 규칙표(PHASE_SCENE)", () => {
     expect(used.has("verdictDusk")).toBe(false);
     expect(SCENE_IDS).toContain("dusk");
     expect(SCENE_IDS).toContain("verdictDusk");
+  });
+});
+
+describe("단계별 시작 문구(PHASE_INTRO, 낮·밤 한 부품)", () => {
+  it("밤과 낮 시작(dayAnnounce) 두 행뿐이고 다른 단계는 문구가 없다 (4페이즈는 행을 더한다)", () => {
+    expect(Object.keys(PHASE_INTRO).sort()).toEqual(["dayAnnounce", "night"]);
+    for (const phase of PHASES) {
+      if (phase !== "night" && phase !== "dayAnnounce") expect(PHASE_INTRO[phase], phase).toBeUndefined();
+    }
+  });
+
+  it("밤: 밤 톤·제목 `밤이 되었습니다`·보조줄 없음. 낮 시작: 낮 톤·제목 `낮이 되었습니다`·보조줄 `토론 전에 먼저 직업을 공개해요`", () => {
+    expect(PHASE_INTRO.night).toEqual({ tone: "night", title: "밤이 되었습니다" });
+    expect(PHASE_INTRO.dayAnnounce).toEqual({ tone: "day", title: "낮이 되었습니다", sub: "토론 전에 먼저 직업을 공개해요" });
+  });
+
+  it("문구가 떠 있는 시간 SCENE_INTRO_MS 는 서버 낮 시작 단계 길이(DAY_ANNOUNCE_MS = 2000)와 같다", () => {
+    expect(SCENE_INTRO_MS).toBe(DAY_ANNOUNCE_MS);
+    expect(SCENE_INTRO_MS).toBe(2000);
   });
 });
 

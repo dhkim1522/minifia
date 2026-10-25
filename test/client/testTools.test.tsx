@@ -246,9 +246,9 @@ describe("게임 중: 버튼 자리와 두 동작 (U-03, U-04)", () => {
     expect(String((testBtn() as HTMLElement).closest(".mf-phasebar__extra") !== null)).toBe("true");
   });
 
-  it("낮 시작 발표에서는 버튼이 .mf-day__top 안에 있다", () => {
+  it("낮 시작 발표에서는 버튼이 장면 상자(.mf-dayscene__scene)의 닻(.mf-tt-anchor) 안에 있다", () => {
     open({ phase: "dayAnnounce", testMode: true });
-    expect(String((testBtn() as HTMLElement).closest(".mf-day__top") !== null)).toBe("true");
+    expect(String((testBtn() as HTMLElement).closest(".mf-dayscene__scene .mf-tt-anchor") !== null)).toBe("true");
   });
 
   it("배정 단계에는 버튼이 없다", () => {
