@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { act, cleanup, fireEvent, render, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { RoleId } from "../../shared/game/roles";
-import type { ClaimLogEntry, PhaseId, RoomView, SpectateView } from "../../shared/protocol";
+import type { ClaimLogEntry, MorningView, PhaseId, RoomView, SpectateView } from "../../shared/protocol";
 import type { RoomConnection, RoomEvent } from "../../src/net/useRoomConnection";
 import { DayScene } from "../../src/screens/DayScene";
 import { TABLE_FIT_MIN_H, TAG_H } from "../../src/game/dayTable";
@@ -27,6 +27,8 @@ interface ViewOpts {
   endsIn?: number;
   /** 공개된 주장 기록 (기본 비어 있음) */
   claimLog?: ClaimLogEntry[];
+  /** 아침 발표(morning 단계에서만 싣는다) */
+  morning?: MorningView;
 }
 
 function makeView(o: ViewOpts): RoomView {
@@ -58,6 +60,7 @@ function makeView(o: ViewOpts): RoomView {
     },
   };
   if (o.spectate) view.spectate = o.spectate;
+  if (o.morning !== undefined && view.day) view.day.morning = o.morning;
   return view;
 }
 
@@ -571,5 +574,87 @@ describe("DayScene 낮 캐릭터 탭 → 유저 기록 카드 (03.1-08, D-06·D-
     fireEvent.click(within(container).getByRole("button", { name: "민지, 주장 기록 보기" }));
     expect(rowsOf("민지 기록")).toEqual(["1일차말하지 않았어요"]);
     expect(sheet("민지 기록")?.textContent?.includes("의사")).toBe(false);
+  });
+});
+
+describe("DayScene 아침 어둡게 층·유령 강조 (03.1-10, D-15, UI-SPEC F)", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  const dims = (c: HTMLElement) => c.querySelectorAll(".mf-dt__dim");
+  const spot = (c: HTMLElement) => [...c.querySelectorAll<HTMLElement>(".mf-dt__seat--spotlit")];
+  const seatNo = (el: HTMLElement) => el.getAttribute("data-seat");
+
+  it("morning: .mf-dt__dim 이 정확히 하나(aria-hidden)이고 헤더·하단 패널 안에는 없다", () => {
+    const { container } = scene(makeView({ phase: "morning", morning: { eliminated: 2, phrase: 1 }, dead: [2] }));
+    expect(dims(container).length).toBe(1);
+    expect(dims(container)[0]!.getAttribute("aria-hidden")).toBe("true");
+    expect(container.querySelector(".mf-phasebar .mf-dt__dim") === null).toBe(true);
+    expect(container.querySelector(".mf-dayscene__panel .mf-dt__dim") === null).toBe(true);
+  });
+
+  it("morning 이 아닌 단계(claim·discussion·night)에는 층이 0개", () => {
+    for (const phase of ["claim", "discussion", "night"] as const) {
+      const { container } = scene(makeView({ phase, role: "citizen" }));
+      expect(`${phase}:${dims(container).length}`).toBe(`${phase}:0`);
+      cleanup();
+    }
+  });
+
+  it("탈락자 X 가 있는 아침: X 자리만 spotlit 이고 인라인 z-index 31, 탈락자 없는 아침은 spotlit 0개", () => {
+    const { container } = scene(makeView({ phase: "morning", morning: { eliminated: 2, phrase: 1 }, dead: [2] }));
+    expect(spot(container).map(seatNo).join(",")).toBe("2");
+    expect(spot(container)[0]!.style.zIndex).toBe("31");
+    cleanup();
+    const quiet = scene(makeView({ phase: "morning", morning: {} }));
+    expect(spot(quiet.container).length).toBe(0);
+  });
+
+  it("밤 → 아침을 직접 보면 X 자리에 pulse, 처음부터 아침으로 마운트하면 spotlit 만 있고 pulse 는 없다", () => {
+    const r = scene(makeView({ phase: "night", role: "citizen" }));
+    r.rerender(makeView({ phase: "morning", role: "citizen", morning: { eliminated: 2, phrase: 1 }, dead: [2] }));
+    expect(r.container.querySelectorAll(".mf-dt__seat--pulse").length).toBe(1);
+    expect(seatNo(r.container.querySelector<HTMLElement>(".mf-dt__seat--pulse")!)).toBe("2");
+    cleanup();
+    const fresh = scene(makeView({ phase: "morning", morning: { eliminated: 2, phrase: 1 }, dead: [2] }));
+    expect(spot(fresh.container).length).toBe(1);
+    expect(fresh.container.querySelectorAll(".mf-dt__seat--pulse").length).toBe(0);
+  });
+
+  it("아침 → 다음 단계(discussion)에서 pulse·spotlit·dim 이 모두 사라진다", () => {
+    const r = scene(makeView({ phase: "night", role: "citizen" }));
+    r.rerender(makeView({ phase: "morning", role: "citizen", morning: { eliminated: 2, phrase: 1 }, dead: [2] }));
+    r.rerender(makeView({ phase: "discussion", role: "citizen", dead: [2] }));
+    expect(`${spot(r.container).length},${r.container.querySelectorAll(".mf-dt__seat--pulse").length},${dims(r.container).length}`).toBe("0,0,0");
+  });
+
+  it("아침 카드·층이 탈락자·관전자·살아 있는 사람 화면 모두에 하나씩 보인다", () => {
+    const spectate: SpectateView = {
+      seats: [0, 1, 2, 3].map((seat) => ({ seat, job: "citizen" as const })),
+      picks: { mafia: [], police: [], doctor: [] },
+    };
+    const views = [
+      makeView({ phase: "morning", role: "citizen", morning: { eliminated: 0, phrase: 1 }, dead: [0], spectate }),
+      makeView({ phase: "morning", role: "citizen", morning: { eliminated: 2, phrase: 1 }, dead: [2] }),
+      makeView({ phase: "morning", role: "citizen", morning: { eliminated: 2, phrase: 1 }, dead: [0, 2] }),
+    ];
+    for (const [i, v] of views.entries()) {
+      const { container } = scene(v);
+      expect(`${i}:${container.querySelectorAll(".mf-morningcard").length},${dims(container).length}`).toBe(`${i}:1,1`);
+      cleanup();
+    }
+  });
+
+  it("아침 하단은 `아침이 밝았습니다` + `곧 낮 토론이 시작돼요`, 헤더는 `아침` / `{n+1}일차`", () => {
+    const { container } = scene(makeView({ phase: "morning", n: 1, morning: {} }));
+    expect(container.querySelector("h1")?.textContent).toBe("아침");
+    expect(container.querySelector(".mf-phasebar__do")?.textContent).toBe("2일차");
+    expect(container.querySelector(".mf-dayscene__panel h2")?.textContent).toBe("아침이 밝았습니다");
+    expect(container.querySelector(".mf-dayscene__panel .mf-claimpanel__guide")?.textContent).toBe("곧 낮 토론이 시작돼요");
   });
 });

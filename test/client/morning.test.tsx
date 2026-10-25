@@ -6,6 +6,7 @@ import "../helpers/singleLineErrors";
 import type { RoleId } from "../../shared/game/roles";
 import type { MorningView, PhaseId, RoomView, SpectateView } from "../../shared/protocol";
 import type { RoomConnection } from "../../src/net/useRoomConnection";
+import { exitDelayOf } from "../../src/components/MorningCard";
 import { DayScene } from "../../src/screens/DayScene";
 
 // 아침 발표 통합 테스트(03-10): DayScene 의 morning 분기를 view 픽스처로 만난다.
@@ -230,5 +231,69 @@ describe("무사·타이머·표시 소멸·탈락 순간 (03-10)", () => {
     expect(panel(container)!.querySelector("h2")?.textContent).toBe("아침이 밝았습니다");
     expect(container.querySelector(".mf-ro") === null).toBe(true);
     expect(container.querySelector(".mf-morningcard__t")?.textContent).toBe("지우님이 이슬이 되어 사라졌습니다");
+  });
+});
+
+describe("아침 카드 팝·퇴장 (03.1-10, D-15, UI-SPEC F)", () => {
+  const css = readCss("src/styles/night.css");
+  const rule = (sel: string) => css.match(new RegExp(`(^|\\n)${sel.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*\\{([^}]*)\\}`))?.[2] ?? "";
+  const keyframes = (name: string) => css.match(new RegExp(`@keyframes ${name}\\s*\\{([\\s\\S]*?\\})\\s*\\}`))?.[0] ?? "";
+
+  it("카드: 제목·보조 문구는 예전과 같다(탈락 문구 `님이`, 무사 `아무 일도 없었습니다` + `모두 무사해요`)", () => {
+    const a = scene(makeView({ morning: { eliminated: 1, phrase: 1 } }));
+    expect(a.container.querySelector(".mf-morningcard__t")?.textContent).toBe("하윤님이 이슬이 되어 사라졌습니다");
+    cleanup();
+    const b = scene(makeView({ morning: {} }));
+    expect(b.container.querySelector(".mf-morningcard__t")?.textContent).toBe("아무 일도 없었습니다");
+    expect(b.container.querySelector(".mf-morningcard__s")?.textContent).toBe("모두 무사해요");
+  });
+
+  it("퇴장 지연 변수: 카드 --mf-morning-exit-delay 와 층 --mf-dim-exit-delay 가 같은 값(남은 5000ms → 4700ms)이다", () => {
+    const { container } = scene(makeView({ morning: { eliminated: 1, phrase: 1 }, endsIn: 5_000 }));
+    const card = container.querySelector<HTMLElement>(".mf-morningcard")!;
+    const dim = container.querySelector<HTMLElement>(".mf-dt__dim")!;
+    expect(card.style.getPropertyValue("--mf-morning-exit-delay")).toBe("4700ms");
+    expect(dim.style.getPropertyValue("--mf-dim-exit-delay")).toBe("4700ms");
+    expect(card.classList.contains("mf-dayscene__enter")).toBe(false);
+  });
+
+  it("재접속으로 남은 2000ms 에 들어오면 지연 1700ms", () => {
+    const { container } = scene(makeView({ morning: {}, endsIn: 2_000 }));
+    expect(container.querySelector<HTMLElement>(".mf-morningcard")!.style.getPropertyValue("--mf-morning-exit-delay")).toBe("1700ms");
+  });
+
+  it("지연은 아침이 시작될 때 한 번 정해 같은 마감 안의 다시 그리기에서는 바뀌지 않는다", () => {
+    const r = scene(makeView({ morning: {}, endsIn: 5_000 }));
+    vi.setSystemTime(NOW + 3_000);
+    r.rerender(makeView({ morning: {}, endsIn: 5_000 }));
+    expect(r.container.querySelector<HTMLElement>(".mf-morningcard")!.style.getPropertyValue("--mf-morning-exit-delay")).toBe("4700ms");
+  });
+
+  it("exitDelayOf: 5000 → 4700, 2000 → 1700, 200 → 0, 음수 → 0", () => {
+    expect([exitDelayOf(5_000), exitDelayOf(2_000), exitDelayOf(200), exitDelayOf(-50)].join(",")).toBe("4700,1700,0,0");
+  });
+
+  it("night.css: 위치·크기 불변, pointer-events none, 팝 등장·퇴장 규칙", () => {
+    const r = rule(".mf-morningcard");
+    expect(/pointer-events:\s*none/.test(r)).toBe(true);
+    expect(/top:\s*168px/.test(r) && /left:\s*50%/.test(r) && /width:\s*252px/.test(r)).toBe(true);
+    expect(/transform:\s*translateX\(-50%\)/.test(r)).toBe(true);
+    expect(/mf-morning-pop\s+300ms/.test(r)).toBe(true);
+    expect(/mf-morning-out\s+300ms\s+linear\s+var\(--mf-morning-exit-delay/.test(r)).toBe(true);
+    const pop = keyframes("mf-morning-pop");
+    expect(/scale:\s*0\.92/.test(pop) && /scale:\s*1/.test(pop) && /opacity:\s*0/.test(pop) && /opacity:\s*1/.test(pop)).toBe(true);
+    expect(/transform/.test(pop)).toBe(false);
+    expect(/opacity:\s*0/.test(keyframes("mf-morning-out"))).toBe(true);
+  });
+
+  it("night.css: 축소 모션 블록은 .mf-morningcard 를 scale 없이 opacity 만으로 다루고 hex 색이 없다", () => {
+    const block = css.match(/@media \(prefers-reduced-motion: reduce\)\s*\{[\s\S]*?\n\}/g)?.find((b) => b.includes(".mf-morningcard")) ?? "";
+    expect(block !== "").toBe(true);
+    expect(/mf-morning-fade/.test(block)).toBe(true);
+    expect(/mf-morning-pop/.test(block)).toBe(false);
+    expect(/scale:\s*0\.92/.test(keyframes("mf-morning-fade"))).toBe(false);
+    expect(/opacity:\s*1/.test(keyframes("mf-morning-fade"))).toBe(true);
+    const code = css.split("\n").filter((l) => !/^\s*(\/\*|\*|\/\/)/.test(l)).join("\n");
+    expect(/#[0-9a-fA-F]{3,8}\b/.test(code)).toBe(false);
   });
 });
