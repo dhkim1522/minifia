@@ -1,0 +1,10 @@
+/* 11차: 이름표는 이름 한 줄만, 주장 직업은 카드(A') 또는 배지(B)로 */
+.tg__c { display: none; }
+.jc { position: absolute; left: 50%; bottom: calc(30% - 15px); width: 22px; height: 30px; margin-left: -11px; border-radius: 4px; background: var(--gray-50); color: var(--night-900); border: 1px solid var(--gray-300); display: grid; place-items: center; box-shadow: 0 2px 6px rgba(0, 0, 0, .5); z-index: 5; }
+.jc--mafia { background: #2a1620; color: #f2556a; border-color: #e0344b; }
+.jc--back { background: repeating-linear-gradient(45deg, var(--night-700) 0 4px, var(--night-600) 4px 8px); border-color: var(--gray-300); }
+.jc--sm { width: 18px; height: 24px; margin-left: -9px; bottom: calc(30% - 12px); }
+.jc__chg { position: absolute; right: -8px; top: -8px; width: 16px; height: 16px; border-radius: 50%; background: var(--gray-50); color: var(--night-900); display: grid; place-items: center; box-shadow: 0 1px 4px rgba(0, 0, 0, .6); }
+.jb { position: absolute; right: -4px; bottom: 6px; width: 24px; height: 24px; border-radius: 50%; background: var(--gray-50); color: var(--night-900); border: 2px solid var(--night-900); display: grid; place-items: center; box-shadow: 0 2px 6px rgba(0, 0, 0, .5); z-index: 5; }
+.jb--mafia { background: #e0344b; color: var(--gray-50); }
+.jb__chg { position: absolute; left: -7px; top: -7px; width: 14px; height: 14px; border-radius: 50%; background: var(--night-900); color: var(--gray-50); border: 1px solid var(--gray-50); display: grid; place-items: center; }

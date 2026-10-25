@@ -6,3 +6,9 @@
 .sf__pick--police { background: var(--night-900); color: var(--gray-50); border: 2px solid var(--gray-50); }
 .sf__pick--doctor { background: var(--night-900); color: #6fa59a; border: 2px solid #6fa59a; margin-left: -4px; }
 .ro { display: flex; align-items: center; justify-content: center; min-height: 44px; border-radius: 14px; background: var(--night-700); color: var(--gray-300); font-size: 14px; line-height: 20px; }
+/* 테스트 방 전용 방장 도구: 장면 왼쪽 위 작은 버튼 + 시트 */
+.tt { position: absolute; z-index: 60; left: 12px; top: 8px; min-width: 44px; min-height: 44px; padding: 0 12px; display: inline-flex; align-items: center; gap: 6px; border-radius: 14px; border: 1px dashed var(--gray-300); background: rgba(14, 19, 38, 0.86); color: var(--gray-100); font: 700 14px/1.4 var(--font-ui); }
+.tt-sheet__list { display: flex; flex-direction: column; gap: 8px; }
+.tt-sheet__list .btn { justify-content: space-between; width: 100%; min-height: 52px; padding: 0 16px; }
+.tt-sheet__list small { font-weight: 400; color: var(--gray-300); }
+.tt-sheet__note { margin: -12px 0 0; font-size: 14px; line-height: 20px; color: var(--gray-300); }
