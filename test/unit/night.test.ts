@@ -180,12 +180,11 @@ describe("pickTarget 검사 순서 (D-02, ELIM-01)", () => {
     "roleReveal",
     "dayAnnounce",
     "claim",
-    "claimReveal",
     "discussion",
     "morning",
   ];
 
-  it("night 가 아닌 여덟 단계에서는 WRONG_PHASE 다", () => {
+  it("night 가 아닌 일곱 단계에서는 WRONG_PHASE 다", () => {
     for (const phase of OTHER_PHASES) {
       const state = stateAtPhase(phase, 6, 11);
       const actor = state.players[0]!;

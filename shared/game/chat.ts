@@ -5,9 +5,10 @@
 // 통과한 한 줄은 돌려주기만 하고 상태에 저장하지 않는다(결정 0017-7) — 저장되는 것은 보낸 사람 lastSendAt 과 줄 번호뿐이다
 // (낮 nextMessageSeq, 밤 nextNightSeq — 밤 번호는 낮과 따로라 낮 chat 프레임 seq 로 밤 메시지 수를 알 수 없다, 밤마다 enterNight 가 지운다).
 // 주장의 참·거짓은 보지 않는다(D-10) — 역할은 밤 보낸 사람 규칙(살아 있는 마피아만, 결정 0019)에서만 읽는다.
+// claim 중에는 이모티콘만(결정 0023-2): 살아 있는 사람은 차례와 무관하게 emote 를 보낼 수 있고 빠른 메시지(say)는 WRONG_PHASE 다.
 // 보낸 사람은 입력이 아니라 actorId 로 서버 상태에서 찾는다(T-02-08).
 import { EMOJI_IDS } from "../protocol";
-import type { ChatLine, EmojiId, TemplateId } from "../protocol";
+import type { ChatLine, EmojiId, PhaseId, TemplateId } from "../protocol";
 import { isAlive } from "./alive";
 import type { RoleId } from "./roles";
 import { rolesInPlay } from "./roles";
@@ -38,12 +39,16 @@ export type SayInput = { template: TemplateId; target?: number; claimedRole?: Ro
 export type ChatError = "WRONG_PHASE" | "BAD_MESSAGE" | "RATE_LIMITED";
 
 /**
- * 거부 규칙 하나(3페이즈 확정, 결정 0016 결과·0019): 틀린 단계 → WRONG_PHASE(누구든, 탈락자도), 맞는 단계(discussion·night)의
+ * 거부 규칙 하나(3페이즈 확정, 결정 0016 결과·0019): 틀린 단계 → WRONG_PHASE(누구든, 탈락자도), 맞는 단계의
  * 방에 없거나 탈락한 보낸 사람 → BAD_MESSAGE, 밤의 살아 있는 비마피아 → WRONG_PHASE(그 단계에 보낼 수 없는 사람이라는 뜻일 뿐 역할 정보를 주지 않는다).
  * discussion 은 방에 있는 생존자 누구나, night 는 살아 있는 마피아만(결정 0019-1).
+ * 맞는 단계는 호출하는 쪽이 정한다: say 는 discussion·night, emote 는 claim·discussion·night(결정 0023-2).
  */
-function senderOf(state: RoomState, actorId: string): ChatError | Player {
-  if (state.phase !== "discussion" && state.phase !== "night") return "WRONG_PHASE";
+const SAY_PHASES: ReadonlySet<PhaseId> = new Set<PhaseId>(["discussion", "night"]);
+const EMOTE_PHASES: ReadonlySet<PhaseId> = new Set<PhaseId>(["claim", "discussion", "night"]);
+
+function senderOf(state: RoomState, actorId: string, allowed: ReadonlySet<PhaseId>): ChatError | Player {
+  if (!allowed.has(state.phase)) return "WRONG_PHASE";
   const sender = state.players.find((p) => p.id === actorId);
   if (!sender || !isAlive(sender)) return "BAD_MESSAGE";
   if (state.phase === "night" && sender.role !== "mafia") return "WRONG_PHASE";
@@ -64,7 +69,7 @@ export function say(
   input: SayInput,
   now: number,
 ): { ok: true; state: RoomState; line: ChatLine } | { ok: false; error: ChatError } {
-  const sender = senderOf(state, actorId);
+  const sender = senderOf(state, actorId, SAY_PHASES);
   if (typeof sender === "string") return { ok: false, error: sender };
 
   const template = input.template;
@@ -114,7 +119,7 @@ export function say(
 }
 
 /**
- * 이모티콘(COMM-02). 앞부분(단계 → 보낸 사람 존재·생존·밤은 마피아)은 say 와 같은 senderOf 를 쓰고, 쿨다운도 같은 lastSendAt 하나를 본다(D-14 합산).
+ * 이모티콘(COMM-02). 앞부분(단계 → 보낸 사람 존재·생존·밤은 마피아)은 say 와 같은 senderOf 를 쓰되 허용 단계에 claim 이 더해지고, 쿨다운도 같은 lastSendAt 하나를 본다(D-14 합산).
  * 통과하면 보낸 사람 lastSendAt 만 바뀐 새 상태와 {seat, icon, at} 이벤트를 돌려준다.
  * 이모티콘도 메시지처럼 저장하지 않는다 — 재접속 복원이 없다(UI-SPEC S-08b, 결정 0017-7). 쿨다운은 플레이어 단위 영속 필드라 재접속으로 풀리지 않는다.
  */
@@ -124,7 +129,7 @@ export function emote(
   icon: EmojiId,
   now: number,
 ): { ok: true; state: RoomState; event: { seat: number; icon: EmojiId; at: number } } | { ok: false; error: ChatError } {
-  const sender = senderOf(state, actorId);
+  const sender = senderOf(state, actorId, EMOTE_PHASES);
   if (typeof sender === "string") return { ok: false, error: sender };
   if (!(EMOJI_IDS as readonly string[]).includes(icon)) return { ok: false, error: "BAD_MESSAGE" };
   if (coolingDown(sender, now)) return { ok: false, error: "RATE_LIMITED" };

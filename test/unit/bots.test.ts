@@ -420,14 +420,14 @@ describe("botPlanKey·syncBotPlan·planBotSteps", () => {
       const state = stateAt(1, 4, 3, phase);
       expect(String(botPlanKey(state))).toBe(`${phase}:${state.phaseEndsAt}`);
     }
-    for (const phase of ["lobby", "assigning", "roleReveal", "dayAnnounce", "claimReveal", "morning"] as const) {
+    for (const phase of ["lobby", "assigning", "roleReveal", "dayAnnounce", "morning"] as const) {
       const state = phase === "lobby" ? withBots(lobbyOf(1), 4) : stateAt(1, 4, 3, phase);
       expect(`${phase}:${String(botPlanKey(state))}`).toBe(`${phase}:null`);
     }
   });
 
   it("봇 없는 방은 모든 단계에서 입력 그대로이고 randInt 를 부르지 않는다", () => {
-    for (const phase of ["claim", "discussion", "night", "morning", "claimReveal"] as const) {
+    for (const phase of ["claim", "discussion", "night", "morning"] as const) {
       const state = stateAt(4, 0, 3, phase);
       expect(syncBotPlan(state, nowOf(state), THROWING) === state).toBe(true);
     }
@@ -441,16 +441,19 @@ describe("botPlanKey·syncBotPlan·planBotSteps", () => {
   });
 
   it("봇 계획이 필요 없는 단계에서는 botPlan 키가 없다", () => {
-    for (const phase of ["lobby", "assigning", "roleReveal", "dayAnnounce", "claimReveal", "morning"] as const) {
+    for (const phase of ["lobby", "assigning", "roleReveal", "dayAnnounce", "morning"] as const) {
       const base = phase === "lobby" ? withBots(lobbyOf(1), 4) : stateAt(1, 4, 3, phase);
       const result = syncBotPlan({ ...base, botPlan: { key: "old", steps: [] } }, nowOf(base), seededRandInt(1));
       expect(`${phase}:${Object.hasOwn(result, "botPlan")}`).toBe(`${phase}:false`);
     }
   });
 
-  it("claim 은 살아 있는 봇마다 claim 하나이고 시각이 범위 안이며 selectClaim 에 모두 통과한다", () => {
+  it("claim 은 살아 있는 봇마다 claim 하나이고 시각이 범위 안이며 그 봇 차례일 때 selectClaim 에 모두 통과한다", () => {
+    // 차례제(결정 0023)에서는 지금 차례인 한 사람만 고를 수 있다. 봇 규칙 자체(차례 아닌 봇은 가만히)는 03.1-02 가 바꾼다 —
+    // 여기서는 각 봇의 값이 "그 봇 차례일 때" 서버 규칙을 통과하는지 같은 강도로 본다.
+    const atTurnOf = (st: RoomState, seat: number): RoomState => ({ ...st, claimIdx: st.claimOrder!.indexOf(seat) });
     for (let seed = 1; seed <= 20; seed += 1) {
-      let state = markDead(stateAt(1, 5, seed, "claim"), 2);
+      const state = markDead(stateAt(1, 5, seed, "claim"), 2);
       const steps = planBotSteps(state, nowOf(state), seededRandInt(seed));
       const alive = botsOf(state).filter((b) => b.alive !== false);
       expect(`${seed}:${steps.length}`).toBe(`${seed}:${alive.length}`);
@@ -459,9 +462,9 @@ describe("botPlanKey·syncBotPlan·planBotSteps", () => {
       expect(new Set(steps.map((s) => s.botId)).size).toBe(alive.length);
       for (const s of steps) {
         if (s.act.t !== "claim") continue;
-        const r = selectClaim(state, s.botId, s.act.claim);
+        const seat = state.players.find((p) => p.id === s.botId)!.seat;
+        const r = selectClaim(atTurnOf(state, seat), s.botId, s.act.claim, s.at);
         expect(`${seed}:${r.ok ? "ok" : r.error}`).toBe(`${seed}:ok`);
-        if (r.ok) state = r.state;
       }
     }
   });
@@ -547,8 +550,8 @@ describe("botPlanKey·syncBotPlan·planBotSteps", () => {
     const claim = syncBotPlan(claim0, nowOf(claim0), seededRandInt(1));
     expect(Object.hasOwn(claim, "botPlan")).toBe(true);
     expect(syncBotPlan(claim, nowOf(claim) + 5, THROWING) === claim).toBe(true);
-    const reveal = tick(claim, claim.phaseEndsAt!, seededRandInt(2));
-    const discussion = tick(reveal, reveal.phaseEndsAt!, seededRandInt(2));
+    let discussion = claim; // 차례제(결정 0023): claim 은 차례마다 마감이 오므로 낮 토론까지 마감마다 한 번씩 tick 한다
+    while (discussion.phase === "claim") discussion = tick(discussion, discussion.phaseEndsAt!, seededRandInt(2));
     expect(discussion.phase).toBe("discussion");
     const next = syncBotPlan(discussion, nowOf(discussion), seededRandInt(5));
     expect(String(next.botPlan?.key)).toBe(`discussion:${discussion.phaseEndsAt}`);

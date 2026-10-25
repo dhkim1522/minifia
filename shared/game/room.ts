@@ -4,7 +4,8 @@ import { validateNickname } from "../nickname";
 import { MAX_PLAYERS, MIN_PLAYERS } from "../protocol";
 import type { Claim, ClaimLogEntry, InvestigationRecord, MorningView, PhaseId } from "../protocol";
 import type { BotPlan } from "./bots";
-import { ASSIGNING_MS, DAY_ANNOUNCE_MS } from "./phases";
+import { enterClaim } from "./claim";
+import { ASSIGNING_MS, CLAIM_TURN_MS, DAY_ANNOUNCE_MS, DISCUSSION_MS } from "./phases";
 import { assignRoles, giveRoleTo, rolesInPlay } from "./roles";
 import type { RoleId } from "./roles";
 
@@ -267,24 +268,49 @@ export function startGame(
   };
 }
 
-/** 1페이즈가 저장한 종착 낮 단계 이름. 지금의 PhaseId 에는 없다. */
-const LEGACY_DAY_PHASE = "day";
+/**
+ * 지금의 PhaseId 에 없는 옛 단계 이름 두 개 — 이 함수 한 곳에서만 문자열로 비교한다.
+ * "day": 1페이즈가 저장한 종착 낮 단계. "claimReveal": 결정 0027: 이 이름은 더는 단계가 아니다(공개 연출 2초 단계 삭제, 결정 0023).
+ */
+const LEGACY_PHASES = { day: "day", claimReveal: "claimReveal" } as const;
+/** 결정 0023 이전 Player 의 주장 필드 — 지금은 방 상태의 claimLog 로 대신한다. */
+const LEGACY_CLAIM_KEYS = ["claimChoice", "claimShown", "claimLast", "claimChanged"] as const;
 
 /**
- * 저장소에서 읽은 방 상태를 새 코드에 맞춘다. 1페이즈에서 저장된 방은 phase 가 "day"(마감 없음)일 수 있는데,
- * 이 값은 PhaseId 에 없어 buildView 가 PHASE_DEFS 를 조회하다 터진다. 방 수명이 3시간이라 배포 뒤에도 살아 있을 수 있으므로,
- * 그런 방은 낮 시작 발표(dayAnnounce)로 옮기고 마감을 now + DAY_ANNOUNCE_MS, 일차를 1로 둔다.
+ * 저장소에서 읽은 방 상태를 새 코드에 맞춘다. 순수 함수다 — 호출(DO 생성자)과 알람 재설정은 호출하는 쪽의 몫이다.
+ * - 1페이즈에서 저장된 방은 phase 가 "day"(마감 없음)일 수 있는데, 이 값은 PhaseId 에 없어 buildView 가 PHASE_DEFS 를 조회하다 터진다.
+ *   그런 방은 낮 시작 발표(dayAnnounce)로 옮기고 마감을 now + DAY_ANNOUNCE_MS, 일차를 1로 둔다.
+ * - 옛 공개 연출 단계(claimReveal)로 저장된 방은 discussion 으로 옮기고 마감을 now + DISCUSSION_MS 로 둔다(주장 기록은 새 방에 없다).
+ * - 차례 상태(claimOrder)가 없는 claim 방은 enterClaim 으로 첫 차례를 만들고 마감을 now + CLAIM_TURN_MS 로 둔다.
+ * - 모든 플레이어에서 옛 주장 필드 넷을 키째 뺀다.
  * 채팅은 서버에 저장하지 않는다(결정 0017-7) — 배포 전 저장된 messages 는 깨어날 때 지운다.
- * 둘 다 해당하지 않으면 같은 객체를 돌려준다(DO 생성자의 "바뀌었을 때만 저장·알람" 규칙이 이 동일성에 기댄다).
- * 새 optional 필드가 없는 옛 상태는 읽는 쪽 기본값이 받는다(RESEARCH Pattern 6). 순수 함수다 — 호출(DO 생성자)과 알람 재설정은 호출하는 쪽의 몫이다.
+ * 아무것도 해당하지 않으면 같은 객체를 돌려준다(DO 생성자의 "바뀌었을 때만 저장·알람" 규칙이 이 동일성에 기댄다).
+ * 새 optional 필드가 없는 옛 상태는 읽는 쪽 기본값이 받는다(RESEARCH Pattern 6).
  */
 export function normalizeStoredRoom(stored: RoomState, now: number): RoomState {
-  const isLegacyDay = (stored.phase as string) === LEGACY_DAY_PHASE;
+  const phase = stored.phase as string;
+  const isLegacyDay = phase === LEGACY_PHASES.day;
+  const isLegacyReveal = phase === LEGACY_PHASES.claimReveal;
+  const needsClaimOrder = stored.phase === "claim" && stored.claimOrder === undefined;
   const hasOldMessages = Object.hasOwn(stored, "messages");
-  if (!isLegacyDay && !hasOldMessages) return stored;
+  const hasOldPlayerFields = stored.players.some((p) => LEGACY_CLAIM_KEYS.some((key) => Object.hasOwn(p, key)));
+  if (!isLegacyDay && !isLegacyReveal && !needsClaimOrder && !hasOldMessages && !hasOldPlayerFields) return stored;
   // 옛 키는 구조 분해로만 뺀다. 필드 선언이 RoomState 에서 사라져도 컴파일되게 지역 교차 타입으로 받는다.
   const { messages: _dropped, ...rest } = stored as RoomState & { messages?: unknown };
-  return isLegacyDay ? { ...rest, phase: "dayAnnounce", phaseEndsAt: now + DAY_ANNOUNCE_MS, day: 1 } : rest;
+  let next: RoomState = rest;
+  if (hasOldPlayerFields) {
+    next = {
+      ...next,
+      players: next.players.map((p) => {
+        const { claimChoice: _a, claimShown: _b, claimLast: _c, claimChanged: _d, ...kept } = p as typeof p & Record<string, unknown>;
+        return kept as typeof p;
+      }),
+    };
+  }
+  if (isLegacyDay) return { ...next, phase: "dayAnnounce", phaseEndsAt: now + DAY_ANNOUNCE_MS, day: 1 };
+  if (isLegacyReveal) return { ...next, phase: "discussion", phaseEndsAt: now + DISCUSSION_MS };
+  if (needsClaimOrder) return { ...enterClaim(next), phaseEndsAt: now + CLAIM_TURN_MS };
+  return next;
 }
 
 export function findPlayerByToken(state: RoomState, token: string): Player | undefined {
