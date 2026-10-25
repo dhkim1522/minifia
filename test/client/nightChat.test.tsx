@@ -89,7 +89,7 @@ describe("밤 조작 줄·모달", () => {
     maxPlayers: 8,
     players,
     me: { seat: 0, isHost: false },
-    day: { n: 1, roles: ["mafia", "police", "citizen"] },
+    day: { n: 1, roles: ["mafia", "police", "citizen"], claimLog: [] },
   };
   const connection = (): RoomConnection => ({
     status: "open",

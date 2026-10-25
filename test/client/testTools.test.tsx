@@ -53,7 +53,7 @@ function makeView(o: Opts = {}): RoomView {
     maxPlayers: 8,
     players: Array.from({ length: count }, (_, i) => ({ seat: i, nickname: NAMES[i]!, connected: true, isHost: i === 0 })),
     me,
-    ...(inDay ? { day: { n: 1, roles: ["mafia", "police", "citizen"] } } : {}),
+    ...(inDay ? { day: { n: 1, roles: ["mafia", "police", "citizen"], ...(phase === "claim" ? { turn: { seat: 1 } } : {}), claimLog: [] } } : {}),
   };
 }
 
@@ -215,6 +215,15 @@ describe("게임 중: 버튼 자리와 두 동작 (U-03, U-04)", () => {
       await new Promise((r) => setTimeout(r, 400));
     });
     expect(String(screen.queryByRole("dialog", { name: "테스트 도구" }) !== null)).toBe("true");
+  });
+
+  it("직업 공개(claim) 중 시트: 아랫줄 '지금: 직업 공개', [다음 단계로 넘기기] 는 testSkip 한 번만 보낸다 (차례 단위 의미는 서버 규칙)", () => {
+    const { conn: c } = open({ phase: "claim", testMode: true });
+    fireEvent.click(testBtn() as HTMLElement);
+    expect(within(sheet()).getByText("지금: 직업 공개").textContent).toBe("지금: 직업 공개");
+    expect(String(within(sheet()).queryByText("지금: 공개 연출"))).toBe("null");
+    fireEvent.click(actionOf(/^다음 단계로 넘기기/));
+    expect(JSON.stringify((c.send as ReturnType<typeof vi.fn>).mock.calls)).toBe('[[{"t":"testSkip"}]]');
   });
 
   it("[대기실로 되돌리기] 는 testReset 을 보내고 시트가 닫힌다", async () => {

@@ -44,7 +44,7 @@ function makeView(o: ViewOpts = {}): RoomView {
     day: {
       n: o.n ?? 1,
       roles: ["mafia", "police", "citizen"],
-      claims: [0, 1, 2, 3].map((seat) => ({ seat, claim: "none" as const, changed: false })),
+      claimLog: [],
     },
   };
 }

@@ -61,6 +61,8 @@ function makeView(o: ViewOpts = {}): RoomView {
     day: {
       n: o.n ?? 1,
       roles: ["mafia", "police", "doctor", "citizen"],
+      ...(phase === "claim" ? { turn: { seat: 1 } } : {}),
+      claimLog: [],
       ...(phase === "morning" ? { morning: {} } : {}),
     },
   };
@@ -150,7 +152,7 @@ describe("[수사 기록] 버튼과 새 기록 점 (03-11)", () => {
   });
 
   it("직업 공개·밤·아침·낮 시작 발표에서도 경찰에게는 버튼이 있다", () => {
-    for (const phase of ["dayAnnounce", "claim", "claimReveal", "discussion", "night", "morning"] as const) {
+    for (const phase of ["dayAnnounce", "claim", "discussion", "night", "morning"] as const) {
       const r = renderRoom(makeView({ phase }));
       expect(`${phase}:${recordsBtn() === null ? "없음" : "있음"}`).toBe(`${phase}:있음`);
       r.unmount();

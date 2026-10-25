@@ -20,7 +20,7 @@ function viewOf(over: Partial<RoomView> = {}, phase: PhaseId = "discussion", n =
     maxPlayers: 8,
     players: [0, 1, 2, 3].map((seat) => ({ seat, nickname: `p${seat}`, connected: true, isHost: seat === 0 })),
     me: { seat: 0, isHost: true },
-    day: { n, roles: ["mafia", "citizen"] },
+    day: { n, roles: ["mafia", "citizen"], claimLog: [] },
     ...over,
   };
 }
@@ -142,7 +142,7 @@ describe("useSeatFloats: 이모티콘", () => {
 
 describe("useSeatFloats: 정리", () => {
   it("discussion 이 아닌 동안 온 chat·emoji 는 무시한다", () => {
-    const { hook, emit } = setup(viewOf({}, "claimReveal"));
+    const { hook, emit } = setup(viewOf({}, "claim"));
     emit(chat(1, 1));
     emit({ t: "emoji", seat: 2, icon: "smile", at: 1 });
     expect(Object.keys(hook.result.current.spoke).length + Object.keys(hook.result.current.emoji).length).toBe(0);
@@ -226,7 +226,7 @@ describe("useDayChat: 그날 받은 chat 이벤트로만 만드는 줄 (결정 0
   });
 
   it("discussion 이 아닌 단계의 chat 은 버린다", () => {
-    const { hook, emit } = setupChat(viewOf({}, "claimReveal"));
+    const { hook, emit } = setupChat(viewOf({}, "claim"));
     emit(chat(1, 1));
     expect(hook.result.current.length).toBe(0);
   });
@@ -291,7 +291,7 @@ describe("밤 수집 (D-17, 결정 0019, RESEARCH Pitfall 4)", () => {
   });
 
   it("morning·claim 중 온 chat·emoji 는 버린다", () => {
-    for (const phase of ["morning", "claimReveal"] as const) {
+    for (const phase of ["morning", "claim"] as const) {
       const c = setupChat(viewOf({}, phase));
       c.emit(chat(1, 1));
       const f = setup(viewOf({}, phase));

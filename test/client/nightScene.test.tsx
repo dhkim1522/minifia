@@ -46,7 +46,7 @@ function makeView(o: ViewOpts = {}): RoomView {
     day: {
       n: o.n ?? 1,
       roles: ["mafia", "police", "doctor", "citizen"],
-      claims: NAMES.map((_, seat) => ({ seat, claim: "citizen" as const, changed: false })),
+      claimLog: [],
     },
   };
   if (o.spectate) view.spectate = o.spectate;
