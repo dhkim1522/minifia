@@ -88,6 +88,29 @@ async function waitForPlan(code: string): Promise<void> {
   throw new Error("waitForPlan: 봇 계획이 저장되지 않았다");
 }
 
+/** 계획 키가 저장될 때까지 기다린다(행동이 없는 차례의 빈 계획도 키로 알 수 있다). 마지막으로 읽은 계획을 돌려준다. */
+async function waitForPlanKey(code: string): Promise<{ key: string; steps: Array<{ at: number; botId: string; act: { t: string } }> }> {
+  for (let i = 0; i < 60; i += 1) {
+    const plan = (await stored(code)).botPlan as { key: string; steps: Array<{ at: number; botId: string; act: { t: string } }> } | undefined;
+    if (plan !== undefined) return plan;
+    await sleep(25);
+  }
+  throw new Error("waitForPlanKey: 봇 계획 키가 저장되지 않았다");
+}
+
+/** 계획 키의 차례 번호가 idx 가 될 때까지 기다린다("claim:마감:차례"). */
+async function waitForClaimIdx(code: string, idx: number): Promise<{ key: string; steps: Array<{ at: number; botId: string; act: { t: string } }> }> {
+  for (let i = 0; i < 80; i += 1) {
+    const plan = (await stored(code)).botPlan as { key: string; steps: Array<{ at: number; botId: string; act: { t: string } }> } | undefined;
+    if (plan !== undefined && plan.key.endsWith(`:${idx}`)) return plan;
+    await sleep(25);
+  }
+  throw new Error(`waitForClaimIdx: 차례 ${idx} 의 봇 계획이 저장되지 않았다`);
+}
+
+const claimLogOf = async (code: string): Promise<Array<{ n: number; seat: number; claim: string }>> =>
+  ((await stored(code)).claimLog ?? []) as Array<{ n: number; seat: number; claim: string }>;
+
 /**
  * 시각 당기기 도우미: 저장된 botPlan.steps 의 at 을 모두 과거로 바꾸고 DO 를 evict 한 뒤 알람을 부른다
  * (forceDue 와 같은 방식 — 생성자가 저장소에서 복구하고 소켓은 하이버네이션으로 남는다).
@@ -186,6 +209,56 @@ describe("testBots 추가·제거", () => {
 });
 
 describe("봇 행동", () => {
+  it("직업 주장: 방장이 먼저라 봇 계획이 비어 있고, 방장이 고르면 봇이 자기 차례마다 한 명씩 주장해 마지막 봇 뒤 낮 토론이 된다", async () => {
+    const r = await seatQuiet(0, { testMode: true });
+    send(r.host, { t: "testBots", count: 3 });
+    await nextFrame(r.host, lobbyOf(4));
+    await start(r);
+    await skipUntil(r, "claim");
+    const first = await waitForPlanKey(r.code);
+    expect(`${first.key.endsWith(":0")}:${first.steps.length}`).toBe("true:0");
+    const room = (await stored(r.code)) as unknown as { phaseEndsAt: number };
+    expect(String(await alarmOf(r.code))).toBe(String(room.phaseEndsAt)); // 방장 차례에는 봇이 깨울 일이 없다
+
+    send(r.host, { t: "claim", claim: "police" });
+    const botSeats = (await botsOf(r.code)).map((b) => b.seat);
+    for (const [i, botSeat] of botSeats.entries()) {
+      const plan = await waitForClaimIdx(r.code, i + 1);
+      expect(`${botSeat}:${plan.steps.length}:${plan.steps[0]?.act.t}`).toBe(`${botSeat}:1:claim`);
+      expect(plan.steps[0]!.botId).toBe((await botsOf(r.code))[i]!.id);
+      await forceBotsDue(r.code);
+    }
+    await nextFrame(r.host, isPhase("discussion"));
+    const log = await claimLogOf(r.code);
+    expect(log.map((l) => `${l.n}:${l.seat}`).join(",")).toBe("1:0,1:1,1:2,1:3");
+    expect(log[0]!.claim).toBe("police");
+    expect(String((await stored(r.code)).phase)).toBe("discussion");
+  }, 30_000);
+
+  it("봇 차례 도중 방장이 넘기기하면 그 차례는 none 으로 닫히고 낡은 계획은 버려지며 다음 봇의 새 계획이 서서 중복 claim 이 없다", async () => {
+    const r = await seatQuiet(0, { testMode: true });
+    send(r.host, { t: "testBots", count: 3 });
+    await nextFrame(r.host, lobbyOf(4));
+    await start(r);
+    await skipUntil(r, "claim");
+    send(r.host, { t: "claim", claim: "police" });
+    const staleBot = (await waitForClaimIdx(r.code, 1)).steps[0]!;
+    const nextBotId = (await botsOf(r.code))[1]!.id;
+
+    send(r.host, { t: "testSkip" }); // 지금 차례(봇 seat 1)를 말 안 함으로 넘긴다
+    const plan = await waitForClaimIdx(r.code, 2);
+    expect(`${plan.steps.length}:${plan.steps[0]?.botId === nextBotId}:${plan.steps[0]?.botId === staleBot.botId}`).toBe("1:true:false");
+    const afterSkip = await claimLogOf(r.code);
+    expect(afterSkip.map((l) => `${l.seat}:${l.claim}`).join(",")).toBe("0:police,1:none");
+
+    await forceBotsDue(r.code);
+    await waitForClaimIdx(r.code, 3);
+    await forceBotsDue(r.code);
+    await nextFrame(r.host, isPhase("discussion"));
+    const log = await claimLogOf(r.code);
+    expect(log.map((l) => l.seat).join(",")).toBe("0,1,2,3"); // 같은 자리가 두 번 기록되지 않았다
+  }, 30_000);
+
   it("낮 토론: 손님이 봇 자리에서 온 chat 또는 emoji 를 받고 오류 프레임은 없다", async () => {
     const r = await seatQuiet(1, { testMode: true });
     send(r.host, { t: "testBots", count: 3 });
@@ -220,12 +293,16 @@ describe("봇 행동", () => {
 });
 
 describe("알람", () => {
-  it("봇 있는 테스트 방 claim 에서 알람은 첫 봇 행동 시각이고 단계 마감보다 이르다", async () => {
+  it("봇 있는 테스트 방 claim 에서 알람은 봇 차례일 때 그 봇 행동 시각이고 단계 마감보다 이르다", async () => {
     const r = await seatQuiet(1, { testMode: true });
     send(r.host, { t: "testBots", count: 3 });
     await nextFrame(r.host, lobbyOf(5));
     await start(r);
     await skipUntil(r, "claim");
+    send(r.host, { t: "claim", claim: "police" }); // 다음 차례는 사람 손님(seat 1), 그다음이 봇 seat 2
+    await nextFrame(r.guests[0]!.sock, (m) => m.t === "state" && m.view.day?.turn?.seat === 1);
+    send(r.guests[0]!.sock, { t: "claim", claim: "none" });
+    await waitForClaimIdx(r.code, 2);
     await waitForPlan(r.code);
     const room = (await stored(r.code)) as unknown as { phaseEndsAt: number; botPlan: { steps: Array<{ at: number }> } };
     const alarm = await alarmOf(r.code);
@@ -250,7 +327,7 @@ describe("대기실 복귀와 방 지우기", () => {
     await nextFrame(r.host, lobbyOf(4));
     await start(r);
     await skipUntil(r, "claim");
-    await waitForPlan(r.code);
+    await waitForPlanKey(r.code); // 방장 차례라 행동은 없지만 계획 키는 저장되어 있다
     send(r.host, { t: "testReset" });
     await nextFrame(r.host, lobbyOf(4));
     expect(String(lastView(r.host).me.testBots)).toBe("3");
@@ -272,6 +349,10 @@ describe("누출 없음", () => {
     await nextFrame(r.host, lobbyOf(6));
     await start(r);
     await skipUntil(r, "claim");
+    send(r.host, { t: "claim", claim: "police" }); // 방장이 먼저, 다음은 손님(사람)이라 testSkip 으로 봇 차례까지 간다
+    await waitForClaimIdx(r.code, 1);
+    send(r.host, { t: "testSkip" });
+    await waitForClaimIdx(r.code, 2);
     await forceBotsDue(r.code);
     await skipUntil(r, "discussion");
     await forceBotsDue(r.code);
@@ -283,7 +364,7 @@ describe("누출 없음", () => {
     expect(botIds.length).toBe(4);
     for (const [who, sock] of [["host", r.host], ["guest", guest]] as const) {
       const text = collect(sock).join("\n");
-      expect(`${who}:${text.includes("isBot") || text.includes("botPlan")}`).toBe(`${who}:false`);
+      expect(`${who}:${text.includes("isBot") || text.includes("botPlan") || text.includes("claimPick")}`).toBe(`${who}:false`);
       expect(`${who}:${text.includes('"token"')}`).toBe(`${who}:false`);
       expect(`${who}:${botIds.some((id) => text.includes(id))}`).toBe(`${who}:false`);
       for (const raw of collect(sock)) {
