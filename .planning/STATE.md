@@ -6,16 +6,16 @@ current_phase: 03
 current_phase_name: 밤과 아침
 current_plan: 12
 status: verifying
-stopped_at: Completed 03-12-PLAN.md
-last_updated: "2026-10-25T04:22:19.938Z"
+stopped_at: Completed 03.1-01-PLAN.md
+last_updated: "2026-10-25T06:30:04.990Z"
 last_activity: 2026-10-25
 last_activity_desc: Phase 03 execution started
-state_head: 215949d77da980d542b08e49735ec8c74a88f59d
+state_head: 802901a3659f73d19c0a68198645c672a315ad87
 progress:
   total_phases: 7
   completed_phases: 1
-  total_plans: 49
-  completed_plans: 49
+  total_plans: 63
+  completed_plans: 50
 ---
 
 # Project State
@@ -95,6 +95,7 @@ Progress: [██░░░░░░░░] 17%
 | Phase 03 P10 | 12min | 3 tasks | 10 files |
 | Phase 03 P11 | 15min | 2 tasks | 10 files |
 | Phase 03 P12 | 25 min | 3 tasks | 5 files |
+| Phase 03.1 P01 | 80min | 3 tasks | 19 files |
 
 ## Accumulated Context
 
@@ -171,6 +172,8 @@ Recent decisions affecting current work:
 - [Phase 03]: 03-11: 본 기록 개수만 폰 메모리(minifia:records:{방코드})에 저장, 기록 내용·토큰은 저장하지 않음. 시트 열림·NEW 는 RoomScreen 이 쥐고 알림은 DayScene(같은 epoch 에서 길이가 늘 때만)
 - [Phase 03]: 03-12: uat-night 의 의사는 항상 자신을 보호한다 — 8명판 동률 추첨에서 의사 구출이 끼어 탈락자가 사라지지 않게
 - [Phase 03]: 03-12: 배포본 스모크(4·5·8명)·uat-night(5·8명)·uat-day(5명) 통과, 새 배포 버전 2026-10-24T16:35:44Z+696c1d2
+- [Phase 03.1]: [03.1-01] 1일차 claim 시작 자리는 방장(살아 있으면), 이후 낮마다 직전 시작 다음 생존 seat 로 한 칸 이동·탈락자 건너뜀; 시간 초과는 이월 없는 none
+- [Phase 03.1]: [03.1-01] 공개 연출 단계는 PhaseId·단계 표에서 삭제, 옛 이름은 normalizeStoredRoom 한 곳에만 남김 (D-07, 결정 0027 에 기록 예정)
 
 ### Pending Todos
 
@@ -200,6 +203,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-24T17:00:37.083Z
-Stopped at: Completed 03-12-PLAN.md
+Last session: 2026-10-25T06:30:04.737Z
+Stopped at: Completed 03.1-01-PLAN.md
 Resume file: None
