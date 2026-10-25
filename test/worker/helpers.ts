@@ -183,7 +183,13 @@ export interface StoredRoom {
   phase: string;
   phaseEndsAt: number | null;
   day?: number;
-  players: Array<{ role?: string; claimChoice?: string; lastSendAt?: number }>;
+  /** 서버 전용 주장 차례 상태(결정 0023): 낮마다 만들어지고 판 동안 claimLog 가 쌓인다. */
+  claimOrder?: number[];
+  claimIdx?: number;
+  claimStart?: number;
+  claimPick?: string;
+  claimLog?: Array<{ n: number; seat: number; claim: string }>;
+  players: Array<{ role?: string; lastSendAt?: number }>;
 }
 
 export async function storedRoom(code: string): Promise<StoredRoom> {

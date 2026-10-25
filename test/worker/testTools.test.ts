@@ -53,7 +53,7 @@ function lastView(sock: TestSocket): RoomView {
 
 type Raw = Record<string, unknown>;
 const stored = async (code: string): Promise<Raw> => (await storedRoom(code)) as unknown as Raw;
-const PHASE_ORDER: PhaseId[] = ["roleReveal", "dayAnnounce", "claim", "claimReveal", "discussion", "night", "morning"];
+const PHASE_ORDER: PhaseId[] = ["roleReveal", "dayAnnounce", "claim", "discussion", "night", "morning"];
 
 /** 방장이 시작하고 assigning 을 모든 소켓이 받을 때까지. */
 async function start(r: Seated): Promise<void> {
@@ -61,15 +61,18 @@ async function start(r: Seated): Promise<void> {
   for (const s of allSockets(r)) await nextFrame(s, isPhase("assigning"));
 }
 
-/** 방장이 testSkip 을 거듭해 phase 에 닿고 모든 소켓이 그 단계 state 를 받을 때까지. assigning 이어야 한다. */
+/**
+ * 방장이 testSkip 을 거듭해 phase 에 닿고 모든 소켓이 그 단계 state 를 받을 때까지. assigning 이어야 한다.
+ * claim 은 차례 하나가 한 번의 넘기기라 같은 단계 state 가 여러 번 온다 — 그래서 저장된 단계를 보고 반복하고,
+ * 매번 소켓마다 "다음 state 프레임 하나" 를 기다린다(보내기 전에 읽을 위치를 맨 끝으로 옮겨 낡은 프레임을 건너뛴다).
+ */
 async function skipUntil(r: Seated, phase: PhaseId): Promise<void> {
-  const order: PhaseId[] = ["assigning", ...PHASE_ORDER];
-  const current = (await stored(r.code)).phase as PhaseId;
-  for (let i = order.indexOf(current); i < order.indexOf(phase); i += 1) {
-    const next = order[i + 1]!;
+  for (let i = 0; i < 40 && (await stored(r.code)).phase !== phase; i += 1) {
+    for (const s of allSockets(r)) s.cursor = s.frames.length;
     send(r.host, { t: "testSkip" });
-    for (const s of allSockets(r)) await nextFrame(s, isPhase(next));
+    for (const s of allSockets(r)) await nextFrame(s, (m) => m.t === "state");
   }
+  expect((await stored(r.code)).phase).toBe(phase);
 }
 
 describe("방 만들기 testMode", () => {
@@ -212,6 +215,30 @@ describe("testSkip", () => {
     expect(summary(await sendAndSettle(r.host, { t: "testRole", role: "police" }))).toBe("[error:WRONG_PHASE,state:roleReveal]");
   }, 30_000);
 
+  it("claim 중에는 한 번에 한 차례만 넘어가고(지금 차례가 none) 마지막 차례에서 낮 토론으로 간다", async () => {
+    const r = await seatQuiet(3, { testMode: true });
+    await start(r);
+    await skipUntil(r, "claim");
+    for (const sock of allSockets(r)) expect(String(lastView(sock).day?.turn?.seat)).toBe("0");
+
+    for (let turn = 1; turn <= 3; turn += 1) {
+      for (const s of allSockets(r)) s.cursor = s.frames.length;
+      send(r.host, { t: "testSkip" });
+      for (const sock of allSockets(r)) {
+        const msg = (await nextFrame(sock, (m) => m.t === "state")) as Extract<ServerMessage, { t: "state" }>;
+        expect(`${msg.view.phase}:${msg.view.day?.turn?.seat}:${msg.view.day?.claimLog?.length}`).toBe(`claim:${turn}:${turn}`);
+        expect(msg.view.day?.claimLog?.every((l) => l.claim === "none")).toBe(true);
+      }
+      expect(String(await alarmOf(r.code))).toBe(String((await stored(r.code)).phaseEndsAt));
+    }
+    for (const s of allSockets(r)) s.cursor = s.frames.length;
+    send(r.host, { t: "testSkip" });
+    for (const sock of allSockets(r)) {
+      const msg = (await nextFrame(sock, (m) => m.t === "state")) as Extract<ServerMessage, { t: "state" }>;
+      expect(`${msg.view.phase}:${msg.view.day?.claimLog?.length}`).toBe("discussion:4");
+    }
+  }, 30_000);
+
   it("밤에 마피아가 시민을 고른 뒤 넘기면 모든 소켓이 같은 아침을 받고 다시 넘기면 2일차 낮 시작 발표다", async () => {
     const r = await seatQuiet(3, { testMode: true });
     await sendAndSettle(r.host, { t: "testRole", role: "mafia" });
@@ -239,10 +266,8 @@ describe("testSkip", () => {
 });
 
 describe("testReset", () => {
-  const FORBIDDEN_ROOM = ["day", "morning", "lastPhrase", "nextNightSeq"];
-  const FORBIDDEN_PLAYER = [
-    "role", "alive", "claimChoice", "claimShown", "claimLast", "claimChanged", "nightPick", "investigations", "lastSendAt",
-  ];
+  const FORBIDDEN_ROOM = ["day", "morning", "lastPhrase", "nextNightSeq", "claimOrder", "claimIdx", "claimStart", "claimPick", "claimLog"];
+  const FORBIDDEN_PLAYER = ["role", "alive", "nightPick", "investigations", "lastSendAt"];
 
   async function resetFrom(phase: PhaseId): Promise<void> {
     const r = await seatQuiet(3, { testMode: true });
@@ -278,6 +303,10 @@ describe("testReset", () => {
     for (const sock of allSockets(r)) await nextFrame(sock, isPhase("roleReveal"));
     expect(String(lastView(r.host).me.role)).toBe("mafia");
   }
+
+  it("claim 도중에 되돌려도 차례 상태(claimOrder·claimIdx·claimStart·claimLog)가 모두 지워진다", async () => {
+    await resetFrom("claim");
+  }, 30_000);
 
   it("night 에서 되돌리면 같은 방이 대기실이 되고 다음 판에 같은 직업 지정이 다시 쓰인다", async () => {
     await resetFrom("night");
