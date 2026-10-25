@@ -25,6 +25,7 @@ import {
   smallTextIssues,
   spectatorChecks,
   turnChecks,
+  nightIntroChecks,
   exitCodeOf,
   faceRegion,
   feltStable,
@@ -716,6 +717,27 @@ test("turnChecks K4: 차례가 없는 상태(expectNone)에서는 돌리지 않�
   const s = daySnap();
   s.turn = { spot: 0, badge: 0, tagTurn: 0, legacyRows: 0, ring: null };
   assert.deepEqual(turnChecks(s, { expectNone: true }).map((x) => x.id), ["K1"]);
+});
+
+// ---- N6 밤 시작 문구 (결정 0028) ----
+test("nightIntroChecks N6: `N일차`+`밤이 되었습니다`, pointer-events none, aria-hidden 이면 통과하고 어긋남마다 실패한다", () => {
+  const good = { texts: ["1일차", "밤이 되었습니다"], pointerEvents: "none", ariaHidden: true };
+  const ok = nightIntroChecks(good);
+  assert.equal(ok.id, "N6");
+  assert.equal(ok.ok, true, ok.detail);
+  assert.equal(nightIntroChecks({ ...good, texts: ["12일차", "밤이 되었습니다"] }).ok, true);
+  for (const bad of [
+    null,
+    undefined,
+    { ...good, texts: ["1일차", "낮이 되었습니다"] },
+    { ...good, texts: ["밤이 되었습니다"] },
+    { ...good, texts: ["일차", "밤이 되었습니다"] },
+    { ...good, pointerEvents: "auto" },
+    { ...good, ariaHidden: false },
+  ]) {
+    assert.equal(nightIntroChecks(bad).ok, false, JSON.stringify(bad));
+  }
+  assert.match(nightIntroChecks(null).detail, /없음/);
 });
 
 test("turnChecks K2: 내 차례는 이번 판 직업 + 말 안 함 칩 · stRow/이모티콘 없음 · 높이 157", () => {
