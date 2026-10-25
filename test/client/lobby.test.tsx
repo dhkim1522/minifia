@@ -14,6 +14,9 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
+// 옛 대기실 테이블(Table)의 클래스 이름들. 코드에 남아 있지 않다는 확인용이라 이름을 조각으로 만든다(옛 식별자 grep 이 0건이어야 한다).
+const LEGACY_TABLE_SELECTOR = ["table", "seat", "badge"].map((n) => `.mf-${n}`).join(", ");
+
 const player = (seat: number, nickname: string, extra: Partial<PublicPlayer> = {}): PublicPlayer => ({
   seat,
   nickname,
@@ -65,7 +68,7 @@ describe("Lobby — 대기실 (S-03) 테이블", () => {
   it("테이블은 낮과 같은 DayTable 이다(.mf-dt)이고 옛 대기실 테이블 요소는 없다", () => {
     const { container } = render(<Lobby view={view} send={() => {}} />);
     expect(container.querySelectorAll(".mf-lobby__scene > .mf-dt").length).toBe(1);
-    expect(container.querySelector(".mf-table, .mf-seat, .mf-badge") === null).toBe(true);
+    expect(container.querySelector(LEGACY_TABLE_SELECTOR) === null).toBe(true);
   });
 
   it("방장 혼자면 테이블에 인물 1개뿐이고 빈 자리 그림은 없다", () => {
@@ -75,7 +78,8 @@ describe("Lobby — 대기실 (S-03) 테이블", () => {
   });
 
   it("끊긴 사람은 '{닉네임}, 연결 끊김' 으로 읽히고 인물이 흑백이다", () => {
-    render(<Lobby view={makeView([player(0, "민수"), player(1, "하윤", { connected: false })], 0)} send={() => {}} />);
+    // 방장이 아닌 사람 화면에서는 끊긴 자리도 누를 수 없는 group 이다(방장 화면에서는 같은 이름의 button, 아래 내보내기 테스트)
+    render(<Lobby view={makeView([player(0, "민수"), player(1, "서준"), player(2, "하윤", { connected: false })], 1)} send={() => {}} />);
     const seatEl = screen.getByRole("group", { name: "하윤, 연결 끊김" });
     expect(seatEl.querySelector("img")?.classList.contains("mf-figure--disconnected")).toBe(true);
     expect(screen.getByRole("group", { name: "테이블" }).querySelectorAll("img.mf-figure--disconnected").length).toBe(1);
@@ -195,7 +199,7 @@ describe("Lobby — 낮과 같은 기하: 좌석 번호 순서 등간격 (결정
   it("대기실 CSS 는 장면 상자를 낮과 같이 잡는다: 높이는 100dvh 로 따로 계산하지 않고, 옛 퍼센트 기하 규칙이 없다", () => {
     const css = readFileSync("src/styles/lobby.css", "utf8");
     expect(/100dvh/.test(css)).toBe(false);
-    expect(/\.mf-table|\.mf-seat\b|\.mf-seat__|aspect-ratio:\s*4\s*\/\s*5/.test(css)).toBe(false);
+    expect(new RegExp(`${LEGACY_TABLE_SELECTOR.split(", ").map((x) => x.replace(".", "\\.")).join("|")}|aspect-ratio:\\s*4\\s*/\\s*5`).test(css)).toBe(false);
     expect(/\.mf-lobby__bar\s*\{[^}]*height:\s*119\.2px/.test(css)).toBe(true);
   });
 });

@@ -61,8 +61,15 @@
 /* S-04 역할 배정 — 대기 장면 테이블 위에 night-950 90% 막(420ms), 가운데 맥박 링 3겹. 1초는 지역 상수. */
 .mf-assign__backdrop { flex: 1 1 0; min-height: 0; height: auto; }
 .mf-assign { --mf-assign-pulse: 1s; position: relative; height: 100%; display: flex; flex-direction: column; overflow: hidden; }
-.mf-assign__scene { flex: 1; min-height: 0; padding: var(--space-md) var(--space-md) 0; }
-.mf-assign__scene .mf-table { width: auto; height: 100%; max-width: 100%; margin: 0 auto; }
+/* 장면 상자는 낮·대기실과 같다(결정 0028): 위 = 머리 119.2, 아래 = 빈 패널 157(+안전 영역), 좌우 여백 12(폰 폭 < 390 이면 4). 패널이 비어도 늘어나지 않는다.
+   세 화면의 이 숫자는 test/client/stageBox.test.tsx 가 교차로 지킨다. */
+.mf-assign__bar { flex: none; box-sizing: border-box; height: 119.2px; padding: var(--space-md); }
+.mf-assign__bar .mf-t-heading { margin: 0; text-shadow: var(--shadow-text); }
+.mf-assign__scene { position: relative; flex: 1; min-height: 0; padding: 0 12px; }
+@media (max-width: 389px) {
+  .mf-assign__scene { padding: 0 4px; }
+}
+.mf-assign__panel { flex: none; box-sizing: border-box; height: calc(157px + env(safe-area-inset-bottom)); background: var(--night-800); border-radius: var(--radius-lg) var(--radius-lg) 0 0; }
 .mf-assign__veil { position: absolute; inset: 0; background: var(--night-950); opacity: 0.9; animation: mf-assign-veil var(--dur-med) var(--ease-out) both; pointer-events: none; }
 @keyframes mf-assign-veil { from { opacity: 0; } to { opacity: 0.9; } }
 .mf-assign__center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-sm); padding: var(--space-lg); text-align: center; }

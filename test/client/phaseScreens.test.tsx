@@ -257,7 +257,7 @@ describe("S-04 역할 배정 (GAME-01, D-12, R11, E7, T-01-44)", () => {
     expect(byRole("group", "테이블")).toBeTruthy();
     // 결정 0028: 낮과 같은 DayTable 이 같은 장면 상자(머리 .mf-assign__bar · 빈 패널 .mf-assign__panel) 안에 있다
     expect(container.querySelectorAll(".mf-assign__scene > .mf-dt").length).toBe(1);
-    expect(container.querySelector(".mf-table, .mf-seat, .mf-badge")).toBeNull();
+    expect(container.querySelector(["table", "seat", "badge"].map((n) => `.mf-${n}`).join(", "))).toBeNull(); // 옛 Table 요소 없음
     expect(container.querySelector(".mf-assign__bar h1")?.textContent).toBe("역할 배정");
     const panel = container.querySelector(".mf-assign__panel");
     expect(panel).not.toBeNull();

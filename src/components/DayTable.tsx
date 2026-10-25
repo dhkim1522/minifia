@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { CSSProperties, ReactElement } from "react";
 import type { EmojiId, RoleId } from "../../shared/protocol";
 import { DAY_SCENE_H, DAY_SCENE_W, FIG_H, FIG_W, SCENE_PAD_DEFAULT, dayTableGeometry, daySeatLayout, px } from "../game/dayTable";
@@ -10,7 +10,9 @@ import "../styles/daytable.css";
 // 낮 화면 고정 테이블(결정 0017-1). 받은 공개 값만 그린다 — 입력에 역할 필드가 없다.
 // 이름표는 이름 한 줄이다(남의 주장은 이름표가 아니라 채팅에서만 본다, 결정 0023). 동료 표시(isAlly)는 서버가 마피아에게만 보낸
 // me.allies 에서 화면이 만든 값이다.
-// 한 자리는 밤에는 onPick 이 있으면 대상 버튼, 낮에는 onInspect 가 있으면 기록 카드 버튼이다(둘이 함께 있으면 onPick 이 이긴다).
+// 한 자리는 밤에는 onPick 이 있으면 대상 버튼, 낮에는 onInspect 가 있으면 기록 카드 버튼, 대기실에는 onPress 가 있으면 누르는 버튼이다
+// (함께 있으면 onPick > onInspect > onPress). 대기실·역할 배정도 이 부품을 그대로 쓴다(결정 0028) — transition 은 입장·퇴장 표시,
+// slide 는 인원이 바뀔 때 나머지가 새 자리로 미끄러지게 한다(첫 프레임 뒤에 켜서 처음 배치는 미끄러지지 않는다).
 // roleArt(직업 그림)는 탈락한 본인(관전자) 화면만 만든다 — 살아 있는 사람의 입력에는 이 값이 없다(결정 0021).
 // 테이블·캐릭터 기하는 모든 상황에서 시안 P2 값으로 고정이다(결정 0028): 390폭 면 216×108, rx 146, 다른 폭은 game/dayTable.ts 의 규칙.
 // 장면 여백(scenePad)은 prop, 없으면 루트의 CSS 변수 --mf-scene-pad(daytable.css 한 곳), 비었으면 12.
@@ -52,6 +54,10 @@ export interface DayTableSeat {
   onInspect?: () => void;
   /** 관전자 전용: 이 살아 있는 자리를 중립 인물 대신 이 직업 그림으로 그린다. 장면이 탈락한 본인의 서버 값으로만 만든다(결정 0021) */
   roleArt?: RoleId;
+  /** 대기실: 입장·퇴장 중인 자리 표시(서버 스냅샷의 차이에서 화면이 만든다). 자리 그림과 이름표에 전이 클래스가 붙는다 */
+  transition?: "entering" | "leaving" | null;
+  /** 대기실: 누를 수 있는 자리(방장이 끊긴 사람을 내보낼 때). onPick·onInspect 가 없을 때만 쓰인다 */
+  onPress?: () => void;
   /** 아침: 어둡게 층(z 30) 위(z 31)로 올려 어두워지지 않게 한다. 방금 탈락한 자리 */
   spotlit?: boolean;
   /** spotlit 일 때만 의미: 400ms 맥동을 한 번 돈다(밤 → 아침을 직접 본 경우에만 켠다) */
@@ -73,6 +79,8 @@ export interface DayTableProps {
   pickDisabled?: boolean;
   /** 동료 마름모의 읽기 이름. 기본 "동료", 관전 화면은 "마피아" */
   allyMarkLabel?: string;
+  /** 대기실: 인원이 바뀌면 나머지 자리가 짧은 CSS 전이로 새 자리로 미끄러진다. 마운트 직후 첫 프레임에는 켜지 않는다 */
+  slide?: boolean;
   /** 아침 어둡게 층. exitDelayMs 는 퇴장 페이드를 시작하기까지의 지연(아침 길이 − 300ms) */
   dim?: { exitDelayMs: number };
 }
@@ -121,6 +129,7 @@ export function DayTable({
   pickDisabled,
   allyMarkLabel = "동료",
   dim,
+  slide,
 }: DayTableProps): ReactElement {
   const rootRef = useRef<HTMLDivElement>(null);
   const [measured, setMeasured] = useState({ w: DAY_SCENE_W, h: DAY_SCENE_H, pad: SCENE_PAD_DEFAULT });
@@ -155,6 +164,17 @@ export function DayTable({
     return () => ro.disconnect();
   }, [needMeasure, scenePad]);
 
+  // 미끄러짐은 첫 프레임이 그려진 뒤에 켠다 — 처음 배치(마운트·단계 전환 직후)가 튀어 보이지 않는다
+  const [slideOn, setSlideOn] = useState(false);
+  useEffect(() => {
+    if (!slide) {
+      setSlideOn(false);
+      return;
+    }
+    const id = requestAnimationFrame(() => setSlideOn(true));
+    return () => cancelAnimationFrame(id);
+  }, [slide]);
+
   const sceneW = width ?? measured.w;
   const sceneH = height ?? measured.h;
   const pad = scenePad ?? measured.pad;
@@ -163,7 +183,7 @@ export function DayTable({
   const bySeat = new Map(seats.map((s) => [s.seat, s]));
 
   return (
-    <div ref={rootRef} className="mf-root mf-dt" role="group" aria-label={label}>
+    <div ref={rootRef} className={`mf-root mf-dt${slide && slideOn ? " mf-dt--slide" : ""}`} role="group" aria-label={label}>
       <div
         className="mf-dt__felt"
         aria-hidden="true"
@@ -181,7 +201,9 @@ export function DayTable({
           zIndex: s.spotlit ? SPOTLIT_Z : p.z,
         };
         const art = s.dead ? undefined : s.roleArt;
-        const seatClass = `mf-dt__seat${s.spotlit ? " mf-dt__seat--spotlit" : ""}${s.spotlit && s.pulse ? " mf-dt__seat--pulse" : ""}`;
+        const seatClass = `mf-dt__seat${s.spotlit ? " mf-dt__seat--spotlit" : ""}${s.spotlit && s.pulse ? " mf-dt__seat--pulse" : ""}${
+          s.transition === "entering" ? " mf-dt__seat--enter" : s.transition === "leaving" ? " mf-dt__seat--leave" : ""
+        }`;
         const inner = (
           <>
             {/* key: 직업 그림으로 바뀌는 자리는 노드가 새로 만들어져 300ms 페이드가 한 번 돈다 */}
@@ -258,6 +280,21 @@ export function DayTable({
             </button>
           );
         }
+        if (s.onPress) {
+          return (
+            <button
+              key={`s${p.seat}`}
+              type="button"
+              className={`${seatClass} mf-dt__seat--pick`}
+              data-seat={p.seat}
+              aria-label={seatLabel(s)}
+              onClick={s.onPress}
+              style={style}
+            >
+              {inner}
+            </button>
+          );
+        }
         return (
           <div key={`s${p.seat}`} className={seatClass} data-seat={p.seat} role="group" aria-label={seatLabel(s)} style={style}>
             {inner}
@@ -270,7 +307,9 @@ export function DayTable({
         return (
           <div
             key={`t${p.seat}`}
-            className={`mf-dt__tag${s.isMe ? " mf-dt__tag--me" : ""}${s.dead ? " mf-dt__tag--dead" : ""}${s.spoke ? " mf-dt__tag--spoke" : ""}${s.turn ? " mf-dt__tag--turn" : ""}`}
+            className={`mf-dt__tag${s.isMe ? " mf-dt__tag--me" : ""}${s.dead ? " mf-dt__tag--dead" : ""}${s.spoke ? " mf-dt__tag--spoke" : ""}${s.turn ? " mf-dt__tag--turn" : ""}${
+              s.transition === "entering" ? " mf-dt__tag--enter" : s.transition === "leaving" ? " mf-dt__tag--leave" : ""
+            }`}
             data-seat={p.seat}
             title={s.nickname}
             style={{ left: px(p.tagLeft), top: px(p.tagTop), zIndex: p.tagZ }}

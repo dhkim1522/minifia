@@ -6,7 +6,7 @@
    발밑 링(.mf-dt__spot)은 자리 안 쌓임 맥락에서 뒤쪽 호 z -1, 앞쪽 호는 그림 위. 바깥 규칙(이름표 1~11·캐릭터 12~22·어둡게 층 30·유령 31·이모티콘 60+)은 불변(결정 0028). */
 
 /* 장면 상자를 100%×100% 로 채운다. 가로로 자르지 않는다(이름표·이모티콘이 장면 밖으로 조금 나가도 보인다). */
-.mf-dt { position: relative; width: 100%; height: 100%; isolation: isolate; --mf-scene-pad: 12px; }
+.mf-dt { position: relative; width: 100%; height: 100%; isolation: isolate; --mf-scene-pad: 12px; --mf-seat-leave-ms: 320ms; }
 /* 장면 상자 좌우 여백(장면 상자의 padding 값과 같은 수): 어둡게 층이 이만큼 밖으로 나가 페이지 폭 전체를 덮는다 */
 @media (max-width: 389px) { .mf-dt { --mf-scene-pad: 4px; } }
 
@@ -153,6 +153,20 @@
 .mf-dt__seat--pulse { animation: mf-dt-pulse 400ms var(--ease-out); }
 .mf-dt__seat--pulse .mf-figure { animation: mf-dt-bright 400ms var(--ease-out); }
 
+/* 대기실(결정 0028): 입장·퇴장 전이. 그림(.mf-figure)만 움직여 자리의 scale 변환과 곱해지지 않는다. 이름표는 페이드만.
+   퇴장 320ms 는 토큰에 없는 길이라 지역 상수(--mf-seat-leave-ms, useSeatTransitions 의 SEAT_LEAVE_MS 와 같은 값). 입장은 --dur-med. */
+.mf-dt__seat--enter .mf-figure { animation: mf-dt-seat-enter var(--dur-med) var(--ease-out) both; }
+.mf-dt__seat--leave .mf-figure { animation: mf-dt-seat-leave var(--mf-seat-leave-ms) var(--ease-out) both; }
+.mf-dt__tag--enter { animation: mf-dt-fade var(--dur-med) var(--ease-out) both; }
+.mf-dt__tag--leave { animation: mf-dt-fade-out var(--mf-seat-leave-ms) var(--ease-out) both; }
+@keyframes mf-dt-seat-enter { from { opacity: 0; transform: translateY(-14px) scale(0.6); } to { opacity: 1; transform: translateY(0) scale(1); } }
+@keyframes mf-dt-seat-leave { from { opacity: 1; transform: translateY(0) scale(1); } to { opacity: 0; transform: translateY(6px) scale(0.85); } }
+@keyframes mf-dt-fade-out { from { opacity: 1; } to { opacity: 0; } }
+
+/* 대기실(결정 0028): 인원이 바뀌면 나머지가 새 등간격 자리로 미끄러진다. 루트 클래스는 첫 프레임 뒤에 DayTable 이 붙인다. */
+.mf-dt--slide .mf-dt__seat { transition: left var(--dur-med) var(--ease-out), top var(--dur-med) var(--ease-out), transform var(--dur-med) var(--ease-out); }
+.mf-dt--slide .mf-dt__tag { transition: left var(--dur-med) var(--ease-out), top var(--dur-med) var(--ease-out); }
+
 @keyframes mf-dt-fade { from { opacity: 0; } to { opacity: 1; } }
 @keyframes mf-dt-dim-in { from { opacity: 0; } to { opacity: 1; } }
 @keyframes mf-dt-dim-out { from { opacity: 1; } to { opacity: 0; } }
@@ -166,4 +180,6 @@
   .mf-dt__seat--pulse .mf-figure { animation: none; }
   .mf-figure--role { animation: none; }
   .mf-dt__spot-arc, .mf-dt__turn, .mf-dt__tag--turn .mf-dt__name { animation: none; }
+  .mf-dt__seat--enter .mf-figure, .mf-dt__seat--leave .mf-figure, .mf-dt__tag--enter, .mf-dt__tag--leave { animation: none; }
+  .mf-dt--slide .mf-dt__seat, .mf-dt--slide .mf-dt__tag { transition: none; }
 }

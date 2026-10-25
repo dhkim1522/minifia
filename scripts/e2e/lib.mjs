@@ -385,8 +385,13 @@ export function morningGoneChecks(snap) {
 export function feltStable(entries) {
   const bad = [];
   const base = entries[0];
+  if (!base?.rect) bad.push(`${base?.state ?? "첫 상태"}: 측정값 없음(테이블 면)`);
   for (const e of entries.slice(1)) {
     const r = e.rect;
+    if (!r || !base?.rect) {
+      if (!r) bad.push(`${e.state}: 측정값 없음(테이블 면)`);
+      continue;
+    }
     const same = ["left", "top", "width", "height"].every((k) => Math.abs(r[k] - base.rect[k]) <= 0.5);
     if (!same) bad.push(`${e.state} 에서 테이블이 ${base.state} 와 다름 (${rd(r.left)},${rd(r.top)} ${rd(r.width)}x${rd(r.height)} ↔ ${rd(base.rect.left)},${rd(base.rect.top)} ${rd(base.rect.width)}x${rd(base.rect.height)})`);
   }
@@ -425,6 +430,35 @@ export function feltGapChecks(stage) {
     if (gap < SIDE_GAP_MIN - 1e-6) bad.push(`자리 ${s.seat} 테이블 면과 간격 ${rd(gap)}px < ${SIDE_GAP_MIN}px`);
   }
   return result("T2", label, bad);
+}
+
+/**
+ * L6 (결정 0028): 대기실 자리 모양 — 둘이면 마주 보고(상대 발 가로 중심 = 내 발 ±0.5, 상대 발이 내 발보다 80px 이상 위),
+ * 셋이면 삼각(세 발의 외적 절댓값 > 100, 쌍별 거리 > 60). 1명이거나 4명 이상이면 건너뛴다(통과).
+ * stage = browser.readStage 결과, n = 지금 앉은 사람 수, mySeat = 내 자리. 둘·셋인데 측정값이 없으면 조용히 통과하지 않고 실패한다.
+ */
+export function lobbyShapeChecks(stage, { n, mySeat }) {
+  const label = "대기실 자리: 둘이면 마주 봄·셋이면 삼각";
+  if (n !== 2 && n !== 3) return result("L6", label, []);
+  const seats = stage?.seats;
+  if (!Array.isArray(seats) || seats.length !== n) return result("L6", label, [`측정값 없음(자리 ${Array.isArray(seats) ? seats.length : 0}개, 기대 ${n}개)`]);
+  const foot = (s) => ({ seat: s.seat, x: s.rect.left + s.rect.width / 2, y: bottom(s.rect) });
+  const feet = seats.map(foot);
+  const me = feet.find((f) => f.seat === mySeat);
+  if (!me) return result("L6", label, [`측정값 없음(내 자리 ${mySeat})`]);
+  const bad = [];
+  if (n === 2) {
+    const other = feet.find((f) => f.seat !== mySeat);
+    if (Math.abs(other.x - me.x) > OVERLAP_EPS) bad.push(`상대 발 가로 중심이 내 발과 ${rd(other.x - me.x)}px 어긋남 (> ${OVERLAP_EPS})`);
+    if (me.y - other.y < 80) bad.push(`상대 발이 내 발보다 ${rd(me.y - other.y)}px 위 (< 80px)`);
+  } else {
+    const [a, b, c] = feet;
+    const cross = (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+    if (Math.abs(cross) <= 100) bad.push(`세 발이 거의 한 직선 (외적 ${rd(Math.abs(cross))} ≤ 100)`);
+    const dist = (p, q) => Math.hypot(p.x - q.x, p.y - q.y);
+    for (const [p, q] of [[a, b], [a, c], [b, c]]) if (dist(p, q) <= 60) bad.push(`자리 ${p.seat}-${q.seat} 발 거리 ${rd(dist(p, q))} ≤ 60 (삼각이 아님)`);
+  }
+  return result("L6", label, bad);
 }
 
 /**

@@ -40,6 +40,7 @@ import {
   genericIssues,
   inspectChecks,
   journalChecks,
+  lobbyShapeChecks,
   lineCount,
   livingRoleArtChecks,
   morningCardIssues,
@@ -125,6 +126,19 @@ async function lobbyFlow(ctx) {
   const clashes = tt ? s1.interactive.filter((e) => !sameRect(e.rect, tt.rect) && rectsOverlap(e.rect, tt.rect)).map((e) => e.desc) : ["버튼 없음"];
   rec("lobby/lobby", "L2", "[테스트]가 다른 조작과 안 겹침", clashes.length === 0, `겹침: ${clashes.join(", ")}`);
 
+  // 장면 상자·테이블(결정 0028): 인원 1·2·3·5 에서 양옆 간격 T2, 둘이면 마주 봄·셋이면 삼각 L6 을 보고, 끝에서 T1(입장해도 늘어나지 않음)
+  const stages = [];
+  const grabStage = async (state, waitMs = 0) => {
+    if (waitMs > 0) await sleep(waitMs);
+    const stage = await readStage(page);
+    const mySeat = tracker.last()?.me?.seat ?? -1;
+    const n = tracker.last()?.players?.length ?? 0;
+    stages.push({ state, stage, mySeat });
+    recOne(rec, "lobby/stage", feltGapChecks(stage));
+    recOne(rec, "lobby/stage", lobbyShapeChecks(stage, { n, mySeat }));
+  };
+  await grabStage("인원 1");
+
   // 시트 열림
   await openTestSheet(page);
   const t1 = await attempt(async () => {
@@ -147,6 +161,16 @@ async function lobbyFlow(ctx) {
   }
   rec("lobby/sheet", "L3", "봇 줄 한 줄·[−][+] 44px", l3.ok, l3.detail);
 
+  // [봇 늘리기] 두 번: 인원 2(마주 봄), 인원 3(삼각). 입장 전이(420ms)가 끝나고 자리가 새 등간격 자리로 미끄러진 뒤에 잰다.
+  const grow = await attempt(async () => {
+    for (const n of [2, 3]) {
+      await clickInDialog(page, "테스트 도구", "봇 늘리기");
+      await tracker.waitFor((v) => v.players.length === n, 3000, `인원 ${n}`);
+      await grabStage(`인원 ${n}`, 700);
+    }
+  });
+  if (!grow.ok) rec("lobby/stage", "L6", "봇 늘리기로 인원 2·3 만들기", false, grow.detail);
+
   // 5명 채우기
   await clickInDialog(page, "테스트 도구", "5명 채우기");
   const l4 = await attempt(async () => {
@@ -154,6 +178,10 @@ async function lobbyFlow(ctx) {
     await page.waitForFunction(() => document.querySelector(".mf-tt-sheet__count")?.textContent?.trim() === "4명" && document.querySelector(".mf-lobby__count")?.textContent?.trim() === "5 / 8명", null, { timeout: 3000 });
   });
   rec("lobby/sheet", "L4", "5명 채우기", l4.ok, l4.detail);
+  if (l4.ok) {
+    await grabStage("인원 5", 700);
+    recOne(rec, "lobby/stage", stageStable(stages));
+  }
 
   // [+] / [−]
   const l5 = await attempt(async () => {
@@ -189,6 +217,14 @@ async function dayState(ctx, flowId, state) {
   rec(`${flowId}/${state}`, t2.id, t2.label, t2.ok, t2.detail);
   (ctx.dayStates ??= []).push({ state, felt: snap.felt, tags: snap.tags, stage, mySeat });
   return { snap, mySeat };
+}
+
+/** 대기실·역할 배정 장면 한 장: 테이블 면·이름표·장면 상자를 흐름 끝의 D7·D9·T1 용으로 모아 둔다(스냅숏·G 는 안 돌린다). */
+async function grabLobbyStage(ctx, state, waitMs = 0) {
+  if (waitMs > 0) await sleep(waitMs);
+  const stage = await readStage(ctx.host.page);
+  const mySeat = ctx.host.tracker.last()?.me?.seat ?? -1;
+  (ctx.dayStates ??= []).push({ state, felt: stage.felt, tags: stage.tags, stage, mySeat });
 }
 
 /** 밤 하단·알약·안내 줄 수(N1·N4·N5). 누르기 전 스냅숏으로 본다. */
@@ -432,7 +468,9 @@ async function gameFlow(ctx, { id, players, role, states }) {
   await openTestSheet(page);
   await setBots(page, tracker, players - 1);
   await chooseRole(page, tracker, role);
-  await startGame(page, tracker);
+  // [게임 시작] 직전의 대기실 테이블: 이후 배정·낮·밤·아침과 같은 자리여야 한다(D7·D9·T1 이 함께 본다)
+  await grabLobbyStage(ctx, "lobby", 700);
+  await startGame(page, tracker, { onAssigning: () => grabLobbyStage(ctx, "assigning") });
   ctx.stage = "play";
   const v0 = tracker.last();
   const s3Ok = v0.players.length === players && v0.me.role === role;

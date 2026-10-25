@@ -590,10 +590,26 @@ export async function chooseRole(page, tracker, role) {
   await stepTo(tracker, (v) => v.me.testRole === role, `내 직업 ${role} 지정`);
 }
 
-/** 시트를 닫고 [게임 시작] 을 눌러 역할 확인(roleReveal)까지 기다린다. */
-export async function startGame(page, tracker) {
+/**
+ * 시트를 닫고 [게임 시작] 을 눌러 역할 확인(roleReveal)까지 기다린다.
+ * onAssigning 이 있으면 역할 배정(3초 창)이 잡혔을 때 화면이 그려지고 300ms 뒤 한 번만 부른다(readStage 하나만 하는 짧은 일).
+ * 배정이 이미 지났으면 건너뛴다 — 실패가 아니다.
+ */
+export async function startGame(page, tracker, { onAssigning } = {}) {
   await closeSheet(page);
   await page.locator(".mf-lobby__sheet").getByRole("button", { name: "게임 시작" }).click();
+  if (onAssigning) {
+    let caught = false;
+    try {
+      await tracker.waitFor((v) => v.phase === "assigning", 3000, "역할 배정 도달");
+      await page.waitForSelector(".mf-assign__scene .mf-dt__felt", { timeout: 2000 });
+      await page.waitForTimeout(300);
+      caught = tracker.last()?.phase === "assigning";
+    } catch {
+      caught = false;
+    }
+    if (caught) await onAssigning();
+  }
   await tracker.waitFor((v) => v.phase === "roleReveal", 8000, "역할 확인 도달");
 }
 

@@ -1,15 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import type { ClientMessage, RoomView } from "../../shared/protocol";
-import { SEAT_COUNT } from "../../shared/seatLayout";
 import { connectedCount } from "../../shared/game/room";
 import { Backdrop } from "../components/Backdrop";
 import { Button } from "../components/Button";
 import { ConfirmSheet } from "../components/ConfirmSheet";
 import { Icon } from "../components/Icon";
 import { ShareSheet } from "../components/ShareSheet";
-import { Table } from "../components/Table";
-import type { TableSeat } from "../components/Table";
+import { DayTable } from "../components/DayTable";
+import type { DayTableSeat } from "../components/DayTable";
 import { Toast, useToast } from "../components/Toast";
 import { diffRoomViews, toastForDiff } from "../net/roomDiff";
 import { useSeatTransitions } from "../net/useSeatTransitions";
@@ -33,7 +32,9 @@ interface LobbyProps {
   testButton?: ReactNode;
 }
 
-// S-03 대기실: 대기 장면 위 원근 테이블, 위쪽 바(방 코드), 하단 시트.
+// S-03 대기실: 대기 장면 위 테이블, 위쪽 바(방 코드), 하단 시트.
+// 테이블은 낮·역할 배정과 같은 DayTable 이고 장면 상자도 같다(머리 119.2 · 시트 157, 결정 0028): 사람이 들어오고 나가면
+// n 명이 좌석 번호 순서로 고르게 앉는 새 자리로 나머지가 미끄러진다(slide).
 // 화면은 서버가 보낸 view 만으로 다시 그린다. 닉네임은 React 텍스트·title 로만 그린다.
 export function Lobby({ view, send, canSend = true, epoch = 0, onLeave, testButton }: LobbyProps) {
   // 입장·방장 변경 토스트: 서버가 보낸 스냅샷 두 개의 차이로만 만든다. 처음 열 때·epoch 가 바뀐 직후(재연결)에는
@@ -95,19 +96,20 @@ export function Lobby({ view, send, canSend = true, epoch = 0, onLeave, testButt
   };
 
   const allies = view.me.allies ?? [];
-  const seats: (TableSeat | null)[] = Array.from({ length: SEAT_COUNT }, () => null);
-  for (const p of seated) {
-    seats[p.seat] = {
-      transition: p.transition,
+  // 자리 입력은 퇴장 중인 사람까지 포함한 seated 에서 만든다. 방장이 끊긴 다른 사람 자리만 누를 수 있다(D-16, 판정은 서버가 다시 한다).
+  const seats: DayTableSeat[] = seated.map((p) => {
+    const pressable = isHost && canSend && !p.connected && p.seat !== view.me.seat && p.transition !== "leaving";
+    return {
+      seat: p.seat,
       nickname: p.nickname,
       connected: p.connected,
       isHost: p.isHost,
       isMe: p.seat === view.me.seat,
       isAlly: allies.includes(p.seat),
-      // 방장이 끊긴 다른 사람 자리만 누를 수 있다(D-16). 판정은 서버가 다시 한다(kickPlayer).
-      pressable: isHost && canSend && !p.connected && p.seat !== view.me.seat && p.transition !== "leaving",
+      transition: p.transition,
+      ...(pressable ? { onPress: () => setSheet({ kind: "kick", seat: p.seat, nickname: p.nickname }) } : {}),
     };
-  }
+  });
 
   return (
     <Backdrop layout="game" variant="lobby" className="mf-lobby__backdrop">
@@ -141,14 +143,7 @@ export function Lobby({ view, send, canSend = true, epoch = 0, onLeave, testButt
         </header>
         <div className="mf-lobby__scene">
           {testButton ? <div className="mf-tt-anchor">{testButton}</div> : null}
-          <Table
-            seats={seats}
-            mySeat={view.me.seat}
-            onSeatPress={(seat) => {
-              const target = view.players.find((p) => p.seat === seat);
-              if (target) setSheet({ kind: "kick", seat, nickname: target.nickname });
-            }}
-          />
+          <DayTable seats={seats} mySeat={view.me.seat} slide />
         </div>
         <section className="mf-lobby__sheet">
           <div className="mf-lobby__status">
