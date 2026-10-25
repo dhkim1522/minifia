@@ -1,0 +1,11 @@
+<!-- 임시 SVG — 데스크톱 일러스트가 오면 같은 이름으로 교체(결정 0026-3) -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 358 44" width="358" height="44" preserveAspectRatio="xMaxYMid slice" fill="none" stroke="#9ec2ff" stroke-linecap="round" stroke-linejoin="round" stroke-opacity="0.45">
+<path d="M232 4 V40" stroke-width="2"/>
+<circle cx="232" cy="11" r="4" stroke-width="2"/>
+<circle cx="232" cy="22" r="4" stroke-width="2"/>
+<circle cx="232" cy="33" r="4" stroke-width="2"/>
+<path d="M252 8 V36 M266 8 V36 M280 8 V36" stroke-width="1" stroke-opacity="0.25"/>
+<path d="M312 38 L330 8 L338 12 L320 42 L312 42 Z" stroke-width="2"/>
+<path d="M330 8 L333 3 L341 7 L338 12" stroke-width="2"/>
+<path d="M314 36 L321 40" stroke-width="2"/>
+</svg>
