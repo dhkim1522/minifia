@@ -94,3 +94,8 @@ export function enterClaim(state: RoomState): RoomState {
     }),
   };
 }
+
+/** RED 자리표시자 — GREEN 에서 구현한다. */
+export function currentClaimSeat(_state: RoomState): number | undefined {
+  return undefined;
+}

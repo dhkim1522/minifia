@@ -1,8 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   ASSIGNING_MS,
-  CLAIM_MS,
-  CLAIM_REVEAL_MS,
+  CLAIM_TURN_MS,
   DAY_ANNOUNCE_MS,
   DISCUSSION_MS,
   MORNING_MS,
@@ -48,10 +47,10 @@ function stateIn(
 }
 
 describe("PHASE_DEFS (단계 표, D-01·D-02·D-19·D-20, NIGHT-05·NIGHT-06)", () => {
-  it("단계는 아홉 개다 — lobby·assigning·roleReveal, 낮 네 단계, 밤·아침", () => {
+  it("단계는 여덟 개다 — lobby·assigning·roleReveal, 낮 세 단계(공개 연출 단계 없음, D-07), 밤·아침", () => {
     const keys = Object.keys(PHASE_DEFS).sort();
     expect(`${keys.length}:${keys.join(",")}`).toBe(
-      "9:assigning,claim,claimReveal,dayAnnounce,discussion,lobby,morning,night,roleReveal",
+      "8:assigning,claim,dayAnnounce,discussion,lobby,morning,night,roleReveal",
     );
   });
 
@@ -66,16 +65,14 @@ describe("PHASE_DEFS (단계 표, D-01·D-02·D-19·D-20, NIGHT-05·NIGHT-06)", 
     expect(row("assigning")).toBe("3000/roleReveal/false");
     expect(row("roleReveal")).toBe("15000/dayAnnounce/true");
     expect(row("dayAnnounce")).toBe("2000/claim/true");
-    expect(row("claim")).toBe("15000/claimReveal/true");
-    expect(row("claimReveal")).toBe("2000/discussion/true");
+    expect(row("claim")).toBe("8000/discussion/true"); // 차례 하나의 길이 — 남은 차례가 있으면 tick 의 ON_DEADLINE 이 머문다
     expect(row("discussion")).toBe("90000/night/true"); // 임시 낮 루프(D-19)가 밤으로 바뀌었다
     expect(row("night")).toBe("30000/morning/true");
     expect(row("morning")).toBe("5000/dayAnnounce/true");
     expect(ASSIGNING_MS).toBe(3000);
     expect(ROLE_REVEAL_MS).toBe(15000);
     expect(DAY_ANNOUNCE_MS).toBe(2000);
-    expect(CLAIM_MS).toBe(15000);
-    expect(CLAIM_REVEAL_MS).toBe(2000);
+    expect(CLAIM_TURN_MS).toBe(8000);
     expect(DISCUSSION_MS).toBe(90000);
     expect(NIGHT_MS).toBe(30000);
     expect(MORNING_MS).toBe(5000);
@@ -141,40 +138,43 @@ describe("tick (순수 단계 진행)", () => {
   it("늦은 알람: 토론 마감 뒤 한참 지나 불려도 밤·아침·다음 낮 마감이 이전 마감 연쇄로 계산된다", () => {
     const T = 100_000;
     const s: RoomState = { ...stateIn("discussion", T), day: 1 };
-    // 마감: night T+30000 → morning T+35000 → dayAnnounce T+37000 → claim T+52000 → claimReveal T+54000.
-    const out = tick(s, T + 37_000 + 15_000);
-    expect(`${out.phase}/${out.day}/${out.phaseEndsAt}`).toBe(`claimReveal/2/${T + 54_000}`);
+    // 마감: night T+30000 → morning T+35000 → dayAnnounce T+37000 → claim 첫 차례 T+45000 → 둘째 차례 T+53000.
+    const out = tick(s, T + 37_000 + 11_000);
+    expect(`${out.phase}/${out.day}/${out.claimIdx}/${out.phaseEndsAt}`).toBe(`claim/2/1/${T + 53_000}`);
   });
 
   it("늦은 알람이 여러 낮 단계를 따라잡아도 중간 단계의 진입 훅이 루프 안에서 돈다 (RESEARCH Pattern 1)", () => {
     const s = stateIn("roleReveal", 19000);
-    // 마감: dayAnnounce 21000 → claim 36000 → claimReveal 38000. 37000 이면 claimReveal 한가운데다.
+    // 마감: dayAnnounce 21000 → 첫 차례 29000 → 둘째 차례 37000 → 셋째 차례 45000. 37000 이면 셋째 차례가 막 시작됐다.
     const next = tick(s, 37000);
-    expect(next.phase).toBe("claimReveal");
+    expect(next.phase).toBe("claim");
     expect(next.day).toBe(1); // dayAnnounce 훅이 한 번 돌았다
-    expect(next.phaseEndsAt).toBe(38000);
+    expect(next.claimIdx).toBe(2); // claim 진입 훅이 돌았고 차례 두 개가 지났다
+    expect(next.claimLog).toHaveLength(2);
+    expect(next.phaseEndsAt).toBe(45000);
   });
 
   it("한 바퀴를 한 번에 따라잡아도 일차가 정확히 한 번만 늘어난다 (밤·아침은 일차를 올리지 않는다)", () => {
     const T = 100_000;
     const s: RoomState = { ...stateIn("discussion", T), day: 1 };
-    // 마감: night T+30000 → morning T+35000 → dayAnnounce T+37000 → claim T+52000 → claimReveal T+54000 → discussion T+144000.
-    const next = tick(s, T + 60_000);
+    // 마감: night T+30000 → morning T+35000 → dayAnnounce T+37000 → claim 네 차례 T+45000..T+69000 → discussion T+159000.
+    const next = tick(s, T + 100_000);
     expect(next.phase).toBe("discussion");
     expect(next.day).toBe(2);
-    expect(next.phaseEndsAt).toBe(T + 144_000);
+    expect(next.phaseEndsAt).toBe(T + 159_000);
     // 한 바퀴가 정확히 끝나는 순간에는 밤이 시작되고 일차는 그대로다.
-    const night = tick(s, T + 144_000);
+    const night = tick(s, T + 159_000);
     expect(night.phase).toBe("night");
     expect(night.day).toBe(2);
-    expect(night.phaseEndsAt).toBe(T + 174_000);
+    expect(night.phaseEndsAt).toBe(T + 189_000);
   });
 
   it("아주 늦게 불리면 여러 단계를 한 번에 따라잡는다", () => {
     const s = stateIn("assigning", 4000);
     const next = tick(s, 30000);
-    expect(next.phase).toBe("claim"); // roleReveal 19000 → dayAnnounce 21000 → claim 36000
-    expect(next.phaseEndsAt).toBe(36000);
+    expect(next.phase).toBe("claim"); // roleReveal 19000 → dayAnnounce 21000 → 첫 차례 29000 → 둘째 차례 37000
+    expect(next.claimIdx).toBe(1);
+    expect(next.phaseEndsAt).toBe(37000);
     expect(next.day).toBe(1);
   });
 
@@ -242,27 +242,32 @@ describe("enterDayAnnounce (낮 진입 훅)", () => {
   });
 });
 
-describe("tick - 늦은 알람의 따라잡기 훅 순서 (밤·아침을 건너 dayAnnounce → claim → claimReveal)", () => {
-  it("discussion 에서 한 번에 claimReveal 까지 따라잡아도 세 낮 훅이 순서대로 돈다", () => {
+describe("tick - 늦은 알람의 따라잡기 훅 순서 (밤·아침을 건너 dayAnnounce → claim)", () => {
+  it("discussion 에서 한 번에 다음 낮 claim 까지 따라잡아도 낮 훅이 순서대로 돌고 시작 자리가 한 칸 이동한다", () => {
     const T = 100_000;
     const base = stateIn("discussion", T);
     const s: RoomState = {
       ...base,
       day: 1,
-      players: base.players.map((p, i) => {
-        if (i === 0) return { ...p, claimChoice: "police" as const, claimLast: "police" as const };
-        if (i === 1) return { ...p, claimLast: "doctor" as const, connected: false, connId: null };
-        return p;
-      }),
+      claimStart: 0,
+      claimOrder: [0, 1, 2, 3],
+      claimIdx: 4,
+      claimPick: "police", // 남아 있어서는 안 되는 값 — claim 진입 훅이 지운다
+      claimLog: [
+        { n: 1, seat: 0, claim: "police" },
+        { n: 1, seat: 1, claim: "none" },
+        { n: 1, seat: 2, claim: "none" },
+        { n: 1, seat: 3, claim: "none" },
+      ],
     };
-    const toClaimEnd = NIGHT_MS + MORNING_MS + DAY_ANNOUNCE_MS + CLAIM_MS;
-    const out = tick(s, T + toClaimEnd);
-    expect(`${out.phase}/${out.day}/${out.phaseEndsAt}`).toBe(`claimReveal/2/${T + toClaimEnd + CLAIM_REVEAL_MS}`);
-    // enterClaim 이 지난 낮 선택(A 의 police)을 지웠으므로 A 는 직접 고르지 않은 연결된 사람이다 → 어제 값 유지
-    expect(out.players.map((p) => "claimChoice" in p).join(",")).toBe("false,false,false,false");
-    expect(`${out.players[0]!.claimShown}/${out.players[0]!.claimChanged}`).toBe("police/false");
-    // B 는 끊겨 있어 말 안 함, 선택 없던 C·D 는 none
-    expect(out.players.map((p) => p.claimShown).join(",")).toBe("police,none,none,none");
+    const dayAnnounceEnd = T + NIGHT_MS + MORNING_MS + DAY_ANNOUNCE_MS;
+    const out = tick(s, dayAnnounceEnd);
+    expect(`${out.phase}/${out.day}/${out.phaseEndsAt}`).toBe(`claim/2/${dayAnnounceEnd + CLAIM_TURN_MS}`);
+    expect(out.claimOrder).toEqual([1, 2, 3, 0]);
+    expect(out.claimIdx).toBe(0);
+    expect(out.claimStart).toBe(1);
+    expect(Object.hasOwn(out, "claimPick")).toBe(false);
+    expect(out.claimLog).toEqual(s.claimLog); // 어제 기록은 그대로 쌓여 있다
   });
 });
 
