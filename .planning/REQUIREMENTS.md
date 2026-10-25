@@ -162,17 +162,17 @@ MVP 이후 후보. 추적만 하고 현재 로드맵에는 넣지 않는다. 올
 | ROLE-01 | Phase 1 | Complete |
 | ROLE-02 | Phase 1 | Complete |
 | DAY-01 | Phase 2 | Complete |
-| DAY-02 | Phase 2 | Complete |
+| DAY-02 | Phase 2, 3.1 | In Progress |
 | COMM-01 | Phase 2 | Complete |
 | COMM-02 | Phase 2 | Complete |
 | COMM-04 | Phase 2 | Complete |
 | NIGHT-01 | Phase 3 | Complete |
 | NIGHT-02 | Phase 3 | Complete |
 | NIGHT-03 | Phase 3 | Complete |
-| NIGHT-04 | Phase 3 | Complete |
+| NIGHT-04 | Phase 3, 3.1 | In Progress |
 | NIGHT-05 | Phase 3 | Complete |
 | NIGHT-06 | Phase 3 | Complete |
-| ELIM-01 | Phase 3 | Complete |
+| ELIM-01 | Phase 3, 3.1 | In Progress |
 | VOTE-01 | Phase 4 | Pending |
 | VOTE-02 | Phase 4 | Pending |
 | VOTE-03 | Phase 4 | Pending |
