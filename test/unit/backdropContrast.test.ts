@@ -166,14 +166,13 @@ describe("막이 필요하다는 사실을 고정한다", () => {
 });
 
 describe("막이 필요한 장면은 SCENES.scrim 과 일치한다", () => {
-  it("막 없이도 4.5 를 넘는 장면에는 막을 달지 않는다 (night·dusk·verdictDusk), 넘지 못하는 아침·낮에는 막이 있다", async () => {
+  it("막이 없는 장면(night)은 세 폭 모두 막 없이 4.5 이상, 막이 있는 장면은 어느 폭에선가 막 없이 4.5 미만이다", async () => {
     for (const scene of GAME_SCENES) {
       if (scene === "lobby") continue;
-      for (const w of WIDTHS) {
-        const bare = await contrastOf(scene, w, timerZone(w), "none");
-        if (SCENES[scene].scrim) expect(bare, `${scene}@${w}`).toBeLessThan(HEADER_CONTRAST_MIN);
-        else expect(bare, `${scene}@${w}`).toBeGreaterThanOrEqual(HEADER_CONTRAST_MIN);
-      }
+      const bares: number[] = [];
+      for (const w of WIDTHS) bares.push(await contrastOf(scene, w, timerZone(w), "none"));
+      if (SCENES[scene].scrim) expect(Math.min(...bares), scene).toBeLessThan(HEADER_CONTRAST_MIN);
+      else for (const b of bares) expect(b, scene).toBeGreaterThanOrEqual(HEADER_CONTRAST_MIN);
     }
   }, 30_000);
 });

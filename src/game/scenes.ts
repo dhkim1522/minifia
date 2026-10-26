@@ -6,7 +6,7 @@
 //   Record<PhaseId, SceneId> 가 타입 오류로 알려 준다.
 // - 해·달: 그림에 이미 그려져 있고 장면마다 위치가 다르다(아침 해 오른쪽 위 → 낮 해 더 왼쪽·아래, 밤 달). 이미지에서 떼어낼 수 없으므로
 //   따로 그리거나 움직이지 않고 배경 크로스페이드에 맡긴다. 이중으로 보일 수 없다(결정 0030, 확인 필요 1).
-// - 아침·낮은 set1(밝은 하늘)이라 헤더 위쪽에 어두운 막이 필요하다(HEADER_SCRIM_STOPS). 4.5:1 은 오프라인 단위 테스트
+// - 아침·낮(밝은 하늘)과 해질녘·처형(360폭 타이머 4.42)은 헤더 위쪽에 어두운 막이 필요하다(HEADER_SCRIM_STOPS, 결정 0031). 4.5:1 은 오프라인 단위 테스트
 //   (test/unit/backdropContrast.test.ts)와 E2E H1 이 같은 값으로 잰다. 값을 바꾸려면 이 상수 한 곳만 고친다.
 import { DAY_ANNOUNCE_MS } from "../../shared/game/phases";
 import type { PhaseId } from "../../shared/protocol";
@@ -17,7 +17,7 @@ export type SceneId = (typeof SCENE_IDS)[number];
 export interface SceneDef {
   /** 파일 이름 조각: bg_{game|entry}_{file}.webp */
   file: string;
-  /** 헤더 위쪽 어두운 막이 필요한 장면(set1 의 아침·낮) */
+  /** 헤더 위쪽 어두운 막이 필요한 장면(막 없이는 헤더 글씨 대비가 4.5 미만인 장면: v3 의 아침·낮·해질녘·처형) */
   scrim: boolean;
   /** 입구(entry) 구도 그림이 있는 장면 */
   entry: boolean;
@@ -28,8 +28,8 @@ export const SCENES: Readonly<Record<SceneId, SceneDef>> = Object.freeze({
   night: Object.freeze({ file: "night", scrim: false, entry: false }),
   morning: Object.freeze({ file: "morning", scrim: true, entry: false }),
   day: Object.freeze({ file: "day", scrim: true, entry: false }),
-  dusk: Object.freeze({ file: "dusk", scrim: false, entry: false }),
-  verdictDusk: Object.freeze({ file: "verdict_dusk", scrim: false, entry: false }),
+  dusk: Object.freeze({ file: "dusk", scrim: true, entry: false }),
+  verdictDusk: Object.freeze({ file: "verdict_dusk", scrim: true, entry: false }),
 });
 
 export const PHASE_SCENE: Readonly<Record<PhaseId, SceneId>> = Object.freeze({
@@ -73,11 +73,11 @@ export const SCENE_FADE_MS = 800;
 /** 새 그림이 준비되기를 기다리는 상한. 넘으면 준비되지 않았어도 크로스페이드를 시작한다. */
 export const SCENE_IMAGE_WAIT_MS = 1200;
 
-/** 헤더 위쪽 어두운 막: [위에서의 거리 px, night-900 알파]. 시안 Y3·Y5 의 .66/.42/.18/0 은 타이머 구역 대비가 3.5~4.1:1 이라 .70/.58/.40/0 으로 올렸다(길이 150px 은 그대로). */
+/** 헤더 위쪽 어두운 막: [위에서의 거리 px, night-900 알파]. 시안 Y3·Y5 의 .66/.42/.18/0 은 타이머 구역 대비가 3.5~4.1:1 이라 .70/.58/.40/0 으로 올렸고, 지평선 18% 의 새 배경(v3)은 하늘이 더 밝아 .80/.70/.55/0 으로 다시 올렸다(길이 150px 은 그대로). */
 export const HEADER_SCRIM_STOPS: ReadonlyArray<readonly [number, number]> = [
-  [0, 0.7],
-  [60, 0.58],
-  [110, 0.4],
+  [0, 0.8],
+  [60, 0.7],
+  [110, 0.55],
   [150, 0],
 ];
 export const HEADER_SCRIM_LENGTH_PX = 150;

@@ -187,7 +187,7 @@ describe("Backdrop 층 규칙", () => {
 });
 
 describe("헤더 위쪽 어두운 막", () => {
-  it("아침·낮 층만 인라인 사용자 지정 속성 --mf-scrim 을 싣고, 값은 HEADER_SCRIM_STOPS 의 그라데이션이다", async () => {
+  it("아침·낮·해질녘·처형 층만 인라인 사용자 지정 속성 --mf-scrim 을 싣고, 값은 HEADER_SCRIM_STOPS 의 그라데이션이다", async () => {
     stubImages("immediate");
     const { container, rerender } = render(<Backdrop layout="game" scene="morning" />);
     const scrimOf = () => [...container.querySelectorAll<HTMLElement>(".mf-backdrop__art")].map((el) => el.style.getPropertyValue("--mf-scrim"));
@@ -203,9 +203,18 @@ describe("헤더 위쪽 어두운 막", () => {
     expect(scrimOf()).toEqual([""]);
   });
 
-  it("lobby·night·dusk·verdictDusk 와 entry 층에는 막이 없다", () => {
+  it("해질녘·처형 층도 막을 싣는다 (v3 에서 360폭 타이머 대비가 4.5 미만이라 추가)", () => {
     stubImages("immediate");
-    for (const scene of ["lobby", "night", "dusk", "verdictDusk"] as const) {
+    for (const scene of ["dusk", "verdictDusk"] as const) {
+      const { container, unmount } = render(<Backdrop layout="game" scene={scene} />);
+      expect(container.querySelector<HTMLElement>(".mf-backdrop__art")!.style.getPropertyValue("--mf-scrim"), scene).toBe(headerScrimGradient());
+      unmount();
+    }
+  });
+
+  it("lobby·night 와 entry 층에는 막이 없다", () => {
+    stubImages("immediate");
+    for (const scene of ["lobby", "night"] as const) {
       const { container, unmount } = render(<Backdrop layout="game" scene={scene} />);
       expect(container.querySelector<HTMLElement>(".mf-backdrop__art")!.style.getPropertyValue("--mf-scrim"), scene).toBe("");
       unmount();

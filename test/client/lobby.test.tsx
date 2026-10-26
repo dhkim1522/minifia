@@ -74,7 +74,7 @@ describe("Lobby — 대기실 (S-03) 테이블", () => {
   it("방장 혼자면 테이블에 인물 1개뿐이고 빈 자리 그림은 없다", () => {
     render(<Lobby view={makeView([player(0, "민수")], 0)} send={() => {}} />);
     const table = screen.getByRole("group", { name: "테이블" });
-    expect(table.querySelectorAll("img").length).toBe(1);
+    expect(table.querySelectorAll("img.mf-figure").length).toBe(1);
   });
 
   it("끊긴 사람은 '{닉네임}, 연결 끊김' 으로 읽히고 인물이 흑백이다", () => {

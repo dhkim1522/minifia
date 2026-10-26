@@ -45,8 +45,8 @@ describe("장면 목록(SCENES)", () => {
     expect(SCENES.verdictDusk.file).toBe("verdict_dusk");
   });
 
-  it("헤더 위쪽 어두운 막은 아침·낮만(set1), entry 구도는 lobby 만 갖는다", () => {
-    expect(SCENE_IDS.filter((id) => SCENES[id].scrim)).toEqual(["morning", "day"]);
+  it("헤더 위쪽 어두운 막은 아침·낮·해질녘·처형만, entry 구도는 lobby 만 갖는다", () => {
+    expect(SCENE_IDS.filter((id) => SCENES[id].scrim)).toEqual(["morning", "day", "dusk", "verdictDusk"]);
     expect(SCENE_IDS.filter((id) => SCENES[id].entry)).toEqual(["lobby"]);
   });
 });
@@ -113,11 +113,11 @@ describe("전환 상수와 헤더 막", () => {
     expect(readFileSync("src/styles/tokens.css", "utf8")).toContain("--dur-slow: 800ms;");
   });
 
-  it("HEADER_SCRIM_STOPS: 시안 .66/.42/.18/0 에서 .70/.58/.40/0 으로 올렸다 (사용자 규칙 4.5:1, 길이 150px 은 그대로)", () => {
+  it("HEADER_SCRIM_STOPS: 시안 .66/.42/.18/0 에서 .70/.58/.40/0, 새 배경(v3)에서 .80/.70/.55/0 으로 올렸다 (사용자 규칙 4.5:1, 길이 150px 은 그대로)", () => {
     expect(HEADER_SCRIM_STOPS).toEqual([
-      [0, 0.7],
-      [60, 0.58],
-      [110, 0.4],
+      [0, 0.8],
+      [60, 0.7],
+      [110, 0.55],
       [150, 0],
     ]);
     expect(HEADER_SCRIM_LENGTH_PX).toBe(150);
@@ -127,9 +127,9 @@ describe("전환 상수와 헤더 막", () => {
   it("headerScrimGradient(): night-900 토큰 color-mix 를 쓰고 150px 끝이 투명이다", () => {
     expect(headerScrimGradient()).toBe(
       "linear-gradient(to bottom, " +
-        "color-mix(in srgb, var(--night-900) 70%, transparent) 0px, " +
-        "color-mix(in srgb, var(--night-900) 58%, transparent) 60px, " +
-        "color-mix(in srgb, var(--night-900) 40%, transparent) 110px, " +
+        "color-mix(in srgb, var(--night-900) 80%, transparent) 0px, " +
+        "color-mix(in srgb, var(--night-900) 70%, transparent) 60px, " +
+        "color-mix(in srgb, var(--night-900) 55%, transparent) 110px, " +
         "color-mix(in srgb, var(--night-900) 0%, transparent) 150px)",
     );
     expect(headerScrimGradient()).not.toMatch(/#[0-9a-f]{3,8}/i);
@@ -148,13 +148,13 @@ const EXPECTED_FILES = [
   "bg_game_verdict_dusk.webp",
 ];
 const LIMIT_KB: Record<string, number> = {
-  "bg_game_lobby.webp": 48,
-  "bg_game_night.webp": 48,
-  "bg_game_dusk.webp": 48,
-  "bg_game_verdict_dusk.webp": 48,
-  "bg_game_morning.webp": 24,
-  "bg_game_day.webp": 24,
-  "bg_entry_lobby.webp": 64,
+  "bg_game_lobby.webp": 40,
+  "bg_game_night.webp": 40,
+  "bg_game_dusk.webp": 40,
+  "bg_game_verdict_dusk.webp": 40,
+  "bg_game_morning.webp": 40,
+  "bg_game_day.webp": 40,
+  "bg_entry_lobby.webp": 52,
 };
 const TOTAL_LIMIT_KB = 260;
 
@@ -171,7 +171,7 @@ describe("public/backgrounds (WebP 일곱 개, 옛 SVG 는 없다)", () => {
     }
   });
 
-  it("장면 하나 ≤ 상한(set2 game 48KB · set1 24KB · entry 64KB), 합계 ≤ 260KB", () => {
+  it("장면 하나 ≤ 상한(game 40KB · entry 52KB), 합계 ≤ 260KB", () => {
     let total = 0;
     for (const name of EXPECTED_FILES) {
       const size = statSync(`public/backgrounds/${name}`).size;
@@ -181,10 +181,11 @@ describe("public/backgrounds (WebP 일곱 개, 옛 SVG 는 없다)", () => {
     expect(total / KB).toBeLessThanOrEqual(TOTAL_LIMIT_KB);
   });
 
-  it("원본(design/backgrounds/A_cute 와 v2)은 그대로 남아 있다", () => {
+  it("원본(design/backgrounds/A_cute·v2·v3)은 그대로 남아 있다", () => {
     expect(existsSync("design/backgrounds/A_cute/bg_entry_lobby.svg")).toBe(true);
     expect(existsSync("design/backgrounds/v2/set2/bg_game_night.png")).toBe(true);
     expect(existsSync("design/backgrounds/v2/set1/bg_game_day.jpg")).toBe(true);
+    expect(existsSync("design/backgrounds/v3/bg_game_night.png")).toBe(true);
   });
 });
 
@@ -196,19 +197,16 @@ describe("scripts/make-backdrops.mjs (SOURCES)", () => {
     expect(SOURCES.map((s) => s.out).sort()).toEqual(EXPECTED_FILES);
   });
 
-  it("원본이 모두 design/backgrounds/v2 안에 있고 파일이 존재한다. 아침·낮은 set1, 나머지는 set2", () => {
+  it("원본이 모두 design/backgrounds/v3 안에 있고 파일이 존재한다", () => {
     for (const s of SOURCES) {
-      expect(s.src.startsWith("design/backgrounds/v2/"), s.src).toBe(true);
+      expect(s.src.startsWith("design/backgrounds/v3/"), s.src).toBe(true);
       expect(existsSync(s.src), s.src).toBe(true);
-      const isSet1 = s.out === "bg_game_morning.webp" || s.out === "bg_game_day.webp";
-      expect(s.src.includes("/set1/"), s.src).toBe(isSet1);
-      expect(s.src.includes("/set2/"), s.src).toBe(!isSet1);
     }
   });
 
-  it("품질 90, 상한은 장면별 예산과 같다", () => {
+  it("품질 86, 상한은 장면별 예산과 같다", () => {
     for (const s of SOURCES) {
-      expect(s.quality).toBe(90);
+      expect(s.quality).toBe(86);
       expect(s.maxKB, s.out).toBe(LIMIT_KB[s.out]);
     }
   });

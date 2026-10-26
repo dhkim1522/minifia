@@ -225,7 +225,7 @@ export function DayTable({
             {s.isAlly ? <Icon name="diamond" label={allyMarkLabel} className="mf-dt__mark" /> : null}
             {hostCrown && s.isHost ? (
               <span className="mf-dt__crown" role="img" aria-label="방장">
-                <Icon name="crown" size={13} />
+                <img src="/characters/host/host_badge.svg" alt="" aria-hidden="true" draggable={false} />
               </span>
             ) : null}
             {(s.turn || s.spoke) && !s.emoji ? (

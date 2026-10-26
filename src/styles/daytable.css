@@ -65,12 +65,8 @@
 
 /* 캐릭터 상자 안: 동료 마름모, 방장 왕관 배지(대기실만) */
 .mf-dt__mark { position: absolute; top: 4%; right: 8%; width: 26%; height: auto; aspect-ratio: 1; color: var(--crimson-400); pointer-events: none; }
-.mf-dt__crown {
-  position: absolute; left: -6px; top: -6px; width: 22px; height: 22px; border-radius: 50%;
-  background: var(--night-900); border: 1px solid var(--gray-300); color: var(--gray-50);
-  display: grid; place-items: center;
-}
-.mf-dt__crown .mf-icon { stroke-width: 2.2; }
+.mf-dt__crown { position: absolute; left: -6px; top: -6px; width: 22px; height: 22px; pointer-events: none; }
+.mf-dt__crown img { display: block; width: 100%; height: 100%; }
 
 /* 말하는 중(주장 차례·빠른 메시지 3초): 머리 위 '…' 말풍선. 자리 상자 안이라 상자와 함께 줄어들고 자리 쌓임 맥락(12~22)을 벗어나지 않는다.
    높이 26·좌우 11·모서리 13·꼬리 5, 위 -26px(승인 시안은 -30 이지만 8명판 이웃 얼굴을 덮어 -26). 점 셋은 차례로 깜박인다.

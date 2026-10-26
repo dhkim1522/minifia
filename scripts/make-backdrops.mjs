@@ -1,7 +1,7 @@
-// 배경 그림 변환기: design/backgrounds/v2 원본(set1 JPG, set2 PNG) → public/backgrounds/*.webp (결정 0030).
+// 배경 그림 변환기: design/backgrounds/v3 원본(PNG, 지평선 18% 구도) → public/backgrounds/*.webp (결정 0030, 0031).
 //
-// - 리사이즈 없음: set2 는 1080×2340, set1(아침·낮)은 540×1170 원본 크기 그대로. 업스케일은 용량만 늘린다.
-// - 품질 90, effort 6(q75 는 어두운 면의 시계탑 윤곽이 뭉개진다). 같은 원본이면 같은 바이트가 나온다.
+// - 리사이즈 없음: 원본 1080×2340 그대로.
+// - 품질 86, effort 6(q75 는 어두운 면의 시계탑 윤곽이 뭉개진다). 같은 원본이면 같은 바이트가 나온다.
 // - 장면 하나가 상한(maxKB)을 넘으면 비정상 종료한다. 합계 상한은 test/unit/scenes.test.ts 가 지킨다.
 // - 원본은 읽기만 한다. 새 장면은 src/game/scenes.ts 의 SCENES 에 먼저 등록한다.
 //
@@ -11,19 +11,19 @@ import { fileURLToPath } from "node:url";
 
 const root = (p) => fileURLToPath(new URL(`../${p}`, import.meta.url));
 
-const QUALITY = 90;
+const QUALITY = 86;
 const EFFORT = 6;
 const OUT_DIR = "public/backgrounds";
 
-/** 출력 이름 · 원본 경로(저장소 기준) · 품질 · 상한(KB, 1024바이트). 예산: set2 game 48KB · set1 24KB · entry 64KB. */
+/** 출력 이름 · 원본 경로(저장소 기준) · 품질 · 상한(KB, 1024바이트). 예산: game 40KB · entry 52KB, 합계 260KB. */
 export const SOURCES = [
-  { out: "bg_game_lobby.webp", src: "design/backgrounds/v2/set2/bg_game_lobby.png", quality: QUALITY, maxKB: 48 },
-  { out: "bg_game_night.webp", src: "design/backgrounds/v2/set2/bg_game_night.png", quality: QUALITY, maxKB: 48 },
-  { out: "bg_game_morning.webp", src: "design/backgrounds/v2/set1/bg_game_morning.jpg", quality: QUALITY, maxKB: 24 },
-  { out: "bg_game_day.webp", src: "design/backgrounds/v2/set1/bg_game_day.jpg", quality: QUALITY, maxKB: 24 },
-  { out: "bg_game_dusk.webp", src: "design/backgrounds/v2/set2/bg_game_dusk.png", quality: QUALITY, maxKB: 48 },
-  { out: "bg_game_verdict_dusk.webp", src: "design/backgrounds/v2/set2/bg_game_verdict_dusk.png", quality: QUALITY, maxKB: 48 },
-  { out: "bg_entry_lobby.webp", src: "design/backgrounds/v2/set2/bg_entry_lobby.png", quality: QUALITY, maxKB: 64 },
+  { out: "bg_game_lobby.webp", src: "design/backgrounds/v3/bg_game_lobby.png", quality: QUALITY, maxKB: 40 },
+  { out: "bg_game_night.webp", src: "design/backgrounds/v3/bg_game_night.png", quality: QUALITY, maxKB: 40 },
+  { out: "bg_game_morning.webp", src: "design/backgrounds/v3/bg_game_morning.png", quality: QUALITY, maxKB: 40 },
+  { out: "bg_game_day.webp", src: "design/backgrounds/v3/bg_game_day.png", quality: QUALITY, maxKB: 40 },
+  { out: "bg_game_dusk.webp", src: "design/backgrounds/v3/bg_game_dusk.png", quality: QUALITY, maxKB: 40 },
+  { out: "bg_game_verdict_dusk.webp", src: "design/backgrounds/v3/bg_game_verdict_dusk.png", quality: QUALITY, maxKB: 40 },
+  { out: "bg_entry_lobby.webp", src: "design/backgrounds/v3/bg_entry_lobby.png", quality: QUALITY, maxKB: 52 },
 ];
 
 async function convertAll() {
