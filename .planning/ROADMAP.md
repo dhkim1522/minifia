@@ -252,7 +252,7 @@ Plans:
   5. 마피아가 모두 탈락하면 시민 팀 승리, 마피아 수가 나머지 생존자 수와 같거나 많아지면 마피아 팀 승리로 처형·아침 직후 즉시 판이 끝난다. 아직 아니면 다음 밤으로 이어진다.
   6. 결과 화면에 승리 팀, 모든 사람의 역할, 판 요약이 공개되고, 처음 화면으로 돌아가 새 방을 만들 수 있다.
 
-**Plans:** 12 plans (서버·공유 로직 웨이브, 결정 0036 — 배포하지 않는다(D-26). 웨이브마다 마지막 계획이 HANDOFF 진행 줄 갱신·개인 원격 push(웨이브 1 은 로컬 커밋만, 04-03 이 04-02 초록 확인 뒤 웨이브 1·2 를 함께 push). 화면 계획은 시안 승인·`/gsd-ui-phase 4` 뒤 Add more plans 로 이어 붙이고 화면 웨이브와 함께 배포한다)
+**Plans:** 12 plans (서버·공유 로직 웨이브, 결정 0036 — 배포하지 않는다(D-26). 웨이브마다 마지막 계획이 HANDOFF 진행 줄 갱신·개인 원격 push(웨이브 1·2 는 로컬 커밋만, 웨이브 3 의 04-05 가 04-02 초록 확인 뒤 웨이브 1·2·3 을 함께 push). 화면 계획은 시안 승인·`/gsd-ui-phase 4` 뒤 Add more plans 로 이어 붙이고 화면 웨이브와 함께 배포한다)
 
 Plans:
 **Wave 1**
@@ -262,7 +262,7 @@ Plans:
 - [ ] 04-02-PLAN.md — 화면 쪽 단계 표 최소 대응(PHASE_SCENE·TEST_PHASE_LABEL·PHASE_ANNOUNCE·EXPECTED_SCENE)과 discussion→night 직결 회귀 이전 — 타입 검사·전체 테스트 초록 (wave 2)
 - [ ] 04-03-PLAN.md — 결정 0036(와이어 계약·규칙표·알려진 한계·바뀔 수 있는 기본값·되돌리기 비용), REQUIREMENTS CONN-02·GAME-01·COMM-01·architecture·product 문장 정정 (wave 2)
 
-**Wave 3** *(blocked on 04-02)*
+**Wave 3** *(blocked on 04-02, 04-03)*
 - [ ] 04-04-PLAN.md — 후보 선택(자기 제외·번복)·서버 셔플 공개·동률은 후보 없음·변론·처형 진입(탈락·문구)·처형 무효 이유 day.noExecution(D-34)·투표 상태 도우미 (TDD, wave 3)
 - [ ] 04-05-PLAN.md — 변론 템플릿 6개·변론은 후보만·투표 중 메시지·공개/처형/종료 거부, 아침 문구 7개·처형 문구 4개 (TDD, wave 3)
 
@@ -277,7 +277,7 @@ Plans:
 - [ ] 04-09-PLAN.md — 열네 단계 view 허용 키 전수·익명 차분(4~8명 × 시드)·처형·처형 무효·종료 한 판 프레임 전수 누출 검사 (TDD, wave 6)
 - [ ] 04-10-PLAN.md — 스모크·uat-day·uat-night 새 단계·분기, 새 uat-vote(처형·두 종료) 로컬 통과 (wave 6)
 
-**Wave 7** *(blocked on 04-08)*
+**Wave 7** *(blocked on 04-08, 04-10)*
 - [ ] 04-11-PLAN.md — 수동 봇·uat-test-room·uat-test-bots 투표 단계·분기형 넘기기 로컬 통과 (wave 7)
 
 **Wave 8** *(blocked on 04-03, 04-09, 04-10, 04-11)*
