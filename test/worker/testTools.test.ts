@@ -238,6 +238,25 @@ describe("testSkip", () => {
     }
   }, 30_000);
 
+  it("discussion 에서 넘기면 모든 소켓이 처형 여부 투표(phaseDurationMs 10000)를 받고, 표가 없이 다시 넘기면 밤이다 (D-25)", async () => {
+    const r = await seatQuiet(3, { testMode: true });
+    await start(r);
+    await skipUntil(r, "discussion");
+    for (const s of allSockets(r)) s.cursor = s.frames.length;
+    send(r.host, { t: "testSkip" });
+    for (const sock of allSockets(r)) {
+      const msg = (await nextFrame(sock, isPhase("execVote"))) as Extract<ServerMessage, { t: "state" }>;
+      expect(`${msg.view.phase}/${msg.view.phaseDurationMs}`).toBe("execVote/10000");
+    }
+    expect(String(await alarmOf(r.code))).toBe(String((await stored(r.code)).phaseEndsAt));
+    for (const s of allSockets(r)) s.cursor = s.frames.length;
+    send(r.host, { t: "testSkip" });
+    for (const sock of allSockets(r)) {
+      const msg = (await nextFrame(sock, isPhase("night"))) as Extract<ServerMessage, { t: "state" }>;
+      expect(`${msg.view.phase}/${msg.view.phaseDurationMs}`).toBe("night/30000");
+    }
+  }, 30_000);
+
   it("밤에 마피아가 시민을 고른 뒤 넘기면 모든 소켓이 같은 아침을 받고 다시 넘기면 2일차 낮 시작 발표다", async () => {
     const r = await seatQuiet(3, { testMode: true });
     await sendAndSettle(r.host, { t: "testRole", role: "mafia" });
@@ -265,8 +284,8 @@ describe("testSkip", () => {
 });
 
 describe("testReset", () => {
-  const FORBIDDEN_ROOM = ["day", "morning", "lastPhrase", "nextNightSeq", "claimOrder", "claimIdx", "claimStart", "claimPick", "claimLog"];
-  const FORBIDDEN_PLAYER = ["role", "alive", "nightPick", "investigations", "lastSendAt"];
+  const FORBIDDEN_ROOM = ["day", "morning", "lastPhrase", "nextNightSeq", "claimOrder", "claimIdx", "claimStart", "claimPick", "claimLog", "voteLog", "verdict"];
+  const FORBIDDEN_PLAYER = ["role", "alive", "nightPick", "investigations", "lastSendAt", "execVote"];
 
   async function resetFrom(phase: PhaseId): Promise<void> {
     const r = await seatQuiet(3, { testMode: true });
@@ -305,6 +324,10 @@ describe("testReset", () => {
 
   it("claim 도중에 되돌려도 차례 상태(claimOrder·claimIdx·claimStart·claimLog)가 모두 지워진다", async () => {
     await resetFrom("claim");
+  }, 30_000);
+
+  it("execVote 에서 되돌려도 같다", async () => {
+    await resetFrom("execVote");
   }, 30_000);
 
   it("night 에서 되돌리면 같은 방이 대기실이 되고 다음 판에 같은 직업 지정이 다시 쓰인다", async () => {

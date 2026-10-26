@@ -1,9 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
   ASSIGNING_MS,
+  CANDIDATE_REVEAL_MS,
+  CANDIDATE_VOTE_MS,
   CLAIM_TURN_MS,
   DAY_ANNOUNCE_MS,
+  DEFENSE_MS,
   DISCUSSION_MS,
+  EXECUTION_MS,
+  EXEC_VOTE_MS,
   MORNING_MS,
   NIGHT_MS,
   PHASE_DEFS,
@@ -47,10 +52,10 @@ function stateIn(
 }
 
 describe("PHASE_DEFS (단계 표, D-01·D-02·D-19·D-20, NIGHT-05·NIGHT-06)", () => {
-  it("단계는 여덟 개다 — lobby·assigning·roleReveal, 낮 세 단계(공개 연출 단계 없음, D-07), 밤·아침", () => {
+  it("단계는 열네 개다 — lobby·assigning·roleReveal, 낮 세 단계(공개 연출 단계 없음, D-07), 처형 여부 투표·후보 선택·공개·변론·처형, 밤·아침, 판 종료", () => {
     const keys = Object.keys(PHASE_DEFS).sort();
     expect(`${keys.length}:${keys.join(",")}`).toBe(
-      "8:assigning,claim,dayAnnounce,discussion,lobby,morning,night,roleReveal",
+      "14:assigning,candidateVote,candidateVoteReveal,claim,dayAnnounce,defense,discussion,ended,execVote,execution,lobby,morning,night,roleReveal",
     );
   });
 
@@ -66,9 +71,15 @@ describe("PHASE_DEFS (단계 표, D-01·D-02·D-19·D-20, NIGHT-05·NIGHT-06)", 
     expect(row("roleReveal")).toBe("15000/dayAnnounce/true");
     expect(row("dayAnnounce")).toBe("2000/claim/true");
     expect(row("claim")).toBe("8000/discussion/true"); // 차례 하나의 길이 — 남은 차례가 있으면 tick 의 ON_DEADLINE 이 머문다
-    expect(row("discussion")).toBe("90000/night/true"); // 임시 낮 루프(D-19)가 밤으로 바뀌었다
+    expect(row("discussion")).toBe("90000/execVote/true"); // 토론 다음은 처형 여부 투표(D-25) — 임시 낮 루프가 밤으로 가던 자리
+    expect(row("execVote")).toBe("10000/candidateVote/true"); // 표가 통과가 아니면 마감 훅이 night 로 보낸다(표의 기본 next 보다 앞선다)
+    expect(row("candidateVote")).toBe("15000/candidateVoteReveal/true");
+    expect(row("candidateVoteReveal")).toBe("4000/defense/true");
+    expect(row("defense")).toBe("10000/execution/true");
+    expect(row("execution")).toBe("5000/night/true");
     expect(row("night")).toBe("30000/morning/true");
     expect(row("morning")).toBe("5000/dayAnnounce/true");
+    expect(row("ended")).toBe("null/null/true"); // 종단 행: 마감 없음
     expect(ASSIGNING_MS).toBe(3000);
     expect(ROLE_REVEAL_MS).toBe(15000);
     expect(DAY_ANNOUNCE_MS).toBe(2000);
@@ -76,6 +87,11 @@ describe("PHASE_DEFS (단계 표, D-01·D-02·D-19·D-20, NIGHT-05·NIGHT-06)", 
     expect(DISCUSSION_MS).toBe(90000);
     expect(NIGHT_MS).toBe(30000);
     expect(MORNING_MS).toBe(5000);
+    expect(EXEC_VOTE_MS).toBe(10000);
+    expect(CANDIDATE_VOTE_MS).toBe(15000);
+    expect(CANDIDATE_REVEAL_MS).toBe(4000);
+    expect(DEFENSE_MS).toBe(10000);
+    expect(EXECUTION_MS).toBe(5000);
   });
 });
 
@@ -109,7 +125,7 @@ describe("tick (순수 단계 진행)", () => {
     expect(Object.keys(next).includes("extendUsed")).toBe(false);
   });
 
-  it("토론 마감(T)에 밤으로 넘어가 마감 T+30000, 일차·nextMessageSeq 는 그대로다 (임시 루프 → 밤, 결정 0016-2)", () => {
+  it("토론 마감(T)에 처형 여부 투표로 넘어가 마감 T+10000, 일차·nextMessageSeq 는 그대로다 (토론 → 여부 투표, D-25)", () => {
     const T = 100_000;
     const s: RoomState = {
       ...stateIn("discussion", T),
@@ -117,11 +133,27 @@ describe("tick (순수 단계 진행)", () => {
       nextMessageSeq: 4,
     };
     const next = tick(s, T);
-    expect(next.phase).toBe("night");
-    expect(next.day).toBe(1); // 밤은 일차를 올리지 않는다
+    expect(next.phase).toBe("execVote");
+    expect(next.day).toBe(1); // 여부 투표는 일차를 올리지 않는다
     expect(Object.keys(next).includes("messages") || Object.keys(next).includes("extendUsed")).toBe(false);
-    expect(next.phaseEndsAt).toBe(T + NIGHT_MS);
+    expect(next.phaseEndsAt).toBe(T + EXEC_VOTE_MS);
     expect(next.nextMessageSeq).toBe(4); // 메시지 번호는 날이 바뀌어도 줄지 않는다
+  });
+
+  it("여부 투표 마감(T+10000)에 표가 없으면 표의 기본 다음 단계(후보 선택)가 아니라 밤으로 간다 — 훅의 next 가 표보다 앞선다, 마감 T+40000 (D-04, D-25)", () => {
+    const T = 100_000;
+    const s: RoomState = { ...stateIn("discussion", T), day: 1 };
+    const vote = tick(s, T);
+    expect(`${vote.phase}/${vote.phaseEndsAt}`).toBe(`execVote/${T + EXEC_VOTE_MS}`);
+    expect(PHASE_DEFS.execVote?.next).toBe("candidateVote"); // 표는 데이터만 — 기본 next 는 그대로
+    const night = tick(vote, T + EXEC_VOTE_MS);
+    expect(`${night.phase}/${night.day}/${night.phaseEndsAt}`).toBe(`night/1/${T + EXEC_VOTE_MS + NIGHT_MS}`);
+    expect(night.voteLog).toEqual([{ n: 1, exec: { yes: 0, no: 0, passed: false } }]);
+  });
+
+  it("판 종료(ended)는 마감이 없어 아무리 늦게 불러도 입력 그대로다", () => {
+    const s = stateIn("ended", null);
+    for (const now of [0, 1_000_000, Number.MAX_SAFE_INTEGER]) expect(tick(s, now)).toBe(s);
   });
 
   it("밤 마감 T+30000 에 아침(마감 T+35000), 아침 마감 T+35000 에 dayAnnounce(마감 T+37000)이고 일차가 1 오른다 (NIGHT-05, NIGHT-06)", () => {
@@ -138,9 +170,9 @@ describe("tick (순수 단계 진행)", () => {
   it("늦은 알람: 토론 마감 뒤 한참 지나 불려도 밤·아침·다음 낮 마감이 이전 마감 연쇄로 계산된다", () => {
     const T = 100_000;
     const s: RoomState = { ...stateIn("discussion", T), day: 1 };
-    // 마감: night T+30000 → morning T+35000 → dayAnnounce T+37000 → claim 첫 차례 T+45000 → 둘째 차례 T+53000.
-    const out = tick(s, T + 37_000 + 11_000);
-    expect(`${out.phase}/${out.day}/${out.claimIdx}/${out.phaseEndsAt}`).toBe(`claim/2/1/${T + 53_000}`);
+    // 마감: execVote T+10000 → night T+40000 → morning T+45000 → dayAnnounce T+47000 → claim 첫 차례 T+55000 → 둘째 차례 T+63000.
+    const out = tick(s, T + 47_000 + 11_000);
+    expect(`${out.phase}/${out.day}/${out.claimIdx}/${out.phaseEndsAt}`).toBe(`claim/2/1/${T + 63_000}`);
   });
 
   it("늦은 알람이 여러 낮 단계를 따라잡아도 중간 단계의 진입 훅이 루프 안에서 돈다 (RESEARCH Pattern 1)", () => {
@@ -157,16 +189,21 @@ describe("tick (순수 단계 진행)", () => {
   it("한 바퀴를 한 번에 따라잡아도 일차가 정확히 한 번만 늘어난다 (밤·아침은 일차를 올리지 않는다)", () => {
     const T = 100_000;
     const s: RoomState = { ...stateIn("discussion", T), day: 1 };
-    // 마감: night T+30000 → morning T+35000 → dayAnnounce T+37000 → claim 네 차례 T+45000..T+69000 → discussion T+159000.
-    const next = tick(s, T + 100_000);
+    // 마감: execVote T+10000 → night T+40000 → morning T+45000 → dayAnnounce T+47000 → claim 네 차례 T+55000..T+79000 → discussion T+169000.
+    const next = tick(s, T + 110_000);
     expect(next.phase).toBe("discussion");
     expect(next.day).toBe(2);
-    expect(next.phaseEndsAt).toBe(T + 159_000);
-    // 한 바퀴가 정확히 끝나는 순간에는 밤이 시작되고 일차는 그대로다.
-    const night = tick(s, T + 159_000);
+    expect(next.phaseEndsAt).toBe(T + 169_000);
+    // 한 바퀴가 정확히 끝나는 순간에는 처형 여부 투표가 시작되고 일차는 그대로다.
+    const vote = tick(s, T + 169_000);
+    expect(vote.phase).toBe("execVote");
+    expect(vote.day).toBe(2);
+    expect(vote.phaseEndsAt).toBe(T + 179_000);
+    // 표가 없으면 그 마감에 밤이 시작되고 일차는 그대로다.
+    const night = tick(s, T + 179_000);
     expect(night.phase).toBe("night");
     expect(night.day).toBe(2);
-    expect(night.phaseEndsAt).toBe(T + 189_000);
+    expect(night.phaseEndsAt).toBe(T + 209_000);
   });
 
   it("아주 늦게 불리면 여러 단계를 한 번에 따라잡는다", () => {
@@ -193,7 +230,14 @@ describe("tick (순수 단계 진행)", () => {
     }
     const T = 100_000;
     const discussion: RoomState = { ...stateIn("discussion", T), day: 1 };
-    for (const now of [T, T + NIGHT_MS, T + NIGHT_MS + MORNING_MS, T + NIGHT_MS + MORNING_MS + DAY_ANNOUNCE_MS]) {
+    const nightStart = T + EXEC_VOTE_MS;
+    for (const now of [
+      T,
+      nightStart,
+      nightStart + NIGHT_MS,
+      nightStart + NIGHT_MS + MORNING_MS,
+      nightStart + NIGHT_MS + MORNING_MS + DAY_ANNOUNCE_MS,
+    ]) {
       const once = tick(discussion, now);
       expect(JSON.stringify(tick(once, now))).toBe(JSON.stringify(once));
     }
@@ -260,7 +304,7 @@ describe("tick - 늦은 알람의 따라잡기 훅 순서 (밤·아침을 건너
         { n: 1, seat: 3, claim: "none" },
       ],
     };
-    const dayAnnounceEnd = T + NIGHT_MS + MORNING_MS + DAY_ANNOUNCE_MS;
+    const dayAnnounceEnd = T + EXEC_VOTE_MS + NIGHT_MS + MORNING_MS + DAY_ANNOUNCE_MS;
     const out = tick(s, dayAnnounceEnd);
     expect(`${out.phase}/${out.day}/${out.phaseEndsAt}`).toBe(`claim/2/${dayAnnounceEnd + CLAIM_TURN_MS}`);
     expect(out.claimOrder).toEqual([1, 2, 3, 0]);

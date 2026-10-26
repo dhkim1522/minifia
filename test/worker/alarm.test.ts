@@ -60,7 +60,7 @@ describe("알람", () => {
     expect(await alarmOf(r.code)).toBe(forced + 2000);
   });
 
-  it("낮 한 바퀴와 밤·아침(dayAnnounce → claim 차례 4번 → discussion → night → morning → dayAnnounce)을 알람이 차례로 넘기고 저장된 일차는 2 가 된다", async () => {
+  it("낮 한 바퀴와 밤·아침(dayAnnounce → claim 차례 4번 → discussion → execVote → night → morning → dayAnnounce)을 알람이 차례로 넘기고 저장된 일차는 2 가 된다", async () => {
     const r = await startedRoom();
     const stub = env.ROOM.getByName(r.code);
     const advance = async (): Promise<number> => {
@@ -82,6 +82,7 @@ describe("알람", () => {
       ["claim", 8_000],
       ["claim", 8_000],
       ["discussion", 90_000],
+      ["execVote", 10_000], // 표가 없으므로 다음은 night
       ["night", 30_000],
       ["morning", 5_000],
       ["dayAnnounce", 2_000],

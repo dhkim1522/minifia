@@ -8,6 +8,7 @@ import { attachConnection, createRoomState, joinRoom, startGame } from "../../sh
 import type { RoomState } from "../../shared/game/room";
 import { pickTarget } from "../../shared/game/night";
 import { isAlive } from "../../shared/game/alive";
+import { castExecVote } from "../../shared/game/vote";
 import { resetToLobby, setTestRole, skipPhase } from "../../shared/game/testTools";
 import { tick } from "../../shared/game/tick";
 import { buildPreview, buildView } from "../../shared/game/view";
@@ -178,6 +179,40 @@ describe("skipPhase 동작", () => {
       expect(canon(state)).toBe(canon(copy));
     });
   }
+
+  // execVote 는 표에 따라 다음 단계가 갈린다(통과 → 후보 선택, 아니면 밤). 표의 기본 next 만 읽는 위 반복에 넣지 않고 따로 묻는다(D-25).
+  it("discussion 에서 한 번 넘기면 처형 여부 투표이고 마감이 now + 10000 이다", () => {
+    const state = stateAt(6, 7, "discussion");
+    const now = state.phaseEndsAt! - 500;
+    const r = skipPhase(state, state.hostId, now, seededRandInt(9));
+    if (!r.ok) throw new Error(`skipPhase failed: ${r.error}`);
+    expect(`${r.state.phase}/${r.state.phaseEndsAt}`).toBe(`execVote/${now + 10_000}`);
+  });
+
+  it("execVote 에서 표가 없이 넘기면 밤이고 마감이 now + 30000 이다 (통과 아님 → night)", () => {
+    const state = stateAt(6, 7, "execVote");
+    const now = state.phaseEndsAt! - 500;
+    const r = skipPhase(state, state.hostId, now, seededRandInt(9));
+    if (!r.ok) throw new Error(`skipPhase failed: ${r.error}`);
+    expect(`${r.state.phase}/${r.state.day}/${r.state.phaseEndsAt}`).toBe(`night/1/${now + 30_000}`);
+    const normal = tick(state, state.phaseEndsAt!, seededRandInt(9));
+    expect(canon({ ...r.state, phaseEndsAt: 0 })).toBe(canon({ ...normal, phaseEndsAt: 0 }));
+  });
+
+  it("execVote 에서 과반 찬성 뒤 넘기면 후보 선택이고 마감이 now + 15000 이다 (통과 → candidateVote)", () => {
+    let state = stateAt(6, 7, "execVote");
+    for (const p of state.players) {
+      const cast = castExecVote(state, p.id, true);
+      if (!cast.ok) throw new Error(`castExecVote failed: ${cast.error}`);
+      state = cast.state;
+    }
+    const now = state.phaseEndsAt! - 500;
+    const r = skipPhase(state, state.hostId, now, seededRandInt(9));
+    if (!r.ok) throw new Error(`skipPhase failed: ${r.error}`);
+    expect(`${r.state.phase}/${r.state.phaseEndsAt}`).toBe(`candidateVote/${now + 15_000}`);
+    const normal = tick(state, state.phaseEndsAt!, seededRandInt(9));
+    expect(canon({ ...r.state, phaseEndsAt: 0 })).toBe(canon({ ...normal, phaseEndsAt: 0 }));
+  });
 
   it("claim 중 넘기기는 차례 단위다: 지금 차례가 말 안 함으로 쌓이고 단계는 그대로이며 마감은 now + 8000, 마지막 차례면 discussion 이다", () => {
     let state = stateAt(6, 7, "claim");

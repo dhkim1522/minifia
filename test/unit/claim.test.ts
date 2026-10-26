@@ -128,7 +128,7 @@ describe("차례 한 바퀴 트레이서 (D-01·D-02·D-05)", () => {
     expect(JSON.stringify(caught)).toBe(JSON.stringify(stepped));
   });
 
-  it("claim 뷰: 모든 viewer 가 같은 turn.seat·claimLog 를 받고 day 키는 정확히 claimLog,n,roles,turn 이다", () => {
+  it("claim 뷰: 모든 viewer 가 같은 turn.seat·claimLog 를 받고 day 키는 정확히 claimLog,n,roles,turn,voteLog 이다", () => {
     const s = claimState(5);
     const t = FIRST_TURN_ENDS_AT - 5000;
     const picked = selectClaim(s, s.hostId, "police", t);
@@ -138,7 +138,7 @@ describe("차례 한 바퀴 트레이서 (D-01·D-02·D-05)", () => {
       const turnSeat = currentClaimSeat(state);
       for (const p of state.players) {
         const view = buildView(state, p.id, state.phaseEndsAt! - 1000);
-        expect(Object.keys(view.day!).sort()).toEqual(["claimLog", "n", "roles", "turn"]);
+        expect(Object.keys(view.day!).sort()).toEqual(["claimLog", "n", "roles", "turn", "voteLog"]);
         expect(view.day!.turn).toEqual({ seat: turnSeat });
         expect(view.day!.claimLog).toEqual(state.claimLog ?? []);
         expect(Object.hasOwn(view.me, "claim")).toBe(false);
@@ -153,7 +153,7 @@ describe("차례 한 바퀴 트레이서 (D-01·D-02·D-05)", () => {
     while (s.phase === "claim") s = tick(s, s.phaseEndsAt!);
     expect(s.phase).toBe("discussion");
     const view = buildView(s, s.hostId, s.phaseEndsAt! - 1000);
-    expect(Object.keys(view.day!).sort()).toEqual(["claimLog", "n", "roles"]);
+    expect(Object.keys(view.day!).sort()).toEqual(["claimLog", "n", "roles", "voteLog"]);
     expect(view.day!.claimLog).toHaveLength(5);
   });
 

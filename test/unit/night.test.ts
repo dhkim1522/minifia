@@ -4,7 +4,7 @@ import { attachConnection, createRoomState, joinRoom, startGame } from "../../sh
 import type { Player, RoomState } from "../../shared/game/room";
 import type { RoleId } from "../../shared/game/roles";
 import { tick } from "../../shared/game/tick";
-import { NIGHT_MS } from "../../shared/game/phases";
+import { EXEC_VOTE_MS, NIGHT_MS } from "../../shared/game/phases";
 import { MORNING_PHRASE_COUNT } from "../../shared/protocol";
 import type { PhaseId } from "../../shared/protocol";
 import { seededRandInt } from "../helpers/seededRandom";
@@ -636,7 +636,7 @@ describe("따라잡기", () => {
   it("discussion 에서 아무도 안 고른 채 tick 한 번으로 다음 낮 claim 까지 가면 morning {} 이 남고 일차가 하나 오른다", () => {
     const discussion = stateAtPhase("discussion", 6, 11);
     const endsAt = discussion.phaseEndsAt ?? 0;
-    const caught = tick(discussion, endsAt + NIGHT_MS + 5_000 + 2_000);
+    const caught = tick(discussion, endsAt + EXEC_VOTE_MS + NIGHT_MS + 5_000 + 2_000);
     expect(caught.phase).toBe("claim");
     expect(caught.day).toBe((discussion.day ?? 0) + 1);
     expect(caught.morning === undefined).toBe(false);
