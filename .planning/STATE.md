@@ -4,18 +4,18 @@ milestone: v1.0
 milestone_name: MVP
 current_phase: 4
 current_phase_name: 처형과 승패
-current_plan: 1
+current_plan: 2
 status: executing
-stopped_at: Phase 4 planned (12 plans, server waves); UI plans pending
-last_updated: "2026-10-26T12:39:17.850Z"
+stopped_at: Completed 04-01-PLAN.md
+last_updated: "2026-10-26T12:49:38.995Z"
 last_activity: 2026-10-26
 last_activity_desc: Phase 4 execution started
-state_head: 5b6267960ed6518465c5e240250fb5c371634fc2
+state_head: 4c1c9adb2e1d64143d6f6db6582ad39a45702382
 progress:
   total_phases: 7
   completed_phases: 2
   total_plans: 75
-  completed_plans: 63
+  completed_plans: 64
 ---
 
 # Project State
@@ -30,10 +30,10 @@ See: .planning/PROJECT.md (updated 2026-10-21)
 ## Current Position
 
 Phase: 4 (처형과 승패) — EXECUTING
-Current Plan: 1
+Current Plan: 2
 Total Plans in Phase: 12
-Plan: 1 of 12
-Status: Executing Phase 4
+Plan: 2 of 12
+Status: Ready to execute
 Last activity: 2026-10-26 — Phase 4 execution started
 
 Progress: [██░░░░░░░░] 17%
@@ -109,6 +109,7 @@ Progress: [██░░░░░░░░] 17%
 | Phase 03.1 P11 | 약 40분 | 3 tasks | 17 files |
 | Phase 03.1 P12 | 약 2시간 | 3 tasks | 5 files |
 | Phase 03.1 P14 | 25min | 3 tasks | 3 files |
+| Phase 04 P01 | 35 min | 1 tasks | 11 files |
 
 ## Accumulated Context
 
@@ -201,6 +202,8 @@ Recent decisions affecting current work:
 - [Phase 03.1]: 알림 CSS 는 rolecard-toast.css 로 분리한다(rolecard.css 는 animation 금지 테스트가 있다)
 - [Phase 03.1]: DayScene 의 roleCardOpen·onOpenActivity 는 선택 props 로 두고 RoomScreen 이 명시해 넘긴다
 - [Phase 03.1]: 03.1-12: 밤 끝 알림은 폭 < 390 에서 좌우 안쪽 여백 8·아이콘 간격 4 (UI-SPEC S13) — D4 완화 없이 360 폭의 [테스트] 가운데 점을 비움
+- [Phase 04]: 04-01: 마감 분기는 훅의 next? 로, 표의 next 는 기본값 데이터 — 표는 데이터만 둔다. 여부 투표 불통과를 night 로 보내는 분기를 resolveExecVote 한 곳에 둔다
+- [Phase 04]: 04-01: 여부 투표 개인 표는 마감 훅이 키째 삭제, execVote 는 값이 바뀌면 전원 방송 — 익명을 데이터가 없다는 사실로 지키고 집계 수는 전원 공개 정보라 모든 소켓이 각자 view 를 받는다
 
 ### Pending Todos
 
@@ -237,6 +240,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-26T12:22:25.422Z
-Stopped at: Phase 4 planned (12 plans, server waves); UI plans pending
-Resume file: .planning/phases/04-execution-verdict/04-01-PLAN.md
+Last session: 2026-10-26T12:49:38.468Z
+Stopped at: Completed 04-01-PLAN.md
+Resume file: None
