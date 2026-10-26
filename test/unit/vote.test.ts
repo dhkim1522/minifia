@@ -1,0 +1,381 @@
+// 여부 투표 트레이서(04-01) — VOTE-01·CONN-02, 결정 0034·D-01·D-02·D-04·D-05·D-25·D-28.
+// 낮 토론 → 처형 여부 투표(execVote 10초) → 마감 분기(후보 선택 / 밤)를 실제 전이(startGame, tick)로 만들어 증명한다.
+// 실패 출력은 한 줄이어야 해서(TAP) 비교는 가능한 한 문자열 하나로 한다.
+import { describe, expect, it } from "vitest";
+import { isAlive } from "../../shared/game/alive";
+import { CANDIDATE_VOTE_MS, DISCUSSION_MS, EXEC_VOTE_MS, MORNING_MS, NIGHT_MS, PHASE_DEFS } from "../../shared/game/phases";
+import { attachConnection, createRoomState, joinRoom, startGame } from "../../shared/game/room";
+import type { Player, RoomState } from "../../shared/game/room";
+import { tick } from "../../shared/game/tick";
+import { castExecVote, enterExecVote, execTallyOf, resolveExecVote } from "../../shared/game/vote";
+import { buildView } from "../../shared/game/view";
+import type { PhaseId, RoomView } from "../../shared/protocol";
+import { seededRandInt } from "../helpers/seededRandom";
+
+const START_AT = 10_000;
+const NEW_PHASES: readonly PhaseId[] = ["execVote", "candidateVote", "candidateVoteReveal", "defense", "execution", "ended"];
+
+/** n 명이 모두 연결된 대기실. */
+function lobbyOf(n: number): RoomState {
+  const created = createRoomState({
+    code: "0420",
+    hostId: "player-id-0000-aaaa",
+    hostToken: "token-secret-0000-aaaa-0123456789",
+    hostNickname: "이름0",
+    now: 0,
+  });
+  if (!created.ok) throw new Error("createRoomState failed");
+  let state = attachConnection(created.state, "player-id-0000-aaaa", "conn-0");
+  for (let i = 1; i < n; i += 1) {
+    const id = `player-id-000${i}-aaaa`;
+    const joined = joinRoom(state, { playerId: id, token: `token-secret-000${i}-aaaa-0123456789`, nickname: `이름${i}` });
+    if (!joined.ok) throw new Error(`joinRoom failed: ${joined.error}`);
+    state = attachConnection(joined.state, id, `conn-${i}`);
+  }
+  return state;
+}
+
+/** 실제 전이(startGame, tick)로 1일차 목표 단계 상태를 만든다. */
+function stateAt(n: number, seed: number, phase: PhaseId): RoomState {
+  const lobby = lobbyOf(n);
+  const started = startGame(lobby, lobby.hostId, START_AT, seededRandInt(seed));
+  if (!started.ok) throw new Error(`startGame failed: ${started.error}`);
+  let state = started.state;
+  for (let guard = 0; state.phase !== phase; guard += 1) {
+    if (state.phaseEndsAt === null || guard > 60) throw new Error(`cannot reach ${phase}`);
+    state = tick(state, state.phaseEndsAt, seededRandInt(seed + 1));
+  }
+  return state;
+}
+
+const execVoteOf = (n: number, seed: number): RoomState => stateAt(n, seed, "execVote");
+
+/** 앞 yes 명은 찬성, 그다음 no 명은 반대로 만든다(생존자 순서 = seat 오름차순). 입력은 바꾸지 않는다. */
+function withVotes(state: RoomState, yes: number, no: number): RoomState {
+  const alive = [...state.players].filter(isAlive).sort((a, b) => a.seat - b.seat);
+  const values = new Map<string, boolean>();
+  alive.slice(0, yes).forEach((p) => values.set(p.id, true));
+  alive.slice(yes, yes + no).forEach((p) => values.set(p.id, false));
+  return {
+    ...state,
+    players: state.players.map((p) => (values.has(p.id) ? { ...p, execVote: values.get(p.id)! } : p)),
+  };
+}
+
+/** 지정한 seat 를 탈락시킨다. */
+function withDead(state: RoomState, seats: number[]): RoomState {
+  return { ...state, players: state.players.map((p) => (seats.includes(p.seat) ? { ...p, alive: false } : p)) };
+}
+
+function deepFreeze<T>(value: T): T {
+  if (value !== null && typeof value === "object" && !Object.isFrozen(value)) {
+    Object.freeze(value);
+    for (const child of Object.values(value as Record<string, unknown>)) deepFreeze(child);
+  }
+  return value;
+}
+
+/** 값 안의 모든 객체 키 이름. */
+function keyNames(value: unknown, into: Set<string> = new Set()): Set<string> {
+  if (Array.isArray(value)) {
+    for (const item of value) keyNames(item, into);
+  } else if (value !== null && typeof value === "object") {
+    for (const [k, v] of Object.entries(value)) {
+      into.add(k);
+      keyNames(v, into);
+    }
+  }
+  return into;
+}
+
+const idOf = (state: RoomState, seat: number): string => state.players.find((p) => p.seat === seat)!.id;
+const lastLog = (state: RoomState) => state.voteLog?.at(-1);
+const passedOf = (state: RoomState, yes: number, no: number): boolean =>
+  lastLog(resolveExecVote(withVotes(state, yes, no)).state)?.exec.passed === true;
+
+describe("단계 표 (D-01·D-25)", () => {
+  it("새 단계 여섯 개와 길이·기본 다음 단계가 표대로다", () => {
+    const row = (id: PhaseId) => `${PHASE_DEFS[id].durationMs}/${PHASE_DEFS[id].next}/${PHASE_DEFS[id].revealsOwnRole}`;
+    expect(
+      [
+        row("discussion"),
+        row("execVote"),
+        row("candidateVote"),
+        row("candidateVoteReveal"),
+        row("defense"),
+        row("execution"),
+        row("ended"),
+      ].join(" "),
+    ).toBe(
+      "90000/execVote/true 10000/candidateVote/true 15000/candidateVoteReveal/true 4000/defense/true 10000/execution/true 5000/night/true null/null/true",
+    );
+  });
+});
+
+describe("castExecVote (VOTE-01) — 검사 순서와 같은 값 재전송", () => {
+  it("execVote 가 아닌 단계는 누구든(탈락자 포함) WRONG_PHASE 다", () => {
+    const discussion = withDead(stateAt(5, 1, "discussion"), [4]);
+    const alive = castExecVote(discussion, idOf(discussion, 0), true);
+    const dead = castExecVote(discussion, idOf(discussion, 4), true);
+    expect(`${alive.ok ? "ok" : alive.error} ${dead.ok ? "ok" : dead.error}`).toBe("WRONG_PHASE WRONG_PHASE");
+  });
+
+  it("방에 없는 사람과 탈락한 사람은 BAD_MESSAGE 다", () => {
+    const base = withDead(execVoteOf(5, 1), [4]);
+    const stranger = castExecVote(base, "nobody", true);
+    const dead = castExecVote(base, idOf(base, 4), true);
+    expect(`${stranger.ok ? "ok" : stranger.error} ${dead.ok ? "ok" : dead.error}`).toBe("BAD_MESSAGE BAD_MESSAGE");
+  });
+
+  it("agree 가 불리언이 아니면 BAD_MESSAGE 다", () => {
+    const base = execVoteOf(5, 1);
+    const results = ["true", 1, null, undefined].map((v) => {
+      const r = castExecVote(base, idOf(base, 0), v as unknown as boolean);
+      return r.ok ? "ok" : r.error;
+    });
+    expect(results.join(" ")).toBe("BAD_MESSAGE BAD_MESSAGE BAD_MESSAGE BAD_MESSAGE");
+  });
+
+  it("같은 값을 다시 보내면 입력 객체를 그대로 돌려준다", () => {
+    const base = execVoteOf(5, 1);
+    const first = castExecVote(base, idOf(base, 0), true);
+    if (!first.ok) throw new Error("setup rejected");
+    const again = castExecVote(first.state, idOf(base, 0), true);
+    expect(again.ok && again.state === first.state).toBe(true);
+  });
+
+  it("그 사람의 execVote 만 바뀐 새 상태를 돌려주고 phaseEndsAt 은 그대로다(입력을 깊게 얼려도 예외가 없다)", () => {
+    const base = deepFreeze(execVoteOf(5, 1));
+    const result = castExecVote(base, idOf(base, 2), false);
+    if (!result.ok) throw new Error("rejected");
+    const changed = result.state.players.filter((p, i) => p !== base.players[i]).map((p) => `${p.seat}:${String(p.execVote)}`);
+    expect(`${changed.join(",")} ends=${result.state.phaseEndsAt === base.phaseEndsAt}`).toBe("2:false ends=true");
+    expect(result.state === base).toBe(false);
+  });
+
+  it("번복: 찬성 → 반대 → 찬성, 마지막 값이 유효하다", () => {
+    let state = execVoteOf(5, 1);
+    const id = idOf(state, 1);
+    const seen: string[] = [];
+    for (const agree of [true, false, true]) {
+      const r = castExecVote(state, id, agree);
+      if (!r.ok) throw new Error("rejected");
+      state = r.state;
+      const t = execTallyOf(state);
+      seen.push(`${t.yes}/${t.no}`);
+    }
+    expect(seen.join(" ")).toBe("1/0 0/1 1/0");
+  });
+});
+
+describe("execTallyOf (D-02·Pitfall 2)", () => {
+  it("안 던진 사람과 탈락자의 값은 어느 쪽에도 세지 않는다 — undefined 를 반대로 세지 않는다", () => {
+    const base = execVoteOf(5, 1);
+    expect(JSON.stringify(execTallyOf(base))).toBe(JSON.stringify({ yes: 0, no: 0 }));
+    // seat 0..3 은 던졌고 seat 4 는 안 던졌다. 그런데 seat 3 이 탈락했다.
+    const voted = withDead(withVotes(base, 2, 2), [3]);
+    expect(JSON.stringify(execTallyOf(voted))).toBe(JSON.stringify({ yes: 2, no: 1 }));
+  });
+});
+
+describe("마감 판정 규칙표 (D-02·D-04, RESEARCH 투표 규칙표)", () => {
+  const base = (): RoomState => execVoteOf(5, 1);
+  it("던진 표가 0 이면 통과가 아니다", () => {
+    expect(passedOf(base(), 0, 0)).toBe(false);
+  });
+  it("찬성 1 (던진 표 1) 이면 통과다 — 정족수 없음", () => {
+    expect(passedOf(base(), 1, 0)).toBe(true);
+  });
+  it("2:2 는 통과가 아니고 3:2 는 통과다", () => {
+    expect(`${passedOf(base(), 2, 2)} ${passedOf(base(), 3, 2)}`).toBe("false true");
+  });
+  it("생존 5 · 던진 2 · 찬성 2 는 통과, 생존 5 · 던진 4 · 찬성 2 는 아니다 (분모는 던진 표)", () => {
+    expect(`${passedOf(base(), 2, 0)} ${passedOf(base(), 2, 2)}`).toBe("true false");
+  });
+});
+
+describe("resolveExecVote (T-04-02) — 집계 직후 개인 표 삭제", () => {
+  it("반환 뒤 어떤 플레이어에도 execVote 키가 없고 voteLog 마지막 줄 키가 정확하다", () => {
+    const voted = withVotes(execVoteOf(5, 2), 3, 1);
+    const result = resolveExecVote(voted);
+    expect(result.state.players.some((p) => Object.hasOwn(p, "execVote"))).toBe(false);
+    const line = lastLog(result.state)!;
+    expect(`${Object.keys(line).sort().join(",")} ${Object.keys(line.exec).sort().join(",")}`).toBe("exec,n no,passed,yes");
+    expect(JSON.stringify(line.exec)).toBe(JSON.stringify({ yes: 3, no: 1, passed: true }));
+    expect(result.state.verdict?.passed).toBe(true);
+  });
+
+  it("통과면 next 키가 없고, 아니면 next 는 night 이며, stay 는 항상 false 다", () => {
+    const base = execVoteOf(5, 2);
+    const pass = resolveExecVote(withVotes(base, 3, 1));
+    const fail = resolveExecVote(withVotes(base, 1, 1));
+    const none = resolveExecVote(base);
+    expect(
+      [pass, fail, none].map((r) => `${Object.hasOwn(r, "next") ? String(r.next) : "-"}/${r.stay}`).join(" "),
+    ).toBe("-/false night/false night/false");
+  });
+
+  it("입력을 얼려도 예외가 없다", () => {
+    const frozen = deepFreeze(withVotes(execVoteOf(5, 2), 2, 1));
+    expect(() => resolveExecVote(frozen)).not.toThrow();
+  });
+});
+
+describe("tick 연쇄 (D-01·D-04·D-25)", () => {
+  for (const seed of [1, 2, 3]) {
+    it(`시드 ${seed}: discussion 마감 D 에서 execVote(D+10000) → 찬성 3·반대 1 이면 candidateVote(D+25000)`, () => {
+      const discussion = stateAt(5, seed, "discussion");
+      const D = discussion.phaseEndsAt!;
+      const rand = seededRandInt(seed);
+      const execVote = tick(discussion, D, rand);
+      expect(`${execVote.phase}/${execVote.phaseEndsAt! - D}`).toBe(`execVote/${EXEC_VOTE_MS}`);
+      const cand = tick(withVotes(execVote, 3, 1), D + EXEC_VOTE_MS, rand);
+      expect(`${cand.phase}/${cand.phaseEndsAt! - D}`).toBe(`candidateVote/${EXEC_VOTE_MS + CANDIDATE_VOTE_MS}`);
+    });
+
+    it(`시드 ${seed}: 0표나 동률이면 night(D+40000)`, () => {
+      const discussion = stateAt(5, seed, "discussion");
+      const D = discussion.phaseEndsAt!;
+      const rand = seededRandInt(seed);
+      const execVote = tick(discussion, D, rand);
+      const zero = tick(execVote, D + EXEC_VOTE_MS, rand);
+      const tie = tick(withVotes(execVote, 2, 2), D + EXEC_VOTE_MS, rand);
+      expect(`${zero.phase}/${zero.phaseEndsAt! - D} ${tie.phase}/${tie.phaseEndsAt! - D}`).toBe(
+        `night/${EXEC_VOTE_MS + NIGHT_MS} night/${EXEC_VOTE_MS + NIGHT_MS}`,
+      );
+    });
+  }
+
+  it("알람 지연 따라잡기: discussion 을 마감보다 훨씬 늦게 tick 하면 execVote(0표) · night 를 지나 morning 까지 마감이 이어진다", () => {
+    const discussion = stateAt(5, 4, "discussion");
+    const D = discussion.phaseEndsAt!;
+    const late = tick(discussion, D + EXEC_VOTE_MS + NIGHT_MS, seededRandInt(4));
+    expect(`${late.phase}/${late.phaseEndsAt! - D}`).toBe(`morning/${EXEC_VOTE_MS + NIGHT_MS + MORNING_MS}`);
+    expect(JSON.stringify(lastLog(late)?.exec)).toBe(JSON.stringify({ yes: 0, no: 0, passed: false }));
+  });
+
+  it("discussion 길이는 그대로 90초다", () => {
+    expect(DISCUSSION_MS).toBe(90_000);
+  });
+});
+
+describe("enterExecVote", () => {
+  it("남은 verdict·execution 키와 모든 플레이어의 execVote·candidateVote 키를 지우고 voteLog 는 남긴다", () => {
+    const dirty: RoomState = {
+      ...withVotes(execVoteOf(5, 1), 2, 1),
+      verdict: { passed: true, candidate: 1 },
+      execution: { seat: 1, phrase: 2 },
+      voteLog: [{ n: 1, exec: { yes: 1, no: 0, passed: true } }],
+      players: withVotes(execVoteOf(5, 1), 2, 1).players.map((p) => ({ ...p, candidateVote: 0 })),
+    };
+    const clean = enterExecVote(dirty);
+    expect(
+      [
+        Object.hasOwn(clean, "verdict"),
+        Object.hasOwn(clean, "execution"),
+        clean.players.some((p) => Object.hasOwn(p, "execVote") || Object.hasOwn(p, "candidateVote")),
+        clean.voteLog?.length,
+      ].join(" "),
+    ).toBe("false false false 1");
+  });
+});
+
+describe("CONN-02 — 끊긴 사람이 있어도 타이머대로", () => {
+  it("전원 connected false 여도 tick 이 execVote 를 마감대로 넘긴다", () => {
+    const base = execVoteOf(5, 1);
+    const offline: RoomState = { ...base, players: base.players.map((p) => ({ ...p, connected: false, connId: null })) };
+    const next = tick(offline, offline.phaseEndsAt!, seededRandInt(1));
+    expect(next.phase).toBe("night");
+  });
+
+  it("던진 뒤 끊긴 사람의 표는 센다", () => {
+    const voted = withVotes(execVoteOf(5, 1), 1, 0);
+    const dropped: RoomState = {
+      ...voted,
+      players: voted.players.map((p) => (p.seat === 0 ? { ...p, connected: false, connId: null } : p)),
+    };
+    const next = tick(dropped, dropped.phaseEndsAt!, seededRandInt(1));
+    expect(`${next.phase} ${JSON.stringify(lastLog(next)?.exec)}`).toBe(
+      `candidateVote ${JSON.stringify({ yes: 1, no: 0, passed: true })}`,
+    );
+  });
+});
+
+describe("투표는 마감을 바꾸지 않는다 (D-28)", () => {
+  it("전원이 던져도 phaseEndsAt 그대로이고, 마감 전 tick 은 입력 그대로다", () => {
+    let state = execVoteOf(5, 1);
+    const ends = state.phaseEndsAt;
+    for (const p of [...state.players]) {
+      const r = castExecVote(state, p.id, true);
+      if (!r.ok) throw new Error("rejected");
+      state = r.state;
+    }
+    expect(state.phaseEndsAt).toBe(ends);
+    expect(tick(state, ends! - 1, seededRandInt(1))).toBe(state);
+  });
+});
+
+describe("뷰 (D-02 익명, T-04-01)", () => {
+  const NOW = 123;
+  const viewOf = (state: RoomState, seat: number): RoomView => buildView(state, idOf(state, seat), NOW);
+
+  it("execVote 단계에서 모든 viewer(생존·탈락)의 day.execTally 가 같고 execTallyOf 와 같다", () => {
+    const state = withDead(withVotes(execVoteOf(6, 1), 2, 1), [5]);
+    const want = JSON.stringify(execTallyOf(state));
+    const got = state.players.map((p) => JSON.stringify(viewOf(state, p.seat).day?.execTally));
+    expect(got.every((g) => g === want)).toBe(true);
+    expect(want).toBe(JSON.stringify({ yes: 2, no: 1 }));
+  });
+
+  it("me.voteAgree 는 본인이 던졌을 때 본인 view 에만 있다", () => {
+    const state = withVotes(execVoteOf(5, 1), 1, 1); // seat 0 찬성, seat 1 반대
+    const has = state.players.map((p) => `${p.seat}:${String(viewOf(state, p.seat).me.voteAgree)}`);
+    expect(has.join(" ")).toBe("0:true 1:false 2:undefined 3:undefined 4:undefined");
+    expect(Object.hasOwn(viewOf(state, 2).me, "voteAgree")).toBe(false);
+  });
+
+  it("execVote 가 아닌 단계 view 에는 execTally·voteAgree 키가 없다", () => {
+    const state = stateAt(5, 1, "discussion");
+    const view = viewOf(state, 0);
+    expect(`${Object.hasOwn(view.day!, "execTally")} ${Object.hasOwn(view.me, "voteAgree")}`).toBe("false false");
+  });
+
+  it("새 여섯 단계 모두 view.day 가 있고 day.voteLog 는 배열이다(빈 배열 포함)", () => {
+    const base = execVoteOf(5, 1);
+    const ok = NEW_PHASES.map((phase) => {
+      const view = viewOf({ ...base, phase }, 0);
+      return `${phase}:${Array.isArray(view.day?.voteLog)}`;
+    });
+    expect(ok.join(" ")).toBe(NEW_PHASES.map((p) => `${p}:true`).join(" "));
+  });
+
+  it("어떤 view 의 어떤 경로에도 키 이름 execVote 가 없다 (마감 전 · 후)", () => {
+    const voted = withVotes(execVoteOf(5, 1), 2, 1);
+    const after = tick(voted, voted.phaseEndsAt!, seededRandInt(1));
+    const names = new Set<string>();
+    for (const state of [voted, after]) {
+      for (const p of state.players) keyNames(viewOf(state, p.seat), names);
+    }
+    expect(names.has("execVote")).toBe(false);
+  });
+
+  it("차분(기본형): 같은 집계를 다른 세 사람에게 나눠 준 두 상태에서, 표를 안 던진 제3자의 view 가 같다", () => {
+    for (const n of [5, 8]) {
+      const base = execVoteOf(n, 3);
+      const set = (votes: Array<[number, boolean]>): RoomState => ({
+        ...base,
+        players: base.players.map((p) => {
+          const hit = votes.find(([seat]) => seat === p.seat);
+          return hit ? { ...p, execVote: hit[1] } : p;
+        }),
+      });
+      const s1 = set([[1, true], [2, true], [3, false]]);
+      const s2 = set([[2, true], [4, true], [1, false]]);
+      expect(JSON.stringify(viewOf(s1, 0))).toBe(JSON.stringify(viewOf(s2, 0)));
+      // 탈락 관전자 O 도 같다
+      const d1 = withDead(s1, [n - 1]);
+      const d2 = withDead(s2, [n - 1]);
+      expect(JSON.stringify(viewOf(d1, n - 1))).toBe(JSON.stringify(viewOf(d2, n - 1)));
+    }
+  });
+});
