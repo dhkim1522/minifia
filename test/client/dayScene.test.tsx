@@ -724,10 +724,10 @@ describe("DayScene 배경 장면 (단계 → 장면 규칙표 PHASE_SCENE, 결�
     }
   });
 
-  it("아침·낮 층에만 헤더 막이 있고 밤 층에는 없다", () => {
+  it("실내 배경은 어느 단계에도 헤더 막이 없다", () => {
     const style = (phase: PhaseId) => sceneOfMount(makeView({ phase, role: "citizen", ...(phase === "morning" ? { morning: { phrase: 1 } } : {}) })).arts[0]!.style.getPropertyValue("--mf-scrim");
-    expect(style("claim")).not.toBe("");
-    expect(style("morning")).not.toBe("");
+    expect(style("claim")).toBe("");
+    expect(style("morning")).toBe("");
     expect(style("night")).toBe("");
   });
 });

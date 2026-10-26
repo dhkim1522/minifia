@@ -8,6 +8,7 @@ vi.mock("react-dom", () => ({ preload: vi.fn() }));
 import { preload } from "react-dom";
 import {
   FIGURE_IDS,
+  ASSET_VERSION,
   backdropUrl,
   entryPreloadList,
   figureSrc,
@@ -50,16 +51,16 @@ describe("그림 URL 헬퍼", () => {
     expect(art.srcSet).toBe("/characters/roles/mafia_default%402x.png 1x, /characters/roles/mafia_default%404x.png 2x");
   });
 
-  it("배경: /backgrounds/bg_{layout}_{장면 파일 조각}.webp", () => {
-    expect(backdropUrl("game", "day")).toBe("/backgrounds/bg_game_day.webp");
-    expect(backdropUrl("game", "night")).toBe("/backgrounds/bg_game_night.webp");
-    expect(backdropUrl("game", "verdictDusk")).toBe("/backgrounds/bg_game_verdict_dusk.webp");
-    expect(backdropUrl("entry", "lobby")).toBe("/backgrounds/bg_entry_lobby.webp");
+  it("배경: /backgrounds/bg_{layout}_{장면 파일 조각}.webp?v=버전", () => {
+    expect(backdropUrl("game", "day")).toBe(`/backgrounds/bg_game_day.webp?v=${ASSET_VERSION}`);
+    expect(backdropUrl("game", "night")).toBe(`/backgrounds/bg_game_night.webp?v=${ASSET_VERSION}`);
+    expect(backdropUrl("game", "verdictDusk")).toBe(`/backgrounds/bg_game_verdict_dusk.webp?v=${ASSET_VERSION}`);
+    expect(backdropUrl("entry", "lobby")).toBe(`/backgrounds/bg_entry_lobby.webp?v=${ASSET_VERSION}`);
   });
 
   it("배경: entry 구도는 lobby 장면만 받는다 (타입)", () => {
     // @ts-expect-error -- entry 구도에는 lobby 가 아닌 장면이 없다
-    expect(backdropUrl("entry", "night")).toBe("/backgrounds/bg_entry_night.webp");
+    expect(backdropUrl("entry", "night")).toBe(`/backgrounds/bg_entry_night.webp?v=${ASSET_VERSION}`);
   });
 });
 
@@ -109,8 +110,8 @@ describe("일지 색 토큰 (UI-SPEC 새 토큰 12개)", () => {
 describe("미리 받기 목록", () => {
   it("입장 화면 목록: 입장·대기실 배경(WebP)과 인물 8종", () => {
     const hrefs = entryPreloadList().map((item) => item.href);
-    expect(hrefs).toContain("/backgrounds/bg_entry_lobby.webp");
-    expect(hrefs).toContain("/backgrounds/bg_game_lobby.webp");
+    expect(hrefs).toContain(`/backgrounds/bg_entry_lobby.webp?v=${ASSET_VERSION}`);
+    expect(hrefs).toContain(`/backgrounds/bg_game_lobby.webp?v=${ASSET_VERSION}`);
     expect(hrefs.some((h) => h.endsWith(".svg"))).toBe(false);
     for (let seat = 0; seat < FIGURE_IDS.length; seat++) expect(hrefs).toContain(figureSrc(seat).src);
     expect(hrefs).toHaveLength(10);
@@ -119,9 +120,9 @@ describe("미리 받기 목록", () => {
   it("역할 화면 목록: 직업 그림 4종 전부와 아침·낮·밤 배경, 유령 그림(역할과 무관하게 같은 목록)", () => {
     const hrefs = rolePreloadList().map((item) => item.href);
     for (const role of ROLE_IDS) expect(hrefs).toContain(roleArtSrc(role).src);
-    expect(hrefs).toContain("/backgrounds/bg_game_morning.webp");
-    expect(hrefs).toContain("/backgrounds/bg_game_day.webp");
-    expect(hrefs).toContain("/backgrounds/bg_game_night.webp");
+    expect(hrefs).toContain(`/backgrounds/bg_game_morning.webp?v=${ASSET_VERSION}`);
+    expect(hrefs).toContain(`/backgrounds/bg_game_day.webp?v=${ASSET_VERSION}`);
+    expect(hrefs).toContain(`/backgrounds/bg_game_night.webp?v=${ASSET_VERSION}`);
     expect(hrefs).toContain(ghostSrc().src);
     expect(hrefs).toHaveLength(17);
     expect(rolePreloadList()).toEqual(rolePreloadList());
@@ -180,7 +181,7 @@ describe("실제 파일과의 일치", () => {
     const nonJournal = urls.filter((url) => !url.startsWith("/journals/"));
     expect(nonJournal.length).toBeGreaterThan(30);
     for (const url of nonJournal) {
-      const path = decodeURIComponent(url);
+      const path = decodeURIComponent(url.split("?")[0]!);
       const files = path.startsWith("/backgrounds/") ? backdropFiles : characterFiles;
       expect(files.has(`/public${path}`), `${url} → /public${path}`).toBe(true);
     }

@@ -1,7 +1,7 @@
 // 장면 그림 6장의 헤더 글씨 대비를 오프라인으로 증명한다 (결정 0030, 사용자 지시 V-06).
 // E2E 규칙 H1(scripts/e2e/lib.mjs headerContrastChecks)과 같은 기준: 글씨 구역 안 배경 픽셀 휘도의 95번째 백분위수(p95)에 대해
-// gray-50 글자의 WCAG 대비 ≥ 4.5. 막이 있는 장면(아침·낮)은 HEADER_SCRIM_STOPS 로 합성하고, lobby 의 타이머 구역은
-// 역할 확인 화면의 --scrim(60%) 막 아래에서 잰다. 막이 필요하다는 사실도 함께 고정한다(막 없는 아침·낮의 타이머 구역은 4.5 미만).
+// gray-50 글자의 WCAG 대비 ≥ 4.5. 막이 있는 장면(지금은 없음)은 HEADER_SCRIM_STOPS 로 합성하고, lobby 의 타이머 구역은
+// 역할 확인 화면의 --scrim(60%) 막 아래에서 잰다. 실내 배경은 막 없이도 전 장면이 4.5 이상임을 고정한다.
 //
 // 구역 좌표(CSS px, 위쪽 기준 cover): 제목 x16~120·y16~45, 타이머 숫자 x(W−69)~(W−16)·y78~100, 대기실 코드 가운데(36px 글씨, y35.6~78.8).
 // 그림은 width = W 로 키운다(폰 세로 비율 ≥ 1.78 이라 cover 가 폭 기준이다). 높이는 round(W·2340/1080).
@@ -147,22 +147,16 @@ describe("장면 그림 6장 × 폰 폭 360·390·430 × 헤더 글씨 구역 p9
 });
 
 describe("막이 필요하다는 사실을 고정한다", () => {
-  for (const scene of ["morning", "day"] as const) {
-    for (const w of WIDTHS) {
-      it(`${scene} @${w}: 막 없이는 타이머 구역이 4.5 미만이다`, async () => {
-        const bare = await contrastOf(scene, w, timerZone(w), "none");
-        expect(bare, `${scene}@${w} 막 없는 타이머 ${bare.toFixed(2)}`).toBeLessThan(HEADER_CONTRAST_MIN);
-        const withScrim = await contrastOf(scene, w, timerZone(w), "headerScrim");
-        expect(withScrim).toBeGreaterThan(bare);
-      }, 30_000);
+  it("실내 배경(v4)은 막 없이도 모든 장면·폭에서 제목과 타이머가 4.5 이상이다 (막을 쓰지 않는다)", async () => {
+    for (const scene of GAME_SCENES) {
+      for (const w of WIDTHS) {
+        const title = await contrastOf(scene, w, titleZone(), "none");
+        const timer = await contrastOf(scene, w, timerZone(w), "none");
+        expect(title, `${scene}@${w} 제목 ${title.toFixed(2)}`).toBeGreaterThanOrEqual(HEADER_CONTRAST_MIN);
+        expect(timer, `${scene}@${w} 타이머 ${timer.toFixed(2)}`).toBeGreaterThanOrEqual(HEADER_CONTRAST_MIN);
+      }
     }
-  }
-  it("lobby 의 타이머 구역도 막 없이는 4.5 미만이다 (역할 확인의 --scrim 이 필요하다)", async () => {
-    for (const w of WIDTHS) {
-      const bare = await contrastOf("lobby", w, timerZone(w), "none");
-      expect(bare, `lobby@${w} 막 없는 타이머 ${bare.toFixed(2)}`).toBeLessThan(HEADER_CONTRAST_MIN);
-    }
-  }, 30_000);
+  }, 60_000);
 });
 
 describe("막이 필요한 장면은 SCENES.scrim 과 일치한다", () => {

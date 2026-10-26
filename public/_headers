@@ -1,5 +1,5 @@
 # 정적 그림 캐시 규칙 (Cloudflare Workers 정적 에셋). 규칙은 최대 100개.
-# 인물·배경 그림은 파일 이름이 해시가 아니라 교체 때 최대 1일 지연된다 — 급하면 파일 이름을 바꾼다.
+# 인물·배경 그림은 파일 이름이 해시가 아니라 교체 때 최대 1일 지연된다 — 배경·유령은 주소 끝 ?v= 값(src/net/assets.ts ASSET_VERSION)을 바꾸면 바로 새 그림을 받는다.
 # 배경은 npm run backdrops 가 만드는 .webp 7개다(결정 0030). /backgrounds/* 규칙이 그대로 적용된다.
 /characters/*
   Cache-Control: public, max-age=86400

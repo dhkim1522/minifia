@@ -109,7 +109,7 @@ describe("아침 발표 (M1)", () => {
     expect(card.closest(".mf-dayscene__scene") === null).toBe(true);
   });
 
-  it("위쪽 바 제목 '아침', 안내 '2일차', 배경 아침(set1 + 헤더 막), 하단 제목 '아침이 밝았습니다'·안내 '곧 낮 토론이 시작돼요'(알약·채팅·버튼 없음)", () => {
+  it("위쪽 바 제목 '아침', 안내 '2일차', 배경 아침(실내, 막 없음), 하단 제목 '아침이 밝았습니다'·안내 '곧 낮 토론이 시작돼요'(알약·채팅·버튼 없음)", () => {
     const { container } = scene(makeView({ morning: { eliminated: 2, phrase: 1 } }));
     expect(container.querySelector("h1")?.textContent).toBe("아침");
     expect(container.querySelector(".mf-phasebar__do")?.textContent).toBe("2일차");
@@ -119,7 +119,7 @@ describe("아침 발표 (M1)", () => {
     const art = container.querySelector<HTMLElement>(".mf-backdrop__art")!;
     expect(art.dataset.scene).toBe("morning");
     expect(art.style.backgroundImage).toContain("/backgrounds/bg_game_morning.webp");
-    expect(art.style.getPropertyValue("--mf-scrim")).not.toBe("");
+    expect(art.style.getPropertyValue("--mf-scrim")).toBe("");
     const p = panel(container)!;
     expect(p.querySelector("h2")?.textContent).toBe("아침이 밝았습니다");
     expect(p.querySelector(".mf-claimpanel__guide")?.textContent).toBe("곧 낮 토론이 시작돼요");

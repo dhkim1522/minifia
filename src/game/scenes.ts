@@ -6,7 +6,7 @@
 //   Record<PhaseId, SceneId> 가 타입 오류로 알려 준다.
 // - 해·달: 그림에 이미 그려져 있고 장면마다 위치가 다르다(아침 해 오른쪽 위 → 낮 해 더 왼쪽·아래, 밤 달). 이미지에서 떼어낼 수 없으므로
 //   따로 그리거나 움직이지 않고 배경 크로스페이드에 맡긴다. 이중으로 보일 수 없다(결정 0030, 확인 필요 1).
-// - 아침·낮(밝은 하늘)과 해질녘·처형(360폭 타이머 4.42)은 헤더 위쪽에 어두운 막이 필요하다(HEADER_SCRIM_STOPS, 결정 0031). 4.5:1 은 오프라인 단위 테스트
+// - 실내 배경(v4, 결정 0032)은 위쪽이 어두운 벽이라 모든 장면에서 막이 필요 없다(SCENES.scrim 전부 false). 야외 배경처럼 밝은 하늘이 헤더 뒤로 오면 scrim 을 true 로 켠다(HEADER_SCRIM_STOPS). 4.5:1 은 오프라인 단위 테스트
 //   (test/unit/backdropContrast.test.ts)와 E2E H1 이 같은 값으로 잰다. 값을 바꾸려면 이 상수 한 곳만 고친다.
 import { DAY_ANNOUNCE_MS } from "../../shared/game/phases";
 import type { PhaseId } from "../../shared/protocol";
@@ -17,7 +17,7 @@ export type SceneId = (typeof SCENE_IDS)[number];
 export interface SceneDef {
   /** 파일 이름 조각: bg_{game|entry}_{file}.webp */
   file: string;
-  /** 헤더 위쪽 어두운 막이 필요한 장면(막 없이는 헤더 글씨 대비가 4.5 미만인 장면: v3 의 아침·낮·해질녘·처형) */
+  /** 헤더 위쪽 어두운 막이 필요한 장면(막 없이는 헤더 글씨 대비가 4.5 미만인 장면). 실내 배경(v4)은 위쪽이 어두운 벽이라 없다. 막 장치는 남겨 둔다. */
   scrim: boolean;
   /** 입구(entry) 구도 그림이 있는 장면 */
   entry: boolean;
@@ -26,10 +26,10 @@ export interface SceneDef {
 export const SCENES: Readonly<Record<SceneId, SceneDef>> = Object.freeze({
   lobby: Object.freeze({ file: "lobby", scrim: false, entry: true }),
   night: Object.freeze({ file: "night", scrim: false, entry: false }),
-  morning: Object.freeze({ file: "morning", scrim: true, entry: false }),
-  day: Object.freeze({ file: "day", scrim: true, entry: false }),
-  dusk: Object.freeze({ file: "dusk", scrim: true, entry: false }),
-  verdictDusk: Object.freeze({ file: "verdict_dusk", scrim: true, entry: false }),
+  morning: Object.freeze({ file: "morning", scrim: false, entry: false }),
+  day: Object.freeze({ file: "day", scrim: false, entry: false }),
+  dusk: Object.freeze({ file: "dusk", scrim: false, entry: false }),
+  verdictDusk: Object.freeze({ file: "verdict_dusk", scrim: false, entry: false }),
 });
 
 export const PHASE_SCENE: Readonly<Record<PhaseId, SceneId>> = Object.freeze({

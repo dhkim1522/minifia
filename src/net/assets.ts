@@ -23,9 +23,16 @@ export type BackdropLayout = "entry" | "game";
 export type EntryScene = "lobby";
 export type PreloadItem = { href: string; imageSrcSet?: string };
 
-// 파일 이름의 @ 는 URL 에서 %40 으로 쓴다.
+/**
+ * 배경·유령 그림 주소 끝에 붙이는 값. 파일 이름이 같아도 그림을 바꾼 배포가 바로 보이게 한다
+ * (정적 그림 캐시가 max-age 1일이라 같은 주소는 하루 동안 옛 그림이 나온다). 그림을 바꾸면 값을 바꾼다.
+ */
+export const ASSET_VERSION = "i1";
+
+// 파일 이름의 @ 는 URL 에서 %40 으로 쓴다. 유령 그림은 바꾼 적이 있어 버전 값을 붙인다.
 function png(dir: "table" | "roles" | "ghost", id: string, scale: 2 | 4): string {
-  return `/characters/${dir}/${id}_default%40${scale}x.png`;
+  const v = dir === "ghost" ? `?v=${ASSET_VERSION}` : "";
+  return `/characters/${dir}/${id}_default%40${scale}x.png${v}`;
 }
 
 // 인물은 72px 로 표시한다. 밀도 기술자는 파일 폭 ÷ 표시 폭이라 @2x 파일은 2x, @4x 파일은 4x 다.
@@ -57,11 +64,11 @@ export function journalArt(role: JournalRole, slot: JournalSlot): { src: string;
   return { src: `/journals/journal_${role}_${slot}.svg` };
 }
 
-/** 배경 그림 주소의 단일 출처: /backgrounds/bg_{layout}_{장면 파일 조각}.webp. 장면 목록은 src/game/scenes.ts. */
+/** 배경 그림 주소의 단일 출처: /backgrounds/bg_{layout}_{장면 파일 조각}.webp?v=버전. 장면 목록은 src/game/scenes.ts. */
 export function backdropUrl(layout: "entry", scene: EntryScene): string;
 export function backdropUrl(layout: "game", scene: SceneId): string;
 export function backdropUrl(layout: BackdropLayout, scene: SceneId): string {
-  return `/backgrounds/bg_${layout}_${SCENES[scene].file}.webp`;
+  return `/backgrounds/bg_${layout}_${SCENES[scene].file}.webp?v=${ASSET_VERSION}`;
 }
 
 /** 입장 화면에서 미리 받는다: 입장·대기실 배경(WebP 약 99KB), 인물 8종(대기실 첫 그림이 비어 보이지 않게). */

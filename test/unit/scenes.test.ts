@@ -45,8 +45,8 @@ describe("장면 목록(SCENES)", () => {
     expect(SCENES.verdictDusk.file).toBe("verdict_dusk");
   });
 
-  it("헤더 위쪽 어두운 막은 아침·낮·해질녘·처형만, entry 구도는 lobby 만 갖는다", () => {
-    expect(SCENE_IDS.filter((id) => SCENES[id].scrim)).toEqual(["morning", "day", "dusk", "verdictDusk"]);
+  it("실내 배경은 어떤 장면에도 헤더 막이 없고, entry 구도는 lobby 만 갖는다", () => {
+    expect(SCENE_IDS.filter((id) => SCENES[id].scrim)).toEqual([]);
     expect(SCENE_IDS.filter((id) => SCENES[id].entry)).toEqual(["lobby"]);
   });
 });
@@ -186,6 +186,7 @@ describe("public/backgrounds (WebP 일곱 개, 옛 SVG 는 없다)", () => {
     expect(existsSync("design/backgrounds/v2/set2/bg_game_night.png")).toBe(true);
     expect(existsSync("design/backgrounds/v2/set1/bg_game_day.jpg")).toBe(true);
     expect(existsSync("design/backgrounds/v3/bg_game_night.png")).toBe(true);
+    expect(existsSync("design/backgrounds/v4/bg_game_night.png")).toBe(true);
   });
 });
 
@@ -197,9 +198,10 @@ describe("scripts/make-backdrops.mjs (SOURCES)", () => {
     expect(SOURCES.map((s) => s.out).sort()).toEqual(EXPECTED_FILES);
   });
 
-  it("원본이 모두 design/backgrounds/v3 안에 있고 파일이 존재한다", () => {
+  it("원본이 있다: 게임 구도는 design/backgrounds/v4(실내), 입구 구도는 v3", () => {
     for (const s of SOURCES) {
-      expect(s.src.startsWith("design/backgrounds/v3/"), s.src).toBe(true);
+      const isEntry = s.out.startsWith("bg_entry_");
+      expect(s.src.startsWith(isEntry ? "design/backgrounds/v3/" : "design/backgrounds/v4/"), s.src).toBe(true);
       expect(existsSync(s.src), s.src).toBe(true);
     }
   });

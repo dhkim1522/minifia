@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import "../helpers/singleLineErrors";
 import { DayTable } from "../../src/components/DayTable";
 import { Icon } from "../../src/components/Icon";
+import { ASSET_VERSION, ghostSrc } from "../../src/net/assets";
 import type { IconName } from "../../src/components/Icon";
 import type { DayTableSeat } from "../../src/components/DayTable";
 import { HALO_MAX_SIMULTANEOUS, daySeatLayout, px } from "../../src/game/dayTable";
@@ -456,8 +457,8 @@ describe("DayTable: 탈락과 관전 아랫줄 (D-15·결정 0021)", () => {
   it("dead 자리: 그림은 유령(@2x src, srcset 4x), mf-figure--ghost, 연결돼 있으면 mf-figure--disconnected 없음. 이름표에 .mf-dt__tag--dead", () => {
     const { container } = render(<DayTable seats={five({ 4: { dead: true } })} mySeat={0} width={366} />);
     const img = imgEl(container, 4);
-    expect(img.getAttribute("src")).toBe("/characters/ghost/ghost_default%402x.png");
-    expect(img.getAttribute("srcset")?.includes("ghost_default%404x.png 4x")).toBe(true);
+    expect(img.getAttribute("src")).toBe(ghostSrc().src);
+    expect(img.getAttribute("srcset")?.includes("ghost_default%404x.png?v=" + ASSET_VERSION + " 4x")).toBe(true);
     expect(img.classList.contains("mf-figure--ghost")).toBe(true);
     expect(img.classList.contains("mf-figure--disconnected")).toBe(false);
     expect(tagEl(container, 4).classList.contains("mf-dt__tag--dead")).toBe(true);
@@ -816,7 +817,7 @@ describe("DayTable: 관전자 직업 그림 (D-17, T-03.1-15)", () => {
 
   it("같은 입력의 dead 자리는 유령 그림이다 (roleArt 무시)", () => {
     const { container } = render(<DayTable seats={five({ 2: { roleArt: "police", dead: true } })} mySeat={0} width={366} />);
-    expect(imgEl(container, 2).getAttribute("src")).toBe("/characters/ghost/ghost_default%402x.png");
+    expect(imgEl(container, 2).getAttribute("src")).toBe(ghostSrc().src);
     expect(container.querySelectorAll('img[src*="/characters/roles/"]').length).toBe(0);
   });
 

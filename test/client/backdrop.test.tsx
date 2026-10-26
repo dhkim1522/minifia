@@ -3,7 +3,8 @@ import { readFileSync } from "node:fs";
 import { act, cleanup, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Backdrop } from "../../src/components/Backdrop";
-import { SCENE_FADE_MS, SCENE_IMAGE_WAIT_MS, headerScrimGradient } from "../../src/game/scenes";
+import { SCENE_FADE_MS, SCENE_IMAGE_WAIT_MS, SCENE_IDS } from "../../src/game/scenes";
+import { ASSET_VERSION } from "../../src/net/assets";
 
 type Mode = "immediate" | "manual";
 
@@ -62,7 +63,7 @@ describe("Backdrop 층 규칙", () => {
     const { container } = render(<Backdrop layout="game" scene="morning" />);
     const art = container.querySelector<HTMLElement>(".mf-backdrop__art")!;
     expect(art.getAttribute("aria-hidden")).toBe("true");
-    expect(art.style.backgroundImage).toMatch(/^url\(["']?\/backgrounds\/bg_game_morning\.webp["']?\)$/);
+    expect(art.style.backgroundImage).toMatch(/^url\(["']?\/backgrounds\/bg_game_morning\.webp\?v=i1["']?\)$/);
     expect(art.style.backgroundPosition).toContain("top");
   });
 
@@ -92,7 +93,7 @@ describe("Backdrop 층 규칙", () => {
     rerender(<Backdrop layout="game" scene="dusk" />);
     await advance(500);
     expect(layersOf(container)).toEqual(["day:current", "dusk:entering"]);
-    expect(img.loaded).toEqual(["/backgrounds/bg_game_dusk.webp"]);
+    expect(img.loaded).toEqual([`/backgrounds/bg_game_dusk.webp?v=${ASSET_VERSION}`]);
     img.resolveAll();
     await flush();
     expect(layersOf(container)).toEqual(["day:leaving", "dusk:current"]);
@@ -187,34 +188,9 @@ describe("Backdrop 층 규칙", () => {
 });
 
 describe("헤더 위쪽 어두운 막", () => {
-  it("아침·낮·해질녘·처형 층만 인라인 사용자 지정 속성 --mf-scrim 을 싣고, 값은 HEADER_SCRIM_STOPS 의 그라데이션이다", async () => {
+  it("실내 배경(v4)은 위쪽이 어두운 벽이라 어떤 장면의 층도 --mf-scrim 을 싣지 않는다 (막 장치는 scrim 장면이 생기면 쓴다)", async () => {
     stubImages("immediate");
-    const { container, rerender } = render(<Backdrop layout="game" scene="morning" />);
-    const scrimOf = () => [...container.querySelectorAll<HTMLElement>(".mf-backdrop__art")].map((el) => el.style.getPropertyValue("--mf-scrim"));
-    expect(scrimOf()).toEqual([headerScrimGradient()]);
-    rerender(<Backdrop layout="game" scene="day" />);
-    await flush();
-    expect(scrimOf()).toEqual([headerScrimGradient(), headerScrimGradient()]);
-    rerender(<Backdrop layout="game" scene="night" />);
-    await flush();
-    // 낮 층(leaving)은 막을 가진 채 함께 사라지고, 밤 층에는 막이 없다
-    expect(scrimOf().at(-1)).toBe("");
-    await advance(SCENE_FADE_MS + 200);
-    expect(scrimOf()).toEqual([""]);
-  });
-
-  it("해질녘·처형 층도 막을 싣는다 (v3 에서 360폭 타이머 대비가 4.5 미만이라 추가)", () => {
-    stubImages("immediate");
-    for (const scene of ["dusk", "verdictDusk"] as const) {
-      const { container, unmount } = render(<Backdrop layout="game" scene={scene} />);
-      expect(container.querySelector<HTMLElement>(".mf-backdrop__art")!.style.getPropertyValue("--mf-scrim"), scene).toBe(headerScrimGradient());
-      unmount();
-    }
-  });
-
-  it("lobby·night 와 entry 층에는 막이 없다", () => {
-    stubImages("immediate");
-    for (const scene of ["lobby", "night"] as const) {
+    for (const scene of SCENE_IDS) {
       const { container, unmount } = render(<Backdrop layout="game" scene={scene} />);
       expect(container.querySelector<HTMLElement>(".mf-backdrop__art")!.style.getPropertyValue("--mf-scrim"), scene).toBe("");
       unmount();
