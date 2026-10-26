@@ -225,9 +225,29 @@ const overlapText = (a, b) =>
 const result = (id, label, bad) => ({ id, label, ok: bad.length === 0, detail: bad.length === 0 ? "" : bad.join("; ") });
 const hasPoint = (r, x, y) => x >= r.left && x <= right(r) && y >= r.top && y <= bottom(r);
 
-/** D3b 인원별 이름표 보이는 비율 바닥. 4·5명 100 %(부동소수 오차 0.001 허용), 6명 85 %, 7명 50 %, 8명 55 %. */
+/**
+ * D3b 5명판 이름표 보이는 비율 바닥 98.0 % — 사용자 승인 완화(2026-10-26, 승인 목록 APPROVED_RELAXATIONS 의 `D3b-5`).
+ * 사유: 앞쪽 옆자리(5명판 자리 1·4)가 탈락해 유령 그림이 되면 유령의 머리 윗부분이 뒤쪽 이웃(자리 2·3)의 5글자 이름표
+ * 알약 아래쪽을 약 0.4 % 덮는다(실측 99.5~99.9 %). 사용자가 캐릭터가 이름표를 덮는 것은 이미 허용했고(UI-SPEC F2),
+ * 이 숫자는 5명판에만 적용한다. 4명판 100 %·6명판 85 %·7명판 50 %·8명판 55 % 와 다른 모든 기준 수치는 그대로다.
+ */
+export const D3B_FLOOR_5_PLAYERS = 0.98;
+
+/**
+ * 사용자가 승인한 검사 완화 목록(출력 머리에도 찍힌다). 이 밖의 기준은 낮추지 않는다 — 단위 테스트가 목록과 상수를 고정한다.
+ * approved: 승인 근거(03.1 F7 = UI-SPEC 확정 결정 F7) 또는 승인 날짜.
+ */
+export const APPROVED_RELAXATIONS = [
+  { id: "M1", approved: "03.1 F7", reason: "아침 카드가 5초 동안 남의 얼굴을 가려도 됨(M3·M4 신설)" },
+  { id: "D3a/D3b", approved: "03.1 F7", reason: "이름표가 이웃 얼굴을 가리지 않음 → 캐릭터 아래 층(D3a) + 인원별 보이는 비율 바닥(D3b)" },
+  { id: "D4", approved: "03.1 F7", reason: "[테스트] 버튼이 캐릭터 상자와 겹치는 세로 깊이 ≤ 3px" },
+  { id: "D3b-5", approved: "2026-10-26", reason: "5명판 D3b 바닥 99.9 % → 98.0 %: 앞쪽 옆자리 유령 머리가 5글자 이름표를 약 0.4 % 덮음(캐릭터가 이름표를 덮는 것은 이미 허용)" },
+];
+
+/** D3b 인원별 이름표 보이는 비율 바닥. 4명 100 %(부동소수 오차 0.001 허용), 5명 98.0 %(승인 완화), 6명 85 %, 7명 50 %, 8명 55 %. */
 function visibilityFloor(n) {
-  if (n <= 5) return 0.999;
+  if (n <= 4) return 0.999;
+  if (n === 5) return D3B_FLOOR_5_PLAYERS;
   if (n === 6) return 0.85;
   if (n === 7) return 0.5;
   return 0.55;
@@ -501,23 +521,118 @@ export function stageStable(entries) {
 
 // ---- 차례(K1·K2)·주장 채팅(K3)·기록 카드(X1) ----
 
+/** 시작 문구 톤별 기대 글자: 밤 `N일차 / 밤이 되었습니다`(N6), 낮 시작 `N일차 / 낮이 되었습니다 / 토론 전에 먼저 직업을 공개해요`(N8). */
+const INTRO_SPEC = {
+  night: { id: "N6", label: "밤 시작 문구가 한 번 보임", lines: ["밤이 되었습니다"] },
+  day: { id: "N8", label: "낮 시작 문구가 한 번 보임", lines: ["낮이 되었습니다", "토론 전에 먼저 직업을 공개해요"] },
+};
+
 /**
- * N6 밤 시작 문구(결정 0028 → 0030: 낮·밤 한 부품 SceneIntro). intro = browser.readSceneIntro 결과: 없으면 null,
- * 있으면 { texts, kind, pointerEvents, ariaHidden, rect }. kind 는 기대 톤(기본 night) — 낮 시작 문구(N8)는 과제 5 가 더한다.
+ * N6 밤·N8 낮 시작 문구(결정 0028 → 0030: 낮·밤 한 부품 SceneIntro). intro = browser.readSceneIntro 결과(또는 처음 본 값 readIntroWatch): 없으면 null,
+ * 있으면 { texts, kind, pointerEvents, ariaHidden, rect }. kind 는 기대 톤(기본 night).
  */
 export function sceneIntroChecks(intro, { kind = "night" } = {}) {
+  const spec = INTRO_SPEC[kind];
+  if (spec === undefined) return result("N6", "밤 시작 문구가 한 번 보임", [`지원하지 않는 톤 ${kind}`]);
   const bad = [];
-  const title = { night: "밤이 되었습니다" }[kind];
-  if (title === undefined) return result("N6", "밤 시작 문구가 한 번 보임", [`지원하지 않는 톤 ${kind}`]);
   if (!intro) bad.push("시작 문구(.mf-sceneintro) 없음");
   else {
     const t = intro.texts ?? [];
-    if (!(t.length === 2 && /^\d+일차$/.test(t[0]) && t[1] === title)) bad.push(`글자 [${t.join(" / ")}] ≠ [N일차 / ${title}]`);
+    const want = ["N일차", ...spec.lines];
+    const ok = t.length === want.length && /^\d+일차$/.test(t[0]) && spec.lines.every((line, i) => t[i + 1] === line);
+    if (!ok) bad.push(`글자 [${t.join(" / ")}] ≠ [${want.join(" / ")}]`);
     if (intro.kind !== kind) bad.push(`톤 ${intro.kind} ≠ ${kind}`);
     if (intro.pointerEvents !== "none") bad.push(`pointer-events ${intro.pointerEvents} ≠ none`);
     if (intro.ariaHidden !== true) bad.push("aria-hidden 이 아님");
   }
-  return result("N6", "밤 시작 문구가 한 번 보임", bad);
+  return result(spec.id, spec.label, bad);
+}
+
+// ---- H1 헤더 글씨 대비 · B1 배경 장면 (결정 0030, 사용자 지시 V-06) ----
+
+/** 헤더 제목·타이머 글씨 대비 하한(WCAG AA 본문). 낮추지 않는다. */
+export const HEADER_CONTRAST_MIN = 4.5;
+/** 글씨 뒤 배경 픽셀 휘도를 대표하는 백분위수 — 별·해 같은 작은 밝은 점에 흔들리지 않게 p95. */
+export const HEADER_BG_PERCENTILE = 0.95;
+
+/** sRGB(0~255 세 값) → WCAG 상대 휘도 0~1. */
+export function relLuminance(rgb) {
+  const lin = (v) => {
+    const c = v / 255;
+    return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  };
+  const l = 0.2126 * lin(rgb[0]) + 0.7152 * lin(rgb[1]) + 0.0722 * lin(rgb[2]);
+  return Math.round(l * 1e12) / 1e12;
+}
+
+/** 값 목록의 p 분위수(가장 가까운 순위, 오름차순). 빈 목록은 NaN. */
+export function percentile(values, p) {
+  if (!Array.isArray(values) || values.length === 0) return Number.NaN;
+  const sorted = [...values].sort((a, b) => a - b);
+  const rank = Math.min(sorted.length, Math.max(1, Math.ceil(p * sorted.length)));
+  return sorted[rank - 1];
+}
+
+/** 평평한 RGB 배열([r,g,b,r,g,b,…])의 픽셀 휘도 p95(HEADER_BG_PERCENTILE). 비면 NaN. */
+export function rgbP95Luminance(flat) {
+  const lums = [];
+  for (let i = 0; i + 2 < flat.length; i += 3) lums.push(relLuminance([flat[i], flat[i + 1], flat[i + 2]]));
+  return percentile(lums, HEADER_BG_PERCENTILE);
+}
+
+/**
+ * H1 헤더 제목·타이머 글씨가 배경 위에서 읽힌다. measure = browser.readHeaderContrast 결과 { items: [{ name: "제목"|"타이머", rect, color: [r,g,b], bgLum }] }.
+ * 대비 = (밝은 쪽 휘도 + .05) / (어두운 쪽 휘도 + .05) ≥ HEADER_CONTRAST_MIN. bgLum 은 글씨를 투명하게 한 스냅숏에서 그 요소 사각형 안 픽셀 휘도의 p95.
+ * expectTimer(타이머가 있어야 하는 상태)인데 타이머 항목이 없거나, 제목 항목이 없거나, 측정값이 비면 조용히 통과하지 않고 실패한다.
+ */
+export function headerContrastChecks(measure, { expectTimer }) {
+  const label = "헤더 제목·타이머 글씨 대비 4.5:1";
+  const items = measure?.items;
+  if (!Array.isArray(items) || items.length === 0) return result("H1", label, ["측정값 없음(헤더 글씨 항목이 없음)"]);
+  const bad = [];
+  if (!items.some((i) => i.name === "제목")) bad.push("제목 항목 없음");
+  if (expectTimer && !items.some((i) => i.name === "타이머")) bad.push("타이머가 있어야 하는데 타이머 항목 없음");
+  for (const i of items) {
+    if (typeof i.bgLum !== "number" || Number.isNaN(i.bgLum) || !Array.isArray(i.color)) {
+      bad.push(`${i.name} 측정값 없음(배경 휘도 또는 글자색)`);
+      continue;
+    }
+    const lt = relLuminance(i.color);
+    const ratio = (Math.max(lt, i.bgLum) + 0.05) / (Math.min(lt, i.bgLum) + 0.05);
+    if (ratio < HEADER_CONTRAST_MIN) bad.push(`${i.name} ${rd(ratio)}:1 < ${HEADER_CONTRAST_MIN}:1 (배경 p95 휘도 ${Math.round(i.bgLum * 1000) / 1000})`);
+  }
+  return result("H1", label, bad);
+}
+
+/** 단계 → 배경 장면 id. src/game/scenes.ts 의 PHASE_SCENE 과 같은 표다 — test/unit/scenes.test.ts 가 두 표가 같음을 확인한다. */
+export const EXPECTED_SCENE = {
+  lobby: "lobby",
+  assigning: "lobby",
+  roleReveal: "lobby",
+  dayAnnounce: "day",
+  claim: "day",
+  discussion: "day",
+  night: "night",
+  morning: "morning",
+};
+
+/**
+ * B1 배경 장면이 단계에 맞다. info = browser.readBackdropLayers 결과 { layers: [{ scene, state, image }] }.
+ * 전환이 끝나 한 층만 남고 그 층이 current, data-scene 이 단계의 기대 장면, 계산된 background-image 가 bg_game_*.webp 여야 한다.
+ */
+export function backdropSceneChecks(info, { phase }) {
+  const label = "배경 장면이 단계에 맞음";
+  const layers = info?.layers;
+  if (!Array.isArray(layers)) return result("B1", label, ["측정값 없음(배경 층)"]);
+  const want = EXPECTED_SCENE[phase];
+  if (want === undefined) return result("B1", label, [`알 수 없는 단계 ${phase}`]);
+  if (layers.length !== 1) return result("B1", label, [`배경 층 ${layers.length}개 ≠ 1 (${layers.map((l) => `${l.scene}:${l.state}`).join(",") || "없음"})`]);
+  const l = layers[0];
+  const bad = [];
+  if (l.state !== "current") bad.push(`층 상태 ${l.state} ≠ current`);
+  if (l.scene !== want) bad.push(`장면 ${l.scene} ≠ 기대 ${want} (단계 ${phase})`);
+  if (!/bg_game_[a-z_]+\.webp/.test(String(l.image ?? ""))) bad.push(`그림이 bg_game_*.webp 가 아님 (${String(l.image ?? "").slice(0, 80)})`);
+  return result("B1", label, bad);
 }
 
 /**

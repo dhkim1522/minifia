@@ -2,7 +2,7 @@
 // 방장 소켓은 브라우저 페이지가 쥔다(스크립트가 쥐면 앱이 앞 소켓을 4001 로 대체한다).
 // 토큰은 createTestRoom 결과와 addInitScript 인자에만 머문다. 페이지가 받은 state 프레임만 읽고 보낸 프레임은 구독하지 않는다.
 import { chromium } from "playwright-core";
-import { DECORATIVE_ALLOW, FONT_HOSTS, ROLE_NAME, TAP_ALLOW, TEXT_SIZE_ALLOW, redact } from "./lib.mjs";
+import { DECORATIVE_ALLOW, FONT_HOSTS, ROLE_NAME, TAP_ALLOW, TEXT_SIZE_ALLOW, redact, rgbP95Luminance } from "./lib.mjs";
 
 /** 준비 단계의 실패(연결·단계 도달·선택자 대기 시간 초과). 한 번 새 방으로 다시 돈다. 검사 실패와 다르다. */
 export class SetupError extends Error {
@@ -210,6 +210,147 @@ export async function readSceneIntro(page) {
       rect: { left: r.left, top: r.top, width: r.width, height: r.height },
     };
   });
+}
+
+/**
+ * 시작 문구(.mf-sceneintro)가 처음 보이는 순간의 값을 MutationObserver 로 붙잡아 둔다 (N8). 문구는 2초뿐이라 폴링하면 시간 경쟁이 생기므로
+ * 단계를 넘기기 전에 걸어 두고 readIntroWatch 로 처음 본 값을 읽는다. 모양은 readSceneIntro 와 같다.
+ */
+export async function armIntroWatch(page) {
+  await page.evaluate(() => {
+    window.__introSeen = null;
+    window.__introObs?.disconnect();
+    const grab = () => {
+      if (window.__introSeen) return;
+      const el = document.querySelector(".mf-sceneintro");
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      const tone = /\bmf-sceneintro--(night|day)\b/.exec(el.className);
+      window.__introSeen = {
+        texts: [...el.querySelectorAll("p")].map((p) => (p.textContent || "").trim()),
+        kind: tone ? tone[1] : null,
+        pointerEvents: getComputedStyle(el).pointerEvents,
+        ariaHidden: el.getAttribute("aria-hidden") === "true",
+        rect: { left: r.left, top: r.top, width: r.width, height: r.height },
+      };
+    };
+    window.__introObs = new MutationObserver(grab);
+    window.__introObs.observe(document.body, { childList: true, subtree: true });
+    grab();
+  });
+}
+
+/** armIntroWatch 가 처음 붙잡은 값(없으면 null)을 읽고 관찰자를 끈다. */
+export async function readIntroWatch(page) {
+  return page.evaluate(() => {
+    window.__introObs?.disconnect();
+    window.__introObs = null;
+    return window.__introSeen ?? null;
+  });
+}
+
+/** 배경 층(.mf-backdrop__art)마다 { scene, state, image(계산된 background-image) } (B1). 층이 없으면 빈 목록. */
+export async function readBackdropLayers(page) {
+  return page.evaluate(() => ({
+    layers: [...document.querySelectorAll(".mf-backdrop__art")].map((el) => ({
+      scene: el.getAttribute("data-scene") ?? "",
+      state: el.getAttribute("data-state") ?? "",
+      image: getComputedStyle(el).backgroundImage,
+    })),
+  }));
+}
+
+/**
+ * 배경 크로스페이드가 끝나(층이 하나이고 불투명) 시작 문구가 없을 때까지 기다린다(상한 4초). 시간 초과는 던지지 않는다 —
+ * 아직 두 층이거나 문구가 남아 있으면 B1·H1 이 그 사실을 실패로 보고한다.
+ */
+export async function waitBackdropStable(page, ms = 4000) {
+  try {
+    await page.waitForFunction(
+      () => {
+        const arts = document.querySelectorAll(".mf-backdrop__art");
+        return arts.length === 1 && Number(getComputedStyle(arts[0]).opacity) >= 0.999 && !document.querySelector(".mf-sceneintro");
+      },
+      null,
+      { timeout: ms },
+    );
+  } catch {
+    /* B1·H1 이 보고한다 */
+  }
+}
+
+/**
+ * H1: 헤더 제목·타이머 글씨 뒤의 실제 렌더 배경(막 포함)을 잰다.
+ * (1) 제목(.mf-phasebar h1 · .mf-assign__bar h1 · .mf-lobby__code)과 타이머 숫자(.mf-timer__num)의 글자 사각형(Range)과 계산된 글자색을 읽고,
+ * (2) 임시 <style> 로 그 글씨를 투명하게 하고(color·text-shadow·text-stroke) (3) 머리 영역을 스크린샷(CSS 1:1)으로 찍어 페이지에서 디코드(createImageBitmap + canvas, 새 패키지 없음)해
+ * 글씨가 있던 사각형 안 픽셀을 평평한 RGB 로 돌려받고, (4) 임시 스타일을 지운다. 배경 휘도는 그 픽셀의 p95(lib.rgbP95Luminance).
+ * 돌려주는 값: { items: [{ name, rect, color: [r,g,b], bgLum }] }. 제목이 보이지 않으면 null.
+ */
+export async function readHeaderContrast(page) {
+  const probe = await page.evaluate(() => {
+    const defs = [
+      { name: "제목", sels: [".mf-phasebar h1", ".mf-assign__bar h1", ".mf-lobby__code"] },
+      { name: "타이머", sels: [".mf-timer__num"] },
+    ];
+    const items = [];
+    const hide = [];
+    for (const d of defs) {
+      for (const sel of d.sels) {
+        const el = document.querySelector(sel);
+        if (!el) continue;
+        const range = document.createRange();
+        range.selectNodeContents(el);
+        const r = range.getBoundingClientRect();
+        if (r.width <= 0 || r.height <= 0) continue;
+        const m = /rgba?\(\s*(\d+)[,\s]+(\d+)[,\s]+(\d+)/.exec(getComputedStyle(el).color);
+        items.push({ name: d.name, rect: { left: r.left, top: r.top, width: r.width, height: r.height }, color: m ? [Number(m[1]), Number(m[2]), Number(m[3])] : null });
+        hide.push(sel);
+        break;
+      }
+    }
+    if (items.length === 0) return null;
+    const style = document.createElement("style");
+    style.id = "__e2e_hide_glyphs";
+    style.textContent = `${hide.map((s) => `${s}, ${s} *`).join(", ")} { color: transparent !important; text-shadow: none !important; -webkit-text-stroke: 0 !important; }`;
+    document.head.appendChild(style);
+    return { items, vw: window.innerWidth, vh: window.innerHeight };
+  });
+  if (probe === null) return null;
+  try {
+    await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+    const bottom = Math.max(...probe.items.map((i) => i.rect.top + i.rect.height));
+    const clip = { x: 0, y: 0, width: probe.vw, height: Math.min(probe.vh, Math.ceil(bottom) + 4) };
+    const png = await page.screenshot({ clip, scale: "css", type: "png" });
+    const pixels = await page.evaluate(
+      async ({ b64, rects, clip: c }) => {
+        const bin = atob(b64);
+        const bytes = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+        const bmp = await createImageBitmap(new Blob([bytes], { type: "image/png" }));
+        const canvas = document.createElement("canvas");
+        canvas.width = bmp.width;
+        canvas.height = bmp.height;
+        const g = canvas.getContext("2d");
+        g.drawImage(bmp, 0, 0);
+        const k = bmp.width / c.width;
+        return rects.map((r) => {
+          const x0 = Math.max(0, Math.floor(r.left * k));
+          const y0 = Math.max(0, Math.floor(r.top * k));
+          const x1 = Math.min(bmp.width, Math.ceil((r.left + r.width) * k));
+          const y1 = Math.min(bmp.height, Math.ceil((r.top + r.height) * k));
+          if (x1 <= x0 || y1 <= y0) return [];
+          const data = g.getImageData(x0, y0, x1 - x0, y1 - y0).data;
+          const out = [];
+          for (let i = 0; i < data.length; i += 4) out.push(data[i], data[i + 1], data[i + 2]);
+          return out;
+        });
+      },
+      { b64: png.toString("base64"), rects: probe.items.map((i) => i.rect), clip },
+    );
+    return { items: probe.items.map((i, n) => ({ name: i.name, rect: i.rect, color: i.color, bgLum: rgbP95Luminance(pixels[n]) })) };
+  } finally {
+    await page.evaluate(() => document.getElementById("__e2e_hide_glyphs")?.remove());
+  }
 }
 
 export function shot(page, path) {

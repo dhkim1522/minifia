@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 import { launchChrome, SetupError } from "./browser.mjs";
 import { FLOWS } from "./flows.mjs";
 import {
+  APPROVED_RELAXATIONS,
   DECORATIVE_ALLOW,
   MAX_PARALLEL,
   OVERALL_LIMIT_MS,
@@ -103,6 +104,7 @@ emit(`대상 ${origin} · 버전 ${version}`);
 emit(`Chrome ${chromePath}`);
 const allow = (list) => (list.length === 0 ? "(없음)" : list.map((a) => `${a.selector} — ${a.reason}`).join("; "));
 emit(`허용 목록 — 장식(G2): ${allow(DECORATIVE_ALLOW)} / 탭 대상(G3): ${allow(TAP_ALLOW)} / 글자 크기(G7): ${allow(TEXT_SIZE_ALLOW)}`);
+emit(`승인된 완화: ${APPROVED_RELAXATIONS.map((r) => `${r.id}(${r.approved})`).join(", ")} — 그 밖의 기준 수치는 낮추지 않는다`);
 emit(`크기 ${args.sizes.map((s) => s.label).join(", ")} · 흐름 ${flows.map((f) => f.id).join(", ")}${args.shots ? " · 사진 저장(scripts/e2e/out/)" : ""}`);
 
 let browser;

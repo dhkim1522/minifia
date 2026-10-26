@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { mkdirSync } from "node:fs";
 import {
   SetupError,
+  armIntroWatch,
   chooseRole,
   clickInDialog,
   clickTopmostPoint,
@@ -18,6 +19,9 @@ import {
   openRoleCard,
   openTestSheet,
   pickChip,
+  readBackdropLayers,
+  readHeaderContrast,
+  readIntroWatch,
   readSceneIntro,
   readStage,
   resetAndLeave,
@@ -29,15 +33,18 @@ import {
   sleep,
   startGame,
   tapSeat,
+  waitBackdropStable,
 } from "./browser.mjs";
 import {
   ROLE_NAME,
+  backdropSceneChecks,
   claimChatIssues,
   dayChecks,
   dimChecks,
   feltGapChecks,
   feltStable,
   genericIssues,
+  headerContrastChecks,
   inspectChecks,
   journalChecks,
   lobbyShapeChecks,
@@ -123,6 +130,7 @@ async function lobbyFlow(ctx) {
   // 대기실, 시트 닫힘
   const s1 = await checkState(ctx, "lobby", "lobby");
   recOne(rec, "lobby/lobby", crownChecks(s1, { expect: 1 })); // W1: 방장 왕관은 대기실에만 정확히 하나
+  await stageChecks(ctx, "lobby", "lobby", "lobby", { expectTimer: false }); // B1 배경 장면 · H1 헤더 글씨 대비 (대기실에는 타이머가 없다)
   const tt = s1.tt;
   rec("lobby/lobby", "L1", "[테스트] 버튼이 보임", !!tt && tt.rect.width > 0 && tt.rect.height > 0 && rectInside(tt.rect, { left: 0, top: 0, width: w, height: h }) && tt.hit, tt ? `rect ${Math.round(tt.rect.left)},${Math.round(tt.rect.top)} ${Math.round(tt.rect.width)}x${Math.round(tt.rect.height)}, hit ${tt.hit}` : "버튼 없음");
   const clashes = tt ? s1.interactive.filter((e) => !sameRect(e.rect, tt.rect) && rectsOverlap(e.rect, tt.rect)).map((e) => e.desc) : ["버튼 없음"];
@@ -228,6 +236,44 @@ async function grabLobbyStage(ctx, state, waitMs = 0) {
   const stage = await readStage(ctx.host.page);
   const mySeat = ctx.host.tracker.last()?.me?.seat ?? -1;
   (ctx.dayStates ??= []).push({ state, felt: stage.felt, tags: stage.tags, stage, mySeat });
+}
+
+/**
+ * 배경 장면(B1)과 헤더 글씨 대비(H1). 배경 크로스페이드가 끝나(한 층) 시작 문구가 없을 때 잰다.
+ * 재는 동안 추적 단계가 phase 에서 벗어났으면(아침 5초 등) 값이 다른 장면의 것이므로 준비 실패(SetupError)로 알려 새 방으로 한 번 다시 돈다.
+ * expectTimer: 타이머가 있어야 하는 상태(대기실은 거짓).
+ */
+async function stageChecks(ctx, flowId, state, phase, { expectTimer = true } = {}) {
+  const rec = recorder(ctx);
+  const { page, tracker } = ctx.host;
+  await waitBackdropStable(page);
+  const layers = await readBackdropLayers(page);
+  const header = await readHeaderContrast(page);
+  if (tracker.last()?.phase !== phase) throw new SetupError(`${state} 배경·헤더 측정 중에 단계가 ${tracker.last()?.phase} 로 바뀜 (기대 ${phase})`);
+  recOne(rec, `${flowId}/${state}`, backdropSceneChecks(layers, { phase }));
+  recOne(rec, `${flowId}/${state}`, headerContrastChecks(header, { expectTimer }));
+}
+
+/**
+ * 낮 시작(dayAnnounce) 직후(morning 다음): 문구가 처음 보인 값으로 N8, 같은 시점의 테이블·장면 상자를 ctx.dayStates 에 더해(D7·D9·T1 이 함께 본다),
+ * 문구가 3.5초 안에 DOM 에서 사라지는지 N9. 낮 시작은 2초뿐이라 문구는 MutationObserver 로 붙잡고(시간 경쟁 없음) 장면은 시트를 닫자마자 읽는다.
+ */
+async function dayIntro(ctx, id) {
+  const rec = recorder(ctx);
+  const { page, tracker } = ctx.host;
+  const sc = `${id}/day-intro`;
+  await armIntroWatch(page);
+  await skipTo(page, tracker, "dayAnnounce");
+  const stage = await readStage(page);
+  if (tracker.last()?.phase !== "dayAnnounce") throw new SetupError("낮 시작 장면을 읽기 전에 낮 시작(2초)이 끝남");
+  const mySeat = mySeatOf(tracker);
+  (ctx.dayStates ??= []).push({ state: "dayAnnounce", felt: stage.felt, tags: stage.tags, stage, mySeat });
+  recOne(rec, sc, sceneIntroChecks(await readIntroWatch(page), { kind: "day" })); // N8
+  const n9 = await attempt(async () => {
+    await page.waitForSelector(".mf-sceneintro", { state: "detached", timeout: 3500 });
+    return true;
+  });
+  rec(sc, "N9", "낮 시작 문구가 사라짐", n9.ok, n9.detail);
 }
 
 /** 밤 하단·알약·안내 줄 수(N1·N4·N5). 누르기 전 스냅숏으로 본다. */
@@ -486,6 +532,7 @@ async function gameFlow(ctx, { id, players, role, states }) {
     else if (state === "discussion") {
       await skipTo(page, tracker, "discussion");
       await settle(page);
+      await stageChecks(ctx, id, "discussion", "discussion");
       const { snap } = await dayState(ctx, id, "discussion");
       recAll(rec, `${id}/discussion`, turnChecks(snap, { expectNone: true }));
       if (id === "police5") {
@@ -523,11 +570,13 @@ async function gameFlow(ctx, { id, players, role, states }) {
         return true;
       });
       rec(`${id}/night`, "N7", "밤 시작 문구가 사라짐", n7.ok, n7.detail);
+      await stageChecks(ctx, id, "night", "night");
     } else if (state === "morning") {
       // 아침은 5초라 넘긴 직후 바로 닫고 찍는다. 앞뒤 단계가 morning 이 아니면 준비 실패(재시도).
       await skipTo(page, tracker, "morning");
       await settle(page);
       if (tracker.last()?.phase !== "morning") throw new SetupError("아침 스냅숏 전에 아침이 끝남");
+      await stageChecks(ctx, id, "morning", "morning"); // 아침은 5초뿐이라 dayState 보다 먼저(크로스페이드가 끝난 직후) 잰다
       const { snap, mySeat } = await dayState(ctx, id, "morning");
       const v = tracker.last();
       if (v?.phase !== "morning") throw new SetupError("아침 스냅숏 중에 아침이 끝남");
@@ -540,12 +589,14 @@ async function gameFlow(ctx, { id, players, role, states }) {
       const elim = v.day?.morning?.eliminated;
       recOne(rec, `${id}/morning`, dimChecks(snap, { w: ctx.size.w, expectSpotlit: elim !== undefined && elim !== null }));
       morningRoleChecks(ctx, id, role, snap);
-    } else if (state === "rolecard-btn") await roleCardViaButton(ctx, id, role);
+    } else if (state === "day-intro") await dayIntro(ctx, id);
+    else if (state === "rolecard-btn") await roleCardViaButton(ctx, id, role);
     else if (state === "rolecard-citizen") await roleCardCitizen(ctx, id);
     else if (state === "next-day") {
       // 아침이 끝난 뒤 첫 낮 장면: 카드·어둡게 층이 없고(M4) 고정물 검사가 그대로 통과한다
       await tracker.waitFor((n) => n.phase === "claim" && (n.day?.n ?? 0) >= 2, 25_000, "다음 낮 직업 공개");
       await settle(page);
+      await stageChecks(ctx, id, "next-day", "claim");
       const { snap } = await dayState(ctx, id, "next-day");
       recOne(rec, `${id}/next-day`, morningGoneChecks(snap));
     }
@@ -660,10 +711,10 @@ const CLAIMS = ["claim-mine", "claim-other", "claim-done", "discussion"];
 
 export const FLOWS = [
   { id: "lobby", run: lobbyFlow },
-  { id: "police5", run: game("police5", 5, "police", [...CLAIMS, "chat", "night", "morning", "rolecard-btn", "next-day"]) },
-  { id: "citizen4", run: game("citizen4", 4, "citizen", [...CLAIMS, "night", "morning", "rolecard-citizen", "next-day"]) },
-  { id: "mafia8", run: game("mafia8", 8, "mafia", [...CLAIMS, "night", "morning", "rolecard-btn", "next-day"]) },
-  { id: "doctor5", run: game("doctor5", 5, "doctor", [...CLAIMS, "night", "morning", "rolecard-btn", "next-day"]) },
+  { id: "police5", run: game("police5", 5, "police", [...CLAIMS, "chat", "night", "morning", "day-intro", "rolecard-btn", "next-day"]) },
+  { id: "citizen4", run: game("citizen4", 4, "citizen", [...CLAIMS, "night", "morning", "day-intro", "rolecard-citizen", "next-day"]) },
+  { id: "mafia8", run: game("mafia8", 8, "mafia", [...CLAIMS, "night", "morning", "day-intro", "rolecard-btn", "next-day"]) },
+  { id: "doctor5", run: game("doctor5", 5, "doctor", [...CLAIMS, "night", "morning", "day-intro", "rolecard-btn", "next-day"]) },
   { id: "spec4", run: specFlow },
 ];
 export { SetupError };
