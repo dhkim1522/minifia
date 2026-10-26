@@ -58,7 +58,8 @@ body{margin:0;background:var(--n900)}
 .vb{position:absolute;left:var(--bx);top:var(--by);min-width:28px;height:24px;padding:0 7px;border-radius:7px;background:var(--g100);color:var(--n900);font:700 16px/24px var(--ui);text-align:center;z-index:46;box-shadow:0 4px 10px rgba(0,0,0,.45)}
 .vb.pop{background:var(--amber)}
 .vb.crim{background:var(--c500);color:var(--g50)}
-.vb.big{height:30px;min-width:34px;font-size:20px;line-height:30px;margin:-3px 0 0 -3px}
+.vb.big{height:32px;min-width:38px;font-size:24px;line-height:32px;margin:-4px 0 0 -5px}
+.vb.big,.vb.beat,.vb.beat2{-webkit-text-stroke:1.4px currentColor;paint-order:stroke fill;letter-spacing:.5px}
 .halo-amber img{filter:drop-shadow(0 0 2px rgba(242,184,75,.95)) drop-shadow(0 0 9px rgba(242,184,75,.75))}
 .halo-crim img{filter:drop-shadow(0 0 2px rgba(224,52,75,.95)) drop-shadow(0 0 9px rgba(224,52,75,.7))}
 .ov{position:absolute;left:0;top:0;width:390px;height:844px;z-index:44;pointer-events:none}
