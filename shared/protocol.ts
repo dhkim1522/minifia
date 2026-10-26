@@ -4,6 +4,7 @@
 // 방장 연장·넘기기는 결정 0017-5 로 없앴다(extend·skip 메시지, 연장 중복 오류 코드, DayView 의 연장 표시가 없다).
 // 서버 전용 검증 스키마는 shared/schemas.ts 에 있고 Worker 만 import 한다.
 // 3페이즈 밤·아침 계약도 이 파일이다 — 밤 행동 메시지·아침 결과·수사 기록·탈락자 관전 타입을 03-01 에서 한 번에 정한다(채우는 일은 03-03·03-05).
+// 4페이즈 처형·승패 계약(결정 0034·0036): 새 단계 여섯·투표 메시지·투표 기록·처형 발표·판 결과 타입을 04-01 에서 한 번에 정한다(채우는 일은 뒤 계획).
 
 // 타입 import·재수출이라 값 import 가 아니다 — 클라이언트 번들에는 아무것도 들어가지 않는다.
 import type { RoleId } from "./game/roles";
@@ -17,11 +18,14 @@ export const MAX_FRAME_BYTES = 1024; // WebSocket 프레임 상한
 export const MAX_BODY_BYTES = 1024; // HTTP 본문 상한
 
 // 낮 세 단계(dayAnnounce·claim·discussion)와 밤·아침(night·morning)은 단계 표(shared/game/phases.ts)의 한 줄씩이다.
+// discussion 다음에 처형 여부 투표(execVote) → 후보 선택(candidateVote) → 선택 공개(candidateVoteReveal) → 최후 변론(defense) → 처형(execution)이 이어지고,
+// 여부 투표 마감에서 통과하지 못하면 바로 night 로 간다(분기는 shared/game/tick.ts). 종료 단계 ended 는 마감이 없다.
 // claim 은 직업 주장을 한 명씩 차례로 하는 단계다(결정 0023). 한 차례(8초)의 마감이 곧 단계 마감이고, 남은 차례가 있으면
 // 서버가 같은 단계에 머물며 마감만 한 차례 뒤로 옮긴다 — 모든 폰이 같은 마감을 받는다. 옛 공개 연출 단계는 없어졌다(결정 0027).
 export type PhaseId =
   | "lobby" | "assigning" | "roleReveal" | "dayAnnounce" | "claim" | "discussion"
-  | "night" | "morning";
+  | "execVote" | "candidateVote" | "candidateVoteReveal" | "defense" | "execution"
+  | "night" | "morning" | "ended";
 
 // ---- 밤·아침 계약(3페이즈) ----
 /** 아침 탈락 문구 번호는 1..MORNING_PHRASE_COUNT (D-18). 서버(문구 추첨)와 화면(문장 표)이 같은 값을 읽는다. */
@@ -64,6 +68,50 @@ export interface SpectatePicks {
 export interface SpectateView {
   seats: SpectateSeat[];
   picks?: SpectatePicks; // 밤에만
+}
+
+// ---- 처형·승패 계약(4페이즈) ----
+/** 처형 문구 번호는 1..EXECUTION_PHRASE_COUNT (D-11). 서버(문구 추첨)와 화면(문장 표)이 같은 값을 읽는다. */
+export const EXECUTION_PHRASE_COUNT = 4;
+/** 여부 투표의 실시간 집계 — 던진 표만 센다(안 던진 사람은 어느 쪽도 아니다). 모든 viewer 에게 같은 값이다(D-02). */
+export interface ExecTally {
+  yes: number;
+  no: number;
+}
+/** 후보 선택 한 줄: 누가 누구를 골랐는지. 던진 표만 있다(무효표는 줄이 없다). 공개 구간 이후에만 모두에게 실린다(D-07). */
+export interface CandidateVoteLine {
+  seat: number;
+  target: number;
+}
+/**
+ * 날짜별 공개 투표 기록 한 줄(D-08). exec 에는 집계 수뿐이다 — 여부 투표는 익명이라 개인 줄이 타입에도 없다.
+ * cand 는 여부 투표를 통과한 날에만: votes 배열 순서가 서버가 정한 공개 순서(D-20)이고, candidate 가 없으면 동률·0표다.
+ */
+export interface VoteLogEntry {
+  n: number;
+  exec: { yes: number; no: number; passed: boolean };
+  cand?: { votes: CandidateVoteLine[]; candidate?: number };
+}
+/** 처형 발표: 탈락한 seat 와 문구 번호. 직업은 싣지 않는다(D-09). */
+export interface ExecutionView {
+  seat: number;
+  phrase: number;
+}
+/** 처형이 성립하지 않아 밤으로 온 이유 코드(D-34): 과반 못 채움 · 후보 동률 · 후보 선택 0표. */
+export type NoExecutionReason = "notMajority" | "tie" | "noVotes";
+/** 판 요약 한 줄(종료 뒤에만 모두에게, D-17·D-27). died false 는 지목했으나 죽지 않은 밤(의사가 지킴)이다. */
+export interface SummaryRow {
+  n: number;
+  exec?: { yes: number; no: number; passed: boolean; candidate?: number };
+  night?: { target?: number; died: boolean };
+}
+/** 승리 팀 — 역할 이름(mafia·citizen)과 겹치지 않는 단어를 쓴다(누출 검사의 직업 단어 목록, Pitfall 10). */
+export type GameWinner = "citizenWin" | "mafiaWin";
+/** 종료 단계(ended)에서만 모두에게 실리는 판 결과(D-17): 승리 팀·모든 사람의 직업·판 요약. */
+export interface GameResult {
+  winner: GameWinner;
+  seats: SpectateSeat[];
+  summary: SummaryRow[];
 }
 
 // ---- 낮 토론 계약(2페이즈) ----
@@ -114,6 +162,13 @@ export interface DayView {
   turn?: ClaimTurn; // claim 단계에서만: 지금 주장할 차례인 seat
   claimLog: ClaimLogEntry[]; // 낮 단계마다 항상: 지금까지 공개된 주장(일차 오름차순, 같은 일차는 차례 순서)
   morning?: MorningView; // morning 단계에서만
+  // ---- 4페이즈 처형 필드 ----
+  // 서버는 낮 단계마다(빈 배열 포함) 항상 싣는다. 타입을 optional 로 둔 이유: 필수로 하면 화면 테스트의 DayView 리터럴이 서버 웨이브에서 한꺼번에 바뀐다(화면 계획이 필요하면 필수로 올린다).
+  voteLog?: VoteLogEntry[];
+  execTally?: ExecTally; // execVote 단계에서만, 모든 viewer 에게 같은 값
+  candidate?: number; // candidateVoteReveal·defense·execution 에서, 후보가 있을 때만
+  execution?: ExecutionView; // execution 단계에서만
+  noExecution?: { reason: NoExecutionReason }; // 처형이 성립하지 않아 밤으로 온 그 밤 단계에서만(D-34)
 }
 
 // ---- HTTP ----
@@ -171,6 +226,7 @@ export type ClientMessage =
   | { t: "say"; template: TemplateId; target?: number; claimedRole?: RoleId }
   | { t: "emoji"; icon: EmojiId }
   | { t: "pick"; target: number } // 밤 행동 — 행동 종류는 보내지 않는다(서버 저장 역할이 정한다)
+  | { t: "execVote"; agree: boolean } // 처형 여부 투표 — 생존자의 찬성 true / 반대 false, 마지막 값이 유효(결정 0034)
   // 테스트 방 방장 도구(결정 0022). 일반 방은 BAD_MESSAGE 로 거부한다. role null = 무작위.
   | { t: "testSkip" }
   | { t: "testReset" }
@@ -193,6 +249,8 @@ export interface MyInfo {
   role?: RoleId; // 내 역할 — 채우는 일은 01-07
   allies?: number[]; // 같은 마피아 동료의 seat — 채우는 일은 01-07
   pick?: number; // 밤에 본인이 고른 seat(본인에게만)
+  voteAgree?: boolean; // execVote 단계에서 본인이 던진 여부 표(본인에게만, 남의 표는 어떤 키로도 싣지 않는다)
+  voteTarget?: number; // candidateVote 단계에서 본인이 고른 후보 seat(본인에게만)
   allyPicks?: number[]; // 생존 마피아에게만: 동료들이 고른 대상 seat 오름차순·중복 없음(누가 골랐는지는 싣지 않는다)
   records?: RoleRecord[]; // 본인 역할의 일지 하나(경찰 수사·마피아 암살·의사 치료), 본인에게만
   testMode?: true; // 테스트 방 방장 본인만(결정 0022). 손님·일반 방·미리보기에는 키 자체가 없다
@@ -209,8 +267,9 @@ export interface RoomView {
   maxPlayers: number;
   players: PublicPlayer[];
   me: MyInfo;
-  day?: DayView; // 낮 세 단계(dayAnnounce·claim·discussion)와 밤·아침에서
+  day?: DayView; // 낮 세 단계(dayAnnounce·claim·discussion)·처형 다섯 단계·밤·아침·종료에서
   spectate?: SpectateView; // 탈락한 본인 view 에만(결정 0021). 살아 있는 사람 view 에는 키 자체가 없다
+  result?: GameResult; // ended 단계에서만, 모두에게(D-17)
 }
 export type WsErrorCode =
   | "BAD_MESSAGE"

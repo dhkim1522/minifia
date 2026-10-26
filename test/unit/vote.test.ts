@@ -372,10 +372,8 @@ describe("뷰 (D-02 익명, T-04-01)", () => {
       const s1 = set([[1, true], [2, true], [3, false]]);
       const s2 = set([[2, true], [4, true], [1, false]]);
       expect(JSON.stringify(viewOf(s1, 0))).toBe(JSON.stringify(viewOf(s2, 0)));
-      // 탈락 관전자 O 도 같다
-      const d1 = withDead(s1, [n - 1]);
-      const d2 = withDead(s2, [n - 1]);
-      expect(JSON.stringify(viewOf(d1, n - 1))).toBe(JSON.stringify(viewOf(d2, n - 1)));
+      // 표를 안 던진 탈락 관전자 O(seat 0)도 같다
+      expect(JSON.stringify(viewOf(withDead(s1, [0]), 0))).toBe(JSON.stringify(viewOf(withDead(s2, [0]), 0)));
     }
   });
 });

@@ -2,7 +2,18 @@
 // 모든 함수는 새 객체를 돌려주고 입력을 바꾸지 않는다. DOM·workerd 전용 API 를 쓰지 않는다(앱·워커 두 tsconfig 에 모두 들어감).
 import { validateNickname } from "../nickname";
 import { MAX_PLAYERS, MIN_PLAYERS } from "../protocol";
-import type { AssassinationRecord, Claim, ClaimLogEntry, InvestigationRecord, MorningView, PhaseId, TreatmentRecord } from "../protocol";
+import type {
+  AssassinationRecord,
+  Claim,
+  ClaimLogEntry,
+  ExecutionView,
+  GameWinner,
+  InvestigationRecord,
+  MorningView,
+  PhaseId,
+  TreatmentRecord,
+  VoteLogEntry,
+} from "../protocol";
 import type { BotPlan } from "./bots";
 import { enterClaim } from "./claim";
 import { ASSIGNING_MS, CLAIM_TURN_MS, DAY_ANNOUNCE_MS, DISCUSSION_MS } from "./phases";
@@ -12,6 +23,13 @@ import type { RoleId } from "./roles";
 export const ROOM_TTL_MS = 3 * 60 * 60 * 1000;
 /** 만든 뒤 아무도 접속(hello)하지 않은 방의 수명. 방 만들기 HTTP 를 쏟아부어 4자리 코드를 말리는 공격의 효과를 줄인다(WR-05). */
 export const UNCONNECTED_ROOM_TTL_MS = 10 * 60 * 1000;
+
+/** 밤 기록 한 줄(판 요약 재료, D-27): 그 밤 마피아 팀의 최종 지목 seat(없으면 키 없음)과 그 사람이 죽었는지. */
+export interface NightLogEntry {
+  n: number;
+  target?: number;
+  died: boolean;
+}
 
 export interface Player {
   id: string;
@@ -38,6 +56,11 @@ export interface Player {
   assassinations?: AssassinationRecord[];
   /** 의사 본인의 치료일지 — 뷰에는 그 의사 본인에게만 실린다. */
   treatments?: TreatmentRecord[];
+  // ---- 4페이즈 투표 상태(결정 0034). 모두 optional — 옛 방도 읽힌다. 서버 전용이고 어떤 view 에도 이 키로 실리지 않는다. ----
+  /** 이번 낮 처형 여부 표(찬성 true). 마지막 값이 유효. resolveExecVote(마감 훅)가 집계 직후 키째 지우고 enterExecVote 가 한 번 더 지운다 — 익명을 데이터가 없다는 사실로 지킨다(D-02). */
+  execVote?: boolean;
+  /** 이번 낮 후보 선택(seat). enterExecVote 가 키째 지운다. */
+  candidateVote?: number;
   /**
    * 서버 전용(결정 0024). 테스트 방 서버 봇 표시 — 토큰은 빈 문자열, connId 는 null, connected 는 true 로 고정이고
    * 소켓이 없다. view·미리보기·어떤 프레임에도 싣지 않는다(허용 목록 리터럴이라 저절로 빠진다).
@@ -80,6 +103,19 @@ export interface RoomState {
   claimPick?: Claim;
   /** 공개 주장 기록. 차례가 끝나는 순간 한 줄씩 쌓이고 판 내내 남는다(공개 정보). */
   claimLog?: ClaimLogEntry[];
+  // ---- 4페이즈 처형·승패 상태(결정 0034). 모두 optional 이고 서버 전용이다. 뷰에는 허용 목록으로만 실린다. ----
+  /** 이번 낮 여부 투표 결과(분기 근거). resolveExecVote 가 쓰고 enterExecVote 가 지운다. */
+  verdict?: { passed: boolean; candidate?: number };
+  /** 날짜별 공개 투표 기록(D-08). resolveExecVote 가 줄을 더하고 판 내내 쌓인다. */
+  voteLog?: VoteLogEntry[];
+  /** 처형 발표(seat·문구). enterExecVote 가 지운다. */
+  execution?: ExecutionView;
+  /** 마지막 처형 문구 번호 — 아침의 lastPhrase 와 따로 센다(연달아 같은 문구 방지). */
+  lastExecPhrase?: number;
+  /** 밤별 지목·사망 기록(판 요약 재료). 서버 전용이고 종료 전에는 어디에도 싣지 않는다. */
+  nightLog?: NightLogEntry[];
+  /** 승리 팀 — 종료 진입 때 기록한다. */
+  winner?: GameWinner;
   hostId: string;
   nextJoinSeq: number;
   players: Player[];

@@ -23,6 +23,7 @@ import { nightChatRecipientIds, pickRecipientIds, pickTarget } from "../shared/g
 import { resetToLobby, setBotCount, setTestRole, skipPhase } from "../shared/game/testTools";
 import type { RoleId } from "../shared/game/roles";
 import { nextWakeAt, tick } from "../shared/game/tick";
+import { castExecVote } from "../shared/game/vote";
 import { buildPreview, buildView } from "../shared/game/view";
 import { ClientMessageSchema } from "../shared/schemas";
 import { cryptoRandInt, randomToken } from "./random";
@@ -207,6 +208,9 @@ export class Room extends DurableObject<Env> {
       case "pick":
         await this.handlePick(ws, msg.target);
         return;
+      case "execVote":
+        await this.handleExecVote(ws, msg.agree);
+        return;
       case "testSkip":
         await this.handleTestSkip(ws);
         return;
@@ -219,6 +223,12 @@ export class Room extends DurableObject<Env> {
       case "testBots":
         await this.handleTestBots(ws, msg.count);
         return;
+      default: {
+        // 새 메시지를 ClientMessage 에 더하고 여기를 빠뜨리면 컴파일이 실패한다 — 조용히 무시되지 않게(Pitfall 15).
+        const unhandled: never = msg;
+        void unhandled;
+        return;
+      }
     }
   }
 
@@ -421,6 +431,30 @@ export class Room extends DurableObject<Env> {
     return null;
   }
 
+  // 처형 여부 투표: 신원은 소켓 첨부의 playerId 뿐이다 — 메시지에 seat·id 가 없다(T-04-03).
+  private async handleExecVote(ws: WebSocket, agree: boolean): Promise<void> {
+    const att = this.attachmentOf(ws);
+    if (!att || !this.room) {
+      this.sendTo(ws, { t: "error", code: "BAD_MESSAGE" });
+      return;
+    }
+    const error = await this.applyExecVote(att.playerId, agree);
+    if (error !== null) this.sendRejection(ws, att.playerId, error);
+  }
+
+  // 마감이 바뀌지 않으니 reschedule 은 필요 없다(D-28). 같은 값을 다시 보내면 같은 객체라 저장·전송도 하지 않는다.
+  // 받아들여지면 pick 과 달리 모든 소켓이 각자 view 를 받는다: 집계 수(day.execTally)는 모두에게 공개되는 실시간 정보이고(D-02),
+  // 개인 표는 view 허용 목록이 본인 프레임(me.voteAgree)으로만 제한한다. 받는 사람을 줄이면 오히려 집계가 모두에게 같지 않게 된다.
+  private async applyExecVote(playerId: string, agree: boolean): Promise<WsErrorCode | null> {
+    if (!this.room) return "BAD_MESSAGE";
+    const result = castExecVote(this.room, playerId, agree);
+    if (!result.ok) return result.error;
+    if (result.state === this.room) return null;
+    this.room = result.state;
+    await this.persistAndBroadcast();
+    return null;
+  }
+
   // 서버 봇 행동 실행(결정 0024): 때가 된 행동을 꺼내 남은 계획을 먼저 저장하고, 봇 id 로 같은 apply* 를 부른다.
   // 거부(RATE_LIMITED 포함)는 버린다 — 알릴 소켓이 없을 뿐 사람 메시지가 거부된 것과 같다.
   private async runDueBots(now: number): Promise<void> {
@@ -447,6 +481,12 @@ export class Room extends DurableObject<Env> {
       case "pick":
         await this.applyPick(step.botId, act.target);
         return;
+      default: {
+        // 새 봇 행동을 BotAct 에 더하고 여기를 빠뜨리면 컴파일이 실패한다(Pitfall 15).
+        const unhandled: never = act;
+        void unhandled;
+        return;
+      }
     }
   }
 

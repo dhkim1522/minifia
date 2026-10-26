@@ -2,6 +2,8 @@
 // 관전(결정 0021): 탈락한 본인에게만 모든 실제 직업과 그 밤의 행동 대상. 살아 있는 사람에게는 어떤 키로도 싣지 않는다 —
 // 결정 0002 를 "살아 있는 사람에게는 보내지 않는다" 로 좁혀 유지. 직업 키 이름은 role 이 아니라 job 이다(누출 검사가 role 키를 me 밖에서 금지).
 // 밤 필드 받는 사람: pick 본인(생존·밤), allyPicks 생존 마피아(밤), records 경찰(수사)·마피아(암살)·의사(치료) 본인 중 본인 역할 일지 하나(역할 공개 단계 전체), morning 모두(아침만).
+// 투표 필드 받는 사람(4페이즈): execTally 모두에게 같은 값(execVote 단계만), voteAgree 본인(생존·execVote), voteLog 모두(낮 단계마다 항상, 집계 수만).
+// 남의 여부 표는 어떤 키로도 싣지 않는다 — Player.execVote 는 허용 목록 리터럴에 없고 마감 훅이 키째 지운다(결정 0034·D-02).
 import type {
   DayView,
   MorningView,
@@ -13,6 +15,7 @@ import type {
   RoomView,
   SpectatePicks,
   SpectateSeat,
+  VoteLogEntry,
 } from "../protocol";
 import { MAX_PLAYERS, MIN_PLAYERS } from "../protocol";
 import { isAlive } from "./alive";
@@ -23,15 +26,35 @@ import { PHASE_DEFS } from "./phases";
 import { rolesInPlay } from "./roles";
 import { hostOf } from "./room";
 import type { RoomState } from "./room";
+import { execTallyOf } from "./vote";
 
-/** view.day 가 생기는 단계: 낮 세 단계와 밤·아침. 이 밖의 단계 뷰에는 day 키 자체가 없다(D-07). */
+/**
+ * view.day 가 생기는 단계: 낮 세 단계·처형 다섯 단계·밤·아침·종료. 이 밖의 단계 뷰에는 day 키 자체가 없다(D-07).
+ * ended 도 넣는다: day 에는 공개 정보(일차·구성·주장 기록·투표 기록)만 있어 누출이 없고, 결과 화면이 테이블을 다시 쓸 수 있다.
+ */
 const DAY_PHASES: ReadonlySet<PhaseId> = new Set([
   "dayAnnounce",
   "claim",
   "discussion",
+  "execVote",
+  "candidateVote",
+  "candidateVoteReveal",
+  "defense",
+  "execution",
   "night",
   "morning",
+  "ended",
 ]);
+
+/** 투표 기록 한 줄을 필드별로 복사한다(펼쳐 복사 금지): exec 는 yes·no·passed 세 키, cand 는 있을 때만 votes 를 {seat, target} 으로, candidate 는 있을 때만. */
+function voteLogLine(entry: VoteLogEntry): VoteLogEntry {
+  const line: VoteLogEntry = { n: entry.n, exec: { yes: entry.exec.yes, no: entry.exec.no, passed: entry.exec.passed } };
+  if (entry.cand !== undefined) {
+    line.cand = { votes: entry.cand.votes.map((v) => ({ seat: v.seat, target: v.target })) };
+    if (entry.cand.candidate !== undefined) line.cand.candidate = entry.cand.candidate;
+  }
+  return line;
+}
 
 /**
  * 낮 정보. 허용 목록 리터럴로만 만든다 — 조건을 채울 때만 키를 만들고, 서버 전용 필드(claimOrder·claimIdx·claimStart·claimPick)는 싣지 않는다.
@@ -44,7 +67,10 @@ function buildDay(state: RoomState): DayView {
     n: state.day ?? 1,
     roles: rolesInPlay(state.players.length),
     claimLog: (state.claimLog ?? []).map((entry) => ({ n: entry.n, seat: entry.seat, claim: entry.claim })),
+    voteLog: (state.voteLog ?? []).map(voteLogLine),
   };
+  // 실시간 집계는 모든 viewer 에게 같은 값이다 — 마감 집계와 같은 함수(execTallyOf)를 쓴다.
+  if (state.phase === "execVote") day.execTally = execTallyOf(state);
   if (state.phase === "claim") {
     const seat = currentClaimSeat(state);
     if (seat !== undefined) day.turn = { seat };
@@ -121,6 +147,11 @@ export function buildView(state: RoomState, playerId: string, now: number): Room
   // 본인 선택은 본인에게만(D-06) — 남의 nightPick 은 어떤 키로도 싣지 않는다. 밤에 살아 있는 본인이 고른 값이 있을 때만 키를 만든다.
   if (state.phase === "night" && isAlive(me) && me.nightPick !== undefined) {
     myInfo.pick = me.nightPick;
+  }
+
+  // 여부 표는 본인에게만(D-02) — 생존한 본인이 execVote 단계에서 던진 값이 있을 때만 키를 만든다. 남의 값은 어떤 키로도 싣지 않는다.
+  if (state.phase === "execVote" && isAlive(me) && me.execVote !== undefined) {
+    myInfo.voteAgree = me.execVote;
   }
 
   // 동료가 고른 대상은 밤에 살아 있는 마피아에게만, 대상 seat 집합으로만(누가 골랐는지는 없다, D-07). 탈락한 마피아는 allies 만 받는다(A3).

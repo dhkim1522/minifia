@@ -9,11 +9,14 @@
 // 마감 훅(ON_DEADLINE): 같은 단계에 머무는 단계(claim 의 차례)의 마감 처리. 진입 훅과 같이 tick 루프 안에서만 부른다(결정 0016-2).
 // 훅이 stay 를 돌려주면 다음 단계로 가지 않고 같은 단계에서 마감만 "이전 마감 + 단계 길이" 로 옮긴다.
 // 난수는 세 번째 인자로만 받는다 — 방 DO 는 cryptoRandInt, 테스트는 seededRandInt.
+// 분기(4페이즈): 마감 훅이 next 를 돌려주면 그 단계로, 없으면 단계 표(PHASE_DEFS)의 기본 next 로 간다. 표는 데이터만 두고 분기는 훅이 정한다.
+// 진입 훅의 세 번째 인자 at 은 진입 시각(= 이전 마감)이다 — 시각을 스스로 읽지 않는 순수 규칙이 "진입 + 30분" 같은 계산을 할 때 쓴다.
 import type { PhaseId } from "../protocol";
 import { enterClaim, resolveClaimTurn } from "./claim";
 import { enterMorning, enterNight } from "./night";
 import { PHASE_DEFS } from "./phases";
 import type { RoomState } from "./room";
+import { enterExecVote, resolveExecVote } from "./vote";
 
 /** 낮 시작 발표 진입: 일차 +1. 메시지는 서버에 없고(결정 0017-7) 연장은 없다(결정 0017-5). nextMessageSeq 는 건드리지 않는다. */
 export function enterDayAnnounce(state: RoomState): RoomState {
@@ -25,19 +28,25 @@ export type RandInt = (n: number) => number;
 
 /** 기본값: 난수가 필요한 진입을 난수 없이 부르면 조용히 틀리지 않고 바로 오류를 던진다. */
 const NO_RANDOM: RandInt = () => {
-  throw new Error("tick: randInt is required to resolve the night");
+  throw new Error("tick: randInt is required for this phase transition");
 };
 
-const ON_ENTER: Partial<Record<PhaseId, (s: RoomState, randInt: RandInt) => RoomState>> = {
+/** 마감 훅의 반환. stay 면 같은 단계에 머물고, next 가 있으면 표의 기본 다음 단계 대신 그 단계로 간다. */
+export type DeadlineResult = { state: RoomState; stay: boolean; next?: PhaseId };
+
+/** 진입 훅. at 은 진입 시각(= 이전 마감)이다. 인자를 쓰지 않는 훅은 앞의 둘만 받아도 타입이 맞는다. */
+const ON_ENTER: Partial<Record<PhaseId, (s: RoomState, randInt: RandInt, at: number) => RoomState>> = {
   dayAnnounce: enterDayAnnounce,
   claim: enterClaim,
+  execVote: enterExecVote,
   night: enterNight,
   morning: enterMorning,
 };
 
 /** 마감 훅. stay 면 같은 단계에 머문다(claim 의 다음 차례). 상태만 바꾸고 시각은 tick 이 정한다. */
-const ON_DEADLINE: Partial<Record<PhaseId, (s: RoomState) => { state: RoomState; stay: boolean }>> = {
+const ON_DEADLINE: Partial<Record<PhaseId, (s: RoomState) => DeadlineResult>> = {
   claim: resolveClaimTurn,
+  execVote: resolveExecVote,
 };
 
 /**
@@ -51,6 +60,7 @@ export function tick(state: RoomState, now: number, randInt: RandInt = NO_RANDOM
     const deadline = current.phaseEndsAt;
     const onDeadline = ON_DEADLINE[current.phase];
     let closing = current;
+    let branch: PhaseId | undefined;
     if (onDeadline !== undefined) {
       const resolved = onDeadline(current);
       const turnMs = PHASE_DEFS[current.phase].durationMs;
@@ -59,8 +69,9 @@ export function tick(state: RoomState, now: number, randInt: RandInt = NO_RANDOM
         continue;
       }
       closing = resolved.state;
+      branch = resolved.next;
     }
-    const next = PHASE_DEFS[closing.phase].next;
+    const next = branch ?? PHASE_DEFS[closing.phase].next;
     if (next === null) break;
     const duration = PHASE_DEFS[next].durationMs;
     const entered: RoomState = {
@@ -69,7 +80,7 @@ export function tick(state: RoomState, now: number, randInt: RandInt = NO_RANDOM
       phaseEndsAt: duration === null ? null : deadline + duration,
     };
     const hook = ON_ENTER[next];
-    current = hook ? hook(entered, randInt) : entered;
+    current = hook ? hook(entered, randInt, deadline) : entered;
   }
   return current;
 }
