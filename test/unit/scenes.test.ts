@@ -187,6 +187,7 @@ describe("public/backgrounds (WebP 일곱 개, 옛 SVG 는 없다)", () => {
     expect(existsSync("design/backgrounds/v2/set1/bg_game_day.jpg")).toBe(true);
     expect(existsSync("design/backgrounds/v3/bg_game_night.png")).toBe(true);
     expect(existsSync("design/backgrounds/v4/bg_game_night.png")).toBe(true);
+    expect(existsSync("design/backgrounds/v5/bg_game_night.png")).toBe(true);
   });
 });
 
@@ -198,10 +199,10 @@ describe("scripts/make-backdrops.mjs (SOURCES)", () => {
     expect(SOURCES.map((s) => s.out).sort()).toEqual(EXPECTED_FILES);
   });
 
-  it("원본이 있다: 게임 구도는 design/backgrounds/v4(실내), 입구 구도는 v3", () => {
+  it("원본이 있다: 게임 구도는 design/backgrounds/v5(실내 V2), 입구 구도는 v3", () => {
     for (const s of SOURCES) {
       const isEntry = s.out.startsWith("bg_entry_");
-      expect(s.src.startsWith(isEntry ? "design/backgrounds/v3/" : "design/backgrounds/v4/"), s.src).toBe(true);
+      expect(s.src.startsWith(isEntry ? "design/backgrounds/v3/" : "design/backgrounds/v5/"), s.src).toBe(true);
       expect(existsSync(s.src), s.src).toBe(true);
     }
   });

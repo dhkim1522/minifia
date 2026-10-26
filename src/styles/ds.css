@@ -51,11 +51,13 @@
 
 /* Backdrop: 화면 뒤 배경 장면 */
 :where(.mf-backdrop) { width: 100%; height: 100%; }
-.mf-backdrop { position: relative; overflow: hidden; background: var(--night-900); isolation: isolate; }
+.mf-backdrop { --mf-backdrop-dim: 0.8; position: relative; overflow: hidden; background: var(--night-900); isolation: isolate; }
 .mf-backdrop__art { position: absolute; inset: 0; z-index: -1; pointer-events: none; background-size: cover; background-repeat: no-repeat; transition: opacity var(--dur-slow) var(--ease-out); }
 /* 장면이 바뀌면 층을 쌓는다: 새 층(entering)은 그림이 준비된 뒤 current 로 켜지고 이전 층(leaving)은 꺼진 뒤 걷힌다. 축소 모션은 base.css 전역 규칙이 처리한다. */
 .mf-backdrop__art[data-state="entering"], .mf-backdrop__art[data-state="leaving"] { opacity: 0; }
 .mf-backdrop__art[data-state="current"] { opacity: 1; }
+/* 실내 배경(V2): 헤더 글씨가 읽히도록 게임 구도 그림 전체 명도를 낮춘다(0.8 = 색 값을 0.8배, 채도·색상 그대로). 입구 구도는 그대로. */
+.mf-backdrop__art[data-layout="game"] { filter: brightness(var(--mf-backdrop-dim)); }
 /* 아침·낮(밝은 하늘): 헤더 위쪽 어두운 막. 값은 src/game/scenes.ts 의 HEADER_SCRIM_STOPS 가 인라인 --mf-scrim 으로 싣는다(층과 함께 전환). */
 .mf-backdrop__art[style*="--mf-scrim"]::after { content: ""; position: absolute; inset: 0 0 auto 0; height: 150px; background: var(--mf-scrim); pointer-events: none; }
 .mf-backdrop__content { position: relative; height: 100%; }
