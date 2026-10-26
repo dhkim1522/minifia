@@ -19,6 +19,8 @@ import {
 // 타입 선언이 없는 .mjs 다(allowJs 없음). 모양은 아래 SourceRow 로 직접 적는다.
 // @ts-expect-error -- 선언 없는 스크립트 모듈
 import * as backdropScript from "../../scripts/make-backdrops.mjs";
+// @ts-expect-error -- 선언 없는 스크립트 모듈
+import * as e2eLib from "../../scripts/e2e/lib.mjs";
 
 interface SourceRow {
   out: string;
@@ -74,6 +76,14 @@ describe("단계 → 장면 규칙표(PHASE_SCENE)", () => {
     expect(used.has("verdictDusk")).toBe(false);
     expect(SCENE_IDS).toContain("dusk");
     expect(SCENE_IDS).toContain("verdictDusk");
+  });
+});
+
+describe("E2E 기대 장면표(EXPECTED_SCENE)와 PHASE_SCENE", () => {
+  it("scripts/e2e/lib.mjs 의 EXPECTED_SCENE 이 모든 단계에서 PHASE_SCENE 과 같다 (두 표가 어긋나면 B1 이 거짓 통과·거짓 실패한다)", () => {
+    const expected = (e2eLib as { EXPECTED_SCENE: Record<string, string> }).EXPECTED_SCENE;
+    expect(Object.keys(expected).sort()).toEqual([...PHASES].sort());
+    for (const phase of PHASES) expect(expected[phase], phase).toBe(PHASE_SCENE[phase]);
   });
 });
 

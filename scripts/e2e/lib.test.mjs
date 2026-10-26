@@ -2,8 +2,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  APPROVED_RELAXATIONS,
+  D3B_FLOOR_5_PLAYERS,
   DECORATIVE_ALLOW,
+  EXPECTED_SCENE,
   FACE_RATIO,
+  HEADER_BG_PERCENTILE,
+  HEADER_CONTRAST_MIN,
   HEADER_H,
   ONE_LINE_FACTOR,
   PANEL_H,
@@ -29,6 +34,11 @@ import {
   turnChecks,
   crownChecks,
   sceneIntroChecks,
+  backdropSceneChecks,
+  headerContrastChecks,
+  percentile,
+  relLuminance,
+  rgbP95Luminance,
   exitCodeOf,
   faceRegion,
   feltGapChecks,
@@ -247,6 +257,42 @@ test("기준 수치는 낮추지 않았다(0.5px·1.6배·45%·44·157)", () => 
   assert.equal(PANEL_H, 157);
 });
 
+test("D3B_FLOOR_5_PLAYERS 는 98.0% 하나만 낮췄다(5명판 한정, 사용자 승인 2026-10-26) — 다른 바닥과 기준 수치는 그대로", () => {
+  assert.equal(D3B_FLOOR_5_PLAYERS, 0.98);
+  // 5명판 바닥만 98.0%. 다른 인원 바닥은 dayChecks 로 직접 잰다 (4명 100%, 6명 85%, 7명 50%, 8명 55%).
+  const floorOk = (n, ratio) => {
+    const s = daySnap();
+    s.tagVisibility = Array.from({ length: n }, (_, i) => ({ seat: i, ratio: i === 1 ? ratio : 1 }));
+    return dayById(dayChecks(s, size), "D3b").ok;
+  };
+  assert.equal(floorOk(4, 0.999), true);
+  assert.equal(floorOk(4, 0.998), false);
+  assert.equal(floorOk(5, 0.98), true);
+  assert.equal(floorOk(5, 0.979), false);
+  assert.equal(floorOk(6, 0.85), true);
+  assert.equal(floorOk(6, 0.849), false);
+  assert.equal(floorOk(7, 0.5), true);
+  assert.equal(floorOk(7, 0.499), false);
+  assert.equal(floorOk(8, 0.55), true);
+  assert.equal(floorOk(8, 0.549), false);
+  assert.equal(OVERLAP_EPS, 0.5);
+  assert.equal(ONE_LINE_FACTOR, 1.6);
+  assert.equal(FACE_RATIO, 0.45);
+  assert.equal(TAP_MIN, 44);
+  assert.equal(PANEL_H, 157);
+});
+
+test("APPROVED_RELAXATIONS: 승인된 완화는 M1·D3a/D3b·D4 와 5명판 D3b 98.0% 뿐이고, 모두 이유와 승인 날짜가 있다", () => {
+  assert.deepEqual(APPROVED_RELAXATIONS.map((r) => r.id), ["M1", "D3a/D3b", "D4", "D3b-5"]);
+  for (const r of APPROVED_RELAXATIONS) {
+    assert.ok(typeof r.reason === "string" && r.reason.trim().length > 0, JSON.stringify(r));
+    assert.ok(/^\d{4}-\d{2}-\d{2}$/.test(r.approved) || r.approved === "03.1 F7", JSON.stringify(r));
+  }
+  const five = APPROVED_RELAXATIONS.find((r) => r.id === "D3b-5");
+  assert.equal(five.approved, "2026-10-26");
+  assert.match(five.reason, /98\.0/);
+});
+
 test("G7 smallTextIssues: 14px 미만 글자는 실패, 허용된 줄은 통과, 필드가 없으면 실패", () => {
   assert.equal(smallTextIssues([]).ok, true);
   assert.equal(smallTextIssues([{ desc: "span.x", size: 14 }]).ok, true);
@@ -403,7 +449,7 @@ test("dayChecks D3a: 이름표 z 최댓값 < 캐릭터 z 최솟값이면 통과,
   assert.equal(dayById(dayChecks(n, size), "D3a").ok, false);
 });
 
-test("dayChecks D3b: 인원별 바닥(4·5명 100%, 6명 85%, 7명 50%, 8명 55%)", () => {
+test("dayChecks D3b: 인원별 바닥(4명 100%, 5명 98.0%, 6명 85%, 7명 50%, 8명 55%)", () => {
   const withN = (n, ratio, lowSeat = 1) => {
     const s = daySnap();
     s.tagVisibility = Array.from({ length: n }, (_, i) => ({ seat: i, ratio: i === lowSeat ? ratio : 1 }));
@@ -412,6 +458,10 @@ test("dayChecks D3b: 인원별 바닥(4·5명 100%, 6명 85%, 7명 50%, 8명 55%
   assert.equal(withN(4, 1).ok, true);
   assert.equal(withN(4, 0.99).ok, false);
   assert.equal(withN(5, 1).ok, true);
+  // 5명판만 98.0% (2026-10-26 사용자 승인 완화, D3B_FLOOR_5_PLAYERS): 앞쪽 옆자리 유령 머리가 5글자 이름표를 약 0.4% 덮는다
+  assert.equal(withN(5, 0.996).ok, true);
+  assert.equal(withN(5, 0.98).ok, true);
+  assert.equal(withN(5, 0.979).ok, false);
   assert.equal(withN(5, 0.95).ok, false);
   assert.equal(withN(6, 0.85).ok, true);
   assert.equal(withN(6, 0.84).ok, false);
@@ -1236,4 +1286,170 @@ test("livingRoleArtChecks V2: 테이블 안에 역할 그림 0 개, 시트·공�
     { myJob: "police" },
   );
   assert.equal(two.ok, false);
+});
+
+// ---- H1 헤더 글씨 대비 · B1 배경 장면 · N8 낮 시작 문구 (결정 0030, 사용자 지시 V-06) ----
+
+const GRAY_50 = [241, 242, 245];
+// 대비 비율 r 이 되는 배경 휘도 (L글자 + .05) / (L배경 + .05) = r
+const bgFor = (ratio, color = GRAY_50) => (relLuminance(color) + 0.05) / ratio - 0.05;
+const hItem = (name, ratio, color = GRAY_50) => ({ name, rect: rect(16, 16, 100, 30), color, bgLum: bgFor(ratio, color) });
+
+test("H1 상수: 대비 하한 4.5, 배경 백분위수 0.95 — 낮추지 않는다", () => {
+  assert.equal(HEADER_CONTRAST_MIN, 4.5);
+  assert.equal(HEADER_BG_PERCENTILE, 0.95);
+});
+
+test("relLuminance: 흰색 1, 검정 0, gray-50(241,242,245) 약 0.889, 초록이 가장 밝다", () => {
+  assert.equal(relLuminance([255, 255, 255]), 1);
+  assert.equal(relLuminance([0, 0, 0]), 0);
+  assert.ok(Math.abs(relLuminance(GRAY_50) - 0.889) < 0.002, String(relLuminance(GRAY_50)));
+  assert.ok(relLuminance([0, 255, 0]) > relLuminance([255, 0, 0]));
+  assert.ok(relLuminance([255, 0, 0]) > relLuminance([0, 0, 255]));
+});
+
+test("percentile: 정렬 후 95번째, 한 개면 그 값, 빈 목록은 NaN", () => {
+  const v = Array.from({ length: 100 }, (_, i) => i + 1);
+  assert.equal(percentile(v, 0.95), 95);
+  assert.equal(percentile([...v].reverse(), 0.95), 95);
+  assert.equal(percentile([0.3], 0.95), 0.3);
+  assert.equal(percentile(v, 1), 100);
+  assert.equal(percentile(v, 0), 1);
+  assert.ok(Number.isNaN(percentile([], 0.95)));
+});
+
+test("rgbP95Luminance: 한 점만 밝은 픽셀(별·해)은 p95 를 흔들지 않고 전체가 밝으면 밝다", () => {
+  // 픽셀 100개: 99개는 어둡고(14,19,38) 1개만 흰색 → p95 는 어두운 쪽
+  const flat = [];
+  for (let i = 0; i < 99; i += 1) flat.push(14, 19, 38);
+  flat.push(255, 255, 255);
+  assert.ok(rgbP95Luminance(flat) < 0.02, String(rgbP95Luminance(flat)));
+  // 10 % 가 흰색이면 p95 는 흰색
+  const flat2 = [];
+  for (let i = 0; i < 90; i += 1) flat2.push(14, 19, 38);
+  for (let i = 0; i < 10; i += 1) flat2.push(255, 255, 255);
+  assert.equal(rgbP95Luminance(flat2), 1);
+  assert.ok(Number.isNaN(rgbP95Luminance([])));
+});
+
+test("headerContrastChecks H1: 제목 7.0·타이머 5.2 는 통과", () => {
+  const r = headerContrastChecks({ items: [hItem("제목", 7.0), hItem("타이머", 5.2)] }, { expectTimer: true });
+  assert.equal(r.id, "H1");
+  assert.equal(r.ok, true, r.detail);
+});
+
+test("headerContrastChecks H1: 정확히 4.5 는 통과, 4.49 는 실패", () => {
+  assert.equal(headerContrastChecks({ items: [hItem("제목", 4.5001)] }, { expectTimer: false }).ok, true);
+  assert.equal(headerContrastChecks({ items: [hItem("제목", 4.49)] }, { expectTimer: false }).ok, false);
+});
+
+test("headerContrastChecks H1: 타이머 3.9 는 실패하고 내용 칸에 요소 이름과 숫자가 나온다", () => {
+  const r = headerContrastChecks({ items: [hItem("제목", 7.0), hItem("타이머", 3.9)] }, { expectTimer: true });
+  assert.equal(r.ok, false);
+  assert.match(r.detail, /타이머/);
+  assert.match(r.detail, /3\.9/);
+  assert.doesNotMatch(r.detail, /제목/);
+});
+
+test("headerContrastChecks H1: 계산된 글자색이 어두우면 같은 배경에서도 달라진다(글자색을 쓴다)", () => {
+  const dark = [40, 40, 40];
+  const bgLum = bgFor(7.0, GRAY_50);
+  const r = headerContrastChecks({ items: [{ name: "제목", rect: rect(0, 0, 10, 10), color: dark, bgLum }] }, { expectTimer: false });
+  assert.equal(r.ok, false);
+});
+
+test("headerContrastChecks H1: 측정값이 없으면 조용히 통과하지 않고 `측정값 없음`", () => {
+  for (const m of [null, undefined, {}, { items: [] }, { items: null }]) {
+    const r = headerContrastChecks(m, { expectTimer: false });
+    assert.equal(r.ok, false, JSON.stringify(m));
+    assert.match(r.detail, /측정값 없음/);
+  }
+});
+
+test("headerContrastChecks H1: 배경 휘도가 숫자가 아니면(캡처 실패) 실패한다", () => {
+  const bad = { name: "제목", rect: rect(0, 0, 10, 10), color: GRAY_50, bgLum: Number.NaN };
+  const r = headerContrastChecks({ items: [bad] }, { expectTimer: false });
+  assert.equal(r.ok, false);
+  assert.match(r.detail, /측정값 없음|배경/);
+});
+
+test("headerContrastChecks H1: 타이머가 있어야 하는 상태에서 타이머 항목이 없으면 실패, 거짓이면 제목만 있어도 통과", () => {
+  const onlyTitle = { items: [hItem("제목", 7.0)] };
+  const a = headerContrastChecks(onlyTitle, { expectTimer: true });
+  assert.equal(a.ok, false);
+  assert.match(a.detail, /타이머/);
+  assert.equal(headerContrastChecks(onlyTitle, { expectTimer: false }).ok, true);
+});
+
+test("headerContrastChecks H1: 제목 항목이 없어도 실패한다(대기실 코드·장면 제목이 반드시 있다)", () => {
+  const r = headerContrastChecks({ items: [hItem("타이머", 6)] }, { expectTimer: true });
+  assert.equal(r.ok, false);
+  assert.match(r.detail, /제목/);
+});
+
+const layer = (scene, state = "current", image = `url("http://localhost:5173/backgrounds/bg_game_${scene}.webp")`) => ({ scene, state, image });
+
+test("EXPECTED_SCENE: 단계 여덟 개가 모두 장면 id 로 정해져 있다", () => {
+  assert.deepEqual(Object.keys(EXPECTED_SCENE).sort(), ["assigning", "claim", "dayAnnounce", "discussion", "lobby", "morning", "night", "roleReveal"]);
+  assert.equal(EXPECTED_SCENE.night, "night");
+  assert.equal(EXPECTED_SCENE.morning, "morning");
+  assert.equal(EXPECTED_SCENE.dayAnnounce, "day");
+  assert.equal(EXPECTED_SCENE.claim, "day");
+  assert.equal(EXPECTED_SCENE.discussion, "day");
+  assert.equal(EXPECTED_SCENE.lobby, "lobby");
+});
+
+test("backdropSceneChecks B1: 한 층이 current 이고 기대 장면이며 webp 면 통과", () => {
+  const r = backdropSceneChecks({ layers: [layer("night")] }, { phase: "night" });
+  assert.equal(r.id, "B1");
+  assert.equal(r.ok, true, r.detail);
+  assert.equal(backdropSceneChecks({ layers: [layer("day")] }, { phase: "discussion" }).ok, true);
+  assert.equal(backdropSceneChecks({ layers: [layer("lobby")] }, { phase: "lobby" }).ok, true);
+});
+
+test("backdropSceneChecks B1: 층이 둘, leaving 이 남음, 장면 다름, webp 아님, info 없음은 각각 실패", () => {
+  const cases = [
+    [{ layers: [layer("night", "leaving"), layer("night")] }, /층/],
+    [{ layers: [layer("night", "leaving")] }, /current|leaving/],
+    [{ layers: [layer("night", "entering")] }, /current|entering/],
+    [{ layers: [layer("morning")] }, /morning/],
+    [{ layers: [layer("night", "current", 'url("http://localhost:5173/backgrounds/bg_game_night.svg")')] }, /webp/],
+    [{ layers: [layer("night", "current", "none")] }, /webp/],
+    [{ layers: [] }, /층/],
+    [null, /없음/],
+    [undefined, /없음/],
+  ];
+  for (const [info, re] of cases) {
+    const r = backdropSceneChecks(info, { phase: "night" });
+    assert.equal(r.ok, false, JSON.stringify(info));
+    assert.match(r.detail, re, JSON.stringify(info));
+  }
+});
+
+test("backdropSceneChecks B1: 알 수 없는 단계는 실패한다", () => {
+  assert.equal(backdropSceneChecks({ layers: [layer("night")] }, { phase: "voting" }).ok, false);
+});
+
+test("sceneIntroChecks N8: 낮 시작 문구 `N일차`+`낮이 되었습니다`+보조줄, 톤 day, pointer-events none, aria-hidden 이면 통과", () => {
+  const good = { texts: ["2일차", "낮이 되었습니다", "토론 전에 먼저 직업을 공개해요"], kind: "day", pointerEvents: "none", ariaHidden: true };
+  const r = sceneIntroChecks(good, { kind: "day" });
+  assert.equal(r.id, "N8");
+  assert.equal(r.ok, true, r.detail);
+  assert.equal(sceneIntroChecks({ ...good, texts: ["13일차", ...good.texts.slice(1)] }, { kind: "day" }).ok, true);
+  for (const bad of [
+    null,
+    undefined,
+    { ...good, texts: ["2일차", "낮이 되었습니다"] },
+    { ...good, texts: ["2일차", "밤이 되었습니다", good.texts[2]] },
+    { ...good, texts: ["일차", "낮이 되었습니다", good.texts[2]] },
+    { ...good, texts: ["2일차", "낮이 되었습니다", "다른 줄"] },
+    { ...good, kind: "night" },
+    { ...good, pointerEvents: "auto" },
+    { ...good, ariaHidden: false },
+  ]) {
+    assert.equal(sceneIntroChecks(bad, { kind: "day" }).ok, false, JSON.stringify(bad));
+  }
+  assert.match(sceneIntroChecks(null, { kind: "day" }).detail, /\.mf-sceneintro/);
+  // 밤 규칙(N6)은 그대로: 낮 글자는 밤 검사를 통과하지 못한다
+  assert.equal(sceneIntroChecks(good).ok, false);
 });
