@@ -267,6 +267,10 @@ async function dayIntro(ctx, id) {
   const stage = await readStage(page);
   if (tracker.last()?.phase !== "dayAnnounce") throw new SetupError("낮 시작 장면을 읽기 전에 낮 시작(2초)이 끝남");
   const mySeat = mySeatOf(tracker);
+  if (ctx.shots) {
+    mkdirSync(OUT_DIR, { recursive: true });
+    await shot(page, join(OUT_DIR, `${id}-day-intro-${ctx.size.label}.png`)); // 낮 시작 문구가 떠 있는 동안의 사진(--shots 한정)
+  }
   (ctx.dayStates ??= []).push({ state: "dayAnnounce", felt: stage.felt, tags: stage.tags, stage, mySeat });
   recOne(rec, sc, sceneIntroChecks(await readIntroWatch(page), { kind: "day" })); // N8
   const n9 = await attempt(async () => {
