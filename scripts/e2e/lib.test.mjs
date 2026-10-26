@@ -1389,8 +1389,12 @@ test("headerContrastChecks H1: 제목 항목이 없어도 실패한다(대기실
 
 const layer = (scene, state = "current", image = `url("http://localhost:5173/backgrounds/bg_game_${scene}.webp")`) => ({ scene, state, image });
 
-test("EXPECTED_SCENE: 단계 여덟 개가 모두 장면 id 로 정해져 있다", () => {
-  assert.deepEqual(Object.keys(EXPECTED_SCENE).sort(), ["assigning", "claim", "dayAnnounce", "discussion", "lobby", "morning", "night", "roleReveal"]);
+test("EXPECTED_SCENE: 단계 열네 개가 모두 장면 id 로 정해져 있다", () => {
+  assert.deepEqual(Object.keys(EXPECTED_SCENE).sort(), [
+    "assigning", "candidateVote", "candidateVoteReveal", "claim", "dayAnnounce", "defense", "discussion", "ended", "execVote", "execution", "lobby", "morning", "night", "roleReveal",
+  ]);
+  for (const p of ["execVote", "candidateVote", "candidateVoteReveal", "defense", "execution"]) assert.equal(EXPECTED_SCENE[p], "verdictDusk", p);
+  assert.equal(EXPECTED_SCENE.ended, "lobby");
   assert.equal(EXPECTED_SCENE.night, "night");
   assert.equal(EXPECTED_SCENE.morning, "morning");
   assert.equal(EXPECTED_SCENE.dayAnnounce, "day");

@@ -39,6 +39,12 @@ const PHASE_ANNOUNCE: Record<PhaseId, (view: RoomView) => string> = {
   discussion: () => "낮 토론",
   night: nightAnnounce,
   morning: morningAnnounce,
+  execVote: () => "처형 여부 투표",
+  candidateVote: () => "후보 선택 투표",
+  candidateVoteReveal: () => "투표 공개",
+  defense: () => "최후 변론",
+  execution: () => "처형",
+  ended: () => "게임이 끝났습니다",
 };
 
 // 주장 차례 안내: 내 차례면 `내 차례예요`, 남이면 `{닉네임}님 차례`. 차례나 닉네임을 못 찾으면 빈 문자열(`님 차례` 만 읽히지 않게).

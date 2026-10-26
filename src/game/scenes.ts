@@ -2,8 +2,8 @@
 //
 // - 장면 목록(SCENES): 앱 그림 한 장이 장면 하나다(public/backgrounds/bg_{game|entry}_{파일 조각}.webp).
 // - 단계 → 장면 규칙표(PHASE_SCENE): 화면에 단계별 분기를 따로 두지 않는다.
-//   4페이즈: 투표·처형 단계가 생기면 PHASE_SCENE 에 행을 더한다(dusk·verdictDusk 는 이미 등록돼 있다). PhaseId 가 늘면
-//   Record<PhaseId, SceneId> 가 타입 오류로 알려 준다.
+//   4페이즈 단계는 verdictDusk(ended 는 결과 화면 장면이 UI-SPEC 4 에서 정해질 때까지 lobby). dusk 는 어떤 단계도 가리키지 않는다.
+//   PhaseId 가 늘면 Record<PhaseId, SceneId> 가 타입 오류로 알려 준다.
 // - 해·달: 그림에 이미 그려져 있고 장면마다 위치가 다르다(아침 해 오른쪽 위 → 낮 해 더 왼쪽·아래, 밤 달). 이미지에서 떼어낼 수 없으므로
 //   따로 그리거나 움직이지 않고 배경 크로스페이드에 맡긴다. 이중으로 보일 수 없다(결정 0030, 확인 필요 1).
 // - 실내 배경(v4, 결정 0032)은 위쪽이 어두운 벽이라 모든 장면에서 막이 필요 없다(SCENES.scrim 전부 false). 야외 배경처럼 밝은 하늘이 헤더 뒤로 오면 scrim 을 true 로 켠다(HEADER_SCRIM_STOPS). 4.5:1 은 오프라인 단위 테스트
@@ -41,6 +41,12 @@ export const PHASE_SCENE: Readonly<Record<PhaseId, SceneId>> = Object.freeze({
   discussion: "day",
   night: "night",
   morning: "morning",
+  execVote: "verdictDusk",
+  candidateVote: "verdictDusk",
+  candidateVoteReveal: "verdictDusk",
+  defense: "verdictDusk",
+  execution: "verdictDusk",
+  ended: "lobby",
 });
 
 export function sceneOfPhase(phase: PhaseId): SceneId {
