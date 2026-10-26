@@ -6,11 +6,11 @@ current_phase: 03
 current_phase_name: 밤과 아침
 current_plan: 12
 status: verifying
-stopped_at: Completed 03.1-14-PLAN.md
-last_updated: "2026-10-25T12:03:44.175Z"
+stopped_at: "Completed quick-261025-unr (시각 개선 묶음, 배포 2026-10-26T01:57:25Z+e717ac0)"
+last_updated: "2026-10-26T02:28:54.560Z"
 last_activity: 2026-10-25
 last_activity_desc: Phase 03 execution started
-state_head: c39247ed434ba49db72e1879d26211d9e5f391a8
+state_head: 926dae37518131e29b8bafb952ac7b219ba6a312
 progress:
   total_phases: 7
   completed_phases: 2
@@ -221,6 +221,7 @@ None yet.
 | # | Description | Date | Commit | Directory |
 |---|-------------|------|--------|-----------|
 | 261025-qvx | 테스트 피드백 4건 수정(밤 끝 알림 제거·차례 링 앞뒤 층·밤 시작 문구)과 테이블 기하 P2 고정, 결정 0028, 배포 2026-10-25T11:40:42Z+d2af5a9 | 2026-10-25 | c39247e | [261025-qvx-test-feedback-fixes](./quick/261025-qvx-test-feedback-fixes/) |
+| 261025-unr | 시각 개선 묶음(후광·'…' 말풍선·대기실 왕관, 배경 v2 WebP 장면·크로스페이드, 낮 시작 화면 제거, 헤더 막, 5글자 봇 이름), 결정 0030, 배포 2026-10-26T01:57:25Z+e717ac0 | 2026-10-26 | 926dae3 | [261025-unr-visual-bundle](./quick/261025-unr-visual-bundle/) |
 
 ### Roadmap Evolution
 
@@ -236,6 +237,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-25T08:58:14.251Z
-Stopped at: Completed 03.1-14-PLAN.md
+Last session: 2026-10-26T02:28:54.092Z
+Stopped at: Completed quick-261025-unr (시각 개선 묶음, 배포 2026-10-26T01:57:25Z+e717ac0)
 Resume file: None

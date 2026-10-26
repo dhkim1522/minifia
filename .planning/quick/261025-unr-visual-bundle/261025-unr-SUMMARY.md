@@ -1,20 +1,100 @@
 ---
 phase: quick-261025-unr
 plan: 01
-status: incomplete
+status: complete
 subsystem: screens-day-table
-tags: [day-table, halo, speech-bubble, host-crown, bot-names, decision-0030]
+tags: [day-table, halo, speech-bubble, host-crown, bot-names, backdrop-webp, scene-intro, header-scrim, e2e, decision-0030, deploy]
 requirements: [QUICK-261025-unr]
-completed_tasks: [1, 2, 3, 4, 5]
-remaining_tasks: [6]
-commits: 15
+completed: 2026-10-26
+completed_tasks: [1, 2, 3, 4, 5, 6]
+remaining_tasks: []
+commits: 19
 plan_head_before: 97ce65598ce58ba8c5e54a38aa44753826efe5e6
-plan_head_after: 931b2fff1926dc952f2691702321f20d2a1bfbe3
+plan_head_after: 926dae37518131e29b8bafb952ac7b219ba6a312
+deployed_version: "2026-10-26T01:57:25Z+e717ac0"
+previous_version: "2026-10-25T11:40:42Z+d2af5a9"
+actuals:
+  tokens: 142111
+  tasks: 6
+  commits: 19
 ---
 
-# 퀵 261025-unr 진행 체크포인트 (패스 A: 과제 1 · 패스 B: 과제 2·3 · 패스 C: 과제 4 · 패스 D: 과제 5 완료)
+# 퀵 261025-unr: 시각 개선 묶음 — 후광·'…' 말풍선·대기실 왕관, 배경 v2 WebP 장면과 크로스페이드, 낮 시작 화면 제거, 헤더 막, 5글자 봇 이름 (결정 0030)
 
-> 상태: **미완료** (과제 6개 중 5개 완료). 패스 C 의 열린 문제(5명판 D3b)는 사용자 승인 완화(2026-10-26)로 닫혔다 — 아래 「패스 D」. 이 파일은 패스마다 갱신하고 마지막 패스(E)에서 최종본으로 바꾼다.
+> 상태: **완료** (과제 6개 모두 완료, 배포·push 완료). `commits` 는 원장 `.git/gsd-plan-head-before-quick-261025-unr-01`(= `97ce655`)에서 `git rev-list --count` 로 잰 값이고 `plan_head_after` 는 그 측정 시점 HEAD 다(이 SUMMARY·STATE 커밋은 그 뒤에 따른다). `actuals.tokens` 는 계획의 `estimate` 와 같은 척도(chars/4)로 `git diff 97ce655..HEAD`(WebP 바이너리·lock 제외, 지운 옛 SVG 포함)의 글자 수를 4로 나눈 값이다(계획 추정 630,000 — 하니스 토큰이 아님). 서버 쪽 변경은 `shared/game/bots.ts` 봇 이름 한 줄뿐이다.
+
+## 한 줄 요약
+
+발밑 원 전부와 이름표 반전을 캐릭터 윤곽 후광(흰·진홍)과 머리 위 '…' 말풍선으로 바꾸고 방장 왕관은 대기실에만 두었으며, 배경을 장면 6개·WebP 7개(248.0KB)와 단계→장면 규칙표로 옮겨 낮 시작 전용 화면 없이 0.8초 크로스페이드하고(해·달은 이미지에 맡김) 아침·낮 헤더에 어두운 막(.70/.58/.40/0)을 달아 E2E 헤더 대비 4.5:1(H1)을 지켰으며, 사용자 승인 완화 D3b-5(5명판 98.0%)를 더해 로컬·배포본 E2E 와 스모크·UAT 를 모두 통과시켰다.
+
+## 배포와 배포본 확인 (과제 6 라~마)
+
+- 사전 확인: `npx wrangler whoami` = dhkim1522@naver.com, `wrangler.jsonc` name = `minifia`. `npm run deploy` 로 Worker `minifia` 만 배포(Version ID `3ee6de16-a99c-4b4d-bd58-ec9cdac26385`). 새 버전 `2026-10-26T01:57:25Z+e717ac0` (직전 `2026-10-25T11:40:42Z+d2af5a9` 와 다름). 토큰은 어떤 출력에도 싣지 않았다. push 대상은 `git@github.com:dhkim1522/minifia.git` 한 곳.
+
+| 확인 | 결과 |
+|------|------|
+| `smoke --prod --stage full --players 4` | `SMOKE OK full code=0568 players=4 spread=3ms discSpread=9ms` |
+| `smoke ... --players 5 --previous-version <옛 버전>` | `SMOKE OK full code=1335 players=5 spread=0ms discSpread=6ms` |
+| `smoke ... --players 8` | `SMOKE OK full code=0034 players=8 spread=10ms discSpread=10ms` |
+| WebP 검사(smoke full 끝) | 세 번 모두 통과: `bg_game_night.webp`·`bg_entry_lobby.webp` 200·`image/webp`·`max-age=86400`·RIFF/WEBP 머리·용량 상한. 따로 `curl -I`: `bg_game_night.webp` image/webp·max-age=86400, 옛 `bg_game_night.svg` 는 text/html(SPA 응답) |
+| `uat-night --prod --players 5` | 36/36 통과 |
+| `uat-night --prod --players 8` | 첫 실행 「1일차 아침 (45초 제한 초과)」 중단 → 같은 명령 재실행 36/36 통과 |
+| `uat-test-bots --prod --previous-version` | 42/42 `UAT TEST-BOTS OK` |
+| `uat-test-room --prod --previous-version` | 첫 실행 「방 만들기 500」 중단 → `/api/health` 200·방 만들기 201 확인 뒤 재실행 28/28 `UAT TEST-ROOM OK` |
+| 배포본 `node scripts/e2e/run.mjs --url https://minifia.dhplay.workers.dev` | 첫 실행 17/18 작업 통과 + citizen4 390x664 의 준비 실패 S4 한 건(방장이 첫 밤에 탈락) → 같은 명령 재실행 18/18 `E2E OK`(174초). H1 51줄·B1 51·N8 12·N9 12·W1 84·K1 60·K4 60·N6 12·N7 12 모두 통과 |
+
+재시도 세 건(S4 준비 실패, `uat-night` 8명 시간 초과, `uat-test-room` 방 만들기 500)은 모두 규칙 실패가 아니며 같은 명령 재실행으로 통과했다. `uat-night` 8명·`uat-test-room` 의 첫 실패는 원인을 확인하지 못했다(이번 배포는 서버 코드를 바꾸지 않았다). 일시적인 Durable Object 오류일 수 있으니 또 나면 그쪽을 본다.
+
+### 최종 E2E 표 (같은 열 순서 = 360x640 · 390x664 · 430x932)
+
+| 흐름 | 로컬(dev 5173) | 배포본(재실행) |
+|------|----------------|----------------|
+| lobby | 23 · 23 · 23 / 23 | 23 · 23 · 23 / 23 |
+| citizen4 | 115 · 115 · 115 / 115 | 115 · 115 · 115 / 115 |
+| police5 | 123 · 123 · 123 / 123 | 123 · 123 · 123 / 123 |
+| mafia8 | 120 · 120 · 120 / 120 | 120 · 120 · 120 / 120 |
+| doctor5 | 119 · 119 · 119 / 119 | 119 · 119 · 119 / 119 |
+| spec4 | 50 · 50 · 50 / 50 | 50 · 50 · 50 / 50 |
+
+둘 다 마지막 줄 `E2E OK`, 실패 0. 로컬은 이 패스의 한 번(147초)이고 이전 패스 여섯 번도 모두 통과했다.
+
+## 로컬 전체 검증 (HEAD `e717ac0` 직전 코드와 같음)
+
+- `npm run typecheck` 통과, `npx vitest run` 80 파일 / 1894 테스트 통과, `node --test scripts/e2e/lib.test.mjs` 107 통과.
+- 불변: `git diff 97ce655 -- scripts/e2e/lib.mjs` 에서 `OVERLAP_EPS`·`ONE_LINE_FACTOR`·`FACE_RATIO`·`TAP_MIN`·`PANEL_H`·`TEXT_SIZE_ALLOW`·`DECORATIVE_ALLOW`·`TAP_ALLOW` 줄 변경 0(승인 완화는 M1·D3a/D3b·D4·D3b-5 뿐). `git diff --name-only 97ce655 -- shared worker` = `shared/game/bots.ts`.
+- `! grep -rnE "mf-dt__(spot|ring|sel|turn)|tag--(turn|spoke)" src`, `src/screens/Day.tsx` 없음, `! grep -rnE "mf-day__|mf-nightintro|NightIntro" src scripts/e2e` 모두 통과. `public/backgrounds` = WebP 7개.
+- `npm run build`: `dist/client/backgrounds` = WebP 7개, SVG 0개, 합계 253,974바이트 = 248.0KiB(상한 260KB).
+
+## 사진 확인 (`--shots`, 로컬 dev, 내가 직접 연 이미지의 사실)
+
+- 대기실 1명(390): 방장 왕관 한 개(캐릭터 머리 왼쪽 위), 달 있는 밤 하늘 배경, 방 코드 글씨 선명, 테이블 면이 크림색. 대기실 3명(390, 별도 스크립트로 봇 늘리기 두 번): 왕관은 방장 하나뿐, 양옆 두 봇이 같은 높이에 앉고 이름표가 폰 안에 들어오며, `봇마바사아님이 들어왔어요` 토스트가 방 코드 아래 달 옆에 뜬다.
+- 낮 직업 공개 남의 차례(8명판 390): `봇가나다라` 머리 위에 `…` 말풍선, 그 캐릭터에 은은한 흰 후광, 마피아 동료 `봇서어저처` 에 진홍 후광 + 마름모, 발밑 원 없음. 밝은 하늘 위 헤더 제목·`0:08` 은 막 덕에 읽히고 안내 줄 `1일차`는 옅은 회색이라 상대적으로 약하다(확인 필요 5). 일부 이름표(`봇자차카타`·`봇더러머버`·`봇서어저처`)가 앞쪽 캐릭터에 가려지며 허용된 F2·D3b 범위다.
+- 낮 내 차례(8명판 360): 내 캐릭터에 흰 후광과 `…` 말풍선, 동료 `봇마바사아` 에 진홍 후광 + 마름모(왼쪽 가장자리, 이름표 `봇마바…` 가 앞 캐릭터에 가림). 하단에 `내 차례예요` 칩 다섯.
+- 아침(360): 탈락 유령(`봇가나다라`)과 아침 카드가 장면 위 가운데, 제목 `아침`·타이머 `0:04` 읽힘. 헤더 막과 어둡게 층의 경계가 y≈237 에서 가는 가로선처럼 보인다.
+- 낮 시작(citizen4 390, 새로 저장하게 한 사진): `2일차`/`낮이 되었습니다`/`토론 전에 먼저 직업을 공개해요` 가 테이블 위에 얹히고 낮 배경은 막 때문에 회청색으로 어둡게 보인다. **보조줄이 왼쪽 유령의 이름표 `봇가나다라` 끝과 같은 높이에서 맞닿아 보인다.** 고치지 않고 HANDOFF 실기기 목록 (13) 에 사실로만 적었다(디자인 판단).
+- 밤(8명판 390): `1일차`/`밤이 되었습니다` 문구가 뜬 순간, 진홍 후광(동료) + 마름모, 밤 하늘 배경, 하단 `마피아끼리만 보여요`·`빠른 메시지`. 5글자 이름표가 폰 가장자리에서 잘리지 않는다.
+
+## 확인 필요 결과 (결정 0030 결과 절 전체 목록)
+
+모두 기본값으로 진행했다: 해·달 이동 없음(선택 B, 후속 A 안은 데스크톱에서 해·달 없는 하늘 + 해·달 PNG), 헤더 막 .70/.58/.40/0(렌더 측정 제목 8.3~16.9·타이머 5.1~13.5 모두 ≥ 4.5), 빠른 메시지는 말풍선만, 왕관은 대기실만, 안내 줄 대비 약 3:1(재지 않음), `design/backgrounds/A_cute` 보류, 말풍선 −26px, 낮 시작 보조줄 유지·막 70%, 새 그림 준비 뒤 크로스페이드, 5명판 D3b 98.0%. 해·달·막·안내 줄 등 눈으로만 판단되는 것은 HANDOFF 의 실기기 확인 목록 (1)~(13) 에 남겼다.
+
+## 계획과 다른 점
+
+1. **[Rule 3 - 보조 도구] `--shots` 가 낮 시작 사진을 저장하게 했다**(`scripts/e2e/flows.mjs`, 커밋 `e717ac0`). 계획의 사진 목록에 「낮 시작」이 있었지만 기존 `--shots` 는 그 장면을 저장하지 않았다. 검사·기준은 건드리지 않고 `--shots` 일 때만 사진을 더한다. 이 변경 뒤에 배포했고 배포본 E2E 가 통과했다. 대기실 2~3명 사진은 저장소 코드를 바꾸지 않고 임시 스크립트로 찍었다.
+2. 패스 D 의 사용자 승인 완화 D3b-5(5명판 98.0%)는 계획 이후 추가된 것이다(아래 패스 D 절, 결정 0030-8).
+3. 위 「재시도 세 건」.
+
+## 알려진 스텁
+
+없음.
+
+## 위협 표 점검
+
+T-unr-05(배포 계정)·T-unr-06(원격): `whoami`·`wrangler.jsonc` name·`git remote -v` 를 확인하고 진행했다. T-unr-04(WebP): smoke 가 배포본에서 헤더·용량을 확인했다. 새 위협 면 없음(Threat Flags 없음).
+
+---
+
+# 패스별 기록 (이전 체크포인트에서 옮김)
 
 ## 완료한 과제
 
@@ -31,12 +111,9 @@ plan_head_after: 931b2fff1926dc952f2691702321f20d2a1bfbe3
 | 4-나 | GREEN: `Day.tsx`·`NightIntro.tsx` 삭제, `SceneIntro`·`PHASE_INTRO`·`SCENE_INTRO_MS`, `usePhaseArrival`, `DayScene`(arrivedFrom·instant·fromScene), `RoomScreen`, CSS 정리, E2E 이름 맞춤 | `618f57d` |
 | 5-가 | RED: E2E H1·B1·N8 단위 테스트, `D3B_FLOOR_5_PLAYERS` 98.0 고정, `APPROVED_RELAXATIONS`, `EXPECTED_SCENE` = `PHASE_SCENE`, 오프라인 `backdropContrast.test.ts` (모듈 가져오기 실패 + 28 테스트 실패를 확인하고 커밋) | `8c7eaed` |
 | 5-나 | GREEN: `lib.mjs`(H1·B1·N8·D3B 상수·승인 목록), `browser.mjs`(`readHeaderContrast`·`readBackdropLayers`·`waitBackdropStable`·`armIntroWatch`/`readIntroWatch`), `flows.mjs`(`stageChecks`·`dayIntro`), `run.mjs` 승인 목록 출력, UI-SPEC F7 승인 기록 | `931b2ff` |
-
-## 남은 과제
-
-| 과제 | 패스 | 비고 |
-|------|------|------|
-| 6 | E | 문서(결정 0030·UI-SPEC·HANDOFF)·전체 검증·배포·push |
+| 6-가 | 문서: 결정 0030(`docs/decisions/0030-visual-bundle.md`), 결정 0024·0025·0028·0029 문장, 03.1-UI-SPEC(F11·E2E 표·Motion·확인 필요 16~21·아티팩트 동기화), HANDOFF(실기기 확인 목록) | `488c989` |
+| 6-나 | 검증 보조: `--shots` 가 낮 시작 문구 사진(`{흐름}-day-intro-{크기}.png`)도 저장(검사·기준 불변) | `e717ac0` |
+| 6-다 | 배포 버전 `2026-10-26T01:57:25Z+e717ac0` 와 배포본 확인 결과를 HANDOFF 에 채움 | `926dae3` |
 
 ## 패스 D 과제 5 결과 (E2E H1·B1·N8·N9, 오프라인 대비, 5명판 D3b 승인 완화)
 
@@ -45,7 +122,7 @@ plan_head_after: 931b2fff1926dc952f2691702321f20d2a1bfbe3
 - **D3b 5명판 바닥만 99.9% → 98.0%.** 사유: 앞쪽 옆자리가 탈락해 유령 그림이 되면 그 머리 윗부분이 뒤쪽 이웃의 5글자 이름표를 약 0.4% 덮는다(패스 C 열린 문제). 사용자가 캐릭터가 이름표를 덮는 것은 이미 허용했다(UI-SPEC F2).
 - 구현: `scripts/e2e/lib.mjs` 의 이름 있는 상수 `D3B_FLOOR_5_PLAYERS = 0.98`(머리 주석에 승인 날짜·사유), `visibilityFloor` 가 `n === 5` 에서만 쓴다. 4명 100%(0.999)·6명 85%·7명 50%·8명 55% 와 `OVERLAP_EPS`·`ONE_LINE_FACTOR`·`FACE_RATIO`·`TAP_MIN`·`PANEL_H`·허용 목록은 `97ce655` 대비 diff 0.
 - 단위 테스트가 고정한다: 5명 0.98 통과·0.979 실패, 다른 인원 바닥 경계값(4명 0.999/0.998, 6명 0.85/0.849, 7명 0.5/0.499, 8명 0.55/0.549), `APPROVED_RELAXATIONS` = [M1, D3a/D3b, D4, D3b-5] 이고 `D3b-5` 의 승인일이 2026-10-26.
-- 승인된 완화 목록을 적은 곳(이 패스가 건드린 문서 줄): `lib.mjs` 의 `APPROVED_RELAXATIONS`(실행 때 출력 머리에도 찍힘, `run.mjs`), UI-SPEC F7 행. **과제 6 이 결정 0030 본문과 0028/0025 의 「승인 완화는 M1·D3·D4」 문장 옆에도 같은 내용을 적는다.**
+- 승인된 완화 목록을 적은 곳(이 패스가 건드린 문서 줄): `lib.mjs` 의 `APPROVED_RELAXATIONS`(실행 때 출력 머리에도 찍힘, `run.mjs`), UI-SPEC F7 행. (과제 6 에서 결정 0030-8 본문과 0025·0028 의 「승인 완화」 문장 옆에도 적었다.)
 
 ### 새 E2E 규칙
 
@@ -183,14 +260,6 @@ plan_head_after: 931b2fff1926dc952f2691702321f20d2a1bfbe3
 
 없음.
 
-## 다음 패스(E) 인계 — 과제 6
-
-- 과제 6(문서·전체 검증·배포·push)만 남았다. 결정 0030(`docs/decisions/0030-visual-bundle.md`)에 **D3b 5명판 98.0% 승인 완화(2026-10-26)** 를 반드시 적고, 0028·0025 의 「승인된 완화는 M1·D3a/D3b·D4」 문장 옆에도 갱신한다. UI-SPEC F7 행은 이 패스에서 이미 갱신했다. HANDOFF 의 확인 필요에 H1 측정 숫자(낮 타이머 5.1~5.3:1, `HEADER_SCRIM_STOPS` 값 .70/.58/.40/0 이 계획 값 그대로 통과)를 적는다.
-- 배포본 E2E(`node scripts/e2e/run.mjs --url https://minifia.dhplay.workers.dev`)는 새 규칙 H1·B1·N8·N9 를 처음 실제 배포본에서 돌린다. 배포본은 캐시 헤더가 있어 B1 의 background-image 가 `bg_game_*.webp` 로 나오는지, 낮 시작 2초를 MutationObserver 가 붙잡는지(네트워크 지연이 큰 환경에서 `day-intro` 의 SetupError 재시도 가능성) 눈여겨본다.
-- `scripts/smoke.mjs` 의 WebP 검사는 `--stage full` 끝에서만 돌고 배포본에서 처음 실제로 돈다(패스 B 인계).
-- 커밋 원장 `.git/gsd-plan-head-before-quick-261025-unr-01` (= `97ce655`) 는 그대로 쓴다. 최종 SUMMARY 의 `commits`·`plan_head_after` 는 마지막에 다시 측정한다.
-- 실기기 확인 목록 후보(과제 6 에서 HANDOFF 로): 후광 모양, 말풍선 깜박임·위치, 8명판 5글자 이름표 칼날 경계, 배경 전환 속도(0.8초)·아침·낮(set1)↔밤(set2) 하늘 색 차이, 헤더 막 가독성, 5명판에서 앞쪽 옆자리 유령 머리가 5글자 이름표를 살짝 덮는 모양(승인된 98.0%).
-
 ## 이전 인계 (패스 B → C, 참고)
 
 - 시작 때 `git status --short` 와 직전 커밋(이 체크포인트 커밋 직전은 `3043681`)을 확인한다. `.planning/milestone.lock` 은 추적하지 않는다.
@@ -198,3 +267,7 @@ plan_head_after: 931b2fff1926dc952f2691702321f20d2a1bfbe3
 - 라이브 E2E 는 이제 새 후광·말풍선·왕관 계약을 읽는다(`mafia8`·`citizen4`·`lobby` 통과). 후광 filter 는 180ms 전환 중간값을 피하려고 `browser.mjs` 가 진행 중인 전환을 끝낸 뒤 읽는다.
 - 과제 4 가 이어서 할 것: `Day.tsx` 제거, `NightIntro` → `SceneIntro`, `usePhaseArrival`, `DayScene` 의 `instant`(epoch 변화)·`fromScene`(역할 확인 직후 마운트) 연결. `Backdrop` 은 이미 `instant`·`fromScene` props 를 받고 단위 테스트가 닫혀 있다. 과제 5 의 오프라인 대비 테스트는 `HEADER_SCRIM_STOPS`(`src/game/scenes.ts`)와 `public/backgrounds/bg_game_*.webp` 를 읽는다.
 - 실기기 확인 목록 후보 (과제 6 에서 HANDOFF 로): 후광 모양, 말풍선 깜박임·위치, 8명판 5글자 이름표 칼날 경계(봇·방장 이름이 모두 5글자), 배경 전환 속도(0.8초)·아침·낮(set1)↔밤(set2) 하늘 색 차이, 헤더 막(알파 상향) 가독성.
+
+## Self-Check: PASSED
+
+핵심 파일 7개와 커밋 14개(과제별 대표 해시)가 존재하고 HEAD 의 조상이다. 배포본 버전은 `node scripts/smoke.mjs --prod --print-version` 이 `2026-10-26T01:57:25Z+e717ac0` 를 돌려준다.
