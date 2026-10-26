@@ -120,7 +120,7 @@ export function Backdrop(props: BackdropProps) {
           backgroundPosition: "center top",
         };
         if (SCENES[l.scene].scrim) style["--mf-scrim"] = headerScrimGradient();
-        return <div key={l.id} className="mf-backdrop__art" data-layout={layout} data-scene={l.scene} data-state={l.state} style={style} aria-hidden="true" />;
+        return <div key={l.id} className="mf-backdrop__art" data-scene={l.scene} data-state={l.state} style={style} aria-hidden="true" />;
       })}
       {children ? <div className="mf-backdrop__content">{children}</div> : null}
     </div>

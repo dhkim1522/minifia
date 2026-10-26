@@ -36,10 +36,7 @@ const revealScrim = (() => {
   return { color: [Number(m[1]), Number(m[2]), Number(m[3])] as Rgb, alpha: Number(m[4]) };
 })();
 
-const dsCss = readFileSync(new URL("../../src/styles/ds.css", import.meta.url), "utf8");
 const phaseCss = readFileSync(new URL("../../src/styles/phase.css", import.meta.url), "utf8");
-/** 게임 구도 그림 전체 명도 배율(ds.css --mf-backdrop-dim) */
-const DIM = Number(/--mf-backdrop-dim:\s*([\d.]+)/.exec(dsCss)?.[1] ?? 1);
 /** 글씨 묶음 뒤 번짐 알파(phase.css, 남색 N%) */
 const HALO = Number(/\.mf-phasebar__text::before[^}]*night-900\) (\d+)%/.exec(phaseCss)?.[1] ?? 0) / 100;
 
@@ -98,7 +95,7 @@ async function contrastOf(scene: SceneId, w: number, zone: Zone, overlay: Overla
   for (let y = Math.ceil(zone.y0 - 0.5); y + 0.5 <= zone.y1; y++) {
     for (let x = Math.ceil(zone.x0 - 0.5); x + 0.5 <= zone.x1; x++) {
       const i = (y * width + x) * channels;
-      let px: Rgb = [data[i]! * DIM, data[i + 1]! * DIM, data[i + 2]! * DIM];
+      let px: Rgb = [data[i]!, data[i + 1]!, data[i + 2]!];
       let a = 0;
       let c: Rgb = NIGHT_900;
       if (overlay === "headerScrim") a = scrimAlpha(y + 0.5);
@@ -155,7 +152,7 @@ describe("장면 그림 6장 × 폰 폭 360·390·430 × 헤더 글씨 구역 p9
 });
 
 describe("막이 필요하다는 사실을 고정한다", () => {
-  it("실내 배경은 헤더 막 없이 밝기 배율과 글씨 뒤 번짐만으로 모든 장면·폭에서 제목과 타이머가 4.5 이상이다 (막을 쓰지 않는다)", async () => {
+  it("실내 배경은 헤더 막 없이 구워진 명도(0.8)와 글씨 뒤 번짐만으로 모든 장면·폭에서 제목과 타이머가 4.5 이상이다 (막을 쓰지 않는다)", async () => {
     for (const scene of GAME_SCENES) {
       for (const w of WIDTHS) {
         const title = await contrastOf(scene, w, titleZone(), "textHalo");

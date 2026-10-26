@@ -1,5 +1,6 @@
 // 배경 그림 변환기: design/backgrounds/v5 원본(실내 V2, PNG) + v3 입구 그림 → public/backgrounds/*.webp (결정 0030~0033).
 //
+// - 게임 구도는 명도 0.8배를 굽는다(GAME_BRIGHTNESS). 원본 PNG 는 그대로 둔다.
 // - 리사이즈 없음: 원본 1080×2340 그대로.
 // - 품질 86, effort 6(q75 는 어두운 면의 시계탑 윤곽이 뭉개진다). 같은 원본이면 같은 바이트가 나온다.
 // - 장면 하나가 상한(maxKB)을 넘으면 비정상 종료한다. 합계 상한은 test/unit/scenes.test.ts 가 지킨다.
@@ -12,17 +13,19 @@ import { fileURLToPath } from "node:url";
 const root = (p) => fileURLToPath(new URL(`../${p}`, import.meta.url));
 
 const QUALITY = 86;
+/** 게임 구도 그림 전체 명도 배율(색 값을 0.8배, 채도·색상 그대로 = CSS brightness(0.8) 과 같은 계산). 헤더 글씨가 읽히도록 구워 넣는다(결정 0033). 입구 그림은 그대로. */
+export const GAME_BRIGHTNESS = 0.8;
 const EFFORT = 6;
 const OUT_DIR = "public/backgrounds";
 
 /** 출력 이름 · 원본 경로(저장소 기준) · 품질 · 상한(KB, 1024바이트). 예산: game 40KB · entry 52KB, 합계 260KB. */
 export const SOURCES = [
-  { out: "bg_game_lobby.webp", src: "design/backgrounds/v5/bg_game_night.png", quality: QUALITY, maxKB: 40 },
-  { out: "bg_game_night.webp", src: "design/backgrounds/v5/bg_game_night.png", quality: QUALITY, maxKB: 40 },
-  { out: "bg_game_morning.webp", src: "design/backgrounds/v5/bg_game_morning.png", quality: QUALITY, maxKB: 40 },
-  { out: "bg_game_day.webp", src: "design/backgrounds/v5/bg_game_day.png", quality: QUALITY, maxKB: 40 },
-  { out: "bg_game_dusk.webp", src: "design/backgrounds/v5/bg_game_dusk.png", quality: QUALITY, maxKB: 40 },
-  { out: "bg_game_verdict_dusk.webp", src: "design/backgrounds/v5/bg_game_verdict_dusk.png", quality: QUALITY, maxKB: 40 },
+  { out: "bg_game_lobby.webp", src: "design/backgrounds/v5/bg_game_night.png", quality: QUALITY, maxKB: 40, dim: GAME_BRIGHTNESS },
+  { out: "bg_game_night.webp", src: "design/backgrounds/v5/bg_game_night.png", quality: QUALITY, maxKB: 40, dim: GAME_BRIGHTNESS },
+  { out: "bg_game_morning.webp", src: "design/backgrounds/v5/bg_game_morning.png", quality: QUALITY, maxKB: 40, dim: GAME_BRIGHTNESS },
+  { out: "bg_game_day.webp", src: "design/backgrounds/v5/bg_game_day.png", quality: QUALITY, maxKB: 40, dim: GAME_BRIGHTNESS },
+  { out: "bg_game_dusk.webp", src: "design/backgrounds/v5/bg_game_dusk.png", quality: QUALITY, maxKB: 40, dim: GAME_BRIGHTNESS },
+  { out: "bg_game_verdict_dusk.webp", src: "design/backgrounds/v5/bg_game_verdict_dusk.png", quality: QUALITY, maxKB: 40, dim: GAME_BRIGHTNESS },
   { out: "bg_entry_lobby.webp", src: "design/backgrounds/v3/bg_entry_lobby.png", quality: QUALITY, maxKB: 52 },
 ];
 
@@ -34,7 +37,8 @@ async function convertAll() {
   let over = 0;
   for (const s of SOURCES) {
     const dest = root(`${OUT_DIR}/${s.out}`);
-    await sharp(root(s.src)).webp({ quality: s.quality, effort: EFFORT }).toFile(dest);
+    const img = sharp(root(s.src));
+    await (s.dim === undefined ? img : img.linear(s.dim, 0)).webp({ quality: s.quality, effort: EFFORT }).toFile(dest);
     const kb = statSync(dest).size / 1024;
     total += kb;
     const ok = kb <= s.maxKB;
