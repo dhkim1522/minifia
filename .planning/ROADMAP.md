@@ -252,32 +252,36 @@ Plans:
   5. 마피아가 모두 탈락하면 시민 팀 승리, 마피아 수가 나머지 생존자 수와 같거나 많아지면 마피아 팀 승리로 처형·아침 직후 즉시 판이 끝난다. 아직 아니면 다음 밤으로 이어진다.
   6. 결과 화면에 승리 팀, 모든 사람의 역할, 판 요약이 공개되고, 처음 화면으로 돌아가 새 방을 만들 수 있다.
 
-**Plans:** 10 plans (서버·공유 로직 웨이브, 결정 0036 — 배포하지 않는다(D-26). 화면 계획은 시안 승인·`/gsd-ui-phase 4` 뒤 Add more plans 로 이어 붙이고 화면 웨이브와 함께 배포한다)
+**Plans:** 12 plans (서버·공유 로직 웨이브, 결정 0036 — 배포하지 않는다(D-26). 웨이브마다 마지막 계획이 HANDOFF 진행 줄 갱신·개인 원격 push. 화면 계획은 시안 승인·`/gsd-ui-phase 4` 뒤 Add more plans 로 이어 붙이고 화면 웨이브와 함께 배포한다)
 
 Plans:
 **Wave 1**
-- [ ] 04-01-PLAN.md — 트레이서: 여부 투표 한 경로(투표 → 전원 같은 익명 집계 → 마감 분기 후보 선택/밤)를 단계 표·tick next 분기·vote.ts·view·스키마·방 DO·실제 소켓까지, 4페이즈 와이어 타입 전체, 화면 쪽 단계 표 최소 대응, discussion→night 직결 회귀 이전 (TDD, wave 1)
+- [ ] 04-01-PLAN.md — 트레이서: 여부 투표 한 경로(투표 → 전원 같은 익명 집계 → 마감 분기 후보 선택/밤)를 단계 표·tick next 분기·vote.ts·view·스키마·방 DO·실제 소켓까지, 4페이즈 와이어 타입 전체 (TDD, wave 1)
 
 **Wave 2** *(blocked on 04-01)*
-- [ ] 04-02-PLAN.md — 결정 0036(와이어 계약·규칙표·알려진 한계·바뀔 수 있는 기본값·되돌리기 비용), REQUIREMENTS CONN-02·GAME-01·COMM-01·architecture·product 문장 정정 (wave 2)
-- [ ] 04-03-PLAN.md — 후보 선택(자기 제외·번복)·서버 셔플 공개·동률은 후보 없음·변론·처형 진입(탈락·문구)·처형 무효 이유 day.noExecution(D-34)·투표 상태 도우미 (TDD, wave 2)
-- [ ] 04-04-PLAN.md — 변론 템플릿 6개·변론은 후보만·투표 중 메시지·공개/처형/종료 거부, 아침 문구 7개·처형 문구 4개 (TDD, wave 2)
+- [ ] 04-02-PLAN.md — 화면 쪽 단계 표 최소 대응(PHASE_SCENE·TEST_PHASE_LABEL·PHASE_ANNOUNCE·EXPECTED_SCENE)과 discussion→night 직결 회귀 이전 — 타입 검사·전체 테스트 초록 (wave 2)
+- [ ] 04-03-PLAN.md — 결정 0036(와이어 계약·규칙표·알려진 한계·바뀔 수 있는 기본값·되돌리기 비용), REQUIREMENTS CONN-02·GAME-01·COMM-01·architecture·product 문장 정정 (wave 2)
 
-**Wave 3** *(blocked on 04-03)*
-- [ ] 04-05-PLAN.md — 승패 판정(처형·아침 마감)·종단 단계 ended(winner·30분 만료)·밤 기록·판 요약·ended 전용 result (TDD, wave 3)
+**Wave 3** *(blocked on 04-02)*
+- [ ] 04-04-PLAN.md — 후보 선택(자기 제외·번복)·서버 셔플 공개·동률은 후보 없음·변론·처형 진입(탈락·문구)·처형 무효 이유 day.noExecution(D-34)·투표 상태 도우미 (TDD, wave 3)
+- [ ] 04-05-PLAN.md — 변론 템플릿 6개·변론은 후보만·투표 중 메시지·공개/처형/종료 거부, 아침 문구 7개·처형 문구 4개 (TDD, wave 3)
 
-**Wave 4** *(blocked on 04-04, 04-05)*
-- [ ] 04-06-PLAN.md — 방 DO: 후보 선택은 투표자에게만, 공개·변론·처형·처형 무효 프레임, 두 종료 경로·30분 정리 workerd 통합 (TDD, wave 4)
+**Wave 4** *(blocked on 04-04)*
+- [ ] 04-06-PLAN.md — 승패 판정(처형·아침 마감)·종단 단계 ended(winner·30분 만료)·밤 기록·판 요약·ended 전용 result (TDD, wave 4)
 
-**Wave 5** *(blocked on 04-06)*
-- [ ] 04-07-PLAN.md — 서버 봇 투표·변론, 테스트 방 넘기기 분기·대기실 복귀 정리, DO 봇 실행 (TDD, wave 5)
-- [ ] 04-08-PLAN.md — 열네 단계 view 허용 키 전수·익명 차분(4~8명 × 시드)·처형·처형 무효·종료 한 판 프레임 전수 누출 검사 (TDD, wave 5)
+**Wave 5** *(blocked on 04-03, 04-05, 04-06)*
+- [ ] 04-07-PLAN.md — 방 DO: 후보 선택은 투표자에게만, 공개·변론·처형·처형 무효 프레임, 두 종료 경로·30분 정리 workerd 통합 (TDD, wave 5)
 
 **Wave 6** *(blocked on 04-07)*
-- [ ] 04-09-PLAN.md — 스모크·UAT·봇 스크립트 새 단계·분기, 새 uat-vote(처형·두 종료) 로컬 통과 (wave 6)
+- [ ] 04-08-PLAN.md — 서버 봇 투표·변론, 테스트 방 넘기기 분기·대기실 복귀 정리, DO 봇 실행 (TDD, wave 6)
+- [ ] 04-09-PLAN.md — 열네 단계 view 허용 키 전수·익명 차분(4~8명 × 시드)·처형·처형 무효·종료 한 판 프레임 전수 누출 검사 (TDD, wave 6)
+- [ ] 04-10-PLAN.md — 스모크·uat-day·uat-night 새 단계·분기, 새 uat-vote(처형·두 종료) 로컬 통과 (wave 6)
 
-**Wave 7** *(blocked on 04-02, 04-08, 04-09)*
-- [ ] 04-10-PLAN.md — 결정 0036 코드 대조·전체 게이트·검증 표·HANDOFF(배포 금지 경고)·push (wave 7)
+**Wave 7** *(blocked on 04-08)*
+- [ ] 04-11-PLAN.md — 수동 봇·uat-test-room·uat-test-bots 투표 단계·분기형 넘기기 로컬 통과 (wave 7)
+
+**Wave 8** *(blocked on 04-03, 04-09, 04-10, 04-11)*
+- [ ] 04-12-PLAN.md — 결정 0036 코드 대조·전체 게이트·검증 표·HANDOFF(배포 금지 경고)·push (wave 8)
 
 **Notes**: 4페이즈 논의(`04-CONTEXT.md`)로 결정 0034 가 확정됐다. 화면은 새 시안(클로드 데스크톱) → `/gsd-ui-phase 4` 순서로 만든다. 옛 화면설계서 보드 07·08·10 은 옛 순서 기준이라 대체된다.
 **UI hint**: yes
@@ -324,6 +328,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 (decimal phases
 | 2. 낮 토론 | v1.0 | 18/18 | In Progress | - |
 | 3. 밤과 아침 | v1.0 | 12/12 | In Progress | - |
 | 3.1. 순차 주장과 역할 카드 | v1.0 | 14/14 | Complete | 2026-10-25 |
-| 4. 처형과 승패 | v1.0 | 0/10 | Planned (서버 웨이브, 화면 계획 추가 예정) | - |
+| 4. 처형과 승패 | v1.0 | 0/12 | Planned (서버 웨이브, 화면 계획 추가 예정) | - |
 | 5. 분위기와 캐릭터 | v1.0 | 0/TBD | Not started | - |
 | 6. 친구 플레이테스트 | v1.0 | 0/TBD | Not started | - |
