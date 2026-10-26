@@ -91,7 +91,8 @@
 - `docs/decisions/0006-player-immersion.md` — 구간별 이펙트·액션 기본형을 함께 만든다
 
 ### 디자인
-- `design/screens/07_B7_Vote.png`, `08_B7b_Reveal.png`, `10_B9_End.png` — v0.2 투표·변론·찬반·처형·공개·종료 보드. **옛 순서·기권 버튼 기준이라 그대로 쓰지 않는다.** 레이아웃·부품 참고용.
+- `design/screens/execution-v1/SPEC.md` 와 `project/*.dc.html` — **승인된 4페이즈 새 시안(2026-10-26)**. 옛 보드 07·08·10 을 대체한다. 화면 웨이브의 기준.
+- `design/screens/07_B7_Vote.png`, `08_B7b_Reveal.png`, `10_B9_End.png` — v0.2 투표·변론·찬반·처형·공개·종료 보드. **옛 순서·기권 버튼 기준이라 쓰지 않는다(execution-v1 로 대체됨).** 레이아웃·부품 참고용.
 - `docs/decisions/0030-visual-bundle.md`, `design/screens/visual-v1/SPEC.md` — **선택·강조는 캐릭터 윤곽 후광으로 통일(발밑 원·링·머리 위 배지 폐기)**. 시안 사본 night-v1 의 링·표적 배지 설명은 이 결정이 대체했다.
 - `design/screens/night-v1/SPEC.md`, `design/screens/day-v3/SPEC.md`, `design/screens/visual-v1/SPEC.md` — 테이블·이름표·배경 전환 규칙
 - `design/tokens.json`, `design/design-system/` — 토큰·부품

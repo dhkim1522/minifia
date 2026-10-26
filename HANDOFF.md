@@ -19,7 +19,7 @@
 ## 다음 할 일
 
 1. 영역 지도·가이드 이미지·에셋 자동 검사를 `docs/` 에 정리(폰 폭 360·390·430별 헤더·창·테이블·패널 영역, 그림이 지키는지 거르는 스크립트). gsd-addons 에 올릴지 결정.
-2. 4페이즈 논의 끝(`.planning/phases/04-execution-verdict/04-CONTEXT.md`, 결정 0034: 처형 여부→후보 선택→변론→처형). 다음은 **새 시안**(이 세션의 Design 캔버스: 여부·후보 선택 투표, 화살표 공개, 변론·처형 스포트라이트, 결과 화면) → `/gsd-ui-phase 4` → `/gsd-plan-phase 4`. 서버 규칙·테스트는 시안과 독립이라 먼저 계획해도 된다. 남은 건 어두움 퍼센트 미세 조정뿐(모든 결정은 CONTEXT 에 있음). 아침 문구 묶음에서 "이슬이 되어 사라졌습니다"를 빼고 처형 쪽으로 옮기는 작업이 계획에 들어간다.
+2. 4페이즈: 논의 끝(`.planning/phases/04-execution-verdict/04-CONTEXT.md`, 결정 0034) · 시안 승인됨(`design/screens/execution-v1/`, 원본 Design 캔버스 KpxQ2EN37vQMkApXjv8in5) · 서버·공유 로직 계획 진행(04-RESEARCH·PATTERNS·VALIDATION). 다음: `/gsd-ui-phase 4` → 화면 웨이브 계획 추가 → 실행(서버만 배포 금지, D-26). 아침 문구 묶음에서 "이슬이 되어 사라졌습니다"를 빼 처형 쪽으로 옮기는 작업이 계획에 들어간다.
 3. 큰 폰 세로 가운데 + 층 분리 에셋(투명 PNG·원래 크기 필요).
 4. 점검: `/gsd-verify-work 3.1`, 각 페이즈(1·2·3·3.1)의 `/gsd-secure-phase`·`/gsd-validate-phase`·`/gsd-extract-learnings`.
 5. 디자인 아티팩트 동기화(디자인 세션): 디자인 시스템·화면 설계서·화면 흐름.
