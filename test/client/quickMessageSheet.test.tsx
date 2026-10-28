@@ -307,4 +307,14 @@ describe("QuickMessageSheet — 밤 문구 (D-17)", () => {
       unmount();
     }
   });
+
+  it("직업만 필요한 문구(defRole)는 직업을 고른 뒤 { template, claimedRole } 로 나간다 — 대상 키는 없다 (04-22)", () => {
+    const { onSend } = setup({ templates: ["defRole"], roles: ROLES4 });
+    expect(screen.queryByRole("group", { name: "대상" })).toBeNull();
+    expect(sendBtn().disabled).toBe(true);
+    tap(group("직업").getByRole("button", { name: "경찰" }));
+    tap(sendBtn());
+    expect(onSend).toHaveBeenCalledTimes(1);
+    expect(onSend.mock.calls[0]![0]).toEqual({ template: "defRole", claimedRole: "police" });
+  });
 });

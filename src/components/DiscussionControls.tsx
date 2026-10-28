@@ -30,8 +30,12 @@ export interface DiscussionControlsProps {
 export function DiscussionControls({ view, connection, showToast, templates }: DiscussionControlsProps): ReactElement {
   const [sheet, setSheet] = useState<"quick" | "emoji" | null>(null);
   const { coolingDown, blocked, sendAndLock } = useSendLock(connection, showToast);
-  const sendSay = (payload: SayPayload): void => sendAndLock({ t: "say", ...payload });
-  const sendEmoji = (icon: EmojiId): void => sendAndLock({ t: "emoji", icon });
+  const sendSay = (payload: SayPayload): void => {
+    sendAndLock({ t: "say", ...payload });
+  };
+  const sendEmoji = (icon: EmojiId): void => {
+    sendAndLock({ t: "emoji", icon });
+  };
 
   return (
     <div className="mf-discuss">

@@ -16,6 +16,12 @@
   .mf-execvote__num { animation: none; }
 }
 
+/* 최후 변론 후보 본인 하단(UI-SPEC 8.4, 04-22, 시안 DC): 변론 칩 6개를 2칸 × 3줄 격자에 담는다. 칩 모양은 기존 알약(.mf-seg__b, 높이 --tap-min)을 그대로 쓰고 칸 폭만 격자가 정한다.
+   패널 높이는 승인 시안 값 236 으로 한 곳 예외: 위 8 + 제목 28.8 + 간격 8 + 안내 20 + 간격 8 + 칩 3줄 148 + 아래 12 = 232.8 ≤ 236. */
+.mf-defchips { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-sm); }
+.mf-defchips__b { flex: none; width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.mf-dayscene__panel.mf-dayscene__panel--tall { height: calc(236px + env(safe-area-inset-bottom)); }
+
 /* 후보 선택 공개의 표수 칩(UI-SPEC 8.3, 04-19): 대상 머리 위 가운데. 위치·크기는 DayTable 이 인라인으로 준다(game/verdict.ts chipAnchor).
    일반 gray-100 바탕·night-900 글자 16px 700, 방금 닿은 칩은 앰버 면 + 팝, 유일한 최다 칩은 앰버 면 유지 + 24px 큰 칩(외곽선으로 굵게).
    앰버는 면에만 쓴다(글자색 아님). 칩은 장식이라 클릭을 가로채지 않는다. */

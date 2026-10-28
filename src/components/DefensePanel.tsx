@@ -39,7 +39,9 @@ export function DefensePanel({ view, connection, showToast, lines, candidateNick
   const hasDeadline = phaseEndsAt !== null && phaseDurationMs !== null;
   // 훅은 조건부로 부를 수 없다 — 마감이 없으면 이미 지난 마감으로 불러 두고 초는 그리지 않는다
   const { seconds } = useCountdown(hasDeadline ? phaseEndsAt : 0, hasDeadline ? phaseDurationMs : 1, connection.offset);
-  const sendEmoji = (icon: EmojiId): void => sendAndLock({ t: "emoji", icon });
+  const sendEmoji = (icon: EmojiId): void => {
+    sendAndLock({ t: "emoji", icon });
+  };
 
   if (readOnly) {
     return (

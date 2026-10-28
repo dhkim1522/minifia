@@ -14,8 +14,8 @@ export interface SendLock {
   coolingDown: boolean;
   /** 지금 보낼 수 없음: 연결이 못 보내거나 쿨다운 중 */
   blocked: boolean;
-  /** 보낸다. 보냈으면(연결이 끊겨 버려지지 않았으면) 잠근다 */
-  sendAndLock: (msg: ClientMessage) => void;
+  /** 보낸다. 보냈으면(연결이 끊겨 버려지지 않았으면) 잠그고 true, 버려졌으면 false */
+  sendAndLock: (msg: ClientMessage) => boolean;
 }
 
 export function useSendLock(connection: RoomConnection, showToast: (text: string) => void): SendLock {
@@ -51,8 +51,10 @@ export function useSendLock(connection: RoomConnection, showToast: (text: string
     [onEvent, lock, showToast],
   );
 
-  const sendAndLock = (msg: ClientMessage): void => {
-    if (connection.send(msg) !== false) lock();
+  const sendAndLock = (msg: ClientMessage): boolean => {
+    const sent = connection.send(msg) !== false;
+    if (sent) lock();
+    return sent;
   };
   return { coolingDown, blocked: !connection.canSend || coolingDown, sendAndLock };
 }

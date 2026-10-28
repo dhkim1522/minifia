@@ -61,12 +61,17 @@ export function QuickMessageSheet({ players, mySeat, roles, canSend, templates =
   const send = (requestClose: () => void): void => {
     if (!ready || !canSend) return;
     // 필요한 키만 리터럴로 담는다 — 입력 객체를 펼치지 않는다(T-02-27)
+    // 대상만·직업만·둘 다·둘 다 없음 네 경우를 모두 다룬다(변론 `제가 [직업]입니다` 는 직업만 필요하다, 04-22)
+    const withTarget = need.target && target !== undefined;
+    const withRole = need.role && claimedRole !== undefined;
     const payload: SayPayload =
-      need.target && target !== undefined
-        ? need.role && claimedRole !== undefined
-          ? { template, target, claimedRole }
-          : { template, target }
-        : { template };
+      withTarget && withRole
+        ? { template, target, claimedRole }
+        : withTarget
+          ? { template, target }
+          : withRole
+            ? { template, claimedRole }
+            : { template };
     onSend(payload);
     requestClose();
   };
