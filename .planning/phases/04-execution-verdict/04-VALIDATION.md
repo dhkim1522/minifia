@@ -1,9 +1,9 @@
 ---
 phase: "4"
 slug: "execution-verdict"
-status: draft
-nyquist_compliant: false
-wave_0_complete: false
+status: server-wave-complete
+nyquist_compliant: true
+wave_0_complete: true
 created: "2026-10-26"
 ---
 
@@ -37,31 +37,47 @@ created: "2026-10-26"
 
 ## Per-Task Verification Map
 
-작업 ID는 계획(PLAN.md) 확정 뒤 채운다. 요구사항별 시험 매핑:
+작업 ID 는 `{계획}-T{번호}` 이다. 상태는 04-12 에서 실제로 돌린 결과 기준이다(`npm test` 87 파일 2157 개 통과, `npm run typecheck` 통과, 스크립트 테스트 117 개 통과; 로컬 소켓 스크립트는 각 계획 SUMMARY 에 결과가 있다).
 
-| Requirement | Secure Behavior | Test Type | Automated Command | File Exists | Status |
-|-------------|-----------------|-----------|-------------------|-------------|--------|
-| VOTE-01 | 과반=찬성×2>던진 표, 번복 시 마지막 값, 익명(개인 표 마감 시 삭제) | unit/worker | `npx vitest run test/unit/vote.test.ts` / `--project worker test/worker/vote.test.ts` | ❌ W0 | ⬜ pending |
-| VOTE-02 | 최다 득표=후보, 동률→밤, 자기 선택 거부, 서버 셔플 순서, 진행 중 투표자에게만 | unit/worker | 위와 같음 + `test/unit/execution.test.ts` | ❌ W0 | ⬜ pending |
-| VOTE-03 | 변론은 후보만, 변론 템플릿은 defense 에서만 | unit | `npx vitest run test/unit/chat.test.ts` | ✅ 확장 | ⬜ pending |
-| VOTE-04 | 처형 시 후보 alive=false, 문구, 직업 비공개, voteLog | unit | `npx vitest run test/unit/execution.test.ts test/unit/view.test.ts` | ❌ W0 | ⬜ pending |
-| COMM-03 | 후보만 변론 메시지, 나머지 이모티콘만 | unit/worker | `npx vitest run test/unit/chat.test.ts` | ✅ 확장 | ⬜ pending |
-| CONN-02 | 끊긴 사람이 있어도 tick 진행, 못 보낸 표 무효 | unit | `npx vitest run test/unit/tick.test.ts test/unit/win.test.ts` | ✅ 확장 / ❌ W0 | ⬜ pending |
-| END-01 | 승패 판정표, 처형·아침 마감에서 분기 | unit | `npx vitest run test/unit/win.test.ts test/unit/tick.test.ts` | ❌ W0 | ⬜ pending |
-| END-02 | `ended` 에서만 `result` 전원 공개, 방 정리 알람 | unit/worker | `npx vitest run test/unit/view.test.ts` / `--project worker test/worker/endgame.test.ts` | ❌ W0 | ⬜ pending |
-| 누출 전체 | 차분(익명) 테스트, 서버 전용 키 부재, 종료 전 직업 비공개 | unit/worker | `npx vitest run test/unit/view.test.ts` / `--project worker test/worker/leak.test.ts` | ✅ 확장 | ⬜ pending |
+| Task ID | Requirement | Secure Behavior | Automated Command | File Exists | Status |
+|---------|-------------|-----------------|-------------------|-------------|--------|
+| 04-01-T1 | VOTE-01, CONN-02 | 트레이서: 여부 투표 집계·번복·마감 분기가 실제 소켓에서 | `npx vitest run test/unit/vote.test.ts` / `--project worker test/worker/vote.test.ts` | ✅ | ✅ green |
+| 04-02-T1 | VOTE-01, CONN-02 | 화면 쪽 단계 표·장면 표가 새 단계에서 app 타입 검사 초록 | `npx tsc -p tsconfig.app.json --noEmit` + `test/unit/scenes.test.ts` | ✅ | ✅ green |
+| 04-02-T2 | VOTE-01, CONN-02 | discussion → night 직결 회귀를 새 흐름으로 | `npm test` | ✅ | ✅ green |
+| 04-03-T1 | 전체 | 결정 0036 와이어 계약 문서 | `grep` 이름 대조(04-12-T1 에서 코드와 재대조) | ✅ | ✅ green |
+| 04-03-T2 | CONN-02 | 요구사항·설계·기획 문서의 옛 표현 정정 | `grep` 문구 검사 + `test/unit/handoff.test.ts` | ✅ | ✅ green |
+| 04-04-T1 | VOTE-02 | 후보 선택 집계: 자기 제외·번복·동률=후보 없음·서버 셔플 | `npx vitest run test/unit/vote.test.ts` | ✅ | ✅ green |
+| 04-04-T2 | VOTE-02, VOTE-03, VOTE-04 | 공개·변론·처형 진입 훅, tick 행, view 필드 | `npx vitest run test/unit/execution.test.ts test/unit/tick.test.ts` | ✅ | ✅ green |
+| 04-05-T1 | COMM-03, VOTE-03 | 변론 템플릿 여섯과 단계별 메시지 허용 | `npx vitest run test/unit/chat.test.ts` | ✅ | ✅ green |
+| 04-05-T2 | VOTE-04 | 아침 문구 일곱·처형 문구 네 개 | `npx vitest run test/unit/eliminationText.test.ts` | ✅ | ✅ green |
+| 04-06-T1 | END-01, CONN-02 | checkWinner 경계표(끊긴 생존자 포함) | `npx vitest run test/unit/win.test.ts` | ✅ | ✅ green |
+| 04-06-T2 | END-01, END-02 | 처형·아침 마감 종료 분기, ended 진입·30분 만료 | `npx vitest run test/unit/endgame.test.ts test/unit/tick.test.ts` | ✅ | ✅ green |
+| 04-06-T3 | END-02 | 판 요약과 ended 전용 result view | `npx vitest run test/unit/endgame.test.ts` | ✅ | ✅ green |
+| 04-07-T1 | VOTE-02, VOTE-03, VOTE-04, COMM-03 | 후보 선택 배선(투표자에게만)과 공개·변론·처형 프레임 | `npx vitest run --project worker test/worker/vote.test.ts` | ✅ | ✅ green |
+| 04-07-T2 | END-01, END-02, CONN-02 | 두 종료 경로·결과 방송·30분 정리·재접속 | `npx vitest run --project worker test/worker/endgame.test.ts` | ✅ | ✅ green |
+| 04-08-T1 | VOTE-01, VOTE-02, VOTE-03 | 봇 계획: 여부·후보·후보 봇 변론 | `npx vitest run test/unit/bots.test.ts` | ✅ | ✅ green |
+| 04-08-T2 | END-02 | 테스트 방 넘기기: 안 던진 봇이 먼저 던지고 분기를 따름 | `npx vitest run test/unit/testTools.test.ts` | ✅ | ✅ green |
+| 04-08-T3 | VOTE-01, VOTE-02, VOTE-03, END-02 | DO 봇 실행과 테스트 방 한 판 | `npx vitest run --project worker test/worker/bots.test.ts test/worker/testTools.test.ts` | ✅ | ✅ green |
+| 04-09-T1 | VOTE-01, VOTE-02, VOTE-04, END-02 | 열네 단계 허용 키 전수·익명·후보 선택 차분(4~8명 × 시드) | `npx vitest run test/unit/view.test.ts` | ✅ | ✅ green |
+| 04-09-T2 | VOTE-01, VOTE-02, VOTE-04, END-02 | 처형·처형 무효·종료 한 판 전수 누출 검사 | `npx vitest run --project worker test/worker/leak.test.ts` | ✅ | ✅ green |
+| 04-10-T1 | VOTE-01, CONN-02 | 스모크·uat-day·uat-night 새 단계 순서(로컬 소켓) | `node scripts/smoke.mjs http://localhost:5173 --stage full --players 5` | ✅ | ✅ green |
+| 04-10-T2 | VOTE-01~04, COMM-03, END-01, END-02 | uat-vote: 처형·아침 종료 두 판을 소켓으로 끝까지(로컬) | `node scripts/uat-vote.mjs http://localhost:5173` | ✅ | ✅ green |
+| 04-11-T1 | VOTE-01, VOTE-02, VOTE-03 | 수동 봇·uat-test-room 이 투표 단계·분기를 따름(로컬) | `node scripts/uat-test-room.mjs http://localhost:5173` | ✅ | ✅ green |
+| 04-11-T2 | VOTE-01, END-02 | uat-test-bots 분기형 넘기기·봇 투표 검사(로컬) | `node scripts/uat-test-bots.mjs http://localhost:5173` | ✅ | ✅ green |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
+
+서버·공유 로직 웨이브(04-01~04-12)의 표다. 화면 계획이 Add more plans 로 더해지면 그 계획이 이 표를 이어 채운다(Manual-Only 표의 화면 몫 포함).
 
 ---
 
 ## Wave 0 Requirements
 
-- [ ] `test/unit/vote.test.ts` — 투표 집계·번복·셔플
-- [ ] `test/unit/win.test.ts` — `checkWinner` 경계표
-- [ ] `test/unit/execution.test.ts` — 진입·마감 훅, 요약
-- [ ] `test/worker/vote.test.ts`, `test/worker/endgame.test.ts` — 소켓 방송 범위·종료
-- [ ] 도우미 `stateWithVerdict()` (투표 주입)
+- [x] `test/unit/vote.test.ts` — 투표 집계·번복·셔플
+- [x] `test/unit/win.test.ts` — `checkWinner` 경계표
+- [x] `test/unit/execution.test.ts` — 진입·마감 훅, 요약
+- [x] `test/worker/vote.test.ts`, `test/worker/endgame.test.ts` — 소켓 방송 범위·종료
+- [x] 도우미 `stateWithVerdict()` (투표 주입)
 
 프레임워크 설치는 필요 없다.
 
@@ -78,11 +94,11 @@ created: "2026-10-26"
 
 ## Validation Sign-Off
 
-- [ ] All tasks have `<automated>` verify or Wave 0 dependencies
-- [ ] Sampling continuity: no 3 consecutive tasks without automated verify
-- [ ] Wave 0 covers all MISSING references
-- [ ] No watch-mode flags
-- [ ] Feedback latency < 60s
-- [ ] `nyquist_compliant: true` set in frontmatter
+- [x] All tasks have `<automated>` verify or Wave 0 dependencies
+- [x] Sampling continuity: no 3 consecutive tasks without automated verify
+- [x] Wave 0 covers all MISSING references
+- [x] No watch-mode flags
+- [x] Feedback latency < 60s
+- [x] frontmatter 의 nyquist_compliant 가 true
 
-**Approval:** pending
+**Approval:** 서버·공유 로직 웨이브 승인(04-12). 화면 웨이브는 화면 계획이 이어서 채운다.

@@ -86,11 +86,11 @@
 | 번호 | 기본값 | 바꾸려면 고칠 곳 한 곳 |
 |---|---|---|
 | A3 | 공개 구간·처형 중에는 이모티콘도 거부한다(`WRONG_PHASE`) | `shared/game/chat.ts` 의 이모티콘 허용 단계 집합에 단계 추가 |
-| A7 | 진행 중 후보 선택은 탈락 관전자에게도 보내지 않는다 | `worker/room.ts` 의 `candidateVote` 수신자 목록 |
+| A7 | 진행 중 후보 선택은 탈락 관전자에게도 보내지 않는다 | `worker/room.ts` 의 `applyCandidateVote` (수신자는 투표자 본인 한 명) |
 | A8 | 여부 투표 번복마다 즉시 전원 방송한다(합치기·최소 간격 없음) | `worker/room.ts` 의 `applyExecVote` |
 | A12 | 여부 개인 표는 마감 때 삭제하고 종료 뒤에도 공개하지 않는다 | `shared/game/vote.ts` 의 `resolveExecVote` (공개하려면 별도 결정) |
 | A13 | 여부 집계는 탈락 관전자에게도 같은 값으로 보낸다. 정족수는 없다 | `shared/game/view.ts` 의 `execTally` 조건 / `resolveExecVote` 의 통과 조건 |
-| — | 봇 찬성 확률 70%·지연 범위(여부 1~7초, 후보 1~10초, 변론 1~5초) | `shared/game/bots.ts` 상수 |
+| — | 봇 찬성 확률 70%(`EXEC_YES_PERCENT`)·지연 범위(여부 1~7초, 후보 1~10초, 변론 1~5초) | `shared/game/bots.ts` 상수 |
 | — | `ended` 장면은 임시로 lobby, `ended` 도 `day` 를 싣는다 | `src/game/scenes.ts`(화면 계획), `shared/game/view.ts` |
 | — | 여부 투표 동률의 처형 무효 이유를 `notMajority` 로 묶음(D-34) | `shared/game/execution.ts` 의 `noExecutionOf` |
 | — | 종료 방 정리 30분, 단계 시간 | `ENDED_ROOM_TTL_MS`, `shared/game/phases.ts` |
@@ -101,4 +101,5 @@
   - `PhaseId` 여섯 개, view 필드 이름(`execTally`·`voteAgree`·`voteTarget`·`voteLog`·`candidate`·`execution`·`noExecution`·`result`), 메시지 두 개(`execVote`·`candidateVote`), 승리 값(`citizenWin`·`mafiaWin`), 변론 템플릿 ID 여섯 개는 **비싸다**(costly) — 서버·화면·테스트를 한 배포에서 함께 고쳐야 하고, 열린 방은 최대 3시간 옛 번들을 쓴다.
   - 단계 시간·과반 정족수·봇 확률·종료 30분·이모티콘 허용 단계는 **쉬운 변경**(reversible)이다. 위 표처럼 한 파일을 고치면 된다.
 - 누출 테스트가 이 계약을 지킨다: `test/unit/view.test.ts`(4~8명 × 시드 전수 — 단계별 허용 키, 익명 차분, 처형자 직업 비공개), `test/worker/leak.test.ts`(처형 경로를 더한 한 판의 모든 프레임 — 서버 전용 키 부재, `voteLog.exec` 키가 `no`·`passed`·`yes` 뿐, 후보 선택 진행 중 투표자 외 프레임 불변, `result` 는 `ended` 에만), `test/worker/vote.test.ts`·`endgame.test.ts`(소켓·알람 단위 흐름).
+- 04-12 대조: 와이어 이름(단계 여섯·메시지 두 개·view 필드·이유 코드·템플릿 ID·승리 값·문구 상수·단계 시간·봇 확률과 지연)은 코드와 모두 같았다. 어긋난 곳은 "바뀔 수 있는 기본값" 표의 고칠 곳 두 군데(A7 은 `applyCandidateVote`, 봇 확률은 상수 이름 `EXEC_YES_PERCENT`)뿐이라 문서를 코드에 맞췄다.
 - 결정 0034 7항("와이어 계약 … 계획에서 정해 이어서 적는다")이 이 문서로 닫혔다. 결정 0020 의 "4페이즈 전에는 승패가 없다" 문장과 0016 의 `discussion → night` 임시 직결은 이 페이즈가 대체한다.
