@@ -6,16 +6,16 @@ current_phase: 4
 current_phase_name: 처형과 승패
 current_plan: 12
 status: executing
-stopped_at: Completed 04-11-PLAN.md
-last_updated: "2026-10-28T06:16:38.234Z"
+stopped_at: Completed 04-12-PLAN.md (server wave closed)
+last_updated: "2026-10-28T06:19:56.044Z"
 last_activity: 2026-10-26
 last_activity_desc: Phase 4 execution started
-state_head: bb00018c88ccf215a1e3489c43e6a4d3d6c4a737
+state_head: ec629674e62446ccd19dce92e25d23e6ac126cc3
 progress:
   total_phases: 7
   completed_phases: 2
   total_plans: 75
-  completed_plans: 74
+  completed_plans: 75
 ---
 
 # Project State
@@ -33,7 +33,7 @@ Phase: 4 (처형과 승패) — EXECUTING
 Current Plan: 12
 Total Plans in Phase: 12
 Plan: 12 of 12
-Status: Ready to execute
+Status: 서버 웨이브 완료(04-12) — 화면 계획 추가 대기(시안 승인 → /gsd-ui-phase 4 → Add more plans)
 Last activity: 2026-10-26 — Phase 4 execution started
 
 Progress: [██░░░░░░░░] 17%
@@ -119,6 +119,7 @@ Progress: [██░░░░░░░░] 17%
 | Phase 04 P09 | 25min | 2 tasks | 2 files |
 | Phase 04 P10 | 45min | 2 tasks | 5 files |
 | Phase 4 P11 | 35min | 2 tasks | 4 files |
+| Phase 04 P12 | 10min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -226,6 +227,7 @@ Recent decisions affecting current work:
 - [Phase 04]: 04-09: ended 단계에서만 result.seats[].job 이 역할 단어 허용 경로에 더해진다(unit·worker 누출 검사). 일지 died 키 검사에서 result.* 는 제외
 - [Phase 04]: 04-10: 스모크의 에셋 Cache-Control 단언은 로컬 dev 서버에서 항상 실패하므로(알려진 제약) 단언은 두고 스크래치 사본으로 확인한다; 배포본에서 본다
 - [Phase 4]: 04-11: uat-test-bots g 방은 방장·동료 마피아가 1일차 처형되면 testReset 후 재시도(최대 6판), R1 이 ended 면 밤 검사 건너뛰고 result 확인
+- [Phase 04]: 04-12: 결정 0036 의 고칠 곳(A7 applyCandidateVote, 봇 상수 EXEC_YES_PERCENT)을 코드에 맞춤. 서버 웨이브 배포 금지 유지(D-26)
 
 ### Pending Todos
 
@@ -262,6 +264,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-28T06:16:37.705Z
-Stopped at: Completed 04-11-PLAN.md
+Last session: 2026-10-28T06:19:55.487Z
+Stopped at: Completed 04-12-PLAN.md (server wave closed)
 Resume file: None
