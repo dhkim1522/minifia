@@ -9,3 +9,4 @@ status: in-progress
 ## 진행 기록
 
 Task 1 — RED c99bee0 / GREEN 42f6b75 / win.test.ts 32 통과(RED 때 32 실패), tsc app·worker 0 / 남은 태스크 2, 3.
+Task 2 — RED 71ca457 / GREEN 7e85fc9 / unit 전체·worker 151 통과, tsc app·worker 0 / 남은 태스크 3.
