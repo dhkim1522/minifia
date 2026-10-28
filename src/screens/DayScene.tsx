@@ -25,11 +25,13 @@ import { EMOJI_TEXT, NIGHT_TEMPLATE_ORDER } from "../game/messageText";
 import { claimLinesOf } from "../net/claimLines";
 import { FLOAT_PHASES, useDayChat, useSeatFloats } from "../net/seatFloats";
 import type { RoomConnection } from "../net/useRoomConnection";
+import { useVerdictScene } from "./verdictScene";
 import "../styles/day.css";
 import "../styles/night.css";
 import "../styles/phase.css";
 import "../styles/testtools.css";
 import "../styles/urecord.css";
+import "../styles/verdict.css";
 
 // 밤 대상 버튼의 동사(접근성 이름 "{닉네임}, {동사} 대상"). 부품은 역할을 모르므로 장면이 값으로 넘긴다.
 const PICK_VERB: Readonly<Partial<Record<RoleId, string>>> = { police: "조사", doctor: "보호", mafia: "지목" };
@@ -115,7 +117,9 @@ export function DayScene({ view, connection, myRoleButton, testButton, arrivedFr
   const [inspectSeat, setInspectSeat] = useState<number | null>(null);
   if (isNight && inspectSeat !== null) setInspectSeat(null);
   const inspectable = view.phase === "claim" || view.phase === "discussion" || isMorning;
-  const title = isNight ? "밤" : isMorning ? "아침" : view.phase === "discussion" ? "낮 · 토론" : view.phase === "claim" ? "낮 · 직업 공개" : "낮";
+  // 투표 구간(execVote~)이면 제목·안내·타이머 톤·하단을 이 값이 정한다. 아니면 null 이라 아래 낮·밤·아침 경로는 그대로다(verdictScene.tsx).
+  const verdict = useVerdictScene({ view, connection });
+  const title = verdict ? verdict.title : isNight ? "밤" : isMorning ? "아침" : view.phase === "discussion" ? "낮 · 토론" : view.phase === "claim" ? "낮 · 직업 공개" : "낮";
 
   // 밤 대상 선택(D-01·D-06). 행위자 = 살아 있는 마피아·경찰·의사. 누를 수 있는 자리는 살아 있는 사람이다(역할별 제외는 아래).
   // 낙관적 선택: ClaimPanel 과 같이 어느 view 를 보고 있을 때 눌렀는지 함께 기억한다. 새 서버 view(다른 객체)가 오면 버려
@@ -208,7 +212,7 @@ export function DayScene({ view, connection, myRoleButton, testButton, arrivedFr
   // 아침 5초·낮 시작 2초도 전체가 마지막 5초라 진홍을 쓰지 않는다(calm, UI-SPEC 확인 필요 10).
   const timer =
     endsAt !== null && durationMs !== null ? (
-      <Timer endsAt={endsAt} durationMs={durationMs} offset={connection.offset} calm={isMorning || view.phase === "claim" || view.phase === "dayAnnounce"} />
+      <Timer endsAt={endsAt} durationMs={durationMs} offset={connection.offset} calm={verdict !== null ? verdict.calm : isMorning || view.phase === "claim" || view.phase === "dayAnnounce"} />
     ) : null;
 
   return (
@@ -221,7 +225,7 @@ export function DayScene({ view, connection, myRoleButton, testButton, arrivedFr
     >
       <main className="mf-root mf-dayscene">
         <div key={`bar-${view.phase}`} className="mf-dayscene__enter">
-          <PhaseBar title={title} instruction={mafiaNight ? `${n}일차 · 함께 지목하세요` : isMorning ? `${n + 1}일차` : `${n}일차`} extra={myRoleButton} timer={timer} />
+          <PhaseBar title={title} instruction={verdict ? verdict.instruction : mafiaNight ? `${n}일차 · 함께 지목하세요` : isMorning ? `${n + 1}일차` : `${n}일차`} extra={myRoleButton} timer={timer} />
         </div>
         <div className="mf-dayscene__scene">
           {testButton ? <div className="mf-tt-anchor">{testButton}</div> : null}
@@ -236,7 +240,9 @@ export function DayScene({ view, connection, myRoleButton, testButton, arrivedFr
         </div>
         {isMorning ? <MorningCard {...morningCardText(view.day?.morning, nicknameOf)} exitDelayMs={morningExit.delay} /> : null}
         <section key={`panel-${view.phase}`} className="mf-dayscene__panel mf-dayscene__enter">
-          {isMorning ? (
+          {verdict ? (
+            verdict.bottom
+          ) : isMorning ? (
             // 아침 하단(UI-SPEC M): 살아 있는 사람·탈락자·관전자 모두 같은 제목+안내. 알약·채팅·버튼 없음.
             <NightPanel title={NIGHT_PANEL_TEXT.morning.title} guide={NIGHT_PANEL_TEXT.morning.guide} />
           ) : meDead ? (

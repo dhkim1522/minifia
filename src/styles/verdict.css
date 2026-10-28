@@ -1,0 +1,11 @@
+/* 4페이즈 투표·변론·처형 단계 화면 스타일(UI-SPEC 8). 값은 tokens.css 변수만 쓴다(색 직접 지정 없음). 글자 크기는 14·16·24·36 에서만 고른다.
+   이 페이즈가 새로 그리는 투표 요소에는 진홍을 쓰지 않는다(D-33). */
+
+/* 처형 여부 투표 하단(UI-SPEC 8.1): 제목(.mf-claimpanel__title 24px) + 집계 줄 + [찬성][반대] 한 줄. 높이는 하단 패널 157 안에 든다. */
+.mf-execvote { display: flex; flex-direction: column; gap: var(--space-sm); }
+/* 집계 줄: 앞(찬성 N · 반대 M)은 굵게 gray-50, 뒤(아직 k명 …)는 gray-300. 한 줄이라 줄바꿈하지 않는다(시안 .stat: 뒤는 앞과 8px 띄움). */
+.mf-execvote__tally { margin: 0; font-size: 14px; line-height: 20px; color: var(--gray-300); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mf-execvote__tally b { font-weight: 700; color: var(--gray-50); }
+.mf-execvote__tally span { margin-left: var(--space-sm); }
+/* 버튼 줄: 두 버튼 간격 8(기본 .mf-seg 간격은 4). 높이 44(--tap-min)는 .mf-seg__b 규칙을 그대로 쓴다. */
+.mf-execvote__seg { gap: var(--space-sm); }

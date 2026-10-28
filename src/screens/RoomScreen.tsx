@@ -9,6 +9,7 @@ import { RoleCardSheet } from "../components/RoleCardSheet";
 import type { RoleCardTab } from "../components/RoleCardSheet";
 import { TestToolsButton, TestToolsSheet } from "../components/TestTools";
 import { morningCardText } from "../game/eliminationText";
+import { VERDICT_TEXT } from "../game/verdict";
 import { preloadDuskAssets, preloadRoleAssets } from "../net/assets";
 import { usePhaseArrival } from "../net/phaseArrival";
 import { loadSeenCount, saveSeenCount, unseenCount } from "../net/recordsSeen";
@@ -39,7 +40,7 @@ const PHASE_ANNOUNCE: Record<PhaseId, (view: RoomView) => string> = {
   discussion: () => "낮 토론",
   night: nightAnnounce,
   morning: morningAnnounce,
-  execVote: () => "처형 여부 투표",
+  execVote: () => VERDICT_TEXT.announce.execVote,
   candidateVote: () => "후보 선택 투표",
   candidateVoteReveal: () => "투표 공개",
   defense: () => "최후 변론",
@@ -84,7 +85,7 @@ function nightAnnounce(view: RoomView): string {
 // 장면 키: 낮 시작(dayAnnounce)·낮 두 단계와 밤·아침은 같은 장면(DayScene)이라 같은 키를 쓴다 — 테이블을 다시 마운트하지 않는다(UI-SPEC C5).
 // 낮 시작 전용 화면은 없다(결정 0030). 래퍼와 장면은 장면에 들어올 때만 mf-phase-enter 가 돈다. 그 밖은 단계 이름이 키다.
 function sceneKey(phase: PhaseId): string {
-  return phase === "dayAnnounce" || phase === "claim" || phase === "discussion" || phase === "night" || phase === "morning"
+  return phase === "dayAnnounce" || phase === "claim" || phase === "discussion" || phase === "night" || phase === "morning" || phase === "execVote"
     ? "dayScene"
     : phase;
 }
@@ -272,6 +273,7 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
       case "discussion":
       case "night":
       case "morning":
+      case "execVote":
         return (
           <DayScene
             view={view}
