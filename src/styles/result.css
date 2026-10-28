@@ -47,7 +47,10 @@
   border-radius: var(--radius-md); border: 1px solid var(--night-600);
   background: color-mix(in srgb, var(--night-800) 92%, transparent);
 }
-.mf-result__art { display: block; width: 72px; height: 96px; object-fit: contain; animation: none; }
+/* 그림 상자: 직업 그림이 자리를 잡고(72×96), 연출 동안만 중립 인물이 그 위에 겹친다(done 에서 제거) */
+.mf-result__figs { position: relative; width: 72px; height: 96px; flex: none; }
+.mf-result__art { display: block; width: 72px; height: 96px; object-fit: contain; animation: none; transition: opacity 300ms var(--ease-out); }
+.mf-result__neutral { position: absolute; inset: 0; width: 72px; height: 96px; object-fit: contain; animation: none; transition: opacity 300ms var(--ease-out); }
 /* 탈락: 그림만 흐리게(결과 화면 한정 승인 표시, UI-SPEC 11.1) */
 .mf-result__art--dead { filter: grayscale(1); opacity: 0.5; }
 
@@ -80,3 +83,32 @@
 /* [처음으로] + 보조 문구 */
 .mf-result__foot { display: flex; flex-direction: column; align-items: stretch; gap: var(--space-sm); }
 .mf-result__note { margin: 0; text-align: center; font-size: 14px; line-height: 20px; color: var(--gray-300); word-break: keep-all; }
+
+/* ---- 공개 연출(04-26, UI-SPEC 11.2, D-17). 단계는 .mf-result[data-stage] (neutral 0~300ms → flip 300~900ms → done).
+   data-reveal="true" 일 때만(같은 접속의 전환) 움직임이 있다 — 재접속·모션 줄이기는 처음부터 done + reveal false 라 아래 규칙이 아무것도 하지 않는다.
+   전이는 opacity·transform·scale 만. 자리는 항상 차지한다(숨김은 opacity·visibility) — 단계가 바뀌어도 레이아웃이 움직이지 않는다. ---- */
+
+/* 0ms: 배너 팝 scale .92 → 1 + opacity, 360ms (RESULT_BANNER_MS) */
+.mf-result[data-reveal="true"] .mf-result__banner { animation: mf-result-banner-pop 360ms var(--ease-out) both; }
+@keyframes mf-result-banner-pop { from { opacity: 0; transform: scale(0.92); } to { opacity: 1; transform: scale(1); } }
+
+/* 0ms: 마피아 승 위쪽 진홍 번짐 600ms 페이드인(연출 시작에만) */
+.mf-result__glow[data-reveal="true"] { animation: mf-result-glow-in 600ms ease-out both; }
+@keyframes mf-result-glow-in { from { opacity: 0; } to { opacity: 1; } }
+
+/* 0~300ms neutral: 직업 그림·이름·탈락은 아직 없다(자리는 유지). 중립 인물만 보인다 */
+.mf-result[data-stage="neutral"] .mf-result__art { opacity: 0; }
+.mf-result__role, .mf-result__out { transition: opacity 300ms var(--ease-out); }
+.mf-result[data-stage="neutral"] .mf-result__role,
+.mf-result[data-stage="neutral"] .mf-result__out { opacity: 0; }
+
+/* 300ms flip: 모든 카드가 같은 순간(지연 없음) — 그림 crossfade 300ms(중립 층이 사라지고 직업 그림이 나타난다) + 카드 scale 1 → 1.06 → 1, 360ms */
+.mf-result[data-stage="flip"] .mf-result__neutral { opacity: 0; }
+.mf-result[data-stage="flip"] .mf-result__card { animation: mf-result-card-pop 360ms var(--ease-out); }
+@keyframes mf-result-card-pop { 0% { scale: 1; } 50% { scale: 1.06; } 100% { scale: 1; } }
+
+/* 900ms done: 요약 카드와 [처음으로] 가 opacity 0 → 1 + translateY 8px → 0, 300ms. 그 전엔 자리만 차지하고 보이지 않는다 */
+.mf-result[data-stage="neutral"] .mf-result__rise,
+.mf-result[data-stage="flip"] .mf-result__rise { opacity: 0; visibility: hidden; transform: translateY(8px); }
+.mf-result[data-reveal="true"][data-stage="done"] .mf-result__rise { animation: mf-result-rise 300ms var(--ease-out) both; }
+@keyframes mf-result-rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }

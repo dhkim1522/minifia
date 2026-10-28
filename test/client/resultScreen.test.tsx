@@ -239,6 +239,8 @@ describe("결과 화면 핵심 (END-01·END-02, D-17·D-18)", () => {
     after.me = { ...after.me, isHost: true, testMode: true };
     r.rerenderRoom(after);
     expect(r.container.querySelector("dialog")).toBeNull();
+    // 같은 접속의 전환이라 공개 연출이 돈다 — 900ms 뒤에 [처음으로] 가 열린다
+    act(() => void vi.advanceTimersByTime(900));
     expect(screen.getByRole("button", { name: "처음으로" })).toBeTruthy();
   });
 
@@ -494,6 +496,14 @@ describe("결과 공개 연출 상태기계 (D-17, UI-SPEC 11.2)", () => {
     return r;
   };
   const advance = (ms: number) => act(() => void vi.advanceTimersByTime(ms));
+  /** fn 이 거는 setTimeout 의 지연들. 연출 타이머는 300·900 이다(배경 크로스페이드 등 다른 타이머와 구분) */
+  const delaysOf = (fn: () => void): number[] => {
+    const spy = vi.spyOn(globalThis, "setTimeout");
+    fn();
+    const delays = spy.mock.calls.map((c) => Number(c[1] ?? 0));
+    spy.mockRestore();
+    return delays;
+  };
 
   afterEach(() => vi.unstubAllGlobals());
 
@@ -567,23 +577,29 @@ describe("결과 공개 연출 상태기계 (D-17, UI-SPEC 11.2)", () => {
 
   it("연출 중 같은 result 가 다시 와도 stage 가 되돌아가지 않고 타이머가 늘지 않는다", () => {
     const r = arrive("execution");
+    expect(vi.getTimerCount()).toBeGreaterThanOrEqual(2);
     advance(300);
     expect(stageOf(r.container)).toBe("flip");
-    r.rerenderRoom(makeView());
+    const again = delaysOf(() => r.rerenderRoom(makeView()));
+    expect(again).not.toContain(300);
+    expect(again).not.toContain(900);
     expect(stageOf(r.container)).toBe("flip");
     advance(600);
     expect(stageOf(r.container)).toBe("done");
-    r.rerenderRoom(makeView());
+    const late = delaysOf(() => r.rerenderRoom(makeView()));
     expect(stageOf(r.container)).toBe("done");
-    expect(vi.getTimerCount()).toBe(0);
+    expect(late).not.toContain(300);
+    expect(late).not.toContain(900);
   });
 
   it("재접속·처음 마운트(arrivedFrom 없음)는 곧바로 done: 중립 층이 없다", () => {
-    const r = renderRoom(makeView());
+    let r!: ReturnType<typeof renderRoom>;
+    const delays = delaysOf(() => void (r = renderRoom(makeView())));
     expect(stageOf(r.container)).toBe("done");
     expect(neutralImgs(r.container).length).toBe(0);
     expect(r.container.querySelector(".mf-result__role")?.getAttribute("aria-hidden")).toBeNull();
-    expect(vi.getTimerCount()).toBe(0);
+    expect(delays).not.toContain(300);
+    expect(delays).not.toContain(900);
     expect(r.container.querySelector(".mf-result")!.getAttribute("data-reveal")).toBe("false");
   });
 
@@ -596,10 +612,12 @@ describe("결과 공개 연출 상태기계 (D-17, UI-SPEC 11.2)", () => {
 
   it("모션 줄이기: 같은 접속 전환이어도 곧바로 done, 타이머 없음", () => {
     vi.stubGlobal("matchMedia", (q: string) => ({ matches: q.includes("reduce"), media: q, addEventListener: () => {}, removeEventListener: () => {}, addListener: () => {}, removeListener: () => {} }));
-    const r = arrive("execution");
+    let r!: ReturnType<typeof arrive>;
+    const delays = delaysOf(() => void (r = arrive("execution")));
     expect(stageOf(r.container)).toBe("done");
     expect(neutralImgs(r.container).length).toBe(0);
-    expect(vi.getTimerCount()).toBe(0);
+    expect(delays).not.toContain(300);
+    expect(delays).not.toContain(900);
   });
 
   it("execution·morning 이외 단계에서 온 ended 도 예외 없이 최종 상태(done)를 그린다", () => {
@@ -629,7 +647,7 @@ describe("결과 공개 연출 상태기계 (D-17, UI-SPEC 11.2)", () => {
   it("언마운트하면 타이머 둘이 정리되어 이후 상태 갱신·경고가 없다 (T-04-66)", () => {
     const err = vi.spyOn(console, "error").mockImplementation(() => {});
     const r = arrive("execution");
-    expect(vi.getTimerCount()).toBe(2);
+    expect(vi.getTimerCount()).toBeGreaterThanOrEqual(2);
     r.unmount();
     expect(vi.getTimerCount()).toBe(0);
     advance(2000);
