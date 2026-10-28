@@ -1797,7 +1797,7 @@ test("04-29: 기존 기준 수치는 그대로다(04-30 이 완화를 더해도 
 
 // ---- 04-30 Task 1: P5 변론 스포트라이트·P6 처형 카드, 승인 완화 P-PANEL-236 ----
 
-const SCENE = { left: 0, top: 119.2, right: 390, bottom: 520, width: 390 };
+const DEF_SCENE = { left: 0, top: 119.2, right: 390, bottom: 520, width: 390 };
 const defenseSnap = ({ me = false } = {}) => ({
   bottom: {
     title: me ? "변론할 말을 고르세요" : "",
@@ -1806,7 +1806,7 @@ const defenseSnap = ({ me = false } = {}) => ({
     buttons: me ? Array.from({ length: 6 }, (_, i) => ({ text: `칩${i}`, pressed: null, disabled: false, w: 110, h: 44 })) : [],
   },
   dt: {
-    scene: SCENE,
+    scene: DEF_SCENE,
     center: { seat: 2, cx: 195, scale: 1.7, z: 31, tagZ: 32, tagBottom: 514 },
     others: { maxSeatZ: 10, maxTagZ: 12 },
     dim: { count: 1, backdropFilter: "blur(3px)", background: "rgba(0, 0, 0, 0.45)", z: 30 },

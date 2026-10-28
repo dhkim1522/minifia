@@ -49,7 +49,31 @@ export const OVERALL_LIMIT_MS = 600_000;
 //   }
 //
 // 시간표본 입력(재는 쪽이 시각 오름차순으로 모은다): introChecks 는 [{ t(ms, 도착 이후), intro }] + { clickedThrough },
-// revealChecks 는 [{ t, reveal, dt:{ haloImgs, scene }, crimsonNew }]. 04-30 이 나머지 필드(방어·처형·종료·P10)를 같은 주석에 더한다.
+// revealChecks 는 [{ t, reveal, dt:{ haloImgs, scene }, crimsonNew }].
+//
+// ---- 04-30 이 더한 필드 (P5·P6·P7·P8·P10) — VerdictSnap 에 아래가 이어진다 ----
+//   VerdictSnap.bottom 추가: height(패널 높이 px; 변론 후보 본인은 236, 그 밖은 157), buttons = 변론 칩 버튼 목록을 그대로 재사용(후보 본인 6개).
+//   VerdictSnap.dt 추가 (P5 변론):
+//     center: { seat, cx(후보 좌석 가운데 x), scale(계산된 배율), z(좌석 z-index), tagZ(이름표 z-index), tagBottom(이름표 아래끝 y) },
+//     others: { maxSeatZ, maxTagZ },     // 후보가 아닌 모든 자리·이름표 z-index 의 최댓값
+//     dim:    { count(`.mf-dt__dim--verdict` 수), backdropFilter(계산된 값), background(계산된 값 `rgba(…, .45)`), z },
+//     cones:  number,                    // 원뿔 층 수(`.mf-dt__cone`)
+//   VerdictSnap.dt 추가 (P6 처형):
+//     ghosts: number[],                  // 그림이 유령(`/characters/ghost/`)인 자리 번호 목록
+//     roleImgs: number,                  // `/characters/roles/` 그림 수(살아 있는 viewer 화면에서 0)
+//     roleWords: number,                 // 화면에 보이는 역할 이름 글자 요소 수(마피아·경찰·의사·시민)
+//     header, panel: { left, top, right, bottom },   // P10 배치 비교용 사각형
+//   VerdictSnap.execCard (P6): { count, title, sub, borderColor(계산된 border-color 문자열) }       // `.mf-morningcard--amber`
+//   VerdictSnap.voidCard (P7): { count, title, sub, borderColor, pointerEvents }                      // 처형 무효 회색 카드
+//   VerdictSnap.card (P10, 선택): { rect }                                                           // 인트로·무효 카드 사각형
+//   VerdictSnap.reveal.chips: 각 { seat, n, tone, left, top, right, bottom }, reveal.tags: 각 { seat, left, top, right, bottom }(모든 이름표)
+//   VerdictSnap.result (P8, ended): {
+//     winner: "citizenWin"|"mafiaWin", bannerText(`시민 팀 승리`|`마피아 팀 승리`), bannerSub,
+//     cards: [{ seat, job(직업 이름 글자), dead: boolean, figOpacity(캐릭터 그림 계산된 opacity) }],
+//     rows(요약 카드 행 수), scrollW, clientW(가로 스크롤 판정), reachedButton(세로 스크롤로 [처음으로] 가 화면에 닿음),
+//     glow(위쪽 진홍 번짐 요소 존재), hasPhaseBar(헤더 바·타이머·하단 패널 존재)
+//   }
+// P7 시간표본: [{ t(ms, 처형 무효 카드 도착 기준), voidCard, nightIntro(밤 시작 문구 `.mf-sceneintro` 수) }] + { clickedThrough }.
 
 /** G2 가 보지 않는 장식 요소. 항목을 더할 때는 selector 와 reason 을 함께 적는다(결과 출력 머리에 목록이 찍힌다). */
 export const DECORATIVE_ALLOW = [
@@ -234,6 +258,13 @@ export const ONE_LINE_FACTOR = 1.6;
 export const FACE_RATIO = 0.45;
 /** 낮 장면 하단 패널 높이(결정 0017). */
 export const PANEL_H = 157;
+/**
+ * 변론의 후보 본인 하단 패널 높이 236 — 승인 시안 DC 값(승인 완화 `P-PANEL-236`). defenseChecks 가 isCandidate 일 때만 이 값을 요구하고
+ * 그 밖의 모든 상태는 PANEL_H 157 이다. PANEL_H 자체는 낮추지 않는다.
+ */
+export const PANEL_H_DEFENSE_ME = 236;
+/** 앰버 처형 카드 테두리(UI-SPEC 6.2 amber-400 #f2b84b). 회색·진홍 색값은 04-31 이 토큰에서 읽어 넘긴다. */
+export const AMBER_RGB = "rgb(242, 184, 75)";
 /** 양옆 캐릭터와 테이블 면 사이 가로 간격 하한(px, T2). P2 계산 최소는 6.2. */
 export const SIDE_GAP_MIN = 4;
 /** 장면 상자 위의 머리 높이(실측 119.2, T1). */
@@ -278,6 +309,7 @@ export const APPROVED_RELAXATIONS = [
   { id: "D3a/D3b", approved: "03.1 F7", reason: "이름표가 이웃 얼굴을 가리지 않음 → 캐릭터 아래 층(D3a) + 인원별 보이는 비율 바닥(D3b)" },
   { id: "D4", approved: "03.1 F7", reason: "[테스트] 버튼이 캐릭터 상자와 겹치는 세로 깊이 ≤ 3px" },
   { id: "D3b-5", approved: "2026-10-26", reason: "5명판 D3b 바닥 99.9 % → 98.0 %: 앞쪽 옆자리 유령 머리가 5글자 이름표를 약 0.4 % 덮음(캐릭터가 이름표를 덮는 것은 이미 허용)" },
+  { id: "P-PANEL-236", approved: "execution-v1/DC-defense-me", reason: "변론의 후보 본인 하단 패널 높이 157 → 236(제목+안내+칩 3줄×2칸). 승인 시안 DC 값이며 defenseChecks 가 isCandidate 일 때만 허용한다(UI-SPEC 8.4·15.1, 결정 0030 §6)" },
 ];
 
 /** D3b 인원별 이름표 보이는 비율 바닥. 4명 100 %(부동소수 오차 0.001 허용), 5명 98.0 %(승인 완화), 6명 85 %, 7명 50 %, 8명 55 %. */
@@ -1139,4 +1171,122 @@ export function colorRuleChecks(v, { crimsonColors, wholeScreenCrimson = false }
     for (const c of screenColors ?? []) if (crimson.has(colorKey(c.color))) bad.push(`화면 전체: ${c.desc} 가 진홍 ${c.color} 를 씀 (방장이 시민)`);
   }
   return result("P-COLOR", label, bad);
+}
+
+// ---- 04-30 P5 변론 스포트라이트·P6 처형 카드 (UI-SPEC 8.4·8.5·15.3) ----
+
+// 아래 수치는 src/game/verdict.ts 의 상수와 같은 값이다(단위 시험이 파일을 읽어 동일성 단언 — D-38 이 바뀌면 E2E 가 알려 준다).
+const DEFENSE_DIM_ALPHA = 0.45; // VERDICT_DIM_PERCENT 45 %
+const DEFENSE_BLUR = "blur(3px)"; // VERDICT_BLUR_PX 3
+const DEFENSE_SCALE = 1.7; // VERDICT_CANDIDATE_SCALE
+const DEFENSE_DIM_Z = 30; // UI-SPEC 12 층: 어둡게+흐림 z 30
+const DEFENSE_CHIPS = 6; // 후보 본인 칩 3줄×2칸
+const TAG_BOTTOM_MARGIN = 4; // 후보 이름표 아래끝 ≤ 장면 아래 − 4
+const EXEC_TAIL_RE = /^.+님이 (더는 함께할 수 없게 되었습니다|형장의 이슬이 되었습니다|잔혹하게 처형되었습니다|처형대에 올랐습니다)$/;
+
+/** rgba(…, a) 또는 color(… / a) 문자열의 알파. 못 읽으면 NaN. 알파 없는 rgb() 는 1. */
+const alphaOf = (c) => {
+  const t = String(c);
+  const slash = /\/\s*([\d.]+)(%?)\s*\)/.exec(t);
+  if (slash) return Number(slash[1]) / (slash[2] ? 100 : 1);
+  const m = /rgba\(\s*[\d.]+[\s,]+[\d.]+[\s,]+[\d.]+[\s,]+([\d.]+)\s*\)/i.exec(t);
+  if (m) return Number(m[1]);
+  return /^rgb\(/i.test(t.trim()) ? 1 : NaN;
+};
+const isNum = (x) => typeof x === "number" && Number.isFinite(x);
+
+/**
+ * P5 변론 스포트라이트(defense). opts = { isCandidate(viewer 가 후보 본인인가) }.
+ * 후보 가운데 |cx − 장면 가운데| ≤ 2·배율 1.7 ± .02, 어둡게 층 정확히 하나(계산된 backdrop-filter 에 blur(3px), 배경 알파 .45 ± .02, z 30),
+ * 원뿔 정확히 하나, 층 순서(후보 좌석·이름표 z > 어둡게 z > 다른 자리·이름표 z), 후보 이름표 아래끝 ≤ 장면 아래 − 4.
+ * 패널: 후보 본인은 높이 236(승인 완화 P-PANEL-236) + 칩 정확히 6개(각 ≥ TAP_MIN), 그 밖은 PANEL_H.
+ */
+export function defenseChecks(v, { isCandidate } = {}) {
+  const label = "변론 스포트라이트: 가운데·1.7배·어둡게 45%·흐림 3px·원뿔 하나·층 순서·패널";
+  const miss = [];
+  if (typeof isCandidate !== "boolean") miss.push("측정값 없음(isCandidate 인자)");
+  const dt = v?.dt;
+  const c = dt?.center;
+  if (!dt || typeof dt !== "object") miss.push("측정값 없음(dt)");
+  else {
+    const sc = dt.scene;
+    if (!(isNum(sc?.left) && isNum(sc?.width) && isNum(sc?.bottom))) miss.push("측정값 없음(dt.scene)");
+    if (!c || !["cx", "scale", "z", "tagZ", "tagBottom"].every((k) => isNum(c[k]))) miss.push("측정값 없음(dt.center)");
+    if (!(isNum(dt.others?.maxSeatZ) && isNum(dt.others?.maxTagZ))) miss.push("측정값 없음(dt.others)");
+    const d = dt.dim;
+    if (!d || !isNum(d.count) || typeof d.backdropFilter !== "string" || typeof d.background !== "string" || !isNum(d.z)) miss.push("측정값 없음(dt.dim)");
+    if (!isNum(dt.cones)) miss.push("측정값 없음(dt.cones)");
+  }
+  if (!isNum(v?.bottom?.height)) miss.push("측정값 없음(bottom.height)");
+  if (isCandidate === true && !Array.isArray(v?.bottom?.buttons)) miss.push("측정값 없음(bottom.buttons)");
+  if (miss.length > 0) return result("P5", label, miss);
+
+  const bad = [];
+  const sc = dt.scene;
+  const mid = sc.left + sc.width / 2;
+  if (Math.abs(c.cx - mid) > 2) bad.push(`후보 가운데 x ${fmt(c.cx)} 가 장면 가운데 ${fmt(mid)} 에서 ${fmt(Math.abs(c.cx - mid))}px 어긋남(허용 2)`);
+  if (Math.abs(c.scale - DEFENSE_SCALE) > 0.02) bad.push(`후보 배율 ${fmt(c.scale * 100) / 100} ≠ ${DEFENSE_SCALE}`);
+  const d = dt.dim;
+  if (d.count !== 1) bad.push(`어둡게 층 ${d.count}개 ≠ 1`);
+  else {
+    if (!d.backdropFilter.includes(DEFENSE_BLUR)) bad.push(`어둡게 층 backdrop-filter "${d.backdropFilter}" 에 ${DEFENSE_BLUR} 없음(흐림 3px)`);
+    const a = alphaOf(d.background);
+    if (!Number.isFinite(a)) bad.push(`어둡게 층 배경 "${d.background}" 에서 알파를 읽을 수 없음`);
+    else if (Math.abs(a - DEFENSE_DIM_ALPHA) > 0.02) bad.push(`어둡게 층 배경 알파 ${fmt(a * 100) / 100} ≠ ${DEFENSE_DIM_ALPHA}`);
+    if (d.z !== DEFENSE_DIM_Z) bad.push(`어둡게 층 z ${d.z} ≠ ${DEFENSE_DIM_Z}`);
+  }
+  if (dt.cones !== 1) bad.push(`원뿔 ${dt.cones}개 ≠ 1`);
+  if (!(c.z > d.z)) bad.push(`후보 좌석 z ${c.z} 가 어둡게 층 z ${d.z} 보다 위가 아님`);
+  if (!(c.tagZ > d.z)) bad.push(`후보 이름표 z ${c.tagZ} 가 어둡게 층 z ${d.z} 보다 위가 아님`);
+  if (!(dt.others.maxSeatZ < d.z)) bad.push(`다른 자리 z ${dt.others.maxSeatZ} 가 어둡게 층 z ${d.z} 이상(어두워지지 않음)`);
+  if (!(dt.others.maxTagZ < d.z)) bad.push(`다른 이름표 z ${dt.others.maxTagZ} 가 어둡게 층 z ${d.z} 이상(어두워지지 않음)`);
+  if (c.tagBottom > sc.bottom - TAG_BOTTOM_MARGIN) bad.push(`후보 이름표 아래끝 ${fmt(c.tagBottom)} 가 장면 아래 ${fmt(sc.bottom)} − ${TAG_BOTTOM_MARGIN} 을 침범`);
+
+  const h = v.bottom.height;
+  if (isCandidate) {
+    if (Math.abs(h - PANEL_H_DEFENSE_ME) > OVERLAP_EPS) bad.push(`후보 본인 패널 높이 ${fmt(h)} ≠ ${PANEL_H_DEFENSE_ME}(승인 완화 P-PANEL-236)`);
+    const chips = v.bottom.buttons;
+    if (chips.length !== DEFENSE_CHIPS) bad.push(`변론 칩 ${chips.length}개 ≠ ${DEFENSE_CHIPS}`);
+    for (const x of chips) {
+      if (!(x.w >= TAP_MIN && x.h >= TAP_MIN)) bad.push(`칩 "${x.text}" ${fmt(x.w)}×${fmt(x.h)} 가 ${TAP_MIN}px 미만`);
+    }
+  } else if (Math.abs(h - PANEL_H) > OVERLAP_EPS) {
+    bad.push(`패널 높이 ${fmt(h)} ≠ ${PANEL_H}(236 은 후보 본인만)`);
+  }
+  return result("P5", label, bad);
+}
+
+/**
+ * P6 처형(execution). opts = { viewerAlive, candidateSeat }.
+ * 처형 카드 정확히 1장·테두리 앰버(AMBER_RGB, 진홍·회색 아님)·제목 `…님이 {꼬리 4개 중 하나}`·부제 `처형이 집행됐어요`,
+ * 후보 그림이 유령(dt.ghosts 에 candidateSeat), 하단 `처형이 끝났어요` + `곧 다음으로 넘어가요`, 새 요소 진홍 0.
+ * 살아 있는 viewer 의 화면에는 역할 그림·역할 이름이 0(D-09; 처형된 viewer 는 관전 규칙으로 허용되어 검사하지 않는다).
+ */
+export function executionChecks(v, { viewerAlive, candidateSeat } = {}) {
+  const label = "처형: 앰버 카드·꼬리 문구·유령·직업 비노출";
+  const miss = [];
+  if (typeof viewerAlive !== "boolean") miss.push("측정값 없음(viewerAlive 인자)");
+  if (!isNum(candidateSeat)) miss.push("측정값 없음(candidateSeat 인자)");
+  const ec = v?.execCard;
+  if (!ec || !isNum(ec.count) || typeof ec.title !== "string" || typeof ec.sub !== "string" || typeof ec.borderColor !== "string") miss.push("측정값 없음(execCard)");
+  if (!Array.isArray(v?.dt?.ghosts)) miss.push("측정값 없음(dt.ghosts)");
+  if (typeof v?.bottom?.title !== "string" || typeof v?.bottom?.guide !== "string") miss.push("측정값 없음(bottom.title·guide)");
+  if (!isNum(v?.crimsonNew)) miss.push("측정값 없음(crimsonNew)");
+  if (viewerAlive === true && !(isNum(v?.dt?.roleImgs) && isNum(v?.dt?.roleWords))) miss.push("측정값 없음(dt.roleImgs·roleWords)");
+  if (miss.length > 0) return result("P6", label, miss);
+
+  const bad = [];
+  if (ec.count !== 1) bad.push(`처형 카드 ${ec.count}장 ≠ 1`);
+  if (colorKey(ec.borderColor) !== colorKey(AMBER_RGB)) bad.push(`처형 카드 테두리 ${ec.borderColor} 가 앰버 ${AMBER_RGB} 가 아님(진홍·회색 아님)`);
+  if (!EXEC_TAIL_RE.test(ec.title)) bad.push(`처형 카드 문구 "${ec.title}" 가 "…님이 (네 꼬리 중 하나)" 모양이 아님`);
+  if (ec.sub !== "처형이 집행됐어요") bad.push(`처형 카드 부제 "${ec.sub}" ≠ "처형이 집행됐어요"`);
+  if (!v.dt.ghosts.includes(candidateSeat)) bad.push(`후보 자리 ${candidateSeat} 가 유령 그림이 아님(유령 자리 [${v.dt.ghosts.join(",")}])`);
+  if (v.bottom.title !== "처형이 끝났어요") bad.push(`하단 제목 "${v.bottom.title}" ≠ "처형이 끝났어요"`);
+  if (v.bottom.guide !== "곧 다음으로 넘어가요") bad.push(`하단 안내 "${v.bottom.guide}" ≠ "곧 다음으로 넘어가요"`);
+  if (v.crimsonNew !== 0) bad.push(`새 요소 진홍 ${v.crimsonNew}개 ≠ 0`);
+  if (viewerAlive) {
+    if (v.dt.roleImgs !== 0) bad.push(`역할 그림 ${v.dt.roleImgs}개 ≠ 0 (D-09)`);
+    if (v.dt.roleWords !== 0) bad.push(`역할 이름 ${v.dt.roleWords}개 ≠ 0 (D-09)`);
+  }
+  return result("P6", label, bad);
 }
