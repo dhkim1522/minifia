@@ -44,6 +44,28 @@ export function enterEnded(state: RoomState, _randInt: RandInt, at: number): Roo
   };
 }
 
-export function buildSummary(_state: RoomState): SummaryRow[] {
-  throw new Error("not implemented");
+/**
+ * 판 요약(END-02, D-27): 공개 기록(voteLog)과 서버 전용 밤 기록(nightLog)을 일차별로 합쳐 날짜 오름차순 한 줄씩 만든다.
+ * 줄과 하위 객체는 필드별로 새로 만든다 — Player·상태를 펼쳐 복사하지 않는다(Pitfall 22). 조건을 채울 때만 키가 생긴다:
+ *   exec  : 그날 voteLog 줄이 있을 때 { yes, no, passed }, 후보가 있으면 candidate
+ *   night : 그날 nightLog 줄이 있을 때 { died }, 지목이 있으면 target (died false + target 은 지목했는데 아무도 안 죽은 밤 — 의사 구출, D-27)
+ * nightLog 를 읽는 곳은 이 함수 하나이고, view 가 ended 단계에서만 이 함수를 부른다 — 판 중에는 어떤 view 에도 실리지 않는다(결정 0020-3, T-04-18).
+ */
+export function buildSummary(state: RoomState): SummaryRow[] {
+  const votes = state.voteLog ?? [];
+  const nights = state.nightLog ?? [];
+  const days = [...new Set([...votes.map((v) => v.n), ...nights.map((night) => night.n)])].sort((a, b) => a - b);
+  return days.map((n) => {
+    const row: SummaryRow = { n };
+    const vote = votes.find((v) => v.n === n);
+    if (vote !== undefined) {
+      row.exec = { yes: vote.exec.yes, no: vote.exec.no, passed: vote.exec.passed };
+      if (vote.cand?.candidate !== undefined) row.exec.candidate = vote.cand.candidate;
+    }
+    const night = nights.find((entry) => entry.n === n);
+    if (night !== undefined) {
+      row.night = night.target === undefined ? { died: night.died } : { target: night.target, died: night.died };
+    }
+    return row;
+  });
 }
