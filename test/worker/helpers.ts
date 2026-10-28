@@ -2,7 +2,7 @@
 import { env, exports } from "cloudflare:workers";
 import { evictDurableObject, runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
 import { expect } from "vitest";
-import type { CreateRoomResponse, PhaseId, ServerMessage } from "../../shared/protocol";
+import type { CreateRoomResponse, PhaseId, RoleId, RoomView, ServerMessage } from "../../shared/protocol";
 
 export interface TestSocket {
   ws: WebSocket;
@@ -189,7 +189,11 @@ export interface StoredRoom {
   claimStart?: number;
   claimPick?: string;
   claimLog?: Array<{ n: number; seat: number; claim: string }>;
-  players: Array<{ role?: string; lastSendAt?: number }>;
+  /** 4페이즈 서버 전용 투표 상태: 개인 표는 마감·공개 구간 진입 훅이 키째 지운다(결정 0034). */
+  voteLog?: Array<{ n: number; exec: { yes: number; no: number; passed: boolean }; cand?: { votes: Array<{ seat: number; target: number }>; candidate?: number } }>;
+  winner?: string;
+  verdict?: { passed: boolean; candidate?: number };
+  players: Array<{ role?: string; lastSendAt?: number; execVote?: boolean; candidateVote?: number; alive?: boolean }>;
 }
 
 export async function storedRoom(code: string): Promise<StoredRoom> {
@@ -235,4 +239,95 @@ export async function backdateSends(code: string, msAgo = 5000): Promise<void> {
     await state.storage.put("room", { ...room, players });
   });
   await evictDurableObject(stub);
+}
+
+// ---- 4페이즈 소켓 도우미(04-07): night.test.ts 의 지역 도우미와 같은 모양을 내보낸다 ----
+
+/** 실패 출력은 한 줄이어야 해서(TAP) 프레임 목록은 summary() 한 줄 문자열로 비교한다: "[state:night,error:BAD_MESSAGE]". 빈 목록도 "[]" 라 비어 있지 않다. */
+export const summary = (msgs: ServerMessage[]): string =>
+  `[${msgs
+    .map((m) => (m.t === "state" ? `state:${m.view.phase}` : m.t === "error" ? `error:${m.code}` : m.t))
+    .join(",")}]`;
+
+const parseFrame = (raw: string): ServerMessage => JSON.parse(raw) as ServerMessage;
+
+/** 행동 전에 그 소켓의 frames 길이를 적어 둔다. settle 의 from 으로 쓴다. */
+export const mark = (sock: TestSocket): number => sock.frames.length;
+
+let pingCounter = 0;
+/**
+ * `from`(행동 전 mark) 이후 ~ pong 직전까지 받은 프레임. 소켓마다 보낸 순서대로 전달되므로 ping 을 보내 pong 이 올 때까지 사이에 낀 프레임이
+ * 곧 그 행동이 만든 프레임 전부다("오지 않았음" 의 증명).
+ */
+export async function settle(sock: TestSocket, from: number): Promise<ServerMessage[]> {
+  pingCounter += 1;
+  const c = pingCounter;
+  send(sock, { t: "ping", c });
+  await nextFrame(sock, (m) => m.t === "pong" && m.c === c);
+  return sock.frames.slice(from, sock.cursor - 1).map(parseFrame);
+}
+
+/** 소켓이 받은 마지막 state view. */
+export function lastViewOf(sock: TestSocket): RoomView {
+  const views = sock.frames
+    .map(parseFrame)
+    .filter((m): m is Extract<ServerMessage, { t: "state" }> => m.t === "state")
+    .map((m) => m.view);
+  return views.at(-1)!;
+}
+
+export interface Actor {
+  sock: TestSocket;
+  token: string;
+  seat: number;
+  role: RoleId;
+}
+
+/** 모든 소켓의 마지막 view 로 사람마다 seat·역할을 읽는다(역할은 무작위라 테스트가 이렇게 고른다). 역할 확인 단계 뒤에 불러야 한다. */
+export function actorsOf(seated: Seated): Actor[] {
+  const tokens = [seated.hostToken, ...seated.guests.map((g) => g.token)];
+  return [seated.host, ...seated.guests.map((g) => g.sock)].map((sock, i) => {
+    const view = lastViewOf(sock);
+    return { sock, token: tokens[i]!, seat: view.me.seat, role: view.me.role! };
+  });
+}
+
+/** 저장된 마감을 과거로 당기고 알람을 한 번 돌린다(단계 하나가 넘어간다). 당긴 마감 시각을 돌려준다 — 종료 알람 시각(= 이 값 + 30분) 단언에 쓴다. */
+export async function closePhase(code: string): Promise<number> {
+  await forceDue(code, "phaseEndsAt");
+  const deadline = (await storedRoom(code)).phaseEndsAt!;
+  expect(await runDurableObjectAlarm(env.ROOM.getByName(code))).toBe(true);
+  return deadline;
+}
+
+/** `from` 이 아닌 단계의 state 를 모든 actor 가 받을 때까지 기다린다. */
+async function untilLeft(actors: Actor[], from: PhaseId): Promise<void> {
+  for (const a of actors) await nextFrame(a.sock, (m) => m.t === "state" && m.view.phase !== from);
+}
+
+/**
+ * 처형 여부 투표로 단계를 넘긴다: agreeBySeat 에 든 사람이 execVote 를 보내고(없는 사람은 안 던진다), 모든 actor 가 자기 소켓을 flush 한 뒤
+ * 마감을 당겨 execVote 를 벗어난 단계 state 를 모두 받을 때까지 기다린다. 마감 시각을 돌려준다.
+ */
+export async function voteExec(code: string, actors: Actor[], agreeBySeat: Readonly<Record<number, boolean>>): Promise<number> {
+  const marks = actors.map((a) => mark(a.sock));
+  for (const a of actors) {
+    if (Object.hasOwn(agreeBySeat, a.seat)) send(a.sock, { t: "execVote", agree: agreeBySeat[a.seat] });
+  }
+  for (let i = 0; i < actors.length; i += 1) await settle(actors[i]!.sock, marks[i]!);
+  const deadline = await closePhase(code);
+  await untilLeft(actors, "execVote");
+  return deadline;
+}
+
+/** 후보 선택 투표로 단계를 넘긴다(voteExec 와 같은 모양): targetBySeat[투표자 seat] = 고른 seat. 마감 시각을 돌려준다. */
+export async function voteCandidate(code: string, actors: Actor[], targetBySeat: Readonly<Record<number, number>>): Promise<number> {
+  const marks = actors.map((a) => mark(a.sock));
+  for (const a of actors) {
+    if (Object.hasOwn(targetBySeat, a.seat)) send(a.sock, { t: "candidateVote", target: targetBySeat[a.seat] });
+  }
+  for (let i = 0; i < actors.length; i += 1) await settle(actors[i]!.sock, marks[i]!);
+  const deadline = await closePhase(code);
+  await untilLeft(actors, "candidateVote");
+  return deadline;
 }

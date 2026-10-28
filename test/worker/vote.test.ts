@@ -5,30 +5,12 @@ import { env } from "cloudflare:workers";
 import { runDurableObjectAlarm } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 import type { RoomView, ServerMessage } from "../../shared/protocol";
-import { advanceTo, forceDue, nextFrame, seat, send, storedRoom } from "./helpers";
-import type { Seated, TestSocket } from "./helpers";
+import { actorsOf, advanceTo, backdateSends, forceDue, lastViewOf, mark, nextFrame, seat, send, settle, storedRoom, summary, voteCandidate, voteExec } from "./helpers";
+import type { Actor, Seated, TestSocket } from "./helpers";
 
 const allSockets = (r: Seated): TestSocket[] => [r.host, ...r.guests.map((g) => g.sock)];
 
 const parse = (raw: string): ServerMessage => JSON.parse(raw) as ServerMessage;
-
-/** 프레임 목록을 "[state:execVote,error:BAD_MESSAGE]" 같은 한 줄로. 빈 목록도 "[]" 라 비어 있지 않다. */
-const summary = (msgs: ServerMessage[]): string =>
-  `[${msgs
-    .map((m) => (m.t === "state" ? `state:${m.view.phase}` : m.t === "error" ? `error:${m.code}` : m.t))
-    .join(",")}]`;
-
-let pingCounter = 0;
-/** `from`(행동 전 frames 길이) 이후 ~ pong 직전까지 받은 프레임. 소켓마다 순서대로 전달되므로 ping/pong 사이가 그 행동이 만든 프레임 전부다. */
-async function settle(sock: TestSocket, from: number): Promise<ServerMessage[]> {
-  pingCounter += 1;
-  const c = pingCounter;
-  send(sock, { t: "ping", c });
-  await nextFrame(sock, (m) => m.t === "pong" && m.c === c);
-  return sock.frames.slice(from, sock.cursor - 1).map(parse);
-}
-
-const mark = (sock: TestSocket): number => sock.frames.length;
 
 const viewsOf = (msgs: ServerMessage[]): RoomView[] =>
   msgs.filter((m): m is Extract<ServerMessage, { t: "state" }> => m.t === "state").map((m) => m.view);
@@ -186,5 +168,221 @@ describe("여부 투표 마감 분기 (D-04, T-04-02)", () => {
     const stored = await storedVote(r.code);
     expect(JSON.stringify(stored.voteLog?.at(-1)?.exec)).toBe(JSON.stringify({ yes: 1, no: 1, passed: false }));
     expect(hasPersonalVote(stored)).toBe(false);
+  });
+});
+
+// ---- 후보 선택·공개·변론·처형 (04-07): VOTE-02·VOTE-03·VOTE-04·COMM-03, 결정 0034·0036, D-03·D-09·D-13·D-19·D-20·D-34, 위협 T-04-22~25 ----
+
+const ROLE_WORDS = new Set(["mafia", "police", "doctor", "citizen", "none"]);
+/** 살아 있는 사람 프레임에서 역할 단어가 나와도 되는 경로(본인 역할·구성표·공개 주장 기록). */
+const ROLE_PATHS_ALIVE = [".view.me.role", ".view.day.roles[]", ".view.day.claimLog[].claim"];
+
+/** 프레임 값 중 역할 단어와 같은 문자열의 경로를 모은다(배열 칸은 [] 로 적는다). */
+function roleWordPaths(value: unknown, path = ""): string[] {
+  if (typeof value === "string") return ROLE_WORDS.has(value) ? [path] : [];
+  if (Array.isArray(value)) return value.flatMap((item) => roleWordPaths(item, `${path}[]`));
+  if (value !== null && typeof value === "object") {
+    return Object.entries(value).flatMap(([key, item]) => roleWordPaths(item, `${path}.${key}`));
+  }
+  return [];
+}
+
+/** 6명 방(방장 + 연결 손님 5)을 execVote 에서 모두 찬성으로 닫아 candidateVote 까지 간다. */
+async function atCandidateVote(): Promise<{ r: Seated; actors: Actor[] }> {
+  const r = await startedAtExecVote(6);
+  const actors = actorsOf(r);
+  await voteExec(r.code, actors, Object.fromEntries(actors.map((a) => [a.seat, true])));
+  expect((await storedRoom(r.code)).phase).toBe("candidateVote");
+  return { r, actors };
+}
+
+/** 후보 선택: actors[0,2,3]→actors[1], actors[4]→actors[2], actors[1]→actors[0], actors[5] 는 안 던짐. 후보는 actors[1] (3표). 공개 구간까지 간다. */
+async function atReveal(): Promise<{ r: Seated; actors: Actor[]; candidate: Actor; cast: Record<number, number> }> {
+  const { r, actors } = await atCandidateVote();
+  const s = actors.map((a) => a.seat);
+  const cast = { [s[0]!]: s[1]!, [s[2]!]: s[1]!, [s[3]!]: s[1]!, [s[4]!]: s[2]!, [s[1]!]: s[0]! };
+  await voteCandidate(r.code, actors, cast);
+  expect((await storedRoom(r.code)).phase).toBe("candidateVoteReveal");
+  return { r, actors, candidate: actors[1]!, cast };
+}
+
+async function atDefense(): Promise<{ r: Seated; actors: Actor[]; candidate: Actor; cast: Record<number, number> }> {
+  const out = await atReveal();
+  await advanceTo(out.r.code, allSockets(out.r), "defense");
+  return out;
+}
+
+/** 보낸 사람(from)이 메시지를 보내면 actors 모두가 받은 프레임을 actors 순서대로 돌려준다. */
+async function sendAndSettleAll(actors: Actor[], from: Actor, msg: unknown): Promise<ServerMessage[][]> {
+  const marks = actors.map((a) => mark(a.sock));
+  send(from.sock, msg);
+  const out: ServerMessage[][] = [];
+  for (let i = 0; i < actors.length; i += 1) out.push(await settle(actors[i]!.sock, marks[i]!));
+  return out;
+}
+
+const lines = (frames: ServerMessage[][], actors: Actor[]): string => frames.map((f, i) => `${actors[i]!.seat}:${summary(f)}`).join(" ");
+
+describe("후보 선택은 투표자에게만 (VOTE-02, D-03, D-19, A7)", () => {
+  it("A 가 B 를 고르면 A 소켓만 me.voteTarget 이 든 state 를 받고 나머지 다섯은 아무것도 받지 않는다. 같은 값은 A 도 프레임이 없다", async () => {
+    const { actors } = await atCandidateVote();
+    const [a, b] = actors as [Actor, Actor];
+    const first = await sendAndSettleAll(actors, a, { t: "candidateVote", target: b.seat });
+    const mine = viewsOf(first[0]!)[0]!;
+    expect(`${summary(first[0]!)} ${mine.me.voteTarget}`).toBe(`[state:candidateVote] ${b.seat}`);
+    expect(lines(first.slice(1), actors.slice(1))).toBe(actors.slice(1).map((x) => `${x.seat}:[]`).join(" "));
+
+    const same = await sendAndSettleAll(actors, a, { t: "candidateVote", target: b.seat });
+    expect(lines(same, actors)).toBe(actors.map((x) => `${x.seat}:[]`).join(" "));
+  });
+
+  it("자기 자신은 보낸 소켓만 BAD_MESSAGE + state, 범위 밖·문자열 대상·덧붙은 키는 BAD_MESSAGE 뿐이고 다른 소켓은 프레임이 없다", async () => {
+    const { r, actors } = await atCandidateVote();
+    const a = actors[0]!;
+    const others = actors.slice(1);
+    const own = await sendAndSettleAll(actors, a, { t: "candidateVote", target: a.seat });
+    expect(summary(own[0]!)).toBe("[error:BAD_MESSAGE,state:candidateVote]");
+    for (const [i, bad] of [{ t: "candidateVote", target: 9 }, { t: "candidateVote", target: "1" }, { t: "candidateVote", target: 1, seat: 2 }].entries()) {
+      const frames = await sendAndSettleAll(actors, a, bad);
+      expect(`${i} ${summary(frames[0]!)}`).toBe(`${i} [error:BAD_MESSAGE]`);
+      expect(frames.slice(1).map(summary).join(" ")).toBe(others.map(() => "[]").join(" "));
+    }
+    expect(own.slice(1).map(summary).join(" ")).toBe(others.map(() => "[]").join(" "));
+    const stored = await storedRoom(r.code);
+    expect(stored.players.some((p) => Object.hasOwn(p, "candidateVote"))).toBe(false);
+  });
+
+  it("execVote 단계에 보낸 candidateVote 는 보낸 소켓만 WRONG_PHASE + 최신 state 를 받는다", async () => {
+    const r = await startedAtExecVote(6);
+    const actors = actorsOf(r);
+    const frames = await sendAndSettleAll(actors, actors[0]!, { t: "candidateVote", target: actors[1]!.seat });
+    expect(summary(frames[0]!)).toBe("[error:WRONG_PHASE,state:execVote]");
+    expect(frames.slice(1).map(summary).join(" ")).toBe(actors.slice(1).map(() => "[]").join(" "));
+  });
+});
+
+describe("선택 공개 (VOTE-02, D-20, D-21)", () => {
+  it("여섯 소켓이 같은 순서의 day.voteLog 그날 줄 cand.votes 와 같은 day.candidate 를 받고 phaseDurationMs 는 4000 이다", async () => {
+    const { r, candidate, cast } = await atReveal();
+    const views = allSockets(r).map((s) => lastViewOf(s));
+    const first = JSON.stringify(views[0]!.day?.voteLog?.at(-1)?.cand?.votes);
+    for (const v of views) {
+      expect(v.phase).toBe("candidateVoteReveal");
+      expect(JSON.stringify(v.day?.voteLog?.at(-1)?.cand?.votes)).toBe(first);
+      expect(`${v.day?.candidate} ${v.phaseDurationMs}`).toBe(`${candidate.seat} 4000`);
+    }
+    const votes = views[0]!.day!.voteLog!.at(-1)!.cand!.votes;
+    expect(votes.length).toBe(5);
+    const shown = [...votes].sort((x, y) => x.seat - y.seat).map((v) => `${v.seat}>${v.target}`);
+    const thrown = Object.entries(cast).map(([from, to]) => ({ from: Number(from), to })).sort((x, y) => x.from - y.from).map((v) => `${v.from}>${v.to}`);
+    expect(JSON.stringify(shown)).toBe(JSON.stringify(thrown));
+  });
+
+  it("공개 중 say 는 보낸 소켓만 WRONG_PHASE + state, 이모티콘은 보낸 소켓만 WRONG_PHASE 이고 다른 소켓은 프레임이 없다", async () => {
+    const { actors } = await atReveal();
+    const [a] = actors as [Actor];
+    const said = await sendAndSettleAll(actors, a, { t: "say", template: "innocent" });
+    expect(summary(said[0]!)).toBe("[error:WRONG_PHASE,state:candidateVoteReveal]");
+    expect(said.slice(1).map(summary).join(" ")).toBe(actors.slice(1).map(() => "[]").join(" "));
+    const emoted = await sendAndSettleAll(actors, a, { t: "emoji", icon: "smile" });
+    expect(summary(emoted[0]!)).toBe("[error:WRONG_PHASE]");
+    expect(emoted.slice(1).map(summary).join(" ")).toBe(actors.slice(1).map(() => "[]").join(" "));
+  });
+});
+
+describe("최후 변론 (COMM-03, VOTE-03, D-13)", () => {
+  it("후보의 변론은 여섯 소켓 모두에 chat 으로 가고, 후보의 낮 템플릿은 후보 소켓만 BAD_MESSAGE 다", async () => {
+    const { actors, candidate } = await atDefense();
+    const said = await sendAndSettleAll(actors, candidate, { t: "say", template: "defNotMe" });
+    expect(said.map(summary).join(" ")).toBe(actors.map(() => "[chat]").join(" "));
+    for (const f of said) {
+      const chat = f[0] as Extract<ServerMessage, { t: "chat" }>;
+      expect(`${chat.template} ${chat.seat}`).toBe(`defNotMe ${candidate.seat}`);
+    }
+    const day = await sendAndSettleAll(actors, candidate, { t: "say", template: "innocent" });
+    expect(day.map(summary).join(" ")).toBe(actors.map((a) => (a === candidate ? "[error:BAD_MESSAGE]" : "[]")).join(" "));
+  });
+
+  it("후보가 아닌 생존자의 say 는 그 소켓만 WRONG_PHASE + state 이고, 이모티콘은 여섯 소켓 모두에 간다", async () => {
+    const { r, actors, candidate } = await atDefense();
+    const other = actors.find((a) => a !== candidate)!;
+    const said = await sendAndSettleAll(actors, other, { t: "say", template: "defNotMe" });
+    expect(said.map(summary).join(" ")).toBe(actors.map((a) => (a === other ? "[error:WRONG_PHASE,state:defense]" : "[]")).join(" "));
+
+    await backdateSends(r.code);
+    const emoted = await sendAndSettleAll(actors, other, { t: "emoji", icon: "smile" });
+    expect(emoted.map(summary).join(" ")).toBe(actors.map(() => "[emoji]").join(" "));
+  });
+});
+
+describe("처형 발표 (VOTE-04, D-09, D-34)", () => {
+  it("여섯 소켓 모두 후보 alive false 와 day.execution {seat, phrase 1..4} 를 받고, 살아 있는 소켓에는 역할 단어가 허용 경로 밖에 없으며 처형된 소켓만 관전을 받는다", async () => {
+    const { r, actors, candidate } = await atDefense();
+    await advanceTo(r.code, allSockets(r), "execution");
+    for (const a of actors) {
+      const v = lastViewOf(a.sock);
+      expect(v.phase).toBe("execution");
+      expect(`${v.players.find((p) => p.seat === candidate.seat)?.alive} ${v.day?.execution?.seat}`).toBe(`false ${candidate.seat}`);
+      expect([1, 2, 3, 4].includes(v.day?.execution?.phrase ?? 0)).toBe(true);
+      expect(JSON.stringify(v.day?.execution)).toBe(JSON.stringify(lastViewOf(actors[0]!.sock).day?.execution));
+    }
+    for (const a of actors.filter((x) => x !== candidate)) {
+      const bad = a.sock.frames.flatMap((raw) => roleWordPaths(JSON.parse(raw))).filter((p) => !ROLE_PATHS_ALIVE.includes(p));
+      expect(`${a.seat} ${JSON.stringify(bad)}`).toBe(`${a.seat} []`);
+      expect(Object.hasOwn(lastViewOf(a.sock), "spectate")).toBe(false);
+    }
+    expect(String(lastViewOf(candidate.sock).spectate?.seats.length)).toBe("6");
+  });
+
+  it("처형 중 say·이모티콘은 보낸 소켓에만 WRONG_PHASE 다", async () => {
+    const { r, actors, candidate } = await atDefense();
+    await advanceTo(r.code, allSockets(r), "execution");
+    const other = actors.find((a) => a !== candidate)!;
+    const said = await sendAndSettleAll(actors, other, { t: "say", template: "innocent" });
+    expect(said.map(summary).join(" ")).toBe(actors.map((a) => (a === other ? "[error:WRONG_PHASE,state:execution]" : "[]")).join(" "));
+    const emoted = await sendAndSettleAll(actors, other, { t: "emoji", icon: "smile" });
+    expect(emoted.map(summary).join(" ")).toBe(actors.map((a) => (a === other ? "[error:WRONG_PHASE]" : "[]")).join(" "));
+  });
+
+  it("처형이 이뤄진 날의 밤 state 에는 day.noExecution 키가 없다", async () => {
+    const { r, actors } = await atDefense();
+    await advanceTo(r.code, allSockets(r), "night");
+    for (const a of actors) expect(Object.hasOwn(lastViewOf(a.sock).day ?? {}, "noExecution")).toBe(false);
+  });
+});
+
+describe("처형이 성립하지 않은 밤 (D-34)", () => {
+  it("후보 최다 동률이면 공개 구간(후보 없음) 뒤 여섯 소켓의 night state 모두 noExecution {reason:'tie'} 가 같고, 아침 state 에는 키가 없다", async () => {
+    const { r, actors } = await atCandidateVote();
+    const s = actors.map((a) => a.seat);
+    await voteCandidate(r.code, actors, { [s[0]!]: s[1]!, [s[1]!]: s[0]!, [s[2]!]: s[1]!, [s[3]!]: s[0]! });
+    for (const a of actors) {
+      const v = lastViewOf(a.sock);
+      expect(`${v.phase} ${Object.hasOwn(v.day ?? {}, "candidate")} ${v.day?.voteLog?.at(-1)?.cand?.votes.length}`).toBe("candidateVoteReveal false 4");
+    }
+    await advanceTo(r.code, allSockets(r), "night");
+    for (const a of actors) expect(JSON.stringify(lastViewOf(a.sock).day?.noExecution)).toBe(JSON.stringify({ reason: "tie" }));
+    await advanceTo(r.code, allSockets(r), "morning");
+    for (const a of actors) expect(Object.hasOwn(lastViewOf(a.sock).day ?? {}, "noExecution")).toBe(false);
+  });
+
+  it("후보 선택에 아무도 던지지 않으면 night 의 모든 소켓에 noExecution {reason:'noVotes'} 가 간다", async () => {
+    const { r, actors } = await atCandidateVote();
+    await voteCandidate(r.code, actors, {});
+    await advanceTo(r.code, allSockets(r), "night");
+    for (const a of actors) expect(JSON.stringify(lastViewOf(a.sock).day?.noExecution)).toBe(JSON.stringify({ reason: "noVotes" }));
+  });
+
+  it("여부 투표 미통과(찬성 1 · 반대 2)는 night 의 모든 소켓에 {reason:'notMajority'}, 0표는 {reason:'noVotes'} 다", async () => {
+    const a = await startedAtExecVote(6);
+    const actorsA = actorsOf(a);
+    const s = actorsA.map((x) => x.seat);
+    await voteExec(a.code, actorsA, { [s[0]!]: true, [s[1]!]: false, [s[2]!]: false });
+    for (const x of actorsA) expect(`${lastViewOf(x.sock).phase} ${JSON.stringify(lastViewOf(x.sock).day?.noExecution)}`).toBe(`night ${JSON.stringify({ reason: "notMajority" })}`);
+
+    const b = await startedAtExecVote(6);
+    const actorsB = actorsOf(b);
+    await voteExec(b.code, actorsB, {});
+    for (const x of actorsB) expect(`${lastViewOf(x.sock).phase} ${JSON.stringify(lastViewOf(x.sock).day?.noExecution)}`).toBe(`night ${JSON.stringify({ reason: "noVotes" })}`);
   });
 });
