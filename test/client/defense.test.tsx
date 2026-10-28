@@ -324,14 +324,79 @@ describe("defense 화면 한 경로 (VOTE-03, D-15·D-16·D-29, COMM-03)", () =>
     expect(/dimPercent:\s*\d|blurPx:\s*\d/.test(src)).toBe(false);
   });
 
-  it("후보 본인: 안내 `1일차 · 내 변론`, 하단은 제목 `변론할 말을 고르세요` + 안내 `한 번에 하나씩 보낼 수 있어요`(칩은 04-22), 안내문 `내 최후 변론. 변론할 말을 고르세요`", () => {
+  it("후보 본인: 안내 `1일차 · 내 변론`, 하단 <section> 이 panel--tall 이고 제목·안내·변론 칩 6개, 안내문 `내 최후 변론. 변론할 말을 고르세요`", () => {
     const { container } = renderRoom(roomView({ me: 2 }));
     expect(screen.queryByText("1일차 · 내 변론")).not.toBeNull();
-    expect(panelOf(container).querySelector("h2")?.textContent).toBe(VERDICT_TEXT.defenseChooseTitle);
-    expect(panelOf(container).querySelector("p")?.textContent).toBe(VERDICT_TEXT.defenseChooseHint);
-    expect(panelOf(container).querySelector(".st-row")).toBeNull();
+    const section = panelOf(container);
+    expect(section.tagName).toBe("SECTION");
+    expect(section.classList.contains("mf-dayscene__panel--tall")).toBe(true);
+    expect(section.classList.contains("mf-dayscene__enter")).toBe(true);
+    expect(section.querySelector("h2")?.textContent).toBe(VERDICT_TEXT.defenseChooseTitle);
+    expect(section.querySelector(".mf-claimpanel__guide")?.textContent).toBe(VERDICT_TEXT.defenseChooseHint);
+    expect([...section.querySelectorAll(".mf-defchips button")].map((b) => b.textContent)).toEqual([
+      "저 아니에요",
+      "저는 시민이에요",
+      "[○○] 의심해 주세요",
+      "[○○] 믿어 주세요",
+      "제가 [직업]입니다",
+      "한 번만 믿어 주세요",
+    ]);
+    expect(section.querySelector(".st-row")).toBeNull();
+    expect(section.querySelectorAll("input, textarea").length).toBe(0);
     expect(haloSeats(container, "white")).toBe("2");
     expect(announce(container)).toBe("내 최후 변론. 변론할 말을 고르세요");
+  });
+
+  it("panel--tall 은 내가 후보일 때만 있다: 남의 변론·관전·서버 이상·다른 단계에는 없다", () => {
+    const a = renderRoom(roomView());
+    expect(panelOf(a.container).classList.contains("mf-dayscene__panel--tall")).toBe(false);
+    cleanup();
+    const b = renderRoom(roomView({ me: 1, dead: [1] }));
+    expect(panelOf(b.container).classList.contains("mf-dayscene__panel--tall")).toBe(false);
+    cleanup();
+    const c = renderRoom(roomView({ me: 2, candidate: null }));
+    expect(panelOf(c.container).classList.contains("mf-dayscene__panel--tall")).toBe(false);
+    cleanup();
+    const d = renderRoom({ ...roomView({ me: 2 }), phase: "candidateVoteReveal" });
+    expect(panelOf(d.container).classList.contains("mf-dayscene__panel--tall")).toBe(false);
+    expect(readFileSync("src/styles/verdict.css", "utf8")).toMatch(/\.mf-dayscene__panel\.mf-dayscene__panel--tall\s*\{[^}]*calc\(236px/);
+  });
+
+  it("후보 본인이 칩을 누르면 { t:'say', template } 가 나가고, 내 chat 이벤트가 오면 후보(나) 머리 위 말풍선이 뜬다", () => {
+    const bus = emitter();
+    const { container, send } = renderRoom(roomView({ me: 2 }), { onEvent: bus.onEvent });
+    fireEvent.click(screen.getByRole("button", { name: "저 아니에요" }));
+    expect(send).toHaveBeenCalledWith({ t: "say", template: "defNotMe" });
+    expect(panelOf(container).querySelector(".mf-claimpanel__guide")?.textContent).toBe("보냈어요 · 저 아니에요");
+    expect(container.querySelectorAll(".mf-dt__bubble").length).toBe(0);
+    bus.emit({ t: "chat", seq: 1, seat: 2, template: "defNotMe", at: NOW } as RoomEvent);
+    expect(seatOf(container, 2).querySelectorAll(".mf-dt__bubble--spoke").length).toBe(1);
+  });
+
+  it("후보 본인 화면에서도 가운데 이동·어둡게 층·원뿔은 그대로다", () => {
+    const { container } = renderRoom(roomView({ me: 2 }));
+    expect(container.querySelector(".mf-dayscene")?.classList.contains("mf-dayscene--verdict")).toBe(true);
+    expect(container.querySelectorAll(".mf-dt__dim--verdict").length).toBe(1);
+    expect(container.querySelectorAll(".mf-dt__cone").length).toBe(1);
+    expect(seatOf(container, 2).style.zIndex).toBe("31");
+  });
+
+  it("후보가 연결이 끊긴 채 돌아와도(재접속) 칩이 보이고, 서버가 거부하면 토스트가 뜬다", () => {
+    const bus = emitter();
+    const { container } = renderRoom(roomView({ me: 2, disconnected: [2] }), { onEvent: bus.onEvent });
+    expect(panelOf(container).querySelectorAll(".mf-defchips button").length).toBe(6);
+    bus.emit({ t: "error", code: "BAD_MESSAGE" });
+    expect(screen.queryByText("보내지 못했어요. 다시 시도해 주세요")).not.toBeNull();
+  });
+
+  it("defense → execution 으로 단계가 바뀌면 칩 패널이 사라지고 열려 있던 시트도 함께 닫힌다", () => {
+    const r = renderRoom(roomView({ me: 2 }));
+    fireEvent.click(screen.getByRole("button", { name: "[○○] 의심해 주세요" }));
+    expect(document.querySelector("dialog")).toBeTruthy();
+    r.rerenderRoom({ ...roomView({ me: 2 }), phase: "execution" });
+    expect(r.container.querySelectorAll(".mf-defchips").length).toBe(0);
+    expect(document.querySelector('dialog[aria-label="빠른 메시지"]')).toBeNull();
+    expect(panelOf(r.container).classList.contains("mf-dayscene__panel--tall")).toBe(false);
   });
 
   it("탈락 viewer: 하단은 채팅(읽기) + 관전 알약, 좌석은 버튼이 아니다(기록 카드 열림 없음)", () => {
