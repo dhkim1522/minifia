@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { DISPLAY_ONLY_TEMPLATE_IDS, EMOJI_IDS, TEMPLATE_IDS } from "../../shared/protocol";
-import { EMOJI_TEXT, hasBatchim, messageText, NIGHT_TEMPLATE_ORDER, TEMPLATE_CHIP, TEMPLATE_ORDER } from "../../src/game/messageText";
+import { DEFENSE_TEMPLATE_ORDER, EMOJI_TEXT, hasBatchim, messageText, NIGHT_TEMPLATE_ORDER, TEMPLATE_CHIP, TEMPLATE_ORDER } from "../../src/game/messageText";
 
 const NAMES: Record<number, string> = {
   1: "하윤",
@@ -65,6 +65,23 @@ describe("messageText: 템플릿 → 문장", () => {
   });
 });
 
+describe("변론 문장 (D-13, COMM-03)", () => {
+  it("여섯 문장이 확정 문구 그대로다", () => {
+    expect(messageText({ template: "defNotMe" }, nick)).toBe("저 아니에요");
+    expect(messageText({ template: "defCitizen" }, nick)).toBe("저는 시민이에요");
+    expect(messageText({ template: "defSuspect", target: 1 }, nick)).toBe("하윤 의심해 주세요");
+    expect(messageText({ template: "defTrust", target: 2 }, nick)).toBe("도현 믿어 주세요");
+    expect(messageText({ template: "defRole", claimedRole: "police" }, nick)).toBe("제가 경찰입니다");
+    expect(messageText({ template: "defPlead" }, nick)).toBe("한 번만 믿어 주세요");
+  });
+
+  it("대상·직업이 비면 [○○]·[직업]", () => {
+    expect(messageText({ template: "defSuspect" }, nick)).toBe("[○○] 의심해 주세요");
+    expect(messageText({ template: "defTrust", target: 99 }, nick)).toBe("[○○] 믿어 주세요");
+    expect(messageText({ template: "defRole" }, nick)).toBe("제가 [직업]입니다");
+  });
+});
+
 describe("주장 줄 문장 (D-04)", () => {
   it("claimRole 은 직업별 고정 문장이다", () => {
     const rows = (["mafia", "police", "doctor", "citizen"] as const).map((claimedRole) => messageText({ template: "claimRole", claimedRole }, nick));
@@ -83,10 +100,11 @@ describe("주장 줄 문장 (D-04)", () => {
 });
 
 describe("문구 칩·이모티콘 이름", () => {
-  it("TEMPLATE_ORDER 는 낮 다섯 그대로, NIGHT_TEMPLATE_ORDER 는 밤 세 개이고 둘을 합치면 표시 전용을 뺀 TEMPLATE_IDS 와 같다", () => {
+  it("TEMPLATE_ORDER 는 낮 다섯 그대로, NIGHT_TEMPLATE_ORDER 는 밤 세 개, DEFENSE_TEMPLATE_ORDER 는 변론 여섯이고 셋을 합치면 표시 전용을 뺀 TEMPLATE_IDS 와 같다", () => {
     expect(String(TEMPLATE_ORDER)).toBe("suspect,trust,innocent,claimed,vote");
     expect(String(NIGHT_TEMPLATE_ORDER)).toBe("nightTarget,nightAgree,nightOther");
-    expect([...TEMPLATE_ORDER, ...(NIGHT_TEMPLATE_ORDER ?? [])].sort().join(",")).toBe(
+    expect(String(DEFENSE_TEMPLATE_ORDER)).toBe("defNotMe,defCitizen,defSuspect,defTrust,defRole,defPlead");
+    expect([...TEMPLATE_ORDER, ...NIGHT_TEMPLATE_ORDER, ...DEFENSE_TEMPLATE_ORDER].sort().join(",")).toBe(
       TEMPLATE_IDS.filter((id) => !(DISPLAY_ONLY_TEMPLATE_IDS as readonly string[]).includes(id)).sort().join(","),
     );
   });
@@ -97,7 +115,8 @@ describe("문구 칩·이모티콘 이름", () => {
     expect(chips).toBe(
       "suspect=[○○] 의심돼요 | trust=[○○] 믿어요 | claimed=[○○]는 [직업]이었어요 | innocent=저 아니에요 | vote=[○○] 투표해요 | " +
         "nightTarget=[○○] 지목해요 | nightAgree=동의해요 | nightOther=다른 사람을 지목해요 | " +
-        "claimRole=저는 [직업]이에요 | claimNone=말하지 않았어요",
+        "claimRole=저는 [직업]이에요 | claimNone=말하지 않았어요 | " +
+        "defNotMe=저 아니에요 | defCitizen=저는 시민이에요 | defSuspect=[○○] 의심해 주세요 | defTrust=[○○] 믿어 주세요 | defRole=제가 [직업]입니다 | defPlead=한 번만 믿어 주세요",
     );
   });
 

@@ -61,24 +61,25 @@ describe("isAlive - 생존 판정 한 곳", () => {
 describe("QUICK_TEMPLATES - 템플릿 표 (D-11, COMM-01)", () => {
   it("TEMPLATE_IDS 와 같은 열 키이고 칸·때가 표대로다 (D-17, 결정 0019-2, 0027-7)", () => {
     expect(Object.keys(QUICK_TEMPLATES).sort().join(",")).toBe([...TEMPLATE_IDS].sort().join(","));
-    expect(TEMPLATE_IDS.length).toBe(10);
+    expect(TEMPLATE_IDS.length).toBe(16);
     const rows = TEMPLATE_IDS.map((id) => `${id}:${QUICK_TEMPLATES[id]?.target}/${QUICK_TEMPLATES[id]?.role}/${QUICK_TEMPLATES[id]?.when}`).join(" ");
     expect(rows).toBe(
       "suspect:true/false/day trust:true/false/day claimed:true/true/day innocent:false/false/day vote:true/false/day " +
         "nightTarget:true/false/night nightAgree:false/false/night nightOther:false/false/night " +
-        "claimRole:false/true/claim claimNone:false/false/claim",
+        "claimRole:false/true/claim claimNone:false/false/claim " +
+        "defNotMe:false/false/defense defCitizen:false/false/defense defSuspect:true/false/defense defTrust:true/false/defense defRole:false/true/defense defPlead:false/false/defense",
     );
   });
 
-  it("표시 전용 템플릿은 claimRole·claimNone 둘뿐이고 TEMPLATE_IDS 에 있으며 때가 claim 이다. 나머지 여덟은 day/night (결정 0027-7)", () => {
+  it("표시 전용 템플릿은 claimRole·claimNone 둘뿐이고 TEMPLATE_IDS 에 있으며 때가 claim 이다. 나머지 열넷은 day/night/defense (결정 0027-7, 0036)", () => {
     expect([...DISPLAY_ONLY_TEMPLATE_IDS].join(",")).toBe("claimRole,claimNone");
     for (const id of DISPLAY_ONLY_TEMPLATE_IDS) {
       expect((TEMPLATE_IDS as readonly string[]).includes(id)).toBe(true);
       expect(QUICK_TEMPLATES[id].when).toBe("claim");
     }
     const others = TEMPLATE_IDS.filter((id) => !(DISPLAY_ONLY_TEMPLATE_IDS as readonly string[]).includes(id));
-    expect(others.length).toBe(8);
-    expect(others.every((id) => QUICK_TEMPLATES[id].when === "day" || QUICK_TEMPLATES[id].when === "night")).toBe(true);
+    expect(others.length).toBe(14);
+    expect(others.every((id) => ["day", "night", "defense"].includes(QUICK_TEMPLATES[id].when))).toBe(true);
   });
 
   it("서버 한도 SERVER_MIN_SEND_GAP_MS 는 1800, 클라이언트 잠금 SEND_COOLDOWN_MS 는 2000 이고 서버 한도가 더 짧다 (G-02-2)", () => {
@@ -593,5 +594,120 @@ describe("say - 표시 전용 템플릿(claimRole·claimNone)은 서버가 받�
       expect(outcome(say(state, "p1", input, NOW))).toBe("BAD_MESSAGE");
       expect(JSON.stringify(state)).toBe(before);
     }
+  });
+});
+
+describe("투표 두 단계의 메시지 (D-12, 결정 0036)", () => {
+  const phases = ["execVote", "candidateVote"] as PhaseId[];
+
+  it.each(phases)("%s: 생존자의 낮 템플릿(대상 포함)은 통과하고 nextMessageSeq 가 늘어난다", (phase) => {
+    const a = say(room(phase), "p1", { template: "innocent" }, NOW);
+    expect(outcome(a)).toBe("ok");
+    expect(a.ok && a.state.nextMessageSeq).toBe(2);
+    expect(outcome(say(room(phase), "p1", { template: "suspect", target: 2 }, NOW))).toBe("ok");
+  });
+
+  it.each(phases)("%s: 밤 템플릿·변론 템플릿은 BAD_MESSAGE", (phase) => {
+    const rows = [
+      outcome(say(room(phase), "p1", { template: "nightAgree" }, NOW)),
+      outcome(say(room(phase), "p1", { template: "defNotMe" }, NOW)),
+      outcome(say(room(phase), "p1", { template: "defSuspect", target: 2 }, NOW)),
+    ];
+    expect(rows.join(",")).toBe("BAD_MESSAGE,BAD_MESSAGE,BAD_MESSAGE");
+  });
+
+  it.each(phases)("%s: 탈락자는 BAD_MESSAGE, 이모티콘은 생존자에게 통과", (phase) => {
+    const dead = room(phase, { overrides: { 1: { alive: false } } });
+    expect(outcome(say(dead, "p1", { template: "innocent" }, NOW))).toBe("BAD_MESSAGE");
+    expect(outcome(emote(dead, "p1", "smile", NOW))).toBe("BAD_MESSAGE");
+    expect(outcome(emote(room(phase), "p1", "smile", NOW))).toBe("ok");
+  });
+});
+
+describe("최후 변론 - 후보만 (COMM-03, VOTE-03, D-13, T-04-14)", () => {
+  /** seat 1 이 후보인 변론 방 */
+  const defense = (overrides: Record<number, Extra> = {}, candidate: number | undefined = 1): RoomState => ({
+    ...room("defense", { overrides }),
+    ...(candidate === undefined ? {} : { verdict: { passed: true, candidate } }),
+  });
+
+  it("후보의 defNotMe·defCitizen·defPlead 는 칸 없이 통과한다", () => {
+    const rows = (["defNotMe", "defCitizen", "defPlead"] as const).map((template) => `${template}:${outcome(say(defense(), "p1", { template }, NOW))}`);
+    expect(rows.join(" ")).toBe("defNotMe:ok defCitizen:ok defPlead:ok");
+  });
+
+  it("후보의 defSuspect·defTrust 는 대상이 필요하고, defRole 은 직업이 필요하다", () => {
+    const rows = [
+      outcome(say(defense(), "p1", { template: "defSuspect", target: 2 }, NOW)),
+      outcome(say(defense(), "p1", { template: "defTrust", target: 3 }, NOW)),
+      outcome(say(defense(), "p1", { template: "defRole", claimedRole: "police" }, NOW)),
+      outcome(say(defense(), "p1", { template: "defSuspect" }, NOW)),
+      outcome(say(defense(), "p1", { template: "defRole" }, NOW)),
+    ];
+    expect(rows.join(",")).toBe("ok,ok,ok,BAD_MESSAGE,BAD_MESSAGE");
+  });
+
+  it("defSuspect 대상이 자기 자신·탈락자면 BAD_MESSAGE, defRole 이 구성 밖 직업이면 BAD_MESSAGE", () => {
+    const dead = defense({ 2: { alive: false } });
+    const rows = [
+      outcome(say(defense(), "p1", { template: "defSuspect", target: 1 }, NOW)),
+      outcome(say(dead, "p1", { template: "defSuspect", target: 2 }, NOW)),
+      outcome(say({ ...defense(), players: defense().players.slice(0, 4) }, "p1", { template: "defRole", claimedRole: "doctor" }, NOW)),
+    ];
+    expect(rows.join(",")).toBe("BAD_MESSAGE,BAD_MESSAGE,BAD_MESSAGE");
+  });
+
+  it("후보의 낮 템플릿·밤 템플릿은 BAD_MESSAGE", () => {
+    const rows = [outcome(say(defense(), "p1", { template: "innocent" }, NOW)), outcome(say(defense(), "p1", { template: "nightAgree" }, NOW))];
+    expect(rows.join(",")).toBe("BAD_MESSAGE,BAD_MESSAGE");
+  });
+
+  it("후보가 아닌 생존자의 say 는 어떤 템플릿이든 WRONG_PHASE", () => {
+    const rows = [
+      outcome(say(defense(), "p2", { template: "defNotMe" }, NOW)),
+      outcome(say(defense(), "p2", { template: "innocent" }, NOW)),
+      outcome(say(defense(), "p2", { template: "defSuspect", target: 3 }, NOW)),
+    ];
+    expect(rows.join(",")).toBe("WRONG_PHASE,WRONG_PHASE,WRONG_PHASE");
+  });
+
+  it("탈락자의 say 는 BAD_MESSAGE, 후보가 아닌 생존자의 이모티콘은 통과", () => {
+    const dead = defense({ 3: { alive: false } });
+    expect(outcome(say(dead, "p3", { template: "defNotMe" }, NOW))).toBe("BAD_MESSAGE");
+    expect(outcome(emote(defense(), "p2", "smile", NOW))).toBe("ok");
+    expect(outcome(emote(dead, "p3", "smile", NOW))).toBe("BAD_MESSAGE");
+  });
+
+  it("verdict 가 없으면 생존자 say 는 모두 WRONG_PHASE, 이모티콘은 통과", () => {
+    const none = defense({}, undefined);
+    expect(outcome(say(none, "p1", { template: "defNotMe" }, NOW))).toBe("WRONG_PHASE");
+    expect(outcome(emote(none, "p1", "smile", NOW))).toBe("ok");
+  });
+
+  it("후보가 say 한 뒤 1799ms 의 이모티콘은 RATE_LIMITED, 거부는 lastSendAt 을 바꾸지 않는다", () => {
+    const sent = say(defense(), "p1", { template: "defPlead" }, 10_000);
+    if (!sent.ok) throw new Error("setup");
+    expect(sent.state.nextMessageSeq).toBe(2);
+    expect(outcome(emote(sent.state, "p1", "smile", 10_000 + 1_799))).toBe("RATE_LIMITED");
+    expect(sent.state.players[1]!.lastSendAt).toBe(10_000);
+    expect(outcome(emote(sent.state, "p1", "smile", 10_000 + 1_800))).toBe("ok");
+  });
+
+  it("단계 검사가 후보 검사보다 먼저다(후보가 아닌 사람이 틀린 단계에서도 WRONG_PHASE, 형식 검사는 후보 검사 뒤)", () => {
+    expect(outcome(say({ ...defense(), phase: "execution" }, "p1", { template: "defNotMe" }, NOW))).toBe("WRONG_PHASE");
+    expect(outcome(say(defense(), "p2", { template: "hello" as never }, NOW))).toBe("WRONG_PHASE");
+  });
+});
+
+describe("공개·처형·종료 단계는 전면 거부 (A3, T-04-16)", () => {
+  it.each(["candidateVoteReveal", "execution", "ended"] as PhaseId[])("%s: 생존자·탈락자 모두 say·이모티콘 WRONG_PHASE", (phase) => {
+    const state = room(phase, { overrides: { 1: { alive: false } } });
+    const rows = [
+      outcome(say(state, "p2", { template: "innocent" }, NOW)),
+      outcome(emote(state, "p2", "smile", NOW)),
+      outcome(say(state, "p1", { template: "innocent" }, NOW)),
+      outcome(emote(state, "p1", "smile", NOW)),
+    ];
+    expect(rows.join(",")).toBe("WRONG_PHASE,WRONG_PHASE,WRONG_PHASE,WRONG_PHASE");
   });
 });
