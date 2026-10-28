@@ -24,6 +24,7 @@
 
 .mf-result__head { text-align: center; }
 .mf-result__head .mf-t-heading { text-shadow: var(--shadow-text); }
+.mf-result__sub { margin: var(--space-xs) 0 0; font-size: 14px; line-height: 20px; color: var(--gray-300); text-shadow: var(--shadow-text); }
 
 /* 승리 배너: 모서리 16, night-900 92%, 테두리 night-600, 안쪽 16·16, 위 띠 8(배너 위·좌·우로 번진다) */
 .mf-result__banner {
@@ -64,6 +65,17 @@
 .mf-result__role { font-size: 14px; line-height: 18px; font-weight: 700; color: var(--gray-100); word-break: keep-all; }
 .mf-result__role--mafia { color: var(--crimson-300); }
 .mf-result__out { font-size: 14px; line-height: 18px; color: var(--gray-300); }
+
+/* 판 요약 카드: night-800 92%, 모서리 14, 안쪽 12·16, 제목 14 700, 행 14/20(앞 64px 열 gray-300, 본문 gray-100), 행 간격 4.
+   행이 많으면 카드가 늘어나고 본문(.mf-result)이 스크롤된다. 안쪽 위아래 12 는 시안 값(토큰에 없음, UI-SPEC 4 예외) */
+.mf-result__sm {
+  display: flex; flex-direction: column; gap: var(--space-xs); padding: 12px var(--space-md); min-width: 0;
+  border-radius: var(--radius-md); background: color-mix(in srgb, var(--night-800) 92%, transparent);
+}
+.mf-result__sm-title { margin: 0 0 var(--space-xs); font-size: 14px; line-height: 20px; font-weight: 700; color: var(--gray-50); }
+.mf-result__sm-row { display: flex; gap: var(--space-sm); font-size: 14px; line-height: 20px; color: var(--gray-100); }
+.mf-result__sm-label { flex: none; width: 64px; color: var(--gray-300); }
+.mf-result__sm-text { min-width: 0; word-break: keep-all; overflow-wrap: anywhere; }
 
 /* [처음으로] + 보조 문구 */
 .mf-result__foot { display: flex; flex-direction: column; align-items: stretch; gap: var(--space-sm); }

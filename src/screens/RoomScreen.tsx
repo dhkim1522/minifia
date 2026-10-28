@@ -321,7 +321,7 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
         );
       case "ended":
         // 결과는 서버가 ended 에서만 모두에게 같게 싣는다(D-17). 없는 프레임(옛 서버 등)은 안내 화면으로 안전하게 폴백한다.
-        return view.result ? <ResultScreen view={{ ...view, result: view.result }} onExit={() => onExit("left")} /> : connecting();
+        return view.result ? <ResultScreen view={{ ...view, result: view.result }} onExit={() => onExit("left")} arrivedFrom={arrivedFrom} /> : connecting();
       default:
         return connecting();
     }
