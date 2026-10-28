@@ -536,9 +536,9 @@ describe("candidateVoteReveal 화살표 층 연결 (D-20, 04-20)", () => {
     const { container, advance } = renderAt(350, makeView({ votes: VOTES }));
     expect(container.querySelectorAll(".mf-dt .mf-varrow").length).toBe(1);
     expect(container.querySelector(".mf-varrow")?.getAttribute("data-step")).toBe("0");
-    advance(250); // 600 = 첫 화살표가 사라진 끝
+    advance(270); // 620: 첫 화살표가 사라진 끝(600)을 지난 첫 프레임(16ms 간격) 뒤
     expect(container.querySelectorAll(".mf-varrow").length).toBe(0);
-    advance(100); // 700 = 둘째 화살표 시작
+    advance(100); // 720: 둘째 화살표 시작(700) 뒤
     expect(container.querySelector(".mf-varrow")?.getAttribute("data-step")).toBe("1");
   });
 

@@ -16,6 +16,7 @@ export const REVEAL_BUDGET_MS = 3600; // D-21: 화살표 연출 전체 예산(4�
 export const REVEAL_DRAW_MS = 280; // D-21: 한 화살표가 자라는 시간(슬롯 안) = 닿는 시각
 export const REVEAL_FADE_MS = 120; // UI-SPEC 13.2: 닿은 화살표가 사라지는 시간
 export const REVEAL_REDUCED_HOLD_MS = 200; // UI-SPEC 13.4: 축소 모션에서 완성된 화살표를 보여 주는 시간(이후 REVEAL_FADE_MS 동안 사라짐)
+export const CLINCH_BEAT_MS = 700; // UI-SPEC 8.3: 과반 확정 두근(캐릭터·칩 2회) 길이. 이후는 공개가 끝날 때까지 느린 박동
 export const REVEAL_POP_MS = 220; // UI-SPEC 8.3: 칩 팝 길이(화면 애니메이션 시간. 팝 대상 해제는 다음 화살표 시작)
 export const VERDICT_MOVE_MS = 600; // UI-SPEC 8.4: 후보 가운데 이동
 export const VERDICT_DIM_FADE_MS = 400; // UI-SPEC 8.4: 어둡게 층 페이드인
@@ -202,6 +203,15 @@ export function revealStateAt(plan: RevealPlan, now: number): RevealState {
     outcome: plan.outcome,
     finalLeader: plan.finalLeader,
   };
+}
+
+/** 과반 확정 연출의 모양: 확정 순간부터 CLINCH_BEAT_MS 동안 clinch(크게 두근), 그 뒤는 slow(작은 느린 박동) */
+export type ClinchBeatKind = "clinch" | "slow";
+/** 서버 시각 now 에서 두근 중인 확정 후보. 확정 사건 전이거나 확정이 없는 판(동률·미확정·표 없음)이면 null. 중간 합류도 지금 시각의 모양이다. */
+export function clinchBeat(plan: RevealPlan, now: number): { seat: number; beat: ClinchBeatKind } | null {
+  const clinch = plan.clinch;
+  if (clinch === null || now < clinch.atMs) return null;
+  return { seat: clinch.seat, beat: now - clinch.atMs < CLINCH_BEAT_MS ? "clinch" : "slow" };
 }
 
 // ---- (3) 기하 — 장면 좌표 공식은 dayTableGeometry·daySeatLayout 한 곳이고 여기서는 그 결과(x, y, scale)만 쓴다 ----

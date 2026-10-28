@@ -40,7 +40,7 @@
   background: var(--amber-400);
   animation: mf-vchip-pop 220ms var(--ease-out) both;
 }
-/* 유일한 최다(lead), 04-20 이 확정 두근을 얹을 자리(beat — 지금은 lead 와 같은 모양): 앰버 면 유지, 24px, 높이 32, 안쪽 여백 4 */
+/* 유일한 최다(lead)와 과반 확정 순간(beat): 앰버 면 유지, 24px, 높이 32, 안쪽 여백 4. beat 의 두근 움직임은 아래 "과반 확정" 구역 */
 .mf-vchip--lead, .mf-vchip--beat {
   padding: 0 4px;
   font-size: 24px;
@@ -66,3 +66,67 @@
   pointer-events: none;
 }
 .mf-varrow__line { filter: drop-shadow(0 0 7px color-mix(in srgb, var(--amber-400) 90%, transparent)); }
+
+/* 과반 확정 두근과 느린 박동(UI-SPEC 8.3 D-31 ③, 04-20). 확정 순간 약 0.7초: 캐릭터 1 → 1.12 → 1 ×2(좌석), 칩 1 → 1.3 → 1 ×2, 앰버 후광 3px/18px 로 밝아졌다 돌아옴.
+   그 뒤 공개가 끝날 때까지 느린 박동: 캐릭터 1 → 1.04 → 1, 칩 1 → 1.1 → 1, 주기 1.2초(P-14: 시안 dk-slow 2.2s 는 참고만, CONTEXT 의 약 1.2초가 이긴다).
+   크기는 개별 속성 scale 만 쓴다 — 좌석 래퍼의 인라인 transform(깊이 배율)과 겹치지 않는다. */
+.mf-dt__seat--clinch { animation: mf-dk-c 700ms ease-out 1; }
+.mf-dt__seat--slow { animation: mf-dk-slow 1200ms ease-in-out infinite; }
+/* 후광 그림 한정(앰버 후광이 켜진 확정 후보). 끊긴 사람 그림의 회색 필터는 건드리지 않는다 */
+.mf-dt__seat--clinch .mf-figure--halo-amber:not(.mf-figure--disconnected) { animation: mf-dk-halo 700ms ease-out 1; }
+.mf-vchip--beat { animation: mf-dk-chip 700ms ease-out 1; }
+.mf-vchip--slow { animation: mf-dk-chip-slow 1200ms ease-in-out infinite; }
+@keyframes mf-dk-c {
+  0% { scale: 1; }
+  14% { scale: 1.12; }
+  28% { scale: 1; }
+  42% { scale: 1.12; }
+  57% { scale: 1; }
+  100% { scale: 1; }
+}
+@keyframes mf-dk-chip {
+  0% { scale: 1; }
+  14% { scale: 1.3; }
+  28% { scale: 1; }
+  42% { scale: 1.3; }
+  57% { scale: 1; }
+  100% { scale: 1; }
+}
+@keyframes mf-dk-halo {
+  0% { filter: var(--mf-halo-amber); }
+  14% { filter: drop-shadow(0 0 3px var(--amber-400)) drop-shadow(0 0 18px color-mix(in srgb, var(--amber-400) 95%, transparent)); }
+  28% { filter: var(--mf-halo-amber); }
+  42% { filter: drop-shadow(0 0 3px var(--amber-400)) drop-shadow(0 0 18px color-mix(in srgb, var(--amber-400) 95%, transparent)); }
+  57%, 100% { filter: var(--mf-halo-amber); }
+}
+@keyframes mf-dk-slow {
+  0%, 100% { scale: 1; }
+  50% { scale: 1.04; }
+}
+@keyframes mf-dk-chip-slow {
+  0%, 100% { scale: 1; }
+  50% { scale: 1.1; }
+}
+/* 축소 모션 대체(UI-SPEC 13.4): 크기 변화 없이 밝기 깜빡임만. 캐릭터 brightness 1 → 1.3 → 1 ×2 (0.7초), 칩도 같은 깜빡임, 느린 박동은 없다.
+   base.css 의 전역 축소 모션 규칙이 모든 애니메이션을 0.01ms·1회로 !important 줄이므로, 비움직임인 이 깜빡임 둘만 더 구체적인 선택자로 같은 중요도를 되돌려 준다.
+   크기가 변하는 애니메이션(mf-dk-c·chip·slow)은 되돌리지 않고 아예 끈다. */
+@keyframes mf-dk-flash {
+  0% { filter: var(--mf-halo-amber) brightness(1); }
+  14% { filter: var(--mf-halo-amber) brightness(1.3); }
+  28% { filter: var(--mf-halo-amber) brightness(1); }
+  42% { filter: var(--mf-halo-amber) brightness(1.3); }
+  57%, 100% { filter: var(--mf-halo-amber) brightness(1); }
+}
+@keyframes mf-dk-chip-flash {
+  0% { filter: brightness(1); }
+  14% { filter: brightness(1.3); }
+  28% { filter: brightness(1); }
+  42% { filter: brightness(1.3); }
+  57%, 100% { filter: brightness(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mf-dt__seat--clinch, .mf-dt__seat--slow { animation: none; }
+  .mf-vchip--slow { animation: none; }
+  .mf-dt__seat--clinch .mf-figure { animation: mf-dk-flash 700ms ease-out 1 !important; }
+  .mf-vchip--beat { animation: mf-dk-chip-flash 700ms ease-out 1 !important; }
+}

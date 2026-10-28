@@ -1,11 +1,11 @@
 // 후보 선택 공개(candidateVoteReveal) 상태 훅 (04-19, VOTE-02). 공개 시간표(revealPlan)와 한 시각의 상태(revealStateAt)는 game/verdict.ts 의
 // 순수 함수고, 이 훅은 그것을 서버 시각에 적용한다. 서버 시각 = Date.now() + connection.offset 이므로 모든 폰이 같은 순서·같은 시각에 같은 칩 수를 본다.
 // votes 는 서버가 셔플해 보낸 view.day.voteLog 의 그날 cand.votes 배열이고, 여기서 다시 정렬·섞지 않는다(T-04-53).
-// 다시 그리는 때는 시간표의 경계 시각(화살표 시작·닿음·사라짐 끝·마지막 슬롯 끝)뿐이다 — 애니메이션 프레임 갱신은 없다(화살표 이동은 04-20).
+// 다시 그리는 때는 시간표의 경계 시각(화살표 시작·닿음·사라짐 끝·마지막 슬롯 끝·확정 두근 끝)뿐이다 — 이 훅에 애니메이션 프레임 갱신은 없다(화살표 이동은 RevealLayer 가 따로 프레임으로 한다, 04-20).
 // 중간 합류는 지금 시각의 상태로 시작하고 지난 경계는 건너뛴다. 단계를 벗어나거나 언마운트되면 타이머를 정리한다(T-04-54).
 import { useEffect, useMemo, useState } from "react";
 import type { CandidateVoteLine, RoomView } from "../../shared/protocol";
-import { REVEAL_FADE_MS, revealCaption, revealPlan, revealStateAt } from "../game/verdict";
+import { CLINCH_BEAT_MS, REVEAL_FADE_MS, revealCaption, revealPlan, revealStateAt } from "../game/verdict";
 import type { RevealPlan, RevealState } from "../game/verdict";
 
 export interface RevealView {
@@ -34,6 +34,8 @@ export function nextBoundary(plan: RevealPlan, now: number): number | null {
     consider(s.touchMs + REVEAL_FADE_MS);
   }
   consider(plan.endMs);
+  // 확정 두근(CLINCH_BEAT_MS)이 끝나 느린 박동으로 넘어가는 시각(04-20)
+  if (plan.clinch !== null) consider(plan.clinch.atMs + CLINCH_BEAT_MS);
   return next;
 }
 

@@ -239,6 +239,7 @@ export function DayScene({ view, connection, myRoleButton, testButton, arrivedFr
             pickDisabled={!connection.canSend}
             {...(spectate !== undefined ? { allyMarkLabel: "마피아" } : {})}
             {...(isMorning ? { dim: { exitDelayMs: morningExit.delay } } : {})}
+            {...(verdict?.layer ? { layer: verdict.layer } : {})}
           />
         </div>
         {isMorning ? <MorningCard {...morningCardText(view.day?.morning, nicknameOf)} exitDelayMs={morningExit.delay} /> : null}

@@ -1,13 +1,15 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import type { ReactNode } from "react";
 import { isAlive } from "../../shared/game/alive";
 import type { RoomView } from "../../shared/protocol";
 import { CandidateVotePanel } from "../components/CandidateVotePanel";
-import type { DayTableSeat } from "../components/DayTable";
+import type { DayTableLayout, DayTableProps, DayTableSeat } from "../components/DayTable";
 import { ExecVotePanel } from "../components/ExecVotePanel";
 import { NIGHT_PANEL_TEXT, NightPanel } from "../components/NightPanel";
-import { VERDICT_TEXT, capHalos, revealIntroHint, revealResultLine } from "../game/verdict";
+import { RevealLayer } from "../components/RevealLayer";
+import { CLINCH_BEAT_MS, CLINCH_VIBRATE_MS, VERDICT_TEXT, capHalos, clinchBeat, revealIntroHint, revealResultLine } from "../game/verdict";
 import type { HaloRequest } from "../game/verdict";
+import { useReducedMotion } from "../net/useReducedMotion";
 import { useRevealState } from "../net/useRevealState";
 import type { RoomConnection } from "../net/useRoomConnection";
 import { useViewChoice } from "../net/useViewChoice";
@@ -46,6 +48,8 @@ export interface VerdictScene {
   seatPatch: (seat: number) => Partial<DayTableSeat>;
   /** 있으면 DayScene 의 보이지 않는 polite 영역이 읽는 문장(공개 끝 상태의 결과 한 줄). 빈 문자열은 아직 읽을 것이 없다 */
   liveLine?: string;
+  /** DayTable 의 덧그림 층(후보 선택 공개의 화살표). 있으면 DayScene 이 DayTable 로 잇는다 */
+  layer?: DayTableProps["layer"];
 }
 
 // 서버가 보낸 행동을 거절하는 단계: 여부 투표와 후보 선택(04-18 이 같은 효과를 쓴다). 밤 대상 선택의 토스트는 DayScene 이 밤에만 구독하므로 겹치지 않는다.
@@ -66,6 +70,24 @@ export function useVerdictScene({ view, connection, meAlive, showToast, onInspec
 
   // 후보 선택 공개: 서버 시각 기준 공개 상태(경계 시각마다만 다시 그림). 훅이라 단계와 상관없이 항상 부르고 단계가 아니면 null 이다.
   const reveal = useRevealState(view, connection.offset);
+  // 움직임 줄이기: 화살표는 자라지 않고 완성된 모습으로 보인다(CSS 로 끝나는 두근·박동은 미디어 쿼리가 따로 분기한다)
+  const reduced = useReducedMotion();
+
+  // 과반 확정 진동(D-31 구현 재량): 확정 후보가 null → 자리로 바뀌었고 확정 시각에서 CLINCH_BEAT_MS 이내일 때만 한 번. 중간 합류로 이미 지난 확정에는 울리지 않는다.
+  // 지원하지 않는 기기(iOS·데스크톱)나 예외는 무시한다. 서버 시각 보정(offset)이 바뀌어도 다시 울리지 않게 ref 로 읽는다.
+  const clinchedSeat = reveal?.state.clinched ?? null;
+  const clinchAtMs = reveal?.plan.clinch?.atMs ?? null;
+  const offsetRef = useRef(connection.offset);
+  offsetRef.current = connection.offset;
+  useEffect(() => {
+    if (clinchedSeat === null || clinchAtMs === null) return;
+    if (Date.now() + offsetRef.current - clinchAtMs >= CLINCH_BEAT_MS) return;
+    try {
+      if (typeof navigator !== "undefined" && typeof navigator.vibrate === "function") navigator.vibrate(CLINCH_VIBRATE_MS);
+    } catch {
+      // 진동 실패는 무시한다
+    }
+  }, [clinchedSeat, clinchAtMs]);
 
   const n = view.day?.n ?? 1;
   if (view.phase === "candidateVoteReveal") {
@@ -79,6 +101,9 @@ export function useVerdictScene({ view, connection, meAlive, showToast, onInspec
     for (const p of view.players) if (isAllySeat(p.seat)) requests.push({ seat: p.seat, kind: "crimson" });
     const { kinds } = capHalos(requests);
     const caption = reveal?.caption ?? { title: VERDICT_TEXT.revealIntroTitle, hint: revealIntroHint(reveal?.plan.steps.length ?? 0) };
+    // 과반 확정 연출: 확정 순간 700ms 는 clinch(크게 두근), 그 뒤는 slow(작은 느린 박동). 동률·미확정이면 null
+    const beat = reveal ? clinchBeat(reveal.plan, Date.now() + connection.offset) : null;
+    const serverNow = (): number => Date.now() + connection.offset;
     return {
       title: "낮 · 투표 공개",
       instruction: `${n}일차`,
@@ -92,9 +117,15 @@ export function useVerdictScene({ view, connection, meAlive, showToast, onInspec
       // 공개 중 좌석 탭은 비활성: onPick·onInspect 없음(기록 카드도 안 열린다)
       seatPatch: (seat) => {
         const count = state?.counts[seat] ?? 0;
-        const tone = state?.leader === seat ? "lead" : state?.pop === seat ? "pop" : "plain";
-        return { halo: kinds.get(seat) ?? "none", ...(count > 0 ? { chip: { n: count, tone } } : {}) };
+        const mine = beat !== null && beat.seat === seat ? beat.beat : null;
+        const tone = mine === "clinch" ? "beat" : state?.leader === seat ? "lead" : state?.pop === seat ? "pop" : "plain";
+        return {
+          halo: kinds.get(seat) ?? "none",
+          ...(count > 0 ? { chip: { n: count, tone, ...(mine === "slow" ? { slow: true } : {}) } } : {}),
+          ...(mine !== null ? { beat: mine } : {}),
+        };
       },
+      ...(reveal ? { layer: (layout: DayTableLayout) => <RevealLayer layout={layout} plan={reveal.plan} serverNow={serverNow} reduced={reduced} /> } : {}),
       liveLine: reveal !== null && reveal.state.ended ? revealResultLine(reveal.plan, nicknameOf) : "",
     };
   }

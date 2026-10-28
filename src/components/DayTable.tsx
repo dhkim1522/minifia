@@ -71,9 +71,15 @@ export interface DayTableSeat {
   pressed?: boolean;
   /**
    * 후보 선택 공개의 표수 칩(UI-SPEC 8.3). 그 자리 머리 위에 n 을 그린다(장식, 클릭을 가로채지 않음). tone: plain(일반) · pop(방금 닿음, 앰버 팝) ·
-   * lead(유일한 최다, 앰버 유지·큰 칩) · beat(04-20 이 확정 두근을 얹는 자리, 지금은 lead 와 같은 모양). 숫자가 오르면 새 노드라 팝이 다시 돈다.
+   * lead(유일한 최다, 앰버 유지·큰 칩) · beat(과반 확정 순간 약 0.7초, lead 모양 + 2회 크게 두근). slow 면 확정 뒤 작은 느린 박동.
+   * 숫자가 오르면 새 노드라 팝이 다시 돈다.
    */
-  chip?: { n: number; tone: "plain" | "pop" | "lead" | "beat" };
+  chip?: { n: number; tone: "plain" | "pop" | "lead" | "beat"; slow?: boolean };
+  /**
+   * 과반 확정 연출(04-20, D-31 ③): clinch = 확정 순간 약 0.7초 동안 캐릭터가 2회 크게 두근(앰버 후광도 밝아졌다 돌아옴),
+   * slow = 그 뒤 공개가 끝날 때까지 작은 느린 박동. 안 주면 지금 그대로다. 크기 변화는 개별 속성 scale 이라 좌석의 깊이 transform 과 겹치지 않는다.
+   */
+  beat?: "clinch" | "slow";
   /** 아침: 어둡게 층(z 30) 위(z 31)로 올려 어두워지지 않게 한다. 방금 탈락한 자리 */
   spotlit?: boolean;
   /** spotlit 일 때만 의미: 400ms 맥동을 한 번 돈다(밤 → 아침을 직접 본 경우에만 켠다) */
@@ -243,7 +249,7 @@ export function DayTable({
           zIndex: s.spotlit ? SPOTLIT_Z : p.z,
         };
         const art = s.dead ? undefined : s.roleArt;
-        const seatClass = `mf-dt__seat${s.spotlit ? " mf-dt__seat--spotlit" : ""}${s.spotlit && s.pulse ? " mf-dt__seat--pulse" : ""}${
+        const seatClass = `mf-dt__seat${s.beat ? ` mf-dt__seat--${s.beat}` : ""}${s.spotlit ? " mf-dt__seat--spotlit" : ""}${s.spotlit && s.pulse ? " mf-dt__seat--pulse" : ""}${
           s.transition === "entering" ? " mf-dt__seat--enter" : s.transition === "leaving" ? " mf-dt__seat--leave" : ""
         }`;
         // 후광은 그림 img 하나에만 붙는다. halo 가 있으면 그 값, 없으면 파생: 흰(차례·내가 고른 대상) > 진홍(동료)
@@ -382,7 +388,7 @@ export function DayTable({
         return (
           <span
             key={`c${p.seat}:${chip.n}`}
-            className={`mf-vchip mf-vchip--${chip.tone}`}
+            className={`mf-vchip mf-vchip--${chip.tone}${chip.slow ? " mf-vchip--slow" : ""}`}
             data-seat={p.seat}
             aria-hidden="true"
             style={{ left: px(rect.left), top: px(rect.top), width: px(rect.width), height: px(rect.height), zIndex: CHIP_Z }}
