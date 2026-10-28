@@ -60,6 +60,9 @@ import {
   voteChecks,
   introChecks,
   candidateChecks,
+  revealChecks,
+  colorRuleChecks,
+  haloChecks,
 } from "./lib.mjs";
 
 const PROD = "https://minifia.dhplay.workers.dev\n";
@@ -1640,4 +1643,147 @@ test("candidateChecks P3: 필드가 없으면 측정값 없음으로 실패한�
     assert.match(r.detail, /측정값 없음/);
   }
   assert.match(candidateChecks(goodCand(), { chosenSeat: 2 }).detail, /측정값 없음\(.*mySeat/);
+});
+
+// ---- P4 공개 연출 불변식과 후광·색 규칙 확장 (04-29, D-31·D-33) ----
+
+const SCENE = { left: 0, top: 119, right: 360, bottom: 483, width: 360 };
+const chip = (seat, n, over = {}) => ({ seat, n, tone: "pop", left: 100 + seat * 20, top: 200, right: 140 + seat * 20, bottom: 232, ...over });
+const sample = (t, { arrows = 0, chips = [], halo = [], crimsonNew = 0 } = {}) => ({
+  t,
+  reveal: { arrows, chips, tags: [] },
+  dt: { haloImgs: halo, scene: SCENE },
+  crimsonNew,
+});
+const goodReveal = () => [
+  sample(200, { arrows: 1 }),
+  sample(700, { arrows: 1, chips: [chip(2, 1)], halo: [{ seat: 2, kind: "amber" }] }),
+  sample(1300, { arrows: 0, chips: [chip(2, 2)], halo: [{ seat: 2, kind: "amber" }] }),
+  sample(2000, { arrows: 0, chips: [chip(2, 2, { tone: "lead" }), chip(3, 1)], halo: [{ seat: 2, kind: "amber" }, { seat: 3, kind: "amber" }] }),
+];
+const revealOpts = { n: 3, size: { w: 360, h: 640 } };
+
+test("revealChecks P4: 화살표 ≤ 1·칩 합 단조 증가해 최종 n·후광 합 ≤ 3·새 요소 진홍 0·칩이 장면 안이면 통과한다", () => {
+  const r = revealChecks(goodReveal(), revealOpts);
+  assert.equal(r.id, "P4");
+  assert.equal(r.ok, true, r.detail);
+  // 표가 하나도 없는 판(n=0): 칩 없음
+  assert.equal(revealChecks([sample(200), sample(900)], { n: 0, size: revealOpts.size }).ok, true);
+  // 앰버+흰+진홍 합이 정확히 3
+  const three = goodReveal();
+  three[3].dt.haloImgs = [{ seat: 2, kind: "amber" }, { seat: 3, kind: "white" }, { seat: 1, kind: "crimson" }];
+  assert.equal(revealChecks(three, revealOpts).ok, true);
+});
+
+test("revealChecks P4: 어긋남마다 실패하고 이유를 말한다", () => {
+  const mutate = (fn) => {
+    const s = goodReveal();
+    fn(s);
+    return s;
+  };
+  const cases = [
+    ["화살표 둘", mutate((s) => { s[1].reveal.arrows = 2; }), revealOpts, /화살표/],
+    ["칩 합 감소", mutate((s) => { s[2].reveal.chips = [chip(2, 0)]; }), revealOpts, /줄어|감소/],
+    ["최종 합 ≠ n", goodReveal(), { ...revealOpts, n: 4 }, /최종|n/],
+    ["n=0 인데 칩", goodReveal(), { ...revealOpts, n: 0 }, /칩/],
+    ["후광 4개", mutate((s) => { s[3].dt.haloImgs = [1, 2, 3, 4].map((seat) => ({ seat, kind: "amber" })); }), revealOpts, /후광/],
+    ["새 요소 진홍", mutate((s) => { s[1].crimsonNew = 1; }), revealOpts, /진홍/],
+    ["칩이 장면 오른쪽 밖", mutate((s) => { s[3].reveal.chips[1].right = 380; s[3].reveal.chips[1].left = 340; }), revealOpts, /장면|폭/],
+    ["칩이 헤더를 침범", mutate((s) => { s[3].reveal.chips[0].top = 100; }), revealOpts, /헤더/],
+    ["칩이 화면 폭 밖", mutate((s) => { s[3].reveal.chips[1].right = 361; }), { ...revealOpts, size: { w: 360, h: 640 } }, /폭|밖/],
+    ["표본 시각이 오름차순이 아님", mutate((s) => { s.reverse(); }), revealOpts, /오름차순/],
+  ];
+  for (const [name, samples, opts, re] of cases) {
+    const r = revealChecks(samples, opts);
+    assert.equal(r.ok, false, name);
+    assert.match(r.detail, re, name);
+  }
+});
+
+test("revealChecks P4: 필드가 없으면 측정값 없음으로 실패한다", () => {
+  for (const samples of [null, [], [{ t: 1 }], [{ t: 1, reveal: { arrows: 0, chips: [] } }], [sample(1)].map((x) => ({ ...x, crimsonNew: undefined }))]) {
+    const r = revealChecks(samples, revealOpts);
+    assert.equal(r.ok, false, JSON.stringify(samples));
+    assert.match(r.detail, /측정값 없음/);
+  }
+  assert.match(revealChecks(goodReveal(), { size: revealOpts.size }).detail, /측정값 없음\(.*n/);
+});
+
+const FILTER_AMBER = "drop-shadow(rgba(242, 184, 75, 0.95) 0px 0px 2px) drop-shadow(rgba(242, 184, 75, 0.75) 0px 0px 9px)";
+const amberHalo = () => ({
+  items: [
+    { seat: 2, cls: "amber", filter: FILTER_AMBER, seatContext: true, onImg: true },
+    { seat: 3, cls: "white", filter: FILTER_WHITE, seatContext: true, onImg: true },
+  ],
+  max: 2,
+});
+
+test("haloChecks K4: 앰버 후광을 허용하되 drop-shadow 두 겹·9px 규칙은 같이 적용된다", () => {
+  const r = haloChecks(amberHalo(), { circles: 0, expectNone: true });
+  assert.equal(r.id, "K4");
+  assert.equal(r.ok, true, r.detail);
+  const one = amberHalo();
+  one.items[0].filter = "drop-shadow(rgba(242, 184, 75, 0.75) 0px 0px 9px)";
+  assert.match(haloChecks(one, { circles: 0, expectNone: true }).detail, /drop-shadow/);
+  const four = amberHalo();
+  four.items = [1, 2, 3, 4].map((seat) => ({ seat, cls: "amber", filter: FILTER_AMBER, seatContext: true, onImg: true }));
+  four.max = 4;
+  assert.match(haloChecks(four, { circles: 0, expectNone: true }).detail, /3/);
+  // 모르는 후광 종류는 실패한다
+  const weird = amberHalo();
+  weird.items[0].cls = "green";
+  assert.match(haloChecks(weird, { circles: 0, expectNone: true }).detail, /green/);
+});
+
+test("haloChecks K4: crimsonAllowed false 이면 진홍 후광이 하나라도 있을 때 실패한다(방장이 시민인 투표·처형, D-33)", () => {
+  const withCrimson = goodHalo(); // 흰 + 진홍
+  assert.equal(haloChecks(withCrimson, { circles: 0, expectNone: true }).ok, true, "기본값은 진홍 허용");
+  assert.equal(haloChecks(withCrimson, { circles: 0, expectNone: true, crimsonAllowed: true }).ok, true);
+  const r = haloChecks(withCrimson, { circles: 0, expectNone: true, crimsonAllowed: false });
+  assert.equal(r.ok, false);
+  assert.match(r.detail, /진홍/);
+  assert.equal(haloChecks(amberHalo(), { circles: 0, expectNone: true, crimsonAllowed: false }).ok, true);
+  // turnChecks 도 같은 인자를 K4 에 넘긴다
+  const k4 = dayById(turnChecks(turnSnap(), { myTurn: false, crimsonAllowed: false }), "K4");
+  assert.equal(k4.ok, false);
+  assert.match(k4.detail, /진홍/);
+});
+
+test("colorRuleChecks P-COLOR: 새 요소 진홍 0, 방장이 시민이면 화면 전체 진홍도 0", () => {
+  const crimsonColors = ["rgb(224, 52, 75)"];
+  const r = colorRuleChecks({ crimsonNew: 0, crimsonScreen: 3 }, { crimsonColors, wholeScreenCrimson: false });
+  assert.equal(r.id, "P-COLOR");
+  assert.equal(r.ok, true, r.detail);
+  assert.equal(colorRuleChecks({ crimsonNew: 0, crimsonScreen: 0 }, { crimsonColors, wholeScreenCrimson: true }).ok, true);
+  const cases = [
+    ["새 요소에 진홍", { crimsonNew: 1, crimsonScreen: 0 }, false, /새 요소/],
+    ["시민 방장 화면에 진홍", { crimsonNew: 0, crimsonScreen: 1 }, true, /화면 전체/],
+  ];
+  for (const [name, v, whole, re] of cases) {
+    const x = colorRuleChecks(v, { crimsonColors, wholeScreenCrimson: whole });
+    assert.equal(x.ok, false, name);
+    assert.match(x.detail, re, name);
+  }
+  // 색 목록이 있으면 토큰 진홍 값과 비교한다(공백·알파 차이는 같은 색)
+  const byColor = colorRuleChecks({ crimsonNew: 0, crimsonScreen: 0, newColors: [{ desc: ".mf-vchip", color: "rgba(224,52,75,0.7)" }] }, { crimsonColors });
+  assert.equal(byColor.ok, false);
+  assert.match(byColor.detail, /\.mf-vchip/);
+  const amberOnly = colorRuleChecks({ crimsonNew: 0, crimsonScreen: 0, newColors: [{ desc: ".mf-vchip", color: "rgb(242, 184, 75)" }] }, { crimsonColors });
+  assert.equal(amberOnly.ok, true, amberOnly.detail);
+  const screenColor = colorRuleChecks({ crimsonNew: 0, crimsonScreen: 0, screenColors: [{ desc: ".mf-dt__mark", color: "rgb(224, 52, 75)" }] }, { crimsonColors, wholeScreenCrimson: true });
+  assert.equal(screenColor.ok, false);
+  // 측정값 없음
+  assert.match(colorRuleChecks({ crimsonScreen: 0 }, { crimsonColors }).detail, /측정값 없음\(.*crimsonNew/);
+  assert.match(colorRuleChecks({ crimsonNew: 0 }, { crimsonColors, wholeScreenCrimson: true }).detail, /측정값 없음\(.*crimsonScreen/);
+  assert.match(colorRuleChecks({ crimsonNew: 0, newColors: [] }, {}).detail, /측정값 없음\(.*crimsonColors/);
+  assert.match(colorRuleChecks(null, { crimsonColors }).detail, /측정값 없음/);
+});
+
+test("04-29: 이 계획은 검사 완화를 더하지 않는다(승인 목록 그대로)", () => {
+  assert.deepEqual(APPROVED_RELAXATIONS.map((x) => x.id), ["M1", "D3a/D3b", "D4", "D3b-5"]);
+  assert.equal(OVERLAP_EPS, 0.5);
+  assert.equal(TAP_MIN, 44);
+  assert.equal(PANEL_H, 157);
+  assert.equal(ONE_LINE_FACTOR, 1.6);
+  assert.equal(FACE_RATIO, 0.45);
 });
