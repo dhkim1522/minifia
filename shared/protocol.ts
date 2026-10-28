@@ -117,11 +117,12 @@ export interface GameResult {
 // ---- 낮 토론 계약(2페이즈) ----
 /** 공개된 직업 주장. 그 사람의 실제 역할이 아니다. */
 export type Claim = RoleId | "none";
-// 낮 다섯 + 밤 전용 세 개(결정 0019-2) + 표시 전용 두 개(결정 0027-7) — 쓸 수 있는 때는 shared/game/chat.ts QUICK_TEMPLATES.when
+// 낮 다섯 + 밤 전용 세 개(결정 0019-2) + 표시 전용 두 개(결정 0027-7) + 변론 여섯 개(결정 0036, D-13) — 쓸 수 있는 때는 shared/game/chat.ts QUICK_TEMPLATES.when
 export const TEMPLATE_IDS = [
   "suspect", "trust", "claimed", "innocent", "vote",
   "nightTarget", "nightAgree", "nightOther",
   "claimRole", "claimNone",
+  "defNotMe", "defCitizen", "defSuspect", "defTrust", "defRole", "defPlead",
 ] as const;
 export type TemplateId = (typeof TEMPLATE_IDS)[number];
 /**

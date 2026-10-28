@@ -16,10 +16,11 @@ import type { Player, RoomState } from "./room";
 
 /**
  * 템플릿 표(D-11). 문구를 늘리려면 TEMPLATE_IDS(protocol.ts)와 이 표에 행을 더한다.
- * target: 대상 칸이 필요한가, role: 직업 칸이 필요한가, when: 쓸 수 있는 때(day = 낮 토론, night = 밤 마피아 채팅 — 결정 0019-2, claim = 표시 전용으로 서버는 받지 않는다 — 결정 0027-7).
+ * target: 대상 칸이 필요한가, role: 직업 칸이 필요한가, when: 쓸 수 있는 때(day = 낮 토론·처형 여부 투표·후보 선택 투표, night = 밤 마피아 채팅 — 결정 0019-2,
+ * defense = 최후 변론(후보만 보낸다, 결정 0036·D-13), claim = 표시 전용으로 서버는 받지 않는다 — 결정 0027-7).
  * 주석은 화면 문장이고 서버는 만들지 않는다.
  */
-export const QUICK_TEMPLATES: Readonly<Record<TemplateId, { target: boolean; role: boolean; when: "day" | "night" | "claim" }>> = Object.freeze({
+export const QUICK_TEMPLATES: Readonly<Record<TemplateId, { target: boolean; role: boolean; when: "day" | "night" | "defense" | "claim" }>> = Object.freeze({
   suspect: Object.freeze({ target: true, role: false, when: "day" as const }), // "{닉네임} 의심돼요"
   trust: Object.freeze({ target: true, role: false, when: "day" as const }), // "{닉네임} 믿어요"
   claimed: Object.freeze({ target: true, role: true, when: "day" as const }), // "{닉네임}은/는 {직업}이었어요"
@@ -31,6 +32,13 @@ export const QUICK_TEMPLATES: Readonly<Record<TemplateId, { target: boolean; rol
   // 표시 전용(결정 0027-7): 화면이 claimLog 에서 만드는 주장 줄. when "claim" 은 say 의 때 검사(day|night)에 걸려 서버가 받지 않는다.
   claimRole: Object.freeze({ target: false, role: true, when: "claim" as const }), // "저는 {직업}이에요"
   claimNone: Object.freeze({ target: false, role: false, when: "claim" as const }), // "말하지 않았어요"
+  // 최후 변론(결정 0036, D-13): 후보만 보낸다. 기존 innocent 와 문구가 같아도 when 이 한 값이라 따로 둔다(A11).
+  defNotMe: Object.freeze({ target: false, role: false, when: "defense" as const }), // "저 아니에요"
+  defCitizen: Object.freeze({ target: false, role: false, when: "defense" as const }), // "저는 시민이에요"
+  defSuspect: Object.freeze({ target: true, role: false, when: "defense" as const }), // "{닉네임} 의심해 주세요"
+  defTrust: Object.freeze({ target: true, role: false, when: "defense" as const }), // "{닉네임} 믿어 주세요"
+  defRole: Object.freeze({ target: false, role: true, when: "defense" as const }), // "제가 {직업 이름}입니다"
+  defPlead: Object.freeze({ target: false, role: false, when: "defense" as const }), // "한 번만 믿어 주세요"
 });
 
 /** 클라이언트 잠금(보낸 순간 + 2초). 서버 한도는 지터 여유로 더 짧다(G-02-2, 결정 0016-6 의 대안). */
@@ -44,11 +52,20 @@ export type ChatError = "WRONG_PHASE" | "BAD_MESSAGE" | "RATE_LIMITED";
 /**
  * 거부 규칙 하나(3페이즈 확정, 결정 0016 결과·0019): 틀린 단계 → WRONG_PHASE(누구든, 탈락자도), 맞는 단계의
  * 방에 없거나 탈락한 보낸 사람 → BAD_MESSAGE, 밤의 살아 있는 비마피아 → WRONG_PHASE(그 단계에 보낼 수 없는 사람이라는 뜻일 뿐 역할 정보를 주지 않는다).
- * discussion 은 방에 있는 생존자 누구나, night 는 살아 있는 마피아만(결정 0019-1).
- * 맞는 단계는 호출하는 쪽이 정한다: say 는 discussion·night, emote 는 claim·discussion·night(결정 0023-2).
+ * 최후 변론(defense)에서 say 는 후보(verdict.candidate)만 보낸다: 후보가 아닌 생존자는 같은 이유로 WRONG_PHASE(결정 0036, COMM-03). 이모티콘은 생존자 누구나.
+ * discussion·execVote·candidateVote 는 방에 있는 생존자 누구나, night 는 살아 있는 마피아만(결정 0019-1).
+ * 공개 구간(candidateVoteReveal)·처형(execution)·종료(ended)는 누구의 say·이모티콘도 WRONG_PHASE 다(A3).
+ * 맞는 단계는 호출하는 쪽이 정한다: say 는 discussion·execVote·candidateVote·defense·night, emote 는 claim 이 더해진다(결정 0023-2).
  */
-const SAY_PHASES: ReadonlySet<PhaseId> = new Set<PhaseId>(["discussion", "night"]);
-const EMOTE_PHASES: ReadonlySet<PhaseId> = new Set<PhaseId>(["claim", "discussion", "night"]);
+const SAY_PHASES: ReadonlySet<PhaseId> = new Set<PhaseId>(["discussion", "execVote", "candidateVote", "defense", "night"]);
+const EMOTE_PHASES: ReadonlySet<PhaseId> = new Set<PhaseId>(["claim", "discussion", "execVote", "candidateVote", "defense", "night"]);
+
+/** 단계 → 템플릿을 쓸 수 있는 때. 투표 두 단계는 낮 템플릿을 쓴다(D-12). */
+function whenOf(phase: PhaseId): "day" | "night" | "defense" {
+  if (phase === "night") return "night";
+  if (phase === "defense") return "defense";
+  return "day";
+}
 
 function senderOf(state: RoomState, actorId: string, allowed: ReadonlySet<PhaseId>): ChatError | Player {
   if (!allowed.has(state.phase)) return "WRONG_PHASE";
@@ -61,7 +78,7 @@ function senderOf(state: RoomState, actorId: string, allowed: ReadonlySet<PhaseI
 const coolingDown = (sender: Player, now: number): boolean => now - (sender.lastSendAt ?? -Infinity) < SERVER_MIN_SEND_GAP_MS;
 
 /**
- * 빠른 메시지. 통과하면 방송할 한 줄(line)을 돌려준다 — 상태에는 저장하지 않는다(결정 0017-7). 검사 순서가 계약이다: 단계 → 보낸 사람(방에 있음·생존·밤은 마피아) → 템플릿(고유 속성) → 템플릿의 when 이 지금 단계 종류와 같음 → 칸 과부족
+ * 빠른 메시지. 통과하면 방송할 한 줄(line)을 돌려준다 — 상태에는 저장하지 않는다(결정 0017-7). 검사 순서가 계약이다: 단계 → 보낸 사람(방에 있음·생존·밤은 마피아·변론은 후보) → 템플릿(고유 속성) → 템플릿의 when 이 지금 단계 종류와 같음 → 칸 과부족
  * → 대상(정수·앉은 seat·본인 아님·생존) → 직업(rolesInPlay 안, none 불가) → 쿨다운.
  * 거부는 상태를 바꾸지 않는다(쿨다운 위반도 lastSendAt 을 늘리지 않는다, A1).
  * 끊긴 사람을 대상으로 한 메시지는 허용한다(UI-SPEC S-08a).
@@ -74,13 +91,17 @@ export function say(
 ): { ok: true; state: RoomState; line: ChatLine } | { ok: false; error: ChatError } {
   const sender = senderOf(state, actorId, SAY_PHASES);
   if (typeof sender === "string") return { ok: false, error: sender };
+  // 최후 변론은 후보만(T-04-14). 이모티콘(emote)은 이 검사를 하지 않는다.
+  if (state.phase === "defense" && (state.verdict?.candidate === undefined || state.verdict.candidate !== sender.seat)) {
+    return { ok: false, error: "WRONG_PHASE" };
+  }
 
   const template = input.template;
   // 고유 속성만 인정한다 — "constructor"·"toString" 같은 프로토타입 키가 표를 우회하지 못하게.
   if (typeof template !== "string" || !Object.hasOwn(QUICK_TEMPLATES, template)) return { ok: false, error: "BAD_MESSAGE" };
   const { target: needsTarget, role: needsRole, when } = QUICK_TEMPLATES[template];
-  // 낮 문구는 밤에, 밤 문구는 낮 토론에 보낼 수 없다.
-  if (when !== (state.phase === "night" ? "night" : "day")) return { ok: false, error: "BAD_MESSAGE" };
+  // 낮 문구는 밤·변론에, 밤 문구는 낮·투표에, 변론 문구는 변론 밖에 보낼 수 없다.
+  if (when !== whenOf(state.phase)) return { ok: false, error: "BAD_MESSAGE" };
   const target = input.target;
   const claimedRole = input.claimedRole;
   if ((target !== undefined) !== needsTarget || (claimedRole !== undefined) !== needsRole) {

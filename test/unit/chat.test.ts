@@ -626,9 +626,9 @@ describe("투표 두 단계의 메시지 (D-12, 결정 0036)", () => {
 
 describe("최후 변론 - 후보만 (COMM-03, VOTE-03, D-13, T-04-14)", () => {
   /** seat 1 이 후보인 변론 방 */
-  const defense = (overrides: Record<number, Extra> = {}, candidate: number | undefined = 1): RoomState => ({
+  const defense = (overrides: Record<number, Extra> = {}, candidate: number | null = 1): RoomState => ({
     ...room("defense", { overrides }),
-    ...(candidate === undefined ? {} : { verdict: { passed: true, candidate } }),
+    ...(candidate === null ? {} : { verdict: { passed: true, candidate } }),
   });
 
   it("후보의 defNotMe·defCitizen·defPlead 는 칸 없이 통과한다", () => {
@@ -679,7 +679,7 @@ describe("최후 변론 - 후보만 (COMM-03, VOTE-03, D-13, T-04-14)", () => {
   });
 
   it("verdict 가 없으면 생존자 say 는 모두 WRONG_PHASE, 이모티콘은 통과", () => {
-    const none = defense({}, undefined);
+    const none = defense({}, null);
     expect(outcome(say(none, "p1", { template: "defNotMe" }, NOW))).toBe("WRONG_PHASE");
     expect(outcome(emote(none, "p1", "smile", NOW))).toBe("ok");
   });

@@ -14,6 +14,9 @@ export const TEMPLATE_ORDER: readonly TemplateId[] = ["suspect", "trust", "innoc
 /** 밤 시트의 문구 칩 순서(고정, N-2). 낮 칩은 TEMPLATE_ORDER. */
 export const NIGHT_TEMPLATE_ORDER: readonly TemplateId[] = ["nightTarget", "nightAgree", "nightOther"];
 
+/** 변론 칩 순서(고정, D-13 번호 순서). 시트·패널 연결은 화면 계획 몫이다. */
+export const DEFENSE_TEMPLATE_ORDER: readonly TemplateId[] = ["defNotMe", "defCitizen", "defSuspect", "defTrust", "defRole", "defPlead"];
+
 /** 문구 칩 글자. */
 export const TEMPLATE_CHIP: Readonly<Record<TemplateId, string>> = {
   suspect: "[○○] 의심돼요",
@@ -27,6 +30,13 @@ export const TEMPLATE_CHIP: Readonly<Record<TemplateId, string>> = {
   // 표시 전용(결정 0027-7): 주장 줄에만 쓰고 칩 목록(TEMPLATE_ORDER·NIGHT_TEMPLATE_ORDER)에는 쓰이지 않는다
   claimRole: "저는 [직업]이에요",
   claimNone: "말하지 않았어요",
+  // 최후 변론(결정 0036, D-13): 후보만 보낸다
+  defNotMe: "저 아니에요",
+  defCitizen: "저는 시민이에요",
+  defSuspect: "[○○] 의심해 주세요",
+  defTrust: "[○○] 믿어 주세요",
+  defRole: "제가 [직업]입니다",
+  defPlead: "한 번만 믿어 주세요",
 };
 
 /** 이모티콘 화면 읽기용 이름과 트레이 칸 글자. */
@@ -80,6 +90,18 @@ export function messageText(
       return msg.claimedRole === undefined ? CLAIM_NONE_LINE : CLAIM_LINE[msg.claimedRole];
     case "claimNone":
       return CLAIM_NONE_LINE;
+    case "defNotMe":
+      return "저 아니에요";
+    case "defCitizen":
+      return "저는 시민이에요";
+    case "defSuspect":
+      return `${who} 의심해 주세요`;
+    case "defTrust":
+      return `${who} 믿어 주세요`;
+    case "defRole":
+      return `제가 ${msg.claimedRole === undefined ? BLANK_ROLE : ROLE_TEXT[msg.claimedRole].name}입니다`;
+    case "defPlead":
+      return "한 번만 믿어 주세요";
     case "claimed": {
       // 닉네임이 없어 "[○○]" 인 경우의 조사는 칩 문구와 같게 "는"
       const josa = nick !== undefined && hasBatchim(lastUnit(nick)) ? "은" : "는";
