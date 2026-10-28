@@ -242,6 +242,7 @@ export function DayScene({ view, connection, myRoleButton, testButton, arrivedFr
             {...(verdict?.layer ? { layer: verdict.layer } : {})}
             {...verdict?.tableProps}
           />
+          {verdict?.sceneOverlay}
         </div>
         {isMorning ? <MorningCard {...morningCardText(view.day?.morning, nicknameOf)} exitDelayMs={morningExit.delay} /> : null}
         <section key={`panel-${view.phase}`} className={`mf-dayscene__panel mf-dayscene__enter${verdict?.panelClassName ? ` ${verdict.panelClassName}` : ""}`}>

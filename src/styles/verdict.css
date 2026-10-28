@@ -113,6 +113,40 @@
   .mf-dt__cone { animation-duration: 150ms !important; animation-delay: 0ms; }
 }
 
+/* 처형 단계 문구 카드(UI-SPEC 8.5·6.1, 04-23): MorningCard 의 앰버 변형. 폭 252·모서리 16·팝 등장·퇴장 페이드·터치 통과는 night.css 의 .mf-morningcard 를 그대로 상속한다.
+   앰버는 선·면·그림자에만 쓴다(글자색 아님, D-33). 위 띠 8px 는 모서리에 잘리게 overflow 를 숨기고, 안쪽 위 여백은 띠 8 + 14. */
+.mf-morningcard.mf-morningcard--amber {
+  overflow: hidden;
+  padding: 22px 16px 14px;
+  background: color-mix(in srgb, var(--night-900) 94%, transparent);
+  border: 1px solid var(--amber-400);
+  box-shadow: 0 10px 28px var(--shadow), 0 0 24px color-mix(in srgb, var(--amber-400) 30%, transparent);
+}
+.mf-morningcard--amber::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 8px;
+  background: var(--amber-400);
+}
+/* 위치: 기준 상자가 장면 상자다(.mf-dayscene__scene 는 position: relative). 위 8px(시안 128 − 119.2 를 4 의 배수로), 가로 가운데는 기본 규칙 */
+.mf-morningcard.mf-morningcard--scene { top: 8px; }
+
+/* 처형: 후보 사람 층 → 유령 층 400ms 교차(UI-SPEC 8.5·13.3, 04-23). 두 층은 같은 상자를 겹쳐 그린다(사람 층이 위에서 사라지고 유령이 아래 18px 에서 떠오른다).
+   크기·위치는 좌석 래퍼의 transform 이 정하므로 여기서는 개별 속성 translate 와 opacity 만 쓴다. 사람 층은 GHOST_FADE_MS 뒤 DayTable 이 제거한다. */
+.mf-figure--exec-out { position: absolute; inset: 0; z-index: 1; animation: mf-exec-out 400ms var(--ease-out) both; }
+.mf-figure--exec-in { animation: mf-exec-in 400ms var(--ease-out) both; }
+@keyframes mf-exec-out { from { opacity: 1; } to { opacity: 0.35; } }
+@keyframes mf-exec-in { from { opacity: 0; translate: 0 18px; } to { opacity: 0.9; translate: 0 0; } }
+/* 축소 모션: 크로스페이드만(떠오름 없음) */
+@keyframes mf-exec-in-fade { from { opacity: 0; } to { opacity: 0.9; } }
+@media (prefers-reduced-motion: reduce) {
+  .mf-figure--exec-out { animation-duration: 400ms !important; }
+  .mf-figure--exec-in { animation: mf-exec-in-fade 400ms var(--ease-out) both !important; }
+}
+
 /* 과반 확정 두근과 느린 박동(UI-SPEC 8.3 D-31 ③, 04-20). 확정 순간 약 0.7초: 캐릭터 1 → 1.12 → 1 ×2(좌석), 칩 1 → 1.3 → 1 ×2, 앰버 후광 3px/18px 로 밝아졌다 돌아옴.
    그 뒤 공개가 끝날 때까지 느린 박동: 캐릭터 1 → 1.04 → 1, 칩 1 → 1.1 → 1, 주기 1.2초(P-14: 시안 dk-slow 2.2s 는 참고만, CONTEXT 의 약 1.2초가 이긴다).
    크기는 개별 속성 scale 만 쓴다 — 좌석 래퍼의 인라인 transform(깊이 배율)과 겹치지 않는다. */
@@ -193,38 +227,4 @@
   .mf-vchip--slow { animation: none; }
   .mf-dt__seat--clinch .mf-figure { animation: mf-dk-flash 700ms ease-out 1 !important; }
   .mf-vchip--beat { animation: mf-dk-chip-flash 700ms ease-out 1 !important; }
-}
-
-/* 처형 단계 문구 카드(UI-SPEC 8.5·6.1, 04-23): MorningCard 의 앰버 변형. 폭 252·모서리 16·팝 등장·퇴장 페이드·터치 통과는 night.css 의 .mf-morningcard 를 그대로 상속한다.
-   앰버는 선·면·그림자에만 쓴다(글자색 아님, D-33). 위 띠 8px 는 모서리에 잘리게 overflow 를 숨기고, 안쪽 위 여백은 띠 8 + 14. */
-.mf-morningcard.mf-morningcard--amber {
-  overflow: hidden;
-  padding: 22px 16px 14px;
-  background: color-mix(in srgb, var(--night-900) 94%, transparent);
-  border: 1px solid var(--amber-400);
-  box-shadow: 0 10px 28px var(--shadow), 0 0 24px color-mix(in srgb, var(--amber-400) 30%, transparent);
-}
-.mf-morningcard--amber::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 8px;
-  background: var(--amber-400);
-}
-/* 위치: 기준 상자가 장면 상자다(.mf-dayscene__scene 는 position: relative). 위 8px(시안 128 − 119.2 를 4 의 배수로), 가로 가운데는 기본 규칙 */
-.mf-morningcard.mf-morningcard--scene { top: 8px; }
-
-/* 처형: 후보 사람 층 → 유령 층 400ms 교차(UI-SPEC 8.5·13.3, 04-23). 두 층은 같은 상자를 겹쳐 그린다(사람 층이 위에서 사라지고 유령이 아래 18px 에서 떠오른다).
-   크기·위치는 좌석 래퍼의 transform 이 정하므로 여기서는 개별 속성 translate 와 opacity 만 쓴다. 사람 층은 GHOST_FADE_MS 뒤 DayTable 이 제거한다. */
-.mf-figure--exec-out { position: absolute; inset: 0; z-index: 1; animation: mf-exec-out 400ms var(--ease-out) both; }
-.mf-figure--exec-in { animation: mf-exec-in 400ms var(--ease-out) both; }
-@keyframes mf-exec-out { from { opacity: 1; } to { opacity: 0.35; } }
-@keyframes mf-exec-in { from { opacity: 0; translate: 0 18px; } to { opacity: 0.9; translate: 0 0; } }
-/* 축소 모션: 크로스페이드만(떠오름 없음) */
-@keyframes mf-exec-in-fade { from { opacity: 0; } to { opacity: 0.9; } }
-@media (prefers-reduced-motion: reduce) {
-  .mf-figure--exec-out { animation-duration: 400ms !important; }
-  .mf-figure--exec-in { animation: mf-exec-in-fade 400ms var(--ease-out) both !important; }
 }

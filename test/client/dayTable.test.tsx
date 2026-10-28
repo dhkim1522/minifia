@@ -1490,8 +1490,6 @@ describe("DayTable: executed 좌석의 사람 → 유령 전환", () => {
     expect(inn).not.toMatch(/transform/);
     expect(css).toMatch(/\.mf-figure--exec-out[^{]*\{[^}]*animation:\s*mf-exec-out 400ms/);
     expect(css).toMatch(/\.mf-figure--exec-in[^{]*\{[^}]*animation:\s*mf-exec-in 400ms/);
-    const reduced = css.slice(css.lastIndexOf("@media (prefers-reduced-motion: reduce)"));
     expect(css).toMatch(/@media \(prefers-reduced-motion: reduce\)\s*\{[^@]*mf-exec-in-fade/);
-    expect(reduced.length).toBeGreaterThan(0);
   });
 });

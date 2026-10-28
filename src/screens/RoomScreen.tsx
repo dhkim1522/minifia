@@ -8,7 +8,7 @@ import { RoleCardButton } from "../components/RoleCardButton";
 import { RoleCardSheet } from "../components/RoleCardSheet";
 import type { RoleCardTab } from "../components/RoleCardSheet";
 import { TestToolsButton, TestToolsSheet } from "../components/TestTools";
-import { morningCardText } from "../game/eliminationText";
+import { executionTitle, morningCardText } from "../game/eliminationText";
 import { VERDICT_TEXT, defenseAnnounce } from "../game/verdict";
 import { preloadDuskAssets, preloadRoleAssets } from "../net/assets";
 import { usePhaseArrival } from "../net/phaseArrival";
@@ -44,7 +44,7 @@ const PHASE_ANNOUNCE: Record<PhaseId, (view: RoomView) => string> = {
   candidateVote: () => VERDICT_TEXT.announce.candidateVote,
   candidateVoteReveal: () => VERDICT_TEXT.announce.candidateVoteReveal,
   defense: defenseAnnounceOf,
-  execution: () => "처형",
+  execution: executionAnnounceOf,
   ended: () => "게임이 끝났습니다",
 };
 
@@ -91,10 +91,17 @@ function defenseAnnounceOf(view: RoomView): string {
   return nickname === undefined ? "최후 변론" : defenseAnnounce(nickname);
 }
 
+// 처형 안내: 카드 제목과 같은 문장(`{이름}님이 {꼬리}`). 처형된 자리를 못 찾으면(서버 이상) `처형`.
+function executionAnnounceOf(view: RoomView): string {
+  const seat = view.day?.execution?.seat ?? view.day?.candidate;
+  const nickname = seat === undefined ? undefined : view.players.find((p) => p.seat === seat)?.nickname;
+  return nickname === undefined ? "처형" : executionTitle(view.day?.execution?.phrase, nickname);
+}
+
 // 장면 키: 낮 시작(dayAnnounce)·낮 두 단계와 밤·아침은 같은 장면(DayScene)이라 같은 키를 쓴다 — 테이블을 다시 마운트하지 않는다(UI-SPEC C5).
 // 낮 시작 전용 화면은 없다(결정 0030). 래퍼와 장면은 장면에 들어올 때만 mf-phase-enter 가 돈다. 그 밖은 단계 이름이 키다.
 function sceneKey(phase: PhaseId): string {
-  return phase === "dayAnnounce" || phase === "claim" || phase === "discussion" || phase === "night" || phase === "morning" || phase === "execVote" || phase === "candidateVote" || phase === "candidateVoteReveal" || phase === "defense"
+  return phase === "dayAnnounce" || phase === "claim" || phase === "discussion" || phase === "night" || phase === "morning" || phase === "execVote" || phase === "candidateVote" || phase === "candidateVoteReveal" || phase === "defense" || phase === "execution"
     ? "dayScene"
     : phase;
 }
@@ -286,6 +293,7 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
       case "candidateVote":
       case "candidateVoteReveal":
       case "defense":
+      case "execution":
         return (
           <DayScene
             view={view}

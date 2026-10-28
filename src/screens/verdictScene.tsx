@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { isAlive } from "../../shared/game/alive";
 import type { ChatLine, RoomView } from "../../shared/protocol";
@@ -7,8 +7,10 @@ import type { DayTableLayout, DayTableProps, DayTableSeat } from "../components/
 import { DefenseChips } from "../components/DefenseChips";
 import { DefensePanel } from "../components/DefensePanel";
 import { ExecVotePanel } from "../components/ExecVotePanel";
+import { MorningCard, exitDelayOf } from "../components/MorningCard";
 import { NIGHT_PANEL_TEXT, NightPanel } from "../components/NightPanel";
 import { RevealLayer } from "../components/RevealLayer";
+import { executionTitle } from "../game/eliminationText";
 import {
   CLINCH_BEAT_MS,
   CLINCH_VIBRATE_MS,
@@ -21,7 +23,8 @@ import {
   revealIntroHint,
   revealResultLine,
 } from "../game/verdict";
-import type { HaloRequest } from "../game/verdict";
+import type { HaloKind, HaloRequest } from "../game/verdict";
+import { usePhaseArrival } from "../net/phaseArrival";
 import { useReducedMotion } from "../net/useReducedMotion";
 import { useRevealState } from "../net/useRevealState";
 import type { RoomConnection } from "../net/useRoomConnection";
@@ -31,6 +34,7 @@ import { useViewChoice } from "../net/useViewChoice";
 // 낮·밤·아침 경로는 한 줄도 바뀌지 않는다. 이후 계획이 후보 선택·공개·변론·처형 단계를 이 파일에 더한다(DayScene 줄 수를 늘리지 않는다).
 // 이 훅은 서버 view 만 따른다. 단계나 승패를 화면이 스스로 정하지 않고, 역할 문자열을 만들지 않는다.
 // 투표 단계에는 말하기·이모티콘 입구가 없다(D-12 개정, P-7): FLOAT_PHASES·CHAT_PHASES 에 이 단계들이 없어 말풍선·이모티콘·채팅 줄도 뜨지 않는다.
+// 처형(execution, 04-23)은 변론 무대를 그대로 이어 간다(후보는 같은 가운데 자리, 유령으로 바뀌고 앰버 카드가 뜬다). 하단은 모두에게 같은 두 줄이고 입구가 없다.
 // 최후 변론(defense, 04-21)은 예외다 — 후보의 변론이 말풍선·채팅 줄이 되고 나머지 생존자는 이모티콘을 보낸다(두 집합에 defense 가 있다). 후보 본인의 변론 칩 6개(DefenseChips, 04-22)는 같은 자리에서 하단 패널을 236 으로 키운다.
 
 export interface VerdictSceneCtx {
@@ -70,8 +74,17 @@ export interface VerdictScene {
   rootClassName?: string;
   /** 하단 패널 <section> 에 더할 클래스: 최후 변론의 후보 본인만 높이 236 변형(mf-dayscene__panel--tall, 04-22) */
   panelClassName?: string;
+  /** 장면 상자(.mf-dayscene__scene) 안, DayTable 뒤에 그릴 덧그림: 처형 단계의 앰버 카드(04-23) */
+  sceneOverlay?: ReactNode;
   /** DayTable 에 그대로 잇는 선택 prop(어둡게+흐림 층 verdict) */
   tableProps?: Pick<DayTableProps, "verdict">;
+}
+
+// 최후 변론·처형 무대의 후광: 후보는 흰(하나), 마피아 동료는 진홍. 합이 3 을 넘으면 진홍부터 꺼진다(마름모는 남는다). 두 단계가 같은 규칙을 쓴다.
+function stageHalos(view: RoomView, candidate: number, isAllySeat: (seat: number) => boolean): ReadonlyMap<number, HaloKind> {
+  const requests: HaloRequest[] = [{ seat: candidate, kind: "white" }];
+  for (const p of view.players) if (isAllySeat(p.seat)) requests.push({ seat: p.seat, kind: "crimson" });
+  return capHalos(requests).kinds;
 }
 
 // 서버가 보낸 행동을 거절하는 단계: 여부 투표와 후보 선택(04-18 이 같은 효과를 쓴다). 밤 대상 선택의 토스트는 DayScene 이 밤에만 구독하므로 겹치지 않는다.
@@ -110,6 +123,14 @@ export function useVerdictScene({ view, connection, meAlive, showToast, lines, o
       // 진동 실패는 무시한다
     }
   }, [clinchedSeat, clinchAtMs]);
+
+  // 처형: 이 접속이 변론에서 처형으로 넘어오는 것을 직접 봤는가(재접속·처음 마운트는 null). 보았을 때만 사람 → 유령 전환을 켠다.
+  const arrivedFrom = usePhaseArrival(view.phase, connection.epoch);
+  // 처형 카드 퇴장 지연: 마감 시각이 바뀔 때 한 번 정해 쥔다(렌더마다 다시 계산하면 애니메이션이 흔들린다). 중간 합류는 남은 시간만큼만 보인다.
+  const [execExit, setExecExit] = useState<{ ends: number | null; delay: number }>({ ends: null, delay: exitDelayOf(5_000) });
+  if (view.phase === "execution" && view.phaseEndsAt !== null && execExit.ends !== view.phaseEndsAt) {
+    setExecExit({ ends: view.phaseEndsAt, delay: exitDelayOf(view.phaseEndsAt - (Date.now() + connection.offset)) });
+  }
 
   const n = view.day?.n ?? 1;
   if (view.phase === "candidateVoteReveal") {
@@ -203,10 +224,7 @@ export function useVerdictScene({ view, connection, meAlive, showToast, lines, o
       };
     }
     const mine = candidate === view.me.seat;
-    // 후광: 후보는 흰(하나), 마피아 동료는 진홍. 합이 3 을 넘으면 진홍부터 꺼진다(마름모는 남는다)
-    const requests: HaloRequest[] = [{ seat: candidate, kind: "white" }];
-    for (const p of view.players) if (isAllySeat(p.seat)) requests.push({ seat: p.seat, kind: "crimson" });
-    const { kinds } = capHalos(requests);
+    const kinds = stageHalos(view, candidate, isAllySeat);
     return {
       title: "낮 · 최후 변론",
       instruction: defenseInstruction(n, mine ? null : cand.nickname),
@@ -229,6 +247,38 @@ export function useVerdictScene({ view, connection, meAlive, showToast, lines, o
       seatPatch: (seat) => ({ halo: kinds.get(seat) ?? "none", ...(seat === candidate ? { center: true } : {}) }),
       rootClassName: "mf-dayscene--verdict",
       ...(mine ? { panelClassName: "mf-dayscene__panel--tall" } : {}),
+      tableProps: { verdict: { dimPercent: VERDICT_DIM_PERCENT, blurPx: VERDICT_BLUR_PX } },
+    };
+  }
+  if (view.phase === "execution") {
+    // 처형된 자리: 처형 발표(day.execution)가 이기고, 없으면 후보. 하단은 모든 viewer(처형된 본인·탈락자 포함)에게 같은 두 줄이다 —
+    // 이 시점 클라이언트는 승패를 모르므로 밤을 단정하지 않는다(P-10). 입구(이모티콘·메시지)는 없다.
+    const seat = view.day?.execution?.seat ?? view.day?.candidate;
+    const cand = seat === undefined ? undefined : view.players.find((p) => p.seat === seat);
+    const bottom = <NightPanel title={VERDICT_TEXT.executionDoneTitle} guide={VERDICT_TEXT.executionDoneHint} />;
+    // 서버 이상(처형된 자리를 못 찾음): 무대·카드 없이 안내만 그린다. 화면이 멈추지 않는 것이 목적이다
+    if (seat === undefined || !cand) {
+      return { title: "낮 · 처형", instruction: `${n}일차`, calm: true, bottom, seatPatch: () => ({}) };
+    }
+    const kinds = stageHalos(view, seat, isAllySeat);
+    const executed = arrivedFrom === "defense";
+    return {
+      title: "낮 · 처형",
+      instruction: `${n}일차`,
+      calm: true,
+      bottom,
+      // 변론과 같은 가운데·배율·어둡게·원뿔을 그대로 이어 간다(이동 연출 없음, D-16). 좌석은 버튼이 아니다
+      seatPatch: (s) => ({ halo: kinds.get(s) ?? "none", ...(s === seat ? { center: true, ...(executed ? { executed: true } : {}) } : {}) }),
+      sceneOverlay: (
+        <MorningCard
+          tone="amber"
+          anchor="scene"
+          title={executionTitle(view.day?.execution?.phrase, cand.nickname)}
+          sub={VERDICT_TEXT.executionCardSub}
+          exitDelayMs={execExit.delay}
+        />
+      ),
+      rootClassName: "mf-dayscene--verdict",
       tableProps: { verdict: { dimPercent: VERDICT_DIM_PERCENT, blurPx: VERDICT_BLUR_PX } },
     };
   }
