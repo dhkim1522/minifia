@@ -89,18 +89,63 @@ export function enterExecVote(state: RoomState): RoomState {
   };
 }
 
-// RED 껍데기: GREEN 에서 구현으로 바꾼다.
+/**
+ * 후보 선택 표 한 번(고른 seat). 마지막 값이 유효하다(번복 가능).
+ * 검사 순서가 계약이다: 단계(candidateVote 아니면 누구든 WRONG_PHASE) → 행위자(방에 있고 생존, 아니면 BAD_MESSAGE)
+ * → 대상(정수·앉은 생존자, 아니면 BAD_MESSAGE) → 자기 자신이면 BAD_MESSAGE(D-03, 화면이 막아도 서버가 방어선)
+ * → 같은 값이면 입력 상태 그대로 ok → 그 사람의 candidateVote 만 바뀐 새 상태.
+ * 마감(phaseEndsAt)은 절대 건드리지 않는다: 일찍 던져도 15초를 다 채운다(D-28).
+ */
 export function castCandidateVote(
-  _state: RoomState,
-  _actorId: string,
-  _target: number,
+  state: RoomState,
+  actorId: string,
+  target: number,
 ): { ok: true; state: RoomState } | { ok: false; error: VoteError } {
-  throw new Error("not implemented");
+  if (state.phase !== "candidateVote") return { ok: false, error: "WRONG_PHASE" };
+  const actor = state.players.find((p) => p.id === actorId);
+  if (!actor || !isAlive(actor)) return { ok: false, error: "BAD_MESSAGE" };
+  const chosen = Number.isInteger(target) ? state.players.find((p) => p.seat === target) : undefined;
+  if (!chosen || !isAlive(chosen)) return { ok: false, error: "BAD_MESSAGE" };
+  if (chosen.seat === actor.seat) return { ok: false, error: "BAD_MESSAGE" };
+  if (actor.candidateVote === target) return { ok: true, state };
+  return {
+    ok: true,
+    state: { ...state, players: state.players.map((p) => (p.id === actorId ? { ...p, candidateVote: target } : p)) },
+  };
 }
 
+/**
+ * 후보 선택 집계와 공개 순서(공개 구간 진입 훅에서 한 번, Pattern 2). 판정 규칙표(후보 행, 결정 0034·D-03·D-04):
+ *   던진 표 0                         → votes [] · 후보 없음 → 공개 뒤 night
+ *   최다 득표 대상이 한 명            → 그 사람이 후보 → defense
+ *   최다 동률                         → 후보 없음 → 공개 뒤 night (밤 지목처럼 무작위로 고르지 않는다 — Pitfall 4, D-03)
+ *   탈락한 투표자의 표 · 저장된 대상이 탈락자인 표 → 세지 않는다
+ * 못 던진 표(끊김 포함)는 줄이 없다(무효표). 던진 뒤 끊긴 사람의 표는 센다(CONN-02).
+ * votes 는 던진 표를 seat 오름차순으로 모은 뒤 roles.ts 와 같은 Fisher–Yates 로 섞은 순서이고, 이 배열 순서가 모든 폰의 공개 순서다(D-20).
+ * 난수 호출 순서 계약: 던진 표 수 n ≥ 2 이면 i = n-1 … 1 에 randInt(i+1) (즉 인자 n, n-1, …, 2 순서), n ≤ 1 이면 부르지 않는다.
+ * 동률·0표 판정에는 난수를 쓰지 않으며 randInt(0)·randInt(1) 은 부르지 않는다. 입력 상태는 바꾸지 않는다(배열은 복사).
+ */
 export function tallyCandidateVote(
-  _state: RoomState,
-  _randInt: (n: number) => number,
+  state: RoomState,
+  randInt: (n: number) => number,
 ): { votes: CandidateVoteLine[]; candidate?: number } {
-  throw new Error("not implemented");
+  const seated = new Map(state.players.map((p) => [p.seat, p]));
+  const votes: CandidateVoteLine[] = [];
+  for (const p of [...state.players].sort((a, b) => a.seat - b.seat)) {
+    if (!isAlive(p) || p.candidateVote === undefined) continue;
+    const target = seated.get(p.candidateVote);
+    if (!target || !isAlive(target)) continue;
+    votes.push({ seat: p.seat, target: target.seat });
+  }
+
+  const counts = new Map<number, number>();
+  for (const v of votes) counts.set(v.target, (counts.get(v.target) ?? 0) + 1);
+  const top = Math.max(0, ...counts.values());
+  const leaders = [...counts].filter(([, count]) => count === top && top > 0).map(([seat]) => seat);
+
+  for (let i = votes.length - 1; i >= 1; i -= 1) {
+    const j = randInt(i + 1);
+    [votes[i], votes[j]] = [votes[j]!, votes[i]!];
+  }
+  return leaders.length === 1 ? { votes, candidate: leaders[0]! } : { votes };
 }
