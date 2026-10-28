@@ -1,4 +1,5 @@
 import type { ReactElement, ReactNode } from "react";
+import { VERDICT_TEXT } from "../game/verdict";
 import "../styles/day.css";
 import "../styles/night.css";
 
@@ -41,24 +42,37 @@ export function NightPanel({ title, guide, children }: NightPanelProps): ReactEl
 export interface PickPillProps {
   /** 지금 보이는 선택. 없으면 '선택 안 함'. label 은 닉네임(자신이면 "나") */
   pick: { seat: number; label: string } | null;
+  /** "pick"(기본, 밤): `선택 ●이름`. "vote"(후보 선택, D-19): `●이름님에게 투표했어요` */
+  format?: "pick" | "vote";
 }
 
 // 선택 알약(시안 .pk): "선택 ●이름". 눌리지 않는 상태 표시라 role=status 로 변화를 읽는다.
-export function PickPill({ pick }: PickPillProps): ReactElement {
+export function PickPill({ pick, format = "pick" }: PickPillProps): ReactElement {
   if (pick === null) {
     return (
       <p className="mf-pk mf-pk--empty" role="status" aria-live="polite">
-        선택 안 함
+        {VERDICT_TEXT.candidateNone}
+      </p>
+    );
+  }
+  const name = (
+    <b>
+      <i className="mf-pk__dot" aria-hidden="true" style={{ background: `var(--seat-${(pick.seat % 8) + 1})` }} />
+      {pick.label}
+    </b>
+  );
+  if (format === "vote") {
+    // 이름 뒤 '님' 은 받침을 보지 않는다(D-11). 문구 조각은 VERDICT_TEXT 한 곳
+    return (
+      <p className="mf-pk" role="status" aria-live="polite">
+        {name}
+        {VERDICT_TEXT.votedSuffix}
       </p>
     );
   }
   return (
     <p className="mf-pk" role="status" aria-live="polite">
-      <span>선택</span>{" "}
-      <b>
-        <i className="mf-pk__dot" aria-hidden="true" style={{ background: `var(--seat-${(pick.seat % 8) + 1})` }} />
-        {pick.label}
-      </b>
+      <span>선택</span> {name}
     </p>
   );
 }
