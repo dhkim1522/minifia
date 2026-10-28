@@ -1,14 +1,17 @@
-import { act, cleanup, renderHook } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, renderHook, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { CandidateVoteLine, PhaseId, RoomView } from "../../shared/protocol";
-import { revealPlan, revealStateAt } from "../../src/game/verdict";
+import { VERDICT_TEXT, revealIntroHint, revealPlan, revealStateAt } from "../../src/game/verdict";
 import { useRevealState } from "../../src/net/useRevealState";
+import type { RoomConnection } from "../../src/net/useRoomConnection";
 
 // 후보 선택 공개(candidateVoteReveal) 상태 (04-19). Task 1: useRevealState 훅. Task 2: RoomScreen 한 경로(아래).
 const connectionMock = vi.hoisted(() => ({ current: null as unknown }));
 vi.mock("../../src/net/useRoomConnection", () => ({
   useRoomConnection: () => connectionMock.current,
 }));
+
+const { RoomScreen } = await import("../../src/screens/RoomScreen");
 
 afterEach(() => {
   cleanup();
@@ -245,5 +248,223 @@ describe("useRevealState (VOTE-02, D-20, D-31, 결정 0036-5)", () => {
     expect(vi.getTimerCount()).toBe(1);
     unmount();
     expect(vi.getTimerCount()).toBe(0);
+  });
+});
+
+// ---- Task 2: RoomScreen 한 경로 (candidateVoteReveal 연결) ----
+function conn(view: RoomView, over: Partial<RoomConnection> = {}): RoomConnection {
+  return {
+    status: "open",
+    banner: "hidden",
+    view,
+    offset: 0,
+    epoch: 1,
+    removedReason: null,
+    canSend: true,
+    send: vi.fn(() => true),
+    onEvent: vi.fn(() => () => {}),
+    reconnect: vi.fn(),
+    retry: vi.fn(),
+    ...over,
+  };
+}
+
+/** 서버 시각 START + t 에서 RoomScreen 을 그린다. 이후 vi.advanceTimersByTime 이 시계를 같이 흘린다. */
+function renderAt(t: number, view: RoomView, over: Partial<RoomConnection> = {}) {
+  vi.useFakeTimers();
+  vi.setSystemTime(START + t);
+  connectionMock.current = conn(view, over);
+  const utils = render(<RoomScreen code="0042" token={"t".repeat(43)} onExit={vi.fn()} />);
+  const rerenderRoom = (v: RoomView, o: Partial<RoomConnection> = {}) => {
+    connectionMock.current = conn(v, o);
+    utils.rerender(<RoomScreen code="0042" token={"t".repeat(43)} onExit={vi.fn()} />);
+  };
+  const advance = (ms: number) =>
+    act(() => {
+      vi.advanceTimersByTime(ms);
+    });
+  return { ...utils, rerenderRoom, advance, send: (connectionMock.current as RoomConnection).send as ReturnType<typeof vi.fn> };
+}
+
+const panelOf = (c: HTMLElement) => c.querySelector<HTMLElement>(".mf-dayscene__panel")!;
+const chipOf = (c: HTMLElement, n: number) => c.querySelector<HTMLElement>(`.mf-vchip[data-seat="${n}"]`);
+const seatOf = (c: HTMLElement, n: number) => c.querySelector<HTMLElement>(`.mf-dt__seat[data-seat="${n}"]`)!;
+const amberSeats = (c: HTMLElement) =>
+  Array.from(c.querySelectorAll<HTMLElement>("img.mf-figure--halo-amber")).map((img) => Number(img.closest<HTMLElement>(".mf-dt__seat")!.dataset.seat));
+const allHalos = (c: HTMLElement) => c.querySelectorAll('img[class*="mf-figure--halo"]').length;
+const titleOf = (c: HTMLElement) => panelOf(c).querySelector("h2")?.textContent;
+const hintOf = (c: HTMLElement) => panelOf(c).querySelector("p")?.textContent;
+const verdictLive = (c: HTMLElement) => c.querySelector<HTMLElement>(".mf-dayscene p.mf-sr-only[aria-live='polite']");
+
+describe("candidateVoteReveal 화면 한 경로 (VOTE-02, D-07, D-20, D-31)", () => {
+  beforeEach(() => {
+    cleanup();
+  });
+
+  it("연결 중… 이 아니라 낮 테이블: 헤더 `낮 · 투표 공개`/`1일차`, 하단은 제목+안내뿐(버튼·알약 없음), 타이머 calm, 단계 안내 `투표 공개`", () => {
+    const { container } = renderAt(0, makeView({ votes: VOTES }));
+    expect(screen.queryByText("연결 중…")).toBeNull();
+    expect(screen.queryByRole("heading", { name: "낮 · 투표 공개" })).not.toBeNull();
+    expect(screen.queryByText("1일차")).not.toBeNull();
+    // 첫 화살표 전(200ms)에는 기본 제목
+    expect(titleOf(container)).toBe(VERDICT_TEXT.revealIntroTitle);
+    expect(hintOf(container)).toBe(revealIntroHint(5));
+    expect(panelOf(container).querySelectorAll("button, [role=status]").length).toBe(0);
+    expect(container.querySelector(".mf-timer--urgent")).toBeNull();
+    expect(container.querySelector<HTMLElement>(".mf-room > p.mf-sr-only[aria-live]")?.textContent).toBe("투표 공개");
+    // 하단 래퍼는 aria-live 를 끈다(빠른 교체를 읽지 않는다)
+    expect(panelOf(container).querySelector("[aria-live='off']")).not.toBeNull();
+    expect(container.querySelectorAll(".mf-vchip").length).toBe(0);
+    expect(allHalos(container)).toBe(0);
+  });
+
+  it("candidateVote → 공개에서 테이블(.mf-dt)과 장면 래퍼는 같은 DOM 노드다", () => {
+    const r = renderAt(0, makeView({ phase: "candidateVote", votes: VOTES }));
+    const scene = r.container.querySelector(".mf-phase-enter");
+    const table = r.container.querySelector(".mf-dt");
+    expect(table).not.toBeNull();
+    r.rerenderRoom(makeView({ votes: VOTES }));
+    expect(r.container.querySelector(".mf-phase-enter") === scene).toBe(true);
+    expect(r.container.querySelector(".mf-dt") === table).toBe(true);
+  });
+
+  it("좌석은 버튼이 아니다: 탭해도 기록 카드가 열리지 않고 아무것도 보내지 않는다", () => {
+    const { container, send } = renderAt(1500, makeView({ votes: VOTES }));
+    expect(container.querySelectorAll(".mf-dt button").length).toBe(0);
+    fireEvent.click(seatOf(container, 3));
+    expect(document.querySelector("dialog[open]")).toBeNull();
+    expect(send).not.toHaveBeenCalled();
+  });
+
+  it("닿은 순서대로 칩 수가 오른다: 첫 표 직후 도현 1(유일한 선두라 lead + 앰버 후광), 문구는 `하윤님이 도현님을 골랐어요`/`1번째 표 · 모두 5표`", () => {
+    const { container } = renderAt(480, makeView({ votes: VOTES }));
+    expect(chipOf(container, 3)?.textContent).toBe("1");
+    expect(chipOf(container, 3)?.className).toContain("mf-vchip--lead");
+    expect(container.querySelectorAll(".mf-vchip").length).toBe(1);
+    expect(amberSeats(container)).toEqual([3]);
+    expect(titleOf(container)).toBe("하윤님이 도현님을 골랐어요");
+    expect(hintOf(container)).toBe("1번째 표 · 모두 5표");
+  });
+
+  it("방금 닿은 대상은 pop + 앰버 후광, 유일한 선두는 lead + 앰버 후광, 그 밖은 plain(후광 없음)", () => {
+    // 셋째 표(지우 → 하윤)가 닿은 직후: 하윤 1 = pop, 도현 2 = lead
+    const { container, advance } = renderAt(1500, makeView({ votes: VOTES }));
+    expect(chipOf(container, 1)?.className).toContain("mf-vchip--pop");
+    expect(chipOf(container, 1)?.textContent).toBe("1");
+    expect(chipOf(container, 3)?.className).toContain("mf-vchip--lead");
+    expect(chipOf(container, 3)?.textContent).toBe("2");
+    expect(amberSeats(container).sort()).toEqual([1, 3]);
+    expect(titleOf(container)).toBe("지우님이 하윤님을 골랐어요");
+    expect(hintOf(container)).toBe("3번째 표 · 모두 5표");
+    // 다음 화살표가 시작하면(1700) 팝이 풀려 하윤 칩은 plain, 앰버 후광은 선두만
+    advance(200);
+    expect(chipOf(container, 1)?.className).toContain("mf-vchip--plain");
+    expect(chipOf(container, 3)?.className).toContain("mf-vchip--lead");
+    expect(amberSeats(container)).toEqual([3]);
+    expect(titleOf(container)).toBe("서연님이 도현님을 골랐어요");
+    expect(hintOf(container)).toBe("4번째 표 · 모두 5표");
+  });
+
+  it("시간이 흐르면 같은 화면에서 끝 상태까지 간다: 도현 3표 lead 앰버 후광 하나, 나머지 plain, 하단 `도현님이 가장 많은 표를 받았어요`/`3표 · 곧 최후 변론이 시작돼요`", () => {
+    const { container, advance } = renderAt(0, makeView({ votes: VOTES }));
+    const table = container.querySelector(".mf-dt");
+    expect(verdictLive(container)?.textContent ?? "").toBe("");
+    advance(2699);
+    expect(titleOf(container)).toBe("도현님이 민지님을 골랐어요");
+    expect(verdictLive(container)?.textContent ?? "").toBe(""); // 끝 상태 전에는 읽지 않는다
+    advance(1);
+    expect(container.querySelector(".mf-dt") === table).toBe(true);
+    expect(titleOf(container)).toBe("도현님이 가장 많은 표를 받았어요");
+    expect(hintOf(container)).toBe("3표 · 곧 최후 변론이 시작돼요");
+    expect(chipOf(container, 3)?.textContent).toBe("3");
+    expect(chipOf(container, 3)?.className).toContain("mf-vchip--lead");
+    expect(chipOf(container, 1)?.className).toContain("mf-vchip--plain");
+    expect(chipOf(container, 2)?.className).toContain("mf-vchip--plain");
+    expect(chipOf(container, 0)).toBeNull();
+    expect(chipOf(container, 4)).toBeNull();
+    expect(amberSeats(container)).toEqual([3]);
+    // 읽기용 안내: 끝 상태에서 한 문장
+    expect(verdictLive(container)?.textContent).toBe("도현님이 3표로 가장 많은 표를 받았어요");
+    expect(container.querySelectorAll(".mf-dayscene p.mf-sr-only[aria-live='polite']").length).toBe(1);
+  });
+
+  it("동률: `표가 갈렸어요`, 칩만 남고 앰버 후광·큰 칩 없음, 읽기 문장도 동률", () => {
+    const votes: CandidateVoteLine[] = [
+      { seat: 1, target: 2 },
+      { seat: 2, target: 3 },
+      { seat: 3, target: 2 },
+      { seat: 4, target: 3 },
+    ];
+    const { container } = renderAt(2800, makeView({ votes }));
+    expect(titleOf(container)).toBe("표가 갈렸어요");
+    expect(hintOf(container)).toBe("동률이라 처형하지 않아요 · 곧 밤이 시작돼요");
+    expect(chipOf(container, 2)?.textContent).toBe("2");
+    expect(chipOf(container, 3)?.textContent).toBe("2");
+    expect(container.querySelectorAll(".mf-vchip--lead, .mf-vchip--beat, .mf-vchip--pop").length).toBe(0);
+    expect(amberSeats(container)).toEqual([]);
+    expect(allHalos(container)).toBe(0);
+    expect(verdictLive(container)?.textContent).toBe("표가 갈렸어요. 동률이라 처형하지 않아요");
+  });
+
+  it("던진 표 0: `투표한 사람이 없어요`/`던진 표가 없어요 · 곧 밤이 시작돼요`, 칩 0, 후광 0", () => {
+    const { container } = renderAt(100, makeView({ votes: [] }));
+    expect(titleOf(container)).toBe("투표한 사람이 없어요");
+    expect(hintOf(container)).toBe("던진 표가 없어요 · 곧 밤이 시작돼요");
+    expect(container.querySelectorAll(".mf-vchip").length).toBe(0);
+    expect(allHalos(container)).toBe(0);
+    expect(verdictLive(container)?.textContent).toBe("투표한 사람이 없어요");
+  });
+
+  it("서버 순서가 바뀌어도(같은 득표 분포) 화면은 받은 배열 순서를 따른다 (T-04-53)", () => {
+    const reordered: CandidateVoteLine[] = [VOTES[2], VOTES[4], VOTES[0], VOTES[3], VOTES[1]];
+    const a = renderAt(480, makeView({ votes: VOTES }));
+    expect(titleOf(a.container)).toBe("하윤님이 도현님을 골랐어요");
+    a.unmount();
+    const b = renderAt(480, makeView({ votes: reordered }));
+    expect(titleOf(b.container)).toBe("지우님이 하윤님을 골랐어요");
+    expect(chipOf(b.container, 1)?.textContent).toBe("1");
+    expect(chipOf(b.container, 3)).toBeNull();
+  });
+
+  it("중간 합류(단계 시작 + 3000ms 에 첫 렌더): 지난 화살표를 재생하지 않고 그 시각의 칩 수로 시작한다", () => {
+    const { container } = renderAt(3000, makeView({ votes: VOTES }));
+    expect(chipOf(container, 3)?.textContent).toBe("3");
+    expect(chipOf(container, 1)?.textContent).toBe("1");
+    expect(chipOf(container, 2)?.textContent).toBe("1");
+    expect(titleOf(container)).toBe("도현님이 가장 많은 표를 받았어요");
+    expect(amberSeats(container)).toEqual([3]);
+  });
+
+  it("후광 상한 3: 마피아 viewer 의 동료 진홍이 앰버와 합쳐 3 을 넘으면 진홍부터 꺼지고 마름모는 남는다 (결정 0030)", () => {
+    // 1500ms: 앰버 둘(하윤 pop, 도현 lead). 동료 하윤(1)·민지(2)·서연(4): 하윤은 앰버가 이겨 한 자리에 하나, 남은 진홍 둘 중 큰 번호가 꺼진다
+    const { container } = renderAt(1500, makeView({ votes: VOTES, allies: [1, 2, 4] }));
+    expect(amberSeats(container).sort()).toEqual([1, 3]);
+    expect(seatOf(container, 2).querySelector("img.mf-figure--halo-crimson")).not.toBeNull();
+    expect(seatOf(container, 4).querySelector("img.mf-figure--halo-crimson")).toBeNull();
+    expect(allHalos(container)).toBe(3);
+    expect(container.querySelectorAll(".mf-dt__mark").length).toBe(3);
+  });
+
+  it("끝 상태에서 마피아 viewer 의 동료 진홍 후광은 앰버(1)와 함께 남는다", () => {
+    const { container } = renderAt(2800, makeView({ votes: VOTES, allies: [1] }));
+    expect(amberSeats(container)).toEqual([3]);
+    expect(seatOf(container, 1).querySelector("img.mf-figure--halo-crimson")).not.toBeNull();
+    expect(allHalos(container)).toBe(2);
+  });
+
+  it("탈락한 viewer 도 같은 공개를 보되 좌석은 버튼이 아니다", () => {
+    const { container } = renderAt(2800, makeView({ votes: VOTES, dead: [0] }));
+    expect(container.querySelectorAll(".mf-dt button").length).toBe(0);
+    expect(titleOf(container)).toBe("도현님이 가장 많은 표를 받았어요");
+    expect(chipOf(container, 3)?.textContent).toBe("3");
+    expect(panelOf(container).querySelectorAll("button").length).toBe(0);
+  });
+
+  it("단계가 바뀌면 칩·읽기 안내가 사라진다(defense 는 아직 연결 중…)", () => {
+    const r = renderAt(2800, makeView({ votes: VOTES }));
+    expect(r.container.querySelectorAll(".mf-vchip").length).toBe(3);
+    r.rerenderRoom(makeView({ phase: "candidateVote", votes: VOTES }));
+    expect(r.container.querySelectorAll(".mf-vchip").length).toBe(0);
+    expect(verdictLive(r.container)).toBeNull();
   });
 });
