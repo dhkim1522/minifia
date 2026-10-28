@@ -1,13 +1,25 @@
 import { useEffect, useRef } from "react";
 import type { ReactNode } from "react";
 import { isAlive } from "../../shared/game/alive";
-import type { RoomView } from "../../shared/protocol";
+import type { ChatLine, RoomView } from "../../shared/protocol";
 import { CandidateVotePanel } from "../components/CandidateVotePanel";
 import type { DayTableLayout, DayTableProps, DayTableSeat } from "../components/DayTable";
+import { DefensePanel } from "../components/DefensePanel";
 import { ExecVotePanel } from "../components/ExecVotePanel";
 import { NIGHT_PANEL_TEXT, NightPanel } from "../components/NightPanel";
 import { RevealLayer } from "../components/RevealLayer";
-import { CLINCH_BEAT_MS, CLINCH_VIBRATE_MS, VERDICT_TEXT, capHalos, clinchBeat, revealIntroHint, revealResultLine } from "../game/verdict";
+import {
+  CLINCH_BEAT_MS,
+  CLINCH_VIBRATE_MS,
+  VERDICT_BLUR_PX,
+  VERDICT_DIM_PERCENT,
+  VERDICT_TEXT,
+  capHalos,
+  clinchBeat,
+  defenseInstruction,
+  revealIntroHint,
+  revealResultLine,
+} from "../game/verdict";
 import type { HaloRequest } from "../game/verdict";
 import { useReducedMotion } from "../net/useReducedMotion";
 import { useRevealState } from "../net/useRevealState";
@@ -18,6 +30,7 @@ import { useViewChoice } from "../net/useViewChoice";
 // 낮·밤·아침 경로는 한 줄도 바뀌지 않는다. 이후 계획이 후보 선택·공개·변론·처형 단계를 이 파일에 더한다(DayScene 줄 수를 늘리지 않는다).
 // 이 훅은 서버 view 만 따른다. 단계나 승패를 화면이 스스로 정하지 않고, 역할 문자열을 만들지 않는다.
 // 투표 단계에는 말하기·이모티콘 입구가 없다(D-12 개정, P-7): FLOAT_PHASES·CHAT_PHASES 에 이 단계들이 없어 말풍선·이모티콘·채팅 줄도 뜨지 않는다.
+// 최후 변론(defense, 04-21)은 예외다 — 후보의 변론이 말풍선·채팅 줄이 되고 나머지 생존자는 이모티콘을 보낸다(두 집합에 defense 가 있다). 후보 본인의 칩은 04-22 가 같은 자리에 더한다.
 
 export interface VerdictSceneCtx {
   view: RoomView;
@@ -26,6 +39,8 @@ export interface VerdictSceneCtx {
   meAlive: boolean;
   /** 위쪽 토스트 */
   showToast: (text: string) => void;
+  /** 이 폰이 이 단계에서 받은 채팅 줄(최후 변론의 하단 채팅 3줄, DayScene 의 useDayChat) */
+  lines: ChatLine[];
   /** 좌석을 눌렀을 때 열 기록 카드(DayScene 이 쥔 상태) */
   onInspect: (seat: number) => void;
   /** 이 자리가 마피아 동료로 보이는가(살아 있는 마피아의 me.allies, 관전자 화면의 모든 마피아). DayScene 이 마름모를 그리는 규칙과 같은 값이다 */
@@ -50,12 +65,16 @@ export interface VerdictScene {
   liveLine?: string;
   /** DayTable 의 덧그림 층(후보 선택 공개의 화살표). 있으면 DayScene 이 DayTable 로 잇는다 */
   layer?: DayTableProps["layer"];
+  /** DayScene 루트(<main>)에 더할 클래스: 최후 변론·처형은 헤더와 하단 패널을 어둡게 층 위로 올린다(mf-dayscene--verdict) */
+  rootClassName?: string;
+  /** DayTable 에 그대로 잇는 선택 prop(어둡게+흐림 층 verdict) */
+  tableProps?: Pick<DayTableProps, "verdict">;
 }
 
 // 서버가 보낸 행동을 거절하는 단계: 여부 투표와 후보 선택(04-18 이 같은 효과를 쓴다). 밤 대상 선택의 토스트는 DayScene 이 밤에만 구독하므로 겹치지 않는다.
 const REJECTING_PHASES: ReadonlySet<RoomView["phase"]> = new Set<RoomView["phase"]>(["execVote", "candidateVote"]);
 
-export function useVerdictScene({ view, connection, meAlive, showToast, onInspect, isAllySeat }: VerdictSceneCtx): VerdictScene | null {
+export function useVerdictScene({ view, connection, meAlive, showToast, lines, onInspect, isAllySeat }: VerdictSceneCtx): VerdictScene | null {
   const rejecting = REJECTING_PHASES.has(view.phase);
   const { onEvent } = connection;
   useEffect(() => {
@@ -165,6 +184,48 @@ export function useVerdictScene({ view, connection, meAlive, showToast, onInspec
       calm: true,
       bottom: <ExecVotePanel view={view} canSend={connection.canSend} send={connection.send} readOnly={!meAlive} />,
       seatPatch: (seat) => ({ onInspect: () => onInspect(seat) }),
+    };
+  }
+  if (view.phase === "defense") {
+    const candidate = view.day?.candidate;
+    const cand = candidate === undefined ? undefined : view.players.find((p) => p.seat === candidate);
+    // 서버 이상(후보가 없음): 무대 없이 안내만 안전하게 그린다. 화면이 멈추지 않는 것이 목적이다
+    if (candidate === undefined || !cand) {
+      return {
+        title: "낮 · 최후 변론",
+        instruction: `${n}일차`,
+        calm: true,
+        bottom: <NightPanel title="최후 변론" guide={VERDICT_TEXT.executionDoneHint} />,
+        seatPatch: () => ({}),
+      };
+    }
+    const mine = candidate === view.me.seat;
+    // 후광: 후보는 흰(하나), 마피아 동료는 진홍. 합이 3 을 넘으면 진홍부터 꺼진다(마름모는 남는다)
+    const requests: HaloRequest[] = [{ seat: candidate, kind: "white" }];
+    for (const p of view.players) if (isAllySeat(p.seat)) requests.push({ seat: p.seat, kind: "crimson" });
+    const { kinds } = capHalos(requests);
+    return {
+      title: "낮 · 최후 변론",
+      instruction: defenseInstruction(n, mine ? null : cand.nickname),
+      calm: true,
+      // 후보 본인: 제목·안내까지(칩 6개와 전송은 04-22). 그 밖: 변론하는 중 + 이모티콘, 탈락 viewer 는 관전 알약
+      bottom: mine ? (
+        <NightPanel title={VERDICT_TEXT.defenseChooseTitle} guide={VERDICT_TEXT.defenseChooseHint} />
+      ) : (
+        <DefensePanel
+          view={view}
+          connection={connection}
+          showToast={showToast}
+          lines={lines}
+          candidateNickname={cand.nickname}
+          candidateConnected={cand.connected}
+          readOnly={!meAlive}
+        />
+      ),
+      // 좌석은 버튼이 아니다(onPick·onInspect 없음): 기록 카드가 열리지 않는다
+      seatPatch: (seat) => ({ halo: kinds.get(seat) ?? "none", ...(seat === candidate ? { center: true } : {}) }),
+      rootClassName: "mf-dayscene--verdict",
+      tableProps: { verdict: { dimPercent: VERDICT_DIM_PERCENT, blurPx: VERDICT_BLUR_PX } },
     };
   }
   return null;

@@ -159,7 +159,7 @@ export function DayScene({ view, connection, myRoleButton, testButton, arrivedFr
   // 동료 표시 규칙 한 곳: 살아 있는 마피아의 me.allies, 관전 화면은 모든 마피아(job 이 mafia 인 다른 자리). 마름모는 이 값으로 그린다.
   const isAllySeat = (seat: number): boolean => allies.includes(seat) || (spectate !== undefined && seat !== view.me.seat && jobOf(seat) === "mafia");
   // 투표 구간(execVote~)이면 제목·안내·타이머 톤·하단·좌석 덧입힘을 이 값이 정한다. 아니면 null 이라 낮·밤·아침 경로는 그대로다(verdictScene.tsx).
-  const verdict = useVerdictScene({ view, connection, meAlive, showToast, onInspect: setInspectSeat, isAllySeat });
+  const verdict = useVerdictScene({ view, connection, meAlive, showToast, lines: chatLines, onInspect: setInspectSeat, isAllySeat });
   const title = verdict ? verdict.title : isNight ? "밤" : isMorning ? "아침" : view.phase === "discussion" ? "낮 · 토론" : view.phase === "claim" ? "낮 · 직업 공개" : "낮";
   // 동료가 고른 대상(마피아 화면만, D-07). 서버가 생존 마피아에게만 보낸 값이다.
   const allyPicks = view.me.allyPicks ?? [];
@@ -226,7 +226,7 @@ export function DayScene({ view, connection, myRoleButton, testButton, arrivedFr
       {...(fromScene !== undefined ? { fromScene } : {})}
       className="mf-dayscene__backdrop"
     >
-      <main className="mf-root mf-dayscene">
+      <main className={`mf-root mf-dayscene${verdict?.rootClassName ? ` ${verdict.rootClassName}` : ""}`}>
         <div key={`bar-${view.phase}`} className="mf-dayscene__enter">
           <PhaseBar title={title} instruction={verdict ? verdict.instruction : mafiaNight ? `${n}일차 · 함께 지목하세요` : isMorning ? `${n + 1}일차` : `${n}일차`} extra={myRoleButton} timer={timer} />
         </div>
@@ -240,6 +240,7 @@ export function DayScene({ view, connection, myRoleButton, testButton, arrivedFr
             {...(spectate !== undefined ? { allyMarkLabel: "마피아" } : {})}
             {...(isMorning ? { dim: { exitDelayMs: morningExit.delay } } : {})}
             {...(verdict?.layer ? { layer: verdict.layer } : {})}
+            {...verdict?.tableProps}
           />
         </div>
         {isMorning ? <MorningCard {...morningCardText(view.day?.morning, nicknameOf)} exitDelayMs={morningExit.delay} /> : null}

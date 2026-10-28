@@ -376,13 +376,13 @@ describe("defense 화면 한 경로 (VOTE-03, D-15·D-16·D-29, COMM-03)", () =>
     const r = renderRoom({ ...roomView(), phase: "candidateVoteReveal" });
     const scene = r.container.querySelector(".mf-phase-enter");
     const table = r.container.querySelector(".mf-dt");
-    const before = seatOf(r.container, 2).style.left;
+    const before = seatOf(r.container, 2).style.top;
     expect(r.container.querySelector(".mf-dayscene")?.classList.contains("mf-dayscene--verdict")).toBe(false);
     expect(r.container.querySelectorAll(".mf-dt__dim--verdict, .mf-dt__cone").length).toBe(0);
     r.rerenderRoom(roomView());
     expect(r.container.querySelector(".mf-phase-enter") === scene).toBe(true);
     expect(r.container.querySelector(".mf-dt") === table).toBe(true);
-    expect(seatOf(r.container, 2).style.left).not.toBe(before);
+    expect(seatOf(r.container, 2).style.top).not.toBe(before);
     expect(r.container.querySelector(".mf-dt")?.classList.contains("mf-dt--verdict")).toBe(true);
   });
 
