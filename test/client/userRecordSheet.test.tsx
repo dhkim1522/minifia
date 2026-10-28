@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { cleanup, fireEvent, render, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import "../helpers/singleLineErrors";
-import type { ClaimLogEntry } from "../../shared/protocol";
+import type { ClaimLogEntry, VoteLogEntry } from "../../shared/protocol";
 import { UserRecordSheet } from "../../src/components/UserRecordSheet";
 import sheetSource from "../../src/components/UserRecordSheet.tsx?raw";
 
@@ -23,7 +23,16 @@ const LOG: ClaimLogEntry[] = [
   { n: 3, seat: 3, claim: "mafia" },
 ];
 
-function open(over: Partial<{ seat: number; nickname: string; claimLog: readonly ClaimLogEntry[]; onClose: () => void }> = {}) {
+function open(
+  over: Partial<{
+    seat: number;
+    nickname: string;
+    claimLog: readonly ClaimLogEntry[];
+    voteLog: readonly VoteLogEntry[];
+    nicknameOf: (seat: number) => string | undefined;
+    onClose: () => void;
+  }> = {},
+) {
   const props = { seat: 1, nickname: "하윤", claimLog: LOG, onClose: () => {}, ...over };
   return render(<UserRecordSheet {...props} />);
 }
@@ -115,13 +124,13 @@ describe("UserRecordSheet — 행 (날짜별 주장)", () => {
 });
 
 describe("UserRecordSheet — 빈 상태·금지", () => {
-  it("기록이 없으면 목록 면은 그대로 두고 `아직 주장 기록이 없어요` 한 줄", () => {
+  it("기록이 없으면 목록 면은 그대로 두고 `아직 기록이 없어요` 한 줄", () => {
     const { container } = open({ seat: 0 });
     expect(container.querySelector("ol.mf-urecord__list") !== null).toBe(true);
     expect(rows(container).length).toBe(0);
     const empty = container.querySelectorAll(".mf-urecord__empty");
     expect(empty.length).toBe(1);
-    expect(empty[0]?.textContent).toBe("아직 주장 기록이 없어요");
+    expect(empty[0]?.textContent).toBe("아직 기록이 없어요");
   });
 
   it("기록이 있으면 빈 상태 줄이 없다", () => {
@@ -143,6 +152,88 @@ describe("UserRecordSheet — 빈 상태·금지", () => {
     expect(container.querySelector(".mf-urecord__title img")).toBeNull();
     expect(container.querySelector("h2")?.textContent).toBe("<img src=x onerror=alert(1)>");
     expect(container.querySelectorAll(".mf-urecord__text b").length).toBe(2); // 주장이 있는 두 줄(경찰·의사)
+  });
+});
+
+// ---- 04-27: 날짜별 투표 줄 (VOTE-04, D-02, D-08, P-16) ----
+const NAMES: Record<number, string> = { 0: "지우", 1: "하윤", 2: "도현", 3: "민서" };
+const nameOf = (seat: number): string | undefined => NAMES[seat];
+const VOTES: VoteLogEntry[] = [
+  { n: 1, exec: { yes: 1, no: 3, passed: false }, cand: { votes: [{ seat: 1, target: 2 }, { seat: 0, target: 2 }], candidate: 2 } },
+  { n: 2, exec: { yes: 3, no: 1, passed: true } },
+];
+
+describe("UserRecordSheet — 투표 줄 (04-27)", () => {
+  it("일차 내림차순, 같은 일차는 주장 → 처형 여부 → 후보 선택 순으로 같은 행 모양에 그린다", () => {
+    const { container } = open({ seat: 1, voteLog: VOTES, nicknameOf: nameOf });
+    expect(rows(container).map(rowText)).toEqual([
+      ["3일차", "의사라고 주장했어요"],
+      ["2일차", "말하지 않았어요"],
+      ["2일차", "처형 여부 찬성 3 · 반대 1"],
+      ["1일차", "경찰이라고 주장했어요"],
+      ["1일차", "처형 여부 찬성 1 · 반대 3 · 미통과"],
+      ["1일차", "도현님에게 투표했어요"],
+    ]);
+  });
+
+  it("후보 선택 행의 대상 이름만 굵고, 투표 행에는 보조 클래스가 붙는다", () => {
+    const { container } = open({ seat: 1, voteLog: VOTES, nicknameOf: nameOf });
+    const voteRows = rows(container).filter((li) => li.classList.contains("mf-urecord__row--vote"));
+    expect(voteRows.length).toBe(3);
+    const cand = voteRows[2]!;
+    expect(cand.querySelector("b")?.textContent).toBe("도현");
+    expect(voteRows[0]!.querySelector("b")).toBeNull();
+  });
+
+  it("처형 여부 집계는 모든 사람에게 같다(이 사람 줄이 없어도 나온다)", () => {
+    const { container } = open({ seat: 3, claimLog: [], voteLog: VOTES, nicknameOf: nameOf });
+    expect(rows(container).map(rowText)).toEqual([
+      ["2일차", "처형 여부 찬성 3 · 반대 1"],
+      ["1일차", "처형 여부 찬성 1 · 반대 3 · 미통과"],
+    ]);
+  });
+
+  it("후보 선택 기록이 있어도 이 사람의 줄이 없으면 후보 선택 행이 없다 (P-16)", () => {
+    const { container } = open({ seat: 3, claimLog: [], voteLog: VOTES, nicknameOf: nameOf });
+    expect((container.textContent ?? "").includes("투표했어요")).toBe(false);
+  });
+
+  it("집계 줄에 개인 표시가 없다(찬성·반대한 사람 이름이 나오지 않는다) (T-04-67)", () => {
+    const { container } = open({ seat: 3, claimLog: [], voteLog: [VOTES[1]!], nicknameOf: nameOf });
+    const text = container.querySelector(".mf-urecord__list")?.textContent ?? "";
+    for (const name of Object.values(NAMES)) expect(text.includes(name)).toBe(false);
+  });
+
+  it("대상 이름을 못 찾으면 `알 수 없는 사람`, 닉네임은 글자로만 그린다", () => {
+    const votes: VoteLogEntry[] = [{ n: 1, exec: { yes: 0, no: 0, passed: false }, cand: { votes: [{ seat: 1, target: 2 }, { seat: 0, target: 9 }] } }];
+    const { container } = open({ seat: 1, claimLog: [], voteLog: votes, nicknameOf: () => "<img src=x onerror=alert(1)>" });
+    expect(container.querySelector(".mf-urecord__list img")).toBeNull();
+    expect(rows(container).map((li) => rowText(li)[1])).toEqual(["처형 여부 찬성 0 · 반대 0 · 미통과", "<img src=x onerror=alert(1)>님에게 투표했어요"]);
+    cleanup();
+    const r = open({ seat: 0, claimLog: [], voteLog: votes, nicknameOf: () => undefined });
+    expect(rows(r.container).map((li) => rowText(li)[1])[1]).toBe("알 수 없는 사람님에게 투표했어요");
+  });
+
+  it("voteLog 가 비어 있고 주장도 없으면 `아직 기록이 없어요`", () => {
+    const { container } = open({ seat: 0, voteLog: [], nicknameOf: nameOf });
+    expect(container.querySelector(".mf-urecord__empty")?.textContent).toBe("아직 기록이 없어요");
+  });
+
+  it("주장이 없어도 투표 줄만 있으면 빈 상태 문구는 없다", () => {
+    const { container } = open({ seat: 3, claimLog: [], voteLog: VOTES, nicknameOf: nameOf });
+    expect(container.querySelector(".mf-urecord__empty")).toBeNull();
+  });
+
+  it("voteLog 를 주지 않으면 이전과 같은 주장 줄만 나온다", () => {
+    const { container } = open({ seat: 1 });
+    expect(container.querySelectorAll(".mf-urecord__row--vote").length).toBe(0);
+    expect(rows(container).length).toBe(3);
+  });
+
+  it("voteLog 입력 배열을 바꾸지 않는다", () => {
+    const copy = JSON.stringify(VOTES);
+    open({ seat: 1, voteLog: VOTES, nicknameOf: nameOf });
+    expect(JSON.stringify(VOTES)).toBe(copy);
   });
 });
 
