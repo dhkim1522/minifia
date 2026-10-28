@@ -28,8 +28,11 @@ export type PhaseId =
   | "night" | "morning" | "ended";
 
 // ---- 밤·아침 계약(3페이즈) ----
-/** 아침 탈락 문구 번호는 1..MORNING_PHRASE_COUNT (D-18). 서버(문구 추첨)와 화면(문장 표)이 같은 값을 읽는다. */
-export const MORNING_PHRASE_COUNT = 8;
+/**
+ * 아침 탈락 문구 번호는 1..MORNING_PHRASE_COUNT (D-18). 서버(문구 추첨)와 화면(문장 표)이 같은 값을 읽는다.
+ * 결정 0036 9항: 첫 문구를 처형 묶음으로 옮겨 번호가 한 칸 당겨졌다(8 → 7).
+ */
+export const MORNING_PHRASE_COUNT = 7;
 /** 경찰 본인에게만 보이는 수사 기록 한 줄: 그 밤의 일차·대상 seat·마피아인지 불리언 하나. 직업 이름은 싣지 않는다. */
 export interface InvestigationRecord {
   n: number;

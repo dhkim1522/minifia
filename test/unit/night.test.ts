@@ -527,15 +527,15 @@ describe("판정 규칙표 (NIGHT-01·02·03)", () => {
 });
 
 describe("난수 계약 (T-03-09)", () => {
-  it("동률 + 탈락이면 호출 인자가 [2, 8], lastPhrase 가 있으면 [2, 7] 순서다", () => {
+  it("동률 + 탈락이면 호출 인자가 [2, MORNING_PHRASE_COUNT], lastPhrase 가 있으면 [2, MORNING_PHRASE_COUNT - 1] 순서다", () => {
     const { night, m1, m2, c1, c2 } = cast6();
     const tied = picks(night, [m1, c1], [m2, c2]);
     const first = spyRandInt();
     enterMorning(tied, first.randInt);
-    expect(`[${first.calls.join(",")}]`).toBe("[2,8]");
+    expect(`[${first.calls.join(",")}]`).toBe(`[2,${String(MORNING_PHRASE_COUNT)}]`);
     const second = spyRandInt();
     enterMorning({ ...tied, lastPhrase: 4 }, second.randInt);
-    expect(`[${second.calls.join(",")}]`).toBe("[2,7]");
+    expect(`[${second.calls.join(",")}]`).toBe(`[2,${String(MORNING_PHRASE_COUNT - 1)}]`);
   });
 
   it("어떤 경로에서도 인자 0 호출이 없다", () => {
