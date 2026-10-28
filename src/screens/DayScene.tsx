@@ -123,9 +123,6 @@ export function DayScene({ view, connection, myRoleButton, testButton, arrivedFr
   // 서버 값(view.me.pick)을 따른다 — 서버가 거절하면 같은 소켓에 state 를 다시 보낸다(T-03-27).
   const myPlayer = view.players.find((p) => p.seat === view.me.seat);
   const meAlive = myPlayer ? isAlive(myPlayer) : true;
-  // 투표 구간(execVote~)이면 제목·안내·타이머 톤·하단·좌석 덧입힘을 이 값이 정한다. 아니면 null 이라 낮·밤·아침 경로는 그대로다(verdictScene.tsx).
-  const verdict = useVerdictScene({ view, connection, meAlive, showToast, onInspect: setInspectSeat });
-  const title = verdict ? verdict.title : isNight ? "밤" : isMorning ? "아침" : view.phase === "discussion" ? "낮 · 토론" : view.phase === "claim" ? "낮 · 직업 공개" : "낮";
   const pickVerb = view.me.role ? PICK_VERB[view.me.role] : undefined;
   const actor = isNight && meAlive && pickVerb !== undefined;
   const myRole = view.me.role;
@@ -159,6 +156,11 @@ export function DayScene({ view, connection, myRoleButton, testButton, arrivedFr
   };
 
   const allies = view.me.allies ?? [];
+  // 동료 표시 규칙 한 곳: 살아 있는 마피아의 me.allies, 관전 화면은 모든 마피아(job 이 mafia 인 다른 자리). 마름모는 이 값으로 그린다.
+  const isAllySeat = (seat: number): boolean => allies.includes(seat) || (spectate !== undefined && seat !== view.me.seat && jobOf(seat) === "mafia");
+  // 투표 구간(execVote~)이면 제목·안내·타이머 톤·하단·좌석 덧입힘을 이 값이 정한다. 아니면 null 이라 낮·밤·아침 경로는 그대로다(verdictScene.tsx).
+  const verdict = useVerdictScene({ view, connection, meAlive, showToast, onInspect: setInspectSeat, isAllySeat });
+  const title = verdict ? verdict.title : isNight ? "밤" : isMorning ? "아침" : view.phase === "discussion" ? "낮 · 토론" : view.phase === "claim" ? "낮 · 직업 공개" : "낮";
   // 동료가 고른 대상(마피아 화면만, D-07). 서버가 생존 마피아에게만 보낸 값이다.
   const allyPicks = view.me.allyPicks ?? [];
   const nicknameOf = (seat: number): string | undefined => view.players.find((p) => p.seat === seat)?.nickname;
@@ -175,7 +177,7 @@ export function DayScene({ view, connection, myRoleButton, testButton, arrivedFr
         isHost: p.isHost,
         isMe: p.seat === view.me.seat,
         // 관전 화면은 모든 마피아에 진홍 후광·마름모를 그린다(job 이 mafia 인 다른 자리)
-        isAlly: allies.includes(p.seat) || (spectate !== undefined && p.seat !== view.me.seat && jobOf(p.seat) === "mafia"),
+        isAlly: isAllySeat(p.seat),
         dead: !isAlive(p),
         ...(spectatorPicksOf(p.seat).length > 0 ? { spectatorPicks: spectatorPicksOf(p.seat) } : {}),
         spoke: floats.spoke[p.seat] !== undefined,
@@ -233,7 +235,7 @@ export function DayScene({ view, connection, myRoleButton, testButton, arrivedFr
           <DayTable
             seats={seats}
             mySeat={view.me.seat}
-            pickVerb={pickVerb}
+            pickVerb={verdict?.pickVerb ?? pickVerb}
             pickDisabled={!connection.canSend}
             {...(spectate !== undefined ? { allyMarkLabel: "마피아" } : {})}
             {...(isMorning ? { dim: { exitDelayMs: morningExit.delay } } : {})}

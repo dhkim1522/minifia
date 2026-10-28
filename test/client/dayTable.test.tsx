@@ -1116,6 +1116,16 @@ describe("DayTable: 좌석이 후광 종류(halo)를 명시한다 (04-18, 결정
     expect(img.classList.contains("mf-figure--halo-amber")).toBe(true);
   });
 
+  it("pressed 는 배지 없이 onPick 버튼의 aria-pressed 만 켠다. 안 주면 pick.mine 을 따른다", () => {
+    const { container } = render(
+      <DayTable seats={five({ 1: { onPick: () => {}, pressed: true }, 2: { onPick: () => {}, pick: { mine: true } }, 3: { onPick: () => {} } })} mySeat={0} width={366} />,
+    );
+    expect(seatEl(container, 1).getAttribute("aria-pressed")).toBe("true");
+    expect(seatEl(container, 1).querySelector(".mf-dt__pick")).toBeNull();
+    expect(seatEl(container, 2).getAttribute("aria-pressed")).toBe("true");
+    expect(seatEl(container, 3).getAttribute("aria-pressed")).toBe("false");
+  });
+
   it("CSS: 앰버 후광은 --amber-400 변수로 만든 --mf-halo-amber 이고, 끊김 조합은 흑백을 먼저 적용한다(색 값 직접 없음)", () => {
     const code = readFileSync("src/styles/daytable.css", "utf8");
     expect(/--mf-halo-amber:\s*drop-shadow\(0 0 2px color-mix\(in srgb, var\(--amber-400\) 95%, transparent\)\)\s*drop-shadow\(0 0 9px color-mix\(in srgb, var\(--amber-400\) 75%, transparent\)\)/.test(code)).toBe(true);

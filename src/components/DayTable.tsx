@@ -65,6 +65,8 @@ export interface DayTableSeat {
    * "none" 은 후광만 끄고 동료 마름모(isAlly)는 남긴다(한 화면 3개 상한, UI-SPEC 12.4). 안 주면 기존 파생 그대로다.
    */
   halo?: "white" | "amber" | "crimson" | "none";
+  /** onPick 버튼의 눌림 상태(aria-pressed). 후광만 쓰는 투표 구간용 — pick.mine 과 달리 머리 위 배지를 그리지 않는다. 안 주면 !!pick.mine */
+  pressed?: boolean;
   /** 아침: 어둡게 층(z 30) 위(z 31)로 올려 어두워지지 않게 한다. 방금 탈락한 자리 */
   spotlit?: boolean;
   /** spotlit 일 때만 의미: 400ms 맥동을 한 번 돈다(밤 → 아침을 직접 본 경우에만 켠다) */
@@ -267,7 +269,7 @@ export function DayTable({
               type="button"
               className={`${seatClass} mf-dt__seat--pick`}
               data-seat={p.seat}
-              aria-pressed={!!s.pick?.mine}
+              aria-pressed={s.pressed ?? !!s.pick?.mine}
               aria-label={`${s.nickname}${s.isMe ? " (나)" : ""}, ${pickVerb} 대상`}
               disabled={pickDisabled}
               onClick={s.onPick}

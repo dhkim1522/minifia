@@ -1,10 +1,15 @@
 import { useEffect } from "react";
 import type { ReactNode } from "react";
+import { isAlive } from "../../shared/game/alive";
 import type { RoomView } from "../../shared/protocol";
+import { CandidateVotePanel } from "../components/CandidateVotePanel";
 import type { DayTableSeat } from "../components/DayTable";
 import { ExecVotePanel } from "../components/ExecVotePanel";
 import { NIGHT_PANEL_TEXT } from "../components/NightPanel";
+import { capHalos } from "../game/verdict";
+import type { HaloRequest } from "../game/verdict";
 import type { RoomConnection } from "../net/useRoomConnection";
+import { useViewChoice } from "../net/useViewChoice";
 
 // 투표 구간(execVote → execution) 전용 장면 조립 훅(04-16). DayScene 은 이 훅이 null 이 아닐 때만 제목·안내·타이머 톤·하단·좌석 덧입힘을 이 값으로 덮는다 —
 // 낮·밤·아침 경로는 한 줄도 바뀌지 않는다. 이후 계획이 후보 선택·공개·변론·처형 단계를 이 파일에 더한다(DayScene 줄 수를 늘리지 않는다).
@@ -20,6 +25,8 @@ export interface VerdictSceneCtx {
   showToast: (text: string) => void;
   /** 좌석을 눌렀을 때 열 기록 카드(DayScene 이 쥔 상태) */
   onInspect: (seat: number) => void;
+  /** 이 자리가 마피아 동료로 보이는가(살아 있는 마피아의 me.allies, 관전자 화면의 모든 마피아). DayScene 이 마름모를 그리는 규칙과 같은 값이다 */
+  isAllySeat: (seat: number) => boolean;
 }
 
 /** 투표 구간 장면이 DayScene 에 넘기는 값. 단계가 늘면 필드가 늘어난다. */
@@ -32,14 +39,16 @@ export interface VerdictScene {
   calm: boolean;
   /** 하단 패널 안쪽 */
   bottom: ReactNode;
-  /** 자리별 덧입힘: 투표 단계에서는 모든 자리(살아 있든 탈락했든)가 읽기 전용 기록 카드 버튼이다 */
+  /** 대상 버튼의 동사. 있으면 DayScene 의 직업별 동사(조사·보호·지목)를 대신한다 */
+  pickVerb?: string;
+  /** 자리별 덧입힘: 여부 투표는 모든 자리가 읽기 전용 기록 카드 버튼, 후보 선택은 살아 있는 viewer 가 자기 아닌 살아 있는 자리를 고르는 대상 버튼 */
   seatPatch: (seat: number) => Partial<DayTableSeat>;
 }
 
 // 서버가 보낸 행동을 거절하는 단계: 여부 투표와 후보 선택(04-18 이 같은 효과를 쓴다). 밤 대상 선택의 토스트는 DayScene 이 밤에만 구독하므로 겹치지 않는다.
 const REJECTING_PHASES: ReadonlySet<RoomView["phase"]> = new Set<RoomView["phase"]>(["execVote", "candidateVote"]);
 
-export function useVerdictScene({ view, connection, meAlive, showToast, onInspect }: VerdictSceneCtx): VerdictScene | null {
+export function useVerdictScene({ view, connection, meAlive, showToast, onInspect, isAllySeat }: VerdictSceneCtx): VerdictScene | null {
   const rejecting = REJECTING_PHASES.has(view.phase);
   const { onEvent } = connection;
   useEffect(() => {
@@ -49,7 +58,39 @@ export function useVerdictScene({ view, connection, meAlive, showToast, onInspec
     });
   }, [onEvent, rejecting, showToast]);
 
+  // 후보 선택: 낙관적 선택. 새 서버 view 가 오면 me.voteTarget(서버 값)이 이긴다(useViewChoice). 훅이라 단계와 상관없이 항상 부른다.
+  const [chosen, choose] = useViewChoice<number>(view, view.me.voteTarget);
+
   const n = view.day?.n ?? 1;
+  if (view.phase === "candidateVote") {
+    const nicknameOf = (seat: number): string | undefined => view.players.find((p) => p.seat === seat)?.nickname;
+    const label = chosen === undefined ? undefined : nicknameOf(chosen);
+    // 한 화면 후광은 최대 3개, 흰(내 선택) > 앰버 > 진홍(동료)(결정 0030). 최종 종류를 모든 자리에 명시한다 — 상한 때문에 꺼진 동료는 마름모만 남는다.
+    const requests: HaloRequest[] = [];
+    if (meAlive && chosen !== undefined) requests.push({ seat: chosen, kind: "white" });
+    for (const p of view.players) if (isAllySeat(p.seat)) requests.push({ seat: p.seat, kind: "crimson" });
+    const { kinds } = capHalos(requests);
+    const pressPick = (target: number): void => {
+      if (target === chosen) return; // 선택 해제 없음, 같은 자리 재탭은 아무 일도 없다
+      choose(target);
+      connection.send({ t: "candidateVote", target });
+    };
+    return {
+      title: "낮 · 후보 선택",
+      instruction: `${n}일차`,
+      calm: true,
+      bottom: <CandidateVotePanel pick={label !== undefined && chosen !== undefined ? { seat: chosen, label } : null} readOnly={!meAlive} />,
+      pickVerb: "투표",
+      seatPatch: (seat) => {
+        const p = view.players.find((x) => x.seat === seat);
+        const halo = kinds.get(seat) ?? "none";
+        if (!meAlive) return { halo, onInspect: () => onInspect(seat) }; // 탈락 viewer: 투표 버튼 없이 기록 카드
+        // 나·탈락자는 버튼이 아니다. 연결이 끊긴 살아 있는 자리는 고를 수 있다(후보가 될 수 있음)
+        if (seat === view.me.seat || !p || !isAlive(p)) return { halo };
+        return { halo, pressed: chosen === seat, onPick: () => pressPick(seat) };
+      },
+    };
+  }
   if (view.phase === "execVote") {
     return {
       title: "낮 · 처형 여부",
