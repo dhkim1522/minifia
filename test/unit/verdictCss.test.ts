@@ -246,15 +246,25 @@ describe("모션 줄이기 짝 (UI-SPEC 13.4)", () => {
     expect(branch.some((r) => r.decls.some((d) => d.prop === "transition" && d.value === "none"))).toBe(true);
   });
 
-  it("-webkit-backdrop-filter 는 같은 규칙의 backdrop-filter 와 짝이다", () => {
+  it("backdrop-filter 는 접두 없이 한 번만 쓰고, 빌드가 접두와 비접두를 모두 내보낸다 (04-35: 손으로 짝지으면 lightningcss 가 접두만 남긴다)", async () => {
     for (const file of BOTH) {
       const hit = styleRules(PARSED[file]).filter((r) => r.decls.some((d) => /backdrop-filter$/.test(d.prop)));
       if (file === "verdict") expect(hit.length, "backdrop-filter 규칙").toBeGreaterThanOrEqual(1);
       for (const r of hit) {
         expect(declsOf(r, "backdrop-filter"), `${r.selector} backdrop-filter`).toHaveLength(1);
-        expect(declsOf(r, "-webkit-backdrop-filter"), `${r.selector} -webkit-backdrop-filter`).toEqual(declsOf(r, "backdrop-filter"));
+        expect(declsOf(r, "-webkit-backdrop-filter"), `${r.selector} 손으로 쓴 -webkit-backdrop-filter`).toHaveLength(0);
       }
     }
+    // 배포 빌드와 같은 minify(lightningcss, Vite 8 기본)를 거쳐도 Chrome 계열이 읽는 비접두 선언이 남아야 한다.
+    const { transform } = await import("lightningcss");
+    const out = transform({
+      filename: "verdict.css",
+      code: Buffer.from(FILES.verdict),
+      minify: true,
+      targets: { chrome: 111 << 16, safari: (16 << 16) | (4 << 8) },
+    }).code.toString();
+    expect(out, "빌드 결과에 비접두 backdrop-filter").toMatch(/(^|[;{])backdrop-filter:blur\(/);
+    expect(out, "빌드 결과에 -webkit-backdrop-filter").toMatch(/-webkit-backdrop-filter:blur\(/);
   });
 });
 

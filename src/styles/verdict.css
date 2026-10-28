@@ -80,8 +80,8 @@
   top: -160px;
   bottom: calc(-260px - env(safe-area-inset-bottom));
   background: color-mix(in srgb, var(--night-900) var(--mf-verdict-dim), transparent);
+  /* 접두 선언을 손으로 짝지어 쓰지 않는다: 빌드의 lightningcss 가 둘을 한 쌍으로 보고 접두 쪽만 남겨 Chrome 계열에서 흐림이 사라졌다(04-35 배포본 E2E). 접두는 빌드가 붙인다 */
   backdrop-filter: blur(var(--mf-verdict-blur));
-  -webkit-backdrop-filter: blur(var(--mf-verdict-blur));
   animation: mf-vd-in 400ms var(--ease-out) both;
 }
 /* 위에서 내려오는 원뿔 하나(배경 그림에는 조명이 없다, D-29). 이동 시작 200ms 뒤 500ms 페이드인. 위치·크기는 DayTable 이 인라인으로 준다 */

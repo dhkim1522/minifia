@@ -1359,13 +1359,14 @@ describe("DayTable: 최후 변론 무대 verdict·center (04-21, VOTE-03, D-15·
     expect(img.classList.contains("mf-figure--halo-white")).toBe(true);
   });
 
-  it("verdict.css: 어둡게 층(색 45% 변수 혼합·backdrop-filter 표준+접두어)·원뿔(clip-path·그라데이션)·이동 전이 600ms ease-in-out·헤더/패널 z 3·축소 모션", () => {
+  it("verdict.css: 어둡게 층(색 45% 변수 혼합·backdrop-filter 비접두 한 번, 접두는 빌드가)·원뿔(clip-path·그라데이션)·이동 전이 600ms ease-in-out·헤더/패널 z 3·축소 모션", () => {
     const css = readFileSync("src/styles/verdict.css", "utf8");
     const rule = (sel: string): string => new RegExp(`${sel.replace(/[.]/g, "\\.")}\\s*\\{([^}]*)\\}`).exec(css)?.[1] ?? "";
     const dim = rule(".mf-dt__dim--verdict");
     expect(dim).toContain("color-mix(in srgb, var(--night-900) var(--mf-verdict-dim), transparent)");
     expect(dim).toContain("backdrop-filter: blur(var(--mf-verdict-blur))");
-    expect(dim).toContain("-webkit-backdrop-filter: blur(var(--mf-verdict-blur))");
+    // 접두 선언은 소스에 쓰지 않는다 — 손으로 짝지으면 빌드(lightningcss)가 접두만 남긴다(04-35). 접두는 빌드가 붙인다
+    expect(dim).not.toMatch(/^\s*-webkit-backdrop-filter:/m);
     // z 30·클릭 통과는 아침 층과 공유하는 기본 규칙(.mf-dt__dim)에서 온다. 등장은 opacity 만 쓰는 400ms 페이드
     const base = /\.mf-dt__dim\s*\{([^}]*)\}/.exec(readFileSync("src/styles/daytable.css", "utf8"))?.[1] ?? "";
     expect(base).toContain("z-index: 30");
