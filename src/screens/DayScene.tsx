@@ -161,6 +161,10 @@ export function DayScene({ view, connection, myRoleButton, testButton, arrivedFr
   // 투표 구간(execVote~)이면 제목·안내·타이머 톤·하단·좌석 덧입힘을 이 값이 정한다. 아니면 null 이라 낮·밤·아침 경로는 그대로다(verdictScene.tsx).
 // 필드마다 `verdict?.field ?? 기존` 으로 읽는다 — 처형 무효로 온 밤은 layer(회색 카드)·introDelayMs(밤 시작 문구 지연)만 채워져 나머지는 기존 밤 값이 쓰인다(04-24).
   const verdict = useVerdictScene({ view, connection, meAlive, showToast, lines: chatLines, onInspect: setInspectSeat, isAllySeat });
+  // 기록 카드가 열릴 수 있는 단계(04-27): 투표 구간은 verdict 가 정하고(처형 여부 모두·후보 선택 탈락 viewer·그 밖 닫힘), 아니면 낮 세 단계다.
+  // 열려 있는데 허용되지 않는 단계가 되면 렌더 중 상태 조정으로 닫는다(밤 규칙과 같은 방식). 낮 → 낮 사이에는 닫히지 않는다.
+  const inspectAllowed = verdict?.inspectAllowed ?? inspectable;
+  if (inspectSeat !== null && !inspectAllowed) setInspectSeat(null);
   const title = verdict?.title ?? (isNight ? "밤" : isMorning ? "아침" : view.phase === "discussion" ? "낮 · 토론" : view.phase === "claim" ? "낮 · 직업 공개" : "낮");
   // 동료가 고른 대상(마피아 화면만, D-07). 서버가 생존 마피아에게만 보낸 값이다.
   const allyPicks = view.me.allyPicks ?? [];
@@ -318,6 +322,8 @@ export function DayScene({ view, connection, myRoleButton, testButton, arrivedFr
             seat={inspectSeat}
             nickname={nicknameOf(inspectSeat) ?? ""}
             claimLog={view.day?.claimLog ?? []}
+            voteLog={view.day?.voteLog ?? []}
+            nicknameOf={nicknameOf}
             onClose={() => setInspectSeat(null)}
           />
         ) : null}

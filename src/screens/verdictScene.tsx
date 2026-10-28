@@ -84,6 +84,8 @@ export interface VerdictScene {
   sceneOverlay?: ReactNode;
   /** DayTable 에 그대로 잇는 선택 prop(어둡게+흐림 층 verdict) */
   tableProps?: Pick<DayTableProps, "verdict">;
+  /** 이 단계에서 기록 카드가 열릴 수 있는가(04-27). 처형 여부 투표는 모두, 후보 선택은 탈락 viewer 만, 그 밖의 투표 구간 단계는 false. 없으면 DayScene 의 낮 단계 규칙을 따른다 */
+  inspectAllowed?: boolean;
   /** 밤 시작 문구(SceneIntro)를 미룰 시간(ms). 처형 무효로 온 밤만 NO_EXEC_INTRO_DELAY_MS 를 돌려준다(회색 카드가 먼저 1.6초, 04-24, P-3) */
   introDelayMs?: number;
 }
@@ -170,6 +172,7 @@ export function useVerdictScene({ view, connection, meAlive, showToast, lines, o
       title: "낮 · 투표 공개",
       instruction: `${n}일차`,
       calm: true,
+      inspectAllowed: false,
       // 화살표 하나에 문구 하나가 빠르게 바뀌므로 읽지 않는다(aria-live 끔). 끝 상태 한 문장만 liveLine 으로 한 번 읽는다(P-11)
       bottom: (
         <div aria-live="off">
@@ -208,6 +211,7 @@ export function useVerdictScene({ view, connection, meAlive, showToast, lines, o
       title: "낮 · 후보 선택",
       instruction: `${n}일차`,
       calm: true,
+      inspectAllowed: !meAlive, // 살아 있는 viewer 의 좌석 탭은 투표다
       bottom: <CandidateVotePanel pick={label !== undefined && chosen !== undefined ? { seat: chosen, label } : null} readOnly={!meAlive} />,
       pickVerb: "투표",
       seatPatch: (seat) => {
@@ -225,6 +229,7 @@ export function useVerdictScene({ view, connection, meAlive, showToast, lines, o
       title: "낮 · 처형 여부",
       instruction: `${n}일차`,
       calm: true,
+      inspectAllowed: true,
       bottom: <ExecVotePanel view={view} canSend={connection.canSend} send={connection.send} readOnly={!meAlive} introActive={execIntroOn} />,
       seatPatch: (seat) => ({ onInspect: () => onInspect(seat) }),
       ...(execIntroOn
@@ -241,6 +246,7 @@ export function useVerdictScene({ view, connection, meAlive, showToast, lines, o
         title: "낮 · 최후 변론",
         instruction: `${n}일차`,
         calm: true,
+        inspectAllowed: false,
         bottom: <NightPanel title="최후 변론" guide={VERDICT_TEXT.executionDoneHint} />,
         seatPatch: () => ({}),
       };
@@ -251,6 +257,7 @@ export function useVerdictScene({ view, connection, meAlive, showToast, lines, o
       title: "낮 · 최후 변론",
       instruction: defenseInstruction(n, mine ? null : cand.nickname),
       calm: true,
+      inspectAllowed: false,
       // 후보 본인: 제목·안내·변론 칩 6개(04-22, 높이 236 변형). 그 밖: 변론하는 중 + 이모티콘, 탈락 viewer 는 관전 알약
       bottom: mine ? (
         <DefenseChips view={view} connection={connection} showToast={showToast} />
@@ -280,7 +287,7 @@ export function useVerdictScene({ view, connection, meAlive, showToast, lines, o
     const bottom = <NightPanel title={VERDICT_TEXT.executionDoneTitle} guide={VERDICT_TEXT.executionDoneHint} />;
     // 서버 이상(처형된 자리를 못 찾음): 무대·카드 없이 안내만 그린다. 화면이 멈추지 않는 것이 목적이다
     if (seat === undefined || !cand) {
-      return { title: "낮 · 처형", instruction: `${n}일차`, calm: true, bottom, seatPatch: () => ({}) };
+      return { title: "낮 · 처형", instruction: `${n}일차`, calm: true, inspectAllowed: false, bottom, seatPatch: () => ({}) };
     }
     const kinds = stageHalos(view, seat, isAllySeat);
     const executed = arrivedFrom === "defense";
@@ -288,6 +295,7 @@ export function useVerdictScene({ view, connection, meAlive, showToast, lines, o
       title: "낮 · 처형",
       instruction: `${n}일차`,
       calm: true,
+      inspectAllowed: false,
       bottom,
       // 변론과 같은 가운데·배율·어둡게·원뿔을 그대로 이어 간다(이동 연출 없음, D-16). 좌석은 버튼이 아니다
       seatPatch: (s) => ({ halo: kinds.get(s) ?? "none", ...(s === seat ? { center: true, ...(executed ? { executed: true } : {}) } : {}) }),
