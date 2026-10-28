@@ -511,12 +511,12 @@ describe("tallyCandidateVote (VOTE-02, D-03, D-04, D-20) — 집계와 서버 �
     // 동률 판정 자체는 난수를 쓰지 않는다: 셔플 호출(n=4 → 4,3,2)만 있고 그 밖의 호출이 없다.
     const spy = spyRand();
     tallyCandidateVote(state, spy.randInt);
-    expect(spy.calls).toEqual([4, 3, 2]);
+    expect(JSON.stringify(spy.calls)).toBe(JSON.stringify([4, 3, 2]));
   });
 
   it("0표면 votes [] 이고 candidate 가 없다", () => {
     const result = tallyCandidateVote(candidateVoteOf(5, 1), THROWING_RAND);
-    expect(result).toStrictEqual({ votes: [] });
+    expect(JSON.stringify(result)).toBe(JSON.stringify({ votes: [] }));
   });
 
   it("살아 있는 투표자의 표만 센다: 탈락한 투표자·저장된 대상이 탈락자인 표는 뺀다", () => {
@@ -524,14 +524,14 @@ describe("tallyCandidateVote (VOTE-02, D-03, D-04, D-20) — 집계와 서버 �
     const state = withDead(base, [2, 3]); // 투표자 seat 2 탈락 · 대상 seat 3 탈락
     const result = tallyCandidateVote(state, seededRandInt(2));
     // 남는 표: 4 → 5 하나뿐
-    expect(result.votes).toStrictEqual([{ seat: 4, target: 5 }]);
+    expect(JSON.stringify(result.votes)).toBe(JSON.stringify([{ seat: 4, target: 5 }]));
     expect(result.candidate).toBe(5);
   });
 
   it("투표자 1명 이하면 randInt 를 부르지 않는다 (던지는 함수를 넘겨도 예외가 없다)", () => {
     const one = withCandidateVotes(candidateVoteOf(5, 3), [[2, 4]]);
-    expect(tallyCandidateVote(one, THROWING_RAND)).toStrictEqual({ votes: [{ seat: 2, target: 4 }], candidate: 4 });
-    expect(tallyCandidateVote(candidateVoteOf(5, 3), THROWING_RAND)).toStrictEqual({ votes: [] });
+    expect(JSON.stringify(tallyCandidateVote(one, THROWING_RAND))).toBe(JSON.stringify({ votes: [{ seat: 2, target: 4 }], candidate: 4 }));
+    expect(JSON.stringify(tallyCandidateVote(candidateVoteOf(5, 3), THROWING_RAND))).toBe(JSON.stringify({ votes: [] }));
   });
 
   it("셔플 호출 순서 계약: 투표자 n 명(n ≥ 2)이면 randInt 인자가 정확히 [n, n-1, …, 2] 이고 randInt(0)·randInt(1) 은 없다", () => {
@@ -550,7 +550,7 @@ describe("tallyCandidateVote (VOTE-02, D-03, D-04, D-20) — 집계와 서버 �
     const state = withCandidateVotes(candidateVoteOf(5, 4), [[0, 1], [1, 0]]);
     const spy = spyRand();
     tallyCandidateVote(state, spy.randInt);
-    expect(spy.calls).toEqual([2]);
+    expect(JSON.stringify(spy.calls)).toBe(JSON.stringify([2]));
   });
 
   it("같은 시드는 같은 순서이고, votes 는 seat 오름차순 목록의 순열이며 각 줄 키는 정확히 seat·target 이다", () => {
