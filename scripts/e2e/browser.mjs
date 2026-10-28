@@ -1099,3 +1099,132 @@ export async function readVerdict(page, colors = { crimson: [], gray: [] }) {
     return { bottom, dt, intro, voidCard, execCard, card, reveal, crimsonNew, crimsonScreen, result, now: performance.now() };
   }, crimson);
 }
+
+// ---- 조작·관찰·표본 ----
+
+/**
+ * 테스트 시트가 열려 있어야 한다(대기실에서만 그룹이 보인다). 값은 프로토콜 값이다:
+ * exec = "random"|"yes"|"no" (무작위|모두 찬성|모두 반대), pick = "random"|"host"|"other" (무작위|방장|방장 아닌 사람).
+ * 두 그룹의 칩을 누르고 view 의 me.testBotVote 가 기대와 같아질 때까지 기다린다(둘 다 random 이면 키가 없다).
+ */
+export async function setBotVote(page, tracker, { exec = "random", pick = "random" } = {}) {
+  const execLabel = { random: "무작위", yes: "모두 찬성", no: "모두 반대" }[exec];
+  const pickLabel = { random: "무작위", host: "방장", other: "방장 아닌 사람" }[pick];
+  if (execLabel === undefined || pickLabel === undefined) throw new Error(`setBotVote 값이 올바르지 않음: exec=${exec}, pick=${pick}`);
+  const press = (group, label) => dialogOf(page, TT_LABEL).getByRole("group", { name: group, exact: true }).getByRole("button", { name: label, exact: true }).click();
+  const want = (v) => {
+    const cur = v.me.testBotVote;
+    return exec === "random" && pick === "random" ? cur === undefined : cur?.exec === exec && cur?.pick === pick;
+  };
+  // 한쪽을 먼저 누르면 다른 쪽은 현재 서버 값과 합쳐 보내진다 — 각 클릭 뒤 서버 반영을 기다려 순서를 지킨다
+  await press("봇 처형 투표", execLabel);
+  await tracker.waitFor((v) => (v.me.testBotVote?.exec ?? "random") === exec, 3000, `봇 처형 투표 ${exec}`);
+  await press("봇 후보 선택", pickLabel);
+  await tracker.waitFor(want, 3000, `봇 투표 고정 ${exec}/${pick}`);
+}
+
+/** 하단 `.mf-seg__b` [찬성]/[반대] 를 눌러 me.voteAgree 가 기대 값이 될 때까지 기다린다. 인트로 카드는 터치를 통과시킨다. */
+export async function voteAs(page, tracker, choice) {
+  if (choice !== "찬성" && choice !== "반대") throw new Error(`voteAs 는 "찬성"|"반대" 만 받음: ${choice}`);
+  const want = choice === "찬성";
+  try {
+    await page.locator(".mf-execvote .mf-seg__b", { hasText: choice }).click({ timeout: 4000 });
+  } catch (e) {
+    throw new SetupError(`${choice} 버튼을 누르지 못함 (${e instanceof Error ? e.name : "오류"})`);
+  }
+  await tracker.waitFor((v) => v.me.voteAgree === want, 3000, `내 처형 여부 표 ${choice}`);
+}
+
+/** 그 자리 `button.mf-dt__seat[data-seat]` 를 맨 위 겹침 점에서 눌러 me.voteTarget 이 그 자리가 될 때까지 기다린다. */
+export async function pickCandidate(page, tracker, seat) {
+  try {
+    await page.locator(`button.mf-dt__seat--pick[data-seat="${seat}"]`).waitFor({ state: "visible", timeout: 4000 });
+  } catch {
+    throw new SetupError(`자리 ${seat} 의 후보 선택 버튼이 보이지 않음`);
+  }
+  await clickTopmostPoint(page, seat);
+  await tracker.waitFor((v) => v.me.voteTarget === seat, 3000, `후보 선택 자리 ${seat}`);
+}
+
+/** 추적 단계가 목록 중 하나가 될 때까지 기다린다(분기 단계처럼 skipTo 가 못 가는 경우). 못 오면 SetupError. */
+export function waitPhaseIn(tracker, phases, ms = 15_000) {
+  return tracker.waitFor((v) => phases.includes(v.phase), ms, `단계 ${phases.join("|")} 도달`);
+}
+
+/** 표본 수 상한 — 과도한 표본으로 느려지지 않게 한다. */
+export const MAX_SERIES_SAMPLES = 600;
+
+/**
+ * stepMs 간격으로 take() 를 불러 [{ t, value }] 를 돌려준다(t = 시작 기준 ms, 오름차순). take 가 느려도 밀린 표본을 몰아서 찍지 않고 다음 간격으로 넘어간다.
+ * 표본 수가 MAX_SERIES_SAMPLES 를 넘을 간격이면 던진다(조용히 자르면 뒷부분 검사가 측정값 없음이 된다).
+ */
+export async function sampleSeries(page, { durationMs, stepMs, take }) {
+  if (!(durationMs >= 0) || !(stepMs >= 10) || typeof take !== "function") throw new Error("sampleSeries 인자가 올바르지 않음");
+  const planned = Math.floor(durationMs / stepMs) + 1;
+  if (planned > MAX_SERIES_SAMPLES) throw new Error(`표본 ${planned}개 > 상한 ${MAX_SERIES_SAMPLES} (간격을 늘리세요)`);
+  const start = performance.now();
+  const out = [];
+  for (let i = 0; i < planned; i++) {
+    const wait = start + i * stepMs - performance.now();
+    if (wait > 0) await sleep(wait);
+    const t = performance.now() - start;
+    out.push({ t, value: await take(page) });
+  }
+  return out;
+}
+
+/**
+ * sampleSeries 결과의 t 를 카드 도착(readVerdictWatch 의 *SeenAt, page 시계) 기준으로 바꾸고 도착 전 표본은 버린다.
+ * 표본 값에 page 시계 `now`(readVerdict 가 싣는다)가 들어 있어야 한다. P2·P7 처럼 `t` 가 「카드 도착 이후 ms」인 검사에 쓴다 —
+ * 표본기는 단계를 넘기기 전에 시작하고(간격 ≤ 100ms, 안 그러면 lib 의 1500ms 여유가 모자란다) 도착 시각은 감시 값으로 환산한다.
+ */
+export function rebaseSeries(series, originAt, nowOf = (value) => value.now) {
+  return series.filter((s) => nowOf(s.value) >= originAt).map((s) => ({ t: nowOf(s.value) - originAt, value: s.value }));
+}
+
+/**
+ * 인트로 카드(`.mf-vintro` 비-void)·처형 무효 카드(`--void`)·밤 시작 문구(`.mf-sceneintro--night`)가 DOM 에 처음 나타난 시각과 사라진 시각을
+ * MutationObserver 로 붙잡아 둔다(performance.now 기준). 카드는 1.6초뿐이라 폴링하면 시간 경쟁이 생기므로 단계를 넘기기 전에 건다(armIntroWatch 와 같은 방식).
+ */
+export async function armVerdictWatch(page) {
+  await page.evaluate(() => {
+    window.__vwObs?.disconnect();
+    const w = { introSeenAt: null, introGoneAt: null, voidSeenAt: null, voidGoneAt: null, nightIntroSeenAt: null };
+    window.__vw = w;
+    const look = () => {
+      const now = performance.now();
+      const intro = document.querySelector(".mf-vintro:not(.mf-vintro--void)") !== null;
+      const vd = document.querySelector(".mf-vintro--void") !== null;
+      if (intro && w.introSeenAt === null) w.introSeenAt = now;
+      if (!intro && w.introSeenAt !== null && w.introGoneAt === null) w.introGoneAt = now;
+      if (vd && w.voidSeenAt === null) w.voidSeenAt = now;
+      if (!vd && w.voidSeenAt !== null && w.voidGoneAt === null) w.voidGoneAt = now;
+      if (w.nightIntroSeenAt === null && document.querySelector(".mf-sceneintro--night") !== null) w.nightIntroSeenAt = now;
+    };
+    window.__vwObs = new MutationObserver(look);
+    window.__vwObs.observe(document.body, { childList: true, subtree: true });
+    look();
+  });
+}
+
+/** armVerdictWatch 가 붙잡은 { introSeenAt, introGoneAt, voidSeenAt, voidGoneAt, nightIntroSeenAt } (없으면 null)를 읽고 관찰자를 끈다. */
+export async function readVerdictWatch(page) {
+  return page.evaluate(() => {
+    window.__vwObs?.disconnect();
+    window.__vwObs = null;
+    return window.__vw ?? { introSeenAt: null, introGoneAt: null, voidSeenAt: null, voidGoneAt: null, nightIntroSeenAt: null };
+  });
+}
+
+/** 결과 화면의 [처음으로] 를 스크롤로 보이게 해 누르고 입구 화면(h1 Minifia + [방 만들기])이 보일 때까지 기다린다. 실패는 예외. */
+export async function leaveFromResult(page) {
+  const btn = page.locator(".mf-result").getByRole("button", { name: "처음으로", exact: true });
+  try {
+    await btn.scrollIntoViewIfNeeded({ timeout: 4000 });
+    await btn.click({ timeout: 4000 });
+    await page.getByRole("heading", { level: 1, name: "Minifia", exact: true }).waitFor({ state: "visible", timeout: 6000 });
+    await page.getByRole("button", { name: "방 만들기" }).waitFor({ state: "visible", timeout: 3000 });
+  } catch (e) {
+    throw new Error(`[처음으로] 뒤 입구 화면에 도달하지 못함 (${e instanceof Error ? e.name : "오류"})`);
+  }
+}
