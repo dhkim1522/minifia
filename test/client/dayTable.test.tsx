@@ -9,7 +9,7 @@ import type { IconName } from "../../src/components/Icon";
 import type { DayTableSeat } from "../../src/components/DayTable";
 import { HALO_MAX_SIMULTANEOUS, daySeatLayout, px } from "../../src/game/dayTable";
 import { claimName } from "../../src/game/roleText";
-import { CONE_H, CONE_W, VERDICT_BLUR_PX, VERDICT_CANDIDATE_SCALE, VERDICT_DIM_PERCENT, VERDICT_MOVE_MS, candidateCenter, chipAnchor } from "../../src/game/verdict";
+import { CONE_H, CONE_W, GHOST_FADE_MS, VERDICT_BLUR_PX, VERDICT_CANDIDATE_SCALE, VERDICT_DIM_PERCENT, VERDICT_MOVE_MS, candidateCenter, chipAnchor } from "../../src/game/verdict";
 
 afterEach(() => {
   cleanup();
@@ -1389,5 +1389,100 @@ describe("DayTable: 최후 변론 무대 verdict·center (04-21, VOTE-03, D-15·
     expect(/@media \(prefers-reduced-motion: reduce\)\s*\{[^@]*\.mf-dt--verdict \.mf-dt__seat[^{]*\{[^}]*transition:\s*none/.test(css)).toBe(true);
     const verdictCss = css.slice(css.indexOf(".mf-dt__dim--verdict"));
     expect(/#[0-9a-fA-F]{3,8}\b|rgba?\(/.test(verdictCss)).toBe(false);
+  });
+});
+
+// ---- 04-23: 처형 — 사람 → 유령 400ms 전환 (VOTE-04, D-06, D-16, UI-SPEC 8.5) ----
+describe("DayTable: executed 좌석의 사람 → 유령 전환", () => {
+  const imgsOf = (c: HTMLElement, n: number) => Array.from(seatEl(c, n).querySelectorAll<HTMLImageElement>("img.mf-figure"));
+  const advanceBy = (ms: number) => act(() => void vi.advanceTimersByTime(ms));
+
+  it("dead + executed: 사람 층과 유령 층 이미지가 둘 다 있고 유령 층 src 가 /characters/ghost/ 를 가리킨다", () => {
+    vi.useFakeTimers();
+    try {
+      const { container } = render(<DayTable seats={five({ 2: { dead: true, executed: true } })} mySeat={0} width={366} />);
+      const imgs = imgsOf(container, 2);
+      expect(imgs.length).toBe(2);
+      const ghost = imgs.find((i) => i.classList.contains("mf-figure--exec-in"))!;
+      const human = imgs.find((i) => i.classList.contains("mf-figure--exec-out"))!;
+      expect(ghost.getAttribute("src")).toContain("/characters/ghost/");
+      expect(ghost.classList.contains("mf-figure--ghost")).toBe(true);
+      expect(human.getAttribute("src")).not.toContain("/characters/ghost/");
+      expect(human.classList.contains("mf-figure--ghost")).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("후광 클래스는 유령 층에만 정확히 하나다(사람 층에는 없다)", () => {
+    vi.useFakeTimers();
+    try {
+      const { container } = render(<DayTable seats={five({ 2: { dead: true, executed: true, halo: "white" } })} mySeat={0} width={366} />);
+      const imgs = imgsOf(container, 2);
+      const haloed = imgs.filter((i) => /mf-figure--halo-/.test(i.className));
+      expect(haloed.length).toBe(1);
+      expect(haloed[0]!.classList.contains("mf-figure--exec-in")).toBe(true);
+      expect(container.querySelectorAll('img[class*="mf-figure--halo"]').length).toBe(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("GHOST_FADE_MS(400) 뒤 사람 층이 사라지고 유령 한 장만 남는다 (399ms 에는 아직 둘)", () => {
+    vi.useFakeTimers();
+    try {
+      expect(GHOST_FADE_MS).toBe(400);
+      const { container } = render(<DayTable seats={five({ 2: { dead: true, executed: true, halo: "white" } })} mySeat={0} width={366} />);
+      advanceBy(GHOST_FADE_MS - 1);
+      expect(imgsOf(container, 2).length).toBe(2);
+      advanceBy(1);
+      const left = imgsOf(container, 2);
+      expect(left.length).toBe(1);
+      expect(left[0]!.classList.contains("mf-figure--ghost")).toBe(true);
+      expect(left[0]!.classList.contains("mf-figure--halo-white")).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("executed 가 없으면 유령 한 장(기존)이고, dead 가 아니면 executed 만으로 두 층이 되지 않는다", () => {
+    const a = render(<DayTable seats={five({ 2: { dead: true } })} mySeat={0} width={366} />);
+    expect(imgsOf(a.container, 2).length).toBe(1);
+    expect(imgsOf(a.container, 2)[0]!.classList.contains("mf-figure--exec-in")).toBe(false);
+    cleanup();
+    const b = render(<DayTable seats={five({ 2: { executed: true } })} mySeat={0} width={366} />);
+    expect(imgsOf(b.container, 2).length).toBe(1);
+    expect(imgsOf(b.container, 2)[0]!.classList.contains("mf-figure--ghost")).toBe(false);
+  });
+
+  it("이름표는 dead 면 탈락 표시(mf-dt__tag--dead)이고, 언마운트 때 타이머가 정리된다", () => {
+    vi.useFakeTimers();
+    try {
+      const { container, unmount } = render(<DayTable seats={five({ 2: { dead: true, executed: true } })} mySeat={0} width={366} />);
+      expect(tagEl(container, 2).classList.contains("mf-dt__tag--dead")).toBe(true);
+      unmount();
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("verdict.css: mf-exec-out(투명 1 → .35)·mf-exec-in(투명 0 → .9, 개별 속성 translate 아래 18px → 0)·축소 모션은 떠오름 없음", () => {
+    const css = readFileSync("src/styles/verdict.css", "utf8");
+    const kf = (name: string): string => new RegExp(`@keyframes ${name}\\s*\\{([\\s\\S]*?\\n?\\})\\s*\\}?`).exec(css)?.[0] ?? "";
+    const out = kf("mf-exec-out");
+    expect(out).toMatch(/opacity:\s*1/);
+    expect(out).toMatch(/opacity:\s*0?\.35/);
+    const inn = kf("mf-exec-in");
+    expect(inn).toMatch(/opacity:\s*0\b/);
+    expect(inn).toMatch(/opacity:\s*0?\.9\b/);
+    expect(inn).toMatch(/translate:\s*0 18px/);
+    expect(inn).toMatch(/translate:\s*0 0|translate:\s*0\b/);
+    expect(inn).not.toMatch(/transform/);
+    expect(css).toMatch(/\.mf-figure--exec-out[^{]*\{[^}]*animation:\s*mf-exec-out 400ms/);
+    expect(css).toMatch(/\.mf-figure--exec-in[^{]*\{[^}]*animation:\s*mf-exec-in 400ms/);
+    const reduced = css.slice(css.lastIndexOf("@media (prefers-reduced-motion: reduce)"));
+    expect(css).toMatch(/@media \(prefers-reduced-motion: reduce\)\s*\{[^@]*mf-exec-in-fade/);
+    expect(reduced.length).toBeGreaterThan(0);
   });
 });

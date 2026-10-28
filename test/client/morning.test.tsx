@@ -6,7 +6,7 @@ import "../helpers/singleLineErrors";
 import type { RoleId } from "../../shared/game/roles";
 import type { MorningView, PhaseId, RoomView, SpectateView } from "../../shared/protocol";
 import type { RoomConnection } from "../../src/net/useRoomConnection";
-import { exitDelayOf } from "../../src/components/MorningCard";
+import { MorningCard, exitDelayOf } from "../../src/components/MorningCard";
 import { DayScene } from "../../src/screens/DayScene";
 
 // 아침 발표 통합 테스트(03-10): DayScene 의 morning 분기를 view 픽스처로 만난다.
@@ -301,5 +301,60 @@ describe("아침 카드 팝·퇴장 (03.1-10, D-15, UI-SPEC F)", () => {
     expect(/opacity:\s*1/.test(keyframes("mf-morning-fade"))).toBe(true);
     const code = css.split("\n").filter((l) => !/^\s*(\/\*|\*|\/\/)/.test(l)).join("\n");
     expect(/#[0-9a-fA-F]{3,8}\b/.test(code)).toBe(false);
+  });
+});
+
+// ---- 04-23: 앰버 처형 카드 변형 (VOTE-04, D-33, UI-SPEC 8.5) ----
+describe("MorningCard 앰버 처형 변형 (tone=amber · anchor=scene)", () => {
+  const verdictCss = readCss("src/styles/verdict.css");
+  const rule = (sel: string): string =>
+    new RegExp(`${sel.replace(/[.]/g, "\\.")}\\s*\\{([^}]*)\\}`).exec(verdictCss)?.[1] ?? "";
+
+  it("기본 호출(아침)의 마크업은 이전과 같다: 클래스 mf-morningcard 하나, 변형 클래스 없음", () => {
+    const { container } = render(<MorningCard title="제목" sub="부제" exitDelayMs={1700} />);
+    const card = container.firstElementChild as HTMLElement;
+    expect(card.className).toBe("mf-morningcard");
+    expect(card.style.getPropertyValue("--mf-morning-exit-delay")).toBe("1700ms");
+    expect(card.querySelector(".mf-morningcard__t")?.textContent).toBe("제목");
+    expect(card.querySelector(".mf-morningcard__s")?.textContent).toBe("부제");
+  });
+
+  it("tone=amber + anchor=scene: 클래스 mf-morningcard--amber·mf-morningcard--scene 이 붙는다", () => {
+    const { container } = render(<MorningCard title="제목" sub="부제" exitDelayMs={0} tone="amber" anchor="scene" />);
+    const card = container.firstElementChild as HTMLElement;
+    expect(card.classList.contains("mf-morningcard")).toBe(true);
+    expect(card.classList.contains("mf-morningcard--amber")).toBe(true);
+    expect(card.classList.contains("mf-morningcard--scene")).toBe(true);
+  });
+
+  it("tone 만 주면 위치 변형은 없고, anchor 만 주면 톤 변형은 없다", () => {
+    const a = render(<MorningCard title="제목" exitDelayMs={0} tone="amber" />);
+    expect((a.container.firstElementChild as HTMLElement).className).toBe("mf-morningcard mf-morningcard--amber");
+    cleanup();
+    const b = render(<MorningCard title="제목" exitDelayMs={0} anchor="scene" />);
+    expect((b.container.firstElementChild as HTMLElement).className).toBe("mf-morningcard mf-morningcard--scene");
+  });
+
+  it("verdict.css: 앰버 카드 테두리는 앰버 토큰이고 진홍이 아니다, 위 띠 8px 앰버, 그림자에 앰버 바깥 번짐", () => {
+    const amber = rule(".mf-morningcard.mf-morningcard--amber");
+    expect(amber).toMatch(/border:\s*1px solid var\(--amber-400\)/);
+    expect(amber).toMatch(/box-shadow:[^;]*0 10px 28px var\(--shadow\)[^;]*24px[^;]*var\(--amber-400\)[^;]*30%/);
+    expect(amber).toMatch(/background:[^;]*var\(--night-900\) 94%/);
+    const band = rule(".mf-morningcard--amber::before");
+    expect(band).toMatch(/height:\s*8px/);
+    expect(band).toMatch(/background:\s*var\(--amber-400\)/);
+    const block = verdictCss.slice(verdictCss.indexOf(".mf-morningcard.mf-morningcard--amber"), verdictCss.indexOf(".mf-morningcard.mf-morningcard--scene") + 200);
+    expect(/crimson|#[0-9a-fA-F]{3,8}\b/.test(block.replace(/\/\*[\s\S]*?\*\//g, ""))).toBe(false);
+    // 앰버는 선·면·그림자에만 — 글자색으로 쓰지 않는다
+    expect(/(^|[;{\s])color:\s*var\(--amber/.test(amber)).toBe(false);
+  });
+
+  it("verdict.css: scene 변형은 장면 상자 안 위 8px, 폭·가운데·터치 통과는 아침 카드 규칙을 상속한다", () => {
+    const scene = rule(".mf-morningcard.mf-morningcard--scene");
+    expect(scene).toMatch(/top:\s*8px/);
+    const base = rule(".mf-morningcard");
+    expect(base === "" || /pointer-events:\s*none/.test(base)).toBe(true);
+    const nightBase = readCss("src/styles/night.css");
+    expect(/\.mf-morningcard\s*\{[^}]*pointer-events:\s*none[^}]*width:\s*252px|\.mf-morningcard\s*\{[^}]*width:\s*252px[^}]*pointer-events:\s*none/.test(nightBase)).toBe(true);
   });
 });
