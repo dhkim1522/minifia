@@ -510,6 +510,13 @@ export class Room extends DurableObject<Env> {
       case "pick":
         await this.applyPick(step.botId, act.target);
         return;
+      // 투표도 사람과 같은 본체를 지난다(특권 없음, 결정 0024-6): 여부 투표는 전원 방송, 후보 선택은 투표자(봇이라 소켓 없음)에게만 간다.
+      case "execVote":
+        await this.applyExecVote(step.botId, act.agree);
+        return;
+      case "candidateVote":
+        await this.applyCandidateVote(step.botId, act.target);
+        return;
       default: {
         // 새 봇 행동을 BotAct 에 더하고 여기를 빠뜨리면 컴파일이 실패한다(Pitfall 15).
         const unhandled: never = act;
