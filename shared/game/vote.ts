@@ -1,7 +1,7 @@
 // 처형 투표 규칙. 순수 모듈이다 — 현재 시각·전역 난수를 읽지 않고, 입력 상태는 바꾸지 않는다.
 // 결정 0034·D-02: 여부 투표는 익명이다. 개인 표(Player.execVote)는 서버 전용이고 뷰 허용 목록에 없으며,
 // 마감 훅(resolveExecVote)이 집계 직후 키째 지운다 — 익명을 뷰 코드가 아니라 "데이터가 없다" 는 사실로 지킨다(Pitfall 22).
-import type { ExecTally } from "../protocol";
+import type { CandidateVoteLine, ExecTally } from "../protocol";
 import { isAlive } from "./alive";
 import type { RoomState } from "./room";
 import type { DeadlineResult } from "./tick";
@@ -87,4 +87,20 @@ export function enterExecVote(state: RoomState): RoomState {
       return kept;
     }),
   };
+}
+
+// RED 껍데기: GREEN 에서 구현으로 바꾼다.
+export function castCandidateVote(
+  _state: RoomState,
+  _actorId: string,
+  _target: number,
+): { ok: true; state: RoomState } | { ok: false; error: VoteError } {
+  throw new Error("not implemented");
+}
+
+export function tallyCandidateVote(
+  _state: RoomState,
+  _randInt: (n: number) => number,
+): { votes: CandidateVoteLine[]; candidate?: number } {
+  throw new Error("not implemented");
 }

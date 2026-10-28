@@ -7,10 +7,18 @@ import { CANDIDATE_VOTE_MS, DISCUSSION_MS, EXEC_VOTE_MS, MORNING_MS, NIGHT_MS, P
 import { attachConnection, createRoomState, joinRoom, startGame } from "../../shared/game/room";
 import type { Player, RoomState } from "../../shared/game/room";
 import { tick } from "../../shared/game/tick";
-import { castExecVote, enterExecVote, execTallyOf, resolveExecVote } from "../../shared/game/vote";
+import {
+  castCandidateVote,
+  castExecVote,
+  enterExecVote,
+  execTallyOf,
+  resolveExecVote,
+  tallyCandidateVote,
+} from "../../shared/game/vote";
 import { buildView } from "../../shared/game/view";
 import type { PhaseId, RoomView } from "../../shared/protocol";
 import { seededRandInt } from "../helpers/seededRandom";
+import { stateWithVerdict } from "../helpers/voteState";
 
 const START_AT = 10_000;
 const NEW_PHASES: readonly PhaseId[] = ["execVote", "candidateVote", "candidateVoteReveal", "defense", "execution", "ended"];
@@ -374,6 +382,217 @@ describe("뷰 (D-02 익명, T-04-01)", () => {
       expect(JSON.stringify(viewOf(s1, 0))).toBe(JSON.stringify(viewOf(s2, 0)));
       // 표를 안 던진 탈락 관전자 O(seat 0)도 같다
       expect(JSON.stringify(viewOf(withDead(s1, [0]), 0))).toBe(JSON.stringify(viewOf(withDead(s2, [0]), 0)));
+    }
+  });
+});
+
+// ---- 04-04 Task 1: 후보 선택 수신과 집계 (VOTE-02, D-03, D-04, D-20, D-21) ----
+
+const candidateVoteOf = (n: number, seed: number, candidate: "none" = "none"): RoomState =>
+  stateWithVerdict(n, seed, "candidateVote", { candidate });
+
+/** 지정한 seat 들이 고른 값을 서버 저장 필드에 직접 넣는다(집계 규칙만 따로 보려는 준비용 — 수신 검사는 castCandidateVote 테스트가 한다). */
+function withCandidateVotes(state: RoomState, picks: Array<[number, number]>): RoomState {
+  return {
+    ...state,
+    players: state.players.map((p) => {
+      const hit = picks.find(([seat]) => seat === p.seat);
+      return hit ? { ...p, candidateVote: hit[1] } : p;
+    }),
+  };
+}
+
+/** 호출을 기록하는 randInt. 항상 0 을 돌려준다. */
+function spyRand(): { randInt: (n: number) => number; calls: number[] } {
+  const calls: number[] = [];
+  return {
+    calls,
+    randInt: (n: number): number => {
+      calls.push(n);
+      return 0;
+    },
+  };
+}
+
+const THROWING_RAND = (): number => {
+  throw new Error("randInt must not be called");
+};
+
+describe("castCandidateVote (VOTE-02, D-03) — 검사 순서", () => {
+  it("candidateVote 가 아닌 단계는 누구든(탈락자 포함) WRONG_PHASE 다", () => {
+    const discussion = withDead(stateAt(5, 1, "discussion"), [4]);
+    const exec = withDead(execVoteOf(5, 1), [4]);
+    const out = [discussion, exec].flatMap((s) =>
+      [0, 4].map((seat) => {
+        const r = castCandidateVote(s, idOf(s, seat), 1);
+        return r.ok ? "ok" : r.error;
+      }),
+    );
+    expect(out.join(" ")).toBe("WRONG_PHASE WRONG_PHASE WRONG_PHASE WRONG_PHASE");
+  });
+
+  it("방에 없는 행위자·탈락한 행위자는 BAD_MESSAGE 다", () => {
+    const state = withDead(candidateVoteOf(5, 2), [4]);
+    const ghost = castCandidateVote(state, "player-id-zzzz-none", 1);
+    const dead = castCandidateVote(state, idOf(state, 4), 1);
+    expect(`${ghost.ok ? "ok" : ghost.error} ${dead.ok ? "ok" : dead.error}`).toBe("BAD_MESSAGE BAD_MESSAGE");
+  });
+
+  it("대상이 정수가 아니거나 앉지 않았거나 탈락자면 BAD_MESSAGE 다", () => {
+    const state = withDead(candidateVoteOf(5, 2), [3]);
+    const bad = [1.5, Number.NaN, -1, 99, 3, "2" as unknown as number, null as unknown as number, undefined as unknown as number].map(
+      (target) => {
+        const r = castCandidateVote(state, idOf(state, 0), target);
+        return r.ok ? "ok" : r.error;
+      },
+    );
+    expect(bad.join(" ")).toBe(Array(8).fill("BAD_MESSAGE").join(" "));
+  });
+
+  it("자기 자신은 고를 수 없다 — BAD_MESSAGE (D-03, 서버가 방어선)", () => {
+    const state = candidateVoteOf(6, 4);
+    const results = state.players.map((p) => {
+      const r = castCandidateVote(state, p.id, p.seat);
+      return r.ok ? "ok" : r.error;
+    });
+    expect(results.join(" ")).toBe(Array(6).fill("BAD_MESSAGE").join(" "));
+  });
+
+  it("같은 값을 다시 보내면 입력 상태 그대로(toBe)다", () => {
+    const state = candidateVoteOf(5, 5);
+    const first = castCandidateVote(state, idOf(state, 0), 2);
+    expect(first.ok).toBe(true);
+    if (!first.ok) return;
+    const again = castCandidateVote(first.state, idOf(first.state, 0), 2);
+    expect(again.ok && again.state === first.state).toBe(true);
+  });
+
+  it("그 사람의 candidateVote 만 바뀐 새 상태를 돌려주고 입력과 마감 시각은 바뀌지 않는다", () => {
+    const state = deepFreeze(candidateVoteOf(5, 6));
+    const result = castCandidateVote(state, idOf(state, 1), 3);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.state).not.toBe(state);
+    expect(result.state.phaseEndsAt).toBe(state.phaseEndsAt);
+    expect(result.state.phase).toBe("candidateVote");
+    const changed = result.state.players.filter((p, i) => JSON.stringify(p) !== JSON.stringify(state.players[i]));
+    expect(changed.map((p) => `${p.seat}:${p.candidateVote}`).join(" ")).toBe("1:3");
+    expect(state.players.every((p) => p.candidateVote === undefined)).toBe(true);
+  });
+
+  it("번복: A → B → C, 마지막 값만 남는다 (마감은 그대로)", () => {
+    let state = candidateVoteOf(6, 7);
+    const deadline = state.phaseEndsAt;
+    for (const target of [2, 3, 4]) {
+      const r = castCandidateVote(state, idOf(state, 0), target);
+      if (!r.ok) throw new Error(`rejected ${target}: ${r.error}`);
+      state = r.state;
+    }
+    expect(state.players.find((p) => p.seat === 0)?.candidateVote).toBe(4);
+    expect(state.phaseEndsAt).toBe(deadline);
+  });
+});
+
+describe("tallyCandidateVote (VOTE-02, D-03, D-04, D-20) — 집계와 서버 셔플", () => {
+  const seatsOf = (votes: Array<{ seat: number }>): string => votes.map((v) => v.seat).join(",");
+
+  it("최다 득표가 한 명이면 그 사람이 candidate 다", () => {
+    const state = withCandidateVotes(candidateVoteOf(6, 1), [[0, 3], [1, 3], [2, 4], [3, 0]]);
+    const result = tallyCandidateVote(state, seededRandInt(1));
+    expect(result.candidate).toBe(3);
+    expect(result.votes.length).toBe(4);
+  });
+
+  it("최다 동률이면 candidate 키 자체가 없고 난수로 고르지 않는다", () => {
+    const state = withCandidateVotes(candidateVoteOf(6, 1), [[0, 3], [1, 3], [2, 4], [3, 4]]);
+    const result = tallyCandidateVote(state, seededRandInt(1));
+    expect("candidate" in result).toBe(false);
+    expect(result.votes.length).toBe(4);
+    // 동률 판정 자체는 난수를 쓰지 않는다: 셔플 호출(n=4 → 4,3,2)만 있고 그 밖의 호출이 없다.
+    const spy = spyRand();
+    tallyCandidateVote(state, spy.randInt);
+    expect(spy.calls).toEqual([4, 3, 2]);
+  });
+
+  it("0표면 votes [] 이고 candidate 가 없다", () => {
+    const result = tallyCandidateVote(candidateVoteOf(5, 1), THROWING_RAND);
+    expect(result).toStrictEqual({ votes: [] });
+  });
+
+  it("살아 있는 투표자의 표만 센다: 탈락한 투표자·저장된 대상이 탈락자인 표는 뺀다", () => {
+    const base = withCandidateVotes(candidateVoteOf(6, 2), [[0, 3], [1, 3], [2, 3], [4, 5]]);
+    const state = withDead(base, [2, 3]); // 투표자 seat 2 탈락 · 대상 seat 3 탈락
+    const result = tallyCandidateVote(state, seededRandInt(2));
+    // 남는 표: 4 → 5 하나뿐
+    expect(result.votes).toStrictEqual([{ seat: 4, target: 5 }]);
+    expect(result.candidate).toBe(5);
+  });
+
+  it("투표자 1명 이하면 randInt 를 부르지 않는다 (던지는 함수를 넘겨도 예외가 없다)", () => {
+    const one = withCandidateVotes(candidateVoteOf(5, 3), [[2, 4]]);
+    expect(tallyCandidateVote(one, THROWING_RAND)).toStrictEqual({ votes: [{ seat: 2, target: 4 }], candidate: 4 });
+    expect(tallyCandidateVote(candidateVoteOf(5, 3), THROWING_RAND)).toStrictEqual({ votes: [] });
+  });
+
+  it("셔플 호출 순서 계약: 투표자 n 명(n ≥ 2)이면 randInt 인자가 정확히 [n, n-1, …, 2] 이고 randInt(0)·randInt(1) 은 없다", () => {
+    for (const n of [4, 5, 6, 7, 8]) {
+      const picks: Array<[number, number]> = Array.from({ length: n }, (_, seat) => [seat, (seat + 1) % n]);
+      const state = withCandidateVotes(candidateVoteOf(n, 4), picks);
+      const spy = spyRand();
+      tallyCandidateVote(state, spy.randInt);
+      const expected = Array.from({ length: n - 1 }, (_, i) => n - i);
+      expect(spy.calls.join(",")).toBe(expected.join(","));
+      expect(spy.calls.includes(0) || spy.calls.includes(1)).toBe(false);
+    }
+  });
+
+  it("투표자가 둘이면 randInt(2) 한 번이다", () => {
+    const state = withCandidateVotes(candidateVoteOf(5, 4), [[0, 1], [1, 0]]);
+    const spy = spyRand();
+    tallyCandidateVote(state, spy.randInt);
+    expect(spy.calls).toEqual([2]);
+  });
+
+  it("같은 시드는 같은 순서이고, votes 는 seat 오름차순 목록의 순열이며 각 줄 키는 정확히 seat·target 이다", () => {
+    const picks: Array<[number, number]> = [[0, 5], [1, 5], [2, 5], [3, 0], [4, 0], [5, 1], [6, 1], [7, 1]];
+    const state = withCandidateVotes(candidateVoteOf(8, 5), picks);
+    for (const seed of [1, 2, 3]) {
+      const a = tallyCandidateVote(state, seededRandInt(seed));
+      const b = tallyCandidateVote(state, seededRandInt(seed));
+      expect(JSON.stringify(a)).toBe(JSON.stringify(b));
+      expect(seatsOf([...a.votes].sort((x, y) => x.seat - y.seat))).toBe("0,1,2,3,4,5,6,7");
+      for (const line of a.votes) expect(Object.keys(line).sort().join(",")).toBe("seat,target");
+    }
+    const orders = new Set([1, 2, 3, 4, 5, 6].map((seed) => seatsOf(tallyCandidateVote(state, seededRandInt(seed)).votes)));
+    expect(orders.size).toBeGreaterThan(1); // 순서가 실제로 섞인다
+  });
+
+  it("입력 상태를 바꾸지 않는다 (깊은 동결)", () => {
+    const state = deepFreeze(withCandidateVotes(candidateVoteOf(6, 6), [[0, 1], [1, 2], [2, 1]]));
+    expect(() => tallyCandidateVote(state, seededRandInt(6))).not.toThrow();
+  });
+
+  it("4~8명 × 시드 3개: votes 길이 = 던진 사람 수, candidate 는 votes 로 센 최다 득표자와 같다", () => {
+    for (let n = 4; n <= 8; n += 1) {
+      for (const seed of [1, 2, 3]) {
+        const rand = seededRandInt(seed * 100 + n);
+        const picks: Array<[number, number]> = [];
+        for (let seat = 0; seat < n; seat += 1) {
+          if (rand(4) === 0) continue; // 일부는 못 던진다
+          const others = Array.from({ length: n }, (_, i) => i).filter((i) => i !== seat);
+          picks.push([seat, others[rand(others.length)]!]);
+        }
+        const state = withCandidateVotes(candidateVoteOf(n, seed), picks);
+        const result = tallyCandidateVote(state, seededRandInt(seed));
+        expect(result.votes.length).toBe(picks.length);
+
+        const counts = new Map<number, number>();
+        for (const v of result.votes) counts.set(v.target, (counts.get(v.target) ?? 0) + 1);
+        const top = Math.max(0, ...counts.values());
+        const leaders = [...counts].filter(([, c]) => c === top && top > 0).map(([t]) => t);
+        const expected = leaders.length === 1 ? String(leaders[0]) : "none";
+        expect(`${n}/${seed}: ${result.candidate === undefined ? "none" : result.candidate}`).toBe(`${n}/${seed}: ${expected}`);
+      }
     }
   });
 });
