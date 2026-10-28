@@ -23,7 +23,7 @@ import { nightChatRecipientIds, pickRecipientIds, pickTarget } from "../shared/g
 import { resetToLobby, setBotCount, setTestRole, skipPhase } from "../shared/game/testTools";
 import type { RoleId } from "../shared/game/roles";
 import { nextWakeAt, tick } from "../shared/game/tick";
-import { castExecVote } from "../shared/game/vote";
+import { castCandidateVote, castExecVote } from "../shared/game/vote";
 import { buildPreview, buildView } from "../shared/game/view";
 import { ClientMessageSchema } from "../shared/schemas";
 import { cryptoRandInt, randomToken } from "./random";
@@ -210,6 +210,9 @@ export class Room extends DurableObject<Env> {
         return;
       case "execVote":
         await this.handleExecVote(ws, msg.agree);
+        return;
+      case "candidateVote":
+        await this.handleCandidateVote(ws, msg.target);
         return;
       case "testSkip":
         await this.handleTestSkip(ws);
@@ -452,6 +455,32 @@ export class Room extends DurableObject<Env> {
     if (result.state === this.room) return null;
     this.room = result.state;
     await this.persistAndBroadcast();
+    return null;
+  }
+
+  // 후보 선택 투표: 신원은 소켓 첨부의 playerId 뿐이다 — 메시지에 seat·id 가 없다(T-04-23).
+  private async handleCandidateVote(ws: WebSocket, target: number): Promise<void> {
+    const att = this.attachmentOf(ws);
+    if (!att || !this.room) {
+      this.sendTo(ws, { t: "error", code: "BAD_MESSAGE" });
+      return;
+    }
+    const error = await this.applyCandidateVote(att.playerId, target);
+    if (error !== null) this.sendRejection(ws, att.playerId, error);
+  }
+
+  // 마감이 바뀌지 않으니 reschedule 은 필요 없다(D-28). 같은 값을 다시 보내면 같은 객체라 저장·전송도 하지 않는다.
+  // 받아들여지면 투표자 본인 한 명에게만 state 를 보낸다: 여부 투표(전원 방송, 집계가 모두에게 공개)와 달리 후보 선택은 진행 중에 공개 집계가 없고
+  // (공개는 공개 구간에서 서버가 정한 순서로 한 번에), 전원 방송은 "누가 언제 골랐는지" 타이밍을 흘린다(Pitfall 7).
+  // 관전자(탈락자)에게도 보내지 않는다 — 탈락자는 투표 자격이 없고 남의 진행을 알 이유가 없다(A7, 결정 0036 기본값. 바꾸려면 이 한 곳).
+  private async applyCandidateVote(playerId: string, target: number): Promise<WsErrorCode | null> {
+    if (!this.room) return "BAD_MESSAGE";
+    const result = castCandidateVote(this.room, playerId, target);
+    if (!result.ok) return result.error;
+    if (result.state === this.room) return null;
+    this.room = result.state;
+    await this.ctx.storage.put("room", this.room);
+    this.sendViewTo([playerId]);
     return null;
   }
 

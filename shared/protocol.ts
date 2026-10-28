@@ -231,6 +231,7 @@ export type ClientMessage =
   | { t: "emoji"; icon: EmojiId }
   | { t: "pick"; target: number } // 밤 행동 — 행동 종류는 보내지 않는다(서버 저장 역할이 정한다)
   | { t: "execVote"; agree: boolean } // 처형 여부 투표 — 생존자의 찬성 true / 반대 false, 마지막 값이 유효(결정 0034)
+  | { t: "candidateVote"; target: number } // 후보 선택 투표 — 자기 자신은 서버가 거부, 진행 중 값은 본인에게만(결정 0034·0036)
   // 테스트 방 방장 도구(결정 0022). 일반 방은 BAD_MESSAGE 로 거부한다. role null = 무작위.
   | { t: "testSkip" }
   | { t: "testReset" }
