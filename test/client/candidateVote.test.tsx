@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { PhaseId, RoomView } from "../../shared/protocol";
+import type { PhaseId, RoomView, VoteLogEntry } from "../../shared/protocol";
 import { CandidateVotePanel } from "../../src/components/CandidateVotePanel";
 import { PickPill } from "../../src/components/NightPanel";
 import type { RoomConnection, RoomEvent } from "../../src/net/useRoomConnection";
@@ -87,6 +87,10 @@ interface CandOpts {
   voteTarget?: number;
   /** 마피아 동료 seat (me.allies) — 주면 내 역할은 마피아 */
   allies?: number[];
+  /** 일차(기본 1) */
+  n?: number;
+  /** 날짜별 공개 투표 기록 (기본 없음) */
+  voteLog?: VoteLogEntry[];
 }
 
 function makeView(o: CandOpts = {}): RoomView {
@@ -114,7 +118,7 @@ function makeView(o: CandOpts = {}): RoomView {
       ...(offline.includes(p.seat) ? { connected: false } : {}),
     })),
     me,
-    day: { n: 1, roles: ["mafia", "police", "citizen"], claimLog: [] },
+    day: { n: o.n ?? 1, roles: ["mafia", "police", "citizen"], claimLog: [], ...(o.voteLog !== undefined ? { voteLog: o.voteLog } : {}) },
   };
 }
 
@@ -299,5 +303,30 @@ describe("candidateVote 화면 한 경로 (VOTE-02, D-03, D-19)", () => {
     expect(r.container.querySelector(".mf-dt__bubble")).toBeNull();
     expect(r.container.querySelector(".mf-dt__emoji")).toBeNull();
     expect(screen.queryByRole("button", { name: /빠른 메시지|이모티콘/ })).toBeNull();
+  });
+});
+
+// ---- 04-27: 후보 선택 단계의 기록 카드 (VOTE-04, D-35) ----
+describe("candidateVote 기록 카드 (04-27)", () => {
+  beforeEach(() => {
+    cleanup();
+  });
+  const VOTES: VoteLogEntry[] = [
+    { n: 1, exec: { yes: 3, no: 1, passed: true }, cand: { votes: [{ seat: 1, target: 3 }], candidate: 3 } },
+  ];
+
+  it("탈락한 viewer 가 연 카드에 지난 일차의 집계와 이 사람의 후보 선택 줄이 날짜별로 쌓인다", () => {
+    renderRoom(makeView({ dead: [0], n: 2, voteLog: VOTES }));
+    fireEvent.click(screen.getByRole("button", { name: "하윤, 주장 기록 보기" }));
+    const rows = [...(sheet("하윤 기록")?.querySelectorAll(".mf-urecord__row") ?? [])].map((li) => li.textContent);
+    expect(rows).toEqual(["1일차처형 여부 찬성 3 · 반대 1", "1일차도현님에게 투표했어요"]);
+  });
+
+  it("살아 있는 viewer 의 좌석 탭은 투표이고 기록 카드가 열리지 않는다", () => {
+    const { container, send } = renderRoom(makeView({ voteLog: VOTES }));
+    expect(container.querySelectorAll(".mf-dt button.mf-dt__seat--inspect").length).toBe(0);
+    fireEvent.click(voteBtn("하윤")!);
+    expect(send).toHaveBeenCalledWith({ t: "candidateVote", target: 1 });
+    expect(document.querySelector("dialog.mf-sheet--urecord")).toBeNull();
   });
 });

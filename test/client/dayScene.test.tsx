@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { act, cleanup, fireEvent, render, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { RoleId } from "../../shared/game/roles";
-import type { ClaimLogEntry, MorningView, PhaseId, RoomView, SpectateView } from "../../shared/protocol";
+import type { ClaimLogEntry, MorningView, PhaseId, RoomView, SpectateView, VoteLogEntry } from "../../shared/protocol";
 import type { RoomConnection, RoomEvent } from "../../src/net/useRoomConnection";
 import { DayScene } from "../../src/screens/DayScene";
 import { TABLE_FIT_MIN_H, TAG_H } from "../../src/game/dayTable";
@@ -29,6 +29,8 @@ interface ViewOpts {
   claimLog?: ClaimLogEntry[];
   /** 아침 발표(morning 단계에서만 싣는다) */
   morning?: MorningView;
+  /** 날짜별 공개 투표 기록 (기본 없음) */
+  voteLog?: VoteLogEntry[];
 }
 
 function makeView(o: ViewOpts): RoomView {
@@ -61,6 +63,7 @@ function makeView(o: ViewOpts): RoomView {
   };
   if (o.spectate) view.spectate = o.spectate;
   if (o.morning !== undefined && view.day) view.day.morning = o.morning;
+  if (o.voteLog !== undefined && view.day) view.day.voteLog = o.voteLog;
   return view;
 }
 
@@ -523,6 +526,36 @@ describe("DayScene 낮 캐릭터 탭 → 유저 기록 카드 (03.1-08, D-06·D-
     fireEvent.click(inspect(container).find((b) => b.dataset.seat === "0")!);
     expect(sheet("지우 기록") !== null).toBe(true);
     expect(rowsOf("지우 기록")).toEqual(["1일차시민이라고 주장했어요"]);
+  });
+
+  it("낮 토론에서 연 카드에 주장 줄과 날짜별 투표 줄이 일차 내림차순으로 쌓인다 (VOTE-04)", () => {
+    const voteLog: VoteLogEntry[] = [
+      { n: 1, exec: { yes: 1, no: 3, passed: false }, cand: { votes: [{ seat: 1, target: 2 }], candidate: 2 } },
+      { n: 2, exec: { yes: 3, no: 1, passed: true } },
+    ];
+    const { container } = scene(makeView({ phase: "discussion", n: 3, claimLog, voteLog }));
+    fireEvent.click(within(container).getByRole("button", { name: "하윤, 주장 기록 보기" }));
+    expect(rowsOf("하윤 기록")).toEqual([
+      "2일차마피아라고 주장했어요",
+      "2일차처형 여부 찬성 3 · 반대 1",
+      "1일차경찰이라고 주장했어요",
+      "1일차처형 여부 찬성 1 · 반대 3 · 미통과",
+      "1일차민지님에게 투표했어요",
+    ]);
+  });
+
+  it("낮 → 낮 사이(claim → discussion)에는 열린 카드가 닫히지 않는다", () => {
+    const r = scene(makeView({ phase: "claim", turn: 2, claimLog }));
+    fireEvent.click(within(r.container).getByRole("button", { name: "하윤, 주장 기록 보기" }));
+    r.rerender(makeView({ phase: "discussion", claimLog }));
+    expect(sheet("하윤 기록") !== null).toBe(true);
+  });
+
+  it("밤이 되면 열린 카드가 닫힌다(기존 규칙 불변)", () => {
+    const r = scene(makeView({ phase: "discussion", claimLog }));
+    fireEvent.click(within(r.container).getByRole("button", { name: "하윤, 주장 기록 보기" }));
+    r.rerender(makeView({ phase: "night", role: "citizen", claimLog }));
+    expect(sheet("하윤 기록")).toBeNull();
   });
 
   it("기록이 없는 사람은 빈 상태 문구가 보인다", () => {

@@ -1,6 +1,6 @@
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { PhaseId, RoomView } from "../../shared/protocol";
+import type { PhaseId, RoomView, VoteLogEntry } from "../../shared/protocol";
 import type { RoomConnection, RoomEvent } from "../../src/net/useRoomConnection";
 
 // 처형 여부 투표(execVote) 화면: 방 화면 라우팅 → 낮 장면 → 하단 패널 → 소켓 메시지까지 한 경로 (04-16 트레이서).
@@ -26,6 +26,10 @@ interface VoteOpts {
   offline?: number[];
   /** 마감까지 남은 ms (기본 10000) */
   endsIn?: number;
+  /** 일차(기본 1) */
+  n?: number;
+  /** 날짜별 공개 투표 기록 (기본 없음) */
+  voteLog?: VoteLogEntry[];
 }
 
 function makeView(o: VoteOpts = {}): RoomView {
@@ -54,9 +58,10 @@ function makeView(o: VoteOpts = {}): RoomView {
     })),
     me,
     day: {
-      n: 1,
+      n: o.n ?? 1,
       roles: ["mafia", "police", "citizen"],
       claimLog: [],
+      ...(o.voteLog !== undefined ? { voteLog: o.voteLog } : {}),
       ...(phase === "execVote" ? { execTally: o.tally ?? { yes: 0, no: 0 } } : {}),
     },
   };
@@ -306,5 +311,66 @@ describe("execVote 나머지 상태 (D-35, D-36, D-12 개정, D-08)", () => {
   it("연결이 끊긴 살아 있는 사람의 캐릭터는 흐림 클래스(mf-figure--disconnected)를 가진다 (D-36)", () => {
     const { container } = renderRoom(makeView({ offline: [2] }));
     expect(container.querySelectorAll(".mf-dt .mf-figure--disconnected").length).toBe(1);
+  });
+});
+
+// ---- 04-27: 기록 카드의 날짜별 투표 줄과 열리는·닫히는 단계 규칙 (VOTE-04, D-08) ----
+describe("기록 카드 — 투표 줄·단계 규칙 (04-27)", () => {
+  const VOTES: VoteLogEntry[] = [
+    { n: 1, exec: { yes: 1, no: 3, passed: false }, cand: { votes: [{ seat: 1, target: 2 }, { seat: 0, target: 2 }], candidate: 2 } },
+  ];
+  const rowsOf = (name: string) => [...(sheet(name)?.querySelectorAll(".mf-urecord__row") ?? [])].map((li) => li.textContent);
+
+  it("execVote 에서 좌석을 누르면 지난 일차의 처형 여부 집계와 이 사람의 후보 선택 줄이 보인다", () => {
+    renderRoom(makeView({ n: 2, voteLog: VOTES }));
+    fireEvent.click(screen.getByRole("button", { name: "하윤, 주장 기록 보기" }));
+    expect(rowsOf("하윤 기록")).toEqual(["1일차처형 여부 찬성 1 · 반대 3 · 미통과", "1일차민지님에게 투표했어요"]);
+  });
+
+  it("집계 줄은 모든 사람에게 같고 후보 선택 줄이 없는 사람에게는 후보 선택 행이 없다 (P-16)", () => {
+    renderRoom(makeView({ n: 2, voteLog: VOTES }));
+    fireEvent.click(screen.getByRole("button", { name: "도현, 주장 기록 보기" }));
+    expect(rowsOf("도현 기록")).toEqual(["1일차처형 여부 찬성 1 · 반대 3 · 미통과"]);
+  });
+
+  it("기록이 하나도 없으면 `아직 기록이 없어요`", () => {
+    renderRoom(makeView({ voteLog: [] }));
+    fireEvent.click(screen.getByRole("button", { name: "하윤, 주장 기록 보기" }));
+    expect(sheet("하윤 기록")?.textContent).toContain("아직 기록이 없어요");
+  });
+
+  it("카드가 열려 있을 때 execVote → candidateVote(살아 있는 viewer)가 되면 닫힌다 — 그 단계에서 좌석 탭은 투표이기 때문", () => {
+    const r = renderRoom(makeView());
+    fireEvent.click(screen.getByRole("button", { name: "하윤, 주장 기록 보기" }));
+    expect(sheet("하윤 기록")).not.toBeNull();
+    r.rerenderRoom(makeView({ phase: "candidateVote" }));
+    expect(sheet("하윤 기록")).toBeNull();
+  });
+
+  it("카드가 열려 있을 때 candidateVoteReveal·defense·execution 이 되면 닫힌다", () => {
+    for (const phase of ["candidateVoteReveal", "defense", "execution"] as const) {
+      const r = renderRoom(makeView());
+      fireEvent.click(screen.getByRole("button", { name: "하윤, 주장 기록 보기" }));
+      expect(`${phase}:${sheet("하윤 기록") !== null}`).toBe(`${phase}:true`);
+      r.rerenderRoom(makeView({ phase }));
+      expect(`${phase}:${sheet("하윤 기록") !== null}`).toBe(`${phase}:false`);
+      cleanup();
+    }
+  });
+
+  it("탈락한 viewer 는 execVote → candidateVote 에서도 카드가 열려 있고, 그 단계에서 새로 열 수도 있다", () => {
+    const r = renderRoom(makeView({ dead: [0] }));
+    fireEvent.click(screen.getByRole("button", { name: "하윤, 주장 기록 보기" }));
+    r.rerenderRoom(makeView({ phase: "candidateVote", dead: [0] }));
+    expect(sheet("하윤 기록")).not.toBeNull();
+  });
+
+  it("낮 → 낮 사이(discussion → execVote)에는 닫히지 않는다", () => {
+    const r = renderRoom(makeView({ phase: "dayAnnounce" }));
+    r.rerenderRoom(makeView({ phase: "discussion" }));
+    fireEvent.click(screen.getByRole("button", { name: "하윤, 주장 기록 보기" }));
+    expect(sheet("하윤 기록")).not.toBeNull();
+    r.rerenderRoom(makeView({ phase: "execVote" }));
+    expect(sheet("하윤 기록")).not.toBeNull();
   });
 });
