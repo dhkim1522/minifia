@@ -4,18 +4,18 @@ milestone: v1.0
 milestone_name: MVP
 current_phase: 4
 current_phase_name: 처형과 승패
-current_plan: 34
+current_plan: 35
 status: executing
-stopped_at: Completed 04-34-PLAN.md
-last_updated: "2026-10-28T13:29:56.618Z"
+stopped_at: Completed 04-35-PLAN.md
+last_updated: "2026-10-28T15:49:54.265Z"
 last_activity: 2026-10-26
 last_activity_desc: Phase 4 execution started
-state_head: ecf83ec5872a5626c1a079a9c537317822c79ab9
+state_head: 8575f0cf1473f7cdf5db41309d9fd4b1d435f25d
 progress:
   total_phases: 7
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 98
-  completed_plans: 97
+  completed_plans: 98
 ---
 
 # Project State
@@ -29,11 +29,11 @@ See: .planning/PROJECT.md (updated 2026-10-21)
 
 ## Current Position
 
-Phase: 4 (처형과 승패) — EXECUTING
-Current Plan: 34
+Phase: 4 (처형과 승패) — COMPLETE (실기기 확인·verify-work 대기)
+Current Plan: 35
 Total Plans in Phase: 35
-Plan: 34 of 35
-Status: 화면 웨이브 진행 중 — 04-13(순수 모듈 verdict.ts)·04-14(토큰·dusk 장면 표·dusk 미리 받기)·04-15(테스트 방 testBotVote) 완료(웨이브 9 끝), 04-16(execVote 트레이서: 라우팅·useVerdictScene·ExecVotePanel)·04-17(테스트 시트 봇 처형 투표·봇 후보 선택 칩)·04-18(후보 선택 화면: DayTable halo·useViewChoice·CandidateVotePanel·candidateVote 연결)·04-19(선택 공개 상태: useRevealState·표수 칩·앰버 후광·끝 문구)·04-20(선택 공개 연출: 화살표 RevealLayer·과반 확정 두근·느린 박동·진동·모션 줄이기)·04-21(최후 변론 1: DayTable verdict·center·원뿔, 남의 변론 하단 DefensePanel, defense 연결)·04-22(최후 변론 2: 후보 본인 하단 236·변론 칩 6개 DefenseChips·시트 재사용·보냈어요 2초)·04-23(처형: 앰버 처형 카드 MorningCard tone·사람→유령 400ms 전환 DayTable executed·execution 연결·하단 두 줄·직업 비노출 시험)·04-24(처형 투표 인트로 카드 ExecIntroCard·회색 처형 무효 카드 NoExecutionCard·밤 시작 문구 delayMs 지연·읽기 접두)·04-25(결과 화면 ResultScreen 최종 상태: 승리 배너·직업 카드 격자·판 요약·처음으로·ended 라우팅·직전 장면 크로스페이드)·04-26(결과 공개 연출: neutral → flip → done 상태기계, 300ms 카드 일괄 뒤집기·900ms 요약·처음으로 떠오름, 재접속·모션 줄이기는 즉시 최종 상태)·04-27(기록 카드 투표 줄: recordRows 순수 함수·날짜별 처형 여부 집계와 후보 선택 줄·단계별 inspectAllowed 로 열림·닫힘 규칙)·04-28(단계 × 보는 사람 상태 84칸 표 시험 verdictStates·새 CSS 정적 게이트 verdictCss, result.css 모션 줄이기 분기)·04-29(E2E 순수 검사 P1·P2·P3·P4·P9·P-COLOR, 앰버/진홍 후광 규칙, 스냅숏 계약은 lib.mjs 머리 한 곳)·04-30(E2E 순수 검사 P5·P6·P7·P8·P10, 승인 완화 P-PANEL-236, 스냅숏 계약 완성)·04-31(E2E 브라우저 도우미 readVerdict·readTokenColors·setBotVote·voteAs·pickCandidate·armVerdictWatch·sampleSeries·leaveFromResult, 실제 DOM 과 계약 대조: 진홍 후광 color(srgb) 판정 보강, 공개 단계 P10 칩↔이름표 겹침 발견 — deferred-items)·04-32(기존 여섯 흐름을 새 낮 루프에 적응: 봇 처형 투표 모두 반대·밤 문구 대기·spec4 재시작, vote5 흐름 P1~P6·P10, 칩이 이름표를 피하는 chipPlacement Rule-1 수정) ·04-33(noexec 처형 무효 카드 P7·result-c 후보 본인 변론 P5와 시민 승 결과 P8·result-m 마피아 승 결과·spec4 탈락 방장 투표 화면 P9, 로컬 10흐름×3폭 전체 E2E 초록 253초, 집계 줄 말줄임 Rule-1 수정 `모두 냈어요`) 완료·04-34(결정 0037·시안 사본·검증 표 47행·배포 직전 로컬 게이트 전부 초록: npm test 2777, 소켓 6종, 로컬 E2E 30작업 276초·HANDOFF 4.4KB·push, 방장 첫 밤 탈락 빈도는 설계대로 확인) 완료, 다음 04-35(사용자 go-ahead 체크포인트). 배포는 04-35 에서만(D-26)
+Plan: 35 of 35
+Status: 04-01~04-35 전부 완료. 서버+화면 웨이브를 개인 Cloudflare 계정에 한 단위로 배포(버전 2026-10-28T14:27:59Z+5dcd032, 재배포 한 번: 배포본 E2E 가 잡은 backdrop-filter 접두 짝 선언 결함 수정)하고 배포본에서 smoke 4·5·8, uat-vote·test-bots·test-room·day·night, E2E 10흐름×3폭 통과. VOTE-01~04·COMM-03·CONN-02·END-01·02 완료 표시. 남은 것: 실기기 확인(HANDOFF), /gsd-verify-work 4. 이 PC 네트워크 지터로 배포본 smoke·UAT 간헐 실패가 있었음(04-35-SUMMARY)
 Last activity: 2026-10-26 — Phase 4 execution started
 
 Progress: [██░░░░░░░░] 17%
@@ -142,6 +142,7 @@ Progress: [██░░░░░░░░] 17%
 | Phase 04 P32 | 75min | 2 tasks | 8 files |
 | Phase 04 P33 | 42min | 3 tasks | 9 files |
 | Phase 4 P34 | 35min | 3 tasks | 5 files |
+| Phase 04 P35 | 2h | 3 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -282,6 +283,7 @@ Recent decisions affecting current work:
 - [Phase 4]: [04-33] E2E 준비 실패 재시도 2 → 4번 (첫 밤 방장 탈락 무작위가 전체 실행을 자주 깸)
 - [Phase 4]: 0037: 화면 웨이브 결정은 결정 0037 한 곳(장면 dusk/night, 색 의미·토큰, 연출 상수 verdict.ts, 후광 3개, 패널 236, testBotVote). 사용자 확정 P-7·P-18·선두 규칙·두근 재생, 나머지는 확인 대기 표
 - [Phase 4]: 살아 있는 방장 E2E 의 첫 밤 방장 탈락은 설계대로의 확률(시드 2만 판 모의 4명판 0.332·5명판 약 0.2), 서버 버그 증거 없음, 서버 로직 불변
+- [Phase 04]: 04-35: 배포본 E2E 가 잡은 backdrop-filter 접두 짝 선언은 lightningcss 가 접두만 남겨 Chrome 계열 흐림이 사라졌다 — 소스엔 비접두 한 번만 쓴다
 
 ### Pending Todos
 
@@ -318,6 +320,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-28T13:29:56.044Z
-Stopped at: Completed 04-34-PLAN.md
+Last session: 2026-10-28T15:49:53.690Z
+Stopped at: Completed 04-35-PLAN.md
 Resume file: None
