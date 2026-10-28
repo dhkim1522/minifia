@@ -4,18 +4,18 @@ milestone: v1.0
 milestone_name: MVP
 current_phase: 4
 current_phase_name: 처형과 승패
-current_plan: 11
+current_plan: 12
 status: executing
-stopped_at: Completed 04-10-PLAN.md
-last_updated: "2026-10-28T06:03:36.677Z"
+stopped_at: Completed 04-11-PLAN.md
+last_updated: "2026-10-28T06:16:38.234Z"
 last_activity: 2026-10-26
 last_activity_desc: Phase 4 execution started
-state_head: 938990db410eb83ac15dc9e19ba4cf69c8b8d883
+state_head: bb00018c88ccf215a1e3489c43e6a4d3d6c4a737
 progress:
   total_phases: 7
   completed_phases: 2
   total_plans: 75
-  completed_plans: 73
+  completed_plans: 74
 ---
 
 # Project State
@@ -30,9 +30,9 @@ See: .planning/PROJECT.md (updated 2026-10-21)
 ## Current Position
 
 Phase: 4 (처형과 승패) — EXECUTING
-Current Plan: 11
+Current Plan: 12
 Total Plans in Phase: 12
-Plan: 11 of 12
+Plan: 12 of 12
 Status: Ready to execute
 Last activity: 2026-10-26 — Phase 4 execution started
 
@@ -118,6 +118,7 @@ Progress: [██░░░░░░░░] 17%
 | Phase 4 P08 | 35min | 3 tasks | 10 files |
 | Phase 04 P09 | 25min | 2 tasks | 2 files |
 | Phase 04 P10 | 45min | 2 tasks | 5 files |
+| Phase 4 P11 | 35min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -224,6 +225,7 @@ Recent decisions affecting current work:
 - [Phase 4]: 04-08: 테스트 방 봇은 여부 투표 찬성 70%·후보 선택은 자기를 뺀 살아 있는 한 명(역할 무시)·변론은 후보 봇만 defNotMe/defCitizen/defPlead 중 하나. 확률·지연은 bots.ts 상수(0036 의 바뀔 수 있는 기본값)
 - [Phase 04]: 04-09: ended 단계에서만 result.seats[].job 이 역할 단어 허용 경로에 더해진다(unit·worker 누출 검사). 일지 died 키 검사에서 result.* 는 제외
 - [Phase 04]: 04-10: 스모크의 에셋 Cache-Control 단언은 로컬 dev 서버에서 항상 실패하므로(알려진 제약) 단언은 두고 스크래치 사본으로 확인한다; 배포본에서 본다
+- [Phase 4]: 04-11: uat-test-bots g 방은 방장·동료 마피아가 1일차 처형되면 testReset 후 재시도(최대 6판), R1 이 ended 면 밤 검사 건너뛰고 result 확인
 
 ### Pending Todos
 
@@ -260,6 +262,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-28T06:03:36.149Z
-Stopped at: Completed 04-10-PLAN.md
+Last session: 2026-10-28T06:16:37.705Z
+Stopped at: Completed 04-11-PLAN.md
 Resume file: None
