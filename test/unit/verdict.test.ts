@@ -291,8 +291,10 @@ describe("candidateCenter — 변론 후보 위치 (UI-SPEC 8.4)", () => {
   it.each(SCENES)("$label: 이름표 아래끝이 장면 아래 − 4 이내다", ({ w, h, pad }) => {
     const c = candidateCenter(w, h, pad);
     const { cy } = dayTableGeometry(w, h, pad);
-    expect(c.footY).toBeCloseTo(Math.min(cy + 80, h - 34), 9);
-    expect(c.tagTop + TAG_H).toBeLessThanOrEqual(h - 4 + 1e-9);
+    expect(c.footY).toBeCloseTo(Math.min(cy + 80, h - 38), 9);
+    expect(c.tagTop + TAG_H).toBeLessThanOrEqual(h - 8 + 1e-9);
+    // 실제 이름표 상자는 알약(TAG_H 22)보다 4 크다(인라인 줄 상자): 상자 아래끝도 장면 아래 − 4 이내다
+    expect(c.tagTop + TAG_H + 4).toBeLessThanOrEqual(h - 4 + 1e-9);
     // 확대한 그림이 장면 위로 나가지 않는다
     expect(c.footY - FIG_H * c.scale).toBeGreaterThanOrEqual(0);
   });

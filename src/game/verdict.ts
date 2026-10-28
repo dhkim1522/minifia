@@ -236,14 +236,15 @@ export interface FootPlace {
 export interface CandidateCenter {
   /** 가운데 x = 장면 폭 / 2 */
   x: number;
-  /** 발 y = min(cy + 80, 장면 높이 − 34) — 짧은 폰에서 이름표 아래끝이 패널에 닿지 않는다(P-15) */
+  /** 발 y = min(cy + 80, 장면 높이 − 38) — 짧은 폰에서 이름표 아래끝이 패널에 닿지 않는다(P-15) */
   footY: number;
   scale: number;
   /** 이름표 위 = 발 y + 8, 높이 22 */
   tagTop: number;
 }
 const CANDIDATE_FOOT_BELOW_CY = 80; // UI-SPEC 8.4
-const CANDIDATE_FOOT_ABOVE_BOTTOM = 34; // 이름표 간격 8 + 높이 22 + 아래 여유 4
+// 이름표 간격 8 + 이름표 상자 높이 26 + 아래 여유 4. 상자는 알약(22)보다 4 크다(인라인 줄 상자) — 04-22 가 하단을 236 으로 키워 360×640 에서 처음 드러났다(UI-SPEC 8.4 의 34 는 22 로 센 값)
+const CANDIDATE_FOOT_ABOVE_BOTTOM = 38;
 const CANDIDATE_TAG_GAP = 8; // UI-SPEC 8.4: 이름표는 발 y + 8
 
 /** 변론·처형 후보가 서는 가운데 자리 (UI-SPEC 8.4) */
