@@ -28,6 +28,7 @@ import {
 } from "./helpers";
 import type { Actor, Seated, TestSocket } from "./helpers";
 
+/** 종료 진입 + 30분(결정 0034, D-28). 순수 규칙의 ENDED_ROOM_TTL_MS 를 읽지 않고 값을 따로 적어 상수가 바뀌면 이 테스트가 잡는다. */
 const ENDED_TTL_MS = 1_800_000;
 
 const allSockets = (r: Seated): TestSocket[] => [r.host, ...r.guests.map((g) => g.sock)];
@@ -122,16 +123,14 @@ describe("처형으로 끝나는 판 (END-01, END-02, D-10, D-28)", () => {
     );
     const stored = await storedRoom(g.r.code);
     expect(`${stored.phase} ${stored.winner} ${stored.phaseEndsAt}`).toBe("ended citizenWin null");
-    expect(`${stored.expiresAt} ${await alarmOf(g.r.code)}`).toBe(`${E + ENDED_TTL_MS} ${E + 1_800_000}`);
+    expect(`${stored.expiresAt} ${await alarmOf(g.r.code)}`).toBe(`${E + ENDED_TTL_MS} ${E + ENDED_TTL_MS}`);
   });
 });
 
 describe("아침으로 끝나는 판 (END-01, D-10)", () => {
   it("밤 마감 뒤 네 소켓이 먼저 같은 morning(eliminated 있음)을 받고, 아침 마감 알람 뒤 mafiaWin 으로 끝나며 요약에 처형과 밤이 함께 있다", async () => {
     const { g, E, morning } = await endedByMorning();
-    for (const v of morning) {
-      expect(`${v.phase} ${JSON.stringify(v.day?.morning)}`).toBe(`morning ${JSON.stringify({ eliminated: g.c1.seat, phrase: v.day?.morning?.phrase })}`);
-    }
+    for (const v of morning) expect(`${v.phase} ${v.day?.morning?.eliminated}`).toBe(`morning ${g.c1.seat}`);
     expect(new Set(morning.map((v) => JSON.stringify(v.day?.morning))).size).toBe(1);
 
     const views = g.actors.map((a) => lastViewOf(a.sock));
@@ -144,7 +143,7 @@ describe("아침으로 끝나는 판 (END-01, D-10)", () => {
         { n: 1, exec: { yes: 4, no: 0, passed: true, candidate: g.c0.seat }, night: { target: g.c1.seat, died: true } },
       ]),
     );
-    expect(`${(await storedRoom(g.r.code)).expiresAt} ${await alarmOf(g.r.code)}`).toBe(`${E + ENDED_TTL_MS} ${E + 1_800_000}`);
+    expect(`${(await storedRoom(g.r.code)).expiresAt} ${await alarmOf(g.r.code)}`).toBe(`${E + ENDED_TTL_MS} ${E + ENDED_TTL_MS}`);
   });
 });
 
