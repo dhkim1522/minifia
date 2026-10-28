@@ -1,5 +1,7 @@
 // 낮 토론과 밤에 폰이 받은 chat·emoji 이벤트로만 만드는 화면 상태 훅 묶음(결정 0017-2·0017-7·0019). 서버 뷰에는 메시지가 없다.
 // 반전·이모티콘은 claim 부터(FLOAT_PHASES, 결정 0023-2), 채팅 줄은 discussion·night(CHAT_PHASES) — claim 에는 chat 이벤트가 오지 않는다.
+// 최후 변론(defense, 04-21)은 두 집합 모두에 있다: 후보의 변론이 말풍선·채팅 줄이 되고 남의 이모티콘이 뜬다(D-13). 서버는 변론 중 후보의 say 만 받는다.
+// 투표 구간(execVote~candidateVoteReveal)·처형·종료에는 말하기 입구가 없어 집합에 없다 — 그 단계에서 온 이벤트는 버린다.
 // 규칙:
 //  - 이벤트에서만 만든다. 재접속·새로고침으로 처음 마운트하면 지난 줄·반전·이모티콘은 복원되지 않는다.
 //  - 단계가 위 수집 단계일 때 온 이벤트만 받는다. 밤 이벤트는 서버가 살아 있는 마피아와 관전자에게만 보낸다 —
@@ -15,11 +17,11 @@ import { TEMPLATE_IDS } from "../../shared/protocol";
 import type { ChatLine, EmojiId, PhaseId, RoomView } from "../../shared/protocol";
 import type { RoomConnection } from "./useRoomConnection";
 
-/** chat·emoji 이벤트를 받는 단계: 낮 토론과 밤(D-17). 그 밖의 단계에서 온 이벤트는 버린다 */
-export const CHAT_PHASES: ReadonlySet<PhaseId> = new Set<PhaseId>(["discussion", "night"]);
+/** chat·emoji 이벤트를 받는 단계: 낮 토론·밤(D-17)·최후 변론(04-21). 그 밖의 단계에서 온 이벤트는 버린다 */
+export const CHAT_PHASES: ReadonlySet<PhaseId> = new Set<PhaseId>(["discussion", "night", "defense"]);
 
 /** 반전·이모티콘을 받는 단계: claim 부터(결정 0023-2). 채팅 줄은 CHAT_PHASES 그대로 */
-export const FLOAT_PHASES: ReadonlySet<PhaseId> = new Set<PhaseId>(["claim", "discussion", "night"]);
+export const FLOAT_PHASES: ReadonlySet<PhaseId> = new Set<PhaseId>(["claim", "discussion", "night", "defense"]);
 
 /** 수집 단계일 때만 있는 열쇠 `${일차}:${단계}`. 열쇠가 바뀌면(단계·일차) 지난 줄·반전·이모티콘을 비운다 */
 function collectKey(view: RoomView | null, phases: ReadonlySet<PhaseId>): string | undefined {
