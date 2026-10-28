@@ -4,18 +4,18 @@ milestone: v1.0
 milestone_name: MVP
 current_phase: 4
 current_phase_name: 처형과 승패
-current_plan: 6
+current_plan: 7
 status: executing
-stopped_at: Completed 04-05-PLAN.md
-last_updated: "2026-10-28T05:03:52.737Z"
+stopped_at: Completed 04-06-PLAN.md
+last_updated: "2026-10-28T05:19:13.045Z"
 last_activity: 2026-10-26
 last_activity_desc: Phase 4 execution started
-state_head: 1b2723d7244d94bc69c628d62dd6dc26e4ea9c7c
+state_head: 52c74d25858d741c6ec2bb32e8d0429ab8fa8b83
 progress:
   total_phases: 7
   completed_phases: 2
   total_plans: 75
-  completed_plans: 68
+  completed_plans: 69
 ---
 
 # Project State
@@ -30,9 +30,9 @@ See: .planning/PROJECT.md (updated 2026-10-21)
 ## Current Position
 
 Phase: 4 (처형과 승패) — EXECUTING
-Current Plan: 6
+Current Plan: 7
 Total Plans in Phase: 12
-Plan: 6 of 12
+Plan: 7 of 12
 Status: Ready to execute
 Last activity: 2026-10-26 — Phase 4 execution started
 
@@ -113,6 +113,7 @@ Progress: [██░░░░░░░░] 17%
 | Phase 04 P02 | 15 min | 2 tasks | 14 files |
 | Phase 04 P04 | 10min | 2 tasks | 9 files |
 | Phase 04 P05 | 25min | 2 tasks | 12 files |
+| Phase 4 P06 | 25min | 3 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -213,6 +214,8 @@ Recent decisions affecting current work:
 - [Phase 04]: 처형 문구는 아침 문구와 따로 센다(lastExecPhrase), 처형 진입 훅에서 한 번 추첨
 - [Phase 04]: 여부 동률을 notMajority 로 묶는다(결정 0036 의 바뀔 수 있는 기본값, noExecutionOf 한 곳)
 - [Phase 04]: 04-05: 변론 템플릿은 새 ID 여섯 개로 따로 두고 변론 say 는 후보만(비후보 WRONG_PHASE), 공개·처형·종료는 전면 거부
+- [Phase 4]: 04-06: 승패는 처형·아침 마감 훅에서만 판정, ended 진입 때 winner 를 와이어 값으로 기록하고 만료를 진입+30분으로 앞당김
+- [Phase 4]: 04-06: nightLog 는 서버 전용이며 buildSummary 만 읽고 view 는 ended 에서만 result 를 만든다
 
 ### Pending Todos
 
@@ -249,6 +252,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-28T05:03:40.959Z
-Stopped at: Completed 04-05-PLAN.md
+Last session: 2026-10-28T05:19:12.530Z
+Stopped at: Completed 04-06-PLAN.md
 Resume file: None
