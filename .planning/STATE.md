@@ -4,18 +4,18 @@ milestone: v1.0
 milestone_name: MVP
 current_phase: 4
 current_phase_name: 처형과 승패
-current_plan: 20
+current_plan: 21
 status: executing
-stopped_at: Completed 04-20-PLAN.md
-last_updated: "2026-10-28T09:06:15.635Z"
+stopped_at: Completed 04-21-PLAN.md
+last_updated: "2026-10-28T09:23:07.039Z"
 last_activity: 2026-10-26
 last_activity_desc: Phase 4 execution started
-state_head: caf5675e78ace2eef3b87d81e62224cba752c05a
+state_head: ac4dee7de310fd457304ffe52760408dc96bf951
 progress:
   total_phases: 7
   completed_phases: 2
   total_plans: 98
-  completed_plans: 83
+  completed_plans: 84
 ---
 
 # Project State
@@ -30,10 +30,10 @@ See: .planning/PROJECT.md (updated 2026-10-21)
 ## Current Position
 
 Phase: 4 (처형과 승패) — EXECUTING
-Current Plan: 20
+Current Plan: 21
 Total Plans in Phase: 35
-Plan: 20 of 35
-Status: 화면 웨이브 진행 중 — 04-13(순수 모듈 verdict.ts)·04-14(토큰·dusk 장면 표·dusk 미리 받기)·04-15(테스트 방 testBotVote) 완료(웨이브 9 끝), 04-16(execVote 트레이서: 라우팅·useVerdictScene·ExecVotePanel)·04-17(테스트 시트 봇 처형 투표·봇 후보 선택 칩)·04-18(후보 선택 화면: DayTable halo·useViewChoice·CandidateVotePanel·candidateVote 연결)·04-19(선택 공개 상태: useRevealState·표수 칩·앰버 후광·끝 문구)·04-20(선택 공개 연출: 화살표 RevealLayer·과반 확정 두근·느린 박동·진동·모션 줄이기) 완료, 다음 04-21. 배포는 04-35 에서만(D-26)
+Plan: 21 of 35
+Status: 화면 웨이브 진행 중 — 04-13(순수 모듈 verdict.ts)·04-14(토큰·dusk 장면 표·dusk 미리 받기)·04-15(테스트 방 testBotVote) 완료(웨이브 9 끝), 04-16(execVote 트레이서: 라우팅·useVerdictScene·ExecVotePanel)·04-17(테스트 시트 봇 처형 투표·봇 후보 선택 칩)·04-18(후보 선택 화면: DayTable halo·useViewChoice·CandidateVotePanel·candidateVote 연결)·04-19(선택 공개 상태: useRevealState·표수 칩·앰버 후광·끝 문구)·04-20(선택 공개 연출: 화살표 RevealLayer·과반 확정 두근·느린 박동·진동·모션 줄이기)·04-21(최후 변론 1: DayTable verdict·center·원뿔, 남의 변론 하단 DefensePanel, defense 연결) 완료, 다음 04-22. 배포는 04-35 에서만(D-26)
 Last activity: 2026-10-26 — Phase 4 execution started
 
 Progress: [██░░░░░░░░] 17%
@@ -128,6 +128,7 @@ Progress: [██░░░░░░░░] 17%
 | Phase 04 P18 | 12min | 3 tasks | 12 files |
 | Phase 04 P19 | 17min | 2 tasks | 9 files |
 | Phase 4 P20 | 11min | 2 tasks | 10 files |
+| Phase 04 P21 | 14min | 3 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -282,6 +283,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-28T09:06:15.078Z
-Stopped at: Completed 04-20-PLAN.md
+Last session: 2026-10-28T09:23:06.363Z
+Stopped at: Completed 04-21-PLAN.md
 Resume file: None
