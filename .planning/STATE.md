@@ -4,18 +4,18 @@ milestone: v1.0
 milestone_name: MVP
 current_phase: 4
 current_phase_name: 처형과 승패
-current_plan: 17
+current_plan: 18
 status: executing
-stopped_at: Completed 04-17-PLAN.md
-last_updated: "2026-10-28T08:31:47.135Z"
+stopped_at: Completed 04-18-PLAN.md
+last_updated: "2026-10-28T08:42:18.740Z"
 last_activity: 2026-10-26
 last_activity_desc: Phase 4 execution started
-state_head: b34455c5eb6f3dbdf7c2eb76ed20b40ff0838d9d
+state_head: 75d979ead7602e095438114ccf702460d2cb8d3b
 progress:
   total_phases: 7
   completed_phases: 2
   total_plans: 98
-  completed_plans: 80
+  completed_plans: 81
 ---
 
 # Project State
@@ -30,10 +30,10 @@ See: .planning/PROJECT.md (updated 2026-10-21)
 ## Current Position
 
 Phase: 4 (처형과 승패) — EXECUTING
-Current Plan: 17
+Current Plan: 18
 Total Plans in Phase: 35
-Plan: 17 of 35
-Status: 화면 웨이브 진행 중 — 04-13(순수 모듈 verdict.ts)·04-14(토큰·dusk 장면 표·dusk 미리 받기)·04-15(테스트 방 testBotVote) 완료(웨이브 9 끝), 04-16(execVote 트레이서: 라우팅·useVerdictScene·ExecVotePanel)·04-17(테스트 시트 봇 처형 투표·봇 후보 선택 칩) 완료, 다음 04-18. 배포는 04-35 에서만(D-26)
+Plan: 18 of 35
+Status: 화면 웨이브 진행 중 — 04-13(순수 모듈 verdict.ts)·04-14(토큰·dusk 장면 표·dusk 미리 받기)·04-15(테스트 방 testBotVote) 완료(웨이브 9 끝), 04-16(execVote 트레이서: 라우팅·useVerdictScene·ExecVotePanel)·04-17(테스트 시트 봇 처형 투표·봇 후보 선택 칩)·04-18(후보 선택 화면: DayTable halo·useViewChoice·CandidateVotePanel·candidateVote 연결) 완료, 다음 04-19. 배포는 04-35 에서만(D-26)
 Last activity: 2026-10-26 — Phase 4 execution started
 
 Progress: [██░░░░░░░░] 17%
@@ -125,6 +125,7 @@ Progress: [██░░░░░░░░] 17%
 | Phase 04 P15 | 35min | 3 tasks | 12 files |
 | Phase 04 P16 | 20min | 2 tasks | 7 files |
 | Phase 4 P17 | 15min | 1 tasks | 3 files |
+| Phase 04 P18 | 12min | 3 tasks | 12 files |
 
 ## Accumulated Context
 
@@ -238,6 +239,8 @@ Recent decisions affecting current work:
 - [Phase 4]: 04-14: 투표 다섯 단계 배경은 dusk(P-1, 확인 대기 기본값), ended 는 night(P-2). verdictDusk 는 등록만 남김. ASSET_VERSION 불변
 - [Phase 04]: 04-15: 테스트 방 봇 투표 설정(testBotVote exec/pick)은 절대값 한 메시지, 무작위가 아닌 값만 저장하며 testReset 뒤에도 남는다 (P-13)
 - [Phase 04]: 04-16: 투표 구간 장면은 useVerdictScene 한 곳에서 조립하고 DayScene 은 null 이 아닐 때만 덮는다. 투표 단계의 말풍선·이모티콘은 FLOAT_PHASES 에 넣지 않는 것으로 막는다
+- [Phase 04]: 04-18: 후보 선택 눌림은 pick.mine 대신 좌석 prop pressed 로 켠다(투표 단계에 머리 위 배지 없음, 결정 0030)
+- [Phase 04]: 04-18: 투표 구간 후광은 capHalos 로 최종 종류를 계산해 좌석 halo 로 명시, 동료 판정은 DayScene isAllySeat 한 곳
 
 ### Pending Todos
 
@@ -274,6 +277,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-28T08:31:46.565Z
-Stopped at: Completed 04-17-PLAN.md
+Last session: 2026-10-28T08:42:18.160Z
+Stopped at: Completed 04-18-PLAN.md
 Resume file: None
