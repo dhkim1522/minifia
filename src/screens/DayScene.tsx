@@ -159,8 +159,9 @@ export function DayScene({ view, connection, myRoleButton, testButton, arrivedFr
   // 동료 표시 규칙 한 곳: 살아 있는 마피아의 me.allies, 관전 화면은 모든 마피아(job 이 mafia 인 다른 자리). 마름모는 이 값으로 그린다.
   const isAllySeat = (seat: number): boolean => allies.includes(seat) || (spectate !== undefined && seat !== view.me.seat && jobOf(seat) === "mafia");
   // 투표 구간(execVote~)이면 제목·안내·타이머 톤·하단·좌석 덧입힘을 이 값이 정한다. 아니면 null 이라 낮·밤·아침 경로는 그대로다(verdictScene.tsx).
+// 필드마다 `verdict?.field ?? 기존` 으로 읽는다 — 처형 무효로 온 밤은 layer(회색 카드)·introDelayMs(밤 시작 문구 지연)만 채워져 나머지는 기존 밤 값이 쓰인다(04-24).
   const verdict = useVerdictScene({ view, connection, meAlive, showToast, lines: chatLines, onInspect: setInspectSeat, isAllySeat });
-  const title = verdict ? verdict.title : isNight ? "밤" : isMorning ? "아침" : view.phase === "discussion" ? "낮 · 토론" : view.phase === "claim" ? "낮 · 직업 공개" : "낮";
+  const title = verdict?.title ?? (isNight ? "밤" : isMorning ? "아침" : view.phase === "discussion" ? "낮 · 토론" : view.phase === "claim" ? "낮 · 직업 공개" : "낮");
   // 동료가 고른 대상(마피아 화면만, D-07). 서버가 생존 마피아에게만 보낸 값이다.
   const allyPicks = view.me.allyPicks ?? [];
   const nicknameOf = (seat: number): string | undefined => view.players.find((p) => p.seat === seat)?.nickname;
@@ -198,7 +199,7 @@ export function DayScene({ view, connection, myRoleButton, testButton, arrivedFr
         // 낮(claim·discussion·morning): 탈락한 viewer 포함 모든 자리가 읽기 전용 기록 카드 버튼이다. 연결 상태와 무관하고 서버 요청이 없다.
         // 밤에는 주지 않는다 — 밤 onPick 과 한 자리에 함께 켜지지 않는다.
         // 투표 구간은 verdict 의 덧입힘이 정한다(모든 자리 기록 카드 버튼, 투표는 영향받지 않는다).
-        ...(verdict ? verdict.seatPatch(p.seat) : inspectable ? { onInspect: () => setInspectSeat(p.seat) } : {}),
+        ...(verdict?.seatPatch ? verdict.seatPatch(p.seat) : inspectable ? { onInspect: () => setInspectSeat(p.seat) } : {}),
       };
     });
 
@@ -215,7 +216,7 @@ export function DayScene({ view, connection, myRoleButton, testButton, arrivedFr
   // 아침 5초·낮 시작 2초도 전체가 마지막 5초라 진홍을 쓰지 않는다(calm, UI-SPEC 확인 필요 10).
   const timer =
     endsAt !== null && durationMs !== null ? (
-      <Timer endsAt={endsAt} durationMs={durationMs} offset={connection.offset} calm={verdict !== null ? verdict.calm : isMorning || view.phase === "claim" || view.phase === "dayAnnounce"} />
+      <Timer endsAt={endsAt} durationMs={durationMs} offset={connection.offset} calm={verdict?.calm ?? (isMorning || view.phase === "claim" || view.phase === "dayAnnounce")} />
     ) : null;
 
   return (
@@ -228,7 +229,7 @@ export function DayScene({ view, connection, myRoleButton, testButton, arrivedFr
     >
       <main className={`mf-root mf-dayscene${verdict?.rootClassName ? ` ${verdict.rootClassName}` : ""}`}>
         <div key={`bar-${view.phase}`} className="mf-dayscene__enter">
-          <PhaseBar title={title} instruction={verdict ? verdict.instruction : mafiaNight ? `${n}일차 · 함께 지목하세요` : isMorning ? `${n + 1}일차` : `${n}일차`} extra={myRoleButton} timer={timer} />
+          <PhaseBar title={title} instruction={verdict?.instruction ?? (mafiaNight ? `${n}일차 · 함께 지목하세요` : isMorning ? `${n + 1}일차` : `${n}일차`)} extra={myRoleButton} timer={timer} />
         </div>
         <div className="mf-dayscene__scene">
           {testButton ? <div className="mf-tt-anchor">{testButton}</div> : null}
@@ -246,7 +247,7 @@ export function DayScene({ view, connection, myRoleButton, testButton, arrivedFr
         </div>
         {isMorning ? <MorningCard {...morningCardText(view.day?.morning, nicknameOf)} exitDelayMs={morningExit.delay} /> : null}
         <section key={`panel-${view.phase}`} className={`mf-dayscene__panel mf-dayscene__enter${verdict?.panelClassName ? ` ${verdict.panelClassName}` : ""}`}>
-          {verdict ? (
+          {verdict?.bottom !== undefined ? (
             verdict.bottom
           ) : isMorning ? (
             // 아침 하단(UI-SPEC M): 살아 있는 사람·탈락자·관전자 모두 같은 제목+안내. 알약·채팅·버튼 없음.
@@ -311,7 +312,7 @@ export function DayScene({ view, connection, myRoleButton, testButton, arrivedFr
           </p>
         ) : null}
         <Toast toast={toast} placement="top" />
-        {introN !== null && PHASE_INTRO[view.phase] ? <SceneIntro n={introN} intro={PHASE_INTRO[view.phase]!} onDone={() => setIntroN(null)} /> : null}
+        {introN !== null && PHASE_INTRO[view.phase] ? <SceneIntro n={introN} intro={PHASE_INTRO[view.phase]!} delayMs={verdict?.introDelayMs} onDone={() => setIntroN(null)} /> : null}
         {inspectSeat !== null ? (
           <UserRecordSheet
             seat={inspectSeat}

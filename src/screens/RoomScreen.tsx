@@ -9,7 +9,7 @@ import { RoleCardSheet } from "../components/RoleCardSheet";
 import type { RoleCardTab } from "../components/RoleCardSheet";
 import { TestToolsButton, TestToolsSheet } from "../components/TestTools";
 import { executionTitle, morningCardText } from "../game/eliminationText";
-import { VERDICT_TEXT, defenseAnnounce } from "../game/verdict";
+import { VERDICT_TEXT, defenseAnnounce, noExecutionPrefix } from "../game/verdict";
 import { preloadDuskAssets, preloadRoleAssets } from "../net/assets";
 import { usePhaseArrival } from "../net/phaseArrival";
 import { loadSeenCount, saveSeenCount, unseenCount } from "../net/recordsSeen";
@@ -66,7 +66,13 @@ function morningAnnounce(view: RoomView): string {
 }
 
 // 밤 안내: "{N}일차 밤. " 뒤에 내 처지에 맞는 한 줄. 탈락한 사람은 역할과 무관하게 관전 문구다(결정 0021).
+// 처형 무효로 온 밤이면 그 앞에 `처형 무효. {부제}. ` 를 붙인다(04-24, UI-SPEC 7.3). 카드는 aria-hidden 이라 이 문구가 읽는다.
 function nightAnnounce(view: RoomView): string {
+  const noExecution = view.day?.noExecution;
+  return `${noExecution ? noExecutionPrefix(noExecution.reason) : ""}${nightAnnounceBase(view)}`;
+}
+
+function nightAnnounceBase(view: RoomView): string {
   const head = `${view.day?.n ?? 1}일차 밤. `;
   const me = view.players.find((p) => p.seat === view.me.seat);
   if (me && !isAlive(me)) return `${head}탈락했어요, 관전 중`;

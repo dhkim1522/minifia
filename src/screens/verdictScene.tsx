@@ -9,12 +9,14 @@ import { DefensePanel } from "../components/DefensePanel";
 import { ExecIntroCard } from "../components/ExecIntroCard";
 import { ExecVotePanel } from "../components/ExecVotePanel";
 import { MorningCard, exitDelayOf } from "../components/MorningCard";
+import { NoExecutionCard } from "../components/NoExecutionCard";
 import { NIGHT_PANEL_TEXT, NightPanel } from "../components/NightPanel";
 import { RevealLayer } from "../components/RevealLayer";
 import { executionTitle } from "../game/eliminationText";
 import {
   CLINCH_BEAT_MS,
   CLINCH_VIBRATE_MS,
+  NO_EXEC_INTRO_DELAY_MS,
   VERDICT_BLUR_PX,
   VERDICT_DIM_PERCENT,
   VERDICT_TEXT,
@@ -53,20 +55,23 @@ export interface VerdictSceneCtx {
   isAllySeat: (seat: number) => boolean;
 }
 
-/** 투표 구간 장면이 DayScene 에 넘기는 값. 단계가 늘면 필드가 늘어난다. */
+/**
+ * 투표 구간 장면이 DayScene 에 넘기는 값. 단계가 늘면 필드가 늘어난다. 모든 필드가 선택이다 — 처형 무효로 온 밤(04-24)은 `layer`·`introDelayMs` 만 채운 부분 결과를 돌려주고,
+ * DayScene 은 비어 있는 필드를 기존 낮·밤 값으로 읽는다(`verdict?.field ?? 기존`).
+ */
 export interface VerdictScene {
   /** 위쪽 바 제목 */
-  title: string;
+  title?: string;
   /** 위쪽 바 안내(제목 아래 줄) */
-  instruction: string;
+  instruction?: string;
   /** true 면 마지막 5초에도 타이머가 진홍이 되지 않는다(UI-SPEC 6.1 P-9) */
-  calm: boolean;
+  calm?: boolean;
   /** 하단 패널 안쪽 */
-  bottom: ReactNode;
+  bottom?: ReactNode;
   /** 대상 버튼의 동사. 있으면 DayScene 의 직업별 동사(조사·보호·지목)를 대신한다 */
   pickVerb?: string;
   /** 자리별 덧입힘: 여부 투표는 모든 자리가 읽기 전용 기록 카드 버튼, 후보 선택은 살아 있는 viewer 가 자기 아닌 살아 있는 자리를 고르는 대상 버튼 */
-  seatPatch: (seat: number) => Partial<DayTableSeat>;
+  seatPatch?: (seat: number) => Partial<DayTableSeat>;
   /** 있으면 DayScene 의 보이지 않는 polite 영역이 읽는 문장(공개 끝 상태의 결과 한 줄). 빈 문자열은 아직 읽을 것이 없다 */
   liveLine?: string;
   /** DayTable 의 덧그림 층(후보 선택 공개의 화살표). 있으면 DayScene 이 DayTable 로 잇는다 */
@@ -79,6 +84,8 @@ export interface VerdictScene {
   sceneOverlay?: ReactNode;
   /** DayTable 에 그대로 잇는 선택 prop(어둡게+흐림 층 verdict) */
   tableProps?: Pick<DayTableProps, "verdict">;
+  /** 밤 시작 문구(SceneIntro)를 미룰 시간(ms). 처형 무효로 온 밤만 NO_EXEC_INTRO_DELAY_MS 를 돌려준다(회색 카드가 먼저 1.6초, 04-24, P-3) */
+  introDelayMs?: number;
 }
 
 // 최후 변론·처형 무대의 후광: 후보는 흰(하나), 마피아 동료는 진홍. 합이 3 을 넘으면 진홍부터 꺼진다(마름모는 남는다). 두 단계가 같은 규칙을 쓴다.
@@ -139,6 +146,12 @@ export function useVerdictScene({ view, connection, meAlive, showToast, lines, o
   const [execIntro, setExecIntro] = useState<{ n: number | null; on: boolean }>({ n: null, on: false });
   if (view.phase === "execVote" && arrivedFrom === "discussion" && execIntro.n !== n) setExecIntro({ n, on: true });
   const execIntroOn = execIntro.on && view.phase === "execVote" && arrivedFrom === "discussion" && execIntro.n === n;
+  // 처형 무효 카드(D-34): 같은 접속에서 execVote(반대·동률·0표) 또는 candidateVoteReveal(동률·0표)에서 noExecution 이 있는 밤으로 넘어온 렌더에서만 켠다. 열쇠는 일차(밤 하나에 한 번).
+  const noExecReason = view.phase === "night" ? view.day?.noExecution?.reason : undefined;
+  const noExecArrival = noExecReason !== undefined && (arrivedFrom === "execVote" || arrivedFrom === "candidateVoteReveal");
+  const [noExecCard, setNoExecCard] = useState<{ n: number | null; on: boolean }>({ n: null, on: false });
+  if (noExecArrival && noExecCard.n !== n) setNoExecCard({ n, on: true });
+  const noExecCardOn = noExecArrival && noExecCard.on && noExecCard.n === n;
   if (view.phase === "candidateVoteReveal") {
     const nicknameOf = (seat: number): string | undefined => view.players.find((p) => p.seat === seat)?.nickname;
     const state = reveal?.state;
@@ -289,6 +302,16 @@ export function useVerdictScene({ view, connection, meAlive, showToast, lines, o
       ),
       rootClassName: "mf-dayscene--verdict",
       tableProps: { verdict: { dimPercent: VERDICT_DIM_PERCENT, blurPx: VERDICT_BLUR_PX } },
+    };
+  }
+  // 밤: 처형 무효로 온 밤만 회색 카드(layer)와 시작 문구 지연을 더한다. 나머지(제목·하단·좌석·타이머 톤)는 DayScene 의 기존 밤 경로 그대로다.
+  if (view.phase === "night" && noExecReason !== undefined) {
+    const reason = noExecReason;
+    return {
+      introDelayMs: NO_EXEC_INTRO_DELAY_MS,
+      ...(noExecCardOn
+        ? { layer: (layout: DayTableLayout) => <NoExecutionCard layout={layout} reason={reason} onDone={() => setNoExecCard((prev) => ({ ...prev, on: false }))} /> }
+        : {}),
     };
   }
   return null;
