@@ -2,10 +2,11 @@
 // 시각 now 와 난수 randInt 는 인자로만 받는다(방 DO 는 Date.now()·cryptoRandInt, 테스트는 고정 값·seededRandInt).
 // 검사 순서가 계약이다: testMode 가 아니면 BAD_MESSAGE(일반 방에서는 이 메시지가 있다는 사실도 드러내지 않는다)
 // → 방장이 아니면 NOT_HOST → 단계가 맞지 않으면 WRONG_PHASE → (testRole 만) 직업이 구성에 없으면 BAD_MESSAGE
-// (testBots 는 대기실 다음에 개수 범위가 틀리면 BAD_MESSAGE, 결정 0024).
+// (testBots 는 대기실 다음에 개수 범위가 틀리면 BAD_MESSAGE, 결정 0024. testBotVote 는 대기실 다음에 값이 범위 밖이면 BAD_MESSAGE, P-13).
 // 결정 0017-5(방장 연장·넘기기 제거)와 0020 은 일반 방에서 그대로다. 이 도구는 테스트 방 전용 예외다.
 import { validateNickname } from "../nickname";
 import { MAX_PLAYERS, MAX_TEST_BOTS } from "../protocol";
+import type { BotVoteExec, BotVotePick } from "../protocol";
 import { isAlive } from "./alive";
 import { BOT_NAMES, botCandidateTarget, botCount, botExecAgree, botNightTarget, isBot } from "./bots";
 import { testRoleOptions } from "./roles";
@@ -70,11 +71,11 @@ function botsVoteNow(state: RoomState, randInt: RandInt): RoomState {
   for (const bot of bots) {
     if (state.phase === "execVote") {
       if (bot.execVote !== undefined) continue;
-      const cast = castExecVote(next, bot.id, botExecAgree(randInt));
+      const cast = castExecVote(next, bot.id, botExecAgree(randInt, state.testBotVote?.exec));
       if (cast.ok) next = cast.state;
     } else {
       if (bot.candidateVote !== undefined) continue;
-      const target = botCandidateTarget(next, bot, randInt);
+      const target = botCandidateTarget(next, bot, randInt, state.testBotVote?.pick);
       if (target === undefined) continue;
       const cast = castCandidateVote(next, bot.id, target);
       if (cast.ok) next = cast.state;
@@ -86,7 +87,7 @@ function botsVoteNow(state: RoomState, randInt: RandInt): RoomState {
 /**
  * 같은 방을 대기실로 되돌린다: 허용 목록 리터럴로 방·플레이어를 다시 만든다 — 상태를 펼쳐 복사하지 않아
  * 역할·주장·밤 선택·수사 기록·탈락·일차·아침 결과·투표·처형·종료 필드(voteLog·verdict·execution·lastExecPhrase·nightLog·winner, execVote·candidateVote)와 앞으로 늘어날 게임 필드도 자동으로 빠진다.
- * 남기는 것: 방 식별·수명·방장·가입 순번·앉은 사람(자리·닉네임·연결)·testMode·testRole·방 수명 동안 줄지 않는 nextMessageSeq.
+ * 남기는 것: 방 식별·수명·방장·가입 순번·앉은 사람(자리·닉네임·연결)·testMode·testRole·testBotVote·방 수명 동안 줄지 않는 nextMessageSeq.
  */
 export function resetToLobby(state: RoomState, actorId: string): TestToolResult {
   const denied = checkTestHost(state, actorId);
@@ -117,6 +118,8 @@ export function resetToLobby(state: RoomState, actorId: string): TestToolResult 
     players,
     testMode: true,
     ...(state.testRole !== undefined ? { testRole: state.testRole } : {}),
+    // 봇 투표 설정도 testRole 처럼 남는다(P-13) — 같은 방의 다음 판에서도 봇이 같은 규칙으로 던진다.
+    ...(state.testBotVote !== undefined ? { testBotVote: state.testBotVote } : {}),
   };
   return { ok: true, state: next };
 }
@@ -201,4 +204,33 @@ export function setBotCount(state: RoomState, actorId: string, count: number, ma
     players = [...players, bot];
   }
   return { ok: true, state: { ...state, nextJoinSeq, players } };
+}
+
+const BOT_VOTE_EXECS: readonly BotVoteExec[] = ["random", "yes", "no"];
+const BOT_VOTE_PICKS: readonly BotVotePick[] = ["random", "host", "other"];
+
+/**
+ * 테스트 방 봇의 투표 규칙을 정한다(P-13, 결정 0022·0024 확장): exec 는 모든 봇의 처형 여부 표(random = 기존 70% 찬성), pick 은 모든 봇의 후보 선택
+ * (host = 방장, other = 방장도 자기도 아닌 살아 있는 사람 중 가장 낮은 seat, 조건이 안 맞으면 무작위). 두 값을 함께 절대값으로 받는다 — 연타해도 같은 요청이다.
+ * 대기실에서만. 무작위가 아닌 값만 저장하고(둘 다 random 이면 키를 지운다), 지금과 같으면 입력 상태를 그대로 돌려준다.
+ */
+export function setBotVote(state: RoomState, actorId: string, exec: BotVoteExec, pick: BotVotePick): TestToolResult {
+  const denied = checkTestHost(state, actorId);
+  if (denied !== null) return { ok: false, error: denied };
+  if (state.phase !== "lobby") return { ok: false, error: "WRONG_PHASE" };
+  if (!BOT_VOTE_EXECS.includes(exec) || !BOT_VOTE_PICKS.includes(pick)) return { ok: false, error: "BAD_MESSAGE" };
+  const wantExec = exec === "random" ? undefined : exec;
+  const wantPick = pick === "random" ? undefined : pick;
+  if (wantExec === state.testBotVote?.exec && wantPick === state.testBotVote?.pick) return { ok: true, state };
+  if (wantExec === undefined && wantPick === undefined) {
+    const { testBotVote: _cleared, ...rest } = state;
+    return { ok: true, state: rest };
+  }
+  return {
+    ok: true,
+    state: {
+      ...state,
+      testBotVote: { ...(wantExec !== undefined ? { exec: wantExec } : {}), ...(wantPick !== undefined ? { pick: wantPick } : {}) },
+    },
+  };
 }

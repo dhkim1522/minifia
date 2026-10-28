@@ -843,10 +843,10 @@ describe("skipPhase: 봇 투표 설정을 따른다", () => {
     expect(calls.slice(0, 4).join(",")).toBe("100,100,100,100");
   });
 
-  it("candidateVote: pick host 면 봇 표가 모두 방장에게 가서 방장이 후보다(방장이 안 던져도)", () => {
+  it("candidateVote: pick host 면 봇 표가 모두 방장에게 가서 방장이 후보다(방장이 안 던져도, 표 공개 순서 섞기만 난수를 쓴다)", () => {
     const state = stateWithVerdict(5, 4, "candidateVote", { lobby: setting(botLobby(), "random", "host"), candidate: "none" });
     const now = state.phaseEndsAt! - 500;
-    const after = skipOk(state, now, THROWING);
+    const after = skipOk(state, now, seededRandInt(9));
     expect(`${after.phase}/${after.phaseEndsAt}`).toBe(`candidateVoteReveal/${now + 4_000}`);
     const votes = [...after.voteLog!.at(-1)!.cand!.votes].sort((a, b) => a.seat - b.seat);
     expect(votes.map((v) => `${v.seat}>${v.target}`).join(",")).toBe("1>0,2>0,3>0,4>0");
@@ -856,7 +856,7 @@ describe("skipPhase: 봇 투표 설정을 따른다", () => {
 
   it("candidateVote: pick other 면 봇 표가 방장도 자기도 아닌 가장 낮은 seat 로 간다", () => {
     const state = stateWithVerdict(5, 4, "candidateVote", { lobby: setting(botLobby(), "random", "other"), candidate: "none" });
-    const after = skipOk(state, state.phaseEndsAt! - 500, THROWING);
+    const after = skipOk(state, state.phaseEndsAt! - 500, seededRandInt(9));
     const votes = [...after.voteLog!.at(-1)!.cand!.votes].sort((a, b) => a.seat - b.seat);
     expect(votes.map((v) => `${v.seat}>${v.target}`).join(",")).toBe("1>2,2>1,3>1,4>1");
   });

@@ -239,6 +239,10 @@ export type ClientMessage =
   // 원하는 봇 수(절대값, 0..MAX_TEST_BOTS). 서버가 사람 + 봇 <= MAX_PLAYERS 로 잘라 정확히 그만큼 둔다(결정 0024).
   | { t: "testBots"; count: number };
 
+// 테스트 방 봇 투표 선택(결정 0022·0024 확장, P-13). 무작위가 기본이고 고정 값은 방장이 대기실에서 정한다.
+export type BotVoteExec = "random" | "yes" | "no";
+export type BotVotePick = "random" | "host" | "other";
+
 // ---- 서버 -> 클라이언트 ----
 // 공개 식별자는 seat 뿐이다. 내부 id·토큰·역할 자리는 타입에도 없다.
 export interface PublicPlayer {

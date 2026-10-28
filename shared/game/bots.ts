@@ -15,6 +15,8 @@
 // 새 단계의 난수는 새 분기 안에서만 늘어난다 — 기존 claim·discussion·night 계획은 같은 시드에서 예전과 같다.
 // 봇 하나당 순서: execVote = randInt(100) → randInt(지연 폭), candidateVote = (후보가 있으면) randInt(후보 수) → randInt(지연 폭),
 // defense(후보 봇만) = randInt(템플릿 수) → randInt(지연 폭).
+// 테스트 방 방장이 봇 투표를 고정한 경우(RoomState.testBotVote, P-13): 고정 값이면 결정 난수(randInt(100)·randInt(후보 수))를 건너뛰고 지연 난수는 그대로 부른다.
+// 고정 설정이 없거나 pick 조건이 안 맞아 무작위로 돌아가면 위 순서와 똑같다.
 import { EMOJI_IDS } from "../protocol";
 import type { Claim, EmojiId, TemplateId } from "../protocol";
 import { isAlive } from "./alive";
@@ -121,19 +123,38 @@ export function botNightTarget(state: RoomState, bot: Player, randInt: RandInt):
   return candidates[randInt(candidates.length)]!.seat;
 }
 
-/** 처형 여부 투표에서 이 봇이 던질 값: randInt(100) < EXEC_YES_PERCENT 이면 찬성. 계획과 넘기기(botsVoteNow)가 같은 결정을 쓴다. */
-export function botExecAgree(randInt: RandInt): boolean {
+/**
+ * 처형 여부 투표에서 이 봇이 던질 값: 고정(fixed) yes 면 true, no 면 false 이고 randInt 를 부르지 않는다.
+ * 고정이 없으면 randInt(100) < EXEC_YES_PERCENT 이면 찬성. 계획과 넘기기(botsVoteNow)가 같은 결정을 쓴다.
+ */
+export function botExecAgree(randInt: RandInt, fixed?: "yes" | "no"): boolean {
+  if (fixed === "yes") return true;
+  if (fixed === "no") return false;
   return randInt(100) < EXEC_YES_PERCENT;
 }
 
 /**
  * 후보 선택에서 이 봇이 고를 대상 seat. 후보는 자기 자신을 뺀 살아 있는 사람 seat 오름차순이고 역할을 보지 않는다(봇이 마피아를 아는 척하지 않는다).
  * 탈락한 봇·후보 없음은 undefined(randInt 를 부르지 않는다).
+ * 고정(pick, P-13): host 는 방장이 살아 있고 이 봇이 아니면 방장 seat, other 는 방장도 자기도 아닌 살아 있는 사람 중 가장 낮은 seat 이며 randInt 를 부르지 않는다.
+ * 조건이 안 맞으면(방장 탈락·후보 없음) 위 무작위로 돌아가 기존과 같이 한 번 부른다.
  */
-export function botCandidateTarget(state: RoomState, bot: Player, randInt: RandInt): number | undefined {
+export function botCandidateTarget(
+  state: RoomState,
+  bot: Player,
+  randInt: RandInt,
+  pick?: "host" | "other",
+): number | undefined {
   if (!isAlive(bot)) return undefined;
   const candidates = state.players.filter((p) => isAlive(p) && p.id !== bot.id).sort(bySeat);
   if (candidates.length === 0) return undefined;
+  if (pick === "host") {
+    const host = candidates.find((p) => p.id === state.hostId);
+    if (host !== undefined) return host.seat;
+  } else if (pick === "other") {
+    const other = candidates.find((p) => p.id !== state.hostId);
+    if (other !== undefined) return other.seat;
+  }
   return candidates[randInt(candidates.length)]!.seat;
 }
 
@@ -179,10 +200,10 @@ function planFor(state: RoomState, bot: Player, now: number, randInt: RandInt): 
       else add(at, { t: "emoji", icon: EMOJI_IDS[randInt(EMOJI_IDS.length)] as EmojiId });
     }
   } else if (state.phase === "execVote") {
-    const agree = botExecAgree(randInt);
+    const agree = botExecAgree(randInt, state.testBotVote?.exec);
     add(now + EXEC_VOTE_BASE_MS + randInt(EXEC_VOTE_SPAN_MS), { t: "execVote", agree });
   } else if (state.phase === "candidateVote") {
-    const target = botCandidateTarget(state, bot, randInt);
+    const target = botCandidateTarget(state, bot, randInt, state.testBotVote?.pick);
     if (target !== undefined) add(now + CANDIDATE_VOTE_BASE_MS + randInt(CANDIDATE_VOTE_SPAN_MS), { t: "candidateVote", target });
   } else if (state.phase === "defense") {
     // 변론은 후보만 할 수 있다(chat.ts when: "defense"). 후보가 아닌 봇은 아무것도 하지 않는다.
