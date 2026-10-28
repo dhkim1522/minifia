@@ -4,18 +4,18 @@ milestone: v1.0
 milestone_name: MVP
 current_phase: 4
 current_phase_name: 처형과 승패
-current_plan: 8
+current_plan: 9
 status: executing
-stopped_at: Completed 04-07-PLAN.md
-last_updated: "2026-10-28T05:27:49.110Z"
+stopped_at: Completed 04-08-PLAN.md
+last_updated: "2026-10-28T05:40:16.676Z"
 last_activity: 2026-10-26
 last_activity_desc: Phase 4 execution started
-state_head: b6f378c31b8ee70c6b645809b122cad8a717a6e7
+state_head: fb43bfec0c8a58314ef810c8c4fa96c25c0959e3
 progress:
   total_phases: 7
   completed_phases: 2
   total_plans: 75
-  completed_plans: 70
+  completed_plans: 71
 ---
 
 # Project State
@@ -30,9 +30,9 @@ See: .planning/PROJECT.md (updated 2026-10-21)
 ## Current Position
 
 Phase: 4 (처형과 승패) — EXECUTING
-Current Plan: 8
+Current Plan: 9
 Total Plans in Phase: 12
-Plan: 8 of 12
+Plan: 9 of 12
 Status: Ready to execute
 Last activity: 2026-10-26 — Phase 4 execution started
 
@@ -115,6 +115,7 @@ Progress: [██░░░░░░░░] 17%
 | Phase 04 P05 | 25min | 2 tasks | 12 files |
 | Phase 4 P06 | 25min | 3 tasks | 10 files |
 | Phase 04 P07 | 6min | 2 tasks | 8 files |
+| Phase 4 P08 | 35min | 3 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -218,6 +219,7 @@ Recent decisions affecting current work:
 - [Phase 4]: 04-06: 승패는 처형·아침 마감 훅에서만 판정, ended 진입 때 winner 를 와이어 값으로 기록하고 만료를 진입+30분으로 앞당김
 - [Phase 4]: 04-06: nightLog 는 서버 전용이며 buildSummary 만 읽고 view 는 ended 에서만 result 를 만든다
 - [Phase 04]: 04-07: 후보 선택 진행은 투표자 본인 소켓 한 개에만 보낸다(관전자 제외, A7·Pitfall 7). 바꾸려면 applyCandidateVote 한 곳
+- [Phase 4]: 04-08: 테스트 방 봇은 여부 투표 찬성 70%·후보 선택은 자기를 뺀 살아 있는 한 명(역할 무시)·변론은 후보 봇만 defNotMe/defCitizen/defPlead 중 하나. 확률·지연은 bots.ts 상수(0036 의 바뀔 수 있는 기본값)
 
 ### Pending Todos
 
@@ -254,6 +256,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-28T05:27:48.588Z
-Stopped at: Completed 04-07-PLAN.md
+Last session: 2026-10-28T05:40:16.143Z
+Stopped at: Completed 04-08-PLAN.md
 Resume file: None
