@@ -81,7 +81,9 @@ import {
   tagsOverlap,
   turnChecks,
   crownChecks,
+  voidCardChecks,
   voteChecks,
+  resultChecks,
 } from "./lib.mjs";
 
 export const OUT_DIR = new URL("./out/", import.meta.url).pathname;
@@ -728,6 +730,20 @@ async function specFlow(ctx) {
     await closeSheet(page, `${bot.nickname} 기록`);
   }
 
+  // 처형 여부 투표(P9, D-35): 탈락한 방장은 버튼 없이 `관전 중` 알약과 집계 줄만 본다. 봇은 모두 반대라 이 뒤 밤으로 처형 없이 간다
+  await skipTo(page, tracker, "execVote");
+  await settle(page);
+  {
+    const sc = `${id}/exec-vote`;
+    if (tracker.last()?.phase !== "execVote") throw new SetupError(`처형 여부 투표 읽기 전에 단계가 ${tracker.last()?.phase} 로 바뀜`);
+    // 인트로 카드(.mf-vintro, 1.8초, 낮 테이블 안)가 사라진 뒤에 읽는다 — 카드의 `처형 투표` 글자는 익명 검사(P9)의 대상이 아니다
+    await page.waitForSelector(".mf-vintro", { state: "detached", timeout: 4000 }).catch(() => {});
+    const colors = await readTokenColors(page);
+    recOne(rec, sc, voteChecks(await readVerdict(page, colors), { spectator: true }));
+    await checkState(ctx, id, "exec-vote");
+    if (tracker.last()?.phase !== "execVote") throw new SetupError(`처형 여부 투표 검사 중에 단계가 ${tracker.last()?.phase} 로 바뀜`);
+  }
+
   // 밤: 관전자는 어떤 자리도 버튼이 아니고 눌러도 아무 카드가 안 열린다
   await skipTo(page, tracker, "night");
   await settle(page);
@@ -814,6 +830,8 @@ async function voteFlow(ctx) {
   // 3) exec-vote: 카드가 사라진 뒤의 하단·익명·진홍 규칙, 번복
   {
     const sc = `${id}/exec-vote`;
+    // 봇이 모두 던져 집계 줄이 가장 긴 문구(`모두 냈어요 · …`)가 된 뒤에 잰다 — 360 폭 한 줄(G2)을 결정적으로 본다(04-33). 안 오면 그대로 진행
+    await page.waitForFunction(() => (document.querySelector(".mf-execvote__tally")?.textContent ?? "").includes("모두 냈어요"), null, { timeout: 6000 }).catch(() => {});
     const v = await read();
     still("execVote", "처형 여부 투표 읽기");
     recOne(rec, sc, voteChecks(v));
@@ -964,6 +982,238 @@ async function voteFlow(ctx) {
   await resetAndLeave(page, tracker);
 }
 
+
+// ---- noexec·result-c·result-m: 처형 무효 카드와 결과 화면(04-33, UI-SPEC 15.2) ----
+
+/** 방 하나를 만들어 게임을 시작하고(봇 처형 투표 고정 포함) 처형 구간 흐름이 쓰는 도우미를 돌려준다. */
+async function verdictRoom(ctx, id, { players, role, vote }) {
+  const rec = recorder(ctx);
+  const host = await startHost(ctx, id);
+  const { page, tracker } = host;
+  await settle(page);
+  await openTestSheet(page);
+  await setBots(page, tracker, players - 1);
+  await chooseRole(page, tracker, role);
+  await setBotVote(page, tracker, vote);
+  await grabLobbyStage(ctx, "lobby", 700);
+  await startGame(page, tracker, { onAssigning: () => grabLobbyStage(ctx, "assigning") });
+  ctx.stage = "play";
+  const v0 = tracker.last();
+  rec(`${id}/setup`, "S3", "인원·지정 직업", v0.players.length === players && v0.me.role === role, `인원 ${v0.players.length}/${players}, 직업 ${v0.me.role}/${role}`);
+  const colors = await readTokenColors(page);
+  const read = () => readVerdict(page, colors);
+  const still = (phase, what) => {
+    if (tracker.last()?.phase !== phase) throw new SetupError(`${what} 중에 단계가 ${tracker.last()?.phase} 로 바뀜 (기대 ${phase})`);
+  };
+  const alive = () => tracker.last().players.filter((p) => p.alive !== false).map((p) => p.seat).sort((a, b) => a - b);
+  return { rec, page, tracker, mySeat: v0.me.seat, colors, read, still, alive };
+}
+
+/** 흐름 끝: 낮 고정물이 단계마다 그대로(D7·D9·T1) + 단계 도달(S4). */
+function tableChecksOf(ctx, rec, id) {
+  const days = ctx.dayStates ?? [];
+  if (days.length >= 2) {
+    const f = feltStable(days.map((d) => ({ state: d.state, rect: d.felt })));
+    rec(`${id}/table`, "D7", f.label, f.ok, f.detail);
+  }
+  const badTags = days.map((d) => ({ d, r: tagsOverlap(d.tags) })).filter((x) => !x.r.ok);
+  rec(`${id}/table`, "D9", "이름표끼리 안 겹침", badTags.length === 0, badTags.map((x) => `${x.d.state}: ${x.r.detail}`).join("; "));
+  const t1 = stageStable(days.map((d) => ({ state: d.state, stage: d.stage, mySeat: d.mySeat })));
+  rec(`${id}/table`, t1.id, t1.label, t1.ok, t1.detail);
+  rec(`${id}/setup`, "S4", "단계 도달", true);
+}
+
+/** 서버가 정한 요약(view.result.summary)에서 결과 화면 요약 카드의 행 수 기대값: 행마다 exec 가 있으면 1, night 가 있으면 1. */
+const summaryRowsOf = (summary) => (summary ?? []).reduce((n, row) => n + (row.exec ? 1 : 0) + (row.night ? 1 : 0), 0);
+
+/**
+ * 종료 단계에서 결과 화면(P8)을 검사하고 [처음으로] 로 입구까지 간다. winner 는 서버가 정한 값(view.result.winner)과 기대 값을 둘 다 단언한다(T-04-74).
+ * 공개 연출(data-stage=done)이 끝난 뒤에 읽는다.
+ */
+async function resultState(ctx, { id, rec, page, tracker, read, colors }, { winner, n }) {
+  const sc = `${id}/ended`;
+  await waitPhaseIn(tracker, ["ended"]);
+  try {
+    await page.waitForSelector('.mf-result[data-stage="done"]', { state: "attached", timeout: 8000 });
+  } catch {
+    throw new SetupError("결과 화면 공개 연출(data-stage=done)이 끝나지 않음");
+  }
+  const view = tracker.last();
+  rec(sc, "P8", "서버가 정한 승자·요약이 view 에 있음", view.result?.winner === winner && Array.isArray(view.result?.summary), `view.result.winner ${view.result?.winner} ≠ ${winner}`);
+  await checkState(ctx, id, "ended");
+  const v = await read();
+  recOne(rec, sc, resultChecks(v, { winner, n, summaryRows: summaryRowsOf(view.result?.summary) }));
+  tableChecksOf(ctx, rec, id);
+  await leaveFromResult(page);
+}
+
+/** 처형 무효로 오는 밤: 회색 카드가 1.8초 안에 사라지고 밤 시작 문구가 그 뒤에 뜨며, 카드가 떠 있는 동안 밤 조작 클릭이 통과한다(P7, D-34, P-3). 방장 경찰, 5명, 봇은 모두 반대. */
+async function noExecFlow(ctx) {
+  const id = "noexec";
+  const R = await verdictRoom(ctx, id, { players: 5, role: "police", vote: { exec: "no", pick: "random" } });
+  const { rec, page, tracker, mySeat, colors, read, still, alive } = R;
+
+  await skipTo(page, tracker, "discussion");
+  await settle(page);
+  await stageChecks(ctx, id, "discussion", "discussion");
+  await dayState(ctx, id, "discussion");
+
+  // 처형 여부 투표에서 방장도 반대 → 던진 표 5 중 찬성 0 = notMajority
+  await skipTo(page, tracker, "execVote");
+  await voteAs(page, tracker, "반대");
+  still("execVote", "반대표 던지기");
+
+  // 관찰자와 표본기는 단계를 넘기기 전에 시작한다(skipTo 가 시트를 닫느라 카드 도착을 놓친다, 04-31 SUMMARY 4번). 80ms 간격.
+  const sc = `${id}/night`;
+  await armVerdictWatch(page);
+  const series = sampleSeries(page, {
+    durationMs: 6500,
+    stepMs: 80,
+    take: async () => {
+      const v = await read();
+      const nightIntro = await page.evaluate(() => document.querySelectorAll(".mf-sceneintro").length);
+      return { ...v, nightIntro };
+    },
+  });
+  series.catch(() => {});
+  await skipTo(page, tracker, "night");
+  const target = alive().find((x) => x !== mySeat);
+  let doneAt = null;
+  let clickedThrough = false;
+  try {
+    await tapSeat(page, target); // 카드 위에서 눌러도 통과해야 한다
+    await tracker.waitFor((v) => v.me.pick === target, 3000, `밤 지목 ${target}`);
+    clickedThrough = true;
+  } catch {
+    clickedThrough = false;
+  }
+  doneAt = await page.evaluate(() => performance.now());
+  const reason = tracker.last()?.day?.noExecution?.reason;
+  const samples = await series;
+  const watch = await readVerdictWatch(page);
+  if (watch.voidSeenAt === null) throw new SetupError("처형 무효 카드가 DOM 에 나타나지 않음");
+  if (watch.voidGoneAt !== null && doneAt >= watch.voidGoneAt) throw new SetupError("카드가 사라진 뒤에 눌러 통과를 확인하지 못함");
+  const rebased = rebaseSeries(samples, watch.voidSeenAt).map((x) => ({ t: x.t, voidCard: x.value.voidCard, nightIntro: x.value.nightIntro }));
+  recOne(rec, sc, voidCardChecks(rebased, { grayColors: colors.gray, crimsonColors: colors.crimson, clickedThrough }));
+  rec(sc, "P7", "무효 이유가 notMajority (서버가 정한 값)", reason === "notMajority", `day.noExecution.reason ${reason}`);
+
+  // 카드·문구가 다 지난 뒤의 밤 장면
+  await page.waitForSelector(".mf-sceneintro", { state: "detached", timeout: 4000 }).catch(() => {});
+  await settle(page);
+  await stageChecks(ctx, id, "night", "night");
+  await dayState(ctx, id, "night");
+  tableChecksOf(ctx, rec, id);
+  await resetAndLeave(page, tracker);
+}
+
+/** 5명(방장 마피아 + 봇 4): 봇은 모두 찬성·후보는 방장. 방장이 후보 본인 변론을 지나 처형되고 마피아가 0 이 되어 시민 팀 승리 결과 화면(P5 후보 본인, P6 탈락 viewer, P8). */
+async function resultCitizenFlow(ctx) {
+  const id = "result-c";
+  const R = await verdictRoom(ctx, id, { players: 5, role: "mafia", vote: { exec: "yes", pick: "host" } });
+  const { rec, page, tracker, mySeat, colors, read, still, alive } = R;
+  const colorRule = (sc, v) => recOne(rec, sc, colorRuleChecks(v, { crimsonColors: colors.crimson, wholeScreenCrimson: false })); // 방장이 마피아 → 동료 표시 허용
+
+  await skipTo(page, tracker, "discussion");
+  await settle(page);
+  await stageChecks(ctx, id, "discussion", "discussion");
+  await dayState(ctx, id, "discussion");
+
+  await skipTo(page, tracker, "execVote");
+  await voteAs(page, tracker, "찬성");
+  await skipTo(page, tracker, "candidateVote");
+  await settle(page);
+  still("candidateVote", "후보 선택 도착");
+  await pickCandidate(page, tracker, alive().find((x) => x !== mySeat)); // 방장은 자기 외의 한 명(자기 자신은 서버가 거부). 봇 4명이 방장에게 던져 방장이 후보가 된다
+  await skipTo(page, tracker, "candidateVoteReveal");
+  const candidateSeat = tracker.last().day?.candidate;
+  if (candidateSeat !== mySeat) throw new SetupError(`후보가 방장이 아님 (후보 ${candidateSeat}, 방장 ${mySeat})`);
+
+  // 후보 본인 변론: 패널 236·칩 6개
+  {
+    const sc = `${id}/defense`;
+    await skipTo(page, tracker, "defense");
+    await settle(page);
+    still("defense", "변론 도착");
+    const v = await read();
+    recOne(rec, sc, defenseChecks(v, { isCandidate: true }));
+    colorRule(sc, v);
+    await checkState(ctx, id, "defense");
+    await stageChecks(ctx, id, "defense", "defense");
+    const sent = await attempt(async () => {
+      await page.locator(".mf-defchips__b", { hasText: "저 아니에요" }).first().click({ timeout: 4000 });
+      await page.waitForFunction(() => (document.querySelector(".mf-claimpanel__guide")?.textContent ?? "").trim() === "보냈어요 · 저 아니에요", null, { timeout: 2500 });
+    });
+    rec(sc, "P5", "칩을 보내면 안내 줄이 `보냈어요 · 저 아니에요`", sent.ok, sent.detail);
+    still("defense", "변론 칩 보내기");
+  }
+
+  // 처형: 방장이 탈락하는 쪽(관전) viewer
+  {
+    const sc = `${id}/execution`;
+    await skipTo(page, tracker, "execution");
+    const v = await read();
+    const viewerAlive = !isDeadView(tracker.last());
+    still("execution", "처형 읽기");
+    recOne(rec, sc, executionChecks(v, { viewerAlive, candidateSeat }));
+    colorRule(sc, v);
+    await checkState(ctx, id, "execution");
+  }
+
+  await resultState(ctx, { id, ...R }, { winner: "citizenWin", n: 5 });
+}
+
+/** 4명(방장 마피아 + 봇 3): 봇은 모두 찬성·후보는 방장 아닌 사람. 1일차 낮에 그 사람이 처형되고(마피아 1 대 시민 2), 밤에 방장이 한 명을 지목해 1 대 1 이 되어 마피아 팀 승리 결과 화면(P8, 진홍 번짐). */
+async function resultMafiaFlow(ctx) {
+  const id = "result-m";
+  const R = await verdictRoom(ctx, id, { players: 4, role: "mafia", vote: { exec: "yes", pick: "other" } });
+  const { rec, page, tracker, mySeat, read, still, alive } = R;
+
+  await skipTo(page, tracker, "discussion");
+  await settle(page);
+  await stageChecks(ctx, id, "discussion", "discussion");
+  await dayState(ctx, id, "discussion");
+
+  await skipTo(page, tracker, "execVote");
+  await voteAs(page, tracker, "찬성");
+  await skipTo(page, tracker, "candidateVote");
+  await settle(page);
+  still("candidateVote", "후보 선택 도착");
+  await pickCandidate(page, tracker, alive().find((x) => x !== mySeat)); // 봇들과 같은 대상(방장 아닌 가장 낮은 자리)
+  await skipTo(page, tracker, "candidateVoteReveal");
+  await skipTo(page, tracker, "defense");
+  await skipTo(page, tracker, "execution");
+  await skipTo(page, tracker, "night");
+  if (alive().length !== 3 || !alive().includes(mySeat)) throw new SetupError(`처형 뒤 생존자가 방장 포함 3명이 아님 (${alive().join(",")})`);
+
+  // 밤: 방장(유일한 마피아)이 비동료 한 명을 지목 — 4명판에는 의사가 없어 반드시 죽는다
+  {
+    const sc = `${id}/night`;
+    await waitSceneIntro(page, 4000);
+    await page.waitForSelector(".mf-sceneintro", { state: "detached", timeout: 4000 }).catch(() => {});
+    await settle(page);
+    still("night", "밤 도착");
+    const { snap } = await dayState(ctx, id, "night");
+    nightStaticChecks(ctx, id, "mafia", snap);
+    const target = alive().find((x) => x !== mySeat);
+    const n2 = await attempt(async () => {
+      await tapSeat(page, target);
+      await page.waitForFunction((n) => !!document.querySelector(`.mf-dt__seat[data-seat="${n}"] img.mf-figure--halo-white`), target, { timeout: 2000 });
+      await tracker.waitFor((v) => v.me.pick === target, 2000, `me.pick ${target}`);
+      return (await selState(page, target)).pressed ? true : { ok: false, detail: "aria-pressed false" };
+    });
+    rec(sc, "N2", "자리를 누르면 선택 후광(흰)", n2.ok, n2.detail);
+  }
+
+  // 아침 → 결과: 아침 카드에서 G 를 돌리고 종료를 기다린다(마감에서 마피아 1 ≥ 나머지 1)
+  {
+    await skipTo(page, tracker, "morning");
+    await settle(page);
+    still("morning", "아침 도착");
+    await checkState(ctx, id, "morning");
+  }
+  await resultState(ctx, { id, ...R }, { winner: "mafiaWin", n: 4 });
+}
+
 const game = (id, players, role, states) => (ctx) => gameFlow(ctx, { id, players, role, states });
 const CLAIMS = ["claim-mine", "claim-other", "claim-done", "discussion"];
 
@@ -975,5 +1225,8 @@ export const FLOWS = [
   { id: "doctor5", run: game("doctor5", 5, "doctor", [...CLAIMS, "night", "morning", "day-intro", "rolecard-btn", "next-day"]) },
   { id: "spec4", run: specFlow },
   { id: "vote5", run: voteFlow },
+  { id: "noexec", run: noExecFlow },
+  { id: "result-c", run: resultCitizenFlow },
+  { id: "result-m", run: resultMafiaFlow },
 ];
 export { SetupError };

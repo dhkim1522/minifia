@@ -1558,6 +1558,27 @@ test("voteChecks P9: 탈락 viewer 는 버튼 0·알약 `관전 중`·집계 줄
   assert.equal(voteChecks(spec).ok, false);
 });
 
+test("voteChecks P9: 관전자는 마피아 동료 표시(진홍 후광, D-33)만 허용하고 흰·앰버 후광은 여전히 실패한다", () => {
+  const spec = (haloImgs) => {
+    const v = withBottom({ buttons: [], pill: "관전 중 · 볼 수만 있어요" });
+    v.dt.haloImgs = haloImgs;
+    return v;
+  };
+  // 관전자는 모든 직업을 보므로 마피아 자리에 진홍 후광이 계속 남는다(UI-SPEC 12.4·D-33)
+  const ally = voteChecks(spec([{ seat: 2, kind: "crimson" }]), { spectator: true });
+  assert.equal(ally.ok, true, ally.detail);
+  for (const kind of ["white", "amber"]) {
+    const x = voteChecks(spec([{ seat: 2, kind }]), { spectator: true });
+    assert.equal(x.ok, false, kind);
+    assert.match(x.detail, /후광/, kind);
+  }
+  assert.equal(voteChecks(spec([{ seat: 2, kind: "crimson" }, { seat: 3, kind: "white" }]), { spectator: true }).ok, false);
+  // 살아 있는 viewer 는 진홍이어도 후광 0 이어야 한다(P1 은 그대로)
+  const alive = goodVote();
+  alive.dt.haloImgs = [{ seat: 2, kind: "crimson" }];
+  assert.equal(voteChecks(alive).ok, false);
+});
+
 const introSamples = (over = {}) => [
   { t: 100, intro: { count: 1, pointerEvents: "none", cardOpacity: 1, residueCount: 0 } },
   { t: 900, intro: { count: 1, pointerEvents: "none", cardOpacity: 1, residueCount: 0 } },

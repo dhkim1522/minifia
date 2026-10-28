@@ -971,7 +971,7 @@ const INTRO_GONE_MS = 1800;
 
 /**
  * P1(살아 있는 viewer)·P9(탈락 viewer, spectator: true) 처형 여부 투표 하단과 익명.
- * 제목 `오늘 처형을 할까요?`, 집계 줄 `찬성 N · 반대 M…`, 이름표·캐릭터 안 `찬성`·`반대`·`투표` 글자 0, 후광 0(내 선택도 후광이 아님, D-02).
+ * 제목 `오늘 처형을 할까요?`, 집계 줄 `찬성 N · 반대 M…`, 이름표·캐릭터 안 `찬성`·`반대`·`투표` 글자 0, 후광 0(내 선택도 후광이 아님, D-02; 관전자의 마피아 동료 진홍 후광은 D-33 으로 남으므로 제외).
  * 살아 있는 viewer: 버튼이 정확히 `찬성`·`반대` 둘, 각 w·h ≥ TAP_MIN, aria-pressed 불리언, `기권` 없음. 탈락 viewer: 버튼 0, 알약에 `관전 중`, 집계 줄은 그대로.
  */
 export function voteChecks(v, { spectator = false } = {}) {
@@ -997,7 +997,9 @@ export function voteChecks(v, { spectator = false } = {}) {
   if (b.title !== EXEC_TITLE) bad.push(`제목 "${b.title}" ≠ "${EXEC_TITLE}"`);
   if (!TALLY_RE.test(b.tally)) bad.push(`집계 줄 "${b.tally}" 이 "찬성 N · 반대 M" 모양이 아님`);
   if (dt.textHits !== 0) bad.push(`이름표·캐릭터 안 찬성/반대/투표 글자 요소 ${dt.textHits}개 ≠ 0 (익명)`);
-  if (dt.haloImgs.length !== 0) bad.push(`후광 ${dt.haloImgs.length}개 ≠ 0 (자리 ${dt.haloImgs.map((h) => h.seat).join(",")}) — 내 선택도 후광이 아님`);
+  // 관전자는 모든 직업을 보므로 마피아 자리의 진홍 후광(동료 표시, D-33·UI-SPEC 12.4)은 투표 장면에서도 남는다. 흰·앰버(내 선택·공개)는 어떤 viewer 에게도 0.
+  const halos = spectator ? dt.haloImgs.filter((h) => h.kind !== "crimson") : dt.haloImgs;
+  if (halos.length !== 0) bad.push(`후광 ${halos.length}개 ≠ 0 (자리 ${halos.map((h) => h.seat).join(",")}) — 내 선택도 후광이 아님${spectator ? "(관전자의 마피아 동료 진홍 후광은 제외)" : ""}`);
   const texts = b.buttons.map((x) => String(x.text ?? "").trim());
   if (texts.some((t) => t.includes("기권"))) bad.push("기권 버튼이 있음");
   if (spectator) {

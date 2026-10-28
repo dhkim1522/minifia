@@ -121,11 +121,15 @@ limitTimer.unref();
 const jobs = [];
 for (const size of args.sizes) for (const flow of flows) jobs.push({ flow, size });
 
-/** 작업 하나: 새 방·새 컨텍스트. 준비 실패(SetupError·시간 초과·선택자 오류)는 새 방으로 한 번 다시 돈다. 검사 실패는 다시 돌지 않는다. */
+// 준비 실패(SetupError)로 새 방에서 다시 도는 최대 횟수. 「살아 있는 방장」 흐름(citizen4 등)은 첫 밤에 방장이 탈락할 확률이 4명판 1/3 이라
+// 두 번이면 흐름마다 약 1/9 이상으로 실패한다(04-33 로컬 전체 실행에서 관찰: 시도마다 1/2 가까이) — 열 흐름 × 세 폭 전체 실행이 자주 깨져서 네 번으로 늘렸다. 검사 기준과는 무관하다.
+const MAX_ATTEMPTS = 4;
+
+/** 작업 하나: 새 방·새 컨텍스트. 준비 실패(SetupError·시간 초과·선택자 오류)는 새 방으로 다시 돈다(최대 MAX_ATTEMPTS번). 검사 실패는 다시 돌지 않는다. */
 async function runJob({ flow, size }) {
   const t0 = performance.now();
   let lastError = null;
-  for (let attempt = 1; attempt <= 2; attempt++) {
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     const ctx = { origin, size, shots: args.shots, browser, secrets, results: [], host: null, stage: "connect" };
     try {
       await flow.run(ctx);
