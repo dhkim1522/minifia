@@ -16,6 +16,41 @@ export const LOCAL_HOSTS = ["localhost", "127.0.0.1", "[::1]"];
 export const MAX_PARALLEL = 3;
 export const OVERALL_LIMIT_MS = 600_000;
 
+// ---- 처형 구간 스냅숏 계약 (04-29) ----
+// 처형 구간(execVote·candidateVote·candidateVoteReveal·defense·execution·ended) 검사 P1~P10 이 받는 값의 모양을 여기 한 곳에 적는다.
+// 04-31 의 `readVerdict(page)`(browser.mjs)가 이 모양 그대로 만든다. 사각형은 위 머리 주석과 같은 { left, top, width, height[, right, bottom] }.
+// 검사 함수는 필드가 없으면 조용히 통과하지 않고 `측정값 없음(…)` 으로 실패한다(기존 검사와 같은 규칙).
+//
+//   VerdictSnap = {
+//     bottom: {                      // 하단 패널(.mf-claimpanel / .mf-execvote 등)
+//       title: string,               //   제목 글자
+//       guide: string,               //   안내 줄 글자(없으면 "")
+//       tally: string,               //   집계 줄 글자 `.mf-execvote__tally`(없으면 "")
+//       pill: string | null,         //   알약 글자(`관전 중 · …`, `…님에게 투표했어요`, `선택 안 함`). 없으면 null
+//       buttons: [{ text, pressed: boolean|null, disabled, w, h }],  // `.mf-seg__b` 등 누르는 요소. pressed = aria-pressed, w·h = 탭 크기(px)
+//       height: number,              //   패널 높이(px)
+//     },
+//     dt: {                          // 낮 테이블 장면(.mf-dt)
+//       textHits: number,            //   이름표·캐릭터 안에 `찬성`·`반대`·`투표` 글자가 든 요소 수(익명 D-02)
+//       haloImgs: [{ seat, kind: "white"|"amber"|"crimson" }],       // 후광 img 전부(한 화면 합계 ≤ 3)
+//       seatButtons: [{ seat, pickable: boolean, pressed: boolean|null, label }], // 자리마다 하나. pickable = 누를 수 있는 버튼
+//       scene: { left, top, right, bottom, width },                  // 장면 상자(top = 헤더 아래끝)
+//     },
+//     intro: { count, pointerEvents, cardOpacity, residueCount },    // `.mf-vintro` 수·계산된 pointer-events·카드 불투명도·남은 불투명 잔상 요소 수
+//     reveal: {                      // 공개 단계(candidateVoteReveal)
+//       arrows: number,              //   `.mf-varrow` 동시 수
+//       chips: [{ seat, n, tone: "pop"|"lead"|"beat"|…, left, top, right, bottom }], // `.mf-vchip`
+//       tags: [{ seat, left, top, right, bottom }],                  // 이름표 사각형(P10, 04-30)
+//     },
+//     crimsonNew: number,            // 이 페이즈가 새로 그린 요소(카드·화살표·칩·후광·처형 카드) 중 진홍을 쓰는 요소 수. 0 이어야 한다
+//     crimsonScreen: number,         // 화면 전체 진홍 요소 수(동료 마름모·후광 포함). 방장이 시민이면 0 이어야 한다
+//     newColors?: [{ desc, color }], // (선택) 새 요소가 쓴 색의 rgb 문자열 — 있으면 crimsonColors 와 비교해 crimsonNew 에 더한다
+//     screenColors?: [{ desc, color }], // (선택) 화면 전체 요소가 쓴 색 — 같은 방식으로 crimsonScreen 에 더한다
+//   }
+//
+// 시간표본 입력(재는 쪽이 시각 오름차순으로 모은다): introChecks 는 [{ t(ms, 도착 이후), intro }] + { clickedThrough },
+// revealChecks 는 [{ t, reveal, dt:{ haloImgs, scene }, crimsonNew }]. 04-30 이 나머지 필드(방어·처형·종료·P10)를 같은 주석에 더한다.
+
 /** G2 가 보지 않는 장식 요소. 항목을 더할 때는 selector 와 reason 을 함께 적는다(결과 출력 머리에 목록이 찍힌다). */
 export const DECORATIVE_ALLOW = [
   { selector: '[aria-hidden="true"], [aria-hidden="true"] *', reason: "보조 기술에서 숨긴 장식" },
@@ -887,4 +922,130 @@ export function smallTextIssues(smallText) {
   if (!Array.isArray(smallText)) return { id: "G7", label: "본문 글자 14px 이상", ok: false, detail: "글자 크기 측정값(smallText) 없음" };
   const bad = smallText.filter((e) => !e.allowed && e.size < 14).map((e) => `${e.desc} ${fmt(e.size)}px`);
   return { id: "G7", label: "본문 글자 14px 이상", ok: bad.length === 0, detail: bad.length === 0 ? "" : `14px 미만: ${list(bad)}` };
+}
+
+// ---- 처형 구간 순수 검사 P1·P9·P2·P3 (04-29, UI-SPEC 15.3). 입력 모양은 머리의 `처형 구간 스냅숏 계약` ----
+
+const EXEC_TITLE = "오늘 처형을 할까요?";
+const TALLY_RE = /^찬성 \d+ · 반대 \d+/;
+/** 인트로 카드가 DOM 에서 사라져야 하는 시각(ms, D-30). 낮추지 않는다. */
+const INTRO_GONE_MS = 1800;
+
+/**
+ * P1(살아 있는 viewer)·P9(탈락 viewer, spectator: true) 처형 여부 투표 하단과 익명.
+ * 제목 `오늘 처형을 할까요?`, 집계 줄 `찬성 N · 반대 M…`, 이름표·캐릭터 안 `찬성`·`반대`·`투표` 글자 0, 후광 0(내 선택도 후광이 아님, D-02).
+ * 살아 있는 viewer: 버튼이 정확히 `찬성`·`반대` 둘, 각 w·h ≥ TAP_MIN, aria-pressed 불리언, `기권` 없음. 탈락 viewer: 버튼 0, 알약에 `관전 중`, 집계 줄은 그대로.
+ */
+export function voteChecks(v, { spectator = false } = {}) {
+  const id = spectator ? "P9" : "P1";
+  const label = spectator ? "탈락 방장의 투표 화면: 버튼 없음·관전 알약·집계 보임" : "처형 여부 투표 하단·익명";
+  const b = v?.bottom;
+  const dt = v?.dt;
+  const miss = [];
+  if (!b || typeof b !== "object") miss.push("측정값 없음(bottom)");
+  else {
+    if (typeof b.title !== "string") miss.push("측정값 없음(bottom.title)");
+    if (typeof b.tally !== "string") miss.push("측정값 없음(bottom.tally)");
+    if (!Array.isArray(b.buttons)) miss.push("측정값 없음(bottom.buttons)");
+  }
+  if (!dt || typeof dt !== "object") miss.push("측정값 없음(dt)");
+  else {
+    if (typeof dt.textHits !== "number") miss.push("측정값 없음(dt.textHits)");
+    if (!Array.isArray(dt.haloImgs)) miss.push("측정값 없음(dt.haloImgs)");
+  }
+  if (miss.length > 0) return result(id, label, miss);
+
+  const bad = [];
+  if (b.title !== EXEC_TITLE) bad.push(`제목 "${b.title}" ≠ "${EXEC_TITLE}"`);
+  if (!TALLY_RE.test(b.tally)) bad.push(`집계 줄 "${b.tally}" 이 "찬성 N · 반대 M" 모양이 아님`);
+  if (dt.textHits !== 0) bad.push(`이름표·캐릭터 안 찬성/반대/투표 글자 요소 ${dt.textHits}개 ≠ 0 (익명)`);
+  if (dt.haloImgs.length !== 0) bad.push(`후광 ${dt.haloImgs.length}개 ≠ 0 (자리 ${dt.haloImgs.map((h) => h.seat).join(",")}) — 내 선택도 후광이 아님`);
+  const texts = b.buttons.map((x) => String(x.text ?? "").trim());
+  if (texts.some((t) => t.includes("기권"))) bad.push("기권 버튼이 있음");
+  if (spectator) {
+    if (b.buttons.length !== 0) bad.push(`버튼 ${b.buttons.length}개 ≠ 0 (관전 중 [${texts.join(",")}])`);
+    if (typeof b.pill !== "string" || !b.pill.includes("관전 중")) bad.push(`알약 "${b.pill ?? ""}" 에 "관전 중" 없음`);
+  } else {
+    if (texts.join(",") !== "찬성,반대") bad.push(`버튼 [${texts.join(",")}] ≠ [찬성,반대]`);
+    for (const x of b.buttons) {
+      if (!(x.w >= TAP_MIN && x.h >= TAP_MIN)) bad.push(`버튼 "${x.text}" ${fmt(x.w)}×${fmt(x.h)} 가 ${TAP_MIN}px 미만`);
+      if (typeof x.pressed !== "boolean") bad.push(`버튼 "${x.text}" aria-pressed 가 불리언이 아님`);
+    }
+  }
+  return result(id, label, bad);
+}
+
+/**
+ * P2 처형 투표 인트로 카드(D-30). samples = [{ t(ms), intro:{ count, pointerEvents, cardOpacity, residueCount } }],
+ * clickedThrough = 그 동안 버튼 클릭이 me.voteAgree 를 바꿈. 도착 직후 표본: 카드 정확히 1장, 카드가 보이는 모든 표본: pointer-events none,
+ * INTRO_GONE_MS(1800ms) 이후 표본: 카드 0장·남은 불투명 잔상 0.
+ */
+export function introChecks(samples, { clickedThrough } = {}) {
+  const label = "인트로 카드: 도착·터치 통과·1.8초 뒤 흔적 없음";
+  if (!Array.isArray(samples) || samples.length === 0) return result("P2", label, ["측정값 없음(인트로 시간표본)"]);
+  if (samples.some((x) => !Number.isFinite(x?.t) || !x.intro || typeof x.intro.count !== "number")) {
+    return result("P2", label, ["측정값 없음(표본 t·intro.count)"]);
+  }
+  const sorted = [...samples].sort((a, b) => a.t - b.t);
+  const bad = [];
+  const first = sorted[0];
+  if (first.intro.count !== 1) bad.push(`도착 직후(t=${fmt(first.t)}ms) 인트로 카드 ${first.intro.count}개 ≠ 1`);
+  for (const x of sorted) {
+    if (x.intro.count > 0 && x.intro.pointerEvents !== "none") bad.push(`t=${fmt(x.t)}ms 카드 pointer-events "${x.intro.pointerEvents}" ≠ none`);
+  }
+  const late = sorted.filter((x) => x.t >= INTRO_GONE_MS);
+  if (late.length === 0) bad.push(`측정값 없음(${INTRO_GONE_MS}ms 이후 표본)`);
+  for (const x of late) {
+    if (x.intro.count !== 0) bad.push(`${INTRO_GONE_MS}ms 뒤(t=${fmt(x.t)}ms)에도 인트로 카드 ${x.intro.count}개가 사라지지 않음`);
+    if (typeof x.intro.residueCount !== "number") bad.push("측정값 없음(intro.residueCount)");
+    else if (x.intro.residueCount !== 0) bad.push(`t=${fmt(x.t)}ms 불투명 잔상 ${x.intro.residueCount}개 ≠ 0`);
+  }
+  if (typeof clickedThrough !== "boolean") bad.push("측정값 없음(clickedThrough)");
+  else if (!clickedThrough) bad.push("버튼 클릭이 카드를 통과하지 못함(me.voteAgree 가 안 바뀜)");
+  return result("P2", label, bad);
+}
+
+/**
+ * P3 후보 선택(candidateVote). opts = { mySeat, deadSeats, chosenSeat(number|null), crimsonSeats = [], name? }.
+ * 내 자리·탈락 자리는 pickable false, 나머지는 true. 고른 자리만 aria-pressed true 이고 흰 후광이 정확히 한 개로 그 자리.
+ * 그 밖 후광은 동료 진홍 마름모 자리(crimsonSeats)의 진홍뿐. 알약은 고른 뒤 `…님에게 투표했어요`(name 이 있으면 그 이름 포함), 고르기 전 `선택 안 함`.
+ */
+export function candidateChecks(v, { mySeat, deadSeats, chosenSeat, crimsonSeats = [], name } = {}) {
+  const label = "후보 선택: 자리 규칙·흰 후광 하나·알약";
+  const miss = [];
+  if (typeof mySeat !== "number") miss.push("측정값 없음(mySeat 인자)");
+  if (!Array.isArray(deadSeats)) miss.push("측정값 없음(deadSeats 인자)");
+  if (chosenSeat !== null && typeof chosenSeat !== "number") miss.push("측정값 없음(chosenSeat 인자)");
+  if (typeof v?.bottom?.pill !== "string") miss.push("측정값 없음(bottom.pill)");
+  if (!Array.isArray(v?.dt?.seatButtons) || v.dt.seatButtons.length === 0) miss.push("측정값 없음(dt.seatButtons)");
+  if (!Array.isArray(v?.dt?.haloImgs)) miss.push("측정값 없음(dt.haloImgs)");
+  if (miss.length > 0) return result("P3", label, miss);
+
+  const bad = [];
+  for (const s of v.dt.seatButtons) {
+    const mine = s.seat === mySeat;
+    const dead = deadSeats.includes(s.seat);
+    const blocked = mine || dead;
+    if (blocked) {
+      if (s.pickable !== false) bad.push(`${mine ? "내 자리" : "탈락 자리"} ${s.seat} 가 누를 수 있는 버튼임`);
+    } else if (s.pickable !== true) bad.push(`살아 있는 남의 자리 ${s.seat} 가 누를 수 있는 버튼이 아님`);
+    const want = !blocked && chosenSeat !== null && s.seat === chosenSeat;
+    if (blocked ? s.pressed === true : s.pressed !== want) bad.push(`자리 ${s.seat} aria-pressed ${String(s.pressed)} ≠ ${want}`);
+  }
+  const whites = v.dt.haloImgs.filter((h) => h.kind === "white");
+  if (chosenSeat === null) {
+    if (v.dt.haloImgs.length !== 0) bad.push(`고르기 전인데 후광 ${v.dt.haloImgs.length}개 (자리 ${v.dt.haloImgs.map((h) => h.seat).join(",")})`);
+    if (!v.bottom.pill.includes("선택 안 함")) bad.push(`고르기 전 알약 "${v.bottom.pill}" 에 "선택 안 함" 없음`);
+  } else {
+    if (whites.length !== 1) bad.push(`흰 후광 ${whites.length}개 ≠ 1`);
+    else if (whites[0].seat !== chosenSeat) bad.push(`흰 후광 자리 ${whites[0].seat} ≠ 고른 자리 ${chosenSeat}`);
+    for (const h of v.dt.haloImgs) {
+      if (h.kind === "white") continue;
+      if (h.kind === "crimson" && crimsonSeats.includes(h.seat)) continue;
+      bad.push(`자리 ${h.seat} 후광 종류 ${h.kind} 는 남의 자리에 허용되지 않음(동료 진홍 마름모 자리만)`);
+    }
+    const phrase = name ? `${name}님에게 투표했어요` : "님에게 투표했어요";
+    if (!v.bottom.pill.includes(phrase)) bad.push(`알약 "${v.bottom.pill}" 에 "${phrase}" 없음`);
+  }
+  return result("P3", label, bad);
 }
