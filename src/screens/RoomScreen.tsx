@@ -42,7 +42,7 @@ const PHASE_ANNOUNCE: Record<PhaseId, (view: RoomView) => string> = {
   morning: morningAnnounce,
   execVote: () => VERDICT_TEXT.announce.execVote,
   candidateVote: () => VERDICT_TEXT.announce.candidateVote,
-  candidateVoteReveal: () => "투표 공개",
+  candidateVoteReveal: () => VERDICT_TEXT.announce.candidateVoteReveal,
   defense: () => "최후 변론",
   execution: () => "처형",
   ended: () => "게임이 끝났습니다",
@@ -85,7 +85,7 @@ function nightAnnounce(view: RoomView): string {
 // 장면 키: 낮 시작(dayAnnounce)·낮 두 단계와 밤·아침은 같은 장면(DayScene)이라 같은 키를 쓴다 — 테이블을 다시 마운트하지 않는다(UI-SPEC C5).
 // 낮 시작 전용 화면은 없다(결정 0030). 래퍼와 장면은 장면에 들어올 때만 mf-phase-enter 가 돈다. 그 밖은 단계 이름이 키다.
 function sceneKey(phase: PhaseId): string {
-  return phase === "dayAnnounce" || phase === "claim" || phase === "discussion" || phase === "night" || phase === "morning" || phase === "execVote" || phase === "candidateVote"
+  return phase === "dayAnnounce" || phase === "claim" || phase === "discussion" || phase === "night" || phase === "morning" || phase === "execVote" || phase === "candidateVote" || phase === "candidateVoteReveal"
     ? "dayScene"
     : phase;
 }
@@ -275,6 +275,7 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
       case "morning":
       case "execVote":
       case "candidateVote":
+      case "candidateVoteReveal":
         return (
           <DayScene
             view={view}

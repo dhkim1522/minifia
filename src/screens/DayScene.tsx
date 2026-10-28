@@ -302,6 +302,11 @@ export function DayScene({ view, connection, myRoleButton, testButton, arrivedFr
             {lastEmoji ? `${nicknameOf(lastEmoji.seat) ?? ""}: ${EMOJI_TEXT[lastEmoji.icon].name}` : ""}
           </p>
         ) : null}
+        {verdict?.liveLine !== undefined ? (
+          <p className="mf-sr-only mf-dayscene__verdict-live" aria-live="polite">
+            {verdict.liveLine}
+          </p>
+        ) : null}
         <Toast toast={toast} placement="top" />
         {introN !== null && PHASE_INTRO[view.phase] ? <SceneIntro n={introN} intro={PHASE_INTRO[view.phase]!} onDone={() => setIntroN(null)} /> : null}
         {inspectSeat !== null ? (

@@ -5,9 +5,10 @@ import type { RoomView } from "../../shared/protocol";
 import { CandidateVotePanel } from "../components/CandidateVotePanel";
 import type { DayTableSeat } from "../components/DayTable";
 import { ExecVotePanel } from "../components/ExecVotePanel";
-import { NIGHT_PANEL_TEXT } from "../components/NightPanel";
-import { capHalos } from "../game/verdict";
+import { NIGHT_PANEL_TEXT, NightPanel } from "../components/NightPanel";
+import { VERDICT_TEXT, capHalos, revealIntroHint, revealResultLine } from "../game/verdict";
 import type { HaloRequest } from "../game/verdict";
+import { useRevealState } from "../net/useRevealState";
 import type { RoomConnection } from "../net/useRoomConnection";
 import { useViewChoice } from "../net/useViewChoice";
 
@@ -43,6 +44,8 @@ export interface VerdictScene {
   pickVerb?: string;
   /** 자리별 덧입힘: 여부 투표는 모든 자리가 읽기 전용 기록 카드 버튼, 후보 선택은 살아 있는 viewer 가 자기 아닌 살아 있는 자리를 고르는 대상 버튼 */
   seatPatch: (seat: number) => Partial<DayTableSeat>;
+  /** 있으면 DayScene 의 보이지 않는 polite 영역이 읽는 문장(공개 끝 상태의 결과 한 줄). 빈 문자열은 아직 읽을 것이 없다 */
+  liveLine?: string;
 }
 
 // 서버가 보낸 행동을 거절하는 단계: 여부 투표와 후보 선택(04-18 이 같은 효과를 쓴다). 밤 대상 선택의 토스트는 DayScene 이 밤에만 구독하므로 겹치지 않는다.
@@ -61,7 +64,40 @@ export function useVerdictScene({ view, connection, meAlive, showToast, onInspec
   // 후보 선택: 낙관적 선택. 새 서버 view 가 오면 me.voteTarget(서버 값)이 이긴다(useViewChoice). 훅이라 단계와 상관없이 항상 부른다.
   const [chosen, choose] = useViewChoice<number>(view, view.me.voteTarget);
 
+  // 후보 선택 공개: 서버 시각 기준 공개 상태(경계 시각마다만 다시 그림). 훅이라 단계와 상관없이 항상 부르고 단계가 아니면 null 이다.
+  const reveal = useRevealState(view, connection.offset);
+
   const n = view.day?.n ?? 1;
+  if (view.phase === "candidateVoteReveal") {
+    const nicknameOf = (seat: number): string | undefined => view.players.find((p) => p.seat === seat)?.nickname;
+    const state = reveal?.state;
+    // 후광: 방금 닿은 대상·유일한 선두는 앰버, 마피아 동료는 진홍. 합이 3 을 넘으면 흰 > 앰버 > 진홍 순으로 낮은 쪽부터 꺼진다(마름모는 남는다).
+    // 동률 선두는 선두가 없으므로(state.leader === null) 후광이 켜지지 않는다(P-14).
+    const requests: HaloRequest[] = [];
+    if (state?.pop != null) requests.push({ seat: state.pop, kind: "amber" });
+    if (state?.leader != null) requests.push({ seat: state.leader, kind: "amber" });
+    for (const p of view.players) if (isAllySeat(p.seat)) requests.push({ seat: p.seat, kind: "crimson" });
+    const { kinds } = capHalos(requests);
+    const caption = reveal?.caption ?? { title: VERDICT_TEXT.revealIntroTitle, hint: revealIntroHint(reveal?.plan.steps.length ?? 0) };
+    return {
+      title: "낮 · 투표 공개",
+      instruction: `${n}일차`,
+      calm: true,
+      // 화살표 하나에 문구 하나가 빠르게 바뀌므로 읽지 않는다(aria-live 끔). 끝 상태 한 문장만 liveLine 으로 한 번 읽는다(P-11)
+      bottom: (
+        <div aria-live="off">
+          <NightPanel title={caption.title} guide={caption.hint} />
+        </div>
+      ),
+      // 공개 중 좌석 탭은 비활성: onPick·onInspect 없음(기록 카드도 안 열린다)
+      seatPatch: (seat) => {
+        const count = state?.counts[seat] ?? 0;
+        const tone = state?.leader === seat ? "lead" : state?.pop === seat ? "pop" : "plain";
+        return { halo: kinds.get(seat) ?? "none", ...(count > 0 ? { chip: { n: count, tone } } : {}) };
+      },
+      liveLine: reveal !== null && reveal.state.ended ? revealResultLine(reveal.plan, nicknameOf) : "",
+    };
+  }
   if (view.phase === "candidateVote") {
     const nicknameOf = (seat: number): string | undefined => view.players.find((p) => p.seat === seat)?.nickname;
     const label = chosen === undefined ? undefined : nicknameOf(chosen);

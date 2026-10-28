@@ -342,6 +342,8 @@ export const VERDICT_TEXT = {
   votedSuffix: "님에게 투표했어요",
   candidateSpectatorTitle: "처형할 사람을 고르는 중이에요",
   candidateSpectatorHint: "누구를 골랐는지는 공개될 때 볼 수 있어요",
+  // candidateVoteReveal: 첫 화살표(단계 시작 200ms 뒤) 전에만 보이는 기본 제목. 진행 중·끝 상태 문구는 revealCaption 이 만든다
+  revealIntroTitle: "투표 공개",
   // defense
   defenseChooseTitle: "변론할 말을 고르세요",
   defenseChooseHint: "한 번에 하나씩 보낼 수 있어요",
@@ -396,6 +398,11 @@ export function execTallyText(tally: ExecTally, alive: number): { strong: string
   const left = Math.max(0, alive - (tally.yes + tally.no));
   const rest = left === 0 ? "모두 투표했어요 · 마감까지 바꿀 수 있어요" : `아직 ${left}명 · 마감까지 바꿀 수 있어요`;
   return { strong: `찬성 ${tally.yes} · 반대 ${tally.no}`, rest };
+}
+
+/** 공개 단계 첫 화살표 전 기본 안내: `모두 {n}표` (진행 중 안내 `{k}번째 표 · 모두 {n}표` 의 뒷부분) */
+export function revealIntroHint(total: number): string {
+  return `모두 ${total}표`;
 }
 
 /** 공개 단계 제목·안내. 화살표 사이 틈에서는 직전 화살표 문구를 유지하고, 첫 화살표 전에는 null (화면은 기본 제목을 쓴다). */
