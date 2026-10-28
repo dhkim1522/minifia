@@ -411,7 +411,8 @@ describe("시간 초과와 이월 없음 (D-02)", () => {
   });
 
   it("탈락자는 그날 기록 줄이 없다 (2일차부터)", () => {
-    const day1 = playOutClaim(claimState(5));
+    // 시드 2 는 마피아가 seat 2 라 seat 3 탈락으로 승패가 나지 않는다(시드 1 은 seat 3 이 마피아라 아침 마감에 ended 가 된다, 04-06).
+    const day1 = playOutClaim(claimState(5, 2));
     const dayTwo = nextClaimDay(markDead(day1, 3));
     const done = playOutClaim(dayTwo);
     expect(done.claimLog!.filter((e) => e.n === 2).map((e) => e.seat)).toEqual([1, 2, 4, 0]);

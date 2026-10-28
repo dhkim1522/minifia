@@ -52,6 +52,8 @@ export function enterNight(state: RoomState): RoomState {
 
 /** resolveNight 의 결과. 일지 줄에는 숫자·불리언뿐이고 직업 이름은 없다. */
 export interface ResolvedNight {
+  /** 마피아 팀의 최종 지목 seat(의사가 막았어도 남는다). 지목이 없으면 키가 없다. 서버 전용 밤 기록(nightLog)의 재료다. */
+  target?: number;
   eliminated?: number;
   phrase?: number;
   /** 경찰 수사일지 줄 */
@@ -74,6 +76,7 @@ export interface ResolvedNight {
  *   그 밤에 지목되는 경찰·의사      → 조사·보호는 그대로 적용 — 동시 해결 (A1)
  *   마피아 암살일지                 → 그 밤 마피아 팀의 최종 지목이 있으면 밤 시작 때 생존 마피아 모두에게 같은 { n: day ?? 1, target, died } 한 줄(안 고른 동료 포함). 의사가 막으면 died false. 지목이 없으면 줄이 없다 (D-09·D-10)
  *   의사 치료일지                   → 밤 시작 때 생존 의사마다 고른 앉은 생존자가 있으면 { n, target } 한 줄(자기 포함, 구출 여부 키 없음) (D-10)
+ *   밤 기록(서버 전용, 판 요약 재료) → enterMorning 이 nightLog 끝에 { n: day ?? 1, target?, died } 한 줄. target 은 최종 지목이 있을 때만, died 는 탈락자가 있을 때만 true. 의사 구출은 { target, died: false } 로 지목 없음 { died: false } 와 구별된다 (D-27) — 게임 중에는 어떤 view 에도 싣지 않는다 (결정 0020-3)
  *   문구                            → 탈락자가 있을 때만 1..MORNING_PHRASE_COUNT 에서 lastPhrase 를 뺀 오름차순 후보 중 하나 (D-18)
  * 동시 해결(A1)·고른 표만 센다(A2)는 사용자가 바꿀 수 있는 기본값이다 — 바뀌면 이 표와 테스트만 고친다(결정 0020).
  * 일지는 새 정보를 만들지 않는다 — 막은 사실을 마피아에게 알리지 않는다(결정 0026-4): died false 는 '지목했는데 아무도 죽지 않았다' 뿐이다.
@@ -134,16 +137,17 @@ export function resolveNight(
     treatments.push({ playerId: p.id, record: { n: state.day ?? 1, target: t.seat } });
   }
 
-  if (eliminated === undefined) return { records, assassinations, treatments };
+  const picked = target === undefined ? {} : { target };
+  if (eliminated === undefined) return { ...picked, records, assassinations, treatments };
   const candidates: number[] = [];
   for (let n = 1; n <= MORNING_PHRASE_COUNT; n += 1) if (n !== state.lastPhrase) candidates.push(n);
-  return { eliminated, phrase: candidates[randInt(candidates.length)], records, assassinations, treatments };
+  return { ...picked, eliminated, phrase: candidates[randInt(candidates.length)], records, assassinations, treatments };
 }
 
 /**
  * morning 진입 훅: resolveNight 결과를 한 번의 새 상태로 적용한다 — 탈락자 alive false(직업은 싣지 않는다),
  * 경찰 investigations·마피아 assassinations·의사 treatments 뒤에 추가, morning 은 탈락자가 있으면 { eliminated, phrase } 없으면 {}, 탈락자가 있으면 lastPhrase 갱신,
- * 모든 nightPick 키 제거(아침 뷰에 선택 흔적이 남지 않는다).
+ * 모든 nightPick 키 제거(아침 뷰에 선택 흔적이 남지 않는다), nightLog 끝에 그 밤 한 줄 추가(서버 전용, 키를 필드별로 만든다).
  */
 export function enterMorning(state: RoomState, randInt: RandInt): RoomState {
   const result = resolveNight(state, randInt);
@@ -164,6 +168,14 @@ export function enterMorning(state: RoomState, randInt: RandInt): RoomState {
     ...state,
     players,
     morning: result.eliminated === undefined ? {} : { eliminated: result.eliminated, phrase: result.phrase },
+    nightLog: [
+      ...(state.nightLog ?? []),
+      {
+        n: state.day ?? 1,
+        ...(result.target === undefined ? {} : { target: result.target }),
+        died: result.eliminated !== undefined,
+      },
+    ],
   };
   return result.phrase === undefined ? next : { ...next, lastPhrase: result.phrase };
 }
