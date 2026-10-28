@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import type { CandidateVoteLine, SummaryRow, VoteLogEntry } from "../../shared/protocol";
-import { daySeatLayout, dayTableGeometry, FIG_H, TAG_H } from "../../src/game/dayTable";
+import { daySeatLayout, dayTableGeometry, FIG_H, FIG_W, TAG_H } from "../../src/game/dayTable";
 import {
   CHIP_H,
   CHIP_H_LEAD,
@@ -39,6 +39,7 @@ import {
   candidateCenter,
   capHalos,
   chipAnchor,
+  chipPlacement,
   candidateSeatLabel,
   clinchedTarget,
   defenseAnnounce,
@@ -56,7 +57,9 @@ import {
   revealResultLine,
   revealStateAt,
   summaryLines,
+  tagBoxesOf,
   winnerText,
+  type ChipRect,
   type HaloRequest,
 } from "../../src/game/verdict";
 
@@ -328,6 +331,66 @@ describe("chipAnchor — 표수 칩 위치 (UI-SPEC 8.3)", () => {
           expect(chip.left + chip.width).toBeLessThanOrEqual(w);
           expect(chip.top).toBeGreaterThanOrEqual(4);
           expect(chip.left).toBeCloseTo(place.x - chip.width / 2, 9);
+        }
+      }
+    }
+  });
+});
+
+// 04-32 Rule-1: 실제 화면에서 선두 칩(머리 위 8px)이 앞줄 자리의 이름표와 겹쳐 E2E P10 이 실패했다.
+// chipPlacement 는 UI-SPEC 8.3 의 머리 위 가운데(chipAnchor)를 먼저 쓰고, 다른 자리 이름표와 겹치면 머리 폭 안에서 옆으로,
+// 그래도 안 되면 위로 옮긴다. 이름표 폭은 최악(NAME_TAG_MAX_W)·높이는 인라인 줄 상자(TAG_H + 4) 로 본다.
+describe("chipPlacement — 이름표를 피하는 표수 칩 위치 (04-32, P10)", () => {
+  const overlap = (a: ChipRect, b: ChipRect, eps = 0): boolean =>
+    a.left < b.left + b.width - eps && b.left < a.left + a.width - eps && a.top < b.top + b.height - eps && b.top < a.top + a.height - eps;
+
+  it("겹치는 이름표가 없으면 chipAnchor 와 같다", () => {
+    const place = { x: 100, y: 200, scale: 1 };
+    expect(chipPlacement(place, "lead", 366, [])).toEqual(chipAnchor(place, "lead", 366));
+    expect(chipPlacement(place, "normal", 366, [{ left: 0, top: 260, width: 100, height: 26 }])).toEqual(chipAnchor(place, "normal", 366));
+  });
+
+  it("기본 자리가 이름표와 겹치면 머리 폭 안에서 옆으로 옮겨 피한다(위로 올리지 않는다)", () => {
+    const place = { x: 60, y: 200, scale: 1 };
+    const base = chipAnchor(place, "lead", 366); // left 42, top 64..96
+    const tag = { left: 50, top: 70, width: 100, height: 26 }; // 오른쪽 이름표
+    const got = chipPlacement(place, "lead", 366, [tag]);
+    expect(overlap(got, tag)).toBe(false);
+    expect(got.top).toBe(base.top);
+    expect(got.left).toBeLessThan(base.left);
+    expect(Math.abs(got.left + got.width / 2 - place.x)).toBeLessThanOrEqual(36);
+  });
+
+  it("옆으로 피할 수 없으면 위로 올려 피한다", () => {
+    const place = { x: 100, y: 200, scale: 1 };
+    const tag = { left: 0, top: 60, width: 200, height: 26 }; // 머리 위를 가로로 덮는 긴 띠
+    const got = chipPlacement(place, "normal", 366, [tag]);
+    expect(overlap(got, tag)).toBe(false);
+    expect(got.top).toBeGreaterThanOrEqual(4);
+  });
+
+  it("회귀 근거: 기본 자리(chipAnchor)만 쓰면 실제 배치에서 이름표와 겹치는 경우가 있다(390 폭 8명판 선두 칩 등)", () => {
+    const layout = daySeatLayout(Array.from({ length: 8 }, (_, i) => ({ seat: i })), 0, 366, 387.8, 12);
+    const tags = tagBoxesOf(layout);
+    const hit = layout.filter((p) => tags.some((t) => overlap(chipAnchor(p, "lead", 366), t)));
+    expect(hit.length).toBeGreaterThan(0);
+    for (const p of hit) expect(chipPlacement(p, "lead", 366, tags)).not.toEqual(chipAnchor(p, "lead", 366));
+  });
+
+  it.each(SCENES)("$label: 4~8명 모든 자리·두 칩에서 어떤 이름표(최악 폭)와도 겹치지 않고 장면 안·위 4 이상·머리 폭 안이다", ({ w, h, pad }) => {
+    for (let n = 4; n <= 8; n++) {
+      const seats = Array.from({ length: n }, (_, i) => ({ seat: i }));
+      const layout = daySeatLayout(seats, 0, w, h, pad);
+      const tags = tagBoxesOf(layout);
+      for (const place of layout) {
+        for (const tone of ["normal", "lead"] as const) {
+          const chip = chipPlacement(place, tone, w, tags);
+          const where = `${n}명 자리 ${place.seat} ${tone}`;
+          for (const t of tags) expect(overlap(chip, t, 0), `${where} 칩 ${JSON.stringify(chip)} ↔ 이름표 ${JSON.stringify(t)}`).toBe(false);
+          expect(chip.left, where).toBeGreaterThanOrEqual(0);
+          expect(chip.left + chip.width, where).toBeLessThanOrEqual(w);
+          expect(chip.top, where).toBeGreaterThanOrEqual(4);
+          expect(Math.abs(chip.left + chip.width / 2 - place.x), where).toBeLessThanOrEqual(FIG_W * place.scale / 2 + 1e-9);
         }
       }
     }

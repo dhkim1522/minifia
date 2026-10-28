@@ -9,7 +9,7 @@ import type { IconName } from "../../src/components/Icon";
 import type { DayTableSeat } from "../../src/components/DayTable";
 import { HALO_MAX_SIMULTANEOUS, daySeatLayout, px } from "../../src/game/dayTable";
 import { claimName } from "../../src/game/roleText";
-import { CONE_H, CONE_W, GHOST_FADE_MS, VERDICT_BLUR_PX, VERDICT_CANDIDATE_SCALE, VERDICT_DIM_PERCENT, VERDICT_MOVE_MS, candidateCenter, chipAnchor } from "../../src/game/verdict";
+import { CONE_H, CONE_W, GHOST_FADE_MS, VERDICT_BLUR_PX, VERDICT_CANDIDATE_SCALE, VERDICT_DIM_PERCENT, VERDICT_MOVE_MS, candidateCenter, chipPlacement, tagBoxesOf } from "../../src/game/verdict";
 
 afterEach(() => {
   cleanup();
@@ -1160,7 +1160,7 @@ describe("DayTable: 표수 칩 chip (04-19, UI-SPEC 8.3, D-31)", () => {
     expect(el.closest("button")).toBeNull();
   });
 
-  it("폰 폭 4종 × 4~8명: 칩 사각형이 장면 폭 안이고 위는 4 이상이며 chipAnchor 와 같은 위치다", () => {
+  it("폰 폭 4종 × 4~8명: 칩 사각형이 장면 폭 안이고 위는 4 이상이며 chipPlacement 와 같은 위치다", () => {
     for (const w of [320, 360, 390, 430]) {
       for (let count = 4; count <= 8; count++) {
         const seats = Array.from({ length: count }, (_, i) =>
@@ -1171,7 +1171,7 @@ describe("DayTable: 표수 칩 chip (04-19, UI-SPEC 8.3, D-31)", () => {
         for (const L of layout) {
           const el = chipEl(container, L.seat)!;
           const tone = seats[L.seat].chip!.tone === "lead" ? "lead" : "normal";
-          const rect = chipAnchor({ x: L.x, y: L.y, scale: L.scale }, tone, w);
+          const rect = chipPlacement({ x: L.x, y: L.y, scale: L.scale }, tone, w, tagBoxesOf(layout));
           expect(el.style.left).toBe(px(rect.left));
           expect(el.style.top).toBe(px(rect.top));
           expect(rect.left).toBeGreaterThanOrEqual(0);

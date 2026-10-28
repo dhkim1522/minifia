@@ -4,7 +4,7 @@
 // (4) 후광 상한 capHalos (5) 문구 정본 VERDICT_TEXT 와 문구 함수. 이 파일은 역할 문자열(직업 단어)을 만들지 않는다 —
 // 입력은 서버가 모두에게 보낸 공개 타입뿐이다(D-09).
 import type { CandidateVoteLine, ExecTally, GameWinner, NoExecutionReason, SummaryRow, VoteLogEntry } from "../../shared/protocol";
-import { dayTableGeometry, FIG_H, HALO_MAX_SIMULTANEOUS } from "./dayTable";
+import { dayTableGeometry, FIG_H, FIG_W, HALO_MAX_SIMULTANEOUS, NAME_TAG_MAX_W, TAG_H, type DaySeatPlace } from "./dayTable";
 
 // ---- (1) 상수 (UI-SPEC 13.1 값 그대로) ----
 export const EXEC_INTRO_MS = 1600; // UI-SPEC 13.1: "처형 투표" 카드(§9.1). 서버 execVote 10초와 동시, 시간을 깎지 않음
@@ -277,6 +277,45 @@ export function chipAnchor(place: FootPlace, tone: ChipTone, sceneW: number): Ch
   const headTop = place.y - FIG_H * place.scale;
   const left = Math.min(Math.max(0, place.x - width / 2), Math.max(0, sceneW - width));
   return { left, top: Math.max(CHIP_TOP_MIN, headTop - CHIP_GAP_ABOVE_HEAD - height), width, height };
+}
+
+const TAG_BOX_EXTRA_H = 4; // 실제 이름표 상자는 알약(TAG_H 22)보다 인라인 줄 상자만큼(4) 크다(daytable.css .mf-dt__tag)
+const CHIP_TAG_MARGIN = 4; // 칩 팝(scale 1.25)이 커지는 만큼의 여유 — 정지 상태뿐 아니라 팝 중에도 이름표와 안 겹친다
+const CHIP_RAISE_MAX = 64; // 옆으로 피할 수 없을 때 머리 위에서 더 올리는 최대 거리
+const CHIP_SEARCH_STEP = 1;
+
+/** 모든 자리의 이름표 상자(최악 폭 NAME_TAG_MAX_W, 높이는 인라인 줄 상자). 칩 위치가 피해야 하는 영역이다. */
+export function tagBoxesOf(places: readonly Pick<DaySeatPlace, "tagLeft" | "tagTop">[]): ChipRect[] {
+  return places.map((p) => ({ left: p.tagLeft - NAME_TAG_MAX_W / 2, top: p.tagTop, width: NAME_TAG_MAX_W, height: TAG_H + TAG_BOX_EXTRA_H }));
+}
+
+const hitsAny = (r: ChipRect, boxes: readonly ChipRect[]): boolean =>
+  boxes.some((b) => r.left < b.left + b.width + CHIP_TAG_MARGIN && b.left - CHIP_TAG_MARGIN < r.left + r.width && r.top < b.top + b.height + CHIP_TAG_MARGIN && b.top - CHIP_TAG_MARGIN < r.top + r.height);
+
+/**
+ * 표수 칩의 실제 위치(UI-SPEC 8.3 + 04-32 Rule-1). 기본은 chipAnchor(머리 위 8px 가운데). 앞줄 자리의 이름표가 뒷줄 자리의 머리 위로 올라와 있어
+ * 기본 자리가 이름표와 겹치면(E2E P10), ① 캐릭터 폭 안에서 칩을 옆으로 옮기고(가장 적게), ② 그래도 안 되면 위로 올린다. 못 찾으면 기본 자리다.
+ * tags 는 tagBoxesOf — 대상 자신의 이름표(발 아래)는 칩과 겹칠 수 없으니 그대로 넣어도 된다.
+ */
+export function chipPlacement(place: FootPlace, tone: ChipTone, sceneW: number, tags: readonly ChipRect[]): ChipRect {
+  const base = chipAnchor(place, tone, sceneW);
+  if (!hitsAny(base, tags)) return base;
+  const maxLeft = Math.max(0, sceneW - base.width);
+  const halfHead = (FIG_W * place.scale) / 2;
+  const outward = place.x < sceneW / 2 ? -1 : 1;
+  for (let rise = 0; rise <= CHIP_RAISE_MAX; rise += 2) {
+    const top = base.top - rise;
+    if (top < CHIP_TOP_MIN) break;
+    for (let d = 0; d <= halfHead; d += CHIP_SEARCH_STEP) {
+      for (const sign of d === 0 ? [1] : [outward, -outward]) {
+        const left = Math.min(maxLeft, Math.max(0, base.left + sign * d));
+        if (Math.abs(left + base.width / 2 - place.x) > halfHead + 1e-9) continue;
+        const cand = { left, top, width: base.width, height: base.height };
+        if (!hitsAny(cand, tags)) return cand;
+      }
+    }
+  }
+  return base;
 }
 
 export interface Point {

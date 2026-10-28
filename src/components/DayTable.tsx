@@ -4,7 +4,7 @@ import type { EmojiId, RoleId } from "../../shared/protocol";
 import { DAY_SCENE_H, DAY_SCENE_W, EMOJI_LIFT, EMOJI_SIZE, FIG_H, FIG_W, SCENE_PAD_DEFAULT, dayTableGeometry, daySeatLayout, px } from "../game/dayTable";
 import type { DaySeatPlace } from "../game/dayTable";
 import { ROLE_TEXT } from "../game/roleText";
-import { CONE_H, CONE_W, GHOST_FADE_MS, candidateCenter, chipAnchor } from "../game/verdict";
+import { CONE_H, CONE_W, GHOST_FADE_MS, candidateCenter, chipPlacement, tagBoxesOf } from "../game/verdict";
 import { Figure } from "./Figure";
 import { Icon } from "./Icon";
 import "../styles/daytable.css";
@@ -287,6 +287,7 @@ export function DayTable({
   const bySeat = new Map(seats.map((s) => [s.seat, s]));
   const cc = candidateCenter(sceneW, sceneH, pad);
   const places = daySeatLayout(seats, mySeat, sceneW, sceneH, pad).map((p) => placeOf(p, bySeat.get(p.seat)?.center === true, cc));
+  const tagBoxes = tagBoxesOf(places);
   const hasCenter = seats.some((s) => s.center === true);
 
   return (
@@ -445,9 +446,9 @@ export function DayTable({
       {places.map((p) => {
         const chip = bySeat.get(p.seat)?.chip;
         if (!chip) return null;
-        // 위치는 chipAnchor 한 곳(머리 위 8px, 위는 4 이상·좌우는 장면 안). 숫자가 key 에 들어 오르면 새 노드가 되어 팝이 다시 돈다.
+        // 위치는 chipPlacement 한 곳(머리 위 8px 가운데가 기본, 다른 자리 이름표와 겹치면 옆·위로 비킴. 위는 4 이상·좌우는 장면 안). 숫자가 key 에 들어 오르면 새 노드가 되어 팝이 다시 돈다.
         const big = chip.tone === "lead" || chip.tone === "beat";
-        const rect = chipAnchor({ x: p.x, y: p.y, scale: p.scale }, big ? "lead" : "normal", sceneW);
+        const rect = chipPlacement({ x: p.x, y: p.y, scale: p.scale }, big ? "lead" : "normal", sceneW, tagBoxes);
         return (
           <span
             key={`c${p.seat}:${chip.n}`}
