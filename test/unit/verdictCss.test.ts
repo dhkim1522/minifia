@@ -259,8 +259,13 @@ describe("모션 줄이기 짝 (UI-SPEC 13.4)", () => {
 });
 
 describe("터치 통과 (T-04-62: 연출 층은 입력을 가로채지 않는다)", () => {
-  const noneIn = (file: string, selector: string): boolean =>
-    styleRules(flatten(parse(css(file)))).some((r) => r.selector.split(",").some((s) => s.trim() === selector) && declsOf(r, "pointer-events").includes("none"));
+  // 그 선택자의 규칙 중 pointer-events 를 정하는 것이 하나 이상이고 모두 none 이어야 한다(나중 규칙이 되살리는 일을 막는다)
+  const noneIn = (file: string, selector: string): boolean => {
+    const values = styleRules(flatten(parse(css(file))))
+      .filter((r) => r.selector.split(",").some((s) => s.trim() === selector))
+      .flatMap((r) => declsOf(r, "pointer-events"));
+    return values.length > 0 && values.every((v) => v === "none");
+  };
 
   // [선택자, 어느 파일들에서 찾는가]: 변형 클래스는 기본 클래스가 이미 터치를 통과시키면 그 규칙을 상속한다
   const layers: Array<[string, string[]]> = [

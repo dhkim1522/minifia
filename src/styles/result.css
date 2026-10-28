@@ -112,3 +112,13 @@
 .mf-result[data-stage="flip"] .mf-result__rise { opacity: 0; visibility: hidden; transform: translateY(8px); }
 .mf-result[data-reveal="true"][data-stage="done"] .mf-result__rise { animation: mf-result-rise 300ms var(--ease-out) both; }
 @keyframes mf-result-rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
+/* 모션 줄이기(UI-SPEC 13.4, 11.2): 연출 여부는 마운트 때 JS 가 한 번 정한다(data-reveal) — 설정이 그 뒤에 바뀌어도 움직임이 즉시 멈추도록 CSS 도 같은 쪽으로 끈다.
+   배너 팝·번짐 페이드인·카드 뒤집기·요약 떠오름은 애니메이션 없이 최종 상태로, 직업 그림·이름·탈락 전이도 없다. 숨김 상태(neutral·flip)의 opacity·visibility 는 단계 타이머가 done 으로 넘기며 풀린다. */
+@media (prefers-reduced-motion: reduce) {
+  .mf-result[data-reveal="true"] .mf-result__banner,
+  .mf-result__glow[data-reveal="true"],
+  .mf-result[data-stage="flip"] .mf-result__card,
+  .mf-result[data-reveal="true"][data-stage="done"] .mf-result__rise { animation: none; }
+  .mf-result__art, .mf-result__neutral, .mf-result__role, .mf-result__out { transition: none; }
+}
