@@ -159,6 +159,11 @@ export function buildView(state: RoomState, playerId: string, now: number): Room
     if (state.phase === "lobby" && state.testRole !== undefined) myInfo.testRole = state.testRole;
     // 서버 봇 수는 시트의 '봇' 줄이 있는 대기실에서만, 0 포함 항상 숫자로(결정 0024). isBot·botPlan·봇 id 는 어디에도 싣지 않는다.
     if (state.phase === "lobby") myInfo.testBots = botCount(state);
+    // 봇 투표 규칙(P-13)은 시트의 '봇 투표' 줄이 있는 대기실에서만, 무작위가 아닌 값이 있을 때만. 상태 객체를 펼치지 않고 두 값을 필드별로 읽는다.
+    if (state.phase === "lobby" && state.testBotVote !== undefined) {
+      const { exec, pick } = state.testBotVote;
+      if (exec !== undefined || pick !== undefined) myInfo.testBotVote = { exec: exec ?? "random", pick: pick ?? "random" };
+    }
   }
 
   // 본인 선택은 본인에게만(D-06) — 남의 nightPick 은 어떤 키로도 싣지 않는다. 밤에 살아 있는 본인이 고른 값이 있을 때만 키를 만든다.

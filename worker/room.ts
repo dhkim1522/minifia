@@ -1,6 +1,6 @@
 import { DurableObject } from "cloudflare:workers";
 import { CLOSE_CODES, MAX_FRAME_BYTES } from "../shared/protocol";
-import type { ApiErrorCode, ClientMessage, Claim, EmojiId, RemovedReason, RoomPreview, ServerMessage, WsErrorCode } from "../shared/protocol";
+import type { ApiErrorCode, BotVoteExec, BotVotePick, ClientMessage, Claim, EmojiId, RemovedReason, RoomPreview, ServerMessage, WsErrorCode } from "../shared/protocol";
 import { botWakeAt, isBot, syncBotPlan, takeDueBotSteps } from "../shared/game/bots";
 import type { BotStep } from "../shared/game/bots";
 import { selectClaim } from "../shared/game/claim";
@@ -20,7 +20,7 @@ import {
 import type { JoinError } from "../shared/game/room";
 import type { RoomState } from "../shared/game/room";
 import { nightChatRecipientIds, pickRecipientIds, pickTarget } from "../shared/game/night";
-import { resetToLobby, setBotCount, setTestRole, skipPhase } from "../shared/game/testTools";
+import { resetToLobby, setBotCount, setBotVote, setTestRole, skipPhase } from "../shared/game/testTools";
 import type { RoleId } from "../shared/game/roles";
 import { nextWakeAt, tick } from "../shared/game/tick";
 import { castCandidateVote, castExecVote } from "../shared/game/vote";
@@ -225,6 +225,9 @@ export class Room extends DurableObject<Env> {
         return;
       case "testBots":
         await this.handleTestBots(ws, msg.count);
+        return;
+      case "testBotVote":
+        await this.handleTestBotVote(ws, msg.exec, msg.pick);
         return;
       default: {
         // 새 메시지를 ClientMessage 에 더하고 여기를 빠뜨리면 컴파일이 실패한다 — 조용히 무시되지 않게(Pitfall 15).
@@ -576,6 +579,24 @@ export class Room extends DurableObject<Env> {
       return;
     }
     const result = setTestRole(this.room, att.playerId, role);
+    if (!result.ok) {
+      this.rejectTestTool(ws, att.playerId, result.error);
+      return;
+    }
+    if (result.state === this.room) return;
+    this.room = result.state;
+    await this.ctx.storage.put("room", this.room);
+    this.sendViewTo([att.playerId]);
+  }
+
+  // 봇 투표 규칙 고르기(P-13): handleTestRole 과 같다 — 성공하면 방장 소켓에만 state 를 보내고, 같은 값이면 저장·전송하지 않는다. 마감이 안 바뀌어 알람은 그대로다.
+  private async handleTestBotVote(ws: WebSocket, exec: BotVoteExec, pick: BotVotePick): Promise<void> {
+    const att = this.attachmentOf(ws);
+    if (!att || !this.room) {
+      this.sendTo(ws, { t: "error", code: "BAD_MESSAGE" });
+      return;
+    }
+    const result = setBotVote(this.room, att.playerId, exec, pick);
     if (!result.ok) {
       this.rejectTestTool(ws, att.playerId, result.error);
       return;

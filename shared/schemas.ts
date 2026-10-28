@@ -37,4 +37,6 @@ export const ClientMessageSchema = z.discriminatedUnion("t", [
   z.strictObject({ t: z.literal("testRole"), role: z.enum(["mafia", "police", "doctor", "citizen"]).nullable() }),
   // 서버 봇 수(결정 0024): 정수 0..MAX_TEST_BOTS. 총 인원 8명 제한은 서버 규칙(setBotCount)이 한 번 더 자른다.
   z.strictObject({ t: z.literal("testBots"), count: z.number().int().min(0).max(MAX_TEST_BOTS) }),
+  // 봇 투표 규칙(P-13): 두 값 모두 필수인 절대값. 모르는 값·빠진 키·덧붙은 키는 거부한다(T-04-46). 방장·testMode·대기실 검사는 서버 규칙(setBotVote)이 한다.
+  z.strictObject({ t: z.literal("testBotVote"), exec: z.enum(["random", "yes", "no"]), pick: z.enum(["random", "host", "other"]) }),
 ]) satisfies z.ZodType<ClientMessage>;
