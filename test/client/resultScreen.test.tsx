@@ -4,7 +4,7 @@ import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import "../helpers/singleLineErrors";
 import type { RoleId } from "../../shared/game/roles";
-import type { GameWinner, RoomView, SummaryRow } from "../../shared/protocol";
+import type { GameWinner, RoomView, SummaryRow, VoteLogEntry } from "../../shared/protocol";
 import type { RoomConnection } from "../../src/net/useRoomConnection";
 
 // RoomScreen 의 연결 훅만 가짜로 바꾼다(execIntro.test.tsx 와 같은 방식). 서버와는 view 픽스처로만 만난다.
@@ -33,6 +33,7 @@ interface Opts {
   connected?: boolean;
   spectate?: boolean;
   nicknames?: string[];
+  voteLog?: VoteLogEntry[];
 }
 
 const DEFAULT_JOBS: RoleId[] = ["citizen", "police", "doctor", "mafia", "citizen", "mafia", "citizen", "citizen"];
@@ -63,7 +64,7 @@ function makeView(o: Opts = {}): RoomView {
       ...(dead.includes(seat) ? { alive: false } : {}),
     })),
     me: { seat: me, isHost: me === 0, role: jobs[me]! },
-    day: { n: 1, roles: ["mafia", "police", "citizen"], claimLog: [], voteLog: [] },
+    day: { n: 1, roles: ["mafia", "police", "citizen"], claimLog: [], voteLog: o.voteLog ?? [] },
     ...(o.spectate ? { spectate: { seats } } : {}),
     ...(o.withResult === false ? {} : { result: { winner: o.winner ?? "citizenWin", seats, summary } }),
   };
@@ -282,5 +283,171 @@ describe("정리", () => {
     r.unmount();
     act(() => void vi.runOnlyPendingTimers());
     expect(vi.getTimerCount()).toBe(0);
+  });
+});
+
+
+// ---- Task 2: 판 요약 카드·부제·스크롤·배경 크로스페이드 (D-17·D-27, UI-SPEC 11.1·11.3) ----
+const summaryRows = (c: HTMLElement) =>
+  Array.from(c.querySelectorAll<HTMLElement>(".mf-result__sm-row")).map((r) => [text(r.querySelector(".mf-result__sm-label")), text(r.querySelector(".mf-result__sm-text"))]);
+
+describe("판 요약 카드 `이번 판 기록` (UI-SPEC 7.2·11.1)", () => {
+  it("제목과 행: 앞 라벨 `{n}일차 낮|밤` + 본문, 일차 오름차순으로 낮 → 밤", () => {
+    const summary: SummaryRow[] = [
+      { n: 2, exec: { yes: 1, no: 2, passed: false }, night: { target: 1, died: true } },
+      { n: 1, exec: { yes: 3, no: 1, passed: true, candidate: 3 }, night: { target: 2, died: true } },
+    ];
+    const voteLog: VoteLogEntry[] = [
+      { n: 1, exec: { yes: 3, no: 1, passed: true }, cand: { votes: [{ seat: 0, target: 3 }, { seat: 1, target: 3 }, { seat: 2, target: 0 }], candidate: 3 } },
+    ];
+    const r = renderRoom(makeView({ summary, voteLog }));
+    expect(text(r.container.querySelector(".mf-result__sm-title"))).toBe("이번 판 기록");
+    expect(summaryRows(r.container)).toEqual([
+      ["1일차 낮", "도현님 처형 (2표)"],
+      ["1일차 밤", "민지님 사망"],
+      ["2일차 낮", "처형 없음 (찬성 1 · 반대 2)"],
+      ["2일차 밤", "하윤님 사망"],
+    ]);
+  });
+
+  it("나머지 문구: 동률 · 던진 표 없음 · 의사가 지킴 · 지목 없음", () => {
+    const summary: SummaryRow[] = [
+      { n: 1, exec: { yes: 3, no: 1, passed: true }, night: { target: 1, died: false } },
+      { n: 2, exec: { yes: 3, no: 1, passed: true }, night: { died: false } },
+    ];
+    const voteLog: VoteLogEntry[] = [
+      { n: 1, exec: { yes: 3, no: 1, passed: true }, cand: { votes: [{ seat: 0, target: 3 }, { seat: 1, target: 4 }] } },
+      { n: 2, exec: { yes: 3, no: 1, passed: true }, cand: { votes: [] } },
+    ];
+    const r = renderRoom(makeView({ summary, voteLog }));
+    expect(summaryRows(r.container)).toEqual([
+      ["1일차 낮", "처형 없음 (동률)"],
+      ["1일차 밤", "하윤님을 노렸지만 의사가 지켰어요"],
+      ["2일차 낮", "처형 없음 (던진 표 없음)"],
+      ["2일차 밤", "아무 일도 없었어요"],
+    ]);
+  });
+
+  it("요약 행이 없으면 요약 카드와 부제를 그리지 않는다", () => {
+    const r = renderRoom(makeView({ summary: [] }));
+    expect(r.container.querySelector(".mf-result__sm")).toBeNull();
+    expect(r.container.querySelector(".mf-result__sub")).toBeNull();
+  });
+
+  it("부제: 요약 마지막 줄에 night 가 있으면 `{n}일차 밤`, 없으면 `{n}일차 낮`", () => {
+    const a = renderRoom(makeView({ summary: [{ n: 1, exec: { yes: 1, no: 2, passed: false } }, { n: 2, exec: { yes: 3, no: 0, passed: true, candidate: 3 }, night: { target: 1, died: true } }] }));
+    expect(text(a.container.querySelector(".mf-result__sub"))).toBe("2일차 밤");
+    a.unmount();
+    const b = renderRoom(makeView({ summary: [{ n: 1, exec: { yes: 1, no: 2, passed: false }, night: { died: false } }, { n: 2, exec: { yes: 3, no: 0, passed: true, candidate: 3 } }] }));
+    expect(text(b.container.querySelector(".mf-result__sub"))).toBe("2일차 낮");
+  });
+
+  it("`<b>` 닉네임이 요약 문장에도 평문이다(T-04-65)", () => {
+    const nicknames = ["<b>굵게</b>", "하윤", "민지", "도현", "서연", "수빈", "하준", "지호"];
+    const r = renderRoom(makeView({ nicknames, summary: [{ n: 1, exec: { yes: 3, no: 1, passed: true, candidate: 0 }, night: { target: 0, died: true } }] }));
+    expect(r.container.querySelector(".mf-result__sm b")).toBeNull();
+    expect(summaryRows(r.container)[1]![1]).toBe("<b>굵게</b>님 사망");
+  });
+});
+
+describe("8명·긴 요약: 스크롤로 [처음으로] 에 닿는다 (P-2)", () => {
+  const long: SummaryRow[] = [1, 2, 3].map((n) => ({ n, exec: { yes: 1, no: 2, passed: false }, night: { target: 1, died: true } }));
+  it("8장 카드와 요약 6행, [처음으로] 는 스크롤 본문(.mf-result) 안에 있고 헤더 바·하단 패널은 없다", () => {
+    const r = renderRoom(makeView({ count: 8, dead: [1, 2, 3], summary: long }));
+    expect(cards(r.container).length).toBe(8);
+    expect(summaryRows(r.container).length).toBe(6);
+    const btn = screen.getByRole("button", { name: "처음으로" });
+    expect(btn.closest(".mf-result")).not.toBeNull();
+    expect(r.container.querySelector(".mf-phasebar")).toBeNull();
+  });
+});
+
+describe("배경 크로스페이드 (UI-SPEC 11.2, P-2)", () => {
+  const arts = (c: HTMLElement) => Array.from(c.querySelectorAll<HTMLElement>(".mf-backdrop__art")).map((a) => a.dataset.scene);
+  const executionView = (): RoomView => {
+    const v = makeView();
+    v.phase = "execution";
+    delete (v as { result?: unknown }).result;
+    v.day = { ...v.day!, candidate: 3, execution: { seat: 3, phrase: 0 } };
+    return v;
+  };
+
+  it("같은 접속에서 execution → ended 로 오면 직전 장면(dusk)에서 night 로 크로스페이드한다", () => {
+    const r = renderRoom(executionView());
+    r.rerenderRoom(makeView());
+    expect(arts(r.container).sort()).toEqual(["dusk", "night"]);
+  });
+
+  it("morning 에서 와도 직전 장면(morning)에서 이어진다", () => {
+    const v = executionView();
+    v.phase = "morning";
+    v.day = { ...v.day!, morning: { eliminated: 2 } as never };
+    const r = renderRoom(v);
+    r.rerenderRoom(makeView());
+    expect(arts(r.container).sort()).toEqual(["morning", "night"]);
+  });
+
+  it("처음 마운트·재접속(arrivedFrom 없음)이면 night 한 장만 즉시", () => {
+    const r = renderRoom(makeView());
+    expect(arts(r.container)).toEqual(["night"]);
+  });
+
+  it("에포크가 바뀐 재접속은 직전 단계를 잇지 않는다", () => {
+    const r = renderRoom(executionView());
+    r.rerenderRoom(makeView(), { epoch: 2 });
+    expect(arts(r.container)).toEqual(["night"]);
+  });
+});
+
+describe("result.css 정적 단언 (happy-dom 은 레이아웃을 재지 못한다)", () => {
+  const css = readFileSync("src/styles/result.css", "utf8");
+  const rule = (sel: string): string => {
+    const m = css.match(new RegExp(`${sel.replace(/[.\[\]="]/g, "\\$&")}\\s*\\{([^}]*)\\}`));
+    return m?.[1] ?? "";
+  };
+
+  it("스크롤 본문: overflow-y auto · overflow-x hidden · overscroll-behavior contain", () => {
+    const body = rule(".mf-result");
+    expect(body).toMatch(/overflow-y:\s*auto/);
+    expect(body).toMatch(/overflow-x:\s*hidden/);
+    expect(body).toMatch(/overscroll-behavior:\s*contain/);
+  });
+
+  it("격자는 3열(repeat(3, minmax(0, 1fr))) 간격 8, 카드는 min-width 0", () => {
+    const grid = rule(".mf-result__grid");
+    expect(grid).toMatch(/grid-template-columns:\s*repeat\(3,\s*minmax\(0,\s*1fr\)\)/);
+    expect(grid).toMatch(/gap:\s*var\(--space-sm\)/);
+    expect(rule(".mf-result__card")).toMatch(/min-width:\s*0/);
+  });
+
+  it("글자 크기는 14·16·24·36 만, 색 직접 지정(#)이 없고 진홍은 배너·마피아 글자에만", () => {
+    expect(css).not.toMatch(/#[0-9a-fA-F]{3,8}\b/);
+    const sizes = new Set([...css.matchAll(/font-size:\s*(\d+)px/g)].map((m) => Number(m[1])));
+    for (const n of sizes) expect([14, 16, 24, 36]).toContain(n);
+    const crimsonRules = [...css.matchAll(/([^{}]+)\{[^}]*crimson[^}]*\}/g)].map((m) => m[1]!.trim());
+    for (const sel of crimsonRules) expect(sel).toMatch(/banner|band|role--mafia|glow/);
+  });
+
+  it("닉네임 말줄임 없음: 이름표에 text-overflow 가 없고, 5글자 이름표 폭(99)이 360 폰 카드 폭(104) 안에 든다", () => {
+    expect(rule(".mf-result__tag")).not.toMatch(/text-overflow|overflow:\s*hidden/);
+    // 이름표 = 테두리 2 + 안쪽 7+8 + 점 8 + 간격 4 + 글자 5×14
+    const tagW = 2 + 7 + 8 + 8 + 4 + 5 * 14;
+    expect(tagW).toBe(99);
+    // 360 폰: 좌우 16 → 격자 328, 간격 8 두 개 → 카드 (328 − 16)/3 = 104
+    const cardW = (360 - 2 * 16 - 2 * 8) / 3;
+    expect(cardW).toBe(104);
+    expect(tagW).toBeLessThanOrEqual(cardW - 2);
+  });
+
+  it("스크롤 본문 아래 여백은 24 + 안전 영역, 배경은 스크롤해도 고정(글로우는 본문 밖 형제)", () => {
+    expect(rule(".mf-result__inner")).toMatch(/padding:[^;]*var\(--space-lg\)[^;]*safe-area-inset-bottom/);
+    expect(css).toMatch(/\.mf-result__glow\s*\{[^}]*position:\s*absolute/);
+  });
+
+  it("요약 카드: night-800 92% · 모서리 14 · 라벨 열 64px · 행 간격 4", () => {
+    expect(rule(".mf-result__sm")).toMatch(/border-radius:\s*var\(--radius-md\)/);
+    expect(rule(".mf-result__sm")).toMatch(/night-800/);
+    expect(rule(".mf-result__sm-label")).toMatch(/width:\s*64px/);
+    expect(rule(".mf-result__sm")).toMatch(/gap:\s*var\(--space-xs\)/);
   });
 });
