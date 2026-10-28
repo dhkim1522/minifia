@@ -9,6 +9,7 @@ import type { IconName } from "../../src/components/Icon";
 import type { DayTableSeat } from "../../src/components/DayTable";
 import { HALO_MAX_SIMULTANEOUS, daySeatLayout, px } from "../../src/game/dayTable";
 import { claimName } from "../../src/game/roleText";
+import { chipAnchor } from "../../src/game/verdict";
 
 afterEach(() => {
   cleanup();
@@ -1131,5 +1132,89 @@ describe("DayTable: 좌석이 후광 종류(halo)를 명시한다 (04-18, 결정
     expect(/--mf-halo-amber:\s*drop-shadow\(0 0 2px color-mix\(in srgb, var\(--amber-400\) 95%, transparent\)\)\s*drop-shadow\(0 0 9px color-mix\(in srgb, var\(--amber-400\) 75%, transparent\)\)/.test(code)).toBe(true);
     expect(/\.mf-dt__seat \.mf-figure--halo-amber\s*\{[^}]*filter:\s*var\(--mf-halo-amber\)/.test(code)).toBe(true);
     expect(/\.mf-figure--disconnected\.mf-figure--halo-amber\s*\{[^}]*filter:\s*grayscale\(1\) var\(--mf-halo-amber\)/.test(code)).toBe(true);
+  });
+});
+
+describe("DayTable: 표수 칩 chip (04-19, UI-SPEC 8.3, D-31)", () => {
+  const chipEl = (c: HTMLElement, n: number) => c.querySelector<HTMLElement>(`.mf-vchip[data-seat="${n}"]`);
+
+  it("chip 이 있는 자리만 머리 위에 .mf-vchip.mf-vchip--{tone} 가 그려지고 숫자가 n 이다. 없으면 칩이 없다", () => {
+    const { container } = render(
+      <DayTable seats={five({ 1: { chip: { n: 3, tone: "pop" } }, 2: { chip: { n: 1, tone: "plain" } }, 3: { chip: { n: 4, tone: "lead" } }, 4: { chip: { n: 2, tone: "beat" } } })} mySeat={0} width={366} height={407} />,
+    );
+    expect(container.querySelectorAll(".mf-vchip").length).toBe(4);
+    expect(chipEl(container, 0)).toBeNull();
+    expect(chipEl(container, 1)?.className).toContain("mf-vchip--pop");
+    expect(chipEl(container, 1)?.textContent).toBe("3");
+    expect(chipEl(container, 2)?.className).toContain("mf-vchip--plain");
+    expect(chipEl(container, 3)?.className).toContain("mf-vchip--lead");
+    expect(chipEl(container, 4)?.className).toContain("mf-vchip--beat");
+    expect(chipEl(container, 4)?.textContent).toBe("2");
+  });
+
+  it("칩은 aria-hidden 장식이고 z-index 46(캐릭터 22·어둡게 30 위, 이모티콘 60 아래)이다", () => {
+    const { container } = render(<DayTable seats={five({ 1: { chip: { n: 2, tone: "plain" } } })} mySeat={0} width={366} height={407} />);
+    const el = chipEl(container, 1)!;
+    expect(el.getAttribute("aria-hidden")).toBe("true");
+    expect(el.style.zIndex).toBe("46");
+    expect(el.closest("button")).toBeNull();
+  });
+
+  it("폰 폭 4종 × 4~8명: 칩 사각형이 장면 폭 안이고 위는 4 이상이며 chipAnchor 와 같은 위치다", () => {
+    for (const w of [320, 360, 390, 430]) {
+      for (let count = 4; count <= 8; count++) {
+        const seats = Array.from({ length: count }, (_, i) =>
+          seat(i, `사람${i}`, { isMe: i === 0, chip: { n: 1 + (i % 3), tone: i % 2 ? "lead" : "plain" } }),
+        );
+        const { container, unmount } = render(<DayTable seats={seats} mySeat={0} width={w} height={640} />);
+        const layout = daySeatLayout(seats, 0, w, 640);
+        for (const L of layout) {
+          const el = chipEl(container, L.seat)!;
+          const tone = seats[L.seat].chip!.tone === "lead" ? "lead" : "normal";
+          const rect = chipAnchor({ x: L.x, y: L.y, scale: L.scale }, tone, w);
+          expect(el.style.left).toBe(px(rect.left));
+          expect(el.style.top).toBe(px(rect.top));
+          expect(rect.left).toBeGreaterThanOrEqual(0);
+          expect(rect.left + rect.width).toBeLessThanOrEqual(w);
+          expect(rect.top).toBeGreaterThanOrEqual(4);
+        }
+        unmount();
+      }
+    }
+  });
+
+  it("숫자가 오르면 key 가 달라져 새 노드가 된다(팝이 다시 돈다). 같은 숫자면 같은 노드다", () => {
+    const view = (n: number) => <DayTable seats={five({ 1: { chip: { n, tone: "pop" } } })} mySeat={0} width={366} height={407} />;
+    const { container, rerender } = render(view(1));
+    const first = chipEl(container, 1)!;
+    rerender(view(1));
+    expect(chipEl(container, 1)).toBe(first);
+    rerender(view(2));
+    const second = chipEl(container, 1)!;
+    expect(second).not.toBe(first);
+    expect(second.textContent).toBe("2");
+  });
+
+  it("CSS: .mf-vchip 기본 + pop·lead·beat, 색은 토큰 변수만, 클릭을 가로채지 않고 모션 줄이기에서 팝이 없다", () => {
+    const css = readFileSync("src/styles/verdict.css", "utf8");
+    const rule = (sel: string): string => new RegExp(`${sel.replace(/[.]/g, "\\.")}\\s*\\{([^}]*)\\}`).exec(css)?.[1] ?? "";
+    const base = rule(".mf-vchip");
+    expect(base).toContain("position: absolute");
+    expect(base).toContain("pointer-events: none");
+    expect(base).toContain("min-width: 28px");
+    expect(base).toContain("border-radius: 7px");
+    expect(base).toContain("font-size: 16px");
+    expect(base).toContain("var(--gray-100)");
+    expect(base).toContain("var(--night-900)");
+    expect(rule(".mf-vchip--pop")).toContain("var(--amber-400)");
+    expect(rule(".mf-vchip--pop")).toContain("animation");
+    const lead = rule(".mf-vchip--lead, .mf-vchip--beat");
+    expect(lead).toContain("var(--amber-400)");
+    expect(lead).toContain("font-size: 24px");
+    expect(lead).toContain("-webkit-text-stroke: 1.4px currentColor");
+    expect(lead).toContain("paint-order: stroke fill");
+    expect(/@media \(prefers-reduced-motion: reduce\)\s*\{[^@]*\.mf-vchip--pop\s*\{[^}]*animation:\s*none/.test(css)).toBe(true);
+    const chipCss = css.slice(css.indexOf(".mf-vchip"));
+    expect(/#[0-9a-fA-F]{3,8}\b|rgba?\(/.test(chipCss.replace(/box-shadow:[^;]*;/g, ""))).toBe(false);
   });
 });
