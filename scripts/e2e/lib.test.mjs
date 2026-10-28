@@ -68,6 +68,9 @@ import {
   PANEL_H_DEFENSE_ME,
   defenseChecks,
   executionChecks,
+  voidCardChecks,
+  resultChecks,
+  placementChecks,
 } from "./lib.mjs";
 
 const PROD = "https://minifia.dhplay.workers.dev\n";
@@ -1991,4 +1994,205 @@ test("04-30: 변론 후보 패널 236 은 승인 완화 한 줄뿐이고 기준 
   spot.dt.center.scale = num("VERDICT_CANDIDATE_SCALE");
   assert.equal(defenseChecks(spot, { isCandidate: false }).ok, true);
   // lib 에 쓴 236 이 UI-SPEC 8.4 와 같은지는 위 PANEL_H_DEFENSE_ME 단언이 고정한다.
+});
+
+// ---- 04-30 Task 2: P7 처형 무효 카드·P8 결과 화면·P10 배치 겹침 ----
+
+const GRAY = ["rgb(168, 172, 184)", "rgb(200, 203, 212)"];
+const CRIMSON = ["rgb(224, 52, 75)"];
+const voidCard = (over = {}) => ({ count: 1, title: "처형 무효", sub: "동률이라 처형하지 않아요", borderColor: "rgb(168, 172, 184)", pointerEvents: "none", ...over });
+const voidSamples = () => [
+  { t: 0, voidCard: voidCard(), nightIntro: 0 },
+  { t: 800, voidCard: voidCard(), nightIntro: 0 },
+  { t: 1650, voidCard: voidCard({ count: 0 }), nightIntro: 1 },
+  { t: 1900, voidCard: voidCard({ count: 0 }), nightIntro: 1 },
+];
+const voidOpts = (o = {}) => ({ grayColors: GRAY, crimsonColors: CRIMSON, clickedThrough: true, ...o });
+
+test("voidCardChecks P7: 정상 입력은 통과하고 세 부제 모두 받아들인다", () => {
+  const r = voidCardChecks(voidSamples(), voidOpts());
+  assert.equal(r.id, "P7");
+  assert.equal(r.ok, true, r.detail);
+  for (const sub of ["찬성이 과반이 아니에요", "동률이라 처형하지 않아요", "던진 표가 없어요"]) {
+    const x = voidSamples();
+    x.forEach((e) => { if (e.voidCard.count) e.voidCard.sub = sub; });
+    assert.equal(voidCardChecks(x, voidOpts()).ok, true, sub);
+  }
+});
+
+test("voidCardChecks P7: 카드 색·제목·부제·순서·잔상·터치 통과 위반을 각각 잡는다", () => {
+  const cases = [
+    ["테두리 앰버", (x) => { x[0].voidCard.borderColor = "rgb(242, 184, 75)"; }, /앰버|회색/],
+    ["테두리 진홍", (x) => { x[0].voidCard.borderColor = "rgba(224, 52, 75, 1)"; }, /진홍|회색/],
+    ["테두리가 회색 목록에 없음", (x) => { x[0].voidCard.borderColor = "rgb(10, 20, 30)"; }, /회색/],
+    ["제목 다름", (x) => { x[0].voidCard.title = "처형 취소"; }, /제목/],
+    ["부제 다름", (x) => { x[0].voidCard.sub = "표가 모자라요"; }, /부제/],
+    ["도착 직후 카드 없음", (x) => { x[0].voidCard.count = 0; }, /도착|카드 0/],
+    ["카드 둘", (x) => { x[0].voidCard.count = 2; }, /카드 2/],
+    ["터치 막음", (x) => { x[1].voidCard.pointerEvents = "auto"; }, /pointer-events/],
+    ["밤 시작 문구가 카드와 동시", (x) => { x[0].nightIntro = 1; }, /밤 시작 문구/],
+    ["밤 시작 문구가 1.4초에", (x) => { x[0].nightIntro = 0; x[1].nightIntro = 0; x[2].nightIntro = 0; x[2].t = 1650; x.splice(2, 0, { t: 1400, voidCard: voidCard(), nightIntro: 1 }); }, /밤 시작 문구/],
+    ["1.8초 뒤 잔상", (x) => { x[3].voidCard.count = 1; }, /1800ms|사라지지/],
+  ];
+  for (const [name, mutate, re] of cases) {
+    const x = voidSamples();
+    mutate(x);
+    const r = voidCardChecks(x, voidOpts());
+    assert.equal(r.ok, false, name);
+    assert.match(r.detail, re, name);
+  }
+  const noClick = voidCardChecks(voidSamples(), voidOpts({ clickedThrough: false }));
+  assert.equal(noClick.ok, false);
+  assert.match(noClick.detail, /통과/);
+});
+
+test("voidCardChecks P7: 측정값이 없으면 조용히 통과하지 않는다", () => {
+  assert.match(voidCardChecks([], voidOpts()).detail, /측정값 없음/);
+  assert.match(voidCardChecks(undefined, voidOpts()).detail, /측정값 없음/);
+  assert.match(voidCardChecks(voidSamples(), voidOpts({ grayColors: undefined })).detail, /측정값 없음\(.*grayColors/);
+  assert.match(voidCardChecks(voidSamples(), voidOpts({ crimsonColors: [] })).detail, /측정값 없음\(.*crimsonColors/);
+  assert.match(voidCardChecks(voidSamples(), voidOpts({ clickedThrough: undefined })).detail, /측정값 없음\(.*clickedThrough/);
+  const noLate = voidSamples().slice(0, 2);
+  assert.match(voidCardChecks(noLate, voidOpts()).detail, /측정값 없음\(.*1800/);
+  const noIntro = voidSamples();
+  noIntro.forEach((e) => { e.nightIntro = 0; });
+  assert.match(voidCardChecks(noIntro, voidOpts()).detail, /측정값 없음\(.*밤 시작 문구/);
+  const noField = voidSamples();
+  delete noField[0].voidCard;
+  assert.match(voidCardChecks(noField, voidOpts()).detail, /측정값 없음/);
+});
+
+const resultSnap = (winner = "mafiaWin", n = 5) => ({
+  result: {
+    winner,
+    bannerText: winner === "mafiaWin" ? "마피아 팀 승리" : "시민 팀 승리",
+    bannerSub: "마피아 수가 나머지 생존자 수와 같아졌어요",
+    cards: Array.from({ length: n }, (_, i) => ({ seat: i, job: ["마피아", "경찰", "의사", "시민", "시민"][i % 5], dead: i === 1 || i === 3, figOpacity: i === 1 || i === 3 ? 0.5 : 1 })),
+    rows: 4,
+    scrollW: 300,
+    clientW: 300,
+    reachedButton: true,
+    glow: winner === "mafiaWin",
+    hasPhaseBar: false,
+  },
+});
+const resultOpts = (o = {}) => ({ winner: "mafiaWin", n: 5, summaryRows: 4, ...o });
+const resBad = (mutate, snapWinner = "mafiaWin", opts) => {
+  const s = resultSnap(snapWinner);
+  mutate(s.result);
+  return resultChecks(s, resultOpts({ winner: snapWinner, ...(opts ?? {}) }));
+};
+
+test("resultChecks P8: 마피아 승·시민 승 정상 입력은 통과한다", () => {
+  const a = resultChecks(resultSnap("mafiaWin"), resultOpts());
+  assert.equal(a.id, "P8");
+  assert.equal(a.ok, true, a.detail);
+  const b = resultChecks(resultSnap("citizenWin"), resultOpts({ winner: "citizenWin" }));
+  assert.equal(b.ok, true, b.detail);
+});
+
+test("resultChecks P8: 배너·카드·흐림·요약·스크롤·번짐 위반을 각각 잡는다", () => {
+  const cases = [
+    ["배너가 승자와 다름", "mafiaWin", (r) => { r.bannerText = "시민 팀 승리"; }, /배너/],
+    ["결과 winner 가 기대와 다름", "mafiaWin", (r) => { r.winner = "citizenWin"; }, /winner|승자/],
+    ["카드 수 부족", "mafiaWin", (r) => { r.cards.pop(); }, /카드 4/],
+    ["직업 이름 없음", "mafiaWin", (r) => { r.cards[0].job = ""; }, /직업/],
+    ["엉뚱한 직업 이름", "mafiaWin", (r) => { r.cards[0].job = "광대"; }, /직업/],
+    ["탈락 카드 불투명", "mafiaWin", (r) => { r.cards[1].figOpacity = 1; }, /탈락/],
+    ["살아 있는 카드가 흐림", "mafiaWin", (r) => { r.cards[0].figOpacity = 0.5; }, /살아/],
+    ["요약 행 수 다름", "mafiaWin", (r) => { r.rows = 3; }, /요약/],
+    ["가로 스크롤 301>300", "mafiaWin", (r) => { r.scrollW = 301; }, /가로/],
+    ["[처음으로] 에 못 닿음", "mafiaWin", (r) => { r.reachedButton = false; }, /처음으로/],
+    ["시민 승에 번짐", "citizenWin", (r) => { r.glow = true; }, /번짐/],
+    ["마피아 승에 번짐 없음", "mafiaWin", (r) => { r.glow = false; }, /번짐/],
+    ["진행 바가 보임", "mafiaWin", (r) => { r.hasPhaseBar = true; }, /헤더|바/],
+  ];
+  for (const [name, w, mutate, re] of cases) {
+    const r = resBad(mutate, w);
+    assert.equal(r.ok, false, name);
+    assert.match(r.detail, re, name);
+  }
+  // 오차 허용: 탈락 .5 ± .05
+  assert.equal(resBad((r) => { r.cards[1].figOpacity = 0.54; }).ok, true);
+  assert.equal(resBad((r) => { r.cards[1].figOpacity = 0.56; }).ok, false);
+});
+
+test("resultChecks P8: 측정값이 없으면 조용히 통과하지 않는다", () => {
+  assert.match(resultChecks(null, resultOpts()).detail, /측정값 없음/);
+  for (const k of ["bannerText", "cards", "rows", "scrollW", "reachedButton", "glow", "hasPhaseBar"]) {
+    const s = resultSnap();
+    delete s.result[k];
+    const r = resultChecks(s, resultOpts());
+    assert.equal(r.ok, false, k);
+    assert.match(r.detail, /측정값 없음/, k);
+  }
+  assert.match(resultChecks(resultSnap(), { winner: "mafiaWin", n: 5 }).detail, /측정값 없음\(.*summaryRows/);
+  assert.match(resultChecks(resultSnap(), { n: 5, summaryRows: 4 }).detail, /측정값 없음\(.*winner/);
+});
+
+const placeSnap = () => ({
+  dt: { header: rect(0, 0, 390, 119.2), panel: rect(0, 560, 390, 157), scene: { left: 0, top: 119.2, right: 390, bottom: 560, width: 390 } },
+  reveal: {
+    chips: [{ seat: 1, n: 2, tone: "lead", ...rect(150, 200, 36, 32) }],
+    tags: [
+      { seat: 1, ...rect(140, 290, 70, 22) },
+      { seat: 2, ...rect(250, 250, 70, 22) },
+    ],
+  },
+  card: { rect: rect(55, 200, 280, 176) },
+});
+
+test("placementChecks P10: 정상 입력은 통과한다(머리 위 캐릭터를 덮는 칩은 허용)", () => {
+  const r = placementChecks(placeSnap());
+  assert.equal(r.id, "P10");
+  assert.equal(r.ok, true, r.detail);
+  const noCard = placeSnap();
+  delete noCard.card;
+  assert.equal(placementChecks(noCard).ok, true);
+});
+
+test("placementChecks P10: 칩·카드가 이름표·헤더·패널과 겹치면 실패한다", () => {
+  const cases = [
+    ["칩이 자기 이름표와 겹침", (s) => { s.reveal.chips[0] = { seat: 1, n: 2, tone: "lead", ...rect(150, 280, 36, 32) }; }, /이름표/],
+    ["칩이 남의 이름표와 겹침", (s) => { s.reveal.chips[0] = { seat: 1, n: 2, tone: "lead", ...rect(260, 240, 36, 32) }; }, /이름표/],
+    ["칩이 헤더와 겹침", (s) => { s.reveal.chips[0] = { seat: 1, n: 2, tone: "lead", ...rect(150, 100, 36, 32) }; }, /헤더/],
+    ["칩이 패널과 겹침", (s) => { s.reveal.chips[0] = { seat: 1, n: 2, tone: "lead", ...rect(150, 550, 36, 32) }; }, /패널/],
+    ["카드가 패널 침범", (s) => { s.card.rect = rect(55, 440, 280, 176); }, /패널/],
+    ["카드가 헤더 침범", (s) => { s.card.rect = rect(55, 80, 280, 176); }, /헤더/],
+    ["카드가 장면 폭 밖", (s) => { s.card.rect = rect(-20, 200, 280, 176); }, /장면 폭/],
+  ];
+  for (const [name, mutate, re] of cases) {
+    const s = placeSnap();
+    mutate(s);
+    const r = placementChecks(s);
+    assert.equal(r.ok, false, name);
+    assert.match(r.detail, re, name);
+  }
+  // 변만 맞닿는 것은 겹침이 아니다
+  const touch = placeSnap();
+  touch.reveal.chips[0] = { seat: 1, n: 2, tone: "lead", ...rect(150, 258, 36, 32) };
+  assert.equal(placementChecks(touch).ok, true);
+});
+
+test("placementChecks P10: 측정값이 없으면 조용히 통과하지 않는다", () => {
+  for (const [name, mutate] of [
+    ["header", (s) => { delete s.dt.header; }],
+    ["panel", (s) => { delete s.dt.panel; }],
+    ["chips", (s) => { delete s.reveal.chips; }],
+    ["tags", (s) => { delete s.reveal.tags; }],
+    ["scene(카드가 있을 때)", (s) => { delete s.dt.scene; }],
+  ]) {
+    const s = placeSnap();
+    mutate(s);
+    const r = placementChecks(s);
+    assert.equal(r.ok, false, name);
+    assert.match(r.detail, /측정값 없음/, name);
+  }
+  assert.match(placementChecks(null).detail, /측정값 없음/);
+});
+
+test("04-30: 닫기 — 승인 목록은 다섯 건이고 기준 수치는 그대로다", () => {
+  assert.deepEqual(APPROVED_RELAXATIONS.map((x) => x.id), ["M1", "D3a/D3b", "D4", "D3b-5", "P-PANEL-236"]);
+  assert.equal(FACE_RATIO, 0.45);
+  assert.equal(PANEL_H, 157);
 });
