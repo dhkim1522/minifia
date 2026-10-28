@@ -6,6 +6,7 @@ import { CandidateVotePanel } from "../components/CandidateVotePanel";
 import type { DayTableLayout, DayTableProps, DayTableSeat } from "../components/DayTable";
 import { DefenseChips } from "../components/DefenseChips";
 import { DefensePanel } from "../components/DefensePanel";
+import { ExecIntroCard } from "../components/ExecIntroCard";
 import { ExecVotePanel } from "../components/ExecVotePanel";
 import { MorningCard, exitDelayOf } from "../components/MorningCard";
 import { NIGHT_PANEL_TEXT, NightPanel } from "../components/NightPanel";
@@ -132,7 +133,12 @@ export function useVerdictScene({ view, connection, meAlive, showToast, lines, o
     setExecExit({ ends: view.phaseEndsAt, delay: exitDelayOf(view.phaseEndsAt - (Date.now() + connection.offset)) });
   }
 
+  // 처형 투표 인트로 카드(04-24, D-23): 같은 접속에서 discussion → execVote 로 바뀐 것을 직접 본 렌더에서만 켠다(재접속·처음 마운트는 arrivedFrom 이 null).
+  // 열쇠는 일차(n)다 — 한 번 켜진 카드는 자기 타이머(EXEC_INTRO_MS)로 끝나고 같은 날 다시 켜지지 않는다(마감 시각이 바뀌어도 되살아나지 않는다).
   const n = view.day?.n ?? 1;
+  const [execIntro, setExecIntro] = useState<{ n: number | null; on: boolean }>({ n: null, on: false });
+  if (view.phase === "execVote" && arrivedFrom === "discussion" && execIntro.n !== n) setExecIntro({ n, on: true });
+  const execIntroOn = execIntro.on && view.phase === "execVote" && arrivedFrom === "discussion" && execIntro.n === n;
   if (view.phase === "candidateVoteReveal") {
     const nicknameOf = (seat: number): string | undefined => view.players.find((p) => p.seat === seat)?.nickname;
     const state = reveal?.state;
@@ -206,8 +212,11 @@ export function useVerdictScene({ view, connection, meAlive, showToast, lines, o
       title: "낮 · 처형 여부",
       instruction: `${n}일차`,
       calm: true,
-      bottom: <ExecVotePanel view={view} canSend={connection.canSend} send={connection.send} readOnly={!meAlive} />,
+      bottom: <ExecVotePanel view={view} canSend={connection.canSend} send={connection.send} readOnly={!meAlive} introActive={execIntroOn} />,
       seatPatch: (seat) => ({ onInspect: () => onInspect(seat) }),
+      ...(execIntroOn
+        ? { layer: (layout: DayTableLayout) => <ExecIntroCard layout={layout} onDone={() => setExecIntro((prev) => ({ ...prev, on: false }))} /> }
+        : {}),
     };
   }
   if (view.phase === "defense") {

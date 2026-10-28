@@ -147,6 +147,201 @@
   .mf-figure--exec-in { animation: mf-exec-in-fade 400ms var(--ease-out) both !important; }
 }
 
+/* ==== mf-vintro 시작 ==== */
+/* 처형 투표 인트로 카드(UI-SPEC 9.1, 04-24, D-23·D-30): DayTable 의 layer 슬롯 안(루트 .mf-dt, 장면 상자와 같은 크기)에 그린다.
+   카드 280×176, 위쪽은 인라인(cy − 105). 모든 층이 터치를 통과시킨다(T-04-62). 글자 크기는 14·24·36 만 쓴다(P-18). 색은 토큰만.
+   시각표(ms): 0~450 낙하(+4px 바운스) → 450~850 정지 → 850~1450 면 지우기·질문 강조·셰브런 → 1450~1600 전체 페이드아웃. 1600 에 컴포넌트가 사라진다.
+   처형 무효 카드(--void, UI-SPEC 9.2)는 같은 구조를 공유하고 색과 시각표만 바꾼다. 키프레임 이름은 mf-vi-*. */
+.mf-vintro, .mf-vintro * { pointer-events: none; }
+.mf-vintro {
+  --mf-vi-out-delay: 1450ms;
+  --mf-vi-out-ms: 150ms;
+  position: absolute;
+  inset: 0;
+  z-index: 70;
+  animation: mf-vi-out var(--mf-vi-out-ms) linear var(--mf-vi-out-delay) both;
+}
+/* 막: 위·아래로 넉넉히 뻗어 .mf-dayscene(overflow hidden)의 잘림에 맡긴다(헤더·하단 패널 뒤까지 어둡다). 좌우는 장면 여백만큼 바깥까지 */
+.mf-vintro__veil {
+  position: absolute;
+  top: -160px;
+  bottom: calc(-260px - env(safe-area-inset-bottom));
+  left: calc(-1 * var(--mf-scene-pad, 12px));
+  right: calc(-1 * var(--mf-scene-pad, 12px));
+  background: var(--night-950);
+  opacity: 0;
+  animation: mf-vi-veil 1600ms linear both;
+}
+/* 낙하 상자: 폭 280·높이 176, 가로 가운데. 위쪽은 인라인. translate·rotate 는 개별 속성이라 다른 변환과 겹치지 않는다 */
+.mf-vintro__drop {
+  position: absolute;
+  left: calc(50% - 140px);
+  width: 280px;
+  height: 176px;
+  box-sizing: border-box;
+  animation: mf-vi-fall 450ms ease-out both;
+}
+/* 카드 면: 바탕·테두리·그림자·안쪽 선·장식 선. 색은 변형(--intro·--void)이 정한다 */
+.mf-vintro__face {
+  position: absolute;
+  inset: 0;
+  box-sizing: border-box;
+  border-radius: 18px;
+  border: 2px solid transparent;
+}
+.mf-vintro__face::before {
+  content: "";
+  position: absolute;
+  inset: 6px;
+  border-radius: 12px;
+  border: 1px solid transparent;
+}
+.mf-vintro__ln { position: absolute; top: 20px; left: 50%; width: 150px; height: 10px; margin-left: -75px; overflow: visible; }
+.mf-vintro__ln-line { fill: none; stroke-width: 1.5; }
+.mf-vintro__body { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; text-align: center; }
+.mf-vintro__title {
+  margin: 14px 0 0;
+  font-size: 36px;
+  line-height: 1.2;
+  font-weight: 700;
+  letter-spacing: 2px;
+  color: var(--gray-50);
+  white-space: nowrap;
+}
+/* 작은 질문과 큰 질문은 같은 칸에 겹쳐 있다(교차 페이드). 칸 높이 = 큰 질문 줄 높이 */
+.mf-vintro__q { display: grid; justify-items: center; align-items: center; }
+.mf-vintro__q > p { grid-area: 1 / 1; margin: 0; white-space: nowrap; }
+.mf-vintro__q-small { font-size: 14px; line-height: 20px; color: var(--gray-100); }
+.mf-vintro__q-big {
+  font-size: 24px;
+  line-height: 28px;
+  font-weight: 700;
+  color: var(--gray-50);
+  opacity: 0;
+}
+
+/* 앰버 변형(처형 투표) */
+.mf-vintro--intro .mf-vintro__smear {
+  position: absolute;
+  left: 20px;
+  top: -110px;
+  width: 240px;
+  height: 110px;
+  background: linear-gradient(180deg, transparent, color-mix(in srgb, var(--amber-400) 45%, transparent));
+  filter: blur(6px);
+  animation: mf-vi-smear 450ms linear both;
+}
+.mf-vintro--intro .mf-vintro__glow {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at 50% 60%, color-mix(in srgb, var(--amber-400) 30%, transparent), transparent 70%);
+  opacity: 0;
+  animation: mf-vi-glow 400ms var(--ease-out) 850ms both;
+}
+.mf-vintro--intro .mf-vintro__face {
+  background: linear-gradient(180deg, var(--amber-700), var(--amber-900));
+  border-color: var(--amber-400);
+  box-shadow:
+    0 22px 44px color-mix(in srgb, var(--night-950) 70%, transparent),
+    0 0 36px color-mix(in srgb, var(--amber-400) 45%, transparent),
+    inset 0 1px 0 color-mix(in srgb, var(--amber-400) 55%, transparent);
+  animation: mf-vi-face-out 400ms var(--ease-out) 850ms both;
+}
+.mf-vintro--intro .mf-vintro__face::before { border-color: color-mix(in srgb, var(--amber-400) 70%, transparent); }
+.mf-vintro--intro .mf-vintro__ln-line { stroke: var(--amber-400); }
+.mf-vintro--intro .mf-vintro__ln-dia { fill: var(--amber-400); }
+.mf-vintro--intro .mf-vintro__title {
+  text-shadow: 0 3px 0 var(--night-950), 0 0 18px color-mix(in srgb, var(--amber-400) 80%, transparent);
+  animation: mf-vi-title-out 400ms var(--ease-out) 850ms both;
+}
+.mf-vintro--intro .mf-vintro__q-small { animation: mf-vi-q-small-out 200ms linear 850ms both; }
+.mf-vintro--intro .mf-vintro__q-big {
+  text-shadow: 0 2px 0 var(--night-950), 0 0 16px color-mix(in srgb, var(--amber-400) 70%, transparent);
+  animation: mf-vi-q-big-in 400ms var(--ease-out) 850ms both;
+}
+/* 셰브런: 가로 가운데, 아래끝 = 장면 아래 − 16, 높이는 인라인(clamp). 셰브런마다 120ms 간격으로 켜지며 두 번 반복한다 */
+.mf-vintro__chevs {
+  position: absolute;
+  left: calc(50% - 60px);
+  bottom: 16px;
+  width: 120px;
+  filter: drop-shadow(0 0 8px color-mix(in srgb, var(--amber-400) 80%, transparent));
+}
+.mf-vintro__chev {
+  fill: none;
+  stroke: var(--amber-400);
+  stroke-width: 7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0;
+  animation: mf-vi-chev 260ms ease-in-out calc(850ms + var(--mf-vi-i, 0) * 120ms) 2 both;
+}
+
+@keyframes mf-vi-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+@keyframes mf-vi-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+/* 막: 0 → .15(225ms) → .35(450ms) 유지 → .22(1150ms) → 0(1450ms) */
+@keyframes mf-vi-veil {
+  0% { opacity: 0; }
+  14% { opacity: 0.15; }
+  28%, 53% { opacity: 0.35; }
+  72% { opacity: 0.22; }
+  90%, 100% { opacity: 0; }
+}
+/* 낙하: 위 −276px(카드 높이 + 100) 에서 −5도 기울어져 떨어지고 끝에 4px 바운스 */
+@keyframes mf-vi-fall {
+  0% { translate: 0 -276px; rotate: -5deg; opacity: 0.92; }
+  70% { translate: 0 4px; rotate: 0deg; opacity: 1; }
+  100% { translate: 0 0; rotate: 0deg; opacity: 1; }
+}
+@keyframes mf-vi-smear {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+@keyframes mf-vi-glow {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes mf-vi-face-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+@keyframes mf-vi-title-out {
+  from { opacity: 1; filter: blur(0); }
+  to { opacity: 0.18; filter: blur(1.5px); }
+}
+@keyframes mf-vi-q-small-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+@keyframes mf-vi-q-big-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes mf-vi-chev {
+  0% { opacity: 0; }
+  45%, 75% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+/* 축소 모션(UI-SPEC 9.1·13.4, D-24): 낙하·바운스·셰브런 이동 없음. 카드가 가운데에 160ms 페이드인 → 정지 → 850ms 부터 면이 페이드로 지워지고 질문만 24px 로 남아 → 1450ms 부터 페이드아웃.
+   base.css 의 전역 규칙이 모든 animation-duration 을 0.01ms 로 줄이므로(!important), 페이드인 것들만 더 구체적인 선택자로 길이를 되돌려 시각(animation-delay)대로 단계가 이어지게 한다. 셰브런은 움직임 없이 정지 표시(페이드인만). */
+@media (prefers-reduced-motion: reduce) {
+  .mf-vintro__drop { animation: mf-vi-fade-in 160ms ease-out both !important; }
+  .mf-vintro__smear { display: none; }
+  .mf-vintro__chev { animation: mf-vi-fade-in 160ms ease-out 850ms both !important; }
+  .mf-vintro { animation-duration: var(--mf-vi-out-ms) !important; }
+  .mf-vintro__veil { animation-duration: 1600ms !important; }
+  .mf-vintro--intro .mf-vintro__face, .mf-vintro--intro .mf-vintro__glow, .mf-vintro--intro .mf-vintro__title, .mf-vintro--intro .mf-vintro__q-big { animation-duration: 400ms !important; }
+  .mf-vintro--intro .mf-vintro__q-small { animation-duration: 200ms !important; }
+}
+/* ==== mf-vintro 끝 ==== */
+
 /* 과반 확정 두근과 느린 박동(UI-SPEC 8.3 D-31 ③, 04-20). 확정 순간 약 0.7초: 캐릭터 1 → 1.12 → 1 ×2(좌석), 칩 1 → 1.3 → 1 ×2, 앰버 후광 3px/18px 로 밝아졌다 돌아옴.
    그 뒤 공개가 끝날 때까지 느린 박동: 캐릭터 1 → 1.04 → 1, 칩 1 → 1.1 → 1, 주기 1.2초(P-14: 시안 dk-slow 2.2s 는 참고만, CONTEXT 의 약 1.2초가 이긴다).
    크기는 개별 속성 scale 만 쓴다 — 좌석 래퍼의 인라인 transform(깊이 배율)과 겹치지 않는다. */

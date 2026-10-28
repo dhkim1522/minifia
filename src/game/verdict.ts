@@ -28,6 +28,12 @@ export const VERDICT_CANDIDATE_SCALE = 1.7; // UI-SPEC 4: 후보 가운데 크�
 export const CONE_W = 300; // UI-SPEC 4: 원뿔 크기
 export const CONE_H = 340; // UI-SPEC 8.4
 export const GHOST_FADE_MS = 400; // UI-SPEC 13.3: 사람 → 유령 전환
+export const INTRO_CARD_W = 280; // UI-SPEC 9.1: 처형 투표·처형 무효 카드 폭
+export const INTRO_CARD_H = 176; // UI-SPEC 9.1: 카드 높이
+export const INTRO_CARD_UP = 105; // UI-SPEC 9.1: 카드 위쪽 = 장면 위 + (cy − 105)
+export const INTRO_CHEV_MIN_H = 96; // UI-SPEC 9.1: 셰브런 높이 clamp 아래
+export const INTRO_CHEV_MAX_H = 230; // UI-SPEC 9.1: 셰브런 높이 clamp 위(시안 120×230)
+export const INTRO_CHEV_BOTTOM = 16; // UI-SPEC 9.1: 셰브런 아래끝 = 장면 아래 − 16
 export const CLINCH_VIBRATE_MS = 30; // UI-SPEC 13.1: 확정 순간 진동(선택)
 export const CHIP_H = 24; // UI-SPEC 8.3: 표수 칩 높이
 export const CHIP_H_LEAD = 32; // UI-SPEC 4·8.3: 강조(유일한 최다 득표) 칩 높이
@@ -302,6 +308,17 @@ export function arrowEndpoints(from: FootPlace, to: FootPlace): { start: Point; 
     start: { x: a.x + ux * ARROW_START_OFFSET, y: a.y + uy * ARROW_START_OFFSET },
     end: { x: b.x - ux * ARROW_END_OFFSET, y: b.y - uy * ARROW_END_OFFSET },
   };
+}
+
+/**
+ * 처형 투표·처형 무효 카드의 위치: 위쪽 = cy − 105(장면 위 기준), 셰브런 높이 = clamp(96, 장면 아래 − 카드 아래끝 − 16, 230).
+ * cy 는 dayTableGeometry 한 곳에서만 나온다(여백 pad 와 무관하지만 같은 호출을 쓴다).
+ */
+export function introCardGeometry(sceneW: number, sceneH: number, pad?: number): { top: number; chevH: number } {
+  const { cy } = dayTableGeometry(sceneW, sceneH, pad);
+  const top = cy - INTRO_CARD_UP;
+  const chevH = Math.min(INTRO_CHEV_MAX_H, Math.max(INTRO_CHEV_MIN_H, sceneH - (top + INTRO_CARD_H) - INTRO_CHEV_BOTTOM));
+  return { top, chevH };
 }
 
 // ---- (4) 후광 상한 (결정 0030, D-33, UI-SPEC 12.4) ----

@@ -21,14 +21,17 @@ export interface ExecVotePanelProps {
   send: (msg: ClientMessage) => boolean;
   /** 탈락한 viewer: 버튼 없이 집계 줄과 관전 알약만 본다(D-35). 집계는 살아 있는 사람과 같은 값이다 */
   readOnly?: boolean;
+  /** 처형 투표 인트로 카드가 떠 있는 동안(처음 1.6초) true: 집계 줄 회색 부분이 `카드 뒤에서도 바로 고를 수 있어요` 가 된다(UI-SPEC 9.1). 집계 앞부분은 그대로다 */
+  introActive?: boolean;
 }
 
-export function ExecVotePanel({ view, canSend, send, readOnly = false }: ExecVotePanelProps): ReactElement {
+export function ExecVotePanel({ view, canSend, send, readOnly = false, introActive = false }: ExecVotePanelProps): ReactElement {
   const [pending, setPending] = useState<{ view: RoomView; agree: boolean } | null>(null);
   const shown = pending !== null && pending.view === view ? pending.agree : view.me.voteAgree;
 
   const aliveCount = view.players.filter(isAlive).length;
-  const { strong, rest } = execTallyText(view.day?.execTally ?? { yes: 0, no: 0 }, aliveCount);
+  const { strong, rest: tallyRest } = execTallyText(view.day?.execTally ?? { yes: 0, no: 0 }, aliveCount);
+  const rest = introActive ? VERDICT_TEXT.execIntroHint : tallyRest;
 
   const press = (agree: boolean): void => {
     if (agree === shown) return; // 같은 쪽을 다시 눌러도 아무것도 보내지 않는다. 번복은 반대쪽을 눌러서
