@@ -3,7 +3,7 @@
 import { exports } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
 import type { PhaseId, RoomView, ServerMessage } from "../../shared/protocol";
-import { alarmOf, advanceTo, collect, createRoom, driveToEnded, nextFrame, seat, send, skipThrough, storedRoom } from "./helpers";
+import { alarmOf, advanceTo, collect, createRoom, driveToEnded, editRoom, nextFrame, seat, send, skipOnce, skipThrough, storedRoom } from "./helpers";
 import type { Seated, TestSocket } from "./helpers";
 
 const allSockets = (r: Seated): TestSocket[] => [r.host, ...r.guests.map((g) => g.sock)];
@@ -459,4 +459,59 @@ describe("투표 단계 넘기기와 종료 중 도구", () => {
     expect(summary(await settle(guest, guestMark))).toBe("[]");
     expect(JSON.stringify(await stored(r.code))).toBe(before);
   }, 60_000);
+});
+
+// ---- P-13: 봇 투표 설정을 따라 한 판의 투표 분기가 결정적으로 정해진다 (E2E 결정성) ----
+/** 소켓당 메시지 창(처리 한도)을 비운다: 방 DO 를 내려 메모리 창을 없앤다. 저장된 방은 그대로다. */
+const resetRateWindow = (code: string): Promise<void> => editRoom(code, (room) => room);
+
+/** 방장(마피아) + 연결 손님 1 + 봇 3 테스트 방에서 봇 투표 설정을 정하고 시작해 execVote 에 닿는다. 설정은 대기실에서만 바뀐다. */
+async function votingRoom(exec: string, pick: string): Promise<Seated> {
+  const r = await seatQuiet(1, { testMode: true });
+  send(r.host, { t: "testBots", count: 3 });
+  await nextFrame(r.host, lobbyOf(5));
+  await sendAndSettle(r.host, { t: "testRole", role: "mafia" });
+  expect(summary(await sendAndSettle(r.host, { t: "testBotVote", exec, pick }))).toBe("[state:lobby]");
+  await start(r);
+  await skipThrough(r, "execVote");
+  for (const sock of allSockets(r)) await settle(sock, mark(sock));
+  await resetRateWindow(r.code);
+  return r;
+}
+
+describe("testBotVote: 넘기기가 설정을 따른다", () => {
+  it("exec no: 한 번 넘기면 봇이 모두 반대라 처형 무효(notMajority)로 밤이 된다", async () => {
+    const r = await votingRoom("no", "random");
+    await skipOnce(r);
+    const view = lastView(r.host);
+    expect(`${view.phase}/${view.day?.noExecution?.reason}`).toBe("night/notMajority");
+    expect(JSON.stringify((await storedRoom(r.code)).voteLog!.at(-1)!.exec)).toBe('{"yes":0,"no":3,"passed":false}');
+  }, 30_000);
+
+  it("exec yes + pick host: 여부 투표가 통과해 후보 선택으로 가고, 봇 표가 모두 방장에게 가서 방장이 후보가 되어 변론으로 간다", async () => {
+    const r = await votingRoom("yes", "host");
+    await skipOnce(r);
+    expect(lastView(r.host).phase).toBe("candidateVote");
+    await skipOnce(r);
+    const reveal = lastView(r.host);
+    expect(`${reveal.phase}/${reveal.day?.candidate}`).toBe("candidateVoteReveal/0");
+    const votes = (await storedRoom(r.code)).voteLog!.at(-1)!.cand!.votes.map((v) => `${v.seat}>${v.target}`).sort();
+    expect(votes.join(",")).toBe("2>0,3>0,4>0"); // 손님(seat 1)은 안 던졌고 봇 셋(seat 2~4)이 모두 방장
+    await resetRateWindow(r.code);
+    await skipOnce(r);
+    const defense = lastView(r.host);
+    expect(`${defense.phase}/${defense.day?.candidate}`).toBe("defense/0");
+  }, 30_000);
+
+  it("대기실로 되돌려도 방장 view 의 me.testBotVote 가 남고 손님 프레임에는 키가 한 번도 없다", async () => {
+    const r = await votingRoom("no", "host");
+    send(r.host, { t: "testReset" });
+    for (const sock of allSockets(r)) await nextFrame(sock, isPhase("lobby"));
+    for (const sock of allSockets(r)) await settle(sock, mark(sock));
+    expect(JSON.stringify(lastView(r.host).me.testBotVote)).toBe('{"exec":"no","pick":"host"}');
+    expect(JSON.stringify((await stored(r.code)).testBotVote)).toBe('{"exec":"no","pick":"host"}');
+    const guestText = collect(r.guests[0]!.sock).join("\n");
+    expect(guestText.includes("testBotVote")).toBe(false);
+    expect(guestText.includes("testMode")).toBe(false);
+  }, 30_000);
 });

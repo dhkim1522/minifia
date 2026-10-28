@@ -712,3 +712,33 @@ describe("6명 한 판: 처형·처형 무효·종료 전수 프레임 누출 �
     },
   );
 });
+
+describe("테스트 방 봇 투표 설정은 손님·게임 중 프레임에 새지 않는다 (P-13, T-04-45)", () => {
+  it("방장이 설정을 바꾸고 판을 시작해 투표 단계까지 가는 동안 손님이 받은 모든 프레임에 testBotVote 키가 없다", { timeout: 30_000 }, async () => {
+    const r = await seat(1, 0, { testMode: true });
+    const guest = r.guests[0]!.sock;
+    // 시작 최소 인원(4명)을 봇 둘로 채운다.
+    send(r.host, { t: "testBots", count: 2 });
+    for (const sock of [r.host, guest]) await nextFrame(sock, (m) => m.t === "state" && m.view.players.length === 4);
+    for (const sock of [r.host, guest]) await flush(sock);
+    const guestFrom = mark(guest);
+    send(r.host, { t: "testBotVote", exec: "no", pick: "host" });
+    const own = await nextFrame(r.host, (m) => m.t === "state");
+    // 방장은 대기실 view 에서만 받는다
+    expect(own.t === "state" && JSON.stringify(own.view.me.testBotVote)).toBe('{"exec":"no","pick":"host"}');
+    expect(summary(await settle(guest, guestFrom))).toBe("[]");
+    send(r.host, { t: "start" });
+    for (const sock of [r.host, guest]) await nextFrame(sock, (m) => m.t === "state" && m.view.phase === "assigning");
+    await advanceTo(r.code, [r.host, guest], "execVote");
+    for (const sock of [r.host, guest]) await flush(sock);
+    // 손님이 받은 모든 프레임의 모든 경로 키 이름에 testBotVote 가 없다(허용 경로 목록은 넓히지 않는다)
+    for (const raw of collect(guest)) {
+      expect(keyPaths(JSON.parse(raw)).some((path) => path.endsWith(".testBotVote"))).toBe(false);
+    }
+    // 방장도 게임 중 프레임에는 키가 없다(대기실 view 에서만)
+    const hostViews = collect(r.host).map((raw) => JSON.parse(raw) as ServerMessage);
+    for (const m of hostViews) {
+      if (m.t === "state" && m.view.phase !== "lobby") expect(Object.hasOwn(m.view.me, "testBotVote")).toBe(false);
+    }
+  });
+});
