@@ -25,6 +25,8 @@
 .mf-urecord__row:last-child { border-bottom: 0; }
 .mf-urecord__row b { font-weight: 700; color: var(--gray-50); }
 .mf-urecord__row--none { color: var(--gray-300); }
+/* 투표 줄(04-27): 행 모양은 주장 줄과 같다. 색·간격을 더 만들지 않는다 */
+.mf-urecord__row--vote { color: var(--gray-300); }
 
 .mf-urecord__empty {
   display: flex; align-items: center; min-height: 48px; padding: 8px 0;

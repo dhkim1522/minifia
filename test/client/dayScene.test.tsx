@@ -528,7 +528,7 @@ describe("DayScene 낮 캐릭터 탭 → 유저 기록 카드 (03.1-08, D-06·D-
   it("기록이 없는 사람은 빈 상태 문구가 보인다", () => {
     const { container } = scene(makeView({ phase: "discussion", claimLog }));
     fireEvent.click(within(container).getByRole("button", { name: "도현, 주장 기록 보기" }));
-    expect(sheet("도현 기록")?.textContent).toContain("아직 주장 기록이 없어요");
+    expect(sheet("도현 기록")?.textContent).toContain("아직 기록이 없어요");
   });
 
   it("아침(morning)에도 열린다", () => {
