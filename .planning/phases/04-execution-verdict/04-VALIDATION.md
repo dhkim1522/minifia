@@ -1,7 +1,7 @@
 ---
 phase: "4"
 slug: "execution-verdict"
-status: screen-wave-complete-pre-deploy
+status: deployed-verified-awaiting-device-check
 nyquist_compliant: true
 wave_0_complete: true
 created: "2026-10-26"
@@ -114,10 +114,13 @@ created: "2026-10-26"
 | 04-34-T1 | VOTE-01~04, COMM-03, CONN-02, END-01, END-02 | 결정 0037(화면 웨이브 결정)과 시안 사본 갱신 | `test -f docs/decisions/0037-execution-screens.md && grep -q "되돌리기" docs/decisions/0037-execution-screens.md && grep -q "VERDICT_DIM_PERCENT" docs/decisions/0037-execution-screens.md` | ✅ | ✅ green |
 | 04-34-T2 | VOTE-01~04, COMM-03, CONN-02, END-01, END-02 | 이 검증 표의 화면 웨이브 완성(작업별 자동 명령·사람 확인 몫) | `grep -cE '^\| 04-(1[3-9]\|2[0-9]\|3[0-3])-T[1-3] ' .planning/phases/04-execution-verdict/04-VALIDATION.md` (47) | ✅ | ✅ green |
 | 04-34-T3 | VOTE-01~04, COMM-03, CONN-02, END-01, END-02 | 배포 직전 로컬 전체 게이트·소켓 스크립트·E2E, HANDOFF 6KB 이하와 push (배포 없음) | `npm test` + `npm run typecheck` + `npm run build` + `npx vitest run test/unit/handoff.test.ts` + `npm run e2e -- --url http://localhost:5173` | ✅ | ✅ green |
+| 04-35-T1 | VOTE-01~04, COMM-03, CONN-02, END-01, END-02 | 배포 go-ahead(체크포인트): 사용자 "지금 배포" | — (사람 결정) | ✅ | ✅ green |
+| 04-35-T2 | VOTE-01~04, COMM-03, CONN-02, END-01, END-02 | 개인 계정 배포·버전 변경·배포본 스모크 4·5·8·uat-vote·uat-test-bots·uat-test-room·uat-day·uat-night | `node scripts/smoke.mjs --prod --stage full [--players 4\|8] [--previous-version V]` + `node scripts/uat-{vote,test-bots,test-room,day,night}.mjs --prod` | ✅ | ⚠️ flaky (통과, 이 PC 네트워크 지터로 재실행 필요했음 — 04-35-SUMMARY) |
+| 04-35-T3 | VOTE-01~04, COMM-03, CONN-02, END-01, END-02 | 배포본 화면 E2E(10흐름×3폭)와 요구사항·로드맵·HANDOFF 갱신·push | `npm run e2e`(기본 = 배포본) + `npx vitest run test/unit/handoff.test.ts` | ✅ | ✅ green (재배포 한 번 뒤: 접두 짝 `backdrop-filter` 결함 수정) |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
-04-01~04-12 서버 웨이브, 04-13~04-34 화면 웨이브. 배포본 검증은 04-35 가 이어 채운다. 화면 웨이브의 `node --check`·`node --test` 행은 E2E 스크립트의 문법·순수 검사이고, 실제 브라우저 검사는 `npm run e2e -- --url http://localhost:5173` 전체 실행(04-33, 04-34 재확인)이 맡는다.
+04-01~04-12 서버 웨이브, 04-13~04-35 화면 웨이브와 배포본 검증(04-35). 화면 웨이브의 `node --check`·`node --test` 행은 E2E 스크립트의 문법·순수 검사이고, 실제 브라우저 검사는 `npm run e2e -- --url http://localhost:5173` 전체 실행(04-33, 04-34 재확인)이 맡는다.
 
 ---
 
@@ -144,7 +147,7 @@ created: "2026-10-26"
 | 어둡게 45%·흐림 3px 가독성(D-38) | VOTE-03, COMM-03 | E2E H1·P5 는 숫자만 본다 | 실기기에서 확인할 것: 변론 헤더·후보 이름표·칩 글씨가 읽히는지, 수치는 `src/game/verdict.ts` 한 곳 | 사람 확인 대기 |
 | 후광 8명판 프레임 | VOTE-02 | 후광 3개 상한·칩 배치의 체감 | 8명판 공개 4초에서 후광·칩·화살표가 겹치지 않고 읽히는지 | 사람 확인 대기 |
 | 처형 카드·유령 전환, 처형 무효 카드 → 밤 문구 순서 | VOTE-04, END-01 | 낙하 느낌·iOS·재접속은 실기기 | 실기기에서 확인할 것: 처형 앰버 카드와 유령 전환(투명 .9), 무효 회색 카드 1.6초 뒤 밤 문구 | 사람 확인 대기 |
-| 배포본에서 한 판 끝까지 | END-01/02 | 서버 단독 배포 금지(D-26), 배포는 04-35 | 04-35 배포 뒤 smoke 4·5·8 · `uat-vote` · `uat-test-bots` · E2E, 이어서 실기기 한 판 | 04-35 이후 |
+| 배포본에서 한 판 끝까지 | END-01/02 | 서버 단독 배포 금지(D-26) | 04-35 배포본 smoke 4·5·8 · `uat-vote` · `uat-test-bots` · `uat-test-room` · `uat-day` · `uat-night` · E2E 10흐름×3폭 통과(04-35-SUMMARY). 이어서 실기기 한 판은 위 항목들로 사람이 확인 | 통과(봇·E2E 근거), 실기기 한 판은 사람 확인 대기 |
 
 ## Validation Sign-Off
 
@@ -155,6 +158,6 @@ created: "2026-10-26"
 - [x] Feedback latency < 60s
 - [x] frontmatter 의 nyquist_compliant 가 true
 
-- [x] 화면 웨이브(04-13~04-34): 작업별 자동 명령이 표에 있고(47 행 + 04-34 3행), 사람 확인 몫은 Manual-Only 표에 실기기 항목으로 남았다. 요구사항 체크는 04-35 배포본 검증 뒤에 한다.
+- [x] 화면 웨이브(04-13~04-34): 작업별 자동 명령이 표에 있고(47 행 + 04-34 3행), 사람 확인 몫은 Manual-Only 표에 실기기 항목으로 남았다. 요구사항 체크는 04-35 배포본 검증 뒤에 했다(8개 완료).
 
-**Approval:** 서버·공유 로직 웨이브 승인(04-12). 화면 웨이브 로컬 검증 승인(04-34, 배포 직전). 배포본 검증은 04-35 가 이어 채운다.
+**Approval:** 서버·공유 로직 웨이브 승인(04-12). 화면 웨이브 로컬 검증 승인(04-34, 배포 직전). 배포본 검증 승인(04-35: 스모크 4·5·8, 봇 UAT 다섯, E2E 10흐름×3폭 통과). 연출 체감·흐림 가독성·iOS 흐림은 실기기 확인 대기.
