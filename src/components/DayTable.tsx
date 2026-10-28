@@ -60,6 +60,11 @@ export interface DayTableSeat {
   transition?: "entering" | "leaving" | null;
   /** 대기실: 누를 수 있는 자리(방장이 끊긴 사람을 내보낼 때). onPick·onInspect 가 없을 때만 쓰인다 */
   onPress?: () => void;
+  /**
+   * 투표 구간이 capHalos(game/verdict.ts)로 정한 최종 후광 종류. 주면 이 값이 파생 규칙(차례·밤 선택 = 흰, 동료 = 진홍)을 이긴다 —
+   * "none" 은 후광만 끄고 동료 마름모(isAlly)는 남긴다(한 화면 3개 상한, UI-SPEC 12.4). 안 주면 기존 파생 그대로다.
+   */
+  halo?: "white" | "amber" | "crimson" | "none";
   /** 아침: 어둡게 층(z 30) 위(z 31)로 올려 어두워지지 않게 한다. 방금 탈락한 자리 */
   spotlit?: boolean;
   /** spotlit 일 때만 의미: 400ms 맥동을 한 번 돈다(밤 → 아침을 직접 본 경우에만 켠다) */
@@ -209,8 +214,9 @@ export function DayTable({
         const seatClass = `mf-dt__seat${s.spotlit ? " mf-dt__seat--spotlit" : ""}${s.spotlit && s.pulse ? " mf-dt__seat--pulse" : ""}${
           s.transition === "entering" ? " mf-dt__seat--enter" : s.transition === "leaving" ? " mf-dt__seat--leave" : ""
         }`;
-        // 후광은 그림 img 하나에만 붙는다: 흰(차례·내가 고른 대상) > 진홍(동료)
-        const haloClass = s.turn || s.pick?.mine ? "mf-figure--halo-white" : s.isAlly ? "mf-figure--halo-crimson" : undefined;
+        // 후광은 그림 img 하나에만 붙는다. halo 가 있으면 그 값, 없으면 파생: 흰(차례·내가 고른 대상) > 진홍(동료)
+        const derivedHalo = s.turn || s.pick?.mine ? "mf-figure--halo-white" : s.isAlly ? "mf-figure--halo-crimson" : undefined;
+        const haloClass = s.halo !== undefined ? (s.halo === "none" ? undefined : `mf-figure--halo-${s.halo}`) : derivedHalo;
         const inner = (
           <>
             {/* key: 직업 그림으로 바뀌는 자리는 노드가 새로 만들어져 300ms 페이드가 한 번 돈다 */}

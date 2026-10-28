@@ -12,6 +12,8 @@
   /* 후광(승인 시안 17차 값): 그림 윤곽을 따르는 안쪽 2px + 바깥 9px 두 겹. 한 곳에만 적고 아래 클래스가 var() 로 쓴다 */
   --mf-halo-white: drop-shadow(0 0 2px color-mix(in srgb, var(--gray-50) 95%, transparent)) drop-shadow(0 0 9px color-mix(in srgb, var(--gray-50) 75%, transparent));
   --mf-halo-crimson: drop-shadow(0 0 2px color-mix(in srgb, var(--crimson-400) 95%, transparent)) drop-shadow(0 0 9px color-mix(in srgb, var(--crimson-400) 70%, transparent));
+  /* 앰버 후광(04-18, UI-SPEC 6.2): 선택 공개·변론 단계가 쓴다. 번짐은 흰과 같은 9px */
+  --mf-halo-amber: drop-shadow(0 0 2px color-mix(in srgb, var(--amber-400) 95%, transparent)) drop-shadow(0 0 9px color-mix(in srgb, var(--amber-400) 75%, transparent));
 }
 /* 장면 상자 좌우 여백(장면 상자의 padding 값과 같은 수): 어둡게 층이 이만큼 밖으로 나가 페이지 폭 전체를 덮는다 */
 @media (max-width: 389px) { .mf-dt { --mf-scene-pad: 4px; } }
@@ -27,12 +29,14 @@
 /* 캐릭터 상자: 72×96, 발 기준으로 크기만 바꾼다 */
 .mf-dt__seat { position: absolute; transform-origin: 50% 100%; }
 .mf-dt__seat .mf-figure { width: 100%; height: 100%; display: block; transition: filter var(--dur-fast) var(--ease-out); }
-/* 후광: 흰 = 말하는 차례 + 내가 밤에 고른 대상, 진홍 = 마피아 동료(마름모는 따로 남는다). 필터 값은 애니메이션하지 않는다.
+/* 후광: 흰 = 말하는 차례 + 내가 밤·투표에서 고른 대상, 앰버 = 선택 공개·변론 후보, 진홍 = 마피아 동료(마름모는 따로 남는다). 필터 값은 애니메이션하지 않는다.
    끊김(흑백)과 함께면 흑백을 먼저 적용하고 그 뒤에 후광을 붙인다(후광 색이 회색이 되지 않는다) */
 .mf-dt__seat .mf-figure--halo-white { filter: var(--mf-halo-white); }
 .mf-dt__seat .mf-figure--halo-crimson { filter: var(--mf-halo-crimson); }
+.mf-dt__seat .mf-figure--halo-amber { filter: var(--mf-halo-amber); }
 .mf-dt__seat .mf-figure--disconnected.mf-figure--halo-white { filter: grayscale(1) var(--mf-halo-white); }
 .mf-dt__seat .mf-figure--disconnected.mf-figure--halo-crimson { filter: grayscale(1) var(--mf-halo-crimson); }
+.mf-dt__seat .mf-figure--disconnected.mf-figure--halo-amber { filter: grayscale(1) var(--mf-halo-amber); }
 /* 탈락 = 유령 그림(시안 f8 .sf--off img). 필터·투명도 지정 없음 — 흐림은 연결 끊김 전용(.mf-figure--disconnected) */
 .mf-figure--ghost { object-fit: contain; }
 
