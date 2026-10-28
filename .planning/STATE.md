@@ -4,18 +4,18 @@ milestone: v1.0
 milestone_name: MVP
 current_phase: 4
 current_phase_name: 처형과 승패
-current_plan: 3
+current_plan: 5
 status: executing
-stopped_at: Completed 04-02-PLAN.md
-last_updated: "2026-10-26T12:57:37.255Z"
+stopped_at: Completed 04-04-PLAN.md
+last_updated: "2026-10-28T04:58:23.486Z"
 last_activity: 2026-10-26
 last_activity_desc: Phase 4 execution started
-state_head: 3a84de5267ac3016f31176665249d00d96a04016
+state_head: 7f60a43ae8a8a3023c9f746c0081897d09b63fa1
 progress:
   total_phases: 7
   completed_phases: 2
   total_plans: 75
-  completed_plans: 65
+  completed_plans: 67
 ---
 
 # Project State
@@ -30,9 +30,9 @@ See: .planning/PROJECT.md (updated 2026-10-21)
 ## Current Position
 
 Phase: 4 (처형과 승패) — EXECUTING
-Current Plan: 3
+Current Plan: 5
 Total Plans in Phase: 12
-Plan: 3 of 12
+Plan: 5 of 12
 Status: Ready to execute
 Last activity: 2026-10-26 — Phase 4 execution started
 
@@ -111,6 +111,7 @@ Progress: [██░░░░░░░░] 17%
 | Phase 03.1 P14 | 25min | 3 tasks | 3 files |
 | Phase 04 P01 | 35 min | 1 tasks | 11 files |
 | Phase 04 P02 | 15 min | 2 tasks | 14 files |
+| Phase 04 P04 | 10min | 2 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -206,6 +207,10 @@ Recent decisions affecting current work:
 - [Phase 04]: 04-01: 마감 분기는 훅의 next? 로, 표의 next 는 기본값 데이터 — 표는 데이터만 둔다. 여부 투표 불통과를 night 로 보내는 분기를 resolveExecVote 한 곳에 둔다
 - [Phase 04]: 04-01: 여부 투표 개인 표는 마감 훅이 키째 삭제, execVote 는 값이 바뀌면 전원 방송 — 익명을 데이터가 없다는 사실로 지키고 집계 수는 전원 공개 정보라 모든 소켓이 각자 view 를 받는다
 - [Phase 04]: 04-02: ended 장면은 lobby 임시값(UI-SPEC 4 가 표 한 줄로 변경), view.test PHASES 확장은 04-04 몫
+- [Phase 04]: 후보 선택 집계는 공개 구간 진입 훅에서 한 번에 한다(마감 훅에는 난수 인자가 없다)
+- [Phase 04]: 공개 진입 때 Player.candidateVote 를 지운다(voteLog.cand.votes 로 남는다)
+- [Phase 04]: 처형 문구는 아침 문구와 따로 센다(lastExecPhrase), 처형 진입 훅에서 한 번 추첨
+- [Phase 04]: 여부 동률을 notMajority 로 묶는다(결정 0036 의 바뀔 수 있는 기본값, noExecutionOf 한 곳)
 
 ### Pending Todos
 
@@ -242,6 +247,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-26T12:57:36.756Z
-Stopped at: Completed 04-02-PLAN.md
+Last session: 2026-10-28T04:58:01.111Z
+Stopped at: Completed 04-04-PLAN.md
 Resume file: None

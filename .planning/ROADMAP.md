@@ -252,7 +252,7 @@ Plans:
   5. 마피아가 모두 탈락하면 시민 팀 승리, 마피아 수가 나머지 생존자 수와 같거나 많아지면 마피아 팀 승리로 처형·아침 직후 즉시 판이 끝난다. 아직 아니면 다음 밤으로 이어진다.
   6. 결과 화면에 승리 팀, 모든 사람의 역할, 판 요약이 공개되고, 처음 화면으로 돌아가 새 방을 만들 수 있다.
 
-**Plans:** 2/12 plans executed (서버·공유 로직 웨이브, 결정 0036 — 배포하지 않는다(D-26). 웨이브마다 마지막 계획이 HANDOFF 진행 줄 갱신·개인 원격 push(웨이브 1·2 는 로컬 커밋만, 웨이브 3 의 04-05 가 04-02 초록 확인 뒤 웨이브 1·2·3 을 함께 push). 화면 계획은 시안 승인·`/gsd-ui-phase 4` 뒤 Add more plans 로 이어 붙이고 화면 웨이브와 함께 배포한다)
+**Plans:** 4/12 plans executed (서버·공유 로직 웨이브, 결정 0036 — 배포하지 않는다(D-26). 웨이브마다 마지막 계획이 HANDOFF 진행 줄 갱신·개인 원격 push(웨이브 1·2 는 로컬 커밋만, 웨이브 3 의 04-05 가 04-02 초록 확인 뒤 웨이브 1·2·3 을 함께 push). 화면 계획은 시안 승인·`/gsd-ui-phase 4` 뒤 Add more plans 로 이어 붙이고 화면 웨이브와 함께 배포한다)
 
 Plans:
 **Wave 1**
@@ -260,10 +260,10 @@ Plans:
 
 **Wave 2** *(blocked on 04-01)*
 - [x] 04-02-PLAN.md — 화면 쪽 단계 표 최소 대응(PHASE_SCENE·TEST_PHASE_LABEL·PHASE_ANNOUNCE·EXPECTED_SCENE)과 discussion→night 직결 회귀 이전 — 타입 검사·전체 테스트 초록 (wave 2)
-- [ ] 04-03-PLAN.md — 결정 0036(와이어 계약·규칙표·알려진 한계·바뀔 수 있는 기본값·되돌리기 비용), REQUIREMENTS CONN-02·GAME-01·COMM-01·architecture·product 문장 정정 (wave 2)
+- [x] 04-03-PLAN.md — 결정 0036(와이어 계약·규칙표·알려진 한계·바뀔 수 있는 기본값·되돌리기 비용), REQUIREMENTS CONN-02·GAME-01·COMM-01·architecture·product 문장 정정 (wave 2)
 
 **Wave 3** *(blocked on 04-02, 04-03)*
-- [ ] 04-04-PLAN.md — 후보 선택(자기 제외·번복)·서버 셔플 공개·동률은 후보 없음·변론·처형 진입(탈락·문구)·처형 무효 이유 day.noExecution(D-34)·투표 상태 도우미 (TDD, wave 3)
+- [x] 04-04-PLAN.md — 후보 선택(자기 제외·번복)·서버 셔플 공개·동률은 후보 없음·변론·처형 진입(탈락·문구)·처형 무효 이유 day.noExecution(D-34)·투표 상태 도우미 (TDD, wave 3)
 - [ ] 04-05-PLAN.md — 변론 템플릿 6개·변론은 후보만·투표 중 메시지·공개/처형/종료 거부, 아침 문구 7개·처형 문구 4개 (TDD, wave 3)
 
 **Wave 4** *(blocked on 04-04)*
@@ -328,6 +328,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 (decimal phases
 | 2. 낮 토론 | v1.0 | 18/18 | In Progress | - |
 | 3. 밤과 아침 | v1.0 | 12/12 | In Progress | - |
 | 3.1. 순차 주장과 역할 카드 | v1.0 | 14/14 | Complete | 2026-10-25 |
-| 4. 처형과 승패 | v1.0 | 2/12 | In Progress (서버 웨이브, 화면 계획 추가 예정) | - |
+| 4. 처형과 승패 | v1.0 | 4/12 | In Progress (서버 웨이브, 화면 계획 추가 예정) | - |
 | 5. 분위기와 캐릭터 | v1.0 | 0/TBD | Not started | - |
 | 6. 친구 플레이테스트 | v1.0 | 0/TBD | Not started | - |
