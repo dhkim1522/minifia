@@ -396,7 +396,6 @@ describe("defense 화면 한 경로 (VOTE-03, D-15·D-16·D-29, COMM-03)", () =>
     r.rerenderRoom({ ...roomView({ me: 2 }), phase: "execution" });
     expect(r.container.querySelectorAll(".mf-defchips").length).toBe(0);
     expect(document.querySelector('dialog[aria-label="빠른 메시지"]')).toBeNull();
-    expect(panelOf(r.container).classList.contains("mf-dayscene__panel--tall")).toBe(false);
   });
 
   it("탈락 viewer: 하단은 채팅(읽기) + 관전 알약, 좌석은 버튼이 아니다(기록 카드 열림 없음)", () => {

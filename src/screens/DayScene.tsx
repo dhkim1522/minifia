@@ -244,7 +244,7 @@ export function DayScene({ view, connection, myRoleButton, testButton, arrivedFr
           />
         </div>
         {isMorning ? <MorningCard {...morningCardText(view.day?.morning, nicknameOf)} exitDelayMs={morningExit.delay} /> : null}
-        <section key={`panel-${view.phase}`} className="mf-dayscene__panel mf-dayscene__enter">
+        <section key={`panel-${view.phase}`} className={`mf-dayscene__panel mf-dayscene__enter${verdict?.panelClassName ? ` ${verdict.panelClassName}` : ""}`}>
           {verdict ? (
             verdict.bottom
           ) : isMorning ? (

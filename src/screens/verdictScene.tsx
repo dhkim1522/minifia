@@ -4,6 +4,7 @@ import { isAlive } from "../../shared/game/alive";
 import type { ChatLine, RoomView } from "../../shared/protocol";
 import { CandidateVotePanel } from "../components/CandidateVotePanel";
 import type { DayTableLayout, DayTableProps, DayTableSeat } from "../components/DayTable";
+import { DefenseChips } from "../components/DefenseChips";
 import { DefensePanel } from "../components/DefensePanel";
 import { ExecVotePanel } from "../components/ExecVotePanel";
 import { NIGHT_PANEL_TEXT, NightPanel } from "../components/NightPanel";
@@ -30,7 +31,7 @@ import { useViewChoice } from "../net/useViewChoice";
 // 낮·밤·아침 경로는 한 줄도 바뀌지 않는다. 이후 계획이 후보 선택·공개·변론·처형 단계를 이 파일에 더한다(DayScene 줄 수를 늘리지 않는다).
 // 이 훅은 서버 view 만 따른다. 단계나 승패를 화면이 스스로 정하지 않고, 역할 문자열을 만들지 않는다.
 // 투표 단계에는 말하기·이모티콘 입구가 없다(D-12 개정, P-7): FLOAT_PHASES·CHAT_PHASES 에 이 단계들이 없어 말풍선·이모티콘·채팅 줄도 뜨지 않는다.
-// 최후 변론(defense, 04-21)은 예외다 — 후보의 변론이 말풍선·채팅 줄이 되고 나머지 생존자는 이모티콘을 보낸다(두 집합에 defense 가 있다). 후보 본인의 칩은 04-22 가 같은 자리에 더한다.
+// 최후 변론(defense, 04-21)은 예외다 — 후보의 변론이 말풍선·채팅 줄이 되고 나머지 생존자는 이모티콘을 보낸다(두 집합에 defense 가 있다). 후보 본인의 변론 칩 6개(DefenseChips, 04-22)는 같은 자리에서 하단 패널을 236 으로 키운다.
 
 export interface VerdictSceneCtx {
   view: RoomView;
@@ -67,6 +68,8 @@ export interface VerdictScene {
   layer?: DayTableProps["layer"];
   /** DayScene 루트(<main>)에 더할 클래스: 최후 변론·처형은 헤더와 하단 패널을 어둡게 층 위로 올린다(mf-dayscene--verdict) */
   rootClassName?: string;
+  /** 하단 패널 <section> 에 더할 클래스: 최후 변론의 후보 본인만 높이 236 변형(mf-dayscene__panel--tall, 04-22) */
+  panelClassName?: string;
   /** DayTable 에 그대로 잇는 선택 prop(어둡게+흐림 층 verdict) */
   tableProps?: Pick<DayTableProps, "verdict">;
 }
@@ -208,9 +211,9 @@ export function useVerdictScene({ view, connection, meAlive, showToast, lines, o
       title: "낮 · 최후 변론",
       instruction: defenseInstruction(n, mine ? null : cand.nickname),
       calm: true,
-      // 후보 본인: 제목·안내까지(칩 6개와 전송은 04-22). 그 밖: 변론하는 중 + 이모티콘, 탈락 viewer 는 관전 알약
+      // 후보 본인: 제목·안내·변론 칩 6개(04-22, 높이 236 변형). 그 밖: 변론하는 중 + 이모티콘, 탈락 viewer 는 관전 알약
       bottom: mine ? (
-        <NightPanel title={VERDICT_TEXT.defenseChooseTitle} guide={VERDICT_TEXT.defenseChooseHint} />
+        <DefenseChips view={view} connection={connection} showToast={showToast} />
       ) : (
         <DefensePanel
           view={view}
@@ -225,6 +228,7 @@ export function useVerdictScene({ view, connection, meAlive, showToast, lines, o
       // 좌석은 버튼이 아니다(onPick·onInspect 없음): 기록 카드가 열리지 않는다
       seatPatch: (seat) => ({ halo: kinds.get(seat) ?? "none", ...(seat === candidate ? { center: true } : {}) }),
       rootClassName: "mf-dayscene--verdict",
+      ...(mine ? { panelClassName: "mf-dayscene__panel--tall" } : {}),
       tableProps: { verdict: { dimPercent: VERDICT_DIM_PERCENT, blurPx: VERDICT_BLUR_PX } },
     };
   }
