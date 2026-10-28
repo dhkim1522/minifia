@@ -4,18 +4,18 @@ milestone: v1.0
 milestone_name: MVP
 current_phase: 4
 current_phase_name: 처형과 승패
-current_plan: 13
+current_plan: 14
 status: executing
-stopped_at: Completed 04-13-PLAN.md
-last_updated: "2026-10-28T08:05:38.513Z"
+stopped_at: Completed 04-14-PLAN.md
+last_updated: "2026-10-28T08:10:07.989Z"
 last_activity: 2026-10-26
 last_activity_desc: Phase 4 execution started
-state_head: 5d6e911bd1ff631e973fc63aae2f8460868c177b
+state_head: 226993c8a35e81d30105b10a3ee2ad242b7ce105
 progress:
   total_phases: 7
   completed_phases: 2
   total_plans: 98
-  completed_plans: 76
+  completed_plans: 77
 ---
 
 # Project State
@@ -30,10 +30,10 @@ See: .planning/PROJECT.md (updated 2026-10-21)
 ## Current Position
 
 Phase: 4 (처형과 승패) — EXECUTING
-Current Plan: 13
+Current Plan: 14
 Total Plans in Phase: 35
-Plan: 13 of 35
-Status: 화면 웨이브 진행 중 — 04-13(순수 모듈 verdict.ts) 완료, 다음 04-14. 배포는 04-35 에서만(D-26)
+Plan: 14 of 35
+Status: 화면 웨이브 진행 중 — 04-13(순수 모듈 verdict.ts)·04-14(토큰·dusk 장면 표·dusk 미리 받기) 완료, 다음 04-15. 배포는 04-35 에서만(D-26)
 Last activity: 2026-10-26 — Phase 4 execution started
 
 Progress: [██░░░░░░░░] 17%
@@ -121,6 +121,7 @@ Progress: [██░░░░░░░░] 17%
 | Phase 4 P11 | 35min | 2 tasks | 4 files |
 | Phase 04 P12 | 10min | 2 tasks | 3 files |
 | Phase 04 P13 | 10min | 2 tasks | 2 files |
+| Phase 4 P14 | 12min | 3 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -231,6 +232,7 @@ Recent decisions affecting current work:
 - [Phase 04]: 04-12: 결정 0036 의 고칠 곳(A7 applyCandidateVote, 봇 상수 EXEC_YES_PERCENT)을 코드에 맞춤. 서버 웨이브 배포 금지 유지(D-26)
 - [Phase 04]: 04-13: revealStateAt 에 current(가장 최근 시작한 단계)를 더해 화살표 사이 틈에도 문구가 직전 화살표를 유지한다
 - [Phase 04]: 04-13: capHalos 는 한 자리 요청 여럿 중 가장 높은 우선순위 하나만 남기고 흰은 상한과 무관하게 항상 남긴다
+- [Phase 4]: 04-14: 투표 다섯 단계 배경은 dusk(P-1, 확인 대기 기본값), ended 는 night(P-2). verdictDusk 는 등록만 남김. ASSET_VERSION 불변
 
 ### Pending Todos
 
@@ -267,6 +269,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-28T08:05:10.103Z
-Stopped at: Completed 04-13-PLAN.md
+Last session: 2026-10-28T08:10:07.311Z
+Stopped at: Completed 04-14-PLAN.md
 Resume file: None
