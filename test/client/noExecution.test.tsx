@@ -166,3 +166,134 @@ describe("처형 무효 CSS (정적 단언)", () => {
     expect(section.match(/@keyframes mf-vi-veil-void \{[\s\S]*?\n\}/)?.[0] ?? "").toMatch(/0\.25/);
   });
 });
+
+describe("처형 무효로 밤이 올 때 (RoomScreen, D-34·P-3)", () => {
+  it.each([
+    ["execVote", "notMajority", "찬성이 과반이 아니에요"],
+    ["execVote", "tie", "동률이라 처형하지 않아요"],
+    ["candidateVoteReveal", "tie", "동률이라 처형하지 않아요"],
+    ["candidateVoteReveal", "noVotes", "던진 표가 없어요"],
+  ] as const)("%s → night(%s): 같은 접속이면 회색 카드가 이유 `%s` 와 함께 뜬다", (from, reason, sub) => {
+    const r = renderRoom(makeView(from, { reason }));
+    expect(voidCard(r.container)).toBeNull();
+    r.rerenderRoom(makeView("night", { reason }));
+    const el = voidCard(r.container)!;
+    expect(el).not.toBeNull();
+    expect(el.querySelector(".mf-vintro__title")?.textContent).toBe("처형 무효");
+    expect(el.querySelector(".mf-vintro__sub")?.textContent).toBe(sub);
+    expect(r.container.querySelectorAll(".mf-vintro").length).toBe(1);
+    expect(el.closest(".mf-dt")).not.toBeNull();
+  });
+
+  it("도착 조건 5가지: 처음 마운트·재접속·noExecution 없는 밤(처형이 이뤄진 밤)·밤 중 다시 그리기·다른 단계에서 온 밤에는 뜨지 않는다", () => {
+    // 1) 처음 마운트
+    expect(voidCard(renderRoom(makeView("night")).container)).toBeNull();
+    cleanup();
+    // 2) 재접속(단계와 epoch 가 함께 바뀜)
+    const b = renderRoom(makeView("execVote"), { epoch: 1 });
+    b.rerenderRoom(makeView("night"), { epoch: 2 });
+    expect(voidCard(b.container)).toBeNull();
+    cleanup();
+    // 3) noExecution 없는 밤(처형이 이뤄진 밤 포함): execution → night, execVote → night(reason 없음)
+    const c = renderRoom(makeView("execution"));
+    c.rerenderRoom(makeView("night", { reason: null }));
+    expect(voidCard(c.container)).toBeNull();
+    cleanup();
+    const d = renderRoom(makeView("execVote"));
+    d.rerenderRoom(makeView("night", { reason: null }));
+    expect(voidCard(d.container)).toBeNull();
+    cleanup();
+    // 4) 밤 중 다시 그리기: 카드가 끝난 뒤 새 view 로 다시 그려도 돌아오지 않는다
+    const e = renderRoom(makeView("execVote"));
+    e.rerenderRoom(makeView("night"));
+    advance(NO_EXEC_CARD_MS);
+    expect(voidCard(e.container)).toBeNull();
+    e.rerenderRoom(makeView("night"));
+    e.rerenderRoom(makeView("night", { role: "police" }));
+    expect(voidCard(e.container)).toBeNull();
+    cleanup();
+    // 5) 다른 단계에서 온 밤(예: 낮 토론 → 밤)에는 noExecution 이 있어도 뜨지 않는다
+    const f = renderRoom(makeView("discussion"));
+    f.rerenderRoom(makeView("night"));
+    expect(voidCard(f.container)).toBeNull();
+  });
+
+  it("1599ms 에는 카드가 있고 1600ms 에 사라진다, 밤 중간에 다시 그려도 연장되지 않는다", () => {
+    const r = renderRoom(makeView("execVote"));
+    r.rerenderRoom(makeView("night"));
+    advance(1000);
+    r.rerenderRoom(makeView("night", { role: "citizen" }));
+    advance(599);
+    expect(voidCard(r.container)).not.toBeNull();
+    advance(1);
+    expect(voidCard(r.container)).toBeNull();
+    expect(r.container.querySelectorAll(".mf-vintro, .mf-vintro__veil").length).toBe(0);
+  });
+
+  it("밤 시작 문구는 1000ms 에는 없고 1700ms 에 있다(NO_EXEC_INTRO_DELAY_MS 뒤부터 2초), 그 뒤 사라진다", () => {
+    expect(NO_EXEC_INTRO_DELAY_MS).toBe(1600);
+    const r = renderRoom(makeView("execVote"));
+    r.rerenderRoom(makeView("night"));
+    advance(1000);
+    expect(sceneIntro(r.container)).toBeNull();
+    advance(599);
+    expect(sceneIntro(r.container)).toBeNull();
+    advance(101); // 1700ms
+    const el = sceneIntro(r.container)!;
+    expect(el).not.toBeNull();
+    expect(Array.from(el.querySelectorAll("p")).map((p) => p.textContent)).toEqual(["1일차", "밤이 되었습니다"]);
+    // 카드는 이미 사라졌고 두 문구가 겹치지 않는다
+    expect(voidCard(r.container)).toBeNull();
+    advance(SCENE_INTRO_MS - 101 - 1); // 3599ms: 마지막 순간 전
+    expect(sceneIntro(r.container)).not.toBeNull();
+    advance(2); // 3600ms 이후
+    expect(sceneIntro(r.container)).toBeNull();
+  });
+
+  it("noExecution 이 없는 밤의 시작 문구는 지금처럼 바로 뜬다(지연 없음)", () => {
+    const r = renderRoom(makeView("execution"));
+    r.rerenderRoom(makeView("night", { reason: null }));
+    expect(sceneIntro(r.container)).not.toBeNull();
+    advance(SCENE_INTRO_MS);
+    expect(sceneIntro(r.container)).toBeNull();
+  });
+
+  it("카드가 떠 있는 동안 밤 행동이 된다: 경찰의 대상 좌석 버튼 클릭이 send 로 이어진다", () => {
+    const send = vi.fn(() => true);
+    const r = renderRoom(makeView("execVote", { role: "police" }), { send });
+    r.rerenderRoom(makeView("night", { role: "police" }), { send });
+    expect(voidCard(r.container)).not.toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "하윤, 조사 대상" }));
+    expect(send).toHaveBeenCalledWith({ t: "pick", target: 1 });
+  });
+
+  it("밤 장면은 그대로다: 제목 `밤`, 1일차, 서버 단계 시간(타이머)은 그대로, 하단은 기존 시민 밤 하단", () => {
+    const r = renderRoom(makeView("execVote"));
+    r.rerenderRoom(makeView("night"));
+    expect(screen.queryByRole("heading", { name: "밤" })).not.toBeNull();
+    expect(r.container.querySelector(".mf-phasebar__do")?.textContent).toBe("1일차");
+    expect(r.container.querySelector(".mf-dayscene__panel h2")?.textContent).not.toBe("");
+    expect(r.container.querySelector(".mf-dayscene")?.classList.contains("mf-dayscene--verdict")).toBe(false);
+  });
+
+  it("읽기 안내: noExecution 이 있으면 `처형 무효. {부제}. {일차}일차 밤. …`, 없으면 기존 문구", () => {
+    const a = renderRoom(makeView("execVote"));
+    a.rerenderRoom(makeView("night", { reason: "tie" }));
+    expect(announce(a.container)).toBe(`${noExecutionPrefix("tie")}1일차 밤. 밤이 되었어요`);
+    expect(announce(a.container)).toBe("처형 무효. 동률이라 처형하지 않아요. 1일차 밤. 밤이 되었어요");
+    cleanup();
+    const b = renderRoom(makeView("execVote", { role: "mafia" }));
+    b.rerenderRoom(makeView("night", { role: "mafia", reason: "notMajority" }));
+    expect(announce(b.container)).toBe("처형 무효. 찬성이 과반이 아니에요. 1일차 밤. 함께 지목하세요");
+    cleanup();
+    const c = renderRoom(makeView("execution"));
+    c.rerenderRoom(makeView("night", { reason: null }));
+    expect(announce(c.container)).toBe("1일차 밤. 밤이 되었어요");
+  });
+
+  it("카드 소스는 직업 표를 읽지 않는다", () => {
+    for (const f of ["src/components/NoExecutionCard.tsx", "src/components/ExecIntroCard.tsx"]) {
+      expect(readFileSync(f, "utf8")).not.toMatch(/roleText|ROLE_TEXT|ROLE_IDS|roleArtSrc|me\.role/);
+    }
+  });
+});

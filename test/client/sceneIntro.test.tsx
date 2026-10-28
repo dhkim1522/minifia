@@ -5,7 +5,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DAY_ANNOUNCE_MS } from "../../shared/game/phases";
 import type { RoleId } from "../../shared/game/roles";
 import type { PhaseId, RoomView } from "../../shared/protocol";
-import { SCENE_FADE_MS, SCENE_INTRO_MS } from "../../src/game/scenes";
+import { SceneIntro } from "../../src/components/SceneIntro";
+import { PHASE_INTRO, SCENE_FADE_MS, SCENE_INTRO_MS } from "../../src/game/scenes";
 import { DayScene } from "../../src/screens/DayScene";
 import type { RoomConnection } from "../../src/net/useRoomConnection";
 
@@ -464,5 +465,62 @@ describe("night.css: .mf-sceneintro (밤·낮 시작 문구 한 부품)", () => 
       const text = readFileSync(f, "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
       expect(/mf-day__|\.mf-day\b|mf-day-(morning|title)|mf-nightintro/.test(text), f).toBe(false);
     }
+  });
+});
+
+// ---- delayMs (04-24, 처형 무효 카드 뒤로 밤 시작 문구를 미룬다) ----
+
+describe("SceneIntro delayMs (P-3)", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+  const nightIntro = PHASE_INTRO.night!;
+
+  it("delayMs 가 없거나 0 이면 지금과 같다: 마운트 즉시 같은 마크업, SCENE_INTRO_MS 뒤 onDone 한 번", () => {
+    const onDone = vi.fn();
+    const base = render(<SceneIntro n={1} intro={nightIntro} onDone={vi.fn()} />);
+    const html = base.container.innerHTML;
+    cleanup();
+    const { container } = render(<SceneIntro n={1} intro={nightIntro} delayMs={0} onDone={onDone} />);
+    expect(container.innerHTML).toBe(html);
+    expect(container.querySelector(".mf-sceneintro")).not.toBeNull();
+    advance(SCENE_INTRO_MS - 1);
+    expect(onDone).not.toHaveBeenCalled();
+    advance(1);
+    expect(onDone).toHaveBeenCalledTimes(1);
+  });
+
+  it("delayMs 가 양수면 그 전에는 아무것도 그리지 않고, 그 뒤에 보이기 시작하며 onDone 은 delayMs + SCENE_INTRO_MS 뒤다", () => {
+    const onDone = vi.fn();
+    const { container } = render(<SceneIntro n={2} intro={nightIntro} delayMs={1600} onDone={onDone} />);
+    expect(container.innerHTML).toBe("");
+    advance(1599);
+    expect(container.innerHTML).toBe("");
+    advance(1);
+    const el = container.querySelector(".mf-sceneintro")!;
+    expect(el).not.toBeNull();
+    expect(Array.from(el.querySelectorAll("p")).map((p) => p.textContent)).toEqual(["2일차", "밤이 되었습니다"]);
+    expect(el.getAttribute("aria-hidden")).toBe("true");
+    advance(SCENE_INTRO_MS - 1);
+    expect(onDone).not.toHaveBeenCalled();
+    advance(1);
+    expect(onDone).toHaveBeenCalledTimes(1);
+  });
+
+  it("부모가 다시 그려도 타이머가 연장되지 않고, 언마운트하면 타이머가 남지 않는다", () => {
+    const onDone = vi.fn();
+    const { rerender, unmount } = render(<SceneIntro n={1} intro={nightIntro} delayMs={1600} onDone={onDone} />);
+    advance(1000);
+    rerender(<SceneIntro n={1} intro={nightIntro} delayMs={1600} onDone={onDone} />);
+    advance(2599);
+    expect(onDone).not.toHaveBeenCalled();
+    advance(1);
+    expect(onDone).toHaveBeenCalledTimes(1);
+    unmount();
+    expect(vi.getTimerCount()).toBe(0);
   });
 });
