@@ -2,8 +2,9 @@
 // 관전(결정 0021): 탈락한 본인에게만 모든 실제 직업과 그 밤의 행동 대상. 살아 있는 사람에게는 어떤 키로도 싣지 않는다 —
 // 결정 0002 를 "살아 있는 사람에게는 보내지 않는다" 로 좁혀 유지. 직업 키 이름은 role 이 아니라 job 이다(누출 검사가 role 키를 me 밖에서 금지).
 // 밤 필드 받는 사람: pick 본인(생존·밤), allyPicks 생존 마피아(밤), records 경찰(수사)·마피아(암살)·의사(치료) 본인 중 본인 역할 일지 하나(역할 공개 단계 전체), morning 모두(아침만).
-// 투표 필드 받는 사람(4페이즈): execTally 모두에게 같은 값(execVote 단계만), voteAgree 본인(생존·execVote), voteLog 모두(낮 단계마다 항상, 집계 수만).
-// 남의 여부 표는 어떤 키로도 싣지 않는다 — Player.execVote 는 허용 목록 리터럴에 없고 마감 훅이 키째 지운다(결정 0034·D-02).
+// 투표 필드 받는 사람(4페이즈): execTally 모두에게 같은 값(execVote 단계만), voteAgree 본인(생존·execVote), voteTarget 본인(생존·candidateVote), voteLog 모두(낮 단계마다 항상, 집계 수만),
+// candidate 모두(공개 구간·변론·처형, 후보가 있을 때), execution 모두(처형 단계만, seat·phrase), noExecution 모두(처형 무효로 온 밤만, reason 하나).
+// 남의 여부 표·후보 선택은 어떤 키로도 싣지 않는다 — Player.execVote 는 마감 훅이, Player.candidateVote 는 공개 구간 진입 훅이 키째 지운다(결정 0034·D-02·D-19).
 import type {
   DayView,
   MorningView,
@@ -22,6 +23,7 @@ import { isAlive } from "./alive";
 import { botCount } from "./bots";
 import { currentClaimSeat } from "./claim";
 import { phaseDurationOf } from "./discussion";
+import { noExecutionOf } from "./execution";
 import { PHASE_DEFS } from "./phases";
 import { rolesInPlay } from "./roles";
 import { hostOf } from "./room";
@@ -71,6 +73,19 @@ function buildDay(state: RoomState): DayView {
   };
   // 실시간 집계는 모든 viewer 에게 같은 값이다 — 마감 집계와 같은 함수(execTallyOf)를 쓴다.
   if (state.phase === "execVote") day.execTally = execTallyOf(state);
+  // 후보·처형 발표는 모두에게 같다(공개 정보). 직업은 싣지 않는다 — 필드별로 복사한다(D-09).
+  if (
+    (state.phase === "candidateVoteReveal" || state.phase === "defense" || state.phase === "execution") &&
+    state.verdict?.candidate !== undefined
+  ) {
+    day.candidate = state.verdict.candidate;
+  }
+  if (state.phase === "execution" && state.execution !== undefined) {
+    day.execution = { seat: state.execution.seat, phrase: state.execution.phrase };
+  }
+  // 처형이 성립하지 않아 밤으로 온 그 밤에만, 이유 코드 하나(D-34). 공개 투표 기록에서 파생해 새 상태 필드가 없다.
+  const noExecution = noExecutionOf(state);
+  if (noExecution !== undefined) day.noExecution = { reason: noExecution.reason };
   if (state.phase === "claim") {
     const seat = currentClaimSeat(state);
     if (seat !== undefined) day.turn = { seat };
@@ -152,6 +167,11 @@ export function buildView(state: RoomState, playerId: string, now: number): Room
   // 여부 표는 본인에게만(D-02) — 생존한 본인이 execVote 단계에서 던진 값이 있을 때만 키를 만든다. 남의 값은 어떤 키로도 싣지 않는다.
   if (state.phase === "execVote" && isAlive(me) && me.execVote !== undefined) {
     myInfo.voteAgree = me.execVote;
+  }
+
+  // 후보 선택 값은 본인에게만(D-19, A7) — 생존한 본인이 candidateVote 단계에서 고른 값이 있을 때만 키를 만든다. 남의 값은 어떤 키로도 싣지 않는다.
+  if (state.phase === "candidateVote" && isAlive(me) && me.candidateVote !== undefined) {
+    myInfo.voteTarget = me.candidateVote;
   }
 
   // 동료가 고른 대상은 밤에 살아 있는 마피아에게만, 대상 seat 집합으로만(누가 골랐는지는 없다, D-07). 탈락한 마피아는 allies 만 받는다(A3).

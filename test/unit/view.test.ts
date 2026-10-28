@@ -564,14 +564,14 @@ describe("buildView 낮 뷰 — 한 명씩 주장(claim): 지금 차례와 공�
     expect(bad.join(",")).toBe("");
   });
 
-  it("dayAnnounce·discussion·night·morning 의 day 키는 claimLog,n,roles,voteLog(morning 은 + morning)이고 turn 키가 없다", () => {
+  it("dayAnnounce·discussion·night·morning 의 day 키는 claimLog,n,roles,voteLog(night 는 + noExecution: 표 없이 지나온 밤, morning 은 + morning)이고 turn 키가 없다", () => {
     const got: string[] = [];
     for (const phase of ["dayAnnounce", "discussion", "night", "morning"] as const) {
       const s = richStateAt(phase, 5, 1);
       const keys = new Set(s.players.map((p) => Object.keys(buildView(s, p.id, START_AT).day ?? {}).sort().join(",")));
       got.push(`${phase}:${[...keys].join("|")}`);
     }
-    expect(got.join(" ")).toBe("dayAnnounce:claimLog,n,roles,voteLog discussion:claimLog,n,roles,voteLog night:claimLog,n,roles,voteLog morning:claimLog,morning,n,roles,voteLog");
+    expect(got.join(" ")).toBe("dayAnnounce:claimLog,n,roles,voteLog discussion:claimLog,n,roles,voteLog night:claimLog,n,noExecution,roles,voteLog morning:claimLog,morning,n,roles,voteLog");
   });
 
   it("dayAnnounce 뷰의 day 는 {n, roles, claimLog [], voteLog []} 뿐이다", () => {
@@ -660,10 +660,10 @@ describe("buildView 낮 뷰 — 토론·이튿날 (D-02, D-05, D-15)", () => {
 });
 
 describe("buildView 밤 — 생존·본인 선택 (ELIM-01, D-06)", () => {
-  it("night view: day 의 키는 claimLog,n,roles,voteLog 이고 players[] 키는 alive,connected,isHost,nickname,seat, 모두 alive true", () => {
+  it("night view: day 의 키는 claimLog,n,noExecution,roles,voteLog(표 없이 지나온 밤이라 처형 무효 이유가 실린다, D-34) 이고 players[] 키는 alive,connected,isHost,nickname,seat, 모두 alive true", () => {
     const s = stateAt("night", 5, 1);
     const dayKeys = s.players.map((p) => Object.keys(buildView(s, p.id, START_AT).day ?? {}).sort().join(","));
-    expect(`[${dayKeys.join(" ")}]`).toBe("[claimLog,n,roles,voteLog claimLog,n,roles,voteLog claimLog,n,roles,voteLog claimLog,n,roles,voteLog claimLog,n,roles,voteLog]");
+    expect(`[${dayKeys.join(" ")}]`).toBe(`[${Array(5).fill("claimLog,n,noExecution,roles,voteLog").join(" ")}]`);
     const got = s.players.map((p) => {
       const v = buildView(s, p.id, START_AT);
       return v.players.map((e) => `${Object.keys(e).sort().join(",")}:${String(e.alive)}`).join("|");

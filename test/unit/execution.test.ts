@@ -445,3 +445,60 @@ describe("noExecutionOf · day.noExecution (D-34)", () => {
     expect(() => noExecutionOf(night)).not.toThrow();
   });
 });
+
+describe("새 단계 전수 누출 검사 (4~8명 × 투표 이후 네 단계 × 모든 viewer × 시드 3, T-04-10·T-04-11·T-04-12)", () => {
+  it("token·id 가 없고, role·allies 키는 me 아래에만 있으며, 공개 항목은 다섯 키뿐이고, 서버 전용 키가 없으며, day 키가 단계별 허용 목록과 같다", () => {
+    const violations: string[] = [];
+    let views = 0;
+    const serverOnly = ["candidateVote", "execVote", "verdict", "lastExecPhrase", "nightPick", "claimPick"];
+    for (let n = 4; n <= 8; n += 1) {
+      for (const seed of SEEDS) {
+        for (const phase of ["candidateVote", "candidateVoteReveal", "defense", "execution"] as const) {
+          const state = stateWithVerdict(n, seed, phase);
+          for (const viewer of state.players) {
+            views += 1;
+            const tag = `${n}/${seed}/${phase}/seat${viewer.seat}`;
+            const view = buildView(state, viewer.id, NOW);
+            const text = JSON.stringify(view);
+            for (const q of state.players) {
+              if (text.includes(q.token)) violations.push(`${tag}: token of seat${q.seat}`);
+              if (text.includes(q.id)) violations.push(`${tag}: id of seat${q.seat}`);
+            }
+            const paths = new Set<string>();
+            const walk = (value: unknown, path: string): void => {
+              if (Array.isArray(value)) value.forEach((v) => walk(v, `${path}[]`));
+              else if (value !== null && typeof value === "object") {
+                for (const [k, v] of Object.entries(value)) {
+                  paths.add(`${path}.${k}`);
+                  walk(v, `${path}.${k}`);
+                }
+              }
+            };
+            walk(view, "");
+            for (const path of paths) {
+              const key = path.slice(path.lastIndexOf(".") + 1);
+              if (key === "role" && path !== ".me.role") violations.push(`${tag}: role at ${path}`);
+              if (key === "allies" && path !== ".me.allies") violations.push(`${tag}: allies at ${path}`);
+              if (serverOnly.includes(key)) violations.push(`${tag}: server-only key at ${path}`);
+            }
+            for (const entry of view.players) {
+              const keys = Object.keys(entry).sort().join(",");
+              if (keys !== "alive,connected,isHost,nickname,seat") violations.push(`${tag}: players[] keys ${keys}`);
+            }
+            const want = ["claimLog", "n", "roles", "voteLog"];
+            if (phase !== "candidateVote") want.push("candidate");
+            if (phase === "execution") want.push("execution");
+            const got = Object.keys(view.day ?? {}).sort().join(",");
+            if (got !== want.sort().join(",")) violations.push(`${tag}: day keys ${got}`);
+            // 진행 중 후보 선택(me.voteTarget)은 candidateVote 단계의 생존한 본인에게만
+            const wantTarget = phase === "candidateVote" && isAlive(viewer) && viewer.candidateVote !== undefined;
+            if ("voteTarget" in view.me !== wantTarget) violations.push(`${tag}: me.voteTarget presence`);
+            else if (wantTarget && view.me.voteTarget !== viewer.candidateVote) violations.push(`${tag}: me.voteTarget value`);
+          }
+        }
+      }
+    }
+    expect(views).toBe(3 * 4 * (4 + 5 + 6 + 7 + 8));
+    expect(violations.join("; ")).toBe("");
+  });
+});
