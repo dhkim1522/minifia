@@ -614,14 +614,14 @@ export async function collectSnapshot(page) {
           };
         })(),
         halo: (() => {
-          const haloEls = [...document.querySelectorAll(".mf-figure--halo-white, .mf-figure--halo-crimson")];
+          const haloEls = [...document.querySelectorAll(".mf-figure--halo-white, .mf-figure--halo-amber, .mf-figure--halo-crimson")];
           const items = haloEls.map((el) => {
             // 후광 filter 는 180ms 전환(transition)이라 차례가 막 바뀐 순간의 계산값은 중간값(0.74px 등)이다. 끝 상태를 읽으려고 진행 중인 전환만 끝낸다(보이는 결과는 같다).
             for (const a of el.getAnimations()) if (a instanceof CSSTransition) a.finish();
             const seatEl = el.closest(".mf-dt__seat");
             return {
               seat: Number(seatEl?.getAttribute("data-seat")),
-              cls: el.classList.contains("mf-figure--halo-white") ? "white" : "crimson",
+              cls: el.classList.contains("mf-figure--halo-white") ? "white" : el.classList.contains("mf-figure--halo-amber") ? "amber" : "crimson",
               filter: getComputedStyle(el).filter,
               seatContext: !!seatEl && Number.isFinite(parseInt(getComputedStyle(seatEl).zIndex, 10)),
               onImg: el.tagName === "IMG",
@@ -854,4 +854,248 @@ export async function resetAndLeave(page, tracker) {
     /* 정리 실패는 결과에 넣지 않는다 */
   }
   await leaveLobby(page);
+}
+
+// ---- 처형 구간 읽기·조작 도우미 (04-31, UI-SPEC 15.1·15.2) ----
+// readVerdict 가 돌려주는 모양은 lib.mjs 머리의 `처형 구간 스냅숏 계약` 과 필드 이름·단위가 같다. 읽기는 한 번의 evaluate 로 끝낸다(시간 경쟁 없음).
+// 요소가 없으면 숫자 0·문자열 ""·배열 []·객체 null. 단, 검사가 `count` 로 판정하는 인트로·카드·어둡게 층은 count 0 인 객체로 돌려준다.
+// 결과에는 닉네임·직업·토큰 같은 값이 아니라 검사가 필요로 하는 모양·글자만 들어 있다(T-04-72).
+
+/**
+ * `--crimson-300|400|500|700`, `--gray-300|500|700`, `--amber-400` 토큰을 브라우저가 계산한 rgb 문자열로 읽는다.
+ * 색 값을 스크립트에 박지 않는다 — lib 검사는 이 문자열을 그대로 비교한다. 토큰이 없으면 던진다(조용히 틀린 색으로 비교하지 않는다).
+ */
+export async function readTokenColors(page) {
+  return page.evaluate(() => {
+    const probe = document.createElement("span");
+    probe.style.cssText = "position:absolute;visibility:hidden;pointer-events:none;width:0;height:0";
+    document.body.appendChild(probe);
+    try {
+      const rootStyle = getComputedStyle(document.documentElement);
+      const read = (name) => {
+        if (rootStyle.getPropertyValue(name).trim() === "") throw new Error(`토큰 ${name} 이 정의돼 있지 않음`);
+        probe.style.color = `var(${name})`;
+        return getComputedStyle(probe).color;
+      };
+      return {
+        crimson: ["--crimson-300", "--crimson-400", "--crimson-500", "--crimson-700"].map(read),
+        gray: ["--gray-300", "--gray-500", "--gray-700"].map(read),
+        amber: read("--amber-400"),
+      };
+    } finally {
+      probe.remove();
+    }
+  });
+}
+
+/**
+ * 처형 구간(execVote~ended) 스냅숏을 한 번의 evaluate 로 읽는다. colors = { crimson: string[] } (readTokenColors 결과).
+ * 진홍 판정은 계산된 color·background-color·border-color·box-shadow·filter·stroke·fill 문자열에 진홍 토큰의 `r, g, b` 가 들어 있는지다
+ * (알파가 붙은 rgba()·drop-shadow(rgb() …) 도 같은 색으로 센다). 결과 화면이면 [처음으로] 를 스크롤로 화면에 불러 닿는지 본다(reachedButton).
+ * 계약 밖 덧붙임 두 가지: result.stage(neutral|flip|done), 최상위 now(page 시계 ms). 계약 필드는 이름·단위를 바꾸지 않았다.
+ */
+export async function readVerdict(page, colors = { crimson: [], gray: [] }) {
+  const crimson = Array.isArray(colors?.crimson) ? colors.crimson : [];
+  return page.evaluate((crimsonColors) => {
+    const text = (el) => (el ? (el.textContent || "").replace(/\s+/g, " ").trim() : "");
+    const rectOf = (el) => {
+      if (!el) return null;
+      const r = el.getBoundingClientRect();
+      return { left: r.left, top: r.top, right: r.right, bottom: r.bottom, width: r.width, height: r.height };
+    };
+    const visible = (el) => {
+      const r = el.getBoundingClientRect();
+      if (r.width <= 0 || r.height <= 0) return false;
+      const cs = getComputedStyle(el);
+      return cs.display !== "none" && cs.visibility !== "hidden" && Number(cs.opacity) > 0.01;
+    };
+    const zOf = (el) => {
+      const z = parseInt(getComputedStyle(el).zIndex, 10);
+      return Number.isFinite(z) ? z : Number.NaN;
+    };
+    const seatOf = (el) => Number(el?.getAttribute("data-seat"));
+    const q = (s, root = document) => root.querySelector(s);
+    const qa = (s, root = document) => [...root.querySelectorAll(s)];
+    const ownText = (el) => [...el.childNodes].filter((n) => n.nodeType === 3).map((n) => n.textContent || "").join("").replace(/\s+/g, " ").trim();
+    const ariaBool = (el) => {
+      const v = el.getAttribute("aria-pressed");
+      return v === "true" ? true : v === "false" ? false : null;
+    };
+
+    // ---- 하단 패널 ----
+    const panel = q(".mf-dayscene__panel");
+    const pillEl = panel ? q(".mf-pk, .mf-ro", panel) : null;
+    const bottom = {
+      title: text(panel && q(".mf-claimpanel__title", panel)),
+      guide: text(panel && q(".mf-claimpanel__guide", panel)),
+      tally: text(panel && q(".mf-execvote__tally", panel)),
+      pill: pillEl ? text(pillEl) : null,
+      buttons: panel
+        ? qa("button", panel).map((b) => {
+            const r = b.getBoundingClientRect();
+            return { text: text(b), pressed: ariaBool(b), disabled: b.disabled === true, w: r.width, h: r.height };
+          })
+        : [],
+      height: panel ? panel.getBoundingClientRect().height : 0,
+    };
+
+    // ---- 낮 테이블 장면 ----
+    const dtRoot = q(".mf-dt");
+    const seatEls = qa(".mf-dt__seat");
+    const tagEls = qa(".mf-dt__tag");
+    const dimEl = q(".mf-dt__dim--verdict");
+    const dimZ = dimEl ? zOf(dimEl) : Number.NaN;
+    const dimCs = dimEl ? getComputedStyle(dimEl) : null;
+    const centerEl = Number.isFinite(dimZ) ? seatEls.filter((el) => zOf(el) > dimZ).sort((a, b) => zOf(b) - zOf(a))[0] ?? null : null;
+    let center = null;
+    if (centerEl) {
+      const r = centerEl.getBoundingClientRect();
+      const t = getComputedStyle(centerEl).transform;
+      const m = new DOMMatrix(t === "none" ? undefined : t);
+      const tag = tagEls.find((el) => seatOf(el) === seatOf(centerEl));
+      center = {
+        seat: seatOf(centerEl),
+        cx: r.left + r.width / 2,
+        scale: Math.hypot(m.a, m.b),
+        z: zOf(centerEl),
+        tagZ: tag ? zOf(tag) : Number.NaN,
+        tagBottom: tag ? tag.getBoundingClientRect().bottom : Number.NaN,
+      };
+    }
+    const maxZ = (els) => Math.max(0, ...els.map(zOf).filter(Number.isFinite));
+    const roleWordRe = /마피아|경찰|의사|시민/;
+    const dt = {
+      textHits: dtRoot ? qa("*", dtRoot).filter((el) => !el.closest(".mf-vchip") && /찬성|반대|투표/.test(ownText(el))).length : 0,
+      haloImgs: qa("img.mf-figure--halo-white, img.mf-figure--halo-amber, img.mf-figure--halo-crimson").map((el) => ({
+        seat: seatOf(el.closest(".mf-dt__seat")),
+        kind: el.classList.contains("mf-figure--halo-white") ? "white" : el.classList.contains("mf-figure--halo-amber") ? "amber" : "crimson",
+      })),
+      seatButtons: seatEls.map((el) => ({
+        seat: seatOf(el),
+        pickable: el.tagName === "BUTTON" && el.classList.contains("mf-dt__seat--pick") && !el.classList.contains("mf-dt__seat--inspect") && el.hasAttribute("aria-pressed") && !el.disabled,
+        pressed: ariaBool(el),
+        label: el.getAttribute("aria-label") ?? "",
+      })),
+      ghosts: [...new Set(qa('.mf-dt__seat img[src*="/characters/ghost/"]').map((im) => seatOf(im.closest(".mf-dt__seat"))))].sort((a, b) => a - b),
+      roleImgs: qa('img[src*="/characters/roles/"]').length,
+      roleWords: qa("body *").filter((el) => !el.closest(".mf-rolecard-btn, dialog, .mf-sr-only, script, style") && roleWordRe.test(ownText(el)) && visible(el)).length,
+      center,
+      others: seatEls.length > 0 ? { maxSeatZ: maxZ(seatEls.filter((el) => el !== centerEl)), maxTagZ: maxZ(tagEls.filter((el) => !centerEl || seatOf(el) !== seatOf(centerEl))) } : null,
+      dim: {
+        count: qa(".mf-dt__dim--verdict").length,
+        backdropFilter: dimCs ? dimCs.backdropFilter || dimCs.webkitBackdropFilter || "" : "",
+        background: dimCs ? dimCs.backgroundColor : "",
+        z: dimEl && Number.isFinite(dimZ) ? dimZ : 0,
+      },
+      cones: qa(".mf-dt__cone").length,
+      scene: rectOf(q(".mf-dayscene__scene")),
+      header: rectOf(q(".mf-phasebar")),
+      panel: rectOf(panel),
+    };
+
+    // ---- 카드: 인트로·처형 무효·처형 ----
+    const introEls = qa(".mf-vintro:not(.mf-vintro--void)");
+    const introEl = introEls[0] ?? null;
+    const introLayers = introEl ? [introEl, ...qa("*", introEl)] : [];
+    const blocking = introLayers.map((el) => getComputedStyle(el).pointerEvents).find((p) => p !== "none");
+    const introDrop = introEl ? q(".mf-vintro__drop", introEl) : null;
+    const intro = {
+      count: introEls.length,
+      pointerEvents: introEl ? blocking ?? "none" : "",
+      cardOpacity: introEl ? Number(getComputedStyle(introDrop ?? introEl).opacity) : 0,
+      residueCount: qa('[class*="mf-vintro"]:not(.mf-vintro--void):not(.mf-vintro--void *)').filter(visible).length,
+    };
+    const voidEls = qa(".mf-vintro--void");
+    const voidEl = voidEls[0] ?? null;
+    const voidFace = voidEl ? q(".mf-vintro__face", voidEl) : null;
+    const voidCard = {
+      count: voidEls.length,
+      title: text(voidEl && q(".mf-vintro__title", voidEl)),
+      sub: text(voidEl && q(".mf-vintro__sub", voidEl)),
+      borderColor: voidFace ? getComputedStyle(voidFace).borderTopColor : "",
+      pointerEvents: voidEl ? [voidEl, ...qa("*", voidEl)].map((el) => getComputedStyle(el).pointerEvents).find((p) => p !== "none") ?? "none" : "",
+    };
+    const execEls = qa(".mf-morningcard--amber");
+    const execEl = execEls[0] ?? null;
+    const execCard = {
+      count: execEls.length,
+      title: text(execEl && q(".mf-morningcard__t", execEl)),
+      sub: text(execEl && q(".mf-morningcard__s", execEl)),
+      borderColor: execEl ? getComputedStyle(execEl).borderTopColor : "",
+    };
+    const cardEl = q(".mf-vintro__drop") ?? execEl;
+    const card = cardEl ? { rect: rectOf(cardEl) } : null;
+
+    // ---- 공개: 화살표·칩·이름표 ----
+    const reveal = {
+      arrows: qa(".mf-varrow").length,
+      chips: qa(".mf-vchip").map((el) => {
+        const tone = /\bmf-vchip--(?!slow\b)([a-z]+)/.exec(el.className);
+        const r = el.getBoundingClientRect();
+        return { seat: seatOf(el), n: parseInt(text(el), 10) || 0, tone: tone ? tone[1] : "", left: r.left, top: r.top, right: r.right, bottom: r.bottom };
+      }),
+      tags: tagEls.map((el) => {
+        const r = el.getBoundingClientRect();
+        return { seat: seatOf(el), left: r.left, top: r.top, right: r.right, bottom: r.bottom };
+      }),
+    };
+
+    // ---- 진홍 사용 수 ----
+    const triples = crimsonColors
+      .map((c) => /rgba?\(\s*([\d.]+)[\s,]+([\d.]+)[\s,]+([\d.]+)/i.exec(String(c)))
+      .filter(Boolean)
+      .map((m) => `${Number(m[1])}, ${Number(m[2])}, ${Number(m[3])}`);
+    const usesCrimson = (el) => {
+      if (triples.length === 0) return false;
+      const cs = getComputedStyle(el);
+      const vals = [cs.color, cs.backgroundColor, cs.borderTopColor, cs.borderRightColor, cs.borderBottomColor, cs.borderLeftColor, cs.boxShadow, cs.filter, cs.stroke, cs.fill];
+      return vals.some((v) => typeof v === "string" && triples.some((t) => v.includes(t)));
+    };
+    const newSel =
+      ".mf-vintro, .mf-vintro *, .mf-vchip, .mf-varrow, .mf-varrow *, .mf-morningcard--amber, .mf-morningcard--amber *, .mf-pk--vote, .mf-execvote, .mf-execvote *, .mf-defchips, .mf-defchips *, .mf-dt__dim--verdict, .mf-dt__cone";
+    const crimsonNew = qa(newSel).filter((el) => visible(el) && usesCrimson(el)).length;
+    const crimsonScreen = qa("body *").filter((el) => el.tagName !== "SCRIPT" && el.tagName !== "STYLE" && visible(el) && usesCrimson(el)).length;
+
+    // ---- 결과 화면 ----
+    const resultRoot = q(".mf-result");
+    let result = null;
+    if (resultRoot) {
+      const cards = qa(".mf-result__card", resultRoot).map((el) => {
+        const art = q(".mf-result__art", el);
+        return {
+          seat: seatOf(el),
+          job: text(q(".mf-result__role", el)),
+          dead: el.classList.contains("mf-result__card--dead"),
+          figOpacity: art ? Number(getComputedStyle(art).opacity) : Number.NaN,
+        };
+      });
+      const scrollers = [document.documentElement, document.body, resultRoot];
+      const worst = scrollers.reduce((a, b) => (b.scrollWidth - b.clientWidth > a.scrollWidth - a.clientWidth ? b : a), scrollers[0]);
+      // [처음으로] 는 세로 스크롤로 닿아야 한다: 가까운 쪽으로 즉시 스크롤한 뒤 뷰포트 안에 있고 맨 위 요소가 그 버튼인지 본다(읽기 마지막에 한다)
+      const btn = qa("button", resultRoot).find((b) => text(b) === "처음으로") ?? null;
+      let reachedButton = false;
+      if (btn) {
+        btn.scrollIntoView({ block: "nearest", behavior: "instant" });
+        const r = btn.getBoundingClientRect();
+        const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+        reachedButton = r.width > 0 && r.top >= 0 && r.bottom <= window.innerHeight && r.left >= 0 && r.right <= window.innerWidth && !!hit && btn.contains(hit);
+      }
+      result = {
+        winner: resultRoot.getAttribute("data-winner") ?? "",
+        stage: resultRoot.getAttribute("data-stage") ?? "", // 계약 밖 덧붙임: neutral|flip|done — 공개 연출이 끝난(done) 뒤에 읽어야 카드 불투명도가 최종값이다
+        bannerText: text(q(".mf-result__banner-title", resultRoot)),
+        bannerSub: text(q(".mf-result__banner-sub", resultRoot)),
+        cards,
+        rows: qa(".mf-result__sm-row", resultRoot).length,
+        scrollW: worst.scrollWidth,
+        clientW: worst.clientWidth,
+        reachedButton,
+        glow: q(".mf-result__glow") !== null,
+        hasPhaseBar: q(".mf-phasebar") !== null || q(".mf-timer__num") !== null || q(".mf-dayscene__panel") !== null,
+      };
+    }
+
+    // now: 계약 밖 덧붙임 — 읽은 순간의 page 시계(performance.now). readVerdictWatch 의 *At 값과 같은 시계라 표본 t 를 카드 도착 기준으로 환산할 수 있다
+    return { bottom, dt, intro, voidCard, execCard, card, reveal, crimsonNew, crimsonScreen, result, now: performance.now() };
+  }, crimson);
 }
