@@ -1469,7 +1469,16 @@ describe("DayTable: executed 좌석의 사람 → 유령 전환", () => {
 
   it("verdict.css: mf-exec-out(투명 1 → .35)·mf-exec-in(투명 0 → .9, 개별 속성 translate 아래 18px → 0)·축소 모션은 떠오름 없음", () => {
     const css = readFileSync("src/styles/verdict.css", "utf8");
-    const kf = (name: string): string => new RegExp(`@keyframes ${name}\\s*\\{([\\s\\S]*?\\n?\\})\\s*\\}?`).exec(css)?.[0] ?? "";
+    const kf = (name: string): string => {
+      const at = css.indexOf(`@keyframes ${name} {`);
+      if (at < 0) return "";
+      let depth = 0;
+      for (let k = css.indexOf("{", at); k < css.length; k++) {
+        if (css[k] === "{") depth++;
+        else if (css[k] === "}" && --depth === 0) return css.slice(at, k + 1);
+      }
+      return "";
+    };
     const out = kf("mf-exec-out");
     expect(out).toMatch(/opacity:\s*1/);
     expect(out).toMatch(/opacity:\s*0?\.35/);

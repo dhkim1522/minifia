@@ -4,7 +4,7 @@ import type { EmojiId, RoleId } from "../../shared/protocol";
 import { DAY_SCENE_H, DAY_SCENE_W, EMOJI_LIFT, EMOJI_SIZE, FIG_H, FIG_W, SCENE_PAD_DEFAULT, dayTableGeometry, daySeatLayout, px } from "../game/dayTable";
 import type { DaySeatPlace } from "../game/dayTable";
 import { ROLE_TEXT } from "../game/roleText";
-import { CONE_H, CONE_W, candidateCenter, chipAnchor } from "../game/verdict";
+import { CONE_H, CONE_W, GHOST_FADE_MS, candidateCenter, chipAnchor } from "../game/verdict";
 import { Figure } from "./Figure";
 import { Icon } from "./Icon";
 import "../styles/daytable.css";
@@ -90,6 +90,11 @@ export interface DayTableSeat {
   beatAlt?: boolean;
   /** 최후 변론·처형의 후보: 테이블 가운데로 이동·1.7배(game/verdict.ts candidateCenter). z 그림 31·이름표 32. 한 화면에 한 자리 */
   center?: boolean;
+  /**
+   * 처형(04-23): dead 와 함께 켜면 사람 층 → 유령 층 400ms 전환을 그린다(사람 층 투명 1 → .35, 유령 층 0 → .9 + 아래 18px 에서 떠오름, 끝나면 사람 층 제거).
+   * 이 접속이 직접 본 처형에만 켠다 — 재접속·중간 합류는 안 주어 곧바로 유령 한 장이다. 후광은 보이는 유령 층 하나에만 붙는다.
+   */
+  executed?: boolean;
   /** 아침: 어둡게 층(z 30) 위(z 31)로 올려 어두워지지 않게 한다. 방금 탈락한 자리 */
   spotlit?: boolean;
   /** spotlit 일 때만 의미: 400ms 맥동을 한 번 돈다(밤 → 아침을 직접 본 경우에만 켠다) */
@@ -170,6 +175,21 @@ function placeOf(p: DaySeatPlace, center: boolean, cc: ReturnType<typeof candida
     emojiLeft: cc.x - EMOJI_SIZE / 2,
     emojiTop: Math.max(0, cc.footY - FIG_H * cc.scale - EMOJI_LIFT),
   };
+}
+
+/** 처형 전환 한 자리: 사람 층(투명으로 사라짐)과 유령 층(떠오름)을 GHOST_FADE_MS 동안 겹쳐 그리고, 지나면 사람 층을 걷어 유령 한 장만 남긴다. 타이머는 하나이고 언마운트에 정리한다 */
+function ExecutedFigures({ seat, disconnected, haloClass }: { seat: number; disconnected: boolean; haloClass: string | undefined }): ReactElement {
+  const [humanGone, setHumanGone] = useState(false);
+  useEffect(() => {
+    const id = setTimeout(() => setHumanGone(true), GHOST_FADE_MS);
+    return () => clearTimeout(id);
+  }, []);
+  return (
+    <>
+      {humanGone ? null : <Figure key="exec-out" seat={seat} disconnected={disconnected} className="mf-figure--exec-out" />}
+      <Figure key="exec-in" seat={seat} disconnected={disconnected} ghost className={haloClass ? `mf-figure--exec-in ${haloClass}` : "mf-figure--exec-in"} />
+    </>
+  );
 }
 
 /** 자리 읽기 이름: "{닉네임}{ (나)}{, 직업 | , 탈락}{, 연결 끊김}{, 지금 주장하는 차례}" (낮 기록 버튼이면 ", 주장 기록 보기" 가 더해진다) */
@@ -297,14 +317,18 @@ export function DayTable({
         const inner = (
           <>
             {/* key: 직업 그림으로 바뀌는 자리는 노드가 새로 만들어져 300ms 페이드가 한 번 돈다 */}
-            <Figure
-              key={art !== undefined ? "role" : "fig"}
-              seat={p.seat}
-              disconnected={!s.connected}
-              ghost={s.dead}
-              {...(art !== undefined ? { roleArt: art } : {})}
-              {...(haloClass ? { className: haloClass } : {})}
-            />
+            {s.dead && s.executed ? (
+              <ExecutedFigures seat={p.seat} disconnected={!s.connected} haloClass={haloClass} />
+            ) : (
+              <Figure
+                key={art !== undefined ? "role" : "fig"}
+                seat={p.seat}
+                disconnected={!s.connected}
+                ghost={s.dead}
+                {...(art !== undefined ? { roleArt: art } : {})}
+                {...(haloClass ? { className: haloClass } : {})}
+              />
+            )}
             {s.isAlly ? <Icon name="diamond" label={allyMarkLabel} className="mf-dt__mark" /> : null}
             {hostCrown && s.isHost ? (
               <span className="mf-dt__crown" role="img" aria-label="방장">
