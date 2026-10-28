@@ -1,5 +1,6 @@
 // 화면 E2E 순수 도우미 단위 테스트. 실행: node --test scripts/e2e/lib.test.mjs
 import test from "node:test";
+import { readFileSync } from "node:fs";
 import assert from "node:assert/strict";
 import {
   APPROVED_RELAXATIONS,
@@ -63,6 +64,10 @@ import {
   revealChecks,
   colorRuleChecks,
   haloChecks,
+  AMBER_RGB,
+  PANEL_H_DEFENSE_ME,
+  defenseChecks,
+  executionChecks,
 } from "./lib.mjs";
 
 const PROD = "https://minifia.dhplay.workers.dev\n";
@@ -288,15 +293,18 @@ test("D3B_FLOOR_5_PLAYERS 는 98.0% 하나만 낮췄다(5명판 한정, 사용�
   assert.equal(PANEL_H, 157);
 });
 
-test("APPROVED_RELAXATIONS: 승인된 완화는 M1·D3a/D3b·D4 와 5명판 D3b 98.0% 뿐이고, 모두 이유와 승인 날짜가 있다", () => {
-  assert.deepEqual(APPROVED_RELAXATIONS.map((r) => r.id), ["M1", "D3a/D3b", "D4", "D3b-5"]);
+test("APPROVED_RELAXATIONS: 승인된 완화는 M1·D3a/D3b·D4·5명판 D3b 98.0%·변론 후보 패널 236 뿐이고, 모두 이유와 승인 날짜가 있다", () => {
+  assert.deepEqual(APPROVED_RELAXATIONS.map((r) => r.id), ["M1", "D3a/D3b", "D4", "D3b-5", "P-PANEL-236"]);
   for (const r of APPROVED_RELAXATIONS) {
     assert.ok(typeof r.reason === "string" && r.reason.trim().length > 0, JSON.stringify(r));
-    assert.ok(/^\d{4}-\d{2}-\d{2}$/.test(r.approved) || r.approved === "03.1 F7", JSON.stringify(r));
+    assert.ok(/^\d{4}-\d{2}-\d{2}$/.test(r.approved) || r.approved === "03.1 F7" || r.approved === "execution-v1/DC-defense-me", JSON.stringify(r));
   }
   const five = APPROVED_RELAXATIONS.find((r) => r.id === "D3b-5");
   assert.equal(five.approved, "2026-10-26");
   assert.match(five.reason, /98\.0/);
+  const panel = APPROVED_RELAXATIONS.find((r) => r.id === "P-PANEL-236");
+  assert.equal(panel.approved, "execution-v1/DC-defense-me");
+  assert.match(panel.reason, /236/);
 });
 
 test("G7 smallTextIssues: 14px 미만 글자는 실패, 허용된 줄은 통과, 필드가 없으면 실패", () => {
@@ -1779,11 +1787,208 @@ test("colorRuleChecks P-COLOR: 새 요소 진홍 0, 방장이 시민이면 화�
   assert.match(colorRuleChecks(null, { crimsonColors }).detail, /측정값 없음/);
 });
 
-test("04-29: 이 계획은 검사 완화를 더하지 않는다(승인 목록 그대로)", () => {
-  assert.deepEqual(APPROVED_RELAXATIONS.map((x) => x.id), ["M1", "D3a/D3b", "D4", "D3b-5"]);
+test("04-29: 기존 기준 수치는 그대로다(04-30 이 완화를 더해도 낮추지 않는다)", () => {
   assert.equal(OVERLAP_EPS, 0.5);
   assert.equal(TAP_MIN, 44);
   assert.equal(PANEL_H, 157);
   assert.equal(ONE_LINE_FACTOR, 1.6);
   assert.equal(FACE_RATIO, 0.45);
+});
+
+// ---- 04-30 Task 1: P5 변론 스포트라이트·P6 처형 카드, 승인 완화 P-PANEL-236 ----
+
+const SCENE = { left: 0, top: 119.2, right: 390, bottom: 520, width: 390 };
+const defenseSnap = ({ me = false } = {}) => ({
+  bottom: {
+    title: me ? "변론할 말을 고르세요" : "",
+    guide: "",
+    height: me ? 236 : 157,
+    buttons: me ? Array.from({ length: 6 }, (_, i) => ({ text: `칩${i}`, pressed: null, disabled: false, w: 110, h: 44 })) : [],
+  },
+  dt: {
+    scene: SCENE,
+    center: { seat: 2, cx: 195, scale: 1.7, z: 31, tagZ: 32, tagBottom: 514 },
+    others: { maxSeatZ: 10, maxTagZ: 12 },
+    dim: { count: 1, backdropFilter: "blur(3px)", background: "rgba(0, 0, 0, 0.45)", z: 30 },
+    cones: 1,
+  },
+});
+const defenseBad = (mutate, opts) => {
+  const s = defenseSnap({ me: opts?.isCandidate });
+  mutate(s);
+  return defenseChecks(s, opts ?? { isCandidate: false });
+};
+
+test("defenseChecks P5: 정상 입력(남의 시점·후보 본인)은 통과한다", () => {
+  const a = defenseChecks(defenseSnap(), { isCandidate: false });
+  assert.equal(a.id, "P5");
+  assert.equal(a.ok, true, a.detail);
+  const b = defenseChecks(defenseSnap({ me: true }), { isCandidate: true });
+  assert.equal(b.ok, true, b.detail);
+});
+
+test("defenseChecks P5: 가운데·배율·어둡게·원뿔·층 순서·이름표 여유 위반을 각각 잡는다", () => {
+  const cases = [
+    ["가운데 5px 어긋남", (s) => { s.dt.center.cx = 200; }, /가운데/],
+    ["가운데 2px 는 허용", null, null],
+    ["배율 1.5", (s) => { s.dt.center.scale = 1.5; }, /배율/],
+    ["어둡게 층 없음", (s) => { s.dt.dim.count = 0; }, /어둡게/],
+    ["어둡게 층 둘", (s) => { s.dt.dim.count = 2; }, /어둡게/],
+    ["흐림 4px", (s) => { s.dt.dim.backdropFilter = "blur(4px)"; }, /blur\(3px\)|흐림/],
+    ["흐림 없음", (s) => { s.dt.dim.backdropFilter = "none"; }, /blur\(3px\)|흐림/],
+    ["어둡게 알파 .6", (s) => { s.dt.dim.background = "rgba(0, 0, 0, 0.6)"; }, /알파|어둡게/],
+    ["어둡게 알파 읽을 수 없음", (s) => { s.dt.dim.background = "red"; }, /알파|어둡게/],
+    ["어둡게 z 가 30 아님", (s) => { s.dt.dim.z = 20; }, /z/],
+    ["원뿔 둘", (s) => { s.dt.cones = 2; }, /원뿔/],
+    ["원뿔 없음", (s) => { s.dt.cones = 0; }, /원뿔/],
+    ["후보 z 29", (s) => { s.dt.center.z = 29; }, /후보.*z|z.*후보/],
+    ["후보 이름표 z 29", (s) => { s.dt.center.tagZ = 29; }, /이름표.*z|z.*이름표/],
+    ["다른 자리가 층 위", (s) => { s.dt.others.maxSeatZ = 30; }, /다른 자리/],
+    ["다른 이름표가 층 위", (s) => { s.dt.others.maxTagZ = 31; }, /다른 이름표/],
+    ["이름표 아래끝이 장면 아래 − 4 침범", (s) => { s.dt.center.tagBottom = 517; }, /아래끝/],
+    ["패널 높이 157 이 아님", (s) => { s.bottom.height = 170; }, /패널 높이/],
+  ];
+  for (const [name, mutate, re] of cases) {
+    if (!mutate) {
+      const s = defenseSnap();
+      s.dt.center.cx = 197;
+      assert.equal(defenseChecks(s, { isCandidate: false }).ok, true, name);
+      continue;
+    }
+    const r = defenseBad(mutate);
+    assert.equal(r.ok, false, name);
+    assert.match(r.detail, re, name);
+  }
+});
+
+test("defenseChecks P5: 후보 본인 패널은 236·칩 6개(각 ≥ 44)이고 남의 시점은 157 이다(승인 완화가 번지지 않음, T-04-71)", () => {
+  // 후보 본인인데 157 이면 실패, 남인데 236 이어도 실패
+  const me157 = defenseSnap({ me: true });
+  me157.bottom.height = 157;
+  assert.match(defenseChecks(me157, { isCandidate: true }).detail, /236/);
+  const other236 = defenseSnap();
+  other236.bottom.height = 236;
+  const r = defenseChecks(other236, { isCandidate: false });
+  assert.equal(r.ok, false);
+  assert.match(r.detail, /157/);
+  // 칩 5개, 칩 하나가 44 미만
+  const five = defenseSnap({ me: true });
+  five.bottom.buttons.pop();
+  assert.match(defenseChecks(five, { isCandidate: true }).detail, /칩 5개/);
+  const small = defenseSnap({ me: true });
+  small.bottom.buttons[0].h = 40;
+  assert.match(defenseChecks(small, { isCandidate: true }).detail, /44/);
+  // 236 은 반올림 오차 ±0.5 까지
+  const tol = defenseSnap({ me: true });
+  tol.bottom.height = 236.4;
+  assert.equal(defenseChecks(tol, { isCandidate: true }).ok, true);
+  tol.bottom.height = 236.6;
+  assert.equal(defenseChecks(tol, { isCandidate: true }).ok, false);
+});
+
+test("defenseChecks P5: 측정값이 없으면 조용히 통과하지 않는다", () => {
+  for (const [name, mutate] of [
+    ["center", (s) => { delete s.dt.center; }],
+    ["dim", (s) => { delete s.dt.dim; }],
+    ["cones", (s) => { delete s.dt.cones; }],
+    ["others", (s) => { delete s.dt.others; }],
+    ["scene", (s) => { delete s.dt.scene; }],
+    ["bottom.height", (s) => { delete s.bottom.height; }],
+  ]) {
+    const r = defenseBad(mutate);
+    assert.equal(r.ok, false, name);
+    assert.match(r.detail, /측정값 없음/, name);
+  }
+  assert.match(defenseChecks(null, { isCandidate: false }).detail, /측정값 없음/);
+  assert.match(defenseChecks(defenseSnap(), {}).detail, /측정값 없음\(.*isCandidate/);
+});
+
+const execSnap = () => ({
+  bottom: { title: "처형이 끝났어요", guide: "곧 다음으로 넘어가요" },
+  dt: { ghosts: [2], roleImgs: 0, roleWords: 0 },
+  execCard: { count: 1, title: "하늘님이 형장의 이슬이 되었습니다", sub: "처형이 집행됐어요", borderColor: "rgb(242, 184, 75)" },
+  crimsonNew: 0,
+});
+const execBad = (mutate, opts) => {
+  const s = execSnap();
+  mutate(s);
+  return executionChecks(s, opts ?? { viewerAlive: true, candidateSeat: 2 });
+};
+
+test("executionChecks P6: 정상 입력은 통과하고 네 꼬리 모두 받아들인다", () => {
+  const r = executionChecks(execSnap(), { viewerAlive: true, candidateSeat: 2 });
+  assert.equal(r.id, "P6");
+  assert.equal(r.ok, true, r.detail);
+  for (const tail of ["더는 함께할 수 없게 되었습니다", "형장의 이슬이 되었습니다", "잔혹하게 처형되었습니다", "처형대에 올랐습니다"]) {
+    const s = execSnap();
+    s.execCard.title = `하늘님이 ${tail}`;
+    assert.equal(executionChecks(s, { viewerAlive: true, candidateSeat: 2 }).ok, true, tail);
+  }
+});
+
+test("executionChecks P6: 카드·문구·유령·하단·진홍·직업 비노출 위반을 각각 잡는다", () => {
+  const cases = [
+    ["처형 카드 진홍", (s) => { s.execCard.borderColor = "rgb(224, 52, 75)"; }, /앰버/],
+    ["처형 카드 회색", (s) => { s.execCard.borderColor = "rgb(168, 172, 184)"; }, /앰버/],
+    ["처형 카드 없음", (s) => { s.execCard.count = 0; }, /처형 카드/],
+    ["처형 카드 둘", (s) => { s.execCard.count = 2; }, /처형 카드/],
+    ["아침 꼬리(5번째)", (s) => { s.execCard.title = "하늘님이 어둠 속으로 사라졌습니다"; }, /문구/],
+    ["님이 없음", (s) => { s.execCard.title = "하늘이 형장의 이슬이 되었습니다"; }, /문구/],
+    ["부제 다름", (s) => { s.execCard.sub = "처형이 끝났어요"; }, /부제/],
+    ["유령 아님", (s) => { s.dt.ghosts = [1, 3]; }, /유령/],
+    ["하단 제목 다름", (s) => { s.bottom.title = "처형 중"; }, /하단 제목/],
+    ["하단 안내 다름", (s) => { s.bottom.guide = "잠시만요"; }, /안내/],
+    ["새 요소 진홍", (s) => { s.crimsonNew = 1; }, /진홍/],
+    ["역할 그림 1개", (s) => { s.dt.roleImgs = 1; }, /역할 그림/],
+    ["역할 이름 1개", (s) => { s.dt.roleWords = 1; }, /역할 이름/],
+  ];
+  for (const [name, mutate, re] of cases) {
+    const r = execBad(mutate);
+    assert.equal(r.ok, false, name);
+    assert.match(r.detail, re, name);
+  }
+});
+
+test("executionChecks P6: 탈락한 viewer 는 직업 그림 검사를 하지 않고, 측정값이 없으면 실패한다", () => {
+  const s = execSnap();
+  s.dt.roleImgs = 5;
+  s.dt.roleWords = 5;
+  assert.equal(executionChecks(s, { viewerAlive: false, candidateSeat: 2 }).ok, true);
+  for (const [name, mutate] of [
+    ["execCard", (x) => { delete x.execCard; }],
+    ["ghosts", (x) => { delete x.dt.ghosts; }],
+    ["crimsonNew", (x) => { delete x.crimsonNew; }],
+    ["roleImgs", (x) => { delete x.dt.roleImgs; }],
+    ["bottom", (x) => { delete x.bottom; }],
+  ]) {
+    const r = execBad(mutate);
+    assert.equal(r.ok, false, name);
+    assert.match(r.detail, /측정값 없음/, name);
+  }
+  assert.match(executionChecks(execSnap(), { viewerAlive: true }).detail, /측정값 없음\(.*candidateSeat/);
+});
+
+test("04-30: 변론 후보 패널 236 은 승인 완화 한 줄뿐이고 기준 수치는 그대로이며, 상수는 verdict.ts 와 같다", () => {
+  assert.equal(PANEL_H_DEFENSE_ME, 236);
+  assert.equal(PANEL_H, 157);
+  assert.equal(AMBER_RGB, "rgb(242, 184, 75)");
+  assert.equal(APPROVED_RELAXATIONS.filter((x) => x.id === "P-PANEL-236").length, 1);
+  assert.equal(OVERLAP_EPS, 0.5);
+  assert.equal(TAP_MIN, 44);
+  assert.equal(ONE_LINE_FACTOR, 1.6);
+  assert.equal(FACE_RATIO, 0.45);
+  const src = readFileSync(new URL("../../src/game/verdict.ts", import.meta.url), "utf8");
+  const num = (name) => Number(new RegExp(`export const ${name} = ([0-9.]+)`).exec(src)?.[1]);
+  const spot = defenseSnap();
+  // lib 의 수치가 상수 파일과 같다: 45%·3px·1.7. 다르면 아래 단언이 깨진다.
+  assert.equal(num("VERDICT_DIM_PERCENT"), 45);
+  assert.equal(num("VERDICT_BLUR_PX"), 3);
+  assert.equal(num("VERDICT_CANDIDATE_SCALE"), 1.7);
+  // 기준값 그대로 만든 스냅숏이 통과한다 = lib 수치가 상수와 같다
+  const dim = `rgba(0, 0, 0, ${num("VERDICT_DIM_PERCENT") / 100})`;
+  spot.dt.dim.background = dim;
+  spot.dt.dim.backdropFilter = `blur(${num("VERDICT_BLUR_PX")}px)`;
+  spot.dt.center.scale = num("VERDICT_CANDIDATE_SCALE");
+  assert.equal(defenseChecks(spot, { isCandidate: false }).ok, true);
+  // lib 에 쓴 236 이 UI-SPEC 8.4 와 같은지는 위 PANEL_H_DEFENSE_ME 단언이 고정한다.
 });
