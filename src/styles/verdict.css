@@ -329,6 +329,35 @@
   100% { opacity: 0; }
 }
 
+/* 처형 무효 변형(UI-SPEC 9.2, D-34, P-3): 같은 모양·낙하, 색은 회색 토큰만. 바운스 없음, 면은 지워지지 않고 전체가 1300ms 부터 300ms 페이드아웃한다. 셰브런·질문 강조·번짐은 DOM 에 없다 */
+.mf-vintro--void { --mf-vi-out-delay: 1300ms; --mf-vi-out-ms: 300ms; }
+.mf-vintro--void .mf-vintro__veil { animation: mf-vi-veil-void 1600ms linear both; }
+.mf-vintro--void .mf-vintro__drop { animation: mf-vi-fall-void 420ms ease-out both; }
+.mf-vintro--void .mf-vintro__face {
+  background: linear-gradient(180deg, var(--gray-700), var(--gray-800));
+  border-color: var(--gray-300);
+  box-shadow:
+    0 22px 44px color-mix(in srgb, var(--night-950) 70%, transparent),
+    0 0 36px color-mix(in srgb, var(--gray-300) 25%, transparent),
+    inset 0 1px 0 color-mix(in srgb, var(--gray-300) 40%, transparent);
+}
+.mf-vintro--void .mf-vintro__face::before { border-color: color-mix(in srgb, var(--gray-500) 70%, transparent); }
+.mf-vintro--void .mf-vintro__ln-line { stroke: var(--gray-300); }
+.mf-vintro--void .mf-vintro__ln-dia { fill: var(--gray-300); }
+.mf-vintro--void .mf-vintro__title { text-shadow: 0 3px 0 var(--night-950), 0 0 18px color-mix(in srgb, var(--gray-300) 50%, transparent); }
+.mf-vintro__sub { margin: 0; font-size: 14px; line-height: 20px; color: var(--gray-100); white-space: nowrap; }
+/* 막: 0 → .25(420ms) 유지 → 0(1600ms) */
+@keyframes mf-vi-veil-void {
+  0% { opacity: 0; }
+  26%, 81% { opacity: 0.25; }
+  100% { opacity: 0; }
+}
+/* 낙하: 위 −276px 에서 −5도 기울어져 떨어진다. 바운스 없음 */
+@keyframes mf-vi-fall-void {
+  from { translate: 0 -276px; rotate: -5deg; opacity: 0.92; }
+  to { translate: 0 0; rotate: 0deg; opacity: 1; }
+}
+
 /* 축소 모션(UI-SPEC 9.1·13.4, D-24): 낙하·바운스·셰브런 이동 없음. 카드가 가운데에 160ms 페이드인 → 정지 → 850ms 부터 면이 페이드로 지워지고 질문만 24px 로 남아 → 1450ms 부터 페이드아웃.
    base.css 의 전역 규칙이 모든 animation-duration 을 0.01ms 로 줄이므로(!important), 페이드인 것들만 더 구체적인 선택자로 길이를 되돌려 시각(animation-delay)대로 단계가 이어지게 한다. 셰브런은 움직임 없이 정지 표시(페이드인만). */
 @media (prefers-reduced-motion: reduce) {
