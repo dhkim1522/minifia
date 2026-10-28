@@ -57,8 +57,8 @@ shadcn 게이트: `components.json` 이 없고 이 프로젝트는 React + Vite 
 
 | PhaseId (시간) | 화면 컴포넌트 | 배경 장면 | 헤더 제목 / 안내 | 하단 패널 | 타이머 |
 |---|---|---|---|---|---|
-| `execVote` (10초) | `DayScene`(낮 테이블 유지) | `dusk` (§2.2) | `낮 · 처형 여부` / `{n}일차` | 제목 + 집계 줄 + [찬성][반대] (+ 말하기 아이콘 2개, P-7) | calm(§6.1 P-9) |
-| `candidateVote` (15초) | `DayScene` | `dusk` | `낮 · 후보 선택` / `{n}일차` | 제목 + 안내 + 선택 알약 (+ 말하기 아이콘 2개) | calm |
+| `execVote` (10초) | `DayScene`(낮 테이블 유지) | `dusk` (§2.2) | `낮 · 처형 여부` / `{n}일차` | 제목 + 집계 줄 + [찬성][반대] | calm(§6.1 P-9) |
+| `candidateVote` (15초) | `DayScene` | `dusk` | `낮 · 후보 선택` / `{n}일차` | 제목 + 안내 + 선택 알약 | calm |
 | `candidateVoteReveal` (4초) | `DayScene` + 공개 층 | `dusk` | `낮 · 투표 공개` / `{n}일차` | 제목 + 안내(알약·버튼 없음) | calm |
 | `defense` (10초) | `DayScene` + 스포트라이트 층 | `dusk` | `낮 · 최후 변론` / 남이 후보 `{n}일차 · {이름}님의 변론`, 내가 후보 `{n}일차 · 내 변론` | 남: 채팅 3줄 + 상태 줄 + 이모티콘 / 후보 본인: 변론 칩 6개(높이 236) | calm |
 | `execution` (5초) | `DayScene` + 스포트라이트 층 + 처형 카드 | `dusk` | `낮 · 처형` / `{n}일차` | 제목 + 안내(알약·버튼 없음) | calm |
@@ -111,7 +111,7 @@ Enumerated by `ls src/components/*.tsx | wc -l` — 32 components — 버전 없
 | `PhaseBar`, `Timer`(calm), `RoleCardButton` | 모든 투표·처형 단계 헤더 |
 | `NightPanel`, `PickPill`, `NoticePill` | 공개·처형 하단(제목+안내), 후보 선택 하단(알약) |
 | `MessageLog`(`more={false}`는 변론에서만 검토), `TurnPanel` 의 `st-row` 모양 | 변론 하단(남의 변론) |
-| `QuickMessageSheet`(`templates` 인자), `EmojiTraySheet`, `useSendLock` | 투표 단계 말하기, 변론 칩의 대상·직업 고르기 |
+| `QuickMessageSheet`(`templates` 인자), `EmojiTraySheet`, `useSendLock` | 변론 칩의 대상·직업 고르기, 변론 중 남의 이모티콘 |
 | `Toast`, `ReadOnlyRow`(문구 인자 추가) | 거부 토스트, 관전 하단 |
 | `Backdrop`, `usePhaseArrival` | 배경 크로스페이드, "방금 단계가 바뀌어 왔다" 판단(카드 연출 조건) |
 | `Figure`(`roleArt`·`ghost`), `Button`, `Sheet` | 결과 카드, 처음으로, 기록 카드 |
@@ -124,7 +124,7 @@ Enumerated by `ls src/components/*.tsx | wc -l` — 32 components — 버전 없
 | `MorningCard` | `tone?: "amber"` 와 `top` 이 시안 값(128)이 되는 모양을 더한다. 처형 카드가 이 부품을 쓴다(§8.5) |
 | `UserRecordSheet` | `voteLog` 입력과 투표 줄(§10) |
 | `ReadOnlyRow` | `text` 인자(기본값은 기존 `탈락했어요 · 볼 수만 있어요`) |
-| `seatFloats.ts` | `FLOAT_PHASES`·`CHAT_PHASES` 에 `execVote`·`candidateVote`·`defense` 추가(말풍선·이모티콘·채팅 줄이 이 단계에서도 뜨게). 공개·처형·종료는 서버가 거부하므로 넣지 않는다 |
+| `seatFloats.ts` | `FLOAT_PHASES`·`CHAT_PHASES` 에 `defense` 추가(변론 채팅 줄·이모티콘·말풍선이 뜨게). 투표 두 단계는 화면이 말하기를 보내지 않으므로(P-7 결정) 넣지 않고, 공개·처형·종료는 서버가 거부하므로 넣지 않는다 |
 | `RoomScreen` | `renderPhase` 에 다섯 단계(→ `DayScene`)와 `ended`(→ `ResultScreen`), `sceneKey`, `PHASE_ANNOUNCE` 문구(§5.4) |
 | `DayScene` | §12.4 의 분기 |
 
@@ -134,7 +134,6 @@ Enumerated by `ls src/components/*.tsx | wc -l` — 32 components — 버전 없
 |---|---|---|
 | `ExecVotePanel` | 하단: 질문·집계·[찬성][반대] | `day.execTally{yes,no}`(전원 같은 값), `me.voteAgree`(본인), `players[].alive`(`아직 N명` 계산), 내 생존 |
 | `CandidateVotePanel` | 하단: 안내 + 확정 알약 | `me.voteTarget`(본인) |
-| `VoteTalkButtons` | 투표 두 단계 말하기 아이콘 2개(44×44) | 없음(보내기만) |
 | `ExecIntroCard` | "처형 투표" 카드(§9.1) | `phase`, 도착 직전 단계(`usePhaseArrival`) |
 | `NoExecutionCard` | 회색 "처형 무효" 카드(§9.2) | `day.noExecution.reason` |
 | `RevealLayer` | 화살표(SVG) + 표수 칩 + 하단 문구의 시간표(§8.3·§13.2) | `day.voteLog[]` 에서 `n === day.n` 인 줄의 `cand.votes[]`(**배열 순서 = 공개 순서**)·`cand.candidate`, `phaseEndsAt`·`phaseDurationMs`, `players[]`(닉네임·연결), 좌석 좌표(`daySeatLayout`) |
@@ -166,7 +165,7 @@ Enumerated by `ls src/components/*.tsx | wc -l` — 32 components — 버전 없
 
 Exceptions (모두 기존 승인 값):
 - 하단 패널 높이 **157**(기존), **236**(변론의 후보 본인, 승인 시안 DC) — §8.4. 패널 위 8·아래 12 여백도 기존.
-- 탭 대상 **44×44**(`--tap-min`): 찬성·반대·말하기 아이콘·변론 칩.
+- 탭 대상 **44×44**(`--tap-min`): 찬성·반대·변론 칩·변론 이모티콘.
 - 모서리 14(`--radius-md`)·20(`--radius-lg`)·카드 18·16 은 모서리라 간격 규칙 밖(시안 값).
 - 인트로·무효 카드 크기 **280×176**, 처형 카드 폭 **252**, 원뿔 **300×340**, 표수 칩 높이 24(강조 32): 시안 값.
 - 후보 가운데 크기 배율 **1.7**(72×96 → 122.4×163.2).
@@ -183,10 +182,10 @@ Exceptions (모두 기존 승인 값):
 | Body / Label | 14px | 400 (강조 700) | 1.4(20px) | 하단 안내·집계 줄·칩·요약 행·이름표·역할 이름 |
 | Body-large | 16px | 400 / 700 | 1.5 | 표수 칩 숫자, 변론 칩 글자, [처음으로] |
 | Heading | 24px | 700 | 1.2 | 하단 패널 제목, 헤더 제목, 처형 카드 제목, 결과 `게임 종료`, 인트로 질문 강조, 강조 표수 칩 숫자(+외곽선 1.4px) |
-| Display | 36px | 700 | 1.2 | 결과 배너 `마피아 팀 승리`·`시민 팀 승리`, **인트로·무효 카드의 큰 제목** `처형 투표`·`처형 무효`(자간 2px) `[제안(확인 대기) P-18]` |
+| Display | 36px | 700 | 1.2 | 결과 배너 `마피아 팀 승리`·`시민 팀 승리`, **인트로·무효 카드의 큰 제목** `처형 투표`·`처형 무효`(자간 2px) `[확정 P-18]` |
 
 - 시안의 22px(인트로 질문 강조)은 **24px 로 올린다**(크기 4종 유지).
-- 시안의 44px(인트로·무효 카드 큰 제목, 승인 시안 값)는 **36px(Display)로 내린다**(크기 4종 유지, 줄 높이 1.2 = 약 43px). 승인 시안 값을 바꾸는 것이라 §14 `P-18`(제안, 확인 대기)로 올렸고, 사용자가 원하면 44px 를 다섯 번째 글자 크기로 승인할 수 있다.
+- 시안의 44px(인트로·무효 카드 큰 제목, 승인 시안 값)는 **36px(Display)로 내린다**(크기 4종 유지, 줄 높이 1.2 = 약 43px). 승인 시안 값을 바꾸는 것이라 §14 `P-18` 로 올렸고, 사용자가 36px 로 **확정**했다(44px 다섯 번째 글자 크기는 쓰지 않는다).
 - 글자 위 번짐: 인트로·무효 카드 제목만 `text-shadow: 0 3px 0 var(--night-950), 0 0 18px <카드 색 .8>`. 그 밖의 글자는 `--shadow-text`(기존) 또는 없음.
 - 닉네임은 말줄임하지 않는다(5자 이름표 99px 설계 값 그대로). 하단 제목·결과 문구는 `word-break: keep-all`.
 - 표수 칩 숫자: 일반 16px 700, 강조(`lead`·`beat`)는 24px + `-webkit-text-stroke: 1.4px currentColor` + `paint-order: stroke fill`(Gowun Dodum 에 700 초과 굵기가 없어서, 시안 2026-10-26 확정).
@@ -353,13 +352,12 @@ Exceptions (모두 기존 승인 값):
 
 > 좌표는 390×844 시안의 값이며 장면 좌표(= 시안 y − 119.2)로 구현한다. 폰 폭 360·375·390·430 에서 `dayTableGeometry` 가 정한 기하를 따른다.
 
-### 8.1 `execVote` — 처형 여부 투표 (D-02, D-12, D-14, D-23, D-30)
+### 8.1 `execVote` — 처형 여부 투표 (D-02, D-14, D-23, D-30)
 
 - 장면: 낮 테이블 그대로(같은 `DayScene`, 같은 자리·이름표·z). 배경 `dusk`. 이름표·캐릭터 아래·머리 위에 투표 표시 **없음**.
-- 하단(높이 157): 제목 24 + 집계 줄 14 + 버튼 줄(높이 44). 버튼 줄은 `[찬성][반대]` 두 버튼과 `[말풍선][이모티콘]` 44×44 아이콘 두 개 한 줄 `[제안(확인 대기) P-7]`:
-  - 폭 계산: 358(390폭 − 좌우 16×2) − 아이콘 2×44 − 간격 3×8 = 246 → 버튼 각 123. 360폭은 328 → 각 108. 고른 버튼 반전·체크 배지가 들어가도 `한 줄, 줄바꿈 없음`.
-  - 말하기 아이콘은 D-12(여부·후보 선택에서 생존자가 빠른 메시지·이모티콘을 보낸다)를 지키려는 것이다. **승인 시안 Main 에는 이 아이콘이 없다** — 시안의 157 은 제목+집계+버튼으로 이미 찼으므로 같은 줄에 아이콘 두 개만 더한다. 시안 그대로를 원하면 아이콘을 지우되 D-12 가 화면에서 빠진다(서버는 계속 받음).
-  - 아이콘은 `QuickMessageSheet`(기본 낮 문구 5개)·`EmojiTraySheet` 를 열고 보낸 뒤 `useSendLock` 쿨다운(1.8초)과 합산한다. 보내기는 서버가 `execVote` 중 허용(결정 0036 §6).
+- 하단(높이 157): 제목 24 + 집계 줄 14 + 버튼 줄(높이 44). 버튼 줄은 `[찬성][반대]` 두 버튼 한 줄(말하기·이모티콘 아이콘은 두지 않는다, 사용자 결정 P-7):
+  - 폭 계산: 358(390폭 − 좌우 16×2) − 간격 8 = 350 → 버튼 각 175. 360폭은 328 − 8 = 320 → 각 160. 고른 버튼 반전·체크 배지가 들어가도 `한 줄, 줄바꿈 없음`.
+  - 이 단계 화면에는 말하기·이모티콘 입구가 없다(승인 시안 Main 과 같음). 서버는 `execVote` 중 say/emoji 를 계속 허용하지만(결정 0036 §6) 화면이 보내지 않는다. CONTEXT D-12 개정(2026-10-28).
 - 버튼: 기존 `.mf-seg__b` 두 개(간격 8). 고른 쪽 `aria-pressed="true"` → `gray-100` 바탕·`night-900` 글자·오른쪽 위 체크 배지. 같은 쪽을 다시 눌러도 변화 없음(번복은 반대 쪽을 눌러서). 낙관적 선택: 밤 `pending` 방식과 같이 `{view, agree}` 를 쥐고 새 서버 view 가 오면 `me.voteAgree` 를 따른다. 연결이 끊겨 보낼 수 없으면(`!canSend`) 두 버튼 모두 비활성(opacity .6).
 - 집계 숫자가 바뀌면 숫자에 `scale 1.15 → 1` 180ms 팝(축소 모션: 없음). 값은 서버가 방송한 `execTally` 그대로이며 화면이 계산하는 것은 `아직 k명` 하나뿐.
 - 좌석 탭: 기록 카드(`onInspect`)를 연다(투표 판단 재료인 주장 기록, §10). 투표 기능과 충돌하지 않는다. 탈락 viewer 도 같다.
@@ -369,7 +367,7 @@ Exceptions (모두 기존 승인 값):
 
 - 장면: 같은 테이블. 살아 있는 **나 아닌** 자리만 `onPick`(버튼 `aria-pressed`, 읽기 이름 `{닉네임}, 투표 대상`, `pickVerb="투표"`). 나·탈락자는 버튼이 아니다(화면이 막고 서버도 `BAD_MESSAGE`). 연결이 끊긴 살아 있는 자리는 고를 수 있다(후보가 될 수 있음).
 - 내가 고른 자리: **흰 후광**(`mf-figure--halo-white`, 기존) 한 개. 마감 전에는 다른 자리를 탭하면 바뀐다. 같은 자리 재탭은 무시(선택 해제 없음, 밤 규칙과 같음). 낙관적 선택 `pending` 은 밤(`DayScene.pressPick`)과 같은 방식이고 서버 값은 `me.voteTarget`.
-- 하단(157): 제목 + 안내 + 확정 알약 한 줄. 알약 줄은 `[알약 ........][말풍선][이모티콘]`(알약이 남은 폭) `[P-7]`. 알약은 `PickPill` 을 `text` 변형으로 확장(`선택 안 함` / `{●이름}님에게 투표했어요`).
+- 하단(157): 제목 + 안내 + 확정 알약 한 줄. 알약 줄은 알약 하나가 **전체 폭**(말하기·이모티콘 아이콘 없음, 사용자 결정 P-7)을 쓴다. 알약은 `PickPill` 을 `text` 변형으로 확장(`선택 안 함` / `{●이름}님에게 투표했어요`).
 - 남의 선택은 보이지 않는다(서버가 보내지 않음, A7). 이름표·머리 위에 아무 표시 없음.
 - 탈락 관전자: 좌석은 버튼이 아니라 기록 카드를 연다. 하단은 §7.2 관전 문구.
 - 거부(`BAD_MESSAGE`) 토스트: `보내지 못했어요. 다시 시도해 주세요`(위쪽 바 아래, 기존 `mf-toast--top` 위치).
@@ -547,7 +545,7 @@ Exceptions (모두 기존 승인 값):
 | 하단 | §7.2 의 단계별 패널. 살아 있는 viewer → `ExecVotePanel`·`CandidateVotePanel`·`NightPanel`·`DefensePanel`/`DefenseChips`; 탈락 viewer → 같은 제목+안내에 `ReadOnlyRow` |
 | 오버레이 | `ExecIntroCard`(arrivedFrom `discussion` → `execVote`), `NoExecutionCard`(night + `day.noExecution` + 직전 `execVote`/`candidateVoteReveal`), 처형 카드(`MorningCard tone="amber"`) |
 | 밤 시작 문구 | `noExecution` 이 있으면 `NO_EXEC_INTRO_DELAY_MS` 만큼 늦게 시작 |
-| 이모티콘·말풍선 | `FLOAT_PHASES` 에 세 단계 추가(§3.2) |
+| 이모티콘·말풍선 | `FLOAT_PHASES`·`CHAT_PHASES` 에 `defense` 추가(§3.2) |
 | 마피아 동료 표시 | 기존 `isAlly` 입력을 그대로 둔다(투표·변론·처형 단계에서도 마피아 viewer·관전자에게 마름모·진홍 후광 유지, D-33). 변론·처형의 어둡게 층 아래 다른 자리에 있어도 어두워질 뿐 표시는 남는다 |
 
 ---
@@ -613,7 +611,7 @@ Exceptions (모두 기존 승인 값):
 | P-4 | 관전자 투표 화면 하단(`관전 중 · 볼 수만 있어요`) | §7.2 | 문구 |
 | P-5 | 연결 끊긴 후보 변론 문구 | §7.2 | 문구 |
 | P-6 | 결과 연출(카드 한꺼번에 공개 타이밍), 요약 문구, `처음으로` 확인 시트 없음, `이 방은 30분 뒤에 닫혀요` | §11 | 문구·타이밍 |
-| P-7 | 투표 두 단계에 말하기 아이콘 2개 추가(시안 Main·V2 에는 없음, D-12 를 지키려고 같은 줄에 44×44 두 개) | 추가 | 지우면 D-12 가 화면에서 빠짐 |
+| P-7 | 투표 두 단계(`execVote`·`candidateVote`)의 말하기·이모티콘 아이콘 | **사용자 결정: 넣지 않는다**(서버는 계속 허용, 화면만 뺌. CONTEXT D-12 개정) | — |
 | P-8 | 변론 칩의 대상·직업 고르기 = `QuickMessageSheet`(칩 하나) 재사용, 후보 본인 안내 줄이 `보냈어요 · 문장` 2초 | §8.4 | 인라인 선택 UI 신규 |
 | P-9 | 타이머 calm(진홍 없음), 마감 임박 앰버 숫자는 후속 | calm | `Timer` 에 앰버 톤 prop |
 | P-10 | 처형 하단 안내를 `곧 다음으로 넘어가요`(승패를 모름) | §7.2 | 서버가 `winner` 를 미리 보내지 않는 한 유지 |
@@ -624,7 +622,7 @@ Exceptions (모두 기존 승인 값):
 | P-15 | 후보 가운데 y 단일 공식 `min(cy+80, sceneH−34)`, 후보 본인 패널 236 | §8.4 | 수치 |
 | P-16 | 기록 카드: 후보 선택 줄이 없으면 행 자체를 두지 않음 | §10 | 문구 |
 | P-17 | `dusk` 배경 25KB 를 낮 토론 진입 때 프리로드 | §2.2 | 처음 쓸 때 불러오기 |
-| P-18 | 카드 제목 44 → 36px, 글자 크기 4종 유지(인트로·무효 카드의 `처형 투표`·`처형 무효`. 승인 시안은 44px) | §5 | 5번째 글자 크기 44px 를 승인하면 §5 에 예외 행을 되살린다 |
+| P-18 | 카드 제목 44 → 36px, 글자 크기 4종 유지(인트로·무효 카드의 `처형 투표`·`처형 무효`. 승인 시안은 44px) | **확정**: 36px | — |
 
 ---
 
@@ -689,9 +687,9 @@ Exceptions (모두 기존 승인 값):
 
 | 구분 | 파일 |
 |---|---|
-| 신규 | `src/game/verdict.ts`, `src/components/{ExecVotePanel,CandidateVotePanel,VoteTalkButtons,ExecIntroCard,NoExecutionCard,RevealLayer,VerdictLayers,DefensePanel,DefenseChips}.tsx`, `src/screens/ResultScreen.tsx`, `src/styles/{verdict,result}.css`, `test/unit/verdict.test.ts` |
+| 신규 | `src/game/verdict.ts`, `src/components/{ExecVotePanel,CandidateVotePanel,ExecIntroCard,NoExecutionCard,RevealLayer,VerdictLayers,DefensePanel,DefenseChips}.tsx`, `src/screens/ResultScreen.tsx`, `src/styles/{verdict,result}.css`, `test/unit/verdict.test.ts` |
 | 수정 | `src/screens/{RoomScreen,DayScene}.tsx`, `src/components/{DayTable,MorningCard,UserRecordSheet,ReadOnlyRow,NightPanel}.tsx`, `src/game/{scenes,dayTable}.ts`, `src/net/{seatFloats,assets}.ts`, `src/styles/{daytable,day,night}.css`, `design/tokens.json`(+`npm run tokens`), `scripts/e2e/{browser,flows,lib,lib.test}.mjs`, `test/unit/scenes.test.ts`, `test/client/*` |
-| 문서 | `design/screens/execution-v1/SPEC.md`(P-1·P-3·P-7·P-8·P-10 반영 후 사본 갱신), `docs/decisions/` 새 결정 1건(장면 매핑·카드·말하기 아이콘·토큰, 결정 0036 은 와이어라 건드리지 않음), `HANDOFF.md`, `.planning/phases/04-execution-verdict/04-VALIDATION.md` 화면 몫 행 |
+| 문서 | `design/screens/execution-v1/SPEC.md`(P-1·P-3·P-8·P-10 반영 후 사본 갱신), `docs/decisions/` 새 결정 1건(장면 매핑·카드·토큰, 결정 0036 은 와이어라 건드리지 않음), `HANDOFF.md`, `.planning/phases/04-execution-verdict/04-VALIDATION.md` 화면 몫 행 |
 | 변경 없음 | `shared/`(서버 웨이브 완료), `ASSET_VERSION`(그림 변경 없음) |
 
 배포: 서버 웨이브와 **화면 웨이브를 한 단위로 배포**한다(D-26, 결정 0036 §15). 배포본 `smoke 4·5·8`·`uat-vote`·`uat-test-bots`·E2E 통과 뒤 사용자가 실기기로 D-38 수치(어둡게 45%·흐림 3px)를 보고 수정을 요청한다.
@@ -702,7 +700,7 @@ Exceptions (모두 기존 승인 값):
 
 > 상태 커버리지(빈 상태·긴 글·많은 수·부분 상태). 문구는 §7 에 있다(여기서 되풀이하지 않는다).
 
-Applicable state considerations resolved: 12 covered, 3 backstop, 2 unresolved
+Applicable state considerations resolved: 12 covered, 3 backstop, 1 unresolved
 
 | Category | Element(s) | Status | Resolution / Reason |
 |----------|------------|--------|---------------------|
@@ -722,7 +720,6 @@ Applicable state considerations resolved: 12 covered, 3 backstop, 2 unresolved
 | populated | 흐림·어둡게 가독성(45%·3px) | 🧪 backstop | E2E H1·P5 가 숫자로 보지만 눈으로 보는 판단은 사용자 실기기(D-38) |
 | populated | `backdrop-filter` 의 iOS 동작 | 🧪 backstop | §12.3 대체안 준비, 실기기에서 확인 |
 | unresolved | 후보 본인의 변론 후 피드백 문구·칩 배치 | ⚠ unresolved | P-8 기본값(안내 줄 2초 교체)으로 구현, 사용자 확인 대기 |
-| unresolved | 시안에 없는 말하기 아이콘 위치 | ⚠ unresolved | P-7 기본값(같은 줄 아이콘 2개), 사용자 확인 대기 |
 
 ---
 
