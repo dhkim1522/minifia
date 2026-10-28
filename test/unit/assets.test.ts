@@ -10,11 +10,13 @@ import {
   FIGURE_IDS,
   ASSET_VERSION,
   backdropUrl,
+  duskPreloadList,
   entryPreloadList,
   figureSrc,
   ghostSrc,
   journalArt,
   preloadEntryAssets,
+  preloadDuskAssets,
   preloadRoleAssets,
   roleArtSrc,
   rolePreloadList,
@@ -95,9 +97,24 @@ describe("일지 색 토큰 (UI-SPEC 새 토큰 12개)", () => {
     ["journal-doctor-ink", "#8fd0bf"],
   ];
 
-  it("color.tokens 맨 끝 12개가 순서와 값 그대로 들어 있다", () => {
-    const last = tokens.color.tokens.slice(-12).map((t) => [t.name, t.value]);
-    expect(last).toEqual(expected);
+  it("color.tokens 에 이 열두 개가 순서와 값 그대로 들어 있다 (사이에 다른 토큰이 끼어도 순서가 같다)", () => {
+    const names = new Set(expected.map(([name]) => name));
+    const found = tokens.color.tokens.filter((t) => names.has(t.name)).map((t) => [t.name, t.value]);
+    expect(found).toEqual(expected);
+  });
+
+  it("투표 화면 토큰 세 개(amber-700·amber-900·cone-light, P-12)가 amber-400 바로 뒤에 있고 css 에도 있다", () => {
+    const list = tokens.color.tokens.map((t) => [t.name, t.value]);
+    const at = list.findIndex(([name]) => name === "amber-400");
+    expect(list.slice(at + 1, at + 4)).toEqual([
+      ["amber-700", "#7a5314"],
+      ["amber-900", "#3a2508"],
+      ["cone-light", "#fff4d6"],
+    ]);
+    const css = readFileSync("src/styles/tokens.css", "utf8");
+    expect(css).toContain("--amber-700: #7a5314;");
+    expect(css).toContain("--amber-900: #3a2508;");
+    expect(css).toContain("--cone-light: #fff4d6;");
   });
 
   it("tokens.css 가 새 토큰을 :root 변수로 가진다", () => {
@@ -128,11 +145,18 @@ describe("미리 받기 목록", () => {
     expect(rolePreloadList()).toEqual(rolePreloadList());
   });
 
-  it("해질녘·투표·처형 배경은 어떤 미리 받기 목록에도 없다 (처음 쓰일 때 불러온다)", () => {
+  it("해질녘 배경은 입장·역할 미리 받기 목록에 없다 (낮 토론 진입 때 따로 받는다), verdictDusk 는 어디에도 없다", () => {
     const hrefs = [...entryPreloadList(), ...rolePreloadList()].map((item) => item.href);
     expect(hrefs).not.toContain(backdropUrl("game", "dusk"));
     expect(hrefs).not.toContain(backdropUrl("game", "verdictDusk"));
     expect(hrefs.filter((h) => h.endsWith(".svg") && h.startsWith("/backgrounds/"))).toEqual([]);
+  });
+
+  it("해질녘 목록: dusk 배경 하나뿐이고 인자가 없어 매번 같다 (역할·인원과 무관, T-04-42)", () => {
+    expect(duskPreloadList()).toEqual([{ href: backdropUrl("game", "dusk") }]);
+    expect(duskPreloadList()).toEqual(duskPreloadList());
+    expect(duskPreloadList.length).toBe(0);
+    expect(preloadDuskAssets.length).toBe(0);
   });
 
   it("역할 화면 목록은 역할과 무관한 한 목록이고 일지 SVG 아홉 개가 들어 있다 (T-03.1-18)", () => {
@@ -155,6 +179,10 @@ describe("미리 받기 목록", () => {
       vi.mocked(preload).mockClear();
       preloadRoleAssets();
       expect(preload).toHaveBeenCalledTimes(17);
+      vi.mocked(preload).mockClear();
+      preloadDuskAssets();
+      expect(preload).toHaveBeenCalledTimes(1);
+      expect(preload).toHaveBeenCalledWith(backdropUrl("game", "dusk"), { as: "image" });
     });
   });
 });
@@ -172,7 +200,7 @@ describe("실제 파일과의 일치", () => {
     }
     for (const scene of SCENE_IDS) urls.push(backdropUrl("game", scene));
     urls.push(backdropUrl("entry", "lobby"));
-    for (const item of [...entryPreloadList(), ...rolePreloadList()]) {
+    for (const item of [...entryPreloadList(), ...rolePreloadList(), ...duskPreloadList()]) {
       urls.push(item.href);
       if (item.imageSrcSet) urls.push(...urlsOfSrcSet(item.imageSrcSet));
     }

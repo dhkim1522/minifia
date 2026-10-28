@@ -17,9 +17,11 @@ vi.mock("../../src/net/useRoomConnection", () => ({
 
 // 직업 그림 미리 받기는 호출 여부만 본다(요청 목록은 assets 단위 테스트의 몫). 나머지 assets 는 그대로 쓴다.
 const preloadMock = vi.hoisted(() => vi.fn());
+const preloadDuskMock = vi.hoisted(() => vi.fn());
 vi.mock("../../src/net/assets", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../src/net/assets")>()),
   preloadRoleAssets: preloadMock,
+  preloadDuskAssets: preloadDuskMock,
 }));
 
 const { RoomScreen } = await import("../../src/screens/RoomScreen");
@@ -134,6 +136,7 @@ function byText(text: string): HTMLElement {
 
 beforeEach(() => {
   preloadMock.mockClear();
+  preloadDuskMock.mockClear();
   vi.useFakeTimers();
   vi.setSystemTime(NOW);
 });
@@ -637,6 +640,21 @@ describe("대기실 연결 (C-02, R9) · 미리 받기 (Pattern 13 ②)", () => 
     preloadMock.mockClear();
     rerenderRoom(r.rerender, makeView({ phase: "roleReveal", endsIn: 15_000, role: "mafia", allies: [2] }));
     expect(preloadMock.mock.calls.length, "preloadRoleAssets 호출 수").toBe(0);
+  });
+
+  it("낮 토론에 들어서면 preloadDuskAssets 를 한 번 부르고, 다른 단계나 같은 단계의 다시 그리기에서는 부르지 않는다 (P-17)", () => {
+    const r = renderRoom(lobby(4));
+    rerenderRoom(r.rerender, makeView({ phase: "assigning" }));
+    rerenderRoom(r.rerender, makeView({ phase: "roleReveal", endsIn: 15_000, role: "mafia", allies: [2] }));
+    rerenderRoom(r.rerender, makeView({ phase: "dayAnnounce", endsIn: 2_000, role: "mafia", allies: [2], day: 1 }));
+    rerenderRoom(r.rerender, makeView({ phase: "claim", endsIn: 20_000, role: "mafia", allies: [2], day: 1, turn: 0 }));
+    expect(preloadDuskMock.mock.calls.length, "토론 전 preloadDuskAssets 호출 수").toBe(0);
+    rerenderRoom(r.rerender, makeView({ phase: "discussion", endsIn: 60_000, role: "mafia", allies: [2], day: 1 }));
+    expect(preloadDuskMock.mock.calls.length, "토론 진입 preloadDuskAssets 호출 수").toBe(1);
+    rerenderRoom(r.rerender, makeView({ phase: "discussion", endsIn: 59_000, role: "mafia", allies: [2], day: 1 }));
+    expect(preloadDuskMock.mock.calls.length, "토론 다시 그리기 preloadDuskAssets 호출 수").toBe(1);
+    rerenderRoom(r.rerender, makeView({ phase: "night", endsIn: 20_000, role: "mafia", allies: [2], day: 1 }));
+    expect(preloadDuskMock.mock.calls.length, "밤 preloadDuskAssets 호출 수").toBe(1);
   });
 });
 
