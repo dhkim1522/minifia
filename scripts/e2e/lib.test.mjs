@@ -1393,8 +1393,8 @@ test("EXPECTED_SCENE: 단계 열네 개가 모두 장면 id 로 정해져 있다
   assert.deepEqual(Object.keys(EXPECTED_SCENE).sort(), [
     "assigning", "candidateVote", "candidateVoteReveal", "claim", "dayAnnounce", "defense", "discussion", "ended", "execVote", "execution", "lobby", "morning", "night", "roleReveal",
   ]);
-  for (const p of ["execVote", "candidateVote", "candidateVoteReveal", "defense", "execution"]) assert.equal(EXPECTED_SCENE[p], "verdictDusk", p);
-  assert.equal(EXPECTED_SCENE.ended, "lobby");
+  for (const p of ["execVote", "candidateVote", "candidateVoteReveal", "defense", "execution"]) assert.equal(EXPECTED_SCENE[p], "dusk", p);
+  assert.equal(EXPECTED_SCENE.ended, "night");
   assert.equal(EXPECTED_SCENE.night, "night");
   assert.equal(EXPECTED_SCENE.morning, "morning");
   assert.equal(EXPECTED_SCENE.dayAnnounce, "day");
