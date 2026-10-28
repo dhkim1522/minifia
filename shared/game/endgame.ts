@@ -4,7 +4,7 @@
 // 마감 훅이 next "ended" 를 돌려주면 tick 이 종단 단계로 가고, 아니면 표의 기본 다음 단계(처형 → 밤, 아침 → 낮 시작)로 간다.
 // 종료 방 정리는 새 타이머가 아니라 만료(expiresAt)를 앞당기는 것뿐이다: nextWakeAt 이 이미 만료를 알람으로 쓰고, 만료되면 DO 가 방을 닫는다.
 // 승리 값 변환은 enterEnded 한 곳: 내부 checkWinner 의 "citizen"·"mafia" → 상태·와이어의 GameWinner "citizenWin"·"mafiaWin"(역할 단어와 겹치지 않는다, Pitfall 10).
-import type { GameWinner } from "../protocol";
+import type { GameWinner, SummaryRow } from "../protocol";
 import type { RoomState } from "./room";
 import type { DeadlineResult, RandInt } from "./tick";
 import { checkWinner } from "./win";
@@ -42,4 +42,8 @@ export function enterEnded(state: RoomState, _randInt: RandInt, at: number): Roo
     expiresAt: Math.min(state.expiresAt, at + ENDED_ROOM_TTL_MS),
     ...(team === null ? {} : { winner: WIRE_WINNER[team] }),
   };
+}
+
+export function buildSummary(_state: RoomState): SummaryRow[] {
+  throw new Error("not implemented");
 }
