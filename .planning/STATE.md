@@ -4,18 +4,18 @@ milestone: v1.0
 milestone_name: MVP
 current_phase: 4
 current_phase_name: 처형과 승패
-current_plan: 23
+current_plan: 24
 status: executing
-stopped_at: Completed 04-23-PLAN.md
-last_updated: "2026-10-28T09:50:40.425Z"
+stopped_at: Completed 04-24-PLAN.md
+last_updated: "2026-10-28T10:07:57.441Z"
 last_activity: 2026-10-26
 last_activity_desc: Phase 4 execution started
-state_head: 08a5ec2dcce827190d852768a02bb693b5f9171b
+state_head: a9a7fa66a6e74a07e9db98914df90dd0af0790a1
 progress:
   total_phases: 7
   completed_phases: 2
   total_plans: 98
-  completed_plans: 86
+  completed_plans: 87
 ---
 
 # Project State
@@ -30,10 +30,10 @@ See: .planning/PROJECT.md (updated 2026-10-21)
 ## Current Position
 
 Phase: 4 (처형과 승패) — EXECUTING
-Current Plan: 23
+Current Plan: 24
 Total Plans in Phase: 35
-Plan: 23 of 35
-Status: 화면 웨이브 진행 중 — 04-13(순수 모듈 verdict.ts)·04-14(토큰·dusk 장면 표·dusk 미리 받기)·04-15(테스트 방 testBotVote) 완료(웨이브 9 끝), 04-16(execVote 트레이서: 라우팅·useVerdictScene·ExecVotePanel)·04-17(테스트 시트 봇 처형 투표·봇 후보 선택 칩)·04-18(후보 선택 화면: DayTable halo·useViewChoice·CandidateVotePanel·candidateVote 연결)·04-19(선택 공개 상태: useRevealState·표수 칩·앰버 후광·끝 문구)·04-20(선택 공개 연출: 화살표 RevealLayer·과반 확정 두근·느린 박동·진동·모션 줄이기)·04-21(최후 변론 1: DayTable verdict·center·원뿔, 남의 변론 하단 DefensePanel, defense 연결)·04-22(최후 변론 2: 후보 본인 하단 236·변론 칩 6개 DefenseChips·시트 재사용·보냈어요 2초)·04-23(처형: 앰버 처형 카드 MorningCard tone·사람→유령 400ms 전환 DayTable executed·execution 연결·하단 두 줄·직업 비노출 시험) 완료, 다음 04-24. 배포는 04-35 에서만(D-26)
+Plan: 24 of 35
+Status: 화면 웨이브 진행 중 — 04-13(순수 모듈 verdict.ts)·04-14(토큰·dusk 장면 표·dusk 미리 받기)·04-15(테스트 방 testBotVote) 완료(웨이브 9 끝), 04-16(execVote 트레이서: 라우팅·useVerdictScene·ExecVotePanel)·04-17(테스트 시트 봇 처형 투표·봇 후보 선택 칩)·04-18(후보 선택 화면: DayTable halo·useViewChoice·CandidateVotePanel·candidateVote 연결)·04-19(선택 공개 상태: useRevealState·표수 칩·앰버 후광·끝 문구)·04-20(선택 공개 연출: 화살표 RevealLayer·과반 확정 두근·느린 박동·진동·모션 줄이기)·04-21(최후 변론 1: DayTable verdict·center·원뿔, 남의 변론 하단 DefensePanel, defense 연결)·04-22(최후 변론 2: 후보 본인 하단 236·변론 칩 6개 DefenseChips·시트 재사용·보냈어요 2초)·04-23(처형: 앰버 처형 카드 MorningCard tone·사람→유령 400ms 전환 DayTable executed·execution 연결·하단 두 줄·직업 비노출 시험)·04-24(처형 투표 인트로 카드 ExecIntroCard·회색 처형 무효 카드 NoExecutionCard·밤 시작 문구 delayMs 지연·읽기 접두) 완료, 다음 04-25. 배포는 04-35 에서만(D-26)
 Last activity: 2026-10-26 — Phase 4 execution started
 
 Progress: [██░░░░░░░░] 17%
@@ -131,6 +131,7 @@ Progress: [██░░░░░░░░] 17%
 | Phase 04 P21 | 14min | 3 tasks | 10 files |
 | Phase 4 P22 | 11min | 2 tasks | 14 files |
 | Phase 04 P23 | 20min | 2 tasks | 9 files |
+| Phase 04 P24 | 11min | 3 tasks | 12 files |
 
 ## Accumulated Context
 
@@ -253,6 +254,8 @@ Recent decisions affecting current work:
 - [Phase 4]: [04-22] 후보 발 y 여유 34→38: 하단 236 에서 360x640 이름표 알약이 장면 아래에 닿아 이름표 상자 실제 높이 26 기준으로 고침(UI-SPEC 8.4 문구는 34, 문서는 04-35 전 정리)
 - [Phase 4]: [04-23] P-10 기본값 유지: 처형 하단 안내를 '곧 다음으로 넘어가요'로 한다(승패를 클라이언트가 모르므로 밤을 단정하지 않음). 처형된 본인·탈락 viewer 도 같은 NightPanel 두 줄
 - [Phase 4]: [04-23] 처형 사람→유령 전환은 같은 접속에서 defense→execution 을 직접 본 경우에만(usePhaseArrival), 재접속·중간 합류는 유령 한 장. 카드 퇴장 지연은 마감 시각이 바뀔 때 한 번 정한다
+- [Phase 04]: [04-24] P-3 기본값 구현: 처형 무효 카드는 인트로와 같은 모양·낙하·회색, 밤 시작 문구는 카드 뒤 1.6초부터(NO_EXEC_INTRO_DELAY_MS=0 한 줄로 동시 표시 가능, 사용자 확인 대기)
+- [Phase 04]: [04-24] 도착 연출(처형 투표 카드·처형 무효 카드)의 한 번만 켜기 열쇠는 일차(n)다. useVerdictScene 필드를 모두 선택으로 바꾸고 처형 무효 밤만 layer·introDelayMs 부분 결과를 돌려준다(그 밖의 밤은 null 그대로)
 
 ### Pending Todos
 
@@ -289,6 +292,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-28T09:50:39.846Z
-Stopped at: Completed 04-23-PLAN.md
+Last session: 2026-10-28T10:07:56.898Z
+Stopped at: Completed 04-24-PLAN.md
 Resume file: None
