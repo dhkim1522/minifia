@@ -30,7 +30,7 @@
 ## 다음 할 일
 
 1. 영역 지도·가이드 이미지·에셋 자동 검사를 `docs/` 에 정리(폰 폭 360·390·430별 헤더·창·테이블·패널 영역, 그림이 지키는지 거르는 스크립트). gsd-addons 에 올릴지 결정.
-2. 4페이즈 화면 웨이브 계획 완료(04-13~04-35, UI-SPEC 승인 2026-10-28, 순차 실행). 04-27(기록 카드 투표 줄 — 헤드리스 Chrome 에서 2일차 카드 내용·단계 전환 닫힘 확인)까지 완료·미배포. `/gsd-execute-phase 4` 로 04-28(단계 × 보는 사람 상태 표 시험) 부터 이어서 → 배포는 마지막 04-35 에서만(사용자 go-ahead 뒤) → 배포본 smoke 4·5·8 · uat-vote · uat-test-bots · E2E → `/gsd-verify-work 4`. 요구사항 VOTE·COMM-03·CONN-02·END 는 04-35 에서 배포본 검증 뒤에 체크한다.
+2. 4페이즈 화면 웨이브(04-13~04-35, UI-SPEC 승인 2026-10-28, 순차 실행). 04-28(단계 × 보는 사람 상태 84칸 표 시험 `verdictStates`·새 CSS 정적 게이트 `verdictCss`)까지 완료·미배포. `/gsd-execute-phase 4` 로 04-29(E2E 순수 검사) 부터 이어서 → 배포는 마지막 04-35 에서만(사용자 go-ahead 뒤) → 배포본 smoke 4·5·8 · uat-vote · uat-test-bots · E2E → `/gsd-verify-work 4`. 요구사항 VOTE·COMM-03·CONN-02·END 는 04-35 에서 배포본 검증 뒤에 체크한다.
 3. 큰 폰 세로 가운데 + 층 분리 에셋(투명 PNG·원래 크기 필요).
 4. 점검: `/gsd-verify-work 3.1`, 각 페이즈(1·2·3·3.1)의 `/gsd-secure-phase`·`/gsd-validate-phase`·`/gsd-extract-learnings`.
 5. 디자인 아티팩트 동기화(디자인 세션): 디자인 시스템·화면 설계서·화면 흐름.
