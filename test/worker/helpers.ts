@@ -331,3 +331,71 @@ export async function voteCandidate(code: string, actors: Actor[], targetBySeat:
   await untilLeft(actors, "candidateVote");
   return deadline;
 }
+
+// ---- 봇 투표·테스트 방 도구 소켓 도우미(04-08) ----
+
+/**
+ * 저장된 방을 고쳐 쓰고 DO 를 evict 한다(생성자가 저장소에서 다시 읽고 소켓은 하이버네이션으로 남는다). 표를 손으로 넣어 분기를 정하는 데 쓴다 —
+ * 봇 표는 무작위라 "여부 투표 통과" "이 사람이 후보" 같은 경로를 고정하려면 저장된 표를 직접 정해야 한다.
+ */
+export async function editRoom(code: string, edit: (room: Record<string, unknown>) => Record<string, unknown>): Promise<void> {
+  const stub = env.ROOM.getByName(code);
+  await runInDurableObject(stub, async (_instance, state) => {
+    const room = await state.storage.get<Record<string, unknown>>("room");
+    if (!room) throw new Error("editRoom: 방이 없다");
+    await state.storage.put("room", edit(room));
+  });
+  await evictDurableObject(stub);
+}
+
+/** 저장된 모든 플레이어에 fn 을 적용한다. */
+export const mapPlayers = (
+  room: Record<string, unknown>,
+  fn: (p: Record<string, unknown>) => Record<string, unknown>,
+): Record<string, unknown> => ({ ...room, players: (room.players as Array<Record<string, unknown>>).map(fn) });
+
+/** 저장된 플레이어 가운데 key 가 정해진 사람 수. */
+export async function votesIn(code: string, key: "execVote" | "candidateVote"): Promise<number> {
+  return (await storedRoom(code)).players.filter((p) => p[key] !== undefined).length;
+}
+
+/** 조건이 참이 될 때까지 25ms 간격으로 기다린다(최대 3초). */
+export async function until(label: string, ready: () => Promise<boolean>): Promise<void> {
+  for (let i = 0; i < 120; i += 1) {
+    if (await ready()) return;
+    await new Promise<void>((resolve) => setTimeout(resolve, 25));
+  }
+  throw new Error(`until: ${label} 이(가) 이뤄지지 않았다`);
+}
+
+/** 방장이 testSkip 을 한 번 보내고 모든 소켓이 다음 state 하나를 받을 때까지. */
+export async function skipOnce(seated: Seated): Promise<void> {
+  const socks = [seated.host, ...seated.guests.map((g) => g.sock)];
+  for (const s of socks) s.cursor = s.frames.length;
+  send(seated.host, { t: "testSkip" });
+  for (const s of socks) await nextFrame(s, (m) => m.t === "state");
+}
+
+/** 저장된 단계가 phase 가 될 때까지 skipOnce 를 거듭한다(claim 은 차례마다 한 번). */
+export async function skipThrough(seated: Seated, phase: PhaseId): Promise<void> {
+  for (let i = 0; i < 40 && (await storedRoom(seated.code)).phase !== phase; i += 1) await skipOnce(seated);
+  expect((await storedRoom(seated.code)).phase).toBe(phase);
+}
+
+/**
+ * 시작된 테스트 방(방장 + 봇, 방장 직업은 마피아로 지정해 두어야 한다)을 처형 여부 투표부터 종료까지 끌고 간다.
+ * 여부 투표는 봇 전원 찬성(통과), 후보 선택은 봇 전원이 방장(seat 0)을, 방장이 seat 1 을 골라 방장이 후보가 된다 → 마피아 처형 → 시민 승리.
+ * hook 은 두 투표 단계에서 표를 손으로 정하기 전에 불린다(봇이 실제로 던지게 하는 데 쓴다).
+ */
+export async function driveToEnded(seated: Seated, hook?: (stage: "execVote" | "candidateVote") => Promise<void>): Promise<void> {
+  await skipThrough(seated, "execVote");
+  await hook?.("execVote");
+  await editRoom(seated.code, (room) => mapPlayers(room, (p) => (p.isBot === true ? { ...p, execVote: true } : p)));
+  await skipOnce(seated);
+  expect((await storedRoom(seated.code)).phase).toBe("candidateVote");
+  await hook?.("candidateVote");
+  await editRoom(seated.code, (room) =>
+    mapPlayers(room, (p) => (p.isBot === true ? { ...p, candidateVote: 0 } : p.seat === 0 ? { ...p, candidateVote: 1 } : p)),
+  );
+  await skipThrough(seated, "ended");
+}

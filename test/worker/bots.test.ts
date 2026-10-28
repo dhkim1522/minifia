@@ -4,7 +4,22 @@ import { env, exports } from "cloudflare:workers";
 import { evictDurableObject, runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 import type { PhaseId, RoomView, ServerMessage } from "../../shared/protocol";
-import { advanceTo, alarmOf, closed, collect, nextFrame, seat, send, storedRoom } from "./helpers";
+import {
+  advanceTo,
+  alarmOf,
+  closed,
+  collect,
+  driveToEnded,
+  editRoom,
+  mapPlayers,
+  nextFrame,
+  seat,
+  send,
+  skipThrough,
+  storedRoom,
+  until,
+  votesIn,
+} from "./helpers";
 import type { Seated, TestSocket } from "./helpers";
 
 const allSockets = (r: Seated): TestSocket[] => [r.host, ...r.guests.map((g) => g.sock)];
@@ -74,6 +89,16 @@ async function skipUntil(r: Seated, phase: PhaseId): Promise<void> {
     for (const s of allSockets(r)) await nextFrame(s, (m) => m.t === "state");
   }
   expect((await stored(r.code)).phase).toBe(phase);
+}
+
+/**
+ * 낮을 넘겨 밤으로 간다. 넘기기가 투표 단계에서 안 던진 봇을 대신 던지게 한 뒤(04-08) 봇 표가 무작위로 후보 선택·처형까지 이어지면
+ * 방장이 처형되거나 판이 끝나 밤에 닿지 못할 수 있다 — 그래서 여부 투표에서 봇 전원이 반대를 던져 둔 채 넘겨 밤으로 곧장 간다.
+ */
+async function skipDayToNight(r: Seated): Promise<void> {
+  await skipUntil(r, "execVote");
+  await editRoom(r.code, (room) => mapPlayers(room, (p) => (p.isBot === true ? { ...p, execVote: false } : p)));
+  await skipUntil(r, "night");
 }
 
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
@@ -280,7 +305,7 @@ describe("봇 행동", () => {
     await nextFrame(r.host, lobbyOf(6));
     send(r.host, { t: "testRole", role: "mafia" });
     await start(r);
-    await skipUntil(r, "night");
+    await skipDayToNight(r);
     await forceBotsDue(r.code);
     const picked = (await nextFrame(r.host, (m) => m.t === "state" && (m.view.me.allyPicks?.length ?? 0) > 0)) as State;
     const allies = picked.view.me.allies ?? [];
@@ -356,7 +381,7 @@ describe("누출 없음", () => {
     await forceBotsDue(r.code);
     await skipUntil(r, "discussion");
     await forceBotsDue(r.code);
-    await skipUntil(r, "night");
+    await skipDayToNight(r);
     await forceBotsDue(r.code);
     await settle(r.host, mark(r.host));
     await settle(guest, mark(guest));
@@ -376,6 +401,89 @@ describe("누출 없음", () => {
         const hasTestBots = raw.includes("testBots");
         expect(`${who}:${hasTestBots}`).toBe(`${who}:${who === "host" && msg.view.me.testBots !== undefined}`);
       }
+    }
+  }, 60_000);
+});
+
+// ---- 4페이즈: 봇 투표·변론 (VOTE-01, VOTE-02, VOTE-03, END-02, 결정 0024-6, 0036) ----
+/** 방장 + 봇 3 테스트 방을 시작해 phase 에 닿는다(손님 guests 명 추가). */
+async function botRoomAt(phase: PhaseId, guests = 0): Promise<Seated> {
+  const r = await seatQuiet(guests, { testMode: true });
+  send(r.host, { t: "testBots", count: 3 });
+  await nextFrame(r.host, lobbyOf(guests + 4));
+  await start(r);
+  await skipThrough(r, phase);
+  return r;
+}
+const botSeatsOf = async (code: string): Promise<number[]> => (await botsOf(code)).map((b) => b.seat);
+
+describe("봇 투표·변론", () => {
+  it("execVote: 봇 표가 들어갈 때마다 방장이 state 를 받고 집계 합계가 봇 수만큼 늘며 방장 view 에 남의 표가 없다", async () => {
+    const r = await botRoomAt("execVote");
+    const from = mark(r.host);
+    await forceBotsDue(r.code);
+    await until("봇 표 3개", async () => (await votesIn(r.code, "execVote")) === 3);
+    const frames = await settle(r.host, from);
+    const states = frames.filter((m): m is State => m.t === "state");
+    expect(`${summary(frames)}`).toBe("[state:execVote,state:execVote,state:execVote]");
+    const tally = states.at(-1)!.view.day?.execTally;
+    expect(String((tally?.yes ?? 0) + (tally?.no ?? 0))).toBe("3");
+    expect(Object.hasOwn(states.at(-1)!.view.me, "voteAgree")).toBe(false);
+    expect(frames.length === 3 && states.every((m) => !JSON.stringify(m).includes("isBot"))).toBe(true);
+  }, 30_000);
+
+  it("candidateVote: 봇 표가 들어가도 방장 소켓에는 프레임이 없고 공개 구간의 voteLog 에 봇 줄이 있다", async () => {
+    const r = await botRoomAt("execVote");
+    await editRoom(r.code, (room) => mapPlayers(room, (p) => (p.isBot === true ? { ...p, execVote: true } : p)));
+    await skipThrough(r, "candidateVote");
+    const from = mark(r.host);
+    await forceBotsDue(r.code);
+    await until("봇 후보 표 3개", async () => (await votesIn(r.code, "candidateVote")) === 3);
+    expect(summary(await settle(r.host, from))).toBe("[]");
+    const botSeats = await botSeatsOf(r.code);
+    await skipThrough(r, "candidateVoteReveal");
+    const line = (await storedRoom(r.code)).voteLog!.at(-1)!.cand!;
+    expect(line.votes.map((v) => v.seat).sort().join(",")).toBe(botSeats.join(","));
+    expect(line.votes.every((v) => v.target !== v.seat)).toBe(true);
+  }, 30_000);
+
+  it("defense: 후보가 봇이면 그 봇 자리에서 온 chat 을 방장이 받고 오류 프레임은 없다", async () => {
+    const r = await botRoomAt("execVote");
+    const [b1, b2, b3] = await botSeatsOf(r.code);
+    await editRoom(r.code, (room) => mapPlayers(room, (p) => (p.isBot === true ? { ...p, execVote: true } : p)));
+    await skipThrough(r, "candidateVote");
+    const picks: Record<number, number> = { 0: b1!, [b1!]: b2!, [b2!]: b1!, [b3!]: b1! };
+    await editRoom(r.code, (room) => mapPlayers(room, (p) => ({ ...p, candidateVote: picks[p.seat as number] })));
+    await skipThrough(r, "defense");
+    expect(String((await storedRoom(r.code)).verdict?.candidate)).toBe(String(b1));
+    const from = mark(r.host);
+    await forceBotsDue(r.code);
+    const chat = await nextFrame(r.host, (m) => m.t === "chat" && m.seat === b1);
+    expect(chat.t).toBe("chat");
+    expect(summary((await settle(r.host, from)).filter((m) => m.t === "error"))).toBe("[]");
+  }, 30_000);
+});
+
+describe("누출 없음: 투표·변론·처형·종료", () => {
+  it("봇이 던지는 투표와 종료까지 방장·손님 프레임 어디에도 isBot·botPlan·봇 id·token 이 없다", async () => {
+    const r = await seatQuiet(1, { testMode: true });
+    send(r.host, { t: "testBots", count: 3 });
+    await nextFrame(r.host, lobbyOf(5));
+    await sendAndSettle(r.host, { t: "testRole", role: "mafia" });
+    await start(r);
+    const botIds = (await botsOf(r.code)).map((b) => b.id);
+    await driveToEnded(r, async () => {
+      await forceBotsDue(r.code);
+    });
+    for (const sock of allSockets(r)) await settle(sock, mark(sock));
+    expect(String((await stored(r.code)).phase)).toBe("ended");
+    expect(botIds.length).toBe(3);
+    for (const [who, sock] of [["host", r.host], ["guest", r.guests[0]!.sock]] as const) {
+      const text = collect(sock).join("\n");
+      expect(`${who}:${text.includes("isBot") || text.includes("botPlan")}`).toBe(`${who}:false`);
+      expect(`${who}:${text.includes('"token"')}`).toBe(`${who}:false`);
+      expect(`${who}:${botIds.some((id) => text.includes(id))}`).toBe(`${who}:false`);
+      expect(`${who}:${text.includes('"phase":"ended"')}`).toBe(`${who}:true`);
     }
   }, 60_000);
 });

@@ -3,7 +3,7 @@
 import { exports } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
 import type { PhaseId, RoomView, ServerMessage } from "../../shared/protocol";
-import { alarmOf, advanceTo, collect, createRoom, nextFrame, seat, send, storedRoom } from "./helpers";
+import { alarmOf, advanceTo, collect, createRoom, driveToEnded, nextFrame, seat, send, skipThrough, storedRoom } from "./helpers";
 import type { Seated, TestSocket } from "./helpers";
 
 const allSockets = (r: Seated): TestSocket[] => [r.host, ...r.guests.map((g) => g.sock)];
@@ -337,4 +337,67 @@ describe("testReset", () => {
   it("morning 에서 되돌려도 같다", async () => {
     await resetFrom("morning");
   }, 30_000);
+});
+
+// ---- 4페이즈: 투표 단계 넘기기·종료 중 도구 (VOTE-01, END-02, 결정 0022) ----
+const lobbyOf = (n: number) => (m: ServerMessage): boolean => m.t === "state" && m.view.phase === "lobby" && m.view.players.length === n;
+
+/** 방장 + 연결 손님 1 + 봇 3 테스트 방(방장 직업 마피아)을 시작해 종료까지 끌고 간다. */
+async function endedRoom(): Promise<Seated> {
+  const r = await seatQuiet(1, { testMode: true });
+  send(r.host, { t: "testBots", count: 3 });
+  await nextFrame(r.host, lobbyOf(5));
+  await sendAndSettle(r.host, { t: "testRole", role: "mafia" });
+  await start(r);
+  await driveToEnded(r);
+  for (const sock of allSockets(r)) await settle(sock, mark(sock));
+  return r;
+}
+
+describe("투표 단계 넘기기와 종료 중 도구", () => {
+  it("execVote 중 testSkip: 아직 안 던진 봇이 던진 뒤 넘어가고 저장된 voteLog 마지막 줄 합계는 살아 있는 봇 수 + 방장 표다", async () => {
+    const r = await seatQuiet(0, { testMode: true });
+    send(r.host, { t: "testBots", count: 3 });
+    await nextFrame(r.host, lobbyOf(4));
+    await start(r);
+    await skipThrough(r, "execVote");
+    await sendAndSettle(r.host, { t: "execVote", agree: true });
+    send(r.host, { t: "testSkip" });
+    await nextFrame(r.host, (m) => m.t === "state" && m.view.phase !== "execVote");
+    const exec = (await storedRoom(r.code)).voteLog!.at(-1)!.exec;
+    expect(String(exec.yes + exec.no)).toBe("4");
+    expect(String(exec.yes >= 1)).toBe("true"); // 방장 찬성은 그대로 세어졌다
+  }, 30_000);
+
+  it("ended 에서 testReset: 대기실이 되고 저장된 방·플레이어에 투표·종료 필드가 없으며 다시 시작하면 만료가 시작 + 3시간이다", async () => {
+    const r = await endedRoom();
+    expect((await storedRoom(r.code)).winner).toBe("citizenWin");
+    send(r.host, { t: "testReset" });
+    for (const sock of allSockets(r)) await nextFrame(sock, isPhase("lobby"));
+    const room = await stored(r.code);
+    for (const key of ["voteLog", "verdict", "execution", "lastExecPhrase", "nightLog", "winner"]) {
+      expect(`${key}:${Object.hasOwn(room, key)}`).toBe(`${key}:false`);
+    }
+    for (const p of room.players as Array<Raw>) {
+      for (const key of ["execVote", "candidateVote", "role", "alive"]) expect(`${p.seat}:${key}:${Object.hasOwn(p, key)}`).toBe(`${p.seat}:${key}:false`);
+    }
+    expect(String(await alarmOf(r.code))).toBe(String(room.expiresAt));
+    const before = Date.now();
+    send(r.host, { t: "start" });
+    for (const sock of allSockets(r)) await nextFrame(sock, isPhase("assigning"));
+    const after = Date.now();
+    const expiresAt = (await storedRoom(r.code)).expiresAt;
+    const THREE_HOURS = 10_800_000;
+    expect(String(expiresAt >= before + THREE_HOURS && expiresAt <= after + THREE_HOURS)).toBe("true");
+  }, 60_000);
+
+  it("ended 에서 testSkip 은 보낸 소켓에만 WRONG_PHASE 와 state 이고 방은 그대로다", async () => {
+    const r = await endedRoom();
+    const guest = r.guests[0]!.sock;
+    const guestMark = mark(guest);
+    const before = JSON.stringify(await stored(r.code));
+    expect(summary(await sendAndSettle(r.host, { t: "testSkip" }))).toBe("[error:WRONG_PHASE,state:ended]");
+    expect(summary(await settle(guest, guestMark))).toBe("[]");
+    expect(JSON.stringify(await stored(r.code))).toBe(before);
+  }, 60_000);
 });
