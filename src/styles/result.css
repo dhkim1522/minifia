@@ -1,0 +1,70 @@
+/* 결과 화면(UI-SPEC 11, 04-25). 값은 tokens.css 변수만 쓴다(색 직접 지정 없음). 글자 크기는 14·16·24·36 에서만 고른다.
+   진홍은 마피아 팀 승리 배너(띠·제목·위쪽 번짐)와 카드의 `마피아` 글자에만 쓴다(UI-SPEC 6.1 예약).
+   헤더 바·타이머·하단 패널이 없다: 배경(night)은 고정이고 .mf-result 하나가 세로로 스크롤한다. 가로 스크롤은 없다. */
+
+/* 배경 상자는 방 본문의 남는 높이를 채운다(낮 장면과 같은 규칙) */
+.mf-result__backdrop { flex: 1 1 0; min-height: 0; height: auto; }
+
+/* 마피아 승: 화면 위 380px 에 crimson-700 65% → 0 세로 번짐. 배경 쪽에 붙어 스크롤해도 움직이지 않는다 */
+.mf-result__glow {
+  position: absolute; left: 0; right: 0; top: 0; height: 380px; pointer-events: none;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--crimson-700) 65%, transparent), transparent);
+}
+
+/* 스크롤 본문: 배경 상자 안에서 자기 높이로 스크롤. 안쪽 여백 위 20 → 16 + 안전 영역은 방 틀이 이미 뺀다, 아래 24 + 안전 영역 */
+.mf-result {
+  position: relative; height: 100%; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+.mf-result__inner {
+  display: flex; flex-direction: column; gap: var(--space-md);
+  padding: var(--space-md) var(--space-md) calc(var(--space-lg) + env(safe-area-inset-bottom));
+  min-width: 0;
+}
+
+.mf-result__head { text-align: center; }
+.mf-result__head .mf-t-heading { text-shadow: var(--shadow-text); }
+
+/* 승리 배너: 모서리 16, night-900 92%, 테두리 night-600, 안쪽 16·16, 위 띠 8(배너 위·좌·우로 번진다) */
+.mf-result__banner {
+  position: relative; overflow: hidden; text-align: center; padding: var(--space-md);
+  border-radius: 16px; border: 1px solid var(--night-600);
+  background: color-mix(in srgb, var(--night-900) 92%, transparent);
+  box-shadow: 0 10px 28px var(--shadow);
+}
+.mf-result__band { height: 8px; margin: calc(-1 * var(--space-md)) calc(-1 * var(--space-md)) var(--space-md); background: var(--gray-100); }
+.mf-result__banner[data-winner="mafiaWin"] .mf-result__band { background: var(--crimson-500); }
+.mf-result__banner-title { margin: 0; font-size: 36px; line-height: 1.2; font-weight: 700; color: var(--gray-50); word-break: keep-all; }
+.mf-result__banner[data-winner="mafiaWin"] .mf-result__banner-title { color: var(--crimson-300); }
+.mf-result__banner-sub { margin: var(--space-xs) 0 0; font-size: 14px; line-height: 20px; color: var(--gray-300); word-break: keep-all; }
+
+/* 직업 카드 격자: 3열, 간격 8, 마지막 줄은 왼쪽 정렬(격자 기본). 카드: 모서리 14, night-800 92%, 테두리 night-600, 안쪽 8·4, 가운데 정렬, 간격 8 */
+.mf-result__grid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-sm); }
+.mf-result__card {
+  min-width: 0; display: flex; flex-direction: column; align-items: center; gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-xs); box-sizing: border-box;
+  border-radius: var(--radius-md); border: 1px solid var(--night-600);
+  background: color-mix(in srgb, var(--night-800) 92%, transparent);
+}
+.mf-result__art { display: block; width: 72px; height: 96px; object-fit: contain; animation: none; }
+/* 탈락: 그림만 흐리게(결과 화면 한정 승인 표시, UI-SPEC 11.1) */
+.mf-result__art--dead { filter: grayscale(1); opacity: 0.5; }
+
+/* 이름표(기존 낮 이름표와 같은 모양): 점 + 닉네임, 높이 22. 말줄임하지 않는다 — 5글자 이름표 폭 99 가 카드 폭(360 폰 104)에 든다 */
+.mf-result__tag {
+  flex: none; display: inline-flex; align-items: center; gap: var(--space-xs);
+  height: 22px; padding: 0 8px 0 7px; border-radius: var(--radius-pill); box-sizing: border-box;
+  background: color-mix(in srgb, var(--night-900) 86%, transparent);
+  border: 1px solid color-mix(in srgb, var(--night-600) 90%, transparent);
+  font-size: 14px; line-height: 20px; font-weight: 700; color: var(--gray-50); white-space: nowrap;
+}
+.mf-result__tag--me { border-color: var(--gray-100); }
+.mf-result__dot { flex: none; width: 8px; height: 8px; border-radius: var(--radius-pill); }
+
+.mf-result__role { font-size: 14px; line-height: 18px; font-weight: 700; color: var(--gray-100); word-break: keep-all; }
+.mf-result__role--mafia { color: var(--crimson-300); }
+.mf-result__out { font-size: 14px; line-height: 18px; color: var(--gray-300); }
+
+/* [처음으로] + 보조 문구 */
+.mf-result__foot { display: flex; flex-direction: column; align-items: stretch; gap: var(--space-sm); }
+.mf-result__note { margin: 0; text-align: center; font-size: 14px; line-height: 20px; color: var(--gray-300); word-break: keep-all; }

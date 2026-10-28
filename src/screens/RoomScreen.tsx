@@ -9,7 +9,7 @@ import { RoleCardSheet } from "../components/RoleCardSheet";
 import type { RoleCardTab } from "../components/RoleCardSheet";
 import { TestToolsButton, TestToolsSheet } from "../components/TestTools";
 import { executionTitle, morningCardText } from "../game/eliminationText";
-import { VERDICT_TEXT, defenseAnnounce, noExecutionPrefix } from "../game/verdict";
+import { VERDICT_TEXT, defenseAnnounce, noExecutionPrefix, winnerText } from "../game/verdict";
 import { preloadDuskAssets, preloadRoleAssets } from "../net/assets";
 import { usePhaseArrival } from "../net/phaseArrival";
 import { loadSeenCount, saveSeenCount, unseenCount } from "../net/recordsSeen";
@@ -17,6 +17,7 @@ import { useRoomConnection } from "../net/useRoomConnection";
 import { Assigning } from "./Assigning";
 import { DayScene } from "./DayScene";
 import { Lobby } from "./Lobby";
+import { ResultScreen } from "./ResultScreen";
 import { RoleReveal } from "./RoleReveal";
 import "../styles/phase.css";
 import "../styles/room.css";
@@ -45,7 +46,8 @@ const PHASE_ANNOUNCE: Record<PhaseId, (view: RoomView) => string> = {
   candidateVoteReveal: () => VERDICT_TEXT.announce.candidateVoteReveal,
   defense: defenseAnnounceOf,
   execution: executionAnnounceOf,
-  ended: () => "게임이 끝났습니다",
+  // 결과가 있으면 승리 팀까지 읽는다(result 없는 옛 서버 프레임은 연결 중… 화면이라 짧은 문구)
+  ended: (view) => (view.result ? winnerText(view.result.winner).announce : "게임이 끝났습니다"),
 };
 
 // 주장 차례 안내: 내 차례면 `내 차례예요`, 남이면 `{닉네임}님 차례`. 차례나 닉네임을 못 찾으면 빈 문자열(`님 차례` 만 읽히지 않게).
@@ -169,6 +171,14 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
       saveSeenCount(code, 0);
     }
   }, [phase, code]);
+
+  // 판이 끝나면 열려 있던 역할 카드 시트를 닫는다 — 결과 화면에는 [역할 카드] 버튼이 없다(UI-SPEC 11, 04-25).
+  useEffect(() => {
+    if (phase === "ended") {
+      setRoleCard({ open: false, tab: "role" });
+      setNewCount(0);
+    }
+  }, [phase]);
 
   // 테스트 방 방장 도구(결정 0022): 방장 본인 view 의 me.testMode 가 있을 때만 [테스트] 버튼과 시트가 있다.
   // 시트는 대기실에서도 쓰므로(내 직업 고르기) 대기실·배정 진입 효과에서 닫지 않는다 — 단계가 바뀌어도 열린 채다.
@@ -309,6 +319,9 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
             arrivedFrom={arrivedFrom}
           />
         );
+      case "ended":
+        // 결과는 서버가 ended 에서만 모두에게 같게 싣는다(D-17). 없는 프레임(옛 서버 등)은 안내 화면으로 안전하게 폴백한다.
+        return view.result ? <ResultScreen view={{ ...view, result: view.result }} onExit={() => onExit("left")} /> : connecting();
       default:
         return connecting();
     }
