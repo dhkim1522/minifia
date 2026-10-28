@@ -890,8 +890,8 @@ export async function readTokenColors(page) {
 
 /**
  * 처형 구간(execVote~ended) 스냅숏을 한 번의 evaluate 로 읽는다. colors = { crimson: string[] } (readTokenColors 결과).
- * 진홍 판정은 계산된 color·background-color·border-color·box-shadow·filter·stroke·fill 문자열에 진홍 토큰의 `r, g, b` 가 들어 있는지다
- * (알파가 붙은 rgba()·drop-shadow(rgb() …) 도 같은 색으로 센다). 결과 화면이면 [처음으로] 를 스크롤로 화면에 불러 닿는지 본다(reachedButton).
+ * 진홍 판정은 계산된 color·background-color·border-color·box-shadow·filter·stroke·fill 값 안의 색(rgb·color(srgb)·oklab·oklch)을
+ * 8비트 sRGB 로 바꿔 진홍 토큰과 채널당 ±2 안이면 같은 색으로 세는 것이다(알파·흐림 그림자·color-mix 로 계산된 색 포함). 결과 화면이면 [처음으로] 를 스크롤로 화면에 불러 닿는지 본다(reachedButton).
  * 계약 밖 덧붙임 두 가지: result.stage(neutral|flip|done), 최상위 now(page 시계 ms). 계약 필드는 이름·단위를 바꾸지 않았다.
  */
 export async function readVerdict(page, colors = { crimson: [], gray: [] }) {
@@ -1041,20 +1041,46 @@ export async function readVerdict(page, colors = { crimson: [], gray: [] }) {
     };
 
     // ---- 진홍 사용 수 ----
-    const triples = crimsonColors
-      .map((c) => /rgba?\(\s*([\d.]+)[\s,]+([\d.]+)[\s,]+([\d.]+)/i.exec(String(c)))
-      .filter(Boolean)
-      .map((m) => `${Number(m[1])}, ${Number(m[2])}, ${Number(m[3])}`);
+    // 계산된 색 문자열은 rgb() 만이 아니다: color-mix 와 흐림 그림자는 `color(srgb 0.88 0.20 0.29 / .95)`·`oklab(…)` 로 계산된다(실제 후광 filter 가 그렇다).
+    // 그래서 값에서 색 함수를 모두 뽑아 8비트 sRGB 로 바꾼 뒤 진홍 토큰과 채널당 ±2 안이면 같은 색으로 센다(문자열 포함만 보면 후광을 놓친다).
+    const toByte = (v) => Math.round(Math.min(1, Math.max(0, v)) * 255);
+    const encode = (v) => (v <= 0.0031308 ? 12.92 * v : 1.055 * Math.pow(Math.max(v, 0), 1 / 2.4) - 0.055);
+    const fromOklab = (L, a, b) => {
+      const l = (L + 0.3963377774 * a + 0.2158037573 * b) ** 3;
+      const m = (L - 0.1055613458 * a - 0.0638541728 * b) ** 3;
+      const sv = (L - 0.0894841775 * a - 1.291485548 * b) ** 3;
+      return [
+        toByte(encode(4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * sv)),
+        toByte(encode(-1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * sv)),
+        toByte(encode(-0.0041960863 * l - 0.7034186147 * m + 1.707614701 * sv)),
+      ];
+    };
+    const colorsIn = (value) => {
+      const out = [];
+      for (const m of String(value).matchAll(/(rgba?|color|oklab|oklch)\(([^)]*)\)/gi)) {
+        const nums = m[2].split("/")[0].replace(/srgb|,/gi, " ").trim().split(/\s+/).map(Number);
+        if (nums.some((n) => !Number.isFinite(n))) continue;
+        const fn = m[1].toLowerCase();
+        if (fn === "rgb" || fn === "rgba") out.push(nums.slice(0, 3).map((n) => Math.round(n)));
+        else if (fn === "color" && /srgb/i.test(m[2]) && !/srgb-linear/i.test(m[2])) out.push(nums.slice(0, 3).map(toByte));
+        else if (fn === "oklab") out.push(fromOklab(nums[0], nums[1], nums[2]));
+        else if (fn === "oklch") out.push(fromOklab(nums[0], nums[1] * Math.cos((nums[2] * Math.PI) / 180), nums[1] * Math.sin((nums[2] * Math.PI) / 180)));
+      }
+      return out;
+    };
+    const tokens = crimsonColors.flatMap((c) => colorsIn(c));
+    const near = (a, b) => a.every((x, i) => Math.abs(x - b[i]) <= 2);
     const usesCrimson = (el) => {
-      if (triples.length === 0) return false;
+      if (tokens.length === 0) return false;
       const cs = getComputedStyle(el);
       const vals = [cs.color, cs.backgroundColor, cs.borderTopColor, cs.borderRightColor, cs.borderBottomColor, cs.borderLeftColor, cs.boxShadow, cs.filter, cs.stroke, cs.fill];
-      return vals.some((v) => typeof v === "string" && triples.some((t) => v.includes(t)));
+      return vals.some((v) => typeof v === "string" && colorsIn(v).some((c) => tokens.some((t) => near(c, t))));
     };
     const newSel =
       ".mf-vintro, .mf-vintro *, .mf-vchip, .mf-varrow, .mf-varrow *, .mf-morningcard--amber, .mf-morningcard--amber *, .mf-pk--vote, .mf-execvote, .mf-execvote *, .mf-defchips, .mf-defchips *, .mf-dt__dim--verdict, .mf-dt__cone";
-    const crimsonNew = qa(newSel).filter((el) => visible(el) && usesCrimson(el)).length;
-    const crimsonScreen = qa("body *").filter((el) => el.tagName !== "SCRIPT" && el.tagName !== "STYLE" && visible(el) && usesCrimson(el)).length;
+    // 진홍 토큰을 못 받았으면 0 이 아니라 null — 0 이면 아무것도 못 센 채로 「진홍 0」 검사를 통과해 버린다(lib 은 null 을 측정값 없음으로 실패시킨다)
+    const crimsonNew = tokens.length === 0 ? null : qa(newSel).filter((el) => visible(el) && usesCrimson(el)).length;
+    const crimsonScreen = tokens.length === 0 ? null : qa("body *").filter((el) => el.tagName !== "SCRIPT" && el.tagName !== "STYLE" && visible(el) && usesCrimson(el)).length;
 
     // ---- 결과 화면 ----
     const resultRoot = q(".mf-result");
