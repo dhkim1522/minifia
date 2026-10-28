@@ -4,18 +4,18 @@ milestone: v1.0
 milestone_name: MVP
 current_phase: 4
 current_phase_name: 처형과 승패
-current_plan: 12
+current_plan: 13
 status: executing
-stopped_at: Completed 04-12-PLAN.md (server wave closed)
-last_updated: "2026-10-28T06:19:56.044Z"
+stopped_at: Completed 04-13-PLAN.md
+last_updated: "2026-10-28T08:05:38.513Z"
 last_activity: 2026-10-26
 last_activity_desc: Phase 4 execution started
-state_head: ec629674e62446ccd19dce92e25d23e6ac126cc3
+state_head: 5d6e911bd1ff631e973fc63aae2f8460868c177b
 progress:
   total_phases: 7
   completed_phases: 2
-  total_plans: 75
-  completed_plans: 75
+  total_plans: 98
+  completed_plans: 76
 ---
 
 # Project State
@@ -30,10 +30,10 @@ See: .planning/PROJECT.md (updated 2026-10-21)
 ## Current Position
 
 Phase: 4 (처형과 승패) — EXECUTING
-Current Plan: 12
-Total Plans in Phase: 12
-Plan: 12 of 12
-Status: 서버 웨이브 완료(04-12) — 화면 계획 추가 대기(시안 승인 → /gsd-ui-phase 4 → Add more plans)
+Current Plan: 13
+Total Plans in Phase: 35
+Plan: 13 of 35
+Status: 화면 웨이브 진행 중 — 04-13(순수 모듈 verdict.ts) 완료, 다음 04-14. 배포는 04-35 에서만(D-26)
 Last activity: 2026-10-26 — Phase 4 execution started
 
 Progress: [██░░░░░░░░] 17%
@@ -120,6 +120,7 @@ Progress: [██░░░░░░░░] 17%
 | Phase 04 P10 | 45min | 2 tasks | 5 files |
 | Phase 4 P11 | 35min | 2 tasks | 4 files |
 | Phase 04 P12 | 10min | 2 tasks | 3 files |
+| Phase 04 P13 | 10min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -228,6 +229,8 @@ Recent decisions affecting current work:
 - [Phase 04]: 04-10: 스모크의 에셋 Cache-Control 단언은 로컬 dev 서버에서 항상 실패하므로(알려진 제약) 단언은 두고 스크래치 사본으로 확인한다; 배포본에서 본다
 - [Phase 4]: 04-11: uat-test-bots g 방은 방장·동료 마피아가 1일차 처형되면 testReset 후 재시도(최대 6판), R1 이 ended 면 밤 검사 건너뛰고 result 확인
 - [Phase 04]: 04-12: 결정 0036 의 고칠 곳(A7 applyCandidateVote, 봇 상수 EXEC_YES_PERCENT)을 코드에 맞춤. 서버 웨이브 배포 금지 유지(D-26)
+- [Phase 04]: 04-13: revealStateAt 에 current(가장 최근 시작한 단계)를 더해 화살표 사이 틈에도 문구가 직전 화살표를 유지한다
+- [Phase 04]: 04-13: capHalos 는 한 자리 요청 여럿 중 가장 높은 우선순위 하나만 남기고 흰은 상한과 무관하게 항상 남긴다
 
 ### Pending Todos
 
@@ -264,6 +267,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-28T06:19:55.487Z
-Stopped at: Completed 04-12-PLAN.md (server wave closed)
+Last session: 2026-10-28T08:05:10.103Z
+Stopped at: Completed 04-13-PLAN.md
 Resume file: None
