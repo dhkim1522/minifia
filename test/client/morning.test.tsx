@@ -95,10 +95,10 @@ afterEach(() => {
 });
 
 describe("아침 발표 (M1)", () => {
-  it("morning view(day.n 1, morning {eliminated: 2, phrase: 1}): 카드 제목이 '민지님이 이슬이 되어 사라졌습니다' 이고 보조 문단이 없다", () => {
+  it("morning view(day.n 1, morning {eliminated: 2, phrase: 1}): 카드 제목이 '민지님이 조용히 눈을 감았습니다' 이고 보조 문단이 없다", () => {
     const { container } = scene(makeView({ morning: { eliminated: 2, phrase: 1 } }));
     expect(container.querySelectorAll(".mf-morningcard").length).toBe(1);
-    expect(container.querySelector(".mf-morningcard__t")?.textContent).toBe("민지님이 이슬이 되어 사라졌습니다");
+    expect(container.querySelector(".mf-morningcard__t")?.textContent).toBe("민지님이 조용히 눈을 감았습니다");
     expect(container.querySelector(".mf-morningcard__s") === null).toBe(true);
   });
 
@@ -126,8 +126,8 @@ describe("아침 발표 (M1)", () => {
     expect(p.querySelectorAll(".mf-pk, .mf-ro, button, textarea, input").length).toBe(0);
   });
 
-  it("phase 4 → '민지님이 차갑게 식은 채 발견되었습니다'", () => {
-    const { container } = scene(makeView({ morning: { eliminated: 2, phrase: 4 } }));
+  it("phase 3 → '민지님이 차갑게 식은 채 발견되었습니다'", () => {
+    const { container } = scene(makeView({ morning: { eliminated: 2, phrase: 3 } }));
     expect(container.querySelector(".mf-morningcard__t")?.textContent).toBe("민지님이 차갑게 식은 채 발견되었습니다");
   });
 
@@ -236,7 +236,7 @@ describe("무사·타이머·표시 소멸·탈락 순간 (03-10)", () => {
     expect(claimRowCount(container)).toBe(0);
     expect(panel(container)!.querySelector("h2")?.textContent).toBe("아침이 밝았습니다");
     expect(container.querySelector(".mf-ro") === null).toBe(true);
-    expect(container.querySelector(".mf-morningcard__t")?.textContent).toBe("지우님이 이슬이 되어 사라졌습니다");
+    expect(container.querySelector(".mf-morningcard__t")?.textContent).toBe("지우님이 조용히 눈을 감았습니다");
   });
 });
 
@@ -247,7 +247,7 @@ describe("아침 카드 팝·퇴장 (03.1-10, D-15, UI-SPEC F)", () => {
 
   it("카드: 제목·보조 문구는 예전과 같다(탈락 문구 `님이`, 무사 `아무 일도 없었습니다` + `모두 무사해요`)", () => {
     const a = scene(makeView({ morning: { eliminated: 1, phrase: 1 } }));
-    expect(a.container.querySelector(".mf-morningcard__t")?.textContent).toBe("하윤님이 이슬이 되어 사라졌습니다");
+    expect(a.container.querySelector(".mf-morningcard__t")?.textContent).toBe("하윤님이 조용히 눈을 감았습니다");
     cleanup();
     const b = scene(makeView({ morning: {} }));
     expect(b.container.querySelector(".mf-morningcard__t")?.textContent).toBe("아무 일도 없었습니다");

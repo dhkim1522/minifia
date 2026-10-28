@@ -423,9 +423,9 @@ describe("밤·아침 라우팅과 안내 (UI-SPEC C5·접근성, RESEARCH A6)",
     expect(r.container.querySelector(".mf-dt") === table, "morning 테이블 유지").toBe(true);
   });
 
-  it("morning view(eliminated 2, phrase 1) → 안내 '아침이 밝았습니다. 민지님이 이슬이 되어 사라졌습니다'", () => {
+  it("morning view(eliminated 2, phrase 1) → 안내 '아침이 밝았습니다. 민지님이 조용히 눈을 감았습니다'", () => {
     const r = renderRoom(morning({ morning: { eliminated: 2, phrase: 1 } }));
-    expect(liveRegion(r.container).textContent).toBe("아침이 밝았습니다. 민지님이 이슬이 되어 사라졌습니다");
+    expect(liveRegion(r.container).textContent).toBe("아침이 밝았습니다. 민지님이 조용히 눈을 감았습니다");
   });
 
   it("morning view({}) → '아침이 밝았습니다. 아무 일도 없었습니다. 모두 무사해요'", () => {
