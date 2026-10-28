@@ -1290,3 +1290,150 @@ export function executionChecks(v, { viewerAlive, candidateSeat } = {}) {
   }
   return result("P6", label, bad);
 }
+
+// ---- 04-30 P7 처형 무효 카드·P8 결과 화면·P10 배치 겹침 (UI-SPEC 9.2·11·15.3) ----
+
+const VOID_SUBS = ["찬성이 과반이 아니에요", "동률이라 처형하지 않아요", "던진 표가 없어요"];
+/** P-3: 밤 시작 문구는 처형 무효 카드가 뜬 지 최소 이만큼(ms) 뒤에 보인다(카드 0–1.6초, 문구 1.6초 뒤부터. 측정 오차로 100ms 여유). */
+const VOID_INTRO_AFTER_MS = 1500;
+/** 처형 무효 카드가 DOM 에서 사라져야 하는 시각(ms, UI-SPEC 9.2 마감 1.6초 + 여유). */
+const VOID_GONE_MS = 1800;
+const WINNER_BANNER = { citizenWin: "시민 팀 승리", mafiaWin: "마피아 팀 승리" };
+const ROLE_WORDS = Object.values(ROLE_NAME);
+const RESULT_OPACITY_TOL = 0.05; // 탈락 카드 그림 opacity .5 ± .05
+const isRect = (r) => isNum(r?.left) && isNum(r?.top) && (isNum(r.right) || isNum(r.width)) && (isNum(r.bottom) || isNum(r.height));
+
+/**
+ * P7 처형 무효 회색 카드(night + noExecution). samples = [{ t(ms, 카드 도착 기준), voidCard:{ count, title, sub, borderColor, pointerEvents }, nightIntro(밤 시작 문구 수) }],
+ * opts = { grayColors, crimsonColors(토큰을 읽어 넘긴 rgb 문자열 목록), clickedThrough(밤 조작 클릭이 통과함) }.
+ * 도착 직후 카드 1장, 보이는 모든 표본: 제목 `처형 무효`·부제가 세 문구 중 하나·테두리가 grayColors 중 하나(앰버·진홍 아님)·pointer-events none.
+ * 1800ms 이후 표본은 카드 0장. 밤 시작 문구의 첫 등장은 카드의 첫 등장보다 1500ms 이상 뒤(P-3).
+ */
+export function voidCardChecks(samples, { grayColors, crimsonColors, clickedThrough } = {}) {
+  const label = "처형 무효 카드: 회색·문구·1.8초 안 사라짐·밤 시작 문구 순서·터치 통과";
+  if (!Array.isArray(samples) || samples.length === 0) return result("P7", label, ["측정값 없음(처형 무효 카드 시간표본)"]);
+  const miss = [];
+  if (!Array.isArray(grayColors) || grayColors.length === 0) miss.push("측정값 없음(grayColors 토큰 색 목록)");
+  if (!Array.isArray(crimsonColors) || crimsonColors.length === 0) miss.push("측정값 없음(crimsonColors 토큰 색 목록)");
+  if (typeof clickedThrough !== "boolean") miss.push("측정값 없음(clickedThrough)");
+  samples.forEach((x, i) => {
+    if (!Number.isFinite(x?.t)) miss.push(`측정값 없음(표본 ${i} t)`);
+    else if (!x.voidCard || !isNum(x.voidCard.count)) miss.push(`측정값 없음(표본 ${i} voidCard.count)`);
+    else if (!isNum(x.nightIntro)) miss.push(`측정값 없음(표본 ${i} nightIntro)`);
+  });
+  if (miss.length > 0) return result("P7", label, [...new Set(miss)]);
+  const sorted = [...samples].sort((a, b) => a.t - b.t);
+  const late = sorted.filter((x) => x.t >= VOID_GONE_MS);
+  if (late.length === 0) miss.push(`측정값 없음(${VOID_GONE_MS}ms 이후 표본)`);
+  const cardFirst = sorted.find((x) => x.voidCard.count > 0);
+  const introFirst = sorted.find((x) => x.nightIntro > 0);
+  if (!introFirst) miss.push("측정값 없음(밤 시작 문구 등장 표본)");
+  if (miss.length > 0) return result("P7", label, miss);
+
+  const gray = new Set(grayColors.map(colorKey));
+  const crimson = new Set(crimsonColors.map(colorKey));
+  const bad = new Set();
+  const first = sorted[0];
+  if (first.voidCard.count !== 1) bad.add(`도착 직후(t=${fmt(first.t)}ms) 처형 무효 카드 ${first.voidCard.count}개 ≠ 1`);
+  for (const x of sorted) {
+    const c = x.voidCard;
+    if (c.count === 0) continue;
+    if (c.count > 1) bad.add(`t=${fmt(x.t)}ms 카드 ${c.count}개 > 1`);
+    if (c.title !== "처형 무효") bad.add(`카드 제목 "${c.title}" ≠ "처형 무효"`);
+    if (!VOID_SUBS.includes(c.sub)) bad.add(`카드 부제 "${c.sub}" 가 세 문구 [${VOID_SUBS.join(" / ")}] 중 하나가 아님`);
+    const key = colorKey(c.borderColor);
+    if (key === colorKey(AMBER_RGB)) bad.add(`카드 테두리 ${c.borderColor} 가 앰버 — 회색이어야 함`);
+    else if (crimson.has(key)) bad.add(`카드 테두리 ${c.borderColor} 가 진홍 — 회색이어야 함`);
+    else if (!gray.has(key)) bad.add(`카드 테두리 ${c.borderColor} 가 회색 목록에 없음`);
+    if (c.pointerEvents !== "none") bad.add(`카드 pointer-events "${c.pointerEvents}" ≠ none(밤 조작을 막음)`);
+  }
+  for (const x of late) {
+    if (x.voidCard.count !== 0) bad.add(`${VOID_GONE_MS}ms 뒤(t=${fmt(x.t)}ms)에도 카드 ${x.voidCard.count}개가 사라지지 않음`);
+  }
+  if (cardFirst && introFirst.t - cardFirst.t < VOID_INTRO_AFTER_MS) {
+    bad.add(`밤 시작 문구가 카드 도착 ${fmt(introFirst.t - cardFirst.t)}ms 뒤에 보임 < ${VOID_INTRO_AFTER_MS}ms (카드 뒤 순서, P-3)`);
+  }
+  if (!clickedThrough) bad.add("밤 조작 클릭이 카드를 통과하지 못함");
+  return result("P7", label, [...bad]);
+}
+
+/**
+ * P8 결과 화면(ended). v.result = { winner, bannerText, bannerSub, cards:[{ seat, job, dead, figOpacity }], rows, scrollW, clientW, reachedButton, glow, hasPhaseBar },
+ * opts = { winner("citizenWin"|"mafiaWin"), n(인원), summaryRows(요약 카드 행 수 기대값) }.
+ * 배너=승패, 카드 수=인원, 모든 카드에 직업 이름, 탈락 카드 그림 opacity .5 ± .05(살아 있는 카드 1 ± .05), 요약 행 수, 가로 스크롤 없음(G1),
+ * 세로 스크롤로 [처음으로] 에 닿음, 위쪽 진홍 번짐은 마피아 승일 때만, 헤더 바·하단 패널 없음.
+ */
+export function resultChecks(v, { winner, n, summaryRows } = {}) {
+  const label = "결과 화면: 배너·카드 수·직업·탈락 흐림·요약·스크롤·번짐";
+  const miss = [];
+  if (!(winner in WINNER_BANNER)) miss.push("측정값 없음(winner 인자)");
+  if (!isNum(n)) miss.push("측정값 없음(n 인자)");
+  if (!isNum(summaryRows)) miss.push("측정값 없음(summaryRows 인자)");
+  const r = v?.result;
+  if (!r || typeof r !== "object") miss.push("측정값 없음(result)");
+  else {
+    if (typeof r.winner !== "string") miss.push("측정값 없음(result.winner)");
+    if (typeof r.bannerText !== "string") miss.push("측정값 없음(result.bannerText)");
+    if (!Array.isArray(r.cards)) miss.push("측정값 없음(result.cards)");
+    else if (r.cards.some((c) => typeof c?.job !== "string" || typeof c.dead !== "boolean" || !isNum(c.figOpacity))) miss.push("측정값 없음(result.cards 의 job·dead·figOpacity)");
+    if (!isNum(r.rows)) miss.push("측정값 없음(result.rows)");
+    if (!isNum(r.scrollW) || !isNum(r.clientW)) miss.push("측정값 없음(result.scrollW·clientW)");
+    if (typeof r.reachedButton !== "boolean") miss.push("측정값 없음(result.reachedButton)");
+    if (typeof r.glow !== "boolean") miss.push("측정값 없음(result.glow)");
+    if (typeof r.hasPhaseBar !== "boolean") miss.push("측정값 없음(result.hasPhaseBar)");
+  }
+  if (miss.length > 0) return result("P8", label, miss);
+
+  const bad = [];
+  if (r.winner !== winner) bad.push(`결과 승자 ${r.winner} ≠ 기대 ${winner}`);
+  if (r.bannerText !== WINNER_BANNER[winner]) bad.push(`배너 "${r.bannerText}" ≠ "${WINNER_BANNER[winner]}"`);
+  if (r.cards.length !== n) bad.push(`카드 ${r.cards.length}장 ≠ 인원 ${n}`);
+  for (const c of r.cards) {
+    if (!ROLE_WORDS.includes(c.job)) bad.push(`자리 ${c.seat} 직업 이름 "${c.job}" 가 [${ROLE_WORDS.join("|")}] 중 하나가 아님`);
+    const want = c.dead ? 0.5 : 1;
+    if (Math.abs(c.figOpacity - want) > RESULT_OPACITY_TOL + 1e-9) {
+      bad.push(c.dead ? `탈락 카드(자리 ${c.seat}) 그림 opacity ${fmt(c.figOpacity * 100) / 100} ≠ .5` : `살아 있는 카드(자리 ${c.seat}) 그림 opacity ${fmt(c.figOpacity * 100) / 100} ≠ 1`);
+    }
+  }
+  if (r.rows !== summaryRows) bad.push(`요약 행 ${r.rows}개 ≠ ${summaryRows}`);
+  if (r.scrollW > r.clientW) bad.push(`가로 스크롤: scrollWidth ${r.scrollW} > clientWidth ${r.clientW}`);
+  if (!r.reachedButton) bad.push("세로 스크롤로 [처음으로] 에 닿지 못함");
+  if (r.glow !== (winner === "mafiaWin")) bad.push(winner === "mafiaWin" ? "마피아 승인데 위쪽 진홍 번짐이 없음" : "시민 승인데 진홍 번짐이 있음(마피아 승에만)");
+  if (r.hasPhaseBar) bad.push("헤더 바·타이머·하단 패널이 보임(결과 화면에는 없음)");
+  return result("P8", label, bad);
+}
+
+/**
+ * P10 칩·카드 배치. v = { dt:{ header, panel, scene? }, reveal:{ chips[], tags[] }, card?:{ rect } }.
+ * 칩 사각형은 헤더·하단 패널·모든 이름표(자기 대상 포함)와 겹치지 않는다(캐릭터 머리 위를 덮는 것은 허용). card.rect 가 있으면 장면 폭 안이고 헤더·패널과 겹치지 않는다.
+ */
+export function placementChecks(v) {
+  const label = "배치: 칩·카드가 이름표·헤더·패널과 겹치지 않음";
+  const miss = [];
+  if (!isRect(v?.dt?.header)) miss.push("측정값 없음(dt.header)");
+  if (!isRect(v?.dt?.panel)) miss.push("측정값 없음(dt.panel)");
+  if (!Array.isArray(v?.reveal?.chips)) miss.push("측정값 없음(reveal.chips)");
+  if (!Array.isArray(v?.reveal?.tags)) miss.push("측정값 없음(reveal.tags)");
+  const card = v?.card?.rect;
+  if (v?.card) {
+    if (!isRect(card)) miss.push("측정값 없음(card.rect)");
+    if (!(isNum(v.dt?.scene?.left) && isNum(v.dt?.scene?.right))) miss.push("측정값 없음(dt.scene)");
+  }
+  if (miss.length > 0) return result("P10", label, miss);
+
+  const bad = [];
+  const { header, panel } = v.dt;
+  for (const c of v.reveal.chips) {
+    const who = `칩(자리 ${c.seat})`;
+    if (rectsOverlap(c, header)) bad.push(`${who} 가 헤더와 겹침`);
+    if (rectsOverlap(c, panel)) bad.push(`${who} 가 하단 패널과 겹침`);
+    for (const t of v.reveal.tags) if (rectsOverlap(c, t)) bad.push(`${who} 가 이름표(자리 ${t.seat})와 겹침`);
+  }
+  if (card) {
+    const sc = v.dt.scene;
+    if (card.left < sc.left - OVERLAP_EPS || right(card) > sc.right + OVERLAP_EPS) bad.push(`카드가 장면 폭 [${fmt(sc.left)}, ${fmt(sc.right)}] 밖 (${fmt(card.left)}~${fmt(right(card))})`);
+    if (rectsOverlap(card, header)) bad.push("카드가 헤더와 겹침");
+    if (rectsOverlap(card, panel)) bad.push("카드가 하단 패널과 겹침");
+  }
+  return result("P10", label, bad);
+}
