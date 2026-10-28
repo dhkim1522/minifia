@@ -9,7 +9,7 @@ import { ROOM_TTL_MS, attachConnection, createRoomState, joinRoom, startGame } f
 import type { Player, RoomState } from "../../shared/game/room";
 import { rolesInPlay } from "../../shared/game/roles";
 import { tick } from "../../shared/game/tick";
-import { buildView } from "../../shared/game/view";
+import { buildPreview, buildView } from "../../shared/game/view";
 import { MORNING_PHRASE_COUNT } from "../../shared/protocol";
 import type { Claim, ClaimLogEntry, PhaseId, RoomView } from "../../shared/protocol";
 import { seededRandInt } from "../helpers/seededRandom";
@@ -269,7 +269,7 @@ const DAY_VIEW_PHASES: ReadonlySet<PhaseId> = new Set([
   "dayAnnounce", "claim", "discussion", "execVote", "candidateVote", "candidateVoteReveal", "defense", "execution", "night", "morning", "ended",
 ]);
 const ME_KEYS: ReadonlySet<string> = new Set([
-  "seat", "isHost", "role", "allies", "testMode", "testRole", "testBots", "pick", "allyPicks", "records", "voteAgree", "voteTarget",
+  "seat", "isHost", "role", "allies", "testMode", "testRole", "testBots", "testBotVote", "pick", "allyPicks", "records", "voteAgree", "voteTarget",
 ]);
 const DAY_KEYS: ReadonlySet<string> = new Set([
   "n", "roles", "claimLog", "voteLog", "turn", "morning", "execTally", "candidate", "execution", "noExecution",
@@ -1569,5 +1569,50 @@ describe("buildView 처형자 직업 비공개 (D-09, T-04-31)", () => {
     }
     expect(aliveViews > 0).toBe(true);
     expect(bad.join("; ")).toBe("");
+  });
+});
+
+describe("buildView 테스트 방 봇 투표 설정 me.testBotVote (P-13, T-04-45)", () => {
+  const testLobby = (testBotVote?: RoomState["testBotVote"]): RoomState => ({
+    ...lobbyOf(5),
+    testMode: true,
+    ...(testBotVote !== undefined ? { testBotVote } : {}),
+  });
+  const guestOf = (state: RoomState): Player => state.players.find((p) => p.id !== state.hostId)!;
+
+  it("테스트 방 방장의 대기실 view 에서 무작위가 아닌 값이 있을 때만 me.testBotVote 가 실리고, 빠진 쪽은 random 이다", () => {
+    const both = testLobby({ exec: "no", pick: "host" });
+    expect(JSON.stringify(buildView(both, both.hostId, 1).me.testBotVote)).toBe('{"exec":"no","pick":"host"}');
+    const execOnly = testLobby({ exec: "yes" });
+    expect(JSON.stringify(buildView(execOnly, execOnly.hostId, 1).me.testBotVote)).toBe('{"exec":"yes","pick":"random"}');
+    const pickOnly = testLobby({ pick: "other" });
+    expect(JSON.stringify(buildView(pickOnly, pickOnly.hostId, 1).me.testBotVote)).toBe('{"exec":"random","pick":"other"}');
+  });
+
+  it("값이 없으면(빈 객체 포함) 키 자체가 없다", () => {
+    for (const state of [testLobby(), testLobby({})]) {
+      expect(Object.hasOwn(buildView(state, state.hostId, 1).me, "testBotVote")).toBe(false);
+    }
+  });
+
+  it("손님·일반 방 방장·미리보기에는 값이 있어도 키 자체가 없다", () => {
+    const state = testLobby({ exec: "no", pick: "host" });
+    expect(JSON.stringify(buildView(state, guestOf(state).id, 1)).includes("testBotVote")).toBe(false);
+    const normal: RoomState = { ...lobbyOf(5), testBotVote: { exec: "no", pick: "host" } };
+    expect(JSON.stringify(buildView(normal, normal.hostId, 1)).includes("testBotVote")).toBe(false);
+    expect(JSON.stringify(buildPreview(state)).includes("testBotVote")).toBe(false);
+  });
+
+  it("게임 중(대기실이 아닌 모든 단계)에는 방장 view 에도 키가 없다", () => {
+    const bad: string[] = [];
+    for (const phase of PHASES) {
+      if (phase === "lobby") continue;
+      const s = { ...stateAt(phase, 5, 1), testMode: true as const, testBotVote: { exec: "no" as const, pick: "host" as const } };
+      for (const p of s.players) {
+        const json = JSON.stringify(buildView(s, p.id, START_AT));
+        if (json.includes("testBotVote")) bad.push(`${phase}/seat${p.seat}`);
+      }
+    }
+    expect(bad.join(",")).toBe("");
   });
 });

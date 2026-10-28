@@ -193,6 +193,65 @@ describe("testRole", () => {
   });
 });
 
+describe("testBotVote", () => {
+  const msg = (exec: string, pick: string): { t: string; exec: string; pick: string } => ({ t: "testBotVote", exec, pick });
+
+  it("일반 방은 BAD_MESSAGE 오류 프레임 하나뿐이고 방 상태가 그대로다", async () => {
+    const r = await seatQuiet(3);
+    const before = JSON.stringify(await stored(r.code));
+    for (const sock of allSockets(r)) {
+      expect(summary(await sendAndSettle(sock, msg("no", "host")))).toBe("[error:BAD_MESSAGE]");
+    }
+    expect(JSON.stringify(await stored(r.code))).toBe(before);
+    expect(Object.hasOwn(await stored(r.code), "testBotVote")).toBe(false);
+  });
+
+  it("손님은 NOT_HOST 와 그 소켓에만 state 가 가고 방장 소켓에는 프레임이 없다", async () => {
+    const r = await seatQuiet(3, { testMode: true });
+    const guest = r.guests[0]!;
+    const hostMark = mark(r.host);
+    expect(summary(await sendAndSettle(guest.sock, msg("no", "host")))).toBe("[error:NOT_HOST,state:lobby]");
+    expect(summary(await settle(r.host, hostMark))).toBe("[]");
+    expect(Object.hasOwn(await stored(r.code), "testBotVote")).toBe(false);
+  });
+
+  it("게임 중에는 WRONG_PHASE 와 방장 state 이고 저장된 방에 설정이 없다", async () => {
+    const r = await seatQuiet(3, { testMode: true });
+    await start(r);
+    expect(summary(await sendAndSettle(r.host, msg("no", "host")))).toBe("[error:WRONG_PHASE,state:assigning]");
+    expect(Object.hasOwn(await stored(r.code), "testBotVote")).toBe(false);
+  });
+
+  it("알 수 없는 값·빠진 키·추가 키는 BAD_MESSAGE 오류 프레임 하나뿐이다", async () => {
+    const r = await seatQuiet(3, { testMode: true });
+    expect(summary(await sendAndSettle(r.host, msg("maybe", "host")))).toBe("[error:BAD_MESSAGE]");
+    expect(summary(await sendAndSettle(r.host, msg("yes", "everyone")))).toBe("[error:BAD_MESSAGE]");
+    expect(summary(await sendAndSettle(r.host, { t: "testBotVote", exec: "yes" }))).toBe("[error:BAD_MESSAGE]");
+    expect(summary(await sendAndSettle(r.host, { t: "testBotVote", exec: "yes", pick: "host", extra: 1 }))).toBe("[error:BAD_MESSAGE]");
+    expect(Object.hasOwn(await stored(r.code), "testBotVote")).toBe(false);
+  });
+
+  it("방장이 보내면 방장 소켓만 state:lobby 를 받고(me.testBotVote 포함) 손님은 프레임이 없으며 저장된다", async () => {
+    const r = await seatQuiet(3, { testMode: true });
+    const marks = r.guests.map((g) => mark(g.sock));
+    const own = await sendAndSettle(r.host, msg("no", "host"));
+    expect(summary(own)).toBe("[state:lobby]");
+    expect(JSON.stringify((own[0] as Extract<ServerMessage, { t: "state" }>).view.me.testBotVote)).toBe('{"exec":"no","pick":"host"}');
+    for (const [i, g] of r.guests.entries()) expect(summary(await settle(g.sock, marks[i]!))).toBe("[]");
+    expect(JSON.stringify((await stored(r.code)).testBotVote)).toBe('{"exec":"no","pick":"host"}');
+  });
+
+  it("같은 값을 다시 보내면 프레임이 없고, random 두 개는 설정을 지운다", async () => {
+    const r = await seatQuiet(3, { testMode: true });
+    await sendAndSettle(r.host, msg("yes", "other"));
+    expect(summary(await sendAndSettle(r.host, msg("yes", "other")))).toBe("[]");
+    const cleared = await sendAndSettle(r.host, msg("random", "random"));
+    expect(summary(cleared)).toBe("[state:lobby]");
+    expect(Object.hasOwn((cleared[0] as Extract<ServerMessage, { t: "state" }>).view.me, "testBotVote")).toBe(false);
+    expect(Object.hasOwn(await stored(r.code), "testBotVote")).toBe(false);
+  });
+});
+
 describe("testSkip", () => {
   it("assigning 에서 넘기면 모든 소켓이 각자 view 의 roleReveal 을 받고 방장이 마피아다", async () => {
     const r = await seatQuiet(3, { testMode: true });
