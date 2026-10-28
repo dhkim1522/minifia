@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { CandidateVoteLine, PhaseId, RoomView } from "../../shared/protocol";
 import { readFileSync } from "node:fs";
 import { CLINCH_BEAT_MS, CLINCH_VIBRATE_MS, VERDICT_TEXT, clinchBeat, revealIntroHint, revealPlan, revealStateAt } from "../../src/game/verdict";
-import { useRevealState } from "../../src/net/useRevealState";
+import { nextBoundary, useRevealState } from "../../src/net/useRevealState";
 import type { RoomConnection } from "../../src/net/useRoomConnection";
 
 // 후보 선택 공개(candidateVoteReveal) 상태 (04-19). Task 1: useRevealState 훅. Task 2: RoomScreen 한 경로(아래).
@@ -97,6 +97,20 @@ const BOUNDARIES = (() => {
   if (plan.clinch !== null) all.add(plan.clinch.atMs + CLINCH_BEAT_MS);
   return [...all].sort((a, b) => a - b);
 })();
+
+describe("nextBoundary: 확정 뒤 다시 닿는 표마다 두근 끝(닿음 + 700ms)이 경계 (04-20 후속)", () => {
+  it("CLINCH_REPLAY: 확정 두근 끝이 아니라 마지막 닿음 1980 + 700 = 2680 이 경계로 들어 있다", () => {
+    const plan = revealPlan(CLINCH_REPLAY, START);
+    const seen = new Set<number>();
+    let t = START - 1;
+    for (let next = nextBoundary(plan, t); next !== null; next = nextBoundary(plan, t)) {
+      seen.add(next);
+      t = next;
+    }
+    expect(seen.has(START + 2680)).toBe(true);
+    expect(seen.has(START + 1480 + CLINCH_BEAT_MS)).toBe(true);
+  });
+});
 
 describe("useRevealState (VOTE-02, D-20, D-31, 결정 0036-5)", () => {
   beforeEach(() => {
@@ -479,6 +493,22 @@ const beatSeats = (c: HTMLElement, kind: "clinch" | "slow") =>
   Array.from(c.querySelectorAll<HTMLElement>(`.mf-dt__seat--${kind}`)).map((el) => Number(el.dataset.seat));
 const chipSlow = (c: HTMLElement) => Array.from(c.querySelectorAll<HTMLElement>(".mf-vchip--slow")).map((el) => Number(el.dataset.seat));
 
+/** 확정(1480) 뒤 네 번째 표(1980)도 도현에게, 다섯 번째 표(2480)는 하윤에게 */
+const CLINCH_REPLAY: CandidateVoteLine[] = [
+  { seat: 1, target: 3 },
+  { seat: 2, target: 3 },
+  { seat: 0, target: 3 },
+  { seat: 4, target: 3 },
+  { seat: 3, target: 1 },
+];
+/** 다섯 표 모두 도현에게: 확정 1480, 다시 닿음 1980·2480 */
+const CLINCH_ALL: CandidateVoteLine[] = [
+  { seat: 1, target: 3 },
+  { seat: 2, target: 3 },
+  { seat: 0, target: 3 },
+  { seat: 4, target: 3 },
+  { seat: 3, target: 3 },
+];
 /** 도현(3)이 세 번째 표에서 확정(3-0-0, 남은 2표): 닿음 = 시작 + 200 + 2×500 + 280 = 1480 */
 const CLINCH_THIRD: CandidateVoteLine[] = [
   { seat: 1, target: 3 },
@@ -512,10 +542,29 @@ describe("clinchBeat: 확정 두근 700ms 뒤 느린 박동 (D-31 ③, 순수 �
     const plan = revealPlan(CLINCH_THIRD, START);
     expect(plan.clinch).toEqual({ seat: 3, atMs: START + 1480, step: 2 });
     expect(clinchBeat(plan, START + 1479)).toBeNull();
-    expect(clinchBeat(plan, START + 1480)).toEqual({ seat: 3, beat: "clinch" });
-    expect(clinchBeat(plan, START + 1480 + CLINCH_BEAT_MS - 1)).toEqual({ seat: 3, beat: "clinch" });
-    expect(clinchBeat(plan, START + 1480 + CLINCH_BEAT_MS)).toEqual({ seat: 3, beat: "slow" });
-    expect(clinchBeat(plan, START + 99_999)).toEqual({ seat: 3, beat: "slow" });
+    expect(clinchBeat(plan, START + 1480)).toEqual({ seat: 3, beat: "clinch", replay: 0 });
+    expect(clinchBeat(plan, START + 1480 + CLINCH_BEAT_MS - 1)).toEqual({ seat: 3, beat: "clinch", replay: 0 });
+    expect(clinchBeat(plan, START + 1480 + CLINCH_BEAT_MS)).toEqual({ seat: 3, beat: "slow", replay: 0 });
+    expect(clinchBeat(plan, START + 99_999)).toEqual({ seat: 3, beat: "slow", replay: 0 });
+  });
+
+  it("확정 뒤 같은 후보에게 표가 더 닿으면 그 닿음부터 700ms 다시 clinch, replay 가 하나씩 오른다 (마지막 닿음 + 700ms 가 창)", () => {
+    const plan = revealPlan(CLINCH_REPLAY, START); // 닿음 480·980·1480(확정)·1980(도현)·2480(하윤)
+    expect(plan.clinch).toEqual({ seat: 3, atMs: START + 1480, step: 2 });
+    expect(clinchBeat(plan, START + 1480)).toEqual({ seat: 3, beat: "clinch", replay: 0 });
+    expect(clinchBeat(plan, START + 1979)).toEqual({ seat: 3, beat: "clinch", replay: 0 });
+    expect(clinchBeat(plan, START + 1980)).toEqual({ seat: 3, beat: "clinch", replay: 1 });
+    expect(clinchBeat(plan, START + 2180)).toEqual({ seat: 3, beat: "clinch", replay: 1 }); // 예전엔 여기서 slow 였다
+    expect(clinchBeat(plan, START + 2680 - 1)).toEqual({ seat: 3, beat: "clinch", replay: 1 });
+    expect(clinchBeat(plan, START + 2680)).toEqual({ seat: 3, beat: "slow", replay: 1 }); // 2480 의 하윤 표는 창을 늘리지 않는다
+    expect(clinchBeat(plan, START + 99_999)).toEqual({ seat: 3, beat: "slow", replay: 1 });
+  });
+
+  it("표가 계속 이어지면 마지막 닿음 + 700ms 까지 이어서 clinch", () => {
+    const plan = revealPlan(CLINCH_ALL, START); // 도현 5표: 닿음 480…2480, 확정 1480
+    expect(clinchBeat(plan, START + 2480)).toEqual({ seat: 3, beat: "clinch", replay: 2 });
+    expect(clinchBeat(plan, START + 3179)).toEqual({ seat: 3, beat: "clinch", replay: 2 });
+    expect(clinchBeat(plan, START + 3180)).toEqual({ seat: 3, beat: "slow", replay: 2 });
   });
 
   it("동률·미확정·표 없음은 언제나 null", () => {
@@ -637,6 +686,62 @@ describe("과반 확정 두근과 느린 박동 (D-31 ③, P-14, 04-20)", () => 
     expect(beatSeats(container, "slow")).toEqual([3]);
   });
 
+  it("확정 두근 안에 같은 후보에게 표가 더 닿으면 두근을 처음부터 다시 돈다: 칩은 새 노드, 좌석은 애니메이션 이름이 번갈아 바뀐다. 끝나면 slow", () => {
+    const { container, advance } = renderAt(1480, makeView({ votes: CLINCH_REPLAY }));
+    expect(beatSeats(container, "clinch")).toEqual([3]);
+    expect(seatClasses(container, 3)).not.toContain("mf-dt__seat--alt");
+    const firstChip = chipOf(container, 3);
+    expect(firstChip?.textContent).toBe("3");
+    advance(499); // 1979
+    expect(seatClasses(container, 3)).not.toContain("mf-dt__seat--alt");
+    advance(1); // 1980: 네 번째 표가 도현에게
+    expect(beatSeats(container, "clinch")).toEqual([3]);
+    expect(seatClasses(container, 3)).toContain("mf-dt__seat--alt"); // 이름이 바뀌어 CSS 애니메이션이 처음부터 다시 돈다
+    expect(chipOf(container, 3)?.textContent).toBe("4");
+    expect(chipOf(container, 3)).not.toBe(firstChip); // 새 노드 → 칩 두근도 처음부터
+    expect(chipOf(container, 3)?.className).toContain("mf-vchip--beat");
+    advance(200); // 2180: 예전엔 여기서 slow 로 끊겼다
+    expect(beatSeats(container, "clinch")).toEqual([3]);
+    expect(beatSeats(container, "slow")).toEqual([]);
+    expect(chipOf(container, 3)?.className).toContain("mf-vchip--beat");
+    advance(300); // 2480: 하윤 표 — 도현 두근은 이어지고 다시 돌지 않는다
+    expect(seatClasses(container, 3)).toContain("mf-dt__seat--alt");
+    expect(chipOf(container, 3)?.textContent).toBe("4");
+    advance(199); // 2679
+    expect(beatSeats(container, "clinch")).toEqual([3]);
+    advance(1); // 2680 = 1980 + 700
+    expect(beatSeats(container, "clinch")).toEqual([]);
+    expect(beatSeats(container, "slow")).toEqual([3]);
+    expect(chipSlow(container)).toEqual([3]);
+    expect(chipOf(container, 3)?.className).not.toContain("mf-vchip--beat");
+  });
+
+  it("연달아 두 번 더 닿으면 번갈아 alt 가 켜졌다 꺼졌다 한다(다시 돌 때마다 이름이 바뀐다)", () => {
+    const { container, advance } = renderAt(1980, makeView({ votes: CLINCH_ALL }));
+    expect(seatClasses(container, 3)).toContain("mf-dt__seat--alt");
+    expect(chipOf(container, 3)?.textContent).toBe("4");
+    advance(500); // 2480: 다섯 번째 표도 도현
+    expect(beatSeats(container, "clinch")).toEqual([3]);
+    expect(seatClasses(container, 3)).not.toContain("mf-dt__seat--alt");
+    expect(chipOf(container, 3)?.textContent).toBe("5");
+    advance(699); // 3179
+    expect(beatSeats(container, "clinch")).toEqual([3]);
+    advance(1); // 3180
+    expect(beatSeats(container, "slow")).toEqual([3]);
+  });
+
+  it("마지막 닿음 창 안에 합류(2300)해도 clinch 로 시작하고 2680 에 slow", () => {
+    const { container, advance } = renderAt(2300, makeView({ votes: CLINCH_REPLAY }));
+    expect(beatSeats(container, "clinch")).toEqual([3]);
+    advance(380); // 2680
+    expect(beatSeats(container, "slow")).toEqual([3]);
+  });
+
+  it("확정 한 번이면 alt 는 없다(기존 모양 그대로)", () => {
+    const { container } = renderAt(1500, makeView({ votes: CLINCH_THIRD }));
+    expect(container.querySelectorAll(".mf-dt__seat--alt").length).toBe(0);
+  });
+
   it("두근 때 칩이 다른 사람에게 가도 확정 좌석의 칩만 beat 다(후광은 앰버 하나)", () => {
     const { container } = renderAt(1500, makeView({ votes: CLINCH_THIRD }));
     expect(amberSeats(container)).toEqual([3]);
@@ -666,6 +771,18 @@ describe("확정 진동 navigator.vibrate (D-31 구현 재량)", () => {
     expect(CLINCH_VIBRATE_MS).toBe(30);
     advance(3000);
     rerenderRoom(makeView({ votes: CLINCH_THIRD }));
+    expect(vibrate).toHaveBeenCalledTimes(1);
+  });
+
+  it("확정 두근을 다시 돌아도(같은 후보에게 더 닿음) 진동은 첫 확정에서 한 번뿐이다", () => {
+    const vibrate = vi.fn(() => true);
+    stubVibrate(vibrate);
+    const { advance } = renderAt(1000, makeView({ votes: CLINCH_ALL }));
+    advance(480); // 1480
+    expect(vibrate).toHaveBeenCalledTimes(1);
+    advance(500); // 1980: 다시 닿음
+    advance(500); // 2480
+    advance(1500);
     expect(vibrate).toHaveBeenCalledTimes(1);
   });
 
@@ -729,6 +846,15 @@ describe("verdict.css: 확정 두근 스타일 규칙 (UI-SPEC 8.3·13.4)", () =
     expect(chip).not.toContain("transform");
     expect(css).toMatch(/\.mf-dt__seat--clinch\s*\{[^}]*mf-dk-c 700ms/);
     expect(css).toMatch(/\.mf-vchip--beat\s*\{[^}]*mf-dk-chip 700ms/);
+  });
+
+  it("다시 돌기: alt 클래스가 같은 두근을 다른 이름(mf-dk-c-b·mf-dk-halo-b)으로 건다. 키프레임 내용은 원본과 같다", () => {
+    expect(keyframe("mf-dk-c-b")).toBe(keyframe("mf-dk-c"));
+    expect(keyframe("mf-dk-halo-b")).toBe(keyframe("mf-dk-halo"));
+    expect(css).toMatch(/\.mf-dt__seat--clinch\.mf-dt__seat--alt\s*\{[^}]*mf-dk-c-b 700ms/);
+    expect(css).toMatch(/\.mf-dt__seat--clinch\.mf-dt__seat--alt \.mf-figure--halo-amber[^{]*\{[^}]*mf-dk-halo-b 700ms/);
+    // 축소 모션에서는 alt 도 애니메이션을 끈다
+    expect(reduced).toMatch(/\.mf-dt__seat--alt[^{]*\{[^}]*animation: none/);
   });
 
   it("후광: 3px/18px 로 밝아졌다 돌아온다, 후광 그림에만", () => {
