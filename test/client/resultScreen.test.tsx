@@ -226,6 +226,22 @@ describe("결과 화면 핵심 (END-01·END-02, D-17·D-18)", () => {
     expect(mafiaViewer).toBe(alive);
   });
 
+  it("판이 끝나면 열려 있던 테스트 시트도 닫는다 — 열린 시트가 [처음으로] 를 가리지 않는다", () => {
+    const before = makeView();
+    before.phase = "execution";
+    delete (before as { result?: unknown }).result;
+    before.day = { ...before.day!, execution: { seat: 2, phrase: 0 } };
+    before.me = { ...before.me, isHost: true, testMode: true };
+    const r = renderRoom(before);
+    fireEvent.click(screen.getByRole("button", { name: /테스트/ }));
+    expect(r.container.querySelector("dialog")).not.toBeNull();
+    const after = makeView();
+    after.me = { ...after.me, isHost: true, testMode: true };
+    r.rerenderRoom(after);
+    expect(r.container.querySelector("dialog")).toBeNull();
+    expect(screen.getByRole("button", { name: "처음으로" })).toBeTruthy();
+  });
+
   it("판이 끝나면 열려 있던 역할 카드 시트를 닫는다", () => {
     const night = makeView();
     night.phase = "execution";

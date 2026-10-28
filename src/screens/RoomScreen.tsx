@@ -172,17 +172,17 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
     }
   }, [phase, code]);
 
-  // 판이 끝나면 열려 있던 역할 카드 시트를 닫는다 — 결과 화면에는 [역할 카드] 버튼이 없다(UI-SPEC 11, 04-25).
+  // 테스트 방 방장 도구(결정 0022): 방장 본인 view 의 me.testMode 가 있을 때만 [테스트] 버튼과 시트가 있다.
+  // 시트는 대기실에서도 쓰므로(내 직업 고르기) 대기실·배정 진입 효과에서 닫지 않는다 — 단계가 바뀌어도 열린 채다.
+  const [testOpen, setTestOpen] = useState(false);
+  // 판이 끝나면 열려 있던 역할 카드·테스트 시트를 닫는다 — 결과 화면에는 두 버튼이 없고, 열린 시트가 [처음으로] 를 가리지 않게 한다(UI-SPEC 11, 04-25).
   useEffect(() => {
     if (phase === "ended") {
       setRoleCard({ open: false, tab: "role" });
       setNewCount(0);
+      setTestOpen(false);
     }
   }, [phase]);
-
-  // 테스트 방 방장 도구(결정 0022): 방장 본인 view 의 me.testMode 가 있을 때만 [테스트] 버튼과 시트가 있다.
-  // 시트는 대기실에서도 쓰므로(내 직업 고르기) 대기실·배정 진입 효과에서 닫지 않는다 — 단계가 바뀌어도 열린 채다.
-  const [testOpen, setTestOpen] = useState(false);
   const testTools = view !== null && view.me.isHost && view.me.testMode === true;
 
   // 쫓겨난 이유별 화면은 App 이 고른다(오류 화면·링크 참가 화면).
