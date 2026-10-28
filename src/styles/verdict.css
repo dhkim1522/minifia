@@ -53,3 +53,16 @@
 @media (prefers-reduced-motion: reduce) {
   .mf-vchip--pop { animation: none; }
 }
+
+/* 후보 선택 공개의 화살표 층(UI-SPEC 8.3, 04-20): 장면 전체를 덮는 SVG 하나. 캐릭터(22)·이름표 위, 칩(46) 아래. 클릭을 가로채지 않는다.
+   선 두 겹(아래 night-950 55% 9px, 위 앰버 5px)과 삼각 머리는 RevealLayer 가 그리고, 바깥 앰버 그림자는 위 선에 건다. */
+.mf-varrow {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  z-index: 40;
+  pointer-events: none;
+}
+.mf-varrow__line { filter: drop-shadow(0 0 7px color-mix(in srgb, var(--amber-400) 90%, transparent)); }

@@ -1,7 +1,8 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import type { CSSProperties, ReactElement } from "react";
+import type { CSSProperties, ReactElement, ReactNode } from "react";
 import type { EmojiId, RoleId } from "../../shared/protocol";
 import { DAY_SCENE_H, DAY_SCENE_W, FIG_H, FIG_W, SCENE_PAD_DEFAULT, dayTableGeometry, daySeatLayout, px } from "../game/dayTable";
+import type { DaySeatPlace } from "../game/dayTable";
 import { ROLE_TEXT } from "../game/roleText";
 import { chipAnchor } from "../game/verdict";
 import { Figure } from "./Figure";
@@ -79,6 +80,13 @@ export interface DayTableSeat {
   pulse?: boolean;
 }
 
+/** layer 슬롯이 받는 장면 배치: 자리별 발 위치·배율과 장면 크기(daySeatLayout 한 번의 결과) */
+export interface DayTableLayout {
+  places: readonly DaySeatPlace[];
+  sceneW: number;
+  sceneH: number;
+}
+
 export interface DayTableProps {
   seats: readonly DayTableSeat[];
   mySeat: number;
@@ -100,6 +108,11 @@ export interface DayTableProps {
   hostCrown?: boolean;
   /** 아침 어둡게 층. exitDelayMs 는 퇴장 페이드를 시작하기까지의 지연(아침 길이 − 300ms) */
   dim?: { exitDelayMs: number };
+  /**
+   * 좌석·이름표·칩 뒤, 루트의 마지막 자식으로 한 번 그리는 덧그림 층(후보 선택 공개의 화살표, 04-20). 장면 배치를 받아 좌표를 얻는다.
+   * 없으면 렌더가 이전과 같다.
+   */
+  layer?: (layout: DayTableLayout) => ReactNode;
 }
 
 /** 좌석 halo → 그림 후광 클래스(none 은 클래스 없음) */
@@ -158,6 +171,7 @@ export function DayTable({
   hostCrown,
   dim,
   slide,
+  layer,
 }: DayTableProps): ReactElement {
   const rootRef = useRef<HTMLDivElement>(null);
   const [measured, setMeasured] = useState({ w: DAY_SCENE_W, h: DAY_SCENE_H, pad: SCENE_PAD_DEFAULT });
@@ -380,6 +394,7 @@ export function DayTable({
       {dim ? (
         <div className="mf-dt__dim" aria-hidden="true" style={{ "--mf-dim-exit-delay": `${dim.exitDelayMs}ms` } as CSSProperties} />
       ) : null}
+      {layer ? layer({ places, sceneW, sceneH }) : null}
     </div>
   );
 }

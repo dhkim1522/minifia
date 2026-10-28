@@ -15,6 +15,7 @@ export const REVEAL_SLOT_MAX_MS = 500; // D-21: 한 표 슬롯 상한
 export const REVEAL_BUDGET_MS = 3600; // D-21: 화살표 연출 전체 예산(4초 − 앞 200 − 뒤 200)
 export const REVEAL_DRAW_MS = 280; // D-21: 한 화살표가 자라는 시간(슬롯 안) = 닿는 시각
 export const REVEAL_FADE_MS = 120; // UI-SPEC 13.2: 닿은 화살표가 사라지는 시간
+export const REVEAL_REDUCED_HOLD_MS = 200; // UI-SPEC 13.4: 축소 모션에서 완성된 화살표를 보여 주는 시간(이후 REVEAL_FADE_MS 동안 사라짐)
 export const REVEAL_POP_MS = 220; // UI-SPEC 8.3: 칩 팝 길이(화면 애니메이션 시간. 팝 대상 해제는 다음 화살표 시작)
 export const VERDICT_MOVE_MS = 600; // UI-SPEC 8.4: 후보 가운데 이동
 export const VERDICT_DIM_FADE_MS = 400; // UI-SPEC 8.4: 어둡게 층 페이드인
