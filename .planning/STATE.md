@@ -4,18 +4,18 @@ milestone: v1.0
 milestone_name: MVP
 current_phase: 4
 current_phase_name: 처형과 승패
-current_plan: 32
+current_plan: 33
 status: executing
-stopped_at: Completed 04-32-PLAN.md
-last_updated: "2026-10-28T12:09:49.723Z"
+stopped_at: Completed 04-33-PLAN.md
+last_updated: "2026-10-28T12:55:02.897Z"
 last_activity: 2026-10-26
 last_activity_desc: Phase 4 execution started
-state_head: f91d0972de93e8f6b7b85f2f3b03c1778d620859
+state_head: 8931d16ffbcf88a081c6b7064d0ab6132f3984ff
 progress:
   total_phases: 7
   completed_phases: 2
   total_plans: 98
-  completed_plans: 95
+  completed_plans: 96
 ---
 
 # Project State
@@ -30,10 +30,10 @@ See: .planning/PROJECT.md (updated 2026-10-21)
 ## Current Position
 
 Phase: 4 (처형과 승패) — EXECUTING
-Current Plan: 32
+Current Plan: 33
 Total Plans in Phase: 35
-Plan: 32 of 35
-Status: 화면 웨이브 진행 중 — 04-13(순수 모듈 verdict.ts)·04-14(토큰·dusk 장면 표·dusk 미리 받기)·04-15(테스트 방 testBotVote) 완료(웨이브 9 끝), 04-16(execVote 트레이서: 라우팅·useVerdictScene·ExecVotePanel)·04-17(테스트 시트 봇 처형 투표·봇 후보 선택 칩)·04-18(후보 선택 화면: DayTable halo·useViewChoice·CandidateVotePanel·candidateVote 연결)·04-19(선택 공개 상태: useRevealState·표수 칩·앰버 후광·끝 문구)·04-20(선택 공개 연출: 화살표 RevealLayer·과반 확정 두근·느린 박동·진동·모션 줄이기)·04-21(최후 변론 1: DayTable verdict·center·원뿔, 남의 변론 하단 DefensePanel, defense 연결)·04-22(최후 변론 2: 후보 본인 하단 236·변론 칩 6개 DefenseChips·시트 재사용·보냈어요 2초)·04-23(처형: 앰버 처형 카드 MorningCard tone·사람→유령 400ms 전환 DayTable executed·execution 연결·하단 두 줄·직업 비노출 시험)·04-24(처형 투표 인트로 카드 ExecIntroCard·회색 처형 무효 카드 NoExecutionCard·밤 시작 문구 delayMs 지연·읽기 접두)·04-25(결과 화면 ResultScreen 최종 상태: 승리 배너·직업 카드 격자·판 요약·처음으로·ended 라우팅·직전 장면 크로스페이드)·04-26(결과 공개 연출: neutral → flip → done 상태기계, 300ms 카드 일괄 뒤집기·900ms 요약·처음으로 떠오름, 재접속·모션 줄이기는 즉시 최종 상태)·04-27(기록 카드 투표 줄: recordRows 순수 함수·날짜별 처형 여부 집계와 후보 선택 줄·단계별 inspectAllowed 로 열림·닫힘 규칙)·04-28(단계 × 보는 사람 상태 84칸 표 시험 verdictStates·새 CSS 정적 게이트 verdictCss, result.css 모션 줄이기 분기)·04-29(E2E 순수 검사 P1·P2·P3·P4·P9·P-COLOR, 앰버/진홍 후광 규칙, 스냅숏 계약은 lib.mjs 머리 한 곳)·04-30(E2E 순수 검사 P5·P6·P7·P8·P10, 승인 완화 P-PANEL-236, 스냅숏 계약 완성)·04-31(E2E 브라우저 도우미 readVerdict·readTokenColors·setBotVote·voteAs·pickCandidate·armVerdictWatch·sampleSeries·leaveFromResult, 실제 DOM 과 계약 대조: 진홍 후광 color(srgb) 판정 보강, 공개 단계 P10 칩↔이름표 겹침 발견 — deferred-items)·04-32(기존 여섯 흐름을 새 낮 루프에 적응: 봇 처형 투표 모두 반대·밤 문구 대기·spec4 재시작, vote5 흐름 P1~P6·P10, 칩이 이름표를 피하는 chipPlacement Rule-1 수정) 완료, 다음 04-33. 배포는 04-35 에서만(D-26)
+Plan: 33 of 35
+Status: 화면 웨이브 진행 중 — 04-13(순수 모듈 verdict.ts)·04-14(토큰·dusk 장면 표·dusk 미리 받기)·04-15(테스트 방 testBotVote) 완료(웨이브 9 끝), 04-16(execVote 트레이서: 라우팅·useVerdictScene·ExecVotePanel)·04-17(테스트 시트 봇 처형 투표·봇 후보 선택 칩)·04-18(후보 선택 화면: DayTable halo·useViewChoice·CandidateVotePanel·candidateVote 연결)·04-19(선택 공개 상태: useRevealState·표수 칩·앰버 후광·끝 문구)·04-20(선택 공개 연출: 화살표 RevealLayer·과반 확정 두근·느린 박동·진동·모션 줄이기)·04-21(최후 변론 1: DayTable verdict·center·원뿔, 남의 변론 하단 DefensePanel, defense 연결)·04-22(최후 변론 2: 후보 본인 하단 236·변론 칩 6개 DefenseChips·시트 재사용·보냈어요 2초)·04-23(처형: 앰버 처형 카드 MorningCard tone·사람→유령 400ms 전환 DayTable executed·execution 연결·하단 두 줄·직업 비노출 시험)·04-24(처형 투표 인트로 카드 ExecIntroCard·회색 처형 무효 카드 NoExecutionCard·밤 시작 문구 delayMs 지연·읽기 접두)·04-25(결과 화면 ResultScreen 최종 상태: 승리 배너·직업 카드 격자·판 요약·처음으로·ended 라우팅·직전 장면 크로스페이드)·04-26(결과 공개 연출: neutral → flip → done 상태기계, 300ms 카드 일괄 뒤집기·900ms 요약·처음으로 떠오름, 재접속·모션 줄이기는 즉시 최종 상태)·04-27(기록 카드 투표 줄: recordRows 순수 함수·날짜별 처형 여부 집계와 후보 선택 줄·단계별 inspectAllowed 로 열림·닫힘 규칙)·04-28(단계 × 보는 사람 상태 84칸 표 시험 verdictStates·새 CSS 정적 게이트 verdictCss, result.css 모션 줄이기 분기)·04-29(E2E 순수 검사 P1·P2·P3·P4·P9·P-COLOR, 앰버/진홍 후광 규칙, 스냅숏 계약은 lib.mjs 머리 한 곳)·04-30(E2E 순수 검사 P5·P6·P7·P8·P10, 승인 완화 P-PANEL-236, 스냅숏 계약 완성)·04-31(E2E 브라우저 도우미 readVerdict·readTokenColors·setBotVote·voteAs·pickCandidate·armVerdictWatch·sampleSeries·leaveFromResult, 실제 DOM 과 계약 대조: 진홍 후광 color(srgb) 판정 보강, 공개 단계 P10 칩↔이름표 겹침 발견 — deferred-items)·04-32(기존 여섯 흐름을 새 낮 루프에 적응: 봇 처형 투표 모두 반대·밤 문구 대기·spec4 재시작, vote5 흐름 P1~P6·P10, 칩이 이름표를 피하는 chipPlacement Rule-1 수정) ·04-33(noexec 처형 무효 카드 P7·result-c 후보 본인 변론 P5와 시민 승 결과 P8·result-m 마피아 승 결과·spec4 탈락 방장 투표 화면 P9, 로컬 10흐름×3폭 전체 E2E 초록 253초, 집계 줄 말줄임 Rule-1 수정 `모두 냈어요`) 완료, 다음 04-34. 배포는 04-35 에서만(D-26)
 Last activity: 2026-10-26 — Phase 4 execution started
 
 Progress: [██░░░░░░░░] 17%
@@ -140,6 +140,7 @@ Progress: [██░░░░░░░░] 17%
 | Phase 04 P30 | 25min | 2 tasks | 2 files |
 | Phase 04 P31 | 55min | 2 tasks | 1 files |
 | Phase 04 P32 | 75min | 2 tasks | 8 files |
+| Phase 04 P33 | 42min | 3 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -275,6 +276,9 @@ Recent decisions affecting current work:
 - [Phase 04]: [04-31] 중앙 좌석(dt.center)은 클래스가 아니라 어둡게 층 z 보다 높은 좌석으로 읽는다. 진홍 판정은 color(srgb)·oklab 로 계산된 색도 8비트 sRGB ±2 로 세고, 토큰이 없으면 null
 - [Phase 04]: [04-31] P2·P7 의 t 는 표본기를 단계 전환 전에 시작하고 readVerdictWatch 의 SeenAt 으로 rebaseSeries 환산한다(간격 ≤ 100ms)
 - [Phase 04]: 04-32: 공개 칩이 이름표를 피하도록 chipPlacement(옆→위) 도입, P10 기준 불변. spec4 는 첫 밤 방장 미탈락 시 같은 방 재시작(최대 8번)
+- [Phase 4]: [04-33] P9 는 관전자의 마피아 동료 진홍 후광(D-33)을 허용하고 흰·앰버 후광은 0 으로 유지 — UI-SPEC 과 모순이던 검사를 맞춤
+- [Phase 4]: [04-33] 집계 줄 0명 남은 문구 '모두 투표했어요' → '모두 냈어요' (360 폭 한 줄, 줄바꿈은 버튼이 밀려 거부)
+- [Phase 4]: [04-33] E2E 준비 실패 재시도 2 → 4번 (첫 밤 방장 탈락 무작위가 전체 실행을 자주 깸)
 
 ### Pending Todos
 
@@ -311,6 +315,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-28T12:09:49.106Z
-Stopped at: Completed 04-32-PLAN.md
+Last session: 2026-10-28T12:55:02.321Z
+Stopped at: Completed 04-33-PLAN.md
 Resume file: None
