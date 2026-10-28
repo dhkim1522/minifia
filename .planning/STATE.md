@@ -4,18 +4,18 @@ milestone: v1.0
 milestone_name: MVP
 current_phase: 4
 current_phase_name: 처형과 승패
-current_plan: 10
+current_plan: 11
 status: executing
-stopped_at: Completed 04-09-PLAN.md
-last_updated: "2026-10-28T05:49:35.769Z"
+stopped_at: Completed 04-10-PLAN.md
+last_updated: "2026-10-28T06:03:36.677Z"
 last_activity: 2026-10-26
 last_activity_desc: Phase 4 execution started
-state_head: edd7551123246805aa94ae279debda2c931a7c7d
+state_head: 938990db410eb83ac15dc9e19ba4cf69c8b8d883
 progress:
   total_phases: 7
   completed_phases: 2
   total_plans: 75
-  completed_plans: 72
+  completed_plans: 73
 ---
 
 # Project State
@@ -30,9 +30,9 @@ See: .planning/PROJECT.md (updated 2026-10-21)
 ## Current Position
 
 Phase: 4 (처형과 승패) — EXECUTING
-Current Plan: 10
+Current Plan: 11
 Total Plans in Phase: 12
-Plan: 10 of 12
+Plan: 11 of 12
 Status: Ready to execute
 Last activity: 2026-10-26 — Phase 4 execution started
 
@@ -117,6 +117,7 @@ Progress: [██░░░░░░░░] 17%
 | Phase 04 P07 | 6min | 2 tasks | 8 files |
 | Phase 4 P08 | 35min | 3 tasks | 10 files |
 | Phase 04 P09 | 25min | 2 tasks | 2 files |
+| Phase 04 P10 | 45min | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -222,6 +223,7 @@ Recent decisions affecting current work:
 - [Phase 04]: 04-07: 후보 선택 진행은 투표자 본인 소켓 한 개에만 보낸다(관전자 제외, A7·Pitfall 7). 바꾸려면 applyCandidateVote 한 곳
 - [Phase 4]: 04-08: 테스트 방 봇은 여부 투표 찬성 70%·후보 선택은 자기를 뺀 살아 있는 한 명(역할 무시)·변론은 후보 봇만 defNotMe/defCitizen/defPlead 중 하나. 확률·지연은 bots.ts 상수(0036 의 바뀔 수 있는 기본값)
 - [Phase 04]: 04-09: ended 단계에서만 result.seats[].job 이 역할 단어 허용 경로에 더해진다(unit·worker 누출 검사). 일지 died 키 검사에서 result.* 는 제외
+- [Phase 04]: 04-10: 스모크의 에셋 Cache-Control 단언은 로컬 dev 서버에서 항상 실패하므로(알려진 제약) 단언은 두고 스크래치 사본으로 확인한다; 배포본에서 본다
 
 ### Pending Todos
 
@@ -258,6 +260,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-28T05:49:35.253Z
-Stopped at: Completed 04-09-PLAN.md
+Last session: 2026-10-28T06:03:36.149Z
+Stopped at: Completed 04-10-PLAN.md
 Resume file: None
