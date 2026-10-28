@@ -2,13 +2,19 @@
 // 입력 상태를 바꾸지 않으며, DOM·workerd API 를 쓰지 않는다.
 //
 // 이 파일은 "계획"만 만든다: 단계에 들어갈 때 어떤 봇이 언제 무엇을 할지(BotStep)를 정해 RoomState.botPlan 에 둔다.
-// 행동의 실행과 검증은 방 DO 가 사람과 같은 처리기(selectClaim·say·emote·pickTarget)로 한다 — 봇은 특권이 없다.
+// 행동의 실행과 검증은 방 DO 가 사람과 같은 처리기(selectClaim·say·emote·pickTarget·castExecVote·castCandidateVote)로 한다 — 봇은 특권이 없다.
 // 단계가 바뀌면 계획 키(단계:마감)가 달라져 남은 행동은 저절로 버려지고 새 단계 계획이 선다.
 //
 // 구현됨(결정 0023, 0027-10): 봇은 자기 차례에만 주장한다. botClaimChoice 는 그 봇 차례가 아니면 난수 없이 null 을 돌려주고,
 // 차례마다 새 계획이 서도록 botPlanKey 에 차례 번호가 들어 있다. 나머지 규칙은 그대로다.
 //
+// 구현됨(결정 0024, 0036): 처형 여부 투표(execVote)에는 찬성·반대 하나, 후보 선택(candidateVote)에는 자기를 뺀 살아 있는 한 명(역할을 보지 않는다),
+// 최후 변론(defense)에서는 후보인 봇만 대상·직업이 필요 없는 변론 템플릿 하나를 던진다. 공개·처형·종료 단계에는 계획이 없다.
+//
 // 난수 호출 순서가 계약이다(시드 테스트가 고정한다). randInt(0) 호출은 어디에도 없다(cryptoRandInt(0) 은 RangeError).
+// 새 단계의 난수는 새 분기 안에서만 늘어난다 — 기존 claim·discussion·night 계획은 같은 시드에서 예전과 같다.
+// 봇 하나당 순서: execVote = randInt(100) → randInt(지연 폭), candidateVote = (후보가 있으면) randInt(후보 수) → randInt(지연 폭),
+// defense(후보 봇만) = randInt(템플릿 수) → randInt(지연 폭).
 import { EMOJI_IDS } from "../protocol";
 import type { Claim, EmojiId, TemplateId } from "../protocol";
 import { isAlive } from "./alive";
@@ -42,12 +48,28 @@ const NIGHT_CHAT_TENTHS = 6;
 const NIGHT_CHAT_BASE_MS = 8_000;
 const NIGHT_CHAT_SPAN_MS = 6_000;
 
+/** 처형 여부 투표: 찬성 확률(%). 테스트 방에서 처형 경로가 자주 열리게 높인 바뀔 수 있는 기본값(결정 0036). */
+export const EXEC_YES_PERCENT = 70;
+/** 여부 투표 지연: 1000 + [0, 6000) ms (단계 10초 − 마감 여유 안). */
+const EXEC_VOTE_BASE_MS = 1_000;
+const EXEC_VOTE_SPAN_MS = 6_000;
+/** 후보 선택 지연: 1000 + [0, 9000) ms (단계 15초 안). */
+const CANDIDATE_VOTE_BASE_MS = 1_000;
+const CANDIDATE_VOTE_SPAN_MS = 9_000;
+/** 최후 변론 지연: 1000 + [0, 4000) ms (단계 10초 안). */
+const DEFENSE_SAY_BASE_MS = 1_000;
+const DEFENSE_SAY_SPAN_MS = 4_000;
+/** 후보인 봇이 고르는 변론 템플릿. 대상·직업이 필요 없는 셋뿐이다(defSuspect·defTrust·defRole 은 대상·직업이 필요하다). */
+const DEFENSE_BOT_TEMPLATES: readonly TemplateId[] = ["defNotMe", "defCitizen", "defPlead"];
+
 /** 봇 행동 한 가지 — 사람 ClientMessage 의 같은 칸 이름을 쓴다. */
 export type BotAct =
   | { t: "claim"; claim: Claim }
   | { t: "say"; template: TemplateId; target?: number; claimedRole?: RoleId }
   | { t: "emoji"; icon: EmojiId }
-  | { t: "pick"; target: number };
+  | { t: "pick"; target: number }
+  | { t: "execVote"; agree: boolean }
+  | { t: "candidateVote"; target: number };
 export interface BotStep {
   at: number;
   botId: string;
@@ -99,13 +121,30 @@ export function botNightTarget(state: RoomState, bot: Player, randInt: RandInt):
   return candidates[randInt(candidates.length)]!.seat;
 }
 
+/** 처형 여부 투표에서 이 봇이 던질 값: randInt(100) < EXEC_YES_PERCENT 이면 찬성. 계획과 넘기기(botsVoteNow)가 같은 결정을 쓴다. */
+export function botExecAgree(randInt: RandInt): boolean {
+  return randInt(100) < EXEC_YES_PERCENT;
+}
+
 /**
- * 봇 계획이 필요한 단계(claim·discussion·night)의 키. 그 밖은 null. claim 은 차례마다 계획이 새로 서야 하므로
+ * 후보 선택에서 이 봇이 고를 대상 seat. 후보는 자기 자신을 뺀 살아 있는 사람 seat 오름차순이고 역할을 보지 않는다(봇이 마피아를 아는 척하지 않는다).
+ * 탈락한 봇·후보 없음은 undefined(randInt 를 부르지 않는다).
+ */
+export function botCandidateTarget(state: RoomState, bot: Player, randInt: RandInt): number | undefined {
+  if (!isAlive(bot)) return undefined;
+  const candidates = state.players.filter((p) => isAlive(p) && p.id !== bot.id).sort(bySeat);
+  if (candidates.length === 0) return undefined;
+  return candidates[randInt(candidates.length)]!.seat;
+}
+
+/**
+ * 봇 계획이 필요한 단계(claim·discussion·night·execVote·candidateVote·defense)의 키. 그 밖은 null. claim 은 차례마다 계획이 새로 서야 하므로
  * "claim:마감:차례 번호" 다 — 마감이 우연히 같아져도(테스트 넘기기 연타) 차례 번호가 달라 낡은 계획이 살아남지 않는다(D-20).
  */
 export function botPlanKey(state: RoomState): string | null {
   if (state.phase === "claim") return `claim:${state.phaseEndsAt}:${state.claimIdx ?? 0}`;
-  if (state.phase !== "discussion" && state.phase !== "night") return null;
+  const planned: readonly string[] = ["discussion", "night", "execVote", "candidateVote", "defense"];
+  if (!planned.includes(state.phase)) return null;
   return `${state.phase}:${state.phaseEndsAt}`;
 }
 
@@ -138,6 +177,18 @@ function planFor(state: RoomState, bot: Player, now: number, randInt: RandInt): 
       const at = now + NIGHT_CHAT_BASE_MS + randInt(NIGHT_CHAT_SPAN_MS);
       if (randInt(2) === 0) add(at, { t: "say", template: "nightAgree" });
       else add(at, { t: "emoji", icon: EMOJI_IDS[randInt(EMOJI_IDS.length)] as EmojiId });
+    }
+  } else if (state.phase === "execVote") {
+    const agree = botExecAgree(randInt);
+    add(now + EXEC_VOTE_BASE_MS + randInt(EXEC_VOTE_SPAN_MS), { t: "execVote", agree });
+  } else if (state.phase === "candidateVote") {
+    const target = botCandidateTarget(state, bot, randInt);
+    if (target !== undefined) add(now + CANDIDATE_VOTE_BASE_MS + randInt(CANDIDATE_VOTE_SPAN_MS), { t: "candidateVote", target });
+  } else if (state.phase === "defense") {
+    // 변론은 후보만 할 수 있다(chat.ts when: "defense"). 후보가 아닌 봇은 아무것도 하지 않는다.
+    if (state.verdict?.candidate === bot.seat) {
+      const template = DEFENSE_BOT_TEMPLATES[randInt(DEFENSE_BOT_TEMPLATES.length)]!;
+      add(now + DEFENSE_SAY_BASE_MS + randInt(DEFENSE_SAY_SPAN_MS), { t: "say", template });
     }
   }
   return steps;
