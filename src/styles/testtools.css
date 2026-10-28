@@ -17,10 +17,12 @@
 .mf-tt-anchor { position: relative; height: 0; z-index: var(--z-overlay); }
 .mf-tt-anchor .mf-tt { position: absolute; top: var(--space-sm); left: 0; }
 
-/* 시트(T2): 제목 아래 안내 한 줄 → (대기실만) 내 직업 칸 → (대기실만) 봇 줄 → 두 동작 버튼. */
+/* 시트(T2): 제목 아래 안내 한 줄 → (대기실만) 내 직업 칸 → (대기실만) 봇 줄 → (대기실만) 봇 처형 투표·봇 후보 선택 → 두 동작 버튼. */
 .mf-tt-sheet__note { margin: calc(-1 * var(--space-md)) 0 0; font-size: 14px; line-height: 20px; color: var(--gray-300); word-break: keep-all; }
 .mf-tt-sheet__roles { display: flex; flex-direction: column; gap: var(--space-sm); }
 .mf-tt-sheet__bots { display: flex; flex-direction: column; gap: var(--space-sm); }
+/* 봇 투표 선택(P-13): 봇 줄 아래 두 칩 그룹, 내 직업 칸과 같은 세로 간격. */
+.mf-tt-sheet__botvote { display: flex; flex-direction: column; gap: var(--space-sm); }
 /* 봇 줄(결정 0024): [−] N명 [+] 와 [5명 채우기] 가 360px 폭에서 한 줄에 든다. 아이콘 버튼은 정사각 탭 대상(--tap-min). */
 .mf-tt-sheet__stepper { display: flex; align-items: center; gap: var(--space-sm); }
 .mf-tt-sheet__step { flex: none; min-width: var(--tap-min); min-height: var(--tap-min); padding: 0; }

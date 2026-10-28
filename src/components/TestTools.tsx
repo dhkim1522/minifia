@@ -3,7 +3,7 @@ import type { ReactElement } from "react";
 import { ROLE_IDS, testRoleOptions } from "../../shared/game/roles";
 import type { RoleId } from "../../shared/game/roles";
 import { MAX_TEST_BOTS } from "../../shared/protocol";
-import type { ClientMessage, PhaseId, RoomView } from "../../shared/protocol";
+import type { BotVoteExec, BotVotePick, ClientMessage, PhaseId, RoomView } from "../../shared/protocol";
 import { ROLE_TEXT } from "../game/roleText";
 import { Button } from "./Button";
 import { Chip } from "./Chip";
@@ -59,11 +59,34 @@ const FILL_TO_PLAYERS = 5;
 /** 칩이 고르는 값: null = 랜덤. */
 type Pick = RoleId | null;
 
+/** 봇 투표 선택 칩 — 그룹 이름(aria-label)과 칩 이름이 04-31 E2E 도우미의 선택자 계약이다. 두 그룹에 '무작위' 가 있어 그룹 이름으로 가린다. */
+const BOT_EXEC_CHIPS: ReadonlyArray<{ value: BotVoteExec; label: string }> = [
+  { value: "random", label: "무작위" },
+  { value: "yes", label: "모두 찬성" },
+  { value: "no", label: "모두 반대" },
+];
+const BOT_PICK_CHIPS: ReadonlyArray<{ value: BotVotePick; label: string }> = [
+  { value: "random", label: "무작위" },
+  { value: "host", label: "방장" },
+  { value: "other", label: "방장 아닌 사람" },
+];
+
 export function TestToolsSheet({ view, canSend, send, onClose }: TestToolsSheetProps): ReactElement {
   const isLobby = view.phase === "lobby";
   // 낙관적 선택: 누른 view 와 함께 기억해, 새 view 객체가 오면 버리고 서버 값(me.testRole)을 따른다(ClaimPanel 선례).
   const [pending, setPending] = useState<{ view: RoomView; role: Pick } | null>(null);
   const selected: Pick = pending !== null && pending.view === view ? pending.role : (view.me.testRole ?? null);
+  // 봇 투표 선택(P-13): 같은 방식의 낙관적 값. testBotVote 메시지는 절대값 한 쌍이라 칩 하나를 눌러도 다른 그룹의 현재 값을 함께 싣는다.
+  const [pendingVote, setPendingVote] = useState<{ view: RoomView; exec: BotVoteExec; pick: BotVotePick } | null>(null);
+  const botVote =
+    pendingVote !== null && pendingVote.view === view
+      ? pendingVote
+      : { exec: view.me.testBotVote?.exec ?? "random", pick: view.me.testBotVote?.pick ?? "random" };
+  const chooseBotVote = (exec: BotVoteExec, pick: BotVotePick) => {
+    if (!canSend || (exec === botVote.exec && pick === botVote.pick)) return;
+    setPendingVote({ view, exec, pick });
+    send({ t: "testBotVote", exec, pick });
+  };
   const options = testRoleOptions(view.players.length);
 
   // 봇 줄(결정 0024): 숫자는 서버 view 의 me.testBots 를 따른다(낙관적 값 없음 — count 가 절대값이라 연타해도 같은 요청이다).
@@ -134,6 +157,30 @@ export function TestToolsSheet({ view, canSend, send, onClose }: TestToolsSheetP
                 </Button>
               </div>
             </section>
+          ) : null}
+          {isLobby ? (
+            <>
+              <section className="mf-tt-sheet__botvote">
+                <p className="mf-tt-sheet__label">봇 처형 투표</p>
+                <div className="mf-chips" role="group" aria-label="봇 처형 투표">
+                  {BOT_EXEC_CHIPS.map(({ value, label }) => (
+                    <Chip key={value} selected={botVote.exec === value} disabled={!canSend} onPress={() => chooseBotVote(value, botVote.pick)}>
+                      {label}
+                    </Chip>
+                  ))}
+                </div>
+              </section>
+              <section className="mf-tt-sheet__botvote">
+                <p className="mf-tt-sheet__label">봇 후보 선택</p>
+                <div className="mf-chips" role="group" aria-label="봇 후보 선택">
+                  {BOT_PICK_CHIPS.map(({ value, label }) => (
+                    <Chip key={value} selected={botVote.pick === value} disabled={!canSend} onPress={() => chooseBotVote(botVote.exec, value)}>
+                      {label}
+                    </Chip>
+                  ))}
+                </div>
+              </section>
+            </>
           ) : null}
           <div className="mf-tt-sheet__list">
             <Button variant="primary" block disabled={!canSend || isLobby} onClick={() => send({ t: "testSkip" })}>
