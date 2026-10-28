@@ -1,7 +1,8 @@
 import { act, cleanup, fireEvent, render, renderHook, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { CandidateVoteLine, PhaseId, RoomView } from "../../shared/protocol";
-import { VERDICT_TEXT, revealIntroHint, revealPlan, revealStateAt } from "../../src/game/verdict";
+import { readFileSync } from "node:fs";
+import { CLINCH_BEAT_MS, CLINCH_VIBRATE_MS, VERDICT_TEXT, clinchBeat, revealIntroHint, revealPlan, revealStateAt } from "../../src/game/verdict";
 import { useRevealState } from "../../src/net/useRevealState";
 import type { RoomConnection } from "../../src/net/useRoomConnection";
 
@@ -92,6 +93,8 @@ const BOUNDARIES = (() => {
     all.add(s.touchMs);
     all.add(s.fadeEndMs);
   }
+  // 확정 두근(700ms)이 끝나 느린 박동으로 넘어가는 시각도 경계다(04-20)
+  if (plan.clinch !== null) all.add(plan.clinch.atMs + CLINCH_BEAT_MS);
   return [...all].sort((a, b) => a - b);
 })();
 
@@ -466,5 +469,293 @@ describe("candidateVoteReveal 화면 한 경로 (VOTE-02, D-07, D-20, D-31)", ()
     r.rerenderRoom(makeView({ phase: "candidateVote", votes: VOTES }));
     expect(r.container.querySelectorAll(".mf-vchip").length).toBe(0);
     expect(verdictLive(r.container)).toBeNull();
+  });
+});
+
+// ---- 04-20 Task 1·2: 화살표 층 연결, 과반 확정 두근, 느린 박동, 진동 ----
+const seatClasses = (c: HTMLElement, n: number) => seatOf(c, n).className;
+/** 두근(clinch)·느린 박동(slow) 클래스가 붙은 좌석 번호 */
+const beatSeats = (c: HTMLElement, kind: "clinch" | "slow") =>
+  Array.from(c.querySelectorAll<HTMLElement>(`.mf-dt__seat--${kind}`)).map((el) => Number(el.dataset.seat));
+const chipSlow = (c: HTMLElement) => Array.from(c.querySelectorAll<HTMLElement>(".mf-vchip--slow")).map((el) => Number(el.dataset.seat));
+
+/** 도현(3)이 세 번째 표에서 확정(3-0-0, 남은 2표): 닿음 = 시작 + 200 + 2×500 + 280 = 1480 */
+const CLINCH_THIRD: CandidateVoteLine[] = [
+  { seat: 1, target: 3 },
+  { seat: 2, target: 3 },
+  { seat: 0, target: 3 },
+  { seat: 4, target: 1 },
+  { seat: 3, target: 2 },
+];
+/** 도현(3)이 두 번째 표에서 확정(2-0, 남은 1표 → 2 > 0 + 1): 닿음 = 200 + 500 + 280 = 980 */
+const CLINCH_SECOND: CandidateVoteLine[] = [
+  { seat: 1, target: 3 },
+  { seat: 2, target: 3 },
+  { seat: 0, target: 1 },
+];
+/** 동률 [A,B,A,B]: 끝까지 2-2 */
+const TIE: CandidateVoteLine[] = [
+  { seat: 1, target: 2 },
+  { seat: 2, target: 3 },
+  { seat: 3, target: 2 },
+  { seat: 4, target: 3 },
+];
+/** 미확정: 세 갈래 1-1-1 */
+const SPLIT: CandidateVoteLine[] = [
+  { seat: 1, target: 2 },
+  { seat: 2, target: 3 },
+  { seat: 3, target: 4 },
+];
+
+describe("clinchBeat: 확정 두근 700ms 뒤 느린 박동 (D-31 ③, 순수 함수)", () => {
+  it("확정 사건 전엔 null, 닿는 시각부터 700ms 는 clinch, 그 뒤는 slow", () => {
+    const plan = revealPlan(CLINCH_THIRD, START);
+    expect(plan.clinch).toEqual({ seat: 3, atMs: START + 1480, step: 2 });
+    expect(clinchBeat(plan, START + 1479)).toBeNull();
+    expect(clinchBeat(plan, START + 1480)).toEqual({ seat: 3, beat: "clinch" });
+    expect(clinchBeat(plan, START + 1480 + CLINCH_BEAT_MS - 1)).toEqual({ seat: 3, beat: "clinch" });
+    expect(clinchBeat(plan, START + 1480 + CLINCH_BEAT_MS)).toEqual({ seat: 3, beat: "slow" });
+    expect(clinchBeat(plan, START + 99_999)).toEqual({ seat: 3, beat: "slow" });
+  });
+
+  it("동률·미확정·표 없음은 언제나 null", () => {
+    for (const votes of [TIE, SPLIT, []]) {
+      const plan = revealPlan(votes, START);
+      for (const t of [0, 500, 1500, 2500, 3500, 3999]) expect(clinchBeat(plan, START + t)).toBeNull();
+    }
+  });
+});
+
+describe("candidateVoteReveal 화살표 층 연결 (D-20, 04-20)", () => {
+  beforeEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+  });
+
+  it("화살표가 자라는 구간에만 .mf-varrow 하나가 장면 안에 있고, 닿고 사라진 뒤에는 없다", () => {
+    const { container, advance } = renderAt(350, makeView({ votes: VOTES }));
+    expect(container.querySelectorAll(".mf-dt .mf-varrow").length).toBe(1);
+    expect(container.querySelector(".mf-varrow")?.getAttribute("data-step")).toBe("0");
+    advance(250); // 600 = 첫 화살표가 사라진 끝
+    expect(container.querySelectorAll(".mf-varrow").length).toBe(0);
+    advance(100); // 700 = 둘째 화살표 시작
+    expect(container.querySelector(".mf-varrow")?.getAttribute("data-step")).toBe("1");
+  });
+
+  it("다른 단계(후보 선택)에는 화살표 층이 없다", () => {
+    const { container } = renderAt(350, makeView({ phase: "candidateVote", votes: VOTES }));
+    expect(container.querySelectorAll(".mf-varrow").length).toBe(0);
+  });
+
+  it("축소 모션 설정이면 첫 화살표가 시작하자마자 완성된 모습이다", () => {
+    vi.stubGlobal("matchMedia", (q: string) => ({
+      matches: q.includes("prefers-reduced-motion"),
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    }));
+    const { container } = renderAt(210, makeView({ votes: VOTES }));
+    const top = container.querySelector<SVGLineElement>(".mf-varrow__line")!;
+    expect(top).not.toBeNull();
+    // 완성: 끝점이 시작점과 다르다(보통 모션이면 시작 + 10ms 에는 거의 같다)
+    expect(Math.hypot(Number(top.getAttribute("x2")) - Number(top.getAttribute("x1")), Number(top.getAttribute("y2")) - Number(top.getAttribute("y1")))).toBeGreaterThan(20);
+    vi.unstubAllGlobals();
+  });
+});
+
+describe("과반 확정 두근과 느린 박동 (D-31 ③, P-14, 04-20)", () => {
+  beforeEach(() => {
+    cleanup();
+  });
+
+  it("세 번째 표에서 확정: 닿는 순간 도현 좌석에 clinch 700ms, 칩은 beat, 그 뒤 공개가 끝날 때까지 slow(칩은 lead + slow). 다른 자리엔 없다", () => {
+    const { container, advance } = renderAt(1479, makeView({ votes: CLINCH_THIRD }));
+    expect(beatSeats(container, "clinch")).toEqual([]);
+    expect(beatSeats(container, "slow")).toEqual([]);
+    expect(chipOf(container, 3)?.className).toContain("mf-vchip--lead");
+    advance(1); // 1480
+    expect(beatSeats(container, "clinch")).toEqual([3]);
+    expect(beatSeats(container, "slow")).toEqual([]);
+    expect(chipOf(container, 3)?.textContent).toBe("3");
+    expect(chipOf(container, 3)?.className).toContain("mf-vchip--beat");
+    expect(chipOf(container, 3)?.className).not.toContain("mf-vchip--slow");
+    expect(chipSlow(container)).toEqual([]);
+    expect(seatClasses(container, 1)).not.toMatch(/--clinch|--slow/);
+    // 다른 자리의 칩이 올라도(1980 = 서연 → 하윤 닿음) 도현만 두근
+    advance(699); // 2179
+    expect(beatSeats(container, "clinch")).toEqual([3]);
+    expect(chipOf(container, 1)?.className).not.toMatch(/beat|slow/);
+    advance(1); // 2180 = 1480 + 700
+    expect(beatSeats(container, "clinch")).toEqual([]);
+    expect(beatSeats(container, "slow")).toEqual([3]);
+    expect(chipOf(container, 3)?.className).toContain("mf-vchip--lead");
+    expect(chipOf(container, 3)?.className).not.toContain("mf-vchip--beat");
+    expect(chipSlow(container)).toEqual([3]);
+    // 끝 상태(2700 이후)에도 박동 유지
+    advance(1200);
+    expect(beatSeats(container, "slow")).toEqual([3]);
+    expect(chipSlow(container)).toEqual([3]);
+    expect(chipOf(container, 3)?.className).toContain("mf-vchip--lead");
+  });
+
+  it("두 번째 표에서 확정하는 판: 두 번째 표가 닿는 980 에 두근", () => {
+    const { container, advance } = renderAt(979, makeView({ votes: CLINCH_SECOND }));
+    expect(beatSeats(container, "clinch")).toEqual([]);
+    advance(1);
+    expect(beatSeats(container, "clinch")).toEqual([3]);
+    advance(CLINCH_BEAT_MS);
+    expect(beatSeats(container, "slow")).toEqual([3]);
+  });
+
+  it("동률 [A,B,A,B]: 두근·느린 박동 클래스가 처음부터 끝까지 어디에도 없다", () => {
+    const { container, advance } = renderAt(0, makeView({ votes: TIE }));
+    for (let t = 0; t < 4000; t += 100) {
+      expect(container.querySelectorAll(".mf-dt__seat--clinch, .mf-dt__seat--slow, .mf-vchip--beat, .mf-vchip--slow").length).toBe(0);
+      advance(100);
+    }
+  });
+
+  it("미확정(세 갈래)·표 없음도 없다", () => {
+    const split = renderAt(3000, makeView({ votes: SPLIT }));
+    expect(split.container.querySelectorAll(".mf-dt__seat--clinch, .mf-dt__seat--slow, .mf-vchip--beat, .mf-vchip--slow").length).toBe(0);
+    split.unmount();
+    const none = renderAt(3000, makeView({ votes: [] }));
+    expect(none.container.querySelectorAll(".mf-dt__seat--clinch, .mf-dt__seat--slow, .mf-vchip--beat, .mf-vchip--slow").length).toBe(0);
+  });
+
+  it("중간 합류(확정 700ms 뒤): 바로 slow 이고 clinch 는 없다", () => {
+    const { container } = renderAt(2800, makeView({ votes: CLINCH_THIRD }));
+    expect(beatSeats(container, "clinch")).toEqual([]);
+    expect(beatSeats(container, "slow")).toEqual([3]);
+    expect(chipSlow(container)).toEqual([3]);
+    expect(chipOf(container, 3)?.className).toContain("mf-vchip--lead");
+  });
+
+  it("확정 두근 중 합류(1700): clinch 로 시작해 남은 시간 뒤 slow", () => {
+    const { container, advance } = renderAt(1700, makeView({ votes: CLINCH_THIRD }));
+    expect(beatSeats(container, "clinch")).toEqual([3]);
+    advance(480); // 2180
+    expect(beatSeats(container, "slow")).toEqual([3]);
+  });
+
+  it("두근 때 칩이 다른 사람에게 가도 확정 좌석의 칩만 beat 다(후광은 앰버 하나)", () => {
+    const { container } = renderAt(1500, makeView({ votes: CLINCH_THIRD }));
+    expect(amberSeats(container)).toEqual([3]);
+    expect(container.querySelectorAll(".mf-vchip--beat").length).toBe(1);
+  });
+});
+
+describe("확정 진동 navigator.vibrate (D-31 구현 재량)", () => {
+  const original = Object.getOwnPropertyDescriptor(navigator, "vibrate");
+  const stubVibrate = (fn: unknown) => Object.defineProperty(navigator, "vibrate", { value: fn, configurable: true, writable: true });
+  beforeEach(() => {
+    cleanup();
+  });
+  afterEach(() => {
+    if (original) Object.defineProperty(navigator, "vibrate", original);
+    else delete (navigator as unknown as Record<string, unknown>).vibrate;
+  });
+
+  it("확정 순간 정확히 한 번 30ms. 이후 박동·끝 상태·재렌더에서 다시 울리지 않는다", () => {
+    const vibrate = vi.fn(() => true);
+    stubVibrate(vibrate);
+    const { advance, rerenderRoom } = renderAt(1000, makeView({ votes: CLINCH_THIRD }));
+    expect(vibrate).not.toHaveBeenCalled();
+    advance(480); // 1480
+    expect(vibrate).toHaveBeenCalledTimes(1);
+    expect(vibrate).toHaveBeenCalledWith(CLINCH_VIBRATE_MS);
+    expect(CLINCH_VIBRATE_MS).toBe(30);
+    advance(3000);
+    rerenderRoom(makeView({ votes: CLINCH_THIRD }));
+    expect(vibrate).toHaveBeenCalledTimes(1);
+  });
+
+  it("확정 700ms 뒤에 합류한 폰에서는 울리지 않는다", () => {
+    const vibrate = vi.fn(() => true);
+    stubVibrate(vibrate);
+    renderAt(2800, makeView({ votes: CLINCH_THIRD }));
+    expect(vibrate).not.toHaveBeenCalled();
+  });
+
+  it("동률·미확정에서는 울리지 않는다", () => {
+    const vibrate = vi.fn(() => true);
+    stubVibrate(vibrate);
+    const r = renderAt(0, makeView({ votes: TIE }));
+    r.advance(4000);
+    r.unmount();
+    const s = renderAt(0, makeView({ votes: SPLIT }));
+    s.advance(4000);
+    expect(vibrate).not.toHaveBeenCalled();
+  });
+
+  it("vibrate 가 예외를 던져도 화면은 멈추지 않는다", () => {
+    stubVibrate(
+      vi.fn(() => {
+        throw new Error("blocked");
+      }),
+    );
+    const { container, advance } = renderAt(1000, makeView({ votes: CLINCH_THIRD }));
+    expect(() => advance(480)).not.toThrow();
+    expect(beatSeats(container, "clinch")).toEqual([3]);
+    advance(3000);
+    expect(beatSeats(container, "slow")).toEqual([3]);
+  });
+
+  it("vibrate 구현이 없는 환경(데스크톱·iOS)에서도 멈추지 않는다", () => {
+    delete (navigator as unknown as Record<string, unknown>).vibrate;
+    const { container, advance } = renderAt(1000, makeView({ votes: CLINCH_THIRD }));
+    advance(480);
+    expect(beatSeats(container, "clinch")).toEqual([3]);
+  });
+});
+
+describe("verdict.css: 확정 두근 스타일 규칙 (UI-SPEC 8.3·13.4)", () => {
+  const css = readFileSync("src/styles/verdict.css", "utf8");
+  const keyframe = (name: string): string => new RegExp(`@keyframes ${name}\\s*\\{([\\s\\S]*?\\n\\})`).exec(css)?.[1] ?? "";
+  const reduced = css.slice(css.lastIndexOf("@media (prefers-reduced-motion: reduce)"));
+
+  it("키프레임 이름은 mf- 접두어이고 mf-dk- 가 5개 이상이다", () => {
+    expect((css.match(/@keyframes mf-dk-[\w-]+/g) ?? []).length).toBeGreaterThanOrEqual(5);
+    expect(css.match(/@keyframes (?!mf-)/g)).toBeNull();
+  });
+
+  it("두근: 캐릭터 1 → 1.12 → 1 ×2, 칩 1 → 1.3 → 1 ×2 (개별 속성 scale, transform 금지)", () => {
+    const c = keyframe("mf-dk-c");
+    const chip = keyframe("mf-dk-chip");
+    expect(c).toContain("scale: 1.12");
+    expect(chip).toContain("scale: 1.3");
+    expect((c.match(/scale: 1\.12/g) ?? []).length).toBe(2);
+    expect((chip.match(/scale: 1\.3/g) ?? []).length).toBe(2);
+    expect(c).not.toContain("transform");
+    expect(chip).not.toContain("transform");
+    expect(css).toMatch(/\.mf-dt__seat--clinch\s*\{[^}]*mf-dk-c 700ms/);
+    expect(css).toMatch(/\.mf-vchip--beat\s*\{[^}]*mf-dk-chip 700ms/);
+  });
+
+  it("후광: 3px/18px 로 밝아졌다 돌아온다, 후광 그림에만", () => {
+    const h = keyframe("mf-dk-halo");
+    expect(h).toContain("drop-shadow(0 0 3px");
+    expect(h).toContain("drop-shadow(0 0 18px");
+    expect(css).toMatch(/\.mf-dt__seat--clinch \.mf-figure--halo-amber[^{]*\{[^}]*mf-dk-halo 700ms/);
+  });
+
+  it("느린 박동: 주기 1200ms 무한, 캐릭터 1 → 1.04 → 1, 칩 1 → 1.1 → 1", () => {
+    expect(keyframe("mf-dk-slow")).toContain("scale: 1.04");
+    expect(keyframe("mf-dk-chip-slow")).toContain("scale: 1.1");
+    expect(css).toMatch(/\.mf-dt__seat--slow\s*\{[^}]*mf-dk-slow 1200ms[^;}]*infinite/);
+    expect(css).toMatch(/\.mf-vchip--slow\s*\{[^}]*mf-dk-chip-slow 1200ms[^;}]*infinite/);
+  });
+
+  it("축소 모션: 크기 변화 없이 밝기 깜빡임만(brightness 1.3 2회), 느린 박동 없음, 전역 0.01ms 규칙을 이 깜빡임만 되돌린다", () => {
+    const flash = keyframe("mf-dk-flash");
+    expect(flash).toContain("brightness(1.3)");
+    expect((flash.match(/brightness\(1\.3\)/g) ?? []).length).toBeGreaterThanOrEqual(2);
+    expect(flash).not.toContain("scale");
+    expect(reduced).toMatch(/\.mf-dt__seat--clinch[^{]*\{[^}]*animation: none/);
+    expect(reduced).toMatch(/\.mf-dt__seat--slow[^{]*\{[^}]*animation: none/);
+    expect(reduced).toMatch(/\.mf-vchip--slow[^{]*\{[^}]*animation: none/);
+    expect(reduced).toMatch(/mf-dk-flash 700ms[^;]*!important/);
+    expect(reduced).toMatch(/mf-dk-chip-flash 700ms[^;]*!important/);
+    // 크기·위치가 변하는 키프레임은 되돌리지 않는다
+    expect(reduced).not.toMatch(/mf-dk-(c|chip|slow|chip-slow) [^;]*!important/);
   });
 });
