@@ -252,7 +252,7 @@ Plans:
   5. 마피아가 모두 탈락하면 시민 팀 승리, 마피아 수가 나머지 생존자 수와 같거나 많아지면 마피아 팀 승리로 처형·아침 직후 즉시 판이 끝난다. 아직 아니면 다음 밤으로 이어진다.
   6. 결과 화면에 승리 팀, 모든 사람의 역할, 판 요약이 공개되고, 처음 화면으로 돌아가 새 방을 만들 수 있다.
 
-**Plans:** 14/35 plans executed (04-01~04-12 서버·공유 로직 웨이브 완료·미배포, 결정 0036 / 04-13~04-35 화면 웨이브 추가 — UI-SPEC 승인 2026-10-28. 배포는 마지막 계획 04-35 에서만, 사용자 go-ahead 뒤 한 단위로(D-26). 웨이브마다 마지막 계획이 HANDOFF 진행 줄 갱신·개인 원격 push)
+**Plans:** 15/35 plans executed (04-01~04-12 서버·공유 로직 웨이브 완료·미배포, 결정 0036 / 04-13~04-35 화면 웨이브 추가 — UI-SPEC 승인 2026-10-28. 배포는 마지막 계획 04-35 에서만, 사용자 go-ahead 뒤 한 단위로(D-26). 웨이브마다 마지막 계획이 HANDOFF 진행 줄 갱신·개인 원격 push)
 
 Plans:
 **Wave 1**
@@ -288,7 +288,7 @@ Plans:
 **Wave 9** *(blocked on 04-12)*
 - [x] 04-13-PLAN.md — 순수 모듈 `src/game/verdict.ts`: 연출 상수·공개 시간표·확정 판정·후보 가운데 기하·후광 상한·문구 정본과 단위 시험 (TDD, wave 9)
 - [x] 04-14-PLAN.md — 토큰 3종(amber-700·amber-900·cone-light)·장면 매핑(투표 다섯 단계 dusk, ended night — P-1·P-2)·E2E 기대 표·dusk 미리 받기 (TDD, wave 9)
-- [ ] 04-15-PLAN.md — 테스트 방 `testBotVote`(봇 처형 투표·후보 선택 고정, P-13): 봇 규칙·와이어·방 DO·소켓 시험 (TDD, wave 9)
+- [x] 04-15-PLAN.md — 테스트 방 `testBotVote`(봇 처형 투표·후보 선택 고정, P-13): 봇 규칙·와이어·방 DO·소켓 시험 (TDD, wave 9)
 
 **Wave 10** *(blocked on 04-13, 04-14, 04-15)*
 - [ ] 04-16-PLAN.md — 트레이서: 처형 여부 투표 한 경로(방 화면 → useVerdictScene → ExecVotePanel → execVote 메시지)·관전·오류·기록 카드 입구 (TDD, wave 10)
@@ -369,6 +369,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 (decimal phases
 | 2. 낮 토론 | v1.0 | 18/18 | In Progress | - |
 | 3. 밤과 아침 | v1.0 | 12/12 | In Progress | - |
 | 3.1. 순차 주장과 역할 카드 | v1.0 | 14/14 | Complete | 2026-10-25 |
-| 4. 처형과 승패 | v1.0 | 14/35 | In Progress (서버 웨이브 완료·미배포, 화면 웨이브 04-13~04-35 계획됨) | - |
+| 4. 처형과 승패 | v1.0 | 15/35 | In Progress (서버 웨이브 완료·미배포, 화면 웨이브 04-13~04-35 계획됨) | - |
 | 5. 분위기와 캐릭터 | v1.0 | 0/TBD | Not started | - |
 | 6. 친구 플레이테스트 | v1.0 | 0/TBD | Not started | - |
