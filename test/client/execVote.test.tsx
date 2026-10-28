@@ -238,12 +238,12 @@ describe("execVote 나머지 상태 (D-35, D-36, D-12 개정, D-08)", () => {
     expect(alive.container.querySelector(".mf-execvote__tally")?.textContent).toBe("찬성 2 · 반대 0아직 1명 · 마감까지 바꿀 수 있어요");
   });
 
-  it("던진 표가 생존자 수와 같으면 뒤 문구가 `모두 투표했어요 · 마감까지 바꿀 수 있어요`", () => {
+  it("던진 표가 생존자 수와 같으면 뒤 문구가 `모두 냈어요 · 마감까지 바꿀 수 있어요`", () => {
     const { container } = renderRoom(makeView({ tally: { yes: 3, no: 1 } }));
-    expect(container.querySelector(".mf-execvote__tally")?.textContent).toBe("찬성 3 · 반대 1모두 투표했어요 · 마감까지 바꿀 수 있어요");
+    expect(container.querySelector(".mf-execvote__tally")?.textContent).toBe("찬성 3 · 반대 1모두 냈어요 · 마감까지 바꿀 수 있어요");
     cleanup();
     const spectator = renderRoom(makeView({ dead: [0], tally: { yes: 2, no: 1 } }));
-    expect(spectator.container.querySelector(".mf-execvote__tally")?.textContent).toContain("모두 투표했어요");
+    expect(spectator.container.querySelector(".mf-execvote__tally")?.textContent).toContain("모두 냈어요");
   });
 
   it("집계 숫자가 바뀐 노드만 새 요소가 되고(팝이 다시 돈다) 같은 값 재그리기에서는 같은 노드다", () => {

@@ -555,11 +555,11 @@ describe("execTallyText (D-35, UI-SPEC 7.2)", () => {
   it("생존 5·찬성 3·반대 1 → 아직 1명", () => {
     expect(execTallyText({ yes: 3, no: 1 }, 5)).toEqual({ strong: "찬성 3 · 반대 1", rest: "아직 1명 · 마감까지 바꿀 수 있어요" });
   });
-  it("모두 던지면 모두 투표했어요", () => {
-    expect(execTallyText({ yes: 3, no: 1 }, 4).rest).toBe("모두 투표했어요 · 마감까지 바꿀 수 있어요");
+  it("모두 던지면 모두 냈어요 (360 폭 한 줄에 들어가도록 짧게, 04-33)", () => {
+    expect(execTallyText({ yes: 3, no: 1 }, 4).rest).toBe("모두 냈어요 · 마감까지 바꿀 수 있어요");
   });
   it("던진 표가 생존자보다 많아도 남은 수는 0", () => {
-    expect(execTallyText({ yes: 4, no: 3 }, 5).rest).toBe("모두 투표했어요 · 마감까지 바꿀 수 있어요");
+    expect(execTallyText({ yes: 4, no: 3 }, 5).rest).toBe("모두 냈어요 · 마감까지 바꿀 수 있어요");
   });
   it("아무도 안 던졌으면 생존자 수 전부가 남았다", () => {
     expect(execTallyText({ yes: 0, no: 0 }, 6)).toEqual({ strong: "찬성 0 · 반대 0", rest: "아직 6명 · 마감까지 바꿀 수 있어요" });

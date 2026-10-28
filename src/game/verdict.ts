@@ -476,7 +476,8 @@ export function defenseAnnounce(name: string | null): string {
 /** 처형 여부 투표 집계 줄: 앞(굵게)과 뒤(회색). 남은 사람 수 = 생존자 − (찬성 + 반대), 음수면 0 (D-35) */
 export function execTallyText(tally: ExecTally, alive: number): { strong: string; rest: string } {
   const left = Math.max(0, alive - (tally.yes + tally.no));
-  const rest = left === 0 ? "모두 투표했어요 · 마감까지 바꿀 수 있어요" : `아직 ${left}명 · 마감까지 바꿀 수 있어요`;
+  // 0명 남은 문구는 360 폭에서 앞(`찬성 N · 반대 M`, 굵게)과 한 줄에 들어가야 한다 — `모두 투표했어요` 는 15px 넘쳐 말줄임표로 잘렸다(E2E G2, 04-33)
+  const rest = left === 0 ? "모두 냈어요 · 마감까지 바꿀 수 있어요" : `아직 ${left}명 · 마감까지 바꿀 수 있어요`;
   return { strong: `찬성 ${tally.yes} · 반대 ${tally.no}`, rest };
 }
 
