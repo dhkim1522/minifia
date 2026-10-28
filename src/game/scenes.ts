@@ -2,7 +2,8 @@
 //
 // - 장면 목록(SCENES): 앱 그림 한 장이 장면 하나다(public/backgrounds/bg_{game|entry}_{파일 조각}.webp).
 // - 단계 → 장면 규칙표(PHASE_SCENE): 화면에 단계별 분기를 따로 두지 않는다.
-//   4페이즈 단계는 verdictDusk(ended 는 결과 화면 장면이 UI-SPEC 4 에서 정해질 때까지 lobby). dusk 는 어떤 단계도 가리키지 않는다.
+//   4페이즈: 투표·공개·변론·처형 다섯 단계는 조명이 구워지지 않은 해질녘 그림 dusk 한 장이다(빛은 원뿔 층 하나, D-29). 종료(ended)는 night(P-2).
+//   verdictDusk 는 등록만 남고 어떤 단계도 가리키지 않는다(그림에 위에서 떨어지는 조명이 구워져 있어 D-29 와 맞지 않는다, P-1).
 //   PhaseId 가 늘면 Record<PhaseId, SceneId> 가 타입 오류로 알려 준다.
 // - 해·달: 그림에 이미 그려져 있고 장면마다 위치가 다르다(아침 해 오른쪽 위 → 낮 해 더 왼쪽·아래, 밤 달). 이미지에서 떼어낼 수 없으므로
 //   따로 그리거나 움직이지 않고 배경 크로스페이드에 맡긴다. 이중으로 보일 수 없다(결정 0030, 확인 필요 1).
@@ -41,12 +42,12 @@ export const PHASE_SCENE: Readonly<Record<PhaseId, SceneId>> = Object.freeze({
   discussion: "day",
   night: "night",
   morning: "morning",
-  execVote: "verdictDusk",
-  candidateVote: "verdictDusk",
-  candidateVoteReveal: "verdictDusk",
-  defense: "verdictDusk",
-  execution: "verdictDusk",
-  ended: "lobby",
+  execVote: "dusk",
+  candidateVote: "dusk",
+  candidateVoteReveal: "dusk",
+  defense: "dusk",
+  execution: "dusk",
+  ended: "night",
 });
 
 export function sceneOfPhase(phase: PhaseId): SceneId {
@@ -55,7 +56,7 @@ export function sceneOfPhase(phase: PhaseId): SceneId {
 
 // - 단계 시작 문구(PHASE_INTRO): 밤과 낮 시작(dayAnnounce)만 'N일차 / 밤·낮이 되었습니다' 를 2초 보여 준다. 같은 부품(SceneIntro)이 두 장면에 쓰인다.
 //   낮 시작 전용 화면은 없다 — dayAnnounce 도 테이블 장면(DayScene) 위에서 그려지고 문구가 그 위에 얹힌다(서버 규칙·시간·와이어 불변).
-//   4페이즈: 투표·처형 시작 문구가 생기면 이 표에 행을 더한다.
+//   4페이즈: 처형 투표 카드는 SceneIntro 가 아니라 전용 카드(UI-SPEC 9.1)다.
 export type IntroTone = "night" | "day";
 export interface SceneIntroDef {
   /** 막의 톤: 밤은 짙게(중앙 85%), 낮은 옅게(70%) */

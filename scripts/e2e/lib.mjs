@@ -614,12 +614,12 @@ export const EXPECTED_SCENE = {
   discussion: "day",
   night: "night",
   morning: "morning",
-  execVote: "verdictDusk",
-  candidateVote: "verdictDusk",
-  candidateVoteReveal: "verdictDusk",
-  defense: "verdictDusk",
-  execution: "verdictDusk",
-  ended: "lobby",
+  execVote: "dusk",
+  candidateVote: "dusk",
+  candidateVoteReveal: "dusk",
+  defense: "dusk",
+  execution: "dusk",
+  ended: "night",
 };
 
 /**
