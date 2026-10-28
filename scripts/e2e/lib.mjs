@@ -253,6 +253,7 @@ export function faceRegion(r) {
 }
 
 const rd = (n) => Math.round(n * 10) / 10;
+const HALO_KINDS = ["white", "amber", "crimson"]; // 후광 img 의 색 종류
 const HALO_MAX = 3; // 한 화면 후광 img 상한(src/game/dayTable.ts 의 HALO_MAX_SIMULTANEOUS 와 같은 값)
 /** 겹친 크기를 사람이 판단할 수 있게 내용 칸에 적는다(기준은 바꾸지 않는다). */
 const overlapText = (a, b) =>
@@ -680,13 +681,17 @@ export function backdropSceneChecks(info, { phase }) {
  * K4 후광은 윤곽을 따르는 filter 이고 발밑 원이 없다 (결정 0030). halo = 스냅숏 halo { items: [{ seat, cls, filter, seatContext, onImg }], max },
  * circles = 발밑 원 요소 수(turn.legacyCircles). 후광 img 는 한 화면 3개 이하, 각각 계산된 filter 에 drop-shadow 두 겹과 9px 반지름이 있고
  * 후광 클래스는 img 에만 있으며 자리는 쌓임 맥락(z-index 있음)이다. expectNone 이 아니면(차례가 있는 claim) 흰 후광이 차례 말풍선과 같은 자리다.
+ * 04-29: 후광 종류는 white|amber|crimson (앰버 = 낮의 공개 투표, D-33). crimsonAllowed(기본 true)가 false 이면 진홍 후광이 하나라도 있을 때 실패한다
+ * (방장이 시민인 투표·처형 단계 — 진홍 후광은 동료인 마피아 viewer·관전자에게만 있다).
  */
-export function haloChecks(halo, { circles, bubbleSeats, whiteSeats, expectNone }) {
+export function haloChecks(halo, { circles, bubbleSeats, whiteSeats, expectNone, crimsonAllowed = true }) {
   const bad = [];
   if (!halo || !Array.isArray(halo.items)) bad.push("측정값 없음(후광 halo)");
   else {
     if (typeof halo.max !== "number" || halo.max > HALO_MAX) bad.push(`후광 img ${halo.max}개 > ${HALO_MAX}`);
     for (const h of halo.items) {
+      if (!HALO_KINDS.includes(h.cls)) bad.push(`자리 ${h.seat} 후광 종류 "${h.cls}" 를 모름(white|amber|crimson)`);
+      else if (h.cls === "crimson" && !crimsonAllowed) bad.push(`자리 ${h.seat} 진홍 후광이 있음 — 방장이 시민이면 투표·처형 단계에 진홍 후광 0 (D-33)`);
       const f = String(h.filter ?? "");
       const layers = f.split("drop-shadow(").length - 1;
       if (layers !== 2) bad.push(`자리 ${h.seat} 후광 filter 에 drop-shadow ${layers}겹 ≠ 2 ("${f.slice(0, 60)}")`);
@@ -718,7 +723,7 @@ export function crownChecks(snap, { expect }) {
  * expectNone: 차례 없는 단계(토론·밤·아침)라 차례 말풍선이 0 개(토론의 빠른 메시지 말풍선은 세지 않고, 밤 선택의 흰 후광은 허용). K4 는 항상 돌린다.
  * myTurn(true/false)이 있으면 K2 도 돌린다. jobs = 이번 판 직업 칩 글자(내 차례일 때 + 「말 안 함」과 순서까지 비교).
  */
-export function turnChecks(snap, { expectNone = false, myTurn, jobs = [] } = {}) {
+export function turnChecks(snap, { expectNone = false, myTurn, jobs = [], crimsonAllowed = true } = {}) {
   const t = snap.turn ?? {};
   const bubbles = Array.isArray(t.bubbleTurnSeats) ? t.bubbleTurnSeats : null;
   const whites = Array.isArray(t.haloWhiteSeats) ? t.haloWhiteSeats : null;
@@ -735,7 +740,7 @@ export function turnChecks(snap, { expectNone = false, myTurn, jobs = [] } = {})
   if (t.tagInverted !== 0) k1.push(`이름표 반전 ${t.tagInverted}개 ≠ 0`);
   if (t.legacyRows !== 0) k1.push(`이름표 아랫줄 ${t.legacyRows}개 ≠ 0`);
   const out = [result("K1", expectNone ? "차례 표식 없음" : "차례 표식이 정확히 한 자리", k1)];
-  out.push(haloChecks(snap.halo, { circles: t.legacyCircles, bubbleSeats: bubbles, whiteSeats: whites, expectNone }));
+  out.push(haloChecks(snap.halo, { circles: t.legacyCircles, bubbleSeats: bubbles, whiteSeats: whites, expectNone, crimsonAllowed }));
   if (typeof myTurn !== "boolean") return out;
 
   const p = snap.panel;
@@ -1048,4 +1053,90 @@ export function candidateChecks(v, { mySeat, deadSeats, chosenSeat, crimsonSeats
     if (!v.bottom.pill.includes(phrase)) bad.push(`알약 "${v.bottom.pill}" 에 "${phrase}" 없음`);
   }
   return result("P3", label, bad);
+}
+
+// ---- P4 공개 연출·P-COLOR 색 규칙 (04-29, UI-SPEC 15.1·15.3, D-31·D-33) ----
+
+/**
+ * P4 후보 선택 공개(candidateVoteReveal). samples = [{ t(ms), reveal:{ arrows, chips[], tags[] }, dt:{ haloImgs, scene }, crimsonNew }] 시각 오름차순,
+ * opts = { n(= 최종 후보 선택 표 수 cand.votes.length), size?:{ w, h }(화면 크기) }.
+ * 모든 표본: 화살표 ≤ 1, 후광 img 합(white+amber+crimson) ≤ HALO_MAX, 새 요소 진홍 0, 칩이 장면 폭 안이고 위가 헤더 아래(scene.top 이상),
+ * size 가 있으면 화면 폭 안. 시간에 따라 칩 숫자 합이 줄지 않고 마지막 표본의 합이 n (n=0 이면 칩 없음).
+ */
+export function revealChecks(samples, { n, size } = {}) {
+  const label = "공개 연출: 화살표 ≤ 1·칩 합 단조 증가·후광 ≤ 3·진홍 0·칩 위치";
+  if (!Array.isArray(samples) || samples.length === 0) return result("P4", label, ["측정값 없음(공개 시간표본)"]);
+  if (typeof n !== "number") return result("P4", label, ["측정값 없음(n 인자)"]);
+  const miss = [];
+  samples.forEach((x, i) => {
+    if (!Number.isFinite(x?.t)) miss.push(`측정값 없음(표본 ${i} t)`);
+    else if (typeof x.reveal?.arrows !== "number" || !Array.isArray(x.reveal?.chips)) miss.push(`측정값 없음(표본 ${i} reveal.arrows·chips)`);
+    else if (!Array.isArray(x.dt?.haloImgs)) miss.push(`측정값 없음(표본 ${i} dt.haloImgs)`);
+    else if (typeof x.crimsonNew !== "number") miss.push(`측정값 없음(표본 ${i} crimsonNew)`);
+    else if (x.reveal.chips.length > 0 && !(Number.isFinite(x.dt.scene?.left) && Number.isFinite(x.dt.scene?.right) && Number.isFinite(x.dt.scene?.top))) {
+      miss.push(`측정값 없음(표본 ${i} dt.scene)`);
+    }
+  });
+  if (miss.length > 0) return result("P4", label, miss);
+
+  const bad = [];
+  let prevSum = 0;
+  let lastSum = 0;
+  samples.forEach((x, i) => {
+    const at = `t=${fmt(x.t)}ms`;
+    if (i > 0 && x.t < samples[i - 1].t) bad.push(`표본 시각이 오름차순이 아님 (${fmt(samples[i - 1].t)} → ${fmt(x.t)})`);
+    if (x.reveal.arrows > 1) bad.push(`${at} 화살표 ${x.reveal.arrows}개 > 1`);
+    if (x.dt.haloImgs.length > HALO_MAX) bad.push(`${at} 후광 img ${x.dt.haloImgs.length}개 > ${HALO_MAX}`);
+    if (x.crimsonNew !== 0) bad.push(`${at} 새 요소 진홍 ${x.crimsonNew}개 ≠ 0`);
+    const sum = x.reveal.chips.reduce((a, c) => a + (c.n || 0), 0);
+    if (sum < prevSum) bad.push(`${at} 칩 숫자 합이 줄어듦 ${prevSum} → ${sum}`);
+    prevSum = Math.max(prevSum, sum);
+    lastSum = sum;
+    for (const c of x.reveal.chips) {
+      const sc = x.dt.scene;
+      const who = `${at} 칩(자리 ${c.seat})`;
+      if (c.left < sc.left - OVERLAP_EPS || right(c) > sc.right + OVERLAP_EPS) bad.push(`${who} 가 장면 폭 [${fmt(sc.left)}, ${fmt(sc.right)}] 밖 (${fmt(c.left)}~${fmt(right(c))})`);
+      if (c.top < sc.top - OVERLAP_EPS) bad.push(`${who} 가 헤더를 침범 (위 ${fmt(c.top)} < 장면 위 ${fmt(sc.top)})`);
+      if (Number.isFinite(size?.w) && (c.left < -OVERLAP_EPS || right(c) > size.w + OVERLAP_EPS)) bad.push(`${who} 가 화면 폭 ${size.w} 밖`);
+    }
+  });
+  if (n === 0 && samples.some((x) => x.reveal.chips.length > 0)) bad.push("표가 0 인데 칩이 나옴");
+  if (lastSum !== n) bad.push(`최종 칩 숫자 합 ${lastSum} ≠ 투표 수 ${n}`);
+  return result("P4", label, bad);
+}
+
+/** rgb()/rgba() 색 문자열을 알파·공백을 뺀 `r,g,b` 로 줄인다(진홍 토큰 값과 비교용). 못 읽으면 소문자·공백 제거한 문자열. */
+const colorKey = (c) => {
+  const m = /rgba?\(\s*([\d.]+)[\s,]+([\d.]+)[\s,]+([\d.]+)/i.exec(String(c));
+  return m ? `${Number(m[1])},${Number(m[2])},${Number(m[3])}` : String(c).replace(/\s+/g, "").toLowerCase();
+};
+
+/**
+ * P-COLOR 진홍 사용 규칙(D-33). v = { crimsonNew, crimsonScreen, newColors?, screenColors? }(스냅숏 계약), opts = { crimsonColors, wholeScreenCrimson }.
+ * 새 요소의 진홍 사용 crimsonNew 는 0. wholeScreenCrimson(방장이 시민인 투표·처형 단계)이면 화면 전체 진홍 crimsonScreen 도 0(동료 마름모·후광 제외 없음).
+ * 색 목록(newColors·screenColors)이 있으면 crimsonColors(토큰을 읽어 rgb 로 정규화한 문자열 배열)와 비교해 같은 색을 진홍으로 센다 — lib 에 색 값을 박지 않는다.
+ */
+export function colorRuleChecks(v, { crimsonColors, wholeScreenCrimson = false } = {}) {
+  const label = wholeScreenCrimson ? "진홍 규칙: 새 요소·화면 전체 진홍 0 (방장이 시민)" : "진홍 규칙: 새 요소 진홍 0";
+  const miss = [];
+  if (typeof v?.crimsonNew !== "number") miss.push("측정값 없음(crimsonNew)");
+  if (wholeScreenCrimson && typeof v?.crimsonScreen !== "number") miss.push("측정값 없음(crimsonScreen)");
+  const newColors = v?.newColors;
+  const screenColors = wholeScreenCrimson ? v?.screenColors : undefined;
+  if ((newColors !== undefined || screenColors !== undefined) && (!Array.isArray(crimsonColors) || crimsonColors.length === 0)) {
+    miss.push("측정값 없음(crimsonColors 토큰 색 목록)");
+  }
+  if (newColors !== undefined && !Array.isArray(newColors)) miss.push("측정값 없음(newColors 배열)");
+  if (screenColors !== undefined && !Array.isArray(screenColors)) miss.push("측정값 없음(screenColors 배열)");
+  if (miss.length > 0) return result("P-COLOR", label, miss);
+
+  const bad = [];
+  const crimson = new Set((crimsonColors ?? []).map(colorKey));
+  if (v.crimsonNew !== 0) bad.push(`새 요소 진홍 사용 ${v.crimsonNew}개 ≠ 0`);
+  for (const c of newColors ?? []) if (crimson.has(colorKey(c.color))) bad.push(`새 요소 ${c.desc} 가 진홍 ${c.color} 를 씀`);
+  if (wholeScreenCrimson) {
+    if (v.crimsonScreen !== 0) bad.push(`화면 전체 진홍 요소 ${v.crimsonScreen}개 ≠ 0 (방장이 시민)`);
+    for (const c of screenColors ?? []) if (crimson.has(colorKey(c.color))) bad.push(`화면 전체: ${c.desc} 가 진홍 ${c.color} 를 씀 (방장이 시민)`);
+  }
+  return result("P-COLOR", label, bad);
 }
