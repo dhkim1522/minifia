@@ -4,18 +4,18 @@ milestone: v1.0
 milestone_name: MVP
 current_phase: 4
 current_phase_name: 처형과 승패
-current_plan: 21
+current_plan: 22
 status: executing
-stopped_at: Completed 04-21-PLAN.md
-last_updated: "2026-10-28T09:23:07.039Z"
+stopped_at: Completed 04-22-PLAN.md
+last_updated: "2026-10-28T09:36:56.326Z"
 last_activity: 2026-10-26
 last_activity_desc: Phase 4 execution started
-state_head: ac4dee7de310fd457304ffe52760408dc96bf951
+state_head: 2a1abc43965894e201425b8f4c2d110afc02a554
 progress:
   total_phases: 7
   completed_phases: 2
   total_plans: 98
-  completed_plans: 84
+  completed_plans: 85
 ---
 
 # Project State
@@ -30,10 +30,10 @@ See: .planning/PROJECT.md (updated 2026-10-21)
 ## Current Position
 
 Phase: 4 (처형과 승패) — EXECUTING
-Current Plan: 21
+Current Plan: 22
 Total Plans in Phase: 35
-Plan: 21 of 35
-Status: 화면 웨이브 진행 중 — 04-13(순수 모듈 verdict.ts)·04-14(토큰·dusk 장면 표·dusk 미리 받기)·04-15(테스트 방 testBotVote) 완료(웨이브 9 끝), 04-16(execVote 트레이서: 라우팅·useVerdictScene·ExecVotePanel)·04-17(테스트 시트 봇 처형 투표·봇 후보 선택 칩)·04-18(후보 선택 화면: DayTable halo·useViewChoice·CandidateVotePanel·candidateVote 연결)·04-19(선택 공개 상태: useRevealState·표수 칩·앰버 후광·끝 문구)·04-20(선택 공개 연출: 화살표 RevealLayer·과반 확정 두근·느린 박동·진동·모션 줄이기)·04-21(최후 변론 1: DayTable verdict·center·원뿔, 남의 변론 하단 DefensePanel, defense 연결) 완료, 다음 04-22. 배포는 04-35 에서만(D-26)
+Plan: 22 of 35
+Status: 화면 웨이브 진행 중 — 04-13(순수 모듈 verdict.ts)·04-14(토큰·dusk 장면 표·dusk 미리 받기)·04-15(테스트 방 testBotVote) 완료(웨이브 9 끝), 04-16(execVote 트레이서: 라우팅·useVerdictScene·ExecVotePanel)·04-17(테스트 시트 봇 처형 투표·봇 후보 선택 칩)·04-18(후보 선택 화면: DayTable halo·useViewChoice·CandidateVotePanel·candidateVote 연결)·04-19(선택 공개 상태: useRevealState·표수 칩·앰버 후광·끝 문구)·04-20(선택 공개 연출: 화살표 RevealLayer·과반 확정 두근·느린 박동·진동·모션 줄이기)·04-21(최후 변론 1: DayTable verdict·center·원뿔, 남의 변론 하단 DefensePanel, defense 연결)·04-22(최후 변론 2: 후보 본인 하단 236·변론 칩 6개 DefenseChips·시트 재사용·보냈어요 2초) 완료, 다음 04-23. 배포는 04-35 에서만(D-26)
 Last activity: 2026-10-26 — Phase 4 execution started
 
 Progress: [██░░░░░░░░] 17%
@@ -129,6 +129,7 @@ Progress: [██░░░░░░░░] 17%
 | Phase 04 P19 | 17min | 2 tasks | 9 files |
 | Phase 4 P20 | 11min | 2 tasks | 10 files |
 | Phase 04 P21 | 14min | 3 tasks | 10 files |
+| Phase 4 P22 | 11min | 2 tasks | 14 files |
 
 ## Accumulated Context
 
@@ -247,6 +248,8 @@ Recent decisions affecting current work:
 - [Phase 04]: 04-19: 공개 칩 톤은 유일한 선두 lead > 방금 닿은 pop > plain (선두와 팝이 같은 자리면 lead). 1표짜리 선두도 lead 가 되는 점은 사용자 확인 대기
 - [Phase 4]: [04-20] 확정 두근 700ms 판정은 verdict.ts 의 순수 함수 clinchBeat(plan, now) 한 곳에 두고, 훅 경계에 확정 + 700ms 를 더했다
 - [Phase 4]: [04-20] 화살표는 컴포넌트 안 rAF 한 줄기(RevealLayer)로 끝점을 보간하고, 칩·두근·박동은 04-19 훅의 경계 타이머로 한다. 축소 모션은 전역 0.01ms 규칙에서 밝기 깜빡임 둘만 되돌린다
+- [Phase 4]: [04-22] P-8 기본값 구현: 변론 칩 중 대상·직업이 필요한 것은 QuickMessageSheet 를 templates=[칩 하나] 로 재사용, 보낸 직후 안내 줄 2초 '보냈어요 · 문장'(사용자 확인 대기)
+- [Phase 4]: [04-22] 후보 발 y 여유 34→38: 하단 236 에서 360x640 이름표 알약이 장면 아래에 닿아 이름표 상자 실제 높이 26 기준으로 고침(UI-SPEC 8.4 문구는 34, 문서는 04-35 전 정리)
 
 ### Pending Todos
 
@@ -283,6 +286,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-28T09:23:06.363Z
-Stopped at: Completed 04-21-PLAN.md
+Last session: 2026-10-28T09:36:55.752Z
+Stopped at: Completed 04-22-PLAN.md
 Resume file: None
