@@ -1,7 +1,7 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { PhaseId, RoomView } from "../../shared/protocol";
-import type { RoomConnection } from "../../src/net/useRoomConnection";
+import type { RoomConnection, RoomEvent } from "../../src/net/useRoomConnection";
 
 // 처형 여부 투표(execVote) 화면: 방 화면 라우팅 → 낮 장면 → 하단 패널 → 소켓 메시지까지 한 경로 (04-16 트레이서).
 // 연결 훅은 반환값을 테스트가 정한다(phaseScreens.test 와 같은 방식). 화면은 서버 view 만 따른다.
@@ -195,5 +195,118 @@ describe("execVote 화면 한 경로 (VOTE-01, D-02, D-14)", () => {
     const { container } = renderRoom(makeView());
     expect(panel(container)?.querySelectorAll("button").length).toBe(2);
     expect(screen.queryByRole("button", { name: /빠른 메시지|이모티콘/ })).toBeNull();
+  });
+});
+
+// ---- Task 2: 관전·마감·집계 팝·오류 토스트·좌석 기록 카드 ----
+
+function emitter() {
+  const listeners = new Set<(e: RoomEvent) => void>();
+  return {
+    onEvent: (l: (e: RoomEvent) => void) => {
+      listeners.add(l);
+      return () => {
+        listeners.delete(l);
+      };
+    },
+    emit: (e: RoomEvent) =>
+      act(() => {
+        for (const l of [...listeners]) l(e);
+      }),
+    count: () => listeners.size,
+  };
+}
+
+const sheet = (name: string) => document.querySelector(`dialog[aria-label="${name}"]`);
+const nums = (c: HTMLElement) => [...c.querySelectorAll<HTMLElement>(".mf-execvote__tally .mf-execvote__num")];
+
+describe("execVote 나머지 상태 (D-35, D-36, D-12 개정, D-08)", () => {
+  it("탈락한 viewer: 버튼 0, 제목 + 집계 줄(살아 있는 사람과 같은 값) + 알약 `관전 중 · 볼 수만 있어요`", () => {
+    const tally = { yes: 2, no: 0 };
+    const { container } = renderRoom(makeView({ dead: [0], tally }));
+    expect(panel(container)?.querySelectorAll("button").length).toBe(0);
+    expect(screen.queryByRole("heading", { name: "오늘 처형을 할까요?" })).not.toBeNull();
+    expect(container.querySelector(".mf-execvote__tally")?.textContent).toBe("찬성 2 · 반대 0아직 1명 · 마감까지 바꿀 수 있어요");
+    const pill = panel(container)?.querySelector(".mf-ro");
+    expect(pill?.textContent).toBe("관전 중 · 볼 수만 있어요");
+    cleanup();
+    const alive = renderRoom(makeView({ dead: [1], tally }));
+    expect(alive.container.querySelector(".mf-execvote__tally")?.textContent).toBe("찬성 2 · 반대 0아직 1명 · 마감까지 바꿀 수 있어요");
+  });
+
+  it("던진 표가 생존자 수와 같으면 뒤 문구가 `모두 투표했어요 · 마감까지 바꿀 수 있어요`", () => {
+    const { container } = renderRoom(makeView({ tally: { yes: 3, no: 1 } }));
+    expect(container.querySelector(".mf-execvote__tally")?.textContent).toBe("찬성 3 · 반대 1모두 투표했어요 · 마감까지 바꿀 수 있어요");
+    cleanup();
+    const spectator = renderRoom(makeView({ dead: [0], tally: { yes: 2, no: 1 } }));
+    expect(spectator.container.querySelector(".mf-execvote__tally")?.textContent).toContain("모두 투표했어요");
+  });
+
+  it("집계 숫자가 바뀐 노드만 새 요소가 되고(팝이 다시 돈다) 같은 값 재그리기에서는 같은 노드다", () => {
+    const r = renderRoom(makeView({ tally: { yes: 1, no: 1 } }));
+    const [yes0, no0] = nums(r.container);
+    expect(yes0?.textContent).toBe("1");
+    r.rerenderRoom(makeView({ tally: { yes: 1, no: 1 } }));
+    const same = nums(r.container);
+    expect(same[0] === yes0 && same[1] === no0).toBe(true);
+    r.rerenderRoom(makeView({ tally: { yes: 2, no: 1 } }));
+    const next = nums(r.container);
+    expect(next[0] === yes0).toBe(false);
+    expect(next[0]?.textContent).toBe("2");
+    expect(next[1] === no0).toBe(true);
+  });
+
+  it("BAD_MESSAGE 오류 이벤트가 오면 토스트 `보내지 못했어요. 다시 시도해 주세요` 가 한 번 뜬다", () => {
+    const ev = emitter();
+    renderRoom(makeView(), { onEvent: ev.onEvent });
+    expect(screen.queryAllByText("보내지 못했어요. 다시 시도해 주세요").length).toBe(0);
+    ev.emit({ t: "error", code: "BAD_MESSAGE" });
+    expect(screen.queryAllByText("보내지 못했어요. 다시 시도해 주세요").length).toBe(1);
+    expect(ev.count()).toBe(1);
+  });
+
+  it("execVote 가 아닌 단계에서는 이 오류 구독이 없다 (낮 시작 단계는 토스트를 띄우지 않는다)", () => {
+    const ev = emitter();
+    renderRoom(makeView({ phase: "dayAnnounce" }), { onEvent: ev.onEvent });
+    ev.emit({ t: "error", code: "BAD_MESSAGE" });
+    expect(screen.queryAllByText("보내지 못했어요. 다시 시도해 주세요").length).toBe(0);
+  });
+
+  it("좌석을 누르면 기록 카드가 열리고 투표는 영향받지 않는다 — 살아 있는 사람도 탈락한 사람도", () => {
+    for (const dead of [[], [0]]) {
+      const { container, send } = renderRoom(makeView({ dead, voteAgree: dead.length === 0 ? true : undefined, tally: { yes: 1, no: 0 } }));
+      const seats = container.querySelectorAll<HTMLButtonElement>(".mf-dt button.mf-dt__seat--inspect");
+      expect(seats.length).toBe(4);
+      fireEvent.click(screen.getByRole("button", { name: "하윤, 주장 기록 보기" }));
+      expect(sheet("하윤 기록")).not.toBeNull();
+      expect(send).not.toHaveBeenCalled();
+      expect(container.querySelector(".mf-execvote__tally")?.textContent).toContain("찬성 1 · 반대 0");
+      if (dead.length === 0) expect(button("찬성").getAttribute("aria-pressed")).toBe("true");
+      cleanup();
+    }
+  });
+
+  it("밤이 되면 열려 있던 기록 카드가 닫힌다(기존 규칙 불변)", () => {
+    const r = renderRoom(makeView());
+    fireEvent.click(screen.getByRole("button", { name: "하윤, 주장 기록 보기" }));
+    expect(sheet("하윤 기록")).not.toBeNull();
+    r.rerenderRoom(makeView({ phase: "night" }));
+    expect(sheet("하윤 기록")).toBeNull();
+  });
+
+  it("빠른 메시지·이모티콘 입구가 없고 chat·emoji 이벤트가 와도 말풍선·이모티콘이 테이블에 뜨지 않는다", () => {
+    const ev = emitter();
+    const { container } = renderRoom(makeView(), { onEvent: ev.onEvent });
+    ev.emit({ t: "chat", seq: 1, seat: 2, template: "innocent", at: 0 } as RoomEvent);
+    ev.emit({ t: "emoji", seat: 2, icon: "smile", at: 0 });
+    expect(container.querySelector(".mf-dt__bubble")).toBeNull();
+    expect(container.querySelector(".mf-dt__emoji")).toBeNull();
+    expect(panel(container)?.querySelector('[role="log"]')).toBeNull();
+    expect(screen.queryByRole("button", { name: /빠른 메시지|이모티콘/ })).toBeNull();
+  });
+
+  it("연결이 끊긴 살아 있는 사람의 캐릭터는 흐림 클래스(mf-figure--disconnected)를 가진다 (D-36)", () => {
+    const { container } = renderRoom(makeView({ offline: [2] }));
+    expect(container.querySelectorAll(".mf-dt .mf-figure--disconnected").length).toBe(1);
   });
 });
