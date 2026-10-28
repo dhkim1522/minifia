@@ -4,18 +4,18 @@ milestone: v1.0
 milestone_name: MVP
 current_phase: 4
 current_phase_name: 처형과 승패
-current_plan: 29
+current_plan: 30
 status: executing
-stopped_at: Completed 04-29-PLAN.md
-last_updated: "2026-10-28T11:05:20.024Z"
+stopped_at: Completed 04-30-PLAN.md
+last_updated: "2026-10-28T11:12:46.024Z"
 last_activity: 2026-10-26
 last_activity_desc: Phase 4 execution started
-state_head: a02211eb261ec8e692c7015071bdf7957ccfe141
+state_head: ee8de34649574ca1da5826edcdd2a4dc54c773e6
 progress:
   total_phases: 7
   completed_phases: 2
   total_plans: 98
-  completed_plans: 92
+  completed_plans: 93
 ---
 
 # Project State
@@ -30,10 +30,10 @@ See: .planning/PROJECT.md (updated 2026-10-21)
 ## Current Position
 
 Phase: 4 (처형과 승패) — EXECUTING
-Current Plan: 29
+Current Plan: 30
 Total Plans in Phase: 35
-Plan: 29 of 35
-Status: 화면 웨이브 진행 중 — 04-13(순수 모듈 verdict.ts)·04-14(토큰·dusk 장면 표·dusk 미리 받기)·04-15(테스트 방 testBotVote) 완료(웨이브 9 끝), 04-16(execVote 트레이서: 라우팅·useVerdictScene·ExecVotePanel)·04-17(테스트 시트 봇 처형 투표·봇 후보 선택 칩)·04-18(후보 선택 화면: DayTable halo·useViewChoice·CandidateVotePanel·candidateVote 연결)·04-19(선택 공개 상태: useRevealState·표수 칩·앰버 후광·끝 문구)·04-20(선택 공개 연출: 화살표 RevealLayer·과반 확정 두근·느린 박동·진동·모션 줄이기)·04-21(최후 변론 1: DayTable verdict·center·원뿔, 남의 변론 하단 DefensePanel, defense 연결)·04-22(최후 변론 2: 후보 본인 하단 236·변론 칩 6개 DefenseChips·시트 재사용·보냈어요 2초)·04-23(처형: 앰버 처형 카드 MorningCard tone·사람→유령 400ms 전환 DayTable executed·execution 연결·하단 두 줄·직업 비노출 시험)·04-24(처형 투표 인트로 카드 ExecIntroCard·회색 처형 무효 카드 NoExecutionCard·밤 시작 문구 delayMs 지연·읽기 접두)·04-25(결과 화면 ResultScreen 최종 상태: 승리 배너·직업 카드 격자·판 요약·처음으로·ended 라우팅·직전 장면 크로스페이드)·04-26(결과 공개 연출: neutral → flip → done 상태기계, 300ms 카드 일괄 뒤집기·900ms 요약·처음으로 떠오름, 재접속·모션 줄이기는 즉시 최종 상태)·04-27(기록 카드 투표 줄: recordRows 순수 함수·날짜별 처형 여부 집계와 후보 선택 줄·단계별 inspectAllowed 로 열림·닫힘 규칙)·04-28(단계 × 보는 사람 상태 84칸 표 시험 verdictStates·새 CSS 정적 게이트 verdictCss, result.css 모션 줄이기 분기)·04-29(E2E 순수 검사 P1·P2·P3·P4·P9·P-COLOR, 앰버/진홍 후광 규칙, 스냅숏 계약은 lib.mjs 머리 한 곳) 완료, 다음 04-30. 배포는 04-35 에서만(D-26)
+Plan: 30 of 35
+Status: 화면 웨이브 진행 중 — 04-13(순수 모듈 verdict.ts)·04-14(토큰·dusk 장면 표·dusk 미리 받기)·04-15(테스트 방 testBotVote) 완료(웨이브 9 끝), 04-16(execVote 트레이서: 라우팅·useVerdictScene·ExecVotePanel)·04-17(테스트 시트 봇 처형 투표·봇 후보 선택 칩)·04-18(후보 선택 화면: DayTable halo·useViewChoice·CandidateVotePanel·candidateVote 연결)·04-19(선택 공개 상태: useRevealState·표수 칩·앰버 후광·끝 문구)·04-20(선택 공개 연출: 화살표 RevealLayer·과반 확정 두근·느린 박동·진동·모션 줄이기)·04-21(최후 변론 1: DayTable verdict·center·원뿔, 남의 변론 하단 DefensePanel, defense 연결)·04-22(최후 변론 2: 후보 본인 하단 236·변론 칩 6개 DefenseChips·시트 재사용·보냈어요 2초)·04-23(처형: 앰버 처형 카드 MorningCard tone·사람→유령 400ms 전환 DayTable executed·execution 연결·하단 두 줄·직업 비노출 시험)·04-24(처형 투표 인트로 카드 ExecIntroCard·회색 처형 무효 카드 NoExecutionCard·밤 시작 문구 delayMs 지연·읽기 접두)·04-25(결과 화면 ResultScreen 최종 상태: 승리 배너·직업 카드 격자·판 요약·처음으로·ended 라우팅·직전 장면 크로스페이드)·04-26(결과 공개 연출: neutral → flip → done 상태기계, 300ms 카드 일괄 뒤집기·900ms 요약·처음으로 떠오름, 재접속·모션 줄이기는 즉시 최종 상태)·04-27(기록 카드 투표 줄: recordRows 순수 함수·날짜별 처형 여부 집계와 후보 선택 줄·단계별 inspectAllowed 로 열림·닫힘 규칙)·04-28(단계 × 보는 사람 상태 84칸 표 시험 verdictStates·새 CSS 정적 게이트 verdictCss, result.css 모션 줄이기 분기)·04-29(E2E 순수 검사 P1·P2·P3·P4·P9·P-COLOR, 앰버/진홍 후광 규칙, 스냅숏 계약은 lib.mjs 머리 한 곳)·04-30(E2E 순수 검사 P5·P6·P7·P8·P10, 승인 완화 P-PANEL-236, 스냅숏 계약 완성) 완료, 다음 04-31. 배포는 04-35 에서만(D-26)
 Last activity: 2026-10-26 — Phase 4 execution started
 
 Progress: [██░░░░░░░░] 17%
@@ -137,6 +137,7 @@ Progress: [██░░░░░░░░] 17%
 | Phase 04 P27 | 13min | 2 tasks | 10 files |
 | Phase 4 P28 | 12min | 2 tasks | 4 files |
 | Phase 04 P29 | 25min | 2 tasks | 2 files |
+| Phase 04 P30 | 25min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -268,6 +269,7 @@ Recent decisions affecting current work:
 - [Phase 4]: 04-28: z-index 1 은 .mf-figure--exec-out(좌석 안 사람/유령 층 순서)만 장면 층 예외로 정적 시험에 적고 CSS 는 유지
 - [Phase 4]: 04-28: result.css 연출 애니메이션·전이를 prefers-reduced-motion 분기에서 CSS 로도 끈다(마운트 뒤 설정 변경 대응)
 - [Phase 4]: 04-29: E2E 진홍 판정은 브라우저가 센 개수(crimsonNew·crimsonScreen)가 필수이고 요소별 색 목록은 토큰 crimsonColors 와 비교하는 선택 입력 — lib 에 색 값을 박지 않음
+- [Phase 04]: 04-30: 승자 값은 citizenWin|mafiaWin, P7 표본에 nightIntro 를 더하고 회색·진홍은 토큰에서 읽은 목록으로 비교, 236 은 isCandidate 일 때만 요구(P-PANEL-236)
 
 ### Pending Todos
 
@@ -304,6 +306,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-28T11:05:04.330Z
-Stopped at: Completed 04-29-PLAN.md
+Last session: 2026-10-28T11:12:45.468Z
+Stopped at: Completed 04-30-PLAN.md
 Resume file: None
