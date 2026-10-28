@@ -32,6 +32,7 @@ interface Opts {
   testMode?: boolean;
   testRole?: "mafia" | "police" | "doctor" | "citizen";
   testBots?: number;
+  testBotVote?: { exec: "random" | "yes" | "no"; pick: "random" | "host" | "other" };
 }
 
 function makeView(o: Opts = {}): RoomView {
@@ -42,6 +43,7 @@ function makeView(o: Opts = {}): RoomView {
   if (o.testMode) me.testMode = true;
   if (o.testRole) me.testRole = o.testRole;
   if (o.testBots !== undefined) me.testBots = o.testBots;
+  if (o.testBotVote) me.testBotVote = o.testBotVote;
   const inDay = phase !== "lobby" && phase !== "assigning" && phase !== "roleReveal";
   return {
     code: "0042",
@@ -390,6 +392,120 @@ describe("대기실: 시트의 봇 줄 (U-10)", () => {
     expect(String(/#[0-9a-fA-F]{3,8}\b/.test(css))).toBe("false");
     expect(String(css.includes("mf-tt-sheet__step"))).toBe("true");
     expect(String(css.includes("var(--tap-min)"))).toBe("true");
+  });
+});
+
+describe("대기실: 시트의 봇 처형 투표·봇 후보 선택 (P-13)", () => {
+  const openSheet = (o: Opts, over: Partial<RoomConnection> = {}) => {
+    const utils = open({ testMode: true, ...o }, over);
+    fireEvent.click(testBtn() as HTMLElement);
+    return utils;
+  };
+  const sent = (c: RoomConnection): string => JSON.stringify((c.send as ReturnType<typeof vi.fn>).mock.calls);
+  const execGroup = () => within(sheet()).getByRole("group", { name: "봇 처형 투표" });
+  const pickGroup = () => within(sheet()).getByRole("group", { name: "봇 후보 선택" });
+  const execChip = (name: string) => within(execGroup()).getByRole("button", { name }) as HTMLButtonElement;
+  const pickChip = (name: string) => within(pickGroup()).getByRole("button", { name }) as HTMLButtonElement;
+  const pressed = (b: HTMLButtonElement) => b.getAttribute("aria-pressed");
+  const EXEC_NAMES = ["무작위", "모두 찬성", "모두 반대"];
+  const PICK_NAMES = ["무작위", "방장", "방장 아닌 사람"];
+
+  it("두 그룹이 role=group 과 aria-label 을 가지고 칩 이름이 계약대로이며 기본은 둘 다 무작위다", () => {
+    openSheet({});
+    expect(EXEC_NAMES.map((n) => pressed(execChip(n))).join(",")).toBe("true,false,false");
+    expect(PICK_NAMES.map((n) => pressed(pickChip(n))).join(",")).toBe("true,false,false");
+    expect(within(sheet()).getByText("봇 처형 투표").textContent).toBe("봇 처형 투표");
+    expect(within(sheet()).getByText("봇 후보 선택").textContent).toBe("봇 후보 선택");
+  });
+
+  it("봇이 0명이어도 칩은 켜져 있다", () => {
+    openSheet({ players: 1, testBots: 0 });
+    expect([...EXEC_NAMES.map(execChip), ...PICK_NAMES.map(pickChip)].map((b) => b.disabled).join(",")).toBe(
+      "false,false,false,false,false,false",
+    );
+  });
+
+  it("view.me.testBotVote 가 {no, host} 면 모두 반대와 방장이 눌려 있다", () => {
+    openSheet({ testBotVote: { exec: "no", pick: "host" } });
+    expect(EXEC_NAMES.map((n) => pressed(execChip(n))).join(",")).toBe("false,false,true");
+    expect(PICK_NAMES.map((n) => pressed(pickChip(n))).join(",")).toBe("false,true,false");
+  });
+
+  it("모두 찬성을 누르면 다른 그룹 값(random)을 함께 싣고, 이어 방장 아닌 사람을 누르면 앞서 고른 yes 를 함께 싣는다 (낙관적 표시 유지)", () => {
+    const { conn: c } = openSheet({});
+    fireEvent.click(execChip("모두 찬성"));
+    expect(sent(c)).toBe('[[{"t":"testBotVote","exec":"yes","pick":"random"}]]');
+    expect(pressed(execChip("모두 찬성"))).toBe("true");
+    expect(pressed(execChip("무작위"))).toBe("false");
+    fireEvent.click(pickChip("방장 아닌 사람"));
+    expect(sent(c)).toBe(
+      '[[{"t":"testBotVote","exec":"yes","pick":"random"}],[{"t":"testBotVote","exec":"yes","pick":"other"}]]',
+    );
+    expect(pressed(execChip("모두 찬성"))).toBe("true");
+    expect(pressed(pickChip("방장 아닌 사람"))).toBe("true");
+  });
+
+  it("서버 값이 no/host 일 때 후보를 무작위로 바꾸면 exec no 를 그대로 싣는다", () => {
+    const { conn: c } = openSheet({ testBotVote: { exec: "no", pick: "host" } });
+    fireEvent.click(pickChip("무작위"));
+    expect(sent(c)).toBe('[[{"t":"testBotVote","exec":"no","pick":"random"}]]');
+  });
+
+  it("이미 눌린 칩을 다시 눌러도 보내지 않는다", () => {
+    const { conn: c } = openSheet({ testBotVote: { exec: "no", pick: "host" } });
+    fireEvent.click(execChip("모두 반대"));
+    fireEvent.click(pickChip("방장"));
+    expect(sent(c)).toBe("[]");
+    cleanup();
+    const { conn: c2 } = openSheet({});
+    fireEvent.click(execChip("무작위"));
+    expect(sent(c2)).toBe("[]");
+  });
+
+  it("새 view 객체가 오면 낙관적 선택을 버리고 서버 값을 따른다", () => {
+    connectionMock.current = conn(makeView({ testMode: true }));
+    const { rerender } = render(<RoomScreen code="0042" token={"t".repeat(43)} onExit={vi.fn()} />);
+    fireEvent.click(testBtn() as HTMLElement);
+    fireEvent.click(execChip("모두 찬성"));
+    expect(pressed(execChip("모두 찬성"))).toBe("true");
+    connectionMock.current = conn(makeView({ testMode: true, testBotVote: { exec: "no", pick: "other" } }));
+    rerender(<RoomScreen code="0042" token={"t".repeat(43)} onExit={vi.fn()} />);
+    expect(EXEC_NAMES.map((n) => pressed(execChip(n))).join(",")).toBe("false,false,true");
+    expect(PICK_NAMES.map((n) => pressed(pickChip(n))).join(",")).toBe("false,false,true");
+  });
+
+  it("canSend 가 거짓이면 칩이 모두 꺼진다", () => {
+    openSheet({}, { canSend: false });
+    expect([...EXEC_NAMES.map(execChip), ...PICK_NAMES.map(pickChip)].map((b) => b.disabled).join(",")).toBe(
+      "true,true,true,true,true,true",
+    );
+  });
+
+  it("canSend 가 거짓이면 눌러도 보내지 않는다", () => {
+    const { conn: c } = openSheet({}, { canSend: false });
+    fireEvent.click(execChip("모두 찬성"));
+    expect(sent(c)).toBe("[]");
+  });
+
+  it("게임 중(낮 토론) 시트에는 두 그룹이 없다", () => {
+    open({ testMode: true, phase: "discussion" });
+    fireEvent.click(testBtn() as HTMLElement);
+    expect(String(within(sheet()).queryByRole("group", { name: "봇 처형 투표" }))).toBe("null");
+    expect(String(within(sheet()).queryByRole("group", { name: "봇 후보 선택" }))).toBe("null");
+  });
+
+  it("두 그룹은 봇 줄 아래, 두 동작 버튼 위에 놓인다", () => {
+    openSheet({});
+    const bots = sheet().querySelector(".mf-tt-sheet__bots") as HTMLElement;
+    const list = sheet().querySelector(".mf-tt-sheet__list") as HTMLElement;
+    const follows = (a: Node, b: Node) => (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
+    expect(String(follows(bots, execGroup()) && follows(execGroup(), pickGroup()) && follows(pickGroup(), list))).toBe("true");
+  });
+
+  it("testtools.css 에 새 구역 규칙이 있고 hex 색이 없다", () => {
+    const css = readFileSync("src/styles/testtools.css", "utf8");
+    expect(String(css.includes(".mf-tt-sheet__botvote"))).toBe("true");
+    expect(String(/#[0-9a-fA-F]{3,8}\b/.test(css))).toBe("false");
   });
 });
 
