@@ -3,6 +3,7 @@ import type { CSSProperties, ReactElement } from "react";
 import type { EmojiId, RoleId } from "../../shared/protocol";
 import { DAY_SCENE_H, DAY_SCENE_W, FIG_H, FIG_W, SCENE_PAD_DEFAULT, dayTableGeometry, daySeatLayout, px } from "../game/dayTable";
 import { ROLE_TEXT } from "../game/roleText";
+import { chipAnchor } from "../game/verdict";
 import { Figure } from "./Figure";
 import { Icon } from "./Icon";
 import "../styles/daytable.css";
@@ -67,6 +68,11 @@ export interface DayTableSeat {
   halo?: "white" | "amber" | "crimson" | "none";
   /** onPick 버튼의 눌림 상태(aria-pressed). 후광만 쓰는 투표 구간용 — pick.mine 과 달리 머리 위 배지를 그리지 않는다. 안 주면 !!pick.mine */
   pressed?: boolean;
+  /**
+   * 후보 선택 공개의 표수 칩(UI-SPEC 8.3). 그 자리 머리 위에 n 을 그린다(장식, 클릭을 가로채지 않음). tone: plain(일반) · pop(방금 닿음, 앰버 팝) ·
+   * lead(유일한 최다, 앰버 유지·큰 칩) · beat(04-20 이 확정 두근을 얹는 자리, 지금은 lead 와 같은 모양). 숫자가 오르면 새 노드라 팝이 다시 돈다.
+   */
+  chip?: { n: number; tone: "plain" | "pop" | "lead" | "beat" };
   /** 아침: 어둡게 층(z 30) 위(z 31)로 올려 어두워지지 않게 한다. 방금 탈락한 자리 */
   spotlit?: boolean;
   /** spotlit 일 때만 의미: 400ms 맥동을 한 번 돈다(밤 → 아침을 직접 본 경우에만 켠다) */
@@ -106,6 +112,8 @@ const HALO_CLASS: Readonly<Record<NonNullable<DayTableSeat["halo"]>, string | un
 
 /** 이모티콘 층 z 기준값: 이름표(최대 11)·캐릭터(최대 22)·어둡게 층(30)·강조(31)보다 위. emoji.z 가 더해진다. */
 const EMOJI_Z = 60;
+/** 표수 칩 z-index: 캐릭터(22)·어둡게 층(30)·강조(31) 위, 이모티콘(60+) 아래 */
+const CHIP_Z = 46;
 /** 어둡게 층 위로 올라온 자리(방금 탈락한 유령)의 z-index */
 const SPOTLIT_Z = 31;
 
@@ -349,6 +357,24 @@ export function DayTable({
           >
             <Icon name={emoji.icon} size={22} />
           </div>
+        );
+      })}
+      {places.map((p) => {
+        const chip = bySeat.get(p.seat)?.chip;
+        if (!chip) return null;
+        // 위치는 chipAnchor 한 곳(머리 위 8px, 위는 4 이상·좌우는 장면 안). 숫자가 key 에 들어 오르면 새 노드가 되어 팝이 다시 돈다.
+        const big = chip.tone === "lead" || chip.tone === "beat";
+        const rect = chipAnchor({ x: p.x, y: p.y, scale: p.scale }, big ? "lead" : "normal", sceneW);
+        return (
+          <span
+            key={`c${p.seat}:${chip.n}`}
+            className={`mf-vchip mf-vchip--${chip.tone}`}
+            data-seat={p.seat}
+            aria-hidden="true"
+            style={{ left: px(rect.left), top: px(rect.top), width: px(rect.width), height: px(rect.height), zIndex: CHIP_Z }}
+          >
+            {chip.n}
+          </span>
         );
       })}
       {dim ? (

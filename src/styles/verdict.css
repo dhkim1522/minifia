@@ -15,3 +15,41 @@
 @media (prefers-reduced-motion: reduce) {
   .mf-execvote__num { animation: none; }
 }
+
+/* 후보 선택 공개의 표수 칩(UI-SPEC 8.3, 04-19): 대상 머리 위 가운데. 위치·크기는 DayTable 이 인라인으로 준다(game/verdict.ts chipAnchor).
+   일반 gray-100 바탕·night-900 글자 16px 700, 방금 닿은 칩은 앰버 면 + 팝, 유일한 최다 칩은 앰버 면 유지 + 24px 큰 칩(외곽선으로 굵게).
+   앰버는 면에만 쓴다(글자색 아님). 칩은 장식이라 클릭을 가로채지 않는다. */
+.mf-vchip {
+  position: absolute;
+  min-width: 28px;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 7px;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--night-900);
+  background: var(--gray-100);
+  box-shadow: 0 4px 10px var(--shadow);
+  pointer-events: none;
+}
+/* 닿은 순간: 앰버 면, scale 1 → 1.25 → 1 을 220ms 돈다(개별 속성 scale) */
+.mf-vchip--pop {
+  background: var(--amber-400);
+  animation: mf-vchip-pop 220ms var(--ease-out) both;
+}
+/* 유일한 최다(lead), 04-20 이 확정 두근을 얹을 자리(beat — 지금은 lead 와 같은 모양): 앰버 면 유지, 24px, 높이 32, 안쪽 여백 4 */
+.mf-vchip--lead, .mf-vchip--beat {
+  padding: 0 4px;
+  font-size: 24px;
+  background: var(--amber-400);
+  -webkit-text-stroke: 1.4px currentColor;
+  paint-order: stroke fill;
+}
+@keyframes mf-vchip-pop { 0% { scale: 1; } 50% { scale: 1.25; } 100% { scale: 1; } }
+/* 모션 줄이기: 팝 없이 색만 */
+@media (prefers-reduced-motion: reduce) {
+  .mf-vchip--pop { animation: none; }
+}
