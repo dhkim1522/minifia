@@ -5,6 +5,7 @@ import { mkdirSync } from "node:fs";
 import {
   SetupError,
   armIntroWatch,
+  armVerdictWatch,
   chooseRole,
   clickInDialog,
   clickTopmostPoint,
@@ -13,19 +14,27 @@ import {
   collectSnapshot,
   createTestRoom,
   inspectSeat,
+  leaveFromResult,
   leaveLobby,
   openChatHistory,
   openHostPage,
   openRoleCard,
   openTestSheet,
+  pickCandidate,
   pickChip,
   readBackdropLayers,
   readHeaderContrast,
   readIntroWatch,
   readSceneIntro,
   readStage,
+  readTokenColors,
+  readVerdict,
+  readVerdictWatch,
+  rebaseSeries,
   resetAndLeave,
+  sampleSeries,
   selectRoleCardTab,
+  setBotVote,
   setBots,
   settle,
   shot,
@@ -33,19 +42,26 @@ import {
   sleep,
   startGame,
   tapSeat,
+  voteAs,
   waitBackdropStable,
+  waitPhaseIn,
 } from "./browser.mjs";
 import {
   ROLE_NAME,
   backdropSceneChecks,
+  candidateChecks,
   claimChatIssues,
+  colorRuleChecks,
   dayChecks,
+  defenseChecks,
   dimChecks,
+  executionChecks,
   feltGapChecks,
   feltStable,
   genericIssues,
   headerContrastChecks,
   inspectChecks,
+  introChecks,
   journalChecks,
   lobbyShapeChecks,
   lineCount,
@@ -54,8 +70,10 @@ import {
   morningGoneChecks,
   sceneIntroChecks,
   noNightNoticeChecks,
+  placementChecks,
   rectInside,
   rectsOverlap,
+  revealChecks,
   roleCardButtonChecks,
   roleCardTabChecks,
   spectatorChecks,
@@ -63,10 +81,13 @@ import {
   tagsOverlap,
   turnChecks,
   crownChecks,
+  voteChecks,
 } from "./lib.mjs";
 
 export const OUT_DIR = new URL("./out/", import.meta.url).pathname;
 const HOST_NICK = "화면검사기";
+/** spec4: 방장이 첫 밤에 탈락할 때까지 같은 방에서 다시 시작하는 최대 횟수 */
+const SPEC_MAX_NIGHTS = 8;
 
 /** 검사 한 줄을 쌓는다. */
 function recorder(ctx) {
@@ -278,6 +299,15 @@ async function dayIntro(ctx, id) {
     return true;
   });
   rec(sc, "N9", "낮 시작 문구가 사라짐", n9.ok, n9.detail);
+}
+
+/** 밤 시작 문구(.mf-sceneintro)가 DOM 에 나타날 때까지 기다린다. 못 나타나면 조용히 돌아간다(읽기 쪽 검사가 `문구 없음` 으로 실패시킨다). */
+async function waitSceneIntro(page, ms) {
+  try {
+    await page.waitForSelector(".mf-sceneintro", { state: "attached", timeout: ms });
+  } catch {
+    /* 아래 읽기가 null 을 돌려주고 N6 이 실패로 보고한다 */
+  }
 }
 
 /** 밤 하단·알약·안내 줄 수(N1·N4·N5). 누르기 전 스냅숏으로 본다. */
@@ -521,6 +551,8 @@ async function gameFlow(ctx, { id, players, role, states }) {
   await openTestSheet(page);
   await setBots(page, tracker, players - 1);
   await chooseRole(page, tracker, role);
+  // 결정성(04-32): 봇 처형 투표를 모두 반대로 고정 — 모든 skipTo 가 처형 없이 밤으로 가서 방장 탈락·종료 우연이 사라진다(UI-SPEC 15.1·15.4, P-13)
+  await setBotVote(page, tracker, { exec: "no", pick: "random" });
   // [게임 시작] 직전의 대기실 테이블: 이후 배정·낮·밤·아침과 같은 자리여야 한다(D7·D9·T1 이 함께 본다)
   await grabLobbyStage(ctx, "lobby", 700);
   await startGame(page, tracker, { onAssigning: () => grabLobbyStage(ctx, "assigning") });
@@ -560,6 +592,8 @@ async function gameFlow(ctx, { id, players, role, states }) {
       await skipTo(page, tracker, "night");
       // N6: 밤에 막 들어선 직후(settle 전)에는 '밤이 되었습니다' 문구가 떠 있다. 아래 밤 검사는 문구가 아직 떠 있을 수 있는 시점에도 그대로 돌려
       // 문구가 터치·검사를 방해하지 않는 것을 함께 증명한다(pointer-events none).
+      // 04-24 이후 처형 무효로 오는 밤은 회색 무효 카드가 1.6초 먼저 뜨고 시작 문구는 그 뒤 2초다 — 문구가 나타날 때까지 최대 4초 기다린 뒤 읽는다.
+      await waitSceneIntro(page, 4000);
       recOne(rec, `${id}/night`, sceneIntroChecks(await readSceneIntro(page)));
       await settle(page);
       const { snap, mySeat } = await dayState(ctx, id, "night");
@@ -568,7 +602,7 @@ async function gameFlow(ctx, { id, players, role, states }) {
       await nightActions(ctx, id, role, snap, mySeat);
       // X1(밤): 어떤 자리를 눌러도 기록 카드가 열리지 않는다(행위자는 선택만 됨)
       recOne(rec, `${id}/night`, inspectChecks(await collectSnapshot(page), { night: true }));
-      // N7: 문구는 2초 뒤 사라진다(여유를 두어 3.5초 안에 DOM 에서 없어지면 통과)
+      // N7: 문구는 시작 2초 뒤 사라진다(문구가 나타난 뒤를 기준으로 여유를 두어 3.5초 안에 DOM 에서 없어지면 통과 — 위에서 문구가 나타난 것을 기다렸다)
       const n7 = await attempt(async () => {
         await page.waitForSelector(".mf-sceneintro", { state: "detached", timeout: 3500 });
         return true;
@@ -635,14 +669,24 @@ async function specFlow(ctx) {
   await openTestSheet(page);
   await setBots(page, tracker, 3);
   await chooseRole(page, tracker, "citizen");
+  await setBotVote(page, tracker, { exec: "no", pick: "random" }); // 처형 없이 밤 암살로만 방장 탈락(결정성, 04-32)
   await startGame(page, tracker);
   ctx.stage = "play";
   const v0 = tracker.last();
   const mySeat = v0.me.seat;
   rec(`${id}/setup`, "S3", "인원·지정 직업", v0.players.length === 4 && v0.me.role === "citizen", `인원 ${v0.players.length}/4, 직업 ${v0.me.role}/citizen`);
 
+  // 방장 탈락은 밤 암살로만 일어난다(봇 처형 투표 모두 반대). 4명판은 첫 밤에 방장이 죽지 않으면(2/3) 두 번째 밤 뒤 1대1 로 판이 끝나므로(04-08 종료 규칙)
+  // 방장이 살아 있으면 같은 방을 [대기실로 되돌리기] 해서 첫 밤부터 다시 한다(방 설정·봇 고정은 되돌려도 남는다). 최대 8번(실패 확률 (2/3)^8 ≈ 4%).
   let dead = false;
-  for (let day = 1; day <= 4 && !dead; day++) {
+  for (let attempt = 1; attempt <= SPEC_MAX_NIGHTS && !dead; attempt++) {
+    if (attempt > 1) {
+      await openTestSheet(page);
+      await clickInDialog(page, "테스트 도구", "대기실로 되돌리기");
+      await tracker.waitFor((v) => v.phase === "lobby", 3000, "대기실 복귀");
+      await page.waitForTimeout(800); // 대기실 화면이 다시 그려지는 동안 시트 닫기 버튼이 움직인다
+      await startGame(page, tracker);
+    }
     await skipTo(page, tracker, "claim");
     await skipTo(page, tracker, "discussion");
     await skipTo(page, tracker, "night");
@@ -666,7 +710,7 @@ async function specFlow(ctx) {
     const mine = snap.seats.find((s) => s.seat === mySeat);
     rec(sc, "M3", "탈락한 방장 자리가 강조됨", !!mine?.spotlit, `내 자리 spotlit ${mine?.spotlit}`);
   }
-  if (!dead) throw new SetupError("4일 안에 방장이 탈락하지 않음");
+  if (!dead) throw new SetupError(`${SPEC_MAX_NIGHTS}번의 첫 밤 안에 방장이 탈락하지 않음`);
 
   const specOf = (v) => (v.spectate?.seats ?? []).map((s) => ({ seat: s.seat, job: s.job, alive: v.players.find((p) => p.seat === s.seat)?.alive !== false }));
   const aliveBot = () => tracker.last().players.find((p) => p.seat !== mySeat && p.alive !== false);
@@ -710,6 +754,216 @@ async function specFlow(ctx) {
   await resetAndLeave(page, tracker);
 }
 
+
+// ---- vote5: 처형 구간 전체(04-32, UI-SPEC 15.2) ----
+
+/** 후광 목록에서 앰버를 뺀 스냅숏: 공개 단계의 앰버 후광은 박동 애니메이션 중이라 K4 의 9px 규칙(정지 상태)을 적용하지 않는다(04-31 SUMMARY). 흰·진홍만 본다. */
+const withoutAmberHalo = (snap) => ({ ...snap, halo: snap.halo ? { ...snap.halo, items: (snap.halo.items ?? []).filter((h) => h.cls !== "amber") } : snap.halo });
+
+/** 5명(방장 시민 + 봇 4). 봇: 처형 투표 모두 찬성, 후보 선택은 방장 아닌 가장 낮은 자리. 방장은 찬성 후 같은 자리를 고른다. */
+async function voteFlow(ctx) {
+  const id = "vote5";
+  const rec = recorder(ctx);
+  const host = await startHost(ctx, id);
+  const { page, tracker } = host;
+  await settle(page);
+  await openTestSheet(page);
+  await setBots(page, tracker, 4);
+  await chooseRole(page, tracker, "citizen");
+  await setBotVote(page, tracker, { exec: "yes", pick: "other" });
+  await grabLobbyStage(ctx, "lobby", 700);
+  await startGame(page, tracker, { onAssigning: () => grabLobbyStage(ctx, "assigning") });
+  ctx.stage = "play";
+  const v0 = tracker.last();
+  const mySeat = v0.me.seat;
+  rec(`${id}/setup`, "S3", "인원·지정 직업", v0.players.length === 5 && v0.me.role === "citizen", `인원 ${v0.players.length}/5, 직업 ${v0.me.role}/citizen`);
+  const colors = await readTokenColors(page);
+  const read = () => readVerdict(page, colors);
+  const colorRule = (sc, v) => recOne(rec, sc, colorRuleChecks(v, { crimsonColors: colors.crimson, wholeScreenCrimson: true })); // 방장이 시민 → 화면 전체 진홍 0 (D-33)
+  const still = (phase, what) => {
+    if (tracker.last()?.phase !== phase) throw new SetupError(`${what} 중에 단계가 ${tracker.last()?.phase} 로 바뀜 (기대 ${phase})`);
+  };
+
+  // 1) discussion
+  await skipTo(page, tracker, "discussion");
+  await settle(page);
+  await stageChecks(ctx, id, "discussion", "discussion");
+  {
+    const { snap } = await dayState(ctx, id, "discussion");
+    recAll(rec, `${id}/discussion`, turnChecks(snap, { expectNone: true }));
+  }
+
+  // 2) exec-intro: 관찰자와 시계열 표본기를 단계를 넘기기 전에 시작한다(skipTo 는 시트를 닫느라 약 1초 걸려 카드 도착을 놓친다, 04-31 SUMMARY 4번)
+  {
+    const sc = `${id}/exec-intro`;
+    await armVerdictWatch(page);
+    const series = sampleSeries(page, { durationMs: 3800, stepMs: 80, take: () => read() });
+    series.catch(() => {}); // 아래에서 await 하기 전에 skipTo 가 던져도 처리 안 된 거부가 되지 않게
+    await skipTo(page, tracker, "execVote");
+    const clickAt = await page.evaluate(() => performance.now());
+    await voteAs(page, tracker, "찬성"); // 카드 위에서 눌러도 통과해야 한다(P2)
+    const samples = await series;
+    const watch = await readVerdictWatch(page);
+    if (watch.introSeenAt === null) throw new SetupError("처형 투표 인트로 카드가 DOM 에 나타나지 않음");
+    if (watch.introGoneAt !== null && clickAt >= watch.introGoneAt) throw new SetupError("인트로 카드가 사라진 뒤에 눌러 통과를 확인하지 못함");
+    const rebased = rebaseSeries(samples, watch.introSeenAt).map((x) => ({ t: x.t, intro: x.value.intro }));
+    recOne(rec, sc, introChecks(rebased, { clickedThrough: tracker.last()?.me?.voteAgree === true }));
+    await stageChecks(ctx, id, "exec-intro", "execVote");
+  }
+
+  // 3) exec-vote: 카드가 사라진 뒤의 하단·익명·진홍 규칙, 번복
+  {
+    const sc = `${id}/exec-vote`;
+    const v = await read();
+    still("execVote", "처형 여부 투표 읽기");
+    recOne(rec, sc, voteChecks(v));
+    colorRule(sc, v);
+    const { snap } = await dayState(ctx, id, "exec-vote");
+    recAll(rec, sc, turnChecks(snap, { expectNone: true, crimsonAllowed: false })); // K4: 방장이 시민이면 투표 단계에 진홍 후광 0
+    await stageChecks(ctx, id, "exec-vote", "execVote");
+    const flip = await attempt(async () => {
+      const tally = async () => (await read()).bottom.tally.replace(/아직.*$/, "").trim();
+      const before = await tally();
+      await voteAs(page, tracker, "반대");
+      await page.waitForFunction((t) => (document.querySelector(".mf-execvote__tally")?.textContent ?? "").replace(/아직.*$/, "").trim() !== t, before, { timeout: 3000 });
+      const after = await tally();
+      await voteAs(page, tracker, "찬성");
+      return after !== before ? true : { ok: false, detail: `집계 "${before}" → "${after}" 변화 없음` };
+    });
+    rec(sc, "P1", "번복하면 집계 글자가 바뀜", flip.ok, flip.detail);
+    still("execVote", "번복");
+  }
+
+  // 4) cand-vote: 자리 규칙·흰 후광 하나가 따라 움직임·알약
+  const alive = () => tracker.last().players.filter((p) => p.alive !== false).map((p) => p.seat).sort((a, b) => a - b);
+  const deadSeats = () => tracker.last().players.filter((p) => p.alive === false).map((p) => p.seat);
+  const others = alive().filter((x) => x !== mySeat);
+  const target = others[0];
+  const second = others[1];
+  {
+    const sc = `${id}/cand-vote`;
+    await skipTo(page, tracker, "candidateVote");
+    await settle(page);
+    still("candidateVote", "후보 선택 도착");
+    recOne(rec, sc, candidateChecks(await read(), { mySeat, deadSeats: deadSeats(), chosenSeat: null }));
+    const moved = await attempt(async () => {
+      await pickCandidate(page, tracker, second);
+      recOne(rec, sc, candidateChecks(await read(), { mySeat, deadSeats: deadSeats(), chosenSeat: second, name: nickOf(tracker.last(), second) }));
+      await pickCandidate(page, tracker, target);
+    });
+    rec(sc, "P3", "다른 자리를 눌렀다 돌아오면 후광이 따라 움직임", moved.ok, moved.detail);
+    const v = await read();
+    recOne(rec, sc, candidateChecks(v, { mySeat, deadSeats: deadSeats(), chosenSeat: target, name: nickOf(tracker.last(), target) }));
+    colorRule(sc, v);
+    await stageChecks(ctx, id, "cand-vote", "candidateVote");
+    const { snap } = await dayState(ctx, id, "cand-vote");
+    recAll(rec, sc, turnChecks(snap, { expectNone: true, crimsonAllowed: false }));
+    still("candidateVote", "후보 선택 검사");
+  }
+
+  // 5) reveal: 표본기를 단계를 넘기기 전에 시작해 4초 공개 전체를 모은다. 단계가 reveal 인 표본만 쓴다(추적 단계는 DOM 보다 먼저 바뀐다)
+  {
+    const sc = `${id}/reveal`;
+    const series = sampleSeries(page, {
+      durationMs: 6500,
+      stepMs: 100,
+      take: async () => {
+        const before = tracker.last()?.phase;
+        const v = await read();
+        return { v, inPhase: before === "candidateVoteReveal" && tracker.last()?.phase === "candidateVoteReveal" };
+      },
+    });
+    series.catch(() => {});
+    await skipTo(page, tracker, "candidateVoteReveal");
+    await settle(page);
+    const view = tracker.last();
+    const log = (view.day?.voteLog ?? []).find((e) => e.n === view.day?.n) ?? (view.day?.voteLog ?? []).at(-1);
+    const n = log?.cand?.votes?.length;
+    await stageChecks(ctx, id, "reveal", "candidateVoteReveal");
+    const { snap } = await dayState(ctx, id, "reveal");
+    recAll(rec, sc, turnChecks(withoutAmberHalo(snap), { expectNone: true, crimsonAllowed: false })); // K4: 앰버(박동 중)는 빼고 흰·진홍만
+    const all = await series;
+    const kept = all.filter((x) => x.value.inPhase);
+    recOne(rec, sc, revealChecks(kept.map((x) => ({ t: x.t, reveal: x.value.v.reveal, dt: x.value.v.dt, crimsonNew: x.value.v.crimsonNew })), { n, size: ctx.size }));
+    // P10: 칩이 보이는 모든 표본에서 이름표·헤더·패널과 겹치지 않음(정지 + 팝 중)
+    const withChips = kept.filter((x) => x.value.v.reveal.chips.length > 0);
+    const bad = withChips.map((x) => placementChecks(x.value.v)).filter((r) => !r.ok);
+    const detail = [...new Set(bad.map((r) => r.detail))].slice(0, 3).join(" / ");
+    rec(sc, "P10", withChips.length === 0 ? "배치: 칩·카드가 이름표·헤더·패널과 겹치지 않음 (칩 표본 없음)" : "배치: 칩·카드가 이름표·헤더·패널과 겹치지 않음", withChips.length > 0 && bad.length === 0, withChips.length === 0 ? "측정값 없음(칩이 보이는 표본)" : `${bad.length}/${withChips.length} 표본: ${detail}`);
+    if (kept.length > 0) colorRule(sc, kept[kept.length - 1].value.v);
+  }
+
+  // 6) defense: 후보는 남(봇) — 후보 가운데·어둡게·원뿔·패널 157, 변론 줄, 이모티콘
+  const candidateSeat = tracker.last().day?.candidate ?? target;
+  {
+    const sc = `${id}/defense`;
+    await skipTo(page, tracker, "defense");
+    await settle(page);
+    still("defense", "변론 도착");
+    const v = await read();
+    recOne(rec, sc, defenseChecks(v, { isCandidate: candidateSeat === mySeat }));
+    colorRule(sc, v);
+    await checkState(ctx, id, "defense");
+    await stageChecks(ctx, id, "defense", "defense");
+    // 후보 봇의 변론 줄(1~5초 뒤)이 하단 채팅에 보임. 안 오면 건너뜀(봇은 세 문장 중 하나를 보낸다)
+    const line = await page.waitForSelector(".mf-turnpanel .mf-msglog__item", { state: "attached", timeout: 6000 }).then(() => true, () => false);
+    if (line) rec(sc, "P5", "후보의 변론 줄이 하단 채팅에 보임", (await page.locator(".mf-turnpanel .mf-msglog__item").count()) >= 1, "채팅 줄 없음");
+    // 이모티콘 하나: 트레이에서 보내면 머리 위에 뜬다
+    const emoji = await attempt(async () => {
+      await page.getByRole("button", { name: "이모티콘", exact: true }).first().click({ timeout: 4000 });
+      await page.locator('dialog[aria-label="이모티콘"] .mf-emojitray__cell').first().click({ timeout: 4000 });
+      await page.waitForSelector(".mf-dt__emoji", { state: "attached", timeout: 3000 });
+      await closeSheet(page, "이모티콘");
+    });
+    rec(sc, "P5", "변론 중 이모티콘이 머리 위에 뜸", emoji.ok, emoji.detail);
+  }
+
+  // 7) execution: 5초뿐이라 읽기부터
+  {
+    const sc = `${id}/execution`;
+    await skipTo(page, tracker, "execution");
+    const v = await read();
+    const viewerAlive = !isDeadView(tracker.last());
+    still("execution", "처형 읽기");
+    recOne(rec, sc, executionChecks(v, { viewerAlive, candidateSeat }));
+    colorRule(sc, v);
+    await checkState(ctx, id, "execution");
+    await stageChecks(ctx, id, "execution", "execution");
+  }
+
+  // 흐름 끝(밤이든 종료든): 낮 고정물이 단계마다 그대로(D7·D9·T1)
+  const tableChecks = () => {
+    const days = ctx.dayStates ?? [];
+    if (days.length >= 2) {
+      const f = feltStable(days.map((d) => ({ state: d.state, rect: d.felt })));
+      rec(`${id}/table`, "D7", f.label, f.ok, f.detail);
+    }
+    const badTags = days.map((d) => ({ d, r: tagsOverlap(d.tags) })).filter((x) => !x.r.ok);
+    rec(`${id}/table`, "D9", "이름표끼리 안 겹침", badTags.length === 0, badTags.map((x) => `${x.d.state}: ${x.r.detail}`).join("; "));
+    const t1 = stageStable(days.map((d) => ({ state: d.state, stage: d.stage, mySeat: d.mySeat })));
+    rec(`${id}/table`, t1.id, t1.label, t1.ok, t1.detail);
+    rec(`${id}/setup`, "S4", "단계 도달", true);
+  };
+
+  // 8) 처형 뒤: 대상 직업에 따라 밤 또는 종료(결과 화면 검사는 04-33)
+  await waitPhaseIn(tracker, ["night", "ended"]);
+  if (tracker.last().phase === "ended") {
+    await settle(page);
+    tableChecks();
+    await leaveFromResult(page);
+    return;
+  }
+  await page.waitForSelector(".mf-sceneintro", { state: "detached", timeout: 4000 }).catch(() => {});
+  await settle(page);
+  await stageChecks(ctx, id, "night", "night");
+  {
+    const { snap } = await dayState(ctx, id, "night");
+    recAll(rec, `${id}/night`, turnChecks(snap, { expectNone: true }));
+  }
+  tableChecks();
+  await resetAndLeave(page, tracker);
+}
+
 const game = (id, players, role, states) => (ctx) => gameFlow(ctx, { id, players, role, states });
 const CLAIMS = ["claim-mine", "claim-other", "claim-done", "discussion"];
 
@@ -720,5 +974,6 @@ export const FLOWS = [
   { id: "mafia8", run: game("mafia8", 8, "mafia", [...CLAIMS, "night", "morning", "day-intro", "rolecard-btn", "next-day"]) },
   { id: "doctor5", run: game("doctor5", 5, "doctor", [...CLAIMS, "night", "morning", "day-intro", "rolecard-btn", "next-day"]) },
   { id: "spec4", run: specFlow },
+  { id: "vote5", run: voteFlow },
 ];
 export { SetupError };

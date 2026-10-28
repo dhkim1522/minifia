@@ -14,7 +14,8 @@ export const TAP_MIN = 44;
 export const FONT_HOSTS = ["fonts.googleapis.com", "fonts.gstatic.com"];
 export const LOCAL_HOSTS = ["localhost", "127.0.0.1", "[::1]"];
 export const MAX_PARALLEL = 3;
-export const OVERALL_LIMIT_MS = 600_000;
+// 흐름이 늘었다(vote5 등, 04-32) — 기준 수치가 아니라 중단 한도다.
+export const OVERALL_LIMIT_MS = 900_000;
 
 // ---- 처형 구간 스냅숏 계약 (04-29) ----
 // 처형 구간(execVote·candidateVote·candidateVoteReveal·defense·execution·ended) 검사 P1~P10 이 받는 값의 모양을 여기 한 곳에 적는다.
