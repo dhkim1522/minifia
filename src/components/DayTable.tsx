@@ -94,6 +94,14 @@ export interface DayTableProps {
   dim?: { exitDelayMs: number };
 }
 
+/** 좌석 halo → 그림 후광 클래스(none 은 클래스 없음) */
+const HALO_CLASS: Readonly<Record<NonNullable<DayTableSeat["halo"]>, string | undefined>> = {
+  white: "mf-figure--halo-white",
+  amber: "mf-figure--halo-amber",
+  crimson: "mf-figure--halo-crimson",
+  none: undefined,
+};
+
 /** 이모티콘 층 z 기준값: 이름표(최대 11)·캐릭터(최대 22)·어둡게 층(30)·강조(31)보다 위. emoji.z 가 더해진다. */
 const EMOJI_Z = 60;
 /** 어둡게 층 위로 올라온 자리(방금 탈락한 유령)의 z-index */
@@ -216,7 +224,7 @@ export function DayTable({
         }`;
         // 후광은 그림 img 하나에만 붙는다. halo 가 있으면 그 값, 없으면 파생: 흰(차례·내가 고른 대상) > 진홍(동료)
         const derivedHalo = s.turn || s.pick?.mine ? "mf-figure--halo-white" : s.isAlly ? "mf-figure--halo-crimson" : undefined;
-        const haloClass = s.halo !== undefined ? (s.halo === "none" ? undefined : `mf-figure--halo-${s.halo}`) : derivedHalo;
+        const haloClass = s.halo !== undefined ? HALO_CLASS[s.halo] : derivedHalo;
         const inner = (
           <>
             {/* key: 직업 그림으로 바뀌는 자리는 노드가 새로 만들어져 300ms 페이드가 한 번 돈다 */}
