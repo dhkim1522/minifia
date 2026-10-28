@@ -467,3 +467,207 @@ describe("result.css 정적 단언 (happy-dom 은 레이아웃을 재지 못한�
     expect(rule(".mf-result__sm")).toMatch(/gap:\s*var\(--space-xs\)/);
   });
 });
+
+// ---- 04-26 Task 1·2: 결과 공개 연출 neutral → flip → done (D-17, UI-SPEC 11.2) ----
+describe("결과 공개 연출 상태기계 (D-17, UI-SPEC 11.2)", () => {
+  const stageOf = (c: HTMLElement) => c.querySelector<HTMLElement>(".mf-result")!.dataset.stage;
+  const neutralImgs = (c: HTMLElement) => Array.from(c.querySelectorAll<HTMLImageElement>(".mf-result__neutral"));
+  const roleImgs = (c: HTMLElement) => Array.from(c.querySelectorAll<HTMLImageElement>(".mf-result__art"));
+  const rises = (c: HTMLElement) => Array.from(c.querySelectorAll<HTMLElement>(".mf-result__rise"));
+  const execView = (): RoomView => {
+    const v = makeView();
+    v.phase = "execution";
+    delete (v as { result?: unknown }).result;
+    v.day = { ...v.day!, candidate: 3, execution: { seat: 3, phrase: 0 } };
+    return v;
+  };
+  const morningView = (): RoomView => {
+    const v = execView();
+    v.phase = "morning";
+    v.day = { ...v.day!, morning: { eliminated: 2 } as never };
+    return v;
+  };
+  /** 같은 접속에서 from 단계 → ended 로 넘어온 렌더 */
+  const arrive = (from: "execution" | "morning" = "execution", opts: Opts = {}) => {
+    const r = renderRoom(from === "execution" ? execView() : morningView());
+    r.rerenderRoom(makeView(opts));
+    return r;
+  };
+  const advance = (ms: number) => act(() => void vi.advanceTimersByTime(ms));
+
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("t=0: stage neutral — 카드에는 중립 인물·이름표만, 직업 이름·탈락·요약·[처음으로] 는 숨김", () => {
+    const r = arrive("execution");
+    expect(stageOf(r.container)).toBe("neutral");
+    const neutrals = neutralImgs(r.container);
+    expect(neutrals.length).toBe(5);
+    for (const img of neutrals) expect(img.getAttribute("src")).toContain("/table/");
+    for (const c of cards(r.container)) {
+      expect(c.querySelector(".mf-result__role")?.getAttribute("aria-hidden")).toBe("true");
+      expect(c.querySelector(".mf-result__tag")).not.toBeNull();
+    }
+    expect(r.container.querySelector(".mf-result__out")?.getAttribute("aria-hidden")).toBe("true");
+    expect(rises(r.container).length).toBe(2);
+    for (const el of rises(r.container)) expect(el.getAttribute("aria-hidden")).toBe("true");
+    expect((screen.getByRole("button", { name: "처음으로", hidden: true }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("t=299 는 아직 neutral, t=300 에 모든 카드가 같은 순간 flip(직업 이름·탈락 표시)", () => {
+    const r = arrive("execution");
+    advance(299);
+    expect(stageOf(r.container)).toBe("neutral");
+    advance(1);
+    expect(stageOf(r.container)).toBe("flip");
+    // 한꺼번에: 카드마다 다른 지연·순서 표시가 없다
+    for (const c of cards(r.container)) {
+      expect(c.getAttribute("style")).toBeNull();
+      expect(c.querySelector(".mf-result__role")?.getAttribute("aria-hidden")).toBeNull();
+    }
+    expect(r.container.querySelector(".mf-result__out")?.getAttribute("aria-hidden")).toBeNull();
+    // flip 동안은 중립 층이 남아 있다(크로스페이드)
+    expect(neutralImgs(r.container).length).toBe(5);
+    // 요약·버튼은 아직 숨김
+    for (const el of rises(r.container)) expect(el.getAttribute("aria-hidden")).toBe("true");
+  });
+
+  it("t=899 는 아직 flip, t=900 에 done: 요약·[처음으로] 표시, 중립 층 제거, 버튼 눌림", () => {
+    const r = arrive("execution");
+    advance(899);
+    expect(stageOf(r.container)).toBe("flip");
+    fireEvent.click(screen.getByRole("button", { name: "처음으로", hidden: true }));
+    expect(r.onExit).not.toHaveBeenCalled();
+    advance(1);
+    expect(stageOf(r.container)).toBe("done");
+    expect(neutralImgs(r.container).length).toBe(0);
+    for (const el of rises(r.container)) expect(el.getAttribute("aria-hidden")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "처음으로" }));
+    expect(r.onExit).toHaveBeenCalledTimes(1);
+    expect(r.onExit).toHaveBeenCalledWith("left");
+  });
+
+  it("done 의 모습은 04-25 의 최종 상태와 같다(직업 그림·이름·탈락·요약)", () => {
+    const r = arrive("execution");
+    advance(900);
+    const list = cards(r.container);
+    expect(list.map((c) => text(c.querySelector(".mf-result__role")))).toEqual(["시민", "경찰", "의사", "마피아", "시민"]);
+    expect(text(list[2]!.querySelector(".mf-result__out"))).toBe("탈락");
+    expect(roleImgs(r.container).length).toBe(5);
+    expect(r.container.querySelector(".mf-result__sm")).not.toBeNull();
+  });
+
+  it("morning → ended 도 같은 연출이 돈다", () => {
+    const r = arrive("morning");
+    expect(stageOf(r.container)).toBe("neutral");
+    advance(300);
+    expect(stageOf(r.container)).toBe("flip");
+    advance(600);
+    expect(stageOf(r.container)).toBe("done");
+  });
+
+  it("연출 중 같은 result 가 다시 와도 stage 가 되돌아가지 않고 타이머가 늘지 않는다", () => {
+    const r = arrive("execution");
+    advance(300);
+    expect(stageOf(r.container)).toBe("flip");
+    r.rerenderRoom(makeView());
+    expect(stageOf(r.container)).toBe("flip");
+    advance(600);
+    expect(stageOf(r.container)).toBe("done");
+    r.rerenderRoom(makeView());
+    expect(stageOf(r.container)).toBe("done");
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("재접속·처음 마운트(arrivedFrom 없음)는 곧바로 done: 중립 층이 없다", () => {
+    const r = renderRoom(makeView());
+    expect(stageOf(r.container)).toBe("done");
+    expect(neutralImgs(r.container).length).toBe(0);
+    expect(r.container.querySelector(".mf-result__role")?.getAttribute("aria-hidden")).toBeNull();
+    expect(vi.getTimerCount()).toBe(0);
+    expect(r.container.querySelector(".mf-result")!.getAttribute("data-reveal")).toBe("false");
+  });
+
+  it("에포크가 바뀐 재접속으로 ended 를 받으면 연출 없이 done", () => {
+    const r = renderRoom(execView());
+    r.rerenderRoom(makeView(), { epoch: 2 });
+    expect(stageOf(r.container)).toBe("done");
+    expect(neutralImgs(r.container).length).toBe(0);
+  });
+
+  it("모션 줄이기: 같은 접속 전환이어도 곧바로 done, 타이머 없음", () => {
+    vi.stubGlobal("matchMedia", (q: string) => ({ matches: q.includes("reduce"), media: q, addEventListener: () => {}, removeEventListener: () => {}, addListener: () => {}, removeListener: () => {} }));
+    const r = arrive("execution");
+    expect(stageOf(r.container)).toBe("done");
+    expect(neutralImgs(r.container).length).toBe(0);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("execution·morning 이외 단계에서 온 ended 도 예외 없이 최종 상태(done)를 그린다", () => {
+    const night = execView();
+    night.phase = "night";
+    const r = renderRoom(night);
+    r.rerenderRoom(makeView());
+    expect(stageOf(r.container)).toBe("done");
+    expect(neutralImgs(r.container).length).toBe(0);
+    expect(cards(r.container).length).toBe(5);
+  });
+
+  it("마피아 승 연출 시작에는 진홍 번짐이 reveal 표시로 페이드인, 시민 승에는 번짐이 없다", () => {
+    const m = arrive("execution", { winner: "mafiaWin" });
+    const glow = m.container.querySelector<HTMLElement>(".mf-result__glow")!;
+    expect(glow).not.toBeNull();
+    expect(glow.dataset.reveal).toBe("true");
+    m.unmount();
+    const c = arrive("execution", { winner: "citizenWin" });
+    expect(c.container.querySelector(".mf-result__glow")).toBeNull();
+    c.unmount();
+    // 재접속이면 번짐은 있되 페이드인 표시는 없다
+    const re = renderRoom(makeView({ winner: "mafiaWin" }));
+    expect(re.container.querySelector<HTMLElement>(".mf-result__glow")!.dataset.reveal).toBe("false");
+  });
+
+  it("언마운트하면 타이머 둘이 정리되어 이후 상태 갱신·경고가 없다 (T-04-66)", () => {
+    const err = vi.spyOn(console, "error").mockImplementation(() => {});
+    const r = arrive("execution");
+    expect(vi.getTimerCount()).toBe(2);
+    r.unmount();
+    expect(vi.getTimerCount()).toBe(0);
+    advance(2000);
+    expect(err).not.toHaveBeenCalled();
+    err.mockRestore();
+  });
+
+  it("ended 화면은 낮 장면과 다른 DOM 노드로 새로 마운트된다 — 이전 투표 카드·층이 남지 않는다", () => {
+    const r = renderRoom(execView());
+    const dayScene = r.container.querySelector(".mf-dayscene");
+    expect(dayScene).not.toBeNull();
+    r.rerenderRoom(makeView());
+    expect(r.container.querySelector(".mf-dayscene")).toBeNull();
+    expect(dayScene!.isConnected).toBe(false);
+    expect(r.container.querySelector(".mf-verdict, .mf-defense, .mf-exec")).toBeNull();
+  });
+});
+
+describe("result.css 공개 연출 정적 단언 (04-26)", () => {
+  const css = readFileSync("src/styles/result.css", "utf8");
+  it("단계별 규칙: 배너 팝·번짐 페이드·카드 팝(scale)·떠오름 키프레임이 있고 시간은 verdict.ts 상수와 같다", () => {
+    expect(css).toMatch(/@keyframes mf-result-banner-pop/);
+    expect(css).toMatch(/@keyframes mf-result-glow-in/);
+    expect(css).toMatch(/@keyframes mf-result-card-pop/);
+    expect(css).toMatch(/@keyframes mf-result-rise/);
+    expect(css).toMatch(/\[data-stage="neutral"\]/);
+    expect(css).toMatch(/\[data-stage="flip"\]/);
+    expect(css).toMatch(/360ms/);
+    expect(css).toMatch(/600ms/);
+    expect(css).toMatch(/300ms/);
+    expect(css).toMatch(/scale:\s*1\.06/);
+    expect(css).toMatch(/translateY\(8px\)/);
+  });
+  it("전이·애니메이션은 opacity·transform·scale 만 쓴다(레이아웃 속성 없음)", () => {
+    const props = [...css.matchAll(/transition(?:-property)?:\s*([^;]+);/g)].map((m) => m[1]!);
+    for (const p of props) expect(p).not.toMatch(/\b(width|height|top|left|margin|padding)\b/);
+  });
+  it("새 색 직접 지정이 없고 진홍은 번짐·배너·마피아 글자에만", () => {
+    expect(css).not.toMatch(/#[0-9a-fA-F]{3,8}\b/);
+  });
+});
