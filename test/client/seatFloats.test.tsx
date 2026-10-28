@@ -257,8 +257,8 @@ describe("밤 수집 (D-17, 결정 0019, RESEARCH Pitfall 4)", () => {
   const seqs = (lines: readonly { seq: number }[]) => lines.map((l) => l.seq).join(",");
   const count = (f: { spoke: object; emoji: object }) => Object.keys(f.spoke).length + Object.keys(f.emoji).length;
 
-  it("CHAT_PHASES 는 discussion·night 두 개다", () => {
-    expect([...(CHAT_PHASES ?? [])].sort().join(",")).toBe("discussion,night");
+  it("CHAT_PHASES 는 discussion·night·defense(04-21) 세 개다", () => {
+    expect([...(CHAT_PHASES ?? [])].sort().join(",")).toBe("defense,discussion,night");
   });
 
   it("night 중 chat 이벤트는 useDayChat 줄이 된다", () => {
@@ -311,8 +311,8 @@ describe("밤 수집 (D-17, 결정 0019, RESEARCH Pitfall 4)", () => {
     expect(count(hook.result.current)).toBe(0);
   });
 
-  it("FLOAT_PHASES 는 claim·discussion·night 세 개다(반전·이모티콘은 claim 부터, 결정 0023-2)", () => {
-    expect([...(FLOAT_PHASES ?? [])].sort().join(",")).toBe("claim,discussion,night");
+  it("FLOAT_PHASES 는 claim·discussion·night·defense(04-21) 네 개다(반전·이모티콘은 claim 부터, 결정 0023-2)", () => {
+    expect([...(FLOAT_PHASES ?? [])].sort().join(",")).toBe("claim,defense,discussion,night");
   });
 
   it("morning 중 온 chat·emoji 는 버리고, claim 중에는 chat 줄은 버리되 emoji 는 받는다", () => {
@@ -333,5 +333,51 @@ describe("밤 수집 (D-17, 결정 0019, RESEARCH Pitfall 4)", () => {
     emit(chat(1, 1, { template: "nightAgree" }));
     emit(chat(2, 2, { template: "nightOther" }));
     expect(seqs(hook.result.current)).toBe("1,2");
+  });
+});
+
+describe("최후 변론 수집 (04-21, COMM-03, D-13)", () => {
+  const count = (f: { spoke: object; emoji: object }) => Object.keys(f.spoke).length + Object.keys(f.emoji).length;
+
+  it("defense 중 emoji 는 머리 위 이모티콘, chat 은 보낸 사람 반전과 채팅 줄이 된다", () => {
+    const f = setup(viewOf({}, "defense", 1));
+    f.emit({ t: "emoji", seat: 2, icon: "smile", at: 1 });
+    f.emit(chat(1, 1, { template: "defNotMe" }));
+    expect(f.hook.result.current.emoji[2]?.icon).toBe("smile");
+    expect(f.hook.result.current.spoke[1] !== undefined).toBe(true);
+    const c = setupChat(viewOf({}, "defense", 1));
+    c.emit(chat(1, 1, { template: "defNotMe" }));
+    expect(c.hook.result.current.map((l) => `${l.seq}:${l.seat}:${l.template}`).join(",")).toBe("1:1:defNotMe");
+  });
+
+  it("열쇠가 `${일차}:defense` 라 discussion 의 줄·반전은 defense 로 바뀌면 비워진다", () => {
+    const c = setupChat(viewOf({}, "discussion", 1));
+    c.emit(chat(1, 1));
+    expect(c.hook.result.current.length).toBe(1);
+    c.update(viewOf({}, "defense", 1));
+    expect(c.hook.result.current.length).toBe(0);
+    const f = setup(viewOf({}, "discussion", 1));
+    f.emit(chat(1, 1));
+    f.emit({ t: "emoji", seat: 2, icon: "smile", at: 1 });
+    f.update(viewOf({}, "defense", 1));
+    expect(count(f.hook.result.current)).toBe(0);
+  });
+
+  it("공개(candidateVoteReveal)·처형(execution)·종료(ended)·투표 단계에서는 수집하지 않는다(이벤트를 버린다)", () => {
+    for (const phase of ["execVote", "candidateVote", "candidateVoteReveal", "execution", "ended"] as const) {
+      const c = setupChat(viewOf({}, phase, 1));
+      c.emit(chat(1, 1));
+      const f = setup(viewOf({}, phase, 1));
+      f.emit(chat(1, 1));
+      f.emit({ t: "emoji", seat: 2, icon: "smile", at: 1 });
+      expect(`${phase}:${c.hook.result.current.length}:${count(f.hook.result.current)}`).toBe(`${phase}:0:0`);
+    }
+  });
+
+  it("defense → execution 으로 바뀌면 이모티콘·반전이 비워진다", () => {
+    const f = setup(viewOf({}, "defense", 1));
+    f.emit({ t: "emoji", seat: 2, icon: "smile", at: 1 });
+    f.update(viewOf({}, "execution", 1));
+    expect(count(f.hook.result.current)).toBe(0);
   });
 });
