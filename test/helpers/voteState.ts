@@ -34,7 +34,11 @@ export function lobbyOf(n: number): RoomState {
 
 /** 표 없이 다음 단계 표만 따라 목표 단계의 첫 순간까지. 분기 단계(후보 선택 이후)에는 닿지 못한다 — 그쪽은 stateWithVerdict. */
 export function startedAt(n: number, seed: number, phase: PhaseId): RoomState {
-  const lobby = lobbyOf(n);
+  return startedFrom(lobbyOf(n), seed, phase);
+}
+
+/** startedAt 과 같되 대기실을 직접 준다(봇이 낀 테스트 방처럼 lobbyOf 와 다른 방). */
+export function startedFrom(lobby: RoomState, seed: number, phase: PhaseId): RoomState {
   const started = startGame(lobby, lobby.hostId, START_AT, seededRandInt(seed));
   if (!started.ok) throw new Error(`startGame failed: ${started.error}`);
   let state = started.state;
@@ -86,10 +90,10 @@ export function stateWithVerdict(
   n: number,
   seed: number,
   phase: "candidateVote" | "candidateVoteReveal" | "defense" | "execution",
-  opts: { candidate?: CandidateSpec } = {},
+  opts: { candidate?: CandidateSpec; lobby?: RoomState } = {},
 ): RoomState {
   const spec = opts.candidate ?? "citizen";
-  let state = startedAt(n, seed, "execVote");
+  let state = opts.lobby === undefined ? startedAt(n, seed, "execVote") : startedFrom(opts.lobby, seed, "execVote");
   const agree: Record<number, boolean> = {};
   for (const p of state.players) if (isAlive(p)) agree[p.seat] = true;
   state = castExecVotes(state, agree);
