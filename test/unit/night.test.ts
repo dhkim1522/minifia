@@ -760,3 +760,43 @@ describe("역할별 일지 쌓기 (D-09·D-10)", () => {
     }
   });
 });
+
+describe("밤 기록 nightLog (04-06, D-27) — 서버 전용 판 요약 재료", () => {
+  const logOf = (state: RoomState): string => JSON.stringify(state.nightLog);
+
+  it("지목 없음: {n, died:false} 한 줄이고 target 키가 없다", () => {
+    const { night } = cast6();
+    const out = enterMorning(night, spyRandInt().randInt);
+    expect(logOf(out)).toBe(JSON.stringify([{ n: 1, died: false }]));
+    expect(out.nightLog?.[0] !== undefined && "target" in out.nightLog[0]).toBe(false);
+  });
+
+  it("지목·탈락: {n, target, died:true}", () => {
+    const { night, m1, m2, c1 } = cast6();
+    const out = enterMorning(picks(night, [m1, c1], [m2, c1]), spyRandInt().randInt);
+    expect(logOf(out)).toBe(JSON.stringify([{ n: 1, target: c1.seat, died: true }]));
+  });
+
+  it("지목·의사 구출: {n, target, died:false} — 지목 없음과 달리 target 이 남는다", () => {
+    const { night, m1, m2, doctor, c1 } = cast6();
+    const out = enterMorning(picks(night, [m1, c1], [m2, c1], [doctor, c1]), spyRandInt().randInt);
+    expect(logOf(out)).toBe(JSON.stringify([{ n: 1, target: c1.seat, died: false }]));
+  });
+
+  it("밤마다 끝에 쌓인다(일차는 state.day), 입력 상태는 바뀌지 않는다", () => {
+    const { night, m1, m2, c1 } = cast6();
+    const old = [{ n: 1, died: false }];
+    const day2: RoomState = { ...night, day: 2, nightLog: old };
+    const out = enterMorning(picks(day2, [m1, c1], [m2, c1]), spyRandInt().randInt);
+    expect(logOf(out)).toBe(JSON.stringify([{ n: 1, died: false }, { n: 2, target: c1.seat, died: true }]));
+    expect(JSON.stringify(old)).toBe(JSON.stringify([{ n: 1, died: false }]));
+    expect(day2.nightLog === old).toBe(true);
+  });
+
+  it("난수 호출 순서는 그대로: 동률 한 번 뒤 문구 한 번", () => {
+    const { night, m1, m2, c1, c2 } = cast6();
+    const spy = spyRandInt();
+    enterMorning(picks(night, [m1, c1], [m2, c2]), spy.randInt);
+    expect(`[${spy.calls.join(",")}]`).toBe(`[2,${String(MORNING_PHRASE_COUNT)}]`);
+  });
+});
