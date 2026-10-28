@@ -252,7 +252,7 @@ Plans:
   5. 마피아가 모두 탈락하면 시민 팀 승리, 마피아 수가 나머지 생존자 수와 같거나 많아지면 마피아 팀 승리로 처형·아침 직후 즉시 판이 끝난다. 아직 아니면 다음 밤으로 이어진다.
   6. 결과 화면에 승리 팀, 모든 사람의 역할, 판 요약이 공개되고, 처음 화면으로 돌아가 새 방을 만들 수 있다.
 
-**Plans:** 12/12 plans executed (서버·공유 로직 웨이브, 결정 0036 — 배포하지 않는다(D-26). 웨이브마다 마지막 계획이 HANDOFF 진행 줄 갱신·개인 원격 push(웨이브 1·2 는 로컬 커밋만, 웨이브 3 의 04-05 가 04-02 초록 확인 뒤 웨이브 1·2·3 을 함께 push). 화면 계획은 시안 승인·`/gsd-ui-phase 4` 뒤 Add more plans 로 이어 붙이고 화면 웨이브와 함께 배포한다)
+**Plans:** 12/35 plans complete (04-01~04-12 서버·공유 로직 웨이브 완료·미배포, 결정 0036 / 04-13~04-35 화면 웨이브 추가 — UI-SPEC 승인 2026-10-28. 배포는 마지막 계획 04-35 에서만, 사용자 go-ahead 뒤 한 단위로(D-26). 웨이브마다 마지막 계획이 HANDOFF 진행 줄 갱신·개인 원격 push)
 
 Plans:
 **Wave 1**
@@ -283,7 +283,48 @@ Plans:
 **Wave 8** *(blocked on 04-03, 04-09, 04-10, 04-11)*
 - [x] 04-12-PLAN.md — 결정 0036 코드 대조·전체 게이트·검증 표·HANDOFF(배포 금지 경고)·push (wave 8)
 
-**Notes**: 4페이즈 논의(`04-CONTEXT.md`)로 결정 0034 가 확정됐다. 화면은 새 시안(클로드 데스크톱) → `/gsd-ui-phase 4` 순서로 만든다. 옛 화면설계서 보드 07·08·10 은 옛 순서 기준이라 대체된다.
+**화면 웨이브** *(04-UI-SPEC.md 승인 2026-10-28, 서버 웨이브 뒤 Add more plans. 화면 계획은 04-13 부터이며 순차 실행, 배포는 04-35 에서만)*
+
+**Wave 9** *(blocked on 04-12)*
+- [ ] 04-13-PLAN.md — 순수 모듈 `src/game/verdict.ts`: 연출 상수·공개 시간표·확정 판정·후보 가운데 기하·후광 상한·문구 정본과 단위 시험 (TDD, wave 9)
+- [ ] 04-14-PLAN.md — 토큰 3종(amber-700·amber-900·cone-light)·장면 매핑(투표 다섯 단계 dusk, ended night — P-1·P-2)·E2E 기대 표·dusk 미리 받기 (TDD, wave 9)
+- [ ] 04-15-PLAN.md — 테스트 방 `testBotVote`(봇 처형 투표·후보 선택 고정, P-13): 봇 규칙·와이어·방 DO·소켓 시험 (TDD, wave 9)
+
+**Wave 10** *(blocked on 04-13, 04-14, 04-15)*
+- [ ] 04-16-PLAN.md — 트레이서: 처형 여부 투표 한 경로(방 화면 → useVerdictScene → ExecVotePanel → execVote 메시지)·관전·오류·기록 카드 입구 (TDD, wave 10)
+- [ ] 04-17-PLAN.md — 테스트 시트에 `봇 처형 투표`·`봇 후보 선택` 칩 그룹 (TDD, wave 10)
+
+**Wave 11–13** *(순차)*
+- [ ] 04-18-PLAN.md — 후보 선택 화면: DayTable 후광 종류(halo)·낙관적 선택 훅·CandidateVotePanel·좌석 탭 투표·관전 (TDD, wave 11)
+- [ ] 04-19-PLAN.md — 선택 공개 1: useRevealState(서버 시각)·표수 칩·앰버 후광·끝 문구·후광 상한 (TDD, wave 12)
+- [ ] 04-20-PLAN.md — 선택 공개 2: 화살표 층(프레임 보간)·과반 확정 두근·진동·모션 줄이기 (TDD, wave 13)
+
+**Wave 14–16** *(순차)*
+- [ ] 04-21-PLAN.md — 최후 변론 1: 후보 가운데 이동·어둡게+흐림+원뿔·남의 변론 하단·끊김·관전 (TDD, wave 14)
+- [ ] 04-22-PLAN.md — 최후 변론 2: 후보 본인 패널 236·변론 칩 6개·대상/직업 시트 재사용·보냈어요 표시 (TDD, wave 15)
+- [ ] 04-23-PLAN.md — 처형: 앰버 처형 카드·사람 → 유령 전환·직업 비노출·하단 (TDD, wave 16)
+
+**Wave 17–20** *(순차)*
+- [ ] 04-24-PLAN.md — `처형 투표` 인트로 카드와 회색 `처형 무효` 카드, 밤 시작 문구 지연·읽기 안내 접두 (TDD, wave 17)
+- [ ] 04-25-PLAN.md — 결과 화면 ResultScreen: 배너·직업 카드 격자·판 요약·처음으로·ended 라우팅 (TDD, wave 18)
+- [ ] 04-26-PLAN.md — 결과 공개 연출(neutral → flip → done)과 도착 정보 연결 (TDD, wave 19)
+- [ ] 04-27-PLAN.md — 유저 기록 카드 투표 줄(날짜별 여부 집계·후보 선택)과 기록 카드 열림 규칙 (TDD, wave 20)
+
+**Wave 21** *(blocked on 04-27)*
+- [ ] 04-28-PLAN.md — 단계 × 보는 사람 상태 표 시험(관전·끊김·재접속·동료·인원)과 새 CSS 정적 게이트, 결함 수정 (TDD, wave 21)
+
+**Wave 22–26 — E2E 갱신** *(순차, 결정성은 04-15·04-17 훅)*
+- [ ] 04-29-PLAN.md — E2E 순수 검사 P1·P2·P3·P4·P9와 앰버/진홍 후광 규칙, 스냅숏 계약 (TDD, wave 22)
+- [ ] 04-30-PLAN.md — E2E 순수 검사 P5·P6·P7·P8·P10, 승인 완화 P-PANEL-236 (TDD, wave 23)
+- [ ] 04-31-PLAN.md — E2E 브라우저 도우미: readVerdict·토큰 색·봇 투표 고정·투표/후보 조작·관찰자·표본 (wave 24)
+- [ ] 04-32-PLAN.md — 기존 여섯 흐름을 새 낮 루프에 적응(deferred 해소)·vote5 흐름 (wave 25)
+- [ ] 04-33-PLAN.md — noexec·result-c·result-m 흐름, spec4 투표 화면, 로컬 전체 E2E (wave 26)
+
+**Wave 27–28 — 마감과 배포** *(순차)*
+- [ ] 04-34-PLAN.md — 결정 0037·시안 사본·검증 표·로컬 전체 게이트·HANDOFF·push (배포 없음, wave 27)
+- [ ] 04-35-PLAN.md — 사용자 go-ahead(체크포인트) → 개인 계정 배포 → 배포본 스모크·uat-vote·uat-test-bots·E2E → VOTE·COMM-03·CONN-02·END 요구사항 완료 표시 → push (autonomous: false, wave 28)
+
+**Notes**: 4페이즈 논의(`04-CONTEXT.md`)로 결정 0034 가 확정됐다. 화면은 승인 시안(`design/screens/execution-v1/`) → UI-SPEC(`04-UI-SPEC.md`, 승인 2026-10-28) 순서로 만들었고 화면 웨이브(04-13~04-35)는 UI-SPEC 를 기준으로 한다. 옛 화면설계서 보드 07·08·10 은 옛 순서 기준이라 대체된다. 서버 웨이브와 화면 웨이브는 한 단위로 04-35 에서만 배포한다.
 **UI hint**: yes
 
 ### Phase 5: 분위기와 캐릭터
@@ -328,6 +369,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 (decimal phases
 | 2. 낮 토론 | v1.0 | 18/18 | In Progress | - |
 | 3. 밤과 아침 | v1.0 | 12/12 | In Progress | - |
 | 3.1. 순차 주장과 역할 카드 | v1.0 | 14/14 | Complete | 2026-10-25 |
-| 4. 처형과 승패 | v1.0 | 12/12 | In Progress (서버 웨이브, 화면 계획 추가 예정) | - |
+| 4. 처형과 승패 | v1.0 | 12/35 | In Progress (서버 웨이브 완료·미배포, 화면 웨이브 04-13~04-35 계획됨) | - |
 | 5. 분위기와 캐릭터 | v1.0 | 0/TBD | Not started | - |
 | 6. 친구 플레이테스트 | v1.0 | 0/TBD | Not started | - |
