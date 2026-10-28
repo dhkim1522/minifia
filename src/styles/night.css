@@ -12,6 +12,8 @@
 /* 이름은 굵게 gray-50, 앞에 자리 색 점 8px(오른쪽 4) */
 .mf-pk b { display: inline-flex; align-items: center; font-weight: 700; color: var(--gray-50); }
 .mf-pk__dot { display: inline-block; flex: none; width: 8px; height: 8px; margin-right: var(--space-xs); border-radius: var(--radius-pill); }
+/* 확정 문구(04-18, D-19): 이름 바로 뒤에 `님에게 투표했어요` 가 붙는다(한 문장이라 항목 사이 간격이 없다) */
+.mf-pk--vote { gap: 0; }
 /* 선택 전·행동 없음 */
 .mf-pk--empty { color: var(--gray-300); }
 

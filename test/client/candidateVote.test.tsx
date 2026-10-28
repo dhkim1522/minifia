@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { PhaseId, RoomView } from "../../shared/protocol";
@@ -38,6 +39,9 @@ describe("PickPill format (D-19)", () => {
     expect(pill.querySelector("b")?.textContent).toBe("민지");
     expect(container.querySelector<HTMLElement>(".mf-pk__dot")?.style.background).toBe("var(--seat-3)");
     expect(pill.textContent).not.toContain("선택 ");
+    // 이름과 `님에게…` 는 한 문장이라 사이 간격이 없다(밤의 `선택 ●이름` 은 항목 간격 8 을 그대로 쓴다)
+    expect(pill.classList.contains("mf-pk--vote")).toBe(true);
+    expect(/\.mf-pk--vote\s*\{[^}]*gap:\s*0/.test(readFileSync("src/styles/night.css", "utf8"))).toBe(true);
   });
 });
 

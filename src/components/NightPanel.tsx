@@ -64,7 +64,7 @@ export function PickPill({ pick, format = "pick" }: PickPillProps): ReactElement
   if (format === "vote") {
     // 이름 뒤 '님' 은 받침을 보지 않는다(D-11). 문구 조각은 VERDICT_TEXT 한 곳
     return (
-      <p className="mf-pk" role="status" aria-live="polite">
+      <p className="mf-pk mf-pk--vote" role="status" aria-live="polite">
         {name}
         {VERDICT_TEXT.votedSuffix}
       </p>
