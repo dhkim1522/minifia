@@ -1069,3 +1069,57 @@ describe("DayTable 대기실 확장", () => {
     expect(/#[0-9a-fA-F]{3,8}\b/.test(code)).toBe(false);
   });
 });
+
+describe("DayTable: 좌석이 후광 종류(halo)를 명시한다 (04-18, 결정 0030, D-33)", () => {
+  const haloImgs = (c: HTMLElement, n: number) => Array.from(seatEl(c, n).querySelectorAll<HTMLElement>("img[class*='mf-figure--halo']"));
+
+  it("halo 네 값: amber·white·crimson 은 그 자리 그림에만 해당 클래스, none 은 후광 클래스가 없다", () => {
+    const { container } = render(
+      <DayTable
+        seats={five({ 1: { halo: "amber" }, 2: { halo: "white" }, 3: { halo: "crimson" }, 4: { halo: "none" } })}
+        mySeat={0}
+        width={366}
+      />,
+    );
+    expect(container.querySelectorAll("img.mf-figure--halo-amber").length).toBe(1);
+    expect(haloImgs(container, 1)[0]?.classList.contains("mf-figure--halo-amber")).toBe(true);
+    expect(haloImgs(container, 2)[0]?.classList.contains("mf-figure--halo-white")).toBe(true);
+    expect(haloImgs(container, 3)[0]?.classList.contains("mf-figure--halo-crimson")).toBe(true);
+    expect(haloImgs(container, 4).length).toBe(0);
+    expect(container.querySelectorAll('img[class*="halo"]').length).toBe(3);
+  });
+
+  it("halo none 이어도 동료 마름모는 isAlly 로 그대로 남는다. halo 가 기본 파생(동료 진홍·차례 흰)보다 우선한다", () => {
+    const { container } = render(
+      <DayTable seats={five({ 3: { isAlly: true, halo: "none" }, 2: { turn: true, halo: "amber" } })} mySeat={0} width={366} />,
+    );
+    expect(haloImgs(container, 3).length).toBe(0);
+    expect(seatEl(container, 3).querySelectorAll(".mf-dt__mark").length).toBe(1);
+    expect(haloImgs(container, 2).length).toBe(1);
+    expect(haloImgs(container, 2)[0]?.classList.contains("mf-figure--halo-amber")).toBe(true);
+  });
+
+  it("halo 가 없으면 기존 파생: 동료 = 진홍, 차례 = 흰, 둘이면 흰", () => {
+    const { container } = render(
+      <DayTable seats={five({ 1: { isAlly: true }, 2: { turn: true }, 3: { isAlly: true, turn: true } })} mySeat={0} width={366} />,
+    );
+    expect(haloImgs(container, 1)[0]?.classList.contains("mf-figure--halo-crimson")).toBe(true);
+    expect(haloImgs(container, 2)[0]?.classList.contains("mf-figure--halo-white")).toBe(true);
+    expect(haloImgs(container, 3)[0]?.classList.contains("mf-figure--halo-white")).toBe(true);
+    expect(container.querySelectorAll("img.mf-figure--halo-amber").length).toBe(0);
+  });
+
+  it("끊긴 자리에 halo 가 있어도 그림은 끊김 클래스를 함께 가진다", () => {
+    const { container } = render(<DayTable seats={five({ 1: { connected: false, halo: "amber" } })} mySeat={0} width={366} />);
+    const img = haloImgs(container, 1)[0]!;
+    expect(img.classList.contains("mf-figure--disconnected")).toBe(true);
+    expect(img.classList.contains("mf-figure--halo-amber")).toBe(true);
+  });
+
+  it("CSS: 앰버 후광은 --amber-400 변수로 만든 --mf-halo-amber 이고, 끊김 조합은 흑백을 먼저 적용한다(색 값 직접 없음)", () => {
+    const code = readFileSync("src/styles/daytable.css", "utf8");
+    expect(/--mf-halo-amber:\s*drop-shadow\(0 0 2px color-mix\(in srgb, var\(--amber-400\) 95%, transparent\)\)\s*drop-shadow\(0 0 9px color-mix\(in srgb, var\(--amber-400\) 75%, transparent\)\)/.test(code)).toBe(true);
+    expect(/\.mf-dt__seat \.mf-figure--halo-amber\s*\{[^}]*filter:\s*var\(--mf-halo-amber\)/.test(code)).toBe(true);
+    expect(/\.mf-figure--disconnected\.mf-figure--halo-amber\s*\{[^}]*filter:\s*grayscale\(1\) var\(--mf-halo-amber\)/.test(code)).toBe(true);
+  });
+});
