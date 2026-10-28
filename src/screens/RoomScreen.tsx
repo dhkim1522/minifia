@@ -9,7 +9,7 @@ import { RoleCardSheet } from "../components/RoleCardSheet";
 import type { RoleCardTab } from "../components/RoleCardSheet";
 import { TestToolsButton, TestToolsSheet } from "../components/TestTools";
 import { morningCardText } from "../game/eliminationText";
-import { preloadRoleAssets } from "../net/assets";
+import { preloadDuskAssets, preloadRoleAssets } from "../net/assets";
 import { usePhaseArrival } from "../net/phaseArrival";
 import { loadSeenCount, saveSeenCount, unseenCount } from "../net/recordsSeen";
 import { useRoomConnection } from "../net/useRoomConnection";
@@ -101,6 +101,10 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
   const arrivedFrom = usePhaseArrival(phase, connection.epoch);
   useEffect(() => {
     if (phase === "lobby" || phase === "assigning") preloadRoleAssets();
+  }, [phase]);
+  // 낮 토론에 들어서면 투표 단계가 쓸 해질녘 배경 하나를 미리 받는다(P-17). 어떤 역할이든 같은 요청 하나다(Pitfall 20).
+  useEffect(() => {
+    if (phase === "discussion") preloadDuskAssets();
   }, [phase]);
 
   // 역할 카드 시트(결정 0026): 열림·선택 탭과 "카드가 앞면이 된 적이 있는가" 는 단계 switch 밖에서 쥔다 —

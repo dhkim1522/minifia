@@ -82,7 +82,7 @@ export function entryPreloadList(): PreloadItem[] {
 
 /**
  * 대기실·배정 동안 미리 받는다: 직업 그림 4종 전부와 아침·낮·밤 배경(WebP 약 74KB), 유령 그림(탈락 순간 깜빡임 방지), 일지 SVG 9종.
- * 해질녘·투표·처형 배경은 어떤 목록에도 없다 — 그 장면이 처음 쓰일 때 불러온다(4페이즈).
+ * 해질녘 배경은 낮 토론 진입 때 따로 받는다(duskPreloadList).
  * 어떤 역할이든 같은 목록 — 요청 패턴으로 역할이 드러나지 않는다(Pitfall 20).
  */
 export function rolePreloadList(): PreloadItem[] {
@@ -103,6 +103,15 @@ export function rolePreloadList(): PreloadItem[] {
   ];
 }
 
+/**
+ * 낮 토론 진입 때 미리 받는다: 해질녘 배경 하나(WebP 약 25KB, P-17). 투표·공개·변론·처형 다섯 단계가 이 한 장을 쓴다.
+ * 처음 쓰일 때 불러오면 1.2초 상한(SCENE_IMAGE_WAIT_MS) 안에 크로스페이드가 늦을 수 있어 낮 토론 진입 때 하나를 미리 받는다.
+ * 인자가 없는 고정 목록이다 — 어떤 역할이든 같은 요청이라 요청 패턴으로 역할이 드러나지 않는다(Pitfall 20, T-04-42).
+ */
+export function duskPreloadList(): PreloadItem[] {
+  return [{ href: backdropUrl("game", "dusk") }];
+}
+
 function preloadImages(list: PreloadItem[]): void {
   for (const item of list) {
     if (item.imageSrcSet) preload(item.href, { as: "image", imageSrcSet: item.imageSrcSet });
@@ -117,4 +126,8 @@ export function preloadEntryAssets(): void {
 
 export function preloadRoleAssets(): void {
   preloadImages(rolePreloadList());
+}
+
+export function preloadDuskAssets(): void {
+  preloadImages(duskPreloadList());
 }
