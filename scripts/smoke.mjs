@@ -1,6 +1,8 @@
 // 스모크: 배포(또는 로컬) 주소에서 방 만들기 → WebSocket hello → 대기실 상태까지 확인한다.
-// full 단계는 한 판 시작부터 낮 한 바퀴(낮 시작 발표 → 직업 주장 차례 한 바퀴(한 명 8초, 결정 0023·0027) → 낮 토론 90초) → 밤 30초(역할별 행동·마피아 채팅)
-// → 아침 5초(탈락 발표) → 서버 타이머로 2일차 낮 시작 발표까지 돈다. 탈락한 클라이언트는 그 아침부터 관전 정보(spectate)를 받는다(결정 0021).
+// full 단계는 한 판 시작부터 낮 한 바퀴(낮 시작 발표 → 직업 주장 차례 한 바퀴(한 명 8초, 결정 0023·0027) → 낮 토론 90초)
+// → 처형 여부 투표 10초(결정 0036: 클라이언트 다수가 반대해 미통과 경로를 탄다 — 집계 동일·남의 표 비공개·처형 무효 이유 확인)
+// → 밤 30초(역할별 행동·마피아 채팅) → 아침 5초(탈락 발표) → 서버 타이머로 2일차 낮 시작 발표까지 돈다.
+// 후보 선택·변론·처형·종료 경로는 uat-vote.mjs 가 돈다. 탈락한 클라이언트는 그 아침부터 관전 정보(spectate)를 받는다(결정 0021).
 // 방장 연장·넘기기는 없다(결정 0017-5). 빠른 메시지는 state 가 아니라 chat 프레임으로 온다(결정 0017-7).
 // Node 22.12+ 내장 fetch·전역 WebSocket 만 쓴다. 셸 명령·외부 패키지 없음 (Windows 에서도 같은 명령).
 //
@@ -16,9 +18,14 @@ import { fileURLToPath } from "node:url";
 
 const TOTAL_LIMIT_MS = 30_000;
 const STATE_LIMIT_MS = 10_000;
-const FULL_TOTAL_LIMIT_MS = 420_000; // 시작 → 2일차 dayAnnounce 약 170초 + 여유 (claim 은 최대 인원 × 8초)
+const FULL_TOTAL_LIMIT_MS = 480_000; // 시작 → 2일차 dayAnnounce 약 180초(여부 투표 10초 포함) + 여유 (claim 은 최대 인원 × 8초)
 // 토론 90초 + 여유: 넘기기 없이 서버 타이머가 낮을 넘기는 것을 기다린다.
 const DISCUSSION_WAIT_MS = 90_000 + STATE_LIMIT_MS;
+// 여부 투표 10초 + 여유(shared/game/phases.ts EXEC_VOTE_MS)
+const EXEC_VOTE_MS = 10_000;
+const EXEC_VOTE_WAIT_MS = EXEC_VOTE_MS + STATE_LIMIT_MS;
+// shared/protocol.ts 의 MORNING_PHRASE_COUNT 와 같은 값(스크립트는 TS 를 import 하지 않는다). 아침 탈락 문구 번호는 1..7.
+const MORNING_PHRASE_COUNT = 7;
 // 밤 30초, 아침 5초 + 여유
 const NIGHT_WAIT_MS = 30_000 + STATE_LIMIT_MS;
 const MORNING_WAIT_MS = 5_000 + STATE_LIMIT_MS;
@@ -35,18 +42,26 @@ const EXPECTED_ROLES = {
   7: { mafia: 2, police: 1, doctor: 1, citizen: 3 },
   8: { mafia: 2, police: 1, doctor: 1, citizen: 4 },
 };
-// 허용 전이 표(shared/game/phases.ts 의 next 와 같다). 낮 루프라 끝이 없다: discussion → night → morning → 다시 dayAnnounce.
+// 허용 전이 표(shared/game/phases.ts 의 next + tick 분기와 같다). 분기형이라 값이 배열이다(결정 0036-2):
+// discussion → execVote → (통과) candidateVote → candidateVoteReveal → (후보 있음) defense → execution → night | ended,
+// execVote 미통과·후보 없음은 곧장 night, night → morning → dayAnnounce(다음 낮) | ended. 승패가 나지 않는 한 낮 루프라 끝이 없다.
 const PHASE_NEXT = {
   lobby: ["assigning"],
   assigning: ["roleReveal"],
   roleReveal: ["dayAnnounce"],
   dayAnnounce: ["claim"],
   claim: ["discussion"],
-  discussion: ["night"],
+  discussion: ["execVote"],
+  execVote: ["candidateVote", "night"],
+  candidateVote: ["candidateVoteReveal"],
+  candidateVoteReveal: ["defense", "night"],
+  defense: ["execution"],
+  execution: ["night", "ended"],
   night: ["morning"],
-  morning: ["dayAnnounce"],
+  morning: ["dayAnnounce", "ended"],
+  ended: [],
 };
-const DAY_PHASES = ["dayAnnounce", "claim", "discussion", "night", "morning"];
+const DAY_PHASES = ["dayAnnounce", "claim", "discussion", "execVote", "candidateVote", "candidateVoteReveal", "defense", "execution", "night", "morning", "ended"];
 const ROLE_IDS = ["mafia", "police", "doctor", "citizen"];
 // 주장 값으로 쓰일 수 있는 문자열(직업 + 말 안 함). 허용 경로 밖에 나오면 안 된다.
 const CLAIM_STRINGS = new Set([...ROLE_IDS, "none"]);
@@ -56,7 +71,8 @@ const CLAIM_STRINGS = new Set([...ROLE_IDS, "none"]);
 const ALLOWED_CLAIM_STRING_PATHS = new Set(["view.me.role", "view.day.roles[]", "view.day.claimLog[].claim"]);
 // 서버 전용 상태 키(결정 0027-3): 어떤 프레임에도 이름이 나오면 안 된다. claims 와 옛 완료 표시 키는 삭제된 옛 키다.
 // 옛 이름이 scripts 에 문자열로 남지 않았는지 grep 으로 확인하므로 옛 완료 표시 키는 조각으로 잇는다.
-const SERVER_ONLY_KEYS = ["claimPick", "claimOrder", "claimIdx", "claimStart", "claim" + "Done", "claims"];
+// 4페이즈 서버 전용 키(결정 0036-12): 개인 투표·판정·밤 기록·직전 처형 문구. winner·execution 은 같은 이름의 view 키(result.winner·day.execution)가 있어 넣지 않는다.
+const SERVER_ONLY_KEYS = ["claimPick", "claimOrder", "claimIdx", "claimStart", "claim" + "Done", "claims", "execVote", "candidateVote", "verdict", "nightLog", "lastExecPhrase"];
 // 직업 주장 차례 하나의 길이(shared/game/phases.ts CLAIM_TURN_MS)
 const CLAIM_TURN_MS = 8_000;
 // 역할별 일지 줄의 키 집합(결정 0027-11)
@@ -67,6 +83,8 @@ function fail(reason) {
   console.log(`SMOKE FAIL: ${reason}`);
   process.exit(1);
 }
+
+const info = (text) => console.log(`  info: ${text}`);
 
 function usage(reason) {
   console.log(`사용법 오류: ${reason}`);
@@ -541,8 +559,74 @@ async function stageFull(url, args) {
     if (v.phaseEndsAt !== endsBefore || v.phaseDurationMs !== 90_000) fail(`${c.nickname} 의 discussion 마감이 extend·skip 시도 뒤 바뀜: ${v.phaseEndsAt} / ${v.phaseDurationMs}`);
   }
 
-  // (14) 밤: 토론 마감 뒤 모든 클라이언트가 night 를 받는다(넘기기 없이 서버 타이머)
-  await waitUntil(() => clients.every((c) => firstState(c, "night")), DISCUSSION_WAIT_MS, "토론 마감 뒤 night 가 모든 클라이언트에 오지 않음");
+  // (13b) 처형 여부 투표(결정 0036-3, D-02·D-34): 토론 마감 뒤 모든 클라이언트가 execVote 를 받는다.
+  //   찬성 floor((N-1)/2)명·나머지 반대 — 던진 표의 과반이 안 되므로 미통과 → 후보 선택 없이 night.
+  //   매 표 뒤 모든 클라이언트의 마지막 execTally 가 같고, 보낸 사람 view 에만 me.voteAgree 가 있다.
+  await waitUntil(() => clients.every((c) => firstState(c, "execVote")), DISCUSSION_WAIT_MS, "토론 마감 뒤 execVote 가 모든 클라이언트에 오지 않음");
+  for (const c of clients) {
+    const ev = firstState(c, "execVote").msg.view;
+    if (ev.phaseDurationMs !== EXEC_VOTE_MS) fail(`${c.nickname} 의 execVote phaseDurationMs 가 ${EXEC_VOTE_MS} 가 아님: ${ev.phaseDurationMs}`);
+    if (ev.day?.execTally?.yes !== 0 || ev.day?.execTally?.no !== 0) fail(`${c.nickname} 의 execVote 첫 execTally 가 {yes:0, no:0} 이 아님: ${JSON.stringify(ev.day?.execTally)}`);
+    if (ev.me.voteAgree !== undefined) fail(`${c.nickname} 의 execVote 첫 view 에 voteAgree 가 이미 있음`);
+  }
+  const evEnds = new Set(clients.map((c) => firstState(c, "execVote").msg.view.phaseEndsAt));
+  if (evEnds.size !== 1) fail(`execVote 의 phaseEndsAt 이 클라이언트마다 다름 (${evEnds.size}종)`);
+  const agreeCount = Math.floor((N - 1) / 2);
+  const voteOf = (idx) => idx < agreeCount; // 앞의 agreeCount 명 찬성, 나머지 반대
+  const sentVotes = new Map(); // idx → agree
+  let tallyYes = 0;
+  let tallyNo = 0;
+  for (let idx = 0; idx < N; idx++) {
+    const agree = voteOf(idx);
+    clients[idx].ws.send(JSON.stringify({ t: "execVote", agree }));
+    sentVotes.set(idx, agree);
+    if (agree) tallyYes += 1; else tallyNo += 1;
+    await waitUntil(
+      () => clients.every((c) => {
+        const t = lastView(c)?.day?.execTally;
+        return lastView(c)?.phase === "execVote" && t?.yes === tallyYes && t?.no === tallyNo;
+      }),
+      STATE_LIMIT_MS,
+      `${idx + 1}번째 표 뒤 모든 클라이언트의 execTally 가 {yes:${tallyYes}, no:${tallyNo}} 로 같아지지 않음`,
+    );
+    // 보낸 사람 view 에만 voteAgree, 아직 안 던진 사람의 view 에는 없다
+    clients.forEach((c, k) => {
+      const v = lastView(c);
+      const want = sentVotes.has(k) ? sentVotes.get(k) : undefined;
+      if (v.me.voteAgree !== want) fail(`${idx + 1}번째 표 뒤 ${c.nickname} 의 me.voteAgree 가 ${want} 가 아님: ${v.me.voteAgree}`);
+      if (JSON.stringify(v.day.execTally) !== JSON.stringify({ yes: tallyYes, no: tallyNo })) fail(`${c.nickname} 의 execTally 가 다른 클라이언트와 다름`);
+    });
+  }
+  // 어떤 execVote 프레임에도 남의 표를 알 수 있는 키가 없다: voteAgree 는 view.me.voteAgree 경로뿐이고, execTally 는 yes·no 두 키뿐
+  for (const c of clients) {
+    for (const f of states(c)) {
+      if (f.msg.view.phase !== "execVote") continue;
+      const va = [];
+      collectKeyPaths(f.msg, "voteAgree", "", va);
+      if (va.some((p) => p !== "view.me.voteAgree")) fail(`${c.nickname} 의 execVote 프레임에 view.me.voteAgree 밖의 voteAgree 키가 있음: ${va.join(",")}`);
+      const tk = f.msg.view.day?.execTally;
+      if (tk && Object.keys(tk).sort().join(",") !== "no,yes") fail(`${c.nickname} 의 execTally 키 집합이 no,yes 가 아님: ${Object.keys(tk).sort().join(",")}`);
+    }
+  }
+
+  // (14) 밤: 여부 투표 마감 뒤(미통과) 모든 클라이언트가 candidateVote 없이 night 를 받는다(넘기기 없이 서버 타이머)
+  await waitUntil(() => clients.every((c) => firstState(c, "night")), EXEC_VOTE_WAIT_MS, "여부 투표 마감 뒤 night 가 모든 클라이언트에 오지 않음");
+  // 처형 무효(D-34): 모든 클라이언트의 night 가 day.noExecution {reason:"notMajority"} 를 같게 싣고, voteLog 마지막 줄 exec 는 정확히 no·passed·yes
+  for (const c of clients) {
+    const nv = firstState(c, "night").msg.view;
+    if (JSON.stringify(nv.day?.noExecution) !== JSON.stringify({ reason: "notMajority" })) fail(`${c.nickname} 의 night day.noExecution 이 {reason:"notMajority"} 가 아님: ${JSON.stringify(nv.day?.noExecution)}`);
+    const lastLine = nv.day?.voteLog?.at(-1);
+    if (!lastLine || lastLine.n !== 1) fail(`${c.nickname} 의 night voteLog 마지막 줄이 1일차가 아님: ${JSON.stringify(lastLine)}`);
+    if (Object.keys(lastLine.exec).sort().join(",") !== "no,passed,yes") fail(`${c.nickname} 의 voteLog exec 키 집합이 no,passed,yes 가 아님: ${Object.keys(lastLine.exec).sort().join(",")}`);
+    if (lastLine.exec.yes !== tallyYes || lastLine.exec.no !== tallyNo || lastLine.exec.passed !== false) fail(`${c.nickname} 의 voteLog exec 가 {yes:${tallyYes}, no:${tallyNo}, passed:false} 가 아님: ${JSON.stringify(lastLine.exec)}`);
+    if (lastLine.cand !== undefined) fail(`${c.nickname} 의 미통과 날 voteLog 에 cand 가 있음`);
+    // 마감 뒤에는 개인 표 키가 view 어디에도 없다(마감 훅이 삭제, 결정 0036-3)
+    const vp = [];
+    collectKeyPaths(nv, "voteAgree", "", vp);
+    if (vp.length > 0) fail(`${c.nickname} 의 night view 에 voteAgree 키가 남아 있음: ${vp.join(",")}`);
+  }
+  if (new Set(clients.map((c) => JSON.stringify(firstState(c, "night").msg.view.day.noExecution))).size !== 1) fail("night 의 day.noExecution 이 클라이언트마다 다름");
+  info(`여부 투표 찬성 ${tallyYes} 반대 ${tallyNo} → 미통과, night 의 noExecution notMajority`);
   for (const c of clients) {
     const nv = firstState(c, "night").msg.view;
     if (nv.day?.n !== 1) fail(`${c.nickname} 의 night 의 day.n 이 1 이 아님: ${nv.day?.n}`);
@@ -638,9 +722,10 @@ async function stageFull(url, args) {
       if (!(PHASE_NEXT[seq[k - 1]] ?? []).includes(seq[k])) fail(`${c.nickname} 의 단계 순서가 이상함: ${seq.join(" → ")}`);
     }
     const iDisc = seq.indexOf("discussion");
-    if (iDisc < 0 || seq[iDisc + 1] !== "night") fail(`${c.nickname} 의 discussion 다음이 night 가 아님: ${seq.join(" → ")}`);
-    if (seq[iDisc + 2] !== "morning") fail(`${c.nickname} 의 night 다음이 morning 이 아님: ${seq.join(" → ")}`);
-    if (seq[iDisc + 3] !== "dayAnnounce") fail(`${c.nickname} 의 morning 다음이 dayAnnounce 가 아님: ${seq.join(" → ")}`);
+    if (iDisc < 0 || seq[iDisc + 1] !== "execVote") fail(`${c.nickname} 의 discussion 다음이 execVote 가 아님: ${seq.join(" → ")}`);
+    if (seq[iDisc + 2] !== "night") fail(`${c.nickname} 의 execVote(미통과) 다음이 night 가 아님: ${seq.join(" → ")}`);
+    if (seq[iDisc + 3] !== "morning") fail(`${c.nickname} 의 night 다음이 morning 이 아님: ${seq.join(" → ")}`);
+    if (seq[iDisc + 4] !== "dayAnnounce") fail(`${c.nickname} 의 morning 다음이 dayAnnounce 가 아님: ${seq.join(" → ")}`);
   }
   // me.allies 는 마피아에게만, 다른 마피아의 seat 와 같다
   for (const c of clients) {
@@ -769,7 +854,7 @@ async function stageFull(url, args) {
   });
   const morning = morningViews[0].day.morning;
   if (morning.eliminated !== targetX) fail(`아침 탈락자가 지목한 seat(${targetX})가 아님: ${morning.eliminated}`);
-  if (!Number.isInteger(morning.phrase) || morning.phrase < 1 || morning.phrase > 8) fail(`아침 문구 번호가 1..8 정수가 아님: ${morning.phrase}`);
+  if (!Number.isInteger(morning.phrase) || morning.phrase < 1 || morning.phrase > MORNING_PHRASE_COUNT) fail(`아침 문구 번호가 1..${MORNING_PHRASE_COUNT} 정수가 아님: ${morning.phrase}`);
   morningViews.forEach((v, i) => {
     for (const p of v.players) {
       if (p.alive !== (p.seat !== targetX)) fail(`${clients[i].nickname} 의 아침 players seat ${p.seat} 의 alive 가 ${p.seat !== targetX} 가 아님: ${p.alive}`);

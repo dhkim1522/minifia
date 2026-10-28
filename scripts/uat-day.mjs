@@ -1,7 +1,8 @@
 // 2페이즈 UAT 를 봇으로 대신 도는 시나리오. 봇이 방을 만들고 채워 낮 두 바퀴를 돌며 결과 표를 낸다.
 // 직업 주장은 한 명씩 차례로(결정 0023·0027): 한 차례 8초, 일찍 고르면 곧바로 다음 차례. 스크립트 안의 응답기가
 // 상태 프레임에서 자기 차례(claim 단계 + day.turn.seat)가 오면 한 번 보낸다.
-// 방장 넘기기는 없다(결정 0017-5): 1일차 토론(90초)·밤(30초)·아침(5초)이 서버 타이머로 지나 2일차로 간다.
+// 방장 넘기기는 없다(결정 0017-5): 1일차 토론(90초)·처형 여부 투표(10초, 결정 0036)·밤(30초)·아침(5초)이 서버 타이머로 지나 2일차로 간다.
+// 이 스크립트의 봇은 여부 투표에 표를 던지지 않아(0표 = 미통과) 후보 선택 없이 곧장 밤이 된다.
 // 이 스크립트의 봇은 밤에 행동하지 않아 탈락자가 없다 — 밤·아침은 단계 도착 차이 표에만 나온다(밤 시나리오는 uat-night.mjs).
 // 빠른 메시지는 state 가 아니라 chat 프레임으로 온다(결정 0017-7).
 //   테스트 6: 빠른 메시지를 2초 간격(2000·2050·2150ms)으로 연달아 보낼 때 RATE_LIMITED 오탐 수, 받은 줄이 모든 폰에 가는지
@@ -185,10 +186,17 @@ async function main() {
   check(7, "이모티콘은 chat 프레임이 아니고 state 의 day 에 messages 키가 없음", !emojiAsChat && !hasMessagesKey, "");
 
   // 넘기기는 없다: 토론 90초가 서버 타이머로 끝나기를 기다려 2일차로 간다
-  console.log("서버 타이머로 토론·밤·아침이 지나 2일차가 되기를 기다림(최대 180초)");
+  console.log("서버 타이머로 토론·여부 투표·밤·아침이 지나 2일차가 되기를 기다림(최대 190초)");
 
   // ---- 2일차 ----
-  await waitUntil(() => clients.every((c) => firstState(c, (v) => v.phase === "claim" && v.day?.n === 2)), 180_000, "2일차 claim");
+  await waitUntil(() => clients.every((c) => firstState(c, (v) => v.phase === "claim" && v.day?.n === 2)), 190_000, "2일차 claim");
+  // 여부 투표(표 0) → 미통과 → 후보 선택 단계 없이 night. 모든 폰의 night 가 처형 무효 이유 noVotes 를 같게 싣는다(결정 0036-8).
+  const noExec = clients.map((c) => firstState(c, (v) => v.phase === "night" && v.day?.n === 1).msg.view.day.noExecution);
+  check(4, "여부 투표 0표 → 미통과: 1일차 night 의 day.noExecution 이 모든 폰에서 {reason:noVotes}", noExec.every((x) => JSON.stringify(x) === JSON.stringify({ reason: "noVotes" })), JSON.stringify(noExec[0]));
+  const seq1 = [];
+  for (const f of states(host)) if (f.msg.view.day?.n === 1 && seq1.at(-1) !== f.msg.view.phase) seq1.push(f.msg.view.phase);
+  const iDisc1 = seq1.indexOf("discussion");
+  check(4, "1일차 단계 순서: discussion → execVote → night (후보 선택 단계 없음)", seq1[iDisc1 + 1] === "execVote" && seq1[iDisc1 + 2] === "night", seq1.join(" → "));
   const firstTurn2 = firstState(host, (v) => v.phase === "claim" && v.day?.n === 2).msg.view.day.turn.seat;
   const wantStart2 = allSeats[(startIdx + 1) % N];
   check(3, "시작 자리 한 칸 이동 (2일차 첫 차례 = 방장 다음 seat)", firstTurn2 === wantStart2, `1일차 시작 ${host.seat} → 2일차 시작 ${firstTurn2} (기대 ${wantStart2})`);
@@ -206,7 +214,7 @@ async function main() {
 
   // 테스트 7: 단계 전환 도착 차이(1일차 dayAnnounce 부터 2일차 discussion 까지)
   clearInterval(driver);
-  const phases = [["dayAnnounce", 1], ["claim", 1], ["discussion", 1], ["night", 1], ["morning", 1], ["dayAnnounce", 2], ["claim", 2], ["discussion", 2]];
+  const phases = [["dayAnnounce", 1], ["claim", 1], ["discussion", 1], ["execVote", 1], ["night", 1], ["morning", 1], ["dayAnnounce", 2], ["claim", 2], ["discussion", 2]];
   const worst = [];
   for (const [ph, n] of phases) {
     const ats = clients.map((c) => firstState(c, (v) => v.phase === ph && v.day?.n === n).at);

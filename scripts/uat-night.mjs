@@ -1,11 +1,11 @@
 // 3페이즈 밤·아침 UAT 를 봇으로 대신 도는 시나리오. 봇이 방을 만들고 채워 밤 두 번을 돌며 결과 표를 낸다.
 // 스크립트는 전지적이다: 각 클라이언트의 view.me.role 로 역할을 알고 그 역할대로 행동시킨다.
-// 낮은 직업 주장 차례(결정 0023·0027)에 자기 차례가 오면 말 안 함(none)을 바로 보내고 토론 90초는 서버 타이머로 넘긴다. 전체 약 5분.
+// 낮은 직업 주장 차례(결정 0023·0027)에 자기 차례가 오면 말 안 함(none)을 바로 보내고 토론 90초·처형 여부 투표 10초(표를 안 던짐 → 미통과 → 밤, 결정 0036)는 서버 타이머로 넘긴다. 전체 약 5분 30초.
 // 역할별 일지(결정 0026·0027-11)를 본다: 경찰 수사 {n,target,isMafia}, 마피아 암살 {n,target,died}, 의사 치료 {n,target}.
 //
 //   밤1: 마피아 전원 → 시민 X 지목, 경찰 → 마피아 조사, 의사 → 자신 보호, 마피아 한 명이 밤 채팅(nightTarget).
 //        마피아가 둘(6명 이상)이면 서로 다른 시민 A·B 를 골라 동률 추첨을 본다(탈락자는 둘 중 하나).
-//   아침1: 모든 폰이 같은 day.morning(탈락자 = 지목한 사람, 문구 1..8), players[].alive 일치, 경찰 기록 1건·isMafia true,
+//   아침1: 모든 폰이 같은 day.morning(탈락자 = 지목한 사람, 문구 1..MORNING_PHRASE_COUNT), players[].alive 일치, 경찰 기록 1건·isMafia true,
 //          마피아 전원 같은 암살일지 1건(target = 탈락자, died true), 의사 치료일지 1건(target = 자신),
 //          그 역할 밖 프레임에는 records 키 없음·줄 키는 역할별, 살아 있는 비마피아는 밤 chat·emoji 0,
 //          탈락자만 spectate(모든 직업), 아침 중 pick → WRONG_PHASE.
@@ -38,7 +38,10 @@ const results = [];
 const check = (test, label, ok, detail = "") => results.push({ test, label, ok, detail });
 const CLAIM_TURN_MS = 8_000;
 const CLAIM_WAIT_MS = CLAIM_TURN_MS * N; // 차례 대기 한도: 모두 시간 초과일 때 최대 인원 × 8초
-const OVERALL_LIMIT_MS = 540_000 + CLAIM_WAIT_MS;
+const EXEC_VOTE_MS = 10_000; // 처형 여부 투표(shared/game/phases.ts EXEC_VOTE_MS): 하루마다 표를 안 던지고 지나간다
+const OVERALL_LIMIT_MS = 540_000 + 2 * EXEC_VOTE_MS + CLAIM_WAIT_MS;
+// shared/protocol.ts 의 MORNING_PHRASE_COUNT 와 같은 값(스크립트는 TS 를 import 하지 않는다). 아침 탈락 문구 번호는 1..7.
+const MORNING_PHRASE_COUNT = 7;
 // 역할별 일지 줄의 키 집합
 const RECORD_KEYS = { police: "isMafia,n,target", mafia: "died,n,target", doctor: "n,target" };
 
@@ -135,7 +138,7 @@ async function main() {
 
   // ---- 1일차 낮: 차례마다 none 을 보내고 토론은 서버 타이머로 밤까지 (약 100초) ----
   console.log("1일차 낮을 타이머로 넘기는 중(약 2분)");
-  await waitUntil(() => clients.every((c) => stateAt(c, "night", 1)), 170_000 + CLAIM_WAIT_MS, "1일차 밤");
+  await waitUntil(() => clients.every((c) => stateAt(c, "night", 1)), 170_000 + EXEC_VOTE_MS + CLAIM_WAIT_MS, "1일차 밤");
   for (const c of clients) c.role = stateAt(c, "night", 1).msg.view.me.role;
   const byRole = (r) => clients.filter((c) => c.role === r);
   const mafias = byRole("mafia").sort((a, b) => a.seat - b.seat);
@@ -179,7 +182,7 @@ async function main() {
   const sameMorning = m1.every((v) => same(v.day.morning, morning1));
   check("아침1", "모든 폰이 같은 day.morning", sameMorning, JSON.stringify(morning1));
   check("아침1", dual ? "탈락자가 두 후보(A·B) 중 하나 (동률 추첨)" : "탈락자 = 마피아가 지목한 시민", picks1.includes(X), `후보 ${picks1.join("·")} → 탈락 ${X}`);
-  check("아침1", "탈락 문구 번호 1..8 정수", Number.isInteger(morning1.phrase) && morning1.phrase >= 1 && morning1.phrase <= 8, `문구 ${morning1.phrase}`);
+  check("아침1", `탈락 문구 번호 1..${MORNING_PHRASE_COUNT} 정수`, Number.isInteger(morning1.phrase) && morning1.phrase >= 1 && morning1.phrase <= MORNING_PHRASE_COUNT, `문구 ${morning1.phrase}`);
   const aliveOk = m1.every((v) => v.players.every((p) => p.alive === (p.seat !== X)));
   check("아침1", "players[].alive 가 탈락자만 false", aliveOk, "");
   const xClient = bySeatClient(X);
@@ -224,7 +227,7 @@ async function main() {
   const claimCode = await requestError(xClient, { t: "claim", claim: "none" });
   check("낮2", "탈락자의 claim → BAD_MESSAGE", claimCode === "BAD_MESSAGE", claimCode);
   holdDay2Claims = false;
-  await waitUntil(() => clients.every((c) => stateAt(c, "night", 2)), 150_000 + CLAIM_WAIT_MS, "2일차 밤");
+  await waitUntil(() => clients.every((c) => stateAt(c, "night", 2)), 150_000 + EXEC_VOTE_MS + CLAIM_WAIT_MS, "2일차 밤");
 
   // ---- 밤2 ----
   console.log("2일차 밤 — 관전자 수신·구출");
