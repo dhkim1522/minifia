@@ -896,3 +896,105 @@ describe("봇 투표·변론 계획: 회귀", () => {
     expect(got.join(",")).toBe("251347194,802530989,431118882");
   });
 });
+
+// ---- P-13: 테스트 방 방장이 고른 봇 투표 설정(결정 0022·0024 확장, 04-15) ----
+describe("봇 투표 고정 설정: botExecAgree·botCandidateTarget", () => {
+  it("botExecAgree: 고정 yes 는 true, no 는 false 이고 randInt 를 한 번도 부르지 않는다", () => {
+    expect(String(botExecAgree(THROWING, "yes"))).toBe("true");
+    expect(String(botExecAgree(THROWING, "no"))).toBe("false");
+  });
+
+  it("botExecAgree: 고정이 없으면 기존과 같이 randInt(100) 한 번이다", () => {
+    const rec = recording(1);
+    botExecAgree(rec.randInt);
+    botExecAgree(rec.randInt, undefined);
+    expect(rec.calls.join(",")).toBe("100,100");
+    expect(String(botExecAgree(() => 69))).toBe("true");
+    expect(String(botExecAgree(() => 70))).toBe("false");
+  });
+
+  it("botCandidateTarget host: 방장이 살아 있고 이 봇이 아니면 방장 seat 이며 randInt 를 부르지 않는다", () => {
+    const state = verdictAt(8, "candidateVote");
+    const hostSeat = state.players.find((p) => p.id === state.hostId)!.seat;
+    for (const bot of botsOf(state)) {
+      expect(`${bot.seat}:${botCandidateTarget(state, bot, THROWING, "host")}`).toBe(`${bot.seat}:${hostSeat}`);
+    }
+  });
+
+  it("botCandidateTarget other: 방장도 자기도 아닌 살아 있는 사람 중 가장 낮은 seat 이며 randInt 를 부르지 않는다", () => {
+    const state = verdictAt(8, "candidateVote");
+    const [b1, b2, b3] = botsOf(state); // seat 1, 2, 3
+    expect(String(botCandidateTarget(state, b1!, THROWING, "other"))).toBe("2");
+    expect(String(botCandidateTarget(state, b2!, THROWING, "other"))).toBe("1");
+    expect(String(botCandidateTarget(state, b3!, THROWING, "other"))).toBe("1");
+    // 가장 낮은 seat 이 탈락했으면 그다음.
+    const dead = markDead(state, 1);
+    expect(String(botCandidateTarget(dead, b2!, THROWING, "other"))).toBe("3");
+  });
+
+  it("조건이 안 맞으면 무작위로 돌아가 기존과 같이 randInt(길이) 한 번 부른다", () => {
+    const base = verdictAt(8, "candidateVote");
+    const hostSeat = base.players.find((p) => p.id === base.hostId)!.seat;
+    const bot = botsOf(base)[1]!; // seat 2
+    // host: 방장 탈락 → 살아 있는 다른 사람 3명 중 무작위
+    const hostDead = markDead(base, hostSeat);
+    const rec1 = recording(2);
+    const t1 = botCandidateTarget(hostDead, bot, rec1.randInt, "host");
+    expect(`${rec1.calls.join(",")}:${t1 !== undefined && t1 !== hostSeat && t1 !== bot.seat}`).toBe("3:true");
+    // other: 방장·자기 말고 아무도 없음 → 후보는 방장 하나뿐이라 randInt(1) 한 번
+    const alone = markDead(base, ...base.players.filter((p) => p.id !== base.hostId && p.id !== bot.id).map((p) => p.seat));
+    const rec2 = recording(2);
+    const t2 = botCandidateTarget(alone, bot, rec2.randInt, "other");
+    expect(`${rec2.calls.join(",")}:${t2}`).toBe(`1:${hostSeat}`);
+    // 후보가 아예 없으면 undefined, 난수 없음
+    const none = markDead(alone, hostSeat);
+    expect(String(botCandidateTarget(none, bot, THROWING, "host"))).toBe("undefined");
+    expect(String(botCandidateTarget(none, bot, THROWING, "other"))).toBe("undefined");
+  });
+
+  it("고정 설정이 없으면 기존 시그니처 호출과 같다(같은 난수 기록·같은 결과)", () => {
+    const state = verdictAt(8, "candidateVote");
+    const bot = botsOf(state)[1]!;
+    const a = recording(5);
+    const b = recording(5);
+    expect(String(botCandidateTarget(state, bot, a.randInt))).toBe(String(botCandidateTarget(state, bot, b.randInt, undefined)));
+    expect(a.calls.join(",")).toBe(b.calls.join(","));
+  });
+});
+
+describe("봇 투표 고정 설정: planBotSteps", () => {
+  it("execVote: 설정 yes 는 모두 찬성, no 는 모두 반대이고 결정 난수 없이 지연 난수만 부른다", () => {
+    const state = voteStateAt(5, "execVote");
+    for (const exec of ["yes", "no"] as const) {
+      const fixed: RoomState = { ...state, testBotVote: { exec } };
+      const rec = recording(7);
+      const steps = planBotSteps(fixed, nowOf(fixed), rec.randInt);
+      expect(`${exec}:${rec.calls.join(",")}`).toBe(`${exec}:6000,6000,6000,6000`);
+      expect(steps.length).toBe(4);
+      expect(steps.every((s) => s.act.t === "execVote" && s.act.agree === (exec === "yes"))).toBe(true);
+    }
+  });
+
+  it("candidateVote: 설정 pick host 는 모두 방장에게 던지고 지연 난수만 부른다", () => {
+    const state = { ...verdictAt(5, "candidateVote"), testBotVote: { pick: "host" as const } };
+    const hostSeat = state.players.find((p) => p.id === state.hostId)!.seat;
+    const rec = recording(3);
+    const steps = planBotSteps(state, nowOf(state), rec.randInt);
+    expect(rec.calls.join(",")).toBe("9000,9000,9000,9000");
+    expect(steps.length).toBe(4);
+    expect(steps.every((s) => s.act.t === "candidateVote" && s.act.target === hostSeat)).toBe(true);
+  });
+
+  it("설정의 다른 쪽 값은 서로 영향이 없다(exec 만 고정이면 pick 은 무작위 그대로)", () => {
+    const state = { ...verdictAt(5, "candidateVote"), testBotVote: { exec: "yes" as const } };
+    const rec = recording(3);
+    planBotSteps(state, nowOf(state), rec.randInt);
+    expect(rec.calls.join(",")).toBe(Array.from({ length: 4 }, () => "4,9000").join(","));
+  });
+
+  it("설정이 없으면 같은 시드의 계획이 설정 키를 가진 빈 객체와도 같다", () => {
+    const state = voteStateAt(5, "execVote");
+    const plain = canon(planBotSteps(state, nowOf(state), seededRandInt(42)));
+    expect(canon(planBotSteps({ ...state, testBotVote: {} }, nowOf(state), seededRandInt(42)))).toBe(plain);
+  });
+});

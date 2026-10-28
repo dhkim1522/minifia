@@ -9,7 +9,7 @@ import type { RoomState } from "../../shared/game/room";
 import { pickTarget } from "../../shared/game/night";
 import { isAlive } from "../../shared/game/alive";
 import { castCandidateVote, castExecVote } from "../../shared/game/vote";
-import { resetToLobby, setBotCount, setTestRole, skipPhase } from "../../shared/game/testTools";
+import { resetToLobby, setBotCount, setBotVote, setTestRole, skipPhase } from "../../shared/game/testTools";
 import { tick } from "../../shared/game/tick";
 import { buildPreview, buildView } from "../../shared/game/view";
 import type { PhaseId } from "../../shared/protocol";
@@ -726,5 +726,138 @@ describe("resetToLobby: 투표·처형·종료 필드를 모두 지운다 (END-0
     const ended = skipOk(mafiaExecution, 20_000, seededRandInt(9));
     expect(ended.phase).toBe("ended");
     check(rich(ended), "ended");
+  });
+});
+
+// ---- P-13: 테스트 방 봇 투표 선택 규칙(04-15) ----
+function deepFreeze<T>(value: T): T {
+  if (value !== null && typeof value === "object" && !Object.isFrozen(value)) {
+    Object.freeze(value);
+    for (const child of Object.values(value as Record<string, unknown>)) deepFreeze(child);
+  }
+  return value;
+}
+
+describe("setBotVote", () => {
+  it("검사 순서: 일반 방 BAD_MESSAGE → 손님 NOT_HOST → 대기실 밖 WRONG_PHASE → 값 범위 밖 BAD_MESSAGE", () => {
+    const normal = lobbyOf(5, false);
+    const a = setBotVote(normal, normal.hostId, "yes", "host");
+    expect(a.ok ? "ok" : a.error).toBe("BAD_MESSAGE");
+    const test = lobbyOf(5);
+    const guest = test.players.find((p) => p.id !== test.hostId)!;
+    const b = setBotVote(test, guest.id, "yes", "host");
+    expect(b.ok ? "ok" : b.error).toBe("NOT_HOST");
+    const started = stateAt(5, 1, "discussion");
+    const c = setBotVote(started, started.hostId, "yes", "host");
+    expect(c.ok ? "ok" : c.error).toBe("WRONG_PHASE");
+    // 일반 방은 손님이 보내도 값이 틀려도 BAD_MESSAGE 가 먼저다
+    const normalBad = setBotVote(normal, "someone-else", "maybe" as "yes", "host");
+    expect(normalBad.ok ? "ok" : normalBad.error).toBe("BAD_MESSAGE");
+    const badExec = setBotVote(test, test.hostId, "maybe" as "yes", "host");
+    expect(badExec.ok ? "ok" : badExec.error).toBe("BAD_MESSAGE");
+    const badPick = setBotVote(test, test.hostId, "yes", "everyone" as "host");
+    expect(badPick.ok ? "ok" : badPick.error).toBe("BAD_MESSAGE");
+    // 대기실 밖이면 값이 틀려도 WRONG_PHASE 가 먼저다
+    const badInGame = setBotVote(started, started.hostId, "maybe" as "yes", "host");
+    expect(badInGame.ok ? "ok" : badInGame.error).toBe("WRONG_PHASE");
+  });
+
+  it("무작위가 아닌 값만 저장하고 입력 상태는 깊은 동결이어도 바뀌지 않는다", () => {
+    const lobby = deepFreeze(lobbyOf(5));
+    const both = setBotVote(lobby, lobby.hostId, "no", "other");
+    if (!both.ok) throw new Error(both.error);
+    expect(JSON.stringify(both.state.testBotVote)).toBe('{"exec":"no","pick":"other"}');
+    expect(Object.hasOwn(lobby, "testBotVote")).toBe(false);
+    const execOnly = setBotVote(lobby, lobby.hostId, "yes", "random");
+    if (!execOnly.ok) throw new Error(execOnly.error);
+    expect(JSON.stringify(execOnly.state.testBotVote)).toBe('{"exec":"yes"}');
+    const pickOnly = setBotVote(lobby, lobby.hostId, "random", "host");
+    if (!pickOnly.ok) throw new Error(pickOnly.error);
+    expect(JSON.stringify(pickOnly.state.testBotVote)).toBe('{"pick":"host"}');
+  });
+
+  it("둘 다 random 이면 키를 지운다", () => {
+    const lobby = deepFreeze({ ...lobbyOf(5), testBotVote: { exec: "no" as const, pick: "host" as const } });
+    const r = setBotVote(lobby, lobby.hostId, "random", "random");
+    if (!r.ok) throw new Error(r.error);
+    expect(Object.hasOwn(r.state, "testBotVote")).toBe(false);
+  });
+
+  it("같은 값은 입력 객체 그대로다(없음 = random,random 포함)", () => {
+    const set = { ...lobbyOf(5), testBotVote: { exec: "no" as const, pick: "host" as const } };
+    const same = setBotVote(set, set.hostId, "no", "host");
+    expect(same.ok && same.state === set).toBe(true);
+    const none = lobbyOf(5);
+    const sameNone = setBotVote(none, none.hostId, "random", "random");
+    expect(sameNone.ok && sameNone.state === none).toBe(true);
+    const half = { ...lobbyOf(5), testBotVote: { pick: "other" as const } };
+    const sameHalf = setBotVote(half, half.hostId, "random", "other");
+    expect(sameHalf.ok && sameHalf.state === half).toBe(true);
+  });
+
+  it("resetToLobby 가 설정을 남긴다(testRole 처럼) — 없으면 키도 없다", () => {
+    const execution = skipOk(stateWithVerdict(5, 6, "defense", { lobby: botLobby(), candidate: "citizen" }), 20_000, seededRandInt(9));
+    const withSetting: RoomState = { ...execution, testBotVote: { exec: "yes", pick: "host" } };
+    const r = resetToLobby(withSetting, withSetting.hostId);
+    if (!r.ok) throw new Error(r.error);
+    expect(JSON.stringify(r.state.testBotVote)).toBe('{"exec":"yes","pick":"host"}');
+    const plain = resetToLobby(execution, execution.hostId);
+    if (!plain.ok) throw new Error(plain.error);
+    expect(Object.hasOwn(plain.state, "testBotVote")).toBe(false);
+  });
+});
+
+describe("skipPhase: 봇 투표 설정을 따른다", () => {
+  const setting = (lobby: RoomState, exec: "random" | "yes" | "no", pick: "random" | "host" | "other"): RoomState => {
+    const r = setBotVote(lobby, lobby.hostId, exec, pick);
+    if (!r.ok) throw new Error(r.error);
+    return r.state;
+  };
+  const THROWING = (): number => {
+    throw new Error("randInt must not be called");
+  };
+
+  it("execVote: yes 면 봇이 모두 찬성 → candidateVote(now + 15000), 난수를 부르지 않는다", () => {
+    const state = startedFrom(setting(botLobby(), "yes", "random"), 3, "execVote");
+    const now = state.phaseEndsAt! - 500;
+    const after = skipOk(state, now, THROWING);
+    expect(`${after.phase}/${after.phaseEndsAt}`).toBe(`candidateVote/${now + 15_000}`);
+    expect(lastExec(after)).toBe('{"yes":4,"no":0,"passed":true}');
+  });
+
+  it("execVote: no 면 봇이 모두 반대 → notMajority 로 night(now + 30000)", () => {
+    const state = startedFrom(setting(botLobby(), "no", "random"), 3, "execVote");
+    const now = state.phaseEndsAt! - 500;
+    const after = skipOk(state, now, THROWING);
+    expect(`${after.phase}/${after.phaseEndsAt}`).toBe(`night/${now + 30_000}`);
+    expect(lastExec(after)).toBe('{"yes":0,"no":4,"passed":false}');
+  });
+
+  it("execVote: 설정이 random 이면 기존과 같다(봇마다 randInt(100) 한 번)", () => {
+    const state = startedFrom(setting(botLobby(), "random", "random"), 3, "execVote");
+    const calls: number[] = [];
+    skipOk(state, state.phaseEndsAt! - 500, (n) => {
+      calls.push(n);
+      return 0;
+    });
+    expect(calls.slice(0, 4).join(",")).toBe("100,100,100,100");
+  });
+
+  it("candidateVote: pick host 면 봇 표가 모두 방장에게 가서 방장이 후보다(방장이 안 던져도)", () => {
+    const state = stateWithVerdict(5, 4, "candidateVote", { lobby: setting(botLobby(), "random", "host"), candidate: "none" });
+    const now = state.phaseEndsAt! - 500;
+    const after = skipOk(state, now, THROWING);
+    expect(`${after.phase}/${after.phaseEndsAt}`).toBe(`candidateVoteReveal/${now + 4_000}`);
+    const votes = [...after.voteLog!.at(-1)!.cand!.votes].sort((a, b) => a.seat - b.seat);
+    expect(votes.map((v) => `${v.seat}>${v.target}`).join(",")).toBe("1>0,2>0,3>0,4>0");
+    const defense = skipOk(after, now, seededRandInt(9));
+    expect(`${defense.phase}/${defense.verdict?.candidate}`).toBe("defense/0");
+  });
+
+  it("candidateVote: pick other 면 봇 표가 방장도 자기도 아닌 가장 낮은 seat 로 간다", () => {
+    const state = stateWithVerdict(5, 4, "candidateVote", { lobby: setting(botLobby(), "random", "other"), candidate: "none" });
+    const after = skipOk(state, state.phaseEndsAt! - 500, THROWING);
+    const votes = [...after.voteLog!.at(-1)!.cand!.votes].sort((a, b) => a.seat - b.seat);
+    expect(votes.map((v) => `${v.seat}>${v.target}`).join(",")).toBe("1>2,2>1,3>1,4>1");
   });
 });
