@@ -641,7 +641,10 @@ describe("T-04-40: 닉네임은 평문으로만 이어 붙인다", () => {
     const plan = revealPlan(sameSeatVotes([[1, 2], [3, 2]]), 0);
     for (const now of [0, 250, 1000, plan.endMs]) {
       const cap = revealCaption(plan, revealStateAt(plan, now), five);
-      if (cap !== null) expect(typeof cap.title + cap.hint).toBe("string");
+      if (cap !== null) {
+        expect(typeof cap.title).toBe("string");
+        expect(typeof cap.hint).toBe("string");
+      }
     }
     expect(revealResultLine(plan, five)).toBe("가나다라마님이 2표로 가장 많은 표를 받았어요");
   });
