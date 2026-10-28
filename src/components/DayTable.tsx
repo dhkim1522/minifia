@@ -83,6 +83,11 @@ export interface DayTableSeat {
    * slow = 그 뒤 공개가 끝날 때까지 작은 느린 박동. 안 주면 지금 그대로다. 크기 변화는 개별 속성 scale 이라 좌석의 깊이 transform 과 겹치지 않는다.
    */
   beat?: "clinch" | "slow";
+  /**
+   * beat 가 clinch 일 때, 확정 뒤 같은 후보에게 표가 더 닿아 두근을 처음부터 다시 도는 홀수 번째 반복이면 true.
+   * CSS 애니메이션은 같은 이름이면 다시 시작하지 않으므로, 다시 돌 때마다 이름이 번갈아 바뀌게(mf-dk-c ↔ mf-dk-c-b) 클래스로 구분한다.
+   */
+  beatAlt?: boolean;
   /** 최후 변론·처형의 후보: 테이블 가운데로 이동·1.7배(game/verdict.ts candidateCenter). z 그림 31·이름표 32. 한 화면에 한 자리 */
   center?: boolean;
   /** 아침: 어둡게 층(z 30) 위(z 31)로 올려 어두워지지 않게 한다. 방금 탈락한 자리 */
@@ -283,7 +288,7 @@ export function DayTable({
           zIndex: s.spotlit ? SPOTLIT_Z : p.z,
         };
         const art = s.dead ? undefined : s.roleArt;
-        const seatClass = `mf-dt__seat${s.beat ? ` mf-dt__seat--${s.beat}` : ""}${s.spotlit ? " mf-dt__seat--spotlit" : ""}${s.spotlit && s.pulse ? " mf-dt__seat--pulse" : ""}${
+        const seatClass = `mf-dt__seat${s.beat ? ` mf-dt__seat--${s.beat}` : ""}${s.beat === "clinch" && s.beatAlt ? " mf-dt__seat--alt" : ""}${s.spotlit ? " mf-dt__seat--spotlit" : ""}${s.spotlit && s.pulse ? " mf-dt__seat--pulse" : ""}${
           s.transition === "entering" ? " mf-dt__seat--enter" : s.transition === "leaving" ? " mf-dt__seat--leave" : ""
         }`;
         // 후광은 그림 img 하나에만 붙는다. halo 가 있으면 그 값, 없으면 파생: 흰(차례·내가 고른 대상) > 진홍(동료)

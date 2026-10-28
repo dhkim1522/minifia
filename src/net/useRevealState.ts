@@ -34,8 +34,11 @@ export function nextBoundary(plan: RevealPlan, now: number): number | null {
     consider(s.touchMs + REVEAL_FADE_MS);
   }
   consider(plan.endMs);
-  // 확정 두근(CLINCH_BEAT_MS)이 끝나 느린 박동으로 넘어가는 시각(04-20)
-  if (plan.clinch !== null) consider(plan.clinch.atMs + CLINCH_BEAT_MS);
+  // 확정 두근(CLINCH_BEAT_MS)이 끝나 느린 박동으로 넘어가는 시각(04-20). 확정 뒤 같은 후보에게 닿는 표마다 두근을 다시 돌므로 그 닿음 + CLINCH_BEAT_MS 도 경계다.
+  if (plan.clinch !== null) {
+    consider(plan.clinch.atMs + CLINCH_BEAT_MS);
+    for (const s of plan.steps) if (s.index > plan.clinch.step && s.target === plan.clinch.seat) consider(s.touchMs + CLINCH_BEAT_MS);
+  }
   return next;
 }
 

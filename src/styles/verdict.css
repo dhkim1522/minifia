@@ -115,8 +115,19 @@
 /* 후광 그림 한정(앰버 후광이 켜진 확정 후보). 끊긴 사람 그림의 회색 필터는 건드리지 않는다 */
 .mf-dt__seat--clinch .mf-figure--halo-amber:not(.mf-figure--disconnected) { animation: mf-dk-halo 700ms ease-out 1; }
 .mf-vchip--beat { animation: mf-dk-chip 700ms ease-out 1; }
+/* 확정 뒤 같은 후보에게 표가 더 닿으면 두근을 처음부터 다시 돈다. 같은 이름이면 애니메이션이 다시 시작하지 않으므로 다시 돌 때마다 이름이 번갈아 바뀐다(-b). 칩은 득표 수가 key 라 새 노드가 되어 저절로 다시 돈다. */
+.mf-dt__seat--clinch.mf-dt__seat--alt { animation: mf-dk-c-b 700ms ease-out 1; }
+.mf-dt__seat--clinch.mf-dt__seat--alt .mf-figure--halo-amber:not(.mf-figure--disconnected) { animation: mf-dk-halo-b 700ms ease-out 1; }
 .mf-vchip--slow { animation: mf-dk-chip-slow 1200ms ease-in-out infinite; }
 @keyframes mf-dk-c {
+  0% { scale: 1; }
+  14% { scale: 1.12; }
+  28% { scale: 1; }
+  42% { scale: 1.12; }
+  57% { scale: 1; }
+  100% { scale: 1; }
+}
+@keyframes mf-dk-c-b {
   0% { scale: 1; }
   14% { scale: 1.12; }
   28% { scale: 1; }
@@ -133,6 +144,13 @@
   100% { scale: 1; }
 }
 @keyframes mf-dk-halo {
+  0% { filter: var(--mf-halo-amber); }
+  14% { filter: drop-shadow(0 0 3px var(--amber-400)) drop-shadow(0 0 18px color-mix(in srgb, var(--amber-400) 95%, transparent)); }
+  28% { filter: var(--mf-halo-amber); }
+  42% { filter: drop-shadow(0 0 3px var(--amber-400)) drop-shadow(0 0 18px color-mix(in srgb, var(--amber-400) 95%, transparent)); }
+  57%, 100% { filter: var(--mf-halo-amber); }
+}
+@keyframes mf-dk-halo-b {
   0% { filter: var(--mf-halo-amber); }
   14% { filter: drop-shadow(0 0 3px var(--amber-400)) drop-shadow(0 0 18px color-mix(in srgb, var(--amber-400) 95%, transparent)); }
   28% { filter: var(--mf-halo-amber); }
@@ -165,7 +183,7 @@
   57%, 100% { filter: brightness(1); }
 }
 @media (prefers-reduced-motion: reduce) {
-  .mf-dt__seat--clinch, .mf-dt__seat--slow { animation: none; }
+  .mf-dt__seat--clinch, .mf-dt__seat--clinch.mf-dt__seat--alt, .mf-dt__seat--slow { animation: none; }
   .mf-vchip--slow { animation: none; }
   .mf-dt__seat--clinch .mf-figure { animation: mf-dk-flash 700ms ease-out 1 !important; }
   .mf-vchip--beat { animation: mf-dk-chip-flash 700ms ease-out 1 !important; }

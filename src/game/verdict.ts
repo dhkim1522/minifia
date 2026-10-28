@@ -205,13 +205,25 @@ export function revealStateAt(plan: RevealPlan, now: number): RevealState {
   };
 }
 
-/** 과반 확정 연출의 모양: 확정 순간부터 CLINCH_BEAT_MS 동안 clinch(크게 두근), 그 뒤는 slow(작은 느린 박동) */
+/** 과반 확정 연출의 모양: 마지막 닿음(확정 순간 또는 확정 뒤 같은 후보에게 닿은 표)부터 CLINCH_BEAT_MS 동안 clinch(크게 두근), 그 뒤는 slow(작은 느린 박동) */
 export type ClinchBeatKind = "clinch" | "slow";
-/** 서버 시각 now 에서 두근 중인 확정 후보. 확정 사건 전이거나 확정이 없는 판(동률·미확정·표 없음)이면 null. 중간 합류도 지금 시각의 모양이다. */
-export function clinchBeat(plan: RevealPlan, now: number): { seat: number; beat: ClinchBeatKind } | null {
+/**
+ * 서버 시각 now 에서 두근 중인 확정 후보. 확정 사건 전이거나 확정이 없는 판(동률·미확정·표 없음)이면 null. 중간 합류도 지금 시각의 모양이다.
+ * 확정 뒤 같은 후보에게 표가 더 닿으면 그 닿음부터 두근을 처음부터 다시 돈다 — 창 = 마지막 닿음 + CLINCH_BEAT_MS.
+ * replay = now 까지 확정 뒤 같은 후보에게 닿은 횟수(첫 확정 0). 화면이 두근 애니메이션을 다시 시작할 때 키로 쓴다.
+ */
+export function clinchBeat(plan: RevealPlan, now: number): { seat: number; beat: ClinchBeatKind; replay: number } | null {
   const clinch = plan.clinch;
   if (clinch === null || now < clinch.atMs) return null;
-  return { seat: clinch.seat, beat: now - clinch.atMs < CLINCH_BEAT_MS ? "clinch" : "slow" };
+  let lastTouchMs = clinch.atMs;
+  let replay = 0;
+  for (const s of plan.steps) {
+    if (s.index > clinch.step && s.target === clinch.seat && s.touchMs <= now) {
+      lastTouchMs = s.touchMs;
+      replay += 1;
+    }
+  }
+  return { seat: clinch.seat, beat: now - lastTouchMs < CLINCH_BEAT_MS ? "clinch" : "slow", replay };
 }
 
 // ---- (3) 기하 — 장면 좌표 공식은 dayTableGeometry·daySeatLayout 한 곳이고 여기서는 그 결과(x, y, scale)만 쓴다 ----

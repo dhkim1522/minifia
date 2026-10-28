@@ -141,7 +141,7 @@ export function useVerdictScene({ view, connection, meAlive, showToast, lines, o
         return {
           halo: kinds.get(seat) ?? "none",
           ...(count > 0 ? { chip: { n: count, tone, ...(mine === "slow" ? { slow: true } : {}) } } : {}),
-          ...(mine !== null ? { beat: mine } : {}),
+          ...(mine !== null ? { beat: mine, ...(mine === "clinch" && beat !== null && beat.replay % 2 === 1 ? { beatAlt: true } : {}) } : {}),
         };
       },
       ...(reveal ? { layer: (layout: DayTableLayout) => <RevealLayer layout={layout} plan={reveal.plan} serverNow={serverNow} reduced={reduced} /> } : {}),
