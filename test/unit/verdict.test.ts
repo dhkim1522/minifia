@@ -1,5 +1,6 @@
+import { existsSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import type { CandidateVoteLine } from "../../shared/protocol";
+import type { CandidateVoteLine, SummaryRow, VoteLogEntry } from "../../shared/protocol";
 import { daySeatLayout, dayTableGeometry, FIG_H, TAG_H } from "../../src/game/dayTable";
 import {
   CHIP_H,
@@ -32,13 +33,30 @@ import {
   VERDICT_DIM_FADE_MS,
   VERDICT_DIM_PERCENT,
   VERDICT_MOVE_MS,
+  VERDICT_TEXT,
+  UNKNOWN_NAME,
   arrowEndpoints,
   candidateCenter,
   capHalos,
   chipAnchor,
+  candidateSeatLabel,
   clinchedTarget,
+  defenseAnnounce,
+  defenseDisconnected,
+  defenseInstruction,
+  defenseSent,
+  defenseStatus,
+  endedAnnounce,
+  endedSubtitle,
+  execTallyText,
+  noExecutionPrefix,
+  noExecutionText,
+  revealCaption,
   revealPlan,
+  revealResultLine,
   revealStateAt,
+  summaryLines,
+  winnerText,
   type HaloRequest,
 } from "../../src/game/verdict";
 
@@ -407,5 +425,224 @@ describe("순수 모듈 검사 (D-38)", () => {
       .filter((line) => !/^\s*(\/\/|\*|\/\*)/.test(line))
       .join("\n");
     expect(src).not.toMatch(/Date\.now|Math\.random|document\.|window\./);
+  });
+});
+
+// ---- Task 2: 문구 정본 (UI-SPEC 7.2·7.3, D-11, D-19, D-27, D-34, D-35) ----
+const NAMES: Record<number, string> = { 0: "나나나나나", 1: "지호", 2: "도윤", 3: "서연", 4: "하늘" };
+const nameOf = (seat: number): string | undefined => NAMES[seat];
+
+describe("VERDICT_TEXT — UI-SPEC 7.2 와 글자까지 같다", () => {
+  it("고정 문구 전부", () => {
+    expect(VERDICT_TEXT).toMatchObject({
+      execTitle: "오늘 처형을 할까요?",
+      execIntroHint: "카드 뒤에서도 바로 고를 수 있어요",
+      spectatorPill: "관전 중 · 볼 수만 있어요",
+      candidateTitle: "처형할 사람을 고르세요",
+      candidateHint: "자기 자신은 고를 수 없어요 · 마감까지 바꿀 수 있어요",
+      candidateNone: "선택 안 함",
+      votedSuffix: "님에게 투표했어요",
+      candidateSpectatorTitle: "처형할 사람을 고르는 중이에요",
+      candidateSpectatorHint: "누구를 골랐는지는 공개될 때 볼 수 있어요",
+      defenseChooseTitle: "변론할 말을 고르세요",
+      defenseChooseHint: "한 번에 하나씩 보낼 수 있어요",
+      executionDoneTitle: "처형이 끝났어요",
+      executionDoneHint: "곧 다음으로 넘어가요",
+      executionCardSub: "처형이 집행됐어요",
+      execIntroCardTitle: "처형 투표",
+      noExecCardTitle: "처형 무효",
+      endedTitle: "게임 종료",
+      summaryTitle: "이번 판 기록",
+      homeButton: "처음으로",
+      roomCloseNote: "이 방은 30분 뒤에 닫혀요",
+      noRecord: "아직 기록이 없어요",
+    });
+  });
+
+  it("값이 UI-SPEC 문서에도 그대로 있다 (문서가 있을 때)", () => {
+    const path = new URL("../../.planning/phases/04-execution-verdict/04-UI-SPEC.md", import.meta.url);
+    if (!existsSync(path)) return;
+    const doc = readFileSync(path, "utf8");
+    const flat = (v: unknown): string[] => (typeof v === "string" ? [v] : typeof v === "object" && v !== null ? Object.values(v).flatMap(flat) : []);
+    for (const text of flat(VERDICT_TEXT)) expect(doc, text).toContain(text);
+  });
+
+  it("읽기용 단계 안내와 보조 문구 함수", () => {
+    expect(VERDICT_TEXT.announce.execVote).toBe("처형 여부 투표. 오늘 처형을 할까요?");
+    expect(VERDICT_TEXT.announce.candidateVote).toBe("후보 선택 투표. 처형할 사람을 고르세요");
+    expect(VERDICT_TEXT.announce.candidateVoteReveal).toBe("투표 공개");
+    expect(defenseAnnounce("도윤")).toBe("도윤님의 최후 변론");
+    expect(defenseAnnounce(null)).toBe("내 최후 변론. 변론할 말을 고르세요");
+    expect(endedAnnounce("citizenWin")).toBe("게임이 끝났습니다. 시민 팀 승리");
+    expect(endedAnnounce("mafiaWin")).toBe("게임이 끝났습니다. 마피아 팀 승리");
+    expect(defenseStatus("도윤")).toBe("도윤님이 변론하는 중");
+    expect(defenseDisconnected("도윤")).toBe("도윤님은 연결이 끊겨 있어요");
+    expect(defenseInstruction(2, "도윤")).toBe("2일차 · 도윤님의 변론");
+    expect(defenseInstruction(2, null)).toBe("2일차 · 내 변론");
+    expect(defenseSent("저 아니에요")).toBe("보냈어요 · 저 아니에요");
+    expect(candidateSeatLabel("도윤", false)).toBe("도윤, 투표 대상");
+    expect(candidateSeatLabel("도윤", true)).toBe("도윤 (나), 투표 대상");
+    expect(noExecutionPrefix("tie")).toBe("처형 무효. 동률이라 처형하지 않아요. ");
+  });
+});
+
+describe("execTallyText (D-35, UI-SPEC 7.2)", () => {
+  it("생존 5·찬성 3·반대 1 → 아직 1명", () => {
+    expect(execTallyText({ yes: 3, no: 1 }, 5)).toEqual({ strong: "찬성 3 · 반대 1", rest: "아직 1명 · 마감까지 바꿀 수 있어요" });
+  });
+  it("모두 던지면 모두 투표했어요", () => {
+    expect(execTallyText({ yes: 3, no: 1 }, 4).rest).toBe("모두 투표했어요 · 마감까지 바꿀 수 있어요");
+  });
+  it("던진 표가 생존자보다 많아도 남은 수는 0", () => {
+    expect(execTallyText({ yes: 4, no: 3 }, 5).rest).toBe("모두 투표했어요 · 마감까지 바꿀 수 있어요");
+  });
+  it("아무도 안 던졌으면 생존자 수 전부가 남았다", () => {
+    expect(execTallyText({ yes: 0, no: 0 }, 6)).toEqual({ strong: "찬성 0 · 반대 0", rest: "아직 6명 · 마감까지 바꿀 수 있어요" });
+  });
+});
+
+describe("revealCaption · revealResultLine (UI-SPEC 7.2 candidateVoteReveal)", () => {
+  const plan = revealPlan(sameSeatVotes([[1, 2], [3, 2], [4, 1]]), 0);
+
+  it("첫 화살표 전에는 문구가 없다", () => {
+    expect(revealCaption(plan, revealStateAt(plan, 0), nameOf)).toBeNull();
+  });
+
+  it("화살표 k 가 나가는 중이면 누가 누구를 골랐는지와 몇 번째 표", () => {
+    expect(revealCaption(plan, revealStateAt(plan, 200 + 100), nameOf)).toEqual({
+      title: "지호님이 도윤님을 골랐어요",
+      hint: "1번째 표 · 모두 3표",
+    });
+    const second = plan.steps[1].startMs + 50;
+    expect(revealCaption(plan, revealStateAt(plan, second), nameOf)).toEqual({
+      title: "서연님이 도윤님을 골랐어요",
+      hint: "2번째 표 · 모두 3표",
+    });
+  });
+
+  it("화살표 사이 틈에서는 직전 문구를 유지한다", () => {
+    const gap = plan.steps[0].fadeEndMs + 10;
+    expect(revealStateAt(plan, gap).arrow).toBeNull();
+    expect(revealCaption(plan, revealStateAt(plan, gap), nameOf)?.title).toBe("지호님이 도윤님을 골랐어요");
+  });
+
+  it("끝 상태: 유일한 선두", () => {
+    const st = revealStateAt(plan, plan.endMs);
+    expect(revealCaption(plan, st, nameOf)).toEqual({ title: "도윤님이 가장 많은 표를 받았어요", hint: "2표 · 곧 최후 변론이 시작돼요" });
+    expect(revealResultLine(plan, nameOf)).toBe("도윤님이 2표로 가장 많은 표를 받았어요");
+  });
+
+  it("끝 상태: 동률", () => {
+    const tie = revealPlan(sameSeatVotes([[1, 2], [3, 4]]), 0);
+    expect(revealCaption(tie, revealStateAt(tie, tie.endMs), nameOf)).toEqual({
+      title: "표가 갈렸어요",
+      hint: "동률이라 처형하지 않아요 · 곧 밤이 시작돼요",
+    });
+    expect(revealResultLine(tie, nameOf)).toBe("표가 갈렸어요. 동률이라 처형하지 않아요");
+  });
+
+  it("끝 상태: 던진 표 0", () => {
+    const none = revealPlan([], 0);
+    expect(revealCaption(none, revealStateAt(none, 0), nameOf)).toEqual({
+      title: "투표한 사람이 없어요",
+      hint: "던진 표가 없어요 · 곧 밤이 시작돼요",
+    });
+    expect(revealResultLine(none, nameOf)).toBe("투표한 사람이 없어요");
+  });
+
+  it("이름을 못 찾으면 알 수 없는 사람", () => {
+    const lost = revealPlan(sameSeatVotes([[99, 98]]), 0);
+    expect(revealCaption(lost, revealStateAt(lost, 250), nameOf)?.title).toBe(`${UNKNOWN_NAME}님이 ${UNKNOWN_NAME}님을 골랐어요`);
+    expect(UNKNOWN_NAME).toBe("알 수 없는 사람");
+  });
+});
+
+describe("noExecutionText · winnerText (D-34, UI-SPEC 7.2)", () => {
+  it("무효 이유 부제 세 개", () => {
+    expect(noExecutionText("notMajority")).toBe("찬성이 과반이 아니에요");
+    expect(noExecutionText("tie")).toBe("동률이라 처형하지 않아요");
+    expect(noExecutionText("noVotes")).toBe("던진 표가 없어요");
+  });
+  it("승리 배너", () => {
+    expect(winnerText("citizenWin")).toEqual({ title: "시민 팀 승리", sub: "마피아가 모두 탈락했어요", announce: "게임이 끝났습니다. 시민 팀 승리" });
+    expect(winnerText("mafiaWin")).toEqual({
+      title: "마피아 팀 승리",
+      sub: "마피아 수가 나머지 생존자 수와 같아졌어요",
+      announce: "게임이 끝났습니다. 마피아 팀 승리",
+    });
+  });
+});
+
+describe("summaryLines · endedSubtitle (D-27, UI-SPEC 7.2 ended)", () => {
+  const voteLog: VoteLogEntry[] = [
+    { n: 1, exec: { yes: 3, no: 1, passed: true }, cand: { votes: sameSeatVotes([[0, 2], [1, 2], [3, 4]]), candidate: 2 } },
+    { n: 2, exec: { yes: 1, no: 3, passed: false } },
+    { n: 3, exec: { yes: 3, no: 0, passed: true }, cand: { votes: [] } },
+    { n: 4, exec: { yes: 3, no: 0, passed: true }, cand: { votes: sameSeatVotes([[0, 1], [3, 4]]) } },
+  ];
+
+  it("낮 → 밤 순서로 일차 오름차순, 낮은 처형·무효 네 갈래", () => {
+    const summary: SummaryRow[] = [
+      { n: 2, exec: { yes: 1, no: 3, passed: false }, night: { target: 1, died: true } },
+      { n: 1, exec: { yes: 3, no: 1, passed: true, candidate: 2 }, night: { target: 3, died: false } },
+      { n: 3, exec: { yes: 3, no: 0, passed: true } },
+      { n: 4, exec: { yes: 3, no: 0, passed: true }, night: { died: false } },
+    ];
+    const lines = summaryLines(summary, voteLog, nameOf);
+    expect(lines.map((l) => [l.label, l.text])).toEqual([
+      ["1일차 낮", "도윤님 처형 (2표)"],
+      ["1일차 밤", "서연님을 노렸지만 의사가 지켰어요"],
+      ["2일차 낮", "처형 없음 (찬성 1 · 반대 3)"],
+      ["2일차 밤", "지호님 사망"],
+      ["3일차 낮", "처형 없음 (던진 표 없음)"],
+      ["4일차 낮", "처형 없음 (동률)"],
+      ["4일차 밤", "아무 일도 없었어요"],
+    ]);
+  });
+
+  it("exec 가 없는 일차는 낮 행이 없고 night 가 없으면 밤 행이 없다", () => {
+    const lines = summaryLines([{ n: 1, night: { target: 1, died: true } }, { n: 2, exec: { yes: 0, no: 2, passed: false } }], [], nameOf);
+    expect(lines.map((l) => l.label)).toEqual(["1일차 밤", "2일차 낮"]);
+  });
+
+  it("밤에 지목 자체가 없으면 아무 일도 없었어요", () => {
+    const lines = summaryLines([{ n: 1, night: { died: false } }], [], nameOf);
+    expect(lines).toEqual([{ n: 1, kind: "night", label: "1일차 밤", text: "아무 일도 없었어요" }]);
+  });
+
+  it("투표 기록을 못 찾아도 예외 없이 표 수만 뺀다", () => {
+    const lines = summaryLines([{ n: 7, exec: { yes: 3, no: 0, passed: true, candidate: 2 } }], voteLog, nameOf);
+    expect(lines[0].text).toBe("도윤님 처형");
+  });
+
+  it("입력을 바꾸지 않는다", () => {
+    const summary: SummaryRow[] = [{ n: 2 }, { n: 1 }];
+    summaryLines(summary, [], nameOf);
+    expect(summary.map((r) => r.n)).toEqual([2, 1]);
+  });
+
+  it("endedSubtitle: 마지막 행에 night 가 있으면 밤, 없으면 낮, 행이 없으면 빈 문자열", () => {
+    expect(endedSubtitle([{ n: 1, exec: { yes: 1, no: 1, passed: false } }, { n: 2, night: { target: 1, died: true } }])).toBe("2일차 밤");
+    expect(endedSubtitle([{ n: 1, night: { died: false } }, { n: 2, exec: { yes: 3, no: 0, passed: true, candidate: 1 } }])).toBe("2일차 낮");
+    expect(endedSubtitle([])).toBe("");
+  });
+});
+
+describe("T-04-40: 닉네임은 평문으로만 이어 붙인다", () => {
+  const evil = (seat: number): string | undefined => (seat === 1 ? "<b>가나다라</b>" : seat === 2 ? "{x}&amp;" : undefined);
+  it("모든 문구 함수가 마크업·중괄호를 그대로 둔 문자열을 돌려준다", () => {
+    const plan = revealPlan(sameSeatVotes([[1, 2]]), 0);
+    expect(revealCaption(plan, revealStateAt(plan, 250), evil)?.title).toBe("<b>가나다라</b>님이 {x}&amp;님을 골랐어요");
+    expect(summaryLines([{ n: 1, night: { target: 1, died: true } }], [], evil)[0].text).toBe("<b>가나다라</b>님 사망");
+    expect(defenseStatus("<i>")).toBe("<i>님이 변론하는 중");
+  });
+  it("5글자 닉네임으로도 예외 없이 문자열을 만든다", () => {
+    const five = (): string => "가나다라마";
+    const plan = revealPlan(sameSeatVotes([[1, 2], [3, 2]]), 0);
+    for (const now of [0, 250, 1000, plan.endMs]) {
+      const cap = revealCaption(plan, revealStateAt(plan, now), five);
+      if (cap !== null) expect(typeof cap.title + cap.hint).toBe("string");
+    }
+    expect(revealResultLine(plan, five)).toBe("가나다라마님이 2표로 가장 많은 표를 받았어요");
   });
 });
