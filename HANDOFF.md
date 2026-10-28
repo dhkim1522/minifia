@@ -4,7 +4,7 @@
 
 ## 지금 상태
 
-- 4페이즈 서버 웨이브: 04-04 까지 완료(웨이브 3 순수 규칙: 후보 선택·공개·변론·처형). 결정 0036 이 와이어 계약. 04-05 부터(웨이브 1~3 push). 배포 금지(D-26)
+- 4페이즈 서버 웨이브: 04-05 까지 완료(웨이브 1~3). 배포 금지(D-26)
 - 마지막 작업: 실내 배경 V2(커튼 더 걷힘) + 명도 0.8 구움 + 헤더 글씨 번짐(결정 0033). 명도는 폰에서 적절하다고 확인됨. 버전은 `/api/health`.
 - `npm run e2e` 는 인자가 없으면 **배포본**을 검사한다. 로컬은 `npm run dev` 후 `npm run e2e -- --url http://localhost:5173`.
 - 배경·유령 그림을 바꾸면 `ASSET_VERSION`(`src/net/assets.ts`)을 올린다(정적 그림 캐시 1일).
@@ -20,7 +20,7 @@
 ## 다음 할 일
 
 1. 영역 지도·가이드 이미지·에셋 자동 검사를 `docs/` 에 정리(폰 폭 360·390·430별 헤더·창·테이블·패널 영역, 그림이 지키는지 거르는 스크립트). gsd-addons 에 올릴지 결정.
-2. 4페이즈: 논의 끝(`.planning/phases/04-execution-verdict/04-CONTEXT.md`, 결정 0034) · 시안 승인됨(`design/screens/execution-v1/`, 원본 Design 캔버스 KpxQ2EN37vQMkApXjv8in5) · 서버·공유 로직 계획 진행(04-RESEARCH·PATTERNS·VALIDATION). 다음: `/gsd-ui-phase 4` → 화면 웨이브 계획 추가 → 실행(서버만 배포 금지, D-26). 아침 문구 묶음에서 "이슬이 되어 사라졌습니다"를 빼 처형 쪽으로 옮기는 작업이 계획에 들어간다.
+2. 4페이즈: 논의 끝(`.planning/phases/04-execution-verdict/04-CONTEXT.md`, 결정 0034) · 시안 승인됨(`design/screens/execution-v1/`, 원본 Design 캔버스 KpxQ2EN37vQMkApXjv8in5) · 서버·공유 로직 계획 진행(04-RESEARCH·PATTERNS·VALIDATION). 다음: `/gsd-ui-phase 4` → 화면 웨이브 계획 추가 → 실행(서버만 배포 금지, D-26).
 3. 큰 폰 세로 가운데 + 층 분리 에셋(투명 PNG·원래 크기 필요).
 4. 점검: `/gsd-verify-work 3.1`, 각 페이즈(1·2·3·3.1)의 `/gsd-secure-phase`·`/gsd-validate-phase`·`/gsd-extract-learnings`.
 5. 디자인 아티팩트 동기화(디자인 세션): 디자인 시스템·화면 설계서·화면 흐름.
