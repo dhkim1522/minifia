@@ -57,6 +57,9 @@ import {
   resolveTarget,
   stageStable,
   tagsOverlap,
+  voteChecks,
+  introChecks,
+  candidateChecks,
 } from "./lib.mjs";
 
 const PROD = "https://minifia.dhplay.workers.dev\n";
@@ -1456,4 +1459,185 @@ test("sceneIntroChecks N8: 낮 시작 문구 `N일차`+`낮이 되었습니다`+
   assert.match(sceneIntroChecks(null, { kind: "day" }).detail, /\.mf-sceneintro/);
   // 밤 규칙(N6)은 그대로: 낮 글자는 밤 검사를 통과하지 못한다
   assert.equal(sceneIntroChecks(good).ok, false);
+});
+
+// ---- 처형 구간 순수 검사 P1·P9·P2·P3 (04-29, UI-SPEC 15.3). 입력은 lib.mjs 머리의 `처형 구간 스냅숏 계약` 모양 ----
+
+const goodVote = (over = {}) => ({
+  bottom: {
+    title: "오늘 처형을 할까요?",
+    guide: "",
+    tally: "찬성 2 · 반대 1 · 살아 있는 5명",
+    pill: null,
+    buttons: [
+      { text: "찬성", pressed: true, disabled: false, w: 160, h: 52 },
+      { text: "반대", pressed: false, disabled: false, w: 160, h: 52 },
+    ],
+    height: 157,
+  },
+  dt: { textHits: 0, haloImgs: [], seatButtons: [], scene: { left: 0, top: 119, right: 360, bottom: 483, width: 360 } },
+  ...over,
+});
+const withBottom = (patch) => {
+  const v = goodVote();
+  Object.assign(v.bottom, patch);
+  return v;
+};
+
+test("voteChecks P1: 제목·집계 줄·찬성/반대 둘(≥44, aria-pressed)·익명(글자·후광 0)이면 통과한다", () => {
+  const r = voteChecks(goodVote());
+  assert.equal(r.id, "P1");
+  assert.equal(r.ok, true, r.detail);
+  // 아직 아무것도 안 고른 상태(둘 다 false)도 통과
+  const none = withBottom({ buttons: goodVote().bottom.buttons.map((b) => ({ ...b, pressed: false })) });
+  assert.equal(voteChecks(none).ok, true);
+});
+
+test("voteChecks P1: 어긋남마다 실패하고 이유를 말한다", () => {
+  const b = goodVote().bottom.buttons;
+  const cases = [
+    ["익명 깨짐: 이름표·캐릭터에 찬성/반대 글자", (() => { const v = goodVote(); v.dt.textHits = 1; return v; })(), /익명|글자/],
+    ["익명 깨짐: 후광 하나", (() => { const v = goodVote(); v.dt.haloImgs = [{ seat: 2, kind: "white" }]; return v; })(), /후광/],
+    ["버튼 하나 부족", withBottom({ buttons: [b[0]] }), /버튼/],
+    ["버튼 높이 40", withBottom({ buttons: [{ ...b[0], h: 40 }, b[1]] }), /44/],
+    ["버튼 너비 40", withBottom({ buttons: [b[0], { ...b[1], w: 40 }] }), /44/],
+    ["기권 버튼", withBottom({ buttons: [...b, { text: "기권", pressed: false, disabled: false, w: 100, h: 52 }] }), /기권|버튼/],
+    ["aria-pressed 가 불리언이 아님", withBottom({ buttons: [{ ...b[0], pressed: null }, b[1]] }), /aria-pressed|pressed/],
+    ["제목이 다름", withBottom({ title: "누구를 처형할까요?" }), /제목/],
+    ["집계 줄 모양이 다름", withBottom({ tally: "찬성 2" }), /집계/],
+  ];
+  for (const [name, v, re] of cases) {
+    const r = voteChecks(v);
+    assert.equal(r.ok, false, name);
+    assert.match(r.detail, re, name);
+  }
+});
+
+test("voteChecks P1: 필드가 없으면 측정값 없음으로 실패한다", () => {
+  for (const v of [null, undefined, {}, { bottom: goodVote().bottom }, { dt: goodVote().dt }]) {
+    const r = voteChecks(v);
+    assert.equal(r.ok, false, JSON.stringify(v));
+    assert.match(r.detail, /측정값 없음/);
+  }
+  const v = goodVote();
+  delete v.dt.textHits;
+  assert.match(voteChecks(v).detail, /측정값 없음\(.*textHits/);
+});
+
+test("voteChecks P9: 탈락 viewer 는 버튼 0·알약 `관전 중`·집계 줄은 그대로 보인다", () => {
+  const spec = withBottom({ buttons: [], pill: "관전 중 · 볼 수만 있어요" });
+  const r = voteChecks(spec, { spectator: true });
+  assert.equal(r.id, "P9");
+  assert.equal(r.ok, true, r.detail);
+  const cases = [
+    ["관전자에 버튼 있음", withBottom({ buttons: goodVote().bottom.buttons, pill: "관전 중 · 볼 수만 있어요" }), /버튼/],
+    ["알약 없음", withBottom({ buttons: [], pill: null }), /관전 중/],
+    ["알약 문구 다름", withBottom({ buttons: [], pill: "투표했어요" }), /관전 중/],
+    ["집계 줄 사라짐", withBottom({ buttons: [], pill: "관전 중 · 볼 수만 있어요", tally: "" }), /집계/],
+  ];
+  for (const [name, v, re] of cases) {
+    const x = voteChecks(v, { spectator: true });
+    assert.equal(x.ok, false, name);
+    assert.match(x.detail, re, name);
+  }
+  // 살아 있는 viewer 기준으로는 관전 화면이 통과하지 못한다
+  assert.equal(voteChecks(spec).ok, false);
+});
+
+const introSamples = (over = {}) => [
+  { t: 100, intro: { count: 1, pointerEvents: "none", cardOpacity: 1, residueCount: 0 } },
+  { t: 900, intro: { count: 1, pointerEvents: "none", cardOpacity: 1, residueCount: 0 } },
+  { t: 1900, intro: { count: 0, pointerEvents: null, cardOpacity: null, residueCount: 0 } },
+  ...(over.extra ?? []),
+];
+
+test("introChecks P2: 도착 직후 카드 1장·터치 통과, 1.8초 뒤 DOM 에서 사라져 잔상 0, 그 동안 클릭이 통과했으면 통과한다", () => {
+  const r = introChecks(introSamples(), { clickedThrough: true });
+  assert.equal(r.id, "P2");
+  assert.equal(r.ok, true, r.detail);
+});
+
+test("introChecks P2: 어긋남마다 실패하고 이유를 말한다", () => {
+  const s = introSamples();
+  const mut = (i, patch) => s.map((x, k) => (k === i ? { ...x, intro: { ...x.intro, ...patch } } : x));
+  const cases = [
+    ["도착 직후 카드 없음", mut(0, { count: 0 }), true, /카드/],
+    ["도착 직후 카드 둘", mut(0, { count: 2 }), true, /카드/],
+    ["터치를 가로챔", mut(0, { pointerEvents: "auto" }), true, /pointer-events/],
+    ["1.8초 뒤에도 남아 있음", mut(2, { count: 1, pointerEvents: "none" }), true, /1800|사라/],
+    ["불투명 잔상", mut(2, { residueCount: 1 }), true, /잔상/],
+    ["클릭이 통과하지 못함", s, false, /클릭/],
+    ["1.8초 뒤 표본 없음", s.slice(0, 2), true, /측정값 없음/],
+    ["표본 없음", [], true, /측정값 없음/],
+  ];
+  for (const [name, samples, clickedThrough, re] of cases) {
+    const r = introChecks(samples, { clickedThrough });
+    assert.equal(r.ok, false, name);
+    assert.match(r.detail, re, name);
+  }
+  assert.match(introChecks(s, {}).detail, /측정값 없음\(.*clickedThrough/);
+  assert.match(introChecks(null, { clickedThrough: true }).detail, /측정값 없음/);
+});
+
+const seatBtns = (over = {}) =>
+  [0, 1, 2, 3, 4].map((seat) => ({
+    seat,
+    pickable: seat !== 0 && seat !== 4,
+    pressed: false,
+    label: `플레이어${seat}`,
+    ...(over[seat] ?? {}),
+  }));
+const goodCand = ({ chosen = 2, halo, pill } = {}) => ({
+  bottom: { title: "처형할 사람을 고르세요", guide: "", tally: "", pill: pill ?? (chosen === null ? "선택 안 함" : "플레이어2님에게 투표했어요"), buttons: [], height: 157 },
+  dt: {
+    textHits: 0,
+    haloImgs: halo ?? (chosen === null ? [] : [{ seat: chosen, kind: "white" }]),
+    seatButtons: seatBtns(chosen === null ? {} : { [chosen]: { pressed: true } }),
+    scene: { left: 0, top: 119, right: 360, bottom: 483, width: 360 },
+  },
+});
+const candOpts = { mySeat: 0, deadSeats: [4], chosenSeat: 2 };
+
+test("candidateChecks P3: 내 자리·탈락 자리 비활성, 고른 자리 pressed+흰 후광 하나, 알약 `…님에게 투표했어요`면 통과한다", () => {
+  const r = candidateChecks(goodCand(), candOpts);
+  assert.equal(r.id, "P3");
+  assert.equal(r.ok, true, r.detail);
+  // 고르기 전: 선택 안 함, 후광 0
+  const none = candidateChecks(goodCand({ chosen: null }), { ...candOpts, chosenSeat: null });
+  assert.equal(none.ok, true, none.detail);
+  // 동료 진홍 마름모 후광은 허용 목록에 있을 때만 통과
+  const withMate = goodCand({ halo: [{ seat: 2, kind: "white" }, { seat: 3, kind: "crimson" }] });
+  assert.equal(candidateChecks(withMate, { ...candOpts, crimsonSeats: [3] }).ok, true);
+  assert.equal(candidateChecks(withMate, candOpts).ok, false);
+});
+
+test("candidateChecks P3: 어긋남마다 실패하고 이유를 말한다", () => {
+  const cases = [
+    ["내 자리가 pickable", (() => { const v = goodCand(); v.dt.seatButtons[0].pickable = true; return v; })(), candOpts, /내 자리/],
+    ["탈락 자리가 pickable", (() => { const v = goodCand(); v.dt.seatButtons[4].pickable = true; return v; })(), candOpts, /탈락/],
+    ["살아 있는 남의 자리가 pickable 아님", (() => { const v = goodCand(); v.dt.seatButtons[3].pickable = false; return v; })(), candOpts, /자리 3/],
+    ["후광 둘", goodCand({ halo: [{ seat: 2, kind: "white" }, { seat: 3, kind: "white" }] }), candOpts, /흰 후광/],
+    ["남의 자리에만 후광", goodCand({ halo: [{ seat: 3, kind: "white" }] }), candOpts, /후광/],
+    ["후광 없음", goodCand({ halo: [] }), candOpts, /흰 후광/],
+    ["앰버 후광", goodCand({ halo: [{ seat: 2, kind: "white" }, { seat: 3, kind: "amber" }] }), candOpts, /후광/],
+    ["고른 자리 pressed 아님", (() => { const v = goodCand(); v.dt.seatButtons[2].pressed = false; return v; })(), candOpts, /pressed|aria-pressed/],
+    ["다른 자리도 pressed", (() => { const v = goodCand(); v.dt.seatButtons[1].pressed = true; return v; })(), candOpts, /pressed|aria-pressed/],
+    ["알약 문구 다름", goodCand({ pill: "선택 안 함" }), candOpts, /투표했어요/],
+    ["고르기 전인데 알약이 선택 안 함이 아님", goodCand({ chosen: null, pill: "플레이어2님에게 투표했어요" }), { ...candOpts, chosenSeat: null }, /선택 안 함/],
+    ["고르기 전인데 후광", goodCand({ chosen: null, halo: [{ seat: 2, kind: "white" }] }), { ...candOpts, chosenSeat: null }, /후광/],
+  ];
+  for (const [name, v, opts, re] of cases) {
+    const r = candidateChecks(v, opts);
+    assert.equal(r.ok, false, name);
+    assert.match(r.detail, re, name);
+  }
+});
+
+test("candidateChecks P3: 필드가 없으면 측정값 없음으로 실패한다", () => {
+  for (const v of [null, {}, { bottom: goodCand().bottom }, { dt: { ...goodCand().dt, seatButtons: undefined }, bottom: goodCand().bottom }]) {
+    const r = candidateChecks(v, candOpts);
+    assert.equal(r.ok, false, JSON.stringify(v));
+    assert.match(r.detail, /측정값 없음/);
+  }
+  assert.match(candidateChecks(goodCand(), { chosenSeat: 2 }).detail, /측정값 없음\(.*mySeat/);
 });
