@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import type { ReactElement } from "react";
 import { isAlive } from "../../shared/game/alive";
 import type { ClientMessage, RoomView } from "../../shared/protocol";
 import { execTallyText, VERDICT_TEXT } from "../game/verdict";
 import { Icon } from "./Icon";
+import { ReadOnlyRow } from "./ReadOnlyRow";
 import "../styles/day.css";
 import "../styles/verdict.css";
 
@@ -18,9 +19,11 @@ export interface ExecVotePanelProps {
   view: RoomView; // execVote 단계
   canSend: boolean;
   send: (msg: ClientMessage) => boolean;
+  /** 탈락한 viewer: 버튼 없이 집계 줄과 관전 알약만 본다(D-35). 집계는 살아 있는 사람과 같은 값이다 */
+  readOnly?: boolean;
 }
 
-export function ExecVotePanel({ view, canSend, send }: ExecVotePanelProps): ReactElement {
+export function ExecVotePanel({ view, canSend, send, readOnly = false }: ExecVotePanelProps): ReactElement {
   const [pending, setPending] = useState<{ view: RoomView; agree: boolean } | null>(null);
   const shown = pending !== null && pending.view === view ? pending.agree : view.me.voteAgree;
 
@@ -42,28 +45,43 @@ export function ExecVotePanel({ view, canSend, send }: ExecVotePanelProps): Reac
     <div className="mf-execvote">
       <h2 className="mf-claimpanel__title">{VERDICT_TEXT.execTitle}</h2>
       <p className="mf-execvote__tally">
-        <b>{strong}</b>
+        <b>
+          {/* 숫자는 값이 key 라 바뀔 때만 새 노드가 된다 — 팝 애니메이션이 그 숫자에서만 다시 돈다. 문구는 execTallyText 한 곳에서 온다 */}
+          {strong.split(/(\d+)/).map((part, i) =>
+            i % 2 === 1 ? (
+              <span key={`${i}-${part}`} className="mf-execvote__num">
+                {part}
+              </span>
+            ) : (
+              <Fragment key={i}>{part}</Fragment>
+            ),
+          )}
+        </b>
         <span>{rest}</span>
       </p>
-      <div className="mf-seg mf-execvote__seg" role="group" aria-label="처형 여부">
-        {choices.map(({ agree, label }) => (
-          <button
-            key={label}
-            type="button"
-            className="mf-seg__b"
-            aria-pressed={shown === agree}
-            disabled={!canSend}
-            onClick={() => press(agree)}
-          >
-            {label}
-            {shown === agree ? (
-              <span className="mf-seg__ok" aria-hidden="true">
-                <Icon name="check" size={12} />
-              </span>
-            ) : null}
-          </button>
-        ))}
-      </div>
+      {readOnly ? (
+        <ReadOnlyRow text={VERDICT_TEXT.spectatorPill} />
+      ) : (
+        <div className="mf-seg mf-execvote__seg" role="group" aria-label="처형 여부">
+          {choices.map(({ agree, label }) => (
+            <button
+              key={label}
+              type="button"
+              className="mf-seg__b"
+              aria-pressed={shown === agree}
+              disabled={!canSend}
+              onClick={() => press(agree)}
+            >
+              {label}
+              {shown === agree ? (
+                <span className="mf-seg__ok" aria-hidden="true">
+                  <Icon name="check" size={12} />
+                </span>
+              ) : null}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

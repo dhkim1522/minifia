@@ -9,3 +9,9 @@
 .mf-execvote__tally span { margin-left: var(--space-sm); }
 /* 버튼 줄: 두 버튼 간격 8(기본 .mf-seg 간격은 4). 높이 44(--tap-min)는 .mf-seg__b 규칙을 그대로 쓴다. */
 .mf-execvote__seg { gap: var(--space-sm); }
+/* 집계 숫자 팝(UI-SPEC 8.1): 값이 바뀌어 새 노드가 되면 scale 1.15 → 1 을 180ms 돈다(개별 속성 scale). 모션 줄이기에서는 없다. */
+.mf-execvote__num { display: inline-block; animation: mf-execvote-pop var(--dur-fast) var(--ease-out) both; }
+@keyframes mf-execvote-pop { from { scale: 1.15; } to { scale: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  .mf-execvote__num { animation: none; }
+}

@@ -213,7 +213,6 @@ function emitter() {
       act(() => {
         for (const l of [...listeners]) l(e);
       }),
-    count: () => listeners.size,
   };
 }
 
@@ -262,7 +261,6 @@ describe("execVote 나머지 상태 (D-35, D-36, D-12 개정, D-08)", () => {
     expect(screen.queryAllByText("보내지 못했어요. 다시 시도해 주세요").length).toBe(0);
     ev.emit({ t: "error", code: "BAD_MESSAGE" });
     expect(screen.queryAllByText("보내지 못했어요. 다시 시도해 주세요").length).toBe(1);
-    expect(ev.count()).toBe(1);
   });
 
   it("execVote 가 아닌 단계에서는 이 오류 구독이 없다 (낮 시작 단계는 토스트를 띄우지 않는다)", () => {

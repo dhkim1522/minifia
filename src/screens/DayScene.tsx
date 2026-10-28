@@ -117,15 +117,15 @@ export function DayScene({ view, connection, myRoleButton, testButton, arrivedFr
   const [inspectSeat, setInspectSeat] = useState<number | null>(null);
   if (isNight && inspectSeat !== null) setInspectSeat(null);
   const inspectable = view.phase === "claim" || view.phase === "discussion" || isMorning;
-  // 투표 구간(execVote~)이면 제목·안내·타이머 톤·하단을 이 값이 정한다. 아니면 null 이라 아래 낮·밤·아침 경로는 그대로다(verdictScene.tsx).
-  const verdict = useVerdictScene({ view, connection });
-  const title = verdict ? verdict.title : isNight ? "밤" : isMorning ? "아침" : view.phase === "discussion" ? "낮 · 토론" : view.phase === "claim" ? "낮 · 직업 공개" : "낮";
 
   // 밤 대상 선택(D-01·D-06). 행위자 = 살아 있는 마피아·경찰·의사. 누를 수 있는 자리는 살아 있는 사람이다(역할별 제외는 아래).
   // 낙관적 선택: ClaimPanel 과 같이 어느 view 를 보고 있을 때 눌렀는지 함께 기억한다. 새 서버 view(다른 객체)가 오면 버려
   // 서버 값(view.me.pick)을 따른다 — 서버가 거절하면 같은 소켓에 state 를 다시 보낸다(T-03-27).
   const myPlayer = view.players.find((p) => p.seat === view.me.seat);
   const meAlive = myPlayer ? isAlive(myPlayer) : true;
+  // 투표 구간(execVote~)이면 제목·안내·타이머 톤·하단·좌석 덧입힘을 이 값이 정한다. 아니면 null 이라 낮·밤·아침 경로는 그대로다(verdictScene.tsx).
+  const verdict = useVerdictScene({ view, connection, meAlive, showToast, onInspect: setInspectSeat });
+  const title = verdict ? verdict.title : isNight ? "밤" : isMorning ? "아침" : view.phase === "discussion" ? "낮 · 토론" : view.phase === "claim" ? "낮 · 직업 공개" : "낮";
   const pickVerb = view.me.role ? PICK_VERB[view.me.role] : undefined;
   const actor = isNight && meAlive && pickVerb !== undefined;
   const myRole = view.me.role;
@@ -195,7 +195,8 @@ export function DayScene({ view, connection, myRoleButton, testButton, arrivedFr
           : {}),
         // 낮(claim·discussion·morning): 탈락한 viewer 포함 모든 자리가 읽기 전용 기록 카드 버튼이다. 연결 상태와 무관하고 서버 요청이 없다.
         // 밤에는 주지 않는다 — 밤 onPick 과 한 자리에 함께 켜지지 않는다.
-        ...(inspectable ? { onInspect: () => setInspectSeat(p.seat) } : {}),
+        // 투표 구간은 verdict 의 덧입힘이 정한다(모든 자리 기록 카드 버튼, 투표는 영향받지 않는다).
+        ...(verdict ? verdict.seatPatch(p.seat) : inspectable ? { onInspect: () => setInspectSeat(p.seat) } : {}),
       };
     });
 
