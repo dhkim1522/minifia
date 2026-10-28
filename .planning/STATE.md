@@ -4,18 +4,18 @@ milestone: v1.0
 milestone_name: MVP
 current_phase: 4
 current_phase_name: 처형과 승패
-current_plan: 19
+current_plan: 20
 status: executing
-stopped_at: Completed 04-19-PLAN.md
-last_updated: "2026-10-28T08:51:58.317Z"
+stopped_at: Completed 04-20-PLAN.md
+last_updated: "2026-10-28T09:06:15.635Z"
 last_activity: 2026-10-26
 last_activity_desc: Phase 4 execution started
-state_head: 48b84c9f9bafeaff4fb0b2f5952d5fd1a2c8dbf1
+state_head: caf5675e78ace2eef3b87d81e62224cba752c05a
 progress:
   total_phases: 7
   completed_phases: 2
   total_plans: 98
-  completed_plans: 82
+  completed_plans: 83
 ---
 
 # Project State
@@ -30,10 +30,10 @@ See: .planning/PROJECT.md (updated 2026-10-21)
 ## Current Position
 
 Phase: 4 (처형과 승패) — EXECUTING
-Current Plan: 19
+Current Plan: 20
 Total Plans in Phase: 35
-Plan: 19 of 35
-Status: 화면 웨이브 진행 중 — 04-13(순수 모듈 verdict.ts)·04-14(토큰·dusk 장면 표·dusk 미리 받기)·04-15(테스트 방 testBotVote) 완료(웨이브 9 끝), 04-16(execVote 트레이서: 라우팅·useVerdictScene·ExecVotePanel)·04-17(테스트 시트 봇 처형 투표·봇 후보 선택 칩)·04-18(후보 선택 화면: DayTable halo·useViewChoice·CandidateVotePanel·candidateVote 연결)·04-19(선택 공개 상태: useRevealState·표수 칩·앰버 후광·끝 문구) 완료, 다음 04-20. 배포는 04-35 에서만(D-26)
+Plan: 20 of 35
+Status: 화면 웨이브 진행 중 — 04-13(순수 모듈 verdict.ts)·04-14(토큰·dusk 장면 표·dusk 미리 받기)·04-15(테스트 방 testBotVote) 완료(웨이브 9 끝), 04-16(execVote 트레이서: 라우팅·useVerdictScene·ExecVotePanel)·04-17(테스트 시트 봇 처형 투표·봇 후보 선택 칩)·04-18(후보 선택 화면: DayTable halo·useViewChoice·CandidateVotePanel·candidateVote 연결)·04-19(선택 공개 상태: useRevealState·표수 칩·앰버 후광·끝 문구)·04-20(선택 공개 연출: 화살표 RevealLayer·과반 확정 두근·느린 박동·진동·모션 줄이기) 완료, 다음 04-21. 배포는 04-35 에서만(D-26)
 Last activity: 2026-10-26 — Phase 4 execution started
 
 Progress: [██░░░░░░░░] 17%
@@ -127,6 +127,7 @@ Progress: [██░░░░░░░░] 17%
 | Phase 4 P17 | 15min | 1 tasks | 3 files |
 | Phase 04 P18 | 12min | 3 tasks | 12 files |
 | Phase 04 P19 | 17min | 2 tasks | 9 files |
+| Phase 4 P20 | 11min | 2 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -243,6 +244,8 @@ Recent decisions affecting current work:
 - [Phase 04]: 04-18: 후보 선택 눌림은 pick.mine 대신 좌석 prop pressed 로 켠다(투표 단계에 머리 위 배지 없음, 결정 0030)
 - [Phase 04]: 04-18: 투표 구간 후광은 capHalos 로 최종 종류를 계산해 좌석 halo 로 명시, 동료 판정은 DayScene isAllySeat 한 곳
 - [Phase 04]: 04-19: 공개 칩 톤은 유일한 선두 lead > 방금 닿은 pop > plain (선두와 팝이 같은 자리면 lead). 1표짜리 선두도 lead 가 되는 점은 사용자 확인 대기
+- [Phase 4]: [04-20] 확정 두근 700ms 판정은 verdict.ts 의 순수 함수 clinchBeat(plan, now) 한 곳에 두고, 훅 경계에 확정 + 700ms 를 더했다
+- [Phase 4]: [04-20] 화살표는 컴포넌트 안 rAF 한 줄기(RevealLayer)로 끝점을 보간하고, 칩·두근·박동은 04-19 훅의 경계 타이머로 한다. 축소 모션은 전역 0.01ms 규칙에서 밝기 깜빡임 둘만 되돌린다
 
 ### Pending Todos
 
@@ -279,6 +282,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-28T08:51:57.717Z
-Stopped at: Completed 04-19-PLAN.md
+Last session: 2026-10-28T09:06:15.078Z
+Stopped at: Completed 04-20-PLAN.md
 Resume file: None
