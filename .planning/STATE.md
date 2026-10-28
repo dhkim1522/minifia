@@ -4,18 +4,18 @@ milestone: v1.0
 milestone_name: MVP
 current_phase: 4
 current_phase_name: 처형과 승패
-current_plan: 16
+current_plan: 17
 status: executing
-stopped_at: Completed 04-16-PLAN.md
-last_updated: "2026-10-28T08:29:03.289Z"
+stopped_at: Completed 04-17-PLAN.md
+last_updated: "2026-10-28T08:31:47.135Z"
 last_activity: 2026-10-26
 last_activity_desc: Phase 4 execution started
-state_head: 316821227944c30ccdedf435d3e0007767b81408
+state_head: b34455c5eb6f3dbdf7c2eb76ed20b40ff0838d9d
 progress:
   total_phases: 7
   completed_phases: 2
   total_plans: 98
-  completed_plans: 79
+  completed_plans: 80
 ---
 
 # Project State
@@ -30,10 +30,10 @@ See: .planning/PROJECT.md (updated 2026-10-21)
 ## Current Position
 
 Phase: 4 (처형과 승패) — EXECUTING
-Current Plan: 16
+Current Plan: 17
 Total Plans in Phase: 35
-Plan: 16 of 35
-Status: 화면 웨이브 진행 중 — 04-13(순수 모듈 verdict.ts)·04-14(토큰·dusk 장면 표·dusk 미리 받기)·04-15(테스트 방 testBotVote) 완료(웨이브 9 끝), 04-16(execVote 트레이서: 라우팅·useVerdictScene·ExecVotePanel) 완료, 다음 04-17. 배포는 04-35 에서만(D-26)
+Plan: 17 of 35
+Status: 화면 웨이브 진행 중 — 04-13(순수 모듈 verdict.ts)·04-14(토큰·dusk 장면 표·dusk 미리 받기)·04-15(테스트 방 testBotVote) 완료(웨이브 9 끝), 04-16(execVote 트레이서: 라우팅·useVerdictScene·ExecVotePanel)·04-17(테스트 시트 봇 처형 투표·봇 후보 선택 칩) 완료, 다음 04-18. 배포는 04-35 에서만(D-26)
 Last activity: 2026-10-26 — Phase 4 execution started
 
 Progress: [██░░░░░░░░] 17%
@@ -124,6 +124,7 @@ Progress: [██░░░░░░░░] 17%
 | Phase 4 P14 | 12min | 3 tasks | 10 files |
 | Phase 04 P15 | 35min | 3 tasks | 12 files |
 | Phase 04 P16 | 20min | 2 tasks | 7 files |
+| Phase 4 P17 | 15min | 1 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -273,6 +274,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-28T08:29:02.432Z
-Stopped at: Completed 04-16-PLAN.md
+Last session: 2026-10-28T08:31:46.565Z
+Stopped at: Completed 04-17-PLAN.md
 Resume file: None
