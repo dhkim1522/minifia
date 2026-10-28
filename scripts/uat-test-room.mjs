@@ -176,13 +176,18 @@ async function main() {
   check("d", "역할 확인에서 방장 testRole → WRONG_PHASE", revealRole === "[error:WRONG_PHASE,state:roleReveal]", revealRole);
 
   // ---- e. 단계를 거듭 넘기기 ----
-  const PHASE_NEXT = { roleReveal: "dayAnnounce", dayAnnounce: "claim", claim: "discussion", discussion: "night", night: "morning", morning: "dayAnnounce" };
+  // 값이 배열인 이유: 분기가 있는 단계가 있다(결정 0022·0034). 이 방은 사람만 있어 표가 없으므로 execVote 는 후보 없이 night 으로 가지만,
+  // 표가 있으면 candidateVote 쪽으로 갈 수 있다 — 순서 확인은 "허용된 다음 단계 중 하나" 로 본다.
+  const PHASE_NEXT = {
+    roleReveal: ["dayAnnounce"], dayAnnounce: ["claim"], claim: ["discussion"], discussion: ["execVote"],
+    execVote: ["night", "candidateVote"], night: ["morning"], morning: ["dayAnnounce"],
+  };
   const order = [];
   let current = "roleReveal";
   let orderOk = true;
   const t0 = performance.now();
   const skipTo = async (next) => {
-    if (PHASE_NEXT[current] !== next) orderOk = false;
+    if (!PHASE_NEXT[current]?.includes(next)) orderOk = false;
     await sleep(RATE_PAUSE_MS);
     send(host, { t: "testSkip" });
     await waitAllPhase(clients, next, SKIP_WAIT_MS, `${current} 넘기기(${next})`);
@@ -215,8 +220,13 @@ async function main() {
   check("e", "claim 중 넘기기는 차례 하나씩 (차례 순서대로 같은 단계에 머물다 마지막에 discussion)",
     claimTurnsOk && claimLog.length === wantTurns.length && same(claimLog.map((e) => e.seat), wantTurns) && claimLog.every((e) => e.n === 1 && e.claim === "none"),
     `차례 [${turnSeats}] → claimLog ${claimLog.map((e) => `${e.seat}:${e.claim}`).join(" ")}`);
+  await skipTo("execVote");
+  // 사람만 있는 방이라 아무도 표를 던지지 않았다: 처형 여부 투표는 통과하지 못하고 후보 선택 없이 곧장 night 이다(execTally 도 0:0).
+  check("e", "discussion 다음은 execVote (처형 여부 투표 단계, 집계 day.execTally 가 0:0)",
+    clients.every((c) => lastView(c).phase === "execVote" && lastView(c).day?.execTally?.yes === 0 && lastView(c).day?.execTally?.no === 0),
+    JSON.stringify(lastView(host).day?.execTally ?? null));
   await skipTo("night");
-  check("e", "roleReveal → dayAnnounce → claim(차례 하나씩) → discussion → night 를 네 소켓 모두 3초 안에 받음",
+  check("e", "roleReveal → dayAnnounce → claim(차례 하나씩) → discussion → execVote → night 를 네 소켓 모두 3초 안에 받음",
     orderOk, `${order.join(" → ")} (${Math.round(performance.now() - t0)}ms, 토론 90초·밤 30초를 기다리지 않음)`);
   const victim = guests[0];
   await act(host, { t: "pick", target: victim.seat });

@@ -1,6 +1,9 @@
 // 수동 확인용 봇: 사람이 만든 방에 가짜 플레이어를 채워 넣는다. 방장은 브라우저에서 직접 [시작] 을 누른다.
 // 봇은 직업 주장을 한 명씩 차례로 한다(결정 0023): 자기 차례(day.turn.seat)가 오면 알아서 주장을 고르고, 낮 토론에서 가끔 이모티콘·"결백" 메시지를 보낸다.
 // 밤에는 역할대로 행동한다: 마피아·경찰·의사 봇은 살아 있는 사람 중 하나를 pick 하고(마피아는 동료 제외), 마피아 봇은 가끔 밤 채팅·이모티콘을 보낸다. 탈락한 봇은 멈춘다.
+// 투표 구간(결정 0024·0036, 서버 봇 shared/game/bots.ts 와 같은 성향): 처형 여부 투표(execVote)에는 70% 찬성·30% 반대,
+// 후보 선택(candidateVote)에는 자기를 뺀 살아 있는 한 명, 최후 변론(defense)에서는 자기가 후보일 때만 변론 템플릿(defNotMe·defCitizen·defPlead) 하나.
+// 단계마다 한 번만 행동하고, 공개·처형·종료(ended) 단계에서는 아무것도 하지 않는다.
 //
 // 사용법:
 //   node scripts/bots.mjs <방 코드> [--count N] [--prod | <기준 주소>] [--quiet]
@@ -89,6 +92,7 @@ function onState(bot, view) {
     if (bot.talkTimer) { clearInterval(bot.talkTimer); bot.talkTimer = null; }
     bot.claimKey = null;
     bot.nightKey = null;
+    bot.voteKey = null;
     return;
   }
   if (view.phase === "claim") {
@@ -127,7 +131,28 @@ function onState(bot, view) {
       // 마피아 봇은 가끔 밤 채팅·이모티콘(서버가 살아 있는 마피아와 탈락자에게만 보낸다)
       setTimeout(() => send(Math.random() < 0.5 ? { t: "say", template: "nightAgree" } : { t: "emoji", icon: pick(EMOJIS) }), 6000 + Math.random() * 6000);
     }
+  } else if (view.phase === "execVote" || view.phase === "candidateVote" || view.phase === "defense") {
+    if (bot.talkTimer) { clearInterval(bot.talkTimer); bot.talkTimer = null; }
+    // 투표 구간 행동은 단계마다 한 번만 보낸다(키 = `${일차}:${단계}`). 사람과 같은 메시지 형식이라 서버 검증을 그대로 받는다.
+    const key = `${view.day?.n ?? "d"}:${view.phase}`;
+    if (bot.voteKey === key) return;
+    bot.voteKey = key;
+    if (view.phase === "execVote") {
+      const agree = Math.random() < 0.7;
+      setTimeout(() => { send({ t: "execVote", agree }); log(`${bot.nickname}: 여부 투표 ${agree ? "찬성" : "반대"}`); }, 500 + Math.random() * 5500);
+    } else if (view.phase === "candidateVote") {
+      const candidates = view.players.filter((p) => p.alive !== false && p.seat !== bot.seat).map((p) => p.seat);
+      if (candidates.length === 0) return;
+      const target = pick(candidates);
+      setTimeout(() => { send({ t: "candidateVote", target }); log(`${bot.nickname}: 후보 선택 ${target}`); }, 1000 + Math.random() * 8000);
+    } else {
+      // 변론은 후보 본인만 한다. 대상·직업이 필요 없는 템플릿 셋 중 하나.
+      if (view.day?.candidate !== bot.seat) return;
+      const template = pick(["defNotMe", "defCitizen", "defPlead"]);
+      setTimeout(() => { send({ t: "say", template }); log(`${bot.nickname}: 변론 ${template}`); }, 1000 + Math.random() * 3000);
+    }
   } else if (bot.talkTimer) {
+    // 공개·처형·종료(ended) 등 그 밖의 단계: 행동 없이 토론 타이머만 정리한다.
     clearInterval(bot.talkTimer);
     bot.talkTimer = null;
     bot.claimKey = null;
