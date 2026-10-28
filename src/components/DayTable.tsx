@@ -1,10 +1,10 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { CSSProperties, ReactElement, ReactNode } from "react";
 import type { EmojiId, RoleId } from "../../shared/protocol";
-import { DAY_SCENE_H, DAY_SCENE_W, FIG_H, FIG_W, SCENE_PAD_DEFAULT, dayTableGeometry, daySeatLayout, px } from "../game/dayTable";
+import { DAY_SCENE_H, DAY_SCENE_W, EMOJI_LIFT, EMOJI_SIZE, FIG_H, FIG_W, SCENE_PAD_DEFAULT, dayTableGeometry, daySeatLayout, px } from "../game/dayTable";
 import type { DaySeatPlace } from "../game/dayTable";
 import { ROLE_TEXT } from "../game/roleText";
-import { chipAnchor } from "../game/verdict";
+import { CONE_H, CONE_W, candidateCenter, chipAnchor } from "../game/verdict";
 import { Figure } from "./Figure";
 import { Icon } from "./Icon";
 import "../styles/daytable.css";
@@ -22,6 +22,9 @@ import "../styles/daytable.css";
 // 한 자리가 둘 다면 흰 후광이 이긴다. 내 표시는 후광 없이 내 이름표 테두리뿐이다. 말하는 중(주장 차례·빠른 메시지 3초)은 머리 위 '…' 말풍선이고,
 // 같은 자리에 이모티콘이 있으면 말풍선 대신 이모티콘만 보인다. 방장 왕관은 hostCrown(대기실)일 때만 그린다.
 // 캐릭터 상자·이름표·이모티콘의 좌표는 game/dayTable.ts 의 daySeatLayout 한 번의 결과에서 나온다(떠 있는 층을 따로 가두지 않는다).
+// 최후 변론·처형 무대(04-21): 좌석 center 는 그 자리를 candidateCenter(game/verdict.ts) 한 곳의 가운데 자리로 옮기고(x·발 y·배율 1.7), root verdict 는
+// 어둡게+흐림 층(z 30)을 그린다. center 좌석이 있으면 위에서 내려오는 원뿔 층 하나도 그린다(어둡게 층 뒤 같은 z). 수치는 prop 에서만 온다 —
+// 이 부품은 45·3 같은 값을 모른다(D-38). 좌표는 placeOf 한 함수를 지나 기본 좌석과 같은 경로다.
 
 /** 관전 화면에서 표적 배지를 다는 역할 종류. 살아 있는 사람 화면에는 넘어오지 않는다 */
 export type SpectatorPick = "mafia" | "police" | "doctor";
@@ -80,6 +83,8 @@ export interface DayTableSeat {
    * slow = 그 뒤 공개가 끝날 때까지 작은 느린 박동. 안 주면 지금 그대로다. 크기 변화는 개별 속성 scale 이라 좌석의 깊이 transform 과 겹치지 않는다.
    */
   beat?: "clinch" | "slow";
+  /** 최후 변론·처형의 후보: 테이블 가운데로 이동·1.7배(game/verdict.ts candidateCenter). z 그림 31·이름표 32. 한 화면에 한 자리 */
+  center?: boolean;
   /** 아침: 어둡게 층(z 30) 위(z 31)로 올려 어두워지지 않게 한다. 방금 탈락한 자리 */
   spotlit?: boolean;
   /** spotlit 일 때만 의미: 400ms 맥동을 한 번 돈다(밤 → 아침을 직접 본 경우에만 켠다) */
@@ -114,6 +119,8 @@ export interface DayTableProps {
   hostCrown?: boolean;
   /** 아침 어둡게 층. exitDelayMs 는 퇴장 페이드를 시작하기까지의 지연(아침 길이 − 300ms) */
   dim?: { exitDelayMs: number };
+  /** 최후 변론·처형: 어둡게+흐림 층. 값은 CSS 변수(--mf-verdict-dim·--mf-verdict-blur)로 내려간다. 있으면 root 에 mf-dt--verdict(좌석 이동 전이 600ms). 아침 dim 과 함께 쓰지 않는다 */
+  verdict?: { dimPercent: number; blurPx: number };
   /**
    * 좌석·이름표·칩 뒤, 루트의 마지막 자식으로 한 번 그리는 덧그림 층(후보 선택 공개의 화살표, 04-20). 장면 배치를 받아 좌표를 얻는다.
    * 없으면 렌더가 이전과 같다.
@@ -135,6 +142,30 @@ const EMOJI_Z = 60;
 const CHIP_Z = 46;
 /** 어둡게 층 위로 올라온 자리(방금 탈락한 유령)의 z-index */
 const SPOTLIT_Z = 31;
+/** 최후 변론 후보의 z-index: 그림은 어둡게 층(30) 위, 이름표는 그림 위(UI-SPEC 12) */
+const CENTER_Z = 31;
+const CENTER_TAG_Z = 32;
+/** 원뿔 아래끝은 후보 발 y + 8 (UI-SPEC 8.4, 이름표 위와 같은 선) */
+const CANDIDATE_CONE_BELOW_FOOT = 8;
+
+/** 한 좌석의 최종 배치. center 좌석은 candidateCenter 한 곳의 가운데 자리로 덮고, 나머지는 daySeatLayout 결과 그대로다 */
+function placeOf(p: DaySeatPlace, center: boolean, cc: ReturnType<typeof candidateCenter>): DaySeatPlace {
+  if (!center) return p;
+  return {
+    ...p,
+    x: cc.x,
+    y: cc.footY,
+    scale: cc.scale,
+    z: CENTER_Z,
+    tagZ: CENTER_TAG_Z,
+    figLeft: cc.x - FIG_W / 2,
+    figTop: cc.footY - FIG_H,
+    tagLeft: cc.x,
+    tagTop: cc.tagTop,
+    emojiLeft: cc.x - EMOJI_SIZE / 2,
+    emojiTop: Math.max(0, cc.footY - FIG_H * cc.scale - EMOJI_LIFT),
+  };
+}
 
 /** 자리 읽기 이름: "{닉네임}{ (나)}{, 직업 | , 탈락}{, 연결 끊김}{, 지금 주장하는 차례}" (낮 기록 버튼이면 ", 주장 기록 보기" 가 더해진다) */
 function seatLabel(s: DayTableSeat): string {
@@ -176,6 +207,7 @@ export function DayTable({
   allyMarkLabel = "동료",
   hostCrown,
   dim,
+  verdict,
   slide,
   layer,
 }: DayTableProps): ReactElement {
@@ -227,11 +259,13 @@ export function DayTable({
   const sceneH = height ?? measured.h;
   const pad = scenePad ?? measured.pad;
   const geo = dayTableGeometry(sceneW, sceneH, pad);
-  const places = daySeatLayout(seats, mySeat, sceneW, sceneH, pad);
   const bySeat = new Map(seats.map((s) => [s.seat, s]));
+  const cc = candidateCenter(sceneW, sceneH, pad);
+  const places = daySeatLayout(seats, mySeat, sceneW, sceneH, pad).map((p) => placeOf(p, bySeat.get(p.seat)?.center === true, cc));
+  const hasCenter = seats.some((s) => s.center === true);
 
   return (
-    <div ref={rootRef} className={`mf-root mf-dt${slide && slideOn ? " mf-dt--slide" : ""}`} role="group" aria-label={label}>
+    <div ref={rootRef} className={`mf-root mf-dt${slide && slideOn ? " mf-dt--slide" : ""}${verdict ? " mf-dt--verdict" : ""}`} role="group" aria-label={label}>
       <div
         className="mf-dt__felt"
         aria-hidden="true"
@@ -397,8 +431,21 @@ export function DayTable({
           </span>
         );
       })}
-      {dim ? (
+      {verdict ? (
+        <div
+          className="mf-dt__dim mf-dt__dim--verdict"
+          aria-hidden="true"
+          style={{ "--mf-verdict-dim": `${verdict.dimPercent}%`, "--mf-verdict-blur": `${verdict.blurPx}px` } as CSSProperties}
+        />
+      ) : dim ? (
         <div className="mf-dt__dim" aria-hidden="true" style={{ "--mf-dim-exit-delay": `${dim.exitDelayMs}ms` } as CSSProperties} />
+      ) : null}
+      {hasCenter ? (
+        <div
+          className="mf-dt__cone"
+          aria-hidden="true"
+          style={{ left: px(cc.x - CONE_W / 2), top: px(cc.footY + CANDIDATE_CONE_BELOW_FOOT - CONE_H), width: CONE_W, height: CONE_H }}
+        />
       ) : null}
       {layer ? layer({ places, sceneW, sceneH }) : null}
     </div>

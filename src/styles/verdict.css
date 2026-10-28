@@ -130,3 +130,43 @@
   .mf-dt__seat--clinch .mf-figure { animation: mf-dk-flash 700ms ease-out 1 !important; }
   .mf-vchip--beat { animation: mf-dk-chip-flash 700ms ease-out 1 !important; }
 }
+
+/* 최후 변론·처형 무대(UI-SPEC 6.3·8.4·12, 04-21). 어둡게+흐림 층(z 30)과 원뿔(z 30, DOM 뒤라 어둡게 위)은 DayTable 안이다.
+   후보 좌석(31)·이름표(32)는 층 위, 이모티콘(60+)은 그 위. 수치는 DayTable 이 prop 에서 내려 준 변수 --mf-verdict-dim·--mf-verdict-blur 뿐이다(상수 한 곳: game/verdict.ts, D-38).
+   어둡게 층은 위·아래로 넉넉히 뻗어 .mf-dayscene(overflow hidden)의 잘림에 맡긴다 — 헤더·패널 영역 뒤 창 그림까지 어두워지고 흐려진다. 좌우는 아침 층처럼 장면 여백만큼 바깥까지. */
+.mf-dt__dim--verdict {
+  top: -160px;
+  bottom: calc(-260px - env(safe-area-inset-bottom));
+  background: color-mix(in srgb, var(--night-900) var(--mf-verdict-dim), transparent);
+  backdrop-filter: blur(var(--mf-verdict-blur));
+  -webkit-backdrop-filter: blur(var(--mf-verdict-blur));
+  animation: mf-vd-in 400ms var(--ease-out) both;
+}
+/* 위에서 내려오는 원뿔 하나(배경 그림에는 조명이 없다, D-29). 이동 시작 200ms 뒤 500ms 페이드인. 위치·크기는 DayTable 이 인라인으로 준다 */
+.mf-dt__cone {
+  position: absolute;
+  z-index: 30;
+  pointer-events: none;
+  clip-path: polygon(41% 0, 59% 0, 100% 100%, 0 100%);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--cone-light) 55%, transparent), color-mix(in srgb, var(--cone-light) 20%, transparent));
+  animation: mf-vd-in 500ms var(--ease-out) 200ms both;
+}
+@keyframes mf-vd-in { from { opacity: 0; } to { opacity: 1; } }
+
+/* 후보 이동: 좌석 위치 → 가운데, 600ms ease-in-out (대기실 mf-dt--slide 와 같은 방식). 이름표도 같이 간다. 안 움직이는 좌석은 값이 같아 전이가 없다 */
+.mf-dt--verdict .mf-dt__seat { transition: left 600ms ease-in-out, top 600ms ease-in-out, transform 600ms ease-in-out; }
+.mf-dt--verdict .mf-dt__tag { transition: left 600ms ease-in-out, top 600ms ease-in-out; }
+
+/* 헤더(PhaseBar 래퍼)와 하단 패널은 DayTable(어둡게 층)보다 위라 선명하다. DayTable 은 이 컨텍스트 밖(.mf-dayscene 안)이다 */
+.mf-dayscene--verdict > .mf-dayscene__enter:first-child,
+.mf-dayscene--verdict > .mf-dayscene__panel {
+  position: relative;
+  z-index: 3;
+}
+
+/* 축소 모션(UI-SPEC 13.4): 후보는 즉시 가운데로, 어둡게·원뿔은 150ms 페이드. base.css 의 전역 규칙(0.01ms !important)보다 구체적인 선택자로 되돌린다 */
+@media (prefers-reduced-motion: reduce) {
+  .mf-dt--verdict .mf-dt__seat, .mf-dt--verdict .mf-dt__tag { transition: none; }
+  .mf-dt__dim--verdict { animation-duration: 150ms !important; }
+  .mf-dt__cone { animation-duration: 150ms !important; animation-delay: 0ms; }
+}
