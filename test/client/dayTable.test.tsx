@@ -9,7 +9,7 @@ import type { IconName } from "../../src/components/Icon";
 import type { DayTableSeat } from "../../src/components/DayTable";
 import { HALO_MAX_SIMULTANEOUS, daySeatLayout, px } from "../../src/game/dayTable";
 import { claimName } from "../../src/game/roleText";
-import { chipAnchor } from "../../src/game/verdict";
+import { CONE_H, CONE_W, VERDICT_BLUR_PX, VERDICT_CANDIDATE_SCALE, VERDICT_DIM_PERCENT, VERDICT_MOVE_MS, candidateCenter, chipAnchor } from "../../src/game/verdict";
 
 afterEach(() => {
   cleanup();
@@ -1216,5 +1216,178 @@ describe("DayTable: 표수 칩 chip (04-19, UI-SPEC 8.3, D-31)", () => {
     expect(/@media \(prefers-reduced-motion: reduce\)\s*\{[^@]*\.mf-vchip--pop\s*\{[^}]*animation:\s*none/.test(css)).toBe(true);
     const chipCss = css.slice(css.indexOf(".mf-vchip"));
     expect(/#[0-9a-fA-F]{3,8}\b|rgba?\(/.test(chipCss.replace(/box-shadow:[^;]*;/g, ""))).toBe(false);
+  });
+});
+
+describe("DayTable: 최후 변론 무대 verdict·center (04-21, VOTE-03, D-15·D-29·D-38)", () => {
+  const VERDICT = { dimPercent: VERDICT_DIM_PERCENT, blurPx: VERDICT_BLUR_PX };
+  const dimEls = (c: HTMLElement) => Array.from(c.querySelectorAll<HTMLElement>(".mf-dt__dim"));
+  const coneEls = (c: HTMLElement) => Array.from(c.querySelectorAll<HTMLElement>(".mf-dt__cone"));
+  const withCenter = (n: number, over: Partial<Record<number, Partial<DayTableSeat>>> = {}) => five({ [n]: { center: true, ...over[n] }, ...over });
+
+  it("verdict 가 있으면 .mf-dt__dim--verdict 하나가 그려지고 수치는 CSS 변수(prop 값)로만 내려간다. 루트에 mf-dt--verdict", () => {
+    const { container } = render(<DayTable seats={withCenter(2)} mySeat={0} width={366} height={407} verdict={VERDICT} />);
+    const dims = dimEls(container);
+    expect(dims.length).toBe(1);
+    expect(dims[0].classList.contains("mf-dt__dim--verdict")).toBe(true);
+    expect(dims[0].getAttribute("aria-hidden")).toBe("true");
+    expect(dims[0].style.getPropertyValue("--mf-verdict-dim")).toBe(`${VERDICT_DIM_PERCENT}%`);
+    expect(dims[0].style.getPropertyValue("--mf-verdict-blur")).toBe(`${VERDICT_BLUR_PX}px`);
+    expect(root(container).classList.contains("mf-dt--verdict")).toBe(true);
+  });
+
+  it("값을 바꿔 주면 변수만 바뀐다(숫자는 prop 에서만 온다)", () => {
+    const { container } = render(<DayTable seats={withCenter(2)} mySeat={0} width={366} height={407} verdict={{ dimPercent: 30, blurPx: 0 }} />);
+    const d = dimEls(container)[0];
+    expect(d.style.getPropertyValue("--mf-verdict-dim")).toBe("30%");
+    expect(d.style.getPropertyValue("--mf-verdict-blur")).toBe("0px");
+  });
+
+  it("verdict 가 없으면 verdict 층도 클래스도 없고, 아침 dim 과 verdict 를 함께 주어도 어둡게 층은 하나(verdict)다", () => {
+    const a = render(<DayTable seats={five()} mySeat={0} width={366} height={407} />);
+    expect(dimEls(a.container).length).toBe(0);
+    expect(root(a.container).classList.contains("mf-dt--verdict")).toBe(false);
+    cleanup();
+    const b = render(<DayTable seats={five()} mySeat={0} width={366} height={407} dim={{ exitDelayMs: 100 }} />);
+    expect(dimEls(b.container).length).toBe(1);
+    expect(dimEls(b.container)[0].classList.contains("mf-dt__dim--verdict")).toBe(false);
+    cleanup();
+    const c = render(<DayTable seats={five()} mySeat={0} width={366} height={407} dim={{ exitDelayMs: 100 }} verdict={VERDICT} />);
+    expect(dimEls(c.container).length).toBe(1);
+    expect(dimEls(c.container)[0].classList.contains("mf-dt__dim--verdict")).toBe(true);
+  });
+
+  it("center 좌석이 있으면 원뿔이 정확히 하나: 폭 300·높이 340, 가로 가운데, 아래끝 = 후보 발 y + 8. DOM 순서로 어둡게 층 뒤", () => {
+    const { container } = render(<DayTable seats={withCenter(2)} mySeat={0} width={366} height={407} verdict={VERDICT} />);
+    const cones = coneEls(container);
+    expect(cones.length).toBe(1);
+    const cc = candidateCenter(366, 407, 12);
+    expect(cones[0].style.width).toBe(`${CONE_W}px`);
+    expect(cones[0].style.height).toBe(`${CONE_H}px`);
+    expect(cones[0].style.left).toBe(px(cc.x - CONE_W / 2));
+    expect(cones[0].style.top).toBe(px(cc.footY + 8 - CONE_H));
+    expect(cones[0].getAttribute("aria-hidden")).toBe("true");
+    const kids = Array.from(root(container).children);
+    expect(kids.indexOf(cones[0])).toBeGreaterThan(kids.indexOf(dimEls(container)[0]));
+  });
+
+  it("center 가 없으면 원뿔이 없다(verdict 만 있어도)", () => {
+    const { container } = render(<DayTable seats={five()} mySeat={0} width={366} height={407} verdict={VERDICT} />);
+    expect(coneEls(container).length).toBe(0);
+    expect(dimEls(container).length).toBe(1);
+  });
+
+  it("center 좌석: 그림 상자는 candidateCenter(x = 장면 폭/2, 발 y), 배율 1.7, 이름표는 발 y + 8, z 그림 31·이름표 32", () => {
+    const { container } = render(<DayTable seats={withCenter(2)} mySeat={0} width={366} height={407} verdict={VERDICT} />);
+    const cc = candidateCenter(366, 407, 12);
+    expect(cc.x).toBe(183);
+    const el = seatEls(container).find((e) => e.dataset.seat === "2")!;
+    expect(el.style.left).toBe(px(cc.x - 36));
+    expect(el.style.top).toBe(px(cc.footY - 96));
+    expect(el.style.width).toBe("72px");
+    expect(el.style.height).toBe("96px");
+    expect(el.style.transform).toBe(`scale(${VERDICT_CANDIDATE_SCALE})`);
+    expect(el.style.zIndex).toBe("31");
+    const tag = tagEl(container, 2);
+    expect(tag.style.left).toBe(px(cc.x));
+    expect(tag.style.top).toBe(px(cc.tagTop));
+    expect(cc.tagTop).toBe(cc.footY + 8);
+    expect(tag.style.zIndex).toBe("32");
+  });
+
+  it("center 가 없는 좌석은 center 가 없을 때의 좌표와 정확히 같다(이동·확대 없음)", () => {
+    const base = render(<DayTable seats={five()} mySeat={0} width={366} height={407} />);
+    const baseStyle = new Map(seatEls(base.container).map((e) => [e.dataset.seat, e.getAttribute("style")]));
+    const baseTag = new Map([0, 1, 2, 3, 4].map((n) => [n, tagEl(base.container, n).getAttribute("style")]));
+    cleanup();
+    const { container } = render(<DayTable seats={withCenter(2)} mySeat={0} width={366} height={407} verdict={VERDICT} />);
+    for (const e of seatEls(container)) {
+      if (e.dataset.seat === "2") continue;
+      expect(e.getAttribute("style")).toBe(baseStyle.get(e.dataset.seat));
+    }
+    for (const n of [0, 1, 3, 4]) expect(tagEl(container, n).getAttribute("style")).toBe(baseTag.get(n));
+  });
+
+  it("z 순서: 후보 그림 31 > 어둡게 층 30 > 다른 좌석 최대 22 > 이름표 최대 11, 후보 이름표 32, 이모티콘 60+ (UI-SPEC 12)", () => {
+    const seats = withCenter(2, { 3: { emoji: { key: "e1", icon: "heart", z: 1 } }, 2: { center: true, emoji: { key: "e2", icon: "heart", z: 2 } } });
+    const { container } = render(<DayTable seats={seats} mySeat={0} width={366} height={407} verdict={VERDICT} />);
+    const z = (el: HTMLElement) => Number(el.style.zIndex);
+    const figs = seatEls(container);
+    const others = figs.filter((e) => e.dataset.seat !== "2").map(z);
+    expect(Math.max(...others)).toBeLessThanOrEqual(22);
+    expect(z(figs.find((e) => e.dataset.seat === "2")!)).toBe(31);
+    expect(30).toBeGreaterThan(Math.max(...others));
+    expect(z(dimEls(container)[0]) || 30).toBe(30);
+    const emojis = Array.from(container.querySelectorAll<HTMLElement>(".mf-dt__emoji"));
+    expect(emojis.length).toBe(2);
+    for (const e of emojis) expect(z(e)).toBeGreaterThanOrEqual(60);
+  });
+
+  it("후보 이모티콘은 후보 머리 위로 따라간다(발 y − 163.2 − 36)", () => {
+    const seats = withCenter(2, { 2: { center: true, emoji: { key: "e2", icon: "heart", z: 2 } } });
+    const { container } = render(<DayTable seats={seats} mySeat={0} width={366} height={407} verdict={VERDICT} />);
+    const cc = candidateCenter(366, 407, 12);
+    const em = container.querySelector<HTMLElement>('.mf-dt__emoji[data-seat="2"]')!;
+    expect(em.style.left).toBe(px(cc.x - 16));
+    expect(em.style.top).toBe(px(Math.max(0, cc.footY - 96 * VERDICT_CANDIDATE_SCALE - 36)));
+  });
+
+  it("폰 폭 4종 × 장면 높이 2종: 후보 이름표 아래끝 ≤ 장면 아래 − 4, 그림 상자는 장면 폭 안, z 순서 유지", () => {
+    for (const [w, pad] of [[320, 4], [352, 4], [366, 12], [406, 12]] as const) {
+      for (const h of [300, 640]) {
+        const { container, unmount } = render(<DayTable seats={withCenter(2)} mySeat={0} width={w} height={h} scenePad={pad} verdict={VERDICT} />);
+        const tag = tagEl(container, 2);
+        const bottom = Number.parseFloat(tag.style.top) + 22;
+        expect(bottom).toBeLessThanOrEqual(h - 4);
+        const fig = seatEls(container).find((e) => e.dataset.seat === "2")!;
+        const left = Number.parseFloat(fig.style.left);
+        const half = (72 * VERDICT_CANDIDATE_SCALE) / 2;
+        expect(left + 36 - half).toBeGreaterThanOrEqual(0);
+        expect(left + 36 + half).toBeLessThanOrEqual(w);
+        expect(Number(fig.style.zIndex)).toBe(31);
+        expect(Number(tag.style.zIndex)).toBe(32);
+        unmount();
+      }
+    }
+  });
+
+  it("후보 연결 끊김: 그림에 끊김 클래스 + 흰 후광이 함께 붙는다(흑백 먼저, 후광은 그 뒤)", () => {
+    const seats = withCenter(2, { 2: { center: true, connected: false, halo: "white" } });
+    const { container } = render(<DayTable seats={seats} mySeat={0} width={366} height={407} verdict={VERDICT} />);
+    const img = container.querySelector<HTMLElement>('.mf-dt__seat[data-seat="2"] img')!;
+    expect(img.classList.contains("mf-figure--disconnected")).toBe(true);
+    expect(img.classList.contains("mf-figure--halo-white")).toBe(true);
+  });
+
+  it("verdict.css: 어둡게 층(색 45% 변수 혼합·backdrop-filter 표준+접두어)·원뿔(clip-path·그라데이션)·이동 전이 600ms ease-in-out·헤더/패널 z 3·축소 모션", () => {
+    const css = readFileSync("src/styles/verdict.css", "utf8");
+    const rule = (sel: string): string => new RegExp(`${sel.replace(/[.]/g, "\\.")}\\s*\\{([^}]*)\\}`).exec(css)?.[1] ?? "";
+    const dim = rule(".mf-dt__dim--verdict");
+    expect(dim).toContain("color-mix(in srgb, var(--night-900) var(--mf-verdict-dim), transparent)");
+    expect(dim).toContain("backdrop-filter: blur(var(--mf-verdict-blur))");
+    expect(dim).toContain("-webkit-backdrop-filter: blur(var(--mf-verdict-blur))");
+    // z 30·클릭 통과는 아침 층과 공유하는 기본 규칙(.mf-dt__dim)에서 온다. 등장은 opacity 만 쓰는 400ms 페이드
+    const base = /\.mf-dt__dim\s*\{([^}]*)\}/.exec(readFileSync("src/styles/daytable.css", "utf8"))?.[1] ?? "";
+    expect(base).toContain("z-index: 30");
+    expect(base).toContain("pointer-events: none");
+    expect(dim).toContain("mf-vd-in 400ms");
+    expect(css).toMatch(/@keyframes mf-vd-in\s*\{\s*from\s*\{\s*opacity:\s*0;\s*\}\s*to\s*\{\s*opacity:\s*1;\s*\}\s*\}/);
+    const cone = rule(".mf-dt__cone");
+    expect(cone).toContain("clip-path: polygon(41% 0, 59% 0, 100% 100%, 0 100%)");
+    expect(cone).toContain("var(--cone-light)");
+    expect(cone).toContain("55%");
+    expect(cone).toContain("20%");
+    expect(cone).toContain("z-index: 30");
+    expect(cone).toContain("pointer-events: none");
+    const move = `${VERDICT_MOVE_MS}ms ease-in-out`;
+    const seatMove = rule(".mf-dt--verdict .mf-dt__seat");
+    expect(seatMove).toContain(`left ${move}`);
+    expect(seatMove).toContain(`top ${move}`);
+    expect(seatMove).toContain(`transform ${move}`);
+    expect(rule(".mf-dt--verdict .mf-dt__tag")).toContain(`left ${move}`);
+    expect(css).toMatch(/\.mf-dayscene--verdict[^{]*\{[^}]*position: relative;[^}]*z-index: 3/);
+    expect(/@media \(prefers-reduced-motion: reduce\)\s*\{[^@]*\.mf-dt--verdict \.mf-dt__seat[^{]*\{[^}]*transition:\s*none/.test(css)).toBe(true);
+    const verdictCss = css.slice(css.indexOf(".mf-dt__dim--verdict"));
+    expect(/#[0-9a-fA-F]{3,8}\b|rgba?\(/.test(verdictCss)).toBe(false);
   });
 });
