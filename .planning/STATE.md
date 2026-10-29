@@ -33,7 +33,7 @@ Phase: 5 (분위기와 캐릭터) — 실행 중 (4페이즈는 코드·배포·
 Current Plan: 3
 Total Plans in Phase: 9
 Plan: 3 of 9
-Status: 05-01 완료(안내 문장 빈칸 채우기, data-guide 점검표). 다음 05-02(useWakeLock). 클라이언트 전용 페이즈, 배포는 05-09 한 번.
+Status: 05-01·05-02·05-04 완료(웨이브 1). 다음 05-03(밤 비네팅·아침 밝아짐). 클라이언트 전용 페이즈, 배포는 05-09 한 번.
 Last activity: 2026-10-29 — 05-01 executed
 
 Progress: [██░░░░░░░░] 17%
