@@ -339,7 +339,7 @@ Plans:
   4. 폰 폭 360~430px 세로 화면에서 스크롤 없이 지금 할 일과 메시지 영역이 함께 보이고, PC 브라우저에서는 가운데에 폰 폭으로 보인다.
   5. 지원하는 기기에서는 게임 중 폰 화면이 저절로 꺼지지 않고, 지원하지 않는 기기에서도 게임은 정상적으로 돈다.
 
-**Plans**: 7/9 plans executed (클라이언트 전용 — 서버·와이어 불변, 마지막 계획 05-09 에서 한 번 배포)
+**Plans**: 8/9 plans executed (클라이언트 전용 — 서버·와이어 불변, 마지막 계획 05-09 에서 한 번 배포)
 
 Plans:
 **Wave 1**
@@ -358,7 +358,7 @@ Plans:
 - [x] 05-07-PLAN.md — E2E 새 흐름 pc(1280 가운데)·wakelock(미지원·스파이), 크기 고정 흐름 (wave 4)
 
 **Wave 5** *(blocked on Wave 4 completion)*
-- [ ] 05-08-PLAN.md — 배포 전 로컬 게이트(전체 시험·빌드 CSS·로컬 전체 E2E)·결정 0038·0008 보완·HANDOFF push (wave 5)
+- [x] 05-08-PLAN.md — 배포 전 로컬 게이트(전체 시험·빌드 CSS·로컬 전체 E2E)·결정 0038·0008 보완·HANDOFF push (wave 5)
 
 **Wave 6** *(blocked on Wave 5 completion)*
 - [ ] 05-09-PLAN.md — 개인 계정 배포·배포본 스모크·UAT·E2E·요구사항 완료 표시(실기기 확인은 대기) (wave 6)
@@ -393,5 +393,5 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 (decimal phases
 | 3. 밤과 아침 | v1.0 | 12/12 | In Progress | - |
 | 3.1. 순차 주장과 역할 카드 | v1.0 | 14/14 | Complete | 2026-10-25 |
 | 4. 처형과 승패 | v1.0 | 35/35 | Complete | 2026-10-28 |
-| 5. 분위기와 캐릭터 | v1.0 | 7/9 | In Progress | - |
+| 5. 분위기와 캐릭터 | v1.0 | 8/9 | In Progress | - |
 | 6. 친구 플레이테스트 | v1.0 | 0/TBD | Not started | - |

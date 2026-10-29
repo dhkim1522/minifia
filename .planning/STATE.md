@@ -4,18 +4,18 @@ milestone: v1.0
 milestone_name: MVP
 current_phase: 5
 current_phase_name: 분위기와 캐릭터
-current_plan: 7
+current_plan: 8
 status: executing
-stopped_at: Completed 05-07-PLAN.md
-last_updated: "2026-10-29T10:28:53.400Z"
+stopped_at: Completed 05-08-PLAN.md
+last_updated: "2026-10-29T10:41:06.498Z"
 last_activity: 2026-10-29
 last_activity_desc: Phase 4 execution started
-state_head: 3b2196de13b72f32d6ae892b936162323dce1dd7
+state_head: 10ad1d722d613ec8f8aef191515ed75a728d23d6
 progress:
   total_phases: 7
   completed_phases: 3
   total_plans: 107
-  completed_plans: 105
+  completed_plans: 106
 ---
 
 # Project State
@@ -30,10 +30,10 @@ See: .planning/PROJECT.md (updated 2026-10-21)
 ## Current Position
 
 Phase: 5 (분위기와 캐릭터) — 실행 중 (4페이즈는 코드·배포·자동 검증 완료, 실기기 확인·verify-work 대기: 개발 완료 후 일괄)
-Current Plan: 7
+Current Plan: 8
 Total Plans in Phase: 9
-Plan: 7 of 9
-Status: 05-01~05-07 완료. 다음 05-08(로컬 전체 E2E). 클라이언트 전용 페이즈, 배포는 05-09 한 번.
+Plan: 8 of 9
+Status: 05-01~05-08 완료(로컬 게이트·결정 0038·HANDOFF push). 다음 05-09(배포·배포본 검증). 클라이언트 전용 페이즈, 배포는 05-09 한 번.
 Last activity: 2026-10-29 — 05-01 executed
 
 Progress: [██░░░░░░░░] 17%
@@ -148,6 +148,7 @@ Progress: [██░░░░░░░░] 17%
 | Phase 5 P04 | 20min | 3 tasks | 7 files |
 | Phase 5 P03 | 15min | 2 tasks | 7 files |
 | Phase 05 P07 | 25min | 2 tasks | 3 files |
+| Phase 5 P08 | about 30min | 3 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -293,6 +294,7 @@ Recent decisions affecting current work:
 - [Phase 5]: 05-02: 화면 꺼짐 방지는 대기실부터 건다(P5-7 기본값, 확인 대기). 재요청은 visibilitychange 한 곳뿐
 - [Phase 5]: 05-04: 짧은 장면 압축 하한 0.78 (UI-SPEC 권장 0.8 과 다름, 장면 240 모델 기준 넘침 0). 실제 DOM 은 이름표 상자 26 이라 4px 남음 — 결정 필요(05-04-SUMMARY)
 - [Phase 5]: 05-04: 링크 참가 광장은 앉은 사람 5명 이상일 때 mf-join__seated--many(48x64) 로 줄임; 로컬 크롬 실측 7명 360x640 문서 621
+- [Phase 5]: 05-08: 결정 0038 기록 — 압축 하한 0.77(이름표 상자 26)·[테스트] 버튼 좁힘·새 진동 없음을 코드 기준으로 적음
 
 ### Pending Todos
 
@@ -329,6 +331,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-29T10:28:52.718Z
-Stopped at: Completed 05-07-PLAN.md
+Last session: 2026-10-29T10:41:05.914Z
+Stopped at: Completed 05-08-PLAN.md
 Resume file: None
