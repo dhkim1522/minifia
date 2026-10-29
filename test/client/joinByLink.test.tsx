@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { RoomPreview } from "../../shared/protocol";
@@ -457,5 +458,89 @@ describe("링크 참가 화면 미리보기 폴링 (E2 populated, Pitfall 18)", 
     await advance(POLL_MS);
     expect(screen.queryByText("2 / 8명이 모였어요")).not.toBeNull();
     expect(screen.queryByRole("status")).toBeNull();
+  });
+});
+
+// ---- 05-04 Task 2: 광장 압축 (P5-4) — 5명 이상이면 줄여 7명도 한 화면. 실제 높이 판정은 브라우저 E2E UX2-J(05-06) ----
+describe("링크 참가 광장 압축 (P5-4)", () => {
+  const compactClass = "mf-join__seated--many";
+
+  it.each([1, 2, 4])("앉은 사람 %i명은 광장을 줄이지 않는다(수정자 클래스 없음)", async (n) => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    stubRoom([() => json(seatedRoom(n))]);
+    const { container } = renderJoin();
+    await settle();
+    expect(container.querySelector("ul.mf-join__seated")!.classList.contains(compactClass)).toBe(false);
+    expect(container.querySelector("main.mf-join")!.classList.contains("mf-join--many")).toBe(false);
+    expect(container.querySelectorAll("ul.mf-join__seated li.mf-tag")).toHaveLength(n);
+  });
+
+  it.each([5, 7])("앉은 사람 %i명은 수정자 클래스가 붙고 그림·닉네임이 사람 수만큼 있다", async (n) => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    stubRoom([() => json(seatedRoom(n))]);
+    const { container } = renderJoin();
+    await settle();
+    const ul = container.querySelector("ul.mf-join__seated")!;
+    expect(ul.classList.contains(compactClass)).toBe(true);
+    expect(container.querySelector("main.mf-join")!.classList.contains("mf-join--many")).toBe(true);
+    const tags = ul.querySelectorAll("li.mf-tag");
+    expect(tags).toHaveLength(n);
+    tags.forEach((li, i) => {
+      expect(li.querySelector("img.mf-figure")).not.toBeNull();
+      expect(li.querySelector(".mf-tag__name")!.textContent).toBe(`이름${i}`);
+    });
+    expect(screen.queryByRole("button", { name: "참가하기" })).not.toBeNull();
+  });
+
+  describe("ds.css 규칙(주석 제거 뒤 원문)", () => {
+    const css = readFileSync("src/styles/ds.css", "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+    const rules = (selector: string): string[] => {
+      const out: string[] = [];
+      const re = /([^{}]+)\{([^{}]*)\}/g;
+      for (let m = re.exec(css); m; m = re.exec(css)) {
+        if (m[1]!.split(",").some((sel) => sel.trim() === selector)) out.push(m[2]!);
+      }
+      return out;
+    };
+    const px = (decl: string, prop: string): number | null => {
+      const m = new RegExp(`(?:^|[;\\s])${prop}\\s*:\\s*(\\d+)px`).exec(decl);
+      return m ? Number(m[1]) : null;
+    };
+
+    it(".mf-join__seated--many 안의 .mf-figure 는 72×96 보다 작고 3:4 비율이다", () => {
+      const body = rules(".mf-join__seated--many .mf-figure").join(";");
+      const w = px(body, "width");
+      const h = px(body, "height");
+      expect(w).not.toBeNull();
+      expect(h).not.toBeNull();
+      expect(w!).toBeLessThan(72);
+      expect(h!).toBeLessThan(96);
+      expect(w! * 4).toBe(h! * 3);
+    });
+
+    it("이름표 글자 크기 규칙(14px)은 그대로이고 수정자 규칙 안에는 font-size 가 없다", () => {
+      expect(rules(".mf-tag__name").join(";")).toMatch(/font-size:\s*14px/);
+      const mods = [...rules(".mf-join__seated--many"), ...rules(".mf-join__seated--many .mf-figure"), ...rules(".mf-join__seated--many .mf-tag__name"), ...rules(".mf-join--many")];
+      for (const body of mods) expect(body).not.toMatch(/font-size/);
+    });
+
+    it("수정자 규칙의 새 간격 값은 4의 배수(var(--space-*) 또는 4의 배수 px)다", () => {
+      const sels = [".mf-join__seated--many", ".mf-join--many", ".mf-join--many .mf-entry__head", ".mf-join--many .mf-join__plaza", ".mf-join--many .mf-entry__card"];
+      let seen = 0;
+      for (const sel of sels) {
+        for (const body of rules(sel)) {
+          for (const decl of body.split(";")) {
+            const m = /^\s*(?:padding[\w-]*|margin[\w-]*|gap|row-gap|column-gap)\s*:\s*(.+?)\s*$/.exec(decl);
+            if (!m) continue;
+            for (const v of m[1]!.split(/\s+/)) {
+              seen += 1;
+              const ok = /^var\(--space-[a-z0-9]+\)$/.test(v) || (/^\d+px$/.test(v) && parseInt(v, 10) % 4 === 0) || v === "0" || v === "auto";
+              expect(ok, `${sel}: ${v}`).toBe(true);
+            }
+          }
+        }
+      }
+      expect(seen).toBeGreaterThan(0);
+    });
   });
 });
