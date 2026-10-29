@@ -5,6 +5,8 @@ export const DEFAULT_SIZES = [
   { w: 360, h: 640, label: "360x640" },
   { w: 390, h: 664, label: "390x664" },
   { w: 430, h: 932, label: "430x932" },
+  // 단 높이 probe(05-UI-SPEC 11.3c, P5-3): 방 높이 575 미만의 짧은 폰. 세 폭 기준은 그대로.
+  { w: 360, h: 560, label: "360x560" },
 ];
 /** 겹침 허용 오차(px). 변이 맞닿거나 0.5px 이하로 겹친 것은 겹침이 아니다. 알려진 결함 D4 의 기준이므로 낮추지 않는다. */
 export const OVERLAP_EPS = 0.5;
@@ -76,6 +78,38 @@ export const OVERALL_LIMIT_MS = 900_000;
 //   }
 // P7 시간표본: [{ t(ms, 처형 무효 카드 도착 기준), voidCard, nightIntro(밤 시작 문구 `.mf-sceneintro` 수) }] + { clickedThrough }.
 
+// ---- 5페이즈 계약 (05-05) — UX1·UX2·UX2-J·UX2-PC·AT1·AT2·WL1·WL2 가 받는 값의 모양 ----
+// 05-06·05-07 의 browser.mjs 가 아래 모양 그대로 읽어 온다. 검사 함수는 필드가 없거나 숫자가 아니면 조용히 통과하지 않고 `측정값 없음(…)` 으로 실패한다.
+// 높이·좌표 단위는 CSS px, 사각형 값은 getBoundingClientRect 그대로.
+//
+//   UX1  guideChecks(g, { phase })
+//     g = { count, items: [{ text, inHeader, height, lineHeight }], timers }
+//       count      `[data-guide]` 요소 수(한 화면에 정확히 하나)
+//       items[i]   text = 글자(textContent), inHeader = 헤더 안내줄(`.mf-phasebar__do`)인가, height·lineHeight = 그 요소의 높이와 계산된 줄 높이
+//       timers     `[role="timer"]` 요소 수. `TIMELESS_PHASES` 밖 단계에서는 1 이상이어야 한다
+//   UX2  docHeightChecks(m, { h })       m = { docH }   — document.documentElement.scrollHeight, h = 화면 높이
+//   UX2-J joinFitChecks(j, { h, expectSeated })
+//     j = { seated, docH, buttonBottom }  — 링크 참가 화면에 앉은 사람 수·문서 높이·`참가하기` 버튼의 아래끝(y).
+//     화면 높이 JOIN_FIT_MIN_H(640) 미만에서는 흐름이 이 검사를 부르지 않는다(P5-4 범위가 360×640·390×664 이상이다).
+//   UX2-PC pcCenterChecks(p, { w })
+//     p = { rootLeft, rootWidth, where }  — `#root` 의 left·width, where = 재는 자리 이름(`홈`·`대기실`·`낮`), w = 화면 폭(PC 1280)
+//   AT1  vignetteChecks(a, { expect })    expect = 1(밤) | 0(밤이 아님)
+//     a = { vignettes: [{ pointerEvents, backgroundImage }], tapHitsTable }
+//       vignettes    `.mf-backdrop__vignette` 요소별 계산된 값. tapHitsTable = 내 인물 위 한 점을 탭했을 때 elementFromPoint 가 비네팅이 아닌 테이블 쪽 요소를 돌려주는가(expect 1 에서만 필요)
+//   AT2  glowChecks(a, { expect })        expect = 1(밤 → 아침을 본 렌더) | 0
+//     a = { glows: [{ pointerEvents, backgroundImage, top, bottom }], sceneTop, sceneBottom, tagHit }
+//       glows        `.mf-morningglow` 요소별 계산된 값과 사각형 위·아래. sceneTop·sceneBottom = 장면 상자 `.mf-dayscene__scene` 위·아래
+//       tagHit       이름표 위 한 점을 탭했을 때 elementFromPoint 가 밝아짐 층이 아니라 이름표 쪽을 돌려주는가(expect 1 에서만 필요)
+//   WL1  wakeLockChecks(w, { mode: "unsupported" })   w = { hasApi, reachedPhase, consoleErrors: string[] }
+//       hasApi = 모의로 `navigator.wakeLock` 을 지운 뒤에도 남아 있는가(false 여야 함), reachedPhase = 대기실 이후 단계까지 정상 진행했는가
+//   WL2  wakeLockChecks(w, { mode: "spy" })           w = { requestsAtLobby, requestsAfterVisible }
+//       스파이가 센 `navigator.wakeLock.request` 호출 수 — 대기실에서의 누계, 숨김 → 보임 복귀 뒤의 누계(정확히 1 늘어야 함)
+
+/** 시간(타이머) 없이 머무는 단계. src/game/scenes.ts 의 같은 이름 상수와 같은 목록이다 — test/unit/e2eContract.test.ts 가 같음을 확인한다. */
+export const TIMELESS_PHASES = ["lobby", "assigning", "ended"];
+/** 링크 참가 한 화면 판정(UX2-J)은 화면 높이가 이 값 이상일 때만 한다(P5-4: 360×640·390×664, 430 폭은 이미 맞음). */
+export const JOIN_FIT_MIN_H = 640;
+
 /** G2 가 보지 않는 장식 요소. 항목을 더할 때는 selector 와 reason 을 함께 적는다(결과 출력 머리에 목록이 찍힌다). */
 export const DECORATIVE_ALLOW = [
   { selector: '[aria-hidden="true"], [aria-hidden="true"] *', reason: "보조 기술에서 숨긴 장식" },
@@ -101,7 +135,7 @@ export class UsageError extends Error {
 }
 
 export const USAGE =
-  "사용법: node scripts/e2e/run.mjs [--url https://minifia.dhplay.workers.dev | http://localhost:5173] [--only <시나리오 부분 문자열>] [--shots] [--sizes 360x640,390x664,430x932]";
+  "사용법: node scripts/e2e/run.mjs [--url https://minifia.dhplay.workers.dev | http://localhost:5173] [--only <시나리오 부분 문자열>] [--shots] [--sizes 360x640,390x664,430x932,360x560]";
 
 export function parseArgs(argv) {
   const out = { url: null, only: null, shots: false, sizes: DEFAULT_SIZES.map((s) => ({ ...s })) };
@@ -1439,4 +1473,37 @@ export function placementChecks(v) {
     if (rectsOverlap(card, panel)) bad.push("카드가 하단 패널과 겹침");
   }
   return result("P10", label, bad);
+}
+
+// ---- 5페이즈 순수 검사 (05-05) ----
+
+/** 측정값이 빠졌거나 모양이 틀린 입력은 조용히 통과하지 않는다(T-05-11). */
+const noMeasure = (id, label, what) => result(id, label, [`측정값 없음(${what})`]);
+
+/**
+ * UX1 지금 할 일 문장이 한 화면에 하나, 글자가 있고(헤더 안내줄이면 한 줄), 시간 있는 단계에는 타이머가 있다 (D-08, UI-SPEC 8.4).
+ * g = { count, items: [{ text, inHeader, height, lineHeight }], timers } — 모양은 위 5페이즈 계약.
+ */
+export function guideChecks(g, { phase }) {
+  const label = "지금 할 일 문장 하나·한 줄·타이머";
+  if (!g || !isNum(g.count) || !Array.isArray(g.items) || !isNum(g.timers)) return noMeasure("UX1", label, "안내 문장 개수·항목·타이머 수");
+  if (g.count === 0) return result("UX1", label, ["안내 문장 요소 없음"]);
+  if (g.count !== 1) return result("UX1", label, [`안내 문장 요소 ${g.count}개 ≠ 1`]);
+  const it = g.items[0];
+  if (!it || typeof it.text !== "string" || typeof it.inHeader !== "boolean") return noMeasure("UX1", label, "안내 문장 글자");
+  const bad = [];
+  if (it.text.trim() === "") bad.push("안내 문장 글자가 비어 있음");
+  if (it.inHeader) {
+    if (!isNum(it.height) || !isNum(it.lineHeight) || it.lineHeight <= 0) return noMeasure("UX1", label, "헤더 안내줄 높이·줄 높이");
+    if (!isOneLine(it.height, it.lineHeight)) bad.push(`헤더 안내줄이 한 줄이 아님(높이 ${rd(it.height)}px·줄 높이 ${rd(it.lineHeight)}px, ${lineCount(it.height, it.lineHeight)}줄)`);
+  }
+  if (!TIMELESS_PHASES.includes(phase) && g.timers < 1) bad.push(`타이머 없음(단계 ${phase})`);
+  return result("UX1", label, bad);
+}
+
+/** UX2 문서 높이가 화면 높이를 넘지 않는다(세로 스크롤이 생기지 않음). m = { docH }. */
+export function docHeightChecks(m, { h }) {
+  const label = "문서 높이가 화면 높이 이내";
+  if (!m || !isNum(m.docH) || !isNum(h)) return noMeasure("UX2", label, "문서 높이");
+  return result("UX2", label, m.docH > h ? [`문서 높이 ${rd(m.docH)} > ${h}`] : []);
 }
