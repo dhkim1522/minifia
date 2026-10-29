@@ -1,6 +1,6 @@
 // 스모크: 배포(또는 로컬) 주소에서 방 만들기 → WebSocket hello → 대기실 상태까지 확인한다.
-// full 단계는 한 판 시작부터 낮 한 바퀴(낮 시작 발표 → 직업 주장 차례 한 바퀴(한 명 8초, 결정 0023·0027) → 낮 토론 90초)
-// → 처형 여부 투표 10초(결정 0036: 클라이언트 다수가 반대해 미통과 경로를 탄다 — 집계 동일·남의 표 비공개·처형 무효 이유 확인)
+// full 단계는 한 판 시작부터 낮 한 바퀴(낮 시작 발표 → 직업 주장 차례 한 바퀴(한 명 8초, 결정 0023·0027) → 낮 토론 40초, 결정 0039)
+// → 처형 여부 투표 13초(결정 0036·0039: 클라이언트 다수가 반대해 미통과 경로를 탄다 — 집계 동일·남의 표 비공개·처형 무효 이유 확인)
 // → 밤 30초(역할별 행동·마피아 채팅) → 아침 5초(탈락 발표) → 서버 타이머로 2일차 낮 시작 발표까지 돈다.
 // 후보 선택·변론·처형·종료 경로는 uat-vote.mjs 가 돈다. 탈락한 클라이언트는 그 아침부터 관전 정보(spectate)를 받는다(결정 0021).
 // 방장 연장·넘기기는 없다(결정 0017-5). 빠른 메시지는 state 가 아니라 chat 프레임으로 온다(결정 0017-7).
@@ -18,11 +18,13 @@ import { fileURLToPath } from "node:url";
 
 const TOTAL_LIMIT_MS = 30_000;
 const STATE_LIMIT_MS = 10_000;
-const FULL_TOTAL_LIMIT_MS = 480_000; // 시작 → 2일차 dayAnnounce 약 180초(여부 투표 10초 포함) + 여유 (claim 은 최대 인원 × 8초)
-// 토론 90초 + 여유: 넘기기 없이 서버 타이머가 낮을 넘기는 것을 기다린다.
-const DISCUSSION_WAIT_MS = 90_000 + STATE_LIMIT_MS;
-// 여부 투표 10초 + 여유(shared/game/phases.ts EXEC_VOTE_MS)
-const EXEC_VOTE_MS = 10_000;
+const FULL_TOTAL_LIMIT_MS = 480_000; // 시작 → 2일차 dayAnnounce 약 150초(토론 40초·여부 투표 13초 포함) + 여유 (claim 은 최대 인원 × 8초)
+// 낮 토론 길이(shared/game/phases.ts DISCUSSION_MS 와 같은 값, 결정 0039). 스크립트는 TS 를 import 하지 않는다.
+const DISCUSSION_MS = 40_000;
+// 토론 40초 + 여유: 넘기기 없이 서버 타이머가 낮을 넘기는 것을 기다린다.
+const DISCUSSION_WAIT_MS = DISCUSSION_MS + STATE_LIMIT_MS;
+// 여부 투표 13초 + 여유(shared/game/phases.ts EXEC_VOTE_MS, 결정 0039)
+const EXEC_VOTE_MS = 13_000;
 const EXEC_VOTE_WAIT_MS = EXEC_VOTE_MS + STATE_LIMIT_MS;
 // shared/protocol.ts 의 MORNING_PHRASE_COUNT 와 같은 값(스크립트는 TS 를 import 하지 않는다). 아침 탈락 문구 번호는 1..7.
 const MORNING_PHRASE_COUNT = 7;
@@ -520,7 +522,7 @@ async function stageFull(url, args) {
   if (discEnds.size !== 1) fail(`discussion 의 phaseEndsAt 이 클라이언트마다 다름 (${discEnds.size}종)`);
   const endsBefore = [...discEnds][0];
   const durBefore = firstState(host, "discussion").msg.view.phaseDurationMs;
-  if (durBefore !== 90_000) fail(`discussion phaseDurationMs 가 90000 이 아님: ${durBefore}`);
+  if (durBefore !== DISCUSSION_MS) fail(`discussion phaseDurationMs 가 ${DISCUSSION_MS} 이 아님: ${durBefore}`);
 
   // 메시지: seat = 보낸 사람, 모든 클라이언트가 chat 프레임을 받는다(state 로는 오지 않는다)
   const isSuspectChat = (f) => f.msg?.t === "chat" && f.msg.seat === clients[1].seat && f.msg.template === "suspect" && f.msg.target === clients[2].seat;
@@ -556,7 +558,7 @@ async function stageFull(url, args) {
   for (const c of clients) {
     const v = lastView(c);
     if (v.phase !== "discussion") fail(`${c.nickname} 가 extend·skip 거부 뒤 discussion 이 아님: ${v.phase}`);
-    if (v.phaseEndsAt !== endsBefore || v.phaseDurationMs !== 90_000) fail(`${c.nickname} 의 discussion 마감이 extend·skip 시도 뒤 바뀜: ${v.phaseEndsAt} / ${v.phaseDurationMs}`);
+    if (v.phaseEndsAt !== endsBefore || v.phaseDurationMs !== DISCUSSION_MS) fail(`${c.nickname} 의 discussion 마감이 extend·skip 시도 뒤 바뀜: ${v.phaseEndsAt} / ${v.phaseDurationMs}`);
   }
 
   // (13b) 처형 여부 투표(결정 0036-3, D-02·D-34): 토론 마감 뒤 모든 클라이언트가 execVote 를 받는다.

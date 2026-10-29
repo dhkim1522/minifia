@@ -1,6 +1,6 @@
 // 테스트 방 방장 도구(결정 0022) 배포본 확인: 단계 넘기기·대기실 복귀·내 직업 지정과 손님·일반 방·시작 뒤 거부를 증명한다.
 // 방장 1명 + 봇 3명(모두 연결)으로 테스트 방(POST /api/rooms 본문 testMode true)을 만들어 단계를 testSkip 으로 넘기므로
-// 토론 90초·밤 30초를 기다리지 않는다(전체 약 1분). claim 단계의 넘기기는 직업 주장 차례 하나씩이다(결정 0027-9).
+// 토론 40초·밤 30초를 기다리지 않는다(전체 약 1분). claim 단계의 넘기기는 직업 주장 차례 하나씩이다(결정 0027-9).
 // 일반 방(본문 nickname 만)에서는 세 요청이 모두 거부되는지도 본다.
 // 스크립트는 전지적이다: 각 클라이언트의 view 로 확인한다. 토큰은 어떤 출력에도 찍지 않는다. Node 22 내장 fetch·WebSocket 만 쓴다.
 //
@@ -227,7 +227,7 @@ async function main() {
     JSON.stringify(lastView(host).day?.execTally ?? null));
   await skipTo("night");
   check("e", "roleReveal → dayAnnounce → claim(차례 하나씩) → discussion → execVote → night 를 네 소켓 모두 3초 안에 받음",
-    orderOk, `${order.join(" → ")} (${Math.round(performance.now() - t0)}ms, 토론 90초·밤 30초를 기다리지 않음)`);
+    orderOk, `${order.join(" → ")} (${Math.round(performance.now() - t0)}ms, 토론 40초·밤 30초를 기다리지 않음)`);
   const victim = guests[0];
   await act(host, { t: "pick", target: victim.seat });
   check("e", "밤에 마피아(방장)의 pick 이 me.pick 으로 돌아옴", lastView(host).me.pick === victim.seat, String(lastView(host).me.pick));

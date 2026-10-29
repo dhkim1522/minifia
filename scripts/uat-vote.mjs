@@ -1,6 +1,6 @@
 // 4페이즈 처형·종료 UAT 를 봇으로 대신 도는 시나리오(결정 0034·0036). 봇이 방을 만들고 채워 두 판을 끝까지 돌며 결과 표를 낸다.
 // 스크립트는 전지적이다: 각 클라이언트의 view.me.role 로 마피아를 알고 그에 맞춰 표를 던진다. 직업 공개(claim)는 자기 차례에 none 을 바로 보낸다.
-// 각 판은 토론 90초를 서버 타이머로 넘기고 처형 구간(최대 44초)을 지난다. 두 판을 차례로 돈다. 전체 약 7~9분.
+// 각 판은 토론 40초를 서버 타이머로 넘기고 처형 구간(최대 60초: 13 + 15 + 17 + 10 + 5)을 지난다. 두 판을 차례로 돈다. 전체 약 7~9분.
 //
 //   (a) 5명 — 처형으로 시민이 이기는 판
 //        여부 투표: 한 명이 반대 → 찬성으로 번복하고 넷 찬성·하나 반대. 매 표 뒤 모든 클라이언트의 execTally 가 같고 남의 voteAgree 는 없다.
@@ -37,10 +37,15 @@ const check = (test, label, ok, detail = "") => results.push({ test, label, ok, 
 
 // 단계 시간(shared/game/phases.ts 와 같은 값. 스크립트는 TS 를 import 하지 않는다)
 const CLAIM_TURN_MS = 8_000;
-const DISCUSSION_MS = 90_000;
-const EXEC_VOTE_MS = 10_000;
+const DISCUSSION_MS = 40_000;
+const EXEC_VOTE_MS = 13_000;
 const CANDIDATE_VOTE_MS = 15_000;
-const CANDIDATE_REVEAL_MS = 4_000;
+// 후보 선택 공개 단계 길이(결정 0039): n ≥ 1 이면 400 + n×2000 + 600, 0표는 2000. shared/game/phases.ts 의 candidateRevealMs 와 같은 식 — 스크립트는 사본을 쓴다.
+const REVEAL_LEAD_MS = 400;
+const REVEAL_SLOT_MS = 2_000;
+const REVEAL_TAIL_MS = 600;
+const REVEAL_EMPTY_MS = 2_000;
+const candidateRevealMs = (n) => (n <= 0 ? REVEAL_EMPTY_MS : REVEAL_LEAD_MS + n * REVEAL_SLOT_MS + REVEAL_TAIL_MS);
 const DEFENSE_MS = 10_000;
 const EXECUTION_MS = 5_000;
 const NIGHT_MS = 30_000;
@@ -316,10 +321,20 @@ async function gameA() {
   check(T, "후보 = 마피아(최다 득표 4표)", revealLines.every((l) => l.cand.candidate === mafia.seat) && reveal.every((v) => v.day.candidate === mafia.seat), `후보 ${revealLines[0].cand.candidate}, 마피아 ${mafia.seat}`);
   const revealPrivacy = clients.every((c) => states(c).filter((f) => f.msg.view.phase === "candidateVoteReveal").every((f) => f.msg.view.me.voteTarget === undefined));
   check(T, "공개 구간에는 개인 선택(voteTarget)이 따로 없음", revealPrivacy, "");
+  const revealMs = candidateRevealMs(votes0.length);
+  check(
+    T,
+    `공개 마감 길이 = 400 + ${votes0.length}×2000 + 600 = ${revealMs}ms, 모든 클라이언트 같은 phaseEndsAt`,
+    revealMs === 11_000 && reveal.every((v) => v.phaseDurationMs === revealMs) && new Set(reveal.map((v) => v.phaseEndsAt)).size === 1,
+    `${reveal.map((v) => v.phaseDurationMs).join("/")}, 마감 ${new Set(reveal.map((v) => v.phaseEndsAt)).size}종`,
+  );
+  const revealAt = Math.min(...clients.map((c) => stateOf(c, "candidateVoteReveal").at));
 
   // ---- 변론 ----
-  await waitUntil(() => allHave(clients, "defense"), CANDIDATE_REVEAL_MS + 10_000, "defense");
+  await waitUntil(() => allHave(clients, "defense"), revealMs + 10_000, "defense");
   const defenseAt = Math.min(...clients.map((c) => stateOf(c, "defense").at));
+  const revealGap = Math.round(defenseAt - revealAt);
+  check(T, `공개 약 ${revealMs / 1000}초 뒤 변론`, revealGap >= revealMs - 1000 && revealGap <= revealMs + 4000, `${revealGap}ms`);
   const nonCand = clients.filter((c) => c !== mafia);
   const wrongSay = await requestError(nonCand[0], { t: "say", template: "defPlead" });
   check(T, "변론: 비후보의 say → WRONG_PHASE", wrongSay === "WRONG_PHASE", wrongSay);
@@ -383,7 +398,18 @@ async function gameB() {
   const revealLines = clients.map((c) => stateOf(c, "candidateVoteReveal").msg.view.day.voteLog.at(-1));
   check(T, "공개: 후보 = 처형될 시민, 모든 클라이언트 같은 voteLog", allSame(revealLines) && revealLines[0].cand?.candidate === C.seat && revealLines[0].cand.votes.length === 4, JSON.stringify(revealLines[0]?.cand));
 
-  await waitUntil(() => allHave(clients, "defense"), CANDIDATE_REVEAL_MS + 10_000, "defense");
+  const revealViewsB = clients.map((c) => stateOf(c, "candidateVoteReveal").msg.view);
+  const revealMsB = candidateRevealMs(revealLines[0]?.cand?.votes.length ?? 0);
+  check(
+    T,
+    `공개 마감 길이 = 400 + 4×2000 + 600 = ${revealMsB}ms, 모든 클라이언트 같은 phaseEndsAt`,
+    revealMsB === 8_600 && revealViewsB.every((v) => v.phaseDurationMs === revealMsB) && new Set(revealViewsB.map((v) => v.phaseEndsAt)).size === 1,
+    `${revealViewsB.map((v) => v.phaseDurationMs).join("/")}, 마감 ${new Set(revealViewsB.map((v) => v.phaseEndsAt)).size}종`,
+  );
+  const revealAtB = Math.min(...clients.map((c) => stateOf(c, "candidateVoteReveal").at));
+  await waitUntil(() => allHave(clients, "defense"), revealMsB + 10_000, "defense");
+  const revealGapB = Math.round(Math.min(...clients.map((c) => stateOf(c, "defense").at)) - revealAtB);
+  check(T, `공개 약 ${revealMsB / 1000}초 뒤 변론`, revealGapB >= revealMsB - 1000 && revealGapB <= revealMsB + 4000, `${revealGapB}ms`);
   await waitUntil(() => allHave(clients, "execution"), DEFENSE_MS + 10_000, "execution");
   const ex = clients.map((c) => stateOf(c, "execution").msg.view.day.execution);
   check(T, "처형: 모든 클라이언트 day.execution 이 같고 seat = 시민", allSame(ex) && ex[0].seat === C.seat, JSON.stringify(ex[0]));

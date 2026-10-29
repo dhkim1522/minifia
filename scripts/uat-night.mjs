@@ -1,6 +1,6 @@
 // 3페이즈 밤·아침 UAT 를 봇으로 대신 도는 시나리오. 봇이 방을 만들고 채워 밤 두 번을 돌며 결과 표를 낸다.
 // 스크립트는 전지적이다: 각 클라이언트의 view.me.role 로 역할을 알고 그 역할대로 행동시킨다.
-// 낮은 직업 주장 차례(결정 0023·0027)에 자기 차례가 오면 말 안 함(none)을 바로 보내고 토론 90초·처형 여부 투표 10초(표를 안 던짐 → 미통과 → 밤, 결정 0036)는 서버 타이머로 넘긴다. 전체 약 5분 30초.
+// 낮은 직업 주장 차례(결정 0023·0027)에 자기 차례가 오면 말 안 함(none)을 바로 보내고 토론 40초·처형 여부 투표 13초(표를 안 던짐 → 미통과 → 밤, 결정 0036)는 서버 타이머로 넘긴다. 전체 약 4분.
 // 역할별 일지(결정 0026·0027-11)를 본다: 경찰 수사 {n,target,isMafia}, 마피아 암살 {n,target,died}, 의사 치료 {n,target}.
 //
 //   밤1: 마피아 전원 → 시민 X 지목, 경찰 → 마피아 조사, 의사 → 자신 보호, 마피아 한 명이 밤 채팅(nightTarget).
@@ -38,7 +38,7 @@ const results = [];
 const check = (test, label, ok, detail = "") => results.push({ test, label, ok, detail });
 const CLAIM_TURN_MS = 8_000;
 const CLAIM_WAIT_MS = CLAIM_TURN_MS * N; // 차례 대기 한도: 모두 시간 초과일 때 최대 인원 × 8초
-const EXEC_VOTE_MS = 10_000; // 처형 여부 투표(shared/game/phases.ts EXEC_VOTE_MS): 하루마다 표를 안 던지고 지나간다
+const EXEC_VOTE_MS = 13_000; // 처형 여부 투표(shared/game/phases.ts EXEC_VOTE_MS): 하루마다 표를 안 던지고 지나간다
 const OVERALL_LIMIT_MS = 540_000 + 2 * EXEC_VOTE_MS + CLAIM_WAIT_MS;
 // shared/protocol.ts 의 MORNING_PHRASE_COUNT 와 같은 값(스크립트는 TS 를 import 하지 않는다). 아침 탈락 문구 번호는 1..7.
 const MORNING_PHRASE_COUNT = 7;

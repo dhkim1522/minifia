@@ -51,10 +51,12 @@ import {
   waitPhaseIn,
 } from "./browser.mjs";
 import {
+  INTRO_GONE_MS,
   JOIN_FIT_MIN_H,
   ROLE_NAME,
   backdropSceneChecks,
   candidateChecks,
+  candidateRevealMs,
   claimChatIssues,
   colorRuleChecks,
   dayChecks,
@@ -831,8 +833,8 @@ async function specFlow(ctx) {
   {
     const sc = `${id}/exec-vote`;
     if (tracker.last()?.phase !== "execVote") throw new SetupError(`처형 여부 투표 읽기 전에 단계가 ${tracker.last()?.phase} 로 바뀜`);
-    // 인트로 카드(.mf-vintro, 1.8초, 낮 테이블 안)가 사라진 뒤에 읽는다 — 카드의 `처형 투표` 글자는 익명 검사(P9)의 대상이 아니다
-    await page.waitForSelector(".mf-vintro", { state: "detached", timeout: 4000 }).catch(() => {});
+    // 인트로 카드(.mf-vintro, 3초, 낮 테이블 안)가 사라진 뒤에 읽는다 — 카드의 `처형 투표` 글자는 익명 검사(P9)의 대상이 아니다
+    await page.waitForSelector(".mf-vintro", { state: "detached", timeout: INTRO_GONE_MS + 2200 }).catch(() => {});
     const colors = await readTokenColors(page);
     recOne(rec, sc, voteChecks(await readVerdict(page, colors), { spectator: true }));
     await checkState(ctx, id, "exec-vote");
@@ -908,7 +910,7 @@ async function voteFlow(ctx) {
   {
     const sc = `${id}/exec-intro`;
     await armVerdictWatch(page);
-    const series = sampleSeries(page, { durationMs: 3800, stepMs: 80, take: () => read() });
+    const series = sampleSeries(page, { durationMs: INTRO_GONE_MS + 2000, stepMs: 80, take: () => read() });
     series.catch(() => {}); // 아래에서 await 하기 전에 skipTo 가 던져도 처리 안 된 거부가 되지 않게
     await skipTo(page, tracker, "execVote");
     const clickAt = await page.evaluate(() => performance.now());
@@ -974,11 +976,11 @@ async function voteFlow(ctx) {
     still("candidateVote", "후보 선택 검사");
   }
 
-  // 5) reveal: 표본기를 단계를 넘기기 전에 시작해 4초 공개 전체를 모은다. 단계가 reveal 인 표본만 쓴다(추적 단계는 DOM 보다 먼저 바뀐다)
+  // 5) reveal: 표본기를 단계를 넘기기 전에 시작해 표 수 길이 공개 전체(생존자 수가 표 수 상한, 결정 0039)를 모은다. 단계가 reveal 인 표본만 쓴다(추적 단계는 DOM 보다 먼저 바뀐다)
   {
     const sc = `${id}/reveal`;
     const series = sampleSeries(page, {
-      durationMs: 6500,
+      durationMs: candidateRevealMs(alive().length) + 2500,
       stepMs: 100,
       take: async () => {
         const before = tracker.last()?.phase;

@@ -1346,7 +1346,7 @@ export function rebaseSeries(series, originAt, nowOf = (value) => value.now) {
 
 /**
  * 인트로 카드(`.mf-vintro` 비-void)·처형 무효 카드(`--void`)·밤 시작 문구(`.mf-sceneintro--night`)가 DOM 에 처음 나타난 시각과 사라진 시각을
- * MutationObserver 로 붙잡아 둔다(performance.now 기준). 카드는 1.6초뿐이라 폴링하면 시간 경쟁이 생기므로 단계를 넘기기 전에 건다(armIntroWatch 와 같은 방식).
+ * MutationObserver 로 붙잡아 둔다(performance.now 기준). 카드는 3초(처형 투표)·1.6초(처형 무효)뿐이라 폴링하면 시간 경쟁이 생기므로 단계를 넘기기 전에 건다(armIntroWatch 와 같은 방식).
  */
 export async function armVerdictWatch(page) {
   await page.evaluate(() => {

@@ -1000,8 +1000,24 @@ export function smallTextIssues(smallText) {
 
 const EXEC_TITLE = "오늘 처형을 할까요?";
 const TALLY_RE = /^찬성 \d+ · 반대 \d+/;
-/** 인트로 카드가 DOM 에서 사라져야 하는 시각(ms, D-30). 낮추지 않는다. */
-const INTRO_GONE_MS = 1800;
+/**
+ * 인트로 카드가 DOM 에서 사라져야 하는 시각(ms, D-30). 낮추지 않는다.
+ * EXEC_INTRO_MS 3000 + 측정 여유 200 — 여유는 예전(1600 + 200)과 같다(결정 0039). test/unit/e2eContract.test.ts 가 앱 상수와 대조한다.
+ */
+export const INTRO_GONE_MS = 3200;
+
+/**
+ * 후보 선택 공개 단계 시간표 사본(결정 0039). TS(shared/game/phases.ts)를 import 하지 않는 스크립트용이다 —
+ * test/unit/e2eContract.test.ts 가 같은 값인지 대조한다.
+ */
+export const CANDIDATE_REVEAL_TIMING = Object.freeze({ leadMs: 400, slotMs: 2000, tailMs: 600, emptyMs: 2000 });
+
+/** 공개 단계 길이(ms): n ≥ 1 이면 앞 + n × 한 표 + 뒤, n = 0 이면 emptyMs. shared/game/phases.ts 의 candidateRevealMs 와 같은 식. */
+export function candidateRevealMs(n) {
+  const count = Number.isFinite(n) ? Math.max(0, Math.floor(n)) : 0;
+  const { leadMs, slotMs, tailMs, emptyMs } = CANDIDATE_REVEAL_TIMING;
+  return count === 0 ? emptyMs : leadMs + count * slotMs + tailMs;
+}
 
 /**
  * P1(살아 있는 viewer)·P9(탈락 viewer, spectator: true) 처형 여부 투표 하단과 익명.
@@ -1052,10 +1068,10 @@ export function voteChecks(v, { spectator = false } = {}) {
 /**
  * P2 처형 투표 인트로 카드(D-30). samples = [{ t(ms), intro:{ count, pointerEvents, cardOpacity, residueCount } }],
  * clickedThrough = 그 동안 버튼 클릭이 me.voteAgree 를 바꿈. 도착 직후 표본: 카드 정확히 1장, 카드가 보이는 모든 표본: pointer-events none,
- * INTRO_GONE_MS(1800ms) 이후 표본: 카드 0장·남은 불투명 잔상 0.
+ * INTRO_GONE_MS(3200ms) 이후 표본: 카드 0장·남은 불투명 잔상 0.
  */
 export function introChecks(samples, { clickedThrough } = {}) {
-  const label = "인트로 카드: 도착·터치 통과·1.8초 뒤 흔적 없음";
+  const label = "인트로 카드: 도착·터치 통과·3.2초 뒤 흔적 없음";
   if (!Array.isArray(samples) || samples.length === 0) return result("P2", label, ["측정값 없음(인트로 시간표본)"]);
   if (samples.some((x) => !Number.isFinite(x?.t) || !x.intro || typeof x.intro.count !== "number")) {
     return result("P2", label, ["측정값 없음(표본 t·intro.count)"]);
