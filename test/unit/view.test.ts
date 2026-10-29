@@ -4,7 +4,7 @@ import type { SayInput } from "../../shared/game/chat";
 import { claimOptions, currentClaimSeat, selectClaim } from "../../shared/game/claim";
 import { isAlive } from "../../shared/game/alive";
 import { pickTarget } from "../../shared/game/night";
-import { CLAIM_TURN_MS, PHASE_DEFS } from "../../shared/game/phases";
+import { CLAIM_TURN_MS, DISCUSSION_MS, EXEC_VOTE_MS, MORNING_MS, NIGHT_MS, PHASE_DEFS, candidateRevealMs } from "../../shared/game/phases";
 import { ROOM_TTL_MS, attachConnection, createRoomState, joinRoom, startGame } from "../../shared/game/room";
 import type { Player, RoomState } from "../../shared/game/room";
 import { rolesInPlay } from "../../shared/game/roles";
@@ -509,29 +509,60 @@ function mafiaSeatsOtherThan(state: RoomState, p: Player): number[] {
 }
 
 describe("buildView 단계 길이 (D-15, 결정 0012)", () => {
-  it("phaseDurationMs 는 단계 표 길이를 그대로 보내고, phaseEndsAt·serverNow 는 상태·now 그대로다", () => {
+  it("phaseDurationMs 는 단계 길이(공개 단계는 그날 공개 표 수로 파생)를 보내고, phaseEndsAt·serverNow 는 상태·now 그대로다", () => {
     const got = PHASES.map((phase) => {
       const s = stateAt(phase, 4, 1);
       const v = buildView(s, s.hostId, 77_777);
       return `${phase}:${v.phaseDurationMs}:${v.phaseEndsAt === s.phaseEndsAt}:${v.serverNow}`;
     });
+    const reveal = stateAt("candidateVoteReveal", 4, 1);
+    const revealVotes = reveal.voteLog!.find((e) => e.n === reveal.day)!.cand!.votes.length;
     expect(got.join(" ")).toBe(
-      "lobby:null:true:77777 assigning:3000:true:77777 roleReveal:15000:true:77777 dayAnnounce:2000:true:77777 claim:8000:true:77777 discussion:90000:true:77777 execVote:10000:true:77777 candidateVote:15000:true:77777 candidateVoteReveal:4000:true:77777 defense:10000:true:77777 execution:5000:true:77777 night:30000:true:77777 morning:5000:true:77777 ended:null:true:77777",
+      `lobby:null:true:77777 assigning:3000:true:77777 roleReveal:15000:true:77777 dayAnnounce:2000:true:77777 claim:8000:true:77777 discussion:40000:true:77777 execVote:13000:true:77777 candidateVote:15000:true:77777 candidateVoteReveal:${candidateRevealMs(revealVotes)}:true:77777 defense:10000:true:77777 execution:5000:true:77777 night:30000:true:77777 morning:5000:true:77777 ended:null:true:77777`,
     );
   });
 
-  it("마감은 이전 마감 + 단계 길이로 이어진다: assigning +3000, roleReveal +15000, dayAnnounce +2000, claim 첫 차례 +8000, 차례 4개 뒤 discussion +90000, execVote +10000, night +30000, morning +5000", () => {
+  it("마감은 이전 마감 + 단계 길이로 이어진다: assigning +3000, roleReveal +15000, dayAnnounce +2000, claim 첫 차례 +8000, 차례 4개 뒤 discussion +40000, execVote +13000, night +30000, morning +5000", () => {
     const a = stateAt("assigning", 4, 1);
     const r = stateAt("roleReveal", 4, 1);
     const ends = ["assigning", "roleReveal", "dayAnnounce", "claim", "discussion", "execVote", "night", "morning"].map(
       (phase) => stateAt(phase as PhaseId, 4, 1).phaseEndsAt,
     );
-    // claim 은 첫 차례의 마감(20000 + 8000), discussion 은 네 차례가 끝난 뒤(20000 + 4 × 8000 + 90000)
+    // claim 은 첫 차례의 마감(20000 + 8000), discussion 은 네 차례가 끝난 뒤(20000 + 4 × 8000 + DISCUSSION_MS)
+    const discussionEnd = START_AT + 20000 + 4 * CLAIM_TURN_MS + DISCUSSION_MS;
+    expect(DISCUSSION_MS).toBe(40000);
     expect(ends.join("/")).toBe(
-      [START_AT + 3000, START_AT + 18000, START_AT + 20000, START_AT + 28000, START_AT + 142000, START_AT + 152000, START_AT + 182000, START_AT + 187000].join("/"),
+      [
+        START_AT + 3000,
+        START_AT + 18000,
+        START_AT + 20000,
+        START_AT + 28000,
+        discussionEnd,
+        discussionEnd + EXEC_VOTE_MS,
+        discussionEnd + EXEC_VOTE_MS + NIGHT_MS,
+        discussionEnd + EXEC_VOTE_MS + NIGHT_MS + MORNING_MS,
+      ].join("/"),
     );
     expect(r.phaseEndsAt).toBe(START_AT + 18000);
     expect(a.expiresAt).toBe(START_AT + ROOM_TTL_MS);
+  });
+
+  it("공개 단계: 4~8명 × 시드, 모든 viewer(생존·관전)의 view 가 같은 phaseDurationMs = candidateRevealMs(그날 표 수) 이고 마감 − 길이 = 공개 진입 시각 (결정 0039)", () => {
+    const bad: string[] = [];
+    for (const n of PLAYER_COUNTS) {
+      for (const seed of SEEDS) {
+        const before = stateAt("candidateVote", n, seed);
+        const s = stateAt("candidateVoteReveal", n, seed);
+        const votes = s.voteLog!.find((e) => e.n === s.day)!.cand!.votes.length;
+        const want = candidateRevealMs(votes);
+        for (const p of s.players) {
+          const v = buildView(s, p.id, START_AT);
+          if (v.phaseDurationMs !== want) bad.push(`n${n} s${seed} ${p.seat}: dur ${v.phaseDurationMs} != ${want}`);
+          if (v.phaseEndsAt! - v.phaseDurationMs! !== before.phaseEndsAt) bad.push(`n${n} s${seed} ${p.seat}: start mismatch`);
+        }
+      }
+    }
+    expect(bad.join("\n")).toBe("");
   });
 });
 
@@ -839,11 +870,11 @@ describe("buildView 낮 뷰 — 토론·이튿날 (D-02, D-05, D-15)", () => {
     }
   });
 
-  it("discussion phaseDurationMs 는 90000 이다(옛 상태의 연장 표시와 무관); claim 은 차례 하나의 8000", () => {
+  it("discussion phaseDurationMs 는 40000 이다(옛 상태의 연장 표시와 무관); claim 은 차례 하나의 8000", () => {
     const s = stateAt("discussion", 4, 1);
     const old = { ...s, extendUsed: true } as RoomState; // 옛 저장 방: 키로만 넣는다(타입 선언에 기대지 않는다)
-    expect(buildView(s, s.hostId, START_AT).phaseDurationMs).toBe(90_000);
-    expect(buildView(old, s.hostId, START_AT).phaseDurationMs).toBe(90_000);
+    expect(buildView(s, s.hostId, START_AT).phaseDurationMs).toBe(40_000);
+    expect(buildView(old, s.hostId, START_AT).phaseDurationMs).toBe(40_000);
     expect(buildView(stateAt("claim", 4, 1), s.hostId, START_AT).phaseDurationMs).toBe(8000);
   });
 });

@@ -5,7 +5,8 @@ import { env } from "cloudflare:workers";
 import { runDurableObjectAlarm } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 import type { RoomView, ServerMessage } from "../../shared/protocol";
-import { actorsOf, advanceTo, backdateSends, forceDue, lastViewOf, mark, nextFrame, seat, send, settle, storedRoom, summary, voteCandidate, voteExec } from "./helpers";
+import { EXEC_VOTE_MS, candidateRevealMs } from "../../shared/game/phases";
+import { actorsOf, advanceTo, alarmOf, backdateSends, forceDue, lastViewOf, mark, nextFrame, seat, send, settle, storedRoom, summary, voteCandidate, voteExec } from "./helpers";
 import type { Actor, Seated, TestSocket } from "./helpers";
 
 const allSockets = (r: Seated): TestSocket[] => [r.host, ...r.guests.map((g) => g.sock)];
@@ -49,11 +50,11 @@ const storedVote = async (code: string): Promise<StoredVoteRoom> => (await store
 const hasPersonalVote = (room: StoredVoteRoom): boolean => room.players.some((p) => Object.hasOwn(p, "execVote"));
 
 describe("여부 투표 방송 (VOTE-01, D-02)", () => {
-  it("execVote 단계에 들어가면 네 소켓 모두 phaseDurationMs 10000 과 day.execTally {0,0} 을 받는다", async () => {
+  it("execVote 단계에 들어가면 네 소켓 모두 phaseDurationMs 13000(EXEC_VOTE_MS) 과 day.execTally {0,0} 을 받는다", async () => {
     const r = await startedAtExecVote(4);
     for (const s of allSockets(r)) {
       const v = viewsOf(s.frames.map(parse)).filter((x) => x.phase === "execVote").at(-1)!;
-      expect(`${v.phaseDurationMs} ${JSON.stringify(v.day?.execTally)}`).toBe(`10000 ${JSON.stringify({ yes: 0, no: 0 })}`);
+      expect(`${v.phaseDurationMs} ${JSON.stringify(v.day?.execTally)}`).toBe(`${EXEC_VOTE_MS} ${JSON.stringify({ yes: 0, no: 0 })}`);
     }
   });
 
@@ -262,15 +263,18 @@ describe("후보 선택은 투표자에게만 (VOTE-02, D-03, D-19, A7)", () => 
 });
 
 describe("선택 공개 (VOTE-02, D-20, D-21)", () => {
-  it("여섯 소켓이 같은 순서의 day.voteLog 그날 줄 cand.votes 와 같은 day.candidate 를 받고 phaseDurationMs 는 4000 이다", async () => {
+  it("여섯 소켓이 같은 순서의 day.voteLog 그날 줄 cand.votes 와 같은 day.candidate 를 받고 phaseDurationMs 는 표 수 길이(5표 11000)이며 마감·저장 알람이 같다", async () => {
     const { r, candidate, cast } = await atReveal();
     const views = allSockets(r).map((s) => lastViewOf(s));
     const first = JSON.stringify(views[0]!.day?.voteLog?.at(-1)?.cand?.votes);
     for (const v of views) {
       expect(v.phase).toBe("candidateVoteReveal");
       expect(JSON.stringify(v.day?.voteLog?.at(-1)?.cand?.votes)).toBe(first);
-      expect(`${v.day?.candidate} ${v.phaseDurationMs}`).toBe(`${candidate.seat} 4000`);
+      expect(`${v.day?.candidate} ${v.phaseDurationMs}`).toBe(`${candidate.seat} ${candidateRevealMs(5)}`);
+      expect(v.phaseEndsAt).toBe(views[0]!.phaseEndsAt);
     }
+    expect(candidateRevealMs(5)).toBe(11000);
+    expect(await alarmOf(r.code)).toBe(views[0]!.phaseEndsAt);
     const votes = views[0]!.day!.voteLog!.at(-1)!.cand!.votes;
     expect(votes.length).toBe(5);
     const shown = [...votes].sort((x, y) => x.seat - y.seat).map((v) => `${v.seat}>${v.target}`);

@@ -1,7 +1,7 @@
 // 테스트 방 방장 도구 규칙(quick 261025-f09, 결정 0022): testSkip·testReset·testRole 의 순수 규칙을 확인한다.
 // 실패 출력은 한 줄이어야 해서(TAP) 상태 비교는 키 순서를 맞춘 문자열로, 목록 비교는 요약 문자열로 한다.
 import { describe, expect, it } from "vitest";
-import { PHASE_DEFS } from "../../shared/game/phases";
+import { DISCUSSION_MS, PHASE_DEFS } from "../../shared/game/phases";
 import { ROLE_IDS, ROLE_TABLE, assignRoles, giveRoleTo, rolesInPlay, testRoleOptions } from "../../shared/game/roles";
 import type { RoleId } from "../../shared/game/roles";
 import { attachConnection, createRoomState, joinRoom, startGame } from "../../shared/game/room";
@@ -227,7 +227,7 @@ describe("skipPhase 동작", () => {
       if (i < n - 1) {
         expect(`${r.state.phase}/${r.state.claimIdx}/${r.state.phaseEndsAt}`).toBe(`claim/${i + 1}/${now + 8000}`);
       } else {
-        expect(`${r.state.phase}/${r.state.claimLog!.length}/${r.state.phaseEndsAt}`).toBe(`discussion/${n}/${now + 90_000}`);
+        expect(`${r.state.phase}/${r.state.claimLog!.length}/${r.state.phaseEndsAt}`).toBe(`discussion/${n}/${now + DISCUSSION_MS}`);
       }
       state = r.state;
     }

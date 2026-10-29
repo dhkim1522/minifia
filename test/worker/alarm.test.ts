@@ -2,6 +2,7 @@ import { env, exports } from "cloudflare:workers";
 import { runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 import type { RoomView, ServerMessage } from "../../shared/protocol";
+import { DISCUSSION_MS, EXEC_VOTE_MS } from "../../shared/game/phases";
 import { ROOM_TTL_MS, UNCONNECTED_ROOM_TTL_MS } from "../../shared/game/room";
 import { alarmOf, closed, connect, createRoom, forceDue, hello, nextFrame, seat, send, storedRoom } from "./helpers";
 import type { Seated } from "./helpers";
@@ -81,8 +82,8 @@ describe("알람", () => {
       ["claim", 8_000],
       ["claim", 8_000],
       ["claim", 8_000],
-      ["discussion", 90_000],
-      ["execVote", 10_000], // 표가 없으므로 다음은 night
+      ["discussion", DISCUSSION_MS],
+      ["execVote", EXEC_VOTE_MS], // 표가 없으므로 다음은 night
       ["night", 30_000],
       ["morning", 5_000],
       ["dayAnnounce", 2_000],

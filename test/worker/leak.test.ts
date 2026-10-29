@@ -2,6 +2,7 @@
 import { env, exports } from "cloudflare:workers";
 import { runDurableObjectAlarm } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
+import { CANDIDATE_VOTE_MS, candidateRevealMs } from "../../shared/game/phases";
 import { MORNING_PHRASE_COUNT } from "../../shared/protocol";
 import type { RoleId, RoomView, ServerMessage } from "../../shared/protocol";
 import {
@@ -658,6 +659,12 @@ describe("6명 한 판: 처형·처형 무효·종료 전수 프레임 누출 �
           expect(has(".view.day.candidate")).toBe(["candidateVoteReveal", "defense", "execution"].includes(v.phase));
           expect(has(".view.day.execution")).toBe(v.phase === "execution");
           if (v.phase === "execution") seen.execution.add(a.seat);
+          // 단계 길이는 공개 정보에서만 파생된다: 공개 단계는 그날 공개된 표 수, 진행 중 후보 선택은 표 수와 무관한 고정 길이(결정 0039, T-t40-01)
+          if (v.phase === "candidateVote") expect(v.phaseDurationMs).toBe(CANDIDATE_VOTE_MS);
+          if (v.phase === "candidateVoteReveal") {
+            const todays = v.day?.voteLog?.filter((line) => line.n === day).at(-1);
+            expect(v.phaseDurationMs).toBe(candidateRevealMs(todays?.cand?.votes.length ?? 0));
+          }
           // (8) 처형 무효 이유는 처형 무효로 온 밤(2일차)에만, 키는 reason 하나
           const wantNoExecution = v.phase === "night" && day === 2;
           expect(has(".view.day.noExecution")).toBe(wantNoExecution);

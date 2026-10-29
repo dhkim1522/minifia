@@ -537,7 +537,7 @@ describe("botPlanKey·syncBotPlan·planBotSteps", () => {
     expect(calls).toBe(3);
   });
 
-  it("discussion 은 살아 있는 봇마다 1~2개이고 같은 봇 간격이 2000 이상이며 say·emote 에 모두 통과한다", () => {
+  it("discussion 은 살아 있는 봇마다 정확히 2개(토론 40초 안, 결정 0039)이고 같은 봇 간격이 2000 이상이며 say·emote 에 모두 통과한다", () => {
     for (let seed = 1; seed <= 20; seed += 1) {
       let state = markDead(stateAt(1, 5, seed, "discussion"), 3);
       const steps = planBotSteps(state, nowOf(state), seededRandInt(seed));
@@ -545,7 +545,7 @@ describe("botPlanKey·syncBotPlan·planBotSteps", () => {
         const mine = steps.filter((s) => s.botId === bot.id);
         const expected = bot.alive === false ? 0 : -1;
         if (expected === 0) expect(`${seed}:${mine.length}`).toBe(`${seed}:0`);
-        else expect(`${seed}:${mine.length >= 1 && mine.length <= 2}`).toBe(`${seed}:true`);
+        else expect(`${seed}:${mine.length}`).toBe(`${seed}:2`);
         if (mine.length === 2) expect(mine[1]!.at - mine[0]!.at >= 2000).toBe(true);
       }
       expect(steps.every((s) => s.at < state.phaseEndsAt! - 500 && s.at > nowOf(state))).toBe(true);

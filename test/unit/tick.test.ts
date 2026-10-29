@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
   ASSIGNING_MS,
-  CANDIDATE_REVEAL_MS,
+  CANDIDATE_REVEAL_EMPTY_MS,
+  CANDIDATE_REVEAL_LEAD_MS,
+  CANDIDATE_REVEAL_SLOT_MS,
+  CANDIDATE_REVEAL_TAIL_MS,
   CANDIDATE_VOTE_MS,
   CLAIM_TURN_MS,
   DAY_ANNOUNCE_MS,
@@ -13,6 +16,7 @@ import {
   NIGHT_MS,
   PHASE_DEFS,
   ROLE_REVEAL_MS,
+  candidateRevealMs,
 } from "../../shared/game/phases";
 import { ROOM_TTL_MS } from "../../shared/game/room";
 import type { Player, RoomState } from "../../shared/game/room";
@@ -71,10 +75,11 @@ describe("PHASE_DEFS (단계 표, D-01·D-02·D-19·D-20, NIGHT-05·NIGHT-06)", 
     expect(row("roleReveal")).toBe("15000/dayAnnounce/true");
     expect(row("dayAnnounce")).toBe("2000/claim/true");
     expect(row("claim")).toBe("8000/discussion/true"); // 차례 하나의 길이 — 남은 차례가 있으면 tick 의 ON_DEADLINE 이 머문다
-    expect(row("discussion")).toBe("90000/execVote/true"); // 토론 다음은 처형 여부 투표(D-25) — 임시 낮 루프가 밤으로 가던 자리
-    expect(row("execVote")).toBe("10000/candidateVote/true"); // 표가 통과가 아니면 마감 훅이 night 로 보낸다(표의 기본 next 보다 앞선다)
+    expect(row("discussion")).toBe("40000/execVote/true"); // 토론 다음은 처형 여부 투표(D-25) — 임시 낮 루프가 밤으로 가던 자리
+    expect(row("execVote")).toBe("13000/candidateVote/true"); // 표가 통과가 아니면 마감 훅이 night 로 보낸다(표의 기본 next 보다 앞선다)
     expect(row("candidateVote")).toBe("15000/candidateVoteReveal/true");
-    expect(row("candidateVoteReveal")).toBe("4000/defense/true");
+    // 표 값은 0표 기준이다. 실제 길이는 phaseDurationOf 가 그날 공개 표 수로 파생한다(결정 0039).
+    expect(row("candidateVoteReveal")).toBe(`${candidateRevealMs(0)}/defense/true`);
     expect(row("defense")).toBe("10000/execution/true");
     expect(row("execution")).toBe("5000/night/true");
     expect(row("night")).toBe("30000/morning/true");
@@ -84,12 +89,11 @@ describe("PHASE_DEFS (단계 표, D-01·D-02·D-19·D-20, NIGHT-05·NIGHT-06)", 
     expect(ROLE_REVEAL_MS).toBe(15000);
     expect(DAY_ANNOUNCE_MS).toBe(2000);
     expect(CLAIM_TURN_MS).toBe(8000);
-    expect(DISCUSSION_MS).toBe(90000);
+    expect(DISCUSSION_MS).toBe(40000);
     expect(NIGHT_MS).toBe(30000);
     expect(MORNING_MS).toBe(5000);
-    expect(EXEC_VOTE_MS).toBe(10000);
+    expect(EXEC_VOTE_MS).toBe(13000);
     expect(CANDIDATE_VOTE_MS).toBe(15000);
-    expect(CANDIDATE_REVEAL_MS).toBe(4000);
     expect(DEFENSE_MS).toBe(10000);
     expect(EXECUTION_MS).toBe(5000);
   });
@@ -330,5 +334,35 @@ describe("nextWakeAt (알람 하나로 단계 마감과 방 만료)", () => {
 
   it("discussion 은 단계 마감이 만료보다 이르면 단계 마감이다", () => {
     expect(nextWakeAt(stateIn("discussion", 100_000))).toBe(100_000);
+  });
+});
+
+describe("candidateRevealMs (결정 0039)", () => {
+  it("표 수별 공개 단계 길이: 0표 2000, 1표 3000, 2표 5000, 5표 11000, 8표 17000", () => {
+    expect([0, 1, 2, 5, 8].map((n) => `${n}:${candidateRevealMs(n)}`).join(" ")).toBe("0:2000 1:3000 2:5000 5:11000 8:17000");
+  });
+
+  it("n ≥ 1 이면 앞 + n × 슬롯 + 뒤, n = 0 이면 빈 공개 길이", () => {
+    for (let n = 1; n <= 8; n += 1) {
+      expect(candidateRevealMs(n)).toBe(CANDIDATE_REVEAL_LEAD_MS + n * CANDIDATE_REVEAL_SLOT_MS + CANDIDATE_REVEAL_TAIL_MS);
+    }
+    expect(candidateRevealMs(0)).toBe(CANDIDATE_REVEAL_EMPTY_MS);
+  });
+
+  it("네 상수: 400 · 2000 · 600 · 2000", () => {
+    expect(
+      [CANDIDATE_REVEAL_LEAD_MS, CANDIDATE_REVEAL_SLOT_MS, CANDIDATE_REVEAL_TAIL_MS, CANDIDATE_REVEAL_EMPTY_MS].join(" "),
+    ).toBe("400 2000 600 2000");
+  });
+
+  it("음수·소수·NaN·무한대 입력은 0 이상 정수로 내린다", () => {
+    expect(candidateRevealMs(-3)).toBe(candidateRevealMs(0));
+    expect(candidateRevealMs(Number.NaN)).toBe(candidateRevealMs(0));
+    expect(candidateRevealMs(Number.POSITIVE_INFINITY)).toBe(candidateRevealMs(0));
+    expect(candidateRevealMs(2.9)).toBe(candidateRevealMs(2));
+  });
+
+  it("8명 최악 처형 구간은 60초다: 13 + 15 + 17 + 10 + 5", () => {
+    expect(EXEC_VOTE_MS + CANDIDATE_VOTE_MS + candidateRevealMs(8) + DEFENSE_MS + EXECUTION_MS).toBe(60_000);
   });
 });

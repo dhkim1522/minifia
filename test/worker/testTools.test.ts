@@ -2,6 +2,7 @@
 // 실패 출력은 한 줄이어야 해서(TAP) 프레임 목록은 summary() 한 줄 문자열로 비교한다.
 import { exports } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
+import { EXEC_VOTE_MS } from "../../shared/game/phases";
 import type { PhaseId, RoomView, ServerMessage } from "../../shared/protocol";
 import { alarmOf, advanceTo, collect, createRoom, driveToEnded, editRoom, nextFrame, seat, send, skipOnce, skipThrough, storedRoom } from "./helpers";
 import type { Seated, TestSocket } from "./helpers";
@@ -297,7 +298,7 @@ describe("testSkip", () => {
     }
   }, 30_000);
 
-  it("discussion 에서 넘기면 모든 소켓이 처형 여부 투표(phaseDurationMs 10000)를 받고, 표가 없이 다시 넘기면 밤이다 (D-25)", async () => {
+  it("discussion 에서 넘기면 모든 소켓이 처형 여부 투표(phaseDurationMs 13000)를 받고, 표가 없이 다시 넘기면 밤이다 (D-25)", async () => {
     const r = await seatQuiet(3, { testMode: true });
     await start(r);
     await skipUntil(r, "discussion");
@@ -305,7 +306,7 @@ describe("testSkip", () => {
     send(r.host, { t: "testSkip" });
     for (const sock of allSockets(r)) {
       const msg = (await nextFrame(sock, isPhase("execVote"))) as Extract<ServerMessage, { t: "state" }>;
-      expect(`${msg.view.phase}/${msg.view.phaseDurationMs}`).toBe("execVote/10000");
+      expect(`${msg.view.phase}/${msg.view.phaseDurationMs}`).toBe(`execVote/${EXEC_VOTE_MS}`);
     }
     expect(String(await alarmOf(r.code))).toBe(String((await stored(r.code)).phaseEndsAt));
     for (const s of allSockets(r)) s.cursor = s.frames.length;

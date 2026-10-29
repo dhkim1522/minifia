@@ -3,7 +3,15 @@
 // 실패 출력은 한 줄이어야 해서(TAP) 비교는 가능한 한 문자열 하나로 한다.
 import { describe, expect, it } from "vitest";
 import { isAlive } from "../../shared/game/alive";
-import { CANDIDATE_VOTE_MS, DISCUSSION_MS, EXEC_VOTE_MS, MORNING_MS, NIGHT_MS, PHASE_DEFS } from "../../shared/game/phases";
+import {
+  CANDIDATE_VOTE_MS,
+  DISCUSSION_MS,
+  EXEC_VOTE_MS,
+  MORNING_MS,
+  NIGHT_MS,
+  PHASE_DEFS,
+  candidateRevealMs,
+} from "../../shared/game/phases";
 import { attachConnection, createRoomState, joinRoom, startGame } from "../../shared/game/room";
 import type { Player, RoomState } from "../../shared/game/room";
 import { tick } from "../../shared/game/tick";
@@ -115,7 +123,7 @@ describe("단계 표 (D-01·D-25)", () => {
         row("ended"),
       ].join(" "),
     ).toBe(
-      "90000/execVote/true 10000/candidateVote/true 15000/candidateVoteReveal/true 4000/defense/true 10000/execution/true 5000/night/true null/null/true",
+      `40000/execVote/true 13000/candidateVote/true 15000/candidateVoteReveal/true ${candidateRevealMs(0)}/defense/true 10000/execution/true 5000/night/true null/null/true`,
     );
   });
 });
@@ -231,7 +239,7 @@ describe("resolveExecVote (T-04-02) — 집계 직후 개인 표 삭제", () => 
 
 describe("tick 연쇄 (D-01·D-04·D-25)", () => {
   for (const seed of [1, 2, 3]) {
-    it(`시드 ${seed}: discussion 마감 D 에서 execVote(D+10000) → 찬성 3·반대 1 이면 candidateVote(D+25000)`, () => {
+    it(`시드 ${seed}: discussion 마감 D 에서 execVote(D+EXEC_VOTE_MS) → 찬성 3·반대 1 이면 candidateVote(D+EXEC_VOTE_MS+CANDIDATE_VOTE_MS)`, () => {
       const discussion = stateAt(5, seed, "discussion");
       const D = discussion.phaseEndsAt!;
       const rand = seededRandInt(seed);
@@ -241,7 +249,7 @@ describe("tick 연쇄 (D-01·D-04·D-25)", () => {
       expect(`${cand.phase}/${cand.phaseEndsAt! - D}`).toBe(`candidateVote/${EXEC_VOTE_MS + CANDIDATE_VOTE_MS}`);
     });
 
-    it(`시드 ${seed}: 0표나 동률이면 night(D+40000)`, () => {
+    it(`시드 ${seed}: 0표나 동률이면 night(D+EXEC_VOTE_MS+NIGHT_MS)`, () => {
       const discussion = stateAt(5, seed, "discussion");
       const D = discussion.phaseEndsAt!;
       const rand = seededRandInt(seed);
@@ -262,8 +270,8 @@ describe("tick 연쇄 (D-01·D-04·D-25)", () => {
     expect(JSON.stringify(lastLog(late)?.exec)).toBe(JSON.stringify({ yes: 0, no: 0, passed: false }));
   });
 
-  it("discussion 길이는 그대로 90초다", () => {
-    expect(DISCUSSION_MS).toBe(90_000);
+  it("discussion 길이는 40초다 (결정 0039)", () => {
+    expect(DISCUSSION_MS).toBe(40_000);
   });
 });
 

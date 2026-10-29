@@ -8,7 +8,7 @@ import {
   noExecutionOf,
   routeAfterCandidateVote,
 } from "../../shared/game/execution";
-import { CANDIDATE_REVEAL_MS, DEFENSE_MS, EXECUTION_MS, NIGHT_MS } from "../../shared/game/phases";
+import { DEFENSE_MS, EXECUTION_MS, NIGHT_MS, candidateRevealMs } from "../../shared/game/phases";
 import type { RoomState } from "../../shared/game/room";
 import { tick } from "../../shared/game/tick";
 import { tallyCandidateVote } from "../../shared/game/vote";
@@ -214,7 +214,9 @@ describe("tick 연쇄: 후보 선택 → 공개 → 변론 → 처형 → 밤 (D
       const rand = seededRandInt(seed + 9);
 
       const reveal = tick(s0, t0, rand);
-      expect(`${reveal.phase}/${reveal.phaseEndsAt! - t0}`).toBe(`candidateVoteReveal/${CANDIDATE_REVEAL_MS}`);
+      expect(`${reveal.phase}/${reveal.phaseEndsAt! - t0}`).toBe(
+        `candidateVoteReveal/${candidateRevealMs(lastLog(reveal)!.cand!.votes.length)}`,
+      );
       expect(lastLog(reveal)!.cand!.candidate).toBe(x);
 
       const defense = tick(reveal, reveal.phaseEndsAt!, rand);
@@ -235,19 +237,20 @@ describe("tick 연쇄: 후보 선택 → 공개 → 변론 → 처형 → 밤 (D
   it("알람이 늦어 한 번에 따라잡아도 같은 결과다 (공개·변론·처형 훅이 모두 돈다)", () => {
     const s0 = stateWithVerdict(6, 2, "candidateVote");
     const stepwise = tickTo(s0, "night", 5);
-    const caughtUp = tick(s0, s0.phaseEndsAt! + CANDIDATE_REVEAL_MS + DEFENSE_MS + EXECUTION_MS + 1, seededRandInt(5));
+    const revealMs = candidateRevealMs(lastLog(stepwise)!.cand!.votes.length);
+    const caughtUp = tick(s0, s0.phaseEndsAt! + revealMs + DEFENSE_MS + EXECUTION_MS + 1, seededRandInt(5));
     expect(caughtUp.phase).toBe("night");
     expect(caughtUp.phaseEndsAt).toBe(stepwise.phaseEndsAt);
     expect(JSON.stringify(caughtUp.players)).toBe(JSON.stringify(stepwise.players));
     expect(caughtUp.players.filter((p) => p.alive === false).length).toBe(1);
   });
 
-  it("동률 → 공개(votes 둘 이상, candidate 없음) → 4초 뒤 바로 밤", () => {
+  it("동률 → 공개(votes 둘 이상, candidate 없음) → 표 수 길이 뒤 바로 밤", () => {
     const s0 = stateWithVerdict(6, 1, "candidateVote", { candidate: "tie" });
     const t0 = s0.phaseEndsAt!;
     const reveal = tick(s0, t0, seededRandInt(1));
     expect(reveal.phase).toBe("candidateVoteReveal");
-    expect(reveal.phaseEndsAt).toBe(t0 + CANDIDATE_REVEAL_MS);
+    expect(reveal.phaseEndsAt).toBe(t0 + candidateRevealMs(lastLog(reveal)!.cand!.votes.length));
     expect(lastLog(reveal)!.cand!.votes.length).toBeGreaterThanOrEqual(2);
     expect("candidate" in lastLog(reveal)!.cand!).toBe(false);
     expect(viewOf(reveal, 0).day?.candidate).toBeUndefined();
@@ -256,11 +259,12 @@ describe("tick 연쇄: 후보 선택 → 공개 → 변론 → 처형 → 밤 (D
     expect(night.players.every(isAlive)).toBe(true);
   });
 
-  it("0표 → 공개(votes []) → 4초 뒤 밤: 공개 구간은 두 경우 모두 4초를 거친다", () => {
+  it("0표 → 공개(votes []) → 2초 뒤 밤: 0표도 공개 구간(2초)을 거친다", () => {
     const s0 = stateWithVerdict(6, 1, "candidateVote", { candidate: "none" });
     const reveal = tick(s0, s0.phaseEndsAt!, seededRandInt(1));
     expect(reveal.phase).toBe("candidateVoteReveal");
-    expect(reveal.phaseEndsAt).toBe(s0.phaseEndsAt! + CANDIDATE_REVEAL_MS);
+    expect(reveal.phaseEndsAt).toBe(s0.phaseEndsAt! + 2000);
+    expect(reveal.phaseEndsAt).toBe(s0.phaseEndsAt! + candidateRevealMs(0));
     expect(`${lastLog(reveal)!.cand?.votes.length}/${Object.keys(lastLog(reveal)!.cand ?? {}).join(",")}`).toBe("0/votes");
     const night = tick(reveal, reveal.phaseEndsAt!, seededRandInt(1));
     expect(night.phase).toBe("night");
