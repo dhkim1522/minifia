@@ -4,11 +4,11 @@
 
 ## 지금 상태
 
-- **5페이즈 개발 완료·배포 직전**(05-01~05-08, 결정 0038): 안내 문장·`data-guide`, 밤 비네팅·아침 밝아짐, 짧은 폰 테이블 압축(하한 0.77)·링크 참가 광장 축소, Wake Lock. 로컬 전체 시험·E2E(네 크기 + pc + wakelock) 통과. 클라이언트 전용이라 배포는 05-09 에서 한 번. 캐릭터 움직임·새 에셋·새 진동은 없음(사용자 결정, 앱 전환 때 재검토).
+- **5페이즈 배포 완료**(05-01~05-09, 결정 0038): 안내 문장·`data-guide`, 밤 비네팅·아침 밝아짐, 짧은 폰 테이블 압축(하한 0.77)·링크 참가 광장 축소, Wake Lock. 클라이언트 전용(서버·와이어 불변). 배포본 `https://minifia.dhplay.workers.dev` 버전 `2026-10-29T11:11:36Z+42d648b`(개인 Cloudflare 계정). 배포본 smoke 4·5·8명, uat-vote·test-bots·test-room·day·night, E2E(열 흐름 × 네 크기 + pc + wakelock) 통과. 요구사항 LOOK-01·CHAR-01·UX-01·UX-02·CONN-03 완료 표시(실기기 체감·Wake Lock 실제 동작은 대기). 캐릭터 움직임·새 에셋·새 진동은 없음(사용자 결정, 앱 전환 때 재검토).
 - `npm run e2e` 기본 크기는 이제 `360x640`·`390x664`·`430x932`·`360x560`(단 높이 probe). 흐름은 열 개 + 크기 고정 `pc`(1280x800)·`wakelock`.
-- **4페이즈 배포 완료**(결정 0036 와이어·0037 화면). 배포본 `https://minifia.dhplay.workers.dev` 버전 `2026-10-28T14:27:59Z+5dcd032`(개인 Cloudflare 계정). 요구사항 VOTE·COMM-03·CONN-02·END 체크 완료.
+- 4페이즈 배포 완료(결정 0036 와이어·0037 화면, 요구사항 VOTE·COMM-03·CONN-02·END 완료).
 - 소스에 `backdrop-filter` 를 접두와 짝으로 쓰면 빌드(lightningcss)가 접두만 남겨 Chrome 에서 변론 흐림이 사라진다. 비접두 한 번만 쓴다(`verdictCss.test.ts`). 로컬 dev 는 CSS 를 압축하지 않으니 CSS 를 바꾸면 배포본 E2E 로 확인.
-- 이 PC 의 배포본 smoke·UAT 가 간헐 실패한 적 있다(`ping` 170~345ms 흔들림, 같은 버전 재실행 통과, 원인 미확정). 다른 네트워크에서 한 번 더 돌려 보면 좋다.
+- 이 PC 의 배포본 smoke 가 간헐 실패한다(5페이즈 배포에서도 8명 2회·4명 1회 도착 편차/execTally, 같은 버전 단독 재실행 통과, `ping` 은 안정이라 원인 미확정). 다른 네트워크에서 한 번 더 돌려 보면 좋다.
 - 버전은 `/api/health`. `npm run e2e` 는 인자가 없으면 **배포본**을 검사한다. 로컬은 `npm run dev` 후 `npm run e2e -- --url http://localhost:5173`. 소켓 확인 `node scripts/uat-vote.mjs <주소>`.
 - 배경·유령 그림을 바꾸면 `ASSET_VERSION`(`src/net/assets.ts`)을 올린다. E2E 「살아 있는 방장」 흐름의 첫 밤 방장 탈락은 설계대로의 무작위다(최대 4번 재시도).
 - 내가 만들지 않은 `design/backgrounds/indoor-draft/`, `Claude outputs/` 는 커밋하지 않았다.
@@ -23,8 +23,8 @@
 
 ## 다음 할 일
 
-1. **05-09 배포·배포본 검증**(사용자 go-ahead 뒤 개인 계정 배포 → 배포본 smoke·UAT·E2E → LOOK-01·UX-01·UX-02·CONN-03 체크).
-2. 위 실기기 확인 목록은 모든 개발이 끝난 뒤 한 번에 폰으로 돌린다. `/gsd-verify-work 4` 는 UAT 10항목을 `blocked(physical-device)` 로 보류함(`04-UAT.md`); 그때 5페이즈 항목과 함께 이어 간다.
-3. **아티팩트 동기화**(디자인 세션): 디자인 시스템 — 새 토큰 `amber-700`·`amber-900`·`cone-light`, `amber-400`·`crimson-500` usage 개정, 후광 앰버·표수 칩·카드 부품 / 화면설계서 — 투표·공개·변론·처형·무효·결과 화면 / 화면 흐름 — 낮 → 투표 구간 순서.
+1. **모든 개발이 끝났다.** 실기기 확인 요청서를 한 번에 쓰고 진행(4·5페이즈 함께). 위 실기기 확인 목록(①~⑬)은 아직 아무것도 통과 표시하지 않았다. `/gsd-verify-work 4` 는 UAT 10항목을 `blocked(physical-device)` 로 보류함(`04-UAT.md`); 그때 `/gsd-verify-work 5` 와 함께 이어 간다.
+2. **아티팩트 동기화**(디자인 세션): 디자인 시스템 — 새 토큰 `amber-700`·`amber-900`·`cone-light`, `amber-400`·`crimson-500` usage 개정, 후광 앰버·표수 칩·카드 부품 / 화면설계서 — 투표·공개·변론·처형·무효·결과 화면 / 화면 흐름 — 낮 → 투표 구간 순서 / 5페이즈 분위기 시안 승인 값.
+3. **6페이즈 친구 플레이테스트.**
 4. 영역 지도·가이드 이미지·에셋 자동 검사를 `docs/` 에 정리(폰 폭 360·390·430별 영역). 큰 폰 세로 가운데 + 층 분리 에셋(투명 PNG·원래 크기 필요).
 5. 점검: `/gsd-verify-work 3.1`, 각 페이즈(1·2·3·3.1)의 `/gsd-secure-phase`·`/gsd-validate-phase`·`/gsd-extract-learnings`.
