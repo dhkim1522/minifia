@@ -9,12 +9,14 @@
 // execVote: 지난 투표 흔적 청소, candidateVoteReveal: 후보 선택 집계·서버 셔플 공개 순서(난수 사용), execution: 후보 탈락·처형 문구(난수 사용), ended: winner 기록·방 만료를 진입 + 30분으로 앞당김(endgame.ts).
 // 마감 훅(ON_DEADLINE): 같은 단계에 머무는 단계(claim 의 차례)의 마감 처리. 진입 훅과 같이 tick 루프 안에서만 부른다(결정 0016-2).
 // 마감 훅 행: claim(차례 넘김), execVote(여부 집계 → 통과 아니면 night), candidateVoteReveal(후보 없음 → night). execution·morning(승패면 next ended, 아니면 기본 단계 — 판정은 마감 훅에서만, D-10). ended 는 마감이 없는 종단 단계다.
+// 새 마감 = 이전 마감 + phaseDurationOf(진입 훅 뒤 상태) — 공개 단계는 훅이 집계한 표 수로 길이가 정해진다(결정 0039).
 // 훅이 stay 를 돌려주면 다음 단계로 가지 않고 같은 단계에서 마감만 "이전 마감 + 단계 길이" 로 옮긴다.
 // 난수는 세 번째 인자로만 받는다 — 방 DO 는 cryptoRandInt, 테스트는 seededRandInt.
 // 분기(4페이즈): 마감 훅이 next 를 돌려주면 그 단계로, 없으면 단계 표(PHASE_DEFS)의 기본 next 로 간다. 표는 데이터만 두고 분기는 훅이 정한다.
 // 진입 훅의 세 번째 인자 at 은 진입 시각(= 이전 마감)이다 — 시각을 스스로 읽지 않는 순수 규칙이 "진입 + 30분" 같은 계산을 할 때 쓴다.
 import type { PhaseId } from "../protocol";
 import { enterClaim, resolveClaimTurn } from "./claim";
+import { phaseDurationOf } from "./discussion";
 import { enterEnded, routeAfterExecution, routeAfterMorning } from "./endgame";
 import { enterCandidateVoteReveal, enterExecution, routeAfterCandidateVote } from "./execution";
 import { enterMorning, enterNight } from "./night";
@@ -90,7 +92,10 @@ export function tick(state: RoomState, now: number, randInt: RandInt = NO_RANDOM
       phaseEndsAt: duration === null ? null : deadline + duration,
     };
     const hook = ON_ENTER[next];
-    current = hook ? hook(entered, randInt, deadline) : entered;
+    const hooked = hook ? hook(entered, randInt, deadline) : entered;
+    // 진입 훅이 만든 상태(공개 단계의 표)로 길이를 구해 마감을 다시 정한다. 훅 입력의 임시 마감은 표 값이다.
+    const length = phaseDurationOf(hooked);
+    current = { ...hooked, phaseEndsAt: length === null ? null : deadline + length };
   }
   return current;
 }

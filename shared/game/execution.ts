@@ -38,7 +38,7 @@ export function enterCandidateVoteReveal(state: RoomState, randInt: RandInt): Ro
 
 /**
  * candidateVoteReveal 마감 훅: 후보가 있으면 표의 기본 다음 단계(defense)로, 없으면(동률·0표) night 로 간다(D-25).
- * 공개 구간 4초는 두 경우 모두 거친다(D-28). 상태는 바꾸지 않는다.
+ * 공개 구간(표 수 길이, 0표 2초, 결정 0039)은 두 경우 모두 거친다(D-28). 상태는 바꾸지 않는다.
  */
 export function routeAfterCandidateVote(state: RoomState): DeadlineResult {
   return state.verdict?.candidate === undefined ? { state, stay: false, next: "night" } : { state, stay: false };

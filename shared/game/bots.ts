@@ -37,11 +37,11 @@ const NONE_PERCENT = 15;
 /** 직업 공개 첫 행동 지연: 500 + [0, 3000) ms. */
 const CLAIM_DELAY_BASE_MS = 500;
 const CLAIM_DELAY_SPAN_MS = 3_000;
-/** 낮 토론: 첫 행동 2000 + [0, 10000) ms, 둘째는 그 뒤 8000 + [0, 30000) ms. 서버 전송 한도(1800ms)보다 넉넉하다. */
+/** 낮 토론: 첫 행동 2000 + [0, 10000) ms, 둘째는 그 뒤 8000 + [0, 18000) ms — 토론 40초(결정 0039)에서 둘째 행동 최대 37998ms 가 마감 − 500 안에 든다. 서버 전송 한도(1800ms)보다 넉넉하다. */
 const DISCUSSION_FIRST_BASE_MS = 2_000;
 const DISCUSSION_FIRST_SPAN_MS = 10_000;
 const DISCUSSION_GAP_BASE_MS = 8_000;
-const DISCUSSION_GAP_SPAN_MS = 30_000;
+const DISCUSSION_GAP_SPAN_MS = 18_000;
 /** 밤 pick: 1000 + [0, 5000) ms. */
 const NIGHT_PICK_BASE_MS = 1_000;
 const NIGHT_PICK_SPAN_MS = 5_000;
@@ -52,7 +52,7 @@ const NIGHT_CHAT_SPAN_MS = 6_000;
 
 /** 처형 여부 투표: 찬성 확률(%). 테스트 방에서 처형 경로가 자주 열리게 높인 바뀔 수 있는 기본값(결정 0036). */
 export const EXEC_YES_PERCENT = 70;
-/** 여부 투표 지연: 1000 + [0, 6000) ms (단계 10초 − 마감 여유 안). */
+/** 여부 투표 지연: 1000 + [0, 6000) ms (단계 13초 − 마감 여유 안). */
 const EXEC_VOTE_BASE_MS = 1_000;
 const EXEC_VOTE_SPAN_MS = 6_000;
 /** 후보 선택 지연: 1000 + [0, 9000) ms (단계 15초 안). */

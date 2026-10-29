@@ -1,7 +1,7 @@
 // 테스트 방 방장 도구 규칙(quick 261025-f09, 결정 0022): testSkip·testReset·testRole 의 순수 규칙을 확인한다.
 // 실패 출력은 한 줄이어야 해서(TAP) 상태 비교는 키 순서를 맞춘 문자열로, 목록 비교는 요약 문자열로 한다.
 import { describe, expect, it } from "vitest";
-import { DISCUSSION_MS, PHASE_DEFS } from "../../shared/game/phases";
+import { DISCUSSION_MS, EXEC_VOTE_MS, PHASE_DEFS, candidateRevealMs } from "../../shared/game/phases";
 import { ROLE_IDS, ROLE_TABLE, assignRoles, giveRoleTo, rolesInPlay, testRoleOptions } from "../../shared/game/roles";
 import type { RoleId } from "../../shared/game/roles";
 import { attachConnection, createRoomState, joinRoom, startGame } from "../../shared/game/room";
@@ -182,12 +182,12 @@ describe("skipPhase 동작", () => {
   }
 
   // execVote 는 표에 따라 다음 단계가 갈린다(통과 → 후보 선택, 아니면 밤). 표의 기본 next 만 읽는 위 반복에 넣지 않고 따로 묻는다(D-25).
-  it("discussion 에서 한 번 넘기면 처형 여부 투표이고 마감이 now + 10000 이다", () => {
+  it("discussion 에서 한 번 넘기면 처형 여부 투표이고 마감이 now + EXEC_VOTE_MS(13000) 이다", () => {
     const state = stateAt(6, 7, "discussion");
     const now = state.phaseEndsAt! - 500;
     const r = skipPhase(state, state.hostId, now, seededRandInt(9));
     if (!r.ok) throw new Error(`skipPhase failed: ${r.error}`);
-    expect(`${r.state.phase}/${r.state.phaseEndsAt}`).toBe(`execVote/${now + 10_000}`);
+    expect(`${r.state.phase}/${r.state.phaseEndsAt}`).toBe(`execVote/${now + EXEC_VOTE_MS}`);
   });
 
   it("execVote 에서 표가 없이 넘기면 밤이고 마감이 now + 30000 이다 (통과 아님 → night)", () => {
@@ -622,7 +622,9 @@ describe("skipPhase: 투표 단계에서 안 던진 봇이 먼저 던진다", ()
       calls.push(n);
       return 0; // 후보 중 가장 낮은 seat
     });
-    expect(`${after.phase}/${after.phaseEndsAt}`).toBe(`candidateVoteReveal/${now + 4_000}`);
+    expect(`${after.phase}/${after.phaseEndsAt}`).toBe(
+      `candidateVoteReveal/${now + candidateRevealMs(after.voteLog!.at(-1)!.cand!.votes.length)}`,
+    );
     expect(calls.slice(0, 4).join(",")).toBe("4,4,4,4"); // 봇 하나당 randInt(후보 수) 한 번
     const votes = [...after.voteLog!.at(-1)!.cand!.votes].sort((a, b) => a.seat - b.seat);
     // 방장(seat 0)은 2 를, 봇 seat 1~4 는 가장 낮은 seat 인 다른 사람을 고른다(seat 1 은 0, 나머지도 0).
@@ -847,7 +849,9 @@ describe("skipPhase: 봇 투표 설정을 따른다", () => {
     const state = stateWithVerdict(5, 4, "candidateVote", { lobby: setting(botLobby(), "random", "host"), candidate: "none" });
     const now = state.phaseEndsAt! - 500;
     const after = skipOk(state, now, seededRandInt(9));
-    expect(`${after.phase}/${after.phaseEndsAt}`).toBe(`candidateVoteReveal/${now + 4_000}`);
+    expect(`${after.phase}/${after.phaseEndsAt}`).toBe(
+      `candidateVoteReveal/${now + candidateRevealMs(after.voteLog!.at(-1)!.cand!.votes.length)}`,
+    );
     const votes = [...after.voteLog!.at(-1)!.cand!.votes].sort((a, b) => a.seat - b.seat);
     expect(votes.map((v) => `${v.seat}>${v.target}`).join(",")).toBe("1>0,2>0,3>0,4>0");
     const defense = skipOk(after, now, seededRandInt(9));

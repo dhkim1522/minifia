@@ -117,7 +117,7 @@ describe("차례 한 바퀴 트레이서 (D-01·D-02·D-05)", () => {
     const picked = selectClaim(s, s.hostId, "police", t);
     if (!picked.ok) throw new Error("selectClaim rejected");
     const lastTurnEnd = t + 4 * CLAIM_TURN_MS;
-    const caught = tick(picked.state, lastTurnEnd + 60_000);
+    const caught = tick(picked.state, lastTurnEnd + DISCUSSION_MS / 2);
     expect(caught.phase).toBe("discussion");
     expect(caught.phaseEndsAt).toBe(lastTurnEnd + DISCUSSION_MS);
     expect(caught.claimLog).toHaveLength(5);

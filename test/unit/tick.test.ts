@@ -174,9 +174,10 @@ describe("tick (순수 단계 진행)", () => {
   it("늦은 알람: 토론 마감 뒤 한참 지나 불려도 밤·아침·다음 낮 마감이 이전 마감 연쇄로 계산된다", () => {
     const T = 100_000;
     const s: RoomState = { ...stateIn("discussion", T), day: 1 };
-    // 마감: execVote T+10000 → night T+40000 → morning T+45000 → dayAnnounce T+47000 → claim 첫 차례 T+55000 → 둘째 차례 T+63000.
-    const out = tick(s, T + 47_000 + 11_000);
-    expect(`${out.phase}/${out.day}/${out.claimIdx}/${out.phaseEndsAt}`).toBe(`claim/2/1/${T + 63_000}`);
+    // 마감: execVote +EXEC_VOTE_MS → night +NIGHT_MS → morning +MORNING_MS → dayAnnounce +DAY_ANNOUNCE_MS → claim 첫 차례 +CLAIM_TURN_MS → 둘째 차례 +CLAIM_TURN_MS.
+    const toClaim = EXEC_VOTE_MS + NIGHT_MS + MORNING_MS + DAY_ANNOUNCE_MS;
+    const out = tick(s, T + toClaim + CLAIM_TURN_MS + 3_000);
+    expect(`${out.phase}/${out.day}/${out.claimIdx}/${out.phaseEndsAt}`).toBe(`claim/2/1/${T + toClaim + 2 * CLAIM_TURN_MS}`);
   });
 
   it("늦은 알람이 여러 낮 단계를 따라잡아도 중간 단계의 진입 훅이 루프 안에서 돈다 (RESEARCH Pattern 1)", () => {
@@ -193,21 +194,22 @@ describe("tick (순수 단계 진행)", () => {
   it("한 바퀴를 한 번에 따라잡아도 일차가 정확히 한 번만 늘어난다 (밤·아침은 일차를 올리지 않는다)", () => {
     const T = 100_000;
     const s: RoomState = { ...stateIn("discussion", T), day: 1 };
-    // 마감: execVote T+10000 → night T+40000 → morning T+45000 → dayAnnounce T+47000 → claim 네 차례 T+55000..T+79000 → discussion T+169000.
-    const next = tick(s, T + 110_000);
+    // 마감: execVote → night → morning → dayAnnounce → claim 네 차례 → discussion (각 단계 길이를 이어 붙인다).
+    const round = EXEC_VOTE_MS + NIGHT_MS + MORNING_MS + DAY_ANNOUNCE_MS + 4 * CLAIM_TURN_MS + DISCUSSION_MS;
+    const next = tick(s, T + round - 5_000);
     expect(next.phase).toBe("discussion");
     expect(next.day).toBe(2);
-    expect(next.phaseEndsAt).toBe(T + 169_000);
+    expect(next.phaseEndsAt).toBe(T + round);
     // 한 바퀴가 정확히 끝나는 순간에는 처형 여부 투표가 시작되고 일차는 그대로다.
-    const vote = tick(s, T + 169_000);
+    const vote = tick(s, T + round);
     expect(vote.phase).toBe("execVote");
     expect(vote.day).toBe(2);
-    expect(vote.phaseEndsAt).toBe(T + 179_000);
+    expect(vote.phaseEndsAt).toBe(T + round + EXEC_VOTE_MS);
     // 표가 없으면 그 마감에 밤이 시작되고 일차는 그대로다.
-    const night = tick(s, T + 179_000);
+    const night = tick(s, T + round + EXEC_VOTE_MS);
     expect(night.phase).toBe("night");
     expect(night.day).toBe(2);
-    expect(night.phaseEndsAt).toBe(T + 209_000);
+    expect(night.phaseEndsAt).toBe(T + round + EXEC_VOTE_MS + NIGHT_MS);
   });
 
   it("아주 늦게 불리면 여러 단계를 한 번에 따라잡는다", () => {

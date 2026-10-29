@@ -886,14 +886,14 @@ describe("봇 투표·변론 계획: 회귀", () => {
     }
   });
 
-  it("기존 claim·discussion·night 계획은 같은 시드에서 예전과 같다(고정값)", () => {
+  it("claim·discussion·night 계획 고정값(결정 0039: 토론 간격 폭 18초, 토론 40초로 discussion·night 의 값이 바뀌었다 — 옛 값 802530989·431118882)", () => {
     const digest = (text: string): number => [...text].reduce((h, ch) => (h * 31 + ch.charCodeAt(0)) % 1_000_000_007, 7);
     const got = (["claim", "discussion", "night"] as const).map((phase) => {
       const base = stateAt(1, 5, 8, phase);
       const state = phase === "claim" ? atTurnOf(base, botsOf(base)[0]!.seat) : base;
       return digest(canon(planBotSteps(state, nowOf(state), seededRandInt(42))));
     });
-    expect(got.join(",")).toBe("251347194,802530989,431118882");
+    expect(got.join(",")).toBe("251347194,289874952,760964938");
   });
 });
 
