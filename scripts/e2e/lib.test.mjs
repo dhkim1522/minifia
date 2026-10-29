@@ -73,8 +73,14 @@ import {
   placementChecks,
   DEFAULT_SIZES,
   TIMELESS_PHASES,
+  JOIN_FIT_MIN_H,
   guideChecks,
   docHeightChecks,
+  joinFitChecks,
+  pcCenterChecks,
+  vignetteChecks,
+  glowChecks,
+  wakeLockChecks,
 } from "./lib.mjs";
 
 const PROD = "https://minifia.dhplay.workers.dev\n";
@@ -2321,4 +2327,174 @@ test("docHeightChecks UX2: 문서 높이 ≤ 화면 높이 통과, +1 은 실패
     assert.equal(r.ok, false);
     assert.match(r.detail, /측정값 없음/);
   }
+});
+
+test("JOIN_FIT_MIN_H 는 640", () => {
+  assert.equal(JOIN_FIT_MIN_H, 640);
+});
+
+test("joinFitChecks UX2-J: 7명 앉음·문서 640·버튼 아래끝 620 은 통과", () => {
+  const r = joinFitChecks({ seated: 7, docH: 640, buttonBottom: 620 }, { h: 640, expectSeated: 7 });
+  assert.equal(r.id, "UX2-J");
+  assert.equal(r.ok, true, r.detail);
+});
+
+test("joinFitChecks UX2-J: 문서 높이 733 실패(숫자), 버튼 아래끝 685 실패, 앉은 수 6 실패, 측정값 없음 실패", () => {
+  const doc = joinFitChecks({ seated: 7, docH: 733, buttonBottom: 620 }, { h: 640, expectSeated: 7 });
+  assert.equal(doc.ok, false);
+  assert.match(doc.detail, /문서 높이 733 > 640/);
+  const btn = joinFitChecks({ seated: 7, docH: 640, buttonBottom: 685 }, { h: 640, expectSeated: 7 });
+  assert.equal(btn.ok, false);
+  assert.match(btn.detail, /685/);
+  const seated = joinFitChecks({ seated: 6, docH: 640, buttonBottom: 620 }, { h: 640, expectSeated: 7 });
+  assert.equal(seated.ok, false);
+  assert.match(seated.detail, /6/);
+  for (const j of [undefined, {}, { seated: 7, docH: 640 }, { seated: 7, buttonBottom: 600 }, { docH: 640, buttonBottom: 600 }]) {
+    const r = joinFitChecks(j, { h: 640, expectSeated: 7 });
+    assert.equal(r.ok, false, JSON.stringify(j));
+    assert.match(r.detail, /측정값 없음/, JSON.stringify(j));
+  }
+});
+
+test("pcCenterChecks UX2-PC: 1280 폭에서 폭 430·left 425 는 통과", () => {
+  const r = pcCenterChecks({ rootLeft: 425, rootWidth: 430, where: "홈" }, { w: 1280 });
+  assert.equal(r.id, "UX2-PC");
+  assert.equal(r.ok, true, r.detail);
+  assert.equal(pcCenterChecks({ rootLeft: 425.9, rootWidth: 430, where: "홈" }, { w: 1280 }).ok, true);
+  assert.equal(pcCenterChecks({ rootLeft: 426.1, rootWidth: 430, where: "홈" }, { w: 1280 }).ok, false);
+});
+
+test("pcCenterChecks UX2-PC: left 0 실패·폭 1280 실패·측정값 없음 실패, 실패 내용에 위치", () => {
+  const left = pcCenterChecks({ rootLeft: 0, rootWidth: 430, where: "대기실" }, { w: 1280 });
+  assert.equal(left.ok, false);
+  assert.match(left.detail, /대기실/);
+  assert.match(left.detail, /0/);
+  const wide = pcCenterChecks({ rootLeft: 0, rootWidth: 1280, where: "낮" }, { w: 1280 });
+  assert.equal(wide.ok, false);
+  assert.match(wide.detail, /낮/);
+  assert.match(wide.detail, /1280/);
+  for (const p of [undefined, {}, { rootLeft: 425 }, { rootWidth: 430 }, { rootLeft: "425", rootWidth: 430 }]) {
+    const r = pcCenterChecks(p, { w: 1280 });
+    assert.equal(r.ok, false, JSON.stringify(p));
+    assert.match(r.detail, /측정값 없음/, JSON.stringify(p));
+  }
+});
+
+const vOk = { pointerEvents: "none", backgroundImage: "radial-gradient(ellipse at center, rgba(0, 0, 0, 0) 40%, rgba(0, 0, 0, 0.5) 100%)" };
+
+test("vignetteChecks AT1 expect 1: 한 개·none·radial·탭이 테이블로 감은 통과", () => {
+  const r = vignetteChecks({ vignettes: [vOk], tapHitsTable: true }, { expect: 1 });
+  assert.equal(r.id, "AT1");
+  assert.equal(r.ok, true, r.detail);
+});
+
+test("vignetteChecks AT1 expect 1: 0개·2개·auto·그라데이션 아님·탭이 막힘은 각각 실패", () => {
+  assert.equal(vignetteChecks({ vignettes: [], tapHitsTable: true }, { expect: 1 }).ok, false);
+  const two = vignetteChecks({ vignettes: [vOk, vOk], tapHitsTable: true }, { expect: 1 });
+  assert.equal(two.ok, false);
+  assert.match(two.detail, /2/);
+  const auto = vignetteChecks({ vignettes: [{ ...vOk, pointerEvents: "auto" }], tapHitsTable: true }, { expect: 1 });
+  assert.equal(auto.ok, false);
+  assert.match(auto.detail, /auto/);
+  const none = vignetteChecks({ vignettes: [{ ...vOk, backgroundImage: "none" }], tapHitsTable: true }, { expect: 1 });
+  assert.equal(none.ok, false);
+  const tap = vignetteChecks({ vignettes: [vOk], tapHitsTable: false }, { expect: 1 });
+  assert.equal(tap.ok, false);
+});
+
+test("vignetteChecks AT1 expect 0: 0개면 통과(탭 값 무시), 1개면 실패, 측정값 없음 실패", () => {
+  assert.equal(vignetteChecks({ vignettes: [] }, { expect: 0 }).ok, true);
+  assert.equal(vignetteChecks({ vignettes: [], tapHitsTable: false }, { expect: 0 }).ok, true);
+  const one = vignetteChecks({ vignettes: [vOk], tapHitsTable: true }, { expect: 0 });
+  assert.equal(one.ok, false);
+  assert.match(one.detail, /1/);
+  for (const a of [undefined, {}, { vignettes: "x" }]) {
+    for (const expect of [0, 1]) {
+      const r = vignetteChecks(a, { expect });
+      assert.equal(r.ok, false, JSON.stringify(a));
+      assert.match(r.detail, /측정값 없음/);
+    }
+  }
+  // expect 1 인데 탭 판정 값이 빠지면 조용히 통과하지 않는다
+  const noTap = vignetteChecks({ vignettes: [vOk] }, { expect: 1 });
+  assert.equal(noTap.ok, false);
+  assert.match(noTap.detail, /측정값 없음/);
+});
+
+const gl = { pointerEvents: "none", backgroundImage: "radial-gradient(ellipse at 50% 0%, rgba(255, 220, 160, 0.3) 0%, rgba(255, 220, 160, 0) 70%)", top: 119, bottom: 380 };
+const glOk = { glows: [gl], sceneTop: 119.2, sceneBottom: 380, tagHit: true };
+
+test("glowChecks AT2 expect 1: 장면 상자 안·none·radial·이름표 탭이 이름표로 감은 통과, 경계 0.5 허용", () => {
+  const r = glowChecks(glOk, { expect: 1 });
+  assert.equal(r.id, "AT2");
+  assert.equal(r.ok, true, r.detail);
+  assert.equal(glowChecks({ ...glOk, glows: [{ ...gl, top: 118.7, bottom: 380.5 }] }, { expect: 1 }).ok, true);
+  assert.equal(glowChecks({ ...glOk, glows: [{ ...gl, bottom: 380.6 }] }, { expect: 1 }).ok, false);
+});
+
+test("glowChecks AT2 expect 1: 헤더로 올라감·이름표 탭 막힘·개수·pointer-events·배경이 틀리면 실패", () => {
+  const up = glowChecks({ ...glOk, glows: [{ ...gl, top: 100 }] }, { expect: 1 });
+  assert.equal(up.ok, false);
+  assert.match(up.detail, /100/);
+  assert.equal(glowChecks({ ...glOk, tagHit: false }, { expect: 1 }).ok, false);
+  assert.equal(glowChecks({ ...glOk, glows: [] }, { expect: 1 }).ok, false);
+  assert.equal(glowChecks({ ...glOk, glows: [gl, gl] }, { expect: 1 }).ok, false);
+  assert.equal(glowChecks({ ...glOk, glows: [{ ...gl, pointerEvents: "auto" }] }, { expect: 1 }).ok, false);
+  assert.equal(glowChecks({ ...glOk, glows: [{ ...gl, backgroundImage: "none" }] }, { expect: 1 }).ok, false);
+});
+
+test("glowChecks AT2 expect 0: 0개 통과, 1개 실패, 측정값 없음 실패", () => {
+  assert.equal(glowChecks({ glows: [] }, { expect: 0 }).ok, true);
+  assert.equal(glowChecks(glOk, { expect: 0 }).ok, false);
+  for (const a of [undefined, {}, { glows: null }]) {
+    const r = glowChecks(a, { expect: 0 });
+    assert.equal(r.ok, false);
+    assert.match(r.detail, /측정값 없음/);
+  }
+  for (const a of [{ glows: [gl], sceneTop: 119, tagHit: true }, { glows: [gl], sceneTop: 119, sceneBottom: 380 }, { glows: [{ ...gl, top: undefined }], sceneTop: 119, sceneBottom: 380, tagHit: true }]) {
+    const r = glowChecks(a, { expect: 1 });
+    assert.equal(r.ok, false, JSON.stringify(a));
+    assert.match(r.detail, /측정값 없음/, JSON.stringify(a));
+  }
+});
+
+test("wakeLockChecks WL1(unsupported): API 없음·단계 도달·콘솔 오류 0 은 통과", () => {
+  const r = wakeLockChecks({ hasApi: false, reachedPhase: true, consoleErrors: [] }, { mode: "unsupported" });
+  assert.equal(r.id, "WL1");
+  assert.equal(r.ok, true, r.detail);
+});
+
+test("wakeLockChecks WL1(unsupported): API 가 남아 있음·단계 미도달·콘솔 오류는 실패, 측정값 없음 실패", () => {
+  assert.equal(wakeLockChecks({ hasApi: true, reachedPhase: true, consoleErrors: [] }, { mode: "unsupported" }).ok, false);
+  assert.equal(wakeLockChecks({ hasApi: false, reachedPhase: false, consoleErrors: [] }, { mode: "unsupported" }).ok, false);
+  const err = wakeLockChecks({ hasApi: false, reachedPhase: true, consoleErrors: ["TypeError: x"] }, { mode: "unsupported" });
+  assert.equal(err.ok, false);
+  assert.match(err.detail, /TypeError/);
+  for (const w of [undefined, {}, { hasApi: false, reachedPhase: true }, { hasApi: false, consoleErrors: [] }, { reachedPhase: true, consoleErrors: [] }]) {
+    const r = wakeLockChecks(w, { mode: "unsupported" });
+    assert.equal(r.ok, false, JSON.stringify(w));
+    assert.match(r.detail, /측정값 없음/, JSON.stringify(w));
+  }
+});
+
+test("wakeLockChecks WL2(spy): 대기실에서 1 이상·가시성 복귀에 정확히 1 증가는 통과", () => {
+  const r = wakeLockChecks({ requestsAtLobby: 1, requestsAfterVisible: 2 }, { mode: "spy" });
+  assert.equal(r.id, "WL2");
+  assert.equal(r.ok, true, r.detail);
+  assert.equal(wakeLockChecks({ requestsAtLobby: 3, requestsAfterVisible: 4 }, { mode: "spy" }).ok, true);
+});
+
+test("wakeLockChecks WL2(spy): 요청 0·증가 0·증가 2·측정값 없음은 실패, 알 수 없는 모드도 실패", () => {
+  assert.equal(wakeLockChecks({ requestsAtLobby: 0, requestsAfterVisible: 1 }, { mode: "spy" }).ok, false);
+  const none = wakeLockChecks({ requestsAtLobby: 1, requestsAfterVisible: 1 }, { mode: "spy" });
+  assert.equal(none.ok, false);
+  const twice = wakeLockChecks({ requestsAtLobby: 1, requestsAfterVisible: 3 }, { mode: "spy" });
+  assert.equal(twice.ok, false);
+  assert.match(twice.detail, /2/);
+  for (const w of [undefined, {}, { requestsAtLobby: 1 }, { requestsAfterVisible: 2 }]) {
+    const r = wakeLockChecks(w, { mode: "spy" });
+    assert.equal(r.ok, false, JSON.stringify(w));
+    assert.match(r.detail, /측정값 없음/, JSON.stringify(w));
+  }
+  assert.equal(wakeLockChecks({}, { mode: "other" }).ok, false);
 });
