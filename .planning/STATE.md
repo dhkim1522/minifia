@@ -6,16 +6,16 @@ current_phase: 4
 current_phase_name: 처형과 승패
 current_plan: 35
 status: executing
-stopped_at: Phase 5 UI-SPEC approved (P5-1/2 mockup pending)
-last_updated: "2026-10-29T07:15:53.963Z"
+stopped_at: Completed 05-01-PLAN.md
+last_updated: "2026-10-29T08:59:57.541Z"
 last_activity: 2026-10-26
 last_activity_desc: Phase 4 execution started
-state_head: ec517def3156c5cc4a115227f3e48e3dccd9dd1e
+state_head: d5958d52afcc01960133467c61d4422ccc52261d
 progress:
   total_phases: 7
   completed_phases: 3
-  total_plans: 98
-  completed_plans: 98
+  total_plans: 107
+  completed_plans: 99
 ---
 
 # Project State
@@ -143,6 +143,7 @@ Progress: [██░░░░░░░░] 17%
 | Phase 04 P33 | 42min | 3 tasks | 9 files |
 | Phase 4 P34 | 35min | 3 tasks | 5 files |
 | Phase 04 P35 | 2h | 3 tasks | 8 files |
+| Phase 5 P01 | 10min | 3 tasks | 18 files |
 
 ## Accumulated Context
 
@@ -284,6 +285,7 @@ Recent decisions affecting current work:
 - [Phase 4]: 0037: 화면 웨이브 결정은 결정 0037 한 곳(장면 dusk/night, 색 의미·토큰, 연출 상수 verdict.ts, 후광 3개, 패널 236, testBotVote). 사용자 확정 P-7·P-18·선두 규칙·두근 재생, 나머지는 확인 대기 표
 - [Phase 4]: 살아 있는 방장 E2E 의 첫 밤 방장 탈락은 설계대로의 확률(시드 2만 판 모의 4명판 0.332·5명판 약 0.2), 서버 버그 증거 없음, 서버 로직 불변
 - [Phase 04]: 04-35: 배포본 E2E 가 잡은 backdrop-filter 접두 짝 선언은 lightningcss 가 접두만 남겨 Chrome 계열 흐림이 사라졌다 — 소스엔 비접두 한 번만 쓴다
+- [Phase 5]: 05-01: TIMELESS_PHASES 에 assigning 포함(P5-5 기본값, 확인 대기). 낮 시작 하단은 생존·탈락 모두 같은 두 줄, 토론 헤더 안내줄은 생존자만 새 문장(P5-6 기본값)
 
 ### Pending Todos
 
@@ -320,6 +322,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-29T07:15:52.638Z
-Stopped at: Phase 5 UI-SPEC approved (P5-1/2 mockup pending)
-Resume file: .planning/phases/05-atmosphere-character/05-UI-SPEC.md
+Last session: 2026-10-29T08:59:56.917Z
+Stopped at: Completed 05-01-PLAN.md
+Resume file: None
