@@ -2,9 +2,9 @@
 gsd_state_version: "1.0"
 milestone: v1.0
 milestone_name: MVP
-current_phase: 4
-current_phase_name: 처형과 승패
-current_plan: 35
+current_phase: 5
+current_phase_name: 분위기와 캐릭터
+current_plan: 1
 status: executing
 stopped_at: Completed 05-01-PLAN.md
 last_updated: "2026-10-29T08:59:57.541Z"
@@ -15,7 +15,7 @@ progress:
   total_phases: 7
   completed_phases: 3
   total_plans: 107
-  completed_plans: 99
+  completed_plans: 100
 ---
 
 # Project State
@@ -25,16 +25,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-10-21)
 
 **Core value:** 링크 하나로 모인 친구들이 설명 없이 정통 마피아 한 판(6~10분)을 끝까지 마치는 것
-**Current focus:** Phase 4 — 처형과 승패
+**Current focus:** Phase 5 — 분위기와 캐릭터
 
 ## Current Position
 
-Phase: 4 (처형과 승패) — COMPLETE (실기기 확인·verify-work 대기)
-Current Plan: 35
-Total Plans in Phase: 35
-Plan: 35 of 35
-Status: 04-01~04-35 전부 완료. 서버+화면 웨이브를 개인 Cloudflare 계정에 한 단위로 배포(버전 2026-10-28T14:27:59Z+5dcd032, 재배포 한 번: 배포본 E2E 가 잡은 backdrop-filter 접두 짝 선언 결함 수정)하고 배포본에서 smoke 4·5·8, uat-vote·test-bots·test-room·day·night, E2E 10흐름×3폭 통과. VOTE-01~04·COMM-03·CONN-02·END-01·02 완료 표시. 남은 것: 실기기 확인(HANDOFF), /gsd-verify-work 4. 이 PC 네트워크 지터로 배포본 smoke·UAT 간헐 실패가 있었음(04-35-SUMMARY)
-Last activity: 2026-10-26 — Phase 4 execution started
+Phase: 5 (분위기와 캐릭터) — 실행 중 (4페이즈는 코드·배포·자동 검증 완료, 실기기 확인·verify-work 대기: 개발 완료 후 일괄)
+Current Plan: 1
+Total Plans in Phase: 9
+Plan: 1 of 9
+Status: 05-01 완료(안내 문장 빈칸 채우기, data-guide 점검표). 다음 05-02(useWakeLock). 클라이언트 전용 페이즈, 배포는 05-09 한 번.
+Last activity: 2026-10-29 — 05-01 executed
 
 Progress: [██░░░░░░░░] 17%
 
