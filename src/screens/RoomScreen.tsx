@@ -14,6 +14,7 @@ import { preloadDuskAssets, preloadRoleAssets } from "../net/assets";
 import { usePhaseArrival } from "../net/phaseArrival";
 import { loadSeenCount, saveSeenCount, unseenCount } from "../net/recordsSeen";
 import { useRoomConnection } from "../net/useRoomConnection";
+import { useWakeLock } from "../net/useWakeLock";
 import { Assigning } from "./Assigning";
 import { DayScene } from "./DayScene";
 import { Lobby } from "./Lobby";
@@ -118,6 +119,9 @@ function sceneKey(phase: PhaseId): string {
 export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
   const connection = useRoomConnection(code, token);
   const { status, banner, view, removedReason } = connection;
+
+  // 방을 보여 주는 동안 화면이 꺼지지 않게 한다(D-12, P5-7 기본값: 대기실 포함 — 꺼지면 소켓이 끊겨 친구에게 "나갔다" 로 보인다).
+  useWakeLock(view !== null && view.phase !== "ended" && status !== "replaced" && status !== "failed" && status !== "removed");
 
   // 대기실·배정 동안 직업 그림 4종 전부와 낮 배경을 미리 받아 둔다.
   // 어떤 역할인지와 무관하게 같은 요청 패턴이다(Pattern 13 ②, Pitfall 20).
