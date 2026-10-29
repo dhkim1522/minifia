@@ -4,13 +4,13 @@ milestone: v1.0
 milestone_name: MVP
 current_phase: 5
 current_phase_name: 분위기와 캐릭터
-current_plan: 1
+current_plan: 2
 status: executing
-stopped_at: Completed 05-01-PLAN.md
-last_updated: "2026-10-29T08:59:57.541Z"
-last_activity: 2026-10-26
+stopped_at: Completed 05-02-PLAN.md
+last_updated: "2026-10-29T09:05:41.665Z"
+last_activity: 2026-10-29
 last_activity_desc: Phase 4 execution started
-state_head: d5958d52afcc01960133467c61d4422ccc52261d
+state_head: ff28fa7a1b93d5974aaabc6c92c8006d54d84826
 progress:
   total_phases: 7
   completed_phases: 3
@@ -30,9 +30,9 @@ See: .planning/PROJECT.md (updated 2026-10-21)
 ## Current Position
 
 Phase: 5 (분위기와 캐릭터) — 실행 중 (4페이즈는 코드·배포·자동 검증 완료, 실기기 확인·verify-work 대기: 개발 완료 후 일괄)
-Current Plan: 1
+Current Plan: 2
 Total Plans in Phase: 9
-Plan: 1 of 9
+Plan: 2 of 9
 Status: 05-01 완료(안내 문장 빈칸 채우기, data-guide 점검표). 다음 05-02(useWakeLock). 클라이언트 전용 페이즈, 배포는 05-09 한 번.
 Last activity: 2026-10-29 — 05-01 executed
 
@@ -144,6 +144,7 @@ Progress: [██░░░░░░░░] 17%
 | Phase 4 P34 | 35min | 3 tasks | 5 files |
 | Phase 04 P35 | 2h | 3 tasks | 8 files |
 | Phase 5 P01 | 10min | 3 tasks | 18 files |
+| Phase 5 P02 | about 6min | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -286,6 +287,7 @@ Recent decisions affecting current work:
 - [Phase 4]: 살아 있는 방장 E2E 의 첫 밤 방장 탈락은 설계대로의 확률(시드 2만 판 모의 4명판 0.332·5명판 약 0.2), 서버 버그 증거 없음, 서버 로직 불변
 - [Phase 04]: 04-35: 배포본 E2E 가 잡은 backdrop-filter 접두 짝 선언은 lightningcss 가 접두만 남겨 Chrome 계열 흐림이 사라졌다 — 소스엔 비접두 한 번만 쓴다
 - [Phase 5]: 05-01: TIMELESS_PHASES 에 assigning 포함(P5-5 기본값, 확인 대기). 낮 시작 하단은 생존·탈락 모두 같은 두 줄, 토론 헤더 안내줄은 생존자만 새 문장(P5-6 기본값)
+- [Phase 5]: 05-02: 화면 꺼짐 방지는 대기실부터 건다(P5-7 기본값, 확인 대기). 재요청은 visibilitychange 한 곳뿐
 
 ### Pending Todos
 
@@ -322,6 +324,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-29T08:59:56.917Z
-Stopped at: Completed 05-01-PLAN.md
+Last session: 2026-10-29T09:05:41.108Z
+Stopped at: Completed 05-02-PLAN.md
 Resume file: None
