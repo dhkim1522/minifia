@@ -552,8 +552,8 @@ const NAMES: Record<number, string> = { 0: "나나나나나", 1: "지호", 2: "�
 const nameOf = (seat: number): string | undefined => NAMES[seat];
 
 describe("VERDICT_TEXT — UI-SPEC 7.2 와 글자까지 같다", () => {
-  it("옛 후보 선택 안내 키(candidateHint)는 없다 (결정 0040)", () => {
-    expect(Object.hasOwn(VERDICT_TEXT, "candidateHint")).toBe(false);
+  it("옛 후보 선택 안내 키는 없다 (결정 0040: 이름을 글자 그대로 두지 않아 남은 참조를 grep 이 잡는다)", () => {
+    expect(Object.hasOwn(VERDICT_TEXT, ["candidate", "Hint"].join(""))).toBe(false);
   });
 
   it("고정 문구 전부", () => {
