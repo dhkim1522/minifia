@@ -46,7 +46,7 @@ export function ExecVotePanel({ view, canSend, send, readOnly = false, introActi
 
   return (
     <div className="mf-execvote">
-      <h2 className="mf-claimpanel__title">{VERDICT_TEXT.execTitle}</h2>
+      <h2 className="mf-claimpanel__title" data-guide="">{VERDICT_TEXT.execTitle}</h2>
       <p className="mf-execvote__tally">
         <b>
           {/* 숫자는 값이 key 라 바뀔 때만 새 노드가 된다 — 팝 애니메이션이 그 숫자에서만 다시 돈다. 문구는 execTallyText 한 곳에서 온다 */}

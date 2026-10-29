@@ -60,7 +60,7 @@ export function DefenseChips({ view, connection, showToast }: DefenseChipsProps)
 
   return (
     <div className="mf-nightpanel">
-      <h2 className="mf-claimpanel__title">{VERDICT_TEXT.defenseChooseTitle}</h2>
+      <h2 className="mf-claimpanel__title" data-guide="">{VERDICT_TEXT.defenseChooseTitle}</h2>
       <p className="mf-claimpanel__guide" aria-live="polite">
         {sent === null ? VERDICT_TEXT.defenseChooseHint : defenseSent(sent)}
       </p>

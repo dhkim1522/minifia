@@ -47,7 +47,7 @@ export function DefensePanel({ view, connection, showToast, lines, candidateNick
     return (
       <div className="mf-turnpanel">
         <MessageLog lines={lines} players={view.players} mySeat={view.me.seat} />
-        <ReadOnlyRow text={VERDICT_TEXT.spectatorPill} />
+        <ReadOnlyRow text={VERDICT_TEXT.spectatorPill} guide />
       </div>
     );
   }
@@ -56,7 +56,7 @@ export function DefensePanel({ view, connection, showToast, lines, candidateNick
       <MessageLog lines={lines} players={view.players} mySeat={view.me.seat} />
       <div className="st-row">
         <p className="stat">
-          <b>{candidateConnected ? defenseStatus(candidateNickname) : defenseDisconnected(candidateNickname)}</b>
+          <b data-guide="">{candidateConnected ? defenseStatus(candidateNickname) : defenseDisconnected(candidateNickname)}</b>
           {hasDeadline ? <span>{seconds}초</span> : null}
         </p>
         <Button

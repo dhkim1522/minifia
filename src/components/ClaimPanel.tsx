@@ -37,7 +37,7 @@ export function ClaimPanel({ view, canSend, send }: ClaimPanelProps): ReactEleme
 
   return (
     <div className="mf-claimpanel">
-      <h2 className="mf-claimpanel__title">{TITLE}</h2>
+      <h2 className="mf-claimpanel__title" data-guide="">{TITLE}</h2>
       <p className="mf-claimpanel__guide">{GUIDE}</p>
       <div className="mf-seg" role="group" aria-label="주장할 직업">
         {options.map((claim) => (

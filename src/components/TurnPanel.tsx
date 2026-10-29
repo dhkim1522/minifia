@@ -42,7 +42,7 @@ export function TurnPanel({ view, connection, showToast, lines }: TurnPanelProps
       <MessageLog lines={lines} players={view.players} mySeat={view.me.seat} />
       <div className="st-row">
         <p className="stat">
-          <b>{nickname !== undefined ? `${nickname}님이 주장하는 중` : ""}</b>
+          <b data-guide="">{nickname !== undefined ? `${nickname}님이 주장하는 중` : ""}</b>
           {hasDeadline ? <span>{seconds}초</span> : null}
         </p>
         <Button
