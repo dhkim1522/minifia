@@ -105,7 +105,11 @@ emit(`Chrome ${chromePath}`);
 const allow = (list) => (list.length === 0 ? "(없음)" : list.map((a) => `${a.selector} — ${a.reason}`).join("; "));
 emit(`허용 목록 — 장식(G2): ${allow(DECORATIVE_ALLOW)} / 탭 대상(G3): ${allow(TAP_ALLOW)} / 글자 크기(G7): ${allow(TEXT_SIZE_ALLOW)}`);
 emit(`승인된 완화: ${APPROVED_RELAXATIONS.map((r) => `${r.id}(${r.approved})`).join(", ")} — 그 밖의 기준 수치는 낮추지 않는다`);
-emit(`크기 ${args.sizes.map((s) => s.label).join(", ")} · 흐름 ${flows.map((f) => f.id).join(", ")}${args.shots ? " · 사진 저장(scripts/e2e/out/)" : ""}`);
+const fixedFlows = flows.filter((f) => f.size);
+emit(
+  `크기 ${args.sizes.map((s) => s.label).join(", ")} · 흐름 ${flows.map((f) => f.id).join(", ")}` +
+    `${fixedFlows.length > 0 ? ` · 크기 고정 ${fixedFlows.map((f) => `${f.id}@${f.size.label}`).join(", ")}` : ""}${args.shots ? " · 사진 저장(scripts/e2e/out/)" : ""}`,
+);
 
 let browser;
 try {
@@ -118,8 +122,10 @@ try {
 const limitTimer = setTimeout(() => abortNow(`전체 ${OVERALL_LIMIT_MS / 1000}초 제한 초과`), OVERALL_LIMIT_MS);
 limitTimer.unref();
 
+// 크기 고정 흐름(flow.size — pc·wakelock)은 폰 크기와 무관하므로 크기 목록과 곱하지 않고 자기 크기로 작업 하나만 만든다.
 const jobs = [];
-for (const size of args.sizes) for (const flow of flows) jobs.push({ flow, size });
+for (const size of args.sizes) for (const flow of flows) if (!flow.size) jobs.push({ flow, size });
+for (const flow of flows) if (flow.size) jobs.push({ flow, size: flow.size });
 
 // 준비 실패(SetupError)로 새 방에서 다시 도는 최대 횟수. 「살아 있는 방장」 흐름(citizen4 등)은 첫 밤에 방장이 탈락할 확률이 4명판 1/3 이라
 // 두 번이면 흐름마다 약 1/9 이상으로 실패한다(04-33 로컬 전체 실행에서 관찰: 시도마다 1/2 가까이) — 열 흐름 × 세 폭 전체 실행이 자주 깨져서 네 번으로 늘렸다. 검사 기준과는 무관하다.

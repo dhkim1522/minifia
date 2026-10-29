@@ -38,14 +38,16 @@ export function launchChrome(executablePath) {
 
 /**
  * 방장으로 붙은 휴대폰 크기 페이지를 연다.
+ * 선택 인자(05-07): mobile = true(거짓이면 isMobile·hasTouch 를 꺼 데스크톱 창처럼 연다),
+ * initScripts = [] (세션 init 스크립트 다음에 순서대로 addInitScript 할 함수 또는 문자열 — 시험 컨텍스트에만 들어간다).
  * 돌려주는 값: { context, page, tracker, takeIssues, fontOk, fontDetail }
  */
-export async function openHostPage(browser, { origin, code, token, size, dpr }) {
+export async function openHostPage(browser, { origin, code, token, size, dpr, mobile = true, initScripts = [] }) {
   const context = await browser.newContext({
     viewport: { width: size.w, height: size.h },
     deviceScaleFactor: dpr,
-    isMobile: true,
-    hasTouch: true,
+    isMobile: mobile,
+    hasTouch: mobile,
     locale: "ko-KR",
   });
   let issues = { console: [], failed: [], offOrigin: [] };
@@ -76,6 +78,7 @@ export async function openHostPage(browser, { origin, code, token, size, dpr }) 
     },
     { code, token },
   );
+  for (const script of initScripts) await context.addInitScript(script);
 
   const page = await context.newPage();
   page.setDefaultTimeout(8000);

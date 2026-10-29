@@ -94,6 +94,7 @@ import {
   voidCardChecks,
   voteChecks,
   resultChecks,
+  pcCenterChecks,
 } from "./lib.mjs";
 
 export const OUT_DIR = new URL("./out/", import.meta.url).pathname;
@@ -126,7 +127,7 @@ export async function startHost(ctx, flowId) {
   const room = await createTestRoom(ctx.origin, HOST_NICK);
   ctx.secrets.push(room.token);
   ctx.roomCode = room.code; // 링크 참가 probe(UX2-J)용. 방 코드는 비밀이 아니다 — 토큰은 남기지 않는다
-  const host = await openHostPage(ctx.browser, { origin: ctx.origin, code: room.code, token: room.token, size: ctx.size, dpr: ctx.shots ? 2 : 1 });
+  const host = await openHostPage(ctx.browser, { origin: ctx.origin, code: room.code, token: room.token, size: ctx.size, dpr: ctx.shots ? 2 : 1, mobile: ctx.size.mobile !== false });
   ctx.host = host;
   const v = host.tracker.last();
   rec(`${flowId}/setup`, "S1", "방장으로 연결", v?.me?.isHost === true && v?.me?.testMode === true, `isHost ${v?.me?.isHost}, testMode ${v?.me?.testMode}`);
@@ -1309,6 +1310,55 @@ async function resultMafiaFlow(ctx) {
   await resultState(ctx, { id, ...R }, { winner: "mafiaWin", n: 4 });
 }
 
+// ---- pc (05-07, D-11, UI-SPEC 11.3c): 1280x800 데스크톱 창에서 앱이 가운데 폰 폭 ----
+
+/** `#root` 의 왼쪽·폭을 읽는다(#root 안에 화면이 그려진 뒤). */
+async function readRootRect(page) {
+  await page.waitForSelector("#root > *", { timeout: 8000 });
+  return page.evaluate(() => {
+    const r = document.querySelector("#root").getBoundingClientRect();
+    return { rootLeft: r.left, rootWidth: r.width };
+  });
+}
+
+async function pcFlow(ctx) {
+  const rec = recorder(ctx);
+  const { w, h } = ctx.size;
+  const dpr = ctx.shots ? 2 : 1;
+  let home = null;
+  try {
+    // ① 홈: 방 없이, 모바일이 아닌 데스크톱 창
+    home = await ctx.browser.newContext({ viewport: { width: w, height: h }, deviceScaleFactor: dpr, isMobile: false, hasTouch: false, locale: "ko-KR" });
+    const homePage = await home.newPage();
+    homePage.setDefaultTimeout(8000);
+    await homePage.goto(`${ctx.origin}/`, { waitUntil: "domcontentloaded" });
+    const homeRect = await readRootRect(homePage);
+    await settle(homePage);
+    recOne(rec, "pc/home", pcCenterChecks({ ...homeRect, where: "홈" }, { w }));
+  } finally {
+    await home?.close().catch(() => {});
+  }
+
+  // ② 대기실
+  const host = await startHost(ctx, "pc");
+  const { page, tracker } = host;
+  await settle(page);
+  recOne(rec, "pc/lobby", pcCenterChecks({ ...(await readRootRect(page)), where: "대기실" }, { w }));
+  await checkState(ctx, "pc", "lobby");
+
+  // ③ 낮(claim): 봇 3명 → 시작 → 첫 낮
+  await openTestSheet(page);
+  await setBots(page, tracker, 3);
+  await startGame(page, tracker);
+  await skipTo(page, tracker, "claim");
+  await settle(page);
+  ctx.stage = "play";
+  recOne(rec, "pc/day", pcCenterChecks({ ...(await readRootRect(page)), where: "낮" }, { w }));
+  await checkState(ctx, "pc", "day");
+
+  await resetAndLeave(page, tracker);
+}
+
 const game = (id, players, role, states) => (ctx) => gameFlow(ctx, { id, players, role, states });
 const CLAIMS = ["claim-mine", "claim-other", "claim-done", "discussion"];
 
@@ -1323,5 +1373,7 @@ export const FLOWS = [
   { id: "noexec", run: noExecFlow },
   { id: "result-c", run: resultCitizenFlow },
   { id: "result-m", run: resultMafiaFlow },
+  // 크기 고정 흐름(05-07): 폰 크기와 무관해서 크기 목록과 곱하지 않고 자기 크기로 한 번만 돈다
+  { id: "pc", run: pcFlow, size: { w: 1280, h: 800, label: "1280x800", mobile: false } },
 ];
 export { SetupError };
