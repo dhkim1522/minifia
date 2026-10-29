@@ -4,3 +4,19 @@
 
 /* 밤 비네팅: 밤 그림 층(.mf-backdrop__art) 안의 자식. 켜짐·꺼짐은 그림 층의 opacity 전환을 따른다. */
 .mf-backdrop__vignette { position: absolute; inset: 0; pointer-events: none; background: var(--mf-vignette); }
+
+/* 아침 밝아짐: 장면 상자(.mf-dayscene__scene) 첫 자식, DayTable 뒤(z-index -1, Backdrop 의 쌓임 맥락 안이라 그림 층 위·콘텐츠 아래).
+   헤더 영역에 닿지 않는다. 퇴장은 아침 카드와 같은 지연(--mf-morning-exit-delay) 뒤 300ms. 지연은 DayScene 이 변수로 싣는다. */
+.mf-morningglow {
+  position: absolute; inset: 0; z-index: -1; pointer-events: none;
+  background: var(--mf-glow);
+  animation: mf-morningglow-out 300ms linear var(--mf-morning-exit-delay, 4700ms) forwards;
+}
+/* 밤 → 아침을 같은 접속에서 본 렌더만: 상승 + 퇴장을 함께 나열한다. 재접속·중간 입장은 이 수정자가 없어 최대치로 시작한다. */
+.mf-morningglow--rise {
+  animation:
+    mf-morningglow-rise var(--mf-glow-rise-ms, 600ms) var(--ease-out) both,
+    mf-morningglow-out 300ms linear var(--mf-morning-exit-delay, 4700ms) forwards;
+}
+@keyframes mf-morningglow-rise { from { opacity: 0; } to { opacity: 1; } }
+@keyframes mf-morningglow-out { from { opacity: 1; } to { opacity: 0; } }

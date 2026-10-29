@@ -127,3 +127,17 @@ export function nightVignetteGradient(): string {
   const stops = NIGHT_VIGNETTE_STOPS.map(([pos, alpha]) => `color-mix(in srgb, var(--night-950) ${Math.round(alpha * 100)}%, transparent) ${pos}%`);
   return `radial-gradient(ellipse ${NIGHT_VIGNETTE_ELLIPSE}, ${stops.join(", ")})`;
 }
+
+// - 아침 밝아짐(LOOK-01, D-05): 아침 장면 상자 안 DayTable 뒤의 방사형 밝은 층. P5-2 확정(시안 승인 2026-10-29).
+//   약하면 알파나 색(`--morning`)을 이 한 곳에서 바꾼다. 색은 dawn 토큰 한 가지라 앰버·진홍·# 색 값이 없다(D-07). 글자 바탕이 아니라 DayTable 뒤에만 둔다.
+/** 타원의 가로·세로 반지름과 중심(장면 상자 기준) */
+export const MORNING_GLOW_ELLIPSE = "85% 60% at 50% 55%";
+/** 중심 불투명도(--dawn). 가장자리는 0 으로 사라진다 */
+export const MORNING_GLOW_ALPHA = 0.38;
+/** 밤 → 아침을 같은 접속에서 본 렌더에서 최대치까지 오르는 시간(--ease-out) */
+export const MORNING_GLOW_RISE_MS = 600;
+
+/** 밝아짐의 CSS 그라데이션 값. 중심 dawn 알파 → 가장자리 transparent. # 색 값이 없다. */
+export function morningGlowGradient(): string {
+  return `radial-gradient(ellipse ${MORNING_GLOW_ELLIPSE}, color-mix(in srgb, var(--dawn) ${Math.round(MORNING_GLOW_ALPHA * 100)}%, transparent), transparent)`;
+}

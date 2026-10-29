@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import type { EmojiId, PhaseId, RoomView } from "../../shared/protocol";
 import { isAlive } from "../../shared/game/alive";
 import type { RoleId } from "../../shared/game/roles";
@@ -19,7 +19,7 @@ import { TurnPanel } from "../components/TurnPanel";
 import { UserRecordSheet } from "../components/UserRecordSheet";
 import { Toast, useToast } from "../components/Toast";
 import { morningCardText } from "../game/eliminationText";
-import { PHASE_GUIDE_FILL, PHASE_INTRO, sceneOfPhase } from "../game/scenes";
+import { MORNING_GLOW_RISE_MS, PHASE_GUIDE_FILL, PHASE_INTRO, morningGlowGradient, sceneOfPhase } from "../game/scenes";
 import type { SceneId } from "../game/scenes";
 import { EMOJI_TEXT, NIGHT_TEMPLATE_ORDER } from "../game/messageText";
 import { claimLinesOf } from "../net/claimLines";
@@ -250,6 +250,20 @@ export function DayScene({ view, connection, myRoleButton, testButton, arrivedFr
           />
         </div>
         <div className="mf-dayscene__scene">
+          {isMorning ? (
+            // 아침 밝아짐(05-03): DayTable 뒤 한 층. 밤 → 아침을 이 접속에서 본 렌더만 오르고, 퇴장은 아침 카드·어둡게 층과 같은 지연. 역할·연결 상태는 읽지 않는다(D-09).
+            <div
+              className={`mf-morningglow${sawNightToMorning ? " mf-morningglow--rise" : ""}`}
+              style={
+                {
+                  "--mf-glow": morningGlowGradient(),
+                  "--mf-glow-rise-ms": `${MORNING_GLOW_RISE_MS}ms`,
+                  "--mf-morning-exit-delay": `${morningExit.delay}ms`,
+                } as CSSProperties
+              }
+              aria-hidden="true"
+            />
+          ) : null}
           {testButton ? <div className="mf-tt-anchor">{testButton}</div> : null}
           <DayTable
             seats={seats}
