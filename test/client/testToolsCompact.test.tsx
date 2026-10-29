@@ -1,7 +1,7 @@
 // [테스트] 버튼 좁힘(05-06, 사용자 결정 2026-10-29 (a)): 장면 높이가 TABLE_FIT_MIN_H(299) 미만일 때만 글자를 시각적으로 숨겨 2번 자리 캐릭터 상자 왼쪽 경계 안쪽에 들게 한다.
 // 위치(왼쪽 위)는 그대로이고, 긴 화면(299 이상)과 장면 밖(역할 확인 등)에서는 지금과 완전히 같다.
 import { readFileSync } from "node:fs";
-import { cleanup, render, screen } from "@testing-library/react";
+import { act, cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import "../helpers/singleLineErrors";
 import { TestToolsButton } from "../../src/components/TestTools";
@@ -72,8 +72,8 @@ describe("[테스트] 버튼: 짧은 장면에서만 좁힌다", () => {
     render(<div className="mf-lobby__scene"><TestToolsButton onOpen={() => {}} /></div>);
     expect(btn().hasAttribute("data-compact")).toBe(false);
     h = 280;
-    cb!();
-    return Promise.resolve().then(() => expect(btn().hasAttribute("data-compact")).toBe(true));
+    act(() => cb!());
+    expect(btn().hasAttribute("data-compact")).toBe(true);
   });
 });
 

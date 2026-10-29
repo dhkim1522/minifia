@@ -88,6 +88,15 @@ export function tableFitScale(sceneH: number): number {
   return raw > TABLE_FIT_MIN_SCALE ? Math.min(1, raw) : TABLE_FIT_MIN_SCALE;
 }
 
+/**
+ * [테스트] 버튼을 좁혀야 하는 짧은 장면인가(05-06, 사용자 결정 2026-10-29). 장면 높이가 TABLE_FIT_MIN_H 미만이면 압축이 뒷자리 머리를 장면 위쪽으로 올려
+ * 왼쪽 위 [테스트] 버튼(폭 약 88)이 2번 자리 캐릭터 상자와 겹친다(D4). 버튼 위치는 그대로 두고 글자를 시각적으로 숨겨 폭을 탭 하한(44)으로 좁힌다.
+ * 재지 못한 값(0·음수·NaN·Infinity)은 좁히지 않는다 — 긴 화면과 같은 모양이 기본이다.
+ */
+export function testButtonCompact(sceneH: number): boolean {
+  return Number.isFinite(sceneH) && sceneH > 0 && sceneH < TABLE_FIT_MIN_H;
+}
+
 // 후광·말풍선(결정 0030). 후광은 그림 img 하나의 filter drop-shadow 두 겹이다(안쪽 2px + 바깥 9px, 가우시안 σ = 반지름/2).
 // 윤곽 바깥 알파는 4px 에서 0.14, 9px 에서 0.017 이라 보이는 번짐은 9px(배율 0.8~1 적용 7.2~9px)이고, 번짐을 더한 캐릭터 상자는 네 폰 × 1~8명 모두
 // 폰 가장자리 안, 위쪽은 장면 높이 299.8 에서도 헤더 아래 안쪽 여백 16px 안이다. 필터는 한 화면 최대 3개(마피아 ≤ 2명 + 차례·선택 1개).

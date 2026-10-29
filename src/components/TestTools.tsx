@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import type { ReactElement } from "react";
 import { ROLE_IDS, testRoleOptions } from "../../shared/game/roles";
 import type { RoleId } from "../../shared/game/roles";
 import { MAX_TEST_BOTS } from "../../shared/protocol";
 import type { BotVoteExec, BotVotePick, ClientMessage, PhaseId, RoomView } from "../../shared/protocol";
+import { testButtonCompact } from "../game/dayTable";
 import { ROLE_TEXT } from "../game/roleText";
 import { Button } from "./Button";
 import { Chip } from "./Chip";
@@ -37,11 +38,27 @@ export interface TestToolsButtonProps {
   onOpen: () => void;
 }
 
+/** 버튼이 놓인 장면 상자(낮·대기실). 역할 확인 위쪽 바처럼 장면 밖에 놓이면 없다. */
+const SCENE_SELECTOR = ".mf-dayscene__scene, .mf-lobby__scene";
+
 export function TestToolsButton({ onOpen }: TestToolsButtonProps): ReactElement {
+  const ref = useRef<HTMLButtonElement>(null);
+  // 짧은 장면(높이 < 299)에서만 좁힌다: 마운트 직후 한 번 동기로 재고(첫 페인트부터), 이후 ResizeObserver 로 따라간다. 긴 화면·장면 밖은 늘 false.
+  const [compact, setCompact] = useState(false);
+  useLayoutEffect(() => {
+    const scene = ref.current?.closest<HTMLElement>(SCENE_SELECTOR) ?? null;
+    if (!scene) return;
+    const apply = (): void => setCompact(testButtonCompact(scene.getBoundingClientRect().height));
+    apply();
+    if (typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(apply);
+    ro.observe(scene);
+    return () => ro.disconnect();
+  }, []);
   return (
-    <button type="button" className="mf-tt" aria-haspopup="dialog" onClick={onOpen}>
+    <button ref={ref} type="button" className="mf-tt" aria-haspopup="dialog" onClick={onOpen} {...(compact ? { "data-compact": "" } : {})}>
       <Icon name="wrench" size={18} />
-      테스트
+      <span className="mf-tt__label">테스트</span>
     </button>
   );
 }
