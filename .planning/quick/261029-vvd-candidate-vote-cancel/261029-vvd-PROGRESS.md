@@ -11,4 +11,6 @@ plan_head_before: 06725019af0f013fa702c0870175fce7dd8f02cf
 
 ## 한 일
 
-(작성 중)
+- **Task 1 (tracer, 완료)**: 와이어 `candidateVote.target` 을 `number | null`(스키마 nullable 한 곳), `castCandidateVote` 취소(키 지움 / 고른 표 없으면 입력 그대로), 워커 `applyCandidateVote` 는 투표자 본인에게만 state, `src/game/blankTap.ts`(closest 판정), `verdictScene` cancelPick·onBlankTap, `DayScene` 장면 상자 onClick. 로컬: unit vote·schemas 73, worker vote 28, client candidateVote 21 통과, `npm test` 110 파일 3017 시험, typecheck 통과.
+  - 커밋: 3dfe7db (RED test), 98d4bee (GREEN feat)
+  - 편차(계획된 기대 변경): `test/unit/vote.test.ts` "대상이 정수가 아니거나…" 목록에서 `null` 을 뺐다(null 은 이제 취소, 기대 개수 8 → 7). undefined 는 남김.
