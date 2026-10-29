@@ -1507,3 +1507,106 @@ export function docHeightChecks(m, { h }) {
   if (!m || !isNum(m.docH) || !isNum(h)) return noMeasure("UX2", label, "문서 높이");
   return result("UX2", label, m.docH > h ? [`문서 높이 ${rd(m.docH)} > ${h}`] : []);
 }
+
+/** UX2-J 링크 참가(앉은 사람 expectSeated 명): 문서 높이와 `참가하기` 아래끝이 화면 높이 이내. j = { seated, docH, buttonBottom }. h ≥ JOIN_FIT_MIN_H 일 때만 흐름이 부른다. */
+export function joinFitChecks(j, { h, expectSeated }) {
+  const label = "링크 참가 한 화면(문서·참가하기 버튼)";
+  if (!j || !isNum(j.seated) || !isNum(j.docH) || !isNum(j.buttonBottom) || !isNum(h) || !isNum(expectSeated)) {
+    return noMeasure("UX2-J", label, "앉은 사람 수·문서 높이·참가하기 아래끝");
+  }
+  const bad = [];
+  if (j.seated !== expectSeated) bad.push(`앉은 사람 ${j.seated}명 ≠ 기대 ${expectSeated}명`);
+  if (j.docH > h) bad.push(`문서 높이 ${rd(j.docH)} > ${h}`);
+  if (j.buttonBottom > h) bad.push(`참가하기 아래끝 ${rd(j.buttonBottom)} > ${h}`);
+  return result("UX2-J", label, bad);
+}
+
+/** PC 에서 폰 폭 열의 최대 폭(px). UI-SPEC D-11 — `#root` 가 이 폭 이하이고 화면 가운데에 선다. */
+const PC_ROOT_MAX_W = 430;
+/** 가운데 정렬 허용 오차(px). */
+const PC_CENTER_EPS = 1;
+/** UX2-PC PC 폭(1280)에서 `#root` 폭 ≤ 430 이고 가로 가운데(±1). p = { rootLeft, rootWidth, where }. */
+export function pcCenterChecks(p, { w }) {
+  const label = "PC 폭에서 폰 폭 열이 가운데";
+  if (!p || !isNum(p.rootLeft) || !isNum(p.rootWidth) || !isNum(w)) return noMeasure("UX2-PC", label, "#root left·width");
+  const where = typeof p.where === "string" && p.where !== "" ? p.where : "?";
+  const bad = [];
+  if (p.rootWidth > PC_ROOT_MAX_W) bad.push(`${where}: #root 폭 ${rd(p.rootWidth)} > ${PC_ROOT_MAX_W}`);
+  const wantLeft = (w - p.rootWidth) / 2;
+  if (Math.abs(p.rootLeft - wantLeft) > PC_CENTER_EPS) bad.push(`${where}: #root left ${rd(p.rootLeft)} ≠ 가운데 ${rd(wantLeft)}(±${PC_CENTER_EPS}, 화면 폭 ${w})`);
+  return result("UX2-PC", label, bad);
+}
+
+/** 겹침 층(비네팅·밝아짐) 한 요소의 공통 판정: 탭을 가로채지 않고(pointer-events: none) 배경이 radial-gradient 다. 이유 목록을 돌려준다. */
+function overlayLayerIssues(layer, name) {
+  const bad = [];
+  if (layer.pointerEvents !== "none") bad.push(`${name} pointer-events ${String(layer.pointerEvents)} ≠ none`);
+  if (!String(layer.backgroundImage ?? "").startsWith("radial-gradient(")) bad.push(`${name} 배경이 radial-gradient 가 아님(${String(layer.backgroundImage ?? "").slice(0, 40)})`);
+  return bad;
+}
+
+/**
+ * AT1 밤 비네팅: expect 1(밤)이면 층 정확히 1개·pointer-events none·radial-gradient·내 인물 위 탭이 테이블로 간다. expect 0(밤이 아님)이면 0개다.
+ * a = { vignettes: [{ pointerEvents, backgroundImage }], tapHitsTable }.
+ */
+export function vignetteChecks(a, { expect }) {
+  const label = expect === 1 ? "밤 비네팅 한 겹·탭 통과" : "밤이 아니면 비네팅 없음";
+  if (!a || !Array.isArray(a.vignettes)) return noMeasure("AT1", label, "비네팅 층 목록");
+  const n = a.vignettes.length;
+  if (expect === 0) return result("AT1", label, n === 0 ? [] : [`밤이 아닌데 비네팅 ${n}개`]);
+  if (n !== 1) return result("AT1", label, [`비네팅 ${n}개 ≠ 1`]);
+  if (typeof a.tapHitsTable !== "boolean") return noMeasure("AT1", label, "내 인물 위 탭 대상");
+  const bad = overlayLayerIssues(a.vignettes[0], "비네팅");
+  if (!a.tapHitsTable) bad.push("내 인물 위 탭이 테이블로 가지 않음(비네팅이 가로챔)");
+  return result("AT1", label, bad);
+}
+
+/** 밝아짐 층이 장면 상자에서 벗어나도 되는 오차(px). */
+const GLOW_BOX_EPS = 0.5;
+/**
+ * AT2 아침 밝아짐: expect 1(밤 → 아침을 본 렌더)이면 층 정확히 1개·pointer-events none·radial-gradient·장면 상자 안·이름표 위 탭이 이름표로 간다. expect 0 이면 0개다.
+ * a = { glows: [{ pointerEvents, backgroundImage, top, bottom }], sceneTop, sceneBottom, tagHit }.
+ */
+export function glowChecks(a, { expect }) {
+  const label = expect === 1 ? "아침 밝아짐 한 겹·장면 상자 안·탭 통과" : "아침을 본 렌더가 아니면 밝아짐 없음";
+  if (!a || !Array.isArray(a.glows)) return noMeasure("AT2", label, "밝아짐 층 목록");
+  const n = a.glows.length;
+  if (expect === 0) return result("AT2", label, n === 0 ? [] : [`밝아짐 ${n}개 ≠ 0`]);
+  if (n !== 1) return result("AT2", label, [`밝아짐 ${n}개 ≠ 1`]);
+  const g = a.glows[0];
+  if (!isNum(g?.top) || !isNum(g?.bottom) || !isNum(a.sceneTop) || !isNum(a.sceneBottom)) return noMeasure("AT2", label, "밝아짐 층·장면 상자 위아래");
+  if (typeof a.tagHit !== "boolean") return noMeasure("AT2", label, "이름표 위 탭 대상");
+  const bad = overlayLayerIssues(g, "밝아짐");
+  if (g.top < a.sceneTop - GLOW_BOX_EPS) bad.push(`밝아짐 위 ${rd(g.top)} < 장면 상자 위 ${rd(a.sceneTop)}(헤더 쪽으로 올라감)`);
+  if (g.bottom > a.sceneBottom + GLOW_BOX_EPS) bad.push(`밝아짐 아래 ${rd(g.bottom)} > 장면 상자 아래 ${rd(a.sceneBottom)}`);
+  if (!a.tagHit) bad.push("이름표 위 탭이 이름표로 가지 않음(밝아짐이 가로챔)");
+  return result("AT2", label, bad);
+}
+
+/**
+ * WL1·WL2 화면 켜짐 유지(Wake Lock). mode "unsupported"(WL1): w = { hasApi, reachedPhase, consoleErrors } — API 없는 환경에서도 정상 진행하고 콘솔 오류가 없다.
+ * mode "spy"(WL2): w = { requestsAtLobby, requestsAfterVisible } — 대기실에서 요청이 1회 이상이고 숨김 → 보임 복귀에 정확히 1회 늘어난다.
+ */
+export function wakeLockChecks(w, { mode }) {
+  if (mode === "unsupported") {
+    const label = "Wake Lock 미지원 환경 정상 진행";
+    if (!w || typeof w.hasApi !== "boolean" || typeof w.reachedPhase !== "boolean" || !Array.isArray(w.consoleErrors)) {
+      return noMeasure("WL1", label, "hasApi·reachedPhase·consoleErrors");
+    }
+    const bad = [];
+    if (w.hasApi) bad.push("navigator.wakeLock 이 남아 있음(미지원 모의가 안 먹음)");
+    if (!w.reachedPhase) bad.push("미지원 환경에서 다음 단계까지 가지 못함");
+    if (w.consoleErrors.length > 0) bad.push(`콘솔 오류 ${w.consoleErrors.length}개: ${w.consoleErrors.slice(0, 3).join(" | ").slice(0, 200)}`);
+    return result("WL1", label, bad);
+  }
+  if (mode === "spy") {
+    const label = "Wake Lock 요청이 대기실·가시성 복귀에 맞음";
+    if (!w || !isNum(w.requestsAtLobby) || !isNum(w.requestsAfterVisible)) return noMeasure("WL2", label, "requestsAtLobby·requestsAfterVisible");
+    const bad = [];
+    if (w.requestsAtLobby < 1) bad.push(`대기실 요청 ${w.requestsAtLobby}회 < 1`);
+    const delta = w.requestsAfterVisible - w.requestsAtLobby;
+    if (delta !== 1) bad.push(`보임 복귀 뒤 요청 증가 ${delta}회 ≠ 1`);
+    return result("WL2", label, bad);
+  }
+  return result("WL", "Wake Lock 검사", [`알 수 없는 모드 ${String(mode)}`]);
+}
