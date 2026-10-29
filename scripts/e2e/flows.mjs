@@ -7,6 +7,7 @@ import {
   armIntroWatch,
   armVerdictWatch,
   chooseRole,
+  clickAt,
   clickInDialog,
   clickTopmostPoint,
   closeRoleCard,
@@ -974,7 +975,7 @@ async function voteFlow(ctx) {
       const tagPt = await findTagPassThroughPoint(page, target);
       let afterTag = null;
       if (tagPt) {
-        await tapAt(page, tagPt);
+        await clickAt(page, tagPt); // 터치 탭은 탭 보정으로 좌석 버튼에 가므로 보정 없는 클릭으로 이름표를 통과시킨다(browser.mjs clickAt)
         await sleep(600);
         afterTag = { voteTarget: tracker.last()?.me?.voteTarget, pill: (await read()).bottom.pill };
       }

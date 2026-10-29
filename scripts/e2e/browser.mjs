@@ -1380,6 +1380,14 @@ export async function tapAt(page, pt) {
   await page.touchscreen.tap(pt.x, pt.y);
 }
 
+/**
+ * 그 점을 마우스로 정확히 누른다. 터치 탭은 Chromium 의 탭 대상 보정이 가까운 버튼(좌석)으로 클릭을 옮기므로(261029-vvd 로컬 확인: 이름표 점의 탭이
+ * 좌석 그림으로 가 앱의 좌표 판정을 거치지 않았다), 이름표를 통과한 클릭이 정말 장면 상자의 빈 요소로 닿게 하려면 보정 없는 마우스 클릭을 쓴다.
+ */
+export async function clickAt(page, pt) {
+  await page.mouse.click(pt.x, pt.y);
+}
+
 /** 추적 단계가 목록 중 하나가 될 때까지 기다린다(분기 단계처럼 skipTo 가 못 가는 경우). 못 오면 SetupError. */
 export function waitPhaseIn(tracker, phases, ms = 15_000) {
   return tracker.waitFor((v) => phases.includes(v.phase), ms, `단계 ${phases.join("|")} 도달`);
