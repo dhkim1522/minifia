@@ -363,7 +363,7 @@ Plans:
 **Wave 6** *(blocked on Wave 5 completion)*
 - [ ] 05-09-PLAN.md — 개인 계정 배포·배포본 스모크·UAT·E2E·요구사항 완료 표시(실기기 확인은 대기) (wave 6)
 
-**Notes**: 사용자는 정적 2D 보다 완성도 높은 캐릭터(캐릭터별 프레임 PNG 애니메이션, 또는 가벼운 3D)를 원한다. 실시간 3D 는 쓰지 않고 2.5D 로 간다(결정 0008). 캐릭터는 프레임 PNG 로 움직이며, 일러스트로 그릴지 3D 로 렌더링한 그림을 쓸지와 공개된 캐릭터 에셋 도구는 이 페이즈 논의에서 정한다. 캐릭터 수·외형은 8종 이상이면 된다. 직접 고르기·성격 문구·애니메이션 라이브러리(Rive 또는 Lottie)는 v2 로 미뤘다. 정적 2D 로 시작하고, 애니메이션 도입은 디자인 방향을 정한 뒤에 결정한다.
+**Notes**: 사용자는 정적 2D 보다 완성도 높은 캐릭터(캐릭터별 프레임 PNG 애니메이션, 또는 가벼운 3D)를 원한다. 실시간 3D 는 쓰지 않고 2.5D 로 간다(결정 0008). 캐릭터는 프레임 PNG 로 움직이며, 일러스트로 그릴지 3D 로 렌더링한 그림을 쓸지와 공개된 캐릭터 에셋 도구는 이 페이즈 논의에서 정한다. 캐릭터 수·외형은 8종 이상이면 된다. 직접 고르기·성격 문구·애니메이션 라이브러리(Rive 또는 Lottie)는 v2 로 미뤘다. 정적 2D 로 시작하고, 애니메이션 도입은 디자인 방향을 정한 뒤에 결정한다. 5페이즈 논의(D-01)로 캐릭터 움직임은 하지 않고 정지 그림 8종을 유지한다(결정 0038). 움직임은 플레이테스트 뒤 v1.1 후보.
 **UI hint**: yes
 **참고 자료**: `design/references/character/` (main.jpeg, mafia_character.jpeg, Mortis Brawl Stars Spooky Graveyard Wallpaper.jpeg, Coin Master mobile game , a little Halloween quest in collaboration with Moon Active games_, Sheri Amouzad.jpeg, Crime Coast Character Designs 2 - Sanjay Charlton.jpeg, PATH OF GANGSTER _ slot game - Inkration Studio.jpeg, Wild Heist Cashout - PGSOFT.jpeg). 이미지별 메모는 `design/references/notes.md`. 1페이즈 논의에서 색 방향(밤 남색 + 회색 + 진홍)과 임시 정장 실루엣을 정했다 (01-CONTEXT D-20, D-21).
 

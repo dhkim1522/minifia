@@ -54,7 +54,7 @@ Worker  ── 방 코드로 라우팅 ──▶  Room Durable Object (방마다
 - 진동(Vibration API)이 동작하지 않는다. 앱으로 감쌀 때 Capacitor 로 붙인다.
 - 소리는 사용자가 한 번 누른 뒤에만 재생된다. 방 참가 버튼에서 오디오를 깨운다.
 - 웹 푸시 알림은 홈 화면에 추가한 경우에만 된다. MVP 에서는 쓰지 않는다.
-- 게임 중 화면 꺼짐 방지는 Screen Wake Lock API 를 쓰고, 지원하지 않으면 생략한다.
+- 게임 중 화면 꺼짐 방지는 Screen Wake Lock API 를 쓰고, 지원하지 않으면 생략한다. (훅 `src/net/useWakeLock.ts`, 방 화면 `RoomScreen` 이 대기실부터 결과 전까지 건다. 결정 0038)
 
 ## 출시 경로
 
