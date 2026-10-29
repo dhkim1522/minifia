@@ -1,8 +1,9 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
-import { SCENES, SCENE_FADE_MS, SCENE_IMAGE_WAIT_MS, headerScrimGradient } from "../game/scenes";
+import { SCENES, SCENE_FADE_MS, SCENE_IMAGE_WAIT_MS, headerScrimGradient, nightVignetteGradient } from "../game/scenes";
 import type { SceneId } from "../game/scenes";
 import { backdropUrl } from "../net/assets";
+import "../styles/atmosphere.css";
 
 type LayerState = "entering" | "current" | "leaving";
 interface Layer {
@@ -18,8 +19,15 @@ interface BaseProps {
   children?: ReactNode;
 }
 export type BackdropProps =
-  | (BaseProps & { layout: "game"; scene: SceneId; /** 처음에는 이 장면이 보였다가 곧 scene 으로 크로스페이드한다 */ fromScene?: SceneId })
-  | (BaseProps & { layout: "entry"; scene: "lobby"; fromScene?: undefined });
+  | (BaseProps & {
+      layout: "game";
+      scene: SceneId;
+      /** 처음에는 이 장면이 보였다가 곧 scene 으로 크로스페이드한다 */
+      fromScene?: SceneId;
+      /** 밤 그림 층 안에 가장자리 비네팅 하나를 둔다(05-03, DayScene 만 켠다). 층과 함께 켜지고 꺼진다. */
+      vignette?: boolean;
+    })
+  | (BaseProps & { layout: "entry"; scene: "lobby"; fromScene?: undefined; vignette?: undefined });
 
 /** 동시에 그리는 층의 최대 수: 걷히는 중 둘 + 켜지는 중(또는 current) 하나 */
 const MAX_LAYERS = 3;
@@ -57,9 +65,9 @@ function withTarget(layers: Layer[], scene: SceneId, id: number): Layer[] {
 
 // 화면 뒤 배경 장면. 그림은 cover 로 채우고 기준은 가운데 위쪽이다.
 // 장면(scene)이 바뀌면 층을 쌓아 0.8초 크로스페이드한다: 새 층은 그림이 준비된 뒤(상한 1.2초) 켜지고, 그동안 이전 그림이 그대로 보인다.
-// 처음 마운트와 instant 는 전환 없이 한 층이다. 막이 있는 장면(아침·낮)은 헤더 위쪽 어두운 막을 같은 층 안에 가져 층과 함께 전환된다.
+// 처음 마운트와 instant 는 전환 없이 한 층이다. 막이 있는 장면(아침·낮)은 헤더 위쪽 어두운 막을, vignette 가 켜진 밤은 가장자리 비네팅을 같은 층 안에 가져 층과 함께 전환된다.
 export function Backdrop(props: BackdropProps) {
-  const { layout, scene, fromScene, instant, className, children } = props;
+  const { layout, scene, fromScene, vignette, instant, className, children } = props;
   const nextId = useRef(1);
   const rootRef = useRef<HTMLDivElement>(null);
   const [layers, setLayers] = useState<Layer[]>(() => [{ id: 0, scene: fromScene && !instant ? fromScene : scene, state: "current" }]);
@@ -120,7 +128,13 @@ export function Backdrop(props: BackdropProps) {
           backgroundPosition: "center top",
         };
         if (SCENES[l.scene].scrim) style["--mf-scrim"] = headerScrimGradient();
-        return <div key={l.id} className="mf-backdrop__art" data-scene={l.scene} data-state={l.state} style={style} aria-hidden="true" />;
+        // 비네팅은 night 그림 층의 자식이라 층의 0.8초 크로스페이드를 그대로 따른다(재접속 instant 는 한 층이라 바로 켜진 상태).
+        const vignetteStyle: CSSProperties & Record<string, string> = { "--mf-vignette": nightVignetteGradient() };
+        return (
+          <div key={l.id} className="mf-backdrop__art" data-scene={l.scene} data-state={l.state} style={style} aria-hidden="true">
+            {vignette && l.scene === "night" ? <div className="mf-backdrop__vignette" style={vignetteStyle} /> : null}
+          </div>
+        );
       })}
       {children ? <div className="mf-backdrop__content">{children}</div> : null}
     </div>

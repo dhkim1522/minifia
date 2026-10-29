@@ -232,6 +232,7 @@ export function DayScene({ view, connection, myRoleButton, testButton, arrivedFr
       layout="game"
       scene={sceneOfPhase(view.phase)}
       instant={instant}
+      vignette
       {...(fromScene !== undefined ? { fromScene } : {})}
       className="mf-dayscene__backdrop"
     >

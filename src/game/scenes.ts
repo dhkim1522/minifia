@@ -107,3 +107,23 @@ export function headerScrimGradient(): string {
   const stops = HEADER_SCRIM_STOPS.map(([px, alpha]) => `color-mix(in srgb, var(--night-900) ${Math.round(alpha * 100)}%, transparent) ${px}px`);
   return `linear-gradient(to bottom, ${stops.join(", ")})`;
 }
+
+// - 밤 비네팅(LOOK-01, D-05): 밤 그림 위 가장자리를 어둡게 하는 방사형 층. P5-1 확정(시안 승인 2026-10-29). 값은 이 한 곳만 고친다(D-05).
+//   색은 night-950 한 가지(토큰 usage "장면 비네트 가장자리"), 앰버·진홍·# 색 값 없음(D-07).
+/** 타원의 가로·세로 반지름과 중심(radial-gradient 의 `ellipse` 뒤 부분) */
+export const NIGHT_VIGNETTE_ELLIPSE = "70% 60% at 50% 44%";
+/** [타원 위 위치 %, night-950 알파]: 중심~45% 는 그대로, 75% 에서 0.40, 모서리 100% 에서 0.72 */
+export const NIGHT_VIGNETTE_STOPS: ReadonlyArray<readonly [number, number]> = [
+  [0, 0],
+  [45, 0],
+  [75, 0.4],
+  [100, 0.72],
+];
+/** 켜지고 꺼지는 시간. 밤 배경 크로스페이드와 같은 박자라 따로 전환을 두지 않고 그림 층의 opacity 전환을 따른다. */
+export const NIGHT_VIGNETTE_FADE_MS = SCENE_FADE_MS;
+
+/** 비네팅의 CSS 그라데이션 값. 색은 night-950 토큰의 color-mix 라 # 색 값이 없다. */
+export function nightVignetteGradient(): string {
+  const stops = NIGHT_VIGNETTE_STOPS.map(([pos, alpha]) => `color-mix(in srgb, var(--night-950) ${Math.round(alpha * 100)}%, transparent) ${pos}%`);
+  return `radial-gradient(ellipse ${NIGHT_VIGNETTE_ELLIPSE}, ${stops.join(", ")})`;
+}

@@ -1,0 +1,6 @@
+/* 5페이즈 분위기 두 층 (LOOK-01, D-05): 밤 비네팅과 아침 밝아짐.
+   값(타원·멈춤·알파·시간)은 모두 src/game/scenes.ts 상수 한 곳이 인라인 변수로 싣는다. 이 파일은 위치·층·전환만 안다.
+   색은 토큰 변수뿐이고(그라데이션 문자열 안), 접두 짝 선언은 쓰지 않는다 — 04-35 교훈. 두 층 모두 탭을 막지 않는다. */
+
+/* 밤 비네팅: 밤 그림 층(.mf-backdrop__art) 안의 자식. 켜짐·꺼짐은 그림 층의 opacity 전환을 따른다. */
+.mf-backdrop__vignette { position: absolute; inset: 0; pointer-events: none; background: var(--mf-vignette); }
