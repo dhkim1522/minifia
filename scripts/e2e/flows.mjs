@@ -95,6 +95,7 @@ import {
   voteChecks,
   resultChecks,
   pcCenterChecks,
+  wakeLockChecks,
 } from "./lib.mjs";
 
 export const OUT_DIR = new URL("./out/", import.meta.url).pathname;
@@ -1359,6 +1360,113 @@ async function pcFlow(ctx) {
   await resetAndLeave(page, tracker);
 }
 
+// ---- wakelock (05-07, D-12·D-13, UI-SPEC 12): 화면 켜짐 유지 API 가 없을 때·요청을 셀 때 ----
+
+/** 미지원 모의: Navigator.prototype 의 wakeLock 을 지워 `"wakeLock" in navigator` 가 거짓이 되게 한다(앱 스크립트보다 먼저). */
+function removeWakeLockInit() {
+  try {
+    delete Navigator.prototype.wakeLock;
+  } catch {
+    /* 지울 수 없으면 hasApi 가 참이 되어 WL1 이 모의 실패로 보고한다 */
+  }
+}
+
+/** 스파이: request 호출을 세고 EventTarget 기반 가짜 sentinel(released·release()) 을 돌려준다. 가려짐은 visibilityState 게터를 바꿔 흉내 낸다. */
+function spyWakeLockInit() {
+  const spy = {
+    requests: 0,
+    sentinels: [],
+    /** 잡고 있던 가짜 잠금을 모두 풀린 상태로 만들고 release 이벤트를 보낸다(시스템이 잠금을 거둔 것처럼). */
+    dropAll() {
+      for (const s of spy.sentinels) {
+        if (s.released) continue;
+        s.released = true;
+        s.dispatchEvent(new Event("release"));
+      }
+    },
+    /** document 가림/보임 흉내: state 가 "hidden" 이면 게터를 바꾸고, "visible" 이면 게터를 지운다. 둘 다 visibilitychange 를 보낸다. */
+    setVisibility(state) {
+      if (state === "hidden") Object.defineProperty(document, "visibilityState", { configurable: true, get: () => "hidden" });
+      else delete document.visibilityState;
+      document.dispatchEvent(new Event("visibilitychange"));
+    },
+  };
+  window.__mfWakeLock = spy;
+  const fake = {
+    request() {
+      spy.requests += 1;
+      const s = new EventTarget();
+      s.type = "screen";
+      s.released = false;
+      s.release = () => {
+        if (!s.released) {
+          s.released = true;
+          s.dispatchEvent(new Event("release"));
+        }
+        return Promise.resolve();
+      };
+      spy.sentinels.push(s);
+      return Promise.resolve(s);
+    },
+  };
+  Object.defineProperty(navigator, "wakeLock", { configurable: true, get: () => fake });
+}
+
+/** 방 하나 만들고 방장 페이지를 연다(init 스크립트 포함). 토큰은 ctx.secrets 에 넣어 출력에서 가린다(T-05-16). */
+async function openWakeRoom(ctx, initScripts) {
+  const room = await createTestRoom(ctx.origin, HOST_NICK);
+  ctx.secrets.push(room.token);
+  ctx.roomCode = room.code;
+  const host = await openHostPage(ctx.browser, { origin: ctx.origin, code: room.code, token: room.token, size: ctx.size, dpr: ctx.shots ? 2 : 1, initScripts });
+  ctx.host = host;
+  return host;
+}
+
+async function wakeLockFlow(ctx) {
+  const rec = recorder(ctx);
+  // WL1: 미지원 브라우저 — 대기실 → 배정 → 역할 확인 → 낮 토론까지 정상, 콘솔 오류 0
+  const first = await openWakeRoom(ctx, [removeWakeLockInit]);
+  try {
+    const { page, tracker } = first;
+    await settle(page);
+    const hasApi = await page.evaluate(() => "wakeLock" in navigator);
+    await openTestSheet(page);
+    await setBots(page, tracker, 3);
+    await startGame(page, tracker);
+    await skipTo(page, tracker, "discussion");
+    await settle(page);
+    ctx.stage = "play";
+    const reachedPhase = tracker.last()?.phase === "discussion";
+    const consoleErrors = first.takeIssues().console;
+    recOne(rec, "wakelock/unsupported", wakeLockChecks({ hasApi, reachedPhase, consoleErrors }, { mode: "unsupported" }));
+    await resetAndLeave(page, tracker);
+  } finally {
+    await first.context.close().catch(() => {});
+  }
+
+  // WL2: 요청을 세는 가짜 — 대기실 진입 요청 ≥ 1, 잠금이 풀린 뒤 가림 → 보임 복귀에 정확히 1회 더
+  const second = await openWakeRoom(ctx, [spyWakeLockInit]);
+  const { page: p2 } = second;
+  await settle(p2);
+  const readRequests = () => p2.evaluate(() => window.__mfWakeLock?.requests ?? -1);
+  const atLobbyWait = await attempt(async () => {
+    await p2.waitForFunction(() => (window.__mfWakeLock?.requests ?? 0) >= 1, null, { timeout: 3000 });
+  });
+  await sleep(300); // 늦게 오는 요청이 증가분에 섞이지 않게 한 템포 쉰다
+  const requestsAtLobby = await readRequests();
+  await p2.evaluate(() => {
+    const spy = window.__mfWakeLock;
+    spy.dropAll();
+    spy.setVisibility("hidden");
+    spy.setVisibility("visible");
+  });
+  await sleep(200);
+  const requestsAfterVisible = await readRequests();
+  const wl2 = wakeLockChecks({ requestsAtLobby, requestsAfterVisible }, { mode: "spy" });
+  rec("wakelock/spy", wl2.id, wl2.label, wl2.ok && atLobbyWait.ok, wl2.ok ? atLobbyWait.detail : `${wl2.detail}${atLobbyWait.ok ? "" : ` / ${atLobbyWait.detail}`}`);
+  await leaveLobby(p2);
+}
+
 const game = (id, players, role, states) => (ctx) => gameFlow(ctx, { id, players, role, states });
 const CLAIMS = ["claim-mine", "claim-other", "claim-done", "discussion"];
 
@@ -1375,5 +1483,6 @@ export const FLOWS = [
   { id: "result-m", run: resultMafiaFlow },
   // 크기 고정 흐름(05-07): 폰 크기와 무관해서 크기 목록과 곱하지 않고 자기 크기로 한 번만 돈다
   { id: "pc", run: pcFlow, size: { w: 1280, h: 800, label: "1280x800", mobile: false } },
+  { id: "wakelock", run: wakeLockFlow, size: { w: 360, h: 640, label: "360x640" } },
 ];
 export { SetupError };
