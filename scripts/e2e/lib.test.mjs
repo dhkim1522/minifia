@@ -62,7 +62,12 @@ import {
   candidateRevealMs,
   CANDIDATE_REVEAL_TIMING,
   introChecks,
+  BLANK_TAP_E2E_MARGIN,
+  CANDIDATE_GUIDE,
+  blankPointsOf,
+  cancelTapChecks,
   candidateChecks,
+  candidateGuideChecks,
   revealChecks,
   colorRuleChecks,
   haloChecks,
@@ -2507,4 +2512,105 @@ test("wakeLockChecks WL2(spy): 요청 0·증가 0·증가 2·측정값 없음은
     assert.match(r.detail, /측정값 없음/, JSON.stringify(w));
   }
   assert.equal(wakeLockChecks({}, { mode: "other" }).ok, false);
+});
+
+// ---- 261029-vvd: 후보 선택 취소 (결정 0040) — P11 안내 줄, P12 이름표 탭 유지·빈 곳 탭 취소, blankPointsOf ----
+
+test("CANDIDATE_GUIDE 는 고르기 전·고른 뒤 두 문장이고 얼려 있다", () => {
+  assert.deepEqual({ ...CANDIDATE_GUIDE }, { none: "아무도 고르지 않으면 무효표가 돼요", picked: "빈 곳을 누르면 선택이 취소돼요" });
+  assert.equal(Object.isFrozen(CANDIDATE_GUIDE), true);
+  assert.equal(BLANK_TAP_E2E_MARGIN, 16);
+});
+
+test("candidateGuideChecks P11: 맞는 문장이고 한 줄이면 통과한다 (고르기 전·고른 뒤)", () => {
+  const none = candidateGuideChecks({ bottom: { guide: CANDIDATE_GUIDE.none, guideH: 20, guideLH: 20 } }, { picked: false });
+  assert.equal(none.id, "P11");
+  assert.equal(none.ok, true, none.detail);
+  const picked = candidateGuideChecks({ bottom: { guide: CANDIDATE_GUIDE.picked, guideH: 20, guideLH: 20 } }, { picked: true });
+  assert.equal(picked.ok, true, picked.detail);
+});
+
+test("candidateGuideChecks P11: 다른 문장·두 줄·측정값 없음은 실패한다", () => {
+  const wrong = candidateGuideChecks({ bottom: { guide: CANDIDATE_GUIDE.picked, guideH: 20, guideLH: 20 } }, { picked: false });
+  assert.equal(wrong.ok, false);
+  assert.match(wrong.detail, /무효표|취소/);
+  const two = candidateGuideChecks({ bottom: { guide: CANDIDATE_GUIDE.none, guideH: 40, guideLH: 20 } }, { picked: false });
+  assert.equal(two.ok, false);
+  assert.match(two.detail, /줄/);
+  for (const bottom of [undefined, { guide: CANDIDATE_GUIDE.none }, { guide: CANDIDATE_GUIDE.none, guideH: 20 }, { guideH: 20, guideLH: 20 }]) {
+    const r = candidateGuideChecks({ bottom }, { picked: false });
+    assert.equal(r.ok, false);
+    assert.match(r.detail, /측정값 없음/);
+  }
+});
+
+test("cancelTapChecks P12: 이름표 탭 뒤 표가 남고 빈 곳 탭 뒤 풀리면 통과한다", () => {
+  const r = cancelTapChecks({
+    chosenSeat: 2,
+    afterTag: { voteTarget: 2, pill: "민지님에게 투표했어요" },
+    afterBlank: { voteTarget: undefined, pill: "선택 안 함", halos: 0 },
+  });
+  assert.equal(r.id, "P12");
+  assert.equal(r.ok, true, r.detail);
+  assert.equal(cancelTapChecks({ chosenSeat: 2, afterTag: { voteTarget: 2, pill: "x님에게 투표했어요" }, afterBlank: { voteTarget: null, pill: "선택 안 함", halos: 0 } }).ok, true);
+});
+
+test("cancelTapChecks P12: 이름표 탭에 취소되면 `이름표`, 빈 곳 탭에 안 풀리면 `빈 곳` 사유로 실패한다", () => {
+  const tagCancelled = cancelTapChecks({
+    chosenSeat: 2,
+    afterTag: { voteTarget: undefined, pill: "선택 안 함" },
+    afterBlank: { voteTarget: undefined, pill: "선택 안 함", halos: 0 },
+  });
+  assert.equal(tagCancelled.ok, false);
+  assert.match(tagCancelled.detail, /이름표/);
+  const notCleared = cancelTapChecks({
+    chosenSeat: 2,
+    afterTag: { voteTarget: 2, pill: "민지님에게 투표했어요" },
+    afterBlank: { voteTarget: 2, pill: "민지님에게 투표했어요", halos: 1 },
+  });
+  assert.equal(notCleared.ok, false);
+  assert.match(notCleared.detail, /빈 곳/);
+  const haloLeft = cancelTapChecks({
+    chosenSeat: 2,
+    afterTag: { voteTarget: 2, pill: "민지님에게 투표했어요" },
+    afterBlank: { voteTarget: undefined, pill: "선택 안 함", halos: 1 },
+  });
+  assert.equal(haloLeft.ok, false);
+});
+
+test("cancelTapChecks P12: 값이 없으면 `측정값 없음` 으로 실패한다 (건너뛰지 않는다)", () => {
+  for (const arg of [
+    { chosenSeat: 2, afterTag: null, afterBlank: { voteTarget: undefined, pill: "선택 안 함", halos: 0 } },
+    { chosenSeat: 2, afterTag: { voteTarget: 2, pill: "x님에게 투표했어요" }, afterBlank: null },
+    { chosenSeat: null, afterTag: { voteTarget: 2, pill: "x님에게 투표했어요" }, afterBlank: { voteTarget: undefined, pill: "선택 안 함", halos: 0 } },
+  ]) {
+    const r = cancelTapChecks(arg);
+    assert.equal(r.ok, false);
+    assert.match(r.detail, /측정값 없음/);
+  }
+});
+
+test("blankPointsOf: scene 을 margin 만큼 줄인 안쪽 격자에서 avoid 상자(margin 넓힘) 밖인 점을 위→아래·왼→오른 순서로 돌려준다", () => {
+  const scene = { left: 0, top: 0, width: 100, height: 60 };
+  const pts = blankPointsOf({ scene, avoid: [{ left: 40, top: 20, width: 20, height: 20 }], margin: 10, step: 10, limit: 200 });
+  assert.ok(pts.length > 0);
+  // 안쪽 범위: x 10..90, y 10..50
+  for (const p of pts) {
+    assert.ok(p.x >= 10 && p.x <= 90 && p.y >= 10 && p.y <= 50, `scene 안쪽 ${JSON.stringify(p)}`);
+    const inside = p.x >= 40 - 10 && p.x <= 60 + 10 && p.y >= 20 - 10 && p.y <= 40 + 10;
+    assert.equal(inside, false, `avoid 밖 ${JSON.stringify(p)}`);
+  }
+  assert.deepEqual(pts[0], { x: 10, y: 10 });
+  const order = pts.map((p) => p.y * 1000 + p.x);
+  assert.deepEqual(order, [...order].sort((a, b) => a - b));
+  assert.deepEqual(pts, blankPointsOf({ scene, avoid: [{ left: 40, top: 20, width: 20, height: 20 }], margin: 10, step: 10, limit: 200 }));
+});
+
+test("blankPointsOf: limit 로 자르고, 너비·높이 0 인 avoid 는 무시하며, 다 덮이면 [] 이다", () => {
+  const scene = { left: 0, top: 0, width: 100, height: 60 };
+  assert.equal(blankPointsOf({ scene, avoid: [], margin: 10, step: 10, limit: 3 }).length, 3);
+  const zero = blankPointsOf({ scene, avoid: [{ left: 0, top: 0, width: 0, height: 50 }, { left: 0, top: 0, width: 50, height: 0 }], margin: 10, step: 10 });
+  assert.equal(zero[0].x, 10);
+  assert.deepEqual(blankPointsOf({ scene, avoid: [{ left: 0, top: 0, width: 100, height: 60 }], margin: 10, step: 10 }), []);
+  assert.deepEqual(blankPointsOf({ scene: { left: 0, top: 0, width: 10, height: 10 }, avoid: [], margin: 10, step: 5 }), []);
 });
