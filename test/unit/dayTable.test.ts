@@ -24,12 +24,16 @@ import {
   NAME_TAG_MAX_W,
   SEAT_CY_MIN,
   TABLE_FIT_MIN_H,
+  TABLE_FIT_MIN_SCALE,
+  TABLE_FIT_SPAN,
   dayTableGeometry,
   daySeatLayout,
   feltWidthOf,
   px,
   seatRx,
+  tableFitScale,
 } from "../../src/game/dayTable";
+import { candidateCenter } from "../../src/game/verdict";
 
 // 고정 테이블 배치(결정 0017-1, 0028). 기하는 승인 시안 P2(design/screens/table-v1/SPEC.md)로 고정한다.
 const seatsOf = (n: number): { seat: number }[] => Array.from({ length: n }, (_, i) => ({ seat: i }));
@@ -119,8 +123,11 @@ describe("dayTableGeometry: 세로 규칙은 그대로", () => {
     expect(dayTableGeometry(366, 299).cy).toBe(177);
   });
 
-  it("높이 298 도 cy 177 (최소에서 멈춘다)", () => {
-    expect(dayTableGeometry(366, 298).cy).toBe(177);
+  it("높이 299 미만은 같은 배율로 압축한다(P5-3): 298 은 177 이 아니라 cy ≈ 176.3·fit < 1", () => {
+    const g = dayTableGeometry(366, 298);
+    expect(g.fit).toBeLessThan(1);
+    expect(g.cy).toBeLessThan(177);
+    expect(g.cy).toBeGreaterThan(176);
   });
 
   it("높이 460 은 cy 210 (최대에서 멈춘다)", () => {
@@ -473,22 +480,180 @@ describe("자동 배치 검사: 세로 (장면 높이 299~460)", () => {
     expect(out.join(",")).toBe("");
   });
 
-  it("높이 299 미만이면 cy 는 SEAT_CY_MIN(177)에서 멈추고 맨 앞 이름표만 장면 높이를 넘을 수 있다 (받아들인 한계)", () => {
+});
+
+// ---- 짧은 장면 압축 (P5-3, UI-SPEC 11.3a, 05-04) ----
+// 장면 높이 TABLE_FIT_MIN_H(299) 이상의 기하는 HEAD 식 그대로여야 한다. 참조 구현을 시험 안에 둔다.
+const refGeometry = (sceneW: number, sceneH: number, pad: number) => {
+  const rx = seatRx(sceneW, pad);
+  const feltW = feltWidthOf(rx);
+  const cy = Math.max(177, Math.min(210, sceneH - 122));
+  return { cx: sceneW / 2, cy, rx, ry: 100, felt: { left: (sceneW - feltW) / 2, top: cy - 60, width: feltW, height: 108 } };
+};
+const refLayout = (n: number, sceneW: number, sceneH: number, pad: number) => {
+  const { cx, cy, rx, ry } = refGeometry(sceneW, sceneH, pad);
+  return Array.from({ length: n }, (_, slot) => {
+    const theta = Math.PI / 2 + (slot / n) * Math.PI * 2;
+    const depth = (Math.sin(theta) + 1) / 2;
+    const scale = 0.8 + 0.2 * depth;
+    const x = cx + rx * Math.cos(theta);
+    const y = cy + ry * Math.sin(theta);
+    return {
+      seat: slot, slot, x, y, depth, scale,
+      z: 12 + Math.round(depth * 10),
+      figLeft: x - 36, figTop: y - 96,
+      tagLeft: x, tagTop: y, tagZ: 1 + Math.round(depth * 10),
+      emojiLeft: x - 16, emojiTop: Math.max(0, y - 96 * scale - 36),
+    };
+  });
+};
+const FIT_RUNS = [
+  { w: 352, pad: 4 },
+  { w: 366, pad: 12 },
+  { w: 367, pad: 4 },
+  { w: 406, pad: 12 },
+] as const;
+
+describe("짧은 장면 압축 (P5-3): 상수와 배율", () => {
+  it("하한 0.78, 분모 276.8(= 2·100 + 96·0.8)", () => {
+    expect(TABLE_FIT_MIN_SCALE).toBe(0.78);
+    expect(TABLE_FIT_SPAN).toBeCloseTo(276.8, 9);
+  });
+
+  it("tableFitScale: 299 이상 1, 270 → 0.896, 240 → 0.7876, 200 → 하한", () => {
+    expect(tableFitScale(299)).toBe(1);
+    expect(tableFitScale(655.8)).toBe(1);
+    expect(tableFitScale(270)).toBeCloseTo((270 - 22) / 276.8, 9);
+    expect(tableFitScale(270)).toBeCloseTo(0.896, 3);
+    expect(tableFitScale(240)).toBeCloseTo(0.7876, 3);
+    expect(tableFitScale(200)).toBe(TABLE_FIT_MIN_SCALE);
+  });
+
+  it("0·음수·NaN·Infinity 장면 높이에서도 유한한 값이다 (T-05-09)", () => {
+    for (const h of [0, -50, Number.NaN, Number.POSITIVE_INFINITY]) {
+      const f = tableFitScale(h);
+      expect(Number.isFinite(f), `fit ${h}`).toBe(true);
+      expect(f).toBeGreaterThanOrEqual(TABLE_FIT_MIN_SCALE);
+      const g = dayTableGeometry(352, h, 4);
+      for (const v of [g.cx, g.cy, g.rx, g.ry, g.fit, g.felt.left, g.felt.top, g.felt.width, g.felt.height]) expect(Number.isFinite(v), `geo ${h}`).toBe(true);
+      for (const p of daySeatLayout(seatsOf(8), 0, 352, h, 4)) {
+        for (const v of [p.x, p.y, p.scale, p.tagTop, p.figTop, p.emojiTop]) expect(Number.isFinite(v), `layout ${h}`).toBe(true);
+        expect(p.scale).toBeGreaterThan(0);
+      }
+    }
+  });
+});
+
+describe("짧은 장면 압축 (P5-3): 299 이상은 한 값도 안 바뀐다", () => {
+  it("높이 299~700 정수 × 폭 4종 × 4~8명: 기하·배치 모든 필드가 HEAD 식과 같다", () => {
     const out: string[] = [];
-    for (const w of [352, 366]) {
-      for (const h of [290, 294, 298]) {
-        expect(dayTableGeometry(w, h).cy).toBe(SEAT_CY_MIN);
+    for (const { w, pad } of FIT_RUNS) {
+      for (let h = 299; h <= 700; h++) {
+        const g = dayTableGeometry(w, h, pad);
+        const r = refGeometry(w, h, pad);
+        if (g.fit !== 1) out.push(`fit w${w}h${h}`);
+        if (JSON.stringify({ cx: g.cx, cy: g.cy, rx: g.rx, ry: g.ry, felt: g.felt }) !== JSON.stringify(r)) out.push(`geo w${w}h${h}`);
         for (let n = 4; n <= 8; n++) {
-          const over = daySeatLayout(seatsOf(n), 0, w, h, w === 352 ? 4 : 12)
-            .filter((p) => p.tagTop + TAG_H > h)
-            .map((p) => p.slot);
-          if (over.length > 0 && over.join(",") !== "0") out.push(`w${w}h${h}n${n}:[${over.join(",")}]`);
+          const got = daySeatLayout(seatsOf(n), 0, w, h, pad);
+          const want = refLayout(n, w, h, pad);
+          for (let i = 0; i < n; i++) {
+            if (JSON.stringify(got[i]) !== JSON.stringify(want.find((q) => q.slot === got[i]!.slot))) out.push(`lay w${w}h${h}n${n}:${i}`);
+          }
+        }
+      }
+    }
+    expect(out.slice(0, 10).join(",")).toBe("");
+  });
+});
+
+describe("짧은 장면 압축 (P5-3): 장면 높이 240~299 미만", () => {
+  it("모든 정수 높이 × 폭 4종 × 4~8명: 맨 앞 이름표 아래끝 ≤ 장면 높이, 머리 위 ≥ 0, 이름표 겹침 없음, 면 top ≥ 0", () => {
+    const out: string[] = [];
+    for (const { w, pad } of FIT_RUNS) {
+      for (let h = 240; h < 299; h++) {
+        const g = dayTableGeometry(w, h, pad);
+        if (g.felt.top < -1e-9) out.push(`felt w${w}h${h}`);
+        for (let n = 4; n <= 8; n++) {
+          const places = daySeatLayout(seatsOf(n), 0, w, h, pad);
+          for (const p of places) {
+            if (p.tagTop + TAG_H > h + 1e-9) out.push(`tag w${w}h${h}n${n}:${p.seat}`);
+            if (p.y - FIG_H * p.scale < -1e-9) out.push(`head w${w}h${h}n${n}:${p.seat}`);
+          }
+          for (let i = 0; i < places.length; i++) {
+            for (let j = i + 1; j < places.length; j++) {
+              if (overlapsBy(tagBox(places[i]!), tagBox(places[j]!), 0.5)) out.push(`overlap w${w}h${h}n${n}:${i}-${j}`);
+            }
+          }
+        }
+      }
+    }
+    expect(out.slice(0, 10).join(",")).toBe("");
+  });
+
+  it("좌석 원 세로 반지름·캐릭터 배율·면 높이는 같은 배율 f 로 줄고, 가로 반지름·면 폭·이름표 높이는 그대로다", () => {
+    const full = dayTableGeometry(352, 400, 4);
+    const g = dayTableGeometry(352, 260, 4);
+    const f = tableFitScale(260);
+    expect(f).toBeLessThan(1);
+    expect(g.fit).toBe(f);
+    expect(g.ry).toBeCloseTo(100 * f, 9);
+    expect(g.felt.height).toBeCloseTo(108 * f, 9);
+    expect(g.felt.top).toBeCloseTo(g.cy - 60 * f, 9);
+    expect(g.rx).toBe(full.rx);
+    expect(g.felt.width).toBe(full.felt.width);
+    expect(g.felt.left).toBe(full.felt.left);
+    const places = daySeatLayout(seatsOf(6), 0, 352, 260, 4);
+    const me = places.find((p) => p.slot === 0)!;
+    expect(me.scale).toBeCloseTo(1 * f, 9);
+    expect(me.tagTop - me.y).toBe(0);
+    const rear = daySeatLayout(seatsOf(4), 0, 352, 260, 4).find((p) => p.slot === 2)!;
+    expect(rear.scale).toBeCloseTo(0.8 * f, 9);
+  });
+
+  it("높이 299 에서 두 식이 cy 177 로 이어진다(저쪽 끝 298.99 도 ≈ 177)", () => {
+    expect(dayTableGeometry(366, 299).cy).toBe(177);
+    expect(dayTableGeometry(366, 298.99).cy).toBeCloseTo(177, 1);
+  });
+});
+
+describe("짧은 장면 압축 (P5-3): 장면 높이 240 미만(지원 하한 아래)", () => {
+  it("배율은 TABLE_FIT_MIN_SCALE 에서 멈추고 맨 뒤 머리 위가 장면 안에 남는다", () => {
+    const out: string[] = [];
+    for (const { w, pad } of FIT_RUNS) {
+      for (const h of [239, 236, 204.8, 200, 160.8, 120, 60, 0]) {
+        const g = dayTableGeometry(w, h, pad);
+        if (h <= 237.8 && g.fit !== TABLE_FIT_MIN_SCALE) out.push(`fit w${w}h${h}`);
+        for (let n = 4; n <= 8; n++) {
+          for (const p of daySeatLayout(seatsOf(n), 0, w, h, pad)) {
+            if (p.y - FIG_H * p.scale < -1e-9) out.push(`head w${w}h${h}n${n}:${p.seat}`);
+          }
         }
       }
     }
     expect(out.join(",")).toBe("");
   });
+
+  it("후보 가운데 자리의 이름표 아래끝(발 y + 8 + 26) ≤ 장면 아래 − 4 (E2E P5)", () => {
+    for (const { w, pad } of FIT_RUNS) {
+      for (const h of [236, 204.8, 160.8]) {
+        const cc = candidateCenter(w, h, pad);
+        expect(cc.footY + 8 + 26, `w${w}h${h}`).toBeLessThanOrEqual(h - 4 + 1e-9);
+      }
+    }
+  });
+
+  it("rx·면 폭·이름표 높이는 높이와 무관하다", () => {
+    for (const { w, pad } of FIT_RUNS) {
+      const base = dayTableGeometry(w, 400, pad);
+      for (const h of [0, 160.8, 204.8, 240, 270]) {
+        const g = dayTableGeometry(w, h, pad);
+        expect(g.rx).toBe(base.rx);
+        expect(g.felt.width).toBe(base.felt.width);
+      }
+    }
+  });
 });
+
 
 describe("px", () => {
   it("소수 첫째 자리까지 반올림해 px 를 붙인다", () => {

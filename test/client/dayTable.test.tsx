@@ -125,6 +125,30 @@ describe("DayTable: 좌표는 daySeatLayout 하나에서 나온다", () => {
     expect(felt(container).style.top).toBe("138px");
     expect(tagEl(container, 0).style.top).toBe(px(198 + 100));
   });
+
+  it("짧은 폰(P5-3): height 240·8명·폭 352 에서 모든 이름표 상자 top + 22 ≤ 240, 좌석 캐릭터 배율도 같은 배율로 줄었다", () => {
+    const eight = Array.from({ length: 8 }, (_, i) => seat(i, `이름${i}`, i === 0 ? { isMe: true } : {}));
+    const { container } = render(<DayTable seats={eight} mySeat={0} width={352} height={240} scenePad={4} />);
+    const tags = Array.from(container.querySelectorAll<HTMLElement>(".mf-dt__tag"));
+    expect(tags).toHaveLength(8);
+    for (const t of tags) expect(parseFloat(t.style.top) + 22, `seat ${t.dataset.seat}`).toBeLessThanOrEqual(240 + 1e-9);
+    // 내 자리(맨 앞)의 그림 배율은 fit(≈0.788) — 줄지 않았다면 1
+    const myFig = container.querySelector<HTMLElement>('.mf-dt__seat[data-seat="0"]')!;
+    const scale = parseFloat(/scale\(([\d.]+)\)/.exec(myFig.style.transform)![1]!);
+    expect(scale).toBeGreaterThan(0.78);
+    expect(scale).toBeLessThan(0.8);
+    // 테이블 면 높이도 같은 배율로 줄었다(108 → 약 85)
+    expect(parseFloat(felt(container).style.height)).toBeLessThan(108);
+    expect(parseFloat(felt(container).style.top)).toBeGreaterThanOrEqual(0);
+  });
+
+  it("높이 299 이상은 줄지 않는다(P5-3): height 299·8명의 내 그림 배율은 1, 면 높이 108px", () => {
+    const eight = Array.from({ length: 8 }, (_, i) => seat(i, `이름${i}`, i === 0 ? { isMe: true } : {}));
+    const { container } = render(<DayTable seats={eight} mySeat={0} width={352} height={299} scenePad={4} />);
+    const myFig = container.querySelector<HTMLElement>('.mf-dt__seat[data-seat="0"]')!;
+    expect(myFig.style.transform).toBe("scale(1)");
+    expect(felt(container).style.height).toBe("108px");
+  });
 });
 
 describe("DayTable: 장면 크기 재기", () => {
