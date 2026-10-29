@@ -13,6 +13,8 @@ import {
   closeSheet,
   collectSnapshot,
   createTestRoom,
+  findBlankScenePoint,
+  findTagPassThroughPoint,
   inspectSeat,
   leaveFromResult,
   leaveLobby,
@@ -45,6 +47,7 @@ import {
   skipTo,
   sleep,
   startGame,
+  tapAt,
   tapSeat,
   voteAs,
   waitBackdropStable,
@@ -55,7 +58,9 @@ import {
   JOIN_FIT_MIN_H,
   ROLE_NAME,
   backdropSceneChecks,
+  cancelTapChecks,
   candidateChecks,
+  candidateGuideChecks,
   candidateRevealMs,
   claimChatIssues,
   colorRuleChecks,
@@ -961,6 +966,31 @@ async function voteFlow(ctx) {
     await settle(page);
     still("candidateVote", "후보 선택 도착");
     recOne(rec, sc, candidateChecks(await read(), { mySeat, deadSeats: deadSeats(), chosenSeat: null }));
+    recOne(rec, sc, candidateGuideChecks(await read(), { picked: false })); // P11: 고르기 전 안내 줄(무효표)
+    // 결정 0040: 고른 뒤 안내 줄(P11), 이름표를 통과한 탭은 표를 지우지 않고 빈 곳 탭은 지운다(P12). 점을 못 찾으면 측정값을 null 로 넘겨 P12 가 `측정값 없음` 으로 실패한다(건너뛰지 않는다)
+    {
+      await pickCandidate(page, tracker, target);
+      recOne(rec, sc, candidateGuideChecks(await read(), { picked: true }));
+      const tagPt = await findTagPassThroughPoint(page, target);
+      let afterTag = null;
+      if (tagPt) {
+        await tapAt(page, tagPt);
+        await sleep(600);
+        afterTag = { voteTarget: tracker.last()?.me?.voteTarget, pill: (await read()).bottom.pill };
+      }
+      const blankPt = await findBlankScenePoint(page);
+      let afterBlank = null;
+      if (blankPt) {
+        await tapAt(page, blankPt);
+        await tracker.waitFor((v) => v.me?.voteTarget === undefined, 3000, "빈 곳 탭 뒤 표 취소").catch(() => {}); // 시간 초과는 판정(P12)에 맡긴다
+        const after = await read();
+        afterBlank = { voteTarget: tracker.last()?.me?.voteTarget, pill: after.bottom.pill, halos: after.dt.haloImgs.filter((h) => h.kind === "white").length };
+      }
+      recOne(rec, sc, cancelTapChecks({ chosenSeat: target, afterTag, afterBlank }));
+      recOne(rec, sc, candidateChecks(await read(), { mySeat, deadSeats: deadSeats(), chosenSeat: null }));
+      recOne(rec, sc, candidateGuideChecks(await read(), { picked: false }));
+      still("candidateVote", "취소 검사");
+    }
     const moved = await attempt(async () => {
       await pickCandidate(page, tracker, second);
       recOne(rec, sc, candidateChecks(await read(), { mySeat, deadSeats: deadSeats(), chosenSeat: second, name: nickOf(tracker.last(), second) }));
@@ -994,6 +1024,11 @@ async function voteFlow(ctx) {
     const view = tracker.last();
     const log = (view.day?.voteLog ?? []).find((e) => e.n === view.day?.n) ?? (view.day?.voteLog ?? []).at(-1);
     const n = log?.cand?.votes?.length;
+    // P12(결정 0040): [테스트] 시트로 단계를 넘긴 뒤에도 내 표가 공개에 남음(시트 안 탭·버튼이 표를 지우지 않는다)
+    {
+      const mine = (log?.cand?.votes ?? []).find((x) => x.seat === mySeat);
+      rec(sc, "P12", "[테스트] 시트로 넘겨도 내 표가 남음(공개에 내 줄)", mine?.target === target, `내 줄 ${JSON.stringify(mine)} (기대 ${mySeat}>${target}), 공개 표 ${JSON.stringify(log?.cand?.votes ?? null)}`);
+    }
     await stageChecks(ctx, id, "reveal", "candidateVoteReveal");
     const { snap } = await dayState(ctx, id, "reveal");
     recAll(rec, sc, turnChecks(withoutAmberHalo(snap), { expectNone: true, crimsonAllowed: false })); // K4: 앰버(박동 중)는 빼고 흰·진홍만

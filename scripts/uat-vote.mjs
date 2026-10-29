@@ -12,6 +12,8 @@
 //   (b) 4명 — 밤 암살로 마피아가 이기는 판
 //        1일차 시민 하나 처형(마피아는 후보에서 뺌) → 밤: 마피아가 남은 비마피아 하나 지목 → morning(탈락)을 먼저 받고 5초 뒤 ended,
 //        mafiaWin, 요약 1일차 줄에 exec 와 night {target, died:true}.
+//        후보 선택에서 C 가 고른 뒤 취소해 무효표(결정 0040) → 공개 3표·7초. 고르기 전 취소는 어느 클라이언트에도 프레임이 가지 않고,
+//        취소하면 C 만 voteTarget 없는 state 를 받는다.
 //
 // 사용법: node scripts/uat-vote.mjs [--prod | <기준 주소>]
 // 화면 모양·애니메이션·실제 폰 시계 차이는 봇으로 볼 수 없다. 토큰은 어떤 출력에도 찍지 않는다.
@@ -225,6 +227,25 @@ async function castCandidateVote(clients, idx, target) {
   return leaked;
 }
 
+// 후보 선택 취소(target null, 결정 0040)를 보내고, 투표자만 voteTarget 없는 state 를 받았는지 본다(castCandidateVote 와 같은 모양).
+// 보내기 전 state 수를 적어 두고, 투표자의 마지막 view 에 voteTarget 이 없고 state 가 하나 늘 때까지 기다린 뒤 300ms 뒤 다른 클라이언트의 state 수 변화를 모은다.
+async function castCandidateCancel(clients, idx) {
+  const counts = clients.map((c) => states(c).length);
+  send(clients[idx], { t: "candidateVote", target: null });
+  await waitUntil(() => lastView(clients[idx])?.me.voteTarget === undefined && states(clients[idx]).length === counts[idx] + 1, 5000, `${clients[idx].nickname} 의 취소 반영`);
+  await sleep(300); // 새는 프레임이 있다면 도착할 시간
+  const leaked = clients.filter((c, k) => k !== idx && states(c).length !== counts[k]).map((c) => c.nickname);
+  return { leaked, ownStates: states(clients[idx]).length - counts[idx] };
+}
+
+// 아무 표도 안 고른 사람의 취소: 500ms 동안 모든 클라이언트에 state·error 프레임이 하나도 오지 않아야 한다(같은 값 재전송과 같은 규칙).
+async function castNoopCancel(clients, idx) {
+  const counts = clients.map((c) => c.frames.filter((f) => f.msg.t === "state" || f.msg.t === "error").length);
+  send(clients[idx], { t: "candidateVote", target: null });
+  await sleep(500);
+  return clients.filter((c, k) => c.frames.filter((f) => f.msg.t === "state" || f.msg.t === "error").length !== counts[k]).map((c) => c.nickname);
+}
+
 // 처형자(또는 탈락자)가 아닌 클라이언트의 ended 이전 state 프레임에서 역할 문자열이 허용 경로 밖에 있는 경로를 모은다.
 function roleStringLeaks(clients, exceptSeats) {
   const out = new Set();
@@ -389,21 +410,27 @@ async function gameB() {
 
   await waitUntil(() => allHave(clients, "candidateVote"), EXEC_VOTE_MS + 10_000, "candidateVote");
   // 마피아·경찰·다른 시민은 C 를, C 본인은 경찰을 고른다(마피아는 후보에서 뺀다 — 시민 승이 나지 않게)
+  // 결정 0040: 고르기 전 취소(target null)는 아무 프레임도 만들지 않는다. 그다음 C 가 경찰을 고른 뒤 취소해 무효표가 된다.
+  const noopLeaks = await castNoopCancel(clients, clients.indexOf(mafia));
+  check(T, "고르기 전 취소(target null)는 아무 프레임도 오지 않음", noopLeaks.length === 0, noopLeaks.join(","));
   const picks = new Map();
   clients.forEach((c, k) => picks.set(k, c === C ? police.seat : C.seat));
   for (const [k] of clients.entries()) send(clients[k], { t: "candidateVote", target: picks.get(k) });
   await waitUntil(() => clients.every((c, k) => lastView(c)?.me.voteTarget === picks.get(k)), 5000, "후보 선택 표 반영");
+  const cancel = await castCandidateCancel(clients, clients.indexOf(C));
+  check(T, "취소: C 만 voteTarget 없는 state, 다른 클라이언트는 그 사이 state 없음", cancel.leaked.length === 0 && cancel.ownStates === 1 && lastView(C)?.me.voteTarget === undefined && !Object.hasOwn(lastView(C).me, "voteTarget"), `새는 프레임 ${cancel.leaked.join(",")} · C state ${cancel.ownStates}개`);
+  picks.delete(clients.indexOf(C));
 
   await waitUntil(() => allHave(clients, "candidateVoteReveal"), CANDIDATE_VOTE_MS + 10_000, "candidateVoteReveal");
   const revealLines = clients.map((c) => stateOf(c, "candidateVoteReveal").msg.view.day.voteLog.at(-1));
-  check(T, "공개: 후보 = 처형될 시민, 모든 클라이언트 같은 voteLog", allSame(revealLines) && revealLines[0].cand?.candidate === C.seat && revealLines[0].cand.votes.length === 4, JSON.stringify(revealLines[0]?.cand));
+  check(T, "공개: 후보 = 처형될 시민, 표 3개(C 의 취소 표는 줄이 없음), 모든 클라이언트 같은 voteLog", allSame(revealLines) && revealLines[0].cand?.candidate === C.seat && revealLines[0].cand.votes.length === 3 && !revealLines[0].cand.votes.some((v) => v.seat === C.seat), JSON.stringify(revealLines[0]?.cand));
 
   const revealViewsB = clients.map((c) => stateOf(c, "candidateVoteReveal").msg.view);
   const revealMsB = candidateRevealMs(revealLines[0]?.cand?.votes.length ?? 0);
   check(
     T,
-    `공개 마감 길이 = 400 + 4×2000 + 600 = ${revealMsB}ms, 모든 클라이언트 같은 phaseEndsAt`,
-    revealMsB === 9_000 && revealViewsB.every((v) => v.phaseDurationMs === revealMsB) && new Set(revealViewsB.map((v) => v.phaseEndsAt)).size === 1,
+    `공개 마감 길이 = 400 + 3×2000 + 600 = ${revealMsB}ms, 마감 1종`,
+    revealMsB === 7_000 && candidateRevealMs(3) === 7_000 && revealViewsB.every((v) => v.phaseDurationMs === revealMsB) && new Set(revealViewsB.map((v) => v.phaseEndsAt)).size === 1,
     `${revealViewsB.map((v) => v.phaseDurationMs).join("/")}, 마감 ${new Set(revealViewsB.map((v) => v.phaseEndsAt)).size}종`,
   );
   const revealAtB = Math.min(...clients.map((c) => stateOf(c, "candidateVoteReveal").at));

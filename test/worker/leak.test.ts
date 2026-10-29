@@ -510,6 +510,15 @@ describe("6명 한 판: 처형·처형 무효·종료 전수 프레임 누출 �
       // 누가 어느 날 무엇을 던졌는지(프레임 검사의 기대값). 일차 → seat → 값.
       const execVotes = new Map<number, Map<number, boolean>>();
       const candidateVotes = new Map<number, Map<number, number>>();
+      // 그날 그 투표자가 (취소 전후 포함) 실제로 고른 값들. 프레임 검사의 voteTarget 기대는 이 집합이다(결정 0040).
+      const candidateEver = new Map<number, Map<number, Set<number>>>();
+      const everPicked = (day: number, seatNo: number): Set<number> => {
+        const byDay = candidateEver.get(day) ?? new Map<number, Set<number>>();
+        candidateEver.set(day, byDay);
+        const set = byDay.get(seatNo) ?? new Set<number>();
+        byDay.set(seatNo, set);
+        return set;
+      };
       const dead = new Set<number>();
 
       /** 여부 표를 던진다. 던진 직후 모든 소켓의 집계가 같은 값이고, 아직 안 던진 소켓의 me 에는 voteAgree 가 없다. */
@@ -536,13 +545,25 @@ describe("6명 한 판: 처형·처형 무효·종료 전수 프레임 누출 �
         candidateVotes.set(day, mine);
         const [first, ...rest] = voters as [SeatedActor, ...SeatedActor[]];
         mine.set(first.seat, targetOf(first));
+        everPicked(day, first.seat).add(targetOf(first));
         const others = actors.filter((a) => a !== first);
         const marks = others.map((a) => mark(a.sock));
         const own = await act(first, { t: "candidateVote", target: targetOf(first) });
         expect(summary(own)).toBe("[state:candidateVote]"); // 본인에게만 state(me.voteTarget)
         for (let i = 0; i < others.length; i += 1) expect(summary(await settle(others[i]!.sock, marks[i]!))).toBe("[]"); // (3)
+        // (3b) 결정 0040: 첫 투표자가 취소하면 그 소켓만 voteTarget 키 없는 state 를 받고, 다른 모든 소켓(탈락 관전자 포함)은 아무것도 받지 않는다. 다시 고르기도 같다.
+        const cancelMarks = others.map((a) => mark(a.sock));
+        const cancelOwn = await act(first, { t: "candidateVote", target: null });
+        expect(summary(cancelOwn)).toBe("[state:candidateVote]");
+        const cancelView = (cancelOwn[0] as Extract<ServerMessage, { t: "state" }>).view;
+        expect(Object.hasOwn(cancelView.me, "voteTarget")).toBe(false);
+        for (let i = 0; i < others.length; i += 1) expect(summary(await settle(others[i]!.sock, cancelMarks[i]!))).toBe("[]");
+        const repickMarks = others.map((a) => mark(a.sock));
+        expect(summary(await act(first, { t: "candidateVote", target: targetOf(first) }))).toBe("[state:candidateVote]");
+        for (let i = 0; i < others.length; i += 1) expect(summary(await settle(others[i]!.sock, repickMarks[i]!))).toBe("[]");
         for (const a of rest) {
           mine.set(a.seat, targetOf(a));
+          everPicked(day, a.seat).add(targetOf(a));
           expect(summary(await act(a, { t: "candidateVote", target: targetOf(a) }))).toBe("[state:candidateVote]");
         }
       };
@@ -620,6 +641,8 @@ describe("6명 한 판: 처형·처형 무효·종료 전수 프레임 누출 �
       expect(previewText.includes("result")).toBe(false);
 
       const seen = { agree: new Set<number>(), target: new Set<number>(), noExec: new Set<number>(), result: new Set<number>(), execution: new Set<number>() };
+      let cancelFrames = 0; // 취소 프레임: 그날 candidateVote 에서 voteTarget 이 있던 투표자의 voteTarget 없는 state (결정 0040)
+      const hadTarget = new Set<string>();
       for (const a of actors) {
         let isDead = false;
         for (const raw of collect(a.sock)) {
@@ -691,8 +714,12 @@ describe("6명 한 판: 처형·처형 무효·종료 전수 프레임 누출 �
           if (v.me.voteTarget !== undefined) {
             expect(v.phase).toBe("candidateVote");
             expect(isDead).toBe(false);
-            expect(v.me.voteTarget).toBe(candidateVotes.get(day)?.get(a.seat));
+            expect(everPicked(day, a.seat).has(v.me.voteTarget)).toBe(true);
+            expect(v.me.voteTarget).toBe(candidateVotes.get(day)?.get(a.seat)); // 이 시나리오의 취소는 같은 값으로 다시 고르므로 프레임 값은 최종 값과 같다
             seen.target.add(a.seat);
+            hadTarget.add(`${day}:${a.seat}`);
+          } else if (v.phase === "candidateVote" && hadTarget.has(`${day}:${a.seat}`)) {
+            cancelFrames += 1;
           }
         }
       }
@@ -704,6 +731,7 @@ describe("6명 한 판: 처형·처형 무효·종료 전수 프레임 누출 �
       expect([...seen.noExec].sort()).toEqual(everyone);
       expect([...seen.result].sort()).toEqual(everyone);
       expect([...seen.execution].sort()).toEqual(everyone);
+      expect(cancelFrames).toBeGreaterThanOrEqual(1); // 취소 프레임을 실제로 하나 이상 봤다(결정 0040)
 
       // (10) 종료: 모든 소켓의 result 가 같고, 요약에 1일차 의사가 지킨 밤과 2일차 불통과가 있다.
       const results = actors.map((a) => lastViewOf(a.sock).result);

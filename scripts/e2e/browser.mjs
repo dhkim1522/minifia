@@ -2,7 +2,7 @@
 // 방장 소켓은 브라우저 페이지가 쥔다(스크립트가 쥐면 앱이 앞 소켓을 4001 로 대체한다).
 // 토큰은 createTestRoom 결과와 addInitScript 인자에만 머문다. 페이지가 받은 state 프레임만 읽고 보낸 프레임은 구독하지 않는다.
 import { chromium } from "playwright-core";
-import { DECORATIVE_ALLOW, FONT_HOSTS, ROLE_NAME, TAP_ALLOW, TEXT_SIZE_ALLOW, redact, rgbP95Luminance } from "./lib.mjs";
+import { BLANK_TAP_E2E_MARGIN, DECORATIVE_ALLOW, FONT_HOSTS, ROLE_NAME, TAP_ALLOW, TEXT_SIZE_ALLOW, blankPointsOf, redact, rgbP95Luminance } from "./lib.mjs";
 
 /** 준비 단계의 실패(연결·단계 도달·선택자 대기 시간 초과). 한 번 새 방으로 다시 돈다. 검사 실패와 다르다. */
 export class SetupError extends Error {
@@ -1064,6 +1064,15 @@ export async function readVerdict(page, colors = { crimson: [], gray: [] }) {
     const bottom = {
       title: text(panel && q(".mf-claimpanel__title", panel)),
       guide: text(panel && q(".mf-claimpanel__guide", panel)),
+      // 안내 줄 요소 높이·계산된 줄 높이(결정 0040 P11: 한 줄 판정). 줄 높이가 normal 이면 글자 크기 × 1.4. 없으면 NaN.
+      guideH: panel && q(".mf-claimpanel__guide", panel) ? q(".mf-claimpanel__guide", panel).getBoundingClientRect().height : Number.NaN,
+      guideLH: (() => {
+        const g = panel && q(".mf-claimpanel__guide", panel);
+        if (!g) return Number.NaN;
+        const cs = getComputedStyle(g);
+        const lh = parseFloat(cs.lineHeight);
+        return Number.isFinite(lh) ? lh : parseFloat(cs.fontSize) * 1.4;
+      })(),
       tally: text(panel && q(".mf-execvote__tally", panel)),
       pill: pillEl ? text(pillEl) : null,
       buttons: panel
@@ -1306,6 +1315,69 @@ export async function pickCandidate(page, tracker, seat) {
   }
   await clickTopmostPoint(page, seat);
   await tracker.waitFor((v) => v.me.voteTarget === seat, 3000, `후보 선택 자리 ${seat}`);
+}
+
+/**
+ * 빈 곳 탭 점(결정 0040 P12). 장면 상자(.mf-dayscene__scene)와 그 안의 [data-seat]·.mf-tt-anchor·button 상자를 읽고,
+ * lib 의 blankPointsOf(margin BLANK_TAP_E2E_MARGIN, step 8) 후보를 순서대로 elementFromPoint 로 확인해 맨 위 요소가 장면 안이고
+ * [data-seat]·button·.mf-tt-anchor 안이 아닌 첫 점을 돌려준다. 없으면 null.
+ */
+export async function findBlankScenePoint(page) {
+  const geo = await page.evaluate(() => {
+    const scene = document.querySelector(".mf-dayscene__scene");
+    if (!scene) return null;
+    const box = (el) => {
+      const r = el.getBoundingClientRect();
+      return { left: r.left, top: r.top, width: r.width, height: r.height };
+    };
+    return { scene: box(scene), avoid: [...scene.querySelectorAll("[data-seat], .mf-tt-anchor, button")].map(box) };
+  });
+  if (!geo) return null;
+  const candidates = blankPointsOf({ scene: geo.scene, avoid: geo.avoid, margin: BLANK_TAP_E2E_MARGIN, step: 8, limit: 400 });
+  if (candidates.length === 0) return null;
+  return page.evaluate((pts) => {
+    const scene = document.querySelector(".mf-dayscene__scene");
+    for (const p of pts) {
+      const top = document.elementFromPoint(p.x, p.y);
+      if (!top || !scene || !scene.contains(top)) continue;
+      if (top.closest("[data-seat], button, .mf-tt-anchor")) continue;
+      return p;
+    }
+    return null;
+  }, candidates);
+}
+
+/**
+ * 이름표 통과 점(결정 0040 P12). 장면의 .mf-dt__tag[data-seat] 를 preferSeat 먼저 순서로 돌며 상자 안 7×3 격자 점 중
+ * elementFromPoint 의 맨 위 요소가 장면 안이고 [data-seat]·button 안이 아닌 첫 점({ x, y, seat })을 돌려준다.
+ * 이름표는 pointer-events none 이라 탭이 아래 요소(테이블 면 등)로 빠지는 점이다. 없으면 null.
+ */
+export async function findTagPassThroughPoint(page, preferSeat) {
+  return page.evaluate((prefer) => {
+    const scene = document.querySelector(".mf-dayscene__scene");
+    if (!scene) return null;
+    const tags = [...scene.querySelectorAll(".mf-dt__tag[data-seat]")];
+    tags.sort((a, b) => (Number(a.getAttribute("data-seat")) === prefer ? -1 : 0) - (Number(b.getAttribute("data-seat")) === prefer ? -1 : 0));
+    for (const tag of tags) {
+      const r = tag.getBoundingClientRect();
+      if (r.width <= 0 || r.height <= 0) continue;
+      for (let j = 0; j < 3; j++) {
+        for (let i = 0; i < 7; i++) {
+          const x = r.left + (r.width * (i + 0.5)) / 7;
+          const y = r.top + (r.height * (j + 0.5)) / 3;
+          const top = document.elementFromPoint(x, y);
+          if (!top || !scene.contains(top) || top.closest("[data-seat], button")) continue;
+          return { x, y, seat: Number(tag.getAttribute("data-seat")) };
+        }
+      }
+    }
+    return null;
+  }, preferSeat);
+}
+
+/** 그 점을 터치로 탭한다(vote5 문맥은 hasTouch). */
+export async function tapAt(page, pt) {
+  await page.touchscreen.tap(pt.x, pt.y);
 }
 
 /** 추적 단계가 목록 중 하나가 될 때까지 기다린다(분기 단계처럼 skipTo 가 못 가는 경우). 못 오면 SetupError. */

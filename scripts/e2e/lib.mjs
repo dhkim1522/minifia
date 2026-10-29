@@ -28,6 +28,8 @@ export const OVERALL_LIMIT_MS = 900_000;
 //     bottom: {                      // 하단 패널(.mf-claimpanel / .mf-execvote 등)
 //       title: string,               //   제목 글자
 //       guide: string,               //   안내 줄 글자(없으면 "")
+//       guideH: number,              //   안내 줄 요소 높이(px, 없으면 NaN — 결정 0040 P11)
+//       guideLH: number,             //   안내 줄 계산된 line-height(px, 없으면 NaN)
 //       tally: string,               //   집계 줄 글자 `.mf-execvote__tally`(없으면 "")
 //       pill: string | null,         //   알약 글자(`관전 중 · …`, `…님에게 투표했어요`, `선택 안 함`). 없으면 null
 //       buttons: [{ text, pressed: boolean|null, disabled, w, h }],  // `.mf-seg__b` 등 누르는 요소. pressed = aria-pressed, w·h = 탭 크기(px)
@@ -1625,4 +1627,77 @@ export function wakeLockChecks(w, { mode }) {
     return result("WL2", label, bad);
   }
   return result("WL", "Wake Lock 검사", [`알 수 없는 모드 ${String(mode)}`]);
+}
+
+// ---- 261029-vvd: 후보 선택 취소 (결정 0040) — P11 안내 줄, P12 이름표 탭 유지·빈 곳 탭 취소 ----
+
+/** 후보 선택 하단 안내 줄 두 문장. src/game/verdict.ts VERDICT_TEXT.candidateGuideNone·candidateGuidePicked 의 사본이다 — test/unit/e2eContract.test.ts 가 대조한다. */
+export const CANDIDATE_GUIDE = Object.freeze({
+  none: "아무도 고르지 않으면 무효표가 돼요",
+  picked: "빈 곳을 누르면 선택이 취소돼요",
+});
+
+/** 빈 곳 측정 점이 사람·버튼에서 떨어져야 하는 여유(px). 앱 여유 BLANK_TAP_SLOP_PX(8)의 두 배 — 측정 점이 분명히 빈 곳이다(e2eContract 가 2배 이상을 지킨다). */
+export const BLANK_TAP_E2E_MARGIN = 16;
+
+/**
+ * 빈 곳 후보 점. scene 상자를 margin 만큼 줄인 안쪽에서 step 간격 격자를 위→아래·왼→오른 순서로 훑어,
+ * 모든 avoid 상자를 margin 만큼 넓힌 범위(경계 포함) 밖인 점을 limit 개까지 돌려준다. 너비·높이 0 인 avoid 는 무시한다. 다 덮이면 [].
+ * 사각형은 { left, top, width, height }. 같은 입력이면 같은 결과.
+ */
+export function blankPointsOf({ scene, avoid = [], margin, step, limit = 200 }) {
+  const x0 = scene.left + margin;
+  const x1 = scene.left + scene.width - margin;
+  const y0 = scene.top + margin;
+  const y1 = scene.top + scene.height - margin;
+  const boxes = avoid.filter((b) => b.width > 0 && b.height > 0);
+  const out = [];
+  for (let y = y0; y <= y1 && out.length < limit; y += step) {
+    for (let x = x0; x <= x1 && out.length < limit; x += step) {
+      const covered = boxes.some((b) => x >= b.left - margin && x <= b.left + b.width + margin && y >= b.top - margin && y <= b.top + b.height + margin);
+      if (!covered) out.push({ x, y });
+    }
+  }
+  return out;
+}
+
+/**
+ * P11 후보 선택 안내 줄(결정 0040). v = readVerdict 스냅숏(bottom.guide·guideH·guideLH), opts.picked = 고른 뒤인가.
+ * 안내 줄이 CANDIDATE_GUIDE 의 맞는 문장이고 한 줄(isOneLine)이면 통과.
+ */
+export function candidateGuideChecks(v, { picked } = {}) {
+  const label = "후보 선택 안내 줄: 문장·한 줄";
+  const miss = [];
+  if (typeof v?.bottom?.guide !== "string") miss.push("측정값 없음(bottom.guide)");
+  if (!isNum(v?.bottom?.guideH)) miss.push("측정값 없음(bottom.guideH)");
+  if (!isNum(v?.bottom?.guideLH)) miss.push("측정값 없음(bottom.guideLH)");
+  if (typeof picked !== "boolean") miss.push("측정값 없음(picked 인자)");
+  if (miss.length > 0) return result("P11", label, miss);
+  const want = CANDIDATE_GUIDE[picked ? "picked" : "none"];
+  const bad = [];
+  if (v.bottom.guide !== want) bad.push(`안내 줄 "${v.bottom.guide}" ≠ "${want}" (무효표·취소 문장)`);
+  if (!isOneLine(v.bottom.guideH, v.bottom.guideLH)) bad.push(`안내 줄이 한 줄이 아님(높이 ${rd(v.bottom.guideH)}px·줄 높이 ${rd(v.bottom.guideLH)}px, ${lineCount(v.bottom.guideH, v.bottom.guideLH)}줄)`);
+  return result("P11", label, bad);
+}
+
+/**
+ * P12 취소 탭(결정 0040). 입력 { chosenSeat, afterTag, afterBlank }:
+ *  - afterTag = 이름표(pointer-events none 이라 아래로 통과하는 점)를 탭한 뒤 { voteTarget, pill } — 표가 chosenSeat 로 남고 알약이 `님에게 투표했어요`.
+ *  - afterBlank = 빈 곳을 탭한 뒤 { voteTarget, pill, halos } — 표가 없고(undefined·null) 알약이 `선택 안 함`, 흰 후광 0.
+ * 값이 없으면 `측정값 없음` 으로 실패한다.
+ */
+export function cancelTapChecks({ chosenSeat, afterTag, afterBlank } = {}) {
+  const label = "취소 탭: 이름표는 표 유지·빈 곳은 취소";
+  const miss = [];
+  if (typeof chosenSeat !== "number") miss.push("측정값 없음(chosenSeat 인자)");
+  if (!afterTag || typeof afterTag.pill !== "string") miss.push("측정값 없음(이름표 탭 뒤 값)");
+  if (!afterBlank || typeof afterBlank.pill !== "string" || !isNum(afterBlank.halos)) miss.push("측정값 없음(빈 곳 탭 뒤 값)");
+  if (miss.length > 0) return result("P12", label, miss);
+  const bad = [];
+  if (afterTag.voteTarget !== chosenSeat) bad.push(`이름표를 탭했더니 표가 ${String(afterTag.voteTarget)} 로 바뀜(기대 ${chosenSeat} 유지, 이름표 탭이 취소됨)`);
+  if (!afterTag.pill.includes("님에게 투표했어요")) bad.push(`이름표 탭 뒤 알약 "${afterTag.pill}" 에 "님에게 투표했어요" 없음`);
+  if (afterBlank.voteTarget !== undefined && afterBlank.voteTarget !== null) bad.push(`빈 곳을 탭했는데 표 ${String(afterBlank.voteTarget)} 가 안 풀림`);
+  if (!afterBlank.pill.includes("선택 안 함")) bad.push(`빈 곳 탭 뒤 알약 "${afterBlank.pill}" 에 "선택 안 함" 없음(빈 곳 탭이 취소하지 않음)`);
+  if (afterBlank.halos !== 0) bad.push(`빈 곳 탭 뒤 흰 후광 ${afterBlank.halos}개 ≠ 0`);
+  return result("P12", label, bad);
 }
