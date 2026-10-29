@@ -7,10 +7,10 @@ current_phase_name: 분위기와 캐릭터
 current_plan: 9
 status: executing
 stopped_at: Completed 05-09-PLAN.md
-last_updated: "2026-10-29T15:20:56.963Z"
+last_updated: "2026-10-29T15:21:41.827Z"
 last_activity: 2026-10-29
 last_activity_desc: Phase 4 execution started
-state_head: bfd53912c0fd504ac93a9059fa0524622b3bad17
+state_head: 3e160611271fd423532aa05bec2bcf5ff9b51e5d
 progress:
   total_phases: 7
   completed_phases: 4
@@ -318,6 +318,7 @@ None yet.
 | 261025-qvx | 테스트 피드백 4건 수정(밤 끝 알림 제거·차례 링 앞뒤 층·밤 시작 문구)과 테이블 기하 P2 고정, 결정 0028, 배포 2026-10-25T11:40:42Z+d2af5a9 | 2026-10-25 | c39247e | [261025-qvx-test-feedback-fixes](./quick/261025-qvx-test-feedback-fixes/) |
 | 261025-unr | 시각 개선 묶음(후광·'…' 말풍선·대기실 왕관, 배경 v2 WebP 장면·크로스페이드, 낮 시작 화면 제거, 헤더 막, 5글자 봇 이름), 결정 0030, 배포 2026-10-26T01:57:25Z+e717ac0 | 2026-10-26 | 926dae3 | [261025-unr-visual-bundle](./quick/261025-unr-visual-bundle/) |
 | 261029-vvd | 후보 선택 취소(빈 곳 탭 = 와이어 target null, 투표자에게만)·무효표/취소 안내 줄, 결정 0040, 배포 2026-10-29T14:52:03Z+cb6979c | 2026-10-30 | bfd5391 | [261029-vvd-candidate-vote-cancel](./quick/261029-vvd-candidate-vote-cancel/) |
+| 261029-t40 | 실테스트 피드백 3건: 토론 40초, 처형 투표 카드 3초(여부 13초), 표 공개 한 표당 2초 가변 | 2026-10-30 | 3e16061 | [261029-t40-3-40-3-13-2](./quick/261029-t40-3-40-3-13-2/) |
 
 ### Roadmap Evolution
 
