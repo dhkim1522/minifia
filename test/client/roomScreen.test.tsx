@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { act, cleanup, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { RoomView } from "../../shared/protocol";
 import type { RoomConnection } from "../../src/net/useRoomConnection";
@@ -129,5 +129,58 @@ describe("RoomScreen: 헤더 역할 카드 버튼 (03.1-11, D-08)", () => {
     expect(document.querySelector(".mf-rolecard-btn") === null ? "없음" : "있음").toBe("없음");
     expect(screen.queryByRole("button", { name: "내 역할" })).toBeNull();
     expect(screen.queryByRole("button", { name: /수사 기록/ })).toBeNull();
+  });
+});
+
+describe("RoomScreen: 화면 꺼짐 방지 연결 (CONN-03, D-12, P5-7)", () => {
+  const wake = () => import("../helpers/wakeLockFake");
+  const claimDay: NonNullable<RoomView["day"]> = { n: 1, roles: ["mafia", "police", "citizen"], turn: { seat: 0 }, claimLog: [] };
+  const players: RoomView["players"] = [
+    { seat: 0, nickname: "민수", connected: true, isHost: true },
+    { seat: 1, nickname: "하윤", connected: true, isHost: false },
+    { seat: 2, nickname: "지우", connected: true, isHost: false },
+    { seat: 3, nickname: "서연", connected: true, isHost: false },
+  ];
+  const at = (phase: RoomView["phase"]): RoomView => ({
+    ...view,
+    phase,
+    players,
+    me: { seat: 0, isHost: true, role: "citizen" },
+    ...(phase === "claim" ? { day: claimDay } : {}),
+  });
+  const mount = () => render(<RoomScreen code="0042" token={"t".repeat(43)} onExit={vi.fn()} />);
+  const settle = () => act(async () => {});
+  let w: Awaited<ReturnType<typeof wake>>;
+
+  beforeEach(async () => {
+    w = await wake();
+  });
+  afterEach(() => {
+    cleanup();
+    w.removeWakeLock();
+    w.resetVisibility();
+    vi.restoreAllMocks();
+  });
+
+  it("대기실(status open)에서 request(\"screen\") 가 정확히 1번 불린다", async () => {
+    const fake = w.installWakeLock();
+    mount();
+    await settle();
+    expect(fake.request).toHaveBeenCalledTimes(1);
+    expect(fake.request).toHaveBeenCalledWith("screen");
+  });
+
+  it("같은 대기실 리렌더와 assigning → roleReveal → claim 전환에서도 다시 요청하지 않는다", async () => {
+    const fake = w.installWakeLock();
+    const { rerender } = mount();
+    await settle();
+    rerender(<RoomScreen code="0042" token={"t".repeat(43)} onExit={vi.fn()} />);
+    for (const phase of ["assigning", "roleReveal", "claim"] as const) {
+      connectionMock.current = conn({ view: at(phase) });
+      rerender(<RoomScreen code="0042" token={"t".repeat(43)} onExit={vi.fn()} />);
+      await settle();
+    }
+    expect(fake.request).toHaveBeenCalledTimes(1);
+    expect(fake.sentinels[0]!.releaseCalls).toBe(0);
   });
 });
