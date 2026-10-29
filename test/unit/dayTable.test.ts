@@ -495,7 +495,7 @@ const refLayout = (n: number, sceneW: number, sceneH: number, pad: number) => {
   return Array.from({ length: n }, (_, slot) => {
     const theta = Math.PI / 2 + (slot / n) * Math.PI * 2;
     const depth = (Math.sin(theta) + 1) / 2;
-    const scale = 0.8 + 0.2 * depth;
+    const scale = 0.8 + (1 - 0.8) * depth;
     const x = cx + rx * Math.cos(theta);
     const y = cy + ry * Math.sin(theta);
     return {
