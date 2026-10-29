@@ -403,7 +403,7 @@ async function gameB() {
   check(
     T,
     `공개 마감 길이 = 400 + 4×2000 + 600 = ${revealMsB}ms, 모든 클라이언트 같은 phaseEndsAt`,
-    revealMsB === 8_600 && revealViewsB.every((v) => v.phaseDurationMs === revealMsB) && new Set(revealViewsB.map((v) => v.phaseEndsAt)).size === 1,
+    revealMsB === 9_000 && revealViewsB.every((v) => v.phaseDurationMs === revealMsB) && new Set(revealViewsB.map((v) => v.phaseEndsAt)).size === 1,
     `${revealViewsB.map((v) => v.phaseDurationMs).join("/")}, 마감 ${new Set(revealViewsB.map((v) => v.phaseEndsAt)).size}종`,
   );
   const revealAtB = Math.min(...clients.map((c) => stateOf(c, "candidateVoteReveal").at));
