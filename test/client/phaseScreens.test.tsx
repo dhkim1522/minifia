@@ -862,7 +862,7 @@ describe("헤더 줄바꿈 금지·패널 여백·칩 간격 (03.1-10, D-16, UI-
   it("헤더 제목·안내 문구표: 모든 역할에서 같은 제목이다", () => {
     const table: Array<[PhaseId, string, (n: number) => string]> = [
       ["claim", "낮 · 직업 공개", (n) => `${n}일차`],
-      ["discussion", "낮 · 토론", (n) => `${n}일차`],
+      ["discussion", "낮 · 토론", (n) => `${n}일차 · 의견을 나눠요`], // UX-01 빈 칸 2 (05-01): 살아 있는 viewer 헤더 안내줄
       ["night", "밤", (n) => `${n}일차`],
       ["morning", "아침", (n) => `${n + 1}일차`],
     ];

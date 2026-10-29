@@ -39,7 +39,9 @@ export function Assigning({ view }: { view: RoomView }) {
               <Icon name="card" size={32} />
             </div>
           </div>
-          <h2 className="mf-t-heading">직업을 배정하고 있습니다…</h2>
+          <h2 className="mf-t-heading" data-guide="">
+            직업을 배정하고 있습니다…
+          </h2>
           <p className="mf-t-label">잠시만 기다려 주세요</p>
         </div>
       </main>

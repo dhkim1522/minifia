@@ -69,7 +69,9 @@ export function ResultScreen({ view, onExit, arrivedFrom }: ResultScreenProps) {
 
           <section className="mf-result__banner" data-winner={result.winner} aria-label={banner.title}>
             <div className="mf-result__band" aria-hidden="true" />
-            <p className="mf-result__banner-title">{banner.title}</p>
+            <p className="mf-result__banner-title" data-guide="">
+              {banner.title}
+            </p>
             <p className="mf-result__banner-sub">{banner.sub}</p>
           </section>
 

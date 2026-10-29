@@ -147,7 +147,9 @@ export function Lobby({ view, send, canSend = true, epoch = 0, onLeave, testButt
         </div>
         <section className="mf-lobby__sheet">
           <div className="mf-lobby__status">
-            <p className="mf-lobby__guide">{guide}</p>
+            <p className="mf-lobby__guide" data-guide="">
+              {guide}
+            </p>
             <p className="mf-lobby__count">{countText}</p>
           </div>
           {isHost ? (

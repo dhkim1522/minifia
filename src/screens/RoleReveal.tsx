@@ -76,7 +76,9 @@ export function RoleReveal({ view, offset, myRoleButton, onSeenFront }: RoleReve
           <RoleCard role={role} face={card.face} allies={allies} onFlip={() => setCard((s) => onTap(s, hasRole))} />
         </section>
         <div className="mf-reveal__hints">
-          <p className="mf-reveal__hint">{front ? "확인했으면 그대로 기다리세요" : "카드를 눌러 직업을 확인하세요"}</p>
+          <p className="mf-reveal__hint" data-guide="">
+            {front ? "확인했으면 그대로 기다리세요" : "카드를 눌러 직업을 확인하세요"}
+          </p>
           <p className="mf-reveal__sub">{front ? "카드를 다시 누르면 가려져요" : "다른 사람에게 보이지 않게 가려 주세요"}</p>
         </div>
       </main>
