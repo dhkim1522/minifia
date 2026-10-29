@@ -6,6 +6,7 @@ import type { PhaseId } from "../../shared/protocol";
 import {
   HEADER_SCRIM_LENGTH_PX,
   HEADER_SCRIM_STOPS,
+  PHASE_GUIDE_FILL,
   PHASE_INTRO,
   PHASE_SCENE,
   SCENES,
@@ -13,6 +14,7 @@ import {
   SCENE_IMAGE_WAIT_MS,
   SCENE_INTRO_MS,
   SCENE_IDS,
+  TIMELESS_PHASES,
   headerScrimGradient,
   sceneOfPhase,
 } from "../../src/game/scenes";
@@ -230,5 +232,26 @@ describe("캐시 규칙", () => {
   it("public/_headers 에 /backgrounds/* 규칙과 max-age=86400 이 있다 (.webp 에도 적용)", () => {
     const headers = readFileSync("public/_headers", "utf8");
     expect(headers).toMatch(/\/backgrounds\/\*\s+Cache-Control: public, max-age=86400/);
+  });
+});
+
+describe("PHASE_GUIDE_FILL·TIMELESS_PHASES (UX-01 빈 칸 채움, 05-UI-SPEC 7.2)", () => {
+  it("낮 시작 하단 두 줄과 토론 헤더 문장이 상수 한 곳에 있다", () => {
+    expect(PHASE_GUIDE_FILL.dayAnnounce).toEqual({ title: "낮이 되었어요", guide: "곧 직업 공개가 시작돼요" });
+    expect(PHASE_GUIDE_FILL.discussion(1)).toBe("1일차 · 의견을 나눠요");
+  });
+
+  it("토론 헤더 문장은 99일차에서도 14자 이하다 (헤더 안내줄 nowrap)", () => {
+    expect([...PHASE_GUIDE_FILL.discussion(99)].length).toBeLessThanOrEqual(14);
+  });
+
+  it("객체는 동결돼 있다", () => {
+    expect(Object.isFrozen(PHASE_GUIDE_FILL)).toBe(true);
+    expect(Object.isFrozen(PHASE_GUIDE_FILL.dayAnnounce)).toBe(true);
+  });
+
+  it("TIMELESS_PHASES 는 lobby·assigning·ended 순서의 동결 배열이다", () => {
+    expect([...TIMELESS_PHASES]).toEqual(["lobby", "assigning", "ended"]);
+    expect(Object.isFrozen(TIMELESS_PHASES)).toBe(true);
   });
 });

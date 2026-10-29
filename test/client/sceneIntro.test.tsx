@@ -298,12 +298,18 @@ describe("dayAnnounce 는 테이블 장면(DayScene) 위에서 그려진다", ()
     expect(mafia).toContain("mf-figure--halo-crimson");
   });
 
-  it("낮 시작에서 탈락자는 관전 하단(읽기 전용 줄)을 본다. 살아 있는 사람 하단은 비어 있다", () => {
-    const alive = scene(makeView({ phase: "dayAnnounce", role: "citizen" }));
-    expect(alive.container.querySelector(".mf-dayscene__panel")?.children.length).toBe(0);
-    cleanup();
-    const dead = scene(makeView({ phase: "dayAnnounce", role: "citizen", dead: [0] }));
-    expect((dead.container.querySelector(".mf-dayscene__panel")?.children.length ?? 0) > 0).toBe(true);
+  it("낮 시작 하단은 생존자·탈락자 모두 같은 두 줄(`낮이 되었어요` / `곧 직업 공개가 시작돼요`)이다 (UX-01, 05-UI-SPEC 7.2)", () => {
+    const texts: string[] = [];
+    for (const dead of [undefined, [0]] as const) {
+      const { container, unmount } = scene(makeView({ phase: "dayAnnounce", role: "citizen", ...(dead ? { dead: [...dead] } : {}) }));
+      const panel = container.querySelector(".mf-dayscene__panel")!;
+      expect(panel.children.length).toBe(1);
+      expect(panel.querySelector(".mf-ro")).toBeNull();
+      texts.push(panel.textContent ?? "");
+      unmount();
+    }
+    expect(texts[0]).toBe("낮이 되었어요곧 직업 공개가 시작돼요");
+    expect(texts[1]).toBe(texts[0]);
   });
 
   it("dayAnnounce ↔ 주장·밤·아침으로 가도 테이블과 장면 상자 노드가 유지된다", () => {
