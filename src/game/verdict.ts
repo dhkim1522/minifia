@@ -418,7 +418,9 @@ export const VERDICT_TEXT = {
   execIntroCardTitle: "처형 투표", // §9.1
   // candidateVote
   candidateTitle: "처형할 사람을 고르세요",
-  candidateHint: "자기 자신은 고를 수 없어요 · 마감까지 바꿀 수 있어요",
+  // 하단 안내 줄(14px, 360폭 한 줄, 네 역할이 같은 글자, 결정 0040). 고르기 전은 안 고르면 어떻게 되는지, 고른 뒤는 빈 곳 탭 취소만 알린다.
+  candidateGuideNone: "아무도 고르지 않으면 무효표가 돼요",
+  candidateGuidePicked: "빈 곳을 누르면 선택이 취소돼요",
   candidateNone: "선택 안 함",
   /** 확정 알약은 자리 색 점과 굵은 이름이 따로 그려지므로 이름 뒤 조각만 둔다(D-19) */
   votedSuffix: "님에게 투표했어요",

@@ -230,7 +230,7 @@ export function DayScene({ view, connection, myRoleButton, testButton, arrivedFr
 
   // 후보 선택의 빈 곳 탭 = 선택 취소(결정 0040). 장면 상자의 클릭에서 대상이 빈 곳일 때만 verdict.onBlankTap 을 부른다.
   const onSceneClick = (e: MouseEvent<HTMLDivElement>): void => {
-    if (isBlankSceneTap(e.target, e.currentTarget)) verdict?.onBlankTap?.();
+    if (isBlankSceneTap(e.target, { x: e.clientX, y: e.clientY }, e.currentTarget)) verdict?.onBlankTap?.();
   };
 
   return (

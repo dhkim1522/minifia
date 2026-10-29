@@ -251,19 +251,28 @@ describe("UX-01 투표 구간 부품: execVote·candidateVote·reveal·defense·
     for (const ro of Array.from(spec.container.querySelectorAll(".mf-ro"))) expect(ro.hasAttribute("data-guide")).toBe(false);
   });
 
-  it("candidateVote 안내 줄(결정 0040): 마피아·경찰·의사·시민이 같은 `아무도 고르지 않으면 무효표가 돼요`를 보고 관전자는 기존 관전 안내를 본다. [data-guide] 는 어디서나 하나", () => {
-    const texts = new Set<string>();
-    for (const vp of ["mafia", "police", "doctor", "citizen"] as const) {
-      const { container, unmount } = renderCell("candidateVote", vp);
-      onlyGuide(container, `candidateVote/${vp}`);
-      texts.add(squish(container.querySelector(".mf-dayscene__panel .mf-claimpanel__guide")?.textContent));
-      unmount();
-    }
-    expect([...texts]).toEqual([VERDICT_TEXT.candidateGuideNone]);
+  it("candidateVote 안내 줄(결정 0040): 네 역할이 같은 글자를 본다 — 고르기 전 `아무도 고르지 않으면 무효표가 돼요`, 고른 뒤 `빈 곳을 누르면 선택이 취소돼요`. 관전자는 기존 관전 안내. [data-guide] 는 어디서나 하나", () => {
+    const guideText = (container: HTMLElement): string => squish(container.querySelector(".mf-dayscene__panel .mf-claimpanel__guide")?.textContent);
     expect(VERDICT_TEXT.candidateGuideNone).toBe("아무도 고르지 않으면 무효표가 돼요");
+    expect(VERDICT_TEXT.candidateGuidePicked).toBe("빈 곳을 누르면 선택이 취소돼요");
+    for (const picked of [false, true]) {
+      const texts = new Set<string>();
+      for (const vp of ["mafia", "police", "doctor", "citizen"] as const) {
+        const viewer: Viewer = vp === "mafia" ? "mafiaAlly" : "alive";
+        const fx = verdictFixture({ stage: "candidateVote", viewer, count: 4 });
+        if (picked) fx.view.me.voteTarget = vp === "mafia" ? 3 : 2;
+        else delete fx.view.me.voteTarget;
+        connectionMock.current = { ...conn(fx.view), ...fx.over };
+        const { container, unmount } = render(<RoomScreen code="0042" token={"t".repeat(43)} onExit={vi.fn()} />);
+        onlyGuide(container, `candidateVote/${vp}/${picked ? "고름" : "안 고름"}`);
+        texts.add(guideText(container));
+        unmount();
+      }
+      expect([...texts], picked ? "고른 뒤" : "고르기 전").toEqual([picked ? VERDICT_TEXT.candidateGuidePicked : VERDICT_TEXT.candidateGuideNone]);
+    }
     const spec = renderCell("candidateVote", "spectator");
     onlyGuide(spec.container, "candidateVote/spectator");
-    expect(squish(spec.container.querySelector(".mf-dayscene__panel .mf-claimpanel__guide")?.textContent)).toBe(VERDICT_TEXT.candidateSpectatorHint);
+    expect(guideText(spec.container)).toBe(VERDICT_TEXT.candidateSpectatorHint);
   });
 
   it("candidateVoteReveal: 하나, 글자가 비어 있지 않다 (공개 caption 제목)", () => {
