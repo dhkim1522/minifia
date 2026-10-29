@@ -17,9 +17,9 @@
 // - 세로: 장면 높이가 시안보다 짧은 실제 폰(주소창·툴바)에서는 테이블 전체(면과 좌석 원)를 같은 만큼 올린다.
 //   그러면 테이블과 좌석의 관계는 그대로이고, 맨 앞 이름표가 장면 안에 든다(높이 TABLE_FIT_MIN_H 이상).
 //   짧은 장면(P5-3, 05-04): 높이가 TABLE_FIT_MIN_H(299) 미만이면 좌석 원 세로 반지름·캐릭터 배율·테이블 면 높이를 같은 배율 f 로 줄인다
-//   (f = (높이 − 이름표 22) / 276.8, 하한 TABLE_FIT_MIN_SCALE). 이름표 글자·높이와 가로 반지름·면 폭은 줄이지 않는다. 지원 하한은 방 높이 516
+//   (f = (높이 − 이름표 상자 26) / 276.8, 하한 TABLE_FIT_MIN_SCALE). 이름표 글자·높이와 가로 반지름·면 폭은 줄이지 않는다. 이름표 상자(.mf-dt__tag)는 실제로 26(알약 22 + 줄 상자 4, 알약이 상자 아래쪽)이라 26 으로 맞춘다. 지원 하한은 방 높이 516
 //   (장면 높이 240)이고, 그 아래에서는 배율이 하한에서 멈춰 맨 뒤 머리 위가 0 에 닿고(머리 우선) 맨 앞 이름표가 장면 아래로 넘칠 수 있다.
-//   높이 299 이상의 기하는 한 값도 바뀌지 않는다(f = 1).
+//   높이 299 이상의 기하는 한 값도 바뀌지 않는다(f = 1) — 그래서 299 경계에서 cy 가 약 2.6px 어긋난다(승인 기하 177 ↔ 압축 식 174.4).
 
 /** 시안 기준 장면 크기: 폭 366(390 폭 폰), 높이 407(390×664 에서 헤더 100·하단 157 을 뺀 값). 재지 못할 때의 기본값. */
 export const DAY_SCENE_W = 366;
@@ -58,6 +58,8 @@ export const DEPTH_K0 = 0.8;
 export const TAG_GAP_Y = 0;
 /** 이름표 한 줄 높이(테두리 포함) */
 export const TAG_H = 22;
+/** 실제 DOM 의 이름표 상자(.mf-dt__tag) 높이: 알약 22 + 인라인 줄 상자 4. 알약은 상자 아래쪽(tagTop + 4 ~ tagTop + 26)에 놓인다. 짧은 장면 압축은 이 높이로 맞춘다. */
+export const TAG_BOX_H = 26;
 /**
  * 이름표 상자 폭 상한(배치 검사의 기준). 5글자 닉네임 윗줄의 설계 값이다:
  * 테두리 1 + 여백 7 + 점 8 + 간격 4 + 글자 70(14px × 5) + 여백 8 + 테두리 1 = 99.
@@ -67,22 +69,22 @@ export const NAME_TAG_MAX_W = 100;
 
 /**
  * 짧은 장면 압축의 분모(P5-3): 맨 뒤 머리 위에서 맨 앞 발까지의 세로 길이 = 2·SEAT_RY + FIG_H·DEPTH_K0 = 276.8.
- * 장면 높이 H 에 맨 앞 이름표(TAG_H)를 더해 맞추면 f = (H − TAG_H) / 276.8.
+ * 장면 높이 H 에 맨 앞 이름표 상자(TAG_BOX_H)를 더해 맞추면 f = (H − TAG_BOX_H) / 276.8.
  */
 export const TABLE_FIT_SPAN = 2 * SEAT_RY + FIG_H * DEPTH_K0;
 /**
- * 압축 배율의 하한. 장면 240 = 방 516 − 헤더 119.2 − 패널 157 에서 맨 앞 이름표가 들어가는 배율 (240 − 22)/276.8 ≈ 0.7876 아래로 둔다.
- * UI-SPEC 권장 0.8 은 장면 240 에서 이름표가 3.4px 넘쳐 다르게 둔다(결정 0038). 장면 240 미만에서는 이 값에서 멈춘다.
+ * 압축 배율의 하한. 장면 240 = 방 516 − 헤더 119.2 − 패널 157 에서 맨 앞 이름표 상자가 들어가는 배율 (240 − 26)/276.8 ≈ 0.7731 아래로 둔다.
+ * UI-SPEC 권장 0.8 은 장면 240 에서 이름표가 약 7.6px 넘쳐 다르게 둔다(결정 0038). 장면 240 미만에서는 이 값에서 멈춘다.
  */
-export const TABLE_FIT_MIN_SCALE = 0.78;
+export const TABLE_FIT_MIN_SCALE = 0.77;
 
 /**
- * 장면 높이에 맞춘 압축 배율. TABLE_FIT_MIN_H 이상이면 1(승인 기하 그대로), 아니면 (높이 − 이름표)/TABLE_FIT_SPAN 을
+ * 장면 높이에 맞춘 압축 배율. TABLE_FIT_MIN_H 이상이면 1(승인 기하 그대로), 아니면 (높이 − 이름표 상자)/TABLE_FIT_SPAN 을
  * [TABLE_FIT_MIN_SCALE, 1] 로 자른다. 0·음수·NaN(첫 측정 전)도 하한으로 받는다(T-05-09).
  */
 export function tableFitScale(sceneH: number): number {
   if (sceneH >= TABLE_FIT_MIN_H) return 1;
-  const raw = (sceneH - TAG_H) / TABLE_FIT_SPAN;
+  const raw = (sceneH - TAG_BOX_H) / TABLE_FIT_SPAN;
   return raw > TABLE_FIT_MIN_SCALE ? Math.min(1, raw) : TABLE_FIT_MIN_SCALE;
 }
 
@@ -136,12 +138,12 @@ export function dayTableGeometry(sceneW: number, sceneH: number = DAY_SCENE_H, p
     const cy = Math.max(SEAT_CY_MIN, Math.min(SEAT_CY, sceneH - FRONT_TAG_BELOW_CY));
     return { cx: sceneW / 2, cy, rx, ry: SEAT_RY, fit: 1, felt: { left, top: cy - FELT_CY_OFFSET, width: feltW, height: FELT_H } };
   }
-  // 짧은 장면(P5-3): 세로만 같은 배율 f 로 줄인다. 맨 앞 이름표가 장면 아래끝에 닿게 cy 를 두되, 배율이 하한에서 멈추는 아주 짧은
+  // 짧은 장면(P5-3): 세로만 같은 배율 f 로 줄인다. 맨 앞 이름표 상자가 장면 아래끝에 닿게 cy 를 두되, 배율이 하한에서 멈추는 아주 짧은
   // 장면에서는 맨 뒤 머리가 0 에 닿는 값(머리 우선)에서 멈춘다. NaN 높이는 0 으로 본다.
   const h = Number.isFinite(sceneH) ? sceneH : 0;
   const f = tableFitScale(h);
   const ry = SEAT_RY * f;
-  const cy = Math.max(ry + FIG_H * DEPTH_K0 * f, h - TAG_H - ry);
+  const cy = Math.max(ry + FIG_H * DEPTH_K0 * f, h - TAG_BOX_H - ry);
   return {
     cx: sceneW / 2,
     cy,
