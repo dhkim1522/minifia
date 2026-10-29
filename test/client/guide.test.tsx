@@ -1,5 +1,5 @@
 /// <reference types="node" />
-import { cleanup, render } from "@testing-library/react";
+import { act, cleanup, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { RoleId } from "../../shared/game/roles";
 import type { MorningView, PhaseId, RoomView } from "../../shared/protocol";
@@ -26,7 +26,7 @@ vi.mock("../../src/net/assets", async (importOriginal) => ({
 }));
 
 const { RoomScreen } = await import("../../src/screens/RoomScreen");
-const { PHASE_GUIDE_FILL } = await import("../../src/game/scenes");
+const { PHASE_GUIDE_FILL, TIMELESS_PHASES } = await import("../../src/game/scenes");
 
 const NOW = 1_700_000_000_000;
 
@@ -295,5 +295,141 @@ describe("UX-01 투표 구간 부품: execVote·candidateVote·reveal·defense·
     const citizen = renderVerdict("noExecution", "alive");
     const gc = onlyGuide(citizen.container, "noExecution/시민");
     expect(squish(gc.textContent)).toBe("밤이 되었어요");
+  });
+});
+
+// ---- 05-01 Task 3: 대기실·배정·역할 확인·결과 + 14단계 × 시점 점검표 (D-08, D-09, P5-5) ----
+
+/** 시점: 역할 넷 + 관전자, 그리고 역할이 아직 없는 단계의 한 칸(none) */
+type CheckViewpoint = Viewpoint | "none";
+
+/**
+ * 점검표(05-UI-SPEC 8): PhaseId 14개 × 시점. 있을 수 없는 칸은 적지 않는다 —
+ * lobby·assigning 은 역할이 없어 none 한 칸, roleReveal 은 살아 있는 사람뿐(관전 없음).
+ * 새 PhaseId 가 생기면 Record 가 타입 오류로 알린다.
+ */
+const CHECKLIST: Readonly<Record<PhaseId, readonly CheckViewpoint[]>> = {
+  lobby: ["none"],
+  assigning: ["none"],
+  roleReveal: ["mafia", "police", "doctor", "citizen"],
+  dayAnnounce: ["mafia", "police", "doctor", "citizen", "spectator"],
+  claim: ["mafia", "police", "doctor", "citizen", "spectator"],
+  discussion: ["mafia", "police", "doctor", "citizen", "spectator"],
+  night: ["mafia", "police", "doctor", "citizen", "spectator"],
+  morning: ["mafia", "police", "doctor", "citizen", "spectator"],
+  execVote: ["mafia", "police", "doctor", "citizen", "spectator"],
+  candidateVote: ["mafia", "police", "doctor", "citizen", "spectator"],
+  candidateVoteReveal: ["mafia", "police", "doctor", "citizen", "spectator"],
+  defense: ["mafia", "police", "doctor", "citizen", "spectator"],
+  execution: ["mafia", "police", "doctor", "citizen", "spectator"],
+  ended: ["mafia", "police", "doctor", "citizen", "spectator"],
+};
+
+const VERDICT_PHASES: ReadonlySet<PhaseId> = new Set<PhaseId>(["execVote", "candidateVote", "candidateVoteReveal", "defense", "execution", "ended"]);
+
+/** 칸 하나를 그린다. 투표 구간·결과는 verdictViews 픽스처(역할은 마피아/그 밖만 구분), 나머지는 이 파일의 makeView */
+function renderCell(phase: PhaseId, vp: CheckViewpoint) {
+  if (VERDICT_PHASES.has(phase)) {
+    const viewer: Viewer = vp === "spectator" ? "spectator" : vp === "mafia" ? "mafiaAlly" : "alive";
+    const r = renderVerdict(phase as VerdictStage, viewer);
+    if (phase === "candidateVoteReveal") act(() => vi.advanceTimersByTime(2_000));
+    return r;
+  }
+  const viewpoint: Viewpoint = vp === "none" ? "citizen" : vp;
+  const endsIn = phase === "lobby" ? null : phase === "assigning" ? 3_000 : phase === "roleReveal" ? 15_000 : phase === "claim" ? 8_000 : phase === "night" ? 30_000 : 15_000;
+  const view = makeView({ phase, viewpoint, endsIn, turn: phase === "claim" ? 1 : undefined, day: 1 });
+  if (vp === "none") delete view.me.role;
+  return renderRoom(view);
+}
+
+describe("UX-01 점검표: 14단계 × 시점 모든 칸의 안내 문장과 남은 시간 (D-08, 05-UI-SPEC 8.4)", () => {
+  const phases = Object.keys(CHECKLIST) as PhaseId[];
+
+  it("점검표가 14단계를 모두 가진다", () => {
+    expect(phases.length).toBe(14);
+  });
+
+  for (const phase of phases) {
+    for (const vp of CHECKLIST[phase]) {
+      it(`${phase}/${vp}: [data-guide] 정확히 하나·글자 있음·값 빈 문자열, ${TIMELESS_PHASES.includes(phase) ? "타이머 없어도 됨" : "타이머 있음"}`, () => {
+        const { container } = renderCell(phase, vp);
+        const cell = `${phase}/${vp}`;
+        const g = onlyGuide(container, cell);
+        expect(squish(g.textContent), `${cell}: 안내 글자`).not.toBe("");
+        expect(g.getAttribute("data-guide"), `${cell}: 속성 값`).toBe("");
+        if (!TIMELESS_PHASES.includes(phase)) {
+          expect(container.querySelectorAll('[role="timer"]').length, `${cell}: 타이머`).toBeGreaterThanOrEqual(1);
+        }
+      });
+    }
+  }
+
+  it("TIMELESS_PHASES 밖의 단계(11개)는 모두 점검표에 있고 타이머를 시험한다", () => {
+    expect(phases.filter((p) => !TIMELESS_PHASES.includes(p)).length).toBe(11);
+  });
+});
+
+describe("UX-01 대기실·배정·역할 확인·결과의 안내 요소 (D-08)", () => {
+  it("lobby 방장·손님: [data-guide] 는 `.mf-lobby__guide` 하나이고 글자가 비어 있지 않다", () => {
+    for (const isHost of [true, false]) {
+      const view = makeView({ phase: "lobby", endsIn: null, isHost });
+      delete view.me.role;
+      const { container, unmount } = renderRoom(view);
+      const g = onlyGuide(container, `lobby/${isHost ? "방장" : "손님"}`);
+      expect(g.classList.contains("mf-lobby__guide")).toBe(true);
+      expect(squish(g.textContent)).not.toBe("");
+      unmount();
+    }
+  });
+
+  it("assigning: 하나 = `직업을 배정하고 있습니다…`", () => {
+    const { container } = renderRoom(makeView({ phase: "assigning", endsIn: 3_000 }));
+    expect(squish(onlyGuide(container, "assigning").textContent)).toBe("직업을 배정하고 있습니다…");
+  });
+
+  it("roleReveal: 하나 = `.mf-reveal__hint`", () => {
+    const { container } = renderRoom(makeView({ phase: "roleReveal", viewpoint: "police", endsIn: 15_000 }));
+    expect(onlyGuide(container, "roleReveal").classList.contains("mf-reveal__hint")).toBe(true);
+  });
+
+  it("ended: 하나 = 배너 제목 `시민 팀 승리` 또는 `마피아 팀 승리` (생존·관전 모두)", () => {
+    for (const [winner, title] of [
+      ["citizenWin", "시민 팀 승리"],
+      ["mafiaWin", "마피아 팀 승리"],
+    ] as const) {
+      for (const viewer of ["alive", "spectator"] as const) {
+        const fx = verdictFixture({ stage: "ended", viewer, count: 4 });
+        fx.view.result = { ...fx.view.result!, winner };
+        connectionMock.current = { ...conn(fx.view), ...fx.over };
+        const { container, unmount } = render(<RoomScreen code="0042" token={"t".repeat(43)} onExit={vi.fn()} />);
+        const g = onlyGuide(container, `ended/${winner}/${viewer}`);
+        expect(g.classList.contains("mf-result__banner-title")).toBe(true);
+        expect(squish(g.textContent)).toBe(title);
+        unmount();
+      }
+    }
+  });
+});
+
+describe("UX-01 누출 검사: 새 문장은 역할로 달라지지 않는다 (T-05-01, D-09)", () => {
+  it("dayAnnounce·discussion 의 새 문장이 4역할(·관전자)에서 같은 글자다", () => {
+    const day = new Set<string>();
+    const talk = new Set<string>();
+    for (const vp of ALL_VIEWPOINTS) {
+      const a = renderRoom(makeView({ phase: "dayAnnounce", viewpoint: vp, endsIn: 2_000 }));
+      day.add(squish(a.container.querySelector(".mf-dayscene__panel")?.textContent));
+      a.unmount();
+      if (vp === "spectator") continue; // 탈락자의 토론 안내는 기존 `{n}일차` + 읽기 전용 줄(설계)
+      const d = renderRoom(makeView({ phase: "discussion", viewpoint: vp, endsIn: 90_000 }));
+      talk.add(squish(onlyGuide(d.container, `discussion/${vp}`).textContent));
+      d.unmount();
+    }
+    expect([...day]).toEqual([`${PHASE_GUIDE_FILL.dayAnnounce.title}${PHASE_GUIDE_FILL.dayAnnounce.guide}`]);
+    expect([...talk]).toEqual([PHASE_GUIDE_FILL.discussion(1)]);
+  });
+
+  it("새 문장 상수에는 역할 이름이 없다", () => {
+    const sentences = [PHASE_GUIDE_FILL.dayAnnounce.title, PHASE_GUIDE_FILL.dayAnnounce.guide, PHASE_GUIDE_FILL.discussion(1)].join(" ");
+    for (const word of ["마피아", "경찰", "의사", "시민"]) expect(sentences).not.toContain(word);
   });
 });
