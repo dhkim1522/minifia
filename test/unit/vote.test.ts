@@ -446,15 +446,15 @@ describe("castCandidateVote (VOTE-02, D-03) — 검사 순서", () => {
     expect(`${ghost.ok ? "ok" : ghost.error} ${dead.ok ? "ok" : dead.error}`).toBe("BAD_MESSAGE BAD_MESSAGE");
   });
 
-  it("대상이 정수가 아니거나 앉지 않았거나 탈락자면 BAD_MESSAGE 다", () => {
+  it("대상이 정수가 아니거나 앉지 않았거나 탈락자면 BAD_MESSAGE 다 (null 은 취소(결정 0040)라 이 목록에 없고 undefined 는 남는다)", () => {
     const state = withDead(candidateVoteOf(5, 2), [3]);
-    const bad = [1.5, Number.NaN, -1, 99, 3, "2" as unknown as number, null as unknown as number, undefined as unknown as number].map(
+    const bad = [1.5, Number.NaN, -1, 99, 3, "2" as unknown as number, undefined as unknown as number].map(
       (target) => {
         const r = castCandidateVote(state, idOf(state, 0), target);
         return r.ok ? "ok" : r.error;
       },
     );
-    expect(bad.join(" ")).toBe(Array(8).fill("BAD_MESSAGE").join(" "));
+    expect(bad.join(" ")).toBe(Array(7).fill("BAD_MESSAGE").join(" "));
   });
 
   it("자기 자신은 고를 수 없다 — BAD_MESSAGE (D-03, 서버가 방어선)", () => {
@@ -602,5 +602,147 @@ describe("tallyCandidateVote (VOTE-02, D-03, D-04, D-20) — 집계와 서버 �
         expect(`${n}/${seed}: ${result.candidate === undefined ? "none" : result.candidate}`).toBe(`${n}/${seed}: ${expected}`);
       }
     }
+  });
+});
+
+// ---- 261029-vvd: 후보 선택 취소 (결정 0040) ----
+
+/** 실제 castCandidateVote 로 표를 넣는다(거부되면 준비가 틀린 것). */
+function castPicks(state: RoomState, picks: Array<[number, number]>): RoomState {
+  let current = state;
+  for (const [seat, target] of picks) {
+    const r = castCandidateVote(current, idOf(current, seat), target);
+    if (!r.ok) throw new Error(`rejected ${seat}->${target}: ${r.error}`);
+    current = r.state;
+  }
+  return current;
+}
+
+/** 취소(target null)를 한 번 보낸다. 거부되면 준비가 틀린 것. */
+function cancelPick(state: RoomState, seat: number): RoomState {
+  const r = castCandidateVote(state, idOf(state, seat), null);
+  if (!r.ok) throw new Error(`cancel rejected ${seat}: ${r.error}`);
+  return r.state;
+}
+
+describe("castCandidateVote 취소 (결정 0040)", () => {
+  it("고른 뒤 null 이면 그 사람의 candidateVote 키만 사라지고 나머지는 그대로이며 결과가 고르기 전 상태와 같다 (깊게 얼려도 예외 없음)", () => {
+    const before = candidateVoteOf(5, 1);
+    const picked = deepFreeze(castPicks(before, [[0, 2]]));
+    const r = castCandidateVote(picked, idOf(picked, 0), null);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.state).not.toBe(picked);
+    const mine = r.state.players.find((p) => p.seat === 0)!;
+    expect(Object.hasOwn(mine, "candidateVote")).toBe(false);
+    expect(r.state.phaseEndsAt).toBe(picked.phaseEndsAt);
+    expect(r.state.phase).toBe("candidateVote");
+    expect(JSON.stringify(r.state)).toBe(JSON.stringify(before));
+    expect(r.state).toEqual(before);
+  });
+
+  it("고른 표 없는 null 은 입력 상태 그대로(toBe)다", () => {
+    const state = candidateVoteOf(5, 2);
+    const r = castCandidateVote(state, idOf(state, 3), null);
+    expect(r.ok && r.state === state).toBe(true);
+  });
+
+  it("고르기 → 취소 → 다시 고르기 → 취소를 반복해도 마지막 상태만 남고 마감은 그대로다", () => {
+    const start = candidateVoteOf(6, 3);
+    let state = start;
+    for (const target of [2, 3, 4]) {
+      state = castPicks(state, [[0, target]]);
+      expect(state.players.find((p) => p.seat === 0)?.candidateVote).toBe(target);
+      state = cancelPick(state, 0);
+      expect(Object.hasOwn(state.players.find((p) => p.seat === 0)!, "candidateVote")).toBe(false);
+    }
+    expect(JSON.stringify(state)).toBe(JSON.stringify(start));
+    state = castPicks(state, [[0, 5]]);
+    expect(state.players.find((p) => p.seat === 0)?.candidateVote).toBe(5);
+    expect(state.phaseEndsAt).toBe(start.phaseEndsAt);
+  });
+
+  it("candidateVote 가 아닌 단계(탈락자 포함)의 null 은 WRONG_PHASE 다", () => {
+    const discussion = withDead(stateAt(5, 1, "discussion"), [4]);
+    const exec = withDead(execVoteOf(5, 1), [4]);
+    const reveal = withDead(stateWithVerdict(5, 1, "candidateVoteReveal"), [4]);
+    const out = [discussion, exec, reveal].flatMap((s) =>
+      [0, 4].map((seat) => {
+        const r = castCandidateVote(s, idOf(s, seat), null);
+        return r.ok ? "ok" : r.error;
+      }),
+    );
+    expect(out.join(" ")).toBe(Array(6).fill("WRONG_PHASE").join(" "));
+  });
+
+  it("방에 없는 행위자·탈락한 행위자의 null 은 BAD_MESSAGE 다", () => {
+    const state = withDead(candidateVoteOf(5, 2), [4]);
+    const ghost = castCandidateVote(state, "player-id-zzzz-none", null);
+    const dead = castCandidateVote(state, idOf(state, 4), null);
+    expect(`${ghost.ok ? "ok" : ghost.error} ${dead.ok ? "ok" : dead.error}`).toBe("BAD_MESSAGE BAD_MESSAGE");
+  });
+
+  it("자기 자신 고르기는 여전히 BAD_MESSAGE 다 (취소 도입 뒤에도)", () => {
+    const state = castPicks(candidateVoteOf(5, 4), [[0, 2]]);
+    const r = castCandidateVote(state, idOf(state, 0), 0);
+    expect(r.ok ? "ok" : r.error).toBe("BAD_MESSAGE");
+    expect(state.players.find((p) => p.seat === 0)?.candidateVote).toBe(2);
+  });
+
+  it("뷰 익명: 4~8명 × 시드 1~3 에서 안 고름·A→B·A 취소 세 상태의 A 외 모든 viewer view 가 같고, A 는 고른 상태에만 voteTarget 이 있으며 취소 뒤 A view 는 안 고름과 같다", () => {
+    for (let n = 4; n <= 8; n += 1) {
+      for (const seed of [1, 2, 3]) {
+        const s0 = withDead(candidateVoteOf(n, seed), n >= 6 ? [n - 1] : []);
+        const s1 = castPicks(s0, [[0, 1]]);
+        const s2 = cancelPick(s1, 0);
+        const viewOfSeat = (state: RoomState, seat: number): string => JSON.stringify(buildView(state, idOf(state, seat), 99));
+        for (const p of s0.players) {
+          if (p.seat === 0) continue;
+          expect(`${n}/${seed}/${p.seat} ${viewOfSeat(s1, p.seat) === viewOfSeat(s0, p.seat)}`).toBe(`${n}/${seed}/${p.seat} true`);
+          expect(`${n}/${seed}/${p.seat} ${viewOfSeat(s2, p.seat) === viewOfSeat(s0, p.seat)}`).toBe(`${n}/${seed}/${p.seat} true`);
+        }
+        const mine = (state: RoomState): RoomView => buildView(state, idOf(state, 0), 99);
+        expect(`${n}/${seed} ${String(mine(s0).me.voteTarget)} ${String(mine(s1).me.voteTarget)} ${String(mine(s2).me.voteTarget)}`).toBe(`${n}/${seed} undefined 1 undefined`);
+        expect(Object.hasOwn(mine(s2).me, "voteTarget")).toBe(false);
+        expect(viewOfSeat(s2, 0)).toBe(viewOfSeat(s0, 0));
+      }
+    }
+  });
+
+  it("결과: X→T·Y→T·A→U 뒤 A 가 취소하고 마감하면 공개 표 2개·A 줄 없음·후보 T·공개 길이 candidateRevealMs(2)", () => {
+    const base = candidateVoteOf(5, 1);
+    const [a, x, y] = [0, 1, 2];
+    const t = 3;
+    const u = 4;
+    const state = cancelPick(castPicks(base, [[x, t], [y, t], [a, u]]), a);
+    const deadline = state.phaseEndsAt!;
+    const reveal = tick(state, deadline, seededRandInt(7));
+    const cand = reveal.voteLog!.at(-1)!.cand!;
+    expect(reveal.phase).toBe("candidateVoteReveal");
+    expect(cand.votes.length).toBe(2);
+    expect(cand.votes.some((v) => v.seat === a)).toBe(false);
+    expect(cand.candidate).toBe(t);
+    expect(reveal.phaseEndsAt).toBe(deadline + candidateRevealMs(2));
+  });
+
+  it("결과: A 만 던졌다 취소하면 votes []·후보 없음·공개 길이 candidateRevealMs(0), 그 마감 뒤 night 의 view 는 day.noExecution noVotes 다", () => {
+    const state = cancelPick(castPicks(candidateVoteOf(5, 2), [[0, 2]]), 0);
+    const deadline = state.phaseEndsAt!;
+    const reveal = tick(state, deadline, seededRandInt(8));
+    const cand = reveal.voteLog!.at(-1)!.cand!;
+    expect(JSON.stringify(cand.votes)).toBe("[]");
+    expect(Object.hasOwn(cand, "candidate")).toBe(false);
+    expect(reveal.phaseEndsAt).toBe(deadline + candidateRevealMs(0));
+    const night = tick(reveal, reveal.phaseEndsAt!, seededRandInt(9));
+    expect(night.phase).toBe("night");
+    const view = buildView(night, idOf(night, 0), 99);
+    expect(JSON.stringify(view.day?.noExecution)).toBe(JSON.stringify({ reason: "noVotes" }));
+  });
+
+  it("결과: 취소 뒤 다시 고른 표는 새 값으로 센다", () => {
+    const state = castPicks(cancelPick(castPicks(candidateVoteOf(5, 3), [[0, 2], [1, 2]]), 0), [[0, 4]]);
+    const reveal = tick(state, state.phaseEndsAt!, seededRandInt(10));
+    const votes = [...reveal.voteLog!.at(-1)!.cand!.votes].sort((p, q) => p.seat - q.seat);
+    expect(JSON.stringify(votes)).toBe(JSON.stringify([{ seat: 0, target: 4 }, { seat: 1, target: 2 }]));
   });
 });

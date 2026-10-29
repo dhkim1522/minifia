@@ -179,6 +179,35 @@ describe("candidateVote 화면 한 경로 (VOTE-02, D-03, D-19)", () => {
     cleanup();
   });
 
+  it("고른 뒤 테이블 면 클릭 → send candidateVote target null, 알약 `선택 안 함`·흰 후광 0·눌림 해제 (결정 0040)", () => {
+    const { container, send } = renderRoom(makeView());
+    fireEvent.click(voteBtn("민지")!);
+    expect(send).toHaveBeenCalledTimes(1);
+    fireEvent.click(container.querySelector(".mf-dt__felt")!);
+    expect(send).toHaveBeenCalledTimes(2);
+    expect(send).toHaveBeenLastCalledWith({ t: "candidateVote", target: null });
+    expect(panel(container)?.querySelector("[role=status]")?.textContent).toBe("선택 안 함");
+    expect(whiteHalos(container).length).toBe(0);
+    expect(voteBtn("민지")?.getAttribute("aria-pressed")).toBe("false");
+  });
+
+  it("아무도 안 고른 상태의 테이블 면 클릭은 send 가 없다", () => {
+    const { container, send } = renderRoom(makeView());
+    fireEvent.click(container.querySelector(".mf-dt__felt")!);
+    expect(send).not.toHaveBeenCalled();
+  });
+
+  it("고른 뒤 이름표(.mf-dt__tag)·내 자리(div) 클릭은 send 가 없고 선택이 남는다", () => {
+    const { container, send } = renderRoom(makeView());
+    fireEvent.click(voteBtn("민지")!);
+    expect(send).toHaveBeenCalledTimes(1);
+    fireEvent.click(container.querySelector(".mf-dt__tag[data-seat='1']")!);
+    fireEvent.click(seatEl(container, 0));
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(voteBtn("민지")?.getAttribute("aria-pressed")).toBe("true");
+    expect(whiteHalos(container).length).toBe(1);
+  });
+
   it("연결 중… 이 아니라 낮 테이블: 헤더 `낮 · 후보 선택`/`1일차`, 하단 제목, 알약 `선택 안 함`, 읽기용 안내", () => {
     const { container } = renderRoom(makeView());
     expect(screen.queryByText("연결 중…")).toBeNull();

@@ -6,7 +6,7 @@ import { runDurableObjectAlarm } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 import type { RoomView, ServerMessage } from "../../shared/protocol";
 import { EXEC_VOTE_MS, candidateRevealMs } from "../../shared/game/phases";
-import { actorsOf, advanceTo, alarmOf, backdateSends, forceDue, lastViewOf, mark, nextFrame, seat, send, settle, storedRoom, summary, voteCandidate, voteExec } from "./helpers";
+import { actorsOf, advanceTo, alarmOf, backdateSends, closePhase, forceDue, lastViewOf, mark, nextFrame, seat, send, settle, storedRoom, summary, voteCandidate, voteExec } from "./helpers";
 import type { Actor, Seated, TestSocket } from "./helpers";
 
 const allSockets = (r: Seated): TestSocket[] => [r.host, ...r.guests.map((g) => g.sock)];
@@ -259,6 +259,66 @@ describe("후보 선택은 투표자에게만 (VOTE-02, D-03, D-19, A7)", () => 
     const frames = await sendAndSettleAll(actors, actors[0]!, { t: "candidateVote", target: actors[1]!.seat });
     expect(summary(frames[0]!)).toBe("[error:WRONG_PHASE,state:execVote]");
     expect(frames.slice(1).map(summary).join(" ")).toBe(actors.slice(1).map(() => "[]").join(" "));
+  });
+});
+
+describe("후보 선택 취소 (결정 0040, A7)", () => {
+  it("A 가 B 를 고른 뒤 null 을 보내면 A 소켓만 voteTarget 키 없는 state 를 받고 나머지 다섯은 아무것도 받지 않으며, 저장된 A 에 candidateVote 키가 없다. 같은 null 을 한 번 더 보내면 여섯 모두 프레임이 없다", async () => {
+    const { r, actors } = await atCandidateVote();
+    const [a, b] = actors as [Actor, Actor];
+    await sendAndSettleAll(actors, a, { t: "candidateVote", target: b.seat });
+    expect((await storedRoom(r.code)).players.some((p) => p.candidateVote === b.seat)).toBe(true);
+
+    const cancel = await sendAndSettleAll(actors, a, { t: "candidateVote", target: null });
+    const mine = viewsOf(cancel[0]!)[0]!;
+    expect(summary(cancel[0]!)).toBe("[state:candidateVote]");
+    expect(Object.hasOwn(mine.me, "voteTarget")).toBe(false);
+    expect(lines(cancel.slice(1), actors.slice(1))).toBe(actors.slice(1).map((x) => `${x.seat}:[]`).join(" "));
+    expect((await storedRoom(r.code)).players.some((p) => Object.hasOwn(p, "candidateVote"))).toBe(false);
+
+    const again = await sendAndSettleAll(actors, a, { t: "candidateVote", target: null });
+    expect(lines(again, actors)).toBe(actors.map((x) => `${x.seat}:[]`).join(" "));
+  });
+
+  it("안 고른 C 의 null 은 여섯 소켓 모두 프레임이 없다", async () => {
+    const { actors } = await atCandidateVote();
+    const frames = await sendAndSettleAll(actors, actors[2]!, { t: "candidateVote", target: null });
+    expect(lines(frames, actors)).toBe(actors.map((x) => `${x.seat}:[]`).join(" "));
+  });
+
+  it("execVote 단계의 null 은 보낸 소켓만 WRONG_PHASE + 최신 state 를 받고 나머지는 프레임이 없다", async () => {
+    const r = await startedAtExecVote(6);
+    const actors = actorsOf(r);
+    const frames = await sendAndSettleAll(actors, actors[0]!, { t: "candidateVote", target: null });
+    expect(summary(frames[0]!)).toBe("[error:WRONG_PHASE,state:execVote]");
+    expect(frames.slice(1).map(summary).join(" ")).toBe(actors.slice(1).map(() => "[]").join(" "));
+  });
+
+  it("target 이 빠졌거나 null 에 seat 가 덧붙으면 보낸 소켓만 BAD_MESSAGE 를 받고 나머지는 프레임이 없다", async () => {
+    const { actors } = await atCandidateVote();
+    const a = actors[0]!;
+    for (const [i, bad] of [{ t: "candidateVote" }, { t: "candidateVote", target: null, seat: 1 }].entries()) {
+      const frames = await sendAndSettleAll(actors, a, bad);
+      expect(`${i} ${summary(frames[0]!)}`).toBe(`${i} [error:BAD_MESSAGE]`);
+      expect(frames.slice(1).map(summary).join(" ")).toBe(actors.slice(1).map(() => "[]").join(" "));
+    }
+  });
+
+  it("A 가 고른 뒤 취소하고 아무도 안 던진 채 마감하면 여섯 소켓 모두 공개 표 [] · 길이 candidateRevealMs(0) · 후보 없음이고, 다음 night 의 day.noExecution 은 noVotes 다", async () => {
+    const { r, actors } = await atCandidateVote();
+    const [a, b] = actors as [Actor, Actor];
+    await sendAndSettleAll(actors, a, { t: "candidateVote", target: b.seat });
+    await sendAndSettleAll(actors, a, { t: "candidateVote", target: null });
+    await closePhase(r.code);
+    for (const x of actors) await nextFrame(x.sock, (m) => m.t === "state" && m.view.phase === "candidateVoteReveal");
+    for (const x of actors) {
+      const v = lastViewOf(x.sock);
+      expect(`${v.phase} ${JSON.stringify(v.day?.voteLog?.at(-1)?.cand?.votes)} ${v.phaseDurationMs} ${Object.hasOwn(v.day ?? {}, "candidate")}`).toBe(
+        `candidateVoteReveal [] ${candidateRevealMs(0)} false`,
+      );
+    }
+    await advanceTo(r.code, allSockets(r), "night");
+    for (const x of actors) expect(JSON.stringify(lastViewOf(x.sock).day?.noExecution)).toBe(JSON.stringify({ reason: "noVotes" }));
   });
 });
 
