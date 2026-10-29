@@ -339,13 +339,13 @@ Plans:
   4. 폰 폭 360~430px 세로 화면에서 스크롤 없이 지금 할 일과 메시지 영역이 함께 보이고, PC 브라우저에서는 가운데에 폰 폭으로 보인다.
   5. 지원하는 기기에서는 게임 중 폰 화면이 저절로 꺼지지 않고, 지원하지 않는 기기에서도 게임은 정상적으로 돈다.
 
-**Plans**: 2/9 plans executed (클라이언트 전용 — 서버·와이어 불변, 마지막 계획 05-09 에서 한 번 배포)
+**Plans**: 3/9 plans executed (클라이언트 전용 — 서버·와이어 불변, 마지막 계획 05-09 에서 한 번 배포)
 
 Plans:
 **Wave 1**
 - [x] 05-01-PLAN.md — 트레이서: 안내 문장 빈칸 채우기(PHASE_GUIDE_FILL)·`data-guide` 계약·14단계 × 시점 점검 시험 (UX-01, TDD, wave 1)
 - [x] 05-02-PLAN.md — Wake Lock 훅 useWakeLock 과 RoomScreen 연결, 모의 갈래 시험 (CONN-03, TDD, wave 1)
-- [ ] 05-04-PLAN.md — 짧은 폰 테이블 압축(지원 하한 516)·링크 참가 광장 축소·CHAR-01 점검 시험 (UX-02, CHAR-01, TDD, wave 1)
+- [x] 05-04-PLAN.md — 짧은 폰 테이블 압축(지원 하한 516)·링크 참가 광장 축소·CHAR-01 점검 시험 (UX-02, CHAR-01, TDD, wave 1)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 - [ ] 05-03-PLAN.md — 밤 비네팅·아침 밝아짐(상수 한 곳, CSS 그라데이션) (LOOK-01, TDD, wave 2)
@@ -393,5 +393,5 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 (decimal phases
 | 3. 밤과 아침 | v1.0 | 12/12 | In Progress | - |
 | 3.1. 순차 주장과 역할 카드 | v1.0 | 14/14 | Complete | 2026-10-25 |
 | 4. 처형과 승패 | v1.0 | 35/35 | Complete | 2026-10-28 |
-| 5. 분위기와 캐릭터 | v1.0 | 2/9 | In Progress | - |
+| 5. 분위기와 캐릭터 | v1.0 | 3/9 | In Progress | - |
 | 6. 친구 플레이테스트 | v1.0 | 0/TBD | Not started | - |

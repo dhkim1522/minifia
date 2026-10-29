@@ -4,18 +4,18 @@ milestone: v1.0
 milestone_name: MVP
 current_phase: 5
 current_phase_name: 분위기와 캐릭터
-current_plan: 2
+current_plan: 3
 status: executing
-stopped_at: Completed 05-02-PLAN.md
-last_updated: "2026-10-29T09:05:41.665Z"
+stopped_at: Completed 05-04-PLAN.md
+last_updated: "2026-10-29T09:17:19.025Z"
 last_activity: 2026-10-29
 last_activity_desc: Phase 4 execution started
-state_head: ff28fa7a1b93d5974aaabc6c92c8006d54d84826
+state_head: eb209b656590920c0dcf1c0309c9d28ab527b6d5
 progress:
   total_phases: 7
   completed_phases: 3
   total_plans: 107
-  completed_plans: 100
+  completed_plans: 101
 ---
 
 # Project State
@@ -30,9 +30,9 @@ See: .planning/PROJECT.md (updated 2026-10-21)
 ## Current Position
 
 Phase: 5 (분위기와 캐릭터) — 실행 중 (4페이즈는 코드·배포·자동 검증 완료, 실기기 확인·verify-work 대기: 개발 완료 후 일괄)
-Current Plan: 2
+Current Plan: 3
 Total Plans in Phase: 9
-Plan: 2 of 9
+Plan: 3 of 9
 Status: 05-01 완료(안내 문장 빈칸 채우기, data-guide 점검표). 다음 05-02(useWakeLock). 클라이언트 전용 페이즈, 배포는 05-09 한 번.
 Last activity: 2026-10-29 — 05-01 executed
 
@@ -145,6 +145,7 @@ Progress: [██░░░░░░░░] 17%
 | Phase 04 P35 | 2h | 3 tasks | 8 files |
 | Phase 5 P01 | 10min | 3 tasks | 18 files |
 | Phase 5 P02 | about 6min | 2 tasks | 5 files |
+| Phase 5 P04 | 20min | 3 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -288,6 +289,8 @@ Recent decisions affecting current work:
 - [Phase 04]: 04-35: 배포본 E2E 가 잡은 backdrop-filter 접두 짝 선언은 lightningcss 가 접두만 남겨 Chrome 계열 흐림이 사라졌다 — 소스엔 비접두 한 번만 쓴다
 - [Phase 5]: 05-01: TIMELESS_PHASES 에 assigning 포함(P5-5 기본값, 확인 대기). 낮 시작 하단은 생존·탈락 모두 같은 두 줄, 토론 헤더 안내줄은 생존자만 새 문장(P5-6 기본값)
 - [Phase 5]: 05-02: 화면 꺼짐 방지는 대기실부터 건다(P5-7 기본값, 확인 대기). 재요청은 visibilitychange 한 곳뿐
+- [Phase 5]: 05-04: 짧은 장면 압축 하한 0.78 (UI-SPEC 권장 0.8 과 다름, 장면 240 모델 기준 넘침 0). 실제 DOM 은 이름표 상자 26 이라 4px 남음 — 결정 필요(05-04-SUMMARY)
+- [Phase 5]: 05-04: 링크 참가 광장은 앉은 사람 5명 이상일 때 mf-join__seated--many(48x64) 로 줄임; 로컬 크롬 실측 7명 360x640 문서 621
 
 ### Pending Todos
 
@@ -324,6 +327,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-29T09:05:41.108Z
-Stopped at: Completed 05-02-PLAN.md
+Last session: 2026-10-29T09:17:18.342Z
+Stopped at: Completed 05-04-PLAN.md
 Resume file: None
