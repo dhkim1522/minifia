@@ -3,7 +3,7 @@ import { act, cleanup, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { RoleId } from "../../shared/game/roles";
 import type { MorningView, PhaseId, RoomView } from "../../shared/protocol";
-import { defenseDisconnected, defenseStatus } from "../../src/game/verdict";
+import { VERDICT_TEXT, defenseDisconnected, defenseStatus } from "../../src/game/verdict";
 import type { RoomConnection } from "../../src/net/useRoomConnection";
 import { CANDIDATE_SEAT, NAMES, verdictFixture } from "../helpers/verdictViews";
 import type { Viewer, VerdictStage } from "../helpers/verdictViews";
@@ -249,6 +249,21 @@ describe("UX-01 투표 구간 부품: execVote·candidateVote·reveal·defense·
     const spec = renderVerdict("candidateVote", "spectator");
     expect(squish(onlyGuide(spec.container, "candidateVote/spectator").textContent)).toBe("처형할 사람을 고르는 중이에요");
     for (const ro of Array.from(spec.container.querySelectorAll(".mf-ro"))) expect(ro.hasAttribute("data-guide")).toBe(false);
+  });
+
+  it("candidateVote 안내 줄(결정 0040): 마피아·경찰·의사·시민이 같은 `아무도 고르지 않으면 무효표가 돼요`를 보고 관전자는 기존 관전 안내를 본다. [data-guide] 는 어디서나 하나", () => {
+    const texts = new Set<string>();
+    for (const vp of ["mafia", "police", "doctor", "citizen"] as const) {
+      const { container, unmount } = renderCell("candidateVote", vp);
+      onlyGuide(container, `candidateVote/${vp}`);
+      texts.add(squish(container.querySelector(".mf-dayscene__panel .mf-claimpanel__guide")?.textContent));
+      unmount();
+    }
+    expect([...texts]).toEqual([VERDICT_TEXT.candidateGuideNone]);
+    expect(VERDICT_TEXT.candidateGuideNone).toBe("아무도 고르지 않으면 무효표가 돼요");
+    const spec = renderCell("candidateVote", "spectator");
+    onlyGuide(spec.container, "candidateVote/spectator");
+    expect(squish(spec.container.querySelector(".mf-dayscene__panel .mf-claimpanel__guide")?.textContent)).toBe(VERDICT_TEXT.candidateSpectatorHint);
   });
 
   it("candidateVoteReveal: 하나, 글자가 비어 있지 않다 (공개 caption 제목)", () => {

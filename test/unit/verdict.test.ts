@@ -552,13 +552,18 @@ const NAMES: Record<number, string> = { 0: "나나나나나", 1: "지호", 2: "�
 const nameOf = (seat: number): string | undefined => NAMES[seat];
 
 describe("VERDICT_TEXT — UI-SPEC 7.2 와 글자까지 같다", () => {
+  it("옛 후보 선택 안내 키(candidateHint)는 없다 (결정 0040)", () => {
+    expect(Object.hasOwn(VERDICT_TEXT, "candidateHint")).toBe(false);
+  });
+
   it("고정 문구 전부", () => {
     expect(VERDICT_TEXT).toMatchObject({
       execTitle: "오늘 처형을 할까요?",
       execIntroHint: "카드 뒤에서도 바로 고를 수 있어요",
       spectatorPill: "관전 중 · 볼 수만 있어요",
       candidateTitle: "처형할 사람을 고르세요",
-      candidateHint: "자기 자신은 고를 수 없어요 · 마감까지 바꿀 수 있어요",
+      candidateGuideNone: "아무도 고르지 않으면 무효표가 돼요",
+      candidateGuidePicked: "빈 곳을 누르면 선택이 취소돼요",
       candidateNone: "선택 안 함",
       votedSuffix: "님에게 투표했어요",
       candidateSpectatorTitle: "처형할 사람을 고르는 중이에요",

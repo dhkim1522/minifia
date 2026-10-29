@@ -49,15 +49,20 @@ describe("CandidateVotePanel (D-19, D-35, UI-SPEC 7.2)", () => {
   it("살아 있는 viewer: 제목·안내·알약 한 줄, 관전 줄과 말하기·이모티콘 입구 없음", () => {
     const { container } = render(<CandidateVotePanel pick={null} readOnly={false} />);
     expect(screen.getByRole("heading", { name: "처형할 사람을 고르세요" })).not.toBeNull();
-    expect(container.textContent).toContain("자기 자신은 고를 수 없어요 · 마감까지 바꿀 수 있어요");
+    expect(container.querySelector("p.mf-claimpanel__guide")?.textContent).toBe("아무도 고르지 않으면 무효표가 돼요");
+    expect(container.textContent).not.toContain("자기 자신은 고를 수 없어요");
+    expect(container.querySelectorAll("[data-guide]").length).toBe(1);
     expect(screen.getByRole("status").textContent).toBe("선택 안 함");
     expect(container.querySelector(".mf-ro")).toBeNull();
     expect(container.querySelectorAll("button").length).toBe(0);
   });
 
-  it("고른 뒤: 알약이 {이름}님에게 투표했어요", () => {
-    render(<CandidateVotePanel pick={{ seat: 1, label: "하윤" }} readOnly={false} />);
+  it("고른 뒤: 알약이 {이름}님에게 투표했어요, 안내 줄은 `빈 곳을 누르면 선택이 취소돼요`이고 [data-guide] 는 제목 하나", () => {
+    const { container } = render(<CandidateVotePanel pick={{ seat: 1, label: "하윤" }} readOnly={false} />);
     expect(screen.getByRole("status").textContent).toBe("하윤님에게 투표했어요");
+    expect(container.querySelector("p.mf-claimpanel__guide")?.textContent).toBe("빈 곳을 누르면 선택이 취소돼요");
+    expect(container.querySelectorAll("[data-guide]").length).toBe(1);
+    expect(container.querySelector("[data-guide]")?.tagName).toBe("H2");
   });
 
   it("관전: 제목·안내가 관전 문구이고 알약 자리에 관전 줄, 선택 알약은 없다", () => {
@@ -91,12 +96,15 @@ interface CandOpts {
   n?: number;
   /** 날짜별 공개 투표 기록 (기본 없음) */
   voteLog?: VoteLogEntry[];
+  /** 테스트 방 방장 본인 view (me.isHost·me.testMode) */
+  testHost?: boolean;
 }
 
 function makeView(o: CandOpts = {}): RoomView {
   const dead = o.dead ?? [];
   const offline = o.offline ?? [];
-  const me: RoomView["me"] = { seat: 0, isHost: false, role: o.allies ? "mafia" : "citizen" };
+  const me: RoomView["me"] = { seat: 0, isHost: o.testHost === true, role: o.allies ? "mafia" : "citizen" };
+  if (o.testHost === true) me.testMode = true;
   if (o.voteTarget !== undefined) me.voteTarget = o.voteTarget;
   if (o.allies) me.allies = o.allies;
   return {
@@ -205,6 +213,68 @@ describe("candidateVote 화면 한 경로 (VOTE-02, D-03, D-19)", () => {
     fireEvent.click(seatEl(container, 0));
     expect(send).toHaveBeenCalledTimes(1);
     expect(voteBtn("민지")?.getAttribute("aria-pressed")).toBe("true");
+    expect(whiteHalos(container).length).toBe(1);
+  });
+
+  it("이름표(.mf-dt__tag)를 통과한 탭: 이름표 상자를 8px 넓힌 안은 취소하지 않고, 9px 밖이면 취소한다 (결정 0040)", () => {
+    const { container, send } = renderRoom(makeView());
+    fireEvent.click(voteBtn("민지")!);
+    const tag = container.querySelector<HTMLElement>(".mf-dt__tag[data-seat='1']")!;
+    tag.getBoundingClientRect = () => ({ left: 100, top: 200, width: 60, height: 20, x: 100, y: 200, right: 160, bottom: 220, toJSON: () => ({}) }) as DOMRect;
+    const root = container.querySelector(".mf-dt")!;
+    fireEvent.click(root, { clientX: 110, clientY: 205 });
+    expect(send).toHaveBeenCalledTimes(1);
+    fireEvent.click(root, { clientX: 100 + 60 + 8, clientY: 205 });
+    expect(send).toHaveBeenCalledTimes(1);
+    fireEvent.click(root, { clientX: 100 + 60 + 9, clientY: 205 });
+    expect(send).toHaveBeenCalledTimes(2);
+    expect(send).toHaveBeenLastCalledWith({ t: "candidateVote", target: null });
+  });
+
+  it("가드: 고른 뒤 헤더(위쪽 바)·하단 패널 클릭은 send 가 없다", () => {
+    const { container, send } = renderRoom(makeView());
+    fireEvent.click(voteBtn("민지")!);
+    fireEvent.click(screen.getByRole("heading", { name: "낮 · 후보 선택" }));
+    fireEvent.click(panel(container)!);
+    fireEvent.click(panel(container)!.querySelector("[role=status]")!);
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(voteBtn("민지")?.getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("가드: 테스트 방 방장이 고른 뒤 [테스트] 버튼과 열린 시트 안을 눌러도 취소(target null)를 보내지 않는다", () => {
+    const { send } = renderRoom(makeView({ testHost: true }));
+    fireEvent.click(voteBtn("민지")!);
+    fireEvent.click(screen.getByRole("button", { name: "테스트" }));
+    const dialog = screen.getByRole("dialog", { name: "테스트 도구" });
+    fireEvent.click(dialog);
+    fireEvent.click(dialog.querySelector("button, h2, p")!);
+    const nulls = send.mock.calls.filter((c) => (c[0] as { target?: unknown }).target === null);
+    expect(nulls.length).toBe(0);
+    expect(voteBtn("민지")?.getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("가드: 관전자(내 자리 탈락)의 테이블 면 클릭은 send 가 없다", () => {
+    const { container, send } = renderRoom(makeView({ dead: [0], voteTarget: 2 }));
+    fireEvent.click(container.querySelector(".mf-dt__felt")!);
+    fireEvent.click(container.querySelector(".mf-dt")!);
+    expect(send).not.toHaveBeenCalled();
+  });
+
+  it("가드: execVote·discussion 단계의 테이블 면 클릭은 send 가 없다", () => {
+    for (const phase of ["execVote", "discussion"] as const) {
+      cleanup();
+      const { container, send } = renderRoom(makeView({ phase, voteTarget: 2 }));
+      fireEvent.click(container.querySelector(".mf-dt__felt")!);
+      fireEvent.click(container.querySelector(".mf-dt")!);
+      expect(send, phase).not.toHaveBeenCalled();
+    }
+  });
+
+  it("가드: 서버 voteTarget 2 이고 canSend false 면 테이블 면 클릭은 send 가 없고 알약이 그대로다", () => {
+    const { container, send } = renderRoom(makeView({ voteTarget: 2 }), { canSend: false });
+    fireEvent.click(container.querySelector(".mf-dt__felt")!);
+    expect(send).not.toHaveBeenCalled();
+    expect(panel(container)?.querySelector("[role=status]")?.textContent).toBe("민지님에게 투표했어요");
     expect(whiteHalos(container).length).toBe(1);
   });
 
