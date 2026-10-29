@@ -21,7 +21,7 @@ export interface ExecVotePanelProps {
   send: (msg: ClientMessage) => boolean;
   /** 탈락한 viewer: 버튼 없이 집계 줄과 관전 알약만 본다(D-35). 집계는 살아 있는 사람과 같은 값이다 */
   readOnly?: boolean;
-  /** 처형 투표 인트로 카드가 떠 있는 동안(처음 1.6초) true: 집계 줄 회색 부분이 `카드 뒤에서도 바로 고를 수 있어요` 가 된다(UI-SPEC 9.1). 집계 앞부분은 그대로다 */
+  /** 처형 투표 인트로 카드가 떠 있는 동안(처음 3초) true: 집계 줄 회색 부분이 `카드 뒤에서도 바로 고를 수 있어요` 가 된다(UI-SPEC 9.1). 집계 앞부분은 그대로다 */
   introActive?: boolean;
 }
 

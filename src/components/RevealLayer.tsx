@@ -38,6 +38,7 @@ function frameAt(plan: RevealPlan, now: number, reduced: boolean): Frame | null 
   if (!reduced) {
     return { step: arrow.step, voter: arrow.voter, target: arrow.target, progress: easeOutCubic(arrow.progress), opacity: arrow.opacity };
   }
+  // 모션 줄이기: 완성된 화살표를 닿을 때까지(REVEAL_REDUCED_HOLD_MS = REVEAL_DRAW_MS) 보여 주고 REVEAL_FADE_MS 동안 사라진다 — 칩 +1 과 같은 순간에 시작한다(결정 0039)
   const elapsed = now - plan.steps[arrow.step].startMs;
   if (elapsed >= REVEAL_REDUCED_HOLD_MS + REVEAL_FADE_MS) return null;
   return {

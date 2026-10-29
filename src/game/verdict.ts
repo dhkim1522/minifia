@@ -1,21 +1,22 @@
-// DOM·현재 시각·난수를 읽지 않는 순수 모듈 — 시각은 인자로만 받는다. 4페이즈 화면 연출의 수치는 이 파일 한 곳에서만 고친다(D-38).
+// DOM·현재 시각·난수를 읽지 않는 순수 모듈 — 시각은 인자로만 받는다. 4페이즈 화면 연출의 수치는 이 파일 한 곳에서만 고친다(D-38). 공개 앞·한 표·뒤 여유는 서버 공개 길이와 같은 출처(shared/game/phases)다(결정 0039).
 //
 // 구성: (1) 상수 (2) 공개 시간표 revealPlan·revealStateAt·clinchedTarget (3) 기하 candidateCenter·chipAnchor·arrowEndpoints
 // (4) 후광 상한 capHalos (5) 문구 정본 VERDICT_TEXT 와 문구 함수. 이 파일은 역할 문자열(직업 단어)을 만들지 않는다 —
 // 입력은 서버가 모두에게 보낸 공개 타입뿐이다(D-09).
+import { CANDIDATE_REVEAL_LEAD_MS, CANDIDATE_REVEAL_SLOT_MS, CANDIDATE_REVEAL_TAIL_MS } from "../../shared/game/phases";
 import type { CandidateVoteLine, ExecTally, GameWinner, NoExecutionReason, SummaryRow, VoteLogEntry } from "../../shared/protocol";
 import { dayTableGeometry, FIG_H, FIG_W, HALO_MAX_SIMULTANEOUS, NAME_TAG_MAX_W, TAG_H, type DaySeatPlace } from "./dayTable";
 
-// ---- (1) 상수 (UI-SPEC 13.1 값 그대로) ----
-export const EXEC_INTRO_MS = 1600; // UI-SPEC 13.1: "처형 투표" 카드(§9.1). 서버 execVote 10초와 동시, 시간을 깎지 않음
+// ---- (1) 상수 (UI-SPEC 13.1, 결정 0039 개정) ----
+export const EXEC_INTRO_MS = 3000; // UI-SPEC 13.1, 결정 0039: "처형 투표" 카드(§9.1). 서버 execVote 13초 안에서 뜨고 시간을 깎지 않음(카드 뒤 10초 이상 남음)
 export const NO_EXEC_CARD_MS = 1600; // UI-SPEC 13.1: 처형 무효 카드(§9.2)
 export const NO_EXEC_INTRO_DELAY_MS = 1600; // UI-SPEC 13.1: 무효 카드가 있을 때 밤 시작 문구를 미루는 시간
-export const REVEAL_LEAD_MS = 200; // D-21: 공개 단계 시작 뒤 첫 화살표까지
-export const REVEAL_SLOT_MAX_MS = 500; // D-21: 한 표 슬롯 상한
-export const REVEAL_BUDGET_MS = 3600; // D-21: 화살표 연출 전체 예산(4초 − 앞 200 − 뒤 200)
-export const REVEAL_DRAW_MS = 280; // D-21: 한 화살표가 자라는 시간(슬롯 안) = 닿는 시각
+export const REVEAL_LEAD_MS = CANDIDATE_REVEAL_LEAD_MS; // 결정 0039: 공개 단계 시작 뒤 첫 화살표까지(400). 서버 공개 길이와 같은 출처
+export const REVEAL_SLOT_MS = CANDIDATE_REVEAL_SLOT_MS; // 결정 0039: 한 표 슬롯(2000) 고정. 서버 공개 길이와 같은 출처
+export const REVEAL_TAIL_MS = CANDIDATE_REVEAL_TAIL_MS; // 결정 0039: 마지막 슬롯 뒤 끝 문구(600). 서버 공개 길이와 같은 출처
+export const REVEAL_DRAW_MS = 1200; // 결정 0039: 한 화살표가 자라는 시간(슬롯 안) = 닿는 시각
 export const REVEAL_FADE_MS = 120; // UI-SPEC 13.2: 닿은 화살표가 사라지는 시간
-export const REVEAL_REDUCED_HOLD_MS = 200; // UI-SPEC 13.4: 축소 모션에서 완성된 화살표를 보여 주는 시간(이후 REVEAL_FADE_MS 동안 사라짐)
+export const REVEAL_REDUCED_HOLD_MS = REVEAL_DRAW_MS; // UI-SPEC 13.4, 결정 0039: 축소 모션에서 완성된 화살표를 닿을 때까지 보여 주고 칩 +1 과 함께 사라지게 한다(이후 REVEAL_FADE_MS 동안 사라짐)
 export const CLINCH_BEAT_MS = 700; // UI-SPEC 8.3: 과반 확정 두근(캐릭터·칩 2회) 길이. 이후는 공개가 끝날 때까지 느린 박동
 export const REVEAL_POP_MS = 220; // UI-SPEC 8.3: 칩 팝 길이(화면 애니메이션 시간. 팝 대상 해제는 다음 화살표 시작)
 export const VERDICT_MOVE_MS = 600; // UI-SPEC 8.4: 후보 가운데 이동
@@ -106,11 +107,12 @@ function leaderOf(counts: Readonly<Record<number, number>>): number | null {
 
 /**
  * 공개 시간표. votes 는 서버가 정한 순서 그대로(정렬·셔플하지 않는다), startMs 는 단계 시작의 서버 시각.
- * 슬롯 = floor(min(500, 3600/n)), 단계 k 의 시작 = startMs + 200 + k×슬롯. 입력 배열은 바꾸지 않는다.
+ * 슬롯 = REVEAL_SLOT_MS(2000) 고정, 단계 k 의 시작 = startMs + REVEAL_LEAD_MS + k×슬롯. endMs + REVEAL_TAIL_MS = 서버 마감(startMs + candidateRevealMs(n)), 결정 0039.
+ * 입력 배열은 바꾸지 않는다.
  */
 export function revealPlan(votes: readonly CandidateVoteLine[], startMs: number): RevealPlan {
   const n = votes.length;
-  const slotMs = n === 0 ? 0 : Math.floor(Math.min(REVEAL_SLOT_MAX_MS, REVEAL_BUDGET_MS / n));
+  const slotMs = n === 0 ? 0 : REVEAL_SLOT_MS;
   const steps: RevealStep[] = votes.map((v, index) => {
     const start = startMs + REVEAL_LEAD_MS + index * slotMs;
     const touch = start + REVEAL_DRAW_MS;
@@ -411,7 +413,7 @@ const nameFor = (nicknameOf: NicknameOf, seat: number): string => nicknameOf(sea
 export const VERDICT_TEXT = {
   // execVote
   execTitle: "오늘 처형을 할까요?", // UI-SPEC 7.2 execVote 하단 제목, 처형 투표 카드의 질문
-  execIntroHint: "카드 뒤에서도 바로 고를 수 있어요", // 인트로 카드가 떠 있는 처음 1.6초의 회색 부분
+  execIntroHint: "카드 뒤에서도 바로 고를 수 있어요", // 인트로 카드가 떠 있는 처음 3초의 회색 부분
   spectatorPill: "관전 중 · 볼 수만 있어요", // D-35, P-4
   execIntroCardTitle: "처형 투표", // §9.1
   // candidateVote
@@ -422,7 +424,7 @@ export const VERDICT_TEXT = {
   votedSuffix: "님에게 투표했어요",
   candidateSpectatorTitle: "처형할 사람을 고르는 중이에요",
   candidateSpectatorHint: "누구를 골랐는지는 공개될 때 볼 수 있어요",
-  // candidateVoteReveal: 첫 화살표(단계 시작 200ms 뒤) 전에만 보이는 기본 제목. 진행 중·끝 상태 문구는 revealCaption 이 만든다
+  // candidateVoteReveal: 첫 화살표(단계 시작 400ms 뒤) 전에만 보이는 기본 제목. 진행 중·끝 상태 문구는 revealCaption 이 만든다
   revealIntroTitle: "투표 공개",
   // defense
   defenseChooseTitle: "변론할 말을 고르세요",

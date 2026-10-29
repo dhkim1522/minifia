@@ -150,11 +150,11 @@
 /* ==== mf-vintro 시작 ==== */
 /* 처형 투표 인트로 카드(UI-SPEC 9.1, 04-24, D-23·D-30): DayTable 의 layer 슬롯 안(루트 .mf-dt, 장면 상자와 같은 크기)에 그린다.
    카드 280×176, 위쪽은 인라인(cy − 105). 모든 층이 터치를 통과시킨다(T-04-62). 글자 크기는 14·24·36 만 쓴다(P-18). 색은 토큰만.
-   시각표(ms): 0~450 낙하(+4px 바운스) → 450~850 정지 → 850~1450 면 지우기·질문 강조·셰브런 → 1450~1600 전체 페이드아웃. 1600 에 컴포넌트가 사라진다.
+   시각표(ms, 결정 0039): 0~450 낙하(+4px 바운스) → 450~1500 정지(카드 면·`처형 투표` 제목) → 1500~1900 면 지우기·질문 강조, 셰브런 1500 부터 4회 → 1900~2850 질문·셰브런 유지 → 2850~3000 전체 페이드아웃. 3000 에 컴포넌트가 사라진다.
    처형 무효 카드(--void, UI-SPEC 9.2)는 같은 구조를 공유하고 색과 시각표만 바꾼다. 키프레임 이름은 mf-vi-*. */
 .mf-vintro, .mf-vintro * { pointer-events: none; }
 .mf-vintro {
-  --mf-vi-out-delay: 1450ms;
+  --mf-vi-out-delay: 2850ms;
   --mf-vi-out-ms: 150ms;
   position: absolute;
   inset: 0;
@@ -170,7 +170,7 @@
   right: calc(-1 * var(--mf-scene-pad, 12px));
   background: var(--night-950);
   opacity: 0;
-  animation: mf-vi-veil 1600ms linear both;
+  animation: mf-vi-veil 3000ms linear both;
 }
 /* 낙하 상자: 폭 280·높이 176, 가로 가운데. 위쪽은 인라인. translate·rotate 는 개별 속성이라 다른 변환과 겹치지 않는다 */
 .mf-vintro__drop {
@@ -220,7 +220,8 @@
   opacity: 0;
 }
 
-/* 앰버 변형(처형 투표) */
+/* 앰버 변형(처형 투표). --mf-vi-erase-at: 면 지우기·질문 강조·셰브런이 시작하는 시각(결정 0039: 정지 구간을 길게) */
+.mf-vintro--intro { --mf-vi-erase-at: 1500ms; }
 .mf-vintro--intro .mf-vintro__smear {
   position: absolute;
   left: 20px;
@@ -236,7 +237,7 @@
   inset: 0;
   background: radial-gradient(ellipse at 50% 60%, color-mix(in srgb, var(--amber-400) 30%, transparent), transparent 70%);
   opacity: 0;
-  animation: mf-vi-glow 400ms var(--ease-out) 850ms both;
+  animation: mf-vi-glow 400ms var(--ease-out) var(--mf-vi-erase-at) both;
 }
 .mf-vintro--intro .mf-vintro__face {
   background: linear-gradient(180deg, var(--amber-700), var(--amber-900));
@@ -245,21 +246,21 @@
     0 22px 44px color-mix(in srgb, var(--night-950) 70%, transparent),
     0 0 36px color-mix(in srgb, var(--amber-400) 45%, transparent),
     inset 0 1px 0 color-mix(in srgb, var(--amber-400) 55%, transparent);
-  animation: mf-vi-face-out 400ms var(--ease-out) 850ms both;
+  animation: mf-vi-face-out 400ms var(--ease-out) var(--mf-vi-erase-at) both;
 }
 .mf-vintro--intro .mf-vintro__face::before { border-color: color-mix(in srgb, var(--amber-400) 70%, transparent); }
 .mf-vintro--intro .mf-vintro__ln-line { stroke: var(--amber-400); }
 .mf-vintro--intro .mf-vintro__ln-dia { fill: var(--amber-400); }
 .mf-vintro--intro .mf-vintro__title {
   text-shadow: 0 3px 0 var(--night-950), 0 0 18px color-mix(in srgb, var(--amber-400) 80%, transparent);
-  animation: mf-vi-title-out 400ms var(--ease-out) 850ms both;
+  animation: mf-vi-title-out 400ms var(--ease-out) var(--mf-vi-erase-at) both;
 }
-.mf-vintro--intro .mf-vintro__q-small { animation: mf-vi-q-small-out 200ms linear 850ms both; }
+.mf-vintro--intro .mf-vintro__q-small { animation: mf-vi-q-small-out 200ms linear var(--mf-vi-erase-at) both; }
 .mf-vintro--intro .mf-vintro__q-big {
   text-shadow: 0 2px 0 var(--night-950), 0 0 16px color-mix(in srgb, var(--amber-400) 70%, transparent);
-  animation: mf-vi-q-big-in 400ms var(--ease-out) 850ms both;
+  animation: mf-vi-q-big-in 400ms var(--ease-out) var(--mf-vi-erase-at) both;
 }
-/* 셰브런: 가로 가운데, 아래끝 = 장면 아래 − 16, 높이는 인라인(clamp). 셰브런마다 120ms 간격으로 켜지며 두 번 반복한다 */
+/* 셰브런: 가로 가운데, 아래끝 = 장면 아래 − 16, 높이는 인라인(clamp). 셰브런마다 120ms 간격으로 켜지며 네 번 반복한다 */
 .mf-vintro__chevs {
   position: absolute;
   left: calc(50% - 60px);
@@ -274,7 +275,7 @@
   stroke-linecap: round;
   stroke-linejoin: round;
   opacity: 0;
-  animation: mf-vi-chev 260ms ease-in-out calc(850ms + var(--mf-vi-i, 0) * 120ms) 2 both;
+  animation: mf-vi-chev 260ms ease-in-out calc(var(--mf-vi-erase-at, 1500ms) + var(--mf-vi-i, 0) * 120ms) 4 both;
 }
 
 @keyframes mf-vi-out {
@@ -285,13 +286,13 @@
   from { opacity: 0; }
   to { opacity: 1; }
 }
-/* 막: 0 → .15(225ms) → .35(450ms) 유지 → .22(1150ms) → 0(1450ms) */
+/* 막(3000ms): 0 → .15(225ms) → .35(450ms) 유지 → 1500ms → .22(1800ms) 유지 → 2550ms → 0(2850ms) */
 @keyframes mf-vi-veil {
   0% { opacity: 0; }
-  14% { opacity: 0.15; }
-  28%, 53% { opacity: 0.35; }
-  72% { opacity: 0.22; }
-  90%, 100% { opacity: 0; }
+  7.5% { opacity: 0.15; }
+  15%, 50% { opacity: 0.35; }
+  60%, 85% { opacity: 0.22; }
+  95%, 100% { opacity: 0; }
 }
 /* 낙하: 위 −276px(카드 높이 + 100) 에서 −5도 기울어져 떨어지고 끝에 4px 바운스 */
 @keyframes mf-vi-fall {
@@ -358,14 +359,15 @@
   to { translate: 0 0; rotate: 0deg; opacity: 1; }
 }
 
-/* 축소 모션(UI-SPEC 9.1·13.4, D-24): 낙하·바운스·셰브런 이동 없음. 카드가 가운데에 160ms 페이드인 → 정지 → 850ms 부터 면이 페이드로 지워지고 질문만 24px 로 남아 → 1450ms 부터 페이드아웃.
+/* 축소 모션(UI-SPEC 9.1·13.4, D-24): 낙하·바운스·셰브런 이동 없음. 카드가 가운데에 160ms 페이드인 → 정지 → 1500ms 부터 면이 페이드로 지워지고 질문만 24px 로 남아 → 2850ms 부터 페이드아웃.
    base.css 의 전역 규칙이 모든 animation-duration 을 0.01ms 로 줄이므로(!important), 페이드인 것들만 더 구체적인 선택자로 길이를 되돌려 시각(animation-delay)대로 단계가 이어지게 한다. 셰브런은 움직임 없이 정지 표시(페이드인만). */
 @media (prefers-reduced-motion: reduce) {
   .mf-vintro__drop { animation: mf-vi-fade-in 160ms ease-out both !important; }
   .mf-vintro__smear { display: none; }
-  .mf-vintro__chev { animation: mf-vi-fade-in 160ms ease-out 850ms both !important; }
+  .mf-vintro__chev { animation: mf-vi-fade-in 160ms ease-out var(--mf-vi-erase-at, 1500ms) both !important; }
   .mf-vintro { animation-duration: var(--mf-vi-out-ms) !important; }
-  .mf-vintro__veil { animation-duration: 1600ms !important; }
+  .mf-vintro--intro .mf-vintro__veil { animation-duration: 3000ms !important; }
+  .mf-vintro--void .mf-vintro__veil { animation-duration: 1600ms !important; }
   .mf-vintro--intro .mf-vintro__face, .mf-vintro--intro .mf-vintro__glow, .mf-vintro--intro .mf-vintro__title, .mf-vintro--intro .mf-vintro__q-big { animation-duration: 400ms !important; }
   .mf-vintro--intro .mf-vintro__q-small { animation-duration: 200ms !important; }
 }

@@ -6,12 +6,12 @@ import "../styles/verdict.css";
 export interface ExecIntroCardProps {
   /** DayTable 의 layer 슬롯이 주는 장면 크기. 위치는 여기서 dayTableGeometry 로만 얻는다(pad 는 cy 에 영향이 없어 선택) */
   layout: { sceneW: number; sceneH: number; pad?: number };
-  /** 1.6초가 지나면 부른다. 마운트 때 한 번만 건 타이머가 부른다(부모가 다시 그려도 리셋·연장되지 않는다) */
+  /** 3초(EXEC_INTRO_MS)가 지나면 부른다. 마운트 때 한 번만 건 타이머가 부른다(부모가 다시 그려도 리셋·연장되지 않는다) */
   onDone: () => void;
 }
 
 // 처형 투표 인트로 카드(04-24, UI-SPEC 9.1, D-23·D-30): 앰버 카드가 위에서 떨어져 가운데에 서고, 카드 면이 지워지며 질문이 24px 로 다시 강조되고
-// 반투명 아래 화살표(셰브런)가 하단 [찬성][반대]를 가리킨 뒤 1.6초에 흔적 없이 사라진다. 코드(CSS+SVG)라 그림 요청이 없다.
+// 반투명 아래 화살표(셰브런)가 하단 [찬성][반대]를 가리킨 뒤 3초(EXEC_INTRO_MS, 결정 0039)에 흔적 없이 사라진다. 코드(CSS+SVG)라 그림 요청이 없다.
 // 클라이언트 연출일 뿐이라 서버 시간을 깎지 않고, 모든 층이 터치를 통과시키며(pointer-events none) 읽기 도구에는 숨긴다(읽기는 하단·단계 안내가 한다).
 // 입력이 없다: 문구는 VERDICT_TEXT 에서만 오고 view 의 역할·표를 읽지 않는다. 시각표는 verdict.css 의 mf-vintro 구역(키프레임 이름 mf-vi-*).
 export function ExecIntroCard({ layout, onDone }: ExecIntroCardProps): ReactElement {
