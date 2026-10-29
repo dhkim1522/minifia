@@ -6,6 +6,9 @@ import type { PhaseId } from "../../shared/protocol";
 import {
   HEADER_SCRIM_LENGTH_PX,
   HEADER_SCRIM_STOPS,
+  MORNING_GLOW_ALPHA,
+  MORNING_GLOW_ELLIPSE,
+  MORNING_GLOW_RISE_MS,
   NIGHT_VIGNETTE_ELLIPSE,
   NIGHT_VIGNETTE_FADE_MS,
   NIGHT_VIGNETTE_STOPS,
@@ -19,6 +22,7 @@ import {
   SCENE_IDS,
   TIMELESS_PHASES,
   headerScrimGradient,
+  morningGlowGradient,
   nightVignetteGradient,
   sceneOfPhase,
 } from "../../src/game/scenes";
@@ -176,6 +180,21 @@ describe("밤 비네팅 상수와 그라데이션 (P5-1 확정)", () => {
         "color-mix(in srgb, var(--night-950) 72%, transparent) 100%)",
     );
     expect(nightVignetteGradient()).not.toContain("#");
+  });
+});
+
+describe("아침 밝아짐 상수와 그라데이션 (P5-2 확정)", () => {
+  it("타원·중심 알파·상승 시간 상수가 UI-SPEC 9.4 값이다", () => {
+    expect(MORNING_GLOW_ELLIPSE).toBe("85% 60% at 50% 55%");
+    expect(MORNING_GLOW_ALPHA).toBe(0.38);
+    expect(MORNING_GLOW_RISE_MS).toBe(600);
+  });
+
+  it("morningGlowGradient(): dawn 토큰 color-mix 로 시작하고 끝 멈춤이 transparent 이며 # 이 없다", () => {
+    const g = morningGlowGradient();
+    expect(g.startsWith("radial-gradient(ellipse 85% 60% at 50% 55%, color-mix(in srgb, var(--dawn) 38%, transparent)")).toBe(true);
+    expect(g.endsWith("transparent)")).toBe(true);
+    expect(g).not.toContain("#");
   });
 });
 

@@ -5,7 +5,7 @@ import "../helpers/singleLineErrors";
 import type { RoleId } from "../../shared/game/roles";
 import type { GameWinner, MorningView, PhaseId, RoomView, SpectateView } from "../../shared/protocol";
 import type { RoomConnection } from "../../src/net/useRoomConnection";
-import { SCENE_FADE_MS, SCENE_IMAGE_WAIT_MS, nightVignetteGradient } from "../../src/game/scenes";
+import { SCENE_FADE_MS, SCENE_IMAGE_WAIT_MS, morningGlowGradient, nightVignetteGradient } from "../../src/game/scenes";
 import { DayScene } from "../../src/screens/DayScene";
 import { ResultScreen } from "../../src/screens/ResultScreen";
 
@@ -73,6 +73,7 @@ function scene(view: RoomView, over: Partial<RoomConnection> = {}) {
 }
 
 const vignettes = (c: HTMLElement) => [...c.querySelectorAll<HTMLElement>(".mf-backdrop__vignette")];
+const glows = (c: HTMLElement) => [...c.querySelectorAll<HTMLElement>(".mf-morningglow")];
 const parentArt = (el: HTMLElement) => el.parentElement as HTMLElement;
 const flush = async () => {
   const { act } = await import("@testing-library/react");
@@ -177,6 +178,72 @@ describe("밤 비네팅 — 어디에 몇 개 (D-04·D-05, P5-1)", () => {
       const r = scene(makeView({ phase: "night", ...o }));
       const v = vignettes(r.container);
       const out = `${v.length}|${v[0]?.outerHTML ?? ""}`;
+      r.unmount();
+      return [name, out] as const;
+    });
+    const first = html[0]![1];
+    expect(first.startsWith("1|")).toBe(true);
+    expect(html.filter(([, h]) => h !== first).map(([n]) => n).join(",")).toBe("");
+  });
+});
+
+describe("아침 밝아짐 — 어디에 몇 개 (D-05, P5-2)", () => {
+  it("재접속처럼 첫 렌더가 아침: 장면 상자 안 1개, DayTable 앞 형제, --rise 없음(최대치로 시작), 변수가 상수·아침 카드와 같다", () => {
+    const { container } = scene(makeView({ phase: "morning", role: "citizen", morning: { eliminated: 2, phrase: 1 } }));
+    const g = glows(container);
+    expect(g.length).toBe(1);
+    const box = g[0]!.parentElement!;
+    expect(box.classList.contains("mf-dayscene__scene")).toBe(true);
+    const dt = box.querySelector(".mf-dt")!;
+    expect(box.firstElementChild === g[0]).toBe(true);
+    expect(Boolean(g[0]!.compareDocumentPosition(dt) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
+    expect(g[0]!.classList.contains("mf-morningglow--rise")).toBe(false);
+    expect(g[0]!.getAttribute("aria-hidden")).toBe("true");
+    expect(g[0]!.style.getPropertyValue("--mf-glow")).toBe(morningGlowGradient());
+    const card = container.querySelector<HTMLElement>(".mf-morningcard")!;
+    const delay = card.style.getPropertyValue("--mf-morning-exit-delay");
+    expect(delay).toBe("4700ms");
+    expect(g[0]!.style.getPropertyValue("--mf-morning-exit-delay")).toBe(delay);
+  });
+
+  it("night → morning 으로 다시 렌더(같은 접속에서 봄): --rise 가 있고 --mf-glow-rise-ms 가 600ms", () => {
+    const r = scene(makeView({ phase: "night", role: "citizen" }));
+    expect(glows(r.container).length).toBe(0);
+    r.rerender(makeView({ phase: "morning", role: "citizen", morning: { eliminated: 2, phrase: 1 } }));
+    const g = glows(r.container);
+    expect(g.length).toBe(1);
+    expect(g[0]!.classList.contains("mf-morningglow--rise")).toBe(true);
+    expect(g[0]!.style.getPropertyValue("--mf-glow-rise-ms")).toBe("600ms");
+  });
+
+  it("night·dayAnnounce·claim·discussion·execVote·defense 렌더에는 0개이고 morning 을 벗어나면 사라진다", () => {
+    const phases: PhaseId[] = ["night", "dayAnnounce", "claim", "discussion", "execVote", "defense"];
+    const counts = phases.map((phase) => {
+      const r = scene(makeView({ phase, role: "citizen" }));
+      const n = glows(r.container).length;
+      r.unmount();
+      return `${phase}:${n}`;
+    });
+    expect(counts.join(",")).toBe("night:0,dayAnnounce:0,claim:0,discussion:0,execVote:0,defense:0");
+    const r = scene(makeView({ phase: "morning", role: "citizen", morning: {} }));
+    expect(glows(r.container).length).toBe(1);
+    r.rerender(makeView({ phase: "dayAnnounce", role: "citizen" }));
+    expect(glows(r.container).length).toBe(0);
+  });
+
+  it("4역할·관전자 viewer 의 아침 렌더에서 밝아짐 요소 마크업이 같다 (D-09, T-05-07)", () => {
+    const spectate: SpectateView = { seats: NAMES.map((_, seat) => ({ seat, job: seat === 1 ? "mafia" : "citizen" })) };
+    const cases: Array<[string, ViewOpts]> = [
+      ["citizen", { role: "citizen" }],
+      ["mafia", { role: "mafia", allies: [1] }],
+      ["police", { role: "police" }],
+      ["doctor", { role: "doctor" }],
+      ["spectator", { role: "citizen", dead: [0], spectate }],
+    ];
+    const html = cases.map(([name, o]) => {
+      const r = scene(makeView({ phase: "morning", morning: { eliminated: 2, phrase: 1 }, ...o }));
+      const g = glows(r.container);
+      const out = `${g.length}|${g[0]?.outerHTML ?? ""}`;
       r.unmount();
       return [name, out] as const;
     });
