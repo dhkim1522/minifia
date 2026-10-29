@@ -122,6 +122,14 @@
 .mf-join__count { margin: 0; font-size: 14px; line-height: 1.4; font-weight: 700; color: var(--gray-50); text-shadow: var(--shadow-text); text-align: center; }
 .mf-join .mf-entry__card { margin-top: var(--space-lg); }
 .mf-join__loading { margin-top: auto; text-align: center; text-shadow: var(--shadow-text); }
+/* 앉은 사람 5명 이상(P5-4): 인물 그림을 같은 3:4 비율로 48×64 로 줄이고 광장·머리글·카드 사이 여백을 한 단계씩 줄인다. 이름표 글자 14px·최대 폭·4열 줄바꿈은 그대로다.
+   목표: 7명일 때 360×640 문서 높이 733 → 640 이하(93px 이상 줄임), 390×664 는 69px 이상. 판정은 브라우저 E2E UX2-J(05-06) — 모자라면 이 값만 조정한다. */
+.mf-join--many { padding-top: var(--space-xl); }
+.mf-join--many .mf-entry__head { margin-bottom: var(--space-lg); }
+.mf-join--many .mf-join__plaza { gap: var(--space-xs); padding-bottom: var(--space-sm); }
+.mf-join--many .mf-entry__card { margin-top: var(--space-md); }
+.mf-join__seated--many { row-gap: var(--space-xs); }
+.mf-join__seated--many .mf-figure { width: 48px; height: 64px; }
 
 /* S-01 입력 카드 안의 두 폼(방 만들기 / 코드 참가). 코드 줄의 [참가] 높이는 입력칸과 같은 48. */
 .mf-entry__form { display: flex; flex-direction: column; gap: var(--space-md); margin: 0; }

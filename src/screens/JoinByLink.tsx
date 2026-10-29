@@ -19,6 +19,9 @@ interface JoinByLinkProps {
 }
 
 const MAX_SEATED = 8;
+// 앉은 사람이 이 수 이상이면 광장을 줄여(인물 그림 48×64·여백 축소) 7명이 앉아도 [참가하기]가 한 화면에 들게 한다(P5-4).
+// 4명 이하는 지금 배치 그대로다. 실제 높이 판정은 브라우저 E2E UX2-J(05-06).
+const SEATED_COMPACT_FROM = 5;
 // 미리보기를 다시 받는 간격. 화면이 보이는 동안에만 센다(Pitfall 18).
 const POLL_MS = 10_000;
 
@@ -178,6 +181,8 @@ export function JoinByLink({ code, notice, onEnterRoom, onHome }: JoinByLinkProp
 
   const seated = preview ? [...preview.players].sort((a, b) => a.seat - b.seat).slice(0, MAX_SEATED) : [];
 
+  const compact = seated.length >= SEATED_COMPACT_FROM;
+
   let body;
   if (blocked) {
     body = (
@@ -192,7 +197,7 @@ export function JoinByLink({ code, notice, onEnterRoom, onHome }: JoinByLinkProp
     body = (
       <>
         <section className="mf-join__plaza" aria-label="먼저 들어와 있는 사람">
-          <ul className="mf-join__seated">
+          <ul className={`mf-join__seated${compact ? " mf-join__seated--many" : ""}`}>
             {seated.map((p) => (
               <li key={p.seat} className="mf-tag">
                 <Figure seat={p.seat} />
@@ -229,7 +234,7 @@ export function JoinByLink({ code, notice, onEnterRoom, onHome }: JoinByLinkProp
 
   return (
     <Backdrop layout="entry" scene="lobby">
-      <main className="mf-root mf-entry mf-join">
+      <main className={`mf-root mf-entry mf-join${compact && !blocked ? " mf-join--many" : ""}`}>
         <header className="mf-entry__head">
           <p className="mf-t-label">Minifia에 초대받았어요</p>
           <h1 className="mf-t-display">{`방 ${code}`}</h1>
