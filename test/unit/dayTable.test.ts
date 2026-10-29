@@ -33,6 +33,7 @@ import {
   px,
   seatRx,
   tableFitScale,
+  testButtonCompact,
 } from "../../src/game/dayTable";
 import { candidateCenter } from "../../src/game/verdict";
 
@@ -833,5 +834,17 @@ describe("말풍선 기하: 이웃 얼굴을 덮지 않고 장면 안에 든다 
         }
       }
     }
+  });
+});
+
+describe("testButtonCompact: 짧은 장면(높이 299 미만)에서만 [테스트] 버튼을 좁힌다 (05-06)", () => {
+  it("TABLE_FIT_MIN_H(299) 미만의 양수 높이는 좁힌다", () => {
+    expect([283.8, 240, 298.9, 1].map((h) => testButtonCompact(h))).toEqual([true, true, true, true]);
+  });
+  it("TABLE_FIT_MIN_H 이상은 좁히지 않는다 (긴 화면은 지금과 같다)", () => {
+    expect([299, 299.1, 363.8, 387.8, 407, 655.8].map((h) => testButtonCompact(h))).toEqual([false, false, false, false, false, false]);
+  });
+  it("재지 못한 값(0·음수·NaN·Infinity)은 좁히지 않는다", () => {
+    expect([0, -5, Number.NaN, Number.POSITIVE_INFINITY].map((h) => testButtonCompact(h))).toEqual([false, false, false, false]);
   });
 });
