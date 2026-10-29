@@ -166,6 +166,138 @@ export async function openHostPage(browser, { origin, code, token, size, dpr }) 
   };
 }
 
+/**
+ * 세션 없이 링크 참가 화면을 여는 손님 컨텍스트(05-06, P5-4). openHostPage 와 같은 뷰포트·모바일 설정·대상 밖 요청 차단이지만
+ * 세션 init 스크립트가 없어 앱이 `/r/{code}` 에서 링크 참가 화면을 띄운다. 참가하지 않고 토큰도 다루지 않는다 — 부른 쪽이 context 를 닫는다.
+ * 돌려주는 값: { context, page }
+ */
+export async function openGuestJoinPage(browser, { origin, code, size, dpr = 2 }) {
+  const context = await browser.newContext({
+    viewport: { width: size.w, height: size.h },
+    deviceScaleFactor: dpr,
+    isMobile: true,
+    hasTouch: true,
+    locale: "ko-KR",
+  });
+  try {
+    await context.route("**/*", (route) => {
+      let u;
+      try {
+        u = new URL(route.request().url());
+      } catch {
+        return route.continue();
+      }
+      if (u.origin === origin || FONT_HOSTS.includes(u.hostname)) return route.continue();
+      return route.abort();
+    });
+    const page = await context.newPage();
+    page.setDefaultTimeout(8000);
+    await page.goto(`${origin}/r/${code}`, { waitUntil: "domcontentloaded" });
+    return { context, page };
+  } catch (e) {
+    await context.close().catch(() => {});
+    throw e;
+  }
+}
+
+/** 링크 참가 화면의 앉은 사람 수·문서 높이·`참가하기` 버튼 아래끝(UX2-J). 버튼이 없으면 buttonBottom 은 null. */
+export async function readJoinFit(page) {
+  return page.evaluate(() => {
+    const btn = [...document.querySelectorAll("button")].find((b) => (b.textContent ?? "").replace(/\s+/g, " ").trim() === "참가하기");
+    return {
+      seated: document.querySelectorAll("ul.mf-join__seated > li").length,
+      docH: document.documentElement.scrollHeight,
+      innerH: window.innerHeight,
+      buttonBottom: btn ? btn.getBoundingClientRect().bottom : null,
+    };
+  });
+}
+
+/**
+ * 지금 할 일 문장(UX1)과 문서 높이(UX2)를 한 번의 evaluate 로 읽는다(05-06). `[data-guide]` 목록은 글자(공백 정리)·헤더 안내줄 여부·높이·계산된 줄 높이,
+ * 줄 높이가 normal 이면 글자 크기 × 1.4. 모양은 lib.mjs "5페이즈 계약" 의 guideChecks·docHeightChecks 입력과 같다.
+ */
+export async function readGuide(page) {
+  return page.evaluate(() => {
+    const items = [...document.querySelectorAll("[data-guide]")].map((el) => {
+      const cs = getComputedStyle(el);
+      const lh = parseFloat(cs.lineHeight);
+      return {
+        text: (el.textContent ?? "").replace(/\s+/g, " ").trim(),
+        inHeader: el.closest(".mf-phasebar") !== null && el.classList.contains("mf-phasebar__do"),
+        height: el.getBoundingClientRect().height,
+        lineHeight: Number.isFinite(lh) ? lh : parseFloat(cs.fontSize) * 1.4,
+      };
+    });
+    return {
+      count: items.length,
+      items,
+      timers: document.querySelectorAll('[role="timer"]').length,
+      docH: document.documentElement.scrollHeight,
+      innerH: window.innerHeight,
+    };
+  });
+}
+
+/**
+ * 분위기 두 층(비네팅 AT1·아침 밝아짐 AT2)을 읽는다(05-06). 층은 pointer-events: none 이라 elementFromPoint 가 건너뛰므로,
+ * 원래 pointer-events 를 먼저 기록한 뒤 이 evaluate 안에서만 잠시 auto 로 바꿔 내 인물 그림 가운데(비네팅)·내 이름표 가운데(밝아짐)를 찍고 곧바로 되돌린다.
+ * 층이 위에 칠해져 있으면 층이 돌아오고, 아래면 인물·이름표가 돌아온다. 요소가 없으면 빈 목록·null 이다.
+ * 돌려주는 값: { vignettes, glows, sceneTop, sceneBottom, tapHitsTable, tagHit }
+ */
+export async function readAtmosphere(page, { mySeat }) {
+  return page.evaluate((seat) => {
+    const layerOf = (el) => {
+      const cs = getComputedStyle(el);
+      const r = el.getBoundingClientRect();
+      return { pointerEvents: cs.pointerEvents, backgroundImage: cs.backgroundImage, top: r.top, bottom: r.bottom, left: r.left, right: r.right };
+    };
+    const vigEls = [...document.querySelectorAll(".mf-backdrop__vignette")];
+    const glowEls = [...document.querySelectorAll(".mf-morningglow")];
+    const vignettes = vigEls.map(layerOf);
+    const glows = glowEls.map(layerOf);
+    const sceneEl = document.querySelector(".mf-dayscene__scene");
+    const scene = sceneEl ? sceneEl.getBoundingClientRect() : null;
+    const centerOf = (el) => {
+      if (!el) return null;
+      const r = el.getBoundingClientRect();
+      if (r.width <= 0 || r.height <= 0) return null;
+      return [r.left + r.width / 2, r.top + r.height / 2];
+    };
+    const figure = seat === null || seat === undefined ? null : document.querySelector(`.mf-dt__seat[data-seat="${seat}"] img`);
+    const tagEl = document.querySelector(".mf-dt__tag--me");
+    const figPt = centerOf(figure);
+    const tagPt = centerOf(tagEl);
+    const touched = [...vigEls, ...glowEls].map((el) => [el, el.style.pointerEvents]);
+    let tapHitsTable = null;
+    let tagHit = null;
+    try {
+      for (const [el] of touched) el.style.setProperty("pointer-events", "auto", "important");
+      if (vigEls.length > 0 && figPt) {
+        const hit = document.elementFromPoint(figPt[0], figPt[1]);
+        tapHitsTable = hit !== null && !vigEls.some((v) => v === hit || v.contains(hit)) && hit.closest(".mf-dt") !== null;
+      }
+      if (glowEls.length > 0 && tagPt) {
+        const hit = document.elementFromPoint(tagPt[0], tagPt[1]);
+        tagHit = hit !== null && !glowEls.some((g) => g === hit || g.contains(hit)) && hit.closest(".mf-dt__tag") !== null;
+      }
+    } finally {
+      for (const [el, prev] of touched) {
+        if (prev === "") el.style.removeProperty("pointer-events");
+        else el.style.pointerEvents = prev;
+      }
+    }
+    return {
+      vignettes,
+      glows,
+      sceneTop: scene ? scene.top : null,
+      sceneBottom: scene ? scene.bottom : null,
+      tapHitsTable,
+      tagHit,
+    };
+  }, mySeat ?? null);
+}
+
 // ---- 화면 조작 ----
 
 const TT_LABEL = "테스트 도구";
