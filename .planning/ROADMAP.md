@@ -339,7 +339,29 @@ Plans:
   4. 폰 폭 360~430px 세로 화면에서 스크롤 없이 지금 할 일과 메시지 영역이 함께 보이고, PC 브라우저에서는 가운데에 폰 폭으로 보인다.
   5. 지원하는 기기에서는 게임 중 폰 화면이 저절로 꺼지지 않고, 지원하지 않는 기기에서도 게임은 정상적으로 돈다.
 
-**Plans**: TBD
+**Plans**: 9 plans (클라이언트 전용 — 서버·와이어 불변, 마지막 계획 05-09 에서 한 번 배포)
+
+Plans:
+**Wave 1**
+- [ ] 05-01-PLAN.md — 트레이서: 안내 문장 빈칸 채우기(PHASE_GUIDE_FILL)·`data-guide` 계약·14단계 × 시점 점검 시험 (UX-01, TDD, wave 1)
+- [ ] 05-02-PLAN.md — Wake Lock 훅 useWakeLock 과 RoomScreen 연결, 모의 갈래 시험 (CONN-03, TDD, wave 1)
+- [ ] 05-04-PLAN.md — 짧은 폰 테이블 압축(지원 하한 516)·링크 참가 광장 축소·CHAR-01 점검 시험 (UX-02, CHAR-01, TDD, wave 1)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+- [ ] 05-03-PLAN.md — 밤 비네팅·아침 밝아짐(상수 한 곳, CSS 그라데이션) (LOOK-01, TDD, wave 2)
+- [ ] 05-05-PLAN.md — E2E 순수 검사 UX1·UX2·UX2-J·UX2-PC·AT1·AT2·WL1·WL2, 360x560 probe (TDD, wave 2)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+- [ ] 05-06-PLAN.md — E2E 브라우저 읽기·기존 흐름 배선, 로컬 대표 흐름 × 네 크기 (wave 3)
+
+**Wave 4** *(blocked on Wave 3 completion)*
+- [ ] 05-07-PLAN.md — E2E 새 흐름 pc(1280 가운데)·wakelock(미지원·스파이), 크기 고정 흐름 (wave 4)
+
+**Wave 5** *(blocked on Wave 4 completion)*
+- [ ] 05-08-PLAN.md — 배포 전 로컬 게이트(전체 시험·빌드 CSS·로컬 전체 E2E)·결정 0038·0008 보완·HANDOFF push (wave 5)
+
+**Wave 6** *(blocked on Wave 5 completion)*
+- [ ] 05-09-PLAN.md — 개인 계정 배포·배포본 스모크·UAT·E2E·요구사항 완료 표시(실기기 확인은 대기) (wave 6)
 **Notes**: 사용자는 정적 2D 보다 완성도 높은 캐릭터(캐릭터별 프레임 PNG 애니메이션, 또는 가벼운 3D)를 원한다. 실시간 3D 는 쓰지 않고 2.5D 로 간다(결정 0008). 캐릭터는 프레임 PNG 로 움직이며, 일러스트로 그릴지 3D 로 렌더링한 그림을 쓸지와 공개된 캐릭터 에셋 도구는 이 페이즈 논의에서 정한다. 캐릭터 수·외형은 8종 이상이면 된다. 직접 고르기·성격 문구·애니메이션 라이브러리(Rive 또는 Lottie)는 v2 로 미뤘다. 정적 2D 로 시작하고, 애니메이션 도입은 디자인 방향을 정한 뒤에 결정한다.
 **UI hint**: yes
 **참고 자료**: `design/references/character/` (main.jpeg, mafia_character.jpeg, Mortis Brawl Stars Spooky Graveyard Wallpaper.jpeg, Coin Master mobile game , a little Halloween quest in collaboration with Moon Active games_, Sheri Amouzad.jpeg, Crime Coast Character Designs 2 - Sanjay Charlton.jpeg, PATH OF GANGSTER _ slot game - Inkration Studio.jpeg, Wild Heist Cashout - PGSOFT.jpeg). 이미지별 메모는 `design/references/notes.md`. 1페이즈 논의에서 색 방향(밤 남색 + 회색 + 진홍)과 임시 정장 실루엣을 정했다 (01-CONTEXT D-20, D-21).
@@ -370,5 +392,5 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 (decimal phases
 | 3. 밤과 아침 | v1.0 | 12/12 | In Progress | - |
 | 3.1. 순차 주장과 역할 카드 | v1.0 | 14/14 | Complete | 2026-10-25 |
 | 4. 처형과 승패 | v1.0 | 35/35 | Complete | 2026-10-28 |
-| 5. 분위기와 캐릭터 | v1.0 | 0/TBD | Not started | - |
+| 5. 분위기와 캐릭터 | v1.0 | 0/9 | Planned | - |
 | 6. 친구 플레이테스트 | v1.0 | 0/TBD | Not started | - |
