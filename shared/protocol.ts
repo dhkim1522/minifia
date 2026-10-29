@@ -231,7 +231,7 @@ export type ClientMessage =
   | { t: "emoji"; icon: EmojiId }
   | { t: "pick"; target: number } // 밤 행동 — 행동 종류는 보내지 않는다(서버 저장 역할이 정한다)
   | { t: "execVote"; agree: boolean } // 처형 여부 투표 — 생존자의 찬성 true / 반대 false, 마지막 값이 유효(결정 0034)
-  | { t: "candidateVote"; target: number } // 후보 선택 투표 — 자기 자신은 서버가 거부, 진행 중 값은 본인에게만(결정 0034·0036)
+  | { t: "candidateVote"; target: number | null } // 후보 선택 투표 — 자기 자신은 서버가 거부, 진행 중 값은 본인에게만(결정 0034·0036). null = 선택 취소: 고른 표가 있으면 서버가 지우고 본인에게만 알림(결정 0040)
   // 테스트 방 방장 도구(결정 0022). 일반 방은 BAD_MESSAGE 로 거부한다. role null = 무작위.
   | { t: "testSkip" }
   | { t: "testReset" }
@@ -261,7 +261,7 @@ export interface MyInfo {
   allies?: number[]; // 같은 마피아 동료의 seat — 채우는 일은 01-07
   pick?: number; // 밤에 본인이 고른 seat(본인에게만)
   voteAgree?: boolean; // execVote 단계에서 본인이 던진 여부 표(본인에게만, 남의 표는 어떤 키로도 싣지 않는다)
-  voteTarget?: number; // candidateVote 단계에서 본인이 고른 후보 seat(본인에게만)
+  voteTarget?: number; // candidateVote 단계에서 본인이 고른 후보 seat(본인에게만). 취소하면 키가 없다(결정 0040)
   allyPicks?: number[]; // 생존 마피아에게만: 동료들이 고른 대상 seat 오름차순·중복 없음(누가 골랐는지는 싣지 않는다)
   records?: RoleRecord[]; // 본인 역할의 일지 하나(경찰 수사·마피아 암살·의사 치료), 본인에게만
   testMode?: true; // 테스트 방 방장 본인만(결정 0022). 손님·일반 방·미리보기에는 키 자체가 없다

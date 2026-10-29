@@ -462,7 +462,7 @@ export class Room extends DurableObject<Env> {
   }
 
   // 후보 선택 투표: 신원은 소켓 첨부의 playerId 뿐이다 — 메시지에 seat·id 가 없다(T-04-23).
-  private async handleCandidateVote(ws: WebSocket, target: number): Promise<void> {
+  private async handleCandidateVote(ws: WebSocket, target: number | null): Promise<void> {
     const att = this.attachmentOf(ws);
     if (!att || !this.room) {
       this.sendTo(ws, { t: "error", code: "BAD_MESSAGE" });
@@ -476,7 +476,8 @@ export class Room extends DurableObject<Env> {
   // 받아들여지면 투표자 본인 한 명에게만 state 를 보낸다: 여부 투표(전원 방송, 집계가 모두에게 공개)와 달리 후보 선택은 진행 중에 공개 집계가 없고
   // (공개는 공개 구간에서 서버가 정한 순서로 한 번에), 전원 방송은 "누가 언제 골랐는지" 타이밍을 흘린다(Pitfall 7).
   // 관전자(탈락자)에게도 보내지 않는다 — 탈락자는 투표 자격이 없고 남의 진행을 알 이유가 없다(A7, 결정 0036 기본값. 바꾸려면 이 한 곳).
-  private async applyCandidateVote(playerId: string, target: number): Promise<WsErrorCode | null> {
+  // 취소(null)도 같은 길이다: 받아들이면 투표자 본인에게만 state, 고른 표 없는 취소는 입력 그대로라 저장·전송 없음(결정 0040).
+  private async applyCandidateVote(playerId: string, target: number | null): Promise<WsErrorCode | null> {
     if (!this.room) return "BAD_MESSAGE";
     const result = castCandidateVote(this.room, playerId, target);
     if (!result.ok) return result.error;

@@ -30,7 +30,8 @@ export const ClientMessageSchema = z.discriminatedUnion("t", [
   // 처형 여부 투표(결정 0034): 불리언 하나뿐이다. 덧붙은 키(seat·id 등)는 거부한다 — 행위자는 소켓 첨부 playerId 로만 정해진다(T-04-03).
   z.strictObject({ t: z.literal("execVote"), agree: z.boolean() }),
   // 후보 선택 투표(결정 0034·0036): 대상 seat 하나뿐이다. 자기 자신·탈락자·빈 자리는 서버 규칙(castCandidateVote)이 거부한다. 덧붙은 키는 스키마가 거부한다(T-04-23).
-  z.strictObject({ t: z.literal("candidateVote"), target: z.number().int().min(0).max(7) }),
+  // null = 선택 취소(결정 0040). 빠진 target·문자열·범위 밖·덧붙은 키는 그대로 거부한다. nullable 은 이 한 곳뿐이다(pick·say 의 target 은 null 을 거부).
+  z.strictObject({ t: z.literal("candidateVote"), target: z.number().int().min(0).max(7).nullable() }),
   // 테스트 방 방장 도구(결정 0022). 덧붙은 키는 거부한다. 방장·testMode·단계 검사는 서버 규칙(shared/game/testTools.ts)이 한다.
   z.strictObject({ t: z.literal("testSkip") }),
   z.strictObject({ t: z.literal("testReset") }),

@@ -88,6 +88,8 @@ export interface VerdictScene {
   inspectAllowed?: boolean;
   /** 밤 시작 문구(SceneIntro)를 미룰 시간(ms). 처형 무효로 온 밤만 NO_EXEC_INTRO_DELAY_MS 를 돌려준다(회색 카드가 먼저 1.6초, 04-24, P-3) */
   introDelayMs?: number;
+  /** 후보 선택의 살아 있는 viewer 에게만: 장면의 빈 곳 탭이면 DayScene 이 부른다. 고른 표를 취소한다(결정 0040) */
+  onBlankTap?: () => void;
 }
 
 // 최후 변론·처형 무대의 후광: 후보는 흰(하나), 마피아 동료는 진홍. 합이 3 을 넘으면 진홍부터 꺼진다(마름모는 남는다). 두 단계가 같은 규칙을 쓴다.
@@ -111,7 +113,9 @@ export function useVerdictScene({ view, connection, meAlive, showToast, lines, o
   }, [onEvent, rejecting, showToast]);
 
   // 후보 선택: 낙관적 선택. 새 서버 view 가 오면 me.voteTarget(서버 값)이 이긴다(useViewChoice). 훅이라 단계와 상관없이 항상 부른다.
-  const [chosen, choose] = useViewChoice<number>(view, view.me.voteTarget);
+  // 취소(null)도 낙관적으로 보인다: 지금 보일 선택은 picked(고른 자리 또는 null) 하나다(결정 0040).
+  const [chosen, choose] = useViewChoice<number | null>(view, view.me.voteTarget);
+  const picked = chosen ?? null;
 
   // 후보 선택 공개: 서버 시각 기준 공개 상태(경계 시각마다만 다시 그림). 훅이라 단계와 상관없이 항상 부르고 단계가 아니면 null 이다.
   const reveal = useRevealState(view, connection.offset);
@@ -196,23 +200,29 @@ export function useVerdictScene({ view, connection, meAlive, showToast, lines, o
   }
   if (view.phase === "candidateVote") {
     const nicknameOf = (seat: number): string | undefined => view.players.find((p) => p.seat === seat)?.nickname;
-    const label = chosen === undefined ? undefined : nicknameOf(chosen);
+    const label = picked === null ? undefined : nicknameOf(picked);
     // 한 화면 후광은 최대 3개, 흰(내 선택) > 앰버 > 진홍(동료)(결정 0030). 최종 종류를 모든 자리에 명시한다 — 상한 때문에 꺼진 동료는 마름모만 남는다.
     const requests: HaloRequest[] = [];
-    if (meAlive && chosen !== undefined) requests.push({ seat: chosen, kind: "white" });
+    if (meAlive && picked !== null) requests.push({ seat: picked, kind: "white" });
     for (const p of view.players) if (isAllySeat(p.seat)) requests.push({ seat: p.seat, kind: "crimson" });
     const { kinds } = capHalos(requests);
     const pressPick = (target: number): void => {
-      if (target === chosen) return; // 선택 해제 없음, 같은 자리 재탭은 아무 일도 없다
+      if (target === picked) return; // 같은 자리 재탭은 아무 일도 없다(취소는 빈 곳 탭, 결정 0040)
       choose(target);
       connection.send({ t: "candidateVote", target });
+    };
+    // 빈 곳 탭 = 선택 취소(결정 0040). 고른 표가 없거나 보낼 수 없으면 아무 일도 없다.
+    const cancelPick = (): void => {
+      if (picked === null || !connection.canSend) return;
+      choose(null);
+      connection.send({ t: "candidateVote", target: null });
     };
     return {
       title: "낮 · 후보 선택",
       instruction: `${n}일차`,
       calm: true,
       inspectAllowed: !meAlive, // 살아 있는 viewer 의 좌석 탭은 투표다
-      bottom: <CandidateVotePanel pick={label !== undefined && chosen !== undefined ? { seat: chosen, label } : null} readOnly={!meAlive} />,
+      bottom: <CandidateVotePanel pick={label !== undefined && picked !== null ? { seat: picked, label } : null} readOnly={!meAlive} />,
       pickVerb: "투표",
       seatPatch: (seat) => {
         const p = view.players.find((x) => x.seat === seat);
@@ -220,8 +230,9 @@ export function useVerdictScene({ view, connection, meAlive, showToast, lines, o
         if (!meAlive) return { halo, onInspect: () => onInspect(seat) }; // 탈락 viewer: 투표 버튼 없이 기록 카드
         // 나·탈락자는 버튼이 아니다. 연결이 끊긴 살아 있는 자리는 고를 수 있다(후보가 될 수 있음)
         if (seat === view.me.seat || !p || !isAlive(p)) return { halo };
-        return { halo, pressed: chosen === seat, onPick: () => pressPick(seat) };
+        return { halo, pressed: picked === seat, onPick: () => pressPick(seat) };
       },
+      ...(meAlive ? { onBlankTap: cancelPick } : {}),
     };
   }
   if (view.phase === "execVote") {

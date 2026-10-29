@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { CSSProperties, ReactNode } from "react";
+import type { CSSProperties, MouseEvent, ReactNode } from "react";
 import type { EmojiId, PhaseId, RoomView } from "../../shared/protocol";
 import { isAlive } from "../../shared/game/alive";
 import type { RoleId } from "../../shared/game/roles";
@@ -21,6 +21,7 @@ import { Toast, useToast } from "../components/Toast";
 import { morningCardText } from "../game/eliminationText";
 import { MORNING_GLOW_RISE_MS, PHASE_GUIDE_FILL, PHASE_INTRO, morningGlowGradient, sceneOfPhase } from "../game/scenes";
 import type { SceneId } from "../game/scenes";
+import { isBlankSceneTap } from "../game/blankTap";
 import { EMOJI_TEXT, NIGHT_TEMPLATE_ORDER } from "../game/messageText";
 import { claimLinesOf } from "../net/claimLines";
 import { FLOAT_PHASES, useDayChat, useSeatFloats } from "../net/seatFloats";
@@ -227,6 +228,11 @@ export function DayScene({ view, connection, myRoleButton, testButton, arrivedFr
       <Timer endsAt={endsAt} durationMs={durationMs} offset={connection.offset} calm={verdict?.calm ?? (isMorning || view.phase === "claim" || view.phase === "dayAnnounce")} />
     ) : null;
 
+  // 후보 선택의 빈 곳 탭 = 선택 취소(결정 0040). 장면 상자의 클릭에서 대상이 빈 곳일 때만 verdict.onBlankTap 을 부른다.
+  const onSceneClick = (e: MouseEvent<HTMLDivElement>): void => {
+    if (isBlankSceneTap(e.target, e.currentTarget)) verdict?.onBlankTap?.();
+  };
+
   return (
     <Backdrop
       layout="game"
@@ -249,7 +255,8 @@ export function DayScene({ view, connection, myRoleButton, testButton, arrivedFr
             guide={headerGuide}
           />
         </div>
-        <div className="mf-dayscene__scene">
+        {/* 결정 0040: 후보 선택의 빈 곳 탭 = 선택 취소. 헤더·하단 패널·시트는 이 상자 밖이라 대상이 아니다. */}
+        <div className="mf-dayscene__scene" {...(verdict?.onBlankTap ? { onClick: onSceneClick } : {})}>
           {isMorning ? (
             // 아침 밝아짐(05-03): DayTable 뒤 한 층. 밤 → 아침을 이 접속에서 본 렌더만 오르고, 퇴장은 아침 카드·어둡게 층과 같은 지연. 역할·연결 상태는 읽지 않는다(D-09).
             <div

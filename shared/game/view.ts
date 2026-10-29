@@ -2,7 +2,7 @@
 // 관전(결정 0021): 탈락한 본인에게만 모든 실제 직업과 그 밤의 행동 대상. 살아 있는 사람에게는 어떤 키로도 싣지 않는다 —
 // 결정 0002 를 "살아 있는 사람에게는 보내지 않는다" 로 좁혀 유지. 직업 키 이름은 role 이 아니라 job 이다(누출 검사가 role 키를 me 밖에서 금지).
 // 밤 필드 받는 사람: pick 본인(생존·밤), allyPicks 생존 마피아(밤), records 경찰(수사)·마피아(암살)·의사(치료) 본인 중 본인 역할 일지 하나(역할 공개 단계 전체), morning 모두(아침만).
-// 투표 필드 받는 사람(4페이즈): execTally 모두에게 같은 값(execVote 단계만), voteAgree 본인(생존·execVote), voteTarget 본인(생존·candidateVote), voteLog 모두(낮 단계마다 항상, 집계 수만),
+// 투표 필드 받는 사람(4페이즈): execTally 모두에게 같은 값(execVote 단계만), voteAgree 본인(생존·execVote), voteTarget 본인(생존·candidateVote, 취소하면 키가 없다 — 결정 0040), voteLog 모두(낮 단계마다 항상, 집계 수만),
 // candidate 모두(공개 구간·변론·처형, 후보가 있을 때), execution 모두(처형 단계만, seat·phrase), noExecution 모두(처형 무효로 온 밤만, reason 하나).
 // result(승리 팀·모든 직업·판 요약)는 ended 단계에서만, 생존·탈락 구분 없이 모두에게 같게(D-17). 서버 전용 밤 기록(nightLog)은 buildSummary 만 읽고 판 중에는 어떤 view 에도 없다(결정 0020-3).
 // 남의 여부 표·후보 선택은 어떤 키로도 싣지 않는다 — Player.execVote 는 마감 훅이, Player.candidateVote 는 공개 구간 진입 훅이 키째 지운다(결정 0034·D-02·D-19).
