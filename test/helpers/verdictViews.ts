@@ -4,6 +4,7 @@
 import type { RoleId } from "../../shared/game/roles";
 import type { CandidateVoteLine, PhaseId, RoomView, SpectateSeat, VoteLogEntry } from "../../shared/protocol";
 import type { RoomConnection } from "../../src/net/useRoomConnection";
+import { candidateRevealMs } from "../../shared/game/phases";
 
 export const NOW = 1_700_000_000_000;
 
@@ -113,7 +114,7 @@ export function viewAt(phase: PhaseId, opts: FixtureOpts, noExecution: boolean):
     log.push({ n: 2, exec: { yes: alive.length - 1, no: 1, passed: true }, cand: { votes: todayVotes, candidate } });
   }
 
-  const durationMs = phase === "candidateVoteReveal" ? 8_000 : 10_000;
+  const durationMs = phase === "candidateVoteReveal" ? candidateRevealMs(todayVotes.length) : 10_000;
   const view: RoomView = {
     code: "0042",
     phase,

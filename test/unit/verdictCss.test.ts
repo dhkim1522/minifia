@@ -3,6 +3,7 @@
 // vitest 는 CSS 를 비워 주므로 `?raw` 대신 readFileSync 로 읽는다(01-17 선례). 레이아웃(겹침)은 단위 시험이 못 재므로 E2E(04-29~)가 본다.
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { EXEC_INTRO_MS, NO_EXEC_CARD_MS } from "../../src/game/verdict";
 
 const css = (name: string): string => readFileSync(new URL(`../../src/styles/${name}.css`, import.meta.url), "utf8");
 
@@ -327,5 +328,67 @@ describe("탭 대상 (UI-SPEC 4: 투표 버튼·변론 칩 높이 --tap-min 44 �
       .filter((d) => d.prop === "max-height" || (px(d.value) ?? 0) < 44)
       .map((d) => `${d.selector} { ${d.prop}: ${d.value} }`);
     expect(bad.join(" | ")).toBe("");
+  });
+});
+
+describe("카드 시각표와 상수 (결정 0039)", () => {
+  const rules = PARSED.verdict;
+  const ruleOf = (selector: string): FlatRule => {
+    const found = rules.find((r) => r.within.length === 0 && r.selector === selector);
+    if (found === undefined) throw new Error(`rule not found: ${selector}`);
+    return found;
+  };
+  const ms = (value: string | undefined): number => {
+    const m = /^(\d+(?:\.\d+)?)ms$/.exec((value ?? "").trim());
+    if (m === null) throw new Error(`not a ms value: ${String(value)}`);
+    return Number(m[1]);
+  };
+  const first = (rule: Rule, prop: string): string | undefined => declsOf(rule, prop)[0];
+  const animationMs = (rule: Rule): number => {
+    const m = /(\d+(?:\.\d+)?)ms/.exec(first(rule, "animation") ?? "");
+    if (m === null) throw new Error(`no animation duration in ${rule.selector}`);
+    return Number(m[1]);
+  };
+
+  it("처형 투표 카드: out-delay + out-ms = EXEC_INTRO_MS (2850 + 150)", () => {
+    const base = ruleOf(".mf-vintro");
+    expect(ms(first(base, "--mf-vi-out-delay"))).toBe(2850);
+    expect(ms(first(base, "--mf-vi-out-delay")) + ms(first(base, "--mf-vi-out-ms"))).toBe(EXEC_INTRO_MS);
+  });
+
+  it("처형 무효 카드는 1.6초 그대로: out-delay + out-ms = NO_EXEC_CARD_MS (1300 + 300)", () => {
+    const voided = ruleOf(".mf-vintro--void");
+    expect(ms(first(voided, "--mf-vi-out-delay")) + ms(first(voided, "--mf-vi-out-ms"))).toBe(NO_EXEC_CARD_MS);
+  });
+
+  it("막 애니메이션 길이: 기본(처형 투표) = EXEC_INTRO_MS, 무효 변형 = NO_EXEC_CARD_MS", () => {
+    expect(animationMs(ruleOf(".mf-vintro__veil"))).toBe(EXEC_INTRO_MS);
+    expect(animationMs(ruleOf(".mf-vintro--void .mf-vintro__veil"))).toBe(NO_EXEC_CARD_MS);
+  });
+
+  it("축소 모션 블록의 막 길이도 변형별로 같은 값이다", () => {
+    const reduced = rules.filter((r) => r.within.some((w) => w.includes("prefers-reduced-motion")));
+    const intro = reduced.find((r) => r.selector === ".mf-vintro--intro .mf-vintro__veil");
+    const voided = reduced.find((r) => r.selector === ".mf-vintro--void .mf-vintro__veil");
+    expect(ms(first(intro!, "animation-duration")?.replace("!important", "").trim())).toBe(EXEC_INTRO_MS);
+    expect(ms(first(voided!, "animation-duration")?.replace("!important", "").trim())).toBe(NO_EXEC_CARD_MS);
+  });
+
+  it("면 지우기 시작 --mf-vi-erase-at 1500ms 이고, 셰브런 4회가 끝나는 시각(1500 + 2×120 + 4×260)이 페이드아웃 시작(2850) 이내다", () => {
+    const erase = ms(first(ruleOf(".mf-vintro--intro"), "--mf-vi-erase-at"));
+    expect(erase).toBe(1500);
+    const chev = ruleOf(".mf-vintro__chev");
+    const anim = first(chev, "animation") ?? "";
+    expect(anim).toMatch(/calc\(var\(--mf-vi-erase-at, 1500ms\) \+ var\(--mf-vi-i, 0\) \* 120ms\) 4 both/);
+    const chevEnd = erase + 2 * 120 + 4 * 260;
+    expect(chevEnd).toBe(2780);
+    expect(chevEnd).toBeLessThanOrEqual(ms(first(ruleOf(".mf-vintro"), "--mf-vi-out-delay")));
+  });
+
+  it("면 지우기·글로·제목·질문이 같은 시작 변수를 쓴다(850ms 리터럴이 남지 않는다)", () => {
+    expect(FILES.verdict).not.toMatch(/\b850ms\b/);
+    for (const sel of [".mf-vintro--intro .mf-vintro__glow", ".mf-vintro--intro .mf-vintro__face", ".mf-vintro--intro .mf-vintro__title", ".mf-vintro--intro .mf-vintro__q-small", ".mf-vintro--intro .mf-vintro__q-big"]) {
+      expect(first(ruleOf(sel), "animation"), sel).toContain("var(--mf-vi-erase-at)");
+    }
   });
 });

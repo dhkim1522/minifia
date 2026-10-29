@@ -143,11 +143,11 @@ describe("처형 투표 인트로 카드 (D-23·D-30)", () => {
     expect(intro(b.container)).toBeNull();
   });
 
-  it("1599ms 에는 있고 1600ms 에 DOM 에서 사라진다(EXEC_INTRO_MS), 같은 단계 안에서 다시 그리거나 마감 시각이 바뀌어도 돌아오지 않는다", () => {
-    expect(EXEC_INTRO_MS).toBe(1600);
+  it("3초 직전(EXEC_INTRO_MS − 1)에는 있고 3초(EXEC_INTRO_MS)에 DOM 에서 사라진다, 같은 단계 안에서 다시 그리거나 마감 시각이 바뀌어도 돌아오지 않는다", () => {
+    expect(EXEC_INTRO_MS).toBe(3000);
     const r = renderRoom(makeView("discussion"));
     r.rerenderRoom(makeView("execVote"));
-    advance(1599);
+    advance(EXEC_INTRO_MS - 1);
     expect(intro(r.container)).not.toBeNull();
     advance(1);
     expect(intro(r.container)).toBeNull();
@@ -164,7 +164,7 @@ describe("처형 투표 인트로 카드 (D-23·D-30)", () => {
     r.rerenderRoom(makeView("execVote"));
     advance(1000);
     r.rerenderRoom(makeView("execVote", { yes: 1 }));
-    advance(599);
+    advance(EXEC_INTRO_MS - 1000 - 1);
     expect(intro(r.container)).not.toBeNull();
     advance(1);
     expect(intro(r.container)).toBeNull();

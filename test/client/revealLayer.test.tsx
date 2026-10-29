@@ -6,7 +6,8 @@ import { RevealLayer } from "../../src/components/RevealLayer";
 import { DayTable } from "../../src/components/DayTable";
 import type { DayTableSeat } from "../../src/components/DayTable";
 import { daySeatLayout } from "../../src/game/dayTable";
-import { REVEAL_DRAW_MS, REVEAL_FADE_MS, arrowEndpoints, revealPlan } from "../../src/game/verdict";
+import { candidateRevealMs } from "../../shared/game/phases";
+import { REVEAL_DRAW_MS, REVEAL_FADE_MS, REVEAL_LEAD_MS, REVEAL_REDUCED_HOLD_MS, REVEAL_SLOT_MS, arrowEndpoints, revealPlan } from "../../src/game/verdict";
 import { useReducedMotion } from "../../src/net/useReducedMotion";
 import { renderHook } from "@testing-library/react";
 
@@ -65,13 +66,13 @@ const num = (el: Element, name: string) => Number(el.getAttribute(name));
 const easeOut = (p: number) => 1 - (1 - p) ** 3;
 
 describe("RevealLayer: 화살표 하나가 자라며 나가고 닿으면 사라진다 (D-20, D-32)", () => {
-  it("첫 화살표 전(단계 시작 + 199ms)에는 .mf-varrow 가 없다", () => {
-    const { container } = mountAt(199);
+  it("첫 화살표 전(단계 시작 + REVEAL_LEAD_MS − 1)에는 .mf-varrow 가 없다", () => {
+    const { container } = mountAt(REVEAL_LEAD_MS - 1);
     expect(arrows(container).length).toBe(0);
   });
 
-  it("첫 화살표(시작 + 200ms): 하나, 시작점에서 출발하고 aria-hidden 이며 두 겹 선 + 삼각 머리 marker 가 있다", () => {
-    const { container } = mountAt(200);
+  it("첫 화살표(시작 + REVEAL_LEAD_MS): 하나, 시작점에서 출발하고 aria-hidden 이며 두 겹 선 + 삼각 머리 marker 가 있다", () => {
+    const { container } = mountAt(REVEAL_LEAD_MS);
     expect(arrows(container).length).toBe(1);
     const svg = arrows(container)[0];
     expect(svg.getAttribute("aria-hidden")).toBe("true");
@@ -102,11 +103,11 @@ describe("RevealLayer: 화살표 하나가 자라며 나가고 닿으면 사라�
     expect(marker.querySelector("path")?.getAttribute("d")).toBe("M0 0L10 5L0 10z");
   });
 
-  it("끝점은 시작점에서 arrowEndpoints 의 끝으로 세제곱 ease-out 으로 자란다(280ms), 닿으면 끝에 있다", () => {
+  it("끝점은 시작점에서 arrowEndpoints 의 끝으로 세제곱 ease-out 으로 자란다(1200ms), 닿으면 끝에 있다", () => {
     const { start, end } = endpointsOf(1, 3);
-    for (const dt of [0, 56, 140, 224, 279]) {
+    for (const dt of [0, 240, 600, 960, REVEAL_DRAW_MS - 1]) {
       cleanup();
-      const { container } = mountAt(200 + dt);
+      const { container } = mountAt(REVEAL_LEAD_MS + dt);
       const k = easeOut(dt / REVEAL_DRAW_MS);
       const [under, over] = linesOf(container);
       for (const l of [under, over]) {
@@ -115,14 +116,14 @@ describe("RevealLayer: 화살표 하나가 자라며 나가고 닿으면 사라�
       }
     }
     cleanup();
-    const touched = mountAt(200 + REVEAL_DRAW_MS);
+    const touched = mountAt(REVEAL_LEAD_MS + REVEAL_DRAW_MS);
     const [, over] = linesOf(touched.container);
     expect(num(over, "x2")).toBeCloseTo(end.x, 3);
     expect(num(over, "y2")).toBeCloseTo(end.y, 3);
   });
 
   it("닿고 120ms 동안 불투명도가 1 → 0, 그 뒤 DOM 에 없다", () => {
-    const touch = 200 + REVEAL_DRAW_MS;
+    const touch = REVEAL_LEAD_MS + REVEAL_DRAW_MS;
     const at = (dt: number) => {
       cleanup();
       return mountAt(touch + dt).container;
@@ -131,16 +132,16 @@ describe("RevealLayer: 화살표 하나가 자라며 나가고 닿으면 사라�
     expect(Number(arrows(at(60))[0].style.opacity)).toBeCloseTo(0.5, 2);
     expect(arrows(at(REVEAL_FADE_MS - 1)).length).toBe(1);
     expect(arrows(at(REVEAL_FADE_MS)).length).toBe(0);
-    // 다음 화살표(시작 + 700) 전 틈에는 없다
-    expect(arrows(at(200)).length).toBe(0);
+    // 다음 화살표(시작 + LEAD + SLOT) 전 틈에는 없다
+    expect(arrows(at(REVEAL_FADE_MS + 200)).length).toBe(0);
   });
 
-  it("시간 0~4000ms 를 20ms 간격으로 훑어도 .mf-varrow 가 둘 이상인 시점이 없고, 단계마다 한 번씩 나온다", () => {
+  it("시간 0~(공개 전체 길이)를 20ms 간격으로 훑어도 .mf-varrow 가 둘 이상인 시점이 없고, 단계마다 한 번씩 나온다", () => {
     const { container, advance } = mountAt(0);
     const seenSteps = new Set<string>();
     let maxCount = 0;
     let withArrow = 0;
-    for (let t = 0; t <= 4000; t += 20) {
+    for (let t = 0; t <= candidateRevealMs(VOTES.length); t += 20) {
       const found = arrows(container);
       maxCount = Math.max(maxCount, found.length);
       if (found.length === 1) {
@@ -170,8 +171,8 @@ describe("RevealLayer: 화살표 하나가 자라며 나가고 닿으면 사라�
   });
 
   it("중간 합류: 지난 화살표를 재생하지 않고 지금 슬롯의 화살표만 남은 시간으로 이어서 그린다", () => {
-    const s = PLAN.steps[3]; // 시작 + 1700
-    const { container } = mountAt(s.startMs - START + 140);
+    const s = PLAN.steps[3]; // 시작 + LEAD + 3×SLOT
+    const { container } = mountAt(s.startMs - START + REVEAL_DRAW_MS / 2);
     expect(arrows(container).length).toBe(1);
     expect(arrows(container)[0].getAttribute("data-step")).toBe("3");
     const { start, end } = endpointsOf(s.voter, s.target);
@@ -185,7 +186,7 @@ describe("RevealLayer: 화살표 하나가 자라며 나가고 닿으면 사라�
       { seat: 2, target: 3 },
     ];
     const plan = revealPlan(bad, START);
-    const first = mountAt(200 + 100, false, plan);
+    const first = mountAt(REVEAL_LEAD_MS + 100, false, plan);
     expect(arrows(first.container).length).toBe(0);
     cleanup();
     const second = mountAt(plan.steps[1].startMs - START + 100, false, plan);
@@ -203,28 +204,30 @@ describe("RevealLayer: 화살표 하나가 자라며 나가고 닿으면 사라�
 });
 
 describe("RevealLayer: 축소 모션 (UI-SPEC 13.4)", () => {
-  it("자라는 동작 없이 완성된 모습으로 시작해 200ms 보이고, 120ms 동안 사라진다", () => {
+  it("자라는 동작 없이 완성된 모습으로 시작해 닿을 때까지(1200ms) 보이고, 120ms 동안 사라진다", () => {
     const { end } = endpointsOf(1, 3);
-    for (const dt of [0, 100, 199]) {
+    expect(REVEAL_REDUCED_HOLD_MS).toBe(REVEAL_DRAW_MS);
+    for (const dt of [0, 100, REVEAL_REDUCED_HOLD_MS - 1]) {
       cleanup();
-      const { container } = mountAt(200 + dt, true);
+      const { container } = mountAt(REVEAL_LEAD_MS + dt, true);
       expect(arrows(container).length).toBe(1);
       expect(num(linesOf(container)[1], "x2")).toBeCloseTo(end.x, 3);
       expect(num(linesOf(container)[1], "y2")).toBeCloseTo(end.y, 3);
       expect(arrows(container)[0].style.opacity).toBe("1");
     }
     cleanup();
-    const fading = mountAt(200 + 260, true);
+    const fading = mountAt(REVEAL_LEAD_MS + REVEAL_REDUCED_HOLD_MS + REVEAL_FADE_MS / 2, true);
     expect(num(linesOf(fading.container)[1], "x2")).toBeCloseTo(end.x, 3);
     expect(Number(arrows(fading.container)[0].style.opacity)).toBeCloseTo(0.5, 2);
     cleanup();
-    expect(arrows(mountAt(200 + 320, true).container).length).toBe(0);
+    expect(arrows(mountAt(REVEAL_LEAD_MS + REVEAL_REDUCED_HOLD_MS + REVEAL_FADE_MS, true).container).length).toBe(0);
+    expect(REVEAL_REDUCED_HOLD_MS + REVEAL_FADE_MS).toBeLessThanOrEqual(REVEAL_SLOT_MS);
   });
 
   it("축소 모션에서도 동시에 하나뿐이다", () => {
     const { container, advance } = mountAt(0, true);
     let max = 0;
-    for (let t = 0; t <= 4000; t += 20) {
+    for (let t = 0; t <= candidateRevealMs(VOTES.length); t += 20) {
       max = Math.max(max, arrows(container).length);
       advance(20);
     }
@@ -259,16 +262,16 @@ describe("RevealLayer: 정리 (T-04-55)", () => {
     expect(vi.getTimerCount()).toBe(0);
   });
 
-  it("이미 다 끝난 시각(단계 시작 + 3900)에 합류하면 프레임 요청 없이 아무것도 그리지 않는다", () => {
+  it("이미 다 끝난 시각(공개 전체 길이 − 100)에 합류하면 프레임 요청 없이 아무것도 그리지 않는다", () => {
     const raf = vi.spyOn(globalThis, "requestAnimationFrame");
-    const { container, advance } = mountAt(3900);
+    const { container, advance } = mountAt(candidateRevealMs(VOTES.length) - 100);
     advance(1000);
     expect(arrows(container).length).toBe(0);
     expect(raf).not.toHaveBeenCalled();
   });
 
   it("marker id 는 인스턴스마다 다르다(useId)", () => {
-    const a = mountAt(200 + 100);
+    const a = mountAt(REVEAL_LEAD_MS + 100);
     const b = render(<RevealLayer layout={LAYOUT} plan={PLAN} serverNow={serverNow} reduced={false} />);
     const ids = Array.from(document.querySelectorAll("marker")).map((m) => m.id);
     expect(ids.length).toBe(2);

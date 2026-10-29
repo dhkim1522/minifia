@@ -1,5 +1,12 @@
 import { existsSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import {
+  CANDIDATE_REVEAL_LEAD_MS,
+  CANDIDATE_REVEAL_SLOT_MS,
+  CANDIDATE_REVEAL_TAIL_MS,
+  EXEC_VOTE_MS,
+  candidateRevealMs,
+} from "../../shared/game/phases";
 import type { CandidateVoteLine, SummaryRow, VoteLogEntry } from "../../shared/protocol";
 import { daySeatLayout, dayTableGeometry, FIG_H, FIG_W, TAG_H } from "../../src/game/dayTable";
 import {
@@ -7,6 +14,7 @@ import {
   CHIP_H_LEAD,
   CHIP_W,
   CHIP_W_LEAD,
+  CLINCH_BEAT_MS,
   CLINCH_VIBRATE_MS,
   CONE_H,
   CONE_W,
@@ -20,12 +28,13 @@ import {
   RESULT_FLIP_MS,
   RESULT_REDUCED_FADE_MS,
   RESULT_SUMMARY_AT_MS,
-  REVEAL_BUDGET_MS,
   REVEAL_DRAW_MS,
   REVEAL_FADE_MS,
   REVEAL_LEAD_MS,
   REVEAL_POP_MS,
-  REVEAL_SLOT_MAX_MS,
+  REVEAL_REDUCED_HOLD_MS,
+  REVEAL_SLOT_MS,
+  REVEAL_TAIL_MS,
   VERDICT_BLUR_PX,
   VERDICT_CANDIDATE_SCALE,
   VERDICT_CONE_DELAY_MS,
@@ -41,6 +50,7 @@ import {
   chipAnchor,
   chipPlacement,
   candidateSeatLabel,
+  clinchBeat,
   clinchedTarget,
   defenseAnnounce,
   defenseDisconnected,
@@ -81,12 +91,19 @@ const SCENES = PHONES.flatMap((p) => [
   { ...p, label: `${p.phone} 폭 · 패널 236`, h: p.h - 79 },
 ]);
 
-describe("상수 (UI-SPEC 13.1)", () => {
+describe("상수 (UI-SPEC 13.1, 결정 0039 개정)", () => {
   it("값이 UI-SPEC 와 같다", () => {
-    expect([EXEC_INTRO_MS, NO_EXEC_CARD_MS, NO_EXEC_INTRO_DELAY_MS]).toEqual([1600, 1600, 1600]);
-    expect([REVEAL_LEAD_MS, REVEAL_SLOT_MAX_MS, REVEAL_BUDGET_MS, REVEAL_DRAW_MS, REVEAL_FADE_MS, REVEAL_POP_MS]).toEqual([
-      200, 500, 3600, 280, 120, 220,
-    ]);
+    // 결정 0039: 처형 투표 카드 3초(무효 카드는 1.6초 그대로), 공개는 한 표 2초·닿음 1.2초
+    expect([EXEC_INTRO_MS, NO_EXEC_CARD_MS, NO_EXEC_INTRO_DELAY_MS]).toEqual([3000, 1600, 1600]);
+    expect([
+      REVEAL_LEAD_MS,
+      REVEAL_SLOT_MS,
+      REVEAL_TAIL_MS,
+      REVEAL_DRAW_MS,
+      REVEAL_FADE_MS,
+      REVEAL_POP_MS,
+      REVEAL_REDUCED_HOLD_MS,
+    ]).toEqual([400, 2000, 600, 1200, 120, 220, 1200]);
     expect([VERDICT_MOVE_MS, VERDICT_DIM_FADE_MS, VERDICT_CONE_DELAY_MS, VERDICT_CONE_FADE_MS]).toEqual([600, 400, 200, 500]);
     expect([VERDICT_DIM_PERCENT, VERDICT_BLUR_PX, VERDICT_CANDIDATE_SCALE]).toEqual([45, 3, 1.7]);
     expect([CONE_W, CONE_H, GHOST_FADE_MS, CLINCH_VIBRATE_MS]).toEqual([300, 340, 400, 30]);
@@ -98,6 +115,29 @@ describe("상수 (UI-SPEC 13.1)", () => {
   });
 });
 
+describe("상수 관계와 서버 출처 (결정 0039)", () => {
+  it("공개 앞·한 표·뒤 여유는 서버(shared/game/phases)와 같은 출처다", () => {
+    expect([REVEAL_LEAD_MS, REVEAL_SLOT_MS, REVEAL_TAIL_MS]).toEqual([
+      CANDIDATE_REVEAL_LEAD_MS,
+      CANDIDATE_REVEAL_SLOT_MS,
+      CANDIDATE_REVEAL_TAIL_MS,
+    ]);
+  });
+
+  it("처형 투표 카드가 사라진 뒤에도 여부 투표가 10초 이상 남는다", () => {
+    expect(EXEC_VOTE_MS - EXEC_INTRO_MS).toBeGreaterThanOrEqual(10_000);
+  });
+
+  it("화살표 + 사라짐, 화살표 + 확정 두근이 한 슬롯 안에 든다", () => {
+    expect(REVEAL_DRAW_MS + REVEAL_FADE_MS).toBeLessThanOrEqual(REVEAL_SLOT_MS);
+    expect(REVEAL_DRAW_MS + CLINCH_BEAT_MS).toBeLessThanOrEqual(REVEAL_SLOT_MS);
+  });
+
+  it("모션 줄이기 화살표는 닿을 때까지 보인다", () => {
+    expect(REVEAL_REDUCED_HOLD_MS).toBe(REVEAL_DRAW_MS);
+  });
+});
+
 describe("revealPlan — 슬롯과 단계 시각 (D-21, UI-SPEC 13.2)", () => {
   it("n=0 이면 단계 목록이 비고 끝이 곧 시작이다", () => {
     const plan = revealPlan([], 1000);
@@ -106,34 +146,48 @@ describe("revealPlan — 슬롯과 단계 시각 (D-21, UI-SPEC 13.2)", () => {
     expect(plan.outcome).toBe("none");
   });
 
-  it.each([
-    [1, 500],
-    [2, 500],
-    [7, 500],
-    [8, 450],
-  ])("n=%i 이면 슬롯 %ims", (n, slot) => {
+  it.each([1, 2, 5, 7, 8, 20])("n=%i 이면 슬롯 2000ms 고정", (n) => {
     const plan = revealPlan(votesOf(Array.from({ length: n }, () => 0)), 0);
-    expect(plan.slotMs).toBe(slot);
+    expect(plan.slotMs).toBe(2000);
   });
 
-  it("인원 0~8 모두에서 마지막 슬롯 끝이 단계 시작 + 3800ms 이하다", () => {
-    for (let n = 0; n <= 8; n++) {
+  it("n=1..8: 마지막 슬롯 끝 + 뒤 여유 600 = 서버 마감 시각 (start + candidateRevealMs(n))", () => {
+    for (let n = 1; n <= 8; n++) {
       const plan = revealPlan(votesOf(Array.from({ length: n }, (_, i) => i % 3)), 5000);
-      if (n === 0) continue;
-      expect(plan.slotMs).toBe(Math.floor(Math.min(500, 3600 / n)));
-      expect(plan.endMs).toBe(5000 + 200 + n * plan.slotMs);
-      expect(plan.endMs).toBeLessThanOrEqual(5000 + 3800);
+      expect(plan.slotMs).toBe(2000);
+      expect(plan.endMs).toBe(5000 + 400 + n * 2000);
+      expect(plan.endMs + REVEAL_TAIL_MS).toBe(5000 + candidateRevealMs(n));
     }
   });
 
-  it("단계 k 의 시작 = 시작 + 200 + k×슬롯, 닿음 = +280, 사라짐 끝 = 닿음 + 120", () => {
+  it("n=0: 끝이 곧 시작이고 서버 길이는 2000ms 다", () => {
+    const plan = revealPlan([], 5000);
+    expect(plan.endMs).toBe(5000);
+    expect(candidateRevealMs(0)).toBe(2000);
+  });
+
+  it("8표 최악: 마지막 닿음 = start + 15600, endMs = start + 16400, 서버 길이 17000", () => {
+    const plan = revealPlan(votesOf(Array.from({ length: 8 }, (_, i) => i % 3)), 0);
+    expect(plan.steps.at(-1)!.touchMs).toBe(15_600);
+    expect(plan.endMs).toBe(16_400);
+    expect(candidateRevealMs(8)).toBe(17_000);
+  });
+
+  it("단계 k 의 시작 = 시작 + 400 + k×2000, 닿음 = +1200, 사라짐 끝 = 닿음 + 120", () => {
     const plan = revealPlan(sameSeatVotes([[3, 1], [4, 2], [5, 1]]), 10_000);
     plan.steps.forEach((s, k) => {
       expect(s.index).toBe(k);
-      expect(s.startMs).toBe(10_000 + 200 + k * 500);
-      expect(s.touchMs).toBe(s.startMs + 280);
+      expect(s.startMs).toBe(10_000 + 400 + k * 2000);
+      expect(s.touchMs).toBe(s.startMs + 1200);
       expect(s.fadeEndMs).toBe(s.touchMs + 120);
     });
+  });
+
+  it("확정 두근(닿음 + 700)은 다음 화살표 시작보다 먼저 끝난다", () => {
+    const plan = revealPlan(votesOf([1, 1, 1, 2, 3]), 0);
+    const c = plan.clinch!;
+    expect(c.atMs + CLINCH_BEAT_MS).toBeLessThan(plan.steps[c.step + 1]!.startMs);
+    expect(clinchBeat(plan, c.atMs + CLINCH_BEAT_MS - 1)?.beat).toBe("clinch");
   });
 
   it("투표 순서는 입력 배열 그대로고 입력은 바뀌지 않는다", () => {
@@ -148,7 +202,7 @@ describe("revealPlan — 슬롯과 단계 시각 (D-21, UI-SPEC 13.2)", () => {
     const many = votesOf(Array.from({ length: 20 }, () => 1));
     const plan = revealPlan(many, 0);
     expect(plan.steps).toHaveLength(20);
-    expect(plan.slotMs).toBe(Math.floor(3600 / 20));
+    expect(plan.slotMs).toBe(2000);
     const dup = revealPlan(sameSeatVotes([[1, 2], [1, 2], [1, 2]]), 0);
     expect(dup.steps).toHaveLength(3);
   });
@@ -156,10 +210,10 @@ describe("revealPlan — 슬롯과 단계 시각 (D-21, UI-SPEC 13.2)", () => {
 
 describe("revealStateAt — 같은 서버 시각이면 같은 상태 (D-20, D-31, 결정 0036-5)", () => {
   const plan = revealPlan(sameSeatVotes([[1, 7], [2, 8], [3, 7]]), 1000);
-  // 단계 0: 시작 1200 닿음 1480 끝 1600 / 단계 1: 시작 1700 닿음 1980 / 단계 2: 시작 2200 닿음 2480 / 끝 2700
+  // 단계 0: 시작 1400 닿음 2600 끝 2720 / 단계 1: 시작 3400 닿음 4600 / 단계 2: 시작 5400 닿음 6600 / 끝 7400
 
   it("첫 단계 시작 전엔 칩 0·화살표 없음·팝 없음", () => {
-    for (const now of [0, 1000, 1199]) {
+    for (const now of [0, 1000, 1399]) {
       const st = revealStateAt(plan, now);
       expect(st.counts).toEqual({});
       expect(st.arrow).toBeNull();
@@ -170,15 +224,15 @@ describe("revealStateAt — 같은 서버 시각이면 같은 상태 (D-20, D-31
     }
   });
 
-  it("단계 0 시작 + 140ms 이면 화살표 단계 0, 진행 0.5, 칩 0", () => {
-    const st = revealStateAt(plan, 1200 + 140);
+  it("단계 0 시작 + 600ms 이면 화살표 단계 0, 진행 0.5, 칩 0", () => {
+    const st = revealStateAt(plan, 1400 + 600);
     expect(st.arrow).toMatchObject({ step: 0, voter: 1, target: 7, progress: 0.5, opacity: 1 });
     expect(st.counts).toEqual({});
     expect(st.current).toBe(0);
   });
 
   it("닿는 시각엔 대상 칩 1·팝 = 그 대상·진행 1", () => {
-    const st = revealStateAt(plan, 1200 + 280);
+    const st = revealStateAt(plan, 1400 + 1200);
     expect(st.counts).toEqual({ 7: 1 });
     expect(st.pop).toBe(7);
     expect(st.arrow).toMatchObject({ step: 0, progress: 1 });
@@ -186,14 +240,14 @@ describe("revealStateAt — 같은 서버 시각이면 같은 상태 (D-20, D-31
   });
 
   it("닿고 60ms 뒤엔 화살표가 반쯤 사라지고, 120ms 뒤엔 없다", () => {
-    const half = revealStateAt(plan, 1200 + 280 + 60);
+    const half = revealStateAt(plan, 1400 + 1200 + 60);
     expect(half.arrow?.opacity).toBeCloseTo(0.5, 5);
-    expect(revealStateAt(plan, 1200 + 280 + 120).arrow).toBeNull();
+    expect(revealStateAt(plan, 1400 + 1200 + 120).arrow).toBeNull();
   });
 
   it("다음 단계가 시작하면 팝이 해제되고 칩은 남는다", () => {
-    expect(revealStateAt(plan, 1699).pop).toBe(7);
-    const st = revealStateAt(plan, 1700);
+    expect(revealStateAt(plan, 3399).pop).toBe(7);
+    const st = revealStateAt(plan, 3400);
     expect(st.pop).toBeNull();
     expect(st.counts).toEqual({ 7: 1 });
     expect(st.arrow).toMatchObject({ step: 1, voter: 2, target: 8, progress: 0 });
@@ -201,15 +255,15 @@ describe("revealStateAt — 같은 서버 시각이면 같은 상태 (D-20, D-31
   });
 
   it("동률 선두는 leader null (P-14), 다시 한 표 더 받으면 선두", () => {
-    const tie = revealStateAt(plan, 1980);
+    const tie = revealStateAt(plan, 4600);
     expect(tie.counts).toEqual({ 7: 1, 8: 1 });
     expect(tie.leader).toBeNull();
-    expect(revealStateAt(plan, 2480).leader).toBe(7);
+    expect(revealStateAt(plan, 6600).leader).toBe(7);
   });
 
   it("마지막 슬롯 끝 뒤에는 팝 없음·최종 칩 수·끝 상태", () => {
     const st = revealStateAt(plan, plan.endMs);
-    expect(plan.endMs).toBe(1000 + 200 + 3 * 500);
+    expect(plan.endMs).toBe(1000 + 400 + 3 * 2000);
     expect(st.ended).toBe(true);
     expect(st.pop).toBeNull();
     expect(st.arrow).toBeNull();
@@ -222,11 +276,11 @@ describe("revealStateAt — 같은 서버 시각이면 같은 상태 (D-20, D-31
   });
 
   it("중간 합류는 지금 시각의 상태다 — 지난 화살표를 재생하지 않고 같은 시각이면 같은 결과다", () => {
-    const joined = revealStateAt(plan, 2300);
+    const joined = revealStateAt(plan, 5600);
     expect(joined.counts).toEqual({ 7: 1, 8: 1 });
     expect(joined.arrow).toMatchObject({ step: 2, voter: 3, target: 7 });
-    expect(joined.arrow?.progress).toBeCloseTo(100 / 280, 5);
-    expect(revealStateAt(plan, 2300)).toEqual(joined);
+    expect(joined.arrow?.progress).toBeCloseTo(200 / 1200, 5);
+    expect(revealStateAt(plan, 5600)).toEqual(joined);
   });
 
   it("최종 결과 종류: 유일 선두 leader · 동률 tie · 표 없음 none", () => {
@@ -574,7 +628,7 @@ describe("revealCaption · revealResultLine (UI-SPEC 7.2 candidateVoteReveal)", 
   });
 
   it("화살표 k 가 나가는 중이면 누가 누구를 골랐는지와 몇 번째 표", () => {
-    expect(revealCaption(plan, revealStateAt(plan, 200 + 100), nameOf)).toEqual({
+    expect(revealCaption(plan, revealStateAt(plan, REVEAL_LEAD_MS + 100), nameOf)).toEqual({
       title: "지호님이 도윤님을 골랐어요",
       hint: "1번째 표 · 모두 3표",
     });
@@ -617,7 +671,7 @@ describe("revealCaption · revealResultLine (UI-SPEC 7.2 candidateVoteReveal)", 
 
   it("이름을 못 찾으면 알 수 없는 사람", () => {
     const lost = revealPlan(sameSeatVotes([[99, 98]]), 0);
-    expect(revealCaption(lost, revealStateAt(lost, 250), nameOf)?.title).toBe(`${UNKNOWN_NAME}님이 ${UNKNOWN_NAME}님을 골랐어요`);
+    expect(revealCaption(lost, revealStateAt(lost, REVEAL_LEAD_MS + 50), nameOf)?.title).toBe(`${UNKNOWN_NAME}님이 ${UNKNOWN_NAME}님을 골랐어요`);
     expect(UNKNOWN_NAME).toBe("알 수 없는 사람");
   });
 });
@@ -697,7 +751,7 @@ describe("T-04-40: 닉네임은 평문으로만 이어 붙인다", () => {
   const evil = (seat: number): string | undefined => (seat === 1 ? "<b>가나다라</b>" : seat === 2 ? "{x}&amp;" : undefined);
   it("모든 문구 함수가 마크업·중괄호를 그대로 둔 문자열을 돌려준다", () => {
     const plan = revealPlan(sameSeatVotes([[1, 2]]), 0);
-    expect(revealCaption(plan, revealStateAt(plan, 250), evil)?.title).toBe("<b>가나다라</b>님이 {x}&amp;님을 골랐어요");
+    expect(revealCaption(plan, revealStateAt(plan, REVEAL_LEAD_MS + 50), evil)?.title).toBe("<b>가나다라</b>님이 {x}&amp;님을 골랐어요");
     expect(summaryLines([{ n: 1, night: { target: 1, died: true } }], [], evil)[0].text).toBe("<b>가나다라</b>님 사망");
     expect(defenseStatus("<i>")).toBe("<i>님이 변론하는 중");
   });
