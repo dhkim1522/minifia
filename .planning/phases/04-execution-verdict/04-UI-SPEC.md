@@ -552,6 +552,8 @@ Exceptions (모두 기존 승인 값):
 
 ## 13. 타이밍 요약 (한 곳)
 
+> 결정 0039(2026-10-29)가 13.1 의 EXEC_INTRO_MS(3000)와 13.2 공개 시간표(한 표 2초, 서버가 표 수로 길이)를 개정했다. 값은 shared/game/phases.ts·src/game/verdict.ts 가 기준이다.
+
 ### 13.1 상수 (`src/game/verdict.ts`, D-38 수치 한 곳)
 
 | 상수 | 값 | 설명 |
