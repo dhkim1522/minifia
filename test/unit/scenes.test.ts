@@ -6,6 +6,9 @@ import type { PhaseId } from "../../shared/protocol";
 import {
   HEADER_SCRIM_LENGTH_PX,
   HEADER_SCRIM_STOPS,
+  NIGHT_VIGNETTE_ELLIPSE,
+  NIGHT_VIGNETTE_FADE_MS,
+  NIGHT_VIGNETTE_STOPS,
   PHASE_GUIDE_FILL,
   PHASE_INTRO,
   PHASE_SCENE,
@@ -16,6 +19,7 @@ import {
   SCENE_IDS,
   TIMELESS_PHASES,
   headerScrimGradient,
+  nightVignetteGradient,
   sceneOfPhase,
 } from "../../src/game/scenes";
 // 타입 선언이 없는 .mjs 다(allowJs 없음). 모양은 아래 SourceRow 로 직접 적는다.
@@ -146,6 +150,32 @@ describe("전환 상수와 헤더 막", () => {
         "color-mix(in srgb, var(--night-900) 0%, transparent) 150px)",
     );
     expect(headerScrimGradient()).not.toMatch(/#[0-9a-f]{3,8}/i);
+  });
+});
+
+// ---- 5페이즈 두 층: 밤 비네팅·아침 밝아짐 (05-03, LOOK-01, D-05) ----
+
+describe("밤 비네팅 상수와 그라데이션 (P5-1 확정)", () => {
+  it("타원·멈춤·시간 상수가 UI-SPEC 9.3 값이고 켜짐·꺼짐 시간은 배경 크로스페이드와 같다", () => {
+    expect(NIGHT_VIGNETTE_ELLIPSE).toBe("70% 60% at 50% 44%");
+    expect(NIGHT_VIGNETTE_STOPS.map((s) => [...s])).toEqual([
+      [0, 0],
+      [45, 0],
+      [75, 0.4],
+      [100, 0.72],
+    ]);
+    expect(NIGHT_VIGNETTE_FADE_MS).toBe(SCENE_FADE_MS);
+  });
+
+  it("nightVignetteGradient(): night-950 토큰 color-mix 방사형이고 # 색 값이 없다", () => {
+    expect(nightVignetteGradient()).toBe(
+      "radial-gradient(ellipse 70% 60% at 50% 44%, " +
+        "color-mix(in srgb, var(--night-950) 0%, transparent) 0%, " +
+        "color-mix(in srgb, var(--night-950) 0%, transparent) 45%, " +
+        "color-mix(in srgb, var(--night-950) 40%, transparent) 75%, " +
+        "color-mix(in srgb, var(--night-950) 72%, transparent) 100%)",
+    );
+    expect(nightVignetteGradient()).not.toContain("#");
   });
 });
 
