@@ -59,6 +59,8 @@ import {
   stageStable,
   tagsOverlap,
   voteChecks,
+  candidateRevealMs,
+  CANDIDATE_REVEAL_TIMING,
   introChecks,
   candidateChecks,
   revealChecks,
@@ -1593,11 +1595,12 @@ test("voteChecks P9: 관전자는 마피아 동료 표시(진홍 후광, D-33)�
 const introSamples = (over = {}) => [
   { t: 100, intro: { count: 1, pointerEvents: "none", cardOpacity: 1, residueCount: 0 } },
   { t: 900, intro: { count: 1, pointerEvents: "none", cardOpacity: 1, residueCount: 0 } },
-  { t: 1900, intro: { count: 0, pointerEvents: null, cardOpacity: null, residueCount: 0 } },
+  { t: 2500, intro: { count: 1, pointerEvents: "none", cardOpacity: 0.4, residueCount: 0 } }, // 3초 카드는 2.5초에도 있는 것이 정상(결정 0039)
+  { t: 3300, intro: { count: 0, pointerEvents: null, cardOpacity: null, residueCount: 0 } },
   ...(over.extra ?? []),
 ];
 
-test("introChecks P2: 도착 직후 카드 1장·터치 통과, 1.8초 뒤 DOM 에서 사라져 잔상 0, 그 동안 클릭이 통과했으면 통과한다", () => {
+test("introChecks P2: 도착 직후 카드 1장·터치 통과, 3.2초 뒤 DOM 에서 사라져 잔상 0, 그 동안 클릭이 통과했으면 통과한다", () => {
   const r = introChecks(introSamples(), { clickedThrough: true });
   assert.equal(r.id, "P2");
   assert.equal(r.ok, true, r.detail);
@@ -1610,10 +1613,10 @@ test("introChecks P2: 어긋남마다 실패하고 이유를 말한다", () => {
     ["도착 직후 카드 없음", mut(0, { count: 0 }), true, /카드/],
     ["도착 직후 카드 둘", mut(0, { count: 2 }), true, /카드/],
     ["터치를 가로챔", mut(0, { pointerEvents: "auto" }), true, /pointer-events/],
-    ["1.8초 뒤에도 남아 있음", mut(2, { count: 1, pointerEvents: "none" }), true, /1800|사라/],
-    ["불투명 잔상", mut(2, { residueCount: 1 }), true, /잔상/],
+    ["3.2초 뒤에도 남아 있음", mut(3, { count: 1, pointerEvents: "none" }), true, /3200|사라/],
+    ["불투명 잔상", mut(3, { residueCount: 1 }), true, /잔상/],
     ["클릭이 통과하지 못함", s, false, /클릭/],
-    ["1.8초 뒤 표본 없음", s.slice(0, 2), true, /측정값 없음/],
+    ["3.2초 뒤 표본 없음", s.slice(0, 3), true, /측정값 없음/],
     ["표본 없음", [], true, /측정값 없음/],
   ];
   for (const [name, samples, clickedThrough, re] of cases) {
@@ -1623,6 +1626,13 @@ test("introChecks P2: 어긋남마다 실패하고 이유를 말한다", () => {
   }
   assert.match(introChecks(s, {}).detail, /측정값 없음\(.*clickedThrough/);
   assert.match(introChecks(null, { clickedThrough: true }).detail, /측정값 없음/);
+});
+
+test("candidateRevealMs 사본: 0표 2000, 1표 3000, 5표 11000, 8표 17000 (결정 0039)", () => {
+  assert.deepEqual([0, 1, 5, 8].map((n) => candidateRevealMs(n)), [2000, 3000, 11000, 17000]);
+  assert.deepEqual({ ...CANDIDATE_REVEAL_TIMING }, { leadMs: 400, slotMs: 2000, tailMs: 600, emptyMs: 2000 });
+  assert.equal(candidateRevealMs(-2), 2000);
+  assert.equal(candidateRevealMs(Number.NaN), 2000);
 });
 
 const seatBtns = (over = {}) =>
