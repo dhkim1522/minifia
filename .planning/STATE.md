@@ -6,11 +6,11 @@ current_phase: 4
 current_phase_name: 처형과 승패
 current_plan: 35
 status: executing
-stopped_at: Completed 04-35-PLAN.md
-last_updated: "2026-10-28T15:49:54.265Z"
+stopped_at: Phase 5 context gathered
+last_updated: "2026-10-29T05:36:49.307Z"
 last_activity: 2026-10-26
 last_activity_desc: Phase 4 execution started
-state_head: 8575f0cf1473f7cdf5db41309d9fd4b1d435f25d
+state_head: 7e7a7b47198701d5e1357ef0418277f4641f897b
 progress:
   total_phases: 7
   completed_phases: 3
@@ -320,6 +320,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-28T15:49:53.690Z
-Stopped at: Completed 04-35-PLAN.md
-Resume file: None
+Last session: 2026-10-29T05:36:48.080Z
+Stopped at: Phase 5 context gathered
+Resume file: .planning/phases/05-atmosphere-character/05-CONTEXT.md
