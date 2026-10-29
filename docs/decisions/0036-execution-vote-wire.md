@@ -29,7 +29,7 @@
    | 던진 뒤 연결이 끊김 | 던진 표는 유효 (못 보낸 표만 무효, CONN-02) |
 
    받는 사람: 값이 바뀌면 방의 모든 소켓이 각자 view 를 받는다(집계 수는 공개 정보, D-02). 개인 표 `Player.execVote` 는 서버 전용이고 마감 훅이 집계 직후 키째 지운다 — 익명을 "보내지 않는다" 만이 아니라 "서버에도 남지 않는다" 로 지킨다. 실시간 집계와 마감 집계는 같은 함수(`execTallyOf`)다.
-4. **후보 선택**: 메시지 `{ t: "candidateVote", target: number }`. 검사 순서는 단계(`WRONG_PHASE`) → 행위자(방에 있고 생존, 아니면 `BAD_MESSAGE`) → 대상(정수·앉은 생존자, 자기 자신·탈락자·없는 자리는 `BAD_MESSAGE`) → 같은 값이면 입력 그대로. 최다 득표 한 명이 후보이고, 동률·0표는 후보 없음이다(난수로 고르지 않는다, D-03). 번복은 마지막 값이 유효하다. 받는 사람: 투표자 본인 소켓에만 state(`me.voteTarget`)를 보낸다 — 방송하지 않고 관전자에게도 보내지 않는다(남의 선택은 보이지 않는다, D-19).
+4. **후보 선택**: 메시지 `{ t: "candidateVote", target: number }`. 검사 순서는 단계(`WRONG_PHASE`) → 행위자(방에 있고 생존, 아니면 `BAD_MESSAGE`) → 대상(정수·앉은 생존자, 자기 자신·탈락자·없는 자리는 `BAD_MESSAGE`) → 같은 값이면 입력 그대로. 최다 득표 한 명이 후보이고, 동률·0표는 후보 없음이다(난수로 고르지 않는다, D-03). 번복은 마지막 값이 유효하다. 받는 사람: 투표자 본인 소켓에만 state(`me.voteTarget`)를 보낸다 — 방송하지 않고 관전자에게도 보내지 않는다(남의 선택은 보이지 않는다, D-19). (→ 결정 0040: target 은 number | null 이고 null 은 취소다. 고른 표가 있으면 지우고 투표자에게만 state, 없으면 무전송)
 5. **공개 구간**: `candidateVoteReveal` 진입 때 서버가 던진 표를 seat 오름차순으로 모은 뒤 Fisher–Yates 로 섞어 `day.voteLog[그날].cand.votes` 에 그 순서로 싣는다 — 배열 순서가 모든 폰의 공개 순서다(D-20). 난수 호출 계약: 던진 표 수 n ≥ 2 이면 `i = n-1 … 1` 에 `randInt(i+1)`, n ≤ 1 이면 부르지 않고, `randInt(0)` 은 부르지 않는다. 화면이 4초 안에 연출을 맞춘다(D-21). (→ 결정 0039: 화면 시간표 끝 + 600ms = 서버 마감) 확정 판정(두근 효과, D-31)은 화면이 `votes` 로 계산한다 — 서버 추가 필드가 없다. 무효표는 줄이 없다.
 6. **메시지 허용표**: 쿨다운은 빠른 메시지와 이모티콘 합산 1.8초 그대로.
 
@@ -59,7 +59,7 @@
     |---|---|---|
     | `day.execTally {yes, no}` | execVote | 모든 viewer, 같은 값 (관전자 포함, A13) |
     | `me.voteAgree` | execVote | 생존한 본인만 |
-    | `me.voteTarget` | candidateVote | 생존한 본인만 |
+    | `me.voteTarget` | candidateVote | 생존한 본인만 (취소하면 키 없음, 결정 0040) |
     | `day.voteLog[] {n, exec{yes,no,passed}, cand?{votes[{seat,target}], candidate?}}` | 낮 단계마다(`ended` 포함) | 모두. `cand` 는 공개 구간부터 |
     | `day.candidate` | candidateVoteReveal · defense · execution (후보가 있을 때) | 모두 |
     | `day.execution {seat, phrase}` | execution | 모두 |
