@@ -17,12 +17,16 @@ import {
   leaveFromResult,
   leaveLobby,
   openChatHistory,
+  openGuestJoinPage,
   openHostPage,
   openRoleCard,
   openTestSheet,
   pickCandidate,
   pickChip,
+  readAtmosphere,
   readBackdropLayers,
+  readGuide,
+  readJoinFit,
   readHeaderContrast,
   readIntroWatch,
   readSceneIntro,
@@ -47,6 +51,7 @@ import {
   waitPhaseIn,
 } from "./browser.mjs";
 import {
+  JOIN_FIT_MIN_H,
   ROLE_NAME,
   backdropSceneChecks,
   candidateChecks,
@@ -55,13 +60,17 @@ import {
   dayChecks,
   defenseChecks,
   dimChecks,
+  docHeightChecks,
   executionChecks,
   feltGapChecks,
   feltStable,
   genericIssues,
+  glowChecks,
+  guideChecks,
   headerContrastChecks,
   inspectChecks,
   introChecks,
+  joinFitChecks,
   journalChecks,
   lobbyShapeChecks,
   lineCount,
@@ -81,6 +90,7 @@ import {
   tagsOverlap,
   turnChecks,
   crownChecks,
+  vignetteChecks,
   voidCardChecks,
   voteChecks,
   resultChecks,
@@ -115,6 +125,7 @@ export async function startHost(ctx, flowId) {
   const rec = recorder(ctx);
   const room = await createTestRoom(ctx.origin, HOST_NICK);
   ctx.secrets.push(room.token);
+  ctx.roomCode = room.code; // 링크 참가 probe(UX2-J)용. 방 코드는 비밀이 아니다 — 토큰은 남기지 않는다
   const host = await openHostPage(ctx.browser, { origin: ctx.origin, code: room.code, token: room.token, size: ctx.size, dpr: ctx.shots ? 2 : 1 });
   ctx.host = host;
   const v = host.tracker.last();
@@ -234,7 +245,48 @@ async function lobbyFlow(ctx) {
   });
   rec("lobby/sheet", "T2", "테스트 시트 닫힘", t2.ok, t2.detail);
 
+  await joinLinkProbe(ctx); // UX2-J: 방장 + 봇 6명 방의 링크 참가 화면이 한 화면에 들어간다(P5-4)
+
   await leaveLobby(page);
+}
+
+/** 링크 참가 화면 probe 의 앉은 사람 수: 방장 + 봇 6명. */
+const JOIN_PROBE_SEATED = 7;
+
+/**
+ * UX2-J(05-06, P5-4): 방장 + 봇 6명(앉은 사람 7명)인 방의 링크 참가 화면을 세션 없는 새 컨텍스트로 열어 문서 높이·`참가하기` 아래끝을 본다.
+ * 화면 높이가 JOIN_FIT_MIN_H 미만이면 판정하지 않는다. 손님은 참가하지 않고 컨텍스트를 finally 에서 닫는다(T-05-14).
+ */
+async function joinLinkProbe(ctx) {
+  const { h } = ctx.size;
+  if (h < JOIN_FIT_MIN_H) return;
+  const rec = recorder(ctx);
+  const { page, tracker } = ctx.host;
+  await openTestSheet(page);
+  await setBots(page, tracker, JOIN_PROBE_SEATED - 1);
+  await closeSheet(page);
+  let guest = null;
+  try {
+    guest = await openGuestJoinPage(ctx.browser, { origin: ctx.origin, code: ctx.roomCode, size: ctx.size, dpr: 1 });
+    const gp = guest.page;
+    const waited = await attempt(async () => {
+      await gp.waitForFunction((n) => document.querySelectorAll("ul.mf-join__seated > li").length === n, JOIN_PROBE_SEATED, { timeout: 12_000 });
+    });
+    if (!waited.ok) {
+      const seen = await gp.locator("ul.mf-join__seated > li").count().catch(() => -1);
+      rec("lobby/join", "UX2-J", "링크 참가 한 화면(문서·참가하기 버튼)", false, `앉은 사람 ${seen}명 ≠ 기대 ${JOIN_PROBE_SEATED}명(12초 안에 미리보기가 채워지지 않음)`);
+      return;
+    }
+    await settle(gp);
+    if (ctx.shots) {
+      mkdirSync(OUT_DIR, { recursive: true });
+      await shot(gp, join(OUT_DIR, `lobby-join-${ctx.size.label}.png`));
+    }
+    const j = await readJoinFit(gp);
+    recOne(rec, "lobby/join", joinFitChecks(j, { h, expectSeated: JOIN_PROBE_SEATED }));
+  } finally {
+    if (guest) await guest.context.close().catch(() => {});
+  }
 }
 
 // ---- 게임 흐름(과제 2) ----
@@ -262,6 +314,41 @@ async function grabLobbyStage(ctx, state, waitMs = 0) {
 }
 
 /**
+ * 지금 할 일 문장 하나·한 줄·타이머(UX1)와 문서 높이(UX2)를 한 번에 기록한다(05-06, D-08, D-10).
+ * 읽는 동안 추적 단계가 phase 에서 벗어났으면 다른 장면의 값이므로 기록하지 않고 false 를 돌려준다(짧은 단계 — 배정 3초·낮 시작 2초 — 의 "이미 지났으면 건너뛴다" 규칙).
+ */
+async function guideState(ctx, flowId, state, phase) {
+  const rec = recorder(ctx);
+  const { page, tracker } = ctx.host;
+  const g = await readGuide(page);
+  if (tracker.last()?.phase !== phase) return false;
+  const sc = `${flowId}/${state}`;
+  recOne(rec, sc, guideChecks(g, { phase }));
+  recOne(rec, sc, docHeightChecks(g, { h: ctx.size.h }));
+  return true;
+}
+
+/** 역할 배정(3초 창)에서 부르는 콜백: 장면을 모으고(D7·D9·T1) 안내 문장·문서 높이를 읽는다. */
+const onAssigningOf = (ctx, flowId) => async () => {
+  await grabLobbyStage(ctx, "assigning");
+  await guideState(ctx, flowId, "assigning", "assigning");
+};
+
+/**
+ * 분위기 두 층(AT1 비네팅·AT2 밝아짐)을 기록한다(05-06). vignette·glow 는 기대 개수(1 또는 0).
+ * 읽는 동안 추적 단계가 phase 에서 벗어났으면 SetupError(스냅숏 중 단계 변경, 기존 규칙) — 층은 단계에 묶인 값이다.
+ */
+async function atmosphereState(ctx, flowId, state, phase, { vignette, glow }) {
+  const rec = recorder(ctx);
+  const { page, tracker } = ctx.host;
+  const a = await readAtmosphere(page, { mySeat: tracker.last()?.me?.seat ?? null });
+  if (tracker.last()?.phase !== phase) throw new SetupError(`${state} 분위기 층 측정 중에 단계가 ${tracker.last()?.phase} 로 바뀜 (기대 ${phase})`);
+  const sc = `${flowId}/${state}`;
+  recOne(rec, sc, vignetteChecks(a, { expect: vignette }));
+  recOne(rec, sc, glowChecks(a, { expect: glow }));
+}
+
+/**
  * 배경 장면(B1)과 헤더 글씨 대비(H1). 배경 크로스페이드가 끝나(한 층) 시작 문구가 없을 때 잰다.
  * 재는 동안 추적 단계가 phase 에서 벗어났으면(아침 5초 등) 값이 다른 장면의 것이므로 준비 실패(SetupError)로 알려 새 방으로 한 번 다시 돈다.
  * expectTimer: 타이머가 있어야 하는 상태(대기실은 거짓).
@@ -275,6 +362,7 @@ async function stageChecks(ctx, flowId, state, phase, { expectTimer = true } = {
   if (tracker.last()?.phase !== phase) throw new SetupError(`${state} 배경·헤더 측정 중에 단계가 ${tracker.last()?.phase} 로 바뀜 (기대 ${phase})`);
   recOne(rec, `${flowId}/${state}`, backdropSceneChecks(layers, { phase }));
   recOne(rec, `${flowId}/${state}`, headerContrastChecks(header, { expectTimer }));
+  await guideState(ctx, flowId, state, phase); // UX1 안내 문장·타이머 · UX2 문서 높이 (05-06)
 }
 
 /**
@@ -295,6 +383,7 @@ async function dayIntro(ctx, id) {
     await shot(page, join(OUT_DIR, `${id}-day-intro-${ctx.size.label}.png`)); // 낮 시작 문구가 떠 있는 동안의 사진(--shots 한정)
   }
   (ctx.dayStates ??= []).push({ state: "dayAnnounce", felt: stage.felt, tags: stage.tags, stage, mySeat });
+  if (!(await guideState(ctx, id, "day-intro", "dayAnnounce"))) throw new SetupError("낮 시작 안내를 읽는 동안 낮 시작(2초)이 끝남"); // UX1·UX2
   recOne(rec, sc, sceneIntroChecks(await readIntroWatch(page), { kind: "day" })); // N8
   const n9 = await attempt(async () => {
     await page.waitForSelector(".mf-sceneintro", { state: "detached", timeout: 3500 });
@@ -557,7 +646,8 @@ async function gameFlow(ctx, { id, players, role, states }) {
   await setBotVote(page, tracker, { exec: "no", pick: "random" });
   // [게임 시작] 직전의 대기실 테이블: 이후 배정·낮·밤·아침과 같은 자리여야 한다(D7·D9·T1 이 함께 본다)
   await grabLobbyStage(ctx, "lobby", 700);
-  await startGame(page, tracker, { onAssigning: () => grabLobbyStage(ctx, "assigning") });
+  await startGame(page, tracker, { onAssigning: onAssigningOf(ctx, id) });
+  await guideState(ctx, id, "role-reveal", "roleReveal"); // UX1·UX2 역할 확인(단계가 이미 지났으면 건너뛴다)
   ctx.stage = "play";
   const v0 = tracker.last();
   const s3Ok = v0.players.length === players && v0.me.role === role;
@@ -571,6 +661,7 @@ async function gameFlow(ctx, { id, players, role, states }) {
       await skipTo(page, tracker, "discussion");
       await settle(page);
       await stageChecks(ctx, id, "discussion", "discussion");
+      await atmosphereState(ctx, id, "discussion", "discussion", { vignette: 0, glow: 0 }); // AT1·AT2: 토론에는 두 층이 없다
       const { snap } = await dayState(ctx, id, "discussion");
       recAll(rec, `${id}/discussion`, turnChecks(snap, { expectNone: true }));
       if (id === "police5") {
@@ -611,12 +702,14 @@ async function gameFlow(ctx, { id, players, role, states }) {
       });
       rec(`${id}/night`, "N7", "밤 시작 문구가 사라짐", n7.ok, n7.detail);
       await stageChecks(ctx, id, "night", "night");
+      await atmosphereState(ctx, id, "night", "night", { vignette: 1, glow: 0 }); // AT1: 밤 비네팅 한 겹·탭 통과
     } else if (state === "morning") {
       // 아침은 5초라 넘긴 직후 바로 닫고 찍는다. 앞뒤 단계가 morning 이 아니면 준비 실패(재시도).
       await skipTo(page, tracker, "morning");
       await settle(page);
       if (tracker.last()?.phase !== "morning") throw new SetupError("아침 스냅숏 전에 아침이 끝남");
       await stageChecks(ctx, id, "morning", "morning"); // 아침은 5초뿐이라 dayState 보다 먼저(크로스페이드가 끝난 직후) 잰다
+      await atmosphereState(ctx, id, "morning", "morning", { vignette: 0, glow: 1 }); // AT1(크로스페이드 끝 → 비네팅 0)·AT2(밝아짐 한 겹)
       const { snap, mySeat } = await dayState(ctx, id, "morning");
       const v = tracker.last();
       if (v?.phase !== "morning") throw new SetupError("아침 스냅숏 중에 아침이 끝남");
@@ -788,7 +881,7 @@ async function voteFlow(ctx) {
   await chooseRole(page, tracker, "citizen");
   await setBotVote(page, tracker, { exec: "yes", pick: "other" });
   await grabLobbyStage(ctx, "lobby", 700);
-  await startGame(page, tracker, { onAssigning: () => grabLobbyStage(ctx, "assigning") });
+  await startGame(page, tracker, { onAssigning: onAssigningOf(ctx, id) });
   ctx.stage = "play";
   const v0 = tracker.last();
   const mySeat = v0.me.seat;
@@ -996,7 +1089,7 @@ async function verdictRoom(ctx, id, { players, role, vote }) {
   await chooseRole(page, tracker, role);
   await setBotVote(page, tracker, vote);
   await grabLobbyStage(ctx, "lobby", 700);
-  await startGame(page, tracker, { onAssigning: () => grabLobbyStage(ctx, "assigning") });
+  await startGame(page, tracker, { onAssigning: onAssigningOf(ctx, id) });
   ctx.stage = "play";
   const v0 = tracker.last();
   rec(`${id}/setup`, "S3", "인원·지정 직업", v0.players.length === players && v0.me.role === role, `인원 ${v0.players.length}/${players}, 직업 ${v0.me.role}/${role}`);
@@ -1041,6 +1134,8 @@ async function resultState(ctx, { id, rec, page, tracker, read, colors }, { winn
   const view = tracker.last();
   rec(sc, "P8", "서버가 정한 승자·요약이 view 에 있음", view.result?.winner === winner && Array.isArray(view.result?.summary), `view.result.winner ${view.result?.winner} ≠ ${winner}`);
   await checkState(ctx, id, "ended");
+  await guideState(ctx, id, "ended", "ended"); // UX1·UX2
+  await atmosphereState(ctx, id, "ended", "ended", { vignette: 0, glow: 0 }); // AT1: 결과에는 비네팅이 없다
   const v = await read();
   recOne(rec, sc, resultChecks(v, { winner, n, summaryRows: summaryRowsOf(view.result?.summary) }));
   tableChecksOf(ctx, rec, id);
