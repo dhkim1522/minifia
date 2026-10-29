@@ -151,9 +151,13 @@ describe("RoomScreen: 화면 꺼짐 방지 연결 (CONN-03, D-12, P5-7)", () => 
   const mount = () => render(<RoomScreen code="0042" token={"t".repeat(43)} onExit={vi.fn()} />);
   const settle = () => act(async () => {});
   let w: Awaited<ReturnType<typeof wake>>;
+  let errorSpy: ReturnType<typeof vi.spyOn>;
+  let warnSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(async () => {
     w = await wake();
+    errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
   });
   afterEach(() => {
     cleanup();
@@ -182,5 +186,68 @@ describe("RoomScreen: 화면 꺼짐 방지 연결 (CONN-03, D-12, P5-7)", () => 
     }
     expect(fake.request).toHaveBeenCalledTimes(1);
     expect(fake.sentinels[0]!.releaseCalls).toBe(0);
+  });
+
+  it("view 가 없으면(연결 중…) 요청하지 않는다", async () => {
+    const fake = w.installWakeLock();
+    connectionMock.current = conn({ status: "connecting", view: null, canSend: false });
+    mount();
+    await settle();
+    expect(fake.request).not.toHaveBeenCalled();
+  });
+
+  it("ended 로 바뀌면 잡고 있던 잠금을 1번 release 하고 이후 visible 이벤트에 요청하지 않는다", async () => {
+    const fake = w.installWakeLock();
+    const { rerender } = mount();
+    await settle();
+    connectionMock.current = conn({ view: at("ended") });
+    rerender(<RoomScreen code="0042" token={"t".repeat(43)} onExit={vi.fn()} />);
+    await settle();
+    expect(fake.sentinels[0]!.releaseCalls).toBe(1);
+    w.setVisibility("visible");
+    await settle();
+    expect(fake.request).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(["failed", "replaced"] as const)("status 가 %s 로 바뀌면 release 1번, 이후 요청 없음", async (status) => {
+    const fake = w.installWakeLock();
+    const { rerender } = mount();
+    await settle();
+    connectionMock.current = conn({ status, canSend: false });
+    rerender(<RoomScreen code="0042" token={"t".repeat(43)} onExit={vi.fn()} />);
+    await settle();
+    expect(fake.sentinels[0]!.releaseCalls).toBe(1);
+    w.setVisibility("visible");
+    await settle();
+    expect(fake.request).toHaveBeenCalledTimes(1);
+  });
+
+  it("reconnecting 동안에는 잠금을 유지한다(해제하지 않는다)", async () => {
+    const fake = w.installWakeLock();
+    const { rerender } = mount();
+    await settle();
+    connectionMock.current = conn({ status: "reconnecting", banner: "reconnecting", canSend: false });
+    rerender(<RoomScreen code="0042" token={"t".repeat(43)} onExit={vi.fn()} />);
+    await settle();
+    expect(fake.request).toHaveBeenCalledTimes(1);
+    expect(fake.sentinels[0]!.releaseCalls).toBe(0);
+  });
+
+  it("navigator.wakeLock 이 없어도 대기실이 정상으로 그려지고 콘솔 호출 0, 마크업에 화면 꺼짐 문구가 없다", async () => {
+    w.removeWakeLock();
+    const { container } = mount();
+    await settle();
+    expect(screen.getByText("0042")).toBeTruthy();
+    expect(errorSpy).not.toHaveBeenCalled();
+    expect(warnSpy).not.toHaveBeenCalled();
+    expect(container.textContent).not.toMatch(/화면 꺼짐|wake/i);
+  });
+
+  it("언마운트하면 release 1번", async () => {
+    const fake = w.installWakeLock();
+    const { unmount } = mount();
+    await settle();
+    unmount();
+    expect(fake.sentinels[0]!.releaseCalls).toBe(1);
   });
 });
