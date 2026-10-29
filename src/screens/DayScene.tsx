@@ -19,7 +19,7 @@ import { TurnPanel } from "../components/TurnPanel";
 import { UserRecordSheet } from "../components/UserRecordSheet";
 import { Toast, useToast } from "../components/Toast";
 import { morningCardText } from "../game/eliminationText";
-import { PHASE_INTRO, sceneOfPhase } from "../game/scenes";
+import { PHASE_GUIDE_FILL, PHASE_INTRO, sceneOfPhase } from "../game/scenes";
 import type { SceneId } from "../game/scenes";
 import { EMOJI_TEXT, NIGHT_TEMPLATE_ORDER } from "../game/messageText";
 import { claimLinesOf } from "../net/claimLines";
@@ -165,6 +165,10 @@ export function DayScene({ view, connection, myRoleButton, testButton, arrivedFr
   // 열려 있는데 허용되지 않는 단계가 되면 렌더 중 상태 조정으로 닫는다(밤 규칙과 같은 방식). 낮 → 낮 사이에는 닫히지 않는다.
   const inspectAllowed = verdict?.inspectAllowed ?? inspectable;
   if (inspectSeat !== null && !inspectAllowed) setInspectSeat(null);
+  // 낮 토론의 살아 있는 viewer 헤더 안내줄만 새 문장(UX-01 빈 칸 2). 탈락 viewer 는 기존 `{n}일차` 와 하단 읽기 전용 줄이 안내다.
+  const discussionGuide = view.phase === "discussion" && meAlive;
+  // 헤더 안내줄이 그 화면의 안내(data-guide)인 경우. 투표 구간(verdict.instruction)은 하단 부품이 안내라 켜지 않는다 — 처형 무효로 온 밤은 instruction 이 비어 마피아 헤더가 그대로 안내다.
+  const headerGuide = verdict?.instruction === undefined && (discussionGuide || mafiaNight);
   const title = verdict?.title ?? (isNight ? "밤" : isMorning ? "아침" : view.phase === "discussion" ? "낮 · 토론" : view.phase === "claim" ? "낮 · 직업 공개" : "낮");
   // 동료가 고른 대상(마피아 화면만, D-07). 서버가 생존 마피아에게만 보낸 값이다.
   const allyPicks = view.me.allyPicks ?? [];
@@ -233,7 +237,16 @@ export function DayScene({ view, connection, myRoleButton, testButton, arrivedFr
     >
       <main className={`mf-root mf-dayscene${verdict?.rootClassName ? ` ${verdict.rootClassName}` : ""}`}>
         <div key={`bar-${view.phase}`} className="mf-dayscene__enter">
-          <PhaseBar title={title} instruction={verdict?.instruction ?? (mafiaNight ? `${n}일차 · 함께 지목하세요` : isMorning ? `${n + 1}일차` : `${n}일차`)} extra={myRoleButton} timer={timer} />
+          <PhaseBar
+            title={title}
+            instruction={
+              verdict?.instruction ??
+              (mafiaNight ? `${n}일차 · 함께 지목하세요` : discussionGuide ? PHASE_GUIDE_FILL.discussion(n) : isMorning ? `${n + 1}일차` : `${n}일차`)
+            }
+            extra={myRoleButton}
+            timer={timer}
+            guide={headerGuide}
+          />
         </div>
         <div className="mf-dayscene__scene">
           {testButton ? <div className="mf-tt-anchor">{testButton}</div> : null}
@@ -256,6 +269,9 @@ export function DayScene({ view, connection, myRoleButton, testButton, arrivedFr
           ) : isMorning ? (
             // 아침 하단(UI-SPEC M): 살아 있는 사람·탈락자·관전자 모두 같은 제목+안내. 알약·채팅·버튼 없음.
             <NightPanel title={NIGHT_PANEL_TEXT.morning.title} guide={NIGHT_PANEL_TEXT.morning.guide} />
+          ) : view.phase === "dayAnnounce" ? (
+            // 낮 시작 하단(UX-01 빈 칸 1): 생존자·탈락자 모두 같은 두 줄. 아침 하단과 같은 규칙이라 meDead 분기보다 앞이다.
+            <NightPanel title={PHASE_GUIDE_FILL.dayAnnounce.title} guide={PHASE_GUIDE_FILL.dayAnnounce.guide} />
           ) : meDead ? (
             // 관전 하단(UI-SPEC N-6): 채팅 읽기 전용 + 읽기 전용 안내 줄. 보내기 줄·직업 공개 칩 줄은 그리지 않는다.
             <>
@@ -271,7 +287,7 @@ export function DayScene({ view, connection, myRoleButton, testButton, arrivedFr
               ) : (
                 <MessageLog lines={dayLines} players={view.players} mySeat={view.me.seat} />
               )}
-              <ReadOnlyRow />
+              <ReadOnlyRow guide />
             </>
           ) : view.phase === "claim" ? (
             view.day?.turn?.seat === view.me.seat ? (

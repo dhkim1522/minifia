@@ -72,6 +72,19 @@ export const PHASE_INTRO: Readonly<Partial<Record<PhaseId, SceneIntroDef>>> = Ob
   dayAnnounce: Object.freeze({ tone: "day", title: "낮이 되었습니다", sub: "토론 전에 먼저 직업을 공개해요" } as const),
 });
 
+// - 안내 문장 빈 칸 채움(PHASE_GUIDE_FILL): UX-01 점검표(05-UI-SPEC 8)에서 문장이 없던 두 곳 — 낮 시작 하단, 낮 토론 헤더 안내줄.
+//   역할로 달라지지 않는다(4역할·관전자 같은 글자, D-09). 기존 문구 표(NIGHT_PANEL_TEXT·VERDICT_TEXT·PHASE_ANNOUNCE)는 옮기지 않는다.
+//   문구는 확인 대기 기본값(P5-6)이라 결정 0038 에 적는다. 토론 문장은 헤더 안내줄(nowrap)에 들어가도록 n ≤ 99 에서 14자 이하여야 한다.
+export const PHASE_GUIDE_FILL = Object.freeze({
+  /** 낮 시작 하단 패널(NightPanel) 제목 + 안내. 생존자·탈락자 모두 같은 두 줄 */
+  dayAnnounce: Object.freeze({ title: "낮이 되었어요", guide: "곧 직업 공개가 시작돼요" } as const),
+  /** 낮 토론 헤더 안내줄(살아 있는 viewer 만) */
+  discussion: (n: number): string => `${n}일차 · 의견을 나눠요`,
+});
+
+/** 시간이 의미 없는 단계(D-08 예외): 남은 시간 타이머가 없어도 된다. assigning 은 3초 연출 단계라 P5-5 기본값(확인 대기, 결정 0038). */
+export const TIMELESS_PHASES: readonly PhaseId[] = Object.freeze(["lobby", "assigning", "ended"] as const);
+
 /** 시작 문구가 떠 있는 시간. 서버 낮 시작 단계(DAY_ANNOUNCE_MS)와 한 곳에서 같다. */
 export const SCENE_INTRO_MS = DAY_ANNOUNCE_MS;
 

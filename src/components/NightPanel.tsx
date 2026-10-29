@@ -32,7 +32,7 @@ export interface NightPanelProps {
 export function NightPanel({ title, guide, children }: NightPanelProps): ReactElement {
   return (
     <div className="mf-nightpanel">
-      <h2 className="mf-claimpanel__title">{title}</h2>
+      <h2 className="mf-claimpanel__title" data-guide="">{title}</h2>
       <p className="mf-claimpanel__guide">{guide}</p>
       {children}
     </div>

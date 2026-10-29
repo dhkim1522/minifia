@@ -10,17 +10,21 @@ export interface PhaseBarProps {
   extra?: ReactNode;
   /** 아래 줄 타이머 */
   timer?: ReactNode;
+  /** 참이면 안내줄이 그 화면의 "지금 할 일 한 문장"(UX-01 data-guide 계약). 하단 부품이 안내를 맡는 단계에서는 켜지 않는다 */
+  guide?: boolean;
 }
 
 // 단계 화면 위쪽 바(UI-SPEC S-05 배치): 윗줄 왼쪽 제목 + 안내, 오른쪽 extra, 아랫줄 타이머.
 // 참고 구현(bundle.js PhaseBar)의 구조에서 단계 이름 14px · 지금 할 일 16px 를 제목 24px · 안내 14px 로 바꿨다.
-export function PhaseBar({ title, instruction, extra, timer }: PhaseBarProps) {
+export function PhaseBar({ title, instruction, extra, timer, guide }: PhaseBarProps) {
   return (
     <header className="mf-phasebar">
       <div className="mf-phasebar__row">
         <div className="mf-phasebar__text">
           <h1 className="mf-t-heading">{title}</h1>
-          <p className="mf-phasebar__do">{instruction}</p>
+          <p className="mf-phasebar__do" {...(guide ? { "data-guide": "" } : {})}>
+            {instruction}
+          </p>
         </div>
         {extra ? <div className="mf-phasebar__extra">{extra}</div> : null}
       </div>
