@@ -18,6 +18,7 @@ import {
   SCENE_PAD_NARROW,
   SEAT_RX_MAX,
   SEAT_RX_MIN,
+  TAG_BOX_H,
   TAG_GAP_Y,
   TAG_H,
   DAY_SCENE_W,
@@ -123,11 +124,12 @@ describe("dayTableGeometry: 세로 규칙은 그대로", () => {
     expect(dayTableGeometry(366, 299).cy).toBe(177);
   });
 
-  it("높이 299 미만은 같은 배율로 압축한다(P5-3): 298 은 177 이 아니라 cy ≈ 176.3·fit < 1", () => {
+  it("높이 299 미만은 같은 배율로 압축한다(P5-3): 298 은 177 이 아니라 cy ≈ 173.7·fit < 1 (이름표 상자 26 기준)", () => {
     const g = dayTableGeometry(366, 298);
     expect(g.fit).toBeLessThan(1);
     expect(g.cy).toBeLessThan(177);
-    expect(g.cy).toBeGreaterThan(176);
+    expect(g.cy).toBeGreaterThan(173);
+    expect(g.cy + g.ry + TAG_BOX_H).toBeCloseTo(298, 9);
   });
 
   it("높이 460 은 cy 210 (최대에서 멈춘다)", () => {
@@ -515,17 +517,19 @@ const FIT_RUNS = [
 ] as const;
 
 describe("짧은 장면 압축 (P5-3): 상수와 배율", () => {
-  it("하한 0.78, 분모 276.8(= 2·100 + 96·0.8)", () => {
-    expect(TABLE_FIT_MIN_SCALE).toBe(0.78);
+  it("이름표 상자 높이 26(실제 DOM: 알약 22 + 줄 상자 4), 하한 0.77, 분모 276.8(= 2·100 + 96·0.8)", () => {
+    expect(TAG_BOX_H).toBe(26);
+    expect(TABLE_FIT_MIN_SCALE).toBe(0.77);
     expect(TABLE_FIT_SPAN).toBeCloseTo(276.8, 9);
   });
 
-  it("tableFitScale: 299 이상 1, 270 → 0.896, 240 → 0.7876, 200 → 하한", () => {
+  it("tableFitScale: 299 이상 1, 270 → 0.8815, 240 → 0.7731, 200 → 하한", () => {
     expect(tableFitScale(299)).toBe(1);
     expect(tableFitScale(655.8)).toBe(1);
-    expect(tableFitScale(270)).toBeCloseTo((270 - 22) / 276.8, 9);
-    expect(tableFitScale(270)).toBeCloseTo(0.896, 3);
-    expect(tableFitScale(240)).toBeCloseTo(0.7876, 3);
+    expect(tableFitScale(270)).toBeCloseTo((270 - 26) / 276.8, 9);
+    expect(tableFitScale(270)).toBeCloseTo(0.8815, 3);
+    expect(tableFitScale(240)).toBeCloseTo(0.7731, 3);
+    expect(tableFitScale(240)).toBeGreaterThan(TABLE_FIT_MIN_SCALE);
     expect(tableFitScale(200)).toBe(TABLE_FIT_MIN_SCALE);
   });
 
@@ -567,7 +571,7 @@ describe("짧은 장면 압축 (P5-3): 299 이상은 한 값도 안 바뀐다", 
 });
 
 describe("짧은 장면 압축 (P5-3): 장면 높이 240~299 미만", () => {
-  it("모든 정수 높이 × 폭 4종 × 4~8명: 맨 앞 이름표 아래끝 ≤ 장면 높이, 머리 위 ≥ 0, 이름표 겹침 없음, 면 top ≥ 0", () => {
+  it("모든 정수 높이 × 폭 4종 × 4~8명: 맨 앞 이름표 상자(26) 아래끝 ≤ 장면 높이, 머리 위 ≥ 0, 이름표 겹침 없음, 면 top ≥ 0", () => {
     const out: string[] = [];
     for (const { w, pad } of FIT_RUNS) {
       for (let h = 240; h < 299; h++) {
@@ -576,7 +580,7 @@ describe("짧은 장면 압축 (P5-3): 장면 높이 240~299 미만", () => {
         for (let n = 4; n <= 8; n++) {
           const places = daySeatLayout(seatsOf(n), 0, w, h, pad);
           for (const p of places) {
-            if (p.tagTop + TAG_H > h + 1e-9) out.push(`tag w${w}h${h}n${n}:${p.seat}`);
+            if (p.tagTop + TAG_BOX_H > h + 1e-9) out.push(`tag w${w}h${h}n${n}:${p.seat}`);
             if (p.y - FIG_H * p.scale < -1e-9) out.push(`head w${w}h${h}n${n}:${p.seat}`);
           }
           for (let i = 0; i < places.length; i++) {
@@ -610,9 +614,11 @@ describe("짧은 장면 압축 (P5-3): 장면 높이 240~299 미만", () => {
     expect(rear.scale).toBeCloseTo(0.8 * f, 9);
   });
 
-  it("높이 299 에서 두 식이 cy 177 로 이어진다(저쪽 끝 298.99 도 ≈ 177)", () => {
+  it("높이 299 경계: 승인 기하(cy 177)와 압축 식(상자 26 기준) 사이에 cy 불연속이 약 2.6px 있다 — 받아들인 값, 4px 미만", () => {
     expect(dayTableGeometry(366, 299).cy).toBe(177);
-    expect(dayTableGeometry(366, 298.99).cy).toBeCloseTo(177, 1);
+    const gap = 177 - dayTableGeometry(366, 298.99).cy;
+    expect(gap).toBeGreaterThan(2);
+    expect(gap).toBeLessThan(4);
   });
 });
 
@@ -622,7 +628,7 @@ describe("짧은 장면 압축 (P5-3): 장면 높이 240 미만(지원 하한 �
     for (const { w, pad } of FIT_RUNS) {
       for (const h of [239, 236, 204.8, 200, 160.8, 120, 60, 0]) {
         const g = dayTableGeometry(w, h, pad);
-        if (h <= 237.8 && g.fit !== TABLE_FIT_MIN_SCALE) out.push(`fit w${w}h${h}`);
+        if (h <= 238 && g.fit !== TABLE_FIT_MIN_SCALE) out.push(`fit w${w}h${h}`);
         for (let n = 4; n <= 8; n++) {
           for (const p of daySeatLayout(seatsOf(n), 0, w, h, pad)) {
             if (p.y - FIG_H * p.scale < -1e-9) out.push(`head w${w}h${h}n${n}:${p.seat}`);
