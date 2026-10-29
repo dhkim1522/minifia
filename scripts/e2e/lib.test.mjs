@@ -71,12 +71,16 @@ import {
   voidCardChecks,
   resultChecks,
   placementChecks,
+  DEFAULT_SIZES,
+  TIMELESS_PHASES,
+  guideChecks,
+  docHeightChecks,
 } from "./lib.mjs";
 
 const PROD = "https://minifia.dhplay.workers.dev\n";
 const rect = (left, top, width, height) => ({ left, top, width, height, right: left + width, bottom: top + height });
 
-test("parseArgs: 인자 없음은 기본값 세 크기", () => {
+test("parseArgs: 인자 없음은 기본값 세 폭 기준 + 단 높이 probe 360x560", () => {
   const a = parseArgs([]);
   assert.equal(a.url, null);
   assert.equal(a.only, null);
@@ -87,6 +91,7 @@ test("parseArgs: 인자 없음은 기본값 세 크기", () => {
       [360, 640, "360x640"],
       [390, 664, "390x664"],
       [430, 932, "430x932"],
+      [360, 560, "360x560"],
     ],
   );
 });
@@ -2216,4 +2221,104 @@ test("04-30: 닫기 — 승인 목록은 다섯 건이고 기준 수치는 그�
   assert.deepEqual(APPROVED_RELAXATIONS.map((x) => x.id), ["M1", "D3a/D3b", "D4", "D3b-5", "P-PANEL-236"]);
   assert.equal(FACE_RATIO, 0.45);
   assert.equal(PANEL_H, 157);
+});
+
+
+// ---- 5페이즈 순수 검사 (05-05): UX1·UX2·UX2-J·UX2-PC·AT1·AT2·WL1·WL2 ----
+
+test("DEFAULT_SIZES: 세 폭 기준 뒤에 단 높이 probe 360x560 하나, 기준 수치는 불변", () => {
+  assert.deepEqual(
+    DEFAULT_SIZES.map((s) => s.label),
+    ["360x640", "390x664", "430x932", "360x560"],
+  );
+  assert.equal(OVERLAP_EPS, 0.5);
+  assert.equal(TAP_MIN, 44);
+  assert.equal(ONE_LINE_FACTOR, 1.6);
+  assert.equal(FACE_RATIO, 0.45);
+  assert.equal(PANEL_H, 157);
+  assert.equal(HEADER_CONTRAST_MIN, 4.5);
+});
+
+test("parseArgs: --sizes 를 주면 probe 가 섞이지 않고 그 값만이다", () => {
+  assert.deepEqual(parseArgs(["--sizes", "390x664"]).sizes.map((s) => s.label), ["390x664"]);
+});
+
+test("TIMELESS_PHASES: 대기실·배정·결과 (src/game/scenes.ts 와 같은 목록)", () => {
+  assert.deepEqual([...TIMELESS_PHASES], ["lobby", "assigning", "ended"]);
+});
+
+const gOk = (over = {}) => ({
+  count: 1,
+  items: [{ text: "토론하세요", inHeader: false, height: 20, lineHeight: 20 }],
+  timers: 1,
+  ...over,
+});
+
+test("guideChecks UX1: 안내 하나·글자 있음·타이머 하나는 통과", () => {
+  const r = guideChecks(gOk(), { phase: "discussion" });
+  assert.equal(r.id, "UX1");
+  assert.equal(r.ok, true, r.detail);
+});
+
+test("guideChecks UX1: 안내 요소 0개는 실패, 2개도 실패(개수 적힘)", () => {
+  const r0 = guideChecks(gOk({ count: 0, items: [] }), { phase: "discussion" });
+  assert.equal(r0.ok, false);
+  assert.match(r0.detail, /안내 문장 요소 없음/);
+  const r2 = guideChecks(gOk({ count: 2, items: [gOk().items[0], gOk().items[0]] }), { phase: "discussion" });
+  assert.equal(r2.ok, false);
+  assert.match(r2.detail, /2개/);
+});
+
+test("guideChecks UX1: 글자가 공백뿐이면 실패", () => {
+  const r = guideChecks(gOk({ items: [{ text: "  \n ", inHeader: false, height: 20, lineHeight: 20 }] }), { phase: "discussion" });
+  assert.equal(r.ok, false);
+  assert.match(r.detail, /글자/);
+});
+
+test("guideChecks UX1: 헤더 안내줄이 두 줄이면 실패, 한 줄 경계(1.6배)는 통과", () => {
+  const two = guideChecks(gOk({ items: [{ text: "안내", inHeader: true, height: 40, lineHeight: 20 }] }), { phase: "discussion" });
+  assert.equal(two.ok, false);
+  assert.match(two.detail, /40/);
+  const edge = guideChecks(gOk({ items: [{ text: "안내", inHeader: true, height: 32, lineHeight: 20 }] }), { phase: "discussion" });
+  assert.equal(edge.ok, true, edge.detail);
+  const over = guideChecks(gOk({ items: [{ text: "안내", inHeader: true, height: 32.5, lineHeight: 20 }] }), { phase: "discussion" });
+  assert.equal(over.ok, false);
+});
+
+test("guideChecks UX1: 헤더가 아닌 안내는 여러 줄이어도 한 줄 판정을 받지 않는다", () => {
+  const r = guideChecks(gOk({ items: [{ text: "안내", inHeader: false, height: 80, lineHeight: 20 }] }), { phase: "discussion" });
+  assert.equal(r.ok, true, r.detail);
+});
+
+test("guideChecks UX1: 타이머 0개는 시간 있는 단계에서 실패, TIMELESS_PHASES 에서는 통과", () => {
+  const bad = guideChecks(gOk({ timers: 0 }), { phase: "discussion" });
+  assert.equal(bad.ok, false);
+  assert.match(bad.detail, /타이머 없음/);
+  for (const phase of TIMELESS_PHASES) assert.equal(guideChecks(gOk({ timers: 0 }), { phase }).ok, true, phase);
+});
+
+test("guideChecks UX1: 측정값이 없거나 숫자가 아니면 조용히 통과하지 않고 측정값 없음으로 실패", () => {
+  for (const g of [undefined, null, {}, gOk({ count: "1" }), gOk({ timers: undefined }), gOk({ items: undefined }), { count: 1, items: [], timers: 1 }]) {
+    const r = guideChecks(g, { phase: "discussion" });
+    assert.equal(r.ok, false, JSON.stringify(g));
+    assert.match(r.detail, /측정값 없음/, JSON.stringify(g));
+  }
+  const r = guideChecks(gOk({ items: [{ text: "안내", inHeader: true, height: "x", lineHeight: 20 }] }), { phase: "discussion" });
+  assert.equal(r.ok, false);
+  assert.match(r.detail, /측정값 없음/);
+});
+
+test("docHeightChecks UX2: 문서 높이 ≤ 화면 높이 통과, +1 은 실패(숫자 포함), 측정값 없음 실패", () => {
+  const ok = docHeightChecks({ docH: 560 }, { h: 560 });
+  assert.equal(ok.id, "UX2");
+  assert.equal(ok.ok, true, ok.detail);
+  const bad = docHeightChecks({ docH: 561 }, { h: 560 });
+  assert.equal(bad.ok, false);
+  assert.match(bad.detail, /561/);
+  assert.match(bad.detail, /560/);
+  for (const m of [undefined, {}, { docH: "561" }, { docH: NaN }]) {
+    const r = docHeightChecks(m, { h: 560 });
+    assert.equal(r.ok, false);
+    assert.match(r.detail, /측정값 없음/);
+  }
 });
