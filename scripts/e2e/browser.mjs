@@ -241,7 +241,7 @@ export async function readGuide(page) {
 
 /**
  * 분위기 두 층(비네팅 AT1·아침 밝아짐 AT2)을 읽는다(05-06). 층은 pointer-events: none 이라 elementFromPoint 가 건너뛰므로,
- * 원래 pointer-events 를 먼저 기록한 뒤 이 evaluate 안에서만 잠시 auto 로 바꿔 내 인물 그림 가운데(비네팅)·내 이름표 가운데(밝아짐)를 찍고 곧바로 되돌린다.
+ * 원래 pointer-events 를 먼저 기록한 뒤 이 evaluate 안에서만 잠시 auto 로 바꿔(층과 평소 pointer-events: none 인 내 이름표) 내 인물 그림 가운데(비네팅)·내 이름표 가운데(밝아짐)를 찍고 곧바로 되돌린다.
  * 층이 위에 칠해져 있으면 층이 돌아오고, 아래면 인물·이름표가 돌아온다. 요소가 없으면 빈 목록·null 이다.
  * 돌려주는 값: { vignettes, glows, sceneTop, sceneBottom, tapHitsTable, tagHit }
  */
@@ -268,7 +268,8 @@ export async function readAtmosphere(page, { mySeat }) {
     const tagEl = document.querySelector(".mf-dt__tag--me");
     const figPt = centerOf(figure);
     const tagPt = centerOf(tagEl);
-    const touched = [...vigEls, ...glowEls].map((el) => [el, el.style.pointerEvents]);
+    // 이름표(.mf-dt__tag)도 평소 pointer-events: none 이라 elementFromPoint 가 건너뛴다 — 층과 같이 잠시 auto 로 두어 칠 순서만 비교한다.
+    const touched = [...vigEls, ...glowEls, ...(tagEl ? [tagEl] : [])].map((el) => [el, el.style.pointerEvents]);
     let tapHitsTable = null;
     let tagHit = null;
     try {
