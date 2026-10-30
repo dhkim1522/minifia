@@ -24,7 +24,6 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 3.1: 순차 주장과 역할 카드** (INSERTED) - 한 명씩 직업 주장, 평문 채팅, 유저 기록 카드, 역할 카드·역할별 일지 (completed 2026-10-25)
 - [x] **Phase 4: 처형과 승패** - 투표·최후 변론·찬반·처형을 거쳐 한 판이 승패로 끝난다 (completed 2026-10-28)
 - [x] **Phase 5: 분위기와 캐릭터** - 무거운 분위기와 특색 있는 캐릭터, 세로 폰 화면에서 설명 없이 따라올 수 있는 안내 (completed 2026-10-29)
-- [~] **Phase 6: 친구 플레이테스트** - 건너뜀(결정 0041). 사용자가 직접 플레이한 뒤 필요한 수정·개발을 새로 요청한다
 
 ## Phase Details
 
@@ -367,24 +366,10 @@ Plans:
 **UI hint**: yes
 **참고 자료**: `design/references/character/` (main.jpeg, mafia_character.jpeg, Mortis Brawl Stars Spooky Graveyard Wallpaper.jpeg, Coin Master mobile game , a little Halloween quest in collaboration with Moon Active games_, Sheri Amouzad.jpeg, Crime Coast Character Designs 2 - Sanjay Charlton.jpeg, PATH OF GANGSTER _ slot game - Inkration Studio.jpeg, Wild Heist Cashout - PGSOFT.jpeg). 이미지별 메모는 `design/references/notes.md`. 1페이즈 논의에서 색 방향(밤 남색 + 회색 + 진홍)과 임시 정장 실루엣을 정했다 (01-CONTEXT D-20, D-21).
 
-### Phase 6: 친구 플레이테스트
-
-**Goal**: 각자 다른 곳에 있는 친구들이 폰으로 배포된 주소에 들어와 앱만으로 한 판을 끝까지 하고, 다시 하고 싶은지와 불편한 점을 확인해 규칙 수치를 조정한다.
-**Depends on**: Phase 5
-**Requirements**: PLAY-01, PLAY-02, PLAY-03
-**Success Criteria** (what must be TRUE):
-  1. 친구 4명 이상이 각자 폰(iPhone Safari와 Android Chrome 모두 포함)으로 배포된 주소에 들어와 한 판을 끝까지 마친다.
-  2. 기본 타이머로 한 판이 6~10분 안에 끝난다 (실제 소요 시간을 기록한다).
-  3. 마피아를 처음 하는 사람이 사회자의 말로 된 설명 없이 화면 안내만으로 한 판을 따라온다.
-  4. 참가자가 "다시 하고 싶은지", 빠른 메시지만으로 하고 싶은 말을 할 수 있었는지, 불편한 점을 남기고, 그에 따른 규칙 수치(타이머·역할 구성) 조정이 배포본에 반영된다. v1.1 에 올릴 후보도 정해진다.
-
-**Plans**: 없음 — 2026-10-30 사용자 결정으로 건너뜀(결정 0041). 개발 전 페이즈를 마친 뒤 사용자가 직접 실테스트하고, 필요한 사항은 새로 요구한다.
-**Notes**: (건너뛰기 전 메모) 이 페이즈의 변경 범위는 플레이테스트 피드백으로 정한다. 새 기능은 피드백이나 결정 기록을 근거로만 더한다. "다시 하고 싶어 한다"는 응답이 나오면 REMATCH-01(다시 하기)을, "말하고 싶은데 못 했다"는 응답이 나오면 COMMX-01(자유 채팅)을 v1.1 의 첫 후보로 본다.
-
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 (decimal phases, if inserted: 2 → 2.1 → 2.2 → 3)
+Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 (decimal phases, if inserted: 2 → 2.1 → 2.2 → 3)
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
@@ -394,4 +379,3 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 (decimal phases
 | 3.1. 순차 주장과 역할 카드 | v1.0 | 14/14 | Complete | 2026-10-25 |
 | 4. 처형과 승패 | v1.0 | 35/35 | Complete | 2026-10-28 |
 | 5. 분위기와 캐릭터 | v1.0 | 9/9 | Complete | 2026-10-29 |
-| 6. 친구 플레이테스트 | v1.0 | 0/0 | Skipped (결정 0041) | - |
