@@ -1,9 +1,9 @@
 ---
-status: partial
+status: complete
 phase: 04-execution-verdict
 source: 04-01-SUMMARY.md … 04-35-SUMMARY.md (사용자 관찰 항목만 발췌)
 started: 2026-10-29T02:38:21Z
-updated: 2026-10-29T02:52:24.426Z
+updated: 2026-10-30T00:50:00Z
 ---
 
 ## Current Test
@@ -14,72 +14,62 @@ updated: 2026-10-29T02:52:24.426Z
 
 ### 1. 처형 투표 인트로와 찬성/반대
 expected: 낮 토론이 끝나면 '처형 투표' 카드가 위에서 떨어져 중앙에 멈추고(약 1.6초), 제목이 흐려지며 화살표가 [찬성][반대]를 가리킨다. 카드가 끝난 뒤 잔상이 없고, 찬성/반대를 눌러 바꿀 수 있다.
-result: blocked
-blocked_by: physical-device
-reason: "사용자 결정: 실기기 확인은 모든 개발이 끝난 뒤 한 번에 진행하고 요청서도 한 번에 작성한다"
+result: pass
+note: "사용자 실기기 확인·승인 (2026-10-30)"
 
 ### 2. 후보 선택
 expected: 찬성 과반이면 후보 선택 화면이 열린다. 사람을 누르면 내 선택에 흰 후광과 '○○님에게' 알약이 뜬다. 나 자신은 고를 수 없다.
-result: blocked
-blocked_by: physical-device
-reason: "사용자 결정: 실기기 확인은 모든 개발이 끝난 뒤 한 번에 진행하고 요청서도 한 번에 작성한다"
+result: pass
+note: "사용자 실기기 확인·승인 (2026-10-30)"
 
 ### 3. 표 공개 연출
 expected: 공개 때 화살표가 투표자에서 대상으로 하나씩 뻗어 닿고, 표수 칩이 오른다. 과반 확정 순간 칩이 두근하고(폰 진동), 같은 대상에 표가 더 닿으면 다시 두근한다. 이름표를 칩이 가리지 않는다.
-result: blocked
-blocked_by: physical-device
-reason: "사용자 결정: 실기기 확인은 모든 개발이 끝난 뒤 한 번에 진행하고 요청서도 한 번에 작성한다"
+result: pass
+note: "사용자 실기기 확인·승인 (2026-10-30)"
 
 ### 4. 최후 변론 스포트라이트
 expected: 최다 득표 후보가 가운데로 커지고, 나머지는 어두워지며(45%) 흐려지고(3px), 위에서 원뿔 빛이 내려온다. 글자가 읽힌다. (안드로이드 Chrome·iOS Safari 모두)
-result: blocked
-blocked_by: physical-device
-reason: "사용자 결정: 실기기 확인은 모든 개발이 끝난 뒤 한 번에 진행하고 요청서도 한 번에 작성한다"
+result: pass
+note: "사용자 실기기 확인·승인 (2026-10-30)"
 
 ### 5. 처형 카드와 유령 전환
 expected: 처형 때 앰버색 카드가 뜨고, 후보가 사람에서 유령으로 바뀐다(약 0.4초). 진홍색은 쓰이지 않는다.
-result: blocked
-blocked_by: physical-device
-reason: "사용자 결정: 실기기 확인은 모든 개발이 끝난 뒤 한 번에 진행하고 요청서도 한 번에 작성한다"
+result: pass
+note: "사용자 실기기 확인·승인 (2026-10-30)"
 
 ### 6. 처형 무효 → 밤
 expected: 과반 미달·동률·무표일 때 회색 '처형 무효' 카드가 뜨고 사유가 맞다. 이어 밤 문구가 그 뒤 순서로 나온다.
-result: blocked
-blocked_by: physical-device
-reason: "사용자 결정: 실기기 확인은 모든 개발이 끝난 뒤 한 번에 진행하고 요청서도 한 번에 작성한다"
+result: pass
+note: "사용자 실기기 확인·승인 (2026-10-30)"
 
 ### 7. 결과 화면
 expected: 게임이 끝나면 결과 화면이 중립 → 승리 팀 순으로 공개된다. 마피아 승은 진홍 배너, 시민 승은 다른 색이다. 스크롤이 되고 [처음으로]가 동작한다.
-result: blocked
-blocked_by: physical-device
-reason: "사용자 결정: 실기기 확인은 모든 개발이 끝난 뒤 한 번에 진행하고 요청서도 한 번에 작성한다"
+result: pass
+note: "사용자 실기기 확인·승인 (2026-10-30)"
 
 ### 8. 승패 판정
 expected: 처형 직후와 아침에 승패 조건이 맞게 판정된다(마피아 수 ≥ 시민 수면 마피아 승, 마피아 전멸이면 시민 승). 끝나지 않으면 밤으로 넘어간다.
-result: blocked
-blocked_by: physical-device
-reason: "사용자 결정: 실기기 확인은 모든 개발이 끝난 뒤 한 번에 진행하고 요청서도 한 번에 작성한다"
+result: pass
+note: "사용자 실기기 확인·승인 (2026-10-30)"
 
 ### 9. 8명판과 360폭
 expected: 8명 방과 폭 360px 폰에서 후광·표수 칩·이름표가 겹치거나 잘리지 않는다. 내 자리가 가운데 후보에 가려지지 않는다.
-result: blocked
-blocked_by: physical-device
-reason: "사용자 결정: 실기기 확인은 모든 개발이 끝난 뒤 한 번에 진행하고 요청서도 한 번에 작성한다"
+result: pass
+note: "사용자 실기기 확인·승인 (2026-10-30)"
 
 ### 10. 관전(죽은 사람) 화면
 expected: 죽은 뒤에도 투표 결과·변론·처형·결과 화면을 볼 수 있고, 다른 사람의 직업은 결과 화면 전까지 보이지 않는다.
-result: blocked
-blocked_by: physical-device
-reason: "사용자 결정: 실기기 확인은 모든 개발이 끝난 뒤 한 번에 진행하고 요청서도 한 번에 작성한다"
+result: pass
+note: "사용자 실기기 확인·승인 (2026-10-30)"
 
 ## Summary
 
 total: 10
-passed: 0
+passed: 10
 issues: 0
 pending: 0
 skipped: 0
-blocked: 10
+blocked: 0
 
 ## Gaps
 
