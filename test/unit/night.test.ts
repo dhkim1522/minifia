@@ -566,7 +566,7 @@ describe("난수 계약 (T-03-09)", () => {
 });
 
 describe("문구 번호 (D-18, NIGHT-06)", () => {
-  it("첫 탈락은 후보 8개, lastPhrase 가 있으면 7개이고 그 번호가 없다", () => {
+  it("첫 탈락은 후보 MORNING_PHRASE_COUNT(7)개, lastPhrase 가 있으면 하나 적고 그 번호가 없다", () => {
     const { night, m1, c1 } = cast6();
     const base = picks(night, [m1, c1]);
     const phrase = (s: RoomState, fn: (n: number) => number): number | undefined => enterMorning(s, fn).morning?.phrase;
@@ -596,7 +596,7 @@ describe("문구 번호 (D-18, NIGHT-06)", () => {
     return s;
   }
 
-  it("시드 1..200 에서 두 밤 연속 탈락의 문구 번호가 같지 않고, 첫 탈락 번호로 1 과 8 이 모두 나온다", () => {
+  it("시드 1..200 에서 두 밤 연속 탈락의 문구 번호가 같지 않고, 첫 탈락 번호로 1 과 MORNING_PHRASE_COUNT 가 모두 나온다", () => {
     const first = new Set<number>();
     const repeats: number[] = [];
     for (let seed = 1; seed <= 200; seed += 1) {

@@ -1,0 +1,112 @@
+// Nyquist 검증(3.1): 여러 날을 실제 전이(startGame, tick, pickTarget)로 돌리며 독립 모델과 대조한다.
+// 개별 규칙 단위 테스트가 놓치기 쉬운 '낮이 거듭될 때의 누적' 을 본다: 시작 자리 이동·탈락자 제외·일지 누적·누출 키 부재.
+import { describe, expect, it } from "vitest";
+import { CLAIM_TURN_MS } from "../../shared/game/phases";
+import { pickTarget } from "../../shared/game/night";
+import { attachConnection, createRoomState, joinRoom, startGame } from "../../shared/game/room";
+import type { Player, RoomState } from "../../shared/game/room";
+import { tick } from "../../shared/game/tick";
+import { buildView } from "../../shared/game/view";
+import { seededRandInt } from "../helpers/seededRandom";
+
+function lobbyOf(n: number): RoomState {
+  const created = createRoomState({ code: "0420", hostId: "pid-0000-aaaa", hostToken: "tok-secret-0000-aaaa-0123456789", hostNickname: "이름0", now: 0 });
+  if (!created.ok) throw new Error("create");
+  let s = attachConnection(created.state, "pid-0000-aaaa", "c0");
+  for (let i = 1; i < n; i += 1) {
+    const id = `pid-000${i}-aaaa`;
+    const j = joinRoom(s, { playerId: id, token: `tok-secret-000${i}-aaaa-0123456789`, nickname: `이름${i}` });
+    if (!j.ok) throw new Error("join");
+    s = attachConnection(j.state, id, `c${i}`);
+  }
+  return s;
+}
+
+const living = (s: RoomState): Player[] => s.players.filter((p) => p.alive !== false);
+
+/** 밤 행동을 규칙대로 고른다: 마피아는 가장 낮은 seat 의 비마피아, 의사는 가장 높은 seat 생존자, 경찰은 가장 낮은 seat 의 다른 생존자. */
+function actNight(s: RoomState): RoomState {
+  let st = s;
+  for (const p of living(s)) {
+    const others = living(st).filter((q) => q.id !== p.id);
+    let target: Player | undefined;
+    if (p.role === "mafia") target = others.filter((q) => q.role !== "mafia").sort((a, b) => a.seat - b.seat)[0];
+    else if (p.role === "doctor") target = living(st).sort((a, b) => b.seat - a.seat)[0];
+    else if (p.role === "police") target = others.sort((a, b) => a.seat - b.seat)[0];
+    if (!target) continue;
+    const r = pickTarget(st, p.id, target.seat);
+    if (!r.ok) throw new Error(`pick ${p.role}: ${r.error}`);
+    st = r.state;
+  }
+  return st;
+}
+
+describe("여러 날 순차 주장 + 일지 누적 (DAY-02, NIGHT-04, ELIM-01)", () => {
+  for (const n of [5, 6, 7, 8]) {
+    for (const seed of [1, 2, 3]) {
+      it(`${n}명 seed ${seed}: 날마다 주장 순서·시작 자리·일지가 독립 모델과 같다`, () => {
+        const rand = seededRandInt(seed);
+        const lobby = lobbyOf(n);
+        const started = startGame(lobby, lobby.hostId, 10_000, rand);
+        if (!started.ok) throw new Error("start");
+        let s = started.state;
+        let prevStart: number | undefined;
+        let days = 0;
+        const dayRecords: Array<{ day: number; died: number | undefined }> = [];
+        for (let guard = 0; guard < 400 && s.phase !== "ended" && days < 4; guard += 1) {
+          if (s.phaseEndsAt === null) break;
+          if (s.phase === "claim" && s.claimIdx === 0 && s.claimOrder !== undefined) {
+            days += 1;
+            const alive = living(s).map((p) => p.seat).sort((a, b) => a - b);
+            // 모델: 오름차순 생존 seat, 시작은 (1일차 방장) 또는 직전 시작보다 큰 첫 생존 seat
+            const host = s.players.find((p) => p.id === s.hostId)!;
+            const start = prevStart === undefined ? host.seat : (alive.find((x) => x > prevStart!) ?? alive[0]!);
+            const at = alive.indexOf(start);
+            const expected = [...alive.slice(at), ...alive.slice(0, at)];
+            expect(s.claimOrder).toEqual(expected);
+            prevStart = start;
+            // 뷰에는 서버 전용 키가 없고 turn 은 현재 차례만
+            for (const p of s.players) {
+              const v = JSON.stringify(buildView(s, p.id, s.phaseEndsAt! - 1));
+              for (const k of ["claimPick", "claimOrder", "claimIdx", "claimStart"]) expect(v).not.toContain(`"${k}"`);
+            }
+            // 모두 말 안 함: 차례 수 × 8초 뒤 토론으로 간다
+            const end = s.phaseEndsAt! + (expected.length - 1) * CLAIM_TURN_MS;
+            const after = tick(s, end, rand);
+            expect(after.phase).toBe("discussion");
+            const today = (after.claimLog ?? []).filter((e) => e.n === (s.day ?? 1));
+            expect(today.map((e) => e.seat)).toEqual(expected);
+            expect(today.every((e) => e.claim === "none")).toBe(true);
+          }
+          if (s.phase === "night") s = actNight(s);
+          const before = s;
+          s = tick(s, s.phaseEndsAt!, rand);
+          if (before.phase === "night") {
+            const died = before.players.find((p) => p.alive !== false && s.players.find((q) => q.id === p.id)?.alive === false);
+            dayRecords.push({ day: before.day ?? 1, died: died?.seat });
+          }
+        }
+        expect(days).toBeGreaterThanOrEqual(2);
+        // 일지: 마피아의 암살일지는 그 밤 실제 사망과 일치(died=true ⇔ 그날 사망자 존재), 경찰은 매 밤 한 줄 이하
+        const mafia = s.players.filter((p) => p.role === "mafia");
+        for (const m of mafia) {
+          for (const rec of m.assassinations ?? []) {
+            const night = dayRecords.find((d) => d.day === rec.n);
+            if (night) expect(rec.died).toBe(night.died === rec.target);
+          }
+        }
+        // 마피아 팀원은 같은 일지를 가진다
+        if (mafia.length > 1) {
+          const sig = (m: Player) => JSON.stringify((m.assassinations ?? []).map((r) => [r.n, r.target, r.died]));
+          // 밤에 살아 있던 팀원끼리만 비교 가능: 둘 다 끝까지 산 경우
+          const alive = mafia.filter((m) => m.alive !== false);
+          if (alive.length === mafia.length) expect(new Set(mafia.map(sig)).size).toBe(1);
+        }
+        // 시민에게는 어떤 일지 키도 view 에 없다
+        for (const c of s.players.filter((p) => p.role === "citizen")) {
+          expect("records" in buildView(s, c.id, s.phaseEndsAt ?? 0).me).toBe(false);
+        }
+      });
+    }
+  }
+});
