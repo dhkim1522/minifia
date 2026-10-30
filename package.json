@@ -12,7 +12,7 @@
     "test": "vitest run",
     "cf-typegen": "wrangler types",
     "typecheck": "npm run tokens:check && wrangler types && tsc -p tsconfig.app.json --noEmit && tsc -p tsconfig.worker.json --noEmit",
-    "deploy": "vite build && wrangler deploy",
+    "deploy": "node scripts/check-account.mjs && vite build && wrangler deploy",
     "smoke": "node scripts/smoke.mjs",
     "e2e": "node scripts/e2e/run.mjs",
     "tokens": "node scripts/gen-tokens.mjs",

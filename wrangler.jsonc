@@ -4,6 +4,8 @@
   "compatibility_date": "2026-10-12",
   "main": "./worker/index.ts",
   "upload_source_maps": true,
+  // 버전별 미리보기 주소를 만들지 않는다(옛 버전 화면이 열리지 않게, 결정 0042). 다음 배포부터 반영
+  "preview_urls": false,
   "assets": {
     "not_found_handling": "single-page-application",
     "run_worker_first": ["/api/*"]
