@@ -1,7 +1,7 @@
 ---
 phase: "4"
 slug: "execution-verdict"
-status: deployed-verified-awaiting-device-check
+status: validated
 nyquist_compliant: true
 wave_0_complete: true
 created: "2026-10-26"
@@ -128,6 +128,7 @@ created: "2026-10-26"
 
 - [x] `test/unit/vote.test.ts` — 투표 집계·번복·셔플
 - [x] `test/unit/win.test.ts` — `checkWinner` 경계표
+- [x] `test/unit/nyquist-04-multiday-flow.test.ts` — 여러 날 연속 처형·종료 흐름과 종료 뒤 행동 거부 (감사 2026-10-30)
 - [x] `test/unit/execution.test.ts` — 진입·마감 훅, 요약
 - [x] `test/worker/vote.test.ts`, `test/worker/endgame.test.ts` — 소켓 방송 범위·종료
 - [x] 도우미 `stateWithVerdict()` (투표 주입)
@@ -161,3 +162,25 @@ created: "2026-10-26"
 - [x] 화면 웨이브(04-13~04-34): 작업별 자동 명령이 표에 있고(47 행 + 04-34 3행), 사람 확인 몫은 Manual-Only 표에 실기기 항목으로 남았다. 요구사항 체크는 04-35 배포본 검증 뒤에 했다(8개 완료).
 
 **Approval:** 서버·공유 로직 웨이브 승인(04-12). 화면 웨이브 로컬 검증 승인(04-34, 배포 직전). 배포본 검증 승인(04-35: 스모크 4·5·8, 봇 UAT 다섯, E2E 10흐름×3폭 통과). 연출 체감·흐림 가독성·iOS 흐림은 실기기 확인 대기.
+
+---
+
+## Validation Audit
+
+감사일 2026-10-30 (`/gsd-validate-phase`, State A: 기존 문서 감사).
+
+| 항목 | 수 |
+|------|----|
+| 점검한 요구사항 | 8 (VOTE-01~04, COMM-03, CONN-02, END-01, END-02) |
+| 완전히 덮임 (COVERED) | 7 |
+| 부분 (PARTIAL) → 해결 | 1 |
+| 빠짐 (MISSING) | 0 |
+| 에스컬레이션 (구현 결함) | 0 |
+
+현재 코드(결정 0030~0040 반영) 기준으로 `shared/game/{vote,execution,endgame,win,chat,tick}.ts` 의 행동을 `test/unit` · `test/worker` · `test/client` 와 대조했다. 단일 날 규칙(집계 규칙표, 검사 순서, 익명, 셔플 호출 순서, 승패 경계표, 변론 허용 메시지, 누출 전수)은 모두 시험이 있다.
+
+**해결한 틈 (PARTIAL):** 날짜를 건너 쌓이는 기록과 청소를 한 판 연속으로 보는 시험이 없었다. 새 시험이 6명 판을 1일차 동률 무효 → 2일차 마피아 처형(미종료) → 3일차 마피아 처형 → ended 로 실제 투표·tick 으로 끝까지 돌려 다음을 확인한다. 날마다 voteLog 가 한 줄씩 쌓이고 execVote 진입에서 verdict·execution·개인 표가 비워지며, 판 요약이 날짜 오름차순으로 후보를 정확히 싣고, 모든 viewer 의 결과가 같고, 종료 뒤 여부 투표·후보 선택·지목·이모티콘이 WRONG_PHASE 로 거부된다.
+
+- 새 시험: `test/unit/nyquist-04-multiday-flow.test.ts` (4개, 통과) — `npx vitest run test/unit/nyquist-04-multiday-flow.test.ts`
+- 구현 결함 발견: 없음.
+- 수동 전용(실기기 연출 체감·iOS 흐림 등)은 위 Manual-Only 표대로 갭이 아니라 사람 확인 대기 항목으로 둔다.

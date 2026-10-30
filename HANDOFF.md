@@ -20,8 +20,7 @@
 
 ## 다음 할 일
 
-1. **개발·실기기 확인·승인 완료**(2026-10-30, 4·5페이즈 UAT 통과). 실테스트 뒤 필요한 수정·개발은 사용자가 요구.
-2. **아티팩트 동기화**(디자인 세션): 디자인 시스템 — 새 토큰 `amber-700`·`amber-900`·`cone-light`, `amber-400`·`crimson-500` usage 개정, 후광 앰버·표수 칩·카드 부품 / 화면설계서 — 투표·공개·변론·처형·무효·결과 화면 / 화면 흐름 — 낮 → 투표 구간 순서 / 5페이즈 분위기 시안 승인 값.
-3. 6페이즈 삭제(결정 0041). 실테스트 뒤 사용자가 요구.
-4. 영역 지도·가이드 이미지·에셋 자동 검사를 `docs/` 에 정리(폰 폭 360·390·430별 영역). 큰 폰 세로 가운데 + 층 분리 에셋(투명 PNG·원래 크기 필요).
-5. 점검: `/gsd-verify-work 3.1`, 각 페이즈(1·2·3·3.1)의 `/gsd-secure-phase`·`/gsd-validate-phase`·`/gsd-extract-learnings`.
+1. **v1.0 개발 마무리 완료**(2026-10-30): 1~5페이즈 목표 검증(VERIFICATION)·보안 점검(SECURITY, 위협 310·열린 것 0)·테스트 빈틈(VALIDATION, nyquist 테스트 6파일)·배운 점(LEARNINGS) 완료. 6페이즈 삭제(결정 0041). 다음은 사용자 실테스트 뒤 요구.
+2. 디자인 아티팩트는 v1.0 구현 기준으로 동기화됨(화면설계서·화면 흐름 v1.0 페이지, 디자인 시스템 토큰·번들·참고 카드, 캐릭터 에셋 「최종 채택」). 사본 `design/screens/v1.0/`, 재촬영 `scripts/gallery.mjs`. 영역 지도 `docs/screen-map.md`.
+3. 포트폴리오: 케이스 스터디 슬라이드 https://claude.ai/artifact/P7aBWj4g2nHNTVeQHKEiY2 · 경력기술서 https://claude.ai/artifact/KMQUK84xtVpi5UcCPFwDFZ (둘 다 비공개, 공유는 페이지에서).
+4. 선택 권고(보안 점검 메모): `wrangler.jsonc` 에 `preview_urls: false`(재배포 필요), `npm run deploy` 앞 `wrangler whoami` 계정 확인 가드.

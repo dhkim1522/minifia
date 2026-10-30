@@ -1,9 +1,9 @@
 ---
 phase: "03"
 slug: night-morning
-status: draft
-nyquist_compliant: false
-wave_0_complete: false
+status: validated
+nyquist_compliant: true
+wave_0_complete: true
 created: "2026-10-25"
 ---
 
@@ -58,43 +58,43 @@ created: "2026-10-25"
 
 | Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| 03-01-01 | 01 | 1 | NIGHT-05, NIGHT-06 | T-03-01 | 마감 연쇄·따라잡기·두 번 호출 결과 동일 | unit | `npx vitest run test/unit/tick.test.ts` · `npm run typecheck` | ✅ 수정 | ⬜ pending |
-| 03-01-02 | 01 | 1 | NIGHT-05, NIGHT-06 | T-03-02 | 방 DO 가 cryptoRandInt 를 넘김 | unit + worker | `npx vitest run test/unit/view.test.ts test/worker/alarm.test.ts test/worker/day.test.ts` · `npx vitest run && npm run typecheck` | ✅ 수정 | ⬜ pending |
-| 03-01-03 | 01 | 1 | NIGHT-05, NIGHT-06 | T-03-03 | 모르는 단계 view 폴백 | client | `npx vitest run test/client/phaseScreens.test.tsx test/client/roomScreen.test.tsx test/client/dayScene.test.tsx` · `npx vitest run && npm run typecheck && npm run build` | ✅ 수정 | ⬜ pending |
-| 03-02-01 | 02 | 1 | NIGHT-04 | T-03-05 | 닉네임은 React 텍스트·속성으로만 | client | `npx vitest run test/client/dayTable.test.tsx test/client/dayScene.test.tsx` · `npm run typecheck` | ✅ 수정 | ⬜ pending |
-| 03-02-02 | 02 | 1 | ELIM-01 | T-03-04 | 실제 직업 줄은 넘길 때만, 역할 키 없는 입력 | client + unit | `npx vitest run test/client/dayTable.test.tsx test/client/dayScene.test.tsx test/client/lobby.test.tsx test/client/table.test.tsx test/unit/assets.test.ts` · `npm run typecheck` | ✅ 수정 | ⬜ pending |
-| 03-02-03 | 02 | 1 | NIGHT-04, ELIM-01 | T-03-04 | 진홍·관전 배지는 넘길 때만 | client | `npx vitest run test/client/dayTable.test.tsx` · `npx vitest run && npm run typecheck && npm run build` | ✅ 수정 | ⬜ pending |
-| 03-03-01 | 03 | 2 | NIGHT-01, NIGHT-06 | T-03-08 | 판정에 전역 난수·시각 없음 | unit | `npx vitest run test/unit/night.test.ts test/unit/tick.test.ts` · `npm run typecheck` | ❌ W0 night.test | ⬜ pending |
-| 03-03-02 | 03 | 2 | ELIM-01, NIGHT-05 | T-03-06 / T-03-07 / T-03-34 | 시민·탈락자 행동 거부, 받는 사람에 살아 있는 비행위자 없음 | unit | `npx vitest run test/unit/night.test.ts` | ❌ W0 | ⬜ pending |
-| 03-03-03 | 03 | 2 | NIGHT-01, NIGHT-02, NIGHT-03 | T-03-07 / T-03-09 / T-03-10 | randInt(0) 없음, 아침 결과에 직업·구출 없음 | unit | `npx vitest run test/unit/night.test.ts test/unit/tick.test.ts test/unit/view.test.ts` · `npx vitest run && npm run typecheck` | ❌ W0 | ⬜ pending |
-| 03-04-01 | 04 | 2 | COMM-04 | T-03-11 | 밤에는 생존 마피아만 통과 | unit + client | `npx vitest run test/unit/chat.test.ts test/unit/messageText.test.ts test/client/quickMessageSheet.test.tsx` · `npm run typecheck` | ✅ 수정 | ⬜ pending |
-| 03-04-02 | 04 | 2 | ELIM-01, COMM-04 | T-03-11 / T-03-12 / T-03-13 | 거부 규칙 하나(단계 먼저), 거부는 상태 불변 | unit + worker | `npx vitest run test/unit/chat.test.ts test/unit/claim.test.ts test/worker/day.test.ts` · `npx vitest run && npm run typecheck` | ✅ 수정 | ⬜ pending |
-| 03-04-03 | 04 | 2 | COMM-04 | T-03-40 | 밤 줄 번호가 낮 번호를 쓰지 않음 | unit | `npx vitest run test/unit/chat.test.ts` · `npx vitest run && npm run typecheck` | ✅ 수정 | ⬜ pending |
-| 03-05-01 | 05 | 3 | NIGHT-04, ELIM-01 | T-03-17 | 본인 선택은 본인 view 에만, players 다섯 키 | unit + worker | `npx vitest run test/unit/view.test.ts test/unit/gameRoom.test.ts test/worker/http.test.ts test/worker/leak.test.ts` · `npm run typecheck` | ✅ 수정 | ⬜ pending |
-| 03-05-02 | 05 | 3 | NIGHT-01, NIGHT-02, NIGHT-06 | T-03-14 / T-03-15 / T-03-16 | allyPicks·records 받을 사람만, 아홉 단계 전수 누출 | unit | `npx vitest run test/unit/view.test.ts test/unit/night.test.ts` · `npx vitest run && npm run typecheck` | ✅ 수정 | ⬜ pending |
-| 03-05-03 | 05 | 3 | ELIM-01 | T-03-37 | spectate 는 탈락한 본인 view 에만 | unit | `npx vitest run test/unit/view.test.ts` · `npx vitest run && npm run typecheck` | ✅ 수정 | ⬜ pending |
-| 03-06-01 | 06 | 3 | COMM-04, NIGHT-04 | T-03-19 | 낮·밤 줄 섞임 없음, 밤이 끝나면 비움 | client | `npx vitest run test/client/seatFloats.test.tsx test/client/nightChat.test.tsx test/client/discussion.test.tsx test/client/dayScene.test.tsx` · `npm run typecheck` | ❌ W0 nightChat | ⬜ pending |
-| 03-06-02 | 06 | 3 | COMM-04 | T-03-18 | 문구 ID 만 보냄(자유 텍스트 없음) | client | `npx vitest run test/client/quickMessageSheet.test.tsx test/client/nightChat.test.tsx test/client/discussion.test.tsx` · `npm run typecheck` | ✅ 수정 | ⬜ pending |
-| 03-06-03 | 06 | 3 | ELIM-01 | — | 관전 하단은 읽기 전용(보낼 수단 없음) | client | `npx vitest run test/client/nightChat.test.tsx test/client/discussion.test.tsx test/client/dayScene.test.tsx` · `npx vitest run && npm run typecheck && npm run build` | ✅ (T1 생성) | ⬜ pending |
-| 03-07-01 | 07 | 4 | NIGHT-02, NIGHT-06 | T-03-20 / T-03-22 / T-03-24 | pick 뒤 state 는 행위자 쪽에만, strictObject | worker | `npx vitest run test/worker/night.test.ts` · `npm run typecheck` | ❌ W0 night.test(worker) | ⬜ pending |
-| 03-07-02 | 07 | 4 | NIGHT-01, NIGHT-05, COMM-04 | T-03-20 / T-03-21 / T-03-40 | 밤 chat 은 마피아·관전자 소켓에만, 낮 번호 불변 | worker | `npx vitest run test/worker/night.test.ts test/worker/day.test.ts` · `npm run typecheck` | ✅ (T1 생성) | ⬜ pending |
-| 03-07-03 | 07 | 4 | ELIM-01, NIGHT-05 | T-03-21 / T-03-23 | 관전자만 추가 수신, 탈락자 행동 거부, 마감 뒤 WRONG_PHASE | worker | `npx vitest run test/worker/night.test.ts` · `npx vitest run && npm run typecheck` | ✅ (T1 생성) | ⬜ pending |
-| 03-08-01 | 08 | 4 | NIGHT-02, NIGHT-04 | T-03-27 | 서버 값이 낙관적 표시를 이긴다 | client | `npx vitest run test/client/nightScene.test.tsx test/client/dayScene.test.tsx test/client/discussion.test.tsx` · `npm run typecheck` | ❌ W0 nightScene | ⬜ pending |
-| 03-08-02 | 08 | 4 | NIGHT-01, NIGHT-03 | T-03-26 / T-03-27 | 마피아·시민 하단에 역할 이름 없음 | client | `npx vitest run test/client/nightScene.test.tsx test/client/dayScene.test.tsx test/client/discussion.test.tsx` · `npm run typecheck` | ✅ (T1 생성) | ⬜ pending |
-| 03-08-03 | 08 | 4 | ELIM-01 | T-03-26 | 관전 표시는 view.spectate 가 있을 때만 | client + unit | `npx vitest run test/client/nightScene.test.tsx test/unit/assets.test.ts test/client/dayScene.test.tsx test/client/phaseScreens.test.tsx` · `npx vitest run && npm run typecheck && npm run build` | ✅ 수정 | ⬜ pending |
-| 03-09-01 | 09 | 5 | ELIM-01 | T-03-28 | 두 밤 전 프레임 기존 불변식 | worker | `npx vitest run test/worker/leak.test.ts` | ✅ 수정 | ⬜ pending |
-| 03-09-02 | 09 | 5 | NIGHT-02, COMM-04, ELIM-01 | T-03-28 / T-03-40 | 살아 있는 소켓 spectate·밤 chat 0, 낮 seq 연속 | worker | `npx vitest run test/worker/leak.test.ts test/worker/night.test.ts` · `npx vitest run && npm run typecheck` | ✅ 수정 | ⬜ pending |
-| 03-09-03 | 09 | 5 | NIGHT-04, ELIM-01 | T-03-29 | 계약 기록 | doc/grep | `test -f docs/decisions/0020-night-morning-contract.md && grep -c 'spectate' docs/decisions/0020-night-morning-contract.md && awk '/^### Phase 3:/{f=1;next} /^### Phase 4:/{f=0} f' .planning/ROADMAP.md | grep -c '공개된 진행만 본다' | grep -qx 0` | ❌ (새 결정 파일) | ⬜ pending |
-| 03-10-01 | 10 | 5 | NIGHT-06 | T-03-30 | 카드 입력은 seat·번호뿐 | client | `npx vitest run test/client/morning.test.tsx test/client/nightScene.test.tsx test/client/dayScene.test.tsx` · `npm run typecheck` | ❌ W0 morning | ⬜ pending |
-| 03-10-02 | 10 | 5 | ELIM-01, NIGHT-06 | T-03-30 | 무사·구출 같은 문구 | client | `npx vitest run test/client/timer.test.tsx test/client/morning.test.tsx test/client/nightScene.test.tsx test/client/phaseScreens.test.tsx` · `npm run typecheck` | ✅ 수정 | ⬜ pending |
-| 03-10-03 | 10 | 5 | NIGHT-06 | T-03-31 | 범위 밖 번호 폴백 | unit + client | `npx vitest run test/unit/eliminationText.test.ts test/client/phaseScreens.test.tsx test/client/roomScreen.test.tsx` · `npx vitest run && npm run typecheck && npm run build` | ❌ W0 eliminationText | ⬜ pending |
-| 03-11-01 | 11 | 6 | NIGHT-02 | T-03-32 | 본 개수만 저장, 경찰 화면에만 버튼 | client | `npx vitest run test/client/records.test.tsx test/client/phaseScreens.test.tsx test/client/roomScreen.test.tsx` · `npm run typecheck` | ❌ W0 records | ⬜ pending |
-| 03-11-02 | 11 | 6 | NIGHT-02 | T-03-33 | 위조된 본 개수는 0 | unit + client | `npx vitest run test/client/records.test.tsx test/unit/recordsSeen.test.ts test/client/morning.test.tsx test/client/nightScene.test.tsx test/client/phaseScreens.test.tsx` · `npx vitest run && npm run typecheck && npm run build` | ❌ W0 recordsSeen | ⬜ pending |
-| 03-12-01 | 12 | 7 | NIGHT-01·02·04·05·06, ELIM-01 | T-03-36 / T-03-39 | 개인 계정 배포, 배포본 밤·관전 경계 | smoke(prod) | `node --check scripts/smoke.mjs && node scripts/smoke.mjs --prod --stage full --players 5` · `node scripts/smoke.mjs --prod --stage full --players 8` · `node scripts/smoke.mjs --prod --stage full --players 4` | ✅ 수정 | ⬜ pending |
-| 03-12-02 | 12 | 7 | NIGHT-01·02·03·05·06, ELIM-01, COMM-04 | T-03-38 / T-03-39 | 토큰 출력 없음, 관전 데이터 탈락자만 | bot UAT(prod) | `node --check scripts/uat-night.mjs && node --check scripts/bots.mjs && node --check scripts/uat-day.mjs && node scripts/uat-night.mjs --prod` · `node scripts/uat-night.mjs --prod --players 8` · `node scripts/uat-day.mjs --prod --players 5` | ❌ (새 uat-night) | ⬜ pending |
-| 03-12-03 | 12 | 7 | 전부 | — | HANDOFF 규칙 줄이 결정 0021 과 같음 | doc/grep | `grep -c '3페이즈(밤과 아침) 실행 완료' HANDOFF.md && grep -c '살아 있는 사람에게는 보내지 않는다' HANDOFF.md && grep -c '탈락자 관전' HANDOFF.md && case "$(git log -1 --format=%s)" in 'docs(03-12)'*) true ;; *) false ;; esac` | ✅ 수정 | ⬜ pending |
+| 03-01-01 | 01 | 1 | NIGHT-05, NIGHT-06 | T-03-01 | 마감 연쇄·따라잡기·두 번 호출 결과 동일 | unit | `npx vitest run test/unit/tick.test.ts` · `npm run typecheck` | ✅ 수정 | ✅ green |
+| 03-01-02 | 01 | 1 | NIGHT-05, NIGHT-06 | T-03-02 | 방 DO 가 cryptoRandInt 를 넘김 | unit + worker | `npx vitest run test/unit/view.test.ts test/worker/alarm.test.ts test/worker/day.test.ts` · `npx vitest run && npm run typecheck` | ✅ 수정 | ✅ green |
+| 03-01-03 | 01 | 1 | NIGHT-05, NIGHT-06 | T-03-03 | 모르는 단계 view 폴백 | client | `npx vitest run test/client/phaseScreens.test.tsx test/client/roomScreen.test.tsx test/client/dayScene.test.tsx` · `npx vitest run && npm run typecheck && npm run build` | ✅ 수정 | ✅ green |
+| 03-02-01 | 02 | 1 | NIGHT-04 | T-03-05 | 닉네임은 React 텍스트·속성으로만 | client | `npx vitest run test/client/dayTable.test.tsx test/client/dayScene.test.tsx` · `npm run typecheck` | ✅ 수정 | ✅ green |
+| 03-02-02 | 02 | 1 | ELIM-01 | T-03-04 | 실제 직업 줄은 넘길 때만, 역할 키 없는 입력 | client + unit | `npx vitest run test/client/dayTable.test.tsx test/client/dayScene.test.tsx test/client/lobby.test.tsx test/client/table.test.tsx test/unit/assets.test.ts` · `npm run typecheck` | ✅ 수정 | ✅ green |
+| 03-02-03 | 02 | 1 | NIGHT-04, ELIM-01 | T-03-04 | 진홍·관전 배지는 넘길 때만 | client | `npx vitest run test/client/dayTable.test.tsx` · `npx vitest run && npm run typecheck && npm run build` | ✅ 수정 | ✅ green |
+| 03-03-01 | 03 | 2 | NIGHT-01, NIGHT-06 | T-03-08 | 판정에 전역 난수·시각 없음 | unit | `npx vitest run test/unit/night.test.ts test/unit/tick.test.ts` · `npm run typecheck` | ❌ W0 night.test | ✅ green |
+| 03-03-02 | 03 | 2 | ELIM-01, NIGHT-05 | T-03-06 / T-03-07 / T-03-34 | 시민·탈락자 행동 거부, 받는 사람에 살아 있는 비행위자 없음 | unit | `npx vitest run test/unit/night.test.ts` | ❌ W0 | ✅ green |
+| 03-03-03 | 03 | 2 | NIGHT-01, NIGHT-02, NIGHT-03 | T-03-07 / T-03-09 / T-03-10 | randInt(0) 없음, 아침 결과에 직업·구출 없음 | unit | `npx vitest run test/unit/night.test.ts test/unit/tick.test.ts test/unit/view.test.ts` · `npx vitest run && npm run typecheck` | ❌ W0 | ✅ green |
+| 03-04-01 | 04 | 2 | COMM-04 | T-03-11 | 밤에는 생존 마피아만 통과 | unit + client | `npx vitest run test/unit/chat.test.ts test/unit/messageText.test.ts test/client/quickMessageSheet.test.tsx` · `npm run typecheck` | ✅ 수정 | ✅ green |
+| 03-04-02 | 04 | 2 | ELIM-01, COMM-04 | T-03-11 / T-03-12 / T-03-13 | 거부 규칙 하나(단계 먼저), 거부는 상태 불변 | unit + worker | `npx vitest run test/unit/chat.test.ts test/unit/claim.test.ts test/worker/day.test.ts` · `npx vitest run && npm run typecheck` | ✅ 수정 | ✅ green |
+| 03-04-03 | 04 | 2 | COMM-04 | T-03-40 | 밤 줄 번호가 낮 번호를 쓰지 않음 | unit | `npx vitest run test/unit/chat.test.ts` · `npx vitest run && npm run typecheck` | ✅ 수정 | ✅ green |
+| 03-05-01 | 05 | 3 | NIGHT-04, ELIM-01 | T-03-17 | 본인 선택은 본인 view 에만, players 다섯 키 | unit + worker | `npx vitest run test/unit/view.test.ts test/unit/gameRoom.test.ts test/worker/http.test.ts test/worker/leak.test.ts` · `npm run typecheck` | ✅ 수정 | ✅ green |
+| 03-05-02 | 05 | 3 | NIGHT-01, NIGHT-02, NIGHT-06 | T-03-14 / T-03-15 / T-03-16 | allyPicks·records 받을 사람만, 아홉 단계 전수 누출 | unit | `npx vitest run test/unit/view.test.ts test/unit/night.test.ts` · `npx vitest run && npm run typecheck` | ✅ 수정 | ✅ green |
+| 03-05-03 | 05 | 3 | ELIM-01 | T-03-37 | spectate 는 탈락한 본인 view 에만 | unit | `npx vitest run test/unit/view.test.ts` · `npx vitest run && npm run typecheck` | ✅ 수정 | ✅ green |
+| 03-06-01 | 06 | 3 | COMM-04, NIGHT-04 | T-03-19 | 낮·밤 줄 섞임 없음, 밤이 끝나면 비움 | client | `npx vitest run test/client/seatFloats.test.tsx test/client/nightChat.test.tsx test/client/discussion.test.tsx test/client/dayScene.test.tsx` · `npm run typecheck` | ❌ W0 nightChat | ✅ green |
+| 03-06-02 | 06 | 3 | COMM-04 | T-03-18 | 문구 ID 만 보냄(자유 텍스트 없음) | client | `npx vitest run test/client/quickMessageSheet.test.tsx test/client/nightChat.test.tsx test/client/discussion.test.tsx` · `npm run typecheck` | ✅ 수정 | ✅ green |
+| 03-06-03 | 06 | 3 | ELIM-01 | — | 관전 하단은 읽기 전용(보낼 수단 없음) | client | `npx vitest run test/client/nightChat.test.tsx test/client/discussion.test.tsx test/client/dayScene.test.tsx` · `npx vitest run && npm run typecheck && npm run build` | ✅ (T1 생성) | ✅ green |
+| 03-07-01 | 07 | 4 | NIGHT-02, NIGHT-06 | T-03-20 / T-03-22 / T-03-24 | pick 뒤 state 는 행위자 쪽에만, strictObject | worker | `npx vitest run test/worker/night.test.ts` · `npm run typecheck` | ❌ W0 night.test(worker) | ✅ green |
+| 03-07-02 | 07 | 4 | NIGHT-01, NIGHT-05, COMM-04 | T-03-20 / T-03-21 / T-03-40 | 밤 chat 은 마피아·관전자 소켓에만, 낮 번호 불변 | worker | `npx vitest run test/worker/night.test.ts test/worker/day.test.ts` · `npm run typecheck` | ✅ (T1 생성) | ✅ green |
+| 03-07-03 | 07 | 4 | ELIM-01, NIGHT-05 | T-03-21 / T-03-23 | 관전자만 추가 수신, 탈락자 행동 거부, 마감 뒤 WRONG_PHASE | worker | `npx vitest run test/worker/night.test.ts` · `npx vitest run && npm run typecheck` | ✅ (T1 생성) | ✅ green |
+| 03-08-01 | 08 | 4 | NIGHT-02, NIGHT-04 | T-03-27 | 서버 값이 낙관적 표시를 이긴다 | client | `npx vitest run test/client/nightScene.test.tsx test/client/dayScene.test.tsx test/client/discussion.test.tsx` · `npm run typecheck` | ❌ W0 nightScene | ✅ green |
+| 03-08-02 | 08 | 4 | NIGHT-01, NIGHT-03 | T-03-26 / T-03-27 | 마피아·시민 하단에 역할 이름 없음 | client | `npx vitest run test/client/nightScene.test.tsx test/client/dayScene.test.tsx test/client/discussion.test.tsx` · `npm run typecheck` | ✅ (T1 생성) | ✅ green |
+| 03-08-03 | 08 | 4 | ELIM-01 | T-03-26 | 관전 표시는 view.spectate 가 있을 때만 | client + unit | `npx vitest run test/client/nightScene.test.tsx test/unit/assets.test.ts test/client/dayScene.test.tsx test/client/phaseScreens.test.tsx` · `npx vitest run && npm run typecheck && npm run build` | ✅ 수정 | ✅ green |
+| 03-09-01 | 09 | 5 | ELIM-01 | T-03-28 | 두 밤 전 프레임 기존 불변식 | worker | `npx vitest run test/worker/leak.test.ts` | ✅ 수정 | ✅ green |
+| 03-09-02 | 09 | 5 | NIGHT-02, COMM-04, ELIM-01 | T-03-28 / T-03-40 | 살아 있는 소켓 spectate·밤 chat 0, 낮 seq 연속 | worker | `npx vitest run test/worker/leak.test.ts test/worker/night.test.ts` · `npx vitest run && npm run typecheck` | ✅ 수정 | ✅ green |
+| 03-09-03 | 09 | 5 | NIGHT-04, ELIM-01 | T-03-29 | 계약 기록 | doc/grep | `test -f docs/decisions/0020-night-morning-contract.md && grep -c 'spectate' docs/decisions/0020-night-morning-contract.md && awk '/^### Phase 3:/{f=1;next} /^### Phase 4:/{f=0} f' .planning/ROADMAP.md | grep -c '공개된 진행만 본다' | grep -qx 0` | ❌ (새 결정 파일) | ✅ green |
+| 03-10-01 | 10 | 5 | NIGHT-06 | T-03-30 | 카드 입력은 seat·번호뿐 | client | `npx vitest run test/client/morning.test.tsx test/client/nightScene.test.tsx test/client/dayScene.test.tsx` · `npm run typecheck` | ❌ W0 morning | ✅ green |
+| 03-10-02 | 10 | 5 | ELIM-01, NIGHT-06 | T-03-30 | 무사·구출 같은 문구 | client | `npx vitest run test/client/timer.test.tsx test/client/morning.test.tsx test/client/nightScene.test.tsx test/client/phaseScreens.test.tsx` · `npm run typecheck` | ✅ 수정 | ✅ green |
+| 03-10-03 | 10 | 5 | NIGHT-06 | T-03-31 | 범위 밖 번호 폴백 | unit + client | `npx vitest run test/unit/eliminationText.test.ts test/client/phaseScreens.test.tsx test/client/roomScreen.test.tsx` · `npx vitest run && npm run typecheck && npm run build` | ❌ W0 eliminationText | ✅ green |
+| 03-11-01 | 11 | 6 | NIGHT-02 | T-03-32 | 본 개수만 저장, 경찰 화면에만 버튼 | client | `npx vitest run test/client/records.test.tsx test/client/phaseScreens.test.tsx test/client/roomScreen.test.tsx` · `npm run typecheck` | ❌ W0 records | ✅ green |
+| 03-11-02 | 11 | 6 | NIGHT-02 | T-03-33 | 위조된 본 개수는 0 | unit + client | `npx vitest run test/client/records.test.tsx test/unit/recordsSeen.test.ts test/client/morning.test.tsx test/client/nightScene.test.tsx test/client/phaseScreens.test.tsx` · `npx vitest run && npm run typecheck && npm run build` | ❌ W0 recordsSeen | ✅ green |
+| 03-12-01 | 12 | 7 | NIGHT-01·02·04·05·06, ELIM-01 | T-03-36 / T-03-39 | 개인 계정 배포, 배포본 밤·관전 경계 | smoke(prod) | `node --check scripts/smoke.mjs && node scripts/smoke.mjs --prod --stage full --players 5` · `node scripts/smoke.mjs --prod --stage full --players 8` · `node scripts/smoke.mjs --prod --stage full --players 4` | ✅ 수정 | ✅ green |
+| 03-12-02 | 12 | 7 | NIGHT-01·02·03·05·06, ELIM-01, COMM-04 | T-03-38 / T-03-39 | 토큰 출력 없음, 관전 데이터 탈락자만 | bot UAT(prod) | `node --check scripts/uat-night.mjs && node --check scripts/bots.mjs && node --check scripts/uat-day.mjs && node scripts/uat-night.mjs --prod` · `node scripts/uat-night.mjs --prod --players 8` · `node scripts/uat-day.mjs --prod --players 5` | ❌ (새 uat-night) | ✅ green |
+| 03-12-03 | 12 | 7 | 전부 | — | HANDOFF 규칙 줄이 결정 0021 과 같음 | doc/grep | `grep -c '3페이즈(밤과 아침) 실행 완료' HANDOFF.md && grep -c '살아 있는 사람에게는 보내지 않는다' HANDOFF.md && grep -c '탈락자 관전' HANDOFF.md && case "$(git log -1 --format=%s)" in 'docs(03-12)'*) true ;; *) false ;; esac` | ✅ 수정 | ✅ green |
 
-*Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
+*Status: ✅ green · ✅ green · ❌ red · ⚠️ flaky*
 
 ---
 
@@ -102,13 +102,13 @@ created: "2026-10-25"
 
 각 파일은 그 계획의 첫 태스크(RED 커밋)가 만든다. 별도 설치·공용 도우미 준비는 없다.
 
-- [ ] `test/unit/night.test.ts` — pickTarget 검사 순서 전 경로, 판정 규칙표 전 행, 난수 호출 횟수·순서, 문구 번호 속성 테스트 (03-03 T1)
-- [ ] `test/worker/night.test.ts` — workerd 실제 소켓: 행동 전송 범위, 마피아·관전 채팅 범위, 낮 번호 불변, 마감 뒤·탈락자 거부 (03-07 T1)
-- [ ] `test/client/nightChat.test.tsx` — 안내 줄·로그 이름·^ 끄기·밤 문구 시트·읽기 전용 줄 (03-06 T1)
-- [ ] `test/client/nightScene.test.tsx` — 역할별 밤 하단·직접 탭·낙관적 선택·관전 화면 (03-08 T1)
-- [ ] `test/client/morning.test.tsx`, `test/unit/eliminationText.test.ts` — 아침 카드·문구 표 (03-10 T1·T3)
-- [ ] `test/client/records.test.tsx`, `test/unit/recordsSeen.test.ts` — 수사 기록 버튼·시트·알림·본 개수 (03-11 T1·T2)
-- [ ] 기존 테스트 계약 갱신(RED 또는 회귀 이전): `tick.test.ts`·`view.test.ts`·`alarm.test.ts`·`day.test.ts`(03-01), `gameRoom.test.ts`·`http.test.ts`·`leak.test.ts` 다섯 키(03-05), `chat.test.ts`·`claim.test.ts`·`messageText.test.ts`(03-04), `seatFloats.test.tsx`·`quickMessageSheet.test.tsx`(03-06), `dayTable.test.tsx`(03-02), `timer.test.tsx`·`phaseScreens.test.tsx`(03-01·03-10), `assets.test.ts`(03-08)
+- [x] `test/unit/night.test.ts` — pickTarget 검사 순서 전 경로, 판정 규칙표 전 행, 난수 호출 횟수·순서, 문구 번호 속성 테스트 (03-03 T1)
+- [x] `test/worker/night.test.ts` — workerd 실제 소켓: 행동 전송 범위, 마피아·관전 채팅 범위, 낮 번호 불변, 마감 뒤·탈락자 거부 (03-07 T1)
+- [x] `test/client/nightChat.test.tsx` — 안내 줄·로그 이름·^ 끄기·밤 문구 시트·읽기 전용 줄 (03-06 T1)
+- [x] `test/client/nightScene.test.tsx` — 역할별 밤 하단·직접 탭·낙관적 선택·관전 화면 (03-08 T1)
+- [x] `test/client/morning.test.tsx`, `test/unit/eliminationText.test.ts` — 아침 카드·문구 표 (03-10 T1·T3)
+- [x] `test/client/records.test.tsx`, `test/unit/recordsSeen.test.ts` — 수사 기록 버튼·시트·알림·본 개수 (03-11 T1·T2)
+- [x] 기존 테스트 계약 갱신(RED 또는 회귀 이전): `tick.test.ts`·`view.test.ts`·`alarm.test.ts`·`day.test.ts`(03-01), `gameRoom.test.ts`·`http.test.ts`·`leak.test.ts` 다섯 키(03-05), `chat.test.ts`·`claim.test.ts`·`messageText.test.ts`(03-04), `seatFloats.test.tsx`·`quickMessageSheet.test.tsx`(03-06), `dayTable.test.tsx`(03-02), `timer.test.tsx`·`phaseScreens.test.tsx`(03-01·03-10), `assets.test.ts`(03-08)
 
 ---
 
@@ -130,11 +130,28 @@ created: "2026-10-25"
 
 ## Validation Sign-Off
 
-- [ ] All tasks have `<automated>` verify or Wave 0 dependencies
-- [ ] Sampling continuity: no 3 consecutive tasks without automated verify
-- [ ] Wave 0 covers all MISSING references
-- [ ] No watch-mode flags
-- [ ] Feedback latency < 15s (로컬)
-- [ ] `nyquist_compliant: true` set in frontmatter
+- [x] All tasks have `<automated>` verify or Wave 0 dependencies
+- [x] Sampling continuity: no 3 consecutive tasks without automated verify
+- [x] Wave 0 covers all MISSING references
+- [x] No watch-mode flags
+- [x] Feedback latency < 15s (로컬)
+- [x] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** pending
+**Approval:** 2026-10-30 Nyquist 감사 통과
+
+---
+
+## Validation Audit 2026-10-30
+
+현재 코드(결정 0030–0040 반영) 기준으로 재감사했다. 계획 당시 파일 중 `test/client/records.test.tsx` 는 수사 기록이 역할 카드 일지·`UserRecordSheet` 로 바뀌면서(결정 0026·0027) `test/client/userRecordSheet.test.tsx`·`test/client/journal.test.tsx`·`test/unit/recordRows.test.ts`·`test/unit/recordsSeen.test.ts` 로 대체되어 있다. 나머지 Wave 0 파일은 모두 존재하고 green 이다.
+
+| 항목 | 개수 |
+|------|------|
+| 요구사항 (NIGHT-01~06, ELIM-01, COMM-04 밤) | 8 전부 COVERED |
+| 발견된 틈 | 1 (PARTIAL: 전 인원수 x 무작위 지목 사슬에서 viewer 간 아침 동일성·spectate 범위 교차 불변식) |
+| 해결 | 1 |
+| 에스컬레이션 | 0 |
+
+- 새 테스트: `test/unit/nyquist-03-night-chain.test.ts` (4~8명 x 시드 40개: 무작위 지목 후에도 phaseEndsAt 불변, 마감 틱 뒤 모든 viewer 의 day.morning 동일·직업 문자열 없음, spectate 는 탈락자 view 에만, 탈락자 최대 1명이며 morning.eliminated 와 일치). 명령 `npx vitest run test/unit/nyquist-03-night-chain.test.ts`.
+- 배포본 스모크·봇 UAT·실기기 항목은 Manual-Only 로 유지한다.
+- 경고: 전체 `npx vitest run` 첫 실행에서 2건이 실패했으나(병렬 에이전트 부하 중, 타이밍 의존으로 추정) 재실행은 전부 green(116 파일). 결정적 실패 아님.

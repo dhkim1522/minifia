@@ -14,6 +14,7 @@
 - `docs/product.md` — 기획서: 목표, 콘셉트, MVP 규칙, 진행 흐름, 미결정 항목
 - `docs/architecture.md` — 기술 스택, 구조, 실시간 통신, 출시 경로
 - `docs/decisions/` — 결정 기록 (번호순)
+- `docs/screen-map.md` — 폰 폭별 화면 영역과 자동 검사(E2E·에셋) 지도
 - `.planning/` — GSD 요구사항·로드맵·진행 상태 (결정 0004). 범위와 진행은 여기를 기준으로 한다
 - `design/references/` — 디자인 참고 이미지 보관 위치(선택). 디자인 단계에서 경로를 주면 따른다. 앱 에셋에 넣지 않는다
 - 디자인 아티팩트(사람용, 결정 0010·0011) — 디자인 시스템 https://claude.ai/artifact/Tp175mmuxLAHycMUtwZJ9Q (이 세션에서만 고친다) · 화면설계서 https://claude.ai/artifact/QtbQYhk7ezy4fV7H98bZJz · 화면 흐름 https://claude.ai/artifact/NzZBqoJD8ut16J2VUwpn64 · 캐릭터 에셋 https://claude.ai/artifact/4dYpe74vxJHSnA4WhFSLTM. 사람용 산출물(시안·화면설계서 등)은 이 세션에서 Design 캔버스로 직접 만든다. GSD 에이전트는 아티팩트를 열 수 없으니 승인본은 `design/` 사본을 쓴다

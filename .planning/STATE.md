@@ -25,18 +25,18 @@ progress:
 See: .planning/PROJECT.md (updated 2026-10-21)
 
 **Core value:** 링크 하나로 모인 친구들이 설명 없이 정통 마피아 한 판(6~10분)을 끝까지 마치는 것
-**Current focus:** Phase 5 — 분위기와 캐릭터
+**Current focus:** v1.0 개발 완료(1~5페이즈) — 사용자 실테스트 대기
 
 ## Current Position
 
-Phase: 5 (분위기와 캐릭터) — 코드·배포·자동 검증 완료, 사용자 실기기 확인·승인 완료 (2026-10-30, 4페이즈도 동일)
+Phase: 5 (분위기와 캐릭터) — v1.0 마지막 페이즈. 1~5페이즈 모두 완료·검증(2026-10-30)
 Current Plan: 9
 Total Plans in Phase: 9
 Plan: 9 of 9
-Status: 05-01~05-09 완료(배포 2026-10-29T11:11:36Z+42d648b, 배포본 smoke·UAT·E2E 통과). 5페이즈 요구사항 5개 완료 표시. 실기기 확인은 2026-10-30 사용자가 승인.
-Last activity: 2026-10-29 — 05-01 executed
+Status: 1~5페이즈 목표 검증 통과, 보안 점검 6페이즈(위협 310, 열린 것 0), 테스트 빈틈 점검·배운 점 정리 완료, 디자인 아티팩트 v1.0 동기화, 포트폴리오(케이스 스터디·경력기술서) 작성. 6페이즈는 삭제(결정 0041).
+Last activity: 2026-10-30 — 전 페이즈 마무리 점검(verify·secure·validate·learnings)과 포트폴리오
 
-Progress: [██░░░░░░░░] 17%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
