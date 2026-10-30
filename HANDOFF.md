@@ -5,8 +5,8 @@
 ## 지금 상태
 
 - **v1.0 마감·보관(2026-10-30, 결정 0043)**: 팀 실게임 테스트 결과 이대로 출시는 어렵다고 판단해 v1.0 을 보관하고 v2.0 을 새로 기획한다. 기록 `.planning/MILESTONES.md`, 보관본 `.planning/milestones/v1.0-*`(페이즈 문서 `v1.0-phases/`).
-- **브랜치**: 작업은 **`v2`** 브랜치에서 한다. `v1` 은 v1 배포본 수정 전용, `main` 은 배포된 버전(지금 v1.0), 태그 `v1.0`. 다른 PC 에서는 `git fetch` 후 `git switch v2`.
-- v1 배포본 `https://minifia.dhplay.workers.dev` 버전 `2026-10-29T14:52:03Z+cb6979c` 는 그대로 둔다. v2 는 다른 Worker 이름·주소에 배포한다(이름은 v2 기획에서). 서버·화면은 함께 배포하고 `npm run deploy` 가 개인 계정을 먼저 확인한다(결정 0042, `preview_urls: false` 는 다음 배포부터).
+- **브랜치**: 작업은 **`v2`** 브랜치에서 한다. `v1` 은 v1.0 배포본 수정 전용, `main` 은 배포된 버전(지금 v1.0), 태그 `v1.0`. 다른 PC 에서는 `git fetch` 후 `git switch v2`.
+- v1.0 배포본 `https://minifia.dhplay.workers.dev` 버전 `2026-10-29T14:52:03Z+cb6979c` 는 그대로 둔다. v2.0 은 다른 Worker 이름·주소에 배포한다(이름은 v2.0 기획에서). 서버·화면은 함께 배포하고 `npm run deploy` 가 개인 계정을 먼저 확인한다(결정 0042, `preview_urls: false` 는 다음 배포부터).
 - 도구 메모: 버전은 `/api/health`. `npm run e2e` 는 인자가 없으면 배포본을 검사한다(로컬은 `npm run dev` 후 `-- --url http://localhost:5173`). 이 PC 의 배포본 smoke 는 네트워크에 따라 간헐 실패한 적이 있다 — 단독 재확인, 한도는 바꾸지 않는다. CSS `backdrop-filter` 는 비접두 한 번만(`verdictCss.test.ts`).
 - 커밋 제외: `design/backgrounds/indoor-draft/`, `Claude outputs/`, `.planning/milestone.lock`, `.planning/state.json`.
 
