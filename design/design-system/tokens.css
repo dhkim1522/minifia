@@ -1,4 +1,4 @@
-/* minifia 토큰. tokens.json 에서 만든 파일이다. 직접 고치지 않는다. */
+/* minifia 토큰. design/tokens.json 에서 scripts/gen-tokens.mjs 로 만든 파일이다. 직접 고치지 않는다. */
 :root {
   --night-950: #0a0e1c;
   --night-900: #0e1326;
@@ -48,6 +48,21 @@
   --seat-6: #9aa86f;
   --seat-7: #b87a5c;
   --seat-8: #a9aebb;
+  --amber-400: #f2b84b;
+  --amber-700: #7a5314;
+  --amber-900: #3a2508;
+  --cone-light: #fff4d6;
+  --journal-police-bg: #16213d;
+  --journal-police-head: #1d2c52;
+  --journal-police-edge: #34456f;
+  --journal-police-ink: #9ec2ff;
+  --journal-mafia-bg: #241420;
+  --journal-mafia-head: #3a1a26;
+  --journal-mafia-edge: #5a2434;
+  --journal-doctor-bg: #10241f;
+  --journal-doctor-head: #15332b;
+  --journal-doctor-edge: #26503f;
+  --journal-doctor-ink: #8fd0bf;
   --font-ui: "Gowun Dodum", system-ui, -apple-system, "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", sans-serif;
   --space-xs: 4px;
   --space-sm: 8px;

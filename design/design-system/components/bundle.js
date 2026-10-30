@@ -25,15 +25,15 @@
     'characters/roles/police_default@4x.png': '/_blob/74667d107d385aeec956c14b653d16d6',
     'characters/roles/doctor_default@4x.png': '/_blob/c705093934972fe43e48c8b3c2bc4894',
     'characters/roles/citizen_default@4x.png': '/_blob/1cff16e1a064dde88ad859fe60f01bd2',
-    'characters/ghost/ghost_default@4x.png': '/_blob/50557fd2c98a76b4d5ffed74aa3a8ac3',
-    'backgrounds/bg_game_lobby.svg': '/_blob/d12a14742509df1164e84d402d427ba0',
-    'backgrounds/bg_game_night.svg': '/_blob/dddc67abad905872f6446291c7fa1a1b',
-    'backgrounds/bg_game_day.svg': '/_blob/8b26630d8967bfcc65ae27f29c3bbdeb',
-    'backgrounds/bg_game_verdict.svg': '/_blob/0b64eb4764f579fe343d7048af83d7b3',
-    'backgrounds/bg_entry_lobby.svg': '/_blob/8bc4b924af6747bdfc94111ebea3d303',
-    'backgrounds/bg_entry_night.svg': '/_blob/ce82a4421323c6350b7b5a61650d30d6',
-    'backgrounds/bg_entry_day.svg': '/_blob/3230d271f453dedeef2e141398fc8be1',
-    'backgrounds/bg_entry_verdict.svg': '/_blob/27b3a1db6657d008df302cd4ad8214f1'
+    'characters/ghost/ghost_default@4x.png': '/_blob/6a0e1a1ebfe3ae49ff88b71748206112',
+    'characters/host/host_badge.svg': '/_blob/ef72d71f49e3f1341d0ad2c6c0751591',
+    'backgrounds/bg_game_lobby.webp': '/_blob/2c092c4a418e4c65c1fc2f6833be012f',
+    'backgrounds/bg_game_day.webp': '/_blob/e80f3fd80b385da4827ba6eaed29ab33',
+    'backgrounds/bg_game_dusk.webp': '/_blob/04df1908519b07d1e34ae2c3c4b46c61',
+    'backgrounds/bg_game_night.webp': '/_blob/d83dcfbc69aa07b2869ac76837c2f7ce',
+    'backgrounds/bg_game_morning.webp': '/_blob/7ace773a3801dbf11d99a7ab312912e7',
+    'backgrounds/bg_game_verdict_dusk.webp': '/_blob/3742d6dba52a34cba578a4a039d804c7',
+    'backgrounds/bg_entry_lobby.webp': '/_blob/f5739726e0fa5bcdd9bfa4ef9da3d6f3'
   };
   function asset(path) { return ASSET_BASE ? ASSET_BASE + path : ASSET_BLOBS[path]; }
 
@@ -200,20 +200,24 @@
   function Figure(p) {
     var v = ((p.variant || 0) % 8 + 8) % 8;
     var state = p.state || 'default';
-    /* 탈락하면 유령 하나로 바뀐다(자리별 유령 없음). 끊김은 흑백 + 60% */
+    /* 탈락하면 유령 하나로 바뀐다(자리별 유령 없음). 끊김은 흑백 + 60%.
+       후광(결정 0030·0037): 그림 윤곽을 따르는 두 겹 drop-shadow, white | amber | crimson */
+    var halo = ['white', 'amber', 'crimson'].indexOf(p.halo) >= 0 ? p.halo : null;
     return h('img', {
-      className: cx('mf-figure', state !== 'default' && 'mf-figure--' + state, p.className),
+      className: cx('mf-figure', state !== 'default' && 'mf-figure--' + state, halo && 'mf-figure--halo-' + halo, p.className),
       src: asset(state === 'dead' ? 'characters/ghost/ghost_default@4x.png' : 'characters/table/' + FIGURE_IDS[v] + '_default@4x.png'), width: 72, height: 96, draggable: false,
       alt: p.label || '', 'aria-hidden': p.label ? undefined : 'true'
     });
   }
 
-  /* ---------- Backdrop: 화면 뒤 배경 장면 (A_cute, 원본 design/backgrounds/, 앱은 public/backgrounds/) ---------- */
+  /* ---------- Backdrop: 화면 뒤 배경 장면 (실내 V2 WebP, 결정 0029~0033. 앱은 public/backgrounds/, 장면 표는 src/game/scenes.ts) ---------- */
+  var SCENE_FILE = { lobby: 'lobby', day: 'day', dusk: 'dusk', night: 'night', morning: 'morning', verdictDusk: 'verdict_dusk' };
   function Backdrop(p) {
-    var layout = p.layout === 'entry' ? 'entry' : 'game';
-    var variant = ['lobby', 'night', 'day', 'verdict'].indexOf(p.variant) >= 0 ? p.variant : 'lobby';
-    /* 1080x2340 그림을 cover 로 채운다. 기준은 가운데 위쪽 */
-    var bg = { backgroundImage: 'url("' + asset('backgrounds/bg_' + layout + '_' + variant + '.svg') + '")', backgroundPosition: p.position || 'center top' };
+    var variant = SCENE_FILE[p.variant] ? p.variant : 'lobby';
+    /* 입구 구도 그림은 lobby 하나뿐이다 */
+    var layout = p.layout === 'entry' && variant === 'lobby' ? 'entry' : 'game';
+    /* 세로 그림을 cover 로 채운다. 기준은 가운데 위쪽 */
+    var bg = { backgroundImage: 'url("' + asset('backgrounds/bg_' + layout + '_' + SCENE_FILE[variant] + '.webp') + '")', backgroundPosition: p.position || 'center top' };
     return h('div', { className: cx('mf-backdrop', 'mf-backdrop--' + variant, p.className), style: Object.assign({}, p.style) },
       h('div', { className: 'mf-backdrop__art', style: bg, 'aria-hidden': 'true' }),
       p.children ? h('div', { className: 'mf-backdrop__content' }, p.children) : null);
@@ -248,18 +252,17 @@
       var headTop = L.y - FIG_H * L.scale;
       var front = L.depth >= 0.5;
       var state = s.state || 'default';
-      var ring = s.selected ? 'selected' : s.selectable ? 'selectable' : s.mate ? 'mate' : s.me ? 'me' : null;
+      /* 발밑 링 대신 후광(결정 0030): 흰 = 차례·내 선택, 앰버 = 공개·후보, 진홍 = 마피아 동료. 흰이 진홍보다 앞선다. 한 화면 최대 3개는 쓰는 쪽이 지킨다 */
+      var halo = s.halo || (s.selected ? 'white' : s.mate ? 'crimson' : null);
       var seatLabel = s.name + (s.me ? ' (나)' : '') + (state === 'disconnected' ? ', 연결 끊김' : '') + (state === 'dead' ? ', 탈락' : '');
       layers.push(h('div', { key: 's' + i, className: 'mf-seat', style: { left: L.x + '%', top: L.y + '%', zIndex: L.z, transform: 'translate(-50%,-100%) scale(' + L.scale + ')' } },
         s.candidate ? h('div', { className: 'mf-seat__spot' }) : null,
-        ring ? h('div', { className: 'mf-seat__ring mf-seat__ring--' + ring }) : null,
-        s.mate && ring !== 'mate' ? h('div', { className: 'mf-seat__ring mf-seat__ring--mate' }) : null,
-        h(Figure, { variant: s.variant != null ? s.variant : i, state: state }),
-        s.host ? h(Icon, { name: 'crown', className: 'mf-seat__mark mf-seat__mark--host', label: '방장' }) : null,
+        h(Figure, { variant: s.variant != null ? s.variant : i, state: state, halo: halo }),
+        s.host ? h('img', { className: 'mf-seat__mark mf-seat__mark--host', src: asset('characters/host/host_badge.svg'), alt: '방장', draggable: false }) : null,
         s.mate ? h(Icon, { name: 'diamond', className: 'mf-seat__mark mf-seat__mark--mate', label: '동료' }) : null,
         s.selectable || s.pressable ? h('button', { type: 'button', className: 'mf-seat__btn', 'aria-label': seatLabel, 'aria-pressed': s.selectable ? (s.selected ? 'true' : 'false') : undefined, onClick: p.onSeatPress ? function (idx) { return function () { p.onSeatPress(idx); }; }(i) : undefined }) : null));
       var tagTop = front ? L.y + 1.2 : headTop - 7.5;
-      top.push(h('div', { key: 't' + i, className: cx('mf-tag', !front && 'mf-tag--back', state === 'dead' && 'mf-tag--dead'), style: { left: L.x + '%', top: tagTop + '%' }, title: s.name },
+      top.push(h('div', { key: 't' + i, className: cx('mf-tag', !front && 'mf-tag--back', s.me && 'mf-tag--me', state === 'dead' && 'mf-tag--dead'), style: { left: L.x + '%', top: tagTop + '%' }, title: s.name },
         h('span', { className: 'mf-tag__name' },
           h('i', { className: 'mf-tag__dot', style: { background: SEAT_COLORS[(s.variant != null ? s.variant : i) % 8] }, 'aria-hidden': 'true' }),
           h('span', null, s.name + (s.me ? ' (나)' : '')),
@@ -271,7 +274,8 @@
           s.bubble ? h('div', { className: 'mf-bubble' }, s.bubble) : h('div', { className: 'mf-react' }, h(Icon, { name: s.reaction, label: s.reactionLabel }))));
       }
       if (s.votes) {
-        top.push(h('div', { key: 'v' + i, className: 'mf-votes', style: { left: (L.x + 7 * L.scale) + '%', top: (L.y - 2) + '%' }, 'aria-label': s.votes + '표' }, s.votes));
+        /* 표수 칩(결정 0037): 흰 = 이미 오른 표, votesTone 'new' = 방금 +1 앰버, 'final' = 과반 확정 큰 앰버 */
+        top.push(h('div', { key: 'v' + i, className: cx('mf-votes', s.votesTone && 'mf-votes--' + s.votesTone), style: { left: (L.x + 7 * L.scale) + '%', top: (L.y - 2) + '%' }, 'aria-label': s.votes + '표' }, s.votes));
       }
     }
     return h('div', { className: cx('mf-root mf-table', p.bare && 'mf-table--bare', p.className), style: p.style, role: 'group', 'aria-label': p.label || '테이블' },

@@ -18,16 +18,318 @@
   }
  ],
  "sections": {},
- "groups": [],
- "assetGroups": {},
+ "groups": [
+  "characters",
+  "backgrounds",
+  "screens"
+ ],
+ "assetGroups": {
+  "characters": {
+   "name": "캐릭터",
+   "tile": "m",
+   "order": [
+    "table/fig1_boy_brown_default@4x.png",
+    "table/fig2_boy_black_default@4x.png",
+    "table/fig3_boy_blonde_default@4x.png",
+    "table/fig4_girl_brown_default@4x.png",
+    "table/fig5_girl_black_default@4x.png",
+    "table/fig6_girl_auburn_default@4x.png",
+    "table/fig7_boy_blackhat_default@4x.png",
+    "table/fig8_girl_tanhat_default@4x.png",
+    "roles/mafia_default@4x.png",
+    "roles/police_default@4x.png",
+    "roles/doctor_default@4x.png",
+    "roles/citizen_default@4x.png",
+    "ghost/ghost_default@4x.png",
+    "host/host_badge.svg"
+   ],
+   "files": {
+    "table/fig1_boy_brown_default~404x.png": {
+     "name": "table/fig1_boy_brown_default@4x.png",
+     "blob": "d72b0596b706fdc33a59668be91012e1",
+     "size": 92306,
+     "type": "image/png"
+    },
+    "table/fig2_boy_black_default~404x.png": {
+     "name": "table/fig2_boy_black_default@4x.png",
+     "blob": "ff851a498b24683d8e099e29bdbf122a",
+     "size": 89719,
+     "type": "image/png"
+    },
+    "table/fig3_boy_blonde_default~404x.png": {
+     "name": "table/fig3_boy_blonde_default@4x.png",
+     "blob": "bed2517334884b6a311b4820baa0d040",
+     "size": 95707,
+     "type": "image/png"
+    },
+    "table/fig4_girl_brown_default~404x.png": {
+     "name": "table/fig4_girl_brown_default@4x.png",
+     "blob": "81ddff0a6ddba2017addfa764e1eef4e",
+     "size": 88513,
+     "type": "image/png"
+    },
+    "table/fig5_girl_black_default~404x.png": {
+     "name": "table/fig5_girl_black_default@4x.png",
+     "blob": "67f305c22eb662a91e94572204ee6b26",
+     "size": 85933,
+     "type": "image/png"
+    },
+    "table/fig6_girl_auburn_default~404x.png": {
+     "name": "table/fig6_girl_auburn_default@4x.png",
+     "blob": "5134bb51aab831c7e467c7a4d5a28487",
+     "size": 90449,
+     "type": "image/png"
+    },
+    "table/fig7_boy_blackhat_default~404x.png": {
+     "name": "table/fig7_boy_blackhat_default@4x.png",
+     "blob": "1b308ef208feee9fb86f8804f7ffd369",
+     "size": 99262,
+     "type": "image/png"
+    },
+    "table/fig8_girl_tanhat_default~404x.png": {
+     "name": "table/fig8_girl_tanhat_default@4x.png",
+     "blob": "cc50e2ff1038d3715ab21e934d72839a",
+     "size": 97425,
+     "type": "image/png"
+    },
+    "roles/mafia_default~404x.png": {
+     "name": "roles/mafia_default@4x.png",
+     "blob": "5eb4f2c73ef4163f930ac2c30bfaf920",
+     "size": 100947,
+     "type": "image/png"
+    },
+    "roles/police_default~404x.png": {
+     "name": "roles/police_default@4x.png",
+     "blob": "74667d107d385aeec956c14b653d16d6",
+     "size": 116890,
+     "type": "image/png"
+    },
+    "roles/doctor_default~404x.png": {
+     "name": "roles/doctor_default@4x.png",
+     "blob": "c705093934972fe43e48c8b3c2bc4894",
+     "size": 113735,
+     "type": "image/png"
+    },
+    "roles/citizen_default~404x.png": {
+     "name": "roles/citizen_default@4x.png",
+     "blob": "1cff16e1a064dde88ad859fe60f01bd2",
+     "size": 105803,
+     "type": "image/png"
+    },
+    "ghost/ghost_default~404x.png": {
+     "name": "ghost/ghost_default@4x.png",
+     "blob": "6a0e1a1ebfe3ae49ff88b71748206112",
+     "size": 20840,
+     "type": "image/png"
+    },
+    "host/host_badge.svg": {
+     "name": "host/host_badge.svg",
+     "blob": "ef72d71f49e3f1341d0ad2c6c0751591",
+     "size": 1224,
+     "type": "image/svg+xml"
+    }
+   }
+  },
+  "backgrounds": {
+   "name": "배경 장면",
+   "tile": "l",
+   "order": [
+    "bg_entry_lobby.webp",
+    "bg_game_lobby.webp",
+    "bg_game_day.webp",
+    "bg_game_dusk.webp",
+    "bg_game_night.webp",
+    "bg_game_morning.webp",
+    "bg_game_verdict_dusk.webp"
+   ],
+   "files": {
+    "bg_entry_lobby.webp": {
+     "name": "bg_entry_lobby.webp",
+     "blob": "f5739726e0fa5bcdd9bfa4ef9da3d6f3",
+     "size": 44954,
+     "type": "image/webp"
+    },
+    "bg_game_lobby.webp": {
+     "name": "bg_game_lobby.webp",
+     "blob": "2c092c4a418e4c65c1fc2f6833be012f",
+     "size": 23166,
+     "type": "image/webp"
+    },
+    "bg_game_day.webp": {
+     "name": "bg_game_day.webp",
+     "blob": "e80f3fd80b385da4827ba6eaed29ab33",
+     "size": 24132,
+     "type": "image/webp"
+    },
+    "bg_game_dusk.webp": {
+     "name": "bg_game_dusk.webp",
+     "blob": "04df1908519b07d1e34ae2c3c4b46c61",
+     "size": 25590,
+     "type": "image/webp"
+    },
+    "bg_game_night.webp": {
+     "name": "bg_game_night.webp",
+     "blob": "d83dcfbc69aa07b2869ac76837c2f7ce",
+     "size": 23166,
+     "type": "image/webp"
+    },
+    "bg_game_morning.webp": {
+     "name": "bg_game_morning.webp",
+     "blob": "7ace773a3801dbf11d99a7ab312912e7",
+     "size": 23600,
+     "type": "image/webp"
+    },
+    "bg_game_verdict_dusk.webp": {
+     "name": "bg_game_verdict_dusk.webp",
+     "blob": "3742d6dba52a34cba578a4a039d804c7",
+     "size": 27378,
+     "type": "image/webp"
+    }
+   }
+  },
+  "screens": {
+   "name": "v1.0 화면 (참고)",
+   "tile": "m",
+   "order": [
+    "S-08.webp",
+    "S-09.webp",
+    "S-10.webp",
+    "S-14.webp",
+    "S-15.webp",
+    "S-16.webp",
+    "S-17.webp",
+    "S-17b.webp",
+    "S-18.webp",
+    "S-19.webp",
+    "S-23.webp",
+    "S-24.webp",
+    "S-25.webp",
+    "S-26.webp",
+    "S-27.webp",
+    "S-28.webp",
+    "S-29.webp",
+    "S-30.webp"
+   ],
+   "files": {
+    "S-08.webp": {
+     "name": "S-08.webp",
+     "blob": "a565933479a066b4da6a75da18930527",
+     "size": 44770,
+     "type": "image/webp"
+    },
+    "S-09.webp": {
+     "name": "S-09.webp",
+     "blob": "624456be0e410bccba09c13eb7406b30",
+     "size": 55886,
+     "type": "image/webp"
+    },
+    "S-10.webp": {
+     "name": "S-10.webp",
+     "blob": "83b5e6e5c4c0e70afdf0fd87236ed758",
+     "size": 52876,
+     "type": "image/webp"
+    },
+    "S-14.webp": {
+     "name": "S-14.webp",
+     "blob": "0b74576286301c8a9042c61b3e67d524",
+     "size": 30020,
+     "type": "image/webp"
+    },
+    "S-15.webp": {
+     "name": "S-15.webp",
+     "blob": "ef89485d26f950891f9930382e11c606",
+     "size": 42456,
+     "type": "image/webp"
+    },
+    "S-16.webp": {
+     "name": "S-16.webp",
+     "blob": "e57c467f21564d530156fbe7e5f4d3be",
+     "size": 37212,
+     "type": "image/webp"
+    },
+    "S-17.webp": {
+     "name": "S-17.webp",
+     "blob": "91491df89e01e1be6ec719880896b3e3",
+     "size": 32720,
+     "type": "image/webp"
+    },
+    "S-17b.webp": {
+     "name": "S-17b.webp",
+     "blob": "11fa2e389c2332b009923e70657c016b",
+     "size": 37052,
+     "type": "image/webp"
+    },
+    "S-18.webp": {
+     "name": "S-18.webp",
+     "blob": "a4c297e4f40a34aa31b1f85e9ce41134",
+     "size": 41094,
+     "type": "image/webp"
+    },
+    "S-19.webp": {
+     "name": "S-19.webp",
+     "blob": "3116391448573aee0c630b2732213d0d",
+     "size": 55550,
+     "type": "image/webp"
+    },
+    "S-23.webp": {
+     "name": "S-23.webp",
+     "blob": "2a940a5fd106e332623184d28422d27e",
+     "size": 56996,
+     "type": "image/webp"
+    },
+    "S-24.webp": {
+     "name": "S-24.webp",
+     "blob": "255c845e11e066630cf78f07c403fc2e",
+     "size": 52410,
+     "type": "image/webp"
+    },
+    "S-25.webp": {
+     "name": "S-25.webp",
+     "blob": "d650f38b34bcd5bf8b96401e030c2757",
+     "size": 33000,
+     "type": "image/webp"
+    },
+    "S-26.webp": {
+     "name": "S-26.webp",
+     "blob": "c8f1651ba7dba585c3abc486fc335c11",
+     "size": 34422,
+     "type": "image/webp"
+    },
+    "S-27.webp": {
+     "name": "S-27.webp",
+     "blob": "1b2c181ffaa83a2f02037a2b8a6802aa",
+     "size": 31554,
+     "type": "image/webp"
+    },
+    "S-28.webp": {
+     "name": "S-28.webp",
+     "blob": "d1550a5bf2ee2eaee9b8b244c7c81c6e",
+     "size": 48522,
+     "type": "image/webp"
+    },
+    "S-29.webp": {
+     "name": "S-29.webp",
+     "blob": "b500eae12617a87f6553491de1a97d9f",
+     "size": 49680,
+     "type": "image/webp"
+    },
+    "S-30.webp": {
+     "name": "S-30.webp",
+     "blob": "69ba5d42814bc5492095f20eed8ba96f",
+     "size": 42236,
+     "type": "image/webp"
+    }
+   }
+  }
+ },
  "blobs": {},
  "docs": {
   "sections": []
  },
  "lastChange": {
   "by": "dhkim1522",
-  "at": "2026-10-22T07:40:00Z",
+  "at": "2026-10-30T02:00:00Z",
   "via": "Claude Code",
-  "note": "배경 장면을 그림 에셋(A_cute 8장)으로 교체, 유령 새 그림"
+  "note": "v1.0 구현 기준 동기화: 토큰 15개(앰버·원뿔·일지), 실내 V2 배경 WebP, 유령 v3·방장 배지, 후광·표수 칩 번들 반영, 구현 참고 카드 8개, README v1.0"
  }
 }

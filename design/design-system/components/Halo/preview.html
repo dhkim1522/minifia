@@ -1,0 +1,31 @@
+<!-- @dsCard group="구현 참고 v1.0" height=640 width=840 subtitle="흰 · 앰버 · 진홍 후광 (번들 Figure + 배포본 화면)" -->
+<!doctype html>
+<html lang="ko">
+<head><meta charset="utf-8"><title>Halo</title>
+<style>
+html,body{margin:0;background:var(--night-950);}
+body{padding:16px;font-family:var(--font-ui);color:var(--gray-100);display:flex;flex-direction:column;gap:16px;}
+.figs{display:flex;gap:32px;align-items:flex-end;padding:8px 16px;}
+.fig{display:flex;flex-direction:column;align-items:center;gap:8px;width:96px;}
+.fig .mf-figure{width:72px;}
+.row{display:flex;gap:16px;}
+figure{margin:0;width:180px;display:flex;flex-direction:column;gap:8px;}
+img.shot{width:180px;height:390px;border-radius:16px;border:1px solid var(--gray-700);object-fit:cover;display:block;}
+figcaption,.cap{font-size:14px;line-height:1.4;color:var(--gray-300);margin:0;}
+</style></head>
+<body>
+<div id="root" class="mf-root mf-table" style="aspect-ratio:auto;background:none;overflow:visible"></div>
+<div class="row">
+<figure><img class="shot" src="/_blob/624456be0e410bccba09c13eb7406b30" alt="흰 후광 주장 차례"><figcaption>흰 · 말하는 차례</figcaption></figure>
+<figure><img class="shot" src="/_blob/b500eae12617a87f6553491de1a97d9f" alt="흰 후광 밤 선택"><figcaption>흰 · 내가 밤에 고른 대상</figcaption></figure>
+<figure><img class="shot" src="/_blob/255c845e11e066630cf78f07c403fc2e" alt="앰버 후광"><figcaption>앰버 · 공개 대상</figcaption></figure>
+<figure><img class="shot" src="/_blob/d1550a5bf2ee2eaee9b8b244c7c81c6e" alt="진홍 후광"><figcaption>진홍 · 마피아 동료</figcaption></figure>
+</div>
+<script>
+var M = window.Minifia, h = React.createElement;
+var one = function (v, halo, cap) { return h('div', { key: cap, className: 'fig' }, h(M.Figure, { variant: v, halo: halo }), h('p', { className: 'cap' }, cap)); };
+ReactDOM.createRoot(document.getElementById('root')).render(h('div', { className: 'figs' },
+  one(0, null, '없음'), one(2, 'white', 'white'), one(4, 'amber', 'amber'), one(6, 'crimson', 'crimson')));
+</script>
+</body>
+</html>

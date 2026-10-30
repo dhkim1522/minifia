@@ -11,10 +11,11 @@ export interface ReconnectBannerProps { text?: string }
 export interface ConfirmSheetProps { title: string; body?: string; confirmLabel: string; cancelLabel?: string; overlay?: boolean; onConfirm?: () => void; onCancel?: () => void }
 export interface RoleCardProps { role?: Role | null; face?: 'back' | 'front'; mates?: string[]; onFlip?: () => void }
 export interface MyRoleButtonProps { held?: boolean; hint?: string }
-export interface FigureProps { variant?: number; state?: SeatState; label?: string }
-export interface Seat { name: string; variant?: number; me?: boolean; host?: boolean; mate?: boolean; state?: SeatState; claim?: string; changed?: boolean; bubble?: string; reaction?: string; votes?: number; selectable?: boolean; selected?: boolean; candidate?: boolean; pressable?: boolean }
+type Halo = 'white' | 'amber' | 'crimson';
+export interface FigureProps { variant?: number; state?: SeatState; halo?: Halo; label?: string }
+export interface Seat { name: string; variant?: number; me?: boolean; host?: boolean; mate?: boolean; state?: SeatState; halo?: Halo; claim?: string; changed?: boolean; bubble?: string; reaction?: string; votes?: number; votesTone?: 'new' | 'final'; selectable?: boolean; selected?: boolean; candidate?: boolean; pressable?: boolean }
 export interface TableProps { seats: (Seat | null)[]; mySeat?: number; bare?: boolean; dimmed?: boolean; morning?: boolean; center?: any; label?: string; onSeatPress?: (seat: number) => void }
-export interface BackdropProps { variant?: 'lobby' | 'night' | 'day' | 'verdict'; layout?: 'game' | 'entry'; position?: string; children?: any }
+export interface BackdropProps { variant?: 'lobby' | 'day' | 'dusk' | 'night' | 'morning'; layout?: 'game' | 'entry'; position?: string; children?: any }
 export interface EmojiBarProps { disabled?: boolean }
 export interface QuickMessagePanelProps { templates: string[]; active?: number; options?: string[]; picked?: string; preview?: any; ready?: boolean }
 export interface MessageLogProps { items: { from: string; text: string; variant?: number }[] }

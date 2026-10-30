@@ -17,10 +17,10 @@ html,body{margin:0;background:var(--night-950);}
 <div id="root" class="mf-root"></div>
 <script>
 var M = window.Minifia, h = React.createElement;
-var panel = function (v, cast) { return h(M.Backdrop, { key: v, layout: 'entry', variant: v, className: 'panel' }, cast ? h('div', { className: 'cast' }, cast.map(function (c) { return h(M.Figure, { key: c, variant: c }); })) : null); };
+var panel = function (v, layout, cast) { return h(M.Backdrop, { key: v, layout: layout, variant: v, className: 'panel' }, cast ? h('div', { className: 'cast' }, cast.map(function (c) { return h(M.Figure, { key: c[0], variant: c[0], halo: c[1] }); })) : null); };
 ReactDOM.createRoot(document.getElementById('root')).render(h('div', { className: 'cover' },
-  h('div', { className: 'text' }, h('p', { className: 'name' }, 'minifia'), h('p', { className: 'tag' }, '링크로 모여 각자 폰으로 하는 마피아 한 판')),
-  h('div', { className: 'strip' }, panel('lobby', [0, 3]), panel('night', [6]), panel('day', [2, 5]), panel('verdict', [7]))));
+  h('div', { className: 'text' }, h('p', { className: 'name' }, 'minifia'), h('p', { className: 'tag' }, '링크로 모여 각자 폰으로 하는 마피아 한 판 · v1.0')),
+  h('div', { className: 'strip' }, panel('lobby', 'entry', [[0], [3]]), panel('day', 'game', [[2, 'white']]), panel('dusk', 'game', [[5, 'amber']]), panel('night', 'game', [[7, 'crimson']]))));
 </script>
 </body>
 </html>

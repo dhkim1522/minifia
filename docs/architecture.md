@@ -6,7 +6,7 @@
 
 | 영역 | 선택 | 이유 |
 |---|---|---|
-| 클라이언트 | React 19.3.1 + TypeScript 7.0.2 + Vite 8.3.5 (PWA 는 5~6페이즈에서 판단) | 링크로 바로 참가, 설치 불필요 (결정 0001) |
+| 클라이언트 | React 19.3.1 + TypeScript 7.0.2 + Vite 8.3.5 (v1 은 PWA 없이 웹 주소로 배포. 설치형은 앱 전환 때 판단, 결정 0041) | 링크로 바로 참가, 설치 불필요 (결정 0001) |
 | 실시간 서버 | Cloudflare Workers + Durable Objects (wrangler 4.151.3, `@cloudflare/vite-plugin` 1.64.0, `Room` 클래스는 `exports` 로 선언) | 방 하나 = Durable Object 하나, WebSocket (결정 0002, 0009) |
 | 정적 파일 배포 | Cloudflare Workers 정적 에셋 | 서버와 같은 곳에서 배포 |
 | 테스트 | vitest 4.1.12 (unit / client / worker 세 프로젝트), `@cloudflare/vitest-plugin` 1.4.6, happy-dom 21.0.4, playwright-core 1.64.1(화면 E2E — 시스템 Chrome, dev 전용, 결정 0025) | 순수 규칙은 Node 에서, Durable Object 는 workerd 안에서 (결정 0009) |
@@ -58,7 +58,7 @@ Worker  ── 방 코드로 라우팅 ──▶  Room Durable Object (방마다
 
 ## 출시 경로
 
-1. 웹(PWA)으로 친구들과 플레이테스트
+1. 웹 주소로 친구들과 실테스트(사용자 진행, 결정 0041)
 2. 정식 출시: 같은 코드를 Capacitor 로 감싸 Android·iOS 스토어에 올린다. 웹 링크 참가는 계속 유지해 앱이 없는 친구도 들어올 수 있게 한다.
 3. 스토어 심사(특히 iOS 의 "웹사이트를 감싼 것뿐인 앱" 거절)에 대비해 앱에는 진동, 공유 시트, 알림 같은 기기 기능을 붙인다.
 4. 유료 아이템을 앱에서 팔면 스토어 인앱 결제를 써야 한다. 수익화는 출시 전에 따로 정한다.

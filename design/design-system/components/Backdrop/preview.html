@@ -1,23 +1,22 @@
-<!-- @dsCard group="Backdrop" height=940 width=900 subtitle="배경 장면 4종 × 구도 2종 (A_cute)" -->
+<!-- @dsCard group="Backdrop" height=520 width=1120 subtitle="실내 V2 장면 5종 + 입구 구도" -->
 <!doctype html>
 <html lang="ko">
 <head><meta charset="utf-8"><title>Backdrop</title>
 <style>
 html,body{margin:0;background:var(--night-950);}
 body{padding:16px;font-family:var(--font-ui);}
-.grid{display:grid;grid-template-columns:repeat(4,195px);gap:16px;}
+.grid{display:grid;grid-template-columns:repeat(6,168px);gap:16px;}
 .cell{display:flex;flex-direction:column;gap:8px;}
 .cap{margin:0;font-size:14px;line-height:1.4;color:var(--gray-300);}
-.ph{width:195px;height:422px;border-radius:20px;}
+.ph{width:168px;height:364px;border-radius:20px;}
 </style></head>
 <body>
 <div id="root" class="mf-root"></div>
 <script>
 var M = window.Minifia, h = React.createElement;
-var names = { lobby: '대기·배정', night: '밤', day: '아침·낮', verdict: '투표·처형' };
-var cell = function (layout, v) { return h('div', { key: layout + v, className: 'cell' }, h('p', { className: 'cap' }, (layout === 'game' ? '게임' : '입장') + ' — ' + names[v]), h(M.Backdrop, { layout: layout, variant: v, className: 'ph' })); };
+var list = [['entry', 'lobby', '입장'], ['game', 'lobby', '대기 · 배정'], ['game', 'day', '낮'], ['game', 'dusk', '투표 · 처형'], ['game', 'night', '밤 · 종료'], ['game', 'morning', '아침']];
 ReactDOM.createRoot(document.getElementById('root')).render(h('div', { className: 'grid' },
-  ['game', 'entry'].map(function (l) { return ['lobby', 'night', 'day', 'verdict'].map(function (v) { return cell(l, v); }); })));
+  list.map(function (c) { return h('div', { key: c[0] + c[1], className: 'cell' }, h('p', { className: 'cap' }, c[2] + ' — ' + c[1]), h(M.Backdrop, { layout: c[0], variant: c[1], className: 'ph' })); })));
 </script>
 </body>
 </html>
