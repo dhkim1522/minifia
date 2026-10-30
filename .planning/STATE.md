@@ -1,20 +1,16 @@
 ---
 gsd_state_version: "1.0"
-milestone: v1.0
-milestone_name: MVP
-status: Awaiting next milestone
-stopped_at: Completed 05-09-PLAN.md
-last_updated: "2026-10-30T05:42:50.329Z"
+milestone: v2.0
+milestone_name: 같은 공간
+status: planning
+last_updated: "2026-10-30T07:13:15.801Z"
 last_activity: 2026-10-30
-last_activity_desc: Milestone v1.0 completed and archived
-state_head: b368c7fedc6afa7c7d548b84029b4b1869fc2158
 progress:
-  total_phases: 6
-  completed_phases: 6
-  total_plans: 107
-  completed_plans: 107
-current_phase: 5
-current_phase_name: 분위기와 캐릭터
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -28,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-10-30)
 
 ## Current Position
 
-Phase: Milestone v1.0 complete
+Phase: Not started (defining requirements)
 Plan: —
-Status: Awaiting next milestone
-Last activity: 2026-10-30 — Milestone v1.0 completed and archived
+Status: Defining requirements
+Last activity: 2026-10-30 — Milestone v2.0 started
 
 ## Performance Metrics
 
