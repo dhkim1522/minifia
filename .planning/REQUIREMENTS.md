@@ -186,9 +186,9 @@ MVP 이후 후보. 추적만 하고 현재 로드맵에는 넣지 않는다. 올
 | UX-01 | Phase 5 | Complete |
 | UX-02 | Phase 5 | Complete |
 | CONN-03 | Phase 5 | Complete |
-| PLAY-01 | Phase 6 | Pending |
-| PLAY-02 | Phase 6 | Pending |
-| PLAY-03 | Phase 6 | Pending |
+| PLAY-01 | (건너뜀, 결정 0041) | 사용자 직접 실테스트 |
+| PLAY-02 | (건너뜀, 결정 0041) | 사용자 직접 실테스트 |
+| PLAY-03 | (건너뜀, 결정 0041) | 사용자 직접 실테스트 |
 
 **Coverage:**
 - v1 requirements: 36 total

@@ -12,7 +12,7 @@
 - 이 PC 의 배포본 smoke 는 네트워크에 따라 간헐 실패한 적이 있다(0039 때 8명 2회, 0040 은 통과). 실패하면 단독 한 번 재확인, 한도(500ms)는 바꾸지 않는다.
 - 버전은 `/api/health`. `npm run e2e` 는 인자가 없으면 **배포본**을 검사한다. 로컬은 `npm run dev` 후 `npm run e2e -- --url http://localhost:5173`. 소켓 확인 `node scripts/uat-vote.mjs <주소>`.
 - 배경·유령 그림을 바꾸면 `ASSET_VERSION`(`src/net/assets.ts`)을 올린다. E2E 「살아 있는 방장」 흐름의 첫 밤 방장 탈락은 설계대로의 무작위다(최대 4번 재시도).
-- 내가 만들지 않은 `design/backgrounds/indoor-draft/`, `Claude outputs/` 는 커밋하지 않았다.
+- 커밋 제외: `design/backgrounds/indoor-draft/`, `Claude outputs/`.
 
 ## 확인 대기 (사용자 답·확인이 필요한 것)
 
@@ -26,6 +26,6 @@
 
 1. **모든 개발이 끝났다.** 실기기 확인 요청서를 한 번에 쓰고 진행(4·5페이즈 함께). 위 실기기 확인 목록(①~⑮)은 아직 아무것도 통과 표시하지 않았다. `/gsd-verify-work 4` 는 UAT 10항목을 `blocked(physical-device)` 로 보류함(`04-UAT.md`); 그때 `/gsd-verify-work 5` 와 함께 이어 간다.
 2. **아티팩트 동기화**(디자인 세션): 디자인 시스템 — 새 토큰 `amber-700`·`amber-900`·`cone-light`, `amber-400`·`crimson-500` usage 개정, 후광 앰버·표수 칩·카드 부품 / 화면설계서 — 투표·공개·변론·처형·무효·결과 화면 / 화면 흐름 — 낮 → 투표 구간 순서 / 5페이즈 분위기 시안 승인 값.
-3. **6페이즈 친구 플레이테스트.**
+3. 6페이즈 건너뜀(결정 0041). 실테스트 뒤 사용자가 요구.
 4. 영역 지도·가이드 이미지·에셋 자동 검사를 `docs/` 에 정리(폰 폭 360·390·430별 영역). 큰 폰 세로 가운데 + 층 분리 에셋(투명 PNG·원래 크기 필요).
 5. 점검: `/gsd-verify-work 3.1`, 각 페이즈(1·2·3·3.1)의 `/gsd-secure-phase`·`/gsd-validate-phase`·`/gsd-extract-learnings`.
