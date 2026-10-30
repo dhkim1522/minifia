@@ -584,7 +584,7 @@ describe("VERDICT_TEXT — UI-SPEC 7.2 와 글자까지 같다", () => {
   });
 
   it("값이 UI-SPEC 문서에도 그대로 있다 (문서가 있을 때)", () => {
-    const path = new URL("../../.planning/phases/04-execution-verdict/04-UI-SPEC.md", import.meta.url);
+    const path = new URL("../../.planning/milestones/v1.0-phases/04-execution-verdict/04-UI-SPEC.md", import.meta.url);
     if (!existsSync(path)) return;
     const doc = readFileSync(path, "utf8");
     const flat = (v: unknown): string[] => (typeof v === "string" ? [v] : typeof v === "object" && v !== null ? Object.values(v).flatMap(flat) : []);
