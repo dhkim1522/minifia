@@ -7,7 +7,7 @@
 import type { WorldFrame } from "../protocol";
 import { MOVE_COORD_LIMIT } from "../protocol";
 import type { MapDef } from "./map";
-import { UNIT, routeFx, snapToWalkable } from "./map";
+import { UNIT, lineWalkable, routeFx, snapToWalkable } from "./map";
 
 export { UNIT } from "./map";
 /** 걷는 속도(단위/초). 서버 상수이고 모든 구간 프레임에 v 로 실린다(UI-SPEC 사용자 확정 시작값). */
@@ -161,23 +161,99 @@ export function moveFrame(seat: number, seg: Segment): Extract<WorldFrame, { k: 
   return { t: "world", k: "move", s: seat, p: [...seg.p], t0: seg.t0, v: seg.v };
 }
 
-// ---- RED 뼈대(Task 2): 구현은 GREEN 커밋에서 채운다 ----
+// ---- 입장·퇴장·복귀와 저장/복원·스냅샷 ----
+
+/** 저장 모양. 끝난 구간은 한 점으로 접힌다. lastMoveAt·wanderAt 은 싣지 않는다(가정 A1). */
 export interface StoredWorld {
   v: 1;
   segs: Record<string, Segment>;
 }
-export function despawnPlayer(w: WorldState, _playerId: string): WorldState {
-  return w;
+
+/** 퇴장: 구간·간격·배회 기록을 모두 지운다. */
+export function despawnPlayer(w: WorldState, playerId: string): WorldState {
+  return { segs: withoutKey(w.segs, playerId), lastMoveAt: withoutKey(w.lastMoveAt, playerId), wanderAt: withoutKey(w.wanderAt, playerId) };
 }
-export function respawnAll(w: WorldState, _players: readonly { id: string; seat: number }[], _now: number, _map: MapDef): WorldState {
-  return w;
+
+/** 대기실 복귀: 방에 있는 모두를 자기 seat 입장 지점 한 점으로 세운다. 방에 없는 사람과 간격·배회 기록은 버린다. */
+export function respawnAll(_w: WorldState, players: readonly { id: string; seat: number }[], now: number, map: MapDef): WorldState {
+  let out = emptyWorld();
+  for (const pl of players) out = spawnPlayer(out, pl.id, pl.seat, now, map);
+  return out;
 }
-export function compactWorld(_w: WorldState, _now: number): StoredWorld {
-  return { v: 1, segs: {} };
+
+/** 저장·스냅샷 공통 접기 규칙: 끝난 구간은 [끝x, 끝z] 한 점, 진행 중이면 그대로. 배열은 복사한다. */
+function foldSegment(seg: Segment, now: number): Segment {
+  if (now >= segmentEndsAt(seg) && seg.p.length >= 2) {
+    return { p: [seg.p[seg.p.length - 2]!, seg.p[seg.p.length - 1]!], t0: seg.t0, v: seg.v };
+  }
+  return { p: [...seg.p], t0: seg.t0, v: seg.v };
 }
-export function restoreWorld(_stored: unknown, _players: readonly { id: string; seat: number }[], _now: number, _map: MapDef): WorldState {
-  return emptyWorld();
+
+/** 지연 저장용 모양. 끝난 구간은 한 점으로 접는다. */
+export function compactWorld(w: WorldState, now: number): StoredWorld {
+  const segs: Record<string, Segment> = {};
+  for (const id of Object.keys(w.segs)) segs[id] = foldSegment(w.segs[id]!, now);
+  return { v: 1, segs };
 }
-export function snapFrame(_w: WorldState, _players: readonly { id: string; seat: number }[], _now: number): Extract<WorldFrame, { k: "snap" }> {
-  return { t: "world", k: "snap", at: 0, ents: [] };
+
+/** 저장된 v 의 상한(MOVE_V 보다 넉넉하게). 이보다 큰 값은 손상으로 본다. */
+const MAX_STORED_V = 1000;
+
+function isRecord(x: unknown): x is Record<string, unknown> {
+  return typeof x === "object" && x !== null && !Array.isArray(x);
+}
+
+/** unknown 한 구간을 형태 검사한다(zod 를 쓰지 않는다 — shared/game 은 클라이언트 번들에도 들어간다). 통과하면 p·t0·v 만 새로 만들어 돌려준다. */
+function parseStoredSegment(raw: unknown, map: MapDef): Segment | null {
+  if (!isRecord(raw)) return null;
+  const { p, t0, v } = raw;
+  if (!Array.isArray(p) || p.length < 2 || p.length % 2 !== 0) return null;
+  for (const c of p) {
+    if (typeof c !== "number" || !Number.isInteger(c) || c < -MOVE_COORD_LIMIT || c > MOVE_COORD_LIMIT) return null;
+  }
+  if (typeof t0 !== "number" || !Number.isFinite(t0)) return null;
+  if (typeof v !== "number" || !Number.isFinite(v) || v <= 0 || v > MAX_STORED_V) return null;
+  const pts = p as number[];
+  // 모든 선분(한 점이면 그 점)이 걸을 수 있어야 한다 — 맵 데이터가 바뀐 옛 저장값·손상값은 입장 지점으로.
+  if (pts.length === 2) {
+    if (!lineWalkable(map, { x: pts[0]!, z: pts[1]! }, { x: pts[0]!, z: pts[1]! })) return null;
+  } else {
+    for (let i = 0; i + 3 < pts.length; i += 2) {
+      if (!lineWalkable(map, { x: pts[i]!, z: pts[i + 1]! }, { x: pts[i + 2]!, z: pts[i + 3]! })) return null;
+    }
+  }
+  return { p: [...pts], t0, v };
+}
+
+/**
+ * 하이버네이션·배포 뒤 복원. 모르는 모양·방에 없는 사람·막힌 점·범위 밖 점·v ≤ 0 은 버리고 그 사람을 입장 지점에 세운다.
+ * 결과에는 방에 있는 사람만 들어 있고 간격·배회 기록은 비어 있다.
+ */
+export function restoreWorld(stored: unknown, players: readonly { id: string; seat: number }[], now: number, map: MapDef): WorldState {
+  const segsRaw: Record<string, unknown> | null =
+    isRecord(stored) && stored.v === 1 && isRecord(stored.segs) ? (stored.segs as Record<string, unknown>) : null;
+  let out = emptyWorld();
+  for (const pl of players) {
+    const raw = segsRaw !== null && Object.prototype.hasOwnProperty.call(segsRaw, pl.id) ? segsRaw[pl.id] : undefined;
+    const seg = raw === undefined ? null : parseStoredSegment(raw, map);
+    out = seg === null ? spawnPlayer(out, pl.id, pl.seat, now, map) : { ...out, segs: { ...out.segs, [pl.id]: seg } };
+  }
+  return out;
+}
+
+/** 접속 때 모두의 지금 구간. seat 오름차순, 방에 있고 world 에 있는 사람만, 접기 규칙은 compactWorld 와 같다. */
+export function snapFrame(
+  w: WorldState,
+  players: readonly { id: string; seat: number }[],
+  now: number,
+): Extract<WorldFrame, { k: "snap" }> {
+  const ents = [...players]
+    .sort((a, b) => a.seat - b.seat)
+    .flatMap((pl) => {
+      const seg = Object.prototype.hasOwnProperty.call(w.segs, pl.id) ? w.segs[pl.id] : undefined;
+      if (seg === undefined) return [];
+      const f = foldSegment(seg, now);
+      return [{ s: pl.seat, p: f.p, t0: f.t0, v: f.v }];
+    });
+  return { t: "world", k: "snap", at: now, ents };
 }
