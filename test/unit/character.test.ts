@@ -4,7 +4,7 @@ import { BufferGeometry, CircleGeometry, Color, type Group, type Material, type 
 import { describe, expect, it, vi } from "vitest";
 import { MOVE_SPEED } from "../../shared/game/world";
 import { CHAR_SCALE, characterKit, createCharacter, figForSeat, WALK_PHASE_RATE, type WorldCharacter } from "../../src/world/character";
-import { FACE_IDS, FIGS, OUTFITS, type OutfitId } from "../../src/world/characterData";
+import { EMOTE_KEYS, EMOTES, type EmoteId, FACE_IDS, FIGS, OUTFITS, type OutfitId } from "../../src/world/characterData";
 
 function meshes(root: Object3D, visibleOnly = true): Mesh[] {
   const out: Mesh[] = [];
@@ -377,5 +377,149 @@ describe("해제 dispose", () => {
       geoSpy.mockRestore();
       matSpy.mockRestore();
     }
+  });
+});
+
+// ---------- Task 3: 동작 9종 키프레임·걷기 시작이 동작을 끊음·표정 연동 ----------
+
+/** 원문 emotePose 를 그대로 옮긴 기준 구현(smoothstep k = l²(3 − 2l)). t 는 동작 시작 뒤 경과 시간 */
+function refEmote(id: EmoteId, t0: number, base: Record<string, number>): Record<string, number> | null {
+  const d = EMOTES[id];
+  const n = d.frames.length;
+  const last = n * d.cycles - 1;
+  const total = n * d.seg * d.cycles;
+  if (t0 > total + d.hold) return null;
+  const t = Math.min(t0, total);
+  const idx = Math.min(Math.floor(t / d.seg), last);
+  const local = Math.min(1, (t - idx * d.seg) / d.seg);
+  const fa = d.frames[idx % n];
+  const fb = idx >= last ? fa : d.frames[(idx + 1) % n];
+  const k = local * local * (3 - 2 * local);
+  const out: Record<string, number> = {};
+  for (const key of EMOTE_KEYS) {
+    const a = typeof fa[key] === "number" ? (fa[key] as number) : base[key];
+    const b = typeof fb[key] === "number" ? (fb[key] as number) : base[key];
+    out[key] = a + (b - a) * k;
+  }
+  return out;
+}
+function idleBase(figIndex: number): Record<string, number> {
+  return { aAx: 0, aAz: 0.12, aBx: 0, aBz: -0.12, fA: 0, fB: 0, lA: 0, lB: 0, hx: 0, hy: 0, hz: 0, y: Math.sin(FIGS[figIndex].name.length) * 0.012, s: 1, ry: 0 };
+}
+/** 관절에 적용된 자세를 원문 applyPose 의 대응으로 읽는다 */
+function readPose(c: WorldCharacter): Record<string, number> {
+  const armA = joint(c.root, "armA");
+  const armB = joint(c.root, "armB");
+  const neck = joint(c.root, "neck");
+  const body = joint(c.root, "body");
+  return {
+    aAx: armA.rotation.x,
+    aAz: armA.rotation.z,
+    aBx: armB.rotation.x,
+    aBz: armB.rotation.z,
+    fA: armA.position.z,
+    fB: armB.position.z,
+    lA: joint(c.root, "legA").rotation.x,
+    lB: joint(c.root, "legB").rotation.x,
+    hx: neck.rotation.x,
+    hy: neck.rotation.y,
+    hz: neck.rotation.z,
+    y: body.position.y,
+    s: body.scale.y,
+    ry: body.rotation.y,
+  };
+}
+
+describe("동작 9종", () => {
+  it("동작 이름 9개와 키프레임 키는 EMOTE_KEYS 안이다", () => {
+    expect(Object.keys(EMOTES).join(",")).toBe("throat,deny,clap,cry,handshake,point,praise,surprise,dance");
+    let bad = 0;
+    for (const d of Object.values(EMOTES)) for (const f of d.frames) for (const [k, v] of Object.entries(f)) if (typeof v === "number" && !(EMOTE_KEYS as readonly string[]).includes(k)) bad++;
+    expect(bad).toBe(0);
+  });
+
+  it("박수는 팔을 앞으로 들고(−1.2 ~ −1.25) 웃는 얼굴이 되며 총 길이 뒤 기본 자세로 돌아간다", () => {
+    const c = createCharacter(0, "coat");
+    const ref = createCharacter(0, "coat");
+    ref.setFace("happy");
+    const baseFace = vcount(headMesh(c).geometry);
+    c.playEmote("clap");
+    c.update(0.016, 0, false);
+    expect(readPose(c).aAx).toBeLessThan(-1.19);
+    expect(readPose(c).aAx).toBeGreaterThan(-1.26);
+    expect(vcount(headMesh(c).geometry)).toBe(vcount(headMesh(ref).geometry));
+    expect(vcount(headMesh(c).geometry)).not.toBe(baseFace);
+    const total = 2 * 0.16 * 4 + 0;
+    let t = 0.016;
+    while (t <= total + 0.05) {
+      t += 0.016;
+      c.update(0.016, t, false);
+    }
+    expect(readPose(c).aAx).toBe(0);
+    expect(vcount(headMesh(c).geometry)).toBe(baseFace);
+  });
+
+  it("나 아니야 중 걷기 시작하면 동작이 끊기고 다음 프레임부터 걷기·서기 자세이다", () => {
+    const c = createCharacter(0, "coat");
+    c.playEmote("deny");
+    c.update(0.016, 0, false);
+    expect(readPose(c).aAx).toBeCloseTo(-1.5, 1);
+    c.update(0.016, 0.016, true);
+    expect(Math.abs(readPose(c).aAx)).toBeLessThan(0.5);
+    c.update(0.016, 0.032, false);
+    expect(readPose(c).aAx).toBe(0);
+    expect(readPose(c).hy).toBe(0);
+  });
+
+  it("보간은 원문 smoothstep 과 1e-9 안에서 같다(9종 × 여러 시각, 홀드·끝 포함)", () => {
+    const ids = Object.keys(EMOTES) as EmoteId[];
+    let worst = 0;
+    let nulls = 0;
+    for (const id of ids) {
+      const d = EMOTES[id];
+      const total = d.frames.length * d.seg * d.cycles;
+      for (const t of [0.04, 0.09, 0.13, d.seg * 0.5, d.seg * 1.25, d.seg * 1.9, total * 0.5, total - 0.01, total + d.hold * 0.5, total + d.hold + 0.2]) {
+        const c = createCharacter(0, "coat");
+        c.playEmote(id);
+        c.update(t, 0, false);
+        const want = refEmote(id, t, idleBase(0));
+        const got = readPose(c);
+        if (!want) {
+          nulls++;
+          for (const k of Object.keys(got)) worst = Math.max(worst, Math.abs(got[k] - idleBase(0)[k]));
+          continue;
+        }
+        for (const k of EMOTE_KEYS) worst = Math.max(worst, Math.abs(got[k] - want[k]));
+      }
+    }
+    expect(nulls).toBeGreaterThan(0);
+    expect(worst).toBeLessThan(1e-9);
+  });
+
+  it("동작이 끝난 뒤에는 표정도 기본으로 돌아가고, 몸 비틀기·찌그러짐도 풀린다", () => {
+    const c = createCharacter(0, "coat");
+    const base = vcount(headMesh(c).geometry);
+    c.playEmote("surprise");
+    c.update(0.1, 0, false);
+    expect(vcount(headMesh(c).geometry)).not.toBe(base);
+    c.update(3, 3, false);
+    expect(vcount(headMesh(c).geometry)).toBe(base);
+    expect(readPose(c).s).toBe(1);
+    expect(readPose(c).ry).toBe(0);
+  });
+
+  it("모르는 동작 이름은 무시하고 서 있는 자세를 유지한다", () => {
+    const c = createCharacter(0, "coat");
+    c.playEmote("nope" as EmoteId);
+    c.update(0.1, 0, false);
+    expect(readPose(c).aAx).toBe(0);
+  });
+
+  it("서 있는 동안 바깥에서 정한 표정은 자세가 바뀌지 않는 한 유지된다", () => {
+    const c = createCharacter(0, "coat");
+    c.setFace("angry");
+    const angry = headMesh(c).geometry;
+    for (let i = 0; i < 5; i++) c.update(0.016, i * 0.016, false);
+    expect(headMesh(c).geometry === angry).toBe(true);
   });
 });
