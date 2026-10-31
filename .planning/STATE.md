@@ -5,16 +5,16 @@ milestone_name: 같은 공간
 current_phase: 06
 current_phase_name: 월드 뼈대
 status: executing
-stopped_at: Completed 06-11-PLAN.md
-last_updated: "2026-10-31T17:04:11.281Z"
+stopped_at: Completed 06-12-PLAN.md
+last_updated: "2026-10-31T17:11:46.172Z"
 last_activity: 2026-11-01
 last_activity_desc: Phase 06 execution started
-state_head: cb6f1d94f1a32d45ad4757c9094695a4be0f08b1
+state_head: 2c28dfeb20de9cc5db0d3561472ea0a07e794425
 progress:
   total_phases: 7
   completed_phases: 0
   total_plans: 21
-  completed_plans: 10
+  completed_plans: 11
   percent: 0
 ---
 
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-10-30)
 ## Current Position
 
 Phase: 06 (월드 뼈대) — EXECUTING
-Plan: 11 of 21
+Plan: 12 of 21
 Status: Ready to execute
 Last activity: 2026-11-01 — Phase 06 execution started
 
@@ -68,6 +68,7 @@ Progress: [░░░░░░░░░░] 0% (0/7 phases)
 | Phase 06 P09 | 10min | 2 tasks | 15 files |
 | Phase 06 P10 | 12 min | 3 tasks | 9 files |
 | Phase 06 P11 | 9 min | 3 tasks | 3 files |
+| Phase 06 P12 | 10 min | 2 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -99,6 +100,10 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 06]: 06-10: 렌더러 인터페이스 뒤에 three 를 가두고 recreate 는 씬 그래프를 재사용, 캐릭터 자원은 만든 쪽이 dispose(렌더러는 장면에서 떼기만)
 - [Phase 06]: 06-11: 캐릭터 열린 면(챙·후드)은 DoubleSide 재질 대신 뒤집힌 복사본 지오메트리로 병합 재질 하나를 유지
 - [Phase 06]: 06-11: update() 는 자세가 정한 표정이 바뀔 때만 표정 적용 — 바깥 setFace 가 서 있는 동안 유지됨(10페이즈 UI)
+- [Phase 06]: 06-12: 이름표·알림은 닉네임을 React 텍스트 노드로만 그려 XSS 를 막고(T-06-26) 말줄임·최대 폭이 없다(nowrap)
+- [Phase 06]: 06-12: v2 시간 링의 급함 색 진홍은 옮기지 않았다(UI-SPEC: 진홍·놋쇠는 이 페이즈 UI 에 없음). 시간 링을 쓰는 페이즈가 색을 정한다
+- [Phase 06]: 06-12: TopToast 기본 위치는 mv-toast--top(top var(--toast-top)·z var(--z-toast)); 06-15 는 담는 틀을 position: relative 로 준다
+- [Phase 06]: 06-12: 내 이름표 + 이모지 8개는 실측 약 202px 로 06-03 NAMETAG_MAX_W 180 을 넘는다(남의 이름표는 약 174px). camera.ts 는 바꾸지 않았고 PAN_BOX 재유도는 06-13/06-17 이 정한다
 
 ### Pending Todos
 
@@ -135,8 +140,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-31T17:04:11.254Z
-Stopped at: Completed 06-11-PLAN.md
+Last session: 2026-10-31T17:11:46.146Z
+Stopped at: Completed 06-12-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
