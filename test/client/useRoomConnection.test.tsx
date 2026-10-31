@@ -552,3 +552,52 @@ describe("useRoomConnection: 이벤트 구독 (emoji·chat·error 프레임, Pit
     expect(hook.result.current.view).toBe(before);
   });
 });
+
+describe("useRoomConnection: world 프레임 비간섭 (CONN-04)", () => {
+  const snapFrame = { t: "world", k: "snap", at: 1000, ents: [{ s: 0, p: [360, 40], t0: 0, v: 180 }] };
+
+  it("world 프레임은 구독자에게 { epoch } 메타와 함께 가고, 재연결하면 epoch 가 바뀐다", () => {
+    const { sockets, hook } = setup();
+    openWithState(sockets[0]!);
+    const listener = vi.fn();
+    act(() => {
+      hook.result.current.onEvent(listener);
+    });
+    act(() => sockets[0]!.message(snapFrame));
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(listener).toHaveBeenLastCalledWith(snapFrame, { epoch: 1 });
+    act(() => sockets[0]!.serverClose(1006));
+    advance(500);
+    openWithState(sockets[1]!);
+    const mv = { t: "world", k: "move", s: 0, p: [360, 40, 360, 220], t0: 2000, v: 180 };
+    act(() => sockets[1]!.message(mv));
+    expect(listener).toHaveBeenLastCalledWith(mv, { epoch: 2 });
+  });
+
+  it("알 수 없는 t 는 world 가 화이트리스트에 들어와도 여전히 구독자에게 가지 않는다", () => {
+    const { sockets, hook } = setup();
+    openWithState(sockets[0]!);
+    const listener = vi.fn();
+    act(() => {
+      hook.result.current.onEvent(listener);
+    });
+    act(() => sockets[0]!.message({ t: "worldx", k: "snap", at: 1, ents: [] }));
+    act(() => sockets[0]!.message({ t: "bogus" }));
+    expect(listener).not.toHaveBeenCalled();
+  });
+
+  it("world 프레임은 링크 상태·배너·epoch·offset·view 를 바꾸지 않는다", () => {
+    const { sockets, hook } = setup();
+    openWithState(sockets[0]!);
+    const before = hook.result.current;
+    act(() => sockets[0]!.message(snapFrame));
+    act(() => sockets[0]!.message({ t: "world", k: "move", s: 0, p: [360, 40, 360, 220], t0: 2000, v: 180 }));
+    const after = hook.result.current;
+    expect(after.view).toBe(before.view);
+    expect(after.status).toBe(before.status);
+    expect(after.banner).toBe(before.banner);
+    expect(after.epoch).toBe(before.epoch);
+    expect(after.offset).toBe(before.offset);
+    expect(after.canSend).toBe(before.canSend);
+  });
+});
