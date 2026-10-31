@@ -1,7 +1,8 @@
 ---
 phase: "06"
 slug: "world-skeleton"
-status: draft
+status: approved
+reviewed_at: "2026-10-31"
 shadcn_initialized: false
 preset: none
 created: "2026-10-31"
@@ -583,7 +584,7 @@ Accent reserved for:
 
 ## UI Considerations
 
-상태 점검 프로브가 다룰 요소를 이 재작성에 맞춰 새로 적은 **초안**이다(오케스트레이터가 프로브를 다시 돌리면 행이 교체된다). 빈 상태·오류 문구는 `## Copywriting Contract` 가 정본이고 여기서는 그 행을 가리킨다.
+상태 점검 프로브(2026-10-31, 요소 10개 · 적용 범주 38개) 결과를 사용자가 확인했다. 표에 없던 9개 상태는 아래 "보완" 행으로 채웠다(사용자 확정). 빈 상태·오류 문구는 `## Copywriting Contract` 가 정본이고 여기서는 그 행을 가리킨다.
 
 | # | Element | Category | Status | Resolution / Reason |
 |---|---------|----------|--------|---------------------|
@@ -619,6 +620,15 @@ Accent reserved for:
 | E8 | 나가기·내보내기 확인 시트 | long-text | ✅ resolved | 닉네임 최대 8자라 "{닉네임}님을 내보낼까요?" 제목이 두 줄이 될 수 있다. `keep-all` 줄바꿈이고 시트는 높이가 늘어난다 |
 | E9 | v2.0 시험판 표식·탭 제목 | loading · error · overflow · long-text | ⛔ dismissed(4) | 고정 문구 6자와 고정 탭 제목이라 불러오기·실패·넘침이 없다 |
 | E10 | 하단 채팅 레이아웃 시안 | 8개 범주 | ⛔ dismissed(8) | 제품 화면이 아니라 `?chat-mock=1` 배치 확인용이다. 채팅의 상태 계약은 7페이즈 UI-SPEC 몫이고 이 시안은 위 "확인표"만 채운다 |
+| E3 | 터치해서 걷기·목적지 링 | empty | ✅ resolved | (보완) 첫 방문 전에는 링이 없고, 처음 한 번만 "바닥을 눌러 걸어요" + 손짓 링 안내가 나온 뒤 사라진다 |
+| E3 | 터치해서 걷기 | partial | ✅ resolved | (보완) 걷는 중 다른 곳을 누르면 서버가 지금 위치(`positionAt`)에서 새 경로를 만들어 구간을 바꾼다. 링은 새 목적지로 옮겨 간다 |
+| E5 | 재접속 띠 | long-text | ✅ resolved | (보완) 문구는 한 줄 고정이고 360폭 안에 들어간다(`nowrap`, 줄바꿈 없음) |
+| E6 | 아래 패널 행동 줄 | overflow | ✅ resolved | (보완) 2칸 격자이고 "시작" + 점 8개가 360폭 한 칸 안에 한 줄로 들어간다 |
+| E7 | 헤더·`TopToast` | empty | ✅ resolved | (보완) 알림이 없으면 알림 자리는 보이지 않는다(자리를 차지하지 않음) |
+| E7 | 헤더·`TopToast` | loading | ✅ resolved | (보완) 헤더(단계 이름·[나가기]·[공유])는 맵보다 먼저 나타나 불러오는 동안에도 나갈 수 있다 |
+| E7 | 헤더·`TopToast` | error | ✅ resolved | (보완) 공유(`navigator.share`)가 막히거나 실패하면 v1.0 처럼 링크 복사로 대신한다 |
+| E7 | 헤더·`TopToast` | populated | ✅ resolved | (보완) 알림은 한 번에 하나만 보이고 새 알림이 이전 알림을 바꾼다 |
+| E8 | 확인 시트·공유 시트 | unclassified(직접 검토) | ✅ resolved | (보완) v1.0 `ConfirmSheet`·`ShareSheet` 동작 그대로. 이 페이즈는 바꾸지 않는다 |
 | 추가 | 걷는 캐릭터 수 | zero-one-many | 🧪 backstop | { statement: "8명이 동시에 걷고 동작 2개를 해도 iPhone 16 Pro 와 Chrome CPU 4× 양쪽에서 5분 평균 55fps 이상", verification: backstop } — 성능 게이트 스파이크 |
 
 ---
@@ -665,12 +675,12 @@ Accent reserved for:
 
 ## Checker Sign-Off
 
-- [ ] Dimension 1 Copywriting: PASS
-- [ ] Dimension 2 Visuals: PASS
-- [ ] Dimension 3 Color: PASS
-- [ ] Dimension 4 Typography: PASS
-- [ ] Dimension 5 Spacing: PASS
-- [ ] Dimension 6 Registry Safety: PASS
-- [ ] Dimension 7 Inventory Provenance: PASS
+- [x] Dimension 1 Copywriting: FLAG (동사 한 단어 버튼 — 결정 0051 글 최소에 따른 의도, 비차단)
+- [x] Dimension 2 Visuals: PASS
+- [x] Dimension 3 Color: FLAG (파괴 색 없음 — 확인 시트로 구분, 승인 디자인 시스템과 일치. 구현에서 임의로 빨강을 넣지 않는다. 비차단)
+- [x] Dimension 4 Typography: PASS
+- [x] Dimension 5 Spacing: FLAG (4의 배수가 아닌 예외 값은 승인 보드·`bundle.css` 출처. 구현 때 시안과 대조. 비차단)
+- [x] Dimension 6 Registry Safety: PASS
+- [x] Dimension 7 Inventory Provenance: PASS
 
-**Approval:** pending (v2.0 기준 재작성본, 체커 검증 전. 이전 판의 승인은 이 재작성으로 무효)
+**Approval:** approved 2026-10-31 (v2.0 기준 재작성본, UI 체커 BLOCK 0·FLAG 3, 사용자 확정 항목 반영. 이전 판의 승인은 이 재작성으로 무효)
