@@ -5,16 +5,16 @@ milestone_name: 같은 공간
 current_phase: 06
 current_phase_name: 월드 뼈대
 status: executing
-stopped_at: Completed 06-13-PLAN.md
-last_updated: "2026-10-31T17:32:10.101Z"
+stopped_at: Completed 06-14-PLAN.md
+last_updated: "2026-10-31T17:55:27.618Z"
 last_activity: 2026-11-01
 last_activity_desc: Phase 06 execution started
-state_head: a7d064feb4c9b9e842351cda73dcb493eb0c3ac0
+state_head: 68f954bc4f2af98b7fdbec5deacb46735e1483c3
 progress:
   total_phases: 7
   completed_phases: 0
   total_plans: 21
-  completed_plans: 12
+  completed_plans: 13
   percent: 0
 ---
 
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-10-30)
 ## Current Position
 
 Phase: 06 (월드 뼈대) — EXECUTING
-Plan: 13 of 21
+Plan: 14 of 21
 Status: Ready to execute
 Last activity: 2026-11-01 — Phase 06 execution started
 
@@ -70,6 +70,7 @@ Progress: [░░░░░░░░░░] 0% (0/7 phases)
 | Phase 06 P11 | 9 min | 3 tasks | 3 files |
 | Phase 06 P12 | 10 min | 2 tasks | 8 files |
 | Phase 06 P13 | 13 min | 3 tasks | 10 files |
+| Phase 06 P14 | 18 min | 3 tasks | 15 files |
 
 ## Accumulated Context
 
@@ -109,6 +110,10 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 06]: 06-13: 런타임이 DOM 이름표의 transform·opacity·z-index(발 y 순위)를 직접 쓰고 React 는 내용·접근성·내보내기 버튼만 — 프레임마다 리렌더 없음, 나간 사람 이름표는 EXIT_MS 동안 유지
 - [Phase 06]: 06-13: E2E 훅(window.__mfWorld)과 소프트웨어 렌더러 허용은 ?e2e=1(세션 저장) 또는 개발 빌드에서만 켠다 — 같은 조건 하나
 - [Phase 06]: 06-13: 목적지 링은 렌더러 마커가 하나라 걷는 중 재탭은 새 목적지로 즉시 이동(이전 링 120ms 별도 페이드 없음). 열린 발견: 내 이름표+이모지 8개 약 202px > NAMETAG_MAX_W 180 은 PAN_BOX 건드리지 않고 사용자 결정 대기
+- [Phase 06]: 06-14: 5초 동작은 걷는 사람을 먼저 세운 뒤 한다 — 8명이 거의 늘 걷고 있어 '걷지 않는 사람에게만' 을 지키면 5초 간격이 깨진다
+- [Phase 06]: 06-14: 프레임 기록 칸은 5분 × 150Hz 로 잡고 가득 차면 truncated 표시 — 기본 19,800칸은 120Hz 폰에서 2분 45초에 찬다
+- [Phase 06]: 06-14: 제품 런타임 autoDegrade 기본 true(10초 평균 45fps 미만이면 1~3단계), 스파이크는 false 로 단계 고정
+- [Phase 06]: 06-14: LIGHT_TUNE 은 반구·달빛·노출·하늘색만 올림(talk 1.1π·0.85π·1.25, vote 0.7π·0.55π, vote 무대 점광원 8) — 점광원·emissive·빛 무리는 그대로, 최종 읽힘은 06-19 사람 확인
 
 ### Pending Todos
 
@@ -145,8 +150,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-31T17:32:10.074Z
-Stopped at: Completed 06-13-PLAN.md
+Last session: 2026-10-31T17:55:27.590Z
+Stopped at: Completed 06-14-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
