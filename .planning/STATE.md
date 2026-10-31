@@ -5,16 +5,16 @@ milestone_name: 같은 공간
 current_phase: 06
 current_phase_name: 월드 뼈대
 status: executing
-stopped_at: Completed 06-05-PLAN.md
-last_updated: "2026-10-31T15:59:11.214Z"
+stopped_at: Completed 06-04-PLAN.md
+last_updated: "2026-10-31T16:03:19.096Z"
 last_activity: 2026-11-01
 last_activity_desc: Phase 06 execution started
-state_head: 4f091d7267bea5f9c569b9e20ac093e613b80410
+state_head: 50051a2e3fb9d3ce388dc22d8c6762b089d2f578
 progress:
   total_phases: 7
   completed_phases: 0
   total_plans: 21
-  completed_plans: 4
+  completed_plans: 5
   percent: 0
 ---
 
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-10-30)
 ## Current Position
 
 Phase: 06 (월드 뼈대) — EXECUTING
-Plan: 5 of 21
+Plan: 6 of 21
 Status: Ready to execute
 Last activity: 2026-11-01 — Phase 06 execution started
 
@@ -62,6 +62,7 @@ Progress: [░░░░░░░░░░] 0% (0/7 phases)
 | Phase 06 P02 | 12 min | 3 tasks | 2 files |
 | Phase 06 P03 | 6min | 3 tasks | 4 files |
 | Phase 06 P05 | 8 min | 3 tasks | 5 files |
+| Phase 06 P04 | 3 min | 3 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -82,6 +83,8 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 06]: 06-03: 맵 상태기계는 소실 3초에 재생성 한 번(shouldRecreate), 5초에 failed. visible 로 소실을 발견하면 숨겨 둔 시간은 세지 않고 그 시각부터 센다. loading 중 소실은 무시(06-13 은 loadError 로 알림) — T-06-06 재생성 폭주 완화, linkReducer visibility 규약과 일치
 - [Phase 06]: 06-05: 복원 유효성은 모든 선분(한 점이면 그 점)의 lineWalkable 로 판정, 구간 v 상한 1000, 정수 ±700 밖은 손상
 - [Phase 06]: 06-05: planWander 난수 순서 계약 — seat 오름차순, 때가 된 봇 [셀, 간격], 처음 보는 봇 [간격], 안 된 봇은 난수 없음
+- [Phase 06]: three 0.186.1 정확 고정(최신 0.187.0 배제), lockfile 무결성은 deps.test.ts 가 지킨다
+- [Phase 06]: v2.0 토큰 22개를 design/tokens.json 에 합침(serif 글꼴·글자 스타일은 7~8페이즈), v1.0 토큰 유지
 
 ### Pending Todos
 
@@ -118,8 +121,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-31T15:59:11.187Z
-Stopped at: Completed 06-05-PLAN.md
+Last session: 2026-10-31T16:03:19.072Z
+Stopped at: Completed 06-04-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
