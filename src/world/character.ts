@@ -22,7 +22,7 @@ import {
 } from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import { MOVE_SPEED } from "../../shared/game/world";
-import { EYE, type EmoteId, FACE_IDS, type FaceId, type Fig, FIGS, MOUTH, type Outfit, OUTFITS, type OutfitId, type PoseKey, SKIN } from "./characterData";
+import { EMOTE_KEYS, EMOTES, EYE, type EmoteId, FACE_IDS, type FaceId, type Fig, FIGS, MOUTH, type Outfit, OUTFITS, type OutfitId, type PoseKey, SKIN } from "./characterData";
 
 /** 맵 위 크기 — 원래 키 약 2.1 단위를 약 1.7 로 줄여 쓴다 */
 export const CHAR_SCALE = 0.83;
@@ -642,6 +642,39 @@ function walkPose(walkPhase: number): Pose {
   return { aAx: sw * 0.5, aAz: 0.12, aBx: -sw * 0.5, aBz: -0.12, fA: 0, fB: 0, lA: -sw * 0.6, lB: sw * 0.6, hx: 0.04, hy: 0, hz: 0, y: Math.abs(Math.cos(walkPhase)) * 0.06, s: 1, ry: 0, face: "base" };
 }
 
+/** 재생 중인 동작: id 와 시작 뒤 경과 시간 */
+interface Emote {
+  id: EmoteId;
+  t: number;
+}
+/** 원문 emotePose — 프레임 사이를 smoothstep(k = l²(3 − 2l))으로 잇고, 프레임에 없는 키는 base 자세 값을 쓴다 */
+function emotePose(e: Emote, base: Pose): Pose {
+  const d = EMOTES[e.id];
+  const n = d.frames.length;
+  const last = n * d.cycles - 1;
+  const total = n * d.seg * d.cycles;
+  const t = Math.min(e.t, total);
+  const idx = Math.min(Math.floor(t / d.seg), last);
+  const local = Math.min(1, (t - idx * d.seg) / d.seg);
+  const fa = d.frames[idx % n];
+  const fb = idx >= last ? fa : d.frames[(idx + 1) % n];
+  const k = local * local * (3 - 2 * local);
+  const out = { ...base };
+  for (const key of EMOTE_KEYS) {
+    const a = typeof fa[key] === "number" ? (fa[key] as number) : base[key];
+    const b = typeof fb[key] === "number" ? (fb[key] as number) : base[key];
+    out[key] = a + (b - a) * k;
+  }
+  const face = k < 0.5 ? fa.face : fb.face;
+  out.face = typeof face === "string" && face ? face : "base";
+  return out;
+}
+/** 원문 emoteDone — 모든 프레임을 돌고 붙들기(hold)까지 끝났는지 */
+function emoteDone(e: Emote): boolean {
+  const d = EMOTES[e.id];
+  return e.t > d.frames.length * d.seg * d.cycles + d.hold;
+}
+
 // ---------- 공개 모양 ----------
 
 /** 6페이즈 로비 렌더러(06-10 CharacterKit)가 쓰는 구조 + 10페이즈의 의상·동작·표정 */
@@ -692,7 +725,7 @@ function paint(m: Merged, dim: boolean): void {
 export function createCharacter(figIndex: number, outfit: OutfitId = "coat"): WorldCharacter {
   const fig = FIGS[figIndex];
   const parts = figParts(figIndex);
-  let outfitId: OutfitId = outfit in OUTFITS ? outfit : "coat";
+  let outfitId: OutfitId = Object.hasOwn(OUTFITS, outfit) ? outfit : "coat";
   let face = "base";
   let lastPoseFace = "base";
   let dim = false;
@@ -790,6 +823,7 @@ export function createCharacter(figIndex: number, outfit: OutfitId = "coat"): Wo
   }
 
   let walkPhase = 0;
+  let emote: Emote | null = null;
   function applyPose(p: Pose): void {
     groups.armA.rotation.set(p.aAx, 0, p.aAz);
     groups.armB.rotation.set(p.aBx, 0, p.aBz);
@@ -812,7 +846,14 @@ export function createCharacter(figIndex: number, outfit: OutfitId = "coat"): Wo
     root,
     update(dt, t, moving) {
       if (moving) walkPhase += dt * WALK_PHASE_RATE;
-      const pose = moving ? walkPose(walkPhase) : idlePose(t, root.position.x, fig);
+      const base = moving ? walkPose(walkPhase) : idlePose(t, root.position.x, fig);
+      let pose = base;
+      if (emote && moving) emote = null; // 걷기 시작하면 동작이 끊긴다
+      if (emote) {
+        emote.t += dt;
+        if (emoteDone(emote)) emote = null;
+        else pose = emotePose(emote, base);
+      }
       applyPose(pose);
       return { headY: (2.45 + pose.y) * CHAR_SCALE };
     },
@@ -825,11 +866,13 @@ export function createCharacter(figIndex: number, outfit: OutfitId = "coat"): Wo
       for (const m of cache.values()) paint(m, on);
     },
     applyOutfit(id) {
-      if (disposed || !(id in OUTFITS) || id === outfitId) return;
+      if (disposed || !Object.hasOwn(OUTFITS, id) || id === outfitId) return;
       outfitId = id;
       refresh(JOINTS);
     },
-    playEmote: () => {},
+    playEmote(id) {
+      if (!disposed && Object.hasOwn(EMOTES, id)) emote = { id, t: 0 };
+    },
     setFace(id) {
       if (!disposed) showFace(id);
     },
@@ -854,6 +897,6 @@ export function createCharacter(figIndex: number, outfit: OutfitId = "coat"): Wo
 /** 06-10 렌더러의 CharacterKit 모양에 맞춘 생성기 — 의상 id 를 모르면 기본 코트로 만든다 */
 export const characterKit = {
   create(figIndex: number, outfitId: string): WorldCharacter {
-    return createCharacter(figIndex, outfitId in OUTFITS ? (outfitId as OutfitId) : "coat");
+    return createCharacter(figIndex, Object.hasOwn(OUTFITS, outfitId) ? (outfitId as OutfitId) : "coat");
   },
 };
