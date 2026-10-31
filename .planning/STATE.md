@@ -5,16 +5,16 @@ milestone_name: 같은 공간
 current_phase: 06
 current_phase_name: 월드 뼈대
 status: executing
-stopped_at: Completed 06-01-PLAN.md
-last_updated: "2026-10-31T15:20:24.219Z"
+stopped_at: Completed 06-02-PLAN.md
+last_updated: "2026-10-31T15:38:40.904Z"
 last_activity: 2026-11-01
 last_activity_desc: Phase 06 execution started
-state_head: 78063948858cf1d9a6b983552b5c44ef6becbf98
+state_head: bf53105e86f124e413d8284b0a639e65342c682a
 progress:
   total_phases: 7
   completed_phases: 0
   total_plans: 21
-  completed_plans: 1
+  completed_plans: 2
   percent: 0
 ---
 
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-10-30)
 ## Current Position
 
 Phase: 06 (월드 뼈대) — EXECUTING
-Plan: 2 of 21
+Plan: 3 of 21
 Status: Ready to execute
 Last activity: 2026-11-01 — Phase 06 execution started
 
@@ -59,6 +59,7 @@ Progress: [░░░░░░░░░░] 0% (0/7 phases)
 | Plan | Duration | Tasks | Files |
 |------|----------|-------|-------|
 | Phase 06 P01 | 12 min | 3 tasks | 17 files |
+| Phase 06 P02 | 12 min | 3 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -72,6 +73,9 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Roadmap v2.0]: 9페이즈에서 한 판이 맵 위(낮 + 밤)에서 처음 끝까지 돌고 팀 테스트로 재미 가설을 확인한 뒤 10페이즈 이후 투자를 이어 간다
 - [Phase 06]: [06-01] 배포 대상은 scripts/deploy-target.mjs 한 출처(minifia-v2), v1.0 호스트는 리터럴 한 곳 + 정적 검사 허용 목록으로 고정
 - [Phase 06]: [06-01] v1.0 가드는 파싱된 url.origin 에 건다(base null 오탐 방지); 우회 플래그·환경 변수 없음
+- [Phase 06]: 06-02: TO_CAMERA.y = 12.5 - 0.6 = 11.9 (카메라 위치 - 주시점), 마스크 가려짐 판정 기준
+- [Phase 06]: 06-02: 입장 지점에서 닿지 않는 닫힌 구멍 칸 (2,2)(3,2) 는 BAR_MASK 에서 막는다
+- [Phase 06]: 06-02: lineWalkable 은 닿기만 해도 검사하는 보수적 슈퍼커버, snapped 는 결과가 입력과 다르면 true
 
 ### Pending Todos
 
@@ -108,8 +112,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-31T15:20:24.192Z
-Stopped at: Completed 06-01-PLAN.md
+Last session: 2026-10-31T15:38:40.881Z
+Stopped at: Completed 06-02-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
