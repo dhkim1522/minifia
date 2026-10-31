@@ -5,16 +5,16 @@ milestone_name: 같은 공간
 current_phase: 06
 current_phase_name: 월드 뼈대
 status: executing
-stopped_at: Completed 06-10-PLAN.md
-last_updated: "2026-10-31T16:51:04.685Z"
+stopped_at: Completed 06-11-PLAN.md
+last_updated: "2026-10-31T17:04:11.281Z"
 last_activity: 2026-11-01
 last_activity_desc: Phase 06 execution started
-state_head: c73c2225fcc73ed34e282477599c9ca80cc034fb
+state_head: cb6f1d94f1a32d45ad4757c9094695a4be0f08b1
 progress:
   total_phases: 7
   completed_phases: 0
   total_plans: 21
-  completed_plans: 9
+  completed_plans: 10
   percent: 0
 ---
 
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-10-30)
 ## Current Position
 
 Phase: 06 (월드 뼈대) — EXECUTING
-Plan: 10 of 21
+Plan: 11 of 21
 Status: Ready to execute
 Last activity: 2026-11-01 — Phase 06 execution started
 
@@ -67,6 +67,7 @@ Progress: [░░░░░░░░░░] 0% (0/7 phases)
 | Phase 06 P08 | 17 min | 3 tasks | 8 files |
 | Phase 06 P09 | 10min | 2 tasks | 15 files |
 | Phase 06 P10 | 12 min | 3 tasks | 9 files |
+| Phase 06 P11 | 9 min | 3 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -96,6 +97,8 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 06]: 06-09: world 프레임은 onEvent 로만 흘리고 종료 상태(replaced 포함)에서는 구독자에게 보내지 않는다. WorldStore 는 snap 통째 교체·낡은/새 epoch move 폐기
 - [Phase 06]: 06-10: emissive 를 MeshBasicMaterial + 버텍스 컬러로 구현(병합하면 MeshStandardMaterial.emissive 는 색 하나뿐), BarScene.root 는 Scene 자체, 점광원 core 는 세기 0 + visible false, 사다리 LADDER 0~5 는 shadowMap 0 을 포함하지 않는다(사람 결정)
 - [Phase 06]: 06-10: 렌더러 인터페이스 뒤에 three 를 가두고 recreate 는 씬 그래프를 재사용, 캐릭터 자원은 만든 쪽이 dispose(렌더러는 장면에서 떼기만)
+- [Phase 06]: 06-11: 캐릭터 열린 면(챙·후드)은 DoubleSide 재질 대신 뒤집힌 복사본 지오메트리로 병합 재질 하나를 유지
+- [Phase 06]: 06-11: update() 는 자세가 정한 표정이 바뀔 때만 표정 적용 — 바깥 setFace 가 서 있는 동안 유지됨(10페이즈 UI)
 
 ### Pending Todos
 
@@ -132,8 +135,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-31T16:51:04.657Z
-Stopped at: Completed 06-10-PLAN.md
+Last session: 2026-10-31T17:04:11.254Z
+Stopped at: Completed 06-11-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
