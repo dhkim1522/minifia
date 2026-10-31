@@ -49,6 +49,12 @@ export function preloadWorld(): void {
   loadWorld().catch(() => {});
 }
 
+// RED 껍데기
+export const AUTO_WINDOW_MS = 0;
+export function createAutoDegrade(_o: { enabled: boolean; step: number; setBudget(step: number): void }): { frame(deltaMs: number): void; step(): number } {
+  return { frame() {}, step: () => -1 };
+}
+
 export const WALK_CUE_KEY = "mf-hint-walk";
 /** 새 사람 등장 연출 길이(ms) = dur-med */
 export const ENTER_MS = 420;
