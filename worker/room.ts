@@ -25,8 +25,8 @@ import type { RoleId } from "../shared/game/roles";
 import { nextWakeAt, tick } from "../shared/game/tick";
 import { castCandidateVote, castExecVote } from "../shared/game/vote";
 import { BAR_MAP } from "../shared/game/map";
-import { emptyWorld, moveFrame, requestMove, snapFrame, spawnPlayer } from "../shared/game/world";
-import type { WorldState } from "../shared/game/world";
+import { WORLD_FLUSH_MS, compactWorld, despawnPlayer, emptyWorld, moveFrame, requestMove, respawnAll, restoreWorld, snapFrame, spawnPlayer } from "../shared/game/world";
+import type { Segment, WorldState } from "../shared/game/world";
 import { buildPreview, buildView } from "../shared/game/view";
 import { ClientMessageSchema } from "../shared/schemas";
 import { cryptoRandInt, randomToken } from "./random";
@@ -68,11 +68,8 @@ export class Room extends DurableObject<Env> {
   private room: RoomState | null = null;
   // 로비 이동 상태(06-08). room 키와 분리된 storage "world" 키에 저장한다 — 위치가 room 키를 매번 다시 쓰지 않게(RESEARCH R6).
   private world: WorldState = emptyWorld();
-  // RED 뼈대(06-08 Task 2): 디바운스 저장 타이머와 flush — GREEN 에서 구현한다.
+  // 위치 저장 디바운스 타이머(인메모리). 하이버네이션·퇴거로 사라져도 잃는 것은 마지막 2초의 탭뿐이다(RESEARCH A6).
   private worldFlushTimer: ReturnType<typeof setTimeout> | null = null;
-  private async flushWorld(): Promise<void> {
-    // 일부러 아무것도 저장하지 않는다.
-  }
   // 인메모리라 하이버네이션으로 비면 새로 센다(수용). 소켓 객체가 키라 hello 전 소켓도 센다.
   private readonly rates = new WeakMap<WebSocket, RateWindow>();
 
@@ -80,7 +77,9 @@ export class Room extends DurableObject<Env> {
     super(ctx, env);
     // 알람은 평소에 여기서 설정하지 않는다 — 대기 중인 알람을 덮어쓴다. 예외는 옛 저장 방 정규화로 마감이 바뀐 경우뿐이다(아래).
     ctx.blockConcurrencyWhile(async () => {
-      const stored = (await ctx.storage.get<RoomState>("room")) ?? null;
+      // room·world 를 한 번에 읽는다(06-08). 위치는 room 키와 분리된 별도 키다.
+      const got = await ctx.storage.get(["room", "world"]);
+      const stored = (got.get("room") as RoomState | undefined) ?? null;
       if (stored) {
         // 1페이즈 종착 단계로 저장된 방은 낮 시작 발표로 옮긴다(RESEARCH Pattern 6). 바뀌지 않으면 같은 객체다.
         const normalized = normalizeStoredRoom(stored, Date.now());
@@ -97,6 +96,8 @@ export class Room extends DurableObject<Env> {
             isBot(p) || (p.connId !== null && live.has(p.connId)) ? p : { ...p, connected: false, connId: null },
           ),
         };
+        // 저장된 위치를 되살린다. world 키가 없거나 손상된 사람은 입장 지점에 선다(MAP-05).
+        this.world = restoreWorld(got.get("world"), this.room.players, Date.now(), BAR_MAP);
         if (normalized !== stored) {
           await ctx.storage.put("room", this.room);
           // 정규화로 생긴 이른 마감(now + 2초)이 기존 만료 알람(90초 뒤 등)보다 먼저 깨어나야 하므로 마감이 바뀐 경우에만 여기서 알람을 건다.
@@ -128,6 +129,7 @@ export class Room extends DurableObject<Env> {
     this.room = created.state;
     // 방장은 seat 0 의 입장 지점에 선다(MAP-01). 연결된 소켓이 아직 없어 보낼 프레임은 없다.
     this.world = spawnPlayer(emptyWorld(), hostId, 0, input.now, BAR_MAP);
+    this.markWorldDirty();
     await this.ctx.storage.put("room", this.room);
     await this.reschedule();
     return { ok: true, token, seat: 0 };
@@ -156,6 +158,7 @@ export class Room extends DurableObject<Env> {
     this.world = spawnPlayer(this.world, result.player.id, result.player.seat, Date.now(), BAR_MAP);
     const seg = this.world.segs[result.player.id];
     if (seg) this.emitWorld(moveFrame(result.player.seat, seg));
+    this.markWorldDirty();
     return { ok: true, token: result.player.token, seat: result.player.seat };
   }
 
@@ -307,10 +310,13 @@ export class Room extends DurableObject<Env> {
       await this.ctx.storage.deleteAlarm();
       await this.ctx.storage.deleteAll();
       this.room = null;
+      this.dropWorld();
       return;
     }
     this.room = result.state;
+    this.world = despawnPlayer(this.world, att.playerId);
     await this.persistAndBroadcast();
+    await this.flushWorld();
     await this.reschedule();
   }
 
@@ -327,7 +333,9 @@ export class Room extends DurableObject<Env> {
     }
     this.closePlayerSockets(result.removedId, "kicked");
     this.room = result.state;
+    this.world = despawnPlayer(this.world, result.removedId);
     await this.persistAndBroadcast();
+    await this.flushWorld();
   }
 
   // 시작: 판정은 서버 상태와 소켓 첨부의 playerId 로만 한다(연결자 4명 이상, 방장만).
@@ -347,6 +355,8 @@ export class Room extends DurableObject<Env> {
     }
     this.room = result.state;
     await this.persistAndBroadcast();
+    // 로비를 떠나는 시작: 위치를 지금 저장하고 그대로 둔다(가정 A1). 이후 world 프레임은 나가지 않는다.
+    await this.flushWorld();
     await this.reschedule();
   }
 
@@ -587,7 +597,12 @@ export class Room extends DurableObject<Env> {
       return;
     }
     this.room = result.state;
+    // 대기실로 돌아오면 모두 자기 입장 지점으로 되돌린다(가정 A1, 11페이즈 다시 하기가 같은 길). state 다음에 모든 소켓이 snap 을 받는다.
+    const now = Date.now();
+    this.world = respawnAll(this.world, this.room.players, now, BAR_MAP);
     await this.persistAndBroadcast();
+    this.emitWorld(snapFrame(this.world, this.room.players, now));
+    await this.flushWorld();
     await this.reschedule();
   }
 
@@ -641,7 +656,11 @@ export class Room extends DurableObject<Env> {
     }
     if (result.state === this.room) return;
     this.room = result.state;
+    const spawned = this.syncWorldPlayers(Date.now());
     await this.persistAndBroadcast();
+    // 새 봇은 자기 seat 의 입장 지점에 서고, 방장 소켓은 state 다음에 그 한 점 구간을 받는다. 뺀 봇은 world 에서 지워졌다.
+    for (const { seat, seg } of spawned) this.emitWorld(moveFrame(seat, seg));
+    this.markWorldDirty();
     await this.reschedule();
   }
 
@@ -667,6 +686,7 @@ export class Room extends DurableObject<Env> {
       await this.ctx.storage.deleteAlarm();
       await this.ctx.storage.deleteAll();
       this.room = null;
+      this.dropWorld();
       return;
     }
     // 난수는 여기서만 넣는다 — 아침 판정(03-03)의 동률·문구 추첨
@@ -702,6 +722,8 @@ export class Room extends DurableObject<Env> {
 
   async alarm(): Promise<void> {
     try {
+      // 디바운스 중이던 위치는 알람이 깨어나는 즉시 저장한다(배포·퇴거 직전의 마지막 탭을 지킨다).
+      if (this.worldFlushTimer !== null) await this.flushWorld();
       await this.advance(Date.now());
       await this.runDueBots(Date.now());
       await this.reschedule();
@@ -760,6 +782,8 @@ export class Room extends DurableObject<Env> {
     if (!current || current.connId !== att.connId) return;
     this.room = detachConnection(this.room, att.playerId, att.connId);
     await this.persistAndBroadcast();
+    // 연결된 사람이 한 명도 남지 않으면 DO 가 곧 내려갈 수 있으니 대기 중이던 위치를 지금 저장한다(봇은 사람이 아니다).
+    if (this.room.players.every((p) => isBot(p) || !p.connected)) await this.flushWorld();
   }
 
   // 변경은 항상 저장이 끝난 뒤에 방송한다.
@@ -835,7 +859,52 @@ export class Room extends DurableObject<Env> {
     const result = requestMove(this.world, playerId, dest, now, BAR_MAP);
     if (!result.ok) return;
     this.world = result.world;
+    // 전송이 먼저, 저장은 뒤(디바운스) — output gate 가 쓰기 뒤의 전송을 붙잡으므로(RESEARCH R6).
     this.emitWorld(moveFrame(me.seat, result.seg));
+    this.markWorldDirty();
+  }
+
+  // 위치 저장: 2초 디바운스 한 번(T-06-19). 이미 타이머가 있으면 새로 걸지 않는다 — 연속 이동에도 쓰기는 2초에 한 번이다.
+  private markWorldDirty(): void {
+    if (this.worldFlushTimer !== null) return;
+    this.worldFlushTimer = setTimeout(() => {
+      void this.flushWorld().catch((err: unknown) => console.error("world flush failed", err instanceof Error ? err.name : "unknown"));
+    }, WORLD_FLUSH_MS);
+  }
+
+  /** 타이머를 풀고 지금 저장한다. 방이 없으면(삭제됨) 아무것도 쓰지 않는다 — 지워진 저장소에 world 키가 되살아나지 않게. */
+  private async flushWorld(): Promise<void> {
+    if (this.worldFlushTimer !== null) {
+      clearTimeout(this.worldFlushTimer);
+      this.worldFlushTimer = null;
+    }
+    if (!this.room) return;
+    await this.ctx.storage.put("world", compactWorld(this.world, Date.now()));
+  }
+
+  /** 방이 지워질 때: 메모리 위치를 비우고 대기 중인 저장 타이머를 푼다(저장소는 deleteAll 이 이미 비웠다). */
+  private dropWorld(): void {
+    if (this.worldFlushTimer !== null) {
+      clearTimeout(this.worldFlushTimer);
+      this.worldFlushTimer = null;
+    }
+    this.world = emptyWorld();
+  }
+
+  // 방의 사람과 world 를 맞춘다: 방에 있는데 world 에 없으면 입장 지점에 세우고, world 에 있는데 방에 없으면 지운다. 새로 선 사람의 구간을 seat 오름차순으로 돌려준다.
+  private syncWorldPlayers(now: number): { seat: number; seg: Segment }[] {
+    const room = this.room;
+    if (!room) return [];
+    const present = new Set(room.players.map((p) => p.id));
+    for (const id of Object.keys(this.world.segs)) if (!present.has(id)) this.world = despawnPlayer(this.world, id);
+    const spawned: { seat: number; seg: Segment }[] = [];
+    for (const pl of [...room.players].sort((a, b) => a.seat - b.seat)) {
+      if (Object.prototype.hasOwnProperty.call(this.world.segs, pl.id)) continue;
+      this.world = spawnPlayer(this.world, pl.id, pl.seat, now, BAR_MAP);
+      const seg = this.world.segs[pl.id];
+      if (seg) spawned.push({ seat: pl.seat, seg });
+    }
+    return spawned;
   }
 
   // world 프레임의 유일한 전송 경로. 6페이즈 수신자 = 로비의 연결된 전원. 7~9페이즈의 audience 함수가 이 자리로 들어온다(RESEARCH R6).
