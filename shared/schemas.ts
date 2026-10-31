@@ -46,6 +46,6 @@ export const ClientMessageSchema = z.discriminatedUnion("t", [
 // ClientMessageSchema 에는 아직 넣지 않는다 — ClientMessage 유니온과 DO 처리는 06-08 이 함께 더한다.
 export const MoveMessageSchema = z.strictObject({
   t: z.literal("move"),
-  x: z.number().min(-MOVE_COORD_LIMIT).max(MOVE_COORD_LIMIT),
-  z: z.number().min(-MOVE_COORD_LIMIT).max(MOVE_COORD_LIMIT),
+  x: z.number().int().min(-MOVE_COORD_LIMIT).max(MOVE_COORD_LIMIT),
+  z: z.number().int().min(-MOVE_COORD_LIMIT).max(MOVE_COORD_LIMIT),
 }) satisfies z.ZodType<MoveMessage>;
