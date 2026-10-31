@@ -109,6 +109,40 @@
 .mv-card__desc { font-size: 14px; line-height: 1.4; color: var(--gray-300); word-break: keep-all; }
 .mv-card__mates { font-size: 14px; line-height: 1.4; font-weight: 700; color: var(--crimson-300); }
 
+/* 직업 표시 */
+.mv-rolechip { display: grid; place-items: center; width: 28px; height: 28px; border-radius: var(--radius-pill); background: var(--overlay-ink-strong); border: 1.5px solid var(--gray-300); color: var(--gray-100); }
+.mv-rolechip.is-mafia { border-color: var(--crimson-400); color: var(--crimson-300); }
+
+/* 채팅 카드(유언·쪽지) */
+.mv-chat__card { display: flex; flex-direction: column; gap: 4px; padding: 8px 10px; border-radius: var(--radius-sm); background: var(--night-800); border: 1px solid var(--night-600); }
+.mv-chat__card.is-mafia { border-color: var(--crimson-700); }
+.mv-chat__card-title { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; line-height: 1.4; font-weight: 700; color: var(--gray-50); }
+.mv-chat__card.is-mafia .mv-chat__card-title { color: var(--crimson-300); }
+.mv-chat__card-text { margin: 0; font-size: 16px; line-height: 1.5; color: var(--gray-100); word-break: keep-all; overflow-wrap: anywhere; }
+
+/* 얼굴 목록 */
+.mv-faces { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.mv-face { position: relative; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 4px 2px 6px; border-radius: var(--radius-md); border: 2px solid transparent; background: rgba(21, 28, 54, 0.85); color: var(--gray-50); font-family: var(--font-ui); cursor: pointer; }
+.mv-face.is-on { border-color: var(--gray-100); }
+.mv-face:disabled { opacity: 0.35; cursor: default; }
+.mv-face__img { width: 100%; aspect-ratio: 1; object-fit: contain; filter: brightness(0.85) saturate(0.85); }
+.mv-face.is-on .mv-face__img { filter: none; }
+.mv-face__name { display: inline-flex; align-items: center; gap: 4px; font-size: 14px; line-height: 1.3; font-weight: 700; white-space: nowrap; }
+.mv-face__name i { width: 7px; height: 7px; border-radius: var(--radius-pill); }
+.mv-face__mark { position: absolute; top: 6px; right: 6px; display: grid; place-items: center; width: 26px; height: 26px; border-radius: var(--radius-pill); background: var(--gray-100); color: var(--night-900); }
+
+/* 유언 쓰기 */
+.mv-will { display: flex; flex-direction: column; gap: 10px; box-sizing: border-box; padding: 12px; border-radius: var(--radius-lg); background: var(--night-800); border: 1px solid var(--night-600); box-shadow: var(--shadow-card); font-family: var(--font-ui); color: var(--gray-100); animation: mv-rise var(--dur-pop) ease-out both; }
+.mv-will.is-mafia { border-color: var(--crimson-700); }
+.mv-will.is-mafia .mv-dress__title { color: var(--crimson-300); }
+.mv-will__text { width: 100%; box-sizing: border-box; padding: 12px; border-radius: var(--radius-md); border: 1px solid var(--night-600); background: var(--night-900); color: var(--gray-100); font-family: inherit; font-size: 16px; line-height: 1.5; resize: none; }
+.mv-will__text::placeholder { color: var(--gray-300); }
+.mv-will__foot { display: flex; align-items: center; justify-content: space-between; gap: var(--space-sm); }
+.mv-will__count { font-size: 14px; color: var(--gray-300); font-variant-numeric: tabular-nums; }
+.mv-will__save { display: inline-flex; align-items: center; gap: 6px; min-height: var(--control-input); padding: 0 var(--space-md); border-radius: var(--radius-md); border: 0; background: var(--gray-100); color: var(--night-900); font-family: inherit; font-size: 16px; font-weight: 700; cursor: pointer; }
+.mv-will__save:disabled { background: var(--night-700); color: var(--gray-300); cursor: default; }
+.mv-face:focus-visible, .mv-will__text:focus-visible, .mv-will__save:focus-visible { outline: 2px solid var(--gray-100); outline-offset: 2px; }
+
 /* 찬반 */
 .mv-verdict { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-sm); }
 .mv-verdict__btn { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; min-height: 84px; border-radius: var(--radius-md); border: 1px solid var(--night-600); background: var(--night-700); color: var(--gray-100); font-family: var(--font-ui); font-size: 16px; font-weight: 700; cursor: pointer; }

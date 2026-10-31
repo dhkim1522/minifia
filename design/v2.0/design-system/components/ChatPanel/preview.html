@@ -1,4 +1,4 @@
-<!-- @dsCard group="아래 패널" height=330 subtitle="감정표현 펼침 · 지목 기록" -->
+<!-- @dsCard group="아래 패널" height=380 subtitle="지목 기록 · 유언·쪽지 카드" -->
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&family=Gowun+Batang:wght@700&display=swap">
 <div id="root" style="padding:16px; background: var(--night-800)"></div>
 <script>
@@ -9,6 +9,7 @@ function Demo(){ var s = React.useState(''); return h(M.ChatPanel,{value:s[0],on
  {kind:'player',name:'하은',color:'#a9aebb',text:'도윤 님 아까부터 조용했어요'},
  {kind:'vote',icon:'point',text:'민준 → 도윤'},
  {kind:'hot',text:'도윤 님이 앞서요'},
- {kind:'player',name:'도윤',color:'#b87a5c',text:'저 아니에요 진짜'}]}); }
+ {kind:'card',icon:'quill',title:'지호 님의 유언',text:'하은 님은 믿어도 돼요'},
+ {kind:'card',icon:'note',tone:'mafia',title:'쪽지',text:'다음은 너야'}]}); }
 ReactDOM.createRoot(document.getElementById('root')).render(h(Demo));
 </script>

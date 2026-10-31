@@ -3,7 +3,8 @@
 
 export type IconName =
   | 'throat' | 'deny' | 'clap' | 'cry' | 'handshake' | 'point' | 'praise' | 'surprise' | 'dance'
-  | 'face' | 'hanger' | 'map' | 'skip' | 'check' | 'send' | 'close' | 'play' | 'question' | 'thumbUp' | 'thumbDown';
+  | 'face' | 'hanger' | 'map' | 'skip' | 'check' | 'send' | 'close' | 'play' | 'question' | 'thumbUp' | 'thumbDown'
+  | 'quill' | 'note' | 'target' | 'ghost' | 'eye' | 'heal' | 'roleMafia' | 'rolePolice' | 'roleDoctor' | 'roleCitizen';
 
 /** 직접 그린 SVG 아이콘(currentColor) */
 export interface IconProps {
@@ -56,17 +57,25 @@ export interface SureStampProps { label?: string; }
 /** 머리 위 쌓임: 입력 중 · 도장 · 배지 · 이름표 */
 export interface HeadStackProps extends NameTagProps {
   typing?: boolean;
+  /** 유령 관전·마피아 동료에게만 */
+  role?: 'mafia' | 'police' | 'doctor' | 'citizen';
   count?: number;
   lead?: boolean;
   sure?: boolean;
+  /** 도장 글자. 기본 "유력", 마피아 밤 합의는 "확정" */
+  sureLabel?: string;
 }
 
 /** 화면 위 알림 한 줄 */
 export interface TopToastProps { text: string; visible: boolean; icon?: IconName; }
 
 export interface ChatMessage {
-  /** player: 사람 · system: 단계 안내 · vote: 지목 기록 · hot: 선두·과반 소식 */
-  kind: 'player' | 'system' | 'vote' | 'hot';
+  /** player: 사람 · system: 단계 안내 · vote: 지목 기록 · hot: 선두·과반 소식 · card: 유언·쪽지 */
+  kind: 'player' | 'system' | 'vote' | 'hot' | 'card';
+  /** card 만: 제목. 예: "지호 님의 유언" */
+  title?: string;
+  /** card 만: 'mafia' 면 진홍 테두리(쪽지) */
+  tone?: 'mafia';
   text: string;
   /** 시스템 메시지 앞 아이콘. 예: vote 는 'point' */
   icon?: IconName;
@@ -122,4 +131,36 @@ export interface VerdictPickerProps {
   value?: 'yes' | 'no';
   onChange?: (value: 'yes' | 'no') => void;
   disabled?: boolean;
+}
+
+/** 직업 표시(유령 관전·마피아 동료만) */
+export interface RoleChipProps { role: 'mafia' | 'police' | 'doctor' | 'citizen'; }
+
+/** 얼굴 목록(경찰·의사 밤 고르기) */
+export interface FaceListProps {
+  faces: { id: string; name: string; img: string; color: string; disabled?: boolean }[];
+  value?: string;
+  onPick?: (id: string) => void;
+  /** 고른 얼굴의 행동 아이콘: 경찰 'eye', 의사 'heal' */
+  icon?: IconName;
+  label?: string;
+}
+
+/** 유언 쓰기 */
+export interface WillSheetProps {
+  /** 기본 "유언". 마피아 쪽지는 "쪽지" */
+  title?: string;
+  /** 기본 'quill'. 쪽지는 'note' */
+  icon?: IconName;
+  /** 'mafia' 면 진홍 테두리(쪽지) */
+  tone?: 'mafia';
+  value?: string;
+  onChange?: (value: string) => void;
+  onSave?: () => void;
+  saved?: boolean;
+  /** 기본 100 */
+  max?: number;
+  placeholder?: string;
+  onClose?: () => void;
+  inputId?: string;
 }

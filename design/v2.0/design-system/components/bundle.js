@@ -1,4 +1,4 @@
-/* @ds-bundle: {"format":4,"namespace":"MinifiaV2","components":[{"name":"Icon"},{"name":"PhaseHeader"},{"name":"DotProgress"},{"name":"NameTag"},{"name":"VoteBadge"},{"name":"SureStamp"},{"name":"HeadStack"},{"name":"TopToast"},{"name":"ChatPanel"},{"name":"DressSheet"},{"name":"RoleCard"},{"name":"VerdictPicker"}]} */
+/* @ds-bundle: {"format":4,"namespace":"MinifiaV2","components":[{"name":"Icon"},{"name":"PhaseHeader"},{"name":"DotProgress"},{"name":"NameTag"},{"name":"VoteBadge"},{"name":"SureStamp"},{"name":"HeadStack"},{"name":"TopToast"},{"name":"ChatPanel"},{"name":"DressSheet"},{"name":"RoleCard"},{"name":"VerdictPicker"},{"name":"RoleChip"},{"name":"FaceList"},{"name":"WillSheet"}]} */
 /* minifia v2.0 게임 겹침 부품. 3D 장면(three.js) 위 DOM 층과 아래 패널에 쓴다. React 18 은 쓰는 쪽이 준다.
  * 결정 0051: 글은 최소로, 보고 누르는 조작 중심. 버튼은 아이콘 + 한두 단어, 진행은 링·점으로 */
 (function () {
@@ -28,7 +28,18 @@
     play: [['p', 'M7.5 5l11 7-11 7z']],
     question: [['p', 'M9.2 9a2.8 2.8 0 1 1 3.9 2.6c-.7.3-1.1.9-1.1 1.6v.6'], ['c', 12, 17.2, 0.9, true]],
     thumbUp: [['p', 'M7 10.5V20H4v-9.5z'], ['p', 'M7 10.5l4-7a2 2 0 0 1 3.4 1.9L13.5 9h5.2a2 2 0 0 1 2 2.4l-1.3 6.9a2 2 0 0 1-2 1.7H7']],
-    thumbDown: [['p', 'M7 13.5V4H4v9.5z'], ['p', 'M7 13.5l4 7a2 2 0 0 0 3.4-1.9L13.5 15h5.2a2 2 0 0 0 2-2.4l-1.3-6.9A2 2 0 0 0 17.4 4H7']]
+    thumbDown: [['p', 'M7 13.5V4H4v9.5z'], ['p', 'M7 13.5l4 7a2 2 0 0 0 3.4-1.9L13.5 15h5.2a2 2 0 0 0 2-2.4l-1.3-6.9A2 2 0 0 0 17.4 4H7']],
+    // 밤·아침·유령
+    quill: [['p', 'M20 4c-6.5 1-11 5.5-13 11.5L5.5 20'], ['p', 'M20 4c.6 5.5-3.5 10-9.5 11.5'], ['p', 'M9.5 15L6.8 12.3']],
+    note: [['p', 'M6 3h9l4 4v14H6z'], ['p', 'M15 3v4h4'], ['p', 'M9 12h7'], ['p', 'M9 16h5']],
+    target: [['c', 12, 12, 8], ['c', 12, 12, 3], ['p', 'M12 1.5v3.5'], ['p', 'M12 19v3.5'], ['p', 'M1.5 12H5'], ['p', 'M19 12h3.5']],
+    ghost: [['p', 'M5 21V11a7 7 0 0 1 14 0v10l-2.3-1.6L14.3 21 12 19.4 9.7 21l-2.4-1.6z'], ['c', 9.5, 11, 1.2, true], ['c', 14.5, 11, 1.2, true]],
+    eye: [['p', 'M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12z'], ['c', 12, 12, 3]],
+    heal: [['p', 'M9.5 4h5v5.5H20v5h-5.5V20h-5v-5.5H4v-5h5.5z']],
+    roleMafia: [['p', 'M3.5 15.5c3 1.4 14 1.4 17 0'], ['p', 'M6.5 15V9.5C6.5 6.9 9 5 12 5s5.5 1.9 5.5 4.5V15'], ['p', 'M6.5 12.5h11']],
+    rolePolice: [['p', 'M12 3l7 3v5.5c0 4.5-3 8-7 9.5-4-1.5-7-5-7-9.5V6z'], ['p', 'M12 8.5l1.2 2.4 2.6.4-1.9 1.8.5 2.6L12 14.5l-2.4 1.2.5-2.6-1.9-1.8 2.6-.4z', true]],
+    roleDoctor: [['c', 12, 12, 9], ['p', 'M12 7.5v9'], ['p', 'M7.5 12h9']],
+    roleCitizen: [['c', 12, 8, 3.5], ['p', 'M5 20c.8-3.8 3.6-6 7-6s6.2 2.2 7 6']]
   };
   function Icon(p) {
     var spec = ICONS[p.name] || [], size = p.size || 24;
@@ -84,7 +95,8 @@
   function HeadStack(p) {
     return h('div', { className: cx('mv-head', p.lead && 'is-lead') },
       p.typing ? h('span', { className: 'mv-typing', role: 'img', 'aria-label': '입력 중' }, h('i'), h('i'), h('i')) : null,
-      p.sure ? h(SureStamp, null) : null,
+      p.role ? h(RoleChip, { role: p.role }) : null,
+      p.sure ? h(SureStamp, { label: p.sureLabel }) : null,
       p.count > 0 ? h(VoteBadge, { count: p.count, lead: p.lead }) : null,
       h(NameTag, { name: p.name, color: p.color, me: p.me, away: p.away, mine: p.mine, done: p.done, blink: p.blink }));
   }
@@ -105,6 +117,11 @@
             h('span', { className: 'mv-chat__dot', style: { background: m.color } }),
             h('b', { className: 'mv-chat__name' }, m.name),
             h('span', { className: 'mv-chat__text' }, m.text));
+        }
+        if (m.kind === 'card') {
+          return h('div', { key: i, className: cx('mv-chat__card', m.tone === 'mafia' && 'is-mafia') },
+            h('span', { className: 'mv-chat__card-title' }, m.icon ? h(Icon, { name: m.icon, size: 16 }) : null, m.title),
+            h('p', { className: 'mv-chat__card-text' }, m.text));
         }
         return h('p', { key: i, className: cx('mv-chat__sys', 'is-' + (m.kind || 'system')) },
           m.icon ? h(Icon, { name: m.icon, size: 16 }) : null, h('span', null, m.text));
@@ -179,8 +196,44 @@
       }));
   }
 
+  // ---------- 직업 표시: 머리 위 작은 원 안의 직업 아이콘(유령 관전·마피아 동료) ----------
+  var ROLE = { mafia: ['roleMafia', '마피아'], police: ['rolePolice', '경찰'], doctor: ['roleDoctor', '의사'], citizen: ['roleCitizen', '시민'] };
+  function RoleChip(p) {
+    var r = ROLE[p.role] || ROLE.citizen;
+    return h('span', { className: cx('mv-rolechip', 'is-' + p.role), role: 'img', 'aria-label': r[1] }, h(Icon, { name: r[0], size: 18 }));
+  }
+
+  // ---------- 얼굴 목록: 깜깜한 밤에 경찰·의사가 대상을 고른다 ----------
+  function FaceList(p) {
+    return h('div', { className: 'mv-faces', role: 'radiogroup', 'aria-label': p.label || '대상' }, (p.faces || []).map(function (f) {
+      var on = f.id === p.value;
+      return h('button', { key: f.id, type: 'button', role: 'radio', 'aria-checked': on ? 'true' : 'false', 'aria-label': f.name, disabled: f.disabled,
+        className: cx('mv-face', on && 'is-on'), onClick: function () { if (p.onPick) p.onPick(f.id); } },
+        h('img', { className: 'mv-face__img', src: f.img, alt: '', draggable: false }),
+        h('span', { className: 'mv-face__name' }, h('i', { style: { background: f.color } }), f.name),
+        on ? h('span', { className: 'mv-face__mark' }, h(Icon, { name: p.icon || 'check', size: 18 })) : null);
+    }));
+  }
+
+  // ---------- 유언 쓰기: 언제든 깃펜으로 연다. 죽으면 모두에게 공개된다 ----------
+  function WillSheet(p) {
+    var id = p.inputId || 'mv-will';
+    var title = p.title || '유언';
+    return h('div', { className: cx('mv-will', p.tone === 'mafia' && 'is-mafia'), role: 'dialog', 'aria-label': title },
+      h('div', { className: 'mv-dress__top' },
+        h('span', { className: 'mv-dress__title' }, h(Icon, { name: p.icon || 'quill', size: 20 }), title),
+        p.onClose ? h('button', { type: 'button', className: 'mv-dress__close', 'aria-label': '닫기', onClick: p.onClose }, h(Icon, { name: 'close' })) : null),
+      h('label', { className: 'mv-sr', htmlFor: id }, title),
+      h('textarea', { id: id, className: 'mv-will__text', value: p.value || '', maxLength: p.max || 100, rows: 3, placeholder: p.placeholder || '죽으면 모두에게 보여요',
+        onChange: function (e) { if (p.onChange) p.onChange(e.target.value); } }),
+      h('div', { className: 'mv-will__foot' },
+        h('span', { className: 'mv-will__count' }, (p.value || '').length + '/' + (p.max || 100)),
+        h('button', { type: 'button', className: 'mv-will__save', onClick: p.onSave, disabled: !!p.saved }, h(Icon, { name: 'check', size: 20 }), p.saved ? '저장됨' : '저장')));
+  }
+
   window.MinifiaV2 = {
     Icon: Icon, PhaseHeader: PhaseHeader, DotProgress: DotProgress, NameTag: NameTag, VoteBadge: VoteBadge, SureStamp: SureStamp, HeadStack: HeadStack,
-    TopToast: TopToast, ChatPanel: ChatPanel, DressSheet: DressSheet, RoleCard: RoleCard, VerdictPicker: VerdictPicker
+    TopToast: TopToast, ChatPanel: ChatPanel, DressSheet: DressSheet, RoleCard: RoleCard, VerdictPicker: VerdictPicker,
+    RoleChip: RoleChip, FaceList: FaceList, WillSheet: WillSheet
   };
 })();

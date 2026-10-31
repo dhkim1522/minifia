@@ -1,0 +1,7 @@
+<!-- @dsCard group="머리 위" height=110 subtitle="마피아 · 경찰 · 의사 · 시민" -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&family=Gowun+Batang:wght@700&display=swap">
+<div id="root" style="padding:24px 16px; background: radial-gradient(ellipse at 50% 40%, #3a2a22 0%, #1b1520 60%, #0a0e1c 100%);"></div>
+<script>
+var M = window.MinifiaV2, h = React.createElement;
+ReactDOM.createRoot(document.getElementById('root')).render(h('div',{style:{display:'flex',gap:'20px',justifyContent:'center',alignItems:'flex-end'}}, h(M.HeadStack,{name:'수아',color:'#7f9f7a',role:'mafia'}), h(M.HeadStack,{name:'민준',color:'#6fa59a',role:'police'}), h(M.HeadStack,{name:'서연',color:'#b89a6f',role:'doctor'}), h(M.HeadStack,{name:'하은',color:'#a9aebb',role:'citizen'})));
+</script>
