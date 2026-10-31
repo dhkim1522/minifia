@@ -1,5 +1,6 @@
 // 화면 E2E 순수 도우미(결정 0025). playwright-core·네트워크·파일을 쓰지 않는다 — 단위 테스트: node --test scripts/e2e/lib.test.mjs
 // 사각형은 { left, top, width, height } 이고 right·bottom 이 없으면 계산한다(DOMRect 를 옮긴 값).
+import { assertNotV1 } from "../deploy-target.mjs";
 
 export const DEFAULT_SIZES = [
   { w: 360, h: 640, label: "360x640" },
@@ -137,7 +138,7 @@ export class UsageError extends Error {
 }
 
 export const USAGE =
-  "사용법: node scripts/e2e/run.mjs [--url https://minifia.dhplay.workers.dev | http://localhost:5173] [--only <시나리오 부분 문자열>] [--shots] [--sizes 360x640,390x664,430x932,360x560]";
+  "사용법: node scripts/e2e/run.mjs [--url https://minifia-v2.dhplay.workers.dev | http://localhost:5173] [--only <시나리오 부분 문자열>] [--shots] [--sizes 360x640,390x664,430x932,360x560]";
 
 export function parseArgs(argv) {
   const out = { url: null, only: null, shots: false, sizes: DEFAULT_SIZES.map((s) => ({ ...s })) };
@@ -171,6 +172,7 @@ export function resolveTarget(urlArg, prodUrlText) {
     throw new Error(`대상 주소가 올바르지 않음: ${raw === "" ? "(비어 있음)" : raw}`);
   }
   if (u.username !== "" || u.password !== "") throw new Error("대상 주소에 사용자 정보를 넣을 수 없음");
+  assertNotV1(u.origin); // 기본값·명시값 모두 v1.0 이면 거부(DEPLOY-02, 우회 인자 없음)
   if (u.protocol === "http:") {
     if (!LOCAL_HOSTS.includes(u.hostname)) throw new Error(`http 는 localhost·127.0.0.1·[::1] 만 허용: ${u.hostname}`);
   } else if (u.protocol !== "https:") {
