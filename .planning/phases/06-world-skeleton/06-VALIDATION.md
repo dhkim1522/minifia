@@ -38,7 +38,7 @@ created: "2026-10-31"
 
 ## Per-Task Verification Map
 
-> 플래너가 계획 20개(06-01~06-20)의 Task 를 채웠다(2026-10-31). 상태는 실행자가 갱신한다.
+> 플래너가 계획 21개(06-01~06-21)의 Task 를 채웠다(2026-10-31, 06-15 를 06-15·06-21 로 나눈 수정 반영). 상태는 실행자가 갱신한다.
 
 | Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
@@ -49,13 +49,14 @@ created: "2026-10-31"
 | 06-08-T1~T3 | 06-08 | 3 | MAP-01·02·05 | T-06-16~20 | 로비 전용 emitWorld·state→snap·퇴거 복원·봇 배회 | worker | `npx vitest run test/worker/world.test.ts test/worker/leak.test.ts` | ❌ W0(06-08) | ⬜ pending |
 | 06-03-T1·T2 | 06-03 | 2 | MAP-03 | — | 투영 왕복·6크기×전 격자점 가시성·빈 배경 없음 | unit | `npx vitest run test/unit/camera.test.ts` | ❌ W0(06-03) | ⬜ pending |
 | 06-03-T3 | 06-03 | 2 | MAP-05 | T-06-06 | 소실·3초 재생성·5초 실패 | unit | `npx vitest run test/unit/status.test.ts` | ❌ W0(06-03) | ⬜ pending |
-| 06-09-T1·T2 | 06-09 | 3 | MAP-05·CONN-04 | T-06-21·22 | 화이트리스트·epoch·snap 교체 | unit/client | `npx vitest run test/unit/worldStore.test.ts test/client/useRoomConnection.test.tsx test/unit/linkReducer.test.ts` | ✅ + 신규 | ⬜ pending |
+| 06-09-T1·T2 | 06-09 | 3 | MAP-05·CONN-04 | T-06-21·22 | 화이트리스트·epoch·snap 교체·world 프레임 비간섭 회귀(describe 4개 이상, CONN-04 근거) | unit/client | `npx vitest run test/unit/worldStore.test.ts test/client/useRoomConnection.test.tsx test/unit/linkReducer.test.ts` / `npx vitest run test/client/useRoomConnection.test.tsx -t "world 프레임 비간섭"` | ✅ + 신규 | ⬜ pending |
 | 06-10-T1~T3 | 06-10 | 3 | MAP-01·MAP-03 | T-06-23·24 | three 카메라 일치·장면 예산·사다리 | unit | `npx vitest run test/unit/cameraThree.test.ts test/unit/barScene.test.ts test/unit/palette.test.ts test/unit/ladder.test.ts` | ❌ W0(06-10) | ⬜ pending |
 | 06-11-T1~T3 | 06-11 | 3 | MAP-01·MAP-02 | T-06-25 | 관절 병합·의상·동작 | unit | `npx vitest run test/unit/character.test.ts` | ❌ W0(06-11) | ⬜ pending |
 | 06-12-T1·T2 | 06-12 | 3 | MAP-07·MAP-01 | T-06-26 | 이름표 말줄임 없음·React 텍스트 | client | `npx vitest run test/client/v2parts.test.tsx` | ❌ W0(06-12) | ⬜ pending |
 | 06-13-T1~T3 | 06-13 | 4 | MAP-01·02·03·05·07 | T-06-27·28·29 | 탭→move·예측 없음·카드·훅 조건 | unit/client | `npx vitest run test/unit/input.test.ts test/client/worldStage.test.tsx` | ❌ W0(06-13) | ⬜ pending |
 | 06-06-T1·T3 | 06-06 | 2 | MAP-07 | T-06-12·13 | 서버 검증 1~8자·봇 이름 | unit/client | `npx vitest run test/unit/nickname.test.ts test/unit/copy.test.ts test/unit/bots.test.ts test/client/joinByLink.test.tsx` | ✅ 확장 | ⬜ pending |
-| 06-15-T1~T3 | 06-15 | 5 | MAP-01·05·CONN-04 | T-06-33 | 맵 로비·스토어 구독·skip 없음 | client | `npx vitest run --project client` | ✅ 갱신 | ⬜ pending |
+| 06-15-T1~T3 | 06-15 | 5 | MAP-01·05·CONN-04 | T-06-33 | 맵 로비·스토어 구독·떠 있는 재접속 띠·skip 없음(웨이브 5 끝 게이트) | client | `npx vitest run --project client` | ✅ 갱신 | ⬜ pending |
+| 06-21-T1~T3 | 06-21 | 6 | MAP-01 | T-06-43·44 | v2 알림 문구·방장 왕관·입장 화면 미리 받기·room-enter 표식·skip 없음(웨이브 6 끝 게이트) | unit/client | `npx vitest run test/unit/roomDiff.test.ts test/client/lobby.test.tsx test/client/screens.test.tsx test/client/joinByLink.test.tsx` / `npx vitest run` | ✅ 갱신 | ⬜ pending |
 | 06-17-T1 | 06-17 | 7 | MAP-01·02·07 | T-06-36 | 두 페이지 위치 일치·이름표 폭 | E2E | `npm run e2e -- --url http://localhost:5173 --only world` | ❌ W0(06-17) | ⬜ pending |
 | 06-17-T2 | 06-17 | 7 | MAP-07·성공 기준 3 | — | 로비 6크기 계약·v1.0 게임 흐름 새 로비에서 완주 | E2E + unit | `npx vitest run test/unit/e2eContract.test.ts` / `npm run e2e -- --url http://localhost:5173 --only lobby` | ❌ W0(06-17) | ⬜ pending |
 | 06-18-T1·T2 | 06-18 | 8 | CONN-04·MAP-05·렌더 예산 | T-06-41 | 5종×10회 콘솔 0·calls ≤ 120·메모리 원복 | E2E | `npm run e2e -- --url http://localhost:5173 --only reconnect` / `--only perfbudget` | ❌ W0(06-18) | ⬜ pending |
