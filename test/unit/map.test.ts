@@ -257,6 +257,9 @@ function toLocal(o: Extract<Obstacle, { kind: "rect" }>, px: number, pz: number)
   return { lx: cs * dx - sn * dz, lz: sn * dx + cs * dz };
 }
 
+/** 거리가 기준과 정확히 같은 동률(예: 카운터 끝에서 정확히 0.35)은 부동소수 잡음이라 걸을 수 있는 쪽으로 정한다. */
+const TIE_EPS = 1e-9;
+
 /** 셀 중심에서 floor 장애물까지 바닥 거리와 막힘 기준(반지름 + 캐릭터 반지름)의 차. 음수면 막힘. */
 function floorMargin(o: Obstacle, px: number, pz: number): number {
   if (o.kind === "circle") return Math.hypot(px - o.x, pz - o.z) - (o.r + CHAR_RADIUS);
@@ -306,30 +309,68 @@ function rayHitsAnalytic(o: Obstacle, ox: number, oy: number, oz: number): boole
   return hi > 0 && lo <= hi;
 }
 
-/** 래스터화: BAR_OBSTACLES → 28줄 마스크 문자열(막힘 '#'). 제품 코드에는 없고 이 테스트가 마스크의 출처를 증명한다. */
-function rasterize(obstacles: readonly Obstacle[]): string[] {
-  const rows: string[] = [];
+/** 원시 래스터화: 셀마다 막힘 여부(true = 막힘). 부풀리기 0.35 + 이동 한계 ±5.8 + 머리 꼭대기 가려짐. */
+function rasterizeRaw(obstacles: readonly Obstacle[]): boolean[][] {
+  const grid: boolean[][] = [];
   for (let r = 0; r < GRID_SIZE; r++) {
-    let line = "";
+    const row: boolean[] = [];
     for (let c = 0; c < GRID_SIZE; c++) {
       const { x, z } = cellWorld(c, r);
       let blocked = Math.abs(x) > WALK_HALF || Math.abs(z) > WALK_HALF;
       for (const o of obstacles) {
         if (blocked) break;
-        if (o.floor && floorMargin(o, x, z) < 0) blocked = true;
+        if (o.floor && floorMargin(o, x, z) < -TIE_EPS) blocked = true;
         else if (rayHitsAnalytic(o, x, HEAD_TOP_Y, z)) blocked = true;
       }
-      line += blocked ? "#" : ".";
+      row.push(blocked);
     }
-    rows.push(line);
+    grid.push(row);
   }
-  return rows;
+  return grid;
+}
+
+/**
+ * 래스터화 = 원시 래스터화 + 닫힌 구멍 메우기: 입장 지점 seed 에서 4방향으로 닿지 않는 걸을 수 있는 칸은
+ * 어디서도 도착할 수 없으니(보정이 그 칸을 고르면 캐릭터가 멈춘다) 막는다. 메운 칸은 removed 로 함께 돌려준다.
+ * 제품 코드에는 없고 이 테스트가 마스크의 출처를 증명한다.
+ */
+function rasterize(
+  obstacles: readonly Obstacle[],
+  seed: { c: number; r: number },
+): { rows: string[]; removed: { c: number; r: number }[] } {
+  const grid = rasterizeRaw(obstacles);
+  const reach = new Set<number>();
+  const stack = [seed];
+  while (stack.length > 0) {
+    const { c, r } = stack.pop()!;
+    if (c < 0 || r < 0 || c >= GRID_SIZE || r >= GRID_SIZE || grid[r]![c] || reach.has(r * GRID_SIZE + c)) continue;
+    reach.add(r * GRID_SIZE + c);
+    stack.push({ c: c + 1, r }, { c: c - 1, r }, { c, r: r + 1 }, { c, r: r - 1 });
+  }
+  const removed: { c: number; r: number }[] = [];
+  const rows = grid.map((row, r) =>
+    row
+      .map((blocked, c) => {
+        if (blocked) return "#";
+        if (reach.has(r * GRID_SIZE + c)) return ".";
+        removed.push({ c, r });
+        return "#";
+      })
+      .join(""),
+  );
+  return { rows, removed };
+}
+
+/** 마스크 출처 계산에 쓰는 시작 칸 = 입장 지점 0번이 속한 칸. */
+function seedCell(): { c: number; r: number } {
+  const s0 = BAR_SPAWNS[0]!;
+  return cellOfFx(Math.round(s0.x * UNIT), Math.round(s0.z * UNIT));
 }
 
 if (process.env.MAP_PRINT === "1") {
   describe("마스크 출력(MAP_PRINT=1 일 때만)", () => {
     it("래스터화 결과를 줄로 출력", () => {
-      console.log(`\n${rasterize(BAR_OBSTACLES).map((l) => `  "${l}",`).join("\n")}\n`);
+      process.stdout.write(`\n${rasterize(BAR_OBSTACLES, seedCell()).rows.map((l) => `  "${l}",`).join("\n")}\n`);
     });
   });
 }
@@ -418,20 +459,40 @@ describe("BAR_MASK", () => {
     expect(BAR_MAP.spawns).toBe(BAR_SPAWNS);
   });
 
-  it("장애물 래스터화(부풀리기 0.35 + 이동 한계 ±5.8 + 머리 꼭대기 가려짐)와 글자 하나까지 같다", () => {
-    expect(BAR_MASK).toEqual(rasterize(BAR_OBSTACLES));
+  it("장애물 래스터화(부풀리기 0.35 + 이동 한계 ±5.8 + 머리 꼭대기 가려짐 + 닫힌 구멍 메우기)와 글자 하나까지 같다", () => {
+    expect(BAR_MASK).toEqual(rasterize(BAR_OBSTACLES, seedCell()).rows);
   });
 
-  it("래스터화는 경계 동률이 없다: 모든 칸·바닥 장애물의 여유가 1e-9 보다 크다", () => {
+  it("닫힌 구멍으로 메운 칸은 뒤쪽 구석 (2,2)·(3,2) 두 칸뿐이다(바 카운터·피아노 뒤)", () => {
+    expect(rasterize(BAR_OBSTACLES, seedCell()).removed).toEqual([
+      { c: 2, r: 2 },
+      { c: 3, r: 2 },
+    ]);
+  });
+
+  it("거리가 기준과 정확히 같은 동률 칸은 걸을 수 있는 쪽이고, 동률이 아닌 칸은 부동소수 잡음(1e-9)보다 확실히 갈린다", () => {
+    const ties: string[] = [];
     for (let r = 0; r < GRID_SIZE; r++) {
       for (let c = 0; c < GRID_SIZE; c++) {
         const { x, z } = cellWorld(c, r);
         for (const o of BAR_OBSTACLES) {
-          if (o.floor) expect(Math.abs(floorMargin(o, x, z)), `cell ${c},${r}`).toBeGreaterThan(1e-9);
+          if (!o.floor) continue;
+          const m = floorMargin(o, x, z);
+          if (Math.abs(m) <= TIE_EPS) ties.push(`${c},${r}`);
+          else expect(Math.abs(m), `cell ${c},${r}`).toBeGreaterThan(1e-6);
         }
-        expect(Math.abs(Math.abs(x) - WALK_HALF)).toBeGreaterThan(1e-9);
+        // 이동 한계 ±5.8 도 같다: 칸 중심은 ±5.75 와 ±6.25 뿐이라 동률이 없다.
+        expect(Math.abs(Math.abs(x) - WALK_HALF)).toBeGreaterThan(0.01);
       }
     }
+    // 동률 칸은 마스크에서 걸을 수 있다.
+    for (const t of ties) {
+      const [c, r] = t.split(",").map(Number) as [number, number];
+      const { x, z } = cellWorld(c, r);
+      const hit = BAR_OBSTACLES.some((o) => !o.floor && rayHitsAnalytic(o, x, HEAD_TOP_Y, z));
+      if (!hit) expect(isWalkable(BAR_MAP, c, r), `tie ${t}`).toBe(true);
+    }
+    process.stdout.write(`동률 칸: ${ties.length}개 ${ties.join(" ")}\n`);
   });
 
   it("걸을 수 있는 칸의 중심은 모두 |x|,|z| ≤ 5.8", () => {
@@ -487,7 +548,7 @@ describe("BAR_MASK", () => {
       }
     }
     expect(seen.size).toBe(cells.length);
-    console.log(`걸을 수 있는 셀 수: ${cells.length} / ${GRID_SIZE * GRID_SIZE}`);
+    process.stdout.write(`걸을 수 있는 셀 수: ${cells.length} / ${GRID_SIZE * GRID_SIZE}\n`);
   });
 });
 
