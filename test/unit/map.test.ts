@@ -1,4 +1,6 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { seededRandInt } from "../helpers/seededRandom";
 import {
   BAR_MAP,
   BAR_MASK,
@@ -595,5 +597,195 @@ describe("BAR_SPAWNS (ctx.talk 원문)", () => {
         expect(findPath(BAR_MAP, ca, cb), `${i}-${j}`).not.toBeNull();
       }
     }
+  });
+});
+
+// ───────────────────────── 경로 속성 (Task 3) ─────────────────────────
+
+/** 선분 위를 촘촘히 표본으로 훑어 칸 바닥(floor)이 막힌 곳을 지나는지 본다 — lineWalkable 과 독립된 검사(열린 구간만). */
+function sampledCrossesBlocked(map: MapDef, a: { x: number; z: number }, b: { x: number; z: number }): boolean {
+  const steps = 800;
+  for (let i = 0; i <= steps; i++) {
+    const x = a.x + ((b.x - a.x) * i) / steps;
+    const z = a.z + ((b.z - a.z) * i) / steps;
+    const { c, r } = cellOfFx(x, z);
+    if (!isWalkable(map, c, r)) return true;
+  }
+  return false;
+}
+
+function clamp580(v: number): number {
+  return Math.max(-580, Math.min(580, v));
+}
+
+function sqrtLen(flat: number[]): number {
+  let total = 0;
+  for (let i = 0; i + 3 < flat.length; i += 2) {
+    const dx = flat[i + 2]! - flat[i]!;
+    const dz = flat[i + 3]! - flat[i + 1]!;
+    total += Math.sqrt(dx * dx + dz * dz);
+  }
+  return total;
+}
+
+describe("routeFx 속성 테스트 (재즈 바, 시드 1..200)", () => {
+  const cells = walkableCells(BAR_MAP);
+  /** 걸을 수 있는 칸 둘의 안쪽(경계에서 1~49 떨어진) 임의 고정소수점 점 쌍. */
+  function pair(seed: number): { from: { x: number; z: number }; to: { x: number; z: number } } {
+    const rnd = seededRandInt(seed);
+    const pick = (): { x: number; z: number } => {
+      const cell = cells[rnd(cells.length)]!;
+      const base = cellCenterFx(cell.c, cell.r);
+      return { x: base.x - 25 + 1 + rnd(49), z: base.z - 25 + 1 + rnd(49) };
+    };
+    return { from: pick(), to: pick() };
+  }
+
+  it("길이가 짝수·4 이상이고 첫 점 = 출발, 끝 점 = 도착, 모든 선분이 걸을 수 있다(슈퍼커버와 표본 둘 다)", () => {
+    for (let seed = 1; seed <= 200; seed++) {
+      const { from, to } = pair(seed);
+      const flat = routeFx(BAR_MAP, from, to);
+      expect(flat.length % 2, `seed ${seed}`).toBe(0);
+      expect(flat.length, `seed ${seed}`).toBeGreaterThanOrEqual(4);
+      // 걸을 수 있는 칸 안의 점은 그대로 쓰되 이동 한계 ±580 밖으로는 나가지 않는다(자르기).
+      expect(flat.slice(0, 2), `seed ${seed}`).toEqual([clamp580(from.x), clamp580(from.z)]);
+      expect(flat.slice(-2), `seed ${seed}`).toEqual([clamp580(to.x), clamp580(to.z)]);
+      expect(flat.every(Number.isInteger), `seed ${seed}`).toBe(true);
+      expect(allSegmentsWalkable(BAR_MAP, flat), `seed ${seed}`).toBe(true);
+      for (let i = 0; i + 3 < flat.length; i += 2) {
+        const crossed = sampledCrossesBlocked(BAR_MAP, { x: flat[i]!, z: flat[i + 1]! }, { x: flat[i + 2]!, z: flat[i + 3]! });
+        expect(crossed, `seed ${seed} seg ${i / 2}`).toBe(false);
+      }
+    }
+  });
+
+  it("같은 입력 두 번은 깊은 같음(결정성)", () => {
+    for (let seed = 1; seed <= 200; seed++) {
+      const { from, to } = pair(seed);
+      expect(routeFx(BAR_MAP, from, to), `seed ${seed}`).toEqual(routeFx(BAR_MAP, from, to));
+    }
+  });
+
+  it("경로 총 길이는 직선 길이 이상 직선 × 1.6 이하(최댓값은 출력)", () => {
+    let worst = 0;
+    for (let seed = 1; seed <= 200; seed++) {
+      const { from, to } = pair(seed);
+      const flat = routeFx(BAR_MAP, from, to);
+      const straight = Math.sqrt((clamp580(to.x) - clamp580(from.x)) ** 2 + (clamp580(to.z) - clamp580(from.z)) ** 2);
+      const len = sqrtLen(flat);
+      expect(len, `seed ${seed}`).toBeGreaterThanOrEqual(straight - 1e-6);
+      if (straight > 0) worst = Math.max(worst, len / straight);
+      expect(len, `seed ${seed}`).toBeLessThanOrEqual(straight * 1.6);
+    }
+    process.stdout.write(`경로/직선 최댓값(시드 200): ${worst.toFixed(4)}\n`);
+  });
+
+  it("막힌 도착점(무대 중심 0,0)은 걸을 수 있는 칸의 보정된 점에서 끝난다", () => {
+    const from = { x: -420, z: -420 };
+    const flat = routeFx(BAR_MAP, from, { x: 0, z: 0 });
+    const snapped = snapToWalkable(BAR_MAP, { x: 0, z: 0 });
+    expect(snapped.snapped).toBe(true);
+    expect(flat.slice(-2)).toEqual([snapped.x, snapped.z]);
+    const end = cellOfFx(snapped.x, snapped.z);
+    expect(isWalkable(BAR_MAP, end.c, end.r)).toBe(true);
+    expect(allSegmentsWalkable(BAR_MAP, flat)).toBe(true);
+  });
+
+  it("출발이 막힌 칸이면 첫 점은 보정된 점", () => {
+    const blockedStart = { x: 0, z: 0 };
+    const snapped = snapToWalkable(BAR_MAP, blockedStart);
+    const flat = routeFx(BAR_MAP, blockedStart, { x: 450, z: 450 });
+    expect(flat.slice(0, 2)).toEqual([snapped.x, snapped.z]);
+    expect(allSegmentsWalkable(BAR_MAP, flat)).toBe(true);
+  });
+
+  it("맵 바깥·이동 한계 밖 목적지도 걸을 수 있는 칸에서 끝나고 경로가 막힌 곳을 지나지 않는다", () => {
+    for (const to of [
+      { x: 100000, z: 100000 },
+      { x: -100000, z: 0 },
+      { x: 0, z: -100000 },
+      { x: 700, z: -700 },
+    ]) {
+      const flat = routeFx(BAR_MAP, { x: 400, z: 400 }, to);
+      const end = cellOfFx(flat[flat.length - 2]!, flat[flat.length - 1]!);
+      expect(isWalkable(BAR_MAP, end.c, end.r)).toBe(true);
+      expect(Math.abs(flat[flat.length - 2]!)).toBeLessThanOrEqual(580);
+      expect(Math.abs(flat[flat.length - 1]!)).toBeLessThanOrEqual(580);
+      expect(allSegmentsWalkable(BAR_MAP, flat)).toBe(true);
+    }
+  });
+});
+
+describe("가려짐 없음: 걸을 수 있는 모든 칸의 머리 꼭대기 광선", () => {
+  /** 해석 판정(슬랩)과 독립된 두 번째 판정: 광선을 촘촘히 걸어가며 장애물 부피 안에 드는지 본다. */
+  function marchHits(x: number, z: number, dirY: number): boolean {
+    const D = { x: TO_CAMERA.x, y: dirY, z: TO_CAMERA.z };
+    for (let t = 0; t <= 2; t += 0.0005) {
+      const px = x + D.x * t;
+      const py = HEAD_TOP_Y + D.y * t;
+      const pz = z + D.z * t;
+      for (const o of BAR_OBSTACLES) {
+        if (py < o.y0 || py > o.y1) continue;
+        if (o.kind === "circle") {
+          if ((px - o.x) ** 2 + (pz - o.z) ** 2 <= o.r * o.r) return true;
+        } else {
+          const { lx, lz } = toLocal(o, px, pz);
+          if (Math.abs(lx) <= o.w / 2 && Math.abs(lz) <= o.d / 2) return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  it("TO_CAMERA 방향으로 가구에 막히는 칸이 걸을 수 있는 칸에 없다", () => {
+    for (const { c, r } of walkableCells(BAR_MAP)) {
+      const { x, z } = cellWorld(c, r);
+      expect(marchHits(x, z, TO_CAMERA.y), `cell ${c},${r}`).toBe(false);
+    }
+  });
+
+  it("TO_CAMERA 는 제품 카메라(yaw π/4, 거리 17, 높이 12.5, 주시 높이 0.6)의 위치 − 주시점과 같다", () => {
+    expect(TO_CAMERA.x).toBeCloseTo(17 * Math.sin(Math.PI / 4), 6);
+    expect(TO_CAMERA.z).toBeCloseTo(17 * Math.cos(Math.PI / 4), 6);
+    expect(TO_CAMERA.y).toBeCloseTo(12.5 - 0.6, 6);
+  });
+
+  it("계획 원문의 방향(높이 12.5)으로 봐도 걸을 수 있는 칸은 가려지지 않는다", () => {
+    for (const { c, r } of walkableCells(BAR_MAP)) {
+      const { x, z } = cellWorld(c, r);
+      expect(marchHits(x, z, 12.5), `cell ${c},${r}`).toBe(false);
+    }
+  });
+
+  it("검사가 헛돌지 않는다: 막힌 칸 가운데 펜던트 때문에만 막힌 칸이 있다", () => {
+    let onlyByRay = 0;
+    for (let r = 0; r < GRID_SIZE; r++) {
+      for (let c = 0; c < GRID_SIZE; c++) {
+        const { x, z } = cellWorld(c, r);
+        if (BAR_OBSTACLES.some((o) => o.floor && floorMargin(o, x, z) < -TIE_EPS)) continue;
+        if (Math.abs(x) > WALK_HALF || Math.abs(z) > WALK_HALF) continue;
+        if (marchHits(x, z, TO_CAMERA.y)) {
+          onlyByRay++;
+          expect(isWalkable(BAR_MAP, c, r), `cell ${c},${r}`).toBe(false);
+        }
+      }
+    }
+    expect(onlyByRay).toBeGreaterThan(0);
+  });
+});
+
+describe("map.ts 소스 규약", () => {
+  const source = readFileSync(new URL("../../shared/game/map.ts", import.meta.url), "utf8")
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/\/\/.*$/gm, "");
+
+  it("삼각함수·hypot·random·현재 시각을 쓰지 않는다(주석 제외)", () => {
+    expect(source).not.toMatch(/Math\.(hypot|sin|cos|tan|asin|acos|atan|atan2|random)\b/);
+    expect(source).not.toMatch(/Date\.now|new Date|performance\.now/);
+  });
+
+  it("DOM·workerd API 를 쓰지 않고 import 가 없다(순수 모듈)", () => {
+    expect(source).not.toMatch(/\b(document|window|crypto|fetch)\b/);
+    expect(source).not.toMatch(/^\s*import\s/m);
   });
 });
