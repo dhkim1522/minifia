@@ -72,10 +72,10 @@ export const LIGHT_TUNE: Readonly<Record<LightingPhase, PhaseTune>> & {
   moonTarget: { x: number; y: number; z: number };
 } = {
   talk: {
-    hemi: 0.42 * Math.PI,
-    moon: 0.35 * Math.PI,
-    exposure: 1.0,
-    sky: ["#1a1830", "#0b0a14", "#120f1c"],
+    hemi: 1.1 * Math.PI,
+    moon: 0.85 * Math.PI,
+    exposure: 1.25,
+    sky: ["#524b84", "#2a2034", "#15111f"],
     fog: { near: 20, far: 44 },
     stage: 0,
     pendant: PENDANT_TALK,
@@ -84,12 +84,12 @@ export const LIGHT_TUNE: Readonly<Record<LightingPhase, PhaseTune>> & {
     glow: { room: 1, vote: 0 },
   },
   vote: {
-    hemi: 0.3 * Math.PI,
-    moon: 0.25 * Math.PI,
-    exposure: 1.0,
-    sky: ["#161428", "#09080f", "#0e0c16"],
+    hemi: 0.7 * Math.PI,
+    moon: 0.55 * Math.PI,
+    exposure: 1.25,
+    sky: ["#3a3464", "#1c1428", "#100d19"],
     fog: { near: 20, far: 44 },
-    stage: 1.6 * 4,
+    stage: 2.0 * 4,
     pendant: PENDANT_TALK * 0.45,
     emissive: { room: 0.45, vote: 1 },
     glow: { room: 0.45, vote: 1 },

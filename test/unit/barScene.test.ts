@@ -150,13 +150,24 @@ describe("조명 단계 (talk · vote)", () => {
     bar.dispose();
   });
 
-  it("조명 단계 데이터는 시안 PHASE 값에서 출발한다: 반구·달빛 = 시안 × π (talk 0.42·0.35, vote 0.3·0.25)", () => {
-    expect(LIGHT_TUNE.talk.hemi).toBeCloseTo(0.42 * Math.PI, 6);
-    expect(LIGHT_TUNE.talk.moon).toBeCloseTo(0.35 * Math.PI, 6);
-    expect(LIGHT_TUNE.vote.hemi).toBeCloseTo(0.3 * Math.PI, 6);
-    expect(LIGHT_TUNE.vote.moon).toBeCloseTo(0.25 * Math.PI, 6);
-    expect(LIGHT_TUNE.talk.sky).toEqual(["#1a1830", "#0b0a14", "#120f1c"]);
-    expect(LIGHT_TUNE.vote.sky).toEqual(["#161428", "#09080f", "#0e0c16"]);
+  it("조명 단계 데이터는 승인 맵 그림(map-bar.png)과 나란히 놓고 맞춘 값이다 (06-14): talk 반구 1.1π·달빛 0.85π, vote 0.7π·0.55π, 노출 1.25, vote 무대 점광원 8", () => {
+    // 출발값은 시안 세기 × π(talk 0.42·0.35, vote 0.3·0.25)였고, 390×844 에서 바닥 판자·캐릭터·무대 둘레가 어둠에 묻혀 talk 는 약 2.6배, vote 는 약 2.3배 올렸다
+    expect(LIGHT_TUNE.talk.hemi).toBeCloseTo(1.1 * Math.PI, 6);
+    expect(LIGHT_TUNE.talk.moon).toBeCloseTo(0.85 * Math.PI, 6);
+    expect(LIGHT_TUNE.vote.hemi).toBeCloseTo(0.7 * Math.PI, 6);
+    expect(LIGHT_TUNE.vote.moon).toBeCloseTo(0.55 * Math.PI, 6);
+    expect(LIGHT_TUNE.talk.exposure).toBe(1.25);
+    expect(LIGHT_TUNE.vote.exposure).toBe(1.25);
+    expect(LIGHT_TUNE.vote.stage).toBeCloseTo(2.0 * 4, 6);
+    expect(LIGHT_TUNE.talk.sky).toEqual(["#524b84", "#2a2034", "#15111f"]);
+    expect(LIGHT_TUNE.vote.sky).toEqual(["#3a3464", "#1c1428", "#100d19"]);
+  });
+
+  it("vote 는 talk 보다 어둡고(반구·달빛·배경) 무대에만 점광원이 있다 — 화면 전체를 밝게 덮지 않는다", () => {
+    expect(LIGHT_TUNE.vote.hemi).toBeLessThan(LIGHT_TUNE.talk.hemi);
+    expect(LIGHT_TUNE.vote.moon).toBeLessThan(LIGHT_TUNE.talk.moon);
+    expect(LIGHT_TUNE.talk.stage).toBe(0);
+    expect(LIGHT_TUNE.vote.stage).toBeGreaterThan(0);
   });
 
   it("장면 배경과 안개 색은 같은 색이고 단계에 따라 바뀐다", () => {
@@ -164,10 +175,10 @@ describe("조명 단계 (talk · vote)", () => {
     bar.setLighting("talk");
     const fog = bar.root.fog!;
     const bg = bar.root.background as { getHexString(): string };
-    expect("#" + bg.getHexString()).toBe("#120f1c");
-    expect("#" + (fog.color as { getHexString(): string }).getHexString()).toBe("#120f1c");
+    expect("#" + bg.getHexString()).toBe("#15111f");
+    expect("#" + (fog.color as { getHexString(): string }).getHexString()).toBe("#15111f");
     bar.setLighting("vote");
-    expect("#" + bg.getHexString()).toBe("#0e0c16");
+    expect("#" + bg.getHexString()).toBe("#100d19");
     bar.dispose();
   });
 });

@@ -11,46 +11,17 @@ import { createWorldRuntime, loadWorld } from "../../world/runtime";
 import type { WorldModules, WorldRuntime } from "../../world/runtime";
 import { WorldStore } from "../../world/store";
 import { createHud } from "./hud";
+import { SPIKE_NAMES, makeTag } from "./tags";
 import { parsePerfParams, createScenario } from "./scenario";
 import type { PerfParams } from "./scenario";
 import "../../styles/world.css";
 import "../../styles/v2.css";
 
-/** 사람이 만들 수 없는 모양의 닉네임들 — 전각 4~5자 정도(실제 이름표 폭에 가깝게). 0번이 나 */
-const NAMES = ["별빛여우", "달토끼", "마피아왕", "조용한밤", "고양이탐정", "수상한손님", "반짝이", "시민일호"];
-/** 탭 이동을 시험하려는 사람이 누른다. 측정 시작 뒤 이 시간이 지나면 shot=1 은 멈춘다 */
+/** shot=1 은 측정이 시작된 뒤 이 시간(ms)에 시나리오와 HUD 를 멈춘다(스크린샷용) */
 const SHOT_FREEZE_MS = 10_000;
 
 export interface PerfScene {
   dispose(): void;
-}
-
-function seatColor(seat: number): string {
-  return `var(--seat-${(seat % 8) + 1})`;
-}
-
-/** 이름표 하나: HeadStack 과 같은 마크업·클래스(mv-head > mv-tag), 런타임이 transform·opacity·z-index 를 쓴다 */
-function makeTag(seat: number, name: string, me: boolean): HTMLElement {
-  const tag = document.createElement("div");
-  tag.className = "mf-world__tag";
-  tag.dataset.seat = String(seat);
-  if (me) tag.dataset.me = "true";
-  tag.setAttribute("aria-hidden", "true");
-  tag.style.opacity = "0";
-  const head = document.createElement("div");
-  head.className = "mv-head";
-  const box = document.createElement("span");
-  box.className = me ? "mv-tag is-me" : "mv-tag";
-  const dot = document.createElement("span");
-  dot.className = "mv-tag__dot";
-  dot.style.background = seatColor(seat);
-  const label = document.createElement("span");
-  label.className = "mv-tag__name";
-  label.textContent = me ? `${name} (나)` : name;
-  box.append(dot, label);
-  head.append(box);
-  tag.append(head);
-  return tag;
 }
 
 /** 걷는 영역 표시(nav=1)를 위한 작은 점 */
@@ -77,7 +48,7 @@ export function mount(root: HTMLElement, search: URLSearchParams): PerfScene {
   input.className = "mf-world__input";
   const tags = document.createElement("div");
   tags.className = "mf-world__tags";
-  const players = Array.from({ length: p.chars }, (_, seat) => ({ seat, nickname: NAMES[seat % NAMES.length]!, connected: true }));
+  const players = Array.from({ length: p.chars }, (_, seat) => ({ seat, nickname: SPIKE_NAMES[seat % SPIKE_NAMES.length]!, connected: true }));
   for (const pl of players) tags.append(makeTag(pl.seat, pl.nickname, pl.seat === 0));
   const navLayer = document.createElement("div");
   navLayer.style.cssText = "position:absolute;inset:0;pointer-events:none;z-index:var(--z-tags)";
