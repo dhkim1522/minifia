@@ -8,6 +8,14 @@ const nickname = z.string().max(64);
 export const CreateRoomBodySchema = z.object({ nickname, testMode: z.boolean().optional() }) satisfies z.ZodType<CreateRoomBody>;
 export const JoinRoomBodySchema = z.object({ nickname }) satisfies z.ZodType<JoinRoomBody>;
 
+// 로비 이동 입력(결정 0044-17): 목적지 두 정수뿐이다. 속도·경로·시각·신원(seat·v·t0 등)이 덧붙으면 거부한다(T-06-09).
+// ClientMessageSchema 의 멤버다(06-08) — 이 값이 먼저 선언되어야 유니온이 쓸 수 있다.
+export const MoveMessageSchema = z.strictObject({
+  t: z.literal("move"),
+  x: z.number().int().min(-MOVE_COORD_LIMIT).max(MOVE_COORD_LIMIT),
+  z: z.number().int().min(-MOVE_COORD_LIMIT).max(MOVE_COORD_LIMIT),
+}) satisfies z.ZodType<MoveMessage>;
+
 export const ClientMessageSchema = z.discriminatedUnion("t", [
   z.object({ t: z.literal("hello"), token: z.string().min(16).max(128) }),
   z.object({ t: z.literal("ping"), c: z.number() }),
@@ -40,12 +48,6 @@ export const ClientMessageSchema = z.discriminatedUnion("t", [
   z.strictObject({ t: z.literal("testBots"), count: z.number().int().min(0).max(MAX_TEST_BOTS) }),
   // 봇 투표 규칙(P-13): 두 값 모두 필수인 절대값. 모르는 값·빠진 키·덧붙은 키는 거부한다(T-04-46). 방장·testMode·대기실 검사는 서버 규칙(setBotVote)이 한다.
   z.strictObject({ t: z.literal("testBotVote"), exec: z.enum(["random", "yes", "no"]), pick: z.enum(["random", "host", "other"]) }),
+  // 로비 이동(결정 0044-17, 06-08): 목적지 두 정수뿐. 행위자는 소켓 첨부 playerId 로만 정해진다(T-06-17).
+  MoveMessageSchema,
 ]) satisfies z.ZodType<ClientMessage>;
-
-// 로비 이동 입력(결정 0044-17): 목적지 두 정수뿐이다. 속도·경로·시각·신원(seat·v·t0 등)이 덧붙으면 거부한다(T-06-09).
-// ClientMessageSchema 에는 아직 넣지 않는다 — ClientMessage 유니온과 DO 처리는 06-08 이 함께 더한다.
-export const MoveMessageSchema = z.strictObject({
-  t: z.literal("move"),
-  x: z.number().int().min(-MOVE_COORD_LIMIT).max(MOVE_COORD_LIMIT),
-  z: z.number().int().min(-MOVE_COORD_LIMIT).max(MOVE_COORD_LIMIT),
-}) satisfies z.ZodType<MoveMessage>;

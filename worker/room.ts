@@ -1,6 +1,6 @@
 import { DurableObject } from "cloudflare:workers";
 import { CLOSE_CODES, MAX_FRAME_BYTES } from "../shared/protocol";
-import type { ApiErrorCode, BotVoteExec, BotVotePick, ClientMessage, Claim, EmojiId, RemovedReason, RoomPreview, ServerMessage, WsErrorCode } from "../shared/protocol";
+import type { ApiErrorCode, BotVoteExec, BotVotePick, ClientMessage, Claim, EmojiId, RemovedReason, RoomPreview, ServerMessage, WorldFrame, WsErrorCode } from "../shared/protocol";
 import { botWakeAt, isBot, syncBotPlan, takeDueBotSteps } from "../shared/game/bots";
 import type { BotStep } from "../shared/game/bots";
 import { selectClaim } from "../shared/game/claim";
@@ -24,6 +24,9 @@ import { resetToLobby, setBotCount, setBotVote, setTestRole, skipPhase } from ".
 import type { RoleId } from "../shared/game/roles";
 import { nextWakeAt, tick } from "../shared/game/tick";
 import { castCandidateVote, castExecVote } from "../shared/game/vote";
+import { BAR_MAP } from "../shared/game/map";
+import { emptyWorld, moveFrame, requestMove, snapFrame, spawnPlayer } from "../shared/game/world";
+import type { WorldState } from "../shared/game/world";
 import { buildPreview, buildView } from "../shared/game/view";
 import { ClientMessageSchema } from "../shared/schemas";
 import { cryptoRandInt, randomToken } from "./random";
@@ -63,6 +66,8 @@ interface RateWindow {
 // 소켓은 하이버네이션 API(acceptWebSocket)로 받는다.
 export class Room extends DurableObject<Env> {
   private room: RoomState | null = null;
+  // 로비 이동 상태(06-08). room 키와 분리된 storage "world" 키에 저장한다 — 위치가 room 키를 매번 다시 쓰지 않게(RESEARCH R6).
+  private world: WorldState = emptyWorld();
   // 인메모리라 하이버네이션으로 비면 새로 센다(수용). 소켓 객체가 키라 hello 전 소켓도 센다.
   private readonly rates = new WeakMap<WebSocket, RateWindow>();
 
@@ -116,6 +121,8 @@ export class Room extends DurableObject<Env> {
     if (!created.ok) return { ok: false, error: created.error };
 
     this.room = created.state;
+    // 방장은 seat 0 의 입장 지점에 선다(MAP-01). 연결된 소켓이 아직 없어 보낼 프레임은 없다.
+    this.world = spawnPlayer(emptyWorld(), hostId, 0, input.now, BAR_MAP);
     await this.ctx.storage.put("room", this.room);
     await this.reschedule();
     return { ok: true, token, seat: 0 };
@@ -140,6 +147,10 @@ export class Room extends DurableObject<Env> {
     if (!result.ok) return { ok: false, error: result.error };
     this.room = result.state;
     await this.persistAndBroadcast();
+    // 새 사람은 자기 seat 의 입장 지점에 서고, 이미 연결된 소켓은 state 다음에 그 한 점 구간을 받는다(MAP-01).
+    this.world = spawnPlayer(this.world, result.player.id, result.player.seat, Date.now(), BAR_MAP);
+    const seg = this.world.segs[result.player.id];
+    if (seg) this.emitWorld(moveFrame(result.player.seat, seg));
     return { ok: true, token: result.player.token, seat: result.player.seat };
   }
 
@@ -228,6 +239,9 @@ export class Room extends DurableObject<Env> {
         return;
       case "testBotVote":
         await this.handleTestBotVote(ws, msg.exec, msg.pick);
+        return;
+      case "move":
+        this.handleMove(ws, msg.x, msg.z);
         return;
       default: {
         // 새 메시지를 ClientMessage 에 더하고 여기를 빠뜨리면 컴파일이 실패한다 — 조용히 무시되지 않게(Pitfall 15).
@@ -726,6 +740,9 @@ export class Room extends DurableObject<Env> {
     ws.serializeAttachment(attachment);
     this.room = attachConnection(room, player.id, connId);
     await this.persistAndBroadcast();
+    // state 다음에 이 소켓에만 모두의 지금 위치를 보낸다(로비일 때만 — 게임 중 위치는 나가지 않는다, T-06-16).
+    // 클라이언트 epoch 가 첫 state 에서 오르는 규약(WR-03)과 맞는 순서다.
+    if (this.room.phase === "lobby") this.sendTo(ws, snapFrame(this.world, this.room.players, Date.now()));
     // 첫 접속이면 만료가 늘었으니 알람도 따라 옮긴다.
     if (this.room.expiresAt !== room.expiresAt) await this.reschedule();
   }
@@ -792,6 +809,39 @@ export class Room extends DurableObject<Env> {
       const att = ws.deserializeAttachment() as SocketAttachment | null;
       if (!att || !ids.has(att.playerId) || !room.players.some((p) => p.id === att.playerId)) continue;
       this.sendTo(ws, msg);
+    }
+  }
+
+  // ---- 로비 이동(06-08) ----
+  // 신원은 소켓 첨부 playerId 뿐이고 단계·간격·경로는 서버가 정한다. 거절은 오류 프레임 없이 조용히 버린다(UI-SPEC "서버가 막은 탭에 문구 없음").
+  // 형식이 틀린 move 는 스키마에서 이미 BAD_MESSAGE 로 걸러진다.
+  private handleMove(ws: WebSocket, x: number, z: number): void {
+    const att = this.attachmentOf(ws);
+    if (!att || !this.room) return;
+    this.applyMove(att.playerId, { x, z }, Date.now());
+  }
+
+  // 사람과 봇 배회가 같은 본체를 쓴다(특권 없음, 결정 0024). 로비 밖·방에 없는 사람·150ms 안·경로 실패는 모두 조용히 버린다.
+  private applyMove(playerId: string, dest: { x: number; z: number }, now: number): void {
+    const room = this.room;
+    if (!room || room.phase !== "lobby") return;
+    const me = room.players.find((p) => p.id === playerId);
+    if (!me) return;
+    const result = requestMove(this.world, playerId, dest, now, BAR_MAP);
+    if (!result.ok) return;
+    this.world = result.world;
+    this.emitWorld(moveFrame(me.seat, result.seg));
+  }
+
+  // world 프레임의 유일한 전송 경로. 6페이즈 수신자 = 로비의 연결된 전원. 7~9페이즈의 audience 함수가 이 자리로 들어온다(RESEARCH R6).
+  // broadcastEvent 를 world 에 쓰지 않는다 — 그쪽은 단계를 가리지 않는 무차별 방송이라 게임 중 위치가 샌다(T-06-16).
+  private emitWorld(frame: WorldFrame): void {
+    const room = this.room;
+    if (!room || room.phase !== "lobby") return;
+    for (const ws of this.ctx.getWebSockets()) {
+      const att = ws.deserializeAttachment() as SocketAttachment | null;
+      if (!att || !room.players.some((p) => p.id === att.playerId)) continue;
+      this.sendTo(ws, frame);
     }
   }
 

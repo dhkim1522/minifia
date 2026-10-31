@@ -239,7 +239,9 @@ export type ClientMessage =
   // 원하는 봇 수(절대값, 0..MAX_TEST_BOTS). 서버가 사람 + 봇 <= MAX_PLAYERS 로 잘라 정확히 그만큼 둔다(결정 0024).
   | { t: "testBots"; count: number }
   // 봇 투표 규칙(절대값, 대기실에서만, 테스트 방 방장 도구 — 결정 0022·0024 확장, P-13). exec = 모든 봇의 처형 여부 표, pick = 모든 봇의 후보 선택.
-  | { t: "testBotVote"; exec: BotVoteExec; pick: BotVotePick };
+  | { t: "testBotVote"; exec: BotVoteExec; pick: BotVotePick }
+  // 로비 이동 — 목적지 두 정수뿐, 신원·속도·시각 없음(결정 0044-17)
+  | MoveMessage;
 
 // 테스트 방 봇 투표 선택(결정 0022·0024 확장, P-13). 무작위가 기본이고 고정 값은 방장이 대기실에서 정한다.
 export type BotVoteExec = "random" | "yes" | "no";
@@ -296,7 +298,7 @@ export type WsErrorCode =
 // 공개 식별자는 seat 뿐이다 — world 프레임에는 playerId·토큰·역할 자리가 없다(누설 표면 0).
 /** 이동 목적지 좌표 한계: 방 [−7, 7] × UNIT. 입력 스키마와 저장값 복원이 같은 값을 쓴다. */
 export const MOVE_COORD_LIMIT = 700;
-/** 클라이언트 → 서버: 목적지 두 정수뿐이다. 속도·경로·시각·신원은 서버가 정한다. 서버 처리는 06-08 에서 ClientMessage 에 더한다. */
+/** 클라이언트 → 서버: 목적지 두 정수뿐이다. 속도·경로·시각·신원은 서버가 정한다. ClientMessage 의 멤버다(06-08). */
 export interface MoveMessage {
   t: "move";
   x: number;

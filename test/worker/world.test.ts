@@ -66,8 +66,6 @@ describe("로비 이동 — 트레이서 (MAP-02, MAP-01)", () => {
   it("손님의 move 한 번은 방장·손님 소켓에 같은 world.move 로 가고 첫 점은 손님 위치, 끝 점은 목적지다", async () => {
     const s = await seat(1, 0);
     const guest = s.guests[0]!;
-    await settle(s.host, 0);
-    await settle(guest.sock, 0);
     send(guest.sock, { t: "move", x: 300, z: 100 });
     const onHost = (await nextFrame(s.host, isWalk(1))) as MoveFrame;
     const onGuest = (await nextFrame(guest.sock, isWalk(1))) as MoveFrame;
@@ -118,6 +116,7 @@ describe("로비 이동 — 트레이서 (MAP-02, MAP-01)", () => {
   it("hello 전 소켓의 move 는 아무 프레임도 만들지 않는다", async () => {
     const s = await seat(0, 0);
     const anon = await connect(s.code);
+    await settle(s.host, 0); // hello 뒤 snap 이 아직 오는 중일 수 있어 먼저 비운다
     const mh = mark(s.host);
     const ma = mark(anon);
     send(anon, { t: "move", x: 300, z: 100 });
@@ -130,6 +129,7 @@ describe("로비 이동 — 트레이서 (MAP-02, MAP-01)", () => {
   it("형식이 틀린 move(소수·덧붙은 seat)는 기존 규칙대로 BAD_MESSAGE 다", async () => {
     const s = await seat(1, 0);
     const guest = s.guests[0]!;
+    await settle(guest.sock, 0); // hello 뒤 snap 이 아직 오는 중일 수 있어 먼저 비운다
     const mk = mark(guest.sock);
     send(guest.sock, { t: "move", x: 1.5, z: 0 });
     send(guest.sock, { t: "move", x: 0, z: 0, seat: 1 });
