@@ -4,17 +4,17 @@ milestone: v2.0
 milestone_name: 같은 공간
 current_phase: 06
 current_phase_name: 월드 뼈대
-status: planning
-stopped_at: Phase 6 UI-SPEC approved
-last_updated: "2026-10-31T15:03:29.844Z"
-last_activity: 2026-10-30
-last_activity_desc: v2.0 로드맵 생성 (페이즈 6~12, 요구사항 44/44 매핑)
-state_head: 33d942d7589448e49c330fb3d671837409bbd767
+status: executing
+stopped_at: Completed 06-01-PLAN.md
+last_updated: "2026-10-31T15:20:24.219Z"
+last_activity: 2026-11-01
+last_activity_desc: Phase 06 execution started
+state_head: 78063948858cf1d9a6b983552b5c44ef6becbf98
 progress:
   total_phases: 7
   completed_phases: 0
   total_plans: 21
-  completed_plans: 0
+  completed_plans: 1
   percent: 0
 ---
 
@@ -25,14 +25,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-10-30)
 
 **Core value:** 링크 하나로 모인 친구들이 설명 없이 정통 마피아 한 판(6~10분)을 끝까지 마치는 것
-**Current focus:** v2.0 같은 공간 — 6페이즈(월드 뼈대) 계획 전. 먼저 메인 세션에서 v2.0 디자인을 캔버스로 승인받는다
+**Current focus:** Phase 06 — 월드 뼈대
 
 ## Current Position
 
-Phase: 06 (월드 뼈대) — READY TO EXECUTE
-Plan: —
-Status: 로드맵 완료. 디자인 승인(캔버스) 후 `/gsd-ui-phase 6` → `/gsd-plan-phase 6 --research-phase`
-Last activity: 2026-10-30 — v2.0 로드맵 생성 (페이즈 6~12, 요구사항 44/44 매핑)
+Phase: 06 (월드 뼈대) — EXECUTING
+Plan: 2 of 21
+Status: Ready to execute
+Last activity: 2026-11-01 — Phase 06 execution started
 
 Progress: [░░░░░░░░░░] 0% (0/7 phases)
 
@@ -54,6 +54,11 @@ Progress: [░░░░░░░░░░] 0% (0/7 phases)
 - Trend: -
 
 *Updated after each plan completion. v1.0 지표(107 plans)는 MILESTONES.md 와 git 기록에 있다*
+**Per-Plan Metrics:**
+
+| Plan | Duration | Tasks | Files |
+|------|----------|-------|-------|
+| Phase 06 P01 | 12 min | 3 tasks | 17 files |
 
 ## Accumulated Context
 
@@ -65,6 +70,8 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Roadmap v2.0]: 유령(GHOST)을 낮 처형 페이즈에 묶었다 — 고정 테이블 삭제로 v1.0 관전 화면이 사라져 첫 처형부터 죽은 사람이 지켜볼 곳이 필요하다
 - [Roadmap v2.0]: 6페이즈에 렌더 성능 게이트(실기기 5분 평균 55fps 이상)를 둔다. 미달이면 그림자·광원·건물 예산을 줄이고, 그래도 모자라면 맵을 미리 구운 이미지로(결정 0046)
 - [Roadmap v2.0]: 9페이즈에서 한 판이 맵 위(낮 + 밤)에서 처음 끝까지 돌고 팀 테스트로 재미 가설을 확인한 뒤 10페이즈 이후 투자를 이어 간다
+- [Phase 06]: [06-01] 배포 대상은 scripts/deploy-target.mjs 한 출처(minifia-v2), v1.0 호스트는 리터럴 한 곳 + 정적 검사 허용 목록으로 고정
+- [Phase 06]: [06-01] v1.0 가드는 파싱된 url.origin 에 건다(base null 오탐 방지); 우회 플래그·환경 변수 없음
 
 ### Pending Todos
 
@@ -101,9 +108,9 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-31T13:23:32.653Z
-Stopped at: Phase 6 UI-SPEC approved
-Resume file: .planning/phases/06-world-skeleton/06-UI-SPEC.md
+Last session: 2026-10-31T15:20:24.192Z
+Stopped at: Completed 06-01-PLAN.md
+Resume file: None
 
 ## Operator Next Steps
 
