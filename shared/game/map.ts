@@ -29,6 +29,20 @@ export interface MapDef {
   spawns: readonly Spawn[];
 }
 
+/** 캐릭터 머리 꼭대기에서 카메라 쪽으로 가는 평행 광선 방향: yaw π/4, 거리 17, 높이 12.5 (정사영 카메라) */
+export const TO_CAMERA: { x: number; y: number; z: number } = { x: 12.0208153, y: 12.5, z: 12.0208153 };
+
+/** 장애물 원문. floor 는 바닥을 막는지(false 면 가려짐 검사에만 쓴다). 길이 단위는 월드 단위. */
+export type Obstacle =
+  | { kind: "circle"; x: number; z: number; r: number; y0: number; y1: number; floor: boolean }
+  | { kind: "rect"; x: number; z: number; w: number; d: number; rot: number; y0: number; y1: number; floor: boolean };
+
+// RED 단계 임시 자리표시: 아래 BAR_* 는 아직 비어 있다.
+export const BAR_OBSTACLES: readonly Obstacle[] = [];
+export const BAR_MASK: readonly string[] = [];
+export const BAR_SPAWNS: readonly Spawn[] = [];
+export const BAR_MAP: MapDef = { id: "bar", size: GRID_SIZE, mask: new Uint8Array(0), spawns: BAR_SPAWNS };
+
 /** 칸 한 변(고정소수점) = CELL × UNIT */
 const CELL_FX = 50;
 /** 격자 원점(고정소수점) = GRID_ORIGIN × UNIT */
