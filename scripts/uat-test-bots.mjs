@@ -14,6 +14,7 @@
 // 종료 코드: 0 = UAT TEST-BOTS OK, 1 = UAT TEST-BOTS FAIL, 2 = 중단(제한 시간·연결 오류).
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { exitIfV1 } from "./deploy-target.mjs";
 
 const args = { base: null, prod: false, previousVersion: null };
 for (let i = 2; i < process.argv.length; i++) {
@@ -33,6 +34,7 @@ if (args.previousVersion === "") {
 let base = args.base;
 if (args.prod) base = readFileSync(fileURLToPath(new URL("./prod-url.txt", import.meta.url)), "utf8").trim();
 const url = new URL((base ?? "http://localhost:5173").replace(/\/+$/, ""));
+exitIfV1(url.origin); // v1.0 주소는 요청 전에 거부(DEPLOY-02)
 const wsBase = `${url.protocol === "https:" ? "wss:" : "ws:"}//${url.host}`;
 
 const OVERALL_LIMIT_MS = 360_000; // 투표 분기와 g 방 재시도로 예전(240초)보다 길어질 수 있다

@@ -3,6 +3,7 @@
 // 이 파일은 v1.0 호스트 문자열을 의도적으로 담는다 — 거부 대상이기 때문이다(정적 검사 허용 목록).
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import {
@@ -113,4 +114,48 @@ test("저장소 사실: npm run deploy 는 계정 확인 → 빌드 → 산출�
     JSON.parse(read("package.json")).scripts.deploy,
     "node scripts/check-account.mjs && vite build && node scripts/check-deploy-target.mjs && wrangler deploy",
   );
+});
+
+// --- 정적 검사: v1.0 문자열 전수·가드 호출 누락(DEPLOY-02, T-06-02) ---
+// 가드가 빠진 스크립트를 v1 주소로 실제 실행하면 v1 에 요청이 나가므로, 실행하지 않고 파일 내용으로만 확인한다.
+const gitLsFiles = (...paths) =>
+  execFileSync("git", ["ls-files", "--", ...paths], { cwd: ROOT, encoding: "utf8" }).split("\n").filter(Boolean);
+
+test("정적 검사: v1.0 호스트 문자열은 허용 목록 밖에 없다", () => {
+  const allowedFiles = new Set([
+    "scripts/deploy-target.mjs", // 정의(V1_HOST·V1_ORIGIN)
+    "scripts/deploy-target.test.mjs", // 거부 테스트
+    "scripts/e2e/lib.test.mjs", // resolveTarget 거부 테스트
+  ]);
+  const allowedLine = (file, line) => file === "index.html" && line.includes('property="og:image"'); // UI-SPEC: og:* 는 이 페이즈에서 바꾸지 않는다
+  const found = [];
+  for (const file of gitLsFiles("scripts", "src", "shared", "worker", "index.html", "wrangler.jsonc", "package.json")) {
+    if (allowedFiles.has(file)) continue;
+    let text;
+    try {
+      text = read(file);
+    } catch {
+      continue; // 작업 트리에서 지워진 추적 파일
+    }
+    text.split("\n").forEach((line, i) => {
+      if (line.toLowerCase().includes(V1_HOST) && !allowedLine(file, line)) found.push(`${file}:${i + 1}`);
+    });
+  }
+  assert.deepEqual(found, []);
+});
+
+test("정적 검사: prod-url.txt 를 읽는 요청 스크립트는 모두 v1.0 가드를 부른다", () => {
+  // 가드가 필요 없는 파일: 이 테스트 자신, 정의 파일, 네트워크 요청이 없는 배포 게이트(자체 호스트 대조)
+  const exempt = new Set(["scripts/deploy-target.test.mjs", "scripts/deploy-target.mjs", "scripts/check-deploy-target.mjs"]);
+  const readers = gitLsFiles("scripts").filter(
+    (f) => f.endsWith(".mjs") && !f.endsWith(".test.mjs") && !exempt.has(f) && read(f).includes("prod-url.txt"),
+  );
+  assert.ok(readers.length >= 7, `prod-url.txt 를 읽는 스크립트 수집 실패: ${readers.join(", ")}`);
+  const unguarded = readers.filter((f) => !/\bexitIfV1\(|\bresolveTarget\(/.test(read(f)));
+  assert.deepEqual(unguarded, []);
+  // 명시적 주소 갈래: 이름이 알려진 일곱 스크립트는 반드시 exitIfV1 을 직접 부른다
+  for (const f of ["smoke", "bots", "uat-day", "uat-night", "uat-vote", "uat-test-room", "uat-test-bots"]) {
+    assert.match(read(`scripts/${f}.mjs`), /\bexitIfV1\(/, `${f}.mjs`);
+  }
+  assert.match(read("scripts/gallery.mjs"), /\bexitIfV1\(/);
 });

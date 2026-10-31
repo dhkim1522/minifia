@@ -9,8 +9,8 @@ export const V1_NAME = "minifia";
 /** 개인 계정의 workers.dev 하위 도메인(docs/setup.md). */
 export const WORKERS_SUBDOMAIN = "dhplay";
 /** v1.0 배포본의 호스트 — v2 스크립트는 이 호스트에 요청을 보내지 않는다. */
-export const V1_HOST = `${V1_NAME}.${WORKERS_SUBDOMAIN}.workers.dev`;
-export const V1_ORIGIN = `https://${V1_HOST}`;
+export const V1_HOST = "minifia.dhplay.workers.dev";
+export const V1_ORIGIN = "https://minifia.dhplay.workers.dev";
 
 /** v2.0 공개 주소(workers.dev 규칙으로 파생). */
 export function expectedOrigin() {

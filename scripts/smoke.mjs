@@ -15,6 +15,7 @@
 // 토큰 값은 어떤 출력에도 찍지 않는다.
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { exitIfV1 } from "./deploy-target.mjs";
 
 const TOTAL_LIMIT_MS = 30_000;
 const STATE_LIMIT_MS = 10_000;
@@ -122,11 +123,14 @@ function resolveBase(args) {
     base = readFileSync(file, "utf8").trim();
   }
   base = (base ?? "http://localhost:5173").replace(/\/+$/, "");
+  let url;
   try {
-    return new URL(base);
+    url = new URL(base);
   } catch {
     return fail(`주소를 읽을 수 없음: ${base}`);
   }
+  exitIfV1(url.origin); // v1.0 주소는 요청 전에 거부(DEPLOY-02)
+  return url;
 }
 
 async function getVersion(origin) {

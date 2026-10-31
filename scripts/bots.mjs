@@ -11,6 +11,7 @@
 // Ctrl+C 로 끝내면 봇이 모두 방을 나간다. Node 22.12+ 내장 fetch·WebSocket 만 쓴다.
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { exitIfV1 } from "./deploy-target.mjs";
 
 const EMOJIS = ["smile", "grin", "surprised", "suspicious", "angry", "sad", "heart", "exclaim"];
 const NAMES = ["봇가나다라", "봇마바사아", "봇자차카타", "봇파하갸냐", "봇더러머버", "봇서어저처", "봇커터퍼허"];
@@ -40,6 +41,7 @@ const args = parseArgs(process.argv.slice(2));
 let base = args.base;
 if (args.prod) base = readFileSync(fileURLToPath(new URL("./prod-url.txt", import.meta.url)), "utf8").trim();
 const url = new URL((base ?? "http://localhost:5173").replace(/\/+$/, ""));
+exitIfV1(url.origin); // v1.0 주소는 요청 전에 거부(DEPLOY-02)
 const wsUrl = `${url.protocol === "https:" ? "wss:" : "ws:"}//${url.host}/api/rooms/${args.code}/ws`;
 const log = (...a) => { if (!args.quiet) console.log(...a); };
 const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];

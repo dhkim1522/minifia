@@ -2,9 +2,11 @@
 // 사용법: node scripts/gallery.mjs <저장 폴더> [police|mafia|doctor|citizen] [봇 수 3~7] — 경찰이면 입장·닉네임 화면도 찍는다. Chrome 경로는 E2E 와 같다.
 import { existsSync } from "node:fs";
 import { findChrome } from "./e2e/lib.mjs";
+import { expectedOrigin, exitIfV1 } from "./deploy-target.mjs";
 const B = await import("./e2e/browser.mjs");
 const { createTestRoom, openHostPage, openTestSheet, closeSheet, setBots, chooseRole, startGame, skipTo, sleep, launchChrome, setBotVote, voteAs, pickCandidate, inspectSeat, openRoleCard, selectRoleCardTab, closeRoleCard, openChatHistory, waitTurnSeat, pickChip, tapSeat } = B;
-const ORIGIN = "https://minifia.dhplay.workers.dev";
+const ORIGIN = expectedOrigin();
+exitIfV1(ORIGIN); // 맨 앞에서 v1.0 거부(DEPLOY-02)
 const OUT = process.argv[2];
 const ROLE = process.argv[3] || "police";
 const BOTS = Number(process.argv[4] || 5);

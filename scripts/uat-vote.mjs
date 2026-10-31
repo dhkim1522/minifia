@@ -20,6 +20,7 @@
 // 이 스크립트는 로컬 서버에서 돌린다. 배포본(--prod) 실행은 화면 계획 뒤 배포 때 한다(결정 0036-15, D-26).
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { exitIfV1 } from "./deploy-target.mjs";
 
 const args = { base: null, prod: false };
 for (let i = 2; i < process.argv.length; i++) {
@@ -31,6 +32,7 @@ for (let i = 2; i < process.argv.length; i++) {
 let base = args.base;
 if (args.prod) base = readFileSync(fileURLToPath(new URL("./prod-url.txt", import.meta.url)), "utf8").trim();
 const url = new URL((base ?? "http://localhost:5173").replace(/\/+$/, ""));
+exitIfV1(url.origin); // v1.0 주소는 요청 전에 거부(DEPLOY-02)
 const wsBase = `${url.protocol === "https:" ? "wss:" : "ws:"}//${url.host}`;
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));

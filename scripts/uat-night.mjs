@@ -18,6 +18,7 @@
 // 화면 모양·애니메이션·실제 폰 시계 차이는 봇으로 볼 수 없다. 토큰은 어떤 출력에도 찍지 않는다.
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { exitIfV1 } from "./deploy-target.mjs";
 
 const args = { base: null, prod: false, players: 5 };
 for (let i = 2; i < process.argv.length; i++) {
@@ -30,6 +31,7 @@ if (!Number.isInteger(args.players) || args.players < 4 || args.players > 8) thr
 let base = args.base;
 if (args.prod) base = readFileSync(fileURLToPath(new URL("./prod-url.txt", import.meta.url)), "utf8").trim();
 const url = new URL((base ?? "http://localhost:5173").replace(/\/+$/, ""));
+exitIfV1(url.origin); // v1.0 주소는 요청 전에 거부(DEPLOY-02)
 const wsBase = `${url.protocol === "https:" ? "wss:" : "ws:"}//${url.host}`;
 const N = args.players;
 
