@@ -17,7 +17,8 @@
 - `docs/screen-map.md` — 폰 폭별 화면 영역과 자동 검사(E2E·에셋) 지도
 - `.planning/` — GSD 요구사항·로드맵·진행 상태 (결정 0004). 범위와 진행은 여기를 기준으로 한다
 - `design/references/` — 디자인 참고 이미지 보관 위치(선택). 디자인 단계에서 경로를 주면 따른다. 앱 에셋에 넣지 않는다
-- 디자인 아티팩트(사람용, 결정 0010·0011) — 디자인 시스템 https://claude.ai/artifact/Tp175mmuxLAHycMUtwZJ9Q (이 세션에서만 고친다) · 화면설계서 https://claude.ai/artifact/QtbQYhk7ezy4fV7H98bZJz · 화면 흐름 https://claude.ai/artifact/NzZBqoJD8ut16J2VUwpn64 · 캐릭터 에셋 https://claude.ai/artifact/4dYpe74vxJHSnA4WhFSLTM. 사람용 산출물(시안·화면설계서 등)은 이 세션에서 Design 캔버스로 직접 만든다. GSD 에이전트는 아티팩트를 열 수 없으니 승인본은 `design/` 사본을 쓴다
+- v2.0 디자인 아티팩트 — 디자인 시스템 https://claude.ai/artifact/L4eeQTUD9rCa9Vmzv6fKpU (사본 `design/v2.0/design-system/`) · 지목·변론 배경 블록아웃 https://claude.ai/artifact/1hzgEyAufgnDPVMvPvxdhP (사본 `design/v2.0/blockout/`) · 캐릭터 원본 https://claude.ai/artifact/NP1XfUrYTTqQ5nAB1HKYT5 . 지도와 결정은 `design/v2.0/README.md`
+- v1.0 디자인 아티팩트(사람용, 결정 0010·0011) — 디자인 시스템 https://claude.ai/artifact/Tp175mmuxLAHycMUtwZJ9Q (이 세션에서만 고친다) · 화면설계서 https://claude.ai/artifact/QtbQYhk7ezy4fV7H98bZJz · 화면 흐름 https://claude.ai/artifact/NzZBqoJD8ut16J2VUwpn64 · 캐릭터 에셋 https://claude.ai/artifact/4dYpe74vxJHSnA4WhFSLTM. 사람용 산출물(시안·화면설계서 등)은 이 세션에서 Design 캔버스로 직접 만든다. GSD 에이전트는 아티팩트를 열 수 없으니 승인본은 `design/` 사본을 쓴다
 - `design/` — 승인된 디자인의 저장소 사본. 캐릭터 원본 `design/characters/`(규격 `ASSET_SPEC.md`), 배경 원본 `design/backgrounds/`(A_cute), 토큰 `tokens.json`(앱 `src/styles/tokens.css` 는 `npm run tokens` 로 생성)·화면설계서 v0.2 승인본 PNG `design/screens/`, 디자인 시스템 사본 `design/design-system/`(브랜드 문서·부품 참고 구현). 앱용 그림은 `public/characters/`, `public/backgrounds/`. AI 는 이 사본을 기준으로 화면을 만든다
 
 ## 작업 규칙

@@ -1,0 +1,13 @@
+<!-- @dsCard group="아래 패널" height=300 subtitle="지목 단계 기록" -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&family=Gowun+Batang:wght@700&display=swap">
+<div id="root" style="padding:16px; background: var(--night-800)"></div>
+<script>
+var M = window.MinifiaV2, h = React.createElement;
+function Demo(){ var s = React.useState(''); return h(M.ChatPanel, {value:s[0], onChange:s[1], onSend:function(){s[1]('');}, messages:[
+ {kind:'system', text:'[지목] 모두 무대 둘레에 서서 차례로 지목해요'},
+ {kind:'player', name:'하은', color:'#a9aebb', text:'도윤 님 아까부터 말이 없었어요'},
+ {kind:'vote', text:'민준 님이 도윤 님을 지목했어요'},
+ {kind:'hot', text:'지금 도윤 님이 가장 많이 지목받았어요'},
+ {kind:'player', name:'도윤', color:'#b87a5c', text:'저 아니에요 진짜'}]}); }
+ReactDOM.createRoot(document.getElementById('root')).render(h(Demo));
+</script>

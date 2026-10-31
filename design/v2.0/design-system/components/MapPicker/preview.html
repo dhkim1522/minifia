@@ -1,0 +1,9 @@
+<!-- @dsCard group="로비" height=190 subtitle="방장 화면 · 다른 사람 화면" -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&family=Gowun+Batang:wght@700&display=swap">
+<div id="root" style="padding:16px; background: var(--night-800)"></div>
+<script>
+var M = window.MinifiaV2, h = React.createElement;
+var MAPS=[{id:'bar',label:'지하 재즈 바',desc:'무대가 있는 바'},{id:'plaza',label:'시계탑 광장',desc:'시계가 남은 시간'},{id:'random',label:'랜덤',desc:'시작할 때 정해요'}];
+function Demo(){ var s = React.useState('random'); return h('div',{style:{display:'flex',flexDirection:'column',gap:'16px'}}, h(M.MapPicker,{maps:MAPS,value:s[0],onChange:s[1],host:true}), h(M.MapPicker,{maps:MAPS,value:s[0]})); }
+ReactDOM.createRoot(document.getElementById('root')).render(h(Demo));
+</script>

@@ -1,0 +1,7 @@
+<!-- @dsCard group="아래 패널" height=150 subtitle="동작 9종" -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&family=Gowun+Batang:wght@700&display=swap">
+<div id="root" style="padding:16px; background: var(--night-800)"></div>
+<script>
+var M = window.MinifiaV2, h = React.createElement;
+ReactDOM.createRoot(document.getElementById('root')).render(h(M.EmoteSheet, {emotes:[['throat','목 긋기'],['deny','나 아니야'],['clap','박수'],['cry','엉엉'],['handshake','악수'],['point','손가락질'],['praise','최고'],['surprise','깜짝'],['dance','춤']].map(function(e){return {id:e[0],label:e[1]};})}));
+</script>

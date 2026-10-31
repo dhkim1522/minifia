@@ -1,0 +1,82 @@
+/* minifia v2.0 디자인 시스템 — generated from tokens.json */
+:root, [data-theme="night"] {
+  --night-950: #0a0e1c;
+  --night-900: #0e1326;
+  --night-800: #151c36;
+  --night-700: #1e2847;
+  --night-600: #2a3760;
+  --overlay-ink: rgba(14, 19, 38, 0.8);
+  --overlay-ink-strong: rgba(14, 19, 38, 0.92);
+  --gray-50: #f1f2f5;
+  --gray-100: #e6e8ee;
+  --gray-300: #a9aebb;
+  --gray-500: #6b7180;
+  --gray-700: #3a3f4b;
+  --brass-200: #e8d3a8;
+  --brass-400: #c9a46a;
+  --brass-600: #8f7048;
+  --cream-100: #f1e6cf;
+  --crimson-300: #f2556a;
+  --crimson-400: #e0344b;
+  --crimson-500: #c8102e;
+  --crimson-700: #8e0b21;
+  --seat-1: #7a8fb8;
+  --seat-2: #8e7ab8;
+  --seat-3: #6fa59a;
+  --seat-4: #b89a6f;
+  --seat-5: #6f8fa8;
+  --seat-6: #9aa86f;
+  --seat-7: #b87a5c;
+  --seat-8: #a9aebb;
+  --light-lamp: #ffcf8a;
+  --light-stage: #ffe0b0;
+  --light-spot: #ffe6c4;
+  --light-moon: #c9d4ff;
+  --sky-overcast: #8a8496;
+  --shadow-text: 0 1px 2px rgba(0, 0, 0, 0.55);
+  --shadow-badge: 0 2px 6px rgba(0, 0, 0, 0.5);
+  --shadow-card: 0 16px 40px rgba(0, 0, 0, 0.55);
+}
+:root {
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --space-xl: 32px;
+  --space-2xl: 48px;
+  --space-3xl: 64px;
+  --radius-stamp: 4px;
+  --radius-sm: 8px;
+  --radius-badge: 12px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
+  --radius-pill: 999px;
+  --tap-min: 44px;
+  --control-input: 48px;
+  --control-button: 52px;
+  --badge-min: 34px;
+  --toast-top: 88px;
+  --dur-fast: 180ms;
+  --dur-pop: 260ms;
+  --dur-med: 420ms;
+  --dur-slow: 800ms;
+  --dur-pulse: 1100ms;
+  --dur-toast: 1500ms;
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --z-world: 1;
+  --z-tags: 10;
+  --z-toast: 40;
+  --z-overlay: 50;
+  --z-modal: 100;
+  --font-ui: "Gowun Dodum", system-ui, -apple-system, "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", sans-serif;
+  --font-serif: "Gowun Batang", "Apple SD Gothic Neo", "Noto Serif KR", serif;
+}
+.display { font-family: var(--font-ui); font-size: 36px; line-height: 1.2; font-weight: 700; }
+.heading { font-family: var(--font-ui); font-size: 24px; line-height: 1.2; font-weight: 700; }
+.body-strong { font-family: var(--font-ui); font-size: 16px; line-height: 1.5; font-weight: 700; }
+.body { font-family: var(--font-ui); font-size: 16px; line-height: 1.5; font-weight: 400; }
+.label-strong { font-family: var(--font-ui); font-size: 14px; line-height: 1.4; font-weight: 700; }
+.label { font-family: var(--font-ui); font-size: 14px; line-height: 1.4; font-weight: 400; }
+.badge-number { font-family: var(--font-serif); font-size: 22px; line-height: 1; font-weight: 700; }
+.badge-unit { font-family: var(--font-ui); font-size: 12px; line-height: 1; font-weight: 700; }
+.stamp { font-family: var(--font-serif); font-size: 15px; line-height: 1; font-weight: 700; letter-spacing: 0.12em; }

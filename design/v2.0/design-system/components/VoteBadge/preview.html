@@ -1,0 +1,7 @@
+<!-- @dsCard group="머리 위" height=110 subtitle="1표 · 2표 · 선두 5표" -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&family=Gowun+Batang:wght@700&display=swap">
+<div id="root" style="padding:28px 16px; background: radial-gradient(ellipse at 50% 40%, #3a2a22 0%, #1b1520 60%, #0a0e1c 100%);"></div>
+<script>
+var M = window.MinifiaV2, h = React.createElement;
+ReactDOM.createRoot(document.getElementById('root')).render(h('div', {style:{display:'flex',gap:'28px',alignItems:'flex-end',justifyContent:'center'}}, h(M.VoteBadge, {count:1}), h(M.VoteBadge, {count:2}), h(M.VoteBadge, {count:5, lead:true})));
+</script>

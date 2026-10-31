@@ -1,0 +1,70 @@
+/* minifia v2.0 게임 겹침 부품. 값은 tokens.css 의 변수만 쓴다 */
+.mv-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+@keyframes mv-pop { 0% { transform: scale(0.4); opacity: 0; } 60% { transform: scale(1.2); opacity: 1; } 100% { transform: scale(1); } }
+@keyframes mv-pulse { 0%, 100% { transform: scale(1.18); } 50% { transform: scale(1.34); } }
+@keyframes mv-stamp { 0% { transform: rotate(-10deg) scale(2.2); opacity: 0; } 70% { transform: rotate(-10deg) scale(0.92); opacity: 1; } 100% { transform: rotate(-10deg) scale(1); } }
+
+/* 단계 머리 */
+.mv-phase { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-md); color: var(--gray-100); font-family: var(--font-ui); }
+.mv-phase__text { display: flex; flex-direction: column; gap: var(--space-xs); min-width: 0; }
+.mv-phase__title { font-size: 24px; line-height: 1.2; font-weight: 700; color: var(--gray-50); }
+.mv-phase__hint { font-size: 14px; line-height: 1.4; color: var(--gray-300); }
+.mv-phase__time { font-size: 24px; line-height: 1.2; font-weight: 700; color: var(--gray-50); font-variant-numeric: tabular-nums; }
+.mv-phase__time.is-urgent { color: var(--crimson-400); }
+
+/* 머리 위 쌓임 */
+.mv-head { display: inline-flex; flex-direction: column; align-items: center; gap: var(--space-xs); }
+.mv-tag { display: inline-flex; align-items: center; gap: 6px; padding: 2px var(--space-sm); border-radius: var(--radius-pill); background: var(--overlay-ink); color: var(--gray-50); font-family: var(--font-ui); font-size: 14px; line-height: 1.4; font-weight: 700; white-space: nowrap; text-shadow: var(--shadow-text); }
+.mv-tag.is-me { box-shadow: inset 0 0 0 1.5px var(--gray-100); }
+.mv-tag.is-away { opacity: 0.55; }
+.mv-tag.is-away .mv-tag__dot { background: var(--gray-700) !important; }
+.mv-tag__dot { width: 8px; height: 8px; border-radius: var(--radius-pill); flex: none; }
+.mv-badge { display: inline-flex; align-items: baseline; justify-content: center; gap: 2px; min-width: var(--badge-min); box-sizing: border-box; padding: 4px 10px 6px; border-radius: var(--radius-badge); background: var(--overlay-ink-strong); border: 2px solid var(--brass-400); box-shadow: var(--shadow-badge); white-space: nowrap; transform-origin: 50% 100%; animation: mv-pop var(--dur-pop) ease-out both; }
+.mv-badge.is-lead { animation: mv-pulse var(--dur-pulse) ease-in-out infinite; filter: drop-shadow(0 0 6px rgba(255, 224, 176, 0.75)); }
+.mv-badge__num { font-family: var(--font-serif); font-size: 22px; line-height: 1; font-weight: 700; color: var(--cream-100); font-variant-numeric: tabular-nums; }
+.mv-badge__unit { font-family: var(--font-ui); font-size: 12px; line-height: 1; font-weight: 700; color: var(--brass-400); }
+.mv-stamp { display: inline-block; padding: 4px 8px 5px 10px; border: 2px solid var(--brass-400); border-radius: var(--radius-stamp); background: var(--overlay-ink-strong); color: var(--brass-200); font-family: var(--font-serif); font-size: 15px; line-height: 1; font-weight: 700; letter-spacing: 0.12em; white-space: nowrap; transform: rotate(-10deg); animation: mv-stamp var(--dur-med) ease-out both; }
+
+/* 화면 위 지목 알림 */
+.mv-toast { display: flex; justify-content: center; pointer-events: none; opacity: 0; transition: opacity 220ms; }
+.mv-toast.is-on { opacity: 1; }
+.mv-toast__text { padding: var(--space-sm) var(--space-md); border-radius: var(--radius-pill); background: var(--night-800); border: 1px solid var(--night-600); color: var(--gray-50); font-family: var(--font-ui); font-size: 16px; line-height: 1.5; font-weight: 700; white-space: nowrap; }
+
+/* 채팅 */
+.mv-chat { display: flex; flex-direction: column; gap: var(--space-sm); font-family: var(--font-ui); }
+.mv-chat__log { display: flex; flex-direction: column; justify-content: flex-end; gap: var(--space-xs); min-height: 112px; max-height: 168px; overflow-y: auto; box-sizing: border-box; padding: var(--space-sm) 12px; border-radius: var(--radius-badge); background: var(--night-900); }
+.mv-chat__msg, .mv-chat__sys { margin: 0; font-size: 16px; line-height: 1.5; word-break: keep-all; overflow-wrap: anywhere; }
+.mv-chat__msg { color: var(--gray-100); }
+.mv-chat__dot { display: inline-block; width: 8px; height: 8px; margin-right: 6px; border-radius: var(--radius-pill); vertical-align: 2px; }
+.mv-chat__name { margin-right: 6px; color: var(--gray-50); }
+.mv-chat__msg.is-mafia .mv-chat__name { color: var(--crimson-300); }
+.mv-chat__sys { font-size: 14px; line-height: 1.4; color: var(--gray-300); }
+.mv-chat__sys.is-vote { color: var(--gray-100); }
+.mv-chat__sys.is-hot { color: var(--brass-200); }
+.mv-chat__form { display: flex; gap: var(--space-sm); }
+.mv-chat__input { flex: 1; min-width: 0; height: var(--control-input); box-sizing: border-box; padding: 0 var(--space-md); border-radius: var(--radius-md); border: 1px solid var(--night-600); background: var(--night-900); color: var(--gray-100); font-family: inherit; font-size: 16px; }
+.mv-chat__input::placeholder { color: var(--gray-300); }
+.mv-chat__send { height: var(--control-input); padding: 0 var(--space-md); border-radius: var(--radius-md); border: 0; background: var(--gray-100); color: var(--night-900); font-family: inherit; font-size: 16px; font-weight: 700; cursor: pointer; }
+.mv-chat__send:disabled { background: var(--night-700); color: var(--gray-300); cursor: default; }
+
+/* 동작 목록 */
+.mv-emotes { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-sm); }
+.mv-emotes__btn { min-height: var(--control-input); padding: 0 var(--space-xs); border-radius: var(--radius-badge); border: 1px solid var(--night-600); background: var(--night-700); color: var(--gray-100); font-family: var(--font-ui); font-size: 14px; font-weight: 700; cursor: pointer; }
+.mv-emotes__btn:disabled { opacity: 0.45; cursor: default; }
+
+/* 맵 선택 */
+.mv-maps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-sm); font-family: var(--font-ui); }
+.mv-maps__opt { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-height: 64px; box-sizing: border-box; padding: 10px 12px; border-radius: var(--radius-md); border: 1px solid var(--night-600); background: var(--night-800); color: var(--gray-100); font-family: inherit; text-align: left; cursor: pointer; }
+.mv-maps__opt.is-on { border: 2px solid var(--gray-100); background: var(--night-700); }
+.mv-maps__label { font-size: 16px; line-height: 1.3; font-weight: 700; color: var(--gray-50); }
+.mv-maps__desc { font-size: 14px; line-height: 1.4; color: var(--gray-300); }
+.mv-maps__guest { margin: 0; font-family: var(--font-ui); font-size: 14px; line-height: 1.4; color: var(--gray-300); }
+
+.mv-chat__send:focus-visible, .mv-chat__input:focus-visible, .mv-emotes__btn:focus-visible, .mv-maps__opt:focus-visible { outline: 2px solid var(--gray-100); outline-offset: 2px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .mv-badge, .mv-badge.is-lead, .mv-stamp { animation: none; }
+  .mv-badge.is-lead { transform: scale(1.18); }
+  .mv-toast { transition: none; }
+}
