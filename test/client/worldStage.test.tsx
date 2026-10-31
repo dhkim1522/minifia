@@ -4,10 +4,14 @@ import { Object3D } from "three";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import "../helpers/singleLineErrors";
 import { installMemoryStorage } from "../helpers/memoryStorage";
+import { BAR_MAP, snapToWalkable } from "../../shared/game/map";
+import { segmentEndsAt } from "../../shared/game/world";
 import type { PublicPlayer, RoomView, WorldSeg } from "../../shared/protocol";
 import { WorldStage } from "../../src/components/WorldStage";
+import { NETWORK_TEXT } from "../../src/net/copy";
 import type { WorldStageProps } from "../../src/components/WorldStage";
 import type { CharacterHandle, RendererStatusEvent, WorldRenderer } from "../../src/world/renderer";
+import { ENTER_MS, EXIT_MS, MOVE_ACK_TIMEOUT_MS, WALK_CUE_KEY } from "../../src/world/runtime";
 import type { WorldModules } from "../../src/world/runtime";
 import { WorldStore } from "../../src/world/store";
 
@@ -270,6 +274,17 @@ function tapAt(el: HTMLElement, x: number, y: number, holdMs = 50, id = 1): void
   fireEvent.pointerUp(el, { pointerId: id, clientX: x, clientY: y });
 }
 
+const realMatchMedia = window.matchMedia;
+
+/** prefers-reduced-motion 을 켠다(렌더 전에 부른다). afterEach 가 되돌린다 */
+function stubReducedMotion(on: boolean): void {
+  Object.defineProperty(window, "matchMedia", {
+    configurable: true,
+    writable: true,
+    value: () => ({ matches: on, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} }),
+  });
+}
+
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "setInterval", "clearInterval", "Date"] });
   vi.setSystemTime(1_000_000);
@@ -281,6 +296,7 @@ afterEach(() => {
   cleanup();
   vi.useRealTimers();
   vi.unstubAllGlobals();
+  Object.defineProperty(window, "matchMedia", { configurable: true, writable: true, value: realMatchMedia });
 });
 
 // ---------- Task 1: 트레이서 ----------
@@ -419,5 +435,348 @@ describe("WorldStage: 수명", () => {
     expect(alive).toHaveLength(1);
     s.utils.unmount();
     expect(s.world.renderers.every((r) => r.disposed >= 1)).toBe(true);
+  });
+});
+
+// ---------- Task 2: 이름표 층·등장/퇴장·링·손짓 링 ----------
+
+const tagOf = (utils: ReturnType<typeof render>, seat: number): HTMLElement | null => utils.container.querySelector<HTMLElement>(`.mf-world__tags [data-seat="${seat}"]`);
+
+describe("이름표 층 (MAP-01, MAP-07)", () => {
+  it("플레이어마다 이름표 하나가 data-seat·data-me·data-away 로 있고 나는 (나) 가 붙는다", async () => {
+    const players = [player(0, "민지"), player(1, "가나다라마바사아"), player(2, "영희", { connected: false })];
+    const s = await open({}, { players, mySeat: 1, ents: [seg(0, [200, 100]), seg(1, [-300, 50]), seg(2, [0, 0])] });
+    const mine = tagOf(s.utils, 1)!;
+    expect(mine.getAttribute("data-me")).toBe("true");
+    expect(mine.textContent).toBe("가나다라마바사아 (나)");
+    expect(tagOf(s.utils, 0)!.getAttribute("data-me")).toBeNull();
+    expect(tagOf(s.utils, 2)!.getAttribute("data-away")).toBe("true");
+    expect(tagOf(s.utils, 0)!.getAttribute("data-away")).toBeNull();
+    expect(s.utils.container.querySelectorAll(".mf-world__tags [data-seat]")).toHaveLength(3);
+  });
+
+  it("매 프레임 머리 꼭대기 투영 좌표에 장치 픽셀로 반올림한 translate 로 놓인다(간격 4px 위)", async () => {
+    const s = await open();
+    frame();
+    // seat 0 = (2, 1): 머리 sy = 300 + 10 − 18 = 292, 간격 4 → 288, sx = 220
+    expect(tagOf(s.utils, 0)!.getAttribute("style")).toContain("translate(220px, 288px) translate(-50%, -100%)");
+    // seat 1 = (−3, 0.5): sx = 170, sy = 300 + 5 − 18 − 4 = 283
+    expect(tagOf(s.utils, 1)!.getAttribute("style")).toContain("translate(170px, 283px) translate(-50%, -100%)");
+  });
+
+  it("장치 배율 3 이면 1/3 픽셀에 반올림한다", async () => {
+    vi.stubGlobal("devicePixelRatio", 3);
+    window.devicePixelRatio = 3;
+    const s = await open({}, { ents: [seg(0, [203, 107]), seg(1, [-300, 50])] });
+    frame();
+    // 머리: sx = 200 + 20.3 = 220.3 → 220.333…, sy = 300 + 10.7 − 18 − 4 = 288.7 → 288.666…
+    const style = tagOf(s.utils, 0)!.getAttribute("style")!;
+    expect(style).toMatch(/translate\(220\.3333\d*px, 288\.6666\d*px\)/);
+    window.devicePixelRatio = 1;
+  });
+
+  it("발끝 화면 y 가 큰 쪽이 위에 온다 — 이름표를 밀어서 피하지 않는다", async () => {
+    const s = await open();
+    frame();
+    const z0 = Number(tagOf(s.utils, 0)!.style.zIndex);
+    const z1 = Number(tagOf(s.utils, 1)!.style.zIndex);
+    expect(z0).toBeGreaterThan(z1); // seat 0 발 sy 310 > seat 1 발 sy 305
+    move(s.store, seg(1, [200, 400], Date.now(), 180)); // seat 1 이 더 앞(z=4)으로 간다
+    frame();
+    expect(Number(tagOf(s.utils, 1)!.style.zIndex)).toBeGreaterThan(Number(tagOf(s.utils, 0)!.style.zIndex));
+  });
+
+  it("같은 자리에 8명이 모여도 이름표는 서로 다른 순위를 갖고 모두 같은 좌표다(밀지 않음)", async () => {
+    const players = Array.from({ length: 8 }, (_, i) => player(i, `사람${i}`));
+    const ents = players.map((p) => seg(p.seat, [100, 100]));
+    const s = await open({}, { players, ents });
+    frame();
+    const styles = players.map((p) => tagOf(s.utils, p.seat)!.getAttribute("style")!.match(/translate\([^)]*\)/)![0]);
+    expect(new Set(styles).size).toBe(1);
+    const zs = players.map((p) => Number(tagOf(s.utils, p.seat)!.style.zIndex));
+    expect(new Set(zs).size).toBe(8);
+  });
+
+  it("이름표 안에서 닉네임은 텍스트로만 그려진다", async () => {
+    const players = [player(0, "<img src=x onerror=alert(1)>"), player(1, "철수")];
+    const s = await open({}, { players });
+    expect(s.utils.container.querySelector(".mf-world__tags img")).toBeNull();
+    expect(tagOf(s.utils, 0)!.textContent).toContain("<img src=x onerror=alert(1)>");
+  });
+});
+
+describe("접근성 목록과 내보내기 이름표 (MAP-07)", () => {
+  const players = [player(0, "민지"), player(1, "철수"), player(2, "영희", { connected: false })];
+  const ents = [seg(0, [200, 100]), seg(1, [-300, 50]), seg(2, [0, 0])];
+
+  it("보이지 않는 목록이 사람 수와 상태를 읽어 준다", async () => {
+    const s = await open({}, { players, mySeat: 1, ents });
+    const list = screen.getByRole("list", { name: "방에 있는 사람 3명" });
+    const items = [...list.querySelectorAll("li")].map((li) => li.textContent);
+    expect(items).toEqual(["민지 님, 방장", "철수 님, 나", "영희 님, 연결 끊김"]);
+    expect(s.utils.container.querySelector(".mf-world__tags [data-seat]")?.getAttribute("aria-hidden")).toBe("true");
+  });
+
+  it("방장은 끊긴 다른 사람 이름표를 44×44 이상 누르기 영역의 버튼으로 눌러 내보내기를 시작한다", async () => {
+    const s = await open({}, { players, mySeat: 0, ents });
+    const btn = screen.getByRole("button", { name: "영희 님 내보내기" });
+    expect(btn.classList.contains("mf-world__kick")).toBe(true);
+    fireEvent.click(btn);
+    expect(s.props.onKick).toHaveBeenCalledWith(2, "영희");
+    expect(screen.getAllByRole("button")).toHaveLength(1);
+  });
+
+  it("손님 화면에는 내보내기 버튼이 없다", async () => {
+    await open({}, { players, mySeat: 1, ents });
+    expect(screen.queryByRole("button", { name: /내보내기/ })).toBeNull();
+  });
+
+  it("연결된 사람·방장 자신에게는 버튼이 없고, 연결이 끊긴 동안(canSend false)에도 없다", async () => {
+    await open({}, { players: [player(0, "민지"), player(1, "철수")], mySeat: 0 });
+    expect(screen.queryByRole("button", { name: /내보내기/ })).toBeNull();
+    cleanup();
+    await open({ canSend: false }, { players, mySeat: 0, ents });
+    expect(screen.queryByRole("button", { name: /내보내기/ })).toBeNull();
+  });
+});
+
+describe("끊김 어둡게 (MAP-07)", () => {
+  it("서버 connected:false 인 사람의 캐릭터만 setDim(true), 돌아오면 false", async () => {
+    const players = [player(0, "민지"), player(1, "철수", { connected: false })];
+    const s = await open({}, { players });
+    const h1 = s.world.renderers[0]!.chars.get(1) as FakeHandle;
+    const h0 = s.world.renderers[0]!.chars.get(0) as FakeHandle;
+    expect(h1.dims.at(-1)).toBe(true);
+    expect(h0.dims.at(-1) ?? false).toBe(false);
+    s.rerender({ view: makeView([player(0, "민지"), player(1, "철수")]) });
+    expect(h1.dims.at(-1)).toBe(false);
+  });
+});
+
+describe("등장·퇴장 연출 (결정 0006)", () => {
+  it("첫 snap 에 있던 사람은 등장 연출 없이 서 있다(크기 1)", async () => {
+    const s = await open();
+    const h = s.world.renderers[0]!.chars.get(1)!;
+    expect(h.root.scale.x).toBeCloseTo(0.83, 6);
+    expect(h.root.position.y).toBe(0);
+    expect(tagOf(s.utils, 1)!.style.opacity).toBe("1");
+  });
+
+  it("뒤에 들어온 사람은 크기 0.6→1, 위 0.4→0, 이름표 0→1 로 420ms 에 걸쳐 내려앉는다", async () => {
+    const players = [...TWO, player(2, "영희")];
+    const s = await open();
+    s.rerender({ view: makeView(players) });
+    move(s.store, seg(2, [300, 300], Date.now(), 180));
+    frame(1);
+    const h = s.world.renderers[0]!.chars.get(2)!;
+    expect(h.root.scale.x).toBeCloseTo(0.83 * 0.6, 2);
+    expect(h.root.position.y).toBeGreaterThan(0.35);
+    expect(tagOf(s.utils, 2)!.style.opacity).toBe("0");
+    frames(ENTER_MS / 2);
+    expect(h.root.scale.x).toBeGreaterThan(0.83 * 0.6 + 0.05);
+    expect(h.root.position.y).toBeLessThan(0.3);
+    frames(ENTER_MS);
+    expect(h.root.scale.x).toBeCloseTo(0.83, 6);
+    expect(h.root.position.y).toBe(0);
+    expect(tagOf(s.utils, 2)!.style.opacity).toBe("1");
+  });
+
+  it("모션 줄이기면 등장은 즉시다", async () => {
+    stubReducedMotion(true);
+    const s = await open();
+    s.rerender({ view: makeView([...TWO, player(2, "영희")]) });
+    move(s.store, seg(2, [300, 300], Date.now(), 180));
+    frame(1);
+    const h = s.world.renderers[0]!.chars.get(2)!;
+    expect(h.root.scale.x).toBeCloseTo(0.83, 6);
+    expect(h.root.position.y).toBe(0);
+  });
+
+  it("나간 사람은 크기 1→0.6·이름표 1→0 으로 180ms 뒤 캐릭터와 이름표가 사라진다", async () => {
+    const s = await open();
+    const r = s.world.renderers[0]!;
+    const h = r.chars.get(1) as FakeHandle;
+    s.rerender({ view: makeView([player(0, "민지")]) });
+    frame(EXIT_MS / 2);
+    expect(r.chars.has(1)).toBe(true);
+    expect(h.root.scale.x).toBeLessThan(0.83);
+    expect(h.root.scale.x).toBeGreaterThan(0.83 * 0.6);
+    const mid = tagOf(s.utils, 1);
+    expect(mid).not.toBeNull();
+    expect(Number(mid!.style.opacity)).toBeLessThan(1);
+    expect(Number(mid!.style.opacity)).toBeGreaterThan(0);
+    frames(EXIT_MS * 2);
+    expect(r.chars.has(1)).toBe(false);
+    expect(h.disposed).toBe(1);
+    expect(tagOf(s.utils, 1)).toBeNull();
+  });
+
+  it("모션 줄이기면 퇴장도 즉시다", async () => {
+    stubReducedMotion(true);
+    const s = await open();
+    const r = s.world.renderers[0]!;
+    s.rerender({ view: makeView([player(0, "민지")]) });
+    frame(16);
+    expect(r.chars.has(1)).toBe(false);
+    expect(tagOf(s.utils, 1)).toBeNull();
+  });
+});
+
+describe("목적지 링 피드백 (UI-SPEC 터치해서 걷기 3~8)", () => {
+  const lastRing = (r: FakeRenderer) => r.markers.filter((m) => m.kind === "ring").at(-1);
+
+  it("루트의 data-ring 은 링이 있을 때 x,z(소수 둘째 자리)이고 없으면 속성이 없다", async () => {
+    const s = await open();
+    const root = s.utils.container.querySelector("[data-world-stage]")!;
+    expect(root.getAttribute("data-ring")).toBeNull();
+    tapAt(surface(s.utils), 250, 340);
+    expect(root.getAttribute("data-ring")).toBe("5.00,4.00");
+  });
+
+  it("내 구간이 오면 링이 구간 끝점(보정된 지점)으로 180ms 안에 옮겨진다", async () => {
+    const s = await open();
+    const r = s.world.renderers[0]!;
+    tapAt(surface(s.utils), 250, 340);
+    // 서버가 (5, 4) 를 (4, 3) 으로 보정했다
+    move(s.store, seg(0, [200, 100, 400, 300], Date.now(), 180));
+    frame(16);
+    const mid = lastRing(r)!;
+    expect(mid.at!.x).toBeLessThan(5);
+    frames(200);
+    expect(lastRing(r)!.at).toEqual({ x: 4, z: 3 });
+    const root = s.utils.container.querySelector("[data-world-stage]")!;
+    expect(root.getAttribute("data-ring")).toBe("4.00,3.00");
+  });
+
+  it("도착하면 링이 180ms 에 사라지고 data-ring 속성도 없어진다", async () => {
+    const s = await open();
+    const r = s.world.renderers[0]!;
+    tapAt(surface(s.utils), 250, 340);
+    const seg0 = seg(0, [200, 100, 400, 100], Date.now(), 180); // 길이 2 → 약 1.11초
+    move(s.store, seg0);
+    frames(500);
+    expect(lastRing(r)!.at).not.toBeNull();
+    frames(segmentEndsAt(seg0) - Date.now() + 40);
+    const fading = lastRing(r)!;
+    expect(fading.opacity).toBeLessThan(1);
+    frames(EXIT_MS + 50);
+    expect(lastRing(r)!.at).toBeNull();
+    expect(s.utils.container.querySelector("[data-world-stage]")!.getAttribute("data-ring")).toBeNull();
+  });
+
+  it("링은 1100ms 주기로 1 → 1.15 → 1 맥박하고 모션 줄이기면 1 로 고정이다", async () => {
+    const s = await open();
+    const r = s.world.renderers[0]!;
+    tapAt(surface(s.utils), 250, 340);
+    frames(1100);
+    const scales = r.markers.filter((m) => m.kind === "ring" && m.at).map((m) => m.scale);
+    expect(Math.max(...scales)).toBeGreaterThan(1.14);
+    expect(Math.min(...scales)).toBeGreaterThanOrEqual(1);
+  });
+
+  it("모션 줄이기면 링 맥박이 없다", async () => {
+    stubReducedMotion(true);
+    const s = await open();
+    const r = s.world.renderers[0]!;
+    tapAt(surface(s.utils), 250, 340);
+    frames(1100);
+    const scales = r.markers.filter((m) => m.kind === "ring" && m.at).map((m) => m.scale);
+    expect(new Set(scales)).toEqual(new Set([1]));
+  });
+
+  it("1.5초 안에 내 구간이 안 오면 링이 사라지고 알림이 한 번 뜬다", async () => {
+    const s = await open();
+    const r = s.world.renderers[0]!;
+    tapAt(surface(s.utils), 250, 340);
+    frames(MOVE_ACK_TIMEOUT_MS - 100);
+    expect(s.props.onNotice).not.toHaveBeenCalled();
+    frames(200);
+    expect(s.props.onNotice).toHaveBeenCalledTimes(1);
+    expect(s.props.onNotice).toHaveBeenCalledWith(NETWORK_TEXT);
+    expect(lastRing(r)!.at).toBeNull();
+    frames(3000);
+    expect(s.props.onNotice).toHaveBeenCalledTimes(1);
+  });
+
+  it("1.5초 안에 구간이 오면 알림이 없다", async () => {
+    const s = await open();
+    tapAt(surface(s.utils), 250, 340);
+    frames(600);
+    move(s.store, seg(0, [200, 100, 500, 400], Date.now(), 180));
+    frames(MOVE_ACK_TIMEOUT_MS * 2);
+    expect(s.props.onNotice).not.toHaveBeenCalled();
+  });
+
+  it("보내지 못했으면(send false) 링을 거두고 알림 없이 끝난다", async () => {
+    const s = await open({ send: vi.fn(() => false) });
+    const r = s.world.renderers[0]!;
+    tapAt(surface(s.utils), 250, 340);
+    frames(MOVE_ACK_TIMEOUT_MS + 200);
+    expect(lastRing(r)!.at).toBeNull();
+    expect(s.props.onNotice).not.toHaveBeenCalled();
+  });
+
+  it("걷는 중 다시 누르면 새 목적지로 바로 갈아탄다", async () => {
+    const s = await open();
+    const r = s.world.renderers[0]!;
+    const el = surface(s.utils);
+    tapAt(el, 250, 340);
+    move(s.store, seg(0, [200, 100, 500, 400], Date.now(), 180));
+    frames(300);
+    tapAt(el, 150, 320);
+    expect(lastRing(r)!.at).toEqual({ x: -5, z: 2 });
+    expect(s.send).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("처음 방문 손짓 링 (UI-SPEC 안내)", () => {
+  const cues = (r: FakeRenderer) => r.markers.filter((m) => m.kind === "cue");
+
+  it("저장소에 키가 없으면 맵이 열린 600ms 뒤 내 앞 걸을 수 있는 곳에 3번 맥박하고 사라지며 키가 저장된다", async () => {
+    const s = await open();
+    const r = s.world.renderers[0]!;
+    frames(590);
+    expect(cues(r).filter((m) => m.at)).toHaveLength(0);
+    frames(40);
+    const first = cues(r).find((m) => m.at)!;
+    expect(first).toBeTruthy();
+    // 내 위치(2, 1) 앞(+x+z) 약 2 단위, 걸을 수 있는 칸으로 보정
+    const want = snapToWalkable(BAR_MAP, { x: Math.round((2 + Math.SQRT1_2 * 2) * 100), z: Math.round((1 + Math.SQRT1_2 * 2) * 100) });
+    expect(first.at!.x).toBeCloseTo(want.x / 100, 6);
+    expect(first.at!.z).toBeCloseTo(want.z / 100, 6);
+    frames(3300);
+    const shown = cues(r).filter((m) => m.at);
+    expect(Math.max(...shown.map((m) => m.scale))).toBeGreaterThan(1.14);
+    expect(cues(r).at(-1)!.at).toBeNull();
+    expect(localStorage.getItem(WALK_CUE_KEY)).not.toBeNull();
+  });
+
+  it("키가 이미 있으면 손짓 링이 뜨지 않는다", async () => {
+    localStorage.setItem(WALK_CUE_KEY, "1");
+    const s = await open();
+    frames(5000);
+    expect(cues(s.world.renderers[0]!).filter((m) => m.at)).toHaveLength(0);
+  });
+
+  it("첫 탭이면 즉시 사라진다", async () => {
+    const s = await open();
+    const r = s.world.renderers[0]!;
+    frames(900);
+    expect(cues(r).at(-1)!.at).not.toBeNull();
+    tapAt(surface(s.utils), 250, 340);
+    expect(cues(r).at(-1)!.at).toBeNull();
+    expect(localStorage.getItem(WALK_CUE_KEY)).not.toBeNull();
+  });
+
+  it("모션 줄이기면 맥박 없이 2.5초 고정으로 보이다 사라진다", async () => {
+    stubReducedMotion(true);
+    const s = await open();
+    const r = s.world.renderers[0]!;
+    frames(700);
+    frames(2400);
+    expect(cues(r).at(-1)!.at).not.toBeNull();
+    expect(new Set(cues(r).filter((m) => m.at).map((m) => m.scale))).toEqual(new Set([1]));
+    frames(300);
+    expect(cues(r).at(-1)!.at).toBeNull();
   });
 });
