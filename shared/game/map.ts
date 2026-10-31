@@ -29,8 +29,11 @@ export interface MapDef {
   spawns: readonly Spawn[];
 }
 
-/** 캐릭터 머리 꼭대기에서 카메라 쪽으로 가는 평행 광선 방향: yaw π/4, 거리 17, 높이 12.5 (정사영 카메라) */
-export const TO_CAMERA: { x: number; y: number; z: number } = { x: 12.0208153, y: 12.5, z: 12.0208153 };
+/**
+ * 캐릭터 머리 꼭대기에서 카메라 쪽으로 가는 평행 광선 방향 = 카메라 위치 − 주시점.
+ * 위치 오프셋은 yaw π/4 · 거리 17(수평 성분 17·sin/cos π/4 = 12.0208153) · 높이 12.5 이고 주시 높이가 0.6 이라 y 는 12.5 − 0.6 = 11.9 다.
+ */
+export const TO_CAMERA: { x: number; y: number; z: number } = { x: 12.0208153, y: 11.9, z: 12.0208153 };
 
 /** 장애물 원문. floor 는 바닥을 막는지(false 면 가려짐 검사에만 쓴다). 길이 단위는 월드 단위. */
 export type Obstacle =
@@ -94,7 +97,7 @@ export const BAR_MASK: readonly string[] = [
   "########..................##",
   "############..............##",
   "############..............##",
-  "###########..........##...##",
+  "###########.........###...##",
   "#####..##...........####..##",
   "#####................###..##",
   "#####................####.##",
@@ -408,8 +411,43 @@ export function smoothPath(map: MapDef, pts: { x: number; z: number }[]): { x: n
 }
 
 /**
+ * 꼭짓점 당기기: 안쪽 꼭짓점을 이웃 둘을 잇는 선분 쪽으로 8분의 k 만큼(k = 8 → 1) 옮겨 보고, 양쪽 선분이 모두 걸을 수 있는
+ * 가장 큰 k 를 쓴다. 칸 중심 경로가 남기는 우회를 줄인다. 4번 돌고 smoothPath 로 다시 건너뛸 수 있는 점을 지운다.
+ */
+function relaxPath(map: MapDef, pts: { x: number; z: number }[]): { x: number; z: number }[] {
+  const out: Pt[] = pts.map((p) => ({ x: p.x, z: p.z }));
+  for (let pass = 0; pass < 4; pass++) {
+    let moved = false;
+    for (let i = 1; i < out.length - 1; i++) {
+      const p = out[i - 1]!;
+      const v = out[i]!;
+      const n = out[i + 1]!;
+      const ex = n.x - p.x;
+      const ez = n.z - p.z;
+      const len2 = ex * ex + ez * ez;
+      if (len2 === 0) continue;
+      let t = ((v.x - p.x) * ex + (v.z - p.z) * ez) / len2;
+      t = t < 0 ? 0 : t > 1 ? 1 : t;
+      const qx = p.x + t * ex;
+      const qz = p.z + t * ez;
+      for (let k = 8; k >= 1; k--) {
+        const cand = { x: Math.round(v.x + ((qx - v.x) * k) / 8), z: Math.round(v.z + ((qz - v.z) * k) / 8) };
+        if (cand.x === v.x && cand.z === v.z) break;
+        if (lineWalkable(map, p, cand) && lineWalkable(map, cand, n)) {
+          out[i] = cand;
+          moved = true;
+          break;
+        }
+      }
+    }
+    if (!moved) break;
+  }
+  return smoothPath(map, out);
+}
+
+/**
  * 출발·도착(고정소수점)을 걸을 수 있는 점으로 보정하고 꼭짓점 배열 [x0,z0,x1,z1,…] 을 돌려준다(전부 정수).
- * 같은 칸이거나 곧바로 보이면 두 점, 아니면 A* 칸 중심 경로를 시선 스무딩한 점들. 이어지지 않으면 출발점 하나.
+ * 같은 칸이거나 곧바로 보이면 두 점, 아니면 A* 칸 중심 경로를 시선 스무딩하고 꼭짓점을 당긴 점들. 이어지지 않으면 출발점 하나.
  */
 export function routeFx(map: MapDef, from: { x: number; z: number }, to: { x: number; z: number }): number[] {
   const s = snapToWalkable(map, from);
@@ -423,6 +461,6 @@ export function routeFx(map: MapDef, from: { x: number; z: number }, to: { x: nu
   pts[0] = { x: s.x, z: s.z };
   pts[pts.length - 1] = { x: e.x, z: e.z };
   const flat: number[] = [];
-  for (const p of smoothPath(map, pts)) flat.push(p.x, p.z);
+  for (const p of relaxPath(map, smoothPath(map, pts))) flat.push(p.x, p.z);
   return flat;
 }
