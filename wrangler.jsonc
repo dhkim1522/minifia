@@ -1,6 +1,7 @@
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
-  "name": "minifia",
+  // v2.0 배포 Worker — v1.0(minifia)은 v1 브랜치에서만 배포한다(결정 0043)
+  "name": "minifia-v2",
   "compatibility_date": "2026-10-12",
   "main": "./worker/index.ts",
   "upload_source_maps": true,
