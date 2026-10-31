@@ -201,6 +201,8 @@ export interface BarScene {
   /** 마지막으로 적용한 조명 단계의 톤매핑 노출 */
   readonly exposure: number;
   setLighting(phase: LightingPhase): void;
+  /** 예산 단계를 재생성 없이 반영한다(RED 스텁) */
+  applyBudget(budget: Budget): void;
   dispose(): void;
 }
 
@@ -483,6 +485,7 @@ export function buildBarScene(budget: Budget): BarScene {
       return exposure;
     },
     setLighting,
+    applyBudget(_b: Budget): void {},
     dispose(): void {
       if (disposed) return;
       disposed = true;

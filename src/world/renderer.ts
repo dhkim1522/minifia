@@ -68,6 +68,11 @@ export interface WorldRenderer {
   dispose(): void;
 }
 
+/** 화면 배율: 장치 배율과 단계 상한 중 작은 쪽(RED 스텁) */
+export function pixelRatioFor(_budget: Budget, _deviceDpr: number): number {
+  return 1;
+}
+
 /** 자동 강등을 멈추는 단계: 0→1→2→3 까지만 자동이고 4 이상은 사람 결정이다 */
 export const AUTO_LADDER_MAX = 3;
 /** 10초 평균이 이 값 미만이면 한 단계 내린다 */
