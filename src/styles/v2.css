@@ -11,3 +11,41 @@
 .mv-tag.is-away { opacity: 0.55; }
 .mv-tag.is-away .mv-tag__dot { background: var(--gray-700) !important; }
 .mv-tag__dot { width: 8px; height: 8px; border-radius: var(--radius-pill); flex: none; }
+
+/* 단계 머리: 이름 + 접히는 안내 한 줄(+ 시간 링) */
+.mv-phase { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-md); color: var(--gray-100); font-family: var(--font-ui); }
+.mv-phase__text { display: flex; flex-direction: column; gap: var(--space-xs); min-width: 0; }
+.mv-phase__title { font-size: 24px; line-height: 1.2; font-weight: 700; color: var(--gray-50); }
+.mv-phase__hint { font-size: 14px; line-height: 1.4; color: var(--gray-300); max-height: 40px; overflow: hidden; transition: opacity var(--dur-med), max-height var(--dur-med); }
+.mv-phase__hint.is-folded { opacity: 0; max-height: 0; }
+.mv-ring { position: relative; width: 44px; height: 44px; flex: none; display: grid; place-items: center; }
+.mv-ring svg { position: absolute; inset: 0; }
+.mv-ring__track { fill: none; stroke: var(--night-600); stroke-width: 4; }
+.mv-ring__bar { fill: none; stroke: var(--gray-100); stroke-width: 4; stroke-linecap: round; transition: stroke-dashoffset 1s linear; }
+/* 원본은 급할 때 진홍으로 바꾼다. 진홍은 이 페이즈 UI 에 없으므로(UI-SPEC Color) 숫자만 나타나고 색은 그대로 둔다. 진홍은 시간 링을 쓰는 페이즈가 정한다 */
+.mv-ring__num { position: relative; font-size: 16px; line-height: 1; font-weight: 700; color: var(--gray-50); font-variant-numeric: tabular-nums; }
+
+/* 점 진행 */
+.mv-dots { display: inline-flex; align-items: center; flex: none; gap: 5px; }
+.mv-dots__dot { width: 9px; height: 9px; border-radius: var(--radius-pill); box-sizing: border-box; border: 1.5px solid var(--gray-300); }
+.mv-dots__dot.is-on { background: var(--gray-100); border-color: var(--gray-100); }
+
+/* 화면 위 알림. 위에서 toast-top, 가운데. 비어 있으면 자리를 차지하지 않는다 */
+.mv-toast { display: flex; justify-content: center; pointer-events: none; opacity: 0; transition: opacity 220ms; }
+.mv-toast--top { position: absolute; top: var(--toast-top); left: 0; right: 0; z-index: var(--z-toast); }
+.mv-toast.is-on { opacity: 1; }
+.mv-toast__text { display: inline-flex; align-items: center; gap: 6px; padding: var(--space-sm) var(--space-md); border-radius: var(--radius-pill); background: var(--night-800); border: 1px solid var(--night-600); color: var(--gray-50); font-family: var(--font-ui); font-size: 16px; line-height: 1.5; font-weight: 700; white-space: nowrap; }
+.mv-toast__text:empty { display: none; }
+
+/* 행동 줄과 단계 버튼: 승인 보드 Main.dc.html 의 act() 치수. 값은 토큰으로 */
+.mf-act-row { display: grid; gap: 8px; }
+.mf-act { display: flex; align-items: center; justify-content: center; gap: 8px; min-width: 0; min-height: var(--control-button); box-sizing: border-box; padding: 0 12px; border-radius: var(--radius-md); border: 1px solid transparent; font-family: inherit; font-size: 16px; font-weight: 700; white-space: nowrap; cursor: pointer; }
+.mf-act__label { white-space: nowrap; }
+.mf-act--primary { background: var(--gray-100); border-color: var(--gray-100); color: var(--night-900); }
+.mf-act--inactive { background: var(--night-700); border-color: var(--night-600); color: var(--gray-100); opacity: 0.45; }
+.mf-act--flat { background: transparent; border-color: transparent; color: var(--gray-300); cursor: default; }
+.mf-act:focus-visible { outline: 2px solid var(--gray-100); outline-offset: 2px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .mv-toast, .mv-ring__bar, .mv-phase__hint { transition: none; }
+}

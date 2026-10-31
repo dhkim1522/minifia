@@ -20,11 +20,11 @@ afterEach(() => {
 
 const V2_CSS = readFileSync("src/styles/v2.css", "utf8");
 
-// 주석을 지운 규칙 본문 중 선택자에 `selector` 가 들어 있는 것만 모은다.
+// 주석을 지운 규칙 본문 중 선택자가 `selector` 로 시작하는 것만 모은다(`.mf-act` 가 `.mf-act-row` 를 끌어오지 않게 다음 글자가 이름 글자가 아니어야 한다).
 function rulesFor(css: string, selector: string): string[] {
   const bare = css.replace(/\/\*[\s\S]*?\*\//g, "");
   return [...bare.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
-    .filter((m) => (m[1] ?? "").split(",").some((s) => s.trim().startsWith(selector)))
+    .filter((m) => (m[1] ?? "").split(",").some((s) => s.trim().startsWith(selector) && !/[\w-]/.test(s.trim().charAt(selector.length))))
     .map((m) => m[2] ?? "");
 }
 
@@ -304,15 +304,15 @@ describe("ActionButton·ActionRow (UI-SPEC 행동 줄, E6)", () => {
   });
 
   it("승인 보드 act() 치수: 높이 52·반경 14·테두리 1px·16px 700·안쪽 0 12px·아이콘 22 + 라벨 + 점 간격 8, 한 줄", () => {
-    const act = rulesFor(V2_CSS, ".mf-act")[0] ?? "";
-    expect(act).toContain("min-height: var(--control-button)");
-    expect(act).toContain("border-radius: var(--radius-md)");
-    expect(act).toMatch(/border: 1px solid/);
-    expect(act).toContain("font-size: 16px");
-    expect(act).toContain("font-weight: 700");
-    expect(act).toContain("padding: 0 12px");
-    expect(act).toContain("gap: 8px");
-    expect(act).toContain("white-space: nowrap");
+    const btnRule = rulesFor(V2_CSS, ".mf-act")[0] ?? "";
+    expect(btnRule).toContain("min-height: var(--control-button)");
+    expect(btnRule).toContain("border-radius: var(--radius-md)");
+    expect(btnRule).toMatch(/border: 1px solid/);
+    expect(btnRule).toContain("font-size: 16px");
+    expect(btnRule).toContain("font-weight: 700");
+    expect(btnRule).toContain("padding: 0 12px");
+    expect(btnRule).toContain("gap: 8px");
+    expect(btnRule).toContain("white-space: nowrap");
     const row = rulesFor(V2_CSS, ".mf-act-row").join(";");
     expect(row).toContain("display: grid");
     expect(row).toContain("gap: 8px");
