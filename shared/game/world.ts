@@ -257,3 +257,17 @@ export function snapFrame(
     });
   return { t: "world", k: "snap", at: now, ents };
 }
+
+// ---- RED 뼈대(Task 3): 구현은 GREEN 커밋에서 채운다 ----
+export function planWander(
+  w: WorldState,
+  _bots: readonly { id: string; seat: number }[],
+  _now: number,
+  _randInt: (n: number) => number,
+  _map: MapDef,
+): { world: WorldState; moves: { playerId: string; dest: { x: number; z: number } }[] } {
+  return { world: w, moves: [] };
+}
+export function nextWanderAt(_w: WorldState, _botIds: readonly string[]): number | null {
+  return null;
+}

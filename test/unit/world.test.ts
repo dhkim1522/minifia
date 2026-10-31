@@ -1,12 +1,17 @@
 // 로비 이동 규칙(shared/game/world.ts) — 구간 보간·이동 요청·프레임 모양. 시각과 난수는 모두 인자로 주입한다.
 import { describe, expect, it } from "vitest";
+import { seededRandInt } from "../helpers/seededRandom";
 import {
   BAR_MAP,
+  cellCenterFx,
   cellOfFx,
   isWalkable,
   lineWalkable,
+  walkableCells,
 } from "../../shared/game/map";
 import {
+  WANDER_MIN_MS,
+  WANDER_SPAN_MS,
   MOVE_MIN_GAP_MS,
   MOVE_SPEED,
   MOVE_V,
@@ -16,6 +21,8 @@ import {
   despawnPlayer,
   emptyWorld,
   moveFrame,
+  nextWanderAt,
+  planWander,
   positionAt,
   positionAtFx,
   requestMove,
@@ -488,5 +495,146 @@ describe("snapFrame — 접속 때 모두의 지금 구간 (MAP-01)", () => {
     const f = snapFrame(w, PLAYERS, 2500);
     f.ents[0]!.p.push(1);
     expect(w.segs[ID(0)]!.p).not.toContain(1);
+  });
+});
+
+// ---- Task 3: 테스트 방 봇 로비 배회 계획(결정적) ----
+
+const BOTS = [
+  { id: "bot-a", seat: 3 },
+  { id: "bot-b", seat: 1 },
+  { id: "bot-c", seat: 5 },
+];
+const BOTS_BY_SEAT = [...BOTS].sort((a, b) => a.seat - b.seat); // b(1) → a(3) → c(5)
+
+describe("planWander — 첫 호출은 계획만 세운다", () => {
+  it("상수: 3~6초 간격", () => {
+    expect(WANDER_MIN_MS).toBe(3000);
+    expect(WANDER_SPAN_MS).toBe(3000);
+  });
+
+  it("처음 planWander(now 0): moves 없음, 봇마다 wanderAt = 0 + 3000 + randInt(3000) (seat 오름차순으로 난수 호출)", () => {
+    const ref = seededRandInt(11);
+    const expected: Record<string, number> = {};
+    for (const b of BOTS_BY_SEAT) expected[b.id] = 3000 + ref(3000);
+    const r = planWander(emptyWorld(), BOTS, 0, seededRandInt(11), BAR_MAP);
+    expect(r.moves).toEqual([]);
+    expect(r.world.wanderAt).toEqual(expected);
+  });
+
+  it("각 wanderAt 은 now + [3000, 6000) 안이다", () => {
+    const r = planWander(emptyWorld(), BOTS, 10_000, seededRandInt(5), BAR_MAP);
+    for (const b of BOTS) {
+      expect(r.world.wanderAt[b.id]!).toBeGreaterThanOrEqual(13_000);
+      expect(r.world.wanderAt[b.id]!).toBeLessThan(16_000);
+    }
+  });
+});
+
+describe("planWander — 때가 된 봇만 걷는다", () => {
+  it("now ≥ wanderAt 인 봇만 moves 에 들고(seat 오름차순) 다음 wanderAt = now + 3000 + randInt(3000)", () => {
+    const w0 = { ...emptyWorld(), wanderAt: { "bot-b": 4000, "bot-a": 4000, "bot-c": 9000 } };
+    const cells = walkableCells(BAR_MAP);
+    const ref = seededRandInt(21);
+    const expectMoves: { playerId: string; dest: { x: number; z: number } }[] = [];
+    const expectAt: Record<string, number> = { "bot-c": 9000 };
+    for (const b of [BOTS_BY_SEAT[0]!, BOTS_BY_SEAT[1]!]) {
+      const cell = cells[ref(cells.length)]!;
+      expectMoves.push({ playerId: b.id, dest: cellCenterFx(cell.c, cell.r) });
+      expectAt[b.id] = 5000 + 3000 + ref(3000);
+    }
+    const r = planWander(deepFreeze(w0), BOTS, 5000, seededRandInt(21), BAR_MAP);
+    expect(r.moves).toEqual(expectMoves);
+    expect(r.moves.map((m) => m.playerId)).toEqual(["bot-b", "bot-a"]);
+    expect(r.world.wanderAt).toEqual(expectAt);
+  });
+
+  it("목적지는 걸을 수 있는 셀 중심이다", () => {
+    const w0 = { ...emptyWorld(), wanderAt: { "bot-a": 0, "bot-b": 0, "bot-c": 0 } };
+    for (let seed = 1; seed <= 20; seed++) {
+      const r = planWander(w0, BOTS, 1000, seededRandInt(seed), BAR_MAP);
+      expect(r.moves).toHaveLength(3);
+      for (const m of r.moves) {
+        const cell = cellOfFx(m.dest.x, m.dest.z);
+        expect(isWalkable(BAR_MAP, cell.c, cell.r)).toBe(true);
+        expect(m.dest).toEqual(cellCenterFx(cell.c, cell.r));
+      }
+    }
+  });
+
+  it("처음 보는 봇이 섞이면 호출 순서는 seat 오름차순 [목적지 셀, 다음 간격] / [간격]", () => {
+    const w0 = { ...emptyWorld(), wanderAt: { "bot-b": 0 } }; // seat 1 은 때가 됨, seat 3·5 는 처음
+    const cells = walkableCells(BAR_MAP);
+    const ref = seededRandInt(33);
+    const cell = cells[ref(cells.length)]!;
+    const bAt = 2000 + 3000 + ref(3000);
+    const aAt = 2000 + 3000 + ref(3000);
+    const cAt = 2000 + 3000 + ref(3000);
+    const r = planWander(w0, BOTS, 2000, seededRandInt(33), BAR_MAP);
+    expect(r.moves).toEqual([{ playerId: "bot-b", dest: cellCenterFx(cell.c, cell.r) }]);
+    expect(r.world.wanderAt).toEqual({ "bot-b": bAt, "bot-a": aAt, "bot-c": cAt });
+  });
+
+  it("아직 때가 안 된 봇은 난수도 쓰지 않는다", () => {
+    const w0 = { ...emptyWorld(), wanderAt: { "bot-a": 9000, "bot-b": 9000, "bot-c": 9000 } };
+    let calls = 0;
+    const r = planWander(w0, BOTS, 5000, () => { calls++; return 0; }, BAR_MAP);
+    expect(calls).toBe(0);
+    expect(r.moves).toEqual([]);
+    expect(r.world.wanderAt).toEqual(w0.wanderAt);
+  });
+
+  it("같은 시드·같은 입력 → 같은 moves·wanderAt", () => {
+    const w0 = { ...emptyWorld(), wanderAt: { "bot-a": 0, "bot-b": 0, "bot-c": 0 } };
+    const a = planWander(w0, BOTS, 7000, seededRandInt(99), BAR_MAP);
+    const b = planWander(w0, BOTS, 7000, seededRandInt(99), BAR_MAP);
+    expect(b).toEqual(a);
+    const c = planWander(w0, BOTS, 7000, seededRandInt(100), BAR_MAP);
+    expect(c).not.toEqual(a);
+  });
+
+  it("목적지만 내고 이동을 직접 적용하지 않는다(구간·간격 기록 불변)", () => {
+    const w = busyWorld();
+    const w0 = { ...w, wanderAt: { [ID(6)]: 0 } };
+    const r = planWander(deepFreeze(w0), [{ id: ID(6), seat: 6 }], 5000, seededRandInt(1), BAR_MAP);
+    expect(r.moves).toHaveLength(1);
+    expect(r.world.segs).toBe(w0.segs);
+    expect(r.world.lastMoveAt).toBe(w0.lastMoveAt);
+  });
+
+  it("bots 목록에 없는 id 의 wanderAt 은 지워진다(봇이 빠지면 계획도 사라짐)", () => {
+    const w0 = { ...emptyWorld(), wanderAt: { "bot-a": 9000, "gone-bot": 100 } };
+    const r = planWander(w0, [BOTS[0]!], 5000, seededRandInt(1), BAR_MAP);
+    expect(r.world.wanderAt).toEqual({ "bot-a": 9000 });
+  });
+
+  it("봇이 없으면 아무 일도 없고 난수도 쓰지 않는다", () => {
+    const w0 = { ...emptyWorld(), wanderAt: { x: 1 } };
+    const r = planWander(w0, [], 5000, () => { throw new Error("no rng"); }, BAR_MAP);
+    expect(r).toEqual({ world: { ...w0, wanderAt: {} }, moves: [] });
+  });
+
+  it("randInt(0) 을 부르지 않는다(걸을 수 있는 셀이 없는 맵은 이동 없이 간격만 정한다)", () => {
+    const walled = { id: "bar" as const, size: 2, mask: new Uint8Array(4), spawns: [] };
+    const w0 = { ...emptyWorld(), wanderAt: { "bot-a": 0 } };
+    const seen: number[] = [];
+    const r = planWander(w0, [BOTS[0]!], 1000, (n) => { seen.push(n); return 0; }, walled);
+    expect(seen).not.toContain(0);
+    expect(r.moves).toEqual([]);
+    expect(r.world.wanderAt["bot-a"]).toBe(4000);
+  });
+});
+
+describe("nextWanderAt", () => {
+  it("주어진 봇들의 wanderAt 최솟값", () => {
+    const w = { ...emptyWorld(), wanderAt: { a: 9000, b: 4000, c: 6000 } };
+    expect(nextWanderAt(w, ["a", "b", "c"])).toBe(4000);
+    expect(nextWanderAt(w, ["a", "c"])).toBe(6000);
+  });
+  it("계획이 있는 봇이 없으면 null", () => {
+    const w = { ...emptyWorld(), wanderAt: { a: 9000 } };
+    expect(nextWanderAt(w, [])).toBeNull();
+    expect(nextWanderAt(w, ["zzz"])).toBeNull();
+    expect(nextWanderAt(emptyWorld(), ["a"])).toBeNull();
   });
 });
