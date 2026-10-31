@@ -7,7 +7,7 @@
 import type { WorldFrame } from "../protocol";
 import { MOVE_COORD_LIMIT } from "../protocol";
 import type { MapDef } from "./map";
-import { UNIT, lineWalkable, routeFx, snapToWalkable } from "./map";
+import { UNIT, cellCenterFx, lineWalkable, routeFx, snapToWalkable, walkableCells } from "./map";
 
 export { UNIT } from "./map";
 /** 걷는 속도(단위/초). 서버 상수이고 모든 구간 프레임에 v 로 실린다(UI-SPEC 사용자 확정 시작값). */
@@ -258,16 +258,51 @@ export function snapFrame(
   return { t: "world", k: "snap", at: now, ents };
 }
 
-// ---- RED 뼈대(Task 3): 구현은 GREEN 커밋에서 채운다 ----
+// ---- 테스트 방 봇 로비 배회 ----
+
+/**
+ * 봇 배회 계획. 이동을 직접 적용하지 않고 목적지만 낸다 — 방 DO 가 사람과 같은 requestMove(간격 검사 포함)를 거쳐 적용한다(결정 0024 "봇은 특권 없음").
+ * 난수 호출 순서가 계약이다: seat 오름차순 봇마다, 때가 된 봇은 [목적지 셀 randInt(셀 수), 다음 간격 randInt(WANDER_SPAN_MS)],
+ * 처음 보는 봇은 [간격] 하나(첫 호출은 이동 없이 계획만 세운다). 때가 안 된 봇은 난수를 쓰지 않는다.
+ * bots 에 없는 id 의 wanderAt 은 지운다. segs·lastMoveAt 은 그대로 돌려준다.
+ */
 export function planWander(
   w: WorldState,
-  _bots: readonly { id: string; seat: number }[],
-  _now: number,
-  _randInt: (n: number) => number,
-  _map: MapDef,
+  bots: readonly { id: string; seat: number }[],
+  now: number,
+  randInt: (n: number) => number,
+  map: MapDef,
 ): { world: WorldState; moves: { playerId: string; dest: { x: number; z: number } }[] } {
-  return { world: w, moves: [] };
+  const wanderAt: Record<string, number> = {};
+  const moves: { playerId: string; dest: { x: number; z: number } }[] = [];
+  let cells: { c: number; r: number }[] | null = null;
+  for (const bot of [...bots].sort((a, b) => a.seat - b.seat)) {
+    const planned = Object.prototype.hasOwnProperty.call(w.wanderAt, bot.id) ? w.wanderAt[bot.id] : undefined;
+    if (planned === undefined) {
+      wanderAt[bot.id] = now + WANDER_MIN_MS + randInt(WANDER_SPAN_MS);
+      continue;
+    }
+    if (now < planned) {
+      wanderAt[bot.id] = planned;
+      continue;
+    }
+    cells ??= walkableCells(map);
+    if (cells.length > 0) {
+      const cell = cells[randInt(cells.length)]!;
+      moves.push({ playerId: bot.id, dest: cellCenterFx(cell.c, cell.r) });
+    }
+    wanderAt[bot.id] = now + WANDER_MIN_MS + randInt(WANDER_SPAN_MS);
+  }
+  return { world: { segs: w.segs, lastMoveAt: w.lastMoveAt, wanderAt }, moves };
 }
-export function nextWanderAt(_w: WorldState, _botIds: readonly string[]): number | null {
-  return null;
+
+/** 주어진 봇들의 다음 배회 시각(wanderAt 최솟값). 계획이 있는 봇이 없으면 null. */
+export function nextWanderAt(w: WorldState, botIds: readonly string[]): number | null {
+  let min: number | null = null;
+  for (const id of botIds) {
+    if (!Object.prototype.hasOwnProperty.call(w.wanderAt, id)) continue;
+    const t = w.wanderAt[id]!;
+    if (min === null || t < min) min = t;
+  }
+  return min;
 }
