@@ -58,7 +58,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 ### Phase 6: 월드 뼈대
 **Goal**: 친구들이 `minifia-v2` 주소로 들어와 로비 맵에서 서로의 캐릭터가 걷는 모습을 보고, 이 렌더링 방식이 실제 폰에서 버틴다는 것이 숫자로 확인된다
 **Depends on**: Nothing (v2.0 첫 페이즈). 선행 조건: 맵과 캐릭터 몸체 규격 디자인 승인
-**Requirements**: DEPLOY-02, MAP-01, MAP-02, MAP-03, MAP-05, CONN-04
+**Requirements**: DEPLOY-02, MAP-01, MAP-02, MAP-03, MAP-05, CONN-04, MAP-07
 **Success Criteria** (what must be TRUE):
   1. v2.0 이 `minifia-v2` Worker 에 배포되어, 다른 기기(폰)에서 주소로 들어와 방을 만들고 참가할 수 있다. v1.0 주소(`minifia.dhplay.workers.dev`)는 그대로 동작하고, 배포·검사 스크립트는 v1.0 주소를 덮어쓰거나 검사하지 않는다 (DEPLOY-02)
   2. 폰 2대 이상이 같은 방 로비에서 서로의 캐릭터와 닉네임을 본다. 맵을 터치하면 내 캐릭터가 그곳까지 걸어가고 다른 폰에서도 같은 경로·속도로 움직여 보인다. 맵은 폰 한 화면보다 조금 넓고 카메라가 내 캐릭터를 따라간다 (MAP-01, MAP-02, MAP-03)
