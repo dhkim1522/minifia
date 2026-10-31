@@ -10,7 +10,7 @@ import { NETWORK_TEXT } from "../net/copy";
 import { clampTarget, DEFAULT_TARGET, followStep, NAMETAG_GAP, RESIZE_SETTLE_MS, stageOffsetY } from "./camera";
 import { FIGS } from "./characterData";
 import { createTapGate } from "./input";
-import { DEFAULT_BUDGET_STEP } from "./renderer";
+import { DEFAULT_BUDGET_STEP, nextLadderStep } from "./renderer";
 import type { CharacterHandle, WorldRenderer } from "./renderer";
 import { initialMapStatus, inputBlocked, mapStatusReducer, shouldRecreate } from "./status";
 import type { MapStatusEvent, MapStatusState } from "./status";
@@ -49,10 +49,45 @@ export function preloadWorld(): void {
   loadWorld().catch(() => {});
 }
 
-// RED 껍데기
-export const AUTO_WINDOW_MS = 0;
-export function createAutoDegrade(_o: { enabled: boolean; step: number; setBudget(step: number): void }): { frame(deltaMs: number): void; step(): number } {
-  return { frame() {}, step: () => -1 };
+/** 자동 강등 판정 창(ms): 이 시간의 평균 fps 가 45 미만이면 한 단계 내린다(UI-SPEC "자동 강등") */
+export const AUTO_WINDOW_MS = 10_000;
+/** 이보다 긴 프레임 간격은 탭이 숨었다 돌아온 것으로 보고 평균에 넣지 않는다(ms) */
+const AUTO_GAP_MS = 500;
+
+export interface AutoDegrade {
+  /** 한 프레임의 간격(ms)을 알린다 */
+  frame(deltaMs: number): void;
+  /** 지금 사다리 단계 */
+  step(): number;
+}
+
+/**
+ * 제품 런타임의 자동 강등. 10초 평균이 45fps 미만이면 사다리 1~3단계를 한 단계씩 내리고 되돌리지 않는다(안내 문구 없음).
+ * 4단계 이상은 사람이 결정한다(nextLadderStep). 꺼져 있으면(성능 스파이크 측정 중) 아무것도 하지 않는다.
+ * 창은 판정마다 비운다 — 내린 직후 10초는 새 단계의 값으로만 잰다.
+ */
+export function createAutoDegrade(o: { enabled: boolean; step: number; setBudget(step: number): void }): AutoDegrade {
+  let step = o.step;
+  let sum = 0;
+  let count = 0;
+  return {
+    frame(deltaMs) {
+      if (!o.enabled || !(deltaMs > 0) || deltaMs > AUTO_GAP_MS) return;
+      sum += deltaMs;
+      count += 1;
+      if (sum < AUTO_WINDOW_MS) return;
+      const next = nextLadderStep(step, count / (sum / 1000));
+      sum = 0;
+      count = 0;
+      if (next !== step) {
+        step = next;
+        o.setBudget(step);
+      }
+    },
+    step() {
+      return step;
+    },
+  };
 }
 
 export const WALK_CUE_KEY = "mf-hint-walk";
@@ -107,6 +142,10 @@ export interface WorldRuntimeDeps {
   onNotice(text: string): void;
   allowSoftware: boolean;
   budgetStep?: number;
+  /** 10초 평균 45fps 미만이면 사다리 1~3단계를 한 단계씩 자동으로 내린다. 기본 true — 성능 스파이크(?perf=1)는 false 로 측정 중 단계를 고정한다 */
+  autoDegrade?: boolean;
+  /** 프레임마다 render 호출·이름표 투영·쓰기에 걸린 CPU 시간(ms). 있을 때만 잰다 — 제품은 넘기지 않는다(06-14 HUD 의 p95) */
+  onFrame?(stats: { renderMs: number; tagsMs: number }): void;
   lighting?: "talk" | "vote";
   loadModules?: () => Promise<WorldModules>;
   raf?: (cb: FrameRequestCallback) => number;
@@ -212,6 +251,8 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
   let tickTimer: ReturnType<typeof setInterval> | null = null;
   let interactiveAt: number | null = null;
   let visibilityBound = false;
+
+  const degrade = createAutoDegrade({ enabled: deps.autoDegrade !== false, step: deps.budgetStep ?? DEFAULT_BUDGET_STEP, setBudget: (n) => renderer?.setBudget(n) });
 
   const actors = new Map<number, Actor>();
   const pendingEntered = new Set<number>();
@@ -352,7 +393,7 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
     const s = size();
     let r: WorldRenderer;
     try {
-      r = await mods.createThreeRenderer({ host, width: s.w, height: s.h, budgetStep: deps.budgetStep ?? DEFAULT_BUDGET_STEP, allowSoftware: deps.allowSoftware });
+      r = await mods.createThreeRenderer({ host, width: s.w, height: s.h, budgetStep: degrade.step(), allowSoftware: deps.allowSoftware });
     } catch {
       if (alive()) dispatch({ t: "unsupported" });
       return;
@@ -567,7 +608,8 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
     const r = renderer;
     if (disposed || r === null) return;
     const now = Date.now();
-    const dt = Math.min(Math.max((now - lastFrameAt) / 1000, 0), MAX_DT);
+    const gapMs = now - lastFrameAt;
+    const dt = Math.min(Math.max(gapMs / 1000, 0), MAX_DT);
     lastFrameAt = now;
     const sNow = deps.serverNow();
     const reduced = deps.reducedMotion();
@@ -662,8 +704,17 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
     updateCue(r, now);
 
     // 소실·재생성·포기 중에는 GL 을 그리지 않는다(이름표와 서버 위치 갱신은 계속한다)
-    if (status.status === "loading" || status.status === "ready") r.render();
+    const timed = deps.onFrame !== undefined;
+    let renderMs = 0;
+    let tagsMs = 0;
+    if (status.status === "loading" || status.status === "ready") {
+      const a = timed ? performance.now() : 0;
+      r.render();
+      if (timed) renderMs = performance.now() - a;
+    }
+    const b = timed ? performance.now() : 0;
     writeTags(r);
+    if (timed) tagsMs = performance.now() - b;
     for (const a of gone) {
       removeActor(a);
       if (a.tag !== null) a.tag.style.opacity = "0";
@@ -671,6 +722,8 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
     resync = false;
 
     if (status.status === "loading" && store.isReady()) dispatch({ t: "ready" });
+    if (status.status === "ready") degrade.frame(gapMs);
+    deps.onFrame?.({ renderMs, tagsMs });
 
     schedule();
   }

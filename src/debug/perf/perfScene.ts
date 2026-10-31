@@ -3,12 +3,14 @@
 // 서버 없이 시드 고정 시나리오(scenario.ts)가 만든 구간을 WorldStore 에 넣어 걷게 한다. 프레임 제한 없음 — rAF 마다 그린다.
 // 닉네임은 textContent 로만 넣는다(innerHTML 없음). 결과를 서버로 보내지 않는다(RESEARCH R2.6).
 import { BAR_MAP, UNIT, cellCenterFx, routeFx, walkableCells } from "../../../shared/game/map";
+import { REVISION } from "three";
 import { MOVE_V } from "../../../shared/game/world";
 import { HEADER_BOTTOM, PANEL_HEIGHT } from "../../world/camera";
 import { createTapTracker } from "../../world/input";
-import { createWorldRuntime } from "../../world/runtime";
-import type { WorldRuntime } from "../../world/runtime";
+import { createWorldRuntime, loadWorld } from "../../world/runtime";
+import type { WorldModules, WorldRuntime } from "../../world/runtime";
 import { WorldStore } from "../../world/store";
+import { createHud } from "./hud";
 import { parsePerfParams, createScenario } from "./scenario";
 import type { PerfParams } from "./scenario";
 import "../../styles/world.css";
@@ -79,11 +81,7 @@ export function mount(root: HTMLElement, search: URLSearchParams): PerfScene {
   for (const pl of players) tags.append(makeTag(pl.seat, pl.nickname, pl.seat === 0));
   const navLayer = document.createElement("div");
   navLayer.style.cssText = "position:absolute;inset:0;pointer-events:none;z-index:var(--z-tags)";
-  const hud = document.createElement("div");
-  hud.dataset.perfHud = "";
-  hud.style.cssText = "position:absolute;left:6px;top:6px;z-index:var(--z-modal);padding:2px 6px;border-radius:6px;background:rgba(0,0,0,.6);color:#fff;font:12px/1.4 ui-monospace,Menlo,monospace;pointer-events:none;white-space:pre";
-  hud.textContent = "불러오는 중…";
-  stage.append(host, input, tags, navLayer, hud);
+  stage.append(host, input, tags, navLayer);
   root.append(stage);
 
   // ----- 시계와 시나리오: 맵이 열린 뒤부터 흐른다 (그 전의 불러오는 시간은 측정에 들어가지 않는다) -----
@@ -101,9 +99,40 @@ export function mount(root: HTMLElement, search: URLSearchParams): PerfScene {
 
   let rafId = 0;
   let disposed = false;
-  let frames = 0;
-  let lastHudAt = 0;
-  let statusText = "loading";
+  /** 탭을 받아들인 시각(pointerup 의 timeStamp). 다음 프레임에서 "링이 그려진 시각" 과의 차를 잰다 */
+  let tapAt: number | null = null;
+
+  const hud = createHud({
+    root: stage,
+    params: p,
+    query: window.location.search,
+    threeRevision: REVISION,
+    renderer: () => runtime.renderer(),
+    interactiveMs: () => runtime.interactiveMs(),
+    storage: (() => {
+      try {
+        return window.sessionStorage;
+      } catch {
+        return null;
+      }
+    })(),
+  });
+
+  // 모듈 받기·맵 만들기 시간을 잰다(R2.2 "맵 생성 시간"): 제품과 같은 loadWorld·createThreeRenderer 를 그대로 부르고 시간만 잰다
+  const loadModules = async (): Promise<WorldModules> => {
+    const t0 = performance.now();
+    const mods = await loadWorld();
+    hud.setMapTimes({ moduleLoadMs: performance.now() - t0 });
+    return {
+      ...mods,
+      createThreeRenderer: async (o) => {
+        const t1 = performance.now();
+        const r = await mods.createThreeRenderer(o);
+        hud.setMapTimes({ mapBuildMs: performance.now() - t1 });
+        return r;
+      },
+    };
+  };
 
   // 이 장면에서는 처음 방문 손짓 링을 보지 않는다 — 이미 본 기기처럼 저장소가 늘 값을 돌려준다(측정 장면에 장식이 끼지 않게)
   const seenCue = { getItem: () => "1", setItem: () => {}, removeItem: () => {}, clear: () => {}, key: () => null, length: 0 } as unknown as Storage;
@@ -118,17 +147,21 @@ export function mount(root: HTMLElement, search: URLSearchParams): PerfScene {
     reducedMotion: () => false,
     stageRect: () => ({ top: HEADER_BOTTOM, bottom: (host.clientHeight || window.innerHeight) - PANEL_HEIGHT }),
     onStatus: (s) => {
-      statusText = s.status;
       if (s.status === "ready" && !running && !frozen) {
         running = true;
         runStartPerf = performance.now();
-        lastHudAt = performance.now();
-        frames = 0;
+        hud.begin();
+      } else if (!running) {
+        hud.note(s.status === "loading" ? "불러오는 중…" : `맵 상태: ${s.status}`);
       }
     },
     onNotice: () => {},
     allowSoftware: true,
     budgetStep: p.budget,
+    // 측정 중에는 단계를 고정한다(제품의 자동 강등은 꺼 둔다)
+    autoDegrade: false,
+    onFrame: (stats) => hud.work(stats),
+    loadModules,
     lighting: p.scene,
     storage: seenCue,
   });
@@ -146,6 +179,7 @@ export function mount(root: HTMLElement, search: URLSearchParams): PerfScene {
     if (at === null || frozen) return;
     const dest = runtime.tap(at.x, at.y);
     if (dest === null) return;
+    tapAt = e.timeStamp;
     const now = serverNow();
     const here = store.positionOf(0, now) ?? { x: 0, z: 0 };
     const path = routeFx(BAR_MAP, { x: Math.round(here.x * UNIT), z: Math.round(here.z * UNIT) }, { x: Math.round(dest.x * UNIT), z: Math.round(dest.z * UNIT) });
@@ -166,10 +200,14 @@ export function mount(root: HTMLElement, search: URLSearchParams): PerfScene {
   }
 
   // ----- 프레임마다: 시나리오 이벤트를 넣고, 1Hz 로 HUD 한 줄을 갱신한다 -----
-  function pump(): void {
+  function pump(time: number): void {
     if (disposed) return;
     rafId = requestAnimationFrame(pump);
-    const now = performance.now();
+    hud.frame(time);
+    if (tapAt !== null) {
+      hud.tapRing(time - tapAt);
+      tapAt = null;
+    }
     if (running && !frozen) {
       for (const ev of scenario.advance(elapsed())) {
         if (ev.kind === "move") store.applyFrame({ t: "world", k: "move", s: ev.seat, p: ev.p, t0: wall0 + ev.t0, v: ev.v }, 1);
@@ -178,9 +216,8 @@ export function mount(root: HTMLElement, search: URLSearchParams): PerfScene {
       if (p.shot && elapsed() >= SHOT_FREEZE_MS) {
         frozen = true;
         frozenAt = SHOT_FREEZE_MS;
-        hud.style.display = "none";
+        hud.hide();
       }
-      frames += 1;
     }
     const r = runtime.renderer();
     if (r !== null && navDots.length > 0) {
@@ -188,14 +225,6 @@ export function mount(root: HTMLElement, search: URLSearchParams): PerfScene {
         const s = r.project({ x: d.x, y: 0, z: d.z });
         d.el.style.transform = `translate(${s.sx}px, ${s.sy}px)`;
       }
-    }
-    if (running && now - lastHudAt >= 1000) {
-      const fps = (frames * 1000) / (now - lastHudAt);
-      frames = 0;
-      lastHudAt = now;
-      hud.textContent = `fps ${fps.toFixed(1)}  ${p.scene}  단계 ${p.budget}  ${Math.round(elapsed() / 1000)}s`;
-    } else if (!running) {
-      hud.textContent = statusText === "loading" ? "불러오는 중…" : `맵 상태: ${statusText}`;
     }
   }
   rafId = requestAnimationFrame(pump);
@@ -206,6 +235,7 @@ export function mount(root: HTMLElement, search: URLSearchParams): PerfScene {
       if (disposed) return;
       disposed = true;
       cancelAnimationFrame(rafId);
+      hud.dispose();
       runtime.dispose();
       stage.remove();
       if (p.dpr !== null) {

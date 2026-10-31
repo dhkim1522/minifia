@@ -1,0 +1,81 @@
+{
+  "runner": {
+    "tool": "scripts/perf-run.mjs",
+    "throttle": 4,
+    "dpr": 1.5,
+    "size": "390x844",
+    "headless": true,
+    "chrome": "156.0.8078.74",
+    "platform": "darwin/arm64",
+    "node": "v26.0.0",
+    "url": "http://localhost:5173/?perf=1&scene=vote&minutes=0.25&dpr=1.5&seed=1&budget=0"
+  },
+  "schema": 1,
+  "at": "2026-10-31T17:46:32.835Z",
+  "build": "2026-10-31T17:39:21Z+9b20213",
+  "three": "186",
+  "query": "?perf=1&scene=vote&minutes=0.25&dpr=1.5&seed=1&budget=0",
+  "params": {
+    "scene": "vote",
+    "minutes": 0.25,
+    "dpr": 1.5,
+    "budget": 0,
+    "seed": 1,
+    "chars": 8,
+    "shot": false,
+    "nav": false
+  },
+  "device": {
+    "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.0.0 Safari/537.36",
+    "kakaotalk": false,
+    "dpr": 1.5,
+    "screen": "800x600",
+    "inner": "390x844",
+    "cores": 11,
+    "memoryGB": 32,
+    "glRenderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M3 Pro, Unspecified Version)",
+    "webdriver": true
+  },
+  "heartbeat": "first",
+  "truncated": false,
+  "budgetStep": 0,
+  "frames": {
+    "count": 900,
+    "seconds": 15.016000495910644,
+    "avgFps": 59.936066214508976,
+    "jank": 0,
+    "p50": 16.700000762939453,
+    "p95": 16.700000762939453,
+    "p99": 16.799999237060547,
+    "max": 33.29999923706055,
+    "rafHz": 60,
+    "lowPowerSuspect": false,
+    "firstMinuteFps": null,
+    "lastMinuteFps": null,
+    "thermalRatio": null,
+    "thermalSuspect": false
+  },
+  "work": {
+    "tagsP95Ms": 0.8,
+    "renderP95Ms": 1.4,
+    "mapBuildMs": 77,
+    "moduleLoadMs": 100
+  },
+  "renderer": {
+    "calls": 67,
+    "triangles": 83838,
+    "geometries": 61,
+    "textures": 4,
+    "programs": 7,
+    "pointLights": 3,
+    "callsMax": 67
+  },
+  "heap": {
+    "startMB": 49.6,
+    "endMB": 37,
+    "samplesMB": []
+  },
+  "tapToRingMs": [],
+  "interactiveMs": 699,
+  "meets": null
+}
