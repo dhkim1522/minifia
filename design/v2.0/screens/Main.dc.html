@@ -11,6 +11,7 @@
 <script src="./character.js"></script>
 <script src="./blockout.js"></script>
 <script src="./bar.js"></script>
+<script src="./dressing.js"></script>
 </head>
 <body>
 <x-dc>
@@ -108,6 +109,8 @@ body{margin:0;background:#0e1326}
 </x-dc>
 <script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
 var SCREEN = 'lobby', W = 390, H = 844;
+// 로비는 백스테이지 분장실(결정 0055), 게임은 고른 맵(여기서는 재즈 바)
+var LOBBY = SCREEN === 'lobby' || SCREEN === 'lobbyGuest', MAP = LOBBY ? 'dressing' : 'bar';
 var NAMES = [['지호', '#7a8fb8'], ['민준', '#6fa59a'], ['서연', '#b89a6f'], ['도윤', '#b87a5c'], ['하은', '#a9aebb'], ['태오', '#8f86b0'], ['수아', '#7f9f7a'], ['현우', '#a88f9a']];
 var EMOTES = [['throat', '목 긋기'], ['deny', '나 아니야'], ['clap', '박수'], ['cry', '엉엉'], ['handshake', '악수'], ['point', '손가락질'], ['praise', '최고'], ['surprise', '깜짝'], ['dance', '춤']];
 var IMG = {
@@ -124,8 +127,8 @@ var VOTES = [3, 3, 5, 0, 3, 3, 3, 5], ORDER = [2, 7, 3, 1, 4, 6, 5], ACCUSED = 3
 var VOTERS = ALIVE - 1;
 var SYS = 'system', V = 'vote', HOT = 'hot';
 var CFG = {
-  lobby: { phase: 'talk', title: '대기실', hint: '꾸미고 기다려요', time: null, me: 0, host: true, label: '지하 재즈 바 로비. 8명이 돌아다니고 있어요' },
-  lobbyGuest: { phase: 'talk', title: '대기실', hint: '꾸미고 기다려요', time: null, me: 2, host: false, label: '지하 재즈 바 로비. 일반 참가자 화면' },
+  lobby: { phase: 'talk', title: '대기실', hint: '꾸미고 기다려요', time: null, me: 0, host: true, label: '백스테이지 분장실 로비. 8명이 돌아다니고, 옷걸이를 누르면 꾸미기 창이 열려요' },
+  lobbyGuest: { phase: 'talk', title: '대기실', hint: '꾸미고 기다려요', time: null, me: 2, host: false, label: '백스테이지 분장실 로비. 일반 참가자 화면' },
   role: { phase: 'talk', title: '역할', hint: '카드를 눌러 확인해요', time: 10, me: 0, label: '역할 카드가 장면 위에 떠 있어요' },
   talk: { phase: 'talk', title: '낮 토론', hint: '이야기하며 마피아를 찾아요', time: 90, me: 0, label: '낮 토론. 바를 돌아다니며 이야기해요' },
   vote: { phase: 'vote', title: '지목', hint: '의심되는 사람을 눌러요', time: 15, me: 0, label: '지목. 이름표를 누르면 그 사람을 가리켜요' },
@@ -170,7 +173,7 @@ class Component extends DCLogic {
     (function boot() {
       if (!self.alive) return;
       var canvas = document.getElementById('sdCanvas');
-      if (!window.THREE || !window.MFChar || !window.MFB || !MFB.CONCEPTS.bar || !canvas || !document.getElementById('sdPlate7')) { setTimeout(boot, 60); return; }
+      if (!window.THREE || !window.MFChar || !window.MFB || !MFB.CONCEPTS[MAP] || !canvas || !document.getElementById('sdPlate7')) { setTimeout(boot, 60); return; }
       self.start(canvas);
     })();
   }
@@ -185,7 +188,19 @@ class Component extends DCLogic {
   start(canvas) {
     var self = this;
     canvas.addEventListener('webglcontextlost', function (e) { e.preventDefault(); });
-    var st = this.st = MFB.createStage(canvas, 'bar', { width: W, height: H, offsetY: SCREEN === 'verdict' ? 150 : 110 });
+    var st = this.st = MFB.createStage(canvas, MAP, { width: W, height: H, offsetY: SCREEN === 'verdict' ? 150 : 110 });
+    // 분장실: 옷걸이 랙 앞 바닥을 누르면 꾸미기 창이 열린다
+    if (LOBBY) {
+      var ray = new THREE.Raycaster(), floor = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), hit = new THREE.Vector3();
+      canvas.addEventListener('click', function (e) {
+        var r = canvas.getBoundingClientRect();
+        ray.setFromCamera({ x: (e.clientX - r.left) / r.width * 2 - 1, y: -(e.clientY - r.top) / r.height * 2 + 1 }, st.camera);
+        if (!ray.ray.intersectPlane(floor, hit)) return;
+        if (hit.x > -1.7 && hit.x < 1.1 && hit.z < -3.0) { self.setState({ sheet: true, willOpen: false }); return; }
+        st.walkTo(CFG[SCREEN].me, Math.max(-4.2, Math.min(4.6, hit.x)), Math.max(-3.4, Math.min(4.6, hit.z)));
+      });
+      canvas.style.cursor = 'pointer';
+    }
     this.reset();
     var plates = NAMES.map(function (n, i) { return document.getElementById('sdPlate' + i); });
     this.visible = true;
@@ -331,7 +346,7 @@ class Component extends DCLogic {
       toast: s.toast, toastOn: s.toastOn,
       sheetDress: s.sheet, sheetBottom: sheetBottom, host: !!cfg.host, closeSheet: function () { self.setState({ sheet: false }); },
       maps: MAPS, mapId: s.mapId,
-      pickMap: function (id) { var m = MAPS.filter(function (x) { return x.id === id; })[0]; self.setState({ mapId: id, chat: self.say(s.chat, SYS, '맵 · ' + m.label, 'map') }); },
+      pickMap: function (id) { var m = MAPS.filter(function (x) { return x.id === id; })[0]; if (self.st && self.st.ctx && self.st.ctx.setPoster) self.st.ctx.setPoster(id); self.setState({ mapId: id, chat: self.say(s.chat, SYS, '맵 · ' + m.label, 'map') }); },
       outfits: OUTFITS.map(function (o) { return { id: o[0], label: o[1], img: IMG[o[0]] }; }), outfit: s.outfit,
       pickOutfit: function (id) { if (self.st) MFChar.applyOutfit(self.st.people[me], id); self.setState({ outfit: id }); },
       voters: VOTERS, isVerdict: SCREEN === 'verdict', verdict: s.verdict, verdictLocked: s.verdictResult, verdictCount: s.verdictDone.length,
