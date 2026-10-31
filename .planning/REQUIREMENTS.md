@@ -18,6 +18,7 @@
 - [ ] **MAP-03**: 맵은 폰 한 화면보다 조금 넓고 카메라가 내 캐릭터를 따라간다
 - [ ] **MAP-04**: 단계마다 이동 가능 여부를 서버가 정한다 — 로비·낮 토론은 자유, 지목·변론·찬반은 정지, 밤은 마피아만
 - [ ] **MAP-05**: 화면이 꺼졌다 켜지거나 재접속해도 모든 캐릭터가 지금 위치로 이어진다
+- [ ] **MAP-06**: 방장이 로비에서 맵(지하 재즈 바 · 시계탑 광장 · 랜덤)을 고르고, 기본값은 랜덤이다. 랜덤은 서버가 게임 시작 때 정해 모두에게 같은 맵을 보낸다 (결정 0050)
 
 ### 채팅 (CHAT)
 
@@ -127,6 +128,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | MAP-03 | Phase 6 | Pending |
 | MAP-04 | Phase 8 | Pending |
 | MAP-05 | Phase 6 | Pending |
+| MAP-06 | Phase 11 | Pending |
 | CONN-04 | Phase 6 | Pending |
 | CHAT-01 | Phase 7 | Pending |
 | CHAT-02 | Phase 7 | Pending |
@@ -167,10 +169,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | SOUND-03 | Phase 12 | Pending |
 
 **Coverage:**
-- v2.0 requirements: 44 total
-- Mapped to phases: 44 ✓ (Phase 6: 6, Phase 7: 6, Phase 8: 8, Phase 9: 11, Phase 10: 5, Phase 11: 5, Phase 12: 3)
+- v2.0 requirements: 45 total
+- Mapped to phases: 45 ✓ (Phase 6: 6, Phase 7: 6, Phase 8: 8, Phase 9: 11, Phase 10: 5, Phase 11: 6, Phase 12: 3)
 - Unmapped: 0
 
 ---
 *Requirements defined: 2026-10-30*
-*Last updated: 2026-10-30 after roadmap creation (phases 6~12)*
+*Last updated: 2026-10-31 — MAP-06 맵 선택 추가(결정 0050)*
