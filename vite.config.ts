@@ -2,6 +2,7 @@ import { execSync } from "node:child_process";
 import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 import { cloudflare } from "@cloudflare/vite-plugin";
+import { WORKER_NAME } from "./scripts/deploy-target.mjs";
 
 // 빌드 버전: UTC 시각(초 단위) + 짧은 커밋 해시. /api/health 의 version 으로 보인다.
 function buildVersion(): string {
@@ -29,7 +30,10 @@ const decodeAtSign = (): Plugin => ({
   },
 });
 
-const define = { __APP_VERSION__: JSON.stringify(buildVersion()) };
+const define = {
+  __APP_VERSION__: JSON.stringify(buildVersion()),
+  __WORKER_NAME__: JSON.stringify(WORKER_NAME),
+};
 
 export default defineConfig({
   plugins: [decodeAtSign(), react(), cloudflare({ viteEnvironment: { name: "worker" } })],

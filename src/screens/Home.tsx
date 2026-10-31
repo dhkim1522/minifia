@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { validateNickname } from "../../shared/nickname";
 import { isRoomCode } from "../../shared/roomCode";
+import { WORKER_NAME } from "../../shared/version";
 import { Backdrop } from "../components/Backdrop";
 import { Button } from "../components/Button";
 import { NicknameSheet } from "../components/NicknameSheet";
@@ -145,6 +146,7 @@ export function Home({ onEnterRoom }: HomeProps) {
             방 만들기
           </Button>
         </div>
+        {WORKER_NAME === "minifia-v2" ? <p className="mf-entry__build">v2.0 시험판</p> : null}
       </main>
       {sheet ? (
         <NicknameSheet
