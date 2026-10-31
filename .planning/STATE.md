@@ -3,10 +3,10 @@ gsd_state_version: "1.0"
 milestone: v2.0
 milestone_name: 같은 공간
 status: planning
-last_updated: "2026-10-30T07:13:15.801Z"
+last_updated: "2026-10-30T09:12:09.000Z"
 last_activity: 2026-10-30
 progress:
-  total_phases: 0
+  total_phases: 7
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -20,19 +20,21 @@ progress:
 See: .planning/PROJECT.md (updated 2026-10-30)
 
 **Core value:** 링크 하나로 모인 친구들이 설명 없이 정통 마피아 한 판(6~10분)을 끝까지 마치는 것
-**Current focus:** v1.0 보관 완료 — v2.0 기획 시작 전 (`v2` 브랜치, `/gsd-new-milestone`)
+**Current focus:** v2.0 같은 공간 — 6페이즈(월드 뼈대) 계획 전. 먼저 메인 세션에서 v2.0 디자인을 캔버스로 승인받는다
 
 ## Current Position
 
-Phase: Not started (defining requirements)
+Phase: 6 of 12 (월드 뼈대) — v2.0 은 6~12페이즈 7개
 Plan: —
-Status: Defining requirements
-Last activity: 2026-10-30 — Milestone v2.0 started
+Status: 로드맵 완료. 디자인 승인(캔버스) 후 `/gsd-ui-phase 6` → `/gsd-plan-phase 6 --research-phase`
+Last activity: 2026-10-30 — v2.0 로드맵 생성 (페이즈 6~12, 요구사항 44/44 매핑)
+
+Progress: [░░░░░░░░░░] 0% (0/7 phases)
 
 ## Performance Metrics
 
-**Velocity:**
-- Total plans completed: 19
+**Velocity (v2.0):**
+- Total plans completed: 0
 - Average duration: - min
 - Total execution time: 0.0 hours
 
@@ -40,113 +42,24 @@ Last activity: 2026-10-30 — Milestone v2.0 started
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 1 | 19 | - | - |
+| - | - | - | - |
 
 **Recent Trend:**
 - Last 5 plans: -
 - Trend: -
 
-*Updated after each plan completion*
-**Per-Plan Metrics:**
-
-| Plan | Duration | Tasks | Files |
-|------|----------|-------|-------|
-| Phase 01 P01 | 3 min | 3 tasks | 21 files |
-| Phase 01 P03 | 3 min | 3 tasks | 11 files |
-| Phase 01 P02 | 52 min | 3 tasks | 28 files |
-| Phase 01 P15 | 15min | 2 tasks | 4 files |
-| Phase 01 P17 | 8 min | 2 tasks | 3 files |
-| Phase 02 P01 | 7 min | 3 tasks | 17 files |
-| Phase 02 P02 | 5 min | 2 tasks | 4 files |
-| Phase 02 P03 | 7min | 3 tasks | 5 files |
-| Phase 02 P06 | 3 min | 3 tasks | 8 files |
-| Phase 02 P07 | 6 min | 3 tasks | 9 files |
-| Phase 02 P04 | 8 min | 3 tasks | 4 files |
-| Phase 02 P08 | 6min | 2 tasks | 5 files |
-| Phase 02 P10 | 4 min | 2 tasks | 5 files |
-| Phase 02 P05 | 5 min | 3 tasks | 4 files |
-| Phase 02 P09 | 9 min | 3 tasks | 6 files |
-| Phase 02 P11 | 15 min | 2 tasks | 4 files |
-| Phase 02 P12 | 10min | 3 tasks | 11 files |
-| Phase 02 P13 | 10min | 2 tasks | 9 files |
-| Phase 02 P14 | 7 min | 3 tasks | 9 files |
-| Phase 02 P15 | 9min | 3 tasks | 15 files |
-| Phase 02 P16 | 20min | 3 tasks | 14 files |
-| Phase 02 P17 | 10min | 3 tasks | 9 files |
-| Phase 02 P18 | 25min | 3 tasks | 12 files |
-| Phase 03 P01 | 10 min | 3 tasks | 11 files |
-| Phase 03 P02 | 6min | 3 tasks | 6 files |
-| Phase 03 P03 | 25min | 3 tasks | 3 files |
-| Phase 03 P04 | 약 20분 | 3 tasks | 7 files |
-| Phase 03 P05 | 45min | 3 tasks | 6 files |
-| Phase 03 P06 | 25m | 3 tasks | 10 files |
-| Phase 03 P07 | 25 min | 3 tasks | 3 files |
-| Phase 03 P08 | 15min | 3 tasks | 6 files |
-| Phase 03 P09 | 20min | 3 tasks | 6 files |
-| Phase 03 P10 | 12min | 3 tasks | 10 files |
-| Phase 03 P11 | 15min | 2 tasks | 10 files |
-| Phase 03 P12 | 25 min | 3 tasks | 5 files |
-| Phase 03.1 P01 | 80min | 3 tasks | 19 files |
-| Phase 03.1 P02 | 70min | 3 tasks | 10 files |
-| Phase 03.1 P03 | 약 1시간 | 2 tasks | 16 files |
-| Phase 03.1 P04 | 25min | 3 tasks | 9 files |
-| Phase 03.1 P05 | 35min | 3 tasks | 11 files |
-| Phase 03.1 P06 | 45min | 3 tasks | 20 files |
-| Phase 03.1 P07 | 30min | 2 tasks | 19 files |
-| Phase 03.1 P09 | 35min | 2 tasks | 4 files |
-| Phase 03.1 P13 | 75min | 3 tasks | 6 files |
-| Phase 03.1 P08 | 25min | 2 tasks | 7 files |
-| Phase 03.1 P10 | 30min | 3 tasks | 12 files |
-| Phase 03.1 P11 | 약 40분 | 3 tasks | 17 files |
-| Phase 03.1 P12 | 약 2시간 | 3 tasks | 5 files |
-| Phase 03.1 P14 | 25min | 3 tasks | 3 files |
-| Phase 04 P01 | 35 min | 1 tasks | 11 files |
-| Phase 04 P02 | 15 min | 2 tasks | 14 files |
-| Phase 04 P04 | 10min | 2 tasks | 9 files |
-| Phase 04 P05 | 25min | 2 tasks | 12 files |
-| Phase 4 P06 | 25min | 3 tasks | 10 files |
-| Phase 04 P07 | 6min | 2 tasks | 8 files |
-| Phase 4 P08 | 35min | 3 tasks | 10 files |
-| Phase 04 P09 | 25min | 2 tasks | 2 files |
-| Phase 04 P10 | 45min | 2 tasks | 5 files |
-| Phase 4 P11 | 35min | 2 tasks | 4 files |
-| Phase 04 P12 | 10min | 2 tasks | 3 files |
-| Phase 04 P13 | 10min | 2 tasks | 2 files |
-| Phase 4 P14 | 12min | 3 tasks | 10 files |
-| Phase 04 P15 | 35min | 3 tasks | 12 files |
-| Phase 04 P16 | 20min | 2 tasks | 7 files |
-| Phase 4 P17 | 15min | 1 tasks | 3 files |
-| Phase 04 P18 | 12min | 3 tasks | 12 files |
-| Phase 04 P19 | 17min | 2 tasks | 9 files |
-| Phase 4 P20 | 11min | 2 tasks | 10 files |
-| Phase 04 P21 | 14min | 3 tasks | 10 files |
-| Phase 4 P22 | 11min | 2 tasks | 14 files |
-| Phase 04 P23 | 20min | 2 tasks | 9 files |
-| Phase 04 P24 | 11min | 3 tasks | 12 files |
-| Phase 04 P25 | 25min | 2 tasks | 4 files |
-| Phase 04 P26 | 30min | 2 tasks | 3 files |
-| Phase 04 P27 | 13min | 2 tasks | 10 files |
-| Phase 4 P28 | 12min | 2 tasks | 4 files |
-| Phase 04 P29 | 25min | 2 tasks | 2 files |
-| Phase 04 P30 | 25min | 2 tasks | 2 files |
-| Phase 04 P31 | 55min | 2 tasks | 1 files |
-| Phase 04 P32 | 75min | 2 tasks | 8 files |
-| Phase 04 P33 | 42min | 3 tasks | 9 files |
-| Phase 4 P34 | 35min | 3 tasks | 5 files |
-| Phase 04 P35 | 2h | 3 tasks | 8 files |
-| Phase 5 P01 | 10min | 3 tasks | 18 files |
-| Phase 5 P02 | about 6min | 2 tasks | 5 files |
-| Phase 5 P04 | 20min | 3 tasks | 7 files |
-| Phase 5 P03 | 15min | 2 tasks | 7 files |
-| Phase 05 P07 | 25min | 2 tasks | 3 files |
-| Phase 5 P08 | about 30min | 3 tasks | 5 files |
-| Phase 5 P09 | 70m | 2 tasks | 3 files |
+*Updated after each plan completion. v1.0 지표(107 plans)는 MILESTONES.md 와 git 기록에 있다*
 
 ## Accumulated Context
 
 ### Decisions
 
-v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v1.0-phases/*/*-SUMMARY.md` 에 있다(이 목록은 v1.0 마감 때 비웠다, git 기록 보존).
+v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v1.0-phases/*/*-SUMMARY.md` 에 있다(이 목록은 v1.0 마감 때 비웠다, git 기록 보존). v2.0 범위는 결정 0044(1~24항).
+
+- [Roadmap v2.0]: 7개 페이즈 6~12 — 월드 뼈대 → 자유 채팅 → 낮 처형과 유령 → 밤과 아침 → 캐릭터·동작·의상 → 결과 공개와 다시 하기 → 소리와 마무리. 자리표시 그림으로 한 판을 먼저 완주시키고 꾸밈 층(실제 아트·소리·시상)을 뒤에 얹는다
+- [Roadmap v2.0]: 유령(GHOST)을 낮 처형 페이즈에 묶었다 — 고정 테이블 삭제로 v1.0 관전 화면이 사라져 첫 처형부터 죽은 사람이 지켜볼 곳이 필요하다
+- [Roadmap v2.0]: 6페이즈에 렌더 성능 게이트(실기기 5분 평균 55fps 이상)를 둔다. 미달이면 그림자·광원·건물 예산을 줄이고, 그래도 모자라면 맵을 미리 구운 이미지로(결정 0045)
+- [Roadmap v2.0]: 9페이즈에서 한 판이 맵 위(낮 + 밤)에서 처음 끝까지 돌고 팀 테스트로 재미 가설을 확인한 뒤 10페이즈 이후 투자를 이어 간다
 
 ### Pending Todos
 
@@ -154,8 +67,13 @@ None yet.
 
 ### Blockers/Concerns
 
-- [v2.0] 팀 테스트 피드백 정리 전이라 범위가 정해지지 않았다. 사용자가 받아 온 의견을 하나씩 적고 함께 논의한다.
-- [v2.0] 수익화는 출시 전에 따로 정한다.
+- [v2.0 전체] 디자인 선행: 맵·캐릭터는 승인 완료(결정 0045, `design/v2.0/`). 남은 것은 v2.0 디자인 시스템과 화면설계서(채팅창·동작 목록·지목·변론·찬반·밤·아침·결과). 승인 전에는 화면 페이즈(6~12)를 계획하지 않는다
+- [6페이즈] WR-01~04 의 내용이 `DEFERRED-BUGS.md` 에 없다 — 연결 계층 코드(`useRoomConnection`·`linkReducer`·`worker/room.ts`)에서 원인을 확인해야 한다
+- [6페이즈] three.js 맵 + 2D 캐릭터 합치는 방식(빌보드 vs DOM 겹치기)과 성능 게이트 결과로 렌더 예산을 정한다(결정 0045)
+- [6페이즈] `wrangler.jsonc` 이름 변경 전에 배포하면 v1.0 을 덮어쓴다 — 이름·`prod-url.txt`·E2E/smoke 기본 주소·계정 확인 스크립트를 같은 커밋에서 바꾸고 가드 뒤에 첫 배포
+- [9페이즈] 아침 시작 위치: 결정 0044-18 은 "밤이 끝난 자리" 이지만 리서치는 정체 누설을 우려해 낮 시작 대형 초기화를 권한다 — 9페이즈 논의에서 확정
+- [12페이즈] iOS 무음 스위치·소리 에셋 상업 이용 약관은 실기기·출시 마일스톤에서 확인한다
+- [출시 전] 수익화는 출시 전에 따로 정한다
 
 ### Quick Tasks Completed
 
@@ -164,7 +82,8 @@ None yet.
 
 ### Roadmap Evolution
 
-- Phase 03.1 inserted after Phase 3: 순차 주장(결정 0023)과 역할 카드·일지(결정 0026) 구현, E2E 결함 해소
+- Phase 03.1 inserted after Phase 3 (v1.0): 순차 주장(결정 0023)과 역할 카드·일지(결정 0026) 구현, E2E 결함 해소
+- v2.0 로드맵 생성 2026-10-30: 6~12페이즈 7개 (연구 SUMMARY 의 8단계에서 유령을 낮 처형에, 방장 이양·로비 정리를 결과 공개에 병합)
 
 ## Deferred Items
 
@@ -178,9 +97,10 @@ Items acknowledged and deferred at milestone close, most recent first:
 ## Session Continuity
 
 Last session: 2026-10-30
-Stopped at: v1.0 milestone 마감·보관
+Stopped at: v2.0 로드맵 작성 완료 (ROADMAP.md, STATE.md, REQUIREMENTS.md 추적표)
 Resume file: None
 
 ## Operator Next Steps
 
-- `v2` 브랜치에서 `/gsd-new-milestone` 으로 v2.0 을 시작한다
+- 메인 세션에서 v2.0 디자인(디자인 시스템·화면설계서·맵·캐릭터 리그/의상/동작)을 캔버스로 만들어 승인받고, 승인본 사본을 `design/` 에 둔다 (GSD 페이즈 아님)
+- 6페이즈: `/gsd-ui-phase 6` → `/gsd-plan-phase 6 --research-phase` (연구 필수)

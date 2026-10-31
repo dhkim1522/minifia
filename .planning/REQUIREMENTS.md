@@ -30,9 +30,9 @@
 
 ### 캐릭터와 동작 (AVTR)
 
-- [ ] **AVTR-01**: 캐릭터는 관절이 있는 공통 몸체에 머리·옷·소품 파츠를 입히는 2D 리그로 그린다(three.js 없음, 결정 0044-16)
+- [ ] **AVTR-01**: 캐릭터는 세트 C 얼굴의 로우폴리 면 색면 2D 리그(공통 몸체 + 머리·옷·소품 교체, 앞·옆·뒤 3방향)로, three.js 아이소메트릭 3D 맵 위에 선다 (결정 0045)
 - [ ] **AVTR-02**: 걸을 때 캐릭터가 걷는 동작을 하고 이동 방향으로 좌우를 돌아본다
-- [ ] **AVTR-03**: 동작 목록에서 고르면 내 캐릭터가 그 자리에서 동작(목 긋기·손사래·칭찬/박수·울기·악수 등 8개 이상)을 하고, 같은 공간을 보는 모두에게 보인다. 이동하면 동작이 끊기고 서버가 연타를 막는다
+- [ ] **AVTR-03**: 동작 목록에서 고르면 내 캐릭터가 그 자리에서 동작(목 긋기·손사래·박수·울기·악수 내밀기·지목·엄지척·어깨 으쓱 8종)을 하고, 같은 공간을 보는 모두에게 보인다. 이동하면 동작이 끊기고 서버가 연타를 막는다
 - [ ] **AVTR-04**: 로비에서 여러 직업 의상을 눌러 갈아입고, 고른 외형은 게임 중에도 유지된다. 의상은 실제 역할과 관계없다
 - [ ] **AVTR-05**: 이동을 막는 구간(지목·변론·찬반)에도 제자리 동작과 채팅은 된다
 
@@ -102,7 +102,7 @@
 
 | Feature | Reason |
 |---------|--------|
-| three.js·3D 캐릭터 | 요구가 3D 를 쓰지 않고, 첫 로딩·에셋 제작·iOS WebGL 위험이 크다 (결정 0044-16) |
+| 3D 모델 캐릭터(glTF 등) | 캐릭터는 2D 리그로 그린다. 3D 는 맵에만 쓴다 (결정 0045) |
 | 상대에게 가는 동작·수락형 동작(악수 요청 등) | 동작은 모두 혼자 실행한다 (결정 0044-7) |
 | 귓속말(1:1 채팅) | 사용자가 고르지 않음 |
 | 근접 채팅·음성 채팅 | 앱 안 텍스트만 쓴다는 전제 (결정 0005) |
@@ -121,12 +121,56 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
+| DEPLOY-02 | Phase 6 | Pending |
+| MAP-01 | Phase 6 | Pending |
+| MAP-02 | Phase 6 | Pending |
+| MAP-03 | Phase 6 | Pending |
+| MAP-04 | Phase 8 | Pending |
+| MAP-05 | Phase 6 | Pending |
+| CONN-04 | Phase 6 | Pending |
+| CHAT-01 | Phase 7 | Pending |
+| CHAT-02 | Phase 7 | Pending |
+| CHAT-03 | Phase 7 | Pending |
+| CHAT-04 | Phase 7 | Pending |
+| CHAT-05 | Phase 7 | Pending |
+| CHAT-06 | Phase 7 | Pending |
+| DAY-03 | Phase 8 | Pending |
+| DAY-04 | Phase 8 | Pending |
+| DAY-05 | Phase 8 | Pending |
+| DAY-06 | Phase 8 | Pending |
+| DAY-07 | Phase 8 | Pending |
+| GHOST-01 | Phase 8 | Pending |
+| GHOST-02 | Phase 8 | Pending |
+| NIGHT-07 | Phase 9 | Pending |
+| NIGHT-08 | Phase 9 | Pending |
+| NIGHT-09 | Phase 9 | Pending |
+| NIGHT-10 | Phase 9 | Pending |
+| NIGHT-11 | Phase 9 | Pending |
+| NIGHT-12 | Phase 9 | Pending |
+| MORN-01 | Phase 9 | Pending |
+| MORN-02 | Phase 9 | Pending |
+| MORN-03 | Phase 9 | Pending |
+| MORN-04 | Phase 9 | Pending |
+| WILL-01 | Phase 9 | Pending |
+| AVTR-01 | Phase 10 | Pending |
+| AVTR-02 | Phase 10 | Pending |
+| AVTR-03 | Phase 10 | Pending |
+| AVTR-04 | Phase 10 | Pending |
+| AVTR-05 | Phase 10 | Pending |
+| END-03 | Phase 11 | Pending |
+| END-04 | Phase 11 | Pending |
+| REMATCH-01 | Phase 11 | Pending |
+| CONNX-01 | Phase 11 | Pending |
+| CONNX-02 | Phase 11 | Pending |
+| SOUND-01 | Phase 12 | Pending |
+| SOUND-02 | Phase 12 | Pending |
+| SOUND-03 | Phase 12 | Pending |
 
 **Coverage:**
 - v2.0 requirements: 44 total
-- Mapped to phases: 0
-- Unmapped: 44 ⚠️
+- Mapped to phases: 44 ✓ (Phase 6: 6, Phase 7: 6, Phase 8: 8, Phase 9: 11, Phase 10: 5, Phase 11: 5, Phase 12: 3)
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-10-30*
-*Last updated: 2026-10-30 after initial definition*
+*Last updated: 2026-10-30 after roadmap creation (phases 6~12)*
