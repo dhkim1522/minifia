@@ -4,4 +4,5 @@
 
 | ID | 내용 | 상태 | 비고 |
 |---|---|---|---|
-| WR-01~04 | 연결 계층 경고 | 열림 | 2페이즈 전에 고치는 것이 좋음 |
+
+처리됨: WR-01~04(연결 계층 경고, v1.0 1페이즈 리뷰) — 9b89310·2b308f4·735ef3a·efdf811, 회귀 테스트 test/client/useRoomConnection.test.tsx describe 'world 프레임 비간섭 (CONN-04)' 06-09 (CONN-04)
