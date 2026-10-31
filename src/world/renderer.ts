@@ -68,7 +68,12 @@ export interface WorldRenderer {
   dispose(): void;
 }
 
-/** 자동 강등 판정(RED 스텁: 아직 아무것도 하지 않는다) */
-export function nextLadderStep(step: number, _avgFps10s: number): number {
-  return step;
+/** 자동 강등을 멈추는 단계: 0→1→2→3 까지만 자동이고 4 이상은 사람 결정이다 */
+export const AUTO_LADDER_MAX = 3;
+/** 10초 평균이 이 값 미만이면 한 단계 내린다 */
+export const AUTO_DEGRADE_FPS = 45;
+
+/** 자동 강등 판정. 10초 평균이 45fps 미만이고 아직 3단계 미만이면 한 단계만 내린다. 되돌리지 않고, 4단계 이상은 올리지 않는다 */
+export function nextLadderStep(step: number, avgFps10s: number): number {
+  return avgFps10s < AUTO_DEGRADE_FPS && step < AUTO_LADDER_MAX ? step + 1 : step;
 }
