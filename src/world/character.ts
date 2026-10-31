@@ -22,7 +22,7 @@ import {
 } from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import { MOVE_SPEED } from "../../shared/game/world";
-import { EYE, FIGS, MOUTH, OUTFITS, SKIN, type Fig, type Outfit, type OutfitId, type PoseKey } from "./characterData";
+import { EYE, type EmoteId, FACE_IDS, type FaceId, type Fig, FIGS, MOUTH, type Outfit, OUTFITS, type OutfitId, type PoseKey, SKIN } from "./characterData";
 
 /** 맵 위 크기 — 원래 키 약 2.1 단위를 약 1.7 로 줄여 쓴다 */
 export const CHAR_SCALE = 0.83;
@@ -647,29 +647,56 @@ function walkPose(walkPhase: number): Pose {
 /** 6페이즈 로비 렌더러(06-10 CharacterKit)가 쓰는 구조 + 10페이즈의 의상·동작·표정 */
 export interface WorldCharacter {
   root: Group;
+  /** 한 프레임 움직인다(원문 animate). moving 이면 걷기, 아니면 숨쉬기. headY 는 이름표를 놓을 머리 꼭대기 높이 */
   update(dt: number, t: number, moving: boolean): { headY: number };
+  /** 바라보는 방향(yaw = atan2(dx, dz)) */
   setYaw(yaw: number): void;
+  /** 끊긴 사람 표시: 채도 0 + 밝기 × 0.6, 투명하게 만들지 않는다 */
   setDim(on: boolean): void;
+  /** 의상 바꾸기(원문 applyOutfit) — 해당 관절만 다시 병합(캐시) */
   applyOutfit(id: OutfitId): void;
-  playEmote(id: string): void;
-  setFace(id: string): void;
+  /** 동작 재생(원문 playEmote) */
+  playEmote(id: EmoteId): void;
+  /** 표정 바꾸기(원문 setFace) — 머리만 다시 병합(캐시). 모르는 이름은 기본 표정 */
+  setFace(id: FaceId): void;
+  /** 지금 보이는 메시 수(관절 6 + 발밑 원판 + 투명 조각) */
   meshCount(): number;
+  /** 이 캐릭터가 만든 지오메트리를 해제한다. 공유 재질·발밑 원판은 건드리지 않는다 */
   dispose(): void;
 }
 
 /** 모든 캐릭터가 함께 쓰는 병합 재질(버텍스 컬러). 피부 0.7·놋쇠 금속감의 작은 차이는 합친다(가정 A1) */
 const bodyMaterial = new MeshStandardMaterial({ vertexColors: true, roughness: 0.8, metalness: 0 });
+/** 돋보기 유리처럼 투명한 조각만 따로 둔다(가정 A1) */
+const glassMaterial = new MeshStandardMaterial({ color: "#9ec2ff", transparent: true, opacity: 0.6 });
 const shadowMaterial = new MeshBasicMaterial({ color: "#000000", transparent: true, opacity: 0.3, depthWrite: false });
 const shadowGeometry = new CircleGeometry(0.42, 24);
 
-// Task 2·3 에서 채운다(RED 단계에서는 아무것도 하지 않는 자리)
-const NOT_YET = (): void => {};
+/** 병합 색을 원래대로 또는 어둡게(채도 0 + 휘도 × 0.6) 쓴다 */
+function paint(m: Merged, dim: boolean): void {
+  const a = m.geo.getAttribute("color");
+  const arr = a.array as Float32Array;
+  if (!dim) {
+    arr.set(m.base);
+  } else {
+    const b = m.base;
+    for (let i = 0; i < b.length; i += 3) {
+      const g = (0.2126 * b[i] + 0.7152 * b[i + 1] + 0.0722 * b[i + 2]) * 0.6;
+      arr[i] = arr[i + 1] = arr[i + 2] = g;
+    }
+  }
+  a.needsUpdate = true;
+}
 
 /** 인물 figIndex(0~4)를 만든다 — 원문 MFChar.create. 병합 재질은 모든 캐릭터가 공유한다 */
 export function createCharacter(figIndex: number, outfit: OutfitId = "coat"): WorldCharacter {
   const fig = FIGS[figIndex];
   const parts = figParts(figIndex);
-  const o = OUTFITS[outfit];
+  let outfitId: OutfitId = outfit in OUTFITS ? outfit : "coat";
+  let face = "base";
+  let lastPoseFace = "base";
+  let dim = false;
+  let disposed = false;
 
   const root = new Group();
   root.scale.setScalar(CHAR_SCALE);
@@ -682,46 +709,103 @@ export function createCharacter(figIndex: number, outfit: OutfitId = "coat"): Wo
   disc.castShadow = false;
   root.add(disc);
 
-  const at: Record<JointName, [string, number, number, number, Object3D]> = {
-    torso: ["", 0, 0, 0, body],
-    head: ["neck", 0, 1.0, 0, body],
-    armA: ["armA", 0.37, 0.9, 0, body],
-    armB: ["armB", -0.37, 0.9, 0, body],
-    legA: ["legA", 0.13, 0.38, 0, body],
-    legB: ["legB", -0.13, 0.38, 0, body],
+  // 관절 그룹(원문과 같은 계층·피벗)과 그 안의 병합 메시
+  const at: Record<Exclude<JointName, "torso">, [string, number, number]> = {
+    head: ["neck", 0, 1.0],
+    armA: ["armA", 0.37, 0.9],
+    armB: ["armB", -0.37, 0.9],
+    legA: ["legA", 0.13, 0.38],
+    legB: ["legB", -0.13, 0.38],
   };
-  const groups = {} as Record<JointName, Object3D>;
+  const groups = { torso: body } as unknown as Record<JointName, Object3D>;
   for (const j of JOINTS) {
-    const [name, x, y, z, parent] = at[j];
-    if (j === "torso") {
-      groups[j] = body;
-    } else {
-      const g = new Group();
-      g.name = name;
-      g.position.set(x, y, z);
-      parent.add(g);
-      groups[j] = g;
+    if (j === "torso") continue;
+    const [name, x, y] = at[j];
+    const g = new Group();
+    g.name = name;
+    g.position.set(x, y, 0);
+    body.add(g);
+    groups[j] = g;
+  }
+
+  // 병합 캐시: 몸통·팔·다리는 의상 키, 머리는 (의상, 표정) 키. 이 캐릭터가 만든 지오메트리는 owned 에 모은다
+  const cache = new Map<string, Merged>();
+  const owned = new Set<BufferGeometry>();
+  function merged(j: JointName): Merged {
+    const key = j === "head" ? `${j}|${outfitId}|${face}` : `${j}|${outfitId}`;
+    let m = cache.get(key);
+    if (!m) {
+      m = mergeJoint(parts[j], OUTFITS[outfitId], fig, face);
+      owned.add(m.geo);
+      if (dim) paint(m, true);
+      cache.set(key, m);
     }
-    const merged = mergeJoint(parts[j], o, fig, "base");
-    const mesh = new Mesh(merged.geo, bodyMaterial);
+    return m;
+  }
+  const meshes = {} as Record<JointName, Mesh>;
+  for (const j of JOINTS) {
+    const mesh = new Mesh(merged(j).geo, bodyMaterial);
     mesh.castShadow = false;
     mesh.receiveShadow = true;
     groups[j].add(mesh);
+    meshes[j] = mesh;
+  }
+
+  // 투명 조각(돋보기 유리): 의상별 지오메트리를 한 번씩만 만든다
+  const glassGeos = new Map<string, BufferGeometry>();
+  let glassMesh: Mesh | null = null;
+  function refreshGlass(): void {
+    const o = OUTFITS[outfitId];
+    const shown = parts.armB.filter((p) => p.glass && isShown(p.tag, o, fig, face));
+    if (shown.length === 0) {
+      if (glassMesh) glassMesh.visible = false;
+      return;
+    }
+    let geo = glassGeos.get(outfitId);
+    if (!geo) {
+      const list = shown.map((p) => p.geo);
+      geo = list.length === 1 ? list[0].clone() : (mergeGeometries(list, false) as BufferGeometry);
+      owned.add(geo);
+      glassGeos.set(outfitId, geo);
+    }
+    if (!glassMesh) {
+      glassMesh = new Mesh(geo, glassMaterial);
+      glassMesh.castShadow = false;
+      groups.armB.add(glassMesh);
+    }
+    glassMesh.geometry = geo;
+    glassMesh.visible = true;
+  }
+  refreshGlass();
+
+  function refresh(js: readonly JointName[]): void {
+    for (const j of js) meshes[j].geometry = merged(j).geo;
+    refreshGlass();
+  }
+  function showFace(id: string): void {
+    const f = (FACE_IDS as readonly string[]).includes(id) ? id : "base";
+    if (f === face) return;
+    face = f;
+    refresh(["head"]);
   }
 
   let walkPhase = 0;
-  const g = { legA: groups.legA, legB: groups.legB, armA: groups.armA, armB: groups.armB, neck: groups.head };
   function applyPose(p: Pose): void {
-    g.armA.rotation.set(p.aAx, 0, p.aAz);
-    g.armB.rotation.set(p.aBx, 0, p.aBz);
-    g.armA.position.z = p.fA;
-    g.armB.position.z = p.fB;
-    g.legA.rotation.x = p.lA;
-    g.legB.rotation.x = p.lB;
-    g.neck.rotation.set(p.hx, p.hy, p.hz);
+    groups.armA.rotation.set(p.aAx, 0, p.aAz);
+    groups.armB.rotation.set(p.aBx, 0, p.aBz);
+    groups.armA.position.z = p.fA;
+    groups.armB.position.z = p.fB;
+    groups.legA.rotation.x = p.lA;
+    groups.legB.rotation.x = p.lB;
+    groups.head.rotation.set(p.hx, p.hy, p.hz);
     body.position.y = p.y;
     body.scale.set(1 + (1 - p.s) * 0.6, p.s, 1 + (1 - p.s) * 0.6);
     body.rotation.y = p.ry;
+    // 자세가 정한 표정이 바뀔 때만 적용한다 — 서 있는 동안 바깥에서 정한 표정은 그대로 둔다
+    if (p.face !== lastPoseFace) {
+      lastPoseFace = p.face;
+      showFace(p.face);
+    }
   }
 
   return {
@@ -735,10 +819,20 @@ export function createCharacter(figIndex: number, outfit: OutfitId = "coat"): Wo
     setYaw(yaw) {
       root.rotation.y = yaw;
     },
-    setDim: NOT_YET,
-    applyOutfit: NOT_YET,
-    playEmote: NOT_YET,
-    setFace: NOT_YET,
+    setDim(on) {
+      if (disposed || on === dim) return;
+      dim = on;
+      for (const m of cache.values()) paint(m, on);
+    },
+    applyOutfit(id) {
+      if (disposed || !(id in OUTFITS) || id === outfitId) return;
+      outfitId = id;
+      refresh(JOINTS);
+    },
+    playEmote: () => {},
+    setFace(id) {
+      if (!disposed) showFace(id);
+    },
     meshCount() {
       let n = 0;
       root.traverse((x) => {
@@ -746,7 +840,14 @@ export function createCharacter(figIndex: number, outfit: OutfitId = "coat"): Wo
       });
       return n;
     },
-    dispose: NOT_YET,
+    dispose() {
+      if (disposed) return;
+      disposed = true;
+      for (const g of owned) g.dispose();
+      owned.clear();
+      cache.clear();
+      glassGeos.clear();
+    },
   };
 }
 
