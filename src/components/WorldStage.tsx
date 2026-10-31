@@ -38,6 +38,8 @@ export interface WorldStageProps {
   exiting?: boolean;
   onExited?(): void;
   loadModules?: () => Promise<WorldModules>;
+  /** [새로 고침] 카드가 부른다. 기본은 location.reload(테스트가 바꿔 끼운다) */
+  reload?: () => void;
 }
 
 /** 자리 구분색: seat 0~7 → --seat-1~8 */

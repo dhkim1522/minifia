@@ -3,16 +3,18 @@ import { StrictMode } from "react";
 import { Object3D } from "three";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import "../helpers/singleLineErrors";
-import { installMemoryStorage } from "../helpers/memoryStorage";
+import { installMemoryStorage, MemoryStorage } from "../helpers/memoryStorage";
 import { BAR_MAP, snapToWalkable } from "../../shared/game/map";
 import { segmentEndsAt } from "../../shared/game/world";
 import type { PublicPlayer, RoomView, WorldSeg } from "../../shared/protocol";
 import { WorldStage } from "../../src/components/WorldStage";
 import { NETWORK_TEXT } from "../../src/net/copy";
 import type { WorldStageProps } from "../../src/components/WorldStage";
+import { UnsupportedRendererError } from "../../src/world/renderer";
 import type { CharacterHandle, RendererStatusEvent, WorldRenderer } from "../../src/world/renderer";
 import { ENTER_MS, EXIT_MS, MOVE_ACK_TIMEOUT_MS, WALK_CUE_KEY } from "../../src/world/runtime";
 import type { WorldModules } from "../../src/world/runtime";
+import { installWorldTestHooks, WORLD_TEST_KEY, worldTestHooksEnabled } from "../../src/world/testHooks";
 import { WorldStore } from "../../src/world/store";
 
 // 06-13: 로비 맵 화면(WorldStage + 런타임). happy-dom 에는 WebGL 이 없어 loadModules 로 가짜 렌더러·가짜 캐릭터를 주입한다(가정 A1).
@@ -225,7 +227,7 @@ interface Setup {
 
 const TWO = [player(0, "민지"), player(1, "철수")];
 
-async function open(over: Partial<WorldStageProps> = {}, opts: { strict?: boolean; ents?: WorldSeg[]; players?: PublicPlayer[]; mySeat?: number } = {}): Promise<Setup> {
+async function open(over: Partial<WorldStageProps> = {}, opts: { strict?: boolean; ents?: WorldSeg[] | null; players?: PublicPlayer[]; mySeat?: number } = {}): Promise<Setup> {
   const world = makeWorld();
   const store = new WorldStore();
   const send = vi.fn(() => true);
@@ -242,7 +244,7 @@ async function open(over: Partial<WorldStageProps> = {}, opts: { strict?: boolea
     loadModules: world.loadModules,
     ...over,
   };
-  snap(store, opts.ents ?? [seg(0, [200, 100]), seg(1, [-300, 50])]);
+  if (opts.ents !== null) snap(store, opts.ents ?? [seg(0, [200, 100]), seg(1, [-300, 50])]);
   const wrap = (p: WorldStageProps) => (opts.strict ? <StrictMode><WorldStage {...p} /></StrictMode> : <WorldStage {...p} />);
   const utils = render(wrap(props));
   await flush();
@@ -780,5 +782,290 @@ describe("처음 방문 손짓 링 (UI-SPEC 안내)", () => {
     expect(new Set(cues(r).filter((m) => m.at).map((m) => m.scale))).toEqual(new Set([1]));
     frames(300);
     expect(cues(r).at(-1)!.at).toBeNull();
+  });
+});
+
+// ---------- Task 3: 맵 상태 카드·소실/복구·숨김 복귀·나가는 가림막·E2E 훅 (MAP-05) ----------
+
+const rootOf = (utils: ReturnType<typeof render>): HTMLElement => utils.container.querySelector<HTMLElement>("[data-world-stage]")!;
+
+function setVisibility(state: "hidden" | "visible"): void {
+  Object.defineProperty(document, "visibilityState", { configurable: true, get: () => state });
+  act(() => {
+    document.dispatchEvent(new Event("visibilitychange"));
+  });
+}
+
+afterEach(() => {
+  Object.defineProperty(document, "visibilityState", { configurable: true, get: () => "visible" });
+  vi.unstubAllEnvs();
+});
+
+describe("맵 상태 카드: 불러오는 중 → 열림 (E1 loading)", () => {
+  it("첫 snap 전에는 카드만 보이고, snap 과 렌더러가 모두 준비되면 카드가 사라지고 열림 클래스가 붙고 onReady 가 한 번 불린다", async () => {
+    const onReady = vi.fn();
+    const s = await open({ onReady }, { ents: null });
+    expect(screen.getByText("맵을 불러오는 중…")).toBeTruthy();
+    expect(rootOf(s.utils).classList.contains("is-open")).toBe(false);
+    expect(s.world.renderers).toHaveLength(1); // 렌더러만 준비됨
+    frames(200);
+    expect(screen.getByText("맵을 불러오는 중…")).toBeTruthy();
+    expect(onReady).not.toHaveBeenCalled();
+    snap(s.store, [seg(0, [200, 100]), seg(1, [-300, 50])]);
+    frames(100);
+    expect(screen.queryByText("맵을 불러오는 중…")).toBeNull();
+    expect(rootOf(s.utils).classList.contains("is-open")).toBe(true);
+    expect(onReady).toHaveBeenCalledTimes(1);
+    frames(500);
+    expect(onReady).toHaveBeenCalledTimes(1);
+  });
+
+  it("준비 전에는 탭을 무시한다(링도 move 도 없다)", async () => {
+    const s = await open({}, { ents: null });
+    tapAt(surface(s.utils), 250, 340);
+    expect(s.send).not.toHaveBeenCalled();
+  });
+
+  it("map-interactive 표식은 열린 뒤 한 번만 찍힌다", async () => {
+    const mark = vi.spyOn(performance, "mark");
+    const s = await open();
+    frames(300);
+    const marks = mark.mock.calls.filter((c) => c[0] === "map-interactive");
+    expect(marks).toHaveLength(1);
+    s.world.renderers[0]!.emit({ t: "lost" });
+    s.world.renderers[0]!.emit({ t: "restored" });
+    frames(300);
+    expect(mark.mock.calls.filter((c) => c[0] === "map-interactive")).toHaveLength(1);
+    mark.mockRestore();
+  });
+});
+
+describe("맵 상태 카드: 실패 (E1 error)", () => {
+  it("모듈을 못 받으면 불러오기 실패 카드와 [다시 시도] — 누르면 다시 불러온다", async () => {
+    const world = makeWorld();
+    const loadModules = vi.fn().mockRejectedValueOnce(new Error("network")).mockImplementation(() => Promise.resolve(world.modules));
+    const s = await open({ loadModules });
+    expect(screen.getByText("맵을 불러오지 못했어요")).toBeTruthy();
+    expect(screen.getByText("네트워크를 확인해 주세요")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "다시 시도" }));
+    expect(screen.getByText("맵을 불러오는 중…")).toBeTruthy();
+    await flush();
+    frames(100);
+    expect(loadModules).toHaveBeenCalledTimes(2);
+    expect(world.renderers).toHaveLength(1);
+    expect(rootOf(s.utils).classList.contains("is-open")).toBe(true);
+    expect(screen.queryByText("맵을 불러오지 못했어요")).toBeNull();
+  });
+
+  it("렌더러를 만들 수 없으면 '열 수 없어요' 카드와 [나가기] — v1.0 고정 테이블로 몰래 대체하지 않는다", async () => {
+    const world = makeWorld();
+    world.createThreeRenderer.mockRejectedValue(new UnsupportedRendererError("no webgl"));
+    const s = await open({ loadModules: world.loadModules });
+    expect(screen.getByText("이 기기에서는 맵을 열 수 없어요")).toBeTruthy();
+    expect(screen.getByText("다른 브라우저로 열어 주세요")).toBeTruthy();
+    expect(s.utils.container.querySelector("canvas")).toBeNull();
+    expect(s.utils.container.querySelector("[class*='mf-table'], [class*='mf-dayscene']")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "나가기" }));
+    expect(s.props.onLeave).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("button", { name: "다시 시도" })).toBeNull();
+  });
+
+  it("불러오는 중에 컨텍스트를 잃으면 불러오기 실패로 가고 렌더러를 정리한다", async () => {
+    const s = await open({}, { ents: null });
+    const r = s.world.renderers[0]!;
+    act(() => r.emit({ t: "lost" }));
+    expect(screen.getByText("맵을 불러오지 못했어요")).toBeTruthy();
+    expect(r.disposed).toBe(1);
+  });
+});
+
+describe("WebGL 컨텍스트 소실·복구 (MAP-05)", () => {
+  it("소실하면 40% 가림막과 한 줄 카드가 뜨고 탭은 무시되며 이름표는 서버 위치를 계속 따라간다", async () => {
+    const s = await open();
+    const r = s.world.renderers[0]!;
+    r.lost = true;
+    act(() => r.emit({ t: "lost" }));
+    expect(screen.getByText("화면을 다시 그리는 중…")).toBeTruthy();
+    expect(rootOf(s.utils).classList.contains("is-redrawing")).toBe(true);
+    const renders = r.renders;
+    const before = tagOf(s.utils, 0)!.getAttribute("style");
+    move(s.store, seg(0, [200, 100, 600, 100], Date.now(), 180));
+    frames(600);
+    expect(r.renders).toBe(renders); // GL 은 그리지 않는다
+    expect(tagOf(s.utils, 0)!.getAttribute("style")).not.toBe(before);
+    tapAt(surface(s.utils), 250, 340);
+    expect(s.send).not.toHaveBeenCalled();
+  });
+
+  it("복구하면 가림막이 걷히고 다음 프레임에 모든 캐릭터가 positionOf 위치에 있다", async () => {
+    const s = await open();
+    const r = s.world.renderers[0]!;
+    r.lost = true;
+    act(() => r.emit({ t: "lost" }));
+    move(s.store, seg(1, [-300, 50, -300, 450], Date.now(), 180));
+    frames(1000);
+    r.lost = false;
+    act(() => r.emit({ t: "restored" }));
+    expect(screen.queryByText("화면을 다시 그리는 중…")).toBeNull();
+    expect(rootOf(s.utils).classList.contains("is-open")).toBe(true);
+    const renders = r.renders;
+    frame(16);
+    expect(r.renders).toBeGreaterThan(renders);
+    for (const seat of [0, 1]) {
+      const pos = s.store.positionOf(seat, Date.now())!;
+      const root = r.chars.get(seat)!.root;
+      expect(root.position.x).toBeCloseTo(pos.x, 6);
+      expect(root.position.z).toBeCloseTo(pos.z, 6);
+    }
+    // 복구 직후 카메라는 날아가지 않고 바로 붙는다
+    expect(r.views.at(-1)!.target.x).toBeCloseTo(2, 6);
+  });
+
+  it("소실 3초 뒤 렌더러를 한 번 다시 만들고, 만들어지면 다시 열린다", async () => {
+    const s = await open();
+    const r = s.world.renderers[0]!;
+    r.lost = true;
+    act(() => r.emit({ t: "lost" }));
+    frames(2900);
+    expect(r.recreate).not.toHaveBeenCalled();
+    frames(300);
+    await flush();
+    expect(r.recreate).toHaveBeenCalledTimes(1);
+    frames(3000);
+    expect(r.recreate).toHaveBeenCalledTimes(1);
+    expect(rootOf(s.utils).classList.contains("is-open")).toBe(true);
+    expect(screen.queryByText("화면을 다시 그리는 중…")).toBeNull();
+  });
+
+  it("소실 5초가 지나도 못 그리면 '다시 그리지 못했어요' 카드와 [새로 고침] 이고 누르면 reload 가 불린다", async () => {
+    const reload = vi.fn();
+    const s = await open({ reload });
+    const r = s.world.renderers[0]!;
+    r.recreate = vi.fn(() => new Promise<void>(() => {}));
+    r.lost = true;
+    act(() => r.emit({ t: "lost" }));
+    frames(5100);
+    expect(screen.getByText("화면을 다시 그리지 못했어요")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "새로 고침" }));
+    expect(reload).toHaveBeenCalledTimes(1);
+    expect(r.recreate).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("화면 숨김·복귀 (UI-SPEC 연결·복귀 상태)", () => {
+  it("숨겨지면 그리기를 멈추고, 다시 보이면 한 프레임을 서버 위치로 맞춘다", async () => {
+    const s = await open();
+    const r = s.world.renderers[0]!;
+    setVisibility("hidden");
+    expect(rafCbs.size).toBe(0);
+    move(s.store, seg(0, [200, 100, 600, 100], Date.now(), 180));
+    const renders = r.renders;
+    act(() => {
+      vi.advanceTimersByTime(3000);
+    });
+    expect(r.renders).toBe(renders);
+    setVisibility("visible");
+    expect(rafCbs.size).toBe(1);
+    frame(0);
+    expect(r.renders).toBe(renders + 1);
+    const pos = s.store.positionOf(0, Date.now())!;
+    expect(r.chars.get(0)!.root.position.x).toBeCloseTo(pos.x, 6);
+    // 숨어 있던 3초를 따라잡느라 걷지 않는다: 카메라는 서버 위치에 바로 붙는다
+    expect(r.views.at(-1)!.target.x).toBeCloseTo(Math.min(4.8, pos.x), 6);
+  });
+
+  it("다시 보일 때 컨텍스트가 이미 소실돼 있으면 소실 경로로 들어간다", async () => {
+    const s = await open();
+    const r = s.world.renderers[0]!;
+    setVisibility("hidden");
+    r.lost = true;
+    setVisibility("visible");
+    expect(screen.getByText("화면을 다시 그리는 중…")).toBeTruthy();
+  });
+});
+
+describe("나가는 가림막 (로비에서 맵으로 들어가고 나오기)", () => {
+  it("exiting 이 되면 night-900 가림막을 켜고 420ms 뒤 렌더러를 정리하고 onExited 를 부른다", async () => {
+    const onExited = vi.fn();
+    const s = await open({ onExited });
+    const r = s.world.renderers[0]!;
+    s.rerender({ exiting: true });
+    expect(rootOf(s.utils).classList.contains("is-exiting")).toBe(true);
+    frames(400);
+    expect(r.disposed).toBe(0);
+    expect(onExited).not.toHaveBeenCalled();
+    frames(40);
+    expect(r.disposed).toBe(1);
+    expect(onExited).toHaveBeenCalledTimes(1);
+    frames(1000);
+    expect(onExited).toHaveBeenCalledTimes(1);
+  });
+
+  it("나가는 중에는 탭을 받지 않는다", async () => {
+    const s = await open();
+    s.rerender({ exiting: true });
+    tapAt(surface(s.utils), 250, 340);
+    expect(s.send).not.toHaveBeenCalled();
+  });
+});
+
+describe("E2E 훅 (T-06-27)", () => {
+  it("worldTestHooksEnabled: ?e2e=1 은 켜고 저장, 저장만 있으면 켜짐, ?e2e=0 은 끄고 지움, 아무것도 없으면 꺼짐, 개발 빌드는 켜짐", () => {
+    const st = new MemoryStorage();
+    expect(worldTestHooksEnabled("", st, false)).toBe(false);
+    expect(worldTestHooksEnabled("?e2e=1", st, false)).toBe(true);
+    expect(st.getItem(WORLD_TEST_KEY)).toBe("1");
+    expect(worldTestHooksEnabled("", st, false)).toBe(true);
+    expect(worldTestHooksEnabled("?e2e=0", st, false)).toBe(false);
+    expect(st.getItem(WORLD_TEST_KEY)).toBeNull();
+    expect(worldTestHooksEnabled("", st, false)).toBe(false);
+    expect(worldTestHooksEnabled("", null, false)).toBe(false);
+    expect(worldTestHooksEnabled("", st, true)).toBe(true);
+  });
+
+  it("개발 빌드(또는 ?e2e=1)에서는 window.__mfWorld 가 같은 시각 위치·투영·렌더러 정보를 준다", async () => {
+    const s = await open();
+    const r = s.world.renderers[0]!;
+    const hooks = window.__mfWorld!;
+    expect(hooks).toBeTruthy();
+    const t = Date.now() + 500;
+    expect(hooks.sample(0, t)).toEqual(s.store.positionOf(0, t));
+    expect(hooks.screenOf(1, 2)).toEqual(r.project({ x: 1, y: 0, z: 2 }));
+    expect(hooks.debug.info()).toEqual(r.info());
+    expect(hooks.seats()).toEqual([0, 1]);
+    expect(hooks.status()).toBe("ready");
+    expect(typeof hooks.interactiveMs()).toBe("number");
+    expect(hooks.ring()).toBeNull();
+    tapAt(surface(s.utils), 250, 340);
+    expect(hooks.ring()).toEqual({ x: 5, z: 4 });
+    hooks.debug.loseContext();
+    expect(r.debugLoseContext).toHaveBeenCalledTimes(1);
+    hooks.debug.restoreContext();
+    expect(r.debugRestoreContext).toHaveBeenCalledTimes(1);
+    s.utils.unmount();
+    expect(window.__mfWorld).toBeUndefined();
+  });
+
+  it("개발 빌드가 아니고 ?e2e=1 도 없으면 window.__mfWorld 가 없고 소프트웨어 렌더러를 허용하지 않는다", async () => {
+    vi.stubEnv("DEV", false);
+    const s = await open();
+    expect(window.__mfWorld).toBeUndefined();
+    expect(s.world.createThreeRenderer).toHaveBeenCalledWith(expect.objectContaining({ allowSoftware: false }));
+  });
+
+  it("훅이 켜진 때는 소프트웨어 렌더러를 허용한다(E2E 헤드리스)", async () => {
+    const s = await open();
+    expect(s.world.createThreeRenderer).toHaveBeenCalledWith(expect.objectContaining({ allowSoftware: true }));
+  });
+
+  it("installWorldTestHooks 가 돌려준 함수를 부르면 전역을 지운다", () => {
+    const off = installWorldTestHooks(
+      { sample: () => null, ring: () => null, status: () => ({ status: "ready", lostAt: null }), interactiveMs: () => null, renderer: () => null },
+      new WorldStore(),
+    );
+    expect(window.__mfWorld).toBeTruthy();
+    expect(window.__mfWorld!.screenOf(0, 0)).toBeNull();
+    off();
+    expect(window.__mfWorld).toBeUndefined();
   });
 });
