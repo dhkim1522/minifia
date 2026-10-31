@@ -1,6 +1,7 @@
 // 오류·안내 문구 매핑. 문구와 위치는 UI-SPEC Copywriting Contract 의 Error state 표가 정본이다.
 // 닫힌 코드 집합(api.ts 의 API_ERROR_CODES)만 문구로 바꾸고, 그 맥락에서 나올 수 없는 코드나
 // 알 수 없는 응답은 서버 내부 정보를 드러내지 않도록 "연결이 불안정해요" 로 접는다(T-01-18).
+import { NICKNAME_MAX_GRAPHEMES } from "../../shared/nickname";
 import type { NicknameError } from "../../shared/nickname";
 import type { ApiErrorCode } from "../../shared/protocol";
 
@@ -9,8 +10,8 @@ export type MessagePlace = "nickname" | "code" | "card" | "toast";
 type Message = { place: MessagePlace; text: string };
 type Context = "create" | "home-code" | "link";
 
-const NETWORK_TEXT = "연결이 불안정해요. 다시 시도해 주세요";
-const NICKNAME_RANGE_TEXT = "1~5자로 입력해 주세요";
+export const NETWORK_TEXT = "연결이 불안정해요. 다시 시도해 주세요";
+const NICKNAME_RANGE_TEXT = `1~${NICKNAME_MAX_GRAPHEMES}자로 입력해 주세요`;
 
 const NETWORK_MESSAGE: Message = { place: "toast", text: NETWORK_TEXT };
 

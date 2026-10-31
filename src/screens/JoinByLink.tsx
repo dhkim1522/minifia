@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import type { ApiErrorCode, RoomPreview } from "../../shared/protocol";
-import { validateNickname } from "../../shared/nickname";
+import { NICKNAME_MAX_GRAPHEMES, validateNickname } from "../../shared/nickname";
 import { Backdrop } from "../components/Backdrop";
 import { Button } from "../components/Button";
 import { Figure } from "../components/Figure";
@@ -215,7 +215,7 @@ export function JoinByLink({ code, notice, onEnterRoom, onHome }: JoinByLinkProp
             kind="nickname"
             value={nickname}
             onChange={handleNicknameChange}
-            placeholder="1~5자로 입력"
+            placeholder={`1~${NICKNAME_MAX_GRAPHEMES}자로 입력`}
             inputRef={inputRef}
             error={nicknameError}
           />

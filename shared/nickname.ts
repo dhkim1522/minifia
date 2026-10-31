@@ -6,8 +6,8 @@
 // - ZWJ·변형 선택자·결합 문자는 이모지 표시에 필요해 표시 이름에는 남기고, 비교 키에서만 뺀다.
 // 소스의 특수 문자는 모두 중괄호 코드 포인트 이스케이프로 쓴다. 눈에 보이지 않는 리터럴을 두지 않는다(IN-07).
 
-// 고정 테이블 이름표를 말줄임 없이 보여 주려고 5자(결정 0017-4)
-export const NICKNAME_MAX_GRAPHEMES = 5;
+// 머리 위 이름표는 자리 폭 제약이 없어 8자(결정 0052-1, 0017-4 의 5자를 대체)
+export const NICKNAME_MAX_GRAPHEMES = 8;
 export type NicknameError = "EMPTY" | "TOO_LONG" | "INVALID_CHARS";
 
 const segmenter = new Intl.Segmenter("ko", { granularity: "grapheme" });
