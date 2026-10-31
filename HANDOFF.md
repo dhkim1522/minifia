@@ -13,10 +13,10 @@
 
 ## 확인 대기 (사용자 답·확인이 필요한 것)
 
-- 맵 두 개(응접실·광장)를 어느 단계·판에 쓸지, 시간대 5개를 게임 단계에 어떻게 붙일지 — UI 단계에서 정한다.
+- 8·9페이즈에서 맵(응접실·광장)과 시간대 5개를 게임 단계에 어떻게 붙일지 — 해당 UI 단계에서 정한다. 로비(6페이즈)는 응접실 저녁 고정으로 확정.
 
 ## 다음 할 일
 
 1. 디자인 먼저(남은 것): v2.0 디자인 시스템(0046-7: 실내 따뜻한 등 허용, 광장은 차가운 흰빛, 진홍은 마피아 전용, 낮도 낮은 명도·채도)과 화면설계서(로비·채팅창·동작 목록·지목·변론·찬반·밤·아침·결과·시상식)를 캔버스로 만들어 승인받고 사본을 `design/v2.0/` 에 둔다.
-2. 그다음 `/gsd-ui-phase 6` → `/gsd-plan-phase 6 --research-phase`(월드 뼈대: `minifia-v2` 배포·로비 맵 이동·three.js 맵+2D 캐릭터 성능 게이트·WR-01~04).
+2. 6페이즈 UI-SPEC 승인됨(`.planning/phases/06-world-skeleton/06-UI-SPEC.md`, v1.0 토큰 기준 임시 — 1번 승인 뒤 "임시 기준 경고" 표 항목을 다시 맞춘다). 다음은 `/gsd-plan-phase 6 --research-phase`(월드 뼈대: `minifia-v2` 배포·로비 맵 이동·three.js 맵+2D 캐릭터 성능 게이트·WR-01~04).
 3. 시안 아티팩트: 배경 https://claude.ai/artifact/LztT25LDkxJcfnRjiaPTfE · 캐릭터 https://claude.ai/artifact/QPVNH7DN4jQwpMGtHivssc. v1.0 산출물 링크는 `CLAUDE.md`.

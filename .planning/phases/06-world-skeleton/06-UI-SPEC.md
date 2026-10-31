@@ -1,7 +1,8 @@
 ---
 phase: "06"
 slug: "world-skeleton"
-status: draft
+status: approved
+reviewed_at: "2026-10-31"
 shadcn_initialized: false
 preset: none
 created: "2026-10-31"
@@ -71,8 +72,9 @@ CONTEXT.md·RESEARCH.md 는 아직 없다(6페이즈는 `--research-phase` 필�
 | 잠금 | 시작 이후 한 판은 v1.0 화면 그대로 | ROADMAP 6페이즈 성공 기준 3 |
 | 잠금 | 진홍은 마피아 전용(로비·연결 상태에 쓰지 않음) | 0046-7, design-system README |
 | 잠금 | 햅틱·진동·소리는 이 페이즈에 없다 | 메모리(앱 전용 기능은 앱 전환 때), 로드맵 12페이즈 |
-| 여기서 정함 | 로비 맵 = A 달빛 응접실, 시간대 = 저녁 고정 | 아래 "맵과 시간대" |
-| 여기서 정함 | 제품 로비의 캐릭터 = v1.0 인물 그림(자리표시), 캐릭터 그림은 교체 가능한 슬롯 | 아래 "캐릭터" |
+| 잠금(사용자 확인 2026-10-31) | 로비 맵 = A 달빛 응접실, 시간대 = 저녁 고정 | 아래 "맵과 시간대" |
+| 잠금(사용자 확인 2026-10-31) | 제품 로비의 캐릭터 = v1.0 인물 그림(자리표시), 캐릭터 그림은 교체 가능한 슬롯 | 아래 "캐릭터" |
+| 잠금(사용자 확인 2026-10-31) | WebGL 불가 기기 = 오류 카드. 대체 로비는 스파이크 실패율을 본 뒤 정한다 | 아래 "렌더 성능 게이트" |
 | 리서치 대기 | 빌보드 판 vs DOM 겹치기, 이동 가능 영역 데이터 형식, iOS WebGL 복구 방식 | 0046-6, ROADMAP 계획 메모 |
 
 ---
@@ -98,7 +100,7 @@ shadcn 은 쓰지 않는다: 새 패키지 설치 없음, 화면의 중심이 �
 
 ### 부품 목록 (직접 만든 React 부품)
 
-Enumerated by `ls src/components/*.tsx | wc -l` — 39 components — local `src/components`(외부 패키지 없음) — 2026-10-31. 아래 표는 이 페이즈가 다루는 것만 적은 비한정 목록이다.
+Enumerated by `ls src/components/*.tsx | wc -l` — 39 files — `src/components@cb83a6c`(외부 패키지가 아니라 패키지 버전이 없다. 저장소 커밋으로 표시) — 2026-10-31. 아래 표는 이 페이즈가 다루는 것만 적은 비한정 목록이고, 허용 목록이 아니다("신규" 표시는 아직 없는 부품).
 
 | 부품 | 처리 | 비고 |
 |------|------|------|
@@ -167,6 +169,9 @@ Exceptions (모두 출처가 있는 값):
 - 이름표 안쪽 여백 세로 2px · 가로 10px, 점과 글자 사이 6px: 승인 시안 `design/v2.0/characters/Scene.dc.html` 의 값을 그대로 쓴다.
 - 헤더 119.2 · 하단 시트 157 · 재접속 띠 52 · 누르기 최소 44 · 버튼 52 · 입력칸 48: v1.0 승인 치수(`docs/screen-map.md`, `tokens.json` 의 `size`).
 - 캐릭터 72×96(`figure-width`·`figure-height` 토큰), 목적지 링 40, 이름표 최대 폭 152, 말풍선 48×26(7페이즈 자리): 그림·표시 치수이고 간격이 아니다.
+- 이름표 위치 발끝 아래 +2px: 시안(−1.5px, 발끝을 덮음)과 일부러 다르게 한 값이다. 발을 가리지 않게 하려는 것이고 "참고 자료와 다르게 하는 곳" ①에 적었다.
+- 걷기 흔들림 3px, 입장 낙하 8px: 모션 이동 거리이고 간격이 아니다(이 문서가 정한 값).
+- 목적지 링 선 3px · 바깥 윤곽 1.5px, 내 이름표 테두리 2px, 포커스 링 2px: 선 굵기이고 간격이 아니다.
 - 그 밖에는 없다.
 
 ---
@@ -196,7 +201,8 @@ UI(캔버스 밖) 색은 v1.0 토큰이다. 캔버스 안 색은 승인 시안�
 | Dominant (60%) | `night-900` `#0e1326` | 화면 바탕(입장·연결 중·상태 카드 뒤), 맵을 불러오는 동안의 바탕 |
 | Secondary (30%) | `night-800` `#151c36`, `night-700` `#1e2847`, `night-600` `#2a3760` | 하단 시트, 힌트 알약 면, 칩·보조 버튼 면, 구분 |
 | Accent (10%) | `gray-50` `#f1f2f5`, `gray-100` `#e6e8ee` | 아래 "Accent reserved for" 목록만 |
-| Destructive | 없음 | v1.0 규칙: 진홍·앰버 버튼을 만들지 않는다. 나가기·내보내기 확인은 `ConfirmSheet` 의 일반 버튼 |
+| Destructive | 없음 | v1.0 규칙: 진홍·앰버 버튼을 만들지 않는다. 나가기·내보내기 확인은 `ConfirmSheet` 의 일반 버튼이고, 되돌릴 수 없다는 구분은 색이 아니라 확인 시트의 질문 문장과 동사 버튼 이름([나가기]·[내보내기])이 한다 |
+| 글자(중립) | `gray-50`·`gray-100`·`gray-300` | 이름표·안내 알약·상태 카드·버전 표식의 글자. 글자색은 중립 역할이고 아래 accent 목록과 별개다(accent 목록은 면·선·테두리에만 적용) |
 
 Accent reserved for:
 1. 주 버튼 [게임 시작] 면(`gray-100` + `night-900` 글자)
@@ -342,7 +348,7 @@ Accent reserved for:
 | 사람이 나감 | 불투명도 1→0, 180ms. 이름표도 같이 |
 | 첫 스냅샷에 이미 있던 사람 | 등장 연출 없이 바로 서 있다(새로 고침·재접속 때 모두가 다시 떨어지지 않게) |
 | 방장이 바뀜 | 방장 배지가 새 방장 이름표로 옮겨 간다(애니메이션 없음). 토스트 "{닉네임}님이 새 방장이 되었어요"(기존) |
-| 맵이 처음 열림 | `night-950` 에서 맵으로 `dur-med` 페이드. 에셋과 첫 상태가 모두 준비된 뒤에 연다 |
+| 맵이 처음 열림 | `night-950` 에서 맵으로 `dur-med` 페이드. 에셋(맵·캐릭터 그림 포함)과 첫 상태가 모두 준비된 뒤에 연다. 캐릭터 그림을 하나라도 불러오지 못하면 맵 불러오기 실패와 같게 처리한다(빈 칸이나 깨진 그림으로 열지 않는다) |
 
 ### 처음 한 번 뜨는 안내 알약(`WalkHint`)
 
@@ -524,28 +530,47 @@ Accent reserved for:
 
 ## UI Considerations
 
-Applicable state considerations resolved: 15 covered, 3 backstop, 0 unresolved.
+상태 점검 프로브(체커 승인 뒤 실행, 2026-10-31) 결과. 요소 10개에서 해당 항목 45개가 나왔다. 확정 26 · backstop 2 · 제외 16 · 직접 검토 1, unresolved 0. 프로브 밖에서 추가한 backstop 1개를 맨 아래에 둔다. 빈 상태·오류 문구는 `## Copywriting Contract` 가 정본이고 여기서는 그 행을 가리킨다.
 
-| Category | Element(s) | Status | Resolution / Reason |
-|----------|------------|--------|---------------------|
-| loading | 맵 캔버스(media) | ✅ covered | 에셋과 첫 상태가 준비되기 전에는 `night-950` 바탕에 "맵을 불러오는 중…"만 보인다. 준비되면 `dur-med` 페이드로 맵을 연다. 입장 후 3초 안에 조작 가능이 합격선 |
-| error | 맵 캔버스(media) | ✅ covered | 불러오기 실패는 [다시 시도], WebGL 불가는 [나가기], 컨텍스트 복구 실패는 [새로 고침](문구 계약). 흰·검은 화면이 남는 일이 없다 |
-| empty | 맵 캔버스(media) | ✅ covered | 빈 맵은 없다. 혼자여도 내 캐릭터가 입장 지점에 선다 |
-| populated | 맵 캔버스(media) | ✅ covered | 8명이 모인 맵이 360폭에서 모든 캐릭터·이름표가 읽힌다(성능 게이트 "읽힘") |
-| partial | 맵 캔버스(media) | 🧪 backstop | 텍스처·모델 일부만 실패하면 단색 재질로 대체해 맵은 열린다. 시각 확인 필요(실기기 스파이크에서 네트워크를 끊고 확인) |
-| empty | 사람 목록(list-collection) | ✅ covered | 항상 내가 있으므로 빈 목록 없음. 접근성 목록은 최소 1개 |
-| zero-one-many | 사람 목록(list-collection) | ✅ covered | 1명(혼자, 방장 안내)·2~7명(링 위 입장 지점, 서로 안 겹침)·8명(가득: 인원 "8 / 8명 · 가득 찼어요") 각각 문구와 배치가 정해져 있다 |
-| overflow | 이름표들(list-collection) | 🧪 backstop | 이름표가 서로 겹치면 발끝 y 가 큰 쪽이 위이고 맨 앞 이름표는 전부 읽힌다. 8명을 한 점에 모은 스크린샷으로 확인 |
-| long-text | 이름표(static-content) | ✅ covered | 닉네임 최대 5자 + 방장 배지 + 끊김 아이콘을 모두 합쳐도 최대 폭 152 안에 들어오고 넘치면 말줄임 |
-| long-text | 안내 알약·상태 카드(static-content) | ✅ covered | 한글 `keep-all`, 알약은 스테이지 폭 − 32 안에서 줄바꿈 최대 2줄. 문구가 짧아(약 17자) 360폭에서 한 줄 |
-| loading | 재접속 띠(nav) | ✅ covered | "연결이 끊겼어요 · 다시 연결하는 중" → "다시 연결됐어요" 2초 → 사라짐(기존 상태기계 그대로) |
-| error | 재접속·실패 화면(nav) | ✅ covered | 30초 실패 → "연결할 수 없어요" + [다시 시도], 다른 기기 접속, 방 닫힘(기존 화면) |
-| error | 터치해서 걷기(interactive-control) | ✅ covered | 1.5초 안에 구간을 못 받으면 링이 사라지고 기존 "연결이 불안정해요" 토스트 한 번. 끊긴 동안은 탭 무시 |
-| overflow | 카메라(interactive-control) | ✅ covered | 이동 한계에서 멈춘다. 한계 안에서 빈 배경이 보이지 않고 내 캐릭터는 스테이지 안에 남는다 |
-| loading | 터치해서 걷기(interactive-control) | ✅ covered | 링은 100ms 안에, 출발은 300~500ms 안에. 그 사이 캐릭터는 가만히 있다 |
-| long-text | 하단 시트 안내(static-content) | ✅ covered | v1.0 시트 규칙(한 문장, `keep-all`)을 그대로 쓴다 |
-| zero-one-many | 걷는 캐릭터 수(interactive) | 🧪 backstop | 한 화면에서 동시에 걷는 캐릭터가 늘수록 프레임이 떨어지므로 8명 동시 이동으로 성능 게이트를 잰다 |
-| error | 하단 시트 [게임 시작](interactive-control) | ✅ covered | 연결이 끊기거나 인원이 모자라면 비활성(기존), 누르면 2초 잠금(기존) |
+| # | Element | Category | Status | Resolution / Reason |
+|---|---------|----------|--------|---------------------|
+| E1 | 맵 캔버스 | empty | ✅ resolved | 빈 맵은 없다. 혼자여도 내 캐릭터가 입장 지점에 서 있다 |
+| E1 | 맵 캔버스 | loading | ✅ resolved | 에셋과 첫 상태가 준비되기 전에는 `night-950` 바탕에 "맵을 불러오는 중…"만 보이고, 준비되면 `dur-med` 페이드로 연다. 방 입장 뒤 3초 안에 조작할 수 있어야 한다 |
+| E1 | 맵 캔버스 | error | ✅ resolved | 불러오기 실패(캐릭터 그림 실패 포함) → [다시 시도], WebGL 불가 → [나가기], 컨텍스트 복구 실패 → [새로 고침](문구 계약). 흰 화면·검은 화면이 남지 않는다 |
+| E1 | 맵 캔버스 | populated | ✅ resolved | 8명이 모인 맵에서 360폭으로 모든 캐릭터·이름표가 읽힌다(성능 게이트 "읽힘") |
+| E1 | 맵 캔버스 | partial | 🧪 backstop | { statement: "맵 텍스처·모델 일부만 실패하면 단색 재질로 대신해 맵은 열린다(캐릭터 그림 실패는 맵 실패로 처리)", verification: backstop } — 실기기 스파이크에서 네트워크를 끊어 확인 |
+| E1 | 맵 캔버스 | overflow | ✅ resolved | 맵은 화면보다 크다. 카메라는 이동 한계(응접실 3.2)에서 멈추고 그 안에서는 빈 배경이 보이지 않는다 |
+| E1 | 맵 캔버스 | zero-one-many | ⛔ dismissed | 맵 자체에는 개수 개념이 없다. 사람 수에 따른 배치는 E2 가 다룬다 |
+| E2 | 캐릭터·이름표 목록 | empty | ✅ resolved | 항상 내가 있으므로 빈 목록이 없다. 접근성 목록은 최소 1명 |
+| E2 | 캐릭터·이름표 목록 | loading | ✅ resolved | 첫 스냅샷 전에는 맵이 열리지 않는다("연결 중…" → "맵을 불러오는 중…"). 첫 스냅샷에 이미 있던 사람은 등장 연출 없이 서 있다 |
+| E2 | 캐릭터·이름표 목록 | error | ✅ resolved | 그림을 못 불러오면 맵 불러오기 실패 카드. 끊긴 사람은 흑백 + 60% + 이름표 끊김 아이콘 |
+| E2 | 캐릭터·이름표 목록 | populated | ✅ resolved | 2~7명은 모이는 링 위 자리별 입장 지점에 서고 처음에 서로 겹치지 않는다 |
+| E2 | 캐릭터·이름표 목록 | partial | ✅ resolved | 일부만 끊기면 그 사람만 끊김 표시가 되고 나머지는 정상으로 걷는다. 끊김 표시는 서버의 `connected:false` 만 따른다 |
+| E2 | 캐릭터·이름표 목록 | overflow | 🧪 backstop | { statement: "이름표가 겹치면 발끝 y 가 큰 쪽이 위에 오고 맨 앞 이름표는 전부 읽힌다", verification: backstop } — 8명을 한 점에 모은 스크린샷으로 확인 |
+| E2 | 캐릭터·이름표 목록 | zero-one-many | ✅ resolved | 1명(혼자, "{최소 인원}명부터 시작할 수 있어요") · 2~7명(`n / 8명`) · 8명(가득 찬 상태 문구) 각각 문구와 배치가 정해져 있다 |
+| E3 | 터치해서 걷기 | loading | ✅ resolved | 링이 100ms 안에 뜨고 출발은 300~500ms 안. 그 사이 캐릭터는 가만히 있다(예측 이동 없음) |
+| E3 | 터치해서 걷기 | error | ✅ resolved | 1.5초 안에 구간을 못 받으면 링이 사라지고 기존 "연결이 불안정해요" 토스트 한 번. 끊긴 동안은 탭 무시. 막힌 곳은 서버 보정으로 링이 미끄러져 가고 오류 문구는 없다 |
+| E3 | 터치해서 걷기 | long-text | ⛔ dismissed | 글자가 없는 조작이다 |
+| E4 | 카메라 따라가기 | unclassified(직접 검토) | ✅ resolved | 이동 한계에서 멈추고 캐릭터·이름표는 스테이지 사각형 안에 남는다. 입장·새로 고침·재접속 때는 날아가지 않고 바로 붙는다. 크기 변화 뒤 180ms 에 다시 맞춘다. `prefers-reduced-motion` 이면 감쇠 없이 즉시 붙는다 |
+| E5 | 재접속 띠·연결 실패 화면 | empty | ⛔ dismissed | 데이터 목록이 아니다 |
+| E5 | 재접속 띠·연결 실패 화면 | loading | ✅ resolved | "연결이 끊겼어요 · 다시 연결하는 중" → "다시 연결됐어요" 2초 → 사라짐(기존 상태기계) |
+| E5 | 재접속 띠·연결 실패 화면 | error | ✅ resolved | 30초 실패 → "연결할 수 없어요" + [다시 시도], 다른 기기 접속, 방 닫힘(기존 화면) |
+| E5 | 재접속 띠·연결 실패 화면 | populated | ✅ resolved | 연결이 정상이면 띠가 없다 |
+| E5 | 재접속 띠·연결 실패 화면 | partial | ✅ resolved | 서버 연결은 살아 있고 WebGL 만 끊기면 띠 대신 "화면을 다시 그리는 중…" 카드가 뜬다. 연결이 끊긴 경우에만 띠가 뜬다 |
+| E5 | 재접속 띠·연결 실패 화면 | overflow | ✅ resolved | 띠는 52 고정, 한 줄 문구이고 흐름을 밀지 않고 위에 얹는다(캔버스 크기 불변) |
+| E5 | 재접속 띠·연결 실패 화면 | zero-one-many | ⛔ dismissed | 개수 개념이 없다 |
+| E6 | 하단 시트 | loading | ✅ resolved | [게임 시작]을 누르면 2초 잠금(기존). 시작되면 맵을 420ms 가리고 `Assigning` 으로 넘어간다 |
+| E6 | 하단 시트 | error | ✅ resolved | 연결이 끊기거나 인원이 모자라면 [게임 시작] 비활성(기존) |
+| E6 | 하단 시트 | long-text | ✅ resolved | v1.0 시트 규칙(안내 한 문장, `keep-all`)을 그대로 쓴다 |
+| E7 | 안내 알약 | overflow | ✅ resolved | 최대 폭은 스테이지 폭 − 32, 넘치면 최대 2줄로 줄바꿈 |
+| E7 | 안내 알약 | long-text | ✅ resolved | 문구가 약 17자라 360폭에서 한 줄. `keep-all` |
+| E8 | 나가기·내보내기 확인 시트 | loading | ✅ resolved | v1.0 `ConfirmSheet` 동작 그대로이고 이 페이즈가 바꾸지 않는다 |
+| E8 | 나가기·내보내기 확인 시트 | error | ✅ resolved | v1.0 동작 그대로. 확인 뒤 연결이 끊겨 있으면 재접속 띠가 안내한다 |
+| E8 | 나가기·내보내기 확인 시트 | long-text | ✅ resolved | 닉네임이 최대 5자라 "{닉네임}님을 내보낼까요?"가 넘치지 않는다 |
+| E9 | v2.0 시험판 표식·탭 제목 | loading · error · overflow · long-text | ⛔ dismissed(4) | 고정 문구 6자와 고정 탭 제목이라 불러오기·실패·넘침이 없다 |
+| E10 | 하단 채팅 레이아웃 시안 | empty · loading · error · populated · partial · overflow · zero-one-many · long-text | ⛔ dismissed(8) | 제품 화면이 아니라 `?chat-mock=1` 배치 확인용이다. 채팅의 상태 계약은 7페이즈 UI-SPEC 몫이고 이 시안은 위 "확인표"만 채운다 |
+| 추가 | 걷는 캐릭터 수 | zero-one-many | 🧪 backstop | { statement: "8명이 동시에 걷고 동작 2개를 해도 5분 평균 55fps 이상", verification: backstop } — 성능 게이트 스파이크로 확인 |
+
 
 ---
 
@@ -566,10 +591,10 @@ Applicable state considerations resolved: 15 covered, 3 backstop, 0 unresolved.
 |---|------|------|-------------|
 | 1 | three r128(시안) → 현재 three(0.187.0)로 옮길 때 조명 단위·색공간 기본값이 달라 같은 수치가 다르게 보임 | 승인 시안과 달라 보일 수 있음 | 리서치·스파이크: 시안 스크린샷과 나란히 비교해 값을 다시 맞춤 |
 | 2 | 빌보드 판 vs DOM 겹치기 | 캐릭터 그림 처리·그림자·성능·이름표 투영 방식 | 리서치(0046-6). 이 문서의 가림·크기·이름표 규칙은 둘 다에 적용됨 |
-| 3 | 로비 맵 A·시간대 저녁 고정, 6페이즈 광장 미사용 | 로비 첫인상 | **사용자 확인 권장**(HANDOFF "확인 대기": 맵·시간대 배치). 권장 배치(8·9페이즈 UI-SPEC 입력, 구속력 없음): 로비 = 응접실 저녁 · 낮 토론~찬반 = 광장 낮→해질녘 · 밤 = 광장 저녁 |
+| 3 | 로비 맵 A·시간대 저녁 고정, 6페이즈 광장 미사용 | 로비 첫인상 | **사용자 확인 완료(2026-10-31)**. 8·9페이즈 배치는 아직 미정. 권장 배치(8·9페이즈 UI-SPEC 입력, 구속력 없음): 낮 토론~찬반 = 광장 낮→해질녘 · 밤 = 광장 저녁 |
 | 4 | v2.0 디자인 시스템·화면설계서 미승인 | 이름표·헤더·시트·힌트 모양이 바뀔 수 있음 | 사용자(디자인 승인 후 이 문서를 맞춤) |
 | 5 | WR-01~04 내용을 알 수 없음 | CONN-04 의 완료 판정을 증상 기준으로만 둠 | 리서치(연결 코드 확인) |
-| 6 | WebGL 불가·구형 기기에 대한 대체 로비 여부 | 일부 친구가 못 들어올 수 있음 | 스파이크 실패율을 본 뒤 결정. 기본값은 오류 카드 |
+| 6 | WebGL 불가·구형 기기에 대한 대체 로비 여부 | 일부 친구가 못 들어올 수 있음 | 6페이즈는 오류 카드(사용자 확인 2026-10-31). 대체 로비는 스파이크 실패율을 본 뒤 결정 |
 | 7 | 걷는 속도 2.2·이동 한계·링 지름·탭 임계값 등 시작값 | 조작감 | 스파이크·팀 확인 뒤 조정 |
 | 8 | 캐릭터 폭 72(자리표시) → 80(리그) | 카메라 배율 재조정 | 10페이즈(`CHAR_PX` 한 곳) |
 
@@ -585,12 +610,12 @@ Applicable state considerations resolved: 15 covered, 3 backstop, 0 unresolved.
 
 ## Checker Sign-Off
 
-- [ ] Dimension 1 Copywriting: PASS
-- [ ] Dimension 2 Visuals: PASS
-- [ ] Dimension 3 Color: PASS
-- [ ] Dimension 4 Typography: PASS
-- [ ] Dimension 5 Spacing: PASS
-- [ ] Dimension 6 Registry Safety: PASS
-- [ ] Dimension 7 Inventory Provenance: PASS
+- [x] Dimension 1 Copywriting: PASS
+- [x] Dimension 2 Visuals: PASS
+- [x] Dimension 3 Color: PASS (FLAG 2개 반영: 글자색 중립 역할 분리, destructive 구분 방법 명시)
+- [x] Dimension 4 Typography: PASS
+- [x] Dimension 5 Spacing: PASS (FLAG 반영: 이름표 +2px·흔들림 3px·낙하 8px·선 굵기를 예외에 기록)
+- [x] Dimension 6 Registry Safety: PASS
+- [x] Dimension 7 Inventory Provenance: PASS (FLAG 반영: `src/components@cb83a6c`, "39 files")
 
-**Approval:** pending
+**Approval:** approved 2026-10-31 (gsd-ui-checker). 체커는 결정 기록 원문과 대조하지 않고 이 문서의 인용을 믿고 판정했다. 결정 0046 대조는 플래너·리서치 단계에서 한다.
