@@ -75,6 +75,12 @@ body{margin:0;background:#0e1326}
 </div>
 </sc-if>
 
+<sc-if value="{{ willOpen }}" hint-placeholder-val="{{ false }}">
+<div style="position: absolute; left: 10px; right: 10px; bottom: {{ sheetBottom }}px; z-index: 100">
+<x-import component-from-global-scope="MinifiaV2.WillSheet" value="{{ will }}" on-change="{{ willChange }}" on-save="{{ willSave }}" saved="{{ willSaved }}" on-close="{{ willClose }}" input-id="sdWill"></x-import>
+</div>
+</sc-if>
+
 <section style="position: absolute; left: 0; bottom: 0; width: 390px; box-sizing: border-box; padding: 14px 16px 22px; background: rgba(21, 28, 54, 0.97); border-radius: 20px 20px 0 0; display: flex; flex-direction: column; gap: 10px; z-index: 50">
 <sc-if value="{{ isVerdict }}" hint-placeholder-val="{{ false }}">
 <div style="display: flex; flex-direction: column; gap: 8px">
@@ -84,7 +90,7 @@ body{margin:0;background:#0e1326}
 </div>
 </div>
 </sc-if>
-<x-import component-from-global-scope="MinifiaV2.ChatPanel" messages="{{ chat }}" value="{{ draft }}" on-change="{{ setDraft }}" on-send="{{ send }}" emotes="{{ emotes }}" on-emote="{{ pickEmote }}" input-id="sdChatInput"></x-import>
+<x-import component-from-global-scope="MinifiaV2.ChatPanel" messages="{{ chat }}" value="{{ draft }}" on-change="{{ setDraft }}" on-send="{{ send }}" emotes="{{ emotes }}" on-emote="{{ pickEmote }}" on-will="{{ onWill }}" will-open="{{ willOpen }}" input-id="sdChatInput"></x-import>
 <sc-if value="{{ hasActions }}" hint-placeholder-val="{{ true }}">
 <div role="group" aria-label="행동" style="display: grid; grid-template-columns: repeat({{ actionCols }}, minmax(0, 1fr)); gap: 8px">
 <sc-for list="{{ actions }}" as="a" hint-placeholder-count="2">
@@ -147,7 +153,8 @@ class Component extends DCLogic {
     this.state = {
       time: cfg.time, draft: '', chat: this.chat0(), sheet: false, outfit: 'coat', mapId: 'random', roleFace: 'back',
       endVotes: 3, myEnd: false, counts: [0, 0, 0, 0, 0, 0, 0, 0], leader: -1, sure: -1, myPick: -1, toast: '', toastOn: false,
-      verdict: null, verdictDone: [], verdictResult: false, ghost: false, typing: SCREEN === 'talk' ? 4 : -1, showHint: true, blink: SCREEN === 'vote'
+      verdict: null, verdictDone: [], verdictResult: false, ghost: false, typing: SCREEN === 'talk' ? 4 : -1, showHint: true, blink: SCREEN === 'vote',
+      will: '', willSaved: false, willOpen: false
     };
   }
 
@@ -334,6 +341,12 @@ class Component extends DCLogic {
       send: function (v) { self.setState({ draft: '', typing: SCREEN === 'talk' ? 4 : -1, chat: s.chat.concat([{ kind: 'player', name: NAMES[me][0], color: NAMES[me][1], text: v }]) }); },
       emotes: EMOTES.map(function (e) { return { id: e[0], label: e[1] }; }),
       pickEmote: function (id) { if (self.st) self.st.emote(me, id); },
+      // 유언 깃펜: 게임 중 살아 있는 동안 채팅 입력줄의 감정표현 옆(로비는 없음)
+      onWill: SCREEN === 'lobby' || SCREEN === 'lobbyGuest' ? null : function () { self.setState({ willOpen: !s.willOpen, sheet: false }); },
+      willOpen: s.willOpen, will: s.will, willSaved: s.willSaved,
+      willChange: function (v) { self.setState({ will: v, willSaved: false }); },
+      willSave: function () { self.setState({ willSaved: true }); },
+      willClose: function () { self.setState({ willOpen: false }); },
       hasActions: actions.length > 0, actions: actions, actionCols: Math.max(1, actions.length)
     };
   }

@@ -97,6 +97,10 @@ export interface ChatPanelProps {
   placeholder?: string;
   disabled?: boolean;
   inputId?: string;
+  /** 있으면 감정표현 옆에 깃펜(유언) 버튼. 살아 있는 동안 게임 내내 */
+  onWill?: () => void;
+  /** 유언 창이 열려 있으면 true(깃펜이 눌린 모양) */
+  willOpen?: boolean;
 }
 
 /** 꾸미기 창(로비): 방장은 맵·의상 두 탭, 다른 사람은 의상만 */

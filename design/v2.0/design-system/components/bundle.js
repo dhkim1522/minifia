@@ -133,6 +133,8 @@
       p.onSend ? h('form', { className: 'mv-chat__form', onSubmit: function (e) { e.preventDefault(); if (val.trim()) p.onSend(val); } },
         emotes.length ? h('button', { type: 'button', className: cx('mv-chat__icon', open && 'is-on'), 'aria-label': '감정표현', 'aria-expanded': open ? 'true' : 'false',
           onClick: function () { setOpen(!open); } }, h(Icon, { name: 'face' })) : null,
+        p.onWill ? h('button', { type: 'button', className: cx('mv-chat__icon', p.willOpen && 'is-on'), 'aria-label': '유언', 'aria-expanded': p.willOpen ? 'true' : 'false',
+          onClick: p.onWill }, h(Icon, { name: 'quill' })) : null,
         h('label', { className: 'mv-sr', htmlFor: id }, '메시지'),
         h('input', { id: id, className: 'mv-chat__input', value: val, placeholder: p.placeholder || '', disabled: p.disabled, maxLength: 100, autoComplete: 'off', enterKeyHint: 'send',
           onChange: function (e) { if (p.onChange) p.onChange(e.target.value); } }),

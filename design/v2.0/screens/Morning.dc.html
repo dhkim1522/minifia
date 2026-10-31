@@ -102,7 +102,7 @@ body{margin:0;background:#0e1326}
 <x-import component-from-global-scope="MinifiaV2.FaceList" faces="{{ faces }}" value="{{ facePick }}" on-pick="{{ pickFace }}" icon="{{ faceIcon }}" label="{{ faceLabel }}"></x-import>
 </sc-if>
 <sc-if value="{{ hasChat }}" hint-placeholder-val="{{ true }}">
-<x-import component-from-global-scope="MinifiaV2.ChatPanel" messages="{{ chat }}" value="{{ draft }}" on-change="{{ setDraft }}" on-send="{{ send }}" emotes="{{ emotes }}" on-emote="{{ pickEmote }}" placeholder="{{ chatPlaceholder }}" input-id="sdChatInput"></x-import>
+<x-import component-from-global-scope="MinifiaV2.ChatPanel" messages="{{ chat }}" value="{{ draft }}" on-change="{{ setDraft }}" on-send="{{ send }}" emotes="{{ emotes }}" on-emote="{{ pickEmote }}" on-will="{{ onWill }}" will-open="{{ willOpen }}" placeholder="{{ chatPlaceholder }}" input-id="sdChatInput"></x-import>
 </sc-if>
 <sc-if value="{{ hasActions }}" hint-placeholder-val="{{ true }}">
 <div role="group" aria-label="행동" style="display: grid; grid-template-columns: repeat({{ actionCols }}, minmax(0, 1fr)); gap: 8px">
@@ -336,7 +336,7 @@ class Component extends DCLogic {
     function open(kind) { return function () { self.setState({ sheet: s.sheet === kind ? '' : kind }); }; }
     var actions = [];
     if (mafiaView) actions.push(act({ icon: 'note', label: '쪽지', mafia: true, on: s.sheet === 'note', disabled: !sure, pick: open('note') }));
-    if (cfg.view === 'citizen' && !s.dead || mafiaView) actions.push(act({ icon: 'quill', label: '유언', on: s.sheet === 'will', pick: open('will') }));
+    if (cfg.view === 'citizen' && !s.dead) actions.push(act({ icon: 'quill', label: '유언', on: s.sheet === 'will', pick: open('will') }));
     var faces = [];
     if (SCREEN === 'nightPolice' || SCREEN === 'nightDoctor') {
       faces = NAMES.map(function (n, i) { return { id: String(i), name: n[0], img: FACE[i], color: n[1] }; })
@@ -384,6 +384,8 @@ class Component extends DCLogic {
       send: function (v) { self.setState({ draft: '', chat: self.talk(s.chat, me, v, mafiaView ? 'mafia' : ghostView ? 'ghost' : undefined) }); },
       emotes: ghostView ? [] : EMOTES.map(function (e) { return { id: e[0], label: e[1] }; }),
       pickEmote: function (id) { if (self.st) self.st.emote(me, id); },
+      // 채팅 입력줄이 있으면 깃펜은 감정표현 옆, 없으면(시민 편 밤) 아래 행동 버튼
+      onWill: mafiaView || SCREEN === 'morning' ? open('will') : null, willOpen: s.sheet === 'will',
       hasActions: actions.length > 0, actions: actions, actionCols: Math.max(1, actions.length)
     };
   }
