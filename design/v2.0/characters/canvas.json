@@ -1,0 +1,82 @@
+{
+ "v": 3,
+ "createdOnFiles": {
+  "v": 1,
+  "at": "2026-10-31T09:00:00Z"
+ },
+ "title": "minifia v2 캐릭터 시안",
+ "launch": {
+  "view": "canvas"
+ },
+ "pages": [],
+ "boards": {
+  "Main.dc.html": {
+   "x": 0,
+   "y": 0,
+   "w": 1440,
+   "h": 960,
+   "title": "의상 8종"
+  },
+  "Emotes.dc.html": {
+   "x": 1520,
+   "y": 0,
+   "w": 1440,
+   "h": 960,
+   "title": "동작 8종"
+  },
+  "Scene.dc.html": {
+   "x": 3040,
+   "y": 0,
+   "w": 390,
+   "h": 844,
+   "title": "실제 크기 — 로비 맵 (390폭)"
+  },
+  "Rig.dc.html": {
+   "x": 0,
+   "y": 1080,
+   "w": 1440,
+   "h": 900,
+   "title": "공통 몸체와 관절"
+  },
+  "Turn.dc.html": {
+   "x": 1520,
+   "y": 1080,
+   "w": 1440,
+   "h": 800,
+   "title": "방향 · 상태 · 걷기"
+  },
+  "Views.dc.html": {
+   "x": 3040,
+   "y": 1080,
+   "w": 1440,
+   "h": 1400,
+   "title": "4방향 — 의상 8종"
+  }
+ },
+ "order": [
+  "Main.dc.html",
+  "Emotes.dc.html",
+  "Scene.dc.html",
+  "Rig.dc.html",
+  "Turn.dc.html",
+  "Views.dc.html"
+ ],
+ "notes": {
+  "title": {
+   "x": 0,
+   "y": -300,
+   "text": "minifia v2 캐릭터 시안 — 로우폴리 장난감",
+   "kind": "title1",
+   "maxW": 4480
+  }
+ },
+ "designSystems": [
+  {
+   "title": "minifia",
+   "namespace": "minifia",
+   "artifact": "https://claude.ai/artifact/Tp175mmuxLAHycMUtwZJ9Q",
+   "version": "1793323165-2869",
+   "copiedAt": "2026-10-31T09:00:00Z"
+  }
+ ]
+}
