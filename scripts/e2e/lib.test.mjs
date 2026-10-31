@@ -18,6 +18,7 @@ import {
   TAP_ALLOW,
   TAP_MIN,
   TEXT_SIZE_ALLOW,
+  USAGE,
   UsageError,
   chromeCandidates,
   claimChatIssues,
@@ -90,7 +91,7 @@ import {
   wakeLockChecks,
 } from "./lib.mjs";
 
-const PROD = "https://minifia.dhplay.workers.dev\n";
+const PROD = "https://minifia-v2.dhplay.workers.dev\n";
 const rect = (left, top, width, height) => ({ left, top, width, height, right: left + width, bottom: top + height });
 
 test("parseArgs: 인자 없음은 기본값 세 폭 기준 + 단 높이 probe 360x560", () => {
@@ -124,8 +125,25 @@ test("parseArgs: 잘못된 인자는 UsageError", () => {
   }
 });
 
-test("resolveTarget: 인자 없으면 prod-url 값", () => {
-  assert.equal(resolveTarget(null, PROD).origin, "https://minifia.dhplay.workers.dev");
+test("resolveTarget: 인자 없으면 prod-url 값(v2 주소, 명시 아님)", () => {
+  const t = resolveTarget(null, PROD);
+  assert.equal(t.origin, "https://minifia-v2.dhplay.workers.dev");
+  assert.equal(t.explicit, false);
+});
+
+// DEPLOY-02: v1.0 호스트 문자열은 이 거부 테스트에만 둔다(정적 검사 허용 목록).
+test("resolveTarget: prod-url 이 v1.0 주소면 거부(v1.0 이 기본값이 되지 않는다)", () => {
+  assert.throws(() => resolveTarget(null, "https://minifia.dhplay.workers.dev\n"), /v1\.0/);
+});
+
+test("resolveTarget: v1.0 주소는 명시해도 거부(푸는 옵션 없음)", () => {
+  for (const v1 of ["https://minifia.dhplay.workers.dev", "https://MINIFIA.dhplay.workers.dev/x/", "http://minifia.dhplay.workers.dev"]) {
+    assert.throws(() => resolveTarget(v1, PROD), /v1\.0/, v1);
+  }
+});
+
+test("USAGE 의 예시 주소는 v2 다", () => {
+  assert.ok(USAGE.includes("minifia-v2.dhplay.workers.dev"));
 });
 
 test("resolveTarget: localhost 는 경로와 쿼리를 버린 origin", () => {
