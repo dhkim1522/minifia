@@ -27,9 +27,28 @@ function allSegmentsWalkable(map: MapDef, flat: number[]): boolean {
   return true;
 }
 
+/**
+ * 28×28 격자 한가운데(칸 11..16)에 6×6 무늬를 놓고 나머지는 막는다.
+ * snapToWalkable 의 ±580 자르기가 원점 쪽 작은 맵을 깎으므로, 보정·경로 테스트는 한가운데에 놓은 무늬로 한다.
+ */
+function embed6(rows: readonly string[]): MapDef {
+  const pad = "#".repeat(28);
+  const side = "#".repeat(11);
+  const full = Array.from({ length: 28 }, (_, r) =>
+    r >= 11 && r < 17 ? `${side}${rows[r - 11]}${"#".repeat(28 - 17)}` : pad,
+  );
+  return mk(full);
+}
+/** embed6 무늬의 (c, r) 칸 중심. */
+function P(c: number, r: number): { x: number; z: number } {
+  return cellCenterFx(c + 11, r + 11);
+}
+
 const OPEN6 = mk(Array.from({ length: 6 }, () => "......"));
 // 가운데(열 2) 세로 벽, 맨 아래 줄만 통로
 const WALL6 = mk(["..#...", "..#...", "..#...", "..#...", "..#...", "......"]);
+const OPEN6C = embed6(Array.from({ length: 6 }, () => "......"));
+const WALL6C = embed6(["..#...", "..#...", "..#...", "..#...", "..#...", "......"]);
 
 describe("고정소수점 단위", () => {
   it("1 월드 단위는 100 이다", () => {
@@ -82,17 +101,18 @@ describe("격자 좌표 변환", () => {
 
 describe("snapToWalkable", () => {
   it("걸을 수 있는 칸 안의 점은 좌표 그대로, snapped false", () => {
-    expect(snapToWalkable(OPEN6, { x: -660, z: -610 })).toEqual({ x: -660, z: -610, snapped: false });
+    const p = { x: P(2, 3).x - 10, z: P(2, 3).z + 7 };
+    expect(snapToWalkable(OPEN6C, p)).toEqual({ x: p.x, z: p.z, snapped: false });
   });
 
   it("막힌 칸의 점은 가장 가까운 걸을 수 있는 칸 중심으로 간다(동률은 행 → 열 작은 순)", () => {
-    const m = mk(["......", "......", "..#...", "......", "......", "......"]);
-    // 막힌 칸 (2,2) 중심 (-575,-575): 거리 50 인 이웃이 넷 — 행이 작은 (2,1) 이 이긴다.
-    expect(snapToWalkable(m, { x: -575, z: -575 })).toEqual({ x: -575, z: -625, snapped: true });
+    const m = embed6(["......", "......", "..#...", "......", "......", "......"]);
+    // 막힌 칸 (2,2) 중심: 거리 50 인 이웃이 넷 — 행이 작은 (2,1) 이 이긴다.
+    expect(snapToWalkable(m, P(2, 2))).toEqual({ ...P(2, 1), snapped: true });
   });
 
-  it("맵 범위 밖은 범위 안 가장 가까운 칸 중심으로 간다", () => {
-    expect(snapToWalkable(OPEN6, { x: 0, z: 0 })).toEqual({ x: -425, z: -425, snapped: true });
+  it("맵 바깥은 가장 가까운 걸을 수 있는 칸 중심으로 간다", () => {
+    expect(snapToWalkable(OPEN6C, { x: 100000, z: 100000 })).toEqual({ ...P(5, 5), snapped: true });
   });
 
   it("±580 으로 자른다: 28칸 열린 맵에서 먼 점은 (580,-580)", () => {
@@ -128,7 +148,7 @@ describe("findPath", () => {
 
   it("출발·도착이 막혔거나 이어지지 않으면 null", () => {
     expect(findPath(mk([".#.", ".#.", ".#."]), { c: 0, r: 0 }, { c: 2, r: 2 })).toBeNull();
-    expect(findPath(mk([".#"]), { c: 0, r: 0 }, { c: 1, r: 0 })).toBeNull();
+    expect(findPath(mk(["#.", ".."]), { c: 0, r: 0 }, { c: 1, r: 1 })).toBeNull();
   });
 });
 
@@ -162,38 +182,49 @@ describe("smoothPath", () => {
 
 describe("routeFx", () => {
   it("같은 칸 안 이동은 시작·끝 두 점", () => {
-    expect(routeFx(OPEN6, { x: -680, z: -680 }, { x: -660, z: -670 })).toEqual([-680, -680, -660, -670]);
+    const a = { x: P(1, 1).x - 20, z: P(1, 1).z - 20 };
+    const b = { x: P(1, 1).x + 20, z: P(1, 1).z - 10 };
+    expect(routeFx(OPEN6C, a, b)).toEqual([a.x, a.z, b.x, b.z]);
   });
 
   it("직선으로 보이는 두 점은 두 점", () => {
-    expect(routeFx(OPEN6, { x: -680, z: -680 }, { x: -430, z: -420 })).toEqual([-680, -680, -430, -420]);
+    const a = { x: P(0, 0).x - 20, z: P(0, 0).z - 20 };
+    const b = { x: P(5, 5).x + 20, z: P(5, 5).z + 10 };
+    expect(routeFx(OPEN6C, a, b)).toEqual([a.x, a.z, b.x, b.z]);
   });
 
   it("벽을 돌아가는 꼭짓점이 1개 이상 있고 모든 선분이 걸을 수 있다", () => {
-    const from = cellCenterFx(0, 0);
-    const to = cellCenterFx(5, 0);
-    const flat = routeFx(WALL6, from, to);
+    const from = P(0, 0);
+    const to = P(5, 0);
+    const flat = routeFx(WALL6C, from, to);
     expect(flat.length).toBeGreaterThanOrEqual(6);
     expect(flat.length % 2).toBe(0);
     expect(flat.slice(0, 2)).toEqual([from.x, from.z]);
     expect(flat.slice(-2)).toEqual([to.x, to.z]);
-    expect(allSegmentsWalkable(WALL6, flat)).toBe(true);
+    expect(allSegmentsWalkable(WALL6C, flat)).toBe(true);
     expect(flat.every(Number.isInteger)).toBe(true);
   });
 
   it("막힌 도착점은 보정된 점에서 끝난다", () => {
-    const flat = routeFx(WALL6, cellCenterFx(0, 0), cellCenterFx(2, 2));
-    const snapped = snapToWalkable(WALL6, cellCenterFx(2, 2));
+    const flat = routeFx(WALL6C, P(0, 0), P(2, 2));
+    const snapped = snapToWalkable(WALL6C, P(2, 2));
+    expect(snapped.snapped).toBe(true);
     expect(flat.slice(-2)).toEqual([snapped.x, snapped.z]);
   });
 
+  it("막힌 출발점은 보정된 점에서 시작한다", () => {
+    const flat = routeFx(WALL6C, P(2, 2), P(5, 0));
+    const snapped = snapToWalkable(WALL6C, P(2, 2));
+    expect(flat.slice(0, 2)).toEqual([snapped.x, snapped.z]);
+  });
+
   it("같은 입력은 같은 출력", () => {
-    const a = routeFx(WALL6, { x: -690, z: -690 }, { x: -410, z: -690 });
-    expect(a).toEqual(routeFx(WALL6, { x: -690, z: -690 }, { x: -410, z: -690 }));
+    const a = routeFx(WALL6C, P(0, 0), P(5, 0));
+    expect(a).toEqual(routeFx(WALL6C, P(0, 0), P(5, 0)));
   });
 
   it("도달 불가면 출발점 한 점", () => {
-    const m = mk([".#.", ".#.", ".#."]);
-    expect(routeFx(m, cellCenterFx(0, 0), cellCenterFx(2, 2))).toEqual([-675, -675]);
+    const m = embed6([".#....", ".#....", ".#....", ".#....", ".#....", ".#...."]);
+    expect(routeFx(m, P(0, 0), P(5, 5))).toEqual([P(0, 0).x, P(0, 0).z]);
   });
 });
