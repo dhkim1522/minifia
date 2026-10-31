@@ -320,7 +320,7 @@ describe("execution 연결 (라우팅)", () => {
       listeners.add(l);
       return () => listeners.delete(l);
     };
-    const { container } = renderRoom(makeView({ me: 0 }), { onEvent: onEvent as RoomConnection["onEvent"] });
+    const { container } = renderRoom(makeView({ me: 0 }), { onEvent: onEvent as unknown as RoomConnection["onEvent"] });
     act(() => {
       for (const l of [...listeners]) l({ t: "chat", seq: 1, seat: 2, template: "defNotMe", at: NOW });
     });

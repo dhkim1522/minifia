@@ -206,9 +206,9 @@ describe("execVote 화면 한 경로 (VOTE-01, D-02, D-14)", () => {
 // ---- Task 2: 관전·마감·집계 팝·오류 토스트·좌석 기록 카드 ----
 
 function emitter() {
-  const listeners = new Set<(e: RoomEvent) => void>();
+  const listeners = new Set<(e: RoomEvent, meta: { epoch: number }) => void>();
   return {
-    onEvent: (l: (e: RoomEvent) => void) => {
+    onEvent: (l: (e: RoomEvent, meta: { epoch: number }) => void) => {
       listeners.add(l);
       return () => {
         listeners.delete(l);
@@ -216,7 +216,7 @@ function emitter() {
     },
     emit: (e: RoomEvent) =>
       act(() => {
-        for (const l of [...listeners]) l(e);
+        for (const l of [...listeners]) l(e, { epoch: 1 });
       }),
   };
 }

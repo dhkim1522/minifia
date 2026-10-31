@@ -57,9 +57,9 @@ function makeView(o: ViewOpts = {}): RoomView {
 
 /** 서버 chat·emoji·error 프레임을 흉내 내는 발행기 */
 function emitter() {
-  const listeners = new Set<(e: RoomEvent) => void>();
+  const listeners = new Set<(e: RoomEvent, meta: { epoch: number }) => void>();
   return {
-    onEvent: (l: (e: RoomEvent) => void) => {
+    onEvent: (l: (e: RoomEvent, meta: { epoch: number }) => void) => {
       listeners.add(l);
       return () => {
         listeners.delete(l);
@@ -67,7 +67,7 @@ function emitter() {
     },
     emit: (e: RoomEvent) =>
       act(() => {
-        for (const l of [...listeners]) l(e);
+        for (const l of [...listeners]) l(e, { epoch: 1 });
       }),
   };
 }

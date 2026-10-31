@@ -48,9 +48,9 @@ function makeView(over: Partial<RoomView> = {}): RoomView {
 }
 
 function emitter() {
-  const listeners = new Set<(e: RoomEvent) => void>();
+  const listeners = new Set<(e: RoomEvent, meta: { epoch: number }) => void>();
   return {
-    onEvent: (l: (e: RoomEvent) => void) => {
+    onEvent: (l: (e: RoomEvent, meta: { epoch: number }) => void) => {
       listeners.add(l);
       return () => {
         listeners.delete(l);
@@ -58,7 +58,7 @@ function emitter() {
     },
     emit: (e: RoomEvent) =>
       act(() => {
-        for (const l of [...listeners]) l(e);
+        for (const l of [...listeners]) l(e, { epoch: 1 });
       }),
   };
 }

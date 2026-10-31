@@ -463,7 +463,7 @@ describe("useRoomConnection: 이벤트 구독 (emoji·chat·error 프레임, Pit
     const frame = { t: "emoji", seat: 2, icon: "smile", at: 1 };
     act(() => sockets[0]!.message(frame));
     expect(listener).toHaveBeenCalledTimes(1);
-    expect(listener).toHaveBeenCalledWith(frame);
+    expect(listener).toHaveBeenCalledWith(frame, { epoch: 1 });
   });
 
   it("chat 프레임을 onEvent 리스너가 한 번 받고 view 는 바뀌지 않는다 (결정 0017-7)", () => {
@@ -477,7 +477,7 @@ describe("useRoomConnection: 이벤트 구독 (emoji·chat·error 프레임, Pit
     const frame = { t: "chat", seq: 3, seat: 1, template: "suspect", target: 2, at: 5 };
     act(() => sockets[0]!.message(frame));
     expect(listener).toHaveBeenCalledTimes(1);
-    expect(listener).toHaveBeenCalledWith(frame);
+    expect(listener).toHaveBeenCalledWith(frame, { epoch: 1 });
     expect(hook.result.current.view).toBe(before);
   });
 
@@ -500,7 +500,7 @@ describe("useRoomConnection: 이벤트 구독 (emoji·chat·error 프레임, Pit
       hook.result.current.onEvent(listener);
     });
     act(() => sockets[0]!.message({ t: "error", code: "RATE_LIMITED" }));
-    expect(listener).toHaveBeenCalledWith({ t: "error", code: "RATE_LIMITED" });
+    expect(listener).toHaveBeenCalledWith({ t: "error", code: "RATE_LIMITED" }, { epoch: 1 });
   });
 
   it("해제 함수를 부른 뒤에는 받지 않는다", () => {

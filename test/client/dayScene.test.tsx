@@ -307,9 +307,9 @@ describe("DayScene 하단 패널 (SPEC 하단, 결정 0017-6)", () => {
 // ---- 03.1-07: 차례 강조 연결 · 주장 채팅 줄 · claim 중 이모티콘 ----
 
 function emitter() {
-  const listeners = new Set<(e: RoomEvent) => void>();
+  const listeners = new Set<(e: RoomEvent, meta: { epoch: number }) => void>();
   return {
-    onEvent: (l: (e: RoomEvent) => void) => {
+    onEvent: (l: (e: RoomEvent, meta: { epoch: number }) => void) => {
       listeners.add(l);
       return () => {
         listeners.delete(l);
@@ -317,7 +317,7 @@ function emitter() {
     },
     emit: (e: RoomEvent) =>
       act(() => {
-        for (const l of [...listeners]) l(e);
+        for (const l of [...listeners]) l(e, { epoch: 1 });
       }),
   };
 }

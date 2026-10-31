@@ -30,16 +30,16 @@ const chat = (seq: number, seat: number, over: Record<string, unknown> = {}): Ro
 
 /** onEvent 가짜: 구독 목록을 쥐고 이벤트를 흘려 보낸다 */
 function bus() {
-  const listeners = new Set<(e: RoomEvent) => void>();
+  const listeners = new Set<(e: RoomEvent, meta: { epoch: number }) => void>();
   const unsubscribe = vi.fn();
-  const onEvent = (l: (e: RoomEvent) => void) => {
+  const onEvent = (l: (e: RoomEvent, meta: { epoch: number }) => void) => {
     listeners.add(l);
     return () => {
       unsubscribe();
       listeners.delete(l);
     };
   };
-  return { onEvent, unsubscribe, emit: (e: RoomEvent) => act(() => listeners.forEach((l) => l(e))), listeners };
+  return { onEvent, unsubscribe, emit: (e: RoomEvent) => act(() => listeners.forEach((l) => l(e, { epoch: 1 }))), listeners };
 }
 
 function setup(initial: RoomView | null) {
