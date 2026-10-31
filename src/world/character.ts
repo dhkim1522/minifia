@@ -662,9 +662,8 @@ const bodyMaterial = new MeshStandardMaterial({ vertexColors: true, roughness: 0
 const shadowMaterial = new MeshBasicMaterial({ color: "#000000", transparent: true, opacity: 0.3, depthWrite: false });
 const shadowGeometry = new CircleGeometry(0.42, 24);
 
-const NOT_YET = (): never => {
-  throw new Error("not implemented");
-};
+// Task 2·3 에서 채운다(RED 단계에서는 아무것도 하지 않는 자리)
+const NOT_YET = (): void => {};
 
 /** 인물 figIndex(0~4)를 만든다 — 원문 MFChar.create. 병합 재질은 모든 캐릭터가 공유한다 */
 export function createCharacter(figIndex: number, outfit: OutfitId = "coat"): WorldCharacter {
