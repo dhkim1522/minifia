@@ -12,13 +12,18 @@ import {
   MOVE_V,
   type Segment,
   type WorldState,
+  compactWorld,
+  despawnPlayer,
   emptyWorld,
   moveFrame,
   positionAt,
   positionAtFx,
   requestMove,
+  respawnAll,
   restSegment,
+  restoreWorld,
   segmentEndsAt,
+  snapFrame,
   spawnPlayer,
 } from "../../shared/game/world";
 
@@ -252,5 +257,236 @@ describe("moveFrame — 누설 표면 0 (T-06-09 와 짝)", () => {
     const f = moveFrame(0, seg);
     f.p.push(1);
     expect(seg.p).toEqual([360, 40, 40, 360]);
+  });
+});
+
+// ---- Task 2: 입장·퇴장·대기실 복귀와 저장/복원·스냅샷 (MAP-05, MAP-01) ----
+
+const SPAWNS_FX = [
+  [360, 40],
+  [40, 360],
+  [540, 220],
+  [-420, -120],
+  [340, -260],
+  [-260, 340],
+  [-420, 20],
+  [220, 540],
+];
+const ID = (i: number): string => `00000000-0000-4000-8000-00000000000${i}`;
+const PLAYERS = Array.from({ length: 8 }, (_, i) => ({ id: ID(i), seat: i }));
+
+/** 8명 입장 후 p0..p3 이 서로 다른 곳으로 걷는 중인 월드(첫 이동 now=2000). */
+function busyWorld(): WorldState {
+  let w = emptyWorld();
+  for (const pl of PLAYERS) w = spawnPlayer(w, pl.id, pl.seat, 1000, BAR_MAP);
+  const dests = [
+    { x: 40, z: 360 },
+    { x: -420, z: -120 },
+    { x: 340, z: -260 },
+    { x: -260, z: 340 },
+  ];
+  dests.forEach((d, i) => {
+    w = must(requestMove(w, ID(i), d, 2000, BAR_MAP)).world;
+  });
+  return w;
+}
+
+describe("spawnPlayer / despawnPlayer — 입장 지점", () => {
+  it("8개 seat 모두 BAR_SPAWNS 를 UNIT 배한 정수 한 점에 선다", () => {
+    for (let seat = 0; seat < 8; seat++) {
+      const w = spawnPlayer(emptyWorld(), "p", seat, 5000, BAR_MAP);
+      expect(w.segs.p).toEqual({ p: SPAWNS_FX[seat], t0: 5000, v: 180 });
+    }
+  });
+
+  it("despawnPlayer 는 구간·간격·배회 기록을 모두 지운다(입력 불변)", () => {
+    const moved = must(requestMove(spawnPlayer(emptyWorld(), "p0", 0, 1000, BAR_MAP), "p0", { x: 40, z: 360 }, 2000, BAR_MAP)).world;
+    const base = deepFreeze({ ...moved, wanderAt: { p0: 7000, other: 8000 } });
+    const w = despawnPlayer(base, "p0");
+    expect(w.segs).toEqual({});
+    expect(w.lastMoveAt).toEqual({});
+    expect(w.wanderAt).toEqual({ other: 8000 });
+    expect(Object.keys(base.segs)).toEqual(["p0"]);
+  });
+
+  it("없는 사람을 지워도 던지지 않는다", () => {
+    expect(() => despawnPlayer(emptyWorld(), "ghost")).not.toThrow();
+  });
+});
+
+describe("respawnAll — 대기실 복귀", () => {
+  it("걷던 사람도 서 있던 사람도 모두 자기 seat 입장 지점 한 점으로 돌아간다", () => {
+    const w = busyWorld();
+    const r = respawnAll(deepFreeze(w), PLAYERS, 9000, BAR_MAP);
+    for (const pl of PLAYERS) expect(r.segs[pl.id]).toEqual({ p: SPAWNS_FX[pl.seat], t0: 9000, v: 180 });
+  });
+
+  it("방에 없는 사람은 버리고 간격 기록을 비워 바로 걸을 수 있다", () => {
+    const w = busyWorld();
+    const r = respawnAll(w, PLAYERS.slice(0, 2), 9000, BAR_MAP);
+    expect(Object.keys(r.segs).sort()).toEqual([ID(0), ID(1)]);
+    expect(r.lastMoveAt).toEqual({});
+    expect(requestMove(r, ID(0), { x: 40, z: 360 }, 9000, BAR_MAP).ok).toBe(true);
+  });
+});
+
+describe("compactWorld — 저장 모양 (MAP-05, RESEARCH R6)", () => {
+  it("{ v: 1, segs } 뿐이고 lastMoveAt·wanderAt 은 없다", () => {
+    const stored = compactWorld({ ...busyWorld(), wanderAt: { bot: 99999 } }, 3000);
+    expect(Object.keys(stored).sort()).toEqual(["segs", "v"]);
+    expect(stored.v).toBe(1);
+    expect(JSON.stringify(stored)).not.toContain("99999");
+    expect(JSON.stringify(stored)).not.toContain("lastMoveAt");
+  });
+
+  it("끝난 구간은 [끝x, 끝z] 한 점으로 접히고 진행 중 구간은 그대로다", () => {
+    const w = busyWorld();
+    const seg0 = w.segs[ID(0)]!;
+    const end0 = { x: seg0.p.at(-2)!, z: seg0.p.at(-1)! };
+    const ends = segmentEndsAt(seg0);
+    const afterEnd = compactWorld(w, ends + 1);
+    expect(afterEnd.segs[ID(0)]!.p).toEqual([end0.x, end0.z]);
+    const mid = compactWorld(w, 2500);
+    expect(segmentEndsAt(seg0)).toBeGreaterThan(2500);
+    expect(mid.segs[ID(0)]).toEqual(seg0);
+    expect(mid.segs[ID(7)]!.p).toEqual(SPAWNS_FX[7]); // 서 있던 사람은 한 점 그대로
+  });
+
+  it("입력 월드를 바꾸지 않고, 저장 구간은 입력과 배열을 공유하지 않는다", () => {
+    const w = deepFreeze(busyWorld());
+    const stored = compactWorld(w, 2500);
+    stored.segs[ID(0)]!.p.push(1, 2);
+    expect(w.segs[ID(0)]!.p.length).toBeLessThan(stored.segs[ID(0)]!.p.length);
+    expect(w.segs[ID(0)]!.p).not.toContain(1);
+  });
+
+  it("8명 저장 JSON 은 4096 바이트보다 짧다(진행 중 구간 포함)", () => {
+    expect(JSON.stringify(compactWorld(busyWorld(), 2500)).length).toBeLessThan(4096);
+  });
+});
+
+describe("restoreWorld — 하이버네이션·배포 뒤 복원 (MAP-05, T-06-11)", () => {
+  it("compactWorld 를 되살리면 진행 중 구간까지 같은 위치를 준다", () => {
+    const w = busyWorld();
+    const restored = restoreWorld(JSON.parse(JSON.stringify(compactWorld(w, 2500))), PLAYERS, 2600, BAR_MAP);
+    for (const pl of PLAYERS) {
+      for (const t of [2000, 2600, 3500, 6000, 20000]) {
+        expect(positionAt(restored.segs[pl.id]!, t)).toEqual(positionAt(w.segs[pl.id]!, t));
+      }
+    }
+  });
+
+  it("되살린 월드는 간격 기록·배회 기록이 비어 바로 걸을 수 있다", () => {
+    const r = restoreWorld(compactWorld(busyWorld(), 2500), PLAYERS, 2600, BAR_MAP);
+    expect(r.lastMoveAt).toEqual({});
+    expect(r.wanderAt).toEqual({});
+    expect(requestMove(r, ID(0), { x: 40, z: 360 }, 2600, BAR_MAP).ok).toBe(true);
+  });
+
+  it.each([
+    ["null", null],
+    ["문자열", "text"],
+    ["숫자", 42],
+    ["배열", []],
+    ["v 2", { v: 2, segs: {} }],
+    ["v 없음", { segs: {} }],
+    ["segs 가 배열", { v: 1, segs: [] }],
+    ["segs 가 null", { v: 1, segs: null }],
+    ["segs 가 문자열", { v: 1, segs: "x" }],
+  ])("모르는 모양(%s)이면 모든 플레이어를 입장 지점에 세운다", (_name, stored) => {
+    const r = restoreWorld(stored, PLAYERS, 4000, BAR_MAP);
+    for (const pl of PLAYERS) expect(r.segs[pl.id]).toEqual({ p: SPAWNS_FX[pl.seat], t0: 4000, v: 180 });
+  });
+
+  it("방에 없는 id 는 버리고, 방에 있는데 저장에 없는 사람은 입장 지점에 세운다", () => {
+    const stored = compactWorld(busyWorld(), 2500);
+    stored.segs.ghost = restSegment(100, 100, 0);
+    delete stored.segs[ID(7)];
+    const r = restoreWorld(stored, PLAYERS, 4000, BAR_MAP);
+    expect(r.segs.ghost).toBeUndefined();
+    expect(Object.keys(r.segs).sort()).toEqual(PLAYERS.map((p) => p.id).sort());
+    expect(r.segs[ID(7)]).toEqual({ p: SPAWNS_FX[7], t0: 4000, v: 180 });
+    expect(r.segs[ID(0)]!.t0).toBe(2000); // 멀쩡한 저장값은 그대로
+  });
+
+  const base = { p: [360, 40], t0: 1000, v: 180 };
+  it.each<[string, unknown]>([
+    ["p 길이 홀수", { ...base, p: [360, 40, 100] }],
+    ["p 소수", { ...base, p: [360.5, 40] }],
+    ["p 범위 밖 +", { ...base, p: [9999, 40] }],
+    ["p 범위 밖 −", { ...base, p: [360, 40, -701, 40] }],
+    ["p 비어 있음", { ...base, p: [] }],
+    ["p 가 배열이 아님", { ...base, p: "360,40" }],
+    ["p 에 문자열", { ...base, p: ["360", 40] }],
+    ["p 에 NaN", { ...base, p: [Number.NaN, 40] }],
+    ["끝점이 막힌 셀(무대 중심)", { ...base, p: [360, 40, 0, 0] }],
+    ["한 점이 막힌 셀(무대 중심)", { ...base, p: [0, 0] }],
+    ["v 0", { ...base, v: 0 }],
+    ["v 음수", { ...base, v: -5 }],
+    ["v 1001", { ...base, v: 1001 }],
+    ["v 문자열", { ...base, v: "180" }],
+    ["v 없음", { p: base.p, t0: base.t0 }],
+    ["t0 없음", { p: base.p, v: base.v }],
+    ["t0 NaN", { ...base, t0: Number.NaN }],
+    ["구간이 null", null],
+    ["구간이 배열", []],
+  ])("손상된 구간(%s)은 그 사람만 입장 지점으로 되돌린다", (_name, bad) => {
+    const stored = compactWorld(busyWorld(), 2500);
+    stored.segs[ID(5)] = bad as Segment;
+    const r = restoreWorld(stored, PLAYERS, 4000, BAR_MAP);
+    expect(r.segs[ID(5)]).toEqual({ p: SPAWNS_FX[5], t0: 4000, v: 180 });
+    expect(r.segs[ID(1)]!.p.length).toBeGreaterThan(2); // 이웃은 건드리지 않는다
+  });
+
+  it("저장 구간에 덧붙은 키는 버린다(p·t0·v 만 되살린다)", () => {
+    const stored = compactWorld(busyWorld(), 2500);
+    (stored.segs[ID(0)] as unknown as Record<string, unknown>).evil = "x";
+    const r = restoreWorld(stored, PLAYERS, 4000, BAR_MAP);
+    expect(Object.keys(r.segs[ID(0)]!).sort()).toEqual(["p", "t0", "v"]);
+  });
+
+  it("입력 저장값을 바꾸지 않는다", () => {
+    const stored = deepFreeze(compactWorld(busyWorld(), 2500));
+    expect(() => restoreWorld(stored, PLAYERS, 4000, BAR_MAP)).not.toThrow();
+  });
+});
+
+describe("snapFrame — 접속 때 모두의 지금 구간 (MAP-01)", () => {
+  it("{t:'world', k:'snap', at, ents} 이고 at 은 now 다", () => {
+    const f = snapFrame(busyWorld(), PLAYERS, 12345);
+    expect(f.at).toBe(12345);
+    expect(f.t).toBe("world");
+    expect(f.k).toBe("snap");
+    expect(Object.keys(f).sort()).toEqual(["at", "ents", "k", "t"]);
+  });
+
+  it("ents 는 seat 오름차순이고 각 키 집합은 {s,p,t0,v} 뿐이다(playerId 없음)", () => {
+    const shuffled = [PLAYERS[5]!, PLAYERS[0]!, PLAYERS[7]!, PLAYERS[2]!, PLAYERS[1]!, PLAYERS[6]!, PLAYERS[3]!, PLAYERS[4]!];
+    const f = snapFrame(busyWorld(), shuffled, 2500);
+    expect(f.ents.map((e) => e.s)).toEqual([0, 1, 2, 3, 4, 5, 6, 7]);
+    for (const e of f.ents) expect(Object.keys(e).sort()).toEqual(["p", "s", "t0", "v"]);
+    expect(JSON.stringify(f)).not.toContain("00000000-0000-4000");
+  });
+
+  it("끝난 구간은 한 점으로 접혀 있고 진행 중 구간은 그대로다", () => {
+    const w = busyWorld();
+    const seg0 = w.segs[ID(0)]!;
+    const done = snapFrame(w, PLAYERS, segmentEndsAt(seg0) + 1);
+    expect(done.ents[0]!.p).toEqual([seg0.p.at(-2), seg0.p.at(-1)]);
+    const mid = snapFrame(w, PLAYERS, 2500);
+    expect(mid.ents[0]!.p).toEqual(seg0.p);
+  });
+
+  it("players 에 없는 world 항목은 싣지 않고, world 에 없는 사람도 싣지 않는다", () => {
+    const w = busyWorld();
+    const f = snapFrame(w, [PLAYERS[3]!, { id: "nobody", seat: 6 }], 2500);
+    expect(f.ents.map((e) => e.s)).toEqual([3]);
+  });
+
+  it("p 는 월드와 배열을 공유하지 않는다", () => {
+    const w = busyWorld();
+    const f = snapFrame(w, PLAYERS, 2500);
+    f.ents[0]!.p.push(1);
+    expect(w.segs[ID(0)]!.p).not.toContain(1);
   });
 });

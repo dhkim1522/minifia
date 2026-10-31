@@ -160,3 +160,24 @@ export function requestMove(
 export function moveFrame(seat: number, seg: Segment): Extract<WorldFrame, { k: "move" }> {
   return { t: "world", k: "move", s: seat, p: [...seg.p], t0: seg.t0, v: seg.v };
 }
+
+// ---- RED 뼈대(Task 2): 구현은 GREEN 커밋에서 채운다 ----
+export interface StoredWorld {
+  v: 1;
+  segs: Record<string, Segment>;
+}
+export function despawnPlayer(w: WorldState, _playerId: string): WorldState {
+  return w;
+}
+export function respawnAll(w: WorldState, _players: readonly { id: string; seat: number }[], _now: number, _map: MapDef): WorldState {
+  return w;
+}
+export function compactWorld(_w: WorldState, _now: number): StoredWorld {
+  return { v: 1, segs: {} };
+}
+export function restoreWorld(_stored: unknown, _players: readonly { id: string; seat: number }[], _now: number, _map: MapDef): WorldState {
+  return emptyWorld();
+}
+export function snapFrame(_w: WorldState, _players: readonly { id: string; seat: number }[], _now: number): Extract<WorldFrame, { k: "snap" }> {
+  return { t: "world", k: "snap", at: 0, ents: [] };
+}
