@@ -46,6 +46,15 @@ export class WorldStore {
     return seg ? positionAt(seg, serverNow) : null;
   }
 
+  // RED 뼈대 — 동작은 GREEN 에서 채운다.
+  reset(): void {}
+  takeEntered(): number[] {
+    return [];
+  }
+  retainSeats(_seatsInView: readonly number[]): number[] {
+    return [];
+  }
+
   subscribe(cb: WorldStoreListener): () => void {
     this.listeners.add(cb);
     return () => {

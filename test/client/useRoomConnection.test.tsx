@@ -600,4 +600,20 @@ describe("useRoomConnection: world 프레임 비간섭 (CONN-04)", () => {
     expect(after.offset).toBe(before.offset);
     expect(after.canSend).toBe(before.canSend);
   });
+
+  it("종료 상태(replaced)가 된 뒤 같은 소켓으로 world 프레임이 와도 새 소켓을 열지 않고 구독자도 부르지 않는다 (WR-02 회귀)", () => {
+    const { sockets, hook } = setup();
+    openWithState(sockets[0]!);
+    const listener = vi.fn();
+    act(() => {
+      hook.result.current.onEvent(listener);
+    });
+    act(() => sockets[0]!.serverClose(4001, "replaced"));
+    expect(hook.result.current.status).toBe("replaced");
+    act(() => sockets[0]!.message(snapFrame));
+    advance(10_000);
+    expect(listener).not.toHaveBeenCalled();
+    expect(sockets).toHaveLength(1);
+    expect(hook.result.current.status).toBe("replaced");
+  });
 });

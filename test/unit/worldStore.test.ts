@@ -29,3 +29,124 @@ describe("WorldStore: snap·move 기본 (MAP-05)", () => {
     expect(store.segOf(5)).toBeUndefined();
   });
 });
+
+const rest = (s: number, x = 100, z = 100) => ({ s, p: [x, z], t0: 0, v: 180 });
+
+describe("WorldStore: 연결 단위 교체 (MAP-05, T-06-21)", () => {
+  it("새 epoch 의 move 가 snap 보다 먼저 오면 버려지고 준비 상태가 풀린다", () => {
+    const store = new WorldStore();
+    store.applyFrame(snap([rest(0), rest(1)]), 1);
+    store.applyFrame(move(0, [100, 100, 500, 100], 5000), 2);
+    expect(store.isReady()).toBe(false);
+    expect(store.segOf(0)?.p).toEqual([100, 100]);
+  });
+
+  it("새 epoch 의 snap 은 이전 연결의 위치를 병합하지 않고 통째로 바꾼다", () => {
+    const store = new WorldStore();
+    store.applyFrame(snap([rest(0), rest(1)]), 1);
+    store.applyFrame(move(0, [100, 100, 500, 100], 5000), 2);
+    store.applyFrame(snap([rest(1, 200, 200), rest(2)]), 2);
+    expect(store.isReady()).toBe(true);
+    expect(store.seats()).toEqual([1, 2]);
+    expect(store.segOf(1)?.p).toEqual([200, 200]);
+  });
+
+  it("낡은 epoch 의 늦은 move 는 새 연결의 snap 뒤에도 버려진다", () => {
+    const store = new WorldStore();
+    store.applyFrame(snap([rest(0)]), 1);
+    store.applyFrame(snap([rest(0, 300, 300)]), 2);
+    store.applyFrame(move(0, [300, 300, 500, 300], 9000), 1);
+    expect(store.segOf(0)?.p).toEqual([300, 300]);
+    expect(store.isReady()).toBe(true);
+  });
+
+  it("snap 전에 move 만 오면 준비되지 않고 아무것도 쌓이지 않는다", () => {
+    const store = new WorldStore();
+    store.applyFrame(move(0, [100, 100, 500, 100], 5000), 1);
+    expect(store.isReady()).toBe(false);
+    expect(store.seats()).toEqual([]);
+  });
+
+  it("reset 뒤에는 준비되지 않고 seat 가 없다", () => {
+    const store = new WorldStore();
+    store.applyFrame(snap([rest(0)]), 1);
+    store.reset();
+    expect(store.isReady()).toBe(false);
+    expect(store.seats()).toEqual([]);
+  });
+});
+
+describe("WorldStore: 등장·퇴장 seat (UI-SPEC 입장 연출)", () => {
+  it("첫 snap 의 seat 는 등장 대상이 아니고, snap 뒤 move 로 처음 온 seat 만 한 번 등장한다", () => {
+    const store = new WorldStore();
+    store.applyFrame(snap([rest(0), rest(1)]), 1);
+    expect(store.takeEntered()).toEqual([]);
+    store.applyFrame(move(3, [100, 100, 400, 100], 7000), 1);
+    expect(store.takeEntered()).toEqual([3]);
+    expect(store.takeEntered()).toEqual([]);
+  });
+
+  it("이미 있는 seat 의 move 는 등장이 아니다", () => {
+    const store = new WorldStore();
+    store.applyFrame(snap([rest(0)]), 1);
+    store.applyFrame(move(0, [100, 100, 400, 100], 7000), 1);
+    expect(store.takeEntered()).toEqual([]);
+  });
+
+  it("같은 연결의 두 번째 snap(대기실 복귀)은 구간을 바꾸되 등장 대상을 만들지 않는다", () => {
+    const store = new WorldStore();
+    store.applyFrame(snap([rest(0)]), 1);
+    store.applyFrame(snap([rest(0, 300, 300), rest(4)]), 1);
+    expect(store.seats()).toEqual([0, 4]);
+    expect(store.segOf(0)?.p).toEqual([300, 300]);
+    expect(store.takeEntered()).toEqual([]);
+  });
+
+  it("retainSeats 는 view 에 없는 seat 를 지우고 지운 목록을 돌려준다", () => {
+    const store = new WorldStore();
+    store.applyFrame(snap([rest(0), rest(1), rest(2)]), 1);
+    expect(store.retainSeats([0, 1])).toEqual([2]);
+    expect(store.seats()).toEqual([0, 1]);
+    expect(store.retainSeats([0, 1])).toEqual([]);
+  });
+
+  it("지운 seat 의 늦은 move 는 다시 나타나되 새 사람으로 등장 대상이 된다", () => {
+    const store = new WorldStore();
+    store.applyFrame(snap([rest(0), rest(2)]), 1);
+    store.retainSeats([0]);
+    store.applyFrame(move(2, [100, 100, 400, 100], 7000), 1);
+    expect(store.seats()).toEqual([0, 2]);
+    expect(store.takeEntered()).toEqual([2]);
+  });
+
+  it("retainSeats 가 지운 seat 는 등장 대기에서도 빠진다", () => {
+    const store = new WorldStore();
+    store.applyFrame(snap([rest(0)]), 1);
+    store.applyFrame(move(3, [100, 100, 400, 100], 7000), 1);
+    store.retainSeats([0]);
+    expect(store.takeEntered()).toEqual([]);
+  });
+});
+
+describe("WorldStore: 구독", () => {
+  it("snap·move·실제로 지운 retain 마다 한 번씩 알리고, 버려진 프레임·변화 없는 retain 은 알리지 않는다", () => {
+    const store = new WorldStore();
+    let n = 0;
+    const off = store.subscribe(() => {
+      n += 1;
+    });
+    store.applyFrame(snap([rest(0), rest(1)]), 1);
+    expect(n).toBe(1);
+    store.applyFrame(move(0, [100, 100, 400, 100], 7000), 1);
+    expect(n).toBe(2);
+    store.retainSeats([0, 1]);
+    expect(n).toBe(2);
+    store.retainSeats([0]);
+    expect(n).toBe(3);
+    store.applyFrame(move(0, [100, 100, 400, 100], 7000), 0);
+    expect(n).toBe(3);
+    off();
+    store.applyFrame(snap([]), 1);
+    expect(n).toBe(3);
+  });
+});
