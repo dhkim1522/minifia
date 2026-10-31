@@ -6,7 +6,8 @@
 |---|---|---|
 | 배경(맵) 2종 × 시간대 5개 | https://claude.ai/artifact/LztT25LDkxJcfnRjiaPTfE | `backgrounds/minifia-bg-concepts.html` (three.js r128, 브라우저로 열면 그대로 돈다) |
 | 캐릭터(의상 8·동작 8·4방향·걷기·리그) — **결정 0047 로 대체됨, 참고용** | https://claude.ai/artifact/QPVNH7DN4jQwpMGtHivssc | `characters/*.dc.html`, `characters/canvas.json` (Design 캔버스 원본 소스) |
-| 3D 에셋(결정 0047): 배경 2종 × 게임 장면 8, 1번 시안 인물 + 의상 8·동작 8·표정 10, 게임 흐름 | https://claude.ai/artifact/MExvQNQTCwZdJ79XYSLPQk | `3d/mf3d.js`(맵·장면·캐릭터·이동 격자 공용 코드, three r128 전역 `THREE`), `3d/*.dc.html`(캔버스 보드), `3d/canvas.json`. three.min.js 는 cdnjs r128 판과 같아 넣지 않았다 |
+| 3D 에셋(결정 0047): 배경 2종 × 게임 장면 8, 1번 시안 인물 + 의상 8·동작 8·표정 10, 게임 흐름 | https://claude.ai/artifact/MExvQNQTCwZdJ79XYSLPQk | `3d/mf3d.js`(맵·장면·캐릭터·이동 격자 공용 코드, three r128 전역 `THREE`), `3d/*.dc.html`(캔버스 보드), `3d/canvas.json`. three.min.js 는 cdnjs r128 판과 같아 넣지 않았다. 모자·머리카락·귀·눈썹은 0048 이전 방식 |
+| **캐릭터 에셋 원본(결정 0048)**: 1번 시안 인물 5명 + 의상 9종(기본 코트·누아르 정장·마피아·경찰·의사·탐정·기자·어르신·후드), 표정 7, 동작 9. 모자는 머리를 덮고 안의 머리카락은 잘라 낸다 | https://claude.ai/artifact/NP1XfUrYTTqQ5nAB1HKYT5 | `figure/minifia-street.html` (three.js r128, 브라우저로 열면 그대로 돈다) |
 
 ## 배경
 - A 달빛 응접실: 앞 두 벽을 잘라 낸 넓은 실내. 가운데 크림 대리석 원탁과 의자 8개가 모이는 자리
