@@ -150,3 +150,16 @@ describe("WorldStore: 구독", () => {
     expect(n).toBe(3);
   });
 });
+
+describe("WorldStore: currentEpoch (06-13 런타임이 새 연결 첫 프레임을 알아본다)", () => {
+  it("처음은 -1, snap 이 받아들여지면 그 epoch, 낡은 프레임은 바꾸지 않고, reset 하면 -1 이다", () => {
+    const store = new WorldStore();
+    expect(store.currentEpoch()).toBe(-1);
+    store.applyFrame(snap([rest(0)]), 3);
+    expect(store.currentEpoch()).toBe(3);
+    store.applyFrame(snap([rest(0)]), 2);
+    expect(store.currentEpoch()).toBe(3);
+    store.reset();
+    expect(store.currentEpoch()).toBe(-1);
+  });
+});

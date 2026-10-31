@@ -55,6 +55,11 @@ export class WorldStore {
     if (changed) this.notify();
   }
 
+  /** 마지막으로 받아들인 연결 epoch(아직 없으면 -1). 런타임이 새 연결의 첫 프레임에 카메라를 바로 붙이는 데 쓴다 */
+  currentEpoch(): number {
+    return this.epoch;
+  }
+
   /** 지금 epoch 의 snap 을 받았는가 */
   isReady(): boolean {
     return this.ready;
