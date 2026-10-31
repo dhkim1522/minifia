@@ -399,3 +399,35 @@ export async function driveToEnded(seated: Seated, hook?: (stage: "execVote" | "
   );
   await skipThrough(seated, "ended");
 }
+
+// ---- 6페이즈 로비 이동 저장소 도우미(06-08) ----
+
+/** storage "world" 키의 저장 모양(StoredWorld). 키가 없으면 undefined. */
+export interface StoredWorldRecord {
+  v: number;
+  segs: Record<string, { p: number[]; t0: number; v: number }>;
+}
+
+export async function worldOf(code: string): Promise<StoredWorldRecord | undefined> {
+  let world: unknown;
+  await runInDurableObject(env.ROOM.getByName(code), async (_i, state) => {
+    world = await state.storage.get("world");
+  });
+  return world as StoredWorldRecord | undefined;
+}
+
+/** 디바운스 대기 중인 저장을 지금 한다(private flushWorld). 타이머도 함께 풀린다. */
+export async function flushWorld(code: string): Promise<void> {
+  await runInDurableObject(env.ROOM.getByName(code), async (instance) => {
+    await instance["flushWorld"]();
+  });
+}
+
+/** 위치 저장 디바운스 타이머가 잡혀 있는지(private worldFlushTimer). */
+export async function worldDirty(code: string): Promise<boolean> {
+  let dirty = false;
+  await runInDurableObject(env.ROOM.getByName(code), async (instance) => {
+    dirty = instance["worldFlushTimer"] !== null;
+  });
+  return dirty;
+}

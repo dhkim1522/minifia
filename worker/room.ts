@@ -68,6 +68,11 @@ export class Room extends DurableObject<Env> {
   private room: RoomState | null = null;
   // 로비 이동 상태(06-08). room 키와 분리된 storage "world" 키에 저장한다 — 위치가 room 키를 매번 다시 쓰지 않게(RESEARCH R6).
   private world: WorldState = emptyWorld();
+  // RED 뼈대(06-08 Task 2): 디바운스 저장 타이머와 flush — GREEN 에서 구현한다.
+  private worldFlushTimer: ReturnType<typeof setTimeout> | null = null;
+  private async flushWorld(): Promise<void> {
+    // 일부러 아무것도 저장하지 않는다.
+  }
   // 인메모리라 하이버네이션으로 비면 새로 센다(수용). 소켓 객체가 키라 hello 전 소켓도 센다.
   private readonly rates = new WeakMap<WebSocket, RateWindow>();
 
