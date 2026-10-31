@@ -64,3 +64,19 @@ describe("MoveMessageSchema (strictObject, 정수 ±700)", () => {
     expect(MoveMessageSchema.safeParse(msg).success).toBe(false);
   });
 });
+
+// 06-08: move 는 ClientMessage 유니온의 멤버다 — 방 DO 가 ClientMessageSchema 로만 받는다.
+describe("ClientMessageSchema move (06-08, 결정 0044-17)", () => {
+  it("받는다: 정수 ±700 목적지", () => {
+    expect(ClientMessageSchema.safeParse({ t: "move", x: -700, z: 700 }).success).toBe(true);
+  });
+
+  it.each([
+    ["소수", { t: "move", x: 1.5, z: 0 }],
+    ["범위 밖", { t: "move", x: 701, z: 0 }],
+    ["덧붙은 seat", { t: "move", x: 0, z: 0, seat: 1 }],
+    ["z 빠짐", { t: "move", x: 0 }],
+  ])("거부한다: %s", (_name, msg) => {
+    expect(ClientMessageSchema.safeParse(msg).success).toBe(false);
+  });
+});
