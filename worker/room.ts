@@ -25,7 +25,7 @@ import type { RoleId } from "../shared/game/roles";
 import { nextWakeAt, tick } from "../shared/game/tick";
 import { castCandidateVote, castExecVote } from "../shared/game/vote";
 import { BAR_MAP } from "../shared/game/map";
-import { WORLD_FLUSH_MS, compactWorld, despawnPlayer, emptyWorld, moveFrame, requestMove, respawnAll, restoreWorld, snapFrame, spawnPlayer } from "../shared/game/world";
+import { WORLD_FLUSH_MS, compactWorld, despawnPlayer, emptyWorld, moveFrame, nextWanderAt, planWander, requestMove, respawnAll, restoreWorld, snapFrame, spawnPlayer } from "../shared/game/world";
 import type { Segment, WorldState } from "../shared/game/world";
 import { buildPreview, buildView } from "../shared/game/view";
 import { ClientMessageSchema } from "../shared/schemas";
@@ -316,8 +316,8 @@ export class Room extends DurableObject<Env> {
     this.room = result.state;
     this.world = despawnPlayer(this.world, att.playerId);
     await this.persistAndBroadcast();
-    await this.flushWorld();
     await this.reschedule();
+    await this.flushWorld();
   }
 
   private async handleKick(ws: WebSocket, seat: number): Promise<void> {
@@ -355,9 +355,10 @@ export class Room extends DurableObject<Env> {
     }
     this.room = result.state;
     await this.persistAndBroadcast();
-    // 로비를 떠나는 시작: 위치를 지금 저장하고 그대로 둔다(가정 A1). 이후 world 프레임은 나가지 않는다.
-    await this.flushWorld();
     await this.reschedule();
+    // 로비를 떠나는 시작: 위치를 지금 저장하고 그대로 둔다(가정 A1). 이후 world 프레임은 나가지 않는다.
+    // 알람(단계 마감) 재설정이 먼저다 — 저장 쓰기 때문에 마감 알람이 늦어지지 않게.
+    await this.flushWorld();
   }
 
   // 빠른 메시지·이모티콘·직업 선택·밤 행동은 "소켓 껍데기(handleX)" 와 "본체(applyX)" 로 나뉜다(결정 0024).
@@ -602,8 +603,8 @@ export class Room extends DurableObject<Env> {
     this.world = respawnAll(this.world, this.room.players, now, BAR_MAP);
     await this.persistAndBroadcast();
     this.emitWorld(snapFrame(this.world, this.room.players, now));
-    await this.flushWorld();
     await this.reschedule();
+    await this.flushWorld();
   }
 
   // 내 직업 고르기: 성공하면 방장 소켓에만 state 를 보낸다(대기실의 다른 사람 view 는 바뀌지 않는다). 같은 값이면 저장·전송하지 않는다.
@@ -708,8 +709,11 @@ export class Room extends DurableObject<Env> {
       await this.ctx.storage.put("room", this.room);
     }
     const botAt = botWakeAt(this.room);
+    // 봇 배회(로비·사람 연결·봇 있음일 때만)도 같은 알람 하나에 합친다 — 사람이 없으면 걸지 않아 버려진 테스트 방이 깨어나지 않는다(가정 A2).
+    this.syncWanderPlan(Date.now());
+    const wanderAt = this.wanderActive() ? nextWanderAt(this.world, this.wanderBots().map((b) => b.id)) : null;
     const wake = nextWakeAt(this.room);
-    await this.ctx.storage.setAlarm(botAt === null ? wake : Math.min(wake, botAt));
+    await this.ctx.storage.setAlarm(Math.min(wake, botAt ?? Number.POSITIVE_INFINITY, wanderAt ?? Number.POSITIVE_INFINITY));
   }
 
   async webSocketClose(ws: WebSocket): Promise<void> {
@@ -726,6 +730,7 @@ export class Room extends DurableObject<Env> {
       if (this.worldFlushTimer !== null) await this.flushWorld();
       await this.advance(Date.now());
       await this.runDueBots(Date.now());
+      this.runBotWander(Date.now());
       await this.reschedule();
     } catch (err) {
       // 토큰 없는 짧은 로그만 남기고, 예외로 재시도 한도가 소진되어 알람이 멈추지 않게 1초 뒤 다시 건다.
@@ -751,6 +756,8 @@ export class Room extends DurableObject<Env> {
       return;
     }
 
+    // 연결된 사람이 아무도 없던 방에 처음 사람이 들어오면 봇 배회 알람이 이제 필요하다(아래).
+    const wasIdle = !room.players.some((p) => !isBot(p) && p.connected);
     const connId = crypto.randomUUID();
     // 같은 사람의 이전 소켓은 새 연결이 대체한다. 낡은 소켓의 닫힘은 connId 가 달라 새 연결을 덮지 않는다.
     for (const other of this.ctx.getWebSockets()) {
@@ -771,7 +778,7 @@ export class Room extends DurableObject<Env> {
     // 클라이언트 epoch 가 첫 state 에서 오르는 규약(WR-03)과 맞는 순서다.
     if (this.room.phase === "lobby") this.sendTo(ws, snapFrame(this.world, this.room.players, Date.now()));
     // 첫 접속이면 만료가 늘었으니 알람도 따라 옮긴다.
-    if (this.room.expiresAt !== room.expiresAt) await this.reschedule();
+    if (this.room.expiresAt !== room.expiresAt || (wasIdle && this.wanderBots().length > 0)) await this.reschedule();
   }
 
   private async handleDisconnect(ws: WebSocket): Promise<void> {
@@ -783,7 +790,11 @@ export class Room extends DurableObject<Env> {
     this.room = detachConnection(this.room, att.playerId, att.connId);
     await this.persistAndBroadcast();
     // 연결된 사람이 한 명도 남지 않으면 DO 가 곧 내려갈 수 있으니 대기 중이던 위치를 지금 저장한다(봇은 사람이 아니다).
-    if (this.room.players.every((p) => isBot(p) || !p.connected)) await this.flushWorld();
+    if (this.room.players.every((p) => isBot(p) || !p.connected)) {
+      await this.flushWorld();
+      // 배회 알람은 사람이 없으면 걸지 않는다 — 남은 알람을 방 만료 쪽으로 돌려놓는다.
+      if (this.wanderBots().length > 0) await this.reschedule();
+    }
   }
 
   // 변경은 항상 저장이 끝난 뒤에 방송한다.
@@ -841,7 +852,13 @@ export class Room extends DurableObject<Env> {
     }
   }
 
-  // ---- 로비 이동(06-08) ----
+  // ======== 로비 이동 구역(06-08): move 처리 · 전송 · 저장/복원 · 봇 배회 ========
+  // 규칙 한눈에:
+  //  - 전송: world 프레임은 emitWorld 한 곳으로만 나간다(로비의 연결된 전원). 게임 중에는 어떤 world 프레임도 나가지 않는다(T-06-16).
+  //  - 순서: 프레임을 먼저 보내고 저장은 뒤에 한다 — output gate 가 쓰기 뒤의 전송을 붙잡기 때문이다(RESEARCH R6).
+  //  - 저장: 이동 뒤 2000ms 디바운스 한 번(markWorldDirty). 나가기·내보내기·로비를 떠나는 시작·마지막 사람 연결 끊김·알람에서는 즉시(flushWorld).
+  //  - 키: room 키와 분리된 "world" 키. 생성자가 두 키를 한 번에 읽어 restoreWorld 로 되살린다.
+  //  - 봇: 배회도 applyMove 본체를 지난다(단계·150ms 간격·경로, 특권 없음). 알람 하나에 단계 마감·만료·봇 행동과 함께 합쳐진다.
   // 신원은 소켓 첨부 playerId 뿐이고 단계·간격·경로는 서버가 정한다. 거절은 오류 프레임 없이 조용히 버린다(UI-SPEC "서버가 막은 탭에 문구 없음").
   // 형식이 틀린 move 는 스키마에서 이미 BAD_MESSAGE 로 걸러진다.
   private handleMove(ws: WebSocket, x: number, z: number): void {
@@ -889,6 +906,35 @@ export class Room extends DurableObject<Env> {
       this.worldFlushTimer = null;
     }
     this.world = emptyWorld();
+  }
+
+  // ---- 테스트 방 봇 로비 배회(결정 0024, 가정 A2) ----
+  // 조건: 로비 · 봇이 있음 · 연결된 사람이 한 명 이상(planBotSteps 선례). 일반 방에는 봇이 없어 해당 없다.
+  private wanderActive(): boolean {
+    const room = this.room;
+    if (!room || room.phase !== "lobby") return false;
+    return room.players.some(isBot) && room.players.some((p) => !isBot(p) && p.connected);
+  }
+
+  private wanderBots(): { id: string; seat: number }[] {
+    return (this.room?.players ?? []).filter(isBot).map((p) => ({ id: p.id, seat: p.seat }));
+  }
+
+  // 아직 계획이 없는 봇에게만 첫 배회 시각을 정한다(planWander 가 처음 보는 봇은 이동 없이 계획만 세운다). 이미 계획이 있는 봇은 건드리지 않는다.
+  private syncWanderPlan(now: number): void {
+    if (!this.wanderActive()) return;
+    const unplanned = this.wanderBots().filter((b) => !Object.prototype.hasOwnProperty.call(this.world.wanderAt, b.id));
+    if (unplanned.length === 0) return;
+    const planned = planWander(this.world, unplanned, now, cryptoRandInt, BAR_MAP);
+    this.world = { ...this.world, wanderAt: { ...this.world.wanderAt, ...planned.world.wanderAt } };
+  }
+
+  // 때가 된 봇의 목적지를 정하고 사람과 같은 applyMove(단계·150ms 간격·경로 검사)로 적용한다. 거절은 버린다(특권 없음, T-06-20).
+  private runBotWander(now: number): void {
+    if (!this.wanderActive()) return;
+    const planned = planWander(this.world, this.wanderBots(), now, cryptoRandInt, BAR_MAP);
+    this.world = planned.world;
+    for (const m of planned.moves) this.applyMove(m.playerId, m.dest, now);
   }
 
   // 방의 사람과 world 를 맞춘다: 방에 있는데 world 에 없으면 입장 지점에 세우고, world 에 있는데 방에 없으면 지운다. 새로 선 사람의 구간을 seat 오름차순으로 돌려준다.

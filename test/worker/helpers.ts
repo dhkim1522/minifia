@@ -431,3 +431,12 @@ export async function worldDirty(code: string): Promise<boolean> {
   });
   return dirty;
 }
+
+/** 봇 배회 예정 시각들(인메모리 world.wanderAt, 06-08). 테스트 방의 로비에서는 알람 = min(방 만료, 이 값들)이다. */
+export async function wanderTimes(code: string): Promise<number[]> {
+  let times: number[] = [];
+  await runInDurableObject(env.ROOM.getByName(code), async (instance) => {
+    times = Object.values(instance["world"].wanderAt);
+  });
+  return times;
+}

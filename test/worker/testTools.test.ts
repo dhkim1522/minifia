@@ -4,7 +4,7 @@ import { exports } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
 import { EXEC_VOTE_MS } from "../../shared/game/phases";
 import type { PhaseId, RoomView, ServerMessage } from "../../shared/protocol";
-import { alarmOf, advanceTo, collect, createRoom, driveToEnded, editRoom, nextFrame, seat, send, skipOnce, skipThrough, storedRoom } from "./helpers";
+import { alarmOf, advanceTo, collect, createRoom, driveToEnded, editRoom, nextFrame, seat, send, skipOnce, skipThrough, storedRoom, wanderTimes } from "./helpers";
 import type { Seated, TestSocket } from "./helpers";
 
 const allSockets = (r: Seated): TestSocket[] => [r.host, ...r.guests.map((g) => g.sock)];
@@ -441,7 +441,8 @@ describe("투표 단계 넘기기와 종료 중 도구", () => {
     for (const p of room.players as Array<Raw>) {
       for (const key of ["execVote", "candidateVote", "role", "alive"]) expect(`${p.seat}:${key}:${Object.hasOwn(p, key)}`).toBe(`${p.seat}:${key}:false`);
     }
-    expect(String(await alarmOf(r.code))).toBe(String(room.expiresAt));
+    // 대기실로 돌아온 테스트 방에 봇이 남아 방장이 연결되어 있으면 알람에 봇 배회 시각이 합쳐진다(06-08): 알람 = min(방 만료, 배회 시각).
+    expect(String(await alarmOf(r.code))).toBe(String(Math.min(room.expiresAt as number, ...(await wanderTimes(r.code)))));
     const before = Date.now();
     send(r.host, { t: "start" });
     for (const sock of allSockets(r)) await nextFrame(sock, isPhase("assigning"));

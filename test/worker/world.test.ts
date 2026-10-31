@@ -22,6 +22,7 @@ import {
   storedRoom,
   alarmOf,
   until,
+  wanderTimes,
   worldDirty,
   worldOf,
 } from "./helpers";
@@ -348,14 +349,6 @@ async function pullWanderDue(code: string): Promise<void> {
     for (const p of room.players) if (p.isBot === true) wanderAt[p.id] = Date.now() - 1;
     instance["world"] = { ...instance["world"], wanderAt };
   });
-}
-
-async function wanderTimes(code: string): Promise<number[]> {
-  let times: number[] = [];
-  await runInDurableObject(env.ROOM.getByName(code), async (instance) => {
-    times = Object.values(instance["world"].wanderAt);
-  });
-  return times;
 }
 
 describe("봇 로비 배회 (결정 0024)", () => {
