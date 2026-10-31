@@ -24,7 +24,7 @@
   - "도윤 님이 과반 표를 받았어요"
   - "도윤 님이 5표로 최후 변론에 섰어요"
 - 지목 순간 알림은 이름과 화살표만: "민준 → 도윤", 몰리면 "지호·민준 → 도윤".
-- 이모지와 느낌표는 쓰지 않는다. 몸짓은 캐릭터 동작(`EmoteSheet`)으로 한다.
+- 이모지와 느낌표는 쓰지 않는다. 몸짓은 채팅 옆 감정표현(`ChatPanel` 의 `emotes`, `Icon` 9종)으로 캐릭터가 동작해서 한다.
 - 사람을 부를 때는 "{닉네임} 님". 역할 이름: 마피아 · 경찰 · 의사 · 시민.
 
 ## 색
@@ -71,7 +71,8 @@
 - 폭 최대 430px 한 열. 게임 화면은 세 층이다.
   1. 맨 아래 3D 캔버스(`z-world`)가 화면 전체를 채운다.
   2. 그 위 화면 겹침 층(`z-tags`)에 머리 위 쌓임(`HeadStack`)을 캐릭터 머리 꼭대기 화면 좌표에 놓는다.
-  3. 위에 `PhaseHeader`, 그 아래 `TopToast`(`z-toast`), 맨 아래 패널(`z-overlay`, `night-800` 97%, 위 모서리 `radius-lg`)에 `ChatPanel` 과 단계별 행동을 둔다.
+  3. 위에 `PhaseHeader`(이름 + 시간 링), 그 아래 `TopToast`(`z-toast`), 맨 아래 패널(`z-overlay`, `night-800` 97%, 위 모서리 `radius-lg`)에 `ChatPanel` 과 단계 행동(아이콘 버튼·`DotProgress`·`VerdictPicker`)을 둔다.
+- 아래 패널은 짧게: 채팅(기록 + [감정표현] 입력 [보내기])과 단계 행동 한 줄. 꾸미기·맵 선택은 로비의 꾸미기 버튼 하나로 여는 `DressSheet` 에 모은다.
 - 3D 카메라는 아래 패널에 가리는 만큼 그림을 위로 올린다(뷰 오프셋). 모이는 자리와 8명이 단계 머리와 아래 패널 사이에 들어와야 한다.
 - 누르기 대상은 최소 `tap-min` 44px. 버튼 `control-button` 52px, 입력칸·동작 버튼 `control-input` 48px.
 - 간격은 4의 배수(`space-xs` 4 ~ `space-3xl` 64). 반경: 도장 `radius-stamp`, 배지·채팅 칸·동작 버튼 `radius-badge`, 버튼·입력칸·맵 칸 `radius-md`, 패널 `radius-lg`, 이름표·알림 `radius-pill`.
@@ -128,5 +129,6 @@
 
 - 네임스페이스는 `MinifiaV2`, 부품은 `window.MinifiaV2` 에 있다. React 18 은 쓰는 쪽이 준다.
 - 순서: Google Fonts(Gowun Dodum, Gowun Batang 700) → `tokens.css` → `components/bundle.css` → `components/bundle.js`.
-- 부품: PhaseHeader, NameTag, VoteBadge, SureStamp, HeadStack, TopToast, ChatPanel, EmoteSheet, MapPicker. 속성은 `components/<이름>/README.md` 와 `components/index.d.ts`.
+- 부품: Icon, PhaseHeader, DotProgress, NameTag, VoteBadge, SureStamp, HeadStack, TopToast, ChatPanel, DressSheet, RoleCard, VerdictPicker. 속성은 `components/<이름>/README.md` 와 `components/index.d.ts`.
+- 그림(그림 저장소): 맵 카드 `Maps`(재즈 바·시계탑 광장), 의상 미리보기 `Outfits` 9종(1번 인물), 직업 카드 `Roles` 4종(v1.0 그림 그대로).
 - 3D 맵과 단계 조명은 이 시스템 밖의 코드다: 저장소 `design/v2.0/blockout/`(엔진 `blockout.js`, 맵 `bar.js`·`plaza.js`). 블록아웃이라 정식 맵에서 그리기 횟수를 줄인다.

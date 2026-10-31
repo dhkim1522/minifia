@@ -1,0 +1,8 @@
+<!-- @dsCard group="아래 패널" height=120 subtitle="찬성을 고른 상태" -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&family=Gowun+Batang:wght@700&display=swap">
+<div id="root" style="padding:16px; background: var(--night-800)"></div>
+<script>
+var M = window.MinifiaV2, h = React.createElement;
+function Demo(){ var v=React.useState('yes'); return h(M.VerdictPicker,{value:v[0],onChange:v[1]}); }
+ReactDOM.createRoot(document.getElementById('root')).render(h(Demo));
+</script>

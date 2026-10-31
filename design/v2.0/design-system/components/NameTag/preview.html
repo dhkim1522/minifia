@@ -1,7 +1,7 @@
-<!-- @dsCard group="머리 위" height=100 subtitle="기본 · 나 · 끊김" -->
+<!-- @dsCard group="머리 위" height=110 subtitle="기본 · 나 · 내가 고름 · 투표함 · 끊김" -->
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&family=Gowun+Batang:wght@700&display=swap">
-<div id="root" style="padding:28px 16px; background: radial-gradient(ellipse at 50% 40%, #3a2a22 0%, #1b1520 60%, #0a0e1c 100%); display:flex; gap:12px; justify-content:center"></div>
+<div id="root" style="padding:28px 16px; background: radial-gradient(ellipse at 50% 40%, #3a2a22 0%, #1b1520 60%, #0a0e1c 100%);"></div>
 <script>
 var M = window.MinifiaV2, h = React.createElement;
-ReactDOM.createRoot(document.getElementById('root')).render(h('div', {style:{display:'flex',gap:'12px',flexWrap:'wrap',justifyContent:'center'}}, h(M.NameTag, {name:'민준', color:'#6fa59a'}), h(M.NameTag, {name:'지호', color:'#7a8fb8', me:true}), h(M.NameTag, {name:'현우', color:'#a88f9a', away:true})));
+ReactDOM.createRoot(document.getElementById('root')).render(h('div',{style:{display:'flex',gap:'10px',flexWrap:'wrap',justifyContent:'center'}}, h(M.NameTag,{name:'민준',color:'#6fa59a'}), h(M.NameTag,{name:'지호',color:'#7a8fb8',me:true}), h(M.NameTag,{name:'도윤',color:'#b87a5c',mine:true}), h(M.NameTag,{name:'서연',color:'#b89a6f',done:true}), h(M.NameTag,{name:'현우',color:'#a88f9a',away:true})));
 </script>

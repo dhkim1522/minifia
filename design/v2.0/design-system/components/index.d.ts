@@ -1,15 +1,38 @@
 // minifia v2.0 게임 겹침 부품 — window.MinifiaV2. React 18 은 쓰는 쪽이 준다.
+// 결정 0051: 글은 최소로, 보고 누르는 조작 중심.
 
-/** 단계 머리: 단계 이름, 지금 할 일 한 문장, 남은 시간 */
+export type IconName =
+  | 'throat' | 'deny' | 'clap' | 'cry' | 'handshake' | 'point' | 'praise' | 'surprise' | 'dance'
+  | 'face' | 'hanger' | 'map' | 'skip' | 'check' | 'send' | 'close' | 'play' | 'question' | 'thumbUp' | 'thumbDown';
+
+/** 직접 그린 SVG 아이콘(currentColor) */
+export interface IconProps {
+  name: IconName;
+  /** px, 기본 24 */
+  size?: number;
+  /** 혼자 뜻을 전할 때 읽어 주는 이름. 없으면 장식(aria-hidden) */
+  label?: string;
+  className?: string;
+}
+
+/** 단계 머리: 단계 이름 + 시간 링 + 접히는 안내 한 줄 */
 export interface PhaseHeaderProps {
-  /** 단계 이름. 예: "지목" */
   title: string;
-  /** 지금 할 일 한 문장(화면마다 하나). 예: "가장 의심되는 사람을 가리켜요" */
   hint?: string;
-  /** 남은 초. 없으면 숫자를 그리지 않는다 */
+  /** 단계 시작 뒤 약 2.5초만 true. false 면 안내가 접힌다 */
+  showHint?: boolean;
+  /** 남은 초 */
   time?: number;
-  /** 마지막 5초면 true — 숫자가 crimson-400 */
-  urgent?: boolean;
+  /** 단계 전체 초. 있어야 링을 그린다 */
+  total?: number;
+}
+
+/** 점 진행 ●●●○○ */
+export interface DotProgressProps {
+  count: number;
+  total: number;
+  /** 읽어 주는 이름. 예: "토론 끝내기" */
+  label?: string;
 }
 
 /** 3D 장면 위 이름표 */
@@ -17,79 +40,86 @@ export interface NameTagProps {
   name: string;
   /** 자리 구분색 seat-1~8 값 */
   color: string;
-  /** 내 캐릭터면 true — "(나)" 와 테두리 */
   me?: boolean;
-  /** 연결이 끊긴 사람이면 true — 흐리게 */
   away?: boolean;
+  /** 지목에서 내가 가리킨 사람 */
+  mine?: boolean;
+  /** 찬반에서 투표한 사람 */
+  done?: boolean;
+  /** 누를 수 있다는 손짓(세 번 깜빡) */
+  blink?: boolean;
 }
 
-/** 득표 배지(결정 0049) */
-export interface VoteBadgeProps {
-  /** 받은 표 수. 0 이면 그리지 않는다 */
-  count: number;
-  /** 최다 득표가 이 사람 한 명이면 true — 맥박·빛 번짐 */
-  lead?: boolean;
-}
+export interface VoteBadgeProps { count: number; lead?: boolean; }
+export interface SureStampProps { label?: string; }
 
-/** 과반 도장 */
-export interface SureStampProps {
-  /** 기본 "유력" */
-  label?: string;
-}
-
-/** 머리 위 쌓임: 도장 · 배지 · 이름표 */
+/** 머리 위 쌓임: 입력 중 · 도장 · 배지 · 이름표 */
 export interface HeadStackProps extends NameTagProps {
+  typing?: boolean;
   count?: number;
   lead?: boolean;
-  /** 과반이면 true — "유력" 도장 */
   sure?: boolean;
 }
 
-/** 화면 위 지목 알림 한 줄 */
-export interface TopToastProps {
-  /** 예: "민준 → 도윤", 몰리면 "지호·민준 → 도윤" */
-  text: string;
-  visible: boolean;
-}
+/** 화면 위 알림 한 줄 */
+export interface TopToastProps { text: string; visible: boolean; icon?: IconName; }
 
 export interface ChatMessage {
-  /** player: 사람 메시지 · system: 단계 안내 · vote: 지목 기록 · hot: 선두·과반 소식 */
+  /** player: 사람 · system: 단계 안내 · vote: 지목 기록 · hot: 선두·과반 소식 */
   kind: 'player' | 'system' | 'vote' | 'hot';
   text: string;
-  /** player 만 */
+  /** 시스템 메시지 앞 아이콘. 예: vote 는 'point' */
+  icon?: IconName;
   name?: string;
-  /** player 만. 자리 구분색 */
   color?: string;
-  /** 마피아 밤 채팅(마피아 본인 화면에서만 보인다) */
   channel?: 'all' | 'mafia' | 'ghost';
 }
 
-/** 채팅 기록 + 입력 */
+/** 채팅: 기록 + [감정표현] 입력 [보내기] */
 export interface ChatPanelProps {
   messages: ChatMessage[];
   value?: string;
   onChange?: (value: string) => void;
-  /** 없으면 입력줄을 그리지 않는다(기록만) */
+  /** 없으면 입력줄을 그리지 않는다 */
   onSend?: (value: string) => void;
+  /** 감정표현 9종. 비우면 감정표현 버튼이 없다(밤 등) */
+  emotes?: { id: IconName; label: string }[];
+  onEmote?: (id: IconName) => void;
   placeholder?: string;
   disabled?: boolean;
-  /** 한 화면에 둘 이상이면 서로 다른 id */
   inputId?: string;
 }
 
-/** 동작 목록 */
-export interface EmoteSheetProps {
-  emotes: { id: string; label: string }[];
-  onPick?: (id: string) => void;
-  disabled?: boolean;
+/** 꾸미기 창(로비): 방장은 맵·의상 두 탭, 다른 사람은 의상만 */
+export interface DressSheetProps {
+  host?: boolean;
+  /** 랜덤은 img 없이 */
+  maps?: { id: string; label: string; img?: string }[];
+  mapId?: string;
+  onMap?: (id: string) => void;
+  outfits: { id: string; label: string; img: string }[];
+  outfitId: string;
+  onOutfit?: (id: string) => void;
+  /** 방장이 처음 볼 탭. 기본 'map' */
+  tab?: 'map' | 'outfit';
+  onClose?: () => void;
 }
 
-/** 로비 맵 선택(결정 0050) */
-export interface MapPickerProps {
-  maps: { id: string; label: string; desc?: string }[];
-  /** 고른 맵 id. 기본 "random" */
-  value: string;
-  onChange?: (id: string) => void;
-  /** 방장이면 true. 아니면 지금 맵을 글로만 본다 */
-  host?: boolean;
+/** 역할 카드(v1.0 직업 카드) */
+export interface RoleCardProps {
+  role?: 'mafia' | 'police' | 'doctor' | 'citizen';
+  name?: string;
+  desc?: string;
+  img?: string;
+  /** 마피아 동료 줄. 예: "동료 · 수아" */
+  mates?: string;
+  face: 'back' | 'front';
+  onFlip?: () => void;
+}
+
+/** 찬반: 엄지 위·아래 */
+export interface VerdictPickerProps {
+  value?: 'yes' | 'no';
+  onChange?: (value: 'yes' | 'no') => void;
+  disabled?: boolean;
 }

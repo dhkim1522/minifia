@@ -1,7 +1,7 @@
-<!-- @dsCard group="단계" height=120 subtitle="지목 · 마지막 5초" -->
+<!-- @dsCard group="단계" height=130 subtitle="안내 보임 · 접힘 · 마지막 5초" -->
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&family=Gowun+Batang:wght@700&display=swap">
-<div id="root" style="padding:20px 16px; background: linear-gradient(#0e1326, #151c36); display:flex; flex-direction:column; gap:20px"></div>
+<div id="root" style="padding:20px 16px; background: linear-gradient(#0e1326, #151c36)"></div>
 <script>
 var M = window.MinifiaV2, h = React.createElement;
-ReactDOM.createRoot(document.getElementById('root')).render(h('div', {style:{display:'flex',flexDirection:'column',gap:'20px'}}, h(M.PhaseHeader, {title:'지목', hint:'가장 의심되는 사람을 가리켜요', time:24}), h(M.PhaseHeader, {title:'최후 변론', hint:'도윤 님이 변론하고 있어요', time:4, urgent:true})));
+ReactDOM.createRoot(document.getElementById('root')).render(h('div',{style:{display:'flex',flexDirection:'column',gap:'18px'}}, h(M.PhaseHeader,{title:'지목',hint:'가장 의심되는 사람을 눌러요',time:12,total:15}), h(M.PhaseHeader,{title:'낮 토론',hint:'이야기하며 마피아를 찾아요',showHint:false,time:60,total:90}), h(M.PhaseHeader,{title:'최후 변론',time:4,total:20,showHint:false})));
 </script>

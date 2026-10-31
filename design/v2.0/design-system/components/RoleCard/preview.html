@@ -1,0 +1,9 @@
+<!-- @dsCard group="역할" height=400 subtitle="뒷면 · 앞면(시민) · 앞면(마피아)" -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&family=Gowun+Batang:wght@700&display=swap">
+<div id="root" style="padding:20px; background: var(--night-950)"></div>
+<script>
+var M = window.MinifiaV2, h = React.createElement;
+var B={"map-bar": "/_blob/778cba92f48f4e99a91b06337c4c5101", "map-plaza": "/_blob/2b219a625d6bb95af8dea9c8d47e8fd0", "coat": "/_blob/df816d0d9685c802fc156d5ad114a9de", "noir": "/_blob/ffc379b2ac28607c792c125835699fb0", "mafia": "/_blob/46362d25f0fd25db6f8acec87e792938", "police": "/_blob/c82ec3d9ac20120b7bc6cb17f5d01ed4", "doctor": "/_blob/b679e54c9d10bcfd6a7cd50ff7e4d8e6", "detective": "/_blob/f2567c3db91d2a201a5b00e417c2e906", "reporter": "/_blob/abf4530ae5ce43b3b78d014d53904d06", "elder": "/_blob/c319f665e6eaf546f168337be4bb0259", "hood": "/_blob/cf630841858e993d044b4f0e4328e70f", "r-mafia": "/_blob/50619ec1df11c44792065b87cf90cf5f", "r-police": "/_blob/47e6dff79baabddb1bf53985c8dc1e4e", "r-doctor": "/_blob/37d827349ad9a9c2ca600e118b53d51d", "r-citizen": "/_blob/256fabf04f660572e18924ddd9ca0c91"};
+function Demo(){ var f=React.useState('back'); return h('div',{style:{display:'flex',gap:'16px',justifyContent:'center'}}, h('div',{style:{width:'200px'}},h(M.RoleCard,{face:f[0],role:'citizen',name:'시민',desc:'대화와 투표로 마피아를 찾아요',img:B['r-citizen'],onFlip:function(){f[1](f[0]==='back'?'front':'back');}})), h('div',{style:{width:'200px'}},h(M.RoleCard,{face:'front',role:'mafia',name:'마피아',desc:'밤에 함께 한 명을 지목해요',img:B['r-mafia'],mates:'동료 · 수아',onFlip:function(){}}))); }
+ReactDOM.createRoot(document.getElementById('root')).render(h(Demo));
+</script>
