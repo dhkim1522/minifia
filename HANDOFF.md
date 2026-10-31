@@ -13,6 +13,8 @@
 ## 확인 대기 (사용자 답·확인이 필요한 것)
 
 - v2.0 기획 재료: 사용자가 받아 온 팀 테스트 피드백·아이디어(v2.0 시작 때 하나씩 적고 함께 논의).
+- v2.0 캐릭터 최종 시안 승인(결정 0045, A 말랑 클레이): https://claude.ai/artifact/PPLmn6koNKgJbiBUDiNmnc · 비교 시안 https://claude.ai/artifact/725Naddf6wqXC2H3dnvcGi. 승인되면 사본을 `design/characters/v2.0/` 에 둔다.
+- 렌더 방식: 사용자는 three.js 3D 를 원했지만 결정 0044-16·ROADMAP 6·10페이즈는 "three.js 안 씀(SVG 2D 리그)". 어느 쪽으로 갈지 결정 필요.
 
 ## 다음 할 일
 
