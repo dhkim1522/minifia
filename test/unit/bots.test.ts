@@ -1,7 +1,9 @@
 // 테스트 방 서버 봇 규칙(quick 261025-fx1, 결정 0024): setBotCount·bots.ts 순수 규칙을 확인한다.
 // 실패 출력은 한 줄이어야 해서(TAP) 상태 비교는 키 순서를 맞춘 문자열로, 목록 비교는 요약 문자열로 한다.
 import { describe, expect, it } from "vitest";
-import { nicknameKey, validateNickname } from "../../shared/nickname";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+import { countGraphemes, nicknameKey, validateNickname } from "../../shared/nickname";
 import {
   BOT_NAMES,
   botClaimChoice,
@@ -117,16 +119,27 @@ const atTurnOf = (st: RoomState, seat: number): RoomState => ({ ...st, claimIdx:
 const claimKey = (st: RoomState): string => `claim:${st.phaseEndsAt}:${st.claimIdx ?? 0}`;
 
 describe("BOT_NAMES", () => {
-  it("일곱 이름이 모두 닉네임 규칙을 통과하고 5자 이하이며 비교 키가 서로 다르다", () => {
+  it("일곱 이름이 모두 닉네임 규칙을 통과하고 정확히 8 그래핌이며 비교 키가 서로 다르다 (결정 0052-3)", () => {
     expect(BOT_NAMES.length).toBe(7);
     const keys = new Set<string>();
     for (const name of BOT_NAMES) {
       const checked = validateNickname(name);
       expect(`${name}:${checked.ok}`).toBe(`${name}:true`);
-      expect(`${name}:${[...name].length <= 5}`).toBe(`${name}:true`);
+      expect(`${name}:${countGraphemes(name)}`).toBe(`${name}:8`);
       keys.add(nicknameKey(name));
     }
     expect(keys.size).toBe(7);
+  });
+
+  it("scripts/bots.mjs 의 NAMES 와 scripts/uat-test-bots.mjs 의 BOT_NAMES 가 BOT_NAMES 와 같은 순서·같은 값이다", () => {
+    const literalOf = (file: string, constName: string): string[] => {
+      const text = readFileSync(resolve(__dirname, "../../scripts", file), "utf8");
+      const m = text.match(new RegExp(`const ${constName} = (\\[[^\\]]*\\]);`));
+      expect(`${file}:${m !== null}`).toBe(`${file}:true`);
+      return JSON.parse(m![1]) as string[];
+    };
+    expect(literalOf("bots.mjs", "NAMES")).toEqual([...BOT_NAMES]);
+    expect(literalOf("uat-test-bots.mjs", "BOT_NAMES")).toEqual([...BOT_NAMES]);
   });
 });
 
