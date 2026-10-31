@@ -5,16 +5,16 @@ milestone_name: 같은 공간
 current_phase: 06
 current_phase_name: 월드 뼈대
 status: executing
-stopped_at: Completed 06-03-PLAN.md
-last_updated: "2026-10-31T15:49:36.458Z"
+stopped_at: Completed 06-05-PLAN.md
+last_updated: "2026-10-31T15:59:11.214Z"
 last_activity: 2026-11-01
 last_activity_desc: Phase 06 execution started
-state_head: d2b40ebb36db2be9ea0a5dacd15025b94f78053b
+state_head: 4f091d7267bea5f9c569b9e20ac093e613b80410
 progress:
   total_phases: 7
   completed_phases: 0
   total_plans: 21
-  completed_plans: 3
+  completed_plans: 4
   percent: 0
 ---
 
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-10-30)
 ## Current Position
 
 Phase: 06 (월드 뼈대) — EXECUTING
-Plan: 4 of 21
+Plan: 5 of 21
 Status: Ready to execute
 Last activity: 2026-11-01 — Phase 06 execution started
 
@@ -61,6 +61,7 @@ Progress: [░░░░░░░░░░] 0% (0/7 phases)
 | Phase 06 P01 | 12 min | 3 tasks | 17 files |
 | Phase 06 P02 | 12 min | 3 tasks | 2 files |
 | Phase 06 P03 | 6min | 3 tasks | 4 files |
+| Phase 06 P05 | 8 min | 3 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -79,6 +80,8 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 06]: 06-02: lineWalkable 은 닿기만 해도 검사하는 보수적 슈퍼커버, snapped 는 결과가 입력과 다르면 true
 - [Phase 06]: 06-03: PAN_BOX ±4.8 (가시성을 통과하는 가장 좁은 0.1 단위 값, 폭 360 폰이 정함), PLATE_FAR 18.5 (빈 배경 최소 16.5 + 2) — 6개 폰 크기 × 걷는 영역 2304점 검사가 도출. 계획의 '가장 넓은 통과값' 은 방향이 거꾸로(pan 이 넓을수록 가시성은 쉬워짐)라 가장 좁은 통과값으로 정함
 - [Phase 06]: 06-03: 맵 상태기계는 소실 3초에 재생성 한 번(shouldRecreate), 5초에 failed. visible 로 소실을 발견하면 숨겨 둔 시간은 세지 않고 그 시각부터 센다. loading 중 소실은 무시(06-13 은 loadError 로 알림) — T-06-06 재생성 폭주 완화, linkReducer visibility 규약과 일치
+- [Phase 06]: 06-05: 복원 유효성은 모든 선분(한 점이면 그 점)의 lineWalkable 로 판정, 구간 v 상한 1000, 정수 ±700 밖은 손상
+- [Phase 06]: 06-05: planWander 난수 순서 계약 — seat 오름차순, 때가 된 봇 [셀, 간격], 처음 보는 봇 [간격], 안 된 봇은 난수 없음
 
 ### Pending Todos
 
@@ -115,8 +118,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-31T15:49:36.429Z
-Stopped at: Completed 06-03-PLAN.md
+Last session: 2026-10-31T15:59:11.187Z
+Stopped at: Completed 06-05-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
