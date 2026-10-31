@@ -14,7 +14,7 @@ import { fileURLToPath } from "node:url";
 import { exitIfV1 } from "./deploy-target.mjs";
 
 const EMOJIS = ["smile", "grin", "surprised", "suspicious", "angry", "sad", "heart", "exclaim"];
-const NAMES = ["봇가나다라", "봇마바사아", "봇자차카타", "봇파하갸냐", "봇더러머버", "봇서어저처", "봇커터퍼허"];
+const NAMES = ["봇가나다라마바사", "봇아자차카타파하", "봇갸냐댜랴먀뱌샤", "봇야쟈챠캬탸퍄햐", "봇거너더러머버서", "봇어저처커터퍼허", "봇고노도로모보소"];
 
 function parseArgs(argv) {
   const args = { code: null, count: 3, base: null, prod: false, quiet: false };

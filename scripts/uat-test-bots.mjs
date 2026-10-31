@@ -48,7 +48,7 @@ const NIGHT_PICK_WAIT_MS = 8000; // 봇 밤 pick 은 단계 진입 1~6초 뒤
 const EXEC_VOTE_WAIT_MS = 9000; // 봇 여부 투표는 단계 진입 1~7초 뒤(단계 길이 13초 안)
 const MAX_ATTEMPTS = 6; // g 방: 방장·동료 마피아가 둘 다 살아 밤에 닿을 때까지 다시 시도하는 최대 판 수
 const MAX_NIGHTS = 5;
-const BOT_NAMES = ["봇가나다라", "봇마바사아", "봇자차카타", "봇파하갸냐", "봇더러머버", "봇서어저처", "봇커터퍼허"];
+const BOT_NAMES = ["봇가나다라마바사", "봇아자차카타파하", "봇갸냐댜랴먀뱌샤", "봇야쟈챠캬탸퍄햐", "봇거너더러머버서", "봇어저처커터퍼허", "봇고노도로모보소"];
 const PLAYER_KEYS = "alive,connected,isHost,nickname,seat";
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const results = [];

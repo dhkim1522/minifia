@@ -26,9 +26,9 @@ import type { RoleId } from "./roles";
 import type { Player, RoomState } from "./room";
 import type { RandInt } from "./tick";
 
-/** 봇 닉네임(5자 이하 고정 목록, scripts/bots.mjs 의 NAMES 와 같다). */
-// 봇 이름은 모두 닉네임 최대 길이(5자)로 채운다 — 이름표가 가장 넓은 최악 경우를 E2E·실기기 테스트가 늘 시험하게 한다(결정 0028 칼날 경계).
-export const BOT_NAMES: readonly string[] = ["봇가나다라", "봇마바사아", "봇자차카타", "봇파하갸냐", "봇더러머버", "봇서어저처", "봇커터퍼허"];
+/** 봇 닉네임(8자 고정 목록, scripts/bots.mjs 의 NAMES 와 같다). */
+// 봇 이름은 모두 닉네임 최대 길이(8자)로 채운다 — 가장 넓은 이름표를 E2E·실기기가 늘 시험한다(결정 0052-3, 0028 칼날 경계).
+export const BOT_NAMES: readonly string[] = ["봇가나다라마바사", "봇아자차카타파하", "봇갸냐댜랴먀뱌샤", "봇야쟈챠캬탸퍄햐", "봇거너더러머버서", "봇어저처커터퍼허", "봇고노도로모보소"];
 
 /** 단계 마감 이만큼 전보다 늦은 행동은 계획에서 버린다(마감 직전에 실행되어 거부되는 일을 줄인다). */
 export const BOT_END_MARGIN_MS = 500;
