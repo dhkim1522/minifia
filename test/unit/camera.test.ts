@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { HEAD_TOP_Y, WALK_HALF } from "../../shared/game/map";
 import {
   CAM_DIST,
   CAM_HEIGHT,
@@ -10,11 +11,16 @@ import {
   followStep,
   groundToScreen,
   LOOK_Y,
+  NAMETAG_GAP,
+  NAMETAG_H,
+  NAMETAG_MAX_W,
   PAN_BOX,
+  PLATE_FAR,
   PX_PER_UNIT,
   RESIZE_SETTLE_MS,
   screenRay,
   screenToGround,
+  STAGE_SIZES,
   stageOffsetY,
   stageRect,
 } from "../../src/world/camera";
@@ -254,5 +260,194 @@ describe("followStep (프레임 독립 감쇠, UI-SPEC E4)", () => {
   it("dt 가 0 이하이면 움직이지 않는다", () => {
     expect(followStep({ x: 0, z: 0 }, { x: 5, z: 5 }, 0, false)).toEqual({ x: 0, z: 0 });
     expect(followStep({ x: 0, z: 0 }, { x: 5, z: 5 }, -10, false)).toEqual({ x: 0, z: 0 });
+  });
+});
+
+// ───────────────────────── Task 2: 6개 폰 크기 × 걷는 영역 전 격자점 ─────────────────────────
+
+type Size = { w: number; h: number; label: string };
+type Box = { minX: number; maxX: number; minZ: number; maxZ: number };
+
+const symBox = (p: number): Box => ({ minX: -p, maxX: p, minZ: -p, maxZ: p });
+
+/** 걷는 영역 [−5.8, 5.8]² 의 0.25 간격 모든 점(끝점 5.8 포함) */
+function walkPoints(): { x: number; z: number }[] {
+  const axis: number[] = [];
+  for (let k = 0; -WALK_HALF + 0.25 * k < WALK_HALF - 1e-9; k++) axis.push(-WALK_HALF + 0.25 * k);
+  axis.push(WALK_HALF);
+  const out: { x: number; z: number }[] = [];
+  for (const x of axis) for (const z of axis) out.push({ x, z });
+  return out;
+}
+
+interface Failure {
+  p: { x: number; z: number };
+  target: { x: number; z: number };
+  overflow: number;
+  what: string;
+}
+
+/** 크기 하나에서 상자 box 로 카메라를 자를 때 발·이름표 상자가 스테이지 사각형을 넘는 점들 */
+function visibilityFailures(size: Size, box: Box): Failure[] {
+  const r = stageRect(size);
+  const offsetY = stageOffsetY(size.h, r.top, r.bottom);
+  const fails: Failure[] = [];
+  for (const p of walkPoints()) {
+    const target = clampTarget(p, box);
+    const foot = groundToScreen({ x: p.x, y: 0, z: p.z }, target, size, offsetY);
+    const head = groundToScreen({ x: p.x, y: HEAD_TOP_Y, z: p.z }, target, size, offsetY);
+    const tag = { left: head.sx - NAMETAG_MAX_W / 2, right: head.sx + NAMETAG_MAX_W / 2, bottom: head.sy - NAMETAG_GAP, top: head.sy - NAMETAG_GAP - NAMETAG_H };
+    const checks: [string, number][] = [
+      ["발이 왼쪽 밖", r.left - foot.sx],
+      ["발이 오른쪽 밖", foot.sx - r.right],
+      ["발이 위 밖", r.top - foot.sy],
+      ["발이 아래 밖", foot.sy - r.bottom],
+      ["이름표가 왼쪽 밖", r.left - tag.left],
+      ["이름표가 오른쪽 밖", tag.right - r.right],
+      ["이름표가 위 밖", r.top - tag.top],
+      ["이름표가 아래 밖", tag.bottom - r.bottom],
+    ];
+    let worst: [string, number] = ["", 1e-9];
+    for (const c of checks) if (c[1] > worst[1]) worst = c;
+    if (worst[0] !== "") fails.push({ p, target, overflow: worst[1], what: worst[0] });
+  }
+  return fails;
+}
+
+function describeFailure(size: Size, f: Failure): string {
+  return `${size.label} 점 (${f.p.x}, ${f.p.z}) 목표 (${f.target.x}, ${f.target.z}) ${f.what} ${f.overflow.toFixed(1)}px`;
+}
+
+/** 이동 한계 상자의 9개 목표(모서리 4 · 변 가운데 4 · 가운데) */
+function boxTargets(box: Box): { x: number; z: number }[] {
+  const xs = [box.minX, (box.minX + box.maxX) / 2, box.maxX];
+  const zs = [box.minZ, (box.minZ + box.maxZ) / 2, box.maxZ];
+  const out: { x: number; z: number }[] = [];
+  for (const x of xs) for (const z of zs) out.push({ x, z });
+  return out;
+}
+
+/** 크기 하나에서 스테이지 사각형 7×7 표본점의 광선이 바닥(y=0)에 닿는 점의 최대 |x|·|z| 와 그 자리 */
+function farthestGround(size: Size, box: Box): { far: number; at: string } {
+  const r = stageRect(size);
+  const offsetY = stageOffsetY(size.h, r.top, r.bottom);
+  let far = 0;
+  let at = "";
+  for (const target of boxTargets(box)) {
+    for (let i = 0; i < 7; i++) {
+      for (let j = 0; j < 7; j++) {
+        const sx = r.left + ((r.right - r.left) * i) / 6;
+        const sy = r.top + ((r.bottom - r.top) * j) / 6;
+        const g = screenToGround(sx, sy, target, size, offsetY);
+        const m = Math.max(Math.abs(g.x), Math.abs(g.z));
+        if (m > far) {
+          far = m;
+          at = `${size.label} 목표 (${target.x}, ${target.z}) 화면점 (${sx}, ${sy}) → 바닥 (${g.x.toFixed(2)}, ${g.z.toFixed(2)})`;
+        }
+      }
+    }
+  }
+  return { far, at };
+}
+
+/** 가시성을 통과하는 가장 좁은 대칭 상자 반폭(0.1 단위) */
+function minPanFor(size: Size): number {
+  for (let k = 0; k <= 58; k++) if (visibilityFailures(size, symBox(k / 10)).length === 0) return k / 10;
+  return Number.POSITIVE_INFINITY;
+}
+
+describe("STAGE_SIZES (UI-SPEC 폰 크기 표)", () => {
+  it("정확히 6개이고 label 은 폭x높이", () => {
+    expect(STAGE_SIZES.map((s) => s.label)).toEqual(["360x640", "390x664", "430x932", "360x560", "390x844", "402x874"]);
+    for (const s of STAGE_SIZES) expect(s.label).toBe(`${s.w}x${s.h}`);
+  });
+
+  it("스테이지 사각형 높이는 UI-SPEC 표와 같다 (490·514·782·410·694·724)", () => {
+    const heights = STAGE_SIZES.map((s) => {
+      const r = stageRect(s);
+      return r.bottom - r.top;
+    });
+    expect(heights).toEqual([490, 514, 782, 410, 694, 724]);
+  });
+});
+
+describe("가시성: 걷는 영역 전 격자점 × 6개 폰 크기 (UI-SPEC E1 overflow)", () => {
+  it("격자점은 0.25 간격 [−5.8, 5.8]² 이다 (축마다 −5.8…5.7 의 47개에 끝점 5.8 을 더한 48개, 모두 2304점)", () => {
+    const pts = walkPoints();
+    expect(pts.length).toBe(48 * 48);
+    expect(pts[0]).toEqual({ x: -WALK_HALF, z: -WALK_HALF });
+    expect(pts[pts.length - 1]).toEqual({ x: WALK_HALF, z: WALK_HALF });
+  });
+
+  for (const size of STAGE_SIZES) {
+    it(`visible ${size.label}: 모든 격자점에서 발과 이름표(180×24)가 스테이지 사각형 안에 있다 (PAN_BOX 로 자른 카메라)`, () => {
+      const fails = visibilityFailures(size, PAN_BOX);
+      const worst = fails.sort((a, b) => b.overflow - a.overflow)[0];
+      expect(fails.length, worst ? `${fails.length}점 실패, 최악: ${describeFailure(size, worst)}` : "").toBe(0);
+    });
+  }
+
+  it("PAN_BOX 는 축마다 대칭이고 걷는 영역(±5.8)을 넘지 않는다", () => {
+    expect(PAN_BOX.minX).toBe(-PAN_BOX.maxX);
+    expect(PAN_BOX.minZ).toBe(-PAN_BOX.maxZ);
+    expect(PAN_BOX.maxX).toBe(PAN_BOX.maxZ);
+    expect(PAN_BOX.maxX).toBeLessThanOrEqual(WALK_HALF);
+    expect(PAN_BOX.maxX).toBeGreaterThan(0);
+  });
+
+  it("PAN_BOX 는 가시성을 통과하는 가장 좁은 0.1 단위 값이다 (0.1 더 좁히면 어느 한 크기가 넘친다)", () => {
+    const needed = Math.max(...STAGE_SIZES.map(minPanFor));
+    expect(PAN_BOX.maxX).toBeCloseTo(needed, 9);
+    const narrower = symBox(Math.round((PAN_BOX.maxX - 0.1) * 10) / 10);
+    expect(STAGE_SIZES.some((s) => visibilityFailures(s, narrower).length > 0)).toBe(true);
+  });
+
+  it("카메라가 한계에 걸리지 않는 안쪽 점(|x|,|z| ≤ PAN)에서는 캐릭터가 스테이지 사각형 가운데에 온다", () => {
+    for (const size of STAGE_SIZES) {
+      const r = stageRect(size);
+      const offsetY = stageOffsetY(size.h, r.top, r.bottom);
+      const p = { x: 1.5, z: -2 };
+      const s = groundToScreen({ x: p.x, y: LOOK_Y, z: p.z }, clampTarget(p), size, offsetY);
+      expect(s.sx).toBeCloseTo(size.w / 2, 9);
+      expect(s.sy).toBeCloseTo((r.top + r.bottom) / 2, 9);
+    }
+  });
+});
+
+describe("빈 배경 없음: 이동 한계 상자 9개 목표 × 스테이지 사각형 7×7 표본 (연장 판 PLATE_FAR)", () => {
+  for (const size of STAGE_SIZES) {
+    it(`blank ${size.label}: 모든 표본 광선이 연장 판(|x|,|z| ≤ PLATE_FAR) 위 바닥에 닿는다`, () => {
+      const { far, at } = farthestGround(size, PAN_BOX);
+      expect(far, `${at} (PLATE_FAR ${PLATE_FAR})`).toBeLessThanOrEqual(PLATE_FAR);
+    });
+  }
+
+  it("PLATE_FAR 는 빈 배경 검사가 통과하는 가장 작은 0.5 단위 값에 여유 2 를 더한 값이다", () => {
+    const needed = Math.max(...STAGE_SIZES.map((s) => farthestGround(s, PAN_BOX).far));
+    const minimal = Math.ceil(needed * 2) / 2;
+    expect(PLATE_FAR).toBe(minimal + 2);
+    expect(needed).toBeLessThanOrEqual(PLATE_FAR - 2);
+    expect(needed).toBeGreaterThan(PLATE_FAR - 2.5);
+  });
+
+  it("스테이지 사각형 밖(헤더 가림막 위)까지 보이는 윗부분도 판 안이다: 캔버스 맨 위 줄에서도 PLATE_FAR 안", () => {
+    for (const size of STAGE_SIZES) {
+      const r = stageRect(size);
+      const offsetY = stageOffsetY(size.h, r.top, r.bottom);
+      for (const target of boxTargets(PAN_BOX)) {
+        for (const sx of [0, size.w / 2, size.w]) {
+          const g = screenToGround(sx, 0, target, size, offsetY);
+          expect(Math.max(Math.abs(g.x), Math.abs(g.z)), `${size.label} (${target.x}, ${target.z}) 위 줄`).toBeLessThanOrEqual(PLATE_FAR);
+        }
+      }
+    }
+  });
+});
+
+// CAMERA_PRINT=1 일 때만 크기별 근거 표를 출력한다(SUMMARY 용).
+describe.runIf(process.env.CAMERA_PRINT === "1")("근거 표 출력", () => {
+  it("크기별 필요 pan·가장 먼 바닥 점", () => {
+    const rows = STAGE_SIZES.map((s) => `${s.label}\t최소 pan ${minPanFor(s)}\t가장 먼 바닥 ${farthestGround(s, symBox(minPanFor(s))).at}`);
+    console.log(rows.join("\n"));
   });
 });
