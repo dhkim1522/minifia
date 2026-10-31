@@ -1,7 +1,7 @@
 // 서버 전용 입력 검증 스키마(zod 값 import). Worker 만 이 파일을 import 한다 — src/ 가 import 하면 클라이언트 번들에 zod 가 들어간다.
 import { z } from "zod";
-import { EMOJI_IDS, MAX_TEST_BOTS, TEMPLATE_IDS } from "./protocol";
-import type { ClientMessage, CreateRoomBody, JoinRoomBody } from "./protocol";
+import { EMOJI_IDS, MAX_TEST_BOTS, MOVE_COORD_LIMIT, TEMPLATE_IDS } from "./protocol";
+import type { ClientMessage, CreateRoomBody, JoinRoomBody, MoveMessage } from "./protocol";
 
 const nickname = z.string().max(64);
 
@@ -41,3 +41,11 @@ export const ClientMessageSchema = z.discriminatedUnion("t", [
   // 봇 투표 규칙(P-13): 두 값 모두 필수인 절대값. 모르는 값·빠진 키·덧붙은 키는 거부한다(T-04-46). 방장·testMode·대기실 검사는 서버 규칙(setBotVote)이 한다.
   z.strictObject({ t: z.literal("testBotVote"), exec: z.enum(["random", "yes", "no"]), pick: z.enum(["random", "host", "other"]) }),
 ]) satisfies z.ZodType<ClientMessage>;
+
+// 로비 이동 입력(결정 0044-17): 목적지 두 정수뿐이다. 속도·경로·시각·신원(seat·v·t0 등)이 덧붙으면 거부한다(T-06-09).
+// ClientMessageSchema 에는 아직 넣지 않는다 — ClientMessage 유니온과 DO 처리는 06-08 이 함께 더한다.
+export const MoveMessageSchema = z.strictObject({
+  t: z.literal("move"),
+  x: z.number().min(-MOVE_COORD_LIMIT).max(MOVE_COORD_LIMIT),
+  z: z.number().min(-MOVE_COORD_LIMIT).max(MOVE_COORD_LIMIT),
+}) satisfies z.ZodType<MoveMessage>;

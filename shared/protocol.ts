@@ -290,11 +290,36 @@ export type WsErrorCode =
   | "WRONG_PHASE"
   | "CANNOT_KICK"
   | "RATE_LIMITED";
+
+// ---- 6페이즈 로비 이동 계약(결정 0044-17) ----
+// 좌표는 1/100 단위 정수(고정소수점, UNIT = 100), 시각은 서버 ms, 속도 v 는 단위/초 × 100 이다.
+// 공개 식별자는 seat 뿐이다 — world 프레임에는 playerId·토큰·역할 자리가 없다(누설 표면 0).
+/** 이동 목적지 좌표 한계: 방 [−7, 7] × UNIT. 입력 스키마와 저장값 복원이 같은 값을 쓴다. */
+export const MOVE_COORD_LIMIT = 700;
+/** 클라이언트 → 서버: 목적지 두 정수뿐이다. 속도·경로·시각·신원은 서버가 정한다. 서버 처리는 06-08 에서 ClientMessage 에 더한다. */
+export interface MoveMessage {
+  t: "move";
+  x: number;
+  z: number;
+}
+/** 한 사람의 이동 구간: p = 꼭짓점 [x0,z0,x1,z1,…], t0 = 서버 ms, v = 단위/초 × 100. */
+export interface WorldSeg {
+  s: number;
+  p: number[];
+  t0: number;
+  v: number;
+}
+/** 서버 → 클라이언트 world 프레임(상태가 아니라 이벤트). move = 한 사람의 새 구간, snap = 접속 때 모두의 지금 구간. */
+export type WorldFrame =
+  | { t: "world"; k: "move"; s: number; p: number[]; t0: number; v: number }
+  | { t: "world"; k: "snap"; at: number; ents: WorldSeg[] };
+
 export type ServerMessage =
   | { t: "state"; view: RoomView }
   | { t: "pong"; c: number; serverNow: number }
   | { t: "error"; code: WsErrorCode }
   | { t: "emoji"; seat: number; icon: EmojiId; at: number }
-  | ChatEvent;
+  | ChatEvent
+  | WorldFrame;
 export const CLOSE_CODES = { REPLACED: 4001, REMOVED: 4003 } as const;
 export type RemovedReason = "left" | "kicked" | "invalid_token" | "room_closed";

@@ -1,6 +1,6 @@
 // 클라이언트 메시지 스키마(ClientMessageSchema) 입력 검증 — 후보 선택 취소(target null, 결정 0040)가 다른 메시지로 번지지 않는지 본다.
 import { describe, expect, it } from "vitest";
-import { ClientMessageSchema } from "../../shared/schemas";
+import { ClientMessageSchema, MoveMessageSchema } from "../../shared/schemas";
 
 describe("ClientMessageSchema candidateVote (결정 0040: target 은 0..7 정수 또는 null)", () => {
   it.each([
@@ -29,5 +29,38 @@ describe("ClientMessageSchema candidateVote (결정 0040: target 은 0..7 정수
     expect(ClientMessageSchema.safeParse({ t: "pick", target: null }).success).toBe(false);
     expect(ClientMessageSchema.safeParse({ t: "kick", seat: null }).success).toBe(false);
     expect(ClientMessageSchema.safeParse({ t: "say", template: "innocent", target: null }).success).toBe(false);
+  });
+});
+
+// 로비 이동 입력(결정 0044-17, T-06-09) — 목적지 두 정수뿐이다.
+describe("MoveMessageSchema (strictObject, 정수 ±700)", () => {
+  it.each([
+    ["원점 근처", { t: "move", x: 0, z: -700 }],
+    ["양 끝", { t: "move", x: 700, z: 700 }],
+    ["음의 끝", { t: "move", x: -700, z: 0 }],
+  ])("받는다: %s", (_name, msg) => {
+    expect(MoveMessageSchema.safeParse(msg).success).toBe(true);
+  });
+
+  it.each([
+    ["소수 x", { t: "move", x: 1.5, z: 0 }],
+    ["소수 z", { t: "move", x: 0, z: 0.25 }],
+    ["x 701", { t: "move", x: 701, z: 0 }],
+    ["x -701", { t: "move", x: -701, z: 0 }],
+    ["z 701", { t: "move", x: 0, z: 701 }],
+    ["z -701", { t: "move", x: 0, z: -701 }],
+    ["덧붙은 seat", { t: "move", x: 0, z: 0, seat: 1 }],
+    ["덧붙은 속도 v", { t: "move", x: 0, z: 0, v: 9999 }],
+    ["덧붙은 시각 t0", { t: "move", x: 0, z: 0, t0: 1 }],
+    ["덧붙은 경로 p", { t: "move", x: 0, z: 0, p: [0, 0] }],
+    ["빠진 z", { t: "move", x: 0 }],
+    ["빠진 x", { t: "move", z: 0 }],
+    ["문자열 x", { t: "move", x: "1", z: 0 }],
+    ["NaN", { t: "move", x: Number.NaN, z: 0 }],
+    ["Infinity", { t: "move", x: Number.POSITIVE_INFINITY, z: 0 }],
+    ["null", { t: "move", x: null, z: 0 }],
+    ["다른 t", { t: "pick", x: 0, z: 0 }],
+  ])("거부한다: %s", (_name, msg) => {
+    expect(MoveMessageSchema.safeParse(msg).success).toBe(false);
   });
 });
