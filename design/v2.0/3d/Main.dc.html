@@ -1,0 +1,217 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>배경 A 응접실</title>
+<script src="./support.js"></script>
+<script src="./three.min.js"></script>
+<script src="./mf3d.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#0e1326}
+a{color:#a9aebb}a:hover{color:#e6e8ee}
+.btn:focus-visible{outline:2px solid #e6e8ee;outline-offset:2px}
+</style>
+</helmet>
+<div style="width: 1280px; height: 900px; box-sizing: border-box; padding: 36px 40px; background: #0e1326; color: #e6e8ee; font-family: 'Gowun Dodum', system-ui, -apple-system, 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif; word-break: keep-all; display: flex; flex-direction: column; gap: 20px">
+
+<header style="display: flex; align-items: flex-end; justify-content: space-between; gap: 24px">
+<div style="display: flex; flex-direction: column; gap: 6px">
+<p style="margin: 0; font-size: 14px; color: #a9aebb; letter-spacing: 0.04em">배경 A · three.js 실시간</p>
+<h1 style="margin: 0; font-size: 30px; line-height: 1.25; color: #f1f2f5">달빛 응접실</h1>
+</div>
+<p style="margin: 0; max-width: 560px; font-size: 15px; line-height: 1.6; color: #a9aebb; text-align: right">가운데 크림 대리석 원탁과 의자 8개가 게임 장치예요. 지목 투표 때 모두 의자에 앉고, 최후 변론 때 조명이 꺼지며 변론자가 원탁 위로 올라가 스포트라이트를 받아요.</p>
+</header>
+
+<div style="display: flex; gap: 24px; min-height: 0">
+<div style="width: 820px; display: flex; flex-direction: column; gap: 14px">
+<div style="position: relative; width: 820px; height: 560px; border-radius: 18px; overflow: hidden; border: 1px solid #2a3760; background: #060914">
+<canvas id="bgACanvas" aria-label="응접실 3D 배경. 끌어서 둘러봐요" style="position: absolute; left: 0; top: 0; width: 820px; height: 560px; display: block; touch-action: none; cursor: grab"></canvas>
+<div aria-hidden="true" style="position: absolute; inset: 0; pointer-events: none; opacity: {{ vignette }}; transition: opacity 600ms; background: radial-gradient(ellipse at 50% 55%, rgba(2,3,8,0) 14%, rgba(2,3,8,0.75) 48%, rgba(2,3,8,0.97) 78%)"></div>
+<div style="position: absolute; left: 14px; top: 14px; padding: 6px 12px; border-radius: 999px; background: rgba(14, 19, 38, 0.8); font-size: 14px; color: #e6e8ee; pointer-events: none">{{ sceneLabel }}</div>
+<div style="position: absolute; right: 12px; top: 10px; display: flex; gap: 8px">
+<button type="button" class="btn" aria-label="왼쪽으로 돌리기" onClick="{{ rotL }}" style="width: 44px; height: 44px; border-radius: 999px; border: 1px solid #2a3760; background: rgba(21, 28, 54, 0.88); color: #e6e8ee; display: inline-flex; align-items: center; justify-content: center; cursor: pointer">
+<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7"></path><path d="M3 4v5h5"></path></svg>
+</button>
+<button type="button" class="btn" aria-label="오른쪽으로 돌리기" onClick="{{ rotR }}" style="width: 44px; height: 44px; border-radius: 999px; border: 1px solid #2a3760; background: rgba(21, 28, 54, 0.88); color: #e6e8ee; display: inline-flex; align-items: center; justify-content: center; cursor: pointer">
+<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-3-6.7"></path><path d="M21 4v5h-5"></path></svg>
+</button>
+</div>
+</div>
+<div role="group" aria-label="게임 장면" style="display: flex; flex-wrap: wrap; gap: 8px">
+<sc-for list="{{ scenes }}" as="s" hint-placeholder-count="8">
+<button type="button" class="btn" onClick="{{ s.pick }}" aria-pressed="{{ s.pressed }}" style="min-height: 44px; padding: 0 16px; border-radius: 999px; border: 1px solid {{ s.border }}; background: {{ s.bg }}; color: {{ s.fg }}; font-family: inherit; font-size: 15px; cursor: pointer">{{ s.label }}</button>
+</sc-for>
+</div>
+<div style="display: flex; align-items: center; justify-content: space-between; gap: 16px">
+<p style="margin: 0; font-size: 15px; line-height: 1.5; color: #a9aebb">쓰임 · <span style="color: #e6e8ee">{{ sceneUse }}</span></p>
+<button type="button" class="btn" onClick="{{ toggleChars }}" aria-pressed="{{ charsPressed }}" style="min-height: 44px; padding: 0 16px; border-radius: 12px; border: 1px solid #2a3760; background: {{ charsBg }}; color: {{ charsFg }}; font-family: inherit; font-size: 15px; cursor: pointer; white-space: nowrap">캐릭터 8명 세우기</button>
+</div>
+</div>
+
+<div style="width: 356px; display: flex; flex-direction: column; gap: 10px">
+<p style="margin: 0; font-size: 14px; color: #a9aebb">장면 8개 한눈에 · 누르면 크게 봐요</p>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 16px">
+<sc-for list="{{ scenes }}" as="s" hint-placeholder-count="8">
+<button type="button" class="btn" onClick="{{ s.pick }}" aria-label="{{ s.label }} 크게 보기" style="display: flex; flex-direction: column; gap: 6px; padding: 0; border: none; background: none; color: #e6e8ee; font-family: inherit; text-align: left; cursor: pointer">
+<canvas id="bgAThumb{{ $index }}" width="340" height="232" style="width: 170px; height: 116px; border-radius: 10px; border: 2px solid {{ s.thumbBorder }}; box-sizing: border-box; background: #060914; display: block"></canvas>
+<span style="font-size: 14px; line-height: 1.3">{{ s.label }}</span>
+</button>
+</sc-for>
+</div>
+</div>
+</div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":900}}'>
+var MAP = 'parlor', PREFIX = 'bgA', W = 820, H = 560;
+
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { scene: 'night', chars: false };
+  }
+
+  componentDidMount() {
+    var self = this;
+    this.alive = true;
+    (function boot() {
+      if (!self.alive) return;
+      var canvas = document.getElementById(PREFIX + 'Canvas');
+      if (!window.THREE || !window.MF3D || !canvas || !document.getElementById(PREFIX + 'Thumb7')) { setTimeout(boot, 60); return; }
+      self.start(canvas);
+    })();
+  }
+
+  componentWillUnmount() {
+    this.alive = false;
+    cancelAnimationFrame(this.raf);
+    if (this.io) this.io.disconnect();
+    if (this.world) this.world.dispose();
+  }
+
+  start(canvas) {
+    var self = this;
+    canvas.addEventListener('webglcontextlost', function (e) { e.preventDefault(); });
+    this.world = MF3D.createWorld(canvas, { map: MAP });
+    this.world.setSize(W, H);
+    this.world.setScene(this.state.scene);
+    this.people = [];
+    this.snapshots();
+    this.applyChars();
+    // 끌어서 둘러보기
+    var drag = null, w = this.world;
+    canvas.addEventListener('pointerdown', function (e) { drag = { x: e.clientX, y: e.clientY }; canvas.setPointerCapture(e.pointerId); canvas.style.cursor = 'grabbing'; });
+    canvas.addEventListener('pointermove', function (e) {
+      if (!drag) return;
+      var r = canvas.getBoundingClientRect(), k = W / r.width;
+      var dx = (e.clientX - drag.x) * k, dy = (e.clientY - drag.y) * k; drag = { x: e.clientX, y: e.clientY };
+      var wpp = w.view / H, yaw = w.yaw;
+      var rx = Math.cos(yaw), rz = -Math.sin(yaw), fx = -Math.sin(yaw), fz = -Math.cos(yaw), lim = w.map.pan;
+      w.target.x = Math.max(-lim, Math.min(lim, w.target.x - rx * dx * wpp + fx * dy * wpp / w.SIN_E));
+      w.target.z = Math.max(-lim, Math.min(lim, w.target.z - rz * dx * wpp + fz * dy * wpp / w.SIN_E));
+    });
+    function end() { drag = null; canvas.style.cursor = 'grab'; }
+    canvas.addEventListener('pointerup', end); canvas.addEventListener('pointercancel', end);
+    // 화면 밖이면 그리지 않는다
+    this.visible = true;
+    if (window.IntersectionObserver) { this.io = new IntersectionObserver(function (es) { self.visible = es[0].isIntersecting; }); this.io.observe(canvas); }
+    var last = performance.now(), t = 0, acc = 0;
+    function frame(now) {
+      if (!self.alive) return;
+      var dt = Math.min((now - last) / 1000, 0.05); last = now; acc += dt;
+      if (self.visible && !document.hidden && acc >= 1 / 40) {
+        t += acc;
+        self.people.forEach(function (p) { p.update(acc); });
+        w.render(acc, t);
+        acc = 0;
+      }
+      self.raf = requestAnimationFrame(frame);
+    }
+    this.raf = requestAnimationFrame(frame);
+  }
+
+  // 장면 8개를 같은 렌더러로 한 번씩 그려 작은 그림으로 남긴다
+  snapshots() {
+    var w = this.world, src = w.renderer.domElement;
+    MF3D.SCENES.forEach(function (s, i) {
+      w.setScene(s.id); w.settle(); w.render(0, 0);
+      var c = document.getElementById(PREFIX + 'Thumb' + i);
+      if (!c) return;
+      var g = c.getContext('2d');
+      g.drawImage(src, 0, 0, c.width, c.height);
+      if (s.dark) {
+        var gr = g.createRadialGradient(c.width / 2, c.height * 0.55, c.width * 0.07, c.width / 2, c.height * 0.55, c.width * 0.55);
+        gr.addColorStop(0, 'rgba(2,3,8,0)'); gr.addColorStop(0.6, 'rgba(2,3,8,0.8)'); gr.addColorStop(1, 'rgba(2,3,8,0.97)');
+        g.fillStyle = gr; g.fillRect(0, 0, c.width, c.height);
+      }
+    });
+    w.setScene(this.state.scene); w.settle();
+  }
+
+  // 캐릭터 8명: 모이는 자리에 앉거나 서고, 최후 변론 때는 한 명이 원탁 위로 올라간다
+  applyChars() {
+    var w = this.world, seats = w.ctx.seats, scene = this.state.scene;
+    if (!this.state.chars) {
+      this.people.forEach(function (p) { w.scene.remove(p.root); p.dispose(); });
+      this.people = [];
+      return;
+    }
+    if (!this.people.length) {
+      this.people = MF3D.COSTUMES.map(function (c) { var ch = new MF3D.Character(c.id, { scale: 0.85 }); w.add(ch.root); return ch; });
+    }
+    var accused = 2;
+    this.people.forEach(function (ch, i) {
+      var s = seats[i];
+      ch.x = s.x; ch.z = s.z; ch.yaw = ch.yawTo = s.yaw; ch.y = s.stand ? s.top : 0; ch.sitTop = s.stand ? 0 : s.top;
+      ch.root.visible = scene !== 'citizen' || i === 3;
+      if (scene === 'trial' && i === accused) {
+        ch.sitTop = 0; ch.x = w.ctx.gather[0]; ch.z = w.ctx.gather[1]; ch.y = w.ctx.stageY; ch.yaw = ch.yawTo = w.yaw;
+        w.setSpot({ x: ch.x, y: ch.y, z: ch.z });
+      }
+    });
+  }
+
+  pick(id) {
+    var self = this;
+    this.setState({ scene: id }, function () {
+      if (!self.world) return;
+      self.world.setSpot(null);
+      self.world.setScene(id);
+      self.applyChars();
+    });
+  }
+
+  renderVals() {
+    var self = this, cur = this.state.scene;
+    var def = (window.MF3D ? MF3D.SCENES : []).filter(function (s) { return s.id === cur; })[0] || { label: '저녁', use: '로비 · 밤 기본' };
+    var list = [
+      { id: 'dawn', label: '해뜰녘' }, { id: 'morning', label: '아침' }, { id: 'day', label: '낮' }, { id: 'sunset', label: '해질녘' },
+      { id: 'trial', label: '최후 변론' }, { id: 'night', label: '저녁' }, { id: 'mafia', label: '밤 · 마피아' }, { id: 'citizen', label: '밤 · 시민' }
+    ];
+    return {
+      scenes: list.map(function (s) {
+        var on = s.id === cur;
+        return { label: s.label, pressed: on ? 'true' : 'false', bg: on ? '#e6e8ee' : '#1e2847', fg: on ? '#0e1326' : '#e6e8ee', border: on ? '#e6e8ee' : '#2a3760',
+          thumbBorder: on ? '#e6e8ee' : '#2a3760', pick: function () { self.pick(s.id); } };
+      }),
+      sceneLabel: def.label,
+      sceneUse: def.use,
+      vignette: cur === 'citizen' ? 1 : 0,
+      charsPressed: this.state.chars ? 'true' : 'false',
+      charsBg: this.state.chars ? '#e6e8ee' : '#1e2847',
+      charsFg: this.state.chars ? '#0e1326' : '#e6e8ee',
+      toggleChars: function () { self.setState({ chars: !self.state.chars }, function () { if (self.world) { self.world.setSpot(null); self.world.setScene(self.state.scene); self.applyChars(); } }); },
+      rotL: function () { if (self.world) self.world.rotate(-1); },
+      rotR: function () { if (self.world) self.world.rotate(1); }
+    };
+  }
+}
+</script>
+</body>
+</html>

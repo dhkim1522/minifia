@@ -11,7 +11,7 @@
 | 정적 파일 배포 | Cloudflare Workers 정적 에셋 | 서버와 같은 곳에서 배포 |
 | 테스트 | vitest 4.1.12 (unit / client / worker 세 프로젝트), `@cloudflare/vitest-plugin` 1.4.6, happy-dom 21.0.4, playwright-core 1.64.1(화면 E2E — 시스템 Chrome, dev 전용, 결정 0025) | 순수 규칙은 Node 에서, Durable Object 는 workerd 안에서 (결정 0009) |
 | 메시지 검증 | zod 4.6.7 | 서버가 클라이언트 입력을 값으로 검증 |
-| 캐릭터 애니메이션 | 미정 (Rive 또는 Lottie 후보) | 디자인 방향을 정한 뒤 결정 |
+| 캐릭터 | three.js 구·원통 조립 3D 인물, 관절 키프레임 동작 (v2.0, 결정 0047) | 맵과 같은 장면에서 그림. 외부 모델 파일·애니메이션 라이브러리 없음 |
 | 앱 출시 | Capacitor 로 같은 웹 코드를 감쌈 | 정식 출시 단계에서 (결정 0001) |
 
 ## 구조

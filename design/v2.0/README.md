@@ -5,7 +5,8 @@
 | 무엇 | 원본 아티팩트 | 사본 |
 |---|---|---|
 | 배경(맵) 2종 × 시간대 5개 | https://claude.ai/artifact/LztT25LDkxJcfnRjiaPTfE | `backgrounds/minifia-bg-concepts.html` (three.js r128, 브라우저로 열면 그대로 돈다) |
-| 캐릭터(의상 8·동작 8·4방향·걷기·리그) | https://claude.ai/artifact/QPVNH7DN4jQwpMGtHivssc | `characters/*.dc.html`, `characters/canvas.json` (Design 캔버스 원본 소스) |
+| 캐릭터(의상 8·동작 8·4방향·걷기·리그) — **결정 0047 로 대체됨, 참고용** | https://claude.ai/artifact/QPVNH7DN4jQwpMGtHivssc | `characters/*.dc.html`, `characters/canvas.json` (Design 캔버스 원본 소스) |
+| 3D 에셋(결정 0047): 배경 2종 × 게임 장면 8, 1번 시안 인물 + 의상 8·동작 8·표정 10, 게임 흐름 | https://claude.ai/artifact/MExvQNQTCwZdJ79XYSLPQk | `3d/mf3d.js`(맵·장면·캐릭터·이동 격자 공용 코드, three r128 전역 `THREE`), `3d/*.dc.html`(캔버스 보드), `3d/canvas.json`. three.min.js 는 cdnjs r128 판과 같아 넣지 않았다 |
 
 ## 배경
 - A 달빛 응접실: 앞 두 벽을 잘라 낸 넓은 실내. 가운데 크림 대리석 원탁과 의자 8개가 모이는 자리
@@ -13,7 +14,7 @@
 - 시간대: 해뜰녘·아침·낮·해질녘·저녁. 가장 밝은 낮도 흐린 보랏빛 회색, 밤은 조명과 안개로 분위기를 내고 캐릭터·모이는 자리는 항상 읽힌다
 - 맵은 화면보다 크고 빈 배경이 보이지 않는다. 카메라가 따라가거나 끌어서 둘러본다
 
-## 캐릭터
+## 캐릭터 (결정 0047 로 3D 조립 인물로 바뀜 — 아래는 0046 당시 2D 시안 요약)
 - 로우폴리 장난감 느낌의 면 색면, 얼굴은 세트 C 이목구비. 공통 몸체 하나에 머리·옷·소품만 교체
 - 의상 8종: 시민·경찰·의사·마피아·탐정·기자·어르신·후드 (꾸미기일 뿐 실제 역할과 무관, 결정 0044-8)
 - 동작 8종: 목 긋기·손사래·박수·울기·악수 내밀기·지목·엄지척·어깨 으쓱

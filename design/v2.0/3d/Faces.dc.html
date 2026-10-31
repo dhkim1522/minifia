@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>캐릭터 표정</title>
+<script src="./support.js"></script>
+<script src="./three.min.js"></script>
+<script src="./mf3d.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#0e1326}
+a{color:#a9aebb}a:hover{color:#e6e8ee}
+.btn:focus-visible{outline:2px solid #e6e8ee;outline-offset:2px}
+</style>
+</helmet>
+<div style="width: 1280px; height: 620px; box-sizing: border-box; padding: 36px 40px; background: #0e1326; color: #e6e8ee; font-family: 'Gowun Dodum', system-ui, -apple-system, 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif; word-break: keep-all; display: flex; flex-direction: column; gap: 16px">
+
+<header style="display: flex; align-items: flex-end; justify-content: space-between; gap: 24px">
+<div style="display: flex; flex-direction: column; gap: 6px">
+<p style="margin: 0; font-size: 14px; color: #a9aebb; letter-spacing: 0.04em">캐릭터 · 1번 시안 얼굴</p>
+<h1 style="margin: 0; font-size: 30px; line-height: 1.25; color: #f1f2f5">표정 10종</h1>
+</div>
+<p style="margin: 0; max-width: 640px; font-size: 15px; line-height: 1.6; color: #a9aebb; text-align: right">1번 시안의 표정 7종(기본·웃음·화남·울음·놀람·의심·기절)에 당황·윙크·시큰둥을 더했어요. 동작 8종이 이 중 7개를 쓰고, 놀람·기절은 밤 연출(암살·처형)과 유령에 쓸 자리예요.</p>
+</header>
+
+<div style="position: relative; width: 1200px; height: 330px; border-radius: 18px; overflow: hidden; border: 1px solid #2a3760; background: #151c36">
+<canvas id="faceCanvas" aria-label="표정 10종 3D 캐릭터" style="position: absolute; left: 0; top: 0; width: 1200px; height: 330px; display: block"></canvas>
+</div>
+
+<div style="display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); width: 1200px">
+<sc-for list="{{ faces }}" as="f" hint-placeholder-count="10">
+<span style="font-size: 16px; line-height: 1.4; font-weight: 700; color: #f1f2f5; text-align: center">{{ f.label }}</span>
+</sc-for>
+</div>
+
+<div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap">
+<span style="font-size: 14px; color: #a9aebb; margin-right: 4px">의상</span>
+<sc-for list="{{ outfits }}" as="o" hint-placeholder-count="8">
+<button type="button" class="btn" onClick="{{ o.pick }}" aria-pressed="{{ o.pressed }}" style="min-height: 44px; padding: 0 14px; border-radius: 999px; border: 1px solid {{ o.border }}; background: {{ o.bg }}; color: {{ o.fg }}; font-family: inherit; font-size: 15px; cursor: pointer">{{ o.label }}</button>
+</sc-for>
+</div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":620}}'>
+var W = 1200, H = 330, SPAN = 10.4;
+
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { outfit: 'citizen' };
+  }
+
+  componentDidMount() {
+    var self = this;
+    this.alive = true;
+    (function boot() {
+      if (!self.alive) return;
+      var canvas = document.getElementById('faceCanvas');
+      if (!window.THREE || !window.MF3D || !canvas) { setTimeout(boot, 60); return; }
+      self.start(canvas);
+    })();
+  }
+
+  componentWillUnmount() {
+    this.alive = false;
+    cancelAnimationFrame(this.raf);
+    if (this.io) this.io.disconnect();
+    if (this.renderer) this.renderer.dispose();
+  }
+
+  start(canvas) {
+    var self = this;
+    var r = this.renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
+    r.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2)); r.setSize(W, H, false);
+    r.outputEncoding = THREE.sRGBEncoding; r.toneMapping = THREE.ACESFilmicToneMapping; r.toneMappingExposure = 0.95;
+    var scene = this.scene = new THREE.Scene(); scene.background = new THREE.Color('#151c36');
+    scene.add(new THREE.HemisphereLight('#a9b6e0', '#1e2140', 0.8));
+    var key = new THREE.DirectionalLight('#f2e6da', 0.9); key.position.set(3, 8, 9); scene.add(key);
+    var cam = new THREE.OrthographicCamera(-SPAN / 2, SPAN / 2, SPAN / 2 * H / W, -SPAN / 2 * H / W, 0.1, 100);
+    cam.position.set(0, 1.05 + Math.sin(0.12) * 20, Math.cos(0.12) * 20); cam.lookAt(0, 1.05, 0);
+    this.people = [];
+    this.dress();
+    this.visible = true;
+    if (window.IntersectionObserver) { this.io = new IntersectionObserver(function (es) { self.visible = es[0].isIntersecting; }); this.io.observe(canvas); }
+    var last = performance.now(), acc = 0;
+    function frame(now) {
+      if (!self.alive) return;
+      var dt = Math.min((now - last) / 1000, 0.05); last = now; acc += dt;
+      if (self.visible && !document.hidden && acc >= 1 / 30) {
+        self.people.forEach(function (p) { p.update(acc); });
+        r.render(scene, cam);
+        acc = 0;
+      }
+      self.raf = requestAnimationFrame(frame);
+    }
+    this.raf = requestAnimationFrame(frame);
+  }
+
+  dress() {
+    var scene = this.scene, step = SPAN / 10, outfit = this.state.outfit;
+    this.people.forEach(function (p) { scene.remove(p.root); p.dispose(); });
+    this.people = MF3D.FACES.map(function (f, i) {
+      var ch = new MF3D.Character(outfit, { castShadow: false });
+      ch.x = -SPAN / 2 + step * (i + 0.5); ch.yaw = ch.yawTo = 0.12;
+      ch.faceOverride = f.id;
+      ch.optimize();
+      scene.add(ch.root); return ch;
+    });
+  }
+
+  renderVals() {
+    var self = this, cur = this.state.outfit;
+    return {
+      faces: (window.MF3D ? MF3D.FACES : []).map(function (f) { return { label: f.label }; }),
+      outfits: (window.MF3D ? MF3D.COSTUMES : []).map(function (o) {
+        var on = o.id === cur;
+        return { label: o.label, pressed: on ? 'true' : 'false', bg: on ? '#e6e8ee' : '#1e2847', fg: on ? '#0e1326' : '#e6e8ee', border: on ? '#e6e8ee' : '#2a3760',
+          pick: function () { self.setState({ outfit: o.id }, function () { if (self.scene) self.dress(); }); } };
+      })
+    };
+  }
+}
+</script>
+</body>
+</html>

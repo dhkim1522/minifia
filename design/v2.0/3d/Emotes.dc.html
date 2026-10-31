@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>캐릭터 동작</title>
+<script src="./support.js"></script>
+<script src="./three.min.js"></script>
+<script src="./mf3d.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#0e1326}
+a{color:#a9aebb}a:hover{color:#e6e8ee}
+.btn:focus-visible{outline:2px solid #e6e8ee;outline-offset:2px}
+</style>
+</helmet>
+<div style="width: 1280px; height: 760px; box-sizing: border-box; padding: 36px 40px; background: #0e1326; color: #e6e8ee; font-family: 'Gowun Dodum', system-ui, -apple-system, 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif; word-break: keep-all; display: flex; flex-direction: column; gap: 16px">
+
+<header style="display: flex; align-items: flex-end; justify-content: space-between; gap: 24px">
+<div style="display: flex; flex-direction: column; gap: 6px">
+<p style="margin: 0; font-size: 14px; color: #a9aebb; letter-spacing: 0.04em">캐릭터 · 1번 시안 관절</p>
+<h1 style="margin: 0; font-size: 30px; line-height: 1.25; color: #f1f2f5">동작 8종</h1>
+</div>
+<p style="margin: 0; max-width: 640px; font-size: 15px; line-height: 1.6; color: #a9aebb; text-align: right">1번 시안의 관절(어깨·목·다리)과 키프레임을 그대로 쓰고 마피아 게임 동작 8가지로 맞췄어요. 동작마다 표정과 효과(반짝임·땀·눈물·속도선)가 함께 바뀌어요. 지목은 지목 단계의 가리키기에도 써요.</p>
+</header>
+
+<div style="position: relative; width: 1200px; height: 470px; border-radius: 18px; overflow: hidden; border: 1px solid #2a3760; background: #151c36">
+<canvas id="emoCanvas" aria-label="동작 8종을 반복하는 3D 캐릭터" style="position: absolute; left: 0; top: 0; width: 1200px; height: 470px; display: block"></canvas>
+</div>
+
+<div style="display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); width: 1200px">
+<sc-for list="{{ emotes }}" as="e" hint-placeholder-count="8">
+<button type="button" class="btn" onClick="{{ e.replay }}" aria-label="{{ e.label }} 다시 보기" style="display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 4px 0; border: none; background: none; color: #e6e8ee; font-family: inherit; cursor: pointer">
+<span style="font-size: 17px; line-height: 1.4; font-weight: 700; color: #f1f2f5">{{ e.label }}</span>
+<span style="font-size: 13px; line-height: 1.4; color: #a9aebb">표정 {{ e.face }}</span>
+</button>
+</sc-for>
+</div>
+
+<div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap">
+<span style="font-size: 14px; color: #a9aebb; margin-right: 4px">의상</span>
+<sc-for list="{{ outfits }}" as="o" hint-placeholder-count="9">
+<button type="button" class="btn" onClick="{{ o.pick }}" aria-pressed="{{ o.pressed }}" style="min-height: 44px; padding: 0 14px; border-radius: 999px; border: 1px solid {{ o.border }}; background: {{ o.bg }}; color: {{ o.fg }}; font-family: inherit; font-size: 15px; cursor: pointer">{{ o.label }}</button>
+</sc-for>
+</div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":760}}'>
+var W = 1200, H = 470, SPAN = 9.6, GAP = 1.1;
+// 동작마다 어울리는 의상을 골고루 입힌다
+var SOURCE = ['mafia', 'citizen', 'reporter', 'doctor', 'police', 'detective', 'hood', 'elder'];
+var FACE_LABEL = { smug: '의심', worried: '당황', happy: '웃음', cry: '울음', angry: '화남', wink: '윙크', meh: '시큰둥' };
+
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { outfit: 'source' };
+  }
+
+  componentDidMount() {
+    var self = this;
+    this.alive = true;
+    (function boot() {
+      if (!self.alive) return;
+      var canvas = document.getElementById('emoCanvas');
+      if (!window.THREE || !window.MF3D || !canvas) { setTimeout(boot, 60); return; }
+      self.start(canvas);
+    })();
+  }
+
+  componentWillUnmount() {
+    this.alive = false;
+    cancelAnimationFrame(this.raf);
+    if (this.io) this.io.disconnect();
+    if (this.renderer) this.renderer.dispose();
+  }
+
+  start(canvas) {
+    var self = this;
+    var r = this.renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
+    r.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2)); r.setSize(W, H, false);
+    r.outputEncoding = THREE.sRGBEncoding; r.toneMapping = THREE.ACESFilmicToneMapping; r.toneMappingExposure = 0.95;
+    r.shadowMap.enabled = true; r.shadowMap.type = THREE.PCFSoftShadowMap;
+    var scene = this.scene = new THREE.Scene(); scene.background = new THREE.Color('#151c36');
+    scene.add(new THREE.HemisphereLight('#a9b6e0', '#1e2140', 0.75));
+    var key = new THREE.DirectionalLight('#f2e6da', 0.95); key.position.set(4, 9, 7); key.castShadow = true; key.shadow.mapSize.set(2048, 2048);
+    var sc = key.shadow.camera; sc.left = -7; sc.right = 7; sc.top = 5; sc.bottom = -5; sc.near = 1; sc.far = 30; key.shadow.bias = -0.0015;
+    scene.add(key);
+    var rim = new THREE.DirectionalLight('#9fb3e0', 0.45); rim.position.set(-6, 5, -6); scene.add(rim);
+    var floor = new THREE.Mesh(new THREE.PlaneGeometry(40, 20), new THREE.MeshStandardMaterial({ color: '#1e2847', roughness: 0.95 }));
+    floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; scene.add(floor);
+    var cam = new THREE.OrthographicCamera(-SPAN / 2, SPAN / 2, SPAN / 2 * H / W, -SPAN / 2 * H / W, 0.1, 100);
+    cam.position.set(0, 0.95 + Math.sin(0.28) * 20, Math.cos(0.28) * 20); cam.lookAt(0, 0.95, 0);
+    this.people = [];
+    this.dress();
+    this.visible = true;
+    if (window.IntersectionObserver) { this.io = new IntersectionObserver(function (es) { self.visible = es[0].isIntersecting; }); this.io.observe(canvas); }
+    var last = performance.now(), acc = 0;
+    function frame(now) {
+      if (!self.alive) return;
+      var dt = Math.min((now - last) / 1000, 0.05); last = now; acc += dt;
+      if (self.visible && !document.hidden && acc >= 1 / 40) {
+        self.people.forEach(function (p, i) {
+          // 동작이 끝나면 잠깐 쉬었다가 다시
+          if (!p.emote) { p.rest = (p.rest || 0) + acc; if (p.rest > 1.1) { p.rest = 0; p.play(MF3D.EMOTES[i].id); } }
+          p.update(acc);
+        });
+        r.render(scene, cam);
+        acc = 0;
+      }
+      self.raf = requestAnimationFrame(frame);
+    }
+    this.raf = requestAnimationFrame(frame);
+  }
+
+  dress() {
+    var self = this, scene = this.scene, step = SPAN / 8, outfit = this.state.outfit;
+    this.people.forEach(function (p) { scene.remove(p.root); p.dispose(); });
+    this.people = MF3D.EMOTES.map(function (e, i) {
+      var ch = new MF3D.Character(outfit === 'source' ? SOURCE[i] : outfit);
+      ch.x = -SPAN / 2 + step * (i + 0.5); ch.yaw = ch.yawTo = 0.3;
+      ch.optimize();
+      ch.play(e.id);
+      scene.add(ch.root); return ch;
+    });
+  }
+
+  renderVals() {
+    var self = this, cur = this.state.outfit;
+    var emotes = window.MF3D ? MF3D.EMOTES : [];
+    var outs = [{ id: 'source', label: '골고루' }].concat((window.MF3D ? MF3D.COSTUMES : []).map(function (c) { return { id: c.id, label: c.label }; }));
+    return {
+      emotes: emotes.map(function (e, i) {
+        return { label: e.label, face: FACE_LABEL[e.face] || '', replay: function () { var p = self.people && self.people[i]; if (p) { p.rest = 0; p.play(e.id); } } };
+      }),
+      outfits: outs.map(function (o) {
+        var on = o.id === cur;
+        return { label: o.label, pressed: on ? 'true' : 'false', bg: on ? '#e6e8ee' : '#1e2847', fg: on ? '#0e1326' : '#e6e8ee', border: on ? '#e6e8ee' : '#2a3760',
+          pick: function () { self.setState({ outfit: o.id }, function () { if (self.scene) self.dress(); }); } };
+      })
+    };
+  }
+}
+</script>
+</body>
+</html>

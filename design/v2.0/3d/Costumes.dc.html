@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>캐릭터 의상</title>
+<script src="./support.js"></script>
+<script src="./three.min.js"></script>
+<script src="./mf3d.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#0e1326}
+a{color:#a9aebb}a:hover{color:#e6e8ee}
+.btn:focus-visible{outline:2px solid #e6e8ee;outline-offset:2px}
+</style>
+</helmet>
+<div style="width: 1280px; height: 760px; box-sizing: border-box; padding: 36px 40px; background: #0e1326; color: #e6e8ee; font-family: 'Gowun Dodum', system-ui, -apple-system, 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif; word-break: keep-all; display: flex; flex-direction: column; gap: 16px">
+
+<header style="display: flex; align-items: flex-end; justify-content: space-between; gap: 24px">
+<div style="display: flex; flex-direction: column; gap: 6px">
+<p style="margin: 0; font-size: 14px; color: #a9aebb; letter-spacing: 0.04em">캐릭터 · 1번 시안 인물</p>
+<h1 style="margin: 0; font-size: 30px; line-height: 1.25; color: #f1f2f5">의상 8종</h1>
+</div>
+<p style="margin: 0; max-width: 640px; font-size: 15px; line-height: 1.6; color: #a9aebb; text-align: right">1번 시안의 구·원통 조립 인물을 그대로 쓰고 옷·모자·소품만 마피아 게임에 맞게 바꿨어요. 인물 5명 누구에게나 입힐 수 있어요. 의상은 꾸미기일 뿐 실제 역할과 관계없어요.</p>
+</header>
+
+<div style="position: relative; width: 1200px; height: 470px; border-radius: 18px; overflow: hidden; border: 1px solid #2a3760; background: #151c36">
+<canvas id="cosCanvas" aria-label="의상 8종 3D 캐릭터" style="position: absolute; left: 0; top: 0; width: 1200px; height: 470px; display: block"></canvas>
+</div>
+
+<div style="display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); width: 1200px">
+<sc-for list="{{ costumes }}" as="c" hint-placeholder-count="8">
+<div style="display: flex; flex-direction: column; align-items: center; gap: 2px">
+<span style="font-size: 17px; line-height: 1.4; font-weight: 700; color: #f1f2f5">{{ c.label }}</span>
+<span style="font-size: 13px; line-height: 1.4; color: #a9aebb; text-align: center">{{ c.note }}</span>
+</div>
+</sc-for>
+</div>
+
+<div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap">
+<span style="font-size: 14px; color: #a9aebb; margin-right: 4px">보기</span>
+<sc-for list="{{ views }}" as="v" hint-placeholder-count="4">
+<button type="button" class="btn" onClick="{{ v.pick }}" aria-pressed="{{ v.pressed }}" style="min-height: 44px; padding: 0 16px; border-radius: 999px; border: 1px solid {{ v.border }}; background: {{ v.bg }}; color: {{ v.fg }}; font-family: inherit; font-size: 15px; cursor: pointer">{{ v.label }}</button>
+</sc-for>
+<span style="width: 16px"></span>
+<span style="font-size: 14px; color: #a9aebb; margin-right: 4px">인물</span>
+<sc-for list="{{ figs }}" as="f" hint-placeholder-count="6">
+<button type="button" class="btn" onClick="{{ f.pick }}" aria-pressed="{{ f.pressed }}" style="min-height: 44px; padding: 0 12px; border-radius: 999px; border: 1px solid {{ f.border }}; background: {{ f.bg }}; color: {{ f.fg }}; font-family: inherit; font-size: 14px; cursor: pointer">{{ f.label }}</button>
+</sc-for>
+<span style="width: 16px"></span>
+<button type="button" class="btn" onClick="{{ toggleWalk }}" aria-pressed="{{ walkPressed }}" style="min-height: 44px; padding: 0 16px; border-radius: 12px; border: 1px solid #2a3760; background: {{ walkBg }}; color: {{ walkFg }}; font-family: inherit; font-size: 15px; cursor: pointer">제자리 걷기</button>
+<span style="margin-left: auto; font-size: 14px; color: #a9aebb">드로우콜 {{ calls }} · 관절별로 합친 값</span>
+</div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":760}}'>
+var W = 1200, H = 470, SPAN = 9.6;
+var NOTES = ['기본 코트 · 인물 넥타이', '검은 페도라(진홍 띠) · 선글라스 · 진홍 넥타이', '경찰모 · 금빛 별 배지', '흰 가운 · 청록 십자 · 청진기', '사냥 모자 · 돋보기', '흰 머리 · 수염 · 지팡이', '앞이 트인 두건 · 장갑', '뉴스보이 캡 · 기자증 · 카메라'];
+var VIEWS = [{ id: 'front', label: '앞', yaw: 0.35 }, { id: 'side', label: '옆', yaw: Math.PI / 2 }, { id: 'back', label: '뒤', yaw: Math.PI + 0.35 }, { id: 'spin', label: '돌려 보기', yaw: null }];
+
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { view: 'front', walk: false, calls: '—', fig: -1 };
+  }
+
+  componentDidMount() {
+    var self = this;
+    this.alive = true;
+    (function boot() {
+      if (!self.alive) return;
+      var canvas = document.getElementById('cosCanvas');
+      if (!window.THREE || !window.MF3D || !canvas) { setTimeout(boot, 60); return; }
+      self.start(canvas);
+    })();
+  }
+
+  componentWillUnmount() {
+    this.alive = false;
+    cancelAnimationFrame(this.raf);
+    if (this.io) this.io.disconnect();
+    if (this.renderer) this.renderer.dispose();
+  }
+
+  start(canvas) {
+    var self = this;
+    var r = this.renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
+    r.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2)); r.setSize(W, H, false);
+    r.outputEncoding = THREE.sRGBEncoding; r.toneMapping = THREE.ACESFilmicToneMapping; r.toneMappingExposure = 0.95;
+    r.shadowMap.enabled = true; r.shadowMap.type = THREE.PCFSoftShadowMap;
+    var scene = new THREE.Scene(); scene.background = new THREE.Color('#151c36');
+    scene.add(new THREE.HemisphereLight('#a9b6e0', '#1e2140', 0.75));
+    var key = new THREE.DirectionalLight('#f2e6da', 0.95); key.position.set(4, 9, 7); key.castShadow = true; key.shadow.mapSize.set(2048, 2048);
+    var sc = key.shadow.camera; sc.left = -7; sc.right = 7; sc.top = 5; sc.bottom = -5; sc.near = 1; sc.far = 30; key.shadow.bias = -0.0015;
+    scene.add(key);
+    var rim = new THREE.DirectionalLight('#9fb3e0', 0.45); rim.position.set(-6, 5, -6); scene.add(rim);
+    var floor = new THREE.Mesh(new THREE.PlaneGeometry(40, 20), new THREE.MeshStandardMaterial({ color: '#1e2847', roughness: 0.95 }));
+    floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; scene.add(floor);
+    var cam = new THREE.OrthographicCamera(-SPAN / 2, SPAN / 2, SPAN / 2 * H / W, -SPAN / 2 * H / W, 0.1, 100);
+    cam.position.set(0, 0.95 + Math.sin(0.28) * 20, Math.cos(0.28) * 20); cam.lookAt(0, 0.95, 0);
+    this.scene = scene;
+    this.people = [];
+    this.dress();
+    r.render(scene, cam);
+    this.setState({ calls: String(r.info.render.calls) });
+    this.visible = true;
+    if (window.IntersectionObserver) { this.io = new IntersectionObserver(function (es) { self.visible = es[0].isIntersecting; }); this.io.observe(canvas); }
+    var last = performance.now(), acc = 0;
+    function frame(now) {
+      if (!self.alive) return;
+      var dt = Math.min((now - last) / 1000, 0.05); last = now; acc += dt;
+      if (self.visible && !document.hidden && acc >= 1 / 40) {
+        var spin = self.state.view === 'spin';
+        self.people.forEach(function (p) {
+          if (spin) { p.yawTo += acc * 0.9; p.yaw = p.yawTo; }
+          p.moving = self.state.walk;
+          p.update(acc);
+        });
+        r.render(scene, cam);
+        acc = 0;
+      }
+      self.raf = requestAnimationFrame(frame);
+    }
+    this.raf = requestAnimationFrame(frame);
+  }
+
+  dress() {
+    var scene = this.scene, step = SPAN / 8, fig = this.state.fig;
+    this.people.forEach(function (p) { scene.remove(p.root); p.dispose(); });
+    this.people = MF3D.COSTUMES.map(function (c, i) {
+      var ch = new MF3D.Character(c.id, fig >= 0 ? { fig: fig } : {});
+      ch.x = -SPAN / 2 + step * (i + 0.5); ch.z = 0;
+      ch.optimize();
+      scene.add(ch.root); return ch;
+    });
+    this.setView(this.state.view);
+  }
+
+  setView(id) {
+    var v = VIEWS.filter(function (x) { return x.id === id; })[0];
+    if (!this.people || v.yaw === null) return;
+    this.people.forEach(function (p) { p.yawTo = v.yaw; });
+  }
+
+  renderVals() {
+    var self = this, cur = this.state.view;
+    var list = window.MF3D ? MF3D.COSTUMES : [];
+    return {
+      costumes: list.map(function (c, i) { return { label: c.label, note: NOTES[i] }; }),
+      views: VIEWS.map(function (v) {
+        var on = v.id === cur;
+        return { label: v.label, pressed: on ? 'true' : 'false', bg: on ? '#e6e8ee' : '#1e2847', fg: on ? '#0e1326' : '#e6e8ee', border: on ? '#e6e8ee' : '#2a3760',
+          pick: function () { self.setState({ view: v.id }); self.setView(v.id); } };
+      }),
+      figs: [{ i: -1, label: '의상별 기본' }].concat((window.MF3D ? MF3D.FIGS : []).map(function (f, i) { return { i: i, label: f.label }; })).map(function (f) {
+        var on = f.i === self.state.fig;
+        return { label: f.label, pressed: on ? 'true' : 'false', bg: on ? '#e6e8ee' : '#1e2847', fg: on ? '#0e1326' : '#e6e8ee', border: on ? '#e6e8ee' : '#2a3760',
+          pick: function () { self.setState({ fig: f.i }, function () { if (self.scene) self.dress(); }); } };
+      }),
+      walkPressed: this.state.walk ? 'true' : 'false',
+      walkBg: this.state.walk ? '#e6e8ee' : '#1e2847',
+      walkFg: this.state.walk ? '#0e1326' : '#e6e8ee',
+      toggleWalk: function () { self.setState({ walk: !self.state.walk }); },
+      calls: this.state.calls
+    };
+  }
+}
+</script>
+</body>
+</html>

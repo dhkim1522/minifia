@@ -1,0 +1,431 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>게임 흐름 시안</title>
+<script src="./support.js"></script>
+<script src="./three.min.js"></script>
+<script src="./mf3d.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#060914}
+a{color:#a9aebb}a:hover{color:#e6e8ee}
+.btn:focus-visible{outline:2px solid #e6e8ee;outline-offset:2px}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; position: relative; overflow: hidden; background: #060914; color: #e6e8ee; font-family: 'Gowun Dodum', system-ui, -apple-system, 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif; word-break: keep-all; user-select: none; -webkit-user-select: none">
+
+<canvas id="flCanvas" aria-label="응접실 맵. 낮 토론 때 누르면 그곳으로 걸어가고, 지목 때 사람을 누르면 가리켜요" onPointerDown="{{ onDown }}" onPointerUp="{{ onUp }}" style="position: absolute; left: 0; top: 0; width: 390px; height: 844px; display: block; touch-action: none; cursor: pointer"></canvas>
+
+<div aria-hidden="true" style="position: absolute; inset: 0; pointer-events: none; opacity: {{ vignette }}; transition: opacity 700ms; background: radial-gradient(ellipse at 50% 46%, rgba(2,3,8,0) 10%, rgba(2,3,8,0.8) 34%, rgba(2,3,8,0.98) 62%)"></div>
+
+<div aria-hidden="true" style="position: absolute; left: 0; top: 0; width: 390px; height: 844px; pointer-events: none">
+<sc-for list="{{ people }}" as="p" hint-placeholder-count="8">
+<div id="flPlate{{ p.i }}" style="position: absolute; left: 0; top: 0; width: 0; height: 0; will-change: transform">
+<div style="position: absolute; left: 0; top: 4px; transform: translateX(-50%); display: flex; align-items: center; gap: 6px; padding: 2px 10px; border-radius: 999px; background: rgba(14, 19, 38, 0.82); box-shadow: {{ p.ring }}; white-space: nowrap">
+<span style="width: 8px; height: 8px; border-radius: 999px; background: {{ p.color }}"></span>
+<span style="font-size: 14px; line-height: 1.4; font-weight: 700; color: #f1f2f5">{{ p.name }}</span>
+<sc-if value="{{ p.hasBadge }}" hint-placeholder-val="{{ false }}">
+<span style="font-size: 13px; line-height: 1.3; font-weight: 700; padding: 0 6px; border-radius: 999px; background: {{ p.badgeBg }}; color: {{ p.badgeFg }}">{{ p.badge }}</span>
+</sc-if>
+</div>
+</div>
+</sc-for>
+</div>
+
+<div style="position: absolute; left: 0; top: 0; width: 390px; height: 120px; pointer-events: none; background: linear-gradient(to bottom, rgba(6, 9, 20, 0.78) 0px, rgba(6, 9, 20, 0.78) 80px, rgba(6, 9, 20, 0) 120px)"></div>
+<header style="position: absolute; left: 0; top: 0; width: 390px; box-sizing: border-box; padding: 52px 16px 0; display: flex; align-items: center; justify-content: space-between">
+<span style="width: 72px; font-size: 13px; color: #a9aebb">K7Q2</span>
+<div style="display: flex; flex-direction: column; align-items: center; gap: 2px">
+<span style="font-size: 18px; line-height: 1.3; font-weight: 700; color: #f1f2f5">{{ phaseTitle }}</span>
+<span style="font-size: 14px; line-height: 1.3; color: #a9aebb; font-variant-numeric: tabular-nums">{{ phaseTime }}</span>
+</div>
+<span style="width: 72px; text-align: right; font-size: 13px; color: #a9aebb; font-variant-numeric: tabular-nums">{{ fpsText }}</span>
+</header>
+
+<section style="position: absolute; left: 0; bottom: 0; width: 390px; box-sizing: border-box; padding: 16px 16px 24px; background: rgba(21, 28, 54, 0.97); border-radius: 20px 20px 0 0; display: flex; flex-direction: column; gap: 12px">
+<p style="margin: 0; min-height: 48px; font-size: 16px; line-height: 1.5; color: #e6e8ee">{{ phaseText }}</p>
+<div role="group" aria-label="게임 단계" style="display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px">
+<sc-for list="{{ phases }}" as="ph" hint-placeholder-count="5">
+<button type="button" class="btn" onClick="{{ ph.pick }}" aria-pressed="{{ ph.pressed }}" style="min-height: 44px; padding: 0; border-radius: 12px; border: 1px solid {{ ph.border }}; background: {{ ph.bg }}; color: {{ ph.fg }}; font-family: inherit; font-size: 15px; cursor: pointer">{{ ph.label }}</button>
+</sc-for>
+</div>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px">
+<sc-for list="{{ actions }}" as="a" hint-placeholder-count="2">
+<button type="button" class="btn" onClick="{{ a.pick }}" aria-pressed="{{ a.pressed }}" style="min-height: 48px; border-radius: 14px; border: 1px solid {{ a.border }}; background: {{ a.bg }}; color: {{ a.fg }}; font-family: inherit; font-size: 16px; font-weight: 700; cursor: pointer">{{ a.label }}</button>
+</sc-for>
+</div>
+</section>
+
+<sc-if value="{{ sheetOpen }}" hint-placeholder-val="{{ false }}">
+<div role="dialog" aria-label="동작 고르기" style="position: absolute; left: 12px; right: 12px; bottom: 214px; padding: 12px; border-radius: 18px; background: rgba(21, 28, 54, 0.97); border: 1px solid #2a3760; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px">
+<sc-for list="{{ emotes }}" as="e" hint-placeholder-count="8">
+<button type="button" class="btn" onClick="{{ e.pick }}" style="min-height: 48px; border-radius: 12px; border: 1px solid #2a3760; background: #1e2847; color: #e6e8ee; font-family: inherit; font-size: 14px; cursor: pointer">{{ e.label }}</button>
+</sc-for>
+</div>
+</sc-if>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+var W = 390, H = 844, VIEW = 12.66, SPEED = 2.2, CAM_TAU = 0.16, SCALE = 0.85;
+var STAGE_TOP = 100, STAGE_BOTTOM = H - 214, ANCHOR = STAGE_TOP + (STAGE_BOTTOM - STAGE_TOP) * 0.58;
+var PEOPLE = [
+  { name: '하늘', color: '#a9aebb', costume: 'citizen' },
+  { name: '태오', color: '#6f8fa8', costume: 'mafia' },
+  { name: '민준', color: '#7a8fb8', costume: 'police' },
+  { name: '지호', color: '#8e7ab8', costume: 'doctor' },
+  { name: '서연', color: '#6fa59a', costume: 'detective' },
+  { name: '유나', color: '#b89a6f', costume: 'elder' },
+  { name: '하준', color: '#9aa86f', costume: 'hood' },
+  { name: '도윤', color: '#b87a5c', costume: 'reporter' }
+];
+var ME = 0, MAFIA = 1;
+var PHASES = [
+  { id: 'talk', label: '토론', title: '낮 토론', time: '1:30', scene: 'day', text: '맵을 눌러 걸어 다니며 이야기해요. 동작도 써 보세요.' },
+  { id: 'vote', label: '지목', title: '지목 투표', time: '0:15', scene: 'sunset', text: '모두 원탁 의자에 앉아요. 의심 가는 사람을 누르면 가리켜요.' },
+  { id: 'trial', label: '변론', title: '최후 변론', time: '0:20', scene: 'trial', text: '조명이 꺼지고 가장 많이 지목된 사람만 비춰요.' },
+  { id: 'verdict', label: '찬반', title: '찬반 투표', time: '0:10', scene: 'trial', text: '변론자를 처형할지 정해요. 모두의 손이 보여요.' },
+  { id: 'night', label: '밤', title: '밤', time: '0:30', scene: 'citizen', text: '각자 토론이 끝난 자리로 돌아가요. 시민 화면은 깜깜하고 다른 사람이 보이지 않아요.' }
+];
+
+// 한 사람의 움직임: 길 따라 걷기, 정해진 자리로 미끄러지기(앉기·뛰어오르기), 순서대로 실행
+function Ctl(ch) { this.ch = ch; this.q = []; this.path = []; this.cur = null; }
+Ctl.prototype.clear = function () { this.q = []; this.path = []; this.cur = null; };
+Ctl.prototype.walk = function (goal) { this.q.push({ k: 'path', goal: goal }); return this; };
+Ctl.prototype.tw = function (to, dur, arc, yaw) { this.q.push({ k: 'tw', to: to, dur: dur, arc: arc || 0, yaw: yaw }); return this; };
+Ctl.prototype.fn = function (f) { this.q.push({ k: 'fn', f: f }); return this; };
+Ctl.prototype.busy = function () { return this.path.length || this.q.length || this.cur; };
+Ctl.prototype.update = function (dt, grid) {
+  var ch = this.ch;
+  if (this.path.length) {
+    var p = this.path[0], dx = p.x - ch.x, dz = p.z - ch.z, d = Math.hypot(dx, dz), mv = SPEED * dt;
+    if (d > 0.001) ch.yawTo = Math.atan2(dx, dz);
+    if (d <= mv) { ch.x = p.x; ch.z = p.z; this.path.shift(); } else { ch.x += dx / d * mv; ch.z += dz / d * mv; }
+    ch.moving = true;
+    return;
+  }
+  ch.moving = false;
+  while (!this.cur && this.q.length) {
+    var it = this.q.shift();
+    if (it.k === 'fn') { it.f(); continue; }
+    if (it.k === 'path') { var goal = grid.nearest(it.goal.x, it.goal.z); if (goal) this.path = grid.path({ x: ch.x, z: ch.z }, goal); return; }
+    if (it.k === 'tw') { it.from = { x: ch.x, y: ch.y, z: ch.z }; it.u = 0; if (it.yaw !== undefined) ch.yawTo = it.yaw; this.cur = it; }
+  }
+  var c = this.cur;
+  if (c) {
+    c.u = Math.min(1, c.u + dt / c.dur);
+    var u = c.u * c.u * (3 - 2 * c.u);
+    ch.x = c.from.x + (c.to.x - c.from.x) * u; ch.z = c.from.z + (c.to.z - c.from.z) * u;
+    ch.y = c.from.y + (c.to.y - c.from.y) * u + Math.sin(Math.PI * c.u) * c.arc;
+    if (c.u >= 1) this.cur = null;
+  }
+};
+
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { phase: 'talk', stage: 'table', nightView: 'citizen', sheetOpen: false, fpsText: '', badges: {}, myVote: -1, myVerdict: null };
+  }
+
+  componentDidMount() {
+    var self = this;
+    this.alive = true;
+    (function boot() {
+      if (!self.alive) return;
+      var canvas = document.getElementById('flCanvas');
+      if (!window.THREE || !window.MF3D || !canvas || !document.getElementById('flPlate7')) { setTimeout(boot, 60); return; }
+      self.start(canvas);
+    })();
+  }
+
+  componentWillUnmount() {
+    this.alive = false;
+    cancelAnimationFrame(this.raf);
+    if (this.world) this.world.dispose();
+  }
+
+  start(canvas) {
+    var self = this;
+    canvas.addEventListener('webglcontextlost', function (e) { e.preventDefault(); });
+    var w = this.world = MF3D.createWorld(canvas, { map: 'parlor', view: VIEW, staticShadow: true, shadow: 1024 });
+    w.setSize(W, H);
+    w.setScene('day');
+    this.grid = new MF3D.Grid(function (x, z) { return MF3D.parlorBlocked(x, z, 0.28); }, -7, 56, 0.25);
+    var seats = w.ctx.seats;
+    this.people = PEOPLE.map(function (p, i) {
+      var ch = new MF3D.Character(p.costume, { scale: SCALE, castShadow: false });
+      ch.optimize();
+      var a = i / 8 * Math.PI * 2 + 0.4, spot = self.grid.nearest(Math.cos(a) * 3.4, Math.sin(a) * 3.4);
+      ch.x = spot.x; ch.z = spot.z; ch.yaw = ch.yawTo = Math.atan2(-ch.x, -ch.z);
+      w.add(ch.root);
+      return { ch: ch, ctl: new Ctl(ch), seat: seats[i], idle: 1 + Math.random() * 3, plate: null };
+    });
+    // 지목 선
+    this.lines = this.people.map(function (p, i) {
+      var g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, 0, 0, 0, 0], 3));
+      var l = new THREE.Line(g, new THREE.LineBasicMaterial({ color: i === ME ? '#f1f2f5' : '#a9aebb', transparent: true, opacity: i === ME ? 0.95 : 0.6, depthTest: false }));
+      l.renderOrder = 10; l.visible = false; w.add(l); return l;
+    });
+    this.votes = this.people.map(function () { return -1; });
+    this.cam = { x: 0, z: 0, view: VIEW };
+    this.fps = { n: 0, acc: 0, prev: 0 };
+    var last = performance.now(), t = 0;
+    function frame(now) {
+      if (!self.alive) return;
+      var dt = Math.min((now - last) / 1000, 0.05); last = now; t += dt;
+      if (!document.hidden) self.step(dt, t);
+      self.fps.n++; self.fps.acc += now - (self.fps.prev || now); self.fps.prev = now;
+      if (self.fps.acc >= 600) { var f = Math.round(self.fps.n * 1000 / self.fps.acc); self.fps.n = 0; self.fps.acc = 0; self.setState({ fpsText: f + ' fps' }); }
+      self.raf = requestAnimationFrame(frame);
+    }
+    this.raf = requestAnimationFrame(frame);
+  }
+
+  headOf(p) { var c = p.ch; return new THREE.Vector3(c.x, c.y + (c.sitTop > 0 ? 1.18 : 1.4) * SCALE + (c.sitTop > 0 ? 0.18 : 0), c.z); }
+
+  step(dt, t) {
+    var self = this, w = this.world, phase = this.state.phase;
+    this.people.forEach(function (p, i) {
+      if (phase === 'talk' && i !== ME && !p.ctl.busy() && !p.ch.emote) {
+        p.idle -= dt;
+        if (p.idle <= 0) {
+          p.idle = 2 + Math.random() * 3.5;
+          if (Math.random() < 0.3) p.ch.play(MF3D.EMOTES[Math.floor(Math.random() * 8)].id);
+          else { var a = Math.random() * Math.PI * 2, r = 1.5 + Math.random() * 3; p.ctl.walk({ x: p.ch.x + Math.cos(a) * r, z: p.ch.z + Math.sin(a) * r }); }
+        }
+      }
+      if (phase === 'night' && self.state.nightView === 'mafia' && i === MAFIA && !p.ctl.busy()) {
+        p.idle -= dt;
+        if (p.idle <= 0) { p.idle = 2.5; var tg = self.people[2 + Math.floor(Math.random() * 6)].ch; p.ctl.walk({ x: tg.x + 0.6, z: tg.z + 0.6 }); }
+      }
+      p.ctl.update(dt, self.grid);
+      if (p.ch.moving && p.ch.emote) p.ch.stop();
+      p.ch.update(dt);
+    });
+    // 지목 선
+    this.lines.forEach(function (l, i) {
+      var tgt = self.votes[i];
+      l.visible = phase === 'vote' && tgt >= 0 && !self.people[i].ctl.busy();
+      if (!l.visible) return;
+      var a = self.headOf(self.people[i]), b = self.headOf(self.people[tgt]), pa = l.geometry.attributes.position;
+      pa.setXYZ(0, a.x, a.y, a.z); pa.setXYZ(1, b.x, b.y, b.z); pa.needsUpdate = true;
+    });
+    // 변론자를 비추는 조명은 변론자를 따라간다
+    if ((phase === 'trial' || phase === 'verdict') && this.accused >= 0) {
+      var ac = this.people[this.accused].ch, sp = w.spotPos;
+      if (!sp || Math.abs(sp.x - ac.x) + Math.abs(sp.z - ac.z) + Math.abs(sp.y - ac.y) > 0.02) w.setSpot({ x: ac.x, y: ac.y, z: ac.z });
+    }
+    // 카메라: 토론·밤은 내 캐릭터, 지목은 원탁, 변론·찬반은 변론자에게 다가간다
+    var focus, view = VIEW, anchor = ANCHOR;
+    if (phase === 'talk' || phase === 'night') { var me = this.people[ME].ch; focus = { x: me.x, z: me.z }; }
+    else if (phase === 'vote') { focus = { x: 0, z: 0 }; anchor = (STAGE_TOP + STAGE_BOTTOM) / 2 + 30; }
+    else if (this.accused >= 0) { var acc = this.people[this.accused].ch; focus = { x: acc.x * 0.5, z: acc.z * 0.5 }; view = 10.2; anchor = (STAGE_TOP + STAGE_BOTTOM) / 2 + 40; }
+    else focus = { x: 0, z: 0 };
+    var k = 1 - Math.exp(-dt / CAM_TAU);
+    this.cam.view += (view - this.cam.view) * k;
+    if (Math.abs(w.view - this.cam.view) > 0.001) w.setView(this.cam.view);
+    var ppu = H / this.cam.view, off = (anchor - H / 2) / (w.SIN_E * ppu), yaw = w.yaw;
+    var tx = focus.x - Math.sin(yaw) * off, tz = focus.z - Math.cos(yaw) * off, lim = w.map.pan;
+    tx = Math.max(-lim, Math.min(lim, tx)); tz = Math.max(-lim, Math.min(lim, tz));
+    this.cam.x += (tx - this.cam.x) * k; this.cam.z += (tz - this.cam.z) * k;
+    w.lookAt(this.cam.x, this.cam.z);
+    w.render(dt, t);
+    // 이름표: 발끝 바로 아래
+    var s = { x: 0, y: 0 }, citizenNight = phase === 'night' && this.state.nightView === 'citizen';
+    this.people.forEach(function (p, i) {
+      var el = p.plate || (p.plate = document.getElementById('flPlate' + i));
+      if (!el) return;
+      var c = p.ch, hidden = citizenNight && i !== ME;
+      c.root.visible = !hidden;
+      w.toScreen(c.x, c.y, c.z, s);
+      el.style.transform = 'translate3d(' + s.x.toFixed(1) + 'px,' + s.y.toFixed(1) + 'px,0)';
+      el.style.zIndex = String(10 + Math.round(s.y));
+      el.style.display = hidden ? 'none' : 'block';
+      el.style.opacity = (phase === 'trial' || phase === 'verdict') && i !== self.accused ? '0.55' : '1';
+    });
+  }
+
+  // ---------- 단계 전환 ----------
+  goPhase(id) {
+    var self = this, prev = this.state.phase;
+    if (id === prev) return;
+    var w = this.world, P = this.people;
+    if (prev === 'talk') this.talkEnd = P.map(function (p) { return { x: p.ch.x, z: p.ch.z }; });
+    P.forEach(function (p) { p.ch.stop(); });
+    var badges = {};
+    if (id === 'talk' || id === 'night') {
+      // 자리에서 일어나 토론이 끝난 자리로 돌아간다
+      var back = this.talkEnd || P.map(function (p) { return { x: p.ch.x, z: p.ch.z }; });
+      P.forEach(function (p, i) { self.leaveSeat(p); p.ctl.walk(back[i]); });
+      this.accused = -1;
+      w.setSpot(null);
+    }
+    if (id === 'vote') {
+      this.accused = -1;
+      w.setSpot(null);
+      P.forEach(function (p) { self.leaveSeat(p); self.toSeat(p); });
+      // 봇 지목: 지호가 가장 많이 받도록
+      this.votes = P.map(function (p, i) {
+        if (i === ME) return self.state.myVote;
+        if (i === 3) return 1;
+        return Math.random() < 0.6 ? 3 : (i + 1 + Math.floor(Math.random() * 6)) % 8;
+      });
+      this.votes[ME] = -1;
+      setTimeout(function () {
+        if (!self.alive || self.state.phase !== 'vote') return;
+        P.forEach(function (p, i) { if (i !== ME && self.votes[i] >= 0) p.ch.play('point'); });
+      }, 2600);
+      badges = this.voteBadges();
+    }
+    if (id === 'trial' || id === 'verdict') {
+      if (prev !== 'trial' && prev !== 'verdict') {
+        if (prev !== 'vote') { P.forEach(function (p) { self.leaveSeat(p); self.toSeat(p); }); this.votes = P.map(function (p, i) { return i === ME ? -1 : (i === 3 ? 1 : 3); }); }
+        this.accused = this.tally();
+        this.stageAccused();
+      }
+      if (id === 'trial') setTimeout(function () { if (self.alive && self.state.phase === 'trial' && self.accused >= 0) self.people[self.accused].ch.play('deny'); }, 1800);
+      if (id === 'verdict') {
+        var yes = 0, no = 0;
+        P.forEach(function (p, i) {
+          if (i === self.accused || i === ME) return;
+          var v = Math.random() < 0.62;
+          badges[i] = v ? '찬' : '반'; v ? yes++ : no++;
+          setTimeout(function () { if (self.alive && self.state.phase === 'verdict') p.ch.play(v ? 'thumb' : 'deny'); }, 300 + i * 160);
+        });
+      }
+    }
+    var def = PHASES.filter(function (x) { return x.id === id; })[0];
+    w.setScene(id === 'night' ? (this.state.nightView === 'mafia' ? 'mafia' : 'citizen') : def.scene);
+    this.setState({ phase: id, badges: badges, sheetOpen: false, myVerdict: null });
+  }
+
+  toSeat(p) {
+    var s = p.seat, ch = p.ch;
+    p.ctl.walk({ x: s.ax, z: s.az })
+      .tw({ x: s.x, y: 0, z: s.z }, 0.45, 0.06, s.yaw)
+      .fn(function () { ch.yawTo = s.yaw; ch.sitTop = s.top; });
+  }
+
+  leaveSeat(p) {
+    var ch = p.ch, s = p.seat;
+    p.ctl.clear();
+    if (ch.y > 0.3) p.ctl.tw({ x: s.fx, y: 0, z: s.fz }, 0.5, 0.35);
+    if (ch.sitTop > 0 || ch.y > 0.3) { p.ctl.fn(function () { ch.sitTop = 0; }).tw({ x: s.ax, y: 0, z: s.az }, 0.4, 0.04); }
+  }
+
+  tally() {
+    var n = [0, 0, 0, 0, 0, 0, 0, 0], best = 3;
+    this.votes.forEach(function (v) { if (v >= 0) n[v]++; });
+    n.forEach(function (c, i) { if (c > n[best]) best = i; });
+    return best;
+  }
+
+  voteBadges() {
+    var n = {}, out = {};
+    this.votes.forEach(function (v) { if (v >= 0) n[v] = (n[v] || 0) + 1; });
+    Object.keys(n).forEach(function (k) { out[k] = n[k] + '표'; });
+    return out;
+  }
+
+  // 변론자: 원탁 위로 올라서거나 자기 자리에서 일어선다
+  stageAccused() {
+    var p = this.people[this.accused], ch = p.ch, s = p.seat, w = this.world;
+    p.ctl.clear();
+    if (this.state.stage === 'table') {
+      p.ctl.fn(function () { ch.sitTop = 0; })
+        .tw({ x: s.fx, y: 0, z: s.fz }, 0.45, 0.04, s.yaw)
+        .tw({ x: 0, y: w.ctx.stageY, z: 0 }, 0.65, 0.6)
+        .fn(function () { ch.yawTo = w.yaw; });
+    } else {
+      if (ch.y > 0.3) p.ctl.tw({ x: s.fx, y: 0, z: s.fz }, 0.5, 0.35);
+      p.ctl.fn(function () { ch.sitTop = 0; })
+        .tw({ x: s.x * 0.84, y: 0, z: s.z * 0.84 }, 0.4, 0.04, s.yaw);
+    }
+  }
+
+  tapAt(cx, cy) {
+    var canvas = document.getElementById('flCanvas'), rect = canvas.getBoundingClientRect();
+    var sx = (cx - rect.left) * W / rect.width, sy = (cy - rect.top) * H / rect.height;
+    var phase = this.state.phase, self = this;
+    if (sy > STAGE_BOTTOM || sy < STAGE_TOP - 20) return;
+    if (phase === 'talk') {
+      var hit = this.world.toGround(sx, sy), me = this.people[ME];
+      me.ch.stop(); me.ctl.clear(); me.ctl.walk(hit);
+      if (this.state.sheetOpen) this.setState({ sheetOpen: false });
+    } else if (phase === 'vote') {
+      // 가장 가까운 사람(머리~발) 을 가리킨다
+      var best = -1, bd = 60, s = { x: 0, y: 0 };
+      this.people.forEach(function (p, i) {
+        if (i === ME) return;
+        var h = self.headOf(p); self.world.toScreen(h.x, h.y - 0.3, h.z, s);
+        var d = Math.hypot(s.x - sx, s.y - sy);
+        if (d < bd) { bd = d; best = i; }
+      });
+      if (best < 0) return;
+      this.votes[ME] = best;
+      this.people[ME].ch.play('point');
+      this.setState({ myVote: best, badges: this.voteBadges() });
+    }
+  }
+
+  setStage(v) {
+    var self = this;
+    this.setState({ stage: v }, function () { if (self.accused >= 0 && (self.state.phase === 'trial' || self.state.phase === 'verdict')) self.stageAccused(); });
+  }
+
+  setNight(v) {
+    var self = this;
+    this.setState({ nightView: v }, function () { if (self.world && self.state.phase === 'night') self.world.setScene(v === 'mafia' ? 'mafia' : 'citizen'); });
+  }
+
+  myVerdict(v) {
+    var me = this.people[ME], b = Object.assign({}, this.state.badges);
+    b[ME] = v ? '찬' : '반';
+    me.ch.play(v ? 'thumb' : 'deny');
+    this.setState({ myVerdict: v, badges: b });
+  }
+
+  renderVals() {
+    var self = this, st = this.state, phase = st.phase;
+    var def = PHASES.filter(function (x) { return x.id === phase; })[0];
+    function btn(label, on, pick) { return { label: label, pressed: on ? 'true' : 'false', bg: on ? '#e6e8ee' : '#1e2847', fg: on ? '#0e1326' : '#e6e8ee', border: on ? '#e6e8ee' : '#2a3760', pick: pick }; }
+    var actions;
+    if (phase === 'talk') actions = [btn('동작', st.sheetOpen, function () { self.setState({ sheetOpen: !st.sheetOpen }); }), btn('지목으로', false, function () { self.goPhase('vote'); })];
+    else if (phase === 'vote') actions = [btn(st.myVote >= 0 ? PEOPLE[st.myVote].name + ' 가리킴' : '사람을 눌러 가리켜요', st.myVote >= 0, function () {}), btn('변론으로', false, function () { self.goPhase('trial'); })];
+    else if (phase === 'trial') actions = [btn('원탁 위로', st.stage === 'table', function () { self.setStage('table'); }), btn('자기 자리에서', st.stage === 'seat', function () { self.setStage('seat'); })];
+    else if (phase === 'verdict') actions = [btn('찬성', st.myVerdict === true, function () { self.myVerdict(true); }), btn('반대', st.myVerdict === false, function () { self.myVerdict(false); })];
+    else actions = [btn('시민 화면', st.nightView === 'citizen', function () { self.setNight('citizen'); }), btn('마피아 화면', st.nightView === 'mafia', function () { self.setNight('mafia'); })];
+    var acc = this.accused >= 0 && (phase === 'trial' || phase === 'verdict') ? PEOPLE[this.accused].name : null;
+    return {
+      people: PEOPLE.map(function (p, i) {
+        var b = st.badges[i] || '';
+        return { i: i, name: p.name, color: p.color, ring: i === ME ? 'inset 0 0 0 2px #e6e8ee' : 'none',
+          hasBadge: !!b, badge: b, badgeBg: b === '반' ? '#3a3f4b' : '#e6e8ee', badgeFg: b === '반' ? '#f1f2f5' : '#0e1326' };
+      }),
+      phases: PHASES.map(function (p) { return btn(p.label, p.id === phase, function () { self.goPhase(p.id); }); }),
+      actions: actions,
+      phaseTitle: def.title,
+      phaseTime: def.time,
+      phaseText: acc ? (phase === 'trial' ? acc + '의 최후 변론이에요. ' + def.text : acc + '을(를) 처형할까요? ' + def.text) : def.text,
+      vignette: phase === 'night' && st.nightView === 'citizen' ? 1 : 0,
+      sheetOpen: st.sheetOpen,
+      emotes: (window.MF3D ? MF3D.EMOTES : []).map(function (e) { return { label: e.label, pick: function () { var me = self.people && self.people[ME]; if (me) { me.ctl.clear(); me.ch.play(e.id); } self.setState({ sheetOpen: false }); } }; }),
+      fpsText: st.fpsText,
+      onDown: function (e) { self.down = { x: e.clientX, y: e.clientY, t: performance.now() }; },
+      onUp: function (e) {
+        var d = self.down; self.down = null;
+        if (!d || !self.world) return;
+        if (Math.hypot(e.clientX - d.x, e.clientY - d.y) > 10 || performance.now() - d.t > 400) return;
+        self.tapAt(e.clientX, e.clientY);
+      }
+    };
+  }
+}
+</script>
+</body>
+</html>
