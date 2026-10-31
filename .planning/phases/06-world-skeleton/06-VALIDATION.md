@@ -38,20 +38,28 @@ created: "2026-10-31"
 
 ## Per-Task Verification Map
 
-> 계획 작성 후 플래너/실행자가 Task ID 를 채운다. 아래는 요구사항 기준 초안.
+> 플래너가 계획 20개(06-01~06-20)의 Task 를 채웠다(2026-10-31). 상태는 실행자가 갱신한다.
 
 | Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| TBD | TBD | TBD | DEPLOY-02 | 배포 대상 오인 | v1 이름·주소 거부 | node:test | `node --test scripts/deploy-target.test.mjs scripts/e2e/lib.test.mjs` | ❌ W0 | ⬜ pending |
-| TBD | TBD | TBD | MAP-02 | — | N/A | unit | `npx vitest run test/unit/world.test.ts test/unit/map.test.ts` | ❌ W0 | ⬜ pending |
-| TBD | TBD | TBD | MAP-02 | 좌표 조작·move 폭주 | strictObject·범위·보정·150ms 버림 | worker | `npx vitest run test/worker/world.test.ts` | ❌ W0 | ⬜ pending |
-| TBD | TBD | TBD | MAP-03 | — | N/A | unit | `npx vitest run test/unit/camera.test.ts` | ❌ W0 | ⬜ pending |
-| TBD | TBD | TBD | MAP-01 | 닉네임 DOM 주입 | React 텍스트로만 렌더 | client | `npx vitest run test/client/worldStage.test.tsx` | ❌ W0 | ⬜ pending |
-| TBD | TBD | TBD | MAP-05 | — | N/A | unit/worker | `npx vitest run test/unit/status.test.ts test/worker/world.test.ts` | ❌ W0 | ⬜ pending |
-| TBD | TBD | TBD | CONN-04 | — | N/A | client/unit | `npx vitest run test/client/useRoomConnection.test.tsx test/unit/linkReducer.test.ts test/client/lobby.test.tsx` | ✅ + 신규 | ⬜ pending |
-| TBD | TBD | TBD | MAP-07 | 닉네임 길이 조작 | 서버 스키마 1~8자, 이름표 말줄임 없음 | unit/client | `npx vitest run test/unit test/client` (닉네임 스키마·이름표 케이스) | ✅ 확장 | ⬜ pending |
-| TBD | TBD | TBD | 누설(MAP-01·02) | 로비 밖 위치 누설 | world 프레임 키 허용 목록·로비 밖 0 | worker | `npx vitest run test/worker/leak.test.ts` | ✅ 확장 | ⬜ pending |
-| TBD | TBD | TBD | 렌더 예산 | — | N/A | E2E | `npm run e2e -- --only perf-budget` | ❌ W0 | ⬜ pending |
+| 06-01-T1~T3 | 06-01 | 1 | DEPLOY-02 | T-06-01·02 | v1 이름·주소 거부, 빌드 산출물 이름 가드 | node:test | `node --test scripts/deploy-target.test.mjs scripts/e2e/lib.test.mjs` | ❌ W0(06-01 이 만듦) | ⬜ pending |
+| 06-07-T2·T3 | 06-07 | 2 | DEPLOY-02 | T-06-14 | 첫 배포·v1 health 불변·폰 방 만들기/참가 | smoke + 사람 | `node scripts/smoke.mjs --prod` | ✅ 스크립트 | ⬜ pending |
+| 06-02-T1~T3 | 06-02 | 1 | MAP-02·MAP-01 | T-06-04·05 | 마스크 동치·경로 슈퍼커버·가려짐 없음·입장 지점 | unit | `npx vitest run test/unit/map.test.ts` | ❌ W0(06-02) | ⬜ pending |
+| 06-05-T1~T3 | 06-05 | 2 | MAP-02·MAP-05 | T-06-09·10·11 | positionAt·150ms·strictObject·복원 | unit | `npx vitest run test/unit/world.test.ts test/unit/schemas.test.ts` | ❌ W0(06-05) | ⬜ pending |
+| 06-08-T1~T3 | 06-08 | 3 | MAP-01·02·05 | T-06-16~20 | 로비 전용 emitWorld·state→snap·퇴거 복원·봇 배회 | worker | `npx vitest run test/worker/world.test.ts test/worker/leak.test.ts` | ❌ W0(06-08) | ⬜ pending |
+| 06-03-T1·T2 | 06-03 | 2 | MAP-03 | — | 투영 왕복·6크기×전 격자점 가시성·빈 배경 없음 | unit | `npx vitest run test/unit/camera.test.ts` | ❌ W0(06-03) | ⬜ pending |
+| 06-03-T3 | 06-03 | 2 | MAP-05 | T-06-06 | 소실·3초 재생성·5초 실패 | unit | `npx vitest run test/unit/status.test.ts` | ❌ W0(06-03) | ⬜ pending |
+| 06-09-T1·T2 | 06-09 | 3 | MAP-05·CONN-04 | T-06-21·22 | 화이트리스트·epoch·snap 교체 | unit/client | `npx vitest run test/unit/worldStore.test.ts test/client/useRoomConnection.test.tsx test/unit/linkReducer.test.ts` | ✅ + 신규 | ⬜ pending |
+| 06-10-T1~T3 | 06-10 | 3 | MAP-01·MAP-03 | T-06-23·24 | three 카메라 일치·장면 예산·사다리 | unit | `npx vitest run test/unit/cameraThree.test.ts test/unit/barScene.test.ts test/unit/palette.test.ts test/unit/ladder.test.ts` | ❌ W0(06-10) | ⬜ pending |
+| 06-11-T1~T3 | 06-11 | 3 | MAP-01·MAP-02 | T-06-25 | 관절 병합·의상·동작 | unit | `npx vitest run test/unit/character.test.ts` | ❌ W0(06-11) | ⬜ pending |
+| 06-12-T1·T2 | 06-12 | 3 | MAP-07·MAP-01 | T-06-26 | 이름표 말줄임 없음·React 텍스트 | client | `npx vitest run test/client/v2parts.test.tsx` | ❌ W0(06-12) | ⬜ pending |
+| 06-13-T1~T3 | 06-13 | 4 | MAP-01·02·03·05·07 | T-06-27·28·29 | 탭→move·예측 없음·카드·훅 조건 | unit/client | `npx vitest run test/unit/input.test.ts test/client/worldStage.test.tsx` | ❌ W0(06-13) | ⬜ pending |
+| 06-06-T1·T3 | 06-06 | 2 | MAP-07 | T-06-12·13 | 서버 검증 1~8자·봇 이름 | unit/client | `npx vitest run test/unit/nickname.test.ts test/unit/copy.test.ts test/unit/bots.test.ts test/client/joinByLink.test.tsx` | ✅ 확장 | ⬜ pending |
+| 06-15-T1~T3 | 06-15 | 5 | MAP-01·05·CONN-04 | T-06-33 | 맵 로비·스토어 구독·skip 없음 | client | `npx vitest run --project client` | ✅ 갱신 | ⬜ pending |
+| 06-17-T1 | 06-17 | 7 | MAP-01·02·07 | T-06-36 | 두 페이지 위치 일치·이름표 폭 | E2E | `npm run e2e -- --url http://localhost:5173 --only world` | ❌ W0(06-17) | ⬜ pending |
+| 06-17-T2 | 06-17 | 7 | MAP-07·성공 기준 3 | — | 로비 6크기 계약·v1.0 게임 흐름 새 로비에서 완주 | E2E + unit | `npx vitest run test/unit/e2eContract.test.ts` / `npm run e2e -- --url http://localhost:5173 --only lobby` | ❌ W0(06-17) | ⬜ pending |
+| 06-18-T1·T2 | 06-18 | 8 | CONN-04·MAP-05·렌더 예산 | T-06-41 | 5종×10회 콘솔 0·calls ≤ 120·메모리 원복 | E2E | `npm run e2e -- --url http://localhost:5173 --only reconnect` / `--only perfbudget` | ❌ W0(06-18) | ⬜ pending |
+| 06-14-T2·06-19-T1 | 06-14·06-19 | 5·9 | 성공 기준 4(B) | T-06-31·32 | 크롬 CPU 4× 5분 측정 | 스크립트 | `node scripts/perf-run.mjs --scene vote --minutes 5 --throttle 4` | ❌ W0(06-14) | ⬜ pending |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 

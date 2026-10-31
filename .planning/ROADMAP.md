@@ -64,7 +64,29 @@ Decimal phases appear between their surrounding integers in numeric order.
   2. 폰 2대 이상이 같은 방 로비(지하 재즈 바, 결정 0055)에서 서로의 캐릭터와 닉네임을 본다. 맵을 터치하면 내 캐릭터가 그곳까지 걸어가고 다른 폰에서도 같은 경로·속도로 움직여 보인다. 맵은 폰 한 화면보다 조금 넓고 카메라가 내 캐릭터를 따라간다 (MAP-01, MAP-02, MAP-03)
   3. 화면을 껐다 켜거나 새로 고치거나 배포로 연결이 끊겼다 돌아와도 모든 캐릭터가 지금 위치로 이어지고, 보류했던 연결 계층 경고(WR-01~04)가 더는 나지 않는다. 시작 이후 한 판은 v1.0 흐름 그대로 끝까지 돈다 (MAP-05, CONN-04)
   4. 렌더 성능 게이트: three.js 아이소메트릭 맵(지하 재즈 바, 블록아웃 `design/v2.0/blockout/`, 결정 0050) 위에서 3D 조립 캐릭터 8명(원본 `design/v2.0/blockout/character.js`, 결정 0048)이 걷고 동작 2개를 하는 스파이크가 사용자 폰과 크롬 CPU 4배 스로틀(저가폰 대신, 결정 0055)에서 5분 평균 55fps 이상, 카메라 이동 끊김·발열·메모리 경고 없이 돌고 로비 조작이 3초 안에 반응한다. 미달이면 그림자·광원·건물 예산을 줄이고, 그래도 모자라면 맵을 시간대별 미리 구운 이미지로 바꾸기로 결정 기록에 남긴다 (MAP-01~03 의 렌더 방식 확정, 결정 0046)
-**Plans**: TBD
+**Plans:** 20 plans (10 waves)
+
+Plans:
+- [ ] 06-01-PLAN.md — 배포 대상 가드: minifia-v2 단일 출처·빌드 산출물 검사·스크립트 v1 거부 (W1)
+- [ ] 06-02-PLAN.md — 재즈 바 이동 격자·입장 지점·경로 탐색 map.ts (TDD, W1)
+- [ ] 06-03-PLAN.md — 카메라 수학·이동 한계·WebGL 상태기계 (TDD, W2)
+- [ ] 06-04-PLAN.md — three 0.186.1 설치(사람 확인)·v2 토큰 합치기 (W2)
+- [ ] 06-05-PLAN.md — 구간·보간·이동 요청·저장/복원·봇 배회 world.ts + 와이어 계약 (TDD, W2)
+- [ ] 06-06-PLAN.md — 닉네임 8자·봇 이름·v1 테이블 E2E 충돌 결정 (TDD, W2)
+- [ ] 06-07-PLAN.md — v2 첫 배포·시험판 표식·사람 확인 (W2)
+- [ ] 06-08-PLAN.md — 방 DO world: move·snap·지연 저장·퇴거 복원·봇 배회·누설 검사 (TDD, W3)
+- [ ] 06-09-PLAN.md — 클라이언트 WorldStore·연결 훅·WR-01~04 정리 (TDD, W3)
+- [ ] 06-10-PLAN.md — three 렌더러·재즈 바 장면 병합·사다리 (TDD, W3)
+- [ ] 06-11-PLAN.md — 3D 조립 캐릭터 이식·관절 병합 (TDD, W3)
+- [ ] 06-12-PLAN.md — v2 부품 이식: 이름표·단계 머리·위 알림·점·행동 버튼 (W3)
+- [ ] 06-13-PLAN.md — WorldStage·월드 런타임: 탭→걷기→카메라·이름표·상태 카드 (W4)
+- [ ] 06-14-PLAN.md — 성능 스파이크 ?perf=1·크롬 스로틀 측정·조명 맞추기·?chat-mock=1 (W5)
+- [ ] 06-15-PLAN.md — 로비를 맵으로 교체·RoomScreen 스토어·알림·띠 (W5)
+- [ ] 06-16-PLAN.md — 대체된 v1 로비 코드 삭제·화면 지도·구조 문서 (W6)
+- [ ] 06-17-PLAN.md — E2E 1: world 흐름·새 lobby 흐름·로비 크기 6종·v1.0 게임 흐름 (W7)
+- [ ] 06-18-PLAN.md — E2E 2: reconnect 5종×10회·deployhold·perfbudget·전체 초록 (W8)
+- [ ] 06-19-PLAN.md — 배포(배포 직후 재접속)·크롬 4× 측정·iPhone 16 Pro 실측·게이트 판정 (W9)
+- [ ] 06-20-PLAN.md — 게이트 결정 기록·결과 마무리·HANDOFF·push (W10)
 **UI hint**: yes
 **계획 메모**: 연구 필수(`--research-phase`) — three.js 맵과 2D 캐릭터를 합치는 방식(빌보드 판 vs DOM 겹치기, 결정 0046-6)과 스파이크 실측 방법, iOS WebGL 컨텍스트 끊김 복구, 맵 이동 가능 영역 데이터 형식, WR-01~04 원인 코드(`DEFERRED-BUGS.md` 에 내용 없음, 연결 처리 코드에서 확인), 위치 구간 `world` 키 지연 저장·하이버네이션 복원. 같은 스파이크에서 iOS 키보드가 열린 하단 채팅 레이아웃 시안도 실기기로 확인해 7페이즈 입력으로 쓴다. `wrangler.jsonc` 이름·`prod-url.txt`·E2E/smoke 기본 주소·계정 확인 스크립트를 같은 커밋에서 바꾸고 가드를 둔 뒤 첫 배포한다.
 
@@ -156,7 +178,7 @@ Phases execute in numeric order: 6 → 7 → 8 → 9 → 10 → 11 → 12 (소�
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 6. 월드 뼈대 | v2.0 | 0/TBD | Not started | - |
+| 6. 월드 뼈대 | v2.0 | 0/20 | Planned | - |
 | 7. 자유 채팅 | v2.0 | 0/TBD | Not started | - |
 | 8. 낮 처형과 유령 | v2.0 | 0/TBD | Not started | - |
 | 9. 밤과 아침 | v2.0 | 0/TBD | Not started | - |
