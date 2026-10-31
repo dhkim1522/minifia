@@ -3,17 +3,20 @@
 //
 // three 는 loadWorld() 의 import() 두 줄로만 끌려온다(이 파일에 three 값 import 가 없다 — 메인 번들 분리, RESEARCH 번들 측정).
 // 렌더러·캐릭터 모듈은 deps.loadModules 로 바꿔 끼울 수 있다(happy-dom 테스트의 가짜, 06-14 의 시나리오 스토어).
+import { BAR_MAP, BAR_SPAWNS, snapToWalkable, UNIT } from "../../shared/game/map";
+import { segmentEndsAt } from "../../shared/game/world";
+import type { Segment } from "../../shared/game/world";
+import { NETWORK_TEXT } from "../net/copy";
+import { clampTarget, DEFAULT_TARGET, followStep, NAMETAG_GAP, RESIZE_SETTLE_MS, stageOffsetY } from "./camera";
 import { FIGS } from "./characterData";
-import { clampTarget, DEFAULT_TARGET, followStep, RESIZE_SETTLE_MS, stageOffsetY } from "./camera";
 import { createTapGate } from "./input";
 import { DEFAULT_BUDGET_STEP } from "./renderer";
 import type { CharacterHandle, WorldRenderer } from "./renderer";
-import { initialMapStatus, mapStatusReducer, inputBlocked } from "./status";
+import { initialMapStatus, inputBlocked, mapStatusReducer } from "./status";
 import type { MapStatusEvent, MapStatusState } from "./status";
 import type { WorldStore } from "./store";
 import type { characterKit as CharacterKitType } from "./character";
 import type { createThreeRenderer as CreateThreeRendererType } from "./threeRenderer";
-import { BAR_SPAWNS } from "../../shared/game/map";
 
 export interface WorldModules {
   createThreeRenderer: typeof CreateThreeRendererType;
@@ -56,12 +59,24 @@ export const MOVE_ACK_TIMEOUT_MS = 1500;
 const PULSE_MS = 1100;
 /** 맥박 최대 배율 */
 const PULSE_MAX = 1.15;
+/** 링이 보정된 지점으로 미끄러지는 시간·도착 뒤 사라지는 시간(ms) = dur-fast */
+const RING_MS = 180;
+/** 내 구간의 출발 시각이 보낸 시각보다 이만큼 이르더라도 내 탭의 응답으로 본다(시계 오프셋 추정 오차 허용) */
+const ACK_SLACK_MS = 1000;
+/** 손짓 링: 맵이 열린 뒤 보이기까지(ms)·맥박 횟수·모션 줄이기 고정 시간(ms)·내 앞 거리(월드 단위) */
+const CUE_DELAY_MS = 600;
+const CUE_PULSES = 3;
+const CUE_REDUCED_MS = 2500;
+const CUE_AHEAD = 2;
 /** 크기 변화를 다시 재기 전 기다리는 시간(ms) */
 const RESIZE_DEBOUNCE_MS = 150;
 /** 한 프레임 dt 상한(초) — 탭이 숨었다 돌아와도 걸음 계산이 튀지 않게 */
 const MAX_DT = 0.05;
 /** 이동으로 보는 한 프레임 위치 변화(월드 단위) */
 const MOVE_EPS = 1e-6;
+/** 등장 시작 크기·낙하 높이(월드 단위) */
+const ENTER_SCALE = 0.6;
+const ENTER_LIFT = 0.4;
 /** 6페이즈는 모두 기본 코트(의상 교체는 10페이즈) */
 const OUTFIT = "coat";
 
@@ -84,6 +99,8 @@ export interface WorldRuntimeDeps {
   raf?: (cb: FrameRequestCallback) => number;
   caf?: (id: number) => void;
   storage?: Storage | null;
+  /** 목적지 링이 생기거나(탭)·보정되거나(구간 끝점)·없어질 때 한 번씩 불린다 — 루트의 data-ring 용 */
+  onRing?: (at: { x: number; z: number } | null) => void;
 }
 
 export interface WorldRuntime {
@@ -91,13 +108,17 @@ export interface WorldRuntime {
   syncPlayers(): void;
   /** 화면 좌표의 탭. 받아들이면 바닥 교점(월드 단위)을 돌려주고 목적지 링을 바로 띄운다 */
   tap(clientX: number, clientY: number): { x: number; z: number } | null;
-  /** move 를 보낸 직후 부른다(응답 없음 시계의 시작) */
+  /** move 를 보낸 직후 부른다(서버 시각 at, 응답 없음 시계의 시작) */
   notifyMoveSent(at: number): void;
+  /** move 를 보내지 못했을 때: 링을 거둔다(알림 없음 — 연결 띠가 알린다) */
+  cancelMove(): void;
   retry(): Promise<void>;
   dispose(): void;
   /** 서버 시각 t(기본: 지금)의 seat 위치 */
   sample(seat: number, t?: number): { x: number; z: number } | null;
   renderer(): WorldRenderer | null;
+  /** 지금 목적지 링의 목표 지점(없으면 null) */
+  ring(): { x: number; z: number } | null;
 }
 
 /** 06-11 figForSeat 와 같은 식(character.ts 는 three 를 끌고 와서 정적으로 가져오지 않는다) */
@@ -111,19 +132,56 @@ function spawnYaw(seat: number): number {
   return BAR_SPAWNS[((seat % n) + n) % n]?.yaw ?? Math.PI / 4;
 }
 
+const easeOut = (p: number): number => 1 - (1 - p) * (1 - p) * (1 - p);
+
+function defaultStorage(): Storage | null {
+  try {
+    return typeof localStorage === "undefined" ? null : localStorage;
+  } catch {
+    return null;
+  }
+}
+
 interface Actor {
   seat: number;
   handle: CharacterHandle;
+  /** 생성 때 root.scale (캐릭터 자체 크기). 연출 배율은 여기에 곱한다 */
   base: number;
   pos: { x: number; z: number };
   yaw: number;
   headY: number;
+  dim: boolean;
+  /** 등장 시작 시각(없으면 서 있다) */
+  enter: number | null;
+  /** 퇴장 시작 시각 */
+  exit: number | null;
+  tag: HTMLElement | null;
+  tagStyle: string;
+  tagAlpha: string;
+  tagZ: string;
+}
+
+interface Ring {
+  /** 지금 그려지는 위치 */
+  at: { x: number; z: number };
+  /** 마지막으로 알린(또는 ack 로 정해진) 목표 */
+  target: { x: number; z: number };
+  from: { x: number; z: number } | null;
+  to: { x: number; z: number } | null;
+  slideStart: number;
+  baseSeg: Segment | undefined;
+  sentAt: number | null;
+  acked: boolean;
+  endsAt: number;
+  fadeStart: number | null;
+  timer: ReturnType<typeof setTimeout> | null;
 }
 
 export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
-  const { host, store } = deps;
+  const { host, store, tagLayer } = deps;
   const raf = deps.raf ?? ((cb: FrameRequestCallback) => requestAnimationFrame(cb));
   const caf = deps.caf ?? ((id: number) => cancelAnimationFrame(id));
+  const storage = deps.storage === undefined ? defaultStorage() : deps.storage;
 
   let disposed = false;
   let bootGen = 0;
@@ -133,8 +191,12 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
   let status: MapStatusState = initialMapStatus;
 
   const actors = new Map<number, Actor>();
+  const pendingEntered = new Set<number>();
   const gate = createTapGate();
-  let ring: { at: { x: number; z: number } } | null = null;
+  let ring: Ring | null = null;
+  let cue: { at: { x: number; z: number }; start: number } | null = null;
+  let cueTimer: ReturnType<typeof setTimeout> | null = null;
+  let cueStarted = false;
 
   let lastFrameAt = 0;
   let cam: { x: number; z: number } | null = null;
@@ -144,7 +206,6 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
   let offsetTarget = 0;
   let offsetFrom = 0;
   let offsetStart = 0;
-  let appliedSize = { w: 0, h: 0 };
   let seenSize = { w: 0, h: 0 };
   let resizeTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -162,7 +223,10 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
     if (next === prev) return;
     status = next;
     deps.onStatus(next);
-    if (prev.status !== "ready" && next.status === "ready") markInteractive();
+    if (prev.status !== "ready" && next.status === "ready") {
+      markInteractive();
+      startCueWait();
+    }
   }
 
   function markInteractive(): void {
@@ -200,11 +264,194 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
     }
     renderer = r;
     kit = mods.characterKit;
-    appliedSize = s;
     seenSize = s;
     r.setLighting(deps.lighting ?? "talk");
+    syncPlayers();
     lastFrameAt = Date.now();
     schedule();
+  }
+
+  // ---------- 사람 ----------
+
+  function applyDim(a: Actor, dim: boolean): void {
+    if (a.dim === dim) return;
+    a.dim = dim;
+    a.handle.setDim(dim);
+  }
+
+  function removeActor(a: Actor): void {
+    renderer?.removeCharacter(a.seat);
+    a.handle.dispose();
+    actors.delete(a.seat);
+  }
+
+  function beginExit(seat: number, now: number): void {
+    const a = actors.get(seat);
+    if (a === undefined || a.exit !== null) return;
+    if (deps.reducedMotion()) removeActor(a);
+    else a.exit = now;
+  }
+
+  /** view 가 바뀔 때마다: view 에 없는 seat 의 구간을 지우고 퇴장 연출, 끊김 어둡게를 맞춘다 */
+  function syncPlayers(): void {
+    if (disposed) return;
+    const players = deps.players();
+    const now = Date.now();
+    for (const seat of store.retainSeats(players.map((p) => p.seat))) beginExit(seat, now);
+    for (const p of players) {
+      const a = actors.get(p.seat);
+      if (a !== undefined) applyDim(a, !p.connected);
+    }
+  }
+
+  function createActor(seat: number, now: number): void {
+    if (renderer === null || kit === null) return;
+    const handle = kit.create(figIndexForSeat(seat), OUTFIT);
+    const at = store.positionOf(seat, deps.serverNow());
+    const a: Actor = {
+      seat,
+      handle,
+      base: handle.root.scale.x,
+      pos: at ?? { x: 0, z: 0 },
+      yaw: spawnYaw(seat),
+      headY: 0,
+      dim: false,
+      enter: null,
+      exit: null,
+      tag: null,
+      tagStyle: "",
+      tagAlpha: "",
+      tagZ: "",
+    };
+    // 첫 snap 에 있던 사람은 바로 서 있고, 뒤에 move 로 들어온 사람만 내려앉는다
+    if (pendingEntered.delete(seat) && !deps.reducedMotion()) a.enter = now;
+    handle.setYaw(a.yaw);
+    handle.root.position.set(a.pos.x, 0, a.pos.z);
+    renderer.addCharacter(seat, handle);
+    actors.set(seat, a);
+    const p = deps.players().find((q) => q.seat === seat);
+    if (p !== undefined) applyDim(a, !p.connected);
+  }
+
+  // ---------- 링·손짓 링 ----------
+
+  function clearRing(): void {
+    if (ring === null) return;
+    if (ring.timer !== null) clearTimeout(ring.timer);
+    ring = null;
+    renderer?.setMarker("ring", null, 1, 0);
+    deps.onRing?.(null);
+  }
+
+  function ackRing(g: Ring, s: Segment, now: number): void {
+    g.acked = true;
+    if (g.timer !== null) {
+      clearTimeout(g.timer);
+      g.timer = null;
+    }
+    const n = s.p.length;
+    const to = n >= 2 ? { x: (s.p[n - 2] ?? 0) / UNIT, z: (s.p[n - 1] ?? 0) / UNIT } : g.at;
+    g.endsAt = segmentEndsAt(s);
+    g.target = to;
+    if (deps.reducedMotion()) {
+      g.at = { ...to };
+    } else {
+      g.from = { ...g.at };
+      g.to = to;
+      g.slideStart = now;
+    }
+    deps.onRing?.(to);
+  }
+
+  function updateRing(r: WorldRenderer, now: number, sNow: number): void {
+    const g = ring;
+    if (g === null) return;
+    if (!g.acked && g.sentAt !== null) {
+      const s = store.segOf(deps.mySeat());
+      if (s !== undefined && s !== g.baseSeg && s.t0 >= g.sentAt - ACK_SLACK_MS) ackRing(g, s, now);
+    }
+    if (g.acked) {
+      if (g.from !== null && g.to !== null) {
+        const p = Math.min(1, (now - g.slideStart) / RING_MS);
+        const e = easeOut(p);
+        g.at = { x: g.from.x + (g.to.x - g.from.x) * e, z: g.from.z + (g.to.z - g.from.z) * e };
+        if (p >= 1) {
+          g.at = { ...g.to };
+          g.from = null;
+          g.to = null;
+        }
+      }
+      if (g.fadeStart === null && sNow >= g.endsAt) g.fadeStart = now;
+    }
+    let opacity = 1;
+    if (g.fadeStart !== null) {
+      const p = (now - g.fadeStart) / RING_MS;
+      if (p >= 1) {
+        clearRing();
+        return;
+      }
+      opacity = 1 - p;
+    }
+    r.setMarker("ring", g.at, pulse(now), opacity);
+  }
+
+  function pulse(elapsed: number): number {
+    if (deps.reducedMotion()) return 1;
+    return 1 + (PULSE_MAX - 1) * Math.sin(Math.PI * ((elapsed % PULSE_MS) / PULSE_MS));
+  }
+
+  function readCueKey(): boolean {
+    try {
+      return storage?.getItem(WALK_CUE_KEY) != null;
+    } catch {
+      return false;
+    }
+  }
+
+  function writeCueKey(): void {
+    try {
+      storage?.setItem(WALK_CUE_KEY, "1");
+    } catch {
+      // 저장소를 못 쓰는 환경(개인 모드): 이번 방문에서만 본다
+    }
+  }
+
+  /** 맵이 처음 열린 뒤 600ms 에 손짓 링을 띄운다(처음 방문한 기기에서만) */
+  function startCueWait(): void {
+    if (cueStarted) return;
+    cueStarted = true;
+    if (readCueKey()) return;
+    cueTimer = setTimeout(() => {
+      cueTimer = null;
+      const mine = actors.get(deps.mySeat());
+      if (disposed || mine === undefined) return;
+      const k = Math.SQRT1_2 * CUE_AHEAD; // 화면 아래 방향 = +x +z
+      const p = snapToWalkable(BAR_MAP, { x: Math.round((mine.pos.x + k) * UNIT), z: Math.round((mine.pos.z + k) * UNIT) });
+      cue = { at: { x: p.x / UNIT, z: p.z / UNIT }, start: Date.now() };
+      writeCueKey();
+    }, CUE_DELAY_MS);
+  }
+
+  function hideCue(): void {
+    if (cueTimer !== null) {
+      clearTimeout(cueTimer);
+      cueTimer = null;
+    }
+    if (cue !== null) {
+      cue = null;
+      renderer?.setMarker("cue", null, 1, 0);
+    }
+  }
+
+  function updateCue(r: WorldRenderer, now: number): void {
+    if (cue === null) return;
+    const elapsed = now - cue.start;
+    const reduced = deps.reducedMotion();
+    if (elapsed >= (reduced ? CUE_REDUCED_MS : CUE_PULSES * PULSE_MS)) {
+      hideCue();
+      return;
+    }
+    r.setMarker("cue", cue.at, pulse(elapsed), 1);
   }
 
   // ---------- 프레임 ----------
@@ -212,23 +459,6 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
   function schedule(): void {
     if (disposed || rafId !== null || renderer === null) return;
     rafId = raf(frame);
-  }
-
-  function pulse(now: number): number {
-    if (deps.reducedMotion()) return 1;
-    return 1 + (PULSE_MAX - 1) * Math.sin(Math.PI * ((now % PULSE_MS) / PULSE_MS));
-  }
-
-  function createActor(seat: number): Actor | null {
-    if (renderer === null || kit === null) return null;
-    const handle = kit.create(figIndexForSeat(seat), OUTFIT);
-    const at = store.positionOf(seat, deps.serverNow());
-    const a: Actor = { seat, handle, base: handle.root.scale.x, pos: at ?? { x: 0, z: 0 }, yaw: spawnYaw(seat), headY: 0 };
-    handle.setYaw(a.yaw);
-    handle.root.position.set(a.pos.x, 0, a.pos.z);
-    renderer.addCharacter(seat, handle);
-    actors.set(seat, a);
-    return a;
   }
 
   function frame(): void {
@@ -248,12 +478,19 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
       resync = true;
     }
 
+    for (const seat of store.takeEntered()) pendingEntered.add(seat);
     for (const seat of store.seats()) {
-      if (!actors.has(seat)) createActor(seat);
+      if (!actors.has(seat)) createActor(seat, now);
     }
 
+    const gone: Actor[] = [];
     for (const a of actors.values()) {
-      const at = store.positionOf(a.seat, sNow) ?? a.pos;
+      const live = store.positionOf(a.seat, sNow);
+      if (live === null && a.exit === null) {
+        beginExit(a.seat, now); // 구간이 없어졌다(snap 에서 빠짐)
+        if (!actors.has(a.seat)) continue; // 모션 줄이기면 바로 지워졌다
+      }
+      const at = a.exit === null && live !== null ? live : a.pos;
       const dx = at.x - a.pos.x;
       const dz = at.z - a.pos.z;
       let moving = false;
@@ -263,8 +500,28 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
         a.handle.setYaw(a.yaw);
       }
       a.pos = { x: at.x, z: at.z };
-      a.handle.root.position.set(at.x, 0, at.z);
-      a.headY = a.handle.update(dt, now / 1000, moving).headY;
+
+      // 등장·퇴장 연출: 크기·높이는 캐릭터에, 불투명도는 이름표에
+      let scale = 1;
+      let lift = 0;
+      let alpha = 1;
+      if (a.exit !== null) {
+        const p = Math.min(1, (now - a.exit) / EXIT_MS);
+        scale = 1 - (1 - ENTER_SCALE) * p;
+        alpha = 1 - p;
+        if (p >= 1) gone.push(a);
+      } else if (a.enter !== null) {
+        const p = Math.min(1, (now - a.enter) / ENTER_MS);
+        const e = easeOut(p);
+        scale = ENTER_SCALE + (1 - ENTER_SCALE) * e;
+        lift = ENTER_LIFT * (1 - e);
+        alpha = e;
+        if (p >= 1) a.enter = null;
+      }
+      a.handle.root.scale.setScalar(a.base * scale);
+      a.handle.root.position.set(at.x, lift, at.z);
+      a.headY = lift + a.handle.update(dt, now / 1000, moving).headY * scale;
+      a.tagAlpha = alpha === 1 ? "1" : String(Math.round(alpha * 1000) / 1000);
     }
 
     // 카메라: 내 캐릭터를 따라간다(한계 상자 안에서)
@@ -296,19 +553,51 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
       resizeTimer = setTimeout(() => {
         resizeTimer = null;
         if (disposed || renderer === null) return;
-        appliedSize = seenSize;
-        renderer.resize(appliedSize.w, appliedSize.h);
+        renderer.resize(seenSize.w, seenSize.h);
       }, RESIZE_DEBOUNCE_MS);
     }
 
-    if (ring !== null) r.setMarker("ring", ring.at, pulse(now), 1);
+    updateRing(r, now, sNow);
+    updateCue(r, now);
 
     r.render();
+    writeTags(r);
+    for (const a of gone) {
+      removeActor(a);
+      if (a.tag !== null) a.tag.style.opacity = "0";
+    }
     resync = false;
 
     if (status.status === "loading" && store.isReady()) dispatch({ t: "ready" });
 
     schedule();
+  }
+
+  /** 이름표: 머리 꼭대기 투영 좌표를 장치 픽셀에 반올림해 놓고, 발끝 화면 y 가 큰 쪽을 위로 쌓는다(밀지 않는다) */
+  function writeTags(r: WorldRenderer): void {
+    const dpr = (typeof window !== "undefined" && window.devicePixelRatio) || 1;
+    const snap = (v: number): number => Math.round(v * dpr) / dpr;
+    const order: { a: Actor; foot: number }[] = [];
+    for (const a of actors.values()) {
+      if (a.tag === null || !a.tag.isConnected) a.tag = tagLayer.querySelector<HTMLElement>(`[data-seat="${a.seat}"]`);
+      if (a.tag === null) continue;
+      const head = r.project({ x: a.pos.x, y: a.headY, z: a.pos.z });
+      const style = `translate(${snap(head.sx)}px, ${snap(head.sy - NAMETAG_GAP)}px) translate(-50%, -100%)`;
+      if (style !== a.tagStyle) {
+        a.tagStyle = style;
+        a.tag.style.transform = style;
+      }
+      if (a.tag.style.opacity !== a.tagAlpha) a.tag.style.opacity = a.tagAlpha;
+      order.push({ a, foot: r.project({ x: a.pos.x, y: 0, z: a.pos.z }).sy });
+    }
+    order.sort((p, q) => p.foot - q.foot || p.a.seat - q.a.seat);
+    order.forEach(({ a }, rank) => {
+      const z = String(rank);
+      if (a.tag !== null && a.tagZ !== z) {
+        a.tagZ = z;
+        a.tag.style.zIndex = z;
+      }
+    });
   }
 
   // ---------- 입력 ----------
@@ -318,18 +607,35 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
     if (!gate.accept(Date.now())) return null;
     const rect = host.getBoundingClientRect();
     const at = renderer.groundAt(clientX - rect.left, clientY - rect.top);
-    ring = { at: { x: at.x, z: at.z } };
-    renderer.setMarker("ring", ring.at, 1, 1);
+    hideCue();
+    writeCueKey();
+    clearRing();
+    const here = { x: at.x, z: at.z };
+    ring = { at: here, target: here, from: null, to: null, slideStart: 0, baseSeg: store.segOf(deps.mySeat()), sentAt: null, acked: false, endsAt: 0, fadeStart: null, timer: null };
+    renderer.setMarker("ring", here, 1, 1);
+    deps.onRing?.(here);
     return { x: at.x, z: at.z };
+  }
+
+  function notifyMoveSent(at: number): void {
+    const g = ring;
+    if (g === null || g.acked) return;
+    g.sentAt = at;
+    g.timer = setTimeout(() => {
+      if (ring !== g || g.acked) return;
+      clearRing();
+      deps.onNotice(NETWORK_TEXT);
+    }, MOVE_ACK_TIMEOUT_MS);
   }
 
   return {
     async start() {
       await boot();
     },
-    syncPlayers() {},
+    syncPlayers,
     tap,
-    notifyMoveSent() {},
+    notifyMoveSent,
+    cancelMove: clearRing,
     async retry() {
       dispatch({ t: "retry" });
       await boot();
@@ -341,6 +647,10 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
       if (rafId !== null) caf(rafId);
       rafId = null;
       if (resizeTimer !== null) clearTimeout(resizeTimer);
+      if (cueTimer !== null) clearTimeout(cueTimer);
+      if (ring?.timer) clearTimeout(ring.timer);
+      ring = null;
+      cue = null;
       const r = renderer;
       renderer = null;
       for (const a of actors.values()) {
@@ -355,6 +665,9 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
     },
     renderer() {
       return renderer;
+    },
+    ring() {
+      return ring === null ? null : { ...ring.target };
     },
   };
 }

@@ -639,9 +639,11 @@ describe("목적지 링 피드백 (UI-SPEC 터치해서 걷기 3~8)", () => {
     tapAt(surface(s.utils), 250, 340);
     // 서버가 (5, 4) 를 (4, 3) 으로 보정했다
     move(s.store, seg(0, [200, 100, 400, 300], Date.now(), 180));
-    frame(16);
+    frame(16); // 이 프레임에 구간을 알아본다
+    frame(50);
     const mid = lastRing(r)!;
     expect(mid.at!.x).toBeLessThan(5);
+    expect(mid.at!.x).toBeGreaterThan(4);
     frames(200);
     expect(lastRing(r)!.at).toEqual({ x: 4, z: 3 });
     const root = s.utils.container.querySelector("[data-world-stage]")!;
@@ -773,7 +775,7 @@ describe("처음 방문 손짓 링 (UI-SPEC 안내)", () => {
     const s = await open();
     const r = s.world.renderers[0]!;
     frames(700);
-    frames(2400);
+    frames(2300);
     expect(cues(r).at(-1)!.at).not.toBeNull();
     expect(new Set(cues(r).filter((m) => m.at).map((m) => m.scale))).toEqual(new Set([1]));
     frames(300);

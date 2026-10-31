@@ -10,3 +10,13 @@
 
 /* 이름표 층: 캔버스와 같은 크기, 입력을 가로채지 않는다. 안쪽 이름표의 z-index 는 발 y 순위(0~7)다. */
 .mf-world__tags { z-index: var(--z-tags); pointer-events: none; }
+
+/* 이름표 한 개: 런타임이 transform(translate + translate(-50%, -100%))·opacity·z-index(발 y 순위)를 매 프레임 쓴다. */
+.mf-world__tag { position: absolute; left: 0; top: 0; will-change: transform; }
+
+/* 방장이 누를 수 있는 끊긴 사람 이름표: 누르기 영역 44×44 이상(이름표 24 + 안쪽 11×2), 이름표 모양은 그대로(margin 으로 상쇄). */
+.mf-world__kick { display: block; padding: 11px; margin: -11px; border: 0; background: none; color: inherit; font: inherit; cursor: pointer; pointer-events: auto; -webkit-tap-highlight-color: transparent; border-radius: var(--radius-pill); }
+.mf-world__kick:focus-visible { outline: 2px solid var(--gray-100); outline-offset: 2px; }
+
+/* 화면 낭독기용 목록: 보이지 않지만 읽힌다. */
+.mf-world__sr { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; list-style: none; }
