@@ -17,6 +17,7 @@
 
 - 6페이즈 계획 전 답: three `0.186.1`(권고) vs `0.187.0`, 실기기 목록(저가 Android·구형 iPhone)과 `adb` 유무.
 - 로비를 어느 맵에서 열지(랜덤일 때 포함) — 로비 UI 단계에서 정한다.
+- **v2.0 디자인 시스템 첫 판 검토(사용자)**: https://claude.ai/artifact/L4eeQTUD9rCa9Vmzv6fKpU (새 아티팩트, v1.0 시스템은 v1 용으로 그대로). 규칙(색·글자·3D 공간·단계 조명·지목 연출) + 게임 겹침 부품 9종(PhaseHeader·NameTag·VoteBadge·SureStamp·HeadStack·TopToast·ChatPanel·EmoteSheet·MapPicker). 앰버는 v2.0 에서 안 씀(놋쇠로). 승인되면 `design/v2.0/design-system/` 사본·`CLAUDE.md` 링크 → 화면설계서.
 
 ## 다음 할 일
 
