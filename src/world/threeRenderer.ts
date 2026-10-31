@@ -1,23 +1,8 @@
 // three 구현(WebGLRenderer). 이 파일은 three 를 값으로 import 하는 몇 안 되는 모듈이다 — 정적 import 경로(메인 번들)에
 // 두지 않는다. 06-13 런타임이 `import()` 로만 열어 별도 청크로 나눈다. 렌더러 인터페이스는 renderer.ts(three 값 import 없음).
-import {
-  ACESFilmicToneMapping,
-  Color,
-  Fog,
-  Group,
-  Mesh,
-  MeshStandardMaterial,
-  PCFShadowMap,
-  Plane,
-  PlaneGeometry,
-  Raycaster,
-  Scene,
-  SRGBColorSpace,
-  Vector2,
-  Vector3,
-  WebGLRenderer,
-} from "three";
-import { PLATE_FAR, DEFAULT_TARGET } from "./camera";
+import { ACESFilmicToneMapping, Group, MeshBasicMaterial, PCFShadowMap, Plane, Raycaster, SRGBColorSpace, Vector2, Vector3, WebGLRenderer } from "three";
+import { DEFAULT_TARGET } from "./camera";
+import { buildBarScene } from "./maps/bar";
 import { DEFAULT_BUDGET_STEP, LADDER, UnsupportedRendererError } from "./renderer";
 import type { CharacterHandle, LightingPhase, MarkerKind, RendererStatusEvent, RendererStats, WorldRenderer } from "./renderer";
 import { isSoftwareRenderer } from "./status";
@@ -29,14 +14,6 @@ interface Opts {
   height: number;
   budgetStep: number;
   allowSoftware: boolean;
-}
-
-/** Task 2 가 buildBarScene 으로 바꿀 자리: 이 작업의 장면은 바닥 판 하나다 */
-function createTempFloor(): Mesh {
-  const floor = new Mesh(new PlaneGeometry(PLATE_FAR * 2, PLATE_FAR * 2), new MeshStandardMaterial({ color: "#33241d" }));
-  floor.rotation.x = -Math.PI / 2;
-  floor.receiveShadow = true;
-  return floor;
 }
 
 function makeCanvas(host: HTMLElement): HTMLCanvasElement {
@@ -84,10 +61,9 @@ async function build(opts: Opts): Promise<WorldRenderer> {
   }
   let gl = makeGl(canvas, opts.allowSoftware);
 
-  const scene = new Scene();
-  scene.background = new Color("#060914");
-  scene.fog = new Fog("#060914", 20, 44);
-  scene.add(createTempFloor());
+  const budget = LADDER[step]!;
+  const bar = buildBarScene(budget);
+  const scene = bar.root;
   const characters = new Group();
   scene.add(characters);
   const seats = new Map<number, CharacterHandle>();
@@ -102,13 +78,14 @@ async function build(opts: Opts): Promise<WorldRenderer> {
     for (const cb of [...listeners]) cb(e);
   };
 
-  const budget = LADDER[step]!;
   const applySize = (): void => {
     gl.setPixelRatio(Math.min(globalThis.devicePixelRatio || 1, budget.dpr));
     gl.setSize(size.w, size.h, false);
     configureCamera(camera, target, size, offsetY);
   };
   applySize();
+  gl.toneMappingExposure = bar.exposure;
+  gl.shadowMap.needsUpdate = true; // 맵 그림자는 첫 그리기에서 한 번 굽는다
 
   // three 가 자기 리스너로 preventDefault 하고 render 를 건너뛴다(WebGLRenderer.js onContextLost). 우리는 알리기만 한다.
   const onLost = (): void => emit({ t: "lost" });
@@ -135,8 +112,10 @@ async function build(opts: Opts): Promise<WorldRenderer> {
       offsetY = off;
       configureCamera(camera, target, size, offsetY);
     },
-    setLighting(_phase: LightingPhase): void {
-      // Task 2 가 buildBarScene 의 조명 단계에 잇는다
+    setLighting(phase: LightingPhase): void {
+      bar.setLighting(phase);
+      gl.toneMappingExposure = bar.exposure;
+      gl.shadowMap.needsUpdate = true; // 조명 단계가 바뀌면 그림자를 다시 굽는다
     },
     addCharacter(seat: number, c: CharacterHandle): void {
       const prev = seats.get(seat);
@@ -150,8 +129,18 @@ async function build(opts: Opts): Promise<WorldRenderer> {
       characters.remove(c.root);
       seats.delete(seat);
     },
-    setMarker(_kind: MarkerKind, _at: { x: number; z: number } | null, _scale: number, _opacity: number): void {
-      // Task 2 가 링·손짓 링에 잇는다
+    setMarker(kind: MarkerKind, at: { x: number; z: number } | null, scale: number, opacity: number): void {
+      const mk = bar.markers[kind];
+      if (at === null) {
+        mk.group.visible = false;
+        return;
+      }
+      mk.group.visible = true;
+      mk.group.position.x = at.x;
+      mk.group.position.z = at.z;
+      mk.group.scale.setScalar(scale);
+      (mk.ring.material as MeshBasicMaterial).opacity = opacity;
+      (mk.outline.material as MeshBasicMaterial).opacity = 0.6 * opacity;
     },
     project(p: { x: number; y: number; z: number }): { sx: number; sy: number } {
       const v = new Vector3(p.x, p.y, p.z).project(camera);
@@ -183,7 +172,7 @@ async function build(opts: Opts): Promise<WorldRenderer> {
     },
     info(): RendererStats {
       const r = gl.info;
-      return { calls: r.render.calls, triangles: r.render.triangles, geometries: r.memory.geometries, textures: r.memory.textures, programs: r.programs?.length ?? 0, pointLights: 0 };
+      return { calls: r.render.calls, triangles: r.render.triangles, geometries: r.memory.geometries, textures: r.memory.textures, programs: r.programs?.length ?? 0, pointLights: 3 };
     },
     debugLoseContext(): void {
       gl.forceContextLoss();
@@ -200,12 +189,7 @@ async function build(opts: Opts): Promise<WorldRenderer> {
       // 캐릭터 자원은 만든 쪽(handle.dispose)이 정리한다. 여기서는 장면에서 떼기만 한다.
       for (const c of seats.values()) characters.remove(c.root);
       seats.clear();
-      scene.traverse((o) => {
-        const m = o as Mesh;
-        if (m.geometry) m.geometry.dispose();
-        const mat = m.material;
-        if (mat) for (const x of Array.isArray(mat) ? mat : [mat]) x.dispose();
-      });
+      bar.dispose();
       gl.dispose();
       gl.forceContextLoss();
       canvas.remove();
