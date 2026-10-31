@@ -5,16 +5,16 @@ milestone_name: 같은 공간
 current_phase: 06
 current_phase_name: 월드 뼈대
 status: executing
-stopped_at: Completed 06-12-PLAN.md
-last_updated: "2026-10-31T17:11:46.172Z"
+stopped_at: Completed 06-13-PLAN.md
+last_updated: "2026-10-31T17:32:10.101Z"
 last_activity: 2026-11-01
 last_activity_desc: Phase 06 execution started
-state_head: 2c28dfeb20de9cc5db0d3561472ea0a07e794425
+state_head: a7d064feb4c9b9e842351cda73dcb493eb0c3ac0
 progress:
   total_phases: 7
   completed_phases: 0
   total_plans: 21
-  completed_plans: 11
+  completed_plans: 12
   percent: 0
 ---
 
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-10-30)
 ## Current Position
 
 Phase: 06 (월드 뼈대) — EXECUTING
-Plan: 12 of 21
+Plan: 13 of 21
 Status: Ready to execute
 Last activity: 2026-11-01 — Phase 06 execution started
 
@@ -69,6 +69,7 @@ Progress: [░░░░░░░░░░] 0% (0/7 phases)
 | Phase 06 P10 | 12 min | 3 tasks | 9 files |
 | Phase 06 P11 | 9 min | 3 tasks | 3 files |
 | Phase 06 P12 | 10 min | 2 tasks | 8 files |
+| Phase 06 P13 | 13 min | 3 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -104,6 +105,10 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 06]: 06-12: v2 시간 링의 급함 색 진홍은 옮기지 않았다(UI-SPEC: 진홍·놋쇠는 이 페이즈 UI 에 없음). 시간 링을 쓰는 페이즈가 색을 정한다
 - [Phase 06]: 06-12: TopToast 기본 위치는 mv-toast--top(top var(--toast-top)·z var(--z-toast)); 06-15 는 담는 틀을 position: relative 로 준다
 - [Phase 06]: 06-12: 내 이름표 + 이모지 8개는 실측 약 202px 로 06-03 NAMETAG_MAX_W 180 을 넘는다(남의 이름표는 약 174px). camera.ts 는 바꾸지 않았고 PAN_BOX 재유도는 06-13/06-17 이 정한다
+- [Phase 06]: 06-13: WorldStore.currentEpoch() 읽기 전용 getter 추가 — 새 연결의 첫 프레임에 카메라·캐릭터를 날리지 않고 바로 붙이는 신호
+- [Phase 06]: 06-13: 런타임이 DOM 이름표의 transform·opacity·z-index(발 y 순위)를 직접 쓰고 React 는 내용·접근성·내보내기 버튼만 — 프레임마다 리렌더 없음, 나간 사람 이름표는 EXIT_MS 동안 유지
+- [Phase 06]: 06-13: E2E 훅(window.__mfWorld)과 소프트웨어 렌더러 허용은 ?e2e=1(세션 저장) 또는 개발 빌드에서만 켠다 — 같은 조건 하나
+- [Phase 06]: 06-13: 목적지 링은 렌더러 마커가 하나라 걷는 중 재탭은 새 목적지로 즉시 이동(이전 링 120ms 별도 페이드 없음). 열린 발견: 내 이름표+이모지 8개 약 202px > NAMETAG_MAX_W 180 은 PAN_BOX 건드리지 않고 사용자 결정 대기
 
 ### Pending Todos
 
@@ -140,8 +145,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-31T17:11:46.146Z
-Stopped at: Completed 06-12-PLAN.md
+Last session: 2026-10-31T17:32:10.074Z
+Stopped at: Completed 06-13-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
