@@ -10,12 +10,25 @@ import type { WorldModules, WorldRuntime } from "../world/runtime";
 import { initialMapStatus } from "../world/status";
 import type { MapStatusState } from "../world/status";
 import type { WorldStore } from "../world/store";
+import { installWorldTestHooks, worldTestHooksEnabled } from "../world/testHooks";
+import { MapStatusCard } from "./MapStatusCard";
 import { HeadStack } from "./v2/HeadStack";
 import "../styles/world.css";
 
 // 로비 맵 화면: 캔버스 한 장 + 입력 면 + 이름표 층. three 는 world/runtime 의 import() 로만 열린다(이 파일은 three 를 모른다).
 // 위치·카메라·투영은 런타임의 rAF 한 루프가 한다 — 프레임마다 React 가 다시 그리지 않는다. React 는 틀과 글(이름표 내용·접근성)만 맡는다.
 // 닉네임은 React 텍스트 노드로만 그린다(innerHTML 없음, T-06-29).
+
+/** 나가는 가림막이 덮는 시간(ms) = dur-med. 다 덮인 뒤 WebGL 자원을 해제한다 */
+const EXIT_CURTAIN_MS = 420;
+
+function sessionStore(): Storage | null {
+  try {
+    return typeof sessionStorage === "undefined" ? null : sessionStorage;
+  } catch {
+    return null;
+  }
+}
 
 const SCENE_LABEL = "지하 재즈 바 로비. 바닥을 누르면 그쪽으로 걸어가요";
 
@@ -63,7 +76,8 @@ export function WorldStage(props: WorldStageProps) {
   const tagRef = useRef<HTMLDivElement>(null);
   const runtimeRef = useRef<WorldRuntime | null>(null);
   const [tracker] = useState(createTapTracker);
-  const [, setMapStatus] = useState<MapStatusState>(initialMapStatus);
+  const [mapStatus, setMapStatus] = useState<MapStatusState>(initialMapStatus);
+  const readyReported = useRef(false);
 
   // 방을 나간 사람의 이름표는 퇴장 연출(180ms) 동안 남겨 둔다. view 가 바뀐 같은 렌더에서 계산해 한 프레임도 비지 않게 한다.
   const [seenPlayers, setSeenPlayers] = useState(view.players);
@@ -86,6 +100,8 @@ export function WorldStage(props: WorldStageProps) {
     const host = hostRef.current;
     const tagLayer = tagRef.current;
     if (host === null || tagLayer === null) return;
+    // 테스트 훅은 ?e2e=1(세션 저장) 또는 개발 빌드에서만 — 같은 조건에서 소프트웨어 렌더러도 허용한다(E2E 헤드리스, RESEARCH A13)
+    const hooksOn = worldTestHooksEnabled(window.location.search, sessionStore(), import.meta.env.DEV);
     const runtime = createWorldRuntime({
       host,
       tagLayer,
@@ -107,16 +123,36 @@ export function WorldStage(props: WorldStageProps) {
         if (at === null) root.removeAttribute("data-ring");
         else root.setAttribute("data-ring", `${at.x.toFixed(2)},${at.z.toFixed(2)}`);
       },
-      allowSoftware: false,
+      allowSoftware: hooksOn,
       loadModules: live.current.props.loadModules,
     });
     runtimeRef.current = runtime;
+    const offHooks = hooksOn ? installWorldTestHooks(runtime, live.current.props.store) : null;
     void runtime.start();
     return () => {
+      offHooks?.();
       runtime.dispose();
       if (runtimeRef.current === runtime) runtimeRef.current = null;
     };
   }, []);
+
+  // 맵이 처음 열리면 한 번 알린다(06-15 가 PhaseHeader 안내를 접는 데 쓴다)
+  useEffect(() => {
+    if (mapStatus.status !== "ready" || readyReported.current) return;
+    readyReported.current = true;
+    live.current.props.onReady?.();
+  }, [mapStatus.status]);
+
+  // 나가기: night-900 으로 420ms 덮은 뒤 렌더러·캐릭터 자원을 해제하고 알린다. 걷던 캐릭터는 그 자리에서 멈춘다.
+  const exiting = props.exiting === true;
+  useEffect(() => {
+    if (!exiting) return;
+    const timer = setTimeout(() => {
+      runtimeRef.current?.dispose();
+      live.current.props.onExited?.();
+    }, EXIT_CURTAIN_MS);
+    return () => clearTimeout(timer);
+  }, [exiting]);
 
   // view 가 바뀌면 퇴장·끊김 표시를 런타임에 맞춘다(그리기 전에)
   useLayoutEffect(() => {
@@ -127,7 +163,7 @@ export function WorldStage(props: WorldStageProps) {
   const onTap = (clientX: number, clientY: number): void => {
     const { props: p } = live.current;
     const runtime = runtimeRef.current;
-    if (runtime === null || !p.canSend) return;
+    if (runtime === null || !p.canSend || p.exiting) return;
     const at = runtime.tap(clientX, clientY);
     if (at === null) return;
     const clamp = (v: number): number => Math.max(-MOVE_COORD_LIMIT, Math.min(MOVE_COORD_LIMIT, Math.round(v * 100)));
@@ -141,8 +177,10 @@ export function WorldStage(props: WorldStageProps) {
   const roster = [...view.players, ...leaving.filter((p) => !here.has(p.seat))];
   const canKick = view.me.isHost && props.canSend;
 
+  const stateClass = exiting ? "is-exiting" : mapStatus.status === "ready" ? "is-open" : mapStatus.status === "lost" || mapStatus.status === "recreating" ? "is-redrawing" : "";
+
   return (
-    <div ref={rootRef} className="mf-world" data-world-stage>
+    <div ref={rootRef} className={stateClass ? `mf-world ${stateClass}` : "mf-world"} data-world-stage>
       <div ref={hostRef} className="mf-world__canvas" role="img" aria-label={SCENE_LABEL} />
       <div
         className="mf-world__input"
@@ -189,6 +227,14 @@ export function WorldStage(props: WorldStageProps) {
             </div>
           );
         })}
+      </div>
+      <div className="mf-world__veil">
+        <MapStatusCard
+          status={mapStatus.status}
+          onRetry={() => void runtimeRef.current?.retry()}
+          onLeave={() => live.current.props.onLeave()}
+          onReload={() => (live.current.props.reload ?? (() => window.location.reload()))()}
+        />
       </div>
     </div>
   );

@@ -12,8 +12,9 @@ import { FIGS } from "./characterData";
 import { createTapGate } from "./input";
 import { DEFAULT_BUDGET_STEP } from "./renderer";
 import type { CharacterHandle, WorldRenderer } from "./renderer";
-import { initialMapStatus, inputBlocked, mapStatusReducer } from "./status";
+import { initialMapStatus, inputBlocked, mapStatusReducer, shouldRecreate } from "./status";
 import type { MapStatusEvent, MapStatusState } from "./status";
+import type { RendererStatusEvent } from "./renderer";
 import type { WorldStore } from "./store";
 import type { characterKit as CharacterKitType } from "./character";
 import type { createThreeRenderer as CreateThreeRendererType } from "./threeRenderer";
@@ -68,6 +69,8 @@ const CUE_DELAY_MS = 600;
 const CUE_PULSES = 3;
 const CUE_REDUCED_MS = 2500;
 const CUE_AHEAD = 2;
+/** 소실·재생성 중 상태기계에 시각을 알리는 간격(ms) — 3초 재생성·5초 포기를 판정한다 */
+const TICK_MS = 1000;
 /** 크기 변화를 다시 재기 전 기다리는 시간(ms) */
 const RESIZE_DEBOUNCE_MS = 150;
 /** 한 프레임 dt 상한(초) — 탭이 숨었다 돌아와도 걸음 계산이 튀지 않게 */
@@ -119,6 +122,10 @@ export interface WorldRuntime {
   renderer(): WorldRenderer | null;
   /** 지금 목적지 링의 목표 지점(없으면 null) */
   ring(): { x: number; z: number } | null;
+  /** 지금 맵 상태 */
+  status(): MapStatusState;
+  /** performance.mark("map-interactive") 의 시각(ms). 아직 안 열렸으면 null */
+  interactiveMs(): number | null;
 }
 
 /** 06-11 figForSeat 와 같은 식(character.ts 는 three 를 끌고 와서 정적으로 가져오지 않는다) */
@@ -189,6 +196,10 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
   let kit: WorldModules["characterKit"] | null = null;
   let rafId: number | null = null;
   let status: MapStatusState = initialMapStatus;
+  let offRendererStatus: (() => void) | null = null;
+  let tickTimer: ReturnType<typeof setInterval> | null = null;
+  let interactiveAt: number | null = null;
+  let visibilityBound = false;
 
   const actors = new Map<number, Actor>();
   const pendingEntered = new Set<number>();
@@ -223,18 +234,94 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
     if (next === prev) return;
     status = next;
     deps.onStatus(next);
-    if (prev.status !== "ready" && next.status === "ready") {
-      markInteractive();
-      startCueWait();
+    if (next.status === "ready") {
+      if (prev.status === "loading") {
+        markInteractive();
+        startCueWait();
+      } else {
+        resync = true; // 복구·재생성 뒤 첫 프레임: 카메라와 모든 캐릭터를 서버 위치에 바로 놓는다
+      }
+    }
+    // 소실·재생성 동안만 1초 tick 으로 시간을 알린다
+    const ticking = next.status === "lost" || next.status === "recreating";
+    if (ticking && tickTimer === null) {
+      tickTimer = setInterval(() => dispatch({ t: "tick", now: Date.now() }), TICK_MS);
+    } else if (!ticking && tickTimer !== null) {
+      clearInterval(tickTimer);
+      tickTimer = null;
+    }
+    // 렌더러 재생성은 소실 한 번에 한 번이다(T-06-06)
+    if (shouldRecreate(prev, next) && renderer !== null) {
+      renderer
+        .recreate()
+        .then(() => {
+          if (!disposed && status.status === "recreating") dispatch({ t: "recreated" });
+        })
+        .catch(() => {
+          // 재생성이 실패하면 5초 tick 이 [새로 고침] 카드로 끝낸다
+        });
     }
   }
 
   function markInteractive(): void {
+    if (interactiveAt !== null) return;
     try {
-      performance.mark("map-interactive");
+      const mark = performance.mark("map-interactive");
+      interactiveAt = mark?.startTime ?? performance.now();
     } catch {
-      // performance.mark 가 없는 환경: 표식만 없다
+      interactiveAt = typeof performance !== "undefined" ? performance.now() : 0;
     }
+  }
+
+  /** 렌더러가 알리는 소실·복구·재생성을 상태기계로 넣는다 */
+  function onRendererStatus(e: RendererStatusEvent): void {
+    if (disposed) return;
+    if (e.t === "lost") {
+      if (status.status === "loading") {
+        // 불러오는 중의 소실은 리듀서가 무시한다 — 불러오기 실패로 처리하고 렌더러를 정리한다
+        dispatch({ t: "loadError" });
+        teardownRenderer();
+      } else {
+        dispatch({ t: "lost", at: Date.now() });
+      }
+      return;
+    }
+    dispatch({ t: e.t });
+  }
+
+  function onVisibility(): void {
+    if (disposed || renderer === null) return;
+    if (document.visibilityState === "hidden") {
+      if (rafId !== null) caf(rafId);
+      rafId = null;
+      return;
+    }
+    if (renderer.isContextLost()) dispatch({ t: "visible", contextLost: true, at: Date.now() });
+    resync = true;
+    lastFrameAt = Date.now();
+    schedule();
+  }
+
+  /** 렌더러와 캐릭터를 정리한다(불러오는 중 소실, dispose) */
+  function teardownRenderer(): void {
+    if (rafId !== null) caf(rafId);
+    rafId = null;
+    offRendererStatus?.();
+    offRendererStatus = null;
+    clearRing();
+    hideCue();
+    const r = renderer;
+    renderer = null;
+    kit = null;
+    for (const a of actors.values()) {
+      r?.removeCharacter(a.seat);
+      a.handle.dispose();
+    }
+    actors.clear();
+    cam = null;
+    offsetCur = null;
+    resync = true;
+    r?.dispose();
   }
 
   // ---------- 불러오기 ----------
@@ -265,6 +352,7 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
     renderer = r;
     kit = mods.characterKit;
     seenSize = s;
+    offRendererStatus = r.onStatus(onRendererStatus);
     r.setLighting(deps.lighting ?? "talk");
     syncPlayers();
     lastFrameAt = Date.now();
@@ -458,6 +546,7 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
 
   function schedule(): void {
     if (disposed || rafId !== null || renderer === null) return;
+    if (typeof document !== "undefined" && document.visibilityState === "hidden") return; // 숨겨진 동안은 그리지 않는다(배터리)
     rafId = raf(frame);
   }
 
@@ -560,7 +649,8 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
     updateRing(r, now, sNow);
     updateCue(r, now);
 
-    r.render();
+    // 소실·재생성·포기 중에는 GL 을 그리지 않는다(이름표와 서버 위치 갱신은 계속한다)
+    if (status.status === "loading" || status.status === "ready") r.render();
     writeTags(r);
     for (const a of gone) {
       removeActor(a);
@@ -630,6 +720,10 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
 
   return {
     async start() {
+      if (!visibilityBound && typeof document !== "undefined") {
+        visibilityBound = true;
+        document.addEventListener("visibilitychange", onVisibility);
+      }
       await boot();
     },
     syncPlayers,
@@ -644,21 +738,14 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
       if (disposed) return;
       disposed = true;
       bootGen++;
-      if (rafId !== null) caf(rafId);
-      rafId = null;
+      if (visibilityBound) document.removeEventListener("visibilitychange", onVisibility);
       if (resizeTimer !== null) clearTimeout(resizeTimer);
       if (cueTimer !== null) clearTimeout(cueTimer);
+      if (tickTimer !== null) clearInterval(tickTimer);
       if (ring?.timer) clearTimeout(ring.timer);
       ring = null;
       cue = null;
-      const r = renderer;
-      renderer = null;
-      for (const a of actors.values()) {
-        r?.removeCharacter(a.seat);
-        a.handle.dispose();
-      }
-      actors.clear();
-      r?.dispose();
+      teardownRenderer();
     },
     sample(seat, t) {
       return store.positionOf(seat, t ?? deps.serverNow());
@@ -668,6 +755,12 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
     },
     ring() {
       return ring === null ? null : { ...ring.target };
+    },
+    status() {
+      return status;
+    },
+    interactiveMs() {
+      return interactiveAt;
     },
   };
 }
