@@ -1,0 +1,13 @@
+/* design/v2.0/design-system/components/bundle.css 에서 옮겼다(승인 2026-10-31). 이 페이즈 부품만.
+ * 값은 tokens.css 의 변수만 쓴다(hex 없음). 진홍·놋쇠·따뜻한 색은 이 페이즈 UI 에 없다(UI-SPEC Color).
+ * 7·8·10페이즈가 쓰는 부품(채팅·득표 배지·도장·입력 중 등)은 그 페이즈가 같은 파일에 더한다. */
+.mv-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.mv-icon { display: block; flex: none; }
+
+/* 머리 위 쌓임. 이름표는 최대 폭이 없고 말줄임하지 않는다(MAP-07, 결정 0052-2) */
+.mv-head { display: inline-flex; flex-direction: column; align-items: center; gap: var(--space-xs); }
+.mv-tag { display: inline-flex; align-items: center; gap: 6px; padding: 2px var(--space-sm); border-radius: var(--radius-pill); background: var(--overlay-ink); color: var(--gray-50); font-family: var(--font-ui); font-size: 14px; line-height: 1.4; font-weight: 700; white-space: nowrap; text-shadow: var(--shadow-text); }
+.mv-tag.is-me { box-shadow: inset 0 0 0 1.5px var(--gray-100); }
+.mv-tag.is-away { opacity: 0.55; }
+.mv-tag.is-away .mv-tag__dot { background: var(--gray-700) !important; }
+.mv-tag__dot { width: 8px; height: 8px; border-radius: var(--radius-pill); flex: none; }
