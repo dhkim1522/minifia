@@ -1,5 +1,9 @@
-// 정사영 카메라 수학(순수). three 를 import 하지 않는다 — 렌더러가 같은 상수로 three 카메라를 만든다.
-// RED 뼈대: 상수만 실제 값이고 함수는 아직 틀린 값을 돌려준다(같은 작업의 GREEN 에서 구현으로 바뀐다).
+// 정사영 카메라 수학(순수). three 를 import 하지 않는다 — 렌더러(06-10)가 같은 상수로 three 카메라를 만들고,
+// 그쪽 Vector3.project 가 이 모듈의 groundToScreen 과 같은 값임을 테스트로 증명한다.
+//
+// 좌표: 월드 x·z 는 바닥, y 는 위. 화면 sx 는 오른쪽, sy 는 아래쪽(CSS 픽셀).
+// 카메라 = 목표 + (sin(yaw)·17, 12.5, cos(yaw)·17), 주시점 = (목표.x, 0.6, 목표.z), 정사영, 배율 PX_PER_UNIT.
+// 클라이언트 전용이라 삼각함수를 써도 된다(shared 의 서버 판정 모듈 규칙은 여기 적용되지 않는다).
 
 export interface V3 {
   x: number;
@@ -11,45 +15,123 @@ export interface Canvas {
   h: number;
 }
 
+/** 화면 배율(px/월드 단위). 폰 크기와 무관한 고정값 = 844 ÷ view 14.5 (승인 보드 390×844). 프러스텀 높이 = 캔버스 높이 ÷ 58.2 */
 export const PX_PER_UNIT = 58.2;
+/** 카메라 방위(라디안) */
 export const CAM_YAW = Math.PI / 4;
+/** 카메라가 목표에서 수평으로 떨어진 거리 */
 export const CAM_DIST = 17;
+/** 카메라 높이 */
 export const CAM_HEIGHT = 12.5;
+/** 주시점 높이(캐릭터 몸 가운데쯤) */
 export const LOOK_Y = 0.6;
-export const DEFAULT_TARGET = { x: -0.4, z: -0.4 };
+/** 내 캐릭터가 아직 없을 때의 카메라 목표 */
+export const DEFAULT_TARGET: Readonly<{ x: number; z: number }> = { x: -0.4, z: -0.4 };
+/** 따라가기 감쇠 시간 상수(ms): 350ms 에 거리의 90% 를 줄인다 → τ = 350 / ln 10 ≈ 152 */
 export const FOLLOW_TAU_MS = 350 / Math.LN10;
+/** 크기 변화(주소창 접힘 등) 뒤 카메라 중심을 다시 맞추는 시간(ms) = dur-fast */
 export const RESIZE_SETTLE_MS = 180;
+/** 스테이지 사각형 위 끝 = 헤더 블록 아래 끝(px) */
 export const HEADER_BOTTOM = 62;
+/** 6페이즈 아래 패널 높이(px, 안전 영역 제외). 7페이즈 채팅이 들어오면 DOM 에서 재서 넘긴다 */
 export const PANEL_HEIGHT = 88;
+/** 이름표 상자 최대 폭(가정 A1: 전각 8자 + " (나)" + 점·여백). 06-12 E2E 가 실제 폭을 재서 넘으면 고친다 */
 export const NAMETAG_MAX_W = 180;
+/** 이름표 상자 높이(px) */
 export const NAMETAG_H = 24;
-export const PAN_BOX = { minX: -4.0, maxX: 4.0, minZ: -4.0, maxZ: 4.0 };
+/** 이름표 상자 아래 끝과 머리 꼭대기 사이 간격(px) */
+export const NAMETAG_GAP = 4;
+/** 카메라 목표 이동 한계(월드 단위, 축별 상자) */
+export const PAN_BOX: Readonly<{ minX: number; maxX: number; minZ: number; maxZ: number }> = { minX: -4.0, maxX: 4.0, minZ: -4.0, maxZ: 4.0 };
+/** 연장 바닥 판 반폭(월드 단위, 바닥 아래 y = −0.01 의 정사각형 한 장) */
 export const PLATE_FAR = 30;
-export const STAGE_SIZES: readonly { w: number; h: number; label: string }[] = [];
 
+/** UI-SPEC 의 폰 크기(폰 폭×높이). 스테이지 사각형은 stageRect 로 구한다 */
+export const STAGE_SIZES: readonly { w: number; h: number; label: string }[] = [
+  { w: 360, h: 640, label: "360x640" },
+  { w: 390, h: 664, label: "390x664" },
+  { w: 430, h: 932, label: "430x932" },
+  { w: 360, h: 560, label: "360x560" },
+  { w: 390, h: 844, label: "390x844" },
+  { w: 402, h: 874, label: "402x874" },
+];
+
+// 카메라 위치 − 주시점 = (sin yaw·17, 12.5 − 0.6, cos yaw·17). 기저는 한 번만 계산한다.
+const OFFSET: V3 = { x: Math.sin(CAM_YAW) * CAM_DIST, y: CAM_HEIGHT - LOOK_Y, z: Math.cos(CAM_YAW) * CAM_DIST };
+const OFFSET_LEN = Math.sqrt(OFFSET.x * OFFSET.x + OFFSET.y * OFFSET.y + OFFSET.z * OFFSET.z);
+const BACK: V3 = { x: OFFSET.x / OFFSET_LEN, y: OFFSET.y / OFFSET_LEN, z: OFFSET.z / OFFSET_LEN };
+// right = normalize(worldUp × back) = normalize((back.z, 0, −back.x))
+const RIGHT_LEN = Math.sqrt(BACK.z * BACK.z + BACK.x * BACK.x);
+const RIGHT: V3 = { x: BACK.z / RIGHT_LEN, y: 0, z: -BACK.x / RIGHT_LEN };
+// up = back × right
+const UP: V3 = {
+  x: BACK.y * RIGHT.z - BACK.z * RIGHT.y,
+  y: BACK.z * RIGHT.x - BACK.x * RIGHT.z,
+  z: BACK.x * RIGHT.y - BACK.y * RIGHT.x,
+};
+
+/** 화면 오른쪽·위쪽·카메라 쪽 단위벡터(서로 수직). 호출마다 새 객체를 돌려준다 */
 export function cameraBasis(): { right: V3; up: V3; back: V3 } {
-  const z = { x: 0, y: 0, z: 0 };
-  return { right: z, up: z, back: z };
+  return { right: { ...RIGHT }, up: { ...UP }, back: { ...BACK } };
 }
-export function stageRect(_c: Canvas, _panelHeight: number = PANEL_HEIGHT): { top: number; bottom: number; left: number; right: number } {
-  return { top: 0, bottom: 0, left: 0, right: 0 };
+
+/** 스테이지 사각형(px): 위 62 ~ 아래 패널 위 끝, 폭 전체. 안전 영역은 뺀 값이다 */
+export function stageRect(c: Canvas, panelHeight: number = PANEL_HEIGHT): { top: number; bottom: number; left: number; right: number } {
+  return { top: HEADER_BOTTOM, bottom: c.h - panelHeight, left: 0, right: c.w };
 }
-export function stageOffsetY(_canvasH: number, _stageTop: number, _stageBottom: number): number {
-  return 0;
+
+/** setViewOffset 세로 이동: offsetY = H/2 − (스테이지 위 끝 + 스테이지 높이/2). 양수면 장면이 위로 올라간다 */
+export function stageOffsetY(canvasH: number, stageTop: number, stageBottom: number): number {
+  return canvasH / 2 - (stageTop + (stageBottom - stageTop) / 2);
 }
-export function groundToScreen(_p: V3, _target: { x: number; z: number }, _c: Canvas, _offsetY: number): { sx: number; sy: number } {
-  return { sx: 0, sy: 0 };
+
+/** 월드 점 → 화면 좌표(px). 목표가 주시점이고, 오프셋만큼 장면이 위로 올라간다 */
+export function groundToScreen(p: V3, target: { x: number; z: number }, c: Canvas, offsetY: number): { sx: number; sy: number } {
+  const d: V3 = { x: p.x - target.x, y: p.y - LOOK_Y, z: p.z - target.z };
+  const r = d.x * RIGHT.x + d.y * RIGHT.y + d.z * RIGHT.z;
+  const u = d.x * UP.x + d.y * UP.y + d.z * UP.z;
+  return { sx: c.w / 2 + r * PX_PER_UNIT, sy: c.h / 2 - u * PX_PER_UNIT - offsetY };
 }
-export function screenToGround(_sx: number, _sy: number, _target: { x: number; z: number }, _c: Canvas, _offsetY: number): { x: number; z: number } {
-  return { x: 0, z: 0 };
+
+/** 화면 점의 정사영 광선: 원점은 카메라 평면 위(주시점에서 카메라 쪽으로 OFFSET_LEN), 방향은 −back */
+export function screenRay(sx: number, sy: number, target: { x: number; z: number }, c: Canvas, offsetY: number): { origin: V3; dir: V3 } {
+  const dx = (sx - c.w / 2) / PX_PER_UNIT;
+  const dy = (c.h / 2 - sy - offsetY) / PX_PER_UNIT;
+  return {
+    origin: {
+      x: target.x + RIGHT.x * dx + UP.x * dy + BACK.x * OFFSET_LEN,
+      y: LOOK_Y + RIGHT.y * dx + UP.y * dy + BACK.y * OFFSET_LEN,
+      z: target.z + RIGHT.z * dx + UP.z * dy + BACK.z * OFFSET_LEN,
+    },
+    dir: { x: -BACK.x, y: -BACK.y, z: -BACK.z },
+  };
 }
-export function screenRay(_sx: number, _sy: number, _target: { x: number; z: number }, _c: Canvas, _offsetY: number): { origin: V3; dir: V3 } {
-  const z = { x: 0, y: 0, z: 0 };
-  return { origin: z, dir: z };
+
+/** 화면 점 → 바닥(y = 0) 점. groundToScreen 의 역 */
+export function screenToGround(sx: number, sy: number, target: { x: number; z: number }, c: Canvas, offsetY: number): { x: number; z: number } {
+  const { origin, dir } = screenRay(sx, sy, target, c, offsetY);
+  const t = origin.y / -dir.y;
+  return { x: origin.x + dir.x * t, z: origin.z + dir.z * t };
 }
-export function clampTarget(p: { x: number; z: number }, _box: typeof PAN_BOX = PAN_BOX): { x: number; z: number } {
-  return p;
+
+/** 카메라 목표를 이동 한계 상자 안으로 자른다(축별) */
+export function clampTarget(p: { x: number; z: number }, box: typeof PAN_BOX = PAN_BOX): { x: number; z: number } {
+  return { x: Math.min(box.maxX, Math.max(box.minX, p.x)), z: Math.min(box.maxZ, Math.max(box.minZ, p.z)) };
 }
-export function followStep(cam: { x: number; z: number }, _target: { x: number; z: number }, _dtMs: number, _reduced: boolean): { x: number; z: number } {
-  return cam;
+
+const ARRIVE_EPS = 0.001;
+
+/**
+ * 따라가기 한 걸음. 프레임 독립 감쇠 k = 1 − exp(−dt/τ). 모션 줄이기면 즉시 목표에 붙는다.
+ * 0.001 단위 안으로 들어오면 목표에 붙어 멈춘다(끝없이 가까워지며 다시 그리는 것을 막는다).
+ */
+export function followStep(cam: { x: number; z: number }, target: { x: number; z: number }, dtMs: number, reduced: boolean): { x: number; z: number } {
+  if (reduced) return { x: target.x, z: target.z };
+  const dx = target.x - cam.x;
+  const dz = target.z - cam.z;
+  if (dx === 0 && dz === 0) return { x: cam.x, z: cam.z };
+  if (!(dtMs > 0)) return { x: cam.x, z: cam.z };
+  if (Math.sqrt(dx * dx + dz * dz) < ARRIVE_EPS) return { x: target.x, z: target.z };
+  const k = 1 - Math.exp(-dtMs / FOLLOW_TAU_MS);
+  return { x: cam.x + dx * k, z: cam.z + dz * k };
 }
