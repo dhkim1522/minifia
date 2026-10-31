@@ -1,0 +1,304 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>시상식</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="ds/minifiav2/tokens.css">
+<link rel="stylesheet" href="ds/minifiav2/components/bundle.css">
+<script src="ds/minifiav2/components/bundle.js"></script>
+<script src="./three.min.js"></script>
+<script src="./character.js"></script>
+<script src="./blockout.js"></script>
+<script src="./bar.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&amp;family=Gowun+Batang:wght@700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#0e1326}
+.sd-btn:focus-visible{outline:2px solid #e6e8ee;outline-offset:2px}
+.sd-btn[aria-pressed="true"] .mv-dots__dot{border-color:#2a3760}
+.sd-btn[aria-pressed="true"] .mv-dots__dot.is-on{background:#0e1326;border-color:#0e1326}
+@keyframes sdFade{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion: reduce){*{animation:none!important}}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; position: relative; overflow: hidden; background: var(--night-950); color: var(--gray-100); font-family: var(--font-ui); word-break: keep-all; user-select: none; -webkit-user-select: none">
+
+<canvas id="sdCanvas" aria-label="{{ sceneLabel }}" style="position: absolute; left: 0; top: 0; width: 390px; height: 844px; display: block"></canvas>
+
+<div aria-hidden="true" style="position: absolute; inset: 0; pointer-events: none; background: rgba(6, 9, 20, 0.62); opacity: {{ dimOpacity }}; transition: opacity 420ms"></div>
+
+<div style="position: absolute; left: 0; top: 0; width: 390px; height: 844px; pointer-events: none">
+<sc-for list="{{ people }}" as="p" hint-placeholder-count="8">
+<div id="sdPlate{{ p.i }}" style="position: absolute; left: 0; top: 0; width: 0; height: 0; will-change: transform; z-index: {{ p.z }}; opacity: {{ p.opacity }}; transition: opacity 300ms">
+<div style="position: absolute; left: 0; top: 0; transform: translate(-50%, -100%)">
+<x-import component-from-global-scope="MinifiaV2.HeadStack" name="{{ p.name }}" color="{{ p.color }}" me="{{ p.me }}" role="{{ p.role }}" done="{{ p.done }}" away="{{ p.away }}"></x-import>
+</div>
+</div>
+</sc-for>
+</div>
+
+<div aria-hidden="true" style="position: absolute; left: 0; top: 0; width: 390px; height: 120px; pointer-events: none; background: linear-gradient(to bottom, rgba(14, 19, 38, 0.88) 0px, rgba(14, 19, 38, 0.6) 70px, rgba(14, 19, 38, 0) 120px)"></div>
+<div style="position: absolute; left: 0; top: 0; width: 390px; box-sizing: border-box; padding: 18px 16px 0; z-index: 40">
+<x-import component-from-global-scope="MinifiaV2.PhaseHeader" title="{{ phaseTitle }}" hint="{{ phaseHint }}" show-hint="{{ showHint }}"></x-import>
+</div>
+
+<div style="position: absolute; left: 0; right: 0; top: 96px; z-index: 40">
+<x-import component-from-global-scope="MinifiaV2.TopToast" icon="{{ toastIcon }}" text="{{ toast }}" visible="{{ toastOn }}"></x-import>
+</div>
+
+<sc-if value="{{ hasScenario }}" hint-placeholder-val="{{ false }}">
+<div role="group" aria-label="시안 조절: 이긴 팀" style="position: absolute; left: 16px; right: 16px; top: 92px; z-index: 46; display: flex; align-items: center; gap: 6px; padding: 6px; border-radius: 12px; border: 1px dashed #4a5680; background: rgba(14, 19, 38, 0.8)">
+<span style="font-size: 12px; color: #a9aebb; padding: 0 4px">시안</span>
+<sc-for list="{{ scenarios }}" as="o" hint-placeholder-count="2">
+<button type="button" class="sd-btn" onClick="{{ o.pick }}" aria-pressed="{{ o.pressed }}" style="flex: 1; min-height: 32px; border-radius: 8px; border: 0; background: {{ o.bg }}; color: {{ o.fg }}; font-family: inherit; font-size: 13px; font-weight: 700; cursor: pointer">{{ o.label }}</button>
+</sc-for>
+</div>
+</sc-if>
+
+<sc-if value="{{ hasAnnounce }}" hint-placeholder-val="{{ false }}">
+<div role="status" style="position: absolute; left: 16px; right: 16px; top: 220px; text-align: center; z-index: 45; animation: sdFade 600ms both; display: flex; flex-direction: column; align-items: center; gap: 12px">
+<span style="color: {{ announceColor }}"><x-import component-from-global-scope="MinifiaV2.Icon" name="{{ announceIcon }}" size="64"></x-import></span>
+<p style="margin: 0; font-size: 40px; line-height: 1.2; font-weight: 700; font-family: var(--font-serif); color: var(--gray-50); text-shadow: 0 2px 12px rgba(0, 0, 0, 0.8)">{{ announce }}</p>
+</div>
+</sc-if>
+
+<sc-if value="{{ hasAward }}" hint-placeholder-val="{{ false }}">
+<div style="position: absolute; left: 0; right: 0; top: 128px; z-index: 45; display: flex; justify-content: center">
+<x-import component-from-global-scope="MinifiaV2.AwardPlate" icon="{{ awardIcon }}" title="{{ awardTitle }}" reason="{{ awardReason }}" name="{{ awardName }}" color="{{ awardColor }}"></x-import>
+</div>
+</sc-if>
+
+<section style="position: absolute; left: 0; bottom: 0; width: 390px; box-sizing: border-box; padding: 14px 16px 22px; background: rgba(21, 28, 54, 0.97); border-radius: 20px 20px 0 0; display: flex; flex-direction: column; gap: 10px; z-index: 50">
+<sc-if value="{{ hasChat }}" hint-placeholder-val="{{ true }}">
+<x-import component-from-global-scope="MinifiaV2.ChatPanel" tabs="{{ tabs }}" tab="{{ tab }}" on-tab="{{ pickTab }}" messages="{{ chat }}" value="{{ draft }}" on-change="{{ setDraft }}" on-send="{{ send }}" emotes="{{ emotes }}" on-emote="{{ pickEmote }}" input-id="sdChatInput"></x-import>
+</sc-if>
+<div role="group" aria-label="행동" style="display: grid; grid-template-columns: repeat({{ actionCols }}, minmax(0, 1fr)); gap: 8px">
+<sc-for list="{{ actions }}" as="a" hint-placeholder-count="2">
+<button type="button" class="sd-btn" onClick="{{ a.pick }}" aria-pressed="{{ a.pressed }}" aria-label="{{ a.aria }}" disabled="{{ a.disabled }}" style="display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 52px; padding: 0 12px; border-radius: 14px; border: 1px solid {{ a.border }}; background: {{ a.bg }}; color: {{ a.fg }}; font-family: inherit; font-size: 16px; font-weight: 700; cursor: {{ a.cursor }}; opacity: {{ a.opacity }}">
+<sc-if value="{{ a.hasIcon }}" hint-placeholder-val="{{ true }}"><x-import component-from-global-scope="MinifiaV2.Icon" name="{{ a.icon }}" size="22"></x-import></sc-if>
+<span>{{ a.label }}</span>
+<sc-if value="{{ a.hasDots }}" hint-placeholder-val="{{ false }}"><x-import component-from-global-scope="MinifiaV2.DotProgress" count="{{ a.dots }}" total="{{ a.dotsTotal }}" label="{{ a.label }}"></x-import></sc-if>
+</button>
+</sc-for>
+</div>
+</section>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+var SCREEN = 'award', W = 390, H = 844;
+var NAMES = [['지호', '#7a8fb8'], ['민준', '#6fa59a'], ['서연', '#b89a6f'], ['도윤', '#b87a5c'], ['하은', '#a9aebb'], ['태오', '#8f86b0'], ['수아', '#7f9f7a'], ['현우', '#a88f9a']];
+var EMOTES = [['throat', '목 긋기'], ['deny', '나 아니야'], ['clap', '박수'], ['cry', '엉엉'], ['handshake', '악수'], ['point', '손가락질'], ['praise', '최고'], ['surprise', '깜짝'], ['dance', '춤']];
+var ROLES = ['citizen', 'police', 'citizen', 'citizen', 'doctor', 'citizen', 'mafia', 'mafia'];
+var MAFIA = [6, 7], HOST = 0, READY_MIN = 4;
+var CFG = {
+  resultHost: { phase: 'result', me: 0, host: true, label: '결과. 무대 둘레에서 직업이 한 명씩 공개되고 이긴 팀만 조명을 받아요' },
+  resultGuest: { phase: 'result', me: 2, host: false, label: '결과. 일반 참가자 화면, 준비만 누를 수 있어요' },
+  award: { phase: 'award', me: 0, label: '시상식. 한 명씩 무대로 나와 칭호를 받아요' },
+  hostMove: { phase: 'talk', me: 1, label: '로비. 방장이 나가서 민준에게 방장이 넘어와요' }
+};
+// 칭호 초안(서버 기록으로 정한다, END-04). 진 팀부터, 마지막이 가장 큰 칭호
+var AWARDS = [
+  [2, 'ghost', '첫 희생자', '1밤에 당함'], [3, 'cry', '억울한 시민', '첫날 처형'], [5, 'send', '수다왕', '채팅 42번'], [6, 'target', '밤의 사냥꾼', '암살 1번 성공'],
+  [7, 'roleMafia', '끝까지 연기', '마지막 마피아'], [4, 'heal', '수호천사', '지호 님을 지킴'], [0, 'point', '명탐정', '마피아를 3번 가리킴'], [1, 'eye', '신내림', '수아 님을 찾아냄']
+];
+var SLOT = 2.6;
+var LOGS = {
+  all: [['hot', '시민 승리'], [3, '역시 현우 님이었어'], [7, '들켰네요ㅋㅋ']],
+  mafia: [['divider', '1밤'], [6, '오늘은 서연?'], [7, '좋아요'], ['divider', '2밤'], [6, '민준 님 경찰 같아'], [7, '내일 제가 시민이라고 할게요']],
+  ghost: [['divider', '2밤'], [3, '수아 님이 마피아예요ㅠ'], [2, '아무도 못 들어요…'], ['divider', '3밤'], [6, '들켰다']]
+};
+
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = this.initial('citizen');
+  }
+
+  initial(win) {
+    return { win: win, draft: '', tab: 'all', logs: this.logs(win), reveal: 0, announce: false, ready: [], myReady: false, award: -1, awardShown: false,
+      hostLeft: false, iAmHost: false, toastOn: false, showHint: true };
+  }
+
+  logs(win) {
+    if (SCREEN === 'hostMove') return { all: [[1, '다들 왔어요?'], [5, '지호 님 어디 갔어요?']].map(function (m) { return { kind: 'player', name: NAMES[m[0]][0], color: NAMES[m[0]][1], text: m[1] }; }) };
+    var o = {};
+    Object.keys(LOGS).forEach(function (k) {
+      o[k] = LOGS[k].map(function (m) {
+        if (typeof m[0] !== 'number') return { kind: m[0], text: m[0] === 'hot' ? (win === 'mafia' ? '마피아 승리' : '시민 승리') : m[1] };
+        return { kind: 'player', name: NAMES[m[0]][0], color: NAMES[m[0]][1], text: m[1], channel: k === 'mafia' ? 'mafia' : k === 'ghost' ? 'ghost' : undefined };
+      });
+    });
+    return o;
+  }
+
+  componentDidMount() {
+    var self = this;
+    this.alive = true;
+    (function boot() {
+      if (!self.alive) return;
+      var canvas = document.getElementById('sdCanvas');
+      if (!window.THREE || !window.MFChar || !window.MFB || !MFB.CONCEPTS.bar || !canvas || !document.getElementById('sdPlate7')) { setTimeout(boot, 60); return; }
+      self.start(canvas);
+    })();
+  }
+
+  componentWillUnmount() {
+    this.alive = false;
+    cancelAnimationFrame(this.raf);
+    if (this.io) this.io.disconnect();
+    if (this.st) this.st.dispose();
+  }
+
+  start(canvas) {
+    var self = this;
+    canvas.addEventListener('webglcontextlost', function (e) { e.preventDefault(); });
+    var st = this.st = MFB.createStage(canvas, 'bar', { width: W, height: H, offsetY: SCREEN === 'hostMove' ? 110 : 150 });
+    this.reset(this.state.win);
+    var plates = NAMES.map(function (n, i) { return document.getElementById('sdPlate' + i); });
+    this.visible = true;
+    if (window.IntersectionObserver) { this.io = new IntersectionObserver(function (es) { self.visible = es[0].isIntersecting; }); this.io.observe(canvas); }
+    var last = performance.now(), acc = 0;
+    function frame(now) {
+      if (!self.alive) return;
+      var dt = Math.min((now - last) / 1000, 0.1); last = now; acc += dt;
+      if (self.visible && !document.hidden && acc >= 1 / 30) {
+        var step = Math.min(acc, 0.05);
+        st.frame(step);
+        self.tick(step);
+        st.people.forEach(function (c, i) {
+          var el = plates[i]; if (!el) return;
+          el.style.transform = 'translate(' + c.sx.toFixed(1) + 'px,' + c.sy.toFixed(1) + 'px)';
+        });
+        acc = 0;
+      }
+      self.raf = requestAnimationFrame(frame);
+    }
+    this.raf = requestAnimationFrame(frame);
+  }
+
+  winners(win) { return NAMES.map(function (n, i) { return i; }).filter(function (i) { return (MAFIA.indexOf(i) >= 0) === (win === 'mafia'); }); }
+
+  reset(win) {
+    var st = this.st, cfg = CFG[SCREEN];
+    this.clock = 0; this.events = {}; this.endAt = 0;
+    this.setState(this.initial(win || this.state.win));
+    if (!st) return;
+    st.winners = []; st.awardee = -1;
+    st.setPhase(cfg.phase);
+  }
+
+  once(key, at) { if (this.events[key] || this.clock < at) return false; this.events[key] = true; return true; }
+
+  // 시상식: k 번째 칭호. 앞사람은 자리로, 이번 사람은 무대 가운데로 걸어 나온다
+  callAward(k) {
+    var st = this.st, prev = this.state.award;
+    if (prev >= 0) { var p = AWARDS[prev][0], m = st.ctx.marks[p], c0 = st.ctx.center; st.walkTo(p, c0.x + (m.x - c0.x) * 1.45, c0.z + (m.z - c0.z) * 1.45, true, 3); }
+    if (k >= AWARDS.length) { st.awardee = -1; this.setState({ award: k, awardShown: false }); return; }
+    var i = AWARDS[k][0], cen = st.ctx.center;
+    st.awardee = i; st.walkTo(i, cen.x, cen.z + 0.2, true, 3);
+    this.slotAt = this.clock;
+    this.setState({ award: k, awardShown: false });
+  }
+
+  tick(dt) {
+    this.clock += dt;
+    var s = this.state, st = this.st, self = this;
+    if (s.showHint && this.clock > 2.5) this.setState({ showHint: false });
+    if (s.toastOn && this.clock > this.toastUntil) this.setState({ toastOn: false });
+    if (SCREEN === 'resultHost' || SCREEN === 'resultGuest') {
+      if (this.once('ann', 0.3)) this.setState({ announce: true });
+      var r = Math.max(0, Math.min(8, Math.floor((this.clock - 1.2) / 0.4) + 1));
+      if (this.clock > 1.2 && r !== s.reveal) this.setState({ reveal: r });
+      if (this.once('teams', 4.6)) {
+        var wins = this.winners(s.win);
+        st.winners = wins;
+        NAMES.forEach(function (n, i) { if (wins.indexOf(i) < 0) st.setDim(i, true); });
+      }
+      if (this.once('annOff', 5.2)) this.setState({ announce: false });
+      [[6.5, 1], [7.4, 4], [8.6, 5], [10, 2]].forEach(function (e) {
+        if (CFG[SCREEN].me !== e[1] && self.once('ready' + e[1], e[0])) self.setState({ ready: self.state.ready.concat([e[1]]) });
+      });
+    }
+    if (SCREEN === 'award') {
+      if (s.award < 0 && this.clock > 0.6) this.callAward(0);
+      else if (s.award >= 0 && s.award < AWARDS.length) {
+        if (!s.awardShown && this.clock > this.slotAt + 0.9) this.setState({ awardShown: true });
+        if (this.clock > this.slotAt + SLOT) this.callAward(s.award + 1);
+      }
+      if (s.award >= AWARDS.length && !this.endAt) this.endAt = this.clock;
+      if (this.endAt && this.clock > this.endAt + 2) { this.endAt = 0; this.reset(); }
+    }
+    if (SCREEN === 'hostMove') {
+      if (this.once('leave', 2)) {
+        st.walkTo(HOST, st.ctx.talk[HOST].x + 3, st.ctx.talk[HOST].z + 3);
+        this.setState({ hostLeft: true });
+      }
+      if (this.once('move', 3.6)) {
+        this.toastUntil = this.clock + 2.5;
+        this.setState({ iAmHost: true, toastOn: true, logs: Object.assign({}, s.logs, { all: s.logs.all.concat([{ kind: 'system', icon: 'crown', text: '방장 · ' + NAMES[CFG[SCREEN].me][0] }]) }) });
+      }
+      if (this.clock > 12) this.reset();
+    }
+  }
+
+  renderVals() {
+    var self = this, s = this.state, cfg = CFG[SCREEN], me = cfg.me;
+    var result = cfg.phase === 'result', award = SCREEN === 'award', lobby = SCREEN === 'hostMove';
+    function act(o) {
+      var on = !!o.on;
+      return { label: o.label, aria: o.aria || o.label, icon: o.icon || 'play', hasIcon: !!o.icon, hasDots: o.dots != null, dots: o.dots || 0, dotsTotal: o.total || 0,
+        pressed: on ? 'true' : 'false', disabled: !!o.disabled, cursor: o.disabled ? 'default' : 'pointer', opacity: o.disabled && !o.flat ? 0.45 : 1,
+        bg: on ? '#e6e8ee' : o.flat ? 'transparent' : '#1e2847', fg: on ? '#0e1326' : o.flat ? '#a9aebb' : '#e6e8ee', border: on ? '#e6e8ee' : o.flat ? 'transparent' : '#2a3760', pick: o.pick || function () {} };
+    }
+    var ready = s.ready.concat(s.myReady ? [me] : []), canStart = ready.length >= READY_MIN;
+    var sayEnd = function () { self.setState({ logs: Object.assign({}, s.logs, { all: s.logs.all.concat([{ kind: 'system', text: '시안에서는 여기까지예요' }]) }) }); };
+    var actions = [];
+    if (result) {
+      actions.push(act({ icon: 'check', label: '준비', on: s.myReady, pick: function () { self.setState({ myReady: !s.myReady }); } }));
+      if (cfg.host) actions.push(act({ icon: 'play', label: '시작', dots: ready.length, total: 8, aria: '다음 판 시작, ' + ready.length + '명 준비', disabled: !canStart, on: canStart, pick: sayEnd }));
+    }
+    if (award) actions.push(act({ icon: 'skip', label: '넘기기', dots: Math.min(s.award + 1, AWARDS.length), total: AWARDS.length, aria: '다음 칭호로 넘기기',
+      disabled: s.award < 0 || s.award >= AWARDS.length, pick: function () { self.callAward(s.award + 1); } }));
+    if (lobby) {
+      actions.push(act({ icon: 'hanger', label: '꾸미기' }));
+      actions.push(s.iAmHost ? act({ icon: 'play', label: '시작', dots: 7, total: 8, aria: '게임 시작, 7명 모임', on: true, pick: sayEnd }) : act({ label: '방장을 기다리는 중…', flat: true, disabled: true }));
+    }
+    var aw = award && s.award >= 0 && s.award < AWARDS.length ? AWARDS[s.award] : null;
+    var mafiaWin = s.win === 'mafia';
+    return {
+      sceneLabel: cfg.label,
+      phaseTitle: result ? (s.reveal >= 8 ? (mafiaWin ? '마피아 승리' : '시민 승리') : '결과') : award ? '시상식' : '대기실',
+      phaseHint: result ? '준비하면 다음 판' : award ? '' : '', showHint: s.showHint,
+      hasScenario: result, scenarios: [['citizen', '시민 승리'], ['mafia', '마피아 승리']].map(function (o) {
+        var on = s.win === o[0];
+        return { label: o[1], pressed: on ? 'true' : 'false', bg: on ? '#e6e8ee' : 'transparent', fg: on ? '#0e1326' : '#c3c7d1', pick: function () { self.reset(o[0]); } };
+      }),
+      dimOpacity: s.announce ? 0.8 : 0,
+      hasAnnounce: s.announce, announce: mafiaWin ? '마피아 승리' : '시민 승리', announceIcon: mafiaWin ? 'roleMafia' : 'roleCitizen', announceColor: mafiaWin ? '#f1a5b0' : '#ffe0b0',
+      hasAward: !!aw && s.awardShown, awardIcon: aw ? aw[1] : 'trophy', awardTitle: aw ? aw[2] : '', awardReason: aw ? aw[3] : '', awardName: aw ? NAMES[aw[0]][0] : '', awardColor: aw ? NAMES[aw[0]][1] : '#fff',
+      toast: '방장 · ' + NAMES[me][0], toastIcon: 'crown', toastOn: s.toastOn,
+      people: NAMES.map(function (n, i) {
+        var shown = result ? i < s.reveal : award;
+        return { i: i, name: n[0], color: n[1], me: i === me, role: shown ? ROLES[i] : '', done: result && ready.indexOf(i) >= 0, away: lobby && i === HOST && s.hostLeft,
+          z: aw && aw[0] === i ? 20 : 10, opacity: lobby && i === HOST && s.hostLeft ? 0.45 : award && aw && aw[0] === i && s.awardShown ? 0 : 1 };
+      }),
+      hasChat: !award,
+      tabs: result ? [{ id: 'all', label: '전체' }, { id: 'mafia', label: '마피아', icon: 'roleMafia', tone: 'mafia' }, { id: 'ghost', label: '유령', icon: 'ghost' }] : [],
+      tab: s.tab, pickTab: function (id) { self.setState({ tab: id }); },
+      chat: (result ? s.logs[s.tab] : s.logs.all).slice(-6), draft: s.draft,
+      setDraft: function (v) { self.setState({ draft: v }); },
+      send: function (v) { var l = Object.assign({}, s.logs); l.all = l.all.concat([{ kind: 'player', name: NAMES[me][0], color: NAMES[me][1], text: v }]); self.setState({ draft: '', tab: 'all', logs: l }); },
+      emotes: EMOTES.map(function (e) { return { id: e[0], label: e[1] }; }),
+      pickEmote: function (id) { if (self.st) self.st.emote(me, id); },
+      actions: actions, actionCols: Math.max(1, actions.length)
+    };
+  }
+}
+</script>
+</body>
+</html>

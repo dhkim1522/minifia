@@ -56,11 +56,14 @@
     vote: { grp: { room: 0.45, vote: 1, trial: 0, night: 0 }, hemi: 0.3, moon: 0.25, spot: 0, accent: 0, exp: 1.0 },
     trial: { grp: { room: 0.05, vote: 0.12, trial: 1, night: 0 }, hemi: 0.1, moon: 0.06, spot: 1, accent: 0, exp: 0.95 },
     night: { grp: { room: 0, vote: 0, trial: 0, night: 1 }, hemi: 0.16, moon: 0.45, spot: 0, accent: 1, exp: 0.9 },
-    morning: { grp: { room: 0.25, vote: 0, trial: 0, night: 0.7 }, hemi: 0.5, moon: 0.55, spot: 0, accent: 0, exp: 1.0 }
+    morning: { grp: { room: 0.25, vote: 0, trial: 0, night: 0.7 }, hemi: 0.5, moon: 0.55, spot: 0, accent: 0, exp: 1.0 },
+    // 판 끝: 결과는 지목 조명, 시상식은 무대 스포트라이트
+    result: { grp: { room: 0.3, vote: 0.8, trial: 0, night: 0 }, hemi: 0.3, moon: 0.25, spot: 0, accent: 0, exp: 1.0 },
+    award: { grp: { room: 0.1, vote: 0.25, trial: 1, night: 0 }, hemi: 0.16, moon: 0.1, spot: 1, accent: 0, exp: 1.0 }
   };
   var SKY = {
-    indoor: { talk: ['#1a1830', '#0b0a14', '#120f1c'], vote: ['#161428', '#09080f', '#0e0c16'], trial: ['#08080e', '#030306', '#050508'], night: ['#141c3a', '#04050b', '#05070f'], morning: ['#4a4560', '#120f18', '#1f1a28'] },
-    outdoor: { talk: ['#8a8496', '#24222e', '#5e5a6c'], vote: ['#5a5468', '#1a1822', '#3a3646'], trial: ['#1c1a26', '#07070b', '#0e0d14'], night: ['#1e2850', '#04060d', '#070a16'], morning: ['#7a7488', '#1c1a24', '#4a4658'] }
+    indoor: { talk: ['#1a1830', '#0b0a14', '#120f1c'], vote: ['#161428', '#09080f', '#0e0c16'], trial: ['#08080e', '#030306', '#050508'], night: ['#141c3a', '#04050b', '#05070f'], morning: ['#4a4560', '#120f18', '#1f1a28'], result: ['#161428', '#09080f', '#0e0c16'], award: ['#08080e', '#030306', '#050508'] },
+    outdoor: { talk: ['#8a8496', '#24222e', '#5e5a6c'], vote: ['#5a5468', '#1a1822', '#3a3646'], trial: ['#1c1a26', '#07070b', '#0e0d14'], night: ['#1e2850', '#04060d', '#070a16'], morning: ['#7a7488', '#1c1a24', '#4a4658'], result: ['#5a5468', '#1a1822', '#3a3646'], award: ['#1c1a26', '#07070b', '#0e0d14'] }
   };
 
   // ---------- 사람 8명 ----------
@@ -144,9 +147,14 @@
       var cen = ctx.center; accent.position.set(cen.x, 2.4, cen.z);
       // 자리
       people.forEach(function (c, i) {
-        c.root.visible = true; c.emote = null; c.voted = false; c.walk = null; if (c.ghost) st.setGhost(i, false);
+        c.root.visible = true; c.emote = null; c.voted = false; c.walk = null; if (c.ghost) st.setGhost(i, false); if (c.dim) st.setDim(i, false);
         if (ph === 'talk') place(c, ctx.talk[i]);
-        else if (ph === 'night' || ph === 'morning') {
+        else if (ph === 'result' || ph === 'award') {
+          // 판 끝: 무대 둘레에 서서 카메라를 본다
+          // 시상식은 둘레를 넓혀 앞사람이 무대를 가리지 않게 한다
+          var spread = ph === 'award' ? 1.45 : 1;
+          place(c, { x: cen.x + (ctx.marks[i].x - cen.x) * spread, z: cen.z + (ctx.marks[i].z - cen.z) * spread, yaw: camYaw });
+        } else if (ph === 'night' || ph === 'morning') {
           // 밤에는 각자 토론이 끝난 자리로 돌아간다. 시민 화면에는 나만 보인다
           place(c, ctx.talk[i]);
           if (ph === 'night' && opt.view === 'citizen') c.root.visible = i === opt.me;
@@ -191,14 +199,16 @@
           if (ph === 'talk') id = ['clap', 'deny', 'praise', 'handshake', 'point'][(i + Math.floor(t)) % 5];
           else if (ph === 'vote') id = c.voted ? 'point' : null;
           else if (ph === 'trial' && i === B.ACCUSED) id = ['deny', 'cry'][Math.floor(t / 4) % 2];
+          else if (ph === 'result') id = (st.winners || []).indexOf(i) >= 0 ? ['dance', 'clap', 'praise'][(i + Math.floor(t)) % 3] : null;
+          else if (ph === 'award') id = i === st.awardee ? (c.walk ? null : 'praise') : 'clap';
           if (id && !(c.sit && id !== 'point' && id !== 'clap')) MFChar.playEmote(c, id);
           c.nextEmote = t + 2.6 + ((i * 37) % 10) / 6;
         }
         var moving = false;
         if (c.walk) {
           var wx = c.walk.x - c.pos.x, wz = c.walk.z - c.pos.z, wd = Math.sqrt(wx * wx + wz * wz);
-          if (wd < 0.05) c.walk = null;
-          else { var stp = Math.min(wd, 1.5 * K * dt); c.pos.x += wx / wd * stp; c.pos.z += wz / wd * stp; c.yaw = Math.atan2(wx, wz); moving = true; }
+          if (wd < 0.05) { if (c.walk.faceCam) c.yaw = camYaw; c.walk = null; }
+          else { var stp = Math.min(wd, (c.walk.speed || 1.5) * K * dt); c.pos.x += wx / wd * stp; c.pos.z += wz / wd * stp; c.yaw = Math.atan2(wx, wz); moving = true; }
         }
         var pose = MFChar.animate(c, dt, t, moving);
         if (c.sit) { c.legA.rotation.x = -1.45; c.legB.rotation.x = -1.45; }
@@ -238,7 +248,16 @@
       });
     };
     // 걸어가기(직선). 다 오면 멈춘다
-    st.walkTo = function (i, x, z) { people[i].walk = { x: x, z: z }; people[i].emote = null; };
+    st.walkTo = function (i, x, z, faceCam, speed) { people[i].walk = { x: x, z: z, faceCam: !!faceCam, speed: speed }; people[i].emote = null; };
+    // 진 팀: 색을 낮춰 어둡게 남긴다
+    st.setDim = function (i, on) {
+      var c = people[i]; c.dim = on;
+      c.root.traverse(function (o) {
+        if (!o.material || !o.material.color) return;
+        if (!o.userData.c0) o.userData.c0 = o.material.color.clone();
+        o.material.color.copy(o.userData.c0); if (on) o.material.color.multiplyScalar(0.45);
+      });
+    };
     // 발밑 고리(마피아 화면의 고른 사람 등)
     var rings = {};
     st.ring = function (key, i, color, on) {

@@ -141,7 +141,19 @@
 .mv-will__count { font-size: 14px; color: var(--gray-300); font-variant-numeric: tabular-nums; }
 .mv-will__save { display: inline-flex; align-items: center; gap: 6px; min-height: var(--control-input); padding: 0 var(--space-md); border-radius: var(--radius-md); border: 0; background: var(--gray-100); color: var(--night-900); font-family: inherit; font-size: 16px; font-weight: 700; cursor: pointer; }
 .mv-will__save:disabled { background: var(--night-700); color: var(--gray-300); cursor: default; }
-.mv-face:focus-visible, .mv-will__text:focus-visible, .mv-will__save:focus-visible { outline: 2px solid var(--gray-100); outline-offset: 2px; }
+.mv-chat__tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.mv-chat__tab { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 40px; border-radius: var(--radius-md); border: 1px solid var(--night-600); background: var(--night-900); color: var(--gray-300); font-family: inherit; font-size: 14px; font-weight: 700; cursor: pointer; }
+.mv-chat__tab.is-on { background: var(--gray-100); border-color: var(--gray-100); color: var(--night-900); }
+.mv-chat__tab.is-mafia:not(.is-on) { color: var(--crimson-300); }
+.mv-chat__divider { display: flex; align-items: center; gap: 8px; margin: 2px 0; font-size: 12px; color: var(--gray-300); }
+.mv-chat__divider::before, .mv-chat__divider::after { content: ''; flex: 1; height: 1px; background: var(--night-600); }
+.mv-award { display: inline-flex; flex-direction: column; align-items: center; gap: 4px; min-width: 180px; max-width: 280px; box-sizing: border-box; padding: 12px 18px 14px; border-radius: var(--radius-lg); background: var(--overlay-ink-strong); border: 2px solid var(--brass-400); box-shadow: var(--shadow-badge), 0 0 24px rgba(255, 224, 176, 0.25); color: var(--cream-100); text-align: center; animation: mv-pop var(--dur-pop) ease-out both; }
+.mv-award__icon { color: var(--brass-200); }
+.mv-award__title { font-family: var(--font-serif); font-size: 26px; line-height: 1.2; font-weight: 700; letter-spacing: 0.04em; }
+.mv-award__reason { font-family: var(--font-ui); font-size: 14px; line-height: 1.4; color: var(--gray-100); }
+.mv-award__name { display: inline-flex; align-items: center; gap: 6px; margin-top: 2px; font-family: var(--font-ui); font-size: 14px; font-weight: 700; color: var(--gray-50); }
+.mv-award__name i { width: 8px; height: 8px; border-radius: var(--radius-pill); }
+.mv-chat__tab:focus-visible, .mv-face:focus-visible, .mv-will__text:focus-visible, .mv-will__save:focus-visible { outline: 2px solid var(--gray-100); outline-offset: 2px; }
 
 /* 찬반 */
 .mv-verdict { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-sm); }
@@ -153,7 +165,7 @@
 .mv-mapcard:focus-visible, .mv-outfit:focus-visible, .mv-card:focus-visible, .mv-verdict__btn:focus-visible { outline: 2px solid var(--gray-100); outline-offset: 2px; }
 
 @media (prefers-reduced-motion: reduce) {
-  .mv-badge, .mv-badge.is-lead, .mv-stamp, .mv-tag.is-blink, .mv-typing i, .mv-chat__emotes, .mv-dress, .mv-card { animation: none; }
+  .mv-badge, .mv-badge.is-lead, .mv-stamp, .mv-tag.is-blink, .mv-typing i, .mv-chat__emotes, .mv-dress, .mv-card, .mv-award { animation: none; }
   .mv-badge.is-lead { transform: scale(1.18); }
   .mv-toast, .mv-ring__bar, .mv-card__inner, .mv-phase__hint { transition: none; }
 }

@@ -1,4 +1,4 @@
-<!-- @dsCard group="아래 패널" height=380 subtitle="지목 기록 · 유언·쪽지 카드" -->
+<!-- @dsCard group="아래 패널" height=660 subtitle="지목 기록 · 유언·쪽지 카드 · 결과 화면 탭" -->
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&family=Gowun+Batang:wght@700&display=swap">
 <div id="root" style="padding:16px; background: var(--night-800)"></div>
 <script>
@@ -11,5 +11,10 @@ function Demo(){ var s = React.useState(''); return h(M.ChatPanel,{value:s[0],on
  {kind:'hot',text:'도윤 님이 앞서요'},
  {kind:'card',icon:'quill',title:'지호 님의 유언',text:'하은 님은 믿어도 돼요'},
  {kind:'card',icon:'note',tone:'mafia',title:'쪽지',text:'다음은 너야'}]}); }
+function Tabs(){ var t=React.useState('mafia'); var LOG={all:[{kind:'hot',text:'시민 승리'},{kind:'player',name:'지호',color:'#7a8fb8',text:'역시 현우 님이었어'}],
+ mafia:[{kind:'divider',text:'1밤'},{kind:'player',channel:'mafia',name:'수아',color:'#7f9f7a',text:'오늘은 서연?'},{kind:'player',channel:'mafia',name:'현우',color:'#a88f9a',text:'좋아요'},{kind:'divider',text:'2밤'},{kind:'player',channel:'mafia',name:'수아',color:'#7f9f7a',text:'민준 경찰 같아'}],
+ ghost:[{kind:'divider',text:'2밤'},{kind:'player',name:'도윤',color:'#b87a5c',text:'수아 님이 마피아예요ㅠ'}]};
+ return h(M.ChatPanel,{tabs:[{id:'all',label:'전체'},{id:'mafia',label:'마피아',icon:'roleMafia',tone:'mafia'},{id:'ghost',label:'유령',icon:'ghost'}],tab:t[0],onTab:t[1],messages:LOG[t[0]],onSend:function(){},emotes:[]}); }
+var tabsRoot=document.createElement('div'); tabsRoot.style.cssText='padding:16px;background:#151c36'; document.body.appendChild(tabsRoot); ReactDOM.createRoot(tabsRoot).render(h(Tabs));
 ReactDOM.createRoot(document.getElementById('root')).render(h(Demo));
 </script>

@@ -4,7 +4,8 @@
 export type IconName =
   | 'throat' | 'deny' | 'clap' | 'cry' | 'handshake' | 'point' | 'praise' | 'surprise' | 'dance'
   | 'face' | 'hanger' | 'map' | 'skip' | 'check' | 'send' | 'close' | 'play' | 'question' | 'thumbUp' | 'thumbDown'
-  | 'quill' | 'note' | 'target' | 'ghost' | 'eye' | 'heal' | 'roleMafia' | 'rolePolice' | 'roleDoctor' | 'roleCitizen';
+  | 'quill' | 'note' | 'target' | 'ghost' | 'eye' | 'heal' | 'roleMafia' | 'rolePolice' | 'roleDoctor' | 'roleCitizen'
+  | 'trophy' | 'crown';
 
 /** 직접 그린 SVG 아이콘(currentColor) */
 export interface IconProps {
@@ -70,8 +71,8 @@ export interface HeadStackProps extends NameTagProps {
 export interface TopToastProps { text: string; visible: boolean; icon?: IconName; }
 
 export interface ChatMessage {
-  /** player: 사람 · system: 단계 안내 · vote: 지목 기록 · hot: 선두·과반 소식 · card: 유언·쪽지 */
-  kind: 'player' | 'system' | 'vote' | 'hot' | 'card';
+  /** player: 사람 · system: 단계 안내 · vote: 지목 기록 · hot: 선두·과반 소식 · card: 유언·쪽지 · divider: 밤별 구분선("1밤") */
+  kind: 'player' | 'system' | 'vote' | 'hot' | 'card' | 'divider';
   /** card 만: 제목. 예: "지호 님의 유언" */
   title?: string;
   /** card 만: 'mafia' 면 진홍 테두리(쪽지) */
@@ -101,6 +102,10 @@ export interface ChatPanelProps {
   onWill?: () => void;
   /** 유언 창이 열려 있으면 true(깃펜이 눌린 모양) */
   willOpen?: boolean;
+  /** 결과 화면 기록 탭. 예: 전체·마피아(tone 'mafia')·유령. 쓰는 쪽이 탭에 맞는 messages 를 준다 */
+  tabs?: { id: string; label: string; icon?: IconName; tone?: 'mafia' }[];
+  tab?: string;
+  onTab?: (id: string) => void;
 }
 
 /** 꾸미기 창(로비): 방장은 맵·의상 두 탭, 다른 사람은 의상만 */
@@ -167,4 +172,14 @@ export interface WillSheetProps {
   placeholder?: string;
   onClose?: () => void;
   inputId?: string;
+}
+
+/** 칭호 패(시상식) */
+export interface AwardPlateProps {
+  title: string;
+  /** 이유 한 줄. 예: "수아 님을 찾아냄" */
+  reason?: string;
+  icon?: IconName;
+  name: string;
+  color: string;
 }

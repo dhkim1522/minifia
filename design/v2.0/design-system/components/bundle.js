@@ -1,4 +1,4 @@
-/* @ds-bundle: {"format":4,"namespace":"MinifiaV2","components":[{"name":"Icon"},{"name":"PhaseHeader"},{"name":"DotProgress"},{"name":"NameTag"},{"name":"VoteBadge"},{"name":"SureStamp"},{"name":"HeadStack"},{"name":"TopToast"},{"name":"ChatPanel"},{"name":"DressSheet"},{"name":"RoleCard"},{"name":"VerdictPicker"},{"name":"RoleChip"},{"name":"FaceList"},{"name":"WillSheet"}]} */
+/* @ds-bundle: {"format":4,"namespace":"MinifiaV2","components":[{"name":"Icon"},{"name":"PhaseHeader"},{"name":"DotProgress"},{"name":"NameTag"},{"name":"VoteBadge"},{"name":"SureStamp"},{"name":"HeadStack"},{"name":"TopToast"},{"name":"ChatPanel"},{"name":"DressSheet"},{"name":"RoleCard"},{"name":"VerdictPicker"},{"name":"RoleChip"},{"name":"FaceList"},{"name":"WillSheet"},{"name":"AwardPlate"}]} */
 /* minifia v2.0 게임 겹침 부품. 3D 장면(three.js) 위 DOM 층과 아래 패널에 쓴다. React 18 은 쓰는 쪽이 준다.
  * 결정 0051: 글은 최소로, 보고 누르는 조작 중심. 버튼은 아이콘 + 한두 단어, 진행은 링·점으로 */
 (function () {
@@ -39,7 +39,10 @@
     roleMafia: [['p', 'M3.5 15.5c3 1.4 14 1.4 17 0'], ['p', 'M6.5 15V9.5C6.5 6.9 9 5 12 5s5.5 1.9 5.5 4.5V15'], ['p', 'M6.5 12.5h11']],
     rolePolice: [['p', 'M12 3l7 3v5.5c0 4.5-3 8-7 9.5-4-1.5-7-5-7-9.5V6z'], ['p', 'M12 8.5l1.2 2.4 2.6.4-1.9 1.8.5 2.6L12 14.5l-2.4 1.2.5-2.6-1.9-1.8 2.6-.4z', true]],
     roleDoctor: [['c', 12, 12, 9], ['p', 'M12 7.5v9'], ['p', 'M7.5 12h9']],
-    roleCitizen: [['c', 12, 8, 3.5], ['p', 'M5 20c.8-3.8 3.6-6 7-6s6.2 2.2 7 6']]
+    roleCitizen: [['c', 12, 8, 3.5], ['p', 'M5 20c.8-3.8 3.6-6 7-6s6.2 2.2 7 6']],
+    // 판 끝
+    trophy: [['p', 'M7 4h10v5a5 5 0 0 1-10 0z'], ['p', 'M7 6H4.5v1.5A3 3 0 0 0 7.5 10.5'], ['p', 'M17 6h2.5v1.5a3 3 0 0 1-3 3'], ['p', 'M12 14v3.5'], ['p', 'M8 20.5h8l-1-3H9z']],
+    crown: [['p', 'M4 18.5L3 8l5 4 4-6.5 4 6.5 5-4-1 10.5z'], ['p', 'M4.5 21h15']]
   };
   function Icon(p) {
     var spec = ICONS[p.name] || [], size = p.size || 24;
@@ -110,8 +113,15 @@
   function ChatPanel(p) {
     var st = React.useState(false), open = st[0], setOpen = st[1];
     var msgs = p.messages || [], id = p.inputId || 'mv-chat-input', val = p.value || '', emotes = p.emotes || [];
+    var tabs = p.tabs || [];
     return h('section', { className: 'mv-chat', 'aria-label': '채팅' },
+      tabs.length ? h('div', { className: 'mv-chat__tabs', role: 'tablist', 'aria-label': '채팅 기록' }, tabs.map(function (t) {
+        var on = t.id === p.tab;
+        return h('button', { key: t.id, type: 'button', role: 'tab', 'aria-selected': on ? 'true' : 'false', className: cx('mv-chat__tab', on && 'is-on', t.tone === 'mafia' && 'is-mafia'),
+          onClick: function () { if (p.onTab) p.onTab(t.id); } }, t.icon ? h(Icon, { name: t.icon, size: 18 }) : null, t.label);
+      })) : null,
       h('div', { className: 'mv-chat__log', role: 'log' }, msgs.map(function (m, i) {
+        if (m.kind === 'divider') return h('p', { key: i, className: 'mv-chat__divider' }, h('span', null, m.text));
         if (m.kind === 'player') {
           return h('p', { key: i, className: cx('mv-chat__msg', m.channel === 'mafia' && 'is-mafia') },
             h('span', { className: 'mv-chat__dot', style: { background: m.color } }),
@@ -233,9 +243,18 @@
         h('button', { type: 'button', className: 'mv-will__save', onClick: p.onSave, disabled: !!p.saved }, h(Icon, { name: 'check', size: 20 }), p.saved ? '저장됨' : '저장')));
   }
 
+  // ---------- 칭호 패: 시상식에서 무대 위 사람 위에 뜬다 ----------
+  function AwardPlate(p) {
+    return h('div', { className: 'mv-award', role: 'status', 'aria-label': p.name + ' · ' + p.title },
+      h('span', { className: 'mv-award__icon' }, h(Icon, { name: p.icon || 'trophy', size: 30 })),
+      h('span', { className: 'mv-award__title' }, p.title),
+      p.reason ? h('span', { className: 'mv-award__reason' }, p.reason) : null,
+      h('span', { className: 'mv-award__name' }, h('i', { style: { background: p.color } }), p.name));
+  }
+
   window.MinifiaV2 = {
     Icon: Icon, PhaseHeader: PhaseHeader, DotProgress: DotProgress, NameTag: NameTag, VoteBadge: VoteBadge, SureStamp: SureStamp, HeadStack: HeadStack,
     TopToast: TopToast, ChatPanel: ChatPanel, DressSheet: DressSheet, RoleCard: RoleCard, VerdictPicker: VerdictPicker,
-    RoleChip: RoleChip, FaceList: FaceList, WillSheet: WillSheet
+    RoleChip: RoleChip, FaceList: FaceList, WillSheet: WillSheet, AwardPlate: AwardPlate
   };
 })();

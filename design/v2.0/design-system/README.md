@@ -129,6 +129,6 @@
 
 - 네임스페이스는 `MinifiaV2`, 부품은 `window.MinifiaV2` 에 있다. React 18 은 쓰는 쪽이 준다.
 - 순서: Google Fonts(Gowun Dodum, Gowun Batang 700) → `tokens.css` → `components/bundle.css` → `components/bundle.js`.
-- 부품: Icon, PhaseHeader, DotProgress, NameTag, VoteBadge, SureStamp, HeadStack, TopToast, ChatPanel, DressSheet, RoleCard, VerdictPicker, RoleChip, FaceList, WillSheet. 속성은 `components/<이름>/README.md` 와 `components/index.d.ts`.
+- 부품: Icon, PhaseHeader, DotProgress, NameTag, VoteBadge, SureStamp, HeadStack, TopToast, ChatPanel, DressSheet, RoleCard, VerdictPicker, RoleChip, FaceList, WillSheet, AwardPlate. 속성은 `components/<이름>/README.md` 와 `components/index.d.ts`.
 - 그림(그림 저장소): 맵 카드 `Maps`(재즈 바·시계탑 광장), 의상 미리보기 `Outfits` 9종(1번 인물), 직업 카드 `Roles` 4종(v1.0 그림 그대로), 얼굴 `Faces` 8종(예시 8명의 머리 그림, `FaceList`).
 - 3D 맵과 단계 조명은 이 시스템 밖의 코드다: 저장소 `design/v2.0/blockout/`(엔진 `blockout.js`, 맵 `bar.js`·`plaza.js`). 블록아웃이라 정식 맵에서 그리기 횟수를 줄인다.
