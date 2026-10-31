@@ -1,9 +1,9 @@
 // three 구현(WebGLRenderer). 이 파일은 three 를 값으로 import 하는 몇 안 되는 모듈이다 — 정적 import 경로(메인 번들)에
 // 두지 않는다. 06-13 런타임이 `import()` 로만 열어 별도 청크로 나눈다. 렌더러 인터페이스는 renderer.ts(three 값 import 없음).
-import { ACESFilmicToneMapping, Group, MeshBasicMaterial, PCFShadowMap, Plane, Raycaster, SRGBColorSpace, Vector2, Vector3, WebGLRenderer } from "three";
+import { ACESFilmicToneMapping, Group, MeshBasicMaterial, PCFShadowMap, Plane, PointLight, Raycaster, SRGBColorSpace, Vector2, Vector3, WebGLRenderer } from "three";
 import { DEFAULT_TARGET } from "./camera";
 import { buildBarScene } from "./maps/bar";
-import { DEFAULT_BUDGET_STEP, LADDER, UnsupportedRendererError } from "./renderer";
+import { DEFAULT_BUDGET_STEP, LADDER, pixelRatioFor, UnsupportedRendererError } from "./renderer";
 import type { CharacterHandle, LightingPhase, MarkerKind, RendererStatusEvent, RendererStats, WorldRenderer } from "./renderer";
 import { isSoftwareRenderer } from "./status";
 import { configureCamera, createCamera } from "./threeCamera";
@@ -52,7 +52,8 @@ function makeGl(canvas: HTMLCanvasElement, allowSoftware: boolean): WebGLRendere
 }
 
 async function build(opts: Opts): Promise<WorldRenderer> {
-  const step = Math.min(Math.max(opts.budgetStep, DEFAULT_BUDGET_STEP), LADDER.length - 1);
+  const clampStep = (n: number): number => Math.min(Math.max(Math.round(n) || 0, DEFAULT_BUDGET_STEP), LADDER.length - 1);
+  let budget = LADDER[clampStep(opts.budgetStep)]!;
   let canvas: HTMLCanvasElement;
   try {
     canvas = makeCanvas(opts.host);
@@ -61,7 +62,7 @@ async function build(opts: Opts): Promise<WorldRenderer> {
   }
   let gl = makeGl(canvas, opts.allowSoftware);
 
-  const budget = LADDER[step]!;
+  // 씬 그래프(맵·캐릭터)는 렌더러보다 오래 산다: recreate 가 새 렌더러에 같은 씬·카메라를 다시 물린다(가정 A2)
   const bar = buildBarScene(budget);
   const scene = bar.root;
   const characters = new Group();
@@ -79,25 +80,43 @@ async function build(opts: Opts): Promise<WorldRenderer> {
   };
 
   const applySize = (): void => {
-    gl.setPixelRatio(Math.min(globalThis.devicePixelRatio || 1, budget.dpr));
+    gl.setPixelRatio(pixelRatioFor(budget, globalThis.devicePixelRatio || 1));
     gl.setSize(size.w, size.h, false);
     configureCamera(camera, target, size, offsetY);
   };
-  applySize();
-  gl.toneMappingExposure = bar.exposure;
-  gl.shadowMap.needsUpdate = true; // 맵 그림자는 첫 그리기에서 한 번 굽는다
+  /** 새 렌더러를 현재 상태(크기·시점·노출)에 맞추고 그림자를 다시 굽게 한다 */
+  const configureGl = (): void => {
+    applySize();
+    gl.toneMappingExposure = bar.exposure;
+    gl.shadowMap.needsUpdate = true;
+  };
+  configureGl();
 
   // three 가 자기 리스너로 preventDefault 하고 render 를 건너뛴다(WebGLRenderer.js onContextLost). 우리는 알리기만 한다.
   const onLost = (): void => emit({ t: "lost" });
   const onRestored = (): void => {
-    gl.shadowMap.needsUpdate = true;
+    gl.shadowMap.needsUpdate = true; // 복구 뒤 맵 그림자를 다시 굽는다
     emit({ t: "restored" });
   };
-  canvas.addEventListener("webglcontextlost", onLost);
-  canvas.addEventListener("webglcontextrestored", onRestored);
+  const attach = (c: HTMLCanvasElement): void => {
+    c.addEventListener("webglcontextlost", onLost);
+    c.addEventListener("webglcontextrestored", onRestored);
+  };
+  const detach = (c: HTMLCanvasElement): void => {
+    c.removeEventListener("webglcontextlost", onLost);
+    c.removeEventListener("webglcontextrestored", onRestored);
+  };
+  attach(canvas);
 
   const ray = new Raycaster();
   const floor = new Plane(new Vector3(0, 1, 0), 0);
+  const loseExt = (): { loseContext(): void; restoreContext(): void } | null => {
+    try {
+      return gl.getContext().getExtension("WEBGL_lose_context");
+    } catch {
+      return null;
+    }
+  };
 
   return {
     get canvas(): HTMLCanvasElement {
@@ -155,8 +174,12 @@ async function build(opts: Opts): Promise<WorldRenderer> {
       if (disposed) return;
       gl.render(scene, camera);
     },
-    setBudget(_step: number): void {
-      // Task 3
+    setBudget(next: number): void {
+      if (disposed) return;
+      budget = LADDER[clampStep(next)]!;
+      bar.applyBudget(budget); // 점광원·소품·안개·빛 무리·그림자 맵 크기(재생성 없이)
+      applySize();
+      gl.shadowMap.needsUpdate = true; // 그림자 맵 크기·소품이 바뀌면 다시 굽는다
     },
     onStatus(cb: (e: RendererStatusEvent) => void): () => void {
       listeners.add(cb);
@@ -164,27 +187,42 @@ async function build(opts: Opts): Promise<WorldRenderer> {
         listeners.delete(cb);
       };
     },
-    recreate(): Promise<void> {
-      return Promise.reject(new Error("Task 3 에서 구현"));
+    async recreate(): Promise<void> {
+      if (disposed) throw new Error("이미 해제된 렌더러");
+      // 옛 렌더러를 먼저 치운다(씬은 dispose 하지 않는다). 리스너를 먼저 떼어 forceContextLoss 의 소실 이벤트가 새어 나가지 않게 한다.
+      detach(canvas);
+      gl.dispose();
+      gl.forceContextLoss();
+      canvas.remove();
+      canvas = makeCanvas(opts.host);
+      gl = makeGl(canvas, opts.allowSoftware);
+      attach(canvas);
+      configureGl();
+      gl.render(scene, camera); // 같은 씬·카메라로 한 번 그려 자원을 다시 올린다
+      gl.shadowMap.needsUpdate = true;
+      emit({ t: "recreated" });
     },
     isContextLost(): boolean {
       return gl.getContext().isContextLost();
     },
     info(): RendererStats {
       const r = gl.info;
-      return { calls: r.render.calls, triangles: r.render.triangles, geometries: r.memory.geometries, textures: r.memory.textures, programs: r.programs?.length ?? 0, pointLights: 3 };
+      let pointLights = 0;
+      scene.traverseVisible((o) => {
+        if ((o as PointLight).isPointLight) pointLights++;
+      });
+      return { calls: r.render.calls, triangles: r.render.triangles, geometries: r.memory.geometries, textures: r.memory.textures, programs: r.programs?.length ?? 0, pointLights };
     },
     debugLoseContext(): void {
-      gl.forceContextLoss();
+      loseExt()?.loseContext();
     },
     debugRestoreContext(): void {
-      gl.forceContextRestore();
+      loseExt()?.restoreContext();
     },
     dispose(): void {
       if (disposed) return;
       disposed = true;
-      canvas.removeEventListener("webglcontextlost", onLost);
-      canvas.removeEventListener("webglcontextrestored", onRestored);
+      detach(canvas);
       listeners.clear();
       // 캐릭터 자원은 만든 쪽(handle.dispose)이 정리한다. 여기서는 장면에서 떼기만 한다.
       for (const c of seats.values()) characters.remove(c.root);

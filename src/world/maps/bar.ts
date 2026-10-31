@@ -201,8 +201,9 @@ export interface BarScene {
   /** 마지막으로 적용한 조명 단계의 톤매핑 노출 */
   readonly exposure: number;
   setLighting(phase: LightingPhase): void;
-  /** 예산 단계를 재생성 없이 반영한다(RED 스텁) */
+  /** 예산 단계를 재생성 없이 반영한다(되돌릴 수 있다): 그림자 맵 크기·점광원 core·소품 reduced·안개·빛 무리 */
   applyBudget(budget: Budget): void;
+  readonly budget: Budget;
   dispose(): void;
 }
 
@@ -451,9 +452,13 @@ export function buildBarScene(budget: Budget): BarScene {
 
   let exposure = T.talk.exposure;
   let disposed = false;
+  let current = budget;
+  let phase: LightingPhase = "talk";
 
-  const setLighting = (phase: LightingPhase): void => {
+  const setLighting = (next: LightingPhase): void => {
+    phase = next;
     const t = T[phase];
+    const b = current;
     hemi.color.set(t.sky[0]);
     hemi.groundColor.set(t.sky[1]);
     hemi.intensity = t.hemi;
@@ -463,17 +468,45 @@ export function buildBarScene(budget: Budget): BarScene {
     fog.far = t.fog.far;
     moon.intensity = t.moon;
     stage.intensity = t.stage;
-    pendantA.intensity = t.pendant;
-    pendantB.intensity = t.pendant;
+    // 점광원 core: 펜던트 둘은 세기 0 + 장면 광원 목록에서 뺀다(셰이더 광원 수가 줄어든다). 벽·촛불 빛은 emissive 와 빛 무리가 이미 낸다
+    const pendant = b.lights === "full" ? t.pendant : 0;
+    pendantA.intensity = pendant;
+    pendantB.intensity = pendant;
+    pendantA.visible = b.lights === "full";
+    pendantB.visible = b.lights === "full";
     matEmRoom.color.setScalar(t.emissive.room);
     matEmVote.color.setScalar(t.emissive.vote);
     matGlowRoom.opacity = t.glow.room;
     matGlowVote.opacity = t.glow.vote;
-    meshes.glowRoom!.visible = t.glow.room > 0;
-    meshes.glowVote!.visible = t.glow.vote > 0;
+    meshes.glowRoom!.visible = b.glows && t.glow.room > 0;
+    meshes.glowVote!.visible = b.glows && t.glow.vote > 0;
+    root.fog = b.fog ? fog : null;
     exposure = t.exposure;
   };
-  setLighting("talk");
+
+  const applyBudget = (b: Budget): void => {
+    const prevSize = moon.shadow.mapSize.x;
+    const prevCast = moon.castShadow;
+    current = b;
+    if (b.shadowMap === 0) {
+      moon.castShadow = false;
+    } else {
+      moon.castShadow = true;
+      if (prevSize !== b.shadowMap) moon.shadow.mapSize.set(b.shadowMap, b.shadowMap);
+    }
+    // 크기가 바뀌면 옛 그림자 맵을 버린다: three 는 map 이 있으면 크기를 다시 맞추지 않는다
+    if (moon.shadow.mapSize.x !== prevSize || prevCast !== moon.castShadow) {
+      moon.shadow.map?.dispose();
+      moon.shadow.map = null;
+    }
+    // 소품 reduced: 먼 소품(피아노 뚜껑·술병 선반 세부·펜던트)을 뺀다
+    const far = b.props === "full";
+    meshes.furnitureFar!.visible = far;
+    meshes.emissiveRoomFar!.visible = far;
+    meshes.pendants!.visible = far;
+    setLighting(phase); // 점광원 core·빛 무리·안개를 현재 조명 단계 위에 다시 반영
+  };
+  applyBudget(budget);
 
   return {
     root,
@@ -485,7 +518,10 @@ export function buildBarScene(budget: Budget): BarScene {
       return exposure;
     },
     setLighting,
-    applyBudget(_b: Budget): void {},
+    applyBudget,
+    get budget(): Budget {
+      return current;
+    },
     dispose(): void {
       if (disposed) return;
       disposed = true;

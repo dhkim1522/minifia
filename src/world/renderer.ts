@@ -14,7 +14,19 @@ export interface Budget {
   glows: boolean;
 }
 
-export const LADDER: readonly Budget[] = [{ dpr: 2, shadowMap: 1024, lights: "full", props: "full", fog: true, glows: true }];
+/**
+ * 강등 사다리(UI-SPEC "미달 때 줄이는 순서" 1~5 를 누적으로). 0 = 기본. 그림자 끔(shadowMap 0)은 사다리에 없다 — 사람 결정으로만.
+ *  1 배율 1.5 · 2 배율 1.25 + 그림자 512 · 3 점광원 core(무대 위만, 펜던트는 emissive) · 4 소품 reduced(먼 소품 제거) · 5 안개·빛 무리 끔.
+ * 6단계(맵을 미리 구운 이미지로)는 렌더러 교체라 이 표에 없다(결정 0046 탈출구).
+ */
+export const LADDER: readonly Budget[] = [
+  { dpr: 2, shadowMap: 1024, lights: "full", props: "full", fog: true, glows: true },
+  { dpr: 1.5, shadowMap: 1024, lights: "full", props: "full", fog: true, glows: true },
+  { dpr: 1.25, shadowMap: 512, lights: "full", props: "full", fog: true, glows: true },
+  { dpr: 1.25, shadowMap: 512, lights: "core", props: "full", fog: true, glows: true },
+  { dpr: 1.25, shadowMap: 512, lights: "core", props: "reduced", fog: true, glows: true },
+  { dpr: 1.25, shadowMap: 512, lights: "core", props: "reduced", fog: false, glows: false },
+];
 export const DEFAULT_BUDGET_STEP = 0;
 /** 장면 전체 그리기 호출 상한(UI-SPEC 렌더 성능 게이트) */
 export const DRAW_CALL_BUDGET = 120;
@@ -68,9 +80,9 @@ export interface WorldRenderer {
   dispose(): void;
 }
 
-/** 화면 배율: 장치 배율과 단계 상한 중 작은 쪽(RED 스텁) */
-export function pixelRatioFor(_budget: Budget, _deviceDpr: number): number {
-  return 1;
+/** 화면 배율: 장치 배율과 단계 상한 중 작은 쪽 */
+export function pixelRatioFor(budget: Budget, deviceDpr: number): number {
+  return Math.min(deviceDpr, budget.dpr);
 }
 
 /** 자동 강등을 멈추는 단계: 0→1→2→3 까지만 자동이고 4 이상은 사람 결정이다 */
