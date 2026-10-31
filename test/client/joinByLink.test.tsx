@@ -162,12 +162,12 @@ describe("링크 참가 화면 닉네임 (D-06)", () => {
     render(<App />);
     await see("2 / 8명이 모였어요");
     const input = screen.getByLabelText("닉네임");
-    expect(input.getAttribute("placeholder")).toBe("1~5자로 입력");
+    expect(input.getAttribute("placeholder")).toBe("1~8자로 입력");
     expect((screen.getByRole("button", { name: "참가하기" }) as HTMLButtonElement).disabled).toBe(true);
     expect(screen.queryByRole("alert")).toBeNull();
     fireEvent.change(input, { target: { value: "하" } });
     fireEvent.change(input, { target: { value: "" } });
-    expect(screen.getByRole("alert").textContent).toBe("1~5자로 입력해 주세요");
+    expect(screen.getByRole("alert").textContent).toBe("1~8자로 입력해 주세요");
   });
 
   it("참가에 성공하면 정규화한 닉네임이 마지막 닉네임으로 기억된다", async () => {

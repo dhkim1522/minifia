@@ -26,15 +26,35 @@ describe("validateNickname - 정상 입력", () => {
     expect(r.ok && r.nickname).toBe("김 민수");
   });
 
-  it("5글자는 받는다 (결정 0017-4)", () => {
-    expect(NICKNAME_MAX_GRAPHEMES).toBe(5);
-    expect(validateNickname("가나다라마").ok).toBe(true);
+  it("8글자는 받고 9글자는 TOO_LONG (결정 0052-1, MAP-07)", () => {
+    expect(NICKNAME_MAX_GRAPHEMES).toBe(8);
+    expect(validateNickname("가나다라마바사아").ok).toBe(true);
+    expect(validateNickname("가나다라마바사아자")).toEqual({ ok: false, reason: "TOO_LONG" });
+    expect(validateNickname("abcdefgh").ok).toBe(true);
+    expect(validateNickname("abcdefghi")).toEqual({ ok: false, reason: "TOO_LONG" });
   });
 
-  it("가족 이모지 5개(그래핌 5)는 받고 6개는 TOO_LONG", () => {
-    expect(countGraphemes(FAMILY.repeat(5))).toBe(5);
-    expect(validateNickname(FAMILY.repeat(5)).ok).toBe(true);
-    expect(validateNickname(FAMILY.repeat(6))).toEqual({ ok: false, reason: "TOO_LONG" });
+  it("전각 8자는 받고 9자는 TOO_LONG", () => {
+    expect(validateNickname("\u{FF21}\u{FF22}\u{FF23}\u{FF24}\u{FF25}\u{FF26}\u{FF27}\u{FF28}").ok).toBe(true);
+    expect(validateNickname("\u{FF21}\u{FF22}\u{FF23}\u{FF24}\u{FF25}\u{FF26}\u{FF27}\u{FF28}\u{FF29}")).toEqual({ ok: false, reason: "TOO_LONG" });
+  });
+
+  it("결합 문자가 붙은 8 그래핌은 받는다", () => {
+    const withMark = "e\u{0301}".repeat(8); // é 8개 = 그래핌 8
+    expect(countGraphemes(withMark)).toBe(8);
+    expect(validateNickname(withMark).ok).toBe(true);
+    expect(validateNickname(withMark + "e")).toEqual({ ok: false, reason: "TOO_LONG" });
+  });
+
+  it("가족 이모지 8개(그래핌 8)는 받고 9개는 TOO_LONG", () => {
+    expect(countGraphemes(FAMILY.repeat(8))).toBe(8);
+    expect(validateNickname(FAMILY.repeat(8)).ok).toBe(true);
+    expect(validateNickname(FAMILY.repeat(9))).toEqual({ ok: false, reason: "TOO_LONG" });
+  });
+
+  it("T-06-12: 상한이 늘어도 채움 문자·영폭 문자가 섞인 8자는 INVALID_CHARS", () => {
+    expect(validateNickname("가나다라마바사\u{3164}")).toEqual({ ok: false, reason: "INVALID_CHARS" });
+    expect(validateNickname("가나다라마바\u{200B}사")).toEqual({ ok: false, reason: "INVALID_CHARS" });
   });
 
   it("가족 이모지는 글자 1개로 세고 받는다", () => {
@@ -56,8 +76,8 @@ describe("validateNickname - 정상 입력", () => {
 });
 
 describe("validateNickname - 거부", () => {
-  it("6글자는 TOO_LONG", () => {
-    expect(validateNickname("가나다라마바")).toEqual({ ok: false, reason: "TOO_LONG" });
+  it("9글자는 TOO_LONG", () => {
+    expect(validateNickname("가나다라마바사아자")).toEqual({ ok: false, reason: "TOO_LONG" });
   });
 
   it("빈 값은 EMPTY", () => {
@@ -149,8 +169,8 @@ describe("CR-01 보이지 않는 문자", () => {
     expect(nicknameKey("\u{1112}\u{1161}\u{11AB}")).toBe("\u{D55C}");
   });
 
-  it("CR-01: 가족 이모지 5개는 글자 5개로 받는다", () => {
-    expect(validateNickname("\u{1F468}\u{200D}\u{1F469}\u{200D}\u{1F467}".repeat(5)).ok).toBe(true);
+  it("CR-01: 가족 이모지 8개는 글자 8개로 받는다", () => {
+    expect(validateNickname("\u{1F468}\u{200D}\u{1F469}\u{200D}\u{1F467}".repeat(8)).ok).toBe(true);
   });
 });
 

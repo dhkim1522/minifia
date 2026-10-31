@@ -97,13 +97,13 @@ describe("Home 방 만들기 시트", () => {
     expect(loadLastNickname()).toBe("민수");
   });
 
-  it("6글자 닉네임은 요청 없이 칸 아래 오류 문장과 aria-invalid, 꺼진 버튼을 보여 준다", () => {
+  it("9글자 닉네임은 요청 없이 칸 아래 오류 문장과 aria-invalid, 꺼진 버튼을 보여 준다", () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
     render(<Home onEnterRoom={vi.fn()} />);
     fireEvent.click(createRoomButton());
-    type(nicknameInput(), "가나다라마바");
-    expect(screen.getByRole("alert").textContent).toBe("1~5자로 입력해 주세요");
+    type(nicknameInput(), "가나다라마바사아자");
+    expect(screen.getByRole("alert").textContent).toBe("1~8자로 입력해 주세요");
     expect(nicknameInput().getAttribute("aria-invalid")).toBe("true");
     expect(submitCreate().disabled).toBe(true);
     fireEvent.click(submitCreate());
@@ -116,7 +116,7 @@ describe("Home 방 만들기 시트", () => {
     type(nicknameInput(), "민");
     expect(screen.queryByRole("alert")).toBeNull();
     type(nicknameInput(), "");
-    expect(screen.getByRole("alert").textContent).toBe("1~5자로 입력해 주세요");
+    expect(screen.getByRole("alert").textContent).toBe("1~8자로 입력해 주세요");
   });
 
   it("쓸 수 없는 글자가 들어가면 그 문장을 보여 준다", () => {
@@ -160,7 +160,7 @@ describe("Home 방 만들기 시트", () => {
     fireEvent.click(createRoomButton());
     type(nicknameInput(), "민수");
     fireEvent.click(submitCreate());
-    expect((await screen.findByRole("alert")).textContent).toBe("1~5자로 입력해 주세요");
+    expect((await screen.findByRole("alert")).textContent).toBe("1~8자로 입력해 주세요");
     expect(screen.queryByRole("status")).toBeNull();
     type(nicknameInput(), "민수야");
     expect(screen.queryByRole("alert")).toBeNull();
