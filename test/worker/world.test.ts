@@ -20,6 +20,7 @@ import {
   send,
   settle,
   storedRoom,
+  alarmOf,
   until,
   worldDirty,
   worldOf,
@@ -325,5 +326,90 @@ describe("테스트 방 봇 수·시작·대기실 복귀 (MAP-01)", () => {
     const snap = got.find(isSnap)!;
     expect(snap.ents.map((e) => `${e.s}:${e.p.join(",")}`).join("|")).toBe("0:360,40|1:40,360|2:540,220|3:-420,-120");
     await until("복귀 즉시 저장", async () => !hasEnd(await worldOf(s.code), "300,100"));
+  });
+});
+
+// ---- 테스트 방 봇 로비 배회 (MAP-02, 결정 0024) ----
+
+/** 테스트 방(방장 연결 + 봇 count). 방장 소켓이 봇 입장 프레임까지 받은 뒤다. */
+async function botRoom(count = 3): Promise<Awaited<ReturnType<typeof seat>>> {
+  const s = await seat(0, 0, { testMode: true });
+  send(s.host, { t: "testBots", count });
+  await nextFrame(s.host, (m) => m.t === "state" && m.view.players.length === count + 1);
+  await settle(s.host, 0);
+  return s;
+}
+
+/** 모든 봇의 wanderAt 을 지금으로 당긴다(저장하지 않는 인메모리 값이라 DO 안에서 직접 고친다). */
+async function pullWanderDue(code: string): Promise<void> {
+  await runInDurableObject(env.ROOM.getByName(code), async (instance) => {
+    const room = instance["room"]!;
+    const wanderAt: Record<string, number> = {};
+    for (const p of room.players) if (p.isBot === true) wanderAt[p.id] = Date.now() - 1;
+    instance["world"] = { ...instance["world"], wanderAt };
+  });
+}
+
+async function wanderTimes(code: string): Promise<number[]> {
+  let times: number[] = [];
+  await runInDurableObject(env.ROOM.getByName(code), async (instance) => {
+    times = Object.values(instance["world"].wanderAt);
+  });
+  return times;
+}
+
+describe("봇 로비 배회 (결정 0024)", () => {
+  it("방장이 연결된 테스트 방에서 봇 wanderAt 이 되면 알람이 사람과 같은 규칙으로 봇의 world.move 를 보낸다", async () => {
+    const s = await botRoom(3);
+    await pullWanderDue(s.code);
+    const mk = mark(s.host);
+    expect(await runDurableObjectAlarm(env.ROOM.getByName(s.code))).toBe(true);
+    const got = await settle(s.host, mk);
+    const moves = got.filter(isMove);
+    expect(moves.map((m) => m.s).sort().join(",")).toBe("1,2,3");
+    for (const m of moves) {
+      const end = { x: m.p[m.p.length - 2]!, z: m.p[m.p.length - 1]! };
+      expect(lineWalkable(BAR_MAP, end, end)).toBe(true);
+      expect(m.v).toBe(180);
+    }
+  });
+
+  it("알람 시각은 방 만료와 가장 이른 wanderAt 의 최솟값이다", async () => {
+    const s = await botRoom(3);
+    const times = await wanderTimes(s.code);
+    expect(times.length).toBe(3);
+    const expiresAt = (await storedRoom(s.code)).expiresAt;
+    expect(await alarmOf(s.code)).toBe(Math.min(expiresAt, ...times));
+  });
+
+  it("방장이 끊기면(연결된 사람 0) 배회 시각이 알람에 들어가지 않고 알람은 방 만료로 돌아간다", async () => {
+    const s = await botRoom(3);
+    s.host.ws.close();
+    await until("방장 끊김 반영", async () => (await storedRoom(s.code)).players.some((p) => (p as { connected?: boolean; isBot?: boolean }).isBot !== true && (p as { connected?: boolean }).connected === false));
+    const expiresAt = (await storedRoom(s.code)).expiresAt;
+    await until("알람이 방 만료로", async () => (await alarmOf(s.code)) === expiresAt);
+  });
+
+  it("같은 봇의 wanderAt 을 연달아 당겨도 150ms 안에는 두 번째 프레임이 없다(특권 없음)", async () => {
+    const s = await botRoom(1);
+    await pullWanderDue(s.code);
+    expect(await runDurableObjectAlarm(env.ROOM.getByName(s.code))).toBe(true);
+    await nextFrame(s.host, isMove);
+    const mk = mark(s.host);
+    await pullWanderDue(s.code);
+    expect(await runDurableObjectAlarm(env.ROOM.getByName(s.code))).toBe(true);
+    const got = await settle(s.host, mk);
+    expect(got.filter(isMove).length).toBe(0);
+  });
+
+  it("게임이 시작되면 봇은 배회하지 않고 world 프레임도 없다", async () => {
+    const s = await botRoom(3);
+    send(s.host, { t: "start" });
+    await nextFrame(s.host, (m) => m.t === "state" && m.view.phase !== "lobby");
+    const mk = mark(s.host);
+    await pullWanderDue(s.code);
+    await runDurableObjectAlarm(env.ROOM.getByName(s.code));
+    const got = await settle(s.host, mk);
+    expect(got.filter((m) => m.t === "world").length).toBe(0);
   });
 });
