@@ -6,7 +6,7 @@
 <script src="./support.js"></script>
 <script src="./three.min.js"></script>
 <script src="./character.js"></script>
-<script src="./blockout.js"></script>
+<script src="./blockout-v2.js"></script>
 <script src="./dressing.js"></script>
 </head>
 <body>
@@ -15,29 +15,20 @@
 <link href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&amp;display=swap" rel="stylesheet">
 <style>
 body{margin:0;background:#060914}
-a{color:#a9aebb}a:hover{color:#e6e8ee}
 .btn:focus-visible{outline:2px solid #e6e8ee;outline-offset:2px}
-@keyframes mfPop{0%{transform:scale(0.6)}60%{transform:scale(1.18)}100%{transform:scale(1)}}
+@keyframes mfRise{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
 </style>
 </helmet>
 <div style="width: 390px; height: 844px; position: relative; overflow: hidden; background: #060914; color: #e6e8ee; font-family: 'Gowun Dodum', system-ui, -apple-system, 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif; word-break: keep-all; user-select: none; -webkit-user-select: none">
 
-<canvas id="drCanvas" aria-label="로비 백스테이지 분장실 블록아웃. 왼벽 조명 거울, 뒷벽 무대 문과 맵 포스터, 옷걸이 랙" style="position: absolute; left: 0; top: 0; width: 390px; height: 844px; display: block"></canvas>
+<canvas id="drCanvas" aria-label="로비 백스테이지 분장실 블록아웃. 왼벽 조명 거울, 뒷벽 무대 문과 맵 포스터, 옷걸이 랙. 바닥을 누르면 지호가 걸어가고, 옷걸이 앞을 누르면 의상이 바뀌어요" style="position: absolute; left: 0; top: 0; width: 390px; height: 844px; display: block; cursor: pointer"></canvas>
 
 <div aria-hidden="true" style="position: absolute; left: 0; top: 0; width: 390px; height: 844px; pointer-events: none">
 <sc-for list="{{ people }}" as="p" hint-placeholder-count="8">
 <div id="drPlate{{ p.i }}" style="position: absolute; left: 0; top: 0; width: 0; height: 0; will-change: transform">
-<div style="position: absolute; left: 0; top: 0; transform: translate(-50%, -100%); display: flex; flex-direction: column; align-items: center; gap: 3px">
-<sc-if value="{{ p.hasBubble }}" hint-placeholder-val="{{ false }}">
-<span style="font-size: 13px; line-height: 1; padding: 5px 9px 6px; border-radius: 999px; background: #e6e8ee; color: #0e1326; font-weight: 700; white-space: nowrap; animation: mfPop 260ms ease-out">{{ p.bubble }}</span>
-</sc-if>
-<sc-if value="{{ p.hasBadge }}" hint-placeholder-val="{{ false }}">
-<span style="min-width: 22px; text-align: center; font-size: 14px; line-height: 1; padding: 5px 8px 6px; border-radius: 999px; background: #f1f2f5; color: #0e1326; font-weight: 700; font-variant-numeric: tabular-nums; box-shadow: 0 0 0 2px rgba(14, 19, 38, 0.7); animation: mfPop 260ms ease-out">{{ p.badge }}</span>
-</sc-if>
-<div style="display: flex; align-items: center; gap: 5px; padding: 2px 8px; border-radius: 999px; background: rgba(14, 19, 38, 0.8); white-space: nowrap">
+<div style="position: absolute; left: 0; top: 0; transform: translate(-50%, -100%); display: flex; align-items: center; gap: 5px; padding: 2px 8px; border-radius: 999px; background: rgba(14, 19, 38, 0.8); white-space: nowrap; box-shadow: {{ p.ring }}">
 <span style="width: 7px; height: 7px; border-radius: 999px; background: {{ p.color }}"></span>
 <span style="font-size: 12px; line-height: 1.4; font-weight: 700; color: #f1f2f5">{{ p.name }}</span>
-</div>
 </div>
 </div>
 </sc-for>
@@ -46,51 +37,40 @@ a{color:#a9aebb}a:hover{color:#e6e8ee}
 <div style="position: absolute; left: 0; top: 0; width: 390px; height: 120px; pointer-events: none; background: linear-gradient(to bottom, rgba(6, 9, 20, 0.85) 0px, rgba(6, 9, 20, 0.7) 70px, rgba(6, 9, 20, 0) 120px)"></div>
 <header style="position: absolute; left: 0; top: 0; width: 390px; box-sizing: border-box; padding: 20px 16px 0; display: flex; align-items: flex-start; justify-content: space-between; gap: 12px">
 <div style="display: flex; flex-direction: column; gap: 2px">
-<span style="font-size: 20px; line-height: 1.3; font-weight: 700; color: #f1f2f5">① 지하 재즈 바</span>
-<span style="font-size: 15px; line-height: 1.3; color: #a9aebb">{{ phaseTitle }}</span>
+<span style="font-size: 20px; line-height: 1.3; font-weight: 700; color: #f1f2f5">로비 · 백스테이지 분장실</span>
+<span style="font-size: 15px; line-height: 1.3; color: #a9aebb">바닥을 누르면 걸어가요</span>
 </div>
 <span style="font-size: 12px; line-height: 1.6; color: #a9aebb; font-variant-numeric: tabular-nums">{{ fpsText }}</span>
 </header>
 
-<div role="status" aria-live="polite" style="position: absolute; left: 0; top: 88px; width: 390px; display: flex; justify-content: center; pointer-events: none; opacity: {{ toastOpacity }}; transition: opacity 220ms">
-<span style="font-size: 17px; line-height: 1.3; font-weight: 700; padding: 8px 16px; border-radius: 999px; background: rgba(21, 28, 54, 0.94); border: 1px solid #2a3760; color: #f1f2f5">{{ toast }}</span>
+<sc-if value="{{ outfitOn }}" hint-placeholder-val="{{ false }}">
+<div role="status" style="position: absolute; left: 0; right: 0; top: 96px; display: flex; justify-content: center; pointer-events: none; animation: mfRise 220ms ease-out both">
+<span style="font-size: 16px; font-weight: 700; padding: 8px 16px; border-radius: 999px; background: rgba(21, 28, 54, 0.94); border: 1px solid #2a3760; color: #f1f2f5">{{ outfitText }}</span>
 </div>
+</sc-if>
 
 <section style="position: absolute; left: 0; bottom: 0; width: 390px; box-sizing: border-box; padding: 14px 16px 22px; background: rgba(21, 28, 54, 0.97); border-radius: 20px 20px 0 0; display: flex; flex-direction: column; gap: 10px">
-<div role="log" aria-label="채팅" style="height: 104px; box-sizing: border-box; padding: 8px 10px; border-radius: 12px; background: #0e1326; display: flex; flex-direction: column; justify-content: flex-end; gap: 4px; overflow: hidden">
-<sc-for list="{{ chat }}" as="m" hint-placeholder-count="3">
-<p style="margin: 0; font-size: 13px; line-height: 1.5; color: {{ m.color }}">{{ m.text }}</p>
+<span style="font-size: 14px; color: #a9aebb">방장이 고른 맵 · 문 위 포스터에 불이 켜져요</span>
+<div role="radiogroup" aria-label="맵" style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px">
+<sc-for list="{{ maps }}" as="m" hint-placeholder-count="3">
+<button type="button" class="btn" role="radio" aria-checked="{{ m.checked }}" onClick="{{ m.pick }}" style="min-height: 52px; padding: 0; border-radius: 14px; border: 1px solid {{ m.border }}; background: {{ m.bg }}; color: {{ m.fg }}; font-family: inherit; font-size: 15px; font-weight: 700; cursor: pointer">{{ m.label }}</button>
 </sc-for>
 </div>
-<div style="display: flex; align-items: center; gap: 8px">
-<span style="font-size: 13px; color: #a9aebb; white-space: nowrap">순간 알림</span>
-<div role="group" aria-label="지목 순간 알림 방식" style="flex-grow: 1; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px">
-<sc-for list="{{ notifies }}" as="n" hint-placeholder-count="2">
-<button type="button" class="btn" onClick="{{ n.pick }}" aria-pressed="{{ n.pressed }}" style="min-height: 44px; padding: 0; border-radius: 12px; border: 1px solid {{ n.border }}; background: {{ n.bg }}; color: {{ n.fg }}; font-family: inherit; font-size: 14px; cursor: pointer">{{ n.label }}</button>
-</sc-for>
-</div>
-</div>
-<div role="group" aria-label="게임 단계" style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px">
-<sc-for list="{{ phases }}" as="ph" hint-placeholder-count="4">
-<button type="button" class="btn" onClick="{{ ph.pick }}" aria-pressed="{{ ph.pressed }}" style="min-height: 48px; padding: 0; border-radius: 12px; border: 1px solid {{ ph.border }}; background: {{ ph.bg }}; color: {{ ph.fg }}; font-family: inherit; font-size: 15px; cursor: pointer">{{ ph.label }}</button>
-</sc-for>
-</div>
+<span style="font-size: 13px; color: #8a90a0">옷걸이 앞 바닥을 누르면 의상이 바뀌어요(앱에서는 꾸미기 창)</span>
 </section>
 
 </div>
 </x-dc>
 <script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
-var CONCEPT = 'dressing', PREFIX = 'dr', W = 390, H = 844;
-var PHASES = [{ id: 'talk', label: '로비' }];
+var CONCEPT = 'dressing', PREFIX = 'dr', W = 390, H = 844, ME = 0;
 var NAMES = [['지호', '#7a8fb8'], ['민준', '#6fa59a'], ['서연', '#b89a6f'], ['도윤', '#b87a5c'], ['하은', '#a9aebb'], ['태오', '#8f86b0'], ['수아', '#7f9f7a'], ['현우', '#a88f9a']];
-// 지목 예시: i 번이 VOTES[i] 번을 가리킨다(blockout.js 와 같다). ORDER 순서로 1.2초마다 한 명씩 지목한다
-var VOTES = [3, 3, 5, 0, 3, 3, 3, 5], ACCUSED = 3, ORDER = [1, 4, 0, 2, 5, 7, 6, 3];
-var SYS = '#a9aebb', VOTE = '#e6e8ee';
+var MAPS = [['bar', '재즈 바'], ['plaza', '광장'], ['random', '랜덤']];
+var OUTFITS = [['coat', '기본'], ['noir', '누아르'], ['mafia', '마피아'], ['police', '경찰'], ['doctor', '의사'], ['detective', '탐정'], ['reporter', '기자'], ['elder', '어르신'], ['hood', '후드']];
 
 class Component extends DCLogic {
   constructor(props) {
     super(props);
-    this.state = { phase: 'vote', fpsText: '', notify: 'toast', counts: [0, 0, 0, 0, 0, 0, 0, 0], bubbles: {}, toast: '', toastOn: false, chat: [] };
+    this.state = { fpsText: '', map: 'random', outfit: 0, outfitOn: false };
   }
 
   componentDidMount() {
@@ -107,6 +87,7 @@ class Component extends DCLogic {
   componentWillUnmount() {
     this.alive = false;
     cancelAnimationFrame(this.raf);
+    clearTimeout(this.outfitTimer);
     if (this.io) this.io.disconnect();
     if (this.st) this.st.dispose();
   }
@@ -114,9 +95,19 @@ class Component extends DCLogic {
   start(canvas) {
     var self = this;
     canvas.addEventListener('webglcontextlost', function (e) { e.preventDefault(); });
-    this.st = MFB.createStage(canvas, CONCEPT, { width: W, height: H, offsetY: 90 });
-    this.pick(this.state.phase);
-    var st = this.st, plates = NAMES.map(function (n, i) { return document.getElementById(PREFIX + 'Plate' + i); });
+    var st = this.st = MFB.createStage(canvas, CONCEPT, { width: W, height: H, offsetY: 110 });
+    st.setPhase('talk');
+    if (st.ctx.setPoster) st.ctx.setPoster(this.state.map);
+    // 바닥을 누르면 지호가 걸어간다. 옷걸이 앞이면 의상을 바꾼다
+    var ray = new THREE.Raycaster(), floor = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), hit = new THREE.Vector3();
+    canvas.addEventListener('click', function (e) {
+      var r = canvas.getBoundingClientRect();
+      ray.setFromCamera({ x: (e.clientX - r.left) / r.width * 2 - 1, y: -(e.clientY - r.top) / r.height * 2 + 1 }, st.camera);
+      if (!ray.ray.intersectPlane(floor, hit)) return;
+      if (hit.x > -1.7 && hit.x < 1.1 && hit.z < -3.0) { self.nextOutfit(); return; }
+      st.walkTo(ME, Math.max(-4.2, Math.min(4.6, hit.x)), Math.max(-3.4, Math.min(4.6, hit.z)));
+    });
+    var plates = NAMES.map(function (n, i) { return document.getElementById(PREFIX + 'Plate' + i); });
     this.visible = true;
     if (window.IntersectionObserver) { this.io = new IntersectionObserver(function (es) { self.visible = es[0].isIntersecting; }); this.io.observe(canvas); }
     var last = performance.now(), acc = 0, frames = 0, fpsT = 0;
@@ -124,13 +115,10 @@ class Component extends DCLogic {
       if (!self.alive) return;
       var dt = Math.min((now - last) / 1000, 0.1); last = now; acc += dt;
       if (self.visible && !document.hidden && acc >= 1 / 30) {
-        var step = Math.min(acc, 0.05);
-        st.frame(step);
-        self.tickVotes(step);
+        st.frame(Math.min(acc, 0.05));
         st.people.forEach(function (c, i) {
           var el = plates[i]; if (!el) return;
           el.style.transform = 'translate(' + c.sx.toFixed(1) + 'px,' + c.sy.toFixed(1) + 'px)';
-          el.style.opacity = c.root.visible ? '1' : '0';
         });
         frames++; fpsT += acc; acc = 0;
         if (fpsT >= 1) {
@@ -143,56 +131,25 @@ class Component extends DCLogic {
     this.raf = requestAnimationFrame(frame);
   }
 
-  // 지목 단계: 한 명씩 지목하고, 머리 위 표 수·순간 알림·채팅을 갱신한다
-  tickVotes(dt) {
-    if (this.state.phase !== 'vote') return;
-    this.clock += dt;
-    var s = this.state, changed = null;
-    while (this.next < ORDER.length && this.clock >= 0.9 + this.next * 1.2) {
-      var i = ORDER[this.next++], t = VOTES[i];
-      this.st.castVote(i);
-      var counts = (changed || s).counts.slice(); counts[t]++;
-      if (t === ACCUSED && counts[t] === 3) this.st.emote(t, 'deny');
-      var chat = (changed || s).chat.concat([{ text: NAMES[i][0] + ' 님이 ' + NAMES[t][0] + ' 님을 지목했어요', color: VOTE }]);
-      var bubbles = Object.assign({}, (changed || s).bubbles);
-      changed = { counts: counts, chat: chat, bubbles: bubbles };
-      if (s.notify === 'toast') { changed.toast = NAMES[i][0] + ' → ' + NAMES[t][0]; changed.toastOn = true; this.toastUntil = this.clock + 1.5; }
-      else { bubbles[i] = NAMES[t][0] + '!'; this.bubbleUntil[i] = this.clock + 1.8; }
-    }
-    var b = (changed || s).bubbles, self = this;
-    Object.keys(b).forEach(function (k) {
-      if (self.clock > self.bubbleUntil[k]) { if (!changed) changed = {}; changed.bubbles = Object.assign({}, b); delete changed.bubbles[k]; b = changed.bubbles; }
-    });
-    if (s.toastOn && !(changed && changed.toastOn) && this.clock > this.toastUntil) { if (!changed) changed = {}; changed.toastOn = false; }
-    if (changed) this.setState(changed);
-  }
-
-  pick(id) {
-    var def = MFB.CONCEPTS[CONCEPT], final = [0, 0, 0, 0, 0, 0, 0, 0];
-    VOTES.forEach(function (t) { final[t]++; });
-    var chat = [{ text: '[' + PHASES.filter(function (p) { return p.id === id; })[0].label + '] ' + def.text[id], color: SYS }];
-    if (id === 'trial') chat.push({ text: NAMES[ACCUSED][0] + ' 님이 ' + final[ACCUSED] + '표로 최후 변론에 섰어요', color: VOTE });
-    this.clock = 0; this.next = 0; this.toastUntil = 0; this.bubbleUntil = {};
-    this.setState({ phase: id, counts: id === 'trial' ? final : [0, 0, 0, 0, 0, 0, 0, 0], bubbles: {}, toastOn: false, chat: chat });
-    if (this.st) this.st.setPhase(id);
+  nextOutfit() {
+    var self = this, n = (this.state.outfit + 1) % OUTFITS.length;
+    if (this.st && window.MFChar && MFChar.applyOutfit) MFChar.applyOutfit(this.st.people[ME], OUTFITS[n][0]);
+    clearTimeout(this.outfitTimer);
+    this.outfitTimer = setTimeout(function () { if (self.alive) self.setState({ outfitOn: false }); }, 1500);
+    this.setState({ outfit: n, outfitOn: true });
   }
 
   renderVals() {
-    var self = this, s = this.state, cur = s.phase;
-    function btn(label, on, pick) { return { label: label, pressed: on ? 'true' : 'false', bg: on ? '#e6e8ee' : '#1e2847', fg: on ? '#0e1326' : '#e6e8ee', border: on ? '#e6e8ee' : '#2a3760', pick: pick }; }
+    var self = this, s = this.state;
     return {
-      people: NAMES.map(function (n, i) {
-        var c = s.counts[i], bub = s.bubbles[i];
-        return { i: i, name: n[0], color: n[1], hasBadge: c > 0, badge: c + '표', hasBubble: !!bub, bubble: bub || '' };
-      }),
-      phases: PHASES.map(function (p) { return btn(p.label, p.id === cur, function () { self.pick(p.id); }); }),
-      notifies: [btn('화면 위', s.notify === 'toast', function () { self.setState({ notify: 'toast' }); if (cur === 'vote') self.pick('vote'); }),
-        btn('말풍선', s.notify === 'bubble', function () { self.setState({ notify: 'bubble' }); if (cur === 'vote') self.pick('vote'); })],
-      phaseTitle: PHASES.filter(function (p) { return p.id === cur; })[0].label,
-      toast: s.toast,
-      toastOpacity: s.toastOn ? 1 : 0,
-      chat: s.chat.slice(-5),
-      fpsText: s.fpsText
+      fpsText: s.fpsText,
+      outfitOn: s.outfitOn, outfitText: '지호 · ' + OUTFITS[s.outfit][1],
+      people: NAMES.map(function (n, i) { return { i: i, name: n[0], color: n[1], ring: i === ME ? 'inset 0 0 0 1.5px #e6e8ee' : 'none' }; }),
+      maps: MAPS.map(function (m) {
+        var on = s.map === m[0];
+        return { label: m[1], checked: on ? 'true' : 'false', bg: on ? '#e6e8ee' : '#1e2847', fg: on ? '#0e1326' : '#e6e8ee', border: on ? '#e6e8ee' : '#2a3760',
+          pick: function () { if (self.st && self.st.ctx.setPoster) self.st.ctx.setPoster(m[0]); self.setState({ map: m[0] }); } };
+      })
     };
   }
 }
