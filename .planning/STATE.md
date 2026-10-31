@@ -5,16 +5,16 @@ milestone_name: 같은 공간
 current_phase: 06
 current_phase_name: 월드 뼈대
 status: executing
-stopped_at: Completed 06-08-PLAN.md
-last_updated: "2026-10-31T16:28:16.772Z"
+stopped_at: Completed 06-09-PLAN.md
+last_updated: "2026-10-31T16:36:13.766Z"
 last_activity: 2026-11-01
 last_activity_desc: Phase 06 execution started
-state_head: 84efd7127d91448d73c1227b0e5ce29097ec3c62
+state_head: e32af7265ad273d23fbea94cf1aac5b4cc7f1dcd
 progress:
   total_phases: 7
   completed_phases: 0
   total_plans: 21
-  completed_plans: 7
+  completed_plans: 8
   percent: 0
 ---
 
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-10-30)
 ## Current Position
 
 Phase: 06 (월드 뼈대) — EXECUTING
-Plan: 8 of 21
+Plan: 9 of 21
 Status: Ready to execute
 Last activity: 2026-11-01 — Phase 06 execution started
 
@@ -65,6 +65,7 @@ Progress: [░░░░░░░░░░] 0% (0/7 phases)
 | Phase 06 P04 | 3 min | 3 tasks | 6 files |
 | Phase 06 P06 | 25min | 3 tasks | 13 files |
 | Phase 06 P08 | 17 min | 3 tasks | 8 files |
+| Phase 06 P09 | 10min | 2 tasks | 15 files |
 
 ## Accumulated Context
 
@@ -91,6 +92,7 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 06]: 06-08: MoveMessageSchema 를 ClientMessageSchema 앞에 선언(TDZ), move 는 ClientMessage 유니온 멤버
 - [Phase 06]: 06-08: world 프레임은 emitWorld 한 곳(로비 전용)으로만 나가고 위치는 별도 world 키에 2초 디바운스 저장, 나가기·내보내기·시작·마지막 연결 끊김·알람에서 즉시 저장
 - [Phase 06]: 06-08: 테스트 방 봇 배회는 로비·봇 있음·사람 연결일 때만 알람 하나에 합치고(min), 봇도 applyMove 본체를 지난다
+- [Phase 06]: 06-09: world 프레임은 onEvent 로만 흘리고 종료 상태(replaced 포함)에서는 구독자에게 보내지 않는다. WorldStore 는 snap 통째 교체·낡은/새 epoch move 폐기
 
 ### Pending Todos
 
@@ -127,8 +129,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-31T16:28:16.745Z
-Stopped at: Completed 06-08-PLAN.md
+Last session: 2026-10-31T16:36:13.740Z
+Stopped at: Completed 06-09-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
