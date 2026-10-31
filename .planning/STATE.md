@@ -5,16 +5,16 @@ milestone_name: 같은 공간
 current_phase: 06
 current_phase_name: 월드 뼈대
 status: executing
-stopped_at: Completed 06-06-PLAN.md
-last_updated: "2026-10-31T16:08:31.996Z"
+stopped_at: Completed 06-08-PLAN.md
+last_updated: "2026-10-31T16:28:16.772Z"
 last_activity: 2026-11-01
 last_activity_desc: Phase 06 execution started
-state_head: 15a7d5d9117aa9acaf9e20032a0f4808066db7af
+state_head: 84efd7127d91448d73c1227b0e5ce29097ec3c62
 progress:
   total_phases: 7
   completed_phases: 0
   total_plans: 21
-  completed_plans: 6
+  completed_plans: 7
   percent: 0
 ---
 
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-10-30)
 ## Current Position
 
 Phase: 06 (월드 뼈대) — EXECUTING
-Plan: 7 of 21
+Plan: 8 of 21
 Status: Ready to execute
 Last activity: 2026-11-01 — Phase 06 execution started
 
@@ -64,6 +64,7 @@ Progress: [░░░░░░░░░░] 0% (0/7 phases)
 | Phase 06 P05 | 8 min | 3 tasks | 5 files |
 | Phase 06 P04 | 3 min | 3 tasks | 6 files |
 | Phase 06 P06 | 25min | 3 tasks | 13 files |
+| Phase 06 P08 | 17 min | 3 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -87,6 +88,9 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 06]: three 0.186.1 정확 고정(최신 0.187.0 배제), lockfile 무결성은 deps.test.ts 가 지킨다
 - [Phase 06]: v2.0 토큰 22개를 design/tokens.json 에 합침(serif 글꼴·글자 스타일은 7~8페이즈), v1.0 토큰 유지
 - [Phase 06]: 06-06: 닉네임 상한 8자, 봇 이름 8자 적용, v1.0 고정 테이블 한정 E2E D9·D3b 6자 이상 이름 판을 승인 완화 범위로 (결정 0056, 사용자 선택 a)
+- [Phase 06]: 06-08: MoveMessageSchema 를 ClientMessageSchema 앞에 선언(TDZ), move 는 ClientMessage 유니온 멤버
+- [Phase 06]: 06-08: world 프레임은 emitWorld 한 곳(로비 전용)으로만 나가고 위치는 별도 world 키에 2초 디바운스 저장, 나가기·내보내기·시작·마지막 연결 끊김·알람에서 즉시 저장
+- [Phase 06]: 06-08: 테스트 방 봇 배회는 로비·봇 있음·사람 연결일 때만 알람 하나에 합치고(min), 봇도 applyMove 본체를 지난다
 
 ### Pending Todos
 
@@ -123,8 +127,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-31T16:08:31.967Z
-Stopped at: Completed 06-06-PLAN.md
+Last session: 2026-10-31T16:28:16.745Z
+Stopped at: Completed 06-08-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
