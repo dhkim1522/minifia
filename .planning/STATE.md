@@ -5,16 +5,16 @@ milestone_name: 같은 공간
 current_phase: 06
 current_phase_name: 월드 뼈대
 status: executing
-stopped_at: Completed 06-04-PLAN.md
-last_updated: "2026-10-31T16:03:19.096Z"
+stopped_at: Completed 06-06-PLAN.md
+last_updated: "2026-10-31T16:08:31.996Z"
 last_activity: 2026-11-01
 last_activity_desc: Phase 06 execution started
-state_head: 50051a2e3fb9d3ce388dc22d8c6762b089d2f578
+state_head: 15a7d5d9117aa9acaf9e20032a0f4808066db7af
 progress:
   total_phases: 7
   completed_phases: 0
   total_plans: 21
-  completed_plans: 5
+  completed_plans: 6
   percent: 0
 ---
 
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-10-30)
 ## Current Position
 
 Phase: 06 (월드 뼈대) — EXECUTING
-Plan: 6 of 21
+Plan: 7 of 21
 Status: Ready to execute
 Last activity: 2026-11-01 — Phase 06 execution started
 
@@ -63,6 +63,7 @@ Progress: [░░░░░░░░░░] 0% (0/7 phases)
 | Phase 06 P03 | 6min | 3 tasks | 4 files |
 | Phase 06 P05 | 8 min | 3 tasks | 5 files |
 | Phase 06 P04 | 3 min | 3 tasks | 6 files |
+| Phase 06 P06 | 25min | 3 tasks | 13 files |
 
 ## Accumulated Context
 
@@ -85,6 +86,7 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 06]: 06-05: planWander 난수 순서 계약 — seat 오름차순, 때가 된 봇 [셀, 간격], 처음 보는 봇 [간격], 안 된 봇은 난수 없음
 - [Phase 06]: three 0.186.1 정확 고정(최신 0.187.0 배제), lockfile 무결성은 deps.test.ts 가 지킨다
 - [Phase 06]: v2.0 토큰 22개를 design/tokens.json 에 합침(serif 글꼴·글자 스타일은 7~8페이즈), v1.0 토큰 유지
+- [Phase 06]: 06-06: 닉네임 상한 8자, 봇 이름 8자 적용, v1.0 고정 테이블 한정 E2E D9·D3b 6자 이상 이름 판을 승인 완화 범위로 (결정 0056, 사용자 선택 a)
 
 ### Pending Todos
 
@@ -121,8 +123,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-31T16:03:19.072Z
-Stopped at: Completed 06-04-PLAN.md
+Last session: 2026-10-31T16:08:31.967Z
+Stopped at: Completed 06-06-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
