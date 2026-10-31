@@ -150,7 +150,7 @@ describe("shouldRecreate (T-06-06: 소실 한 번에 재생성 한 번)", () => 
     expect(shouldRecreate(l, l)).toBe(false);
     expect(shouldRecreate(rec, { status: "failed", lostAt: 1000 })).toBe(false);
   });
-  it("소실 한 번에 일어나는 재생성은 정확히 한 번이다 (tick 을 1ms 마다 1000번 흘려도)", () => {
+  it("소실 한 번에 일어나는 재생성은 정확히 한 번이다 (tick 을 1ms 마다 5100번 흘려도)", () => {
     let s = lostAt(1000);
     let count = 0;
     for (let now = 1000; now <= 6100; now += 1) {
