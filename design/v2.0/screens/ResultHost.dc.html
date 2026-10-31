@@ -11,7 +11,6 @@
 <script src="./character.js"></script>
 <script src="./blockout.js"></script>
 <script src="./bar.js"></script>
-<script src="./dressing.js"></script>
 </head>
 <body>
 <x-dc>
@@ -92,7 +91,7 @@ body{margin:0;background:#0e1326}
 </x-dc>
 <script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
 var SCREEN = 'resultHost', W = 390, H = 844;
-var MAP = SCREEN === 'hostMove' ? 'dressing' : 'bar';
+var MAP = 'bar';
 var NAMES = [['지호', '#7a8fb8'], ['민준', '#6fa59a'], ['서연', '#b89a6f'], ['도윤', '#b87a5c'], ['하은', '#a9aebb'], ['태오', '#8f86b0'], ['수아', '#7f9f7a'], ['현우', '#a88f9a']];
 var EMOTES = [['throat', '목 긋기'], ['deny', '나 아니야'], ['clap', '박수'], ['cry', '엉엉'], ['handshake', '악수'], ['point', '손가락질'], ['praise', '최고'], ['surprise', '깜짝'], ['dance', '춤']];
 var ROLES = ['citizen', 'police', 'citizen', 'citizen', 'doctor', 'citizen', 'mafia', 'mafia'];
@@ -101,7 +100,7 @@ var CFG = {
   resultHost: { phase: 'result', me: 0, host: true, label: '결과. 무대 둘레에서 직업이 한 명씩 공개되고 이긴 팀만 조명을 받아요' },
   resultGuest: { phase: 'result', me: 2, host: false, label: '결과. 일반 참가자 화면, 준비만 누를 수 있어요' },
   award: { phase: 'award', me: 0, label: '시상식. 한 명씩 무대로 나와 칭호를 받아요' },
-  hostMove: { phase: 'talk', me: 1, label: '분장실 로비. 방장이 문으로 나가 민준에게 방장이 넘어와요' }
+  hostMove: { phase: 'talk', me: 1, label: '로비. 방장이 나가서 민준에게 방장이 넘어와요' }
 };
 // 칭호 초안(서버 기록으로 정한다, END-04). 진 팀부터, 마지막이 가장 큰 칭호
 var AWARDS = [
@@ -237,7 +236,7 @@ class Component extends DCLogic {
     }
     if (SCREEN === 'hostMove') {
       if (this.once('leave', 2)) {
-        st.walkTo(HOST, -2.4, -4.4);
+        st.walkTo(HOST, st.ctx.talk[HOST].x + 2.5, st.ctx.talk[HOST].z + 2.5);
         this.setState({ hostLeft: true });
       }
       if (this.once('move', 3.6)) {
