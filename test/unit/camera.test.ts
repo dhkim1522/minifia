@@ -447,7 +447,7 @@ describe("빈 배경 없음: 이동 한계 상자 9개 목표 × 스테이지 �
 // CAMERA_PRINT=1 일 때만 크기별 근거 표를 출력한다(SUMMARY 용).
 describe.runIf(process.env.CAMERA_PRINT === "1")("근거 표 출력", () => {
   it("크기별 필요 pan·가장 먼 바닥 점", () => {
-    const rows = STAGE_SIZES.map((s) => `${s.label}\t최소 pan ${minPanFor(s)}\t가장 먼 바닥 ${farthestGround(s, symBox(minPanFor(s))).at}`);
+    const rows = STAGE_SIZES.map((s) => `${s.label}\t최소 pan ${minPanFor(s)}\t가장 먼 바닥 ${farthestGround(s, PAN_BOX).at}`);
     console.log(rows.join("\n"));
   });
 });

@@ -41,10 +41,20 @@ export const NAMETAG_MAX_W = 180;
 export const NAMETAG_H = 24;
 /** 이름표 상자 아래 끝과 머리 꼭대기 사이 간격(px) */
 export const NAMETAG_GAP = 4;
-/** 카메라 목표 이동 한계(월드 단위, 축별 상자) */
-export const PAN_BOX: Readonly<{ minX: number; maxX: number; minZ: number; maxZ: number }> = { minX: -4.0, maxX: 4.0, minZ: -4.0, maxZ: 4.0 };
-/** 연장 바닥 판 반폭(월드 단위, 바닥 아래 y = −0.01 의 정사각형 한 장) */
-export const PLATE_FAR = 30;
+/**
+ * 카메라 목표 이동 한계(월드 단위, 축별 대칭 상자) = 가시성 검사(걷는 영역 0.25 간격 전 격자점 × 6개 폰 크기에서
+ * 발과 이름표 180×24 가 스테이지 사각형 안)를 통과하는 가장 좁은 0.1 단위 값이다. 시작값 ±4.0 은 폭 360 폰에서
+ * 걷는 영역 모서리 (5.8, −5.8) 의 이름표가 오른쪽으로 58px 넘쳤다.
+ * 크기별 최소 pan: 360x640 4.8 · 360x560 4.8 · 390x664 4.6 · 390x844 4.6 · 402x874 4.5 · 430x932 4.3.
+ * 한계를 정한 것은 폭 360 두 크기(이름표 반폭 90 + 모서리의 가로 어긋남 41.2px × |dx − dz|)다.
+ */
+export const PAN_BOX: Readonly<{ minX: number; maxX: number; minZ: number; maxZ: number }> = { minX: -4.8, maxX: 4.8, minZ: -4.8, maxZ: 4.8 };
+/**
+ * 연장 바닥 판 반폭(월드 단위, 바닥 아래 y = −0.01 의 정사각형 한 장) = 빈 배경 검사(PAN_BOX 의 9개 목표 × 스테이지
+ * 사각형 7×7 표본 광선)가 통과하는 가장 작은 0.5 단위 값 16.5 + 여유 2. 가장 먼 점은 430x932 에서 목표 (−4.8, −4.8) 일 때
+ * 스테이지 왼쪽 위 모서리 표본이 닿는 바닥 (−16.30, −11.08) 이다. 스테이지 위(헤더 가림막 뒤)까지는 여유 2 가 덮는다.
+ */
+export const PLATE_FAR = 18.5;
 
 /** UI-SPEC 의 폰 크기(폰 폭×높이). 스테이지 사각형은 stageRect 로 구한다 */
 export const STAGE_SIZES: readonly { w: number; h: number; label: string }[] = [
