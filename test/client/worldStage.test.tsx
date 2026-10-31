@@ -12,6 +12,7 @@ import { NETWORK_TEXT } from "../../src/net/copy";
 import type { WorldStageProps } from "../../src/components/WorldStage";
 import { UnsupportedRendererError } from "../../src/world/renderer";
 import type { CharacterHandle, RendererStatusEvent, WorldRenderer } from "../../src/world/renderer";
+import { stageOffsetY } from "../../src/world/camera";
 import { ENTER_MS, EXIT_MS, MOVE_ACK_TIMEOUT_MS, WALK_CUE_KEY } from "../../src/world/runtime";
 import type { WorldModules } from "../../src/world/runtime";
 import { installWorldTestHooks, WORLD_TEST_KEY, worldTestHooksEnabled } from "../../src/world/testHooks";
@@ -1067,5 +1068,67 @@ describe("E2E 훅 (T-06-27)", () => {
     expect(window.__mfWorld!.screenOf(0, 0)).toBeNull();
     off();
     expect(window.__mfWorld).toBeUndefined();
+  });
+});
+
+// ---------- 카메라 맞춤: 새 연결·크기 변화 (MAP-03, UI-SPEC E4) ----------
+
+describe("카메라: 날아가지 않고 붙는다, 크기 변화는 다시 맞춘다", () => {
+  it("재접속(새 epoch 의 snap)한 첫 프레임에는 카메라가 새 서버 위치에 바로 붙는다", async () => {
+    const s = await open();
+    const r = s.world.renderers[0]!;
+    // 내가 멀리 걸어가 카메라가 따라가는 중
+    move(s.store, seg(0, [200, 100, 600, 100], Date.now(), 180));
+    frames(300);
+    const lagging = r.views.at(-1)!.target.x;
+    expect(lagging).toBeLessThan(s.store.positionOf(0, Date.now())!.x + 1e-6);
+    // 다시 연결: 새 epoch 의 snap 이 내 위치를 반대쪽 끝으로 준다
+    snap(s.store, [seg(0, [-400, -300]), seg(1, [-300, 50])], 2);
+    frame(16);
+    expect(r.views.at(-1)!.target.x).toBeCloseTo(-4, 6);
+    expect(r.views.at(-1)!.target.z).toBeCloseTo(-3, 6);
+    // 등장 연출도 없다: 캐릭터 크기는 그대로 1
+    expect(r.chars.get(0)!.root.scale.x).toBeCloseTo(0.83, 6);
+  });
+
+  it("크기가 바뀌면 150ms 디바운스 뒤 렌더러를 한 번 다시 재고, 카메라 중심은 180ms 에 걸쳐 새 스테이지 가운데로 간다", async () => {
+    const s = await open({ stageInsets: { top: 62, bottom: 88 } });
+    const r = s.world.renderers[0]!;
+    const host = s.utils.container.querySelector<HTMLElement>(".mf-world__canvas")!;
+    Object.defineProperty(host, "clientWidth", { configurable: true, value: 360 });
+    Object.defineProperty(host, "clientHeight", { configurable: true, value: 640 });
+    frame(16);
+    expect(r.resize).not.toHaveBeenCalled();
+    frame(60);
+    expect(r.resize).not.toHaveBeenCalled();
+    frames(120);
+    expect(r.resize).toHaveBeenCalledTimes(1);
+    expect(r.resize).toHaveBeenCalledWith(360, 640);
+    frames(300);
+    const settled = r.views.at(-1)!.offsetY;
+    expect(settled).toBeCloseTo(stageOffsetY(640, 62, 640 - 88), 6);
+    // 렌더러는 다시 만들지 않는다(크기 변화는 WebGL 재할당이라 끊김의 원인)
+    expect(s.world.createThreeRenderer).toHaveBeenCalledTimes(1);
+    // 한 프레임 만에 뛰지 않는다: 아래 패널이 자라면(7페이즈 채팅) 장면은 중간 값을 지나 새 가운데로 간다
+    s.rerender({ stageInsets: { top: 62, bottom: 220 } });
+    frame(16);
+    frame(60);
+    const mid = r.views.at(-1)!.offsetY;
+    const to = stageOffsetY(640, 62, 640 - 220);
+    expect(to).not.toBeCloseTo(settled, 3);
+    expect(Math.abs(mid - settled)).toBeGreaterThan(0.01);
+    expect(Math.abs(mid - to)).toBeGreaterThan(0.01);
+    frames(300);
+    expect(r.views.at(-1)!.offsetY).toBeCloseTo(to, 6);
+  });
+
+  it("모션 줄이기면 카메라는 감쇠 없이 내 캐릭터에 붙는다", async () => {
+    stubReducedMotion(true);
+    const s = await open();
+    const r = s.world.renderers[0]!;
+    move(s.store, seg(0, [200, 100, 600, 100], Date.now(), 180));
+    frames(500);
+    const pos = s.store.positionOf(0, Date.now())!;
+    expect(r.views.at(-1)!.target.x).toBeCloseTo(pos.x, 6);
   });
 });
