@@ -16,6 +16,7 @@ import { initialMapStatus, inputBlocked, mapStatusReducer, shouldRecreate } from
 import type { MapStatusEvent, MapStatusState } from "./status";
 import type { RendererStatusEvent } from "./renderer";
 import type { WorldStore } from "./store";
+import type { EmoteId } from "./characterData";
 import type { characterKit as CharacterKitType } from "./character";
 import type { createThreeRenderer as CreateThreeRendererType } from "./threeRenderer";
 
@@ -83,6 +84,9 @@ const ENTER_LIFT = 0.4;
 /** 6페이즈는 모두 기본 코트(의상 교체는 10페이즈) */
 const OUTFIT = "coat";
 
+/** 동작을 재생할 수 있는 캐릭터 핸들(06-11 WorldCharacter). 테스트의 가짜 캐릭터에는 playEmote 가 없을 수 있다 */
+export type PlayableCharacter = CharacterHandle & { playEmote?(id: EmoteId): void };
+
 export interface WorldRuntimeDeps {
   host: HTMLElement;
   tagLayer: HTMLElement;
@@ -120,6 +124,8 @@ export interface WorldRuntime {
   /** 서버 시각 t(기본: 지금)의 seat 위치 */
   sample(seat: number, t?: number): { x: number; z: number } | null;
   renderer(): WorldRenderer | null;
+  /** seat 의 캐릭터 핸들(없으면 null). 06-14 성능 스파이크가 동작을 재생하는 데 쓴다 — 제품 로비는 부르지 않는다(로비에서 캐릭터는 혼자 동작하지 않는다) */
+  characterOf(seat: number): PlayableCharacter | null;
   /** 지금 목적지 링의 목표 지점(없으면 null) */
   ring(): { x: number; z: number } | null;
   /** 지금 맵 상태 */
@@ -752,6 +758,9 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
     },
     renderer() {
       return renderer;
+    },
+    characterOf(seat) {
+      return actors.get(seat)?.handle ?? null;
     },
     ring() {
       return ring === null ? null : { ...ring.target };

@@ -84,13 +84,14 @@ describe("createScenario: 구간", () => {
     }
   });
   it("한 사람은 3~6초(+ 처음 한 번은 0~3.5초 안)마다 새 목적지로 간다", () => {
-    const moves = run(1, 60000).filter((e) => e.kind === "move" && e.seat === 0);
+    // 멈춤(동작 하려고 선 한 점 구간)은 목적지가 아니다
+    const moves = run(1, 60000).filter((e) => e.kind === "move" && e.seat === 0 && e.p.length >= 4);
     expect(moves.length).toBeGreaterThanOrEqual(9);
     expect(moves[0]!.at).toBeLessThanOrEqual(3500);
     for (let i = 1; i < moves.length; i++) {
       const gap = moves[i]!.at - moves[i - 1]!.at;
       expect(gap).toBeGreaterThanOrEqual(3000);
-      expect(gap).toBeLessThan(6000);
+      expect(gap).toBeLessThan(8000); // 6초 간격 + 동작 때문에 늦춰진 만큼
     }
   });
 });
@@ -102,7 +103,7 @@ describe("createScenario: 동작", () => {
     expect(em.map((e) => e.at)).toEqual(Array.from({ length: 12 }, (_, i) => 5000 * (i + 1)));
     expect(em.map((e) => e.id)).toEqual(Array.from({ length: 12 }, (_, i) => (i % 2 === 0 ? "clap" : "deny")));
   });
-  it("걷고 있지 않은 캐릭터에게만 하고, 사람이 돌아가며 받는다", () => {
+  it("걷고 있지 않은 캐릭터에게만 한다 — 걷던 사람은 먼저 그 자리에 선다 (한 점 구간)", () => {
     const s = createScenario({ seed: 1, chars: 8, map: BAR_MAP });
     const cur = new Map<number, Segment>(s.initial().map((e) => [e.s, { p: e.p, t0: e.t0, v: e.v }]));
     const seen = new Set<number>();
@@ -113,7 +114,7 @@ describe("createScenario: 동작", () => {
         seen.add(e.seat);
       }
     }
-    expect(seen.size).toBeGreaterThanOrEqual(4);
+    expect([...seen].sort()).toEqual([0, 1, 2, 3, 4, 5, 6, 7]); // 사람이 돌아가며 받는다
   });
 });
 
@@ -133,5 +134,20 @@ describe("parsePerfParams", () => {
     expect(p.budget).toBe(5);
     expect(p.seed).toBe(1);
     expect(p.chars).toBe(8);
+  });
+});
+
+describe("createScenario: 사람이 눌러 retarget", () => {
+  it("다른 사람의 경로는 그대로이고, 눌린 사람은 걸음이 끝나기 전에 시나리오가 끼어들지 않는다", () => {
+    const base = run(1, 40000);
+    const s = createScenario({ seed: 1, chars: 8, map: BAR_MAP });
+    s.advance(10000);
+    const seg = { p: [100, 100, 400, 100], t0: 10000, v: MOVE_V }; // 300 단위 = 약 1.67초
+    s.retarget(0, seg);
+    const after = [...base.filter((e) => e.at <= 10000), ...s.advance(40000)];
+    const others = (ev: ScenarioEvent[]) => ev.filter((e) => e.seat !== 0 && e.kind === "move");
+    expect(others(after)).toEqual(others(base));
+    const mine = after.filter((e) => e.seat === 0 && e.kind === "move" && e.p.length >= 4 && e.at > 10000);
+    expect(mine[0]!.at).toBeGreaterThanOrEqual(segmentEndsAt(seg));
   });
 });
