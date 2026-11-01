@@ -37,6 +37,7 @@ import {
   readLinkState,
   readChatLines,
   readChatPanel,
+  readChannelTraces,
   readTablePanel,
   readLobbyFrame,
   readPaintStats,
@@ -644,6 +645,10 @@ async function chatLobbyFlow(ctx) {
 
 /** chat-table 에서 방장이 낮 토론에 보내는 글 */
 const CHAT_TABLE_TEXT = "저는 시민이에요";
+/** chat-table 에서 마피아 방장이 밤에 보내는 글 */
+const CHAT_MAFIA_TEXT = "오늘 밤은 조용히 가요";
+/** chat-ghost 에서 탈락한 방장이 보내는 글 */
+const CHAT_GHOST_TEXT = "나는 유령이에요";
 // 테이블 채팅 패널 치수(UI-SPEC 구조 표). src/game/chatUi.ts 의 값을 그대로 옮긴 사본이다 — 값을 바꾸려면 UI-SPEC 과 chatUi.ts 를 먼저 바꾼다.
 const CHAT_TABLE_EXTRA = 92;
 
@@ -663,9 +668,23 @@ function tablePanelRows(m) {
   ];
 }
 
+/** 시민 편 화면에 있으면 안 되는 문구(UI-SPEC Copywriting 누설 검사 대상, T-07-40) */
+const CHAT_PRIVATE_WORDS = ["마피아 채팅", "마피아끼리만"];
+
+/** 한 화면의 마피아 채널 흔적 0건 판정(문구·aria-label·placeholder·줄·채널 표식). 시민 편 화면과 낮 화면에 건다. */
+async function recordNoMafiaTraces(ctx, sc, id, page) {
+  const rec = recorder(ctx);
+  const t = await readChannelTraces(page, CHAT_PRIVATE_WORDS);
+  const bad = [...CHAT_PRIVATE_WORDS.filter((w) => t.hits[w] > 0).map((w) => `"${w}" ${t.hits[w]}건`), t.mafiaLines > 0 ? `마피아 줄 ${t.mafiaLines}` : "", t.ghostLines > 0 ? `유령 줄 ${t.ghostLines}` : "", t.mafiaChannel + t.ghostChannel > 0 ? `비공개 채널 패널 ${t.mafiaChannel + t.ghostChannel}` : ""].filter(Boolean);
+  rec(sc, id, "마피아·유령 채널 문구·줄·패널이 0건", bad.length === 0, bad.join(", "));
+  return t;
+}
+
 /**
- * 테이블 화면 트레이서: 시민 방장이 낮 토론에서 한 줄을 보내면 기록 칸에 서버 방송이 돌아온 줄(채널 all, 이름 "나")이 보이고
- * 하단 패널 높이가 LOG_H + 92 다(CHAT-01 낮 몫). 낮 시작 연출 다음이 바로 이 화면이다(순차 주장 단계 없음).
+ * 테이블 화면 흐름(07-15, CHAT-01·02): 방 하나로 세 판을 돈다.
+ * (1) 시민 방장: 낮 토론에서 보낸 한 줄이 기록 칸에 보이고(채널 all, 이름 "나") 하단 높이가 LOG_H + 92, 밤에는 채팅 패널이 없고 마피아 채널 흔적이 0건이다.
+ * (2) 마피아 방장: 낮은 시민과 같은 all 패널이고, 밤에는 채널 mafia 패널(입력칸 '마피아 채팅 입력'·'마피아끼리만 보여요')에서 보낸 줄이 data-ch mafia 로만 보인다.
+ * 탈락자 화면은 흐름 chat-ghost 가 본다.
  */
 async function chatTableFlow(ctx) {
   const rec = recorder(ctx);
@@ -683,6 +702,7 @@ async function chatTableFlow(ctx) {
   const v0 = tracker.last();
   rec(`${id}/setup`, "S3", "인원·지정 직업", v0.players.length === 4 && v0.me.role === "citizen", `인원 ${v0.players.length}/4, 직업 ${v0.me.role}/citizen`);
 
+  // (1) 시민 방장 — 낮 토론
   await skipTo(page, tracker, "discussion");
   await settle(page);
   const sc = `${id}/discussion`;
@@ -700,7 +720,105 @@ async function chatTableFlow(ctx) {
     rec(sc, "CT3", "보낸 뒤 입력칸이 비워짐", cleared === "", `입력칸 ${cleared.length}자`);
   }
   for (const r of tablePanelRows(await readTablePanel(page))) rec(sc, r.id, r.label, r.ok, r.detail);
+  await recordNoMafiaTraces(ctx, sc, "CT4", page);
   await checkState(ctx, id, "discussion"); // G 공통 검사 (콘솔 오류·가로 넘침·누르기 크기·글자 크기)
+
+  // (1) 시민 방장 — 밤: 채팅 패널이 없고(기존 NightPanel) 마피아 채널 흔적이 0건
+  await skipTo(page, tracker, "night");
+  await settle(page);
+  {
+    const scn = `${id}/night-citizen`;
+    const m = await readTablePanel(page);
+    rec(scn, "CN1", "시민 방장의 밤 하단에는 채팅 패널이 없고 하단 패널은 기존 높이다", !!m && !m.hasChat, m ? `채팅 패널 ${m.hasChat} · 패널 높이 ${Math.round(m.panel.height)}` : "하단 패널이 없음");
+    const t = await recordNoMafiaTraces(ctx, scn, "CN2", page);
+    rec(scn, "CN3", "문서에 채팅 입력칸·기록 칸이 없다", t.panels === 0, `채팅 패널 ${t.panels}개`);
+    await checkState(ctx, id, "night-citizen");
+  }
+
+  // (2) 마피아 방장: 같은 방을 대기실로 되돌려 직업만 바꾼다
+  await backToLobby(page, tracker);
+  await page.waitForTimeout(800); // 대기실 화면이 다시 그려지는 동안 시트 닫기 버튼이 움직인다
+  await openTestSheet(page);
+  await chooseRole(page, tracker, "mafia");
+  await startGame(page, tracker);
+  rec(`${id}/setup-mafia`, "S4", "다시 시작한 판의 방장 직업이 마피아", tracker.last()?.me?.role === "mafia", `직업 ${tracker.last()?.me?.role}`);
+  await skipTo(page, tracker, "discussion");
+  await settle(page);
+  {
+    const scd = `${id}/discussion-mafia`;
+    const m = await readTablePanel(page);
+    rec(scd, "CM1", "낮의 마피아 방장도 채널 all 패널이다(마피아 문구 없음)", !!m && m.hasChat && m.channel === "all" && m.inputLabel === "채팅 입력", m ? `채널 ${m.channel} · 이름 "${m.inputLabel}"` : "하단 패널이 없음");
+    await recordNoMafiaTraces(ctx, scd, "CM2", page);
+  }
+  await skipTo(page, tracker, "night");
+  await settle(page);
+  {
+    const scn = `${id}/night-mafia`;
+    const nch = tracker.last()?.me?.chat;
+    rec(scn, "NM0", "서버가 보낸 밤 채널은 mafia", nch === "mafia", `me.chat ${nch}`);
+    const m = await readTablePanel(page);
+    rec(scn, "NM1", "밤의 마피아 하단은 채널 mafia 패널: 입력칸 '마피아 채팅 입력'·안내 '마피아끼리만 보여요'", !!m && m.hasChat && m.channel === "mafia" && m.inputLabel === "마피아 채팅 입력" && m.inputHint === "마피아끼리만 보여요", m ? `채널 ${m.channel} · 이름 "${m.inputLabel}" · 안내 "${m.inputHint}"` : "하단 패널이 없음");
+    await typeAndSendChat(page, CHAT_MAFIA_TEXT);
+    const got = await attempt(async () => {
+      await waitChatLine(page, CHAT_MAFIA_TEXT);
+    });
+    rec(scn, "NM2", "마피아가 보낸 한 줄이 기록 칸에 보임", got.ok, got.detail);
+    const lines = (await readChatLines(page)) ?? [];
+    const mine = lines.filter((l) => l.text === CHAT_MAFIA_TEXT);
+    rec(scn, "NM3", "그 줄은 정확히 한 번, 채널 mafia, 이름 '나'", mine.length === 1 && mine[0].ch === "mafia" && mine[0].name === "나", `${mine.length}줄 · ch ${mine[0]?.ch} · 이름 "${mine[0]?.name}"`);
+    rec(scn, "NM4", "밤 기록의 사람 줄은 모두 mafia 채널이다(낮의 공개 줄이 섞이지 않는다)", lines.length > 0 && lines.every((l) => l.ch === "mafia"), lines.map((l) => l.ch).join(","));
+    const sys = await page.evaluate(() => [...document.querySelectorAll("[data-chat-log] .mv-chat__sys")].map((p) => (p.textContent ?? "").trim()));
+    rec(scn, "NM5", "기록에 '밤 · 마피아 채팅' 시스템 줄이 한 번", sys.filter((t) => t === "밤 · 마피아 채팅").length === 1, `시스템 줄 ${JSON.stringify(sys)}`);
+    for (const r of tablePanelRows(await readTablePanel(page))) rec(scn, `N${r.id}`, r.label, r.ok, r.detail);
+    await checkState(ctx, id, "night-mafia");
+  }
+}
+
+/**
+ * 탈락자 화면 흐름(07-15, CHAT-03): 봇이 모두 찬성하고 방장을 후보로 골라 방장을 처형시킨 뒤, 탈락한 방장의 밤 화면이
+ * 채널 ghost 패널('유령 채팅 입력'·'유령끼리만 보여요')이고 보낸 줄이 data-ch ghost 로 보이며 '유령 채팅 · 산 사람에게 안 보여요' 줄이 한 번 있다.
+ */
+async function chatGhostFlow(ctx) {
+  const rec = recorder(ctx);
+  const id = "chat-ghost";
+  const host = await startHost(ctx, id);
+  const { page, tracker } = host;
+  await settle(page);
+  await openTestSheet(page);
+  await setBots(page, tracker, 3);
+  await chooseRole(page, tracker, "citizen");
+  await setBotVote(page, tracker, { exec: "yes", pick: "host" });
+  await startGame(page, tracker);
+  ctx.stage = "play";
+  await skipTo(page, tracker, "discussion");
+  await skipTo(page, tracker, "execVote");
+  await voteAs(page, tracker, "찬성");
+  await page.waitForFunction(() => (document.querySelector(".mf-execvote__tally")?.textContent ?? "").includes("모두 냈어요"), null, { timeout: 8000 }).catch(() => {});
+  await skipTo(page, tracker, "candidateVote");
+  await sleep(7000); // 봇 후보 선택(1~6초)이 끝나도록
+  await skipTo(page, tracker, "candidateVoteReveal");
+  await skipTo(page, tracker, "defense");
+  await skipTo(page, tracker, "execution");
+  await skipTo(page, tracker, "night");
+  await settle(page);
+  if (!isDeadView(tracker.last())) throw new SetupError("방장이 처형되지 않아 탈락자 화면이 아님");
+  const sc = `${id}/night-ghost`;
+  const gch = tracker.last()?.me?.chat;
+  rec(sc, "GH0", "서버가 보낸 탈락자 채널은 ghost", gch === "ghost", `me.chat ${gch}`);
+  const m = await readTablePanel(page);
+  rec(sc, "GH1", "탈락자의 밤 하단은 채널 ghost 패널: '유령 채팅 입력'·'유령끼리만 보여요'", !!m && m.hasChat && m.channel === "ghost" && m.inputLabel === "유령 채팅 입력" && m.inputHint === "유령끼리만 보여요", m ? `채널 ${m.channel} · 이름 "${m.inputLabel}" · 안내 "${m.inputHint}"` : "하단 패널이 없음");
+  await typeAndSendChat(page, CHAT_GHOST_TEXT);
+  const got = await attempt(async () => {
+    await waitChatLine(page, CHAT_GHOST_TEXT);
+  });
+  rec(sc, "GH2", "탈락자가 보낸 한 줄이 기록 칸에 보임", got.ok, got.detail);
+  const lines = (await readChatLines(page)) ?? [];
+  const mine = lines.filter((l) => l.text === CHAT_GHOST_TEXT);
+  rec(sc, "GH3", "그 줄은 정확히 한 번, 채널 ghost, 이름 '나'", mine.length === 1 && mine[0].ch === "ghost" && mine[0].name === "나", `${mine.length}줄 · ch ${mine[0]?.ch} · 이름 "${mine[0]?.name}"`);
+  const sys = await page.evaluate(() => [...document.querySelectorAll("[data-chat-log] .mv-chat__sys")].map((p) => (p.textContent ?? "").trim()));
+  rec(sc, "GH4", "기록에 '유령 채팅 · 산 사람에게 안 보여요' 시스템 줄이 한 번", sys.filter((t) => t === "유령 채팅 · 산 사람에게 안 보여요").length === 1, `시스템 줄 ${JSON.stringify(sys)}`);
+  for (const r of tablePanelRows(await readTablePanel(page))) rec(sc, `G${r.id}`, r.label, r.ok, r.detail);
+  await checkState(ctx, id, "night-ghost");
 }
 
 // ---- reconnect·deployhold (06-18, CONN-04·MAP-05) ----
@@ -2342,6 +2460,8 @@ export const FLOWS = [
   { id: "chat-lobby", run: chatLobbyFlow, extraSizes: LOBBY_EXTRA_SIZES },
   // 테이블 화면 자유 채팅(07-15): 낮 토론의 한 줄(트레이서) → 최후 변론·밤 마피아·시민 화면·탈락자
   { id: "chat-table", run: chatTableFlow, extraSizes: LOBBY_EXTRA_SIZES },
+  // 탈락자 화면(07-15): 방장이 처형된 뒤의 밤. 크기와 무관해서 자기 크기로 한 번만 돈다
+  { id: "chat-ghost", run: chatGhostFlow, size: RECONNECT_SIZE },
   // 재접속·예산(06-18): 폰 크기와 곱하지 않고 자기 크기로 한 번. deployhold 는 배포와 동시에 돌리는 흐름(06-19)이라 --only 없이는 빠진다
   { id: "reconnect", run: reconnectFlow, size: RECONNECT_SIZE },
   { id: "deployhold", run: deployHoldFlow, size: RECONNECT_SIZE, skipByDefault: true },
