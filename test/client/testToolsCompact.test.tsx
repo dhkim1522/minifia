@@ -1,5 +1,5 @@
-// [테스트] 버튼 좁힘(05-06, 사용자 결정 2026-10-29 (a)): 장면 높이가 TABLE_FIT_MIN_H(299) 미만일 때만 글자를 시각적으로 숨겨 2번 자리 캐릭터 상자 왼쪽 경계 안쪽에 들게 한다.
-// 위치(왼쪽 위)는 그대로이고, 긴 화면(299 이상)과 장면 밖(역할 확인 등)에서는 지금과 완전히 같다.
+// [테스트] 버튼 좁힘(05-06, 사용자 결정 2026-10-29 (a)): 장면 높이가 TABLE_FULL_H(336, 07-20 에 299 에서 올림) 미만일 때만 글자를 시각적으로 숨겨 2번 자리 캐릭터 상자 왼쪽 경계 안쪽에 들게 한다.
+// 위치(왼쪽 위)는 그대로이고, 긴 화면(336 이상)과 장면 밖(역할 확인 등)에서는 지금과 완전히 같다.
 import { readFileSync } from "node:fs";
 import { act, cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -25,17 +25,22 @@ function renderIn(sceneClass: string | null, h: number) {
 const btn = () => screen.getByRole("button", { name: "테스트" });
 
 describe("[테스트] 버튼: 짧은 장면에서만 좁힌다", () => {
-  it.each(["mf-dayscene__scene"])("%s 높이 283.8(< 299)이면 data-compact 가 붙는다", (cls) => {
+  it.each(["mf-dayscene__scene"])("%s 높이 283.8(< 336)이면 data-compact 가 붙는다", (cls) => {
     renderIn(cls, 283.8);
     expect(btn().hasAttribute("data-compact")).toBe(true);
   });
 
-  it.each(["mf-dayscene__scene"])("%s 높이 299 이상이면 붙지 않는다 (긴 화면 불변)", (cls) => {
-    renderIn(cls, 299);
+  it.each(["mf-dayscene__scene"])("%s 높이 336 이상이면 붙지 않는다 (긴 화면 불변)", (cls) => {
+    renderIn(cls, 336);
     expect(btn().hasAttribute("data-compact")).toBe(false);
     cleanup();
     renderIn(cls, 363.8);
     expect(btn().hasAttribute("data-compact")).toBe(false);
+  });
+
+  it.each(["mf-dayscene__scene"])("%s 높이 332.8(360×640 의 채팅 패널 하단)도 붙는다 — 테이블이 올라가 2번 자리 머리가 버튼에 닿는 구간 (07-20)", (cls) => {
+    renderIn(cls, 332.8);
+    expect(btn().hasAttribute("data-compact")).toBe(true);
   });
 
   it("장면 밖(역할 확인 위쪽 바 등)에서는 붙지 않는다", () => {

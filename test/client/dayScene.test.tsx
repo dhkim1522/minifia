@@ -193,11 +193,11 @@ describe("DayScene 장면 상자 (SPEC 판 구성, 결정 0017-1)", () => {
     expect(has(/@media \(max-width: 389px\)\s*\{[^@]*\.mf-dayscene__scene\s*\{[^}]*padding:\s*0 4px/)).toBe(true);
   });
 
-  it("장면이 짧으면 테이블이 올라간다: 잰 폭 352·높이 300 에서 테이블 면 top 118px (높이 407 기본이면 150px)", () => {
+  it("장면이 짧으면 테이블이 올라간다: 잰 폭 352·높이 320 에서 테이블 면 top 134px (높이 407 기본이면 150px)", () => {
     class FakeRO {
       constructor(private cb: (entries: { contentRect: { width: number; height: number } }[]) => void) {}
       observe(): void {
-        this.cb([{ contentRect: { width: 352, height: 300 } }]);
+        this.cb([{ contentRect: { width: 352, height: 320 } }]);
       }
       unobserve(): void {}
       disconnect(): void {}
@@ -206,7 +206,7 @@ describe("DayScene 장면 상자 (SPEC 판 구성, 결정 0017-1)", () => {
     try {
       vi.stubGlobal("ResizeObserver", FakeRO);
       const short = scene(makeView({ phase: "discussion" }));
-      expect(felt(short.container).style.top).toBe("118px");
+      expect(felt(short.container).style.top).toBe("134px");
       cleanup();
     } finally {
       vi.unstubAllGlobals();

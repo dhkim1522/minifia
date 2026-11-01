@@ -25,6 +25,7 @@ import {
   NAME_TAG_MAX_W,
   SEAT_CY_MIN,
   TABLE_FIT_MIN_H,
+  TABLE_FULL_H,
   TABLE_FIT_MIN_SCALE,
   TABLE_FIT_SPAN,
   dayTableGeometry,
@@ -52,7 +53,8 @@ describe("상수", () => {
     expect(SCENE_PAD_DEFAULT).toBe(12);
     expect(SCENE_PAD_NARROW).toBe(4);
     expect(SEAT_CY_MIN).toBe(177);
-    expect(TABLE_FIT_MIN_H).toBe(299);
+    expect(TABLE_FULL_H).toBe(336); // 승인 기하(cy 210)가 쓰이는 최소 장면 높이
+    expect(TABLE_FIT_MIN_H).toBe(303); // 07-20: 이름표 상자 26 기준(SEAT_CY_MIN 177 + ry 100 + 26). 이전 299 는 이름표 22 기준이라 299~336 에서 4px 넘쳤다
     expect(NAME_TAG_MAX_W).toBe(100);
     expect(TAG_GAP_Y).toBe(0);
     expect(TAG_H).toBe(22);
@@ -110,19 +112,20 @@ describe("dayTableGeometry: 세로 규칙은 그대로", () => {
     expect(g.felt.height).toBe(108);
   });
 
-  it("높이 332 이상은 cy 210, 331 은 209 (맨 앞 이름표 아래 끝 = cy + 122)", () => {
-    expect(dayTableGeometry(366, 332).cy).toBe(210);
-    expect(dayTableGeometry(366, 331).cy).toBe(209);
+  it("높이 336 이상은 cy 210, 335 는 209 (맨 앞 이름표 상자 아래 끝 = cy + 126, 07-20 이름표 상자 26 기준)", () => {
+    expect(dayTableGeometry(366, 336).cy).toBe(210);
+    expect(dayTableGeometry(366, 335).cy).toBe(209);
+    expect(dayTableGeometry(366, 332.8).cy).toBeCloseTo(206.8, 9); // 360×640 채팅 패널 하단(332.8): 이름표 상자 아래 끝이 장면 아래와 맞는다
   });
 
-  it("높이 320 은 cy 198·면 top 138", () => {
+  it("높이 320 은 cy 194·면 top 134", () => {
     const g = dayTableGeometry(366, 320);
-    expect(g.cy).toBe(198);
-    expect(g.felt.top).toBe(138);
+    expect(g.cy).toBe(194);
+    expect(g.felt.top).toBe(134);
   });
 
-  it("높이 299 는 cy 177", () => {
-    expect(dayTableGeometry(366, 299).cy).toBe(177);
+  it("높이 303 은 cy 177", () => {
+    expect(dayTableGeometry(366, 303).cy).toBe(177);
   });
 
   it("높이 299 미만은 같은 배율로 압축한다(P5-3): 298 은 177 이 아니라 cy ≈ 173.7·fit < 1 (이름표 상자 26 기준)", () => {
@@ -469,13 +472,13 @@ describe("자동 배치 검사: 세로 (장면 높이 299~460)", () => {
     expect(out.join(",")).toBe("");
   });
 
-  it("높이 TABLE_FIT_MIN_H(299) 이상이면 모든 이름표 아래 끝(tagTop + 22)이 장면 높이 이하다", () => {
+  it("높이 TABLE_FIT_MIN_H(303) 이상이면 모든 이름표 상자 아래 끝(tagTop + 26)이 장면 높이 이하다 (07-20: 실제 DOM 상자 26 기준)", () => {
     const out: string[] = [];
     for (const w of [352, 366]) {
       for (const h of heights.filter((v) => v >= TABLE_FIT_MIN_H)) {
         for (let n = 4; n <= 8; n++) {
           for (const p of daySeatLayout(seatsOf(n), 0, w, h, w === 352 ? 4 : 12)) {
-            if (p.tagTop + TAG_H > h + 1e-9) out.push(`w${w}h${h}n${n}:seat${p.seat}`);
+            if (p.tagTop + TAG_BOX_H > h + 1e-9) out.push(`w${w}h${h}n${n}:seat${p.seat}`);
           }
         }
       }
@@ -486,15 +489,16 @@ describe("자동 배치 검사: 세로 (장면 높이 299~460)", () => {
 });
 
 // ---- 짧은 장면 압축 (P5-3, UI-SPEC 11.3a, 05-04) ----
-// 장면 높이 TABLE_FIT_MIN_H(299) 이상의 기하는 HEAD 식 그대로여야 한다. 참조 구현을 시험 안에 둔다.
-const refGeometry = (sceneW: number, sceneH: number, pad: number) => {
+// 장면 높이 TABLE_FIT_MIN_H(303) 이상의 기하는 참조 식 그대로여야 한다. 참조 구현을 시험 안에 둔다.
+// below = 맨 앞 이름표 아래 끝까지의 거리: 07-20 에 122(이름표 22 기준)에서 126(실제 상자 26 기준)으로 고쳤다. 승인 기하(cy 210)가 쓰이는 336 이상은 두 값이 같다.
+const refGeometry = (sceneW: number, sceneH: number, pad: number, below = 126) => {
   const rx = seatRx(sceneW, pad);
   const feltW = feltWidthOf(rx);
-  const cy = Math.max(177, Math.min(210, sceneH - 122));
+  const cy = Math.max(177, Math.min(210, sceneH - below));
   return { cx: sceneW / 2, cy, rx, ry: 100, felt: { left: (sceneW - feltW) / 2, top: cy - 60, width: feltW, height: 108 } };
 };
-const refLayout = (n: number, sceneW: number, sceneH: number, pad: number) => {
-  const { cx, cy, rx, ry } = refGeometry(sceneW, sceneH, pad);
+const refLayout = (n: number, sceneW: number, sceneH: number, pad: number, below = 126) => {
+  const { cx, cy, rx, ry } = refGeometry(sceneW, sceneH, pad, below);
   return Array.from({ length: n }, (_, slot) => {
     const theta = Math.PI / 2 + (slot / n) * Math.PI * 2;
     const depth = (Math.sin(theta) + 1) / 2;
@@ -523,8 +527,8 @@ describe("짧은 장면 압축 (P5-3): 상수와 배율", () => {
     expect(TABLE_FIT_SPAN).toBeCloseTo(276.8, 9);
   });
 
-  it("tableFitScale: 299 이상 1, 270 → 0.8815, 240 → 0.7731, 200 → 하한", () => {
-    expect(tableFitScale(299)).toBe(1);
+  it("tableFitScale: 303 이상 1, 270 → 0.8815, 240 → 0.7731, 200 → 하한", () => {
+    expect(tableFitScale(303)).toBe(1);
     expect(tableFitScale(655.8)).toBe(1);
     expect(tableFitScale(270)).toBeCloseTo((270 - 26) / 276.8, 9);
     expect(tableFitScale(270)).toBeCloseTo(0.8815, 3);
@@ -548,11 +552,11 @@ describe("짧은 장면 압축 (P5-3): 상수와 배율", () => {
   });
 });
 
-describe("짧은 장면 압축 (P5-3): 299 이상은 한 값도 안 바뀐다", () => {
-  it("높이 299~700 정수 × 폭 4종 × 4~8명: 기하·배치 모든 필드가 HEAD 식과 같다", () => {
+describe("짧은 장면 압축 (P5-3): 303 이상은 f = 1, 승인 기하(336 이상)는 한 값도 안 바뀐다", () => {
+  it("높이 303~700 정수 × 폭 4종 × 4~8명: 기하·배치 모든 필드가 참조 식(이름표 상자 26 기준)과 같다", () => {
     const out: string[] = [];
     for (const { w, pad } of FIT_RUNS) {
-      for (let h = 299; h <= 700; h++) {
+      for (let h = 303; h <= 700; h++) {
         const g = dayTableGeometry(w, h, pad);
         const r = refGeometry(w, h, pad);
         if (g.fit !== 1) out.push(`fit w${w}h${h}`);
@@ -570,11 +574,29 @@ describe("짧은 장면 압축 (P5-3): 299 이상은 한 값도 안 바뀐다", 
   });
 });
 
-describe("짧은 장면 압축 (P5-3): 장면 높이 240~299 미만", () => {
+describe("짧은 장면 압축 (P5-3): 승인 기하는 336 이상에서 07-20 이전(이름표 22 기준 122)과 같다", () => {
+  it("높이 336~700 정수 × 폭 4종 × 4~8명: 이전 식(below 122)과 모든 필드가 같다 — 336 미만만 바뀌었다", () => {
+    const out: string[] = [];
+    for (const { w, pad } of FIT_RUNS) {
+      for (let h = 336; h <= 700; h++) {
+        for (let n = 4; n <= 8; n++) {
+          const got = daySeatLayout(seatsOf(n), 0, w, h, pad);
+          const old = refLayout(n, w, h, pad, 122);
+          for (let i = 0; i < n; i++) {
+            if (JSON.stringify(got[i]) !== JSON.stringify(old.find((q) => q.slot === got[i]!.slot))) out.push(`lay w${w}h${h}n${n}:${i}`);
+          }
+        }
+      }
+    }
+    expect(out.slice(0, 10).join(",")).toBe("");
+  });
+});
+
+describe("짧은 장면 압축 (P5-3): 장면 높이 240~303 미만", () => {
   it("모든 정수 높이 × 폭 4종 × 4~8명: 맨 앞 이름표 상자(26) 아래끝 ≤ 장면 높이, 머리 위 ≥ 0, 이름표 겹침 없음, 면 top ≥ 0", () => {
     const out: string[] = [];
     for (const { w, pad } of FIT_RUNS) {
-      for (let h = 240; h < 299; h++) {
+      for (let h = 240; h < 303; h++) {
         const g = dayTableGeometry(w, h, pad);
         if (g.felt.top < -1e-9) out.push(`felt w${w}h${h}`);
         for (let n = 4; n <= 8; n++) {
@@ -614,11 +636,10 @@ describe("짧은 장면 압축 (P5-3): 장면 높이 240~299 미만", () => {
     expect(rear.scale).toBeCloseTo(0.8 * f, 9);
   });
 
-  it("높이 299 경계: 승인 기하(cy 177)와 압축 식(상자 26 기준) 사이에 cy 불연속이 약 2.6px 있다 — 받아들인 값, 4px 미만", () => {
-    expect(dayTableGeometry(366, 299).cy).toBe(177);
-    const gap = 177 - dayTableGeometry(366, 298.99).cy;
-    expect(gap).toBeGreaterThan(2);
-    expect(gap).toBeLessThan(4);
+  it("높이 303 경계: f = 1 식(cy 177)과 압축 식(상자 26 기준)이 이어진다 — 07-20 이전의 약 2.6px 불연속이 없다", () => {
+    expect(dayTableGeometry(366, 303).cy).toBe(177);
+    const gap = Math.abs(177 - dayTableGeometry(366, 302.99).cy);
+    expect(gap).toBeLessThan(0.1);
   });
 });
 
@@ -704,9 +725,9 @@ describe("후광 번짐: 장면 안에 든다 (캐릭터 상자 + 9px × 배율)
     }
   });
 
-  it.each(FOUR_SCENES)("폭 $w: 가장 낮은 장면 높이(299.8)에서도 번짐이 장면 위로 16px(헤더 아래 안쪽 여백)를 넘지 않는다", (sc) => {
+  it.each(FOUR_SCENES)("폭 $w: 가장 낮은 f = 1 장면 높이(303.8)에서도 번짐이 장면 위로 16px(헤더 아래 안쪽 여백)를 넘지 않는다", (sc) => {
     for (let n = 1; n <= 8; n++) {
-      for (const p of daySeatLayout(seatsOf(n), 0, sc.w, 299.8, sc.pad)) {
+      for (const p of daySeatLayout(seatsOf(n), 0, sc.w, 303.8, sc.pad)) {
         const top = p.y - (FIG_H + HALO_BLUR_PX) * p.scale;
         expect(top, `${sc.w}/${n}명/자리 ${p.seat}`).toBeGreaterThanOrEqual(-16);
       }
@@ -836,12 +857,12 @@ describe("말풍선 기하: 이웃 얼굴을 덮지 않고 장면 안에 든다 
   });
 });
 
-describe("testButtonCompact: 짧은 장면(높이 299 미만)에서만 [테스트] 버튼을 좁힌다 (05-06)", () => {
-  it("TABLE_FIT_MIN_H(299) 미만의 양수 높이는 좁힌다", () => {
-    expect([283.8, 240, 298.9, 1].map((h) => testButtonCompact(h))).toEqual([true, true, true, true]);
+describe("testButtonCompact: 테이블이 위로 올라가는 짧은 장면(높이 336 미만)에서만 [테스트] 버튼을 좁힌다 (05-06, 07-20 기준 336)", () => {
+  it("TABLE_FULL_H(336) 미만의 양수 높이는 좁힌다 (압축 구간 303 미만과 올림 구간 303~336 모두)", () => {
+    expect([283.8, 240, 302.9, 303, 332.8, 335.9, 1].map((h) => testButtonCompact(h))).toEqual([true, true, true, true, true, true, true]);
   });
-  it("TABLE_FIT_MIN_H 이상은 좁히지 않는다 (긴 화면은 지금과 같다)", () => {
-    expect([299, 299.1, 363.8, 387.8, 407, 655.8].map((h) => testButtonCompact(h))).toEqual([false, false, false, false, false, false]);
+  it("TABLE_FULL_H 이상은 좁히지 않는다 (긴 화면은 지금과 같다)", () => {
+    expect([336, 336.1, 363.8, 387.8, 407, 655.8].map((h) => testButtonCompact(h))).toEqual([false, false, false, false, false, false]);
   });
   it("재지 못한 값(0·음수·NaN·Infinity)은 좁히지 않는다", () => {
     expect([0, -5, Number.NaN, Number.POSITIVE_INFINITY].map((h) => testButtonCompact(h))).toEqual([false, false, false, false]);

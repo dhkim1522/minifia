@@ -42,7 +42,7 @@ const SCENE_SELECTOR = ".mf-dayscene__scene";
 
 export function TestToolsButton({ onOpen }: TestToolsButtonProps): ReactElement {
   const ref = useRef<HTMLButtonElement>(null);
-  // 짧은 장면(높이 < 299)에서만 좁힌다: 마운트 직후 한 번 동기로 재고(첫 페인트부터), 이후 ResizeObserver 로 따라간다. 긴 화면·장면 밖은 늘 false.
+  // 짧은 장면(높이 < 336)에서만 좁힌다: 마운트 직후 한 번 동기로 재고(첫 페인트부터), 이후 ResizeObserver 로 따라간다. 긴 화면·장면 밖은 늘 false.
   const [compact, setCompact] = useState(false);
   useLayoutEffect(() => {
     const scene = ref.current?.closest<HTMLElement>(SCENE_SELECTOR) ?? null;

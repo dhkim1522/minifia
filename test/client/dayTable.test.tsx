@@ -119,10 +119,10 @@ describe("DayTable: 좌표는 daySeatLayout 하나에서 나온다", () => {
     expect(felt(b.container).style.width).toBe("202px");
   });
 
-  it("height 320 을 주면 테이블 면 top 138px 이고 내 자리(맨 아래) 이름표 top 이 px(198 + 100) 이다", () => {
+  it("height 320 을 주면 테이블 면 top 134px 이고 내 자리(맨 아래) 이름표 top 이 px(194 + 100) 이다(07-20: 이름표 상자 26 기준 cy = 320 − 126)", () => {
     const { container } = render(<DayTable seats={five()} mySeat={0} width={366} height={320} />);
-    expect(felt(container).style.top).toBe("138px");
-    expect(tagEl(container, 0).style.top).toBe(px(198 + 100));
+    expect(felt(container).style.top).toBe("134px");
+    expect(tagEl(container, 0).style.top).toBe(px(194 + 100));
   });
 
   it("짧은 폰(P5-3): height 240·8명·폭 352 에서 모든 이름표 상자 top + 26 ≤ 240, 좌석 캐릭터 배율도 같은 배율로 줄었다", () => {
@@ -141,9 +141,9 @@ describe("DayTable: 좌표는 daySeatLayout 하나에서 나온다", () => {
     expect(parseFloat(felt(container).style.top)).toBeGreaterThanOrEqual(0);
   });
 
-  it("높이 299 이상은 줄지 않는다(P5-3): height 299·8명의 내 그림 배율은 1, 면 높이 108px", () => {
+  it("높이 303 이상은 줄지 않는다(P5-3): height 303·8명의 내 그림 배율은 1, 면 높이 108px", () => {
     const eight = Array.from({ length: 8 }, (_, i) => seat(i, `이름${i}`, i === 0 ? { isMe: true } : {}));
-    const { container } = render(<DayTable seats={eight} mySeat={0} width={352} height={299} scenePad={4} />);
+    const { container } = render(<DayTable seats={eight} mySeat={0} width={352} height={303} scenePad={4} />);
     const myFig = container.querySelector<HTMLElement>('.mf-dt__seat[data-seat="0"]')!;
     expect(myFig.style.transform).toBe("scale(1)");
     expect(felt(container).style.height).toBe("108px");
@@ -151,12 +151,12 @@ describe("DayTable: 좌표는 daySeatLayout 하나에서 나온다", () => {
 });
 
 describe("DayTable: 장면 크기 재기", () => {
-  it("ResizeObserver 가 있으면 루트를 재서 쓴다 (폭 352·높이 300, 여백 기본 12 → 면 left 75px·top 118px), 언마운트하면 disconnect", () => {
+  it("ResizeObserver 가 있으면 루트를 재서 쓴다 (폭 352·높이 320, 여백 기본 12 → 면 left 75px·top 134px), 언마운트하면 disconnect", () => {
     const disconnect = vi.fn();
     class FakeRO {
       constructor(private cb: (entries: { contentRect: { width: number; height: number } }[]) => void) {}
       observe(): void {
-        this.cb([{ contentRect: { width: 352, height: 300 } }]);
+        this.cb([{ contentRect: { width: 352, height: 320 } }]);
       }
       unobserve(): void {}
       disconnect(): void {
@@ -166,20 +166,20 @@ describe("DayTable: 장면 크기 재기", () => {
     vi.stubGlobal("ResizeObserver", FakeRO);
     const { container, unmount } = render(<DayTable seats={five()} mySeat={0} />);
     expect(felt(container).style.left).toBe("75px");
-    expect(felt(container).style.top).toBe("118px");
+    expect(felt(container).style.top).toBe("134px");
     unmount();
     expect(disconnect).toHaveBeenCalled();
   });
 
   it("마운트 직후 한 번 동기로 재서 첫 페인트부터 실제 크기로 그린다 (관측 콜백이 오기 전에도 같은 렌더 묶음 안에서 반영)", () => {
     const rect = vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
-      const r = this.classList.contains("mf-dt") ? { width: 352, height: 300 } : { width: 0, height: 0 };
+      const r = this.classList.contains("mf-dt") ? { width: 352, height: 320 } : { width: 0, height: 0 };
       return { ...r, left: 0, top: 0, right: r.width, bottom: r.height, x: 0, y: 0, toJSON: () => ({}) } as DOMRect;
     });
     const { container } = render(<DayTable seats={five()} mySeat={0} scenePad={4} />);
     rect.mockRestore();
     expect(felt(container).style.left).toBe("83px");
-    expect(felt(container).style.top).toBe("118px");
+    expect(felt(container).style.top).toBe("134px");
   });
 
   it("재지 못하면 시안 기준 366×407 을 쓴다", () => {
