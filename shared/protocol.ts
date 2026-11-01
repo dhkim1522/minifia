@@ -117,8 +117,6 @@ export interface GameResult {
 }
 
 // ---- 낮 토론 계약(2페이즈) ----
-/** 공개된 직업 주장. 그 사람의 실제 역할이 아니다. */
-export type Claim = RoleId | "none";
 // 낮 다섯 + 밤 전용 세 개(결정 0019-2) + 표시 전용 두 개(결정 0027-7) + 변론 여섯 개(결정 0036, D-13) — 쓸 수 있는 때는 shared/game/chat.ts QUICK_TEMPLATES.when
 export const TEMPLATE_IDS = [
   "suspect", "trust", "claimed", "innocent", "vote",
@@ -149,16 +147,9 @@ export interface ChatLine {
 }
 /** 통과한 빠른 메시지 한 줄을 방에 앉은 모든 소켓에 보내는 이벤트 프레임(상태가 아니다). */
 export type ChatEvent = { t: "chat" } & ChatLine;
-/** 공개된 주장 한 줄: 그 일차에 그 자리가 한 말. 차례가 끝나는 순간 모두에게 같게 실린다(공개 정보, 결정 0023-5). */
-export interface ClaimLogEntry {
-  n: number; // 일차
-  seat: number;
-  claim: Claim;
-}
 export interface DayView {
   n: number; // 일차(1부터)
   roles: RoleId[]; // 이번 판 직업(구성표 순서, 공개 정보)
-  claimLog: ClaimLogEntry[]; // 07-08 이후 언제나 빈 배열 — 07-09 가 와이어에서 지운다
   morning?: MorningView; // morning 단계에서만
   // ---- 4페이즈 처형 필드 ----
   // 서버는 낮 단계마다(빈 배열 포함) 항상 싣는다. 타입을 optional 로 둔 이유: 필수로 하면 화면 테스트의 DayView 리터럴이 서버 웨이브에서 한꺼번에 바뀐다(화면 계획이 필요하면 필수로 올린다).

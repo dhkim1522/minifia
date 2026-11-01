@@ -215,7 +215,8 @@ describe("claim 단계로 저장된 방 (07-08, CHAT-06)", () => {
 
     const sock = await connect(r.code);
     const first = await hello(sock, r.hostToken);
-    expect(`${first.view.phase}:${first.view.day?.n}:${JSON.stringify(first.view.day?.claimLog)}`).toBe("discussion:1:[]");
+    expect(`${first.view.phase}:${first.view.day?.n}`).toBe("discussion:1");
+    expect(JSON.stringify(first.view).includes("claimLog")).toBe(false);
     expect(Object.keys(first.view.day ?? {}).includes("turn")).toBe(false);
     const stored = await storedRoom(r.code);
     expect(stored.phase).toBe("discussion");

@@ -33,7 +33,7 @@ import { execTallyOf } from "./vote";
 
 /**
  * view.day 가 생기는 단계: 낮 두 단계·처형 다섯 단계·밤·아침·종료. 이 밖의 단계 뷰에는 day 키 자체가 없다(D-07).
- * ended 도 넣는다: day 에는 공개 정보(일차·구성·주장 기록·투표 기록)만 있어 누출이 없고, 결과 화면이 테이블을 다시 쓸 수 있다.
+ * ended 도 넣는다: day 에는 공개 정보(일차·구성·투표 기록)만 있어 누출이 없고, 결과 화면이 테이블을 다시 쓸 수 있다.
  */
 const DAY_PHASES: ReadonlySet<PhaseId> = new Set([
   "dayAnnounce",
@@ -60,14 +60,12 @@ function voteLogLine(entry: VoteLogEntry): VoteLogEntry {
 
 /**
  * 낮 정보. 허용 목록 리터럴로만 만든다 — 조건을 채울 때만 키를 만들고, 서버 전용 필드는 싣지 않는다.
- * claimLog 는 07-08 이후 언제나 빈 배열이다(순차 주장 제거) — 07-09 가 와이어에서 키를 지운다.
  * 읽는 쪽이 기본값을 쥔다: 일차 없으면 1(RESEARCH Pattern 6).
  */
 function buildDay(state: RoomState): DayView {
   const day: DayView = {
     n: state.day ?? 1,
     roles: rolesInPlay(state.players.length),
-    claimLog: [],
     voteLog: (state.voteLog ?? []).map(voteLogLine),
   };
   // 실시간 집계는 모든 viewer 에게 같은 값이다 — 마감 집계와 같은 함수(execTallyOf)를 쓴다.

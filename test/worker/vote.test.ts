@@ -176,7 +176,7 @@ describe("여부 투표 마감 분기 (D-04, T-04-02)", () => {
 
 const ROLE_WORDS = new Set(["mafia", "police", "doctor", "citizen", "none"]);
 /** 살아 있는 사람 프레임에서 역할 단어가 나와도 되는 경로(본인 역할·구성표·공개 주장 기록). */
-const ROLE_PATHS_ALIVE = [".view.me.role", ".view.day.roles[]", ".view.day.claimLog[].claim"];
+const ROLE_PATHS_ALIVE = [".view.me.role", ".view.day.roles[]"];
 
 /** 프레임 값 중 역할 단어와 같은 문자열의 경로를 모은다(배열 칸은 [] 로 적는다). */
 function roleWordPaths(value: unknown, path = ""): string[] {

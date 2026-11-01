@@ -149,13 +149,12 @@ function stringLeaves(value: unknown, prefix = ""): Array<[string, string]> {
   return [];
 }
 
-/** 역할·주장 값으로 쓰이는 문자열. 이 값은 허용 경로에만 나올 수 있다(RESEARCH Pitfall 2). */
+/** 역할 값으로 쓰이는 문자열. 이 값은 허용 경로에만 나올 수 있다(RESEARCH Pitfall 2). */
 const ROLE_LIKE_VALUES: ReadonlySet<string> = new Set(["mafia", "police", "doctor", "citizen", "none"]);
-/** 허용 경로: 본인 역할·이번 판 구성·공개된 주장 기록. 그 밖의 경로에 이 값이 있으면 누출이다(채팅은 뷰에 없다, 결정 0017-7). */
+/** 허용 경로: 본인 역할·이번 판 구성. 그 밖의 경로에 이 값이 있으면 누출이다(채팅은 뷰에 없다, 결정 0017-7). */
 const ALLOWED_ROLE_VALUE_PATHS: ReadonlySet<string> = new Set([
   "me.role",
   "day.roles[]",
-  "day.claimLog[].claim",
 ]);
 
 /** 탈락한 viewer 에게만 더해지는 허용 경로(결정 0021): 모든 사람의 실제 직업. */
@@ -269,7 +268,7 @@ const ME_KEYS: ReadonlySet<string> = new Set([
   "seat", "isHost", "role", "allies", "testMode", "testRole", "testBots", "testBotVote", "pick", "allyPicks", "records", "voteAgree", "voteTarget",
 ]);
 const DAY_KEYS: ReadonlySet<string> = new Set([
-  "n", "roles", "claimLog", "voteLog", "morning", "execTally", "candidate", "execution", "noExecution",
+  "n", "roles", "voteLog", "morning", "execTally", "candidate", "execution", "noExecution",
 ]);
 const keysOf = (value: unknown): string => Object.keys((value ?? {}) as object).sort().join(",");
 
@@ -661,10 +660,9 @@ describe("buildView 전수 누출 검사 (T-01-23)", () => {
             violations.push(...journalViolations(s, viewer, view, phase, tag));
             violations.push(...phaseKeyViolations(s, viewer, view, phase, tag));
             if ("morning" in (view.day ?? {}) !== (phase === "morning")) violations.push(`${tag}: day.morning presence`);
-            // me 에는 어느 단계에서도 claim 키가 없고 day 에는 turn 키가 없으며 claimLog 는 07-08 이후 언제나 빈 배열이다(07-09 가 키를 지운다).
+            // me 에는 어느 단계에서도 claim 키가 없고 day 에는 turn 키가 없다(07-08: 순차 주장 제거).
             if ("claim" in view.me) violations.push(`${tag}: claim key in me`);
             if ("turn" in (view.day ?? {})) violations.push(`${tag}: day.turn present`);
-            if (view.day !== undefined && flat(view.day.claimLog) !== "[]") violations.push(`${tag}: day.claimLog ${flat(view.day.claimLog)}`);
             // 역할 값은 허용 경로(me.role, day.roles[])에만 있다
             violations.push(...spectateViolations(s, viewer, view, phase, tag));
           }
@@ -676,7 +674,7 @@ describe("buildView 전수 누출 검사 (T-01-23)", () => {
   });
 });
 
-describe("buildView 낮 뷰 — 순차 주장 제거 뒤 (07-08, CHAT-06): turn 키 없음, claimLog 는 언제나 빈 배열", () => {
+describe("buildView 낮 뷰 — 순차 주장 제거 뒤 (07-08, CHAT-06): turn 키 없음", () => {
   const ROLES_5 = ["mafia", "police", "doctor", "citizen"];
 
   it("lobby·assigning·roleReveal 뷰에는 day 키와 me 의 claim 키가 없다", () => {
@@ -691,47 +689,45 @@ describe("buildView 낮 뷰 — 순차 주장 제거 뒤 (07-08, CHAT-06): turn 
     expect(bad.join(",")).toBe("");
   });
 
-  it("dayAnnounce·discussion·night·morning 의 day 키는 claimLog,n,roles,voteLog(night 는 + noExecution: 표 없이 지나온 밤, morning 은 + morning)이고 turn 키가 없다", () => {
+  it("dayAnnounce·discussion·night·morning 의 day 키는 n,roles,voteLog(night 는 + noExecution: 표 없이 지나온 밤, morning 은 + morning)이고 turn 키가 없다", () => {
     const got: string[] = [];
     for (const phase of ["dayAnnounce", "discussion", "night", "morning"] as const) {
       const s = richStateAt(phase, 5, 1);
       const keys = new Set(s.players.map((p) => Object.keys(buildView(s, p.id, START_AT).day ?? {}).sort().join(",")));
       got.push(`${phase}:${[...keys].join("|")}`);
     }
-    expect(got.join(" ")).toBe("dayAnnounce:claimLog,n,roles,voteLog discussion:claimLog,n,roles,voteLog night:claimLog,n,noExecution,roles,voteLog morning:claimLog,morning,n,roles,voteLog");
+    expect(got.join(" ")).toBe("dayAnnounce:n,roles,voteLog discussion:n,roles,voteLog night:n,noExecution,roles,voteLog morning:morning,n,roles,voteLog");
   });
 
-  it("dayAnnounce 뷰의 day 는 {n, roles, claimLog [], voteLog []} 뿐이다", () => {
+  it("dayAnnounce 뷰의 day 는 {n, roles, voteLog []} 뿐이다", () => {
     const s = stateAt("dayAnnounce", 5, 1);
     for (const p of s.players) {
-      expect(flat(buildView(s, p.id, START_AT).day)).toBe(flat({ n: 1, roles: rolesInPlay(5), claimLog: [], voteLog: [] }));
+      expect(flat(buildView(s, p.id, START_AT).day)).toBe(flat({ n: 1, roles: rolesInPlay(5), voteLog: [] }));
     }
   });
 
 });
 
 describe("buildView 낮 뷰 — 토론·이튿날 (D-02, D-05, D-15)", () => {
-  it("discussion: claimLog 는 모든 viewer 에게 빈 배열이고 me 에 claim 키·day 에 turn 키가 없다", () => {
+  it("discussion: me 에 claim 키·day 에 turn 키가 없다", () => {
     const bad: string[] = [];
     const s = richStateAt("discussion", 6, 42);
     for (const p of s.players) {
       const view = buildView(s, p.id, START_AT);
-      if (flat(view.day?.claimLog) !== "[]") bad.push(`seat${p.seat}:${flat(view.day?.claimLog)}`);
       if ("claim" in view.me) bad.push(`seat${p.seat}: claim key in me`);
       if ("turn" in (view.day ?? {})) bad.push(`seat${p.seat}: turn`);
     }
     expect(bad.join(" ")).toBe("");
   });
 
-  it("옛 claimLog·claimOrder 키가 남은 방도 view 의 claimLog 는 [] 이고 서버 전용 키는 실리지 않는다 (07-08)", () => {
+  it("옛 claimOrder 키가 남은 방도 view 에 서버 전용 키는 실리지 않는다 (07-08)", () => {
     const s = stateAt("discussion", 5, 1);
-    const old = { ...s, claimLog: [{ n: 1, seat: 0, claim: "police" }], claimOrder: [0, 1], claimIdx: 1, claimStart: 0, claimPick: "police" } as unknown as RoomState;
+    const old = { ...s, claimOrder: [0, 1], claimIdx: 1, claimStart: 0, claimPick: "police" } as unknown as RoomState;
     const text = JSON.stringify(buildView(old, seatId(old, 0), START_AT));
-    expect(flat(buildView(old, seatId(old, 0), START_AT).day?.claimLog)).toBe("[]");
     for (const key of ["claimOrder", "claimIdx", "claimStart", "claimPick"]) expect(text.includes(`"${key}"`)).toBe(false);
   });
 
-  it("discussion: 여러 번 say 한 뒤에도 day 의 키는 claimLog,n,roles,voteLog 이고 messages·extendUsed 키가 없다 (결정 0017-5·0017-7)", () => {
+  it("discussion: 여러 번 say 한 뒤에도 day 의 키는 n,roles,voteLog 이고 messages·extendUsed 키가 없다 (결정 0017-5·0017-7)", () => {
     let s = stateAt("discussion", 5, 1);
     const at = discussionStartsAt();
     s = speak(s, 0, { template: "suspect", target: 1 }, at + 1_000);
@@ -739,7 +735,7 @@ describe("buildView 낮 뷰 — 토론·이튿날 (D-02, D-05, D-15)", () => {
     s = speak(s, 2, { template: "claimed", target: 3, claimedRole: "police" }, at + 7_000);
     for (const viewer of s.players) {
       const view = buildView(s, viewer.id, START_AT);
-      expect(Object.keys(view.day ?? {}).sort().join(",")).toBe("claimLog,n,roles,voteLog");
+      expect(Object.keys(view.day ?? {}).sort().join(",")).toBe("n,roles,voteLog");
       expect(roleValueLeaks(view).join(";")).toBe("");
     }
   });
@@ -753,10 +749,10 @@ describe("buildView 낮 뷰 — 토론·이튿날 (D-02, D-05, D-15)", () => {
 });
 
 describe("buildView 밤 — 생존·본인 선택 (ELIM-01, D-06)", () => {
-  it("night view: day 의 키는 claimLog,n,noExecution,roles,voteLog(표 없이 지나온 밤이라 처형 무효 이유가 실린다, D-34) 이고 players[] 키는 alive,connected,isHost,nickname,seat, 모두 alive true", () => {
+  it("night view: day 의 키는 n,noExecution,roles,voteLog(표 없이 지나온 밤이라 처형 무효 이유가 실린다, D-34) 이고 players[] 키는 alive,connected,isHost,nickname,seat, 모두 alive true", () => {
     const s = stateAt("night", 5, 1);
     const dayKeys = s.players.map((p) => Object.keys(buildView(s, p.id, START_AT).day ?? {}).sort().join(","));
-    expect(`[${dayKeys.join(" ")}]`).toBe(`[${Array(5).fill("claimLog,n,noExecution,roles,voteLog").join(" ")}]`);
+    expect(`[${dayKeys.join(" ")}]`).toBe(`[${Array(5).fill("n,noExecution,roles,voteLog").join(" ")}]`);
     const got = s.players.map((p) => {
       const v = buildView(s, p.id, START_AT);
       return v.players.map((e) => `${Object.keys(e).sort().join(",")}:${String(e.alive)}`).join("|");
@@ -1064,17 +1060,6 @@ describe("buildView 아침 결과 (NIGHT-06·D-13)", () => {
     s = advanceTo(s, "discussion", 1);
     check("discussion");
     expect(`[${bad.join(",")}]`).toBe("[]");
-  });
-});
-
-describe("buildView 밤·아침 주장 줄 (C6, 07-08 이후)", () => {
-  it("dayAnnounce·discussion·night·morning 의 day.claimLog 는 모든 viewer 에게 빈 배열이다(순차 주장 제거)", () => {
-    const disc = richStateAt("discussion", 6, 42);
-    const night = tick(disc, disc.phaseEndsAt!);
-    const morning = tick(night, night.phaseEndsAt!, seededRandInt(1));
-    for (const s of [richStateAt("dayAnnounce", 6, 42), disc, night, morning]) {
-      expect(s.players.map((p) => flat(buildView(s, p.id, START_AT).day?.claimLog)).join(" ")).toBe(Array(6).fill("[]").join(" "));
-    }
   });
 });
 
@@ -1434,7 +1419,7 @@ describe("buildView 후보 선택 진행 중 비공개 차분 (VOTE-02, D-19, T-
 });
 
 describe("buildView 처형자 직업 비공개 (D-09, T-04-31)", () => {
-  it("처형 발표·그 뒤 밤·아침의 살아 있는 viewer 에게 역할 단어는 me.role·day.roles[]·day.claimLog[].claim 경로에만 있고, 처형 발표는 seat·phrase 뿐이다 (4~8명 × 시드 3 × 시민·마피아 후보)", () => {
+  it("처형 발표·그 뒤 밤·아침의 살아 있는 viewer 에게 역할 단어는 me.role·day.roles[] 경로에만 있고, 처형 발표는 seat·phrase 뿐이다 (4~8명 × 시드 3 × 시민·마피아 후보)", () => {
     const bad: string[] = [];
     let aliveViews = 0;
     for (const n of PLAYER_COUNTS) {

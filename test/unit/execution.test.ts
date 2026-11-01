@@ -336,8 +336,8 @@ describe("view: day.candidate · day.execution (D-06, D-09, D-11)", () => {
     expect(rows.join(" ")).toBe("candidateVote:- candidateVoteReveal:- defense:- execution:phrase,seat");
   });
 
-  it("처형 직업 비공개 (D-09): execution 단계 살아 있는 viewer 의 view 에서 역할 단어는 .me.role·.day.roles[]·.day.claimLog[].claim 경로에만 있다", () => {
-    const allowed = new Set([".me.role", ".day.roles[]", ".day.claimLog[].claim"]);
+  it("처형 직업 비공개 (D-09): execution 단계 살아 있는 viewer 의 view 에서 역할 단어는 .me.role·.day.roles[] 경로에만 있다", () => {
+    const allowed = new Set([".me.role", ".day.roles[]"]);
     for (const n of [4, 5, 6, 7, 8]) {
       for (const seed of SEEDS) {
         const state = stateWithVerdict(n, seed, "execution");
@@ -489,7 +489,7 @@ describe("새 단계 전수 누출 검사 (4~8명 × 투표 이후 네 단계 ×
               const keys = Object.keys(entry).sort().join(",");
               if (keys !== "alive,connected,isHost,nickname,seat") violations.push(`${tag}: players[] keys ${keys}`);
             }
-            const want = ["claimLog", "n", "roles", "voteLog"];
+            const want = ["n", "roles", "voteLog"];
             if (phase !== "candidateVote") want.push("candidate");
             if (phase === "execution") want.push("execution");
             const got = Object.keys(view.day ?? {}).sort().join(",");

@@ -75,8 +75,8 @@ function stringPaths(value: unknown, path = ""): Array<[string, string]> {
 }
 
 const ROLE_WORDS = new Set(["mafia", "police", "doctor", "citizen", "none"]);
-/** 살아 있는 소켓이 역할·주장 값 문자열을 받아도 되는 경로. 탈락 뒤에는 여기에 관전 직업 경로가 더해진다(결정 0021). */
-const ROLE_PATHS_ALIVE = [".view.me.role", ".view.day.roles[]", ".view.day.claimLog[].claim"];
+/** 살아 있는 소켓이 역할 값 문자열을 받아도 되는 경로. 탈락 뒤에는 여기에 관전 직업 경로가 더해진다(결정 0021). */
+const ROLE_PATHS_ALIVE = [".view.me.role", ".view.day.roles[]"];
 /**
  * 서버 전용 키: 어떤 프레임의 어떤 경로에도 없어야 한다. 주장 차례(결정 0027-3)와 4페이즈 투표·종료(결정 0036-12)의 서버 상태.
  * winner·execution 은 같은 이름의 view 키(result.winner·day.execution)가 있어 넣지 않고, 경로·단계로 검사한다.
@@ -272,9 +272,8 @@ describe("6명 한 판(두 밤·두 아침, 행동·마피아 채팅·탈락·�
         // 서버 전용 차례 키는 어떤 프레임의 어떤 경로에도 없다(T-03.1-06).
         for (const path of paths) expect(SERVER_ONLY_KEYS.includes(path.slice(path.lastIndexOf(".") + 1))).toBe(false);
         if (msg.t !== "state") continue;
-        // day.turn 은 어느 단계에도 없고, claimLog 는 언제나 빈 배열이다(07-08: 순차 주장 제거, 키는 07-09 가 지운다).
+        // day.turn 은 어느 단계에도 없다(07-08: 순차 주장 제거).
         expect(`${msg.view.phase}:${Object.hasOwn(msg.view.day ?? {}, "turn")}`).toBe(`${msg.view.phase}:false`);
-        expect(msg.view.day?.claimLog ?? []).toEqual([]);
         for (const pl of msg.view.players) {
           expect(Object.keys(pl).sort()).toEqual(["alive", "connected", "isHost", "nickname", "seat"]);
         }

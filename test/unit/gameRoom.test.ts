@@ -680,10 +680,10 @@ describe("normalizeStoredRoom — 저장된 옛 방 (RESEARCH Pattern 6, T-02-14
     expect(Object.hasOwn(stored, "claimOrder")).toBe(true);
   });
 
-  it("07-08 옮겨진 claim 방의 view 는 오류 없이 만들어지고 day 에 turn 이 없으며 claimLog 는 빈 배열이다", () => {
+  it("07-08 옮겨진 claim 방의 view 는 오류 없이 만들어지고 day 에 turn 이 없다", () => {
     const stored = withClaimState({ ...fullRoom([0, 1, 2, 3]), phase: "claim" as PhaseId, phaseEndsAt: 77_000, day: 2 });
     const day = buildView(normalizeStoredRoom(stored, 5_000), "p1", 5_000).day;
-    expect(`${day?.n}:${Object.keys(day ?? {}).includes("turn")}:${JSON.stringify(day?.claimLog)}`).toBe("2:false:[]");
+    expect(`${day?.n}:${Object.keys(day ?? {}).includes("turn")}`).toBe("2:false");
   });
 
   it("07-08 단계가 discussion 이어도 claim 계열 키가 남아 있으면 키만 지우고 단계·마감은 그대로다", () => {
@@ -719,14 +719,13 @@ describe("normalizeStoredRoom — 저장된 옛 방 (RESEARCH Pattern 6, T-02-14
     }
     expect(seen.join(" ")).toBe("roleReveal:- dayAnnounce:1 discussion:1");
     const day = buildView(state, "p1", at).day;
-    expect(JSON.stringify(day?.claimLog)).toBe("[]");
     expect(Object.keys(day ?? {}).includes("messages")).toBe(false);
   });
 
-  it("day 가 아예 없는 discussion 상태도 뷰가 예외 없이 기본값(day 1, claimLog 빈 배열)을 쥐고 messages 키는 없다", () => {
+  it("day 가 아예 없는 discussion 상태도 뷰가 예외 없이 기본값(day 1)을 쥐고 messages 키는 없다", () => {
     const base = fullRoom([0, 1, 2, 3]);
     const bare: RoomState = { ...base, phase: "discussion", phaseEndsAt: 100_000 };
     const day = buildView(bare, "p2", 50_000).day;
-    expect(`${day?.n}:${day?.claimLog.length}:${Object.keys(day ?? {}).includes("messages")}`).toBe("1:0:false");
+    expect(`${day?.n}:${Object.keys(day ?? {}).includes("messages")}`).toBe("1:false");
   });
 });
