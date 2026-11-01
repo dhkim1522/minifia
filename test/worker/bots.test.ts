@@ -3,6 +3,7 @@
 import { env, exports } from "cloudflare:workers";
 import { evictDurableObject, runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
+import { BOT_CHAT_LINES } from "../../shared/game/bots";
 import type { PhaseId, RoomView, ServerMessage } from "../../shared/protocol";
 import {
   advanceTo,
@@ -221,7 +222,7 @@ describe("testBots 추가·제거", () => {
 });
 
 describe("봇 행동", () => {
-  it("낮 토론: 손님이 봇 자리에서 온 chat 또는 emoji 를 받고 오류 프레임은 없다", async () => {
+  it("낮 토론: 손님이 봇 자리에서 온 자유 채팅(ch all, BOT_CHAT_LINES 안의 문구)을 받고 오류·chatReject 프레임은 없다", async () => {
     const r = await seatQuiet(1, { testMode: true });
     send(r.host, { t: "testBots", count: 3 });
     await nextFrame(r.host, lobbyOf(5));
@@ -231,9 +232,54 @@ describe("봇 행동", () => {
     const guest = r.guests[0]!.sock;
     const from = mark(guest);
     await forceBotsDue(r.code);
-    await nextFrame(guest, (m) => (m.t === "chat" || m.t === "emoji") && botSeats.includes(m.seat));
-    const frames = (await settle(guest, from)).filter((m) => m.t === "error");
+    const line = (await nextFrame(guest, (m) => m.t === "chat" && botSeats.includes(m.seat))) as Extract<ServerMessage, { t: "chat" }>;
+    expect(`${line.ch}:${BOT_CHAT_LINES.includes(line.text)}`).toBe("all:true");
+    const frames = (await settle(guest, from)).filter((m) => m.t === "error" || m.t === "chatReject" || m.t === "emoji");
     expect(frames.length).toBe(0);
+  }, 30_000);
+
+  // 봇 줄은 사람과 같은 applyChat 본체를 지난다(특권 없음, 결정 0024) — 계획의 무작위를 피해 actAsBot 을 직접 불러 전달 범위와 거절을 확인한다.
+  async function botSays(code: string, botId: string, text: string): Promise<void> {
+    await runInDurableObject(env.ROOM.getByName(code), async (instance) => {
+      await instance["actAsBot"]({ at: Date.now(), botId, act: { t: "chat", text } });
+    });
+  }
+
+  it("봇 chat: 낮에는 audience 대로 방장과 손님 모두에게 ch all 로 간다", async () => {
+    const r = await seatQuiet(1, { testMode: true });
+    send(r.host, { t: "testBots", count: 3 });
+    await nextFrame(r.host, lobbyOf(5));
+    await start(r);
+    await skipUntil(r, "discussion");
+    const bot = (await botsOf(r.code))[0]!;
+    const marks = allSockets(r).map(mark);
+    await botSays(r.code, bot.id, "누가 수상해요?");
+    const seen = [];
+    for (const [i, sock] of allSockets(r).entries()) seen.push(summary((await settle(sock, marks[i]!)).filter((m) => m.t === "chat")));
+    expect(seen.join("")).toBe("[chat][chat]");
+  }, 30_000);
+
+  it("봇 chat: 밤에는 마피아 봇의 줄이 마피아 방장에게만 ch mafia 로 가고 손님은 한 프레임도 받지 않으며, 마피아가 아닌 봇의 줄은 버려진다", async () => {
+    const r = await seatQuiet(1, { testMode: true });
+    send(r.host, { t: "testBots", count: 4 });
+    await nextFrame(r.host, lobbyOf(6));
+    send(r.host, { t: "testRole", role: "mafia" });
+    await start(r);
+    await skipDayToNight(r);
+    const bots = await botsOf(r.code);
+    const mafiaBot = bots.find((b) => (b as unknown as { role?: string }).role === "mafia")!;
+    const citizenBot = bots.find((b) => (b as unknown as { role?: string }).role !== "mafia")!;
+    const guest = r.guests[0]!.sock;
+    const mh = mark(r.host);
+    const mg = mark(guest);
+    await botSays(r.code, mafiaBot.id, "동의해요");
+    const hostGot = (await settle(r.host, mh)).filter((m) => m.t === "chat") as Array<Extract<ServerMessage, { t: "chat" }>>;
+    const guestGot = await settle(guest, mg);
+    expect(`${hostGot.map((m) => `${m.ch}/${m.seat}/${m.text}`).join("|")}#${summary(guestGot.filter((m) => m.t === "chat"))}`).toBe(`mafia/${mafiaBot.seat}/동의해요#[]`);
+    const mh2 = mark(r.host);
+    const mg2 = mark(guest);
+    await botSays(r.code, citizenBot.id, "동의해요");
+    expect(`${summary(await settle(r.host, mh2))}${summary(await settle(guest, mg2))}`).toBe("[][]");
   }, 30_000);
 
   it("밤: 마피아 봇이 저절로 pick 해 방장 me.allyPicks 가 비어 있지 않고 방장·동료가 아니며 아침 결과가 온다", async () => {

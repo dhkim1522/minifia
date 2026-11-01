@@ -503,7 +503,7 @@ describe("useRoomConnection: 이벤트 구독 (emoji·chat·error 프레임, Pit
     expect(listener).toHaveBeenCalledWith(frame, { epoch: 1 });
   });
 
-  it("chat 프레임을 onEvent 리스너가 한 번 받고 view 는 바뀌지 않는다 (결정 0017-7)", () => {
+  it("chat 프레임(새 모양)을 onEvent 리스너가 한 번 받고 view 는 바뀌지 않는다 (CHAT-01)", () => {
     const { sockets, hook } = setup();
     openWithState(sockets[0]!);
     const listener = vi.fn();
@@ -511,7 +511,7 @@ describe("useRoomConnection: 이벤트 구독 (emoji·chat·error 프레임, Pit
       hook.result.current.onEvent(listener);
     });
     const before = hook.result.current.view;
-    const frame = { t: "chat", seq: 3, seat: 1, template: "suspect", target: 2, at: 5 };
+    const frame = { t: "chat", ch: "all", seat: 1, seq: 3, text: "안녕하세요", at: 5 };
     act(() => sockets[0]!.message(frame));
     expect(listener).toHaveBeenCalledTimes(1);
     expect(listener).toHaveBeenCalledWith(frame, { epoch: 1 });
@@ -525,7 +525,7 @@ describe("useRoomConnection: 이벤트 구독 (emoji·chat·error 프레임, Pit
     act(() => {
       hook.result.current.onEvent(listener);
     });
-    act(() => sockets[0]!.message({ t: "chatx", seq: 3, seat: 1, template: "suspect", at: 5 }));
+    act(() => sockets[0]!.message({ t: "chatx", ch: "all", seat: 1, seq: 3, text: "안녕", at: 5 }));
     expect(listener).not.toHaveBeenCalled();
   });
 
@@ -709,6 +709,69 @@ describe("useRoomConnection: typing 프레임 (CHAT-04, 07-10)", () => {
       hook.result.current.onEvent(listener);
     });
     act(() => sockets[0]!.message({ t: "typingx", seat: 2, on: true }));
+    expect(listener).not.toHaveBeenCalled();
+  });
+});
+
+// 07-11: 자유 채팅의 새 프레임 셋(chat·chatReject·chatLog)도 상태를 바꾸지 않고 구독자에게만 흘린다. 화이트리스트·분기·종료 연결 버림 세 곳에 모두 있어야 한다(리서치 Pitfall 2).
+describe("useRoomConnection: chat·chatReject·chatLog 프레임 (CHAT-01·05, 07-11)", () => {
+  const frames = [
+    { name: "chat", frame: { t: "chat", ch: "mafia", seat: 2, seq: 1, text: "동의해요", at: 5 } },
+    { name: "chatReject", frame: { t: "chatReject", why: "rate" } },
+    { name: "chatLog", frame: { t: "chatLog", lines: [{ ch: "all", seat: 1, seq: 1, text: "안녕", at: 3 }] } },
+  ];
+
+  it.each(frames)("$name 프레임은 구독자에게 { epoch } 메타와 함께 가고 view·상태는 바뀌지 않는다", ({ frame }) => {
+    const { sockets, hook } = setup();
+    openWithState(sockets[0]!);
+    const listener = vi.fn();
+    act(() => {
+      hook.result.current.onEvent(listener);
+    });
+    const before = hook.result.current;
+    act(() => sockets[0]!.message(frame));
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(listener).toHaveBeenLastCalledWith(frame, { epoch: 1 });
+    expect(hook.result.current.view).toBe(before.view);
+    expect(hook.result.current.status).toBe(before.status);
+    expect(hook.result.current.epoch).toBe(before.epoch);
+  });
+
+  it.each(frames)("종료 상태(replaced)가 된 뒤 늦게 온 $name 은 구독자에게 가지 않는다", ({ frame }) => {
+    const { sockets, hook } = setup();
+    openWithState(sockets[0]!);
+    const listener = vi.fn();
+    act(() => {
+      hook.result.current.onEvent(listener);
+    });
+    act(() => sockets[0]!.serverClose(4001, "replaced"));
+    expect(hook.result.current.status).toBe("replaced");
+    act(() => sockets[0]!.message(frame));
+    expect(listener).not.toHaveBeenCalled();
+  });
+
+  it.each(frames)("종료 상태(removed)가 된 뒤 늦게 온 $name 도 구독자에게 가지 않는다", ({ frame }) => {
+    const { sockets, hook } = setup();
+    openWithState(sockets[0]!);
+    const listener = vi.fn();
+    act(() => {
+      hook.result.current.onEvent(listener);
+    });
+    act(() => sockets[0]!.serverClose(4003, "left"));
+    expect(hook.result.current.status).toBe("removed");
+    act(() => sockets[0]!.message(frame));
+    expect(listener).not.toHaveBeenCalled();
+  });
+
+  it("모르는 t(chatRejectx·chatLogx)는 구독자에게 가지 않는다", () => {
+    const { sockets, hook } = setup();
+    openWithState(sockets[0]!);
+    const listener = vi.fn();
+    act(() => {
+      hook.result.current.onEvent(listener);
+    });
+    act(() => sockets[0]!.message({ t: "chatRejectx", why: "rate" }));
+    act(() => sockets[0]!.message({ t: "chatLogx", lines: [] }));
     expect(listener).not.toHaveBeenCalled();
   });
 });

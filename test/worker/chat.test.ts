@@ -4,7 +4,7 @@ import { env } from "cloudflare:workers";
 import { runInDurableObject } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 import type { PhaseId, ServerMessage } from "../../shared/protocol";
-import { actorsOf, advanceTo, chatSend, chatsOf, connect, createRoom, editRoom, hello, joinOk, mapPlayers, mark, nextFrame, seat, send, settle, storedRoom, typingSend } from "./helpers";
+import { actorsOf, advanceTo, chatSend, chatsOf, connect, createRoom, editRoom, hello, joinOk, mapPlayers, mark, nextFrame, resetChatRates, seat, send, settle, skipThrough, storedRoom, summary, typingSend, voteCandidate, voteExec } from "./helpers";
 import type { Actor, TestSocket } from "./helpers";
 
 /** settle 이 돌려준 프레임 가운데 typing 만 한 줄 문자열로(실패 보고가 한 줄이어야 한다). */
@@ -284,4 +284,303 @@ describe("채팅 — 트레이서 (CHAT-01)", () => {
     expect(chatsOf(got).map((c) => `${c.seat}:${c.seq}:${c.text}`).join("|")).toBe("0:2:반가워요");
     expect(chatsOf(own).map((c) => `${c.seat}:${c.seq}:${c.text}`).join("|")).toBe("0:2:반가워요");
   });
+});
+
+// ---- 채널 · 거절 · 단계 키 · 화면 없는 단계 (CHAT-02·03·05, 07-11 Task 2) ----
+
+/** 한 줄을 "채널/보낸 좌석/번호/본문" 으로(실패 보고가 한 줄이어야 한다). */
+const lineOf = (c: Extract<ServerMessage, { t: "chat" }>): string => `${c.ch}/${c.seat}/${c.seq}/${c.text}`;
+
+/**
+ * 행동 직전 모든 소켓의 위치를 적고, 행동을 한 뒤 보낸 소켓을 먼저(서버가 처리했다는 증거) 나머지를 뒤에 flush 한다.
+ * 돌려주는 배열은 g.actors 와 같은 순서다.
+ */
+async function observe(g: Game, sender: Actor, act: () => void): Promise<ServerMessage[][]> {
+  const marks = g.socks.map((sock) => mark(sock));
+  act();
+  const out: ServerMessage[][] = g.socks.map(() => []);
+  const si = g.actors.indexOf(sender);
+  out[si] = await settle(g.socks[si]!, marks[si]!);
+  for (let i = 0; i < g.socks.length; i += 1) if (i !== si) out[i] = await settle(g.socks[i]!, marks[i]!);
+  return out;
+}
+
+/** chat 프레임을 받은 좌석 오름차순 목록 "좌석:줄,..." (받지 않은 소켓은 생략). */
+const chatReceivers = (g: Game, got: ServerMessage[][]): string =>
+  g.actors
+    .map((a, i) => ({ seat: a.seat, lines: chatsOf(got[i]!).map(lineOf).join("+") }))
+    .filter((x) => x.lines !== "")
+    .sort((a, b) => a.seat - b.seat)
+    .map((x) => `${x.seat}:${x.lines}`)
+    .join(" ");
+
+const wantLine = (seats: number[], line: string): string => [...seats].sort((a, b) => a - b).map((n) => `${n}:${line}`).join(" ");
+
+/** 보낸 사람 외 소켓이 받은 프레임 요약 "[]" 을 좌석 순으로 이어 붙인다 — 모두 "[]" 이면 아무 프레임도 가지 않았다. */
+const othersQuiet = (g: Game, got: ServerMessage[][], sender: Actor): string =>
+  g.actors
+    .map((a, i) => ({ a, i }))
+    .filter((x) => x.a !== sender)
+    .sort((x, y) => x.a.seat - y.a.seat)
+    .map((x) => summary(got[x.i]!))
+    .join("");
+
+/** 저장된 전송 기록을 ms 만큼 과거로 당긴다 — 600ms 간격을 실제로 기다리지 않는다(인메모리 chatRates). 반복 기준 시각도 같이 당긴다. */
+async function ageChatRates(code: string, ms: number): Promise<void> {
+  await runInDurableObject(env.ROOM.getByName(code), async (instance) => {
+    const rates = instance["chatRates"] as Map<string, { lastAt: number; recent: number[]; lastText: string; lastTextAt: number }>;
+    for (const [id, r] of rates) rates.set(id, { ...r, lastAt: r.lastAt - ms, recent: r.recent.map((t) => t - ms), lastTextAt: r.lastTextAt - ms });
+  });
+}
+
+describe("채팅 — 채널 (CHAT-02·03)", () => {
+  it("채널: 밤에 산 마피아의 줄은 다른 산 마피아와 탈락자에게만 ch mafia 로 가고 시민·경찰·의사는 한 프레임도 받지 않는다", async () => {
+    const g = await startedAt("night");
+    const [mafiaA, mafiaB] = withRole(g, "mafia") as [Actor, Actor];
+    const dead = withRole(g, "citizen")[0]!;
+    await kill(g, [dead.seat]);
+    const got = await observe(g, mafiaA, () => chatSend(mafiaA.sock, "그 사람으로 가요"));
+    expect(chatReceivers(g, got)).toBe(wantLine([mafiaA.seat, mafiaB.seat, dead.seat], `mafia/${mafiaA.seat}/1/그 사람으로 가요`));
+    for (const a of g.actors) if (![mafiaA, mafiaB, dead].includes(a)) expect(`${a.seat}${summary(got[g.actors.indexOf(a)]!)}`).toBe(`${a.seat}[]`);
+  });
+
+  it("채널: 밤에 산 시민·경찰·의사의 전송은 보낸 사람만 chatReject phase 와 state 를 받고 다른 소켓은 한 프레임도 받지 않는다", async () => {
+    const g = await startedAt("night");
+    for (const sender of [withRole(g, "citizen")[0]!, withRole(g, "police")[0]!, withRole(g, "doctor")[0]!]) {
+      const got = await observe(g, sender, () => chatSend(sender.sock, "저 마피아 아니에요"));
+      const own = got[g.actors.indexOf(sender)]!;
+      expect(`${sender.role}${summary(own)}`).toBe(`${sender.role}[chatReject,state:night]`);
+      expect(`${sender.role}${JSON.stringify(own.find((m) => m.t === "chatReject"))}`).toBe(`${sender.role}{"t":"chatReject","why":"phase"}`);
+      expect(`${sender.role}${othersQuiet(g, got, sender)}`).toBe(`${sender.role}${"[]".repeat(g.actors.length - 1)}`);
+    }
+  });
+
+  it("채널: 밤에 탈락자의 줄은 ch ghost 로 탈락자에게만 가고 산 마피아에게도 가지 않는다", async () => {
+    const g = await startedAt("night");
+    const [x, y] = withRole(g, "citizen") as [Actor, Actor];
+    await kill(g, [x.seat, y.seat]);
+    const got = await observe(g, x, () => chatSend(x.sock, "아쉽네요"));
+    expect(chatReceivers(g, got)).toBe(wantLine([x.seat, y.seat], `ghost/${x.seat}/1/아쉽네요`));
+  });
+
+  it("채널: 낮 토론에서 탈락자의 줄은 ch ghost 로 탈락자만 받고 산 사람은 한 프레임도 받지 않는다", async () => {
+    const g = await startedAt("discussion");
+    const [x, y] = withRole(g, "citizen") as [Actor, Actor];
+    await kill(g, [x.seat, y.seat]);
+    const got = await observe(g, x, () => chatSend(x.sock, "구경 중이에요"));
+    expect(chatReceivers(g, got)).toBe(wantLine([x.seat, y.seat], `ghost/${x.seat}/1/구경 중이에요`));
+    for (const a of g.actors) if (![x, y].includes(a)) expect(`${a.seat}${summary(got[g.actors.indexOf(a)]!)}`).toBe(`${a.seat}[]`);
+  });
+
+  it("채널: 낮 토론에서 산 사람의 줄은 산 사람과 탈락자 모두에게 ch all 로 간다", async () => {
+    const g = await startedAt("discussion");
+    const dead = withRole(g, "citizen")[0]!;
+    const sender = withRole(g, "police")[0]!;
+    await kill(g, [dead.seat]);
+    const got = await observe(g, sender, () => chatSend(sender.sock, "누가 수상해요?"));
+    expect(chatReceivers(g, got)).toBe(wantLine(g.actors.map((a) => a.seat), `all/${sender.seat}/1/누가 수상해요?`));
+  });
+});
+
+/** 처형 여부 투표를 모두 찬성으로 통과시킨 뒤 후보 선택까지 끌고 간다. 후보는 첫 시민이고, 후보는 둘째 시민에게 던진다. */
+async function startedAtVerdictStage(phase: "candidateVote" | "candidateVoteReveal" | "defense" | "execution"): Promise<Game> {
+  const g = await startedAt("execVote");
+  await voteExec(g.code, g.actors, Object.fromEntries(g.actors.map((a) => [a.seat, true])));
+  if (phase !== "candidateVote") {
+    const [candidate, other] = withRole(g, "citizen") as [Actor, Actor];
+    await voteCandidate(g.code, g.actors, Object.fromEntries(g.actors.map((a) => [a.seat, a === candidate ? other.seat : candidate.seat])));
+    if (phase !== "candidateVoteReveal") await advanceTo(g.code, g.socks, phase);
+  }
+  for (const sock of g.socks) await settle(sock, mark(sock));
+  return g;
+}
+
+describe("채팅 — 화면 없는 단계도 받는다 (D1, 결정 0044-23)", () => {
+  const stages = ["execVote", "candidateVote", "candidateVoteReveal", "defense", "execution", "morning"] as const;
+  it.each(stages)("단계: %s 에서 산 사람의 줄이 서버 audience 규칙대로 ch all 로 모두에게 간다", async (phase) => {
+    const g = phase === "execVote" || phase === "morning" ? await startedAt(phase) : await startedAtVerdictStage(phase);
+    expect((await storedRoom(g.code)).phase).toBe(phase);
+    const sender = withRole(g, "police")[0]!;
+    const got = await observe(g, sender, () => chatSend(sender.sock, "투표 신중하게 해요"));
+    expect(chatReceivers(g, got)).toBe(wantLine(g.actors.map((a) => a.seat), `all/${sender.seat}/1/투표 신중하게 해요`));
+  });
+
+  it("단계: 최후 변론에서 후보가 아닌 산 사람 누구나 쓸 수 있다", async () => {
+    const g = await startedAtVerdictStage("defense");
+    const room = await storedRoom(g.code);
+    const bystanders = g.actors.filter((a) => a.seat !== room.verdict?.candidate);
+    const sender = bystanders.find((a) => a.role === "doctor")!;
+    const got = await observe(g, sender, () => chatSend(sender.sock, "믿어 주세요"));
+    expect(chatReceivers(g, got)).toBe(wantLine(g.actors.map((a) => a.seat), `all/${sender.seat}/1/믿어 주세요`));
+  });
+
+  it("단계: 역할 확인(roleReveal) 중에는 단계 키가 맞아도 chatReject phase 이고 다른 소켓은 한 프레임도 받지 않는다", async () => {
+    const g = await startedAtRoleReveal();
+    const room = await storedRoom(g.code);
+    const sender = g.actors[0]!;
+    const got = await observe(g, sender, () => chatSend(sender.sock, "안녕", `${room.day ?? 0}:${room.phase}`));
+    expect(`${room.phase}${summary(got[0]!)}${othersQuiet(g, got, sender)}`).toBe(`roleReveal[chatReject,state:roleReveal]${"[]".repeat(g.actors.length - 1)}`);
+  });
+});
+
+describe("채팅 — 단계 어긋남 (T-07-24)", () => {
+  it("단계 어긋남: 밤의 단계 키로 아침 이후 도착한 마피아 줄은 폐기되고 보낸 사람에게만 chatReject phase 와 state 가 가며 어느 소켓도 chat 을 받지 않는다", async () => {
+    const g = await startedAt("night");
+    const nightKey = `${(await storedRoom(g.code)).day ?? 0}:night`;
+    const mafiaA = withRole(g, "mafia")[0]!;
+    await advanceTo(g.code, g.socks, "morning");
+    for (const sock of g.socks) await settle(sock, mark(sock));
+    const got = await observe(g, mafiaA, () => chatSend(mafiaA.sock, "그 사람으로 가요", nightKey));
+    expect(`${summary(got[g.actors.indexOf(mafiaA)]!)}${othersQuiet(g, got, mafiaA)}`).toBe(`[chatReject,state:morning]${"[]".repeat(g.actors.length - 1)}`);
+    expect(chatReceivers(g, got)).toBe("");
+  });
+
+  it("단계 어긋남: 형식이 맞아도 서버 단계와 다른 단계 키는 폐기된다 (낮 키로 보낸 밤 전송)", async () => {
+    const g = await startedAt("night");
+    const mafiaA = withRole(g, "mafia")[0]!;
+    const got = await observe(g, mafiaA, () => chatSend(mafiaA.sock, "동의해요", "1:discussion"));
+    expect(`${summary(got[g.actors.indexOf(mafiaA)]!)}${chatReceivers(g, got)}`).toBe("[chatReject,state:night]");
+  });
+});
+
+describe("채팅 — 거절 (CHAT-05, D5)", () => {
+  /** 로비 방장+손님 한 명. 거절은 보낸 사람(손님)에게만 가고 방장은 아무것도 받지 않는다. */
+  async function lobbyPair(): Promise<{ code: string; host: TestSocket; guest: TestSocket }> {
+    const s = await seat(1, 0);
+    await settle(s.host, 0);
+    await settle(s.guests[0]!.sock, 0);
+    return { code: s.code, host: s.host, guest: s.guests[0]!.sock };
+  }
+  const rejectOf = (msgs: ServerMessage[]): string => msgs.filter((m) => m.t === "chatReject").map((m) => JSON.stringify(m)).join("|");
+
+  async function rejectedAs(text: string, pre?: (code: string) => Promise<void>): Promise<{ own: string; host: string }> {
+    const p = await lobbyPair();
+    await pre?.(p.code);
+    const mh = mark(p.host);
+    const mg = mark(p.guest);
+    chatSend(p.guest, text);
+    const own = await settle(p.guest, mg);
+    const host = await settle(p.host, mh);
+    return { own: `${summary(own)}${rejectOf(own)}`, host: summary(host) };
+  }
+
+  it("거절: 공백뿐인 줄은 other 로 막히고 방장에게는 아무 프레임도 가지 않는다", async () => {
+    const r = await rejectedAs("   \t  ");
+    expect(`${r.own}${r.host}`).toBe('[chatReject]{"t":"chatReject","why":"other"}[]');
+  });
+
+  it("거절: 101자는 length 로 막히고 100자는 통과한다", async () => {
+    const r = await rejectedAs("가".repeat(101));
+    expect(`${r.own}${r.host}`).toBe('[chatReject]{"t":"chatReject","why":"length"}[]');
+    const ok = await rejectedAs("가".repeat(100));
+    expect(`${ok.own}${ok.host}`).toBe("[chat][chat]");
+  });
+
+  it("거절: 600ms 안의 두 번째 줄은 rate 로 막히고 방장은 첫 줄만 받는다", async () => {
+    const p = await lobbyPair();
+    const mh = mark(p.host);
+    const mg = mark(p.guest);
+    chatSend(p.guest, "하나");
+    chatSend(p.guest, "둘");
+    const own = await settle(p.guest, mg);
+    const host = await settle(p.host, mh);
+    expect(`${summary(own)}${rejectOf(own)}${summary(host)}`).toBe('[chat,chatReject]{"t":"chatReject","why":"rate"}[chat]');
+  });
+
+  it("거절: 간격을 지켜도 같은 문장을 3초 안에 다시 보내면 repeat 로 막힌다", async () => {
+    const p = await lobbyPair();
+    chatSend(p.guest, "믿어 주세요");
+    await settle(p.guest, mark(p.guest));
+    await ageChatRates(p.code, 700);
+    const mh = mark(p.host);
+    const mg = mark(p.guest);
+    chatSend(p.guest, "믿어 주세요");
+    const own = await settle(p.guest, mg);
+    const host = await settle(p.host, mh);
+    expect(`${summary(own)}${rejectOf(own)}${summary(host)}`).toBe('[chatReject]{"t":"chatReject","why":"repeat"}[]');
+  });
+
+  it("거절: 5초 안에 여섯 번째 줄은 rate 로 막힌다", async () => {
+    const p = await lobbyPair();
+    for (let i = 1; i <= 5; i += 1) {
+      chatSend(p.guest, `줄 ${i}`);
+      await settle(p.guest, mark(p.guest));
+      await ageChatRates(p.code, 700);
+    }
+    const mh = mark(p.host);
+    const mg = mark(p.guest);
+    chatSend(p.guest, "줄 6");
+    const own = await settle(p.guest, mg);
+    const host = await settle(p.host, mh);
+    expect(`${summary(own)}${rejectOf(own)}${summary(host)}`).toBe('[chatReject]{"t":"chatReject","why":"rate"}[]');
+  });
+
+  it("거절: 거절된 전송은 기록을 만들지 않아 기록을 비우면 같은 문장이 곧바로 통과한다 (resetChatRates)", async () => {
+    const p = await lobbyPair();
+    chatSend(p.guest, "하나");
+    chatSend(p.guest, "둘");
+    await settle(p.guest, mark(p.guest));
+    await resetChatRates(p.code);
+    const mg = mark(p.guest);
+    chatSend(p.guest, "둘");
+    expect(summary(await settle(p.guest, mg))).toBe("[chat]");
+  });
+
+  it("거절: hello 전 소켓의 채팅은 보낸 소켓만 BAD_MESSAGE 를 받고 방장은 한 프레임도 받지 않는다", async () => {
+    const { code, token } = await createRoom("방장");
+    const host = await connect(code);
+    await hello(host, token);
+    await joinOk(code, "손님");
+    await settle(host, 0);
+    const anon = await connect(code);
+    const mh = mark(host);
+    const ma = mark(anon);
+    send(anon, { t: "chat", text: "안녕", pk: "0:lobby" });
+    const own = await settle(anon, ma);
+    const got = await settle(host, mh);
+    expect(`${summary(own)}${summary(got)}`).toBe("[error:BAD_MESSAGE][]");
+  });
+});
+
+describe("채팅 — 채널별 줄 번호 (리서치 Pitfall 1, 결정 0058-5)", () => {
+  // 줄 번호는 DO 메모리(chatLog)에 있다 — 마감을 당기는 도우미(forceDue)는 DO 를 evict 해 번호가 1 로 돌아가므로,
+  // 단계는 evict 하지 않는 테스트 방 넘기기(testSkip)로 넘긴다. 저장·복원 뒤에도 이어지는 것은 07-14 가 시험한다.
+  it("줄 번호: 낮 all 줄 번호에는 밤 마피아 줄 때문에 생긴 틈이 없고 mafia 번호는 판 내내 이어진다", async () => {
+    const room = await seat(5, 0, { testMode: true });
+    const socks = [room.host, ...room.guests.map((x) => x.sock)];
+    send(room.host, { t: "start" });
+    for (const sock of socks) await nextFrame(sock, (m) => m.t === "state" && m.view.phase === "assigning");
+    await skipThrough(room, "dayAnnounce");
+    const actors = actorsOf(room);
+    const g: Game = { code: room.code, socks, actors };
+    await skipThrough(room, "discussion");
+    for (const sock of socks) await settle(sock, mark(sock));
+    const [a, b] = withRole(g, "citizen") as [Actor, Actor];
+    const mafia = withRole(g, "mafia")[0]!;
+    const watcher = withRole(g, "doctor")[0]!;
+    const seen = (got: ServerMessage[][]): string => chatsOf(got[g.actors.indexOf(watcher)]!).map(lineOf).join("+");
+    const toPhase = async (phase: PhaseId): Promise<void> => {
+      // 연결당 1초 20개 한도(RATE_LIMITED)에 걸리지 않게 단계를 넘기기 전에 창을 비운다.
+      await new Promise<void>((resolve) => setTimeout(resolve, 1_050));
+      await skipThrough(room, phase);
+      for (const sock of socks) await settle(sock, mark(sock));
+      await resetChatRates(g.code);
+    };
+
+    const l1 = await observe(g, a, () => chatSend(a.sock, "하나"));
+    const l2 = await observe(g, b, () => chatSend(b.sock, "둘"));
+    expect(`${seen(l1)} ${seen(l2)}`).toBe(`all/${a.seat}/1/하나 all/${b.seat}/2/둘`);
+
+    await toPhase("night");
+    const n1 = await observe(g, mafia, () => chatSend(mafia.sock, "동의해요"));
+    expect(`${seen(n1)}|${chatsOf(n1[g.actors.indexOf(mafia)]!).map(lineOf).join("+")}`).toBe(`|mafia/${mafia.seat}/1/동의해요`);
+
+    await toPhase("discussion");
+    const l3 = await observe(g, a, () => chatSend(a.sock, "셋"));
+    expect(seen(l3)).toBe(`all/${a.seat}/3/셋`);
+
+    await toPhase("night");
+    const n2 = await observe(g, mafia, () => chatSend(mafia.sock, "그 사람으로 가요"));
+    expect(chatsOf(n2[g.actors.indexOf(mafia)]!).map(lineOf).join("+")).toBe(`mafia/${mafia.seat}/2/그 사람으로 가요`);
+  }, 30_000);
 });
