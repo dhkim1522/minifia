@@ -575,8 +575,8 @@ describe("DayScene 키보드 열림·닫힘 (CHAT-05)", () => {
   const advance = (ms: number) => act(() => void vi.advanceTimersByTime(ms));
 
   beforeEach(() => {
+    // 시각은 고정하지 않는다: setSystemTime 으로 시계를 옮기면 가짜 requestAnimationFrame(훅이 프레임마다 한 번 읽는 길)이 20ms 안에 돌지 않는다
     vi.useFakeTimers();
-    vi.setSystemTime(NOW);
     Object.defineProperty(window, "innerHeight", { value: INNER_H, configurable: true, writable: true });
   });
   afterEach(() => {

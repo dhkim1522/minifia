@@ -21,10 +21,10 @@ import { MORNING_GLOW_RISE_MS, PHASE_GUIDE_FILL, PHASE_INTRO, morningGlowGradien
 import type { SceneId } from "../game/scenes";
 import { isBlankSceneTap } from "../game/blankTap";
 import { CHAT_TEXT } from "../game/chatText";
-import { tablePanelHeight } from "../game/chatUi";
+import { LOG_H_KB, tablePanelHeight } from "../game/chatUi";
 import type { ChatStore } from "../net/chatStore";
 import { useChat } from "../net/useChat";
-import { useChatLogHeight } from "../net/useKeyboardLift";
+import { useChatLogHeight, useKeyboardLift } from "../net/useKeyboardLift";
 import type { RoomConnection } from "../net/useRoomConnection";
 import { useVerdictScene } from "./verdictScene";
 import "../styles/day.css";
@@ -161,7 +161,10 @@ export function DayScene({ view, connection, chat, myRoleButton, testButton, arr
   const logH = useChatLogHeight(rootRef, inputRef);
   const { typingSeats, ...binding } = useChat({ store: chat, connection, view });
   const panelMode = chatPanelMode(view, meAlive);
-  const chatBottom = panelMode !== null && view.me.chat === panelMode ? <ChatPanel {...binding} logHeight={logH} inputRef={inputRef} /> : null;
+  const chatOn = panelMode !== null && view.me.chat === panelMode;
+  // 키보드(07-19, CHAT-05): 채팅 패널이 있는 동안만 입력칸 포커스 + visualViewport 로 lift 를 읽는다. 장면은 다시 배치하지 않고 패널만 키보드 위로 올라간다(알려진 한계: 아래쪽 인물을 가릴 수 있다).
+  const { open: kbOpen } = useKeyboardLift({ inputRef, target: rootRef, enabled: chatOn });
+  const chatBottom = chatOn ? <ChatPanel {...binding} logHeight={kbOpen ? LOG_H_KB : logH} compact={kbOpen} inputRef={inputRef} /> : null;
   // 채널 시작·변론 시작 시스템 줄(07-UI-SPEC "줄 종류와 모양"): 같은 연결(epoch) 안의 단계 변화·내 채널 변화에서만 기록 칸에 남긴다.
   // 처음 마운트·재접속 첫 state(epoch 가 바뀐 렌더)는 기준만 잡고 만들지 않는다. 직전 값을 ref 에 쥐어 같은 변화에서 두 번(StrictMode 포함) 만들지 않는다.
   // 역할 단어 문구는 내 채널이 mafia 인 분기 안에서만 꺼낸다 — 시민 편 번들 경로에 그 문구가 들어오지 않는다(T-07-40).
@@ -310,7 +313,7 @@ export function DayScene({ view, connection, chat, myRoleButton, testButton, arr
         {isMorning ? <MorningCard {...morningCardText(view.day?.morning, nicknameOf)} exitDelayMs={morningExit.delay} /> : null}
         <section
           key={`panel-${view.phase}`}
-          className={`mf-dayscene__panel mf-dayscene__enter${chatBottom !== null ? " mf-dayscene__panel--chat" : ""}`}
+          className={`mf-dayscene__panel mf-dayscene__enter${chatBottom !== null ? " mf-dayscene__panel--chat" : ""}${chatBottom !== null && kbOpen ? " mf-dayscene__panel--kb" : ""}`}
           {...(chatBottom !== null ? { style: { "--mf-chat-panel-h": `${tablePanelHeight(logH)}px` } as CSSProperties } : {})}
         >
           {verdict?.bottom !== undefined ? (
