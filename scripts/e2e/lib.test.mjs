@@ -119,6 +119,8 @@ import {
   budgetChecks,
   chunkFailChecks,
   consoleIssues,
+  deployHoldChecks,
+  deployObservedOf,
   contextLeakChecks,
   isLocalOrigin,
   isWorldChunkUrl,
@@ -3362,4 +3364,78 @@ test("dropSockets: 건드린 소켓 수를 돌려주고, 방 소켓이 없으면
     fakeSocket("ws://localhost/hmr", 1, calls, "c"),
   ];
   assert.equal(await withFakeSockets(mixed, calls, (page) => dropSockets(page)), 1);
+});
+
+// ---- deployhold: 배포 신호가 있을 때만 판정 (06-23, G-06-6) ----
+
+test("deployObservedOf: 앞뒤 version 이 둘 다 비어 있지 않고 서로 다를 때만 true 다 (같음·읽지 못함은 false)", () => {
+  assert.equal(deployObservedOf("2026-11-01T08:00:00Z+aaa", "2026-11-01T09:00:00Z+bbb"), true);
+  assert.equal(deployObservedOf("v1", "v1"), false);
+  for (const [a, b] of [["", "v2"], ["v1", ""], [null, "v2"], ["v1", undefined], [undefined, undefined], ["", ""], [null, null]]) {
+    assert.equal(deployObservedOf(a, b), false, `${String(a)} → ${String(b)}`);
+  }
+  assert.equal(deployObservedOf(123, 456), false); // 글자가 아니면 읽지 못한 것으로 본다
+});
+
+const deployRound = (over = {}) => goodRound(1, { bannerSeen: false, socketsKept: true, deployObserved: true, ...over });
+
+test("deployHoldChecks 로컬: 이전 판정 그대로 — 10회, 띠가 떠야 통과하고 deployObserved 와 무관하다", () => {
+  const ok = deployHoldChecks(rounds10(), { local: true });
+  assert.deepEqual(ok.map((r) => r.id), ["RC5", "RC1", "RC2", "RC3", "RC4", "RC6"]);
+  assert.equal(ok.every((r) => r.ok), true);
+  const same = reconnectChecks(rounds10(), { expectedRounds: 10, requireBannerSeen: true });
+  assert.deepEqual(ok, same);
+  const noBanner = deployHoldChecks(rounds10((n) => (n === 3 ? { bannerSeen: false } : {})), { local: true });
+  assert.equal(noBanner.find((r) => r.id === "RC6").ok, false);
+  assert.equal(deployHoldChecks(rounds10().slice(0, 9), { local: true }).find((r) => r.id === "RC5").ok, false);
+  // deployObserved 가 없어도(로컬은 신호를 보지 않는다) 같은 결과
+  assert.equal(deployHoldChecks(rounds10({ deployObserved: false }), { local: true }).every((r) => r.ok), true);
+});
+
+test("deployHoldChecks 배포 주소: 배포 신호가 false·null·없음이면 소켓 유지·깨끗한 라운드여도 DH0 한 행뿐이고 통과로 세지 않는다", () => {
+  for (const over of [{ deployObserved: false }, { deployObserved: null }, { deployObserved: undefined }]) {
+    const rows = deployHoldChecks([deployRound(over)], { local: false });
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].id, "DH0");
+    assert.equal(rows[0].ok, true);
+    assert.equal(rows[0].info, true);
+    assert.match(rows[0].detail, /배포 신호 없음 — 통과로 세지 않음/);
+    assert.equal(rows.some((r) => r.id === "DH1"), false);
+  }
+  const none = deployHoldChecks([], { local: false });
+  assert.deepEqual(none.map((r) => r.id), ["DH0"]);
+  assert.deepEqual(deployHoldChecks(undefined, { local: false }).map((r) => r.id), ["DH0"]);
+});
+
+test("deployHoldChecks 배포 주소: 신호가 있고 띠 없음·소켓 유지·위치·콘솔이 깨끗하면 RC5·RC1~RC4 와 DH1 이 모두 통과하고 RC6 은 없다", () => {
+  const rows = deployHoldChecks([deployRound()], { local: false });
+  assert.deepEqual(rows.map((r) => r.id), ["RC5", "RC1", "RC2", "RC3", "RC4", "DH1"]);
+  assert.equal(rows.every((r) => r.ok), true);
+  assert.equal(rows.some((r) => r.info === true), false);
+});
+
+test("deployHoldChecks DH1: 띠 없음인데 소켓이 유지되지 않았거나 측정 못 했으면 실패하고, 띠가 떴으면 복구해야 통과한다", () => {
+  const swapped = deployHoldChecks([deployRound({ socketsKept: false })], { local: false }).find((r) => r.id === "DH1");
+  assert.equal(swapped.ok, false);
+  assert.match(swapped.detail, /띠 없이 소켓이 바뀜|조용히/);
+  const unread = deployHoldChecks([deployRound({ socketsKept: null })], { local: false }).find((r) => r.id === "DH1");
+  assert.equal(unread.ok, false);
+  assert.match(unread.detail, /측정/);
+  const seenOk = deployHoldChecks([deployRound({ bannerSeen: true, socketsKept: false, recovered: true })], { local: false });
+  assert.equal(seenOk.find((r) => r.id === "DH1").ok, true);
+  const seenStuck = deployHoldChecks([deployRound({ bannerSeen: true, recovered: false })], { local: false });
+  const dh1 = seenStuck.find((r) => r.id === "DH1");
+  assert.equal(dh1.ok, false);
+  assert.match(dh1.detail, /복구/);
+});
+
+test("deployHoldChecks 배포 주소: 위치 차 초과는 RC3, 콘솔 항목은 RC1, 띠 잔류는 RC2 가 각각 실패한다", () => {
+  const pos = deployHoldChecks([deployRound({ posDiff: 0.5 })], { local: false });
+  assert.equal(pos.find((r) => r.id === "RC3").ok, false);
+  assert.equal(pos.find((r) => r.id === "RC1").ok, true);
+  const con = deployHoldChecks([deployRound({ console: ["[error] x"] })], { local: false });
+  assert.equal(con.find((r) => r.id === "RC1").ok, false);
+  assert.equal(con.find((r) => r.id === "RC3").ok, true);
+  const left = deployHoldChecks([deployRound({ bannerLeft: true })], { local: false });
+  assert.equal(left.find((r) => r.id === "RC2").ok, false);
 });

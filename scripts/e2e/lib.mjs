@@ -2105,6 +2105,15 @@ export function reconnectChecks(rounds, { expectedRounds = RECONNECT_ROUNDS, req
   return rows;
 }
 
+/** (06-23 RED 임시 뼈대 — 다음 커밋에서 구현) */
+export function deployObservedOf() {
+  return false;
+}
+/** (06-23 RED 임시 뼈대 — 다음 커밋에서 구현) */
+export function deployHoldChecks() {
+  return [];
+}
+
 /** 라운드 결과를 한 줄 기록으로(참고 행): 횟수·허용 경고·위치 차 최대·띠 본 횟수. 판정이 아니다. */
 export function reconnectSummary(rounds, allowedTotals = {}) {
   const list = Array.isArray(rounds) ? rounds : [];
