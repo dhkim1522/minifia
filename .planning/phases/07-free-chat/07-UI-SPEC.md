@@ -1,7 +1,8 @@
 ---
 phase: "07"
 slug: "free-chat"
-status: draft
+status: approved
+reviewed_at: "2026-11-01"
 shadcn_initialized: false
 preset: none
 created: "2026-11-01"
@@ -63,11 +64,11 @@ revision: "초안 — 6페이즈 UI-SPEC 틀과 승인 v2.0 디자인(ChatPanel�
 | 잠금 | 입력 글자 16px, 입력칸 100자, 누르기 44 이상(입력·보내기 48) | 디자인 시스템 README·`ChatPanel` |
 | 잠금 | 햅틱·진동·소리 없음 | 메모리(앱 전용은 앱 전환 때), 12페이즈 |
 | 잠금 | 낮이든 밤이든 스산한 분위기 유지. 채팅 면에 밝은 색면을 새로 만들지 않는다 | 메모리(낮도 마피아 분위기) |
-| 기본값으로 정함 — **계획 전 사용자 확인 권장** D1 | 7페이즈에 입력줄이 붙는 v1.0 고정 테이블 화면 = **낮 토론 · 최후 변론 · 밤(마피아 본인 · 탈락자) · 탈락자 관전 화면**. 버튼 중심의 **처형 여부 투표 · 후보 선택 투표 · 공개 연출 · 아침 카드**에는 7페이즈에서 입력줄을 붙이지 않는다(8·9페이즈가 새로 지을 화면이라 임시 틀을 또 만들지 않는다). 서버는 이 단계들의 채팅도 audience 규칙대로 받게 해 두어 8·9페이즈는 화면만 붙이면 된다. 대안: 모든 낮 단계에 임시로 붙임(비추천 — 투표 패널 236 높이와 충돌해 8페이즈에서 버릴 레이아웃 작업이 늘어남) | 성공 기준 1, 계획 메모 |
-| 기본값으로 정함 — **계획 전 사용자 확인 권장** D2 | 재접속·새로 고침하면 내가 볼 수 있는 **최근 30줄이 서버에서 되돌아온다**(같은 audience 규칙). 서버가 줄을 보관해야 하므로 결정 0017-7("저장하지 않는다")을 v2.0 에서 고치는 결정 기록이 필요하다(11페이즈 END-03 도 마피아·유령 채팅을 서버가 판이 끝날 때까지 보관해야 해 어차피 필요). 대안: 되돌리지 않고 빈 기록으로 시작 | 몰입(결정 0006), END-03 |
-| 기본값으로 정함 D3 | 키보드가 열리면 행동 줄을 숨기고 기록 칸을 72 로 줄인다 | "패널과 키보드" |
-| 기본값으로 정함 D4 | 입력칸에 포커스가 있을 때 맵·바깥을 누르면 **키보드만 닫고 걷지 않는다**(실수로 걷는 것 방지) | "로비(맵)에 붙이기" |
-| 기본값으로 정함 D5 | 서버 제한 시작값: 공백 정리 뒤 1~100자, 같은 사람 최소 전송 간격 600ms, 5초에 5줄 초과 거절, 같은 문장 3초 안에 다시 보내기 거절. 값은 서버 상수 한 곳에서 조정 | CHAT-05 |
+| 사용자 확정(2026-11-01) D1 | 7페이즈에 입력줄이 붙는 v1.0 고정 테이블 화면 = **낮 토론 · 최후 변론 · 밤(마피아 본인 · 탈락자) · 탈락자 관전 화면**. 버튼 중심의 **처형 여부 투표 · 후보 선택 투표 · 공개 연출 · 아침 카드**에는 7페이즈에서 입력줄을 붙이지 않는다(8·9페이즈가 새로 지을 화면이라 임시 틀을 또 만들지 않는다). 서버는 이 단계들의 채팅도 audience 규칙대로 받게 해 두어 8·9페이즈는 화면만 붙이면 된다. (대안 "모든 낮 단계에 임시로 붙임"은 기각) | 성공 기준 1, 계획 메모 |
+| 사용자 확정(2026-11-01) D2 | 재접속·새로 고침하면 내가 볼 수 있는 **최근 30줄이 서버에서 되돌아온다**(같은 audience 규칙). 서버가 줄을 보관해야 하므로 결정 0017-7("저장하지 않는다")을 v2.0 에서 고치는 결정 기록이 필요하다(11페이즈 END-03 도 마피아·유령 채팅을 서버가 판이 끝날 때까지 보관해야 해 어차피 필요). 결정 기록 0058 은 계획 단계에서 쓴다(대안 "빈 기록으로 시작"은 기각) | 몰입(결정 0006), END-03 |
+| 사용자 확정(2026-11-01) D3 | 키보드가 열리면 행동 줄을 숨기고 기록 칸을 72 로 줄인다 | "패널과 키보드" |
+| 사용자 확정(2026-11-01) D4 | 입력칸에 포커스가 있을 때 맵·바깥을 누르면 **키보드만 닫고 걷지 않는다**(실수로 걷는 것 방지) | "로비(맵)에 붙이기" |
+| 사용자 확정(2026-11-01) D5 | 서버 제한 시작값: 공백 정리 뒤 1~100자, 같은 사람 최소 전송 간격 600ms, 5초에 5줄 초과 거절, 같은 문장 3초 안에 다시 보내기 거절. 값은 서버 상수 한 곳에서 조정 | CHAT-05 |
 | 리서치가 정함(계획에서) | 서버 채널 함수 `audience`, 입력 중 만료 시간, 단계 번호 전달 방식, 줄 보관 구조 | ROADMAP 계획 메모 |
 
 ---
@@ -495,7 +496,7 @@ Accent reserved for:
 
 ## UI Considerations
 
-Applicable state considerations resolved: 15 covered, 3 backstop, 1 unresolved
+Applicable state considerations resolved: 17 covered, 3 backstop, 1 unresolved (상태 점검 엔진 대조 후 보강, 사용자 확인 2026-11-01)
 
 요소: E1 채팅 기록 칸(list-collection) · E2 입력줄(form·interactive-control) · E3 머리 위 입력 중 알약(static-content) · E4 시스템 줄·채널 표식(static-content) · E5 키보드 열림 레이아웃(unclassified, 직접 검토) · E6 막힘 알림(static-content). 빈 상태·오류 **문구**는 `## Copywriting Contract` 가 정본이고 여기서는 그 행을 가리킨다.
 
@@ -514,12 +515,16 @@ Applicable state considerations resolved: 15 covered, 3 backstop, 1 unresolved
 | 11 | E2 입력줄 | error | ✅ covered | 거절 이유별 문구 한 줄(Copywriting), 쓴 글을 되돌려 둔다. 연결 끊김은 보내기만 비활성 |
 | 12 | E2 입력줄 | partial | 🧪 backstop | { statement: "한글 조합 중 Enter·보내기를 눌러도 글자가 깨지거나 두 번 전송되거나 비운 뒤 마지막 글자가 되살아나지 않는다", verification: backstop } — Chromium `imeSetComposition` 자동 + iPhone 실기기 사람 확인(5줄 합격 검사 4) |
 | 13 | E2 입력줄 | long-text | ✅ covered | 100자에서 입력을 막고(`maxlength`), 붙여넣기는 100자에서 잘린다. 줄바꿈은 공백으로 바꾼다 |
+| 13a | E2 입력줄 | populated | ✅ covered | 공백 정리 뒤 1자 이상이면 보내기가 켜지고(accent 면), Enter 나 보내기로 `form` 제출 한 길로 나간다 |
+| 13b | E2 입력줄 | overflow | ✅ covered | 입력칸은 한 줄이라 100자 안에서 가로로 밀리고 줄바꿈이 생기지 않는다. 입력줄 높이는 변하지 않는다 |
 | 14 | E3 입력 중 알약 | overflow | ✅ covered | 8명이 동시에 입력해도 각자 이름표 위에 하나씩, 이름표 순위를 따라간다. 스택이 22 늘어난 높이로 카메라 보장 검사를 다시 돈다 |
 | 15 | E3 입력 중 알약 | long-text | ⛔ dismissed | 글자가 없다 |
 | 16 | E3 입력 중 알약 | loading · error | ⛔ dismissed(2) | 서버 신호가 없으면 4.5초 뒤 꺼질 뿐인 단순 표시다. 별도 상태가 없다 |
 | 17 | E4 시스템 줄·채널 표식 | long-text | ✅ covered | 가장 긴 줄 "유령 채팅 · 산 사람에게 안 보여요"(약 19자)는 폭 304 에서 14px 로 한 줄 또는 두 줄로 감긴다. 잘리지 않는다 |
 | 18 | E4 시스템 줄·채널 표식 | overflow | ✅ covered | 시스템 줄도 100줄 상한에 포함되어 오래된 것부터 버려진다 |
+| 18a | E4 시스템 줄·채널 표식 | empty · loading · error · populated | ⛔ dismissed(4) | 서버가 보낸 고정 문구 한 줄과 채널 색·아이콘뿐이라 빈 상태·불러오기·오류 개념이 없다. 보이는 모양은 "줄 종류와 모양"·"채널별 모양"이 정한다 |
 | 19 | E5 키보드 열림 레이아웃 | unclassified | 🧪 backstop | { statement: "키보드가 열려도 입력줄이 가려지지 않고, 캔버스 크기가 변하지 않고, 내 캐릭터가 남은 영역에 보이고, 닫을 때 화면이 튀지 않는다 (iPhone Safari·iOS용 Chrome, 가능하면 Android Chrome·삼성 인터넷·카카오톡 인앱)", verification: backstop } — 합격 검사 1~7, 실기기. 미확인은 합격으로 세지 않음 |
+| 19a | E5 키보드 열림 레이아웃 | empty · loading · error · populated · partial · zero-one-many | ⛔ dismissed(6) | 목록이 아니라 배치 상태다. 열림·닫힘 두 상태는 "패널과 키보드"가 정하고 실기기 검사는 19번이 맡는다 |
 | 20 | E5 키보드 열림 레이아웃 | overflow | ⚠ unresolved | 방 높이가 640 이하인 폰에서 키보드가 열리면 스테이지가 128 미만이라 내 이름표·입력 중 칸이 잘릴 수 있다(최악 360×560 에서 12px). 알려진 한계로 두고 고치지 않는다 — 플래너가 가정으로 받는다 |
 | 21 | E6 막힘 알림 | long-text | ✅ covered | 가장 긴 문구 "보내지 못했어요. 다시 해 보세요" 가 14px 로 한 줄에 들어간다 |
 | 22 | E6 막힘 알림 | loading · empty · populated · overflow | ⛔ dismissed(4) | 2.5초짜리 한 줄 알림이라 목록·불러오기 개념이 없다 |
@@ -547,8 +552,8 @@ Applicable state considerations resolved: 15 covered, 3 backstop, 1 unresolved
 |---|------|------|------|
 | 1 | 키보드 배치 다섯 줄이 전부 미확인이다. iOS(Safari·iOS용 Chrome)의 `visualViewport` 동작과 카카오톡 인앱 WebView 의 레이아웃 축소는 실기기 외에는 확인할 수 없다 | 입력줄이 가려지거나 화면이 튈 수 있다 | 합격 검사 1~7 + "검사 실패 때 내리는 순서". 폰이 없는 환경은 9페이즈 팀 테스트로 이월(합격으로 세지 않음) |
 | 2 | 성공 기준 3 은 iPhone·Android·삼성 인터넷·카카오톡 인앱 전부의 실기기 확인을 요구하나 사용자 확인 기기는 iPhone 16 Pro 뿐이다(결정 0055) | 기준을 문자 그대로 채울 수 없다 | 검증 단계에서 이월 여부를 사용자에게 묻는다. 이 문서는 이월을 허용하되 합격 선언을 막는다 |
-| 3 | 재접속 시 최근 30줄 복원(D2)은 결정 0017-7 과 부딪힌다 | 서버 보관 필요 | 계획 단계에서 결정 기록(다음 번호) 작성. 사용자가 반대하면 기록 칸은 빈 채로 시작 |
-| 4 | D1 때문에 처형 여부 투표·후보 선택·아침 단계의 v1.0 화면에서는 7페이즈 동안 채팅 입력이 없다 | 낮 흐름 중간에 입력이 없는 구간이 생김(8·9페이즈에서 해소) | 사용자 확인 후 필요하면 임시 입력줄 추가(대안) |
+| 3 | 재접속 시 최근 30줄 복원(D2)은 결정 0017-7 과 부딪힌다 | 서버 보관 필요 | 사용자 확정(D2). 계획 단계에서 결정 기록 0058 작성 |
+| 4 | D1 때문에 처형 여부 투표·후보 선택·아침 단계의 v1.0 화면에서는 7페이즈 동안 채팅 입력이 없다 | 낮 흐름 중간에 입력이 없는 구간이 생김(8·9페이즈에서 해소) | 사용자 확정(D1) — 받아들인 한계, 8·9페이즈에서 해소 |
 | 5 | 서버 제한값(D5: 600ms · 5초 5줄 · 같은 말 3초 · 100자)은 시작값이다 | 너무 빡빡하거나 느슨할 수 있다 | 서버 상수 한 곳에서 조정, 9페이즈 팀 테스트에서 확인 |
 | 6 | 채팅이 오가는 동안 맵 렌더 성능 | 6페이즈 게이트(5분 평균 55fps) 보장 | 줄 추가 방식 + 검증 단계에서 채팅 부하 하의 fps 확인 |
 | 7 | 짧은 폰(방 높이 ≤ 640)에서 키보드가 열린 맵 영역이 거의 없음 | 입력 중 이름표가 잘림 | 알려진 한계로 기록(UI Considerations 20) |
@@ -573,12 +578,12 @@ Applicable state considerations resolved: 15 covered, 3 backstop, 1 unresolved
 
 ## Checker Sign-Off
 
-- [ ] Dimension 1 Copywriting: PASS
-- [ ] Dimension 2 Visuals: PASS
-- [ ] Dimension 3 Color: PASS
-- [ ] Dimension 4 Typography: PASS
-- [ ] Dimension 5 Spacing: PASS
-- [ ] Dimension 6 Registry Safety: PASS
-- [ ] Dimension 7 Inventory Provenance: PASS
+- [x] Dimension 1 Copywriting: FLAG — 아이콘만 쓰는 보내기·빈 상태 없음은 결정 0051 로 받아들임. "지금은 보낼 수 없어요"에 다음 할 일을 담는 문구는 다듬기 후보
+- [x] Dimension 2 Visuals: FLAG — 로비·테이블 화면의 시선 중심(맵 캐릭터 대 패널, 무대 대 기록)을 한 줄로 밝히면 좋다
+- [x] Dimension 3 Color: PASS
+- [x] Dimension 4 Typography: PASS
+- [x] Dimension 5 Spacing: FLAG — 14·22·10·6·3 은 승인 v2.0 보드·`bundle.css` 출처 예외(06 과 같음). 채널 아이콘이 있을 때 입력 왼쪽 여백 40 은 새 값이라 구현 때 보드와 대조
+- [x] Dimension 6 Registry Safety: PASS
+- [x] Dimension 7 Inventory Provenance: PASS
 
-**Approval:** pending
+**Approval:** approved 2026-11-01 (gsd-ui-checker, BLOCK 0 · FLAG 3)
