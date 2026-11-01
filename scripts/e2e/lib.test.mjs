@@ -4,6 +4,9 @@ import { readFileSync } from "node:fs";
 import assert from "node:assert/strict";
 import {
   APPROVED_RELAXATIONS,
+  TAG_BASE_ALPHA_MAX,
+  TAG_FRONT_ALPHA_MIN,
+  cssAlpha,
   D3B_FLOOR_5_PLAYERS,
   DECORATIVE_ALLOW,
   EXPECTED_SCENE,
@@ -2732,15 +2735,73 @@ test("nameTagFitChecks NT1: scrollWidth ≠ clientWidth·ellipsis·14px 미만·
   assert.equal(nameTagFitChecks([nameTag({ fontSize: undefined })]).ok, false);
 });
 
+test("cssAlpha: rgba·rgb·공백 문법·transparent 를 알파로 읽고 못 읽으면 NaN", () => {
+  assert.equal(cssAlpha("rgba(14, 19, 38, 0.92)"), 0.92);
+  assert.equal(cssAlpha("rgba(14, 19, 38, 0.8)"), 0.8);
+  assert.equal(cssAlpha("rgb(14, 19, 38)"), 1);
+  assert.equal(cssAlpha("rgb(14 19 38 / 0.5)"), 0.5);
+  assert.equal(cssAlpha("rgb(14 19 38 / 50%)"), 0.5);
+  assert.equal(cssAlpha("transparent"), 0);
+  assert.ok(Number.isNaN(cssAlpha("")));
+  assert.ok(Number.isNaN(cssAlpha(undefined)));
+  assert.ok(Number.isNaN(cssAlpha("불투명")));
+  assert.equal(TAG_FRONT_ALPHA_MIN, 0.9);
+  assert.equal(TAG_BASE_ALPHA_MAX, 0.85);
+});
+
+const STRONG = "rgba(14, 19, 38, 0.92)";
+const BASE = "rgba(14, 19, 38, 0.8)";
+
 test("tagStackChecks NT3: 겹친 이름표는 z-index 가 달라야 하고 같거나 못 읽으면 실패, 안 겹치면 z 가 같아도 통과한다", () => {
-  const t = (seat, left, z) => ({ seat, rect: rect(left, 100, 100, 24), z });
-  assert.equal(tagStackChecks([t(0, 100, 3), t(1, 150, 4)]).ok, true);
+  const t = (seat, left, z, face = BASE, me = false) => ({ seat, me, rect: rect(left, 100, 100, 24), z, face });
+  assert.equal(tagStackChecks([t(0, 100, 3), t(1, 150, 4, STRONG)]).ok, true);
   assert.equal(tagStackChecks([t(0, 100, 3), t(1, 300, 3)]).ok, true);
-  const same = tagStackChecks([t(0, 100, 3), t(1, 150, 3)]);
+  const same = tagStackChecks([t(0, 100, 3), t(1, 150, 3, STRONG)]);
   assert.equal(same.ok, false);
   assert.match(same.detail, /z-index 가 같음/);
   assert.match(tagStackChecks([t(0, 100, Number.NaN), t(1, 150, 3)]).detail, /z-index 를 읽지 못함/);
   assert.match(tagStackChecks([]).detail, /측정값 없음/);
+});
+
+test("tagStackChecks NT3: 내 이름표가 맨 위여야 한다 — 겹치는 쌍에서 내 이름표가 위이고 면이 0.92 이면 통과, 내가 아래이면 실패하고 자리를 말한다", () => {
+  const t = (seat, left, z, face, me = false) => ({ seat, me, rect: rect(left, 100, 100, 24), z, face });
+  const ok = tagStackChecks([t(0, 100, 4, STRONG, true), t(1, 150, 3, BASE)]);
+  assert.equal(ok.id, "NT3");
+  assert.equal(ok.ok, true, ok.detail);
+  const below = tagStackChecks([t(0, 100, 3, BASE, true), t(1, 150, 4, STRONG)]);
+  assert.equal(below.ok, false);
+  assert.match(below.detail, /내 이름표/);
+  assert.match(below.detail, /자리 0/);
+  // 멀리 떨어진 이름표라도 내 이름표는 모두의 위여야 한다(순위는 전체에서 정해진다)
+  const far = tagStackChecks([t(0, 100, 1, BASE, true), t(1, 600, 4, BASE)]);
+  assert.equal(far.ok, false);
+  assert.match(far.detail, /내 이름표/);
+});
+
+test("tagStackChecks NT3: 맨 앞 겹침 이름표의 면은 0.9 이상, 겹치지 않는 이름표의 면은 0.85 이하", () => {
+  const t = (seat, left, z, face, me = false) => ({ seat, me, rect: rect(left, 100, 100, 24), z, face });
+  const flat = tagStackChecks([t(0, 100, 4, BASE, true), t(1, 150, 3, BASE)]);
+  assert.equal(flat.ok, false);
+  assert.match(flat.detail, /맨 앞/);
+  assert.match(flat.detail, /0\.8/);
+  const lone = tagStackChecks([t(0, 100, 4, STRONG, true), t(1, 150, 3, BASE), t(2, 500, 1, STRONG)]);
+  assert.equal(lone.ok, false);
+  assert.match(lone.detail, /자리 2/);
+  assert.match(lone.detail, /겹치지 않/);
+  // 겹쳤지만 맨 앞이 아닌 이름표는 면 제한이 없다
+  assert.equal(tagStackChecks([t(0, 100, 4, STRONG, true), t(1, 150, 3, BASE), t(2, 160, 2, BASE)]).ok, true);
+  // 사슬 A–B, B–C: C 만 맨 앞
+  assert.equal(tagStackChecks([t(0, 100, 1, BASE), t(1, 170, 2, BASE), t(2, 240, 3, STRONG)]).ok, true);
+});
+
+test("tagStackChecks NT3: 면 색을 읽지 못하면 측정값 없음(면 색)으로 실패한다", () => {
+  const t = (seat, left, z, face, me = false) => ({ seat, me, rect: rect(left, 100, 100, 24), z, face });
+  const front = tagStackChecks([t(0, 100, 4, undefined, true), t(1, 150, 3, BASE)]);
+  assert.equal(front.ok, false);
+  assert.match(front.detail, /측정값 없음\(면 색\)/);
+  const lone = tagStackChecks([t(0, 100, 4, "", true)]);
+  assert.equal(lone.ok, false);
+  assert.match(lone.detail, /측정값 없음\(면 색\)/);
 });
 
 test("ownTagInStageChecks NT4: 스테이지 사각형 안이면 통과, 어느 변이든 넘으면 실패하고 방향을 말한다", () => {
