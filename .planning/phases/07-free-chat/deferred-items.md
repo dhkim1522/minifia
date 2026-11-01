@@ -17,7 +17,9 @@
 - 담당: 07-12(텍스트 이모티콘·옛 필드 정리) 또는 07-14 이후 정리 계획. 프레임 단위 E2E(`scripts/e2e/`)는 화면 계획(07-15~)이 새 채팅 UI 와 함께 바꾼다.
 - 이 계획의 Task 3 acceptance 는 `shared worker src` 만 대상이라 영향이 없다.
 
-### 채팅 줄 번호·전송 기록은 DO 메모리뿐 (가정 A1)
+### 채팅 줄 번호·전송 기록은 DO 메모리뿐 (가정 A1) — 줄 번호는 07-14 에서 닫힘
+
+> 07-14 갱신: `chatLog`(채널별 seq)는 이제 `chat:` 키에 저장되고 생성자가 복원한다. `chatRates`(D5 제한)는 계속 메모리뿐이라 evict 뒤 제한이 한 번 느슨해지는 것은 수용된 동작이다.
 
 `chatLog`(채널별 seq)와 `chatRates`(D5 제한)는 DO 메모리에만 있어 하이버네이션·evict 로 비면 seq 가 1 로 돌아가고 제한이 한 번 느슨해진다. 07-14 가 같은 `appendLine` 결과에 저장·복원을 더한다. 그 전까지 줄 번호가 단계를 넘어 이어지는 시험은 evict 하지 않는 `advanceToKeep`(test/worker/helpers.ts)으로 넘긴다.
 
