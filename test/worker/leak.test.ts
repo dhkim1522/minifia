@@ -222,7 +222,7 @@ describe("6명 한 판(두 밤·두 아침, 행동·마피아 채팅·탈락·�
     await advanceToKeep(code, socks, "night");
     await probe(true);
 
-    // 1일차 밤: 마피아 둘이 X 를, 경찰이 마피아 A 를, 의사가 자신을 지목하고, 마피아 A 가 밤 채팅(mafia 줄 1번)과 이모티콘을 보낸다.
+    // 1일차 밤: 마피아 둘이 X 를, 경찰이 마피아 A 를, 의사가 자신을 지목하고, 마피아 A 가 밤 채팅(mafia 줄 1번)을 보낸다.
     await act(mafiaA, { t: "pick", target: victimX.seat });
     await act(mafiaB, { t: "pick", target: victimX.seat });
     await act(police, { t: "pick", target: mafiaA.seat });
@@ -234,7 +234,6 @@ describe("6명 한 판(두 밤·두 아침, 행동·마피아 채팅·탈락·�
     // 산 시민 Y 의 밤 전송은 채널이 없어 폐기된다 — Y 소켓에만 chatReject{phase} 가 가고 아무에게도 줄이 가지 않는다(T-07-26).
     await act(victimY, chatMsg(victimY.sock, "저 시민이에요"));
     await act(mafiaA, chatMsg(mafiaA.sock, "그 사람으로 가요"));
-    await act(mafiaA, { t: "emoji", icon: "smile" });
     await advanceToKeep(code, socks, "morning"); // X 탈락
     await probe(true);
 
@@ -346,7 +345,6 @@ describe("6명 한 판(두 밤·두 아침, 행동·마피아 채팅·탈락·�
     const mafiaLines = new Map<number, number[]>(); // seat → 받은 ch mafia 줄 번호
     const ghostLines = new Map<number, number[]>(); // seat → 받은 ch ghost 줄 번호
     const rejects = new Map<number, string[]>(); // seat → 받은 chatReject 의 why
-    const nightEmojis = new Map<number, number>(); // seat → 밤 emoji 프레임 수
     const typingCounts = new Map<number, number>(); // seat → 받은 typing 프레임 수
     const sawChatMafia = new Set<number>(); // me.chat 이 "mafia" 인 view 를 받은 seat
     const morningsByDay = new Map<number, Set<string>>(); // 일차 → day.morning JSON 모음
@@ -361,7 +359,6 @@ describe("6명 한 판(두 밤·두 아침, 행동·마피아 채팅·탈락·�
       const mafias: number[] = [];
       const ghosts: number[] = [];
       const rejected: string[] = [];
-      let emojis = 0;
       let typings = 0;
       for (const raw of collect(a.sock)) {
         const msg = JSON.parse(raw) as ServerMessage;
@@ -456,12 +453,6 @@ describe("6명 한 판(두 밤·두 아침, 행동·마피아 채팅·탈락·�
           for (const pth of paths) expect(CHAT_REJECT_KEY_PATHS.has(pth)).toBe(true);
           rejected.push(msg.why);
         }
-        // (1)(6) 밤 emoji 는 살아 있는 마피아와 탈락자에게만.
-        if (msg.t === "emoji") {
-          expect(phase).toBe("night");
-          if (!dead) expect(a.role).toBe("mafia");
-          emojis += 1;
-        }
         // (5) 아침 결과.
         if (msg.t === "state" && msg.view.phase === "morning") {
           const set = morningsByDay.get(day) ?? new Set<string>();
@@ -476,7 +467,6 @@ describe("6명 한 판(두 밤·두 아침, 행동·마피아 채팅·탈락·�
       mafiaLines.set(a.seat, mafias);
       ghostLines.set(a.seat, ghosts);
       rejects.set(a.seat, rejected);
-      nightEmojis.set(a.seat, emojis);
       typingCounts.set(a.seat, typings);
     }
 
@@ -535,8 +525,6 @@ describe("6명 한 판(두 밤·두 아침, 행동·마피아 채팅·탈락·�
     for (const a of actors) {
       const expected = a.role === "mafia" ? "1,2" : a === victimX ? "2" : "";
       expect(`${a.seat}:${mafiaLines.get(a.seat)!.join(",")}`).toBe(`${a.seat}:${expected}`);
-      // 밤 emoji 는 1일차 밤 마피아 A 의 한 번: 살아 있던 마피아 둘만 받는다.
-      expect(nightEmojis.get(a.seat)).toBe(a.role === "mafia" ? 1 : 0);
     }
     // 탈락자 줄: X 의 2일차 줄(1번)은 X 만, Y 의 아침 줄(2번)은 X·Y 가 받는다 — 산 사람 소켓은 한 줄도 받지 않는다.
     for (const a of actors) {

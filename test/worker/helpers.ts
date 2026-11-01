@@ -187,7 +187,7 @@ export interface StoredRoom {
   voteLog?: Array<{ n: number; exec: { yes: number; no: number; passed: boolean }; cand?: { votes: Array<{ seat: number; target: number }>; candidate?: number } }>;
   winner?: string;
   verdict?: { passed: boolean; candidate?: number };
-  players: Array<{ role?: string; lastSendAt?: number; execVote?: boolean; candidateVote?: number; alive?: boolean }>;
+  players: Array<{ role?: string; execVote?: boolean; candidateVote?: number; alive?: boolean }>;
 }
 
 export async function storedRoom(code: string): Promise<StoredRoom> {
@@ -242,18 +242,6 @@ export async function advanceToKeep(code: string, sockets: TestSocket[], phase: 
   }
   expect((await storedRoom(code)).phase).toBe(phase);
   for (const s of sockets) await nextFrame(s, isPhase(phase));
-}
-
-/** 저장된 모든 플레이어의 lastSendAt 을 msAgo 전으로 옮기고 evict 한다 — 테스트가 2초 쿨다운을 실제로 기다리지 않게 한다. */
-export async function backdateSends(code: string, msAgo = 5000): Promise<void> {
-  const stub = env.ROOM.getByName(code);
-  await runInDurableObject(stub, async (_instance, state) => {
-    const room = await state.storage.get<{ players: Array<Record<string, unknown>> }>("room");
-    if (!room) throw new Error("backdateSends: 방이 없다");
-    const players = room.players.map((p) => (p.lastSendAt === undefined ? p : { ...p, lastSendAt: Date.now() - msAgo }));
-    await state.storage.put("room", { ...room, players });
-  });
-  await evictDurableObject(stub);
 }
 
 // ---- 4페이즈 소켓 도우미(04-07): night.test.ts 의 지역 도우미와 같은 모양을 내보낸다 ----

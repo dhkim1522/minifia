@@ -2,7 +2,7 @@
 // 실패 출력은 한 줄이어야 해서(TAP) 프레임 목록은 summary() 한 줄 문자열로 비교한다.
 import { describe, expect, it } from "vitest";
 import type { RoomView, RoleId, ServerMessage } from "../../shared/protocol";
-import { advanceTo, alarmOf, chatMsg, collect, connect, forceDue, hello, nextFrame, seat, send, storedRoom } from "./helpers";
+import { advanceTo, alarmOf, chatMsg, collect, connect, forceDue, hello, nextFrame, phaseKeyOf, seat, send, storedRoom } from "./helpers";
 import type { Seated, TestSocket } from "./helpers";
 
 interface Actor {
@@ -189,7 +189,7 @@ describe("마피아 밤 (NIGHT-01·D-07)", () => {
 });
 
 describe("밤 채팅 (D-17·COMM-04, 07-11 자유 채팅)", () => {
-  it("마피아의 밤 chat·emoji 는 살아 있는 마피아 둘에게만 가고 비마피아 네 소켓은 chat·emoji 프레임을 받지 않는다", async () => {
+  it("마피아의 밤 chat·입력 중은 살아 있는 마피아 둘에게만 가고 비마피아 네 소켓은 chat·typing 프레임을 받지 않는다", async () => {
     const r = await startedAtNight(6);
     const actors = actorsOf(r);
     const [a, b] = withRole(actors, "mafia") as [Actor, Actor];
@@ -202,10 +202,10 @@ describe("밤 채팅 (D-17·COMM-04, 07-11 자유 채팅)", () => {
     expect((said.own[0] as Extract<ServerMessage, { t: "chat" }>).ch).toBe("mafia");
     for (const x of rest) expect(summary(said.seen.get(x)!)).toBe("[]");
 
-    const emoted = await sendAndSettle(a, { t: "emoji", icon: "smile" }, [b, ...rest]);
-    expect(summary(emoted.own)).toBe("[emoji]");
-    expect(summary(emoted.seen.get(b)!)).toBe("[emoji]");
-    for (const x of rest) expect(summary(emoted.seen.get(x)!)).toBe("[]");
+    const typed = await sendAndSettle(a, { t: "typing", on: true, pk: phaseKeyOf(a.sock) }, [b, ...rest]);
+    expect(summary(typed.own)).toBe("[]");
+    expect(summary(typed.seen.get(b)!)).toBe("[typing]");
+    for (const x of rest) expect(summary(typed.seen.get(x)!)).toBe("[]");
   });
 
   it("살아 있는 시민의 밤 chat 은 그 소켓만 chatReject + state 를 받고, 마피아의 빠른 메시지(say)는 BAD_MESSAGE 뿐이다", async () => {
@@ -363,7 +363,7 @@ describe("관전 (결정 0021)", () => {
 });
 
 describe("탈락자 거부 (ELIM-01)", () => {
-  it("탈락자의 pick 은 BAD_MESSAGE + state, say·emoji 는 BAD_MESSAGE 뿐이고 아무 소켓에도 chat·emoji 가 가지 않으며, 탈락자의 chat 은 ch ghost 로 탈락자에게만 간다", async () => {
+  it("탈락자의 pick 은 BAD_MESSAGE + state, say 는 BAD_MESSAGE 뿐이고 아무 소켓에도 chat 이 가지 않으며, 탈락자의 chat 은 ch ghost 로 탈락자에게만 간다", async () => {
     const { r, dead, mafia, police, doctor, living } = await diedFirstNight();
     const [a, b] = mafia;
     await advanceTo(r.code, allSockets(r), "night");
@@ -373,12 +373,9 @@ describe("탈락자 거부 (ELIM-01)", () => {
     expect(summary(picked.own)).toBe("[error:BAD_MESSAGE,state:night]");
     const said = await sendAndSettle(dead, { t: "say", template: "nightAgree" }, watchers);
     expect(summary(said.own)).toBe("[error:BAD_MESSAGE]");
-    const emoted = await sendAndSettle(dead, { t: "emoji", icon: "smile" }, watchers);
-    expect(summary(emoted.own)).toBe("[error:BAD_MESSAGE]");
     for (const x of watchers) {
       expect(summary(picked.seen.get(x)!)).toBe("[]");
       expect(summary(said.seen.get(x)!)).toBe("[]");
-      expect(summary(emoted.seen.get(x)!)).toBe("[]");
     }
     const ghost = await sendAndSettle(dead, chatMsg(dead.sock, "아쉽네요"), watchers);
     expect(summary(ghost.own)).toBe("[chat]");

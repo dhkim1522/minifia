@@ -83,7 +83,7 @@ describe("자유 채팅과 사라진 빠른 메시지 (CHAT-01·06, 07-11)", () 
     for (const s of sockets) expect(chatFrames(s).length).toBe(1);
   });
 
-  it("chat 이 통과해도 state 프레임은 방송되지 않는다 — chat 직전 이후 프레임이 chat, emoji 순서뿐이다 (결정 0017-7)", async () => {
+  it("chat 이 통과해도 state 프레임은 방송되지 않는다 — chat 직전 이후 프레임이 chat 하나뿐이다 (결정 0017-7)", async () => {
     const r = await startedAt("discussion");
     const g0 = r.guests[0]!;
     const sockets = allSockets(r);
@@ -92,12 +92,11 @@ describe("자유 채팅과 사라진 빠른 메시지 (CHAT-01·06, 07-11)", () 
 
     send(g0.sock, chatMsg(g0.sock, "저 아니에요"));
     await waitChat(sockets, 1);
-    send(g0.sock, { t: "emoji", icon: "smile" });
-    for (const s of sockets) await nextFrame(s, (m) => m.t === "emoji");
+    for (const s of sockets) await settle(s);
 
     sockets.forEach((s, i) => {
       const kinds = s.frames.slice(marks[i]!).map((raw) => (JSON.parse(raw) as RawFrame).t);
-      expect(kinds.join(",")).toBe("chat,emoji");
+      expect(kinds.join(",")).toBe("chat,pong");
     });
   });
 
@@ -134,46 +133,6 @@ describe("자유 채팅과 사라진 빠른 메시지 (CHAT-01·06, 07-11)", () 
     await settle(g0.sock);
     for (const s of sockets) expect(chatFrames(s).length).toBe(0);
     expect(await storedMessageCount(r.code)).toBe(0);
-  });
-});
-
-describe("이모티콘 (COMM-02, D-14)", () => {
-  it("저장 없이 연결된 모든 소켓에 emoji 프레임이 가고, 직후 emoji 는 RATE_LIMITED 이며 채팅과 쿨다운을 나눠 쓰지 않는다", async () => {
-    const r = await startedAt("discussion");
-    const [g0] = r.guests as [Seated["guests"][number], ...Seated["guests"]];
-    const sockets = allSockets(r);
-
-    send(g0.sock, { t: "emoji", icon: "smile" });
-    for (const s of sockets) {
-      const m = await nextFrame(s, (f) => f.t === "emoji");
-      expect(m.t === "emoji" && `${m.seat}:${m.icon}:${typeof m.at}`).toBe(`${g0.seat}:smile:number`);
-    }
-    for (const s of sockets) expect(chatFrames(s).length).toBe(0);
-
-    send(g0.sock, { t: "emoji", icon: "heart" });
-    expect(await errorCode(g0.sock)).toBe(codeOf("RATE_LIMITED"));
-    // 이모티콘 쿨다운이 걸려 있어도 자유 채팅은 별도 규칙(D5)으로 통과한다.
-    send(g0.sock, chatMsg(g0.sock, "저 아니에요"));
-    await waitChat(sockets, 1);
-    await settle(g0.sock);
-    for (const s of sockets) expect(chatFrames(s).length).toBe(1);
-  });
-
-  it("단계 밖(assigning) emoji 는 WRONG_PHASE, 모르는 아이콘이나 덧붙은 키는 BAD_MESSAGE 이고 아무에게도 가지 않는다", async () => {
-    const r = await seat(4, 0);
-    send(r.host, { t: "start" });
-    for (const s of allSockets(r)) await nextFrame(s, (m) => m.t === "state" && m.view.phase === "assigning");
-    const g0 = r.guests[0]!;
-    const others = [r.host, ...r.guests.slice(1).map((g) => g.sock)];
-
-    send(g0.sock, { t: "emoji", icon: "smile" });
-    expect(await errorCode(g0.sock)).toBe(codeOf("WRONG_PHASE"));
-    send(g0.sock, { t: "emoji", icon: "skull" });
-    expect(await errorCode(g0.sock)).toBe(codeOf("BAD_MESSAGE"));
-    send(g0.sock, { t: "emoji", icon: "smile", seat: 0 });
-    expect(await errorCode(g0.sock)).toBe(codeOf("BAD_MESSAGE"));
-    await settle(g0.sock);
-    for (const s of others) expect(collect(s).some((raw) => raw.includes('"t":"emoji"'))).toBe(false);
   });
 });
 

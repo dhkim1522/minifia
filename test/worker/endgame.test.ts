@@ -149,7 +149,7 @@ describe("아침으로 끝나는 판 (END-01, D-10)", () => {
 });
 
 describe("종료 중 (D-28)", () => {
-  it("chat·emoji·execVote 는 보낸 소켓에만 거절이고 다른 소켓은 프레임이 없으며, say 와 테스트 방이 아닌 방의 testSkip 은 BAD_MESSAGE 뿐이다", async () => {
+  it("chat·execVote 는 보낸 소켓에만 거절이고 다른 소켓은 프레임이 없으며, say 와 테스트 방이 아닌 방의 testSkip 은 BAD_MESSAGE 뿐이다", async () => {
     const { g } = await endedByExecution();
     const actors = g.actors;
     const sender = g.police;
@@ -164,7 +164,6 @@ describe("종료 중 (D-28)", () => {
 
     expect(await send4(sender, chatMsg(sender.sock, "수고했어요"))).toBe(quietOthers("[chatReject,state:ended]"));
     expect(await send4(sender, { t: "say", template: "innocent" })).toBe(quietOthers("[error:BAD_MESSAGE]"));
-    expect(await send4(sender, { t: "emoji", icon: "smile" })).toBe(quietOthers("[error:WRONG_PHASE]"));
     expect(await send4(sender, { t: "execVote", agree: true })).toBe(quietOthers("[error:WRONG_PHASE,state:ended]"));
     expect(await send4(sender, { t: "testSkip" })).toBe(quietOthers("[error:BAD_MESSAGE]"));
     expect((await storedRoom(g.r.code)).phase).toBe("ended");

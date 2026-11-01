@@ -234,7 +234,7 @@ describe("봇 행동", () => {
     await forceBotsDue(r.code);
     const line = (await nextFrame(guest, (m) => m.t === "chat" && botSeats.includes(m.seat))) as Extract<ServerMessage, { t: "chat" }>;
     expect(`${line.ch}:${BOT_CHAT_LINES.includes(line.text)}`).toBe("all:true");
-    const frames = (await settle(guest, from)).filter((m) => m.t === "error" || m.t === "chatReject" || m.t === "emoji");
+    const frames = (await settle(guest, from)).filter((m) => m.t === "error" || m.t === "chatReject");
     expect(frames.length).toBe(0);
   }, 30_000);
 
