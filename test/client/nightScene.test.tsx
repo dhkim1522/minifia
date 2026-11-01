@@ -196,7 +196,7 @@ describe("밤 — 마피아 (N-2)", () => {
     expect(seatEl(r.container, 3)!.querySelector(".mf-dt__pick--me") !== null).toBe(true);
   });
 
-  it("하단: 비어 있다 — 채팅 로그·빠른 메시지·이모티콘 버튼·제목이 없고 머리 위 이모티콘 층도 없다, 헤더 안내만 있다 (CHAT-06)", () => {
+  it("서버 채널(me.chat)이 없는 view 의 마피아 하단은 패널 없이 비어 있다 — 채팅 로그·빠른 메시지·이모티콘 버튼·제목이 없고 머리 위 이모티콘 층도 없다, 헤더 안내만 있다 (CHAT-06)", () => {
     const { container } = scene(mafia());
     expect(screen.queryByRole("log")).toBeNull();
     expect(screen.queryByRole("button", { name: "이모티콘" }) === null).toBe(true);
@@ -291,7 +291,7 @@ describe("관전 (N-6, 결정 0021)", () => {
     expect(container.querySelectorAll(".mf-dt button").length).toBe(0);
   });
 
-  it("밤 하단: 읽기 전용 안내 p.mf-ro 하나뿐 — 채팅 로그·^ 버튼·보내기 줄·제목이 없다", () => {
+  it("서버 채널이 없는 view 의 탈락자 밤 하단: 읽기 전용 안내 p.mf-ro 하나뿐 — 채팅 로그·^ 버튼·보내기 줄·제목이 없다", () => {
     const { container } = scene(dead0());
     expect(screen.queryByRole("log")).toBeNull();
     expect(screen.queryByRole("button", { name: "채팅 내역 크게 보기" }) === null).toBe(true);
@@ -303,7 +303,7 @@ describe("관전 (N-6, 결정 0021)", () => {
     expect(panel(container)!.querySelectorAll("button").length).toBe(0);
   });
 
-  it("낮 토론: 하단은 .mf-ro 뿐이고 채팅 로그·[빠른 메시지]·^ 버튼이 없다, 이름표 아랫줄 없음", () => {
+  it("서버 채널이 없는 view 의 탈락자 낮 토론: 하단은 .mf-ro 뿐이고 채팅 로그·[빠른 메시지]·^ 버튼이 없다, 이름표 아랫줄 없음", () => {
     const { container } = scene(dead0({ phase: "discussion", spectate: { seats: spectate.seats } }));
     expect(screen.queryByRole("log")).toBeNull();
     expect(screen.queryByRole("button", { name: "채팅 내역 크게 보기" }) === null).toBe(true);

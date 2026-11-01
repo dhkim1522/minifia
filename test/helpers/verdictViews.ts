@@ -5,6 +5,7 @@ import type { RoleId } from "../../shared/game/roles";
 import type { CandidateVoteLine, PhaseId, RoomView, SpectateSeat, VoteLogEntry } from "../../shared/protocol";
 import type { RoomConnection } from "../../src/net/useRoomConnection";
 import { candidateRevealMs } from "../../shared/game/phases";
+import { CHAT_PHASES } from "../../shared/game/audience";
 
 export const NOW = 1_700_000_000_000;
 
@@ -102,6 +103,14 @@ export function viewAt(phase: PhaseId, opts: FixtureOpts, noExecution: boolean):
   if (viewer === "selfOffline") offline.add(0);
 
   const me: RoomView["me"] = { seat: 0, isHost: true, role: viewer === "mafiaAlly" ? "mafia" : "citizen" };
+  // 서버가 정해 내려보내는 내 채널(channelOf 와 같은 규칙): 채팅을 받는 단계에서 산 사람 all·탈락자 ghost, 밤은 산 마피아만 mafia.
+  // 투표·공개·처형 단계도 채널은 내려오지만 7페이즈 화면은 그 단계에 입력줄을 붙이지 않는다(D1).
+  if (CHAT_PHASES.has(phase)) {
+    if (dead.has(0)) me.chat = "ghost";
+    else if (phase === "night") {
+      if (viewer === "mafiaAlly") me.chat = "mafia";
+    } else me.chat = "all";
+  }
   if (viewer === "mafiaAlly") me.allies = alliesOf(count).filter((s) => s !== 0);
   if (viewer === "alive" && phase === "execVote") me.voteAgree = true;
   // 후보 선택 중 흰 후광(내 선택)과 동료 진홍 후광이 겹쳐 상한을 시험하도록, 마피아 동료도 동료가 아닌 사람(3번)을 골라 둔다

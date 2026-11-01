@@ -3,7 +3,7 @@ import { act, cleanup, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { RoleId } from "../../shared/game/roles";
 import type { MorningView, PhaseId, RoomView } from "../../shared/protocol";
-import { VERDICT_TEXT, defenseDisconnected, defenseStatus } from "../../src/game/verdict";
+import { VERDICT_TEXT, defenseInstruction } from "../../src/game/verdict";
 import type { RoomConnection } from "../../src/net/useRoomConnection";
 import { CANDIDATE_SEAT, NAMES, verdictFixture } from "../helpers/verdictViews";
 import type { Viewer, VerdictStage } from "../helpers/verdictViews";
@@ -266,25 +266,28 @@ describe("UX-01 투표 구간 부품: execVote·candidateVote·reveal·defense·
     }
   });
 
-  it("defense 후보 본인·생존 비후보 모두 `{이름}님이 변론하는 중` / 관전 `관전 중 · 볼 수만 있어요`", () => {
+  it("defense: 안내는 헤더 한 줄(`{n}일차 · {이름}님의 변론`, 후보 본인은 `내 변론`)이고 후보 상태 줄은 없다 — 산 사람·탈락 관전자 모두 같다 (07-15)", () => {
     const own = renderVerdict("defense", "alive", true);
     const ownGuide = onlyGuide(own.container, "defense/후보 본인");
-    expect(ownGuide.tagName).toBe("B");
-    expect(squish(ownGuide.textContent)).toBe(defenseStatus(NAMES[0]!));
+    expect(ownGuide.classList.contains("mf-phasebar__do")).toBe(true);
+    expect(squish(ownGuide.textContent)).toBe(defenseInstruction(2, null));
     own.unmount();
     const other = renderVerdict("defense", "alive");
     const g = onlyGuide(other.container, "defense/생존");
-    expect(g.tagName).toBe("B");
-    expect(squish(g.textContent)).toBe(defenseStatus(NAMES[CANDIDATE_SEAT]!));
+    expect(g.classList.contains("mf-phasebar__do")).toBe(true);
+    expect(squish(g.textContent)).toBe(defenseInstruction(2, NAMES[CANDIDATE_SEAT]!));
     other.unmount();
     const spec = renderVerdict("defense", "spectator");
-    expect(squish(onlyGuide(spec.container, "defense/관전").textContent)).toBe("관전 중 · 볼 수만 있어요");
-    expect(onlyGuide(spec.container, "defense/관전").classList.contains("mf-ro")).toBe(true);
+    const gs = onlyGuide(spec.container, "defense/관전");
+    expect(gs.classList.contains("mf-phasebar__do")).toBe(true);
+    expect(squish(gs.textContent)).toBe(defenseInstruction(2, NAMES[CANDIDATE_SEAT]!));
+    expect(spec.container.querySelector(".mf-dayscene__panel .mf-ro")).toBeNull();
   });
 
-  it("defense 후보가 끊김: 하나 = 끊김 문구", () => {
+  it("defense 후보가 끊김: 안내는 같은 헤더 한 줄이고 끊김 문구는 변론 시작 때 기록 줄로만 남는다(재접속 첫 state 에는 없다)", () => {
     const { container } = renderVerdict("defense", "otherOffline");
-    expect(squish(onlyGuide(container, "defense/후보 끊김").textContent)).toBe(defenseDisconnected(NAMES[CANDIDATE_SEAT]!));
+    expect(squish(onlyGuide(container, "defense/후보 끊김").textContent)).toBe(defenseInstruction(2, NAMES[CANDIDATE_SEAT]!));
+    expect(container.querySelector(".mf-dayscene__panel .stat")).toBeNull();
   });
 
   it("execution: 하나 = `처형이 끝났어요`", () => {

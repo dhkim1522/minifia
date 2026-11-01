@@ -54,6 +54,7 @@ import {
   defenseAnnounce,
   defenseDisconnected,
   defenseInstruction,
+  defenseStartLine,
   defenseStatus,
   endedAnnounce,
   endedSubtitle,
@@ -596,6 +597,9 @@ describe("VERDICT_TEXT — UI-SPEC 7.2 와 글자까지 같다", () => {
     expect(endedAnnounce("mafiaWin")).toBe("게임이 끝났습니다. 마피아 팀 승리");
     expect(defenseStatus("도윤")).toBe("도윤님이 변론하는 중");
     expect(defenseDisconnected("도윤")).toBe("도윤님은 연결이 끊겨 있어요");
+    // 기록용 시작 줄은 6페이즈 표기대로 "{닉네임} 님" 띄어쓰기(07-15). 기존 함수 문구는 그대로다
+    expect(defenseStartLine("도윤", true)).toBe("도윤 님이 변론하는 중");
+    expect(defenseStartLine("도윤", false)).toBe("도윤 님은 연결이 끊겨 있어요");
     expect(defenseInstruction(2, "도윤")).toBe("2일차 · 도윤님의 변론");
     expect(defenseInstruction(2, null)).toBe("2일차 · 내 변론");
     expect(candidateSeatLabel("도윤", false)).toBe("도윤, 투표 대상");

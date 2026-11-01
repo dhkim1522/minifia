@@ -16,9 +16,11 @@ import { UserRecordSheet } from "../components/UserRecordSheet";
 import { ChatPanel } from "../components/v2/ChatPanel";
 import { Toast, useToast } from "../components/Toast";
 import { morningCardText } from "../game/eliminationText";
+import { defenseStartLine } from "../game/verdict";
 import { MORNING_GLOW_RISE_MS, PHASE_GUIDE_FILL, PHASE_INTRO, morningGlowGradient, sceneOfPhase } from "../game/scenes";
 import type { SceneId } from "../game/scenes";
 import { isBlankSceneTap } from "../game/blankTap";
+import { CHAT_TEXT } from "../game/chatText";
 import { tablePanelHeight } from "../game/chatUi";
 import type { ChatStore } from "../net/chatStore";
 import { useChat } from "../net/useChat";
@@ -37,11 +39,13 @@ const PICK_VERB: Readonly<Partial<Record<RoleId, string>>> = { police: "조사",
 
 /**
  * 하단에 ChatPanel 이 붙는 상황과 그 채널(07-UI-SPEC 범위표, D1). 패널이 없는 상황은 null 이다.
- * 07-15 Task 1 은 낮 토론의 산 사람(all)만 연다. 최후 변론·밤 마피아·탈락자는 이어지는 작업이 더한다.
- * 이 값은 화면의 의도일 뿐이다 — 패널은 서버가 보낸 view.me.chat 이 이 값과 같을 때만 그린다(서버 값이 기준).
+ * 낮 토론·최후 변론: 산 사람 all, 탈락자 ghost. 밤: 산 마피아 mafia, 탈락자 ghost, 그 밖(시민·경찰·의사)은 패널 없음.
+ * 처형 여부 투표·후보 선택·공개 연출·처형·아침·낮 시작은 7페이즈에서 입력줄을 붙이지 않는다(D1 — 8·9페이즈가 새로 짓는다).
+ * 이 값은 화면의 의도일 뿐이다 — 패널은 서버가 보낸 view.me.chat 이 이 값과 같을 때만 그린다(서버 값이 기준, T-07-41).
  */
 export function chatPanelMode(view: RoomView, meAlive: boolean): ChatChannel | null {
-  if (view.phase === "discussion" && meAlive) return "all";
+  if (view.phase === "discussion" || view.phase === "defense") return meAlive ? "all" : "ghost";
+  if (view.phase === "night") return !meAlive ? "ghost" : view.me.role === "mafia" ? "mafia" : null;
   return null;
 }
 
@@ -158,6 +162,28 @@ export function DayScene({ view, connection, chat, myRoleButton, testButton, arr
   const binding = useChat({ store: chat, connection, view });
   const panelMode = chatPanelMode(view, meAlive);
   const chatBottom = panelMode !== null && view.me.chat === panelMode ? <ChatPanel {...binding} logHeight={logH} inputRef={inputRef} /> : null;
+  // 채널 시작·변론 시작 시스템 줄(07-UI-SPEC "줄 종류와 모양"): 같은 연결(epoch) 안의 단계 변화·내 채널 변화에서만 기록 칸에 남긴다.
+  // 처음 마운트·재접속 첫 state(epoch 가 바뀐 렌더)는 기준만 잡고 만들지 않는다. 직전 값을 ref 에 쥐어 같은 변화에서 두 번(StrictMode 포함) 만들지 않는다.
+  // 역할 단어 문구는 내 채널이 mafia 인 분기 안에서만 꺼낸다 — 시민 편 번들 경로에 그 문구가 들어오지 않는다(T-07-40).
+  const sysPrev = useRef<{ epoch: number; phase: PhaseId; channel: ChatChannel | null } | null>(null);
+  useEffect(() => {
+    const cur = { epoch: connection.epoch, phase: view.phase, channel: view.me.chat ?? null };
+    const prev = sysPrev.current;
+    sysPrev.current = cur;
+    if (prev === null || prev.epoch !== cur.epoch) return;
+    const phaseChanged = prev.phase !== cur.phase;
+    const at = Date.now() + connection.offset;
+    if (phaseChanged && cur.phase === "defense") {
+      const candidate = view.players.find((p) => p.seat === view.day?.candidate);
+      if (candidate) chat.addSystem(defenseStartLine(candidate.nickname, candidate.connected), { scope: "all", icon: "point", at });
+    }
+    if (cur.channel === "mafia") {
+      if (cur.phase === "night" && (phaseChanged || prev.channel !== "mafia")) chat.addSystem(CHAT_TEXT.channelStart.mafia, { scope: "mafia", icon: "roleMafia", at });
+    } else if (cur.channel === "ghost") {
+      // 탈락했을 때(채널이 ghost 로 바뀐 렌더)와 탈락자의 밤마다
+      if (prev.channel !== "ghost" || (phaseChanged && cur.phase === "night")) chat.addSystem(CHAT_TEXT.channelStart.ghost, { scope: "ghost", icon: "ghost", at });
+    }
+  }, [view, connection.epoch, connection.offset, chat]);
   const verdict = useVerdictScene({ view, connection, meAlive, showToast, onInspect: setInspectSeat, isAllySeat, chatBottom });
   // 기록 카드가 열릴 수 있는 단계(04-27): 투표 구간은 verdict 가 정하고(처형 여부 모두·후보 선택 탈락 viewer·그 밖 닫힘), 아니면 낮 세 단계다.
   // 열려 있는데 허용되지 않는 단계가 되면 렌더 중 상태 조정으로 닫는다(밤 규칙과 같은 방식). 낮 → 낮 사이에는 닫히지 않는다.
@@ -166,7 +192,8 @@ export function DayScene({ view, connection, chat, myRoleButton, testButton, arr
   // 낮 토론의 살아 있는 viewer 헤더 안내줄만 새 문장(UX-01 빈 칸 2). 탈락 viewer 는 기존 `{n}일차` 와 하단 읽기 전용 줄이 안내다.
   const discussionGuide = view.phase === "discussion" && meAlive;
   // 헤더 안내줄이 그 화면의 안내(data-guide)인 경우. 투표 구간(verdict.instruction)은 하단 부품이 안내라 켜지 않는다 — 처형 무효로 온 밤은 instruction 이 비어 마피아 헤더가 그대로 안내다.
-  const headerGuide = verdict?.instruction === undefined && (discussionGuide || mafiaNight);
+  // 채팅 패널이 하단이면 패널에는 안내문이 없으므로 헤더 안내줄이 그 화면의 안내다(최후 변론의 후보 안내·탈락자의 `{n}일차` 포함, 07-15).
+  const headerGuide = chatBottom !== null || (verdict?.instruction === undefined && (discussionGuide || mafiaNight));
   const title = verdict?.title ?? (isNight ? "밤" : isMorning ? "아침" : view.phase === "discussion" ? "낮 · 토론" : "낮");
   // 동료가 고른 대상(마피아 화면만, D-07). 서버가 생존 마피아에게만 보낸 값이다.
   const allyPicks = view.me.allyPicks ?? [];

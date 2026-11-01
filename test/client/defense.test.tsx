@@ -230,7 +230,7 @@ describe("defense 화면 한 경로 (VOTE-03, D-15·D-16·D-29, COMM-03)", () =>
     const { chat: _chat, ...me } = view.me;
     const { container } = renderRoom({ ...view, me });
     expect(container.querySelector("[data-chat-panel]")).toBeNull();
-    expect(panelOf(container).querySelector(".mf-ro")?.textContent).toBe("탈락했어요 · 볼 수만 있어요");
+    expect(panelOf(container).querySelector(".mf-ro")?.textContent).toBe("관전 중 · 볼 수만 있어요");
   });
 
   it("살아 있는 viewer 의 좌석도 버튼이 아니다 — 누를 수 없다", () => {

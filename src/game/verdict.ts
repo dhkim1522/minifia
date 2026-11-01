@@ -461,6 +461,14 @@ export function defenseStatus(name: string): string {
 export function defenseDisconnected(name: string): string {
   return `${name}님은 연결이 끊겨 있어요`;
 }
+/**
+ * 변론 시작 때 채팅 기록 첫 줄(시스템 줄)에 한 번 남기는 문장 (07-UI-SPEC Copywriting "변론 시작").
+ * 6페이즈 "{닉네임} 님" 표기와 맞춰 기록 줄만 띄어쓴다 — 헤더 안내(defenseInstruction)와 aria-live 문구는 기존 "님" 붙여쓰기 그대로다.
+ * 후보가 연결이 끊겨 있으면 끊김 문장이다. 남은 시간은 헤더 타이머가 보이므로 싣지 않는다.
+ */
+export function defenseStartLine(name: string, connected: boolean): string {
+  return connected ? `${name} 님이 변론하는 중` : `${name} 님은 연결이 끊겨 있어요`;
+}
 /** 변론 헤더 안내. name 이 null 이면 후보 본인 */
 export function defenseInstruction(n: number, name: string | null): string {
   return name === null ? `${n}일차 · 내 변론` : `${n}일차 · ${name}님의 변론`;

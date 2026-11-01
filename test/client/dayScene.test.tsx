@@ -125,7 +125,7 @@ describe("DayScene 낮 토론 하단·테이블 (03.1 UI-SPEC B, 07-04 이후 �
     expect(announce.container.querySelector(".mf-timer--urgent")).toBeNull();
   });
 
-  it("탈락한 viewer(spectate 있음)의 낮 토론 하단은 읽기 전용 안내뿐이고 칩·보내기 줄이 없다", () => {
+  it("서버 채널(me.chat)이 없는 view 에서 탈락한 viewer(spectate 있음)의 낮 토론 하단은 읽기 전용 안내뿐이고 칩·보내기 줄이 없다", () => {
     const spectate: SpectateView = {
       seats: [0, 1, 2, 3].map((seat) => ({ seat, job: "citizen" as const })),
       picks: { mafia: [], police: [], doctor: [] },

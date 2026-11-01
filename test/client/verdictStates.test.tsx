@@ -2,7 +2,6 @@ import { act, cleanup, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import "../helpers/singleLineErrors";
 import type { RoomView } from "../../shared/protocol";
-import { defenseDisconnected } from "../../src/game/verdict";
 import type { RoomConnection } from "../../src/net/useRoomConnection";
 import { COUNTS, CANDIDATE_SEAT, NAMES, NOW, STAGES, VIEWERS, previousView, verdictFixture, viewAt } from "../helpers/verdictViews";
 import type { Count, FixtureOpts, VerdictStage, Viewer } from "../helpers/verdictViews";
@@ -100,8 +99,10 @@ function commonProblems(c: HTMLElement, opts: FixtureOpts): string[] {
     // D-09: 살아 있는 보는 사람 화면에는 직업 그림이 없다(동료 표시는 마름모일 뿐)
     if (viewer !== "spectator" && c.innerHTML.includes("/characters/roles/")) p.push("직업 그림 노출");
   }
-  // 변론 하단은 누구에게나(후보 본인·탈락 관전자 포함) 버튼이 없다 — 빠른 메시지·이모티콘 입구가 없다(CHAT-06)
-  if (stage === "defense" && all(c, ".mf-dayscene__panel button").length > 0) p.push("변론 하단에 버튼");
+  // 변론 하단은 누구에게나(후보 본인·탈락 관전자 포함) 채팅 패널이고 버튼은 보내기 하나뿐이다 — 빠른 메시지·이모티콘 입구는 없다(CHAT-06, 07-15)
+  if (stage === "defense" && all(c, ".mf-dayscene__panel button:not([data-chat-send])").length > 0) p.push("변론 하단에 보내기 밖의 버튼");
+  // D1: 투표·공개·처형 단계에는 입력줄이 없다(8·9페이즈가 새로 짓는다)
+  if (["execVote", "candidateVote", "candidateVoteReveal", "execution"].includes(stage) && c.querySelector("[data-chat-panel], [data-chat-input]")) p.push("D1 단계에 채팅 입력줄");
   // 후광은 한 화면 최대 3개
   const halos = all(c, 'img[class*="mf-figure--halo"]').length;
   if (halos > 3) p.push(`후광 ${halos}개`);
@@ -118,7 +119,9 @@ function viewerProblems(c: HTMLElement, opts: FixtureOpts): string[] {
     // D-35: 탈락 관전 — 어떤 입력도 없고 읽기 전용 줄이 있다
     if (buttonsNamed(c, "찬성").length + buttonsNamed(c, "반대").length > 0) p.push("관전인데 찬성/반대 버튼");
     if (voteSeatButtons(c).length > 0) p.push("관전인데 투표 대상 버튼");
-    if (["execVote", "candidateVote", "defense", "noExecution"].includes(stage) && !c.querySelector(".mf-ro")) p.push("읽기 전용 줄 없음");
+    if (["execVote", "candidateVote"].includes(stage) && !c.querySelector(".mf-ro")) p.push("읽기 전용 줄 없음");
+    // 변론과 밤(처형 무효로 온 밤)의 탈락 관전자는 읽기 전용 줄 대신 유령 채팅 패널을 쓴다(07-15, CHAT-03)
+    if (["defense", "noExecution"].includes(stage) && c.querySelector('[data-chat-channel="ghost"]') === null) p.push("유령 채팅 패널 없음");
     // 탐지기 확인: 관전자는 다른 사람의 직업 그림을 본다(이 탐지기가 살아 있는 칸에서 비어 있는 것이 의미 있도록)
     if (!c.innerHTML.includes("/characters/roles/")) p.push("관전 직업 그림 없음(탐지기 점검)");
   }
@@ -143,9 +146,6 @@ function viewerProblems(c: HTMLElement, opts: FixtureOpts): string[] {
       const target = voteSeatButtons(c).find((b) => (b.getAttribute("aria-label") ?? "").startsWith(NAMES[CANDIDATE_SEAT]!));
       if (!target) p.push("끊긴 자리가 고를 수 있는 버튼이 아님");
       else if (target.disabled) p.push("끊긴 자리 버튼이 꺼져 있음");
-    }
-    if (stage === "defense" && !textOf(c.querySelector(".mf-turnpanel")).includes(defenseDisconnected(NAMES[CANDIDATE_SEAT]!))) {
-      p.push("변론 후보 끊김 문구 없음");
     }
   }
   if (viewer === "mafiaAlly" && stage !== "ended") {
@@ -188,22 +188,27 @@ describe("재접속 대조: 같은 접속의 같은 전환에서는 연출이 �
   });
 });
 
-describe("내가 후보인 변론 화면 (D-36, D-09, CHAT-06)", () => {
-  it.each(COUNTS)("%i명: 후보 본인도 남과 같은 상태 줄 하나뿐이고, 연결이 끊겨도 버튼·입력이 없다", (count: Count) => {
+describe("내가 후보인 변론 화면 (D-36, D-09, CHAT-01, 07-15)", () => {
+  it.each(COUNTS)("%i명: 후보 본인도 남과 같은 채팅 패널이고, 연결이 끊기면 보내기만 꺼지고 입력칸은 쓸 수 있다", (count: Count) => {
     const opts: FixtureOpts = { stage: "defense", viewer: "selfOffline", count, meIsCandidate: true };
     const { container } = mount(opts);
     const panel = container.querySelector(".mf-dayscene__panel")!;
-    expect(panel.querySelectorAll(".mf-turnpanel > .st-row").length, "상태 줄").toBe(1);
-    expect(panel.querySelectorAll("button, input, textarea").length, "입구").toBe(0);
+    expect(panel.querySelectorAll('[data-chat-panel][data-chat-channel="all"]').length, "채팅 패널").toBe(1);
+    expect(panel.querySelectorAll(".mf-turnpanel, .st-row").length, "옛 상태 줄").toBe(0);
+    expect([...panel.querySelectorAll("button")].map((b) => b.getAttribute("aria-label")), "버튼").toEqual(["보내기"]);
+    expect(panel.querySelector("[data-chat-send]")?.getAttribute("aria-disabled"), "보내기").toBe("true");
+    expect(panel.querySelector<HTMLInputElement>("[data-chat-input]")?.disabled, "입력칸").toBe(false);
     expect(errors.join(" | ")).toBe("");
   });
 
-  it.each(COUNTS)("%i명: 연결이 멀쩡해도 입구가 없고 직업 그림은 없다", (count: Count) => {
+  it.each(COUNTS)("%i명: 연결이 멀쩡해도 입구는 채팅 패널 하나뿐이고 직업 그림은 없다", (count: Count) => {
     const opts: FixtureOpts = { stage: "defense", viewer: "alive", count, meIsCandidate: true };
     const { container } = mount(opts);
     const panel = container.querySelector(".mf-dayscene__panel")!;
-    expect(panel.querySelectorAll(".mf-turnpanel > .st-row").length, "상태 줄").toBe(1);
-    expect(panel.querySelectorAll("button, input, textarea").length, "입구").toBe(0);
+    expect(panel.querySelectorAll('[data-chat-panel][data-chat-channel="all"]').length, "채팅 패널").toBe(1);
+    expect(panel.querySelectorAll(".mf-turnpanel, .st-row").length, "옛 상태 줄").toBe(0);
+    expect(panel.querySelectorAll("input, textarea").length, "입력칸").toBe(1);
+    expect([...panel.querySelectorAll("button")].map((b) => b.getAttribute("aria-label")), "버튼").toEqual(["보내기"]);
     expect(container.innerHTML.includes("/characters/roles/"), "직업 그림").toBe(false);
     expect(errors.join(" | ")).toBe("");
   });

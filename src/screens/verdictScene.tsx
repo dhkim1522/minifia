@@ -4,12 +4,12 @@ import { isAlive } from "../../shared/game/alive";
 import type { RoomView } from "../../shared/protocol";
 import { CandidateVotePanel } from "../components/CandidateVotePanel";
 import type { DayTableLayout, DayTableProps, DayTableSeat } from "../components/DayTable";
-import { DefensePanel } from "../components/DefensePanel";
 import { ExecIntroCard } from "../components/ExecIntroCard";
 import { ExecVotePanel } from "../components/ExecVotePanel";
 import { MorningCard, exitDelayOf } from "../components/MorningCard";
 import { NoExecutionCard } from "../components/NoExecutionCard";
 import { NIGHT_PANEL_TEXT, NightPanel } from "../components/NightPanel";
+import { ReadOnlyRow } from "../components/ReadOnlyRow";
 import { RevealLayer } from "../components/RevealLayer";
 import { executionTitle } from "../game/eliminationText";
 import {
@@ -37,7 +37,8 @@ import { useViewChoice } from "../net/useViewChoice";
 // 이 훅은 서버 view 만 따른다. 단계나 승패를 화면이 스스로 정하지 않고, 역할 문자열을 만들지 않는다.
 // 투표 단계에는 말하기·이모티콘 입구가 없다(D-12 개정, P-7): FLOAT_PHASES·CHAT_PHASES 에 이 단계들이 없어 말풍선·이모티콘·채팅 줄도 뜨지 않는다.
 // 처형(execution, 04-23)은 변론 무대를 그대로 이어 간다(후보는 같은 가운데 자리, 유령으로 바뀌고 앰버 카드가 뜬다). 하단은 모두에게 같은 두 줄이고 입구가 없다.
-// 최후 변론(defense)의 하단은 후보 본인을 포함한 모두에게 같은 상태 줄(DefensePanel)이고, 탈락 viewer 는 관전 알약이다 — 빠른 메시지·이모티콘 입구가 없다(CHAT-06).
+// 최후 변론(defense)의 하단은 후보 본인을 포함한 살아 있는 모두에게 채팅 패널(채널 all), 탈락 viewer 에게 채팅 패널(ghost)이다(07-15, CHAT-01·03).
+// 패널은 DayScene 이 서버 view.me.chat 과 함께 만들어 chatBottom 으로 넘긴다. 서버 채널이 없으면(옛 서버) 탈락 viewer 는 관전 알약이다. 후보 상태 줄은 기록 첫 줄(시스템 줄)로 옮겨 갔다.
 
 export interface VerdictSceneCtx {
   view: RoomView;
@@ -99,7 +100,7 @@ function stageHalos(view: RoomView, candidate: number, isAllySeat: (seat: number
 // 서버가 보낸 행동을 거절하는 단계: 여부 투표와 후보 선택(04-18 이 같은 효과를 쓴다). 밤 대상 선택의 토스트는 DayScene 이 밤에만 구독하므로 겹치지 않는다.
 const REJECTING_PHASES: ReadonlySet<RoomView["phase"]> = new Set<RoomView["phase"]>(["execVote", "candidateVote"]);
 
-export function useVerdictScene({ view, connection, meAlive, showToast, onInspect, isAllySeat }: VerdictSceneCtx): VerdictScene | null {
+export function useVerdictScene({ view, connection, meAlive, showToast, onInspect, isAllySeat, chatBottom }: VerdictSceneCtx): VerdictScene | null {
   const rejecting = REJECTING_PHASES.has(view.phase);
   const { onEvent } = connection;
   useEffect(() => {
@@ -266,8 +267,8 @@ export function useVerdictScene({ view, connection, meAlive, showToast, onInspec
       instruction: defenseInstruction(n, mine ? null : cand.nickname),
       calm: true,
       inspectAllowed: false,
-      // 후보 본인·다른 사람 모두 같은 상태 줄(변론하는 중 · N초), 탈락 viewer 는 관전 알약
-      bottom: <DefensePanel view={view} connection={connection} candidateNickname={cand.nickname} candidateConnected={cand.connected} readOnly={!meAlive} />,
+      // 후보 본인·다른 사람 모두 같은 채팅 패널(all), 탈락 viewer 는 유령 패널(ghost). 서버 채널이 어긋나 패널이 없으면 탈락 viewer 만 관전 알약
+      bottom: chatBottom ?? (meAlive ? null : <ReadOnlyRow text={VERDICT_TEXT.spectatorPill} guide />),
       // 좌석은 버튼이 아니다(onPick·onInspect 없음): 기록 카드가 열리지 않는다
       seatPatch: (seat) => ({ halo: kinds.get(seat) ?? "none", ...(seat === candidate ? { center: true } : {}) }),
       rootClassName: "mf-dayscene--verdict",
