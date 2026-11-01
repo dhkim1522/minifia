@@ -447,3 +447,22 @@ export function phaseKeyOf(sock: TestSocket): string {
 export function typingSend(sock: TestSocket, on: boolean): void {
   send(sock, { t: "typing", on, pk: phaseKeyOf(sock) });
 }
+
+// ---- 7페이즈 자유 채팅 도우미(07-11) ----
+
+/** 채팅 한 줄을 보낸다. 단계 키는 그 소켓이 마지막으로 받은 view 에서 만든다(클라이언트가 하는 대로). pk 를 주면 그 값을 쓴다(단계 어긋남 시험). */
+export function chatSend(sock: TestSocket, text: string, pk: string = phaseKeyOf(sock)): void {
+  send(sock, { t: "chat", text, pk });
+}
+
+/** settle 이 돌려준 프레임 가운데 chat 프레임만 고른다. */
+export function chatsOf(msgs: ServerMessage[]): Array<Extract<ServerMessage, { t: "chat" }>> {
+  return msgs.filter((m): m is Extract<ServerMessage, { t: "chat" }> => m.t === "chat");
+}
+
+/** 모든 사람의 채팅 전송 기록(인메모리 chatRates)을 비운다 — 600ms 간격·5초 창을 실제로 기다리지 않게 한다. */
+export async function resetChatRates(code: string): Promise<void> {
+  await runInDurableObject(env.ROOM.getByName(code), async (instance) => {
+    (instance["chatRates"] as Map<string, unknown>).clear();
+  });
+}

@@ -1,10 +1,10 @@
-// 07-10: 입력 중(typing)의 서버 길 — 보낸 사람 상태 → 채널 → audience → deliver → 소켓. 07-11·07-14 가 채팅 줄 시험을 이 파일에 더한다.
+// 07-10: 입력 중(typing)의 서버 길 — 보낸 사람 상태 → 채널 → audience → deliver → 소켓. 07-11 이 채팅 줄(chat) 시험을, 07-14 가 복원 시험을 이 파일에 더한다.
 // 받을 권리가 없는 소켓에는 프레임이 한 건도 가지 않는다는 것을 "오지 않았음"(settle 이 ping/pong 으로 증명)으로 본다.
 import { env } from "cloudflare:workers";
 import { runInDurableObject } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 import type { PhaseId, ServerMessage } from "../../shared/protocol";
-import { actorsOf, advanceTo, connect, createRoom, editRoom, hello, joinOk, mapPlayers, mark, nextFrame, seat, send, settle, storedRoom, typingSend } from "./helpers";
+import { actorsOf, advanceTo, chatSend, chatsOf, connect, createRoom, editRoom, hello, joinOk, mapPlayers, mark, nextFrame, seat, send, settle, storedRoom, typingSend } from "./helpers";
 import type { Actor, TestSocket } from "./helpers";
 
 /** settle 이 돌려준 프레임 가운데 typing 만 한 줄 문자열로(실패 보고가 한 줄이어야 한다). */
@@ -247,3 +247,38 @@ async function ageTypingRelays(code: string, ms: number): Promise<void> {
     for (const [id, st] of relays) relays.set(id, { ...st, lastOnAt: st.lastOnAt - ms });
   });
 }
+
+// ---- 채팅 줄 — 트레이서 (CHAT-01, 07-11 Task 1) ----
+describe("채팅 — 트레이서 (CHAT-01)", () => {
+  it("채팅: 로비 손님의 줄이 정리되어 방장·손님 모두에게 같은 프레임으로 가고 state 방송은 없다", async () => {
+    const s = await seat(1, 0);
+    const guest = s.guests[0]!;
+    const mh = mark(s.host);
+    const mg = mark(guest.sock);
+    chatSend(guest.sock, "  안녕   하세요 ");
+    const sent = await settle(guest.sock, mg);
+    const got = await settle(s.host, mh);
+    expect(chatsOf(got)).toHaveLength(1);
+    expect(chatsOf(sent)).toHaveLength(1);
+    const line = chatsOf(got)[0]!;
+    expect(`${line.t}|${line.ch}|${line.seat}|${line.seq}|${line.text}`).toBe(`chat|all|${guest.seat}|1|안녕 하세요`);
+    expect(typeof line.at).toBe("number");
+    expect(JSON.stringify(chatsOf(sent)[0])).toBe(JSON.stringify(line));
+    expect(sent.filter((m) => m.t === "state")).toHaveLength(0);
+    expect(got.filter((m) => m.t === "state")).toHaveLength(0);
+  });
+
+  it("채팅: 이어서 방장의 줄은 seq 2 이다", async () => {
+    const s = await seat(1, 0);
+    const guest = s.guests[0]!;
+    chatSend(guest.sock, "안녕하세요");
+    await settle(guest.sock, mark(guest.sock));
+    const mh = mark(s.host);
+    const mg = mark(guest.sock);
+    chatSend(s.host, "반가워요");
+    const got = await settle(guest.sock, mg);
+    const own = await settle(s.host, mh);
+    expect(chatsOf(got).map((c) => `${c.seat}:${c.seq}:${c.text}`).join("|")).toBe("0:2:반가워요");
+    expect(chatsOf(own).map((c) => `${c.seat}:${c.seq}:${c.text}`).join("|")).toBe("0:2:반가워요");
+  });
+});

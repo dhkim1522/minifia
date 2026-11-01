@@ -139,3 +139,26 @@ describe("ClientMessageSchema typing (07-10, CHAT-04)", () => {
     expect(ClientMessageSchema.safeParse({ t: "typing", on: true, pk: "a".repeat(32) }).success).toBe(true);
   });
 });
+
+describe("ClientMessageSchema chat (07-11, CHAT-01·05)", () => {
+  it("본문과 단계 키만 있으면 통과한다", () => {
+    expect(ClientMessageSchema.safeParse({ t: "chat", text: "가", pk: "0:lobby" }).success).toBe(true);
+  });
+
+  it("본문 300자(UTF-16)는 통과하고 301자는 거부한다", () => {
+    expect(ClientMessageSchema.safeParse({ t: "chat", text: "가".repeat(300), pk: "0:lobby" }).success).toBe(true);
+    expect(ClientMessageSchema.safeParse({ t: "chat", text: "가".repeat(301), pk: "0:lobby" }).success).toBe(false);
+  });
+
+  it.each([
+    ["덧붙은 ch", { t: "chat", text: "가", pk: "0:lobby", ch: "mafia" }],
+    ["덧붙은 seat", { t: "chat", text: "가", pk: "0:lobby", seat: 3 }],
+    ["pk 33자", { t: "chat", text: "가", pk: "a".repeat(33) }],
+    ["pk 빈 문자열", { t: "chat", text: "가", pk: "" }],
+    ["pk 빠짐", { t: "chat", text: "가" }],
+    ["text 빠짐", { t: "chat", pk: "0:lobby" }],
+    ["text 숫자", { t: "chat", text: 1, pk: "0:lobby" }],
+  ])("%s 는 거부한다", (_name, msg) => {
+    expect(ClientMessageSchema.safeParse(msg).success).toBe(false);
+  });
+});
