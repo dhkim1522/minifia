@@ -5,16 +5,16 @@ milestone_name: 같은 공간
 current_phase: 07
 current_phase_name: 자유 채팅
 status: executing
-stopped_at: Completed 07-16-PLAN.md
-last_updated: "2026-11-01T15:45:59.117Z"
+stopped_at: Completed 07-17-PLAN.md
+last_updated: "2026-11-01T16:08:56.706Z"
 last_activity: 2026-11-01
 last_activity_desc: Phase 07 execution started
-state_head: 53ab58c51f490e4745e2a6fc0835710118fabf21
+state_head: ac50cf3f6f2eba1bec4830e1bfdf7264301fd84c
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 45
-  completed_plans: 39
+  completed_plans: 40
   percent: 14
 ---
 
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-11-01)
 ## Current Position
 
 Phase: 07 (자유 채팅) — EXECUTING
-Plan: 17 of 22
+Plan: 18 of 22
 Status: Ready to execute
 Last activity: 2026-11-01 — Phase 07 execution started
 
@@ -97,6 +97,7 @@ Progress: [█░░░░░░░░░] 14% (1/7 phases)
 | Phase 07 P14 | 14min | 3 tasks | 9 files |
 | Phase 07 P15 | 18 min | 3 tasks | 21 files |
 | Phase 07 P16 | 25 min | 3 tasks | 3 files |
+| Phase 07 P17 | 45min | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -182,6 +183,7 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 07]: 07-15: 테이블 화면 하단 패널은 의도(chatPanelMode)와 서버 view.me.chat 이 같을 때만 그린다(서버 값이 기준). 채팅 패널이 하단이면 헤더 안내줄이 data-guide. 유령 시작 줄은 직전 줄이 같은 안내면 연달아 만들지 않음
 - [Phase 07]: 07-16: chatload 에 --bots 0(채팅 없는 대조 측정)을 허용 — 채팅 부하 로비 fps 가 기준 아래일 때 원인을 같은 환경에서 가른다
 - [Phase 07]: 07-16: 로컬 smoke full 은 배포본 전용 하루 캐시 헤더(Cache-Control max-age=86400)를 보지 않는다(vite 개발 서버는 no-cache)
+- [Phase 07]: 07-17: uat-vote 역할 문자열 누출 검사는 view.me.chat 경로(채널 이름 mafia)를 허용하고, 마피아가 아닌 사람 프레임의 me.chat 'mafia' 는 별도 검사로 막는다
 
 ### Pending Todos
 
@@ -218,8 +220,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-01T15:45:58.931Z
-Stopped at: Completed 07-16-PLAN.md
+Last session: 2026-11-01T16:08:56.513Z
+Stopped at: Completed 07-17-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
