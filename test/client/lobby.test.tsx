@@ -3,7 +3,7 @@ import { StrictMode } from "react";
 import { readFileSync } from "node:fs";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import "../helpers/singleLineErrors";
-import type { PublicPlayer, RoomView } from "../../shared/protocol";
+import type { ClientMessage, PublicPlayer, RoomView } from "../../shared/protocol";
 import type { WorldStageProps } from "../../src/components/WorldStage";
 import { LOBBY_PANEL_EXTRA } from "../../src/game/chatUi";
 import { ChatStore } from "../../src/net/chatStore";
@@ -189,7 +189,7 @@ describe("Lobby — 채팅 패널: 기록 + 입력줄 + 행동 줄 (CHAT-01, 07-
   });
 
   it("보내기는 단계 키와 함께 chat 메시지를 보낸다 (채널 필드 없음)", () => {
-    const send = vi.fn(() => true);
+    const send = vi.fn((_msg: ClientMessage) => true);
     const { container } = render(lobby(makeView(base, 1), { send }));
     const input = container.querySelector("[data-chat-input]") as HTMLInputElement;
     fireEvent.change(input, { target: { value: "안녕하세요" } });

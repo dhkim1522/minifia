@@ -1,6 +1,6 @@
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { RoomView } from "../../shared/protocol";
+import type { ClientMessage, RoomView } from "../../shared/protocol";
 import type { WorldStageProps } from "../../src/components/WorldStage";
 import type { RoomConnection, RoomEvent } from "../../src/net/useRoomConnection";
 
@@ -541,7 +541,7 @@ describe("RoomScreen: 채팅 저장소 연결 (CHAT-01, 07-13)", () => {
   });
 
   it("보내기는 연결의 send 로 chat 메시지를 보낸다", () => {
-    const send = vi.fn(() => true);
+    const send = vi.fn((_msg: ClientMessage) => true);
     withListener({ view: at("lobby"), send });
     const { container } = mount();
     const input = container.querySelector("[data-chat-input]") as HTMLInputElement;
