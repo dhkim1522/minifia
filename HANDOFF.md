@@ -27,6 +27,6 @@
 
 ## 다음 할 일
 
-1. **7페이즈 자유 채팅**: `/gsd-ui-phase 7` 먼저 → `/gsd-plan-phase 7` (입력: 06-PERF-RESULTS 의 채팅 확인표).
+1. **7페이즈 자유 채팅**: UI-SPEC 승인(2026-11-01, `.planning/phases/07-free-chat/07-UI-SPEC.md`, D1~D5 사용자 확정) → `/gsd-plan-phase 7`. 계획에서 결정 0058(채팅 서버 보관·재접속 30줄, 0017-7 개정)을 쓴다. 성공 기준 3 의 Android·삼성 인터넷·카톡 인앱 실기기는 검증 때 이월 여부를 묻는다.
 2. three `0.186.1` 고정, 로비는 재즈 바 고정, 성능 확인 폰은 iPhone 16 Pro + 크롬 CPU 4배 스로틀(결정 0055).
 3. v1.0 산출물 링크는 `CLAUDE.md`.
