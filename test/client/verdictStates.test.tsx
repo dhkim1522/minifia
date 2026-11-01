@@ -79,7 +79,6 @@ const all = (c: ParentNode, sel: string): HTMLElement[] => Array.from(c.querySel
 const buttonsNamed = (c: ParentNode, text: string): HTMLButtonElement[] =>
   all(c, "button").filter((b) => b.textContent?.trim() === text) as HTMLButtonElement[];
 const voteSeatButtons = (c: ParentNode) => all(c, 'button[aria-label$="투표 대상"]') as HTMLButtonElement[];
-const emojiButtons = (c: ParentNode) => all(c, 'button[aria-label="이모티콘"]') as HTMLButtonElement[];
 const textOf = (el: Element | null | undefined) => el?.textContent ?? "";
 
 /** 모든 칸 공통 불변식. 어긋난 것을 한 줄씩 모아 어떤 칸의 무엇이 틀렸는지 한 번에 읽히게 한다 */
@@ -101,6 +100,8 @@ function commonProblems(c: HTMLElement, opts: FixtureOpts): string[] {
     // D-09: 살아 있는 보는 사람 화면에는 직업 그림이 없다(동료 표시는 마름모일 뿐)
     if (viewer !== "spectator" && c.innerHTML.includes("/characters/roles/")) p.push("직업 그림 노출");
   }
+  // 변론 하단은 누구에게나(후보 본인·탈락 관전자 포함) 버튼이 없다 — 빠른 메시지·이모티콘 입구가 없다(CHAT-06)
+  if (stage === "defense" && all(c, ".mf-dayscene__panel button").length > 0) p.push("변론 하단에 버튼");
   // 후광은 한 화면 최대 3개
   const halos = all(c, 'img[class*="mf-figure--halo"]').length;
   if (halos > 3) p.push(`후광 ${halos}개`);
@@ -117,8 +118,6 @@ function viewerProblems(c: HTMLElement, opts: FixtureOpts): string[] {
     // D-35: 탈락 관전 — 어떤 입력도 없고 읽기 전용 줄이 있다
     if (buttonsNamed(c, "찬성").length + buttonsNamed(c, "반대").length > 0) p.push("관전인데 찬성/반대 버튼");
     if (voteSeatButtons(c).length > 0) p.push("관전인데 투표 대상 버튼");
-    if (emojiButtons(c).length > 0) p.push("관전인데 이모티콘 버튼");
-    if (c.querySelector(".mf-defchips")) p.push("관전인데 변론 칩");
     if (["execVote", "candidateVote", "defense", "noExecution"].includes(stage) && !c.querySelector(".mf-ro")) p.push("읽기 전용 줄 없음");
     // 탐지기 확인: 관전자는 다른 사람의 직업 그림을 본다(이 탐지기가 살아 있는 칸에서 비어 있는 것이 의미 있도록)
     if (!c.innerHTML.includes("/characters/roles/")) p.push("관전 직업 그림 없음(탐지기 점검)");
@@ -134,11 +133,6 @@ function viewerProblems(c: HTMLElement, opts: FixtureOpts): string[] {
       const seats = voteSeatButtons(c);
       if (seats.length === 0) p.push("투표 대상 버튼 없음");
       if (disabled(seats) > 0) p.push("끊겼는데 투표 대상이 켜져 있음");
-    }
-    if (stage === "defense") {
-      const emoji = emojiButtons(c);
-      if (emoji.length !== 1) p.push(`이모티콘 버튼 ${emoji.length}개`);
-      if (disabled(emoji) > 0) p.push("끊겼는데 이모티콘이 켜져 있음");
     }
     if (!c.querySelector(".mf-reconnect")) p.push("재접속 띠 없음");
   }
@@ -194,22 +188,22 @@ describe("재접속 대조: 같은 접속의 같은 전환에서는 연출이 �
   });
 });
 
-describe("내가 후보인 변론 화면 (D-36, D-09)", () => {
-  it.each(COUNTS)("%i명: 후보 본인은 변론 칩 6개를 보고, 연결이 끊기면 모두 꺼진다", (count: Count) => {
+describe("내가 후보인 변론 화면 (D-36, D-09, CHAT-06)", () => {
+  it.each(COUNTS)("%i명: 후보 본인도 남과 같은 상태 줄 하나뿐이고, 연결이 끊겨도 버튼·입력이 없다", (count: Count) => {
     const opts: FixtureOpts = { stage: "defense", viewer: "selfOffline", count, meIsCandidate: true };
     const { container } = mount(opts);
-    const chips = all(container, ".mf-defchips__b") as HTMLButtonElement[];
-    expect(chips.length, "변론 칩 수").toBe(6);
-    expect(chips.filter((b) => !b.disabled).length, "켜진 칩").toBe(0);
+    const panel = container.querySelector(".mf-dayscene__panel")!;
+    expect(panel.querySelectorAll(".mf-turnpanel > .st-row").length, "상태 줄").toBe(1);
+    expect(panel.querySelectorAll("button, input, textarea").length, "입구").toBe(0);
     expect(errors.join(" | ")).toBe("");
   });
 
-  it.each(COUNTS)("%i명: 연결이 멀쩡하면 칩이 켜져 있고 직업 그림은 없다", (count: Count) => {
+  it.each(COUNTS)("%i명: 연결이 멀쩡해도 입구가 없고 직업 그림은 없다", (count: Count) => {
     const opts: FixtureOpts = { stage: "defense", viewer: "alive", count, meIsCandidate: true };
     const { container } = mount(opts);
-    const chips = all(container, ".mf-defchips__b") as HTMLButtonElement[];
-    expect(chips.length, "변론 칩 수").toBe(6);
-    expect(chips.filter((b) => b.disabled).length, "꺼진 칩").toBe(0);
+    const panel = container.querySelector(".mf-dayscene__panel")!;
+    expect(panel.querySelectorAll(".mf-turnpanel > .st-row").length, "상태 줄").toBe(1);
+    expect(panel.querySelectorAll("button, input, textarea").length, "입구").toBe(0);
     expect(container.innerHTML.includes("/characters/roles/"), "직업 그림").toBe(false);
     expect(errors.join(" | ")).toBe("");
   });

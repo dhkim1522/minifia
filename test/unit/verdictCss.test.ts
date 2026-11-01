@@ -302,7 +302,7 @@ describe("터치 통과 (T-04-62: 연출 층은 입력을 가로채지 않는다
   });
 });
 
-describe("탭 대상 (UI-SPEC 4: 투표 버튼·변론 칩 높이 --tap-min 44 이상)", () => {
+describe("탭 대상 (UI-SPEC 4: 투표 버튼 높이 --tap-min 44 이상)", () => {
   const verdictRules = styleRules(PARSED.verdict);
   const px = (value: string): number | null => {
     const v = /^var\(--tap-min\)$/.test(value.trim()) ? tokenPx("tap-min") : (/^(\d+(?:\.\d+)?)px$/.exec(value.trim())?.[1] ?? null);
@@ -313,16 +313,16 @@ describe("탭 대상 (UI-SPEC 4: 투표 버튼·변론 칩 높이 --tap-min 44 �
     expect(tokenPx("tap-min")).toBe(44);
   });
 
-  it("기본 알약 버튼(.mf-seg__b, 찬성·반대·변론 칩이 쓰는 모양)의 높이는 --tap-min 이다", () => {
+  it("기본 알약 버튼(.mf-seg__b, 찬성·반대가 쓰는 모양)의 높이는 --tap-min 이다", () => {
     const rule = styleRules(flatten(parse(css("day")))).find((r) => hasSelector(r, ".mf-seg__b"));
     expect(rule, ".mf-seg__b 규칙").toBeDefined();
     const h = declsOf(rule!, "height").concat(declsOf(rule!, "min-height")).map(px);
     expect(h.some((v) => v !== null && v >= 44), `.mf-seg__b 높이 ${h.join(",")}`).toBe(true);
   });
 
-  it("verdict.css 의 찬성·반대·변론 칩 규칙은 높이를 44 아래로 줄이지 않는다", () => {
-    const rules = verdictRules.filter((r) => /mf-execvote__seg|mf-defchips__b|mf-seg__b/.test(r.selector));
-    expect(rules.length, "해당 규칙이 읽힘").toBeGreaterThanOrEqual(2);
+  it("verdict.css 의 찬성·반대 규칙은 높이를 44 아래로 줄이지 않는다", () => {
+    const rules = verdictRules.filter((r) => /mf-execvote__seg|mf-seg__b/.test(r.selector));
+    expect(rules.length, "해당 규칙이 읽힘").toBeGreaterThanOrEqual(1);
     const bad = rules
       .flatMap((r) => r.decls.filter((d) => ["height", "min-height", "max-height"].includes(d.prop)).map((d) => ({ selector: r.selector, ...d })))
       .filter((d) => d.prop === "max-height" || (px(d.value) ?? 0) < 44)

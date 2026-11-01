@@ -267,9 +267,11 @@ describe("UX-01 투표 구간 부품: execVote·candidateVote·reveal·defense·
     }
   });
 
-  it("defense 후보 본인 `변론할 말을 고르세요` / 생존 비후보 `{이름}님이 변론하는 중` / 관전 `관전 중 · 볼 수만 있어요`", () => {
+  it("defense 후보 본인·생존 비후보 모두 `{이름}님이 변론하는 중` / 관전 `관전 중 · 볼 수만 있어요`", () => {
     const own = renderVerdict("defense", "alive", true);
-    expect(squish(onlyGuide(own.container, "defense/후보 본인").textContent)).toBe("변론할 말을 고르세요");
+    const ownGuide = onlyGuide(own.container, "defense/후보 본인");
+    expect(ownGuide.tagName).toBe("B");
+    expect(squish(ownGuide.textContent)).toBe(defenseStatus(NAMES[0]!));
     own.unmount();
     const other = renderVerdict("defense", "alive");
     const g = onlyGuide(other.container, "defense/생존");

@@ -29,7 +29,7 @@ export interface FixtureOpts {
   stage: VerdictStage;
   viewer: Viewer;
   count: Count;
-  /** 내가 후보인 변론·공개·처형 화면(후보 본인의 변론 칩 6개, 기본 false) */
+  /** 내가 후보인 변론·공개·처형 화면(후보 본인도 남과 같은 변론 하단, 기본 false) */
   meIsCandidate?: boolean;
 }
 

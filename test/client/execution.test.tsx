@@ -186,7 +186,6 @@ describe("execution 하단 (P-10, VOTE-04)", () => {
       expect(p.querySelector("h2")?.textContent).toBe("처형이 끝났어요");
       expect(p.querySelector(".mf-claimpanel__guide")?.textContent).toBe("곧 다음으로 넘어가요");
       expect(p.querySelectorAll("button, input, textarea, .mf-ro").length).toBe(0);
-      expect(p.classList.contains("mf-dayscene__panel--tall")).toBe(false);
       expect(p.textContent).not.toContain("밤이 시작");
     });
   }

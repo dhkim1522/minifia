@@ -18,7 +18,6 @@ import {
   CLINCH_VIBRATE_MS,
   CONE_H,
   CONE_W,
-  DEFENSE_SENT_MS,
   EXEC_INTRO_MS,
   GHOST_FADE_MS,
   NO_EXEC_CARD_MS,
@@ -55,7 +54,6 @@ import {
   defenseAnnounce,
   defenseDisconnected,
   defenseInstruction,
-  defenseSent,
   defenseStatus,
   endedAnnounce,
   endedSubtitle,
@@ -108,7 +106,6 @@ describe("상수 (UI-SPEC 13.1, 결정 0039 개정)", () => {
     expect([VERDICT_DIM_PERCENT, VERDICT_BLUR_PX, VERDICT_CANDIDATE_SCALE]).toEqual([45, 3, 1.7]);
     expect([CONE_W, CONE_H, GHOST_FADE_MS, CLINCH_VIBRATE_MS]).toEqual([300, 340, 400, 30]);
     expect([CHIP_H, CHIP_H_LEAD, CHIP_W, CHIP_W_LEAD]).toEqual([24, 32, 28, 36]);
-    expect([DEFENSE_SENT_MS]).toEqual([2000]);
     expect([RESULT_BANNER_MS, RESULT_FLIP_AT_MS, RESULT_FLIP_MS, RESULT_SUMMARY_AT_MS, RESULT_REDUCED_FADE_MS]).toEqual([
       360, 300, 360, 900, 160,
     ]);
@@ -568,8 +565,6 @@ describe("VERDICT_TEXT — UI-SPEC 7.2 와 글자까지 같다", () => {
       votedSuffix: "님에게 투표했어요",
       candidateSpectatorTitle: "처형할 사람을 고르는 중이에요",
       candidateSpectatorHint: "누구를 골랐는지는 공개될 때 볼 수 있어요",
-      defenseChooseTitle: "변론할 말을 고르세요",
-      defenseChooseHint: "한 번에 하나씩 보낼 수 있어요",
       executionDoneTitle: "처형이 끝났어요",
       executionDoneHint: "곧 다음으로 넘어가요",
       executionCardSub: "처형이 집행됐어요",
@@ -596,14 +591,13 @@ describe("VERDICT_TEXT — UI-SPEC 7.2 와 글자까지 같다", () => {
     expect(VERDICT_TEXT.announce.candidateVote).toBe("후보 선택 투표. 처형할 사람을 고르세요");
     expect(VERDICT_TEXT.announce.candidateVoteReveal).toBe("투표 공개");
     expect(defenseAnnounce("도윤")).toBe("도윤님의 최후 변론");
-    expect(defenseAnnounce(null)).toBe("내 최후 변론. 변론할 말을 고르세요");
+    expect(defenseAnnounce(null)).toBe("내 최후 변론");
     expect(endedAnnounce("citizenWin")).toBe("게임이 끝났습니다. 시민 팀 승리");
     expect(endedAnnounce("mafiaWin")).toBe("게임이 끝났습니다. 마피아 팀 승리");
     expect(defenseStatus("도윤")).toBe("도윤님이 변론하는 중");
     expect(defenseDisconnected("도윤")).toBe("도윤님은 연결이 끊겨 있어요");
     expect(defenseInstruction(2, "도윤")).toBe("2일차 · 도윤님의 변론");
     expect(defenseInstruction(2, null)).toBe("2일차 · 내 변론");
-    expect(defenseSent("저 아니에요")).toBe("보냈어요 · 저 아니에요");
     expect(candidateSeatLabel("도윤", false)).toBe("도윤, 투표 대상");
     expect(candidateSeatLabel("도윤", true)).toBe("도윤 (나), 투표 대상");
     expect(noExecutionPrefix("tie")).toBe("처형 무효. 동률이라 처형하지 않아요. ");

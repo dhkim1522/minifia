@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import "../helpers/singleLineErrors";
-import type { ChatLine, RoomView } from "../../shared/protocol";
+import type { RoomView } from "../../shared/protocol";
 import type { RoomConnection, RoomEvent } from "../../src/net/useRoomConnection";
 import { DefensePanel } from "../../src/components/DefensePanel";
 import {
@@ -80,10 +80,7 @@ function conn(view: RoomView, over: Partial<RoomConnection> = {}): RoomConnectio
   };
 }
 
-const defLine = (seq: number, seat: number, template: ChatLine["template"] = "defNotMe"): ChatLine => ({ seq, seat, template, at: 0 });
-
 interface PanelOpts {
-  lines?: ChatLine[];
   over?: Partial<RoomConnection>;
   view?: RoomView;
   candidateConnected?: boolean;
@@ -92,23 +89,18 @@ interface PanelOpts {
 function panel(o: PanelOpts = {}) {
   const view = o.view ?? makeView();
   const c = conn(view, o.over);
-  const showToast = vi.fn();
   const utils = render(
     <DefensePanel
       view={view}
       connection={c}
-      showToast={showToast}
-      lines={o.lines ?? []}
       candidateNickname="민지"
       candidateConnected={o.candidateConnected ?? true}
       readOnly={o.readOnly ?? false}
     />,
   );
-  return { ...utils, conn: c, showToast };
+  return { ...utils, conn: c };
 }
 
-const items = () => [...screen.getByRole("log", { name: "최근 채팅" }).querySelectorAll<HTMLElement>(".mf-msglog__item")];
-const emojiBtn = () => screen.getByRole("button", { name: "이모티콘" }) as HTMLButtonElement;
 const advance = (ms: number) =>
   act(() => {
     vi.advanceTimersByTime(ms);
@@ -124,12 +116,14 @@ afterEach(() => {
 });
 
 describe("DefensePanel: 남의 변론 하단 (UI-SPEC 8.4·7.2, D-13·D-35)", () => {
-  it("채팅 로그 아래에 .st-row(.stat + 이모티콘 버튼 하나)가 있고 TurnPanel 의 클래스를 그대로 쓴다", () => {
+  it(".st-row(.stat) 하나뿐이고 TurnPanel 의 클래스를 그대로 쓴다 — 채팅 로그·버튼이 없다", () => {
     const { container } = panel();
     const root = container.querySelector(".mf-turnpanel")!;
-    expect(root.firstElementChild?.classList.contains("mf-msglog")).toBe(true);
-    expect(root.lastElementChild?.classList.contains("st-row")).toBe(true);
-    expect(root.querySelectorAll(".st-row button").length).toBe(1);
+    expect(root.children.length).toBe(1);
+    expect(root.firstElementChild?.classList.contains("st-row")).toBe(true);
+    expect(root.querySelector(".stat")).not.toBeNull();
+    expect(container.querySelector(".mf-msglog")).toBeNull();
+    expect(container.querySelectorAll("button").length).toBe(0);
   });
 
   it("상태 줄: 굵은 `{이름}님이 변론하는 중` + 오른쪽 `{N}초`(헤더 타이머와 같은 카운트다운)", () => {
@@ -141,24 +135,11 @@ describe("DefensePanel: 남의 변론 하단 (UI-SPEC 8.4·7.2, D-13·D-35)", ()
     expect(container.querySelector(".stat span")?.textContent).toBe("7초");
   });
 
-  it("후보의 변론 줄만 보인다: 점·이름은 후보 자리 색, 문장은 messageText", () => {
-    panel({ lines: [defLine(1, 2, "defNotMe"), defLine(2, 2, "defPlead")] });
-    expect(items().map((el) => el.querySelector(".mf-msglog__name")?.textContent).join("|")).toBe("민지|민지");
-    expect(items().map((el) => el.querySelector(".mf-msglog__text")?.textContent).join("|")).toBe("저 아니에요|한 번만 믿어 주세요");
-    expect(items()[0]!.querySelector<HTMLElement>(".mf-msglog__dot")!.getAttribute("style") ?? "").toContain("var(--seat-3)");
-  });
-
-  it("^ 내역 버튼이 있다(채팅 내역 크게 보기)", () => {
-    panel({ lines: [defLine(1, 2)] });
-    expect(screen.getByRole("button", { name: "채팅 내역 크게 보기" })).toBeTruthy();
-  });
-
-  it("후보가 연결이 끊겨 있으면 상태 줄이 끊김 문구 + 초이고 이모티콘 버튼은 그대로 쓸 수 있다", () => {
+  it("후보가 연결이 끊겨 있으면 상태 줄이 끊김 문구 + 초다", () => {
     const { container } = panel({ candidateConnected: false });
     expect(container.querySelector(".stat b")?.textContent).toBe(defenseDisconnected("민지"));
     expect(container.querySelector(".stat b")?.textContent).toBe("민지님은 연결이 끊겨 있어요");
     expect(container.querySelector(".stat span")?.textContent).toBe("10초");
-    expect(emojiBtn().disabled).toBe(false);
   });
 
   it("마감이 없으면 초를 그리지 않는다", () => {
@@ -171,65 +152,25 @@ describe("DefensePanel: 남의 변론 하단 (UI-SPEC 8.4·7.2, D-13·D-35)", ()
     const evil = { ...view, players: view.players.map((p) => (p.seat === 2 ? { ...p, nickname: "<b>x</b>" } : p)) };
     const c = conn(evil);
     const { container } = render(
-      <DefensePanel view={evil} connection={c} showToast={vi.fn()} lines={[]} candidateNickname="<b>x</b>" candidateConnected readOnly={false} />,
+      <DefensePanel view={evil} connection={c} candidateNickname="<b>x</b>" candidateConnected readOnly={false} />,
     );
     expect(container.querySelector(".stat b")?.textContent).toBe("<b>x</b>님이 변론하는 중");
     expect(container.querySelector(".stat b b")).toBeNull();
   });
 });
 
-describe("DefensePanel: 이모티콘 (합산 쿨다운 훅 공용, COMM-03)", () => {
-  it("버튼 → 트레이가 열리고 이모티콘을 고르면 { t:'emoji', icon } 를 보내며 버튼이 잠긴다", () => {
-    const { conn: c } = panel();
-    fireEvent.click(emojiBtn());
-    const dialog = document.querySelector<HTMLDialogElement>('dialog[aria-label="이모티콘"]')!;
-    expect(dialog).toBeTruthy();
-    const cell = dialog.querySelector<HTMLButtonElement>(".mf-emojitray__cell")!;
-    fireEvent.click(cell);
-    expect(c.send).toHaveBeenCalledTimes(1);
-    const sent = (c.send as ReturnType<typeof vi.fn>).mock.calls[0][0] as { t: string; icon: string };
-    expect(sent.t).toBe("emoji");
-    expect(typeof sent.icon).toBe("string");
-    expect(emojiBtn().disabled).toBe(true);
-    advance(2_000);
-    expect(emojiBtn().disabled).toBe(false);
-  });
-
-  it("연결이 끊겨 보낼 수 없으면 이모티콘 버튼이 꺼진다", () => {
-    panel({ over: { canSend: false } });
-    expect(emojiBtn().disabled).toBe(true);
-  });
-
-  it("서버가 BAD_MESSAGE 로 거부하면 토스트로 알린다", () => {
-    const bus = emitter();
-    const { showToast } = panel({ over: { onEvent: bus.onEvent } });
-    bus.emit({ t: "error", code: "BAD_MESSAGE" });
-    expect(showToast).toHaveBeenCalledTimes(1);
-    expect(String(showToast.mock.calls[0][0])).toContain("보내지 못했어요");
-  });
-
-  it("트레이 열림 상태는 이 부품이 쥔다 — 언마운트하면 닫힌다", () => {
-    const { unmount } = panel();
-    fireEvent.click(emojiBtn());
-    expect(document.querySelector('dialog[aria-label="이모티콘"]')).toBeTruthy();
-    unmount();
-    expect(document.querySelector('dialog[aria-label="이모티콘"]')).toBeNull();
-  });
-});
-
 describe("DefensePanel: 관전 (탈락 viewer, D-35)", () => {
-  it("채팅(읽기) + 알약 `관전 중 · 볼 수만 있어요`, 상태 줄·이모티콘 버튼 없음", () => {
-    const { container } = panel({ readOnly: true, lines: [defLine(1, 2)] });
-    expect(container.querySelector(".mf-turnpanel .mf-msglog")).not.toBeNull();
+  it("알약 `관전 중 · 볼 수만 있어요` 뿐이다: 상태 줄·채팅 로그·버튼 없음", () => {
+    const { container } = panel({ readOnly: true });
     expect(container.querySelector(".mf-ro")?.textContent).toBe(VERDICT_TEXT.spectatorPill);
     expect(container.querySelector(".st-row")).toBeNull();
-    expect(screen.queryByRole("button", { name: "이모티콘" })).toBeNull();
-    expect(items().length).toBe(1);
+    expect(container.querySelector(".mf-msglog")).toBeNull();
+    expect(container.querySelectorAll("button").length).toBe(0);
   });
 });
 
 describe("DefensePanel: 직업 비공개 (T-04-57, D-09)", () => {
-  it("입력에 역할 필드가 없고(후보 닉네임·접속 여부·줄뿐) 부품은 직업 문구 표를 읽지 않는다", () => {
+  it("입력에 역할 필드가 없고(후보 닉네임·접속 여부뿐) 부품은 직업 문구 표를 읽지 않는다", () => {
     const src = readFileSync("src/components/DefensePanel.tsx", "utf8");
     const props = /export interface DefensePanelProps\s*\{([^}]*)\}/.exec(src)?.[1] ?? "";
     expect(props).toContain("candidateNickname");
@@ -324,53 +265,21 @@ describe("defense 화면 한 경로 (VOTE-03, D-15·D-16·D-29, COMM-03)", () =>
     expect(/dimPercent:\s*\d|blurPx:\s*\d/.test(src)).toBe(false);
   });
 
-  it("후보 본인: 안내 `1일차 · 내 변론`, 하단 <section> 이 panel--tall 이고 제목·안내·변론 칩 6개, 안내문 `내 최후 변론. 변론할 말을 고르세요`", () => {
-    const { container } = renderRoom(roomView({ me: 2 }));
+  it("후보 본인: 안내 `1일차 · 내 변론`, 하단은 다른 사람과 같은 상태 줄뿐이다 — 제목·칩·입력·버튼이 없고 아무것도 보내지 않는다, 안내문 `내 최후 변론`", () => {
+    const { container, send } = renderRoom(roomView({ me: 2 }));
     expect(screen.queryByText("1일차 · 내 변론")).not.toBeNull();
     const section = panelOf(container);
     expect(section.tagName).toBe("SECTION");
-    expect(section.classList.contains("mf-dayscene__panel--tall")).toBe(true);
-    expect(section.classList.contains("mf-dayscene__enter")).toBe(true);
-    expect(section.querySelector("h2")?.textContent).toBe(VERDICT_TEXT.defenseChooseTitle);
-    expect(section.querySelector(".mf-claimpanel__guide")?.textContent).toBe(VERDICT_TEXT.defenseChooseHint);
-    expect([...section.querySelectorAll(".mf-defchips button")].map((b) => b.textContent)).toEqual([
-      "저 아니에요",
-      "저는 시민이에요",
-      "[○○] 의심해 주세요",
-      "[○○] 믿어 주세요",
-      "제가 [직업]입니다",
-      "한 번만 믿어 주세요",
-    ]);
-    expect(section.querySelector(".st-row")).toBeNull();
-    expect(section.querySelectorAll("input, textarea").length).toBe(0);
+    expect(section.className).toBe("mf-dayscene__panel mf-dayscene__enter");
+    expect(section.querySelector(".mf-turnpanel > .st-row .stat b")?.textContent).toBe("민지님이 변론하는 중");
+    expect(section.querySelector("h2")).toBeNull();
+    expect(section.querySelector(".mf-claimpanel__guide")).toBeNull();
+    expect(section.querySelector(".mf-defchips")).toBeNull();
+    expect(section.querySelector(".mf-msglog")).toBeNull();
+    expect(section.querySelectorAll("button, input, textarea").length).toBe(0);
+    expect(send).not.toHaveBeenCalled();
     expect(haloSeats(container, "white")).toBe("2");
-    expect(announce(container)).toBe("내 최후 변론. 변론할 말을 고르세요");
-  });
-
-  it("panel--tall 은 내가 후보일 때만 있다: 남의 변론·관전·서버 이상·다른 단계에는 없다", () => {
-    const a = renderRoom(roomView());
-    expect(panelOf(a.container).classList.contains("mf-dayscene__panel--tall")).toBe(false);
-    cleanup();
-    const b = renderRoom(roomView({ me: 1, dead: [1] }));
-    expect(panelOf(b.container).classList.contains("mf-dayscene__panel--tall")).toBe(false);
-    cleanup();
-    const c = renderRoom(roomView({ me: 2, candidate: null }));
-    expect(panelOf(c.container).classList.contains("mf-dayscene__panel--tall")).toBe(false);
-    cleanup();
-    const d = renderRoom({ ...roomView({ me: 2 }), phase: "candidateVoteReveal" });
-    expect(panelOf(d.container).classList.contains("mf-dayscene__panel--tall")).toBe(false);
-    expect(readFileSync("src/styles/verdict.css", "utf8")).toMatch(/\.mf-dayscene__panel\.mf-dayscene__panel--tall\s*\{[^}]*calc\(236px/);
-  });
-
-  it("후보 본인이 칩을 누르면 { t:'say', template } 가 나가고, 내 chat 이벤트가 오면 후보(나) 머리 위 말풍선이 뜬다", () => {
-    const bus = emitter();
-    const { container, send } = renderRoom(roomView({ me: 2 }), { onEvent: bus.onEvent });
-    fireEvent.click(screen.getByRole("button", { name: "저 아니에요" }));
-    expect(send).toHaveBeenCalledWith({ t: "say", template: "defNotMe" });
-    expect(panelOf(container).querySelector(".mf-claimpanel__guide")?.textContent).toBe("보냈어요 · 저 아니에요");
-    expect(container.querySelectorAll(".mf-dt__bubble").length).toBe(0);
-    bus.emit({ t: "chat", seq: 1, seat: 2, template: "defNotMe", at: NOW } as RoomEvent);
-    expect(seatOf(container, 2).querySelectorAll(".mf-dt__bubble--spoke").length).toBe(1);
+    expect(announce(container)).toBe("내 최후 변론");
   });
 
   it("후보 본인 화면에서도 가운데 이동·어둡게 층·원뿔은 그대로다", () => {
@@ -381,24 +290,13 @@ describe("defense 화면 한 경로 (VOTE-03, D-15·D-16·D-29, COMM-03)", () =>
     expect(seatOf(container, 2).style.zIndex).toBe("31");
   });
 
-  it("후보가 연결이 끊긴 채 돌아와도(재접속) 칩이 보이고, 서버가 거부하면 토스트가 뜬다", () => {
-    const bus = emitter();
-    const { container } = renderRoom(roomView({ me: 2, disconnected: [2] }), { onEvent: bus.onEvent });
-    expect(panelOf(container).querySelectorAll(".mf-defchips button").length).toBe(6);
-    bus.emit({ t: "error", code: "BAD_MESSAGE" });
-    expect(screen.queryByText("보내지 못했어요. 다시 시도해 주세요")).not.toBeNull();
+  it("후보 본인이 연결이 끊긴 채 돌아와도(재접속) 하단은 끊김 문구 한 줄이고 버튼이 없다", () => {
+    const { container } = renderRoom(roomView({ me: 2, disconnected: [2] }));
+    expect(panelOf(container).querySelector(".stat b")?.textContent).toBe("민지님은 연결이 끊겨 있어요");
+    expect(panelOf(container).querySelectorAll("button").length).toBe(0);
   });
 
-  it("defense → execution 으로 단계가 바뀌면 칩 패널이 사라지고 열려 있던 시트도 함께 닫힌다", () => {
-    const r = renderRoom(roomView({ me: 2 }));
-    fireEvent.click(screen.getByRole("button", { name: "[○○] 의심해 주세요" }));
-    expect(document.querySelector("dialog")).toBeTruthy();
-    r.rerenderRoom({ ...roomView({ me: 2 }), phase: "execution" });
-    expect(r.container.querySelectorAll(".mf-defchips").length).toBe(0);
-    expect(document.querySelector('dialog[aria-label="빠른 메시지"]')).toBeNull();
-  });
-
-  it("탈락 viewer: 하단은 채팅(읽기) + 관전 알약, 좌석은 버튼이 아니다(기록 카드 열림 없음)", () => {
+  it("탈락 viewer: 하단은 관전 알약뿐이고, 좌석은 버튼이 아니다(기록 카드 열림 없음)", () => {
     const { container } = renderRoom(roomView({ me: 1, dead: [1] }));
     expect(panelOf(container).querySelector(".mf-ro")?.textContent).toBe(VERDICT_TEXT.spectatorPill);
     expect(panelOf(container).querySelector(".st-row")).toBeNull();
@@ -413,13 +311,12 @@ describe("defense 화면 한 경로 (VOTE-03, D-15·D-16·D-29, COMM-03)", () =>
     expect(container.querySelectorAll(".mf-dt__seat[role='group']").length).toBe(4);
   });
 
-  it("후보 연결 끊김: 그림은 끊김 흐림 + 흰 후광, 하단 상태 줄은 끊김 문구, 이모티콘 버튼은 쓸 수 있다", () => {
+  it("후보 연결 끊김: 그림은 끊김 흐림 + 흰 후광, 하단 상태 줄은 끊김 문구", () => {
     const { container } = renderRoom(roomView({ disconnected: [2] }));
     const img = seatOf(container, 2).querySelector("img")!;
     expect(img.classList.contains("mf-figure--disconnected")).toBe(true);
     expect(img.classList.contains("mf-figure--halo-white")).toBe(true);
     expect(panelOf(container).querySelector(".stat b")?.textContent).toBe("민지님은 연결이 끊겨 있어요");
-    expect((screen.getByRole("button", { name: "이모티콘" }) as HTMLButtonElement).disabled).toBe(false);
   });
 
   it("마피아 동료의 진홍 후광은 유지되고(후보 흰 + 동료 진홍), 합이 3 을 넘으면 진홍부터 꺼지며 마름모는 남는다", () => {
@@ -458,13 +355,13 @@ describe("defense 화면 한 경로 (VOTE-03, D-15·D-16·D-29, COMM-03)", () =>
     expect(container.querySelectorAll(".mf-dt__seat").length).toBe(4);
   });
 
-  it("후보 변론 chat 이벤트가 오면 후보 머리 위 `…` 말풍선과 하단 채팅 줄이 생긴다. 남의 이모티콘은 층 위(z 60+)로 뜬다", () => {
+  it("후보 변론 chat 이벤트가 오면 후보 머리 위 `…` 말풍선이 생기고(하단 채팅 줄은 없다). 남의 이모티콘은 층 위(z 60+)로 뜬다", () => {
     const bus = emitter();
     const { container } = renderRoom(roomView(), { onEvent: bus.onEvent });
     expect(container.querySelectorAll(".mf-dt__bubble").length).toBe(0);
     bus.emit({ t: "chat", seq: 1, seat: 2, template: "defNotMe", at: NOW } as RoomEvent);
     expect(seatOf(container, 2).querySelectorAll(".mf-dt__bubble--spoke").length).toBe(1);
-    expect(panelOf(container).querySelector(".mf-msglog__text")?.textContent).toBe("저 아니에요");
+    expect(panelOf(container).querySelector(".mf-msglog")).toBeNull();
     bus.emit({ t: "emoji", seat: 1, icon: "smile", at: NOW } as RoomEvent);
     const em = container.querySelector<HTMLElement>('.mf-dt__emoji[data-seat="1"]')!;
     expect(Number(em.style.zIndex)).toBeGreaterThanOrEqual(60);
@@ -476,14 +373,6 @@ describe("defense 화면 한 경로 (VOTE-03, D-15·D-16·D-29, COMM-03)", () =>
     bus.emit({ t: "chat", seq: 1, seat: 2, template: "defNotMe", at: NOW } as RoomEvent);
     bus.emit({ t: "emoji", seat: 1, icon: "smile", at: NOW } as RoomEvent);
     expect(container.querySelectorAll(".mf-dt__bubble, .mf-dt__emoji").length).toBe(0);
-  });
-
-  it("이모티콘 보내기: 하단 버튼 → 트레이 → { t:'emoji' } 가 전송된다", () => {
-    const r = renderRoom(roomView());
-    fireEvent.click(screen.getByRole("button", { name: "이모티콘" }));
-    fireEvent.click(document.querySelector<HTMLButtonElement>(".mf-emojitray__cell")!);
-    expect(r.send).toHaveBeenCalledTimes(1);
-    expect((r.send.mock.calls[0][0] as { t: string }).t).toBe("emoji");
   });
 
   it("후보 위치 공식은 candidateCenter 한 곳이다 — DayTable 은 좌표 숫자를 따로 갖지 않는다", () => {
