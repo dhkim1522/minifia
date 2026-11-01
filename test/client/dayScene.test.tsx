@@ -6,6 +6,7 @@ import type { RoleId } from "../../shared/game/roles";
 import type { MorningView, PhaseId, RoomView, SpectateView, VoteLogEntry } from "../../shared/protocol";
 import type { RoomConnection } from "../../src/net/useRoomConnection";
 import { DayScene } from "../../src/screens/DayScene";
+import { ChatStore } from "../../src/net/chatStore";
 import { TABLE_FIT_MIN_H, TAG_H } from "../../src/game/dayTable";
 
 // 낮 장면 단위 테스트: 낮 토론·기록 카드·아침·배경. 순차 주장은 없어졌다(07-04, CHAT-06). 낮 단계는 DayTable 하나를 쓴다(결정 0017-1).
@@ -79,9 +80,10 @@ function conn(view: RoomView, over: Partial<RoomConnection> = {}): RoomConnectio
 
 function scene(view: RoomView, over: Partial<RoomConnection> = {}) {
   const c = conn(view, over);
-  const utils = render(<DayScene view={view} connection={c} myRoleButton={<button type="button">내 역할</button>} />);
+  const chat = new ChatStore();
+  const utils = render(<DayScene view={view} connection={c} chat={chat} myRoleButton={<button type="button">내 역할</button>} />);
   const rerender = (v: RoomView) =>
-    utils.rerender(<DayScene view={v} connection={{ ...c, view: v }} myRoleButton={<button type="button">내 역할</button>} />);
+    utils.rerender(<DayScene view={v} connection={{ ...c, view: v }} chat={chat} myRoleButton={<button type="button">내 역할</button>} />);
   return { ...utils, rerender, conn: c };
 }
 
@@ -496,7 +498,8 @@ describe("DayScene 밤 끝 알림 없음 (결정 0028, UI-SPEC D·R6)", () => {
   function renderGrow(role: RoleId, record: NonNullable<RoomView["me"]["records"]>[number]) {
     const night = withRecords(makeView({ phase: "night", role }), []);
     const morning = withRecords(makeView({ phase: "morning", role, morning: {} }), [record]);
-    const ui = (v: RoomView) => <DayScene view={v} connection={{ ...conn(v), view: v }} myRoleButton={<button type="button">역할 카드</button>} />;
+    const growChat = new ChatStore();
+    const ui = (v: RoomView) => <DayScene view={v} connection={{ ...conn(v), view: v }} chat={growChat} myRoleButton={<button type="button">역할 카드</button>} />;
     const utils = render(ui(night));
     utils.rerender(ui(morning));
     return utils;

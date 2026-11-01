@@ -1,14 +1,15 @@
 /// <reference types="node" />
 import { readFileSync } from "node:fs";
-import { act, cleanup, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import "../helpers/singleLineErrors";
-import type { PhaseId, RoomView } from "../../shared/protocol";
+import type { ChatChannel, PhaseId, RoomView } from "../../shared/protocol";
 import type { RoomConnection, RoomEvent } from "../../src/net/useRoomConnection";
 import { DayScene } from "../../src/screens/DayScene";
+import { ChatStore } from "../../src/net/chatStore";
 
-// 낮 토론 화면 통합 테스트(S-07): 위쪽 바와 빈 하단을 DayScene 으로 만난다. 빠른 메시지·이모티콘·채팅 세 줄 로그·말풍선은 07-07 에서 화면에서 사라졌다(CHAT-06).
-// 채팅 패널은 07-13·07-15 가 붙인다. 서버와는 view 픽스처와 이벤트 발행기로만 만난다.
+// 낮 토론 화면 통합 테스트(S-07): 위쪽 바와 하단 채팅 패널을 DayScene 으로 만난다. 빠른 메시지·이모티콘·채팅 세 줄 로그·말풍선은 07-07 에서 화면에서 사라졌다(CHAT-06).
+// 낮 토론 하단은 07-15 부터 ChatPanel(채널 all)이다. 서버와는 view 픽스처와 이벤트 발행기로만 만난다.
 
 const NOW = 10_000;
 
@@ -21,6 +22,8 @@ interface ViewOpts {
   serverNow?: number;
   /** 화면이 방장 여부를 players 에서 읽지 않는지 보려고 players 쪽 isHost 를 따로 줄 수 있다 */
   playerHostSeat?: number;
+  /** 서버가 보낸 내 채널(view.me.chat). 없으면 키가 없다 */
+  chat?: ChatChannel;
 }
 
 function makeView(o: ViewOpts = {}): RoomView {
@@ -40,7 +43,7 @@ function makeView(o: ViewOpts = {}): RoomView {
       { seat: 2, nickname: "민지", connected: true, isHost: hostSeat === 2 },
       { seat: 3, nickname: "도현", connected: true, isHost: hostSeat === 3 },
     ],
-    me: { seat: 0, isHost: o.isHost ?? false },
+    me: { seat: 0, isHost: o.isHost ?? false, ...(o.chat !== undefined ? { chat: o.chat } : {}) },
     day: {
       n: o.n ?? 1,
       roles: ["mafia", "police", "citizen"],
@@ -84,9 +87,10 @@ function conn(view: RoomView, over: Partial<RoomConnection> = {}): RoomConnectio
 
 function scene(view: RoomView, over: Partial<RoomConnection> = {}) {
   const c = conn(view, over);
+  const chat = new ChatStore();
   const role = <button type="button">내 역할</button>;
-  const utils = render(<DayScene view={view} connection={c} myRoleButton={role} />);
-  const rerender = (v: RoomView) => utils.rerender(<DayScene view={v} connection={{ ...c, view: v }} myRoleButton={role} />);
+  const utils = render(<DayScene view={view} connection={c} chat={chat} myRoleButton={role} />);
+  const rerender = (v: RoomView) => utils.rerender(<DayScene view={v} connection={{ ...c, view: v }} chat={chat} myRoleButton={role} />);
   return { ...utils, rerender, conn: c };
 }
 
@@ -105,7 +109,7 @@ const advance = (ms: number) =>
     vi.advanceTimersByTime(ms);
   });
 
-describe("낮 토론 화면 — 위쪽 바와 빈 하단 (CHAT-06, 가정 A1)", () => {
+describe("낮 토론 화면 — 위쪽 바와 하단 (CHAT-06, 가정 A1)", () => {
   it("위쪽 바(낮 · 토론, 1일차, 타이머)가 있고, 빠른 메시지·이모티콘 버튼·채팅 로그·방장 줄이 없다", () => {
     const r = scene(makeView());
     expect(r.container.textContent).toContain("낮 · 토론");
@@ -119,11 +123,53 @@ describe("낮 토론 화면 — 위쪽 바와 빈 하단 (CHAT-06, 가정 A1)", 
     expect(screen.queryByRole("button", { name: /넘기기/ })).toBeNull();
   });
 
-  it("하단 패널에 버튼·입력이 없고 머리 위에 말풍선·이모티콘 층이 없다", () => {
+  it("서버가 채널(me.chat)을 보내지 않은 view 에서는 하단에 패널이 없고(서버 값이 기준) 머리 위에 말풍선·이모티콘 층도 없다", () => {
     const r = scene(makeView());
     const panel = r.container.querySelector(".mf-dayscene__panel")!;
     expect(panel.querySelectorAll("button, input, textarea, dialog").length).toBe(0);
     expect(r.container.querySelectorAll(".mf-dt__bubble, .mf-dt__emoji").length).toBe(0);
+    expect(panel.classList.contains("mf-dayscene__panel--chat")).toBe(false);
+  });
+
+  it("산 사람의 낮 토론 하단은 ChatPanel(채널 all)이다: 입력칸 '채팅 입력', 안내 문구·채널 아이콘 없음, 기록 칸 role=log", () => {
+    const r = scene(makeView({ chat: "all" }));
+    const panel = r.container.querySelector<HTMLElement>(".mf-dayscene__panel")!;
+    const chatPanel = panel.querySelector<HTMLElement>("[data-chat-panel]");
+    expect(chatPanel?.getAttribute("data-chat-channel")).toBe("all");
+    const input = panel.querySelector<HTMLInputElement>("[data-chat-input]")!;
+    expect(input.getAttribute("aria-label")).toBe("채팅 입력");
+    expect(input.getAttribute("placeholder") ?? "").toBe("");
+    expect(panel.querySelector(".mv-chat__chan")).toBeNull();
+    expect(screen.getByRole("log", { name: "채팅 기록" })).not.toBeNull();
+    expect(panel.querySelector("[data-chat-send]")?.getAttribute("aria-label")).toBe("보내기");
+  });
+
+  it("채팅 패널이 붙은 하단은 --mf-chat-panel-h(LOG_H + 92)를 갖고 chat 변형 클래스가 붙는다", () => {
+    const r = scene(makeView({ chat: "all" }));
+    const panel = r.container.querySelector<HTMLElement>(".mf-dayscene__panel")!;
+    expect(panel.classList.contains("mf-dayscene__panel--chat")).toBe(true);
+    const logH = Number.parseFloat(panel.querySelector<HTMLElement>("[data-chat-log]")!.style.height);
+    expect([96, 152]).toContain(logH);
+    expect(panel.style.getPropertyValue("--mf-chat-panel-h")).toBe(`${logH + 92}px`);
+    const css = readFileSync("src/styles/day.css", "utf8");
+    expect(css).toMatch(/\.mf-dayscene__panel\.mf-dayscene__panel--chat\s*\{[^}]*--mf-chat-panel-h/);
+  });
+
+  it("보낸 줄은 pk(1:discussion)와 본문만 서버로 가고, 서버가 방송한 줄이 기록 칸에 나타난다", () => {
+    const view = makeView({ chat: "all" });
+    const c = conn(view);
+    const chat = new ChatStore();
+    render(<DayScene view={view} connection={c} chat={chat} myRoleButton={<button type="button">내 역할</button>} />);
+    const input = document.querySelector<HTMLInputElement>("[data-chat-input]")!;
+    fireEvent.change(input, { target: { value: "저는 시민이에요" } });
+    fireEvent.submit(input.closest("form")!);
+    expect((c.send as ReturnType<typeof vi.fn>).mock.calls[0]?.[0]).toEqual({ t: "chat", text: "저는 시민이에요", pk: "1:discussion" });
+    // 내 줄은 서버 방송이 와야 나타난다
+    expect(document.querySelector("[data-chat-log] .mv-chat__msg")).toBeNull();
+    act(() => chat.apply({ t: "chat", seat: 0, ch: "all", seq: 1, text: "저는 시민이에요", at: NOW }, 1, NOW));
+    const line = document.querySelector("[data-chat-log] .mv-chat__msg");
+    expect(line?.getAttribute("data-ch")).toBe("all");
+    expect(line?.querySelector(".mv-chat__name")?.textContent).toBe("나");
   });
 
   it("화면은 낮 토론에서 아무것도 보내지 않는다(say·emoji·extend·skip)", () => {

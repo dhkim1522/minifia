@@ -7,6 +7,7 @@ import type { GameWinner, MorningView, PhaseId, RoomView, SpectateView } from ".
 import type { RoomConnection } from "../../src/net/useRoomConnection";
 import { SCENE_FADE_MS, SCENE_IMAGE_WAIT_MS, morningGlowGradient, nightVignetteGradient } from "../../src/game/scenes";
 import { DayScene } from "../../src/screens/DayScene";
+import { ChatStore } from "../../src/net/chatStore";
 import { ResultScreen } from "../../src/screens/ResultScreen";
 
 // 분위기 두 층(05-03, LOOK-01, D-04·D-05·D-09): 밤 비네팅은 night 그림 층 안에, 아침 밝아짐은 장면 상자 안 DayTable 앞 형제로 있다.
@@ -66,9 +67,10 @@ function conn(view: RoomView, over: Partial<RoomConnection> = {}): RoomConnectio
 
 function scene(view: RoomView, over: Partial<RoomConnection> = {}) {
   const c = conn(view, over);
+  const chat = new ChatStore();
   const role = <button type="button">내 역할</button>;
-  const utils = render(<DayScene view={view} connection={c} myRoleButton={role} />);
-  const rerender = (v: RoomView) => utils.rerender(<DayScene view={v} connection={{ ...c, view: v }} myRoleButton={role} />);
+  const utils = render(<DayScene view={view} connection={c} chat={chat} myRoleButton={role} />);
+  const rerender = (v: RoomView) => utils.rerender(<DayScene view={v} connection={{ ...c, view: v }} chat={chat} myRoleButton={role} />);
   return { ...utils, rerender };
 }
 

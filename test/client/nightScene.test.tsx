@@ -7,6 +7,7 @@ import type { RoleId } from "../../shared/game/roles";
 import type { PhaseId, RoomView, SpectateView } from "../../shared/protocol";
 import type { RoomConnection, RoomEvent } from "../../src/net/useRoomConnection";
 import { DayScene } from "../../src/screens/DayScene";
+import { ChatStore } from "../../src/net/chatStore";
 
 // 밤 장면 통합 테스트(03-08): 역할별 하단·대상 탭·낙관적 선택·관전 화면을 DayScene 으로 만난다.
 // 서버와는 view 픽스처와 이벤트 발행기로만 만난다. 실패 보고서가 한 줄이 되도록 단언은 문자열·불리언으로 둔다.
@@ -89,9 +90,10 @@ function conn(view: RoomView, over: Partial<RoomConnection> = {}): RoomConnectio
 
 function scene(view: RoomView, over: Partial<RoomConnection> = {}) {
   const c = conn(view, over);
+  const chat = new ChatStore();
   const role = <button type="button">내 역할</button>;
-  const utils = render(<DayScene view={view} connection={c} myRoleButton={role} />);
-  const rerender = (v: RoomView) => utils.rerender(<DayScene view={v} connection={{ ...c, view: v }} myRoleButton={role} />);
+  const utils = render(<DayScene view={view} connection={c} chat={chat} myRoleButton={role} />);
+  const rerender = (v: RoomView) => utils.rerender(<DayScene view={v} connection={{ ...c, view: v }} chat={chat} myRoleButton={role} />);
   return { ...utils, rerender, conn: c };
 }
 

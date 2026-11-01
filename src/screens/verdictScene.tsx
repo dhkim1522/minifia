@@ -50,6 +50,8 @@ export interface VerdictSceneCtx {
   onInspect: (seat: number) => void;
   /** 이 자리가 마피아 동료로 보이는가(살아 있는 마피아의 me.allies, 관전자 화면의 모든 마피아). DayScene 이 마름모를 그리는 규칙과 같은 값이다 */
   isAllySeat: (seat: number) => boolean;
+  /** 채팅 패널이 붙는 단계(최후 변론)의 하단. DayScene 이 채널 판정과 함께 만든다. 패널이 없으면 null */
+  chatBottom: ReactNode | null;
 }
 
 /**

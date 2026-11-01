@@ -37,6 +37,7 @@ import {
   readLinkState,
   readChatLines,
   readChatPanel,
+  readTablePanel,
   readLobbyFrame,
   readPaintStats,
   readWorld,
@@ -637,6 +638,69 @@ async function chatLobbyFlow(ctx) {
     await g.context.close().catch(() => {});
   }
   await leaveLobby(hp);
+}
+
+// ---- chat-table (테이블 화면 자유 채팅, 07-15, CHAT-01·02·03) ----
+
+/** chat-table 에서 방장이 낮 토론에 보내는 글 */
+const CHAT_TABLE_TEXT = "저는 시민이에요";
+// 테이블 채팅 패널 치수(UI-SPEC 구조 표). src/game/chatUi.ts 의 값을 그대로 옮긴 사본이다 — 값을 바꾸려면 UI-SPEC 과 chatUi.ts 를 먼저 바꾼다.
+const CHAT_TABLE_EXTRA = 92;
+
+/** 한 페이지의 테이블 채팅 패널 치수 판정. m 은 readTablePanel 의 값. 검사 행 목록을 돌려준다. */
+function tablePanelRows(m) {
+  if (!m || !m.hasChat) return [{ id: "TP0", label: "채팅 패널을 읽음", ok: false, detail: m ? "하단 패널에 채팅 패널이 없음" : "하단 패널이 없음" }];
+  const logWant = m.roomH >= CHAT_TALL_ROOM_MIN_H ? CHAT_LOG_TALL : CHAT_LOG_SHORT;
+  const panelWant = logWant + CHAT_TABLE_EXTRA;
+  const near = (a, b) => Math.abs(a - b) <= CHAT_PANEL_EPS;
+  const r1 = (n) => Math.round(n * 10) / 10;
+  return [
+    { id: "TP1", label: `테이블 패널 높이 ${panelWant} (방 높이 ${r1(m.roomH)} → 기록 ${logWant} + ${CHAT_TABLE_EXTRA})`, ok: near(m.panel.height, panelWant), detail: `패널 ${r1(m.panel.height)}` },
+    { id: "TP2", label: `기록 칸 높이 ${logWant}`, ok: near(m.log.height, logWant), detail: `기록 칸 ${r1(m.log.height)}` },
+    { id: "TP3", label: `입력칸·보내기 높이 ${CHAT_CONTROL}`, ok: near(m.input.height, CHAT_CONTROL) && near(m.send.height, CHAT_CONTROL) && near(m.send.width, CHAT_CONTROL), detail: `입력칸 ${r1(m.input.height)} · 보내기 ${r1(m.send.width)}x${r1(m.send.height)}` },
+    { id: "TP4", label: "입력칸 글자 16px", ok: m.inputFont === 16, detail: `${m.inputFont}px` },
+    { id: "TP5", label: `보내기 누르는 영역 ≥ ${TAP_MIN} 이고 눌림`, ok: m.send.width + 0.5 >= TAP_MIN && m.send.height + 0.5 >= TAP_MIN && m.send.hit, detail: `${r1(m.send.width)}x${r1(m.send.height)} hit ${m.send.hit}` },
+  ];
+}
+
+/**
+ * 테이블 화면 트레이서: 시민 방장이 낮 토론에서 한 줄을 보내면 기록 칸에 서버 방송이 돌아온 줄(채널 all, 이름 "나")이 보이고
+ * 하단 패널 높이가 LOG_H + 92 다(CHAT-01 낮 몫). 낮 시작 연출 다음이 바로 이 화면이다(순차 주장 단계 없음).
+ */
+async function chatTableFlow(ctx) {
+  const rec = recorder(ctx);
+  const id = "chat-table";
+  const host = await startHost(ctx, id);
+  const { page, tracker } = host;
+  await settle(page);
+  await openTestSheet(page);
+  await setBots(page, tracker, 3);
+  await chooseRole(page, tracker, "citizen");
+  // 결정성: 봇 처형 투표를 모두 반대로 고정 — 처형 없이 밤으로 가서 방장 탈락·종료 우연이 사라진다
+  await setBotVote(page, tracker, { exec: "no", pick: "random" });
+  await startGame(page, tracker);
+  ctx.stage = "play";
+  const v0 = tracker.last();
+  rec(`${id}/setup`, "S3", "인원·지정 직업", v0.players.length === 4 && v0.me.role === "citizen", `인원 ${v0.players.length}/4, 직업 ${v0.me.role}/citizen`);
+
+  await skipTo(page, tracker, "discussion");
+  await settle(page);
+  const sc = `${id}/discussion`;
+  const ch = tracker.last()?.me?.chat;
+  rec(sc, "CT0", "서버가 보낸 내 채널은 all", ch === "all", `me.chat ${ch}`);
+  await typeAndSendChat(page, CHAT_TABLE_TEXT);
+  const arrived = await attempt(async () => {
+    await waitChatLine(page, CHAT_TABLE_TEXT);
+  });
+  rec(sc, "CT1", "방장이 보낸 한 줄이 기록 칸에 보임", arrived.ok, arrived.detail);
+  if (arrived.ok) {
+    const mine = ((await readChatLines(page)) ?? []).filter((l) => l.text === CHAT_TABLE_TEXT);
+    rec(sc, "CT2", "그 줄은 정확히 한 번, 채널 all, 이름 '나', 보낸 자리는 방장", mine.length === 1 && mine[0].ch === "all" && mine[0].name === "나" && mine[0].seat === String(v0.me.seat), `${mine.length}줄 · ch ${mine[0]?.ch} · 이름 "${mine[0]?.name}" · seat ${mine[0]?.seat}`);
+    const cleared = await page.locator("[data-chat-input]").inputValue();
+    rec(sc, "CT3", "보낸 뒤 입력칸이 비워짐", cleared === "", `입력칸 ${cleared.length}자`);
+  }
+  for (const r of tablePanelRows(await readTablePanel(page))) rec(sc, r.id, r.label, r.ok, r.detail);
+  await checkState(ctx, id, "discussion"); // G 공통 검사 (콘솔 오류·가로 넘침·누르기 크기·글자 크기)
 }
 
 // ---- reconnect·deployhold (06-18, CONN-04·MAP-05) ----
@@ -2276,6 +2340,8 @@ export const FLOWS = [
   { id: "world", run: worldFlow, extraSizes: LOBBY_EXTRA_SIZES },
   // 로비 자유 채팅(07-13): 방장·손님 두 페이지로 한 줄이 오가는 트레이서
   { id: "chat-lobby", run: chatLobbyFlow, extraSizes: LOBBY_EXTRA_SIZES },
+  // 테이블 화면 자유 채팅(07-15): 낮 토론의 한 줄(트레이서) → 최후 변론·밤 마피아·시민 화면·탈락자
+  { id: "chat-table", run: chatTableFlow, extraSizes: LOBBY_EXTRA_SIZES },
   // 재접속·예산(06-18): 폰 크기와 곱하지 않고 자기 크기로 한 번. deployhold 는 배포와 동시에 돌리는 흐름(06-19)이라 --only 없이는 빠진다
   { id: "reconnect", run: reconnectFlow, size: RECONNECT_SIZE },
   { id: "deployhold", run: deployHoldFlow, size: RECONNECT_SIZE, skipByDefault: true },

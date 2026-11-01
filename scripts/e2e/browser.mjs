@@ -1048,6 +1048,63 @@ export function readChatPanel(page) {
   });
 }
 
+/**
+ * 테이블 화면(DayScene)의 채팅 패널 치수와 채널 표식(07-15): 방 높이(.mf-dayscene)·하단 패널(.mf-dayscene__panel)·기록 칸·입력칸·보내기.
+ * 한 번의 evaluate. 채팅 패널이 없으면 panelOnly(하단 패널만)로 돌려준다 — 패널 자체가 없는 단계는 null. UI-SPEC 표와 견주는 판정은 flows.mjs 가 한다.
+ */
+export function readTablePanel(page) {
+  return page.evaluate(() => {
+    const box = (el) => {
+      if (!el) return null;
+      const r = el.getBoundingClientRect();
+      const top = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+      return { left: r.left, top: r.top, width: r.width, height: r.height, right: r.right, bottom: r.bottom, hit: !!top && el.contains(top) };
+    };
+    const room = document.querySelector(".mf-dayscene");
+    const panel = document.querySelector(".mf-dayscene__panel");
+    if (!room || !panel) return null;
+    const chat = panel.querySelector("[data-chat-panel]");
+    const log = panel.querySelector("[data-chat-log]");
+    const input = panel.querySelector("[data-chat-input]");
+    const send = panel.querySelector("[data-chat-send]");
+    return {
+      roomH: room.getBoundingClientRect().height,
+      panel: box(panel),
+      hasChat: !!chat,
+      channel: chat ? chat.getAttribute("data-chat-channel") : null,
+      log: box(log),
+      input: box(input),
+      inputFont: input ? parseFloat(getComputedStyle(input).fontSize) : null,
+      inputLabel: input ? input.getAttribute("aria-label") : null,
+      inputHint: input ? input.getAttribute("placeholder") : null,
+      send: box(send),
+    };
+  });
+}
+
+/**
+ * 한 화면에서 마피아·유령 채널의 흔적을 센다(07-15, T-07-40): 문서 글자·aria-label·placeholder·title 에 든 금지 문구의 개수와 채널 표식이 있는 줄 수.
+ * needles = 찾을 문구 목록. 문서 전체(숨은 시트 포함)의 글자를 읽는다.
+ */
+export function readChannelTraces(page, needles) {
+  return page.evaluate((words) => {
+    const texts = [document.body.textContent ?? ""];
+    for (const el of document.querySelectorAll("[aria-label],[placeholder],[title]")) {
+      texts.push(el.getAttribute("aria-label") ?? "", el.getAttribute("placeholder") ?? "", el.getAttribute("title") ?? "");
+    }
+    const hits = {};
+    for (const w of words) hits[w] = texts.filter((t) => t.includes(w)).length;
+    return {
+      hits,
+      panels: document.querySelectorAll("[data-chat-panel]").length,
+      mafiaLines: document.querySelectorAll('[data-chat-log] [data-ch="mafia"]').length,
+      ghostLines: document.querySelectorAll('[data-chat-log] [data-ch="ghost"]').length,
+      mafiaChannel: document.querySelectorAll('[data-chat-channel="mafia"]').length,
+      ghostChannel: document.querySelectorAll('[data-chat-channel="ghost"]').length,
+    };
+  }, needles);
+}
+
 /** 서버 시각 t 의 seat 위치(월드 단위). 훅이 없거나 아직 구간이 없으면 null. */
 export function sampleWorld(page, seat, t) {
   return page.evaluate(({ s, tt }) => (window.__mfWorld ? window.__mfWorld.sample(s, tt) : null), { s: seat, tt: t });

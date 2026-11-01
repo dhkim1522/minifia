@@ -370,6 +370,7 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
           <DayScene
             view={view}
             connection={connection}
+            chat={chat}
             myRoleButton={myRoleButton}
             testButton={testButton}
             arrivedFrom={arrivedFrom}

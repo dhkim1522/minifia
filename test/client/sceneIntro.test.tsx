@@ -8,6 +8,7 @@ import type { PhaseId, RoomView } from "../../shared/protocol";
 import { SceneIntro } from "../../src/components/SceneIntro";
 import { PHASE_INTRO, SCENE_FADE_MS, SCENE_INTRO_MS } from "../../src/game/scenes";
 import { DayScene } from "../../src/screens/DayScene";
+import { ChatStore } from "../../src/net/chatStore";
 import type { RoomConnection } from "../../src/net/useRoomConnection";
 
 // 낮·밤 시작 문구(결정 0028 → 0030): 한 부품(SceneIntro)이 두 장면에 쓰인다.
@@ -59,9 +60,10 @@ function conn(view: RoomView, epoch: number): RoomConnection {
 
 const btn = <button type="button">내 역할</button>;
 function scene(view: RoomView, epoch = 1, arrivedFrom?: PhaseId | null) {
-  const utils = render(<DayScene view={view} connection={conn(view, epoch)} myRoleButton={btn} arrivedFrom={arrivedFrom} />);
+  const chat = new ChatStore();
+  const utils = render(<DayScene view={view} connection={conn(view, epoch)} chat={chat} myRoleButton={btn} arrivedFrom={arrivedFrom} />);
   const rerender = (v: RoomView, e = epoch) =>
-    utils.rerender(<DayScene view={v} connection={conn(v, e)} myRoleButton={btn} arrivedFrom={arrivedFrom} />);
+    utils.rerender(<DayScene view={v} connection={conn(v, e)} chat={chat} myRoleButton={btn} arrivedFrom={arrivedFrom} />);
   return { ...utils, rerender };
 }
 const intro = (c: HTMLElement) => c.querySelector<HTMLElement>(".mf-sceneintro");

@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { CSSProperties, MouseEvent, ReactNode } from "react";
-import type { PhaseId, RoomView } from "../../shared/protocol";
+import type { ChatChannel, PhaseId, RoomView } from "../../shared/protocol";
 import { isAlive } from "../../shared/game/alive";
 import type { RoleId } from "../../shared/game/roles";
 import { Backdrop } from "../components/Backdrop";
@@ -13,11 +13,16 @@ import { ReadOnlyRow } from "../components/ReadOnlyRow";
 import { SceneIntro } from "../components/SceneIntro";
 import { Timer } from "../components/Timer";
 import { UserRecordSheet } from "../components/UserRecordSheet";
+import { ChatPanel } from "../components/v2/ChatPanel";
 import { Toast, useToast } from "../components/Toast";
 import { morningCardText } from "../game/eliminationText";
 import { MORNING_GLOW_RISE_MS, PHASE_GUIDE_FILL, PHASE_INTRO, morningGlowGradient, sceneOfPhase } from "../game/scenes";
 import type { SceneId } from "../game/scenes";
 import { isBlankSceneTap } from "../game/blankTap";
+import { tablePanelHeight } from "../game/chatUi";
+import type { ChatStore } from "../net/chatStore";
+import { useChat } from "../net/useChat";
+import { useChatLogHeight } from "../net/useKeyboardLift";
 import type { RoomConnection } from "../net/useRoomConnection";
 import { useVerdictScene } from "./verdictScene";
 import "../styles/day.css";
@@ -30,9 +35,21 @@ import "../styles/verdict.css";
 // 밤 대상 버튼의 동사(접근성 이름 "{닉네임}, {동사} 대상"). 부품은 역할을 모르므로 장면이 값으로 넘긴다.
 const PICK_VERB: Readonly<Partial<Record<RoleId, string>>> = { police: "조사", doctor: "보호", mafia: "지목" };
 
+/**
+ * 하단에 ChatPanel 이 붙는 상황과 그 채널(07-UI-SPEC 범위표, D1). 패널이 없는 상황은 null 이다.
+ * 07-15 Task 1 은 낮 토론의 산 사람(all)만 연다. 최후 변론·밤 마피아·탈락자는 이어지는 작업이 더한다.
+ * 이 값은 화면의 의도일 뿐이다 — 패널은 서버가 보낸 view.me.chat 이 이 값과 같을 때만 그린다(서버 값이 기준).
+ */
+export function chatPanelMode(view: RoomView, meAlive: boolean): ChatChannel | null {
+  if (view.phase === "discussion" && meAlive) return "all";
+  return null;
+}
+
 export interface DaySceneProps {
   view: RoomView;
   connection: RoomConnection;
+  /** 채팅 저장소(RoomScreen 이 연결과 같은 수명으로 쥔다). 낮 토론·최후 변론·밤 마피아·탈락자 하단의 ChatPanel 이 이것을 읽는다 */
+  chat: ChatStore;
   /** [역할 카드] 버튼. 모양은 RoomScreen 이 한 가지로 만들어 넘긴다 */
   myRoleButton: ReactNode;
   /** 테스트 방 방장의 [테스트] 버튼(결정 0022). 있으면 장면 상자 왼쪽 위에 놓는다 */
@@ -51,7 +68,7 @@ export interface DaySceneProps {
 // 테이블은 키가 없는 장면 상자 안에 있어 단계 사이에 다시 마운트되지 않는다(깜빡임·인물 재등장 없음, Pitfall 7·11).
 // 위쪽 바와 하단 패널만 단계가 든 key(bar-·panel- 접두어로 서로 겹치지 않게)라 단계마다 새 요소가 되어 한 번 페이드된다.
 // 낮 토론·밤 마피아 하단은 비어 있다(채팅 패널은 07-13·07-15). 화면은 스스로 단계를 넘기지 않는다(서버 view 만 따름). 역할 문자열을 화면에 쓰지 않는다.
-export function DayScene({ view, connection, myRoleButton, testButton, arrivedFrom }: DaySceneProps) {
+export function DayScene({ view, connection, chat, myRoleButton, testButton, arrivedFrom }: DaySceneProps) {
   const n = view.day?.n ?? 1;
   const { toast, show: showToast } = useToast();
 
@@ -134,7 +151,14 @@ export function DayScene({ view, connection, myRoleButton, testButton, arrivedFr
   const isAllySeat = (seat: number): boolean => allies.includes(seat) || (spectate !== undefined && seat !== view.me.seat && jobOf(seat) === "mafia");
   // 투표 구간(execVote~)이면 제목·안내·타이머 톤·하단·좌석 덧입힘을 이 값이 정한다. 아니면 null 이라 낮·밤·아침 경로는 그대로다(verdictScene.tsx).
 // 필드마다 `verdict?.field ?? 기존` 으로 읽는다 — 처형 무효로 온 밤은 layer(회색 카드)·introDelayMs(밤 시작 문구 지연)만 채워져 나머지는 기존 밤 값이 쓰인다(04-24).
-  const verdict = useVerdictScene({ view, connection, meAlive, showToast, onInspect: setInspectSeat, isAllySeat });
+  // 하단 채팅 패널(07-15): 기록 칸 높이는 방 높이로 한 번 정하고(useChatLogHeight), 패널 높이는 LOG_H + 92 다. 패널 모양은 서버가 보낸 view.me.chat 이 정한다.
+  const rootRef = useRef<HTMLElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const logH = useChatLogHeight(rootRef, inputRef);
+  const binding = useChat({ store: chat, connection, view });
+  const panelMode = chatPanelMode(view, meAlive);
+  const chatBottom = panelMode !== null && view.me.chat === panelMode ? <ChatPanel {...binding} logHeight={logH} inputRef={inputRef} /> : null;
+  const verdict = useVerdictScene({ view, connection, meAlive, showToast, onInspect: setInspectSeat, isAllySeat, chatBottom });
   // 기록 카드가 열릴 수 있는 단계(04-27): 투표 구간은 verdict 가 정하고(처형 여부 모두·후보 선택 탈락 viewer·그 밖 닫힘), 아니면 낮 세 단계다.
   // 열려 있는데 허용되지 않는 단계가 되면 렌더 중 상태 조정으로 닫는다(밤 규칙과 같은 방식). 낮 → 낮 사이에는 닫히지 않는다.
   const inspectAllowed = verdict?.inspectAllowed ?? inspectable;
@@ -208,7 +232,7 @@ export function DayScene({ view, connection, myRoleButton, testButton, arrivedFr
       {...(fromScene !== undefined ? { fromScene } : {})}
       className="mf-dayscene__backdrop"
     >
-      <main className={`mf-root mf-dayscene${verdict?.rootClassName ? ` ${verdict.rootClassName}` : ""}`}>
+      <main ref={rootRef} className={`mf-root mf-dayscene${verdict?.rootClassName ? ` ${verdict.rootClassName}` : ""}`}>
         <div key={`bar-${view.phase}`} className="mf-dayscene__enter">
           <PhaseBar
             title={title}
@@ -251,7 +275,11 @@ export function DayScene({ view, connection, myRoleButton, testButton, arrivedFr
           {verdict?.sceneOverlay}
         </div>
         {isMorning ? <MorningCard {...morningCardText(view.day?.morning, nicknameOf)} exitDelayMs={morningExit.delay} /> : null}
-        <section key={`panel-${view.phase}`} className="mf-dayscene__panel mf-dayscene__enter">
+        <section
+          key={`panel-${view.phase}`}
+          className={`mf-dayscene__panel mf-dayscene__enter${chatBottom !== null ? " mf-dayscene__panel--chat" : ""}`}
+          {...(chatBottom !== null ? { style: { "--mf-chat-panel-h": `${tablePanelHeight(logH)}px` } as CSSProperties } : {})}
+        >
           {verdict?.bottom !== undefined ? (
             verdict.bottom
           ) : isMorning ? (
@@ -260,11 +288,14 @@ export function DayScene({ view, connection, myRoleButton, testButton, arrivedFr
           ) : view.phase === "dayAnnounce" ? (
             // 낮 시작 하단(UX-01 빈 칸 1): 생존자·탈락자 모두 같은 두 줄. 아침 하단과 같은 규칙이라 meDead 분기보다 앞이다.
             <NightPanel title={PHASE_GUIDE_FILL.dayAnnounce.title} guide={PHASE_GUIDE_FILL.dayAnnounce.guide} />
+          ) : chatBottom !== null ? (
+            // 낮 토론·최후 변론·밤 마피아·탈락자 하단(07-15): 채팅 패널. 서버 view.me.chat 이 패널 모양을 정한다.
+            chatBottom
           ) : meDead ? (
-            // 관전 하단(UI-SPEC N-6): 읽기 전용 안내 줄만. 채팅 패널은 07-13·07-15 가 붙인다.
+            // 관전 하단(UI-SPEC N-6): 채팅 패널이 붙지 않는 단계의 탈락자는 읽기 전용 안내 줄만.
             <ReadOnlyRow guide />
           ) : view.phase === "discussion" || mafiaNight ? (
-            // 낮 토론·밤 마피아 하단은 비어 있다(07-13·07-15 가 채팅 패널을 붙인다, 가정 A1)
+            // 서버 채널(view.me.chat)이 이 화면의 의도와 다르면 패널 없이 비워 둔다(서버 값이 기준, T-07-41)
             null
           ) : pickPanelRole ? (
             <NightPanel title={NIGHT_PANEL_TEXT[pickPanelRole].title} guide={NIGHT_PANEL_TEXT[pickPanelRole].guide}>

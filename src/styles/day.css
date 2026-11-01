@@ -20,6 +20,10 @@
    flex none·높이 고정이라 장면(flex 1·min-height 0)만 줄어든다. 위 8px·아래 12px 여백은 토큰에 없는 값이다(UI-SPEC S6: 8 + 82.8 + 8 + 44 + 12 = 154.8 ≤ 157). 손잡이 막대는 시안에 없다. */
 .mf-dayscene__panel { flex: none; box-sizing: border-box; height: calc(157px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: var(--space-sm); padding: 8px var(--space-md) calc(12px + env(safe-area-inset-bottom)); background: var(--night-800); border-radius: var(--radius-lg) var(--radius-lg) 0 0; }
 
+/* 채팅 패널이 붙는 테이블 화면의 하단(07-15, UI-SPEC "구조"): 높이 = LOG_H + 92 + 안전 영역(변수 --mf-chat-panel-h 는 DayScene 이 chatUi.tablePanelHeight 로 넣는다).
+   안쪽 위 14·아래 22 는 로비 패널과 같은 승인 값이다(14 + LOG_H + 8 + 48 + 22). 157 기본 패널(직업 공개·투표 단계)은 그대로다. */
+.mf-dayscene__panel.mf-dayscene__panel--chat { height: calc(var(--mf-chat-panel-h) + env(safe-area-inset-bottom)); padding: 14px var(--space-md) calc(22px + env(safe-area-inset-bottom)); }
+
 /* 남의 차례 하단 최소형(03.1 UI-SPEC B, 시안 K2·f9.css): 닉네임 + 남은 초를 한 줄 알약 모양 면에 둔다. 03.1-07 이 채팅 줄·이모티콘 버튼을 더한다 */
 .st-row { display: flex; gap: var(--space-sm); }
 .st-row .stat { flex: 1; min-width: 0; display: flex; align-items: center; justify-content: space-between; gap: var(--space-sm); min-height: var(--tap-min); margin: 0; padding: 0 var(--space-md); box-sizing: border-box; border-radius: var(--radius-md); background: var(--night-700); font-size: 14px; line-height: 20px; color: var(--gray-100); word-break: keep-all; }

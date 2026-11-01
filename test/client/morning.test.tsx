@@ -8,6 +8,7 @@ import type { MorningView, PhaseId, RoomView, SpectateView } from "../../shared/
 import type { RoomConnection } from "../../src/net/useRoomConnection";
 import { MorningCard, exitDelayOf } from "../../src/components/MorningCard";
 import { DayScene } from "../../src/screens/DayScene";
+import { ChatStore } from "../../src/net/chatStore";
 
 // 아침 발표 통합 테스트(03-10): DayScene 의 morning 분기를 view 픽스처로 만난다.
 // 실패 보고서가 한 줄이 되도록 단언은 문자열·불리언으로 둔다.
@@ -74,9 +75,10 @@ function conn(view: RoomView): RoomConnection {
 
 function scene(view: RoomView) {
   const c = conn(view);
+  const chat = new ChatStore();
   const role = <button type="button">내 역할</button>;
-  const utils = render(<DayScene view={view} connection={c} myRoleButton={role} />);
-  const rerender = (v: RoomView) => utils.rerender(<DayScene view={v} connection={{ ...c, view: v }} myRoleButton={role} />);
+  const utils = render(<DayScene view={view} connection={c} chat={chat} myRoleButton={role} />);
+  const rerender = (v: RoomView) => utils.rerender(<DayScene view={v} connection={{ ...c, view: v }} chat={chat} myRoleButton={role} />);
   return { ...utils, rerender, conn: c };
 }
 
