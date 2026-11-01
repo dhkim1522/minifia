@@ -63,8 +63,7 @@ async function start(r: Seated): Promise<void> {
 
 /**
  * 방장이 testSkip 을 거듭해 phase 에 닿고 모든 소켓이 그 단계 state 를 받을 때까지. assigning 이어야 한다.
- * claim 은 차례 하나가 한 번의 넘기기라 같은 단계 state 가 여러 번 온다 — 그래서 저장된 단계를 보고 반복하고,
- * 매번 소켓마다 "다음 state 프레임 하나" 를 기다린다(보내기 전에 읽을 위치를 맨 끝으로 옮겨 낡은 프레임을 건너뛴다).
+ * 저장된 단계를 보고 반복하고, 매번 소켓마다 "다음 state 프레임 하나" 를 기다린다(보내기 전에 읽을 위치를 맨 끝으로 옮겨 낡은 프레임을 건너뛴다).
  */
 async function skipUntil(r: Seated, phase: PhaseId): Promise<void> {
   for (let i = 0; i < 40 && (await stored(r.code)).phase !== phase; i += 1) {
@@ -274,30 +273,6 @@ describe("testSkip", () => {
     expect(summary(await sendAndSettle(r.host, { t: "testRole", role: "police" }))).toBe("[error:WRONG_PHASE,state:roleReveal]");
   }, 30_000);
 
-  it("claim 중에는 한 번에 한 차례만 넘어가고(지금 차례가 none) 마지막 차례에서 낮 토론으로 간다", async () => {
-    const r = await seatQuiet(3, { testMode: true });
-    await start(r);
-    await skipUntil(r, "claim");
-    for (const sock of allSockets(r)) expect(String(lastView(sock).day?.turn?.seat)).toBe("0");
-
-    for (let turn = 1; turn <= 3; turn += 1) {
-      for (const s of allSockets(r)) s.cursor = s.frames.length;
-      send(r.host, { t: "testSkip" });
-      for (const sock of allSockets(r)) {
-        const msg = (await nextFrame(sock, (m) => m.t === "state")) as Extract<ServerMessage, { t: "state" }>;
-        expect(`${msg.view.phase}:${msg.view.day?.turn?.seat}:${msg.view.day?.claimLog?.length}`).toBe(`claim:${turn}:${turn}`);
-        expect(msg.view.day?.claimLog?.every((l) => l.claim === "none")).toBe(true);
-      }
-      expect(String(await alarmOf(r.code))).toBe(String((await stored(r.code)).phaseEndsAt));
-    }
-    for (const s of allSockets(r)) s.cursor = s.frames.length;
-    send(r.host, { t: "testSkip" });
-    for (const sock of allSockets(r)) {
-      const msg = (await nextFrame(sock, (m) => m.t === "state")) as Extract<ServerMessage, { t: "state" }>;
-      expect(`${msg.view.phase}:${msg.view.day?.claimLog?.length}`).toBe("discussion:4");
-    }
-  }, 30_000);
-
   it("discussion 에서 넘기면 모든 소켓이 처형 여부 투표(phaseDurationMs 13000)를 받고, 표가 없이 다시 넘기면 밤이다 (D-25)", async () => {
     const r = await seatQuiet(3, { testMode: true });
     await start(r);
@@ -382,8 +357,8 @@ describe("testReset", () => {
     expect(String(lastView(r.host).me.role)).toBe("mafia");
   }
 
-  it("claim 도중에 되돌려도 차례 상태(claimOrder·claimIdx·claimStart·claimLog)가 모두 지워진다", async () => {
-    await resetFrom("claim");
+  it("discussion 도중에 되돌려도 차례 상태(claimOrder·claimIdx·claimStart·claimLog)가 하나도 없다", async () => {
+    await resetFrom("discussion");
   }, 30_000);
 
   it("execVote 에서 되돌려도 같다", async () => {

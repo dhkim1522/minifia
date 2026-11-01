@@ -64,7 +64,7 @@ const DAY_CHAT_PHASES: PhaseId[] = [
   "execution",
   "morning",
 ];
-const SILENT_PHASES: PhaseId[] = ["assigning", "roleReveal", "ended", "claim"];
+const SILENT_PHASES: PhaseId[] = ["assigning", "roleReveal", "ended"];
 
 describe("channelOf — 보낸 사람의 서버 상태로만 채널을 정한다", () => {
   it("밤: 산 마피아 = mafia, 산 시민·경찰·의사 = null, 탈락자 = ghost", () => {

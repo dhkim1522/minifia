@@ -38,7 +38,6 @@ export const PHASE_SCENE: Readonly<Record<PhaseId, SceneId>> = Object.freeze({
   assigning: "lobby",
   roleReveal: "lobby",
   dayAnnounce: "day",
-  claim: "day",
   discussion: "day",
   night: "night",
   morning: "morning",

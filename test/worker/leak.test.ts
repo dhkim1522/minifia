@@ -202,18 +202,7 @@ describe("6명 한 판(두 밤·두 아침, 행동·마피아 채팅·탈락·�
       await flush(who.sock);
     };
 
-    /** claim 단계에서 지금 차례인 사람(view.day.turn.seat)이 role 을 주장한다 — 끝나지 않은 차례의 선택이 어디로도 새지 않는지 보려고 실제로 고른다. */
-    const claimAsTurn = async (role: RoleId): Promise<void> => {
-      await advanceTo(code, socks, "claim");
-      const states = collect(players[0]!.sock)
-        .map((raw) => JSON.parse(raw) as ServerMessage)
-        .filter((m): m is Extract<ServerMessage, { t: "state" }> => m.t === "state" && m.view.phase === "claim");
-      const turnSeat = states[states.length - 1]!.view.day!.turn!.seat;
-      await act(actors.find((a) => a.seat === turnSeat)!, { t: "claim", claim: role });
-    };
-
-    // 1일차: 직업 주장(방장 차례에 한 번, 나머지는 시간 초과) → 토론(살아 있는 시민 Y 가 한 줄, 낮 chat seq 기준점) → 밤
-    await claimAsTurn("police");
+    // 1일차: 토론(살아 있는 시민 Y 가 한 줄, 낮 chat seq 기준점) → 밤 (07-08: 순차 주장 단계 없음)
     await advanceTo(code, socks, "discussion");
     await probe(true);
     await backdateSends(code);
@@ -233,8 +222,7 @@ describe("6명 한 판(두 밤·두 아침, 행동·마피아 채팅·탈락·�
     await advanceTo(code, socks, "morning"); // X 탈락
     await probe(true);
 
-    // 2일차: 직업 주장(시작 자리가 한 칸 옮겨진 첫 차례 사람이 한 번) → 토론(살아 있는 시민 Y 가 한 줄) → 밤(마피아 둘이 Y 를, 경찰이 마피아 B 를 지목, 마피아 B 가 채팅) → 아침
-    await claimAsTurn("doctor");
+    // 2일차: 토론(살아 있는 시민 Y 가 한 줄) → 밤(마피아 둘이 Y 를, 경찰이 마피아 B 를 지목, 마피아 B 가 채팅) → 아침
     await advanceTo(code, socks, "discussion");
     await probe(true);
     await backdateSends(code);
@@ -284,9 +272,9 @@ describe("6명 한 판(두 밤·두 아침, 행동·마피아 채팅·탈락·�
         // 서버 전용 차례 키는 어떤 프레임의 어떤 경로에도 없다(T-03.1-06).
         for (const path of paths) expect(SERVER_ONLY_KEYS.includes(path.slice(path.lastIndexOf(".") + 1))).toBe(false);
         if (msg.t !== "state") continue;
-        // day.turn 은 claim 단계 state 에만 있고, claimLog 줄의 키는 n, seat, claim 뿐이다.
-        expect(`${msg.view.phase}:${msg.view.day?.turn !== undefined}`).toBe(`${msg.view.phase}:${msg.view.phase === "claim"}`);
-        for (const line of msg.view.day?.claimLog ?? []) expect(Object.keys(line).sort()).toEqual(["claim", "n", "seat"]);
+        // day.turn 은 어느 단계에도 없고, claimLog 는 언제나 빈 배열이다(07-08: 순차 주장 제거, 키는 07-09 가 지운다).
+        expect(`${msg.view.phase}:${Object.hasOwn(msg.view.day ?? {}, "turn")}`).toBe(`${msg.view.phase}:false`);
+        expect(msg.view.day?.claimLog ?? []).toEqual([]);
         for (const pl of msg.view.players) {
           expect(Object.keys(pl).sort()).toEqual(["alive", "connected", "isHost", "nickname", "seat"]);
         }

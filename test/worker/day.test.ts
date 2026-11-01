@@ -1,12 +1,10 @@
-// 낮 토론 워커 통합 테스트(02-05, 03.1-02): 실제 소켓·알람으로 직업 주장 차례(결정 0023)·빠른 메시지·이모티콘·연장·넘기기를 workerd 에서 확인한다.
+// 낮 토론 워커 통합 테스트(02-05, 03.1-02): 실제 소켓·알람으로 낮 토론(07-08 이후 순차 주장 없음)·빠른 메시지·이모티콘·연장·넘기기를 workerd 에서 확인한다.
 import { describe, expect, it } from "vitest";
 import type { RoomView, ServerMessage } from "../../shared/protocol";
 import { env } from "cloudflare:workers";
 import { evictDurableObject, runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
 import { advanceTo, alarmOf, backdateSends, collect, connect, flat, forceDue, hello, nextFrame, nextState, seat, send, storedRoom } from "./helpers";
 import type { Seated, TestSocket } from "./helpers";
-
-const ROLE_VALUES = ["mafia", "police", "doctor", "citizen", "none"];
 
 const allSockets = (r: Seated): TestSocket[] => [r.host, ...r.guests.map((g) => g.sock)];
 
@@ -16,188 +14,16 @@ const viewsIn = (sock: TestSocket, phase: string): RoomView[] =>
     .filter((m): m is Extract<ServerMessage, { t: "state" }> => m.t === "state" && m.view.phase === phase)
     .map((m) => m.view);
 
-/** 방장 + 연결 손님 4명(5명 방)을 시작하고 목표 단계까지 넘긴다. claim 은 차례마다 마감이 이어지므로 discussion 까지 알람을 여러 번 돌린다. */
-async function startedAt(phase: "claim" | "discussion", guests = 4): Promise<Seated> {
+/** 방장 + 연결 손님 4명(5명 방)을 시작하고 낮 토론까지 알람을 넘긴다(07-08: 낮 시작 발표 다음이 바로 토론). */
+async function startedAt(phase: "discussion", guests = 4): Promise<Seated> {
   const r = await seat(guests, 0);
   send(r.host, { t: "start" });
   for (const s of allSockets(r)) await nextFrame(s, (m) => m.t === "state" && m.view.phase === "assigning");
-  if (phase === "discussion") await advanceTo(r.code, allSockets(r), "claim");
   await advanceTo(r.code, allSockets(r), phase);
   return r;
 }
 
-/** JSON 을 걸어 내려가며 역할·주장 값 문자열이 있는 경로를 모은다(배열 칸은 [] 로 줄인다). */
-function roleValuePaths(value: unknown, path = ""): string[] {
-  if (Array.isArray(value)) return value.flatMap((v) => roleValuePaths(v, `${path}[]`));
-  if (value !== null && typeof value === "object") {
-    return Object.entries(value as Record<string, unknown>).flatMap(([k, v]) => roleValuePaths(v, `${path}.${k}`));
-  }
-  return typeof value === "string" && ROLE_VALUES.includes(value) ? [path] : [];
-}
-
-const ALLOWED_ROLE_PATHS = new Set([".view.me.role", ".view.day.roles[]", ".view.day.claimLog[].claim"]);
-
 const lastOf = (sock: TestSocket, phase: string): RoomView => viewsIn(sock, phase).at(-1)!;
-
-/** 서버가 앞선 요청을 모두 처리해 다른 소켓에 보낼 것을 보냈다고 볼 수 있을 때까지 ping 왕복과 짧은 대기(아래 settle 과 같다). */
-async function quiet(sock: TestSocket): Promise<void> {
-  send(sock, { t: "ping", c: 7 });
-  await nextFrame(sock, (m) => m.t === "pong");
-  await new Promise<void>((resolve) => setTimeout(resolve, 50));
-}
-
-/** 소켓이 from 번째 프레임 이후 받은 프레임의 종류(pong 제외) 한 줄. */
-const kindsSince = (sock: TestSocket, from: number): string =>
-  sock.frames
-    .slice(from)
-    .map((raw) => (JSON.parse(raw) as { t: string }).t)
-    .filter((t) => t !== "pong")
-    .join(",");
-
-describe("차례 한 바퀴 (DAY-02)", () => {
-  /** 방장(seat 0) + 연결 손님 3명(seat 1~3)의 4명 방이 claim 첫 차례에 있다. */
-  const claimRoom = (): Promise<Seated> => startedAt("claim", 3);
-  const waitTurn = (s: TestSocket, seatNo: number) =>
-    nextFrame(s, (m) => m.t === "state" && m.view.phase === "claim" && m.view.day?.turn?.seat === seatNo);
-
-  it("claim 진입: 네 소켓 모두 day.turn.seat 가 방장 자리이고 phaseDurationMs 8000, claimLog 는 비어 있다", async () => {
-    const r = await claimRoom();
-    for (const s of allSockets(r)) {
-      const view = lastOf(s, "claim");
-      expect(`${view.day?.turn?.seat}:${view.phaseDurationMs}:${JSON.stringify(view.day?.claimLog)}`).toBe("0:8000:[]");
-    }
-  });
-
-  it("차례가 아닌 손님의 claim 은 WRONG_PHASE 뒤 그 소켓에만 최신 state 가 오고(turn 은 그대로) 다른 소켓에는 프레임이 없다", async () => {
-    const r = await claimRoom();
-    const g = r.guests[1]!;
-    const others = allSockets(r).filter((s) => s !== g.sock);
-    await Promise.all(others.map(quiet));
-    const marks = others.map((s) => s.frames.length);
-
-    send(g.sock, { t: "claim", claim: "none" });
-    expect(await errorCode(g.sock)).toBe(codeOf("WRONG_PHASE"));
-    const state = await nextState(g.sock);
-    expect(`${state.view.phase}:${state.view.day?.turn?.seat}`).toBe("claim:0");
-    await Promise.all(others.map(quiet));
-    others.forEach((s, i) => expect(kindsSince(s, marks[i]!)).toBe(""));
-  });
-
-  it("방장이 claim 하면 곧바로 모든 소켓이 다음 차례와 claimLog 한 줄을 받고 마감은 호출 시각 + 8000 이며 알람이 그 마감으로 옮겨진다", async () => {
-    const r = await claimRoom();
-    const before = (await storedRoom(r.code)).phaseEndsAt!;
-    const t0 = Date.now();
-    send(r.host, { t: "claim", claim: "police" });
-    const views: RoomView[] = [];
-    for (const s of allSockets(r)) views.push(((await waitTurn(s, 1)) as Extract<ServerMessage, { t: "state" }>).view);
-    const t1 = Date.now();
-
-    for (const v of views) {
-      expect(JSON.stringify(v.day?.claimLog)).toBe(JSON.stringify([{ n: 1, seat: 0, claim: "police" }]));
-      expect(v.phase).toBe("claim");
-      expect(v.phaseEndsAt).toBe(views[0]!.phaseEndsAt);
-    }
-    const ends = views[0]!.phaseEndsAt!;
-    expect(ends).toBeGreaterThanOrEqual(t0 + 8000);
-    expect(ends).toBeLessThanOrEqual(t1 + 8000);
-    // 일찍 고르면 다음 차례가 그 시점부터 시작한다: 원래 일정(이전 마감 + 8000)보다 앞서 있다.
-    expect(ends).toBeLessThan(before + 8000);
-    expect((await storedRoom(r.code)).phaseEndsAt).toBe(ends);
-    expect(await alarmOf(r.code)).toBe(ends);
-  });
-
-  it("손님이 고르고 나머지가 시간 초과하면 알람이 한 차례씩 none 으로 넘겨 마지막에 낮 토론이 되고 claimLog 는 자리 순서 네 줄이다", async () => {
-    const r = await claimRoom();
-    const stub = env.ROOM.getByName(r.code);
-    const sockets = allSockets(r);
-    send(r.host, { t: "claim", claim: "police" });
-    for (const s of sockets) await waitTurn(s, 1);
-    send(r.guests[0]!.sock, { t: "claim", claim: "none" });
-    for (const s of sockets) await waitTurn(s, 2);
-
-    // seat 2 시간 초과 → 한 차례만 넘어간다
-    await forceDue(r.code, "phaseEndsAt");
-    expect(await runDurableObjectAlarm(stub)).toBe(true);
-    for (const s of sockets) await waitTurn(s, 3);
-    expect((await storedRoom(r.code)).phase).toBe("claim");
-    // seat 3 시간 초과 → 낮 토론
-    await forceDue(r.code, "phaseEndsAt");
-    expect(await runDurableObjectAlarm(stub)).toBe(true);
-    for (const s of sockets) await nextFrame(s, (m) => m.t === "state" && m.view.phase === "discussion");
-
-    for (const s of sockets) {
-      const log = lastOf(s, "discussion").day?.claimLog ?? [];
-      expect(log.map((l) => `${l.n}:${l.seat}:${l.claim}`).join(",")).toBe("1:0:police,1:1:none,1:2:none,1:3:none");
-    }
-  });
-
-  it("2일차 claim 은 시작 자리가 한 칸 옮겨져(seat 1) 1일차 네 줄 뒤에 아직 2일차 줄이 없다", async () => {
-    const r = await startedAt("discussion", 3);
-    const sockets = allSockets(r);
-    await advanceTo(r.code, sockets, "night");
-    await advanceTo(r.code, sockets, "morning");
-    await advanceTo(r.code, sockets, "dayAnnounce");
-    await advanceTo(r.code, sockets, "claim");
-    for (const s of sockets) {
-      const view = lastOf(s, "claim");
-      expect(`${view.day?.n}:${view.day?.turn?.seat}:${view.day?.claimLog?.length}`).toBe("2:1:4");
-      expect((view.day?.claimLog ?? []).every((l) => l.n === 1)).toBe(true);
-    }
-  });
-
-  it("claim 중 이모티콘은 모든 소켓에 가고 빠른 메시지는 WRONG_PHASE 뒤 그 소켓에만 state 가 온다", async () => {
-    const r = await claimRoom();
-    const g = r.guests[1]!;
-    const others = allSockets(r).filter((s) => s !== g.sock);
-    await Promise.all(others.map(quiet));
-    const marks = others.map((s) => s.frames.length);
-
-    send(g.sock, { t: "say", template: "innocent" });
-    expect(await errorCode(g.sock)).toBe(codeOf("WRONG_PHASE"));
-    expect((await nextState(g.sock)).view.phase).toBe("claim");
-    await Promise.all(others.map(quiet));
-    others.forEach((s, i) => expect(kindsSince(s, marks[i]!)).toBe(""));
-
-    send(g.sock, { t: "emoji", icon: "smile" });
-    for (const s of allSockets(r)) {
-      const m = await nextFrame(s, (f) => f.t === "emoji");
-      expect(m.t === "emoji" && `${m.seat}:${m.icon}`).toBe(`${g.seat}:smile`);
-    }
-  });
-
-  it("이미 차례를 마친 방장의 두 번째 claim 은 WRONG_PHASE 이고 그 소켓에만 최신 state 가 온다", async () => {
-    const r = await claimRoom();
-    send(r.host, { t: "claim", claim: "police" });
-    for (const s of allSockets(r)) await waitTurn(s, 1);
-
-    send(r.host, { t: "claim", claim: "none" });
-    expect(await errorCode(r.host)).toBe(codeOf("WRONG_PHASE"));
-    const state = await nextState(r.host);
-    expect(`${state.view.day?.turn?.seat}:${state.view.day?.claimLog?.length}`).toBe("1:1");
-  });
-
-  it("마감 전 모든 프레임에서 역할·주장 문자열은 허용 경로에만 있고 서버 전용 키는 없다", async () => {
-    const r = await claimRoom();
-    send(r.host, { t: "claim", claim: "mafia" });
-    for (const s of allSockets(r)) await waitTurn(s, 1);
-    for (const s of allSockets(r)) {
-      for (const raw of collect(s)) {
-        for (const path of roleValuePaths(JSON.parse(raw))) expect(ALLOWED_ROLE_PATHS.has(path)).toBe(true);
-        expect(/claimPick|claimOrder|claimIdx|claimStart/.test(raw)).toBe(false);
-      }
-    }
-  });
-
-  it("단계 밖(discussion) claim 은 WRONG_PHASE 이고 최신 state 를 다시 받는다", async () => {
-    const r = await startedAt("discussion");
-    const g0 = r.guests[0]!;
-    send(g0.sock, { t: "claim", claim: "police" });
-    const err = await nextFrame(g0.sock, (m) => m.t === "error");
-    expect(JSON.stringify(err)).toBe(JSON.stringify({ t: "error", code: "WRONG_PHASE" }));
-    const state = await nextState(g0.sock);
-    expect(state.view.phase).toBe("discussion");
-  });
-});
 
 const errorCode = async (sock: TestSocket): Promise<string> => flat(await nextFrame(sock, (m) => m.t === "error"));
 const codeOf = (code: string): string => JSON.stringify({ t: "error", code });
@@ -238,19 +64,6 @@ async function settle(sock: TestSocket): Promise<void> {
 const keysOf = (frame: RawFrame): string => Object.keys(frame).sort().join(",");
 
 describe("빠른 메시지 (COMM-01, COMM-04, D-13)", () => {
-  it("claim 단계의 say 는 WRONG_PHASE 이고 다른 소켓 프레임에 메시지가 없다", async () => {
-    const r = await startedAt("claim");
-    const [g0, g1] = r.guests as [Seated["guests"][number], Seated["guests"][number], ...Seated["guests"]];
-    const others = [r.host, ...r.guests.slice(1).map((g) => g.sock)];
-
-    send(g0.sock, { t: "say", template: "suspect", target: g1.seat });
-    expect(await errorCode(g0.sock)).toBe(codeOf("WRONG_PHASE"));
-    await settle(g0.sock);
-    for (const s of others) expect(collect(s).some((raw) => raw.includes('"template"'))).toBe(false);
-    for (const s of allSockets(r)) expect(chatFrames(s).length).toBe(0);
-    expect(await storedMessageCount(r.code)).toBe(0);
-  });
-
   it("discussion 에서 보낸 suspect 는 모든 소켓(보낸 소켓 포함)에 chat 프레임 하나로 가고(seat = 보낸 소켓의 자리), 즉시 두 번째는 RATE_LIMITED 이며 chat 프레임이 더 오지 않는다", async () => {
     const r = await startedAt("discussion");
     const [g0, g1] = r.guests as [Seated["guests"][number], Seated["guests"][number], ...Seated["guests"]];

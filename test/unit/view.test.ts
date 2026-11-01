@@ -723,11 +723,12 @@ describe("buildView 낮 뷰 — 토론·이튿날 (D-02, D-05, D-15)", () => {
     expect(bad.join(" ")).toBe("");
   });
 
-  it("claimLog 가 없는 옛 방도 claimLog [] 로 뷰가 만들어진다", () => {
+  it("옛 claimLog·claimOrder 키가 남은 방도 view 의 claimLog 는 [] 이고 서버 전용 키는 실리지 않는다 (07-08)", () => {
     const s = stateAt("discussion", 5, 1);
-    const { claimLog: _drop, ...rest } = s;
-    const old: RoomState = rest;
+    const old = { ...s, claimLog: [{ n: 1, seat: 0, claim: "police" }], claimOrder: [0, 1], claimIdx: 1, claimStart: 0, claimPick: "police" } as unknown as RoomState;
+    const text = JSON.stringify(buildView(old, seatId(old, 0), START_AT));
     expect(flat(buildView(old, seatId(old, 0), START_AT).day?.claimLog)).toBe("[]");
+    for (const key of ["claimOrder", "claimIdx", "claimStart", "claimPick"]) expect(text.includes(`"${key}"`)).toBe(false);
   });
 
   it("discussion: 여러 번 say 한 뒤에도 day 의 키는 claimLog,n,roles,voteLog 이고 messages·extendUsed 키가 없다 (결정 0017-5·0017-7)", () => {

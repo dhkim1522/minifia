@@ -745,7 +745,6 @@ export const EXPECTED_SCENE = {
   assigning: "lobby",
   roleReveal: "lobby",
   dayAnnounce: "day",
-  claim: "day",
   discussion: "day",
   night: "night",
   morning: "morning",

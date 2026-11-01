@@ -385,13 +385,6 @@ describe("탈락자 거부 (ELIM-01)", () => {
     }
   });
 
-  it("2일차 직업 공개 단계에서 탈락자의 claim 은 BAD_MESSAGE + state 다", async () => {
-    const { r, dead, alive } = await diedFirstNight();
-    await advanceTo(r.code, allSockets(r), "claim");
-    const rejected = await sendAndSettle(dead, { t: "claim", claim: "citizen" }, alive);
-    expect(summary(rejected.own)).toBe("[error:BAD_MESSAGE,state:claim]");
-    for (const x of alive) expect(summary(rejected.seen.get(x)!)).toBe("[]");
-  });
 });
 
 describe("마감 뒤 행동", () => {
