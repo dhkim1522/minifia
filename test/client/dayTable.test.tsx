@@ -221,10 +221,10 @@ describe("DayTable: 안전", () => {
 // CSS 는 정규식으로 한 줄 결과(true/false)만 단언한다 — toMatch 는 실패 때 CSS 전체를 보고서에 쏟아 TAP 을 깨뜨린다.
 const cssHas = (css: string, re: RegExp): boolean => re.test(css);
 
-// ---- 02-14 Task 3: 배지·링·동료·보낸 사람 반전·머리 위 이모티콘 ----
+// ---- 02-14 Task 3: 배지·링·동료 ----
 const seatEl = (c: HTMLElement, n: number) => c.querySelector<HTMLElement>(`.mf-dt__seat[data-seat="${n}"]`)!;
 
-describe("DayTable: 왕관·후광·동료·끊김·보낸 사람", () => {
+describe("DayTable: 왕관·후광·동료·끊김", () => {
   it("내 자리는 후광도 발밑 원도 없고(내 표시는 이름표 테두리 .mf-dt__tag--me 뿐), 내 이름표에만 --me", () => {
     const { container } = render(<DayTable seats={five()} mySeat={0} width={366} />);
     expect(container.querySelectorAll(".mf-dt__ring").length).toBe(0);
@@ -267,45 +267,12 @@ describe("DayTable: 왕관·후광·동료·끊김·보낸 사람", () => {
     expect(both.classList.contains("mf-figure--disconnected")).toBe(true);
     expect(both.classList.contains("mf-figure--halo-crimson")).toBe(true);
   });
-
-  it("spoke true 인 자리에는 .mf-dt__bubble--spoke 하나(aria-hidden, 점 셋)뿐이고 이름표 반전도 후광도 없다", () => {
-    const { container } = render(<DayTable seats={five({ 4: { spoke: true } })} mySeat={0} width={366} />);
-    const bubbles = container.querySelectorAll<HTMLElement>(".mf-dt__bubble");
-    expect(bubbles.length).toBe(1);
-    expect(bubbles[0]?.classList.contains("mf-dt__bubble--spoke")).toBe(true);
-    expect(bubbles[0]?.getAttribute("aria-hidden")).toBe("true");
-    expect(bubbles[0]?.querySelectorAll("i").length).toBe(3);
-    expect(seatEl(container, 4).contains(bubbles[0] ?? null)).toBe(true);
-    expect(tagEl(container, 4).className).toBe("mf-dt__tag");
-    expect(container.querySelectorAll(".mf-figure--halo-white").length).toBe(0);
-  });
 });
 
-describe("DayTable: 머리 위 이모티콘 (결정 0017-2)", () => {
-  it("emoji 가 있는 자리에 .mf-dt__emoji[data-seat] 하나(aria-hidden, svg 하나), 좌표는 배치 결과의 emojiLeft·emojiTop, z-index 60 + z", () => {
-    const seats = five({ 1: { emoji: { key: "a", icon: "smile", z: 3 } } });
-    const { container } = render(<DayTable seats={seats} mySeat={0} width={366} />);
-    const list = container.querySelectorAll<HTMLElement>(".mf-dt__emoji");
-    expect(list.length).toBe(1);
-    const el = list[0]!;
-    const L = daySeatLayout(seats, 0, 366).find((p) => p.seat === 1)!;
-    expect(el.dataset.seat).toBe("1");
-    expect(el.getAttribute("aria-hidden")).toBe("true");
-    expect(el.querySelectorAll("svg").length).toBe(1);
-    expect(el.style.left).toBe(px(L.x - 16));
-    expect(el.style.top).toBe(px(Math.max(0, L.y - 96 * L.scale - 36)));
-    expect(el.style.zIndex).toBe("63");
-  });
-
-  it("key 가 바뀌면 다른 DOM 노드다, emoji 없는 자리에는 없다", () => {
-    const first = five({ 1: { emoji: { key: "a", icon: "smile", z: 1 } } });
-    const { container, rerender } = render(<DayTable seats={first} mySeat={0} width={366} />);
-    const before = container.querySelector(".mf-dt__emoji");
-    rerender(<DayTable seats={five({ 1: { emoji: { key: "b", icon: "smile", z: 1 } } })} mySeat={0} width={366} />);
-    const after = container.querySelector(".mf-dt__emoji");
-    expect(after === before).toBe(false);
-    rerender(<DayTable seats={five()} mySeat={0} width={366} />);
-    expect(container.querySelectorAll(".mf-dt__emoji").length).toBe(0);
+describe("DayTable: 머리 위 이모티콘·말풍선 층이 없다 (CHAT-06)", () => {
+  it("어느 자리에도 .mf-dt__emoji·.mf-dt__bubble 요소가 그려지지 않는다(입력 중 알약은 07-18)", () => {
+    const { container } = render(<DayTable seats={five({ 3: { isAlly: true }, 4: { pick: { mine: true } } })} mySeat={0} width={366} />);
+    expect(container.querySelectorAll(".mf-dt__emoji, .mf-dt__bubble").length).toBe(0);
   });
 });
 
@@ -316,13 +283,10 @@ describe("Icon 3개 추가", () => {
   });
 });
 
-describe("daytable.css: 배지·이모티콘 크기", () => {
+describe("daytable.css: 이모티콘·말풍선 규칙 삭제", () => {
   const css = readFileSync("src/styles/daytable.css", "utf8");
-  it(".mf-dt__emoji 는 32px 원·z-index 60·::after 꼬리 5px", () => {
-    expect(cssHas(css, /\.mf-dt__emoji\s*\{[^}]*width:\s*32px/)).toBe(true);
-    expect(cssHas(css, /\.mf-dt__emoji\s*\{[^}]*height:\s*32px/)).toBe(true);
-    expect(cssHas(css, /\.mf-dt__emoji\s*\{[^}]*z-index:\s*60/)).toBe(true);
-    expect(cssHas(css, /\.mf-dt__emoji::after\s*\{[^}]*border:\s*5px solid transparent/)).toBe(true);
+  it(".mf-dt__emoji·.mf-dt__bubble 규칙과 mf-dt-emoji 키프레임이 없다", () => {
+    expect(cssHas(css, /mf-dt__emoji|mf-dt__bubble|mf-dt-emoji/)).toBe(false);
   });
 });
 
@@ -601,7 +565,7 @@ describe("daytable.css: 종류별 배지 (03-02)", () => {
   });
 });
 
-// ---- 03.1-05 Task 2: 한 줄 이름표·말풍선·낮 탭·관전 그림·아침 층 (D-06·D-14·D-15·D-17) ----
+// ---- 03.1-05 Task 2: 한 줄 이름표·낮 탭·관전 그림·아침 층 (D-06·D-14·D-15·D-17) ----
 const eight = (over: Partial<Record<number, Partial<DayTableSeat>>> = {}): DayTableSeat[] =>
   Array.from({ length: 8 }, (_, i) => seat(i, `이름${i}`, { isMe: i === 0, ...over[i] }));
 const haloWhite = (c: HTMLElement) => Array.from(c.querySelectorAll<HTMLElement>("img.mf-figure--halo-white"));
@@ -634,28 +598,16 @@ describe("DayTable: 한 줄 이름표와 층 (D-04·D-14)", () => {
   });
 });
 
-describe("DayTable: 후광 + '…' 말풍선 (결정 0030)", () => {
-  it("spoke 인 자리 안에 .mf-dt__bubble--spoke 하나(aria-hidden, 점 셋)가 있고, 후광·이름표 반전은 없다", () => {
-    const { container } = render(<DayTable seats={five({ 2: { spoke: true } })} mySeat={0} width={366} />);
-    expect(haloWhite(container).length).toBe(0);
-    expect(bubbleEls(container).length).toBe(1);
-    const bubble = bubbleEls(container)[0]!;
-    expect(bubble.className).toBe("mf-dt__bubble mf-dt__bubble--spoke");
-    expect(bubble.getAttribute("aria-hidden")).toBe("true");
-    expect(bubble.querySelectorAll("i").length).toBe(3);
-    expect(seatEl(container, 2).contains(bubble)).toBe(true);
-    expect(tagEl(container, 2).className).toBe("mf-dt__tag");
-  });
-
-  it("내가 고른 대상(pick.mine) 자리 그림에 흰 후광 하나가 붙고 말풍선은 없다", () => {
+describe("DayTable: 후광 (결정 0030, 말풍선은 07-07 에서 사라졌다)", () => {
+  it("내가 고른 대상(pick.mine) 자리 그림에 흰 후광 하나가 붙고 말풍선 층은 없다", () => {
     const { container } = render(<DayTable seats={five({ 2: { pick: { mine: true } } })} mySeat={0} width={366} />);
     expect(haloWhite(container).length).toBe(1);
     expect(seatEl(container, 2).contains(haloWhite(container)[0] ?? null)).toBe(true);
     expect(bubbleEls(container).length).toBe(0);
   });
 
-  it("후광 클래스는 그림 img 에만 붙는다(자리·이름표·말풍선·마름모에는 없다)", () => {
-    const { container } = render(<DayTable seats={five({ 2: { spoke: true }, 3: { isAlly: true }, 4: { pick: { mine: true } } })} mySeat={0} width={366} />);
+  it("후광 클래스는 그림 img 에만 붙는다(자리·이름표·마름모에는 없다)", () => {
+    const { container } = render(<DayTable seats={five({ 3: { isAlly: true }, 4: { pick: { mine: true } } })} mySeat={0} width={366} />);
     const withHalo = Array.from(container.querySelectorAll<HTMLElement>('[class*="halo"]'));
     expect(withHalo.length).toBe(2);
     for (const el of withHalo) expect(el.tagName).toBe("IMG");
@@ -663,7 +615,7 @@ describe("DayTable: 후광 + '…' 말풍선 (결정 0030)", () => {
 
   it("옛 발밑 원·내 링·동료 링·선택 링·머리 위 배지·이름표 반전 요소가 어디에도 없다", () => {
     const { container } = render(
-      <DayTable seats={five({ 0: { spoke: true }, 2: { spoke: true }, 3: { isAlly: true }, 4: { pick: { mine: true } } })} mySeat={0} width={366} />,
+      <DayTable seats={five({ 3: { isAlly: true }, 4: { pick: { mine: true } } })} mySeat={0} width={366} />,
     );
     expect(container.querySelectorAll(OLD_SELECTORS).length).toBe(0);
   });
@@ -676,35 +628,16 @@ describe("DayTable: 후광 + '…' 말풍선 (결정 0030)", () => {
     expect(seatEl(container, 3).querySelectorAll(".mf-dt__mark").length).toBe(1);
   });
 
-  it("내 자리가 말하는 중이어도 후광은 붙지 않고 이름표 테두리(--me)만 있다", () => {
-    const { container } = render(<DayTable seats={five({ 0: { spoke: true } })} mySeat={0} width={366} />);
-    expect(seatEl(container, 0).querySelectorAll("img.mf-figure--halo-white").length).toBe(0);
-    expect(bubbleEls(container).length).toBe(1);
-    expect(tagEl(container, 0).className).toBe("mf-dt__tag mf-dt__tag--me");
-  });
-
-  it("같은 자리에 emoji 가 있으면 말풍선이 없고(이모티콘이 대신), emoji 가 없어지면 다시 나온다", () => {
-    const emoji = { key: "k1", icon: "smile", z: 0 } as const;
-    const withEmoji = render(<DayTable seats={five({ 2: { spoke: true, emoji } })} mySeat={0} width={366} />);
-    expect(bubbleEls(withEmoji.container).length).toBe(0);
-    expect(withEmoji.container.querySelectorAll(".mf-dt__emoji").length).toBe(1);
-    withEmoji.rerender(<DayTable seats={five({ 2: { spoke: true, emoji: null } })} mySeat={0} width={366} />);
-    expect(bubbleEls(withEmoji.container).length).toBe(1);
-    cleanup();
-    const spoke = render(<DayTable seats={five({ 4: { spoke: true, emoji } })} mySeat={0} width={366} />);
-    expect(bubbleEls(spoke.container).length).toBe(0);
-  });
-
-  it("말하는 자리의 인라인 z-index 는 배치 결과(12~22) 그대로, 탈락 강조는 31 — 후광·말풍선이 있어도 같다", () => {
-    const { container } = render(<DayTable seats={five({ 2: { spoke: true, pick: { mine: true } }, 3: { spotlit: true, dead: true } })} mySeat={0} width={366} />);
+  it("후광 자리의 인라인 z-index 는 배치 결과(12~22) 그대로, 탈락 강조는 31 — 후광이 있어도 같다", () => {
+    const { container } = render(<DayTable seats={five({ 2: { pick: { mine: true } }, 3: { spotlit: true, dead: true } })} mySeat={0} width={366} />);
     const z2 = Number(seatEl(container, 2).style.zIndex);
     expect(z2 >= 12 && z2 <= 22).toBe(true);
     expect(seatEl(container, 3).style.zIndex).toBe("31");
-    for (const el of Array.from(container.querySelectorAll<HTMLElement>(".mf-dt__bubble, img.mf-figure--halo-white"))) expect(el.style.zIndex).toBe("");
+    for (const el of Array.from(container.querySelectorAll<HTMLElement>("img.mf-figure--halo-white"))) expect(el.style.zIndex).toBe("");
   });
 
-  it.each([4, 5, 6, 7, 8])("%i명 말하는 자리가 있어도 이름표 z 최댓값 < 자리 z 최솟값 (D3a 단위 버전)", (n) => {
-    const seats = Array.from({ length: n }, (_, i) => seat(i, `이${i}`, { isMe: i === 0, spoke: i === 1, ...(i === 1 ? { pick: { mine: true } } : {}) }));
+  it.each([4, 5, 6, 7, 8])("%i명 후광 자리가 있어도 이름표 z 최댓값 < 자리 z 최솟값 (D3a 단위 버전)", (n) => {
+    const seats = Array.from({ length: n }, (_, i) => seat(i, `이${i}`, { isMe: i === 0, ...(i === 1 ? { pick: { mine: true } } : {}) }));
     const { container } = render(<DayTable seats={seats} mySeat={0} width={366} />);
     const tagZ = Array.from(container.querySelectorAll<HTMLElement>(".mf-dt__tag")).map((e) => Number(e.style.zIndex));
     const seatZ = seatEls(container).map((e) => Number(e.style.zIndex));
@@ -712,20 +645,15 @@ describe("DayTable: 후광 + '…' 말풍선 (결정 0030)", () => {
     expect(Math.max(...tagZ) < Math.min(...seatZ)).toBe(true);
   });
 
-  it("말하는 자리·고른 대상이 없으면 후광·말풍선이 0개", () => {
+  it("고른 대상이 없으면 후광·말풍선이 0개", () => {
     const { container } = render(<DayTable seats={five()} mySeat={0} width={366} />);
     expect(haloWhite(container).length).toBe(0);
     expect(bubbleEls(container).length).toBe(0);
     expect(container.querySelectorAll(OLD_SELECTORS).length).toBe(0);
   });
 
-  it("두 자리가 말하면 입력 그대로 둘 다 말풍선을 그린다", () => {
-    const { container } = render(<DayTable seats={five({ 1: { spoke: true }, 3: { spoke: true } })} mySeat={0} width={366} />);
-    expect(bubbleEls(container).length).toBe(2);
-  });
-
   it("자리 읽기 이름은 `{닉네임}{ (나)}` 뿐이고 차례 문구가 없다", () => {
-    render(<DayTable seats={five({ 2: { spoke: true }, 0: { spoke: true } })} mySeat={0} width={366} />);
+    render(<DayTable seats={five()} mySeat={0} width={366} />);
     expect(screen.getByRole("group", { name: "지호" })).toBeTruthy();
     expect(screen.getByRole("group", { name: "동현 (나)" })).toBeTruthy();
   });
@@ -819,7 +747,7 @@ describe("DayTable: 관전자 직업 그림 (D-17, T-03.1-15)", () => {
   });
 
   it("roleArt 가 하나도 없는 렌더(4~8명)에서는 /characters/roles/ 를 가리키는 img 가 0개", () => {
-    for (const seats of [five(), five({ 3: { dead: true }, 1: { spoke: true } }), eight()]) {
+    for (const seats of [five(), five({ 3: { dead: true } }), eight()]) {
       const { container } = render(<DayTable seats={seats} mySeat={0} width={366} />);
       expect(container.querySelectorAll('img[src*="/characters/roles/"]').length).toBe(0);
       expect(container.innerHTML.includes("/characters/roles/")).toBe(false);
@@ -872,7 +800,7 @@ describe("DayTable: 아침 어둡게 층과 강조 (D-15)", () => {
   });
 });
 
-describe("daytable.css: 03.1-05 (이름표 한 줄·층) + 결정 0030 (후광·말풍선)", () => {
+describe("daytable.css: 03.1-05 (이름표 한 줄·층) + 결정 0030 (후광)", () => {
   const css = readFileSync("src/styles/daytable.css", "utf8");
   const code = css.replace(/\/\*[\s\S]*?\*\//g, "");
   it("옛 아랫줄 규칙(.mf-dt__claim·.mf-dt__chg·mf-dt-pop·mf-dt-shake)이 CSS 에 없다", () => {
@@ -903,37 +831,6 @@ describe("daytable.css: 03.1-05 (이름표 한 줄·층) + 결정 0030 (후광·
   it("후광은 애니메이션하지 않고 그림에 filter 전이만 둔다(--dur-fast)", () => {
     expect(cssHas(code, /\.mf-dt__seat \.mf-figure\s*\{[^}]*transition:\s*filter var\(--dur-fast\) var\(--ease-out\)/)).toBe(true);
     expect(cssHas(code, /halo[^{]*\{[^}]*animation/)).toBe(false);
-  });
-  it(".mf-dt__bubble: 높이 26·좌우 11·모서리 13·gray-50 면·위 -26px·가운데·pointer-events none, 꼬리 5px(::after), 점 6px night-900", () => {
-    expect(cssHas(code, /\.mf-dt__bubble\s*\{[^}]*position:\s*absolute/)).toBe(true);
-    expect(cssHas(code, /\.mf-dt__bubble\s*\{[^}]*top:\s*-26px/)).toBe(true);
-    expect(cssHas(code, /\.mf-dt__bubble\s*\{[^}]*left:\s*50%/)).toBe(true);
-    expect(cssHas(code, /\.mf-dt__bubble\s*\{[^}]*translateX\(-50%\)/)).toBe(true);
-    expect(cssHas(code, /\.mf-dt__bubble\s*\{[^}]*height:\s*26px/)).toBe(true);
-    expect(cssHas(code, /\.mf-dt__bubble\s*\{[^}]*padding:\s*0 11px/)).toBe(true);
-    expect(cssHas(code, /\.mf-dt__bubble\s*\{[^}]*border-radius:\s*13px/)).toBe(true);
-    expect(cssHas(code, /\.mf-dt__bubble\s*\{[^}]*background:\s*var\(--gray-50\)/)).toBe(true);
-    expect(cssHas(code, /\.mf-dt__bubble\s*\{[^}]*gap:\s*4px/)).toBe(true);
-    expect(cssHas(code, /\.mf-dt__bubble\s*\{[^}]*pointer-events:\s*none/)).toBe(true);
-    expect(cssHas(code, /\.mf-dt__bubble::after\s*\{[^}]*border:\s*5px solid transparent/)).toBe(true);
-    expect(cssHas(code, /\.mf-dt__bubble::after\s*\{[^}]*border-top-color:\s*var\(--gray-50\)/)).toBe(true);
-    expect(cssHas(code, /\.mf-dt__bubble i\s*\{[^}]*width:\s*6px/)).toBe(true);
-    expect(cssHas(code, /\.mf-dt__bubble i\s*\{[^}]*height:\s*6px/)).toBe(true);
-    expect(cssHas(code, /\.mf-dt__bubble i\s*\{[^}]*background:\s*var\(--night-900\)/)).toBe(true);
-  });
-  it("말풍선 점: 1200ms 순환 mf-dt-dot 키프레임이 0/200/400ms 지연으로 차례대로 깜박이고, 정지 불투명도는 1/.6/.3", () => {
-    expect(cssHas(code, /@keyframes mf-dt-dot\b/)).toBe(true);
-    expect(cssHas(code, /\.mf-dt__bubble i\s*\{[^}]*animation:\s*mf-dt-dot 1200ms/)).toBe(true);
-    expect(cssHas(code, /\.mf-dt__bubble i:nth-child\(1\)\s*\{[^}]*animation-delay:\s*0ms/)).toBe(true);
-    expect(cssHas(code, /\.mf-dt__bubble i:nth-child\(2\)\s*\{[^}]*animation-delay:\s*200ms/)).toBe(true);
-    expect(cssHas(code, /\.mf-dt__bubble i:nth-child\(3\)\s*\{[^}]*animation-delay:\s*400ms/)).toBe(true);
-    expect(cssHas(code, /\.mf-dt__bubble i:nth-child\(1\)\s*\{[^}]*opacity:\s*1\b/)).toBe(true);
-    expect(cssHas(code, /\.mf-dt__bubble i:nth-child\(2\)\s*\{[^}]*opacity:\s*0?\.6\b/)).toBe(true);
-    expect(cssHas(code, /\.mf-dt__bubble i:nth-child\(3\)\s*\{[^}]*opacity:\s*0?\.3\b/)).toBe(true);
-  });
-  it("축소 모션에서는 말풍선과 점의 animation 이 none 이라 점이 정지 불투명도로 남는다", () => {
-    expect(cssHas(code, /prefers-reduced-motion: reduce\)\s*\{[^@]*?\.mf-dt__bubble[^{]*\{[^}]*animation:\s*none/)).toBe(true);
-    expect(cssHas(code, /prefers-reduced-motion: reduce\)\s*\{[^@]*?\.mf-dt__bubble i[^{]*\{[^}]*animation:\s*none/)).toBe(true);
   });
   it(".mf-dt__dim: z-index 30·pointer-events none(탭 통과)·좌우 여백까지 연장·night-900 45%", () => {
     expect(cssHas(css, /\.mf-dt__dim\s*\{[^}]*z-index:\s*30/)).toBe(true);
@@ -1084,7 +981,7 @@ describe("DayTable: 표수 칩 chip (04-19, UI-SPEC 8.3, D-31)", () => {
     expect(chipEl(container, 4)?.textContent).toBe("2");
   });
 
-  it("칩은 aria-hidden 장식이고 z-index 46(캐릭터 22·어둡게 30 위, 이모티콘 60 아래)이다", () => {
+  it("칩은 aria-hidden 장식이고 z-index 46(캐릭터 22·어둡게 30 위)이다", () => {
     const { container } = render(<DayTable seats={five({ 1: { chip: { n: 2, tone: "plain" } } })} mySeat={0} width={366} height={407} />);
     const el = chipEl(container, 1)!;
     expect(el.getAttribute("aria-hidden")).toBe("true");
@@ -1240,8 +1137,8 @@ describe("DayTable: 최후 변론 무대 verdict·center (04-21, VOTE-03, D-15·
     for (const n of [0, 1, 3, 4]) expect(tagEl(container, n).getAttribute("style")).toBe(baseTag.get(n));
   });
 
-  it("z 순서: 후보 그림 31 > 어둡게 층 30 > 다른 좌석 최대 22 > 이름표 최대 11, 후보 이름표 32, 이모티콘 60+ (UI-SPEC 12)", () => {
-    const seats = withCenter(2, { 3: { emoji: { key: "e1", icon: "heart", z: 1 } }, 2: { center: true, emoji: { key: "e2", icon: "heart", z: 2 } } });
+  it("z 순서: 후보 그림 31 > 어둡게 층 30 > 다른 좌석 최대 22 > 이름표 최대 11, 후보 이름표 32 (UI-SPEC 12)", () => {
+    const seats = withCenter(2);
     const { container } = render(<DayTable seats={seats} mySeat={0} width={366} height={407} verdict={VERDICT} />);
     const z = (el: HTMLElement) => Number(el.style.zIndex);
     const figs = seatEls(container);
@@ -1250,18 +1147,6 @@ describe("DayTable: 최후 변론 무대 verdict·center (04-21, VOTE-03, D-15·
     expect(z(figs.find((e) => e.dataset.seat === "2")!)).toBe(31);
     expect(30).toBeGreaterThan(Math.max(...others));
     expect(z(dimEls(container)[0]) || 30).toBe(30);
-    const emojis = Array.from(container.querySelectorAll<HTMLElement>(".mf-dt__emoji"));
-    expect(emojis.length).toBe(2);
-    for (const e of emojis) expect(z(e)).toBeGreaterThanOrEqual(60);
-  });
-
-  it("후보 이모티콘은 후보 머리 위로 따라간다(발 y − 163.2 − 36)", () => {
-    const seats = withCenter(2, { 2: { center: true, emoji: { key: "e2", icon: "heart", z: 2 } } });
-    const { container } = render(<DayTable seats={seats} mySeat={0} width={366} height={407} verdict={VERDICT} />);
-    const cc = candidateCenter(366, 407, 12);
-    const em = container.querySelector<HTMLElement>('.mf-dt__emoji[data-seat="2"]')!;
-    expect(em.style.left).toBe(px(cc.x - 16));
-    expect(em.style.top).toBe(px(Math.max(0, cc.footY - 96 * VERDICT_CANDIDATE_SCALE - 36)));
   });
 
   it("폰 폭 4종 × 장면 높이 2종: 후보 이름표 아래끝 ≤ 장면 아래 − 4, 그림 상자는 장면 폭 안, z 순서 유지", () => {

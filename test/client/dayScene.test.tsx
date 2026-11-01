@@ -4,7 +4,7 @@ import { act, cleanup, fireEvent, render, within } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { RoleId } from "../../shared/game/roles";
 import type { MorningView, PhaseId, RoomView, SpectateView, VoteLogEntry } from "../../shared/protocol";
-import type { RoomConnection, RoomEvent } from "../../src/net/useRoomConnection";
+import type { RoomConnection } from "../../src/net/useRoomConnection";
 import { DayScene } from "../../src/screens/DayScene";
 import { TABLE_FIT_MIN_H, TAG_H } from "../../src/game/dayTable";
 
@@ -121,7 +121,7 @@ describe("DayScene 낮 토론 하단·테이블 (03.1 UI-SPEC B, 07-04 이후 �
     expect(announce.container.querySelector(".mf-timer--urgent")).toBeNull();
   });
 
-  it("탈락한 viewer(spectate 있음)의 낮 토론 하단은 채팅 + 읽기 전용 안내이고 칩·보내기 줄이 없다", () => {
+  it("탈락한 viewer(spectate 있음)의 낮 토론 하단은 읽기 전용 안내뿐이고 칩·보내기 줄이 없다", () => {
     const spectate: SpectateView = {
       seats: [0, 1, 2, 3].map((seat) => ({ seat, job: "citizen" as const })),
       picks: { mafia: [], police: [], doctor: [] },
@@ -163,7 +163,7 @@ describe("DayScene 낮 토론 하단·테이블 (03.1 UI-SPEC B, 07-04 이후 �
     expect(container.querySelectorAll(".mf-dt__claim").length).toBe(0);
   });
 
-  it("dayAnnounce → discussion: DayTable 루트가 같은 DOM 노드이고, 토론 하단에 보내기 줄이 있다 (회귀)", () => {
+  it("dayAnnounce → discussion: DayTable 루트가 같은 DOM 노드이고, 토론 하단에 버튼이 없다 (회귀)", () => {
     const r = scene(makeView({ phase: "dayAnnounce" }));
     const table = r.container.querySelector(".mf-dt");
     expect(table).not.toBeNull();
@@ -172,7 +172,7 @@ describe("DayScene 낮 토론 하단·테이블 (03.1 UI-SPEC B, 07-04 이후 �
     const panel = r.container.querySelector(".mf-dayscene__panel")!;
     expect(panel.querySelector(".st-row")).toBeNull();
     expect(panel.querySelectorAll(".mf-seg__b").length).toBe(0);
-    expect(panel.querySelector("button")).not.toBeNull(); // 토론 보내기 줄(DiscussionControls)
+    expect(panel.querySelector("button")).toBeNull(); // 토론 하단은 비어 있다(채팅 패널은 07-13·07-15)
   });
 });
 
@@ -259,23 +259,7 @@ describe("DayScene 하단 패널 (SPEC 하단, 결정 0017-6)", () => {
   });
 });
 
-// ---- 03.1-07: 후광·말풍선 · 낮 토론 이모티콘 ----
-
-function emitter() {
-  const listeners = new Set<(e: RoomEvent, meta: { epoch: number }) => void>();
-  return {
-    onEvent: (l: (e: RoomEvent, meta: { epoch: number }) => void) => {
-      listeners.add(l);
-      return () => {
-        listeners.delete(l);
-      };
-    },
-    emit: (e: RoomEvent) =>
-      act(() => {
-        for (const l of [...listeners]) l(e, { epoch: 1 });
-      }),
-  };
-}
+// ---- 03.1-07: 후광 · 말풍선 없음 ----
 
 describe("DayScene 후광·말풍선 (결정 0030)", () => {
   beforeEach(() => {
@@ -298,34 +282,6 @@ describe("DayScene 후광·말풍선 (결정 0030)", () => {
       expect(`${phase}:${r.container.querySelectorAll('[aria-label="방장"]').length}`).toBe(`${phase}:0`);
       cleanup();
     }
-  });
-});
-
-describe("DayScene 낮 토론 이모티콘 (결정 0023-2)", () => {
-  beforeEach(() => {
-    vi.useFakeTimers();
-    vi.setSystemTime(NOW);
-  });
-  afterEach(() => {
-    vi.useRealTimers();
-  });
-
-  it("낮 토론 중 emoji 이벤트를 받으면 그 자리 머리 위 말풍선이 뜨고 live 줄이 읽는다", () => {
-    const ev = emitter();
-    const { container } = scene(makeView({ phase: "discussion" }), { onEvent: ev.onEvent });
-    expect(container.querySelectorAll(".mf-dt__emoji").length).toBe(0);
-    ev.emit({ t: "emoji", seat: 1, icon: "heart", at: 0 });
-    expect(container.querySelectorAll('.mf-dt__emoji[data-seat="1"]').length).toBe(1);
-    expect(container.querySelector(".mf-sr-only")?.textContent).toBe("하윤: 좋아요");
-  });
-
-  it("하단 이모티콘 버튼을 눌러 보내면 { t:'emoji', icon } 가 간다", () => {
-    const r = scene(makeView({ phase: "discussion" }));
-    const btn = r.container.querySelector<HTMLButtonElement>('button[aria-label="이모티콘"]')!;
-    act(() => btn.click());
-    const heart = document.querySelector<HTMLButtonElement>('dialog button[aria-label="좋아요"]')!;
-    act(() => heart.click());
-    expect(r.conn.send).toHaveBeenCalledWith({ t: "emoji", icon: "heart" });
   });
 });
 

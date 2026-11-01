@@ -163,7 +163,7 @@ describe("daySeatLayout: 시계 방향 좌석 원", () => {
     }
   });
 
-  it("캐릭터·이름표·이모티콘이 같은 (x, y) 에서 나온다 (4~8명 전 자리)", () => {
+  it("캐릭터·이름표가 같은 (x, y) 에서 나온다 (이모티콘 좌표는 없다) (4~8명 전 자리)", () => {
     const bad: string[] = [];
     for (let n = 4; n <= 8; n++) {
       for (const p of daySeatLayout(seatsOf(n), 0, 366)) {
@@ -173,8 +173,8 @@ describe("daySeatLayout: 시계 방향 좌석 원", () => {
           p.tagLeft === p.x &&
           p.tagTop === p.y &&
           p.z - p.tagZ === 11 &&
-          p.emojiLeft === p.x - 16 &&
-          p.emojiTop === Math.max(0, p.y - 96 * p.scale - 36);
+          !("emojiLeft" in p) &&
+          !("emojiTop" in p);
         if (!ok) bad.push(`n${n}:seat${p.seat}`);
       }
     }
@@ -506,7 +506,6 @@ const refLayout = (n: number, sceneW: number, sceneH: number, pad: number) => {
       z: 12 + Math.round(depth * 10),
       figLeft: x - 36, figTop: y - 96,
       tagLeft: x, tagTop: y, tagZ: 1 + Math.round(depth * 10),
-      emojiLeft: x - 16, emojiTop: Math.max(0, y - 96 * scale - 36),
     };
   });
 };
@@ -542,7 +541,7 @@ describe("짧은 장면 압축 (P5-3): 상수와 배율", () => {
       const g = dayTableGeometry(352, h, 4);
       for (const v of [g.cx, g.cy, g.rx, g.ry, g.fit, g.felt.left, g.felt.top, g.felt.width, g.felt.height]) expect(Number.isFinite(v), `geo ${h}`).toBe(true);
       for (const p of daySeatLayout(seatsOf(8), 0, 352, h, 4)) {
-        for (const v of [p.x, p.y, p.scale, p.tagTop, p.figTop, p.emojiTop]) expect(Number.isFinite(v), `layout ${h}`).toBe(true);
+        for (const v of [p.x, p.y, p.scale, p.tagTop, p.figTop]) expect(Number.isFinite(v), `layout ${h}`).toBe(true);
         expect(p.scale).toBeGreaterThan(0);
       }
     }

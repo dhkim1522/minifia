@@ -4,7 +4,7 @@ import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import "../helpers/singleLineErrors";
 import type { RoomView } from "../../shared/protocol";
-import type { RoomConnection, RoomEvent } from "../../src/net/useRoomConnection";
+import type { RoomConnection } from "../../src/net/useRoomConnection";
 import { DefensePanel } from "../../src/components/DefensePanel";
 import {
   VERDICT_BLUR_PX,
@@ -44,22 +44,6 @@ function makeView(over: Partial<RoomView> = {}): RoomView {
     me: { seat: 0, isHost: true },
     day: { n: 1, roles: ["mafia", "police", "citizen"], claimLog: [], candidate: 2 },
     ...over,
-  };
-}
-
-function emitter() {
-  const listeners = new Set<(e: RoomEvent, meta: { epoch: number }) => void>();
-  return {
-    onEvent: (l: (e: RoomEvent, meta: { epoch: number }) => void) => {
-      listeners.add(l);
-      return () => {
-        listeners.delete(l);
-      };
-    },
-    emit: (e: RoomEvent) =>
-      act(() => {
-        for (const l of [...listeners]) l(e, { epoch: 1 });
-      }),
   };
 }
 
@@ -355,24 +339,10 @@ describe("defense 화면 한 경로 (VOTE-03, D-15·D-16·D-29, COMM-03)", () =>
     expect(container.querySelectorAll(".mf-dt__seat").length).toBe(4);
   });
 
-  it("후보 변론 chat 이벤트가 오면 후보 머리 위 `…` 말풍선이 생기고(하단 채팅 줄은 없다). 남의 이모티콘은 층 위(z 60+)로 뜬다", () => {
-    const bus = emitter();
-    const { container } = renderRoom(roomView(), { onEvent: bus.onEvent });
-    expect(container.querySelectorAll(".mf-dt__bubble").length).toBe(0);
-    bus.emit({ t: "chat", seq: 1, seat: 2, template: "defNotMe", at: NOW } as RoomEvent);
-    expect(seatOf(container, 2).querySelectorAll(".mf-dt__bubble--spoke").length).toBe(1);
-    expect(panelOf(container).querySelector(".mf-msglog")).toBeNull();
-    bus.emit({ t: "emoji", seat: 1, icon: "smile", at: NOW } as RoomEvent);
-    const em = container.querySelector<HTMLElement>('.mf-dt__emoji[data-seat="1"]')!;
-    expect(Number(em.style.zIndex)).toBeGreaterThanOrEqual(60);
-  });
-
-  it("공개(candidateVoteReveal)·처형(execution) 단계에서 온 chat·emoji 는 말풍선·이모티콘이 되지 않는다", () => {
-    const bus = emitter();
-    const { container } = renderRoom({ ...roomView(), phase: "candidateVoteReveal" }, { onEvent: bus.onEvent });
-    bus.emit({ t: "chat", seq: 1, seat: 2, template: "defNotMe", at: NOW } as RoomEvent);
-    bus.emit({ t: "emoji", seat: 1, icon: "smile", at: NOW } as RoomEvent);
+  it("변론 장면에는 말풍선·이모티콘 층과 하단 채팅 줄이 없다(CHAT-06)", () => {
+    const { container } = renderRoom(roomView());
     expect(container.querySelectorAll(".mf-dt__bubble, .mf-dt__emoji").length).toBe(0);
+    expect(panelOf(container).querySelector(".mf-msglog")).toBeNull();
   });
 
   it("후보 위치 공식은 candidateCenter 한 곳이다 — DayTable 은 좌표 숫자를 따로 갖지 않는다", () => {

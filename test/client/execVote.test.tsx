@@ -297,13 +297,9 @@ describe("execVote 나머지 상태 (D-35, D-36, D-12 개정, D-08)", () => {
     expect(sheet("하윤 기록")).toBeNull();
   });
 
-  it("빠른 메시지·이모티콘 입구가 없고 chat·emoji 이벤트가 와도 말풍선·이모티콘이 테이블에 뜨지 않는다", () => {
-    const ev = emitter();
-    const { container } = renderRoom(makeView(), { onEvent: ev.onEvent });
-    ev.emit({ t: "chat", seq: 1, seat: 2, template: "innocent", at: 0 } as RoomEvent);
-    ev.emit({ t: "emoji", seat: 2, icon: "smile", at: 0 });
-    expect(container.querySelector(".mf-dt__bubble")).toBeNull();
-    expect(container.querySelector(".mf-dt__emoji")).toBeNull();
+  it("빠른 메시지·이모티콘 입구가 없고 말풍선·이모티콘 층이 테이블에 없다", () => {
+    const { container } = renderRoom(makeView());
+    expect(container.querySelector(".mf-dt__bubble, .mf-dt__emoji")).toBeNull();
     expect(panel(container)?.querySelector('[role="log"]')).toBeNull();
     expect(screen.queryByRole("button", { name: /빠른 메시지|이모티콘/ })).toBeNull();
   });

@@ -388,7 +388,7 @@ describe("candidateVote 화면 한 경로 (VOTE-02, D-03, D-19)", () => {
     expect(screen.queryAllByText("보내지 못했어요. 다시 시도해 주세요").length).toBe(1);
   });
 
-  it("execVote → candidateVote 에서 테이블(.mf-dt)과 장면 래퍼는 같은 DOM 노드이고 chat·emoji 가 와도 말풍선·이모티콘이 뜨지 않는다", () => {
+  it("execVote → candidateVote 에서 테이블(.mf-dt)과 장면 래퍼는 같은 DOM 노드이고 말풍선·이모티콘 층과 입구가 없다", () => {
     const ev = emitter();
     const r = renderRoom(makeView({ phase: "execVote" }), { onEvent: ev.onEvent });
     const scene = r.container.querySelector(".mf-phase-enter");
@@ -397,10 +397,7 @@ describe("candidateVote 화면 한 경로 (VOTE-02, D-03, D-19)", () => {
     r.rerenderRoom(makeView(), { onEvent: ev.onEvent });
     expect(r.container.querySelector(".mf-phase-enter") === scene).toBe(true);
     expect(r.container.querySelector(".mf-dt") === table).toBe(true);
-    ev.emit({ t: "chat", seq: 1, seat: 2, template: "innocent", at: 0 } as RoomEvent);
-    ev.emit({ t: "emoji", seat: 2, icon: "smile", at: 0 });
-    expect(r.container.querySelector(".mf-dt__bubble")).toBeNull();
-    expect(r.container.querySelector(".mf-dt__emoji")).toBeNull();
+    expect(r.container.querySelector(".mf-dt__bubble, .mf-dt__emoji")).toBeNull();
     expect(screen.queryByRole("button", { name: /빠른 메시지|이모티콘/ })).toBeNull();
   });
 });

@@ -313,16 +313,8 @@ describe("execution 연결 (라우팅)", () => {
     expect(r.container.querySelector(".mf-dt") === table).toBe(true);
   });
 
-  it("이모티콘·메시지 입구가 없고, 이 단계에 도착한 chat 이벤트는 말풍선을 만들지 않는다", () => {
-    const listeners = new Set<(e: unknown) => void>();
-    const onEvent = (l: (e: unknown) => void) => {
-      listeners.add(l);
-      return () => listeners.delete(l);
-    };
-    const { container } = renderRoom(makeView({ me: 0 }), { onEvent: onEvent as unknown as RoomConnection["onEvent"] });
-    act(() => {
-      for (const l of [...listeners]) l({ t: "chat", seq: 1, seat: 2, template: "defNotMe", at: NOW });
-    });
+  it("이모티콘·메시지 입구가 없고 말풍선 층이 없다", () => {
+    const { container } = renderRoom(makeView({ me: 0 }));
     expect(container.querySelectorAll(".mf-dt__bubble").length).toBe(0);
     expect(screen.queryByRole("button", { name: "이모티콘" })).toBeNull();
   });
