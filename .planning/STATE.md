@@ -5,16 +5,16 @@ milestone_name: 같은 공간
 current_phase: 07
 current_phase_name: 자유 채팅
 status: executing
-stopped_at: Completed 07-07-PLAN.md
-last_updated: "2026-11-01T13:20:34.515Z"
+stopped_at: Completed 07-08-PLAN.md
+last_updated: "2026-11-01T13:41:58.840Z"
 last_activity: 2026-11-01
 last_activity_desc: Phase 07 execution started
-state_head: 867a8f554d109b50a7d5c81ae95a4f765736761c
+state_head: 9dd34eaf07ec746bcd0bf3fbe62036dd1f58bdd1
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 45
-  completed_plans: 30
+  completed_plans: 31
   percent: 14
 ---
 
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-11-01)
 ## Current Position
 
 Phase: 07 (자유 채팅) — EXECUTING
-Plan: 8 of 22
+Plan: 9 of 22
 Status: Ready to execute
 Last activity: 2026-11-01 — Phase 07 execution started
 
@@ -88,6 +88,7 @@ Progress: [█░░░░░░░░░] 14% (1/7 phases)
 | Phase 07 P05 | 10 min | 3 tasks | 6 files |
 | Phase 07 P06 | 5 min | 2 tasks | 16 files |
 | Phase 07 P07 | 7 min | 3 tasks | 32 files |
+| Phase 07 P08 | 20 min | 3 tasks | 39 files |
 
 ## Accumulated Context
 
@@ -160,6 +161,7 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 07]: useKeyboardLift 는 focus/blur 를 document 캡처로 듣고 e.target 으로 입력칸만 거른다
 - [Phase 07]: 07-06: 후보 본인의 변론 하단은 다른 산 사람과 같은 DefensePanel 상태 줄이고, 변론 aria-live 안내는 '내 최후 변론' 으로 줄였다(칩 제거로 옛 안내가 틀린 말이 됨, 07-15 가 다시 봄)
 - [Phase 07]: 07-07: BUBBLE_* 기하 상수와 mf-dt-fade 키프레임은 07-18 '…' 알약·.mf-figure--role 이 써서 남겼고, 빠른 메시지·이모티콘 부품 8개·talk.css·Icon 이모티콘 8종·주장 문장표를 지웠다
+- [Phase 07]: 07-08: normalizeStoredRoom 은 claim 저장 방을 discussion 으로 옮기고 claim 계열 키 다섯을 단계와 무관하게 지운다. chat.ts when 유니온의 claim 표식은 표시 전용 템플릿이 남아 있는 동안 07-11·07-12 까지 둔다
 
 ### Pending Todos
 
@@ -196,8 +198,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-01T13:20:34.360Z
-Stopped at: Completed 07-07-PLAN.md
+Last session: 2026-11-01T13:41:58.649Z
+Stopped at: Completed 07-08-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
