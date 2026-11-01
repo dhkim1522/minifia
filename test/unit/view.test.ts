@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { say } from "../../shared/game/chat";
-import type { SayInput } from "../../shared/game/chat";
+import { emote } from "../../shared/game/chat";
 import { isAlive } from "../../shared/game/alive";
 import { channelOf } from "../../shared/game/audience";
 import { pickTarget } from "../../shared/game/night";
@@ -416,10 +415,10 @@ function nightActions(state: RoomState): RoomState {
   return s;
 }
 
-/** 실제 전이(say)로 메시지 한 줄을 더한다. */
-function speak(state: RoomState, seat: number, input: SayInput, now: number): RoomState {
-  const r = say(state, seatId(state, seat), input, now);
-  if (!r.ok) throw new Error(`say failed: ${r.error}`);
+/** 실제 전이(emote)로 보낸 사람의 서버 전용 필드(lastSendAt)를 채운다 — view 가 그것을 싣지 않는지 보려면 상태에 값이 있어야 한다. */
+function react(state: RoomState, seat: number, now: number): RoomState {
+  const r = emote(state, seatId(state, seat), "smile", now);
+  if (!r.ok) throw new Error(`emote failed: ${r.error}`);
   return r.state;
 }
 
@@ -428,8 +427,8 @@ const DAY1_START = START_AT + 3_000 + 15_000;
 const discussionStartsAt = (): number => DAY1_START + 2_000;
 
 /**
- * 낮 단계는 서로 다른 메시지가 있는 상태를 실제 전이(tick·say)로 만든다 — 손으로 필드를 채우지 않는다.
- * discussion: 토론이 시작된 뒤 메시지 3줄(그중 claimed 1줄). 낮이 아닌 단계는 stateAt 그대로다.
+ * 낮 단계는 서버 전용 필드가 채워진 상태를 실제 전이(tick·emote)로 만든다 — 손으로 필드를 채우지 않는다.
+ * discussion: 토론이 시작된 뒤 세 사람이 이모티콘을 보낸 상태(lastSendAt). 낮이 아닌 단계는 stateAt 그대로다.
  * night·morning: 그 토론 뒤 밤 행동과 아침.
  */
 function richStateAt(phase: PhaseId, n: number, seed: number): RoomState {
@@ -459,9 +458,9 @@ function richStateAt(phase: PhaseId, n: number, seed: number): RoomState {
   if (phase !== "discussion") return stateAt(phase, n, seed);
   let s = stateAt("discussion", n, seed);
   const at = discussionStartsAt();
-  s = speak(s, 0, { template: "suspect", target: 1 }, at + 1_000);
-  s = speak(s, 1, { template: "claimed", target: 2, claimedRole: rolesInPlay(n)[0]! }, at + 4_000);
-  return speak(s, 2, { template: "trust", target: 0 }, at + 7_000);
+  s = react(s, 0, at + 1_000);
+  s = react(s, 1, at + 4_000);
+  return react(s, 2, at + 7_000);
 }
 
 /** n명 판 1일차 밤: 마피아가 첫 비마피아 X 를 지목해 아침이 된 상태(의사는 보호하지 않는다 — 4명 판은 의사가 없다). */
@@ -736,12 +735,12 @@ describe("buildView 낮 뷰 — 토론·이튿날 (D-02, D-05, D-15)", () => {
     for (const key of ["claimOrder", "claimIdx", "claimStart", "claimPick"]) expect(text.includes(`"${key}"`)).toBe(false);
   });
 
-  it("discussion: 여러 번 say 한 뒤에도 day 의 키는 n,roles,voteLog 이고 messages·extendUsed 키가 없다 (결정 0017-5·0017-7)", () => {
+  it("discussion: 서버 전용 전송 기록이 채워져 있어도 day 의 키는 n,roles,voteLog 이고 messages·extendUsed 키가 없다 (결정 0017-5·0017-7)", () => {
     let s = stateAt("discussion", 5, 1);
     const at = discussionStartsAt();
-    s = speak(s, 0, { template: "suspect", target: 1 }, at + 1_000);
-    s = speak(s, 1, { template: "innocent" }, at + 4_000);
-    s = speak(s, 2, { template: "claimed", target: 3, claimedRole: "police" }, at + 7_000);
+    s = react(s, 0, at + 1_000);
+    s = react(s, 1, at + 4_000);
+    s = react(s, 2, at + 7_000);
     for (const viewer of s.players) {
       const view = buildView(s, viewer.id, START_AT);
       expect(Object.keys(view.day ?? {}).sort().join(",")).toBe("n,roles,voteLog");

@@ -223,6 +223,27 @@ export async function advanceTo(code: string, sockets: TestSocket[], phase: Phas
   for (const s of sockets) await nextFrame(s, isPhase(phase));
 }
 
+/**
+ * advanceTo 와 같지만 DO 를 evict 하지 않는다 — 마감만 과거로 옮기고(저장소와 메모리 둘 다) 알람을 돌린다(07-11).
+ * 채팅 줄 번호(chatLog)와 전송 기록(chatRates)은 DO 메모리에만 있어(저장·복원은 07-14) evict 하면 1 로 돌아간다.
+ * 줄 번호가 단계를 넘어 이어지는 시험이 이 함수를 쓴다.
+ */
+export async function advanceToKeep(code: string, sockets: TestSocket[], phase: PhaseId): Promise<void> {
+  const stub = env.ROOM.getByName(code);
+  for (let i = 0; i < 40 && (await storedRoom(code)).phase !== phase; i += 1) {
+    await runInDurableObject(stub, async (instance, state) => {
+      const room = await state.storage.get<Record<string, unknown>>("room");
+      if (!room) throw new Error("advanceToKeep: 방이 없다");
+      const due = { ...room, phaseEndsAt: Date.now() - 1 };
+      await state.storage.put("room", due);
+      instance["room"] = due;
+    });
+    expect(await runDurableObjectAlarm(stub)).toBe(true);
+  }
+  expect((await storedRoom(code)).phase).toBe(phase);
+  for (const s of sockets) await nextFrame(s, isPhase(phase));
+}
+
 /** 저장된 모든 플레이어의 lastSendAt 을 msAgo 전으로 옮기고 evict 한다 — 테스트가 2초 쿨다운을 실제로 기다리지 않게 한다. */
 export async function backdateSends(code: string, msAgo = 5000): Promise<void> {
   const stub = env.ROOM.getByName(code);
@@ -441,6 +462,11 @@ export async function wanderTimes(code: string): Promise<number[]> {
 export function phaseKeyOf(sock: TestSocket): string {
   const view = lastViewOf(sock);
   return `${view.day?.n ?? 0}:${view.phase}`;
+}
+
+/** 채팅 한 줄을 보내는 원문 메시지 모양(sendAndSettle 류가 메시지 객체를 받는 시험용). 단계 키는 그 소켓의 마지막 view 에서 만든다. */
+export function chatMsg(sock: TestSocket, text: string): { t: "chat"; text: string; pk: string } {
+  return { t: "chat", text, pk: phaseKeyOf(sock) };
 }
 
 /** 입력 중 신호를 보낸다. 단계 키는 그 소켓이 마지막으로 받은 view 에서 만든다(클라이언트가 하는 대로). */

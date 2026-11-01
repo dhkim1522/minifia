@@ -6,7 +6,7 @@ import { runDurableObjectAlarm } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 import type { RoomView, ServerMessage } from "../../shared/protocol";
 import { EXEC_VOTE_MS, candidateRevealMs } from "../../shared/game/phases";
-import { actorsOf, advanceTo, alarmOf, backdateSends, closePhase, forceDue, lastViewOf, mark, nextFrame, seat, send, settle, storedRoom, summary, voteCandidate, voteExec } from "./helpers";
+import { actorsOf, advanceTo, alarmOf, chatMsg, closePhase, forceDue, lastViewOf, mark, nextFrame, seat, send, settle, storedRoom, summary, voteCandidate, voteExec } from "./helpers";
 import type { Actor, Seated, TestSocket } from "./helpers";
 
 const allSockets = (r: Seated): TestSocket[] => [r.host, ...r.guests.map((g) => g.sock)];
@@ -342,38 +342,37 @@ describe("선택 공개 (VOTE-02, D-20, D-21)", () => {
     expect(JSON.stringify(shown)).toBe(JSON.stringify(thrown));
   });
 
-  it("공개 중 say 는 보낸 소켓만 WRONG_PHASE + state, 이모티콘은 보낸 소켓만 WRONG_PHASE 이고 다른 소켓은 프레임이 없다", async () => {
+  it("공개 중 chat 은 서버 audience 규칙대로 여섯 소켓 모두에 가고(화면이 없는 단계도 받는다), 이모티콘은 보낸 소켓만 WRONG_PHASE 이고 다른 소켓은 프레임이 없다", async () => {
     const { actors } = await atReveal();
     const [a] = actors as [Actor];
-    const said = await sendAndSettleAll(actors, a, { t: "say", template: "innocent" });
-    expect(summary(said[0]!)).toBe("[error:WRONG_PHASE,state:candidateVoteReveal]");
-    expect(said.slice(1).map(summary).join(" ")).toBe(actors.slice(1).map(() => "[]").join(" "));
+    const said = await sendAndSettleAll(actors, a, chatMsg(a.sock, "누가 수상해요?"));
+    expect(said.map(summary).join(" ")).toBe(actors.map(() => "[chat]").join(" "));
     const emoted = await sendAndSettleAll(actors, a, { t: "emoji", icon: "smile" });
     expect(summary(emoted[0]!)).toBe("[error:WRONG_PHASE]");
     expect(emoted.slice(1).map(summary).join(" ")).toBe(actors.slice(1).map(() => "[]").join(" "));
   });
 });
 
-describe("최후 변론 (COMM-03, VOTE-03, D-13)", () => {
-  it("후보의 변론은 여섯 소켓 모두에 chat 으로 가고, 후보의 낮 템플릿은 후보 소켓만 BAD_MESSAGE 다", async () => {
+describe("최후 변론 (COMM-03, VOTE-03, D-13, 07-11 자유 채팅)", () => {
+  it("후보의 변론 chat 은 여섯 소켓 모두에 ch all 로 가고, 빠른 메시지(say)는 후보 소켓만 BAD_MESSAGE 다", async () => {
     const { actors, candidate } = await atDefense();
-    const said = await sendAndSettleAll(actors, candidate, { t: "say", template: "defNotMe" });
+    const said = await sendAndSettleAll(actors, candidate, chatMsg(candidate.sock, "저 아니에요"));
     expect(said.map(summary).join(" ")).toBe(actors.map(() => "[chat]").join(" "));
     for (const f of said) {
       const chat = f[0] as Extract<ServerMessage, { t: "chat" }>;
-      expect(`${chat.template} ${chat.seat}`).toBe(`defNotMe ${candidate.seat}`);
+      expect(`${chat.ch} ${chat.seat} ${chat.text}`).toBe(`all ${candidate.seat} 저 아니에요`);
     }
-    const day = await sendAndSettleAll(actors, candidate, { t: "say", template: "innocent" });
+    const day = await sendAndSettleAll(actors, candidate, { t: "say", template: "defNotMe" });
     expect(day.map(summary).join(" ")).toBe(actors.map((a) => (a === candidate ? "[error:BAD_MESSAGE]" : "[]")).join(" "));
   });
 
-  it("후보가 아닌 생존자의 say 는 그 소켓만 WRONG_PHASE + state 이고, 이모티콘은 여섯 소켓 모두에 간다", async () => {
-    const { r, actors, candidate } = await atDefense();
+  it("후보가 아닌 생존자의 chat 도 여섯 소켓 모두에 가고(변론은 살아 있는 누구나 쓴다, D1), 이모티콘도 여섯 소켓 모두에 간다", async () => {
+    const { actors, candidate } = await atDefense();
     const other = actors.find((a) => a !== candidate)!;
-    const said = await sendAndSettleAll(actors, other, { t: "say", template: "defNotMe" });
-    expect(said.map(summary).join(" ")).toBe(actors.map((a) => (a === other ? "[error:WRONG_PHASE,state:defense]" : "[]")).join(" "));
+    const said = await sendAndSettleAll(actors, other, chatMsg(other.sock, "믿어 주세요"));
+    expect(said.map(summary).join(" ")).toBe(actors.map(() => "[chat]").join(" "));
+    for (const f of said) expect((f[0] as Extract<ServerMessage, { t: "chat" }>).seat).toBe(other.seat);
 
-    await backdateSends(r.code);
     const emoted = await sendAndSettleAll(actors, other, { t: "emoji", icon: "smile" });
     expect(emoted.map(summary).join(" ")).toBe(actors.map(() => "[emoji]").join(" "));
   });
@@ -398,12 +397,12 @@ describe("처형 발표 (VOTE-04, D-09, D-34)", () => {
     expect(String(lastViewOf(candidate.sock).spectate?.seats.length)).toBe("6");
   });
 
-  it("처형 중 say·이모티콘은 보낸 소켓에만 WRONG_PHASE 다", async () => {
+  it("처형 중 chat 은 여섯 소켓 모두에 가고(화면이 없는 단계도 받는다), 이모티콘은 보낸 소켓에만 WRONG_PHASE 다", async () => {
     const { r, actors, candidate } = await atDefense();
     await advanceTo(r.code, allSockets(r), "execution");
     const other = actors.find((a) => a !== candidate)!;
-    const said = await sendAndSettleAll(actors, other, { t: "say", template: "innocent" });
-    expect(said.map(summary).join(" ")).toBe(actors.map((a) => (a === other ? "[error:WRONG_PHASE,state:execution]" : "[]")).join(" "));
+    const said = await sendAndSettleAll(actors, other, chatMsg(other.sock, "투표 신중하게 해요"));
+    expect(said.map(summary).join(" ")).toBe(actors.map(() => "[chat]").join(" "));
     const emoted = await sendAndSettleAll(actors, other, { t: "emoji", icon: "smile" });
     expect(emoted.map(summary).join(" ")).toBe(actors.map((a) => (a === other ? "[error:WRONG_PHASE]" : "[]")).join(" "));
   });

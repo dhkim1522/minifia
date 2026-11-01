@@ -26,10 +26,9 @@ describe("ClientMessageSchema candidateVote (결정 0040: target 은 0..7 정수
     expect(ClientMessageSchema.safeParse(msg).success).toBe(false);
   });
 
-  it("nullable 이 다른 메시지로 번지지 않는다: pick·kick 의 target/seat null 은 거부, say 의 target null 도 거부", () => {
+  it("nullable 이 다른 메시지로 번지지 않는다: pick·kick 의 target/seat null 은 거부", () => {
     expect(ClientMessageSchema.safeParse({ t: "pick", target: null }).success).toBe(false);
     expect(ClientMessageSchema.safeParse({ t: "kick", seat: null }).success).toBe(false);
-    expect(ClientMessageSchema.safeParse({ t: "say", template: "innocent", target: null }).success).toBe(false);
   });
 });
 
@@ -159,6 +158,18 @@ describe("ClientMessageSchema chat (07-11, CHAT-01·05)", () => {
     ["text 빠짐", { t: "chat", pk: "0:lobby" }],
     ["text 숫자", { t: "chat", text: 1, pk: "0:lobby" }],
   ])("%s 는 거부한다", (_name, msg) => {
+    expect(ClientMessageSchema.safeParse(msg).success).toBe(false);
+  });
+});
+
+describe("빠른 메시지(say)는 와이어에서 사라졌다 (07-11, CHAT-06)", () => {
+  it.each([
+    ["낮 문구", { t: "say", template: "innocent" }],
+    ["대상이 있는 문구", { t: "say", template: "suspect", target: 2 }],
+    ["직업이 있는 문구", { t: "say", template: "claimed", target: 2, claimedRole: "police" }],
+    ["밤 문구", { t: "say", template: "nightAgree" }],
+    ["변론 문구", { t: "say", template: "defNotMe" }],
+  ])("%s 의 say 는 거부한다", (_name, msg) => {
     expect(ClientMessageSchema.safeParse(msg).success).toBe(false);
   });
 });

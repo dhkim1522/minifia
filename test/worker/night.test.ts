@@ -2,7 +2,7 @@
 // 실패 출력은 한 줄이어야 해서(TAP) 프레임 목록은 summary() 한 줄 문자열로 비교한다.
 import { describe, expect, it } from "vitest";
 import type { RoomView, RoleId, ServerMessage } from "../../shared/protocol";
-import { advanceTo, alarmOf, backdateSends, collect, connect, forceDue, hello, nextFrame, seat, send, storedRoom } from "./helpers";
+import { advanceTo, alarmOf, chatMsg, collect, connect, forceDue, hello, nextFrame, seat, send, storedRoom } from "./helpers";
 import type { Seated, TestSocket } from "./helpers";
 
 interface Actor {
@@ -188,58 +188,55 @@ describe("마피아 밤 (NIGHT-01·D-07)", () => {
   });
 });
 
-describe("밤 채팅 (D-17·COMM-04)", () => {
-  it("마피아의 밤 say·emoji 는 살아 있는 마피아 둘에게만 가고 비마피아 네 소켓은 chat·emoji 프레임을 받지 않는다", async () => {
+describe("밤 채팅 (D-17·COMM-04, 07-11 자유 채팅)", () => {
+  it("마피아의 밤 chat·emoji 는 살아 있는 마피아 둘에게만 가고 비마피아 네 소켓은 chat·emoji 프레임을 받지 않는다", async () => {
     const r = await startedAtNight(6);
     const actors = actorsOf(r);
     const [a, b] = withRole(actors, "mafia") as [Actor, Actor];
-    const victim = withRole(actors, "citizen")[0]!;
     const rest = actors.filter((x) => x.role !== "mafia");
 
-    const said = await sendAndSettle(a, { t: "say", template: "nightTarget", target: victim.seat }, [b, ...rest]);
+    const said = await sendAndSettle(a, chatMsg(a.sock, "그 사람으로 가요"), [b, ...rest]);
     expect(summary(said.own)).toBe("[chat]");
     expect(summary(said.seen.get(b)!)).toBe("[chat]");
-    expect(Object.keys(said.own[0]!).sort().join(",")).toBe("at,seat,seq,t,target,template");
+    expect(Object.keys(said.own[0]!).sort().join(",")).toBe("at,ch,seat,seq,t,text");
+    expect((said.own[0] as Extract<ServerMessage, { t: "chat" }>).ch).toBe("mafia");
     for (const x of rest) expect(summary(said.seen.get(x)!)).toBe("[]");
 
-    await backdateSends(r.code);
     const emoted = await sendAndSettle(a, { t: "emoji", icon: "smile" }, [b, ...rest]);
     expect(summary(emoted.own)).toBe("[emoji]");
     expect(summary(emoted.seen.get(b)!)).toBe("[emoji]");
     for (const x of rest) expect(summary(emoted.seen.get(x)!)).toBe("[]");
   });
 
-  it("살아 있는 시민의 밤 say 는 그 소켓만 WRONG_PHASE + state 를 받고, 마피아의 낮 문구는 BAD_MESSAGE 뿐이다", async () => {
+  it("살아 있는 시민의 밤 chat 은 그 소켓만 chatReject + state 를 받고, 마피아의 빠른 메시지(say)는 BAD_MESSAGE 뿐이다", async () => {
     const r = await startedAtNight(6);
     const actors = actorsOf(r);
     const [a, b] = withRole(actors, "mafia") as [Actor, Actor];
     const citizen = withRole(actors, "citizen")[0]!;
     const rest = actors.filter((x) => x !== citizen);
 
-    const wrong = await sendAndSettle(citizen, { t: "say", template: "nightAgree" }, rest);
-    expect(summary(wrong.own)).toBe("[error:WRONG_PHASE,state:night]");
+    const wrong = await sendAndSettle(citizen, chatMsg(citizen.sock, "동의해요"), rest);
+    expect(summary(wrong.own)).toBe("[chatReject,state:night]");
     for (const x of rest) expect(summary(wrong.seen.get(x)!)).toBe("[]");
 
-    const day = await sendAndSettle(a, { t: "say", template: "innocent" }, [b, citizen]);
-    expect(summary(day.own)).toBe("[error:BAD_MESSAGE]");
-    expect(summary(day.seen.get(b)!)).toBe("[]");
-    expect(summary(day.seen.get(citizen)!)).toBe("[]");
+    const say = await sendAndSettle(a, { t: "say", template: "nightAgree" }, [b, citizen]);
+    expect(summary(say.own)).toBe("[error:BAD_MESSAGE]");
+    expect(summary(say.seen.get(b)!)).toBe("[]");
+    expect(summary(say.seen.get(citizen)!)).toBe("[]");
   });
 
-  it("밤 say 는 메시지를 저장하지 않고 낮 번호는 그대로이며 밤 번호만 오른다", async () => {
+  it("밤 chat 은 방 저장소(room 키)를 바꾸지 않는다 — 줄 번호·메시지가 저장되지 않는다", async () => {
     const r = await startedAtNight(6);
     const actors = actorsOf(r);
     const [a] = withRole(actors, "mafia") as [Actor, Actor];
-    const victim = withRole(actors, "citizen")[0]!;
     const before = (await storedRoom(r.code)) as unknown as Record<string, unknown>;
 
-    await sendAndSettle(a, { t: "say", template: "nightTarget", target: victim.seat }, []);
+    await sendAndSettle(a, chatMsg(a.sock, "그 사람으로 가요"), []);
     const after = (await storedRoom(r.code)) as unknown as Record<string, unknown>;
     expect(Object.hasOwn(after, "messages")).toBe(false);
-    expect(JSON.stringify(after).includes("nightTarget")).toBe(false);
+    expect(JSON.stringify(after).includes("그 사람으로 가요")).toBe(false);
     expect(String(after.nextMessageSeq)).toBe(String(before.nextMessageSeq));
-    expect(String(before.nextNightSeq)).toBe("undefined");
-    expect(String(after.nextNightSeq)).toBe("2");
+    expect(String(after.nextNightSeq)).toBe("undefined");
   });
 });
 
@@ -266,7 +263,7 @@ describe("마감 (NIGHT-05)", () => {
 });
 
 describe("낮 방송 회귀", () => {
-  it("낮 토론 say 는 지금처럼 모든 소켓에 간다", async () => {
+  it("낮 토론 chat 은 지금처럼 모든 소켓에 간다", async () => {
     const r = await seat(4, 0);
     send(r.host, { t: "start" });
     for (const s of allSockets(r)) await nextFrame(s, (m) => m.t === "state" && m.view.phase === "assigning");
@@ -274,7 +271,7 @@ describe("낮 방송 회귀", () => {
     const actors = actorsOf(r);
     const [speaker, ...rest] = actors as [Actor, ...Actor[]];
 
-    const said = await sendAndSettle(speaker, { t: "say", template: "innocent" }, rest);
+    const said = await sendAndSettle(speaker, chatMsg(speaker.sock, "저 아니에요"), rest);
     expect(summary(said.own)).toBe("[chat]");
     for (const x of rest) expect(summary(said.seen.get(x)!)).toBe("[chat]");
   });
@@ -345,12 +342,12 @@ describe("관전 (결정 0021)", () => {
     expect(alive.length).toBe(5);
   });
 
-  it("다음 밤 마피아 say 는 마피아 둘과 관전자 소켓에만 chat 이 가고 살아 있는 비마피아는 0개다", async () => {
+  it("다음 밤 마피아 chat 은 마피아 둘과 관전자 소켓에만 chat 이 가고 살아 있는 비마피아는 0개다", async () => {
     const { r, dead, mafia, police, doctor, living } = await diedFirstNight();
     const [a, b] = mafia;
     await advanceTo(r.code, allSockets(r), "night");
 
-    const said = await sendAndSettle(a, { t: "say", template: "nightTarget", target: living.seat }, [b, dead, police, doctor, living]);
+    const said = await sendAndSettle(a, chatMsg(a.sock, "그 사람으로 가요"), [b, dead, police, doctor, living]);
     expect(summary(said.own)).toBe("[chat]");
     expect(summary(said.seen.get(b)!)).toBe("[chat]");
     expect(summary(said.seen.get(dead)!)).toBe("[chat]");
@@ -366,7 +363,7 @@ describe("관전 (결정 0021)", () => {
 });
 
 describe("탈락자 거부 (ELIM-01)", () => {
-  it("탈락자의 pick 은 BAD_MESSAGE + state, say·emoji 는 BAD_MESSAGE 뿐이고 아무 소켓에도 chat·emoji 가 가지 않는다", async () => {
+  it("탈락자의 pick 은 BAD_MESSAGE + state, say·emoji 는 BAD_MESSAGE 뿐이고 아무 소켓에도 chat·emoji 가 가지 않으며, 탈락자의 chat 은 ch ghost 로 탈락자에게만 간다", async () => {
     const { r, dead, mafia, police, doctor, living } = await diedFirstNight();
     const [a, b] = mafia;
     await advanceTo(r.code, allSockets(r), "night");
@@ -383,6 +380,10 @@ describe("탈락자 거부 (ELIM-01)", () => {
       expect(summary(said.seen.get(x)!)).toBe("[]");
       expect(summary(emoted.seen.get(x)!)).toBe("[]");
     }
+    const ghost = await sendAndSettle(dead, chatMsg(dead.sock, "아쉽네요"), watchers);
+    expect(summary(ghost.own)).toBe("[chat]");
+    expect((ghost.own[0] as Extract<ServerMessage, { t: "chat" }>).ch).toBe("ghost");
+    for (const x of watchers) expect(summary(ghost.seen.get(x)!)).toBe("[]");
   });
 
 });

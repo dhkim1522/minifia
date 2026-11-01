@@ -1,4 +1,4 @@
-// 실제 소켓 프레임과 HTTP 응답 전수 누출 검사(ROLE-02): 6명 한 판(lobby → 두 밤·두 아침)을 실제 행동·마피아 채팅으로 workerd 에서 돌리며 받은 모든 것을 모아 본다.
+// 실제 소켓 프레임과 HTTP 응답 전수 누출 검사(ROLE-02): 6명 한 판(lobby → 두 밤·두 아침)을 실제 행동·자유 채팅(all·mafia·ghost)·입력 중으로 workerd 에서 돌리며 받은 모든 것을 모아 본다.
 import { env, exports } from "cloudflare:workers";
 import { runDurableObjectAlarm } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
@@ -8,7 +8,8 @@ import type { RoleId, RoomView, ServerMessage } from "../../shared/protocol";
 import {
   actorsOf,
   advanceTo,
-  backdateSends,
+  advanceToKeep,
+  chatMsg,
   closePhase,
   collect,
   connect,
@@ -18,6 +19,7 @@ import {
   mark,
   nextFrame,
   phaseKeyOf,
+  resetChatRates,
   seat,
   send,
   settle,
@@ -95,6 +97,10 @@ const WORLD_STRING_VALUES: Record<string, ReadonlySet<string>> = { ".t": new Set
 
 // ---- typing 프레임(07-10, T-07-18): 키는 t·seat·on 뿐, 문자열 값은 .t "typing" 뿐이다 ----
 const TYPING_KEY_PATHS = new Set([".t", ".seat", ".on"]);
+// ---- chat 프레임(07-11, 누설 검사 (a)(b)(c)): 키는 t·ch·seat·seq·text·at 뿐, .t 는 "chat", .ch 는 all|mafia|ghost 이고 mafia·ghost 는 받을 권리 있는 소켓에서만 나온다 ----
+const CHAT_KEY_PATHS = new Set([".t", ".ch", ".seat", ".seq", ".text", ".at"]);
+// ---- chatReject 프레임(07-11): 키는 t·why 뿐, 문자열 값은 .t "chatReject" 와 .why(거절 이유 코드)뿐이다. 보낸 사람 소켓에만 간다 ----
+const CHAT_REJECT_KEY_PATHS = new Set([".t", ".why"]);
 
 /**
  * 각 소켓의 프레임 목록에서 world 프레임을 본다: 첫 "로비가 아닌 단계" state 이후에는 하나도 없고(start 이전에만 있다),
@@ -206,15 +212,17 @@ describe("6명 한 판(두 밤·두 아침, 행동·마피아 채팅·탈락·�
       await flush(who.sock);
     };
 
-    // 1일차: 토론(살아 있는 시민 Y 가 한 줄, 낮 chat seq 기준점) → 밤 (07-08: 순차 주장 단계 없음)
-    await advanceTo(code, socks, "discussion");
+    // 채팅 줄 번호는 DO 메모리에 있다(저장·복원은 07-14) — 단계를 넘길 때 DO 를 evict 하지 않는 advanceToKeep 으로 넘겨 번호가 이어지는지 본다.
+    // 같은 사람의 연속 전송은 600ms 간격·같은 문장 3초 제한(D5)에 걸리므로 줄마다 보낸 사람을 달리한다.
+
+    // 1일차: 토론(살아 있는 시민 Y 가 공개 한 줄 — all 줄 1번) → 밤 (07-08: 순차 주장 단계 없음)
+    await advanceToKeep(code, socks, "discussion");
     await probe(true);
-    await backdateSends(code);
-    await act(victimY, { t: "say", template: "innocent" });
-    await advanceTo(code, socks, "night");
+    await act(victimY, chatMsg(victimY.sock, "저 아니에요"));
+    await advanceToKeep(code, socks, "night");
     await probe(true);
 
-    // 1일차 밤: 마피아 둘이 X 를, 경찰이 마피아 A 를, 의사가 자신을 지목하고, 마피아 A 가 밤 채팅과 이모티콘을 보낸다.
+    // 1일차 밤: 마피아 둘이 X 를, 경찰이 마피아 A 를, 의사가 자신을 지목하고, 마피아 A 가 밤 채팅(mafia 줄 1번)과 이모티콘을 보낸다.
     await act(mafiaA, { t: "pick", target: victimX.seat });
     await act(mafiaB, { t: "pick", target: victimX.seat });
     await act(police, { t: "pick", target: mafiaA.seat });
@@ -223,27 +231,29 @@ describe("6명 한 판(두 밤·두 아침, 행동·마피아 채팅·탈락·�
     await act(mafiaA, { t: "typing", on: true, pk: phaseKeyOf(mafiaA.sock) });
     await act(mafiaA, { t: "typing", on: false, pk: phaseKeyOf(mafiaA.sock) });
     await act(victimY, { t: "typing", on: true, pk: phaseKeyOf(victimY.sock) });
-    await backdateSends(code);
-    await act(mafiaA, { t: "say", template: "nightTarget", target: victimX.seat });
-    await backdateSends(code);
+    // 산 시민 Y 의 밤 전송은 채널이 없어 폐기된다 — Y 소켓에만 chatReject{phase} 가 가고 아무에게도 줄이 가지 않는다(T-07-26).
+    await act(victimY, chatMsg(victimY.sock, "저 시민이에요"));
+    await act(mafiaA, chatMsg(mafiaA.sock, "그 사람으로 가요"));
     await act(mafiaA, { t: "emoji", icon: "smile" });
-    await advanceTo(code, socks, "morning"); // X 탈락
+    await advanceToKeep(code, socks, "morning"); // X 탈락
     await probe(true);
 
-    // 2일차: 토론(살아 있는 시민 Y 가 한 줄) → 밤(마피아 둘이 Y 를, 경찰이 마피아 B 를 지목, 마피아 B 가 채팅) → 아침
-    await advanceTo(code, socks, "discussion");
+    // 2일차: 토론(경찰이 공개 한 줄 — all 줄 2번, 탈락자 X 가 탈락자 줄 — ghost 줄 1번) → 밤(마피아 둘이 Y 를, 경찰이 마피아 B 를 지목, 마피아 B 가 채팅 — mafia 줄 2번) → 아침
+    await advanceToKeep(code, socks, "discussion");
     await probe(true);
-    await backdateSends(code);
-    await act(victimY, { t: "say", template: "innocent" });
-    await advanceTo(code, socks, "night");
+    await act(police, chatMsg(police.sock, "누가 수상해요?"));
+    await act(victimX, chatMsg(victimX.sock, "구경 중이에요"));
+    await advanceToKeep(code, socks, "night");
     await probe(true);
     await act(mafiaA, { t: "pick", target: victimY.seat });
     await act(mafiaB, { t: "pick", target: victimY.seat });
     await act(police, { t: "pick", target: mafiaB.seat });
-    await backdateSends(code);
-    await act(mafiaB, { t: "say", template: "nightAgree" });
-    await advanceTo(code, socks, "morning"); // Y 탈락
+    await act(mafiaB, chatMsg(mafiaB.sock, "동의해요"));
+    await advanceToKeep(code, socks, "morning"); // Y 탈락
     await probe(true);
+    // 아침: 방금 탈락한 Y 가 탈락자 줄(ghost 줄 2번)을 보낸다 — 탈락자 X·Y 만 받는다. 시험이 빨라 Y 의 600ms 간격이 안 지났으므로 전송 기록만 비운다.
+    await resetChatRates(code);
+    await act(victimY, chatMsg(victimY.sock, "아쉽네요"));
     for (const p of players) await flush(p.sock);
 
     // ---- 검사 ----
@@ -332,8 +342,10 @@ describe("6명 한 판(두 밤·두 아침, 행동·마피아 채팅·탈락·�
     };
     const allSeats = [...actors].sort((x, y) => x.seat - y.seat).map((x) => ({ seat: x.seat, job: x.role }));
     const diedAt = new Map<number, string>(); // seat → 탈락 state 의 "단계 일차"
-    const dayLines = new Map<number, number[]>(); // seat → 살아 있는 동안 받은 낮 chat seq
-    const nightLines = new Map<number, string>(); // seat → "일차:seq,…" 밤 chat
+    const allLines = new Map<number, number[]>(); // seat → 받은 ch all 줄 번호(받은 순서)
+    const mafiaLines = new Map<number, number[]>(); // seat → 받은 ch mafia 줄 번호
+    const ghostLines = new Map<number, number[]>(); // seat → 받은 ch ghost 줄 번호
+    const rejects = new Map<number, string[]>(); // seat → 받은 chatReject 의 why
     const nightEmojis = new Map<number, number>(); // seat → 밤 emoji 프레임 수
     const typingCounts = new Map<number, number>(); // seat → 받은 typing 프레임 수
     const sawChatMafia = new Set<number>(); // me.chat 이 "mafia" 인 view 를 받은 seat
@@ -345,8 +357,10 @@ describe("6명 한 판(두 밤·두 아침, 행동·마피아 채팅·탈락·�
       let dead = false;
       let phase = "";
       let day = 0;
-      const lines: number[] = [];
-      const nights: string[] = [];
+      const alls: number[] = [];
+      const mafias: number[] = [];
+      const ghosts: number[] = [];
+      const rejected: string[] = [];
       let emojis = 0;
       let typings = 0;
       for (const raw of collect(a.sock)) {
@@ -401,10 +415,12 @@ describe("6명 한 판(두 밤·두 아침, 행동·마피아 채팅·탈락·�
           expect(String(msg.view.me.pick)).toBe(String(pickedIn[day]?.get(a.seat)));
           saw.pick.add(a.seat);
         }
-        // (4) 역할·주장 값 문자열은 허용 경로에만.
+        // (4) 역할·주장 값 문자열은 허용 경로에만. chat 의 .ch 값 mafia 는 그 밤의 산 마피아·탈락자 소켓에서만 허용한다(누설 검사 (c)).
         const allowed = dead ? ROLE_PATHS_DEAD : ROLE_PATHS_ALIVE;
         for (const [pth, value] of stringPaths(msg)) {
-          if (ROLE_WORDS.has(value)) expect(allowed.includes(pth)).toBe(true);
+          if (!ROLE_WORDS.has(value)) continue;
+          const chOk = msg.t === "chat" && pth === ".ch" && value === "mafia" && phase === "night" && (dead || a.role === "mafia");
+          expect(`${pth}=${value}:${allowed.includes(pth) || chOk}`).toBe(`${pth}=${value}:true`);
         }
         // (7) typing 프레임(07-10): 키·문자열 값은 허용 목록뿐이고, 밤에는 살아 있는 마피아와 탈락자 소켓만 받는다 — 시민 편 소켓은 0건.
         if (msg.t === "typing") {
@@ -419,15 +435,32 @@ describe("6명 한 판(두 밤·두 아침, 행동·마피아 채팅·탈락·�
           expect(`${a.role}/${dead}/${msg.view.phase}`).toBe("mafia/false/night");
           sawChatMafia.add(a.seat);
         }
-        // (1)(6) 밤 chat·emoji 는 살아 있는 마피아와 탈락자에게만. 낮 chat 은 살아 있는 동안 받은 번호를 센다.
-        if (msg.t === "chat" || msg.t === "emoji") {
-          if (phase === "night") {
-            if (!dead) expect(a.role).toBe("mafia");
-            if (msg.t === "chat") nights.push(`${day}:${msg.seq}`);
-            else emojis += 1;
-          } else if (msg.t === "chat" && !dead) {
-            lines.push(msg.seq);
+        // (a)(b)(c) chat 프레임: 키·문자열 값은 허용 목록뿐이고, 채널마다 받을 권리가 있는 소켓에만 온다 — 시민 편 소켓은 mafia·ghost 줄을 한 줄도 받지 않는다.
+        if (msg.t === "chat") {
+          for (const pth of paths) expect(CHAT_KEY_PATHS.has(pth)).toBe(true);
+          for (const [pth, value] of stringPaths(msg)) {
+            if (pth === ".t") expect(value).toBe("chat");
+            if (pth === ".ch") expect(["all", "mafia", "ghost"].includes(value)).toBe(true);
           }
+          if (msg.ch === "all") alls.push(msg.seq);
+          else if (msg.ch === "mafia") {
+            expect(`${phase}/${dead || a.role === "mafia"}`).toBe("night/true"); // 밤의 산 마피아 또는 탈락자
+            mafias.push(msg.seq);
+          } else {
+            expect(dead).toBe(true); // ghost 줄은 탈락자만
+            ghosts.push(msg.seq);
+          }
+        }
+        // chatReject: 보낸 사람(밤의 산 시민 Y) 소켓에만, 키는 t·why 뿐이고 이유는 phase 하나(역할을 말하지 않는다).
+        if (msg.t === "chatReject") {
+          for (const pth of paths) expect(CHAT_REJECT_KEY_PATHS.has(pth)).toBe(true);
+          rejected.push(msg.why);
+        }
+        // (1)(6) 밤 emoji 는 살아 있는 마피아와 탈락자에게만.
+        if (msg.t === "emoji") {
+          expect(phase).toBe("night");
+          if (!dead) expect(a.role).toBe("mafia");
+          emojis += 1;
         }
         // (5) 아침 결과.
         if (msg.t === "state" && msg.view.phase === "morning") {
@@ -439,8 +472,10 @@ describe("6명 한 판(두 밤·두 아침, 행동·마피아 채팅·탈락·�
           morningSeen.set(day, seen);
         }
       }
-      dayLines.set(a.seat, lines);
-      nightLines.set(a.seat, nights.join(","));
+      allLines.set(a.seat, alls);
+      mafiaLines.set(a.seat, mafias);
+      ghostLines.set(a.seat, ghosts);
+      rejects.set(a.seat, rejected);
       nightEmojis.set(a.seat, emojis);
       typingCounts.set(a.seat, typings);
     }
@@ -494,20 +529,22 @@ describe("6명 한 판(두 밤·두 아침, 행동·마피아 채팅·탈락·�
       ]),
     );
 
-    // (6) 낮 chat 번호는 밤 마피아 채팅 수와 무관하게 이어진다(PLAN-CHECK W3, 결정 0020).
-    const day1Seq = dayLines.get(police.seat)![0]!;
-    expect(dayLines.get(police.seat)).toEqual([day1Seq, day1Seq + 1]); // 1일차 밤 마피아 채팅이 끼어도 +1
+    // (6) 채널마다 따로 센 줄 번호(리서치 Pitfall 1, 결정 0058-5): 공개 줄(ch all)은 마피아·탈락자 줄 때문에 틈이 생기지 않는다 — 모든 소켓이 1, 2 를 받는다.
+    for (const a of actors) expect(`${a.seat}:${allLines.get(a.seat)!.join(",")}`).toBe(`${a.seat}:1,2`);
+    // 밤 마피아 줄 번호는 밤마다 1부터가 아니라 판 내내 이어진다(가정 A3): 산 마피아 둘은 1·2, 2일차 밤에 이미 탈락한 X 는 2 만, 나머지는 한 줄도 받지 않는다.
     for (const a of actors) {
-      if (a === victimX) expect(dayLines.get(a.seat)).toEqual([day1Seq]); // 1일차 아침에 탈락 — 2일차 줄은 관전자로 받는다
-      else expect(dayLines.get(a.seat)).toEqual([day1Seq, day1Seq + 1]);
-    }
-    // 밤 chat 번호는 밤마다 1부터다: 마피아 둘은 두 밤 모두, 관전자 X 는 자기가 탈락한 뒤의 2일차 밤만, 나머지는 0줄.
-    for (const a of actors) {
-      const expected = a.role === "mafia" ? "1:1,2:1" : a === victimX ? "2:1" : "";
-      expect(nightLines.get(a.seat)).toBe(expected);
+      const expected = a.role === "mafia" ? "1,2" : a === victimX ? "2" : "";
+      expect(`${a.seat}:${mafiaLines.get(a.seat)!.join(",")}`).toBe(`${a.seat}:${expected}`);
       // 밤 emoji 는 1일차 밤 마피아 A 의 한 번: 살아 있던 마피아 둘만 받는다.
       expect(nightEmojis.get(a.seat)).toBe(a.role === "mafia" ? 1 : 0);
     }
+    // 탈락자 줄: X 의 2일차 줄(1번)은 X 만, Y 의 아침 줄(2번)은 X·Y 가 받는다 — 산 사람 소켓은 한 줄도 받지 않는다.
+    for (const a of actors) {
+      const expected = a === victimX ? "1,2" : a === victimY ? "2" : "";
+      expect(`${a.seat}:${ghostLines.get(a.seat)!.join(",")}`).toBe(`${a.seat}:${expected}`);
+    }
+    // 거절: 밤의 산 시민 Y 의 전송 하나뿐이고 Y 소켓에만 갔다.
+    for (const a of actors) expect(`${a.seat}:${rejects.get(a.seat)!.join(",")}`).toBe(`${a.seat}:${a === victimY ? "phase" : ""}`);
   });
 });
 
@@ -630,7 +667,7 @@ describe("6명 한 판: 처형·처형 무효·종료 전수 프레임 누출 �
         expect(reveals[0]?.votes.length).toBe(6);
       }
       await advanceTo(code, socks, "defense");
-      await act(mafiaA, { t: "say", template: "defNotMe" });
+      await act(mafiaA, chatMsg(mafiaA.sock, "저 아니에요"));
       await advanceTo(code, socks, "execution");
       dead.add(mafiaA.seat);
       for (const a of actors) {
@@ -671,8 +708,7 @@ describe("6명 한 판: 처형·처형 무효·종료 전수 프레임 누출 �
       await castCandidates((a) => (a === mafiaB ? police.seat : mafiaB.seat), alive(dead));
       await closeInto("candidateVoteReveal");
       await advanceTo(code, socks, "defense");
-      await backdateSends(code);
-      await act(mafiaB, { t: "say", template: "defPlead" });
+      await act(mafiaB, chatMsg(mafiaB.sock, "한 번만 믿어 주세요"));
       await advanceTo(code, socks, "execution");
       dead.add(mafiaB.seat);
       await advanceTo(code, socks, "ended");

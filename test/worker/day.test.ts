@@ -1,9 +1,9 @@
-// 낮 토론 워커 통합 테스트(02-05, 03.1-02): 실제 소켓·알람으로 낮 토론(07-08 이후 순차 주장 없음)·빠른 메시지·이모티콘·연장·넘기기를 workerd 에서 확인한다.
+// 낮 토론 워커 통합 테스트(02-05, 03.1-02): 실제 소켓·알람으로 낮 토론(07-08 이후 순차 주장 없음)·자유 채팅(07-11 이후 빠른 메시지 없음)·이모티콘·연장·넘기기를 workerd 에서 확인한다.
 import { describe, expect, it } from "vitest";
 import type { RoomView, ServerMessage } from "../../shared/protocol";
 import { env } from "cloudflare:workers";
 import { evictDurableObject, runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
-import { advanceTo, alarmOf, backdateSends, collect, connect, flat, forceDue, hello, nextFrame, nextState, seat, send, storedRoom } from "./helpers";
+import { advanceTo, alarmOf, chatMsg, collect, connect, flat, forceDue, hello, nextFrame, nextState, seat, send, storedRoom } from "./helpers";
 import type { Seated, TestSocket } from "./helpers";
 
 const allSockets = (r: Seated): TestSocket[] => [r.host, ...r.guests.map((g) => g.sock)];
@@ -63,36 +63,35 @@ async function settle(sock: TestSocket): Promise<void> {
 
 const keysOf = (frame: RawFrame): string => Object.keys(frame).sort().join(",");
 
-describe("빠른 메시지 (COMM-01, COMM-04, D-13)", () => {
-  it("discussion 에서 보낸 suspect 는 모든 소켓(보낸 소켓 포함)에 chat 프레임 하나로 가고(seat = 보낸 소켓의 자리), 즉시 두 번째는 RATE_LIMITED 이며 chat 프레임이 더 오지 않는다", async () => {
+describe("자유 채팅과 사라진 빠른 메시지 (CHAT-01·06, 07-11)", () => {
+  it("discussion 에서 보낸 chat 은 모든 소켓(보낸 소켓 포함)에 chat 프레임 하나로 가고(seat = 보낸 소켓의 자리), 즉시 두 번째는 chatReject rate 이며 chat 프레임이 더 오지 않는다", async () => {
     const r = await startedAt("discussion");
-    const [g0, g1] = r.guests as [Seated["guests"][number], Seated["guests"][number], ...Seated["guests"]];
+    const [g0] = r.guests as [Seated["guests"][number], ...Seated["guests"]];
     const sockets = allSockets(r);
 
-    send(g0.sock, { t: "say", template: "suspect", target: g1.seat });
+    send(g0.sock, chatMsg(g0.sock, "누가 수상해요?"));
     await waitChat(sockets, 1);
     for (const s of sockets) {
       const frame = chatFrames(s)[0]!;
-      expect(`${frame.seat}:${frame.template}:${frame.target}`).toBe(`${g0.seat}:suspect:${g1.seat}`);
-      expect(keysOf(frame)).toBe("at,seat,seq,t,target,template");
+      expect(`${frame.ch}:${frame.seat}:${frame.seq}:${frame.text}`).toBe(`all:${g0.seat}:1:누가 수상해요?`);
+      expect(keysOf(frame)).toBe("at,ch,seat,seq,t,text");
     }
 
-    send(g0.sock, { t: "say", template: "trust", target: g1.seat });
-    expect(await errorCode(g0.sock)).toBe(codeOf("RATE_LIMITED"));
+    send(g0.sock, chatMsg(g0.sock, "믿어 주세요"));
+    expect(flat(await nextFrame(g0.sock, (m) => m.t === "chatReject"))).toBe('{"t":"chatReject","why":"rate"}');
     await settle(g0.sock);
     for (const s of sockets) expect(chatFrames(s).length).toBe(1);
   });
 
-  it("say 가 통과해도 state 프레임은 방송되지 않는다 — say 직전 이후 프레임이 chat, emoji 순서뿐이다 (결정 0017-7)", async () => {
+  it("chat 이 통과해도 state 프레임은 방송되지 않는다 — chat 직전 이후 프레임이 chat, emoji 순서뿐이다 (결정 0017-7)", async () => {
     const r = await startedAt("discussion");
     const g0 = r.guests[0]!;
     const sockets = allSockets(r);
     for (const s of sockets) await settle(s); // 앞선 state 프레임이 모두 도착한 뒤에 경계를 잡는다
     const marks = sockets.map((s) => s.frames.length);
 
-    send(g0.sock, { t: "say", template: "innocent" });
+    send(g0.sock, chatMsg(g0.sock, "저 아니에요"));
     await waitChat(sockets, 1);
-    await backdateSends(r.code);
     send(g0.sock, { t: "emoji", icon: "smile" });
     for (const s of sockets) await nextFrame(s, (m) => m.t === "emoji");
 
@@ -102,15 +101,15 @@ describe("빠른 메시지 (COMM-01, COMM-04, D-13)", () => {
     });
   });
 
-  it("text 키가 붙은 say·seat 키로 방장 자리를 넣은 say 는 BAD_MESSAGE 이고 다른 소켓에 나타나지 않는다", async () => {
+  it("ch·seat 키가 붙은 chat 은 BAD_MESSAGE 이고 다른 소켓에 나타나지 않는다", async () => {
     const r = await startedAt("discussion");
     const [g0, g1] = r.guests as [Seated["guests"][number], Seated["guests"][number], ...Seated["guests"]];
     const sockets = allSockets(r);
     const marker = "UNIQUE-TEXT-9f3a";
 
-    send(g0.sock, { t: "say", template: "suspect", target: g1.seat, text: marker });
+    send(g0.sock, { ...chatMsg(g0.sock, marker), ch: "mafia" });
     expect(await errorCode(g0.sock)).toBe(codeOf("BAD_MESSAGE"));
-    send(g1.sock, { t: "say", template: "suspect", target: g0.seat, seat: 0 });
+    send(g1.sock, { ...chatMsg(g1.sock, marker), seat: 0 });
     expect(await errorCode(g1.sock)).toBe(codeOf("BAD_MESSAGE"));
     await settle(g0.sock);
     await settle(g1.sock);
@@ -121,62 +120,41 @@ describe("빠른 메시지 (COMM-01, COMM-04, D-13)", () => {
     expect(await storedMessageCount(r.code)).toBe(0);
   });
 
-  it("표시 전용 템플릿(claimNone·claimRole)을 토론 중 소켓으로 보내면 보낸 소켓만 error BAD_MESSAGE 를 받고 다른 소켓에는 chat 프레임이 가지 않는다 (결정 0027-7)", async () => {
+  it("빠른 메시지(say)는 어떤 템플릿이든 보낸 소켓만 BAD_MESSAGE 를 받고 다른 소켓에는 chat 프레임이 가지 않는다 (CHAT-06)", async () => {
     const r = await startedAt("discussion");
-    const [g0] = r.guests as [Seated["guests"][number], ...Seated["guests"]];
+    const [g0, g1] = r.guests as [Seated["guests"][number], Seated["guests"][number], ...Seated["guests"]];
     const sockets = allSockets(r);
 
-    send(g0.sock, { t: "say", template: "claimNone" });
+    send(g0.sock, { t: "say", template: "innocent" });
     expect(await errorCode(g0.sock)).toBe(codeOf("BAD_MESSAGE"));
-    await backdateSends(r.code);
+    send(g0.sock, { t: "say", template: "suspect", target: g1.seat });
+    expect(await errorCode(g0.sock)).toBe(codeOf("BAD_MESSAGE"));
     send(g0.sock, { t: "say", template: "claimRole", claimedRole: "police" });
     expect(await errorCode(g0.sock)).toBe(codeOf("BAD_MESSAGE"));
     await settle(g0.sock);
     for (const s of sockets) expect(chatFrames(s).length).toBe(0);
     expect(await storedMessageCount(r.code)).toBe(0);
   });
-
-  it("쿨다운이 지난 뒤 거짓 주장(claimed, 아무 직업)도 그대로 모든 소켓의 chat 프레임이 되고 키는 id·role 이 아니다", async () => {
-    const r = await startedAt("discussion");
-    const [g0, g1, g2] = r.guests as [Seated["guests"][number], Seated["guests"][number], Seated["guests"][number], ...Seated["guests"]];
-    const sockets = allSockets(r);
-
-    send(g0.sock, { t: "say", template: "innocent" });
-    await waitChat(sockets, 1);
-    await backdateSends(r.code);
-    send(g0.sock, { t: "say", template: "claimed", target: g2.seat, claimedRole: "police" });
-    await waitChat(sockets, 2);
-    for (const s of sockets) {
-      const frame = chatFrames(s)[1]!;
-      expect(`${frame.seat}:${frame.template}:${frame.target}:${frame.claimedRole}`).toBe(`${g0.seat}:claimed:${g2.seat}:police`);
-      expect(keysOf(frame)).toBe("at,claimedRole,seat,seq,t,target,template");
-      expect(Object.keys(frame).some((k) => k === "id" || k === "role")).toBe(false);
-    }
-    expect(g1.seat).not.toBe(g2.seat);
-  });
 });
 
 describe("이모티콘 (COMM-02, D-14)", () => {
-  it("저장 없이 연결된 모든 소켓에 emoji 프레임이 가고, 직후 say 는 RATE_LIMITED 다", async () => {
+  it("저장 없이 연결된 모든 소켓에 emoji 프레임이 가고, 직후 emoji 는 RATE_LIMITED 이며 채팅과 쿨다운을 나눠 쓰지 않는다", async () => {
     const r = await startedAt("discussion");
-    const [g0, g1] = r.guests as [Seated["guests"][number], Seated["guests"][number], ...Seated["guests"]];
+    const [g0] = r.guests as [Seated["guests"][number], ...Seated["guests"]];
     const sockets = allSockets(r);
-
-    send(g0.sock, { t: "say", template: "innocent" });
-    await waitChat(sockets, 1);
-    await backdateSends(r.code);
 
     send(g0.sock, { t: "emoji", icon: "smile" });
     for (const s of sockets) {
       const m = await nextFrame(s, (f) => f.t === "emoji");
       expect(m.t === "emoji" && `${m.seat}:${m.icon}:${typeof m.at}`).toBe(`${g0.seat}:smile:number`);
     }
-    for (const s of sockets) expect(chatFrames(s).length).toBe(1);
+    for (const s of sockets) expect(chatFrames(s).length).toBe(0);
 
-    send(g0.sock, { t: "say", template: "suspect", target: g1.seat });
-    expect(await errorCode(g0.sock)).toBe(codeOf("RATE_LIMITED"));
     send(g0.sock, { t: "emoji", icon: "heart" });
     expect(await errorCode(g0.sock)).toBe(codeOf("RATE_LIMITED"));
+    // 이모티콘 쿨다운이 걸려 있어도 자유 채팅은 별도 규칙(D5)으로 통과한다.
+    send(g0.sock, chatMsg(g0.sock, "저 아니에요"));
+    await waitChat(sockets, 1);
     await settle(g0.sock);
     for (const s of sockets) expect(chatFrames(s).length).toBe(1);
   });
@@ -263,11 +241,11 @@ describe("방장 연장·넘기기는 없다 (결정 0017-5, DAY-01)", () => {
   });
 });
 
-describe("채팅은 서버에 저장하지 않는다 (결정 0017-7)", () => {
-  it("통과한 say 뒤 저장된 방의 messages 는 비어 있다(줄을 저장하지 않는다)", async () => {
+describe("채팅은 방 저장소에 저장하지 않는다 (결정 0017-7)", () => {
+  it("통과한 chat 뒤 저장된 방의 messages 는 비어 있다(줄은 room 키에 들어가지 않는다)", async () => {
     const r = await startedAt("discussion");
     const sockets = allSockets(r);
-    send(r.guests[0]!.sock, { t: "say", template: "innocent" });
+    send(r.guests[0]!.sock, chatMsg(r.guests[0]!.sock, "저 아니에요"));
     await waitChat(sockets, 1);
     expect(await storedMessageCount(r.code)).toBe(0);
   });
