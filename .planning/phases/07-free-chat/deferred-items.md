@@ -64,7 +64,7 @@
 ### 닫힌 항목 (07-11·07-12 에서 넘어온 개발용 스크립트)
 
 - `scripts/bots.mjs`, `scripts/smoke.mjs`: 07-16 이 자유 채팅(`chat`·`typing`·`chatReject`·`chatLog`) 기준으로 다시 썼다. 옛 `say`·`emoji`·`claim` 송신과 `claimLog`·`turn` 기대가 없다.
-- 아직 남은 것: `scripts/uat-day.mjs`, `scripts/uat-night.mjs`, `scripts/uat-vote.mjs`, `scripts/uat-test-bots.mjs`(수동 UAT 용, `say`·`emoji` 송신), `scripts/gallery.mjs`(emoji 언급 확인 필요). 07-17 또는 07-20 이 맡는다.
+- 07-17 갱신: `scripts/uat-day.mjs`, `uat-night.mjs`, `uat-vote.mjs`, `uat-test-room.mjs`, `uat-test-bots.mjs` 를 자유 채팅 기준으로 다시 썼다(옛 `say`·`emoji`·`claim` 송신과 `claimLog`·`day.turn` 기대 없음, 로컬 서버 실행 통과). 07-11·07-12 에서 넘어온 개발용 스크립트 항목은 `scripts/gallery.mjs`(emoji 언급 확인 필요) 하나만 남았다 — 07-20 이 맡는다.
 
 ### 로컬 smoke full 의 하루 캐시 헤더 검사
 
