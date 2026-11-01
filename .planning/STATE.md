@@ -5,16 +5,16 @@ milestone_name: 같은 공간
 current_phase: 06
 current_phase_name: 월드 뼈대
 status: verifying
-stopped_at: Completed 06-22-PLAN.md
-last_updated: "2026-11-01T08:43:01.142Z"
+stopped_at: Completed 06-23-PLAN.md
+last_updated: "2026-11-01T08:54:42.313Z"
 last_activity: 2026-11-01
 last_activity_desc: Phase 06 execution started
-state_head: af82c027d24fc654d9ebb227b32b502248ce9e4d
+state_head: 84b6ea5701655a91f6d5abef93bf327ed734b48d
 progress:
   total_phases: 7
   completed_phases: 0
   total_plans: 23
-  completed_plans: 22
+  completed_plans: 23
   percent: 0
 ---
 
@@ -80,6 +80,7 @@ Progress: [░░░░░░░░░░] 0% (0/7 phases)
 | Phase 06 P19 | 50 min | 3 tasks | 16 files |
 | Phase 06 P20 | 12 min | 2 tasks | 4 files |
 | Phase 06 P22 | 6min | 3 tasks | 12 files |
+| Phase 06 P23 | 14 min | 3 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -137,6 +138,8 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 06]: 06-19 렌더 성능 게이트 판정 a: 지금 예산(사다리 0단계, 자동 강등 1~3)으로 확정(사용자 선택). 조건 B 4행 통과 + iPhone 16 Pro(iOS용 Chrome) vote 5분 59.98fps·열감 차갑다. 미확인 실기기 항목은 9페이즈, 채팅 확인표는 7페이즈로 이월
 - [Phase 06]: 0057: 렌더 게이트 통과, 사다리 0단계(자동 강등 1~3), 3D 맵·캐릭터 유지
 - [Phase 06]: 06-22: 내 이름표 맨 위 + 겹친 맨 앞 하나만 overlay-ink-strong (G-06-4 사용자 결정), 가장자리 당기기·카메라 변경 없음
+- [Phase 06]: 06-23: dropSockets 는 합성 close(1006)를 먼저 dispatch 한 뒤 ws.close() — 배포 서버의 약 10초 close 지연에 의존하지 않는다 (G-06-6)
+- [Phase 06]: 06-23: deployhold 배포 주소는 /api/health version 변화가 있을 때만 판정하고 없으면 DH0 미확인 행(통과로 세지 않음), 6분 띠 대기 제거
 
 ### Pending Todos
 
@@ -173,8 +176,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-01T08:43:01.018Z
-Stopped at: Completed 06-22-PLAN.md
+Last session: 2026-11-01T08:54:42.186Z
+Stopped at: Completed 06-23-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
