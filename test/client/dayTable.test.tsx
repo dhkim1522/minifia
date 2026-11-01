@@ -8,7 +8,6 @@ import { ASSET_VERSION, ghostSrc } from "../../src/net/assets";
 import type { IconName } from "../../src/components/Icon";
 import type { DayTableSeat } from "../../src/components/DayTable";
 import { HALO_MAX_SIMULTANEOUS, daySeatLayout, px } from "../../src/game/dayTable";
-import { claimName } from "../../src/game/roleText";
 import { CONE_H, CONE_W, GHOST_FADE_MS, VERDICT_BLUR_PX, VERDICT_CANDIDATE_SCALE, VERDICT_DIM_PERCENT, VERDICT_MOVE_MS, candidateCenter, chipPlacement, tagBoxesOf } from "../../src/game/verdict";
 
 afterEach(() => {
@@ -222,16 +221,8 @@ describe("DayTable: 안전", () => {
 // CSS 는 정규식으로 한 줄 결과(true/false)만 단언한다 — toMatch 는 실패 때 CSS 전체를 보고서에 쏟아 TAP 을 깨뜨린다.
 const cssHas = (css: string, re: RegExp): boolean => re.test(css);
 
-describe("claimName (src/game/roleText.ts 가 단일 출처)", () => {
-  it("none 은 '말 안 함', police 는 '경찰'", () => {
-    expect(claimName("none")).toBe("말 안 함");
-    expect(claimName("police")).toBe("경찰");
-  });
-});
-
 // ---- 02-14 Task 3: 배지·링·동료·보낸 사람 반전·머리 위 이모티콘 ----
 const seatEl = (c: HTMLElement, n: number) => c.querySelector<HTMLElement>(`.mf-dt__seat[data-seat="${n}"]`)!;
-const changedClaim = { kind: "claim", job: "mafia", changed: true, pop: false } as const;
 
 describe("DayTable: 왕관·후광·동료·끊김·보낸 사람", () => {
   it("내 자리는 후광도 발밑 원도 없고(내 표시는 이름표 테두리 .mf-dt__tag--me 뿐), 내 이름표에만 --me", () => {
@@ -610,7 +601,7 @@ describe("daytable.css: 종류별 배지 (03-02)", () => {
   });
 });
 
-// ---- 03.1-05 Task 2: 한 줄 이름표·차례·낮 탭·관전 그림·아침 층 (D-03·D-06·D-14·D-15·D-17) ----
+// ---- 03.1-05 Task 2: 한 줄 이름표·말풍선·낮 탭·관전 그림·아침 층 (D-06·D-14·D-15·D-17) ----
 const eight = (over: Partial<Record<number, Partial<DayTableSeat>>> = {}): DayTableSeat[] =>
   Array.from({ length: 8 }, (_, i) => seat(i, `이름${i}`, { isMe: i === 0, ...over[i] }));
 const haloWhite = (c: HTMLElement) => Array.from(c.querySelectorAll<HTMLElement>("img.mf-figure--halo-white"));
@@ -643,72 +634,77 @@ describe("DayTable: 한 줄 이름표와 층 (D-04·D-14)", () => {
   });
 });
 
-describe("DayTable: 지금 주장하는 차례 (D-03, 결정 0030: 후광 + '…' 말풍선)", () => {
-  it("turn 인 자리 그림에 흰 후광 하나와 그 자리 안에 .mf-dt__bubble--turn 하나(aria-hidden, 점 셋), 이름표 반전은 없다", () => {
-    const { container } = render(<DayTable seats={five({ 2: { turn: true } })} mySeat={0} width={366} />);
-    expect(haloWhite(container).length).toBe(1);
-    expect(seatEl(container, 2).contains(haloWhite(container)[0] ?? null)).toBe(true);
+describe("DayTable: 후광 + '…' 말풍선 (결정 0030)", () => {
+  it("spoke 인 자리 안에 .mf-dt__bubble--spoke 하나(aria-hidden, 점 셋)가 있고, 후광·이름표 반전은 없다", () => {
+    const { container } = render(<DayTable seats={five({ 2: { spoke: true } })} mySeat={0} width={366} />);
+    expect(haloWhite(container).length).toBe(0);
     expect(bubbleEls(container).length).toBe(1);
     const bubble = bubbleEls(container)[0]!;
-    expect(bubble.className).toBe("mf-dt__bubble mf-dt__bubble--turn");
+    expect(bubble.className).toBe("mf-dt__bubble mf-dt__bubble--spoke");
     expect(bubble.getAttribute("aria-hidden")).toBe("true");
     expect(bubble.querySelectorAll("i").length).toBe(3);
     expect(seatEl(container, 2).contains(bubble)).toBe(true);
     expect(tagEl(container, 2).className).toBe("mf-dt__tag");
   });
 
+  it("내가 고른 대상(pick.mine) 자리 그림에 흰 후광 하나가 붙고 말풍선은 없다", () => {
+    const { container } = render(<DayTable seats={five({ 2: { pick: { mine: true } } })} mySeat={0} width={366} />);
+    expect(haloWhite(container).length).toBe(1);
+    expect(seatEl(container, 2).contains(haloWhite(container)[0] ?? null)).toBe(true);
+    expect(bubbleEls(container).length).toBe(0);
+  });
+
   it("후광 클래스는 그림 img 에만 붙는다(자리·이름표·말풍선·마름모에는 없다)", () => {
-    const { container } = render(<DayTable seats={five({ 2: { turn: true }, 3: { isAlly: true }, 4: { pick: { mine: true } } })} mySeat={0} width={366} />);
+    const { container } = render(<DayTable seats={five({ 2: { spoke: true }, 3: { isAlly: true }, 4: { pick: { mine: true } } })} mySeat={0} width={366} />);
     const withHalo = Array.from(container.querySelectorAll<HTMLElement>('[class*="halo"]'));
-    expect(withHalo.length).toBe(3);
+    expect(withHalo.length).toBe(2);
     for (const el of withHalo) expect(el.tagName).toBe("IMG");
   });
 
   it("옛 발밑 원·내 링·동료 링·선택 링·머리 위 배지·이름표 반전 요소가 어디에도 없다", () => {
     const { container } = render(
-      <DayTable seats={five({ 0: { turn: true }, 2: { turn: true, spoke: true }, 3: { isAlly: true }, 4: { pick: { mine: true } } })} mySeat={0} width={366} />,
+      <DayTable seats={five({ 0: { spoke: true }, 2: { spoke: true }, 3: { isAlly: true }, 4: { pick: { mine: true } } })} mySeat={0} width={366} />,
     );
     expect(container.querySelectorAll(OLD_SELECTORS).length).toBe(0);
   });
 
-  it("후광 우선순위: 차례이면서 동료이면 흰 후광(진홍은 없다), 마름모는 그대로", () => {
-    const { container } = render(<DayTable seats={five({ 3: { turn: true, isAlly: true } })} mySeat={0} width={366} />);
+  it("후광 우선순위: 내가 고른 대상이면서 동료이면 흰 후광(진홍은 없다), 마름모는 그대로", () => {
+    const { container } = render(<DayTable seats={five({ 3: { pick: { mine: true }, isAlly: true } })} mySeat={0} width={366} />);
     const img = seatEl(container, 3).querySelector("img")!;
     expect(img.classList.contains("mf-figure--halo-white")).toBe(true);
     expect(img.classList.contains("mf-figure--halo-crimson")).toBe(false);
     expect(seatEl(container, 3).querySelectorAll(".mf-dt__mark").length).toBe(1);
   });
 
-  it("내 자리가 차례면 흰 후광이 붙는다(내 자리라는 이유만으로는 붙지 않는다)", () => {
-    const { container } = render(<DayTable seats={five({ 0: { turn: true } })} mySeat={0} width={366} />);
-    expect(seatEl(container, 0).querySelectorAll("img.mf-figure--halo-white").length).toBe(1);
+  it("내 자리가 말하는 중이어도 후광은 붙지 않고 이름표 테두리(--me)만 있다", () => {
+    const { container } = render(<DayTable seats={five({ 0: { spoke: true } })} mySeat={0} width={366} />);
+    expect(seatEl(container, 0).querySelectorAll("img.mf-figure--halo-white").length).toBe(0);
     expect(bubbleEls(container).length).toBe(1);
     expect(tagEl(container, 0).className).toBe("mf-dt__tag mf-dt__tag--me");
   });
 
-  it("같은 자리에 emoji 가 있으면 말풍선이 없고(이모티콘이 대신), emoji 가 없어지면 다시 나온다. 후광은 그대로", () => {
+  it("같은 자리에 emoji 가 있으면 말풍선이 없고(이모티콘이 대신), emoji 가 없어지면 다시 나온다", () => {
     const emoji = { key: "k1", icon: "smile", z: 0 } as const;
-    const withEmoji = render(<DayTable seats={five({ 2: { turn: true, emoji } })} mySeat={0} width={366} />);
+    const withEmoji = render(<DayTable seats={five({ 2: { spoke: true, emoji } })} mySeat={0} width={366} />);
     expect(bubbleEls(withEmoji.container).length).toBe(0);
     expect(withEmoji.container.querySelectorAll(".mf-dt__emoji").length).toBe(1);
-    expect(haloWhite(withEmoji.container).length).toBe(1);
-    withEmoji.rerender(<DayTable seats={five({ 2: { turn: true, emoji: null } })} mySeat={0} width={366} />);
+    withEmoji.rerender(<DayTable seats={five({ 2: { spoke: true, emoji: null } })} mySeat={0} width={366} />);
     expect(bubbleEls(withEmoji.container).length).toBe(1);
     cleanup();
     const spoke = render(<DayTable seats={five({ 4: { spoke: true, emoji } })} mySeat={0} width={366} />);
     expect(bubbleEls(spoke.container).length).toBe(0);
   });
 
-  it("차례 자리의 인라인 z-index 는 배치 결과(12~22) 그대로, 탈락 강조는 31 — 후광·말풍선이 있어도 같다", () => {
-    const { container } = render(<DayTable seats={five({ 2: { turn: true }, 3: { spotlit: true, dead: true } })} mySeat={0} width={366} />);
+  it("말하는 자리의 인라인 z-index 는 배치 결과(12~22) 그대로, 탈락 강조는 31 — 후광·말풍선이 있어도 같다", () => {
+    const { container } = render(<DayTable seats={five({ 2: { spoke: true, pick: { mine: true } }, 3: { spotlit: true, dead: true } })} mySeat={0} width={366} />);
     const z2 = Number(seatEl(container, 2).style.zIndex);
     expect(z2 >= 12 && z2 <= 22).toBe(true);
     expect(seatEl(container, 3).style.zIndex).toBe("31");
     for (const el of Array.from(container.querySelectorAll<HTMLElement>(".mf-dt__bubble, img.mf-figure--halo-white"))) expect(el.style.zIndex).toBe("");
   });
 
-  it.each([4, 5, 6, 7, 8])("%i명 차례 자리가 있어도 이름표 z 최댓값 < 자리 z 최솟값 (D3a 단위 버전)", (n) => {
-    const seats = Array.from({ length: n }, (_, i) => seat(i, `이${i}`, { isMe: i === 0, turn: i === 1 }));
+  it.each([4, 5, 6, 7, 8])("%i명 말하는 자리가 있어도 이름표 z 최댓값 < 자리 z 최솟값 (D3a 단위 버전)", (n) => {
+    const seats = Array.from({ length: n }, (_, i) => seat(i, `이${i}`, { isMe: i === 0, spoke: i === 1, ...(i === 1 ? { pick: { mine: true } } : {}) }));
     const { container } = render(<DayTable seats={seats} mySeat={0} width={366} />);
     const tagZ = Array.from(container.querySelectorAll<HTMLElement>(".mf-dt__tag")).map((e) => Number(e.style.zIndex));
     const seatZ = seatEls(container).map((e) => Number(e.style.zIndex));
@@ -716,25 +712,22 @@ describe("DayTable: 지금 주장하는 차례 (D-03, 결정 0030: 후광 + '…
     expect(Math.max(...tagZ) < Math.min(...seatZ)).toBe(true);
   });
 
-  it("차례 자리가 없으면 후광·말풍선이 0개", () => {
+  it("말하는 자리·고른 대상이 없으면 후광·말풍선이 0개", () => {
     const { container } = render(<DayTable seats={five()} mySeat={0} width={366} />);
     expect(haloWhite(container).length).toBe(0);
     expect(bubbleEls(container).length).toBe(0);
     expect(container.querySelectorAll(OLD_SELECTORS).length).toBe(0);
   });
 
-  it("두 자리에 turn 을 주어도 입력 그대로 둘 다 그린다 (한 번에 한 자리는 장면이 보장한다)", () => {
-    const { container } = render(<DayTable seats={five({ 1: { turn: true }, 3: { turn: true } })} mySeat={0} width={366} />);
-    expect(haloWhite(container).length).toBe(2);
+  it("두 자리가 말하면 입력 그대로 둘 다 말풍선을 그린다", () => {
+    const { container } = render(<DayTable seats={five({ 1: { spoke: true }, 3: { spoke: true } })} mySeat={0} width={366} />);
     expect(bubbleEls(container).length).toBe(2);
   });
 
-  it("차례 자리 aria-label 에 '지금 주장하는 차례'가 든다 (내 자리는 '(나)' 뒤)", () => {
-    render(<DayTable seats={five({ 2: { turn: true }, 0: {} })} mySeat={0} width={366} />);
-    expect(screen.getByRole("group", { name: "지호, 지금 주장하는 차례" })).toBeTruthy();
-    cleanup();
-    render(<DayTable seats={five({ 0: { turn: true } })} mySeat={0} width={366} />);
-    expect(screen.getByRole("group", { name: "동현 (나), 지금 주장하는 차례" })).toBeTruthy();
+  it("자리 읽기 이름은 `{닉네임}{ (나)}` 뿐이고 차례 문구가 없다", () => {
+    render(<DayTable seats={five({ 2: { spoke: true }, 0: { spoke: true } })} mySeat={0} width={366} />);
+    expect(screen.getByRole("group", { name: "지호" })).toBeTruthy();
+    expect(screen.getByRole("group", { name: "동현 (나)" })).toBeTruthy();
   });
 });
 
@@ -747,22 +740,22 @@ describe("DayTable: 한 화면의 후광은 최대 3개 (HALO_MAX_SIMULTANEOUS)"
     expect(container.querySelectorAll("img.mf-figure--halo-white").length).toBe(1);
   });
 
-  it("관전자 낮: 마피아 둘 + 차례 1 = 3개 이하", () => {
-    const seats = eight({ 2: { isAlly: true }, 6: { isAlly: true }, 4: { turn: true } });
+  it("관전자 낮: 마피아 둘 + 고른 대상 1 = 3개 이하", () => {
+    const seats = eight({ 2: { isAlly: true }, 6: { isAlly: true }, 4: { pick: { mine: true } } });
     const { container } = render(<DayTable seats={seats} mySeat={0} width={366} allyMarkLabel="마피아" />);
     expect(container.querySelectorAll('img[class*="halo"]').length).toBe(HALO_MAX_SIMULTANEOUS);
     expect(container.querySelectorAll("img.mf-figure--halo-crimson").length).toBe(2);
   });
 
-  it("한 자리가 차례이면서 마피아면 후광은 그 자리 하나뿐이다", () => {
-    const seats = eight({ 2: { isAlly: true, turn: true }, 6: { isAlly: true } });
+  it("한 자리가 고른 대상이면서 마피아면 후광은 그 자리 하나뿐이다", () => {
+    const seats = eight({ 2: { isAlly: true, pick: { mine: true } }, 6: { isAlly: true } });
     const { container } = render(<DayTable seats={seats} mySeat={0} width={366} />);
     expect(container.querySelectorAll('img[class*="halo"]').length).toBe(2);
   });
 });
 
 describe("DayTable: 낮 기록 카드 버튼 (D-06)", () => {
-  it("onInspect 가 있는 자리는 button.mf-dt__seat(aria-pressed 없음), 라벨 '{닉네임}, 주장 기록 보기', 내 자리는 '(나)'", () => {
+  it("onInspect 가 있는 자리는 button.mf-dt__seat(aria-pressed 없음), 라벨 '{닉네임}, 기록 보기', 내 자리는 '(나)'", () => {
     const f = vi.fn();
     const { container } = render(<DayTable seats={five({ 1: { onInspect: f }, 0: { onInspect: vi.fn() } })} mySeat={0} width={366} />);
     const buttons = container.querySelectorAll<HTMLElement>("button.mf-dt__seat");
@@ -771,15 +764,15 @@ describe("DayTable: 낮 기록 카드 버튼 (D-06)", () => {
       expect(b.getAttribute("type")).toBe("button");
       expect(b.hasAttribute("aria-pressed")).toBe(false);
     }
-    expect(screen.getByRole("button", { name: "가나다라마, 주장 기록 보기" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "동현 (나), 주장 기록 보기" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "가나다라마, 기록 보기" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "동현 (나), 기록 보기" })).toBeTruthy();
   });
 
   it("클릭하면 그 자리의 onInspect 가 한 번 불린다", () => {
     const a = vi.fn();
     const b = vi.fn();
     render(<DayTable seats={five({ 1: { onInspect: a }, 2: { onInspect: b } })} mySeat={0} width={366} />);
-    fireEvent.click(screen.getByRole("button", { name: "지호, 주장 기록 보기" }));
+    fireEvent.click(screen.getByRole("button", { name: "지호, 기록 보기" }));
     expect(b).toHaveBeenCalledTimes(1);
     expect(a).not.toHaveBeenCalled();
   });
@@ -802,9 +795,9 @@ describe("DayTable: 낮 기록 카드 버튼 (D-06)", () => {
     expect(seatEl(container, 1).getAttribute("role")).toBe("group");
   });
 
-  it("차례이면서 onInspect 면 '{닉네임}, 지금 주장하는 차례, 주장 기록 보기'", () => {
-    render(<DayTable seats={five({ 2: { turn: true, onInspect: vi.fn() } })} mySeat={0} width={366} />);
-    expect(screen.getByRole("button", { name: "지호, 지금 주장하는 차례, 주장 기록 보기" })).toBeTruthy();
+  it("연결이 끊긴 자리의 기록 버튼 이름은 '{닉네임}, 연결 끊김, 기록 보기'", () => {
+    render(<DayTable seats={five({ 2: { connected: false, onInspect: vi.fn() } })} mySeat={0} width={366} />);
+    expect(screen.getByRole("button", { name: "지호, 연결 끊김, 기록 보기" })).toBeTruthy();
   });
 });
 
@@ -826,7 +819,7 @@ describe("DayTable: 관전자 직업 그림 (D-17, T-03.1-15)", () => {
   });
 
   it("roleArt 가 하나도 없는 렌더(4~8명)에서는 /characters/roles/ 를 가리키는 img 가 0개", () => {
-    for (const seats of [five(), five({ 3: { dead: true }, 1: { turn: true } }), eight()]) {
+    for (const seats of [five(), five({ 3: { dead: true }, 1: { spoke: true } }), eight()]) {
       const { container } = render(<DayTable seats={seats} mySeat={0} width={366} />);
       expect(container.querySelectorAll('img[src*="/characters/roles/"]').length).toBe(0);
       expect(container.innerHTML.includes("/characters/roles/")).toBe(false);
@@ -979,7 +972,7 @@ describe("DayTable 누르는 자리", () => {
     expect(btn.tagName).toBe("BUTTON");
     expect(btn.classList.contains("mf-dt__seat")).toBe(true);
     expect(btn.hasAttribute("aria-pressed")).toBe(false);
-    expect(btn.getAttribute("aria-label")).not.toMatch(/대상|주장 기록 보기/);
+    expect(btn.getAttribute("aria-label")).not.toMatch(/대상|기록 보기/);
     expect(container.querySelectorAll("button").length).toBe(1);
     fireEvent.click(btn);
     expect(onPress).toHaveBeenCalledTimes(1);
@@ -996,7 +989,7 @@ describe("DayTable 누르는 자리", () => {
     expect([onPick.mock.calls.length, onInspect.mock.calls.length, onPress.mock.calls.length]).toEqual([1, 0, 0]);
     cleanup();
     const b = render(<DayTable seats={mk({ onInspect, onPress })} mySeat={0} width={366} />);
-    expect(seatBy(b.container, 1).getAttribute("aria-label")).toContain("주장 기록 보기");
+    expect(seatBy(b.container, 1).getAttribute("aria-label")).toContain("기록 보기");
     fireEvent.click(seatBy(b.container, 1));
     expect([onPick.mock.calls.length, onInspect.mock.calls.length, onPress.mock.calls.length]).toEqual([1, 1, 0]);
     cleanup();
@@ -1029,9 +1022,9 @@ describe("DayTable: 좌석이 후광 종류(halo)를 명시한다 (04-18, 결정
     expect(container.querySelectorAll('img[class*="halo"]').length).toBe(3);
   });
 
-  it("halo none 이어도 동료 마름모는 isAlly 로 그대로 남는다. halo 가 기본 파생(동료 진홍·차례 흰)보다 우선한다", () => {
+  it("halo none 이어도 동료 마름모는 isAlly 로 그대로 남는다. halo 가 기본 파생(동료 진홍·고른 대상 흰)보다 우선한다", () => {
     const { container } = render(
-      <DayTable seats={five({ 3: { isAlly: true, halo: "none" }, 2: { turn: true, halo: "amber" } })} mySeat={0} width={366} />,
+      <DayTable seats={five({ 3: { isAlly: true, halo: "none" }, 2: { pick: { mine: true }, halo: "amber" } })} mySeat={0} width={366} />,
     );
     expect(haloImgs(container, 3).length).toBe(0);
     expect(seatEl(container, 3).querySelectorAll(".mf-dt__mark").length).toBe(1);
@@ -1039,9 +1032,9 @@ describe("DayTable: 좌석이 후광 종류(halo)를 명시한다 (04-18, 결정
     expect(haloImgs(container, 2)[0]?.classList.contains("mf-figure--halo-amber")).toBe(true);
   });
 
-  it("halo 가 없으면 기존 파생: 동료 = 진홍, 차례 = 흰, 둘이면 흰", () => {
+  it("halo 가 없으면 기존 파생: 동료 = 진홍, 고른 대상 = 흰, 둘이면 흰", () => {
     const { container } = render(
-      <DayTable seats={five({ 1: { isAlly: true }, 2: { turn: true }, 3: { isAlly: true, turn: true } })} mySeat={0} width={366} />,
+      <DayTable seats={five({ 1: { isAlly: true }, 2: { pick: { mine: true } }, 3: { isAlly: true, pick: { mine: true } } })} mySeat={0} width={366} />,
     );
     expect(haloImgs(container, 1)[0]?.classList.contains("mf-figure--halo-crimson")).toBe(true);
     expect(haloImgs(container, 2)[0]?.classList.contains("mf-figure--halo-white")).toBe(true);

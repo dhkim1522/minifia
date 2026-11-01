@@ -9,7 +9,7 @@ import { installMemoryStorage } from "../helpers/memoryStorage";
 import { NAMES, viewAt } from "../helpers/verdictViews";
 import type { Count } from "../helpers/verdictViews";
 
-// CHAR-01 점검표(UI-SPEC §10, 05-04): 자리 0~7 의 테이블 인물 8장은 서로 다르고, 5명·8명 방의 대기실·낮(주장)·투표(후보 선택)·결과·
+// CHAR-01 점검표(UI-SPEC §10, 05-04): 자리 0~7 의 테이블 인물 8장은 서로 다르고, 5명·8명 방의 대기실·낮(토론)·투표(후보 선택)·결과·
 // 링크 참가 화면에서 모든 자리의 닉네임이 그 자리 그림과 함께 보인다. 외형은 자리 번호만으로 정한다(D-02, D-03) — 역할은 입력이 아니다.
 // 소스를 바꾸지 않는 점검이다: 이 시험이 처음부터 통과하는 것이 UI-SPEC §10 "고칠 것 없음" 의 확인이다.
 
@@ -45,7 +45,7 @@ function renderRoom(view: RoomView) {
   return render(<RoomScreen code="0042" token={"t".repeat(43)} onExit={vi.fn()} />);
 }
 
-/** lobby·claim 용 간단한 view: n 명, 모두 접속, 0번이 방장이자 나. 닉네임은 5글자 NAMES */
+/** lobby·discussion 용 간단한 view: n 명, 모두 접속, 0번이 방장이자 나. 닉네임은 5글자 NAMES */
 function simpleView(phase: PhaseId, n: number, role?: RoleId): RoomView {
   const me: RoomView["me"] = { seat: 0, isHost: true };
   if (role !== undefined) me.role = role;
@@ -60,7 +60,7 @@ function simpleView(phase: PhaseId, n: number, role?: RoleId): RoomView {
     maxPlayers: 8,
     players: Array.from({ length: n }, (_, seat) => ({ seat, nickname: NAMES[seat]!, connected: true, isHost: seat === 0 })),
     me,
-    ...(phase === "claim" ? { day: { n: 1, roles: ["mafia", "police", "citizen"] as RoleId[], turn: { seat: 1 }, claimLog: [] } } : {}),
+    ...(phase === "discussion" ? { day: { n: 1, roles: ["mafia", "police", "citizen"] as RoleId[], claimLog: [] } } : {}),
   };
 }
 
@@ -111,18 +111,18 @@ describe("CHAR-01: 테이블 인물 8장은 서로 다르고 자리 번호가 �
   });
 });
 
-describe("CHAR-01: 낮(주장) — 5명·8명 모두 닉네임과 인물", () => {
+describe("CHAR-01: 낮(토론) — 5명·8명 모두 닉네임과 인물", () => {
   it.each([5, 8])("%i명: 모든 자리 이름표 닉네임, 인물 src 가 서로 다르다", (n) => {
-    const { container } = renderRoom(simpleView("claim", n, "citizen"));
+    const { container } = renderRoom(simpleView("discussion", n, "citizen"));
     const srcs = expectEverySeatNamed(container, n);
     expect(new Set(srcs).size).toBe(n);
   });
 
   it("내 역할이 시민이든 마피아든 모든 자리의 인물 그림은 같다 (능력 무관, D-03·T-05-10)", () => {
-    const citizen = renderRoom(simpleView("claim", 5, "citizen"));
+    const citizen = renderRoom(simpleView("discussion", 5, "citizen"));
     const a = expectEverySeatNamed(citizen.container, 5);
     cleanup();
-    const mafia = renderRoom(simpleView("claim", 5, "mafia"));
+    const mafia = renderRoom(simpleView("discussion", 5, "mafia"));
     const b = expectEverySeatNamed(mafia.container, 5);
     expect(b).toEqual(a);
   });

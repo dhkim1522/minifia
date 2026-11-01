@@ -41,7 +41,6 @@ interface ViewOpts {
   viewpoint?: Viewpoint;
   endsIn?: number | null;
   day?: number;
-  turn?: number;
   morning?: MorningView;
   isHost?: boolean;
 }
@@ -71,7 +70,6 @@ function makeView(o: ViewOpts): RoomView {
     day: {
       n: o.day ?? 1,
       roles: ["mafia", "police", "citizen"],
-      ...(o.turn !== undefined ? { turn: { seat: o.turn } } : {}),
       claimLog: [],
       ...(o.morning !== undefined ? { morning: o.morning } : {}),
     },
@@ -181,7 +179,7 @@ describe("UX-01 트레이서: 낮 시작·낮 토론 빈 칸 두 곳 (D-08, D-09
   });
 });
 
-// ---- 05-01 Task 2: 주장·밤·아침·투표 구간 (부품이 data-guide 를 맡는다) ----
+// ---- 05-01 Task 2: 밤·아침·투표 구간 (부품이 data-guide 를 맡는다) ----
 
 /** 투표 구간 칸: verdictViews 픽스처로 RoomScreen 을 그린다. 공개 단계는 시간표를 돌려 칩이 그려지게 한다 */
 function renderVerdict(stage: VerdictStage, viewer: Viewer, meIsCandidate = false) {
@@ -191,24 +189,7 @@ function renderVerdict(stage: VerdictStage, viewer: Viewer, meIsCandidate = fals
   return r;
 }
 
-describe("UX-01 낮 장면 부품: claim·night·morning (D-08)", () => {
-  it("claim 내 차례: 하나 = `내 차례예요` (ClaimPanel 제목)", () => {
-    const { container } = renderRoom(makeView({ phase: "claim", viewpoint: "citizen", turn: 0, endsIn: 8_000 }));
-    expect(squish(onlyGuide(container, "claim/내 차례").textContent)).toBe("내 차례예요");
-  });
-
-  it("claim 남의 차례: 하나 = `{닉네임}님이 주장하는 중` (TurnPanel 상태 줄)", () => {
-    const { container } = renderRoom(makeView({ phase: "claim", viewpoint: "police", turn: 1, endsIn: 8_000 }));
-    const g = onlyGuide(container, "claim/남의 차례");
-    expect(g.tagName).toBe("B");
-    expect(squish(g.textContent)).toBe("하윤님이 주장하는 중");
-  });
-
-  it("claim 탈락 viewer: 하나 = `탈락했어요 · 볼 수만 있어요`", () => {
-    const { container } = renderRoom(makeView({ phase: "claim", viewpoint: "spectator", turn: 1, endsIn: 8_000 }));
-    expect(squish(onlyGuide(container, "claim/탈락").textContent)).toBe("탈락했어요 · 볼 수만 있어요");
-  });
-
+describe("UX-01 낮 장면 부품: night·morning (D-08)", () => {
   it("night 경찰·의사·시민은 NightPanel 제목, 마피아는 헤더 `1일차 · 함께 지목하세요`, 탈락은 읽기 전용 줄", () => {
     const expected: Readonly<Record<Viewpoint, string>> = {
       police: "조사할 사람을 고르세요",
@@ -331,16 +312,32 @@ describe("UX-01 투표 구간 부품: execVote·candidateVote·reveal·defense·
 type CheckViewpoint = Viewpoint | "none";
 
 /**
- * 점검표(05-UI-SPEC 8): PhaseId 14개 × 시점. 있을 수 없는 칸은 적지 않는다 —
+ * 점검표(05-UI-SPEC 8): 화면이 그리는 PhaseId 13개 × 시점(순차 직업 주장 단계는 화면에서 사라졌다, 07-04). 있을 수 없는 칸은 적지 않는다 —
  * lobby·assigning 은 역할이 없어 none 한 칸, roleReveal 은 살아 있는 사람뿐(관전 없음).
- * 새 PhaseId 가 생기면 Record 가 타입 오류로 알린다.
+ * 이 목록은 PhaseId 의 부분집합이어야 한다(satisfies).
  */
-const CHECKLIST: Readonly<Record<PhaseId, readonly CheckViewpoint[]>> = {
+const CHECKED_PHASES = [
+  "lobby",
+  "assigning",
+  "roleReveal",
+  "dayAnnounce",
+  "discussion",
+  "night",
+  "morning",
+  "execVote",
+  "candidateVote",
+  "candidateVoteReveal",
+  "defense",
+  "execution",
+  "ended",
+] as const satisfies readonly PhaseId[];
+type CheckedPhase = (typeof CHECKED_PHASES)[number];
+
+const CHECKLIST: Readonly<Record<CheckedPhase, readonly CheckViewpoint[]>> = {
   lobby: ["none"],
   assigning: ["none"],
   roleReveal: ["mafia", "police", "doctor", "citizen"],
   dayAnnounce: ["mafia", "police", "doctor", "citizen", "spectator"],
-  claim: ["mafia", "police", "doctor", "citizen", "spectator"],
   discussion: ["mafia", "police", "doctor", "citizen", "spectator"],
   night: ["mafia", "police", "doctor", "citizen", "spectator"],
   morning: ["mafia", "police", "doctor", "citizen", "spectator"],
@@ -355,7 +352,7 @@ const CHECKLIST: Readonly<Record<PhaseId, readonly CheckViewpoint[]>> = {
 const VERDICT_PHASES: ReadonlySet<PhaseId> = new Set<PhaseId>(["execVote", "candidateVote", "candidateVoteReveal", "defense", "execution", "ended"]);
 
 /** 칸 하나를 그린다. 투표 구간·결과는 verdictViews 픽스처(역할은 마피아/그 밖만 구분), 나머지는 이 파일의 makeView */
-function renderCell(phase: PhaseId, vp: CheckViewpoint) {
+function renderCell(phase: CheckedPhase, vp: CheckViewpoint) {
   if (VERDICT_PHASES.has(phase)) {
     const viewer: Viewer = vp === "spectator" ? "spectator" : vp === "mafia" ? "mafiaAlly" : "alive";
     const r = renderVerdict(phase as VerdictStage, viewer);
@@ -363,17 +360,17 @@ function renderCell(phase: PhaseId, vp: CheckViewpoint) {
     return r;
   }
   const viewpoint: Viewpoint = vp === "none" ? "citizen" : vp;
-  const endsIn = phase === "lobby" ? null : phase === "assigning" ? 3_000 : phase === "roleReveal" ? 15_000 : phase === "claim" ? 8_000 : phase === "night" ? 30_000 : 15_000;
-  const view = makeView({ phase, viewpoint, endsIn, turn: phase === "claim" ? 1 : undefined, day: 1 });
+  const endsIn = phase === "lobby" ? null : phase === "assigning" ? 3_000 : phase === "roleReveal" ? 15_000 : phase === "night" ? 30_000 : 15_000;
+  const view = makeView({ phase, viewpoint, endsIn, day: 1 });
   if (vp === "none") delete view.me.role;
   return renderRoom(view);
 }
 
-describe("UX-01 점검표: 14단계 × 시점 모든 칸의 안내 문장과 남은 시간 (D-08, 05-UI-SPEC 8.4)", () => {
-  const phases = Object.keys(CHECKLIST) as PhaseId[];
+describe("UX-01 점검표: 13단계 × 시점 모든 칸의 안내 문장과 남은 시간 (D-08, 05-UI-SPEC 8.4)", () => {
+  const phases = Object.keys(CHECKLIST) as CheckedPhase[];
 
-  it("점검표가 14단계를 모두 가진다", () => {
-    expect(phases.length).toBe(14);
+  it("점검표가 화면이 그리는 13단계를 모두 가진다", () => {
+    expect(phases.length).toBe(13);
   });
 
   for (const phase of phases) {
@@ -391,8 +388,8 @@ describe("UX-01 점검표: 14단계 × 시점 모든 칸의 안내 문장과 남
     }
   }
 
-  it("TIMELESS_PHASES 밖의 단계(11개)는 모두 점검표에 있고 타이머를 시험한다", () => {
-    expect(phases.filter((p) => !TIMELESS_PHASES.includes(p)).length).toBe(11);
+  it("TIMELESS_PHASES 밖의 단계(10개)는 모두 점검표에 있고 타이머를 시험한다", () => {
+    expect(phases.filter((p) => !TIMELESS_PHASES.includes(p)).length).toBe(10);
   });
 });
 

@@ -3,12 +3,12 @@ import { existsSync, readFileSync } from "node:fs";
 import { act, cleanup, fireEvent, render, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { RoleId } from "../../shared/game/roles";
-import type { ClaimLogEntry, MorningView, PhaseId, RoomView, SpectateView, VoteLogEntry } from "../../shared/protocol";
+import type { MorningView, PhaseId, RoomView, SpectateView, VoteLogEntry } from "../../shared/protocol";
 import type { RoomConnection, RoomEvent } from "../../src/net/useRoomConnection";
 import { DayScene } from "../../src/screens/DayScene";
 import { TABLE_FIT_MIN_H, TAG_H } from "../../src/game/dayTable";
 
-// 낮 장면 단위 테스트: 순차 주장(03.1 UI-SPEC B)·낮 토론. 낮 단계는 DayTable 하나를 쓴다(결정 0017-1).
+// 낮 장면 단위 테스트: 낮 토론·기록 카드·아침·배경. 순차 주장은 없어졌다(07-04, CHAT-06). 낮 단계는 DayTable 하나를 쓴다(결정 0017-1).
 // 서버와는 view 픽스처로만 만난다.
 
 const NOW = 1_700_000_000_000;
@@ -16,8 +16,6 @@ const NOW = 1_700_000_000_000;
 interface ViewOpts {
   phase: PhaseId;
   n?: number;
-  /** claim 단계의 지금 차례 seat. 기본 0(= 나). null 이면 차례 키를 싣지 않는다 */
-  turn?: number | null;
   role?: RoleId;
   allies?: number[];
   /** 탈락한 자리들 */
@@ -25,8 +23,6 @@ interface ViewOpts {
   spectate?: SpectateView;
   /** 마감까지 남은 ms (기본 8000) */
   endsIn?: number;
-  /** 공개된 주장 기록 (기본 비어 있음) */
-  claimLog?: ClaimLogEntry[];
   /** 아침 발표(morning 단계에서만 싣는다) */
   morning?: MorningView;
   /** 날짜별 공개 투표 기록 (기본 없음) */
@@ -38,7 +34,6 @@ function makeView(o: ViewOpts): RoomView {
   if (o.role !== undefined) me.role = o.role;
   if (o.allies !== undefined) me.allies = o.allies;
   const dead = o.dead ?? [];
-  const turn = o.turn === undefined ? 0 : o.turn;
   const view: RoomView = {
     code: "0042",
     phase: o.phase,
@@ -57,8 +52,7 @@ function makeView(o: ViewOpts): RoomView {
     day: {
       n: o.n ?? 1,
       roles: ["mafia", "police", "citizen"],
-      ...(o.phase === "claim" && turn !== null ? { turn: { seat: turn } } : {}),
-      claimLog: o.claimLog ?? [],
+      claimLog: [],
     },
   };
   if (o.spectate) view.spectate = o.spectate;
@@ -92,13 +86,9 @@ function scene(view: RoomView, over: Partial<RoomConnection> = {}) {
   return { ...utils, rerender, conn: c };
 }
 
-const claimRows = (c: HTMLElement) => c.querySelectorAll(".mf-dt__claim").length; // 옛 아랫줄이 어디에도 없음을 세는 용도
-const chipGroup = () => within(document.body).queryByRole("group", { name: "주장할 직업" });
-const turnText = (c: HTMLElement) => c.querySelector(".st-row .stat")?.textContent ?? "";
-
 afterEach(cleanup);
 
-describe("DayScene 순차 주장 하단 (03.1 UI-SPEC B, D-03·D-04)", () => {
+describe("DayScene 낮 토론 하단·테이블 (03.1 UI-SPEC B, 07-04 이후 순차 주장 없음)", () => {
   // 남은 초는 시각에서 나오므로 현재 시각을 픽스처의 NOW 에 고정한다
   beforeEach(() => {
     vi.useFakeTimers();
@@ -108,40 +98,13 @@ describe("DayScene 순차 주장 하단 (03.1 UI-SPEC B, D-03·D-04)", () => {
     vi.useRealTimers();
   });
 
-  it("claim 에서 day.turn.seat === me.seat 이면 직업 칩 줄(group 주장할 직업)이 있고 `…님이 주장하는 중` 은 없다", () => {
-    const { container } = scene(makeView({ phase: "claim", turn: 0 }));
-    const panel = container.querySelector(".mf-dayscene__panel");
-    expect(chipGroup()).not.toBeNull();
-    expect(panel?.textContent).toContain("내 차례예요");
-    expect(panel?.querySelectorAll(".mf-seg__b").length).toBe(4);
-    expect(panel?.textContent).not.toContain("님이 주장하는 중");
-    expect(container.querySelector(".st-row")).toBeNull();
-  });
-
-  it("claim 에서 day.turn.seat !== me.seat 이면 `{차례 닉네임}님이 주장하는 중` 과 `N초` 가 있고 직업 칩 줄은 없다. N초는 헤더 타이머(role=timer)의 남은 시간과 같다", () => {
-    const { container } = scene(makeView({ phase: "claim", turn: 2, endsIn: 5_000 }));
-    expect(chipGroup()).toBeNull();
-    expect(container.querySelectorAll(".mf-seg__b").length).toBe(0);
-    expect(turnText(container)).toBe("민지님이 주장하는 중5초");
-    const timer = container.querySelector('[role="timer"]');
-    expect(timer?.getAttribute("aria-label")).toBe("남은 시간 5초");
-  });
-
-  it("차례 닉네임에 `<` 가 들어 있어도 글자로만 그린다 (T-03.1-10)", () => {
-    const v = makeView({ phase: "claim", turn: 1 });
-    const evil: RoomView = { ...v, players: v.players.map((p) => (p.seat === 1 ? { ...p, nickname: "<b>x</b>" } : p)) };
-    const { container } = scene(evil);
-    expect(container.querySelector(".st-row .stat b")?.textContent).toBe("<b>x</b>님이 주장하는 중");
-    expect(container.querySelector(".st-row .stat b b")).toBeNull();
-  });
-
-  it("claim 의 테이블 이름표는 모두 이름 한 줄이다 — 탈락자 포함, '탈락' 글자 없음, 유령 그림 (D-04)", () => {
-    const { container } = scene(makeView({ phase: "claim", turn: 0 }));
+  it("낮 토론의 테이블 이름표는 모두 이름 한 줄이다 — 탈락자 포함, '탈락' 글자 없음, 유령 그림 (D-04)", () => {
+    const { container } = scene(makeView({ phase: "discussion" }));
     const oneLine = (c: HTMLElement): boolean => [...c.querySelectorAll(".mf-dt__tag")].every((t) => t.children.length === 1 && t.firstElementChild?.classList.contains("mf-dt__name"));
     expect(oneLine(container)).toBe(true);
     cleanup();
     // 살아 있는 사람 화면에 탈락자(seat 3)가 있어도 `탈락` 줄이 없다
-    const withDead = scene(makeView({ phase: "claim", turn: 2, dead: [3] }));
+    const withDead = scene(makeView({ phase: "discussion", dead: [3] }));
     expect(oneLine(withDead.container)).toBe(true);
     const tag = withDead.container.querySelector('.mf-dt__tag[data-seat="3"]');
     expect(tag?.classList.contains("mf-dt__tag--dead")).toBe(true);
@@ -149,65 +112,59 @@ describe("DayScene 순차 주장 하단 (03.1 UI-SPEC B, D-03·D-04)", () => {
     expect(withDead.container.querySelector('.mf-dt__seat[data-seat="3"] img')?.getAttribute("src")).toContain("/characters/ghost/");
   });
 
-  it("claim 의 헤더 타이머는 마지막 5초여도 .mf-timer--urgent 가 아니다(calm), 숫자는 지금 차례의 남은 시간", () => {
-    const { container } = scene(makeView({ phase: "claim", turn: 1, endsIn: 3_000 }));
-    expect(container.querySelector(".mf-timer--urgent")).toBeNull();
-    expect(container.querySelector(".mf-timer__num")?.textContent).toBe("0:03");
-    cleanup();
-    // 비교: 낮 토론은 마지막 5초에 진홍으로 바뀐다
+  it("낮 토론의 헤더 타이머는 마지막 5초에 진홍(urgent)이고, 낮 시작(dayAnnounce)은 calm 이다", () => {
     const disc = scene(makeView({ phase: "discussion", endsIn: 3_000 }));
     expect(disc.container.querySelector(".mf-timer--urgent")).not.toBeNull();
+    expect(disc.container.querySelector(".mf-timer__num")?.textContent).toBe("0:03");
+    cleanup();
+    const announce = scene(makeView({ phase: "dayAnnounce", endsIn: 1_000 }));
+    expect(announce.container.querySelector(".mf-timer--urgent")).toBeNull();
   });
 
-  it("탈락한 viewer(spectate 있음)의 claim 하단은 직업 칩도 TurnPanel 도 아닌 기존 관전 하단(채팅 + 읽기 전용 안내)이다", () => {
+  it("탈락한 viewer(spectate 있음)의 낮 토론 하단은 채팅 + 읽기 전용 안내이고 칩·보내기 줄이 없다", () => {
     const spectate: SpectateView = {
       seats: [0, 1, 2, 3].map((seat) => ({ seat, job: "citizen" as const })),
       picks: { mafia: [], police: [], doctor: [] },
     };
-    for (const turn of [0, 2]) {
-      const { container } = scene(makeView({ phase: "claim", turn, dead: [0], role: "citizen", spectate }));
-      const panel = container.querySelector(".mf-dayscene__panel")!;
-      expect(panel.querySelectorAll(".mf-seg__b").length).toBe(0);
-      expect(container.querySelector(".st-row")).toBeNull();
-      expect(panel.textContent).toContain("탈락했어요 · 볼 수만 있어요");
-      cleanup();
-    }
+    const { container } = scene(makeView({ phase: "discussion", dead: [0], role: "citizen", spectate }));
+    const panel = container.querySelector(".mf-dayscene__panel")!;
+    expect(panel.querySelectorAll(".mf-seg__b").length).toBe(0);
+    expect(container.querySelector(".st-row")).toBeNull();
+    expect(panel.textContent).toContain("탈락했어요 · 볼 수만 있어요");
   });
 
-  it("마피아(allies [2])와 시민 화면의 패널 HTML 이 같다 — 내 차례도 남의 차례도 (T-02-25)", () => {
+  it("마피아(allies [2])와 시민 화면의 낮 토론 패널 HTML 이 같다 (T-02-25)", () => {
     const panelHtml = (v: RoomView) => {
       const r = scene(v);
       const html = r.container.querySelector(".mf-dayscene__panel")?.outerHTML ?? "";
       cleanup();
       return html;
     };
-    for (const turn of [0, 2]) {
-      const mafia = panelHtml(makeView({ phase: "claim", turn, role: "mafia", allies: [2] }));
-      const citizen = panelHtml(makeView({ phase: "claim", turn, role: "citizen" }));
-      expect(mafia.length).toBeGreaterThan(0);
-      expect(mafia).toBe(citizen);
-    }
+    const mafia = panelHtml(makeView({ phase: "discussion", role: "mafia", allies: [2] }));
+    const citizen = panelHtml(makeView({ phase: "discussion", role: "citizen" }));
+    expect(mafia.length).toBeGreaterThan(0);
+    expect(mafia).toBe(citizen);
   });
 
   it("마피아 화면에서만 동료 자리(2)의 그림에 진홍 후광(mf-figure--halo-crimson)", () => {
-    const mafia = scene(makeView({ phase: "claim", role: "mafia", allies: [2] }));
+    const mafia = scene(makeView({ phase: "discussion", role: "mafia", allies: [2] }));
     expect(mafia.container.querySelector('.mf-dt__seat[data-seat="2"] img.mf-figure--halo-crimson')).not.toBeNull();
     expect(mafia.container.querySelectorAll(".mf-figure--halo-crimson").length).toBe(1);
     cleanup();
-    const citizen = scene(makeView({ phase: "claim", role: "citizen" }));
+    const citizen = scene(makeView({ phase: "discussion", role: "citizen" }));
     expect(citizen.container.querySelectorAll(".mf-figure--halo-crimson").length).toBe(0);
   });
 
   it("끊긴 자리도 접근성 이름에 연결 끊김이 있고 이름표는 한 줄이다", () => {
-    const v = makeView({ phase: "claim", turn: 0 });
+    const v = makeView({ phase: "discussion" });
     const off: RoomView = { ...v, players: v.players.map((p) => (p.seat === 1 ? { ...p, connected: false } : p)) };
     const { container } = scene(off);
     expect(container.querySelector('.mf-dt__seat[data-seat="1"]')?.getAttribute("aria-label")).toContain("연결 끊김");
-    expect(claimRows(container)).toBe(0);
+    expect(container.querySelectorAll(".mf-dt__claim").length).toBe(0);
   });
 
-  it("claim → discussion: DayTable 루트가 같은 DOM 노드이고, 토론 하단은 예전과 같다 (회귀)", () => {
-    const r = scene(makeView({ phase: "claim", turn: 2 }));
+  it("dayAnnounce → discussion: DayTable 루트가 같은 DOM 노드이고, 토론 하단에 보내기 줄이 있다 (회귀)", () => {
+    const r = scene(makeView({ phase: "dayAnnounce" }));
     const table = r.container.querySelector(".mf-dt");
     expect(table).not.toBeNull();
     r.rerender(makeView({ phase: "discussion", role: "citizen" }));
@@ -242,13 +199,13 @@ describe("DayScene 장면 상자 (SPEC 판 구성, 결정 0017-1)", () => {
     const felt = (c: HTMLElement) => c.querySelector<HTMLElement>(".mf-dt__felt")!;
     try {
       vi.stubGlobal("ResizeObserver", FakeRO);
-      const short = scene(makeView({ phase: "claim" }));
+      const short = scene(makeView({ phase: "discussion" }));
       expect(felt(short.container).style.top).toBe("118px");
       cleanup();
     } finally {
       vi.unstubAllGlobals();
     }
-    const normal = scene(makeView({ phase: "claim" }));
+    const normal = scene(makeView({ phase: "discussion" }));
     expect(felt(normal.container).style.top).toBe("150px");
   });
 });
@@ -257,8 +214,6 @@ describe("DayScene 하단 패널 (SPEC 하단, 결정 0017-6)", () => {
   const css = readFileSync("src/styles/day.css", "utf8");
   const panelRule = /\.mf-dayscene__panel\s*\{([^}]*)\}/.exec(css)?.[1] ?? "";
   const views: [string, RoomView][] = [
-    ["claim 내 차례", makeView({ phase: "claim", turn: 0 })],
-    ["claim 남의 차례", makeView({ phase: "claim", turn: 2 })],
     ["discussion", makeView({ phase: "discussion" })],
   ];
 
@@ -304,7 +259,7 @@ describe("DayScene 하단 패널 (SPEC 하단, 결정 0017-6)", () => {
   });
 });
 
-// ---- 03.1-07: 차례 강조 연결 · 주장 채팅 줄 · claim 중 이모티콘 ----
+// ---- 03.1-07: 후광·말풍선 · 낮 토론 이모티콘 ----
 
 function emitter() {
   const listeners = new Set<(e: RoomEvent, meta: { epoch: number }) => void>();
@@ -322,11 +277,7 @@ function emitter() {
   };
 }
 
-const logItems = (c: HTMLElement) => [...c.querySelectorAll<HTMLElement>('.mf-dayscene__panel [role="log"] .mf-msglog__item')];
-const itemRow = (el: HTMLElement) => `${el.querySelector(".mf-msglog__name")?.textContent}:${el.querySelector(".mf-msglog__text")?.textContent}`;
-const seatsWith = (c: HTMLElement, selector: string) => [...c.querySelectorAll(selector)].map((el) => el.closest("[data-seat]")?.getAttribute("data-seat") ?? el.getAttribute("data-seat")).join(",");
-
-describe("DayScene 차례 강조 (D-03)", () => {
+describe("DayScene 후광·말풍선 (결정 0030)", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.setSystemTime(NOW);
@@ -335,32 +286,14 @@ describe("DayScene 차례 강조 (D-03)", () => {
     vi.useRealTimers();
   });
 
-  it("claim: day.turn.seat 한 자리에만 흰 후광·'…' 말풍선이 하나씩 있고, 차례가 넘어가면 다음 자리로 옮겨 간다", () => {
-    const r = scene(makeView({ phase: "claim", turn: 2 }));
-    expect(r.container.querySelectorAll(".mf-figure--halo-white").length).toBe(1);
-    expect(r.container.querySelectorAll(".mf-dt__bubble--turn").length).toBe(1);
-    expect(seatsWith(r.container, ".mf-figure--halo-white")).toBe("2");
-    expect(seatsWith(r.container, ".mf-dt__bubble--turn")).toBe("2");
-    r.rerender(makeView({ phase: "claim", turn: 3 }));
-    expect(r.container.querySelectorAll(".mf-figure--halo-white").length).toBe(1);
-    expect(seatsWith(r.container, ".mf-figure--halo-white")).toBe("3");
-    expect(seatsWith(r.container, ".mf-dt__bubble--turn")).toBe("3");
-  });
-
-  it("내 차례여도 내 자리에 켜진다", () => {
-    const r = scene(makeView({ phase: "claim", turn: 0 }));
-    expect(seatsWith(r.container, ".mf-figure--halo-white")).toBe("0");
-    expect(seatsWith(r.container, ".mf-dt__bubble--turn")).toBe("0");
-  });
-
-  it("discussion·night·morning 에는 차례 후광·말풍선이 없고, 발밑 원·옛 배지·이름표 반전은 어느 단계에도 없다", () => {
+  it("discussion·night·morning 에는 후광·말풍선이 없고, 발밑 원·옛 배지·이름표 반전은 어느 단계에도 없다", () => {
     for (const phase of ["discussion", "night", "morning"] as const) {
       const r = scene(makeView({ phase, role: "citizen" }));
       expect(`${phase}:${r.container.querySelectorAll(".mf-figure--halo-white, .mf-dt__bubble").length}`).toBe(`${phase}:0`);
       cleanup();
     }
-    for (const phase of ["claim", "discussion", "night", "morning"] as const) {
-      const r = scene(makeView({ phase, role: "citizen", turn: 2 }));
+    for (const phase of ["discussion", "night", "morning"] as const) {
+      const r = scene(makeView({ phase, role: "citizen" }));
       expect(`${phase}:${r.container.querySelectorAll(".mf-dt__spot, .mf-dt__ring, .mf-dt__sel, .mf-dt__turn, .mf-dt__tag--turn, .mf-dt__tag--spoke").length}`).toBe(`${phase}:0`);
       expect(`${phase}:${r.container.querySelectorAll('[aria-label="방장"]').length}`).toBe(`${phase}:0`);
       cleanup();
@@ -368,7 +301,7 @@ describe("DayScene 차례 강조 (D-03)", () => {
   });
 });
 
-describe("DayScene 주장 채팅 줄 (D-04, D-05)", () => {
+describe("DayScene 낮 토론 이모티콘 (결정 0023-2)", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.setSystemTime(NOW);
@@ -377,103 +310,17 @@ describe("DayScene 주장 채팅 줄 (D-04, D-05)", () => {
     vi.useRealTimers();
   });
 
-  const log: ClaimLogEntry[] = [
-    { n: 1, seat: 1, claim: "police" },
-    { n: 1, seat: 0, claim: "citizen" },
-    { n: 2, seat: 3, claim: "mafia" },
-  ];
-
-  it("claim 중 남의 차례 하단 채팅 로그에 오늘 줄이 평문으로 올라온다(내 줄은 `나`), 어제(n 이 다른) 줄은 없다", () => {
-    const { container } = scene(makeView({ phase: "claim", n: 1, turn: 2, claimLog: log }));
-    expect(logItems(container).map(itemRow).join(" | ")).toBe("하윤:저는 경찰이에요 | 나:저는 시민이에요");
-    // 대괄호·배지·카드가 없다
-    expect(container.querySelector(".mf-dayscene__panel")?.textContent).not.toContain("[");
-  });
-
-  it("none 은 `말하지 않았어요`", () => {
-    const { container } = scene(makeView({ phase: "claim", n: 1, turn: 3, claimLog: [{ n: 1, seat: 2, claim: "none" }] }));
-    expect(logItems(container).map(itemRow).join(" | ")).toBe("민지:말하지 않았어요");
-  });
-
-  it("내 차례일 때는 하단에 채팅 로그가 없다(칩 패널만)", () => {
-    const { container } = scene(makeView({ phase: "claim", n: 1, turn: 0, claimLog: log }));
-    expect(container.querySelector('.mf-dayscene__panel [role="log"]')).toBeNull();
-    expect(chipGroup()).not.toBeNull();
-  });
-
-  it("discussion 으로 넘어가도 오늘 주장 줄이 남고 그 뒤에 받은 채팅이 이어진다", () => {
+  it("낮 토론 중 emoji 이벤트를 받으면 그 자리 머리 위 말풍선이 뜨고 live 줄이 읽는다", () => {
     const ev = emitter();
-    const r = scene(makeView({ phase: "discussion", n: 1, claimLog: log.slice(0, 2) }), { onEvent: ev.onEvent });
-    expect(logItems(r.container).map(itemRow).join(" | ")).toBe("하윤:저는 경찰이에요 | 나:저는 시민이에요");
-    ev.emit({ t: "chat", seq: 1, seat: 2, template: "innocent", at: 0 } as RoomEvent);
-    expect(logItems(r.container).map(itemRow).join(" | ")).toBe("하윤:저는 경찰이에요 | 나:저는 시민이에요 | 민지:저 아니에요");
-  });
-
-  it("재접속(새로 마운트)해도 같은 view 의 오늘 줄이 복원된다", () => {
-    const view = makeView({ phase: "discussion", n: 1, claimLog: log.slice(0, 2) });
-    const first = scene(view);
-    const before = logItems(first.container).map(itemRow).join(" | ");
-    cleanup();
-    const second = scene(view);
-    expect(logItems(second.container).map(itemRow).join(" | ")).toBe(before);
-    expect(before).toBe("하윤:저는 경찰이에요 | 나:저는 시민이에요");
-  });
-
-  it("일차가 바뀌면 지난 일차 줄은 사라진다", () => {
-    const r = scene(makeView({ phase: "discussion", n: 1, claimLog: log.slice(0, 2) }));
-    r.rerender(makeView({ phase: "discussion", n: 2, claimLog: log.slice(0, 2) }));
-    expect(logItems(r.container).length).toBe(0);
-  });
-
-  it("night 에는 마피아 채팅만 있고 주장 줄이 없다", () => {
-    const { container } = scene(makeView({ phase: "night", n: 1, role: "mafia", allies: [2], claimLog: log.slice(0, 2) }));
-    const text = container.querySelector(".mf-dayscene__panel")?.textContent ?? "";
-    expect(text).not.toContain("저는 경찰이에요");
-    expect(text).not.toContain("저는 시민이에요");
-  });
-
-  it("닉네임에 `<` 가 들어 있어도 글자로만 그린다 (T-03.1-47)", () => {
-    const v = makeView({ phase: "claim", n: 1, turn: 2, claimLog: [{ n: 1, seat: 1, claim: "doctor" }] });
-    const evil: RoomView = { ...v, players: v.players.map((p) => (p.seat === 1 ? { ...p, nickname: "<b>x</b>" } : p)) };
-    const { container } = scene(evil);
-    expect(logItems(container).map(itemRow).join(" | ")).toBe("<b>x</b>:저는 의사예요");
-    expect(container.querySelector(".mf-dayscene__panel .mf-msglog b")).toBeNull();
-  });
-
-  it("탈락한 viewer 의 claim 하단: 주장 줄이 있는 채팅 세 줄 + 읽기 전용 안내만, stat·이모티콘 버튼은 없다", () => {
-    const spectate: SpectateView = {
-      seats: [0, 1, 2, 3].map((seat) => ({ seat, job: "citizen" as const })),
-      picks: { mafia: [], police: [], doctor: [] },
-    };
-    const { container } = scene(makeView({ phase: "claim", n: 1, turn: 2, dead: [0], role: "citizen", spectate, claimLog: log.slice(0, 2) }));
-    const panel = container.querySelector(".mf-dayscene__panel")!;
-    expect(logItems(container).map(itemRow).join(" | ")).toBe("하윤:저는 경찰이에요 | 나:저는 시민이에요");
-    expect(panel.querySelector(".mf-ro")?.textContent).toBe("탈락했어요 · 볼 수만 있어요");
-    expect(panel.querySelector(".st-row")).toBeNull();
-    expect(panel.querySelector('button[aria-label="이모티콘"]')).toBeNull();
-  });
-});
-
-describe("DayScene claim 중 이모티콘 (결정 0023-2)", () => {
-  beforeEach(() => {
-    vi.useFakeTimers();
-    vi.setSystemTime(NOW);
-  });
-  afterEach(() => {
-    vi.useRealTimers();
-  });
-
-  it("claim 중 emoji 이벤트를 받으면 그 자리 머리 위 말풍선이 뜨고 live 줄이 읽는다", () => {
-    const ev = emitter();
-    const { container } = scene(makeView({ phase: "claim", turn: 2 }), { onEvent: ev.onEvent });
+    const { container } = scene(makeView({ phase: "discussion" }), { onEvent: ev.onEvent });
     expect(container.querySelectorAll(".mf-dt__emoji").length).toBe(0);
     ev.emit({ t: "emoji", seat: 1, icon: "heart", at: 0 });
     expect(container.querySelectorAll('.mf-dt__emoji[data-seat="1"]').length).toBe(1);
     expect(container.querySelector(".mf-sr-only")?.textContent).toBe("하윤: 좋아요");
   });
 
-  it("남의 차례 하단 이모티콘 버튼을 눌러 보내면 { t:'emoji', icon } 가 간다", () => {
-    const r = scene(makeView({ phase: "claim", turn: 2 }));
+  it("하단 이모티콘 버튼을 눌러 보내면 { t:'emoji', icon } 가 간다", () => {
+    const r = scene(makeView({ phase: "discussion" }));
     const btn = r.container.querySelector<HTMLButtonElement>('button[aria-label="이모티콘"]')!;
     act(() => btn.click());
     const heart = document.querySelector<HTMLButtonElement>('dialog button[aria-label="좋아요"]')!;
@@ -491,111 +338,94 @@ describe("DayScene 낮 캐릭터 탭 → 유저 기록 카드 (03.1-08, D-06·D-
     vi.useRealTimers();
   });
 
-  const claimLog: ClaimLogEntry[] = [
-    { n: 1, seat: 0, claim: "citizen" },
-    { n: 1, seat: 1, claim: "police" },
-    { n: 1, seat: 2, claim: "none" },
-    { n: 2, seat: 1, claim: "mafia" },
+  // 카드는 날짜별 공개 투표 기록(voteLog)만 그린다(07-04, CHAT-06: 주장 줄 없음)
+  const voteLog: VoteLogEntry[] = [
+    { n: 1, exec: { yes: 1, no: 3, passed: false }, cand: { votes: [{ seat: 1, target: 2 }], candidate: 2 } },
+    { n: 2, exec: { yes: 3, no: 1, passed: true } },
   ];
   const inspect = (c: HTMLElement) => [...c.querySelectorAll<HTMLButtonElement>(".mf-dt button.mf-dt__seat--inspect")];
   const sheet = (name: string) => document.querySelector(`dialog[aria-label="${name}"]`);
   const rowsOf = (name: string) => [...(sheet(name)?.querySelectorAll(".mf-urecord__row") ?? [])].map((li) => li.textContent);
 
-  it("claim·discussion·morning: 모든 자리가 button 이고 이름이 `{닉네임}, 주장 기록 보기` 로 끝난다(내 자리는 (나) 포함)", () => {
-    for (const phase of ["claim", "discussion", "morning"] as const) {
-      const { container } = scene(makeView({ phase, claimLog }));
+  it("discussion·morning: 모든 자리가 button 이고 이름이 `{닉네임}, 기록 보기` 로 끝난다(내 자리는 (나) 포함)", () => {
+    for (const phase of ["discussion", "morning"] as const) {
+      const { container } = scene(makeView({ phase, voteLog }));
       const names = inspect(container).map((b) => b.getAttribute("aria-label") ?? "");
       expect(`${phase}:${names.length}`).toBe(`${phase}:4`);
-      expect(names.every((n) => n.endsWith(", 주장 기록 보기"))).toBe(true);
+      expect(names.every((n) => n.endsWith(", 기록 보기"))).toBe(true);
       expect(names.some((n) => n.startsWith("지우 (나)"))).toBe(true);
+      expect(names.some((n) => n.includes("주장"))).toBe(false);
       expect(container.querySelectorAll('.mf-dt [role="group"][data-seat]').length).toBe(0);
       cleanup();
     }
   });
 
-  it("자리를 누르면 `{닉네임} 기록` 시트가 열리고 그 사람의 오늘·지난 줄이 최신 위로 보인다", () => {
-    const { container } = scene(makeView({ phase: "discussion", claimLog }));
+  it("자리를 누르면 `{닉네임} 기록` 시트가 열리고 날짜별 투표 줄이 최신 위로 보인다 (VOTE-04)", () => {
+    const { container } = scene(makeView({ phase: "discussion", n: 3, voteLog }));
     expect(sheet("하윤 기록")).toBeNull();
-    fireEvent.click(within(container).getByRole("button", { name: "하윤, 주장 기록 보기" }));
+    fireEvent.click(within(container).getByRole("button", { name: "하윤, 기록 보기" }));
     expect(sheet("하윤 기록") !== null).toBe(true);
-    expect(rowsOf("하윤 기록")).toEqual(["2일차마피아라고 주장했어요", "1일차경찰이라고 주장했어요"]);
+    expect(rowsOf("하윤 기록")).toEqual(["2일차처형 여부 찬성 3 · 반대 1", "1일차처형 여부 찬성 1 · 반대 3 · 미통과", "1일차민지님에게 투표했어요"]);
   });
 
-  it("내 자리를 누르면 내 기록이 열린다", () => {
-    const { container } = scene(makeView({ phase: "claim", turn: 2, claimLog }));
+  it("내 자리를 누르면 내 기록이 열린다 — 후보 선택 줄은 이 사람이 던졌을 때만 있다 (P-16)", () => {
+    const { container } = scene(makeView({ phase: "discussion", n: 3, voteLog }));
     fireEvent.click(inspect(container).find((b) => b.dataset.seat === "0")!);
     expect(sheet("지우 기록") !== null).toBe(true);
-    expect(rowsOf("지우 기록")).toEqual(["1일차시민이라고 주장했어요"]);
+    expect(rowsOf("지우 기록")).toEqual(["2일차처형 여부 찬성 3 · 반대 1", "1일차처형 여부 찬성 1 · 반대 3 · 미통과"]);
   });
 
-  it("낮 토론에서 연 카드에 주장 줄과 날짜별 투표 줄이 일차 내림차순으로 쌓인다 (VOTE-04)", () => {
-    const voteLog: VoteLogEntry[] = [
-      { n: 1, exec: { yes: 1, no: 3, passed: false }, cand: { votes: [{ seat: 1, target: 2 }], candidate: 2 } },
-      { n: 2, exec: { yes: 3, no: 1, passed: true } },
-    ];
-    const { container } = scene(makeView({ phase: "discussion", n: 3, claimLog, voteLog }));
-    fireEvent.click(within(container).getByRole("button", { name: "하윤, 주장 기록 보기" }));
-    expect(rowsOf("하윤 기록")).toEqual([
-      "2일차마피아라고 주장했어요",
-      "2일차처형 여부 찬성 3 · 반대 1",
-      "1일차경찰이라고 주장했어요",
-      "1일차처형 여부 찬성 1 · 반대 3 · 미통과",
-      "1일차민지님에게 투표했어요",
-    ]);
-  });
-
-  it("낮 → 낮 사이(claim → discussion)에는 열린 카드가 닫히지 않는다", () => {
-    const r = scene(makeView({ phase: "claim", turn: 2, claimLog }));
-    fireEvent.click(within(r.container).getByRole("button", { name: "하윤, 주장 기록 보기" }));
-    r.rerender(makeView({ phase: "discussion", claimLog }));
+  it("낮 → 낮 사이(discussion → morning)에는 열린 카드가 닫히지 않는다", () => {
+    const r = scene(makeView({ phase: "discussion", voteLog }));
+    fireEvent.click(within(r.container).getByRole("button", { name: "하윤, 기록 보기" }));
+    r.rerender(makeView({ phase: "morning", voteLog }));
     expect(sheet("하윤 기록") !== null).toBe(true);
   });
 
   it("밤이 되면 열린 카드가 닫힌다(기존 규칙 불변)", () => {
-    const r = scene(makeView({ phase: "discussion", claimLog }));
-    fireEvent.click(within(r.container).getByRole("button", { name: "하윤, 주장 기록 보기" }));
-    r.rerender(makeView({ phase: "night", role: "citizen", claimLog }));
+    const r = scene(makeView({ phase: "discussion", voteLog }));
+    fireEvent.click(within(r.container).getByRole("button", { name: "하윤, 기록 보기" }));
+    r.rerender(makeView({ phase: "night", role: "citizen", voteLog }));
     expect(sheet("하윤 기록")).toBeNull();
   });
 
-  it("기록이 없는 사람은 빈 상태 문구가 보인다", () => {
-    const { container } = scene(makeView({ phase: "discussion", claimLog }));
-    fireEvent.click(within(container).getByRole("button", { name: "도현, 주장 기록 보기" }));
+  it("기록이 없으면 빈 상태 문구가 보인다", () => {
+    const { container } = scene(makeView({ phase: "discussion" }));
+    fireEvent.click(within(container).getByRole("button", { name: "도현, 기록 보기" }));
     expect(sheet("도현 기록")?.textContent).toContain("아직 기록이 없어요");
   });
 
   it("아침(morning)에도 열린다", () => {
-    const { container } = scene(makeView({ phase: "morning", claimLog }));
-    fireEvent.click(within(container).getByRole("button", { name: "하윤, 주장 기록 보기" }));
+    const { container } = scene(makeView({ phase: "morning", voteLog }));
+    fireEvent.click(within(container).getByRole("button", { name: "하윤, 기록 보기" }));
     expect(sheet("하윤 기록") !== null).toBe(true);
   });
 
-  it("탈락한 viewer(spectate 있음)도 낮에 같은 카드를 연다 — 주장 기록만, 직업 정보 줄이 더해지지 않는다", () => {
+  it("탈락한 viewer(spectate 있음)도 낮에 같은 카드를 연다 — 직업 정보 줄이 더해지지 않는다", () => {
     const spectate: SpectateView = {
       seats: [0, 1, 2, 3].map((seat) => ({ seat, job: seat === 1 ? ("mafia" as const) : ("citizen" as const) })),
       picks: { mafia: [], police: [], doctor: [] },
     };
-    const { container } = scene(makeView({ phase: "discussion", dead: [0], spectate, role: "citizen", claimLog }));
+    const { container } = scene(makeView({ phase: "discussion", n: 3, dead: [0], spectate, role: "citizen", voteLog }));
     const btn = inspect(container).find((b) => b.dataset.seat === "1")!;
-    expect(btn.getAttribute("aria-label")?.endsWith(", 주장 기록 보기")).toBe(true);
+    expect(btn.getAttribute("aria-label")?.endsWith(", 기록 보기")).toBe(true);
     fireEvent.click(btn);
     const dlg = sheet("하윤 기록")!;
     expect(dlg !== null).toBe(true);
-    expect(dlg.querySelectorAll("li").length).toBe(2);
-    expect(rowsOf("하윤 기록")).toEqual(["2일차마피아라고 주장했어요", "1일차경찰이라고 주장했어요"]);
-    // 카드의 글자는 제목·닫기·주장 문장뿐이다(관전자에게만 오는 실제 직업 줄이 없다)
+    expect(dlg.querySelectorAll("li").length).toBe(3);
+    expect(rowsOf("하윤 기록")).toEqual(["2일차처형 여부 찬성 3 · 반대 1", "1일차처형 여부 찬성 1 · 반대 3 · 미통과", "1일차민지님에게 투표했어요"]);
   });
 
   it("연결이 끊겨도(canSend false) 기록 카드는 열리고 서버 요청은 없다", () => {
-    const r = scene(makeView({ phase: "discussion", claimLog }), { canSend: false, status: "reconnecting", banner: "reconnecting" });
-    fireEvent.click(within(r.container).getByRole("button", { name: "하윤, 주장 기록 보기" }));
+    const r = scene(makeView({ phase: "discussion", voteLog }), { canSend: false, status: "reconnecting", banner: "reconnecting" });
+    fireEvent.click(within(r.container).getByRole("button", { name: "하윤, 기록 보기" }));
     expect(sheet("하윤 기록") !== null).toBe(true);
     expect(vi.mocked(r.conn.send).mock.calls.length).toBe(0);
   });
 
   it("닫기를 누르면 닫는다", () => {
-    const { container } = scene(makeView({ phase: "discussion", claimLog }));
-    fireEvent.click(within(container).getByRole("button", { name: "하윤, 주장 기록 보기" }));
+    const { container } = scene(makeView({ phase: "discussion", voteLog }));
+    fireEvent.click(within(container).getByRole("button", { name: "하윤, 기록 보기" }));
     fireEvent.click(within(sheet("하윤 기록") as HTMLElement).getByRole("button", { name: "닫기" }));
     act(() => {
       vi.advanceTimersByTime(400);
@@ -603,14 +433,14 @@ describe("DayScene 낮 캐릭터 탭 → 유저 기록 카드 (03.1-08, D-06·D-
     expect(sheet("하윤 기록")).toBeNull();
   });
 
-  it("카드 입력은 claimLog 뿐이다 — 주장 문장이 DayScene 이 만드는 채팅 줄과 같은 표를 쓰고 view.spectate 직업은 카드에 나오지 않는다", () => {
+  it("카드 입력은 voteLog 뿐이다 — view.spectate 직업은 카드에 나오지 않는다", () => {
     const spectate: SpectateView = {
       seats: [0, 1, 2, 3].map((seat) => ({ seat, job: seat === 2 ? ("doctor" as const) : ("citizen" as const) })),
       picks: { mafia: [], police: [], doctor: [] },
     };
-    const { container } = scene(makeView({ phase: "discussion", dead: [0], spectate, role: "citizen", claimLog }));
-    fireEvent.click(within(container).getByRole("button", { name: "민지, 의사, 주장 기록 보기" }));
-    expect(rowsOf("민지 기록")).toEqual(["1일차말하지 않았어요"]);
+    const { container } = scene(makeView({ phase: "discussion", dead: [0], spectate, role: "citizen" }));
+    fireEvent.click(within(container).getByRole("button", { name: "민지, 의사, 기록 보기" }));
+    expect(rowsOf("민지 기록")).toEqual([]);
     expect(sheet("민지 기록")?.textContent?.includes("의사")).toBe(false);
   });
 });
@@ -636,8 +466,8 @@ describe("DayScene 아침 어둡게 층·유령 강조 (03.1-10, D-15, UI-SPEC F
     expect(container.querySelector(".mf-dayscene__panel .mf-dt__dim") === null).toBe(true);
   });
 
-  it("morning 이 아닌 단계(claim·discussion·night)에는 층이 0개", () => {
-    for (const phase of ["claim", "discussion", "night"] as const) {
+  it("morning 이 아닌 단계(discussion·night)에는 층이 0개", () => {
+    for (const phase of ["discussion", "night"] as const) {
       const { container } = scene(makeView({ phase, role: "citizen" }));
       expect(`${phase}:${dims(container).length}`).toBe(`${phase}:0`);
       cleanup();
@@ -744,9 +574,9 @@ describe("DayScene 배경 장면 (단계 → 장면 규칙표 PHASE_SCENE, 결�
     return { arts, root: container.querySelector(".mf-backdrop")! };
   };
 
-  it("claim·discussion 은 낮, 밤은 밤, 아침은 아침 장면이다 (처음 마운트는 층 하나가 바로 current)", () => {
+  it("dayAnnounce·discussion 은 낮, 밤은 밤, 아침은 아침 장면이다 (처음 마운트는 층 하나가 바로 current)", () => {
     for (const [phase, expected] of [
-      ["claim", "day"],
+      ["dayAnnounce", "day"],
       ["discussion", "day"],
       ["night", "night"],
       ["morning", "morning"],
@@ -759,7 +589,7 @@ describe("DayScene 배경 장면 (단계 → 장면 규칙표 PHASE_SCENE, 결�
 
   it("실내 배경은 어느 단계에도 헤더 막이 없다", () => {
     const style = (phase: PhaseId) => sceneOfMount(makeView({ phase, role: "citizen", ...(phase === "morning" ? { morning: { phrase: 1 } } : {}) })).arts[0]!.style.getPropertyValue("--mf-scrim");
-    expect(style("claim")).toBe("");
+    expect(style("discussion")).toBe("");
     expect(style("morning")).toBe("");
     expect(style("night")).toBe("");
   });

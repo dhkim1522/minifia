@@ -43,10 +43,8 @@ interface ViewOpts {
   isHost?: boolean;
   /** 앞에서부터 이 수만큼의 사람만 앉힌다(기본 4) */
   count?: number;
-  /** 서버가 주는 일차. 없으면 view.day 자체가 없다(02-04 이전 서버). turn 이 있으면 1일차로 싣는다 */
+  /** 서버가 주는 일차. 없으면 view.day 자체가 없다(02-04 이전 서버) */
   day?: number;
-  /** claim 단계의 지금 차례 seat(day.turn). 없으면 차례 키를 싣지 않는다 */
-  turn?: number;
   /** false 면 내 자리(seat 0)의 players[].alive 를 false 로 싣는다(탈락 — 결정 0021) */
   meAlive?: boolean;
   /** morning 단계의 아침 결과(day.morning). day 가 있어야 싣는다 */
@@ -58,13 +56,12 @@ function makeView(o: ViewOpts): RoomView {
   if (o.role !== undefined) me.role = o.role;
   if (o.allies !== undefined) me.allies = o.allies;
   const day: Pick<RoomView, "day"> =
-    o.day === undefined && o.turn === undefined
+    o.day === undefined
       ? {}
       : {
           day: {
             n: o.day ?? 1,
             roles: ["mafia", "police", "citizen"],
-            ...(o.turn !== undefined ? { turn: { seat: o.turn } } : {}),
             claimLog: [],
             ...(o.morning !== undefined ? { morning: o.morning } : {}),
           },
@@ -332,45 +329,8 @@ describe("단계 안내 aria-live · 단계 전환 (UI-SPEC 접근성·Motion)",
     expect(liveRegion(first.container).textContent).toBe("역할 확인");
     rerenderRoom(first.rerender, makeView({ phase: "dayAnnounce", role: "mafia", allies: [2], day: 2 }));
     expect(liveRegion(first.container).textContent).toBe("2일차 낮이 되었습니다");
-    rerenderRoom(first.rerender, makeView({ phase: "claim", endsIn: 8_000, durationMs: 8_000, role: "mafia", allies: [2], day: 2, turn: 1 }));
-    expect(liveRegion(first.container).textContent).toBe("하윤님 차례");
     rerenderRoom(first.rerender, makeView({ phase: "discussion", endsIn: 90_000, durationMs: 90_000, role: "mafia", allies: [2], day: 2 }));
     expect(liveRegion(first.container).textContent).toBe("낮 토론");
-  });
-
-  it("claim 안내 영역: 내 차례 `내 차례예요`, 남의 차례 `{닉네임}님 차례`, 차례를 못 찾으면 빈 문자열", () => {
-    const claimView = (over: Partial<ViewOpts>) =>
-      makeView({ phase: "claim", endsIn: 8_000, durationMs: 8_000, role: "citizen", day: 1, ...over });
-    const mine = renderRoom(claimView({ turn: 0 }));
-    expect(liveRegion(mine.container).textContent).toBe("내 차례예요");
-    cleanup();
-    const other = renderRoom(claimView({ turn: 2 }));
-    expect(liveRegion(other.container).textContent).toBe("민지님 차례");
-    cleanup();
-    const none = renderRoom(claimView({}));
-    expect(liveRegion(none.container).textContent).toBe("");
-    cleanup();
-    const ghost = renderRoom(claimView({ turn: 7 }));
-    expect(liveRegion(ghost.container).textContent).toBe("");
-  });
-
-  it("차례가 바뀐 새 view 로 다시 그리면 안내 글자가 새 닉네임으로 바뀐다", () => {
-    const claimView = (turn: number) =>
-      makeView({ phase: "claim", endsIn: 8_000, durationMs: 8_000, role: "citizen", day: 1, turn });
-    const r = renderRoom(claimView(1));
-    expect(liveRegion(r.container).textContent).toBe("하윤님 차례");
-    rerenderRoom(r.rerender, claimView(2));
-    expect(liveRegion(r.container).textContent).toBe("민지님 차례");
-    rerenderRoom(r.rerender, claimView(0));
-    expect(liveRegion(r.container).textContent).toBe("내 차례예요");
-  });
-
-  it("차례가 바뀌어도 테이블(.mf-dt)은 다시 마운트되지 않는다", () => {
-    const claimView = (turn: number) => makeView({ phase: "claim", endsIn: 8_000, durationMs: 8_000, role: "citizen", day: 1, turn });
-    const r = renderRoom(claimView(1));
-    const table = r.container.querySelector(".mf-dt");
-    rerenderRoom(r.rerender, claimView(2));
-    expect(r.container.querySelector(".mf-dt") === table).toBe(true);
   });
 
   it("단계 표 라벨(TEST_PHASE_LABEL)은 PhaseId 와 같은 키 집합이다", () => {
@@ -498,17 +458,17 @@ describe("S-06a 낮 시작 발표 개정 (D-20, M6)", () => {
 });
 
 describe("S-06b·S-06c·S-07 한 장면 DayScene (DAY-01, UI-SPEC 장면)", () => {
-  const claim = (over: Partial<ViewOpts> = {}) =>
-    makeView({ phase: "claim", endsIn: 8_000, durationMs: 8_000, role: "citizen", turn: 0, ...over });
+  const dayAnnounce = (over: Partial<ViewOpts> = {}) =>
+    makeView({ phase: "dayAnnounce", endsIn: 2_000, durationMs: 2_000, role: "citizen", day: 1, ...over });
   const discussion = (over: Partial<ViewOpts> = {}) =>
     makeView({ phase: "discussion", endsIn: 90_000, durationMs: 90_000, role: "citizen", ...over });
 
-  it("직업 공개: 제목·1일차 안내·타이머 하나·테이블 하나·앉은 4명 자리·[역할 카드]", () => {
-    const { container } = renderRoom(claim());
-    expect(byRole("heading", "낮 · 직업 공개")).toBeTruthy();
+  it("낮 시작: 제목·1일차 안내·타이머 하나·테이블 하나·앉은 4명 자리·[역할 카드]", () => {
+    const { container } = renderRoom(dayAnnounce());
+    expect(byRole("heading", "낮")).toBeTruthy();
     expect(byText("1일차")).toBeTruthy();
     expect(screen.queryAllByRole("timer").length).toBe(1);
-    expect(byRole("timer").textContent).toContain("0:08");
+    expect(byRole("timer").textContent).toContain("0:02");
     expect(screen.queryAllByRole("group", { name: "테이블" }).length).toBe(1);
     expect(container.querySelectorAll(".mf-dt__seat").length).toBe(4);
     expect(screen.queryAllByRole("button", { name: "역할 카드" }).length).toBe(1);
@@ -516,12 +476,12 @@ describe("S-06b·S-06c·S-07 한 장면 DayScene (DAY-01, UI-SPEC 장면)", () =
     expect(art?.style.backgroundImage).toContain("/backgrounds/bg_game_day.webp");
   });
 
-  it("claim 타이머는 지금 차례의 남은 시간이고 마지막 5초여도 진홍(urgent) 표시가 없다 (calm)", () => {
-    const { container } = renderRoom(claim({ day: 2, turn: 1, endsIn: 3_000 }));
-    expect(byRole("heading", "낮 · 직업 공개")).toBeTruthy();
+  it("낮 시작 타이머는 남은 시간이고 마지막 5초여도 진홍(urgent) 표시가 없다 (calm)", () => {
+    const { container } = renderRoom(dayAnnounce({ day: 2, endsIn: 1_000 }));
+    expect(byRole("heading", "낮")).toBeTruthy();
     expect(byText("2일차")).toBeTruthy();
-    expect(byRole("timer").textContent).toContain("0:03");
-    expect(container.querySelector<HTMLElement>(".mf-timer__fill")?.style.transform).toBe(`scaleX(${3_000 / 8_000})`);
+    expect(byRole("timer").textContent).toContain("0:01");
+    expect(container.querySelector<HTMLElement>(".mf-timer__fill")?.style.transform).toBe(`scaleX(${1_000 / 2_000})`);
     expect(container.querySelector(".mf-timer--urgent")).toBeNull();
   });
 
@@ -531,8 +491,8 @@ describe("S-06b·S-06c·S-07 한 장면 DayScene (DAY-01, UI-SPEC 장면)", () =
     expect(byRole("timer").textContent).toContain("1:30");
   });
 
-  it("claim → discussion: 테이블은 같은 노드이고 위쪽 바·하단 패널은 단계마다 새 노드다", () => {
-    const r = renderRoom(claim());
+  it("dayAnnounce → discussion: 테이블은 같은 노드이고 위쪽 바·하단 패널은 단계마다 새 노드다", () => {
+    const r = renderRoom(dayAnnounce());
     const table = r.container.querySelector(".mf-dt");
     const bar = r.container.querySelector(".mf-dayscene__enter");
     const panel = r.container.querySelector(".mf-dayscene__panel");
@@ -556,17 +516,14 @@ describe("S-06b·S-06c·S-07 한 장면 DayScene (DAY-01, UI-SPEC 장면)", () =
     expect(r.container.querySelector(".mf-dayscene__panel") === panel).toBe(true);
   });
 
-  it("dayAnnounce → claim: 장면 바깥 래퍼(mf-phase-enter)가 같은 노드이고, 새 노드는 roleReveal → dayAnnounce 에서 생긴다", () => {
+  it("dayAnnounce → discussion: 장면 바깥 래퍼(mf-phase-enter)가 같은 노드이고, 새 노드는 roleReveal → dayAnnounce 에서 생긴다", () => {
     const r = renderRoom(makeView({ phase: "roleReveal", endsIn: 15_000, role: "citizen", day: 1 }));
     const reveal = r.container.querySelector(".mf-phase-enter");
     rerenderRoom(r.rerender, makeView({ phase: "dayAnnounce", role: "citizen", day: 1 }));
     const announce = r.container.querySelector(".mf-phase-enter");
     expect(announce === reveal, "역할 확인 → 낮 시작은 새 래퍼").toBe(false);
-    rerenderRoom(r.rerender, claim());
-    expect(r.container.querySelector(".mf-phase-enter") === announce, "낮 시작 → claim 은 같은 래퍼").toBe(true);
-    const scene = r.container.querySelector(".mf-phase-enter");
     rerenderRoom(r.rerender, discussion());
-    expect(r.container.querySelector(".mf-phase-enter") === scene, "discussion 래퍼 유지").toBe(true);
+    expect(r.container.querySelector(".mf-phase-enter") === announce, "낮 시작 → discussion 은 같은 래퍼").toBe(true);
   });
 
   it("역할 확인 → 낮 시작: 새로 마운트돼도 낮 문구가 한 번 뜨고(aria-hidden, 제목 요소 아님), 2초 뒤 사라지며, lobby 그림에서 day 그림으로 크로스페이드한다", async () => {
@@ -583,15 +540,15 @@ describe("S-06b·S-06c·S-07 한 장면 DayScene (DAY-01, UI-SPEC 장면)", () =
     expect(r.container.querySelector(".mf-sceneintro")).toBeNull();
   });
 
-  it("마피아(allies [2])와 시민의 claim 화면은 동료 후광·마름모를 뺀 나머지가 같고 역할 글자가 없다", () => {
+  it("마피아(allies [2])와 시민의 낮 토론 화면은 동료 후광·마름모를 뺀 나머지가 같고 역할 글자가 없다", () => {
     const strip = (html: string) =>
       html
         .replace(/ mf-figure--halo-crimson/g, "")
         .replace(/<svg[^>]*mf-dt__mark[\s\S]*?<\/svg>/g, "");
-    // 남의 차례 하단(직업 칩이 없는 쪽)으로 비교해 직업 이름 글자가 화면에 없음을 확인한다
-    const mafia = renderRoom(claim({ role: "mafia", allies: [2], turn: 1 })).container.innerHTML;
+    // 직업 이름 글자가 화면에 없음을 확인한다
+    const mafia = renderRoom(discussion({ role: "mafia", allies: [2] })).container.innerHTML;
     cleanup();
-    const citizen = renderRoom(claim({ role: "citizen", turn: 1 })).container.innerHTML;
+    const citizen = renderRoom(discussion({ role: "citizen" })).container.innerHTML;
     expect(citizen.includes("mf-dayscene"), "DayScene 마크업").toBe(true);
     expect(strip(mafia)).toBe(strip(citizen));
     expect(/마피아|경찰|의사/.test(citizen)).toBe(false);
@@ -651,7 +608,6 @@ describe("대기실 연결 (C-02, R9) · 미리 받기 (Pattern 13 ②)", () => 
     rerenderRoom(r.rerender, makeView({ phase: "assigning" }));
     rerenderRoom(r.rerender, makeView({ phase: "roleReveal", endsIn: 15_000, role: "mafia", allies: [2] }));
     rerenderRoom(r.rerender, makeView({ phase: "dayAnnounce", endsIn: 2_000, role: "mafia", allies: [2], day: 1 }));
-    rerenderRoom(r.rerender, makeView({ phase: "claim", endsIn: 20_000, role: "mafia", allies: [2], day: 1, turn: 0 }));
     expect(preloadDuskMock.mock.calls.length, "토론 전 preloadDuskAssets 호출 수").toBe(0);
     rerenderRoom(r.rerender, makeView({ phase: "discussion", endsIn: 60_000, role: "mafia", allies: [2], day: 1 }));
     expect(preloadDuskMock.mock.calls.length, "토론 진입 preloadDuskAssets 호출 수").toBe(1);
@@ -865,7 +821,6 @@ describe("헤더 줄바꿈 금지·패널 여백·칩 간격 (03.1-10, D-16, UI-
 
   it("헤더 제목·안내 문구표: 모든 역할에서 같은 제목이다", () => {
     const table: Array<[PhaseId, string, (n: number) => string]> = [
-      ["claim", "낮 · 직업 공개", (n) => `${n}일차`],
       ["discussion", "낮 · 토론", (n) => `${n}일차 · 의견을 나눠요`], // UX-01 빈 칸 2 (05-01): 살아 있는 viewer 헤더 안내줄
       ["night", "밤", (n) => `${n}일차`],
       ["morning", "아침", (n) => `${n + 1}일차`],
@@ -873,7 +828,7 @@ describe("헤더 줄바꿈 금지·패널 여백·칩 간격 (03.1-10, D-16, UI-
     for (const [phase, heading, guide] of table) {
       for (const role of ["police", "mafia", "doctor", "citizen"] as const) {
         const r = renderRoom(
-          makeView({ phase, endsIn: 8_000, durationMs: 8_000, role, day: 1, ...(phase === "claim" ? { turn: 1 } : {}), ...(phase === "morning" ? { morning: {} } : {}) }),
+          makeView({ phase, endsIn: 8_000, durationMs: 8_000, role, day: 1, ...(phase === "morning" ? { morning: {} } : {}) }),
         );
         const mafiaNight = phase === "night" && role === "mafia";
         const expected = mafiaNight ? "1일차 · 함께 지목하세요" : guide(1);
