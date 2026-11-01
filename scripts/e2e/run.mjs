@@ -106,8 +106,10 @@ const allow = (list) => (list.length === 0 ? "(없음)" : list.map((a) => `${a.s
 emit(`허용 목록 — 장식(G2): ${allow(DECORATIVE_ALLOW)} / 탭 대상(G3): ${allow(TAP_ALLOW)} / 글자 크기(G7): ${allow(TEXT_SIZE_ALLOW)}`);
 emit(`승인된 완화: ${APPROVED_RELAXATIONS.map((r) => `${r.id}(${r.approved})`).join(", ")} — 그 밖의 기준 수치는 낮추지 않는다`);
 const fixedFlows = flows.filter((f) => f.size);
+const extraFlows = args.sizesGiven ? [] : flows.filter((f) => !f.size && (f.extraSizes ?? []).length > 0);
 emit(
   `크기 ${args.sizes.map((s) => s.label).join(", ")} · 흐름 ${flows.map((f) => f.id).join(", ")}` +
+    `${extraFlows.length > 0 ? ` · 추가 크기 ${extraFlows.map((f) => `${f.id}+${f.extraSizes.map((s) => s.label).join("+")}`).join(", ")}` : ""}` +
     `${fixedFlows.length > 0 ? ` · 크기 고정 ${fixedFlows.map((f) => `${f.id}@${f.size.label}`).join(", ")}` : ""}${args.shots ? " · 사진 저장(scripts/e2e/out/)" : ""}`,
 );
 
@@ -125,6 +127,13 @@ limitTimer.unref();
 // 크기 고정 흐름(flow.size — pc·wakelock)은 폰 크기와 무관하므로 크기 목록과 곱하지 않고 자기 크기로 작업 하나만 만든다.
 const jobs = [];
 for (const size of args.sizes) for (const flow of flows) if (!flow.size) jobs.push({ flow, size });
+// 흐름별 추가 크기(flow.extraSizes — lobby·world 의 LOBBY_SIZES 6개 중 기본 4개 밖의 두 크기, 06-17): 사용자가 --sizes 를 직접 주지 않았을 때만 더한다.
+// --sizes 를 주면 그 목록이 전부다(한 크기만 빨리 돌리는 용도). 이미 목록에 있는 크기는 다시 더하지 않는다.
+if (!args.sizesGiven) {
+  for (const flow of flows) {
+    for (const size of flow.extraSizes ?? []) if (!flow.size && !args.sizes.some((s) => s.label === size.label)) jobs.push({ flow, size });
+  }
+}
 for (const flow of flows) if (flow.size) jobs.push({ flow, size: flow.size });
 
 // 준비 실패(SetupError)로 새 방에서 다시 도는 최대 횟수. 「살아 있는 방장」 흐름(citizen4 등)은 첫 밤에 방장이 탈락할 확률이 4명판 1/3 이라

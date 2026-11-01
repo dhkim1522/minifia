@@ -9,6 +9,13 @@ export const DEFAULT_SIZES = [
   // 단 높이 probe(05-UI-SPEC 11.3c, P5-3): 방 높이 575 미만의 짧은 폰. 세 폭 기준은 그대로.
   { w: 360, h: 560, label: "360x560" },
 ];
+/**
+ * 로비·world 흐름의 폰 크기 6종(06-17): DEFAULT_SIZES 4개 + 390×844 + 402×874. src/world/camera.ts 의 STAGE_SIZES 와 같다 —
+ * test/unit/e2eContract.test.ts 가 w·h·label 이 같음을 고정한다. v1.0 게임 흐름의 크기 목록(DEFAULT_SIZES)은 그대로다.
+ */
+export const LOBBY_SIZES = [...DEFAULT_SIZES, { w: 390, h: 844, label: "390x844" }, { w: 402, h: 874, label: "402x874" }];
+/** LOBBY_SIZES 중 DEFAULT_SIZES 에 없는 크기: lobby·world 흐름이 `--sizes` 없이 돌 때 기본 크기에 더해 도는 두 크기(run.mjs 의 extraSizes). */
+export const LOBBY_EXTRA_SIZES = LOBBY_SIZES.filter((s) => !DEFAULT_SIZES.some((d) => d.label === s.label));
 /** 겹침 허용 오차(px). 변이 맞닿거나 0.5px 이하로 겹친 것은 겹침이 아니다. 알려진 결함 D4 의 기준이므로 낮추지 않는다. */
 export const OVERLAP_EPS = 0.5;
 /** 탭 대상 하한(px). */
@@ -138,10 +145,10 @@ export class UsageError extends Error {
 }
 
 export const USAGE =
-  "사용법: node scripts/e2e/run.mjs [--url https://minifia-v2.dhplay.workers.dev | http://localhost:5173] [--only <시나리오 부분 문자열>] [--shots] [--sizes 360x640,390x664,430x932,360x560]";
+  "사용법: node scripts/e2e/run.mjs [--url https://minifia-v2.dhplay.workers.dev | http://localhost:5173] [--only <시나리오 부분 문자열>] [--shots] [--sizes 360x640,390x664,430x932,360x560]  (--sizes 를 주지 않으면 lobby·world 흐름은 390x844,402x874 도 더해 6개 크기로 돈다)";
 
 export function parseArgs(argv) {
-  const out = { url: null, only: null, shots: false, sizes: DEFAULT_SIZES.map((s) => ({ ...s })) };
+  const out = { url: null, only: null, shots: false, sizes: DEFAULT_SIZES.map((s) => ({ ...s })), sizesGiven: false };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--shots") out.shots = true;
@@ -151,6 +158,7 @@ export function parseArgs(argv) {
       if (a === "--url") out.url = v;
       else if (a === "--only") out.only = v;
       else {
+        out.sizesGiven = true;
         out.sizes = v.split(",").map((part) => {
           const m = /^(\d{2,4})x(\d{2,4})$/.exec(part.trim());
           if (!m) throw new UsageError(`--sizes 값이 올바르지 않음: ${part}`);
@@ -349,7 +357,19 @@ export const APPROVED_RELAXATIONS = [
   { id: "D4", approved: "03.1 F7", reason: "[테스트] 버튼이 캐릭터 상자와 겹치는 세로 깊이 ≤ 3px" },
   { id: "D3b-5", approved: "2026-10-26", reason: "5명판 D3b 바닥 99.9 % → 98.0 %: 앞쪽 옆자리 유령 머리가 5글자 이름표를 약 0.4 % 덮음(캐릭터가 이름표를 덮는 것은 이미 허용)" },
   { id: "P-PANEL-236", approved: "execution-v1/DC-defense-me", reason: "변론의 후보 본인 하단 패널 높이 157 → 236(제목+안내+칩 3줄×2칸). 승인 시안 DC 값이며 defenseChecks 가 isCandidate 일 때만 허용한다(UI-SPEC 8.4·15.1, 결정 0030 §6)" },
+  // 결정 0056(2026-11-01): 테스트 봇 이름이 8자가 되어도 v1.0 고정 테이블 화면(8~9페이즈에 삭제)은 5자 기준 간격이다. 기준 수치(0.5px·보이는 비율 바닥)는 그대로, 적용 범위만 좁게 표시한다.
+  // 범위 = v1.0 고정 테이블 화면(.mf-dt__tag)에서 6 그래핌 이상 이름표가 낀 겹침(D9)·6 그래핌 이상 이름표의 보이는 비율(D3b). 6자 미만끼리의 겹침, 새 맵 화면(NT1·NT3·NT4)은 그대로 판정한다.
+  // 8~9페이즈에 고정 테이블을 지울 때 이 두 항목도 함께 지운다.
+  { id: "D9-8ch", approved: "결정 0056", reason: "v1.0 고정 테이블 화면(8~9페이즈 삭제)에서 6 그래핌 이상 이름이 낀 이름표 겹침(D9). 겹침 기준 0.5px 불변" },
+  { id: "D3b-8ch", approved: "결정 0056", reason: "v1.0 고정 테이블 화면(8~9페이즈 삭제)에서 6 그래핌 이상 이름표의 보이는 비율 바닥(D3b). 인원별 바닥 수치 불변" },
 ];
+
+/** 결정 0056 완화 범위의 이름 조건: 이 그래핌 수 이상인 이름. */
+export const WIDE_NAME_GRAPHEMES = 6;
+const isWideTag = (t) => typeof t?.name === "string" && graphemeCount(t.name) >= WIDE_NAME_GRAPHEMES;
+
+/** 완화가 적용된 통과 행: ok 이지만 relaxed 표시와 적용 내용을 detail 에 남긴다(결과 표에 보인다). */
+const relaxedResult = (id, label, relaxId, notes) => ({ id, label, ok: true, relaxed: true, detail: `승인 완화(${relaxId}, 결정 0056) 적용: ${notes.join("; ")}` });
 
 /** D3b 인원별 이름표 보이는 비율 바닥. 4명 100 %(부동소수 오차 0.001 허용), 5명 98.0 %(승인 완화), 6명 85 %, 7명 50 %, 8명 55 %. */
 function visibilityFloor(n) {
@@ -381,12 +401,20 @@ function d3aStructure(snap) {
  */
 function d3bVisibility(snap) {
   const v = snap.tagVisibility;
-  if (!Array.isArray(v) || v.length === 0) return ["이름표 보이는 비율을 측정하지 못함 (tagVisibility 없음)"];
+  if (!Array.isArray(v) || v.length === 0) return { bad: ["이름표 보이는 비율을 측정하지 못함 (tagVisibility 없음)"], relaxed: [] };
   const unloaded = v.filter((x) => x.ratio === null || x.ratio === undefined || Number.isNaN(x.ratio));
-  if (unloaded.length > 0) return [`이미지가 로드되지 않아 측정하지 못함: 자리 ${unloaded.map((x) => x.seat).join("/")}`];
+  if (unloaded.length > 0) return { bad: [`이미지가 로드되지 않아 측정하지 못함: 자리 ${unloaded.map((x) => x.seat).join("/")}`], relaxed: [] };
   const floor = visibilityFloor(v.length);
-  const low = v.reduce((a, b) => (b.ratio < a.ratio ? b : a));
-  return low.ratio >= floor ? [] : [`${v.length}명판 자리 ${low.seat} 이름표 ${rd(low.ratio * 100)}% < 바닥 ${rd(floor * 100)}%`];
+  const bad = [];
+  const relaxed = [];
+  // 가장 낮은 자리부터 모든 미달 자리를 본다. 6 그래핌 이상 이름표의 미달은 결정 0056 완화 범위(D3b-8ch)라 바닥은 그대로 두고 표시만 한다.
+  for (const low of [...v].filter((x) => x.ratio < floor).sort((a, b) => a.ratio - b.ratio)) {
+    const text = `${v.length}명판 자리 ${low.seat} 이름표 ${rd(low.ratio * 100)}% < 바닥 ${rd(floor * 100)}%`;
+    const tag = (snap.tags ?? []).find((t) => t.seat === low.seat);
+    if (isWideTag(tag)) relaxed.push(`${text} (이름 ${graphemeCount(tag.name)}자)`);
+    else bad.push(text);
+  }
+  return { bad: bad.slice(0, 1), relaxed };
 }
 
 /**
@@ -411,7 +439,14 @@ function d4TestButton(snap) {
   return bad;
 }
 
-/** 낮 장면(직업 공개·토론·밤·아침)의 고정물 검사 D1·D2·D3a·D3b·D4·D5·D6·D8. */
+function d3bResult(snap) {
+  const r = d3bVisibility(snap);
+  const label = "이름표 보이는 비율";
+  if (r.bad.length > 0) return result("D3b", label, r.bad);
+  return r.relaxed.length > 0 ? relaxedResult("D3b", label, "D3b-8ch", r.relaxed) : result("D3b", label, []);
+}
+
+/** 낮 장면(직업 공개·토론·밤·아침)의 고정물 검사 D1·D2·D3a·D3b·D4·D5·D6·D8. D3b 는 결정 0056 완화 범위(6 그래핌 이상 이름표)만 표시하고 통과시킨다. */
 export function dayChecks(snap, { w, h }) {
   // D1 위쪽 제목이 한 줄
   const d1 = [];
@@ -447,7 +482,7 @@ export function dayChecks(snap, { w, h }) {
     result("D1", "위쪽 제목이 한 줄", d1),
     result("D2", "이름표가 장면 안·패널 밖", d2),
     result("D3a", "이름표가 캐릭터 아래 층", d3aStructure(snap)),
-    result("D3b", "이름표 보이는 비율", d3bVisibility(snap)),
+    d3bResult(snap),
     result("D4", "[테스트]가 얼굴·이름표를 안 가리고 눌림", d4TestButton(snap)),
     result("D5", "세로 스크롤 없음", d5),
     result("D6", "하단 패널 높이 157", d6),
@@ -526,12 +561,24 @@ export function feltStable(entries) {
   return result("D7", "단계가 바뀌어도 테이블 그대로", bad);
 }
 
-/** D9: 이름표끼리 겹치지 않는다(모든 인원). tags = [{ seat, rect }]. */
+/**
+ * D9: 이름표끼리 겹치지 않는다(모든 인원). tags = [{ seat, rect, name }]. v1.0 고정 테이블 화면(.mf-dt__tag)의 이름표만 부른다.
+ * 결정 0056 완화: 겹친 쌍 중 한쪽이라도 이름(name)이 6 그래핌 이상이면 그 쌍은 완화 범위(D9-8ch)라 통과로 두고 쌍을 표시한다.
+ * 6 그래핌 미만끼리의 겹침, 이름을 모르는 이름표의 겹침은 그대로 실패한다. 겹침 기준(OVERLAP_EPS 0.5px)은 바뀌지 않는다.
+ */
 export function tagsOverlap(tags) {
   const bad = [];
+  const relaxed = [];
   for (let i = 0; i < tags.length; i++)
-    for (let j = i + 1; j < tags.length; j++) if (rectsOverlap(tags[i].rect, tags[j].rect)) bad.push(`${tags[i].seat}-${tags[j].seat}`);
-  return result("D9", "이름표끼리 안 겹침", bad);
+    for (let j = i + 1; j < tags.length; j++) {
+      if (!rectsOverlap(tags[i].rect, tags[j].rect)) continue;
+      const pair = `${tags[i].seat}-${tags[j].seat}`;
+      if (isWideTag(tags[i]) || isWideTag(tags[j])) relaxed.push(pair);
+      else bad.push(pair);
+    }
+  const label = "이름표끼리 안 겹침";
+  if (bad.length > 0) return result("D9", label, bad);
+  return relaxed.length > 0 ? relaxedResult("D9", label, "D9-8ch", [`6자 이상 이름이 낀 겹침 ${relaxed.length}쌍 ${relaxed.join(",")}`]) : result("D9", label, []);
 }
 
 /**

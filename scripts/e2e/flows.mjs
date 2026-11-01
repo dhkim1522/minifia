@@ -65,7 +65,9 @@ import {
 import {
   INTRO_GONE_MS,
   JOIN_FIT_MIN_H,
+  LOBBY_EXTRA_SIZES,
   ROLE_NAME,
+  WORLD_SYNC_TOL,
   backdropSceneChecks,
   cancelTapChecks,
   candidateChecks,
@@ -462,13 +464,17 @@ async function worldFlow(ctx) {
       // 걷는 동안 50ms 간격 5번: 같은 서버 시각 t 로 두 페이지의 손님 위치를 읽는다. t = 구간 출발 시각 + (구간을 받은 뒤 지난 시간)
       const a = [];
       const b = [];
+      const realtime = []; // 같은 순간 각 페이지가 자기 시계로 읽은 위치(t 를 주지 않음) — 시계 오프셋 추정 오차까지 포함한 차이
       for (let i = 0; i < 5; i++) {
         const t = Math.round(seg.t0 + (performance.now() - seg.at));
-        const [pa, pb] = await Promise.all([sampleWorld(gp, gSeat, t), sampleWorld(hp, gSeat, t)]);
+        const [pa, pb, ra, rb] = await Promise.all([sampleWorld(gp, gSeat, t), sampleWorld(hp, gSeat, t), sampleWorld(gp, gSeat), sampleWorld(hp, gSeat)]);
         a.push({ kind: "walk", t, p: pa });
         b.push({ kind: "walk", t, p: pb });
+        realtime.push(ra && rb ? Math.hypot(ra.x - rb.x, ra.z - rb.z) : Number.NaN);
         await sleep(50);
       }
+      const rtMax = Math.max(...realtime);
+      rec(sc, "W10", `걷는 동안 두 페이지의 실시간 위치 차 ≤ ${WORLD_SYNC_TOL} (같은 머신)`, rtMax <= WORLD_SYNC_TOL, `최대 ${Number.isFinite(rtMax) ? rtMax.toFixed(3) : "읽지 못함"} 단위`);
       // 도착 뒤 한 번 (구간 끝 + 0.5초)
       const tEnd = Math.round(seg.t0 + dur + 500);
       const [ea, eb] = await Promise.all([sampleWorld(gp, gSeat, tEnd), sampleWorld(hp, gSeat, tEnd)]);
@@ -476,7 +482,7 @@ async function worldFlow(ctx) {
       b.push({ kind: "arrived", t: tEnd, p: eb });
       for (const r of worldSyncChecks({ a, b, ringMs: tap.ringMs, segmentMs: tap.segmentMs })) recOne(rec, sc, r);
       const diffs = a.map((x, i) => (x.p && b[i].p ? Math.hypot(x.p.x - b[i].p.x, x.p.z - b[i].p.z) : Number.NaN));
-      infoRow(ctx, sc, "W9", "측정값 기록(참고, 판정 아님)", `링 ${tap.ringMs === null ? "없음" : `${Math.round(tap.ringMs * 10) / 10}ms`} · 구간 도착 ${tap.segmentMs === null ? "없음" : `${Math.round(tap.segmentMs)}ms`} · 위치 차 최대 ${Math.max(...diffs).toFixed(4)} 단위 · 구간 ${Math.round(dur)}ms`);
+      infoRow(ctx, sc, "W9", "측정값 기록(참고, 판정 아님)", `링 ${tap.ringMs === null ? "없음" : `${Math.round(tap.ringMs * 10) / 10}ms`} · 구간 도착 ${tap.segmentMs === null ? "없음" : `${Math.round(tap.segmentMs)}ms`} · 위치 차 최대 ${Math.max(...diffs).toFixed(4)} 단위 · 실시간 위치 차 최대 ${Number.isFinite(rtMax) ? rtMax.toFixed(4) : "읽지 못함"} 단위 · 구간 ${Math.round(dur)}ms`);
       const off = ea ? Math.hypot(ea.x - target.x, ea.z - target.z) : Number.NaN;
       rec(sc, "W6", "도착 위치가 누른 점", off <= 0.3, `도착 (${ea ? `${ea.x.toFixed(2)}, ${ea.z.toFixed(2)}` : "없음"}) ↔ 누른 점 (${target.x.toFixed(2)}, ${target.z.toFixed(2)})`);
 
@@ -526,12 +532,27 @@ const w360 = (ctx) => ctx.size.w <= 360;
 
 // ---- 게임 흐름(과제 2) ----
 
+/**
+ * 흐름 끝의 D9(이름표끼리 안 겹침): 모은 낮 장면 상태 전부를 본다. 결정 0056 완화(6 그래핌 이상 이름이 낀 겹침)만 있으면 통과 행에 그 내용을 남긴다.
+ * 완화 범위 밖 겹침이 하나라도 있으면 실패다.
+ */
+function recD9(rec, scenario, days) {
+  const rs = days.map((d) => ({ d, r: tagsOverlap(d.tags) }));
+  const bad = rs.filter((x) => !x.r.ok);
+  if (bad.length > 0) {
+    rec(scenario, "D9", "이름표끼리 안 겹침", false, bad.map((x) => `${x.d.state}: ${x.r.detail}`).join("; "));
+    return;
+  }
+  const relaxed = rs.filter((x) => x.r.relaxed === true);
+  rec(scenario, "D9", "이름표끼리 안 겹침", true, relaxed.map((x) => `${x.d.state}: ${x.r.detail}`).join("; "), relaxed.length > 0);
+}
+
 /** 낮 장면 상태(claim·discussion·night·morning) 한 장: 스냅숏 + G + D1~D6·D8 + T2. 테이블 면·이름표·장면 상자는 흐름 끝의 D7·D9·T1 용으로 모아 둔다. */
 async function dayState(ctx, flowId, state) {
   const rec = recorder(ctx);
   const snap = await checkState(ctx, flowId, state);
   const mySeat = ctx.host.tracker.last()?.me?.seat ?? -1;
-  for (const r of dayChecks(snap, { w: ctx.size.w, h: ctx.size.h })) rec(`${flowId}/${state}`, r.id, r.label, r.ok, r.detail);
+  for (const r of dayChecks(snap, { w: ctx.size.w, h: ctx.size.h })) rec(`${flowId}/${state}`, r.id, r.label, r.ok, r.detail, r.relaxed === true);
   recOne(rec, `${flowId}/${state}`, crownChecks(snap, { expect: 0 })); // W1: 게임 중에는 왕관이 없다
   const stage = await readStage(ctx.host.page);
   const t2 = feltGapChecks(stage);
@@ -977,8 +998,7 @@ async function gameFlow(ctx, { id, players, role, states }) {
     const f = feltStable(days.map((d) => ({ state: d.state, rect: d.felt })));
     rec(`${id}/table`, "D7", f.label, f.ok, f.detail);
   }
-  const bad = days.map((d) => ({ d, r: tagsOverlap(d.tags) })).filter((x) => !x.r.ok);
-  rec(`${id}/table`, "D9", "이름표끼리 안 겹침", bad.length === 0, bad.map((x) => `${x.d.state}: ${x.r.detail}`).join("; "));
+  recD9(rec, `${id}/table`, days);
   const t1 = stageStable(days.map((d) => ({ state: d.state, stage: d.stage, mySeat: d.mySeat })));
   rec(`${id}/table`, t1.id, t1.label, t1.ok, t1.detail);
   const fin = await collectSnapshot(page);
@@ -1091,8 +1111,7 @@ async function specFlow(ctx) {
     const f = feltStable(days.map((d) => ({ state: d.state, rect: d.felt })));
     rec(`${id}/table`, "D7", f.label, f.ok, f.detail);
   }
-  const bad = days.map((d) => ({ d, r: tagsOverlap(d.tags) })).filter((x) => !x.r.ok);
-  rec(`${id}/table`, "D9", "이름표끼리 안 겹침", bad.length === 0, bad.map((x) => `${x.d.state}: ${x.r.detail}`).join("; "));
+  recD9(rec, `${id}/table`, days);
   const t1 = stageStable(days.map((d) => ({ state: d.state, stage: d.stage, mySeat: d.mySeat })));
   rec(`${id}/table`, t1.id, t1.label, t1.ok, t1.detail);
   rec(`${id}/setup`, "S4", "단계 도달", true);
@@ -1314,8 +1333,7 @@ async function voteFlow(ctx) {
       const f = feltStable(days.map((d) => ({ state: d.state, rect: d.felt })));
       rec(`${id}/table`, "D7", f.label, f.ok, f.detail);
     }
-    const badTags = days.map((d) => ({ d, r: tagsOverlap(d.tags) })).filter((x) => !x.r.ok);
-    rec(`${id}/table`, "D9", "이름표끼리 안 겹침", badTags.length === 0, badTags.map((x) => `${x.d.state}: ${x.r.detail}`).join("; "));
+    recD9(rec, `${id}/table`, days);
     const t1 = stageStable(days.map((d) => ({ state: d.state, stage: d.stage, mySeat: d.mySeat })));
     rec(`${id}/table`, t1.id, t1.label, t1.ok, t1.detail);
     rec(`${id}/setup`, "S4", "단계 도달", true);
@@ -1373,8 +1391,7 @@ function tableChecksOf(ctx, rec, id) {
     const f = feltStable(days.map((d) => ({ state: d.state, rect: d.felt })));
     rec(`${id}/table`, "D7", f.label, f.ok, f.detail);
   }
-  const badTags = days.map((d) => ({ d, r: tagsOverlap(d.tags) })).filter((x) => !x.r.ok);
-  rec(`${id}/table`, "D9", "이름표끼리 안 겹침", badTags.length === 0, badTags.map((x) => `${x.d.state}: ${x.r.detail}`).join("; "));
+  recD9(rec, `${id}/table`, days);
   const t1 = stageStable(days.map((d) => ({ state: d.state, stage: d.stage, mySeat: d.mySeat })));
   rec(`${id}/table`, t1.id, t1.label, t1.ok, t1.detail);
   rec(`${id}/setup`, "S4", "단계 도달", true);
@@ -1733,8 +1750,9 @@ const game = (id, players, role, states) => (ctx) => gameFlow(ctx, { id, players
 const CLAIMS = ["claim-mine", "claim-other", "claim-done", "discussion"];
 
 export const FLOWS = [
-  { id: "lobby", run: lobbyFlow },
-  { id: "world", run: worldFlow },
+  // lobby·world 는 LOBBY_SIZES 6개 크기로 돈다: 기본 크기 4개에 더해 390x844·402x874 (run.mjs 의 extraSizes)
+  { id: "lobby", run: lobbyFlow, extraSizes: LOBBY_EXTRA_SIZES },
+  { id: "world", run: worldFlow, extraSizes: LOBBY_EXTRA_SIZES },
   { id: "police5", run: game("police5", 5, "police", [...CLAIMS, "chat", "night", "morning", "day-intro", "rolecard-btn", "next-day"]) },
   { id: "citizen4", run: game("citizen4", 4, "citizen", [...CLAIMS, "night", "morning", "day-intro", "rolecard-citizen", "next-day"]) },
   { id: "mafia8", run: game("mafia8", 8, "mafia", [...CLAIMS, "night", "morning", "day-intro", "rolecard-btn", "next-day"]) },

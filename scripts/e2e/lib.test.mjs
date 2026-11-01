@@ -57,6 +57,9 @@ import {
   redact,
   resolveTarget,
   stageStable,
+  LOBBY_EXTRA_SIZES,
+  LOBBY_SIZES,
+  WIDE_NAME_GRAPHEMES,
   NAMETAG_FONT_MIN,
   WORLD_MOVED_MIN,
   WORLD_RING_MAX_MS,
@@ -113,6 +116,7 @@ test("parseArgs: 인자 없음은 기본값 세 폭 기준 + 단 높이 probe 36
   assert.equal(a.url, null);
   assert.equal(a.only, null);
   assert.equal(a.shots, false);
+  assert.equal(a.sizesGiven, false);
   assert.deepEqual(
     a.sizes.map((s) => [s.w, s.h, s.label]),
     [
@@ -126,6 +130,7 @@ test("parseArgs: 인자 없음은 기본값 세 폭 기준 + 단 높이 probe 36
 
 test("parseArgs: --sizes 하나, --shots, --only, --url", () => {
   const a = parseArgs(["--sizes", "360x640", "--shots", "--only", "lobby", "--url", "http://localhost:5173"]);
+  assert.equal(a.sizesGiven, true);
   assert.equal(a.sizes.length, 1);
   assert.equal(a.sizes[0].label, "360x640");
   assert.equal(a.shots, true);
@@ -346,11 +351,17 @@ test("D3B_FLOOR_5_PLAYERS 는 98.0% 하나만 낮췄다(5명판 한정, 사용�
   assert.equal(PANEL_H, 157);
 });
 
-test("APPROVED_RELAXATIONS: 승인된 완화는 M1·D3a/D3b·D4·5명판 D3b 98.0%·변론 후보 패널 236 뿐이고, 모두 이유와 승인 날짜가 있다", () => {
-  assert.deepEqual(APPROVED_RELAXATIONS.map((r) => r.id), ["M1", "D3a/D3b", "D4", "D3b-5", "P-PANEL-236"]);
+test("APPROVED_RELAXATIONS: 승인된 완화는 M1·D3a/D3b·D4·5명판 D3b 98.0%·변론 후보 패널 236·결정 0056 의 D9·D3b(6자 이상 이름) 뿐이고, 모두 이유와 승인 근거가 있다", () => {
+  assert.deepEqual(APPROVED_RELAXATIONS.map((r) => r.id), ["M1", "D3a/D3b", "D4", "D3b-5", "P-PANEL-236", "D9-8ch", "D3b-8ch"]);
   for (const r of APPROVED_RELAXATIONS) {
     assert.ok(typeof r.reason === "string" && r.reason.trim().length > 0, JSON.stringify(r));
-    assert.ok(/^\d{4}-\d{2}-\d{2}$/.test(r.approved) || r.approved === "03.1 F7" || r.approved === "execution-v1/DC-defense-me", JSON.stringify(r));
+    assert.ok(/^\d{4}-\d{2}-\d{2}$/.test(r.approved) || ["03.1 F7", "execution-v1/DC-defense-me", "결정 0056"].includes(r.approved), JSON.stringify(r));
+  }
+  for (const id of ["D9-8ch", "D3b-8ch"]) {
+    const r = APPROVED_RELAXATIONS.find((x) => x.id === id);
+    assert.equal(r.approved, "결정 0056");
+    assert.match(r.reason, /v1\.0 고정 테이블 화면/);
+    assert.match(r.reason, /6 그래핌 이상/);
   }
   const five = APPROVED_RELAXATIONS.find((r) => r.id === "D3b-5");
   assert.equal(five.approved, "2026-10-26");
@@ -2225,8 +2236,8 @@ test("placementChecks P10: 측정값이 없으면 조용히 통과하지 않는�
   assert.match(placementChecks(null).detail, /측정값 없음/);
 });
 
-test("04-30: 닫기 — 승인 목록은 다섯 건이고 기준 수치는 그대로다", () => {
-  assert.deepEqual(APPROVED_RELAXATIONS.map((x) => x.id), ["M1", "D3a/D3b", "D4", "D3b-5", "P-PANEL-236"]);
+test("04-30·06-17: 닫기 — 승인 목록은 일곱 건(결정 0056 의 두 건 포함)이고 기준 수치는 그대로다", () => {
+  assert.deepEqual(APPROVED_RELAXATIONS.map((x) => x.id), ["M1", "D3a/D3b", "D4", "D3b-5", "P-PANEL-236", "D9-8ch", "D3b-8ch"]);
   assert.equal(FACE_RATIO, 0.45);
   assert.equal(PANEL_H, 157);
 });
@@ -2785,4 +2796,88 @@ test("pickTapTargets: minDist 이상만, 먼 순서, visible 이 거짓인 점�
   const hidden = pickTapTargets(centers, { x: 0, z: 0 }, { minDist: 3, visible: (x) => x < 5 });
   assert.deepEqual(hidden.map((p) => p.x), [4]);
   assert.deepEqual(pickTapTargets(centers, { x: 0, z: 0 }, { minDist: 99 }), []);
+});
+
+
+// ---- 06-17 Task 2: LOBBY_SIZES·extraSizes·결정 0056 완화 범위 ----
+
+test("LOBBY_SIZES: DEFAULT_SIZES 4개 + 390x844 + 402x874 여섯 개이고 LOBBY_EXTRA_SIZES 는 더해진 두 개다 (DEFAULT_SIZES 는 그대로)", () => {
+  assert.deepEqual(LOBBY_SIZES.map((x) => x.label), ["360x640", "390x664", "430x932", "360x560", "390x844", "402x874"]);
+  assert.deepEqual(LOBBY_SIZES.map((x) => [x.w, x.h]), [[360, 640], [390, 664], [430, 932], [360, 560], [390, 844], [402, 874]]);
+  assert.deepEqual(LOBBY_EXTRA_SIZES.map((x) => x.label), ["390x844", "402x874"]);
+  assert.deepEqual(DEFAULT_SIZES.map((x) => x.label), ["360x640", "390x664", "430x932", "360x560"]);
+});
+
+test("run.mjs: 흐름별 extraSizes 는 --sizes 를 주지 않았을 때만 더하고, FLOWS 의 lobby·world 만 갖는다", () => {
+  const run = readFileSync(new URL("./run.mjs", import.meta.url), "utf8");
+  assert.match(run, /extraSizes/);
+  assert.match(run, /!args\.sizesGiven/);
+  const flows = readFileSync(new URL("./flows.mjs", import.meta.url), "utf8");
+  const entries = [...flows.matchAll(/\{ id: "([a-z0-9-]+)", run: [A-Za-z(), ]+?(, extraSizes: LOBBY_EXTRA_SIZES)? \}/g)];
+  const withExtra = entries.filter((m) => m[2]).map((m) => m[1]);
+  assert.deepEqual(withExtra, ["lobby", "world"]);
+});
+
+const wideTag = (seat, left, name) => ({ seat, rect: rect(left, 100, 100, 22), name });
+
+test("결정 0056 D9: 6 그래핌 이상 이름이 낀 겹침만 완화(통과 + relaxed + 쌍 표시), 6자 미만끼리·이름 모름은 그대로 실패한다", () => {
+  assert.equal(WIDE_NAME_GRAPHEMES, 6);
+  const wide = tagsOverlap([wideTag(0, 100, "화면검사기"), wideTag(1, 150, "봇가나다라마바사")]);
+  assert.equal(wide.ok, true, wide.detail);
+  assert.equal(wide.relaxed, true);
+  assert.match(wide.detail, /승인 완화\(D9-8ch, 결정 0056\)/);
+  assert.match(wide.detail, /0-1/);
+  // 6자 정확히도 범위
+  assert.equal(tagsOverlap([wideTag(0, 100, "가나다라마바"), wideTag(1, 150, "가나다")]).relaxed, true);
+  // 5자끼리는 범위 밖: 그대로 실패
+  const narrow = tagsOverlap([wideTag(0, 100, "화면검사기"), wideTag(1, 150, "가나다라마")]);
+  assert.equal(narrow.ok, false);
+  assert.equal(narrow.relaxed, undefined);
+  assert.match(narrow.detail, /0-1/);
+  // 이름을 모르는 이름표(name 없음)는 범위 밖
+  assert.equal(tagsOverlap([{ seat: 0, rect: rect(100, 100, 100, 22) }, { seat: 1, rect: rect(150, 100, 100, 22) }]).ok, false);
+  // 범위 안 쌍과 범위 밖 쌍이 같이 있으면 범위 밖 쌍 때문에 실패
+  const mixed = tagsOverlap([wideTag(0, 100, "봇가나다라마바사"), wideTag(1, 150, "가나다"), wideTag(2, 400, "라마바"), wideTag(3, 450, "사아자")]);
+  assert.equal(mixed.ok, false);
+  assert.match(mixed.detail, /2-3/);
+  assert.doesNotMatch(mixed.detail, /0-1/);
+  // 겹치지 않으면 완화 표시 없이 통과
+  const none = tagsOverlap([wideTag(0, 100, "봇가나다라마바사"), wideTag(1, 300, "봇거너더러머버서")]);
+  assert.equal(none.ok, true);
+  assert.equal(none.relaxed, undefined);
+  assert.equal(none.detail, "");
+  // 겹침 기준(0.5px)은 그대로: 변이 맞닿거나 0.5px 이하 겹침은 겹침이 아니다
+  assert.equal(tagsOverlap([wideTag(0, 100, "봇가나다라마바사"), wideTag(1, 199.5, "봇거너더러머버서")]).relaxed, undefined);
+});
+
+test("결정 0056 D3b: 6 그래핌 이상 이름표의 바닥 미달만 완화(표시), 바닥 수치는 그대로이고 6자 미만 이름표의 미달은 실패한다", () => {
+  const withN = (n, ratio, lowSeat, nameOfLow) => {
+    const s = daySnap();
+    s.tagVisibility = Array.from({ length: n }, (_, i) => ({ seat: i, ratio: i === lowSeat ? ratio : 1 }));
+    s.tags = Array.from({ length: n }, (_, i) => ({ seat: i, rect: rect(20 + i * 5, 300, 72, 22), z: 1, lines: 1, hasDot: true, name: i === lowSeat ? nameOfLow : "가나다" }));
+    return dayById(dayChecks(s, size), "D3b");
+  };
+  const relaxed = withN(8, 0.4, 5, "봇가나다라마바사");
+  assert.equal(relaxed.ok, true, relaxed.detail);
+  assert.equal(relaxed.relaxed, true);
+  assert.match(relaxed.detail, /승인 완화\(D3b-8ch, 결정 0056\)/);
+  assert.match(relaxed.detail, /8명판 자리 5/);
+  assert.match(relaxed.detail, /8자/);
+  // 같은 미달이어도 이름이 짧으면 실패
+  const short = withN(8, 0.4, 5, "가나다라마");
+  assert.equal(short.ok, false);
+  assert.equal(short.relaxed, undefined);
+  assert.match(short.detail, /자리 5/);
+  // 이름을 모르면 실패
+  assert.equal(withN(8, 0.4, 5, undefined).ok, false);
+  // 바닥 이상이면 완화 표시도 없다 (바닥 수치 불변)
+  const fine = withN(8, 0.55, 5, "봇가나다라마바사");
+  assert.equal(fine.ok, true);
+  assert.equal(fine.relaxed, undefined);
+  assert.equal(fine.detail, "");
+  // 이미지 미로드는 이름과 무관하게 실패
+  const s = daySnap();
+  s.tagVisibility = [{ seat: 0, ratio: null }];
+  s.tags = [{ seat: 0, rect: rect(20, 300, 72, 22), z: 1, lines: 1, hasDot: true, name: "봇가나다라마바사" }];
+  assert.equal(dayById(dayChecks(s, size), "D3b").ok, false);
 });

@@ -567,7 +567,7 @@ export async function readStage(page) {
         rect: rect(el),
         spotlit: el.classList.contains("mf-dt__seat--spotlit"),
       })),
-      tags: [...document.querySelectorAll(".mf-dt__tag")].map((el) => ({ seat: Number(el.getAttribute("data-seat")), rect: rect(el) })),
+      tags: [...document.querySelectorAll(".mf-dt__tag")].map((el) => ({ seat: Number(el.getAttribute("data-seat")), rect: rect(el), name: el.getAttribute("title") ?? "" })),
     };
   });
 }
@@ -671,6 +671,7 @@ export async function collectSnapshot(page) {
       const tags = tagEls.map((el) => ({
         seat: Number(el.getAttribute("data-seat")),
         rect: rectOf(el),
+        name: el.getAttribute("title") ?? "", // 결정 0056 완화 범위(6 그래핌 이상 이름) 판정용 — 닉네임은 title 에만 있다
         z: zOf(el),
         lines: el.children.length,
         hasDot: !!el.querySelector(".mf-dt__dot"),

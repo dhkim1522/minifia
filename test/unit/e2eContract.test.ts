@@ -1,10 +1,14 @@
 // E2E 순수 도우미(scripts/e2e/lib.mjs)와 앱 상수의 동일성 (05-05, T-05-12).
 // 두 목록이 어긋나면 UX1(안내·타이머 검사)이 거짓 통과·거짓 실패한다 — scenes.test.ts 의 EXPECTED_SCENE 비교와 같은 방식.
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import { BAR_MASK } from "../../shared/game/map";
 import { candidateRevealMs } from "../../shared/game/phases";
+import { NICKNAME_MAX_GRAPHEMES, countGraphemes } from "../../shared/nickname";
 import { TIMELESS_PHASES } from "../../src/game/scenes";
 import { BLANK_TAP_SLOP_PX } from "../../src/game/blankTap";
 import { EXEC_INTRO_MS, VERDICT_TEXT } from "../../src/game/verdict";
+import { STAGE_SIZES } from "../../src/world/camera";
 // 타입 선언이 없는 .mjs 다(allowJs 없음).
 // @ts-expect-error -- 선언 없는 스크립트 모듈
 import * as e2eLib from "../../scripts/e2e/lib.mjs";
@@ -38,5 +42,47 @@ describe("E2E 의 후보 선택 안내·빈 곳 여유 사본 (결정 0040)", ()
 
   it("BLANK_TAP_E2E_MARGIN 은 앱 여유(BLANK_TAP_SLOP_PX)의 두 배 이상이다 (측정 점이 분명히 빈 곳)", () => {
     expect((e2eLib as { BLANK_TAP_E2E_MARGIN: number }).BLANK_TAP_E2E_MARGIN).toBeGreaterThanOrEqual(2 * BLANK_TAP_SLOP_PX);
+  });
+});
+
+describe("E2E 의 로비 크기 목록과 앱 상수 (06-17, 결정 0052)", () => {
+  type Size = { w: number; h: number; label: string };
+  const lib = e2eLib as { LOBBY_SIZES: readonly Size[]; DEFAULT_SIZES: readonly Size[]; LOBBY_EXTRA_SIZES: readonly Size[] };
+
+  it("LOBBY_SIZES 의 w·h·label 이 src/world/camera.ts 의 STAGE_SIZES 와 같다 (순서까지)", () => {
+    expect(lib.LOBBY_SIZES.length).toBe(STAGE_SIZES.length);
+    expect(lib.LOBBY_SIZES.map((s) => ({ w: s.w, h: s.h, label: s.label }))).toEqual(STAGE_SIZES.map((s) => ({ w: s.w, h: s.h, label: s.label })));
+  });
+
+  it("LOBBY_SIZES 는 DEFAULT_SIZES(v1.0 게임 흐름, 그대로 4개) + 390x844 + 402x874 이고 LOBBY_EXTRA_SIZES 는 그 두 개다", () => {
+    expect(lib.DEFAULT_SIZES.map((s) => s.label)).toEqual(["360x640", "390x664", "430x932", "360x560"]);
+    expect(lib.LOBBY_SIZES.slice(0, lib.DEFAULT_SIZES.length)).toEqual([...lib.DEFAULT_SIZES]);
+    expect(lib.LOBBY_EXTRA_SIZES.map((s) => s.label)).toEqual(["390x844", "402x874"]);
+  });
+});
+
+describe("E2E 가 shared/game/map.ts 원문에서 읽는 걸을 수 있는 칸 (06-17)", () => {
+  const lib = e2eLib as { parseBarMask: (src: string) => string[]; walkableCenters: (rows: string[]) => { x: number; z: number }[]; graphemeCount: (t: string) => number };
+
+  it("parseBarMask(map.ts 원문) 이 BAR_MASK 와 같다 — E2E 가 목적지를 고르는 마스크가 앱의 것과 어긋나지 않는다", () => {
+    const source = readFileSync(new URL("../../shared/game/map.ts", import.meta.url), "utf8");
+    expect(lib.parseBarMask(source)).toEqual([...BAR_MASK]);
+  });
+
+  it("walkableCenters 의 칸 수가 BAR_MASK 의 '.' 개수와 같고 모든 중심이 −6.75 ~ 6.75 안이다", () => {
+    const dots = BAR_MASK.join("").split(".").length - 1;
+    const centers = lib.walkableCenters([...BAR_MASK]);
+    expect(centers.length).toBe(dots);
+    for (const c of centers) {
+      expect(Math.abs(c.x)).toBeLessThanOrEqual(6.75);
+      expect(Math.abs(c.z)).toBeLessThanOrEqual(6.75);
+    }
+  });
+
+  it("E2E 의 graphemeCount 가 앱의 countGraphemes 와 같은 값을 낸다 (8자 닉네임 경계)", () => {
+    for (const t of ["방장이름여덟글자", "😀😃😄😁😆😅🤣😂", "화면검사기", "e\u0301", "가나다라마바사아", "ab"]) {
+      expect(lib.graphemeCount(t)).toBe(countGraphemes(t));
+    }
+    expect(lib.graphemeCount("방장이름여덟글자")).toBe(NICKNAME_MAX_GRAPHEMES);
   });
 });
