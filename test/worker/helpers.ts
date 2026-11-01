@@ -2,7 +2,7 @@
 import { env, exports } from "cloudflare:workers";
 import { evictDurableObject, runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
 import { expect } from "vitest";
-import type { CreateRoomResponse, PhaseId, RoleId, RoomView, ServerMessage } from "../../shared/protocol";
+import type { ChatLineWire, CreateRoomResponse, PhaseId, RoleId, RoomView, ServerMessage } from "../../shared/protocol";
 
 export interface TestSocket {
   ws: WebSocket;
@@ -225,7 +225,7 @@ export async function advanceTo(code: string, sockets: TestSocket[], phase: Phas
 
 /**
  * advanceTo 와 같지만 DO 를 evict 하지 않는다 — 마감만 과거로 옮기고(저장소와 메모리 둘 다) 알람을 돌린다(07-11).
- * 채팅 줄 번호(chatLog)와 전송 기록(chatRates)은 DO 메모리에만 있어(저장·복원은 07-14) evict 하면 1 로 돌아간다.
+ * 채팅 전송 기록(chatRates)은 DO 메모리에만 있어 evict 하면 비고, 줄(chatLog)은 07-14 부터 저장소에서 복원되지만 evict 없이 넘기는 쪽이 단계 넘김 시험을 단순하게 둔다.
  * 줄 번호가 단계를 넘어 이어지는 시험이 이 함수를 쓴다.
  */
 export async function advanceToKeep(code: string, sockets: TestSocket[], phase: PhaseId): Promise<void> {
@@ -480,3 +480,41 @@ export async function resetChatRates(code: string): Promise<void> {
     (instance["chatRates"] as Map<string, unknown>).clear();
   });
 }
+
+// ---- 7페이즈 채팅 보관·복원 도우미(07-14) ----
+
+/** storage 의 chat: 키 전부(키 오름차순). 줄 하나가 키 하나(결정 0058-1). */
+export async function chatKeysOf(code: string): Promise<string[]> {
+  return Object.keys(await chatRecordsOf(code));
+}
+
+/** storage 의 chat: 레코드(키 -> 값). 값은 ChatRecord 모양(g·ch·seq·seat·text·at·n·r). */
+export async function chatRecordsOf(code: string): Promise<Record<string, Record<string, unknown>>> {
+  const out: Record<string, Record<string, unknown>> = {};
+  await runInDurableObject(env.ROOM.getByName(code), async (_i, state) => {
+    const listed = await state.storage.list<Record<string, unknown>>({ prefix: "chat:" });
+    for (const [key, value] of listed) out[key] = value;
+  });
+  return out;
+}
+
+/** 소켓이 받은 모든 프레임을 읽은 위치와 상관없이 해석한 것. */
+export function framesOf(sock: TestSocket): ServerMessage[] {
+  return sock.frames.map(parseFrame);
+}
+
+/** 프레임 목록에서 마지막 chatLog 프레임의 줄. chatLog 가 없으면 null(빈 배열과 구별한다). */
+export function chatLogOf(msgs: ServerMessage[]): ChatLineWire[] | null {
+  const frames = msgs.filter((m): m is Extract<ServerMessage, { t: "chatLog" }> => m.t === "chatLog");
+  return frames.length === 0 ? null : frames[frames.length - 1]!.lines;
+}
+
+/** hello 를 보내고 chatLog 프레임이 올 때까지 기다려 그 줄을 돌려준다(state·snap 은 소켓의 frames 에 남는다). */
+export async function helloForLog(sock: TestSocket, token: string): Promise<ChatLineWire[]> {
+  send(sock, { t: "hello", token });
+  const frame = (await nextFrame(sock, (m) => m.t === "chatLog")) as Extract<ServerMessage, { t: "chatLog" }>;
+  return frame.lines;
+}
+
+/** 줄을 'ch/seat/seq/text' 한 줄 문자열로(실패 보고가 한 줄이어야 한다). */
+export const lineText = (l: ChatLineWire): string => `${l.ch}/${l.seat}/${l.seq}/${l.text}`;
