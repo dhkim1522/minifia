@@ -1,7 +1,7 @@
 // 화면 E2E 흐름(결정 0025): 흐름마다 새 테스트 방 하나와 방장 페이지 하나. 검사 ID 는 계획 261025-h1j 의 "검사 목록" 과 같다.
 // 결과는 { scenario: "흐름/상태", size, id, label, ok, detail } 로 ctx.results 에 쌓인다.
 import { join } from "node:path";
-import { mkdirSync } from "node:fs";
+import { mkdirSync, readFileSync } from "node:fs";
 import {
   SetupError,
   armIntroWatch,
@@ -16,7 +16,9 @@ import {
   createTestRoom,
   findBlankScenePoint,
   findTagPassThroughPoint,
+  hitsInputSurface,
   inspectSeat,
+  joinTestRoom,
   leaveFromResult,
   leaveLobby,
   openChatHistory,
@@ -27,6 +29,10 @@ import {
   pickCandidate,
   pickChip,
   readAtmosphere,
+  readLobbyFrame,
+  readWorld,
+  sampleWorld,
+  screensOfWorld,
   readBackdropLayers,
   readGuide,
   readJoinFit,
@@ -50,9 +56,11 @@ import {
   startGame,
   tapAt,
   tapSeat,
+  tapWorld,
   voteAs,
   waitBackdropStable,
   waitPhaseIn,
+  waitWorldReady,
 } from "./browser.mjs";
 import {
   INTRO_GONE_MS,
@@ -80,7 +88,6 @@ import {
   introChecks,
   joinFitChecks,
   journalChecks,
-  lobbyShapeChecks,
   lineCount,
   livingRoleArtChecks,
   morningCardIssues,
@@ -98,6 +105,15 @@ import {
   tagsOverlap,
   turnChecks,
   crownChecks,
+  lobbyHeaderChecks,
+  lobbyStartChecks,
+  nameTagFitChecks,
+  ownTagInStageChecks,
+  parseBarMask,
+  pickTapTargets,
+  tagStackChecks,
+  walkableCenters,
+  worldSyncChecks,
   vignetteChecks,
   voidCardChecks,
   voteChecks,
@@ -108,15 +124,25 @@ import {
 
 export const OUT_DIR = new URL("./out/", import.meta.url).pathname;
 const HOST_NICK = "화면검사기";
+/** lobby·world 흐름의 방장 닉네임: 전각 8자(결정 0052-2·0056 c) — 내 이름표 "… (나)" 가 가장 넓은 한글 경우다. */
+const LOBBY_HOST_NICK = "방장이름여덟글자";
+/** world 흐름의 손님 닉네임: 전각 8자. */
+const WORLD_GUEST_NICK = "손님이름여덟글자";
+/** 내 이름표 폭 측정 전용 손님: 이모지 8개(06-12 가 약 202px 로 쟀다). 통과·실패에 쓰지 않고 잰 값만 기록한다. */
+const EMOJI_NICK = "😀😃😄😁😆😅🤣😂";
 /** spec4: 방장이 첫 밤에 탈락할 때까지 같은 방에서 다시 시작하는 최대 횟수 */
 const SPEC_MAX_NIGHTS = 8;
 
 /** 검사 한 줄을 쌓는다. */
 function recorder(ctx) {
-  return (scenario, id, label, ok, detail = "") => {
-    ctx.results.push({ scenario, size: ctx.size.label, id, label, ok: !!ok, detail: ok ? "" : String(detail) });
+  // keep: 통과 행에도 내용을 남긴다(승인 완화가 적용된 행, 참고 측정 행). 기본은 통과 행의 내용을 비운다.
+  return (scenario, id, label, ok, detail = "", keep = false) => {
+    ctx.results.push({ scenario, size: ctx.size.label, id, label, ok: !!ok, detail: ok && !keep ? "" : String(detail) });
   };
 }
+
+/** 판정이 아닌 참고 측정 행(통과, 내용 있음). 예: 이름표 폭, 탭 지연 값. */
+const infoRow = (ctx, scenario, id, label, detail) => recorder(ctx)(scenario, id, label, true, detail, true);
 
 /** 비동기 확인을 검사 결과 { ok, detail } 로 바꾼다(시간 초과·오류는 실패 + 이유). */
 export async function attempt(fn) {
@@ -131,9 +157,9 @@ export async function attempt(fn) {
 }
 
 /** 방 만들기 → 방장 페이지 → S1·S2. */
-export async function startHost(ctx, flowId) {
+export async function startHost(ctx, flowId, { nickname = HOST_NICK } = {}) {
   const rec = recorder(ctx);
-  const room = await createTestRoom(ctx.origin, HOST_NICK);
+  const room = await createTestRoom(ctx.origin, nickname);
   ctx.secrets.push(room.token);
   ctx.roomCode = room.code; // 링크 참가 probe(UX2-J)용. 방 코드는 비밀이 아니다 — 토큰은 남기지 않는다
   const host = await openHostPage(ctx.browser, { origin: ctx.origin, code: room.code, token: room.token, size: ctx.size, dpr: ctx.shots ? 2 : 1, mobile: ctx.size.mobile !== false });
@@ -162,36 +188,70 @@ export async function checkState(ctx, flowId, state) {
 
 const sameRect = (a, b) => Math.abs(a.left - b.left) < 0.01 && Math.abs(a.top - b.top) < 0.01 && Math.abs(a.width - b.width) < 0.01;
 
-// ---- lobby ----
+// ---- lobby (맵 로비, 06-17) ----
+
+/** 사진 저장 폴더를 만들고 이 흐름의 사진 경로를 돌려준다. */
+const shotPath = (ctx, name) => {
+  mkdirSync(OUT_DIR, { recursive: true });
+  return join(OUT_DIR, `${name}-${ctx.size.label}.png`);
+};
+
+/** 내 이름표(data-me)의 사각형 폭을 참고 행(NT2)으로 남긴다 — NAMETAG_MAX_W 180 과 견줄 수 있게. 통과·실패 판정이 아니다. */
+function recordMyTagWidth(ctx, scenario, world, note = "") {
+  const me = world.tags.find((t) => t.me);
+  infoRow(ctx, scenario, "NT2", "내 이름표 폭 기록(참고, 판정 아님)", me ? `${Math.round(me.rect.width * 10) / 10}px (NAMETAG_MAX_W 180)${note}` : "내 이름표 없음");
+}
 
 async function lobbyFlow(ctx) {
   const rec = recorder(ctx);
   const { w, h } = ctx.size;
-  const host = await startHost(ctx, "lobby");
+  const host = await startHost(ctx, "lobby", { nickname: LOBBY_HOST_NICK });
   const { page, tracker } = host;
+  await waitWorldReady(page, 1);
   await settle(page);
 
-  // 대기실, 시트 닫힘
+  // 대기실 1명, 시트 닫힘: G · 헤더 L7 · [시작] L8 · 이름표 NT1 · 헤더 글씨 대비 H1 · 안내 UX1 · 문서 높이 UX2
   const s1 = await checkState(ctx, "lobby", "lobby");
-  recOne(rec, "lobby/lobby", crownChecks(s1, { expect: 1 })); // W1: 방장 왕관은 대기실에만 정확히 하나
-  await stageChecks(ctx, "lobby", "lobby", "lobby", { expectTimer: false }); // B1 배경 장면 · H1 헤더 글씨 대비 (대기실에는 타이머가 없다)
+  const frame1 = await readLobbyFrame(page);
+  recOne(rec, "lobby/lobby", lobbyHeaderChecks(frame1.header, { w, h }));
+  recOne(rec, "lobby/lobby", lobbyStartChecks(frame1.start, { n: 1 }));
+  rec("lobby/lobby", "L9", "단계 이름은 [대기실]", frame1.title === "대기실", `제목 "${frame1.title}"`);
+  const world1 = await readWorld(page);
+  recOne(rec, "lobby/lobby", nameTagFitChecks(world1.tags, { expectTexts: [`${LOBBY_HOST_NICK} (나)`] }));
+  recordMyTagWidth(ctx, "lobby/lobby", world1);
+  recOne(rec, "lobby/lobby", headerContrastChecks(await readHeaderContrast(page), { expectTimer: false })); // H1: 위쪽 가림막 위에서도 4.5:1
+  const g1 = await readGuide(page);
+  recOne(rec, "lobby/lobby", guideChecks(g1, { phase: "lobby" }));
+  recOne(rec, "lobby/lobby", docHeightChecks(g1, { h }));
+
+  // 방 코드는 헤더에 없고 공유 시트 안에서만 보인다
+  const share = await attempt(async () => {
+    const headerText = await page.locator(".mf-lobby__header").innerText();
+    if (headerText.includes(ctx.roomCode)) return { ok: false, detail: "헤더에 방 코드가 보임" };
+    await page.locator('.mf-lobby__header [aria-label="공유"]').click();
+    await page.waitForSelector("dialog[open]", { timeout: 3000 });
+    const text = await page.locator("dialog[open]").first().innerText();
+    const inSheet = text.includes(ctx.roomCode) || (await page.locator("dialog[open] input").first().inputValue().catch(() => "")).includes(ctx.roomCode);
+    await page.locator('dialog[open] [aria-label="닫기"]').first().click();
+    await page.waitForSelector("dialog[open]", { state: "detached", timeout: 3000 });
+    return { ok: inSheet, detail: "공유 시트 안에 방 코드가 없음" };
+  });
+  rec("lobby/lobby", "L10", "방 코드는 공유 시트 안에서만", share.ok, share.detail);
+
+  // [테스트] 자리(L1·L2 의 새 판): 헤더 아래 왼쪽, 눌림, 다른 조작과 안 겹침
   const tt = s1.tt;
   rec("lobby/lobby", "L1", "[테스트] 버튼이 보임", !!tt && tt.rect.width > 0 && tt.rect.height > 0 && rectInside(tt.rect, { left: 0, top: 0, width: w, height: h }) && tt.hit, tt ? `rect ${Math.round(tt.rect.left)},${Math.round(tt.rect.top)} ${Math.round(tt.rect.width)}x${Math.round(tt.rect.height)}, hit ${tt.hit}` : "버튼 없음");
   const clashes = tt ? s1.interactive.filter((e) => !sameRect(e.rect, tt.rect) && rectsOverlap(e.rect, tt.rect)).map((e) => e.desc) : ["버튼 없음"];
   rec("lobby/lobby", "L2", "[테스트]가 다른 조작과 안 겹침", clashes.length === 0, `겹침: ${clashes.join(", ")}`);
-
-  // 장면 상자·테이블(결정 0028): 인원 1·2·3·5 에서 양옆 간격 T2, 둘이면 마주 봄·셋이면 삼각 L6 을 보고, 끝에서 T1(입장해도 늘어나지 않음)
-  const stages = [];
-  const grabStage = async (state, waitMs = 0) => {
-    if (waitMs > 0) await sleep(waitMs);
-    const stage = await readStage(page);
-    const mySeat = tracker.last()?.me?.seat ?? -1;
-    const n = tracker.last()?.players?.length ?? 0;
-    stages.push({ state, stage, mySeat });
-    recOne(rec, "lobby/stage", feltGapChecks(stage));
-    recOne(rec, "lobby/stage", lobbyShapeChecks(stage, { n, mySeat }));
-  };
-  await grabStage("인원 1");
+  const slot = frame1.test;
+  const headerBottom = frame1.header.leave ? frame1.header.leave.rect.bottom : 0;
+  rec(
+    "lobby/lobby",
+    "L11",
+    "[테스트] 자리: 헤더 아래·왼쪽",
+    !!slot && slot.rect.top >= headerBottom - 0.5 && slot.rect.left >= 0 && slot.rect.left <= w / 2 && slot.rect.height + 0.5 >= 44 && slot.rect.width + 0.5 >= 44,
+    slot ? `rect ${Math.round(slot.rect.left)},${Math.round(slot.rect.top)} ${Math.round(slot.rect.width)}x${Math.round(slot.rect.height)}, 헤더 버튼 아래 ${Math.round(headerBottom)}` : "측정값 없음",
+  );
 
   // 시트 열림
   await openTestSheet(page);
@@ -215,27 +275,30 @@ async function lobbyFlow(ctx) {
   }
   rec("lobby/sheet", "L3", "봇 줄 한 줄·[−][+] 44px", l3.ok, l3.detail);
 
-  // [봇 늘리기] 두 번: 인원 2(마주 봄), 인원 3(삼각). 입장 전이(420ms)가 끝나고 자리가 새 등간격 자리로 미끄러진 뒤에 잰다.
+  // 인원이 늘 때마다 [시작] 상태(2·3명 흐림, 4명 활성)와 이름표(말줄임 없음)를 본다. 새 이름표가 나타나는 연출(420ms)이 끝난 뒤에 잰다.
+  const stepTo = async (n, scenario) => {
+    await tracker.waitFor((v) => v.players.length === n, 3000, `인원 ${n}`);
+    await waitWorldReady(page, n);
+    await sleep(500);
+    recOne(rec, scenario, lobbyStartChecks((await readLobbyFrame(page)).start, { n }));
+    recOne(rec, scenario, nameTagFitChecks((await readWorld(page)).tags));
+  };
   const grow = await attempt(async () => {
-    for (const n of [2, 3]) {
+    for (const n of [2, 3, 4]) {
       await clickInDialog(page, "테스트 도구", "봇 늘리기");
-      await tracker.waitFor((v) => v.players.length === n, 3000, `인원 ${n}`);
-      await grabStage(`인원 ${n}`, 700);
+      await stepTo(n, `lobby/인원 ${n}`);
     }
   });
-  if (!grow.ok) rec("lobby/stage", "L6", "봇 늘리기로 인원 2·3 만들기", false, grow.detail);
+  if (!grow.ok) rec("lobby/인원", "L4", "봇 늘리기로 인원 2·3·4 만들기", false, grow.detail);
 
   // 5명 채우기
   await clickInDialog(page, "테스트 도구", "5명 채우기");
   const l4 = await attempt(async () => {
     await tracker.waitFor((v) => v.players.length === 5, 3000, "인원 5");
-    await page.waitForFunction(() => document.querySelector(".mf-tt-sheet__count")?.textContent?.trim() === "4명" && document.querySelector(".mf-lobby__count")?.textContent?.trim() === "5 / 8명", null, { timeout: 3000 });
+    await page.waitForFunction(() => document.querySelector(".mf-tt-sheet__count")?.textContent?.trim() === "4명", null, { timeout: 3000 });
   });
   rec("lobby/sheet", "L4", "5명 채우기", l4.ok, l4.detail);
-  if (l4.ok) {
-    await grabStage("인원 5", 700);
-    recOne(rec, "lobby/stage", stageStable(stages));
-  }
+  if (l4.ok) await stepTo(5, "lobby/인원 5");
 
   // [+] / [−]
   const l5 = await attempt(async () => {
@@ -247,6 +310,26 @@ async function lobbyFlow(ctx) {
     await page.waitForFunction(() => document.querySelector(".mf-tt-sheet__count")?.textContent?.trim() === "4명", null, { timeout: 3000 });
   });
   rec("lobby/sheet", "L5", "[+]/[−] 로 숫자가 바뀜", l5.ok, l5.detail);
+
+  // 8명: 점 8개가 모두 켜지고, 8자 이름 8개가 한 맵에서 잘리지 않는다 + 겹친 이름표는 앞뒤가 정해진다
+  const full = await attempt(async () => {
+    await setBots(page, tracker, 7);
+    await tracker.waitFor((v) => v.players.length === 8, 3000, "인원 8");
+    await waitWorldReady(page, 8);
+    await sleep(500);
+  });
+  if (!full.ok) rec("lobby/인원 8", "L4", "인원 8 만들기", false, full.detail);
+  else {
+    const frame8 = await readLobbyFrame(page);
+    recOne(rec, "lobby/인원 8", lobbyStartChecks(frame8.start, { n: 8 }));
+    const world8 = await readWorld(page);
+    recOne(rec, "lobby/인원 8", nameTagFitChecks(world8.tags, { expectTexts: [`${LOBBY_HOST_NICK} (나)`] }));
+    recOne(rec, "lobby/인원 8", tagStackChecks(world8.tags));
+    const g8 = await checkState(ctx, "lobby", "인원 8");
+    void g8;
+    // 8자 이름 8명 사진: 360 폭은 늘 남긴다(맨 앞 이름표가 읽히는지는 backstop 으로 사람이 본다 — 봇은 걸음을 조종할 수 없어 한 점에 모을 수 없다)
+    if (w <= 360 || ctx.shots) await shot(page, shotPath(ctx, "lobby-8"));
+  }
 
   // 시트 닫힘
   const t2 = await attempt(async () => {
@@ -299,6 +382,148 @@ async function joinLinkProbe(ctx) {
   }
 }
 
+// ---- world (두 페이지가 같은 방 로비에서 서로를 보고 같은 경로로 걷는다, 06-17) ----
+
+/** shared/game/map.ts 원문에서 걸을 수 있는 칸 중심을 읽는다(.mjs 가 TS 를 직접 import 하지 않는다 — e2eContract 테스트가 원문 읽기가 BAR_MASK 와 같음을 고정한다). */
+function walkableCentersOfApp() {
+  const source = readFileSync(new URL("../../shared/game/map.ts", import.meta.url), "utf8");
+  return walkableCenters(parseBarMask(source));
+}
+
+/** 구간 { p: [x0,z0,x1,z1,…] 1/100 단위, v: 단위/초 × 100 } 을 걷는 데 걸리는 시간(ms). */
+function segmentDurationMs(seg) {
+  let len = 0;
+  for (let i = 0; i + 3 < seg.p.length; i += 2) len += Math.hypot(seg.p[i + 2] - seg.p[i], seg.p[i + 3] - seg.p[i + 1]);
+  return (len / seg.v) * 1000;
+}
+
+/** 두 페이지에 같은 방의 손님을 붙인다(HTTP 참가 → 손님 페이지). 토큰은 ctx.secrets 에 넣어 출력에서 가린다. */
+async function openGuest(ctx, nickname) {
+  const joined = await joinTestRoom(ctx.origin, ctx.roomCode, nickname);
+  ctx.secrets.push(joined.token);
+  const guest = await openHostPage(ctx.browser, { origin: ctx.origin, code: joined.code, token: joined.token, size: ctx.size, dpr: 1, mobile: ctx.size.mobile !== false, guest: true });
+  return { guest, seat: joined.seat };
+}
+
+async function worldFlow(ctx) {
+  const rec = recorder(ctx);
+  const sc = "world/walk";
+  const host = await startHost(ctx, "world", { nickname: LOBBY_HOST_NICK });
+  const { page: hp, tracker: ht } = host;
+  const { guest: g, seat: gSeat } = await openGuest(ctx, WORLD_GUEST_NICK);
+  try {
+    const { page: gp, tracker: gt } = g;
+    const hSeat = ht.last().me.seat;
+    await Promise.all([ht.waitFor((v) => v.players.length === 2, 5000, "방장 쪽 인원 2"), gt.waitFor((v) => v.players.length === 2, 5000, "손님 쪽 인원 2")]);
+    await Promise.all([waitWorldReady(hp, 2), waitWorldReady(gp, 2)]);
+    await Promise.all([settle(hp), settle(gp)]);
+
+    // 서로의 이름표: 각자 화면에 자기 이름표(나)와 상대 이름표가 보이고 말줄임이 없다
+    const [hw, gw] = await Promise.all([readWorld(hp), readWorld(gp)]);
+    const seen = (w, mine, other) => w.tags.length === 2 && w.tags.some((t) => t.me && t.text === `${mine} (나)`) && w.tags.some((t) => !t.me && t.text === other);
+    rec(sc, "W0", "두 페이지가 서로의 이름표를 봄", seen(hw, LOBBY_HOST_NICK, WORLD_GUEST_NICK) && seen(gw, WORLD_GUEST_NICK, LOBBY_HOST_NICK), `방장 화면 ${hw.tags.map((t) => t.text).join("/")} · 손님 화면 ${gw.tags.map((t) => t.text).join("/")}`);
+    recOne(rec, sc, nameTagFitChecks(hw.tags, { expectTexts: [`${LOBBY_HOST_NICK} (나)`, WORLD_GUEST_NICK] }));
+    recOne(rec, sc, nameTagFitChecks(gw.tags, { expectTexts: [`${WORLD_GUEST_NICK} (나)`, LOBBY_HOST_NICK] }));
+    await checkState(ctx, "world", "lobby"); // 방장 화면의 G (콘솔 오류·가로 넘침·다른 출처 요청 없음)
+
+    // 목적지: 손님 현재 위치에서 3 단위 이상 먼, 두 페이지 화면에 모두 보이고 입력 면 위에 있는 걸을 수 있는 칸 중 가장 먼 곳
+    // (뒤에서 방장이 같은 점을 눌러 두 캐릭터를 한 점에 모으려면 방장 화면에서도 눌릴 수 있어야 한다)
+    const from = await sampleWorld(gp, gSeat);
+    if (!from) throw new SetupError("손님 위치를 읽지 못함(sample)");
+    const centers = walkableCentersOfApp();
+    const pad = 28;
+    const [gScreens, hScreens] = await Promise.all([screensOfWorld(gp, centers), screensOfWorld(hp, centers)]);
+    const inStage = (sc, st) => !!sc && !!st && Number.isFinite(sc.sx) && sc.sx > pad && sc.sx < ctx.size.w - pad && sc.sy > st.top + pad && sc.sy < st.bottom - pad;
+    const onScreen = centers.map((c, i) => ({ ...c, sx: gScreens[i]?.sx, sy: gScreens[i]?.sy, hx: hScreens[i]?.sx, hy: hScreens[i]?.sy })).filter((c, i) => inStage(gScreens[i], gw.stage) && inStage(hScreens[i], hw.stage));
+    const ranked = pickTapTargets(onScreen, from, { minDist: 3 });
+    const probe = ranked.slice(0, 40);
+    const [gHits, hHits] = await Promise.all([hitsInputSurface(gp, probe), hitsInputSurface(hp, probe.map((c) => ({ sx: c.hx, sy: c.hy })))]);
+    const target = probe.find((_, i) => gHits[i] && hHits[i]);
+    if (!target) throw new SetupError(`탭할 목적지를 찾지 못함(두 화면에 보이는 칸 ${onScreen.length}개, 3 단위 이상 먼 칸 ${ranked.length}개)`);
+
+    // 손님이 바닥을 한 번 누른다
+    const tap = await tapWorld(gp, gt, gSeat, target.x, target.z);
+    if (!tap.move) rec(sc, "W4", "탭 → 손님 구간 시작 500ms 이내", false, "3초 안에 내 구간이 오지 않음");
+    else {
+      // 방장 페이지도 같은 구간을 받을 때까지 기다린다(같은 t0)
+      await attempt(async () => {
+        const start = performance.now();
+        while (ht.moves.get(gSeat)?.t0 !== tap.move.t0) {
+          if (performance.now() - start > 3000) throw new Error("방장 페이지가 손님 구간을 받지 못함");
+          await sleep(10);
+        }
+      }).then((r) => {
+        if (!r.ok) rec(sc, "W2", "두 페이지 손님 위치 차", false, r.detail);
+      });
+      const seg = tap.move;
+      const dur = segmentDurationMs(seg);
+      rec(sc, "W5", "걷는 길이가 충분함(≥ 1.5초)", dur >= 1500, `구간 ${Math.round(dur)}ms (목적지까지 ${Math.round(Math.hypot(target.x - from.x, target.z - from.z) * 100) / 100} 단위)`);
+
+      // 걷는 동안 50ms 간격 5번: 같은 서버 시각 t 로 두 페이지의 손님 위치를 읽는다. t = 구간 출발 시각 + (구간을 받은 뒤 지난 시간)
+      const a = [];
+      const b = [];
+      for (let i = 0; i < 5; i++) {
+        const t = Math.round(seg.t0 + (performance.now() - seg.at));
+        const [pa, pb] = await Promise.all([sampleWorld(gp, gSeat, t), sampleWorld(hp, gSeat, t)]);
+        a.push({ kind: "walk", t, p: pa });
+        b.push({ kind: "walk", t, p: pb });
+        await sleep(50);
+      }
+      // 도착 뒤 한 번 (구간 끝 + 0.5초)
+      const tEnd = Math.round(seg.t0 + dur + 500);
+      const [ea, eb] = await Promise.all([sampleWorld(gp, gSeat, tEnd), sampleWorld(hp, gSeat, tEnd)]);
+      a.push({ kind: "arrived", t: tEnd, p: ea });
+      b.push({ kind: "arrived", t: tEnd, p: eb });
+      for (const r of worldSyncChecks({ a, b, ringMs: tap.ringMs, segmentMs: tap.segmentMs })) recOne(rec, sc, r);
+      const diffs = a.map((x, i) => (x.p && b[i].p ? Math.hypot(x.p.x - b[i].p.x, x.p.z - b[i].p.z) : Number.NaN));
+      infoRow(ctx, sc, "W9", "측정값 기록(참고, 판정 아님)", `링 ${tap.ringMs === null ? "없음" : `${Math.round(tap.ringMs * 10) / 10}ms`} · 구간 도착 ${tap.segmentMs === null ? "없음" : `${Math.round(tap.segmentMs)}ms`} · 위치 차 최대 ${Math.max(...diffs).toFixed(4)} 단위 · 구간 ${Math.round(dur)}ms`);
+      const off = ea ? Math.hypot(ea.x - target.x, ea.z - target.z) : Number.NaN;
+      rec(sc, "W6", "도착 위치가 누른 점", off <= 0.3, `도착 (${ea ? `${ea.x.toFixed(2)}, ${ea.z.toFixed(2)}` : "없음"}) ↔ 누른 점 (${target.x.toFixed(2)}, ${target.z.toFixed(2)})`);
+
+      // 도착하고 카메라가 따라잡은 뒤: 내 이름표와 내 발이 스테이지 사각형 안, 링은 사라짐
+      await sleep(Math.max(0, seg.at + dur + 1500 - performance.now()));
+      const arrived = await readWorld(gp);
+      const mine = arrived.tags.find((t) => t.me);
+      recOne(rec, "world/arrived", ownTagInStageChecks(mine?.rect ?? null, arrived.stage));
+      const foot = await screensOfWorld(gp, [await sampleWorld(gp, gSeat)]);
+      const footOk = !!foot[0] && !!arrived.stage && foot[0].sx >= 0 && foot[0].sx <= ctx.size.w && foot[0].sy >= arrived.stage.top && foot[0].sy <= arrived.stage.bottom;
+      rec("world/arrived", "W7", "카메라가 따라가 내 발이 스테이지 안", footOk, foot[0] ? `발 (${Math.round(foot[0].sx)}, ${Math.round(foot[0].sy)}) · 스테이지 ${Math.round(arrived.stage?.top ?? 0)}~${Math.round(arrived.stage?.bottom ?? 0)}` : "발 위치를 읽지 못함");
+      rec("world/arrived", "W8", "도착 뒤 목적지 링이 사라짐", arrived.ring === null, `data-ring ${arrived.ring}`);
+      recOne(rec, "world/arrived", nameTagFitChecks(arrived.tags));
+      if (ctx.shots) await shot(gp, shotPath(ctx, "world-guest-arrived"));
+
+      // 방장도 같은 점으로 걸어가 두 캐릭터가 한 점에 모인다: 겹친 이름표는 앞뒤가 하나로 정해진다(UI-SPEC E2)
+      const hostTap = await tapWorld(hp, ht, hSeat, target.x, target.z);
+      if (hostTap.move) {
+        await sleep(segmentDurationMs(hostTap.move) + 1200);
+        const stacked = await readWorld(hp);
+        recOne(rec, "world/stack", tagStackChecks(stacked.tags));
+        recOne(rec, "world/stack", nameTagFitChecks(stacked.tags));
+        if (w360(ctx) || ctx.shots) await shot(hp, shotPath(ctx, "world-stack"));
+      } else rec("world/stack", "NT3", "겹친 이름표는 앞뒤가 정해짐(z-index 가 서로 다름)", false, "방장 구간이 오지 않음");
+    }
+  } finally {
+    await g.context.close().catch(() => {});
+  }
+
+  // 참고 측정: 이모지 8개 닉네임 손님의 내 이름표 폭(판정 아님) — 06-12 가 약 202px 로 쟀다
+  const probe = await attempt(async () => {
+    const { guest: eg } = await openGuest(ctx, EMOJI_NICK);
+    try {
+      await waitWorldReady(eg.page, 3); // 방장 + 나간 손님(연결 끊김으로 자리가 남음) + 이모지 손님
+      await settle(eg.page);
+      recordMyTagWidth(ctx, "world/emoji", await readWorld(eg.page), " · 이모지 8개 + ' (나)'");
+    } finally {
+      await eg.context.close().catch(() => {});
+    }
+  });
+  if (!probe.ok) rec("world/emoji", "NT2", "내 이름표 폭 기록(참고, 판정 아님)", false, probe.detail);
+
+  await leaveLobby(hp);
+}
+
+const w360 = (ctx) => ctx.size.w <= 360;
+
 // ---- 게임 흐름(과제 2) ----
 
 /** 낮 장면 상태(claim·discussion·night·morning) 한 장: 스냅숏 + G + D1~D6·D8 + T2. 테이블 면·이름표·장면 상자는 흐름 끝의 D7·D9·T1 용으로 모아 둔다. */
@@ -315,7 +540,10 @@ async function dayState(ctx, flowId, state) {
   return { snap, mySeat };
 }
 
-/** 대기실·역할 배정 장면 한 장: 테이블 면·이름표·장면 상자를 흐름 끝의 D7·D9·T1 용으로 모아 둔다(스냅숏·G 는 안 돌린다). */
+/**
+ * 역할 배정 장면 한 장: 테이블 면·이름표·장면 상자를 흐름 끝의 D7·D9·T1 용으로 모아 둔다(스냅숏·G 는 안 돌린다).
+ * 대기실은 맵이라 고정 테이블이 없다 — 06-17 에서 대기실 호출과 대기실 전용 검사(왕관 W1·자리 모양 L6)를 지웠다.
+ */
 async function grabLobbyStage(ctx, state, waitMs = 0) {
   if (waitMs > 0) await sleep(waitMs);
   const stage = await readStage(ctx.host.page);
@@ -509,7 +737,7 @@ const mySeatOf = (tracker) => tracker.last()?.me?.seat ?? -1;
 const nickOf = (view, seat) => view?.players.find((p) => p.seat === seat)?.nickname ?? "";
 const jobNames = (view) => (view?.day?.roles ?? []).map((r) => ROLE_NAME[r]);
 const isDeadView = (view) => view?.players.find((p) => p.seat === view.me.seat)?.alive === false;
-const recOne = (rec, scenario, r) => rec(scenario, r.id, r.label, r.ok, r.detail);
+const recOne = (rec, scenario, r) => rec(scenario, r.id, r.label, r.ok, r.detail, r.relaxed === true);
 const recAll = (rec, scenario, list) => {
   for (const r of list) recOne(rec, scenario, r);
 };
@@ -654,8 +882,6 @@ async function gameFlow(ctx, { id, players, role, states }) {
   await chooseRole(page, tracker, role);
   // 결정성(04-32): 봇 처형 투표를 모두 반대로 고정 — 모든 skipTo 가 처형 없이 밤으로 가서 방장 탈락·종료 우연이 사라진다(UI-SPEC 15.1·15.4, P-13)
   await setBotVote(page, tracker, { exec: "no", pick: "random" });
-  // [게임 시작] 직전의 대기실 테이블: 이후 배정·낮·밤·아침과 같은 자리여야 한다(D7·D9·T1 이 함께 본다)
-  await grabLobbyStage(ctx, "lobby", 700);
   await startGame(page, tracker, { onAssigning: onAssigningOf(ctx, id) });
   await guideState(ctx, id, "role-reveal", "roleReveal"); // UX1·UX2 역할 확인(단계가 이미 지났으면 건너뛴다)
   ctx.stage = "play";
@@ -890,7 +1116,6 @@ async function voteFlow(ctx) {
   await setBots(page, tracker, 4);
   await chooseRole(page, tracker, "citizen");
   await setBotVote(page, tracker, { exec: "yes", pick: "other" });
-  await grabLobbyStage(ctx, "lobby", 700);
   await startGame(page, tracker, { onAssigning: onAssigningOf(ctx, id) });
   ctx.stage = "play";
   const v0 = tracker.last();
@@ -1128,7 +1353,6 @@ async function verdictRoom(ctx, id, { players, role, vote }) {
   await setBots(page, tracker, players - 1);
   await chooseRole(page, tracker, role);
   await setBotVote(page, tracker, vote);
-  await grabLobbyStage(ctx, "lobby", 700);
   await startGame(page, tracker, { onAssigning: onAssigningOf(ctx, id) });
   ctx.stage = "play";
   const v0 = tracker.last();
@@ -1510,6 +1734,7 @@ const CLAIMS = ["claim-mine", "claim-other", "claim-done", "discussion"];
 
 export const FLOWS = [
   { id: "lobby", run: lobbyFlow },
+  { id: "world", run: worldFlow },
   { id: "police5", run: game("police5", 5, "police", [...CLAIMS, "chat", "night", "morning", "day-intro", "rolecard-btn", "next-day"]) },
   { id: "citizen4", run: game("citizen4", 4, "citizen", [...CLAIMS, "night", "morning", "day-intro", "rolecard-citizen", "next-day"]) },
   { id: "mafia8", run: game("mafia8", 8, "mafia", [...CLAIMS, "night", "morning", "day-intro", "rolecard-btn", "next-day"]) },

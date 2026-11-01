@@ -193,7 +193,7 @@ export function WorldStage(props: WorldStageProps) {
         onPointerCancel={(e) => tracker.cancel(e.pointerId)}
       />
       <div ref={tagRef} className="mf-world__tags">
-        <ul className="mf-world__sr" aria-label={`방에 있는 사람 ${view.players.length}명`}>
+        <ul className="mf-world__sr mf-sr-only" aria-label={`방에 있는 사람 ${view.players.length}명`}>
           {view.players.map((p) => (
             <li key={p.seat}>{listLabel(p, mySeat)}</li>
           ))}

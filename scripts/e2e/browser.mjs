@@ -4,6 +4,9 @@
 import { chromium } from "playwright-core";
 import { BLANK_TAP_E2E_MARGIN, DECORATIVE_ALLOW, FONT_HOSTS, ROLE_NAME, TAP_ALLOW, TEXT_SIZE_ALLOW, blankPointsOf, redact, rgbP95Luminance } from "./lib.mjs";
 
+/** 맵 로비 테스트 훅(window.__mfWorld, 06-13)을 켜는 세션 저장소 키. src/world/testHooks.ts 의 WORLD_TEST_KEY 와 같다. */
+const WORLD_HOOK_KEY = "minifia:e2e";
+
 /** 준비 단계의 실패(연결·단계 도달·선택자 대기 시간 초과). 한 번 새 방으로 다시 돈다. 검사 실패와 다르다. */
 export class SetupError extends Error {
   constructor(message) {
@@ -32,17 +35,35 @@ export async function createTestRoom(origin, nickname) {
   return { code: data.code, token: data.token };
 }
 
+/** HTTP 로 방에 손님으로 들어간다(참가 API). 실패는 상태 코드만 담는다 — 토큰·본문을 싣지 않는다. */
+export async function joinTestRoom(origin, code, nickname) {
+  let res;
+  try {
+    res = await fetch(`${origin}/api/rooms/${code}/join`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ nickname }),
+    });
+  } catch (e) {
+    throw new SetupError(`참가 요청 실패: ${e instanceof Error ? e.name : "오류"}`);
+  }
+  if (res.status !== 200) throw new SetupError(`참가 응답 ${res.status}`);
+  const data = await res.json().catch(() => null);
+  if (!data || typeof data.token !== "string") throw new SetupError("참가 응답 모양이 다름");
+  return { code, token: data.token, seat: data.seat };
+}
+
 export function launchChrome(executablePath) {
   return chromium.launch({ executablePath, headless: true });
 }
 
 /**
  * 방장으로 붙은 휴대폰 크기 페이지를 연다.
- * 선택 인자(05-07): mobile = true(거짓이면 isMobile·hasTouch 를 꺼 데스크톱 창처럼 연다),
+ * 선택 인자(05-07): mobile = true(거짓이면 isMobile·hasTouch 를 꺼 데스크톱 창처럼 연다), guest = true(06-17: 방장이 아니라 손님으로 붙는다 — 방장 확인 대신 로비 도달을 기다린다),
  * initScripts = [] (세션 init 스크립트 다음에 순서대로 addInitScript 할 함수 또는 문자열 — 시험 컨텍스트에만 들어간다).
  * 돌려주는 값: { context, page, tracker, takeIssues, fontOk, fontDetail }
  */
-export async function openHostPage(browser, { origin, code, token, size, dpr, mobile = true, initScripts = [] }) {
+export async function openHostPage(browser, { origin, code, token, size, dpr, mobile = true, initScripts = [], guest = false }) {
   const context = await browser.newContext({
     viewport: { width: size.w, height: size.h },
     deviceScaleFactor: dpr,
@@ -78,6 +99,14 @@ export async function openHostPage(browser, { origin, code, token, size, dpr, mo
     },
     { code, token },
   );
+  // 맵 로비 테스트 훅(window.__mfWorld)과 소프트웨어 렌더러 허용은 ?e2e=1 세션 플래그가 켠다 — 주소를 바꾸지 않고 세션 저장소에만 쓴다(06-13).
+  await context.addInitScript((key) => {
+    try {
+      window.sessionStorage.setItem(key, "1");
+    } catch {
+      /* 저장소가 막힌 환경은 훅이 꺼진 채로 둔다 — 로비 검사가 측정값 없음으로 실패한다 */
+    }
+  }, WORLD_HOOK_KEY);
   for (const script of initScripts) await context.addInitScript(script);
 
   const page = await context.newPage();
@@ -126,7 +155,19 @@ export async function openHostPage(browser, { origin, code, token, size, dpr, mo
       }
     },
   };
+  // 로비 이동(06-17): 받은 world move 프레임(seat 별 마지막 구간 + 받은 시각)과 보낸 move 프레임의 시각만 센다 — 좌표 말고 토큰·신원은 싣지 않는다.
+  tracker.moves = new Map();
+  tracker.sentMoveAt = [];
+  tracker.moveSeq = 0;
   page.on("websocket", (ws) => {
+    ws.on("framesent", ({ payload }) => {
+      try {
+        const msg = JSON.parse(typeof payload === "string" ? payload : payload.toString("utf8"));
+        if (msg && msg.t === "move") tracker.sentMoveAt.push(performance.now());
+      } catch {
+        /* 무시 */
+      }
+    });
     ws.on("framereceived", ({ payload }) => {
       let msg;
       try {
@@ -137,12 +178,16 @@ export async function openHostPage(browser, { origin, code, token, size, dpr, mo
       if (msg && msg.t === "state" && msg.view) {
         tracker.view = msg.view;
         tracker.seq += 1;
+      } else if (msg && msg.t === "world" && msg.k === "move" && typeof msg.s === "number") {
+        tracker.moveSeq += 1;
+        tracker.moves.set(msg.s, { p: msg.p, t0: msg.t0, v: msg.v, at: performance.now(), n: tracker.moveSeq });
       }
     });
   });
 
   await page.goto(`${origin}/r/${code}`, { waitUntil: "domcontentloaded" });
-  await tracker.waitFor((v) => v.phase === "lobby" && v.me?.isHost === true && v.me?.testMode === true, 15_000, "방장으로 연결");
+  if (guest) await tracker.waitFor((v) => v.phase === "lobby" && v.me?.isHost === false, 15_000, "손님으로 연결");
+  else await tracker.waitFor((v) => v.phase === "lobby" && v.me?.isHost === true && v.me?.testMode === true, 15_000, "방장으로 연결");
 
   const fonts = await page.evaluate(async () => {
     await document.fonts.ready;
@@ -417,7 +462,7 @@ export async function waitBackdropStable(page, ms = 4000) {
 
 /**
  * H1: 헤더 제목·타이머 글씨 뒤의 실제 렌더 배경(막 포함)을 잰다.
- * (1) 제목(.mf-phasebar h1 · .mf-assign__bar h1 · .mf-lobby__code)과 타이머 숫자(.mf-timer__num)의 글자 사각형(Range)과 계산된 글자색을 읽고,
+ * (1) 제목(.mf-phasebar h1 · .mf-assign__bar h1 · .mf-lobby__header .mv-phase__title)과 타이머 숫자(.mf-timer__num)의 글자 사각형(Range)과 계산된 글자색을 읽고,
  * (2) 임시 <style> 로 그 글씨를 투명하게 하고(color·text-shadow·text-stroke) (3) 머리 영역을 스크린샷(CSS 1:1)으로 찍어 페이지에서 디코드(createImageBitmap + canvas, 새 패키지 없음)해
  * 글씨가 있던 사각형 안 픽셀을 평평한 RGB 로 돌려받고, (4) 임시 스타일을 지운다. 배경 휘도는 그 픽셀의 p95(lib.rgbP95Luminance).
  * 돌려주는 값: { items: [{ name, rect, color: [r,g,b], bgLum }] }. 제목이 보이지 않으면 null.
@@ -425,7 +470,7 @@ export async function waitBackdropStable(page, ms = 4000) {
 export async function readHeaderContrast(page) {
   const probe = await page.evaluate(() => {
     const defs = [
-      { name: "제목", sels: [".mf-phasebar h1", ".mf-assign__bar h1", ".mf-lobby__code"] },
+      { name: "제목", sels: [".mf-phasebar h1", ".mf-assign__bar h1", ".mf-lobby__header .mv-phase__title"] },
       { name: "타이머", sels: [".mf-timer__num"] },
     ];
     const items = [];
@@ -495,7 +540,7 @@ export function shot(page, path) {
 
 /**
  * 장면 상자·머리·하단 패널·테이블 면·캐릭터·이름표 사각형을 한 번의 evaluate 로 읽는다(T1·T2, 결정 0028).
- * 낮·밤·아침(.mf-dayscene), 대기실(.mf-lobby), 역할 배정(.mf-assign) 어느 화면이든 같은 모양이다 — 없으면 null.
+ * 낮·밤·아침(.mf-dayscene), 역할 배정(.mf-assign) 어느 화면이든 같은 모양이다 — 없으면 null. 맵 로비는 고정 테이블이 없어 여기서 읽지 않는다(readLobbyFrame·readWorld).
  * 글자·토큰·프레임은 싣지 않는다.
  */
 export async function readStage(page) {
@@ -513,9 +558,9 @@ export async function readStage(page) {
       return null;
     };
     return {
-      scene: rect(first(".mf-dayscene__scene", ".mf-lobby__scene", ".mf-assign__scene")),
-      header: rect(first(".mf-phasebar", ".mf-lobby__bar", ".mf-assign__bar")),
-      panel: rect(first(".mf-dayscene__panel", ".mf-lobby__sheet", ".mf-assign__panel")),
+      scene: rect(first(".mf-dayscene__scene", ".mf-assign__scene")),
+      header: rect(first(".mf-phasebar", ".mf-assign__bar")),
+      panel: rect(first(".mf-dayscene__panel", ".mf-assign__panel")),
       felt: rect(document.querySelector(".mf-dt__felt")),
       seats: [...document.querySelectorAll(".mf-dt__seat")].map((el) => ({
         seat: Number(el.getAttribute("data-seat")),
@@ -808,7 +853,7 @@ export async function collectSnapshot(page) {
         smallText,
         buttonTexts: [...document.querySelectorAll("button")].filter(visible).map((b) => (b.textContent || "").replace(/\s+/g, " ").trim()),
         mafiaLog: !!q('[aria-label="마피아 채팅"]'),
-        lobbyCount: (q(".mf-lobby__count")?.textContent || "").trim(),
+        lobbyCount: q("[data-lobby-start]")?.getAttribute("aria-label") ?? "",
         testSheet: ttSheet
           ? {
               sheet: rectOf(ttSheet),
@@ -822,6 +867,187 @@ export async function collectSnapshot(page) {
     },
     { decorative, tapAllow, textAllow },
   );
+}
+
+// ---- 맵 로비 읽기·조작 (06-17) ----
+
+/**
+ * 맵이 열리고(window.__mfWorld.status() === "ready") 방에 있는 사람 수만큼 이름표가 놓일 때(불투명도 > 0)까지 기다린다.
+ * 훅이 없으면(?e2e 세션 플래그가 안 켜짐) 또는 시간 안에 안 열리면 준비 실패(SetupError) — 새 방으로 한 번 다시 돈다.
+ */
+export async function waitWorldReady(page, expectPlayers, ms = 20_000) {
+  try {
+    await page.waitForFunction(
+      (n) => {
+        const w = window.__mfWorld;
+        if (!w || w.status() !== "ready") return false;
+        const tags = [...document.querySelectorAll(".mf-world__tag")];
+        return tags.length === n && tags.every((t) => Number(getComputedStyle(t).opacity) > 0.01);
+      },
+      expectPlayers,
+      { timeout: ms },
+    );
+  } catch {
+    const info = await page
+      .evaluate(() => ({ hook: !!window.__mfWorld, status: window.__mfWorld?.status?.() ?? null, tags: document.querySelectorAll(".mf-world__tag").length }))
+      .catch(() => ({ hook: false, status: null, tags: -1 }));
+    throw new SetupError(`맵이 열리지 않음 (훅 ${info.hook}, 상태 ${info.status}, 이름표 ${info.tags}/${expectPlayers}, ${ms / 1000}초)`);
+  }
+}
+
+/**
+ * 맵 로비의 이름표·스테이지·링을 한 번의 evaluate 로 읽는다. 닉네임 글자는 이름표 검사(NT1)에만 쓰고 토큰은 싣지 않는다.
+ * stage = 헤더 아래 ~ 아래 패널 위, 폭 전체(카메라가 내 캐릭터를 맞추는 사각형). tags: 이름표(.mv-tag) 사각형·글자 칸의 넘침·계산된 글자 크기·text-overflow·쌓임 순서(z).
+ */
+export async function readWorld(page) {
+  return page.evaluate(() => {
+    const rect = (el) => {
+      if (!el) return null;
+      const r = el.getBoundingClientRect();
+      return { left: r.left, top: r.top, width: r.width, height: r.height, right: r.right, bottom: r.bottom };
+    };
+    const header = document.querySelector(".mf-lobby__header");
+    const panel = document.querySelector(".mf-lobby__panel");
+    const root = document.querySelector("[data-world-stage]");
+    const tags = [...document.querySelectorAll(".mf-world__tag")].map((el) => {
+      const tag = el.querySelector(".mv-tag");
+      const name = el.querySelector(".mv-tag__name");
+      const ncs = name ? getComputedStyle(name) : null;
+      const tcs = tag ? getComputedStyle(tag) : null;
+      const z = parseInt(getComputedStyle(el).zIndex, 10);
+      return {
+        seat: Number(el.getAttribute("data-seat")),
+        me: el.getAttribute("data-me") === "true",
+        away: el.getAttribute("data-away") === "true",
+        text: (name?.textContent ?? "").trim(),
+        rect: rect(tag ?? el),
+        scrollWidth: name ? name.scrollWidth : null,
+        clientWidth: name ? name.clientWidth : null,
+        textOverflow: [ncs?.textOverflow, tcs?.textOverflow].filter(Boolean).join(","),
+        fontSize: ncs ? parseFloat(ncs.fontSize) : null,
+        z: Number.isFinite(z) ? z : Number.NaN,
+        opacity: Number(getComputedStyle(el).opacity),
+      };
+    });
+    return {
+      vw: window.innerWidth,
+      vh: window.innerHeight,
+      stage: header && panel ? { left: 0, top: header.getBoundingClientRect().bottom, right: window.innerWidth, bottom: panel.getBoundingClientRect().top } : null,
+      ring: root?.getAttribute("data-ring") ?? null,
+      hook: !!window.__mfWorld,
+      status: window.__mfWorld?.status?.() ?? null,
+      seats: window.__mfWorld?.seats?.() ?? [],
+      tags,
+    };
+  });
+}
+
+/**
+ * 맵 로비 틀 한 장: 헤더 [나가기]·[공유], [시작] 버튼(상태·점), [테스트] 버튼, 상호작용 요소(겹침 검사용). 한 번의 evaluate.
+ * rect+hit 는 가운데 점의 elementFromPoint 가 그 버튼 자신(또는 안쪽)인가.
+ */
+export async function readLobbyFrame(page) {
+  return page.evaluate(() => {
+    const toRect = (r) => ({ left: r.left, top: r.top, width: r.width, height: r.height, right: r.right, bottom: r.bottom });
+    const boxOf = (el) => {
+      if (!el) return null;
+      const r = el.getBoundingClientRect();
+      const top = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+      return { rect: toRect(r), hit: !!top && el.contains(top) };
+    };
+    const start = document.querySelector("[data-lobby-start]");
+    const dots = start ? [...start.querySelectorAll(".mv-dots__dot")] : [];
+    return {
+      header: { leave: boxOf(document.querySelector('.mf-lobby__header [aria-label="나가기"]')), share: boxOf(document.querySelector('.mf-lobby__header [aria-label="공유"]')) },
+      start: start
+        ? {
+            ...boxOf(start),
+            ariaDisabled: start.getAttribute("aria-disabled"),
+            opacity: Number(getComputedStyle(start).opacity),
+            dots: dots.length,
+            dotsOn: dots.filter((d) => d.classList.contains("is-on")).length,
+            label: start.getAttribute("aria-label") ?? "",
+          }
+        : null,
+      test: boxOf(document.querySelector(".mf-lobby__test .mf-tt")),
+      title: (document.querySelector(".mf-lobby__header .mv-phase__title")?.textContent ?? "").trim(),
+      hasRoomCodeOutsideSheet: !!document.querySelector(".mf-lobby__code"),
+    };
+  });
+}
+
+/** 서버 시각 t 의 seat 위치(월드 단위). 훅이 없거나 아직 구간이 없으면 null. */
+export function sampleWorld(page, seat, t) {
+  return page.evaluate(({ s, tt }) => (window.__mfWorld ? window.__mfWorld.sample(s, tt) : null), { s: seat, tt: t });
+}
+
+/** 월드 점들 → 화면 px (카메라가 지금 있는 자리 기준). 훅이 없으면 null 목록. */
+export function screensOfWorld(page, points) {
+  return page.evaluate((pts) => pts.map((p) => (window.__mfWorld ? window.__mfWorld.screenOf(p.x, p.z) : null)), points);
+}
+
+/** 화면 점 위의 맨 위 요소가 맵 입력 면(.mf-world__input)인가 — 헤더·패널·버튼에 가려진 점을 목적지로 고르지 않으려고. */
+export function hitsInputSurface(page, points) {
+  return page.evaluate(
+    (pts) =>
+      pts.map((p) => {
+        const el = document.elementFromPoint(p.sx, p.sy);
+        return !!el && el.classList.contains("mf-world__input");
+      }),
+    points,
+  );
+}
+
+/**
+ * 월드 점 (x, z) 를 화면에서 한 번 누른다(screenOf → 마우스 탭: 눌렀다 바로 뗌).
+ * 페이지 안에서 손 뗌(pointerup) 시각과 data-ring 이 새로 생기는 시각을 MutationObserver 로 재서 ringMs 를 돌려주고,
+ * 손 뗌 직전(Node 시계)부터 내 구간 move 프레임이 tracker 에 들어올 때까지를 segmentMs 로 돌려준다(상한 3초, 못 받으면 null).
+ * 돌려주는 값: { sx, sy, ringMs, segmentMs, move }  (move = 받은 구간 { p, t0, v, at })
+ */
+export async function tapWorld(page, tracker, mySeat, x, z) {
+  const pt = await page.evaluate(({ px, pz }) => (window.__mfWorld ? window.__mfWorld.screenOf(px, pz) : null), { px: x, pz: z });
+  if (!pt) throw new SetupError("screenOf 를 쓸 수 없음(맵 훅 없음 또는 렌더러 없음)");
+  const beforeN = tracker.moves.get(mySeat)?.n ?? 0;
+  await page.evaluate(() => {
+    const root = document.querySelector("[data-world-stage]");
+    window.__tapWatch?.obs?.disconnect();
+    const w = { up: null, ring: null, prev: root?.getAttribute("data-ring") ?? null, obs: null };
+    window.__tapWatch = w;
+    document.addEventListener(
+      "pointerup",
+      (e) => {
+        w.up = e.timeStamp;
+      },
+      { capture: true, once: true },
+    );
+    w.obs = new MutationObserver(() => {
+      const v = root?.getAttribute("data-ring") ?? null;
+      if (w.ring === null && v !== null && v !== w.prev) w.ring = performance.now();
+    });
+    if (root) w.obs.observe(root, { attributes: true, attributeFilter: ["data-ring"] });
+  });
+  await page.mouse.move(pt.sx, pt.sy);
+  await page.mouse.down();
+  const upAt = performance.now();
+  await page.mouse.up();
+  let move = null;
+  const deadline = performance.now() + 3000;
+  while (performance.now() < deadline) {
+    const m = tracker.moves.get(mySeat);
+    if (m && m.n > beforeN) {
+      move = m;
+      break;
+    }
+    await sleep(5);
+  }
+  await sleep(30);
+  const watch = await page.evaluate(() => {
+    const w = window.__tapWatch;
+    w?.obs?.disconnect();
+    return w ? { up: w.up, ring: w.ring } : null;
+  });
+  const ringMs = watch && typeof watch.up === "number" && typeof watch.ring === "number" ? watch.ring - watch.up : null;
+  return { sx: pt.sx, sy: pt.sy, ringMs, segmentMs: move ? Math.max(0, move.at - upAt) : null, move };
 }
 
 /** 최선 노력으로 대기실 [나가기] → 확인 [나가기] 를 눌러 방을 지운다. 실패는 무시한다. */
@@ -872,7 +1098,7 @@ export async function chooseRole(page, tracker, role) {
  */
 export async function startGame(page, tracker, { onAssigning } = {}) {
   await closeSheet(page);
-  await page.locator(".mf-lobby__sheet").getByRole("button", { name: "게임 시작" }).click();
+  await page.locator("[data-lobby-start]").click();
   if (onAssigning) {
     let caught = false;
     try {

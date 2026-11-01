@@ -49,7 +49,6 @@ import {
   formatTables,
   genericIssues,
   isOneLine,
-  lobbyShapeChecks,
   lineCount,
   morningCardIssues,
   parseArgs,
@@ -58,6 +57,21 @@ import {
   redact,
   resolveTarget,
   stageStable,
+  NAMETAG_FONT_MIN,
+  WORLD_MOVED_MIN,
+  WORLD_RING_MAX_MS,
+  WORLD_SEGMENT_MAX_MS,
+  WORLD_SYNC_TOL,
+  graphemeCount,
+  lobbyHeaderChecks,
+  lobbyStartChecks,
+  nameTagFitChecks,
+  ownTagInStageChecks,
+  parseBarMask,
+  pickTapTargets,
+  tagStackChecks,
+  walkableCenters,
+  worldSyncChecks,
   tagsOverlap,
   voteChecks,
   candidateRevealMs,
@@ -851,50 +865,6 @@ test("stageStable T1: 내 자리가 spotlit 이면 내 캐릭터 비교만 건�
   assert.equal(stageStable([]).ok, false);
 });
 
-// ---- L6 대기실 자리 모양 (결정 0028) ----
-// 390폭 장면: 내 발 (183+12, 460) 아래 가운데. 발 = 상자 아래 가운데.
-const footSeat = (seat, x, y) => ({ seat, rect: rect(x - 36, y - 96, 72, 96), spotlit: false });
-
-test("lobbyShapeChecks L6: 둘이면 마주 본다 — 상대의 발 가로 중심이 내 발과 ±0.5 같고 80px 이상 위면 통과", () => {
-  const stage = stageOf({ seats: [footSeat(0, 195, 508), footSeat(1, 195.3, 308)] });
-  const r = lobbyShapeChecks(stage, { n: 2, mySeat: 0 });
-  assert.equal(r.id, "L6");
-  assert.match(r.label, /대기실 자리: 둘이면 마주 봄·셋이면 삼각/);
-  assert.equal(r.ok, true, r.detail);
-});
-
-test("lobbyShapeChecks L6: 둘인데 가로가 어긋나거나(1px) 세로로 80px 미만이면 실패하고 이유를 말한다", () => {
-  const side = lobbyShapeChecks(stageOf({ seats: [footSeat(0, 195, 508), footSeat(1, 196.5, 308)] }), { n: 2, mySeat: 0 });
-  assert.equal(side.ok, false);
-  assert.match(side.detail, /가로/);
-  const near = lobbyShapeChecks(stageOf({ seats: [footSeat(0, 195, 508), footSeat(1, 195, 440)] }), { n: 2, mySeat: 0 });
-  assert.equal(near.ok, false);
-  assert.match(near.detail, /80/);
-});
-
-test("lobbyShapeChecks L6: 셋이면 세 발이 삼각이다 — 외적 > 100 이고 쌍별 거리 > 60", () => {
-  const ok = lobbyShapeChecks(stageOf({ seats: [footSeat(0, 195, 508), footSeat(1, 110, 380), footSeat(2, 280, 380)] }), { n: 3, mySeat: 0 });
-  assert.equal(ok.ok, true, ok.detail);
-  const line = lobbyShapeChecks(stageOf({ seats: [footSeat(0, 195, 508), footSeat(1, 195, 420), footSeat(2, 195, 330)] }), { n: 3, mySeat: 0 });
-  assert.equal(line.ok, false);
-  assert.match(line.detail, /직선|삼각/);
-  const close = lobbyShapeChecks(stageOf({ seats: [footSeat(0, 195, 508), footSeat(1, 110, 380), footSeat(2, 130, 380)] }), { n: 3, mySeat: 0 });
-  assert.equal(close.ok, false);
-});
-
-test("lobbyShapeChecks L6: 1명이거나 4명 이상이면 건너뛰고 통과한다", () => {
-  assert.equal(lobbyShapeChecks(stageOf(), { n: 1, mySeat: 0 }).ok, true);
-  assert.equal(lobbyShapeChecks(stageOf(), { n: 5, mySeat: 0 }).ok, true);
-  assert.equal(lobbyShapeChecks(null, { n: 4, mySeat: 0 }).ok, true);
-});
-
-test("lobbyShapeChecks L6: 둘·셋인데 측정값이 없거나 자리 수가 안 맞으면 조용히 통과하지 않고 실패한다", () => {
-  assert.equal(lobbyShapeChecks(null, { n: 2, mySeat: 0 }).ok, false);
-  assert.equal(lobbyShapeChecks(stageOf({ seats: [footSeat(0, 195, 508)] }), { n: 2, mySeat: 0 }).ok, false);
-  assert.equal(lobbyShapeChecks(stageOf({ seats: [footSeat(1, 195, 308), footSeat(2, 195, 308)] }), { n: 2, mySeat: 0 }).ok, false);
-  assert.match(lobbyShapeChecks(null, { n: 3, mySeat: 0 }).detail, /측정값 없음/);
-});
-
 // ---- 차례(K1·K2)·주장 채팅(K3)·기록 카드(X1) ----
 
 const turnPanel = (over = {}) => ({ rect: rect(0, 483, 360, 157), text: "", stRow: false, emojiBtn: false, quickBtn: false, chips: [], ...over });
@@ -1012,16 +982,15 @@ test("turnChecks K4: 차례가 없는 단계(expectNone)에서는 말풍선과 �
   assert.equal(dayById(turnChecks(s, { expectNone: true }), "K4").ok, true);
 });
 
-// ---- W1 방장 왕관은 대기실만 (결정 0030) ----
+// ---- W1 게임 중 방장 왕관 없음 (결정 0030, 06-17: 대기실 왕관 검사는 기능과 함께 지움) ----
 
-test("crownChecks W1: expect 1 이면 왕관 1개 통과·0개 실패, expect 0 이면 0개 통과·1개 실패, 측정값 없으면 실패", () => {
-  const r = crownChecks({ crowns: 1 }, { expect: 1 });
+test("crownChecks W1: 게임 중에는 왕관 0개만 통과, 1개 이상·측정값 없음은 실패, 대기실 기대(expect 1)는 더 이상 없다", () => {
+  const r = crownChecks({ crowns: 0 }, { expect: 0 });
   assert.equal(r.id, "W1");
   assert.equal(r.ok, true, r.detail);
-  assert.equal(crownChecks({ crowns: 0 }, { expect: 1 }).ok, false);
-  assert.equal(crownChecks({ crowns: 2 }, { expect: 1 }).ok, false);
-  assert.equal(crownChecks({ crowns: 0 }, { expect: 0 }).ok, true);
+  assert.equal(crownChecks({ crowns: 0 }).ok, true);
   assert.equal(crownChecks({ crowns: 1 }, { expect: 0 }).ok, false);
+  assert.throws(() => crownChecks({ crowns: 1 }, { expect: 1 }), /대기실 왕관 검사는 지웠다/);
   for (const snap of [{}, { crowns: undefined }, { crowns: null }, null]) {
     const m = crownChecks(snap, { expect: 0 });
     assert.equal(m.ok, false);
@@ -2631,4 +2600,189 @@ test("blankPointsOf: limit 로 자르고, 너비·높이 0 인 avoid 는 무시�
   assert.equal(zero[0].x, 10);
   assert.deepEqual(blankPointsOf({ scene, avoid: [{ left: 0, top: 0, width: 100, height: 60 }], margin: 10, step: 10 }), []);
   assert.deepEqual(blankPointsOf({ scene: { left: 0, top: 0, width: 10, height: 10 }, avoid: [], margin: 10, step: 5 }), []);
+});
+
+
+// ---- 6페이즈 맵 로비·world 흐름 순수 검사 (06-17) ----
+
+const walkSamples = (n = 5, step = 0.09) => Array.from({ length: n }, (_, i) => ({ kind: "walk", t: 1000 + i * 50, p: { x: i * step, z: 1 } }));
+const arrivedSample = (x = 3, z = 1) => ({ kind: "arrived", t: 4000, p: { x, z } });
+
+test("worldSyncChecks: 상수는 UI-SPEC 그대로 — 0.3 단위·링 100ms·구간 500ms", () => {
+  assert.equal(WORLD_SYNC_TOL, 0.3);
+  assert.equal(WORLD_RING_MAX_MS, 100);
+  assert.equal(WORLD_SEGMENT_MAX_MS, 500);
+  assert.equal(WORLD_MOVED_MIN, 0.1);
+});
+
+test("worldSyncChecks W2~W4: 두 페이지가 0.3 이하로 같고 링 100ms·구간 500ms 이내면 세 줄 모두 통과한다", () => {
+  const a = [...walkSamples(), arrivedSample()];
+  const b = a.map((s) => ({ ...s, p: { x: s.p.x + 0.1, z: s.p.z } }));
+  const r = worldSyncChecks({ a, b, ringMs: 40, segmentMs: 120 });
+  assert.deepEqual(r.map((x) => x.id), ["W2", "W3", "W4"]);
+  for (const x of r) assert.equal(x.ok, true, x.detail);
+});
+
+test("worldSyncChecks W2: 0.3 을 넘게 어긋난 표본이 있으면 실패하고 어느 표본인지 말한다 (걷는 중·도착 뒤 모두 본다)", () => {
+  const a = [...walkSamples(), arrivedSample()];
+  const walkBad = a.map((s, i) => (i === 2 ? { ...s, p: { x: s.p.x + 0.31, z: s.p.z } } : s));
+  const w = worldSyncChecks({ a, b: walkBad, ringMs: 10, segmentMs: 10 })[0];
+  assert.equal(w.ok, false);
+  assert.match(w.detail, /walk 표본 3.*0\.31/);
+  const arrivedBad = a.map((s) => (s.kind === "arrived" ? { ...s, p: { x: s.p.x, z: s.p.z + 0.5 } } : s));
+  const r = worldSyncChecks({ a, b: arrivedBad, ringMs: 10, segmentMs: 10 })[0];
+  assert.equal(r.ok, false);
+  assert.match(r.detail, /arrived 표본/);
+  // 정확히 0.3 은 통과
+  const edge = a.map((s) => (s.kind === "arrived" ? { ...s, p: { x: s.p.x + 0.3, z: s.p.z } } : s));
+  assert.equal(worldSyncChecks({ a, b: edge, ringMs: 10, segmentMs: 10 })[0].ok, true);
+});
+
+test("worldSyncChecks W2: 걷는 중 표본이 3개 미만이거나 움직이지 않았거나 도착 뒤 표본이 없거나 위치를 못 읽으면 조용히 통과하지 않는다", () => {
+  const same = (a) => a.map((s) => ({ ...s }));
+  const few = [...walkSamples(2), arrivedSample()];
+  assert.match(worldSyncChecks({ a: few, b: same(few), ringMs: 1, segmentMs: 1 })[0].detail, /걷는 중 표본 2개/);
+  const still = [...walkSamples(5, 0), arrivedSample()];
+  assert.match(worldSyncChecks({ a: still, b: same(still), ringMs: 1, segmentMs: 1 })[0].detail, /움직이지 않음/);
+  const noArrive = walkSamples();
+  assert.match(worldSyncChecks({ a: noArrive, b: same(noArrive), ringMs: 1, segmentMs: 1 })[0].detail, /도착 뒤 표본 없음/);
+  const a = [...walkSamples(), arrivedSample()];
+  const nullB = a.map((s, i) => (i === 1 ? { ...s, p: null } : s));
+  assert.match(worldSyncChecks({ a, b: nullB, ringMs: 1, segmentMs: 1 })[0].detail, /위치를 읽지 못함/);
+  assert.match(worldSyncChecks({ a: [], b: [], ringMs: 1, segmentMs: 1 })[0].detail, /측정값 없음/);
+  assert.match(worldSyncChecks({ a: undefined, b: undefined, ringMs: 1, segmentMs: 1 })[0].detail, /측정값 없음/);
+  const diffT = a.map((s, i) => (i === 0 ? { ...s, t: s.t + 1 } : s));
+  assert.match(worldSyncChecks({ a, b: diffT, ringMs: 1, segmentMs: 1 })[0].detail, /시각 t 가 다름/);
+});
+
+test("worldSyncChecks W3·W4: 링 100ms·구간 500ms 를 넘거나 측정값이 없으면 실패한다 (경계 값은 통과)", () => {
+  const a = [...walkSamples(), arrivedSample()];
+  const b = a.map((s) => ({ ...s }));
+  const ok = worldSyncChecks({ a, b, ringMs: 100, segmentMs: 500 });
+  assert.equal(ok[1].ok, true);
+  assert.equal(ok[2].ok, true);
+  const slow = worldSyncChecks({ a, b, ringMs: 101, segmentMs: 501 });
+  assert.equal(slow[1].ok, false);
+  assert.match(slow[1].detail, /101ms > 100ms/);
+  assert.equal(slow[2].ok, false);
+  const none = worldSyncChecks({ a, b, ringMs: undefined, segmentMs: Number.NaN });
+  assert.match(none[1].detail, /측정값 없음/);
+  assert.match(none[2].detail, /측정값 없음/);
+});
+
+const nameTag = (over = {}) => ({ seat: 0, text: "방장이름여덟글자 (나)", scrollWidth: 120, clientWidth: 120, textOverflow: "clip", fontSize: 14, ...over });
+
+test("nameTagFitChecks NT1: 넘침 없음·말줄임 아님·14px 이상이면 통과하고, 기대한 글자가 화면에 있어야 한다", () => {
+  const r = nameTagFitChecks([nameTag(), nameTag({ seat: 1, text: "봇가나다라마바사" })], { expectTexts: ["방장이름여덟글자 (나)"] });
+  assert.equal(r.id, "NT1");
+  assert.equal(r.ok, true, r.detail);
+  assert.equal(NAMETAG_FONT_MIN, 14);
+  const missing = nameTagFitChecks([nameTag()], { expectTexts: ["없는이름"] });
+  assert.equal(missing.ok, false);
+  assert.match(missing.detail, /없는이름/);
+});
+
+test("nameTagFitChecks NT1: scrollWidth ≠ clientWidth·ellipsis·14px 미만·측정값 없음은 실패한다", () => {
+  const over = nameTagFitChecks([nameTag({ scrollWidth: 130 })]);
+  assert.equal(over.ok, false);
+  assert.match(over.detail, /scrollWidth 130 ≠ clientWidth 120/);
+  const ell = nameTagFitChecks([nameTag({ textOverflow: "ellipsis" })]);
+  assert.equal(ell.ok, false);
+  assert.match(ell.detail, /text-overflow ellipsis/);
+  const small = nameTagFitChecks([nameTag({ fontSize: 13 })]);
+  assert.equal(small.ok, false);
+  assert.match(small.detail, /13px/);
+  assert.match(nameTagFitChecks([]).detail, /측정값 없음/);
+  assert.match(nameTagFitChecks(undefined).detail, /측정값 없음/);
+  assert.match(nameTagFitChecks([nameTag({ scrollWidth: undefined })]).detail, /측정값 없음/);
+  assert.equal(nameTagFitChecks([nameTag({ fontSize: undefined })]).ok, false);
+});
+
+test("tagStackChecks NT3: 겹친 이름표는 z-index 가 달라야 하고 같거나 못 읽으면 실패, 안 겹치면 z 가 같아도 통과한다", () => {
+  const t = (seat, left, z) => ({ seat, rect: rect(left, 100, 100, 24), z });
+  assert.equal(tagStackChecks([t(0, 100, 3), t(1, 150, 4)]).ok, true);
+  assert.equal(tagStackChecks([t(0, 100, 3), t(1, 300, 3)]).ok, true);
+  const same = tagStackChecks([t(0, 100, 3), t(1, 150, 3)]);
+  assert.equal(same.ok, false);
+  assert.match(same.detail, /z-index 가 같음/);
+  assert.match(tagStackChecks([t(0, 100, Number.NaN), t(1, 150, 3)]).detail, /z-index 를 읽지 못함/);
+  assert.match(tagStackChecks([]).detail, /측정값 없음/);
+});
+
+test("ownTagInStageChecks NT4: 스테이지 사각형 안이면 통과, 어느 변이든 넘으면 실패하고 방향을 말한다", () => {
+  const stage = { left: 0, top: 62, right: 360, bottom: 552 };
+  assert.equal(ownTagInStageChecks(rect(80, 300, 200, 24), stage).ok, true);
+  assert.match(ownTagInStageChecks(rect(-10, 300, 200, 24), stage).detail, /왼쪽/);
+  assert.match(ownTagInStageChecks(rect(200, 300, 200, 24), stage).detail, /오른쪽/);
+  assert.match(ownTagInStageChecks(rect(80, 40, 200, 24), stage).detail, /위/);
+  assert.match(ownTagInStageChecks(rect(80, 540, 200, 24), stage).detail, /아래/);
+  assert.match(ownTagInStageChecks(null, stage).detail, /측정값 없음/);
+  assert.match(ownTagInStageChecks(rect(80, 300, 200, 24), null).detail, /측정값 없음/);
+});
+
+const btn = (left, top, w = 44, h = 44, hit = true) => ({ rect: rect(left, top, w, h), hit });
+
+test("lobbyHeaderChecks L7: 두 버튼이 44px 이상·화면 안·안 겹침·눌림이면 통과하고 하나라도 어긋나면 실패한다", () => {
+  const good = { leave: btn(16, 18), share: btn(300, 18) };
+  const r = lobbyHeaderChecks(good, { w: 360, h: 640 });
+  assert.equal(r.id, "L7");
+  assert.equal(r.ok, true, r.detail);
+  assert.match(lobbyHeaderChecks({ leave: btn(16, 18, 40, 44), share: good.share }, { w: 360, h: 640 }).detail, /\[나가기\] 40x44/);
+  assert.match(lobbyHeaderChecks({ leave: good.leave, share: btn(330, 18) }, { w: 360, h: 640 }).detail, /\[공유\] 가 화면 밖/);
+  assert.match(lobbyHeaderChecks({ leave: btn(16, 18), share: btn(40, 18) }, { w: 360, h: 640 }).detail, /겹침/);
+  assert.match(lobbyHeaderChecks({ leave: btn(16, 18, 44, 44, false), share: good.share }, { w: 360, h: 640 }).detail, /elementFromPoint/);
+  assert.match(lobbyHeaderChecks({ leave: null, share: good.share }, { w: 360, h: 640 }).detail, /측정값 없음/);
+  assert.match(lobbyHeaderChecks(null, { w: 360, h: 640 }).detail, /측정값 없음/);
+});
+
+const startBtn = (over = {}) => ({ ariaDisabled: null, opacity: 1, dots: 8, dotsOn: 4, rect: rect(16, 540, 328, 52), hit: true, ...over });
+
+test("lobbyStartChecks L8: 1명은 흐림, 4명은 활성, 8명은 점 8개가 모두 켜져야 통과한다", () => {
+  const one = lobbyStartChecks(startBtn({ ariaDisabled: "true", opacity: 0.45, dotsOn: 1 }), { n: 1 });
+  assert.equal(one.id, "L8");
+  assert.equal(one.ok, true, one.detail);
+  assert.equal(lobbyStartChecks(startBtn(), { n: 4 }).ok, true);
+  assert.equal(lobbyStartChecks(startBtn({ dotsOn: 8 }), { n: 8 }).ok, true);
+  assert.equal(lobbyStartChecks(startBtn({ ariaDisabled: "true", opacity: 0.45, dotsOn: 3 }), { n: 3 }).ok, true);
+});
+
+test("lobbyStartChecks L8: 1명인데 활성·4명인데 흐림·점 개수 어긋남·측정값 없음은 실패한다", () => {
+  assert.match(lobbyStartChecks(startBtn({ dotsOn: 1 }), { n: 1 }).detail, /흐려야 하는데/);
+  assert.match(lobbyStartChecks(startBtn({ ariaDisabled: "true", opacity: 0.45 }), { n: 4 }).detail, /활성이어야 하는데/);
+  assert.match(lobbyStartChecks(startBtn({ opacity: 0.45 }), { n: 4 }).detail, /불투명도 0\.45/);
+  assert.match(lobbyStartChecks(startBtn({ dots: 7 }), { n: 4 }).detail, /점 7개 ≠ 8/);
+  assert.match(lobbyStartChecks(startBtn({ dotsOn: 5 }), { n: 4 }).detail, /켜진 점 5개 ≠ 4/);
+  assert.match(lobbyStartChecks(startBtn({ rect: rect(16, 540, 328, 40) }), { n: 4 }).detail, /높이 40/);
+  assert.match(lobbyStartChecks(null, { n: 4 }).detail, /측정값 없음/);
+});
+
+test("graphemeCount: 전각 8자 8개, 이모지 8개 8개, 결합 문자 한 글자, 5자 5개", () => {
+  assert.equal(graphemeCount("방장이름여덟글자"), 8);
+  assert.equal(graphemeCount("😀😃😄😁😆😅🤣😂"), 8);
+  assert.equal(graphemeCount("화면검사기"), 5);
+  assert.equal(graphemeCount("e\u0301"), 1);
+  assert.equal(graphemeCount(undefined), 0);
+});
+
+const MAP_SRC = readFileSync(new URL("../../shared/game/map.ts", import.meta.url), "utf8");
+
+test("parseBarMask·walkableCenters: shared/game/map.ts 원문에서 28줄 마스크를 읽고 칸 중심은 −7 + 0.5c + 0.25", () => {
+  const rows = parseBarMask(MAP_SRC);
+  assert.equal(rows.length, 28);
+  assert.ok(rows.every((r) => r.length === 28));
+  const centers = walkableCenters(rows);
+  assert.equal(centers.length, rows.join("").split(".").length - 1);
+  const first = centers[0];
+  assert.deepEqual(first, { x: -7 + rows[2].indexOf(".") * 0.5 + 0.25, z: -7 + 2 * 0.5 + 0.25 });
+  assert.throws(() => parseBarMask("export const X = 1;"), /BAR_MASK/);
+  assert.throws(() => parseBarMask('export const BAR_MASK: readonly string[] = ["..", "."];'), /정사각/);
+});
+
+test("pickTapTargets: minDist 이상만, 먼 순서, visible 이 거짓인 점은 뺀다", () => {
+  const centers = [{ x: 0, z: 0 }, { x: 1, z: 0 }, { x: 4, z: 0 }, { x: 6, z: 0 }];
+  const all = pickTapTargets(centers, { x: 0, z: 0 }, { minDist: 3 });
+  assert.deepEqual(all.map((p) => p.x), [6, 4]);
+  const hidden = pickTapTargets(centers, { x: 0, z: 0 }, { minDist: 3, visible: (x) => x < 5 });
+  assert.deepEqual(hidden.map((p) => p.x), [4]);
+  assert.deepEqual(pickTapTargets(centers, { x: 0, z: 0 }, { minDist: 99 }), []);
 });

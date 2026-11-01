@@ -561,35 +561,6 @@ export function feltGapChecks(stage) {
 }
 
 /**
- * L6 (결정 0028): 대기실 자리 모양 — 둘이면 마주 보고(상대 발 가로 중심 = 내 발 ±0.5, 상대 발이 내 발보다 80px 이상 위),
- * 셋이면 삼각(세 발의 외적 절댓값 > 100, 쌍별 거리 > 60). 1명이거나 4명 이상이면 건너뛴다(통과).
- * stage = browser.readStage 결과, n = 지금 앉은 사람 수, mySeat = 내 자리. 둘·셋인데 측정값이 없으면 조용히 통과하지 않고 실패한다.
- */
-export function lobbyShapeChecks(stage, { n, mySeat }) {
-  const label = "대기실 자리: 둘이면 마주 봄·셋이면 삼각";
-  if (n !== 2 && n !== 3) return result("L6", label, []);
-  const seats = stage?.seats;
-  if (!Array.isArray(seats) || seats.length !== n) return result("L6", label, [`측정값 없음(자리 ${Array.isArray(seats) ? seats.length : 0}개, 기대 ${n}개)`]);
-  const foot = (s) => ({ seat: s.seat, x: s.rect.left + s.rect.width / 2, y: bottom(s.rect) });
-  const feet = seats.map(foot);
-  const me = feet.find((f) => f.seat === mySeat);
-  if (!me) return result("L6", label, [`측정값 없음(내 자리 ${mySeat})`]);
-  const bad = [];
-  if (n === 2) {
-    const other = feet.find((f) => f.seat !== mySeat);
-    if (Math.abs(other.x - me.x) > OVERLAP_EPS) bad.push(`상대 발 가로 중심이 내 발과 ${rd(other.x - me.x)}px 어긋남 (> ${OVERLAP_EPS})`);
-    if (me.y - other.y < 80) bad.push(`상대 발이 내 발보다 ${rd(me.y - other.y)}px 위 (< 80px)`);
-  } else {
-    const [a, b, c] = feet;
-    const cross = (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
-    if (Math.abs(cross) <= 100) bad.push(`세 발이 거의 한 직선 (외적 ${rd(Math.abs(cross))} ≤ 100)`);
-    const dist = (p, q) => Math.hypot(p.x - q.x, p.y - q.y);
-    for (const [p, q] of [[a, b], [a, c], [b, c]]) if (dist(p, q) <= 60) bad.push(`자리 ${p.seat}-${q.seat} 발 거리 ${rd(dist(p, q))} ≤ 60 (삼각이 아님)`);
-  }
-  return result("L6", label, bad);
-}
-
-/**
  * T1 (결정 0028): 단계가 바뀌어도(같은 인원) 장면 상자·테이블 면·내 캐릭터가 ±0.5 같고, 머리 119.2·하단 패널 157,
  * 패널 위 = 장면 아래. entries = [{ state, stage, mySeat }]. 내 자리가 spotlit(방금 탈락)이면 내 캐릭터 비교만 건너뛴다.
  */
@@ -781,12 +752,15 @@ export function haloChecks(halo, { circles, bubbleSeats, whiteSeats, expectNone,
   return result("K4", "후광은 윤곽을 따르는 filter, 발밑 원 없음", bad);
 }
 
-/** W1 방장 왕관(결정 0030): 대기실은 정확히 1개, 그 밖(배정·낮·밤·아침)은 0개. snap.crowns = .mf-dt__crown 수. 측정값이 없으면 실패. */
-export function crownChecks(snap, { expect }) {
-  const label = expect === 1 ? "대기실 방장 왕관 1개" : "게임 중 방장 왕관 없음";
+/**
+ * W1 게임 중 방장 왕관 없음(결정 0030): 배정·낮·밤·아침에는 .mf-dt__crown 이 0개다. snap.crowns = .mf-dt__crown 수. 측정값이 없으면 실패.
+ * 대기실의 방장 왕관 검사는 지웠다 — 맵 로비는 고정 테이블이 없고 방장 변경은 TopToast 로 알린다(06-15·06-21, 결정 0051).
+ */
+export function crownChecks(snap, { expect = 0 } = {}) {
+  if (expect !== 0) throw new Error("crownChecks 는 게임 중(expect 0)만 판정한다 — 대기실 왕관 검사는 지웠다");
   const n = snap?.crowns;
-  if (typeof n !== "number") return result("W1", label, ["측정값 없음(왕관 수 crowns)"]);
-  return result("W1", label, n === expect ? [] : [`방장 왕관 ${n}개 ≠ ${expect}`]);
+  if (typeof n !== "number") return result("W1", "게임 중 방장 왕관 없음", ["측정값 없음(왕관 수 crowns)"]);
+  return result("W1", "게임 중 방장 왕관 없음", n === 0 ? [] : [`방장 왕관 ${n}개 ≠ 0`]);
 }
 
 /**
@@ -1702,4 +1676,198 @@ export function cancelTapChecks({ chosenSeat, afterTag, afterBlank } = {}) {
   if (!afterBlank.pill.includes("선택 안 함")) bad.push(`빈 곳 탭 뒤 알약 "${afterBlank.pill}" 에 "선택 안 함" 없음(빈 곳 탭이 취소하지 않음)`);
   if (afterBlank.halos !== 0) bad.push(`빈 곳 탭 뒤 흰 후광 ${afterBlank.halos}개 ≠ 0`);
   return result("P12", label, bad);
+}
+
+// ---- 6페이즈 맵 로비·world 흐름 순수 검사 (06-17) ----
+// 캐릭터는 3D 메시라 DOM 위치가 없다 — 두 페이지의 위치는 window.__mfWorld.sample(seat, t) 로만 읽는다(06-13 테스트 훅, RESEARCH Pitfall 6).
+// 모든 판정 함수는 측정값이 없으면 조용히 통과하지 않고 `측정값 없음(…)` 으로 실패한다.
+
+/** 두 페이지가 같은 서버 시각 t 에서 보는 같은 자리 위치의 차이 상한(월드 단위). 같은 머신(같은 시계)에만 적용한다(가정 A2). 낮추지 않는다. */
+export const WORLD_SYNC_TOL = 0.3;
+/** 바닥을 누른 뒤 목적지 링(data-ring)이 뜨기까지 상한(ms, UI-SPEC 100ms). */
+export const WORLD_RING_MAX_MS = 100;
+/** 바닥을 누른 뒤 서버가 보낸 내 구간이 도착하기까지 상한(ms, UI-SPEC 500ms). */
+export const WORLD_SEGMENT_MAX_MS = 500;
+/** 걷는 중 표본이 실제로 움직였다고 볼 최소 거리(월드 단위) — 서 있는 사람끼리 같은 위치를 비교하는 거짓 통과를 막는다. */
+export const WORLD_MOVED_MIN = 0.1;
+/** 이름표 글자 크기 하한(px). */
+export const NAMETAG_FONT_MIN = 14;
+
+const dist2 = (p, q) => Math.hypot(p.x - q.x, p.z - q.z);
+
+/**
+ * 손님 탭 한 번이 두 페이지에서 같은 위치로 걷는지(MAP-02). a·b = 두 페이지가 같은 서버 시각 t 로 읽은 표본 목록
+ * [{ kind: "walk"|"arrived", t, p: { x, z } | null }] (같은 순서·같은 t). ringMs·segmentMs = 탭(손 뗌)에서 링·내 구간까지 걸린 시간(ms).
+ * W2 위치 차 ≤ tol(걷는 중과 도착 뒤 모두, 걷는 중 표본이 3개 이상이고 실제로 움직였을 것) · W3 링 ≤ 100ms · W4 구간 도착 ≤ 500ms.
+ */
+export function worldSyncChecks({ a, b, tol = WORLD_SYNC_TOL, ringMs, segmentMs }) {
+  const bad = [];
+  if (!Array.isArray(a) || !Array.isArray(b) || a.length === 0 || a.length !== b.length) {
+    bad.push(`측정값 없음(표본 ${Array.isArray(a) ? a.length : 0}/${Array.isArray(b) ? b.length : 0}개)`);
+  } else {
+    const walk = a.filter((s) => s.kind === "walk");
+    if (walk.length < 3) bad.push(`걷는 중 표본 ${walk.length}개 < 3`);
+    if (!a.some((s) => s.kind === "arrived")) bad.push("도착 뒤 표본 없음");
+    let worst = 0;
+    let worstAt = "";
+    for (let i = 0; i < a.length; i++) {
+      const pa = a[i].p;
+      const pb = b[i].p;
+      if (!pa || !pb) {
+        bad.push(`${a[i].kind} 표본 ${i + 1}: 위치를 읽지 못함 (A ${pa ? "있음" : "없음"}, B ${pb ? "있음" : "없음"})`);
+        continue;
+      }
+      if (a[i].t !== b[i].t) bad.push(`${a[i].kind} 표본 ${i + 1}: 두 페이지의 시각 t 가 다름`);
+      const d = dist2(pa, pb);
+      if (d > worst) {
+        worst = d;
+        worstAt = `${a[i].kind} 표본 ${i + 1}`;
+      }
+    }
+    if (worst > tol) bad.push(`${worstAt} 두 페이지 위치 차 ${Math.round(worst * 1000) / 1000} > ${tol}`);
+    const first = walk[0]?.p;
+    const last = walk[walk.length - 1]?.p;
+    if (first && last && dist2(first, last) < WORLD_MOVED_MIN) bad.push(`걷는 중 표본이 움직이지 않음 (${Math.round(dist2(first, last) * 1000) / 1000} < ${WORLD_MOVED_MIN})`);
+  }
+  const timing = (id, label, ms, max) => {
+    if (typeof ms !== "number" || !Number.isFinite(ms)) return result(id, label, [`측정값 없음(${label})`]);
+    return result(id, label, ms <= max ? [] : [`${Math.round(ms)}ms > ${max}ms`]);
+  };
+  return [
+    result("W2", `두 페이지 손님 위치 차 ≤ ${tol} (걷는 중·도착 뒤)`, bad),
+    timing("W3", `탭 → 목적지 링 ${WORLD_RING_MAX_MS}ms 이내`, ringMs, WORLD_RING_MAX_MS),
+    timing("W4", `탭 → 손님 구간 시작 ${WORLD_SEGMENT_MAX_MS}ms 이내`, segmentMs, WORLD_SEGMENT_MAX_MS),
+  ];
+}
+
+/**
+ * NT1 이름표가 잘리지 않는다(MAP-07, 결정 0052-2): 모든 이름표 글자 칸이 scrollWidth === clientWidth, text-overflow 가 말줄임이 아니고, 글자 크기 14px 이상.
+ * tags = browser.readWorld().tags — [{ seat, text, scrollWidth, clientWidth, textOverflow, fontSize }]. expectTexts 가 있으면 화면 글자가 기대한 닉네임 그대로인지도 본다.
+ */
+export function nameTagFitChecks(tags, { expectTexts = [] } = {}) {
+  const label = "이름표가 잘리지 않음(말줄임 없음·14px 이상)";
+  if (!Array.isArray(tags) || tags.length === 0) return result("NT1", label, ["측정값 없음(이름표가 없음)"]);
+  const bad = [];
+  for (const t of tags) {
+    if (typeof t.scrollWidth !== "number" || typeof t.clientWidth !== "number") {
+      bad.push(`자리 ${t.seat} 측정값 없음(scrollWidth·clientWidth)`);
+      continue;
+    }
+    if (t.scrollWidth !== t.clientWidth) bad.push(`자리 ${t.seat} scrollWidth ${t.scrollWidth} ≠ clientWidth ${t.clientWidth}`);
+    if (String(t.textOverflow ?? "").includes("ellipsis")) bad.push(`자리 ${t.seat} text-overflow ${t.textOverflow}`);
+    if (!(t.fontSize >= NAMETAG_FONT_MIN)) bad.push(`자리 ${t.seat} 글자 ${t.fontSize}px < ${NAMETAG_FONT_MIN}px`);
+  }
+  for (const want of expectTexts) {
+    if (!tags.some((t) => t.text === want)) bad.push(`기대한 이름표 글자 "${want}" 가 화면에 없음`);
+  }
+  return result("NT1", label, bad);
+}
+
+/**
+ * NT3 겹친 이름표는 맨 앞이 하나다(UI-SPEC E2): 사각형이 겹치는 이름표 쌍은 z-index 가 서로 달라 앞뒤가 정해진다(발 y 순위, 큰 쪽이 위).
+ * tags = [{ seat, rect, z }]. 겹치는 쌍이 없으면 통과(할 일이 없다).
+ */
+export function tagStackChecks(tags) {
+  const label = "겹친 이름표는 앞뒤가 정해짐(z-index 가 서로 다름)";
+  if (!Array.isArray(tags) || tags.length === 0) return result("NT3", label, ["측정값 없음(이름표가 없음)"]);
+  const bad = [];
+  for (let i = 0; i < tags.length; i++) {
+    for (let j = i + 1; j < tags.length; j++) {
+      if (!rectsOverlap(tags[i].rect, tags[j].rect)) continue;
+      if (!Number.isFinite(tags[i].z) || !Number.isFinite(tags[j].z)) bad.push(`자리 ${tags[i].seat}-${tags[j].seat} z-index 를 읽지 못함`);
+      else if (tags[i].z === tags[j].z) bad.push(`자리 ${tags[i].seat}-${tags[j].seat} 겹쳤는데 z-index 가 같음 (${tags[i].z})`);
+    }
+  }
+  return result("NT3", label, bad);
+}
+
+/**
+ * NT4 내 이름표가 스테이지 사각형(헤더 아래 ~ 아래 패널 위, 폭 전체) 안에 있다(MAP-03: 카메라가 따라가 이동 뒤에도 안에 든다).
+ * mine = 내 이름표 사각형, stage = { left, top, right, bottom }.
+ */
+export function ownTagInStageChecks(mine, stage) {
+  const label = "내 이름표가 스테이지 사각형 안";
+  if (!mine || !stage) return result("NT4", label, ["측정값 없음(내 이름표 또는 스테이지 사각형)"]);
+  const bad = [];
+  if (mine.left < stage.left - OVERLAP_EPS) bad.push(`왼쪽 ${rd(mine.left)} < ${rd(stage.left)}`);
+  if (right(mine) > stage.right + OVERLAP_EPS) bad.push(`오른쪽 ${rd(right(mine))} > ${rd(stage.right)}`);
+  if (mine.top < stage.top - OVERLAP_EPS) bad.push(`위 ${rd(mine.top)} < ${rd(stage.top)}`);
+  if (bottom(mine) > stage.bottom + OVERLAP_EPS) bad.push(`아래 ${rd(bottom(mine))} > ${rd(stage.bottom)}`);
+  return result("NT4", label, bad);
+}
+
+/**
+ * L7 로비 헤더: [나가기]·[공유] 가 화면 안에서 44px 이상으로 보이고(가운데 점이 그 버튼) 서로 겹치지 않는다.
+ * m = browser.readLobbyFrame().header — { leave, share } 각 { rect, hit } | null.
+ */
+export function lobbyHeaderChecks(m, { w, h }) {
+  const label = "헤더 [나가기]·[공유] 44px 이상·겹치지 않음";
+  if (!m || !m.leave || !m.share) return result("L7", label, ["측정값 없음([나가기] 또는 [공유])"]);
+  const bad = [];
+  for (const [name, b] of [["나가기", m.leave], ["공유", m.share]]) {
+    if (b.rect.width + OVERLAP_EPS < TAP_MIN || b.rect.height + OVERLAP_EPS < TAP_MIN) bad.push(`[${name}] ${rd(b.rect.width)}x${rd(b.rect.height)} < ${TAP_MIN}`);
+    if (!rectInside(b.rect, { left: 0, top: 0, width: w, height: h })) bad.push(`[${name}] 가 화면 밖`);
+    if (b.hit !== true) bad.push(`[${name}] 가운데 점을 눌러도 그 버튼이 아님(elementFromPoint)`);
+  }
+  if (rectsOverlap(m.leave.rect, m.share.rect)) bad.push(`[나가기]·[공유] 겹침 (${overlapText(m.leave.rect, m.share.rect)})`);
+  return result("L7", label, bad);
+}
+
+/**
+ * L8 [시작] 버튼 상태(ROOM-03, UI-SPEC 행동 줄): 방장의 [시작] 은 연결된 사람이 4명 미만이면 흐림(aria-disabled="true", 불투명도 < 1),
+ * 4명 이상이면 활성(aria-disabled 없음, 불투명도 1)이고, 점은 항상 최대 인원(8)개이며 켜진 점은 연결된 사람 수와 같다.
+ * s = browser.readLobbyFrame().start — { ariaDisabled, opacity, dots, dotsOn, rect, hit } | null.
+ */
+export function lobbyStartChecks(s, { n, min = 4, max = 8 }) {
+  const label = `[시작] ${n}명: ${n >= min ? "활성" : "흐림"}·점 ${max}개 중 ${n}개 켜짐`;
+  if (!s) return result("L8", label, ["측정값 없음([시작] 버튼 없음)"]);
+  const bad = [];
+  const dim = s.ariaDisabled === "true";
+  if (n >= min && dim) bad.push("활성이어야 하는데 aria-disabled");
+  if (n < min && !dim) bad.push("흐려야 하는데 aria-disabled 아님");
+  if (n >= min && !(s.opacity >= 0.99)) bad.push(`활성인데 불투명도 ${s.opacity}`);
+  if (n < min && !(s.opacity < 0.99)) bad.push(`흐려야 하는데 불투명도 ${s.opacity}`);
+  if (s.dots !== max) bad.push(`점 ${s.dots}개 ≠ ${max}`);
+  if (s.dotsOn !== n) bad.push(`켜진 점 ${s.dotsOn}개 ≠ ${n}`);
+  if (s.rect.height + OVERLAP_EPS < TAP_MIN) bad.push(`높이 ${rd(s.rect.height)} < ${TAP_MIN}`);
+  return result("L8", label, bad);
+}
+
+/** 이름이 6 그래핌 이상인가(결정 0056 완화 범위의 이름 조건). Intl.Segmenter 가 없으면 코드 포인트 수로 센다. */
+export function graphemeCount(text) {
+  const t = String(text ?? "");
+  if (typeof Intl !== "undefined" && typeof Intl.Segmenter === "function") return [...new Intl.Segmenter("ko", { granularity: "grapheme" }).segment(t)].length;
+  return [...t].length;
+}
+
+/**
+ * shared/game/map.ts 의 원문에서 BAR_MASK 줄(28개)을 읽는다 — .mjs 가 TS 를 직접 import 하지 않게 원문 텍스트를 받는다(순수).
+ * 못 읽으면 던진다.
+ */
+export function parseBarMask(source) {
+  const m = /export const BAR_MASK[^=]*=\s*\[([\s\S]*?)\];/.exec(String(source));
+  if (!m) throw new Error("BAR_MASK 를 찾지 못함");
+  const rows = [...m[1].matchAll(/"([.#]+)"/g)].map((x) => x[1]);
+  if (rows.length === 0 || rows.some((r) => r.length !== rows.length)) throw new Error("BAR_MASK 줄이 정사각이 아님");
+  return rows;
+}
+
+/** 마스크의 걸을 수 있는 칸 중심(월드 단위: 원점 −7, 칸 0.5). 행 우선. */
+export function walkableCenters(rows) {
+  const out = [];
+  rows.forEach((row, r) => {
+    for (let c = 0; c < row.length; c++) if (row[c] === ".") out.push({ x: -7 + c * 0.5 + 0.25, z: -7 + r * 0.5 + 0.25 });
+  });
+  return out;
+}
+
+/**
+ * 탭할 목적지 고르기: from 에서 minDist 이상 떨어진 걸을 수 있는 칸 중심을 먼 순서로 돌려준다(가장 먼 것부터 시도하게).
+ * visible(x, z) 이 거짓인 점(화면 밖·헤더·패널 아래)은 뺀다.
+ */
+export function pickTapTargets(centers, from, { minDist = 3, visible = () => true } = {}) {
+  return centers
+    .map((p) => ({ ...p, d: dist2(p, from) }))
+    .filter((p) => p.d >= minDist && visible(p.x, p.z))
+    .sort((p, q) => q.d - p.d);
 }

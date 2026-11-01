@@ -520,6 +520,11 @@ describe("접근성 목록과 내보내기 이름표 (MAP-07)", () => {
     expect(s.utils.container.querySelector(".mf-world__tags [data-seat]")?.getAttribute("aria-hidden")).toBe("true");
   });
 
+  it("보이지 않는 목록은 E2E G2 가 건너뛰는 읽기 전용 안내 클래스(mf-sr-only)를 함께 갖는다 (06-17: 1px 이 화면 왼쪽 밖으로 나가 G2 가 잡았다)", async () => {
+    await open({}, { players, mySeat: 1, ents });
+    expect(screen.getByRole("list", { name: "방에 있는 사람 3명" }).classList.contains("mf-sr-only")).toBe(true);
+  });
+
   it("방장은 끊긴 다른 사람 이름표를 44×44 이상 누르기 영역의 버튼으로 눌러 내보내기를 시작한다", async () => {
     const s = await open({}, { players, mySeat: 0, ents });
     const btn = screen.getByRole("button", { name: "영희 님 내보내기" });
