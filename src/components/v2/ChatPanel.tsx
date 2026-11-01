@@ -298,7 +298,15 @@ export function ChatPanel(props: ChatPanelProps) {
               onBlur={onBlur}
             />
           </div>
-          <button type="submit" className={sendCls} data-chat-send="" aria-label={CHAT_TEXT.send} aria-disabled={sendOff ? "true" : "false"}>
+          <button
+            type="submit"
+            className={sendCls}
+            data-chat-send=""
+            aria-label={CHAT_TEXT.send}
+            aria-disabled={sendOff ? "true" : "false"}
+            // 누르는 순간 포커스가 버튼으로 옮겨 가면 입력칸이 blur 되어 키보드가 닫히고 패널이 손가락 밑에서 내려간다(Chromium·Android). 포커스는 입력칸에 둔다(07-19, 합격 검사 6).
+            onMouseDown={(e) => e.preventDefault()}
+          >
             <V2Icon name="send" />
           </button>
         </form>
