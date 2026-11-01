@@ -654,3 +654,61 @@ describe("useRoomConnection: world 프레임 비간섭 (CONN-04)", () => {
     expect(hook.result.current.status).toBe("replaced");
   });
 });
+
+// 07-10: 입력 중(typing)도 상태를 바꾸지 않고 구독자에게만 흘린다. 화이트리스트·분기·종료 연결 버림 세 곳에 모두 있어야 한다(리서치 Pitfall 2).
+describe("useRoomConnection: typing 프레임 (CHAT-04, 07-10)", () => {
+  const typingFrame = { t: "typing", seat: 2, on: true };
+
+  it("typing 프레임은 구독자에게 { epoch } 메타와 함께 가고 view·상태는 바뀌지 않는다", () => {
+    const { sockets, hook } = setup();
+    openWithState(sockets[0]!);
+    const listener = vi.fn();
+    act(() => {
+      hook.result.current.onEvent(listener);
+    });
+    const before = hook.result.current;
+    act(() => sockets[0]!.message(typingFrame));
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(listener).toHaveBeenLastCalledWith(typingFrame, { epoch: 1 });
+    expect(hook.result.current.view).toBe(before.view);
+    expect(hook.result.current.status).toBe(before.status);
+    expect(hook.result.current.epoch).toBe(before.epoch);
+  });
+
+  it("종료 상태(replaced)가 된 뒤 늦게 온 typing 은 구독자에게 가지 않는다", () => {
+    const { sockets, hook } = setup();
+    openWithState(sockets[0]!);
+    const listener = vi.fn();
+    act(() => {
+      hook.result.current.onEvent(listener);
+    });
+    act(() => sockets[0]!.serverClose(4001, "replaced"));
+    expect(hook.result.current.status).toBe("replaced");
+    act(() => sockets[0]!.message(typingFrame));
+    expect(listener).not.toHaveBeenCalled();
+  });
+
+  it("종료 상태(removed)가 된 뒤 늦게 온 typing 도 구독자에게 가지 않는다", () => {
+    const { sockets, hook } = setup();
+    openWithState(sockets[0]!);
+    const listener = vi.fn();
+    act(() => {
+      hook.result.current.onEvent(listener);
+    });
+    act(() => sockets[0]!.serverClose(4003, "left"));
+    expect(hook.result.current.status).toBe("removed");
+    act(() => sockets[0]!.message(typingFrame));
+    expect(listener).not.toHaveBeenCalled();
+  });
+
+  it("모르는 t(typingx)는 여전히 구독자에게 가지 않는다", () => {
+    const { sockets, hook } = setup();
+    openWithState(sockets[0]!);
+    const listener = vi.fn();
+    act(() => {
+      hook.result.current.onEvent(listener);
+    });
+    act(() => sockets[0]!.message({ t: "typingx", seat: 2, on: true }));
+    expect(listener).not.toHaveBeenCalled();
+  });
+});
