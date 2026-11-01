@@ -6,7 +6,7 @@ import "../../styles/v2.css";
 // 나머지 아이콘은 그것을 쓰는 페이즈(7·8·10페이즈)가 같은 표에 더한다.
 // v1.0 아이콘(src/components/Icon.tsx)과 이름이 겹쳐도(check·crown) 서로 다른 부품이다: v2 화면은 이 파일을 쓴다.
 // 로비 헤더의 [나가기]·[공유] 는 v1.0 Icon 을 그대로 쓴다(UI-SPEC 결정 현황) — 여기에 back·share 를 더하지 않는다.
-export type V2IconName = "point" | "crown" | "play" | "check" | "roleCitizen";
+export type V2IconName = "point" | "crown" | "play" | "check" | "roleCitizen" | "send";
 
 // ["c", cx, cy, r, filled?] 원 · ["p", d, filled?] 경로
 type Part = readonly ["c", number, number, number, boolean?] | readonly ["p", string, boolean?];
@@ -27,6 +27,10 @@ const ICONS: Readonly<Record<V2IconName, readonly Part[]>> = {
   roleCitizen: [
     ["c", 12, 8, 3.5],
     ["p", "M5 20c.8-3.8 3.6-6 7-6s6.2 2.2 7 6"],
+  ],
+  send: [
+    ["p", "M4 12l16-8-6 16-3-7z"],
+    ["p", "M11 13l9-9"],
   ],
 };
 
