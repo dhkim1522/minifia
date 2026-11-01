@@ -60,7 +60,7 @@ function simpleView(phase: PhaseId, n: number, role?: RoleId): RoomView {
     maxPlayers: 8,
     players: Array.from({ length: n }, (_, seat) => ({ seat, nickname: NAMES[seat]!, connected: true, isHost: seat === 0 })),
     me,
-    ...(phase === "discussion" ? { day: { n: 1, roles: ["mafia", "police", "citizen"] as RoleId[], claimLog: [] } } : {}),
+    ...(phase === "discussion" ? { day: { n: 1, roles: ["mafia", "police", "citizen"] as RoleId[] } } : {}),
   };
 }
 

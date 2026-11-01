@@ -70,7 +70,6 @@ function makeView(o: ViewOpts): RoomView {
     day: {
       n: o.day ?? 1,
       roles: ["mafia", "police", "citizen"],
-      claimLog: [],
       ...(o.morning !== undefined ? { morning: o.morning } : {}),
     },
   };

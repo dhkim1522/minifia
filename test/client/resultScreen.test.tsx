@@ -64,7 +64,7 @@ function makeView(o: Opts = {}): RoomView {
       ...(dead.includes(seat) ? { alive: false } : {}),
     })),
     me: { seat: me, isHost: me === 0, role: jobs[me]! },
-    day: { n: 1, roles: ["mafia", "police", "citizen"], claimLog: [], voteLog: o.voteLog ?? [] },
+    day: { n: 1, roles: ["mafia", "police", "citizen"], voteLog: o.voteLog ?? [] },
     ...(o.spectate ? { spectate: { seats } } : {}),
     ...(o.withResult === false ? {} : { result: { winner: o.winner ?? "citizenWin", seats, summary } }),
   };

@@ -81,7 +81,6 @@ function makeView(o: ViewOpts = {}): RoomView {
     day: {
       n: o.dayN ?? 1,
       roles: ["mafia", "police", "citizen"],
-      claimLog: [],
       voteLog: [
         {
           n: o.logN ?? 1,

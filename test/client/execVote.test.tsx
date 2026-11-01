@@ -60,7 +60,6 @@ function makeView(o: VoteOpts = {}): RoomView {
     day: {
       n: o.n ?? 1,
       roles: ["mafia", "police", "citizen"],
-      claimLog: [],
       ...(o.voteLog !== undefined ? { voteLog: o.voteLog } : {}),
       ...(phase === "execVote" ? { execTally: o.tally ?? { yes: 0, no: 0 } } : {}),
     },

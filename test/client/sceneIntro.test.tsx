@@ -37,7 +37,7 @@ function makeView(o: { phase: PhaseId; n?: number; role?: RoleId; allies?: numbe
       { seat: 3, nickname: "도현", connected: true, isHost: false },
     ].map((p) => (dead.includes(p.seat) ? { ...p, alive: false } : p)),
     me,
-    day: { n: o.n ?? 1, roles: ["mafia", "police", "citizen"], claimLog: [] },
+    day: { n: o.n ?? 1, roles: ["mafia", "police", "citizen"] },
   };
 }
 

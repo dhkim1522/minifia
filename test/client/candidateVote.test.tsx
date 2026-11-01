@@ -126,7 +126,7 @@ function makeView(o: CandOpts = {}): RoomView {
       ...(offline.includes(p.seat) ? { connected: false } : {}),
     })),
     me,
-    day: { n: o.n ?? 1, roles: ["mafia", "police", "citizen"], claimLog: [], ...(o.voteLog !== undefined ? { voteLog: o.voteLog } : {}) },
+    day: { n: o.n ?? 1, roles: ["mafia", "police", "citizen"], ...(o.voteLog !== undefined ? { voteLog: o.voteLog } : {}) },
   };
 }
 

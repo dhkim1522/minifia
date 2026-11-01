@@ -59,7 +59,6 @@ function makeView(o: Opts = {}): RoomView {
     day: {
       n: 1,
       roles: ["mafia", "police", "citizen"],
-      claimLog: [],
       candidate,
       ...(phase === "execution" && !o.noExecution ? { execution: { seat: candidate, phrase: o.phrase ?? 2 } } : {}),
     },

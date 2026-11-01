@@ -134,7 +134,6 @@ export function viewAt(phase: PhaseId, opts: FixtureOpts, noExecution: boolean):
     day: {
       n: 2,
       roles: ["mafia", "police", "citizen"],
-      claimLog: [],
       voteLog: log,
       ...(phase === "execVote" ? { execTally: { yes: 2, no: 1 } } : {}),
       ...(phase === "candidateVoteReveal" || phase === "defense" || phase === "execution" ? { candidate } : {}),

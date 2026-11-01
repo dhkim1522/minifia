@@ -35,7 +35,6 @@ function makeView(phase: PhaseId = "execVote", o: { endsIn?: number; n?: number;
     day: {
       n: o.n ?? 1,
       roles: ["mafia", "police", "citizen"],
-      claimLog: [],
       ...(phase === "execVote" ? { execTally: { yes: o.yes ?? 0, no: 0 } } : {}),
     },
   };

@@ -47,7 +47,6 @@ function makeView(phase: PhaseId, o: Opts = {}): RoomView {
     day: {
       n: o.n ?? 1,
       roles: ["mafia", "police", "citizen"],
-      claimLog: [],
       ...(phase === "night" && reason !== null ? { noExecution: { reason } } : {}),
     },
   };

@@ -4,7 +4,7 @@ import { act, cleanup, fireEvent, render, screen, within } from "@testing-librar
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import "../helpers/singleLineErrors";
 import type { RoleId } from "../../shared/game/roles";
-import type { ClaimLogEntry, PhaseId, RoomView, SpectateView } from "../../shared/protocol";
+import type { PhaseId, RoomView, SpectateView } from "../../shared/protocol";
 import type { RoomConnection, RoomEvent } from "../../src/net/useRoomConnection";
 import { DayScene } from "../../src/screens/DayScene";
 
@@ -25,7 +25,6 @@ interface ViewOpts {
   dead?: number[];
   spectate?: SpectateView;
   /** 공개된 주장 기록 (기본 비어 있음) */
-  claimLog?: ClaimLogEntry[];
 }
 
 function makeView(o: ViewOpts = {}): RoomView {
@@ -48,7 +47,6 @@ function makeView(o: ViewOpts = {}): RoomView {
     day: {
       n: o.n ?? 1,
       roles: ["mafia", "police", "doctor", "citizen"],
-      claimLog: o.claimLog ?? [],
     },
   };
   if (o.spectate) view.spectate = o.spectate;
@@ -384,14 +382,13 @@ describe("밤에는 기록 카드가 열리지 않는다 (03.1-08, D-06)", () =>
   });
 
   it("낮에 연 기록 카드는 밤이 되면 닫히고, 다시 낮이 되어도 다시 열리지 않는다", () => {
-    const claimLog: ClaimLogEntry[] = [{ n: 1, seat: 1, claim: "police" }];
-    const r = scene(makeView({ phase: "discussion", role: "citizen", claimLog }));
+    const r = scene(makeView({ phase: "discussion", role: "citizen" }));
     fireEvent.click(screen.getByRole("button", { name: /^하윤, 기록 보기$/ }));
     expect(r.container.querySelector('dialog[aria-label="하윤 기록"]') !== null).toBe(true);
-    r.rerender(makeView({ phase: "night", role: "citizen", claimLog }));
+    r.rerender(makeView({ phase: "night", role: "citizen" }));
     expect(r.container.querySelector("dialog") === null).toBe(true);
     expect(inspectBtns(r.container).length).toBe(0);
-    r.rerender(makeView({ phase: "discussion", n: 2, role: "citizen", claimLog }));
+    r.rerender(makeView({ phase: "discussion", n: 2, role: "citizen" }));
     expect(r.container.querySelector("dialog") === null).toBe(true);
     expect(inspectBtns(r.container).length).toBe(5);
   });

@@ -40,7 +40,7 @@ function makeView(o: ViewOpts = {}): RoomView {
     maxPlayers: 8,
     players: NAMES.map((nickname, seat) => ({ seat, nickname, connected: true, isHost: seat === 0, alive: !dead.includes(seat) })),
     me,
-    day: { n: 1, roles: ["mafia", "police", "doctor", "citizen"], claimLog: [] },
+    day: { n: 1, roles: ["mafia", "police", "doctor", "citizen"] },
   };
   if (o.morning !== undefined && view.day) view.day.morning = o.morning;
   if (o.spectate) view.spectate = o.spectate;

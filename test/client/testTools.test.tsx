@@ -57,7 +57,7 @@ function makeView(o: Opts = {}): RoomView {
     maxPlayers: 8,
     players: Array.from({ length: count }, (_, i) => ({ seat: i, nickname: NAMES[i]!, connected: true, isHost: i === 0 })),
     me,
-    ...(inDay ? { day: { n: 1, roles: ["mafia", "police", "citizen"], claimLog: [] } } : {}),
+    ...(inDay ? { day: { n: 1, roles: ["mafia", "police", "citizen"] } } : {}),
   };
 }
 

@@ -42,7 +42,7 @@ function makeView(over: Partial<RoomView> = {}): RoomView {
       { seat: 3, nickname: "도현", connected: true, isHost: false },
     ],
     me: { seat: 0, isHost: true },
-    day: { n: 1, roles: ["mafia", "police", "citizen"], claimLog: [], candidate: 2 },
+    day: { n: 1, roles: ["mafia", "police", "citizen"], candidate: 2 },
     ...over,
   };
 }
@@ -191,7 +191,6 @@ function roomView(o: { me?: number; candidate?: number | null; dead?: number[]; 
     day: {
       n: 1,
       roles: ["mafia", "police", "citizen"],
-      claimLog: [],
       ...(o.candidate === null ? {} : { candidate: o.candidate ?? 2 }),
     },
   };

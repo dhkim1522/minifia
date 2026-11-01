@@ -49,7 +49,6 @@ function makeView(o: ViewOpts = {}): RoomView {
     day: {
       n: o.n ?? 1,
       roles: ["mafia", "police", "doctor", "citizen"],
-      claimLog: [],
     },
   };
   if (o.morning !== undefined && view.day) view.day.morning = o.morning;
