@@ -3,7 +3,7 @@
 // 이 파일은 v1.0 호스트 문자열을 의도적으로 담는다 — 거부 대상이기 때문이다(정적 검사 허용 목록).
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import {
@@ -127,7 +127,7 @@ test("저장소 사실: preview_urls 는 false 그대로(결정 0042)", () => {
 test("저장소 사실: npm run deploy 는 계정 확인 → 빌드 → 산출물 검사 → 배포 순서", () => {
   assert.equal(
     JSON.parse(read("package.json")).scripts.deploy,
-    "node scripts/check-account.mjs && vite build && node scripts/check-deploy-target.mjs && wrangler deploy",
+    "node scripts/check-account.mjs && vite build && node scripts/check-deploy-target.mjs && node scripts/deploy.mjs",
   );
 });
 
@@ -173,4 +173,30 @@ test("정적 검사: prod-url.txt 를 읽는 요청 스크립트는 모두 v1.0 
     assert.match(read(`scripts/${f}.mjs`), /\bexitIfV1\(/, `${f}.mjs`);
   }
   assert.match(read("scripts/gallery.mjs"), /\bexitIfV1\(/);
+});
+
+// WR-05(06 리뷰): `npm run deploy -- --name minifia` 가 가드 뒤 wrangler 로 새지 않는다.
+test("npm run deploy 의 마지막 단계는 인자를 받지 않는 래퍼다(wrangler deploy 를 직접 두지 않는다)", () => {
+  const { scripts } = JSON.parse(read("package.json"));
+  assert.match(scripts.deploy, /node scripts\/deploy\.mjs$/);
+  assert.doesNotMatch(scripts.deploy, /wrangler deploy/);
+  assert.ok(scripts.deploy.indexOf("check-deploy-target.mjs") < scripts.deploy.indexOf("scripts/deploy.mjs"));
+});
+
+test("planDeploy: 인자가 없으면 고정 명령, 인자는 하나도 거부", async () => {
+  const { planDeploy } = await import("./deploy.mjs");
+  assert.deepEqual(planDeploy([]), { ok: true, command: "npx", args: ["wrangler", "deploy"] });
+  for (const extra of [["--name", "minifia"], ["--name=minifia"], ["--env", "x"], [""]]) {
+    const plan = planDeploy(extra);
+    assert.equal(plan.ok, false);
+    assert.ok(!("args" in plan));
+  }
+});
+
+test("scripts/deploy.mjs 는 추가 인자(--name minifia)를 받으면 wrangler 를 띄우지 않고 종료 상태 1", () => {
+  // 인자가 있을 때는 wrangler 를 실행하기 전에 끝나므로 오프라인·무부작용이다.
+  const r = spawnSync(process.execPath, [`${ROOT}scripts/deploy.mjs`, "--name", "minifia"], { encoding: "utf8" });
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, /추가 인자/);
+  assert.doesNotMatch(r.stdout + r.stderr, /wrangler\s+\d|Uploaded|Deployed/i);
 });

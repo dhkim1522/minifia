@@ -57,7 +57,7 @@ v2.0 대기실은 "같은 공간" 맵이다(결정 0044·0050). 이동은 서버
 ## 테스트 배포
 
 - `wrangler deploy` 한 번으로 URL 이 바뀌지 않고 갱신된다. 테스터는 링크만 열면 되고 Android·iPhone 구분이 없다.
-- 배포 대상(v2.0 Worker 이름 `minifia-v2` 와 공개 주소)은 `scripts/deploy-target.mjs` 한 곳이 유일한 출처이고, 다른 스크립트는 이 값만 import 한다(결정 0043·0044). `npm run deploy` 는 `check-account.mjs`(개인 Cloudflare 계정 확인) → `vite build` → `check-deploy-target.mjs`(빌드 산출물의 Worker 이름 확인) → `wrangler deploy` 순서이고 하나라도 어긋나면 배포 전에 멈춘다. v1.0 주소(`minifia`)는 v2 스크립트가 검사도 배포도 하지 않는다. v1.0 수정 배포는 `v1` 브랜치에서만 한다.
+- 배포 대상(v2.0 Worker 이름 `minifia-v2` 와 공개 주소)은 `scripts/deploy-target.mjs` 한 곳이 유일한 출처이고, 다른 스크립트는 이 값만 import 한다(결정 0043·0044). `npm run deploy` 는 `check-account.mjs`(개인 Cloudflare 계정 확인) → `vite build` → `check-deploy-target.mjs`(빌드 산출물의 Worker 이름 확인) → `deploy.mjs`(고정 인자로 `wrangler deploy` 실행, `npm run deploy -- <인자>` 는 거부) 순서이고 하나라도 어긋나면 배포 전에 멈춘다. v1.0 주소(`minifia`)는 v2 스크립트가 검사도 배포도 하지 않는다. v1.0 수정 배포는 `v1` 브랜치에서만 한다.
 - 개발 중에는 PC 브라우저 탭 여러 개로 4~8명을 흉내 내고, 같은 Wi-Fi 의 폰으로 로컬 서버에 접속해 확인한다.
 
 ## iOS Safari 주의
