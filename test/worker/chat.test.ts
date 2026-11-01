@@ -253,6 +253,9 @@ describe("채팅 — 트레이서 (CHAT-01)", () => {
   it("채팅: 로비 손님의 줄이 정리되어 방장·손님 모두에게 같은 프레임으로 가고 state 방송은 없다", async () => {
     const s = await seat(1, 0);
     const guest = s.guests[0]!;
+    // 입장 때 쌓인 state 가 모두 도착한 뒤에 위치를 적는다 — 아니면 늦게 온 입장 state 를 채팅이 만든 것으로 센다.
+    await settle(s.host, 0);
+    await settle(guest.sock, 0);
     const mh = mark(s.host);
     const mg = mark(guest.sock);
     chatSend(guest.sock, "  안녕   하세요 ");

@@ -1,12 +1,14 @@
 import { DurableObject } from "cloudflare:workers";
 import { CLOSE_CODES, MAX_FRAME_BYTES } from "../shared/protocol";
-import type { ApiErrorCode, BotVoteExec, BotVotePick, ClientMessage, EmojiId, RemovedReason, RoomPreview, ServerMessage, WorldFrame, WsErrorCode } from "../shared/protocol";
+import type { ApiErrorCode, BotVoteExec, BotVotePick, ChatRejectWhy, ClientMessage, EmojiId, RemovedReason, RoomPreview, ServerMessage, WorldFrame, WsErrorCode } from "../shared/protocol";
 import { botWakeAt, isBot, syncBotPlan, takeDueBotSteps } from "../shared/game/bots";
 import type { BotStep } from "../shared/game/bots";
 import { audience, channelOf, phaseKey } from "../shared/game/audience";
 import { emote, say } from "../shared/game/chat";
-import { typingRelay } from "../shared/game/chatRules";
-import type { TypingRelayState } from "../shared/game/chatRules";
+import { appendLine, emptyChatLog, seatMask, toWire } from "../shared/game/chatLog";
+import type { ChatLog } from "../shared/game/chatLog";
+import { checkChatSend, sanitizeChatText, typingRelay } from "../shared/game/chatRules";
+import type { ChatSenderRate, TypingRelayState } from "../shared/game/chatRules";
 import type { SayInput } from "../shared/game/chat";
 import {
   attachConnection,
@@ -77,6 +79,10 @@ export class Room extends DurableObject<Env> {
   // 입력 중 중계 기록(사람 id -> 마지막 켜짐 중계). 인메모리라 하이버네이션으로 비면 새로 센다 — 결과는 신호가 한 번 더 중계될 뿐이다(수용, A2).
   // 서버는 입력 중 타이머를 두지 않는다(A1): 만료는 받는 쪽 4.5초와 보내는 쪽 4초 무입력이 맡는다.
   private readonly typingRelays = new Map<string, TypingRelayState>();
+  // 채팅 줄 보관(07-11, 메모리뿐 — 가정 A1): 채널별 seq·수신자 마스크를 appendLine 이 정한다. 저장·재접속 복원은 07-14 가 같은 결과에 쓰기를 더한다.
+  private chatLog: ChatLog = emptyChatLog();
+  // 사람(봇 포함)별 최근 전송 기록(D5 도배 제한). 인메모리라 하이버네이션으로 비면 새로 센다(수용) — 제한이 한 번 느슨해질 뿐이다.
+  private readonly chatRates = new Map<string, ChatSenderRate>();
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
@@ -255,6 +261,9 @@ export class Room extends DurableObject<Env> {
         return;
       case "typing":
         this.handleTyping(ws, msg.on, msg.pk);
+        return;
+      case "chat":
+        this.handleChat(ws, msg.text, msg.pk);
         return;
       default: {
         // 새 메시지를 ClientMessage 에 더하고 여기를 빠뜨리면 컴파일이 실패한다 — 조용히 무시되지 않게(Pitfall 15).
@@ -873,6 +882,45 @@ export class Room extends DurableObject<Env> {
     const others = new Set(audience(room, { k: "typing", ch }));
     others.delete(att.playerId);
     this.deliver(others, { t: "typing", seat: me.seat, on });
+  }
+
+  // 자유 채팅(07-11, CHAT-01·02·03·05): 신원은 소켓 첨부 playerId 뿐이고 채널은 서버가 보낸 사람 상태로 정한다(결정 0002).
+  // 거절은 보낸 소켓에만 chatReject 로 알리고, phase 거절은 이어서 최신 state 를 한 번 더 보낸다(클라이언트가 서버 단계로 돌아오게, ROADMAP 계획 메모).
+  private handleChat(ws: WebSocket, text: string, pk: string): void {
+    const att = this.attachmentOf(ws);
+    if (!att || !this.room) {
+      this.sendTo(ws, { t: "error", code: "BAD_MESSAGE" });
+      return;
+    }
+    const why = this.applyChat(att.playerId, text, pk, Date.now());
+    if (why === null) return;
+    this.sendTo(ws, { t: "chatReject", why });
+    if (why === "phase") this.sendTo(ws, { t: "state", view: buildView(this.room, att.playerId, Date.now()) });
+  }
+
+  // 사람과 봇이 같은 본체를 쓴다(특권 없음, 결정 0024). 판정 순서: 단계 키 → 채널 → 정리 → D5 제한 → (받는 사람·마스크 한 번) → 보관 → 전송.
+  // 받는 사람·마스크는 이 지역 변수로만 쓴다 — 한 번 계산하고, (07-14: 저장하고,) 보낸다. 다시 audience 를 부르지 않는다.
+  // 단계 키가 어긋나거나 채널이 없으면 더 넓은 채널로 돌리지 않고 폐기한다 — 거절 이유는 모두 phase 하나라 보낸 사람의 역할이 드러나지 않는다(T-07-24·26).
+  // 본문·닉네임을 로그에 남기지 않는다(결정 0058-8).
+  private applyChat(playerId: string, text: string, pk: string, now: number): ChatRejectWhy | null {
+    const room = this.room;
+    if (!room) return "phase";
+    if (pk !== phaseKey({ phase: room.phase, day: room.day })) return "phase";
+    const ch = channelOf(room, playerId);
+    if (ch === null) return "phase";
+    const me = room.players.find((p) => p.id === playerId);
+    if (!me) return "phase";
+    const clean = sanitizeChatText(text);
+    if (!clean.ok) return clean.why;
+    const sent = checkChatSend(this.chatRates.get(playerId), clean.text, now);
+    if (!sent.ok) return sent.why;
+    this.chatRates.set(playerId, sent.next);
+    const ids = audience(room, { k: "chat", ch });
+    const r = seatMask(room.players, ids);
+    const appended = appendLine(this.chatLog, { ch, seat: me.seat, text: clean.text, at: now, n: room.day ?? 0, r });
+    this.chatLog = appended.log;
+    this.deliver(ids, { t: "chat", ...toWire(appended.record) });
+    return null;
   }
 
   // ======== 로비 이동 구역(06-08): move 처리 · 전송 · 저장/복원 · 봇 배회 ========
