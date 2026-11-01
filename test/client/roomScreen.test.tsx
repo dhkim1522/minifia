@@ -1,7 +1,8 @@
 import { act, cleanup, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { RoomView } from "../../shared/protocol";
-import type { RoomConnection } from "../../src/net/useRoomConnection";
+import type { WorldStageProps } from "../../src/components/WorldStage";
+import type { RoomConnection, RoomEvent } from "../../src/net/useRoomConnection";
 
 // 연결 훅은 반환값을 테스트가 정한다. 소켓·타이머는 useRoomConnection.test 가 본다.
 const connectionMock = vi.hoisted(() => ({ current: null as unknown }));
@@ -9,7 +10,21 @@ vi.mock("../../src/net/useRoomConnection", () => ({
   useRoomConnection: () => connectionMock.current,
 }));
 
+// 06-15: 대기실은 맵(WorldStage) 위에 그려진다. 캔버스·런타임은 worldStage.test 가 보므로 여기서는 받은 props 만 쥐는 가짜로 바꾼다
+// (lobby.test.tsx 와 같은 모양).
+const stage = vi.hoisted(() => ({ props: null as null | WorldStageProps }));
+vi.mock("../../src/components/WorldStage", async () => {
+  const { createElement } = await import("react");
+  return {
+    WorldStage: (props: WorldStageProps) => {
+      stage.props = props;
+      return createElement("div", { "data-world-stage-fake": "" });
+    },
+  };
+});
+
 const { RoomScreen } = await import("../../src/screens/RoomScreen");
+const { EXIT_CURTAIN_MS } = await import("../../src/world/runtime");
 
 const view: RoomView = {
   code: "0042",
@@ -57,7 +72,7 @@ describe("RoomScreen: 재접속 띠 (C-02)", () => {
     // 띠가 본문 앞에 온다(문서 순서) — 띠가 생기면 본문이 그만큼 줄어든다.
     expect(banner.compareDocumentPosition(body) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     // 끊긴 동안에도 마지막 화면(대기실)은 그대로 그려진다.
-    expect(screen.getByText("0042")).toBeTruthy();
+    expect(container.querySelector("main.mf-lobby [data-world-stage-fake]")).not.toBeNull();
   });
 
   it("restored 면 '다시 연결됐어요'", () => {
@@ -118,7 +133,7 @@ describe("RoomScreen: 포기·나가게 된 이유 (C-02, Pitfall 22)", () => {
   it("canSend 가 거짓이어도 화면은 바뀌지 않는다(띠만)", () => {
     connectionMock.current = conn({ canSend: false, banner: "reconnecting", status: "reconnecting" });
     render(<RoomScreen code="0042" token={"t".repeat(43)} onExit={vi.fn()} />);
-    expect(screen.getByText("0042")).toBeTruthy();
+    expect(screen.getByText("대기실")).toBeTruthy();
     expect(screen.queryByText("연결할 수 없어요")).toBeNull();
   });
 });
@@ -237,7 +252,7 @@ describe("RoomScreen: 화면 꺼짐 방지 연결 (CONN-03, D-12, P5-7)", () => 
     w.removeWakeLock();
     const { container } = mount();
     await settle();
-    expect(screen.getByText("0042")).toBeTruthy();
+    expect(screen.getByText("대기실")).toBeTruthy();
     expect(errorSpy).not.toHaveBeenCalled();
     expect(warnSpy).not.toHaveBeenCalled();
     expect(container.textContent).not.toMatch(/화면 꺼짐|wake/i);
@@ -249,5 +264,199 @@ describe("RoomScreen: 화면 꺼짐 방지 연결 (CONN-03, D-12, P5-7)", () => 
     await settle();
     unmount();
     expect(fake.sentinels[0]!.releaseCalls).toBe(1);
+  });
+});
+
+describe("RoomScreen: 맵 로비 연결 (MAP-01, MAP-05, CONN-04, 06-15)", () => {
+  const mount = () => render(<RoomScreen code="0042" token={"t".repeat(43)} onExit={vi.fn()} />);
+  const snap: RoomEvent = { t: "world", k: "snap", at: 1000, ents: [{ s: 0, p: [0, 0], t0: 1000, v: 0 }] };
+  const players4: RoomView["players"] = [
+    { seat: 0, nickname: "민수", connected: true, isHost: true },
+    { seat: 1, nickname: "하윤", connected: true, isHost: false },
+    { seat: 2, nickname: "지우", connected: true, isHost: false },
+    { seat: 3, nickname: "서연", connected: true, isHost: false },
+  ];
+  const at = (phase: RoomView["phase"]): RoomView => ({ ...view, phase, players: players4, me: { seat: 0, isHost: true, role: "citizen" } });
+  const setReduced = (reduced: boolean) =>
+    vi.stubGlobal("matchMedia", (q: string) => ({
+      matches: reduced && q.includes("reduce"),
+      media: q,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      addListener: () => {},
+      removeListener: () => {},
+    }));
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+    stage.props = null;
+  });
+
+  it("연결 훅 바로 뒤에 world 프레임을 구독해, 흘러온 첫 snap 이 Lobby 에 넘긴 스토어에 들어간다", () => {
+    let listener: ((e: RoomEvent, meta: { epoch: number }) => void) | undefined;
+    const onEvent = vi.fn((l: (e: RoomEvent, meta: { epoch: number }) => void) => {
+      listener = l;
+      return () => {};
+    });
+    connectionMock.current = conn({ onEvent });
+    mount();
+    expect(onEvent).toHaveBeenCalledTimes(1);
+    const store = stage.props!.store;
+    expect(store.isReady()).toBe(false);
+    act(() => listener!(snap, { epoch: 1 }));
+    expect(store.isReady()).toBe(true);
+    expect(store.seats()).toEqual([0]);
+    expect(store.currentEpoch()).toBe(1);
+  });
+
+  it("world 가 아닌 프레임(emoji·chat·error)은 스토어에 닿지 않는다", () => {
+    let listener: ((e: RoomEvent, meta: { epoch: number }) => void) | undefined;
+    connectionMock.current = conn({
+      onEvent: vi.fn((l: (e: RoomEvent, meta: { epoch: number }) => void) => {
+        listener = l;
+        return () => {};
+      }),
+    });
+    mount();
+    const store = stage.props!.store;
+    act(() => listener!({ t: "error", code: "bad_message" } as unknown as RoomEvent, { epoch: 1 }));
+    expect(store.isReady()).toBe(false);
+    expect(store.currentEpoch()).toBe(-1);
+  });
+
+  it("스토어는 연결과 같은 수명이다: 리렌더·단계 전환에도 같은 객체이고, 언마운트하면 구독을 푼다", () => {
+    const off = vi.fn();
+    const onEvent = vi.fn(() => off);
+    connectionMock.current = conn({ onEvent });
+    const { rerender, unmount } = mount();
+    const first = stage.props!.store;
+    rerender(<RoomScreen code="0042" token={"t".repeat(43)} onExit={vi.fn()} />);
+    expect(stage.props!.store).toBe(first);
+    expect(onEvent).toHaveBeenCalledTimes(1);
+    expect(off).not.toHaveBeenCalled();
+    unmount();
+    expect(off).toHaveBeenCalledTimes(1);
+  });
+
+  it("서버시각 차이(offset)·canSend·send 를 Lobby 를 거쳐 WorldStage 에 넘긴다", () => {
+    const send = vi.fn();
+    connectionMock.current = conn({ offset: 321, canSend: false, send });
+    mount();
+    expect(stage.props!.offset).toBe(321);
+    expect(stage.props!.canSend).toBe(false);
+    expect(stage.props!.send).toBe(send);
+  });
+
+  it("로비 → assigning: 420ms 동안 마지막 로비 view 로 Lobby 가 나가는 가림막(exiting)에 남고, 그 뒤 Assigning 이 나온다", () => {
+    vi.useFakeTimers();
+    setReduced(false);
+    connectionMock.current = conn({ view: at("lobby") });
+    const { container, rerender } = mount();
+    expect(stage.props!.exiting).toBeFalsy();
+    connectionMock.current = conn({ view: at("assigning") });
+    rerender(<RoomScreen code="0042" token={"t".repeat(43)} onExit={vi.fn()} />);
+    expect(container.querySelector("main.mf-lobby")).not.toBeNull();
+    expect(container.querySelector("main.mf-assign")).toBeNull();
+    expect(stage.props!.exiting).toBe(true);
+    expect(stage.props!.view.phase).toBe("lobby");
+    act(() => {
+      vi.advanceTimersByTime(EXIT_CURTAIN_MS - 1);
+    });
+    expect(container.querySelector("main.mf-lobby")).not.toBeNull();
+    act(() => {
+      vi.advanceTimersByTime(1);
+    });
+    expect(container.querySelector("main.mf-lobby")).toBeNull();
+    expect(container.querySelector(".mf-assign, main.mf-assign")).not.toBeNull();
+  });
+
+  it("가림막 시간은 dur-med 420ms 이다", () => {
+    expect(EXIT_CURTAIN_MS).toBe(420);
+  });
+
+  it("모션 줄이기면 가림막 없이 바로 Assigning 이다", () => {
+    vi.useFakeTimers();
+    setReduced(true);
+    connectionMock.current = conn({ view: at("lobby") });
+    const { container, rerender } = mount();
+    connectionMock.current = conn({ view: at("assigning") });
+    rerender(<RoomScreen code="0042" token={"t".repeat(43)} onExit={vi.fn()} />);
+    expect(container.querySelector("main.mf-lobby")).toBeNull();
+    expect(container.querySelector(".mf-assign, main.mf-assign")).not.toBeNull();
+  });
+
+  it("대기실로 돌아오면 맵을 다시 만든다(Lobby 가 새로 마운트되고 exiting 이 아니다)", () => {
+    vi.useFakeTimers();
+    setReduced(true);
+    connectionMock.current = conn({ view: at("lobby") });
+    const { container, rerender } = mount();
+    connectionMock.current = conn({ view: at("assigning") });
+    rerender(<RoomScreen code="0042" token={"t".repeat(43)} onExit={vi.fn()} />);
+    stage.props = null;
+    connectionMock.current = conn({ view: at("lobby") });
+    rerender(<RoomScreen code="0042" token={"t".repeat(43)} onExit={vi.fn()} />);
+    expect(container.querySelector("main.mf-lobby")).not.toBeNull();
+    expect(stage.props).not.toBeNull();
+    expect(stage.props!.exiting).toBeFalsy();
+  });
+
+  it("가림막 동안 로비로 되돌아오면 가림막이 풀린다", () => {
+    vi.useFakeTimers();
+    setReduced(false);
+    connectionMock.current = conn({ view: at("lobby") });
+    const { rerender } = mount();
+    connectionMock.current = conn({ view: at("assigning") });
+    rerender(<RoomScreen code="0042" token={"t".repeat(43)} onExit={vi.fn()} />);
+    expect(stage.props!.exiting).toBe(true);
+    connectionMock.current = conn({ view: at("lobby") });
+    rerender(<RoomScreen code="0042" token={"t".repeat(43)} onExit={vi.fn()} />);
+    expect(stage.props!.exiting).toBeFalsy();
+  });
+
+  it("로비 밖(assigning → roleReveal)의 전환에는 가림막이 없다 — v1.0 흐름 그대로", () => {
+    vi.useFakeTimers();
+    setReduced(false);
+    connectionMock.current = conn({ view: at("assigning") });
+    const { container, rerender } = mount();
+    expect(container.querySelector("main.mf-lobby")).toBeNull();
+    connectionMock.current = conn({ view: at("roleReveal") });
+    rerender(<RoomScreen code="0042" token={"t".repeat(43)} onExit={vi.fn()} />);
+    expect(container.querySelector("main.mf-lobby")).toBeNull();
+    expect(stage.props).toBeNull();
+  });
+
+  it("로비의 재접속 띠는 떠 있는 변형이다(.mf-reconnect--floating), 문구·아이콘·role 은 v1.0 그대로", () => {
+    connectionMock.current = conn({ status: "reconnecting", banner: "reconnecting", canSend: false });
+    render(<RoomScreen code="0042" token={"t".repeat(43)} onExit={vi.fn()} />);
+    const banner = document.querySelector(".mf-reconnect") as HTMLElement;
+    expect(banner.classList.contains("mf-reconnect--floating")).toBe(true);
+    expect(banner.classList.contains("mf-reconnect--reconnecting")).toBe(true);
+    expect(banner.getAttribute("role")).toBe("status");
+    expect(banner.textContent).toContain("연결이 끊겼어요 · 다시 연결하는 중");
+    expect(banner.querySelector("svg")).not.toBeNull();
+  });
+
+  it("restored 띠도 로비에서는 떠 있다", () => {
+    connectionMock.current = conn({ banner: "restored" });
+    render(<RoomScreen code="0042" token={"t".repeat(43)} onExit={vi.fn()} />);
+    const banner = document.querySelector(".mf-reconnect") as HTMLElement;
+    expect(banner.classList.contains("mf-reconnect--floating")).toBe(true);
+    expect(banner.textContent).toContain("다시 연결됐어요");
+  });
+
+  it("다른 단계에서는 floating 클래스 없이 기존 흐름 안 띠이다", () => {
+    connectionMock.current = conn({ view: at("assigning"), status: "reconnecting", banner: "reconnecting", canSend: false });
+    render(<RoomScreen code="0042" token={"t".repeat(43)} onExit={vi.fn()} />);
+    const banner = document.querySelector(".mf-reconnect") as HTMLElement;
+    expect(banner.className).toBe("mf-reconnect mf-reconnect--reconnecting");
+  });
+
+  it("띠가 떠 있는 동안 Lobby 는 알림을 억제한다(bannerVisible) — 띠 아래로 사람이 들어와도 알림이 없다", () => {
+    connectionMock.current = conn({ banner: "restored", epoch: 1 });
+    const { rerender, container } = mount();
+    connectionMock.current = conn({ banner: "restored", epoch: 1, view: { ...at("lobby"), players: [...players4, { seat: 4, nickname: "하준", connected: true, isHost: false }] } });
+    rerender(<RoomScreen code="0042" token={"t".repeat(43)} onExit={vi.fn()} />);
+    expect(container.querySelector(".mv-toast__text")?.textContent ?? "").toBe("");
   });
 });

@@ -1,21 +1,33 @@
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { StrictMode } from "react";
+import { readFileSync } from "node:fs";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import "../helpers/singleLineErrors";
 import type { PublicPlayer, RoomView } from "../../shared/protocol";
-import { readFileSync } from "node:fs";
-import { DayTable } from "../../src/components/DayTable";
-import type { DayTableSeat } from "../../src/components/DayTable";
-import { dayTableGeometry, FIG_H, FIG_W } from "../../src/game/dayTable";
-import { Lobby } from "../../src/screens/Lobby";
+import type { WorldStageProps } from "../../src/components/WorldStage";
+import { WorldStore } from "../../src/world/store";
+
+// 06-15: 대기실은 지하 재즈 바 맵(WorldStage) 위에 승인 로비 틀(헤더·알림·행동 줄·시트)을 얹는다.
+// WorldStage 는 가벼운 가짜로 바꾼다 — 캔버스·런타임은 worldStage.test 가 따로 본다. 가짜는 받은 props 만 기억한다.
+// 이 mock 의 모양(경로 "../../src/components/WorldStage", 가짜 컴포넌트가 props 를 stage.props 에 쥠)은 맵을 거쳐 가는 다른 client 테스트도 같이 쓴다.
+const stage = vi.hoisted(() => ({ props: null as null | WorldStageProps }));
+vi.mock("../../src/components/WorldStage", async () => {
+  const { createElement } = await import("react");
+  return {
+    WorldStage: (props: WorldStageProps) => {
+      stage.props = props;
+      return createElement("div", { "data-world-stage-fake": "" });
+    },
+  };
+});
+
+const { Lobby } = await import("../../src/screens/Lobby");
 
 afterEach(() => {
   cleanup();
   vi.useRealTimers();
+  stage.props = null;
 });
-
-// 옛 대기실 테이블(Table)의 클래스 이름들. 코드에 남아 있지 않다는 확인용이라 이름을 조각으로 만든다(옛 식별자 grep 이 0건이어야 한다).
-const LEGACY_TABLE_SELECTOR = ["table", "seat", "badge"].map((n) => `.mf-${n}`).join(", ");
 
 const player = (seat: number, nickname: string, extra: Partial<PublicPlayer> = {}): PublicPlayer => ({
   seat,
@@ -38,175 +50,114 @@ const makeView = (players: PublicPlayer[], mySeat = 0, extra: Partial<RoomView> 
   ...extra,
 });
 
-describe("Lobby — 대기실 (S-03) 테이블", () => {
+type LobbyProps = Parameters<typeof Lobby>[0];
+const store = new WorldStore();
+/** 필수 props(store·send)를 채워 로비를 그린다 */
+const lobby = (view: RoomView, extra: Partial<LobbyProps> = {}) => <Lobby view={view} store={store} send={() => {}} {...extra} />;
+const props = (): WorldStageProps => {
+  if (stage.props === null) throw new Error("WorldStage 가 그려지지 않았다");
+  return stage.props;
+};
+const advance = (ms: number) =>
+  act(() => {
+    vi.advanceTimersByTime(ms);
+  });
+const toastText = (container: HTMLElement): string => container.querySelector(".mv-toast__text")?.textContent ?? "";
+const toastOn = (container: HTMLElement): boolean => container.querySelector(".mv-toast")?.classList.contains("is-on") === true;
+
+describe("Lobby — 맵 로비 틀 (MAP-01, 06-15)", () => {
   const view = makeView([player(0, "민수"), player(1, "<b>영희</b>"), player(2, "서준")], 0);
 
-  it("방 코드 라벨과 코드, 테이블 위 이름 3개를 보여 주고 닉네임은 텍스트로만 그린다", () => {
-    const { container } = render(<Lobby view={view} send={() => {}} />);
-    expect(screen.getByText("방 코드")).toBeTruthy();
-    expect(screen.getByText("0042")).toBeTruthy();
-    const table = screen.getByRole("group", { name: "테이블" });
-    expect(within(table).getByText("민수")).toBeTruthy();
-    expect(within(table).getByText("<b>영희</b>")).toBeTruthy();
-    expect(within(table).getByText("서준")).toBeTruthy();
-    expect(screen.getByRole("group", { name: "민수 (나)" })).toBeTruthy();
+  it("루트는 main.mf-lobby 이고 WorldStage 한 장 위에 헤더·아래 패널이 얹힌다 — 옛 고정 테이블·배경 장면은 없다", () => {
+    const { container } = render(lobby(view));
+    const root = container.querySelector("main.mf-lobby");
+    expect(root).not.toBeNull();
+    expect(root?.querySelector("[data-world-stage-fake]")).not.toBeNull();
+    expect(root?.querySelector(".mf-lobby__header")).not.toBeNull();
+    expect(root?.querySelector(".mf-lobby__panel[data-world-panel]")).not.toBeNull();
+    expect(container.querySelector(".mf-dt, .mf-backdrop, .mf-lobby__scene, .mf-lobby__sheet") === null).toBe(true);
+  });
+
+  it("WorldStage 에는 view·store·send·canSend·offset 과 콜백이 그대로 넘어간다", () => {
+    const send = vi.fn();
+    render(lobby(view, { send, canSend: false, offset: 250 }));
+    const p = props();
+    expect(p.view).toBe(view);
+    expect(p.store).toBe(store);
+    expect(p.send).toBe(send);
+    expect(p.canSend).toBe(false);
+    expect(p.offset).toBe(250);
+    expect(typeof p.onNotice).toBe("function");
+    expect(typeof p.onKick).toBe("function");
+    expect(typeof p.onLeave).toBe("function");
+    expect(typeof p.onReady).toBe("function");
+    expect(p.exiting).toBeFalsy();
+  });
+
+  it("exiting 이면 WorldStage 가 나가는 가림막으로 간다", () => {
+    render(lobby(view, { exiting: true }));
+    expect(props().exiting).toBe(true);
+  });
+
+  it("헤더: 왼쪽 [나가기]·가운데 '대기실'·오른쪽 [공유], 방 코드는 어디에도 보이지 않는다 (3초 규칙)", () => {
+    const { container } = render(lobby(view));
+    const header = container.querySelector(".mf-lobby__header") as HTMLElement;
+    expect(within(header).getByRole("button", { name: "나가기" })).toBeTruthy();
+    expect(within(header).getByRole("button", { name: "공유" })).toBeTruthy();
+    expect(within(header).getByText("대기실")).toBeTruthy();
+    expect(container.textContent).not.toContain("0042");
+    expect(container.querySelector(".mf-lobby__code") === null).toBe(true);
+    // 읽을 글은 '대기실' 과 접히는 한 줄뿐
+    expect(header.querySelectorAll(".mv-phase__title, .mv-phase__hint").length).toBe(2);
+  });
+
+  it("닉네임은 이 틀 어디에서도 글자로 그려지지 않는다 — 이름표는 WorldStage 몫이다", () => {
+    const { container } = render(lobby(view));
+    expect(container.textContent).not.toContain("영희");
     expect(container.querySelector("b") === null).toBe(true);
   });
 
-  it("01-02 의 임시 목록(ul)은 더 이상 없다", () => {
-    const { container } = render(<Lobby view={view} send={() => {}} />);
-    expect(container.querySelector("ul") === null).toBe(true);
-    expect(container.querySelector(".lobby-players") === null).toBe(true);
+  it("안내 한 줄 '바닥을 눌러 걸어요' 는 [data-guide] 하나이고, 맵이 열리기 전에는 접혀 있다", () => {
+    const { container } = render(lobby(view));
+    const guides = container.querySelectorAll("[data-guide]");
+    expect(guides.length).toBe(1);
+    expect(guides[0]!.textContent).toBe("바닥을 눌러 걸어요");
+    expect(guides[0]!.classList.contains("mv-phase__hint")).toBe(true);
+    expect(guides[0]!.classList.contains("is-folded")).toBe(true);
   });
 
-  it("대기 장면(bg_game_lobby.webp) 위에 그려진다", () => {
-    const { container } = render(<Lobby view={view} send={() => {}} />);
-    const art = container.querySelector(".mf-backdrop__art") as HTMLElement | null;
-    expect(art?.style.backgroundImage).toContain("/backgrounds/bg_game_lobby.webp");
+  it("맵이 열린(onReady) 뒤 안내가 보이고 2500ms 뒤 접힌다", () => {
+    vi.useFakeTimers();
+    const { container } = render(lobby(view));
+    const hint = () => container.querySelector("[data-guide]") as HTMLElement;
+    act(() => props().onReady?.());
+    expect(hint().classList.contains("is-folded")).toBe(false);
+    advance(2499);
+    expect(hint().classList.contains("is-folded")).toBe(false);
+    advance(1);
+    expect(hint().classList.contains("is-folded")).toBe(true);
   });
 
-  it("테이블은 낮과 같은 DayTable 이다(.mf-dt)이고 옛 대기실 테이블 요소는 없다", () => {
-    const { container } = render(<Lobby view={view} send={() => {}} />);
-    expect(container.querySelectorAll(".mf-lobby__scene > .mf-dt").length).toBe(1);
-    expect(container.querySelector(LEGACY_TABLE_SELECTOR) === null).toBe(true);
+  it("[테스트] 버튼은 헤더 아래 자리(.mf-lobby__test)에 놓인다", () => {
+    const { container } = render(lobby(view, { testButton: <button type="button">테스트</button> }));
+    const slot = container.querySelector(".mf-lobby__test") as HTMLElement;
+    expect(slot).not.toBeNull();
+    expect(within(slot).getByRole("button", { name: "테스트" })).toBeTruthy();
   });
 
-  it("방장 혼자면 테이블에 인물 1개뿐이고 빈 자리 그림은 없다", () => {
-    render(<Lobby view={makeView([player(0, "민수")], 0)} send={() => {}} />);
-    const table = screen.getByRole("group", { name: "테이블" });
-    expect(table.querySelectorAll("img.mf-figure").length).toBe(1);
+  it("[테스트] 버튼이 없으면 자리도 없다", () => {
+    const { container } = render(lobby(view));
+    expect(container.querySelector(".mf-lobby__test") === null).toBe(true);
   });
 
-  it("끊긴 사람은 '{닉네임}, 연결 끊김' 으로 읽히고 인물이 흑백이다", () => {
-    // 방장이 아닌 사람 화면에서는 끊긴 자리도 누를 수 없는 group 이다(방장 화면에서는 같은 이름의 button, 아래 내보내기 테스트)
-    render(<Lobby view={makeView([player(0, "민수"), player(1, "서준"), player(2, "하윤", { connected: false })], 1)} send={() => {}} />);
-    const seatEl = screen.getByRole("group", { name: "하윤, 연결 끊김" });
-    expect(seatEl.querySelector("img")?.classList.contains("mf-figure--disconnected")).toBe(true);
-    expect(screen.getByRole("group", { name: "테이블" }).querySelectorAll("img.mf-figure--disconnected").length).toBe(1);
-  });
-
-  it("방장 왕관(role=img, 이름 '방장')이 정확히 하나 보이고, 동료 표시는 없다(대기실에는 동료가 없다)", () => {
-    render(<Lobby view={view} send={() => {}} />);
-    const table = screen.getByRole("group", { name: "테이블" });
-    expect(within(table).getAllByRole("img", { name: "방장" }).length).toBe(1);
-    expect(screen.getByRole("group", { name: "민수 (나)" }).querySelector('[role="img"][aria-label="방장"]')).not.toBeNull();
-    expect(table.querySelector('[aria-label="동료"]') === null).toBe(true);
-  });
-
-  it("마피아 동료가 있는 view(me.allies)면 그 자리에만 동료 표시가 있다 — 서버가 보낸 값에서만 만든다", () => {
-    const v = makeView([player(0, "민수"), player(1, "서준"), player(2, "하윤")], 0, { me: { seat: 0, isHost: true, allies: [2] } });
-    render(<Lobby view={v} send={() => {}} />);
-    const table = screen.getByRole("group", { name: "테이블" });
-    expect(table.querySelectorAll('[aria-label="동료"]').length).toBe(1);
-    expect(screen.getByRole("group", { name: "하윤" }).querySelector('[aria-label="동료"]')).not.toBeNull();
-  });
-
-  it("내 자리가 방장이 아니어도 내 자리가 맨 아래 가운데에 놓이고 내 표시는 이름표 테두리뿐이다(발밑 원·후광 없음)", () => {
-    const { container } = render(<Lobby view={makeView([player(0, "민수"), player(1, "지우")], 1)} send={() => {}} />);
-    const mine = screen.getByRole("group", { name: "지우 (나)" });
-    const geo = dayTableGeometry(366, 407, 12);
-    expect(parseFloat(mine.style.left) + FIG_W / 2).toBeCloseTo(geo.cx, 0);
-    expect(parseFloat(mine.style.top) + FIG_H).toBeCloseTo(geo.cy + geo.ry, 0);
-    expect(container.querySelectorAll(".mf-dt__ring").length).toBe(0);
-    expect(container.querySelectorAll(".mf-figure--halo-white, .mf-figure--halo-crimson").length).toBe(0);
-    expect(container.querySelectorAll(".mf-dt__tag--me").length).toBe(1);
+  it("방 코드가 비어 있으면 [공유] 아이콘이 없다", () => {
+    render(lobby(makeView([player(0, "민수")], 0, { code: "" })));
+    expect(screen.queryByRole("button", { name: "공유" })).toBeNull();
   });
 });
 
-describe("Lobby — 낮과 같은 기하: 좌석 번호 순서 등간격 (결정 0028)", () => {
-  const geo = dayTableGeometry(366, 407, 12);
-  const names = ["가나", "다라", "마바", "사아", "자차", "카타", "파하", "거너"];
-  const make = (seatsList: number[], mySeat: number) =>
-    makeView(
-      seatsList.map((n, i) => player(n, names[i]!)),
-      mySeat,
-    );
-  /** 자리 번호 -> 발 위치(좌표는 인라인 left·top 에서) */
-  const feet = (container: HTMLElement): Map<number, { x: number; y: number }> => {
-    const out = new Map<number, { x: number; y: number }>();
-    for (const el of container.querySelectorAll<HTMLElement>(".mf-dt__seat[data-seat]")) {
-      out.set(Number(el.dataset.seat), { x: parseFloat(el.style.left) + FIG_W / 2, y: parseFloat(el.style.top) + FIG_H });
-    }
-    return out;
-  };
-  const angleOf = (p: { x: number; y: number }): number => Math.atan2((p.y - geo.cy) / geo.ry, (p.x - geo.cx) / geo.rx);
-
-  it.each([1, 2, 3, 4, 5, 6, 7, 8])("%i명: 발이 모두 같은 타원 위에 있고 번호 순서로 각 간격이 2π/n 이며 내가 맨 아래 가운데다", (n) => {
-    const seatNums = Array.from({ length: n }, (_, i) => i);
-    const mySeat = seatNums[Math.min(1, n - 1)]!;
-    const { container } = render(<Lobby view={make(seatNums, mySeat)} send={() => {}} />);
-    const f = feet(container);
-    expect(f.size).toBe(n);
-    for (const p of f.values()) {
-      const e = ((p.x - geo.cx) / geo.rx) ** 2 + ((p.y - geo.cy) / geo.ry) ** 2;
-      expect(e).toBeCloseTo(1, 1);
-    }
-    const me = f.get(mySeat)!;
-    expect(me.x).toBeCloseTo(geo.cx, 0);
-    expect(me.y).toBeCloseTo(geo.cy + geo.ry, 0);
-    if (n < 2) return;
-    // 내 자리부터 번호 순서(원형)로 각이 2π/n 씩 늘어난다
-    const order = [...seatNums.slice(seatNums.indexOf(mySeat)), ...seatNums.slice(0, seatNums.indexOf(mySeat))];
-    for (let i = 1; i < order.length; i += 1) {
-      const a = angleOf(f.get(order[i - 1]!)!);
-      const b = angleOf(f.get(order[i]!)!);
-      const d = (((b - a) % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
-      expect(d).toBeCloseTo((2 * Math.PI) / n, 1);
-    }
-  });
-
-  it("자리 번호에 빈칸이 있어도(0·3·5) 세 명이 고르게 앉는다", () => {
-    const { container } = render(<Lobby view={make([0, 3, 5], 3)} send={() => {}} />);
-    const f = feet(container);
-    const d = (a: number, b: number) => Math.hypot(f.get(a)!.x - f.get(b)!.x, (f.get(a)!.y - f.get(b)!.y) * (geo.rx / geo.ry));
-    expect(d(0, 3)).toBeCloseTo(d(3, 5), -1);
-    expect(d(3, 5)).toBeCloseTo(d(5, 0), -1);
-  });
-
-  it("2명은 마주 본다: 상대의 가로 중심이 내 가로 중심과 같고 세로로 위쪽이다", () => {
-    const { container } = render(<Lobby view={make([0, 1], 0)} send={() => {}} />);
-    const f = feet(container);
-    expect(f.get(1)!.x).toBeCloseTo(f.get(0)!.x, 0);
-    expect(f.get(0)!.y - f.get(1)!.y).toBeGreaterThan(80);
-  });
-
-  it("3명은 한 직선 위에 있지 않다(삼각)", () => {
-    const { container } = render(<Lobby view={make([0, 1, 2], 0)} send={() => {}} />);
-    const f = feet(container);
-    const [a, b, c] = [f.get(0)!, f.get(1)!, f.get(2)!];
-    const cross = (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
-    expect(Math.abs(cross)).toBeGreaterThan(100);
-  });
-
-  it("화면이 자기 기하를 따로 갖지 않는다: 같은 입력의 DayTable 직접 렌더와 자리 인라인 left·top·transform·z-index 가 같다", () => {
-    const players = [player(0, "민수"), player(1, "서준", { connected: false }), player(2, "하윤"), player(4, "지아")];
-    const lobby = render(<Lobby view={makeView(players, 2)} send={() => {}} />);
-    const direct: DayTableSeat[] = players.map((p) => ({
-      seat: p.seat,
-      nickname: p.nickname,
-      connected: p.connected,
-      isHost: p.isHost,
-      isMe: p.seat === 2,
-      isAlly: false,
-    }));
-    const table = render(<DayTable seats={direct} mySeat={2} />);
-    const styleOf = (c: HTMLElement) =>
-      [...c.querySelectorAll<HTMLElement>(".mf-dt__seat[data-seat]")].map((e) => [e.dataset.seat, e.style.left, e.style.top, e.style.transform, e.style.zIndex].join("|"));
-    expect(styleOf(lobby.container)).toEqual(styleOf(table.container));
-    const tagOf = (c: HTMLElement) => [...c.querySelectorAll<HTMLElement>(".mf-dt__tag")].map((e) => [e.dataset.seat, e.style.left, e.style.top, e.style.zIndex].join("|"));
-    expect(tagOf(lobby.container)).toEqual(tagOf(table.container));
-  });
-
-  it("대기실 CSS 는 장면 상자를 낮과 같이 잡는다: 높이는 100dvh 로 따로 계산하지 않고, 옛 퍼센트 기하 규칙이 없다", () => {
-    const css = readFileSync("src/styles/lobby.css", "utf8");
-    expect(/100dvh/.test(css)).toBe(false);
-    expect(new RegExp(`${LEGACY_TABLE_SELECTOR.split(", ").map((x) => x.replace(".", "\\.")).join("|")}|aspect-ratio:\\s*4\\s*/\\s*5`).test(css)).toBe(false);
-    expect(/\.mf-lobby__bar\s*\{[^}]*height:\s*119\.2px/.test(css)).toBe(true);
-  });
-});
-
-describe("Lobby — 하단 시트: 연결된 인원·안내·[게임 시작] (ROOM-03, R7)", () => {
-  const startButton = () => screen.queryByRole("button", { name: "게임 시작" }) as HTMLButtonElement | null;
+describe("Lobby — 행동 줄: [시작] 과 점, 손님 (ROOM-03, UI-SPEC 행동 줄)", () => {
+  const start = (container: HTMLElement) => container.querySelector("[data-lobby-start]") as HTMLButtonElement | null;
   // 방장(seat 0) + 연결된 참가자 n 명 + 끊긴 참가자 away 명
   const hostView = (connected: number, away = 0) => {
     const players = [player(0, "방장님")];
@@ -214,216 +165,203 @@ describe("Lobby — 하단 시트: 연결된 인원·안내·[게임 시작] (RO
     for (let i = 0; i < away; i += 1) players.push(player(connected + 1 + i, `먼친구${i}`, { connected: false }));
     return makeView(players, 0);
   };
+  const dotsOn = (container: HTMLElement) => container.querySelectorAll(".mv-dots__dot.is-on").length;
+  const dotsAll = (container: HTMLElement) => container.querySelectorAll(".mv-dots__dot").length;
 
-  it("방장 혼자(연결) → 안내 '4명부터 시작할 수 있어요', 인원 '1 / 8명', [게임 시작] 꺼짐", () => {
-    render(<Lobby view={hostView(0)} send={() => {}} />);
-    expect(screen.getByText("4명부터 시작할 수 있어요")).toBeTruthy();
-    expect(screen.getByText("1 / 8명")).toBeTruthy();
-    expect(startButton()?.disabled).toBe(true);
+  it("방장 · 연결 5명: 활성 [시작] — aria-label '게임 시작, 5명 모임', 점 5/8", () => {
+    const { container } = render(lobby(hostView(4)));
+    const b = start(container)!;
+    expect(b.getAttribute("aria-label")).toBe("게임 시작, 5명 모임");
+    expect(b.getAttribute("aria-disabled")).toBeNull();
+    expect(b.className).toContain("mf-act--primary");
+    expect(b.textContent).toContain("시작");
+    expect(dotsAll(container)).toBe(8);
+    expect(dotsOn(container)).toBe(5);
+    expect(container.querySelector(".mf-lobby__panel")?.contains(b)).toBe(true);
   });
 
-  it("방장 + 연결 3명 → '모두 모였으면 시작하세요', '4 / 8명', [게임 시작] 켜짐", () => {
-    render(<Lobby view={hostView(3)} send={() => {}} />);
-    expect(screen.getByText("모두 모였으면 시작하세요")).toBeTruthy();
-    expect(screen.getByText("4 / 8명")).toBeTruthy();
-    expect(startButton()?.disabled).toBe(false);
+  it("8명이면 점 8개가 모두 켜지고 별도 문구는 없다", () => {
+    const { container } = render(lobby(hostView(7)));
+    expect(dotsOn(container)).toBe(8);
+    expect(container.textContent).not.toContain("가득");
   });
 
-  it("[게임 시작]을 누르면 start 를 한 번 보내고 2초 안에는 다시 보내지 않으며 2초 뒤 다시 켜진다", () => {
+  it("누르면 start 를 한 번 보내고 2초 안에는 다시 보내지 않으며 2초 뒤 다시 보낼 수 있다", () => {
     vi.useFakeTimers();
     const send = vi.fn();
-    render(<Lobby view={hostView(3)} send={send} />);
-    fireEvent.click(startButton()!);
+    const { container } = render(lobby(hostView(4), { send }));
+    fireEvent.click(start(container)!);
     expect(send).toHaveBeenCalledTimes(1);
     expect(send).toHaveBeenCalledWith({ t: "start" });
-    expect(startButton()?.disabled).toBe(true);
-    fireEvent.click(startButton()!);
-    act(() => {
-      vi.advanceTimersByTime(1999);
-    });
-    fireEvent.click(startButton()!);
+    fireEvent.click(start(container)!);
+    advance(1999);
+    fireEvent.click(start(container)!);
     expect(send).toHaveBeenCalledTimes(1);
-    act(() => {
-      vi.advanceTimersByTime(1);
-    });
-    expect(startButton()?.disabled).toBe(false);
-    fireEvent.click(startButton()!);
+    // 잠긴 동안은 흐리게 — 눌러도 알림을 띄우지 않는다
+    expect(toastText(container)).toBe("");
+    advance(1);
+    fireEvent.click(start(container)!);
     expect(send).toHaveBeenCalledTimes(2);
   });
 
-  it("연결 3 + 끊김 2 → '3 / 8명', 안내 '4명부터 시작할 수 있어요', [게임 시작] 꺼짐(끊긴 사람은 시작 인원에 들지 않는다)", () => {
-    render(<Lobby view={hostView(2, 2)} send={() => {}} />);
-    expect(screen.getByText("3 / 8명")).toBeTruthy();
-    expect(screen.getByText("4명부터 시작할 수 있어요")).toBeTruthy();
-    expect(startButton()?.disabled).toBe(true);
-  });
-
-  it("자리 8개가 차면(끊긴 사람 포함) '8 / 8명 · 가득 찼어요'", () => {
-    render(<Lobby view={hostView(5, 2)} send={() => {}} />);
-    expect(screen.getByText("8 / 8명 · 가득 찼어요")).toBeTruthy();
-  });
-
-  it("canSend 가 거짓이면 [게임 시작]이 꺼진다", () => {
-    render(<Lobby view={hostView(3)} send={() => {}} canSend={false} />);
-    expect(startButton()?.disabled).toBe(true);
-  });
-
-  it("canSend 가 꺼진 채로는 눌러도 start 를 보내지 않는다", () => {
-    const send = vi.fn();
-    render(<Lobby view={hostView(3)} send={send} canSend={false} />);
-    fireEvent.click(startButton()!);
-    expect(send).not.toHaveBeenCalled();
-  });
-
-  it("참가자 화면: [게임 시작]이 없고 안내는 '방장이 시작하길 기다리는 중이에요'", () => {
-    const view = makeView([player(0, "민수"), player(1, "서준"), player(2, "하윤")], 1);
-    render(<Lobby view={view} send={() => {}} />);
-    expect(startButton() === null).toBe(true);
-    expect(screen.getByText("방장이 시작하길 기다리는 중이에요")).toBeTruthy();
-    expect(screen.getByText("3 / 8명")).toBeTruthy();
-  });
-
-  it("참가자 화면에서 방장이 끊겼으면 안내가 '방장 연결을 기다리는 중이에요'", () => {
-    const view = makeView([player(0, "민수", { connected: false }), player(1, "서준")], 1);
-    render(<Lobby view={view} send={() => {}} />);
-    expect(screen.getByText("방장 연결을 기다리는 중이에요")).toBeTruthy();
-    expect(screen.getByText("1 / 8명")).toBeTruthy();
-  });
-
-  it("시작이 거절된 뒤 같은 view 가 다시 와도 같은 문구·버튼 상태이다(화면이 따로 상태를 기억하지 않는다)", () => {
+  it("연결 3명(모자람): 흐린 inactive — aria-disabled, 누르면 start 없이 알림 '4명부터 시작해요' 한 번", () => {
     vi.useFakeTimers();
-    const view = hostView(3);
-    const { rerender } = render(<Lobby view={view} send={() => {}} />);
-    rerender(<Lobby view={{ ...view, serverNow: 5 }} send={() => {}} />);
-    expect(screen.getByText("모두 모였으면 시작하세요")).toBeTruthy();
-    expect(screen.getByText("4 / 8명")).toBeTruthy();
-    expect(startButton()?.disabled).toBe(false);
+    const send = vi.fn();
+    const { container } = render(lobby(hostView(2), { send }));
+    const b = start(container)!;
+    expect(b.getAttribute("aria-disabled")).toBe("true");
+    expect(b.disabled).toBe(false);
+    expect(b.className).toContain("mf-act--inactive");
+    expect(b.getAttribute("aria-label")).toBe("게임 시작, 3명 모임, 4명부터 시작할 수 있어요");
+    expect(dotsOn(container)).toBe(3);
+    fireEvent.click(b);
+    expect(send).not.toHaveBeenCalled();
+    expect(toastText(container)).toBe("4명부터 시작해요");
+    expect(toastOn(container)).toBe(true);
   });
 
-  it("안내 문장은 한 줄 고정 문구이고 방 코드는 4자리다", () => {
-    render(<Lobby view={hostView(0)} send={() => {}} />);
-    expect(screen.getByText("0042").textContent?.length).toBe(4);
-    expect(screen.getByText("4명부터 시작할 수 있어요").textContent).not.toContain("\n");
+  it("방장 혼자면 점 1개만 켜지고 흐리다", () => {
+    const { container } = render(lobby(hostView(0)));
+    expect(dotsOn(container)).toBe(1);
+    expect(start(container)?.getAttribute("aria-disabled")).toBe("true");
+  });
+
+  it("끊긴 사람은 모인 사람 수에 들지 않는다: 연결 3 + 끊김 2 → 점 3, 흐림", () => {
+    const { container } = render(lobby(hostView(2, 2)));
+    expect(dotsOn(container)).toBe(3);
+    expect(start(container)?.getAttribute("aria-disabled")).toBe("true");
+  });
+
+  it("경계: 연결 4명이면 활성, 3명이면 흐림", () => {
+    const four = render(lobby(hostView(3)));
+    expect(start(four.container)?.className).toContain("mf-act--primary");
+    four.unmount();
+    const three = render(lobby(hostView(2)));
+    expect(start(three.container)?.className).toContain("mf-act--inactive");
+  });
+
+  it("canSend 가 거짓이면 눌러도 start 를 보내지 않고 알림도 없다", () => {
+    const send = vi.fn();
+    const { container } = render(lobby(hostView(4), { send, canSend: false }));
+    expect(start(container)?.className).toContain("mf-act--inactive");
+    fireEvent.click(start(container)!);
+    expect(send).not.toHaveBeenCalled();
+    expect(toastText(container)).toBe("");
+  });
+
+  it("손님: 평평한 비활성 '방장을 기다리는 중…' 하나뿐 — 시작 버튼·점·공유 줄은 없다", () => {
+    const view = makeView([player(0, "민수"), player(1, "서준"), player(2, "하윤")], 1);
+    const { container } = render(lobby(view));
+    const b = screen.getByRole("button", { name: "방장을 기다리는 중…" }) as HTMLButtonElement;
+    expect(b.disabled).toBe(true);
+    expect(b.className).toContain("mf-act--flat");
+    expect(container.querySelector("[data-lobby-start]") === null).toBe(true);
+    expect(container.querySelector(".mv-dots") === null).toBe(true);
+    expect(container.querySelectorAll(".mf-lobby__panel button").length).toBe(1);
+  });
+
+  it("손님 화면에서 방장이 끊겨 있어도 같은 라벨이다", () => {
+    render(lobby(makeView([player(0, "민수", { connected: false }), player(1, "서준")], 1)));
+    expect(screen.getByRole("button", { name: "방장을 기다리는 중…" })).toBeTruthy();
+  });
+
+  it("시작이 거절된 뒤 같은 view 가 다시 와도 같은 모양이다(화면이 따로 상태를 기억하지 않는다)", () => {
+    const v = hostView(3);
+    const { container, rerender } = render(lobby(v));
+    rerender(lobby({ ...v, serverNow: 5 }));
+    expect(start(container)?.className).toContain("mf-act--primary");
+    expect(dotsOn(container)).toBe(4);
   });
 });
 
-describe("Lobby — 입장·방장 변경 토스트와 자리 등장·퇴장 (D-10, R9)", () => {
+describe("Lobby — 알림은 TopToast 하나 (D-10, CONN-04 WR-03)", () => {
   const base = [player(0, "민수"), player(1, "서준")];
-  const advance = (ms: number) =>
-    act(() => {
-      vi.advanceTimersByTime(ms);
-    });
-  const seatEl = (name: string) => screen.queryByRole("group", { name }) as HTMLElement | null;
 
-  it("처음 render 에는 토스트가 없고, StrictMode 이중 effect 에서도 없다", () => {
-    render(
-      <StrictMode>
-        <Lobby view={makeView(base, 0)} send={() => {}} />
-      </StrictMode>,
-    );
-    expect(screen.queryByRole("status") === null).toBe(true);
+  it("처음 render 에는 알림이 없고, StrictMode 이중 effect 에서도 없다", () => {
+    const { container } = render(<StrictMode>{lobby(makeView(base, 0))}</StrictMode>);
+    expect(toastText(container)).toBe("");
+    expect(toastOn(container)).toBe(false);
   });
 
-  it("같은 epoch 로 하윤이 더해진 view 가 오면 토스트 '하윤님이 들어왔어요' 가 2초 보이고 사라진다", () => {
+  it("같은 epoch 로 하윤이 더해진 view 가 오면 알림 '하윤님이 들어왔어요' 가 켜졌다 1.5초 뒤 사라진다 (문구는 06-21 전까지 v1 그대로)", () => {
     vi.useFakeTimers();
-    const { rerender } = render(<Lobby view={makeView(base, 0)} send={() => {}} epoch={0} />);
-    rerender(<Lobby view={makeView([...base, player(2, "하윤")], 0)} send={() => {}} epoch={0} />);
-    expect(screen.getByRole("status").textContent).toBe("하윤님이 들어왔어요");
-    advance(1999);
-    expect(screen.queryByRole("status") !== null).toBe(true);
+    const { container, rerender } = render(lobby(makeView(base, 0), { epoch: 0 }));
+    rerender(lobby(makeView([...base, player(2, "하윤")], 0), { epoch: 0 }));
+    expect(toastText(container)).toBe("하윤님이 들어왔어요");
+    expect(toastOn(container)).toBe(true);
+    advance(1499);
+    expect(toastOn(container)).toBe(true);
     advance(1);
-    expect(screen.queryByRole("status") === null).toBe(true);
+    expect(toastOn(container)).toBe(false);
+    advance(300);
+    expect(toastText(container)).toBe("");
   });
 
-  it("epoch 를 바꾸며 사람이 더해진 view 를 주면(재연결 직후) 토스트가 없다", () => {
-    const { rerender } = render(<Lobby view={makeView(base, 0)} send={() => {}} epoch={0} />);
-    rerender(<Lobby view={makeView([...base, player(2, "하윤")], 0)} send={() => {}} epoch={1} />);
-    expect(screen.queryByRole("status") === null).toBe(true);
+  it("알림은 한 번에 하나다: 새 알림이 이전 알림을 바꾼다", () => {
+    vi.useFakeTimers();
+    const { container, rerender } = render(lobby(makeView(base, 0), { epoch: 0 }));
+    rerender(lobby(makeView([...base, player(2, "하윤")], 0), { epoch: 0 }));
+    rerender(lobby(makeView([...base, player(2, "하윤"), player(3, "지아")], 0), { epoch: 0 }));
+    expect(container.querySelectorAll(".mv-toast").length).toBe(1);
+    expect(toastText(container)).toBe("지아님이 들어왔어요");
   });
 
-  it("재연결 뒤 같은 epoch 의 다음 변화에는 다시 토스트가 난다", () => {
-    const { rerender } = render(<Lobby view={makeView(base, 0)} send={() => {}} epoch={0} />);
-    rerender(<Lobby view={makeView([...base, player(2, "하윤")], 0)} send={() => {}} epoch={1} />);
-    rerender(<Lobby view={makeView([...base, player(2, "하윤"), player(3, "지아")], 0)} send={() => {}} epoch={1} />);
-    expect(screen.getByRole("status").textContent).toBe("지아님이 들어왔어요");
+  it("epoch 를 바꾸며 사람이 더해진 view 를 주면(재연결 직후) 알림이 없다", () => {
+    const { container, rerender } = render(lobby(makeView(base, 0), { epoch: 0 }));
+    rerender(lobby(makeView([...base, player(2, "하윤")], 0), { epoch: 1 }));
+    expect(toastText(container)).toBe("");
   });
 
-  it("방장이 바뀌면 '서준님이 새 방장이 되었어요' 토스트", () => {
-    const { rerender } = render(<Lobby view={makeView(base, 0)} send={() => {}} />);
-    rerender(
-      <Lobby view={makeView([player(0, "민수", { isHost: false }), player(1, "서준", { isHost: true })], 0)} send={() => {}} />,
-    );
-    expect(screen.getByRole("status").textContent).toBe("서준님이 새 방장이 되었어요");
+  it("재연결 뒤 같은 epoch 의 다음 변화에는 다시 알림이 난다", () => {
+    const { container, rerender } = render(lobby(makeView(base, 0), { epoch: 0 }));
+    rerender(lobby(makeView([...base, player(2, "하윤")], 0), { epoch: 1 }));
+    rerender(lobby(makeView([...base, player(2, "하윤"), player(3, "지아")], 0), { epoch: 1 }));
+    expect(toastText(container)).toBe("지아님이 들어왔어요");
+  });
+
+  it("방장이 바뀌면 '서준님이 새 방장이 되었어요'", () => {
+    const { container, rerender } = render(lobby(makeView(base, 0)));
+    rerender(lobby(makeView([player(0, "민수", { isHost: false }), player(1, "서준", { isHost: true })], 0)));
+    expect(toastText(container)).toBe("서준님이 새 방장이 되었어요");
   });
 
   it("같은 변화에 입장과 방장 변경이 함께면 방장 변경을 보인다", () => {
-    const { rerender } = render(<Lobby view={makeView(base, 0)} send={() => {}} />);
-    rerender(
-      <Lobby
-        view={makeView([player(0, "민수", { isHost: false }), player(1, "서준", { isHost: true }), player(2, "하윤")], 0)}
-        send={() => {}}
-      />,
-    );
-    expect(screen.getByRole("status").textContent).toBe("서준님이 새 방장이 되었어요");
+    const { container, rerender } = render(lobby(makeView(base, 0)));
+    rerender(lobby(makeView([player(0, "민수", { isHost: false }), player(1, "서준", { isHost: true }), player(2, "하윤")], 0)));
+    expect(toastText(container)).toBe("서준님이 새 방장이 되었어요");
   });
 
-  it("나 자신이 새로 앉은 변화에는 토스트가 없다", () => {
-    const { rerender } = render(<Lobby view={makeView([player(0, "민수")], 0)} send={() => {}} />);
-    rerender(<Lobby view={makeView([player(0, "민수"), player(1, "서준")], 1)} send={() => {}} />);
-    expect(screen.queryByRole("status") === null).toBe(true);
+  it("나 자신이 새로 앉은 변화에는 알림이 없다", () => {
+    const { container, rerender } = render(lobby(makeView([player(0, "민수")], 0)));
+    rerender(lobby(makeView([player(0, "민수"), player(1, "서준")], 1)));
+    expect(toastText(container)).toBe("");
   });
 
-  it("처음 그릴 때 이미 있던 자리에는 전이 클래스가 없다", () => {
-    const { container } = render(<Lobby view={makeView(base, 0)} send={() => {}} />);
-    expect(container.querySelector(".mf-dt__seat--enter") === null).toBe(true);
-    expect(container.querySelector(".mf-dt__seat--leave") === null).toBe(true);
+  it("재접속 띠가 떠 있는 동안(bannerVisible)에는 알림을 띄우지 않고, 띠가 사라진 뒤 다음 변화부터 알린다", () => {
+    const { container, rerender } = render(lobby(makeView(base, 0), { epoch: 0, bannerVisible: true }));
+    rerender(lobby(makeView([...base, player(2, "하윤")], 0), { epoch: 0, bannerVisible: true }));
+    expect(toastText(container)).toBe("");
+    // 띠가 사라져도 그 사이 일은 기준선으로 들어가 뒤늦게 알리지 않는다
+    rerender(lobby(makeView([...base, player(2, "하윤")], 0), { epoch: 0, bannerVisible: false }));
+    expect(toastText(container)).toBe("");
+    rerender(lobby(makeView([...base, player(2, "하윤"), player(3, "지아")], 0), { epoch: 0, bannerVisible: false }));
+    expect(toastText(container)).toBe("지아님이 들어왔어요");
   });
 
-  it("입장한 자리에 .mf-dt__seat--enter 가 420ms 동안 붙고 그 뒤 빠진다", () => {
-    vi.useFakeTimers();
-    const { rerender } = render(<Lobby view={makeView(base, 0)} send={() => {}} />);
-    rerender(<Lobby view={makeView([...base, player(2, "하윤")], 0)} send={() => {}} />);
-    expect(seatEl("하윤")?.classList.contains("mf-dt__seat--enter")).toBe(true);
-    expect(seatEl("서준")?.classList.contains("mf-dt__seat--enter")).toBe(false);
-    advance(419);
-    expect(seatEl("하윤")?.classList.contains("mf-dt__seat--enter")).toBe(true);
-    advance(1);
-    expect(seatEl("하윤")?.classList.contains("mf-dt__seat--enter")).toBe(false);
-  });
-
-  it("나간 사람은 320ms 동안 .mf-dt__seat--leave 로 남았다가 사라진다", () => {
-    vi.useFakeTimers();
-    const { rerender } = render(<Lobby view={makeView([...base, player(2, "하윤")], 0)} send={() => {}} />);
-    rerender(<Lobby view={makeView(base, 0)} send={() => {}} />);
-    expect(seatEl("하윤")?.classList.contains("mf-dt__seat--leave")).toBe(true);
-    advance(319);
-    expect(seatEl("하윤") !== null).toBe(true);
-    advance(1);
-    expect(seatEl("하윤") === null).toBe(true);
-  });
-
-  it("나간 자리에 다른 사람이 바로 앉으면 남긴 사람을 바로 빼고 새 사람이 등장한다", () => {
-    vi.useFakeTimers();
-    const { rerender } = render(<Lobby view={makeView(base, 0)} send={() => {}} />);
-    rerender(<Lobby view={makeView([player(0, "민수"), player(1, "지아")], 0)} send={() => {}} />);
-    expect(seatEl("서준") === null).toBe(true);
-    expect(seatEl("지아")?.classList.contains("mf-dt__seat--enter")).toBe(true);
-  });
-
-  it("epoch 가 바뀐 직후의 변화는 전이 없이 보인다", () => {
-    const { rerender } = render(<Lobby view={makeView(base, 0)} send={() => {}} epoch={0} />);
-    rerender(<Lobby view={makeView([...base, player(2, "하윤")], 0)} send={() => {}} epoch={1} />);
-    expect(seatEl("하윤")?.classList.contains("mf-dt__seat--enter")).toBe(false);
+  it("맵이 알리는 글(onNotice)도 같은 알림 자리에 뜬다", () => {
+    const { container } = render(lobby(makeView(base, 0)));
+    act(() => props().onNotice("가는 길을 다시 찾고 있어요"));
+    expect(toastText(container)).toBe("가는 길을 다시 찾고 있어요");
   });
 });
 
-describe("Lobby — [뒤로] 로 방 나가기 (D-17, R17)", () => {
+describe("Lobby — [나가기] 로 방 나가기 (D-17, WR-01)", () => {
   const lobbyView = makeView([player(0, "민수"), player(1, "서준"), player(2, "하윤")], 0);
   const leaveButton = () => screen.getByRole("button", { name: "나가기" }) as HTMLButtonElement;
   const sheet = () => screen.getByRole("dialog", { name: "방에서 나갈까요?" });
 
-  it("위쪽 바에 [나가기](aria-label) 아이콘 버튼이 있고 시트는 닫혀 있다", () => {
-    render(<Lobby view={lobbyView} send={() => {}} />);
+  it("헤더에 [나가기](aria-label) 아이콘 버튼이 있고 시트는 닫혀 있다", () => {
+    render(lobby(lobbyView));
     expect(leaveButton()).toBeTruthy();
     expect(screen.queryByRole("dialog")).toBeNull();
   });
@@ -431,7 +369,7 @@ describe("Lobby — [뒤로] 로 방 나가기 (D-17, R17)", () => {
   it("[나가기] → '방에서 나갈까요?' → 시트의 [나가기] → send leave 와 onLeave 가 각각 한 번", () => {
     const send = vi.fn();
     const onLeave = vi.fn();
-    render(<Lobby view={lobbyView} send={send} onLeave={onLeave} />);
+    render(lobby(lobbyView, { send, onLeave }));
     fireEvent.click(leaveButton());
     expect(screen.getByRole("heading", { name: "방에서 나갈까요?" })).toBeTruthy();
     expect(send).not.toHaveBeenCalled();
@@ -445,28 +383,26 @@ describe("Lobby — [뒤로] 로 방 나가기 (D-17, R17)", () => {
     vi.useFakeTimers();
     const send = vi.fn();
     const onLeave = vi.fn();
-    render(<Lobby view={lobbyView} send={send} onLeave={onLeave} />);
+    render(lobby(lobbyView, { send, onLeave }));
     fireEvent.click(leaveButton());
     fireEvent.click(within(sheet()).getByRole("button", { name: "취소" }));
-    act(() => {
-      vi.advanceTimersByTime(260);
-    });
+    advance(260);
     expect(send).not.toHaveBeenCalled();
     expect(onLeave).not.toHaveBeenCalled();
     expect(screen.queryByRole("dialog")).toBeNull();
   });
 
   it("canSend 가 거짓이면 [나가기] 아이콘 버튼이 꺼진다", () => {
-    render(<Lobby view={lobbyView} send={() => {}} canSend={false} />);
+    render(lobby(lobbyView, { canSend: false }));
     expect(leaveButton().disabled).toBe(true);
   });
 
   it("시트를 연 뒤 연결이 끊기면 시트의 [나가기] 가 꺼져 leave 가 사라진 채 나가지 않는다 (WR-01)", () => {
     const send = vi.fn();
     const onLeave = vi.fn();
-    const { rerender } = render(<Lobby view={lobbyView} send={send} onLeave={onLeave} canSend />);
+    const { rerender } = render(lobby(lobbyView, { send, onLeave, canSend: true }));
     fireEvent.click(leaveButton());
-    rerender(<Lobby view={lobbyView} send={send} onLeave={onLeave} canSend={false} />);
+    rerender(lobby(lobbyView, { send, onLeave, canSend: false }));
     const confirm = within(sheet()).getByRole("button", { name: "나가기" }) as HTMLButtonElement;
     expect(confirm.disabled).toBe(true);
     fireEvent.click(confirm);
@@ -474,127 +410,144 @@ describe("Lobby — [뒤로] 로 방 나가기 (D-17, R17)", () => {
     expect(onLeave).not.toHaveBeenCalled();
   });
 
-  it("send 가 false 를 돌려주면(소켓이 이미 닫힘) onLeave 를 부르지 않고 토스트로 알린다 (WR-01)", () => {
+  it("send 가 false 를 돌려주면(소켓이 이미 닫힘) onLeave 를 부르지 않고 알림 '연결이 불안정해요. 다시 시도해 주세요' (WR-01)", () => {
     const send = vi.fn(() => false);
     const onLeave = vi.fn();
-    render(<Lobby view={lobbyView} send={send} onLeave={onLeave} />);
+    const { container } = render(lobby(lobbyView, { send, onLeave }));
     fireEvent.click(leaveButton());
     fireEvent.click(within(sheet()).getByRole("button", { name: "나가기" }));
     expect(send).toHaveBeenCalledWith({ t: "leave" });
     expect(onLeave).not.toHaveBeenCalled();
-    expect(screen.getByText("연결이 불안정해요. 다시 시도해 주세요")).toBeTruthy();
+    expect(toastText(container)).toBe("연결이 불안정해요. 다시 시도해 주세요");
+  });
+
+  it("send 가 false 인데 재접속 띠가 떠 있어도 이 알림은 막히지 않는다(내가 누른 일의 답이다)", () => {
+    const send = vi.fn(() => false);
+    const { container } = render(lobby(lobbyView, { send, bannerVisible: true }));
+    fireEvent.click(leaveButton());
+    fireEvent.click(within(sheet()).getByRole("button", { name: "나가기" }));
+    expect(toastText(container)).toBe("연결이 불안정해요. 다시 시도해 주세요");
   });
 
   it("참가자(방장 아님) 화면에서도 나갈 수 있다", () => {
     const send = vi.fn();
-    render(<Lobby view={makeView([player(0, "민수"), player(1, "서준")], 1)} send={send} />);
+    render(lobby(makeView([player(0, "민수"), player(1, "서준")], 1), { send }));
     fireEvent.click(leaveButton());
     fireEvent.click(within(sheet()).getByRole("button", { name: "나가기" }));
     expect(send).toHaveBeenCalledWith({ t: "leave" });
   });
+
+  it("맵 상태 카드의 [나가기](WorldStage onLeave)도 같은 확인 시트로 간다", () => {
+    render(lobby(lobbyView));
+    act(() => props().onLeave());
+    expect(sheet()).toBeTruthy();
+  });
 });
 
-describe("Lobby — 공유 시트와 끊긴 사람 내보내기 (ROOM-01, D-16, R10)", () => {
+describe("Lobby — 공유 시트와 끊긴 사람 내보내기 (ROOM-01, D-16)", () => {
   const shareDialog = () => screen.getByRole("dialog", { name: "친구 초대하기" });
 
-  it("위쪽 바 [공유](aria-label) → '친구 초대하기' 시트(방 코드 포함), 방장도 참가자도 같다", () => {
-    render(<Lobby view={makeView([player(0, "민수"), player(1, "서준")], 0)} send={() => {}} />);
-    expect(screen.queryByRole("dialog")).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "공유" }));
-    expect(within(shareDialog()).getByText("0042")).toBeTruthy();
-    expect(within(shareDialog()).getByRole("heading", { name: "친구 초대하기" })).toBeTruthy();
+  it("헤더 [공유](aria-label) → '친구 초대하기' 시트(방 코드는 여기서만 보임), 방장도 참가자도 같다", () => {
+    for (const mySeat of [0, 1]) {
+      const { unmount } = render(lobby(makeView([player(0, "민수"), player(1, "서준")], mySeat)));
+      expect(screen.queryByRole("dialog")).toBeNull();
+      fireEvent.click(screen.getByRole("button", { name: "공유" }));
+      expect(within(shareDialog()).getByText("0042")).toBeTruthy();
+      expect(within(shareDialog()).getByRole("heading", { name: "친구 초대하기" })).toBeTruthy();
+      unmount();
+    }
   });
 
   it("공유 시트의 링크 칸은 {origin}/r/{코드} 이다", () => {
-    render(<Lobby view={makeView([player(0, "민수")], 0)} send={() => {}} />);
+    render(lobby(makeView([player(0, "민수")], 0)));
     fireEvent.click(screen.getByRole("button", { name: "공유" }));
     const input = within(shareDialog()).getByLabelText("초대 링크") as HTMLInputElement;
     expect(input.value).toBe(`${window.location.origin}/r/0042`);
   });
 
-  it("참가자 화면: '친구가 더 오면 링크를 다시 보낼 수 있어요' + [링크 공유] → 같은 시트", () => {
-    render(<Lobby view={makeView([player(0, "민수"), player(1, "서준")], 1)} send={() => {}} />);
-    expect(screen.getByText("친구가 더 오면 링크를 다시 보낼 수 있어요")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "링크 공유" }));
-    expect(shareDialog()).toBeTruthy();
-  });
-
-  it("방장 화면에는 하단 [링크 공유] 와 그 안내가 없다", () => {
-    render(<Lobby view={makeView([player(0, "민수"), player(1, "서준")], 0)} send={() => {}} />);
-    expect(screen.queryByRole("button", { name: "링크 공유" })).toBeNull();
-    expect(screen.queryByText("친구가 더 오면 링크를 다시 보낼 수 있어요")).toBeNull();
-  });
-
   it("자리 8개가 차면 공유 시트에 '방이 가득 찼어요'", () => {
     const players = Array.from({ length: 8 }, (_, i) => player(i, `친구${i}`));
-    render(<Lobby view={makeView(players, 0)} send={() => {}} />);
+    render(lobby(makeView(players, 0)));
     fireEvent.click(screen.getByRole("button", { name: "공유" }));
     expect(within(shareDialog()).getByText("방이 가득 찼어요")).toBeTruthy();
   });
 
-  const kickView = () => makeView([player(0, "민수"), player(1, "서준", { connected: false }), player(2, "하윤")], 0);
   const kickDialog = () => screen.getByRole("dialog", { name: "서준님을 내보낼까요?" });
 
-  it("방장이 끊긴 서준 자리를 누르면 '서준님을 내보낼까요?' → [내보내기] → send kick seat 1", () => {
+  it("이름표의 내보내기(onKick 2, 영희) → '영희님을 내보낼까요?' → [내보내기] → send kick seat 2", () => {
     const send = vi.fn();
-    render(<Lobby view={kickView()} send={send} />);
-    fireEvent.click(screen.getByRole("button", { name: "서준, 연결 끊김" }));
-    expect(within(kickDialog()).getByRole("heading", { name: "서준님을 내보낼까요?" })).toBeTruthy();
+    render(lobby(makeView([player(0, "민수"), player(1, "서준"), player(2, "영희", { connected: false })], 0), { send }));
+    act(() => props().onKick(2, "영희"));
+    expect(screen.getByRole("heading", { name: "영희님을 내보낼까요?" })).toBeTruthy();
     expect(send).not.toHaveBeenCalled();
-    fireEvent.click(within(kickDialog()).getByRole("button", { name: "내보내기" }));
+    fireEvent.click(within(screen.getByRole("dialog", { name: "영희님을 내보낼까요?" })).getByRole("button", { name: "내보내기" }));
     expect(send).toHaveBeenCalledTimes(1);
-    expect(send).toHaveBeenCalledWith({ t: "kick", seat: 1 });
+    expect(send).toHaveBeenCalledWith({ t: "kick", seat: 2 });
   });
 
   it("[취소] 하면 kick 을 보내지 않는다", () => {
     vi.useFakeTimers();
     const send = vi.fn();
-    render(<Lobby view={kickView()} send={send} />);
-    fireEvent.click(screen.getByRole("button", { name: "서준, 연결 끊김" }));
+    render(lobby(makeView([player(0, "민수"), player(1, "서준", { connected: false })], 0), { send }));
+    act(() => props().onKick(1, "서준"));
     fireEvent.click(within(kickDialog()).getByRole("button", { name: "취소" }));
-    act(() => {
-      vi.advanceTimersByTime(260);
-    });
+    advance(260);
     expect(send).not.toHaveBeenCalled();
     expect(screen.queryByRole("dialog")).toBeNull();
   });
 
-  it("연결된 사람 자리·내 자리에는 누를 버튼이 없다", () => {
-    render(<Lobby view={kickView()} send={() => {}} />);
-    expect(screen.queryByRole("button", { name: "하윤" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "민수 (나)" })).toBeNull();
-  });
-
-  it("참가자 화면에서는 끊긴 자리도 누를 버튼이 없다", () => {
-    render(<Lobby view={makeView([player(0, "민수"), player(1, "서준", { connected: false }), player(2, "하윤")], 2)} send={() => {}} />);
-    expect(screen.queryByRole("button", { name: "서준, 연결 끊김" })).toBeNull();
-  });
-
-  it("canSend 가 거짓이면 끊긴 자리도 누를 버튼이 없다", () => {
-    render(<Lobby view={kickView()} send={() => {}} canSend={false} />);
-    expect(screen.queryByRole("button", { name: "서준, 연결 끊김" })).toBeNull();
-  });
-
-  it("내보내기를 눌렀는데 그사이 서준이 다시 연결됐으면 시트는 닫히고 화면은 새 view 대로 그린다", () => {
-    vi.useFakeTimers();
+  it("canSend 가 거짓이면 시트의 [내보내기] 가 꺼진다", () => {
     const send = vi.fn();
-    const players = [player(0, "민수"), player(1, "서준", { connected: false }), player(2, "하윤")];
-    const { rerender } = render(<Lobby view={makeView(players, 0)} send={send} />);
-    fireEvent.click(screen.getByRole("button", { name: "서준, 연결 끊김" }));
-    rerender(<Lobby view={makeView([players[0]!, player(1, "서준"), players[2]!], 0)} send={send} />);
-    fireEvent.click(within(kickDialog()).getByRole("button", { name: "내보내기" }));
-    act(() => {
-      vi.advanceTimersByTime(260);
-    });
-    expect(send).toHaveBeenCalledWith({ t: "kick", seat: 1 });
-    expect(screen.queryByRole("dialog")).toBeNull();
-    expect(screen.getByRole("group", { name: "서준" })).toBeTruthy();
+    render(lobby(makeView([player(0, "민수"), player(1, "서준", { connected: false })], 0), { send, canSend: false }));
+    act(() => props().onKick(1, "서준"));
+    const confirm = within(kickDialog()).getByRole("button", { name: "내보내기" }) as HTMLButtonElement;
+    expect(confirm.disabled).toBe(true);
+  });
+
+  it("누른 시점의 닉네임을 쥐고 있어, 그사이 view 가 바뀌어도 제목이 흔들리지 않는다", () => {
+    const players = [player(0, "민수"), player(1, "서준", { connected: false })];
+    const { rerender } = render(lobby(makeView(players, 0)));
+    act(() => props().onKick(1, "서준"));
+    rerender(lobby(makeView([players[0]!, player(1, "서준")], 0)));
+    expect(kickDialog()).toBeTruthy();
   });
 
   it("내보낼 사람의 닉네임이 길어도 말줄임 없이 제목에 그대로 들어간다", () => {
     const long = "가나다라마바사아";
-    render(<Lobby view={makeView([player(0, "민수"), player(1, long, { connected: false })], 0)} send={() => {}} />);
-    fireEvent.click(screen.getByRole("button", { name: `${long}, 연결 끊김` }));
+    render(lobby(makeView([player(0, "민수"), player(1, long, { connected: false })], 0)));
+    act(() => props().onKick(1, long));
     expect(screen.getByRole("heading", { name: `${long}님을 내보낼까요?` })).toBeTruthy();
+  });
+});
+
+describe("Lobby — 스타일 계약 (lobby.css)", () => {
+  const css = readFileSync("src/styles/lobby.css", "utf8");
+
+  it("위쪽 가림막: night-900 88% → 70px 에서 60% → 120px 에서 0", () => {
+    expect(css).toMatch(/\.mf-lobby__scrim[^}]*88%/);
+    expect(css).toMatch(/\.mf-lobby__scrim[^}]*60%[^}]*70px/);
+    expect(css).toMatch(/\.mf-lobby__scrim[^}]*120px/);
+  });
+
+  it("아래 패널: night-800 97%·위 모서리 radius-lg", () => {
+    expect(css).toMatch(/\.mf-lobby__panel[^}]*var\(--night-800\)\s+97%/);
+    expect(css).toMatch(/\.mf-lobby__panel[^}]*var\(--radius-lg\)\s+var\(--radius-lg\)\s+0\s+0/);
+  });
+
+  it("떠 있는 재접속 띠: 헤더 아래 top 72, 가로 전체, z-overlay — 흐름을 밀지 않는다", () => {
+    const rule = css.match(/\.mf-reconnect--floating\s*\{[^}]*\}/)?.[0] ?? "";
+    expect(rule).toContain("position: absolute");
+    expect(rule).toContain("top: 72px");
+    expect(rule).toContain("left: 0");
+    expect(rule).toContain("right: 0");
+    expect(rule).toContain("var(--z-overlay)");
+  });
+
+  it("로비 UI 에는 진홍·놋쇠·색 직접 지정이 없다(따뜻한 빛은 3D 장면 안에서만)", () => {
+    expect(css).not.toMatch(/crimson|brass|amber|#[0-9a-fA-F]{3,8}\b|rgba?\(/);
+  });
+
+  it("옛 대기실 규칙(방 코드 36px·장면 상자·시트 157)은 남아 있지 않다", () => {
+    expect(css).not.toMatch(/mf-lobby__code|mf-lobby__scene|mf-lobby__sheet|mf-lobby__bar/);
   });
 });
