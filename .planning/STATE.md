@@ -5,16 +5,16 @@ milestone_name: 같은 공간
 current_phase: 07
 current_phase_name: 자유 채팅
 status: executing
-stopped_at: Completed 07-04-PLAN.md
-last_updated: "2026-11-01T12:52:01.009Z"
+stopped_at: Completed 07-05-PLAN.md
+last_updated: "2026-11-01T13:04:38.968Z"
 last_activity: 2026-11-01
 last_activity_desc: Phase 07 execution started
-state_head: aa0c76528f463bc8031d07a42428f2a7e77fec56
+state_head: 3991217f489be2ed4c01b55c727ffc252f078dd9
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 45
-  completed_plans: 27
+  completed_plans: 28
   percent: 14
 ---
 
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-11-01)
 ## Current Position
 
 Phase: 07 (자유 채팅) — EXECUTING
-Plan: 5 of 22
+Plan: 6 of 22
 Status: Ready to execute
 Last activity: 2026-11-01 — Phase 07 execution started
 
@@ -85,6 +85,7 @@ Progress: [█░░░░░░░░░] 14% (1/7 phases)
 | Phase 07 P02 | 9 min | 3 tasks | 7 files |
 | Phase 07 P03 | 9 min | 3 tasks | 9 files |
 | Phase 07 P04 | 8 min | 3 tasks | 28 files |
+| Phase 07 P05 | 10 min | 3 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -153,6 +154,8 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 07]: 한글 조합 꼬리 글자는 보낸 지 500ms 안에 끝난 조합의 입력칸 값이 보낸 문장의 끝부분일 때만 비운다 (TAIL_WINDOW_MS, 가정 A2)
 - [Phase 07]: 07-04: 낮 기록 버튼 읽기 이름을 '{닉네임}, 기록 보기' 로 정했다(카드에 주장 줄이 없어 '주장 기록' 이 틀린 말)
 - [Phase 07]: 07-04: 07-08 전까지 서버가 claim 단계 view 를 보내면 DayScene 은 일반 낮 단계로 그리고 하단은 비운다(A1, 배포 전 상태)
+- [Phase 07]: nextTypingExpiry(now?) 선택 인자: 타이머가 울린 직후 지난 만료를 건너뛰어 재설정 루프를 막는다
+- [Phase 07]: useKeyboardLift 는 focus/blur 를 document 캡처로 듣고 e.target 으로 입력칸만 거른다
 
 ### Pending Todos
 
@@ -189,8 +192,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-01T12:52:00.855Z
-Stopped at: Completed 07-04-PLAN.md
+Last session: 2026-11-01T13:04:38.819Z
+Stopped at: Completed 07-05-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
