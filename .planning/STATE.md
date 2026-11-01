@@ -6,10 +6,10 @@ current_phase: 07
 current_phase_name: 자유 채팅
 status: executing
 stopped_at: Completed 07-19-PLAN.md
-last_updated: "2026-11-01T16:43:56.027Z"
+last_updated: "2026-11-01T16:44:23.198Z"
 last_activity: 2026-11-01
 last_activity_desc: Phase 07 execution started
-state_head: 3b9eaf4a9934d786dab7eb9aa3704b14ed5150c3
+state_head: fb3a021300bbf0cb0d14be878a1a3f8019fb7952
 progress:
   total_phases: 7
   completed_phases: 1
@@ -188,6 +188,8 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 07]: 07-17: uat-vote 역할 문자열 누출 검사는 view.me.chat 경로(채널 이름 mafia)를 허용하고, 마피아가 아닌 사람 프레임의 me.chat 'mafia' 는 별도 검사로 막는다
 - [Phase 07]: 07-18: PAN_BOX 5.7·PLATE_FAR 17 로 재도출(입력 중 칸 22px + 채팅 패널 스테이지), PANEL_HEIGHT 250
 - [Phase 07]: 07-18: 연결이 끊기면 내 입력 중 알약은 화면에서만 끄고 서버에 보내지 않는다
+- [Phase 07]: 07-19: 키보드 CSS 변수(--mf-kb-lift·--mf-vv-top)는 방 틀(.mf-room)에 쓴다 — 떠 있는 재접속 띠가 로비 밖이라 같은 값을 읽어야 한다
+- [Phase 07]: 07-19: 보내기 버튼 mousedown 기본 동작을 막아 키보드가 닫히며 패널이 손가락 밑에서 내려가는 일을 없앤다(Chromium·Android)
 
 ### Pending Todos
 
