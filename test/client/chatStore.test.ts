@@ -338,3 +338,13 @@ describe("ChatStore: 시스템 줄·reset (A1)", () => {
     expect(store.lines()).toHaveLength(1);
   });
 });
+
+describe("ChatStore: nextTypingExpiry(now) 는 지난 만료를 건너뛴다", () => {
+  it("now 를 주면 이미 지난 만료는 빼고 다음 만료만 돌려준다", () => {
+    const store = ready();
+    store.apply({ t: "typing", seat: 1, on: true }, 1, 1000);
+    store.apply({ t: "typing", seat: 2, on: true }, 1, 3000);
+    expect(store.nextTypingExpiry(5500)).toBe(7500);
+    expect(store.nextTypingExpiry(7500)).toBeNull();
+  });
+});

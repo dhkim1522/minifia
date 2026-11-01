@@ -1,8 +1,10 @@
 // 채팅 화면 문구 한 곳 (07-UI-SPEC Copywriting Contract). 해요체, 짧게, 마침표·느낌표 없음.
-// 이 파일은 shared/protocol.ts 를 가져오지 않는다 — 동작 라벨 표(EMOTE_LABEL)는 EmoteId 가 생긴 뒤 07-05 가 더한다.
+// shared/protocol.ts 는 EmoteId 타입만 가져온다(EMOTE_LABEL).
 //
 // 역할 단어가 든 문구(inputLabel.mafia·hint.mafia·channelStart.mafia)는 그 채널을 쓰는 화면(마피아 본인·탈락자)의
 // 분기 안에서만 꺼내 쓴다 — 시민 편 DOM 에 "마피아 채팅" 이 미리 들어가면 안 된다 (T-07-08, 누설 검사 대상).
+
+import type { EmoteId } from "../../shared/protocol";
 
 export const CHAT_TEXT = {
   logLabel: "채팅 기록",
@@ -26,6 +28,15 @@ export const CHAT_TEXT = {
   left: (name: string) => `${name} 님 퇴장`,
 } as const;
 
-// RED 뼈대: GREEN 에서 채운다.
-import type { EmoteId } from "../../shared/protocol";
-export const EMOTE_LABEL = {} as Readonly<Record<EmoteId, string>>;
+// 10페이즈 동작 버튼의 접근성 이름. 7페이즈 화면에는 버튼이 없다 (UI-SPEC 동작 종류 표, 키 순서는 EMOTE_IDS 와 같다)
+export const EMOTE_LABEL: Readonly<Record<EmoteId, string>> = {
+  throat: "목 긋기",
+  deny: "나 아니야",
+  clap: "박수",
+  cry: "엉엉",
+  handshake: "악수",
+  point: "손가락질",
+  praise: "최고",
+  surprise: "깜짝",
+  dance: "춤",
+};
