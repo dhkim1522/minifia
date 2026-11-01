@@ -991,6 +991,39 @@ export async function typeAndSendChat(page, text) {
 }
 
 /**
+ * 실제 IME 경로로 한글 조합을 흉내 낸다(07-19, CHAT-05). Chromium CDP `Input.imeSetComposition` 으로 조합 글자를 바꾸고 `Input.insertText` 로 확정한다.
+ * steps 의 문자열은 "조합 중인 글자"(imeSetComposition), `{ commit: "안" }` 은 그 글자로 조합을 확정(insertText)한다. 입력칸에 포커스가 있어야 한다.
+ * 한 호출에 CDP 세션 하나를 열고 닫는다 — 조합 상태는 페이지 쪽에 있어서 호출 사이에도 이어진다.
+ */
+export async function imeCompose(page, steps) {
+  const cdp = await page.context().newCDPSession(page);
+  try {
+    for (const step of steps) {
+      if (typeof step === "string") await cdp.send("Input.imeSetComposition", { text: step, selectionStart: step.length, selectionEnd: step.length });
+      else await cdp.send("Input.insertText", { text: step.commit });
+    }
+  } finally {
+    await cdp.detach().catch(() => {});
+  }
+}
+
+/**
+ * 조합 중 Enter(07-19): 조합이 끝나기 전의 Enter 는 keyCode 229(isComposing)라 submit 을 만들지 않는다(리서치 실측).
+ * 이어서 `commit` 으로 마지막 조합을 확정하고, 확정 뒤 Enter 를 한 번 눌러 form 을 제출한다. 반환 전에 제출 여부는 읽지 않는다.
+ */
+export async function imeEnter(page, commit) {
+  const cdp = await page.context().newCDPSession(page);
+  try {
+    await cdp.send("Input.dispatchKeyEvent", { type: "rawKeyDown", key: "Enter", code: "Enter", windowsVirtualKeyCode: 229 });
+    await cdp.send("Input.dispatchKeyEvent", { type: "keyUp", key: "Enter", code: "Enter", windowsVirtualKeyCode: 229 });
+    await cdp.send("Input.insertText", { text: commit });
+  } finally {
+    await cdp.detach().catch(() => {});
+  }
+  await page.keyboard.press("Enter");
+}
+
+/**
  * 채팅 기록 칸의 사람 줄을 읽는다: [{ seat, ch, name, text }] (시스템 줄·막힘 알림은 싣지 않는다). 칸이 없으면 null.
  * 이름은 줄 안 .mv-chat__name 글자("나" 또는 닉네임), 본문은 .mv-chat__text 글자다.
  */

@@ -21,6 +21,8 @@ import {
   findBlankScenePoint,
   findTagPassThroughPoint,
   hitsInputSurface,
+  imeCompose,
+  imeEnter,
   inspectSeat,
   joinTestRoom,
   leaveFromResult,
@@ -653,6 +655,85 @@ async function chatLobbyFlow(ctx) {
     });
     rec(sc, "CL8", "손님이 칸을 비우면 방장 화면 알약이 사라짐", typingOff.ok, typingOff.detail);
     await checkState(ctx, "chat-lobby", "lobby"); // 방장 화면의 G (콘솔 오류·가로 넘침·누르기 크기·글자 크기)
+  } finally {
+    await g.context.close().catch(() => {});
+  }
+  await leaveLobby(hp);
+}
+
+// ---- chat-ime (한글 조합 중 Enter·보내기, 07-19, CHAT-05) ----
+
+/** chat-ime 에서 손님이 조합하는 글 두 개 */
+const IME_ENTER_TEXT = "안녕하세요";
+const IME_BUTTON_TEXT = "반가워요";
+
+/** 앞 글자들은 자모 → 글자로 조합해 확정한다. 단계 하나 = [조합 중 글자들…, 확정 글자]. 마지막 글자(요)는 아래에서 조합 중으로 남긴다. */
+const IME_ENTER_STEPS = [["ㅇ", "아", "안"], ["ㄴ", "녀", "녕"], ["ㅎ", "하"], ["ㅅ", "세"]];
+const IME_BUTTON_STEPS = [["ㅂ", "바", "반"], ["ㄱ", "가"], ["ㅇ", "워"]];
+
+/** 단계들을 차례로 조합하고 마지막 글자로 확정한다. 마지막 글자 하나는 호출한 쪽이 조합 중으로 남겨 둔다. */
+async function imeTypeSteps(page, steps) {
+  for (const group of steps) {
+    await imeCompose(page, [...group.slice(0, -1), { commit: group[group.length - 1] }]);
+  }
+}
+
+/** 보낸 한 줄이 기록에 몇 번 있는지 */
+const countLines = async (page, text) => ((await readChatLines(page)) ?? []).filter((l) => l.text === text).length;
+
+/**
+ * 한글 조합 트레이서: Chromium 의 진짜 IME 경로(CDP imeSetComposition)로 손님이 "안녕하세요" 를 조합하다 마지막 글자 조합 중 Enter,
+ * 또 "반가워요" 를 조합하다 마지막 글자 조합 중 보내기. 두 경우 모두 두 페이지 기록에 줄이 정확히 한 번, 입력칸에는 꼬리 글자가 남지 않는다.
+ */
+async function chatImeFlow(ctx) {
+  const rec = recorder(ctx);
+  const sc = "chat-ime/compose";
+  const host = await startHost(ctx, "chat-ime", { nickname: LOBBY_HOST_NICK });
+  const { page: hp, tracker: ht } = host;
+  const { guest: g } = await openGuest(ctx, WORLD_GUEST_NICK);
+  try {
+    const { page: gp, tracker: gt } = g;
+    await Promise.all([ht.waitFor((v) => v.players.length === 2, 5000, "방장 쪽 인원 2"), gt.waitFor((v) => v.players.length === 2, 5000, "손님 쪽 인원 2")]);
+    await Promise.all([waitWorldReady(hp, 2), waitWorldReady(gp, 2)]);
+    await Promise.all([settle(hp), settle(gp)]);
+    const input = gp.locator("[data-chat-input]");
+    await input.focus();
+
+    // (a) 마지막 글자를 조합하는 중 Enter(keyCode 229) → 확정 → Enter 한 번
+    await imeTypeSteps(gp, IME_ENTER_STEPS);
+    await imeCompose(gp, ["ㅇ", "요"]);
+    const midValue = await input.inputValue();
+    await imeEnter(gp, "요");
+    const sentA = await attempt(async () => {
+      await Promise.all([waitChatLine(hp, IME_ENTER_TEXT, 500), waitChatLine(gp, IME_ENTER_TEXT, 500)]);
+    });
+    rec(sc, "IME1", `조합 중 Enter: "${IME_ENTER_TEXT}" 줄이 0.5초 안에 두 페이지 기록에 보임 (보내기 전 입력칸 "${midValue}")`, sentA.ok, sentA.detail);
+    const [hA, gA] = await Promise.all([countLines(hp, IME_ENTER_TEXT), countLines(gp, IME_ENTER_TEXT)]);
+    rec(sc, "IME2", "그 줄은 페이지마다 정확히 한 번", hA === 1 && gA === 1, `방장 화면 ${hA}줄 · 손님 화면 ${gA}줄`);
+    rec(sc, "IME3", "보낸 뒤 손님 입력칸이 비어 있음(꼬리 글자 없음)", (await input.inputValue()) === "", `입력칸 "${await input.inputValue()}"`);
+
+    // 서버는 한 사람의 글 사이를 600ms 이상 벌린다(D5 CHAT_MIN_GAP_MS) — 두 번째 글이 거절되지 않게 쉰다
+    await gp.waitForTimeout(1000);
+
+    // (b) 마지막 글자를 조합하는 중 보내기: 포커스를 옮기지 않는 DOM click(iOS 의 터치처럼) → 조합 확정 → 보내짐
+    await imeTypeSteps(gp, IME_BUTTON_STEPS);
+    await imeCompose(gp, ["ㅇ", "요"]);
+    await gp.evaluate(() => document.querySelector("[data-chat-send]")?.click());
+    await imeCompose(gp, [{ commit: "요" }]);
+    const sentB = await attempt(async () => {
+      await Promise.all([waitChatLine(hp, IME_BUTTON_TEXT, 1000), waitChatLine(gp, IME_BUTTON_TEXT, 1000)]);
+    });
+    rec(sc, "IME4", `조합 중 보내기: "${IME_BUTTON_TEXT}" 줄이 두 페이지 기록에 보임`, sentB.ok, sentB.detail);
+    const [hB, gB] = await Promise.all([countLines(hp, IME_BUTTON_TEXT), countLines(gp, IME_BUTTON_TEXT)]);
+    rec(sc, "IME5", "그 줄은 페이지마다 정확히 한 번", hB === 1 && gB === 1, `방장 화면 ${hB}줄 · 손님 화면 ${gB}줄`);
+    rec(sc, "IME6", "보낸 뒤 손님 입력칸이 비어 있음(꼬리 글자 없음)", (await input.inputValue()) === "", `입력칸 "${await input.inputValue()}"`);
+
+    // (c) 1초 뒤에도 입력칸은 비어 있고 줄 수는 늘지 않는다(되살아난 글자·두 번 전송 없음)
+    await gp.waitForTimeout(1000);
+    const [hC, gC, lastValue] = await Promise.all([countLines(hp, IME_BUTTON_TEXT), countLines(gp, IME_BUTTON_TEXT), input.inputValue()]);
+    const total = ((await readChatLines(gp)) ?? []).length;
+    rec(sc, "IME7", "1초 뒤에도 입력칸이 비어 있고 두 줄이 그대로 한 번씩", lastValue === "" && hC === 1 && gC === 1 && (await countLines(gp, IME_ENTER_TEXT)) === 1 && total === 2, `입력칸 "${lastValue}" · 손님 화면 전체 ${total}줄 · 방장 ${hC} 손님 ${gC}`);
+    await checkState(ctx, "chat-ime", "lobby");
   } finally {
     await g.context.close().catch(() => {});
   }
@@ -2476,6 +2557,8 @@ export const FLOWS = [
   { id: "world", run: worldFlow, extraSizes: LOBBY_EXTRA_SIZES },
   // 로비 자유 채팅(07-13): 방장·손님 두 페이지로 한 줄이 오가는 트레이서
   { id: "chat-lobby", run: chatLobbyFlow, extraSizes: LOBBY_EXTRA_SIZES },
+  // 한글 조합(07-19): CDP imeSetComposition 으로 조합 중 Enter·보내기가 한 번만 보내진다. 크기와 무관해서 자기 크기로 한 번만 돈다
+  { id: "chat-ime", run: chatImeFlow, size: { w: 390, h: 844, label: "390x844" } },
   // 테이블 화면 자유 채팅(07-15): 낮 토론의 한 줄(트레이서) → 최후 변론·밤 마피아·시민 화면·탈락자
   { id: "chat-table", run: chatTableFlow, extraSizes: LOBBY_EXTRA_SIZES },
   // 탈락자 화면(07-15): 방장이 처형된 뒤의 밤. 크기와 무관해서 자기 크기로 한 번만 돈다
