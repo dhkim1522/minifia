@@ -1497,3 +1497,60 @@ describe("buildView 테스트 방 봇 투표 설정 me.testBotVote (P-13, T-04-4
     expect(bad.join(",")).toBe("");
   });
 });
+
+// 07-10: 서버가 정한 내 채널(channelOf)이 본인 view 의 me.chat 에만 실린다. 말할 수 없으면 키 자체가 없다(허용 목록 방식).
+describe("buildView me.chat — 서버가 정한 내 채널 (07-10, CHAT-02·03)", () => {
+  /** 좌석 오름차순으로 '좌석:채널' (키 없음은 '-'). 한 줄 문자열이라 실패 보고가 한 줄이다. */
+  const chatLine = (s: RoomState): string =>
+    [...s.players]
+      .sort((a, b) => a.seat - b.seat)
+      .map((p) => {
+        const me = buildView(s, p.id, START_AT).me;
+        return `${p.seat}:${"chat" in me ? String(me.chat) : "-"}`;
+      })
+      .join(" ");
+  const everyone = (s: RoomState, ch: string): string =>
+    [...s.players].sort((a, b) => a.seat - b.seat).map((p) => `${p.seat}:${ch}`).join(" ");
+
+  it("대기실: 모두 all", () => {
+    const s = stateAt("lobby", 5, 1);
+    expect(chatLine(s)).toBe(everyone(s, "all"));
+  });
+
+  it.each(["dayAnnounce", "discussion", "execVote", "candidateVote", "candidateVoteReveal", "defense", "execution", "morning"] as const)(
+    "%s: 살아 있는 사람은 모두 all",
+    (phase) => {
+      const s = stateAt(phase, 6, 1);
+      expect(chatLine(s)).toBe(everyone(s, "all"));
+    },
+  );
+
+  it("낮(discussion): 탈락자만 ghost 이고 산 사람은 all", () => {
+    const s = withDead(stateAt("discussion", 6, 1), 2);
+    const want = [...s.players].sort((a, b) => a.seat - b.seat).map((p) => `${p.seat}:${p.seat === 2 ? "ghost" : "all"}`).join(" ");
+    expect(chatLine(s)).toBe(want);
+  });
+
+  it("밤: 산 마피아는 mafia, 산 비마피아는 키 없음", () => {
+    const s = stateAt("night", 6, 1);
+    const want = [...s.players].sort((a, b) => a.seat - b.seat).map((p) => `${p.seat}:${p.role === "mafia" ? "mafia" : "-"}`).join(" ");
+    expect(chatLine(s)).toBe(want);
+  });
+
+  it("밤: 탈락자는 역할과 상관없이 ghost (탈락한 마피아도 mafia 가 아니다)", () => {
+    const base = stateAt("night", 6, 1);
+    const deadMafia = base.players.find((p) => p.role === "mafia")!.seat;
+    const deadCitizen = base.players.find((p) => p.role === "citizen")!.seat;
+    const s = withDead(withDead(base, deadMafia), deadCitizen);
+    const want = [...s.players]
+      .sort((a, b) => a.seat - b.seat)
+      .map((p) => `${p.seat}:${p.seat === deadMafia || p.seat === deadCitizen ? "ghost" : p.role === "mafia" ? "mafia" : "-"}`)
+      .join(" ");
+    expect(chatLine(s)).toBe(want);
+  });
+
+  it.each(["assigning", "roleReveal", "ended"] as const)("%s: 모두 키 없음 (탈락자 포함)", (phase) => {
+    const s = withDead(stateAt(phase, 6, 1), 1);
+    expect(chatLine(s)).toBe(everyone(s, "-"));
+  });
+});

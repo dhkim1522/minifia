@@ -17,6 +17,7 @@ import {
   lastViewOf,
   mark,
   nextFrame,
+  phaseKeyOf,
   seat,
   send,
   settle,
@@ -76,7 +77,7 @@ function stringPaths(value: unknown, path = ""): Array<[string, string]> {
 
 const ROLE_WORDS = new Set(["mafia", "police", "doctor", "citizen", "none"]);
 /** 살아 있는 소켓이 역할 값 문자열을 받아도 되는 경로. 탈락 뒤에는 여기에 관전 직업 경로가 더해진다(결정 0021). */
-const ROLE_PATHS_ALIVE = [".view.me.role", ".view.day.roles[]"];
+const ROLE_PATHS_ALIVE = [".view.me.role", ".view.day.roles[]", ".view.me.chat"];
 /**
  * 서버 전용 키: 어떤 프레임의 어떤 경로에도 없어야 한다. 주장 차례(결정 0027-3)와 4페이즈 투표·종료(결정 0036-12)의 서버 상태.
  * winner·execution 은 같은 이름의 view 키(result.winner·day.execution)가 있어 넣지 않고, 경로·단계로 검사한다.
@@ -91,6 +92,9 @@ const phaseOf = (phase: string) => (m: ServerMessage) => m.t === "state" && m.vi
 // ---- world 프레임(06-08, T-06-16): 로비에서만 나가고, 키·문자열 값은 허용 목록뿐이다 ----
 const WORLD_KEY_PATHS = new Set([".t", ".k", ".s", ".p", ".t0", ".v", ".at", ".ents", ".ents[].s", ".ents[].p", ".ents[].t0", ".ents[].v"]);
 const WORLD_STRING_VALUES: Record<string, ReadonlySet<string>> = { ".t": new Set(["world"]), ".k": new Set(["move", "snap"]) };
+
+// ---- typing 프레임(07-10, T-07-18): 키는 t·seat·on 뿐, 문자열 값은 .t "typing" 뿐이다 ----
+const TYPING_KEY_PATHS = new Set([".t", ".seat", ".on"]);
 
 /**
  * 각 소켓의 프레임 목록에서 world 프레임을 본다: 첫 "로비가 아닌 단계" state 이후에는 하나도 없고(start 이전에만 있다),
@@ -215,6 +219,10 @@ describe("6명 한 판(두 밤·두 아침, 행동·마피아 채팅·탈락·�
     await act(mafiaB, { t: "pick", target: victimX.seat });
     await act(police, { t: "pick", target: mafiaA.seat });
     await act(doctor, { t: "pick", target: doctor.seat });
+    // 입력 중(07-10): 산 마피아 A 의 켜짐·꺼짐은 산 마피아 B 에게만 간다. 산 시민 Y 의 신호는 아무에게도 가지 않는다(채널이 없다).
+    await act(mafiaA, { t: "typing", on: true, pk: phaseKeyOf(mafiaA.sock) });
+    await act(mafiaA, { t: "typing", on: false, pk: phaseKeyOf(mafiaA.sock) });
+    await act(victimY, { t: "typing", on: true, pk: phaseKeyOf(victimY.sock) });
     await backdateSends(code);
     await act(mafiaA, { t: "say", template: "nightTarget", target: victimX.seat });
     await backdateSends(code);
@@ -327,6 +335,8 @@ describe("6명 한 판(두 밤·두 아침, 행동·마피아 채팅·탈락·�
     const dayLines = new Map<number, number[]>(); // seat → 살아 있는 동안 받은 낮 chat seq
     const nightLines = new Map<number, string>(); // seat → "일차:seq,…" 밤 chat
     const nightEmojis = new Map<number, number>(); // seat → 밤 emoji 프레임 수
+    const typingCounts = new Map<number, number>(); // seat → 받은 typing 프레임 수
+    const sawChatMafia = new Set<number>(); // me.chat 이 "mafia" 인 view 를 받은 seat
     const morningsByDay = new Map<number, Set<string>>(); // 일차 → day.morning JSON 모음
     const morningSeen = new Map<number, Set<number>>(); // 일차 → 아침 state 를 받은 seat
     const saw = { ally: new Set<number>(), records: new Set<number>(), pick: new Set<number>(), spectatePicksX: false };
@@ -338,6 +348,7 @@ describe("6명 한 판(두 밤·두 아침, 행동·마피아 채팅·탈락·�
       const lines: number[] = [];
       const nights: string[] = [];
       let emojis = 0;
+      let typings = 0;
       for (const raw of collect(a.sock)) {
         const msg = JSON.parse(raw) as ServerMessage;
         // 서버가 거부한 행동이 없다 — 시나리오의 모든 행동은 받아들여졌다.
@@ -395,6 +406,19 @@ describe("6명 한 판(두 밤·두 아침, 행동·마피아 채팅·탈락·�
         for (const [pth, value] of stringPaths(msg)) {
           if (ROLE_WORDS.has(value)) expect(allowed.includes(pth)).toBe(true);
         }
+        // (7) typing 프레임(07-10): 키·문자열 값은 허용 목록뿐이고, 밤에는 살아 있는 마피아와 탈락자 소켓만 받는다 — 시민 편 소켓은 0건.
+        if (msg.t === "typing") {
+          for (const pth of paths) expect(TYPING_KEY_PATHS.has(pth)).toBe(true);
+          for (const [pth, value] of stringPaths(msg)) expect(`${pth}=${value}`).toBe(".t=typing");
+          expect(phase).toBe("night");
+          if (!dead) expect(a.role).toBe("mafia");
+          typings += 1;
+        }
+        // (8) me.chat 의 값 mafia 는 그 밤의 산 마피아 소켓에서만 나온다(받을 권리가 있는 소켓 조건으로만 허용).
+        if (msg.t === "state" && msg.view.me.chat === "mafia") {
+          expect(`${a.role}/${dead}/${msg.view.phase}`).toBe("mafia/false/night");
+          sawChatMafia.add(a.seat);
+        }
         // (1)(6) 밤 chat·emoji 는 살아 있는 마피아와 탈락자에게만. 낮 chat 은 살아 있는 동안 받은 번호를 센다.
         if (msg.t === "chat" || msg.t === "emoji") {
           if (phase === "night") {
@@ -418,7 +442,12 @@ describe("6명 한 판(두 밤·두 아침, 행동·마피아 채팅·탈락·�
       dayLines.set(a.seat, lines);
       nightLines.set(a.seat, nights.join(","));
       nightEmojis.set(a.seat, emojis);
+      typingCounts.set(a.seat, typings);
     }
+
+    // (7)(8) 받을 사람은 실제로 받았다: 1일차 밤 마피아 A 의 켜짐·꺼짐 두 프레임은 B 만 받고, 나머지(시민 편·A 자신)는 0건이다. 산 마피아 둘은 me.chat "mafia" 를 봤다.
+    for (const a of actors) expect(`${a.seat}:${typingCounts.get(a.seat)}`).toBe(`${a.seat}:${a === mafiaB ? 2 : 0}`);
+    expect([...sawChatMafia].sort().join(",")).toBe([mafiaA.seat, mafiaB.seat].sort().join(","));
 
     // 누가 어느 아침에 탈락했는가: X 는 1일차 아침, Y 는 2일차 아침에 처음 탈락 state 를 받는다. 나머지는 끝까지 살아 있다.
     expect([...diedAt.entries()].sort((x, y) => x[0] - y[0])).toEqual(
