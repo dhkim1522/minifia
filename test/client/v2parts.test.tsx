@@ -7,7 +7,7 @@ import { DotProgress } from "../../src/components/v2/DotProgress";
 import { HeadStack, NameTag } from "../../src/components/v2/HeadStack";
 import { PhaseHeader } from "../../src/components/v2/PhaseHeader";
 import { TopToast, useTopToast } from "../../src/components/v2/TopToast";
-import { V2Icon } from "../../src/components/v2/V2Icon";
+import { V2Icon, type V2IconName } from "../../src/components/v2/V2Icon";
 
 afterEach(() => {
   cleanup();
@@ -20,6 +20,7 @@ afterEach(() => {
 
 const V2_CSS = readFileSync("src/styles/v2.css", "utf8");
 const WORLD_CSS = readFileSync("src/styles/world.css", "utf8");
+const BUNDLE_JS = readFileSync("design/v2.0/design-system/components/bundle.js", "utf8");
 
 // 주석을 지운 규칙 본문 중 선택자가 `selector` 로 시작하는 것만 모은다(`.mf-act` 가 `.mf-act-row` 를 끌어오지 않게 다음 글자가 이름 글자가 아니어야 한다).
 function rulesFor(css: string, selector: string): string[] {
@@ -98,6 +99,31 @@ describe("V2Icon", () => {
   });
 });
 
+// 07-03: 채팅이 쓰는 세 아이콘. 경로는 bundle.js ICONS 에서 그대로 옮긴다(승인 2026-10-31).
+const CHAT_ICON_PATHS: Readonly<Record<"send" | "ghost" | "roleMafia", readonly string[]>> = {
+  send: ["M4 12l16-8-6 16-3-7z", "M11 13l9-9"],
+  ghost: ["M5 21V11a7 7 0 0 1 14 0v10l-2.3-1.6L14.3 21 12 19.4 9.7 21l-2.4-1.6z"],
+  roleMafia: ["M3.5 15.5c3 1.4 14 1.4 17 0", "M6.5 15V9.5C6.5 6.9 9 5 12 5s5.5 1.9 5.5 4.5V15", "M6.5 12.5h11"],
+};
+
+describe("V2Icon — 채팅 아이콘 send·ghost·roleMafia (07-03)", () => {
+  it.each(["send", "ghost", "roleMafia"] as const)("%s 는 그림 요소를 가지고 경로 d 가 bundle.js 와 같다", (name) => {
+    for (const d of CHAT_ICON_PATHS[name]) expect(BUNDLE_JS.includes(d), `bundle.js 에 ${name} 경로`).toBe(true);
+    const iconName: V2IconName = name;
+    expect(() => render(<V2Icon name={iconName} />)).not.toThrow();
+    const { container } = render(<V2Icon name={iconName} />);
+    expect([...container.querySelectorAll("svg path")].map((p) => p.getAttribute("d"))).toEqual([...CHAT_ICON_PATHS[name]]);
+  });
+
+  it("ghost 의 눈 두 원은 채워진다(currentColor)", () => {
+    const { container } = render(<V2Icon name="ghost" />);
+    const eyes = [...container.querySelectorAll("svg circle")];
+    expect(eyes.length).toBe(2);
+    expect(eyes.every((c) => c.getAttribute("fill") === "currentColor")).toBe(true);
+    expect(eyes.map((c) => `${c.getAttribute("cx")},${c.getAttribute("cy")},${c.getAttribute("r")}`)).toEqual(["9.5,11,1.2", "14.5,11,1.2"]);
+  });
+});
+
 describe("v2.css 이름표 스타일 계약 (MAP-07, 결정 0052-2)", () => {
   it(".mv-tag 규칙은 nowrap 이고 max-width·overflow hidden·ellipsis 가 없다", () => {
     const bodies = rulesFor(V2_CSS, ".mv-tag").join(";");
@@ -137,9 +163,12 @@ describe("v2.css 이름표 스타일 계약 (MAP-07, 결정 0052-2)", () => {
     expect(V2_CSS).toMatch(/\.mv-tag\.is-away \.mv-tag__dot\s*\{[^}]*var\(--gray-700\)/);
   });
 
-  it("hex 색이 없고 진홍·놋쇠 토큰을 쓰지 않는다", () => {
+  it("hex 색이 없고 놋쇠 토큰을 쓰지 않으며, 진홍은 crimson-300 글자색 하나뿐이다 (07-UI-SPEC Color: 진홍 글자 예약, 면·큰 글자 금지)", () => {
     expect(V2_CSS).not.toMatch(/#[0-9a-fA-F]{6}\b/);
-    expect(V2_CSS).not.toMatch(/--(crimson|brass)-/);
+    expect(V2_CSS).not.toMatch(/--brass-/);
+    const crimson = [...V2_CSS.matchAll(/--crimson-\d+/g)].map((m) => m[0]);
+    expect(crimson.every((c) => c === "--crimson-300")).toBe(true);
+    expect(/(background|border)[a-z-]*:[^;{}]*--crimson-/.test(V2_CSS), "진홍 면·테두리").toBe(false);
   });
 });
 
