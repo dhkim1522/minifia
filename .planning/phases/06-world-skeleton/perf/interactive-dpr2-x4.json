@@ -1,0 +1,60 @@
+{
+  "runner": {
+    "tool": "scripts/perf-run.mjs --mode interactive",
+    "throttle": 4,
+    "dpr": 2,
+    "size": "390x844",
+    "headless": true,
+    "chrome": "156.0.8078.74",
+    "platform": "darwin/arm64",
+    "node": "v26.0.0",
+    "url": "https://minifia-v2.dhplay.workers.dev/?e2e=1",
+    "network": {
+      "preset": "Fast 4G",
+      "offline": false,
+      "latency": 165,
+      "downloadThroughput": 1012500,
+      "uploadThroughput": 168750,
+      "source": "ChromeDevTools/devtools-frontend front_end/core/sdk/NetworkManager.ts Fast4GConditions (9 Mbps x0.9 down, 1.5 Mbps x0.9 up, 60ms x2.75 RTT)"
+    },
+    "chromeBinary": "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+  },
+  "runs": [
+    {
+      "run": 1,
+      "enterToInteractiveMs": 759.7000000476837,
+      "ringMs": 2.1000001430511475,
+      "startMs": 147,
+      "roomEnterAt": 1717.3999998569489,
+      "mapInteractiveAt": 2477.0999999046326,
+      "screenshot": "/Users/dhkim1522/personal/minifia/.planning/phases/06-world-skeleton/perf/interactive-dpr2-x4-run1.png",
+      "issues": []
+    },
+    {
+      "run": 2,
+      "enterToInteractiveMs": 899.2999999523163,
+      "ringMs": 2.0999999046325684,
+      "startMs": 66,
+      "roomEnterAt": 1751,
+      "mapInteractiveAt": 2650.2999999523163,
+      "screenshot": "/Users/dhkim1522/personal/minifia/.planning/phases/06-world-skeleton/perf/interactive-dpr2-x4-run2.png",
+      "issues": []
+    },
+    {
+      "run": 3,
+      "enterToInteractiveMs": 565.1999998092651,
+      "ringMs": 1.7999999523162842,
+      "startMs": 48.19999980926514,
+      "roomEnterAt": 1742.5,
+      "mapInteractiveAt": 2307.699999809265,
+      "screenshot": "/Users/dhkim1522/personal/minifia/.planning/phases/06-world-skeleton/perf/interactive-dpr2-x4-run3.png",
+      "issues": []
+    }
+  ],
+  "failures": [],
+  "medians": {
+    "enterToInteractiveMs": 759.7000000476837,
+    "ringMs": 2.0999999046325684,
+    "startMs": 66
+  }
+}

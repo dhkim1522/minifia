@@ -1,0 +1,53 @@
+{
+  "origin": "https://minifia-v2.dhplay.workers.dev",
+  "startedAt": "2026-11-01T03:11:37.407Z",
+  "rosterBefore": {
+    "host": "0:배포검사방장,1:배포검사손님",
+    "guest": "0:배포검사방장,1:배포검사손님"
+  },
+  "versionBefore": "2026-10-31T16:12:07Z+9a285ae",
+  "bannerSeen": {
+    "host": false,
+    "guest": false
+  },
+  "bannerGone": false,
+  "waitedMs": 360026,
+  "bannerLeft": {
+    "host": 0,
+    "guest": 0
+  },
+  "lastSocketOpen": {
+    "host": true,
+    "guest": true
+  },
+  "stateFramesAfter": {
+    "host": 0,
+    "guest": 0
+  },
+  "rosterAfter": {
+    "host": "0:배포검사방장,1:배포검사손님",
+    "guest": "0:배포검사방장,1:배포검사손님"
+  },
+  "phaseAfter": {
+    "host": "lobby",
+    "guest": "lobby"
+  },
+  "versionAfter": "2026-11-01T03:11:53Z+350b7fb",
+  "toasts": {
+    "host": [],
+    "guest": []
+  },
+  "console": {
+    "hostIssues": [],
+    "guestIssues": [],
+    "allowed": {
+      "host": {
+        "preload-unused": 17
+      },
+      "guest": {
+        "preload-unused": 17
+      }
+    }
+  },
+  "ok": false
+}

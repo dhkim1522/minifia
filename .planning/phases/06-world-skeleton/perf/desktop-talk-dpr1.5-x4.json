@@ -1,0 +1,83 @@
+{
+  "runner": {
+    "tool": "scripts/perf-run.mjs",
+    "throttle": 4,
+    "dpr": 1.5,
+    "size": "390x844",
+    "headless": true,
+    "chrome": "156.0.8078.74",
+    "platform": "darwin/arm64",
+    "node": "v26.0.0",
+    "url": "https://minifia-v2.dhplay.workers.dev/?perf=1&scene=talk&minutes=1&dpr=1.5&seed=1&budget=0"
+  },
+  "schema": 1,
+  "at": "2026-11-01T03:30:01.995Z",
+  "build": "2026-11-01T03:11:53Z+350b7fb",
+  "three": "186",
+  "query": "?perf=1&scene=talk&minutes=1&dpr=1.5&seed=1&budget=0",
+  "params": {
+    "scene": "talk",
+    "minutes": 1,
+    "dpr": 1.5,
+    "budget": 0,
+    "seed": 1,
+    "chars": 8,
+    "shot": false,
+    "nav": false
+  },
+  "device": {
+    "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.0.0 Safari/537.36",
+    "kakaotalk": false,
+    "dpr": 1.5,
+    "screen": "800x600",
+    "inner": "390x844",
+    "cores": 11,
+    "memoryGB": 32,
+    "glRenderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M3 Pro, Unspecified Version)",
+    "webdriver": true
+  },
+  "heartbeat": "first",
+  "truncated": false,
+  "budgetStep": 0,
+  "frames": {
+    "count": 3601,
+    "seconds": 60.014301916122434,
+    "avgFps": 60.00236418700416,
+    "jank": 0,
+    "p50": 16.700000762939453,
+    "p95": 16.799999237060547,
+    "p99": 16.799999237060547,
+    "max": 16.799999237060547,
+    "rafHz": 60,
+    "lowPowerSuspect": false,
+    "firstMinuteFps": null,
+    "lastMinuteFps": null,
+    "thermalRatio": null,
+    "thermalSuspect": false
+  },
+  "work": {
+    "tagsP95Ms": 0.7,
+    "renderP95Ms": 1.1,
+    "mapBuildMs": 74,
+    "moduleLoadMs": 107
+  },
+  "renderer": {
+    "calls": 51,
+    "triangles": 66020,
+    "geometries": 62,
+    "textures": 4,
+    "programs": 7,
+    "pointLights": 3,
+    "callsMax": 66
+  },
+  "heap": {
+    "startMB": 24.6,
+    "endMB": 17.9,
+    "samplesMB": [
+      17.9
+    ]
+  },
+  "tapToRingMs": [],
+  "interactiveMs": 1014,
+  "meets": null
+}

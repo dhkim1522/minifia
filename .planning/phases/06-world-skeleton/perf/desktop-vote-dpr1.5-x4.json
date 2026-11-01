@@ -8,16 +8,16 @@
     "chrome": "156.0.8078.74",
     "platform": "darwin/arm64",
     "node": "v26.0.0",
-    "url": "http://localhost:5173/?perf=1&scene=vote&minutes=0.25&dpr=1.5&seed=1&budget=0"
+    "url": "https://minifia-v2.dhplay.workers.dev/?perf=1&scene=vote&minutes=1&dpr=1.5&seed=1&budget=0"
   },
   "schema": 1,
-  "at": "2026-10-31T17:46:32.835Z",
-  "build": "2026-10-31T17:39:21Z+9b20213",
+  "at": "2026-11-01T03:31:06.094Z",
+  "build": "2026-11-01T03:11:53Z+350b7fb",
   "three": "186",
-  "query": "?perf=1&scene=vote&minutes=0.25&dpr=1.5&seed=1&budget=0",
+  "query": "?perf=1&scene=vote&minutes=1&dpr=1.5&seed=1&budget=0",
   "params": {
     "scene": "vote",
-    "minutes": 0.25,
+    "minutes": 1,
     "dpr": 1.5,
     "budget": 0,
     "seed": 1,
@@ -40,14 +40,14 @@
   "truncated": false,
   "budgetStep": 0,
   "frames": {
-    "count": 900,
-    "seconds": 15.016000495910644,
-    "avgFps": 59.936066214508976,
+    "count": 3600,
+    "seconds": 60.0144019241333,
+    "avgFps": 59.98560153196077,
     "jank": 0,
     "p50": 16.700000762939453,
-    "p95": 16.700000762939453,
+    "p95": 16.799999237060547,
     "p99": 16.799999237060547,
-    "max": 33.29999923706055,
+    "max": 33.5,
     "rafHz": 60,
     "lowPowerSuspect": false,
     "firstMinuteFps": null,
@@ -56,26 +56,28 @@
     "thermalSuspect": false
   },
   "work": {
-    "tagsP95Ms": 0.8,
-    "renderP95Ms": 1.4,
-    "mapBuildMs": 77,
-    "moduleLoadMs": 100
+    "tagsP95Ms": 0.7,
+    "renderP95Ms": 1.1,
+    "mapBuildMs": 81,
+    "moduleLoadMs": 456
   },
   "renderer": {
-    "calls": 67,
-    "triangles": 83838,
-    "geometries": 61,
+    "calls": 52,
+    "triangles": 66022,
+    "geometries": 63,
     "textures": 4,
     "programs": 7,
     "pointLights": 3,
     "callsMax": 67
   },
   "heap": {
-    "startMB": 49.6,
-    "endMB": 37,
-    "samplesMB": []
+    "startMB": 24.6,
+    "endMB": 18.4,
+    "samplesMB": [
+      18.4
+    ]
   },
   "tapToRingMs": [],
-  "interactiveMs": 699,
+  "interactiveMs": 2353,
   "meets": null
 }
