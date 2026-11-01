@@ -7,12 +7,14 @@ import { BAR_MAP, BAR_SPAWNS, snapToWalkable, UNIT } from "../../shared/game/map
 import { segmentEndsAt } from "../../shared/game/world";
 import type { Segment } from "../../shared/game/world";
 import { NETWORK_TEXT } from "../net/copy";
-import { clampTarget, DEFAULT_TARGET, followStep, NAMETAG_GAP, RESIZE_SETTLE_MS, stageOffsetY } from "./camera";
+import { clampTarget, DEFAULT_TARGET, followStep, NAMETAG_GAP, NAMETAG_MAX_W, RESIZE_SETTLE_MS, stageOffsetY } from "./camera";
 import { FIGS } from "./characterData";
 import { createTapGate } from "./input";
 import { DEFAULT_BUDGET_STEP, nextLadderStep } from "./renderer";
 import type { CharacterHandle, WorldRenderer } from "./renderer";
 import { initialMapStatus, inputBlocked, mapStatusReducer, shouldRecreate } from "./status";
+import { rankTags } from "./tagOrder";
+import type { TagBox } from "./tagOrder";
 import type { MapStatusEvent, MapStatusState } from "./status";
 import type { RendererStatusEvent } from "./renderer";
 import type { WorldStore } from "./store";
@@ -221,6 +223,10 @@ interface Actor {
   tagStyle: string;
   tagAlpha: string;
   tagZ: string;
+  /** 이름표 폭(px). null = 아직 안 쟀다 — 처음 필요할 때 한 번 재고 view 가 바뀔 때(syncPlayers)만 다시 잰다 */
+  tagW: number | null;
+  /** 지금 래퍼에 data-front 가 붙어 있나 */
+  tagFront: boolean;
 }
 
 interface Ring {
@@ -451,6 +457,8 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
       const a = actors.get(p.seat);
       if (a !== undefined) applyDim(a, !p.connected);
     }
+    // 닉네임·표시가 바뀔 수 있어 이름표 폭을 다음 프레임에 다시 잰다
+    for (const a of actors.values()) a.tagW = null;
   }
 
   function createActor(seat: number, now: number): void {
@@ -471,6 +479,8 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
       tagStyle: "",
       tagAlpha: "",
       tagZ: "",
+      tagW: null,
+      tagFront: false,
     };
     // 첫 snap 에 있던 사람은 바로 서 있고, 뒤에 move 로 들어온 사람만 내려앉는다
     if (pendingEntered.delete(seat) && !deps.reducedMotion()) a.enter = now;
@@ -755,31 +765,53 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
     deps.onFrame?.({ renderMs, tagsMs });
   }
 
-  /** 이름표: 머리 꼭대기 투영 좌표를 장치 픽셀에 반올림해 놓고, 발끝 화면 y 가 큰 쪽을 위로 쌓는다(밀지 않는다) */
+  /**
+   * 이름표: 머리 꼭대기 투영 좌표를 장치 픽셀에 반올림해 놓는다(밀지 않는다). 내 이름표가 맨 위, 나머지는 발끝 화면 y 가
+   * 큰 쪽이 위이고, 다른 이름표와 겹친 것 가운데 맨 앞 하나에만 래퍼 data-front="true" 를 붙인다(면이 overlay-ink-strong).
+   */
   function writeTags(r: WorldRenderer): void {
     const dpr = (typeof window !== "undefined" && window.devicePixelRatio) || 1;
     const snap = (v: number): number => Math.round(v * dpr) / dpr;
-    const order: { a: Actor; foot: number }[] = [];
+    const mine = deps.mySeat();
+    const live: Actor[] = [];
     for (const a of actors.values()) {
       if (a.tag === null || !a.tag.isConnected) a.tag = tagLayer.querySelector<HTMLElement>(`[data-seat="${a.seat}"]`);
       if (a.tag === null) continue;
+      // 폭 읽기는 쓰기보다 먼저 모아 한 번에 한다(레이아웃 강제를 한 번으로)
+      if (a.tagW === null) a.tagW = a.tag.offsetWidth;
+      live.push(a);
+    }
+    const boxes: TagBox[] = [];
+    for (const a of live) {
+      const tag = a.tag;
+      if (tag === null) continue;
       const head = r.project({ x: a.pos.x, y: a.headY, z: a.pos.z });
-      const style = `translate(${snap(head.sx)}px, ${snap(head.sy - NAMETAG_GAP)}px) translate(-50%, -100%)`;
+      const x = snap(head.sx);
+      const bottom = snap(head.sy - NAMETAG_GAP);
+      const style = `translate(${x}px, ${bottom}px) translate(-50%, -100%)`;
       if (style !== a.tagStyle) {
         a.tagStyle = style;
-        a.tag.style.transform = style;
+        tag.style.transform = style;
       }
-      if (a.tag.style.opacity !== a.tagAlpha) a.tag.style.opacity = a.tagAlpha;
-      order.push({ a, foot: r.project({ x: a.pos.x, y: 0, z: a.pos.z }).sy });
+      if (tag.style.opacity !== a.tagAlpha) tag.style.opacity = a.tagAlpha;
+      const w = a.tagW !== null && a.tagW > 0 ? a.tagW : NAMETAG_MAX_W;
+      boxes.push({ seat: a.seat, me: a.seat === mine, foot: r.project({ x: a.pos.x, y: 0, z: a.pos.z }).sy, x, bottom, w });
     }
-    order.sort((p, q) => p.foot - q.foot || p.a.seat - q.a.seat);
-    order.forEach(({ a }, rank) => {
-      const z = String(rank);
-      if (a.tag !== null && a.tagZ !== z) {
-        a.tagZ = z;
-        a.tag.style.zIndex = z;
+    const bySeat = new Map(live.map((a) => [a.seat, a]));
+    for (const { seat, z, front } of rankTags(boxes)) {
+      const a = bySeat.get(seat);
+      if (a === undefined || a.tag === null) continue;
+      const zs = String(z);
+      if (a.tagZ !== zs) {
+        a.tagZ = zs;
+        a.tag.style.zIndex = zs;
       }
-    });
+      if (a.tagFront !== front) {
+        a.tagFront = front;
+        if (front) a.tag.setAttribute("data-front", "true");
+        else a.tag.removeAttribute("data-front");
+      }
+    }
   }
 
   // ---------- 입력 ----------

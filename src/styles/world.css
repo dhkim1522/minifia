@@ -8,11 +8,14 @@
 /* 입력 면: 맵 전체가 입력이다. 확대·더블탭·길게 눌러 메뉴·글자 선택·당겨서 새로 고침을 모두 막는다. */
 .mf-world__input { z-index: var(--z-world); touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; overscroll-behavior: none; -webkit-tap-highlight-color: transparent; }
 
-/* 이름표 층: 캔버스와 같은 크기, 입력을 가로채지 않는다. 안쪽 이름표의 z-index 는 발 y 순위(0~7)다. */
+/* 이름표 층: 캔버스와 같은 크기, 입력을 가로채지 않는다. 안쪽 이름표의 z-index 는 순위(0~7)다: 내 이름표가 맨 위, 나머지는 발 y 가 큰 쪽이 위. */
 .mf-world__tags { z-index: var(--z-tags); pointer-events: none; }
 
-/* 이름표 한 개: 런타임이 transform(translate + translate(-50%, -100%))·opacity·z-index(발 y 순위)를 매 프레임 쓴다. */
+/* 이름표 한 개: 런타임이 transform(translate + translate(-50%, -100%))·opacity·z-index(순위)·data-front 를 매 프레임 쓴다. */
 .mf-world__tag { position: absolute; left: 0; top: 0; will-change: transform; }
+
+/* 다른 이름표와 겹친 것 가운데 맨 앞 하나(런타임이 data-front="true" 를 붙임): 뒤가 비치지 않게 면을 승인 토큰 overlay-ink-strong 으로. 겹치지 않으면 .mv-tag 의 overlay-ink(80%) 그대로. */
+.mf-world__tag[data-front="true"] .mv-tag { background: var(--overlay-ink-strong); }
 
 /* 방장이 누를 수 있는 끊긴 사람 이름표: 누르기 영역 44×44 이상(이름표 24 + 안쪽 11×2), 이름표 모양은 그대로(margin 으로 상쇄). */
 .mf-world__kick { display: block; padding: 11px; margin: -11px; border: 0; background: none; color: inherit; font: inherit; cursor: pointer; pointer-events: auto; -webkit-tap-highlight-color: transparent; border-radius: var(--radius-pill); }
