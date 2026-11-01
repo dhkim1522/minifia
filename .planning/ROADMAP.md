@@ -130,11 +130,11 @@ Plans:
   3. 글자 수나 도배 한도를 넘기면 서버가 막고 보낸 사람에게 알린다. 한글 입력(조합 중 Enter)이 깨지지 않고 iOS 키보드가 채팅창을 가리지 않는다 — iPhone·Android·삼성 인터넷·카카오톡 인앱에서 확인 (CHAT-05)
   4. 순차 직업 주장·빠른 메시지·텍스트 이모티콘이 화면과 서버에서 모두 사라지고, 낮 토론은 자유 채팅으로 진행된다 (CHAT-06)
 
-**Plans:** 22 plans (14 waves)
+**Plans:** 1/22 plans executed (14 waves)
 
 Plans:
 **Wave 1** *(같은 웨이브도 번호 순서로 하나씩 돈다 — use_worktrees false)*
-- [ ] 07-01-PLAN.md — 결정 0058(채팅 서버 보관·재접속 채널별 30줄, 0017-7 개정)·옛 결정 폐기 표시 (W1 첫 작업)
+- [x] 07-01-PLAN.md — 결정 0058(채팅 서버 보관·재접속 채널별 30줄, 0017-7 개정)·옛 결정 폐기 표시 (W1 첫 작업)
 - [ ] 07-02-PLAN.md — 순수 규칙 audience·chatRules·chatLog + 새 와이어 타입 (TDD, W1)
 - [ ] 07-03-PLAN.md — 화면 부품 ChatPanel(IME 안전 제출)·HeadStack 입력 중·V2Icon·chatUi·chatText (W1)
 - [ ] 07-04-PLAN.md — 화면에서 순차 주장 걷어내기(ClaimPanel·TurnPanel·claimLines·기록 카드) (W1)
@@ -272,7 +272,7 @@ Phases execute in numeric order: 6 → 7 → 8 → 9 → 10 → 11 → 12 (소�
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 6. 월드 뼈대 | v2.0 | 23/23 | Complete    | 2026-11-01 |
-| 7. 자유 채팅 | v2.0 | 0/22 | Planned | - |
+| 7. 자유 채팅 | v2.0 | 1/22 | In Progress | - |
 | 8. 낮 처형과 유령 | v2.0 | 0/TBD | Not started | - |
 | 9. 밤과 아침 | v2.0 | 0/TBD | Not started | - |
 | 10. 캐릭터·동작·의상 | v2.0 | 0/TBD | Not started | - |

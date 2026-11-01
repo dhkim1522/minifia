@@ -5,16 +5,16 @@ milestone_name: 같은 공간
 current_phase: 07
 current_phase_name: 자유 채팅
 status: executing
-stopped_at: Phase 7 UI-SPEC approved
-last_updated: "2026-11-01T12:13:49.002Z"
+stopped_at: Completed 07-01-PLAN.md
+last_updated: "2026-11-01T12:18:47.176Z"
 last_activity: 2026-11-01
-last_activity_desc: Phase 06 complete, transitioned to Phase 7
-state_head: dc008fdfa4be6dfaeb71a0f251c8c8dd8dc71e50
+last_activity_desc: Phase 07 execution started
+state_head: e5ad62757451e902b40366ccd1e145caf93e85d2
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 45
-  completed_plans: 23
+  completed_plans: 24
   percent: 14
 ---
 
@@ -25,14 +25,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-11-01)
 
 **Core value:** 링크 하나로 모인 친구들이 설명 없이 정통 마피아 한 판(6~10분)을 끝까지 마치는 것
-**Current focus:** Phase 7 — 자유 채팅
+**Current focus:** Phase 07 — 자유 채팅
 
 ## Current Position
 
-Phase: 07 (자유 채팅) — READY TO EXECUTE
-Plan: Not started
+Phase: 07 (자유 채팅) — EXECUTING
+Plan: 2 of 22
 Status: Ready to execute
-Last activity: 2026-11-01 — Phase 06 complete, transitioned to Phase 7
+Last activity: 2026-11-01 — Phase 07 execution started
 
 Progress: [█░░░░░░░░░] 14% (1/7 phases)
 
@@ -81,6 +81,7 @@ Progress: [█░░░░░░░░░] 14% (1/7 phases)
 | Phase 06 P20 | 12 min | 2 tasks | 4 files |
 | Phase 06 P22 | 6min | 3 tasks | 12 files |
 | Phase 06 P23 | 14 min | 3 tasks | 6 files |
+| Phase 07 P01 | 5 min | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -140,6 +141,7 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 06]: 06-22: 내 이름표 맨 위 + 겹친 맨 앞 하나만 overlay-ink-strong (G-06-4 사용자 결정), 가장자리 당기기·카메라 변경 없음
 - [Phase 06]: 06-23: dropSockets 는 합성 close(1006)를 먼저 dispatch 한 뒤 ws.close() — 배포 서버의 약 10초 close 지연에 의존하지 않는다 (G-06-6)
 - [Phase 06]: 06-23: deployhold 배포 주소는 /api/health version 변화가 있을 때만 판정하고 없으면 DH0 미확인 행(통과로 세지 않음), 6분 띠 대기 제거
+- [Phase 07]: 0058: 채팅 줄은 DO storage chat: 키에 수신자 마스크와 함께 보관, 재접속은 채널별 최근 30줄(마스크 복원), 상한 all 100/mafia 300/ghost 300, 0017-7 개정
 
 ### Pending Todos
 
@@ -176,9 +178,9 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-01T09:51:39.798Z
-Stopped at: Phase 7 UI-SPEC approved
-Resume file: .planning/phases/07-free-chat/07-UI-SPEC.md
+Last session: 2026-11-01T12:18:47.121Z
+Stopped at: Completed 07-01-PLAN.md
+Resume file: None
 
 ## Operator Next Steps
 
