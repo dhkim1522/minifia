@@ -285,7 +285,7 @@ describe("ended 전에는 결과·밤 기록이 어떤 view 에도 없다 (T-04-
   /** 실제 전이로 만든 ended 이전 상태들: 로비부터 처형까지, 밤 기록이 쌓인 아침·다음 날 낮 시작 포함. */
   function preEndedStates(seed: number): Array<[string, RoomState]> {
     const out: Array<[string, RoomState]> = [];
-    const phases: PhaseId[] = ["roleReveal", "dayAnnounce", "claim", "discussion", "execVote"];
+    const phases: PhaseId[] = ["roleReveal", "dayAnnounce", "discussion", "execVote"];
     for (const ph of phases) out.push([ph, startedAt(6, seed, ph)]);
     for (const ph of ["candidateVote", "candidateVoteReveal", "defense", "execution"] as const) {
       out.push([ph, stateWithVerdict(6, seed, ph)]);

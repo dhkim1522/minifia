@@ -6,7 +6,6 @@ import { resolve } from "node:path";
 import { countGraphemes, nicknameKey, validateNickname } from "../../shared/nickname";
 import {
   BOT_NAMES,
-  botClaimChoice,
   botCount,
   botCandidateTarget,
   botExecAgree,
@@ -19,7 +18,6 @@ import {
   takeDueBotSteps,
 } from "../../shared/game/bots";
 import type { BotStep } from "../../shared/game/bots";
-import { claimOptions, currentClaimSeat, selectClaim } from "../../shared/game/claim";
 import { emote, say } from "../../shared/game/chat";
 import { pickTarget } from "../../shared/game/night";
 import { PHASE_DEFS } from "../../shared/game/phases";
@@ -113,10 +111,8 @@ const markDead = (s: RoomState, ...seats: number[]): RoomState => ({
   ...s,
   players: s.players.map((p) => (seats.includes(p.seat) ? { ...p, alive: false } : p)),
 });
-/** claim 단계에서 지금 차례를 seat 의 사람으로 옮긴 상태(차례 순서에 그 seat 가 있어야 한다). */
-const atTurnOf = (st: RoomState, seat: number): RoomState => ({ ...st, claimIdx: st.claimOrder!.indexOf(seat) });
-/** claim 계획 키: 단계:마감:차례 번호(결정 0027-10). */
-const claimKey = (st: RoomState): string => `claim:${st.phaseEndsAt}:${st.claimIdx ?? 0}`;
+/** 봇 계획 키: 단계:마감. */
+const planKeyOf = (st: RoomState): string => `${st.phase}:${st.phaseEndsAt}`;
 
 describe("BOT_NAMES", () => {
   it("일곱 이름이 모두 닉네임 규칙을 통과하고 정확히 8 그래핌이며 비교 키가 서로 다르다 (결정 0052-3)", () => {
@@ -302,7 +298,7 @@ describe("방 규칙과 봇", () => {
   });
 
   it("resetToLobby 는 봇을 남기고(키 아홉 개) 사람은 여덟 키 그대로며 botPlan 이 없다", () => {
-    const game = stateAt(2, 3, 5, "claim");
+    const game = stateAt(2, 3, 5, "discussion");
     const planned = syncBotPlan(game, 1000, seededRandInt(1));
     expect(Object.hasOwn(planned, "botPlan")).toBe(true);
     const result = resetToLobby(planned, HOST_ID);
@@ -335,7 +331,7 @@ describe("buildView 와 봇", () => {
   });
 
   it("손님 view JSON 에 isBot·botPlan·봇 id·token 이 없고 players 항목 키는 다섯이며 봇 자리는 connected true 다", () => {
-    const game = syncBotPlan(stateAt(2, 3, 7, "claim"), 1000, seededRandInt(1));
+    const game = syncBotPlan(stateAt(2, 3, 7, "discussion"), 1000, seededRandInt(1));
     const text = JSON.stringify(buildView(game, guestId, 0));
     expect(text.includes("isBot") || text.includes("botPlan") || text.includes("token")).toBe(false);
     for (const bot of botsOf(game)) expect(text.includes(bot.id)).toBe(false);
@@ -347,72 +343,6 @@ describe("buildView 와 봇", () => {
   it("buildPreview 에도 isBot 이 없다", () => {
     const text = JSON.stringify(buildPreview(withBots(lobbyOf(2), 3)));
     expect(text.includes("isBot") || text.includes("botPlan")).toBe(false);
-  });
-});
-
-describe("botClaimChoice", () => {
-  /** 지금 차례가 그 봇인 claim 상태. stateAt 의 첫 차례는 방장(사람)이다. */
-  const botTurn = (humans: number, bots: number, seed: number): { state: RoomState; bot: Player } => {
-    const base = stateAt(humans, bots, seed, "claim");
-    const bot = botsOf(base)[0]!;
-    return { state: atTurnOf(base, bot.seat), bot };
-  };
-
-  it("차례인 봇: seed 1~1000 의 값은 모두 claimOptions 안이고 none 비율이 8~22% 이며 delayMs 는 500 이상 3500 미만이다", () => {
-    const { state, bot } = botTurn(1, 4, 9);
-    expect(currentClaimSeat(state)).toBe(bot.seat);
-    const options = claimOptions(state.players.length);
-    let none = 0;
-    let bad = 0;
-    for (let seed = 1; seed <= 1000; seed += 1) {
-      const choice = botClaimChoice(state, bot, seededRandInt(seed));
-      if (choice === null) {
-        bad += 1;
-        continue;
-      }
-      if (!options.includes(choice.claim)) bad += 1;
-      if (choice.delayMs < 500 || choice.delayMs >= 3500) bad += 1;
-      if (choice.claim === "none") none += 1;
-    }
-    expect(bad).toBe(0);
-    expect(none >= 80 && none <= 220).toBe(true);
-  });
-
-  it("그 봇 차례가 아니면 null 이고 난수 함수를 한 번도 부르지 않는다(호출 횟수 0)", () => {
-    const base = stateAt(1, 4, 9, "claim"); // 지금 차례는 방장
-    for (const bot of botsOf(base)) {
-      let calls = 0;
-      const counting = (): number => {
-        calls += 1;
-        return 0;
-      };
-      expect(`${bot.seat}:${String(botClaimChoice(base, bot, counting))}`).toBe(`${bot.seat}:null`);
-      expect(`${bot.seat}:${calls}`).toBe(`${bot.seat}:0`);
-    }
-    const second = botsOf(base)[1]!;
-    const firstBotTurn = atTurnOf(base, botsOf(base)[0]!.seat); // 다른 봇의 차례
-    expect(String(botClaimChoice(firstBotTurn, second, THROWING))).toBe("null");
-  });
-
-  it("claim 단계가 아니면 차례인 봇이어도 null 이고 난수 함수를 부르지 않는다", () => {
-    const base = stateAt(1, 4, 9, "discussion");
-    for (const bot of botsOf(base)) expect(`${bot.seat}:${String(botClaimChoice(base, bot, THROWING))}`).toBe(`${bot.seat}:null`);
-  });
-
-  it("탈락한 봇은 null 이다", () => {
-    const { state, bot } = botTurn(1, 4, 9);
-    const dead = markDead(state, bot.seat);
-    expect(String(botClaimChoice(dead, dead.players.find((p) => p.id === bot.id)!, THROWING))).toBe("null");
-  });
-
-  it("차례인 봇의 난수 호출 순서는 예전과 같다(randInt(100) → randInt(직업 수) → randInt(3000))", () => {
-    const { state, bot } = botTurn(1, 3, 3);
-    const calls: number[] = [];
-    botClaimChoice(state, bot, (n) => {
-      calls.push(n);
-      return n === 100 ? 99 : 0; // 말 안 함 15% 를 피해 직업 추첨까지 가게 한다
-    });
-    expect(calls.join(",")).toBe([100, rolesInPlay(state.players.length).length, 3000].join(","));
   });
 });
 
@@ -473,17 +403,11 @@ const stepsOf = (s: RoomState): BotStep[] => s.botPlan?.steps ?? [];
 const nowOf = (s: RoomState): number => (s.phaseEndsAt === null ? 0 : s.phaseEndsAt - (PHASE_DEFS[s.phase].durationMs ?? 0));
 
 describe("botPlanKey·syncBotPlan·planBotSteps", () => {
-  it("discussion·night 는 단계 이름과 마감을 이은 키를, claim 은 거기에 차례 번호를 더한 키를 낸다", () => {
+  it("discussion·night 는 단계 이름과 마감을 이은 키를 낸다 (07-08: claim 키는 없다)", () => {
     for (const phase of ["discussion", "night"] as const) {
       const state = stateAt(1, 4, 3, phase);
       expect(String(botPlanKey(state))).toBe(`${phase}:${state.phaseEndsAt}`);
     }
-    const claim = stateAt(1, 4, 3, "claim");
-    expect(String(botPlanKey(claim))).toBe(`claim:${claim.phaseEndsAt}:0`);
-    const second = atTurnOf(claim, botsOf(claim)[1]!.seat);
-    expect(String(botPlanKey(second))).toBe(`claim:${claim.phaseEndsAt}:2`);
-    const { claimIdx: _idx, ...noIdx } = claim;
-    expect(String(botPlanKey(noIdx))).toBe(`claim:${claim.phaseEndsAt}:0`);
     for (const phase of ["lobby", "assigning", "roleReveal", "dayAnnounce", "morning"] as const) {
       const state = phase === "lobby" ? withBots(lobbyOf(1), 4) : stateAt(1, 4, 3, phase);
       expect(`${phase}:${String(botPlanKey(state))}`).toBe(`${phase}:null`);
@@ -491,7 +415,7 @@ describe("botPlanKey·syncBotPlan·planBotSteps", () => {
   });
 
   it("봇 없는 방은 모든 단계에서 입력 그대로이고 randInt 를 부르지 않는다", () => {
-    for (const phase of ["claim", "discussion", "night", "morning"] as const) {
+    for (const phase of ["discussion", "night", "morning"] as const) {
       const state = stateAt(4, 0, 3, phase);
       expect(syncBotPlan(state, nowOf(state), THROWING) === state).toBe(true);
     }
@@ -500,7 +424,7 @@ describe("botPlanKey·syncBotPlan·planBotSteps", () => {
   });
 
   it("봇이 없는데 botPlan 이 남아 있으면 키를 뺀다", () => {
-    const state = { ...stateAt(4, 0, 3, "claim"), botPlan: { key: "x", steps: [] } };
+    const state = { ...stateAt(4, 0, 3, "discussion"), botPlan: { key: "x", steps: [] } };
     expect(Object.hasOwn(syncBotPlan(state, nowOf(state), THROWING), "botPlan")).toBe(false);
   });
 
@@ -510,44 +434,6 @@ describe("botPlanKey·syncBotPlan·planBotSteps", () => {
       const result = syncBotPlan({ ...base, botPlan: { key: "old", steps: [] } }, nowOf(base), seededRandInt(1));
       expect(`${phase}:${Object.hasOwn(result, "botPlan")}`).toBe(`${phase}:false`);
     }
-  });
-
-  it("claim: 지금 차례가 봇이면 그 봇 한 명의 claim 행 하나뿐이고 시각이 범위 안이며 selectClaim 에 통과한다", () => {
-    for (let seed = 1; seed <= 20; seed += 1) {
-      const base = markDead(stateAt(1, 5, seed, "claim"), 2);
-      const order = base.claimOrder!;
-      for (const bot of botsOf(base).filter((b) => b.alive !== false)) {
-        if (!order.includes(bot.seat)) continue;
-        const state = atTurnOf(base, bot.seat);
-        const steps = planBotSteps(state, nowOf(state), seededRandInt(seed));
-        const label = `${seed}:${bot.seat}`;
-        expect(`${label}:${steps.length}`).toBe(`${label}:1`);
-        const step = steps[0]!;
-        expect(`${label}:${step.botId === bot.id && step.act.t === "claim"}`).toBe(`${label}:true`);
-        expect(`${label}:${step.at > nowOf(state) && step.at < state.phaseEndsAt! - 500}`).toBe(`${label}:true`);
-        if (step.act.t !== "claim") continue;
-        const r = selectClaim(state, step.botId, step.act.claim, step.at);
-        expect(`${label}:${r.ok ? "ok" : r.error}`).toBe(`${label}:ok`);
-      }
-    }
-  });
-
-  it("claim: 지금 차례가 사람이면 빈 배열이고 다른 봇의 난수도 쓰지 않는다", () => {
-    for (let seed = 1; seed <= 20; seed += 1) {
-      const state = stateAt(1, 5, seed, "claim"); // 첫 차례는 방장(사람)
-      expect(`${seed}:${planBotSteps(state, nowOf(state), THROWING).length}`).toBe(`${seed}:0`);
-    }
-  });
-
-  it("claim: 차례인 봇이 아닌 봇의 난수는 쓰지 않는다 — 호출 횟수는 차례인 봇 한 명 몫(3)뿐이다", () => {
-    const base = stateAt(1, 4, 5, "claim");
-    const state = atTurnOf(base, botsOf(base)[2]!.seat);
-    let calls = 0;
-    planBotSteps(state, nowOf(state), (n) => {
-      calls += 1;
-      return n === 100 ? 99 : 0;
-    });
-    expect(calls).toBe(3);
   });
 
   it("discussion 은 살아 있는 봇마다 정확히 2개(토론 40초 안, 결정 0039)이고 같은 봇 간격이 2000 이상이며 say·emote 에 모두 통과한다", () => {
@@ -604,7 +490,7 @@ describe("botPlanKey·syncBotPlan·planBotSteps", () => {
   });
 
   it("탈락한 봇은 어느 단계에도 행동이 없다", () => {
-    for (const phase of ["claim", "discussion", "night"] as const) {
+    for (const phase of ["discussion", "night"] as const) {
       const base = stateAt(1, 5, 11, phase);
       const state = markDead(base, ...botsOf(base).map((b) => b.seat));
       expect(`${phase}:${planBotSteps(state, nowOf(state), seededRandInt(1)).length}`).toBe(`${phase}:0`);
@@ -612,7 +498,7 @@ describe("botPlanKey·syncBotPlan·planBotSteps", () => {
   });
 
   it("사람이 모두 끊긴 상태면 steps 가 비어 있고 randInt 를 부르지 않는다", () => {
-    for (const phase of ["claim", "discussion", "night"] as const) {
+    for (const phase of ["discussion", "night"] as const) {
       const base = stateAt(2, 4, 6, phase);
       const state: RoomState = { ...base, players: base.players.map((p) => (isBot(p) ? p : { ...p, connected: false })) };
       expect(`${phase}:${planBotSteps(state, nowOf(state), THROWING).length}`).toBe(`${phase}:0`);
@@ -620,41 +506,21 @@ describe("botPlanKey·syncBotPlan·planBotSteps", () => {
   });
 
   it("같은 시드·같은 now 는 같은 계획이다", () => {
-    for (const phase of ["claim", "discussion", "night"] as const) {
+    for (const phase of ["discussion", "night"] as const) {
       const state = stateAt(1, 5, 8, phase);
       expect(canon(planBotSteps(state, nowOf(state), seededRandInt(42)))).toBe(canon(planBotSteps(state, nowOf(state), seededRandInt(42))));
     }
   });
 
-  it("차례가 넘어가 claimIdx 가 바뀌면 키가 달라져 새 계획이 서고, 같은 차례에서는 입력 그대로다", () => {
-    const first = stateAt(1, 4, 3, "claim"); // 방장 차례
-    const hostPlan = syncBotPlan(first, nowOf(first), seededRandInt(1));
-    expect(`${hostPlan.botPlan?.key}:${stepsOf(hostPlan).length}`).toBe(`${claimKey(first)}:0`);
-    // 방장이 고르면 다음 차례는 봇 seat 1 이다(selectClaim 이 마감을 당기고 tick 이 넘긴다).
-    const picked = selectClaim(hostPlan, HOST_ID, "police", hostPlan.phaseEndsAt! - 4000);
-    if (!picked.ok) throw new Error(`selectClaim failed: ${picked.error}`);
-    const botTurn = tick(picked.state, picked.state.phaseEndsAt!, seededRandInt(2));
-    expect(`${botTurn.phase}:${botTurn.claimIdx}:${currentClaimSeat(botTurn)}`).toBe("claim:1:1");
-    expect(String(botPlanKey(botTurn))).toBe(claimKey(botTurn));
-    expect(String(botWakeAt(botTurn))).toBe("null"); // 이월된 낡은 계획의 시각이 새 차례를 깨우지 않는다
-    const synced = syncBotPlan(botTurn, nowOf(botTurn), seededRandInt(3));
-    expect(`${synced.botPlan?.key}:${stepsOf(synced).length}:${stepsOf(synced)[0]?.botId}`).toBe(`${claimKey(botTurn)}:1:${botsOf(botTurn)[0]!.id}`);
-    expect(syncBotPlan(synced, nowOf(botTurn) + 5, THROWING) === synced).toBe(true);
-    // 마감이 우연히 같아도 차례 번호가 다르면 키가 다르다(테스트 넘기기 연타).
-    const sameDeadline = { ...synced, claimIdx: 2 };
-    expect(botPlanKey(sameDeadline) === synced.botPlan?.key).toBe(false);
-  });
-
   it("같은 단계 키로 다시 부르면 입력 그대로이고 tick 으로 다음 단계에 가면 새 키의 계획이다", () => {
-    const claim0 = stateAt(1, 4, 3, "claim");
-    const claim = syncBotPlan(claim0, nowOf(claim0), seededRandInt(1));
-    expect(Object.hasOwn(claim, "botPlan")).toBe(true);
-    expect(syncBotPlan(claim, nowOf(claim) + 5, THROWING) === claim).toBe(true);
-    let discussion = claim; // 차례제(결정 0023): claim 은 차례마다 마감이 오므로 낮 토론까지 마감마다 한 번씩 tick 한다
-    while (discussion.phase === "claim") discussion = tick(discussion, discussion.phaseEndsAt!, seededRandInt(2));
-    expect(discussion.phase).toBe("discussion");
-    const next = syncBotPlan(discussion, nowOf(discussion), seededRandInt(5));
-    expect(String(next.botPlan?.key)).toBe(`discussion:${discussion.phaseEndsAt}`);
+    const discussion0 = stateAt(1, 4, 3, "discussion");
+    const discussion = syncBotPlan(discussion0, nowOf(discussion0), seededRandInt(1));
+    expect(Object.hasOwn(discussion, "botPlan")).toBe(true);
+    expect(syncBotPlan(discussion, nowOf(discussion) + 5, THROWING) === discussion).toBe(true);
+    const execVote = tick(discussion, discussion.phaseEndsAt!, seededRandInt(2));
+    expect(execVote.phase).toBe("execVote");
+    const next = syncBotPlan(execVote, nowOf(execVote), seededRandInt(5));
+    expect(String(next.botPlan?.key)).toBe(`execVote:${execVote.phaseEndsAt}`);
     expect(stepsOf(next).length > 0).toBe(true);
   });
 
@@ -664,29 +530,18 @@ describe("botPlanKey·syncBotPlan·planBotSteps", () => {
     expect(ats.join(",")).toBe([...ats].sort((a, b) => a - b).join(","));
   });
 
-  it("claim 계획의 호출 순서가 시드 계약과 같다(15% 말 안 함 → 직업 → 지연) — 차례인 봇 한 명 몫만", () => {
-    const base = stateAt(1, 3, 3, "claim");
-    const state = atTurnOf(base, botsOf(base)[1]!.seat);
-    const calls: number[] = [];
-    const recorder = (n: number): number => {
-      calls.push(n);
-      return n === 100 ? 99 : 0; // 말 안 함 15% 를 피해 직업 추첨까지 가게 한다
-    };
-    planBotSteps(state, nowOf(state), recorder);
-    expect(calls.join(",")).toBe([100, rolesInPlay(state.players.length).length, 3000].join(","));
-  });
 });
 
 describe("takeDueBotSteps·botWakeAt", () => {
   const plan = (key: string): RoomState => {
-    const state = stateAt(1, 4, 3, "claim");
+    const state = stateAt(1, 4, 3, "discussion");
     const bot = botsOf(state)[0]!;
-    const step = (at: number): BotStep => ({ at, botId: bot.id, act: { t: "claim", claim: "none" } });
+    const step = (at: number): BotStep => ({ at, botId: bot.id, act: { t: "say", template: "innocent" } });
     return { ...state, botPlan: { key, steps: [step(10), step(20), step(30)] } };
   };
 
   it("at 이하인 행동만 순서대로 꺼내고 나머지를 남긴다", () => {
-    const state = plan(claimKey(stateAt(1, 4, 3, "claim")));
+    const state = plan(planKeyOf(stateAt(1, 4, 3, "discussion")));
     const { state: rest, due } = takeDueBotSteps(state, 20);
     expect(due.map((s) => s.at).join(",")).toBe("10,20");
     expect(stepsOf(rest).map((s) => s.at).join(",")).toBe("30");
@@ -694,20 +549,20 @@ describe("takeDueBotSteps·botWakeAt", () => {
   });
 
   it("꺼낼 것이 없으면 입력 그대로다", () => {
-    const state = plan(claimKey(stateAt(1, 4, 3, "claim")));
+    const state = plan(planKeyOf(stateAt(1, 4, 3, "discussion")));
     const { state: rest, due } = takeDueBotSteps(state, 5);
     expect(due.length === 0 && rest === state).toBe(true);
   });
 
   it("키가 다른(낡은) 계획이면 due 가 비고 입력 그대로며 botWakeAt 도 null 이다", () => {
-    const state = plan("claim:1");
+    const state = plan("discussion:1");
     const { state: rest, due } = takeDueBotSteps(state, 1_000_000);
     expect(due.length === 0 && rest === state).toBe(true);
     expect(String(botWakeAt(state))).toBe("null");
   });
 
   it("남은 행동이 없으면 botWakeAt 은 null 이다", () => {
-    const state = plan(claimKey(stateAt(1, 4, 3, "claim")));
+    const state = plan(planKeyOf(stateAt(1, 4, 3, "discussion")));
     const { state: rest } = takeDueBotSteps(state, 1_000_000);
     expect(String(botWakeAt(rest))).toBe("null");
   });
@@ -899,14 +754,30 @@ describe("봇 투표·변론 계획: 회귀", () => {
     }
   });
 
-  it("claim·discussion·night 계획 고정값(결정 0039: 토론 간격 폭 18초, 토론 40초로 discussion·night 의 값이 바뀌었다 — 옛 값 802530989·431118882)", () => {
+  it("discussion·night 계획 고정값 (07-08: claim 계획 제거로 새 호출 순서로 다시 고정 — 옛 값 289874952·760964938)", () => {
     const digest = (text: string): number => [...text].reduce((h, ch) => (h * 31 + ch.charCodeAt(0)) % 1_000_000_007, 7);
-    const got = (["claim", "discussion", "night"] as const).map((phase) => {
-      const base = stateAt(1, 5, 8, phase);
-      const state = phase === "claim" ? atTurnOf(base, botsOf(base)[0]!.seat) : base;
+    const got = (["discussion", "night"] as const).map((phase) => {
+      const state = stateAt(1, 5, 8, phase);
       return digest(canon(planBotSteps(state, nowOf(state), seededRandInt(42))));
     });
-    expect(got.join(",")).toBe("251347194,289874952,760964938");
+    expect(got.join(",")).toBe("622180622,76649671");
+  });
+
+  it("discussion·night·execVote 계획의 난수 호출 수는 claim 제거 뒤에도 그대로다 (07-08, 리서치 Pitfall 13)", () => {
+    const countCalls = (state: RoomState): number => {
+      let calls = 0;
+      const inner = seededRandInt(42);
+      planBotSteps(state, nowOf(state), (n) => {
+        calls += 1;
+        return inner(n);
+      });
+      return calls;
+    };
+    // discussion = 봇당 randInt(폭) + randInt(2) + (이모티콘이면 randInt(8)) 을 두 번 — 봇당 4~6번, 봇 5명이면 20~30번.
+    const discussion = countCalls(stateAt(1, 5, 8, "discussion"));
+    expect(`${discussion >= 20 && discussion <= 30}`).toBe("true");
+    // execVote = 봇당 randInt(100) + randInt(지연 폭) 두 번, 봇 4명 → 8번.
+    expect(countCalls(voteStateAt(2, "execVote"))).toBe(8);
   });
 });
 

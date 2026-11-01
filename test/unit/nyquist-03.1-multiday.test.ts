@@ -1,8 +1,8 @@
 // Nyquist 검증(3.1): 여러 날을 실제 전이(startGame, tick, pickTarget)로 돌리며 독립 모델과 대조한다.
-// 개별 규칙 단위 테스트가 놓치기 쉬운 '낮이 거듭될 때의 누적' 을 본다: 시작 자리 이동·탈락자 제외·일지 누적·누출 키 부재.
+// 개별 규칙 단위 테스트가 놓치기 쉬운 '낮이 거듭될 때의 누적' 을 본다: 낮 시작 발표 다음이 바로 토론인지·일지 누적·누출 키 부재.
 import { describe, expect, it } from "vitest";
-import { CLAIM_TURN_MS } from "../../shared/game/phases";
 import { pickTarget } from "../../shared/game/night";
+import { DISCUSSION_MS } from "../../shared/game/phases";
 import { attachConnection, createRoomState, joinRoom, startGame } from "../../shared/game/room";
 import type { Player, RoomState } from "../../shared/game/room";
 import { tick } from "../../shared/game/tick";
@@ -41,42 +41,31 @@ function actNight(s: RoomState): RoomState {
   return st;
 }
 
-describe("여러 날 순차 주장 + 일지 누적 (DAY-02, NIGHT-04, ELIM-01)", () => {
+describe("여러 날 낮 흐름 + 일지 누적 (CHAT-06, NIGHT-04, ELIM-01)", () => {
   for (const n of [5, 6, 7, 8]) {
     for (const seed of [1, 2, 3]) {
-      it(`${n}명 seed ${seed}: 날마다 주장 순서·시작 자리·일지가 독립 모델과 같다`, () => {
+      it(`${n}명 seed ${seed}: 날마다 낮 시작 발표 다음이 바로 토론이고 일지가 독립 모델과 같다`, () => {
         const rand = seededRandInt(seed);
         const lobby = lobbyOf(n);
         const started = startGame(lobby, lobby.hostId, 10_000, rand);
         if (!started.ok) throw new Error("start");
         let s = started.state;
-        let prevStart: number | undefined;
         let days = 0;
         const dayRecords: Array<{ day: number; died: number | undefined }> = [];
         for (let guard = 0; guard < 400 && s.phase !== "ended" && days < 4; guard += 1) {
           if (s.phaseEndsAt === null) break;
-          if (s.phase === "claim" && s.claimIdx === 0 && s.claimOrder !== undefined) {
+          if (s.phase === "dayAnnounce") {
             days += 1;
-            const alive = living(s).map((p) => p.seat).sort((a, b) => a - b);
-            // 모델: 오름차순 생존 seat, 시작은 (1일차 방장) 또는 직전 시작보다 큰 첫 생존 seat
-            const host = s.players.find((p) => p.id === s.hostId)!;
-            const start = prevStart === undefined ? host.seat : (alive.find((x) => x > prevStart!) ?? alive[0]!);
-            const at = alive.indexOf(start);
-            const expected = [...alive.slice(at), ...alive.slice(0, at)];
-            expect(s.claimOrder).toEqual(expected);
-            prevStart = start;
-            // 뷰에는 서버 전용 키가 없고 turn 은 현재 차례만
+            // 뷰에는 서버 전용 주장 키가 없고 day 에 turn 이 없다(07-08: 순차 주장 단계 제거)
             for (const p of s.players) {
               const v = JSON.stringify(buildView(s, p.id, s.phaseEndsAt! - 1));
-              for (const k of ["claimPick", "claimOrder", "claimIdx", "claimStart"]) expect(v).not.toContain(`"${k}"`);
+              for (const k of ["claimPick", "claimOrder", "claimIdx", "claimStart", "turn"]) expect(v).not.toContain(`"${k}"`);
             }
-            // 모두 말 안 함: 차례 수 × 8초 뒤 토론으로 간다
-            const end = s.phaseEndsAt! + (expected.length - 1) * CLAIM_TURN_MS;
-            const after = tick(s, end, rand);
+            // 낮 시작 발표 마감 다음이 바로 토론이고, 마감은 이전 마감 + DISCUSSION_MS 다
+            const after = tick(s, s.phaseEndsAt!, rand);
             expect(after.phase).toBe("discussion");
-            const today = (after.claimLog ?? []).filter((e) => e.n === (s.day ?? 1));
-            expect(today.map((e) => e.seat)).toEqual(expected);
-            expect(today.every((e) => e.claim === "none")).toBe(true);
+            expect(after.phaseEndsAt).toBe(s.phaseEndsAt! + DISCUSSION_MS);
+            for (const k of ["claimPick", "claimOrder", "claimIdx", "claimStart", "claimLog"]) expect(Object.hasOwn(after, k)).toBe(false);
           }
           if (s.phase === "night") s = actNight(s);
           const before = s;

@@ -15,7 +15,7 @@ import {
   startGame,
 } from "../../shared/game/room";
 import type { RoomState } from "../../shared/game/room";
-import { ASSIGNING_MS, CLAIM_TURN_MS, DAY_ANNOUNCE_MS, DISCUSSION_MS, ROLE_REVEAL_MS } from "../../shared/game/phases";
+import { ASSIGNING_MS, DAY_ANNOUNCE_MS, DISCUSSION_MS, ROLE_REVEAL_MS } from "../../shared/game/phases";
 import { tick } from "../../shared/game/tick";
 import type { PhaseId } from "../../shared/protocol";
 import { ROLE_IDS, ROLE_TABLE } from "../../shared/game/roles";
@@ -589,7 +589,7 @@ describe("normalizeStoredRoom — 저장된 옛 방 (RESEARCH Pattern 6, T-02-14
     const started = startGame(lobby, "p0", 0, seededRandInt(1));
     if (!started.ok) throw new Error(started.error);
     const roleReveal = tick(started.state, ASSIGNING_MS);
-    const ticked = tick(roleReveal, ASSIGNING_MS + ROLE_REVEAL_MS + DAY_ANNOUNCE_MS + 8 * CLAIM_TURN_MS);
+    const ticked = tick(roleReveal, ASSIGNING_MS + ROLE_REVEAL_MS + DAY_ANNOUNCE_MS);
     // tick 의 낮 시작 훅이 아직 옛 messages 빈 배열을 쓴다(02-15 가 지운다) — 이 테스트는 그 키가 없는 상태의 동일성을 본다.
     const { messages: _old, ...bare } = ticked as RoomState & { messages?: unknown };
     const discussion = bare as RoomState;
@@ -635,25 +635,6 @@ describe("normalizeStoredRoom — 저장된 옛 방 (RESEARCH Pattern 6, T-02-14
     expect(`${got.phase}:${got.phaseEndsAt}:${got.day}`).toBe(`discussion:${5_000 + DISCUSSION_MS}:3`);
     expect(got.players === stored.players).toBe(true);
     expect(String(stored.phase)).toBe("claimReveal"); // 입력은 바꾸지 않는다
-  });
-
-  it("저장 단계가 claim 이고 차례 상태가 없으면 enterClaim 이 적용되어 첫 차례 · now+8000 이 된다", () => {
-    const base = fullRoom([0, 1, 2, 3, 4]);
-    const stored: RoomState = { ...base, phase: "claim", phaseEndsAt: 77_000, day: 2 };
-    const got = normalizeStoredRoom(stored, 5_000);
-    expect(got === stored).toBe(false);
-    expect(got.phase).toBe("claim");
-    expect(got.claimOrder).toEqual([0, 1, 2, 3, 4, 5, 6, 7]);
-    expect(got.claimIdx).toBe(0);
-    expect(got.phaseEndsAt).toBe(5_000 + CLAIM_TURN_MS);
-    expect(got.day).toBe(2);
-    expect(Object.hasOwn(stored, "claimOrder")).toBe(false);
-  });
-
-  it("이미 차례 상태가 있는 claim 방은 같은 객체를 돌려준다", () => {
-    const base = fullRoom([0, 1, 2, 3, 4]);
-    const stored: RoomState = { ...base, phase: "claim", phaseEndsAt: 77_000, day: 1, claimOrder: [0, 1, 2], claimIdx: 1, claimStart: 0 };
-    expect(normalizeStoredRoom(stored, 5_000) === stored).toBe(true);
   });
 
   it("옛 Player 의 주장 필드 넷은 정규화 결과에서 키째 빠진 새 객체가 되고 다른 필드는 그대로다", () => {
@@ -726,7 +707,7 @@ describe("normalizeStoredRoom — 저장된 옛 방 (RESEARCH Pattern 6, T-02-14
         return rest;
       }),
     };
-    const line = [ASSIGNING_MS, ROLE_REVEAL_MS, DAY_ANNOUNCE_MS, 8 * CLAIM_TURN_MS];
+    const line = [ASSIGNING_MS, ROLE_REVEAL_MS, DAY_ANNOUNCE_MS];
     let at = 0;
     const seen: string[] = [];
     let state = legacy;
@@ -736,9 +717,9 @@ describe("normalizeStoredRoom — 저장된 옛 방 (RESEARCH Pattern 6, T-02-14
       const view = buildView(state, "p1", at);
       seen.push(`${state.phase}:${view.day === undefined ? "-" : view.day.n}`);
     }
-    expect(seen.join(" ")).toBe("roleReveal:- dayAnnounce:1 claim:1 discussion:1");
+    expect(seen.join(" ")).toBe("roleReveal:- dayAnnounce:1 discussion:1");
     const day = buildView(state, "p1", at).day;
-    expect(day?.claimLog.map((c) => c.claim).join(",")).toBe(Array(8).fill("none").join(","));
+    expect(JSON.stringify(day?.claimLog)).toBe("[]");
     expect(Object.keys(day ?? {}).includes("messages")).toBe(false);
   });
 

@@ -56,7 +56,7 @@ function leakyRoom(phase: RoomState["phase"]): RoomState {
 }
 
 describe("buildPreview 누출 검사", () => {
-  for (const phase of ["lobby", "assigning", "roleReveal", "dayAnnounce", "claim", "discussion"] as const) {
+  for (const phase of ["lobby", "assigning", "roleReveal", "dayAnnounce", "discussion"] as const) {
     it(`${phase} 단계: 토큰·내부 id·역할·연결 상태 문자열이 직렬화에 없다`, () => {
       const text = JSON.stringify(buildPreview(leakyRoom(phase)));
       for (const secret of ["token-secret-", "id-zero-aaa", "id-two-bbb", "id-one-ccc", "id-three-ddd", "conn-", ...SECRET_WORDS]) {
@@ -72,7 +72,7 @@ describe("buildPreview 누출 검사", () => {
   });
 
   it("대기실 밖 단계: 앉은 사람 목록을 공개하지 않지만 playerCount 는 끊긴 사람을 포함한 자리 수다", () => {
-    for (const phase of ["assigning", "roleReveal", "dayAnnounce", "claim", "discussion"] as const) {
+    for (const phase of ["assigning", "roleReveal", "dayAnnounce", "discussion"] as const) {
       const preview = buildPreview(leakyRoom(phase));
       expect(preview.players).toEqual([]);
       expect(preview.playerCount).toBe(4);

@@ -16,8 +16,8 @@ const room = (phase: PhaseId): RoomState => ({
   ...(phase === "defense" ? { verdict: { candidate: 2 } as RoomState["verdict"] } : {}),
 });
 
-// 이모티콘은 claim·discussion·투표 둘·변론·밤에만, 빠른 메시지는 claim 을 뺀 같은 단계에서만 받는다 (COMM-04).
-const EMOTE_OK = new Set<PhaseId>(["claim", "discussion", "execVote", "candidateVote", "defense", "night"]);
+// 이모티콘과 빠른 메시지는 discussion·투표 둘·변론·밤에서만 받는다 (COMM-04).
+const EMOTE_OK = new Set<PhaseId>(["discussion", "execVote", "candidateVote", "defense", "night"]);
 const SAY_OK = new Set<PhaseId>(["discussion", "execVote", "candidateVote", "defense", "night"]);
 const phases = Object.keys(PHASE_DEFS) as PhaseId[];
 

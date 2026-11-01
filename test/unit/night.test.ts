@@ -179,12 +179,11 @@ describe("pickTarget 검사 순서 (D-02, ELIM-01)", () => {
     "assigning",
     "roleReveal",
     "dayAnnounce",
-    "claim",
     "discussion",
     "morning",
   ];
 
-  it("night 가 아닌 일곱 단계에서는 WRONG_PHASE 다", () => {
+  it("night 가 아닌 여섯 단계에서는 WRONG_PHASE 다", () => {
     for (const phase of OTHER_PHASES) {
       const state = stateAtPhase(phase, 6, 11);
       const actor = state.players[0]!;
@@ -633,11 +632,11 @@ describe("문구 번호 (D-18, NIGHT-06)", () => {
 });
 
 describe("따라잡기", () => {
-  it("discussion 에서 아무도 안 고른 채 tick 한 번으로 다음 낮 claim 까지 가면 morning {} 이 남고 일차가 하나 오른다", () => {
+  it("discussion 에서 아무도 안 고른 채 tick 한 번으로 다음 낮 discussion 까지 가면 morning {} 이 남고 일차가 하나 오른다", () => {
     const discussion = stateAtPhase("discussion", 6, 11);
     const endsAt = discussion.phaseEndsAt ?? 0;
     const caught = tick(discussion, endsAt + EXEC_VOTE_MS + NIGHT_MS + 5_000 + 2_000);
-    expect(caught.phase).toBe("claim");
+    expect(caught.phase).toBe("discussion");
     expect(caught.day).toBe((discussion.day ?? 0) + 1);
     expect(caught.morning === undefined).toBe(false);
     expect(Object.keys(caught.morning ?? { x: 1 }).length).toBe(0);

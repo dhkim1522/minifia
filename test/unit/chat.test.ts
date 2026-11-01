@@ -142,17 +142,13 @@ describe("say - 통과한 메시지 (D-15)", () => {
 });
 
 describe("say - 단계 (D-13, 성공 기준 5)", () => {
-  it.each(["lobby", "assigning", "roleReveal", "dayAnnounce", "claim", "morning"] as PhaseId[])(
+  it.each(["lobby", "assigning", "roleReveal", "dayAnnounce", "morning"] as PhaseId[])(
     "%s 에서는 WRONG_PHASE",
     (phase) => {
       expect(outcome(say(room(phase), "p1", { template: "innocent" }, NOW))).toBe("WRONG_PHASE");
     },
   );
 
-  it("claim 중 빠른 메시지는 탈락자도 WRONG_PHASE 다 (이모티콘만 허용, 결정 0023-2)", () => {
-    const dead = room("claim", { overrides: { 1: { alive: false } } });
-    expect(outcome(say(dead, "p1", { template: "innocent" }, NOW))).toBe("WRONG_PHASE");
-  });
 });
 
 describe("say - 형식·대상 위반은 BAD_MESSAGE (D-12, D-13, COMM-04)", () => {
@@ -200,7 +196,7 @@ describe("say - 형식·대상 위반은 BAD_MESSAGE (D-12, D-13, COMM-04)", () 
   });
 
   it("단계 검사가 형식 검사보다 먼저다", () => {
-    expect(outcome(bad({ template: "hello" }, room("claim")))).toBe("WRONG_PHASE");
+    expect(outcome(bad({ template: "hello" }, room("dayAnnounce")))).toBe("WRONG_PHASE");
   });
 
   it("형식 위반이 쿨다운보다 먼저다", () => {
@@ -311,22 +307,6 @@ describe("emote - 이모티콘 (D-14, D-16, COMM-02)", () => {
     expect(outcome(emote(room(phase), "p1", "smile", NOW))).toBe("WRONG_PHASE");
   });
 
-  it("claim 중에는 살아 있는 사람이 이모티콘을 보낼 수 있고(차례 여부와 무관) 쿨다운 규칙은 같다 (결정 0023-2)", () => {
-    const state = room("claim");
-    const sent = emote(state, "p3", "heart", NOW);
-    expect(outcome(sent)).toBe("ok");
-    if (!sent.ok) return;
-    expect(JSON.stringify(sent.event)).toBe(JSON.stringify({ seat: 3, icon: "heart", at: NOW }));
-    expect(outcome(emote(sent.state, "p3", "smile", NOW + SERVER_MIN_SEND_GAP_MS - 1))).toBe("RATE_LIMITED");
-    expect(outcome(emote(sent.state, "p3", "smile", NOW + SERVER_MIN_SEND_GAP_MS))).toBe("ok");
-  });
-
-  it("claim 중 탈락자·방에 없는 사람은 BAD_MESSAGE", () => {
-    const dead = room("claim", { overrides: { 1: { alive: false } } });
-    expect(outcome(emote(dead, "p1", "smile", NOW))).toBe("BAD_MESSAGE");
-    expect(outcome(emote(room("claim"), "ghost", "smile", NOW))).toBe("BAD_MESSAGE");
-  });
-
   it("탈락자·방에 없는 사람은 BAD_MESSAGE", () => {
     const dead = room("discussion", { overrides: { 1: { alive: false } } });
     expect(outcome(emote(dead, "p1", "smile", NOW))).toBe("BAD_MESSAGE");
@@ -419,11 +399,11 @@ describe("거부 코드는 규칙 하나 - 단계 → 보낸 사람 → 템플�
   /** seat 1 이 살아 있는 비마피아, seat 2 가 마피아인 밤 방 */
   const nightWith = (role: RoleId): RoomState => room("night", { overrides: { 1: { role }, 2: { role: "mafia" } } });
 
-  it("탈락자의 say(innocent): morning·claim → WRONG_PHASE, discussion → BAD_MESSAGE", () => {
-    const rows = (["morning", "claim", "discussion"] as PhaseId[]).map(
+  it("탈락자의 say(innocent): morning·dayAnnounce → WRONG_PHASE, discussion → BAD_MESSAGE", () => {
+    const rows = (["morning", "dayAnnounce", "discussion"] as PhaseId[]).map(
       (phase) => `${phase}:${outcome(say(withDead(phase, "citizen"), "p1", { template: "innocent" }, NOW))}`,
     );
-    expect(rows.join(" ")).toBe("morning:WRONG_PHASE claim:WRONG_PHASE discussion:BAD_MESSAGE");
+    expect(rows.join(" ")).toBe("morning:WRONG_PHASE dayAnnounce:WRONG_PHASE discussion:BAD_MESSAGE");
   });
 
   it("탈락자의 emoji: morning → WRONG_PHASE, discussion → BAD_MESSAGE", () => {
@@ -578,9 +558,9 @@ describe("say - 표시 전용 템플릿(claimRole·claimNone)은 서버가 받�
     }
   });
 
-  it("claim 단계에서는 누구든 WRONG_PHASE 이고 상태가 변하지 않는다", () => {
+  it("dayAnnounce 단계에서는 누구든 WRONG_PHASE 이고 상태가 변하지 않는다", () => {
     for (const input of inputs) {
-      const state = room("claim");
+      const state = room("dayAnnounce");
       const before = JSON.stringify(state);
       expect(outcome(say(state, "p1", input, NOW))).toBe("WRONG_PHASE");
       expect(JSON.stringify(state)).toBe(before);
