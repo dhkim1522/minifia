@@ -24,6 +24,9 @@ vi.mock("../../src/net/assets", async (importOriginal) => ({
   preloadDuskAssets: preloadDuskMock,
 }));
 
+// 06-15: 대기실은 맵(WorldStage) 위에 그려진다. 캔버스·런타임은 worldStage.test 가 보므로 여기서는 가짜로 바꾼다(lobby.test.tsx 와 같은 모양).
+vi.mock("../../src/components/WorldStage", async () => ({ WorldStage: (await import("../helpers/fakeWorldStage")).FakeWorldStage }));
+
 const { RoomScreen } = await import("../../src/screens/RoomScreen");
 const { RoleReveal } = await import("../../src/screens/RoleReveal");
 const { TEST_PHASE_LABEL } = await import("../../src/components/TestTools");
@@ -598,15 +601,15 @@ describe("S-06b·S-06c·S-07 한 장면 DayScene (DAY-01, UI-SPEC 장면)", () =
 describe("대기실 연결 (C-02, R9) · 미리 받기 (Pattern 13 ②)", () => {
   const lobby = (count: number, over: Partial<ViewOpts> = {}) => makeView({ phase: "lobby", isHost: true, count, ...over });
 
-  it("canSend 가 거짓이면 [게임 시작]·[나가기] 가 꺼진다", () => {
-    renderRoom(lobby(4), { canSend: false });
-    expect((byRole("button", "게임 시작") as HTMLButtonElement).disabled).toBe(true);
+  it("canSend 가 거짓이면 [시작] 은 흐리고(inactive) [나가기] 는 꺼진다", () => {
+    const { container } = renderRoom(lobby(4), { canSend: false });
+    expect(container.querySelector("[data-lobby-start]")?.className).toContain("mf-act--inactive");
     expect((byRole("button", "나가기") as HTMLButtonElement).disabled).toBe(true);
   });
 
-  it("canSend 가 참이면 [게임 시작]·[나가기] 가 켜진다", () => {
-    renderRoom(lobby(4), { canSend: true });
-    expect((byRole("button", "게임 시작") as HTMLButtonElement).disabled).toBe(false);
+  it("canSend 가 참이면 [시작] 이 켜지고 [나가기] 도 켜진다", () => {
+    const { container } = renderRoom(lobby(4), { canSend: true });
+    expect(container.querySelector("[data-lobby-start]")?.className).toContain("mf-act--primary");
     expect((byRole("button", "나가기") as HTMLButtonElement).disabled).toBe(false);
   });
 
@@ -625,10 +628,11 @@ describe("대기실 연결 (C-02, R9) · 미리 받기 (Pattern 13 ②)", () => 
 
   it("epoch 가 바뀌며 사람이 더해진 view 는 토스트가 없고, 같은 epoch 의 변화에는 토스트가 난다", () => {
     const r = renderRoom(lobby(2), { epoch: 1 });
+    const toast = () => r.container.querySelector(".mv-toast__text")?.textContent ?? "";
     rerenderRoom(r.rerender, lobby(3), { epoch: 2 });
-    expect(screen.queryByRole("status")?.textContent ?? "").toBe("");
+    expect(toast()).toBe("");
     rerenderRoom(r.rerender, lobby(4), { epoch: 2 });
-    expect(screen.queryByRole("status")?.textContent ?? "").toBe("도현님이 들어왔어요");
+    expect(toast()).toBe("도현님이 들어왔어요");
   });
 
   it("대기실과 배정 동안 preloadRoleAssets 를 부르고, 역할 확인에서는 새로 부르지 않는다", () => {

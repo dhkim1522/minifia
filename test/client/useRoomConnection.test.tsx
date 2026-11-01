@@ -1,8 +1,13 @@
 import { act, cleanup, render, renderHook, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { RoomView } from "../../shared/protocol";
+import { RESTORED_MS } from "../../src/net/linkReducer";
 import { useRoomConnection } from "../../src/net/useRoomConnection";
 import { Lobby } from "../../src/screens/Lobby";
+import { WorldStore } from "../../src/world/store";
+
+// 06-15: 대기실은 맵(WorldStage) 위에 그려진다. 캔버스·런타임은 worldStage.test 가 보므로 여기서는 가짜로 바꾼다(lobby.test.tsx 와 같은 모양).
+vi.mock("../../src/components/WorldStage", async () => ({ WorldStage: (await import("../helpers/fakeWorldStage")).FakeWorldStage }));
 
 class FakeSocket extends EventTarget {
   readyState = 0;
@@ -431,9 +436,10 @@ describe("useRoomConnection + Lobby: 재연결 직후 토스트 (WR-03)", () => 
       sockets.push(s);
       return s as unknown as WebSocket;
     };
+    const store = new WorldStore();
     function Harness() {
       const c = useRoomConnection("0042", "t".repeat(43), { createSocket, random: () => 0, checkRoom: async () => "alive" });
-      return c.view ? <Lobby view={c.view} send={c.send} canSend={c.canSend} epoch={c.epoch} /> : null;
+      return c.view ? <Lobby view={c.view} store={store} send={c.send} canSend={c.canSend} epoch={c.epoch} /> : null;
     }
     const withPlayers = (names: string[]): RoomView => ({
       ...view,
@@ -449,6 +455,37 @@ describe("useRoomConnection + Lobby: 재연결 직후 토스트 (WR-03)", () => 
     expect(screen.queryByText("하윤님이 들어왔어요")).toBeNull();
     act(() => sockets[1]!.message({ t: "state", view: withPlayers(["민수", "서준", "하윤", "지아"]) }));
     expect(screen.getByText("지아님이 들어왔어요")).toBeTruthy();
+  });
+
+  it("재접속 띠가 떠 있는 동안(restored 2초)에는 알림이 없고, 띠가 사라진 뒤의 변화부터 다시 알린다 (CONN-04)", () => {
+    const sockets: FakeSocket[] = [];
+    const createSocket = (url: string) => {
+      const s = new FakeSocket(url);
+      sockets.push(s);
+      return s as unknown as WebSocket;
+    };
+    const store = new WorldStore();
+    function Harness() {
+      const c = useRoomConnection("0042", "t".repeat(43), { createSocket, random: () => 0, checkRoom: async () => "alive" });
+      return c.view ? <Lobby view={c.view} store={store} send={c.send} canSend={c.canSend} epoch={c.epoch} bannerVisible={c.banner !== "hidden"} /> : null;
+    }
+    const withPlayers = (names: string[]): RoomView => ({
+      ...view,
+      players: names.map((nickname, seat) => ({ seat, nickname, connected: true, isHost: seat === 0 })),
+    });
+    render(<Harness />);
+    act(() => sockets[0]!.open());
+    act(() => sockets[0]!.message({ t: "state", view: withPlayers(["민수", "서준"]) }));
+    act(() => sockets[0]!.serverClose(1006));
+    advance(500);
+    act(() => sockets[1]!.open());
+    act(() => sockets[1]!.message({ t: "state", view: withPlayers(["민수", "서준", "하윤"]) }));
+    // 띠("다시 연결됐어요")가 떠 있는 동안 들어온 사람은 알리지 않는다
+    act(() => sockets[1]!.message({ t: "state", view: withPlayers(["민수", "서준", "하윤", "지아"]) }));
+    expect(screen.queryByText("지아님이 들어왔어요")).toBeNull();
+    advance(RESTORED_MS);
+    act(() => sockets[1]!.message({ t: "state", view: withPlayers(["민수", "서준", "하윤", "지아", "도현"]) }));
+    expect(screen.getByText("도현님이 들어왔어요")).toBeTruthy();
   });
 });
 
