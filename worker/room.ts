@@ -716,8 +716,20 @@ export class Room extends DurableObject<Env> {
     await this.ctx.storage.setAlarm(Math.min(wake, botAt ?? Number.POSITIVE_INFINITY, wanderAt ?? Number.POSITIVE_INFINITY));
   }
 
-  async webSocketClose(ws: WebSocket): Promise<void> {
-    await this.handleDisconnect(ws);
+  async webSocketClose(ws: WebSocket, code: number, reason: string, _wasClean: boolean): Promise<void> {
+    try {
+      await this.handleDisconnect(ws);
+    } finally {
+      // 위생 수정(06-23): 받은 close 를 맞받아 쳐 소켓을 정리한다. 배포에서의 효과는 배포 없이 검증할 수 없다(진단: reconnect-banner-deployed).
+      // 예약 코드 1005·1006 은 보낼 수 없다. 이미 닫힌 소켓·보낼 수 없는 코드는 던지므로 무시한다(알람·연결 끊김 처리를 막지 않는다).
+      if (code !== 1005 && code !== 1006) {
+        try {
+          ws.close(code, reason);
+        } catch {
+          /* 이미 닫힌 소켓 또는 보낼 수 없는 코드 — 무시 */
+        }
+      }
+    }
   }
 
   async webSocketError(ws: WebSocket): Promise<void> {
