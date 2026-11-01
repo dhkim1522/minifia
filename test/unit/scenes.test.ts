@@ -66,13 +66,12 @@ describe("단계 → 장면 규칙표(PHASE_SCENE)", () => {
     expect(Object.keys(PHASE_SCENE).sort()).toEqual([...PHASES].sort());
   });
 
-  it("대기실·배정·역할 확인은 lobby, 낮 시작·주장·토론은 day, 밤은 night, 아침은 morning, 투표·공개·변론·처형은 dusk, 판 종료는 night", () => {
+  it("대기실·배정·역할 확인은 lobby, 낮 시작·토론은 day, 밤은 night, 아침은 morning, 투표·공개·변론·처형은 dusk, 판 종료는 night", () => {
     expect(PHASE_SCENE).toEqual({
       lobby: "lobby",
       assigning: "lobby",
       roleReveal: "lobby",
       dayAnnounce: "day",
-      claim: "day",
       discussion: "day",
       night: "night",
       morning: "morning",

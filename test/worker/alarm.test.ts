@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import type { RoomView, ServerMessage } from "../../shared/protocol";
 import { DISCUSSION_MS, EXEC_VOTE_MS } from "../../shared/game/phases";
 import { ROOM_TTL_MS, UNCONNECTED_ROOM_TTL_MS } from "../../shared/game/room";
-import { alarmOf, closed, connect, createRoom, forceDue, hello, nextFrame, seat, send, storedRoom } from "./helpers";
+import { alarmOf, closed, connect, createRoom, editRoom, forceDue, hello, nextFrame, seat, send, storedRoom } from "./helpers";
 import type { Seated } from "./helpers";
 
 const phaseIs = (phase: string) => (m: ServerMessage) => m.t === "state" && m.view.phase === phase;
@@ -61,7 +61,7 @@ describe("알람", () => {
     expect(await alarmOf(r.code)).toBe(forced + 2000);
   });
 
-  it("낮 한 바퀴와 밤·아침(dayAnnounce → claim 차례 4번 → discussion → execVote → night → morning → dayAnnounce)을 알람이 차례로 넘기고 저장된 일차는 2 가 된다", async () => {
+  it("낮 한 바퀴와 밤·아침(dayAnnounce → discussion → execVote → night → morning → dayAnnounce)을 알람이 차례로 넘기고 저장된 일차는 2 가 된다", async () => {
     const r = await startedRoom();
     const stub = env.ROOM.getByName(r.code);
     const advance = async (): Promise<number> => {
@@ -77,11 +77,7 @@ describe("알람", () => {
     expect((await storedRoom(r.code) as { day?: number }).day).toBe(1);
 
     const steps: Array<[string, number]> = [
-      // 4명 방: claim 은 차례 하나가 한 마감이라 마감이 이전 마감 + 8000 으로 네 번 이어지고 같은 단계에 머문다
-      ["claim", 8_000],
-      ["claim", 8_000],
-      ["claim", 8_000],
-      ["claim", 8_000],
+      // 07-08: 순차 주장 단계가 없다 — 낮 시작 발표 마감 다음이 바로 토론이다
       ["discussion", DISCUSSION_MS],
       ["execVote", EXEC_VOTE_MS], // 표가 없으므로 다음은 night
       ["night", 30_000],
@@ -198,5 +194,35 @@ describe("만료됐지만 아직 정리되지 않은 방 코드로 만들기 (WR
     const result = await stub.createRoom({ code: r.code, nickname: "새방장", now: Date.now() });
     expect(result).toEqual({ ok: false, error: "CODE_TAKEN" });
     expect(await closed(r.host, 200)).toBe("0 not_closed");
+  });
+});
+
+describe("claim 단계로 저장된 방 (07-08, CHAT-06)", () => {
+  it("07-08 claim 으로 저장된 방은 깨어날 때 discussion 으로 열리고 claim 키가 지워지며 알람이 새 마감으로 옮겨진다", async () => {
+    const r = await startedRoom();
+    const before = Date.now();
+    await editRoom(r.code, (room) => ({
+      ...room,
+      phase: "claim",
+      phaseEndsAt: before + 5_000,
+      day: 1,
+      claimOrder: [0, 1, 2, 3],
+      claimIdx: 1,
+      claimStart: 0,
+      claimPick: "police",
+      claimLog: [{ n: 1, seat: 0, claim: "police" }],
+    }));
+
+    const sock = await connect(r.code);
+    const first = await hello(sock, r.hostToken);
+    expect(`${first.view.phase}:${first.view.day?.n}:${JSON.stringify(first.view.day?.claimLog)}`).toBe("discussion:1:[]");
+    expect(Object.keys(first.view.day ?? {}).includes("turn")).toBe(false);
+    const stored = await storedRoom(r.code);
+    expect(stored.phase).toBe("discussion");
+    expect(stored.phaseEndsAt! - before >= DISCUSSION_MS).toBe(true);
+    for (const key of ["claimOrder", "claimIdx", "claimStart", "claimPick", "claimLog"]) {
+      expect(`${key}:${Object.hasOwn(stored, key)}`).toBe(`${key}:false`);
+    }
+    expect(await alarmOf(r.code)).toBe(stored.phaseEndsAt);
   });
 });
