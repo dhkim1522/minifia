@@ -31,6 +31,17 @@ Worker  ── 방 코드로 라우팅 ──▶  Room Durable Object (방마다
 - 서버가 단계 전환과 타이머의 기준이다. 클라이언트 타이머는 서버가 보낸 마감 시각으로 표시만 한다.
 - Durable Object 의 WebSocket Hibernation API 를 써서 대기 중 비용을 줄인다.
 
+## 월드 (로비 맵)
+
+v2.0 대기실은 "같은 공간" 맵이다(결정 0044·0050). 이동은 서버가 정하고 클라이언트는 그린다.
+
+- 규칙 모듈: `shared/game/map.ts`(맵 정의 · 걸을 수 있는 칸 · `routeFx` 경로), `shared/game/world.ts`(이동 상태 · 스냅샷 · 복원). `shared/` 규칙대로 DOM 도 workerd 전용 API 도 쓰지 않는다.
+- 서버 권위 이동: 클라이언트는 목적지만 보낸다. `Room` DO 가 `routeFx` 로 걸을 수 있는 경로를 구간 `{p, t0, v}`(점 목록 · 출발 시각 · 속도)로 바꿔 `emitWorld` 로 보낸다. `emitWorld` 가 world 프레임의 유일한 전송 경로이고 6페이즈 수신자는 로비의 연결된 전원이다(게임 중에는 world 프레임이 나가지 않는다). 7~9페이즈의 audience 함수가 이 자리로 들어온다.
+- 저장: storage 의 `world` 키, `room` 키와 분리(위치가 room 키를 매번 다시 쓰지 않게). 이동 뒤 2초 디바운스로 쓰고, 나가기 · 내보내기 · 시작 · 마지막 연결 끊김 · 알람에서는 즉시 쓴다. DO 가 퇴거돼도 생성자가 두 키를 읽어 위치를 되살린다.
+- 클라이언트: `src/world/` — `WorldStore`(서버 구간을 받아 시각별 위치를 계산, `RoomScreen` 이 연결과 같은 수명으로 소유) → `runtime`(rAF 한 곳에서 그림 · 카메라 · 입력 · 목적지 링) → three 렌더러(`threeRenderer`, `import()` 지연 청크라 방 입장 화면에서 미리 받는다) · 3D 캐릭터(`character`) · DOM 이름표(`WorldStage` 의 이름표 층). 게임이 시작되면 맵을 가린 뒤 WebGL 자원을 해제한다.
+- 성능 사다리(결정 0055): 합격선은 프레임 55fps 이상 등 숫자 기준이고, 모자라면 배율 → 그림자 → 광원 → 소품 → 안개 → 미리 구운 맵 이미지 순으로 줄인다. 그래픽을 못 쓰는 기기는 오류 카드를 띄우고 v1.0 테이블 로비로 몰래 바꾸지 않는다. 측정은 `?perf=1` 스파이크 장면에서 한다.
+- 화면 층 구조와 폰 크기별 영역은 `docs/screen-map.md` 의 '대기실 (맵 로비)'.
+
 ## 상태 공개 원칙
 
 - 서버는 플레이어마다 다른 상태를 보낸다. 시민에게는 다른 사람의 역할을 보내지 않는다.
@@ -46,6 +57,7 @@ Worker  ── 방 코드로 라우팅 ──▶  Room Durable Object (방마다
 ## 테스트 배포
 
 - `wrangler deploy` 한 번으로 URL 이 바뀌지 않고 갱신된다. 테스터는 링크만 열면 되고 Android·iPhone 구분이 없다.
+- 배포 대상(v2.0 Worker 이름 `minifia-v2` 와 공개 주소)은 `scripts/deploy-target.mjs` 한 곳이 유일한 출처이고, 다른 스크립트는 이 값만 import 한다(결정 0043·0044). `npm run deploy` 는 `check-account.mjs`(개인 Cloudflare 계정 확인) → `vite build` → `check-deploy-target.mjs`(빌드 산출물의 Worker 이름 확인) → `wrangler deploy` 순서이고 하나라도 어긋나면 배포 전에 멈춘다. v1.0 주소(`minifia`)는 v2 스크립트가 검사도 배포도 하지 않는다. v1.0 수정 배포는 `v1` 브랜치에서만 한다.
 - 개발 중에는 PC 브라우저 탭 여러 개로 4~8명을 흉내 내고, 같은 Wi-Fi 의 폰으로 로컬 서버에 접속해 확인한다.
 
 ## iOS Safari 주의
