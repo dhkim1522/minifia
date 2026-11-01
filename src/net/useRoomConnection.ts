@@ -9,8 +9,9 @@ import { initialLinkState, linkReducer, RESTORED_MS, retryDelayMs, STALE_CHECK_A
 export type ConnectionStatus = LinkStatus;
 
 /** 상태로 쌓지 않고 구독자에게만 흘리는 서버 프레임. 이모티콘 폭주가 전체 화면 렌더로 번지지 않게 한다(T-02-22).
- *  world(로비 이동)도 같다 — 연결 상태를 바꾸지 않고 epoch 메타와 함께 흘려, 구독자(WorldStore)가 낡은 연결의 프레임을 가려낸다. */
-export type RoomEvent = Extract<ServerMessage, { t: "emoji" | "error" | "chat" | "world" }>;
+ *  world(로비 이동)도 같다 — 연결 상태를 바꾸지 않고 epoch 메타와 함께 흘려, 구독자(WorldStore)가 낡은 연결의 프레임을 가려낸다.
+ *  typing(입력 중, 07-10)도 같다 — 상태를 바꾸지 않고 구독자에게만 흘리며, 끝난 연결의 늦은 프레임은 버린다. */
+export type RoomEvent = Extract<ServerMessage, { t: "emoji" | "error" | "chat" | "world" | "typing" }>;
 
 export interface RoomConnection {
   status: ConnectionStatus;
@@ -21,7 +22,7 @@ export interface RoomConnection {
   /** 새 연결의 첫 state 마다 1씩 늘어난다(대기실 토스트가 재접속 직후 지난 변화를 알리지 않게 쓰는 값. view 와 함께 바뀐다) */
   epoch: number;
   removedReason: RemovedReason | null;
-  /** emoji·chat·error·world 서버 프레임 구독. 돌려준 함수로 해제한다. 참조는 렌더 사이에 안정적이다.
+  /** emoji·chat·error·world·typing 서버 프레임 구독. 돌려준 함수로 해제한다. 참조는 렌더 사이에 안정적이다.
    *  meta.epoch 는 프레임을 받은 시점의 연결 epoch(새 연결의 첫 state 마다 +1) — state 가 snap 보다 먼저 오므로 snap 은 새 값을 받는다. */
   onEvent(listener: (e: RoomEvent, meta: { epoch: number }) => void): () => void;
   /** 서버로 입력을 보낼 수 있는지(열려 있고 view 가 있음). 끊긴 동안은 거짓 */
@@ -61,7 +62,7 @@ function parseServerMessage(data: unknown): ServerMessage | null {
   if (typeof data !== "string") return null;
   try {
     const v = JSON.parse(data) as { t?: unknown };
-    if (v && (v.t === "state" || v.t === "pong" || v.t === "error" || v.t === "emoji" || v.t === "chat" || v.t === "world")) return v as ServerMessage;
+    if (v && (v.t === "state" || v.t === "pong" || v.t === "error" || v.t === "emoji" || v.t === "chat" || v.t === "world" || v.t === "typing")) return v as ServerMessage;
   } catch {
     // 서버가 보낸 것이 아닌 프레임은 무시한다.
   }
@@ -201,9 +202,9 @@ export function useRoomConnection(code: string, token: string, options?: RoomCon
           }
         } else if (msg?.t === "pong") {
           onPong(msg.c, msg.serverNow);
-        } else if (msg?.t === "emoji" || msg?.t === "chat" || msg?.t === "error" || msg?.t === "world") {
-          // world 는 연결 상태·view 를 바꾸지 않는다(CONN-04). 끝난 연결(replaced·removed)의 늦은 프레임은 구독자에게 보내지 않는다.
-          if (msg.t === "world" && isTerminal(linkRef.current.status)) return;
+        } else if (msg?.t === "emoji" || msg?.t === "chat" || msg?.t === "error" || msg?.t === "world" || msg?.t === "typing") {
+          // world·typing 은 연결 상태·view 를 바꾸지 않는다(CONN-04). 끝난 연결(replaced·removed)의 늦은 프레임은 구독자에게 보내지 않는다.
+          if ((msg.t === "world" || msg.t === "typing") && isTerminal(linkRef.current.status)) return;
           const meta = { epoch: linkRef.current.epoch };
           for (const listener of [...listenersRef.current]) listener(msg, meta);
         }
