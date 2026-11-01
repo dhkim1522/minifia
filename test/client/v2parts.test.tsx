@@ -112,7 +112,7 @@ describe("V2Icon — 채팅 아이콘 send·ghost·roleMafia (07-03)", () => {
     const iconName: V2IconName = name;
     expect(() => render(<V2Icon name={iconName} />)).not.toThrow();
     const { container } = render(<V2Icon name={iconName} />);
-    expect([...container.querySelectorAll("svg path")].map((p) => p.getAttribute("d"))).toEqual([...CHAT_ICON_PATHS[name]]);
+    expect([...container.querySelectorAll("svg path")].map((p) => p.getAttribute("d")).join("|")).toBe(CHAT_ICON_PATHS[name].join("|"));
   });
 
   it("ghost 의 눈 두 원은 채워진다(currentColor)", () => {
@@ -120,7 +120,7 @@ describe("V2Icon — 채팅 아이콘 send·ghost·roleMafia (07-03)", () => {
     const eyes = [...container.querySelectorAll("svg circle")];
     expect(eyes.length).toBe(2);
     expect(eyes.every((c) => c.getAttribute("fill") === "currentColor")).toBe(true);
-    expect(eyes.map((c) => `${c.getAttribute("cx")},${c.getAttribute("cy")},${c.getAttribute("r")}`)).toEqual(["9.5,11,1.2", "14.5,11,1.2"]);
+    expect(eyes.map((c) => `${c.getAttribute("cx")},${c.getAttribute("cy")},${c.getAttribute("r")}`).join("|")).toBe("9.5,11,1.2|14.5,11,1.2");
   });
 });
 
