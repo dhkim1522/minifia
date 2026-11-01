@@ -6,6 +6,7 @@
 - 설계: [docs/architecture.md](docs/architecture.md)
 - 결정 기록: [docs/decisions/](docs/decisions/)
 - 현재 상태와 다음 할 일: [HANDOFF.md](HANDOFF.md)
+- 상태: v2.0 6페이즈(월드 뼈대) 실행 완료 — 로비가 재즈 바 3D 맵이고 캐릭터가 걷는다. 렌더 성능 게이트 통과([결정 0057](docs/decisions/0057-v2-render-gate.md)). 다음은 7페이즈 자유 채팅.
 
 ## 개발
 
