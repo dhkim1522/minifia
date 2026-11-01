@@ -5,16 +5,16 @@ milestone_name: 같은 공간
 current_phase: 07
 current_phase_name: 자유 채팅
 status: executing
-stopped_at: Completed 07-02-PLAN.md
-last_updated: "2026-11-01T12:28:45.330Z"
+stopped_at: Completed 07-03-PLAN.md
+last_updated: "2026-11-01T12:42:07.551Z"
 last_activity: 2026-11-01
 last_activity_desc: Phase 07 execution started
-state_head: c2662a6fe75a18c96fd86ad7e6fde0546582ec4f
+state_head: 914b3958a470ee322b7ff078479847e8b28b6727
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 45
-  completed_plans: 25
+  completed_plans: 26
   percent: 14
 ---
 
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-11-01)
 ## Current Position
 
 Phase: 07 (자유 채팅) — EXECUTING
-Plan: 3 of 22
+Plan: 4 of 22
 Status: Ready to execute
 Last activity: 2026-11-01 — Phase 07 execution started
 
@@ -83,6 +83,7 @@ Progress: [█░░░░░░░░░] 14% (1/7 phases)
 | Phase 06 P23 | 14 min | 3 tasks | 6 files |
 | Phase 07 P01 | 5 min | 2 tasks | 6 files |
 | Phase 07 P02 | 9 min | 3 tasks | 7 files |
+| Phase 07 P03 | 9 min | 3 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -146,6 +147,9 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 07]: 07-02: channelOf 는 밤의 산 비마피아에게 null — 폐기하고 all 로 돌리지 않는다. 채널은 서버 상태로만 정한다
 - [Phase 07]: 07-02: sanitizeChatText 는 채움 문자(U+115F 등)를 공백으로 접는다(닉네임식 거절 아님) — 글자 사이 위장 차단
 - [Phase 07]: 07-02: chatLog 복원은 보낼 때 저장한 수신자 마스크로만, 채널별 연번·상한 all100/mafia300/ghost300, 20줄 묶음 정리
+- [Phase 07]: ChatPanel 의 기록 칸 아래 붙이기는 justify-content flex-end 대신 첫 줄 margin-top auto 로 한다 (넘친 윗부분 스크롤 도달)
+- [Phase 07]: ChatPanel 새 메시지 점은 기록 칸 밖 형제(mv-chat__logbox 안)에 두어 줄과 함께 스크롤되지 않게 한다
+- [Phase 07]: 한글 조합 꼬리 글자는 보낸 지 500ms 안에 끝난 조합의 입력칸 값이 보낸 문장의 끝부분일 때만 비운다 (TAIL_WINDOW_MS, 가정 A2)
 
 ### Pending Todos
 
@@ -182,8 +186,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-01T12:28:45.184Z
-Stopped at: Completed 07-02-PLAN.md
+Last session: 2026-11-01T12:42:07.417Z
+Stopped at: Completed 07-03-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
