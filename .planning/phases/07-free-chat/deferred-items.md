@@ -44,3 +44,17 @@
 ### view.test 서버 전용 키 목록에서 옛 키 이름 제거
 
 07-12 Task 2 의 acceptance(`nextNightSeq`·`lastSendAt` 이 test/unit·test/client 에 0줄)를 지키려고 `test/unit/view.test.ts` 의 서버 전용 키 목록 두 곳에서 `lastSendAt`·`nextNightSeq` 이름을 뺐다. 저장된 옛 방에 그 키가 남아 있어도 view 에 새지 않는다는 검사는 07-14 의 `normalizeStoredRoom` 시험이 맡는다(옛 키를 지우는 쪽). worker 의 누설 검사 목록(SERVER_ONLY_KEYS·FORBIDDEN_KEYS)과 `test/worker/testTools.test.ts` 의 FORBIDDEN_PLAYER 는 그대로다.
+
+## 07-15 에서 발견
+
+### 옛 낮 화면 프레임 단위 E2E 흐름 (claim·상태 줄·157 패널 높이·채팅 내역 모달 전제)
+
+07-15 가 테이블 화면 하단을 ChatPanel 로 바꿨다(낮 토론 `LOG_H + 92`, 변론은 상태 줄 없음). 아래 옛 흐름은 vitest 대상이 아니라 시험 초록에는 걸리지 않지만, 로컬 서버에 돌리면 사라진 전제에서 실패한다. 새 길은 `chat-table`·`chat-ghost` 가 이미 본다.
+
+| 위치 | 옛 전제 |
+| --- | --- |
+| `scripts/e2e/flows.mjs` 의 `game(...)`(police5·citizen4·mafia8·doctor5)·`specFlow`·`voteFlow` 등 | `skipTo(page, tracker, "claim")`(단계 `claim` 은 07-08 에서 사라짐), 순차 주장(`CLAIMS`), `openChatHistory`(`^` 채팅 내역 모달) |
+| `scripts/e2e/lib.mjs` 의 `PANEL_H = 157`·`PANEL_H_DEFENSE_ME = 236`, D6·T1·K2 묶음 | 낮 토론·밤·변론 하단 패널이 157(변론 후보 본인 236)이라는 단언 — 채팅 패널이 붙는 단계는 188/244(안전 영역 제외) |
+| `scripts/e2e/flows.mjs` 의 변론 검사(`defenseChecks`) | 하단 상태 줄 `.stat`·후보 본인 칩 6개 |
+
+- 담당: 07-20(E2E 하네스 정리 — 주장·빠른 메시지 판정 삭제·패널 높이). 이 계획의 새 흐름은 위 옛 도우미를 쓰지 않는다.
