@@ -2,24 +2,26 @@
 // 입력 상태를 바꾸지 않으며, DOM·workerd API 를 쓰지 않는다.
 //
 // 이 파일은 "계획"만 만든다: 단계에 들어갈 때 어떤 봇이 언제 무엇을 할지(BotStep)를 정해 RoomState.botPlan 에 둔다.
-// 행동의 실행과 검증은 방 DO 가 사람과 같은 처리기(say·emote·pickTarget·castExecVote·castCandidateVote)로 한다 — 봇은 특권이 없다.
+// 행동의 실행과 검증은 방 DO 가 사람과 같은 처리기(applyChat·pickTarget·castExecVote·castCandidateVote)로 한다 — 봇은 특권이 없다.
 // 단계가 바뀌면 계획 키(단계:마감)가 달라져 남은 행동은 저절로 버려지고 새 단계 계획이 선다.
 //
 // 07-08: 순차 직업 주장(claim) 단계와 그 봇 계획이 없어졌다. 봇 계획이 서는 단계는 discussion·night·execVote·candidateVote·defense 다.
 //
 // 구현됨(결정 0024, 0036): 처형 여부 투표(execVote)에는 찬성·반대 하나, 후보 선택(candidateVote)에는 자기를 뺀 살아 있는 한 명(역할을 보지 않는다),
-// 최후 변론(defense)에서는 후보인 봇만 대상·직업이 필요 없는 변론 템플릿 하나를 던진다. 공개·처형·종료 단계에는 계획이 없다.
+// 최후 변론(defense)에서는 후보인 봇만 고정 문구(BOT_DEFENSE_LINES) 하나를 자유 채팅으로 보낸다. 공개·처형·종료 단계에는 계획이 없다.
+// 07-11: 봇은 고정 문구 목록에서 자유 채팅 줄(chat)을 보낸다 — 낮 토론 두 줄(BOT_CHAT_LINES), 밤 산 마피아 60% 한 줄(BOT_NIGHT_LINES), 후보 봇의 변론 한 줄.
+// 이모티콘·빠른 메시지(say)는 더 이상 보내지 않는다. 로비에서는 말하지 않는다(계획이 서지 않는다). 줄은 사람과 같은 applyChat 본체를 지나 단계 키·채널·D5 제한을 그대로 받는다.
 //
 // 난수 호출 순서가 계약이다(시드 테스트가 고정한다). randInt(0) 호출은 어디에도 없다(cryptoRandInt(0) 은 RangeError).
 // 새 단계의 난수는 새 분기 안에서만 늘어난다. 07-08 에서 claim 분기의 난수 호출이 빠져 시드 고정 값이 새 호출 순서로 다시 고정됐다(다른 단계의 호출 수는 그대로).
-// 봇 하나당 순서: execVote = randInt(100) → randInt(지연 폭), candidateVote = (후보가 있으면) randInt(후보 수) → randInt(지연 폭),
-// defense(후보 봇만) = randInt(템플릿 수) → randInt(지연 폭).
+// 07-11: 봇 자유 채팅으로 discussion·night 의 호출 순서가 바뀌어 시드 고정 값을 다시 고정했다(execVote·candidateVote·defense 의 호출 수는 그대로).
+// 봇 하나당 순서: discussion = (randInt(첫 지연 폭) → randInt(8)) → (randInt(둘째 지연 폭) → randInt(8)),
+// night = (대상이 있으면) randInt(대상 수) → randInt(pick 지연 폭), 마피아면 이어서 randInt(10) → (< 6 이면) randInt(채팅 지연 폭) → randInt(3),
+// execVote = randInt(100) → randInt(지연 폭), candidateVote = (후보가 있으면) randInt(후보 수) → randInt(지연 폭),
+// defense(후보 봇만) = randInt(문구 수 3) → randInt(지연 폭).
 // 테스트 방 방장이 봇 투표를 고정한 경우(RoomState.testBotVote, P-13): 고정 값이면 결정 난수(randInt(100)·randInt(후보 수))를 건너뛰고 지연 난수는 그대로 부른다.
 // 고정 설정이 없거나 pick 조건이 안 맞아 무작위로 돌아가면 위 순서와 똑같다.
-import { EMOJI_IDS } from "../protocol";
-import type { EmojiId, TemplateId } from "../protocol";
 import { isAlive } from "./alive";
-import type { RoleId } from "./roles";
 import type { Player, RoomState } from "./room";
 import type { RandInt } from "./tick";
 
@@ -29,7 +31,7 @@ export const BOT_NAMES: readonly string[] = ["봇가나다라마바사", "봇아
 
 /** 단계 마감 이만큼 전보다 늦은 행동은 계획에서 버린다(마감 직전에 실행되어 거부되는 일을 줄인다). */
 export const BOT_END_MARGIN_MS = 500;
-/** 낮 토론: 첫 행동 2000 + [0, 10000) ms, 둘째는 그 뒤 8000 + [0, 18000) ms — 토론 40초(결정 0039)에서 둘째 행동 최대 37998ms 가 마감 − 500 안에 든다. 서버 전송 한도(1800ms)보다 넉넉하다. */
+/** 낮 토론: 첫 행동 2000 + [0, 10000) ms, 둘째는 그 뒤 8000 + [0, 18000) ms — 토론 40초(결정 0039)에서 둘째 행동 최대 37998ms 가 마감 − 500 안에 든다. 서버 채팅 제한(최소 간격 600ms·같은 문장 3초, D5)보다 넉넉하다. */
 const DISCUSSION_FIRST_BASE_MS = 2_000;
 const DISCUSSION_FIRST_SPAN_MS = 10_000;
 const DISCUSSION_GAP_BASE_MS = 8_000;
@@ -53,13 +55,27 @@ const CANDIDATE_VOTE_SPAN_MS = 9_000;
 /** 최후 변론 지연: 1000 + [0, 4000) ms (단계 10초 안). */
 const DEFENSE_SAY_BASE_MS = 1_000;
 const DEFENSE_SAY_SPAN_MS = 4_000;
-/** 후보인 봇이 고르는 변론 템플릿. 대상·직업이 필요 없는 셋뿐이다(defSuspect·defTrust·defRole 은 대상·직업이 필요하다). */
-const DEFENSE_BOT_TEMPLATES: readonly TemplateId[] = ["defNotMe", "defCitizen", "defPlead"];
 
-/** 봇 행동 한 가지 — 사람 ClientMessage 의 같은 칸 이름을 쓴다. */
+// ---- 봇 고정 문구(07-11, 가정 A2). 닉네임 8자 규칙과 무관하고, 모두 sanitizeChatText 를 그대로 통과하며 자소 100 이하다. ----
+/** 낮 토론에서 봇이 두 번 고르는 문구(8개). */
+export const BOT_CHAT_LINES: readonly string[] = [
+  "저 아니에요",
+  "누가 수상해요?",
+  "조용한 사람이 수상해요",
+  "어제 그 말 이상했어요",
+  "믿어 주세요",
+  "투표 신중하게 해요",
+  "다들 뭐 했어요?",
+  "저는 시민 같아요",
+];
+/** 밤에 산 마피아 봇이 고르는 문구(3개). */
+export const BOT_NIGHT_LINES: readonly string[] = ["동의해요", "그 사람으로 가요", "다른 사람으로 해요"];
+/** 최후 변론에서 후보인 봇이 고르는 문구(3개). 길이를 옛 템플릿 목록과 같은 3 으로 두어 defense 의 시드 호출 수가 그대로다. */
+export const BOT_DEFENSE_LINES: readonly string[] = ["저 아니에요", "저는 시민이에요", "한 번만 믿어 주세요"];
+
+/** 봇 행동 한 가지 — 사람 ClientMessage 의 같은 칸 이름을 쓴다(chat 은 본문 text 만, 단계 키는 실행할 때 서버 상태에서 만든다). */
 export type BotAct =
-  | { t: "say"; template: TemplateId; target?: number; claimedRole?: RoleId }
-  | { t: "emoji"; icon: EmojiId }
+  | { t: "chat"; text: string }
   | { t: "pick"; target: number }
   | { t: "execVote"; agree: boolean }
   | { t: "candidateVote"; target: number };
@@ -137,11 +153,9 @@ export function botPlanKey(state: RoomState): string | null {
   return `${state.phase}:${state.phaseEndsAt}`;
 }
 
-/** 낮 토론의 한 행동: 0 이면 이모티콘(randInt(8)), 1 이면 "저 아니에요". */
+/** 낮 토론의 한 행동: 고정 문구 목록에서 randInt(8) 번째 줄. */
 function discussionAct(randInt: RandInt): BotAct {
-  const kind = randInt(2);
-  if (kind === 0) return { t: "emoji", icon: EMOJI_IDS[randInt(EMOJI_IDS.length)] as EmojiId };
-  return { t: "say", template: "innocent" };
+  return { t: "chat", text: BOT_CHAT_LINES[randInt(BOT_CHAT_LINES.length)]! };
 }
 
 function planFor(state: RoomState, bot: Player, now: number, randInt: RandInt): BotStep[] {
@@ -161,8 +175,7 @@ function planFor(state: RoomState, bot: Player, now: number, randInt: RandInt): 
     }
     if (bot.role === "mafia" && randInt(10) < NIGHT_CHAT_TENTHS) {
       const at = now + NIGHT_CHAT_BASE_MS + randInt(NIGHT_CHAT_SPAN_MS);
-      if (randInt(2) === 0) add(at, { t: "say", template: "nightAgree" });
-      else add(at, { t: "emoji", icon: EMOJI_IDS[randInt(EMOJI_IDS.length)] as EmojiId });
+      add(at, { t: "chat", text: BOT_NIGHT_LINES[randInt(BOT_NIGHT_LINES.length)]! });
     }
   } else if (state.phase === "execVote") {
     const agree = botExecAgree(randInt, state.testBotVote?.exec);
@@ -171,10 +184,10 @@ function planFor(state: RoomState, bot: Player, now: number, randInt: RandInt): 
     const target = botCandidateTarget(state, bot, randInt, state.testBotVote?.pick);
     if (target !== undefined) add(now + CANDIDATE_VOTE_BASE_MS + randInt(CANDIDATE_VOTE_SPAN_MS), { t: "candidateVote", target });
   } else if (state.phase === "defense") {
-    // 변론은 후보만 할 수 있다(chat.ts when: "defense"). 후보가 아닌 봇은 아무것도 하지 않는다.
+    // 변론은 후보 봇만 한다(서버는 산 사람 누구의 변론 채팅도 받지만 봇은 후보만 말한다). 후보가 아닌 봇은 아무것도 하지 않는다.
     if (state.verdict?.candidate === bot.seat) {
-      const template = DEFENSE_BOT_TEMPLATES[randInt(DEFENSE_BOT_TEMPLATES.length)]!;
-      add(now + DEFENSE_SAY_BASE_MS + randInt(DEFENSE_SAY_SPAN_MS), { t: "say", template });
+      const text = BOT_DEFENSE_LINES[randInt(BOT_DEFENSE_LINES.length)]!;
+      add(now + DEFENSE_SAY_BASE_MS + randInt(DEFENSE_SAY_SPAN_MS), { t: "chat", text });
     }
   }
   return steps;

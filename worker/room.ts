@@ -519,12 +519,12 @@ export class Room extends DurableObject<Env> {
 
   private async actAsBot(step: BotStep): Promise<void> {
     const act = step.act;
+    const room = this.room;
+    if (!room) return;
     switch (act.t) {
-      case "say":
-        await this.applySay(step.botId, { template: act.template, target: act.target, claimedRole: act.claimedRole });
-        return;
-      case "emoji":
-        await this.applyEmoji(step.botId, act.icon);
+      // 자유 채팅도 사람과 같은 본체를 지난다(특권 없음, 결정 0024): 단계 키는 지금 서버 단계에서 만들고, 거절(phase·D5)은 알릴 소켓이 없어 버린다.
+      case "chat":
+        this.applyChat(step.botId, act.text, phaseKey({ phase: room.phase, day: room.day }), Date.now());
         return;
       case "pick":
         await this.applyPick(step.botId, act.target);
