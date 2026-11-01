@@ -222,12 +222,12 @@ describe("SceneIntro 낮 문구 (낮 시작, 결정 0030)", () => {
     expect(intro(container)).toBeNull();
   });
 
-  it("단계가 바뀌면(낮 시작 → 주장) 즉시 사라진다", () => {
+  it("단계가 바뀌면(낮 시작 → 낮 토론) 즉시 사라진다", () => {
     const { container, rerender } = scene(makeView({ phase: "morning", role: "citizen" }));
     rerender(makeView({ phase: "dayAnnounce", role: "citizen", n: 2 }));
     advance(500);
     expect(intro(container)).not.toBeNull();
-    rerender(makeView({ phase: "claim", role: "citizen", n: 2 }));
+    rerender(makeView({ phase: "discussion", role: "citizen", n: 2 }));
     expect(intro(container)).toBeNull();
   });
 
@@ -312,12 +312,12 @@ describe("dayAnnounce 는 테이블 장면(DayScene) 위에서 그려진다", ()
     expect(texts[1]).toBe(texts[0]);
   });
 
-  it("dayAnnounce ↔ 주장·밤·아침으로 가도 테이블과 장면 상자 노드가 유지된다", () => {
+  it("dayAnnounce ↔ 낮 토론·밤·아침으로 가도 테이블과 장면 상자 노드가 유지된다", () => {
     const { container, rerender } = scene(makeView({ phase: "morning", role: "citizen" }));
     const table = container.querySelector(".mf-dt");
     const box = container.querySelector(".mf-dayscene__scene");
     expect(table).not.toBeNull();
-    for (const phase of ["dayAnnounce", "claim", "discussion", "night", "morning"] as PhaseId[]) {
+    for (const phase of ["dayAnnounce", "discussion", "night", "morning"] as PhaseId[]) {
       rerender(makeView({ phase, role: "citizen", n: 2 }));
       expect(container.querySelector(".mf-dt") === table, phase).toBe(true);
       expect(container.querySelector(".mf-dayscene__scene") === box, phase).toBe(true);

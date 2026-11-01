@@ -65,7 +65,6 @@ function makeView(o: ViewOpts = {}): RoomView {
     day: {
       n: o.n ?? 1,
       roles: ["mafia", "police", "doctor", "citizen"],
-      ...(phase === "claim" ? { turn: { seat: 1 } } : {}),
       claimLog: [],
       ...(phase === "morning" ? { morning: {} } : {}),
     },
@@ -147,7 +146,7 @@ afterEach(() => {
 
 describe("헤더 [역할 카드] 버튼 하나 (D-08)", () => {
   const ROLES: RoleId[] = ["police", "mafia", "doctor", "citizen"];
-  const PHASES: PhaseId[] = ["roleReveal", "dayAnnounce", "claim", "discussion", "night", "morning"];
+  const PHASES: PhaseId[] = ["roleReveal", "dayAnnounce", "discussion", "night", "morning"];
 
   it.each(ROLES)("%s: 모든 단계에서 `역할 카드` 버튼이 정확히 하나, `수사 기록`·`내 역할` 이름의 버튼은 없다", (role) => {
     for (const phase of PHASES) {

@@ -333,14 +333,6 @@ describe("관전 (N-6, 결정 0021)", () => {
     expect(container.querySelectorAll(".mf-dt__pick").length).toBe(0);
   });
 
-  it("직업 공개(claim): 칩 줄이 없고 하단은 로그 + .mf-ro, 이름표 아랫줄이 하나도 없다 (결정 0023-3, 탈락·실제 직업 줄 포함)", () => {
-    const { container } = scene(dead0({ phase: "claim", spectate: { seats: spectate.seats } }));
-    expect(container.querySelectorAll(".mf-seg__b").length).toBe(0);
-    expect(panel(container)!.querySelector("p.mf-ro") !== null).toBe(true);
-    expect(panel(container)!.querySelector('[role="log"]') !== null).toBe(true);
-    expect(claimRowCount(container)).toBe(0);
-  });
-
   it("살아 있는 경찰 화면(dead [4], spectate 없음): 자리 4 는 유령 + 탈락 이름표, 관전 클래스·직업 그림이 렌더 HTML 에 없다", () => {
     const { container } = scene(makeView({ role: "police", dead: [4] }));
     expect(seatEl(container, 4)!.querySelector("img")?.getAttribute("src")).toContain("/characters/ghost/");
@@ -388,11 +380,11 @@ describe("밤에는 기록 카드가 열리지 않는다 (03.1-08, D-06)", () =>
     picks: { mafia: [], police: [], doctor: [] },
   };
 
-  it("행동자(경찰·의사·마피아)는 기존 `… 대상` 버튼만 있고 `주장 기록 보기` 버튼은 없다", () => {
+  it("행동자(경찰·의사·마피아)는 기존 `… 대상` 버튼만 있고 `기록 보기` 버튼은 없다", () => {
     for (const role of ["police", "doctor", "mafia"] as const) {
       const { container } = scene(makeView(role === "mafia" ? { role, allies: [1] } : { role }));
       expect(`${role}:${inspectBtns(container).length}`).toBe(`${role}:0`);
-      expect(`${role}:${screen.queryAllByRole("button", { name: /주장 기록 보기/ }).length}`).toBe(`${role}:0`);
+      expect(`${role}:${screen.queryAllByRole("button", { name: /기록 보기/ }).length}`).toBe(`${role}:0`);
       expect(container.querySelectorAll(".mf-dt button.mf-dt__seat").length > 0).toBe(true);
       cleanup();
     }
@@ -414,7 +406,7 @@ describe("밤에는 기록 카드가 열리지 않는다 (03.1-08, D-06)", () =>
   it("낮에 연 기록 카드는 밤이 되면 닫히고, 다시 낮이 되어도 다시 열리지 않는다", () => {
     const claimLog: ClaimLogEntry[] = [{ n: 1, seat: 1, claim: "police" }];
     const r = scene(makeView({ phase: "discussion", role: "citizen", claimLog }));
-    fireEvent.click(screen.getByRole("button", { name: /^하윤, 주장 기록 보기$/ }));
+    fireEvent.click(screen.getByRole("button", { name: /^하윤, 기록 보기$/ }));
     expect(r.container.querySelector('dialog[aria-label="하윤 기록"]') !== null).toBe(true);
     r.rerender(makeView({ phase: "night", role: "citizen", claimLog }));
     expect(r.container.querySelector("dialog") === null).toBe(true);
@@ -449,8 +441,8 @@ describe("관전자 테이블: 직업 캐릭터는 탈락한 본인에게만 (03
     return v;
   };
 
-  it("내가 탈락했고 spectate 가 있는 claim·discussion·night·morning: 살아 있는 다른 자리는 직업 캐릭터, 탈락한 자리(내 자리 포함)는 유령", () => {
-    for (const phase of ["claim", "discussion", "night", "morning"] as const) {
+  it("내가 탈락했고 spectate 가 있는 discussion·night·morning: 살아 있는 다른 자리는 직업 캐릭터, 탈락한 자리(내 자리 포함)는 유령", () => {
+    for (const phase of ["discussion", "night", "morning"] as const) {
       const { container } = scene(viewOf(phase));
       const got = [1, 2, 4].map((s) => imgOf(container, s)?.getAttribute("src")).join("|");
       expect(`${phase}:${got}`).toBe(`${phase}:${[roleSrc("mafia"), roleSrc("citizen"), roleSrc("doctor")].join("|")}`);
@@ -478,7 +470,7 @@ describe("관전자 테이블: 직업 캐릭터는 탈락한 본인에게만 (03
 
   it("살아 있는 viewer: 4~8명, 낮·밤·아침 단계, 네 역할 모두 DayTable 안에 roles 그림이 0개", () => {
     for (const count of [4, 5, 6, 7, 8]) {
-      for (const phase of ["claim", "discussion", "night", "morning"] as const) {
+      for (const phase of ["discussion", "night", "morning"] as const) {
         for (const role of ["mafia", "police", "doctor", "citizen"] as const) {
           const v = makeView({ phase, role, ...(role === "mafia" ? { allies: [1] } : {}) });
           v.players = Array.from({ length: count }, (_, seat) => ({ seat, nickname: `P${seat}`, connected: true, isHost: seat === 0, alive: true }));
@@ -497,7 +489,7 @@ describe("관전자 테이블: 직업 캐릭터는 탈락한 본인에게만 (03
   });
 
   it("방어: me 가 살아 있는데 view.spectate 가 잘못 실려 있어도 roles 그림 0개", () => {
-    for (const phase of ["claim", "discussion", "night", "morning"] as const) {
+    for (const phase of ["discussion", "night", "morning"] as const) {
       const { container } = scene(makeView({ phase, role: "citizen", dead: [3], spectate: spectateOf() }));
       expect(`${phase}:${rolesImgs(container)}`).toBe(`${phase}:0`);
       expect(container.querySelector(".mf-figure--halo-crimson") === null).toBe(true);
@@ -513,9 +505,9 @@ describe("관전자 테이블: 직업 캐릭터는 탈락한 본인에게만 (03
     expect(panel(container)!.querySelector("p.mf-ro") !== null).toBe(true);
   });
 
-  it("관전자도 낮에 자리를 누르면 기록 카드(주장 기록만), 밤에는 어떤 자리도 눌리지 않는다", () => {
+  it("관전자도 낮에 자리를 누르면 기록 카드, 밤에는 어떤 자리도 눌리지 않는다", () => {
     const day = scene(viewOf("discussion"));
-    fireEvent.click(within(day.container).getByRole("button", { name: /^하윤, 마피아, 주장 기록 보기$/ }));
+    fireEvent.click(within(day.container).getByRole("button", { name: /^하윤, 마피아, 기록 보기$/ }));
     expect(day.container.querySelector('dialog[aria-label="하윤 기록"]') !== null).toBe(true);
     cleanup();
     const night = scene(viewOf("night"));

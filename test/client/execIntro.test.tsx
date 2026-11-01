@@ -136,7 +136,7 @@ describe("처형 투표 인트로 카드 (D-23·D-30)", () => {
     a.rerenderRoom(makeView("execVote"), { epoch: 2 });
     expect(intro(a.container)).toBeNull();
     cleanup();
-    const b = renderRoom(makeView("claim"));
+    const b = renderRoom(makeView("dayAnnounce"));
     b.rerenderRoom(makeView("discussion"));
     expect(intro(b.container)).toBeNull();
     b.rerenderRoom(makeView("candidateVote"));

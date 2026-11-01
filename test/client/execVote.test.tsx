@@ -280,7 +280,7 @@ describe("execVote 나머지 상태 (D-35, D-36, D-12 개정, D-08)", () => {
       const { container, send } = renderRoom(makeView({ dead, voteAgree: dead.length === 0 ? true : undefined, tally: { yes: 1, no: 0 } }));
       const seats = container.querySelectorAll<HTMLButtonElement>(".mf-dt button.mf-dt__seat--inspect");
       expect(seats.length).toBe(4);
-      fireEvent.click(screen.getByRole("button", { name: "하윤, 주장 기록 보기" }));
+      fireEvent.click(screen.getByRole("button", { name: "하윤, 기록 보기" }));
       expect(sheet("하윤 기록")).not.toBeNull();
       expect(send).not.toHaveBeenCalled();
       expect(container.querySelector(".mf-execvote__tally")?.textContent).toContain("찬성 1 · 반대 0");
@@ -291,7 +291,7 @@ describe("execVote 나머지 상태 (D-35, D-36, D-12 개정, D-08)", () => {
 
   it("밤이 되면 열려 있던 기록 카드가 닫힌다(기존 규칙 불변)", () => {
     const r = renderRoom(makeView());
-    fireEvent.click(screen.getByRole("button", { name: "하윤, 주장 기록 보기" }));
+    fireEvent.click(screen.getByRole("button", { name: "하윤, 기록 보기" }));
     expect(sheet("하윤 기록")).not.toBeNull();
     r.rerenderRoom(makeView({ phase: "night" }));
     expect(sheet("하윤 기록")).toBeNull();
@@ -323,25 +323,25 @@ describe("기록 카드 — 투표 줄·단계 규칙 (04-27)", () => {
 
   it("execVote 에서 좌석을 누르면 지난 일차의 처형 여부 집계와 이 사람의 후보 선택 줄이 보인다", () => {
     renderRoom(makeView({ n: 2, voteLog: VOTES }));
-    fireEvent.click(screen.getByRole("button", { name: "하윤, 주장 기록 보기" }));
+    fireEvent.click(screen.getByRole("button", { name: "하윤, 기록 보기" }));
     expect(rowsOf("하윤 기록")).toEqual(["1일차처형 여부 찬성 1 · 반대 3 · 미통과", "1일차민지님에게 투표했어요"]);
   });
 
   it("집계 줄은 모든 사람에게 같고 후보 선택 줄이 없는 사람에게는 후보 선택 행이 없다 (P-16)", () => {
     renderRoom(makeView({ n: 2, voteLog: VOTES }));
-    fireEvent.click(screen.getByRole("button", { name: "도현, 주장 기록 보기" }));
+    fireEvent.click(screen.getByRole("button", { name: "도현, 기록 보기" }));
     expect(rowsOf("도현 기록")).toEqual(["1일차처형 여부 찬성 1 · 반대 3 · 미통과"]);
   });
 
   it("기록이 하나도 없으면 `아직 기록이 없어요`", () => {
     renderRoom(makeView({ voteLog: [] }));
-    fireEvent.click(screen.getByRole("button", { name: "하윤, 주장 기록 보기" }));
+    fireEvent.click(screen.getByRole("button", { name: "하윤, 기록 보기" }));
     expect(sheet("하윤 기록")?.textContent).toContain("아직 기록이 없어요");
   });
 
   it("카드가 열려 있을 때 execVote → candidateVote(살아 있는 viewer)가 되면 닫힌다 — 그 단계에서 좌석 탭은 투표이기 때문", () => {
     const r = renderRoom(makeView());
-    fireEvent.click(screen.getByRole("button", { name: "하윤, 주장 기록 보기" }));
+    fireEvent.click(screen.getByRole("button", { name: "하윤, 기록 보기" }));
     expect(sheet("하윤 기록")).not.toBeNull();
     r.rerenderRoom(makeView({ phase: "candidateVote" }));
     expect(sheet("하윤 기록")).toBeNull();
@@ -350,7 +350,7 @@ describe("기록 카드 — 투표 줄·단계 규칙 (04-27)", () => {
   it("카드가 열려 있을 때 candidateVoteReveal·defense·execution 이 되면 닫힌다", () => {
     for (const phase of ["candidateVoteReveal", "defense", "execution"] as const) {
       const r = renderRoom(makeView());
-      fireEvent.click(screen.getByRole("button", { name: "하윤, 주장 기록 보기" }));
+      fireEvent.click(screen.getByRole("button", { name: "하윤, 기록 보기" }));
       expect(`${phase}:${sheet("하윤 기록") !== null}`).toBe(`${phase}:true`);
       r.rerenderRoom(makeView({ phase }));
       expect(`${phase}:${sheet("하윤 기록") !== null}`).toBe(`${phase}:false`);
@@ -360,7 +360,7 @@ describe("기록 카드 — 투표 줄·단계 규칙 (04-27)", () => {
 
   it("탈락한 viewer 는 execVote → candidateVote 에서도 카드가 열려 있고, 그 단계에서 새로 열 수도 있다", () => {
     const r = renderRoom(makeView({ dead: [0] }));
-    fireEvent.click(screen.getByRole("button", { name: "하윤, 주장 기록 보기" }));
+    fireEvent.click(screen.getByRole("button", { name: "하윤, 기록 보기" }));
     r.rerenderRoom(makeView({ phase: "candidateVote", dead: [0] }));
     expect(sheet("하윤 기록")).not.toBeNull();
   });
@@ -368,7 +368,7 @@ describe("기록 카드 — 투표 줄·단계 규칙 (04-27)", () => {
   it("낮 → 낮 사이(discussion → execVote)에는 닫히지 않는다", () => {
     const r = renderRoom(makeView({ phase: "dayAnnounce" }));
     r.rerenderRoom(makeView({ phase: "discussion" }));
-    fireEvent.click(screen.getByRole("button", { name: "하윤, 주장 기록 보기" }));
+    fireEvent.click(screen.getByRole("button", { name: "하윤, 기록 보기" }));
     expect(sheet("하윤 기록")).not.toBeNull();
     r.rerenderRoom(makeView({ phase: "execVote" }));
     expect(sheet("하윤 기록")).not.toBeNull();

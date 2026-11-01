@@ -375,7 +375,7 @@ describe("candidateVote 화면 한 경로 (VOTE-02, D-03, D-19)", () => {
     expect(panel(container)?.textContent).toContain("누구를 골랐는지는 공개될 때 볼 수 있어요");
     expect(panel(container)?.querySelector(".mf-ro")?.textContent).toBe("관전 중 · 볼 수만 있어요");
     expect(panel(container)?.querySelectorAll("button").length).toBe(0);
-    fireEvent.click(screen.getByRole("button", { name: "하윤, 주장 기록 보기" }));
+    fireEvent.click(screen.getByRole("button", { name: "하윤, 기록 보기" }));
     expect(sheet("하윤 기록")).not.toBeNull();
     expect(send).not.toHaveBeenCalled();
   });
@@ -416,7 +416,7 @@ describe("candidateVote 기록 카드 (04-27)", () => {
 
   it("탈락한 viewer 가 연 카드에 지난 일차의 집계와 이 사람의 후보 선택 줄이 날짜별로 쌓인다", () => {
     renderRoom(makeView({ dead: [0], n: 2, voteLog: VOTES }));
-    fireEvent.click(screen.getByRole("button", { name: "하윤, 주장 기록 보기" }));
+    fireEvent.click(screen.getByRole("button", { name: "하윤, 기록 보기" }));
     const rows = [...(sheet("하윤 기록")?.querySelectorAll(".mf-urecord__row") ?? [])].map((li) => li.textContent);
     expect(rows).toEqual(["1일차처형 여부 찬성 3 · 반대 1", "1일차도현님에게 투표했어요"]);
   });

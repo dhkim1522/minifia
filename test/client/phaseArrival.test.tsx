@@ -25,7 +25,7 @@ describe("usePhaseArrival", () => {
   it("다음 단계 변화가 오면 값이 그 직전 단계로 바뀐다", () => {
     const { result, rerender } = setup({ phase: "roleReveal", epoch: 1 });
     rerender({ phase: "dayAnnounce", epoch: 1 });
-    rerender({ phase: "claim", epoch: 1 });
+    rerender({ phase: "discussion", epoch: 1 });
     expect(result.current).toBe("dayAnnounce");
   });
 
@@ -35,7 +35,7 @@ describe("usePhaseArrival", () => {
     expect(result.current).toBeNull();
     rerender({ phase: "dayAnnounce", epoch: 2 });
     expect(result.current).toBeNull();
-    rerender({ phase: "claim", epoch: 2 });
+    rerender({ phase: "discussion", epoch: 2 });
     expect(result.current).toBe("dayAnnounce");
   });
 

@@ -122,15 +122,15 @@ describe("밤 비네팅 — 어디에 몇 개 (D-04·D-05, P5-1)", () => {
     expect(v[0]!.getAttribute("aria-hidden") === "true" || art.getAttribute("aria-hidden") === "true").toBe(true);
   });
 
-  it("night 가 아닌 DayScene 단계(dayAnnounce·claim·discussion·morning·execVote)에는 0개", () => {
-    const phases: PhaseId[] = ["dayAnnounce", "claim", "discussion", "morning", "execVote"];
+  it("night 가 아닌 DayScene 단계(dayAnnounce·discussion·morning·execVote)에는 0개", () => {
+    const phases: PhaseId[] = ["dayAnnounce", "discussion", "morning", "execVote"];
     const counts = phases.map((phase) => {
       const r = scene(makeView({ phase, role: "citizen", ...(phase === "morning" ? { morning: {} } : {}) }));
       const n = vignettes(r.container).length;
       r.unmount();
       return `${phase}:${n}`;
     });
-    expect(counts.join(",")).toBe("dayAnnounce:0,claim:0,discussion:0,morning:0,execVote:0");
+    expect(counts.join(",")).toBe("dayAnnounce:0,discussion:0,morning:0,execVote:0");
   });
 
   it("결과 화면(ended, 같은 night 그림)에는 0개", () => {
@@ -216,15 +216,15 @@ describe("아침 밝아짐 — 어디에 몇 개 (D-05, P5-2)", () => {
     expect(g[0]!.style.getPropertyValue("--mf-glow-rise-ms")).toBe("600ms");
   });
 
-  it("night·dayAnnounce·claim·discussion·execVote·defense 렌더에는 0개이고 morning 을 벗어나면 사라진다", () => {
-    const phases: PhaseId[] = ["night", "dayAnnounce", "claim", "discussion", "execVote", "defense"];
+  it("night·dayAnnounce·discussion·execVote·defense 렌더에는 0개이고 morning 을 벗어나면 사라진다", () => {
+    const phases: PhaseId[] = ["night", "dayAnnounce", "discussion", "execVote", "defense"];
     const counts = phases.map((phase) => {
       const r = scene(makeView({ phase, role: "citizen" }));
       const n = glows(r.container).length;
       r.unmount();
       return `${phase}:${n}`;
     });
-    expect(counts.join(",")).toBe("night:0,dayAnnounce:0,claim:0,discussion:0,execVote:0,defense:0");
+    expect(counts.join(",")).toBe("night:0,dayAnnounce:0,discussion:0,execVote:0,defense:0");
     const r = scene(makeView({ phase: "morning", role: "citizen", morning: {} }));
     expect(glows(r.container).length).toBe(1);
     r.rerender(makeView({ phase: "dayAnnounce", role: "citizen" }));

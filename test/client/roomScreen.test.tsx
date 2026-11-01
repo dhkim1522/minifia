@@ -149,7 +149,6 @@ describe("RoomScreen: 헤더 역할 카드 버튼 (03.1-11, D-08)", () => {
 
 describe("RoomScreen: 화면 꺼짐 방지 연결 (CONN-03, D-12, P5-7)", () => {
   const wake = () => import("../helpers/wakeLockFake");
-  const claimDay: NonNullable<RoomView["day"]> = { n: 1, roles: ["mafia", "police", "citizen"], turn: { seat: 0 }, claimLog: [] };
   const players: RoomView["players"] = [
     { seat: 0, nickname: "민수", connected: true, isHost: true },
     { seat: 1, nickname: "하윤", connected: true, isHost: false },
@@ -161,7 +160,6 @@ describe("RoomScreen: 화면 꺼짐 방지 연결 (CONN-03, D-12, P5-7)", () => 
     phase,
     players,
     me: { seat: 0, isHost: true, role: "citizen" },
-    ...(phase === "claim" ? { day: claimDay } : {}),
   });
   const mount = () => render(<RoomScreen code="0042" token={"t".repeat(43)} onExit={vi.fn()} />);
   const settle = () => act(async () => {});
@@ -189,12 +187,12 @@ describe("RoomScreen: 화면 꺼짐 방지 연결 (CONN-03, D-12, P5-7)", () => 
     expect(fake.request).toHaveBeenCalledWith("screen");
   });
 
-  it("같은 대기실 리렌더와 assigning → roleReveal → claim 전환에서도 다시 요청하지 않는다", async () => {
+  it("같은 대기실 리렌더와 assigning → roleReveal → dayAnnounce 전환에서도 다시 요청하지 않는다", async () => {
     const fake = w.installWakeLock();
     const { rerender } = mount();
     await settle();
     rerender(<RoomScreen code="0042" token={"t".repeat(43)} onExit={vi.fn()} />);
-    for (const phase of ["assigning", "roleReveal", "claim"] as const) {
+    for (const phase of ["assigning", "roleReveal", "dayAnnounce"] as const) {
       connectionMock.current = conn({ view: at(phase) });
       rerender(<RoomScreen code="0042" token={"t".repeat(43)} onExit={vi.fn()} />);
       await settle();
