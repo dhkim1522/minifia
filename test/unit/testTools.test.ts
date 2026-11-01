@@ -238,7 +238,7 @@ describe("skipPhase 동작", () => {
 });
 
 describe("resetToLobby", () => {
-  /** 2일차 밤: 탈락자·수사 기록·nightPick·lastSendAt 이 모두 있는 상태. */
+  /** 2일차 밤: 탈락자·수사 기록·nightPick 이 모두 있는 상태. */
   function dayTwoNight(): RoomState {
     let state = stateAt(6, 4, "night");
     const mafia = state.players.find((p) => p.role === "mafia")!;
@@ -261,12 +261,7 @@ describe("resetToLobby", () => {
     const aliveMafia = state.players.find((p) => p.role === "mafia")!;
     const picked = pickTarget(state, alivePolice.id, aliveMafia.seat);
     if (!picked.ok) throw new Error(`pickTarget failed: ${picked.error}`);
-    return {
-      ...picked.state,
-      nextMessageSeq: 5,
-      testRole: "mafia",
-      players: picked.state.players.map((p) => ({ ...p, lastSendAt: 777 })),
-    };
+    return { ...picked.state, testRole: "mafia" };
   }
 
   it("일반 방은 BAD_MESSAGE, 손님은 NOT_HOST, 대기실은 WRONG_PHASE 다", () => {
@@ -304,13 +299,12 @@ describe("resetToLobby", () => {
     const r = resetToLobby(before, before.hostId);
     if (!r.ok) throw new Error(`resetToLobby failed: ${r.error}`);
     expect(sortedKeys(r.state)).toBe(
-      "code,createdAt,everConnected,expiresAt,hostId,nextJoinSeq,nextMessageSeq,phase,phaseEndsAt,players,testMode,testRole",
+      "code,createdAt,everConnected,expiresAt,hostId,nextJoinSeq,phase,phaseEndsAt,players,testMode,testRole",
     );
     expect(r.state.phase).toBe("lobby");
     expect(String(r.state.phaseEndsAt)).toBe("null");
     expect(String(r.state.testMode)).toBe("true");
     expect(String(r.state.testRole)).toBe("mafia");
-    expect(String(r.state.nextMessageSeq)).toBe("5");
   });
 
   it("testRole 이 없으면 testRole 키도 없다", () => {
@@ -685,12 +679,11 @@ describe("resetToLobby: 투표·처형·종료 필드를 모두 지운다 (END-0
       for (const key of PLAYER_GONE) expect(`${label}:${p.seat}:${key}:${Object.hasOwn(p, key)}`).toBe(`${label}:${p.seat}:${key}:false`);
       expect(sortedKeys(p)).toBe(p.isBot === true ? "connId,connected,id,isBot,joinSeq,nickname,nicknameKey,seat,token" : "connId,connected,id,joinSeq,nickname,nicknameKey,seat,token");
     }
-    expect(sortedKeys(r.state)).toBe("code,createdAt,everConnected,expiresAt,hostId,nextJoinSeq,nextMessageSeq,phase,phaseEndsAt,players,testMode");
+    expect(sortedKeys(r.state)).toBe("code,createdAt,everConnected,expiresAt,hostId,nextJoinSeq,phase,phaseEndsAt,players,testMode");
   }
   const rich = (state: RoomState): RoomState => ({
     ...state,
     everConnected: true,
-    nextMessageSeq: 9,
     lastExecPhrase: 2,
     nightLog: [],
     players: state.players.map((p) => ({ ...p, execVote: true, candidateVote: 0 })),

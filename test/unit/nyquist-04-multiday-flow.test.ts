@@ -96,9 +96,8 @@ describe("여러 날에 걸친 처형 흐름 (6명, 마피아 2)", () => {
 });
 
 describe("종료 뒤에는 행동이 거부된다 (END-01, END-02)", () => {
-  it("ended 에서 여부 투표·후보 선택·지목·이모티콘이 모두 WRONG_PHASE 다", async () => {
+  it("ended 에서 여부 투표·후보 선택·지목이 모두 WRONG_PHASE 다", async () => {
     const { castCandidateVote, castExecVote } = await import("../../shared/game/vote");
-    const { emote } = await import("../../shared/game/chat");
     const { pickTarget } = await import("../../shared/game/night");
     const { stateWithVerdict } = await import("../helpers/voteState");
     const s0 = stateWithVerdict(4, 1, "execution", { candidate: "mafia" });
@@ -110,8 +109,7 @@ describe("종료 뒤에는 행동이 거부된다 (END-01, END-02)", () => {
       castExecVote(ended, who.id, true),
       castCandidateVote(ended, who.id, other.seat),
       pickTarget(ended, who.id, other.seat),
-      emote(ended, who.id, "smile", 1_000_000),
     ].map((r) => (r.ok ? "ok" : r.error));
-    expect(outcomes).toEqual(["WRONG_PHASE", "WRONG_PHASE", "WRONG_PHASE", "WRONG_PHASE"]);
+    expect(outcomes).toEqual(["WRONG_PHASE", "WRONG_PHASE", "WRONG_PHASE"]);
   });
 });

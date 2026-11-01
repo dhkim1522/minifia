@@ -308,7 +308,7 @@ describe("RoomScreen: 맵 로비 연결 (MAP-01, MAP-05, CONN-04, 06-15)", () =>
     expect(store.currentEpoch()).toBe(1);
   });
 
-  it("world 가 아닌 프레임(emoji·chat·error)은 스토어에 닿지 않는다", () => {
+  it("world 가 아닌 프레임(chat·error)은 스토어에 닿지 않는다", () => {
     let listener: ((e: RoomEvent, meta: { epoch: number }) => void) | undefined;
     connectionMock.current = conn({
       onEvent: vi.fn((l: (e: RoomEvent, meta: { epoch: number }) => void) => {

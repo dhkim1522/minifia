@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { enterMorning, enterNight, nightChatRecipientIds, pickRecipientIds, pickTarget } from "../../shared/game/night";
+import { enterMorning, enterNight, pickRecipientIds, pickTarget } from "../../shared/game/night";
 import { attachConnection, createRoomState, joinRoom, startGame } from "../../shared/game/room";
 import type { Player, RoomState } from "../../shared/game/room";
 import type { RoleId } from "../../shared/game/roles";
@@ -99,21 +99,17 @@ describe("밤 → 아침 한 줄 (NIGHT-01, NIGHT-06, D-08)", () => {
     expect(spy.calls.length).toBe(0);
   });
 
-  it("enterNight: 이전 아침 결과·남은 nightPick·nextNightSeq 키를 모두 지우고 다른 필드는 그대로 둔다", () => {
+  it("enterNight: 이전 아침 결과·남은 nightPick 키를 모두 지우고 다른 필드는 그대로 둔다", () => {
     const night = nightOf(5, 7);
     const dirty: RoomState = {
       ...night,
       morning: { eliminated: 1, phrase: 2 },
-      nextNightSeq: 5,
-      nextMessageSeq: 7,
       lastPhrase: 2,
       players: night.players.map((p, i) => (i === 0 ? { ...p, nightPick: 3 } : p)),
     };
     const out = enterNight(dirty);
     expect("morning" in out).toBe(false);
-    expect("nextNightSeq" in out).toBe(false);
     expect(out.players.some((p) => "nightPick" in p)).toBe(false);
-    expect(out.nextMessageSeq).toBe(7);
     expect(out.lastPhrase).toBe(2);
     expect(out.day).toBe(night.day);
     expect(out.players.length).toBe(night.players.length);
@@ -340,19 +336,6 @@ describe("받는 사람 (D-17, 결정 0021)", () => {
     const seats = ids.map((id) => state.players.find((p) => p.id === id)?.seat ?? -1);
     expect(seats.join(",")).toBe([...seats].sort((a, b) => a - b).join(","));
     expect(seats.length).toBe(3);
-  });
-
-  it("밤 채팅은 생존 마피아와 탈락자만 받는다 — 살아 있는 시민·경찰·의사는 들지 않는다", () => {
-    const night = nightOf(6, 11);
-    const [m1, m2] = withRole(night, "mafia") as [Player, Player];
-    const mafiaSeats = [m1.seat, m2.seat].sort((a, b) => a - b).join(",");
-    expect(seatsOf(night, nightChatRecipientIds(night))).toBe(mafiaSeats);
-    const citizen = withRole(night, "citizen")[0]!;
-    const state = kill(night, m2, citizen);
-    const want = [m1.seat, m2.seat, citizen.seat].sort((a, b) => a - b).join(",");
-    expect(seatsOf(state, nightChatRecipientIds(state))).toBe(want);
-    const police = withRole(night, "police")[0]!;
-    expect(nightChatRecipientIds(state).has(police.id)).toBe(false);
   });
 });
 

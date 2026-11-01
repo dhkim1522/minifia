@@ -602,12 +602,12 @@ describe("normalizeStoredRoom — 저장된 옛 방 (RESEARCH Pattern 6, T-02-14
   const withOldMessages = (state: RoomState, lines: unknown[] = []): RoomState => ({ ...state, messages: lines }) as unknown as RoomState;
 
   it("저장된 방에 messages 키가 있으면(빈 배열이어도) 그 키만 지운 새 객체를 돌려주고 다른 필드·단계·마감은 그대로다 (결정 0017-7)", () => {
-    const base = { ...fullRoom([0, 1, 2, 3]), phase: "discussion" as PhaseId, phaseEndsAt: 77_000, nextMessageSeq: 9 };
+    const base = { ...fullRoom([0, 1, 2, 3]), phase: "discussion" as PhaseId, phaseEndsAt: 77_000 };
     for (const stored of [withOldMessages(base), withOldMessages(base, [{ seq: 1, seat: 0, template: "innocent", at: 1 }])]) {
       const got = normalizeStoredRoom(stored, 5_000);
       expect(got === stored).toBe(false);
       expect(Object.hasOwn(got, "messages")).toBe(false);
-      expect(`${got.phase}:${got.phaseEndsAt}:${got.nextMessageSeq}:${got.day}`).toBe(`discussion:77000:9:${base.day}`);
+      expect(`${got.phase}:${got.phaseEndsAt}:${got.day}`).toBe(`discussion:77000:${base.day}`);
       expect(got.players === stored.players).toBe(true);
       expect(Object.hasOwn(stored, "messages")).toBe(true); // 입력은 바꾸지 않는다
     }
@@ -699,11 +699,11 @@ describe("normalizeStoredRoom — 저장된 옛 방 (RESEARCH Pattern 6, T-02-14
     const lobby = fullRoom([0, 1, 2, 3, 4]);
     const started = startGame(lobby, "p0", 0, seededRandInt(7));
     if (!started.ok) throw new Error(started.error);
-    // 1페이즈에서 저장된 방에는 차례 상태·lastSendAt·day·nextMessageSeq 가 없다
+    // 1페이즈에서 저장된 방에는 차례 상태·day 가 없다
     const legacy: RoomState = {
       ...started.state,
       players: started.state.players.map((p) => {
-        const { alive: _a, lastSendAt: _f, ...rest } = p;
+        const { alive: _a, ...rest } = p;
         return rest;
       }),
     };

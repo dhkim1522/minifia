@@ -126,19 +126,17 @@ describe("tick (순수 단계 진행)", () => {
     expect(Object.keys(next).includes("extendUsed")).toBe(false);
   });
 
-  it("토론 마감(T)에 처형 여부 투표로 넘어가 마감 T+10000, 일차·nextMessageSeq 는 그대로다 (토론 → 여부 투표, D-25)", () => {
+  it("토론 마감(T)에 처형 여부 투표로 넘어가 마감 T+10000, 일차는 그대로다 (토론 → 여부 투표, D-25)", () => {
     const T = 100_000;
     const s: RoomState = {
       ...stateIn("discussion", T),
       day: 1,
-      nextMessageSeq: 4,
     };
     const next = tick(s, T);
     expect(next.phase).toBe("execVote");
     expect(next.day).toBe(1); // 여부 투표는 일차를 올리지 않는다
     expect(Object.keys(next).includes("messages") || Object.keys(next).includes("extendUsed")).toBe(false);
     expect(next.phaseEndsAt).toBe(T + EXEC_VOTE_MS);
-    expect(next.nextMessageSeq).toBe(4); // 메시지 번호는 날이 바뀌어도 줄지 않는다
   });
 
   it("여부 투표 마감(T+10000)에 표가 없으면 표의 기본 다음 단계(후보 선택)가 아니라 밤으로 간다 — 훅의 next 가 표보다 앞선다, 마감 T+40000 (D-04, D-25)", () => {

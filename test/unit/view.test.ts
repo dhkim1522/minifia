@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-import { emote } from "../../shared/game/chat";
 import { isAlive } from "../../shared/game/alive";
 import { channelOf } from "../../shared/game/audience";
 import { pickTarget } from "../../shared/game/night";
@@ -258,8 +257,8 @@ function spectateViolations(s: RoomState, viewer: Player, view: RoomView, phase:
 
 /** 서버 전용 키(결정 0036-12): 어떤 단계의 어떤 view 경로에도 없다. winner·execution 은 같은 이름의 view 키(result.winner·day.execution)가 있어 넣지 않고 경로로 검사한다. */
 const SERVER_ONLY_KEYS: readonly string[] = [
-  "claimLast", "lastSendAt", "claimChoice", "claimShown", "claimChanged", "claimPick", "claimOrder", "claimIdx",
-  "claimStart", "claimDone", "claims", "nightPick", "investigations", "lastPhrase", "nextNightSeq",
+  "claimLast", "claimChoice", "claimShown", "claimChanged", "claimPick", "claimOrder", "claimIdx",
+  "claimStart", "claimDone", "claims", "nightPick", "investigations", "lastPhrase",
   "execVote", "candidateVote", "verdict", "nightLog", "lastExecPhrase",
 ];
 /** view.day 가 있는 열 단계. 이 밖의 단계 뷰에는 day 키 자체가 없다(D-07). */
@@ -415,20 +414,9 @@ function nightActions(state: RoomState): RoomState {
   return s;
 }
 
-/** 실제 전이(emote)로 보낸 사람의 서버 전용 필드(lastSendAt)를 채운다 — view 가 그것을 싣지 않는지 보려면 상태에 값이 있어야 한다. */
-function react(state: RoomState, seat: number, now: number): RoomState {
-  const r = emote(state, seatId(state, seat), "smile", now);
-  if (!r.ok) throw new Error(`emote failed: ${r.error}`);
-  return r.state;
-}
-
-// 낮 1일차 시각(stateAt 의 연쇄와 같다, 전원 생존): dayAnnounce 시작 = 역할 확인 마감, 2000 뒤가 토론 시작.
-const DAY1_START = START_AT + 3_000 + 15_000;
-const discussionStartsAt = (): number => DAY1_START + 2_000;
-
 /**
- * 낮 단계는 서버 전용 필드가 채워진 상태를 실제 전이(tick·emote)로 만든다 — 손으로 필드를 채우지 않는다.
- * discussion: 토론이 시작된 뒤 세 사람이 이모티콘을 보낸 상태(lastSendAt). 낮이 아닌 단계는 stateAt 그대로다.
+ * 낮 단계는 서버 전용 필드가 채워진 상태를 실제 전이(tick·투표·밤 행동)로 만든다 — 손으로 필드를 채우지 않는다.
+ * discussion: 토론이 시작된 상태 그대로다(07-12: 이모티콘 전송 기록이 사라져 더 채울 필드가 없다). 낮이 아닌 단계는 stateAt 그대로다.
  * night·morning: 그 토론 뒤 밤 행동과 아침.
  */
 function richStateAt(phase: PhaseId, n: number, seed: number): RoomState {
@@ -455,12 +443,7 @@ function richStateAt(phase: PhaseId, n: number, seed: number): RoomState {
     if (phase === "night") return s;
     return tick(s, s.phaseEndsAt!, seededRandInt(seed));
   }
-  if (phase !== "discussion") return stateAt(phase, n, seed);
-  let s = stateAt("discussion", n, seed);
-  const at = discussionStartsAt();
-  s = react(s, 0, at + 1_000);
-  s = react(s, 1, at + 4_000);
-  return react(s, 2, at + 7_000);
+  return stateAt(phase, n, seed);
 }
 
 /** n명 판 1일차 밤: 마피아가 첫 비마피아 X 를 지목해 아침이 된 상태(의사는 보호하지 않는다 — 4명 판은 의사가 없다). */
@@ -632,8 +615,8 @@ describe("buildView 전수 누출 검사 (T-01-23)", () => {
             for (const path of keyPaths(view)) {
               if (
                 [
-                  "claimLast", "lastSendAt", "claimChoice", "claimShown", "claimChanged", "claimPick", "claimOrder", "claimIdx",
-                  "claimStart", "claimDone", "claims", "nightPick", "investigations", "lastPhrase", "nextNightSeq",
+                  "claimLast", "claimChoice", "claimShown", "claimChanged", "claimPick", "claimOrder", "claimIdx",
+                  "claimStart", "claimDone", "claims", "nightPick", "investigations", "lastPhrase",
                 ].includes(lastKey(path))
               ) {
                 violations.push(`${tag}: server-only key at ${path}`);
@@ -735,12 +718,8 @@ describe("buildView 낮 뷰 — 토론·이튿날 (D-02, D-05, D-15)", () => {
     for (const key of ["claimOrder", "claimIdx", "claimStart", "claimPick"]) expect(text.includes(`"${key}"`)).toBe(false);
   });
 
-  it("discussion: 서버 전용 전송 기록이 채워져 있어도 day 의 키는 n,roles,voteLog 이고 messages·extendUsed 키가 없다 (결정 0017-5·0017-7)", () => {
-    let s = stateAt("discussion", 5, 1);
-    const at = discussionStartsAt();
-    s = react(s, 0, at + 1_000);
-    s = react(s, 1, at + 4_000);
-    s = react(s, 2, at + 7_000);
+  it("discussion: day 의 키는 n,roles,voteLog 이고 messages·extendUsed 키가 없다 (결정 0017-5·0017-7)", () => {
+    const s = stateAt("discussion", 5, 1);
     for (const viewer of s.players) {
       const view = buildView(s, viewer.id, START_AT);
       expect(Object.keys(view.day ?? {}).sort().join(",")).toBe("n,roles,voteLog");

@@ -489,18 +489,18 @@ describe("useRoomConnection + Lobby: 재연결 직후 토스트 (WR-03)", () => 
   });
 });
 
-describe("useRoomConnection: 이벤트 구독 (emoji·chat·error 프레임, Pitfall 6)", () => {
-  it("emoji 프레임을 onEvent 리스너가 한 번 받는다", () => {
+describe("useRoomConnection: 이벤트 구독 (chat·error 프레임, Pitfall 6)", () => {
+  it("emoji 프레임은 모르는 t 로 버려져 리스너에 가지 않고 view 도 바뀌지 않는다 (07-12, CHAT-06)", () => {
     const { sockets, hook } = setup();
     openWithState(sockets[0]!);
     const listener = vi.fn();
     act(() => {
       hook.result.current.onEvent(listener);
     });
-    const frame = { t: "emoji", seat: 2, icon: "smile", at: 1 };
-    act(() => sockets[0]!.message(frame));
-    expect(listener).toHaveBeenCalledTimes(1);
-    expect(listener).toHaveBeenCalledWith(frame, { epoch: 1 });
+    const before = hook.result.current.view;
+    act(() => sockets[0]!.message({ t: "emoji", seat: 2, icon: "smile", at: 1 }));
+    expect(listener).not.toHaveBeenCalled();
+    expect(hook.result.current.view).toBe(before);
   });
 
   it("chat 프레임(새 모양)을 onEvent 리스너가 한 번 받고 view 는 바뀌지 않는다 (CHAT-01)", () => {
@@ -549,7 +549,7 @@ describe("useRoomConnection: 이벤트 구독 (emoji·chat·error 프레임, Pit
       off = hook.result.current.onEvent(listener);
     });
     act(() => off());
-    act(() => sockets[0]!.message({ t: "emoji", seat: 2, icon: "smile", at: 1 }));
+    act(() => sockets[0]!.message({ t: "chat", ch: "all", seat: 2, seq: 1, text: "안녕", at: 1 }));
     expect(listener).not.toHaveBeenCalled();
   });
 
@@ -562,16 +562,16 @@ describe("useRoomConnection: 이벤트 구독 (emoji·chat·error 프레임, Pit
       hook.result.current.onEvent(a);
       hook.result.current.onEvent(b);
     });
-    act(() => sockets[0]!.message({ t: "emoji", seat: 1, icon: "heart", at: 5 }));
+    act(() => sockets[0]!.message({ t: "chat", ch: "all", seat: 1, seq: 1, text: "안녕", at: 5 }));
     expect(a).toHaveBeenCalledTimes(1);
     expect(b).toHaveBeenCalledTimes(1);
   });
 
-  it("emoji 프레임은 view 를 바꾸지 않고 onEvent 참조도 안정적이다", () => {
+  it("chat 프레임은 view 를 바꾸지 않고 onEvent 참조도 안정적이다", () => {
     const { sockets, hook } = setup();
     openWithState(sockets[0]!);
     const before = hook.result.current;
-    act(() => sockets[0]!.message({ t: "emoji", seat: 2, icon: "smile", at: 1 }));
+    act(() => sockets[0]!.message({ t: "chat", ch: "all", seat: 2, seq: 1, text: "안녕", at: 1 }));
     expect(hook.result.current.view).toBe(before.view);
     expect(hook.result.current.onEvent).toBe(before.onEvent);
   });
