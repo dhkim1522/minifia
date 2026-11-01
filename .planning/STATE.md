@@ -5,16 +5,16 @@ milestone_name: 같은 공간
 current_phase: 06
 current_phase_name: 월드 뼈대
 status: executing
-stopped_at: Halted 06-17-PLAN.md (v1.0 게임 흐름 범위 밖 실패, 사용자 결정 대기)
-last_updated: "2026-11-01T01:03:40.883Z"
+stopped_at: Completed 06-17-PLAN.md
+last_updated: "2026-11-01T02:18:28.379Z"
 last_activity: 2026-11-01
 last_activity_desc: Phase 06 execution started
-state_head: 688431bb22a37423b78759fe6ca864cf08631ebc
+state_head: c8d48c50bcd4b3a708d6861360f432fb2460ec24
 progress:
   total_phases: 7
   completed_phases: 0
   total_plans: 21
-  completed_plans: 17
+  completed_plans: 18
   percent: 0
 ---
 
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-10-30)
 ## Current Position
 
 Phase: 06 (월드 뼈대) — EXECUTING
-Plan: 18 of 21
+Plan: 19 of 21
 Status: Ready to execute
 Last activity: 2026-11-01 — Phase 06 execution started
 
@@ -75,6 +75,7 @@ Progress: [░░░░░░░░░░] 0% (0/7 phases)
 | Phase 06 P15 | 20 min | 3 tasks | 22 files |
 | Phase 06 P16 | 12 min | 2 tasks | 6 files |
 | Phase 06 P21 | 15min | 3 tasks | 10 files |
+| Phase 06 P17 | 55min | 2 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -125,6 +126,7 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 06]: EXIT_CURTAIN_MS(420)는 runtime.ts 한 곳에서 WorldStage 가림막과 RoomScreen 단계 전환 지연이 같이 쓴다
 - [Phase 06]: 06-16: Icon crown 정의와 DayTableSeat.onPress 는 삭제 목록 밖이라 남김(정리 후보); 자리 전이 훅은 06-15 에서 이미 삭제됨
 - [Phase 06]: 06-21: 저장된 토큰으로 바로 들어가는 Home 길은 room-enter 표식을 찍지 않는다(3초 측정은 처음 방문 입장 기준, 테스트로 고정)
+- [Phase 06]: 06-17: 결정 0056 개정(2026-11-01, 사용자 선택 1) — 승인 완화를 G2·D2·P10 으로 넓힘(v1.0 고정 테이블 이름표·칩 + 6 그래핌 이상 이름, 기준 수치 불변, 8~9페이즈에 테이블과 함께 삭제)
 
 ### Pending Todos
 
@@ -139,7 +141,6 @@ None yet.
 - [9페이즈] 아침 시작 위치: 결정 0044-18 은 "밤이 끝난 자리" 이지만 리서치는 정체 누설을 우려해 낮 시작 대형 초기화를 권한다 — 9페이즈 논의에서 확정
 - [12페이즈] iOS 무음 스위치·소리 에셋 상업 이용 약관은 실기기·출시 마일스톤에서 확인한다
 - [출시 전] 수익화는 출시 전에 따로 정한다
-- 06-17 멈춤: v1.0 게임 흐름 E2E 가 결정 0056 완화 범위(D9·D3b) 밖 G2·D2(·P10)로 실패 — 8자 봇 이름표가 360·390 폭 고정 테이블 옆자리에서 화면 밖 최대 17.7px. 사용자 결정 필요(완화 확대 / DayTable 수정 / 게임 흐름 봇 이름 5자). 06-17-SUMMARY.md 참조
 
 ### Quick Tasks Completed
 
@@ -162,9 +163,9 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-01T01:03:40.853Z
-Stopped at: Halted 06-17-PLAN.md (v1.0 게임 흐름 범위 밖 실패, 사용자 결정 대기)
-Resume file: .planning/phases/06-world-skeleton/06-17-SUMMARY.md
+Last session: 2026-11-01T02:18:28.348Z
+Stopped at: Completed 06-17-PLAN.md
+Resume file: None
 
 ## Operator Next Steps
 
