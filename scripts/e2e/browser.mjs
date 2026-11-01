@@ -1016,6 +1016,38 @@ export async function waitChatLine(page, text, ms = 5000) {
   }
 }
 
+/**
+ * 로비 채팅 패널의 치수(07-13): 방 높이(.mf-lobby)·패널(.mf-lobby__panel)·기록 칸·입력칸·보내기·스테이지 사각형 아래 끝(= 패널 위 끝).
+ * 한 번의 evaluate. 칸이 없으면 null. UI-SPEC 폰 크기 표와 견주는 판정은 flows.mjs 가 한다.
+ */
+export function readChatPanel(page) {
+  return page.evaluate(() => {
+    const box = (el) => {
+      if (!el) return null;
+      const r = el.getBoundingClientRect();
+      const top = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+      return { left: r.left, top: r.top, width: r.width, height: r.height, right: r.right, bottom: r.bottom, hit: !!top && el.contains(top) };
+    };
+    const room = document.querySelector(".mf-lobby");
+    const panel = document.querySelector(".mf-lobby__panel");
+    const log = document.querySelector("[data-chat-log]");
+    const input = document.querySelector("[data-chat-input]");
+    const send = document.querySelector("[data-chat-send]");
+    const header = document.querySelector(".mf-lobby__header");
+    if (!room || !panel || !log || !input || !send) return null;
+    return {
+      roomH: room.getBoundingClientRect().height,
+      panel: box(panel),
+      log: box(log),
+      input: box(input),
+      inputFont: parseFloat(getComputedStyle(input).fontSize),
+      send: box(send),
+      stageTop: header ? header.getBoundingClientRect().bottom : null,
+      stageBottom: panel.getBoundingClientRect().top,
+    };
+  });
+}
+
 /** 서버 시각 t 의 seat 위치(월드 단위). 훅이 없거나 아직 구간이 없으면 null. */
 export function sampleWorld(page, seat, t) {
   return page.evaluate(({ s, tt }) => (window.__mfWorld ? window.__mfWorld.sample(s, tt) : null), { s: seat, tt: t });
