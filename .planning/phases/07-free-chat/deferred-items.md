@@ -58,13 +58,14 @@
 | `scripts/e2e/flows.mjs` 의 변론 검사(`defenseChecks`) | 하단 상태 줄 `.stat`·후보 본인 칩 6개 |
 
 - 담당: 07-20(E2E 하네스 정리 — 주장·빠른 메시지 판정 삭제·패널 높이). 이 계획의 새 흐름은 위 옛 도우미를 쓰지 않는다.
+- **07-20 에서 닫힘**: 게임 흐름이 claim 없이 discussion 으로 가고, 채팅 패널 상태의 하단 높이 기대값이 `expectedPanelH`(188·244, 그 밖 157)로 바뀌었다. `PANEL_H_DEFENSE_ME`·`defenseChecks` 의 후보 본인 칩 판정·`openChatHistory` 는 지웠다.
 
 ## 07-16 에서 정리됨 / 발견
 
 ### 닫힌 항목 (07-11·07-12 에서 넘어온 개발용 스크립트)
 
 - `scripts/bots.mjs`, `scripts/smoke.mjs`: 07-16 이 자유 채팅(`chat`·`typing`·`chatReject`·`chatLog`) 기준으로 다시 썼다. 옛 `say`·`emoji`·`claim` 송신과 `claimLog`·`turn` 기대가 없다.
-- 07-17 갱신: `scripts/uat-day.mjs`, `uat-night.mjs`, `uat-vote.mjs`, `uat-test-room.mjs`, `uat-test-bots.mjs` 를 자유 채팅 기준으로 다시 썼다(옛 `say`·`emoji`·`claim` 송신과 `claimLog`·`day.turn` 기대 없음, 로컬 서버 실행 통과). 07-11·07-12 에서 넘어온 개발용 스크립트 항목은 `scripts/gallery.mjs`(emoji 언급 확인 필요) 하나만 남았다 — 07-20 이 맡는다.
+- 07-17 갱신: `scripts/uat-day.mjs`, `uat-night.mjs`, `uat-vote.mjs`, `uat-test-room.mjs`, `uat-test-bots.mjs` 를 자유 채팅 기준으로 다시 썼다(옛 `say`·`emoji`·`claim` 송신과 `claimLog`·`day.turn` 기대 없음, 로컬 서버 실행 통과). 07-11·07-12 에서 넘어온 개발용 스크립트 항목은 `scripts/gallery.mjs`(emoji 언급 확인 필요) 하나만 남았다 — 07-20 이 맡는다. **07-20 에서 닫힘**: gallery 가 주장·빠른 메시지·이모티콘·채팅 내역 모달 대신 로비 채팅·토론 채팅·밤 마피아 채팅을 찍는다.
 
 ### 로컬 smoke full 의 하루 캐시 헤더 검사
 
@@ -81,6 +82,7 @@
 `npm run e2e -- --only world` 가 360x560 에서만 `world/setup S4 단계 도달: 탭할 목적지를 찾지 못함(두 화면에 보이는 칸 5개, 3 단위 이상 먼 칸 0개)` 로 실패한다(나머지 5개 크기는 21/21). 로비 스테이지가 채팅 패널로 248 이 되면서(6페이즈 410) 하네스가 찾는 "3 단위 이상 먼 보이는 칸" 이 없어진 것이다. 07-18 의 카메라 변경 때문이 아니다 — `PAN_BOX` 를 6페이즈 값(4.8)으로 잠시 되돌려 같은 크기에서 돌려도 같은 곳에서 실패했다. 제품 결함이 아니라 하네스의 목적지 탐색 조건(거리 3, 스테이지 높이 가정)이다.
 
 - 담당: 07-20(E2E 하네스 정리). 목적지 탐색의 거리 하한을 스테이지 높이에 맞춰 낮추거나, 360x560 은 보이는 칸 중 가장 먼 칸을 고르게 한다.
+- **07-20 에서 닫힘**: `worldTapRanking` — 3 단위 이상 먼 칸이 없으면 1.5 단위 이상 먼 칸과 걷는 길이 0.8초 하한을 쓴다(W5 라벨에 "낮은 스테이지 기준" 표시). world 360x560 21/21.
 
 ### perfScene 의 스테이지 사각형 기본값
 
@@ -91,10 +93,26 @@
 ### 테이블 화면(DayScene)의 가상 키보드 E2E 와 실기기 확인
 
 - status: open
-- 07-19 의 chat-keyboard 흐름은 로비만 본다(계획 범위). 테이블 화면은 단위 시험(클래스·변수·장면 자리 불변)까지만 초록이다. 올라온 패널이 테이블 아래 인물을 가리는 정도와 실제 키보드 배치는 알려진 한계(UI-SPEC)이고 07-21 실기기 확인(합격 검사 7)이 맡는다. 07-20 이 하네스를 정리할 때 chat-keyboard 를 DayScene 으로 넓힐지 정한다.
+- 07-19 의 chat-keyboard 흐름은 로비만 본다(계획 범위). 테이블 화면은 단위 시험(클래스·변수·장면 자리 불변)까지만 초록이다. 올라온 패널이 테이블 아래 인물을 가리는 정도와 실제 키보드 배치는 알려진 한계(UI-SPEC)이고 07-21 실기기 확인(합격 검사 7)이 맡는다. 07-20 이 하네스를 정리할 때 chat-keyboard 를 DayScene 으로 넓힐지 정한다. **07-20 결정: 넓히지 않는다** — 테이블 틀은 8페이즈에서 삭제되고 알려진 한계(UI-SPEC)라 가짜 값으로 시험할 근거가 약하다. 07-21 실기기 확인(합격 검사 7)이 맡는다. status 는 그대로 open.
 
 ### 방 높이 px 고정과 #root min-height 100dvh
 
 - status: open
 - `.mf-room` 높이는 `--mf-room-h` px 로 고정되지만 `#root` 의 `min-height: 100dvh`(base.css)는 그대로다. 레이아웃 뷰포트가 키보드로 줄어드는 WebView(카카오톡 인앱 등)에서 `#root` 가 줄고 방 틀은 px 그대로라 문서가 스크롤될 수 있다. 가정 A1·UI-SPEC "검사 실패 때 내리는 순서" 3단계 후보이며 07-21 실기기에서 보일 때만 손댄다.
 
+## 07-20 에서 발견
+
+### 낮 시작 문구에 옛 직업 공개 문장이 남아 있음
+
+- status: open
+- `src/game/scenes.ts` 의 `PHASE_INTRO.dayAnnounce.sub`("토론 전에 먼저 직업을 공개해요")와 `PHASE_GUIDE_FILL.dayAnnounce.guide`("곧 직업 공개가 시작돼요")는 순차 주장(직업 공개) 단계가 7페이즈에서 없어졌는데 그대로다. E2E(`INTRO_SPEC.day`·`N8`)는 앱 문구를 그대로 따라 맞춰 두었다. 문구를 바꾸면 `scenes.test.ts`·`lib.mjs` `INTRO_SPEC`·`NIGHT_PANEL_TEXT` 계열 시험이 같이 바뀐다. 문구는 사용자 확인 사항이라 이 계획에서 고치지 않았다. 담당: 07-21 판정 때 사용자에게 문구 안을 묻는다(결정 0051 글 최소화 기준).
+
+### E2E reconnect/offline RC1 이 병렬 부하에서 한 번 실패
+
+- status: open
+- 전체 실행(세 흐름 병렬) 중 한 번 `reconnect/offline RC1 콘솔 경고·오류 0건` 이 WebSocket "closed before the connection is established" 경고 5건으로 실패했다. 단독 3회·전체 재실행 2회는 35/35. 06-18 흐름의 병렬 부하 민감도로 보이며 07-20 의 변경과 무관하다. 재현되면 reconnect 를 단독으로 돌려 구분한다.
+
+### gallery 의 citizen 역할
+
+- status: open
+- `node scripts/gallery.mjs <폴더> citizen` 은 시민에게 [활동 기록] 탭이 없어 `rolecard` 단계에서 실패하고 뒤 단계가 시트에 막혀 이어서 실패한다(기본값 police·mafia 는 통과). 07-20 이전부터 있던 동작이다. 필요하면 시민은 탭 선택을 건너뛰게 한다.

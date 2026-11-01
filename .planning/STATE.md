@@ -5,16 +5,16 @@ milestone_name: 같은 공간
 current_phase: 07
 current_phase_name: 자유 채팅
 status: executing
-stopped_at: Completed 07-19-PLAN.md
-last_updated: "2026-11-01T16:44:23.198Z"
+stopped_at: Completed 07-20-PLAN.md
+last_updated: "2026-11-01T17:59:17.932Z"
 last_activity: 2026-11-01
 last_activity_desc: Phase 07 execution started
-state_head: fb3a021300bbf0cb0d14be878a1a3f8019fb7952
+state_head: 5dd1e193dd43bb3d685e416a81da8b8d2737702f
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 45
-  completed_plans: 42
+  completed_plans: 43
   percent: 14
 ---
 
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-11-01)
 ## Current Position
 
 Phase: 07 (자유 채팅) — EXECUTING
-Plan: 20 of 22
+Plan: 21 of 22
 Status: Ready to execute
 Last activity: 2026-11-01 — Phase 07 execution started
 
@@ -100,6 +100,7 @@ Progress: [█░░░░░░░░░] 14% (1/7 phases)
 | Phase 07 P17 | 45min | 2 tasks | 6 files |
 | Phase 07 P18 | 13 min | 3 tasks | 16 files |
 | Phase 07 P19 | 28 min | 3 tasks | 15 files |
+| Phase 07 P20 | 72min | 2 tasks | 14 files |
 
 ## Accumulated Context
 
@@ -190,6 +191,9 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 07]: 07-18: 연결이 끊기면 내 입력 중 알약은 화면에서만 끄고 서버에 보내지 않는다
 - [Phase 07]: 07-19: 키보드 CSS 변수(--mf-kb-lift·--mf-vv-top)는 방 틀(.mf-room)에 쓴다 — 떠 있는 재접속 띠가 로비 밖이라 같은 값을 읽어야 한다
 - [Phase 07]: 07-19: 보내기 버튼 mousedown 기본 동작을 막아 키보드가 닫히며 패널이 손가락 밑에서 내려가는 일을 없앤다(Chromium·Android)
+- [Phase 07]: 07-20: E2E 하단 높이 기대값은 expectedPanelH({ roomH, chat }) 한 함수(채팅 188·244, 그 밖 157). D7·T1 은 채팅 패널 유무가 같은 상태끼리 비교
+- [Phase 07]: 07-20: 사용자 위임에 따른 추천안 선택 — 360x640 D2 실패를 판정 완화가 아니라 앱 기하 수정으로 해결(TABLE_FIT_MIN_H 299→303, TABLE_FULL_H 336, 336 이상 승인 기하 불변)
+- [Phase 07]: 07-20: chat-keyboard 를 DayScene 으로 넓히지 않는다(테이블 틀은 8페이즈 삭제, 07-21 실기기 확인이 맡음)
 
 ### Pending Todos
 
@@ -226,8 +230,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-01T16:43:55.834Z
-Stopped at: Completed 07-19-PLAN.md
+Last session: 2026-11-01T17:59:17.723Z
+Stopped at: Completed 07-20-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
