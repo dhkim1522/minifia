@@ -1,9 +1,12 @@
 // 서버 전용 입력 검증 스키마(zod 값 import). Worker 만 이 파일을 import 한다 — src/ 가 import 하면 클라이언트 번들에 zod 가 들어간다.
 import { z } from "zod";
+import { NICKNAME_MAX_UTF16 } from "./nickname";
 import { EMOJI_IDS, MAX_TEST_BOTS, MOVE_COORD_LIMIT, TEMPLATE_IDS } from "./protocol";
 import type { ClientMessage, CreateRoomBody, JoinRoomBody, MoveMessage } from "./protocol";
 
-const nickname = z.string().max(64);
+// 상한은 UTF-16 길이다. 제품 규칙(8 자소)은 validateNickname 이 판정한다 — 여기서 64 처럼 낮게 잡으면
+// 자소 8 개짜리 유효 이름(가족 이모지 88 단위)이 스키마에서 먼저 400 으로 막힌다(06 리뷰 WR-03).
+const nickname = z.string().max(NICKNAME_MAX_UTF16);
 
 export const CreateRoomBodySchema = z.object({ nickname, testMode: z.boolean().optional() }) satisfies z.ZodType<CreateRoomBody>;
 export const JoinRoomBodySchema = z.object({ nickname }) satisfies z.ZodType<JoinRoomBody>;

@@ -1,3 +1,4 @@
+import type { ZodError } from "zod";
 import { APP_VERSION } from "../shared/version";
 import { MAX_BODY_BYTES } from "../shared/protocol";
 import type { ApiErrorCode, CreateRoomResponse, JoinRoomResponse } from "../shared/protocol";
@@ -40,11 +41,17 @@ async function readJsonBody(request: Request): Promise<unknown | null> {
   }
 }
 
+// 닉네임 문자열이 스키마 길이 상한을 넘은 경우만 NICKNAME_INVALID 로 돌려, 클라이언트가 이름 칸 아래에 올바른 문구를 보이게 한다.
+// 그 밖의 형식 오류(타입 불일치·알 수 없는 키 등)는 BAD_REQUEST 그대로다.
+function isNicknameTooBig(error: ZodError): boolean {
+  return error.issues.some((i) => i.code === "too_big" && i.path.length === 1 && i.path[0] === "nickname");
+}
+
 async function handleCreateRoom(request: Request, env: Env): Promise<Response> {
   const raw = await readJsonBody(request);
   if (raw === null) return apiError("BAD_REQUEST", 400);
   const parsed = CreateRoomBodySchema.safeParse(raw);
-  if (!parsed.success) return apiError("BAD_REQUEST", 400);
+  if (!parsed.success) return apiError(isNicknameTooBig(parsed.error) ? "NICKNAME_INVALID" : "BAD_REQUEST", 400);
 
   const result = await allocateRoom(
     (code) => env.ROOM.getByName(code),
@@ -77,7 +84,7 @@ async function handleJoin(code: string, request: Request, env: Env): Promise<Res
   const raw = await readJsonBody(request);
   if (raw === null) return apiError("BAD_REQUEST", 400);
   const parsed = JoinRoomBodySchema.safeParse(raw);
-  if (!parsed.success) return apiError("BAD_REQUEST", 400);
+  if (!parsed.success) return apiError(isNicknameTooBig(parsed.error) ? "NICKNAME_INVALID" : "BAD_REQUEST", 400);
 
   const result = await env.ROOM.getByName(code).join({ nickname: parsed.data.nickname, now: Date.now() });
   if (result.ok) {

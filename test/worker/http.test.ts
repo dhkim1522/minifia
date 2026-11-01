@@ -90,6 +90,25 @@ describe("POST /api/rooms", () => {
     expect(await errorOf(res)).toBe("BAD_REQUEST");
   });
 
+  it("자소 8 개짜리 가족 이모지 닉네임(UTF-16 길이 88)은 201 이다 (WR-03)", async () => {
+    const family = "\u{1F468}\u200D\u{1F469}\u200D\u{1F467}\u200D\u{1F466}";
+    const res = await postRooms(JSON.stringify({ nickname: family.repeat(8) }));
+    expect(res.status).toBe(201);
+  });
+
+  it("자소 9 개는 스키마가 아니라 닉네임 검증에서 400 NICKNAME_INVALID 다 (BAD_REQUEST 로 접히지 않는다)", async () => {
+    const family = "\u{1F468}\u200D\u{1F469}\u200D\u{1F467}\u200D\u{1F466}";
+    const res = await postRooms(JSON.stringify({ nickname: family.repeat(9) }));
+    expect(res.status).toBe(400);
+    expect(await errorOf(res)).toBe("NICKNAME_INVALID");
+  });
+
+  it("스키마 상한을 넘는 닉네임 문자열도 NICKNAME_INVALID 다 (클라이언트가 '연결 불안정'으로 오해하지 않는다)", async () => {
+    const res = await postRooms(JSON.stringify({ nickname: "가".repeat(300) }));
+    expect(res.status).toBe(400);
+    expect(await errorOf(res)).toBe("NICKNAME_INVALID");
+  });
+
   it("빈 닉네임과 공백뿐인 닉네임은 400 NICKNAME_INVALID", async () => {
     for (const nickname of ["", "   "]) {
       const res = await postRooms(JSON.stringify({ nickname }));

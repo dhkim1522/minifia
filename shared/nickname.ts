@@ -8,6 +8,10 @@
 
 // 머리 위 이름표는 자리 폭 제약이 없어 8자(결정 0052-1, 0017-4 의 5자를 대체)
 export const NICKNAME_MAX_GRAPHEMES = 8;
+// HTTP 본문 스키마(shared/schemas.ts)가 쓰는 UTF-16 길이 상한. 제품 규칙은 자소 8 개이고, 자소 하나가 가족 이모지처럼
+// 11 단위(8 개면 88) 이상일 수 있으므로 자소 규칙 앞에서 유효한 이름을 막지 않을 만큼 넉넉하게 잡는다(06 리뷰 WR-03).
+// validateNickname 도 이 길이를 넘으면 TOO_LONG 으로 돌려, 클라이언트가 서버 스키마에 걸릴 값을 미리 거른다.
+export const NICKNAME_MAX_UTF16 = 256;
 export type NicknameError = "EMPTY" | "TOO_LONG" | "INVALID_CHARS";
 
 const segmenter = new Intl.Segmenter("ko", { granularity: "grapheme" });
@@ -57,6 +61,6 @@ export function validateNickname(
   // 보이는 글자 검사를 통과해도 키가 비는 값(예: U+FF9E 반각 탁점)은 거부한다. 길이 검사보다 앞이라 INVALID_CHARS 가 TOO_LONG 보다 먼저다.
   const key = nicknameKey(nickname);
   if (key.length === 0) return { ok: false, reason: "INVALID_CHARS" };
-  if (countGraphemes(nickname) > NICKNAME_MAX_GRAPHEMES) return { ok: false, reason: "TOO_LONG" };
+  if (nickname.length > NICKNAME_MAX_UTF16 || countGraphemes(nickname) > NICKNAME_MAX_GRAPHEMES) return { ok: false, reason: "TOO_LONG" };
   return { ok: true, nickname, key };
 }

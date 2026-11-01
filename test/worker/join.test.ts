@@ -97,6 +97,15 @@ describe("POST /api/rooms/{code}/join", () => {
     expect(await errorOf(res)).toBe("NICKNAME_INVALID");
   });
 
+  it("자소 8 개짜리 닉네임은 합류하고, 스키마 상한을 넘는 닉네임은 NICKNAME_INVALID 다 (WR-03)", async () => {
+    const { code } = await createRoom();
+    const family = "\u{1F468}\u200D\u{1F469}\u200D\u{1F467}\u200D\u{1F466}";
+    expect((await joinRoom(code, family.repeat(8))).status).toBe(200);
+    const res = await joinRoom(code, "가".repeat(300));
+    expect(res.status).toBe(400);
+    expect(await errorOf(res)).toBe("NICKNAME_INVALID");
+  });
+
   it("1024바이트를 넘는 본문, JSON 아님, 스키마 불일치는 400 BAD_REQUEST", async () => {
     const { code } = await createRoom();
     for (const raw of [

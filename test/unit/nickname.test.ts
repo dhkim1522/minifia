@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   countGraphemes,
   NICKNAME_MAX_GRAPHEMES,
+  NICKNAME_MAX_UTF16,
   nicknameKey,
   normalizeNickname,
   validateNickname,
@@ -50,6 +51,12 @@ describe("validateNickname - 정상 입력", () => {
     expect(countGraphemes(FAMILY.repeat(8))).toBe(8);
     expect(validateNickname(FAMILY.repeat(8)).ok).toBe(true);
     expect(validateNickname(FAMILY.repeat(9))).toEqual({ ok: false, reason: "TOO_LONG" });
+  });
+
+  it("자소는 8 개 이하여도 UTF-16 길이가 스키마 상한을 넘으면 TOO_LONG (클라이언트가 400 을 맞지 않게)", () => {
+    const heavy = "e" + "\u{0301}".repeat(NICKNAME_MAX_UTF16 + 10); // 자소 1, 길이 상한 초과
+    expect(countGraphemes(heavy)).toBe(1);
+    expect(validateNickname(heavy)).toEqual({ ok: false, reason: "TOO_LONG" });
   });
 
   it("T-06-12: 상한이 늘어도 채움 문자·영폭 문자가 섞인 8자는 INVALID_CHARS", () => {

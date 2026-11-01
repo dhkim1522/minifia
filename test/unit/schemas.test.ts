@@ -1,6 +1,7 @@
 // 클라이언트 메시지 스키마(ClientMessageSchema) 입력 검증 — 후보 선택 취소(target null, 결정 0040)가 다른 메시지로 번지지 않는지 본다.
 import { describe, expect, it } from "vitest";
-import { ClientMessageSchema, MoveMessageSchema } from "../../shared/schemas";
+import { ClientMessageSchema, CreateRoomBodySchema, JoinRoomBodySchema, MoveMessageSchema } from "../../shared/schemas";
+import { NICKNAME_MAX_GRAPHEMES, NICKNAME_MAX_UTF16, countGraphemes, validateNickname } from "../../shared/nickname";
 
 describe("ClientMessageSchema candidateVote (결정 0040: target 은 0..7 정수 또는 null)", () => {
   it.each([
@@ -78,5 +79,28 @@ describe("ClientMessageSchema move (06-08, 결정 0044-17)", () => {
     ["z 빠짐", { t: "move", x: 0 }],
   ])("거부한다: %s", (_name, msg) => {
     expect(ClientMessageSchema.safeParse(msg).success).toBe(false);
+  });
+});
+
+// WR-03(06 리뷰): HTTP 본문 스키마의 상한이 제품 규칙(8 자소)보다 먼저 유효한 닉네임을 막지 않는다.
+describe("닉네임 본문 스키마 상한과 8 자소 규칙의 일관성", () => {
+  const FAMILY4 = "\u{1F468}\u200D\u{1F469}\u200D\u{1F467}\u200D\u{1F466}"; // 11 UTF-16 단위, 자소 1
+  const EIGHT_FAMILIES = FAMILY4.repeat(NICKNAME_MAX_GRAPHEMES);
+
+  it("자소 8 개짜리 유효 닉네임(UTF-16 길이 88)을 스키마가 받는다", () => {
+    expect(EIGHT_FAMILIES.length).toBe(88);
+    expect(countGraphemes(EIGHT_FAMILIES)).toBe(8);
+    expect(validateNickname(EIGHT_FAMILIES).ok).toBe(true);
+    expect(CreateRoomBodySchema.safeParse({ nickname: EIGHT_FAMILIES }).success).toBe(true);
+    expect(JoinRoomBodySchema.safeParse({ nickname: EIGHT_FAMILIES }).success).toBe(true);
+  });
+
+  it("스키마 상한은 자소 8 개의 현실적인 최악값(88)보다 넉넉하다", () => {
+    expect(NICKNAME_MAX_UTF16).toBeGreaterThanOrEqual(128);
+  });
+
+  it("상한을 넘는 문자열은 스키마가 거부한다", () => {
+    expect(CreateRoomBodySchema.safeParse({ nickname: "a".repeat(NICKNAME_MAX_UTF16) }).success).toBe(true);
+    expect(CreateRoomBodySchema.safeParse({ nickname: "a".repeat(NICKNAME_MAX_UTF16 + 1) }).success).toBe(false);
   });
 });
