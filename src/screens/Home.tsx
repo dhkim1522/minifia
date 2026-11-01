@@ -12,6 +12,7 @@ import { createRoom, joinRoom, testModeFromSearch } from "../net/api";
 import { preloadEntryAssets } from "../net/assets";
 import { messageForApiError, nicknameErrorText } from "../net/copy";
 import { loadLastNickname, loadSession, saveLastNickname } from "../net/session";
+import { preloadWorld } from "../world/runtime";
 
 interface HomeProps {
   onEnterRoom: (code: string, token: string) => void;
@@ -32,9 +33,10 @@ export function Home({ onEnterRoom }: HomeProps) {
   const [busy, setBusy] = useState(false);
   const { toast, show } = useToast();
 
-  // 대기실 첫 그림(배경·인물)이 비어 보이지 않게 첫 화면에서 미리 받아 둔다.
+  // 대기실 첫 그림(배경·인물)과 맵 청크(three)가 비어 보이지 않게 첫 화면에서 미리 받아 둔다.
   useEffect(() => {
     preloadEntryAssets();
+    preloadWorld();
   }, []);
 
   const validation = validateNickname(nickname);
@@ -82,6 +84,8 @@ export function Home({ onEnterRoom }: HomeProps) {
     setBusy(false);
     if (result.ok) {
       saveLastNickname(validation.nickname);
+      // 입장 성공 직후: 로비 맵 3초 조작 측정(06-19)의 시작점
+      performance.mark("room-enter");
       onEnterRoom(result.data.code, result.data.token);
       return;
     }
@@ -104,6 +108,7 @@ export function Home({ onEnterRoom }: HomeProps) {
     setBusy(false);
     if (result.ok) {
       saveLastNickname(validation.nickname);
+      performance.mark("room-enter");
       onEnterRoom(code, result.data.token);
       return;
     }

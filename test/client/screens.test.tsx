@@ -397,7 +397,7 @@ describe("Home 닉네임 시트 키패드 대응 (폰)", () => {
 });
 
 describe("Home 월드 청크 미리 받기·room-enter 표식 (06-21, 3초 측정 시작점)", () => {
-  const roomEnterMarks = (spy: ReturnType<typeof vi.spyOn>) => spy.mock.calls.filter(([name]) => name === "room-enter");
+  const roomEnterMarks = (spy: { mock: { calls: unknown[][] } }) => spy.mock.calls.filter(([name]) => name === "room-enter");
 
   it("처음 그려질 때 월드 청크를 한 번 미리 받는다", () => {
     render(<Home onEnterRoom={vi.fn()} />);

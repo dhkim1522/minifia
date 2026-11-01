@@ -10,6 +10,7 @@ import { Toast, useToast } from "../components/Toast";
 import { getPreview, joinRoom } from "../net/api";
 import { messageForApiError, nicknameErrorText } from "../net/copy";
 import { loadLastNickname, saveLastNickname } from "../net/session";
+import { preloadWorld } from "../world/runtime";
 
 interface JoinByLinkProps {
   code: string;
@@ -62,6 +63,11 @@ export function JoinByLink({ code, notice, onEnterRoom, onHome }: JoinByLinkProp
   const stopped = useRef(false);
 
   const showCard = preview !== null && blocked === null;
+
+  // 입장 화면이 열리면 맵 청크(three)를 미리 받아 둔다. 입장하자마자 조작할 수 있게 한다. 실패는 preloadWorld 가 삼킨다.
+  useEffect(() => {
+    preloadWorld();
+  }, []);
 
   // 입력 카드가 처음 나타나는 순간 칸에 포커스를 주고, 미리 채운 글자는 전체를 선택해 바로 덮어쓸 수 있게 한다.
   useEffect(() => {
@@ -163,6 +169,8 @@ export function JoinByLink({ code, notice, onEnterRoom, onHome }: JoinByLinkProp
     setBusy(false);
     if (result.ok) {
       saveLastNickname(validation.nickname);
+      // 입장 성공 직후: 로비 맵 3초 조작 측정(06-19)의 시작점
+      performance.mark("room-enter");
       onEnterRoom(code, result.data.token);
       return;
     }
