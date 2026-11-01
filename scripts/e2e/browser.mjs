@@ -1138,6 +1138,107 @@ export function readChannelTraces(page, needles) {
   }, needles);
 }
 
+/**
+ * 가상 키보드 페이지 init 스크립트(07-19, CHAT-05, 시험 컨텍스트에만 들어간다, 함수라 직렬화되므로 바깥 값을 쓰지 않는다).
+ * 1) window.visualViewport 를 height·offsetTop 을 조종할 수 있는 EventTarget 가짜로 바꾼다. `window.__mfVv.set(height, offsetTop)` 이 값을 바꾸고
+ *    resize(offsetTop 이 바뀌면 scroll 도) 이벤트를 보낸다. 실제 iOS·Android 키보드를 흉내 내지 못한다 — 앱의 배치 식만 시험한다(가정 A1, 실기기는 07-21).
+ * 2) window.__mfRo: `arm()` 이 캔버스 호스트(.mf-world__canvas)에 ResizeObserver 를 건다. 처음 관찰 직후의 호출은 세지 않고 그 뒤 호출을 calls 에 센다.
+ *    앱은 캔버스 크기를 ResizeObserver 로 보지 않으므로(프레임마다 읽는다) 이 기록기가 "키보드 때문에 캔버스 크기가 바뀌었는가" 의 독립된 눈이다.
+ */
+export function installFakeViewport() {
+  const vv = new EventTarget();
+  const state = { height: null, offsetTop: 0 };
+  Object.defineProperties(vv, {
+    width: { get: () => window.innerWidth },
+    height: { get: () => (state.height === null ? window.innerHeight : state.height) },
+    offsetTop: { get: () => state.offsetTop },
+    offsetLeft: { value: 0 },
+    pageTop: { get: () => state.offsetTop + window.scrollY },
+    pageLeft: { value: 0 },
+    scale: { value: 1 },
+  });
+  Object.defineProperty(window, "visualViewport", { value: vv, configurable: true });
+  window.__mfVv = {
+    set(height, offsetTop = 0) {
+      const topChanged = state.offsetTop !== offsetTop;
+      state.height = height;
+      state.offsetTop = offsetTop;
+      vv.dispatchEvent(new Event("resize"));
+      if (topChanged) vv.dispatchEvent(new Event("scroll"));
+    },
+    get: () => ({ height: vv.height, offsetTop: vv.offsetTop }),
+  };
+  window.__mfRo = {
+    calls: 0,
+    armed: false,
+    arm() {
+      const host = document.querySelector(".mf-world__canvas");
+      if (!host || this.armed) return !!host;
+      this.armed = true;
+      let first = true;
+      new ResizeObserver(() => {
+        if (first) {
+          first = false;
+          return;
+        }
+        this.calls += 1;
+      }).observe(host);
+      return true;
+    },
+  };
+}
+
+/**
+ * 가상 키보드 검사용 한 장(07-19): 가짜 visualViewport 값, 로비 루트의 열림 표식, 패널·입력줄·기록 칸·행동 줄, 캔버스 크기(호스트와 안쪽 canvas), ResizeObserver 호출 수,
+ * 내 캐릭터 발의 화면 좌표(sample → screenOf)와 내 이름표(입력 중 칸 포함) 사각형, 스테이지 사각형(헤더 아래 ~ 패널 위). 한 번의 evaluate.
+ * mySeat = 내 자리. 로비가 없으면 null.
+ */
+export function readKeyboardState(page, mySeat) {
+  return page.evaluate((seat) => {
+    const rect = (el) => {
+      if (!el) return null;
+      const r = el.getBoundingClientRect();
+      return { left: r.left, top: r.top, width: r.width, height: r.height, right: r.right, bottom: r.bottom };
+    };
+    const root = document.querySelector("main.mf-lobby");
+    const panel = document.querySelector(".mf-lobby__panel");
+    const header = document.querySelector(".mf-lobby__header");
+    const input = document.querySelector("[data-chat-input]");
+    const host = document.querySelector(".mf-world__canvas");
+    const canvas = host?.querySelector("canvas") ?? null;
+    if (!root || !panel || !input) return null;
+    const vv = window.__mfVv ? window.__mfVv.get() : null;
+    const pos = window.__mfWorld ? window.__mfWorld.sample(seat) : null;
+    const feet = pos && window.__mfWorld ? window.__mfWorld.screenOf(pos.x, pos.z) : null;
+    const tagEl = document.querySelector(`.mf-world__tag[data-seat="${seat}"] .mv-tag`);
+    const stackEl = document.querySelector(`.mf-world__tag[data-seat="${seat}"] .mv-head`);
+    return {
+      innerHeight: window.innerHeight,
+      vv,
+      kbOpen: root.getAttribute("data-kb-open"),
+      lift: root.parentElement ? getComputedStyle(root.closest(".mf-room") ?? root).getPropertyValue("--mf-kb-lift").trim() : "",
+      focusOnInput: document.activeElement === input,
+      panel: rect(panel),
+      input: rect(input),
+      send: rect(document.querySelector("[data-chat-send]")),
+      log: rect(document.querySelector("[data-chat-log]")),
+      headerBottom: header ? header.getBoundingClientRect().bottom : null,
+      headerTop: header ? header.getBoundingClientRect().top : null,
+      actionButtons: panel.querySelectorAll("button:not([data-chat-send]):not([data-chat-newdot])").length,
+      host: host ? { w: host.clientWidth, h: host.clientHeight } : null,
+      canvas: canvas ? { attrW: canvas.width, attrH: canvas.height, cssW: canvas.clientWidth, cssH: canvas.clientHeight } : null,
+      roCalls: window.__mfRo ? window.__mfRo.calls : null,
+      pos,
+      feet,
+      tag: rect(tagEl),
+      stack: rect(stackEl),
+      typing: !!document.querySelector(`.mf-world__tag[data-seat="${seat}"] [data-typing="true"]`),
+      ring: document.querySelector("[data-world-stage]")?.getAttribute("data-ring") ?? null,
+      scrollY: window.scrollY,
+    };
+  }, mySeat);
+}
+
 /** 서버 시각 t 의 seat 위치(월드 단위). 훅이 없거나 아직 구간이 없으면 null. */
 export function sampleWorld(page, seat, t) {
   return page.evaluate(({ s, tt }) => (window.__mfWorld ? window.__mfWorld.sample(s, tt) : null), { s: seat, tt: t });

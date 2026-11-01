@@ -23,6 +23,7 @@ import {
   hitsInputSurface,
   imeCompose,
   imeEnter,
+  installFakeViewport,
   inspectSeat,
   joinTestRoom,
   leaveFromResult,
@@ -39,6 +40,7 @@ import {
   readLinkState,
   readChatLines,
   readChatPanel,
+  readKeyboardState,
   readChannelTraces,
   readTablePanel,
   readLobbyFrame,
@@ -738,6 +740,177 @@ async function chatImeFlow(ctx) {
     await g.context.close().catch(() => {});
   }
   await leaveLobby(hp);
+}
+
+// ---- chat-keyboard (가상 visualViewport 로 본 키보드 배치, 07-19, CHAT-05 — 합격 검사 1·2·3·6 의 자동 몫) ----
+
+// 키보드 열림 치수(UI-SPEC 패널과 키보드). src/game/chatUi.ts 의 값을 그대로 옮긴 사본이다.
+/** 가상 키보드 높이(폰 크기 표의 K) */
+const KB_LIFT = 336;
+const KB_PANEL_H = 150;
+const KB_LOG_H = 72;
+/** 큰 폰(390x844 이상)은 캐릭터 발과 이름표(입력 중 칸 포함)가 남은 스테이지 안에 모두 있어야 한다. 그 아래 작은 폰은 캐릭터 몸만 본다(가정 A2, 합격 검사 3) */
+const KB_BIG_MIN_H = 800;
+const KB_EPS = 0.5;
+
+/** 내 자리에서 가장 먼, 맵 입력 면 위에 있고 화면 안에 보이는 걸을 수 있는 칸. 없으면 null. */
+async function farWalkableOnSurface(page, size, from) {
+  const centers = walkableCentersOfApp();
+  const screens = await screensOfWorld(page, centers);
+  const onScreen = centers
+    .map((c, i) => ({ ...c, sx: screens[i]?.sx, sy: screens[i]?.sy }))
+    .filter((c) => Number.isFinite(c.sx) && c.sx > 20 && c.sx < size.w - 20 && c.sy > 80 && c.sy < size.h - 20);
+  const probe = pickTapTargets(onScreen, from, { minDist: 2 }).slice(0, 80);
+  const hits = await hitsInputSurface(page, probe);
+  return probe.find((_, i) => hits[i]) ?? null;
+}
+
+/**
+ * 로비 가상 키보드 흐름: 입력칸에 포커스를 주고 visualViewport 를 K=336 만큼 줄인다(addInitScript 로 바꾼 가짜).
+ * 포커스 후 300·1000ms 에 패널이 키보드 위에 붙고, 캔버스가 크기를 바꾸지 않고(ResizeObserver 0), 내 캐릭터가 남은 스테이지에 보이는지 본다.
+ * 이어서 vv.offsetTop 120 에서 헤더가 따라 내려오는지, 줄을 보낸 뒤에도 포커스·패널 위치가 그대로인지, 입력 중 맵 탭이 걷지 않고 키보드만 닫는지(D4)를 본다.
+ * 가짜 값은 앱의 배치 식만 시험한다 — 실제 iOS·Android 키보드는 07-21 사람 확인(가정 A1).
+ */
+async function chatKeyboardFlow(ctx) {
+  const rec = recorder(ctx);
+  const sc = "chat-keyboard/lobby";
+  const { w, h } = ctx.size;
+  const big = h >= KB_BIG_MIN_H;
+  const host = await startHost(ctx, "chat-keyboard", { nickname: LOBBY_HOST_NICK, initScripts: [installFakeViewport] });
+  const { page, tracker } = host;
+  const mySeat = tracker.last().me.seat;
+  await waitWorldReady(page, 1);
+  await settle(page);
+  const input = page.locator("[data-chat-input]");
+  const r1 = (n) => Math.round(n * 10) / 10;
+  const near = (a, b, eps = KB_EPS) => Math.abs(a - b) <= eps;
+
+  // 닫힌 기준: 열림 표식 없음, 행동 줄([시작]) 있음, 캔버스 크기와 ResizeObserver 기록기
+  const armed = await page.evaluate(() => window.__mfRo?.arm?.() === true);
+  const closed = await readKeyboardState(page, mySeat);
+  if (!closed || !armed) throw new SetupError(`키보드 검사 준비 실패(상태 ${!!closed}, 기록기 ${armed})`);
+  rec(sc, "KB0", "닫힌 기준: 열림 표식 없음·행동 줄 있음·lift 0", closed.kbOpen === null && closed.actionButtons >= 1 && closed.lift === "0px", `data-kb-open ${closed.kbOpen} · 행동 줄 버튼 ${closed.actionButtons} · lift ${closed.lift}`);
+
+  // 포커스 → 가상 키보드 열기 → 글자를 넣어 입력 중 칸을 켠다(이름표 스택이 22px 늘어난다)
+  await input.focus();
+  await page.evaluate((k) => window.__mfVv.set(window.innerHeight - k, 0), KB_LIFT);
+  await input.fill("안");
+  const t0 = Date.now();
+  const sampleAt = async (ms) => {
+    await page.waitForTimeout(Math.max(0, ms - (Date.now() - t0)));
+    return readKeyboardState(page, mySeat);
+  };
+  const opened = { 300: await sampleAt(300), 1000: await sampleAt(1000) };
+  for (const ms of [300, 1000]) {
+    const k = opened[ms];
+    if (!k) {
+      rec(sc, `KB-${ms}`, `포커스 ${ms}ms 에 상태를 읽음`, false, "로비를 읽지 못함");
+      continue;
+    }
+    const vvBottom = k.vv.height + k.vv.offsetTop;
+    const stageTop = k.headerBottom;
+    const stageBottom = k.panel.top;
+    rec(sc, `KB1-${ms}`, `포커스 ${ms}ms: 패널·입력줄 아래 ≤ 보이는 영역 아래(검사 1), 패널은 키보드 바로 위`, k.panel.bottom <= vvBottom + KB_EPS && k.input.bottom <= vvBottom + KB_EPS && near(k.panel.bottom, vvBottom, 1), `패널 아래 ${r1(k.panel.bottom)} · 입력줄 아래 ${r1(k.input.bottom)} · 보이는 영역 아래 ${r1(vvBottom)}`);
+    rec(sc, `KB2-${ms}`, `포커스 ${ms}ms: data-kb-open true·행동 줄 없음·기록 칸 ${KB_LOG_H}·패널 ${KB_PANEL_H}`, k.kbOpen === "true" && k.actionButtons === 0 && near(k.log.height, KB_LOG_H, 1) && near(k.panel.height, KB_PANEL_H, 1), `열림 ${k.kbOpen} · 행동 줄 버튼 ${k.actionButtons} · 기록 칸 ${r1(k.log.height)} · 패널 ${r1(k.panel.height)}`);
+    rec(sc, `KB3-${ms}`, `포커스 ${ms}ms: 캔버스 크기 불변·ResizeObserver 호출 0(검사 2)`, k.roCalls === 0 && k.host.w === closed.host.w && k.host.h === closed.host.h && k.canvas?.attrW === closed.canvas?.attrW && k.canvas?.attrH === closed.canvas?.attrH && k.canvas?.cssW === closed.canvas?.cssW && k.canvas?.cssH === closed.canvas?.cssH, `호출 ${k.roCalls} · 호스트 ${k.host.w}x${k.host.h}(기준 ${closed.host.w}x${closed.host.h}) · canvas ${k.canvas?.attrW}x${k.canvas?.attrH} css ${k.canvas?.cssW}x${k.canvas?.cssH}(기준 ${closed.canvas?.attrW}x${closed.canvas?.attrH} css ${closed.canvas?.cssW}x${closed.canvas?.cssH})`);
+    const feet = k.feet?.sy;
+    const headY = k.stack ? k.stack.bottom : null;
+    const stageH = stageBottom - stageTop;
+    if (big) {
+      const ok = feet !== undefined && feet >= stageTop - KB_EPS && feet <= stageBottom + KB_EPS && k.stack !== null && k.stack.top >= stageTop - KB_EPS && k.stack.bottom <= stageBottom + KB_EPS && k.typing === true;
+      rec(sc, `KB4-${ms}`, `포커스 ${ms}ms: 내 캐릭터 발과 이름표(입력 중 칸 포함)가 남은 스테이지 안(검사 3, 큰 폰)`, ok, `스테이지 ${r1(stageTop)}~${r1(stageBottom)}(높이 ${r1(stageH)}) · 발 ${r1(feet)} · 이름표 스택 ${r1(k.stack?.top)}~${r1(k.stack?.bottom)} · 입력 중 ${k.typing}`);
+    } else {
+      // 작은 폰: 스테이지가 128 미만이라 이름표·입력 중 칸이 잘릴 수 있다(알려진 한계, 가정 A2) — 몸(머리 ~ 발)이 스테이지와 겹치는지만 본다
+      const ok = feet !== undefined && headY !== null && Math.max(headY, stageTop) <= Math.min(feet, stageBottom) + KB_EPS;
+      rec(sc, `KB4-${ms}`, `포커스 ${ms}ms: 내 캐릭터 몸이 남은 스테이지와 겹침(검사 3, 작은 폰은 몸만)`, ok, `스테이지 ${r1(stageTop)}~${r1(stageBottom)}(높이 ${r1(stageH)}) · 몸 ${r1(headY)}~${r1(feet)}`);
+    }
+  }
+  if (big && opened[1000]) {
+    infoRow(ctx, sc, "KB-INFO", "큰 폰 남은 스테이지 높이(참고, UI-SPEC 128 이상)", `${r1(opened[1000].panel.top - opened[1000].headerBottom)}px`);
+  }
+
+  // iOS 가 화면을 위로 밀면(vv.offsetTop 120) 헤더가 그만큼 내려오고, 창 스크롤로 되돌리지 않는다(scrollY 0)
+  await page.evaluate((k) => window.__mfVv.set(window.innerHeight - k - 120, 120), KB_LIFT);
+  await page.waitForTimeout(300);
+  const pushed = await readKeyboardState(page, mySeat);
+  rec(sc, "KB5", "vv.offsetTop 120: 헤더가 120 내려와 있고 패널은 여전히 키보드 바로 위, 창 스크롤 0", !!pushed && near(pushed.headerTop, 120, 1) && near(pushed.panel.bottom, pushed.vv.height + pushed.vv.offsetTop, 1) && pushed.scrollY === 0, `헤더 위 ${r1(pushed?.headerTop)} · 패널 아래 ${r1(pushed?.panel.bottom)} · 보이는 영역 아래 ${r1(pushed ? pushed.vv.height + pushed.vv.offsetTop : NaN)} · scrollY ${pushed?.scrollY}`);
+  await page.evaluate((k) => window.__mfVv.set(window.innerHeight - k, 0), KB_LIFT);
+  await page.waitForTimeout(300);
+  const back = await readKeyboardState(page, mySeat);
+  rec(sc, "KB6", "vv.offsetTop 가 0 으로 돌아오면 헤더도 제자리(위 0)", !!back && near(back.headerTop, 0, 1), `헤더 위 ${r1(back?.headerTop)}`);
+
+  // 줄을 보낸 뒤에도 포커스가 유지되고 패널 위치가 변하지 않는다(검사 6): 보내는 동안 프레임마다 패널 아래·열림 표식을 기록한다
+  await input.fill("안녕");
+  await page.waitForSelector('[data-chat-send][aria-disabled="false"]', { timeout: 3000 });
+  await page.evaluate(() => {
+    const w = { min: Infinity, max: -Infinity, closedSeen: false, stop: false };
+    window.__kbWatch = w;
+    const loop = () => {
+      const panel = document.querySelector(".mf-lobby__panel");
+      const root = document.querySelector("main.mf-lobby");
+      if (panel) {
+        const b = panel.getBoundingClientRect().bottom;
+        w.min = Math.min(w.min, b);
+        w.max = Math.max(w.max, b);
+      }
+      if (root && root.getAttribute("data-kb-open") !== "true") w.closedSeen = true;
+      if (!w.stop) requestAnimationFrame(loop);
+    };
+    requestAnimationFrame(loop);
+  });
+  const beforeSend = await readKeyboardState(page, mySeat);
+  await page.locator("[data-chat-send]").click({ timeout: 3000 });
+  const sent = await attempt(async () => waitChatLine(page, "안녕", 3000));
+  await page.waitForTimeout(600);
+  const watch = await page.evaluate(() => {
+    const w = window.__kbWatch;
+    w.stop = true;
+    return { min: w.min, max: w.max, closedSeen: w.closedSeen };
+  });
+  const afterSend = await readKeyboardState(page, mySeat);
+  rec(sc, "KB7", "보낸 줄이 기록에 보임", sent.ok, sent.detail);
+  rec(sc, "KB8", "보낸 뒤 입력칸 포커스 유지·열림 유지(검사 6)", !!afterSend && afterSend.focusOnInput === true && afterSend.kbOpen === "true" && (await input.inputValue()) === "", `포커스 ${afterSend?.focusOnInput} · 열림 ${afterSend?.kbOpen} · 입력칸 "${await input.inputValue()}"`);
+  rec(sc, "KB9", "보내는 동안 패널 위치가 변하지 않고 열림이 한 번도 풀리지 않음(검사 6)", !!beforeSend && !!afterSend && watch.max - watch.min <= KB_EPS && watch.closedSeen === false && near(beforeSend.panel.bottom, afterSend.panel.bottom), `패널 아래 변동 ${r1(watch.max - watch.min)}px · 열림 풀림 ${watch.closedSeen} · 보내기 전 ${r1(beforeSend?.panel.bottom)} → 후 ${r1(afterSend?.panel.bottom)}`);
+
+  // D4: 입력칸 포커스 중 맵의 걸을 수 있는 곳을 누르면 걷지 않고 키보드만 닫힌다
+  await input.focus();
+  const moveN = () => tracker.moves.get(mySeat)?.n ?? 0;
+  const me = await sampleWorld(page, mySeat);
+  const target = me ? await farWalkableOnSurface(page, ctx.size, me) : null;
+  if (!target) {
+    rec(sc, "KB10", "D4: 포커스 중 맵 탭 = 걷지 않음·blur", false, "탭할 칸을 찾지 못함(맵 입력 면 위에 보이는 먼 칸 없음)");
+  } else {
+    const nBefore = moveN();
+    await page.touchscreen.tap(target.sx, target.sy);
+    await page.waitForTimeout(1200);
+    const afterTap = await readKeyboardState(page, mySeat);
+    const meAfter = await sampleWorld(page, mySeat);
+    const still = !!me && !!meAfter && Math.hypot(me.x - meAfter.x, me.z - meAfter.z) < 0.01;
+    rec(sc, "KB10", "D4: 포커스 중 맵 탭 → 걷기 요청 없음(위치·구간·링 그대로)", still && moveN() === nBefore && afterTap?.ring === null, `위치 변화 ${me && meAfter ? r1(Math.hypot(me.x - meAfter.x, me.z - meAfter.z)) : "?"} · 새 구간 ${moveN() - nBefore} · 링 ${afterTap?.ring}`);
+    rec(sc, "KB11", "D4: 입력칸이 blur 되고 열림 표식이 사라짐", !!afterTap && afterTap.focusOnInput === false && afterTap.kbOpen === null, `포커스 ${afterTap?.focusOnInput} · 열림 ${afterTap?.kbOpen}`);
+  }
+
+  // 키보드가 닫힌 뒤(가짜 값을 되돌림): 원래 배치로 돌아오고 카메라가 다시 맞는다, 캔버스는 처음부터 끝까지 한 번도 크기를 바꾸지 않았다. 탭은 평소처럼 걷는다.
+  await page.evaluate(() => window.__mfVv.set(window.innerHeight, 0));
+  await page.waitForTimeout(500);
+  const restored = await readKeyboardState(page, mySeat);
+  if (restored) {
+    const stageTop = restored.headerBottom;
+    const stageBottom = restored.panel.top;
+    rec(sc, "KB12", "닫힌 뒤: 행동 줄 복귀·패널 원래 높이·카메라가 닫힌 스테이지에 다시 맞음", restored.actionButtons >= 1 && near(restored.panel.height, closed.panel.height, 1) && restored.feet.sy >= stageTop - KB_EPS && restored.feet.sy <= stageBottom + KB_EPS, `행동 줄 버튼 ${restored.actionButtons} · 패널 ${r1(restored.panel.height)}(기준 ${r1(closed.panel.height)}) · 발 ${r1(restored.feet.sy)} · 스테이지 ${r1(stageTop)}~${r1(stageBottom)}`);
+    rec(sc, "KB13", "처음부터 끝까지 캔버스 크기 불변·ResizeObserver 호출 0", restored.roCalls === 0 && restored.host.w === closed.host.w && restored.host.h === closed.host.h && restored.canvas?.attrW === closed.canvas?.attrW && restored.canvas?.attrH === closed.canvas?.attrH, `호출 ${restored.roCalls} · 호스트 ${restored.host.w}x${restored.host.h}(기준 ${closed.host.w}x${closed.host.h}) · canvas ${restored.canvas?.attrW}x${restored.canvas?.attrH}(기준 ${closed.canvas?.attrW}x${closed.canvas?.attrH})`);
+  } else {
+    rec(sc, "KB12", "닫힌 뒤 상태를 읽음", false, "로비를 읽지 못함");
+  }
+  const walkTarget = restored && me ? await farWalkableOnSurface(page, ctx.size, me) : null;
+  if (!walkTarget) {
+    rec(sc, "KB14", "닫힌 뒤의 탭부터 평소처럼 걷는다", false, "탭할 칸을 찾지 못함");
+  } else {
+    const tap = await tapWorld(page, tracker, mySeat, walkTarget.x, walkTarget.z);
+    rec(sc, "KB14", "닫힌 뒤의 탭부터 평소처럼 걷는다(링·구간이 생김)", tap.move !== null && tap.ringMs !== null, `구간 ${tap.move ? "받음" : "없음"} · 링 ${tap.ringMs === null ? "없음" : `${Math.round(tap.ringMs)}ms`}`);
+  }
+  await checkState(ctx, "chat-keyboard", "lobby");
+  await leaveLobby(page);
 }
 
 // ---- chat-table (테이블 화면 자유 채팅, 07-15, CHAT-01·02·03) ----
@@ -2559,6 +2732,8 @@ export const FLOWS = [
   { id: "chat-lobby", run: chatLobbyFlow, extraSizes: LOBBY_EXTRA_SIZES },
   // 한글 조합(07-19): CDP imeSetComposition 으로 조합 중 Enter·보내기가 한 번만 보내진다. 크기와 무관해서 자기 크기로 한 번만 돈다
   { id: "chat-ime", run: chatImeFlow, size: { w: 390, h: 844, label: "390x844" } },
+  // 가상 키보드(07-19): 입력칸 포커스 + 가짜 visualViewport 로 패널·캔버스·카메라·D4 를 본다. 큰 폰 3종은 이름표까지, 작은 폰 3종은 캐릭터 몸만(가정 A2)
+  { id: "chat-keyboard", run: chatKeyboardFlow, extraSizes: LOBBY_EXTRA_SIZES },
   // 테이블 화면 자유 채팅(07-15): 낮 토론의 한 줄(트레이서) → 최후 변론·밤 마피아·시민 화면·탈락자
   { id: "chat-table", run: chatTableFlow, extraSizes: LOBBY_EXTRA_SIZES },
   // 탈락자 화면(07-15): 방장이 처형된 뒤의 밤. 크기와 무관해서 자기 크기로 한 번만 돈다
