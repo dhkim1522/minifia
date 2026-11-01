@@ -117,36 +117,9 @@ export interface GameResult {
 }
 
 // ---- 낮 토론 계약(2페이즈) ----
-// 낮 다섯 + 밤 전용 세 개(결정 0019-2) + 표시 전용 두 개(결정 0027-7) + 변론 여섯 개(결정 0036, D-13) — 쓸 수 있는 때는 shared/game/chat.ts QUICK_TEMPLATES.when
-export const TEMPLATE_IDS = [
-  "suspect", "trust", "claimed", "innocent", "vote",
-  "nightTarget", "nightAgree", "nightOther",
-  "claimRole", "claimNone",
-  "defNotMe", "defCitizen", "defSuspect", "defTrust", "defRole", "defPlead",
-] as const;
-export type TemplateId = (typeof TEMPLATE_IDS)[number];
-/**
- * 표시 전용(결정 0027-7): 화면이 claimLog 에서 만드는 주장 줄에만 쓰고 서버는 chat 프레임으로도 say 로도 쓰지 않는다.
- * 빠른 메시지 칩 순서 목록(TEMPLATE_ORDER·NIGHT_TEMPLATE_ORDER)에 넣지 않는다.
- */
-export const DISPLAY_ONLY_TEMPLATE_IDS = ["claimRole", "claimNone"] as const;
+// 07-11: 빠른 메시지(문구 표·say 메시지·옛 줄 타입)는 자유 채팅(아래 7페이즈 구역)으로 대체돼 없어졌다. 이모티콘(emoji)은 07-12 가 정리한다.
 export const EMOJI_IDS = ["smile", "grin", "surprised", "suspicious", "angry", "sad", "heart", "exclaim"] as const;
 export type EmojiId = (typeof EMOJI_IDS)[number];
-/**
- * 서버가 방송만 하는 빠른 메시지 한 줄(저장하지 않는다, 결정 0017-7). 키 이름에 id·role 을 쓰지 않는다:
- * test/worker/leak.test.ts 의 FORBIDDEN_KEYS 에 id 가 있고, role 키는 view.me.role 에만 있다는 불변식이 있다.
- * 직업 이름이 필요하면 claimedRole 처럼 다른 이름을 쓴다.
- */
-export interface ChatLine {
-  seq: number;
-  seat: number;
-  template: TemplateId;
-  target?: number;
-  claimedRole?: RoleId;
-  at: number;
-}
-/** 통과한 빠른 메시지 한 줄을 방에 앉은 모든 소켓에 보내는 이벤트 프레임(상태가 아니다). */
-export type ChatEvent = { t: "chat" } & ChatLine;
 export interface DayView {
   n: number; // 일차(1부터)
   roles: RoleId[]; // 이번 판 직업(구성표 순서, 공개 정보)
@@ -211,7 +184,6 @@ export type ClientMessage =
   | { t: "start" }
   | { t: "leave" }
   | { t: "kick"; seat: number }
-  | { t: "say"; template: TemplateId; target?: number; claimedRole?: RoleId }
   | { t: "emoji"; icon: EmojiId }
   | { t: "pick"; target: number } // 밤 행동 — 행동 종류는 보내지 않는다(서버 저장 역할이 정한다)
   | { t: "execVote"; agree: boolean } // 처형 여부 투표 — 생존자의 찬성 true / 반대 false, 마지막 값이 유효(결정 0034)

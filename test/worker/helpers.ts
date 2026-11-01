@@ -236,7 +236,7 @@ export async function advanceToKeep(code: string, sockets: TestSocket[], phase: 
       if (!room) throw new Error("advanceToKeep: 방이 없다");
       const due = { ...room, phaseEndsAt: Date.now() - 1 };
       await state.storage.put("room", due);
-      instance["room"] = due;
+      (instance as unknown as { room: unknown }).room = due;
     });
     expect(await runDurableObjectAlarm(stub)).toBe(true);
   }

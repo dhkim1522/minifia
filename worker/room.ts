@@ -4,12 +4,11 @@ import type { ApiErrorCode, BotVoteExec, BotVotePick, ChatRejectWhy, ClientMessa
 import { botWakeAt, isBot, syncBotPlan, takeDueBotSteps } from "../shared/game/bots";
 import type { BotStep } from "../shared/game/bots";
 import { audience, channelOf, phaseKey } from "../shared/game/audience";
-import { emote, say } from "../shared/game/chat";
+import { emote } from "../shared/game/chat";
 import { appendLine, emptyChatLog, seatMask, toWire } from "../shared/game/chatLog";
 import type { ChatLog } from "../shared/game/chatLog";
 import { checkChatSend, sanitizeChatText, typingRelay } from "../shared/game/chatRules";
 import type { ChatSenderRate, TypingRelayState } from "../shared/game/chatRules";
-import type { SayInput } from "../shared/game/chat";
 import {
   attachConnection,
   createRoomState,
@@ -226,9 +225,6 @@ export class Room extends DurableObject<Env> {
       case "start":
         await this.handleStart(ws);
         return;
-      case "say":
-        await this.handleSay(ws, { template: msg.template, target: msg.target, claimedRole: msg.claimedRole });
-        return;
       case "emoji":
         await this.handleEmoji(ws, msg.icon);
         return;
@@ -375,37 +371,9 @@ export class Room extends DurableObject<Env> {
     await this.flushWorld();
   }
 
-  // 빠른 메시지·이모티콘·밤 행동은 "소켓 껍데기(handleX)" 와 "본체(applyX)" 로 나뉜다(결정 0024).
+  // 이모티콘·밤 행동·투표는 "소켓 껍데기(handleX)" 와 "본체(applyX)" 로 나뉜다(결정 0024). 자유 채팅(handleChat·applyChat)도 같은 모양이다.
   // 껍데기는 소켓 첨부에서 playerId 를 얻고 거부를 그 소켓에 알린다. 본체는 같은 규칙 함수·같은 저장·방송을 하고 실패 코드를 돌려준다.
   // 서버 봇은 본체만 부른다 — 사람과 같은 검증을 거치고(특권 없음), 거부는 알릴 소켓이 없어 버린다.
-
-  // 빠른 메시지: 신원은 소켓 첨부의 playerId 뿐이고, 시각은 서버 Date.now() 다(T-02-16, D-13).
-  // WRONG_PHASE 만 최신 state 를 다시 보낸다 — 단계가 넘어간 화면이 서버 값으로 돌아가게. RATE_LIMITED·BAD_MESSAGE 는 error 뿐이다(UI-SPEC 오류표).
-  private async handleSay(ws: WebSocket, input: SayInput): Promise<void> {
-    const att = this.attachmentOf(ws);
-    if (!att || !this.room) {
-      this.sendTo(ws, { t: "error", code: "BAD_MESSAGE" });
-      return;
-    }
-    const error = await this.applySay(att.playerId, input);
-    if (error === null) return;
-    if (error === "WRONG_PHASE") this.sendRejection(ws, att.playerId, error);
-    else this.sendTo(ws, { t: "error", code: error });
-  }
-
-  // 통과한 한 줄은 저장하지 않고 chat 이벤트로 방송만 한다(결정 0017-7). 저장은 쿨다운용 lastSendAt·nextMessageSeq 뿐이고 state 는 방송하지 않는다.
-  private async applySay(playerId: string, input: SayInput): Promise<WsErrorCode | null> {
-    if (!this.room) return "BAD_MESSAGE";
-    const result = say(this.room, playerId, input, Date.now());
-    if (!result.ok) return result.error;
-    this.room = result.state;
-    await this.ctx.storage.put("room", this.room);
-    // 밤 채팅은 살아 있는 마피아와 관전자 소켓에만 — 다른 소켓에 보내고 화면이 거르는 방식은 쓰지 않는다(결정 0002·0019·0021).
-    const chat: ServerMessage = { t: "chat", ...result.line };
-    if (this.room.phase === "night") this.broadcastEventTo(chat, nightChatRecipientIds(this.room));
-    else this.broadcastEvent(chat);
-    return null;
-  }
 
   private async handleEmoji(ws: WebSocket, icon: EmojiId): Promise<void> {
     const att = this.attachmentOf(ws);

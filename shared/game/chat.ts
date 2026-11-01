@@ -1,70 +1,24 @@
-// 낮 토론·밤 마피아 빠른 메시지 규칙(COMM-01, COMM-04). 순수 모듈이다 — 현재 시각은 인자 now 로만 받고,
-// DOM·workerd API 를 쓰지 않으며, 입력 상태는 바꾸지 않는다.
-//
-// 서버는 문장을 만들지 않는다: 방송하는 것은 템플릿 ID·대상 seat·직업 값뿐이고 문장은 화면이 만든다(T-02-07).
-// 통과한 한 줄은 돌려주기만 하고 상태에 저장하지 않는다(결정 0017-7) — 저장되는 것은 보낸 사람 lastSendAt 과 줄 번호뿐이다
-// (낮 nextMessageSeq, 밤 nextNightSeq — 밤 번호는 낮과 따로라 낮 chat 프레임 seq 로 밤 메시지 수를 알 수 없다, 밤마다 enterNight 가 지운다).
-// 주장의 참·거짓은 보지 않는다(D-10) — 역할은 밤 보낸 사람 규칙(살아 있는 마피아만, 결정 0019)에서만 읽는다.
+// 이모티콘만 남은 옛 모듈 — 07-12 가 지운다. 순수 모듈이다: 현재 시각은 인자 now 로만 받고, DOM·workerd API 를 쓰지 않으며, 입력 상태는 바꾸지 않는다.
+// 07-11: 빠른 메시지(템플릿·say)는 자유 채팅(shared/game/chatRules.ts·chatLog.ts·audience.ts, DO 의 applyChat)으로 대체돼 없어졌다.
+// 이모티콘은 저장하지 않는다(결정 0017-7): 통과하면 이벤트를 돌려주기만 하고 상태에 남는 것은 보낸 사람 lastSendAt(쿨다운)뿐이다.
 // 보낸 사람은 입력이 아니라 actorId 로 서버 상태에서 찾는다(T-02-08).
 import { EMOJI_IDS } from "../protocol";
-import type { ChatLine, EmojiId, PhaseId, TemplateId } from "../protocol";
+import type { EmojiId, PhaseId } from "../protocol";
 import { isAlive } from "./alive";
-import type { RoleId } from "./roles";
-import { rolesInPlay } from "./roles";
 import type { Player, RoomState } from "./room";
 
-/**
- * 템플릿 표(D-11). 문구를 늘리려면 TEMPLATE_IDS(protocol.ts)와 이 표에 행을 더한다.
- * target: 대상 칸이 필요한가, role: 직업 칸이 필요한가, when: 쓸 수 있는 때(day = 낮 토론·처형 여부 투표·후보 선택 투표, night = 밤 마피아 채팅 — 결정 0019-2,
- * defense = 최후 변론(후보만 보낸다, 결정 0036·D-13), claim = 표시 전용 표식으로 서버는 받지 않는다 — 결정 0027-7, 07-11·07-12 가 지운다).
- * 주석은 화면 문장이고 서버는 만들지 않는다.
- */
-export const QUICK_TEMPLATES: Readonly<Record<TemplateId, { target: boolean; role: boolean; when: "day" | "night" | "defense" | "claim" }>> = Object.freeze({
-  suspect: Object.freeze({ target: true, role: false, when: "day" as const }), // "{닉네임} 의심돼요"
-  trust: Object.freeze({ target: true, role: false, when: "day" as const }), // "{닉네임} 믿어요"
-  claimed: Object.freeze({ target: true, role: true, when: "day" as const }), // "{닉네임}은/는 {직업}이었어요"
-  innocent: Object.freeze({ target: false, role: false, when: "day" as const }), // "저 아니에요"
-  vote: Object.freeze({ target: true, role: false, when: "day" as const }), // "{닉네임} 투표해요"
-  nightTarget: Object.freeze({ target: true, role: false, when: "night" as const }), // "{닉네임} 지목해요"
-  nightAgree: Object.freeze({ target: false, role: false, when: "night" as const }), // "동의해요"
-  nightOther: Object.freeze({ target: false, role: false, when: "night" as const }), // "다른 사람을 지목해요"
-  // 표시 전용(결정 0027-7): 과거 화면이 claimLog 에서 만들던 주장 줄(07-11 이 지운다). when "claim" 은 say 의 때 검사(day|night)에 걸려 서버가 받지 않는다.
-  claimRole: Object.freeze({ target: false, role: true, when: "claim" as const }), // "저는 {직업}이에요"
-  claimNone: Object.freeze({ target: false, role: false, when: "claim" as const }), // "말하지 않았어요"
-  // 최후 변론(결정 0036, D-13): 후보만 보낸다. 기존 innocent 와 문구가 같아도 when 이 한 값이라 따로 둔다(A11).
-  defNotMe: Object.freeze({ target: false, role: false, when: "defense" as const }), // "저 아니에요"
-  defCitizen: Object.freeze({ target: false, role: false, when: "defense" as const }), // "저는 시민이에요"
-  defSuspect: Object.freeze({ target: true, role: false, when: "defense" as const }), // "{닉네임} 의심해 주세요"
-  defTrust: Object.freeze({ target: true, role: false, when: "defense" as const }), // "{닉네임} 믿어 주세요"
-  defRole: Object.freeze({ target: false, role: true, when: "defense" as const }), // "제가 {직업 이름}입니다"
-  defPlead: Object.freeze({ target: false, role: false, when: "defense" as const }), // "한 번만 믿어 주세요"
-});
-
-/** 클라이언트 잠금(보낸 순간 + 2초). 서버 한도는 지터 여유로 더 짧다(G-02-2, 결정 0016-6 의 대안). */
-export const SEND_COOLDOWN_MS = 2_000;
-/** 서버가 받는 메시지·이모티콘 합산 최소 전송 간격(D-14, G-02-2). 클라이언트 잠금보다 짧아 정상 간격 전송이 거부되지 않는다. */
+/** 서버가 받는 이모티콘 최소 전송 간격(D-14, G-02-2). 같은 사람의 마지막 전송(lastSendAt)을 기준으로 한다. */
 export const SERVER_MIN_SEND_GAP_MS = 1_800;
 
-export type SayInput = { template: TemplateId; target?: number; claimedRole?: RoleId };
 export type ChatError = "WRONG_PHASE" | "BAD_MESSAGE" | "RATE_LIMITED";
 
 /**
  * 거부 규칙 하나(3페이즈 확정, 결정 0016 결과·0019): 틀린 단계 → WRONG_PHASE(누구든, 탈락자도), 맞는 단계의
  * 방에 없거나 탈락한 보낸 사람 → BAD_MESSAGE, 밤의 살아 있는 비마피아 → WRONG_PHASE(그 단계에 보낼 수 없는 사람이라는 뜻일 뿐 역할 정보를 주지 않는다).
- * 최후 변론(defense)에서 say 는 후보(verdict.candidate)만 보낸다: 후보가 아닌 생존자는 같은 이유로 WRONG_PHASE(결정 0036, COMM-03). 이모티콘은 생존자 누구나.
- * discussion·execVote·candidateVote 는 방에 있는 생존자 누구나, night 는 살아 있는 마피아만(결정 0019-1).
- * 공개 구간(candidateVoteReveal)·처형(execution)·종료(ended)는 누구의 say·이모티콘도 WRONG_PHASE 다(A3).
- * 맞는 단계는 호출하는 쪽이 정한다: say 는 discussion·execVote·candidateVote·defense·night, emote 도 같은 단계다.
+ * discussion·execVote·candidateVote·defense 는 방에 있는 생존자 누구나, night 는 살아 있는 마피아만(결정 0019-1).
+ * 공개 구간(candidateVoteReveal)·처형(execution)·종료(ended)는 누구의 이모티콘도 WRONG_PHASE 다(A3).
  */
-const SAY_PHASES: ReadonlySet<PhaseId> = new Set<PhaseId>(["discussion", "execVote", "candidateVote", "defense", "night"]);
 const EMOTE_PHASES: ReadonlySet<PhaseId> = new Set<PhaseId>(["discussion", "execVote", "candidateVote", "defense", "night"]);
-
-/** 단계 → 템플릿을 쓸 수 있는 때. 투표 두 단계는 낮 템플릿을 쓴다(D-12). */
-function whenOf(phase: PhaseId): "day" | "night" | "defense" {
-  if (phase === "night") return "night";
-  if (phase === "defense") return "defense";
-  return "day";
-}
 
 function senderOf(state: RoomState, actorId: string, allowed: ReadonlySet<PhaseId>): ChatError | Player {
   if (!allowed.has(state.phase)) return "WRONG_PHASE";
@@ -77,72 +31,7 @@ function senderOf(state: RoomState, actorId: string, allowed: ReadonlySet<PhaseI
 const coolingDown = (sender: Player, now: number): boolean => now - (sender.lastSendAt ?? -Infinity) < SERVER_MIN_SEND_GAP_MS;
 
 /**
- * 빠른 메시지. 통과하면 방송할 한 줄(line)을 돌려준다 — 상태에는 저장하지 않는다(결정 0017-7). 검사 순서가 계약이다: 단계 → 보낸 사람(방에 있음·생존·밤은 마피아·변론은 후보) → 템플릿(고유 속성) → 템플릿의 when 이 지금 단계 종류와 같음 → 칸 과부족
- * → 대상(정수·앉은 seat·본인 아님·생존) → 직업(rolesInPlay 안, none 불가) → 쿨다운.
- * 거부는 상태를 바꾸지 않는다(쿨다운 위반도 lastSendAt 을 늘리지 않는다, A1).
- * 끊긴 사람을 대상으로 한 메시지는 허용한다(UI-SPEC S-08a).
- */
-export function say(
-  state: RoomState,
-  actorId: string,
-  input: SayInput,
-  now: number,
-): { ok: true; state: RoomState; line: ChatLine } | { ok: false; error: ChatError } {
-  const sender = senderOf(state, actorId, SAY_PHASES);
-  if (typeof sender === "string") return { ok: false, error: sender };
-  // 최후 변론은 후보만(T-04-14). 이모티콘(emote)은 이 검사를 하지 않는다.
-  if (state.phase === "defense" && (state.verdict?.candidate === undefined || state.verdict.candidate !== sender.seat)) {
-    return { ok: false, error: "WRONG_PHASE" };
-  }
-
-  const template = input.template;
-  // 고유 속성만 인정한다 — "constructor"·"toString" 같은 프로토타입 키가 표를 우회하지 못하게.
-  if (typeof template !== "string" || !Object.hasOwn(QUICK_TEMPLATES, template)) return { ok: false, error: "BAD_MESSAGE" };
-  const { target: needsTarget, role: needsRole, when } = QUICK_TEMPLATES[template];
-  // 낮 문구는 밤·변론에, 밤 문구는 낮·투표에, 변론 문구는 변론 밖에 보낼 수 없다.
-  if (when !== whenOf(state.phase)) return { ok: false, error: "BAD_MESSAGE" };
-  const target = input.target;
-  const claimedRole = input.claimedRole;
-  if ((target !== undefined) !== needsTarget || (claimedRole !== undefined) !== needsRole) {
-    return { ok: false, error: "BAD_MESSAGE" };
-  }
-
-  if (target !== undefined) {
-    if (!Number.isInteger(target) || target === sender.seat) return { ok: false, error: "BAD_MESSAGE" };
-    const seated = state.players.find((p) => p.seat === target);
-    if (!seated || !isAlive(seated)) return { ok: false, error: "BAD_MESSAGE" };
-  }
-  if (claimedRole !== undefined && !rolesInPlay(state.players.length).includes(claimedRole)) {
-    return { ok: false, error: "BAD_MESSAGE" };
-  }
-
-  if (coolingDown(sender, now)) return { ok: false, error: "RATE_LIMITED" };
-
-  // 필드를 하나씩 써서 만든다 — 입력 객체를 펼쳐 복사하지 않아 알 수 없는 키가 끼어들 수 없다(T-02-07).
-  // 밤 줄 번호는 낮 번호와 따로 센다(D-17, PLAN-CHECK W3): 낮 nextMessageSeq 는 밤에 바뀌지 않는다.
-  const isNight = state.phase === "night";
-  const seq = (isNight ? state.nextNightSeq : state.nextMessageSeq) ?? 1;
-  const line: ChatLine = {
-    seq,
-    seat: sender.seat,
-    template,
-    ...(target !== undefined ? { target } : {}),
-    ...(claimedRole !== undefined ? { claimedRole } : {}),
-    at: now,
-  };
-  return {
-    ok: true,
-    line,
-    state: {
-      ...state,
-      ...(isNight ? { nextNightSeq: seq + 1 } : { nextMessageSeq: seq + 1 }),
-      players: state.players.map((p) => (p.id === sender.id ? { ...p, lastSendAt: now } : p)),
-    },
-  };
-}
-
-/**
- * 이모티콘(COMM-02). 앞부분(단계 → 보낸 사람 존재·생존·밤은 마피아)은 say 와 같은 senderOf 를 쓰고, 쿨다운도 같은 lastSendAt 하나를 본다(D-14 합산).
+ * 이모티콘(COMM-02). 앞부분(단계 → 보낸 사람 존재·생존·밤은 마피아)은 senderOf 가 판정하고, 쿨다운은 보낸 사람의 lastSendAt 을 본다(D-14). 자유 채팅과 쿨다운을 나눠 쓰지 않는다(07-11: 채팅은 chatRules 의 D5 제한).
  * 통과하면 보낸 사람 lastSendAt 만 바뀐 새 상태와 {seat, icon, at} 이벤트를 돌려준다.
  * 이모티콘도 메시지처럼 저장하지 않는다 — 재접속 복원이 없다(UI-SPEC S-08b, 결정 0017-7). 쿨다운은 플레이어 단위 영속 필드라 재접속으로 풀리지 않는다.
  */

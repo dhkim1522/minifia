@@ -1,7 +1,7 @@
 // 서버 전용 입력 검증 스키마(zod 값 import). Worker 만 이 파일을 import 한다 — src/ 가 import 하면 클라이언트 번들에 zod 가 들어간다.
 import { z } from "zod";
 import { NICKNAME_MAX_UTF16 } from "./nickname";
-import { CHAT_TEXT_MAX_UTF16, EMOJI_IDS, MAX_TEST_BOTS, MOVE_COORD_LIMIT, PHASE_KEY_MAX, TEMPLATE_IDS } from "./protocol";
+import { CHAT_TEXT_MAX_UTF16, EMOJI_IDS, MAX_TEST_BOTS, MOVE_COORD_LIMIT, PHASE_KEY_MAX } from "./protocol";
 import type { ChatSendMessage, ClientMessage, CreateRoomBody, JoinRoomBody, MoveMessage, TypingSendMessage } from "./protocol";
 
 // 상한은 UTF-16 길이다. 제품 규칙(8 자소)은 validateNickname 이 판정한다 — 여기서 64 처럼 낮게 잡으면
@@ -42,22 +42,15 @@ export const ClientMessageSchema = z.discriminatedUnion("t", [
   z.object({ t: z.literal("start") }),
   z.object({ t: z.literal("leave") }),
   z.object({ t: z.literal("kick"), seat: z.number().int().min(0).max(7) }),
-  // 2페이즈 변형은 strictObject 다: 알 수 없는 키(text·seat·message 등)가 있으면 거부한다(T-02-15, D-16).
-  // ROLE_IDS 는 readonly 배열이라 z.enum 에는 튜플 리터럴을 쓴다.
-  // 템플릿별 칸 조합(target·claimedRole 필요 여부)은 스키마가 아니라 shared/game/chat.ts 가 검증한다.
-  z.strictObject({
-    t: z.literal("say"),
-    template: z.enum(TEMPLATE_IDS),
-    target: z.number().int().min(0).max(7).optional(),
-    claimedRole: z.enum(["mafia", "police", "doctor", "citizen"]).optional(),
-  }),
+  // 빠른 메시지(say)는 07-11 에 없어졌다 — 옛 번들이 보내도 유니온에 없어 BAD_MESSAGE 다(CHAT-06). 자유 채팅은 아래 ChatMessageSchema.
+  // 2페이즈 변형은 strictObject 다: 알 수 없는 키가 있으면 거부한다(T-02-15, D-16).
   z.strictObject({ t: z.literal("emoji"), icon: z.enum(EMOJI_IDS) }),
   // 밤 행동은 대상 seat 하나뿐이다. 행동 종류는 보내지 않는다 — 서버 저장 역할이 정한다(T-03-06).
   z.strictObject({ t: z.literal("pick"), target: z.number().int().min(0).max(7) }),
   // 처형 여부 투표(결정 0034): 불리언 하나뿐이다. 덧붙은 키(seat·id 등)는 거부한다 — 행위자는 소켓 첨부 playerId 로만 정해진다(T-04-03).
   z.strictObject({ t: z.literal("execVote"), agree: z.boolean() }),
   // 후보 선택 투표(결정 0034·0036): 대상 seat 하나뿐이다. 자기 자신·탈락자·빈 자리는 서버 규칙(castCandidateVote)이 거부한다. 덧붙은 키는 스키마가 거부한다(T-04-23).
-  // null = 선택 취소(결정 0040). 빠진 target·문자열·범위 밖·덧붙은 키는 그대로 거부한다. nullable 은 이 한 곳뿐이다(pick·say 의 target 은 null 을 거부).
+  // null = 선택 취소(결정 0040). 빠진 target·문자열·범위 밖·덧붙은 키는 그대로 거부한다. nullable 은 이 한 곳뿐이다(pick 의 target 은 null 을 거부).
   z.strictObject({ t: z.literal("candidateVote"), target: z.number().int().min(0).max(7).nullable() }),
   // 테스트 방 방장 도구(결정 0022). 덧붙은 키는 거부한다. 방장·testMode·단계 검사는 서버 규칙(shared/game/testTools.ts)이 한다.
   z.strictObject({ t: z.literal("testSkip") }),
