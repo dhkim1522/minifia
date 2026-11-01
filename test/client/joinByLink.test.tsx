@@ -8,6 +8,13 @@ import { loadLastNickname, saveLastNickname } from "../../src/net/session";
 import "../helpers/singleLineErrors";
 import { installMemoryStorage } from "../helpers/memoryStorage";
 
+// 월드 청크 미리 받기는 감시만 한다 — 진짜 호출은 three 청크를 끌어오기 때문이다. 나머지 runtime 은 그대로 둔다.
+const { preloadWorldMock } = vi.hoisted(() => ({ preloadWorldMock: vi.fn() }));
+vi.mock("../../src/world/runtime", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../src/world/runtime")>()),
+  preloadWorld: preloadWorldMock,
+}));
+
 // RoomScreen 이 진짜 소켓을 열지 않도록 가짜 WebSocket 을 심는다.
 class FakeWebSocket extends EventTarget {
   static OPEN = 1;
@@ -52,6 +59,7 @@ async function see(text: string): Promise<void> {
 }
 
 beforeEach(() => {
+  preloadWorldMock.mockClear();
   vi.stubGlobal("WebSocket", FakeWebSocket);
   installMemoryStorage();
   window.history.replaceState(null, "", "/r/0042");
@@ -542,5 +550,51 @@ describe("링크 참가 광장 압축 (P5-4)", () => {
       }
       expect(seen).toBeGreaterThan(0);
     });
+  });
+});
+
+describe("링크 참가 월드 청크 미리 받기·room-enter 표식 (06-21, 3초 측정 시작점)", () => {
+  const roomEnterMarks = (spy: ReturnType<typeof vi.spyOn>) => spy.mock.calls.filter(([name]) => name === "room-enter");
+
+  it("처음 그려질 때 월드 청크를 한 번 미리 받는다", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => json(preview())));
+    renderJoin();
+    await see("2 / 8명이 모였어요");
+    expect(preloadWorldMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("참가가 성공하면 onEnterRoom 바로 앞에서 room-enter 표식을 한 번 찍는다", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url: string, init?: RequestInit) => (init?.method === "POST" ? json({ token: TOKEN, seat: 2 }) : json(preview()))),
+    );
+    const mark = vi.spyOn(performance, "mark");
+    const onEnter = vi.fn();
+    renderJoin({ onEnterRoom: onEnter });
+    await see("2 / 8명이 모였어요");
+    fireEvent.change(screen.getByLabelText("닉네임"), { target: { value: "하윤" } });
+    fireEvent.click(screen.getByRole("button", { name: "참가하기" }));
+    await waitFor(() => expect(onEnter).toHaveBeenCalledWith("0042", TOKEN));
+    expect(roomEnterMarks(mark).length).toBe(1);
+    const markOrder = mark.mock.invocationCallOrder[mark.mock.calls.findIndex(([name]) => name === "room-enter")];
+    expect(markOrder).toBeLessThan(onEnter.mock.invocationCallOrder[0]);
+    mark.mockRestore();
+  });
+
+  it("참가가 실패하면 room-enter 표식이 없다", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url: string, init?: RequestInit) => (init?.method === "POST" ? json({ error: "NICKNAME_TAKEN" }, 409) : json(preview()))),
+    );
+    const mark = vi.spyOn(performance, "mark");
+    const onEnter = vi.fn();
+    renderJoin({ onEnterRoom: onEnter });
+    await see("2 / 8명이 모였어요");
+    fireEvent.change(screen.getByLabelText("닉네임"), { target: { value: "하윤" } });
+    fireEvent.click(screen.getByRole("button", { name: "참가하기" }));
+    await screen.findByRole("alert");
+    expect(onEnter).not.toHaveBeenCalled();
+    expect(roomEnterMarks(mark).length).toBe(0);
+    mark.mockRestore();
   });
 });

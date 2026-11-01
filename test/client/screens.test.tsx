@@ -5,9 +5,17 @@ import { installMemoryStorage } from "../helpers/memoryStorage";
 import { loadLastNickname, saveLastNickname, saveSession } from "../../src/net/session";
 import { Home } from "../../src/screens/Home";
 
+// 월드 청크 미리 받기는 감시만 한다 — 진짜 호출은 three 청크를 끌어오기 때문이다. 나머지 runtime 은 그대로 둔다.
+const { preloadWorldMock } = vi.hoisted(() => ({ preloadWorldMock: vi.fn() }));
+vi.mock("../../src/world/runtime", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../src/world/runtime")>()),
+  preloadWorld: preloadWorldMock,
+}));
+
 // 화면 테스트마다 저장소를 새로 심어 닉네임·입장 정보가 다음 테스트로 새지 않게 한다.
 beforeEach(() => {
   installMemoryStorage();
+  preloadWorldMock.mockClear();
 });
 
 afterEach(() => {
@@ -385,5 +393,79 @@ describe("Home 닉네임 시트 키패드 대응 (폰)", () => {
       clientHeight.mockRestore();
       Object.defineProperty(window, "visualViewport", { value: undefined, configurable: true });
     }
+  });
+});
+
+describe("Home 월드 청크 미리 받기·room-enter 표식 (06-21, 3초 측정 시작점)", () => {
+  const roomEnterMarks = (spy: ReturnType<typeof vi.spyOn>) => spy.mock.calls.filter(([name]) => name === "room-enter");
+
+  it("처음 그려질 때 월드 청크를 한 번 미리 받는다", () => {
+    render(<Home onEnterRoom={vi.fn()} />);
+    expect(preloadWorldMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("방 만들기가 성공하면 onEnterRoom 바로 앞에서 room-enter 표식을 한 번 찍는다", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ code: "0042", token: TOKEN, seat: 0 }), { status: 201 })));
+    const mark = vi.spyOn(performance, "mark");
+    const onEnter = vi.fn();
+    render(<Home onEnterRoom={onEnter} />);
+    fireEvent.click(createRoomButton());
+    type(nicknameInput(), "민수");
+    fireEvent.click(submitCreate());
+    await waitFor(() => expect(onEnter).toHaveBeenCalledTimes(1));
+    expect(roomEnterMarks(mark).length).toBe(1);
+    const markOrder = mark.mock.invocationCallOrder[mark.mock.calls.findIndex(([name]) => name === "room-enter")];
+    expect(markOrder).toBeLessThan(onEnter.mock.invocationCallOrder[0]);
+    mark.mockRestore();
+  });
+
+  it("코드 참가가 성공하면 room-enter 표식을 onEnterRoom 앞에 한 번 찍는다", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ token: TOKEN, seat: 2 }), { status: 200 })));
+    const mark = vi.spyOn(performance, "mark");
+    const onEnter = vi.fn();
+    render(<Home onEnterRoom={onEnter} />);
+    type(codeInput(), "0042");
+    fireEvent.click(joinCodeButton());
+    type(nicknameInput(), "민수");
+    fireEvent.click(submitJoin());
+    await waitFor(() => expect(onEnter).toHaveBeenCalledTimes(1));
+    expect(roomEnterMarks(mark).length).toBe(1);
+    const markOrder = mark.mock.invocationCallOrder[mark.mock.calls.findIndex(([name]) => name === "room-enter")];
+    expect(markOrder).toBeLessThan(onEnter.mock.invocationCallOrder[0]);
+    mark.mockRestore();
+  });
+
+  it("만들기·참가가 실패하면 room-enter 표식이 없다", async () => {
+    const mark = vi.spyOn(performance, "mark");
+    vi.stubGlobal("fetch", apiError("CODE_EXHAUSTED", 503));
+    const onEnter = vi.fn();
+    const { unmount } = render(<Home onEnterRoom={onEnter} />);
+    fireEvent.click(createRoomButton());
+    type(nicknameInput(), "민수");
+    fireEvent.click(submitCreate());
+    await screen.findByRole("status");
+    unmount();
+    vi.stubGlobal("fetch", apiError("ROOM_NOT_FOUND", 404));
+    render(<Home onEnterRoom={onEnter} />);
+    type(codeInput(), "4827");
+    fireEvent.click(joinCodeButton());
+    type(nicknameInput(), "민수");
+    fireEvent.click(submitJoin());
+    await screen.findByRole("alert");
+    expect(onEnter).not.toHaveBeenCalled();
+    expect(roomEnterMarks(mark).length).toBe(0);
+    mark.mockRestore();
+  });
+
+  it("저장된 토큰으로 바로 들어가는 길은 표식을 찍지 않는다(응답을 기다리지 않아 3초 측정 대상이 아니다)", () => {
+    saveSession({ code: "0042", token: TOKEN });
+    const mark = vi.spyOn(performance, "mark");
+    const onEnter = vi.fn();
+    render(<Home onEnterRoom={onEnter} />);
+    type(codeInput(), "0042");
+    fireEvent.click(joinCodeButton());
+    expect(onEnter).toHaveBeenCalledWith("0042", TOKEN);
+    expect(roomEnterMarks(mark).length).toBe(0);
+    mark.mockRestore();
   });
 });
