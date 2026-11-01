@@ -329,8 +329,6 @@ async function lobbyFlow(ctx) {
     recOne(rec, "lobby/인원 8", tagStackChecks(world8.tags));
     const g8 = await checkState(ctx, "lobby", "인원 8");
     void g8;
-    // 8자 이름 8명 사진: 360 폭은 늘 남긴다(맨 앞 이름표가 읽히는지는 backstop 으로 사람이 본다 — 봇은 걸음을 조종할 수 없어 한 점에 모을 수 없다)
-    if (w <= 360 || ctx.shots) await shot(page, shotPath(ctx, "lobby-8"));
   }
 
   // 시트 닫힘
@@ -339,6 +337,11 @@ async function lobbyFlow(ctx) {
     return (await page.locator('dialog[aria-label="테스트 도구"]').count()) === 0;
   });
   rec("lobby/sheet", "T2", "테스트 시트 닫힘", t2.ok, t2.detail);
+  // 8자 이름 8명 사진(시트를 닫은 뒤): 360 폭은 늘 남긴다. 맨 앞 이름표가 읽히는지는 backstop 으로 사람이 본다 — 봇은 걸음을 조종할 수 없어 8명을 한 점에 모을 수 없다
+  if (full.ok && t2.ok && (w <= 360 || ctx.shots)) {
+    await sleep(600);
+    await shot(page, shotPath(ctx, "lobby-8"));
+  }
 
   await joinLinkProbe(ctx); // UX2-J: 방장 + 봇 6명 방의 링크 참가 화면이 한 화면에 들어간다(P5-4)
 
