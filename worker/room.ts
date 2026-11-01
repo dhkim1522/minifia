@@ -1,10 +1,9 @@
 import { DurableObject } from "cloudflare:workers";
 import { CLOSE_CODES, MAX_FRAME_BYTES } from "../shared/protocol";
-import type { ApiErrorCode, BotVoteExec, BotVotePick, ChatRejectWhy, ClientMessage, EmojiId, RemovedReason, RoomPreview, ServerMessage, WorldFrame, WsErrorCode } from "../shared/protocol";
+import type { ApiErrorCode, BotVoteExec, BotVotePick, ChatRejectWhy, ClientMessage, RemovedReason, RoomPreview, ServerMessage, WorldFrame, WsErrorCode } from "../shared/protocol";
 import { botWakeAt, isBot, syncBotPlan, takeDueBotSteps } from "../shared/game/bots";
 import type { BotStep } from "../shared/game/bots";
 import { audience, channelOf, phaseKey } from "../shared/game/audience";
-import { emote } from "../shared/game/chat";
 import { appendLine, emptyChatLog, seatMask, toWire } from "../shared/game/chatLog";
 import type { ChatLog } from "../shared/game/chatLog";
 import { checkChatSend, sanitizeChatText, typingRelay } from "../shared/game/chatRules";
@@ -22,7 +21,7 @@ import {
 } from "../shared/game/room";
 import type { JoinError } from "../shared/game/room";
 import type { RoomState } from "../shared/game/room";
-import { nightChatRecipientIds, pickRecipientIds, pickTarget } from "../shared/game/night";
+import { pickRecipientIds, pickTarget } from "../shared/game/night";
 import { resetToLobby, setBotCount, setBotVote, setTestRole, skipPhase } from "../shared/game/testTools";
 import type { RoleId } from "../shared/game/roles";
 import { nextWakeAt, tick } from "../shared/game/tick";
@@ -225,9 +224,6 @@ export class Room extends DurableObject<Env> {
       case "start":
         await this.handleStart(ws);
         return;
-      case "emoji":
-        await this.handleEmoji(ws, msg.icon);
-        return;
       case "pick":
         await this.handlePick(ws, msg.target);
         return;
@@ -371,33 +367,9 @@ export class Room extends DurableObject<Env> {
     await this.flushWorld();
   }
 
-  // 이모티콘·밤 행동·투표는 "소켓 껍데기(handleX)" 와 "본체(applyX)" 로 나뉜다(결정 0024). 자유 채팅(handleChat·applyChat)도 같은 모양이다.
+  // 밤 행동·투표는 "소켓 껍데기(handleX)" 와 "본체(applyX)" 로 나뉜다(결정 0024). 자유 채팅(handleChat·applyChat)도 같은 모양이다.
   // 껍데기는 소켓 첨부에서 playerId 를 얻고 거부를 그 소켓에 알린다. 본체는 같은 규칙 함수·같은 저장·방송을 하고 실패 코드를 돌려준다.
   // 서버 봇은 본체만 부른다 — 사람과 같은 검증을 거치고(특권 없음), 거부는 알릴 소켓이 없어 버린다.
-
-  private async handleEmoji(ws: WebSocket, icon: EmojiId): Promise<void> {
-    const att = this.attachmentOf(ws);
-    if (!att || !this.room) {
-      this.sendTo(ws, { t: "error", code: "BAD_MESSAGE" });
-      return;
-    }
-    const error = await this.applyEmoji(att.playerId, icon);
-    if (error !== null) this.sendTo(ws, { t: "error", code: error });
-  }
-
-  // 이모티콘: 저장은 lastSendAt(쿨다운)뿐이고 state 는 방송하지 않는다 — 화면에 보이는 값이 바뀌지 않았다. 이벤트만 앉은 모든 소켓에 보낸다(D-14).
-  private async applyEmoji(playerId: string, icon: EmojiId): Promise<WsErrorCode | null> {
-    if (!this.room) return "BAD_MESSAGE";
-    const result = emote(this.room, playerId, icon, Date.now());
-    if (!result.ok) return result.error;
-    this.room = result.state;
-    await this.ctx.storage.put("room", this.room);
-    // 밤 이모티콘도 같은 범위다(밤 채팅과 한 규칙).
-    const emoji: ServerMessage = { t: "emoji", ...result.event };
-    if (this.room.phase === "night") this.broadcastEventTo(emoji, nightChatRecipientIds(this.room));
-    else this.broadcastEvent(emoji);
-    return null;
-  }
 
   // 밤 행동: 신원은 소켓 첨부의 playerId 뿐이고 행동 종류는 서버 저장 역할이 정한다(T-03-22).
   private async handlePick(ws: WebSocket, target: number): Promise<void> {
@@ -795,28 +767,6 @@ export class Room extends DurableObject<Env> {
     }
   }
 
-  // 플레이어별 뷰가 아닌 공개 이벤트를 방에 앉은 모든 소켓에 그대로 보낸다(broadcast 와 같은 소켓 순회).
-  private broadcastEvent(msg: ServerMessage): void {
-    const room = this.room;
-    if (!room) return;
-    for (const ws of this.ctx.getWebSockets()) {
-      const att = ws.deserializeAttachment() as SocketAttachment | null;
-      if (!att || !room.players.some((p) => p.id === att.playerId)) continue;
-      this.sendTo(ws, msg);
-    }
-  }
-
-  // broadcastEvent 와 같은 소켓 순회에서 첨부 playerId 가 ids 에 있는 소켓에만 보낸다(밤 채팅·이모티콘).
-  private broadcastEventTo(msg: ServerMessage, ids: ReadonlySet<string>): void {
-    const room = this.room;
-    if (!room) return;
-    for (const ws of this.ctx.getWebSockets()) {
-      const att = ws.deserializeAttachment() as SocketAttachment | null;
-      if (!att || !ids.has(att.playerId) || !room.players.some((p) => p.id === att.playerId)) continue;
-      this.sendTo(ws, msg);
-    }
-  }
-
   /**
    * 이벤트 프레임의 유일한 전송 길. 받는 사람은 audience 가 정한다. 화면에서 거르는 방식으로 대신하지 않는다(결정 0002·0021).
    * 첨부 playerId 가 ids 에 든 소켓에만 보낸다 — hello 전 소켓(첨부 없음)과 방에 없는 사람의 소켓은 받지 않는다.
@@ -993,7 +943,7 @@ export class Room extends DurableObject<Env> {
   }
 
   // world 프레임도 audience 한 길을 지난다(로비가 아니면 빈 집합 — 6페이즈 동작 그대로, T-06-16). 수신자 = 로비의 방 사람 전원.
-  // broadcastEvent 를 world 에 쓰지 않는다 — 그쪽은 단계를 가리지 않는 무차별 방송이라 게임 중 위치가 샌다(T-06-16).
+  // 이벤트 프레임(world·typing·chat)은 deliver 한 길이다 — 단계를 가리지 않는 무차별 방송 길이 없어 게임 중 위치가 새지 않는다(T-06-16).
   private emitWorld(frame: WorldFrame): void {
     const room = this.room;
     if (!room) return;

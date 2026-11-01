@@ -117,9 +117,7 @@ export interface GameResult {
 }
 
 // ---- 낮 토론 계약(2페이즈) ----
-// 07-11: 빠른 메시지(문구 표·say 메시지·옛 줄 타입)는 자유 채팅(아래 7페이즈 구역)으로 대체돼 없어졌다. 이모티콘(emoji)은 07-12 가 정리한다.
-export const EMOJI_IDS = ["smile", "grin", "surprised", "suspicious", "angry", "sad", "heart", "exclaim"] as const;
-export type EmojiId = (typeof EMOJI_IDS)[number];
+// 07-11·07-12: 빠른 메시지(문구 표·say 메시지·옛 줄 타입)와 텍스트 이모티콘(emoji)은 자유 채팅(아래 7페이즈 구역)으로 대체돼 없어졌다. 동작(몸짓)은 10페이즈.
 export interface DayView {
   n: number; // 일차(1부터)
   roles: RoleId[]; // 이번 판 직업(구성표 순서, 공개 정보)
@@ -184,7 +182,6 @@ export type ClientMessage =
   | { t: "start" }
   | { t: "leave" }
   | { t: "kick"; seat: number }
-  | { t: "emoji"; icon: EmojiId }
   | { t: "pick"; target: number } // 밤 행동 — 행동 종류는 보내지 않는다(서버 저장 역할이 정한다)
   | { t: "execVote"; agree: boolean } // 처형 여부 투표 — 생존자의 찬성 true / 반대 false, 마지막 값이 유효(결정 0034)
   | { t: "candidateVote"; target: number | null } // 후보 선택 투표 — 자기 자신은 서버가 거부, 진행 중 값은 본인에게만(결정 0034·0036). null = 선택 취소: 고른 표가 있으면 서버가 지우고 본인에게만 알림(결정 0040)
@@ -330,7 +327,6 @@ export type ServerMessage =
   | { t: "state"; view: RoomView }
   | { t: "pong"; c: number; serverNow: number }
   | { t: "error"; code: WsErrorCode }
-  | { t: "emoji"; seat: number; icon: EmojiId; at: number }
   | ChatLineFrame // 자유 채팅 한 줄 — audience 가 정한 소켓에만, 보낸 사람 포함(07-11)
   | ChatRejectFrame // 거절 — 보낸 소켓에만(07-11)
   | ChatLogFrame // 접속 직후 복원 — 타입과 연결 훅만 07-11, 보내기는 07-14

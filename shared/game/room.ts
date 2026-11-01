@@ -42,8 +42,6 @@ export interface Player {
   // ---- 2페이즈 낮 토론 상태. 모두 optional — 저장된 옛 방도 읽히고(everConnected? 선례), 읽는 쪽이 기본값을 쥔다. ----
   /** 3페이즈가 탈락 때 false 로 만든다. 없으면 생존으로 본다. */
   alive?: boolean;
-  /** 마지막으로 메시지·이모티콘을 보낸 서버 시각 — 합산 2초 쿨다운 기준(D-14). 없으면 보낸 적 없다. */
-  lastSendAt?: number;
   // ---- 3페이즈 밤 상태(타입만 — 쓰는 코드는 03-03·03-04). 모두 optional — 옛 방도 읽힌다. ----
   /** 이번 밤 고른 대상 seat — enterNight 가 비우고 enterMorning 이 쓰고 지운다. 뷰에는 본인(과 관전)에게만 실린다. */
   nightPick?: number;
@@ -78,17 +76,10 @@ export interface RoomState {
   phaseEndsAt: number | null;
   /** 일차(1부터). dayAnnounce 진입 때 tick 의 진입 훅이 올린다. 없으면 아직 낮이 시작되지 않았다. 뷰에는 DayView.n 으로 실린다. */
   day?: number;
-  /** 방 수명 동안 줄지 않는 다음 메시지 번호 — 날이 바뀌어도 줄지 않아 클라이언트가 새 줄을 번호로 가린다. 없으면 1. */
-  nextMessageSeq?: number;
   /** 지난밤 결과 한 곳 — enterMorning 이 쓰고 enterNight 가 지운다. 없으면 아직 아침이 오지 않았다(3페이즈, 모두 optional). */
   morning?: MorningView;
   /** 마지막 탈락 문구 번호 — 판 내내 유지해 같은 문구가 연달아 나오지 않게 한다(3페이즈). */
   lastPhrase?: number;
-  /**
-   * 밤 마피아 채팅 줄 번호 — 낮 채팅의 nextMessageSeq 와 따로 센다. 낮 번호를 밤에 쓰면 살아 있는 사람이
-   * 낮 chat 프레임 seq 간격으로 밤 메시지 수를 알 수 있다. 밤마다 1부터, enterNight 가 지운다(3페이즈).
-   */
-  nextNightSeq?: number;
   // ---- 4페이즈 처형·승패 상태(결정 0034). 모두 optional 이고 서버 전용이다. 뷰에는 허용 목록으로만 실린다. ----
   /** 이번 낮 여부 투표 결과(분기 근거). resolveExecVote 가 쓰고 enterExecVote 가 지운다. */
   verdict?: { passed: boolean; candidate?: number };

@@ -38,9 +38,9 @@ export function pickTarget(
   };
 }
 
-/** 밤 진입 훅: 남은 선택(nightPick)·지난 아침 결과(morning)·밤 채팅 번호(nextNightSeq)를 키째 지운다. 낮 채팅 번호는 건드리지 않는다. */
+/** 밤 진입 훅: 남은 선택(nightPick)·지난 아침 결과(morning)를 키째 지운다. */
 export function enterNight(state: RoomState): RoomState {
-  const { morning: _morning, nextNightSeq: _nextNightSeq, ...rest } = state;
+  const { morning: _morning, ...rest } = state;
   return {
     ...rest,
     players: state.players.map((p) => {
@@ -194,12 +194,4 @@ export function pickRecipientIds(state: RoomState, actorId: string): string[] {
   const seen = new Map<string, Player>();
   for (const p of [...actorSide, ...spectators]) seen.set(p.id, p);
   return [...seen.values()].sort(bySeat).map((p) => p.id);
-}
-
-/**
- * 밤 채팅·이모티콘을 받는 소켓 — 살아 있는 마피아와 관전자(결정 0019·0021). 단계 판단은 부르는 쪽(워커)이 한다.
- * 탈락한 마피아는 관전자로 든다(보낼 수는 없다).
- */
-export function nightChatRecipientIds(state: RoomState): ReadonlySet<string> {
-  return new Set(state.players.filter((p) => !isAlive(p) || p.role === "mafia").map((p) => p.id));
 }

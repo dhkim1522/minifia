@@ -87,7 +87,7 @@ function botsVoteNow(state: RoomState, randInt: RandInt): RoomState {
 /**
  * 같은 방을 대기실로 되돌린다: 허용 목록 리터럴로 방·플레이어를 다시 만든다 — 상태를 펼쳐 복사하지 않아
  * 역할·주장·밤 선택·수사 기록·탈락·일차·아침 결과·투표·처형·종료 필드(voteLog·verdict·execution·lastExecPhrase·nightLog·winner, execVote·candidateVote)와 앞으로 늘어날 게임 필드도 자동으로 빠진다.
- * 남기는 것: 방 식별·수명·방장·가입 순번·앉은 사람(자리·닉네임·연결)·testMode·testRole·testBotVote·방 수명 동안 줄지 않는 nextMessageSeq.
+ * 남기는 것: 방 식별·수명·방장·가입 순번·앉은 사람(자리·닉네임·연결)·testMode·testRole·testBotVote.
  */
 export function resetToLobby(state: RoomState, actorId: string): TestToolResult {
   const denied = checkTestHost(state, actorId);
@@ -112,7 +112,6 @@ export function resetToLobby(state: RoomState, actorId: string): TestToolResult 
     ...(state.everConnected !== undefined ? { everConnected: state.everConnected } : {}),
     phase: "lobby",
     phaseEndsAt: null,
-    ...(state.nextMessageSeq !== undefined ? { nextMessageSeq: state.nextMessageSeq } : {}),
     hostId: state.hostId,
     nextJoinSeq: state.nextJoinSeq,
     players,

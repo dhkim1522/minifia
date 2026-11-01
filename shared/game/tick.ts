@@ -23,7 +23,7 @@ import { PHASE_DEFS } from "./phases";
 import type { RoomState } from "./room";
 import { enterExecVote, resolveExecVote } from "./vote";
 
-/** 낮 시작 발표 진입: 일차 +1. 메시지는 서버에 없고(결정 0017-7) 연장은 없다(결정 0017-5). nextMessageSeq 는 건드리지 않는다. */
+/** 낮 시작 발표 진입: 일차 +1. 연장은 없다(결정 0017-5). */
 export function enterDayAnnounce(state: RoomState): RoomState {
   return { ...state, day: (state.day ?? 0) + 1 };
 }

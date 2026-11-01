@@ -1,7 +1,7 @@
 // 서버 전용 입력 검증 스키마(zod 값 import). Worker 만 이 파일을 import 한다 — src/ 가 import 하면 클라이언트 번들에 zod 가 들어간다.
 import { z } from "zod";
 import { NICKNAME_MAX_UTF16 } from "./nickname";
-import { CHAT_TEXT_MAX_UTF16, EMOJI_IDS, MAX_TEST_BOTS, MOVE_COORD_LIMIT, PHASE_KEY_MAX } from "./protocol";
+import { CHAT_TEXT_MAX_UTF16, MAX_TEST_BOTS, MOVE_COORD_LIMIT, PHASE_KEY_MAX } from "./protocol";
 import type { ChatSendMessage, ClientMessage, CreateRoomBody, JoinRoomBody, MoveMessage, TypingSendMessage } from "./protocol";
 
 // 상한은 UTF-16 길이다. 제품 규칙(8 자소)은 validateNickname 이 판정한다 — 여기서 64 처럼 낮게 잡으면
@@ -42,9 +42,8 @@ export const ClientMessageSchema = z.discriminatedUnion("t", [
   z.object({ t: z.literal("start") }),
   z.object({ t: z.literal("leave") }),
   z.object({ t: z.literal("kick"), seat: z.number().int().min(0).max(7) }),
-  // 빠른 메시지(say)는 07-11 에 없어졌다 — 옛 번들이 보내도 유니온에 없어 BAD_MESSAGE 다(CHAT-06). 자유 채팅은 아래 ChatMessageSchema.
+  // 빠른 메시지(say)는 07-11, 텍스트 이모티콘(emoji)은 07-12 에 없어졌다 — 옛 번들이 보내도 유니온에 없어 BAD_MESSAGE 다(CHAT-06). 자유 채팅은 아래 ChatMessageSchema.
   // 2페이즈 변형은 strictObject 다: 알 수 없는 키가 있으면 거부한다(T-02-15, D-16).
-  z.strictObject({ t: z.literal("emoji"), icon: z.enum(EMOJI_IDS) }),
   // 밤 행동은 대상 seat 하나뿐이다. 행동 종류는 보내지 않는다 — 서버 저장 역할이 정한다(T-03-06).
   z.strictObject({ t: z.literal("pick"), target: z.number().int().min(0).max(7) }),
   // 처형 여부 투표(결정 0034): 불리언 하나뿐이다. 덧붙은 키(seat·id 등)는 거부한다 — 행위자는 소켓 첨부 playerId 로만 정해진다(T-04-03).

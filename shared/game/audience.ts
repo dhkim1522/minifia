@@ -57,7 +57,7 @@ export function audience(state: RoomState, ev: AudienceEvent): ReadonlySet<strin
     case "all":
       return pick(() => true);
     case "mafia":
-      // 밤의 마피아 채팅은 산 마피아와 탈락자 관전만 받는다(night.ts nightChatRecipientIds 의 의미 — 지우는 일은 07-12).
+      // 밤의 마피아 채팅은 산 마피아와 탈락자 관전만 받는다(결정 0019·0021). 탈락한 마피아는 관전자로 든다(보낼 수는 없다).
       return state.phase === "night" ? pick((p) => !isAlive(p) || p.role === "mafia") : new Set();
     case "ghost":
       return pick((p) => !isAlive(p));
