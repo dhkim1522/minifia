@@ -99,6 +99,8 @@ const WORLD_STRING_VALUES: Record<string, ReadonlySet<string>> = { ".t": new Set
 const TYPING_KEY_PATHS = new Set([".t", ".seat", ".on"]);
 // ---- chat 프레임(07-11, 누설 검사 (a)(b)(c)): 키는 t·ch·seat·seq·text·at 뿐, .t 는 "chat", .ch 는 all|mafia|ghost 이고 mafia·ghost 는 받을 권리 있는 소켓에서만 나온다 ----
 const CHAT_KEY_PATHS = new Set([".t", ".ch", ".seat", ".seq", ".text", ".at"]);
+// ---- chatLog 프레임(07-14, 누설 검사 (d)): hello 직후 한 번. 키는 t·lines[]·ch·seat·seq·text·at 뿐이고 수신자 마스크(r)·쓰기 순번(g)·일차(n)는 없다 ----
+const CHATLOG_KEY_PATHS = new Set([".t", ".lines", ".lines[].ch", ".lines[].seat", ".lines[].seq", ".lines[].text", ".lines[].at"]);
 // ---- chatReject 프레임(07-11): 키는 t·why 뿐, 문자열 값은 .t "chatReject" 와 .why(거절 이유 코드)뿐이다. 보낸 사람 소켓에만 간다 ----
 const CHAT_REJECT_KEY_PATHS = new Set([".t", ".why"]);
 
@@ -212,7 +214,7 @@ describe("6명 한 판(두 밤·두 아침, 행동·마피아 채팅·탈락·�
       await flush(who.sock);
     };
 
-    // 채팅 줄 번호는 DO 메모리에 있다(저장·복원은 07-14) — 단계를 넘길 때 DO 를 evict 하지 않는 advanceToKeep 으로 넘겨 번호가 이어지는지 본다.
+    // 채팅 줄 번호는 채널별로 DO 가 센다(저장·복원은 07-14) — 단계를 넘길 때 DO 를 evict 하지 않는 advanceToKeep 으로 넘겨 라이브 번호가 이어지는지 본다. 복원은 아래 끝에서 따로 본다.
     // 같은 사람의 연속 전송은 600ms 간격·같은 문장 3초 제한(D5)에 걸리므로 줄마다 보낸 사람을 달리한다.
 
     // 1일차: 토론(살아 있는 시민 Y 가 공개 한 줄 — all 줄 1번) → 밤 (07-08: 순차 주장 단계 없음)
@@ -345,6 +347,7 @@ describe("6명 한 판(두 밤·두 아침, 행동·마피아 채팅·탈락·�
     const mafiaLines = new Map<number, number[]>(); // seat → 받은 ch mafia 줄 번호
     const ghostLines = new Map<number, number[]>(); // seat → 받은 ch ghost 줄 번호
     const rejects = new Map<number, string[]>(); // seat → 받은 chatReject 의 why
+    const liveChats = new Map<number, string[]>(); // seat → 라이브로 받은 chat 줄 'ch/seat/seq/text'(받은 순서) — 복원 chatLog 와 견준다
     const typingCounts = new Map<number, number>(); // seat → 받은 typing 프레임 수
     const sawChatMafia = new Set<number>(); // me.chat 이 "mafia" 인 view 를 받은 seat
     const morningsByDay = new Map<number, Set<string>>(); // 일차 → day.morning JSON 모음
@@ -359,6 +362,7 @@ describe("6명 한 판(두 밤·두 아침, 행동·마피아 채팅·탈락·�
       const mafias: number[] = [];
       const ghosts: number[] = [];
       const rejected: string[] = [];
+      const lived: string[] = [];
       let typings = 0;
       for (const raw of collect(a.sock)) {
         const msg = JSON.parse(raw) as ServerMessage;
@@ -439,6 +443,7 @@ describe("6명 한 판(두 밤·두 아침, 행동·마피아 채팅·탈락·�
             if (pth === ".t") expect(value).toBe("chat");
             if (pth === ".ch") expect(["all", "mafia", "ghost"].includes(value)).toBe(true);
           }
+          lived.push(`${msg.ch}/${msg.seat}/${msg.seq}/${msg.text}`);
           if (msg.ch === "all") alls.push(msg.seq);
           else if (msg.ch === "mafia") {
             expect(`${phase}/${dead || a.role === "mafia"}`).toBe("night/true"); // 밤의 산 마피아 또는 탈락자
@@ -467,6 +472,7 @@ describe("6명 한 판(두 밤·두 아침, 행동·마피아 채팅·탈락·�
       mafiaLines.set(a.seat, mafias);
       ghostLines.set(a.seat, ghosts);
       rejects.set(a.seat, rejected);
+      liveChats.set(a.seat, lived);
       typingCounts.set(a.seat, typings);
     }
 
@@ -533,6 +539,32 @@ describe("6명 한 판(두 밤·두 아침, 행동·마피아 채팅·탈락·�
     }
     // 거절: 밤의 산 시민 Y 의 전송 하나뿐이고 Y 소켓에만 갔다.
     for (const a of actors) expect(`${a.seat}:${rejects.get(a.seat)!.join(",")}`).toBe(`${a.seat}:${a === victimY ? "phase" : ""}`);
+
+    // ---- 재접속 복원 (07-14, 누설 검사 (d), 결정 0058-2): 판이 끝난 자리에서 모두 새 소켓으로 다시 hello 한다 ----
+    // 복원 chatLog 는 라이브로 받은 줄과 같고(보낼 때의 마스크로만), 키는 허용 목록뿐이며(r·g·n 없음), mafia·ghost 값은 받을 권리 있는 소켓에서만 나온다.
+    for (const a of actors) {
+      const again = await connect(code);
+      send(again, { t: "hello", token: a.token });
+      const logFrame = (await nextFrame(again, (m) => m.t === "chatLog")) as Extract<ServerMessage, { t: "chatLog" }>;
+      const raw = collect(again).find((f) => (JSON.parse(f) as ServerMessage).t === "chatLog")!;
+      for (const t of allTokens) expect(raw.includes(t)).toBe(false);
+      for (const path of keyPaths(logFrame)) {
+        expect(`${path}:${CHATLOG_KEY_PATHS.has(path)}`).toBe(`${path}:true`);
+        expect(FORBIDDEN_KEYS.includes(path.slice(path.lastIndexOf(".") + 1))).toBe(false);
+      }
+      for (const [pth, value] of stringPaths(logFrame)) {
+        if (pth === ".t") expect(value).toBe("chatLog");
+        if (pth !== ".lines[].ch") continue;
+        expect(["all", "mafia", "ghost"].includes(value)).toBe(true);
+        // mafia 줄: 산 마피아, 또는 그 밤(2일차 밤)에 이미 탈락해 있던 X. ghost 줄: 탈락자 X·Y.
+        if (value === "mafia") expect(`${a.seat}:${a.role === "mafia" || a === victimX}`).toBe(`${a.seat}:true`);
+        if (value === "ghost") expect(`${a.seat}:${a === victimX || a === victimY}`).toBe(`${a.seat}:true`);
+      }
+      const restored = logFrame.lines.map((l) => `${l.ch}/${l.seat}/${l.seq}/${l.text}`).join("|");
+      expect(`${a.seat}:${restored}`).toBe(`${a.seat}:${liveChats.get(a.seat)!.join("|")}`);
+      // 살아 있던 시민 편(경찰·의사)은 mafia·ghost 줄이 0건이고, 산 사람 기록에는 ghost 줄이 0건이다.
+      if (a.role !== "mafia" && a !== victimX && a !== victimY) expect(restored.includes("mafia/") || restored.includes("ghost/")).toBe(false);
+    }
   });
 });
 

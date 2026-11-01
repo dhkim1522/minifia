@@ -518,3 +518,40 @@ export async function helloForLog(sock: TestSocket, token: string): Promise<Chat
 
 /** 줄을 'ch/seat/seq/text' 한 줄 문자열로(실패 보고가 한 줄이어야 한다). */
 export const lineText = (l: ChatLineWire): string => `${l.ch}/${l.seat}/${l.seq}/${l.text}`;
+
+// ---- 7페이즈 누설 검사 시나리오 도우미(07-14) ----
+
+/** 실제로 시작한 6명 판: 방 코드, 소켓(방장 먼저), 역할을 읽은 사람들. */
+export interface Game {
+  code: string;
+  socks: TestSocket[];
+  actors: Actor[];
+}
+
+/**
+ * 6명 판(방장 + 손님 5)을 시작해 원하는 단계까지 마감을 당기고, 모든 소켓의 프레임을 ping/pong 으로 flush 해 둔 채 돌려준다.
+ * 역할은 무작위라 dayAnnounce 에서 읽는다. 마피아 둘·경찰·의사·시민 둘이다.
+ */
+export async function startedGame(phase: PhaseId): Promise<Game> {
+  const room = await seat(5, 0);
+  const socks = [room.host, ...room.guests.map((g) => g.sock)];
+  send(room.host, { t: "start" });
+  for (const sock of socks) await nextFrame(sock, (m) => m.t === "state" && m.view.phase === "assigning");
+  await advanceTo(room.code, socks, "dayAnnounce");
+  for (const sock of socks) await settle(sock, mark(sock));
+  const actors = actorsOf(room);
+  await advanceTo(room.code, socks, phase);
+  for (const sock of socks) await settle(sock, mark(sock));
+  return { code: room.code, socks, actors };
+}
+
+/** 역할이 role 인 사람들(seat 오름차순). */
+export const withRole = (g: Game, role: RoleId): Actor[] => g.actors.filter((a) => a.role === role).sort((a, b) => a.seat - b.seat);
+
+/** 저장된 방에서 이 좌석들을 탈락시킨다(DO 가 evict 되어 저장소에서 다시 읽는다 — 소켓은 하이버네이션으로 남는다). */
+export async function killSeats(g: Game, seats: number[]): Promise<void> {
+  await editRoom(g.code, (room) => mapPlayers(room, (p) => (seats.includes(p.seat as number) ? { ...p, alive: false } : p)));
+}
+
+/** 잠깐 기다린다(관찰 구간의 길이를 맞출 때). */
+export const pause = (ms: number): Promise<void> => new Promise<void>((resolve) => setTimeout(resolve, ms));
