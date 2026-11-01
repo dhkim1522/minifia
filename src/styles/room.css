@@ -7,7 +7,9 @@
   flex: 1 1 auto;
   display: flex;
   flex-direction: column;
-  height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  /* 방 높이는 RoomScreen 이 처음 그릴 때와 화면 방향이 바뀔 때(채팅 입력칸에 포커스가 없을 때)만 px 로 정해 --mf-room-h 에 쓴다 — 키보드가 열려도 100dvh 를 따라가지 않는다(07-19).
+     변수가 없으면(측정 전·레이아웃 없는 환경) 예전 식 그대로다. */
+  height: var(--mf-room-h, calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom)));
   overflow: hidden; /* 세로 스크롤 없음 — 띠가 생기면 본문(장면)이 그만큼 줄어든다 */
 }
 

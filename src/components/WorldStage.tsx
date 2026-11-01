@@ -27,6 +27,12 @@ function sessionStore(): Storage | null {
   }
 }
 
+/** 채팅 입력칸(ChatPanel 의 [data-chat-input])에 포커스가 있는가 — D4: 이때의 탭은 걷지 않고 키보드만 닫는다 */
+function chatInputFocused(): boolean {
+  const el = document.activeElement;
+  return el instanceof HTMLElement && el.matches("[data-chat-input]");
+}
+
 const SCENE_LABEL = "지하 재즈 바 로비. 바닥을 누르면 그쪽으로 걸어가요";
 
 /** 이름표는 런타임이 첫 위치를 놓을 때까지 보이지 않는다(옛 자리 0,0 에서 한 프레임 번쩍이지 않게). 값이 늘 같아 React 가 다시 쓰지 않는다. */
@@ -75,6 +81,8 @@ export function WorldStage(props: WorldStageProps) {
   const tagRef = useRef<HTMLDivElement>(null);
   const runtimeRef = useRef<WorldRuntime | null>(null);
   const [tracker] = useState(createTapTracker);
+  // 손가락을 대는 순간 입력칸에 포커스가 있었던 포인터(D4). 떼는 순간에 정하지 않는 이유: 마우스는 누르는 동안 브라우저가 포커스를 옮긴다.
+  const downWhileTyping = useRef(new Set<number>());
   const [mapStatus, setMapStatus] = useState<MapStatusState>(initialMapStatus);
   const readyReported = useRef(false);
 
@@ -185,14 +193,26 @@ export function WorldStage(props: WorldStageProps) {
         className="mf-world__input"
         onPointerDown={(e) => {
           if (e.pointerType === "mouse" && e.button !== 0) return;
+          if (chatInputFocused()) downWhileTyping.current.add(e.pointerId);
+          else downWhileTyping.current.delete(e.pointerId);
           tracker.down(e.pointerId, e.clientX, e.clientY, Date.now());
         }}
         onPointerMove={(e) => tracker.move(e.pointerId, e.clientX, e.clientY)}
         onPointerUp={(e) => {
           const at = tracker.up(e.pointerId, e.clientX, e.clientY, Date.now());
-          if (at !== null) onTap(at.x, at.y);
+          const typing = downWhileTyping.current.delete(e.pointerId);
+          if (at === null) return;
+          // D4: 입력칸에 포커스가 있는 동안의 탭은 키보드만 닫는다(blur). 걷기 요청도 링도 없다. 닫힌 뒤의 탭부터 평소처럼 걷는다.
+          if (typing) {
+            if (chatInputFocused()) (document.activeElement as HTMLElement).blur();
+            return;
+          }
+          onTap(at.x, at.y);
         }}
-        onPointerCancel={(e) => tracker.cancel(e.pointerId)}
+        onPointerCancel={(e) => {
+          downWhileTyping.current.delete(e.pointerId);
+          tracker.cancel(e.pointerId);
+        }}
       />
       <div ref={tagRef} className="mf-world__tags">
         <ul className="mf-world__sr mf-sr-only" aria-label={`방에 있는 사람 ${view.players.length}명`}>

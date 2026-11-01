@@ -30,3 +30,12 @@
 
 /* 재접속 띠(떠 있는 변형): 방 화면 루트(.mf-room) 위에 헤더 아래 top 72, 가로 전체. 높이 52·문구·아이콘·색은 v1.0 그대로. 흐름을 밀지 않는다. */
 .mf-reconnect--floating { position: absolute; top: 72px; left: 0; right: 0; z-index: var(--z-overlay); }
+
+/* 키보드(07-19, CHAT-05, UI-SPEC 패널과 키보드): 입력칸에 포커스가 있고 lift > 80 이면 Lobby 가 패널에 --kb 를 붙인다.
+   패널은 보이는 화면 맨 아래(키보드 바로 위)로 --mf-kb-lift 만큼 올라가고, 아래 여백이 22 → 8 로 줄어 높이 150 (= 14 + 72 + 8 + 48 + 8). 행동 줄은 Lobby 가 그리지 않는다(D3).
+   --mf-kb-lift 는 방 틀(.mf-room)에 쓰이고 키보드가 닫히면 0 이라 이 규칙은 열림에서만 의미가 있다. 캔버스 크기는 건드리지 않는다. */
+.mf-lobby__panel--kb { bottom: var(--mf-kb-lift, 0px); padding-bottom: 8px; }
+
+/* iOS 가 키보드를 위해 화면을 위로 밀면(vv.offsetTop > 0) 헤더 계열이 그만큼 내려와 보이는 영역 맨 위에 머문다. window.scrollTo 로 되돌리지 않는다(깜빡임).
+   --mf-vv-top 은 포커스가 없을 때 0 이라 평소에는 움직이지 않는다. 재접속 띠(.mf-reconnect--floating)는 방 틀 직속이라 같은 변수를 방 틀에서 읽는다. */
+.mf-lobby__scrim, .mf-lobby__header, .mf-lobby__test, .mf-lobby .mv-toast, .mf-reconnect--floating { transform: translateY(var(--mf-vv-top, 0px)); }
