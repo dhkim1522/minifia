@@ -22,6 +22,7 @@
 - **iPhone 16 Pro 실기기(Safari·iOS용 Chrome)**: 합격 검사 1~7·한글 IME·머리 위 "…"·5분 채팅 부하 체감·`?chat-mock=1` 다섯 줄. 절차는 `07-DEVICE-CHECKS.md` 맨 아래. 끝나기 전엔 성공 기준 3(CHAT-05)을 닫지 않는다.
 - **이월 후보 기기**: Android Chrome·삼성 인터넷·카카오톡 인앱(iOS·Android)은 미확인. 검증 때 9페이즈 팀 테스트로 이월할지 묻는다.
 - **낮 시작 옛 직업 공개 문구**: `PHASE_INTRO.dayAnnounce.sub`·`PHASE_GUIDE_FILL.dayAnnounce.guide` 에 순차 주장 문장이 남아 있다. 안은 `.planning/phases/07-free-chat/deferred-items.md`. 고치면 `scenes.test.ts`·`scripts/e2e/lib.mjs` 가 같이 바뀐다.
+- **7페이즈 코드 리뷰 경고 3건(open)**: WR-01 로비 좌석 재사용 시 입장 전 `all` 줄 복원·옛 줄 이름 바뀜, WR-02 로비 시스템 줄 시각 보정 없음, WR-03 위 문구. 추천은 `/gsd-code-review 07 --fix` 뒤 재배포(고치면 iPhone 확인 대상 빌드가 바뀐다). `07-REVIEW-DISPOSITION.md`.
 - **알려진 한계**: 작은 폰(방 높이 640 이하)에서 키보드가 열리면 스테이지가 128 미만, 테이블 화면은 올라온 패널이 아래 인물을 가린다(8페이즈에서 테이블 틀 삭제).
 - **UI-SPEC D1 이월**: 처형 여부 투표·후보 선택·공개 연출·아침 화면의 채팅 입력줄은 8·9페이즈가 붙인다(서버는 이 단계 채팅을 이미 받는다).
 - **이름표 폭**: 내 이름표 + 이모지 8자 202.4px > `NAMETAG_MAX_W` 180 — "일단 허용"(2026-11-01), 나중에 다시 본다.
@@ -30,6 +31,6 @@
 
 ## 다음 할 일
 
-1. **7페이즈 검증**: `/gsd-verify-work 7` — 사용자 iPhone 확인(`07-DEVICE-CHECKS.md`)과 위 열린 질문(문구·이월 기기)을 함께 처리한다. 이어서 8페이즈 `/gsd-ui-phase 8`.
+1. **7페이즈 검증**: 자동 검증은 끝남(검증 human_needed, 보안 56/56 closed, UI 20/24, 회귀 통과). `/gsd-verify-work 7` — `07-UAT.md` 8항목(iPhone 확인·이월 기기·문구)을 처리한다. 이어서 8페이즈 `/gsd-ui-phase 8`.
 2. three `0.186.1` 고정, 로비는 재즈 바 고정, 성능 확인 폰은 iPhone 16 Pro + 크롬 CPU 4배 스로틀(결정 0055).
 3. v1.0 산출물 링크는 `CLAUDE.md`.
