@@ -16,6 +16,12 @@ import {
   HEADER_H,
   ONE_LINE_FACTOR,
   PANEL_H,
+  LOG_H_SHORT,
+  LOG_H_TALL,
+  TABLE_PANEL_EXTRA,
+  expectedPanelH,
+  logHeightFor,
+  tablePanelHeight,
   OVERLAP_EPS,
   SIDE_GAP_MIN,
   TAP_ALLOW,
@@ -24,7 +30,6 @@ import {
   USAGE,
   UsageError,
   chromeCandidates,
-  claimChatIssues,
   dayChecks,
   dimChecks,
   inspectChecks,
@@ -93,7 +98,6 @@ import {
   colorRuleChecks,
   haloChecks,
   AMBER_RGB,
-  PANEL_H_DEFENSE_ME,
   defenseChecks,
   executionChecks,
   voidCardChecks,
@@ -380,11 +384,11 @@ test("D3B_FLOOR_5_PLAYERS 는 98.0% 하나만 낮췄다(5명판 한정, 사용�
   assert.equal(PANEL_H, 157);
 });
 
-test("APPROVED_RELAXATIONS: 승인된 완화는 M1·D3a/D3b·D4·5명판 D3b 98.0%·변론 후보 패널 236·결정 0056 의 D9·D3b·G2·D2·P10(6자 이상 이름) 뿐이고, 모두 이유와 승인 근거가 있다", () => {
-  assert.deepEqual(APPROVED_RELAXATIONS.map((r) => r.id), ["M1", "D3a/D3b", "D4", "D3b-5", "P-PANEL-236", "D9-8ch", "D3b-8ch", "G2-8ch", "D2-8ch", "P10-8ch"]);
+test("APPROVED_RELAXATIONS: 승인된 완화는 M1·D3a/D3b·D4·5명판 D3b 98.0%·결정 0056 의 D9·D3b·G2·D2·P10(6자 이상 이름) 뿐이고, 모두 이유와 승인 근거가 있다", () => {
+  assert.deepEqual(APPROVED_RELAXATIONS.map((r) => r.id), ["M1", "D3a/D3b", "D4", "D3b-5", "D9-8ch", "D3b-8ch", "G2-8ch", "D2-8ch", "P10-8ch"]);
   for (const r of APPROVED_RELAXATIONS) {
     assert.ok(typeof r.reason === "string" && r.reason.trim().length > 0, JSON.stringify(r));
-    assert.ok(/^\d{4}-\d{2}-\d{2}$/.test(r.approved) || ["03.1 F7", "execution-v1/DC-defense-me", "결정 0056"].includes(r.approved), JSON.stringify(r));
+    assert.ok(/^\d{4}-\d{2}-\d{2}$/.test(r.approved) || ["03.1 F7", "결정 0056"].includes(r.approved), JSON.stringify(r));
   }
   for (const id of ["D9-8ch", "D3b-8ch", "G2-8ch", "D2-8ch", "P10-8ch"]) {
     const r = APPROVED_RELAXATIONS.find((x) => x.id === id);
@@ -395,9 +399,8 @@ test("APPROVED_RELAXATIONS: 승인된 완화는 M1·D3a/D3b·D4·5명판 D3b 98.
   const five = APPROVED_RELAXATIONS.find((r) => r.id === "D3b-5");
   assert.equal(five.approved, "2026-10-26");
   assert.match(five.reason, /98\.0/);
-  const panel = APPROVED_RELAXATIONS.find((r) => r.id === "P-PANEL-236");
-  assert.equal(panel.approved, "execution-v1/DC-defense-me");
-  assert.match(panel.reason, /236/);
+  // 변론 후보 패널 236 완화는 변론 칩과 함께 07-20 에 지웠다
+  assert.equal(APPROVED_RELAXATIONS.some((r) => r.id === "P-PANEL-236"), false);
 });
 
 test("G7 smallTextIssues: 14px 미만 글자는 실패, 허용된 줄은 통과, 필드가 없으면 실패", () => {
@@ -637,6 +640,52 @@ test("dayChecks D4: 눌림(hit)이 false 거나 버튼이 없으면 실패", () 
   assert.equal(dayById(dayChecks(s3, size), "D4").ok, false);
 });
 
+test("dayChecks D6: 채팅 패널이 붙는 상태는 LOG_H + 92(188·244), 그 밖은 157 — 기대(chat)와 화면의 채팅 패널 유무가 어긋나면 실패한다", () => {
+  const chatSnap = (height, hasChat = true, roomH) => {
+    const s = daySnap();
+    s.panel.rect = rect(0, 640 - height, 360, height);
+    s.panel.hasChat = hasChat;
+    if (roomH !== undefined) s.roomH = roomH;
+    return s;
+  };
+  // 360x640 (방 높이 640 < 780): 기록 칸 96 → 188
+  assert.equal(dayById(dayChecks(chatSnap(188), { w: 360, h: 640, chat: true }), "D6").ok, true);
+  assert.equal(dayById(dayChecks(chatSnap(157), { w: 360, h: 640, chat: true }), "D6").ok, false);
+  // 기대를 안 주면 화면의 채팅 패널 유무를 따른다
+  assert.equal(dayById(dayChecks(chatSnap(188), { w: 360, h: 640 }), "D6").ok, true);
+  assert.equal(dayById(dayChecks(chatSnap(157, false), { w: 360, h: 640 }), "D6").ok, true);
+  assert.equal(dayById(dayChecks(chatSnap(157), { w: 360, h: 640 }), "D6").ok, false);
+  // 채팅 없는 상태(chat false)에 채팅 패널이 있으면 — 밤의 시민 화면에 채팅 패널이 새면 — 실패
+  const leaked = dayById(dayChecks(chatSnap(188), { w: 360, h: 640, chat: false }), "D6");
+  assert.equal(leaked.ok, false);
+  assert.match(leaked.detail, /채팅 패널/);
+  // 채팅 있어야 하는데 없으면 실패
+  assert.equal(dayById(dayChecks(chatSnap(157, false), { w: 360, h: 640, chat: true }), "D6").ok, false);
+  // 방 높이 780 이상은 244. 스냅숏의 roomH 가 뷰포트 높이보다 우선한다
+  assert.equal(dayById(dayChecks(chatSnap(244, true, 844), { w: 390, h: 844, chat: true }), "D6").ok, true);
+  assert.equal(dayById(dayChecks(chatSnap(188, true, 844), { w: 390, h: 844, chat: true }), "D6").ok, false);
+  assert.equal(dayById(dayChecks(chatSnap(188, true, 779), { w: 390, h: 844, chat: true }), "D6").ok, true);
+});
+
+test("채팅 패널 치수 사본: logHeightFor(779) 96 · (780) 152, tablePanelHeight 188·244, expectedPanelH 는 채팅 없는 하단을 157 로 둔다", () => {
+  assert.equal(LOG_H_SHORT, 96);
+  assert.equal(LOG_H_TALL, 152);
+  assert.equal(logHeightFor(779), 96);
+  assert.equal(logHeightFor(780), 152);
+  assert.equal(logHeightFor(560), 96);
+  assert.equal(tablePanelHeight(96), 188);
+  assert.equal(tablePanelHeight(152), 244);
+  assert.equal(TABLE_PANEL_EXTRA, 92);
+  assert.equal(expectedPanelH({ roomH: 640, chat: true }), 188);
+  assert.equal(expectedPanelH({ roomH: 779, chat: true }), 188);
+  assert.equal(expectedPanelH({ roomH: 780, chat: true }), 244);
+  assert.equal(expectedPanelH({ roomH: 932, chat: true }), 244);
+  // 채팅 없는 하단은 방 높이와 무관하게 157, chat 이 불리언 true 가 아니면 채팅이 아니다
+  assert.equal(expectedPanelH({ roomH: 640, chat: false }), 157);
+  assert.equal(expectedPanelH({ roomH: 932, chat: false }), 157);
+  assert.equal(expectedPanelH({ roomH: 932 }), 157);
+});
+
 test("dayChecks D5·D6·D8", () => {
   const s = daySnap();
   s.docH = 641;
@@ -792,8 +841,8 @@ test("tagsOverlap D9: 라벨이 인원을 말하지 않고, 겹치지 않으면 
 
 test("feltStable: 같으면 통과, 1px 옮겨지면 실패하고 상태 이름을 말한다", () => {
   const r = rect(10, 20, 300, 200);
-  assert.equal(feltStable([{ state: "claim", rect: r }, { state: "discussion", rect: r }, { state: "night", rect: r }]).ok, true);
-  const bad = feltStable([{ state: "claim", rect: r }, { state: "discussion", rect: rect(10, 21, 300, 200) }]);
+  assert.equal(feltStable([{ state: "dayAnnounce", rect: r }, { state: "discussion", rect: r }, { state: "night", rect: r }]).ok, true);
+  const bad = feltStable([{ state: "dayAnnounce", rect: r }, { state: "discussion", rect: rect(10, 21, 300, 200) }]);
   assert.equal(bad.ok, false);
   assert.match(bad.detail, /discussion/);
 });
@@ -869,31 +918,80 @@ test("feltGapChecks T2: stage.felt 또는 stage.seats 가 없으면 조용히 �
 const entry = (state, over = {}, mySeat = 0) => ({ state, stage: stageOf(over), mySeat });
 
 test("stageStable T1: 상태가 달라도 장면 상자·면·내 캐릭터가 ±0.5 같고 머리 119.2·패널 157·패널 위 = 장면 아래면 통과", () => {
-  const r = stageStable([entry("claim"), entry("night"), entry("morning")]);
+  const r = stageStable([entry("dayAnnounce"), entry("night"), entry("morning")]);
   assert.equal(r.id, "T1");
   assert.match(r.label, /단계가 바뀌어도 장면 상자·테이블·내 캐릭터·패널이 그대로/);
   assert.equal(r.ok, true);
-  const near = stageStable([entry("claim"), entry("night", { felt: rect(87.4, 270.4, 216, 108) })]);
+  const near = stageStable([entry("dayAnnounce"), entry("night", { felt: rect(87.4, 270.4, 216, 108) })]);
   assert.equal(near.ok, true);
 });
 
 test("stageStable T1: 1px 다르면 실패하고 상태 이름을 말한다", () => {
-  const scene = stageStable([entry("claim"), entry("night", { scene: rect(0, 119.2, 390, 386.8) })]);
+  const scene = stageStable([entry("dayAnnounce"), entry("night", { scene: rect(0, 119.2, 390, 386.8) })]);
   assert.equal(scene.ok, false);
   assert.match(scene.detail, /night/);
-  const felt = stageStable([entry("claim"), entry("morning", { felt: rect(87, 271, 216, 108) })]);
+  const felt = stageStable([entry("dayAnnounce"), entry("morning", { felt: rect(87, 271, 216, 108) })]);
   assert.equal(felt.ok, false);
   assert.match(felt.detail, /morning/);
-  const me = stageStable([entry("claim"), entry("night", { seats: [{ seat: 0, rect: rect(159, 413, 72, 96), spotlit: false }] })]);
+  const me = stageStable([entry("dayAnnounce"), entry("night", { seats: [{ seat: 0, rect: rect(159, 413, 72, 96), spotlit: false }] })]);
   assert.equal(me.ok, false);
   assert.match(me.detail, /night/);
 });
 
 test("stageStable T1: 머리 높이 ≠ 119.2, 패널 높이 ≠ 157, 패널 위 ≠ 장면 아래면 실패한다", () => {
-  assert.equal(stageStable([entry("claim", { header: rect(0, 0, 390, 100) })]).ok, false);
-  assert.equal(stageStable([entry("claim", { panel: rect(0, 507, 390, 150) })]).ok, false);
-  assert.equal(stageStable([entry("claim", { panel: rect(0, 520, 390, 157) })]).ok, false);
-  assert.equal(stageStable([entry("claim", { header: null })]).ok, false);
+  assert.equal(stageStable([entry("dayAnnounce", { header: rect(0, 0, 390, 100) })]).ok, false);
+  assert.equal(stageStable([entry("dayAnnounce", { panel: rect(0, 507, 390, 150) })]).ok, false);
+  assert.equal(stageStable([entry("dayAnnounce", { panel: rect(0, 520, 390, 157) })]).ok, false);
+  assert.equal(stageStable([entry("dayAnnounce", { header: null })]).ok, false);
+});
+
+test("stageStable T1: 채팅 패널이 붙는 상태(chat true)는 패널 188·244 이고 장면은 같은 하단 모양끼리만 견준다", () => {
+  // 390x664: 채팅 패널 188 → 장면 아래 = 664 − 188 = 476 → 장면 높이 356.8
+  const chat = (state, over = {}) => ({
+    state,
+    chat: true,
+    roomH: 664,
+    stage: stageOf({ scene: rect(0, 119.2, 390, 356.8), panel: rect(0, 476, 390, 188), felt: rect(87, 255, 216, 108), ...over }),
+    mySeat: 0,
+  });
+  const plain = (state) => ({ state, chat: false, roomH: 664, stage: stageOf(), mySeat: 0 });
+  // 채팅 있는 상태와 없는 상태가 섞여도(장면 높이가 다른 것이 정상) 같은 모양끼리 같으면 통과
+  const mixed = stageStable([plain("dayAnnounce"), chat("discussion"), plain("morning"), chat("defense")]);
+  assert.equal(mixed.ok, true, mixed.detail);
+  // 채팅 상태끼리 장면이 어긋나면 실패하고 상태 이름을 말한다
+  const drift = stageStable([chat("discussion"), chat("defense", { scene: rect(0, 119.2, 390, 340) })]);
+  assert.equal(drift.ok, false);
+  assert.match(drift.detail, /defense/);
+  // 채팅 상태의 패널이 157 이면 실패(옛 하단), 채팅 없는 상태의 패널이 188 이어도 실패
+  assert.equal(stageStable([chat("discussion", { panel: rect(0, 507, 390, 157), scene: rect(0, 119.2, 390, 387.8) })]).ok, false);
+  const leakedPanel = { ...plain("morning"), stage: stageOf({ panel: rect(0, 476, 390, 188), scene: rect(0, 119.2, 390, 356.8) }) };
+  assert.equal(stageStable([leakedPanel]).ok, false);
+  // 방 높이를 모르면(항목에도 opts 에도 없음) 채팅 상태는 조용히 통과하지 않는다. opts.roomH 로 받을 수 있다
+  const noRoom = { ...chat("discussion"), roomH: undefined };
+  assert.match(stageStable([noRoom]).detail, /측정값 없음\(방 높이/);
+  assert.equal(stageStable([noRoom], { roomH: 664 }).ok, true);
+  // 긴 방(844 → 기록 칸 152 → 패널 244)
+  const tall = { ...chat("discussion"), roomH: 844, stage: stageOf({ scene: rect(0, 119.2, 390, 480.8), panel: rect(0, 600, 390, 244), felt: rect(87, 255, 216, 108) }) };
+  assert.equal(stageStable([tall]).ok, true);
+});
+
+test("feltStable D7: 채팅 패널이 붙는 상태와 아닌 상태는 따로 견주고, 같은 모양끼리 1px 어긋나면 실패한다", () => {
+  const plainRect = rect(87, 270, 216, 108);
+  const chatRect = rect(87, 255, 216, 108);
+  const ok = feltStable([
+    { state: "dayAnnounce", rect: plainRect },
+    { state: "discussion", rect: chatRect, chat: true },
+    { state: "morning", rect: plainRect, chat: false },
+    { state: "defense", rect: chatRect, chat: true },
+  ]);
+  assert.equal(ok.ok, true, ok.detail);
+  const bad = feltStable([
+    { state: "discussion", rect: chatRect, chat: true },
+    { state: "defense", rect: rect(87, 256, 216, 108), chat: true },
+  ]);
+  assert.equal(bad.ok, false);
+  assert.match(bad.detail, /defense/);
+  assert.equal(feltStable([{ state: "night", rect: null }]).ok, false);
 });
 
 test("stageStable T1: 내 자리가 spotlit 이면 내 캐릭터 비교만 건너뛰고, 항목이 비면 실패한다", () => {
@@ -905,13 +1003,13 @@ test("stageStable T1: 내 자리가 spotlit 이면 내 캐릭터 비교만 건�
   assert.equal(stageStable([]).ok, false);
 });
 
-// ---- 차례(K1·K2)·주장 채팅(K3)·기록 카드(X1) ----
+// ---- 차례 표식 없음(K1)·후광(K4)·기록 카드(X1). 순차 주장(차례·칩·주장 채팅)은 7페이즈에서 없어졌다(07-20) ----
 
-const turnPanel = (over = {}) => ({ rect: rect(0, 483, 360, 157), text: "", stRow: false, emojiBtn: false, quickBtn: false, chips: [], ...over });
+const turnPanel = (over = {}) => ({ rect: rect(0, 483, 360, 157), text: "", hasChat: false, ...over });
 
 const FILTER_WHITE = "drop-shadow(rgba(241, 242, 245, 0.95) 0px 0px 2px) drop-shadow(rgba(241, 242, 245, 0.75) 0px 0px 9px)";
 const FILTER_CRIMSON = "drop-shadow(rgba(224, 52, 75, 0.95) 0px 0px 2px) drop-shadow(rgba(224, 52, 75, 0.7) 0px 0px 9px)";
-const goodTurn = (over = {}) => ({ bubbleTurnSeats: [3], haloWhiteSeats: [3], legacyCircles: 0, tagInverted: 0, legacyRows: 0, ...over });
+const goodTurn = (over = {}) => ({ bubbleTurnSeats: [], haloWhiteSeats: [], legacyCircles: 0, tagInverted: 0, ...over });
 const goodHalo = () => ({
   items: [
     { seat: 3, cls: "white", filter: FILTER_WHITE, seatContext: true, onImg: true },
@@ -919,7 +1017,7 @@ const goodHalo = () => ({
   ],
   max: 2,
 });
-const turnSnap = ({ turn = goodTurn(), halo = goodHalo(), panel = turnPanel({ stRow: true, emojiBtn: true }) } = {}) => {
+const turnSnap = ({ turn = goodTurn(), halo = goodHalo(), panel = turnPanel() } = {}) => {
   const s = daySnap();
   s.panel = panel;
   s.turn = turn;
@@ -927,56 +1025,47 @@ const turnSnap = ({ turn = goodTurn(), halo = goodHalo(), panel = turnPanel({ st
   return s;
 };
 
-test("turnChecks K1: 차례 말풍선이 정확히 한 자리, 흰 후광이 같은 자리 하나, 발밑 원·이름표 반전·이름표 아랫줄 0 이면 통과", () => {
-  const list = turnChecks(turnSnap(), { myTurn: false, jobs: ["마피아", "경찰"] });
+test("turnChecks K1: 차례 말풍선 0·발밑 원 0·이름표 반전 0 이면 통과하고, 밤 선택의 흰 후광은 차례가 아니라 허용한다", () => {
+  const list = turnChecks(turnSnap());
+  assert.deepEqual(list.map((x) => x.id), ["K1", "K4"]);
   assert.equal(dayById(list, "K1").ok, true, dayById(list, "K1").detail);
+  // 밤에 내가 고른 대상의 흰 후광은 차례가 아니므로 실패시키지 않는다
+  assert.equal(dayById(turnChecks(turnSnap({ turn: goodTurn({ haloWhiteSeats: [2] }) })), "K1").ok, true);
   const cases = [
-    ["말풍선 없음", { bubbleTurnSeats: [] }, /말풍선/],
-    ["말풍선 둘", { bubbleTurnSeats: [3, 4] }, /말풍선/],
-    ["흰 후광 없음", { haloWhiteSeats: [] }, /흰 후광/],
-    ["흰 후광이 다른 자리", { haloWhiteSeats: [4] }, /같은 자리|다름/],
+    ["차례 말풍선 남음", { bubbleTurnSeats: [1] }, /말풍선/],
     ["발밑 원 남음", { legacyCircles: 1 }, /발밑 원/],
     ["이름표 반전 남음", { tagInverted: 1 }, /반전/],
-    ["이름표 아랫줄 남음", { legacyRows: 1 }, /아랫줄/],
   ];
   for (const [name, over, re] of cases) {
-    const k1 = dayById(turnChecks(turnSnap({ turn: goodTurn(over) }), { myTurn: false }), "K1");
+    const k1 = dayById(turnChecks(turnSnap({ turn: goodTurn(over) })), "K1");
     assert.equal(k1.ok, false, name);
     assert.match(k1.detail, re, name);
   }
+  // 측정값 없음은 조용히 통과하지 않는다
+  const noTurn = turnSnap();
+  noTurn.turn = { legacyCircles: 0, tagInverted: 0 };
+  assert.equal(dayById(turnChecks(noTurn), "K1").ok, false);
 });
 
-test("turnChecks K1: 차례 없는 단계(expectNone)는 차례 말풍선 0 이어야 통과하고, 토론 빠른 메시지 말풍선(--spoke)은 세지 않는다", () => {
-  const s = turnSnap({ turn: goodTurn({ bubbleTurnSeats: [], haloWhiteSeats: [] }) });
-  const list = turnChecks(s, { expectNone: true });
-  assert.deepEqual(list.map((x) => x.id), ["K1", "K4"]);
-  assert.equal(dayById(list, "K1").ok, true, dayById(list, "K1").detail);
-  // 밤에 내가 고른 대상의 흰 후광은 차례가 아니므로 expectNone 을 실패시키지 않는다
-  s.turn.haloWhiteSeats = [2];
-  assert.equal(dayById(turnChecks(s, { expectNone: true }), "K1").ok, true);
-  // 차례 말풍선이 있으면 실패
-  s.turn.bubbleTurnSeats = [1];
-  assert.equal(dayById(turnChecks(s, { expectNone: true }), "K1").ok, false);
-});
-
-test("turnChecks: K1 과 K4 는 항상, myTurn 이 불리언이면 K2 도 돌려준다", () => {
-  assert.deepEqual(turnChecks(turnSnap(), { myTurn: false, jobs: [] }).map((x) => x.id), ["K1", "K4", "K2"]);
-  assert.deepEqual(turnChecks(turnSnap(), {}).map((x) => x.id), ["K1", "K4"]);
-  assert.deepEqual(turnChecks(turnSnap(), { expectNone: true }).map((x) => x.id), ["K1", "K4"]);
+test("turnChecks: K1 과 K4 만 돌려준다(K2 는 주장 차례와 함께 지웠다) — 옛 이름표 아랫줄·칩·이모티콘 판정이 없다", () => {
+  assert.deepEqual(turnChecks(turnSnap()).map((x) => x.id), ["K1", "K4"]);
+  assert.deepEqual(turnChecks(turnSnap(), { crimsonAllowed: false }).map((x) => x.id), ["K1", "K4"]);
+  // 옛 옵션을 줘도 K2 는 돌지 않는다
+  assert.deepEqual(turnChecks(turnSnap(), { myTurn: true }).map((x) => x.id), ["K1", "K4"]);
 });
 
 // ---- K4 후광은 윤곽을 따르는 filter 이고 발밑 원이 없음 (결정 0030) ----
 
 test("turnChecks K4: 후광 img 에 두 겹 drop-shadow(9px 포함)·자리 쌓임 맥락이 있고 발밑 원이 없으며 3개 이하면 통과", () => {
-  const k4 = dayById(turnChecks(turnSnap(), { myTurn: false }), "K4");
+  const k4 = dayById(turnChecks(turnSnap()), "K4");
   assert.equal(k4.ok, true, k4.detail);
-  // 후광이 하나도 없는 상태(차례 없음, 선택 없음)도 통과
-  const none = dayById(turnChecks(turnSnap({ turn: goodTurn({ bubbleTurnSeats: [], haloWhiteSeats: [] }), halo: { items: [], max: 0 } }), { expectNone: true }), "K4");
+  // 후광이 하나도 없는 상태(선택 없음)도 통과
+  const none = dayById(turnChecks(turnSnap({ halo: { items: [], max: 0 } })), "K4");
   assert.equal(none.ok, true, none.detail);
   // 끊긴 자리: grayscale 뒤에 후광이 붙어도 통과
   const gray = goodHalo();
   gray.items[0].filter = `grayscale(1) ${FILTER_WHITE}`;
-  assert.equal(dayById(turnChecks(turnSnap({ halo: gray }), { myTurn: false }), "K4").ok, true);
+  assert.equal(dayById(turnChecks(turnSnap({ halo: gray })), "K4").ok, true);
 });
 
 test("turnChecks K4: 어긋남마다 실패하고 이유를 말한다", () => {
@@ -995,31 +1084,32 @@ test("turnChecks K4: 어긋남마다 실패하고 이유를 말한다", () => {
     let halo = goodHalo();
     if (typeof change === "function") change(halo);
     else halo = change.halo;
-    const k4 = dayById(turnChecks(turnSnap({ halo }), { myTurn: false }), "K4");
+    const k4 = dayById(turnChecks(turnSnap({ halo })), "K4");
     assert.equal(k4.ok, false, name);
     assert.match(k4.detail, re, name);
   }
   // 발밑 원 요소가 남아 있음
-  const k4c = dayById(turnChecks(turnSnap({ turn: goodTurn({ legacyCircles: 2 }) }), { myTurn: false }), "K4");
+  const k4c = dayById(turnChecks(turnSnap({ turn: goodTurn({ legacyCircles: 2 }) })), "K4");
   assert.equal(k4c.ok, false);
   assert.match(k4c.detail, /발밑 원/);
-  // claim 인데 흰 후광이 말풍선 자리와 다름
-  const k4d = dayById(turnChecks(turnSnap({ turn: goodTurn({ bubbleTurnSeats: [5] }) }), { myTurn: false }), "K4");
-  assert.equal(k4d.ok, false);
-  assert.match(k4d.detail, /말풍선/);
   // 측정값 없음은 조용히 통과하지 않는다
   for (const halo of [null, undefined]) {
     const snap = turnSnap();
     snap.halo = halo; // turnSnap 의 기본값 대신 null/undefined 를 그대로 넣는다
-    const k4 = dayById(turnChecks(snap, { myTurn: false }), "K4");
+    const k4 = dayById(turnChecks(snap), "K4");
     assert.equal(k4.ok, false);
     assert.match(k4.detail, /측정값 없음/);
   }
 });
 
-test("turnChecks K4: 차례가 없는 단계(expectNone)에서는 말풍선과 흰 후광의 자리 일치를 따지지 않는다(밤 선택 후광)", () => {
-  const s = turnSnap({ turn: goodTurn({ bubbleTurnSeats: [], haloWhiteSeats: [3] }) });
-  assert.equal(dayById(turnChecks(s, { expectNone: true }), "K4").ok, true);
+test("turnChecks K4: 방장이 시민이면(crimsonAllowed false) 진홍 후광 하나라도 실패하고, 흰 후광만이면 통과한다", () => {
+  const withCrimson = dayById(turnChecks(turnSnap(), { crimsonAllowed: false }), "K4");
+  assert.equal(withCrimson.ok, false);
+  assert.match(withCrimson.detail, /진홍/);
+  const whiteOnly = goodHalo();
+  whiteOnly.items = whiteOnly.items.filter((h) => h.cls === "white");
+  whiteOnly.max = 1;
+  assert.equal(dayById(turnChecks(turnSnap({ halo: whiteOnly }), { crimsonAllowed: false }), "K4").ok, true);
 });
 
 // ---- W1 게임 중 방장 왕관 없음 (결정 0030, 06-17: 대기실 왕관 검사는 기능과 함께 지움) ----
@@ -1060,49 +1150,6 @@ test("sceneIntroChecks N6: `N일차`+`밤이 되었습니다`, 톤 night, pointe
   }
   assert.match(sceneIntroChecks(null).detail, /없음/);
   assert.match(sceneIntroChecks(null).detail, /\.mf-sceneintro/);
-});
-
-test("turnChecks K2: 내 차례는 이번 판 직업 + 말 안 함 칩 · stRow/이모티콘 없음 · 높이 157", () => {
-  const s = daySnap();
-  s.turn = goodTurn();
-  s.halo = goodHalo();
-  s.panel = turnPanel({ chips: ["마피아", "경찰", "시민", "말 안 함"] });
-  const ok = dayById(turnChecks(s, { myTurn: true, jobs: ["마피아", "경찰", "시민"] }), "K2");
-  assert.equal(ok.ok, true, ok.detail);
-  s.panel = turnPanel({ chips: ["경찰", "마피아", "시민", "말 안 함"] }); // 순서 다름
-  assert.equal(dayById(turnChecks(s, { myTurn: true, jobs: ["마피아", "경찰", "시민"] }), "K2").ok, false);
-  s.panel = turnPanel({ chips: ["마피아", "경찰", "시민", "말 안 함"], stRow: true });
-  assert.equal(dayById(turnChecks(s, { myTurn: true, jobs: ["마피아", "경찰", "시민"] }), "K2").ok, false);
-  s.panel = turnPanel({ chips: ["마피아", "경찰", "시민", "말 안 함"], emojiBtn: true });
-  assert.equal(dayById(turnChecks(s, { myTurn: true, jobs: ["마피아", "경찰", "시민"] }), "K2").ok, false);
-  s.panel = turnPanel({ chips: ["마피아", "경찰", "시민", "말 안 함"], rect: rect(0, 490, 360, 150) });
-  assert.equal(dayById(turnChecks(s, { myTurn: true, jobs: ["마피아", "경찰", "시민"] }), "K2").ok, false);
-});
-
-test("turnChecks K2: 남의 차례는 stRow·이모티콘 있고 빠른 메시지·칩 없음 · 높이 157", () => {
-  const s = daySnap();
-  s.turn = goodTurn();
-  s.halo = goodHalo();
-  s.panel = turnPanel({ stRow: true, emojiBtn: true });
-  assert.equal(dayById(turnChecks(s, { myTurn: false, jobs: [] }), "K2").ok, true);
-  for (const over of [{ stRow: false }, { emojiBtn: false }, { quickBtn: true }, { chips: ["경찰"] }, { rect: rect(0, 480, 360, 160) }]) {
-    s.panel = turnPanel({ stRow: true, emojiBtn: true, ...over });
-    assert.equal(dayById(turnChecks(s, { myTurn: false, jobs: [] }), "K2").ok, false, JSON.stringify(over));
-  }
-});
-
-test("claimChatIssues K3: 주장 문장 또는 말하지 않았어요만, 대괄호 없음, 줄 수 = 살아 있는 인원", () => {
-  const lines = ["저는 마피아예요", "저는 경찰이에요", "저는 의사예요", "저는 시민이에요", "말하지 않았어요"];
-  const r = claimChatIssues(lines, { alive: 5 });
-  assert.equal(r.id, "K3");
-  assert.equal(r.ok, true, r.detail);
-  assert.equal(claimChatIssues(["하하: 저는 경찰이에요", "저는 시민이에요"], { alive: 2 }).ok, true);
-  assert.equal(claimChatIssues(["[경찰] 저는 경찰이에요"], { alive: 1 }).ok, false);
-  assert.equal(claimChatIssues(["안녕하세요"], { alive: 1 }).ok, false);
-  const few = claimChatIssues(lines.slice(0, 3), { alive: 5 });
-  assert.equal(few.ok, false);
-  assert.match(few.detail, /3.*5|5.*3/);
-  assert.equal(claimChatIssues([...lines, "저는 시민이에요"], { alive: 5 }).ok, false);
 });
 
 test("inspectChecks X1: 낮에는 {닉네임} 기록 카드가 열리고 밤에는 아무것도 안 열린다", () => {
@@ -1871,15 +1918,17 @@ test("04-29: 기존 기준 수치는 그대로다(04-30 이 완화를 더해도 
   assert.equal(FACE_RATIO, 0.45);
 });
 
-// ---- 04-30 Task 1: P5 변론 스포트라이트·P6 처형 카드, 승인 완화 P-PANEL-236 ----
+// ---- 04-30 Task 1: P5 변론 스포트라이트·P6 처형 카드. 07-20: 변론 하단은 채팅 패널(LOG_H + 92)이고 후보 본인 236·칩 판정과 승인 완화 P-PANEL-236 은 지웠다 ----
 
 const DEF_SCENE = { left: 0, top: 119.2, right: 390, bottom: 520, width: 390 };
-const defenseSnap = ({ me = false } = {}) => ({
+const defenseSnap = ({ roomH = 664 } = {}) => ({
   bottom: {
-    title: me ? "변론할 말을 고르세요" : "",
+    title: "",
     guide: "",
-    height: me ? 236 : 157,
-    buttons: me ? Array.from({ length: 6 }, (_, i) => ({ text: `칩${i}`, pressed: null, disabled: false, w: 110, h: 44 })) : [],
+    height: expectedPanelH({ roomH, chat: true }),
+    chat: true,
+    roomH,
+    buttons: [],
   },
   dt: {
     scene: DEF_SCENE,
@@ -1890,17 +1939,19 @@ const defenseSnap = ({ me = false } = {}) => ({
   },
 });
 const defenseBad = (mutate, opts) => {
-  const s = defenseSnap({ me: opts?.isCandidate });
+  const s = defenseSnap(opts);
   mutate(s);
-  return defenseChecks(s, opts ?? { isCandidate: false });
+  return defenseChecks(s, opts ?? {});
 };
 
-test("defenseChecks P5: 정상 입력(남의 시점·후보 본인)은 통과한다", () => {
-  const a = defenseChecks(defenseSnap(), { isCandidate: false });
+test("defenseChecks P5: 정상 입력은 통과한다(후보 본인이든 아니든 같은 채팅 패널)", () => {
+  const a = defenseChecks(defenseSnap(), {});
   assert.equal(a.id, "P5");
   assert.equal(a.ok, true, a.detail);
-  const b = defenseChecks(defenseSnap({ me: true }), { isCandidate: true });
-  assert.equal(b.ok, true, b.detail);
+  // 긴 방(≥ 780)은 기록 칸 152 → 244
+  const tall = defenseSnap({ roomH: 844 });
+  assert.equal(tall.bottom.height, 244);
+  assert.equal(defenseChecks(tall, {}).ok, true);
 });
 
 test("defenseChecks P5: 가운데·배율·어둡게·원뿔·층 순서·이름표 여유 위반을 각각 잡는다", () => {
@@ -1922,13 +1973,16 @@ test("defenseChecks P5: 가운데·배율·어둡게·원뿔·층 순서·이름
     ["다른 자리가 층 위", (s) => { s.dt.others.maxSeatZ = 30; }, /다른 자리/],
     ["다른 이름표가 층 위", (s) => { s.dt.others.maxTagZ = 31; }, /다른 이름표/],
     ["이름표 아래끝이 장면 아래 − 4 침범", (s) => { s.dt.center.tagBottom = 517; }, /아래끝/],
-    ["패널 높이 157 이 아님", (s) => { s.bottom.height = 170; }, /패널 높이/],
+    ["패널 높이 188 이 아님", (s) => { s.bottom.height = 170; }, /패널 높이/],
+    ["옛 변론 패널 높이 157", (s) => { s.bottom.height = 157; }, /188/],
+    ["옛 후보 본인 패널 높이 236", (s) => { s.bottom.height = 236; }, /188/],
+    ["채팅 패널 없음", (s) => { s.bottom.chat = false; }, /채팅 패널/],
   ];
   for (const [name, mutate, re] of cases) {
     if (!mutate) {
       const s = defenseSnap();
       s.dt.center.cx = 197;
-      assert.equal(defenseChecks(s, { isCandidate: false }).ok, true, name);
+      assert.equal(defenseChecks(s, {}).ok, true, name);
       continue;
     }
     const r = defenseBad(mutate);
@@ -1937,29 +1991,26 @@ test("defenseChecks P5: 가운데·배율·어둡게·원뿔·층 순서·이름
   }
 });
 
-test("defenseChecks P5: 후보 본인 패널은 236·칩 6개(각 ≥ 44)이고 남의 시점은 157 이다(승인 완화가 번지지 않음, T-04-71)", () => {
-  // 후보 본인인데 157 이면 실패, 남인데 236 이어도 실패
-  const me157 = defenseSnap({ me: true });
-  me157.bottom.height = 157;
-  assert.match(defenseChecks(me157, { isCandidate: true }).detail, /236/);
-  const other236 = defenseSnap();
-  other236.bottom.height = 236;
-  const r = defenseChecks(other236, { isCandidate: false });
-  assert.equal(r.ok, false);
-  assert.match(r.detail, /157/);
-  // 칩 5개, 칩 하나가 44 미만
-  const five = defenseSnap({ me: true });
-  five.bottom.buttons.pop();
-  assert.match(defenseChecks(five, { isCandidate: true }).detail, /칩 5개/);
-  const small = defenseSnap({ me: true });
-  small.bottom.buttons[0].h = 40;
-  assert.match(defenseChecks(small, { isCandidate: true }).detail, /44/);
-  // 236 은 반올림 오차 ±0.5 까지
-  const tol = defenseSnap({ me: true });
-  tol.bottom.height = 236.4;
-  assert.equal(defenseChecks(tol, { isCandidate: true }).ok, true);
-  tol.bottom.height = 236.6;
-  assert.equal(defenseChecks(tol, { isCandidate: true }).ok, false);
+test("defenseChecks P5: 패널 높이는 방 높이로 정한다(779 → 188, 780 → 244) · 반올림 오차 ±0.5 까지", () => {
+  const short = defenseSnap({ roomH: 779 });
+  assert.equal(short.bottom.height, 188);
+  assert.equal(defenseChecks(short, {}).ok, true);
+  // 같은 779 인 방에 244 면 실패, 780 인 방에 188 이어도 실패
+  short.bottom.height = 244;
+  assert.equal(defenseChecks(short, {}).ok, false);
+  const tall = defenseSnap({ roomH: 780 });
+  tall.bottom.height = 188;
+  assert.equal(defenseChecks(tall, {}).ok, false);
+  const tol = defenseSnap();
+  tol.bottom.height = 188.4;
+  assert.equal(defenseChecks(tol, {}).ok, true);
+  tol.bottom.height = 188.6;
+  assert.equal(defenseChecks(tol, {}).ok, false);
+  // roomH 는 인자로도 받는다(스냅숏 값이 없을 때)
+  const noRoom = defenseSnap();
+  delete noRoom.bottom.roomH;
+  assert.match(defenseChecks(noRoom, {}).detail, /측정값 없음\(방 높이/);
+  assert.equal(defenseChecks(noRoom, { roomH: 664 }).ok, true);
 });
 
 test("defenseChecks P5: 측정값이 없으면 조용히 통과하지 않는다", () => {
@@ -1970,13 +2021,13 @@ test("defenseChecks P5: 측정값이 없으면 조용히 통과하지 않는다"
     ["others", (s) => { delete s.dt.others; }],
     ["scene", (s) => { delete s.dt.scene; }],
     ["bottom.height", (s) => { delete s.bottom.height; }],
+    ["bottom.chat", (s) => { delete s.bottom.chat; }],
   ]) {
     const r = defenseBad(mutate);
     assert.equal(r.ok, false, name);
     assert.match(r.detail, /측정값 없음/, name);
   }
-  assert.match(defenseChecks(null, { isCandidate: false }).detail, /측정값 없음/);
-  assert.match(defenseChecks(defenseSnap(), {}).detail, /측정값 없음\(.*isCandidate/);
+  assert.match(defenseChecks(null, {}).detail, /측정값 없음/);
 });
 
 const execSnap = () => ({
@@ -2044,11 +2095,10 @@ test("executionChecks P6: 탈락한 viewer 는 직업 그림 검사를 하지 �
   assert.match(executionChecks(execSnap(), { viewerAlive: true }).detail, /측정값 없음\(.*candidateSeat/);
 });
 
-test("04-30: 변론 후보 패널 236 은 승인 완화 한 줄뿐이고 기준 수치는 그대로이며, 상수는 verdict.ts 와 같다", () => {
-  assert.equal(PANEL_H_DEFENSE_ME, 236);
+test("04-30·07-20: 변론 후보 패널 236 승인 완화는 기능과 함께 지웠고 기준 수치는 그대로이며, 상수는 verdict.ts 와 같다", () => {
   assert.equal(PANEL_H, 157);
   assert.equal(AMBER_RGB, "rgb(242, 184, 75)");
-  assert.equal(APPROVED_RELAXATIONS.filter((x) => x.id === "P-PANEL-236").length, 1);
+  assert.equal(APPROVED_RELAXATIONS.filter((x) => x.id === "P-PANEL-236").length, 0);
   assert.equal(OVERLAP_EPS, 0.5);
   assert.equal(TAP_MIN, 44);
   assert.equal(ONE_LINE_FACTOR, 1.6);
@@ -2065,8 +2115,7 @@ test("04-30: 변론 후보 패널 236 은 승인 완화 한 줄뿐이고 기준 
   spot.dt.dim.background = dim;
   spot.dt.dim.backdropFilter = `blur(${num("VERDICT_BLUR_PX")}px)`;
   spot.dt.center.scale = num("VERDICT_CANDIDATE_SCALE");
-  assert.equal(defenseChecks(spot, { isCandidate: false }).ok, true);
-  // lib 에 쓴 236 이 UI-SPEC 8.4 와 같은지는 위 PANEL_H_DEFENSE_ME 단언이 고정한다.
+  assert.equal(defenseChecks(spot, {}).ok, true);
 });
 
 // ---- 04-30 Task 2: P7 처형 무효 카드·P8 결과 화면·P10 배치 겹침 ----
@@ -2264,8 +2313,8 @@ test("placementChecks P10: 측정값이 없으면 조용히 통과하지 않는�
   assert.match(placementChecks(null).detail, /측정값 없음/);
 });
 
-test("04-30·06-17: 닫기 — 승인 목록은 열 건(결정 0056 의 다섯 건 포함)이고 기준 수치는 그대로다", () => {
-  assert.deepEqual(APPROVED_RELAXATIONS.map((x) => x.id), ["M1", "D3a/D3b", "D4", "D3b-5", "P-PANEL-236", "D9-8ch", "D3b-8ch", "G2-8ch", "D2-8ch", "P10-8ch"]);
+test("04-30·06-17: 닫기 — 승인 목록은 아홉 건(결정 0056 의 다섯 건 포함)이고 기준 수치는 그대로다", () => {
+  assert.deepEqual(APPROVED_RELAXATIONS.map((x) => x.id), ["M1", "D3a/D3b", "D4", "D3b-5", "D9-8ch", "D3b-8ch", "G2-8ch", "D2-8ch", "P10-8ch"]);
   assert.equal(FACE_RATIO, 0.45);
   assert.equal(PANEL_H, 157);
 });
@@ -2894,14 +2943,14 @@ test("LOBBY_SIZES: DEFAULT_SIZES 4개 + 390x844 + 402x874 여섯 개이고 LOBBY
   assert.deepEqual(DEFAULT_SIZES.map((x) => x.label), ["360x640", "390x664", "430x932", "360x560"]);
 });
 
-test("run.mjs: 흐름별 extraSizes 는 --sizes 를 주지 않았을 때만 더하고, FLOWS 의 lobby·world·chat-lobby·chat-table 만 갖는다", () => {
+test("run.mjs: 흐름별 extraSizes 는 --sizes 를 주지 않았을 때만 더하고, FLOWS 의 lobby·world·chat-lobby·chat-keyboard·chat-table 만 갖는다", () => {
   const run = readFileSync(new URL("./run.mjs", import.meta.url), "utf8");
   assert.match(run, /extraSizes/);
   assert.match(run, /!args\.sizesGiven/);
   const flows = readFileSync(new URL("./flows.mjs", import.meta.url), "utf8");
   const entries = [...flows.matchAll(/\{ id: "([a-z0-9-]+)", run: [A-Za-z(), ]+?(, extraSizes: LOBBY_EXTRA_SIZES)? \}/g)];
   const withExtra = entries.filter((m) => m[2]).map((m) => m[1]);
-  assert.deepEqual(withExtra, ["lobby", "world", "chat-lobby", "chat-table"]);
+  assert.deepEqual(withExtra, ["lobby", "world", "chat-lobby", "chat-keyboard", "chat-table"]);
 });
 
 const wideTag = (seat, left, name) => ({ seat, rect: rect(left, 100, 100, 22), name });

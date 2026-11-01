@@ -33,7 +33,7 @@ export const OVERALL_LIMIT_MS = 900_000;
 // 검사 함수는 필드가 없으면 조용히 통과하지 않고 `측정값 없음(…)` 으로 실패한다(기존 검사와 같은 규칙).
 //
 //   VerdictSnap = {
-//     bottom: {                      // 하단 패널(.mf-claimpanel / .mf-execvote 등)
+//     bottom: {                      // 하단 패널(.mf-dayscene__panel: 채팅 패널 / .mf-execvote 등)
 //       title: string,               //   제목 글자
 //       guide: string,               //   안내 줄 글자(없으면 "")
 //       guideH: number,              //   안내 줄 요소 높이(px, 없으면 NaN — 결정 0040 P11)
@@ -65,7 +65,7 @@ export const OVERALL_LIMIT_MS = 900_000;
 // revealChecks 는 [{ t, reveal, dt:{ haloImgs, scene }, crimsonNew }].
 //
 // ---- 04-30 이 더한 필드 (P5·P6·P7·P8·P10) — VerdictSnap 에 아래가 이어진다 ----
-//   VerdictSnap.bottom 추가: height(패널 높이 px; 변론 후보 본인은 236, 그 밖은 157), buttons = 변론 칩 버튼 목록을 그대로 재사용(후보 본인 6개).
+//   VerdictSnap.bottom 추가: height(패널 높이 px; 변론은 채팅 패널이라 LOG_H + 92, 07-20), chat(하단에 [data-chat-panel] 이 있는가), roomH(.mf-dayscene 높이 px).
 //   VerdictSnap.dt 추가 (P5 변론):
 //     center: { seat, cx(후보 좌석 가운데 x), scale(계산된 배율), z(좌석 z-index), tagZ(이름표 z-index), tagBottom(이름표 아래끝 y) },
 //     others: { maxSeatZ, maxTagZ },     // 후보가 아닌 모든 자리·이름표 z-index 의 최댓값
@@ -306,13 +306,51 @@ export function exitCodeOf(results, aborted) {
 export const ONE_LINE_FACTOR = 1.6;
 /** 얼굴 = 캐릭터 상자의 위 45%. */
 export const FACE_RATIO = 0.45;
-/** 낮 장면 하단 패널 높이(결정 0017). */
+/** 낮 장면 하단 패널 높이(결정 0017) — 채팅 패널이 붙지 않는 상태(아침·낮 시작·밤의 시민·경찰·의사·투표 구간 일부)의 기준이다. 낮추지 않는다. */
 export const PANEL_H = 157;
+
+// ---- 채팅 패널 치수 사본(07-20). src/game/chatUi.ts 의 값을 그대로 옮긴 것이다 — test/unit/e2eContract.test.ts 가 같은 값인지 확인한다(05-05 사본 일치 규약).
+//      값을 바꾸려면 UI-SPEC 과 chatUi.ts 를 먼저 바꾼다. ----
+/** 기록 칸 고정 높이: 방 높이 < 780 */
+export const LOG_H_SHORT = 96;
+/** 기록 칸 고정 높이: 방 높이 ≥ 780 */
+export const LOG_H_TALL = 152;
+/** 키보드가 열렸을 때 기록 칸 높이 */
+export const LOG_H_KB = 72;
+/** 이 높이 이상인 방은 긴 기록 칸을 쓴다 */
+export const TALL_ROOM_MIN_H = 780;
+/** 로비 패널 = LOG_H + 154 */
+export const LOBBY_PANEL_EXTRA = 154;
+/** 테이블 패널 = LOG_H + 92 */
+export const TABLE_PANEL_EXTRA = 92;
+/** 키보드 열림 패널 = 14 + 72 + 8 + 48 + 8 */
+export const KB_PANEL_H = 150;
+/** 머리 위 입력 중 알약이 스택을 늘리는 높이 */
+export const TYPING_PILL_H = 22;
+
+/** 기록 칸 고정 높이 — 방 높이로 정한다(chatUi.logHeightFor 사본). */
+export function logHeightFor(roomH) {
+  return roomH >= TALL_ROOM_MIN_H ? LOG_H_TALL : LOG_H_SHORT;
+}
+
+/** 테이블 화면 채팅 패널 높이(chatUi.tablePanelHeight 사본). 안전 영역 제외. */
+export function tablePanelHeight(logH) {
+  return logH + TABLE_PANEL_EXTRA;
+}
+
+/** 로비 채팅 패널 높이(chatUi.lobbyPanelHeight 사본). 안전 영역 제외. */
+export function lobbyPanelHeight(logH) {
+  return logH + LOBBY_PANEL_EXTRA;
+}
+
 /**
- * 변론의 후보 본인 하단 패널 높이 236 — 승인 시안 DC 값(승인 완화 `P-PANEL-236`). defenseChecks 가 isCandidate 일 때만 이 값을 요구하고
- * 그 밖의 모든 상태는 PANEL_H 157 이다. PANEL_H 자체는 낮추지 않는다.
+ * 테이블 화면(DayScene) 하단 패널의 기대 높이. 채팅 패널이 붙는 상태(낮 토론·최후 변론·밤의 마피아·탈락자의 밤과 변론)면
+ * tablePanelHeight(logHeightFor(방 높이)), 아니면 PANEL_H(157). roomH = 방(.mf-dayscene) 높이 — E2E 에서는 뷰포트 높이와 같다.
  */
-export const PANEL_H_DEFENSE_ME = 236;
+export function expectedPanelH({ roomH, chat }) {
+  return chat === true ? tablePanelHeight(logHeightFor(roomH)) : PANEL_H;
+}
+
 /** 앰버 처형 카드 테두리(UI-SPEC 6.2 amber-400 #f2b84b). 회색·진홍 색값은 04-31 이 토큰에서 읽어 넘긴다. */
 export const AMBER_RGB = "rgb(242, 184, 75)";
 /** 양옆 캐릭터와 테이블 면 사이 가로 간격 하한(px, T2). P2 계산 최소는 6.2. */
@@ -359,7 +397,6 @@ export const APPROVED_RELAXATIONS = [
   { id: "D3a/D3b", approved: "03.1 F7", reason: "이름표가 이웃 얼굴을 가리지 않음 → 캐릭터 아래 층(D3a) + 인원별 보이는 비율 바닥(D3b)" },
   { id: "D4", approved: "03.1 F7", reason: "[테스트] 버튼이 캐릭터 상자와 겹치는 세로 깊이 ≤ 3px" },
   { id: "D3b-5", approved: "2026-10-26", reason: "5명판 D3b 바닥 99.9 % → 98.0 %: 앞쪽 옆자리 유령 머리가 5글자 이름표를 약 0.4 % 덮음(캐릭터가 이름표를 덮는 것은 이미 허용)" },
-  { id: "P-PANEL-236", approved: "execution-v1/DC-defense-me", reason: "변론의 후보 본인 하단 패널 높이 157 → 236(제목+안내+칩 3줄×2칸). 승인 시안 DC 값이며 defenseChecks 가 isCandidate 일 때만 허용한다(UI-SPEC 8.4·15.1, 결정 0030 §6)" },
   // 결정 0056(2026-11-01): 테스트 봇 이름이 8자가 되어도 v1.0 고정 테이블 화면(8~9페이즈에 삭제)은 5자 기준 간격이다. 기준 수치(0.5px·보이는 비율 바닥)는 그대로, 적용 범위만 좁게 표시한다.
   // 범위 = v1.0 고정 테이블 화면(.mf-dt__tag)에서 6 그래핌 이상 이름표가 낀 겹침(D9)·6 그래핌 이상 이름표의 보이는 비율(D3b). 6자 미만끼리의 겹침, 새 맵 화면(NT1·NT3·NT4)은 그대로 판정한다.
   // 8~9페이즈에 고정 테이블을 지울 때 이 두 항목도 함께 지운다.
@@ -454,8 +491,12 @@ function d3bResult(snap) {
   return r.relaxed.length > 0 ? relaxedResult("D3b", label, "D3b-8ch", r.relaxed) : result("D3b", label, []);
 }
 
-/** 낮 장면(직업 공개·토론·밤·아침)의 고정물 검사 D1·D2·D3a·D3b·D4·D5·D6·D8. D3b 는 결정 0056 완화 범위(6 그래핌 이상 이름표)만 표시하고 통과시킨다. */
-export function dayChecks(snap, { w, h }) {
+/**
+ * 낮 장면(낮 시작·토론·밤·아침)의 고정물 검사 D1·D2·D3a·D3b·D4·D5·D6·D8. D3b 는 결정 0056 완화 범위(6 그래핌 이상 이름표)만 표시하고 통과시킨다.
+ * D6: 하단 패널 높이. chat 은 이 상태에서 채팅 패널이 붙는지의 기대(true: 낮 토론·밤의 마피아·탈락자 / false: 그 밖)이고,
+ * 생략하면 화면의 채팅 패널 유무(snap.panel.hasChat)를 따른다. 기대 높이는 expectedPanelH({ roomH, chat }), roomH 는 snap.roomH 또는 뷰포트 높이 h.
+ */
+export function dayChecks(snap, { w, h, chat }) {
   // D1 위쪽 제목이 한 줄
   const d1 = [];
   if (!snap.h1) d1.push("제목 없음");
@@ -474,10 +515,16 @@ export function dayChecks(snap, { w, h }) {
   // D5 세로 스크롤 없음
   const d5 = snap.docH > h ? [`문서 높이 ${rd(snap.docH)} > ${h}`] : [];
 
-  // D6 하단 패널 높이 157
+  // D6 하단 패널 높이: 채팅 패널이 붙는 상태는 LOG_H + 92(188·244), 그 밖은 157
   const d6 = [];
   if (!snap.panel) d6.push("하단 패널 없음");
-  else if (Math.abs(snap.panel.rect.height - PANEL_H) > 0.5) d6.push(`패널 높이 ${rd(snap.panel.rect.height)} ≠ ${PANEL_H}`);
+  else {
+    const hasChat = snap.panel.hasChat === true;
+    if (typeof chat === "boolean" && hasChat !== chat) d6.push(`채팅 패널 ${hasChat ? "있음" : "없음"} ≠ 기대 ${chat ? "있음" : "없음"}`);
+    const roomH = Number.isFinite(snap.roomH) ? snap.roomH : h;
+    const want = expectedPanelH({ roomH, chat: typeof chat === "boolean" ? chat : hasChat });
+    if (Math.abs(snap.panel.rect.height - want) > 0.5) d6.push(`패널 높이 ${rd(snap.panel.rect.height)} ≠ ${want}`);
+  }
 
   // D8 위쪽 바 버튼이 한 줄
   const d8 = [];
@@ -495,7 +542,7 @@ export function dayChecks(snap, { w, h }) {
     d3bResult(snap),
     result("D4", "[테스트]가 얼굴·이름표를 안 가리고 눌림", d4TestButton(snap)),
     result("D5", "세로 스크롤 없음", d5),
-    result("D6", "하단 패널 높이 157", d6),
+    result("D6", "하단 패널 높이(채팅 패널이면 LOG_H + 92, 아니면 157)", d6),
     result("D8", "위쪽 바 버튼이 한 줄", d8),
   ];
 }
@@ -554,14 +601,26 @@ export function morningGoneChecks(snap) {
   return result("M4", "아침 뒤 카드·층 사라짐", bad);
 }
 
-/** D7: 흐름의 모든 낮 장면 상태에서 테이블 면(.mf-dt__felt)이 같다. entries = [{ state, rect }]. */
+/** 패널 모양이 같은 상태끼리 묶는 키: 채팅 패널이 붙는 상태(chat true)와 아닌 상태는 하단 높이가 달라 장면 상자(flex 1)도 다르다(UI-SPEC "테이블 장면" 열). */
+const panelGroupOf = (e) => (e?.chat === true ? "chat" : "plain");
+
+/**
+ * D7: 흐름의 낮 장면 상태에서 테이블 면(.mf-dt__felt)이 같다. entries = [{ state, rect, chat? }].
+ * 채팅 패널이 붙는 상태(chat true)는 하단이 LOG_H + 92 라 장면이 더 낮다 — 같은 하단 모양끼리(chat 값이 같은 항목끼리) 첫 항목과 견준다. 0.5px 기준은 그대로다.
+ */
 export function feltStable(entries) {
   const bad = [];
-  const base = entries[0];
-  if (!base?.rect) bad.push(`${base?.state ?? "첫 상태"}: 측정값 없음(테이블 면)`);
-  for (const e of entries.slice(1)) {
+  const baseOf = new Map();
+  for (const e of entries) {
+    const g = panelGroupOf(e);
+    if (!baseOf.has(g)) {
+      baseOf.set(g, e);
+      if (!e.rect) bad.push(`${e.state}: 측정값 없음(테이블 면)`);
+      continue;
+    }
+    const base = baseOf.get(g);
     const r = e.rect;
-    if (!r || !base?.rect) {
+    if (!r || !base.rect) {
       if (!r) bad.push(`${e.state}: 측정값 없음(테이블 면)`);
       continue;
     }
@@ -618,10 +677,12 @@ export function feltGapChecks(stage) {
 }
 
 /**
- * T1 (결정 0028): 단계가 바뀌어도(같은 인원) 장면 상자·테이블 면·내 캐릭터가 ±0.5 같고, 머리 119.2·하단 패널 157,
- * 패널 위 = 장면 아래. entries = [{ state, stage, mySeat }]. 내 자리가 spotlit(방금 탈락)이면 내 캐릭터 비교만 건너뛴다.
+ * T1 (결정 0028): 단계가 바뀌어도 장면 상자·테이블 면·내 캐릭터가 ±0.5 같고, 머리 119.2·하단 패널이 기대 높이, 패널 위 = 장면 아래.
+ * entries = [{ state, stage, mySeat, chat?, roomH? }]. 하단 패널 기대 높이는 expectedPanelH({ roomH, chat }) — 채팅 패널이 붙는 상태(chat true)는 LOG_H + 92, 아니면 157.
+ * 하단 모양이 다르면 장면 상자도 다르므로(flex 1) 장면·테이블·캐릭터 비교는 chat 값이 같은 항목끼리 첫 항목과 한다. 내 자리가 spotlit(방금 탈락)이면 내 캐릭터 비교만 건너뛴다.
+ * opts.roomH = 방 높이(항목에 roomH 가 없을 때의 기본, 보통 뷰포트 높이).
  */
-export function stageStable(entries) {
+export function stageStable(entries, { roomH } = {}) {
   const label = "단계가 바뀌어도 장면 상자·테이블·내 캐릭터·패널이 그대로";
   if (!Array.isArray(entries) || entries.length === 0) return result("T1", label, ["측정값 없음(항목 없음)"]);
   const bad = [];
@@ -634,27 +695,37 @@ export function stageStable(entries) {
       bad.push(`${e.state}: 측정값 없음(장면·테이블·머리·패널 중 하나)`);
       continue;
     }
+    const rh = Number.isFinite(e.roomH) ? e.roomH : roomH;
+    if (e.chat === true && !Number.isFinite(rh)) {
+      bad.push(`${e.state}: 측정값 없음(방 높이 roomH)`);
+      continue;
+    }
+    const want = expectedPanelH({ roomH: rh, chat: e.chat === true });
     if (Math.abs(st.header.height - HEADER_H) > OVERLAP_EPS) bad.push(`${e.state}: 머리 높이 ${rd(st.header.height)} ≠ ${HEADER_H}`);
-    if (Math.abs(st.panel.height - PANEL_H) > OVERLAP_EPS) bad.push(`${e.state}: 패널 높이 ${rd(st.panel.height)} ≠ ${PANEL_H}`);
+    if (Math.abs(st.panel.height - want) > OVERLAP_EPS) bad.push(`${e.state}: 패널 높이 ${rd(st.panel.height)} ≠ ${want}`);
     if (Math.abs(st.panel.top - bottom(st.scene)) > OVERLAP_EPS) bad.push(`${e.state}: 패널 위 ${rd(st.panel.top)} ≠ 장면 아래 ${rd(bottom(st.scene))}`);
   }
-  const base = entries[0];
-  if (base.stage?.scene && base.stage.felt) {
-    for (const e of entries.slice(1)) {
-      const st = e.stage;
-      if (!st?.scene || !st.felt) continue;
-      if (!same(st.scene, base.stage.scene)) bad.push(`${e.state} 에서 장면 상자가 ${base.state} 와 다름 (${fmt(st.scene)} ↔ ${fmt(base.stage.scene)})`);
-      if (!same(st.felt, base.stage.felt)) bad.push(`${e.state} 에서 테이블이 ${base.state} 와 다름 (${fmt(st.felt)} ↔ ${fmt(base.stage.felt)})`);
-      const me = mine(e);
-      const baseMe = mine(base);
-      if (me && baseMe && !me.spotlit && !baseMe.spotlit && !same(me.rect, baseMe.rect))
-        bad.push(`${e.state} 에서 내 캐릭터가 ${base.state} 와 다름 (${fmt(me.rect)} ↔ ${fmt(baseMe.rect)})`);
+  const baseOf = new Map();
+  for (const e of entries) {
+    const g = panelGroupOf(e);
+    if (!baseOf.has(g)) {
+      baseOf.set(g, e);
+      continue;
     }
+    const base = baseOf.get(g);
+    const st = e.stage;
+    if (!st?.scene || !st.felt || !base.stage?.scene || !base.stage.felt) continue;
+    if (!same(st.scene, base.stage.scene)) bad.push(`${e.state} 에서 장면 상자가 ${base.state} 와 다름 (${fmt(st.scene)} ↔ ${fmt(base.stage.scene)})`);
+    if (!same(st.felt, base.stage.felt)) bad.push(`${e.state} 에서 테이블이 ${base.state} 와 다름 (${fmt(st.felt)} ↔ ${fmt(base.stage.felt)})`);
+    const me = mine(e);
+    const baseMe = mine(base);
+    if (me && baseMe && !me.spotlit && !baseMe.spotlit && !same(me.rect, baseMe.rect))
+      bad.push(`${e.state} 에서 내 캐릭터가 ${base.state} 와 다름 (${fmt(me.rect)} ↔ ${fmt(baseMe.rect)})`);
   }
   return result("T1", label, bad);
 }
 
-// ---- 차례(K1·K2)·주장 채팅(K3)·기록 카드(X1) ----
+// ---- 차례 표식 없음(K1)·후광(K4)·기록 카드(X1). 순차 주장(차례·칩·주장 채팅)은 7페이즈에서 없어졌다 ----
 
 /** 시작 문구 톤별 기대 글자: 밤 `N일차 / 밤이 되었습니다`(N6), 낮 시작 `N일차 / 낮이 되었습니다 / 토론 전에 먼저 직업을 공개해요`(N8). */
 const INTRO_SPEC = {
@@ -778,11 +849,11 @@ export function backdropSceneChecks(info, { phase }) {
 /**
  * K4 후광은 윤곽을 따르는 filter 이고 발밑 원이 없다 (결정 0030). halo = 스냅숏 halo { items: [{ seat, cls, filter, seatContext, onImg }], max },
  * circles = 발밑 원 요소 수(turn.legacyCircles). 후광 img 는 한 화면 3개 이하, 각각 계산된 filter 에 drop-shadow 두 겹과 9px 반지름이 있고
- * 후광 클래스는 img 에만 있으며 자리는 쌓임 맥락(z-index 있음)이다. expectNone 이 아니면(차례가 있는 claim) 흰 후광이 차례 말풍선과 같은 자리다.
+ * 후광 클래스는 img 에만 있으며 자리는 쌓임 맥락(z-index 있음)이다.
  * 04-29: 후광 종류는 white|amber|crimson (앰버 = 낮의 공개 투표, D-33). crimsonAllowed(기본 true)가 false 이면 진홍 후광이 하나라도 있을 때 실패한다
  * (방장이 시민인 투표·처형 단계 — 진홍 후광은 동료인 마피아 viewer·관전자에게만 있다).
  */
-export function haloChecks(halo, { circles, bubbleSeats, whiteSeats, expectNone, crimsonAllowed = true }) {
+export function haloChecks(halo, { circles, crimsonAllowed = true }) {
   const bad = [];
   if (!halo || !Array.isArray(halo.items)) bad.push("측정값 없음(후광 halo)");
   else {
@@ -800,11 +871,6 @@ export function haloChecks(halo, { circles, bubbleSeats, whiteSeats, expectNone,
   }
   if (typeof circles !== "number") bad.push("측정값 없음(발밑 원 요소 수)");
   else if (circles !== 0) bad.push(`발밑 원 요소 ${circles}개 ≠ 0`);
-  if (!expectNone && Array.isArray(bubbleSeats) && Array.isArray(whiteSeats)) {
-    const b = [...bubbleSeats].sort().join(",");
-    const w = [...whiteSeats].sort().join(",");
-    if (b !== w) bad.push(`흰 후광 자리 [${w}] 가 차례 말풍선 자리 [${b}] 와 다름`);
-  }
   return result("K4", "후광은 윤곽을 따르는 filter, 발밑 원 없음", bad);
 }
 
@@ -820,63 +886,18 @@ export function crownChecks(snap, { expect = 0 } = {}) {
 }
 
 /**
- * K1·K4·K2. K1: 차례 말풍선(--turn)이 정확히 한 자리이고 흰 후광이 같은 자리 하나, 발밑 원·이름표 반전·아랫줄은 0 개.
- * expectNone: 차례 없는 단계(토론·밤·아침)라 차례 말풍선이 0 개(토론의 빠른 메시지 말풍선은 세지 않고, 밤 선택의 흰 후광은 허용). K4 는 항상 돌린다.
- * myTurn(true/false)이 있으면 K2 도 돌린다. jobs = 이번 판 직업 칩 글자(내 차례일 때 + 「말 안 함」과 순서까지 비교).
+ * K1·K4. K1: 차례 표식이 없다 — 차례 말풍선(--turn)·흰 후광 차례 표시 0, 발밑 원·이름표 반전은 0 개(순차 주장이 없어져 모든 단계가 같다). K4 는 항상 돌린다.
+ * crimsonAllowed: haloChecks 로 넘긴다.
  */
-export function turnChecks(snap, { expectNone = false, myTurn, jobs = [], crimsonAllowed = true } = {}) {
+export function turnChecks(snap, { crimsonAllowed = true } = {}) {
   const t = snap.turn ?? {};
   const bubbles = Array.isArray(t.bubbleTurnSeats) ? t.bubbleTurnSeats : null;
-  const whites = Array.isArray(t.haloWhiteSeats) ? t.haloWhiteSeats : null;
   const k1 = [];
-  if (!bubbles || !whites) k1.push("측정값 없음(차례 말풍선·흰 후광 자리)");
-  else if (expectNone) {
-    if (bubbles.length !== 0) k1.push(`차례 말풍선 ${bubbles.length}개 ≠ 0 (자리 ${bubbles.join(",")})`);
-  } else {
-    if (bubbles.length !== 1) k1.push(`차례 말풍선 ${bubbles.length}개 ≠ 1`);
-    if (whites.length !== 1) k1.push(`차례 흰 후광 ${whites.length}개 ≠ 1`);
-    else if (bubbles.length === 1 && whites[0] !== bubbles[0]) k1.push(`흰 후광 자리 ${whites[0]} 가 말풍선 자리 ${bubbles[0]} 와 다름`);
-  }
+  if (!bubbles) k1.push("측정값 없음(차례 말풍선 자리)");
+  else if (bubbles.length !== 0) k1.push(`차례 말풍선 ${bubbles.length}개 ≠ 0 (자리 ${bubbles.join(",")})`);
   if (t.legacyCircles !== 0) k1.push(`발밑 원 요소 ${t.legacyCircles}개 ≠ 0`);
   if (t.tagInverted !== 0) k1.push(`이름표 반전 ${t.tagInverted}개 ≠ 0`);
-  if (t.legacyRows !== 0) k1.push(`이름표 아랫줄 ${t.legacyRows}개 ≠ 0`);
-  const out = [result("K1", expectNone ? "차례 표식 없음" : "차례 표식이 정확히 한 자리", k1)];
-  out.push(haloChecks(snap.halo, { circles: t.legacyCircles, bubbleSeats: bubbles, whiteSeats: whites, expectNone, crimsonAllowed }));
-  if (typeof myTurn !== "boolean") return out;
-
-  const p = snap.panel;
-  const k2 = [];
-  if (!p) k2.push("하단 패널 없음");
-  else {
-    if (Math.abs(p.rect.height - PANEL_H) > 0.5) k2.push(`패널 높이 ${rd(p.rect.height)} ≠ ${PANEL_H}`);
-    if (myTurn) {
-      const expected = [...jobs, "말 안 함"];
-      if (JSON.stringify(p.chips) !== JSON.stringify(expected)) k2.push(`칩 [${p.chips.join(",")}] ≠ [${expected.join(",")}]`);
-      if (p.stRow) k2.push("내 차례인데 상태 줄(.st-row)이 있음");
-      if (p.emojiBtn) k2.push("내 차례인데 이모티콘 버튼이 있음");
-    } else {
-      if (!p.stRow) k2.push("남의 차례인데 상태 줄(.st-row) 없음");
-      if (!p.emojiBtn) k2.push("남의 차례인데 이모티콘 버튼 없음");
-      if (p.quickBtn) k2.push("빠른 메시지 버튼이 있음");
-      if (p.chips.length > 0) k2.push(`남의 차례인데 칩 [${p.chips.join(",")}]`);
-    }
-  }
-  out.push(result("K2", myTurn ? "내 차례 하단 칩" : "남의 차례 하단 이모티콘", k2));
-  return out;
-}
-
-const CLAIM_LINE_RE = /^(저는 (마피아예요|경찰이에요|의사예요|시민이에요)|말하지 않았어요)$/;
-
-/** K3 주장 채팅 줄. lines = 화면에 보이는 줄 본문(이름 앞부분은 「이름: 」 꼴이면 떼고 본다). alive = 살아 있는 인원. */
-export function claimChatIssues(lines, { alive }) {
-  const bad = [];
-  for (const raw of lines) {
-    if (/[\[\]]/.test(raw)) bad.push(`대괄호 있음: "${raw}"`);
-    const body = raw.replace(/^[^:：]*[:：]\s*/, "");
-    if (!CLAIM_LINE_RE.test(body)) bad.push(`주장 문장이 아님: "${raw}"`);
-  }
-  if (lines.length !== alive) bad.push(`줄 수 ${lines.length} ≠ 살아 있는 인원 ${alive}`);
-  return result("K3", "주장 채팅 줄 문장", bad);
+  return [result("K1", "차례 표식 없음", k1), haloChecks(snap.halo, { circles: t.legacyCircles, crimsonAllowed })];
 }
 
 /** X1 자리를 눌렀을 때: 낮에는 「{닉네임} 기록」 카드가 열리고 제목이 닉네임, 밤에는 아무 dialog 도 안 열린다. snap.dialogs = [{ label, title }]. */
@@ -1267,7 +1288,6 @@ const DEFENSE_DIM_ALPHA = 0.45; // VERDICT_DIM_PERCENT 45 %
 const DEFENSE_BLUR = "blur(3px)"; // VERDICT_BLUR_PX 3
 const DEFENSE_SCALE = 1.7; // VERDICT_CANDIDATE_SCALE
 const DEFENSE_DIM_Z = 30; // UI-SPEC 12 층: 어둡게+흐림 z 30
-const DEFENSE_CHIPS = 6; // 후보 본인 칩 3줄×2칸
 const TAG_BOTTOM_MARGIN = 4; // 후보 이름표 아래끝 ≤ 장면 아래 − 4
 const EXEC_TAIL_RE = /^.+님이 (더는 함께할 수 없게 되었습니다|형장의 이슬이 되었습니다|잔혹하게 처형되었습니다|처형대에 올랐습니다)$/;
 
@@ -1283,15 +1303,15 @@ const alphaOf = (c) => {
 const isNum = (x) => typeof x === "number" && Number.isFinite(x);
 
 /**
- * P5 변론 스포트라이트(defense). opts = { isCandidate(viewer 가 후보 본인인가) }.
+ * P5 변론 스포트라이트(defense). opts = { roomH?(방 높이, 없으면 v.bottom.roomH) }.
  * 후보 가운데 |cx − 장면 가운데| ≤ 2·배율 1.7 ± .02, 어둡게 층 정확히 하나(계산된 backdrop-filter 에 blur(3px), 배경 알파 .45 ± .02, z 30),
  * 원뿔 정확히 하나, 층 순서(후보 좌석·이름표 z > 어둡게 z > 다른 자리·이름표 z), 후보 이름표 아래끝 ≤ 장면 아래 − 4.
- * 패널: 후보 본인은 높이 236(승인 완화 P-PANEL-236) + 칩 정확히 6개(각 ≥ TAP_MIN), 그 밖은 PANEL_H.
+ * 패널(07-20): 후보 본인을 포함한 모든 viewer 의 변론 하단은 채팅 패널이다(순차 주장·변론 칩이 없어짐) — 높이는 expectedPanelH({ roomH, chat: true }) = LOG_H + 92.
  */
-export function defenseChecks(v, { isCandidate } = {}) {
-  const label = "변론 스포트라이트: 가운데·1.7배·어둡게 45%·흐림 3px·원뿔 하나·층 순서·패널";
+export function defenseChecks(v, { roomH } = {}) {
+  const label = "변론 스포트라이트: 가운데·1.7배·어둡게 45%·흐림 3px·원뿔 하나·층 순서·채팅 패널";
   const miss = [];
-  if (typeof isCandidate !== "boolean") miss.push("측정값 없음(isCandidate 인자)");
+  const room = Number.isFinite(roomH) ? roomH : v?.bottom?.roomH;
   const dt = v?.dt;
   const c = dt?.center;
   if (!dt || typeof dt !== "object") miss.push("측정값 없음(dt)");
@@ -1305,7 +1325,8 @@ export function defenseChecks(v, { isCandidate } = {}) {
     if (!isNum(dt.cones)) miss.push("측정값 없음(dt.cones)");
   }
   if (!isNum(v?.bottom?.height)) miss.push("측정값 없음(bottom.height)");
-  if (isCandidate === true && !Array.isArray(v?.bottom?.buttons)) miss.push("측정값 없음(bottom.buttons)");
+  if (typeof v?.bottom?.chat !== "boolean") miss.push("측정값 없음(bottom.chat)");
+  if (!isNum(room)) miss.push("측정값 없음(방 높이 roomH)");
   if (miss.length > 0) return result("P5", label, miss);
 
   const bad = [];
@@ -1330,16 +1351,9 @@ export function defenseChecks(v, { isCandidate } = {}) {
   if (c.tagBottom > sc.bottom - TAG_BOTTOM_MARGIN) bad.push(`후보 이름표 아래끝 ${fmt(c.tagBottom)} 가 장면 아래 ${fmt(sc.bottom)} − ${TAG_BOTTOM_MARGIN} 을 침범`);
 
   const h = v.bottom.height;
-  if (isCandidate) {
-    if (Math.abs(h - PANEL_H_DEFENSE_ME) > OVERLAP_EPS) bad.push(`후보 본인 패널 높이 ${fmt(h)} ≠ ${PANEL_H_DEFENSE_ME}(승인 완화 P-PANEL-236)`);
-    const chips = v.bottom.buttons;
-    if (chips.length !== DEFENSE_CHIPS) bad.push(`변론 칩 ${chips.length}개 ≠ ${DEFENSE_CHIPS}`);
-    for (const x of chips) {
-      if (!(x.w >= TAP_MIN && x.h >= TAP_MIN)) bad.push(`칩 "${x.text}" ${fmt(x.w)}×${fmt(x.h)} 가 ${TAP_MIN}px 미만`);
-    }
-  } else if (Math.abs(h - PANEL_H) > OVERLAP_EPS) {
-    bad.push(`패널 높이 ${fmt(h)} ≠ ${PANEL_H}(236 은 후보 본인만)`);
-  }
+  if (v.bottom.chat !== true) bad.push("변론 하단에 채팅 패널([data-chat-panel])이 없음");
+  const want = expectedPanelH({ roomH: room, chat: true });
+  if (Math.abs(h - want) > OVERLAP_EPS) bad.push(`패널 높이 ${fmt(h)} ≠ ${want}(채팅 패널 LOG_H + 92)`);
   return result("P5", label, bad);
 }
 

@@ -7,6 +7,19 @@ import { candidateRevealMs } from "../../shared/game/phases";
 import { NICKNAME_MAX_GRAPHEMES, countGraphemes } from "../../shared/nickname";
 import { TIMELESS_PHASES } from "../../src/game/scenes";
 import { BLANK_TAP_SLOP_PX } from "../../src/game/blankTap";
+import {
+  KB_PANEL_H,
+  LOBBY_PANEL_EXTRA,
+  LOG_H_KB,
+  LOG_H_SHORT,
+  LOG_H_TALL,
+  TABLE_PANEL_EXTRA,
+  TALL_ROOM_MIN_H,
+  TYPING_PILL_H,
+  lobbyPanelHeight,
+  logHeightFor,
+  tablePanelHeight,
+} from "../../src/game/chatUi";
 import { EXEC_INTRO_MS, VERDICT_TEXT } from "../../src/game/verdict";
 import { RESTORED_MS } from "../../src/net/linkReducer";
 import { STAGE_SIZES } from "../../src/world/camera";
@@ -116,5 +129,58 @@ describe("E2E 재접속·예산 사본과 앱 상수 (06-18)", () => {
     const modules = [...source.matchAll(/import\("\.\/(\w+)"\)/g)].map((m) => m[1]);
     expect(modules.sort()).toEqual(["character", "threeRenderer"]);
     for (const m of modules) expect(lib.isWorldChunkUrl(`http://localhost:5173/src/world/${m}.ts`)).toBe(true);
+  });
+});
+
+describe("E2E 채팅 패널 치수 사본과 src/game/chatUi.ts (07-20, 05-05 사본 일치 규약)", () => {
+  type ChatCopy = {
+    LOG_H_SHORT: number;
+    LOG_H_TALL: number;
+    LOG_H_KB: number;
+    TALL_ROOM_MIN_H: number;
+    LOBBY_PANEL_EXTRA: number;
+    TABLE_PANEL_EXTRA: number;
+    KB_PANEL_H: number;
+    TYPING_PILL_H: number;
+    PANEL_H: number;
+    logHeightFor: (roomH: number) => number;
+    tablePanelHeight: (logH: number) => number;
+    lobbyPanelHeight: (logH: number) => number;
+    expectedPanelH: (o: { roomH: number; chat?: boolean }) => number;
+  };
+  const lib = e2eLib as unknown as ChatCopy;
+
+  it("상수 여덟 개가 chatUi 와 같다(LOBBY_PANEL_EXTRA·TABLE_PANEL_EXTRA·KB_PANEL_H 포함)", () => {
+    expect(lib.LOG_H_SHORT).toBe(LOG_H_SHORT);
+    expect(lib.LOG_H_TALL).toBe(LOG_H_TALL);
+    expect(lib.LOG_H_KB).toBe(LOG_H_KB);
+    expect(lib.TALL_ROOM_MIN_H).toBe(TALL_ROOM_MIN_H);
+    expect(lib.LOBBY_PANEL_EXTRA).toBe(LOBBY_PANEL_EXTRA);
+    expect(lib.TABLE_PANEL_EXTRA).toBe(TABLE_PANEL_EXTRA);
+    expect(lib.KB_PANEL_H).toBe(KB_PANEL_H);
+    expect(lib.TYPING_PILL_H).toBe(TYPING_PILL_H);
+  });
+
+  it("logHeightFor 가 경계 779·780 을 포함한 방 높이에서 chatUi 와 같은 값을 낸다", () => {
+    for (const h of [0, 560, 640, 664, 779, 780, 844, 874, 932, 2000]) expect(lib.logHeightFor(h)).toBe(logHeightFor(h));
+    expect(lib.logHeightFor(779)).toBe(LOG_H_SHORT);
+    expect(lib.logHeightFor(780)).toBe(LOG_H_TALL);
+  });
+
+  it("tablePanelHeight·lobbyPanelHeight 가 chatUi 와 같고 expectedPanelH 는 채팅 상태에서만 테이블 패널 높이를 낸다", () => {
+    for (const logH of [LOG_H_SHORT, LOG_H_TALL, LOG_H_KB]) {
+      expect(lib.tablePanelHeight(logH)).toBe(tablePanelHeight(logH));
+      expect(lib.lobbyPanelHeight(logH)).toBe(lobbyPanelHeight(logH));
+    }
+    for (const roomH of [560, 640, 664, 779, 780, 844, 932]) {
+      expect(lib.expectedPanelH({ roomH, chat: true })).toBe(tablePanelHeight(logHeightFor(roomH)));
+      expect(lib.expectedPanelH({ roomH, chat: false })).toBe(lib.PANEL_H);
+    }
+  });
+
+  it("v1.0 하단 패널 기준 PANEL_H 는 day.css 의 채팅 없는 하단 높이 157 과 같다", () => {
+    const css = readFileSync(new URL("../../src/styles/day.css", import.meta.url), "utf8");
+    const m = /\.mf-dayscene__panel \{[^}]*height: calc\((\d+)px \+ env\(safe-area-inset-bottom\)\)/.exec(css);
+    expect(Number(m?.[1])).toBe(lib.PANEL_H);
   });
 });
