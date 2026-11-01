@@ -25,6 +25,15 @@ function makeCanvas(host: HTMLElement): HTMLCanvasElement {
   return canvas;
 }
 
+/**
+ * 렌더러 자원을 해제한다. 이미 잃은 컨텍스트에는 forceContextLoss 를 부르지 않는다 — 잃은 컨텍스트는 WEBGL_lose_context 확장을 주지 않아
+ * three 가 "extension not supported" 경고를 남긴다(소실 후 방치의 재생성에서 잡힘, 06-18). 잃은 컨텍스트는 이미 놓인 것이라 부를 이유도 없다.
+ */
+function releaseGl(gl: WebGLRenderer): void {
+  gl.dispose();
+  if (!gl.getContext().isContextLost()) gl.forceContextLoss();
+}
+
 /** 렌더러를 만든다. 컨텍스트를 못 만들면 캔버스를 치우고 UnsupportedRendererError */
 function makeGl(canvas: HTMLCanvasElement, allowSoftware: boolean): WebGLRenderer {
   let gl: WebGLRenderer;
@@ -191,8 +200,7 @@ async function build(opts: Opts): Promise<WorldRenderer> {
       if (disposed) throw new Error("이미 해제된 렌더러");
       // 옛 렌더러를 먼저 치운다(씬은 dispose 하지 않는다). 리스너를 먼저 떼어 forceContextLoss 의 소실 이벤트가 새어 나가지 않게 한다.
       detach(canvas);
-      gl.dispose();
-      gl.forceContextLoss();
+      releaseGl(gl);
       canvas.remove();
       canvas = makeCanvas(opts.host);
       gl = makeGl(canvas, opts.allowSoftware);
@@ -228,8 +236,7 @@ async function build(opts: Opts): Promise<WorldRenderer> {
       for (const c of seats.values()) characters.remove(c.root);
       seats.clear();
       bar.dispose();
-      gl.dispose();
-      gl.forceContextLoss();
+      releaseGl(gl);
       canvas.remove();
     },
   };

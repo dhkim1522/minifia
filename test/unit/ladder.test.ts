@@ -312,6 +312,17 @@ describe("threeRenderer: 예산·재생성·통계·해제 (가짜 WebGLRenderer
     r.dispose();
   });
 
+  it("recreate: 이미 잃은 컨텍스트에는 forceContextLoss 를 부르지 않는다 (three 가 WEBGL_lose_context 를 못 얻어 콘솔 경고를 남긴다, 06-18)", async () => {
+    const r = await make(2);
+    const oldGl = Fake.instances[0]!;
+    oldGl.lost = true; // 소실 후 방치: 3초 뒤 재생성은 잃은 컨텍스트 위에서 일어난다
+    await r.recreate();
+    expect(oldGl.disposed).toBe(true);
+    expect(oldGl.lossForced).toBe(0);
+    expect(Fake.instances).toHaveLength(2);
+    r.dispose();
+  });
+
   it("recreate 뒤에도 캐릭터 그룹·시점·예산이 이어진다(같은 씬 재사용)", async () => {
     const r = await make();
     r.setView({ x: 1, z: 2 }, 30);
@@ -358,6 +369,19 @@ describe("threeRenderer: 예산·재생성·통계·해제 (가짜 WebGLRenderer
     r.render();
     expect(gl.renders).toBe(0);
     await expect(r.recreate()).rejects.toBeInstanceOf(Error);
+  });
+
+  it("dispose: 이미 잃은 컨텍스트에는 forceContextLoss 를 부르지 않는다, 잃지 않은 컨텍스트에는 부른다", async () => {
+    const lostR = await make();
+    const lostGl = Fake.instances[0]!;
+    lostGl.lost = true;
+    lostR.dispose();
+    expect(lostGl.disposed).toBe(true);
+    expect(lostGl.lossForced).toBe(0);
+    const liveR = await make();
+    const liveGl = Fake.instances[1]!;
+    liveR.dispose();
+    expect(liveGl.lossForced).toBeGreaterThan(0);
   });
 
   it("소프트웨어 렌더러(SwiftShader·llvmpipe·Software)는 UnsupportedRendererError — allowSoftware 일 때만 예외", async () => {
