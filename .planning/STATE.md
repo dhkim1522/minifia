@@ -5,16 +5,16 @@ milestone_name: 같은 공간
 current_phase: 07
 current_phase_name: 자유 채팅
 status: executing
-stopped_at: Completed 07-14-PLAN.md
-last_updated: "2026-11-01T14:58:27.038Z"
+stopped_at: Completed 07-15-PLAN.md
+last_updated: "2026-11-01T15:20:14.672Z"
 last_activity: 2026-11-01
 last_activity_desc: Phase 07 execution started
-state_head: 56c4aafbf68717eedde2efe6acb36710e9600b0f
+state_head: 822eca2956083ac95926e2ec68d98b6b4c9dd956
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 45
-  completed_plans: 37
+  completed_plans: 38
   percent: 14
 ---
 
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-11-01)
 ## Current Position
 
 Phase: 07 (자유 채팅) — EXECUTING
-Plan: 15 of 22
+Plan: 16 of 22
 Status: Ready to execute
 Last activity: 2026-11-01 — Phase 07 execution started
 
@@ -95,6 +95,7 @@ Progress: [█░░░░░░░░░] 14% (1/7 phases)
 | Phase 07 P12 | 10 min | 3 tasks | 27 files |
 | Phase 07 P13 | 8 min | 3 tasks | 11 files |
 | Phase 07 P14 | 14min | 3 tasks | 9 files |
+| Phase 07 P15 | 18 min | 3 tasks | 21 files |
 
 ## Accumulated Context
 
@@ -177,6 +178,7 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 07]: 07-13: 입장·퇴장 시스템 줄은 diff 의 모든 항목에 만들고 토스트는 마지막 한 명만(재접속 띠·방장 변경 제외 규칙은 토스트와 별개로 기록은 띠와 무관하게 남김)
 - [Phase 07]: 07-13: 대기실 복귀 비우기는 직전 단계가 lobby 가 아니고 지금 lobby 일 때만(A2), reset 효과를 setContext 효과보다 먼저 선언
 - [Phase 07]: 07-14: applyChat 을 async 로 바꿔 쓰기 뒤 전송(받는 사람 집합은 await 앞에서 계산), chatLog 프레임은 로비가 아니어도 hello 직후 항상 sendTo 로 보낸다
+- [Phase 07]: 07-15: 테이블 화면 하단 패널은 의도(chatPanelMode)와 서버 view.me.chat 이 같을 때만 그린다(서버 값이 기준). 채팅 패널이 하단이면 헤더 안내줄이 data-guide. 유령 시작 줄은 직전 줄이 같은 안내면 연달아 만들지 않음
 
 ### Pending Todos
 
@@ -213,8 +215,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-01T14:58:26.847Z
-Stopped at: Completed 07-14-PLAN.md
+Last session: 2026-11-01T15:20:14.479Z
+Stopped at: Completed 07-15-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
