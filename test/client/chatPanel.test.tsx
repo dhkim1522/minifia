@@ -370,6 +370,16 @@ describe("ChatPanel 한글 조합 중 제출 (UI-SPEC 한글 입력, 합격 검�
     expect(document.activeElement === input(container), "포커스가 입력칸").toBe(true);
   });
 
+  it("보내기 버튼을 누르는 순간(mousedown)이 포커스를 옮기지 않는다: 키보드가 닫히며 버튼이 손가락 밑에서 내려가는 일이 없다 (CHAT-05, 합격 검사 6)", () => {
+    const { container } = render(<Harness initial="안녕" />);
+    const inp = input(container);
+    inp.focus();
+    // fireEvent 는 기본 동작이 막히지 않았을 때만 true 를 돌려준다
+    const notPrevented = fireEvent.mouseDown(sendBtn(container));
+    expect(notPrevented, "mousedown 의 기본 동작(포커스 이동)이 막힘").toBe(false);
+    expect(document.activeElement === inp, "포커스가 입력칸").toBe(true);
+  });
+
   it("Esc 는 입력칸을 blur 하고 값은 그대로 둔다", () => {
     const { container } = render(<Harness initial="abc" />);
     const inp = input(container);
