@@ -379,6 +379,75 @@ describe("WorldStage: 탭 → move (MAP-02)", () => {
   });
 });
 
+describe("WorldStage: 입력칸에 포커스가 있을 때의 탭은 키보드만 닫는다 (D4, CHAT-05)", () => {
+  const chatInput = (attr = true): HTMLInputElement => {
+    const input = document.createElement("input");
+    if (attr) input.setAttribute("data-chat-input", "");
+    document.body.append(input);
+    input.focus();
+    return input;
+  };
+  afterEach(() => {
+    for (const el of document.querySelectorAll("body > input")) el.remove();
+  });
+
+  it("입력칸 포커스 중 빈 곳을 탭하면 move 를 보내지 않고 입력칸이 blur 된다", async () => {
+    const s = await open();
+    const r = s.world.renderers[0]!;
+    const input = chatInput();
+    expect(document.activeElement).toBe(input);
+    tapAt(surface(s.utils), 250, 340);
+    expect(s.send).not.toHaveBeenCalled();
+    expect(document.activeElement).not.toBe(input);
+    frame();
+    expect(r.markers.some((m) => m.kind === "ring" && m.at !== null)).toBe(false);
+  });
+
+  it("키보드가 닫힌 뒤의 탭부터 평소처럼 걷는다", async () => {
+    const s = await open();
+    chatInput();
+    const el = surface(s.utils);
+    tapAt(el, 250, 340);
+    expect(s.send).not.toHaveBeenCalled();
+    act(() => {
+      vi.advanceTimersByTime(300);
+    });
+    tapAt(el, 250, 340);
+    expect(s.send).toHaveBeenCalledTimes(1);
+    expect(s.send).toHaveBeenCalledWith({ t: "move", x: 500, z: 400 });
+  });
+
+  it("채팅 입력칸이 아닌 다른 입력칸에 포커스가 있을 때는 평소처럼 걷는다", async () => {
+    const s = await open();
+    chatInput(false);
+    tapAt(surface(s.utils), 250, 340);
+    expect(s.send).toHaveBeenCalledTimes(1);
+  });
+
+  it("누르는 순간 입력칸에 포커스가 없었다면(탭 도중에 생긴 포커스는 무관) 걷는다", async () => {
+    const s = await open();
+    const el = surface(s.utils);
+    fireEvent.pointerDown(el, { pointerId: 1, clientX: 250, clientY: 340 });
+    chatInput();
+    act(() => {
+      vi.advanceTimersByTime(50);
+    });
+    fireEvent.pointerUp(el, { pointerId: 1, clientX: 250, clientY: 340 });
+    expect(s.send).toHaveBeenCalledTimes(1);
+  });
+
+  it("끌기(탭이 아님)는 포커스를 건드리지 않는다", async () => {
+    const s = await open();
+    const input = chatInput();
+    const el = surface(s.utils);
+    fireEvent.pointerDown(el, { pointerId: 1, clientX: 100, clientY: 100 });
+    fireEvent.pointerMove(el, { pointerId: 1, clientX: 140, clientY: 100 });
+    fireEvent.pointerUp(el, { pointerId: 1, clientX: 140, clientY: 100 });
+    expect(document.activeElement).toBe(input);
+    expect(s.send).not.toHaveBeenCalled();
+  });
+});
+
 describe("WorldStage: 서버 구간대로 걷기와 카메라 (MAP-02, MAP-03)", () => {
   it("서버 구간 전에는 내 캐릭터가 움직이지 않는다(예측 이동 없음)", async () => {
     const s = await open();

@@ -1,11 +1,11 @@
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { StrictMode } from "react";
 import { readFileSync } from "node:fs";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import "../helpers/singleLineErrors";
 import type { ClientMessage, PublicPlayer, RoomView } from "../../shared/protocol";
 import type { WorldStageProps } from "../../src/components/WorldStage";
-import { LOBBY_PANEL_EXTRA } from "../../src/game/chatUi";
+import { KB_PANEL_H, LOBBY_PANEL_EXTRA, LOG_H_KB, LOG_H_TALL, lobbyPanelHeight } from "../../src/game/chatUi";
 import { ChatStore } from "../../src/net/chatStore";
 import { WorldStore } from "../../src/world/store";
 
@@ -689,5 +689,166 @@ describe("Lobby — 스타일 계약 (lobby.css)", () => {
 
   it("옛 대기실 규칙(방 코드 36px·장면 상자·시트 157)은 남아 있지 않다", () => {
     expect(css).not.toMatch(/mf-lobby__code|mf-lobby__scene|mf-lobby__sheet|mf-lobby__bar/);
+  });
+});
+
+// ---------- 07-19: 키보드 배치 (CHAT-05, UI-SPEC 패널과 키보드, 사용자 확정 D3) ----------
+
+describe("Lobby — 키보드가 열리면 패널이 올라가고 행동 줄이 숨는다 (CHAT-05, D3)", () => {
+  const INNER_H = 844;
+  const realInnerH = window.innerHeight;
+  const lobbyView = makeView([player(0, "민수"), player(1, "서준")], 0);
+  let panelH = lobbyPanelHeight(LOG_H_TALL);
+  let resizeCallbacks: Array<() => void> = [];
+
+  interface FakeVV extends EventTarget {
+    height: number;
+    offsetTop: number;
+  }
+  const installVV = (height: number, offsetTop = 0): FakeVV => {
+    const vv = Object.assign(new EventTarget(), { height, offsetTop }) as FakeVV;
+    Object.defineProperty(window, "visualViewport", { value: vv, configurable: true, writable: true });
+    return vv;
+  };
+  /** 패널·헤더의 높이를 DOM 대신 값으로 돌려준다(happy-dom 은 레이아웃이 없다). 패널 높이는 panelH 변수가 정한다 */
+  const stubLayout = () => {
+    vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockImplementation(function (this: HTMLElement) {
+      if (this.classList.contains("mf-lobby__panel")) return panelH;
+      if (this.classList.contains("mf-lobby__header")) return 62;
+      return 0;
+    });
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        constructor(cb: () => void) {
+          resizeCallbacks.push(cb);
+        }
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+      },
+    );
+  };
+  const remeasure = () => act(() => void resizeCallbacks.forEach((cb) => cb()));
+  const inputOf = (container: HTMLElement) => container.querySelector("[data-chat-input]") as HTMLInputElement;
+  const rootOf = (container: HTMLElement) => container.querySelector("main.mf-lobby") as HTMLElement;
+  const actionButtons = (container: HTMLElement) => container.querySelectorAll(".mf-lobby__panel button:not([data-chat-send])").length;
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    Object.defineProperty(window, "innerHeight", { value: INNER_H, configurable: true, writable: true });
+    panelH = lobbyPanelHeight(LOG_H_TALL);
+    resizeCallbacks = [];
+    stubLayout();
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+    Object.defineProperty(window, "innerHeight", { value: realInnerH, configurable: true, writable: true });
+    Reflect.deleteProperty(window, "visualViewport");
+  });
+
+  /** 입력칸에 포커스를 주고 키보드 높이 lift 만큼 visualViewport 를 줄인다 */
+  const focusWithKeyboard = (container: HTMLElement, vv: FakeVV, lift: number, offsetTop = 0) => {
+    act(() => inputOf(container).focus());
+    vv.height = INNER_H - lift - offsetTop;
+    vv.offsetTop = offsetTop;
+    act(() => void vv.dispatchEvent(new Event("resize")));
+    advance(20);
+  };
+
+  it("포커스 + lift 336: 루트 data-kb-open true, 행동 줄 없음, 기록 칸 72, 패널 --kb, 스테이지 아래 = 150 + 336", () => {
+    const vv = installVV(INNER_H);
+    const { container } = render(lobby(lobbyView));
+    expect(props().stageInsets).toEqual({ top: 62, bottom: lobbyPanelHeight(LOG_H_TALL) });
+    expect(actionButtons(container)).toBe(1);
+    focusWithKeyboard(container, vv, 336);
+    panelH = KB_PANEL_H;
+    remeasure();
+    expect(rootOf(container).getAttribute("data-kb-open")).toBe("true");
+    expect(rootOf(container).style.getPropertyValue("--mf-kb-lift")).toBe("336px");
+    expect(actionButtons(container)).toBe(0);
+    expect((container.querySelector("[data-chat-log]") as HTMLElement).style.height).toBe(`${LOG_H_KB}px`);
+    expect(container.querySelector(".mv-chat.is-compact")).not.toBeNull();
+    expect(container.querySelector(".mf-lobby__panel")?.classList.contains("mf-lobby__panel--kb")).toBe(true);
+    expect(props().stageInsets).toEqual({ top: 62, bottom: KB_PANEL_H + 336 });
+  });
+
+  it("lift 가 바뀌면(키보드 높이 340) 다시 그리지 않아도 스테이지 아래 끝이 따라간다", () => {
+    const vv = installVV(INNER_H);
+    const { container } = render(lobby(lobbyView));
+    focusWithKeyboard(container, vv, 336);
+    panelH = KB_PANEL_H;
+    remeasure();
+    vv.height = INNER_H - 340;
+    act(() => void vv.dispatchEvent(new Event("resize")));
+    advance(20);
+    expect(props().stageInsets?.bottom).toBe(KB_PANEL_H + 340);
+  });
+
+  it("포커스 중 lift 60(열림 경계 80 아래): data-kb-open 없음, 행동 줄 있음, 기록 칸 그대로", () => {
+    const vv = installVV(INNER_H);
+    const { container } = render(lobby(lobbyView));
+    focusWithKeyboard(container, vv, 60);
+    expect(rootOf(container).hasAttribute("data-kb-open")).toBe(false);
+    expect(actionButtons(container)).toBe(1);
+    expect((container.querySelector("[data-chat-log]") as HTMLElement).style.height).toBe(`${LOG_H_TALL}px`);
+    expect(container.querySelector(".mf-lobby__panel")?.classList.contains("mf-lobby__panel--kb")).toBe(false);
+  });
+
+  it("블러하면 원래대로: data-kb-open 없음, 행동 줄 복귀, 기록 칸 원래 값, 스테이지 아래 = 원래 패널 높이", () => {
+    const vv = installVV(INNER_H);
+    const { container } = render(lobby(lobbyView));
+    focusWithKeyboard(container, vv, 336);
+    panelH = KB_PANEL_H;
+    remeasure();
+    act(() => inputOf(container).blur());
+    panelH = lobbyPanelHeight(LOG_H_TALL);
+    remeasure();
+    expect(rootOf(container).hasAttribute("data-kb-open")).toBe(false);
+    expect(rootOf(container).style.getPropertyValue("--mf-kb-lift")).toBe("0px");
+    expect(actionButtons(container)).toBe(1);
+    expect((container.querySelector("[data-chat-log]") as HTMLElement).style.height).toBe(`${LOG_H_TALL}px`);
+    expect(props().stageInsets).toEqual({ top: 62, bottom: lobbyPanelHeight(LOG_H_TALL) });
+  });
+
+  it("vv.offsetTop 120 이면 --mf-vv-top 120px 가 쓰인다(헤더 계열이 이 값만큼 내려온다)", () => {
+    const vv = installVV(INNER_H);
+    const { container } = render(lobby(lobbyView));
+    focusWithKeyboard(container, vv, 336, 120);
+    expect(rootOf(container).style.getPropertyValue("--mf-vv-top")).toBe("120px");
+  });
+
+  it("키보드가 열려도 창 스크롤을 억지로 되돌리지 않는다(window.scrollTo 호출 없음)", () => {
+    const scrollTo = vi.spyOn(window, "scrollTo").mockImplementation(() => {});
+    const vv = installVV(INNER_H);
+    const { container } = render(lobby(lobbyView));
+    focusWithKeyboard(container, vv, 336, 120);
+    act(() => inputOf(container).blur());
+    advance(1100);
+    expect(scrollTo).not.toHaveBeenCalled();
+  });
+});
+
+describe("Lobby — 키보드 배치 스타일 계약 (lobby.css, room.css)", () => {
+  const lobbyCss = readFileSync("src/styles/lobby.css", "utf8");
+  const roomCss = readFileSync("src/styles/room.css", "utf8");
+
+  it("패널 --kb: bottom 이 --mf-kb-lift, 아래 여백 8", () => {
+    const rule = lobbyCss.match(/\.mf-lobby__panel--kb\s*\{[^}]*\}/)?.[0] ?? "";
+    expect(rule).toContain("bottom: var(--mf-kb-lift, 0px)");
+    expect(rule).toContain("padding-bottom: 8px");
+  });
+
+  it("헤더·위 알림·재접속 띠(떠 있는 변형)는 translateY(var(--mf-vv-top)) 로 보이는 영역 맨 위에 머문다", () => {
+    for (const sel of [".mf-lobby__header", ".mf-lobby .mv-toast", ".mf-reconnect--floating"]) {
+      const rule = lobbyCss.split("}").find((r) => r.includes(sel) && r.includes("translateY(var(--mf-vv-top")) ?? "";
+      expect(rule, sel).not.toBe("");
+    }
+  });
+
+  it("방 높이는 --mf-room-h(px) 를 쓰고, 값이 없을 때만 100dvh 식이다", () => {
+    const rule = roomCss.match(/\.mf-room\s*\{[^}]*\}/)?.[0] ?? "";
+    expect(rule).toContain("height: var(--mf-room-h, calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom)))");
   });
 });

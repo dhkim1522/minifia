@@ -553,3 +553,61 @@ describe("RoomScreen: 채팅 저장소 연결 (CHAT-01, 07-13)", () => {
   });
 });
 
+
+// ---------- 07-19: 방 높이는 px 로 고정한다 (CHAT-05, UI-SPEC 패널과 키보드 — 100dvh 로 키보드를 따라가지 않는다) ----------
+
+describe("RoomScreen: 방 높이 --mf-room-h (CHAT-05)", () => {
+  let height = 700;
+  const root = (container: HTMLElement) => container.querySelector(".mf-room") as HTMLElement;
+  const roomH = (container: HTMLElement) => root(container).style.getPropertyValue("--mf-room-h");
+  const settle = () => act(() => void vi.advanceTimersByTime(50));
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    height = 700;
+    vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockImplementation(function (this: HTMLElement) {
+      return this.classList.contains("mf-room") ? height : 0;
+    });
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  it("처음 그릴 때 측정한 방 높이를 px 로 쓴다", () => {
+    const { container } = render(<RoomScreen code="0042" token={"t".repeat(43)} onExit={vi.fn()} />);
+    expect(roomH(container)).toBe("700px");
+  });
+
+  it("입력칸에 포커스가 없을 때 화면 크기가 바뀌면(방향 전환·주소창) 다시 정한다", () => {
+    const { container } = render(<RoomScreen code="0042" token={"t".repeat(43)} onExit={vi.fn()} />);
+    height = 390;
+    act(() => void window.dispatchEvent(new Event("orientationchange")));
+    settle();
+    expect(roomH(container)).toBe("390px");
+    height = 420;
+    act(() => void window.dispatchEvent(new Event("resize")));
+    settle();
+    expect(roomH(container)).toBe("420px");
+  });
+
+  it("채팅 입력칸에 포커스가 있는 동안의 resize(키보드)는 방 높이를 바꾸지 않는다", () => {
+    const { container } = render(<RoomScreen code="0042" token={"t".repeat(43)} onExit={vi.fn()} />);
+    const input = container.querySelector("[data-chat-input]") as HTMLInputElement;
+    act(() => input.focus());
+    height = 380;
+    act(() => void window.dispatchEvent(new Event("resize")));
+    settle();
+    expect(roomH(container)).toBe("700px");
+    act(() => input.blur());
+    act(() => void window.dispatchEvent(new Event("resize")));
+    settle();
+    expect(roomH(container)).toBe("380px");
+  });
+
+  it("높이를 읽지 못하면(레이아웃 없음) 변수를 쓰지 않아 100dvh 식이 그대로 쓰인다", () => {
+    height = 0;
+    const { container } = render(<RoomScreen code="0042" token={"t".repeat(43)} onExit={vi.fn()} />);
+    expect(roomH(container)).toBe("");
+  });
+});
