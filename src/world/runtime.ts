@@ -97,6 +97,8 @@ export const ENTER_MS = 420;
 export const EXIT_MS = 180;
 /** 로비를 떠날 때 맵을 night-900 으로 덮는 시간(ms) = dur-med. WorldStage 의 가림막과 RoomScreen 의 단계 전환 지연이 같은 값을 쓴다 */
 export const EXIT_CURTAIN_MS = 420;
+/** 프레임 오류 로그 최소 간격(ms) — 매 프레임 던져도 콘솔을 채우지 않는다 */
+const FRAME_ERROR_LOG_MS = 1000;
 /** 탭 뒤 이 시간 안에 내 서버 구간이 없으면 응답 없음 */
 export const MOVE_ACK_TIMEOUT_MS = 1500;
 
@@ -609,10 +611,31 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
     rafId = raf(frame);
   }
 
+  let lastFrameErrorAt = -Infinity;
+
+  /** 프레임 한 번의 예외는 로그로 남기되 루프를 멈추지 않는다. 계속 던져도 로그는 1초에 한 번만 낸다 */
+  function reportFrameError(err: unknown): void {
+    const at = Date.now();
+    if (at - lastFrameErrorAt < FRAME_ERROR_LOG_MS) return;
+    lastFrameErrorAt = at;
+    console.error("[world] 프레임 처리 중 오류 — 다음 프레임에서 계속합니다", err);
+  }
+
   function frame(): void {
     rafId = null;
     const r = renderer;
     if (disposed || r === null) return;
+    try {
+      drawFrame(r);
+    } catch (err) {
+      reportFrameError(err);
+    } finally {
+      // 한 프레임의 throw 가 다음 프레임 예약을 막아 맵이 영구 정지하지 않게 한다(06 리뷰 WR-01)
+      schedule();
+    }
+  }
+
+  function drawFrame(r: WorldRenderer): void {
     const now = Date.now();
     const gapMs = now - lastFrameAt;
     const dt = Math.min(Math.max(gapMs / 1000, 0), MAX_DT);
@@ -730,8 +753,6 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
     if (status.status === "loading" && store.isReady()) dispatch({ t: "ready" });
     if (status.status === "ready") degrade.frame(gapMs);
     deps.onFrame?.({ renderMs, tagsMs });
-
-    schedule();
   }
 
   /** 이름표: 머리 꼭대기 투영 좌표를 장치 픽셀에 반올림해 놓고, 발끝 화면 y 가 큰 쪽을 위로 쌓는다(밀지 않는다) */

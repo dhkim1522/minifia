@@ -963,6 +963,45 @@ describe("WebGL 컨텍스트 소실·복구 (MAP-05)", () => {
   });
 });
 
+describe("프레임 루프 예외 내성 (06 리뷰 WR-01)", () => {
+  it("한 프레임에서 렌더러가 던져도 다음 프레임이 예약되고, 다음 프레임에서 그리기가 이어진다", async () => {
+    const s = await open();
+    const r = s.world.renderers[0]!;
+    const err = vi.spyOn(console, "error").mockImplementation(() => {});
+    let boom = true;
+    const draw = r.render.bind(r);
+    r.render = () => {
+      if (boom) {
+        boom = false;
+        throw new Error("render 실패");
+      }
+      draw();
+    };
+    const before = r.renders;
+    frame();
+    expect(rafCbs.size).toBe(1); // 던진 프레임 뒤에도 루프가 살아 있다
+    expect(r.renders).toBe(before);
+    frame();
+    expect(r.renders).toBe(before + 1);
+    expect(err).toHaveBeenCalled();
+    err.mockRestore();
+  });
+
+  it("연속으로 던져도 루프는 계속 돌고 오류 로그는 프레임마다 쏟아지지 않는다", async () => {
+    const s = await open();
+    const r = s.world.renderers[0]!;
+    const err = vi.spyOn(console, "error").mockImplementation(() => {});
+    r.render = () => {
+      throw new Error("항상 실패");
+    };
+    frames(480); // 약 30 프레임
+    expect(rafCbs.size).toBe(1);
+    expect(err.mock.calls.length).toBeGreaterThan(0);
+    expect(err.mock.calls.length).toBeLessThan(5);
+    err.mockRestore();
+  });
+});
+
 describe("화면 숨김·복귀 (UI-SPEC 연결·복귀 상태)", () => {
   it("숨겨지면 그리기를 멈추고, 다시 보이면 한 프레임을 서버 위치로 맞춘다", async () => {
     const s = await open();
