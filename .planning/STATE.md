@@ -5,11 +5,11 @@ milestone_name: 같은 공간
 current_phase: 06
 current_phase_name: 월드 뼈대
 status: executing
-stopped_at: Completed 06-21-PLAN.md
-last_updated: "2026-11-01T00:34:23.946Z"
+stopped_at: Halted 06-17-PLAN.md (v1.0 게임 흐름 범위 밖 실패, 사용자 결정 대기)
+last_updated: "2026-11-01T01:03:40.883Z"
 last_activity: 2026-11-01
 last_activity_desc: Phase 06 execution started
-state_head: bac15f810cbe69d84e4f963d2b0b2386d5cb5ee2
+state_head: 688431bb22a37423b78759fe6ca864cf08631ebc
 progress:
   total_phases: 7
   completed_phases: 0
@@ -139,6 +139,7 @@ None yet.
 - [9페이즈] 아침 시작 위치: 결정 0044-18 은 "밤이 끝난 자리" 이지만 리서치는 정체 누설을 우려해 낮 시작 대형 초기화를 권한다 — 9페이즈 논의에서 확정
 - [12페이즈] iOS 무음 스위치·소리 에셋 상업 이용 약관은 실기기·출시 마일스톤에서 확인한다
 - [출시 전] 수익화는 출시 전에 따로 정한다
+- 06-17 멈춤: v1.0 게임 흐름 E2E 가 결정 0056 완화 범위(D9·D3b) 밖 G2·D2(·P10)로 실패 — 8자 봇 이름표가 360·390 폭 고정 테이블 옆자리에서 화면 밖 최대 17.7px. 사용자 결정 필요(완화 확대 / DayTable 수정 / 게임 흐름 봇 이름 5자). 06-17-SUMMARY.md 참조
 
 ### Quick Tasks Completed
 
@@ -161,9 +162,9 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-01T00:34:23.913Z
-Stopped at: Completed 06-21-PLAN.md
-Resume file: None
+Last session: 2026-11-01T01:03:40.853Z
+Stopped at: Halted 06-17-PLAN.md (v1.0 게임 흐름 범위 밖 실패, 사용자 결정 대기)
+Resume file: .planning/phases/06-world-skeleton/06-17-SUMMARY.md
 
 ## Operator Next Steps
 
