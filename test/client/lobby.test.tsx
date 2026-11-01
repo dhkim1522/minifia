@@ -283,11 +283,11 @@ describe("Lobby — 알림은 TopToast 하나 (D-10, CONN-04 WR-03)", () => {
     expect(toastOn(container)).toBe(false);
   });
 
-  it("같은 epoch 로 하윤이 더해진 view 가 오면 알림 '하윤님이 들어왔어요' 가 켜졌다 1.5초 뒤 사라진다 (문구는 06-21 전까지 v1 그대로)", () => {
+  it("같은 epoch 로 하윤이 더해진 view 가 오면 알림 '하윤 님 입장' 이 켜졌다 1.5초 뒤 사라진다", () => {
     vi.useFakeTimers();
     const { container, rerender } = render(lobby(makeView(base, 0), { epoch: 0 }));
     rerender(lobby(makeView([...base, player(2, "하윤")], 0), { epoch: 0 }));
-    expect(toastText(container)).toBe("하윤님이 들어왔어요");
+    expect(toastText(container)).toBe("하윤 님 입장");
     expect(toastOn(container)).toBe(true);
     advance(1499);
     expect(toastOn(container)).toBe(true);
@@ -303,7 +303,7 @@ describe("Lobby — 알림은 TopToast 하나 (D-10, CONN-04 WR-03)", () => {
     rerender(lobby(makeView([...base, player(2, "하윤")], 0), { epoch: 0 }));
     rerender(lobby(makeView([...base, player(2, "하윤"), player(3, "지아")], 0), { epoch: 0 }));
     expect(container.querySelectorAll(".mv-toast").length).toBe(1);
-    expect(toastText(container)).toBe("지아님이 들어왔어요");
+    expect(toastText(container)).toBe("지아 님 입장");
   });
 
   it("epoch 를 바꾸며 사람이 더해진 view 를 주면(재연결 직후) 알림이 없다", () => {
@@ -316,19 +316,34 @@ describe("Lobby — 알림은 TopToast 하나 (D-10, CONN-04 WR-03)", () => {
     const { container, rerender } = render(lobby(makeView(base, 0), { epoch: 0 }));
     rerender(lobby(makeView([...base, player(2, "하윤")], 0), { epoch: 1 }));
     rerender(lobby(makeView([...base, player(2, "하윤"), player(3, "지아")], 0), { epoch: 1 }));
-    expect(toastText(container)).toBe("지아님이 들어왔어요");
+    expect(toastText(container)).toBe("지아 님 입장");
   });
 
-  it("방장이 바뀌면 '서준님이 새 방장이 되었어요'", () => {
+  it("방장이 바뀌면 왕관 아이콘과 함께 '방장 · 서준'", () => {
     const { container, rerender } = render(lobby(makeView(base, 0)));
     rerender(lobby(makeView([player(0, "민수", { isHost: false }), player(1, "서준", { isHost: true })], 0)));
-    expect(toastText(container)).toBe("서준님이 새 방장이 되었어요");
+    expect(toastText(container)).toBe("방장 · 서준");
+    expect(container.querySelector(".mv-toast svg") !== null).toBe(true);
+  });
+
+  it("입장 알림에는 아이콘이 없다", () => {
+    const { container, rerender } = render(lobby(makeView(base, 0)));
+    rerender(lobby(makeView([...base, player(2, "하윤")], 0)));
+    expect(toastText(container)).toBe("하윤 님 입장");
+    expect(container.querySelector(".mv-toast svg") === null).toBe(true);
+  });
+
+  it("같은 epoch 에서 한 명이 빠진 view 는 '영희 님 퇴장'", () => {
+    const three = [player(0, "민수"), player(1, "서준"), player(2, "영희")];
+    const { container, rerender } = render(lobby(makeView(three, 0)));
+    rerender(lobby(makeView([player(0, "민수"), player(1, "서준")], 0)));
+    expect(toastText(container)).toBe("영희 님 퇴장");
   });
 
   it("같은 변화에 입장과 방장 변경이 함께면 방장 변경을 보인다", () => {
     const { container, rerender } = render(lobby(makeView(base, 0)));
     rerender(lobby(makeView([player(0, "민수", { isHost: false }), player(1, "서준", { isHost: true }), player(2, "하윤")], 0)));
-    expect(toastText(container)).toBe("서준님이 새 방장이 되었어요");
+    expect(toastText(container)).toBe("방장 · 서준");
   });
 
   it("나 자신이 새로 앉은 변화에는 알림이 없다", () => {
@@ -345,7 +360,7 @@ describe("Lobby — 알림은 TopToast 하나 (D-10, CONN-04 WR-03)", () => {
     rerender(lobby(makeView([...base, player(2, "하윤")], 0), { epoch: 0, bannerVisible: false }));
     expect(toastText(container)).toBe("");
     rerender(lobby(makeView([...base, player(2, "하윤"), player(3, "지아")], 0), { epoch: 0, bannerVisible: false }));
-    expect(toastText(container)).toBe("지아님이 들어왔어요");
+    expect(toastText(container)).toBe("지아 님 입장");
   });
 
   it("맵이 알리는 글(onNotice)도 같은 알림 자리에 뜬다", () => {

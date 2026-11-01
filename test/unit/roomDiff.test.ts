@@ -46,13 +46,13 @@ describe("diffRoomViews — 스냅샷 두 개의 차이", () => {
   it("같은 seat 에 다른 사람이 들어오면 나간 사람과 들어온 사람으로 본다(자리 재사용)", () => {
     const prev = view([p(0, "민수", { isHost: true }), p(1, "서준")]);
     const next = view([p(0, "민수", { isHost: true }), p(1, "지아")]);
-    same(diffRoomViews(prev, next), { joined: [{ seat: 1, nickname: "지아" }], left: [1], newHost: null });
+    same(diffRoomViews(prev, next), { joined: [{ seat: 1, nickname: "지아" }], left: [{ seat: 1, nickname: "서준" }], newHost: null });
   });
 
-  it("나간 사람의 seat 가 left 에 들어간다", () => {
+  it("나간 사람의 seat 와 이전 view 의 닉네임이 left 에 들어간다", () => {
     const prev = view([p(0, "민수", { isHost: true }), p(1, "서준")]);
     const next = view([p(0, "민수", { isHost: true })]);
-    same(diffRoomViews(prev, next), { joined: [], left: [1], newHost: null });
+    same(diffRoomViews(prev, next), { joined: [], left: [{ seat: 1, nickname: "서준" }], newHost: null });
   });
 
   it("방장이 바뀌면 newHost", () => {
@@ -68,15 +68,23 @@ describe("diffRoomViews — 스냅샷 두 개의 차이", () => {
   });
 });
 
-describe("toastForDiff — 한 번에 하나", () => {
-  it("방장 변경과 입장이 함께면 방장 변경을 보인다", () => {
-    expect(
+describe("toastForDiff — 한 번에 하나, v2 말투 (결정 0051 · UI-SPEC Copywriting)", () => {
+  it("방장 변경과 입장이 함께면 방장 변경을 왕관 아이콘과 함께 보인다", () => {
+    same(
       toastForDiff({ joined: [{ seat: 2, nickname: "하윤" }], left: [], newHost: { seat: 1, nickname: "서준" } }),
-    ).toBe("서준님이 새 방장이 되었어요");
+      { text: "방장 · 서준", icon: "crown" },
+    );
   });
 
-  it("입장만이면 마지막 사람", () => {
-    expect(
+  it("방장 변경과 퇴장이 함께여도 방장 변경이 우선이다", () => {
+    same(
+      toastForDiff({ joined: [], left: [{ seat: 0, nickname: "민수" }], newHost: { seat: 1, nickname: "서준" } }),
+      { text: "방장 · 서준", icon: "crown" },
+    );
+  });
+
+  it("입장만이면 마지막 사람 '{닉네임} 님 입장' (아이콘 없음)", () => {
+    same(
       toastForDiff({
         joined: [
           { seat: 2, nickname: "하윤" },
@@ -85,12 +93,43 @@ describe("toastForDiff — 한 번에 하나", () => {
         left: [],
         newHost: null,
       }),
-    ).toBe("지아님이 들어왔어요");
-    expect(toastForDiff({ joined: [{ seat: 2, nickname: "하윤" }], left: [], newHost: null })).toBe("하윤님이 들어왔어요");
+      { text: "지아 님 입장" },
+    );
+    same(toastForDiff({ joined: [{ seat: 2, nickname: "하윤" }], left: [], newHost: null }), { text: "하윤 님 입장" });
   });
 
-  it("바뀐 것이 없으면(나감만 있어도) null", () => {
+  it("입장과 퇴장이 함께면 입장이 우선이다", () => {
+    same(
+      toastForDiff({ joined: [{ seat: 1, nickname: "지아" }], left: [{ seat: 1, nickname: "서준" }], newHost: null }),
+      { text: "지아 님 입장" },
+    );
+  });
+
+  it("퇴장만이면 마지막 사람 '{닉네임} 님 퇴장'", () => {
+    same(toastForDiff({ joined: [], left: [{ seat: 1, nickname: "영희" }], newHost: null }), { text: "영희 님 퇴장" });
+    same(
+      toastForDiff({
+        joined: [],
+        left: [
+          { seat: 1, nickname: "영희" },
+          { seat: 2, nickname: "철수" },
+        ],
+        newHost: null,
+      }),
+      { text: "철수 님 퇴장" },
+    );
+  });
+
+  it("바뀐 것이 없으면 null", () => {
     expect(toastForDiff({ joined: [], left: [], newHost: null })).toBeNull();
-    expect(toastForDiff({ joined: [], left: [1], newHost: null })).toBeNull();
+  });
+
+  it("8자 닉네임의 입장·퇴장 글은 13자 이하라 한 줄에 들어간다 (UI-SPEC E7)", () => {
+    const nick = "가나다라마바사아";
+    expect(nick.length).toBe(8);
+    const join = toastForDiff({ joined: [{ seat: 1, nickname: nick }], left: [], newHost: null });
+    const leave = toastForDiff({ joined: [], left: [{ seat: 1, nickname: nick }], newHost: null });
+    expect(join?.text.length).toBeLessThanOrEqual(13);
+    expect(leave?.text.length).toBeLessThanOrEqual(13);
   });
 });
