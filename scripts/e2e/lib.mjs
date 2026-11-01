@@ -246,9 +246,10 @@ export function genericIssues(snap, { w }) {
   const g1Bad = [];
   if (snap.docW > w) g1Bad.push(`documentElement ${fmt(snap.docW)} > ${w}`);
   if (snap.bodyW > w) g1Bad.push(`body ${fmt(snap.bodyW)} > ${w}`);
-  const g2Bad = snap.elements
-    .filter((e) => e.rect.left < -0.5 || right(e.rect) > w + 0.5)
-    .map((e) => `${e.desc} (${fmt(e.rect.left)}~${fmt(right(e.rect))})`);
+  // 결정 0056 개정(G2-8ch): v1.0 고정 테이블의 6 그래핌 이상 이름 이름표(.mf-dt__tag 와 그 안쪽 요소, fixedTagName)가 화면 밖이면 완화 범위다. 그 밖의 요소는 그대로 실패한다.
+  const g2Out = snap.elements.filter((e) => e.rect.left < -0.5 || right(e.rect) > w + 0.5);
+  const g2Bad = g2Out.filter((e) => !isWideName(e.fixedTagName)).map((e) => `${e.desc} (${fmt(e.rect.left)}~${fmt(right(e.rect))})`);
+  const g2Relaxed = g2Out.filter((e) => isWideName(e.fixedTagName)).map((e) => `${e.desc} (${fmt(e.rect.left)}~${fmt(right(e.rect))})`);
   const g3Bad = snap.interactive
     .filter((e) => e.rect.width + 0.5 < TAP_MIN || e.rect.height + 0.5 < TAP_MIN)
     .map((e) => `${e.desc} ${fmt(e.rect.width)}x${fmt(e.rect.height)}`);
@@ -256,7 +257,9 @@ export function genericIssues(snap, { w }) {
   const mk = (id, bad, name) => ({ id, ok: bad.length === 0, detail: bad.length === 0 ? "" : `${name}: ${list(bad)}` });
   return [
     mk("G1", g1Bad, "가로 스크롤"),
-    mk("G2", g2Bad, "화면 밖"),
+    g2Bad.length === 0 && g2Relaxed.length > 0
+      ? { id: "G2", ok: true, relaxed: true, detail: `승인 완화(G2-8ch, 결정 0056) 적용: 6자 이상 이름 이름표 요소 ${g2Relaxed.length}개 화면 밖 — ${list(g2Relaxed)}` }
+      : mk("G2", g2Bad, "화면 밖"),
     mk("G3", g3Bad, "탭 대상 44px 미만"),
     mk("G4", issues.console, "콘솔 오류"),
     mk("G5", issues.failed, "실패한 요청"),
@@ -362,11 +365,16 @@ export const APPROVED_RELAXATIONS = [
   // 8~9페이즈에 고정 테이블을 지울 때 이 두 항목도 함께 지운다.
   { id: "D9-8ch", approved: "결정 0056", reason: "v1.0 고정 테이블 화면(8~9페이즈 삭제)에서 6 그래핌 이상 이름이 낀 이름표 겹침(D9). 겹침 기준 0.5px 불변" },
   { id: "D3b-8ch", approved: "결정 0056", reason: "v1.0 고정 테이블 화면(8~9페이즈 삭제)에서 6 그래핌 이상 이름표의 보이는 비율 바닥(D3b). 인원별 바닥 수치 불변" },
+  // 결정 0056 개정(2026-11-01, 사용자 선택 1): 같은 범위를 G2·D2·P10 으로 넓힌다. 대상은 v1.0 고정 테이블의 이름표(.mf-dt__tag 와 그 안쪽)와 칩뿐이다.
+  { id: "G2-8ch", approved: "결정 0056", reason: "v1.0 고정 테이블 화면(8~9페이즈 삭제)에서 6 그래핌 이상 이름의 이름표(.mf-dt__tag 와 그 안쪽 요소)가 화면 가로 밖으로 나감(G2). 그 밖의 요소가 화면 밖이면 그대로 실패. 화면 가로 기준 불변" },
+  { id: "D2-8ch", approved: "결정 0056", reason: "v1.0 고정 테이블 화면(8~9페이즈 삭제)에서 6 그래핌 이상 이름의 이름표가 장면 상자 밖으로 나감(D2 의 장면 밖 부분만). 하단 패널과 겹침은 그대로 실패" },
+  { id: "P10-8ch", approved: "결정 0056", reason: "v1.0 고정 테이블 화면(8~9페이즈 삭제)에서 투표 공개 칩이 6 그래핌 이상 이름의 이름표와 겹침(P10 의 칩-이름표 부분만). 헤더·패널·카드 겹침은 그대로 실패" },
 ];
 
 /** 결정 0056 완화 범위의 이름 조건: 이 그래핌 수 이상인 이름. */
 export const WIDE_NAME_GRAPHEMES = 6;
-const isWideTag = (t) => typeof t?.name === "string" && graphemeCount(t.name) >= WIDE_NAME_GRAPHEMES;
+const isWideName = (name) => typeof name === "string" && graphemeCount(name) >= WIDE_NAME_GRAPHEMES;
+const isWideTag = (t) => isWideName(t?.name);
 
 /** 완화가 적용된 통과 행: ok 이지만 relaxed 표시와 적용 내용을 detail 에 남긴다(결과 표에 보인다). */
 const relaxedResult = (id, label, relaxId, notes) => ({ id, label, ok: true, relaxed: true, detail: `승인 완화(${relaxId}, 결정 0056) 적용: ${notes.join("; ")}` });
@@ -455,9 +463,11 @@ export function dayChecks(snap, { w, h }) {
     d1.push(`"${snap.h1.text}" ${lineCount(snap.h1.rect.height, snap.h1.lineHeight)}줄 (높이 ${rd(snap.h1.rect.height)}, 줄 높이 ${rd(snap.h1.lineHeight)})`);
 
   // D2 이름표가 장면 안·패널 밖
+  // 결정 0056 개정(D2-8ch): 6 그래핌 이상 이름 이름표의 "장면 밖"만 완화한다. 하단 패널과 겹침은 이름 길이와 무관하게 실패.
   const d2 = [];
+  const d2Relaxed = [];
   for (const t of snap.tags) {
-    if (snap.scene && !rectInside(t.rect, snap.scene)) d2.push(`자리 ${t.seat} 이름표가 장면 밖`);
+    if (snap.scene && !rectInside(t.rect, snap.scene)) (isWideTag(t) ? d2Relaxed : d2).push(`자리 ${t.seat} 이름표가 장면 밖`);
     if (snap.panel && rectsOverlap(t.rect, snap.panel.rect)) d2.push(`자리 ${t.seat} 이름표가 하단 패널과 겹침`);
   }
 
@@ -480,7 +490,7 @@ export function dayChecks(snap, { w, h }) {
 
   return [
     result("D1", "위쪽 제목이 한 줄", d1),
-    result("D2", "이름표가 장면 안·패널 밖", d2),
+    d2.length === 0 && d2Relaxed.length > 0 ? relaxedResult("D2", "이름표가 장면 안·패널 밖", "D2-8ch", d2Relaxed) : result("D2", "이름표가 장면 안·패널 밖", d2),
     result("D3a", "이름표가 캐릭터 아래 층", d3aStructure(snap)),
     d3bResult(snap),
     result("D4", "[테스트]가 얼굴·이름표를 안 가리고 눌림", d4TestButton(snap)),
@@ -1500,12 +1510,13 @@ export function placementChecks(v) {
   if (miss.length > 0) return result("P10", label, miss);
 
   const bad = [];
+  const relaxed = []; // 결정 0056 개정(P10-8ch): 6 그래핌 이상 이름의 이름표와 칩이 겹친 것만 완화한다
   const { header, panel } = v.dt;
   for (const c of v.reveal.chips) {
     const who = `칩(자리 ${c.seat})`;
     if (rectsOverlap(c, header)) bad.push(`${who} 가 헤더와 겹침`);
     if (rectsOverlap(c, panel)) bad.push(`${who} 가 하단 패널과 겹침`);
-    for (const t of v.reveal.tags) if (rectsOverlap(c, t)) bad.push(`${who} 가 이름표(자리 ${t.seat})와 겹침`);
+    for (const t of v.reveal.tags) if (rectsOverlap(c, t)) (isWideTag(t) ? relaxed : bad).push(`${who} 가 이름표(자리 ${t.seat})와 겹침`);
   }
   if (card) {
     const sc = v.dt.scene;
@@ -1513,6 +1524,7 @@ export function placementChecks(v) {
     if (rectsOverlap(card, header)) bad.push("카드가 헤더와 겹침");
     if (rectsOverlap(card, panel)) bad.push("카드가 하단 패널과 겹침");
   }
+  if (bad.length === 0 && relaxed.length > 0) return relaxedResult("P10", label, "P10-8ch", [...new Set(relaxed)]);
   return result("P10", label, bad);
 }
 

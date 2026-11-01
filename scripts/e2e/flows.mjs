@@ -184,7 +184,8 @@ export async function checkState(ctx, flowId, state) {
   }
   const g = genericIssues(snap, ctx.size);
   const bad = g.filter((x) => !x.ok);
-  rec(`${flowId}/${state}`, "G", "G 공통 검사", bad.length === 0, bad.map((x) => `${x.id} ${x.detail}`).join(" / "));
+  const relaxedG = g.filter((x) => x.ok && x.relaxed === true); // 결정 0056 개정(G2-8ch) 적용 내용은 통과 행에 남긴다
+  rec(`${flowId}/${state}`, "G", "G 공통 검사", bad.length === 0, bad.length > 0 ? bad.map((x) => `${x.id} ${x.detail}`).join(" / ") : relaxedG.map((x) => `${x.id} ${x.detail}`).join(" / "), relaxedG.length > 0);
   return snap;
 }
 
@@ -1287,7 +1288,8 @@ async function voteFlow(ctx) {
     const withChips = kept.filter((x) => x.value.v.reveal.chips.length > 0);
     const bad = withChips.map((x) => placementChecks(x.value.v)).filter((r) => !r.ok);
     const detail = [...new Set(bad.map((r) => r.detail))].slice(0, 3).join(" / ");
-    rec(sc, "P10", withChips.length === 0 ? "배치: 칩·카드가 이름표·헤더·패널과 겹치지 않음 (칩 표본 없음)" : "배치: 칩·카드가 이름표·헤더·패널과 겹치지 않음", withChips.length > 0 && bad.length === 0, withChips.length === 0 ? "측정값 없음(칩이 보이는 표본)" : `${bad.length}/${withChips.length} 표본: ${detail}`);
+    const relaxedP = withChips.map((x) => placementChecks(x.value.v)).filter((r) => r.ok && r.relaxed === true); // 결정 0056 개정(P10-8ch)
+    rec(sc, "P10", withChips.length === 0 ? "배치: 칩·카드가 이름표·헤더·패널과 겹치지 않음 (칩 표본 없음)" : "배치: 칩·카드가 이름표·헤더·패널과 겹치지 않음", withChips.length > 0 && bad.length === 0, withChips.length === 0 ? "측정값 없음(칩이 보이는 표본)" : bad.length > 0 ? `${bad.length}/${withChips.length} 표본: ${detail}` : `${relaxedP.length}/${withChips.length} 표본 ${[...new Set(relaxedP.map((r) => r.detail))].slice(0, 2).join(" / ")}`, bad.length === 0 && relaxedP.length > 0);
     if (kept.length > 0) colorRule(sc, kept[kept.length - 1].value.v);
   }
 

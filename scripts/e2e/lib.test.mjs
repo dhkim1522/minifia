@@ -351,13 +351,13 @@ test("D3B_FLOOR_5_PLAYERS 는 98.0% 하나만 낮췄다(5명판 한정, 사용�
   assert.equal(PANEL_H, 157);
 });
 
-test("APPROVED_RELAXATIONS: 승인된 완화는 M1·D3a/D3b·D4·5명판 D3b 98.0%·변론 후보 패널 236·결정 0056 의 D9·D3b(6자 이상 이름) 뿐이고, 모두 이유와 승인 근거가 있다", () => {
-  assert.deepEqual(APPROVED_RELAXATIONS.map((r) => r.id), ["M1", "D3a/D3b", "D4", "D3b-5", "P-PANEL-236", "D9-8ch", "D3b-8ch"]);
+test("APPROVED_RELAXATIONS: 승인된 완화는 M1·D3a/D3b·D4·5명판 D3b 98.0%·변론 후보 패널 236·결정 0056 의 D9·D3b·G2·D2·P10(6자 이상 이름) 뿐이고, 모두 이유와 승인 근거가 있다", () => {
+  assert.deepEqual(APPROVED_RELAXATIONS.map((r) => r.id), ["M1", "D3a/D3b", "D4", "D3b-5", "P-PANEL-236", "D9-8ch", "D3b-8ch", "G2-8ch", "D2-8ch", "P10-8ch"]);
   for (const r of APPROVED_RELAXATIONS) {
     assert.ok(typeof r.reason === "string" && r.reason.trim().length > 0, JSON.stringify(r));
     assert.ok(/^\d{4}-\d{2}-\d{2}$/.test(r.approved) || ["03.1 F7", "execution-v1/DC-defense-me", "결정 0056"].includes(r.approved), JSON.stringify(r));
   }
-  for (const id of ["D9-8ch", "D3b-8ch"]) {
+  for (const id of ["D9-8ch", "D3b-8ch", "G2-8ch", "D2-8ch", "P10-8ch"]) {
     const r = APPROVED_RELAXATIONS.find((x) => x.id === id);
     assert.equal(r.approved, "결정 0056");
     assert.match(r.reason, /v1\.0 고정 테이블 화면/);
@@ -2236,8 +2236,8 @@ test("placementChecks P10: 측정값이 없으면 조용히 통과하지 않는�
   assert.match(placementChecks(null).detail, /측정값 없음/);
 });
 
-test("04-30·06-17: 닫기 — 승인 목록은 일곱 건(결정 0056 의 두 건 포함)이고 기준 수치는 그대로다", () => {
-  assert.deepEqual(APPROVED_RELAXATIONS.map((x) => x.id), ["M1", "D3a/D3b", "D4", "D3b-5", "P-PANEL-236", "D9-8ch", "D3b-8ch"]);
+test("04-30·06-17: 닫기 — 승인 목록은 열 건(결정 0056 의 다섯 건 포함)이고 기준 수치는 그대로다", () => {
+  assert.deepEqual(APPROVED_RELAXATIONS.map((x) => x.id), ["M1", "D3a/D3b", "D4", "D3b-5", "P-PANEL-236", "D9-8ch", "D3b-8ch", "G2-8ch", "D2-8ch", "P10-8ch"]);
   assert.equal(FACE_RATIO, 0.45);
   assert.equal(PANEL_H, 157);
 });
@@ -2880,4 +2880,96 @@ test("결정 0056 D3b: 6 그래핌 이상 이름표의 바닥 미달만 완화(�
   s.tagVisibility = [{ seat: 0, ratio: null }];
   s.tags = [{ seat: 0, rect: rect(20, 300, 72, 22), z: 1, lines: 1, hasDot: true, name: "봇가나다라마바사" }];
   assert.equal(dayById(dayChecks(s, size), "D3b").ok, false);
+});
+
+
+// ---- 결정 0056 개정(2026-11-01): G2·D2·P10 도 같은 범위(v1.0 고정 테이블 이름표·칩 + 6 그래핌 이상 이름) ----
+
+test("결정 0056 개정 G2: 6 그래핌 이상 이름의 고정 테이블 이름표 요소가 화면 밖이면 완화(통과+표시), 그 밖의 화면 밖 요소·짧은 이름 이름표는 그대로 실패한다", () => {
+  const withEls = (els) => {
+    const s = cleanSnap();
+    s.elements = [...s.elements, ...els];
+    return byId(genericIssues(s, { w: 360, h: 640 }), "G2");
+  };
+  const tagOut = { desc: 'div.mf-dt__tag"봇가나다라마바사"', rect: rect(-17.7, 300, 133, 22), fixedTagName: "봇가나다라마바사" };
+  const dotOut = { desc: "i.mf-dt__dot", rect: rect(-9.7, 304, 8, 8), fixedTagName: "봇가나다라마바사" };
+  // 범위 안: 완화
+  const inScope = withEls([tagOut, dotOut]);
+  assert.equal(inScope.ok, true, inScope.detail);
+  assert.equal(inScope.relaxed, true);
+  assert.match(inScope.detail, /승인 완화\(G2-8ch, 결정 0056\)/);
+  assert.match(inScope.detail, /2개/);
+  // 범위 밖: 이름표가 아닌 요소가 화면 밖
+  const other = withEls([{ desc: "div.mf-other", rect: rect(300, 10, 100, 20), fixedTagName: null }]);
+  assert.equal(other.ok, false);
+  assert.equal(other.relaxed, undefined);
+  assert.match(other.detail, /div\.mf-other/);
+  // 범위 밖: 5자 이름 이름표가 화면 밖
+  assert.equal(withEls([{ ...tagOut, fixedTagName: "화면검사기" }]).ok, false);
+  // 범위 밖: 이름 정보가 없으면(측정 안 됨) 완화하지 않는다
+  assert.equal(withEls([{ desc: "div.mf-dt__tag", rect: rect(-5, 300, 100, 22) }]).ok, false);
+  // 섞이면 범위 밖 요소 때문에 실패하고 완화 표시는 없다
+  const mixed = withEls([tagOut, { desc: "div.mf-other", rect: rect(300, 10, 100, 20), fixedTagName: null }]);
+  assert.equal(mixed.ok, false);
+  assert.doesNotMatch(mixed.detail, /mf-dt__tag/);
+  // 화면 가로 기준은 그대로: 안쪽이면 완화 표시도 없다
+  const inside = withEls([{ ...tagOut, rect: rect(0, 300, 133, 22) }]);
+  assert.equal(inside.ok, true);
+  assert.equal(inside.relaxed, undefined);
+});
+
+test("결정 0056 개정 D2: 6 그래핌 이상 이름 이름표의 장면 밖만 완화, 짧은 이름 이름표의 장면 밖과 하단 패널 겹침은 이름과 무관하게 실패한다", () => {
+  const withTag = (rectOfTag, name) => {
+    const s = daySnap();
+    s.tags = [{ seat: 1, rect: rectOfTag, z: 1, lines: 1, hasDot: true, name }, ...s.tags.slice(1)];
+    return dayById(dayChecks(s, size), "D2");
+  };
+  const out = rect(-17.7, 300, 133, 22); // scene 은 0~360
+  const relaxed = withTag(out, "봇가나다라마바사");
+  assert.equal(relaxed.ok, true, relaxed.detail);
+  assert.equal(relaxed.relaxed, true);
+  assert.match(relaxed.detail, /승인 완화\(D2-8ch, 결정 0056\)/);
+  assert.match(relaxed.detail, /자리 1/);
+  assert.equal(withTag(out, "화면검사기").ok, false);
+  assert.equal(withTag(out, undefined).ok, false);
+  // 패널과 겹침은 긴 이름이어도 실패
+  const overPanel = withTag(rect(20, 470, 133, 30), "봇가나다라마바사");
+  assert.equal(overPanel.ok, false);
+  assert.match(overPanel.detail, /하단 패널/);
+  // 장면 안이면 완화 표시 없음
+  const fine = withTag(rect(20, 300, 133, 22), "봇가나다라마바사");
+  assert.equal(fine.ok, true);
+  assert.equal(fine.relaxed, undefined);
+});
+
+test("결정 0056 개정 P10: 칩이 6 그래핌 이상 이름의 이름표와 겹친 것만 완화, 짧은 이름 이름표·헤더·패널·카드 겹침은 그대로 실패한다", () => {
+  const snapWith = (tagName, chipRect = rect(150, 200, 36, 32)) => {
+    const s = placeSnap();
+    s.reveal.chips = [{ seat: 1, n: 2, tone: "lead", ...chipRect }];
+    s.reveal.tags = [{ seat: 2, ...rect(140, 190, 70, 40), name: tagName }];
+    return s;
+  };
+  const relaxed = placementChecks(snapWith("봇가나다라마바사"));
+  assert.equal(relaxed.ok, true, relaxed.detail);
+  assert.equal(relaxed.relaxed, true);
+  assert.match(relaxed.detail, /승인 완화\(P10-8ch, 결정 0056\)/);
+  assert.match(relaxed.detail, /이름표\(자리 2\)/);
+  const short = placementChecks(snapWith("가나다라마"));
+  assert.equal(short.ok, false);
+  assert.equal(short.relaxed, undefined);
+  assert.equal(placementChecks(snapWith(undefined)).ok, false);
+  // 긴 이름 이름표와 겹쳐도 칩이 헤더·패널과 겹치면 실패
+  const overHeader = placementChecks(snapWith("봇가나다라마바사", rect(150, 100, 36, 32)));
+  assert.equal(overHeader.ok, false);
+  assert.match(overHeader.detail, /헤더/);
+  // 카드가 패널과 겹치면 실패(이름표 완화와 무관)
+  const s = snapWith("봇가나다라마바사");
+  s.card = { rect: rect(55, 500, 280, 176) };
+  const card = placementChecks(s);
+  assert.equal(card.ok, false);
+  assert.match(card.detail, /카드/);
+  // 겹치지 않으면 완화 표시 없음
+  const none = placementChecks(snapWith("봇가나다라마바사", rect(300, 400, 36, 32)));
+  assert.equal(none.ok, true);
+  assert.equal(none.relaxed, undefined);
 });

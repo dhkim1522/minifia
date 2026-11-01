@@ -608,7 +608,7 @@ export async function collectSnapshot(page) {
         if (el.tagName === "SCRIPT" || el.tagName === "STYLE") continue;
         if (deco && el.matches(deco)) continue;
         if (!visible(el)) continue;
-        elements.push({ desc: desc(el), rect: rectOf(el) });
+        elements.push({ desc: desc(el), rect: rectOf(el), fixedTagName: el.closest(".mf-dt__tag")?.getAttribute("title") ?? null }); // 결정 0056 개정(G2-8ch) 범위 판정용: v1.0 고정 테이블 이름표 안쪽이면 그 닉네임
       }
 
       const interactive = [];
@@ -1408,7 +1408,7 @@ export async function readVerdict(page, colors = { crimson: [], gray: [] }) {
       }),
       tags: tagEls.map((el) => {
         const r = el.getBoundingClientRect();
-        return { seat: seatOf(el), left: r.left, top: r.top, right: r.right, bottom: r.bottom };
+        return { seat: seatOf(el), left: r.left, top: r.top, right: r.right, bottom: r.bottom, name: el.getAttribute("title") ?? "" };
       }),
     };
 
