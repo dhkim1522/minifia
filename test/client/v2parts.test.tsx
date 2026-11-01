@@ -76,6 +76,64 @@ describe("HeadStack", () => {
   });
 });
 
+describe("HeadStack 입력 중 칸 (CHAT-04, 07-03)", () => {
+  it("typing 이면 .mv-head 에 data-typing=true 와 맨 위 칸 알약(role img, 입력 중, 점 세 개), 그다음 이름표", () => {
+    const { container } = render(<HeadStack name="지호" color="var(--seat-1)" typing />);
+    const head = container.querySelector("div.mv-head");
+    expect(head?.getAttribute("data-typing")).toBe("true");
+    expect(head?.children.length).toBe(2);
+    const pill = head?.children[0];
+    expect(pill?.matches("span.mv-typing")).toBe(true);
+    expect(pill?.getAttribute("role")).toBe("img");
+    expect(pill?.getAttribute("aria-label")).toBe("입력 중");
+    expect(pill?.querySelectorAll("i").length).toBe(3);
+    expect(head?.children[1]?.matches("span.mv-tag")).toBe(true);
+  });
+
+  it("typing 이 없으면 data-typing 속성 자체가 없고 알약도 없다", () => {
+    const { container } = render(<HeadStack name="지호" color="var(--seat-1)" />);
+    const head = container.querySelector("div.mv-head");
+    expect(head?.hasAttribute("data-typing")).toBe(false);
+    expect(container.querySelector(".mv-typing")).toBeNull();
+    expect(head?.children.length).toBe(1);
+  });
+
+  it("알약에는 글자가 없다: 채팅 본문을 머리 위에 띄우지 않는다 (점 세 개뿐)", () => {
+    const { container } = render(<HeadStack name="지호" color="var(--seat-1)" typing />);
+    expect(container.querySelector(".mv-typing")?.textContent).toBe("");
+    expect(container.querySelector(".mv-typing")?.children.length).toBe(3);
+  });
+
+  it("typing={false} 도 알약이 없다", () => {
+    const { container } = render(<HeadStack name="지호" color="var(--seat-1)" typing={false} />);
+    expect(container.querySelector(".mv-typing")).toBeNull();
+    expect(container.querySelector("div.mv-head")?.hasAttribute("data-typing")).toBe(false);
+  });
+
+  it("스타일: 알약 gray-100 면·안쪽 6px 10px·점 사이 3px, 점 6×6 night-900, 2·3번째 점 지연 0.2·0.4s", () => {
+    const pill = rulesFor(V2_CSS, ".mv-typing").join(";");
+    expect(pill).toContain("display: inline-flex");
+    expect(pill).toContain("gap: 3px");
+    expect(pill).toContain("padding: 6px 10px");
+    expect(pill).toContain("border-radius: var(--radius-pill)");
+    expect(pill).toContain("background: var(--gray-100)");
+    const dot = rulesFor(V2_CSS, ".mv-typing i").join(";");
+    expect(dot).toContain("width: 6px");
+    expect(dot).toContain("height: 6px");
+    expect(dot).toContain("background: var(--night-900)");
+    expect(dot).toContain("animation: mv-typing-dots 1s");
+    expect(V2_CSS).toMatch(/\.mv-typing i:nth-child\(2\)\s*\{[^}]*animation-delay: 0\.2s/);
+    expect(V2_CSS).toMatch(/\.mv-typing i:nth-child\(3\)\s*\{[^}]*animation-delay: 0\.4s/);
+    expect(V2_CSS).toMatch(/@keyframes mv-typing-dots/);
+  });
+
+  it("모션 줄이기면 점이 정지한다", () => {
+    const bare = V2_CSS.replace(/\/\*[\s\S]*?\*\//g, "");
+    const block = bare.slice(bare.indexOf("@media (prefers-reduced-motion: reduce)"));
+    expect(block.includes(".mv-typing i")).toBe(true);
+  });
+});
+
 describe("V2Icon", () => {
   it("label 이 없으면 aria-hidden svg", () => {
     const { container } = render(<V2Icon name="crown" />);
