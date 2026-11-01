@@ -58,3 +58,18 @@
 | `scripts/e2e/flows.mjs` 의 변론 검사(`defenseChecks`) | 하단 상태 줄 `.stat`·후보 본인 칩 6개 |
 
 - 담당: 07-20(E2E 하네스 정리 — 주장·빠른 메시지 판정 삭제·패널 높이). 이 계획의 새 흐름은 위 옛 도우미를 쓰지 않는다.
+
+## 07-16 에서 정리됨 / 발견
+
+### 닫힌 항목 (07-11·07-12 에서 넘어온 개발용 스크립트)
+
+- `scripts/bots.mjs`, `scripts/smoke.mjs`: 07-16 이 자유 채팅(`chat`·`typing`·`chatReject`·`chatLog`) 기준으로 다시 썼다. 옛 `say`·`emoji`·`claim` 송신과 `claimLog`·`turn` 기대가 없다.
+- 아직 남은 것: `scripts/uat-day.mjs`, `scripts/uat-night.mjs`, `scripts/uat-vote.mjs`, `scripts/uat-test-bots.mjs`(수동 UAT 용, `say`·`emoji` 송신), `scripts/gallery.mjs`(emoji 언급 확인 필요). 07-17 또는 07-20 이 맡는다.
+
+### 로컬 smoke full 의 하루 캐시 헤더 검사
+
+`smoke.mjs --stage full` 이 보던 `Cache-Control: max-age=86400`(인물 그림·배경 WebP)은 배포본 Workers 정적 에셋의 헤더라 로컬 vite 개발 서버는 `no-cache` 를 준다. 07-16 이 이 두 검사를 로컬(localhost·127.0.0.1)에서는 건너뛰게 했다(배포본에서는 그대로 본다). 계획의 검증 명령(`smoke.mjs http://localhost:5173 --stage full`)이 통과하려면 필요한 조정이었다.
+
+### 채팅 부하 하 로비 fps 가 6페이즈 기준에 못 미치는 첫 측정 (07-21 판정 입력)
+
+`perf-run --mode chatload` 로컬 1분 측정(개발 서버·CPU 4배·DPR 2·390x844): 봇 7명이 2초마다 채팅·입력 중을 보내는 동안 평균 53.5fps·끊김(>50ms) 29회·43회(두 번), 같은 환경에서 봇 0명 대조는 60.0fps·끊김 0. 기준(5분 평균 55fps·끊김 5회)은 낮추지 않았다. 개발 서버(번들 안 줄임)와 측정 중 다른 프로세스 부하(남은 vitest 프로세스 둘이 코어를 쓰고 있었다)가 섞여 있으니 배포본·5분·조용한 환경의 숫자가 판정 입력이다. 숫자가 그대로 나오면 채팅 줄·입력 중 한 건마다 로비 화면이 다시 그려지는 비용(07-13 로비 ChatPanel·useChat)을 먼저 본다. 원자료: `.planning/phases/07-free-chat/perf/chatload-390x844-x4*.json`.

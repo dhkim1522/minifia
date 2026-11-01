@@ -130,7 +130,7 @@ Plans:
   3. 글자 수나 도배 한도를 넘기면 서버가 막고 보낸 사람에게 알린다. 한글 입력(조합 중 Enter)이 깨지지 않고 iOS 키보드가 채팅창을 가리지 않는다 — iPhone·Android·삼성 인터넷·카카오톡 인앱에서 확인 (CHAT-05)
   4. 순차 직업 주장·빠른 메시지·텍스트 이모티콘이 화면과 서버에서 모두 사라지고, 낮 토론은 자유 채팅으로 진행된다 (CHAT-06)
 
-**Plans:** 15/22 plans executed (14 waves)
+**Plans:** 16/22 plans executed (14 waves)
 
 Plans:
 **Wave 1** *(같은 웨이브도 번호 순서로 하나씩 돈다 — use_worktrees false)*
@@ -167,7 +167,7 @@ Plans:
 - [x] 07-15-PLAN.md — 테이블 화면 채팅(토론·변론·밤 마피아·탈락자)·E2E chat-table (W9)
 
 **Wave 10**
-- [ ] 07-16-PLAN.md — smoke·손 봇 자유 채팅·perf-run --mode chatload (W10, 로컬 서버 07-16~07-18 공유)
+- [x] 07-16-PLAN.md — smoke·손 봇 자유 채팅·perf-run --mode chatload (W10, 로컬 서버 07-16~07-18 공유)
 - [ ] 07-17-PLAN.md — uat-* 스크립트 자유 채팅 기준 (W10)
 - [ ] 07-18-PLAN.md — 머리 위 "…"(보내기 규칙·로비·테이블 알약)·카메라 가시성 +22 (W10)
 
@@ -272,7 +272,7 @@ Phases execute in numeric order: 6 → 7 → 8 → 9 → 10 → 11 → 12 (소�
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 6. 월드 뼈대 | v2.0 | 23/23 | Complete    | 2026-11-01 |
-| 7. 자유 채팅 | v2.0 | 15/22 | In Progress | - |
+| 7. 자유 채팅 | v2.0 | 16/22 | In Progress | - |
 | 8. 낮 처형과 유령 | v2.0 | 0/TBD | Not started | - |
 | 9. 밤과 아침 | v2.0 | 0/TBD | Not started | - |
 | 10. 캐릭터·동작·의상 | v2.0 | 0/TBD | Not started | - |
