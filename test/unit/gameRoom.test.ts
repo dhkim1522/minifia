@@ -728,4 +728,42 @@ describe("normalizeStoredRoom — 저장된 옛 방 (RESEARCH Pattern 6, T-02-14
     const day = buildView(bare, "p2", 50_000).day;
     expect(`${day?.n}:${Object.keys(day ?? {}).includes("messages")}`).toBe("1:false");
   });
+
+  // 07-14: 채팅 옛 번호·쿨다운 필드(결정 0058 로 대체) — 방 키 nextMessageSeq·nextNightSeq 와 Player 키 lastSendAt.
+  const OLD_CHAT_ROOM_KEYS = ["nextMessageSeq", "nextNightSeq"];
+  const withOldChatCounters = (state: RoomState): RoomState =>
+    ({
+      ...state,
+      nextMessageSeq: 7,
+      nextNightSeq: 2,
+      players: state.players.map((p) => ({ ...p, lastSendAt: 1 })),
+    }) as unknown as RoomState;
+
+  it("07-14 저장된 옛 방의 nextMessageSeq·nextNightSeq·lastSendAt 은 키째 빠진 새 객체가 되고 단계·마감·일차는 그대로다 (결정 0058)", () => {
+    const stored = withOldChatCounters({ ...fullRoom([0, 1, 2, 3]), phase: "discussion", phaseEndsAt: 77_000, day: 2 });
+    const got = normalizeStoredRoom(stored, 5_000);
+    expect(got === stored).toBe(false);
+    for (const key of OLD_CHAT_ROOM_KEYS) expect(Object.hasOwn(got, key)).toBe(false);
+    for (const p of got.players) expect(Object.hasOwn(p, "lastSendAt")).toBe(false);
+    expect(got.players.map((p) => p.id).join(",")).toBe(stored.players.map((p) => p.id).join(","));
+    expect(`${got.phase}:${got.phaseEndsAt}:${got.day}`).toBe("discussion:77000:2");
+    // 입력은 바꾸지 않는다
+    for (const key of OLD_CHAT_ROOM_KEYS) expect(Object.hasOwn(stored, key)).toBe(true);
+    for (const p of stored.players) expect(Object.hasOwn(p, "lastSendAt")).toBe(true);
+  });
+
+  it("07-14 방 키만 있거나 Player 키만 있어도 각각 지워지고, 지운 결과를 다시 정규화하면 같은 객체다", () => {
+    const base = { ...fullRoom([0, 1, 2, 3]), phase: "discussion" as PhaseId, phaseEndsAt: 77_000, day: 2 };
+    const roomOnly = { ...base, nextMessageSeq: 3 } as unknown as RoomState;
+    const playerOnly = { ...base, players: base.players.map((p) => ({ ...p, lastSendAt: 9 })) } as unknown as RoomState;
+    const a = normalizeStoredRoom(roomOnly, 5_000);
+    const b = normalizeStoredRoom(playerOnly, 5_000);
+    expect(`${Object.hasOwn(a, "nextMessageSeq")}/${b.players.some((p) => Object.hasOwn(p, "lastSendAt"))}`).toBe("false/false");
+    expect(`${normalizeStoredRoom(a, 6_000) === a}/${normalizeStoredRoom(b, 6_000) === b}`).toBe("true/true");
+  });
+
+  it("07-14 세 키가 모두 없는 방은 같은 객체를 돌려준다", () => {
+    const discussion = { ...fullRoom([0, 1, 2, 3]), phase: "discussion" as PhaseId, phaseEndsAt: 77_000, day: 2 };
+    expect(normalizeStoredRoom(discussion, 5_000) === discussion).toBe(true);
+  });
 });
