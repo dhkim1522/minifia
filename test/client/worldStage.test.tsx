@@ -354,14 +354,19 @@ describe("WorldStage: 탭 → move (MAP-02)", () => {
     expect(r.markers.some((m) => m.kind === "ring" && m.at !== null)).toBe(false);
   });
 
-  it("150ms 안의 다음 탭은 무시한다", async () => {
+  it("250ms(서버 150ms + 여유 100ms) 안의 다음 탭은 무시한다", async () => {
     const s = await open();
     const el = surface(s.utils);
     tapAt(el, 250, 340, 10);
     tapAt(el, 260, 350, 10);
     expect(s.send).toHaveBeenCalledTimes(1);
     act(() => {
-      vi.advanceTimersByTime(200);
+      vi.advanceTimersByTime(200); // 서버 간격(150ms)은 지났지만 클라이언트 간격(250ms)은 아직
+    });
+    tapAt(el, 260, 350, 10);
+    expect(s.send).toHaveBeenCalledTimes(1);
+    act(() => {
+      vi.advanceTimersByTime(100);
     });
     tapAt(el, 260, 350, 10);
     expect(s.send).toHaveBeenCalledTimes(2);

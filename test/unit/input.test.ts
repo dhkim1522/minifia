@@ -1,13 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { createTapGate, createTapTracker, TAP_MAX_MS, TAP_MIN_GAP_MS, TAP_SLOP_PX } from "../../src/world/input";
+import { MOVE_MIN_GAP_MS } from "../../shared/game/world";
+import { createTapGate, createTapTracker, TAP_GAP_MARGIN_MS, TAP_MAX_MS, TAP_MIN_GAP_MS, TAP_SLOP_PX } from "../../src/world/input";
 
-// 06-13 Task 1: 탭 판정은 순수 함수다(시각은 인자). UI-SPEC "터치해서 걷기" 1번·탭 간격 150ms.
+// 06-13 Task 1: 탭 판정은 순수 함수다(시각은 인자). UI-SPEC "터치해서 걷기" 1번·탭 간격은 서버 150ms 위에 여유 100ms(WR-04).
 
 describe("createTapTracker (MAP-02)", () => {
   it("상수는 UI-SPEC 수치다", () => {
     expect(TAP_SLOP_PX).toBe(10);
     expect(TAP_MAX_MS).toBe(350);
-    expect(TAP_MIN_GAP_MS).toBe(150);
+    expect(TAP_MIN_GAP_MS).toBe(250);
   });
 
   it("5px 움직이고 200ms 안에 뗀 손가락은 뗀 자리의 탭이다", () => {
@@ -68,19 +69,38 @@ describe("createTapTracker (MAP-02)", () => {
   });
 });
 
-describe("createTapGate (MAP-02, 서버 속도 제한과 같은 150ms)", () => {
-  it("0 은 받고 149 는 거절하고 150 은 받는다", () => {
+describe("createTapGate (MAP-02, 서버 속도 제한 150ms 보다 크게)", () => {
+  it("기본 간격은 서버 MOVE_MIN_GAP_MS 보다 여유만큼 크다 (WR-04: 같은 값이면 지터에 서버가 조용히 버린다)", () => {
+    expect(MOVE_MIN_GAP_MS).toBe(150);
+    expect(TAP_MIN_GAP_MS).toBeGreaterThan(MOVE_MIN_GAP_MS);
+    expect(TAP_MIN_GAP_MS - MOVE_MIN_GAP_MS).toBeGreaterThanOrEqual(TAP_GAP_MARGIN_MS);
+    expect(TAP_GAP_MARGIN_MS).toBeGreaterThanOrEqual(100);
+  });
+
+  it("보낸 탭 사이 도착 시각이 여유만큼 흔들려도 서버 간격(150ms) 아래로 내려가지 않는다", () => {
+    const g = createTapGate();
+    const sends: number[] = [];
+    for (let t = 0; t < 5000; t += 37) if (g.accept(t)) sends.push(t); // 거의 연타
+    expect(sends.length).toBeGreaterThan(5);
+    for (let i = 1; i < sends.length; i += 1) {
+      const worstCaseArrivalGap = sends[i]! - TAP_GAP_MARGIN_MS - sends[i - 1]!; // 뒤는 일찍, 앞은 늦지 않게 최악의 어긋남
+      expect(worstCaseArrivalGap).toBeGreaterThanOrEqual(MOVE_MIN_GAP_MS);
+    }
+  });
+
+  it("0 은 받고 249 는 거절하고 250 은 받는다", () => {
     const g = createTapGate();
     expect(g.accept(0)).toBe(true);
     expect(g.accept(149)).toBe(false);
-    expect(g.accept(150)).toBe(true);
+    expect(g.accept(249)).toBe(false);
+    expect(g.accept(250)).toBe(true);
   });
 
   it("거절한 탭은 간격 시계를 늘리지 않는다", () => {
     const g = createTapGate();
     expect(g.accept(0)).toBe(true);
     expect(g.accept(100)).toBe(false);
-    expect(g.accept(150)).toBe(true);
+    expect(g.accept(250)).toBe(true);
   });
 
   it("간격을 인자로 바꿀 수 있다", () => {
