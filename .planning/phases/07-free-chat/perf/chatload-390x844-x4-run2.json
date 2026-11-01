@@ -1,0 +1,101 @@
+{
+  "runner": {
+    "tool": "scripts/perf-run.mjs --mode chatload",
+    "throttle": 4,
+    "dpr": 2,
+    "size": "390x844",
+    "headless": true,
+    "chrome": "156.0.8078.74",
+    "platform": "darwin/arm64",
+    "node": "v26.0.0",
+    "url": "http://localhost:5173/?e2e=1",
+    "chromeBinary": "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+  },
+  "schema": "chatload-1",
+  "startedAt": "2026-11-01T15:40:34.451Z",
+  "endedAt": "2026-11-01T15:41:34.629Z",
+  "params": {
+    "minutes": 1,
+    "bots": 7,
+    "chatEveryMs": 2000,
+    "typingLeadMs": 300
+  },
+  "frames": {
+    "count": 3215,
+    "seconds": 60.131,
+    "avgFps": 53.466597927857514,
+    "jank": 43,
+    "jankMs": 50,
+    "p50": 16.69999999999709,
+    "p95": 33.39999999999782,
+    "p99": 50.099999999998545,
+    "max": 66.79999999999927,
+    "rafHz": 60,
+    "firstMinuteFps": null,
+    "lastMinuteFps": null,
+    "thermalRatio": null,
+    "jankPer5min": 214.53160599358068
+  },
+  "baseline": {
+    "avgFps": 55,
+    "jankMax": 5,
+    "perMinutes": 5,
+    "jankMs": 50,
+    "source": "06-PERF-RESULTS.md 조건 B · UI-SPEC 합격 기준 — 5분 평균 ≥ 55fps, 끊김(>50ms) ≤ 5회/5분"
+  },
+  "load": {
+    "botsConnected": 7,
+    "chatsSent": 210,
+    "typingOnSent": 211,
+    "chatRejects": {},
+    "pageLogLines": 100,
+    "pageLogLinesSamples": [
+      {
+        "atMs": 10000,
+        "logLines": 34
+      },
+      {
+        "atMs": 20000,
+        "logLines": 69
+      },
+      {
+        "atMs": 30000,
+        "logLines": 100
+      },
+      {
+        "atMs": 40000,
+        "logLines": 100
+      },
+      {
+        "atMs": 50000,
+        "logLines": 100
+      },
+      {
+        "atMs": 60000,
+        "logLines": 100
+      }
+    ],
+    "pageLogKeepLines": 100
+  },
+  "renderer": {
+    "before": {
+      "calls": 33,
+      "triangles": 38650,
+      "geometries": 31,
+      "textures": 4,
+      "programs": 7,
+      "pointLights": 3
+    },
+    "after": {
+      "calls": 31,
+      "triangles": 37370,
+      "geometries": 31,
+      "textures": 4,
+      "programs": 7,
+      "pointLights": 3
+    },
+    "note": "제품 런타임의 자동 강등(10초 평균 45fps 미만) 단계는 테스트 훅이 주지 않는다. calls·triangles 가 처음보다 크게 줄었으면 강등 의심"
+  },
+  "screenshot": "/Users/dhkim1522/personal/minifia/.planning/phases/07-free-chat/perf/chatload-390x844-x4-run2.png",
+  "issues": []
+}
