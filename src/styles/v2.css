@@ -66,8 +66,29 @@
 .mv-chat__input { flex: 1; min-width: 0; height: var(--control-input); box-sizing: border-box; padding: 0 var(--space-md); border-radius: var(--radius-md); border: 1px solid var(--night-600); background: var(--night-900); color: var(--gray-100); font-family: inherit; font-size: 16px; user-select: text; }
 .mv-chat__send { display: grid; place-items: center; flex: none; width: var(--control-input); height: var(--control-input); padding: 0; border: 0; border-radius: var(--radius-md); background: var(--gray-100); color: var(--night-900); cursor: pointer; }
 .mv-chat__send[aria-disabled="true"] { background: var(--night-700); color: var(--gray-500); cursor: default; }
-.mv-chat__send:focus-visible, .mv-chat__input:focus-visible { outline: 2px solid var(--gray-100); outline-offset: 2px; }
+.mv-chat__send:focus-visible, .mv-chat__input:focus-visible, .mv-chat__newdot:focus-visible { outline: 2px solid var(--gray-100); outline-offset: 2px; }
+.mv-chat__send.is-dim { opacity: 0.45; }
+
+/* 기록 칸 바깥 상자: 새 메시지 점이 줄과 함께 스크롤되지 않게 기록 칸 밖에 둔다 */
+.mv-chat__logbox { position: relative; }
+.mv-chat__newdot { position: absolute; right: 0; bottom: 0; display: grid; place-items: center; width: var(--tap-min); height: var(--tap-min); padding: 0; border: 0; background: transparent; cursor: pointer; }
+.mv-chat__newdot i { width: 8px; height: 8px; border-radius: var(--radius-pill); background: var(--gray-100); animation: mv-chat-pulse 1.6s ease-in-out infinite; }
+@keyframes mv-chat-pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.55; transform: scale(1.25); } }
+
+/* 막힘 알림: system 줄 모양에서 글자색만 crimson-300(입력 오류 문장). 아이콘·nowrap 없음 */
+.mv-chat__notice { margin: 0; font-size: 14px; line-height: 1.4; color: var(--crimson-300); word-break: keep-all; overflow-wrap: anywhere; }
+
+/* 채널 표식: 입력칸 안 왼쪽 아이콘(왼쪽 안쪽 여백 12, 글자와 겹치지 않게 왼쪽 패딩 40), 줄 앞 아이콘(보는 사람이 유령일 때) */
+.mv-chat__chan { position: absolute; left: 12px; top: 50%; display: grid; place-items: center; transform: translateY(-50%); pointer-events: none; }
+.mv-chat__chan.is-mafia { color: var(--crimson-300); }
+.mv-chat__chan.is-ghost { color: var(--gray-300); }
+.mv-chat.has-chan .mv-chat__input { padding-left: 40px; }
+.mv-chat__mark { display: inline-block; margin-right: 4px; vertical-align: -2px; }
+.mv-chat__mark .mv-icon { display: block; }
+.mv-chat__mark.is-mafia { color: var(--crimson-300); }
+.mv-chat__mark.is-ghost { color: var(--gray-300); }
 
 @media (prefers-reduced-motion: reduce) {
   .mv-toast, .mv-ring__bar, .mv-phase__hint { transition: none; }
+  .mv-chat__newdot i { animation: none; }
 }

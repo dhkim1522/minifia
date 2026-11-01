@@ -1,7 +1,8 @@
-import { useRef, type FormEvent, type Ref } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type FormEvent, type KeyboardEvent, type Ref } from "react";
 import "../../styles/v2.css";
 import { CHAT_MAX_GRAPHEMES } from "../../../shared/game/chatRules";
 import { CHAT_TEXT } from "../../game/chatText";
+import { AUTO_SCROLL_SLOP_PX, DUP_SUBMIT_MS, IME_WAIT_MS, TAIL_WINDOW_MS } from "../../game/chatUi";
 import { V2Icon, type V2IconName } from "./V2Icon";
 
 // 채팅 패널(기록 칸 + 입력줄). design/v2.0/design-system/components/bundle.js 의 ChatPanel 과
@@ -16,6 +17,11 @@ import { V2Icon, type V2IconName } from "./V2Icon";
 // - 채널로 줄을 거르는 속성은 없다 — 받을 권리가 없는 줄은 서버가 보내지 않는다(결정 0002·0021).
 // - 보내기 전에 내 줄을 미리 그리지 않는다(낙관적 표시 없음). 받은 messages 만 그린다.
 // - 제출은 form onSubmit 한 길이다. 입력칸 값은 onChange 에서 가공하지 않고, 보낼 때 DOM 입력칸의 현재 값을 읽는다.
+// - 한글 조합: 조합 중에 보내면 compositionend 를 기다려(최대 IME_WAIT_MS) 확정된 값을 보낸다. 같은 문장이 DUP_SUBMIT_MS 안에
+//   다시 제출되면 무시하고, 보낸 직후 TAIL_WINDOW_MS 안에 끝난 조합이 보낸 문장의 끝부분이면 되살아난 꼬리 글자로 보고 한 번 더 비운다.
+//   happy-dom 은 실제 IME 를 재현하지 못하므로 이벤트 순서만 시험한다(실제 조합은 07-19 CDP·07-21 iPhone).
+// - 세 변형: logHeight(고정 높이)·compact(키보드 열림, 아래 여백은 부르는 쪽 CSS)·channel(입력칸 앞 채널 아이콘).
+// - 역할 단어가 든 문구(마피아·유령)는 channelUi 의 해당 채널 분기 안에서만 꺼낸다 — all 이면 DOM 에 그 단어가 없다(T-07-08).
 
 export interface ChatPanelMessage {
   key: string;
@@ -51,8 +57,83 @@ export interface ChatPanelProps {
   onComposingChange?(composing: boolean): void;
 }
 
-export function ChatPanel({ messages, value, onChange, onSend, channel, logHeight, sendDisabled, inputId, inputRef }: ChatPanelProps) {
+interface ChannelUi {
+  label: string;
+  hint: string | undefined;
+  icon: V2IconName | null;
+}
+
+// 역할 단어 문구는 각 채널 분기 안에서만 읽는다.
+function channelUi(channel: "all" | "mafia" | "ghost"): ChannelUi {
+  if (channel === "mafia") return { label: CHAT_TEXT.inputLabel.mafia, hint: CHAT_TEXT.hint.mafia, icon: "roleMafia" };
+  if (channel === "ghost") return { label: CHAT_TEXT.inputLabel.ghost, hint: CHAT_TEXT.hint.ghost, icon: "ghost" };
+  return { label: CHAT_TEXT.inputLabel.all, hint: undefined, icon: null };
+}
+
+function atBottom(el: HTMLElement): boolean {
+  return el.scrollHeight - el.scrollTop - el.clientHeight <= AUTO_SCROLL_SLOP_PX;
+}
+
+export function ChatPanel(props: ChatPanelProps) {
+  const { messages, value, onChange, onSend, channel = "all", logHeight, compact, sendDisabled, sendDim, notice, quiet, inputId, inputRef } = props;
   const fieldRef = useRef<HTMLInputElement | null>(null);
+  const logRef = useRef<HTMLDivElement | null>(null);
+  const composingRef = useRef(false);
+  const pendingRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastSentRef = useRef<{ text: string; at: number } | null>(null);
+  const atBottomRef = useRef(true);
+  const lastKeyRef = useRef<string | null>(messages.length ? (messages[messages.length - 1]?.key ?? null) : null);
+  const [newDot, setNewDot] = useState(false);
+
+  // 타이머·이벤트에서 최신 속성을 읽는다(오래된 클로저 방지).
+  const latest = useRef(props);
+  useLayoutEffect(() => {
+    latest.current = props;
+  });
+
+  useEffect(
+    () => () => {
+      if (pendingRef.current !== null) clearTimeout(pendingRef.current);
+    },
+    [],
+  );
+
+  // 자동 스크롤: 바뀌기 전에 바닥 24px 이내였으면 따라가고, 위로 올려 읽는 중이면 끌어내리지 않고 점을 띄운다.
+  useLayoutEffect(() => {
+    const el = logRef.current;
+    if (!el) return;
+    const lastKey = messages.length ? (messages[messages.length - 1]?.key ?? null) : null;
+    const added = lastKey !== lastKeyRef.current;
+    lastKeyRef.current = lastKey;
+    if (atBottomRef.current) {
+      el.scrollTop = el.scrollHeight;
+    } else if (added && !quiet) {
+      setNewDot(true);
+    }
+  }, [messages, quiet]);
+
+  // 막힘 알림은 기록 칸 맨 아래 줄이라 뜰 때 바닥으로 내려 보이게 한다.
+  useLayoutEffect(() => {
+    const el = logRef.current;
+    if (!notice || !el) return;
+    el.scrollTop = el.scrollHeight;
+    atBottomRef.current = true;
+  }, [notice]);
+
+  const onScroll = () => {
+    const el = logRef.current;
+    if (!el) return;
+    const bottom = atBottom(el);
+    atBottomRef.current = bottom;
+    if (bottom) setNewDot(false);
+  };
+
+  const jumpToBottom = () => {
+    const el = logRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+    atBottomRef.current = true;
+    setNewDot(false);
+  };
 
   const bindInput = (el: HTMLInputElement | null) => {
     fieldRef.current = el;
@@ -60,44 +141,139 @@ export function ChatPanel({ messages, value, onChange, onSend, channel, logHeigh
     else if (inputRef) (inputRef as { current: HTMLInputElement | null }).current = el;
   };
 
+  // 값은 언제나 DOM 입력칸에서 읽는다(조합이 끝난 뒤의 값).
   const send = () => {
+    const p = latest.current;
     const el = fieldRef.current;
-    if (!el || !onSend || sendDisabled) return;
+    if (!el || !p.onSend || p.sendDisabled) return;
     const text = el.value;
     if (text.trim() === "") return;
-    onSend(text);
-    onChange("");
+    const now = Date.now();
+    const last = lastSentRef.current;
+    if (last && last.text === text && now - last.at < DUP_SUBMIT_MS) return;
+    lastSentRef.current = { text, at: now };
+    p.onSend(text);
+    p.onChange("");
+    // 보내기 버튼을 눌러 포커스가 옮겨 갔어도 입력칸으로 돌려 키보드가 닫히지 않게 한다.
+    if (document.activeElement !== el) el.focus({ preventScroll: true });
   };
 
   const onSubmit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    if (composingRef.current) {
+      if (pendingRef.current === null) {
+        pendingRef.current = setTimeout(() => {
+          pendingRef.current = null;
+          send();
+        }, IME_WAIT_MS);
+      }
+      return;
+    }
     send();
   };
 
+  const onCompositionStart = () => {
+    composingRef.current = true;
+    latest.current.onComposingChange?.(true);
+  };
+
+  const onCompositionEnd = () => {
+    composingRef.current = false;
+    latest.current.onComposingChange?.(false);
+    if (pendingRef.current !== null) {
+      clearTimeout(pendingRef.current);
+      pendingRef.current = null;
+      send();
+      return;
+    }
+    const el = fieldRef.current;
+    const last = lastSentRef.current;
+    if (el && last && el.value !== "" && Date.now() - last.at <= TAIL_WINDOW_MS && last.text.endsWith(el.value)) {
+      latest.current.onChange("");
+    }
+  };
+
+  const onBlur = () => {
+    if (composingRef.current) {
+      composingRef.current = false;
+      latest.current.onComposingChange?.(false);
+    }
+    latest.current.onInputBlur?.();
+  };
+
+  // Esc 는 입력을 비우지 않고 blur 만 한다. 보내기는 onSubmit 한 길이다.
+  const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Escape") e.currentTarget.blur();
+  };
+
+  const ui = channelUi(channel);
   const blank = value.trim() === "";
   const sendOff = blank || !!sendDisabled;
+  const rootCls = ["mv-chat", onSend && ui.icon && "has-chan", compact && "is-compact"].filter(Boolean).join(" ");
+  const sendCls = sendDim ? "mv-chat__send is-dim" : "mv-chat__send";
 
   return (
-    <section className="mv-chat" data-chat-panel="" data-chat-channel={channel ?? "all"}>
-      <div className="mv-chat__log" data-chat-log="" role="log" aria-live="polite" aria-label={CHAT_TEXT.logLabel} style={{ height: logHeight }}>
-        {messages.map((m) =>
-          m.kind === "player" ? (
-            <p key={m.key} className={m.ch === "mafia" ? "mv-chat__msg is-mafia" : "mv-chat__msg"} data-seat={m.seat} data-ch={m.ch ?? "all"}>
-              {m.seat !== undefined ? <span className="mv-chat__dot" style={{ background: `var(--seat-${m.seat + 1})` }} /> : null}
-              <span className="mv-chat__name">{m.me ? CHAT_TEXT.me : (m.name ?? "")}</span>
-              <span className="mv-chat__text">{m.text}</span>
+    <section className={rootCls} data-chat-panel="" data-chat-channel={channel}>
+      <div className="mv-chat__logbox">
+        <div
+          ref={logRef}
+          className="mv-chat__log"
+          data-chat-log=""
+          role="log"
+          aria-live="polite"
+          aria-label={CHAT_TEXT.logLabel}
+          style={{ height: logHeight }}
+          onScroll={onScroll}
+        >
+          {messages.map((m) => {
+            if (m.kind !== "player") {
+              return (
+                <p key={m.key} className="mv-chat__sys">
+                  {m.icon ? <V2Icon name={m.icon} size={16} /> : null}
+                  <span>{m.text}</span>
+                </p>
+              );
+            }
+            // 줄 앞 채널 아이콘은 보는 사람이 유령일 때만(마피아 줄과 유령 줄을 색만으로 가르지 않는다).
+            const mark =
+              channel === "ghost" && m.ch === "mafia" ? (
+                <span className="mv-chat__mark is-mafia">
+                  <V2Icon name="roleMafia" size={14} />
+                </span>
+              ) : channel === "ghost" && m.ch === "ghost" ? (
+                <span className="mv-chat__mark is-ghost">
+                  <V2Icon name="ghost" size={14} />
+                </span>
+              ) : null;
+            return (
+              <p key={m.key} className={m.ch === "mafia" ? "mv-chat__msg is-mafia" : "mv-chat__msg"} data-seat={m.seat} data-ch={m.ch ?? "all"}>
+                {m.seat !== undefined ? <span className="mv-chat__dot" style={{ background: `var(--seat-${m.seat + 1})` }} /> : null}
+                {mark}
+                <span className="mv-chat__name">{m.me ? CHAT_TEXT.me : (m.name ?? "")}</span>
+                <span className="mv-chat__text">{m.text}</span>
+              </p>
+            );
+          })}
+          {notice ? (
+            <p className="mv-chat__notice" role="status" data-chat-notice="">
+              {notice}
             </p>
-          ) : (
-            <p key={m.key} className="mv-chat__sys">
-              {m.icon ? <V2Icon name={m.icon} size={16} /> : null}
-              <span>{m.text}</span>
-            </p>
-          ),
-        )}
+          ) : null}
+        </div>
+        {newDot ? (
+          <button type="button" className="mv-chat__newdot" data-chat-newdot="" aria-label={CHAT_TEXT.newDot} onClick={jumpToBottom}>
+            <i />
+          </button>
+        ) : null}
       </div>
       {onSend ? (
         <form className="mv-chat__form" onSubmit={onSubmit}>
           <div className="mv-chat__field">
+            {ui.icon ? (
+              <span className={channel === "mafia" ? "mv-chat__chan is-mafia" : "mv-chat__chan is-ghost"}>
+                <V2Icon name={ui.icon} size={20} />
+              </span>
+            ) : null}
             <input
               id={inputId}
               ref={bindInput}
@@ -111,12 +287,18 @@ export function ChatPanel({ messages, value, onChange, onSend, channel, logHeigh
               autoCorrect="off"
               spellCheck={false}
               maxLength={CHAT_MAX_GRAPHEMES}
-              aria-label={CHAT_TEXT.inputLabel.all}
+              aria-label={ui.label}
+              placeholder={ui.hint}
               value={value}
               onChange={(e) => onChange(e.target.value)}
+              onCompositionStart={onCompositionStart}
+              onCompositionEnd={onCompositionEnd}
+              onKeyDown={onKeyDown}
+              onFocus={() => latest.current.onInputFocus?.()}
+              onBlur={onBlur}
             />
           </div>
-          <button type="submit" className="mv-chat__send" data-chat-send="" aria-label={CHAT_TEXT.send} aria-disabled={sendOff ? "true" : "false"}>
+          <button type="submit" className={sendCls} data-chat-send="" aria-label={CHAT_TEXT.send} aria-disabled={sendOff ? "true" : "false"}>
             <V2Icon name="send" />
           </button>
         </form>
