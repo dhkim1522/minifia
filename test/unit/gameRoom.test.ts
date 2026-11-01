@@ -676,6 +676,44 @@ describe("normalizeStoredRoom — 저장된 옛 방 (RESEARCH Pattern 6, T-02-14
     expect(normalizeStoredRoom(lobby, 1) === lobby).toBe(true);
   });
 
+  // 07-08: claim 단계가 사라졌다 — 배포 시점에 claim 으로 저장된 방은 discussion 으로 옮긴다(T-07-14).
+  const CLAIM_STATE_KEYS = ["claimOrder", "claimIdx", "claimStart", "claimPick", "claimLog"];
+  const withClaimState = (state: RoomState): RoomState =>
+    ({
+      ...state,
+      claimOrder: [0, 1],
+      claimIdx: 1,
+      claimStart: 0,
+      claimPick: "police",
+      claimLog: [{ n: 2, seat: 0, claim: "police" }],
+    }) as unknown as RoomState;
+
+  it("07-08 claim 으로 저장된 방은 discussion · now+DISCUSSION_MS 가 되고 claim 계열 다섯 키가 빠지며 입력은 그대로다", () => {
+    const stored = withClaimState({ ...fullRoom([0, 1, 2, 3]), phase: "claim" as PhaseId, phaseEndsAt: 77_000, day: 2 });
+    const got = normalizeStoredRoom(stored, 5_000);
+    expect(got === stored).toBe(false);
+    expect(`${got.phase}:${got.phaseEndsAt}:${got.day}`).toBe(`discussion:${5_000 + DISCUSSION_MS}:2`);
+    for (const key of CLAIM_STATE_KEYS) expect(Object.hasOwn(got, key)).toBe(false);
+    expect(got.players === stored.players).toBe(true);
+    expect(String(stored.phase)).toBe("claim");
+    expect(Object.hasOwn(stored, "claimOrder")).toBe(true);
+  });
+
+  it("07-08 옮겨진 claim 방의 view 는 오류 없이 만들어지고 day 에 turn 이 없으며 claimLog 는 빈 배열이다", () => {
+    const stored = withClaimState({ ...fullRoom([0, 1, 2, 3]), phase: "claim" as PhaseId, phaseEndsAt: 77_000, day: 2 });
+    const day = buildView(normalizeStoredRoom(stored, 5_000), "p1", 5_000).day;
+    expect(`${day?.n}:${Object.keys(day ?? {}).includes("turn")}:${JSON.stringify(day?.claimLog)}`).toBe("2:false:[]");
+  });
+
+  it("07-08 단계가 discussion 이어도 claim 계열 키가 남아 있으면 키만 지우고 단계·마감은 그대로다", () => {
+    const stored = withClaimState({ ...fullRoom([0, 1, 2, 3]), phase: "discussion", phaseEndsAt: 77_000, day: 3 });
+    const got = normalizeStoredRoom(stored, 5_000);
+    expect(got === stored).toBe(false);
+    expect(`${got.phase}:${got.phaseEndsAt}:${got.day}`).toBe("discussion:77000:3");
+    for (const key of CLAIM_STATE_KEYS) expect(Object.hasOwn(got, key)).toBe(false);
+    expect(normalizeStoredRoom(got, 6_000) === got).toBe(true);
+  });
+
   it("새 optional 필드가 없는 1페이즈 모양 상태를 tick 으로 낮 단계까지 넘겨도 buildView 가 기본값으로 뷰를 만든다", () => {
     const lobby = fullRoom([0, 1, 2, 3, 4]);
     const started = startGame(lobby, "p0", 0, seededRandInt(7));

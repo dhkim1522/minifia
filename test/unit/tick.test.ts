@@ -368,3 +368,17 @@ describe("candidateRevealMs (결정 0039)", () => {
     expect(EXEC_VOTE_MS + CANDIDATE_VOTE_MS + candidateRevealMs(8) + DEFENSE_MS + EXECUTION_MS).toBe(60_000);
   });
 });
+
+// 07-08: 순차 주장 단계 제거 — 낮 시작 발표 다음이 바로 토론이다(CHAT-06).
+describe("tick - 낮 흐름에 순차 주장 단계가 없다 (07-08, CHAT-06)", () => {
+  it("07-08 dayAnnounce 마감 다음이 바로 discussion 이고 마감은 이전 마감 + DISCUSSION_MS 다", () => {
+    const T = 50_000;
+    const out = tick({ ...stateIn("dayAnnounce", T), day: 1 }, T);
+    expect(`${out.phase}/${out.phaseEndsAt}`).toBe(`discussion/${T + DISCUSSION_MS}`);
+  });
+
+  it("07-08 늦은 알람으로 roleReveal 에서 한 번에 따라잡아도 roleReveal → dayAnnounce → discussion 순서이고 일차는 1이다", () => {
+    const out = tick(stateIn("roleReveal", 19_000), 19_000 + DAY_ANNOUNCE_MS + 500);
+    expect(`${out.phase}/${out.day}/${out.phaseEndsAt}`).toBe(`discussion/1/${19_000 + DAY_ANNOUNCE_MS + DISCUSSION_MS}`);
+  });
+});

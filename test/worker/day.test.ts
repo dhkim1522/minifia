@@ -497,3 +497,34 @@ describe("옛 저장 방 정규화 (RESEARCH Pattern 6)", () => {
     expect(await alarmOf(r.code)).toBe(room.phaseEndsAt);
   });
 });
+
+// 07-08: 순차 주장 단계 제거(CHAT-06) — 역할 확인 → 낮 시작 발표 → 바로 낮 토론이고, claim 메시지는 거부된다.
+describe("순차 주장 단계 제거 (07-08, CHAT-06)", () => {
+  it("07-08 시작한 방은 dayAnnounce 다음 바로 discussion 이고 어느 소켓도 claim 단계 state 를 받지 않으며 day 에 turn 이 없고 claimLog 는 빈 배열이다", async () => {
+    const r = await seat(3, 0);
+    const sockets = allSockets(r);
+    send(r.host, { t: "start" });
+    for (const s of sockets) await nextFrame(s, (m) => m.t === "state" && m.view.phase === "assigning");
+    await advanceTo(r.code, sockets, "discussion");
+    for (const s of sockets) {
+      const phases = collect(s)
+        .map((raw) => JSON.parse(raw) as ServerMessage)
+        .flatMap((m) => (m.t === "state" ? [m.view.phase as string] : []));
+      expect(phases.includes("claim")).toBe(false);
+      expect(phases.includes("dayAnnounce")).toBe(true);
+      const view = lastOf(s, "discussion");
+      expect(`${Object.keys(view.day ?? {}).includes("turn")}:${JSON.stringify(view.day?.claimLog)}`).toBe("false:[]");
+    }
+  });
+
+  it("07-08 소켓이 claim 메시지를 보내면 error BAD_MESSAGE 가 온다", async () => {
+    const r = await seat(3, 0);
+    const sockets = allSockets(r);
+    send(r.host, { t: "start" });
+    for (const s of sockets) await nextFrame(s, (m) => m.t === "state" && m.view.phase === "assigning");
+    await advanceTo(r.code, sockets, "discussion");
+    const g = r.guests[0]!;
+    send(g.sock, { t: "claim", claim: "police" } as never);
+    expect(await errorCode(g.sock)).toBe(codeOf("BAD_MESSAGE"));
+  });
+});

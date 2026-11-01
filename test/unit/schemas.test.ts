@@ -104,3 +104,13 @@ describe("닉네임 본문 스키마 상한과 8 자소 규칙의 일관성", ()
     expect(CreateRoomBodySchema.safeParse({ nickname: "a".repeat(NICKNAME_MAX_UTF16 + 1) }).success).toBe(false);
   });
 });
+
+// 07-08: 순차 주장 메시지는 사라졌다 — 옛 번들이 보내도 스키마가 거부한다(T-07-16).
+describe("ClientMessageSchema claim (07-08, CHAT-06)", () => {
+  it.each([
+    ["직업", { t: "claim", claim: "police" }],
+    ["말 안 함", { t: "claim", claim: "none" }],
+  ])("07-08 claim 메시지(%s)는 거부한다", (_name, msg) => {
+    expect(ClientMessageSchema.safeParse(msg).success).toBe(false);
+  });
+});
