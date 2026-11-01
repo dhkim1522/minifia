@@ -10,15 +10,15 @@ import { Icon } from "./Icon";
 import "../styles/daytable.css";
 
 // 낮 화면 고정 테이블(결정 0017-1). 받은 공개 값만 그린다 — 입력에 역할 필드가 없다.
-// 이름표는 이름 한 줄이다(남의 주장은 이름표가 아니라 채팅에서만 본다, 결정 0023). 동료 표시(isAlly)는 서버가 마피아에게만 보낸
+// 이름표는 이름 한 줄이다. 동료 표시(isAlly)는 서버가 마피아에게만 보낸
 // me.allies 에서 화면이 만든 값이다.
 // 한 자리는 밤에는 onPick 이 있으면 대상 버튼, 낮에는 onInspect 가 있으면 기록 카드 버튼, 대기실에는 onPress 가 있으면 누르는 버튼이다
 // (함께 있으면 onPick > onInspect > onPress). 역할 배정도 이 부품을 그대로 쓴다(결정 0028). 대기실은 맵 로비로 바뀌어(06-15) 이 부품을 쓰지 않는다.
 // roleArt(직업 그림)는 탈락한 본인(관전자) 화면만 만든다 — 살아 있는 사람의 입력에는 이 값이 없다(결정 0021).
 // 테이블·캐릭터 기하는 모든 상황에서 시안 P2 값으로 고정이다(결정 0028): 390폭 면 216×108, rx 146, 다른 폭은 game/dayTable.ts 의 규칙.
 // 장면 여백(scenePad)은 prop, 없으면 루트의 CSS 변수 --mf-scene-pad(daytable.css 한 곳), 비었으면 12.
-// 발밑 원과 이름표 반전은 없다(결정 0030). 말하는 차례·내가 밤에 고른 대상은 그림의 흰 후광, 마피아 동료(관전자 화면의 모든 마피아)는 진홍 후광이고
-// 한 자리가 둘 다면 흰 후광이 이긴다. 내 표시는 후광 없이 내 이름표 테두리뿐이다. 말하는 중(주장 차례·빠른 메시지 3초)은 머리 위 '…' 말풍선이고,
+// 발밑 원과 이름표 반전은 없다(결정 0030). 내가 밤에 고른 대상은 그림의 흰 후광, 마피아 동료(관전자 화면의 모든 마피아)는 진홍 후광이고
+// 한 자리가 둘 다면 흰 후광이 이긴다. 내 표시는 후광 없이 내 이름표 테두리뿐이다. 말하는 중(채팅을 보낸 뒤 3초)은 머리 위 '…' 말풍선이고,
 // 같은 자리에 이모티콘이 있으면 말풍선 대신 이모티콘만 보인다.
 // 캐릭터 상자·이름표·이모티콘의 좌표는 game/dayTable.ts 의 daySeatLayout 한 번의 결과에서 나온다(떠 있는 층을 따로 가두지 않는다).
 // 최후 변론·처형 무대(04-21): 좌석 center 는 그 자리를 candidateCenter(game/verdict.ts) 한 곳의 가운데 자리로 옮기고(x·발 y·배율 1.7), root verdict 는
@@ -54,9 +54,7 @@ export interface DayTableSeat {
   dead?: boolean;
   /** 있으면 이 자리가 대상 버튼이 된다(밤). 없으면 지금 그대로의 group 노드 */
   onPick?: () => void;
-  /** 지금 주장하는 차례인 자리(한 번에 한 자리는 장면이 보장한다): 흰 후광 + 머리 위 '…' 말풍선 */
-  turn?: boolean;
-  /** 낮: 자리 전체가 주장 기록 카드 버튼이 된다. onPick 이 있으면 onPick 이 이긴다 */
+  /** 낮: 자리 전체가 기록 카드 버튼이 된다. onPick 이 있으면 onPick 이 이긴다 */
   onInspect?: () => void;
   /** 관전자 전용: 이 살아 있는 자리를 중립 인물 대신 이 직업 그림으로 그린다. 장면이 탈락한 본인의 서버 값으로만 만든다(결정 0021) */
   roleArt?: RoleId;
@@ -185,12 +183,12 @@ function ExecutedFigures({ seat, disconnected, haloClass }: { seat: number; disc
   );
 }
 
-/** 자리 읽기 이름: "{닉네임}{ (나)}{, 직업 | , 탈락}{, 연결 끊김}{, 지금 주장하는 차례}" (낮 기록 버튼이면 ", 주장 기록 보기" 가 더해진다) */
+/** 자리 읽기 이름: "{닉네임}{ (나)}{, 직업 | , 탈락}{, 연결 끊김}" (낮 기록 버튼이면 ", 기록 보기" 가 더해진다) */
 function seatLabel(s: DayTableSeat): string {
   const who = `${s.nickname}${s.isMe ? " (나)" : ""}`;
   const art = s.dead ? undefined : s.roleArt;
   const lead = art !== undefined ? `${who}, ${ROLE_TEXT[art].name}` : s.dead ? `${who}, 탈락` : who;
-  return `${lead}${s.connected ? "" : ", 연결 끊김"}${s.turn ? ", 지금 주장하는 차례" : ""}`;
+  return `${lead}${s.connected ? "" : ", 연결 끊김"}`;
 }
 
 /** 머리 위 26px 표적 배지. label 이 있으면 role=img 로 읽히고, 없으면 장식 */
@@ -290,8 +288,8 @@ export function DayTable({
         };
         const art = s.dead ? undefined : s.roleArt;
         const seatClass = `mf-dt__seat${s.beat ? ` mf-dt__seat--${s.beat}` : ""}${s.beat === "clinch" && s.beatAlt ? " mf-dt__seat--alt" : ""}${s.spotlit ? " mf-dt__seat--spotlit" : ""}${s.spotlit && s.pulse ? " mf-dt__seat--pulse" : ""}`;
-        // 후광은 그림 img 하나에만 붙는다. halo 가 있으면 그 값, 없으면 파생: 흰(차례·내가 고른 대상) > 진홍(동료)
-        const derivedHalo = s.turn || s.pick?.mine ? "mf-figure--halo-white" : s.isAlly ? "mf-figure--halo-crimson" : undefined;
+        // 후광은 그림 img 하나에만 붙는다. halo 가 있으면 그 값, 없으면 파생: 흰(내가 고른 대상) > 진홍(동료)
+        const derivedHalo = s.pick?.mine ? "mf-figure--halo-white" : s.isAlly ? "mf-figure--halo-crimson" : undefined;
         const haloClass = s.halo !== undefined ? HALO_CLASS[s.halo] : derivedHalo;
         const inner = (
           <>
@@ -309,8 +307,8 @@ export function DayTable({
               />
             )}
             {s.isAlly ? <Icon name="diamond" label={allyMarkLabel} className="mf-dt__mark" /> : null}
-            {(s.turn || s.spoke) && !s.emoji ? (
-              <span className={`mf-dt__bubble mf-dt__bubble--${s.turn ? "turn" : "spoke"}`} aria-hidden="true">
+            {s.spoke && !s.emoji ? (
+              <span className="mf-dt__bubble mf-dt__bubble--spoke" aria-hidden="true">
                 <i />
                 <i />
                 <i />
@@ -351,7 +349,7 @@ export function DayTable({
               type="button"
               className={`${seatClass} mf-dt__seat--pick mf-dt__seat--inspect`}
               data-seat={p.seat}
-              aria-label={`${seatLabel(s)}, 주장 기록 보기`}
+              aria-label={`${seatLabel(s)}, 기록 보기`}
               onClick={s.onInspect}
               style={style}
             >

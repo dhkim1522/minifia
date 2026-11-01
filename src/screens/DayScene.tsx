@@ -4,7 +4,6 @@ import type { EmojiId, PhaseId, RoomView } from "../../shared/protocol";
 import { isAlive } from "../../shared/game/alive";
 import type { RoleId } from "../../shared/game/roles";
 import { Backdrop } from "../components/Backdrop";
-import { ClaimPanel } from "../components/ClaimPanel";
 import { DayTable } from "../components/DayTable";
 import type { DayTableSeat, SpectatorPick } from "../components/DayTable";
 import { DiscussionControls } from "../components/DiscussionControls";
@@ -15,7 +14,6 @@ import { PhaseBar } from "../components/PhaseBar";
 import { ReadOnlyRow } from "../components/ReadOnlyRow";
 import { SceneIntro } from "../components/SceneIntro";
 import { Timer } from "../components/Timer";
-import { TurnPanel } from "../components/TurnPanel";
 import { UserRecordSheet } from "../components/UserRecordSheet";
 import { Toast, useToast } from "../components/Toast";
 import { morningCardText } from "../game/eliminationText";
@@ -23,7 +21,6 @@ import { MORNING_GLOW_RISE_MS, PHASE_GUIDE_FILL, PHASE_INTRO, morningGlowGradien
 import type { SceneId } from "../game/scenes";
 import { isBlankSceneTap } from "../game/blankTap";
 import { EMOJI_TEXT, NIGHT_TEMPLATE_ORDER } from "../game/messageText";
-import { claimLinesOf } from "../net/claimLines";
 import { FLOAT_PHASES, useDayChat, useSeatFloats } from "../net/seatFloats";
 import type { RoomConnection } from "../net/useRoomConnection";
 import { useVerdictScene } from "./verdictScene";
@@ -51,14 +48,13 @@ export interface DaySceneProps {
   arrivedFrom?: PhaseId | null | undefined;
 }
 
-// 낮 시작(dayAnnounce)·낮 두 단계(claim·discussion)와 밤·아침이 공유하는 장면. 순차 주장(결정 0023)·S-07.
-// 낮 시작 전용 화면은 없다(결정 0030): 서버 단계 dayAnnounce 도 이 장면(테이블·헤더·패널 위치가 claim 과 같다)이고, 'N일차 / 낮이 되었습니다' 는 SceneIntro 가 그 위에 얹힌다.
+// 낮 시작(dayAnnounce)·낮 토론(discussion)과 밤·아침이 공유하는 장면. S-07.
+// 낮 시작 전용 화면은 없다(결정 0030): 서버 단계 dayAnnounce 도 이 장면(테이블·헤더·패널 위치가 낮 토론과 같다)이고, 'N일차 / 낮이 되었습니다' 는 SceneIntro 가 그 위에 얹힌다.
 // 해·달은 배경 이미지에 그려져 있어 따로 그리거나 움직이지 않는다 — 장면이 바뀌면 Backdrop 이 0.8초 크로스페이드할 뿐이라 이중 표시가 없다.
-// 단계는 DayTable 하나를 공유한다(결정 0017-1). 머리 위는 이모티콘만(0017-2). 이름표 아랫줄(완료·주장·탈락)은 주장 단계에 없다(0023-3).
+// 단계는 DayTable 하나를 공유한다(결정 0017-1). 머리 위는 이모티콘만(0017-2). 
 // 테이블은 키가 없는 장면 상자 안에 있어 단계 사이에 다시 마운트되지 않는다(깜빡임·인물 재등장 없음, Pitfall 7·11).
 // 위쪽 바와 하단 패널만 단계가 든 key(bar-·panel- 접두어로 서로 겹치지 않게)라 단계마다 새 요소가 되어 한 번 페이드된다.
-// claim 하단: 서버가 정한 지금 차례(view.day.turn.seat)가 나면 직업 칩(ClaimPanel), 남이면 "…님이 주장하는 중 · N초"(TurnPanel).
-// 낮 토론은 MessageLog·DiscussionControls. 화면은 스스로 단계나 차례를 넘기지 않는다(서버 view 만 따름). 역할 문자열을 화면에 쓰지 않는다.
+// 낮 토론은 MessageLog·DiscussionControls. 화면은 스스로 단계를 넘기지 않는다(서버 view 만 따름). 역할 문자열을 화면에 쓰지 않는다.
 export function DayScene({ view, connection, myRoleButton, testButton, arrivedFrom }: DaySceneProps) {
   const n = view.day?.n ?? 1;
   // 낮 토론의 보낸 사람 말풍선·이모티콘(자리별 한 번에 하나). 단계가 discussion 이 아니면 훅이 비운다.
@@ -68,11 +64,8 @@ export function DayScene({ view, connection, myRoleButton, testButton, arrivedFr
   const { toast, show: showToast } = useToast();
   // 가장 최근 이모티콘 하나를 보이지 않는 live 줄이 읽는다(UI-SPEC 접근성)
   const [lastEmoji, setLastEmoji] = useState<{ seat: number; icon: EmojiId } | null>(null);
-  // 이모티콘을 받는 단계(claim·낮 토론·밤). 밤 이벤트는 서버가 살아 있는 마피아에게만 보낸다.
+  // 이모티콘을 받는 단계(낮 토론·밤). 밤 이벤트는 서버가 살아 있는 마피아에게만 보낸다.
   const inFloatPhase = FLOAT_PHASES.has(view.phase);
-  // 주장 줄(claim·discussion)은 서버가 공개한 claimLog 에서 화면이 만든다 — 재접속해도 복원되고 일차가 바뀌면 사라진다(D-05).
-  // 주장 단계가 토론보다 먼저라 주장 줄이 받은 채팅 줄 앞이다. 밤에는 마피아 채팅만 있다.
-  const dayLines = view.phase === "claim" || view.phase === "discussion" ? [...claimLinesOf(view), ...chatLines] : chatLines;
   useEffect(() => {
     if (!inFloatPhase) return;
     return connection.onEvent((e) => {
@@ -117,10 +110,10 @@ export function DayScene({ view, connection, myRoleButton, testButton, arrivedFr
   // 낮 캐릭터 탭 → 유저 기록 카드(D-06). 보고 있는 자리를 쥐고, 밤이 되면 닫는다(렌더 중 상태 조정이라 낮 → 밤 → 낮을 돌아와도 다시 열리지 않는다).
   const [inspectSeat, setInspectSeat] = useState<number | null>(null);
   if (isNight && inspectSeat !== null) setInspectSeat(null);
-  const inspectable = view.phase === "claim" || view.phase === "discussion" || isMorning;
+  const inspectable = view.phase === "discussion" || isMorning;
 
   // 밤 대상 선택(D-01·D-06). 행위자 = 살아 있는 마피아·경찰·의사. 누를 수 있는 자리는 살아 있는 사람이다(역할별 제외는 아래).
-  // 낙관적 선택: ClaimPanel 과 같이 어느 view 를 보고 있을 때 눌렀는지 함께 기억한다. 새 서버 view(다른 객체)가 오면 버려
+  // 낙관적 선택: 어느 view 를 보고 있을 때 눌렀는지 함께 기억한다. 새 서버 view(다른 객체)가 오면 버려
   // 서버 값(view.me.pick)을 따른다 — 서버가 거절하면 같은 소켓에 state 를 다시 보낸다(T-03-27).
   const myPlayer = view.players.find((p) => p.seat === view.me.seat);
   const meAlive = myPlayer ? isAlive(myPlayer) : true;
@@ -170,12 +163,10 @@ export function DayScene({ view, connection, myRoleButton, testButton, arrivedFr
   const discussionGuide = view.phase === "discussion" && meAlive;
   // 헤더 안내줄이 그 화면의 안내(data-guide)인 경우. 투표 구간(verdict.instruction)은 하단 부품이 안내라 켜지 않는다 — 처형 무효로 온 밤은 instruction 이 비어 마피아 헤더가 그대로 안내다.
   const headerGuide = verdict?.instruction === undefined && (discussionGuide || mafiaNight);
-  const title = verdict?.title ?? (isNight ? "밤" : isMorning ? "아침" : view.phase === "discussion" ? "낮 · 토론" : view.phase === "claim" ? "낮 · 직업 공개" : "낮");
+  const title = verdict?.title ?? (isNight ? "밤" : isMorning ? "아침" : view.phase === "discussion" ? "낮 · 토론" : "낮");
   // 동료가 고른 대상(마피아 화면만, D-07). 서버가 생존 마피아에게만 보낸 값이다.
   const allyPicks = view.me.allyPicks ?? [];
   const nicknameOf = (seat: number): string | undefined => view.players.find((p) => p.seat === seat)?.nickname;
-  // 차례 강조(D-03): 서버 view 의 지금 차례 한 자리에만 흰 후광·머리 위 말풍선. 차례가 넘어가면 다음 자리로 옮겨 간다.
-  const turnSeat = view.phase === "claim" ? view.day?.turn?.seat : undefined;
   const seats: DayTableSeat[] = [...view.players]
     .sort((x, y) => x.seat - y.seat)
     .map((p) => {
@@ -194,7 +185,6 @@ export function DayScene({ view, connection, myRoleButton, testButton, arrivedFr
         // roleArt 는 meDead && spectate 한 곳(spectate 상수)에서만 만든다 — 살아 있는 사람 화면에는 이 입력과 코드 경로가 없다(결정 0021·0002).
         // 살아 있는 다른 자리만 직업 캐릭터로 그리고, 탈락한 자리와 내 자리는 DayTable 이 유령으로 그린다.
         ...(spectate !== undefined && p.seat !== view.me.seat && isAlive(p) && jobOf(p.seat) !== undefined ? { roleArt: jobOf(p.seat)! } : {}),
-        turn: p.seat === turnSeat,
         // 아침: 방금 탈락한 한 자리는 어둡게 층 위(z 31)에 남고, 밤 → 아침을 직접 본 경우에만 400ms 맥동한다(재접속은 z 만).
         ...(eliminatedSeat !== undefined && p.seat === eliminatedSeat ? { spotlit: true, ...(sawNightToMorning ? { pulse: true } : {}) } : {}),
         emoji: e ? { key: e.key, icon: e.icon, z: e.z } : null,
@@ -205,7 +195,7 @@ export function DayScene({ view, connection, myRoleButton, testButton, arrivedFr
         ...(actor && (shownPick === p.seat || (mafiaNight && allyPicks.includes(p.seat)))
           ? { pick: { ...(shownPick === p.seat ? { mine: true } : {}), ...(mafiaNight && allyPicks.includes(p.seat) ? { ally: true } : {}) } }
           : {}),
-        // 낮(claim·discussion·morning): 탈락한 viewer 포함 모든 자리가 읽기 전용 기록 카드 버튼이다. 연결 상태와 무관하고 서버 요청이 없다.
+        // 낮(discussion·morning): 탈락한 viewer 포함 모든 자리가 읽기 전용 기록 카드 버튼이다. 연결 상태와 무관하고 서버 요청이 없다.
         // 밤에는 주지 않는다 — 밤 onPick 과 한 자리에 함께 켜지지 않는다.
         // 투표 구간은 verdict 의 덧입힘이 정한다(모든 자리 기록 카드 버튼, 투표는 영향받지 않는다).
         ...(verdict?.seatPatch ? verdict.seatPatch(p.seat) : inspectable ? { onInspect: () => setInspectSeat(p.seat) } : {}),
@@ -221,11 +211,10 @@ export function DayScene({ view, connection, myRoleButton, testButton, arrivedFr
 
   const endsAt = view.phaseEndsAt;
   const durationMs = view.phaseDurationMs;
-  // claim 의 타이머는 지금 차례의 남은 시간(8초 → 0)이고 calm 이다 — 8초 중 마지막 5초가 늘 진홍이면 경고처럼 보인다.
   // 아침 5초·낮 시작 2초도 전체가 마지막 5초라 진홍을 쓰지 않는다(calm, UI-SPEC 확인 필요 10).
   const timer =
     endsAt !== null && durationMs !== null ? (
-      <Timer endsAt={endsAt} durationMs={durationMs} offset={connection.offset} calm={verdict?.calm ?? (isMorning || view.phase === "claim" || view.phase === "dayAnnounce")} />
+      <Timer endsAt={endsAt} durationMs={durationMs} offset={connection.offset} calm={verdict?.calm ?? (isMorning || view.phase === "dayAnnounce")} />
     ) : null;
 
   // 후보 선택의 빈 곳 탭 = 선택 취소(결정 0040). 장면 상자의 클릭에서 대상이 빈 곳일 때만 verdict.onBlankTap 을 부른다.
@@ -295,7 +284,7 @@ export function DayScene({ view, connection, myRoleButton, testButton, arrivedFr
             // 낮 시작 하단(UX-01 빈 칸 1): 생존자·탈락자 모두 같은 두 줄. 아침 하단과 같은 규칙이라 meDead 분기보다 앞이다.
             <NightPanel title={PHASE_GUIDE_FILL.dayAnnounce.title} guide={PHASE_GUIDE_FILL.dayAnnounce.guide} />
           ) : meDead ? (
-            // 관전 하단(UI-SPEC N-6): 채팅 읽기 전용 + 읽기 전용 안내 줄. 보내기 줄·직업 공개 칩 줄은 그리지 않는다.
+            // 관전 하단(UI-SPEC N-6): 채팅 읽기 전용 + 읽기 전용 안내 줄. 보내기 줄은 그리지 않는다.
             <>
               {isNight ? (
                 <MessageLog
@@ -307,19 +296,13 @@ export function DayScene({ view, connection, myRoleButton, testButton, arrivedFr
                   more={false}
                 />
               ) : (
-                <MessageLog lines={dayLines} players={view.players} mySeat={view.me.seat} />
+                <MessageLog lines={chatLines} players={view.players} mySeat={view.me.seat} />
               )}
               <ReadOnlyRow guide />
             </>
-          ) : view.phase === "claim" ? (
-            view.day?.turn?.seat === view.me.seat ? (
-              <ClaimPanel view={view} canSend={connection.canSend} send={connection.send} />
-            ) : (
-              <TurnPanel view={view} connection={connection} showToast={showToast} lines={dayLines} />
-            )
           ) : view.phase === "discussion" ? (
             <>
-              <MessageLog lines={dayLines} players={view.players} mySeat={view.me.seat} />
+              <MessageLog lines={chatLines} players={view.players} mySeat={view.me.seat} />
               <DiscussionControls view={view} connection={connection} showToast={showToast} />
             </>
           ) : mafiaNight ? (
@@ -359,7 +342,6 @@ export function DayScene({ view, connection, myRoleButton, testButton, arrivedFr
           <UserRecordSheet
             seat={inspectSeat}
             nickname={nicknameOf(inspectSeat) ?? ""}
-            claimLog={view.day?.claimLog ?? []}
             voteLog={view.day?.voteLog ?? []}
             nicknameOf={nicknameOf}
             onClose={() => setInspectSeat(null)}
