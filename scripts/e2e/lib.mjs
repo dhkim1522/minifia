@@ -1822,21 +1822,66 @@ export function nameTagFitChecks(tags, { expectTexts = [] } = {}) {
   return result("NT1", label, bad);
 }
 
+/** 맨 앞 겹침 이름표 면 알파 하한: overlay-ink-strong(0.92). */
+export const TAG_FRONT_ALPHA_MIN = 0.9;
+/** 겹치지 않는 이름표 면 알파 상한: overlay-ink(0.8) 유지. */
+export const TAG_BASE_ALPHA_MAX = 0.85;
+
+/** CSS 색 문자열의 알파: "rgba(14, 19, 38, 0.92)" → 0.92, "rgb(…)" → 1, "transparent" → 0, 읽지 못하면 NaN. */
+export function cssAlpha(color) {
+  if (typeof color !== "string") return Number.NaN;
+  const c = color.trim().toLowerCase();
+  if (c === "transparent") return 0;
+  const m = /^rgba?\(([^)]*)\)$/.exec(c);
+  if (!m) return Number.NaN;
+  const parts = m[1].split(/[\s,/]+/).filter(Boolean);
+  if (parts.length === 3) return 1;
+  if (parts.length !== 4) return Number.NaN;
+  const raw = parts[3];
+  const v = raw.endsWith("%") ? Number(raw.slice(0, -1)) / 100 : Number(raw);
+  return Number.isFinite(v) ? v : Number.NaN;
+}
+
 /**
- * NT3 겹친 이름표는 맨 앞이 하나다(UI-SPEC E2): 사각형이 겹치는 이름표 쌍은 z-index 가 서로 달라 앞뒤가 정해진다(발 y 순위, 큰 쪽이 위).
- * tags = [{ seat, rect, z }]. 겹치는 쌍이 없으면 통과(할 일이 없다).
+ * NT3 겹친 이름표(UI-SPEC E2, G-06-4): ① 사각형이 겹치는 쌍은 z-index 가 서로 달라 앞뒤가 정해진다 ② 내 이름표가 모두의 위
+ * ③ 다른 이름표와 겹치고 겹친 모두보다 위에 있는 맨 앞 이름표의 면은 overlay-ink-strong(알파 ≥ TAG_FRONT_ALPHA_MIN)
+ * ④ 어떤 이름표와도 겹치지 않는 이름표의 면은 overlay-ink 80%(알파 ≤ TAG_BASE_ALPHA_MAX).
+ * tags = [{ seat, me, rect, z, face }] (face = .mv-tag 의 계산된 배경색). 겹치는 쌍이 없어도 ②·④는 판정한다.
  */
 export function tagStackChecks(tags) {
-  const label = "겹친 이름표는 앞뒤가 정해짐(z-index 가 서로 다름)";
+  const label = "겹친 이름표: 내 이름표 맨 위·맨 앞 면 짙음·안 겹치면 80%";
   if (!Array.isArray(tags) || tags.length === 0) return result("NT3", label, ["측정값 없음(이름표가 없음)"]);
   const bad = [];
+  const touching = tags.map(() => []);
   for (let i = 0; i < tags.length; i++) {
     for (let j = i + 1; j < tags.length; j++) {
       if (!rectsOverlap(tags[i].rect, tags[j].rect)) continue;
+      touching[i].push(j);
+      touching[j].push(i);
       if (!Number.isFinite(tags[i].z) || !Number.isFinite(tags[j].z)) bad.push(`자리 ${tags[i].seat}-${tags[j].seat} z-index 를 읽지 못함`);
       else if (tags[i].z === tags[j].z) bad.push(`자리 ${tags[i].seat}-${tags[j].seat} 겹쳤는데 z-index 가 같음 (${tags[i].z})`);
     }
   }
+  for (const me of tags.filter((t) => t.me)) {
+    for (const o of tags) {
+      if (o === me) continue;
+      if (Number.isFinite(me.z) && Number.isFinite(o.z) && me.z <= o.z) bad.push(`내 이름표(자리 ${me.seat}) z ${me.z} 가 자리 ${o.seat} z ${o.z} 보다 위가 아님`);
+    }
+  }
+  let faceMissing = false;
+  tags.forEach((t, i) => {
+    const alpha = cssAlpha(t.face);
+    const nearby = touching[i];
+    const isFront = nearby.length > 0 && nearby.every((j) => Number.isFinite(t.z) && Number.isFinite(tags[j].z) && t.z > tags[j].z);
+    if (nearby.length > 0 && !isFront) return;
+    if (!Number.isFinite(alpha)) {
+      faceMissing = true;
+      return;
+    }
+    if (isFront && alpha < TAG_FRONT_ALPHA_MIN) bad.push(`자리 ${t.seat} 맨 앞 겹침 이름표 면 알파 ${alpha} < ${TAG_FRONT_ALPHA_MIN} (overlay-ink-strong 이어야 함)`);
+    if (nearby.length === 0 && alpha > TAG_BASE_ALPHA_MAX) bad.push(`자리 ${t.seat} 겹치지 않는 이름표 면 알파 ${alpha} > ${TAG_BASE_ALPHA_MAX} (overlay-ink 80% 여야 함)`);
+  });
+  if (faceMissing) bad.push("측정값 없음(면 색)");
   return result("NT3", label, bad);
 }
 

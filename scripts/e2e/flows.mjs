@@ -532,8 +532,11 @@ async function worldFlow(ctx) {
         const stacked = await readWorld(hp);
         recOne(rec, "world/stack", tagStackChecks(stacked.tags));
         recOne(rec, "world/stack", nameTagFitChecks(stacked.tags));
+        // 손님 시점도 같다: 내 이름표(손님)가 맨 위여야 한다 — 예전엔 seat 번호가 큰 쪽이 항상 위였다(G-06-4)
+        const stackedGuest = await readWorld(gp);
+        recOne(rec, "world/stack", tagStackChecks(stackedGuest.tags));
         if (w360(ctx) || ctx.shots) await shot(hp, shotPath(ctx, "world-stack"));
-      } else rec("world/stack", "NT3", "겹친 이름표는 앞뒤가 정해짐(z-index 가 서로 다름)", false, "방장 구간이 오지 않음");
+      } else rec("world/stack", "NT3", "겹친 이름표: 내 이름표 맨 위·맨 앞 면 짙음·안 겹치면 80%", false, "방장 구간이 오지 않음");
     }
   } finally {
     await g.context.close().catch(() => {});

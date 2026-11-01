@@ -900,7 +900,7 @@ export async function waitWorldReady(page, expectPlayers, ms = 20_000) {
 
 /**
  * 맵 로비의 이름표·스테이지·링을 한 번의 evaluate 로 읽는다. 닉네임 글자는 이름표 검사(NT1)에만 쓰고 토큰은 싣지 않는다.
- * stage = 헤더 아래 ~ 아래 패널 위, 폭 전체(카메라가 내 캐릭터를 맞추는 사각형). tags: 이름표(.mv-tag) 사각형·글자 칸의 넘침·계산된 글자 크기·text-overflow·쌓임 순서(z).
+ * stage = 헤더 아래 ~ 아래 패널 위, 폭 전체(카메라가 내 캐릭터를 맞추는 사각형). tags: 이름표(.mv-tag) 사각형·글자 칸의 넘침·계산된 글자 크기·text-overflow·쌓임 순서(z)·면 색(face, .mv-tag 계산된 배경색).
  */
 export async function readWorld(page) {
   return page.evaluate(() => {
@@ -929,6 +929,7 @@ export async function readWorld(page) {
         textOverflow: [ncs?.textOverflow, tcs?.textOverflow].filter(Boolean).join(","),
         fontSize: ncs ? parseFloat(ncs.fontSize) : null,
         z: Number.isFinite(z) ? z : Number.NaN,
+        face: tcs ? tcs.backgroundColor : "",
         opacity: Number(getComputedStyle(el).opacity),
       };
     });
