@@ -1,7 +1,6 @@
 // 단계 정의 표. 코드 분기 대신 데이터 한 곳에 둔다(roles.ts 의 ROLE_TABLE 과 같은 원칙) —
 // 이후 페이즈는 이 표에 행을 더하는 방식으로만 단계를 늘린다(D-01).
-// 역할 확인(roleReveal) 뒤에는 낮 세 단계(dayAnnounce → claim → discussion)가 돈다.
-// claim 의 마감은 차례 하나의 마감이다. 차례가 남아 있으면 tick 의 ON_DEADLINE 이 같은 단계에 머물게 한다(결정 0023, 0027).
+// 역할 확인(roleReveal) 뒤에는 낮 두 단계(dayAnnounce → discussion)가 돈다. 순차 주장 단계는 7페이즈에서 없어졌다(CHAT-06).
 // 4페이즈 흐름(D-25): discussion → execVote → candidateVote → candidateVoteReveal → defense → execution → night → morning → dayAnnounce.
 // 승패가 나면 execution·morning 의 마감에서 ended(마감 없음)로 간다. 분기(여부 투표 불통과 → night 등)는 tick.ts 의 ON_DEADLINE 이
 // next 로 정한다 — 이 표의 next 는 "기본 다음 단계" 데이터일 뿐이다.
@@ -22,8 +21,7 @@ export interface PhaseDef {
 export const ASSIGNING_MS = 3_000;
 export const ROLE_REVEAL_MS = 15_000;
 export const DAY_ANNOUNCE_MS = 2_000; // D-20
-export const CLAIM_TURN_MS = 8_000; // 한 사람의 주장 차례(결정 0023, D-02)
-export const DISCUSSION_MS = 40_000; // DAY-01 — 자유 채팅 없이 빠른 메시지·이모티콘뿐이라 짧게(결정 0039)
+export const DISCUSSION_MS = 40_000; // DAY-01 — 7페이즈 자유 채팅 토론. 90초는 8페이즈 DAY-07 이 바꾼다(사용자 결정 3, 결정 0058 참고 줄)
 export const NIGHT_MS = 30_000; // NIGHT-05
 export const MORNING_MS = 5_000; // NIGHT-06
 export const EXEC_VOTE_MS = 13_000; // 처형 여부 투표(D-01, VOTE-01) — 처형 투표 카드 3초가 이 단계 안에서 뜨고 카드 뒤 10초 이상 남긴다(결정 0039)
@@ -55,8 +53,7 @@ export const PHASE_DEFS: Readonly<Record<PhaseId, PhaseDef>> = Object.freeze({
   lobby: Object.freeze({ durationMs: null, next: null, revealsOwnRole: false }), // start 로만 나간다
   assigning: Object.freeze({ durationMs: ASSIGNING_MS, next: "roleReveal", revealsOwnRole: false }),
   roleReveal: Object.freeze({ durationMs: ROLE_REVEAL_MS, next: "dayAnnounce", revealsOwnRole: true }),
-  dayAnnounce: Object.freeze({ durationMs: DAY_ANNOUNCE_MS, next: "claim", revealsOwnRole: true }),
-  claim: Object.freeze({ durationMs: CLAIM_TURN_MS, next: "discussion", revealsOwnRole: true }),
+  dayAnnounce: Object.freeze({ durationMs: DAY_ANNOUNCE_MS, next: "discussion", revealsOwnRole: true }),
   discussion: Object.freeze({ durationMs: DISCUSSION_MS, next: "execVote", revealsOwnRole: true }),
   execVote: Object.freeze({ durationMs: EXEC_VOTE_MS, next: "candidateVote", revealsOwnRole: true }), // 불통과면 훅이 night 로
   candidateVote: Object.freeze({ durationMs: CANDIDATE_VOTE_MS, next: "candidateVoteReveal", revealsOwnRole: true }),

@@ -4,8 +4,6 @@ import { validateNickname } from "../nickname";
 import { MAX_PLAYERS, MIN_PLAYERS } from "../protocol";
 import type {
   AssassinationRecord,
-  Claim,
-  ClaimLogEntry,
   ExecutionView,
   GameWinner,
   InvestigationRecord,
@@ -15,8 +13,7 @@ import type {
   VoteLogEntry,
 } from "../protocol";
 import type { BotPlan } from "./bots";
-import { enterClaim } from "./claim";
-import { ASSIGNING_MS, CLAIM_TURN_MS, DAY_ANNOUNCE_MS, DISCUSSION_MS } from "./phases";
+import { ASSIGNING_MS, DAY_ANNOUNCE_MS, DISCUSSION_MS } from "./phases";
 import { assignRoles, giveRoleTo, rolesInPlay } from "./roles";
 import type { RoleId } from "./roles";
 
@@ -92,17 +89,6 @@ export interface RoomState {
    * 낮 chat 프레임 seq 간격으로 밤 메시지 수를 알 수 있다. 밤마다 1부터, enterNight 가 지운다(3페이즈).
    */
   nextNightSeq?: number;
-  // ---- 순차 주장 상태(결정 0023). 모두 optional — 옛 저장 방도 읽힌다. 서버 전용이고 view 에는 허용 목록으로만 실린다. ----
-  /** 이번 낮 주장 차례 순서(seat). claim 진입 훅(enterClaim)이 만든다. 탈락자는 들지 않는다. */
-  claimOrder?: number[];
-  /** 지금 차례 위치(claimOrder 의 인덱스). 차례가 끝날 때마다 resolveClaimTurn 이 올린다. */
-  claimIdx?: number;
-  /** 직전(이번) 낮 시작 seat — 다음 낮 시작 자리를 한 칸 옮기는 기억. */
-  claimStart?: number;
-  /** 지금 차례인 사람이 일찍 고른 값. 차례가 끝나면 지운다. 어떤 view 에도 싣지 않는다. */
-  claimPick?: Claim;
-  /** 공개 주장 기록. 차례가 끝나는 순간 한 줄씩 쌓이고 판 내내 남는다(공개 정보). */
-  claimLog?: ClaimLogEntry[];
   // ---- 4페이즈 처형·승패 상태(결정 0034). 모두 optional 이고 서버 전용이다. 뷰에는 허용 목록으로만 실린다. ----
   /** 이번 낮 여부 투표 결과(분기 근거). resolveExecVote 가 쓰고 enterExecVote 가 지운다. */
   verdict?: { passed: boolean; candidate?: number };
@@ -311,10 +297,13 @@ export function startGame(
 }
 
 /**
- * 지금의 PhaseId 에 없는 옛 단계 이름 두 개 — 이 함수 한 곳에서만 문자열로 비교한다.
+ * 지금의 PhaseId 에 없는 옛 단계 이름 셋 — 이 함수 한 곳에서만 문자열로 비교한다.
  * "day": 1페이즈가 저장한 종착 낮 단계. "claimReveal": 결정 0027: 이 이름은 더는 단계가 아니다(공개 연출 2초 단계 삭제, 결정 0023).
+ * "claim": 순차 주장 단계 — 7페이즈(CHAT-06)에서 없어졌다.
  */
-const LEGACY_PHASES = { day: "day", claimReveal: "claimReveal" } as const;
+const LEGACY_PHASES = { day: "day", claimReveal: "claimReveal", claim: "claim" } as const;
+/** 순차 주장 단계가 방 상태에 쥐던 키 다섯 — 정규화가 키째 뺀다. 필드 선언은 RoomState 에서 사라졌다. */
+const LEGACY_CLAIM_STATE_KEYS = ["claimOrder", "claimIdx", "claimStart", "claimPick", "claimLog"] as const;
 /** 결정 0023 이전 Player 의 주장 필드 — 지금은 방 상태의 claimLog 로 대신한다. */
 const LEGACY_CLAIM_KEYS = ["claimChoice", "claimShown", "claimLast", "claimChanged"] as const;
 
@@ -323,7 +312,8 @@ const LEGACY_CLAIM_KEYS = ["claimChoice", "claimShown", "claimLast", "claimChang
  * - 1페이즈에서 저장된 방은 phase 가 "day"(마감 없음)일 수 있는데, 이 값은 PhaseId 에 없어 buildView 가 PHASE_DEFS 를 조회하다 터진다.
  *   그런 방은 낮 시작 발표(dayAnnounce)로 옮기고 마감을 now + DAY_ANNOUNCE_MS, 일차를 1로 둔다.
  * - 옛 공개 연출 단계(claimReveal)로 저장된 방은 discussion 으로 옮기고 마감을 now + DISCUSSION_MS 로 둔다(주장 기록은 새 방에 없다).
- * - 차례 상태(claimOrder)가 없는 claim 방은 enterClaim 으로 첫 차례를 만들고 마감을 now + CLAIM_TURN_MS 로 둔다.
+ * - 순차 주장 단계(claim)로 저장된 방은 discussion 으로 옮기고 마감을 now + DISCUSSION_MS 로 둔다(그날 주장 기록은 사라진다, A1).
+ * - 방 상태의 주장 키 다섯(claimOrder·claimIdx·claimStart·claimPick·claimLog)은 어느 단계에 있든 키째 뺀다.
  * - 모든 플레이어에서 옛 주장 필드 넷을 키째 뺀다.
  * 채팅은 서버에 저장하지 않는다(결정 0017-7) — 배포 전 저장된 messages 는 깨어날 때 지운다.
  * 아무것도 해당하지 않으면 같은 객체를 돌려준다(DO 생성자의 "바뀌었을 때만 저장·알람" 규칙이 이 동일성에 기댄다).
@@ -333,12 +323,28 @@ export function normalizeStoredRoom(stored: RoomState, now: number): RoomState {
   const phase = stored.phase as string;
   const isLegacyDay = phase === LEGACY_PHASES.day;
   const isLegacyReveal = phase === LEGACY_PHASES.claimReveal;
-  const needsClaimOrder = stored.phase === "claim" && stored.claimOrder === undefined;
+  const isLegacyClaim = phase === LEGACY_PHASES.claim;
+  const hasOldClaimState = LEGACY_CLAIM_STATE_KEYS.some((key) => Object.hasOwn(stored, key));
   const hasOldMessages = Object.hasOwn(stored, "messages");
   const hasOldPlayerFields = stored.players.some((p) => LEGACY_CLAIM_KEYS.some((key) => Object.hasOwn(p, key)));
-  if (!isLegacyDay && !isLegacyReveal && !needsClaimOrder && !hasOldMessages && !hasOldPlayerFields) return stored;
+  if (!isLegacyDay && !isLegacyReveal && !isLegacyClaim && !hasOldClaimState && !hasOldMessages && !hasOldPlayerFields) return stored;
   // 옛 키는 구조 분해로만 뺀다. 필드 선언이 RoomState 에서 사라져도 컴파일되게 지역 교차 타입으로 받는다.
-  const { messages: _dropped, ...rest } = stored as RoomState & { messages?: unknown };
+  const {
+    messages: _dropped,
+    claimOrder: _order,
+    claimIdx: _idx,
+    claimStart: _start,
+    claimPick: _pick,
+    claimLog: _log,
+    ...rest
+  } = stored as RoomState & {
+    messages?: unknown;
+    claimOrder?: unknown;
+    claimIdx?: unknown;
+    claimStart?: unknown;
+    claimPick?: unknown;
+    claimLog?: unknown;
+  };
   let next: RoomState = rest;
   if (hasOldPlayerFields) {
     next = {
@@ -350,8 +356,7 @@ export function normalizeStoredRoom(stored: RoomState, now: number): RoomState {
     };
   }
   if (isLegacyDay) return { ...next, phase: "dayAnnounce", phaseEndsAt: now + DAY_ANNOUNCE_MS, day: 1 };
-  if (isLegacyReveal) return { ...next, phase: "discussion", phaseEndsAt: now + DISCUSSION_MS };
-  if (needsClaimOrder) return { ...enterClaim(next), phaseEndsAt: now + CLAIM_TURN_MS };
+  if (isLegacyReveal || isLegacyClaim) return { ...next, phase: "discussion", phaseEndsAt: now + DISCUSSION_MS };
   return next;
 }
 

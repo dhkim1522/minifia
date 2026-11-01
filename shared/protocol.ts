@@ -17,13 +17,12 @@ export const MAX_TEST_BOTS = 7;
 export const MAX_FRAME_BYTES = 1024; // WebSocket 프레임 상한
 export const MAX_BODY_BYTES = 1024; // HTTP 본문 상한
 
-// 낮 세 단계(dayAnnounce·claim·discussion)와 밤·아침(night·morning)은 단계 표(shared/game/phases.ts)의 한 줄씩이다.
+// 낮 두 단계(dayAnnounce·discussion)와 밤·아침(night·morning)은 단계 표(shared/game/phases.ts)의 한 줄씩이다.
 // discussion 다음에 처형 여부 투표(execVote) → 후보 선택(candidateVote) → 선택 공개(candidateVoteReveal) → 최후 변론(defense) → 처형(execution)이 이어지고,
 // 여부 투표 마감에서 통과하지 못하면 바로 night 로 간다(분기는 shared/game/tick.ts). 종료 단계 ended 는 마감이 없다.
-// claim 은 직업 주장을 한 명씩 차례로 하는 단계다(결정 0023). 한 차례(8초)의 마감이 곧 단계 마감이고, 남은 차례가 있으면
-// 서버가 같은 단계에 머물며 마감만 한 차례 뒤로 옮긴다 — 모든 폰이 같은 마감을 받는다. 옛 공개 연출 단계는 없어졌다(결정 0027).
+// 순차 직업 주장 단계(claim)는 7페이즈에서 없어졌다 — 낮 시작 발표 다음이 바로 자유 채팅 토론이다(CHAT-06). 옛 공개 연출 단계도 없다(결정 0027).
 export type PhaseId =
-  | "lobby" | "assigning" | "roleReveal" | "dayAnnounce" | "claim" | "discussion"
+  | "lobby" | "assigning" | "roleReveal" | "dayAnnounce" | "discussion"
   | "execVote" | "candidateVote" | "candidateVoteReveal" | "defense" | "execution"
   | "night" | "morning" | "ended";
 
@@ -156,15 +155,10 @@ export interface ClaimLogEntry {
   seat: number;
   claim: Claim;
 }
-/** claim 단계의 지금 차례. 끝나지 않은 차례의 선택은 어떤 키로도 싣지 않는다. */
-export interface ClaimTurn {
-  seat: number;
-}
 export interface DayView {
   n: number; // 일차(1부터)
   roles: RoleId[]; // 이번 판 직업(구성표 순서, 공개 정보)
-  turn?: ClaimTurn; // claim 단계에서만: 지금 주장할 차례인 seat
-  claimLog: ClaimLogEntry[]; // 낮 단계마다 항상: 지금까지 공개된 주장(일차 오름차순, 같은 일차는 차례 순서)
+  claimLog: ClaimLogEntry[]; // 07-08 이후 언제나 빈 배열 — 07-09 가 와이어에서 지운다
   morning?: MorningView; // morning 단계에서만
   // ---- 4페이즈 처형 필드 ----
   // 서버는 낮 단계마다(빈 배열 포함) 항상 싣는다. 타입을 optional 로 둔 이유: 필수로 하면 화면 테스트의 DayView 리터럴이 서버 웨이브에서 한꺼번에 바뀐다(화면 계획이 필요하면 필수로 올린다).
@@ -226,7 +220,6 @@ export type ClientMessage =
   | { t: "start" }
   | { t: "leave" }
   | { t: "kick"; seat: number }
-  | { t: "claim"; claim: Claim }
   | { t: "say"; template: TemplateId; target?: number; claimedRole?: RoleId }
   | { t: "emoji"; icon: EmojiId }
   | { t: "pick"; target: number } // 밤 행동 — 행동 종류는 보내지 않는다(서버 저장 역할이 정한다)
@@ -281,7 +274,7 @@ export interface RoomView {
   maxPlayers: number;
   players: PublicPlayer[];
   me: MyInfo;
-  day?: DayView; // 낮 세 단계(dayAnnounce·claim·discussion)·처형 다섯 단계·밤·아침·종료에서
+  day?: DayView; // 낮 두 단계(dayAnnounce·discussion)·처형 다섯 단계·밤·아침·종료에서
   spectate?: SpectateView; // 탈락한 본인 view 에만(결정 0021). 살아 있는 사람 view 에는 키 자체가 없다
   result?: GameResult; // ended 단계에서만, 모두에게(D-17)
 }

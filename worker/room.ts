@@ -1,9 +1,8 @@
 import { DurableObject } from "cloudflare:workers";
 import { CLOSE_CODES, MAX_FRAME_BYTES } from "../shared/protocol";
-import type { ApiErrorCode, BotVoteExec, BotVotePick, ClientMessage, Claim, EmojiId, RemovedReason, RoomPreview, ServerMessage, WorldFrame, WsErrorCode } from "../shared/protocol";
+import type { ApiErrorCode, BotVoteExec, BotVotePick, ClientMessage, EmojiId, RemovedReason, RoomPreview, ServerMessage, WorldFrame, WsErrorCode } from "../shared/protocol";
 import { botWakeAt, isBot, syncBotPlan, takeDueBotSteps } from "../shared/game/bots";
 import type { BotStep } from "../shared/game/bots";
-import { selectClaim } from "../shared/game/claim";
 import { emote, say } from "../shared/game/chat";
 import type { SayInput } from "../shared/game/chat";
 import {
@@ -215,9 +214,6 @@ export class Room extends DurableObject<Env> {
       case "start":
         await this.handleStart(ws);
         return;
-      case "claim":
-        await this.handleClaim(ws, msg.claim);
-        return;
       case "say":
         await this.handleSay(ws, { template: msg.template, target: msg.target, claimedRole: msg.claimedRole });
         return;
@@ -361,7 +357,7 @@ export class Room extends DurableObject<Env> {
     await this.flushWorld();
   }
 
-  // 빠른 메시지·이모티콘·직업 선택·밤 행동은 "소켓 껍데기(handleX)" 와 "본체(applyX)" 로 나뉜다(결정 0024).
+  // 빠른 메시지·이모티콘·밤 행동은 "소켓 껍데기(handleX)" 와 "본체(applyX)" 로 나뉜다(결정 0024).
   // 껍데기는 소켓 첨부에서 playerId 를 얻고 거부를 그 소켓에 알린다. 본체는 같은 규칙 함수·같은 저장·방송을 하고 실패 코드를 돌려준다.
   // 서버 봇은 본체만 부른다 — 사람과 같은 검증을 거치고(특권 없음), 거부는 알릴 소켓이 없어 버린다.
 
@@ -414,32 +410,6 @@ export class Room extends DurableObject<Env> {
     const emoji: ServerMessage = { t: "emoji", ...result.event };
     if (this.room.phase === "night") this.broadcastEventTo(emoji, nightChatRecipientIds(this.room));
     else this.broadcastEvent(emoji);
-    return null;
-  }
-
-  // 직업 선택: 신원은 소켓 첨부의 playerId 뿐이다 — 메시지에서 seat 를 읽지 않는다(T-02-16).
-  private async handleClaim(ws: WebSocket, claim: Claim): Promise<void> {
-    const att = this.attachmentOf(ws);
-    if (!att || !this.room) {
-      this.sendTo(ws, { t: "error", code: "BAD_MESSAGE" });
-      return;
-    }
-    const error = await this.applyClaim(att.playerId, claim);
-    if (error !== null) this.sendRejection(ws, att.playerId, error);
-  }
-
-  // 직업 주장 본체(결정 0023, 0027): selectClaim 이 차례·값을 검사하고 마감을 now 로 당기면, 그 위에서 tick 을 한 번 더 불러
-  // 정상 마감과 같은 경로(ON_DEADLINE → 다음 차례, 마지막이면 낮 토론)로 넘긴다. 공개 주장은 모두에게 같은 정보라 전원에게 방송한다.
-  // claim 은 마감을 바꾼다(차례가 끝나므로): 결정 0020 의 pick(마감 불변)과 다르다. 그래서 reschedule 로 알람을 새 마감으로 옮기고,
-  // 다음 차례가 봇이면 봇 계획도 그 차례 키로 새로 선다. 사람과 봇이 같은 본체를 쓴다(결정 0024-6).
-  private async applyClaim(playerId: string, claim: Claim): Promise<WsErrorCode | null> {
-    if (!this.room) return "BAD_MESSAGE";
-    const now = Date.now();
-    const result = selectClaim(this.room, playerId, claim, now);
-    if (!result.ok) return result.error;
-    this.room = tick(result.state, now, cryptoRandInt);
-    await this.persistAndBroadcast();
-    await this.reschedule();
     return null;
   }
 
@@ -532,9 +502,6 @@ export class Room extends DurableObject<Env> {
   private async actAsBot(step: BotStep): Promise<void> {
     const act = step.act;
     switch (act.t) {
-      case "claim":
-        await this.applyClaim(step.botId, act.claim);
-        return;
       case "say":
         await this.applySay(step.botId, { template: act.template, target: act.target, claimedRole: act.claimedRole });
         return;

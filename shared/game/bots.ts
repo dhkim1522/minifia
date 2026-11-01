@@ -2,26 +2,23 @@
 // 입력 상태를 바꾸지 않으며, DOM·workerd API 를 쓰지 않는다.
 //
 // 이 파일은 "계획"만 만든다: 단계에 들어갈 때 어떤 봇이 언제 무엇을 할지(BotStep)를 정해 RoomState.botPlan 에 둔다.
-// 행동의 실행과 검증은 방 DO 가 사람과 같은 처리기(selectClaim·say·emote·pickTarget·castExecVote·castCandidateVote)로 한다 — 봇은 특권이 없다.
+// 행동의 실행과 검증은 방 DO 가 사람과 같은 처리기(say·emote·pickTarget·castExecVote·castCandidateVote)로 한다 — 봇은 특권이 없다.
 // 단계가 바뀌면 계획 키(단계:마감)가 달라져 남은 행동은 저절로 버려지고 새 단계 계획이 선다.
 //
-// 구현됨(결정 0023, 0027-10): 봇은 자기 차례에만 주장한다. botClaimChoice 는 그 봇 차례가 아니면 난수 없이 null 을 돌려주고,
-// 차례마다 새 계획이 서도록 botPlanKey 에 차례 번호가 들어 있다. 나머지 규칙은 그대로다.
+// 07-08: 순차 직업 주장(claim) 단계와 그 봇 계획이 없어졌다. 봇 계획이 서는 단계는 discussion·night·execVote·candidateVote·defense 다.
 //
 // 구현됨(결정 0024, 0036): 처형 여부 투표(execVote)에는 찬성·반대 하나, 후보 선택(candidateVote)에는 자기를 뺀 살아 있는 한 명(역할을 보지 않는다),
 // 최후 변론(defense)에서는 후보인 봇만 대상·직업이 필요 없는 변론 템플릿 하나를 던진다. 공개·처형·종료 단계에는 계획이 없다.
 //
 // 난수 호출 순서가 계약이다(시드 테스트가 고정한다). randInt(0) 호출은 어디에도 없다(cryptoRandInt(0) 은 RangeError).
-// 새 단계의 난수는 새 분기 안에서만 늘어난다 — 기존 claim·discussion·night 계획은 같은 시드에서 예전과 같다.
+// 새 단계의 난수는 새 분기 안에서만 늘어난다. 07-08 에서 claim 분기의 난수 호출이 빠져 시드 고정 값이 새 호출 순서로 다시 고정됐다(다른 단계의 호출 수는 그대로).
 // 봇 하나당 순서: execVote = randInt(100) → randInt(지연 폭), candidateVote = (후보가 있으면) randInt(후보 수) → randInt(지연 폭),
 // defense(후보 봇만) = randInt(템플릿 수) → randInt(지연 폭).
 // 테스트 방 방장이 봇 투표를 고정한 경우(RoomState.testBotVote, P-13): 고정 값이면 결정 난수(randInt(100)·randInt(후보 수))를 건너뛰고 지연 난수는 그대로 부른다.
 // 고정 설정이 없거나 pick 조건이 안 맞아 무작위로 돌아가면 위 순서와 똑같다.
 import { EMOJI_IDS } from "../protocol";
-import type { Claim, EmojiId, TemplateId } from "../protocol";
+import type { EmojiId, TemplateId } from "../protocol";
 import { isAlive } from "./alive";
-import { currentClaimSeat } from "./claim";
-import { rolesInPlay } from "./roles";
 import type { RoleId } from "./roles";
 import type { Player, RoomState } from "./room";
 import type { RandInt } from "./tick";
@@ -32,11 +29,6 @@ export const BOT_NAMES: readonly string[] = ["봇가나다라마바사", "봇아
 
 /** 단계 마감 이만큼 전보다 늦은 행동은 계획에서 버린다(마감 직전에 실행되어 거부되는 일을 줄인다). */
 export const BOT_END_MARGIN_MS = 500;
-/** 직업 공개에서 말 안 함을 고를 확률(%). */
-const NONE_PERCENT = 15;
-/** 직업 공개 첫 행동 지연: 500 + [0, 3000) ms. */
-const CLAIM_DELAY_BASE_MS = 500;
-const CLAIM_DELAY_SPAN_MS = 3_000;
 /** 낮 토론: 첫 행동 2000 + [0, 10000) ms, 둘째는 그 뒤 8000 + [0, 18000) ms — 토론 40초(결정 0039)에서 둘째 행동 최대 37998ms 가 마감 − 500 안에 든다. 서버 전송 한도(1800ms)보다 넉넉하다. */
 const DISCUSSION_FIRST_BASE_MS = 2_000;
 const DISCUSSION_FIRST_SPAN_MS = 10_000;
@@ -66,7 +58,6 @@ const DEFENSE_BOT_TEMPLATES: readonly TemplateId[] = ["defNotMe", "defCitizen", 
 
 /** 봇 행동 한 가지 — 사람 ClientMessage 의 같은 칸 이름을 쓴다. */
 export type BotAct =
-  | { t: "claim"; claim: Claim }
   | { t: "say"; template: TemplateId; target?: number; claimedRole?: RoleId }
   | { t: "emoji"; icon: EmojiId }
   | { t: "pick"; target: number }
@@ -77,7 +68,7 @@ export interface BotStep {
   botId: string;
   act: BotAct;
 }
-/** key = 계획을 세운 단계("단계:마감", claim 은 "claim:마감:차례 번호"). 지금 단계 키와 다르면 낡은 계획이다. */
+/** key = 계획을 세운 단계("단계:마감"). 지금 단계 키와 다르면 낡은 계획이다. */
 export interface BotPlan {
   key: string;
   steps: BotStep[];
@@ -87,25 +78,6 @@ export const isBot = (p: { isBot?: true }): boolean => p.isBot === true;
 export const botCount = (state: RoomState): number => state.players.filter(isBot).length;
 
 const bySeat = (a: Player, b: Player): number => a.seat - b.seat;
-
-/**
- * 직업 주장에서 이 봇이 낼 주장과 지연. claim 단계가 아니거나, 탈락했거나, 지금 차례(currentClaimSeat)가 이 봇이 아니면 null —
- * 이 검사가 맨 앞이라 난수를 한 번도 부르지 않는다. 차례이면 randInt(100) < 15 이면 말 안 함, 아니면 이번 판 직업 중
- * randInt(길이)번째, 그다음 delayMs = 500 + randInt(3000).
- */
-export function botClaimChoice(
-  state: RoomState,
-  bot: Player,
-  randInt: RandInt,
-): { claim: Claim; delayMs: number } | null {
-  if (state.phase !== "claim" || !isAlive(bot) || currentClaimSeat(state) !== bot.seat) return null;
-  let claim: Claim = "none";
-  if (randInt(100) >= NONE_PERCENT) {
-    const roles = rolesInPlay(state.players.length);
-    if (roles.length > 0) claim = roles[randInt(roles.length)]!;
-  }
-  return { claim, delayMs: CLAIM_DELAY_BASE_MS + randInt(CLAIM_DELAY_SPAN_MS) };
-}
 
 /**
  * 밤에 이 봇이 고를 대상 seat. 후보는 seat 오름차순 — 마피아는 살아 있는 비마피아, 경찰은 살아 있는 다른 사람,
@@ -158,12 +130,8 @@ export function botCandidateTarget(
   return candidates[randInt(candidates.length)]!.seat;
 }
 
-/**
- * 봇 계획이 필요한 단계(claim·discussion·night·execVote·candidateVote·defense)의 키. 그 밖은 null. claim 은 차례마다 계획이 새로 서야 하므로
- * "claim:마감:차례 번호" 다 — 마감이 우연히 같아져도(테스트 넘기기 연타) 차례 번호가 달라 낡은 계획이 살아남지 않는다(D-20).
- */
+/** 봇 계획이 필요한 단계(discussion·night·execVote·candidateVote·defense)의 키 "단계:마감". 그 밖은 null. */
 export function botPlanKey(state: RoomState): string | null {
-  if (state.phase === "claim") return `claim:${state.phaseEndsAt}:${state.claimIdx ?? 0}`;
   const planned: readonly string[] = ["discussion", "night", "execVote", "candidateVote", "defense"];
   if (!planned.includes(state.phase)) return null;
   return `${state.phase}:${state.phaseEndsAt}`;
@@ -181,10 +149,7 @@ function planFor(state: RoomState, bot: Player, now: number, randInt: RandInt): 
   const add = (at: number, act: BotAct): void => {
     steps.push({ at, botId: bot.id, act });
   };
-  if (state.phase === "claim") {
-    const choice = botClaimChoice(state, bot, randInt);
-    if (choice !== null) add(now + choice.delayMs, { t: "claim", claim: choice.claim });
-  } else if (state.phase === "discussion") {
+  if (state.phase === "discussion") {
     const first = now + DISCUSSION_FIRST_BASE_MS + randInt(DISCUSSION_FIRST_SPAN_MS);
     add(first, discussionAct(randInt));
     const second = first + DISCUSSION_GAP_BASE_MS + randInt(DISCUSSION_GAP_SPAN_MS);

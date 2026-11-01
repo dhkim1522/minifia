@@ -22,7 +22,6 @@ import type {
 import { MAX_PLAYERS, MIN_PLAYERS } from "../protocol";
 import { isAlive } from "./alive";
 import { botCount } from "./bots";
-import { currentClaimSeat } from "./claim";
 import { phaseDurationOf } from "./discussion";
 import { buildSummary } from "./endgame";
 import { noExecutionOf } from "./execution";
@@ -33,12 +32,11 @@ import type { RoomState } from "./room";
 import { execTallyOf } from "./vote";
 
 /**
- * view.day 가 생기는 단계: 낮 세 단계·처형 다섯 단계·밤·아침·종료. 이 밖의 단계 뷰에는 day 키 자체가 없다(D-07).
+ * view.day 가 생기는 단계: 낮 두 단계·처형 다섯 단계·밤·아침·종료. 이 밖의 단계 뷰에는 day 키 자체가 없다(D-07).
  * ended 도 넣는다: day 에는 공개 정보(일차·구성·주장 기록·투표 기록)만 있어 누출이 없고, 결과 화면이 테이블을 다시 쓸 수 있다.
  */
 const DAY_PHASES: ReadonlySet<PhaseId> = new Set([
   "dayAnnounce",
-  "claim",
   "discussion",
   "execVote",
   "candidateVote",
@@ -61,16 +59,15 @@ function voteLogLine(entry: VoteLogEntry): VoteLogEntry {
 }
 
 /**
- * 낮 정보. 허용 목록 리터럴로만 만든다 — 조건을 채울 때만 키를 만들고, 서버 전용 필드(claimOrder·claimIdx·claimStart·claimPick)는 싣지 않는다.
- * claimLog 는 공개 정보라 낮 단계마다 모두에게 같게 가고, 줄마다 {n, seat, claim} 세 키로 복사한다(펼쳐 복사 금지).
- * claim 단계에는 지금 차례의 seat(turn)만 싣는다: 끝나지 않은 차례의 선택(claimPick)은 어떤 키로도 나가지 않는다(D-05, T-03.1-01).
+ * 낮 정보. 허용 목록 리터럴로만 만든다 — 조건을 채울 때만 키를 만들고, 서버 전용 필드는 싣지 않는다.
+ * claimLog 는 07-08 이후 언제나 빈 배열이다(순차 주장 제거) — 07-09 가 와이어에서 키를 지운다.
  * 읽는 쪽이 기본값을 쥔다: 일차 없으면 1(RESEARCH Pattern 6).
  */
 function buildDay(state: RoomState): DayView {
   const day: DayView = {
     n: state.day ?? 1,
     roles: rolesInPlay(state.players.length),
-    claimLog: (state.claimLog ?? []).map((entry) => ({ n: entry.n, seat: entry.seat, claim: entry.claim })),
+    claimLog: [],
     voteLog: (state.voteLog ?? []).map(voteLogLine),
   };
   // 실시간 집계는 모든 viewer 에게 같은 값이다 — 마감 집계와 같은 함수(execTallyOf)를 쓴다.
@@ -88,10 +85,6 @@ function buildDay(state: RoomState): DayView {
   // 처형이 성립하지 않아 밤으로 온 그 밤에만, 이유 코드 하나(D-34). 공개 투표 기록에서 파생해 새 상태 필드가 없다.
   const noExecution = noExecutionOf(state);
   if (noExecution !== undefined) day.noExecution = { reason: noExecution.reason };
-  if (state.phase === "claim") {
-    const seat = currentClaimSeat(state);
-    if (seat !== undefined) day.turn = { seat };
-  }
   if (state.phase === "morning") {
     // 아침 결과는 모두에게 같은 값이다. 탈락자가 있을 때만 키를 만들고, 값은 필드별로 복사한다(의사 구출·지목 없음은 둘 다 {}, D-13).
     const morning: MorningView = {};
