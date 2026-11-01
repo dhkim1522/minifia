@@ -23,12 +23,12 @@
 
 ### 채팅 (CHAT)
 
-- [ ] **CHAT-01**: 로비와 낮(토론·지목·변론·찬반·처형·아침)에 살아 있는 사람 모두 하단 채팅창으로 자유 채팅한다
-- [ ] **CHAT-02**: 밤에는 살아 있는 마피아끼리만 채팅하고, 그 내용과 입력 중 표시는 시민 편에게 네트워크로도 가지 않는다
-- [ ] **CHAT-03**: 탈락자는 탈락자끼리만 채팅하고, 산 사람에게는 네트워크로도 가지 않는다
-- [ ] **CHAT-04**: 채팅을 입력하는 동안 내 캐릭터 머리 위에 "…" 가 뜬다(같은 채널을 보는 사람에게만)
+- [x] **CHAT-01**: 로비와 낮(토론·지목·변론·찬반·처형·아침)에 살아 있는 사람 모두 하단 채팅창으로 자유 채팅한다
+- [x] **CHAT-02**: 밤에는 살아 있는 마피아끼리만 채팅하고, 그 내용과 입력 중 표시는 시민 편에게 네트워크로도 가지 않는다
+- [x] **CHAT-03**: 탈락자는 탈락자끼리만 채팅하고, 산 사람에게는 네트워크로도 가지 않는다
+- [x] **CHAT-04**: 채팅을 입력하는 동안 내 캐릭터 머리 위에 "…" 가 뜬다(같은 채널을 보는 사람에게만)
 - [ ] **CHAT-05**: 서버가 글자 수·도배를 제한하고, 막힌 메시지는 보낸 사람에게 알린다. 한글 입력(조합 중 Enter)과 iOS 키보드가 채팅창을 가리지 않는다
-- [ ] **CHAT-06**: v1.0 의 순차 직업 주장·빠른 메시지·텍스트 이모티콘을 없앤다
+- [x] **CHAT-06**: v1.0 의 순차 직업 주장·빠른 메시지·텍스트 이모티콘을 없앤다
 
 ### 캐릭터와 동작 (AVTR)
 
@@ -132,12 +132,12 @@ Which phases cover which requirements. Updated during roadmap creation.
 | MAP-06 | Phase 11 | Pending |
 | MAP-07 | Phase 6 | Complete |
 | CONN-04 | Phase 6 | Complete |
-| CHAT-01 | Phase 7 | Pending |
-| CHAT-02 | Phase 7 | Pending |
-| CHAT-03 | Phase 7 | Pending |
-| CHAT-04 | Phase 7 | Pending |
+| CHAT-01 | Phase 7 | Complete |
+| CHAT-02 | Phase 7 | Complete |
+| CHAT-03 | Phase 7 | Complete |
+| CHAT-04 | Phase 7 | Complete |
 | CHAT-05 | Phase 7 | Pending |
-| CHAT-06 | Phase 7 | Pending |
+| CHAT-06 | Phase 7 | Complete |
 | DAY-03 | Phase 8 | Pending |
 | DAY-04 | Phase 8 | Pending |
 | DAY-05 | Phase 8 | Pending |

@@ -5,16 +5,16 @@ milestone_name: 같은 공간
 current_phase: 07
 current_phase_name: 자유 채팅
 status: executing
-stopped_at: Completed 07-20-PLAN.md
-last_updated: "2026-11-01T17:59:17.932Z"
+stopped_at: Completed 07-21-PLAN.md (Task 3 iPhone 확인 사용자 대기)
+last_updated: "2026-11-01T18:15:34.431Z"
 last_activity: 2026-11-01
 last_activity_desc: Phase 07 execution started
-state_head: 5dd1e193dd43bb3d685e416a81da8b8d2737702f
+state_head: fb7c3a4cf406332e93513b16b6eacc64509beaf0
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 45
-  completed_plans: 43
+  completed_plans: 44
   percent: 14
 ---
 
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-11-01)
 ## Current Position
 
 Phase: 07 (자유 채팅) — EXECUTING
-Plan: 21 of 22
+Plan: 22 of 22
 Status: Ready to execute
 Last activity: 2026-11-01 — Phase 07 execution started
 
@@ -101,6 +101,7 @@ Progress: [█░░░░░░░░░] 14% (1/7 phases)
 | Phase 07 P18 | 13 min | 3 tasks | 16 files |
 | Phase 07 P19 | 28 min | 3 tasks | 15 files |
 | Phase 07 P20 | 72min | 2 tasks | 14 files |
+| Phase 07 P21 | 13 min | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -194,6 +195,7 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 07]: 07-20: E2E 하단 높이 기대값은 expectedPanelH({ roomH, chat }) 한 함수(채팅 188·244, 그 밖 157). D7·T1 은 채팅 패널 유무가 같은 상태끼리 비교
 - [Phase 07]: 07-20: 사용자 위임에 따른 추천안 선택 — 360x640 D2 실패를 판정 완화가 아니라 앱 기하 수정으로 해결(TABLE_FIT_MIN_H 299→303, TABLE_FULL_H 336, 336 이상 승인 기하 불변)
 - [Phase 07]: 07-20: chat-keyboard 를 DayScene 으로 넓히지 않는다(테이블 틀은 8페이즈 삭제, 07-21 실기기 확인이 맡음)
+- [Phase 07]: 07-21: 배포본(minifia-v2 +4147d32) 자동 확인 통과(smoke·E2E chat·chatload 60.00fps). iPhone 실기기 확인(Task 3)은 사용자 확인 대기로 남김, Android·삼성·카카오톡 인앱은 9페이즈 이월 후보
 
 ### Pending Todos
 
@@ -230,8 +232,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-01T17:59:17.723Z
-Stopped at: Completed 07-20-PLAN.md
+Last session: 2026-11-01T18:15:34.232Z
+Stopped at: Completed 07-21-PLAN.md (Task 3 iPhone 확인 사용자 대기)
 Resume file: None
 
 ## Operator Next Steps
