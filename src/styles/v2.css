@@ -12,6 +12,13 @@
 .mv-tag.is-away .mv-tag__dot { background: var(--gray-700) !important; }
 .mv-tag__dot { width: 8px; height: 8px; border-radius: var(--radius-pill); flex: none; }
 
+/* 머리 위 입력 중 알약(승인 .mv-typing, bundle.css 40-43). 글자 없이 점 세 개. 점 애니메이션 이름은 .mv-dots(DotProgress)와 헷갈리지 않게 mv-typing-dots */
+.mv-typing { display: inline-flex; gap: 3px; padding: 6px 10px; border-radius: var(--radius-pill); background: var(--gray-100); }
+.mv-typing i { width: 6px; height: 6px; border-radius: var(--radius-pill); background: var(--night-900); animation: mv-typing-dots 1s infinite; }
+.mv-typing i:nth-child(2) { animation-delay: 0.2s; }
+.mv-typing i:nth-child(3) { animation-delay: 0.4s; }
+@keyframes mv-typing-dots { 0%, 100% { opacity: 0.35; } 50% { opacity: 1; } }
+
 /* 단계 머리: 이름 + 접히는 안내 한 줄(+ 시간 링) */
 .mv-phase { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-md); color: var(--gray-100); font-family: var(--font-ui); }
 .mv-phase__text { display: flex; flex-direction: column; gap: var(--space-xs); min-width: 0; }
@@ -90,5 +97,5 @@
 
 @media (prefers-reduced-motion: reduce) {
   .mv-toast, .mv-ring__bar, .mv-phase__hint { transition: none; }
-  .mv-chat__newdot i { animation: none; }
+  .mv-chat__newdot i, .mv-typing i { animation: none; }
 }

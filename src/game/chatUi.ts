@@ -14,11 +14,11 @@ export const LOG_H_KB = 72;
 export const TALL_ROOM_MIN_H = 780;
 
 /** 로비 패널 = LOG_H + 154 = 14 + LOG_H + 8 + 48(입력줄) + 10 + 52(행동 줄) + 22 */
-export const LOBBY_PANEL_EXTRA = 14 + 8 + 48 + 10 + 52 + 22;
+export const LOBBY_PANEL_EXTRA = 154;
 /** 테이블 패널 = LOG_H + 92 = 14 + LOG_H + 8 + 48 + 22 */
-export const TABLE_PANEL_EXTRA = 14 + 8 + 48 + 22;
+export const TABLE_PANEL_EXTRA = 92;
 /** 키보드 열림 패널 = 14 + 72 + 8 + 48 + 8(아래 여백, 안전 영역 없음) */
-export const KB_PANEL_H = 14 + LOG_H_KB + 8 + 48 + 8;
+export const KB_PANEL_H = 150;
 /** 키보드 열림 판정: 입력칸에 포커스가 있고 lift 가 이 값을 넘을 때 */
 export const KB_OPEN_MIN_LIFT = 80;
 /** 머리 위 입력 중 알약이 스택을 늘리는 높이(알약 약 18 + 이름표와 간격 4) */
