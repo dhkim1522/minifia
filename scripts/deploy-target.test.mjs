@@ -38,6 +38,14 @@ for (const v1 of [
   "https://minifia.dhplay.workers.dev/",
   "https://MINIFIA.dhplay.workers.dev/room/1234",
   "http://minifia.dhplay.workers.dev",
+  // 완전한 도메인 이름(FQDN)의 끝 점도 같은 Worker 로 해석된다 — 우회 금지(06 리뷰 CR-01).
+  "https://minifia.dhplay.workers.dev.",
+  "https://minifia.dhplay.workers.dev./room/1234",
+  "https://MINIFIA.dhplay.workers.dev.:443/x",
+  "https://minifia.dhplay.workers.dev..",
+  "https://minifia.dhplay.workers.dev%2e",
+  "https://minifia\u3002dhplay\u3002workers\u3002dev\u3002",
+  "https://user:pw@minifia.dhplay.workers.dev./",
 ]) {
   test(`assertNotV1 은 v1.0 주소를 거부: ${v1}`, () => {
     assert.throws(() => assertNotV1(v1), /v1\.0/);
@@ -47,6 +55,13 @@ for (const v1 of [
 test("assertNotV1 은 v2 주소의 origin 을 돌려준다", () => {
   assert.equal(assertNotV1(V2_ORIGIN), V2_ORIGIN);
   assert.equal(assertNotV1(`${V2_ORIGIN}/room/1`), V2_ORIGIN);
+});
+
+test("assertNotV1 은 v2 주소를 끝 점·대문자 형태에서도 통과시킨다(v1 만 막는다)", () => {
+  assert.doesNotThrow(() => assertNotV1("https://minifia-v2.dhplay.workers.dev."));
+  assert.doesNotThrow(() => assertNotV1("https://MINIFIA-V2.dhplay.workers.dev"));
+  // v1 이름을 접두로만 공유하는 호스트는 v1 이 아니다.
+  assert.doesNotThrow(() => assertNotV1("https://minifia.dhplay.workers.dev.example.com"));
 });
 
 test("assertNotV1 은 로컬 주소를 통과시킨다(로컬 E2E)", () => {

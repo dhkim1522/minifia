@@ -19,13 +19,15 @@ export function expectedOrigin() {
 
 /**
  * 주소가 v1.0 이면 던지고, 아니면 URL 의 origin 을 돌려준다. 호스트는 대소문자를 가리지 않고,
- * 경로·끝 슬래시·scheme(http/https)과 무관하게 v1.0 호스트면 거부한다. 주소가 아니면 URL 파싱 오류를 던진다.
+ * 경로·끝 슬래시·scheme(http/https)·호스트 끝 점(FQDN)과 무관하게 v1.0 호스트면 거부한다. 주소가 아니면 URL 파싱 오류를 던진다.
  * @param {string} urlOrOrigin
  * @returns {string}
  */
 export function assertNotV1(urlOrOrigin) {
   const u = new URL(String(urlOrOrigin).trim());
-  if (u.hostname.toLowerCase() === V1_HOST) {
+  // FQDN 끝 점(`...dev.`)은 WHATWG URL 이 지우지 않지만 DNS·Cloudflare 에서는 같은 Worker 로 해석된다.
+  const host = u.hostname.toLowerCase().replace(/\.+$/, "");
+  if (host === V1_HOST) {
     throw new Error(`v1.0 주소(${V1_HOST})는 v2 스크립트가 검사·배포하지 않는다(결정 0043)`);
   }
   return u.origin;

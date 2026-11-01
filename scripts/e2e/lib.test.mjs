@@ -169,6 +169,11 @@ test("resolveTarget: 인자 없으면 prod-url 값(v2 주소, 명시 아님)", (
 });
 
 // DEPLOY-02: v1.0 호스트 문자열은 이 거부 테스트에만 둔다(정적 검사 허용 목록).
+test("resolveTarget: 끝 점이 붙은 v1.0 주소도 거부(06 리뷰 CR-01)", () => {
+  assert.throws(() => resolveTarget("https://minifia.dhplay.workers.dev.", PROD), /v1\.0/);
+  assert.throws(() => resolveTarget(null, "https://MINIFIA.dhplay.workers.dev.\n"), /v1\.0/);
+});
+
 test("resolveTarget: prod-url 이 v1.0 주소면 거부(v1.0 이 기본값이 되지 않는다)", () => {
   assert.throws(() => resolveTarget(null, "https://minifia.dhplay.workers.dev\n"), /v1\.0/);
 });
