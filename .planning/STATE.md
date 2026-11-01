@@ -5,16 +5,16 @@ milestone_name: 같은 공간
 current_phase: 06
 current_phase_name: 월드 뼈대
 status: executing
-stopped_at: Completed 06-14-PLAN.md
-last_updated: "2026-10-31T17:55:27.618Z"
+stopped_at: Completed 06-07-PLAN.md
+last_updated: "2026-11-01T00:08:48.826Z"
 last_activity: 2026-11-01
 last_activity_desc: Phase 06 execution started
-state_head: 68f954bc4f2af98b7fdbec5deacb46735e1483c3
+state_head: a19ff6edd575df1fa9e47a9abaa97b56da80c591
 progress:
   total_phases: 7
   completed_phases: 0
   total_plans: 21
-  completed_plans: 13
+  completed_plans: 14
   percent: 0
 ---
 
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-10-30)
 ## Current Position
 
 Phase: 06 (월드 뼈대) — EXECUTING
-Plan: 14 of 21
+Plan: 15 of 21
 Status: Ready to execute
 Last activity: 2026-11-01 — Phase 06 execution started
 
@@ -71,6 +71,7 @@ Progress: [░░░░░░░░░░] 0% (0/7 phases)
 | Phase 06 P12 | 10 min | 2 tasks | 8 files |
 | Phase 06 P13 | 13 min | 3 tasks | 10 files |
 | Phase 06 P14 | 18 min | 3 tasks | 15 files |
+| Phase 06 P07 | 3min | 3 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -114,6 +115,7 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 06]: 06-14: 프레임 기록 칸은 5분 × 150Hz 로 잡고 가득 차면 truncated 표시 — 기본 19,800칸은 120Hz 폰에서 2분 45초에 찬다
 - [Phase 06]: 06-14: 제품 런타임 autoDegrade 기본 true(10초 평균 45fps 미만이면 1~3단계), 스파이크는 false 로 단계 고정
 - [Phase 06]: 06-14: LIGHT_TUNE 은 반구·달빛·노출·하늘색만 올림(talk 1.1π·0.85π·1.25, vote 0.7π·0.55π, vote 무대 점광원 8) — 점광원·emissive·빛 무리는 그대로, 최종 읽힘은 06-19 사람 확인
+- [Phase 06]: 06-07: 배포 대상 이름은 vite define(__WORKER_NAME__)으로 클라이언트에 넘기고 'v2.0 시험판' 표식은 minifia-v2 빌드에서만 보인다; 첫 배포 뒤 v1 health 는 기준선 2026-10-29T14:52:03Z+cb6979c 와 같았다
 
 ### Pending Todos
 
@@ -150,8 +152,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-31T17:55:27.590Z
-Stopped at: Completed 06-14-PLAN.md
+Last session: 2026-11-01T00:08:48.795Z
+Stopped at: Completed 06-07-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
