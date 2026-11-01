@@ -1,5 +1,5 @@
 ---
-status: complete
+status: diagnosed
 phase: 06-world-skeleton
 source: [06-VERIFICATION.md]
 started: 2026-11-01T05:45:15Z
@@ -64,13 +64,38 @@ blocked: 0
   reason: "User reported: 06-UI-REVIEW 경고 1·2 — 반투명 이름표 겹침으로 '(나)' 가림, 360폭 가장자리 이름표 잘림, 입장 알림과 [테스트] 겹침"
   severity: major
   test: 4
-  artifacts: []
-  missing: []
+  root_cause: "코드가 아니라 06-UI-SPEC 계약 결함. (1) writeTags 의 z 순서에 '나' 우선이 없고(발 y 순위·동점 seat 큰 쪽 위) 면이 --overlay-ink 80% 라 한 점에 모이면 '(나)' 가 가려지고 뒤 글자가 비친다 — 계약의 '면 80%·맨 앞은 읽힘·밀지 않음' 이 서로 모순. (2) 화면 안 보장(PAN_BOX·clampTarget·NT4)은 내 이름표에만 걸려 다른 사람 이름표는 360폭 가장자리에서 잘린다. (3) 레이어 표가 [테스트](top 70, z 50)와 TopToast(top 88)를 같은 띠에 둠"
+  artifacts:
+    - path: ".planning/phases/06-world-skeleton/06-UI-SPEC.md"
+      issue: "이름표 329·335·304행, 가시성 381·382·596·609행, 레이어 166·167·234행"
+    - path: "src/world/runtime.ts"
+      issue: "writeTags 758~783 — '나' 우선 없음, 가장자리 클램프 없음"
+    - path: "src/styles/v2.css"
+      issue: ".mv-tag 면 --overlay-ink(0.8)"
+    - path: "src/styles/lobby.css"
+      issue: ".mf-lobby__test top 70·z 50 이 알림 띠와 겹침"
+    - path: "scripts/e2e/lib.mjs"
+      issue: "NT3 는 z 고유성만, NT4 는 내 이름표만 판정"
+  missing:
+    - "사용자 결정에 따른 UI-SPEC 개정(이름표 순서·면, 다른 사람 이름표 가장자리, [테스트] 자리)"
+    - "개정에 맞춘 writeTags·CSS·E2E 판정"
+  debug_session: .planning/debug/nametag-overlap-clip.md
 - gap_id: G-06-6
   truth: "배포본에서 연결이 끊기면 재접속 띠가 뜨고 복구 뒤 사라진다"
   status: failed
   reason: "User reported: 배포본 reconnect E2E offline 10회 띠 0회(로컬은 10/10)"
   severity: major
   test: 6
-  artifacts: []
-  missing: []
+  root_cause: "제품이 아니라 E2E 하네스. dropSockets 가 ws.close() 로 끊김을 흉내 내는데 배포 서버는 클라이언트 Close 프레임에 답하지 않아 close 이벤트가 약 10초 뒤(1006)에 온다. 하네스가 3초 뒤 online 을 켜면 앱 wake() 가 CLOSING 소켓을 새 소켓으로 바꿔 늦은 close 를 무시하므로 띠가 뜨지 않는다. 배포본에서 오프라인 14초 유지 때 실제 띠는 정상으로 떴다. deployhold 는 배포가 소켓을 끊지 않는데도 띠를 기다린다"
+  artifacts:
+    - path: "scripts/e2e/browser.mjs"
+      issue: "dropSockets(1140행)가 서버 close 핸드셰이크에 의존"
+    - path: "scripts/e2e/flows.mjs"
+      issue: "reconnectAction offline(약 679행) 3초 복귀, deployHoldFlow 가 배포본에서 띠를 요구"
+    - path: "worker/room.ts"
+      issue: "webSocketClose(719행)가 ws.close 로 핸드셰이크를 끝내지 않음(선택 위생)"
+  missing:
+    - "dropSockets 가 앱 방 소켓에 CloseEvent(1006) 를 먼저 보내고 ws.close() — 배포본에서 검증됨"
+    - "deployhold: 배포 주소에서는 '띠 없음·소켓 유지·위치 0·콘솔 0' 을 통과로"
+    - "(선택) webSocketClose 에서 예약 코드 제외하고 ws.close(code, reason)"
+  debug_session: .planning/debug/reconnect-banner-deployed.md
