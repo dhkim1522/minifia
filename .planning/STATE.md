@@ -5,16 +5,16 @@ milestone_name: 같은 공간
 current_phase: 07
 current_phase_name: 자유 채팅
 status: executing
-stopped_at: Completed 07-03-PLAN.md
-last_updated: "2026-11-01T12:42:07.551Z"
+stopped_at: Completed 07-04-PLAN.md
+last_updated: "2026-11-01T12:52:01.009Z"
 last_activity: 2026-11-01
 last_activity_desc: Phase 07 execution started
-state_head: 914b3958a470ee322b7ff078479847e8b28b6727
+state_head: aa0c76528f463bc8031d07a42428f2a7e77fec56
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 45
-  completed_plans: 26
+  completed_plans: 27
   percent: 14
 ---
 
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-11-01)
 ## Current Position
 
 Phase: 07 (자유 채팅) — EXECUTING
-Plan: 4 of 22
+Plan: 5 of 22
 Status: Ready to execute
 Last activity: 2026-11-01 — Phase 07 execution started
 
@@ -84,6 +84,7 @@ Progress: [█░░░░░░░░░] 14% (1/7 phases)
 | Phase 07 P01 | 5 min | 2 tasks | 6 files |
 | Phase 07 P02 | 9 min | 3 tasks | 7 files |
 | Phase 07 P03 | 9 min | 3 tasks | 9 files |
+| Phase 07 P04 | 8 min | 3 tasks | 28 files |
 
 ## Accumulated Context
 
@@ -150,6 +151,8 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 07]: ChatPanel 의 기록 칸 아래 붙이기는 justify-content flex-end 대신 첫 줄 margin-top auto 로 한다 (넘친 윗부분 스크롤 도달)
 - [Phase 07]: ChatPanel 새 메시지 점은 기록 칸 밖 형제(mv-chat__logbox 안)에 두어 줄과 함께 스크롤되지 않게 한다
 - [Phase 07]: 한글 조합 꼬리 글자는 보낸 지 500ms 안에 끝난 조합의 입력칸 값이 보낸 문장의 끝부분일 때만 비운다 (TAIL_WINDOW_MS, 가정 A2)
+- [Phase 07]: 07-04: 낮 기록 버튼 읽기 이름을 '{닉네임}, 기록 보기' 로 정했다(카드에 주장 줄이 없어 '주장 기록' 이 틀린 말)
+- [Phase 07]: 07-04: 07-08 전까지 서버가 claim 단계 view 를 보내면 DayScene 은 일반 낮 단계로 그리고 하단은 비운다(A1, 배포 전 상태)
 
 ### Pending Todos
 
@@ -186,8 +189,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-01T12:42:07.417Z
-Stopped at: Completed 07-03-PLAN.md
+Last session: 2026-11-01T12:52:00.855Z
+Stopped at: Completed 07-04-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
