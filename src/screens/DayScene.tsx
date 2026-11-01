@@ -159,7 +159,7 @@ export function DayScene({ view, connection, chat, myRoleButton, testButton, arr
   const rootRef = useRef<HTMLElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const logH = useChatLogHeight(rootRef, inputRef);
-  const binding = useChat({ store: chat, connection, view });
+  const { typingSeats, ...binding } = useChat({ store: chat, connection, view });
   const panelMode = chatPanelMode(view, meAlive);
   const chatBottom = panelMode !== null && view.me.chat === panelMode ? <ChatPanel {...binding} logHeight={logH} inputRef={inputRef} /> : null;
   // 채널 시작·변론 시작 시스템 줄(07-UI-SPEC "줄 종류와 모양"): 같은 연결(epoch) 안의 단계 변화·내 채널 변화에서만 기록 칸에 남긴다.
@@ -214,6 +214,8 @@ export function DayScene({ view, connection, chat, myRoleButton, testButton, arr
         // 관전 화면은 모든 마피아에 진홍 후광·마름모를 그린다(job 이 mafia 인 다른 자리)
         isAlly: isAllySeat(p.seat),
         dead: !isAlive(p),
+        // 입력 중 알약: 서버가 보낸 같은 채널 좌석 + 내 입력(useChat 이 정한다). 화면에서 다른 좌석의 알약을 만들어 내지 않는다(T-07-46).
+        ...(typingSeats.has(p.seat) ? { typing: true } : {}),
         ...(spectatorPicksOf(p.seat).length > 0 ? { spectatorPicks: spectatorPicksOf(p.seat) } : {}),
         // roleArt 는 meDead && spectate 한 곳(spectate 상수)에서만 만든다 — 살아 있는 사람 화면에는 이 입력과 코드 경로가 없다(결정 0021·0002).
         // 살아 있는 다른 자리만 직업 캐릭터로 그리고, 탈락한 자리와 내 자리는 DayTable 이 유령으로 그린다.

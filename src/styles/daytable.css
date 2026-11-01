@@ -61,6 +61,8 @@
   font-size: 14px; line-height: 20px; font-weight: 700; color: var(--gray-50); white-space: nowrap;
 }
 .mf-dt__dot { flex: none; width: 8px; height: 8px; border-radius: var(--radius-pill); }
+/* 머리 위 입력 중 알약(07-18, CHAT-04): 이름표 위 가운데, 옛 말풍선이 있던 자리. 이름표와 간격 4(space-xs). 모양·점 애니메이션·모션 줄이기는 v2.css 의 .mv-typing 이 정한다 */
+.mf-dt__typing { position: absolute; left: 50%; bottom: 100%; margin-bottom: 4px; transform: translateX(-50%); pointer-events: none; }
 /* 내 표시는 후광 없이 이름표 테두리뿐이다 */
 .mf-dt__tag--me .mf-dt__name { border-color: var(--gray-100); }
 

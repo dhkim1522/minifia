@@ -6,17 +6,23 @@
 // - 보낸 직후 SEND_DIM_MS 동안 보내기가 흐려진다(입력은 계속 된다). 서버 거절이 오면 바로 풀린다.
 // - 서버 거절(chatReject)은 기록 칸 맨 아래 알림으로 NOTICE_MS 동안 뜨고, 입력칸이 비어 있으면 마지막으로 보낸 글을 되돌려 둔다.
 // - 연결이 끊기면(canSend 거짓) 보내기만 막히고 입력·이미 받은 줄은 그대로다. 복원(chatLog) 직후에는 quiet 이다.
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+// - 입력 중(07-18, CHAT-04): 빈 칸의 첫 글자(조합 시작 포함)에 켜짐 1번, 입력이 이어지면 2초(TYPING_REFRESH_MS)마다 갱신,
+//   마지막 입력 변화 뒤 4초(TYPING_IDLE_OFF_MS)에 꺼짐(글이 남아 있어도). 칸 비움·보냄·블러·단계 키 변경·채널 변경에도 꺼진다.
+//   연결이 끊긴 동안은 보내지 않는다. typingSeats = 서버가 보낸 좌석(끊긴 사람 제외) + 내 입력 중이면 내 좌석(즉시).
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { phaseKey } from "../../shared/game/audience";
 import type { ClientMessage, RoomView } from "../../shared/protocol";
 import type { ChatPanelProps, ChatPanelMessage } from "../components/v2/ChatPanel";
 import { CHAT_TEXT } from "../game/chatText";
-import { SEND_DIM_MS } from "../game/chatUi";
+import { SEND_DIM_MS, TYPING_IDLE_OFF_MS, TYPING_REFRESH_MS } from "../game/chatUi";
 import type { ChatStore } from "./chatStore";
 
 /** 훅이 ChatPanel 에 넘기는 속성. 기록 칸 높이(logHeight)와 입력칸 ref 는 화면 틀이 붙인다. */
-export type ChatBinding = Omit<ChatPanelProps, "logHeight" | "inputRef" | "onInputFocus" | "onInputBlur" | "onComposingChange" | "compact" | "inputId"> & {
-  /** 머리 위에 입력 중 알약을 그릴 좌석: 서버가 보낸 좌석(연결이 끊긴 사람 제외) + 내가 입력 중이면 내 좌석(서버 왕복 없이 즉시). ChatPanel 에는 넘기지 않는다 */
+export type ChatBinding = Omit<ChatPanelProps, "logHeight" | "inputRef" | "onInputFocus" | "compact" | "inputId"> & {
+  /**
+   * 머리 위에 입력 중 알약을 그릴 좌석: 서버가 보낸 좌석(연결이 끊긴 사람 제외) + 내가 입력 중이면 내 좌석(서버 왕복 없이 즉시).
+   * ChatPanel 에는 넘기지 않고 화면 틀이 WorldStage·DayTable 로 넘긴다(받을 권리 없는 좌석은 서버가 보내지 않는다, T-07-46).
+   */
   typingSeats: ReadonlySet<number>;
 };
 
@@ -84,35 +90,81 @@ export function useChat({ store, connection, view }: { store: ChatStore; connect
   const phase = view.phase;
   const pk = phaseKey(day === undefined ? { phase } : { phase, day });
 
+  // 입력 중 보내기. 타이머·이벤트에서 최신 연결·단계 키를 읽는다(오래된 클로저 방지).
+  const live = useRef({ send, canSend, pk });
+  useLayoutEffect(() => {
+    live.current = { send, canSend, pk };
+  });
   const typingOnRef = useRef(false);
-  const sendTyping = useCallback(
-    (on: boolean) => {
-      if (!canSend) return;
-      send({ t: "typing", on, pk });
-    },
-    [send, canSend, pk],
-  );
-  const setTyping = useCallback((on: boolean) => {
-    typingOnRef.current = on;
-    setTypingOn(on);
+  const lastOnAt = useRef(0);
+  const idleTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const emitTyping = useCallback((on: boolean) => {
+    const l = live.current;
+    if (l.canSend) l.send({ t: "typing", on, pk: l.pk });
   }, []);
+  /** 입력 중을 끈다. notify 면 서버에도 꺼짐을 알린다(켜져 있었을 때만) */
+  const stopTyping = useCallback(
+    (notify: boolean) => {
+      if (idleTimer.current !== undefined) clearTimeout(idleTimer.current);
+      idleTimer.current = undefined;
+      if (!typingOnRef.current) return;
+      typingOnRef.current = false;
+      setTypingOn(false);
+      if (notify) emitTyping(false);
+    },
+    [emitTyping],
+  );
+  /** 글자가 있는 입력 변화 하나: 켜짐(처음) 또는 갱신(2초 뒤)을 보내고 무입력 꺼짐 타이머를 다시 건다 */
+  const touchTyping = useCallback(() => {
+    if (!live.current.canSend) return;
+    const now = Date.now();
+    if (!typingOnRef.current) {
+      typingOnRef.current = true;
+      setTypingOn(true);
+      lastOnAt.current = now;
+      emitTyping(true);
+    } else if (now - lastOnAt.current >= TYPING_REFRESH_MS) {
+      lastOnAt.current = now;
+      emitTyping(true);
+    }
+    if (idleTimer.current !== undefined) clearTimeout(idleTimer.current);
+    idleTimer.current = setTimeout(() => {
+      idleTimer.current = undefined;
+      stopTyping(true);
+    }, TYPING_IDLE_OFF_MS);
+  }, [emitTyping, stopTyping]);
   const onChange = useCallback(
     (v: string) => {
-      const before = valueRef.current;
       valueRef.current = v;
       setValue(v);
-      if (v === "") {
-        if (typingOnRef.current) {
-          sendTyping(false);
-          setTyping(false);
-        }
-      } else if (before === "" && !typingOnRef.current && canSend) {
-        sendTyping(true);
-        setTyping(true);
-      }
+      if (v === "") stopTyping(true);
+      else touchTyping();
     },
-    [sendTyping, setTyping, canSend],
+    [stopTyping, touchTyping],
   );
+  // 조합 시작은 빈 칸에서도 첫 글자로 센다(글자가 칸에 닿기 전). 글자 없이 조합이 끝나면(취소) 끈다.
+  const onComposingChange = useCallback(
+    (composing: boolean) => {
+      if (composing && valueRef.current === "") touchTyping();
+      else if (!composing && valueRef.current === "") stopTyping(true);
+    },
+    [touchTyping, stopTyping],
+  );
+  const onInputBlur = useCallback(() => stopTyping(true), [stopTyping]);
+  // 단계 키·채널이 바뀌면 끈다. 연결이 끊기면 보낼 수 없으니 화면에서만 끈다(돌아온 뒤 다음 입력에 다시 켜진다).
+  const scope = `${pk}|${channel ?? ""}`;
+  const prevScope = useRef(scope);
+  useEffect(() => {
+    if (prevScope.current === scope) return;
+    prevScope.current = scope;
+    stopTyping(true);
+  }, [scope, stopTyping]);
+  useEffect(() => {
+    if (!canSend) stopTyping(false);
+  }, [canSend, stopTyping]);
+  // 화면이 사라지면(게임 시작·단계 전환으로 다른 화면이 됨) 켜져 있던 것을 끈다.
+  useEffect(() => () => stopTyping(true), [stopTyping]);
+
   const onSend = useCallback(
     (text: string) => {
       if (!canSend) return;
@@ -164,7 +216,7 @@ export function useChat({ store, connection, view }: { store: ChatStore; connect
   useEffect(() => {
     const expiry = store.nextTypingExpiry(Date.now());
     if (expiry === null) return;
-    const timer = setTimeout(() => setTypingTick((n) => n + 1), Math.max(0, expiry - Date.now()) + 1);
+    const timer = setTimeout(() => setTypingTick((n) => n + 1), Math.max(0, expiry - Date.now()));
     return () => clearTimeout(timer);
   }, [store, revision, typingTick]);
   const stableSeats = useRef<ReadonlySet<number>>(new Set());
@@ -185,6 +237,8 @@ export function useChat({ store, connection, view }: { store: ChatStore; connect
     messages,
     value,
     onChange,
+    onComposingChange,
+    onInputBlur,
     onSend,
     channel: channel ?? "all",
     sendDisabled: !canSend,

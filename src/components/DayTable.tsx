@@ -47,6 +47,8 @@ export interface DayTableSeat {
   spectatorPicks?: readonly SpectatorPick[];
   /** 탈락: 유령 그림·회색 이름표. 탈락 때문에 흐리게 하지 않는다 */
   dead?: boolean;
+  /** 입력 중(07-18, CHAT-04): 이름표 위에 알약(점 세 개)을 올린다. 장면이 서버가 보낸 입력 중 좌석 + 내 입력으로만 만든다 */
+  typing?: boolean;
   /** 있으면 이 자리가 대상 버튼이 된다(밤). 없으면 지금 그대로의 group 노드 */
   onPick?: () => void;
   /** 낮: 자리 전체가 기록 카드 버튼이 된다. onPick 이 있으면 onPick 이 이긴다 */
@@ -373,6 +375,13 @@ export function DayTable({
             title={s.nickname}
             style={{ left: px(p.tagLeft), top: px(p.tagTop), zIndex: p.tagZ }}
           >
+            {s.typing ? (
+              <span className="mv-typing mf-dt__typing" aria-hidden="true">
+                <i />
+                <i />
+                <i />
+              </span>
+            ) : null}
             <span className="mf-dt__name">
               <i className="mf-dt__dot" style={{ background: `var(--seat-${(p.seat % 8) + 1})` }} />
               <span>{s.nickname}</span>
