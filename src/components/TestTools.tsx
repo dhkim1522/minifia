@@ -38,8 +38,8 @@ export interface TestToolsButtonProps {
   onOpen: () => void;
 }
 
-/** 버튼이 놓인 장면 상자(낮·대기실). 역할 확인 위쪽 바처럼 장면 밖에 놓이면 없다. */
-const SCENE_SELECTOR = ".mf-dayscene__scene, .mf-lobby__scene";
+/** 버튼이 놓인 장면 상자(낮 테이블). 역할 확인 위쪽 바처럼 장면 밖에 놓이거나, 맵 로비의 [테스트] 자리(.mf-lobby__test, 06-15)처럼 캐릭터 상자와 겹치지 않는 곳이면 없다. */
+const SCENE_SELECTOR = ".mf-dayscene__scene";
 
 export function TestToolsButton({ onOpen }: TestToolsButtonProps): ReactElement {
   const ref = useRef<HTMLButtonElement>(null);

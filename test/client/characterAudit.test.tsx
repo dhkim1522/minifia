@@ -111,15 +111,6 @@ describe("CHAR-01: 테이블 인물 8장은 서로 다르고 자리 번호가 �
   });
 });
 
-describe("CHAR-01: 대기실 — 5명·8명 모두 닉네임과 서로 다른 인물", () => {
-  it.each([5, 8])("%i명: 모든 자리 이름표 닉네임, 자리마다 인물 img src 가 서로 다르다", (n) => {
-    const { container } = renderRoom(simpleView("lobby", n));
-    expect(container.querySelectorAll(".mf-dt").length).toBe(1);
-    const srcs = expectEverySeatNamed(container, n);
-    expect(new Set(srcs).size).toBe(n);
-  });
-});
-
 describe("CHAR-01: 낮(주장) — 5명·8명 모두 닉네임과 인물", () => {
   it.each([5, 8])("%i명: 모든 자리 이름표 닉네임, 인물 src 가 서로 다르다", (n) => {
     const { container } = renderRoom(simpleView("claim", n, "citizen"));

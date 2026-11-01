@@ -534,6 +534,28 @@ describe("Lobby — 스타일 계약 (lobby.css)", () => {
     expect(css).toMatch(/\.mf-lobby__panel[^}]*var\(--radius-lg\)\s+var\(--radius-lg\)\s+0\s+0/);
   });
 
+  it("아래 패널 안쪽 여백은 14 16 22, 항목 간격 10 — 행동 줄(52) 하나라 높이 88 (stageBox 의 옛 대기실 시트 157 검사를 대신한다)", () => {
+    const rule = css.match(/\.mf-lobby__panel\s*\{[^}]*\}/)?.[0] ?? "";
+    expect(rule).toContain("padding: 14px var(--space-md) 22px");
+    expect(rule).toContain("gap: 10px");
+    expect(14 + 52 + 22).toBe(88);
+  });
+
+  it("헤더: 위 18·좌우 space-md·높이 62(= 18 + 버튼 44), 맵 탭을 가로채지 않는다 (stageBox 의 옛 대기실 바 119.2 검사를 대신한다)", () => {
+    const rule = css.match(/\.mf-lobby__header\s*\{[^}]*\}/)?.[0] ?? "";
+    expect(rule).toContain("height: 62px");
+    expect(rule).toContain("padding: 18px var(--space-md) 0");
+    expect(rule).toContain("pointer-events: none");
+    expect(18 + 44).toBe(62);
+  });
+
+  it("[테스트] 자리는 헤더 아래 8(= 70)·왼쪽 space-md·z-overlay", () => {
+    const rule = css.match(/\.mf-lobby__test\s*\{[^}]*\}/)?.[0] ?? "";
+    expect(rule).toContain("top: 70px");
+    expect(rule).toContain("left: var(--space-md)");
+    expect(rule).toContain("var(--z-overlay)");
+  });
+
   it("떠 있는 재접속 띠: 헤더 아래 top 72, 가로 전체, z-overlay — 흐름을 밀지 않는다", () => {
     const rule = css.match(/\.mf-reconnect--floating\s*\{[^}]*\}/)?.[0] ?? "";
     expect(rule).toContain("position: absolute");

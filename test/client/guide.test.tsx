@@ -25,6 +25,9 @@ vi.mock("../../src/net/assets", async (importOriginal) => ({
   preloadDuskAssets: preloadDuskMock,
 }));
 
+// 06-15: 대기실은 맵(WorldStage) 위에 그려진다. 캔버스·런타임은 worldStage.test 가 보므로 여기서는 가짜로 바꾼다(lobby.test.tsx 와 같은 모양).
+vi.mock("../../src/components/WorldStage", async () => ({ WorldStage: (await import("../helpers/fakeWorldStage")).FakeWorldStage }));
+
 const { RoomScreen } = await import("../../src/screens/RoomScreen");
 const { PHASE_GUIDE_FILL, TIMELESS_PHASES } = await import("../../src/game/scenes");
 
@@ -394,14 +397,15 @@ describe("UX-01 점검표: 14단계 × 시점 모든 칸의 안내 문장과 남
 });
 
 describe("UX-01 대기실·배정·역할 확인·결과의 안내 요소 (D-08)", () => {
-  it("lobby 방장·손님: [data-guide] 는 `.mf-lobby__guide` 하나이고 글자가 비어 있지 않다", () => {
+  it("lobby 방장·손님: [data-guide] 는 헤더 안내 한 줄(`.mv-phase__hint` '바닥을 눌러 걸어요') 하나이고 글자가 비어 있지 않다", () => {
     for (const isHost of [true, false]) {
       const view = makeView({ phase: "lobby", endsIn: null, isHost });
       delete view.me.role;
       const { container, unmount } = renderRoom(view);
       const g = onlyGuide(container, `lobby/${isHost ? "방장" : "손님"}`);
-      expect(g.classList.contains("mf-lobby__guide")).toBe(true);
-      expect(squish(g.textContent)).not.toBe("");
+      expect(g.classList.contains("mv-phase__hint")).toBe(true);
+      expect(g.closest(".mf-lobby__header")).not.toBeNull();
+      expect(squish(g.textContent)).toBe("바닥을 눌러 걸어요");
       unmount();
     }
   });

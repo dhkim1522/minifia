@@ -13,6 +13,8 @@ const connectionMock = vi.hoisted(() => ({ current: null as unknown }));
 vi.mock("../../src/net/useRoomConnection", () => ({
   useRoomConnection: () => connectionMock.current,
 }));
+// 06-15: 대기실은 맵(WorldStage) 위에 그려진다. 캔버스·런타임은 worldStage.test 가 보므로 여기서는 가짜로 바꾼다(lobby.test.tsx 와 같은 모양).
+vi.mock("../../src/components/WorldStage", async () => ({ WorldStage: (await import("../helpers/fakeWorldStage")).FakeWorldStage }));
 const preloadMock = vi.hoisted(() => vi.fn());
 vi.mock("../../src/net/assets", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../src/net/assets")>()),
@@ -115,10 +117,10 @@ describe("[테스트] 버튼은 테스트 방 방장에게만 보인다 (U-02)",
 });
 
 describe("대기실: 시트의 내 직업 칸 (U-12)", () => {
-  it("버튼은 .mf-lobby__scene 안 .mf-tt-anchor 에 있다", () => {
+  it("버튼은 맵 로비의 [테스트] 자리(.mf-lobby__test) 안에 있다", () => {
     const { container } = open({ testMode: true });
     const btn = testBtn() as HTMLElement;
-    expect(String(btn.closest(".mf-lobby__scene .mf-tt-anchor") !== null)).toBe("true");
+    expect(String(btn.closest("main.mf-lobby .mf-lobby__test") !== null)).toBe("true");
     expect(String(container.querySelectorAll(".mf-tt").length)).toBe("1");
   });
 

@@ -2,10 +2,10 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 // 장면 상자(결정 0028): 위 = 헤더 119.2, 아래 = 뷰포트 − 하단 패널 157(+안전 영역), 좌우 여백 12(폰 폭 < 390 이면 4).
-// 낮·대기실·역할 배정이 같은 상자를 쓴다. 이 값들은 CSS 세 파일에 나뉘어 있어 한 곳만 바뀌면 단계가 바뀔 때 테이블이 움직인다 —
-// 그래서 CSS 를 읽어(vitest 가 CSS import 를 비워 버린다) 세 화면을 교차로 확인한다. E2E T1 이 실제 브라우저에서 같은 것을 다시 본다.
+// 낮·역할 배정이 같은 상자를 쓴다(대기실은 06-15 에서 맵 로비로 바뀌어 이 상자를 쓰지 않는다 — 로비 틀의 값은 lobby.test.tsx 의 스타일 계약이 지킨다).
+// 이 값들은 CSS 두 파일에 나뉘어 있어 한 곳만 바뀌면 단계가 바뀔 때 테이블이 움직인다 —
+// 그래서 CSS 를 읽어(vitest 가 CSS import 를 비워 버린다) 두 화면을 교차로 확인한다. E2E T1 이 실제 브라우저에서 같은 것을 다시 본다.
 const day = readFileSync("src/styles/day.css", "utf8");
-const lobby = readFileSync("src/styles/lobby.css", "utf8");
 const phase = readFileSync("src/styles/phase.css", "utf8");
 const tokens = readFileSync("src/styles/tokens.css", "utf8");
 const dt = readFileSync("src/styles/daytable.css", "utf8");
@@ -44,7 +44,6 @@ const PANEL_H = "calc(157px + env(safe-area-inset-bottom))";
 describe("장면 상자: 하단 패널 높이 157 (+ 안전 영역)", () => {
   it.each([
     ["낮 하단 패널", day, ".mf-dayscene__panel"],
-    ["대기실 시트", lobby, ".mf-lobby__sheet"],
     ["역할 배정 빈 패널", phase, ".mf-assign__panel"],
   ])("%s 는 height calc(157px + 안전 영역) 이고 flex none·border-box 이다", (_name, css, selector) => {
     const b = norm(body(css, selector));
@@ -54,36 +53,21 @@ describe("장면 상자: 하단 패널 높이 157 (+ 안전 영역)", () => {
     expect(b).toMatch(/box-sizing:\s*border-box/);
   });
 
-  it("세 패널은 같은 면과 모서리(night-800, 위쪽 radius-lg)이고 대기실 시트에는 손잡이 막대가 없다", () => {
+  it("두 패널은 같은 면과 모서리(night-800, 위쪽 radius-lg)다", () => {
     for (const [css, sel] of [
       [day, ".mf-dayscene__panel"],
-      [lobby, ".mf-lobby__sheet"],
       [phase, ".mf-assign__panel"],
     ] as const) {
       const b = norm(body(css, sel));
       expect(b, sel).toContain("background: var(--night-800)");
       expect(b, sel).toContain("border-radius: var(--radius-lg) var(--radius-lg) 0 0");
     }
-    expect(/\.mf-lobby__sheet::before/.test(strip(lobby))).toBe(false);
-  });
-
-  it("대기실 시트 안쪽 여백은 낮 패널과 같다(위 8, 옆 space-md, 아래 12 + 안전 영역, 간격 space-sm) — 157 안에 호스트 104·게스트 131.6 이 든다", () => {
-    const d = norm(body(day, ".mf-dayscene__panel"));
-    const l = norm(body(lobby, ".mf-lobby__sheet"));
-    const pad = "padding: 8px var(--space-md) calc(12px + env(safe-area-inset-bottom))";
-    expect(d).toContain(pad);
-    expect(l).toContain(pad);
-    expect(l).toContain("gap: var(--space-sm)");
-    expect(l).toMatch(/display:\s*flex/);
-    expect(l).toMatch(/flex-direction:\s*column/);
   });
 });
 
 describe("장면 상자: 머리 높이 119.2", () => {
-  it("대기실 바와 배정 바는 height 119.2px 고정이다", () => {
-    expect(norm(body(lobby, ".mf-lobby__bar"))).toMatch(/(?:^|[ ;])height: 119\.2px/);
+  it("배정 바는 height 119.2px 고정이다", () => {
     expect(norm(body(phase, ".mf-assign__bar"))).toMatch(/(?:^|[ ;])height: 119\.2px/);
-    expect(norm(body(lobby, ".mf-lobby__bar"))).toMatch(/flex:\s*none/);
     expect(norm(body(phase, ".mf-assign__bar"))).toMatch(/flex:\s*none/);
   });
 
@@ -104,7 +88,6 @@ describe("장면 상자: 머리 높이 119.2", () => {
 describe("장면 상자: 좌우 여백 12 (폰 폭 < 390 이면 4), flex 1, min-height 0", () => {
   it.each([
     ["낮", day, ".mf-dayscene__scene"],
-    ["대기실", lobby, ".mf-lobby__scene"],
     ["역할 배정", phase, ".mf-assign__scene"],
   ])("%s 장면 상자: position relative · flex 1 · min-height 0 · padding 0 12px, max-width 389px 에서 0 4px", (_name, css, selector) => {
     const b = norm(body(css, selector));
@@ -124,7 +107,6 @@ describe("장면 상자: 좌우 여백 12 (폰 폭 < 390 이면 4), flex 1, min-
 describe("장면 상자: 배경은 남는 높이를 채운다(고정 높이 아님)", () => {
   it.each([
     ["낮", day, ".mf-dayscene__backdrop"],
-    ["대기실", lobby, ".mf-lobby__backdrop"],
     ["역할 배정", phase, ".mf-assign__backdrop"],
   ])("%s 배경: flex 1 1 0 · min-height 0 · height auto", (_name, css, selector) => {
     const b = norm(body(css, selector));
@@ -134,7 +116,7 @@ describe("장면 상자: 배경은 남는 높이를 채운다(고정 높이 아�
     expect(b, selector).not.toMatch(/dvh|100vh/);
   });
 
-  it("세 화면 CSS 어디에도 100dvh 로 따로 계산한 배경·루트 높이가 없다", () => {
-    for (const css of [day, lobby, phase]) expect(/100dvh/.test(strip(css))).toBe(false);
+  it("두 화면 CSS 어디에도 100dvh 로 따로 계산한 배경·루트 높이가 없다", () => {
+    for (const css of [day, phase]) expect(/100dvh/.test(strip(css))).toBe(false);
   });
 });

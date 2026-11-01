@@ -25,12 +25,12 @@ function renderIn(sceneClass: string | null, h: number) {
 const btn = () => screen.getByRole("button", { name: "테스트" });
 
 describe("[테스트] 버튼: 짧은 장면에서만 좁힌다", () => {
-  it.each(["mf-lobby__scene", "mf-dayscene__scene"])("%s 높이 283.8(< 299)이면 data-compact 가 붙는다", (cls) => {
+  it.each(["mf-dayscene__scene"])("%s 높이 283.8(< 299)이면 data-compact 가 붙는다", (cls) => {
     renderIn(cls, 283.8);
     expect(btn().hasAttribute("data-compact")).toBe(true);
   });
 
-  it.each(["mf-lobby__scene", "mf-dayscene__scene"])("%s 높이 299 이상이면 붙지 않는다 (긴 화면 불변)", (cls) => {
+  it.each(["mf-dayscene__scene"])("%s 높이 299 이상이면 붙지 않는다 (긴 화면 불변)", (cls) => {
     renderIn(cls, 299);
     expect(btn().hasAttribute("data-compact")).toBe(false);
     cleanup();
@@ -43,13 +43,21 @@ describe("[테스트] 버튼: 짧은 장면에서만 좁힌다", () => {
     expect(btn().hasAttribute("data-compact")).toBe(false);
   });
 
+  it("맵 로비의 [테스트] 자리(.mf-lobby__test)에서는 높이와 관계없이 붙지 않는다 — 누르기 영역 44 이상 그대로 (06-15)", () => {
+    renderIn("mf-lobby__test", 100);
+    expect(btn().hasAttribute("data-compact")).toBe(false);
+    cleanup();
+    renderIn("mf-lobby", 100);
+    expect(btn().hasAttribute("data-compact")).toBe(false);
+  });
+
   it("장면을 못 재면(높이 0) 붙지 않는다", () => {
-    renderIn("mf-lobby__scene", 0);
+    renderIn("mf-dayscene__scene", 0);
     expect(btn().hasAttribute("data-compact")).toBe(false);
   });
 
   it("글자는 접근 이름으로 남는다: 좁혀도 글자 '테스트' 가 span 에 있다", () => {
-    renderIn("mf-lobby__scene", 283.8);
+    renderIn("mf-dayscene__scene", 283.8);
     expect(btn().querySelector(".mf-tt__label")?.textContent).toBe("테스트");
   });
 
@@ -66,10 +74,10 @@ describe("[테스트] 버튼: 짧은 장면에서만 좁힌다", () => {
     vi.stubGlobal("ResizeObserver", FakeRO);
     let h = 400;
     vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
-      const r = this.classList.contains("mf-lobby__scene") ? { width: 352, height: h } : { width: 0, height: 0 };
+      const r = this.classList.contains("mf-dayscene__scene") ? { width: 352, height: h } : { width: 0, height: 0 };
       return { ...r, left: 0, top: 0, right: r.width, bottom: r.height, x: 0, y: 0, toJSON: () => ({}) } as DOMRect;
     });
-    render(<div className="mf-lobby__scene"><TestToolsButton onOpen={() => {}} /></div>);
+    render(<div className="mf-dayscene__scene"><TestToolsButton onOpen={() => {}} /></div>);
     expect(btn().hasAttribute("data-compact")).toBe(false);
     h = 280;
     act(() => cb!());
