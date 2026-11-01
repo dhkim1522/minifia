@@ -41,6 +41,8 @@ export interface WorldStageProps {
   offset: number;
   /** 스테이지 사각형의 위 끝(헤더 블록 아래, 안전 영역 포함)과 아래 패널 높이 — 06-15 의 Lobby 가 재서 넘긴다. 없으면 HEADER_BOTTOM 62 / PANEL_HEIGHT 88 */
   stageInsets?: { top: number; bottom: number };
+  /** 머리 위에 입력 중 알약(…)을 그릴 좌석(07-18). 서버가 보낸 신호와 내 입력만 담겨 온다 */
+  typingSeats?: ReadonlySet<number>;
   onNotice(text: string): void;
   onKick(seat: number, nickname: string): void;
   onLeave(): void;
@@ -203,7 +205,7 @@ export function WorldStage(props: WorldStageProps) {
           const me = p.seat === mySeat;
           const away = !p.connected;
           const kickable = current && canKick && away && !me;
-          const stack = <HeadStack name={p.nickname} color={seatColor(p.seat)} me={me} away={away} />;
+          const stack = <HeadStack name={p.nickname} color={seatColor(p.seat)} me={me} away={away} typing={props.typingSeats?.has(p.seat) === true} />;
           return (
             <div
               key={p.seat}

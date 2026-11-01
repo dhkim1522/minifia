@@ -130,7 +130,7 @@ export function Lobby({ view, store, chat, send, canSend = true, epoch = 0, offs
   const rootRef = useRef<HTMLElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const logH = useChatLogHeight(rootRef, inputRef);
-  const binding = useChat({ store: chat, connection: { send, canSend }, view });
+  const { typingSeats, ...binding } = useChat({ store: chat, connection: { send, canSend }, view });
 
   const connected = connectedCount(view.players);
   const isHost = view.me.isHost;
@@ -163,6 +163,7 @@ export function Lobby({ view, store, chat, send, canSend = true, epoch = 0, offs
         canSend={canSend}
         offset={offset}
         {...(insets ? { stageInsets: insets } : {})}
+        typingSeats={typingSeats}
         onNotice={(text) => show(text)}
         onKick={(seat, nickname) => setSheet({ kind: "kick", seat, nickname })}
         onLeave={() => setSheet({ kind: "leave" })}

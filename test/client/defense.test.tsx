@@ -172,7 +172,8 @@ describe("defense 화면 한 경로 (VOTE-03, D-15·D-16·D-29, COMM-03)", () =>
     const input = container.querySelector<HTMLInputElement>("[data-chat-input]")!;
     fireEvent.change(input, { target: { value: "저는 시민이에요" } });
     fireEvent.submit(input.closest("form")!);
-    expect(send.mock.calls[0]?.[0]).toEqual({ t: "chat", text: "저는 시민이에요", pk: "1:defense" });
+    // 입력 중 신호(typing)는 07-18 부터 글을 넣을 때 따로 나간다 — 채팅 메시지만 가려 본다.
+    expect(send.mock.calls.map((c) => c[0]).filter((m) => m.t === "chat")).toEqual([{ t: "chat", text: "저는 시민이에요", pk: "1:defense" }]);
   });
 
   it("후보 본인 화면에서도 가운데 이동·어둡게 층·원뿔은 그대로다", () => {

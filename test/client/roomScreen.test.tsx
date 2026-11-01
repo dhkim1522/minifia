@@ -547,7 +547,9 @@ describe("RoomScreen: 채팅 저장소 연결 (CHAT-01, 07-13)", () => {
     const input = container.querySelector("[data-chat-input]") as HTMLInputElement;
     fireEvent.change(input, { target: { value: "하이" } });
     fireEvent.submit(input.closest("form") as HTMLFormElement);
-    expect(JSON.stringify(send.mock.calls[0]?.[0])).toBe(JSON.stringify({ t: "chat", text: "하이", pk: "0:lobby" }));
+    // 입력 중 신호(typing)는 07-18 부터 글을 넣을 때 따로 나간다 — 채팅 메시지만 가려 본다.
+    const chats = send.mock.calls.map((c) => c[0]).filter((m) => m.t === "chat");
+    expect(JSON.stringify(chats[0])).toBe(JSON.stringify({ t: "chat", text: "하이", pk: "0:lobby" }));
   });
 });
 

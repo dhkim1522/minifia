@@ -163,7 +163,9 @@ describe("낮 토론 화면 — 위쪽 바와 하단 (CHAT-06, 가정 A1)", () =
     const input = document.querySelector<HTMLInputElement>("[data-chat-input]")!;
     fireEvent.change(input, { target: { value: "저는 시민이에요" } });
     fireEvent.submit(input.closest("form")!);
-    expect((c.send as ReturnType<typeof vi.fn>).mock.calls[0]?.[0]).toEqual({ t: "chat", text: "저는 시민이에요", pk: "1:discussion" });
+    // 입력 중 신호(typing)는 07-18 부터 글을 넣을 때 따로 나간다 — 채팅 메시지만 가려 본다.
+    const sentMsgs = (c.send as ReturnType<typeof vi.fn>).mock.calls.map((call) => call[0] as { t: string });
+    expect(sentMsgs.filter((m) => m.t === "chat")).toEqual([{ t: "chat", text: "저는 시민이에요", pk: "1:discussion" }]);
     // 내 줄은 서버 방송이 와야 나타난다
     expect(document.querySelector("[data-chat-log] .mv-chat__msg")).toBeNull();
     act(() => chat.apply({ t: "chat", seat: 0, ch: "all", seq: 1, text: "저는 시민이에요", at: NOW }, 1, NOW));

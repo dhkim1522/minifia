@@ -15,7 +15,10 @@ import { SEND_DIM_MS } from "../game/chatUi";
 import type { ChatStore } from "./chatStore";
 
 /** 훅이 ChatPanel 에 넘기는 속성. 기록 칸 높이(logHeight)와 입력칸 ref 는 화면 틀이 붙인다. */
-export type ChatBinding = Omit<ChatPanelProps, "logHeight" | "inputRef" | "onInputFocus" | "onInputBlur" | "onComposingChange" | "compact" | "inputId">;
+export type ChatBinding = Omit<ChatPanelProps, "logHeight" | "inputRef" | "onInputFocus" | "onInputBlur" | "onComposingChange" | "compact" | "inputId"> & {
+  /** 머리 위에 입력 중 알약을 그릴 좌석: 서버가 보낸 좌석(연결이 끊긴 사람 제외) + 내가 입력 중이면 내 좌석(서버 왕복 없이 즉시). ChatPanel 에는 넘기지 않는다 */
+  typingSeats: ReadonlySet<number>;
+};
 
 export interface ChatConnection {
   /** 보냈으면 true, 소켓이 닫혀 못 보냈으면 false. 반환값이 없는 함수(void)는 보낸 것으로 본다 */
@@ -32,6 +35,8 @@ export function useChat({ store, connection, view }: { store: ChatStore; connect
   const [value, setValue] = useState("");
   const valueRef = useRef(value);
   valueRef.current = value;
+  // 입력 중: 내 입력칸이 비어 있다가 첫 글자가 들어가면 켜고, 칸이 비면 끈다(보냄도 칸을 비우므로 끝난다).
+  const [typingOn, setTypingOn] = useState(false);
   const lastSent = useRef("");
 
   // 줄 앞 이름: 지금 방에 있는 사람의 닉네임. 떠난 사람의 줄은 마지막으로 본 닉네임을 쓴다.
@@ -77,10 +82,41 @@ export function useChat({ store, connection, view }: { store: ChatStore; connect
   const { send, canSend } = connection;
   const day = view.day?.n;
   const phase = view.phase;
+  const pk = phaseKey(day === undefined ? { phase } : { phase, day });
+
+  const typingOnRef = useRef(false);
+  const sendTyping = useCallback(
+    (on: boolean) => {
+      if (!canSend) return;
+      send({ t: "typing", on, pk });
+    },
+    [send, canSend, pk],
+  );
+  const setTyping = useCallback((on: boolean) => {
+    typingOnRef.current = on;
+    setTypingOn(on);
+  }, []);
+  const onChange = useCallback(
+    (v: string) => {
+      const before = valueRef.current;
+      valueRef.current = v;
+      setValue(v);
+      if (v === "") {
+        if (typingOnRef.current) {
+          sendTyping(false);
+          setTyping(false);
+        }
+      } else if (before === "" && !typingOnRef.current && canSend) {
+        sendTyping(true);
+        setTyping(true);
+      }
+    },
+    [sendTyping, setTyping, canSend],
+  );
   const onSend = useCallback(
     (text: string) => {
       if (!canSend) return;
-      const sentOk = send({ t: "chat", text, pk: phaseKey(day === undefined ? { phase } : { phase, day }) });
+      const sentOk = send({ t: "chat", text, pk });
       if (sentOk === false) {
         // 소켓이 막 닫혀 못 보냈다: ChatPanel 이 이어서 칸을 비우므로, 그 뒤에 쓴 글을 되돌려 놓는다(글이 사라지지 않게).
         queueMicrotask(() => setValue((v) => (v === "" ? text : v)));
@@ -94,7 +130,7 @@ export function useChat({ store, connection, view }: { store: ChatStore; connect
         setSendDim(false);
       }, SEND_DIM_MS);
     },
-    [send, canSend, phase, day],
+    [send, canSend, pk],
   );
 
   // 서버 거절: 새 거절이 올 때마다(n 이 바뀔 때) 흐림을 풀고, 입력칸이 비어 있으면 마지막으로 보낸 글을 되돌려 둔다.
@@ -123,15 +159,38 @@ export function useChat({ store, connection, view }: { store: ChatStore; connect
   }, [store, revision]);
   const why = store.notice(now);
 
+  // 받은 입력 중 신호: 저장소가 만료를 now 로 판정하니, 다음 만료 시각에 타이머를 걸어 다시 계산한다.
+  const [typingTick, setTypingTick] = useState(0);
+  useEffect(() => {
+    const expiry = store.nextTypingExpiry(Date.now());
+    if (expiry === null) return;
+    const timer = setTimeout(() => setTypingTick((n) => n + 1), Math.max(0, expiry - Date.now()) + 1);
+    return () => clearTimeout(timer);
+  }, [store, revision, typingTick]);
+  const stableSeats = useRef<ReadonlySet<number>>(new Set());
+  const typingSeats = useMemo<ReadonlySet<number>>(() => {
+    const away = new Set<number>();
+    for (const p of players) if (!p.connected) away.add(p.seat);
+    const seats = new Set<number>();
+    for (const seat of store.typingSeats(Date.now())) if (!away.has(seat)) seats.add(seat);
+    if (typingOn) seats.add(mySeat);
+    const prev = stableSeats.current;
+    if (prev.size === seats.size && [...seats].every((s) => prev.has(s))) return prev;
+    stableSeats.current = seats;
+    return seats;
+    // revision·typingTick 이 저장소의 입력 중 변화·만료를 알린다
+  }, [store, revision, typingTick, players, mySeat, typingOn]);
+
   return {
     messages,
     value,
-    onChange: setValue,
+    onChange,
     onSend,
     channel: channel ?? "all",
     sendDisabled: !canSend,
     sendDim,
     notice: why === null ? null : CHAT_TEXT.reject[why],
     quiet: store.lastWasReplay(),
+    typingSeats,
   };
 }

@@ -571,6 +571,8 @@ async function worldFlow(ctx) {
 
 /** chat-lobby 에서 손님이 보내는 글 */
 const CHAT_LOBBY_TEXT = "안녕하세요";
+/** 입력 중 단계(07-18)에서 손님이 넣기만 하고 보내지 않는 글 */
+const CHAT_LOBBY_TYPING = "안";
 
 // 로비 채팅 패널 치수(UI-SPEC 구조 표). src/game/chatUi.ts 의 값을 그대로 옮긴 사본이다 — 값을 바꾸려면 UI-SPEC 과 chatUi.ts 를 먼저 바꾼다.
 const CHAT_LOG_TALL = 152;
@@ -634,6 +636,22 @@ async function chatLobbyFlow(ctx) {
     for (const [who, page] of [["방장", hp], ["손님", gp]]) {
       for (const r of chatPanelRows(await readChatPanel(page))) rec(`chat-lobby/panel-${who}`, r.id, r.label, r.ok, r.detail);
     }
+    // 입력 중 알약(07-18, CHAT-04): 손님이 글자를 넣기만 하면 방장 화면의 손님 이름표에 data-typing true, 칸을 비우면 사라진다.
+    // 서버는 한 사람의 켜짐을 1.5초에 한 번만 중계하니, 위에서 보낸 글의 켜짐과 겹치지 않게 1.7초 쉰다.
+    const tagTyping = `.mf-world__tag[data-seat="${gSeat}"] [data-typing="true"]`;
+    await hp.waitForTimeout(1700);
+    await gp.locator("[data-chat-input]").fill(CHAT_LOBBY_TYPING);
+    const typingOn = await attempt(async () => {
+      await hp.waitForSelector(tagTyping, { timeout: 1500 });
+    });
+    rec(sc, "CL6", "손님이 글자를 넣으면 방장 화면 손님 이름표에 입력 중 알약(data-typing true)", typingOn.ok, typingOn.detail);
+    const mineOn = await gp.locator(`.mf-world__tag[data-me="true"] [data-typing="true"]`).count();
+    rec(sc, "CL7", "손님 자기 화면 자기 이름표에도 입력 중 알약이 켜짐", mineOn === 1, `알약 ${mineOn}개`);
+    await gp.locator("[data-chat-input]").fill("");
+    const typingOff = await attempt(async () => {
+      await hp.waitForSelector(tagTyping, { state: "detached", timeout: 1500 });
+    });
+    rec(sc, "CL8", "손님이 칸을 비우면 방장 화면 알약이 사라짐", typingOff.ok, typingOff.detail);
     await checkState(ctx, "chat-lobby", "lobby"); // 방장 화면의 G (콘솔 오류·가로 넘침·누르기 크기·글자 크기)
   } finally {
     await g.context.close().catch(() => {});

@@ -215,7 +215,7 @@ describe("useChat: 연결 끊김과 복원 (UI-SPEC 입력 상태표, D2)", () =
     rerender({ view: makeView(), canSend: false });
     expect(result.current.sendDisabled).toBe(true);
     act(() => result.current.onSend?.("쓰던 글"));
-    expect(sent.length).toBe(0);
+    expect(sent.filter((m) => m.t === "chat").length).toBe(0);
     expect(result.current.messages.map((m) => m.text).join("|")).toBe("받은 줄");
     expect(result.current.value).toBe("쓰던 글");
   });
