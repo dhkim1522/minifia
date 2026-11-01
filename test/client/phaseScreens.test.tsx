@@ -632,7 +632,7 @@ describe("대기실 연결 (C-02, R9) · 미리 받기 (Pattern 13 ②)", () => 
     rerenderRoom(r.rerender, lobby(3), { epoch: 2 });
     expect(toast()).toBe("");
     rerenderRoom(r.rerender, lobby(4), { epoch: 2 });
-    expect(toast()).toBe("도현님이 들어왔어요");
+    expect(toast()).toBe("도현 님 입장");
   });
 
   it("대기실과 배정 동안 preloadRoleAssets 를 부르고, 역할 확인에서는 새로 부르지 않는다", () => {

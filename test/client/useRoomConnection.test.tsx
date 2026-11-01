@@ -452,9 +452,9 @@ describe("useRoomConnection + Lobby: 재연결 직후 토스트 (WR-03)", () => 
     advance(500);
     act(() => sockets[1]!.open());
     act(() => sockets[1]!.message({ t: "state", view: withPlayers(["민수", "서준", "하윤"]) }));
-    expect(screen.queryByText("하윤님이 들어왔어요")).toBeNull();
+    expect(screen.queryByText("하윤 님 입장")).toBeNull();
     act(() => sockets[1]!.message({ t: "state", view: withPlayers(["민수", "서준", "하윤", "지아"]) }));
-    expect(screen.getByText("지아님이 들어왔어요")).toBeTruthy();
+    expect(screen.getByText("지아 님 입장")).toBeTruthy();
   });
 
   it("재접속 띠가 떠 있는 동안(restored 2초)에는 알림이 없고, 띠가 사라진 뒤의 변화부터 다시 알린다 (CONN-04)", () => {
@@ -482,10 +482,10 @@ describe("useRoomConnection + Lobby: 재연결 직후 토스트 (WR-03)", () => 
     act(() => sockets[1]!.message({ t: "state", view: withPlayers(["민수", "서준", "하윤"]) }));
     // 띠("다시 연결됐어요")가 떠 있는 동안 들어온 사람은 알리지 않는다
     act(() => sockets[1]!.message({ t: "state", view: withPlayers(["민수", "서준", "하윤", "지아"]) }));
-    expect(screen.queryByText("지아님이 들어왔어요")).toBeNull();
+    expect(screen.queryByText("지아 님 입장")).toBeNull();
     advance(RESTORED_MS);
     act(() => sockets[1]!.message({ t: "state", view: withPlayers(["민수", "서준", "하윤", "지아", "도현"]) }));
-    expect(screen.getByText("도현님이 들어왔어요")).toBeTruthy();
+    expect(screen.getByText("도현 님 입장")).toBeTruthy();
   });
 });
 
