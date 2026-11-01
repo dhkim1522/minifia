@@ -39,7 +39,7 @@ export interface WorldStageProps {
   canSend: boolean;
   /** 서버시각 − 로컬시각(ms) */
   offset: number;
-  /** 스테이지 사각형의 위 끝(헤더 블록 아래, 안전 영역 포함)과 아래 패널 높이 — 06-15 의 Lobby 가 재서 넘긴다. 없으면 HEADER_BOTTOM 62 / PANEL_HEIGHT 88 */
+  /** 스테이지 사각형의 위 끝(헤더 블록 아래, 안전 영역 포함)과 아래 패널 높이 — 06-15 의 Lobby 가 재서 넘긴다. 없으면 HEADER_BOTTOM 62 / PANEL_HEIGHT 250(로비 패널 기본값, LOG_H + 154) */
   stageInsets?: { top: number; bottom: number };
   /** 머리 위에 입력 중 알약(…)을 그릴 좌석(07-18). 서버가 보낸 신호와 내 입력만 담겨 온다 */
   typingSeats?: ReadonlySet<number>;

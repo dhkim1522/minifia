@@ -10,11 +10,13 @@ import {
   FOLLOW_TAU_MS,
   followStep,
   groundToScreen,
+  HEAD_STACK_H,
   LOOK_Y,
   NAMETAG_GAP,
   NAMETAG_H,
   NAMETAG_MAX_W,
   PAN_BOX,
+  PANEL_HEIGHT,
   PLATE_FAR,
   PX_PER_UNIT,
   RESIZE_SETTLE_MS,
@@ -24,6 +26,7 @@ import {
   stageOffsetY,
   stageRect,
 } from "../../src/world/camera";
+import { LOG_H_SHORT, lobbyPanelHeight, logHeightFor, TYPING_PILL_H } from "../../src/game/chatUi";
 
 /** 시드 고정 난수(mulberry32) */
 function rng(seed: number): () => number {
@@ -186,10 +189,18 @@ describe("스테이지 사각형과 세로 오프셋", () => {
     expect(stageOffsetY(800, 200, 800)).toBe(-100);
   });
 
-  it("stageRect: 위 62 ~ 아래 패널 위 끝(높이 − 88), 폭 전체. 패널 높이를 넘기면 따라간다", () => {
-    expect(stageRect({ w: 390, h: 844 })).toEqual({ top: 62, bottom: 756, left: 0, right: 390 });
-    expect(stageRect({ w: 360, h: 560 })).toEqual({ top: 62, bottom: 472, left: 0, right: 360 });
+  it("stageRect: 위 62 ~ 아래 패널 위 끝(높이 − 250 = 로비 패널 기본값), 폭 전체. 패널 높이를 넘기면 따라간다", () => {
+    expect(stageRect({ w: 390, h: 844 })).toEqual({ top: 62, bottom: 594, left: 0, right: 390 });
+    expect(stageRect({ w: 360, h: 560 })).toEqual({ top: 62, bottom: 310, left: 0, right: 360 });
     expect(stageRect({ w: 390, h: 844 }, 200)).toEqual({ top: 62, bottom: 644, left: 0, right: 390 });
+  });
+
+  it("PANEL_HEIGHT 는 DOM 을 재기 전 기본값으로 7페이즈 로비 패널(LOG_H + 154 = 250)이다, HEAD_STACK_H 는 이름표 24 + 입력 중 칸 22 = 46", () => {
+    expect(PANEL_HEIGHT).toBe(lobbyPanelHeight(LOG_H_SHORT));
+    expect(PANEL_HEIGHT).toBe(250);
+    expect(TYPING_PILL_H).toBe(22);
+    expect(HEAD_STACK_H).toBe(NAMETAG_H + TYPING_PILL_H);
+    expect(HEAD_STACK_H).toBe(46);
   });
 
   it("내 캐릭터(목표 위 높이 0.6)는 스테이지 사각형 가운데에 온다 (오프셋 적용 후 sy = 스테이지 가운데)", () => {
@@ -270,6 +281,9 @@ type Box = { minX: number; maxX: number; minZ: number; maxZ: number };
 
 const symBox = (p: number): Box => ({ minX: -p, maxX: p, minZ: -p, maxZ: p });
 
+/** 7페이즈 로비 스테이지 사각형: 패널 높이 = LOG_H(방 높이로 정함) + 154 (UI-SPEC 구조 표). 키보드가 열린 상태(스테이지 < 128)는 이 검사 대상이 아니다(A2) */
+const lobbyStage = (size: Size) => stageRect(size, lobbyPanelHeight(logHeightFor(size.h)));
+
 /** 걷는 영역 [−5.8, 5.8]² 의 0.25 간격 모든 점(끝점 5.8 포함) */
 function walkPoints(): { x: number; z: number }[] {
   const axis: number[] = [];
@@ -287,16 +301,16 @@ interface Failure {
   what: string;
 }
 
-/** 크기 하나에서 상자 box 로 카메라를 자를 때 발·이름표 상자가 스테이지 사각형을 넘는 점들 */
+/** 크기 하나에서 상자 box 로 카메라를 자를 때 발·이름표 상자(입력 중 칸 22 포함 = HEAD_STACK_H)가 스테이지 사각형을 넘는 점들 (A1: 늘 입력 중 칸이 있다고 보는 최악) */
 function visibilityFailures(size: Size, box: Box): Failure[] {
-  const r = stageRect(size);
+  const r = lobbyStage(size);
   const offsetY = stageOffsetY(size.h, r.top, r.bottom);
   const fails: Failure[] = [];
   for (const p of walkPoints()) {
     const target = clampTarget(p, box);
     const foot = groundToScreen({ x: p.x, y: 0, z: p.z }, target, size, offsetY);
     const head = groundToScreen({ x: p.x, y: HEAD_TOP_Y, z: p.z }, target, size, offsetY);
-    const tag = { left: head.sx - NAMETAG_MAX_W / 2, right: head.sx + NAMETAG_MAX_W / 2, bottom: head.sy - NAMETAG_GAP, top: head.sy - NAMETAG_GAP - NAMETAG_H };
+    const tag = { left: head.sx - NAMETAG_MAX_W / 2, right: head.sx + NAMETAG_MAX_W / 2, bottom: head.sy - NAMETAG_GAP, top: head.sy - NAMETAG_GAP - HEAD_STACK_H };
     const checks: [string, number][] = [
       ["발이 왼쪽 밖", r.left - foot.sx],
       ["발이 오른쪽 밖", foot.sx - r.right],
@@ -329,7 +343,7 @@ function boxTargets(box: Box): { x: number; z: number }[] {
 
 /** 크기 하나에서 스테이지 사각형 7×7 표본점의 광선이 바닥(y=0)에 닿는 점의 최대 |x|·|z| 와 그 자리 */
 function farthestGround(size: Size, box: Box): { far: number; at: string } {
-  const r = stageRect(size);
+  const r = lobbyStage(size);
   const offsetY = stageOffsetY(size.h, r.top, r.bottom);
   let far = 0;
   let at = "";
@@ -362,12 +376,12 @@ describe("STAGE_SIZES (UI-SPEC 폰 크기 표)", () => {
     for (const s of STAGE_SIZES) expect(s.label).toBe(`${s.w}x${s.h}`);
   });
 
-  it("스테이지 사각형 높이는 UI-SPEC 표와 같다 (490·514·782·410·694·724)", () => {
+  it("로비 스테이지 사각형 높이는 07-UI-SPEC 표와 같다 (328·352·564·248·476·506 — 방 높이 − 62 − (LOG_H + 154))", () => {
     const heights = STAGE_SIZES.map((s) => {
-      const r = stageRect(s);
+      const r = lobbyStage(s);
       return r.bottom - r.top;
     });
-    expect(heights).toEqual([490, 514, 782, 410, 694, 724]);
+    expect(heights).toEqual([328, 352, 564, 248, 476, 506]);
   });
 });
 
@@ -380,7 +394,7 @@ describe("가시성: 걷는 영역 전 격자점 × 6개 폰 크기 (UI-SPEC E1 
   });
 
   for (const size of STAGE_SIZES) {
-    it(`visible ${size.label}: 모든 격자점에서 발과 이름표(180×24)가 스테이지 사각형 안에 있다 (PAN_BOX 로 자른 카메라)`, () => {
+    it(`visible ${size.label}: 모든 격자점에서 발과 이름표(180×24)와 입력 중 칸(+22)이 채팅 패널이 들어온 스테이지 사각형 안에 있다 (PAN_BOX 로 자른 카메라)`, () => {
       const fails = visibilityFailures(size, PAN_BOX);
       const worst = fails.sort((a, b) => b.overflow - a.overflow)[0];
       expect(fails.length, worst ? `${fails.length}점 실패, 최악: ${describeFailure(size, worst)}` : "").toBe(0);
@@ -404,7 +418,7 @@ describe("가시성: 걷는 영역 전 격자점 × 6개 폰 크기 (UI-SPEC E1 
 
   it("카메라가 한계에 걸리지 않는 안쪽 점(|x|,|z| ≤ PAN)에서는 캐릭터가 스테이지 사각형 가운데에 온다", () => {
     for (const size of STAGE_SIZES) {
-      const r = stageRect(size);
+      const r = lobbyStage(size);
       const offsetY = stageOffsetY(size.h, r.top, r.bottom);
       const p = { x: 1.5, z: -2 };
       const s = groundToScreen({ x: p.x, y: LOOK_Y, z: p.z }, clampTarget(p), size, offsetY);
@@ -432,7 +446,7 @@ describe("빈 배경 없음: 이동 한계 상자 9개 목표 × 스테이지 �
 
   it("스테이지 사각형 밖(헤더 가림막 위)까지 보이는 윗부분도 판 안이다: 캔버스 맨 위 줄에서도 PLATE_FAR 안", () => {
     for (const size of STAGE_SIZES) {
-      const r = stageRect(size);
+      const r = lobbyStage(size);
       const offsetY = stageOffsetY(size.h, r.top, r.bottom);
       for (const target of boxTargets(PAN_BOX)) {
         for (const sx of [0, size.w / 2, size.w]) {
@@ -448,6 +462,6 @@ describe("빈 배경 없음: 이동 한계 상자 9개 목표 × 스테이지 �
 describe.runIf(process.env.CAMERA_PRINT === "1")("근거 표 출력", () => {
   it("크기별 필요 pan·가장 먼 바닥 점", () => {
     const rows = STAGE_SIZES.map((s) => `${s.label}\t최소 pan ${minPanFor(s)}\t가장 먼 바닥 ${farthestGround(s, PAN_BOX).at}`);
-    console.log(rows.join("\n"));
+    process.stdout.write(`${rows.join("\n")}\n`);
   });
 });

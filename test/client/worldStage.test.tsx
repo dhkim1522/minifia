@@ -12,7 +12,7 @@ import { NETWORK_TEXT } from "../../src/net/copy";
 import type { WorldStageProps } from "../../src/components/WorldStage";
 import { UnsupportedRendererError } from "../../src/world/renderer";
 import type { CharacterHandle, RendererStatusEvent, WorldRenderer } from "../../src/world/renderer";
-import { stageOffsetY } from "../../src/world/camera";
+import { PAN_BOX, stageOffsetY } from "../../src/world/camera";
 import { ENTER_MS, EXIT_MS, MOVE_ACK_TIMEOUT_MS, WALK_CUE_KEY } from "../../src/world/runtime";
 import type { WorldModules } from "../../src/world/runtime";
 import { installWorldTestHooks, WORLD_TEST_KEY, worldTestHooksEnabled } from "../../src/world/testHooks";
@@ -1139,7 +1139,7 @@ describe("화면 숨김·복귀 (UI-SPEC 연결·복귀 상태)", () => {
     const pos = s.store.positionOf(0, Date.now())!;
     expect(r.chars.get(0)!.root.position.x).toBeCloseTo(pos.x, 6);
     // 숨어 있던 3초를 따라잡느라 걷지 않는다: 카메라는 서버 위치에 바로 붙는다
-    expect(r.views.at(-1)!.target.x).toBeCloseTo(Math.min(4.8, pos.x), 6);
+    expect(r.views.at(-1)!.target.x).toBeCloseTo(Math.min(PAN_BOX.maxX, pos.x), 6);
   });
 
   it("숨은 채 소실되면 숨은 시간은 세지 않는다: 오래 숨었다 돌아와도 곧바로 실패 카드가 되지 않고 돌아온 때부터 센다 (WR-02)", async () => {
