@@ -3,7 +3,10 @@ import { CLOSE_CODES, MAX_FRAME_BYTES } from "../shared/protocol";
 import type { ApiErrorCode, BotVoteExec, BotVotePick, ClientMessage, EmojiId, RemovedReason, RoomPreview, ServerMessage, WorldFrame, WsErrorCode } from "../shared/protocol";
 import { botWakeAt, isBot, syncBotPlan, takeDueBotSteps } from "../shared/game/bots";
 import type { BotStep } from "../shared/game/bots";
+import { audience, channelOf, phaseKey } from "../shared/game/audience";
 import { emote, say } from "../shared/game/chat";
+import { typingRelay } from "../shared/game/chatRules";
+import type { TypingRelayState } from "../shared/game/chatRules";
 import type { SayInput } from "../shared/game/chat";
 import {
   attachConnection,
@@ -71,6 +74,9 @@ export class Room extends DurableObject<Env> {
   private worldFlushTimer: ReturnType<typeof setTimeout> | null = null;
   // 인메모리라 하이버네이션으로 비면 새로 센다(수용). 소켓 객체가 키라 hello 전 소켓도 센다.
   private readonly rates = new WeakMap<WebSocket, RateWindow>();
+  // 입력 중 중계 기록(사람 id -> 마지막 켜짐 중계). 인메모리라 하이버네이션으로 비면 새로 센다 — 결과는 신호가 한 번 더 중계될 뿐이다(수용, A2).
+  // 서버는 입력 중 타이머를 두지 않는다(A1): 만료는 받는 쪽 4.5초와 보내는 쪽 4초 무입력이 맡는다.
+  private readonly typingRelays = new Map<string, TypingRelayState>();
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
@@ -246,6 +252,9 @@ export class Room extends DurableObject<Env> {
         return;
       case "move":
         this.handleMove(ws, msg.x, msg.z);
+        return;
+      case "typing":
+        this.handleTyping(ws, msg.on, msg.pk);
         return;
       default: {
         // 새 메시지를 ClientMessage 에 더하고 여기를 빠뜨리면 컴파일이 실패한다 — 조용히 무시되지 않게(Pitfall 15).
@@ -829,6 +838,41 @@ export class Room extends DurableObject<Env> {
       if (!att || !ids.has(att.playerId) || !room.players.some((p) => p.id === att.playerId)) continue;
       this.sendTo(ws, msg);
     }
+  }
+
+  /**
+   * 이벤트 프레임의 유일한 전송 길. 받는 사람은 audience 가 정한다. 화면에서 거르는 방식으로 대신하지 않는다(결정 0002·0021).
+   * 첨부 playerId 가 ids 에 든 소켓에만 보낸다 — hello 전 소켓(첨부 없음)과 방에 없는 사람의 소켓은 받지 않는다.
+   */
+  private deliver(ids: ReadonlySet<string>, msg: ServerMessage): void {
+    const room = this.room;
+    if (!room) return;
+    for (const ws of this.ctx.getWebSockets()) {
+      const att = ws.deserializeAttachment() as SocketAttachment | null;
+      if (!att || !ids.has(att.playerId) || !room.players.some((p) => p.id === att.playerId)) continue;
+      this.sendTo(ws, msg);
+    }
+  }
+
+  // 입력 중(07-10, CHAT-04): 신원은 소켓 첨부 playerId 뿐이고 채널은 서버가 보낸 사람의 상태로 정한다(결정 0002). 거절은 오류 프레임 없이 조용히 버린다.
+  //  - 단계 키(pk)가 서버 단계 키와 다르면 버린다 — 지금 단계의 채널로 다시 분류하지 않는다(밤의 마피아 신호가 아침 직전 넓은 채널로 새는 길을 닫는다, T-07-20).
+  //  - 채널이 없으면(밤의 산 비마피아·CHAT_PHASES 밖) 버린다. 켜짐은 사람당 1.5초에 한 번, 꺼짐은 켜져 있을 때만 중계한다(typingRelay).
+  //  - 받는 사람은 audience 가 정한 같은 채널에서 보낸 사람을 뺀 집합이다(내 화면은 즉시 켠다, A3). 계산한 그 자리에서 바로 보낸다(await 없음).
+  private handleTyping(ws: WebSocket, on: boolean, pk: string): void {
+    const att = this.attachmentOf(ws);
+    const room = this.room;
+    if (!att || !room) return;
+    if (pk !== phaseKey({ phase: room.phase, day: room.day })) return;
+    const ch = channelOf(room, att.playerId);
+    if (ch === null) return;
+    const me = room.players.find((p) => p.id === att.playerId);
+    if (!me) return;
+    const decided = typingRelay(this.typingRelays.get(att.playerId), on, Date.now());
+    this.typingRelays.set(att.playerId, decided.next);
+    if (!decided.relay) return;
+    const others = new Set(audience(room, { k: "typing", ch }));
+    others.delete(att.playerId);
+    this.deliver(others, { t: "typing", seat: me.seat, on });
   }
 
   // ======== 로비 이동 구역(06-08): move 처리 · 전송 · 저장/복원 · 봇 배회 ========

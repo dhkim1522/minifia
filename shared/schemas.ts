@@ -1,8 +1,8 @@
 // 서버 전용 입력 검증 스키마(zod 값 import). Worker 만 이 파일을 import 한다 — src/ 가 import 하면 클라이언트 번들에 zod 가 들어간다.
 import { z } from "zod";
 import { NICKNAME_MAX_UTF16 } from "./nickname";
-import { EMOJI_IDS, MAX_TEST_BOTS, MOVE_COORD_LIMIT, TEMPLATE_IDS } from "./protocol";
-import type { ClientMessage, CreateRoomBody, JoinRoomBody, MoveMessage } from "./protocol";
+import { EMOJI_IDS, MAX_TEST_BOTS, MOVE_COORD_LIMIT, PHASE_KEY_MAX, TEMPLATE_IDS } from "./protocol";
+import type { ClientMessage, CreateRoomBody, JoinRoomBody, MoveMessage, TypingSendMessage } from "./protocol";
 
 // 상한은 UTF-16 길이다. 제품 규칙(8 자소)은 validateNickname 이 판정한다 — 여기서 64 처럼 낮게 잡으면
 // 자소 8 개짜리 유효 이름(가족 이모지 88 단위)이 스키마에서 먼저 400 으로 막힌다(06 리뷰 WR-03).
@@ -18,6 +18,14 @@ export const MoveMessageSchema = z.strictObject({
   x: z.number().int().min(-MOVE_COORD_LIMIT).max(MOVE_COORD_LIMIT),
   z: z.number().int().min(-MOVE_COORD_LIMIT).max(MOVE_COORD_LIMIT),
 }) satisfies z.ZodType<MoveMessage>;
+
+// 입력 중(07-10, CHAT-04): 켜짐/꺼짐과 단계 키뿐이다. 채널·좌석·신원(ch·seat·id)이 덧붙으면 거부한다 — 채널은 서버가 보낸 사람 상태로 정한다(결정 0002, T-07-19).
+// ClientMessageSchema 의 멤버다 — 이 값이 먼저 선언되어야 유니온이 쓸 수 있다(TDZ).
+export const TypingMessageSchema = z.strictObject({
+  t: z.literal("typing"),
+  on: z.boolean(),
+  pk: z.string().min(1).max(PHASE_KEY_MAX),
+}) satisfies z.ZodType<TypingSendMessage>;
 
 export const ClientMessageSchema = z.discriminatedUnion("t", [
   z.object({ t: z.literal("hello"), token: z.string().min(16).max(128) }),
@@ -52,4 +60,5 @@ export const ClientMessageSchema = z.discriminatedUnion("t", [
   z.strictObject({ t: z.literal("testBotVote"), exec: z.enum(["random", "yes", "no"]), pick: z.enum(["random", "host", "other"]) }),
   // 로비 이동(결정 0044-17, 06-08): 목적지 두 정수뿐. 행위자는 소켓 첨부 playerId 로만 정해진다(T-06-17).
   MoveMessageSchema,
+  TypingMessageSchema,
 ]) satisfies z.ZodType<ClientMessage>;

@@ -31,7 +31,10 @@ describe("입력 중 — 트레이서 (CHAT-04)", () => {
   it("입력 중: 꺼짐도 방장 소켓에 on:false 로 간다", async () => {
     const s = await seat(1, 0);
     const guest = s.guests[0]!;
+    const m0h = mark(s.host);
+    const m0g = mark(guest.sock);
     typingSend(guest.sock, true);
+    await flushBoth(guest.sock, m0g, s.host, m0h);
     const mh = mark(s.host);
     const mg = mark(guest.sock);
     typingSend(guest.sock, false);
