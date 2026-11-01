@@ -1070,7 +1070,8 @@ export async function leaveLobby(page) {
 /**
  * 재접속 흐름의 페이지 init 스크립트(시험 컨텍스트에만 들어간다, 함수라 직렬화되므로 바깥 값을 쓰지 않는다):
  *  1) window.WebSocket 을 감싸 만들어진 소켓을 window.__e2eSockets 에 모은다 — 헤드리스 Chrome 은 오프라인 전환만으로 이미 열린 소켓을 끊지 않으므로(06-18 에서 잼)
- *     시험이 setOffline(true) 와 함께 마지막 소켓을 닫아 네트워크 단절을 흉내 낸다. 앱 코드는 바뀌지 않는다.
+ *     시험이 setOffline(true) 와 함께 소켓을 닫아 네트워크 단절을 흉내 낸다. 배포 서버는 클라이언트 Close 프레임에 약 10초 뒤에야 답하므로
+ *     합성 close 로 앱이 즉시 끊김을 알게 한다(dropSockets, 06-23). 앱 코드는 바뀌지 않는다.
  *  2) 위쪽 토스트(.mv-toast.is-on)가 켜질 때마다 글자를 window.__e2eToasts 에 쌓는다(복구 뒤 지난 입장·퇴장 알림이 다시 뜨는지 보려고).
  */
 export function reconnectInit() {
@@ -1135,7 +1136,9 @@ export async function setLifecycle(page, state) {
 }
 
 /**
- * 오프라인 흉내의 절반: 앱의 방 소켓(/api/rooms/…/ws)만 닫는다(reconnectInit 이 있어야 한다). 닫은 소켓 수를 돌려준다.
+ * 오프라인 흉내의 절반: 앱의 방 소켓(/api/rooms/…/ws)만 닫는다(reconnectInit 이 있어야 한다). 건드린 소켓 수를 돌려준다.
+ * 배포 서버는 클라이언트 Close 프레임에 약 10초 뒤에야 답하므로(진단: reconnect-banner-deployed), ws.close() 만 부르면 앱이 끊김을 곧바로 알지 못한다.
+ * 그래서 합성 close 이벤트(code 1006, wasClean false)를 먼저 dispatch 해 앱이 즉시 끊김을 알게 하고, 그다음 ws.close() 를 부른다(순서 고정).
  * 개발 서버의 vite HMR 소켓은 건드리지 않는다 — 닫으면 vite 클라이언트가 서버를 다시 찾아 페이지를 새로 불러온다(06-18 에서 잼).
  */
 export function dropSockets(page) {
@@ -1145,6 +1148,7 @@ export function dropSockets(page) {
     for (const ws of list) {
       if (!String(ws.url).includes("/api/rooms/")) continue;
       if (ws.readyState === 0 || ws.readyState === 1) {
+        ws.dispatchEvent(new CloseEvent("close", { code: 1006, wasClean: false }));
         ws.close();
         n += 1;
       }
