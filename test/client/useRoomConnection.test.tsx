@@ -1,6 +1,7 @@
 import { act, cleanup, render, renderHook, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { RoomView } from "../../shared/protocol";
+import { ChatStore } from "../../src/net/chatStore";
 import { RESTORED_MS } from "../../src/net/linkReducer";
 import { useRoomConnection } from "../../src/net/useRoomConnection";
 import { Lobby } from "../../src/screens/Lobby";
@@ -437,9 +438,10 @@ describe("useRoomConnection + Lobby: 재연결 직후 토스트 (WR-03)", () => 
       return s as unknown as WebSocket;
     };
     const store = new WorldStore();
+    const chat = new ChatStore();
     function Harness() {
       const c = useRoomConnection("0042", "t".repeat(43), { createSocket, random: () => 0, checkRoom: async () => "alive" });
-      return c.view ? <Lobby view={c.view} store={store} send={c.send} canSend={c.canSend} epoch={c.epoch} /> : null;
+      return c.view ? <Lobby view={c.view} store={store} chat={chat} send={c.send} canSend={c.canSend} epoch={c.epoch} /> : null;
     }
     const withPlayers = (names: string[]): RoomView => ({
       ...view,
@@ -465,9 +467,10 @@ describe("useRoomConnection + Lobby: 재연결 직후 토스트 (WR-03)", () => 
       return s as unknown as WebSocket;
     };
     const store = new WorldStore();
+    const chat = new ChatStore();
     function Harness() {
       const c = useRoomConnection("0042", "t".repeat(43), { createSocket, random: () => 0, checkRoom: async () => "alive" });
-      return c.view ? <Lobby view={c.view} store={store} send={c.send} canSend={c.canSend} epoch={c.epoch} bannerVisible={c.banner !== "hidden"} /> : null;
+      return c.view ? <Lobby view={c.view} store={store} chat={chat} send={c.send} canSend={c.canSend} epoch={c.epoch} bannerVisible={c.banner !== "hidden"} /> : null;
     }
     const withPlayers = (names: string[]): RoomView => ({
       ...view,

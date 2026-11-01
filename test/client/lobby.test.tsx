@@ -5,6 +5,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import "../helpers/singleLineErrors";
 import type { PublicPlayer, RoomView } from "../../shared/protocol";
 import type { WorldStageProps } from "../../src/components/WorldStage";
+import { LOBBY_PANEL_EXTRA } from "../../src/game/chatUi";
+import { ChatStore } from "../../src/net/chatStore";
 import { WorldStore } from "../../src/world/store";
 
 // 06-15: 대기실은 지하 재즈 바 맵(WorldStage) 위에 승인 로비 틀(헤더·알림·행동 줄·시트)을 얹는다.
@@ -27,6 +29,7 @@ afterEach(() => {
   cleanup();
   vi.useRealTimers();
   stage.props = null;
+  chatStore = new ChatStore();
 });
 
 const player = (seat: number, nickname: string, extra: Partial<PublicPlayer> = {}): PublicPlayer => ({
@@ -52,8 +55,10 @@ const makeView = (players: PublicPlayer[], mySeat = 0, extra: Partial<RoomView> 
 
 type LobbyProps = Parameters<typeof Lobby>[0];
 const store = new WorldStore();
-/** 필수 props(store·send)를 채워 로비를 그린다 */
-const lobby = (view: RoomView, extra: Partial<LobbyProps> = {}) => <Lobby view={view} store={store} send={() => {}} {...extra} />;
+/** 채팅 저장소: 시험마다 새로 만든다(줄이 시험 사이에 남지 않게). 같은 시험 안의 다시 그리기에서는 같은 저장소다 */
+let chatStore = new ChatStore();
+/** 필수 props(store·chat·send)를 채워 로비를 그린다 */
+const lobby = (view: RoomView, extra: Partial<LobbyProps> = {}) => <Lobby view={view} store={store} chat={chatStore} send={() => {}} {...extra} />;
 const props = (): WorldStageProps => {
   if (stage.props === null) throw new Error("WorldStage 가 그려지지 않았다");
   return stage.props;
@@ -257,7 +262,8 @@ describe("Lobby — 행동 줄: [시작] 과 점, 손님 (ROOM-03, UI-SPEC 행�
     expect(b.className).toContain("mf-act--flat");
     expect(container.querySelector("[data-lobby-start]") === null).toBe(true);
     expect(container.querySelector(".mv-dots") === null).toBe(true);
-    expect(container.querySelectorAll(".mf-lobby__panel button").length).toBe(1);
+    // 패널 안 버튼은 채팅 보내기(07-13) 하나와 이 행동 줄 하나뿐이다
+    expect(container.querySelectorAll(".mf-lobby__panel button:not([data-chat-send])").length).toBe(1);
   });
 
   it("손님 화면에서 방장이 끊겨 있어도 같은 라벨이다", () => {
@@ -549,11 +555,11 @@ describe("Lobby — 스타일 계약 (lobby.css)", () => {
     expect(css).toMatch(/\.mf-lobby__panel[^}]*var\(--radius-lg\)\s+var\(--radius-lg\)\s+0\s+0/);
   });
 
-  it("아래 패널 안쪽 여백은 14 16 22, 항목 간격 10 — 행동 줄(52) 하나라 높이 88 (stageBox 의 옛 대기실 시트 157 검사를 대신한다)", () => {
+  it("아래 패널 안쪽 여백은 14 16 22, 항목 간격 10 — 기록 LOG_H + 입력줄 48 + 행동 줄 52 라 높이 LOG_H + 154 (07-13, 6페이즈 때는 행동 줄 하나라 88)", () => {
     const rule = css.match(/\.mf-lobby__panel\s*\{[^}]*\}/)?.[0] ?? "";
     expect(rule).toContain("padding: 14px var(--space-md) 22px");
     expect(rule).toContain("gap: 10px");
-    expect(14 + 52 + 22).toBe(88);
+    expect(14 + 8 + 48 + 10 + 52 + 22).toBe(LOBBY_PANEL_EXTRA);
   });
 
   it("헤더: 위 18·좌우 space-md·높이 62(= 18 + 버튼 44), 맵 탭을 가로채지 않는다 (stageBox 의 옛 대기실 바 119.2 검사를 대신한다)", () => {

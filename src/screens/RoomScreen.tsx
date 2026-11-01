@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { isAlive } from "../../shared/game/alive";
+import { phaseKey } from "../../shared/game/audience";
 import type { PhaseId, RemovedReason, RoomView } from "../../shared/protocol";
 import { Button } from "../components/Button";
 import { ReconnectBanner } from "../components/ReconnectBanner";
@@ -11,6 +12,7 @@ import { TestToolsButton, TestToolsSheet } from "../components/TestTools";
 import { executionTitle, morningCardText } from "../game/eliminationText";
 import { VERDICT_TEXT, defenseAnnounce, noExecutionPrefix, winnerText } from "../game/verdict";
 import { preloadDuskAssets, preloadRoleAssets } from "../net/assets";
+import { ChatStore } from "../net/chatStore";
 import { usePhaseArrival } from "../net/phaseArrival";
 import { loadSeenCount, saveSeenCount, unseenCount } from "../net/recordsSeen";
 import { useReducedMotion } from "../net/useReducedMotion";
@@ -115,13 +117,17 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
   // 로비 맵의 위치 스토어: 연결과 같은 수명이다. 연결 훅 바로 뒤에 world 프레임을 구독해 첫 snap 을 놓치지 않는다(MAP-05).
   // 로비를 떠났다 돌아와도 같은 스토어를 쓴다 — 돌아오면 서버가 다시 보낸 snap 이 구간을 통째로 바꾼다.
   const [store] = useState(() => new WorldStore());
+  // 채팅 저장소도 연결과 같은 수명이다 — 로비 줄이 게임이 시작돼도 같은 흐름으로 이어진다(방 한 번 들어오면 한 흐름, 리서치 Pattern 5).
+  // 같은 구독 하나로 world 와 채팅 프레임을 나눠 먹인다. 시각은 저장소가 읽지 않고 받은 때를 넘긴다.
+  const [chat] = useState(() => new ChatStore());
   const { onEvent } = connection;
   useEffect(
     () =>
       onEvent((e, meta) => {
         if (e.t === "world") store.applyFrame(e, meta.epoch);
+        else if (e.t === "chat" || e.t === "typing" || e.t === "chatLog" || e.t === "chatReject") chat.apply(e, meta.epoch, Date.now());
       }),
-    [onEvent, store],
+    [onEvent, store, chat],
   );
 
   // 게임이 시작되어 로비를 떠날 때: 마지막 로비 view 로 Lobby 를 EXIT_CURTAIN_MS(dur-med) 동안 더 그려 맵을 night-900 으로 덮은 뒤 v1.0 단계 화면으로 넘어간다.
@@ -151,6 +157,21 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
   // 대기실·배정 동안 직업 그림 4종 전부와 낮 배경을 미리 받아 둔다.
   // 어떤 역할인지와 무관하게 같은 요청 패턴이다(Pattern 13 ②, Pitfall 20).
   const phase = view?.phase;
+  // 대기실로 돌아오면(테스트 방 되돌리기·다시 하기) 지난 판의 줄을 비운다. 판정은 "직전 단계가 대기실이 아니고 지금 대기실"이다 —
+  // 처음 들어오는 대기실이나 대기실에서 대기실(같은 판)은 비우지 않는다. setContext 보다 먼저 선언해 같은 커밋에서 비운 뒤 문맥을 넣는다.
+  const prevPhase = useRef<PhaseId | undefined>(undefined);
+  useEffect(() => {
+    const prev = prevPhase.current;
+    prevPhase.current = phase;
+    if (phase === "lobby" && prev !== undefined && prev !== "lobby") chat.reset();
+  }, [phase, chat]);
+  // view 가 바뀔 때마다 단계 키·내 채널·연결 epoch 를 알린다(셋 중 하나가 바뀌면 저장소가 입력 중을 끈다).
+  const chatEpoch = connection.epoch;
+  useEffect(() => {
+    if (view === null) return;
+    const day = view.day?.n;
+    chat.setContext({ pk: phaseKey(day === undefined ? { phase: view.phase } : { phase: view.phase, day }), channel: view.me.chat ?? null, epoch: chatEpoch });
+  }, [chat, view, chatEpoch]);
   // 같은 접속에서 단계가 바뀌어 온 직전 단계. 역할 확인 → 낮 시작으로 DayScene 이 새로 마운트될 때 문구·배경 전환의 근거다(재접속·처음엔 null).
   const arrivedFrom = usePhaseArrival(phase, connection.epoch);
   useEffect(() => {
@@ -322,6 +343,7 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
             canSend={connection.canSend}
             epoch={connection.epoch}
             store={store}
+            chat={chat}
             offset={connection.offset}
             bannerVisible={banner !== "hidden"}
             exiting={curtain !== null}

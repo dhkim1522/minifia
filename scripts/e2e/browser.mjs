@@ -980,6 +980,42 @@ export async function readLobbyFrame(page) {
   });
 }
 
+/**
+ * 채팅 입력칸에 글을 쓰고 [보내기] 를 누른다(07-13). 값은 fill 로 한 번에 넣는다 — 한글 조합 이벤트는 만들지 않는다(실제 IME 는 07-19 몫).
+ * 보내기 버튼이 활성(aria-disabled "false")이 될 때까지 기다린 뒤 누르므로, 글자가 React 상태에 닿기 전에 누르는 일이 없다.
+ */
+export async function typeAndSendChat(page, text) {
+  await page.locator("[data-chat-input]").fill(text);
+  await page.waitForSelector('[data-chat-send][aria-disabled="false"]', { timeout: 3000 });
+  await page.locator("[data-chat-send]").click({ timeout: 3000 });
+}
+
+/**
+ * 채팅 기록 칸의 사람 줄을 읽는다: [{ seat, ch, name, text }] (시스템 줄·막힘 알림은 싣지 않는다). 칸이 없으면 null.
+ * 이름은 줄 안 .mv-chat__name 글자("나" 또는 닉네임), 본문은 .mv-chat__text 글자다.
+ */
+export function readChatLines(page) {
+  return page.evaluate(() => {
+    const log = document.querySelector("[data-chat-log]");
+    if (!log) return null;
+    return [...log.querySelectorAll(".mv-chat__msg")].map((p) => ({
+      seat: p.getAttribute("data-seat"),
+      ch: p.getAttribute("data-ch"),
+      name: (p.querySelector(".mv-chat__name")?.textContent ?? "").trim(),
+      text: (p.querySelector(".mv-chat__text")?.textContent ?? "").trim(),
+    }));
+  });
+}
+
+/** 기록 칸에 본문이 text 인 사람 줄이 생길 때까지 기다린다. 시간 안에 안 오면 던진다(오류 메시지에 본문은 싣지 않는다). */
+export async function waitChatLine(page, text, ms = 5000) {
+  try {
+    await page.waitForFunction((t) => [...document.querySelectorAll("[data-chat-log] .mv-chat__msg .mv-chat__text")].some((el) => (el.textContent ?? "").trim() === t), text, { timeout: ms });
+  } catch {
+    throw new Error(`채팅 줄이 ${ms / 1000}초 안에 오지 않음`);
+  }
+}
+
 /** 서버 시각 t 의 seat 위치(월드 단위). 훅이 없거나 아직 구간이 없으면 null. */
 export function sampleWorld(page, seat, t) {
   return page.evaluate(({ s, tt }) => (window.__mfWorld ? window.__mfWorld.sample(s, tt) : null), { s: seat, tt: t });

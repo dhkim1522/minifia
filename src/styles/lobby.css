@@ -24,7 +24,8 @@
 /* [테스트] 버튼 자리: 헤더 아래 8, 왼쪽 16 */
 .mf-lobby__test { position: absolute; top: 70px; left: var(--space-md); z-index: var(--z-overlay); }
 
-/* 아래 패널: night-800 97%, 위 모서리 radius-lg, 안쪽 14 16 22, 행동 줄 하나(52) → 높이 88. 7페이즈 채팅은 이 안 행동 줄 위에 들어와 패널이 자란다. */
+/* 아래 패널: night-800 97%, 위 모서리 radius-lg, 안쪽 14 16 22. 위에서부터 채팅 기록 칸(LOG_H 96·152) + 입력줄(48) + 행동 줄(52), 사이 간격은 부품 8 · 패널 10 → 높이 LOG_H + 154 (07-13).
+   채팅 없는 6페이즈 때는 행동 줄 하나라 88 이었다. 높이는 DOM 에서 재서 스테이지 사각형에 넘기므로 식이 바뀌어도 카메라가 따라간다. */
 .mf-lobby__panel { position: absolute; left: 0; right: 0; bottom: 0; z-index: var(--z-overlay); box-sizing: border-box; display: flex; flex-direction: column; gap: 10px; padding: 14px var(--space-md) 22px; background: color-mix(in srgb, var(--night-800) 97%, transparent); border-radius: var(--radius-lg) var(--radius-lg) 0 0; }
 
 /* 재접속 띠(떠 있는 변형): 방 화면 루트(.mf-room) 위에 헤더 아래 top 72, 가로 전체. 높이 52·문구·아이콘·색은 v1.0 그대로. 흐름을 밀지 않는다. */

@@ -7,10 +7,14 @@ import { Button } from "../components/Button";
 import { ConfirmSheet } from "../components/ConfirmSheet";
 import { Icon } from "../components/Icon";
 import { ShareSheet } from "../components/ShareSheet";
+import { ChatPanel } from "../components/v2/ChatPanel";
 import { PhaseHeader } from "../components/v2/PhaseHeader";
 import { TopToast, useTopToast } from "../components/v2/TopToast";
 import { WorldStage } from "../components/WorldStage";
+import type { ChatStore } from "../net/chatStore";
 import { diffRoomViews, toastForDiff } from "../net/roomDiff";
+import { useChat } from "../net/useChat";
+import { useChatLogHeight } from "../net/useKeyboardLift";
 import type { WorldStore } from "../world/store";
 import "../styles/lobby.css";
 import "../styles/sheet.css";
@@ -24,6 +28,8 @@ interface LobbyProps {
   view: RoomView;
   /** RoomScreen 이 연결과 같은 수명으로 만들어 world 프레임을 먹이는 위치 스토어 */
   store: WorldStore;
+  /** RoomScreen 이 연결과 같은 수명으로 만들어 채팅 프레임을 먹이는 채팅 저장소 */
+  chat: ChatStore;
   /** 보냈으면 true, 소켓이 닫혀 못 보냈으면 false. 반환값이 없는 함수(void)는 보낸 것으로 본다 */
   send: (msg: ClientMessage) => boolean | void;
   /** 연결이 열려 있어 서버로 보낼 수 있는가. 기본 true */
@@ -42,10 +48,10 @@ interface LobbyProps {
   testButton?: ReactNode;
 }
 
-// S-03 대기실(06-15): 지하 재즈 바 맵(WorldStage) 위에 승인 로비 틀을 얹는다 — 위쪽 가림막, 헤더([나가기]·PhaseHeader "대기실"·[공유]),
-// 위 알림(TopToast), 아래 패널의 행동 줄 하나. 방 코드는 공유 시트 안에서만 보인다. 읽을 글은 "대기실" 과 접히는 한 줄뿐이다(3초 규칙).
+// S-03 대기실(06-15, 07-13): 지하 재즈 바 맵(WorldStage) 위에 승인 로비 틀을 얹는다 — 위쪽 가림막, 헤더([나가기]·PhaseHeader "대기실"·[공유]),
+// 위 알림(TopToast), 아래 패널의 채팅 기록 + 입력줄 + 행동 줄 하나. 방 코드는 공유 시트 안에서만 보인다. 읽을 글은 "대기실" 과 접히는 한 줄뿐이다(3초 규칙).
 // 화면은 서버가 보낸 view 만으로 다시 그린다. 닉네임(이름표)은 WorldStage 가 React 텍스트 노드로만 그린다.
-export function Lobby({ view, store, send, canSend = true, epoch = 0, offset = 0, bannerVisible = false, exiting = false, onLeave, testButton }: LobbyProps) {
+export function Lobby({ view, store, chat, send, canSend = true, epoch = 0, offset = 0, bannerVisible = false, exiting = false, onLeave, testButton }: LobbyProps) {
   // 입장·퇴장·방장 변경 알림: 서버가 보낸 스냅샷 두 개의 차이로만 만든다. 처음 열 때·epoch 가 바뀐 직후(재연결)에는
   // 직전 스냅샷을 비워 지난 일을 다시 알리지 않는다. 재접속 띠가 떠 있는 동안은 알림을 띄우지 않되 기준선은 갱신한다.
   const toast = useTopToast();
@@ -113,6 +119,12 @@ export function Lobby({ view, store, send, canSend = true, epoch = 0, offset = 0
     return () => ro.disconnect();
   }, []);
 
+  // 아래 패널의 채팅: 기록 칸 높이는 방 높이로 한 번 정하고(키보드·주소창으로 다시 정하지 않는다) 패널 높이는 위 측정이 스테이지 사각형에 넘긴다.
+  const rootRef = useRef<HTMLElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const logH = useChatLogHeight(rootRef, inputRef);
+  const binding = useChat({ store: chat, connection: { send, canSend }, view });
+
   const connected = connectedCount(view.players);
   const isHost = view.me.isHost;
   const host = view.players.find((p) => p.isHost);
@@ -136,7 +148,7 @@ export function Lobby({ view, store, send, canSend = true, epoch = 0, offset = 0
   const startLabel = enoughPlayers ? `게임 시작, ${connected}명 모임` : `게임 시작, ${connected}명 모임, ${view.minPlayers}명부터 시작할 수 있어요`;
 
   return (
-    <main className="mf-root mf-lobby">
+    <main ref={rootRef} className="mf-root mf-lobby">
       <WorldStage
         view={view}
         store={store}
@@ -171,6 +183,7 @@ export function Lobby({ view, store, send, canSend = true, epoch = 0, offset = 0
       <TopToast {...toast.props} />
       {testButton ? <div className="mf-lobby__test">{testButton}</div> : null}
       <section ref={panelRef} className="mf-lobby__panel" data-world-panel="">
+        <ChatPanel {...binding} logHeight={logH} inputRef={inputRef} />
         <ActionRow>
           {isHost ? (
             <ActionButton

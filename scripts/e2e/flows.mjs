@@ -35,6 +35,7 @@ import {
   pickChip,
   readAtmosphere,
   readLinkState,
+  readChatLines,
   readLobbyFrame,
   readPaintStats,
   readWorld,
@@ -66,7 +67,9 @@ import {
   tapAt,
   tapSeat,
   tapWorld,
+  typeAndSendChat,
   voteAs,
+  waitChatLine,
   waitBackdropStable,
   waitPhaseIn,
   waitWorldReady,
@@ -557,6 +560,51 @@ async function worldFlow(ctx) {
   });
   if (!probe.ok) rec("world/emoji", "NT2", "내 이름표 폭 기록(참고, 판정 아님)", false, probe.detail);
 
+  await leaveLobby(hp);
+}
+
+// ---- chat-lobby (로비 자유 채팅, 07-13, CHAT-01) ----
+
+/** chat-lobby 에서 손님이 보내는 글 */
+const CHAT_LOBBY_TEXT = "안녕하세요";
+
+/**
+ * 로비 트레이서: 방장·손님 두 페이지가 로비에 들어오고, 손님이 한 줄을 보내면 두 페이지 기록 칸에 서버 방송이 돌아온 줄이 보인다.
+ * 보낸 폰은 방송이 돌아온 뒤에야 줄이 생기고 이름이 "나", 받은 폰은 보낸 사람의 닉네임이다. 모두 채널 all(공개)이다.
+ */
+async function chatLobbyFlow(ctx) {
+  const rec = recorder(ctx);
+  const sc = "chat-lobby/send";
+  const host = await startHost(ctx, "chat-lobby", { nickname: LOBBY_HOST_NICK });
+  const { page: hp, tracker: ht } = host;
+  const { guest: g, seat: gSeat } = await openGuest(ctx, WORLD_GUEST_NICK);
+  try {
+    const { page: gp, tracker: gt } = g;
+    await Promise.all([ht.waitFor((v) => v.players.length === 2, 5000, "방장 쪽 인원 2"), gt.waitFor((v) => v.players.length === 2, 5000, "손님 쪽 인원 2")]);
+    await Promise.all([waitWorldReady(hp, 2), waitWorldReady(gp, 2)]);
+    await Promise.all([settle(hp), settle(gp)]);
+
+    // 손님이 한 줄을 보낸다 → 두 페이지 기록 칸에 그 줄이 나타난다
+    await typeAndSendChat(gp, CHAT_LOBBY_TEXT);
+    const arrived = await attempt(async () => {
+      await Promise.all([waitChatLine(hp, CHAT_LOBBY_TEXT), waitChatLine(gp, CHAT_LOBBY_TEXT)]);
+    });
+    rec(sc, "CL1", "손님이 보낸 한 줄이 두 페이지 기록 칸에 보임", arrived.ok, arrived.detail);
+    if (arrived.ok) {
+      const [hl, gl] = await Promise.all([readChatLines(hp), readChatLines(gp)]);
+      const only = (lines) => (lines ?? []).filter((l) => l.text === CHAT_LOBBY_TEXT);
+      const hMine = only(hl);
+      const gMine = only(gl);
+      rec(sc, "CL2", "그 줄은 페이지마다 정확히 한 번", hMine.length === 1 && gMine.length === 1, `방장 화면 ${hMine.length}줄 · 손님 화면 ${gMine.length}줄`);
+      rec(sc, "CL3", "손님 쪽 이름은 '나', 방장 쪽 이름은 손님 닉네임", gMine[0]?.name === "나" && hMine[0]?.name === WORLD_GUEST_NICK, `손님 화면 "${gMine[0]?.name}" · 방장 화면 "${hMine[0]?.name}"`);
+      rec(sc, "CL4", "줄의 채널은 all, 보낸 자리는 손님", hMine[0]?.ch === "all" && gMine[0]?.ch === "all" && hMine[0]?.seat === String(gSeat) && gMine[0]?.seat === String(gSeat), `방장 화면 ch ${hMine[0]?.ch} seat ${hMine[0]?.seat} · 손님 화면 ch ${gMine[0]?.ch} seat ${gMine[0]?.seat} (손님 자리 ${gSeat})`);
+      const cleared = await gp.locator("[data-chat-input]").inputValue();
+      rec(sc, "CL5", "보낸 뒤 손님 입력칸이 비워짐", cleared === "", `입력칸 ${cleared.length}자`);
+    }
+    await checkState(ctx, "chat-lobby", "lobby"); // 방장 화면의 G (콘솔 오류·가로 넘침·누르기 크기·글자 크기)
+  } finally {
+    await g.context.close().catch(() => {});
+  }
   await leaveLobby(hp);
 }
 
@@ -2195,6 +2243,8 @@ export const FLOWS = [
   // lobby·world 는 LOBBY_SIZES 6개 크기로 돈다: 기본 크기 4개에 더해 390x844·402x874 (run.mjs 의 extraSizes)
   { id: "lobby", run: lobbyFlow, extraSizes: LOBBY_EXTRA_SIZES },
   { id: "world", run: worldFlow, extraSizes: LOBBY_EXTRA_SIZES },
+  // 로비 자유 채팅(07-13): 방장·손님 두 페이지로 한 줄이 오가는 트레이서
+  { id: "chat-lobby", run: chatLobbyFlow },
   // 재접속·예산(06-18): 폰 크기와 곱하지 않고 자기 크기로 한 번. deployhold 는 배포와 동시에 돌리는 흐름(06-19)이라 --only 없이는 빠진다
   { id: "reconnect", run: reconnectFlow, size: RECONNECT_SIZE },
   { id: "deployhold", run: deployHoldFlow, size: RECONNECT_SIZE, skipByDefault: true },
