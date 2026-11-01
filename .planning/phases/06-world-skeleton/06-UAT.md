@@ -1,9 +1,9 @@
 ---
-status: diagnosed
+status: complete
 phase: 06-world-skeleton
 source: [06-VERIFICATION.md]
 started: 2026-11-01T05:45:15Z
-updated: 2026-11-01T07:00:26.829Z
+updated: 2026-11-01T09:05:04.854Z
 ---
 
 ## Current Test
@@ -34,6 +34,7 @@ expected: 8명이 모여도 맨 앞 이름표(특히 '(나)')가 전부 읽히�
 result: issue
 reported: "06-UI-REVIEW: 360×640 8명·두 사람 겹침 캡처에서 반투명(--overlay-ink 80%) 이름표가 겹쳐 '(나)' 가 '·)' 로 보임. 360×560·360×640 에서 오른쪽 가장자리 이름표가 화면 밖으로 잘림, 입장 알림(top 88)이 [테스트](top 70)와 겹침"
 severity: major
+resolution: "06-22 로 해결 — 배포본(699a8b8) world E2E 360x640·390x664 각 21/21, NT3(내 이름표 맨 위·겹친 맨 앞 면 ≥0.9) 통과"
 
 ### 5. 실제 폰 두 대 이상 로비
 expected: 서로의 캐릭터·닉네임이 보이고, 탭한 쪽이 걷는 경로가 다른 폰에서도 같은 경로·속도로 보인다
@@ -61,7 +62,9 @@ blocked: 0
 - gap_id: G-06-4
   truth: "여러 명이 겹쳐도 내 이름표('(나)')는 맨 위에서 전부 읽히고 뒤 이름표가 비치지 않는다. 내 이름표는 걷는 영역 안에서 화면 밖으로 나가지 않는다"
   decision: "사용자 결정(2026-11-01): 내 이름표 맨 위 + 다른 이름표와 겹친 맨 앞 이름표만 면을 불투명에 가깝게(안 겹치면 80% 유지). 다른 사람 이름표는 캐릭터 위 제자리에 두고 가장자리 잘림은 수용. [테스트]와 알림 겹침은 개발용이라 수용"
-  status: failed
+  status: resolved
+  resolved_by: 06-22-PLAN.md
+  resolved_at: 2026-11-01
   reason: "User reported: 06-UI-REVIEW 경고 1·2 — 반투명 이름표 겹침으로 '(나)' 가림, 360폭 가장자리 이름표 잘림, 입장 알림과 [테스트] 겹침"
   severity: major
   test: 4
@@ -83,7 +86,9 @@ blocked: 0
   debug_session: .planning/debug/nametag-overlap-clip.md
 - gap_id: G-06-6
   truth: "배포본에서 연결이 끊기면 재접속 띠가 뜨고 복구 뒤 사라진다"
-  status: failed
+  status: resolved
+  resolved_by: 06-23-PLAN.md
+  resolved_at: 2026-11-01
   reason: "User reported: 배포본 reconnect E2E offline 10회 띠 0회(로컬은 10/10)"
   severity: major
   test: 6
