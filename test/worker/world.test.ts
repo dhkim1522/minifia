@@ -43,16 +43,17 @@ const worldsSince = (sock: TestSocket, from: number): string[] => sock.frames.sl
 const errorsSince = (sock: TestSocket, from: number): string[] => sock.frames.slice(from).filter((f) => parse(f).t === "error");
 
 describe("로비 이동 — 트레이서 (MAP-02, MAP-01)", () => {
-  it("방장 hello 의 프레임 순서는 [state, world.snap] 이고 snap 에 seat 0 이 입장 지점 한 점으로 있다", async () => {
+  it("방장 hello 의 프레임 순서는 [state, world.snap, chatLog] 이고 snap 에 seat 0 이 입장 지점 한 점으로 있다", async () => {
     const { code, token } = await createRoom("방장");
     const host = await connect(code);
     await hello(host, token);
     const snap = (await nextFrame(host, isSnap)) as SnapFrame;
-    const kinds = host.frames.slice(0, 2).map((f) => {
+    await nextFrame(host, (m) => m.t === "chatLog");
+    const kinds = host.frames.slice(0, 3).map((f) => {
       const m = parse(f);
       return m.t === "world" ? `world.${m.k}` : m.t;
     });
-    expect(kinds.join(",")).toBe("state,world.snap");
+    expect(kinds.join(",")).toBe("state,world.snap,chatLog");
     expect(snap.ents.map((e) => e.s).join(",")).toBe("0");
     expect(snap.ents[0]!.p.join(",")).toBe("360,40");
   });
@@ -62,6 +63,7 @@ describe("로비 이동 — 트레이서 (MAP-02, MAP-01)", () => {
     const host = await connect(code);
     await hello(host, token);
     await nextFrame(host, isSnap);
+    await nextFrame(host, (m) => m.t === "chatLog");
     const mk = mark(host);
     await joinOk(code, "손님");
     const state = await nextFrame(host, (m) => m.t === "state" && m.view.players.length === 2);

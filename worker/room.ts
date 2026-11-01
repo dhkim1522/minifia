@@ -4,7 +4,7 @@ import type { ApiErrorCode, BotVoteExec, BotVotePick, ChatRejectWhy, ClientMessa
 import { botWakeAt, isBot, syncBotPlan, takeDueBotSteps } from "../shared/game/bots";
 import type { BotStep } from "../shared/game/bots";
 import { audience, channelOf, phaseKey } from "../shared/game/audience";
-import { appendLine, emptyChatLog, seatMask, toWire } from "../shared/game/chatLog";
+import { CHAT_KEY_PREFIX, appendLine, chatKey, emptyChatLog, replayFor, restoreChatLog, seatMask, toWire } from "../shared/game/chatLog";
 import type { ChatLog } from "../shared/game/chatLog";
 import { checkChatSend, sanitizeChatText, typingRelay } from "../shared/game/chatRules";
 import type { ChatSenderRate, TypingRelayState } from "../shared/game/chatRules";
@@ -57,6 +57,8 @@ function jsonError(error: ApiErrorCode, status: number): Response {
 // 연결당 속도 제한: 1000ms 창에 20개를 넘으면 처리하지 않고 창마다 한 번만 알린다.
 const RATE_WINDOW_MS = 1000;
 const RATE_MAX_MESSAGES = 20;
+// DO storage.delete(keys[]) 의 한 번 최대 키 수.
+const CHAT_DELETE_MAX = 128;
 
 interface RateWindow {
   windowStart: number;
@@ -77,7 +79,8 @@ export class Room extends DurableObject<Env> {
   // 입력 중 중계 기록(사람 id -> 마지막 켜짐 중계). 인메모리라 하이버네이션으로 비면 새로 센다 — 결과는 신호가 한 번 더 중계될 뿐이다(수용, A2).
   // 서버는 입력 중 타이머를 두지 않는다(A1): 만료는 받는 쪽 4.5초와 보내는 쪽 4초 무입력이 맡는다.
   private readonly typingRelays = new Map<string, TypingRelayState>();
-  // 채팅 줄 보관(07-11, 메모리뿐 — 가정 A1): 채널별 seq·수신자 마스크를 appendLine 이 정한다. 저장·재접속 복원은 07-14 가 같은 결과에 쓰기를 더한다.
+  // 채팅 줄 보관(결정 0058): 메모리 사본이다. 채널별 seq·수신자 마스크를 appendLine 이 정하고, 줄 하나가 storage 키 하나(chat:000001…)로 저장된다.
+  // room 키와 분리해 둔다(입장·시작마다 room 이 통째로 다시 쓰이기 때문, world 키와 같은 이유). 생성자가 chat: 키를 모두 읽어 같은 줄·같은 다음 seq 로 되살린다.
   private chatLog: ChatLog = emptyChatLog();
   // 사람(봇 포함)별 최근 전송 기록(D5 도배 제한). 인메모리라 하이버네이션으로 비면 새로 센다(수용) — 제한이 한 번 느슨해질 뿐이다.
   private readonly chatRates = new Map<string, ChatSenderRate>();
@@ -113,6 +116,9 @@ export class Room extends DurableObject<Env> {
           // 옛 messages 키만 지운 경우(결정 0017-7)는 마감이 그대로라 대기 중인 알람을 건드리지 않는다.
           if (normalized.phaseEndsAt !== stored.phaseEndsAt) await ctx.storage.setAlarm(nextWakeAt(this.room));
         }
+        // 보관 줄을 되살린다(MAP-05 와 같은 복원 규칙, 결정 0058-1). 손상 레코드는 restoreChatLog 가 버린다. 방이 없으면 줄도 없다.
+        const lines = await ctx.storage.list({ prefix: CHAT_KEY_PREFIX });
+        this.chatLog = restoreChatLog(lines.values());
       }
     });
   }
@@ -255,7 +261,7 @@ export class Room extends DurableObject<Env> {
         this.handleTyping(ws, msg.on, msg.pk);
         return;
       case "chat":
-        this.handleChat(ws, msg.text, msg.pk);
+        await this.handleChat(ws, msg.text, msg.pk);
         return;
       default: {
         // 새 메시지를 ClientMessage 에 더하고 여기를 빠뜨리면 컴파일이 실패한다 — 조용히 무시되지 않게(Pitfall 15).
@@ -317,6 +323,7 @@ export class Room extends DurableObject<Env> {
       await this.ctx.storage.deleteAll();
       this.room = null;
       this.dropWorld();
+      this.dropChat();
       return;
     }
     this.room = result.state;
@@ -464,7 +471,7 @@ export class Room extends DurableObject<Env> {
     switch (act.t) {
       // 자유 채팅도 사람과 같은 본체를 지난다(특권 없음, 결정 0024): 단계 키는 지금 서버 단계에서 만들고, 거절(phase·D5)은 알릴 소켓이 없어 버린다.
       case "chat":
-        this.applyChat(step.botId, act.text, phaseKey({ phase: room.phase, day: room.day }), Date.now());
+        await this.applyChat(step.botId, act.text, phaseKey({ phase: room.phase, day: room.day }), Date.now());
         return;
       case "pick":
         await this.applyPick(step.botId, act.target);
@@ -523,6 +530,9 @@ export class Room extends DurableObject<Env> {
       return;
     }
     this.room = result.state;
+    // 보관 줄도 모두 지운다(결정 0058-7): 저장소 키 → 메모리 사본·도배 기록·입력 중 기록. 다음 hello 의 chatLog 는 비고 첫 줄은 seq 1 이다.
+    await this.deleteChatKeys([...(await this.ctx.storage.list({ prefix: CHAT_KEY_PREFIX })).keys()]);
+    this.dropChat();
     // 대기실로 돌아오면 모두 자기 입장 지점으로 되돌린다(가정 A1, 11페이즈 다시 하기가 같은 길). state 다음에 모든 소켓이 snap 을 받는다.
     const now = Date.now();
     this.world = respawnAll(this.world, this.room.players, now, BAR_MAP);
@@ -613,6 +623,7 @@ export class Room extends DurableObject<Env> {
       await this.ctx.storage.deleteAll();
       this.room = null;
       this.dropWorld();
+      this.dropChat();
       return;
     }
     // 난수는 여기서만 넣는다 — 아침 판정(03-03)의 동률·문구 추첨
@@ -714,6 +725,9 @@ export class Room extends DurableObject<Env> {
     // state 다음에 이 소켓에만 모두의 지금 위치를 보낸다(로비일 때만 — 게임 중 위치는 나가지 않는다, T-06-16).
     // 클라이언트 epoch 가 첫 state 에서 오르는 규약(WR-03)과 맞는 순서다.
     if (this.room.phase === "lobby") this.sendTo(ws, snapFrame(this.world, this.room.players, Date.now()));
+    // 그다음 이 소켓에만 보관 줄을 한 프레임으로 돌려준다 — 줄이 없어도 빈 배열로 보낸다(D2, 결정 0058-3).
+    // 복원도 보낼 때의 마스크로만 거른다(결정 0058-2): 지금의 역할·생존으로 다시 계산하지 않아 라이브보다 넓어지지 않는다.
+    this.sendTo(ws, { t: "chatLog", lines: replayFor(this.chatLog, player.seat) });
     // 첫 접속이면 만료가 늘었으니 알람도 따라 옮긴다.
     if (this.room.expiresAt !== room.expiresAt || (wasIdle && this.wanderBots().length > 0)) await this.reschedule();
   }
@@ -804,23 +818,24 @@ export class Room extends DurableObject<Env> {
 
   // 자유 채팅(07-11, CHAT-01·02·03·05): 신원은 소켓 첨부 playerId 뿐이고 채널은 서버가 보낸 사람 상태로 정한다(결정 0002).
   // 거절은 보낸 소켓에만 chatReject 로 알리고, phase 거절은 이어서 최신 state 를 한 번 더 보낸다(클라이언트가 서버 단계로 돌아오게, ROADMAP 계획 메모).
-  private handleChat(ws: WebSocket, text: string, pk: string): void {
+  private async handleChat(ws: WebSocket, text: string, pk: string): Promise<void> {
     const att = this.attachmentOf(ws);
     if (!att || !this.room) {
       this.sendTo(ws, { t: "error", code: "BAD_MESSAGE" });
       return;
     }
-    const why = this.applyChat(att.playerId, text, pk, Date.now());
+    const why = await this.applyChat(att.playerId, text, pk, Date.now());
     if (why === null) return;
     this.sendTo(ws, { t: "chatReject", why });
-    if (why === "phase") this.sendTo(ws, { t: "state", view: buildView(this.room, att.playerId, Date.now()) });
+    if (why === "phase" && this.room) this.sendTo(ws, { t: "state", view: buildView(this.room, att.playerId, Date.now()) });
   }
 
-  // 사람과 봇이 같은 본체를 쓴다(특권 없음, 결정 0024). 판정 순서: 단계 키 → 채널 → 정리 → D5 제한 → (받는 사람·마스크 한 번) → 보관 → 전송.
-  // 받는 사람·마스크는 이 지역 변수로만 쓴다 — 한 번 계산하고, (07-14: 저장하고,) 보낸다. 다시 audience 를 부르지 않는다.
+  // 사람과 봇이 같은 본체를 쓴다(특권 없음, 결정 0024). 판정 순서: 단계 키 → 채널 → 정리 → D5 제한 → (받는 사람·마스크 한 번) → 보관 → 저장 → 전송.
+  // 받는 사람·마스크는 이 지역 변수로만 쓴다 — 한 번 계산하고, 저장하고, 보낸다. 다시 audience 를 부르지 않는다.
+  // 쓰기 뒤 전송 — output gate 가 쓰기 완료까지 전송을 붙잡는다. 받는 사람은 await 앞에서 계산한 집합 그대로다(알람이 끼어들어도 같은 집합).
   // 단계 키가 어긋나거나 채널이 없으면 더 넓은 채널로 돌리지 않고 폐기한다 — 거절 이유는 모두 phase 하나라 보낸 사람의 역할이 드러나지 않는다(T-07-24·26).
   // 본문·닉네임을 로그에 남기지 않는다(결정 0058-8).
-  private applyChat(playerId: string, text: string, pk: string, now: number): ChatRejectWhy | null {
+  private async applyChat(playerId: string, text: string, pk: string, now: number): Promise<ChatRejectWhy | null> {
     const room = this.room;
     if (!room) return "phase";
     if (pk !== phaseKey({ phase: room.phase, day: room.day })) return "phase";
@@ -837,8 +852,23 @@ export class Room extends DurableObject<Env> {
     const r = seatMask(room.players, ids);
     const appended = appendLine(this.chatLog, { ch, seat: me.seat, text: clean.text, at: now, n: room.day ?? 0, r });
     this.chatLog = appended.log;
+    // 줄 하나 = 키 하나. 보관 상한을 넘으면 그 채널의 가장 오래된 줄들(appendLine 이 정한 g)의 키를 묶어 지운다.
+    await this.ctx.storage.put(chatKey(appended.record.g), appended.record);
+    if (appended.evicted.length > 0) await this.deleteChatKeys(appended.evicted.map(chatKey));
     this.deliver(ids, { t: "chat", ...toWire(appended.record) });
     return null;
+  }
+
+  // storage.delete(keys[]) 는 한 번에 128개까지다 — 나눠서 지운다(가정 A1).
+  private async deleteChatKeys(keys: readonly string[]): Promise<void> {
+    for (let i = 0; i < keys.length; i += CHAT_DELETE_MAX) await this.ctx.storage.delete(keys.slice(i, i + CHAT_DELETE_MAX));
+  }
+
+  /** 보관 줄의 메모리 사본·도배 기록·입력 중 기록을 비운다(저장소 키는 deleteAll 이나 deleteChatKeys 가 이미 비웠다). */
+  private dropChat(): void {
+    this.chatLog = emptyChatLog();
+    this.chatRates.clear();
+    this.typingRelays.clear();
   }
 
   // ======== 로비 이동 구역(06-08): move 처리 · 전송 · 저장/복원 · 봇 배회 ========
