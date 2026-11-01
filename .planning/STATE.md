@@ -5,16 +5,16 @@ milestone_name: 같은 공간
 current_phase: 06
 current_phase_name: 월드 뼈대
 status: executing
-stopped_at: Completed 06-07-PLAN.md
-last_updated: "2026-11-01T00:08:48.826Z"
+stopped_at: Completed 06-15-PLAN.md
+last_updated: "2026-11-01T00:23:10.208Z"
 last_activity: 2026-11-01
 last_activity_desc: Phase 06 execution started
-state_head: a19ff6edd575df1fa9e47a9abaa97b56da80c591
+state_head: 4159296679e1889ec3a2403fc2b8dcbee45661c8
 progress:
   total_phases: 7
   completed_phases: 0
   total_plans: 21
-  completed_plans: 14
+  completed_plans: 15
   percent: 0
 ---
 
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-10-30)
 ## Current Position
 
 Phase: 06 (월드 뼈대) — EXECUTING
-Plan: 15 of 21
+Plan: 16 of 21
 Status: Ready to execute
 Last activity: 2026-11-01 — Phase 06 execution started
 
@@ -72,6 +72,7 @@ Progress: [░░░░░░░░░░] 0% (0/7 phases)
 | Phase 06 P13 | 13 min | 3 tasks | 10 files |
 | Phase 06 P14 | 18 min | 3 tasks | 15 files |
 | Phase 06 P07 | 3min | 3 tasks | 9 files |
+| Phase 06 P15 | 20 min | 3 tasks | 22 files |
 
 ## Accumulated Context
 
@@ -116,6 +117,10 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 06]: 06-14: 제품 런타임 autoDegrade 기본 true(10초 평균 45fps 미만이면 1~3단계), 스파이크는 false 로 단계 고정
 - [Phase 06]: 06-14: LIGHT_TUNE 은 반구·달빛·노출·하늘색만 올림(talk 1.1π·0.85π·1.25, vote 0.7π·0.55π, vote 무대 점광원 8) — 점광원·emissive·빛 무리는 그대로, 최종 읽힘은 06-19 사람 확인
 - [Phase 06]: 06-07: 배포 대상 이름은 vite define(__WORKER_NAME__)으로 클라이언트에 넘기고 'v2.0 시험판' 표식은 minifia-v2 빌드에서만 보인다; 첫 배포 뒤 v1 health 는 기준선 2026-10-29T14:52:03Z+cb6979c 와 같았다
+- [Phase 06]: 안전 영역(env)을 로비에서 다시 더하지 않는다 — #root 패딩과 .mf-room 높이가 이미 노치를 비켜, 헤더 위 18·패널 아래 22 로 둔다
+- [Phase 06]: 맵 안 가림막이 헤더를 덮지 않게 .mf-lobby > .mf-world 에 자기 쌓임 맥락을 준다 — 맵을 불러오는 동안에도 나갈 수 있다
+- [Phase 06]: 로비 알림 억제는 서버 view 차이에서 온 입장·방장 알림에만 건다 — 내가 누른 일의 답(나가기 실패 문구)은 띠가 떠 있어도 보인다
+- [Phase 06]: EXIT_CURTAIN_MS(420)는 runtime.ts 한 곳에서 WorldStage 가림막과 RoomScreen 단계 전환 지연이 같이 쓴다
 
 ### Pending Todos
 
@@ -152,8 +157,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-01T00:08:48.795Z
-Stopped at: Completed 06-07-PLAN.md
+Last session: 2026-11-01T00:23:10.178Z
+Stopped at: Completed 06-15-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
