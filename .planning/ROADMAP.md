@@ -130,7 +130,59 @@ Plans:
   3. 글자 수나 도배 한도를 넘기면 서버가 막고 보낸 사람에게 알린다. 한글 입력(조합 중 Enter)이 깨지지 않고 iOS 키보드가 채팅창을 가리지 않는다 — iPhone·Android·삼성 인터넷·카카오톡 인앱에서 확인 (CHAT-05)
   4. 순차 직업 주장·빠른 메시지·텍스트 이모티콘이 화면과 서버에서 모두 사라지고, 낮 토론은 자유 채팅으로 진행된다 (CHAT-06)
 
-**Plans**: TBD
+**Plans:** 22 plans (14 waves)
+
+Plans:
+**Wave 1** *(같은 웨이브도 번호 순서로 하나씩 돈다 — use_worktrees false)*
+- [ ] 07-01-PLAN.md — 결정 0058(채팅 서버 보관·재접속 채널별 30줄, 0017-7 개정)·옛 결정 폐기 표시 (W1 첫 작업)
+- [ ] 07-02-PLAN.md — 순수 규칙 audience·chatRules·chatLog + 새 와이어 타입 (TDD, W1)
+- [ ] 07-03-PLAN.md — 화면 부품 ChatPanel(IME 안전 제출)·HeadStack 입력 중·V2Icon·chatUi·chatText (W1)
+- [ ] 07-04-PLAN.md — 화면에서 순차 주장 걷어내기(ClaimPanel·TurnPanel·claimLines·기록 카드) (W1)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+- [ ] 07-05-PLAN.md — ChatStore·useKeyboardLift·동작 라벨 표 (TDD, W2)
+- [ ] 07-06-PLAN.md — 화면에서 변론 칩·236 패널·변론 채팅 줄·이모티콘 걷어내기 (W2)
+
+**Wave 3**
+- [ ] 07-07-PLAN.md — 화면에서 빠른 메시지·이모티콘·말풍선·채팅 로그 부품 걷어내기 (W3)
+
+**Wave 4**
+- [ ] 07-08-PLAN.md — 서버·와이어에서 claim 단계 제거·저장 방 이전·화면 단계 이름 표 (TDD, W4)
+
+**Wave 5**
+- [ ] 07-09-PLAN.md — 와이어에서 claimLog 제거·시험 픽스처 정리 (W5)
+
+**Wave 6**
+- [ ] 07-10-PLAN.md — 서버 트레이서: 입력 중 typing 한 길·deliver(audience)·me.chat·world 전환 (TDD, W6)
+
+**Wave 7**
+- [ ] 07-11-PLAN.md — 서버 자유 채팅 줄·D5 거절·단계 키 폐기·봇 고정 문구·say 제거·연결 훅 (TDD, W7)
+
+**Wave 8**
+- [ ] 07-12-PLAN.md — emoji·무차별 전송·옛 번호 필드 제거 (TDD, W8)
+- [ ] 07-13-PLAN.md — 화면 트레이서: 로비 채팅(RoomScreen ChatStore·useChat·Lobby 패널)·E2E chat-lobby (W8)
+
+**Wave 9**
+- [ ] 07-14-PLAN.md — chat: 보관·hello chatLog 복원·상한·누설 검사 (a)~(d)·정적 가드 (TDD, W9)
+- [ ] 07-15-PLAN.md — 테이블 화면 채팅(토론·변론·밤 마피아·탈락자)·E2E chat-table (W9)
+
+**Wave 10**
+- [ ] 07-16-PLAN.md — smoke·손 봇 자유 채팅·perf-run --mode chatload (W10, 로컬 서버 07-16~07-18 공유)
+- [ ] 07-17-PLAN.md — uat-* 스크립트 자유 채팅 기준 (W10)
+- [ ] 07-18-PLAN.md — 머리 위 "…"(보내기 규칙·로비·테이블 알약)·카메라 가시성 +22 (W10)
+
+**Wave 11**
+- [ ] 07-19-PLAN.md — 키보드·한글 입력(lift·D3·D4·방 높이 고정)·E2E chat-ime·chat-keyboard (W11)
+
+**Wave 12**
+- [ ] 07-20-PLAN.md — E2E 하네스 정리(주장·빠른 메시지 판정 삭제·패널 높이)·갤러리·전체 E2E 초록 (W12)
+
+**Wave 13**
+- [ ] 07-21-PLAN.md — 화면 지도·구조 문서·기기 확인 문서·가드 체인 배포·배포본 확인·iPhone 사람 확인 (W13, 사람 확인)
+
+**Wave 14**
+- [ ] 07-22-PLAN.md — 사람 확인 결과 기록·HANDOFF(D1 이월 포함)·push (W14)
+
 **UI hint**: yes
 **계획 메모**: 연구 권장 — iOS 키보드 + 하단 고정 채팅 + 한글 IME 실기기. 위치·채팅·입력 중이 모두 `audience` 한 함수를 지나게 하고 무차별 `broadcastEvent` 는 지운다. 채널은 서버가 보낸 사람 상태로 정하고 단계 번호가 어긋나면 넓은 채널로 돌리지 말고 폐기한다. 이 표에 동작(이모트) 종류도 같이 정의해 10페이즈가 재사용한다.
 
@@ -220,7 +272,7 @@ Phases execute in numeric order: 6 → 7 → 8 → 9 → 10 → 11 → 12 (소�
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 6. 월드 뼈대 | v2.0 | 23/23 | Complete    | 2026-11-01 |
-| 7. 자유 채팅 | v2.0 | 0/TBD | Not started | - |
+| 7. 자유 채팅 | v2.0 | 0/22 | Planned | - |
 | 8. 낮 처형과 유령 | v2.0 | 0/TBD | Not started | - |
 | 9. 밤과 아침 | v2.0 | 0/TBD | Not started | - |
 | 10. 캐릭터·동작·의상 | v2.0 | 0/TBD | Not started | - |
