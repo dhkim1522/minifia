@@ -5,16 +5,16 @@ milestone_name: 같은 공간
 current_phase: 07
 current_phase_name: 자유 채팅
 status: executing
-stopped_at: Completed 07-11-PLAN.md
-last_updated: "2026-11-01T14:23:38.891Z"
+stopped_at: Completed 07-12-PLAN.md
+last_updated: "2026-11-01T14:32:16.434Z"
 last_activity: 2026-11-01
 last_activity_desc: Phase 07 execution started
-state_head: 6aed28aba2c16ca25575a75d9dcdbbaefd20615b
+state_head: 232df7064e422f56695273f8c34af6b39b3840fd
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 45
-  completed_plans: 34
+  completed_plans: 35
   percent: 14
 ---
 
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-11-01)
 ## Current Position
 
 Phase: 07 (자유 채팅) — EXECUTING
-Plan: 12 of 22
+Plan: 13 of 22
 Status: Ready to execute
 Last activity: 2026-11-01 — Phase 07 execution started
 
@@ -92,6 +92,7 @@ Progress: [█░░░░░░░░░] 14% (1/7 phases)
 | Phase 07 P09 | 5 min | 2 tasks | 29 files |
 | Phase 07 P10 | 9 min | 3 tasks | 13 files |
 | Phase 07 P11 | 24 min | 3 tasks | 20 files |
+| Phase 07 P12 | 10 min | 3 tasks | 27 files |
 
 ## Accumulated Context
 
@@ -170,6 +171,7 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 07]: 07-10: view.me.chat 은 channelOf 값을 본인에게만 싣고 말할 수 없으면 키가 없다. 누설 검사의 me.chat=mafia 허용은 그 밤의 산 마피아 본인 조건으로만 한다
 - [Phase 07]: 07-11: applyChat 하나를 사람(handleChat)과 봇(actAsBot)이 공유하고, 채팅 줄·전송 기록은 07-14 까지 DO 메모리뿐(A1)
 - [Phase 07]: 07-11: chat.ts 는 emote 만 남기고 빠른 메시지(say)·템플릿을 서버·와이어에서 제거, 봇 낮 토론 난수 순서는 지연 폭 -> 문구 8 (시드 재고정)
+- [Phase 07]: 07-12: 밤 수신자 의미는 audience.ts mafia 행 하나로만 남기고 nightChatRecipientIds·broadcastEvent 계열을 지워 이벤트 전송을 deliver 한 길로 모았다
 
 ### Pending Todos
 
@@ -206,8 +208,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-01T14:23:38.700Z
-Stopped at: Completed 07-11-PLAN.md
+Last session: 2026-11-01T14:32:16.234Z
+Stopped at: Completed 07-12-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
