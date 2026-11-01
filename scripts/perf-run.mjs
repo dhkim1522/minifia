@@ -16,6 +16,12 @@
 //              [방 만들기] → 닉네임 [만들기] → 입장(room-enter) → 맵 조작 가능(map-interactive) 까지의 ms, 걸을 수 있는 점을 누른 뒤 링(data-ring)·
 //              내 캐릭터 출발(sample 이 움직임)까지의 ms 를 --runs 번(기본 3) 재서 중앙값과 함께 저장한다. 방은 끝에 나가서 지운다.
 //   --runs     interactive 반복 횟수(기본 3)
+//   --mode chatload (07-16, UI-SPEC 로비 성능 확인 항목·리서치 A13): 제품 로비(`${origin}/?e2e=1`)를 CPU 감속 아래 열고 소켓 봇 N명(--bots, 기본 7)이
+//              2초마다 입력 중 켜짐 → chat → 꺼짐을 보내는 동안 --minutes(기본 5) 동안 페이지 안 rAF 간격을 재 평균 fps·끊김(50ms 초과) 수·p50/p95/p99/최장 프레임을
+//              결과 JSON 으로 저장한다(`chatload-{크기}-x{감속}.json`, 기본 폴더 .planning/phases/07-free-chat/perf/). 6페이즈 기준(5분 평균 55fps, 끊김 5회 이하)을
+//              같은 JSON 의 baseline 칸에 적을 뿐 판정하지 않는다. 제품 코드는 바뀌지 않고, 제품 런타임의 자동 강등(10초 평균 45fps 미만)은 켜진 그대로다(가정 A2).
+//              방은 끝에 나가서 지운다. v1.0 주소는 어떤 요청보다 먼저 거부한다.
+//   --bots     chatload 소켓 봇 수(0~7, 기본 7). 0 이면 채팅 부하 없는 대조 측정이다(같은 환경에서 채팅 때문인지 가르는 용도, --file 로 이름을 달리한다)
 // 종료 코드: 0 = 결과 저장, 1 = 인자·주소·Chrome·시간 초과·페이지 오류.
 // 가정(A1): 헤드리스 시스템 Chrome 의 CPU 4배 스로틀은 DevTools 와 같은 메커니즘이다. 헤드리스 여부·Chrome 버전은 결과 JSON 의 runner 에 적는다.
 // 결과를 서버로 보내지 않는다. 대상 주소에 보내는 요청은 페이지 자신의 에셋 요청뿐이다.
@@ -25,10 +31,12 @@ import { fileURLToPath } from "node:url";
 import { chromium } from "playwright-core";
 import { exitIfV1, expectedOrigin } from "./deploy-target.mjs";
 import { FONT_HOSTS, findChrome, parseBarMask, pickTapTargets, walkableCenters } from "./e2e/lib.mjs";
-import { hitsInputSurface, leaveLobby, readWorld, screensOfWorld, waitWorldReady } from "./e2e/browser.mjs";
+import { hitsInputSurface, leaveLobby, readChatLines, readWorld, screensOfWorld, sleep, waitWorldReady } from "./e2e/browser.mjs";
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const DEFAULT_OUT = join(REPO, ".planning/phases/06-world-skeleton/perf");
+/** chatload 의 기본 저장 폴더(7페이즈) */
+const CHATLOAD_OUT = join(REPO, ".planning/phases/07-free-chat/perf");
 /** 결과 카드가 뜬 뒤 스크린샷 전에 잠깐 기다린다(ms) */
 const CARD_SETTLE_MS = 400;
 /** 측정 시간 말고 더 기다려 주는 여유(ms): 모듈 받기·맵 만들기·CPU 감속으로 늘어난 시간 */
@@ -49,15 +57,27 @@ const TAP_WAIT_MS = 5_000;
 /** interactive: 출발로 치는 최소 이동(월드 단위) */
 const MOVE_EPS = 0.02;
 const INTERACTIVE_NICK = "측정기";
+/** chatload: 봇마다 채팅 간격(ms) — "2초마다 채팅·입력 중" */
+const CHATLOAD_EVERY_MS = 2_000;
+/** chatload: 입력 중 켜짐 → chat 사이(ms). 한 줄을 치는 시간을 흉내 낸다 */
+const CHATLOAD_TYPING_LEAD_MS = 300;
+/** chatload: 끊김으로 세는 프레임 간격(ms) — 06 spike 와 같은 50ms */
+const JANK_MS = 50;
+/** chatload: 봇 닉네임(자소 8 이하) */
+const CHATLOAD_NICKS = ["측정봇가", "측정봇나", "측정봇다", "측정봇라", "측정봇마", "측정봇바", "측정봇사"];
+/** chatload: 고정 문구 12개 — shared/game/bots.ts 의 BOT_CHAT_LINES 와 같은 말투. 봇마다 다른 자리에서 돌려 같은 문장 3초 규칙에 걸리지 않게 한다 */
+const CHATLOAD_LINES = ["저 아니에요", "누가 수상해요?", "조용한 사람이 수상해요", "어제 그 말 이상했어요", "믿어 주세요", "투표 신중하게 해요", "다들 뭐 했어요?", "저는 시민 같아요", "여기 처음이에요", "몇 명이 올까요?", "빨리 시작해요", "방이 아늑하네요"];
+/** 6페이즈 합격 기준(06-PERF-RESULTS.md 조건 B, UI-SPEC "합격 기준"). 숫자를 낮추지 않고 그대로 적는다 */
+const CHATLOAD_BASELINE = { avgFps: 55, jankMax: 5, perMinutes: 5, jankMs: JANK_MS, source: "06-PERF-RESULTS.md 조건 B · UI-SPEC 합격 기준 — 5분 평균 ≥ 55fps, 끊김(>50ms) ≤ 5회/5분" };
 
 const USAGE =
-  "사용법: node scripts/perf-run.mjs [--mode perf|interactive] [--url 주소] [--scene talk|vote] [--minutes 5] [--dpr 2] [--throttle 4] [--size 390x844] [--out 폴더] [--headed] [--budget 0] [--seed 1] [--runs 3] [--shot [--file 이름]]";
+  "사용법: node scripts/perf-run.mjs [--mode perf|interactive|chatload] [--url 주소] [--scene talk|vote] [--minutes 5] [--dpr 2] [--throttle 4] [--size 390x844] [--out 폴더] [--headed] [--budget 0] [--seed 1] [--runs 3] [--bots 7] [--shot [--file 이름]]";
 
 class UsageError extends Error {}
 
 /** 인자 해석(순수). 값이 필요한 옵션에 값이 없거나 숫자가 아니면 UsageError */
 export function parseArgs(argv) {
-  const o = { url: null, scene: "talk", minutes: 5, dpr: 2, throttle: 4, size: { w: 390, h: 844 }, out: DEFAULT_OUT, headed: false, budget: 0, seed: 1, shot: false, file: null, mode: "perf", runs: 3 };
+  const o = { url: null, scene: "talk", minutes: 5, dpr: 2, throttle: 4, size: { w: 390, h: 844 }, out: DEFAULT_OUT, headed: false, budget: 0, seed: 1, shot: false, file: null, mode: "perf", runs: 3, bots: 7, outGiven: false };
   const need = (name, i) => {
     const v = argv[i + 1];
     if (v === undefined || v.startsWith("--")) throw new UsageError(`${name} 에 값이 필요합니다`);
@@ -91,18 +111,21 @@ export function parseArgs(argv) {
       }
       case "--mode": {
         const v = need(a, i++);
-        if (v !== "perf" && v !== "interactive") throw new UsageError(`--mode 는 perf 또는 interactive: ${v}`);
+        if (v !== "perf" && v !== "interactive" && v !== "chatload") throw new UsageError(`--mode 는 perf, interactive 또는 chatload: ${v}`);
         o.mode = v;
         break;
       }
       case "--runs": o.runs = Math.floor(num(a, need(a, i++), { min: 1, max: 20 })); break;
-      case "--out": o.out = resolve(need(a, i++)); break;
+      case "--bots": o.bots = Math.floor(num(a, need(a, i++), { min: 0, max: CHATLOAD_NICKS.length })); break;
+      case "--out": o.out = resolve(need(a, i++)); o.outGiven = true; break;
       case "--file": o.file = need(a, i++); break;
       case "--headed": o.headed = true; break;
       case "--shot": o.shot = true; break;
       default: throw new UsageError(`알 수 없는 옵션: ${a}`);
     }
   }
+  // chatload 는 --out 이 없으면 7페이즈 폴더에 저장한다(06 폴더는 06 결과의 것이다)
+  if (o.mode === "chatload" && !o.outGiven) o.out = CHATLOAD_OUT;
   return o;
 }
 
@@ -110,6 +133,7 @@ export function parseArgs(argv) {
 export function outputBase(o) {
   if (o.file) return o.file;
   if (o.mode === "interactive") return `interactive-dpr${o.dpr}-x${o.throttle}`;
+  if (o.mode === "chatload") return `chatload-${o.size.w}x${o.size.h}-x${o.throttle}`;
   const base = `desktop-${o.scene}-dpr${o.dpr}-x${o.throttle}`;
   return o.shot ? `shot-${base}` : base;
 }
@@ -302,6 +326,269 @@ async function runInteractive(browser, o, origin, chrome) {
   return runs.length === o.runs ? 0 : 1;
 }
 
+/** 프레임 간격(ms) 배열 → 평균 fps·끊김·백분위. 06 spike 의 frames 칸과 같은 이름을 쓴다(순수). 비어 있으면 null */
+export function frameStats(gaps, jankMs = JANK_MS) {
+  const n = gaps.length;
+  if (n === 0) return null;
+  const sorted = [...gaps].sort((a, b) => a - b);
+  const pct = (p) => sorted[Math.min(n - 1, Math.max(0, Math.ceil(p * n) - 1))];
+  const seconds = gaps.reduce((a, b) => a + b, 0) / 1000;
+  const fpsOf = (arr) => {
+    const sec = arr.reduce((a, b) => a + b, 0) / 1000;
+    return sec > 0 ? arr.length / sec : null;
+  };
+  // 첫 1분 → 끝 1분: 2분 이상 잰 실행에서만 열·감속 저하 신호로 쓴다
+  let first = null;
+  let last = null;
+  if (seconds >= 120) {
+    let acc = 0;
+    let cut = 0;
+    for (; cut < n && acc < 60_000; cut++) acc += gaps[cut];
+    first = fpsOf(gaps.slice(0, cut));
+    acc = 0;
+    let from = n;
+    while (from > 0 && acc < 60_000) acc += gaps[--from];
+    last = fpsOf(gaps.slice(from));
+  }
+  return {
+    count: n,
+    seconds,
+    avgFps: n / seconds,
+    jank: gaps.filter((g) => g > jankMs).length,
+    jankMs,
+    p50: pct(0.5),
+    p95: pct(0.95),
+    p99: pct(0.99),
+    max: sorted[n - 1],
+    rafHz: Math.round(1000 / pct(0.5)),
+    firstMinuteFps: first,
+    lastMinuteFps: last,
+    thermalRatio: first && last ? last / first : null,
+  };
+}
+
+/** chatload: 손님 한 명을 HTTP 로 참가시키고 소켓을 연다(hello → 첫 state). 토큰은 이 함수 밖으로 나가지 않는다 */
+async function openChatGuest(origin, code, nickname) {
+  const res = await fetch(`${origin}/api/rooms/${code}/join`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ nickname }) });
+  const data = await res.json().catch(() => null);
+  if ((res.status !== 200 && res.status !== 201) || typeof data?.token !== "string") throw new Error(`손님 참가 응답 ${res.status}`);
+  const guest = { nickname, seat: data.seat, ws: null, view: null, chats: 0, typings: 0, rejects: {} };
+  const wsUrl = `${origin.replace(/^http/, "ws")}/api/rooms/${code}/ws`;
+  await new Promise((resolve, reject) => {
+    const ws = new WebSocket(wsUrl);
+    guest.ws = ws;
+    const timer = setTimeout(() => reject(new Error("손님 소켓 첫 state 시간 초과")), INTERACTIVE_STEP_MS);
+    ws.addEventListener("open", () => ws.send(JSON.stringify({ t: "hello", token: data.token })));
+    ws.addEventListener("message", (ev) => {
+      let m;
+      try {
+        m = JSON.parse(String(ev.data));
+      } catch {
+        return;
+      }
+      if (m.t === "ping") ws.send(JSON.stringify({ t: "pong", c: m.c }));
+      else if (m.t === "state") {
+        guest.view = m.view;
+        clearTimeout(timer);
+        resolve();
+      } else if (m.t === "chatReject") guest.rejects[m.why] = (guest.rejects[m.why] ?? 0) + 1;
+    });
+    ws.addEventListener("error", () => reject(new Error("손님 소켓 연결 오류")));
+    ws.addEventListener("close", () => reject(new Error("손님 소켓이 첫 state 전에 닫힘")));
+  });
+  return guest;
+}
+
+/** chatload 한 번: 제품 로비에 입장 → 손님 봇 접속 → 채팅 부하 속에서 rAF 간격 기록 → 방을 나가 지운다. 실패는 던진다 */
+async function chatloadOnce(browser, o, origin, chrome) {
+  const context = await browser.newContext({ viewport: { width: o.size.w, height: o.size.h }, deviceScaleFactor: o.dpr, isMobile: true, hasTouch: true, locale: "ko-KR" });
+  const issues = [];
+  const guests = [];
+  const timers = [];
+  let page = null;
+  try {
+    await context.route("**/*", (route) => {
+      let u;
+      try {
+        u = new URL(route.request().url());
+      } catch {
+        return route.continue();
+      }
+      if (u.origin === origin || FONT_HOSTS.includes(u.hostname)) return route.continue();
+      issues.push(`대상 밖 요청 막음: ${u.origin}`);
+      return route.abort();
+    });
+    await context.addInitScript((key) => {
+      try {
+        window.sessionStorage.setItem(key, "1");
+      } catch {
+        /* 저장소가 막힌 환경은 훅이 꺼진 채로 둔다 — 아래 대기가 시간 초과로 실패한다 */
+      }
+    }, "minifia:e2e");
+    page = await context.newPage();
+    page.setDefaultTimeout(INTERACTIVE_STEP_MS);
+    page.on("pageerror", (e) => issues.push(`페이지 오류: ${e.message}`));
+    page.on("crash", () => issues.push("페이지 충돌(crash)"));
+    page.on("console", (m) => {
+      if (m.type() === "error") issues.push(`콘솔 오류: ${m.text().slice(0, 200)}`);
+    });
+    const cdp = await context.newCDPSession(page);
+    await cdp.send("Emulation.setDeviceMetricsOverride", { width: o.size.w, height: o.size.h, deviceScaleFactor: o.dpr, mobile: true });
+    await cdp.send("Emulation.setCPUThrottlingRate", { rate: o.throttle });
+
+    await page.goto(`${origin}/?e2e=1`, { waitUntil: "load" });
+    await page.getByRole("button", { name: "방 만들기" }).first().click();
+    await page.locator(".mf-nick-sheet input").fill(INTERACTIVE_NICK);
+    await page.getByRole("button", { name: "만들기", exact: true }).click();
+    await page.waitForFunction(() => window.__mfWorld?.interactiveMs?.() != null, null, { timeout: INTERACTIVE_STEP_MS, polling: 50 });
+    const code = /\/r\/(\d{4})/.exec(new URL(page.url()).pathname)?.[1];
+    if (!code) throw new Error("방 코드를 주소에서 읽지 못함");
+    await waitWorldReady(page, 1);
+
+    // 손님 봇 접속 → 방에 사람이 늘어난 로비가 다 그려질 때까지 기다린다(이 구간은 측정에 넣지 않는다)
+    for (let i = 0; i < o.bots; i++) guests.push(await openChatGuest(origin, code, CHATLOAD_NICKS[i]));
+    await waitWorldReady(page, 1 + o.bots);
+    await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+    await page.waitForTimeout(500);
+
+    // 부하: 봇마다 2초 간격으로 입력 중 켜짐 → 300ms 뒤 chat → 꺼짐. 봇들이 한꺼번에 보내지 않게 간격 안에서 흩뜨린다
+    let lineIdx = 0;
+    guests.forEach((g, i) => {
+      const send = (m) => g.ws.readyState === WebSocket.OPEN && g.ws.send(JSON.stringify(m));
+      const pk = () => `${g.view?.day?.n ?? 0}:${g.view?.phase}`;
+      const tick = () => {
+        if (g.view?.phase !== "lobby") return;
+        send({ t: "typing", on: true, pk: pk() });
+        g.typings += 1;
+        timers.push(
+          setTimeout(() => {
+            send({ t: "chat", text: CHATLOAD_LINES[(lineIdx++ + i * 3) % CHATLOAD_LINES.length], pk: pk() });
+            send({ t: "typing", on: false, pk: pk() });
+            g.chats += 1;
+          }, CHATLOAD_TYPING_LEAD_MS),
+        );
+      };
+      timers.push(
+        setTimeout(() => {
+          tick();
+          timers.push(setInterval(tick, CHATLOAD_EVERY_MS));
+        }, (CHATLOAD_EVERY_MS / guests.length) * i),
+      );
+    });
+
+    // rAF 간격 기록기(제품 코드 변경 없음, 가정 A2). 기록은 페이지 안 배열이고 끝에 한 번에 가져온다
+    const cap = Math.ceil(o.minutes * 60 * 240) + 2000;
+    const renderBefore = await page.evaluate(() => window.__mfWorld?.debug?.info?.() ?? null);
+    const startedAt = new Date().toISOString();
+    await page.evaluate((capacity) => {
+      const gaps = new Float64Array(capacity);
+      const rec = { n: 0, stopped: false, prev: null };
+      const loop = (t) => {
+        if (rec.stopped) return;
+        if (rec.prev !== null && rec.n < capacity) gaps[rec.n++] = t - rec.prev;
+        rec.prev = t;
+        requestAnimationFrame(loop);
+      };
+      window.__chatloadFps = { rec, gaps };
+      requestAnimationFrame(loop);
+    }, cap);
+    const linesAt = async () => (await readChatLines(page))?.length ?? null;
+    const midpoint = [];
+    const totalMs = o.minutes * 60_000;
+    const sampleEvery = Math.max(10_000, Math.floor(totalMs / 6));
+    for (let waited = 0; waited < totalMs; waited += sampleEvery) {
+      await sleep(Math.min(sampleEvery, totalMs - waited));
+      midpoint.push({ atMs: Math.min(waited + sampleEvery, totalMs), logLines: await linesAt() });
+    }
+    const gaps = await page.evaluate(() => {
+      const f = window.__chatloadFps;
+      f.rec.stopped = true;
+      return Array.from(f.gaps.subarray(0, f.rec.n));
+    });
+    const renderAfter = await page.evaluate(() => window.__mfWorld?.debug?.info?.() ?? null);
+    const logLines = await linesAt();
+    const endedAt = new Date().toISOString();
+
+    for (const t of timers) {
+      clearTimeout(t);
+      clearInterval(t);
+    }
+    const stats = frameStats(gaps);
+    if (!stats) throw new Error("rAF 간격이 하나도 기록되지 않음");
+    const rejects = {};
+    for (const g of guests) for (const [why, n] of Object.entries(g.rejects)) rejects[why] = (rejects[why] ?? 0) + n;
+    const png = join(o.out, `${outputBase(o)}.png`);
+    await page.screenshot({ path: png });
+    await leaveLobby(page);
+    return {
+      runner: {
+        tool: "scripts/perf-run.mjs --mode chatload",
+        throttle: o.throttle,
+        dpr: o.dpr,
+        size: `${o.size.w}x${o.size.h}`,
+        headless: !o.headed,
+        chrome: browser.version(),
+        platform: `${process.platform}/${process.arch}`,
+        node: process.version,
+        url: `${origin}/?e2e=1`,
+        chromeBinary: chrome,
+      },
+      schema: "chatload-1",
+      startedAt,
+      endedAt,
+      params: { minutes: o.minutes, bots: o.bots, chatEveryMs: CHATLOAD_EVERY_MS, typingLeadMs: CHATLOAD_TYPING_LEAD_MS },
+      frames: { ...stats, jankPer5min: (stats.jank * 300) / stats.seconds },
+      baseline: CHATLOAD_BASELINE,
+      load: {
+        botsConnected: guests.length,
+        chatsSent: guests.reduce((a, g) => a + g.chats, 0),
+        typingOnSent: guests.reduce((a, g) => a + g.typings, 0),
+        chatRejects: rejects,
+        pageLogLines: logLines,
+        pageLogLinesSamples: midpoint,
+        pageLogKeepLines: 100,
+      },
+      renderer: { before: renderBefore, after: renderAfter, note: "제품 런타임의 자동 강등(10초 평균 45fps 미만) 단계는 테스트 훅이 주지 않는다. calls·triangles 가 처음보다 크게 줄었으면 강등 의심" },
+      screenshot: png,
+      issues: [...new Set(issues)].slice(0, 8),
+    };
+  } finally {
+    for (const t of timers) {
+      clearTimeout(t);
+      clearInterval(t);
+    }
+    for (const g of guests) {
+      try {
+        g.ws?.send(JSON.stringify({ t: "leave" }));
+        g.ws?.close();
+      } catch {
+        /* 이미 닫힘 */
+      }
+    }
+    await context.close().catch(() => {});
+  }
+}
+
+async function runChatload(browser, o, origin, chrome) {
+  let result;
+  try {
+    result = await chatloadOnce(browser, o, origin, chrome);
+  } catch (e) {
+    console.error(`측정 실패: ${e instanceof Error ? e.message.split("\n")[0] : String(e)}`);
+    return 1;
+  }
+  const json = join(o.out, `${outputBase(o)}.json`);
+  writeFileSync(json, `${JSON.stringify(result, null, 2)}\n`);
+  const f = result.frames;
+  console.log(`결과 저장: ${json}`);
+  console.log(`스크린샷: ${result.screenshot}`);
+  console.log(`평균 ${f.avgFps.toFixed(1)}fps · 끊김(>${f.jankMs}ms) ${f.jank} · p50 ${f.p50.toFixed(1)}ms · p95 ${f.p95.toFixed(1)}ms · 최장 ${f.max.toFixed(1)}ms · rAF ${f.rafHz}Hz (${f.seconds.toFixed(0)}초, ${f.count}프레임)`);
+  console.log(`채팅 부하: 봇 ${result.load.botsConnected}명 · chat ${result.load.chatsSent}줄 · 입력 중 ${result.load.typingOnSent}회 · 막힘 ${JSON.stringify(result.load.chatRejects)} · 기록 칸 ${result.load.pageLogLines}줄(보관 ${result.load.pageLogKeepLines})`);
+  console.log(`기준(06 조건 B, 판정 없음): 평균 ≥ ${CHATLOAD_BASELINE.avgFps}fps · 끊김 ≤ ${CHATLOAD_BASELINE.jankMax}회/${CHATLOAD_BASELINE.perMinutes}분`);
+  if (result.issues.length > 0) console.error(`페이지 신호 ${result.issues.length}건:\n${result.issues.join("\n")}`);
+  return 0;
+}
+
 async function main() {
   let o;
   try {
@@ -336,6 +623,15 @@ async function main() {
   const base = outputBase(o);
   const url = targetUrl(o, origin);
   const browser = await chromium.launch({ executablePath: chrome, headless: !o.headed });
+  if (o.mode === "chatload") {
+    let c = 1;
+    try {
+      c = await runChatload(browser, o, origin, chrome);
+    } finally {
+      await browser.close().catch(() => {});
+    }
+    process.exit(c);
+  }
   if (o.mode === "interactive") {
     let c = 1;
     try {
