@@ -1,9 +1,13 @@
 // 스모크: 배포(또는 로컬) 주소에서 방 만들기 → WebSocket hello → 대기실 상태까지 확인한다.
-// full 단계는 한 판 시작부터 낮 한 바퀴(낮 시작 발표 → 직업 주장 차례 한 바퀴(한 명 8초, 결정 0023·0027) → 낮 토론 40초, 결정 0039)
+// full 단계는 한 판 시작부터 낮 한 바퀴(로비 채팅 한 줄 → 낮 시작 발표 → 낮 토론 40초(자유 채팅, 결정 0058), 결정 0039)
 // → 처형 여부 투표 13초(결정 0036·0039: 클라이언트 다수가 반대해 미통과 경로를 탄다 — 집계 동일·남의 표 비공개·처형 무효 이유 확인)
-// → 밤 30초(역할별 행동·마피아 채팅) → 아침 5초(탈락 발표) → 서버 타이머로 2일차 낮 시작 발표까지 돈다.
+// → 밤 30초(역할별 행동·마피아 채널 채팅) → 아침 5초(탈락 발표·탈락자 채널 채팅) → 서버 타이머로 2일차 낮 시작 발표까지 돈다.
+// 자유 채팅 규칙(CHAT-01·02·03·05·06): 낮 토론의 산 사람 줄은 모두에게 ch all 로 seq 틈 없이 가고 보낸 사람에게도 돌아온다.
+// 600ms 안 두 번째 전송은 보낸 클라이언트에만 chatReject{rate} 가 가고 다른 클라이언트에는 아무것도 가지 않는다.
+// 밤 마피아 줄·입력 중은 마피아에게만 가고 시민 편 클라이언트는 chat·typing 프레임이 0건이다. 탈락자 줄은 탈락자에게만 간다.
+// 재접속한 클라이언트는 hello 직후 chatLog 로 자기가 받을 수 있던 줄만 돌려받는다. 순차 직업 주장 단계는 없다(7페이즈, CHAT-06).
 // 후보 선택·변론·처형·종료 경로는 uat-vote.mjs 가 돈다. 탈락한 클라이언트는 그 아침부터 관전 정보(spectate)를 받는다(결정 0021).
-// 방장 연장·넘기기는 없다(결정 0017-5). 빠른 메시지는 state 가 아니라 chat 프레임으로 온다(결정 0017-7).
+// 방장 연장·넘기기는 없다(결정 0017-5).
 // Node 22.12+ 내장 fetch·전역 WebSocket 만 쓴다. 셸 명령·외부 패키지 없음 (Windows 에서도 같은 명령).
 //
 // 사용법:
@@ -12,14 +16,14 @@
 //   옵션: --stage create (기본값) | full | --print-version
 //         --players N (full 단계 인원, 4~8, 기본 5)
 //         --previous-version V (full 단계: /api/health 의 version 이 V 와 같으면 실패 — 재배포 확인)
-// 토큰 값은 어떤 출력에도 찍지 않는다.
+// 토큰 값은 어떤 출력에도 찍지 않는다. 채팅 본문도 출력하지 않는다.
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { exitIfV1 } from "./deploy-target.mjs";
 
 const TOTAL_LIMIT_MS = 30_000;
 const STATE_LIMIT_MS = 10_000;
-const FULL_TOTAL_LIMIT_MS = 480_000; // 시작 → 2일차 dayAnnounce 약 150초(토론 40초·여부 투표 13초 포함) + 여유 (claim 은 최대 인원 × 8초)
+const FULL_TOTAL_LIMIT_MS = 480_000; // 시작 → 2일차 dayAnnounce 약 150초(토론 40초·여부 투표 13초 포함) + 여유
 // 낮 토론 길이(shared/game/phases.ts DISCUSSION_MS 와 같은 값, 결정 0039). 스크립트는 TS 를 import 하지 않는다.
 const DISCUSSION_MS = 40_000;
 // 토론 40초 + 여유: 넘기기 없이 서버 타이머가 낮을 넘기는 것을 기다린다.
@@ -32,8 +36,15 @@ const MORNING_PHRASE_COUNT = 7;
 // 밤 30초, 아침 5초 + 여유
 const NIGHT_WAIT_MS = 30_000 + STATE_LIMIT_MS;
 const MORNING_WAIT_MS = 5_000 + STATE_LIMIT_MS;
-const CHAT_FRAME_KEYS = ["at", "seat", "seq", "t", "target", "template"];
-const CHAT_ALLOWED_KEYS = new Set(["t", "seq", "seat", "template", "target", "claimedRole", "at"]);
+// 자유 채팅 와이어(shared/protocol.ts ChatLineWire·TypingFrame·ChatLogFrame·ChatRejectFrame): 이 키 밖은 어떤 프레임에도 없다(CHAT-06).
+// 채널 필드는 서버 → 클라이언트에만 있고(ch), id·역할·토큰·수신자 마스크는 싣지 않는다(결정 0002·0058).
+const CHAT_LINE_KEYS = ["at", "ch", "seat", "seq", "t", "text"];
+const CHAT_LOG_KEYS = ["lines", "t"];
+const CHAT_LOG_LINE_KEYS = ["at", "ch", "seat", "seq", "text"];
+const TYPING_KEYS = ["on", "seat", "t"];
+const CHAT_REJECT_KEYS = ["t", "why"];
+// D5(shared/game/chatRules.ts)의 최소 전송 간격 600ms. 스크립트는 TS 를 import 하지 않는다.
+const CHAT_MIN_GAP_MS = 600;
 const ALLOWED_PLAYER_KEYS = ["alive", "connected", "isHost", "nickname", "seat"];
 const PREVIEW_PLAYER_KEYS = ["nickname", "seat"];
 const DAY_SPREAD_LIMIT_MS = 500;
@@ -52,8 +63,7 @@ const PHASE_NEXT = {
   lobby: ["assigning"],
   assigning: ["roleReveal"],
   roleReveal: ["dayAnnounce"],
-  dayAnnounce: ["claim"],
-  claim: ["discussion"],
+  dayAnnounce: ["discussion"],
   discussion: ["execVote"],
   execVote: ["candidateVote", "night"],
   candidateVote: ["candidateVoteReveal"],
@@ -64,22 +74,19 @@ const PHASE_NEXT = {
   morning: ["dayAnnounce", "ended"],
   ended: [],
 };
-const DAY_PHASES = ["dayAnnounce", "claim", "discussion", "execVote", "candidateVote", "candidateVoteReveal", "defense", "execution", "night", "morning", "ended"];
+const DAY_PHASES = ["dayAnnounce", "discussion", "execVote", "candidateVote", "candidateVoteReveal", "defense", "execution", "night", "morning", "ended"];
 const ROLE_IDS = ["mafia", "police", "doctor", "citizen"];
-// 주장 값으로 쓰일 수 있는 문자열(직업 + 말 안 함). 허용 경로 밖에 나오면 안 된다.
-const CLAIM_STRINGS = new Set([...ROLE_IDS, "none"]);
-// 역할·주장 문자열이 나와도 되는 경로(배열 칸은 [] 로 줄여 비교한다, 결정 0027-6).
-// 차례가 끝나기 전에는 day.claimLog 에 그 차례 줄이 없으므로 고른 값은 어느 프레임에도 이 경로로 새지 않는다.
+// 직업 이름 문자열이 나와도 되는 경로(배열 칸은 [] 로 줄여 비교한다). 채널 이름 mafia 가 든 ch·me.chat 은 채널 검사가 따로 본다.
 // 탈락자의 view.spectate.seats[].job 은 탈락 뒤 프레임에서만 따로 허용한다.
-const ALLOWED_CLAIM_STRING_PATHS = new Set(["view.me.role", "view.day.roles[]", "view.day.claimLog[].claim"]);
-// 서버 전용 상태 키(결정 0027-3): 어떤 프레임에도 이름이 나오면 안 된다. claims 와 옛 완료 표시 키는 삭제된 옛 키다.
+const ALLOWED_ROLE_STRING_PATHS = new Set(["view.me.role", "view.day.roles[]", "ch", "lines[].ch", "view.me.chat"]);
+// 서버 전용 상태 키(결정 0027-3): 어떤 프레임에도 이름이 나오면 안 된다. 옛 직업 주장 키(claim*·turn·claimLog)는 7페이즈에서 없어졌으니 다시 나오면 회귀다.
 // 옛 이름이 scripts 에 문자열로 남지 않았는지 grep 으로 확인하므로 옛 완료 표시 키는 조각으로 잇는다.
 // 4페이즈 서버 전용 키(결정 0036-12): 개인 투표·판정·밤 기록·직전 처형 문구. winner·execution 은 같은 이름의 view 키(result.winner·day.execution)가 있어 넣지 않는다.
-const SERVER_ONLY_KEYS = ["claimPick", "claimOrder", "claimIdx", "claimStart", "claim" + "Done", "claims", "execVote", "candidateVote", "verdict", "nightLog", "lastExecPhrase"];
-// 직업 주장 차례 하나의 길이(shared/game/phases.ts CLAIM_TURN_MS)
-const CLAIM_TURN_MS = 8_000;
+// 7페이즈: 채팅 도배 기록·입력 중 중계 기록·줄 저장 레코드의 마스크(r)·쓰기 순번(g)은 서버 안에만 있다.
+const SERVER_ONLY_KEYS = ["claimPick", "claimOrder", "claimIdx", "claimStart", "claim" + "Done", "claims", "claimLog", "turn", "execVote", "candidateVote", "verdict", "nightLog", "lastExecPhrase", "chatRates", "typingRelays", "nextSeq"];
 // 역할별 일지 줄의 키 집합(결정 0027-11)
 const RECORD_KEYS = { police: "isMafia,n,target", mafia: "died,n,target", doctor: "n,target" };
+// 거절된 줄의 본문 표식: 어느 클라이언트의 어떤 프레임에도 되돌아오면 안 된다(COMM-04).
 const REJECT_MARKER = "SMOKE_REJECT_MARKER_7f3a";
 
 function fail(reason) {
@@ -288,15 +295,29 @@ function collectKeyPaths(value, key, path, out) {
   }
 }
 
-// 값이 role·주장 문자열인 잎을 경로와 함께 모은다. 배열 인덱스는 [] 로 줄인다.
-function collectClaimStringPaths(value, path, out) {
+// 값이 직업 이름 문자열인 잎을 경로와 함께 모은다. 배열 인덱스는 [] 로 줄인다.
+function collectRoleStringPaths(value, path, out) {
   if (typeof value === "string") {
-    if (CLAIM_STRINGS.has(value)) out.push({ path, value });
-  } else if (Array.isArray(value)) value.forEach((v) => collectClaimStringPaths(v, `${path}[]`, out));
+    if (ROLE_IDS.includes(value)) out.push({ path, value });
+  } else if (Array.isArray(value)) value.forEach((v) => collectRoleStringPaths(v, `${path}[]`, out));
   else if (value && typeof value === "object") {
-    for (const [k, v] of Object.entries(value)) collectClaimStringPaths(v, path ? `${path}.${k}` : k, out);
+    for (const [k, v] of Object.entries(value)) collectRoleStringPaths(v, path ? `${path}.${k}` : k, out);
   }
 }
+
+const sortedKeys = (o) => Object.keys(o).sort().join(",");
+// 클라이언트가 지금 보는 단계 키 '일차:단계'(shared/game/audience.ts phaseKey 와 같은 모양). 로비는 day 가 없어 0.
+const pkOf = (c) => {
+  const v = lastView(c);
+  return `${v?.day?.n ?? 0}:${v?.phase}`;
+};
+const sendChat = (c, text) => c.ws.send(JSON.stringify({ t: "chat", text, pk: pkOf(c) }));
+const sendTyping = (c, on) => c.ws.send(JSON.stringify({ t: "typing", on, pk: pkOf(c) }));
+// 받은 chat 줄(실시간) / typing / chatReject 프레임. from 은 performance.now 기준 시각 아래쪽 경계.
+const chatsOf = (c, from = 0) => c.frames.filter((f) => f.at >= from && f.msg?.t === "chat");
+const typingsOf = (c, from = 0) => c.frames.filter((f) => f.at >= from && f.msg?.t === "typing");
+const rejectsOf = (c, from = 0) => c.frames.filter((f) => f.at >= from && f.msg?.t === "chatReject");
+const hasLine = (c, from, ch, seat, text) => chatsOf(c, from).some((f) => f.msg.ch === ch && f.msg.seat === seat && f.msg.text === text);
 
 // 요청을 보내 error 프레임이 오고 그 코드가 기대와 같은지 본다.
 // withState 이면 거부 뒤에 최신 state 가 이어서 온다는 것(결정 0027-4)도 본다.
@@ -403,36 +424,64 @@ async function stageFull(url, args) {
     return v && v.players.length === N && v.players.every((p) => p.connected === true);
   }, STATE_LIMIT_MS, `${N}명이 모두 connected 가 되지 않음`);
 
-  // 직업 주장 응답기(결정 0023): 상태 프레임에서 claim 단계이고 day.turn.seat 가 내 seat 이면 한 번만 보낸다(키 = 일차:seat).
-  //   방장·4번째부터는 즉시 말 안 함(none), clients[1]·clients[2] 는 서로 다른 직업, clients[3] 은 일부러 보내지 않아 8초 시간 초과(none)를 건넌다.
-  //   보낸 시각은 일찍 고른 차례가 2초 안에 다음 차례로 넘어가는지 보는 데 쓴다.
-  const claimSent = new Map(); // `${n}:${seat}` → { at, claim, idx }
-  const claimDriver = setInterval(() => {
-    clients.forEach((c, idx) => {
-      const v = lastView(c);
-      if (!v || v.phase !== "claim" || v.day?.turn?.seat !== c.seat) return;
-      const key = `${v.day.n}:${c.seat}`;
-      if (claimSent.has(key) || idx === 3) return; // idx 3 은 시간 초과 경로라 보내지 않는다
-      if (!c.ws || c.ws.readyState !== WebSocket.OPEN) return;
-      const claim = idx === 1 ? v.day.roles[0] : idx === 2 ? v.day.roles[1] : "none";
-      claimSent.set(key, { at: performance.now(), claim, idx });
-      c.ws.send(JSON.stringify({ t: "claim", claim }));
-    });
-  }, 50);
+  // (6b) 로비 채팅(CHAT-01): 방장 한 줄이 연결된 모두에게 ch all 로 가고 보낸 사람에게도 돌아온다. 아래 seq 연속·재접속 복원 비교의 첫 줄이다.
+  const LOBBY_TEXT = "로비 스모크 한 줄";
+  const lobbyAt = performance.now();
+  sendChat(host, LOBBY_TEXT);
+  await waitUntil(() => clients.every((c) => hasLine(c, lobbyAt, "all", host.seat, LOBBY_TEXT)), STATE_LIMIT_MS, "로비 채팅 줄이 모든 클라이언트(보낸 사람 포함)에 오지 않음");
+
+  // 도착 확인용 도우미들. 거절은 클라이언트별로 기대 목록에 쌓아 두고 맨 끝에서 실제 chatReject 프레임과 맞춘다(보낸 쪽에만 가야 한다).
+  const expectedRejects = clients.map(() => []);
+  const knownLines = (c) => {
+    // 이 클라이언트가 실시간 chat 프레임이나 지난 chatLog 로 받은 줄을 채널별 최근 30줄만(서버 복원 상한과 같은 규칙, 결정 0058-3)
+    const byKey = new Map();
+    for (const f of c.frames) {
+      if (f.msg?.t === "chat") byKey.set(`${f.msg.ch}/${f.msg.seq}`, f.msg);
+      if (f.msg?.t === "chatLog") for (const l of f.msg.lines) byKey.set(`${l.ch}/${l.seq}`, l);
+    }
+    const out = [];
+    for (const ch of ["all", "mafia", "ghost"]) {
+      const mine = [...byKey.values()].filter((l) => l.ch === ch).sort((a, b) => a.seq - b.seq);
+      out.push(...mine.slice(-30));
+    }
+    return out.map((l) => `${l.ch}/${l.seq}/${l.seat}/${l.text}/${l.at}`).sort();
+  };
+  // 닫고 같은 토큰으로 다시 붙어 hello 직후 chatLog 를 받는다. 돌아온 줄은 그 클라이언트가 이미 받았던 줄과 정확히 같아야 한다(더 넓어지지 않는다, T-07-35).
+  async function reconnectAndReplay(c, label) {
+    const expected = knownLines(c);
+    await closeSocket(c);
+    c.expectClose = false;
+    c.unexpectedClose = null;
+    await openSocket(wsBase, code, c);
+    const sockId = c.sockets;
+    await waitUntil(() => c.frames.some((f) => f.sock === sockId && f.msg?.t === "chatLog"), STATE_LIMIT_MS, `${label} 재접속 뒤 hello 직후 chatLog 가 오지 않음`);
+    const lines = c.frames.find((f) => f.sock === sockId && f.msg?.t === "chatLog").msg.lines;
+    const got = lines.map((l) => `${l.ch}/${l.seq}/${l.seat}/${l.text}/${l.at}`).sort();
+    if (got.join("|") !== expected.join("|")) fail(`${label} 재접속 chatLog 의 줄이 그 클라이언트가 받았던 줄과 다름 (복원 ${got.length}줄 / 받았던 ${expected.length}줄)`);
+    return lines;
+  }
+  // 막힘 확인: 보낸 클라이언트에만 chatReject{why} 가 온다. phase 거절은 이어서 최신 state 가 온다.
+  async function expectReject(c, text, why, label) {
+    const at = performance.now();
+    sendChat(c, text);
+    await waitUntil(() => rejectsOf(c, at).length > 0, STATE_LIMIT_MS, `${label} 의 chatReject 가 오지 않음`);
+    const got = rejectsOf(c, at)[0];
+    if (got.msg.why !== why) fail(`${label} 의 chatReject 이유가 ${why} 가 아님: ${got.msg.why}`);
+    if (why === "phase") await waitUntil(() => states(c).some((f) => f.at > got.at), STATE_LIMIT_MS, `${label} 거절 뒤 state 가 이어서 오지 않음`);
+    expectedRejects[clients.indexOf(c)].push(why);
+  }
 
   // (7) 시작
   host.ws.send(JSON.stringify({ t: "start" }));
 
-  // (8) 두 번째 클라이언트: roleReveal 에서 소켓을 닫고 같은 토큰으로 다시 붙음
+  // (8) 두 번째 클라이언트: roleReveal 에서 소켓을 닫고 같은 토큰으로 다시 붙음 — hello 직후 chatLog 로 로비 줄이 돌아온다
   const re = clients[1];
   await waitUntil(() => states(re).some((f) => f.msg.view.phase === "roleReveal"), STATE_LIMIT_MS + 5000, "스모크2 가 roleReveal 을 받지 못함");
   const before = states(re).filter((f) => f.msg.view.phase === "roleReveal").at(-1).msg.view.me;
   if (before.role === undefined) fail("스모크2 의 roleReveal state 에 me.role 이 없음");
-  await closeSocket(re);
-  re.expectClose = false;
-  re.unexpectedClose = null;
   const framesBefore = re.frames.length;
-  await openSocket(wsBase, code, re);
+  const reLines = await reconnectAndReplay(re, "스모크2");
+  if (reLines.length !== 1 || reLines[0].text !== LOBBY_TEXT || reLines[0].ch !== "all") fail("스모크2 재접속 chatLog 가 로비 줄 하나(ch all)가 아님");
   const afterFirst = re.frames.slice(framesBefore).find((f) => f.msg?.t === "state").msg.view;
   if (afterFirst.me.seat !== before.seat) fail(`재접속 뒤 seat 가 다름: ${before.seat} → ${afterFirst.me.seat}`);
   if (afterFirst.me.role !== before.role) fail("재접속 뒤 역할이 끊기 전과 다름");
@@ -445,37 +494,11 @@ async function stageFull(url, args) {
     if (c.unexpectedClose !== null) fail(`${c.nickname} 소켓이 예상 밖으로 닫힘 (code ${c.unexpectedClose})`);
   }
 
-  // (10) 직업 주장 차례 한 바퀴(claim): 방장부터 seat 오름차순으로 한 명씩, 한 차례 8초(결정 0023·0027)
-  await waitUntil(() => clients.every((c) => firstState(c, "claim")), STATE_LIMIT_MS + 5000, "모든 클라이언트가 claim 을 받지 못함");
-  const roleList = firstState(clients[1], "claim").msg.view.day.roles;
+  // (10) 낮 토론 진입 — 주장 단계 없이 낮 시작 발표 다음이 곧장 자유 채팅 토론이다(CHAT-06). 직업 목록(day.roles)은 모두 같다.
+  await waitUntil(() => clients.every((c) => firstState(c, "discussion")), STATE_LIMIT_MS + 5000, "모든 클라이언트가 dayAnnounce 다음에 discussion 을 받지 못함");
+  const roleList = firstState(clients[1], "discussion").msg.view.day.roles;
   if (roleList.includes("doctor") !== (N >= 5)) fail(`day.roles 의 의사 포함 여부가 인원(${N})과 맞지 않음: ${roleList.join(",")}`);
   if (roleList.length < 3) fail(`day.roles 가 너무 짧음: ${roleList.join(",")}`);
-  const pick1 = roleList[0];
-  const pick2 = roleList[1];
-  // 차례 순서: 방장 seat 에서 시작해 seat 오름차순(끝에서 처음으로 이어짐), 1일차는 전원 생존
-  const allSeats = clients.map((c) => c.seat).sort((a, b) => a - b);
-  const startAt = allSeats.indexOf(host.seat);
-  const expectedOrder = [...allSeats.slice(startAt), ...allSeats.slice(0, startAt)];
-  const firstTurn = firstState(host, "claim").msg.view.day?.turn?.seat;
-  if (firstTurn !== host.seat) fail(`1일차 첫 차례 seat 가 방장(${host.seat})이 아님: ${firstTurn}`);
-  // clients[3] 의 차례(응답기가 보내지 않아 8초 시간 초과)에서 거부·이모티콘을 시험한다. 그 차례는 8초 동안 이어진다.
-  await waitUntil(() => {
-    const v = lastView(host);
-    return v?.phase === "claim" && v.day?.turn?.seat === clients[3].seat;
-  }, STATE_LIMIT_MS + 5000, "방장 화면에 스모크4 의 차례가 오지 않음");
-  // 차례가 지난 사람(clients[1])·아직 오지 않은 사람(5명 이상이면 clients[4])의 claim 은 WRONG_PHASE 이고 이어 state 가 온다
-  await expectError(clients[1], { t: "claim", claim: pick1 }, "WRONG_PHASE", "차례가 지난 사람의 claim", true);
-  if (N >= 5) await expectError(clients[4], { t: "claim", claim: pick1 }, "WRONG_PHASE", "차례가 오지 않은 사람의 claim", true);
-  // claim 단계의 say 는 WRONG_PHASE
-  await expectError(clients[0], { t: "say", template: "innocent" }, "WRONG_PHASE", "claim 단계 say");
-  // claim 중 이모티콘은 보낼 수 있고 모두에게 방송된다(차례와 무관, 결정 0027-8)
-  const claimEmojiAt = performance.now();
-  clients[2].ws.send(JSON.stringify({ t: "emoji", icon: "heart" }));
-  await waitUntil(
-    () => clients.every((c) => c.frames.some((f) => f.at >= claimEmojiAt && f.msg?.t === "emoji" && f.msg.seat === clients[2].seat && f.msg.icon === "heart")),
-    STATE_LIMIT_MS,
-    "claim 중 이모티콘 emoji 프레임이 모든 클라이언트에 오지 않음",
-  );
 
   // (11) 낮 중 참가는 409 GAME_STARTED, 미리보기는 낮 단계 + players 빈 배열
   const late = await http(null, "POST", `/api/rooms/${code}/join`, { nickname: "늦은사람" });
@@ -484,74 +507,50 @@ async function stageFull(url, args) {
   if (!DAY_PHASES.includes(pvDay.data?.phase)) fail(`낮 미리보기 phase 가 낮 단계 중 하나가 아님: ${pvDay.data?.phase}`);
   if (!Array.isArray(pvDay.data?.players) || pvDay.data.players.length !== 0) fail("낮 미리보기 players 가 빈 배열이 아님");
 
-  // (12) discussion 진입: 모든 클라이언트의 day.claimLog 가 같고 기대값(고른 값·시간 초과 none)이다
-  await waitUntil(() => clients.every((c) => firstState(c, "discussion")), CLAIM_TURN_MS * N + STATE_LIMIT_MS, "모든 클라이언트가 discussion 을 받지 못함");
-  const discLogs = clients.map((c) => firstState(c, "discussion").msg.view.day?.claimLog);
-  const claimLog = discLogs[0];
-  discLogs.forEach((lg, i) => {
-    if (JSON.stringify(lg) !== JSON.stringify(claimLog)) fail(`${clients[i].nickname} 의 discussion claimLog 가 방장과 다름`);
-  });
-  if (!Array.isArray(claimLog) || claimLog.length !== N) fail(`discussion claimLog 길이가 ${N} 이 아님: ${claimLog?.length}`);
-  claimLog.forEach((e, k) => {
-    if (Object.keys(e).sort().join(",") !== "claim,n,seat") fail(`claimLog 줄 키 집합이 다름: ${Object.keys(e).sort().join(",")}`);
-    if (e.n !== 1) fail(`claimLog ${k}번째 줄의 n 이 1 이 아님: ${e.n}`);
-    if (e.seat !== expectedOrder[k]) fail(`claimLog ${k}번째 줄 seat ${e.seat} 가 차례 순서 ${expectedOrder[k]} 와 다름`);
-    const idx = clients.findIndex((c) => c.seat === e.seat);
-    const expected = idx === 1 ? pick1 : idx === 2 ? pick2 : "none"; // clients[3] 은 시간 초과라 none
-    if (e.claim !== expected) fail(`claimLog seat ${e.seat}(스모크${idx + 1}) 주장이 ${expected} 가 아님: ${e.claim}`);
-  });
-  // 호스트 프레임으로 본 차례: 순서가 기대와 같고, 시간 초과 차례는 실제로 8초 가까이 걸렸고, 일찍 고른 차례는 송신 후 2초 안에 다음으로 넘어갔다
-  const hostClaimStates = states(host).filter((f) => f.msg.view.phase === "claim" && f.msg.view.day?.n === 1);
-  const seenOrder = [];
-  for (const f of hostClaimStates) if (seenOrder.at(-1) !== f.msg.view.day.turn.seat) seenOrder.push(f.msg.view.day.turn.seat);
-  if (seenOrder.join(",") !== expectedOrder.join(",")) fail(`방장이 본 차례 순서 [${seenOrder}] 가 기대 [${expectedOrder}] 와 다름`);
-  const timeoutStartAt = hostClaimStates.find((f) => f.msg.view.day.turn.seat === clients[3].seat).at;
-  const afterTimeout = states(host).find((f) => f.at > timeoutStartAt && (f.msg.view.phase !== "claim" || f.msg.view.day.turn.seat !== clients[3].seat));
-  const timeoutMs = Math.round(afterTimeout.at - timeoutStartAt);
-  if (timeoutMs < CLAIM_TURN_MS - 1000) fail(`시간 초과 차례가 ${timeoutMs}ms 만에 끝남 (기대 약 ${CLAIM_TURN_MS}ms)`);
-  let slowestEarly = 0;
-  for (const [key, sent] of claimSent) {
-    if (!key.startsWith("1:")) continue;
-    const seat = Number(key.split(":")[1]);
-    const next = states(host).find((f) => f.at >= sent.at && f.msg.view.day?.claimLog?.some((e) => e.n === 1 && e.seat === seat));
-    if (!next) fail(`seat ${seat} 가 고른 뒤 claimLog 에 그 줄이 든 state 가 방장에게 오지 않음`);
-    const lag = Math.round(next.at - sent.at);
-    if (lag >= 2000) fail(`seat ${seat} 가 일찍 고른 뒤 ${lag}ms 가 지나서야 다음 차례 state 가 옴 (2초 안이어야 함)`);
-    slowestEarly = Math.max(slowestEarly, lag);
-  }
-  console.log(`  info: 차례 순서 [${seenOrder}], 시간 초과 차례 ${timeoutMs}ms, 일찍 고른 뒤 다음 state 최대 ${slowestEarly}ms`);
-
-  // (13) 낮 토론: 빠른 메시지(chat 프레임)·거부·이모티콘·연장/넘기기 거부·타이머로 다음 낮
+  // (13) 낮 토론: 자유 채팅(CHAT-01·02·05)·입력 중·연장/넘기기 거부·타이머로 다음 단계
   const discEnds = new Set(clients.map((c) => firstState(c, "discussion").msg.view.phaseEndsAt));
   if (discEnds.size !== 1) fail(`discussion 의 phaseEndsAt 이 클라이언트마다 다름 (${discEnds.size}종)`);
   const endsBefore = [...discEnds][0];
   const durBefore = firstState(host, "discussion").msg.view.phaseDurationMs;
   if (durBefore !== DISCUSSION_MS) fail(`discussion phaseDurationMs 가 ${DISCUSSION_MS} 이 아님: ${durBefore}`);
 
-  // 메시지: seat = 보낸 사람, 모든 클라이언트가 chat 프레임을 받는다(state 로는 오지 않는다)
-  const isSuspectChat = (f) => f.msg?.t === "chat" && f.msg.seat === clients[1].seat && f.msg.template === "suspect" && f.msg.target === clients[2].seat;
-  clients[1].ws.send(JSON.stringify({ t: "say", template: "suspect", target: clients[2].seat }));
+  // 산 사람 한 줄: 모든 클라이언트가 ch all 로 받고 보낸 사람도 자기 줄을 돌려받는다(낙관적 표시 없음).
+  // 같은 순간에 보낸 두 번째 줄은 600ms 안이라 막힌다 — 보낸 클라이언트에만 chatReject{rate}, 그 줄은 누구에게도 가지 않는다.
+  const chatA = clients[1];
+  const chatB = clients[2];
+  const TEXT_A1 = "토론 첫 줄";
+  const TEXT_B = "토론 둘째 줄";
+  const TEXT_A2 = "토론 셋째 줄";
+  const dayChatAt = performance.now();
+  sendChat(chatA, TEXT_A1);
+  sendChat(chatA, REJECT_MARKER);
+  await waitUntil(() => clients.every((c) => hasLine(c, dayChatAt, "all", chatA.seat, TEXT_A1)), STATE_LIMIT_MS, "낮 토론 chat 줄이 모든 클라이언트(보낸 사람 포함)에 오지 않음");
+  await waitUntil(() => rejectsOf(chatA, dayChatAt).length > 0, STATE_LIMIT_MS, `${CHAT_MIN_GAP_MS}ms 안 두 번째 전송의 chatReject 가 보낸 클라이언트에 오지 않음`);
+  if (rejectsOf(chatA, dayChatAt)[0].msg.why !== "rate") fail(`${CHAT_MIN_GAP_MS}ms 안 두 번째 전송의 거절 이유가 rate 가 아님: ${rejectsOf(chatA, dayChatAt)[0].msg.why}`);
+  expectedRejects[1].push("rate");
+
+  // 입력 중: 켜짐은 같은 채널의 다른 클라이언트에만 가고 보낸 사람에게 되돌아오지 않는다. 꺼짐도 그렇다.
+  const typingAt = performance.now();
+  sendTyping(chatB, true);
   await waitUntil(
-    () => clients.every((c) => c.frames.some(isSuspectChat)),
+    () => clients.every((c) => c === chatB || typingsOf(c, typingAt).some((f) => f.msg.seat === chatB.seat && f.msg.on === true)),
     STATE_LIMIT_MS,
-    "빠른 메시지 chat 프레임이 모든 클라이언트에 오지 않음",
+    "입력 중 켜짐 typing 프레임이 다른 클라이언트에 오지 않음",
   );
-  const chatKeys = Object.keys(host.frames.find(isSuspectChat).msg).sort().join(",");
-  if (chatKeys !== CHAT_FRAME_KEYS.join(",")) fail(`chat 프레임 키 집합이 다름: ${chatKeys} (기대 ${CHAT_FRAME_KEYS.join(",")})`);
-  // 거부: 2초 안의 두 번째 say → RATE_LIMITED, 모르는 키(text)가 붙은 say → BAD_MESSAGE
-  await expectError(clients[1], { t: "say", template: "trust", target: clients[2].seat }, "RATE_LIMITED", "2초 안의 두 번째 say");
-  await expectError(clients[1], { t: "say", template: "suspect", target: clients[2].seat, text: REJECT_MARKER }, "BAD_MESSAGE", "text 키가 붙은 say");
-  // 이모티콘: 2.1초 뒤 clients[2] 의 smile 이 모든 클라이언트에 emoji 프레임으로 간다
-  await sleep(2100);
-  clients[2].ws.send(JSON.stringify({ t: "emoji", icon: "smile" }));
+  sendChat(chatB, TEXT_B);
+  await waitUntil(() => clients.every((c) => hasLine(c, typingAt, "all", chatB.seat, TEXT_B)), STATE_LIMIT_MS, "낮 토론 둘째 chat 줄이 모든 클라이언트에 오지 않음");
+  sendTyping(chatB, false);
   await waitUntil(
-    () => clients.every((c) => c.frames.some((f) => f.at >= firstState(c, "discussion").at && f.msg?.t === "emoji" && f.msg.seat === clients[2].seat && f.msg.icon === "smile")),
+    () => clients.every((c) => c === chatB || typingsOf(c, typingAt).some((f) => f.msg.seat === chatB.seat && f.msg.on === false)),
     STATE_LIMIT_MS,
-    "이모티콘 emoji 프레임이 모든 클라이언트에 오지 않음",
+    "입력 중 꺼짐 typing 프레임이 다른 클라이언트에 오지 않음",
   );
-  // 거부된 요청은 메시지를 남기지 않는다: 방장이 받은 clients[1] 의 chat 프레임은 정확히 하나
-  const nChats = host.frames.filter((f) => f.msg?.t === "chat" && f.msg.seat === clients[1].seat).length;
-  if (nChats !== 1) fail(`거부 뒤 방장이 받은 clients[1] 의 chat 프레임이 하나가 아님: ${nChats}`);
+  // 거절된 줄은 기록을 남기지 않는다: 600ms 가 지난 뒤 보낸 같은 클라이언트의 다음 줄은 받아들여진다
+  await sleep(CHAT_MIN_GAP_MS + 100);
+  const a2At = performance.now();
+  sendChat(chatA, TEXT_A2);
+  await waitUntil(() => clients.every((c) => hasLine(c, a2At, "all", chatA.seat, TEXT_A2)), STATE_LIMIT_MS, `${CHAT_MIN_GAP_MS}ms 가 지난 뒤의 chat 줄이 모든 클라이언트에 오지 않음`);
+  const DAY_TEXTS = [LOBBY_TEXT, TEXT_A1, TEXT_B, TEXT_A2]; // ch all 줄의 seq 1~4 순서
 
   // 연장·넘기기는 스키마에 없다(결정 0017-5): 손님·방장 모두 BAD_MESSAGE, 마감은 그대로
   await expectError(clients[1], { t: "extend" }, "BAD_MESSAGE", "손님 extend");
@@ -657,28 +656,52 @@ async function stageFull(url, args) {
   if (doctorClient) doctorClient.ws.send(JSON.stringify({ t: "pick", target: doctorClient.seat }));
   const actors = [...mafiaClients.map((m) => [m, targetX]), [policeClient, policeTarget], ...(doctorClient ? [[doctorClient, doctorClient.seat]] : [])];
   await waitUntil(() => actors.every(([c, seat]) => hasPicked(c, seat)), STATE_LIMIT_MS, "밤 행동 뒤 본인 선택(me.pick)이 행위자 화면에 오지 않음");
-  // 마피아 한 명이 밤 채팅 → 2초 뒤 이모티콘. 살아 있는 비마피아에게는 chat·emoji 프레임이 가지 않는다.
+  // 마피아 한 명이 밤 채팅·입력 중 → ch mafia 로 마피아(보낸 사람 포함)에게만. 살아 있는 비마피아에게는 chat·typing 프레임이 가지 않는다(CHAT-02).
   const talker = mafiaClients[0];
-  talker.ws.send(JSON.stringify({ t: "say", template: "nightTarget", target: targetX }));
+  const NIGHT_TEXT = "밤 마피아 스모크 줄";
+  const nightChatAt = performance.now();
+  sendTyping(talker, true);
+  sendChat(talker, NIGHT_TEXT);
   await waitUntil(
-    () => mafiaClients.every((m) => m.frames.some((f) => f.at >= nightStartAt(m) && f.msg?.t === "chat" && f.msg.template === "nightTarget" && f.msg.target === targetX)),
+    () => mafiaClients.every((m) => hasLine(m, nightChatAt, "mafia", talker.seat, NIGHT_TEXT)),
     STATE_LIMIT_MS,
-    "밤 마피아 채팅 chat 프레임이 마피아 클라이언트에 오지 않음",
+    "밤 마피아 채팅 chat 프레임이 마피아 클라이언트(보낸 사람 포함)에 오지 않음",
   );
-  // 마피아가 아닌 사람의 밤 say 는 WRONG_PHASE (살아 있는 비마피아, 결정 0020-7)
-  await expectError(citizenClients[0], { t: "say", template: "nightAgree" }, "WRONG_PHASE", "밤 시민의 say");
-  await sleep(2100);
-  talker.ws.send(JSON.stringify({ t: "emoji", icon: "smile" }));
-  await waitUntil(
-    () => mafiaClients.every((m) => m.frames.some((f) => f.at >= nightStartAt(m) && f.msg?.t === "emoji" && f.msg.seat === talker.seat)),
-    STATE_LIMIT_MS,
-    "밤 마피아 이모티콘 emoji 프레임이 마피아 클라이언트에 오지 않음",
-  );
+  const otherMafia = mafiaClients.filter((m) => m !== talker);
+  if (otherMafia.length > 0) {
+    await waitUntil(
+      () => otherMafia.every((m) => typingsOf(m, nightChatAt).some((f) => f.msg.seat === talker.seat && f.msg.on === true)),
+      STATE_LIMIT_MS,
+      "밤 마피아 입력 중 typing 프레임이 다른 마피아에 오지 않음",
+    );
+  }
+  // 살아 있는 비마피아의 밤 채팅은 단계 불일치(phase)로 막힌다 — 보낸 클라이언트에만 chatReject 가 가고 줄은 어디에도 남지 않는다. 입력 중은 조용히 버려진다.
+  const nightCitizen = citizenClients[0];
+  await expectReject(nightCitizen, "시민이 밤에 보낸 줄", "phase", "밤 시민의 chat");
+  sendTyping(nightCitizen, true);
+  await sleep(300);
 
   // (15) 아침: 모든 클라이언트가 morning 을, 그다음 2일차 dayAnnounce 를 서버 타이머로 받는다
   await waitUntil(() => clients.every((c) => firstState(c, "morning")), NIGHT_WAIT_MS, "밤 마감 뒤 morning 이 모든 클라이언트에 오지 않음");
+  // (15b) 탈락자 채널(CHAT-03): 아침에 탈락한 X 의 줄은 ch ghost 로 탈락자(X)에게만 간다. 산 사람 쪽 0건은 아래 최종 단언이 본다.
+  const ghostClient = xClient;
+  const GHOST_TEXT = "구경하는 중 스모크";
+  const ghostAt = performance.now();
+  sendTyping(ghostClient, true);
+  sendChat(ghostClient, GHOST_TEXT);
+  await waitUntil(() => hasLine(ghostClient, ghostAt, "ghost", ghostClient.seat, GHOST_TEXT), STATE_LIMIT_MS, "탈락자 chat 줄이 탈락자 자신에게 돌아오지 않음");
+  await sleep(300);
+  // 재접속 복원(CHAT-05): 산 시민이 다시 붙으면 hello 직후 chatLog 로 자기가 받았던 공개 줄만 돌아온다 — mafia·ghost 줄은 0.
+  // 마피아가 다시 붙으면 공개 줄에 더해 밤 마피아 줄도 돌아온다. 복원이 라이브보다 넓어지지 않는다(T-07-35).
+  const townClient = citizenClients.find((c) => c !== ghostClient);
+  const townLines = await reconnectAndReplay(townClient, "산 시민");
+  if (townLines.some((l) => l.ch !== "all")) fail(`산 시민 재접속 chatLog 에 ch all 밖의 줄이 있음: ${[...new Set(townLines.map((l) => l.ch))].join(",")}`);
+  if (townLines.map((l) => l.text).join("|") !== DAY_TEXTS.join("|")) fail("산 시민 재접속 chatLog 의 낮 줄 순서·본문이 보낸 순서와 다름");
+  const mafiaLines = await reconnectAndReplay(talker, "마피아");
+  if (!mafiaLines.some((l) => l.ch === "mafia" && l.text === NIGHT_TEXT && l.seat === talker.seat)) fail("마피아 재접속 chatLog 에 밤 마피아 줄이 없음");
+  if (mafiaLines.some((l) => l.ch === "ghost")) fail("마피아 재접속 chatLog 에 ghost 줄이 있음");
+  info(`재접속 복원: 산 시민 ${townLines.length}줄(전부 ch all), 마피아 ${mafiaLines.length}줄`);
   await waitUntil(() => clients.every((c) => firstState(c, "dayAnnounce", (v) => v.day?.n === 2)), MORNING_WAIT_MS, "아침 마감 뒤 dayAnnounce(day.n 2) 가 모든 클라이언트에 오지 않음");
-  clearInterval(claimDriver); // 2일차 claim 은 시험하지 않는다(uat-day.mjs 가 본다)
   for (const c of clients) if (c.unexpectedClose !== null) fail(`${c.nickname} 소켓이 예상 밖으로 닫힘 (code ${c.unexpectedClose})`);
 
   // ---- 단언 ----
@@ -767,8 +790,8 @@ async function stageFull(url, args) {
   if (spread >= DAY_SPREAD_LIMIT_MS) fail(`dayAnnounce 도착 편차 ${spread}ms 가 ${DAY_SPREAD_LIMIT_MS}ms 이상`);
   if (discSpread >= DAY_SPREAD_LIMIT_MS) fail(`discussion 도착 편차 ${discSpread}ms 가 ${DAY_SPREAD_LIMIT_MS}ms 이상`);
 
-  // 직업 주장 누출(T-03.1-41, 결정 0027-3·6): 서버 전용 키는 어떤 프레임에도 없고, claim 단계 프레임에서는
-  // 역할·주장 문자열이 허용 경로에만 있으며 day.claimLog 는 지금 차례보다 앞선 차례들의 줄뿐이다(끝나지 않은 차례의 선택은 없다).
+  // 서버 전용·삭제된 키는 어떤 프레임에도 없다(결정 0027-3). 옛 직업 주장 키(claim*·turn·claimLog)가 다시 나오면 회귀다(CHAT-06).
+  // state 어디에도 messages·extendUsed 키가 없다(결정 0017-7): 채팅 줄은 state 가 아니라 chat 프레임으로만 온다.
   for (const c of clients) {
     for (const f of c.frames) {
       if (!f.msg) continue;
@@ -779,46 +802,90 @@ async function stageFull(url, args) {
       }
     }
     for (const f of states(c)) {
-      const v = f.msg.view;
-      if (v.phase !== "claim") {
-        if (v.day?.turn !== undefined) fail(`${c.nickname} 의 ${v.phase} 프레임에 day.turn 이 있음 (claim 단계에서만)`);
-        continue;
-      }
-      if (v.phaseDurationMs !== CLAIM_TURN_MS) fail(`${c.nickname} 의 claim phaseDurationMs 가 ${CLAIM_TURN_MS} 가 아님: ${v.phaseDurationMs}`);
-      const leaves = [];
-      collectClaimStringPaths(f.msg, "", leaves);
-      const bad = leaves.filter((l) => !ALLOWED_CLAIM_STRING_PATHS.has(l.path));
-      if (bad.length > 0) fail(`${c.nickname} 의 claim 프레임에 허용 경로 밖 역할·주장 문자열이 있음: ${bad.map((l) => l.path).join(",")}`);
-      if (v.day?.n !== 1) continue;
-      const turnIdx = expectedOrder.indexOf(v.day.turn?.seat);
-      if (turnIdx < 0) fail(`${c.nickname} 의 claim 프레임 day.turn.seat 가 차례 순서 밖: ${v.day.turn?.seat}`);
-      const loggedSeats = (v.day.claimLog ?? []).filter((e) => e.n === 1).map((e) => e.seat);
-      if (loggedSeats.join(",") !== expectedOrder.slice(0, turnIdx).join(",")) {
-        fail(`${c.nickname} 의 claim 프레임 claimLog seat [${loggedSeats}] 가 지금 차례(${v.day.turn.seat}) 앞선 차례들 [${expectedOrder.slice(0, turnIdx)}] 와 다름`);
-      }
-    }
-  }
-  // 결정 0017-7: state 어디에도 messages·extendUsed 키가 없고, chat 프레임은 허용 키만 쓰며 id·role·token 이 없다(T-02-48)
-  for (const c of clients) {
-    for (const f of states(c)) {
       for (const key of ["messages", "extendUsed"]) {
         const paths = [];
         collectKeyPaths(f.msg, key, "", paths);
         if (paths.length > 0) fail(`${c.nickname} 의 state 프레임에 ${key} 키가 있음: ${paths.join(",")}`);
       }
     }
+  }
+
+  // ---- 자유 채팅 단언 (CHAT-01·02·03·05·06, UI-SPEC D2·D5) ----
+  const CHANNELS = ["all", "mafia", "ghost"];
+  const REJECT_WHYS = ["rate", "repeat", "length", "phase", "other"];
+  // (a) 프레임 모양: chat·typing·chatReject·chatLog 는 허용 키만 쓴다. id·역할·토큰·수신자 마스크가 없다(T-02-48, T-07-36).
+  for (const c of clients) {
     for (const f of c.frames) {
-      if (f.msg?.t !== "chat") continue;
-      const bad = Object.keys(f.msg).filter((k) => !CHAT_ALLOWED_KEYS.has(k));
-      if (bad.length > 0) fail(`${c.nickname} 의 chat 프레임에 허용 밖 키가 있음: ${bad.join(",")}`);
-      for (const key of ["id", "role", "token"]) if (key in f.msg) fail(`${c.nickname} 의 chat 프레임에 ${key} 키가 있음`);
+      const m = f.msg;
+      if (m?.t === "chat") {
+        if (sortedKeys(m) !== CHAT_LINE_KEYS.join(",")) fail(`${c.nickname} 의 chat 프레임 키 집합이 다름: ${sortedKeys(m)} (기대 ${CHAT_LINE_KEYS.join(",")})`);
+        if (!CHANNELS.includes(m.ch)) fail(`${c.nickname} 의 chat 프레임 ch 가 채널 이름이 아님: ${m.ch}`);
+        if (!Number.isInteger(m.seq) || m.seq < 1) fail(`${c.nickname} 의 chat 프레임 seq 가 1 이상 정수가 아님: ${m.seq}`);
+        if (!Number.isInteger(m.seat) || typeof m.text !== "string" || typeof m.at !== "number") fail(`${c.nickname} 의 chat 프레임 값 형식이 다름`);
+      } else if (m?.t === "typing") {
+        if (sortedKeys(m) !== TYPING_KEYS.join(",")) fail(`${c.nickname} 의 typing 프레임 키 집합이 다름: ${sortedKeys(m)}`);
+        if (m.seat === c.seat) fail(`${c.nickname} 가 자기 입력 중 신호를 되돌려 받음`);
+      } else if (m?.t === "chatReject") {
+        if (sortedKeys(m) !== CHAT_REJECT_KEYS.join(",")) fail(`${c.nickname} 의 chatReject 프레임 키 집합이 다름: ${sortedKeys(m)}`);
+        if (!REJECT_WHYS.includes(m.why)) fail(`${c.nickname} 의 chatReject why 가 알 수 없는 값: ${m.why}`);
+      } else if (m?.t === "chatLog") {
+        if (sortedKeys(m) !== CHAT_LOG_KEYS.join(",")) fail(`${c.nickname} 의 chatLog 프레임 키 집합이 다름: ${sortedKeys(m)}`);
+        if (!Array.isArray(m.lines)) fail(`${c.nickname} 의 chatLog.lines 가 배열이 아님`);
+        for (const l of m.lines) {
+          if (sortedKeys(l) !== CHAT_LOG_LINE_KEYS.join(",")) fail(`${c.nickname} 의 chatLog 줄 키 집합이 다름: ${sortedKeys(l)}`);
+          if (!CHANNELS.includes(l.ch)) fail(`${c.nickname} 의 chatLog 줄 ch 가 채널 이름이 아님: ${l.ch}`);
+        }
+      }
     }
   }
-  // 거부된 요청의 표식은 다른 클라이언트의 어떤 프레임에도 없다(COMM-04)
-  clients.forEach((c, i) => {
-    if (i === 1) return;
-    for (const f of c.frames) if (f.raw.includes(REJECT_MARKER)) fail(`${c.nickname} 의 프레임에 거부된 요청의 표식이 있음`);
+  // (b) 공개 채널(CHAT-01): ch all 줄은 모든 클라이언트가 같은 {seat, seq, text, at} 로, seq 1 부터 틈 없이 보낸 순서대로 받는다.
+  const allLines = clients.map((c) => chatsOf(c).filter((f) => f.msg.ch === "all").map((f) => f.msg));
+  allLines.forEach((lines, i) => {
+    if (lines.map((l) => l.seq).join(",") !== DAY_TEXTS.map((_, k) => k + 1).join(",")) fail(`${clients[i].nickname} 가 받은 ch all 줄 seq 가 1..${DAY_TEXTS.length} 틈 없는 순서가 아님: ${lines.map((l) => l.seq).join(",")}`);
+    if (lines.map((l) => l.text).join("|") !== DAY_TEXTS.join("|")) fail(`${clients[i].nickname} 가 받은 ch all 줄의 본문 순서가 보낸 순서와 다름`);
+    if (JSON.stringify(lines) !== JSON.stringify(allLines[0])) fail(`${clients[i].nickname} 가 받은 ch all 줄이 방장과 다름`);
   });
+  // (c) 비공개 채널(CHAT-02·03): ch mafia 는 마피아 클라이언트에만, ch ghost 는 탈락자에게만 간다. 다른 편 폰은 한 줄도 받지 않는다.
+  for (const c of clients) {
+    const mafiaN = chatsOf(c).filter((f) => f.msg.ch === "mafia").length;
+    const ghostN = chatsOf(c).filter((f) => f.msg.ch === "ghost").length;
+    if (c.role === "mafia") {
+      if (mafiaN !== 1) fail(`마피아 ${c.nickname} 가 받은 ch mafia 줄이 하나가 아님: ${mafiaN}`);
+    } else if (mafiaN !== 0) {
+      fail(`마피아가 아닌 ${c.nickname} 가 ch mafia 줄 ${mafiaN}개를 받음`);
+    }
+    if (c === ghostClient) {
+      if (ghostN !== 1) fail(`탈락자 ${c.nickname} 가 받은 ch ghost 줄이 하나가 아님: ${ghostN}`);
+    } else if (ghostN !== 0) {
+      fail(`산 사람 ${c.nickname} 가 ch ghost 줄 ${ghostN}개를 받음`);
+    }
+    // 내 채널 이름(view.me.chat)은 마피아에게만 mafia, 밤의 비마피아에게는 키가 없다
+    for (const f of states(c)) {
+      const chn = f.msg.view.me.chat;
+      if (chn === "mafia" && c.role !== "mafia") fail(`마피아가 아닌 ${c.nickname} 의 view.me.chat 이 mafia 임`);
+      if (f.msg.view.phase === "night" && c.role !== "mafia" && chn !== undefined) fail(`밤의 비마피아 ${c.nickname} 의 view.me.chat 이 ${chn} 임 (키가 없어야 함)`);
+    }
+  }
+  // (d) 입력 중 도달 범위: 낮 B 의 신호는 모두에게 가지만, 밤 마피아의 신호는 마피아 클라이언트에만, 탈락자·시민 편의 신호는 어디에도 가지 않는다.
+  //     시민 편(밤 시민)과 산 사람이 보는 탈락자의 입력 중은 0건이다.
+  for (const c of clients) {
+    const seats = typingsOf(c).map((f) => f.msg.seat);
+    const allowed = new Set([chatB.seat]);
+    if (c.role === "mafia") allowed.add(talker.seat);
+    for (const seat of seats) if (!allowed.has(seat)) fail(`${c.nickname} 가 받을 수 없는 자리(${seat})의 입력 중 신호를 받음`);
+  }
+  // (e) 막힘: chatReject 는 보낸 클라이언트에만, 보낸 순서와 이유가 기대와 같다. 거절된 줄의 본문은 어느 클라이언트의 프레임에도 없다.
+  clients.forEach((c, i) => {
+    const got = rejectsOf(c).map((f) => f.msg.why).join(",");
+    if (got !== expectedRejects[i].join(",")) fail(`${c.nickname} 가 받은 chatReject [${got}] 가 기대 [${expectedRejects[i].join(",")}] 와 다름`);
+    for (const f of c.frames) if (f.raw.includes(REJECT_MARKER)) fail(`${c.nickname} 의 프레임에 거부된 요청의 본문 표식이 있음`);
+  });
+  // (f) 재접속 chatLog 는 hello 마다 한 번씩 왔다: 첫 접속은 로비 시점이라 비었거나 로비 줄뿐이다.
+  for (const c of clients) {
+    const logs = c.frames.filter((f) => f.msg?.t === "chatLog");
+    if (logs.length !== c.sockets) fail(`${c.nickname} 의 chatLog 프레임 수(${logs.length})가 접속 횟수(${c.sockets})와 다름`);
+  }
+  info(`자유 채팅: ch all ${DAY_TEXTS.length}줄 seq 연속·전원 동일, 밤 마피아 채널 도달 ${mafiaClients.length}명, 탈락자 채널 1명, 거절 ${expectedRejects.flat().length}건(보낸 쪽에만)`);
 
   // ---- 밤·아침·관전 단언 (NIGHT-01·02·04·05·06, ELIM-01, 결정 0020·0021) ----
   const framesBetween = (c, fromPhase, toPhase) => {
@@ -826,13 +893,15 @@ async function stageFull(url, args) {
     const to = firstState(c, toPhase).at;
     return c.frames.filter((f) => f.at >= from && f.at < to);
   };
-  // (a) 밤에 받은 chat·emoji 프레임: 살아 있는 비마피아 0, 마피아 1 이상
+  // (a) 밤에 받은 chat·typing 프레임: 살아 있는 비마피아 0, 마피아는 줄 1 이상(보낸 사람 포함)
   for (const c of clients) {
-    const n = framesBetween(c, "night", "morning").filter((f) => f.msg?.t === "chat" || f.msg?.t === "emoji").length;
+    const inNight = framesBetween(c, "night", "morning");
+    const n = inNight.filter((f) => f.msg?.t === "chat").length;
+    const typed = inNight.filter((f) => f.msg?.t === "typing").length;
     if (c.role === "mafia") {
-      if (n < 1) fail(`마피아 ${c.nickname} 가 밤 chat·emoji 프레임을 받지 못함`);
-    } else if (n !== 0) {
-      fail(`마피아가 아닌 ${c.nickname} 가 밤 chat·emoji 프레임 ${n}개를 받음`);
+      if (n < 1) fail(`마피아 ${c.nickname} 가 밤 chat 프레임을 받지 못함`);
+    } else if (n !== 0 || typed !== 0) {
+      fail(`마피아가 아닌 ${c.nickname} 가 밤 chat·typing 프레임 ${n + typed}개를 받음`);
     }
   }
   // (b) allyPicks 는 마피아 프레임에만, records 는 경찰·마피아·의사 본인 프레임에만 (둘 다 view.me 아래), 줄 키는 역할별(결정 0027-11)
@@ -907,14 +976,14 @@ async function stageFull(url, args) {
       if (sp.length > 0) fail(`살아 있는 ${c.nickname} 의 프레임에 spectate 키가 있음`);
     }
   }
-  // (f) 역할 문자열은 허용 경로에만: 모든 프레임에서 view.me.role·view.day.roles[]·view.day.claimLog[].claim, 탈락한 X 의 아침 이후에는 view.spectate.seats[].job 도 허용.
+  // (f) 역할 문자열은 허용 경로에만: 모든 프레임에서 view.me.role·view.day.roles[] (채널 이름 mafia 가 든 ch·lines[].ch·view.me.chat 은 위 채널 단언이 본다), 탈락한 X 의 아침 이후에는 view.spectate.seats[].job 도 허용.
   //     마피아 동료 seat·records 의 isMafia·died 는 숫자·불리언이라 문자열 검사에 걸리지 않는다.
-  const ROLE_ALLOWED_ALWAYS = ALLOWED_CLAIM_STRING_PATHS;
+  const ROLE_ALLOWED_ALWAYS = ALLOWED_ROLE_STRING_PATHS;
   for (const c of clients) {
     for (const f of c.frames) {
       if (!f.msg) continue;
       const leaves = [];
-      collectClaimStringPaths(f.msg, "", leaves);
+      collectRoleStringPaths(f.msg, "", leaves);
       const allowSpectate = c === xClient && f.at >= xMorningAt;
       const bad = leaves.filter((l) => !ROLE_ALLOWED_ALWAYS.has(l.path) && !(allowSpectate && l.path === "view.spectate.seats[].job"));
       if (bad.length > 0) fail(`${c.nickname} 의 프레임에 허용 경로 밖 역할 문자열이 있음: ${[...new Set(bad.map((l) => l.path))].join(",")}`);
@@ -934,7 +1003,8 @@ async function stageFull(url, args) {
   const fig = await fetch(`${origin}${figPath}`);
   if (fig.status !== 200) fail(`${figPath} 상태 ${fig.status}`);
   if (!(fig.headers.get("content-type") ?? "").includes("image/png")) fail(`${figPath} 가 image/png 가 아님`);
-  if (!(fig.headers.get("cache-control") ?? "").includes("max-age=86400")) fail(`${figPath} 의 Cache-Control 에 max-age=86400 이 없음: ${fig.headers.get("cache-control")}`);
+  // 하루 캐시 헤더는 배포본(Workers 정적 에셋 _headers)의 것이다. 로컬 개발 서버(vite)는 no-cache 를 줘서 로컬 실행에서는 헤더를 보지 않는다.
+  if (!isLocal && !(fig.headers.get("cache-control") ?? "").includes("max-age=86400")) fail(`${figPath} 의 Cache-Control 에 max-age=86400 이 없음: ${fig.headers.get("cache-control")}`);
   await fig.arrayBuffer();
   // 가정 A10 기록용: @ 주소는 리다이렉트를 따르지 않고 응답 코드만 출력한다(실패 조건 아님).
   const atRes = await fetch(`${origin}/characters/table/fig1_boy_brown_default@2x.png`, { redirect: "manual" });
@@ -948,7 +1018,7 @@ async function stageFull(url, args) {
     const bg = await fetch(`${origin}${path}`);
     if (bg.status !== 200) fail(`${path} 상태 ${bg.status}`);
     if (!(bg.headers.get("content-type") ?? "").includes("image/webp")) fail(`${path} 가 image/webp 가 아님: ${bg.headers.get("content-type")}`);
-    if (!(bg.headers.get("cache-control") ?? "").includes("max-age=86400")) fail(`${path} 의 Cache-Control 에 max-age=86400 이 없음: ${bg.headers.get("cache-control")}`);
+    if (!isLocal && !(bg.headers.get("cache-control") ?? "").includes("max-age=86400")) fail(`${path} 의 Cache-Control 에 max-age=86400 이 없음: ${bg.headers.get("cache-control")}`);
     const bytes = new Uint8Array(await bg.arrayBuffer());
     const head = (from, to) => String.fromCharCode(...bytes.subarray(from, to));
     if (head(0, 4) !== "RIFF" || head(8, 12) !== "WEBP") fail(`${path} 가 RIFF…WEBP 머리가 아님`);
