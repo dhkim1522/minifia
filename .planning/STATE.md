@@ -5,16 +5,16 @@ milestone_name: 같은 공간
 current_phase: 06
 current_phase_name: 월드 뼈대
 status: verifying
-stopped_at: Completed 06-20-PLAN.md
-last_updated: "2026-11-01T04:58:33.759Z"
+stopped_at: Completed 06-22-PLAN.md
+last_updated: "2026-11-01T08:43:01.142Z"
 last_activity: 2026-11-01
 last_activity_desc: Phase 06 execution started
-state_head: df5ea03d42355b3eff1281b1ac514439c07e1aa9
+state_head: af82c027d24fc654d9ebb227b32b502248ce9e4d
 progress:
   total_phases: 7
   completed_phases: 0
-  total_plans: 21
-  completed_plans: 21
+  total_plans: 23
+  completed_plans: 22
   percent: 0
 ---
 
@@ -79,6 +79,7 @@ Progress: [░░░░░░░░░░] 0% (0/7 phases)
 | Phase 06 P18 | 41 min | 2 tasks | 9 files |
 | Phase 06 P19 | 50 min | 3 tasks | 16 files |
 | Phase 06 P20 | 12 min | 2 tasks | 4 files |
+| Phase 06 P22 | 6min | 3 tasks | 12 files |
 
 ## Accumulated Context
 
@@ -135,6 +136,7 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 06]: 06-18: deployhold 로컬 흉내는 worker/room.ts 파일 시각 갱신만으로 소켓이 끊기지 않아 미확인(가정 A1) — 06-19 의 실제 배포 1회로 확인
 - [Phase 06]: 06-19 렌더 성능 게이트 판정 a: 지금 예산(사다리 0단계, 자동 강등 1~3)으로 확정(사용자 선택). 조건 B 4행 통과 + iPhone 16 Pro(iOS용 Chrome) vote 5분 59.98fps·열감 차갑다. 미확인 실기기 항목은 9페이즈, 채팅 확인표는 7페이즈로 이월
 - [Phase 06]: 0057: 렌더 게이트 통과, 사다리 0단계(자동 강등 1~3), 3D 맵·캐릭터 유지
+- [Phase 06]: 06-22: 내 이름표 맨 위 + 겹친 맨 앞 하나만 overlay-ink-strong (G-06-4 사용자 결정), 가장자리 당기기·카메라 변경 없음
 
 ### Pending Todos
 
@@ -171,8 +173,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-01T04:58:33.727Z
-Stopped at: Completed 06-20-PLAN.md
+Last session: 2026-11-01T08:43:01.018Z
+Stopped at: Completed 06-22-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
