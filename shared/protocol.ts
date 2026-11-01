@@ -316,6 +316,55 @@ export type WorldFrame =
   | { t: "world"; k: "move"; s: number; p: number[]; t0: number; v: number }
   | { t: "world"; k: "snap"; at: number; ents: WorldSeg[] };
 
+// ---- 7페이즈 자유 채팅 계약(결정 0058, 07-02) ----
+// 키 이름은 ch·seat·seq·text·at·on·why·lines·pk 만 쓴다 — test/worker/leak.test.ts 의 FORBIDDEN_KEYS 에 id·playerId 가 있다.
+// 채널 필드는 클라이언트 → 서버 메시지에 없다(결정 0002): 채널은 서버가 보낸 사람의 상태로만 정한다(shared/game/audience.ts).
+// 이 구역의 타입은 아직 ClientMessage·ServerMessage 유니온 밖에 있다. 유니온에 넣는 일은 07-10·07-11 이다.
+/** 채팅 채널: all = 로비·낮의 공개, mafia = 밤의 마피아(와 탈락자 관전), ghost = 탈락자끼리. */
+export type ChatChannel = "all" | "mafia" | "ghost";
+/** 서버 → 클라이언트로 나가는 채팅 한 줄. 채널마다 따로 센 seq 와 보낸 사람 seat 뿐이다 — id·역할·수신자 마스크는 싣지 않는다. */
+export interface ChatLineWire {
+  ch: ChatChannel;
+  seat: number;
+  seq: number;
+  text: string;
+  at: number;
+}
+/** 막힌 이유: 도배 간격·같은 문장 반복·길이·단계/채널 불일치·그 밖(보이는 글자 없음). 보낸 사람에게만 알린다. */
+export type ChatRejectWhy = "rate" | "repeat" | "length" | "phase" | "other";
+export type ChatLineFrame = { t: "chat" } & ChatLineWire;
+export interface TypingFrame {
+  t: "typing";
+  seat: number;
+  on: boolean;
+}
+/** 접속 직후 한 번(비어 있어도 보낸다) — 이 좌석이 받았던 줄의 채널별 최근 30줄. */
+export interface ChatLogFrame {
+  t: "chatLog";
+  lines: ChatLineWire[];
+}
+export interface ChatRejectFrame {
+  t: "chatReject";
+  why: ChatRejectWhy;
+}
+/** pk = phaseKey(단계 한 번을 가리키는 '일차:단계'). 어긋나면 서버가 더 넓은 채널로 돌리지 않고 폐기한다. */
+export interface ChatSendMessage {
+  t: "chat";
+  text: string;
+  pk: string;
+}
+export interface TypingSendMessage {
+  t: "typing";
+  on: boolean;
+  pk: string;
+}
+/** 스키마 상한(UTF-16). 제품 규칙은 자소 100 이고 정확한 판정은 sanitizeChatText 가 한다. 1024B 프레임 안에 든다. */
+export const CHAT_TEXT_MAX_UTF16 = 300;
+export const PHASE_KEY_MAX = 32;
+/** 동작(몸짓) 종류 아홉 개(UI-SPEC 동작 종류 표). 10페이즈가 재사용한다 — 7페이즈는 표만 둔다. */
+export const EMOTE_IDS = ["throat", "deny", "clap", "cry", "handshake", "point", "praise", "surprise", "dance"] as const;
+export type EmoteId = (typeof EMOTE_IDS)[number];
+
 export type ServerMessage =
   | { t: "state"; view: RoomView }
   | { t: "pong"; c: number; serverNow: number }
