@@ -1,14 +1,14 @@
 // 4페이즈 처형·종료 UAT 를 봇으로 대신 도는 시나리오(결정 0034·0036). 봇이 방을 만들고 채워 두 판을 끝까지 돌며 결과 표를 낸다.
-// 스크립트는 전지적이다: 각 클라이언트의 view.me.role 로 마피아를 알고 그에 맞춰 표를 던진다. 직업 공개(claim)는 자기 차례에 none 을 바로 보낸다.
+// 스크립트는 전지적이다: 각 클라이언트의 view.me.role 로 마피아를 알고 그에 맞춰 표를 던진다. 직업 주장 차례는 없다(7페이즈).
 // 각 판은 토론 40초를 서버 타이머로 넘기고 처형 구간(최대 60초: 13 + 15 + 17 + 10 + 5)을 지난다. 두 판을 차례로 돈다. 전체 약 7~9분.
 //
 //   (a) 5명 — 처형으로 시민이 이기는 판
 //        여부 투표: 한 명이 반대 → 찬성으로 번복하고 넷 찬성·하나 반대. 매 표 뒤 모든 클라이언트의 execTally 가 같고 남의 voteAgree 는 없다.
 //        후보 선택: 마피아가 아닌 넷은 마피아를, 마피아는 다른 사람을 고른다. 한 표 뒤 투표자 외 클라이언트는 그 사이 state 를 받지 않는다.
 //        공개: 모든 클라이언트의 voteLog 마지막 줄 cand.votes 가 같은 순서·길이 5, candidate = 마피아.
-//        변론: 후보만 변론 메시지(defNotMe), 비후보 say → WRONG_PHASE, 비후보 이모티콘은 모두에게.
+//        변론: 후보뿐 아니라 누구나 chat 을 보낼 수 있고 후보·비후보의 줄이 모두에게 간다(ch all, UI-SPEC D1·결정 0053).
 //        처형: 모든 클라이언트 day.execution {seat, phrase 1..4}, 살아 있는 클라이언트 프레임에 처형자 직업이 허용 경로 밖에 없음.
-//        종료: 처형 5초 뒤 ended — 모든 클라이언트 같은 result(citizenWin, 5자리, 요약 1줄), 종료 중 say → WRONG_PHASE.
+//        종료: 처형 5초 뒤 ended — 모든 클라이언트 같은 result(citizenWin, 5자리, 요약 1줄), 종료 중 chat → chatReject{phase}(UI-SPEC D1: 결과 화면은 채팅 단계가 아니다).
 //   (b) 4명 — 밤 암살로 마피아가 이기는 판
 //        1일차 시민 하나 처형(마피아는 후보에서 뺌) → 밤: 마피아가 남은 비마피아 하나 지목 → morning(탈락)을 먼저 받고 5초 뒤 ended,
 //        mafiaWin, 요약 1일차 줄에 exec 와 night {target, died:true}.
@@ -40,7 +40,6 @@ const results = [];
 const check = (test, label, ok, detail = "") => results.push({ test, label, ok, detail });
 
 // 단계 시간(shared/game/phases.ts 와 같은 값. 스크립트는 TS 를 import 하지 않는다)
-const CLAIM_TURN_MS = 8_000;
 const DISCUSSION_MS = 40_000;
 const EXEC_VOTE_MS = 13_000;
 const CANDIDATE_VOTE_MS = 15_000;
@@ -56,12 +55,14 @@ const NIGHT_MS = 30_000;
 const MORNING_MS = 5_000;
 // shared/protocol.ts 의 EXECUTION_PHRASE_COUNT 와 같은 값. 처형 문구 번호는 1..4.
 const EXECUTION_PHRASE_COUNT = 4;
-const GAME_LIMIT_MS = 420_000; // 한 판 한도(최대 인원 × 8초 claim + 토론 + 처형 구간 + 밤·아침 + 여유)
+const GAME_LIMIT_MS = 360_000; // 한 판 한도(토론 + 처형 구간 + 밤·아침 + 여유)
 const OVERALL_LIMIT_MS = 2 * GAME_LIMIT_MS + 60_000;
 const ROLE_IDS = ["mafia", "police", "doctor", "citizen"];
-const CLAIM_STRINGS = new Set([...ROLE_IDS, "none"]);
-// 역할·주장 문자열이 나와도 되는 경로(배열 칸은 [] 로 줄여 비교한다). 처형자 직업은 ended 의 result.seats[].job 에서만 처음 나온다.
-const ALLOWED_ROLE_PATHS = new Set(["view.me.role", "view.day.roles[]", "view.day.claimLog[].claim"]);
+const ROLE_STRINGS = new Set(ROLE_IDS);
+// 역할 문자열이 나와도 되는 경로(배열 칸은 [] 로 줄여 비교한다). 처형자 직업은 ended 의 result.seats[].job 에서만 처음 나온다.
+// view.me.chat 은 서버가 정한 내 채널 이름(all·mafia·ghost)이다 — "mafia" 가 역할 문자열과 같은 글자일 뿐이라 허용하되,
+// 마피아가 아닌 사람의 프레임에 me.chat "mafia" 가 없는지는 mafiaChannelLeaks 가 따로 본다.
+const ALLOWED_ROLE_PATHS = new Set(["view.me.role", "view.day.roles[]", "view.me.chat"]);
 
 async function waitUntil(pred, ms, label) {
   const start = performance.now();
@@ -104,6 +105,22 @@ const canon = (v) => (Array.isArray(v) ? v.map(canon) : v && typeof v === "objec
 const same = (a, b) => JSON.stringify(canon(a)) === JSON.stringify(canon(b));
 const allSame = (xs) => xs.every((x) => same(x, xs[0]));
 
+// 단계 키 '일차:단계' — 받은 마지막 state 로 만든다(test/worker/helpers.ts 의 chatSend 와 같은 규칙).
+const pkOf = (c) => `${lastView(c)?.day?.n ?? 0}:${lastView(c)?.phase}`;
+const sendChat = (c, text) => send(c, { t: "chat", text, pk: pkOf(c) });
+const chatFrom = (c, seat, text, since) => c.frames.some((f) => f.at >= since && f.msg.t === "chat" && f.msg.seat === seat && f.msg.text === text);
+// chat 을 보내 chatReject 프레임의 이유를 돌려준다(응답이 없으면 "(응답 없음)").
+async function requestChatReject(c, text) {
+  const before = c.frames.length;
+  sendChat(c, text);
+  try {
+    await waitUntil(() => c.frames.slice(before).some((f) => f.msg.t === "chatReject"), 5000, "chatReject 프레임");
+  } catch {
+    return "(응답 없음)";
+  }
+  return c.frames.slice(before).find((f) => f.msg.t === "chatReject").msg.why;
+}
+
 // 요청을 보내 error 프레임의 코드를 돌려준다(응답이 없으면 "(응답 없음)").
 async function requestError(c, msg) {
   const before = c.frames.length;
@@ -116,10 +133,10 @@ async function requestError(c, msg) {
   return c.frames.slice(before).find((f) => f.msg.t === "error").msg.code;
 }
 
-// 값이 role·주장 문자열인 잎을 경로와 함께 모은다. 배열 인덱스는 [] 로 줄인다.
+// 값이 역할 문자열인 잎을 경로와 함께 모은다. 배열 인덱스는 [] 로 줄인다.
 function collectRoleStringPaths(value, path, out) {
   if (typeof value === "string") {
-    if (CLAIM_STRINGS.has(value)) out.push({ path, value });
+    if (ROLE_STRINGS.has(value)) out.push({ path, value });
   } else if (Array.isArray(value)) value.forEach((v) => collectRoleStringPaths(v, `${path}[]`, out));
   else if (value && typeof value === "object") {
     for (const [k, v] of Object.entries(value)) collectRoleStringPaths(v, path ? `${path}.${k}` : k, out);
@@ -138,7 +155,7 @@ function collectKeyPaths(value, key, path, out) {
   }
 }
 
-// 방을 만들고 채워 모두 연결한다. 직업 주장 응답기(자기 차례에 none 을 한 번)를 켠다.
+// 방을 만들고 채워 모두 연결한다.
 async function setupRoom(prefix, N) {
   const clients = Array.from({ length: N }, (_, i) => ({ nickname: `${prefix}${i + 1}`, token: "", seat: -1, frames: [], ws: null, role: null, leaving: false, closedCode: null }));
   const host = clients[0];
@@ -153,22 +170,10 @@ async function setupRoom(prefix, N) {
   }
   for (const c of clients) await connect(c, code);
   await waitUntil(() => lastView(host)?.players.every((p) => p.connected), 10_000, "모두 연결");
-  const claimSent = new Set();
-  const claimDriver = setInterval(() => {
-    for (const c of clients) {
-      const v = lastView(c);
-      if (!v || v.phase !== "claim" || v.day?.turn?.seat !== c.seat) continue;
-      const key = `${v.day.n}:${c.seat}`;
-      if (claimSent.has(key)) continue;
-      claimSent.add(key);
-      if (c.ws.readyState === WebSocket.OPEN) send(c, { t: "claim", claim: "none" });
-    }
-  }, 50);
-  return { clients, host, code, claimDriver };
+  return { clients, host, code };
 }
 
 function teardown(room) {
-  clearInterval(room.claimDriver);
   for (const c of room.clients) { c.leaving = true; try { send(c, { t: "leave" }); c.ws.close(); } catch { /* 닫힘 */ } }
 }
 
@@ -263,6 +268,11 @@ function roleStringLeaks(clients, exceptSeats) {
   return [...out];
 }
 
+// me.chat "mafia"(밤 마피아 채널)는 마피아 본인의 프레임에만 있어야 한다. 새는 클라이언트 이름을 모은다.
+function mafiaChannelLeaks(clients) {
+  return clients.filter((c) => c.role !== "mafia" && states(c).some((f) => f.msg.view.me.chat === "mafia")).map((c) => c.nickname);
+}
+
 function endedChecks(label, clients, winner, expectSummary) {
   const results_ = clients.map((c) => stateOf(c, "ended").msg.view.result);
   check(label, "ended: 모든 클라이언트가 같은 result", results_.every(Boolean) && allSame(results_), JSON.stringify(results_[0]).slice(0, 160));
@@ -281,6 +291,8 @@ function endedChecks(label, clients, winner, expectSummary) {
   check(label, "ended 프레임의 직업 문자열은 허용 경로와 result.seats[].job 뿐", endedBad.size === 0, [...endedBad].slice(0, 5).join(" "));
   const earlyResult = clients.some((c) => states(c).some((f) => f.msg.view.phase !== "ended" && f.msg.view.result !== undefined));
   check(label, "result 는 ended 단계 프레임에만 있음", !earlyResult, "");
+  const chLeaks = mafiaChannelLeaks(clients);
+  check(label, "me.chat \"mafia\"(밤 마피아 채널)는 마피아 본인의 프레임에만 있음", chLeaks.length === 0, chLeaks.join(","));
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -294,7 +306,7 @@ async function gameA() {
   send(host, { t: "start" });
 
   // ---- 여부 투표 ----
-  await waitUntil(() => allHave(clients, "execVote"), CLAIM_TURN_MS * 5 + 60_000 + DISCUSSION_MS, "1일차 execVote");
+  await waitUntil(() => allHave(clients, "execVote"), 60_000 + DISCUSSION_MS, "1일차 execVote");
   for (const c of clients) c.role = stateOf(c, "execVote").msg.view.me.role;
   const mafias = clients.filter((c) => c.role === "mafia");
   const mafia = mafias[0];
@@ -359,14 +371,16 @@ async function gameA() {
   const revealGap = Math.round(defenseAt - revealAt);
   check(T, `공개 약 ${revealMs / 1000}초 뒤 변론`, revealGap >= revealMs - 1000 && revealGap <= revealMs + 4000, `${revealGap}ms`);
   const nonCand = clients.filter((c) => c !== mafia);
-  const wrongSay = await requestError(nonCand[0], { t: "say", template: "defPlead" });
-  check(T, "변론: 비후보의 say → WRONG_PHASE", wrongSay === "WRONG_PHASE", wrongSay);
-  send(mafia, { t: "say", template: "defNotMe" });
-  await waitUntil(() => clients.every((c) => c.frames.some((f) => f.at >= defenseAt && f.msg.t === "chat" && f.msg.seat === mafia.seat && f.msg.template === "defNotMe")), 5000, "변론 chat 도착").catch(() => {});
-  check(T, "변론: 후보의 defNotMe 가 모든 클라이언트에 chat 프레임으로 감", clients.every((c) => c.frames.some((f) => f.at >= defenseAt && f.msg.t === "chat" && f.msg.seat === mafia.seat && f.msg.template === "defNotMe")), "");
-  send(nonCand[1], { t: "emoji", icon: "smile" });
-  await waitUntil(() => clients.every((c) => c.frames.some((f) => f.at >= defenseAt && f.msg.t === "emoji" && f.msg.seat === nonCand[1].seat)), 5000, "변론 이모티콘 도착").catch(() => {});
-  check(T, "변론: 비후보의 이모티콘이 모든 클라이언트에 감", clients.every((c) => c.frames.some((f) => f.at >= defenseAt && f.msg.t === "emoji" && f.msg.seat === nonCand[1].seat)), "");
+  // 변론은 후보만의 말이 아니다(결정 0053): 후보와 비후보의 chat 이 모두 ch all 로 모든 폰(보낸 폰 포함)에 간다.
+  sendChat(mafia, "저 아니에요");
+  sendChat(nonCand[0], "한 번 들어 봐요");
+  await waitUntil(() => clients.every((c) => chatFrom(c, mafia.seat, "저 아니에요", defenseAt) && chatFrom(c, nonCand[0].seat, "한 번 들어 봐요", defenseAt)), 5000, "변론 chat 도착").catch(() => {});
+  check(T, "변론: 후보의 chat 이 모든 클라이언트(보낸 폰 포함)에 ch all 로 감", clients.every((c) => chatFrom(c, mafia.seat, "저 아니에요", defenseAt)
+    && c.frames.some((f) => f.at >= defenseAt && f.msg.t === "chat" && f.msg.seat === mafia.seat && f.msg.ch === "all")), "");
+  check(T, "변론: 비후보도 chat 이 전달됨 (모든 클라이언트에 ch all)", clients.every((c) => chatFrom(c, nonCand[0].seat, "한 번 들어 봐요", defenseAt)
+    && c.frames.some((f) => f.at >= defenseAt && f.msg.t === "chat" && f.msg.seat === nonCand[0].seat && f.msg.ch === "all")), "");
+  const defRejects = clients.filter((c) => c.frames.some((f) => f.at >= defenseAt && f.msg.t === "chatReject")).map((c) => c.nickname);
+  check(T, "변론: 정상 chat 에 chatReject 가 없음", defRejects.length === 0, defRejects.join(","));
 
   // ---- 처형 ----
   await waitUntil(() => allHave(clients, "execution"), DEFENSE_MS + 10_000, "execution");
@@ -381,8 +395,10 @@ async function gameA() {
   const gap = Math.round(Math.min(...clients.map((c) => stateOf(c, "ended").at)) - Math.min(...clients.map((c) => stateOf(c, "execution").at)));
   check(T, `처형 약 ${EXECUTION_MS / 1000}초 뒤 ended`, gap >= EXECUTION_MS - 1000 && gap <= EXECUTION_MS + 4000, `${gap}ms`);
   endedChecks(T, clients, "citizenWin", (row) => row.n === 1 && same(row.exec, { yes: 4, no: 1, passed: true, candidate: mafia.seat }) && row.night === undefined);
-  const endedSay = await requestError(nonCand[0], { t: "say", template: "innocent" });
-  check(T, "종료 중 say → WRONG_PHASE", endedSay === "WRONG_PHASE", endedSay);
+  const endedChat = await requestChatReject(nonCand[0], "끝났나요");
+  check(T, "종료 중 chat → chatReject{phase}", endedChat === "phase", endedChat);
+  await sleep(500);
+  check(T, "종료 중 거절된 chat 이 다른 클라이언트에 가지 않음", clients.filter((c) => c !== nonCand[0]).every((c) => !c.frames.some((f) => f.msg.t === "chat" && f.msg.text === "끝났나요")), "");
   const endedViews = clients.map((c) => lastView(c));
   check(T, "종료 뒤에도 소켓이 열려 있고 마지막 단계가 ended", clients.every((c) => c.closedCode === null) && endedViews.every((v) => v.phase === "ended"), clients.filter((c) => c.closedCode !== null).map((c) => c.nickname).join(","));
   const tokenLeak = clients.some((c) => clients.some((o) => o !== c && c.frames.some((f) => f.raw.includes(o.token))));
@@ -400,7 +416,7 @@ async function gameB() {
   console.log(`  방 ${code} — 시작`);
   send(host, { t: "start" });
 
-  await waitUntil(() => allHave(clients, "execVote"), CLAIM_TURN_MS * 4 + 60_000 + DISCUSSION_MS, "1일차 execVote");
+  await waitUntil(() => allHave(clients, "execVote"), 60_000 + DISCUSSION_MS, "1일차 execVote");
   for (const c of clients) c.role = stateOf(c, "execVote").msg.view.me.role;
   const mafia = clients.find((c) => c.role === "mafia");
   const police = clients.find((c) => c.role === "police");

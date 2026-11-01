@@ -1,8 +1,7 @@
-// 테스트 방 서버 봇(결정 0024) 배포본 확인: testBots 로 봇을 앉히고 빼고, 봇이 주장·토론 메시지·밤 pick 을 저절로 하며,
-// 어떤 프레임에도 봇 표시(isBot·botPlan·token)가 새지 않고, 일반 방·손님·시작 뒤에는 거부되는지 증명한다.
+// 테스트 방 서버 봇(결정 0024) 배포본 확인: testBots 로 봇을 앉히고 빼고, 봇이 낮 토론과 밤(마피아)에 자유 채팅 줄을 보내고(문구는 고정 목록 안, 7페이즈)
+// 밤 pick 을 저절로 하며, 어떤 프레임에도 봇 표시(isBot·botPlan·token)가 새지 않고, 일반 방·손님·시작 뒤에는 거부되는지 증명한다.
 // 방장 1명(+ 사람 손님 1명)만 사람이고 나머지는 서버 봇이라 외부 봇 스크립트 없이 한 판의 모든 단계가 돈다(전체 약 2분).
-// 직업 주장은 한 명씩 차례로 한다(결정 0023·0027): 방장이 자기 차례에 말 안 함을 보내면 봇 네 자리가 자기 차례에 주장해 day.claimLog 에 쌓인다.
-// claim 단계의 [넘기기](testSkip)는 차례 하나씩이라(결정 0027-9) 단계를 넘기는 도우미가 목표 단계에 닿을 때까지 되풀이한다.
+// 봇의 채팅 줄은 사람과 같은 chat 프레임(ch·seat·seq·text·at)으로 올 뿐 봇 표시가 없다. 직업 주장 차례는 없다 — 넘기기 한 번 = 단계 하나다.
 // 낮 토론 뒤는 4페이즈 흐름이다(결정 0034·0036): execVote → (통과하면) candidateVote → candidateVoteReveal → defense → execution → night, 불통과면 곧장 night.
 // 넘기기는 투표 단계에서 안 던진 봇 표를 먼저 채우고(결정 0022·0024) 분기를 따르므로 어느 길로 갈지는 무작위다 — 그래서 넘기기 도우미는
 // "목표 단계 또는 ended 까지" 되풀이하고 지나간 단계를 기록한다. 판이 ended 로 끝나면(마피아가 처형된 경우 등) 결과에 적고 testReset 으로 다음 검사를 잇는다.
@@ -41,15 +40,19 @@ const OVERALL_LIMIT_MS = 360_000; // 투표 분기와 g 방 재시도로 예전(
 // 서버는 연결당 1초에 20개를 넘는 메시지를 처리하지 않는다(RATE_LIMITED). 빠른 서버에서도 넘지 않도록 요청 사이를 띄운다.
 const RATE_PAUSE_MS = 150;
 const SKIP_WAIT_MS = 3000; // 단계 넘기기 한 번 뒤 소켓이 새 단계를 받아야 하는 시간
-const CLAIM_WAIT_MS = 4 * 4000 + 4000; // 봇 넷의 차례 주장: 한 차례에 0.5~3.5초 뒤 보내므로 넷이면 최대 14초 + 여유
-const MAX_SKIPS = 24; // 목표 단계에 닿기까지 testSkip 최대 횟수(8명 판이 claim 차례 여덟 + 나머지 단계)
-const DISCUSSION_WAIT_MS = 15_000; // 봇 첫 토론 행동은 단계 진입 2~12초 뒤
+const MAX_SKIPS = 12; // 목표 단계에 닿기까지 testSkip 최대 횟수(한 판 단계 수보다 넉넉히)
+const DISCUSSION_WAIT_MS = 15_000; // 봇 첫 토론 줄은 단계 진입 2~12초 뒤
+const NIGHT_CHAT_WAIT_MS = 15_000; // 마피아 봇 밤 줄은 60% 확률로 진입 8~14초 뒤 한 번
 const NIGHT_PICK_WAIT_MS = 8000; // 봇 밤 pick 은 단계 진입 1~6초 뒤
 const EXEC_VOTE_WAIT_MS = 9000; // 봇 여부 투표는 단계 진입 1~7초 뒤(단계 길이 13초 안)
 const MAX_ATTEMPTS = 6; // g 방: 방장·동료 마피아가 둘 다 살아 밤에 닿을 때까지 다시 시도하는 최대 판 수
 const MAX_NIGHTS = 5;
 const BOT_NAMES = ["봇가나다라마바사", "봇아자차카타파하", "봇갸냐댜랴먀뱌샤", "봇야쟈챠캬탸퍄햐", "봇거너더러머버서", "봇어저처커터퍼허", "봇고노도로모보소"];
 const PLAYER_KEYS = "alive,connected,isHost,nickname,seat";
+// shared/game/bots.ts 의 BOT_CHAT_LINES·BOT_NIGHT_LINES·BOT_DEFENSE_LINES 사본이다(.mjs 가 TS 를 읽지 못해 import 하지 않는다). 문구를 고치면 함께 고친다.
+const BOT_CHAT_LINES = ["저 아니에요", "누가 수상해요?", "조용한 사람이 수상해요", "어제 그 말 이상했어요", "믿어 주세요", "투표 신중하게 해요", "다들 뭐 했어요?", "저는 시민 같아요"];
+const BOT_NIGHT_LINES = ["동의해요", "그 사람으로 가요", "다른 사람으로 해요"];
+const CHAT_FRAME_KEYS = "at,ch,seat,seq,t,text";
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const results = [];
 const check = (test, label, ok, detail = "") => results.push({ test, label, ok, detail });
@@ -152,12 +155,12 @@ async function waitPhase(clients, phase, ms, label) {
 }
 
 /**
- * 목표 단계 또는 ended 에 닿을 때까지 testSkip 을 되풀이한다(최대 MAX_SKIPS 번). claim 은 차례 하나씩, 투표 단계는 분기를 따라 넘어간다.
+ * 목표 단계 또는 ended 에 닿을 때까지 testSkip 을 되풀이한다(최대 MAX_SKIPS 번). 투표 단계는 분기를 따라 넘어간다.
  * 매번 단계 또는 마감이 바뀔 때까지 기다린다. ended 에서는 testSkip 이 WRONG_PHASE 라 더 누르지 않는다(되풀이가 멈추지 않는 일을 막는다).
  * 돌려주는 값: ended = 목표가 아닌데 판이 끝났음, path = 지나간 단계(들어간 순서, 시작 단계 제외).
  */
 async function skipPhase(c, next, label) {
-  const stamp = () => `${lastView(c)?.phase}:${lastView(c)?.phaseEndsAt}:${lastView(c)?.day?.turn?.seat}`;
+  const stamp = () => `${lastView(c)?.phase}:${lastView(c)?.phaseEndsAt}`;
   const path = [];
   for (let i = 0; i < MAX_SKIPS && lastView(c)?.phase !== next && lastView(c)?.phase !== "ended"; i++) {
     await sleep(RATE_PAUSE_MS);
@@ -246,26 +249,19 @@ async function main() {
   await skipTo("roleReveal");
   check("d", "roleReveal: 방장 me.role 이 citizen, 인원 5", lastView(host).me.role === "citizen" && lastView(host).players.length === 5, String(lastView(host).me.role));
   await skipTo("dayAnnounce");
-  await skipTo("claim");
   const botSeats = botSeatsOf(host);
-  const roles1 = lastView(host).day?.roles ?? [];
-  check("d", "claim: 첫 차례는 방장 (day.turn.seat 가 방장 seat)", lastView(host).day?.turn?.seat === host.seat, String(lastView(host).day?.turn?.seat));
-  // 방장(사람 소켓)이 자기 차례에 말 안 함을 보낸다. 이어 봇 네 자리가 자기 차례에 저절로 주장한다.
-  await sleep(RATE_PAUSE_MS);
-  send(host, { t: "claim", claim: "none" });
-  const claimedAll = await becomes(() => botSeats.every((s) => lastView(host).day?.claimLog?.some((e) => e.n === 1 && e.seat === s)), CLAIM_WAIT_MS);
-  const log1 = lastView(host).day?.claimLog ?? [];
-  check("d", "claim: 봇 네 자리가 자기 차례에 주장해 day.claimLog 에 쌓였다", claimedAll && botSeats.length === 4, `봇 ${botSeats.join(",")} 기록 ${log1.map((e) => `${e.seat}:${e.claim}`).join(" ")}`);
-  check("d", "claimLog: 봇이 고른 값은 이번 판 직업 또는 none 이고 같은 seat 가 두 번 나오지 않음",
-    log1.every((e) => e.claim === "none" || roles1.includes(e.claim)) && new Set(log1.map((e) => e.seat)).size === log1.length, `후보 ${roles1.join(",")}`);
-  check("d", "claimLog: 방장이 보낸 none 이 첫 줄", log1[0]?.seat === host.seat && log1[0]?.claim === "none", JSON.stringify(log1[0] ?? null));
-  await waitPhase([host], "discussion", SKIP_WAIT_MS, "마지막 차례 뒤 discussion");
+  check("d", "봇 자리 넷이 방장 view 에 있음", botSeats.length === 4, botSeats.join(","));
   const discMark = host.frames.length;
   await skipTo("discussion");
-  const talked = await becomes(() => host.frames.slice(discMark).some((f) => (f.msg.t === "chat" || f.msg.t === "emoji") && botSeats.includes(f.msg.seat)), DISCUSSION_WAIT_MS);
-  check("d", "discussion: 15초 안에 봇 자리에서 온 chat 또는 emoji 프레임이 있음", talked, "");
-  const discErrors = host.frames.slice(discMark).filter((f) => f.msg.t === "error").length;
-  check("d", "discussion: 방장에게 오류 프레임이 없음(봇 거부는 소켓에 닿지 않음)", discErrors === 0, String(discErrors));
+  check("d", "dayAnnounce 다음은 곧바로 discussion (직업 주장 단계 없음)", lastView(host).phase === "discussion" && !states(host).some((f) => f.msg.view.phase === "claim"), "");
+  // 낮 토론: 봇 자리에서 자유 채팅 줄(chat 프레임)이 저절로 온다. 줄은 사람과 같은 모양이고 본문은 고정 문구 목록 안이다.
+  const botChat = (f) => f.msg.t === "chat" && botSeats.includes(f.msg.seat);
+  const talked = await becomes(() => host.frames.slice(discMark).some(botChat), DISCUSSION_WAIT_MS);
+  check("d", "discussion: 15초 안에 봇 자리에서 온 chat 프레임이 있음", talked, "");
+  const botLines = host.frames.slice(discMark).filter(botChat).map((f) => f.msg);
+  check("d", "discussion: 봇 줄은 모두 ch all 이고 본문이 고정 문구 목록(낮 토론 문구) 안", botLines.length > 0 && botLines.every((l) => l.ch === "all" && BOT_CHAT_LINES.includes(l.text)), botLines.map((l) => l.text).join(" | "));
+  const discErrors = host.frames.slice(discMark).filter((f) => f.msg.t === "error" || f.msg.t === "chatReject").length;
+  check("d", "discussion: 방장에게 오류·chatReject 프레임이 없음(봇 거부는 소켓에 닿지 않음)", discErrors === 0, String(discErrors));
 
   // 처형 여부 투표: 봇 네 자리가 저절로 던진다(1~7초 뒤). 방장(사람)은 던지지 않으므로 방장 집계 합계 = 봇 수이고 me.voteAgree 는 없다.
   await skipTo("execVote");
@@ -291,7 +287,7 @@ async function main() {
     if (n === 1) check("d", "아침 결과가 옴(day.morning 이 있음)", morning !== undefined, JSON.stringify(morning));
     if (morning?.eliminated !== undefined) eliminated = morning.eliminated;
     if (eliminated === null && n < MAX_NIGHTS) {
-      for (const phase of ["dayAnnounce", "claim", "discussion", "night"]) {
+      for (const phase of ["dayAnnounce", "discussion", "night"]) {
         const r = await skipTo(phase);
         if (r.ended) { gameEnded = true; break; }
       }
@@ -313,10 +309,18 @@ async function main() {
   const hostText = host.frames.map((f) => f.raw).join("\n");
   const guestText = guest.frames.map((f) => f.raw).join("\n");
   // 문자열 검색이라 단계 이름 값("phase":"execVote" 등)과 겹치지 않도록 투표·판정 서버 전용 키는 키 꼴(따옴표+콜론)로 찾는다.
-  const LEAK_NEEDLES = ["isBot", "botPlan", '"token"', "claimPick", "claimOrder", "claimIdx", "claimStart", '"execVote":', '"candidateVote":', '"verdict":', '"nightLog":', '"lastExecPhrase":'];
-  check("e", "방장·손님 프레임 원문에 isBot·botPlan·따옴표 붙은 token 키·서버 전용 키(주장·투표·판정·밤 일지·처형 문구)가 없음",
+  const LEAK_NEEDLES = ["isBot", "botPlan", '"token"', '"execVote":', '"candidateVote":', '"verdict":', '"nightLog":', '"lastExecPhrase":'];
+  check("e", "방장·손님 프레임 원문에 isBot·botPlan·따옴표 붙은 token 키·서버 전용 키(투표·판정·밤 일지·처형 문구)가 없음",
     ![hostText, guestText].some((t) => LEAK_NEEDLES.some((needle) => t.includes(needle))), "");
   check("e", "손님 프레임에 testBots 가 없음", !guestText.includes("testBots"), "");
+  // 봇이 보낸 줄도 사람 줄과 같은 모양이다: 키는 ch·seat·seq·text·at 뿐이고(봇 표시·수신자 마스크 없음) 본문은 어떤 고정 목록에도 없는 글이 아니다.
+  const chatFrames = [host, guest].flatMap((c) => c.frames.filter((f) => f.msg.t === "chat"));
+  const badChatKeys = chatFrames.filter((f) => Object.keys(f.msg).sort().join(",") !== CHAT_FRAME_KEYS);
+  check("e", "chat 프레임 키는 ch·seat·seq·text·at 뿐 (봇 표시·수신자 없음)", badChatKeys.length === 0, String(badChatKeys.length));
+  const knownLines = new Set([...BOT_CHAT_LINES, ...BOT_NIGHT_LINES]);
+  const botSeatSet = new Set(botSeats);
+  const oddBotText = chatFrames.filter((f) => botSeatSet.has(f.msg.seat) && !knownLines.has(f.msg.text)).map((f) => f.msg.text);
+  check("e", "봇 자리에서 온 모든 chat 본문이 고정 문구 목록 안", oddBotText.length === 0, oddBotText.join(" | "));
   check("e", "방장은 한 번도 안 던졌으니 방장 프레임 어디에도 voteAgree 키가 없음(남의 여부 표가 새지 않음)", !hostText.includes('"voteAgree"'), "");
   const badKeys = [host, guest].flatMap((c) => states(c).flatMap((f) => f.msg.view.players.filter((p) => Object.keys(p).sort().join(",") !== PLAYER_KEYS)));
   check("e", "모든 state 의 players 항목 키가 alive·connected·isHost·nickname·seat 다섯", badKeys.length === 0, String(badKeys.length));
@@ -346,7 +350,6 @@ async function main() {
   send(h2, { t: "testBots", count: 5 });
   check("g", "방장 testBots 5 → 인원 6", await becomes(() => lobbySize(h2, 6), SKIP_WAIT_MS), String(lastView(h2).players.length));
   await act(h2, { t: "testRole", role: "mafia" });
-  // claim 은 차례 하나씩 넘기기라 여섯 번 누른다(방장 + 봇 다섯). 이 방은 [넘기기] 경로를, R1 은 봇이 스스로 주장하는 경로를 본다.
   // 1일차 여부 투표가 통과하면 처형이 한 명 나온다(봇 표는 넘기기가 채운다). 방장이나 동료 마피아가 처형되면 이 방의 목적(살아 있는 동료 봇 마피아의
   // 밤 pick 이 방장에게 보임)을 볼 수 없으므로, 둘 다 살아 밤에 닿을 때까지 대기실로 되돌려 다시 시작한다(최대 MAX_ATTEMPTS 판).
   const skip2 = (next) => skipPhase(h2, next, `R2 ${next}`);
@@ -364,7 +367,7 @@ async function main() {
     send(h2, { t: "start" });
     await waitPhase([h2], "assigning", 5000, "R2 배정");
     let ended = false;
-    for (const phase of ["roleReveal", "dayAnnounce", "claim", "discussion", "night"]) {
+    for (const phase of ["roleReveal", "dayAnnounce", "discussion", "night"]) {
       const r = await skip2(phase);
       if (phase === "night") paths.push(r.path.join(">"));
       if (r.ended) { ended = true; break; }
@@ -375,14 +378,19 @@ async function main() {
   }
   console.log(`R2 밤 도달 시도 ${attempts}판, 마지막 판 discussion 이후 경로 ${paths.at(-1)}`);
   check("g", `방장·동료 마피아가 모두 살아 밤에 닿음(${attempts}번째 판, 처형이 둘 중 하나면 다시 시작)`, ready, paths.join(" | "));
-  const log2 = lastView(h2).day?.claimLog ?? [];
-  check("g", "claim 차례 넘기기 여섯 번: 여섯 자리가 claimLog 에 한 번씩 (방장부터 seat 오름차순)",
-    log2.length === 6 && log2.every((e, k) => e.n === 1 && e.seat === k), log2.map((e) => `${e.seat}:${e.claim}`).join(" "));
   check("g", "방장 me.role 이 mafia, 동료(me.allies)가 봇 한 자리", lastView(h2).me.role === "mafia" && lastView(h2).me.allies?.length === 1, `${lastView(h2).me.role} ${JSON.stringify(lastView(h2).me.allies)}`);
   const picked = await becomes(() => (lastView(h2).me.allyPicks?.length ?? 0) > 0, NIGHT_PICK_WAIT_MS);
   const ap = lastView(h2).me.allyPicks ?? [];
   check("g", "8초 안에 방장 me.allyPicks 가 비어 있지 않고 방장·동료 자리가 아님(봇 마피아의 pick)",
     picked && ap.every((s) => s !== h2.seat && !(lastView(h2).me.allies ?? []).includes(s)), JSON.stringify(ap));
+  // 마피아 봇의 밤 채팅은 60% 확률(진입 8~14초 뒤 한 줄)이라 오지 않아도 실패가 아니다. 오면 ch mafia 이고 본문이 고정 밤 문구 안이어야 한다.
+  const allySeat = (lastView(h2).me.allies ?? [])[0];
+  const nightChat = (f) => f.msg.t === "chat" && f.msg.seat === allySeat;
+  const nightMark = h2.frames.findLastIndex((f) => f.msg.t === "state" && f.msg.view.phase === "night");
+  const gotNight = await becomes(() => h2.frames.slice(nightMark).some(nightChat), NIGHT_CHAT_WAIT_MS);
+  const nightLines = h2.frames.slice(nightMark).filter(nightChat).map((f) => f.msg);
+  check("g", `밤 마피아 봇의 줄(60% 확률): ${gotNight ? "왔다" : "이번 밤은 없음"} — 오면 ch mafia 이고 본문이 고정 밤 문구 안`,
+    nightLines.every((l) => l.ch === "mafia" && BOT_NIGHT_LINES.includes(l.text)), nightLines.map((l) => `${l.ch}:${l.text}`).join(" | "));
   await skip2("morning");
   check("g", "아침 결과가 옴(day.morning 이 있음)", lastView(h2).day?.morning !== undefined, JSON.stringify(lastView(h2).day?.morning));
   send(h2, { t: "testReset" });
