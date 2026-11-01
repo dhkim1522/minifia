@@ -234,6 +234,6 @@ describe("phaseKey — 단계 한 번(instance)마다 유일한 키", () => {
       if (state.phase === "ended") break;
       check(state);
     }
-    for (const phase of ["dayAnnounce", "discussion", "night"] as PhaseId[]) expect(seen.has(phase)).toBe(true);
+    for (const phase of ["dayAnnounce", "discussion", "night", "morning"] as PhaseId[]) expect(seen.has(phase)).toBe(true);
   });
 });
