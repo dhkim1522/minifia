@@ -21,6 +21,7 @@ import type {
 } from "../protocol";
 import { MAX_PLAYERS, MIN_PLAYERS } from "../protocol";
 import { isAlive } from "./alive";
+import { channelOf } from "./audience";
 import { botCount } from "./bots";
 import { phaseDurationOf } from "./discussion";
 import { buildSummary } from "./endgame";
@@ -142,6 +143,10 @@ export function buildView(state: RoomState, playerId: string, now: number): Room
         .sort((a, b) => a - b);
     }
   }
+
+  // 내 채널은 서버가 보낸 사람 상태로 정한 값(channelOf) 그대로 본인에게만 싣는다(07-10). 말할 수 없으면(밤의 산 비마피아·채팅 단계 밖) 키 자체가 없다.
+  const ch = channelOf(state, me.id);
+  if (ch !== null) myInfo.chat = ch;
 
   // 테스트 방 방장 본인에게만(결정 0022): testMode 는 버튼을 그리는 방장만 알면 되고, testRole 은 시트의 '내 직업' 칸이 있는 대기실에서만 실린다.
   // 손님 view·미리보기에는 키 자체가 없다 — 불리언과 방장 본인의 선택뿐이라 역할·토큰과 무관하다.

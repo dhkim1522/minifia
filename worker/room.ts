@@ -976,16 +976,12 @@ export class Room extends DurableObject<Env> {
     return spawned;
   }
 
-  // world 프레임의 유일한 전송 경로. 6페이즈 수신자 = 로비의 연결된 전원. 7~9페이즈의 audience 함수가 이 자리로 들어온다(RESEARCH R6).
+  // world 프레임도 audience 한 길을 지난다(로비가 아니면 빈 집합 — 6페이즈 동작 그대로, T-06-16). 수신자 = 로비의 방 사람 전원.
   // broadcastEvent 를 world 에 쓰지 않는다 — 그쪽은 단계를 가리지 않는 무차별 방송이라 게임 중 위치가 샌다(T-06-16).
   private emitWorld(frame: WorldFrame): void {
     const room = this.room;
-    if (!room || room.phase !== "lobby") return;
-    for (const ws of this.ctx.getWebSockets()) {
-      const att = ws.deserializeAttachment() as SocketAttachment | null;
-      if (!att || !room.players.some((p) => p.id === att.playerId)) continue;
-      this.sendTo(ws, frame);
-    }
+    if (!room) return;
+    this.deliver(audience(room, { k: "world" }), frame);
   }
 
   private sendTo(ws: WebSocket, msg: ServerMessage): void {

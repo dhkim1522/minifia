@@ -453,7 +453,7 @@ describe("buildView", () => {
     const s = attachConnection(newRoom(), "h1", "c1");
     const view = buildView(s, "h1", 5000);
     expect(Object.keys(view.players[0]!).sort().join(",")).toBe(["alive", "connected", "isHost", "nickname", "seat"].join(","));
-    expect(view.me).toEqual({ seat: 0, isHost: true });
+    expect(view.me).toEqual({ seat: 0, isHost: true, chat: "all" }); // 07-10: 대기실의 내 채널
     expect(view.serverNow).toBe(5000);
     expect(view.phaseDurationMs).toBeNull();
     const text = JSON.stringify(view);

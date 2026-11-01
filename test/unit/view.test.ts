@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { say } from "../../shared/game/chat";
 import type { SayInput } from "../../shared/game/chat";
 import { isAlive } from "../../shared/game/alive";
+import { channelOf } from "../../shared/game/audience";
 import { pickTarget } from "../../shared/game/night";
 import { DISCUSSION_MS, EXEC_VOTE_MS, MORNING_MS, NIGHT_MS, PHASE_DEFS, candidateRevealMs } from "../../shared/game/phases";
 import { ROOM_TTL_MS, attachConnection, createRoomState, joinRoom, startGame } from "../../shared/game/room";
@@ -169,7 +170,9 @@ function roleValueLeaks(view: RoomView, spectator = false): string[] {
         ROLE_LIKE_VALUES.has(value) &&
         !ALLOWED_ROLE_VALUE_PATHS.has(path) &&
         !(spectator && path === SPECTATE_ROLE_VALUE_PATH) &&
-        !(view.phase === "ended" && path === RESULT_ROLE_VALUE_PATH),
+        !(view.phase === "ended" && path === RESULT_ROLE_VALUE_PATH) &&
+        // 07-10: me.chat 의 값 mafia 는 그 밤의 산 마피아 본인 view 에서만 나온다(받을 권리가 있는 조건으로만 허용, 탈락한 마피아는 ghost).
+        !(path === "me.chat" && value === "mafia" && view.phase === "night" && view.me.role === "mafia" && !spectator),
     )
     .map(([path, value]) => `${path}=${value}`);
 }
@@ -265,7 +268,7 @@ const DAY_VIEW_PHASES: ReadonlySet<PhaseId> = new Set([
   "dayAnnounce", "discussion", "execVote", "candidateVote", "candidateVoteReveal", "defense", "execution", "night", "morning", "ended",
 ]);
 const ME_KEYS: ReadonlySet<string> = new Set([
-  "seat", "isHost", "role", "allies", "testMode", "testRole", "testBots", "testBotVote", "pick", "allyPicks", "records", "voteAgree", "voteTarget",
+  "seat", "isHost", "role", "allies", "testMode", "testRole", "testBots", "testBotVote", "pick", "allyPicks", "records", "voteAgree", "voteTarget", "chat",
 ]);
 const DAY_KEYS: ReadonlySet<string> = new Set([
   "n", "roles", "voteLog", "morning", "execTally", "candidate", "execution", "noExecution",
@@ -285,6 +288,12 @@ function phaseKeyViolations(s: RoomState, viewer: Player, view: RoomView, phase:
   if (("result" in view) !== (phase === "ended")) out.push(`${tag}: result presence ${"result" in view}`);
   for (const key of Object.keys(view.me)) if (!ME_KEYS.has(key)) out.push(`${tag}: me key ${key}`);
   for (const path of keyPaths(view)) if (SERVER_ONLY_KEYS.includes(lastKey(path))) out.push(`${tag}: server-only key at ${path}`);
+
+  // 내 채널(07-10): 서버 상태로 정한 channelOf 와 같고, 말할 수 없으면 키가 없다. 본인 view 의 me 밖에는 chat 키가 없다.
+  const wantChat = channelOf(s, viewer.id);
+  if (("chat" in view.me) !== (wantChat !== null)) out.push(`${tag}: me.chat presence ${"chat" in view.me}`);
+  else if (wantChat !== null && view.me.chat !== wantChat) out.push(`${tag}: me.chat value ${String(view.me.chat)}`);
+  for (const path of keyPaths(view)) if (lastKey(path) === "chat" && path !== "me.chat") out.push(`${tag}: chat key outside me at ${path}`);
 
   // 본인 표: 생존한 본인이 던졌을 때만, 본인 view 의 me 에만
   const wantAgree = phase === "execVote" && isAlive(viewer) && viewer.execVote !== undefined;
@@ -1521,7 +1530,9 @@ describe("buildView me.chat — 서버가 정한 내 채널 (07-10, CHAT-02·03)
     "%s: 살아 있는 사람은 모두 all",
     (phase) => {
       const s = stateAt(phase, 6, 1);
-      expect(chatLine(s)).toBe(everyone(s, "all"));
+      // 처형 발표 단계에는 방금 처형된 사람이 이미 탈락 상태다 — 그 사람은 ghost, 산 사람은 all.
+      const want = [...s.players].sort((a, b) => a.seat - b.seat).map((p) => `${p.seat}:${isAlive(p) ? "all" : "ghost"}`).join(" ");
+      expect(chatLine(s)).toBe(want);
     },
   );
 
