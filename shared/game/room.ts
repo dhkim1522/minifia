@@ -297,6 +297,8 @@ const LEGACY_PHASES = { day: "day", claimReveal: "claimReveal", claim: "claim" }
 const LEGACY_CLAIM_STATE_KEYS = ["claimOrder", "claimIdx", "claimStart", "claimPick", "claimLog"] as const;
 /** 결정 0023 이전 Player 의 주장 필드 — 지금은 방 상태의 claimLog 로 대신한다. */
 const LEGACY_CLAIM_KEYS = ["claimChoice", "claimShown", "claimLast", "claimChanged"] as const;
+/** 결정 0058 로 대체된 채팅 옛 번호 필드(방 키). 줄 번호는 이제 채널별로 DO 가 chat: 키 복원 때 다시 센다. */
+const LEGACY_CHAT_ROOM_KEYS = ["nextMessageSeq", "nextNightSeq"] as const;
 
 /**
  * 저장소에서 읽은 방 상태를 새 코드에 맞춘다. 순수 함수다 — 호출(DO 생성자)과 알람 재설정은 호출하는 쪽의 몫이다.
@@ -307,6 +309,7 @@ const LEGACY_CLAIM_KEYS = ["claimChoice", "claimShown", "claimLast", "claimChang
  * - 방 상태의 주장 키 다섯(claimOrder·claimIdx·claimStart·claimPick·claimLog)은 어느 단계에 있든 키째 뺀다.
  * - 모든 플레이어에서 옛 주장 필드 넷을 키째 뺀다.
  * 채팅은 서버에 저장하지 않는다(결정 0017-7) — 배포 전 저장된 messages 는 깨어날 때 지운다.
+ * 채팅 옛 번호·쿨다운 필드(결정 0058 로 대체): 방 키 nextMessageSeq·nextNightSeq 와 Player 키 lastSendAt 도 키째 뺀다.
  * 아무것도 해당하지 않으면 같은 객체를 돌려준다(DO 생성자의 "바뀌었을 때만 저장·알람" 규칙이 이 동일성에 기댄다).
  * 새 optional 필드가 없는 옛 상태는 읽는 쪽 기본값이 받는다(RESEARCH Pattern 6).
  */
@@ -317,8 +320,9 @@ export function normalizeStoredRoom(stored: RoomState, now: number): RoomState {
   const isLegacyClaim = phase === LEGACY_PHASES.claim;
   const hasOldClaimState = LEGACY_CLAIM_STATE_KEYS.some((key) => Object.hasOwn(stored, key));
   const hasOldMessages = Object.hasOwn(stored, "messages");
-  const hasOldPlayerFields = stored.players.some((p) => LEGACY_CLAIM_KEYS.some((key) => Object.hasOwn(p, key)));
-  if (!isLegacyDay && !isLegacyReveal && !isLegacyClaim && !hasOldClaimState && !hasOldMessages && !hasOldPlayerFields) return stored;
+  const hasOldChatRoomKeys = LEGACY_CHAT_ROOM_KEYS.some((key) => Object.hasOwn(stored, key));
+  const hasOldPlayerFields = stored.players.some((p) => LEGACY_CLAIM_KEYS.some((key) => Object.hasOwn(p, key)) || Object.hasOwn(p, "lastSendAt"));
+  if (!isLegacyDay && !isLegacyReveal && !isLegacyClaim && !hasOldClaimState && !hasOldMessages && !hasOldChatRoomKeys && !hasOldPlayerFields) return stored;
   // 옛 키는 구조 분해로만 뺀다. 필드 선언이 RoomState 에서 사라져도 컴파일되게 지역 교차 타입으로 받는다.
   const {
     messages: _dropped,
@@ -327,6 +331,8 @@ export function normalizeStoredRoom(stored: RoomState, now: number): RoomState {
     claimStart: _start,
     claimPick: _pick,
     claimLog: _log,
+    nextMessageSeq: _msgSeq,
+    nextNightSeq: _nightSeq,
     ...rest
   } = stored as RoomState & {
     messages?: unknown;
@@ -335,13 +341,15 @@ export function normalizeStoredRoom(stored: RoomState, now: number): RoomState {
     claimStart?: unknown;
     claimPick?: unknown;
     claimLog?: unknown;
+    nextMessageSeq?: unknown;
+    nextNightSeq?: unknown;
   };
   let next: RoomState = rest;
   if (hasOldPlayerFields) {
     next = {
       ...next,
       players: next.players.map((p) => {
-        const { claimChoice: _a, claimShown: _b, claimLast: _c, claimChanged: _d, ...kept } = p as typeof p & Record<string, unknown>;
+        const { claimChoice: _a, claimShown: _b, claimLast: _c, claimChanged: _d, lastSendAt: _e, ...kept } = p as typeof p & Record<string, unknown>;
         return kept as typeof p;
       }),
     };
