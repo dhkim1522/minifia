@@ -1,4 +1,4 @@
-import { act, cleanup, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { RoomView } from "../../shared/protocol";
 import type { WorldStageProps } from "../../src/components/WorldStage";
@@ -458,3 +458,96 @@ describe("RoomScreen: 맵 로비 연결 (MAP-01, MAP-05, CONN-04, 06-15)", () =>
     expect(container.querySelector(".mv-toast__text")?.textContent ?? "").toBe("");
   });
 });
+
+describe("RoomScreen: 채팅 저장소 연결 (CHAT-01, 07-13)", () => {
+  const mount = () => render(<RoomScreen code="0042" token={"t".repeat(43)} onExit={vi.fn()} />);
+  const again = (rerender: (ui: React.ReactElement) => void) => rerender(<RoomScreen code="0042" token={"t".repeat(43)} onExit={vi.fn()} />);
+  const players2: RoomView["players"] = [
+    { seat: 0, nickname: "민수", connected: true, isHost: true },
+    { seat: 1, nickname: "하윤", connected: true, isHost: false },
+  ];
+  const at = (phase: RoomView["phase"], extra: Partial<RoomView> = {}): RoomView => ({ ...view, phase, players: players2, me: { seat: 1, isHost: false }, ...extra });
+  const chatFrame = (seq: number, text: string): RoomEvent => ({ t: "chat", ch: "all", seat: 0, seq, text, at: 1000 + seq });
+  const texts = (container: HTMLElement): string => [...container.querySelectorAll(".mv-chat__msg .mv-chat__text")].map((el) => el.textContent ?? "").join("|");
+  let listener: ((e: RoomEvent, meta: { epoch: number }) => void) | undefined;
+  const withListener = (over: Partial<RoomConnection> = {}) => {
+    listener = undefined;
+    connectionMock.current = conn({
+      onEvent: vi.fn((l: (e: RoomEvent, meta: { epoch: number }) => void) => {
+        listener = l;
+        return () => {};
+      }),
+      ...over,
+    });
+  };
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+    stage.props = null;
+  });
+
+  it("연결과 같은 구독 하나로 chat 프레임이 로비 기록 칸에 들어온다", () => {
+    withListener({ view: at("lobby") });
+    const { container } = mount();
+    expect(texts(container)).toBe("");
+    act(() => listener!(chatFrame(1, "안녕하세요"), { epoch: 1 }));
+    expect(texts(container)).toBe("안녕하세요");
+    expect((connectionMock.current as RoomConnection).onEvent).toHaveBeenCalledTimes(1);
+  });
+
+  it("chatLog 가 줄을 다시 채운다", () => {
+    withListener({ view: at("lobby") });
+    const { container } = mount();
+    act(() => listener!({ t: "chatLog", lines: [{ ch: "all", seat: 0, seq: 1, text: "복원 줄", at: 1001 }] }, { epoch: 1 }));
+    expect(texts(container)).toBe("복원 줄");
+  });
+
+  it("같은 판의 대기실 → 대기실(새 view 객체)에서는 줄을 비우지 않는다", () => {
+    withListener({ view: at("lobby") });
+    const { container, rerender } = mount();
+    act(() => listener!(chatFrame(1, "남는 줄"), { epoch: 1 }));
+    connectionMock.current = { ...(connectionMock.current as RoomConnection), view: at("lobby", { serverNow: 2000 }) };
+    again(rerender);
+    expect(texts(container)).toBe("남는 줄");
+  });
+
+  it("게임으로 갔다가 대기실로 돌아오면 줄을 비운다 (A2)", () => {
+    vi.useFakeTimers();
+    vi.stubGlobal("matchMedia", (q: string) => ({ matches: q.includes("reduce"), media: q, addEventListener: () => {}, removeEventListener: () => {}, addListener: () => {}, removeListener: () => {} }));
+    withListener({ view: at("lobby") });
+    const { container, rerender } = mount();
+    act(() => listener!(chatFrame(1, "지난 판 줄"), { epoch: 1 }));
+    expect(texts(container)).toBe("지난 판 줄");
+    connectionMock.current = { ...(connectionMock.current as RoomConnection), view: at("assigning") };
+    again(rerender);
+    connectionMock.current = { ...(connectionMock.current as RoomConnection), view: at("lobby") };
+    again(rerender);
+    expect(texts(container)).toBe("");
+  });
+
+  it("처음 받는 view 가 대기실이어도 비우기는 일어나지 않는다 (줄은 그 뒤에 들어온다)", () => {
+    withListener({ view: at("lobby") });
+    const { container } = mount();
+    act(() => listener!(chatFrame(1, "첫 줄"), { epoch: 1 }));
+    expect(texts(container)).toBe("첫 줄");
+  });
+
+  it("거절 프레임은 기록 칸 맨 아래 알림으로 뜬다", () => {
+    withListener({ view: at("lobby") });
+    const { container } = mount();
+    act(() => listener!({ t: "chatReject", why: "rate" }, { epoch: 1 }));
+    expect(container.querySelector("[data-chat-notice]")?.textContent).toBe("조금 천천히 보내요");
+  });
+
+  it("보내기는 연결의 send 로 chat 메시지를 보낸다", () => {
+    const send = vi.fn(() => true);
+    withListener({ view: at("lobby"), send });
+    const { container } = mount();
+    const input = container.querySelector("[data-chat-input]") as HTMLInputElement;
+    fireEvent.change(input, { target: { value: "하이" } });
+    fireEvent.submit(input.closest("form") as HTMLFormElement);
+    expect(JSON.stringify(send.mock.calls[0]?.[0])).toBe(JSON.stringify({ t: "chat", text: "하이", pk: "0:lobby" }));
+  });
+});
+

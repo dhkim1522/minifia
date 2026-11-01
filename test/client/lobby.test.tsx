@@ -161,6 +161,101 @@ describe("Lobby — 맵 로비 틀 (MAP-01, 06-15)", () => {
   });
 });
 
+describe("Lobby — 채팅 패널: 기록 + 입력줄 + 행동 줄 (CHAT-01, 07-13)", () => {
+  const base = [player(0, "민수"), player(1, "서준")];
+  const sysTexts = (container: HTMLElement): string => [...container.querySelectorAll(".mv-chat__sys")].map((el) => el.textContent ?? "").join("|");
+
+  it("패널 안에서 [data-chat-panel][data-chat-channel=all] 이 위, 그 아래에 방장 [시작]", () => {
+    const { container } = render(lobby(makeView(base, 0)));
+    const panel = container.querySelector(".mf-lobby__panel") as HTMLElement;
+    const chat = panel.querySelector('[data-chat-panel][data-chat-channel="all"]') as HTMLElement;
+    const start = panel.querySelector("[data-lobby-start]") as HTMLElement;
+    expect(chat === null || start === null).toBe(false);
+    expect((chat.compareDocumentPosition(start) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0).toBe(true);
+  });
+
+  it("손님은 같은 자리에 '방장을 기다리는 중…' 이 채팅 아래에 온다", () => {
+    const { container } = render(lobby(makeView(base, 1)));
+    const panel = container.querySelector(".mf-lobby__panel") as HTMLElement;
+    const chat = panel.querySelector("[data-chat-panel]") as HTMLElement;
+    const wait = within(panel).getByRole("button", { name: "방장을 기다리는 중…" });
+    expect((chat.compareDocumentPosition(wait) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0).toBe(true);
+  });
+
+  it("기록 칸 높이는 방 높이로 한 번 정한 값이다(780 미만 96)", () => {
+    const { container } = render(lobby(makeView(base, 0)));
+    const log = container.querySelector("[data-chat-log]") as HTMLElement;
+    expect(log.style.height).toBe("96px");
+  });
+
+  it("보내기는 단계 키와 함께 chat 메시지를 보낸다 (채널 필드 없음)", () => {
+    const send = vi.fn(() => true);
+    const { container } = render(lobby(makeView(base, 1), { send }));
+    const input = container.querySelector("[data-chat-input]") as HTMLInputElement;
+    fireEvent.change(input, { target: { value: "안녕하세요" } });
+    fireEvent.submit(input.closest("form") as HTMLFormElement);
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(JSON.stringify(send.mock.calls[0]?.[0])).toBe(JSON.stringify({ t: "chat", text: "안녕하세요", pk: "0:lobby" }));
+  });
+
+  it("재접속 띠가 떠 있어도(canSend 거짓) 입력칸은 쓸 수 있고 보내기만 aria-disabled 다", () => {
+    const { container } = render(lobby(makeView(base, 1), { canSend: false, bannerVisible: true }));
+    const input = container.querySelector("[data-chat-input]") as HTMLInputElement;
+    expect(input.disabled).toBe(false);
+    fireEvent.change(input, { target: { value: "쓰는 중" } });
+    expect(input.value).toBe("쓰는 중");
+    expect((container.querySelector("[data-chat-send]") as HTMLElement).getAttribute("aria-disabled")).toBe("true");
+  });
+
+  it("손님이 들어오면 기록 칸에 '{닉네임} 님 입장' 시스템 줄이 남는다 (위 알림과 같은 문구)", () => {
+    const { container, rerender } = render(lobby(makeView(base, 0), { epoch: 0 }));
+    expect(sysTexts(container)).toBe("");
+    rerender(lobby(makeView([...base, player(2, "하윤")], 0), { epoch: 0 }));
+    expect(sysTexts(container)).toBe("하윤 님 입장");
+    expect(toastText(container)).toBe("하윤 님 입장");
+  });
+
+  it("한 번에 둘이 들어오면 둘 다 기록에 남는다", () => {
+    const { container, rerender } = render(lobby(makeView(base, 0), { epoch: 0 }));
+    rerender(lobby(makeView([...base, player(2, "하윤"), player(3, "지아")], 0), { epoch: 0 }));
+    expect(sysTexts(container)).toBe("하윤 님 입장|지아 님 입장");
+  });
+
+  it("퇴장은 '{닉네임} 님 퇴장'", () => {
+    const three = [...base, player(2, "영희")];
+    const { container, rerender } = render(lobby(makeView(three, 0), { epoch: 0 }));
+    rerender(lobby(makeView(base, 0), { epoch: 0 }));
+    expect(sysTexts(container)).toBe("영희 님 퇴장");
+  });
+
+  it("epoch 가 바뀐 첫 view(재연결 직후)에서는 입장 줄을 만들지 않는다", () => {
+    const { container, rerender } = render(lobby(makeView(base, 0), { epoch: 0 }));
+    rerender(lobby(makeView([...base, player(2, "하윤")], 0), { epoch: 1 }));
+    expect(sysTexts(container)).toBe("");
+    rerender(lobby(makeView([...base, player(2, "하윤"), player(3, "지아")], 0), { epoch: 1 }));
+    expect(sysTexts(container)).toBe("지아 님 입장");
+  });
+
+  it("재접속 띠가 떠 있는 동안에도 기록에는 남는다 (알림만 억제)", () => {
+    const { container, rerender } = render(lobby(makeView(base, 0), { epoch: 0, bannerVisible: true }));
+    rerender(lobby(makeView([...base, player(2, "하윤")], 0), { epoch: 0, bannerVisible: true }));
+    expect(toastText(container)).toBe("");
+    expect(sysTexts(container)).toBe("하윤 님 입장");
+  });
+
+  it("방장이 바뀌어도 기록에는 남기지 않는다 (A1)", () => {
+    const { container, rerender } = render(lobby(makeView(base, 1), { epoch: 0 }));
+    rerender(lobby(makeView([player(0, "민수", { isHost: false }), player(1, "서준", { isHost: true })], 1), { epoch: 0 }));
+    expect(sysTexts(container)).toBe("");
+  });
+
+  it("StrictMode 이중 효과에서도 입장 줄이 한 번만 남는다", () => {
+    const { container, rerender } = render(<StrictMode>{lobby(makeView(base, 0), { epoch: 0 })}</StrictMode>);
+    rerender(<StrictMode>{lobby(makeView([...base, player(2, "하윤")], 0), { epoch: 0 })}</StrictMode>);
+    expect(sysTexts(container)).toBe("하윤 님 입장");
+  });
+});
+
 describe("Lobby — 행동 줄: [시작] 과 점, 손님 (ROOM-03, UI-SPEC 행동 줄)", () => {
   const start = (container: HTMLElement) => container.querySelector("[data-lobby-start]") as HTMLButtonElement | null;
   // 방장(seat 0) + 연결된 참가자 n 명 + 끊긴 참가자 away 명
