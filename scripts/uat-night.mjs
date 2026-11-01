@@ -1,18 +1,22 @@
-// 3페이즈 밤·아침 UAT 를 봇으로 대신 도는 시나리오. 봇이 방을 만들고 채워 밤 두 번을 돌며 결과 표를 낸다.
+// 3페이즈 밤·아침 UAT 를 봇으로 대신 도는 시나리오(7페이즈 자유 채팅 기준). 봇이 방을 만들고 채워 밤 두 번을 돌며 결과 표를 낸다.
 // 스크립트는 전지적이다: 각 클라이언트의 view.me.role 로 역할을 알고 그 역할대로 행동시킨다.
-// 낮은 직업 주장 차례(결정 0023·0027)에 자기 차례가 오면 말 안 함(none)을 바로 보내고 토론 40초·처형 여부 투표 13초(표를 안 던짐 → 미통과 → 밤, 결정 0036)는 서버 타이머로 넘긴다. 전체 약 4분.
+// 낮은 dayAnnounce → discussion 이다(직업 주장 차례는 없다). 토론 40초·처형 여부 투표 13초(표를 안 던짐 → 미통과 → 밤, 결정 0036)는 서버 타이머로 넘긴다. 전체 약 4분.
+// 채팅은 자유 채팅 `{t:"chat", text, pk}`·`{t:"typing", on, pk}` 다(pk = 받은 마지막 state 의 `${day.n ?? 0}:${phase}`). 채널은 서버가 보낸 사람 상태로 정한다(결정 0002):
+// 밤의 마피아는 ch mafia, 탈락자는 언제나 ch ghost(탈락자에게만), 살아 있는 비마피아는 밤에 말할 채널이 없다(chatReject phase).
 // 역할별 일지(결정 0026·0027-11)를 본다: 경찰 수사 {n,target,isMafia}, 마피아 암살 {n,target,died}, 의사 치료 {n,target}.
 //
-//   밤1: 마피아 전원 → 시민 X 지목, 경찰 → 마피아 조사, 의사 → 자신 보호, 마피아 한 명이 밤 채팅(nightTarget).
-//        마피아가 둘(6명 이상)이면 서로 다른 시민 A·B 를 골라 동률 추첨을 본다(탈락자는 둘 중 하나).
+//   밤1: 마피아 전원 → 시민 X 지목, 경찰 → 마피아 조사, 의사 → 자신 보호, 마피아 한 명이 밤 채팅(chat ch mafia)·입력 중(typing).
+//        마피아가 둘(6명 이상)이면 서로 다른 시민 A·B 를 골라 동률 추첨을 본다(탈락자는 둘 중 하나). 경찰의 밤 chat → chatReject phase(보낸 폰에만).
 //   아침1: 모든 폰이 같은 day.morning(탈락자 = 지목한 사람, 문구 1..MORNING_PHRASE_COUNT), players[].alive 일치, 경찰 기록 1건·isMafia true,
 //          마피아 전원 같은 암살일지 1건(target = 탈락자, died true), 의사 치료일지 1건(target = 자신),
-//          그 역할 밖 프레임에는 records 키 없음·줄 키는 역할별, 살아 있는 비마피아는 밤 chat·emoji 0,
+//          그 역할 밖 프레임에는 records 키 없음·줄 키는 역할별, 살아 있는 비마피아는 밤 chat·typing 0,
 //          탈락자만 spectate(모든 직업), 아침 중 pick → WRONG_PHASE.
-//   밤2: 탈락자(관전자)가 밤 행동 state(spectate.picks)·마피아 채팅·이모티콘을 받고, 자기 pick·say·emoji 는 BAD_MESSAGE.
-//        마피아 → 시민 Z, 의사 → Z 보호(의사 없는 4명판은 탈락).
+//   낮2: 산 사람의 토론 chat 은 ch all 로 탈락자 포함 모든 폰에 간다.
+//   밤2: 탈락자(관전자)가 밤 행동 state(spectate.picks)·마피아 채팅을 받고, 자기 pick 은 BAD_MESSAGE,
+//        자기 chat 은 ch ghost 로 탈락자에게만 간다(산 사람 프레임 0). 마피아 → 시민 Z, 의사 → Z 보호(의사 없는 4명판은 탈락).
 //   아침2: 의사 구출이면 모든 폰의 morning 이 {} 로 같고(구출 비공개), 경찰 기록은 2건,
 //          마피아 전원의 마지막 암살일지는 died false(구출), 의사 마지막 치료일지는 구한 seat.
+//   전체: chat 프레임 키는 ch·seat·seq·text·at 뿐(역할·템플릿·수신자 마스크 없음).
 //
 // 사용법: node scripts/uat-night.mjs [--prod | <기준 주소>] [--players 4~8]
 // 화면 모양·애니메이션·실제 폰 시계 차이는 봇으로 볼 수 없다. 토큰은 어떤 출력에도 찍지 않는다.
@@ -38,10 +42,8 @@ const N = args.players;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const results = [];
 const check = (test, label, ok, detail = "") => results.push({ test, label, ok, detail });
-const CLAIM_TURN_MS = 8_000;
-const CLAIM_WAIT_MS = CLAIM_TURN_MS * N; // 차례 대기 한도: 모두 시간 초과일 때 최대 인원 × 8초
 const EXEC_VOTE_MS = 13_000; // 처형 여부 투표(shared/game/phases.ts EXEC_VOTE_MS): 하루마다 표를 안 던지고 지나간다
-const OVERALL_LIMIT_MS = 540_000 + 2 * EXEC_VOTE_MS + CLAIM_WAIT_MS;
+const OVERALL_LIMIT_MS = 540_000 + 2 * EXEC_VOTE_MS;
 // shared/protocol.ts 의 MORNING_PHRASE_COUNT 와 같은 값(스크립트는 TS 를 import 하지 않는다). 아침 탈락 문구 번호는 1..7.
 const MORNING_PHRASE_COUNT = 7;
 // 역할별 일지 줄의 키 집합
@@ -78,6 +80,7 @@ function connect(c, code) {
   });
 }
 
+const c_typings = (c) => c.frames.filter((f) => f.msg.t === "typing").length;
 const states = (c) => c.frames.filter((f) => f.msg.t === "state");
 const lastView = (c) => states(c).at(-1)?.msg.view ?? null;
 const stateAt = (c, phase, n) => states(c).find((f) => f.msg.view.phase === phase && f.msg.view.day?.n === n);
@@ -97,12 +100,25 @@ async function requestError(c, msg) {
   return c.frames.slice(before).find((f) => f.msg.t === "error").msg.code;
 }
 
+// 단계 키 '일차:단계' — 받은 마지막 state 로 만든다.
+const pkOf = (c) => `${lastView(c)?.day?.n ?? 0}:${lastView(c)?.phase}`;
+const sendChat = (c, text) => send(c, { t: "chat", text, pk: pkOf(c) });
+const sendTyping = (c, on) => send(c, { t: "typing", on, pk: pkOf(c) });
+const rejects = (c) => c.frames.filter((f) => f.msg.t === "chatReject");
+
 // 한 밤(단계 night n 시작부터 morning n 시작 전까지)에 받은 프레임 중 종류별 개수
 function nightCounts(c, n) {
   const from = stateAt(c, "night", n)?.at ?? Infinity;
   const to = stateAt(c, "morning", n)?.at ?? Infinity;
   const win = c.frames.filter((f) => f.at >= from && f.at < to);
-  return { chat: win.filter((f) => f.msg.t === "chat").length, emoji: win.filter((f) => f.msg.t === "emoji").length, states: win.filter((f) => f.msg.t === "state").length };
+  const chatsIn = win.filter((f) => f.msg.t === "chat");
+  return {
+    chat: chatsIn.length,
+    chatMafia: chatsIn.filter((f) => f.msg.ch === "mafia").length,
+    chatGhost: chatsIn.filter((f) => f.msg.ch === "ghost").length,
+    typing: win.filter((f) => f.msg.t === "typing").length,
+    states: win.filter((f) => f.msg.t === "state").length,
+  };
 }
 
 async function main() {
@@ -120,27 +136,12 @@ async function main() {
   }
   for (const c of clients) await connect(c, code);
   await waitUntil(() => lastView(host)?.players.every((p) => p.connected), 10_000, "모두 연결");
-  // 차례 응답기: 자기 차례(claim 단계 + day.turn.seat === 내 seat)가 오면 일차마다 한 번 none 을 보낸다(키 = 일차:seat).
-  // 2일차 첫 차례는 탈락자 claim 거부 시험이 끝날 때까지 붙든다(차례가 빨리 지나가 claim 단계가 끝나면 WRONG_PHASE 가 되어 시험이 틀어진다).
-  let holdDay2Claims = true;
-  const claimSent = new Set();
-  const claimDriver = setInterval(() => {
-    for (const c of clients) {
-      const v = lastView(c);
-      if (!v || v.phase !== "claim" || v.day?.turn?.seat !== c.seat) continue;
-      if (v.day.n === 2 && holdDay2Claims) continue;
-      const key = `${v.day.n}:${c.seat}`;
-      if (claimSent.has(key)) continue;
-      claimSent.add(key);
-      if (c.ws.readyState === WebSocket.OPEN) send(c, { t: "claim", claim: "none" });
-    }
-  }, 50);
   console.log(`방 ${code} — 시작`);
   send(host, { t: "start" });
 
-  // ---- 1일차 낮: 차례마다 none 을 보내고 토론은 서버 타이머로 밤까지 (약 100초) ----
-  console.log("1일차 낮을 타이머로 넘기는 중(약 2분)");
-  await waitUntil(() => clients.every((c) => stateAt(c, "night", 1)), 170_000 + EXEC_VOTE_MS + CLAIM_WAIT_MS, "1일차 밤");
+  // ---- 1일차 낮: 토론은 서버 타이머로 밤까지 (약 1분) ----
+  console.log("1일차 낮을 타이머로 넘기는 중(약 1분)");
+  await waitUntil(() => clients.every((c) => stateAt(c, "night", 1)), 170_000 + EXEC_VOTE_MS, "1일차 밤");
   for (const c of clients) c.role = stateAt(c, "night", 1).msg.view.me.role;
   const byRole = (r) => clients.filter((c) => c.role === r);
   const mafias = byRole("mafia").sort((a, b) => a.seat - b.seat);
@@ -167,9 +168,20 @@ async function main() {
   const wantAlly = (i) => sorted(new Set(mafias.map((_, k) => k).filter((k) => k !== i).map((k) => mafiaPick1(k))));
   await waitUntil(() => mafias.every((m, i) => same(lastView(m).me.allyPicks, wantAlly(i))), 10_000, "밤1 동료 선택(allyPicks)");
   check("밤1", "마피아 allyPicks 가 동료가 고른 대상 seat 뿐", true, dual ? "마피아 둘이 서로의 선택만 봄" : "마피아 혼자: 빈 배열");
+  // 밤 마피아 채팅: 입력 중(typing) → 한 줄(chat ch mafia). 살아 있는 마피아 전원이 받고, 보낸 폰은 자기 입력 중을 받지 않는다.
   const talker1 = mafias[0];
-  send(talker1, { t: "say", template: "nightTarget", target: mafiaPick1(0) });
-  await waitUntil(() => mafias.every((m) => m.frames.some((f) => f.msg.t === "chat" && f.msg.template === "nightTarget")), 10_000, "밤1 마피아 채팅 도착");
+  const typ1Before = new Map(mafias.map((m) => [m, c_typings(m)]));
+  sendTyping(talker1, true);
+  await sleep(300);
+  sendChat(talker1, "저 사람으로 가요");
+  sendTyping(talker1, false);
+  await waitUntil(() => mafias.every((m) => nightCounts(m, 1).chatMafia >= 1), 10_000, "밤1 마피아 채팅 도착");
+  if (dual) await waitUntil(() => mafias.filter((m) => m !== talker1).every((m) => c_typings(m) >= typ1Before.get(m) + 2), 10_000, "밤1 마피아 입력 중 도착");
+  // 살아 있는 비마피아(경찰)의 밤 chat 은 채널이 없어 막힌다 — 거절 이유는 phase 하나이고 보낸 폰에만 알린다(다른 폰엔 아무것도 없음).
+  const rejBefore = rejects(police).length;
+  sendChat(police, "저도 말할래요");
+  await waitUntil(() => rejects(police).length > rejBefore, 10_000, "밤1 경찰 chat 거절");
+  check("밤1", "산 비마피아(경찰)의 밤 chat → chatReject phase", rejects(police).at(-1).msg.why === "phase", rejects(police).at(-1).msg.why);
   await sleep(1500); // 새는 프레임이 있다면 도착할 시간
 
   // ---- 아침1 ----
@@ -206,10 +218,12 @@ async function main() {
     .flatMap((f) => (f.msg.view.me.records ?? []).map((line) => Object.keys(line).sort().join(",")).filter((k) => k !== RECORD_KEYS[c.role])));
   check("아침1", "일지 줄 키가 역할별 (경찰 isMafia·마피아 died·의사 n,target)", recKeyBad.length === 0, recKeyBad.join(" | "));
   const nonMafiaAlive = clients.filter((c) => c.role !== "mafia");
-  const leak1 = nonMafiaAlive.map((c) => nightCounts(c, 1)).reduce((a, k) => a + k.chat + k.emoji, 0);
-  const mafiaGot1 = mafias.every((m) => nightCounts(m, 1).chat >= 1);
-  check("밤1", "살아 있는 비마피아의 밤 chat·emoji 프레임 0", leak1 === 0, `비마피아 ${nonMafiaAlive.length}명 합계 ${leak1}`);
-  check("밤1", "마피아는 모두 밤 채팅을 받음", mafiaGot1, "");
+  const leak1 = nonMafiaAlive.map((c) => nightCounts(c, 1)).reduce((a, k) => a + k.chat + k.typing, 0);
+  const mafiaGot1 = mafias.every((m) => nightCounts(m, 1).chatMafia >= 1 && nightCounts(m, 1).chat === nightCounts(m, 1).chatMafia);
+  check("밤1", "살아 있는 비마피아의 밤 chat·typing 프레임 0", leak1 === 0, `비마피아 ${nonMafiaAlive.length}명 합계 ${leak1}`);
+  check("밤1", "마피아는 모두 밤 채팅을 ch mafia 로 받음 (보낸 폰 포함)", mafiaGot1, "");
+  const selfTyping1 = c_typings(talker1) === typ1Before.get(talker1);
+  check("밤1", "보낸 폰은 자기 입력 중 프레임을 받지 않음" + (dual ? "" : " (마피아 혼자라 다른 마피아 수신은 해당 없음)"), selfTyping1, "");
   const citizenIdle = citizens.filter((c) => c.seat !== X);
   const idleStates = citizenIdle.map((c) => nightCounts(c, 1).states);
   check("밤1", "행동하지 않은 시민은 밤 동안 state 1개(밤 시작)뿐", idleStates.every((n) => n === 1), `시민 state 수 ${idleStates.join(",")}`);
@@ -223,13 +237,16 @@ async function main() {
   const roleTextOthers = clients.filter((c) => c !== xClient).some((c) => c.frames.some((f) => f.msg.t === "state" && /"job"/.test(f.raw)));
   check("아침1", "살아 있는 클라이언트 프레임에 job 키 없음", !roleTextOthers, "");
 
-  // ---- 2일차 낮 (탈락자 거부) ----
-  console.log("2일차 낮 — 탈락자 claim 거부 확인 후 타이머로 밤까지");
-  await waitUntil(() => stateAt(xClient, "claim", 2), 40_000 + CLAIM_WAIT_MS, "2일차 claim");
-  const claimCode = await requestError(xClient, { t: "claim", claim: "none" });
-  check("낮2", "탈락자의 claim → BAD_MESSAGE", claimCode === "BAD_MESSAGE", claimCode);
-  holdDay2Claims = false;
-  await waitUntil(() => clients.every((c) => stateAt(c, "night", 2)), 150_000 + EXEC_VOTE_MS + CLAIM_WAIT_MS, "2일차 밤");
+  // ---- 2일차 낮: 산 사람의 토론 chat 은 ch all 로 탈락자 포함 모든 폰에 간다 ----
+  console.log("2일차 낮 — 토론 채팅이 탈락자에게도 가는지 확인 후 타이머로 밤까지");
+  await waitUntil(() => clients.every((c) => stateAt(c, "discussion", 2)), 60_000, "2일차 discussion");
+  const day2Talker = clients.find((c) => c !== xClient && c.role !== "mafia");
+  const day2Before = new Map(clients.map((c) => [c, c.frames.filter((f) => f.msg.t === "chat").length]));
+  sendChat(day2Talker, "어제 누가 갔죠");
+  await waitUntil(() => clients.every((c) => c.frames.filter((f) => f.msg.t === "chat").length > day2Before.get(c)), 10_000, "낮2 chat 도착");
+  const day2Lines = clients.map((c) => c.frames.filter((f) => f.msg.t === "chat").at(-1).msg);
+  check("낮2", "산 사람의 낮 chat 이 ch all 로 탈락자 포함 모든 폰에", day2Lines.every((l) => l.ch === "all" && l.seat === day2Talker.seat), `ch ${day2Lines[0].ch}, 폰 ${clients.length}대`);
+  await waitUntil(() => clients.every((c) => stateAt(c, "night", 2)), 150_000 + EXEC_VOTE_MS, "2일차 밤");
 
   // ---- 밤2 ----
   console.log("2일차 밤 — 관전자 수신·구출");
@@ -252,26 +269,27 @@ async function main() {
   const actualJobs = lastView(xClient)?.spectate?.seats ?? [];
   check("밤2", "탈락자 view 의 실제 직업(spectate.seats)이 모두 맞음", actualJobs.length === N && actualJobs.every((s) => s.job === bySeatClient(s.seat).role), "");
 
+  // 마피아의 밤 채팅은 탈락자(관전자)도 받는다. 마피아 전원도 받는다.
   const talker2 = mafias[0];
-  send(talker2, { t: "say", template: "nightAgree" });
-  await waitUntil(() => mafias.every((m) => m.frames.some((f) => f.msg.t === "chat" && f.msg.template === "nightAgree")), 10_000, "밤2 마피아 채팅 도착");
-  await sleep(2100);
-  send(talker2, { t: "emoji", icon: "suspicious" });
-  await waitUntil(() => mafias.every((m) => nightCounts(m, 2).emoji >= 1), 10_000, "밤2 마피아 이모티콘 도착");
+  sendChat(talker2, "이번엔 저 사람이에요");
+  await waitUntil(() => mafias.every((m) => nightCounts(m, 2).chatMafia >= 1), 10_000, "밤2 마피아 채팅 도착");
+  await waitUntil(() => nightCounts(xClient, 2).chatMafia >= 1, 10_000, "밤2 탈락자의 마피아 줄 수신");
+  // 탈락자의 chat 은 ch ghost 로 탈락자에게만 간다 — 보낸 폰(탈락자)은 받고 산 사람 프레임에는 없다.
+  sendChat(xClient, "여기는 유령 방");
+  await waitUntil(() => nightCounts(xClient, 2).chatGhost >= 1, 10_000, "밤2 탈락자 ghost 줄 도착");
   await sleep(1500);
   const xCounts = nightCounts(xClient, 2);
-  check("밤2", "탈락자가 마피아 밤 채팅·이모티콘을 받음", xCounts.chat >= 1 && xCounts.emoji >= 1, `chat ${xCounts.chat}, emoji ${xCounts.emoji}`);
+  check("밤2", "탈락자가 마피아 밤 채팅(ch mafia)을 받고 자기 줄은 ch ghost 로 받음", xCounts.chatMafia >= 1 && xCounts.chatGhost === 1, `mafia ${xCounts.chatMafia}, ghost ${xCounts.chatGhost}`);
   const aliveNonMafia2 = alive2.filter((c) => c.role !== "mafia");
-  const leak2 = aliveNonMafia2.map((c) => nightCounts(c, 2)).reduce((a, k) => a + k.chat + k.emoji, 0);
-  check("밤2", "살아 있는 비마피아의 밤 chat·emoji 프레임 0", leak2 === 0, `비마피아 ${aliveNonMafia2.length}명 합계 ${leak2}`);
-  // 탈락자의 행동은 모두 BAD_MESSAGE, 그 뒤 다른 클라이언트에 X 의 chat·emoji 가 없음
+  const leak2 = aliveNonMafia2.map((c) => nightCounts(c, 2)).reduce((a, k) => a + k.chat + k.typing, 0);
+  check("밤2", "살아 있는 비마피아의 밤 chat·typing 프레임 0", leak2 === 0, `비마피아 ${aliveNonMafia2.length}명 합계 ${leak2}`);
+  const ghostLeak = alive2.some((c) => nightCounts(c, 2).chatGhost > 0 || c.frames.some((f) => f.msg.t === "chat" && f.msg.ch === "ghost"));
+  check("밤2", "탈락자의 ch ghost 줄이 산 사람(마피아 포함) 프레임에 0건", !ghostLeak, "");
+  const xEcho = clients.filter((c) => c !== xClient).some((c) => c.frames.some((f) => f.msg.t === "chat" && f.msg.seat === X));
+  check("밤2", "탈락자가 보낸 줄(seat X)이 다른 폰에 없음", !xEcho, "");
+  // 탈락자의 pick 은 BAD_MESSAGE (행동 불가)
   const xPick = await requestError(xClient, { t: "pick", target: Z });
-  const xSay = await requestError(xClient, { t: "say", template: "nightAgree" });
-  const xEmoji = await requestError(xClient, { t: "emoji", icon: "smile" });
-  check("밤2", "탈락자의 pick·say·emoji → BAD_MESSAGE", xPick === "BAD_MESSAGE" && xSay === "BAD_MESSAGE" && xEmoji === "BAD_MESSAGE", `pick ${xPick}, say ${xSay}, emoji ${xEmoji}`);
-  await sleep(1000);
-  const xEcho = clients.filter((c) => c !== xClient).some((c) => c.frames.some((f) => (f.msg.t === "chat" || f.msg.t === "emoji") && f.msg.seat === X && f.at >= stateAt(c, "night", 2).at));
-  check("밤2", "탈락자의 거부된 요청이 다른 클라이언트에 chat·emoji 로 가지 않음", !xEcho, "");
+  check("밤2", "탈락자의 pick → BAD_MESSAGE", xPick === "BAD_MESSAGE", xPick);
 
   // ---- 아침2 ----
   await waitUntil(() => clients.every((c) => stateAt(c, "morning", 2)), 45_000, "2일차 아침");
@@ -298,12 +316,16 @@ async function main() {
   // ---- 끝: 전체 프레임 검사 ----
   const specAll = clients.filter((c) => c !== xClient).some((c) => c.frames.some((f) => f.raw.includes('"spectate"')));
   check("전체", "끝까지 살아 있는 클라이언트 프레임에 spectate 키 없음", !specAll, "");
+  const CHAT_KEYS = "at,ch,seat,seq,t,text";
+  const badChat = clients.flatMap((c) => c.frames.filter((f) => f.msg.t === "chat").map((f) => Object.keys(f.msg).sort().join(","))).filter((k) => k !== CHAT_KEYS);
+  check("전체", "chat 프레임 키는 ch·seat·seq·text·at 뿐 (역할·템플릿·수신자 없음)", badChat.length === 0, [...new Set(badChat)].join(" | "));
+  const oldFrames = clients.some((c) => c.frames.some((f) => f.msg.t === "emoji" || /"(claim[A-Za-z]*|template|turn)"/.test(f.raw)));
+  check("전체", "emoji 프레임·옛 주장·템플릿 키가 어떤 폰에도 없음", !oldFrames, "");
   const closed = clients.filter((c) => c.closedCode !== null).map((c) => c.nickname);
   check("전체", "소켓이 예상 밖으로 닫히지 않음", closed.length === 0, closed.join(","));
   const tokenLeak = clients.some((c) => clients.some((o) => o !== c && c.frames.some((f) => f.raw.includes(o.token))));
   check("전체", "다른 사람의 토큰이 프레임에 없음", !tokenLeak, "");
 
-  clearInterval(claimDriver);
   for (const c of clients) { c.leaving = true; try { send(c, { t: "leave" }); c.ws.close(); } catch { /* 닫힘 */ } }
 
   console.log("\n테스트 | 항목 | 결과 | 내용");
