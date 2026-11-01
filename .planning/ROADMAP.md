@@ -66,7 +66,7 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. 화면을 껐다 켜거나 새로 고치거나 배포로 연결이 끊겼다 돌아와도 모든 캐릭터가 지금 위치로 이어지고, 보류했던 연결 계층 경고(WR-01~04)가 더는 나지 않는다. 시작 이후 한 판은 v1.0 흐름 그대로 끝까지 돈다 (MAP-05, CONN-04)
   4. 렌더 성능 게이트: three.js 아이소메트릭 맵(지하 재즈 바, 블록아웃 `design/v2.0/blockout/`, 결정 0050) 위에서 3D 조립 캐릭터 8명(원본 `design/v2.0/blockout/character.js`, 결정 0048)이 걷고 동작 2개를 하는 스파이크가 사용자 폰과 크롬 CPU 4배 스로틀(저가폰 대신, 결정 0055)에서 5분 평균 55fps 이상, 카메라 이동 끊김·발열·메모리 경고 없이 돌고 로비 조작이 3초 안에 반응한다. 미달이면 그림자·광원·건물 예산을 줄이고, 그래도 모자라면 맵을 시간대별 미리 구운 이미지로 바꾸기로 결정 기록에 남긴다 (MAP-01~03 의 렌더 방식 확정, 결정 0046)
 
-**Plans:** 21/21 plans executed (10 waves)
+**Plans:** 21/23 plans executed (10 waves + 갭 닫기 2)
 
 Plans:
 **Wave 1**
@@ -109,6 +109,12 @@ Plans:
 
 **Wave 10** *(blocked on Wave 9 completion)*
 - [x] 06-20-PLAN.md — 게이트 결정 기록·결과 마무리·HANDOFF·push (W10)
+
+**Gap closure** *(06-UAT.md 갭 G-06-4 — 이름표 겹침, 사용자 결정 2026-11-01)*
+- [ ] 06-22-PLAN.md — G-06-4: 내 이름표 맨 위(z)·겹친 맨 앞 이름표만 면 overlay-ink-strong(rankTags→writeTags→data-front→CSS), E2E NT3 확장, UI-SPEC·화면 지도 개정. 가장자리 잘림·[테스트]·카메라는 범위 밖 (TDD, gap_closure, wave 1)
+
+**Gap closure** *(06-UAT.md 갭 G-06-6 — 배포본 재접속 띠, E2E 하네스)* *(blocked on 06-22: scripts/e2e 파일 소유 순서)*
+- [ ] 06-23-PLAN.md — G-06-6: dropSockets 합성 close(1006) 먼저, deployhold 배포 주소 '띠 없음·소켓 유지' 통과(6분 대기 폐지), (선택) 서버 webSocketClose 맞받아치는 close (TDD, gap_closure, wave 2)
 
 **UI hint**: yes
 **계획 메모**: 연구 필수(`--research-phase`) — three.js 맵과 2D 캐릭터를 합치는 방식(빌보드 판 vs DOM 겹치기, 결정 0046-6)과 스파이크 실측 방법, iOS WebGL 컨텍스트 끊김 복구, 맵 이동 가능 영역 데이터 형식, WR-01~04 원인 코드(`DEFERRED-BUGS.md` 에 내용 없음, 연결 처리 코드에서 확인), 위치 구간 `world` 키 지연 저장·하이버네이션 복원. 같은 스파이크에서 iOS 키보드가 열린 하단 채팅 레이아웃 시안도 실기기로 확인해 7페이즈 입력으로 쓴다. `wrangler.jsonc` 이름·`prod-url.txt`·E2E/smoke 기본 주소·계정 확인 스크립트를 같은 커밋에서 바꾸고 가드를 둔 뒤 첫 배포한다.
