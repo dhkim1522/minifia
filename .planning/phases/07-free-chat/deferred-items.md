@@ -116,3 +116,11 @@
 
 - status: open
 - `node scripts/gallery.mjs <폴더> citizen` 은 시민에게 [활동 기록] 탭이 없어 `rolecard` 단계에서 실패하고 뒤 단계가 시트에 막혀 이어서 실패한다(기본값 police·mafia 는 통과). 07-20 이전부터 있던 동작이다. 필요하면 시민은 탭 선택을 건너뛰게 한다.
+
+## 07-21 에서 정리 / 남김
+
+- **perfScene 스테이지 사각형 기본값(07-18 항목)**: 07-21 의 chatload 는 제품 로비(`/?e2e=1`)를 재서 perfScene 을 쓰지 않았다. 6페이즈 `?perf=1` 스파이크 장면을 같은 조건으로 다시 재야 할 일이 생길 때까지 열어 둔다. status: open (필요해질 때만).
+- **낮 시작 문구의 옛 직업 공개 문장(07-20 항목)**: 사용자가 자는 중이라 문구 안을 묻지 못했다. 코드는 바꾸지 않았다. 안(결정 0051 글 최소): `PHASE_INTRO.dayAnnounce.sub` "토론 전에 먼저 직업을 공개해요" → "함께 이야기해 봐요" 또는 문장 삭제, `PHASE_GUIDE_FILL.dayAnnounce.guide` "곧 직업 공개가 시작돼요" → "곧 토론이 시작돼요". 바꾸면 `scenes.test.ts` · `scripts/e2e/lib.mjs` `INTRO_SPEC`·`NIGHT_PANEL_TEXT` 가 같이 바뀐다. status: open — 검증(`/gsd-verify-work 7`) 때 사용자에게 묻는다.
+- **테이블 화면 키보드 열림 · `#root min-height: 100dvh`(07-19 항목)**: 실기기 확인(Task 3, 합격 검사 7)이 사용자 확인 대기라 결론이 없다. status: open 그대로. 실기기에서 보일 때만 UI-SPEC "검사 실패 때 내리는 순서" 단계대로 손댄다.
+- **채팅 부하 fps 첫 측정(07-16 항목)**: 닫힘 — 배포본 5분 측정이 평균 60.00fps·끊김 0(`07-DEVICE-CHECKS.md` 표 B). 로컬 개발 서버 1분의 53.5fps 는 개발 서버·타 프로세스 부하 탓으로 보인다.
+- 07-20 의 reconnect RC1 병렬 부하 실패 · gallery citizen: 07-21 범위 밖, 그대로 open.
