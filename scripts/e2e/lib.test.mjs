@@ -128,6 +128,7 @@ import {
   reconnectSummary,
   selectFlows,
 } from "./lib.mjs";
+import { dropSockets } from "./browser.mjs";
 
 const PROD = "https://minifia-v2.dhplay.workers.dev\n";
 const rect = (left, top, width, height) => ({ left, top, width, height, right: left + width, bottom: top + height });
@@ -3284,4 +3285,81 @@ test("selectFlows: --only 가 없으면 skipByDefault 흐름만 빠지고, --onl
   assert.deepEqual(selectFlows(flows, "deployhold").map((f) => f.id), ["deployhold"]);
   assert.deepEqual(selectFlows(flows, "reconnect").map((f) => f.id), ["reconnect"]);
   assert.deepEqual(selectFlows(flows, "nothing"), []);
+});
+
+// ---- dropSockets: 합성 close 가 먼저 (06-23, G-06-6) ----
+
+/** 가짜 page: evaluate(fn) 가 fn() 을 바로 실행한다. 가짜 window.__e2eSockets·CloseEvent 를 globalThis 에 심고 끝나면 되돌린다. */
+async function withFakeSockets(sockets, calls, run) {
+  const had = { window: "window" in globalThis, CloseEvent: "CloseEvent" in globalThis };
+  const prev = { window: globalThis.window, CloseEvent: globalThis.CloseEvent };
+  globalThis.window = { __e2eSockets: sockets };
+  globalThis.CloseEvent = class FakeCloseEvent {
+    constructor(type, init = {}) {
+      this.type = type;
+      this.code = init.code;
+      this.wasClean = init.wasClean;
+    }
+  };
+  try {
+    return await run({ evaluate: async (fn) => fn() });
+  } finally {
+    if (had.window) globalThis.window = prev.window;
+    else delete globalThis.window;
+    if (had.CloseEvent) globalThis.CloseEvent = prev.CloseEvent;
+    else delete globalThis.CloseEvent;
+  }
+}
+
+function fakeSocket(url, readyState, calls, name) {
+  return {
+    url,
+    readyState,
+    dispatchEvent(ev) {
+      calls.push({ name, op: "dispatch", type: ev.type, code: ev.code, wasClean: ev.wasClean });
+      return true;
+    },
+    close() {
+      calls.push({ name, op: "close" });
+    },
+  };
+}
+
+test("dropSockets: 앱 방 소켓(열림·연결 중)마다 합성 close(1006, wasClean false)를 ws.close() 보다 먼저 dispatch 한다", async () => {
+  const calls = [];
+  const sockets = [
+    fakeSocket("wss://x.test/api/rooms/ABCD/ws?token=t", 1, calls, "open"),
+    fakeSocket("wss://x.test/api/rooms/ABCD/ws?token=u", 0, calls, "connecting"),
+  ];
+  const n = await withFakeSockets(sockets, calls, (page) => dropSockets(page));
+  assert.equal(n, 2);
+  assert.deepEqual(calls, [
+    { name: "open", op: "dispatch", type: "close", code: 1006, wasClean: false },
+    { name: "open", op: "close" },
+    { name: "connecting", op: "dispatch", type: "close", code: 1006, wasClean: false },
+    { name: "connecting", op: "close" },
+  ]);
+});
+
+test("dropSockets: 방 소켓이 아닌 소켓(vite HMR)과 닫히는 중·닫힌 소켓은 이벤트도 close 도 받지 않는다", async () => {
+  const calls = [];
+  const sockets = [
+    fakeSocket("ws://localhost:5173/?token=hmr", 1, calls, "hmr"),
+    fakeSocket("wss://x.test/api/rooms/ABCD/ws", 2, calls, "closing"),
+    fakeSocket("wss://x.test/api/rooms/ABCD/ws", 3, calls, "closed"),
+  ];
+  const n = await withFakeSockets(sockets, calls, (page) => dropSockets(page));
+  assert.equal(n, 0);
+  assert.deepEqual(calls, []);
+});
+
+test("dropSockets: 건드린 소켓 수를 돌려주고, 방 소켓이 없으면 0 이다", async () => {
+  const calls = [];
+  assert.equal(await withFakeSockets([], calls, (page) => dropSockets(page)), 0);
+  const mixed = [
+    fakeSocket("wss://x.test/api/rooms/A/ws", 3, calls, "a"),
+    fakeSocket("wss://x.test/api/rooms/A/ws", 1, calls, "b"),
+    fakeSocket("ws://localhost/hmr", 1, calls, "c"),
+  ];
+  assert.equal(await withFakeSockets(mixed, calls, (page) => dropSockets(page)), 1);
 });
