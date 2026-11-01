@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { CSSProperties, ReactElement, ReactNode } from "react";
-import type { EmojiId, RoleId } from "../../shared/protocol";
-import { DAY_SCENE_H, DAY_SCENE_W, EMOJI_LIFT, EMOJI_SIZE, FIG_H, FIG_W, SCENE_PAD_DEFAULT, dayTableGeometry, daySeatLayout, px } from "../game/dayTable";
+import type { RoleId } from "../../shared/protocol";
+import { DAY_SCENE_H, DAY_SCENE_W, FIG_H, FIG_W, SCENE_PAD_DEFAULT, dayTableGeometry, daySeatLayout, px } from "../game/dayTable";
 import type { DaySeatPlace } from "../game/dayTable";
 import { ROLE_TEXT } from "../game/roleText";
 import { CONE_H, CONE_W, GHOST_FADE_MS, candidateCenter, chipPlacement, tagBoxesOf } from "../game/verdict";
@@ -18,9 +18,8 @@ import "../styles/daytable.css";
 // 테이블·캐릭터 기하는 모든 상황에서 시안 P2 값으로 고정이다(결정 0028): 390폭 면 216×108, rx 146, 다른 폭은 game/dayTable.ts 의 규칙.
 // 장면 여백(scenePad)은 prop, 없으면 루트의 CSS 변수 --mf-scene-pad(daytable.css 한 곳), 비었으면 12.
 // 발밑 원과 이름표 반전은 없다(결정 0030). 내가 밤에 고른 대상은 그림의 흰 후광, 마피아 동료(관전자 화면의 모든 마피아)는 진홍 후광이고
-// 한 자리가 둘 다면 흰 후광이 이긴다. 내 표시는 후광 없이 내 이름표 테두리뿐이다. 말하는 중(채팅을 보낸 뒤 3초)은 머리 위 '…' 말풍선이고,
-// 같은 자리에 이모티콘이 있으면 말풍선 대신 이모티콘만 보인다.
-// 캐릭터 상자·이름표·이모티콘의 좌표는 game/dayTable.ts 의 daySeatLayout 한 번의 결과에서 나온다(떠 있는 층을 따로 가두지 않는다).
+// 한 자리가 둘 다면 흰 후광이 이긴다. 내 표시는 후광 없이 내 이름표 테두리뿐이다. 머리 위 표시(입력 중 '…' 알약)는 07-18 이 붙인다.
+// 캐릭터 상자·이름표의 좌표는 game/dayTable.ts 의 daySeatLayout 한 번의 결과에서 나온다(떠 있는 층을 따로 가두지 않는다).
 // 최후 변론·처형 무대(04-21): 좌석 center 는 그 자리를 candidateCenter(game/verdict.ts) 한 곳의 가운데 자리로 옮기고(x·발 y·배율 1.7), root verdict 는
 // 어둡게+흐림 층(z 30)을 그린다. center 좌석이 있으면 위에서 내려오는 원뿔 층 하나도 그린다(어둡게 층 뒤 같은 z). 수치는 prop 에서만 온다 —
 // 이 부품은 45·3 같은 값을 모른다(D-38). 좌표는 placeOf 한 함수를 지나 기본 좌석과 같은 경로다.
@@ -42,10 +41,6 @@ export interface DayTableSeat {
   isHost: boolean;
   isMe: boolean;
   isAlly: boolean;
-  /** 방금 빠른 메시지를 보낸 사람(머리 위 '…' 말풍선, 후광 없음) */
-  spoke?: boolean;
-  /** 머리 위에 떠 있는 이모티콘 하나. key 가 바뀌면 애니메이션이 새로 시작한다. */
-  emoji?: { key: string; icon: EmojiId; z: number } | null;
   /** 밤 선택 표시. mine = 내가 고른 대상(흰 후광 + 표적 배지), ally = 마피아 화면의 동료 선택(장식 배지) */
   pick?: { mine?: boolean; ally?: boolean };
   /** 관전 화면 전용: 이 자리를 고른 역할별 표적 배지. 장면이 view.spectate 로만 만든다(결정 0021) */
@@ -137,9 +132,7 @@ const HALO_CLASS: Readonly<Record<NonNullable<DayTableSeat["halo"]>, string | un
   none: undefined,
 };
 
-/** 이모티콘 층 z 기준값: 이름표(최대 11)·캐릭터(최대 22)·어둡게 층(30)·강조(31)보다 위. emoji.z 가 더해진다. */
-const EMOJI_Z = 60;
-/** 표수 칩 z-index: 캐릭터(22)·어둡게 층(30)·강조(31) 위, 이모티콘(60+) 아래 */
+/** 표수 칩 z-index: 캐릭터(22)·어둡게 층(30)·강조(31) 위 */
 const CHIP_Z = 46;
 /** 어둡게 층 위로 올라온 자리(방금 탈락한 유령)의 z-index */
 const SPOTLIT_Z = 31;
@@ -163,8 +156,6 @@ function placeOf(p: DaySeatPlace, center: boolean, cc: ReturnType<typeof candida
     figTop: cc.footY - FIG_H,
     tagLeft: cc.x,
     tagTop: cc.tagTop,
-    emojiLeft: cc.x - EMOJI_SIZE / 2,
-    emojiTop: Math.max(0, cc.footY - FIG_H * cc.scale - EMOJI_LIFT),
   };
 }
 
@@ -307,13 +298,6 @@ export function DayTable({
               />
             )}
             {s.isAlly ? <Icon name="diamond" label={allyMarkLabel} className="mf-dt__mark" /> : null}
-            {s.spoke && !s.emoji ? (
-              <span className="mf-dt__bubble mf-dt__bubble--spoke" aria-hidden="true">
-                <i />
-                <i />
-                <i />
-              </span>
-            ) : null}
             {/* 배지 쌓기: 경찰 → 의사 → 마피아 → 내 배지(내 것이 위) */}
             {s.spectatorPicks?.includes("police") ? <PickBadge kind="police" label={SPECTATOR_PICK_LABEL.police} /> : null}
             {s.spectatorPicks?.includes("doctor") ? <PickBadge kind="doctor" label={SPECTATOR_PICK_LABEL.doctor} /> : null}
@@ -393,22 +377,6 @@ export function DayTable({
               <i className="mf-dt__dot" style={{ background: `var(--seat-${(p.seat % 8) + 1})` }} />
               <span>{s.nickname}</span>
             </span>
-          </div>
-        );
-      })}
-      {places.map((p) => {
-        const emoji = bySeat.get(p.seat)?.emoji;
-        if (!emoji) return null;
-        // 머리 위에는 이모티콘만 뜬다. 가로로 가두지 않고, key 가 바뀌면 새 노드라 애니메이션이 다시 시작한다.
-        return (
-          <div
-            key={`e${p.seat}:${emoji.key}`}
-            className="mf-dt__emoji"
-            data-seat={p.seat}
-            aria-hidden="true"
-            style={{ left: px(p.emojiLeft), top: px(p.emojiTop), zIndex: EMOJI_Z + emoji.z }}
-          >
-            <Icon name={emoji.icon} size={22} />
           </div>
         );
       })}

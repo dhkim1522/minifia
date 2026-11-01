@@ -1,13 +1,11 @@
 import { useEffect, useState } from "react";
 import type { CSSProperties, MouseEvent, ReactNode } from "react";
-import type { EmojiId, PhaseId, RoomView } from "../../shared/protocol";
+import type { PhaseId, RoomView } from "../../shared/protocol";
 import { isAlive } from "../../shared/game/alive";
 import type { RoleId } from "../../shared/game/roles";
 import { Backdrop } from "../components/Backdrop";
 import { DayTable } from "../components/DayTable";
 import type { DayTableSeat, SpectatorPick } from "../components/DayTable";
-import { DiscussionControls } from "../components/DiscussionControls";
-import { MessageLog } from "../components/MessageLog";
 import { MorningCard, exitDelayOf } from "../components/MorningCard";
 import { NIGHT_PANEL_TEXT, NightPanel, NoticePill, PickPill } from "../components/NightPanel";
 import { PhaseBar } from "../components/PhaseBar";
@@ -20,8 +18,6 @@ import { morningCardText } from "../game/eliminationText";
 import { MORNING_GLOW_RISE_MS, PHASE_GUIDE_FILL, PHASE_INTRO, morningGlowGradient, sceneOfPhase } from "../game/scenes";
 import type { SceneId } from "../game/scenes";
 import { isBlankSceneTap } from "../game/blankTap";
-import { EMOJI_TEXT, NIGHT_TEMPLATE_ORDER } from "../game/messageText";
-import { FLOAT_PHASES, useDayChat, useSeatFloats } from "../net/seatFloats";
 import type { RoomConnection } from "../net/useRoomConnection";
 import { useVerdictScene } from "./verdictScene";
 import "../styles/day.css";
@@ -51,29 +47,15 @@ export interface DaySceneProps {
 // 낮 시작(dayAnnounce)·낮 토론(discussion)과 밤·아침이 공유하는 장면. S-07.
 // 낮 시작 전용 화면은 없다(결정 0030): 서버 단계 dayAnnounce 도 이 장면(테이블·헤더·패널 위치가 낮 토론과 같다)이고, 'N일차 / 낮이 되었습니다' 는 SceneIntro 가 그 위에 얹힌다.
 // 해·달은 배경 이미지에 그려져 있어 따로 그리거나 움직이지 않는다 — 장면이 바뀌면 Backdrop 이 0.8초 크로스페이드할 뿐이라 이중 표시가 없다.
-// 단계는 DayTable 하나를 공유한다(결정 0017-1). 머리 위는 이모티콘만(0017-2). 
+// 단계는 DayTable 하나를 공유한다(결정 0017-1).
 // 테이블은 키가 없는 장면 상자 안에 있어 단계 사이에 다시 마운트되지 않는다(깜빡임·인물 재등장 없음, Pitfall 7·11).
 // 위쪽 바와 하단 패널만 단계가 든 key(bar-·panel- 접두어로 서로 겹치지 않게)라 단계마다 새 요소가 되어 한 번 페이드된다.
-// 낮 토론은 MessageLog·DiscussionControls. 화면은 스스로 단계를 넘기지 않는다(서버 view 만 따름). 역할 문자열을 화면에 쓰지 않는다.
+// 낮 토론·밤 마피아 하단은 비어 있다(채팅 패널은 07-13·07-15). 화면은 스스로 단계를 넘기지 않는다(서버 view 만 따름). 역할 문자열을 화면에 쓰지 않는다.
 export function DayScene({ view, connection, myRoleButton, testButton, arrivedFrom }: DaySceneProps) {
   const n = view.day?.n ?? 1;
-  // 낮 토론의 보낸 사람 말풍선·이모티콘(자리별 한 번에 하나). 단계가 discussion 이 아니면 훅이 비운다.
-  const floats = useSeatFloats(view, connection.onEvent);
-  // 채팅 줄은 이 폰이 그날 받은 chat 이벤트에서만 만든다(서버 뷰에 메시지가 없다, 결정 0017-7)
-  const chatLines = useDayChat(view, connection.onEvent);
   const { toast, show: showToast } = useToast();
-  // 가장 최근 이모티콘 하나를 보이지 않는 live 줄이 읽는다(UI-SPEC 접근성)
-  const [lastEmoji, setLastEmoji] = useState<{ seat: number; icon: EmojiId } | null>(null);
-  // 이모티콘을 받는 단계(낮 토론·밤). 밤 이벤트는 서버가 살아 있는 마피아에게만 보낸다.
-  const inFloatPhase = FLOAT_PHASES.has(view.phase);
-  useEffect(() => {
-    if (!inFloatPhase) return;
-    return connection.onEvent((e) => {
-      if (e.t === "emoji") setLastEmoji({ seat: e.seat, icon: e.icon });
-    });
-  }, [connection.onEvent, inFloatPhase]);
 
-  // 이모티콘 live 줄은 단계가 바뀌면 비운다(다음 단계에서 지난 것을 읽지 않게). 렌더 중 상태 조정이라 효과 없이 첫 커밋부터 맞는다.
+  // 렌더 중 상태 조정이라 효과 없이 첫 커밋부터 맞는다.
   // 같은 조정에서 "밤 → 아침 전환을 이 화면이 직접 봤는가"(sawNightToMorning)를 기억한다 — 유령 맥동 조건(D-15). 아침을 벗어나면 초기화한다.
   // 단계 시작 문구(결정 0028 → 0030): 같은 접속(epoch 불변)에서 문구가 있는 단계(PHASE_INTRO: 밤·낮 시작)로 넘어가는 렌더에서만 켠다.
   // 처음 마운트(prevPhase 초기값이 현재 단계)·재접속(epoch 변화)·같은 단계 안의 다시 그리기·그 단계를 벗어난 뒤에는 켜지 않고, 단계나 epoch 가 바뀌면 끈다.
@@ -93,7 +75,6 @@ export function DayScene({ view, connection, myRoleButton, testButton, arrivedFr
   }
   if (prevPhase !== view.phase) {
     setPrevPhase(view.phase);
-    setLastEmoji(null);
     setSawNightToMorning(prevPhase === "night" && view.phase === "morning");
     setIntroN(PHASE_INTRO[view.phase] !== undefined && !epochChanged ? n : null);
     setInstant(epochChanged);
@@ -130,8 +111,7 @@ export function DayScene({ view, connection, myRoleButton, testButton, arrivedFr
     return picks ? (["mafia", "police", "doctor"] as const).filter((k) => picks[k].includes(seat)) : [];
   };
   const mafiaNight = isNight && meAlive && myRole === "mafia";
-  // 경찰·의사의 하단은 NightPanel(눌리지 않는 알약). 선택 거부 토스트는 이 하단일 때만 이 장면이 구독한다 —
-  // 마피아 하단은 DiscussionControls 가 같은 토스트를 이미 띄운다(중복 구독 없음).
+  // 경찰·의사의 하단은 NightPanel(눌리지 않는 알약). 선택 거부 토스트는 이 하단일 때만 이 장면이 구독한다.
   const pickPanelRole = isNight && meAlive && (myRole === "police" || myRole === "doctor") ? myRole : null;
   const hasPickPanel = pickPanelRole !== null;
   const { onEvent } = connection;
@@ -170,7 +150,6 @@ export function DayScene({ view, connection, myRoleButton, testButton, arrivedFr
   const seats: DayTableSeat[] = [...view.players]
     .sort((x, y) => x.seat - y.seat)
     .map((p) => {
-      const e = floats.emoji[p.seat];
       return {
         seat: p.seat,
         nickname: p.nickname,
@@ -181,13 +160,11 @@ export function DayScene({ view, connection, myRoleButton, testButton, arrivedFr
         isAlly: isAllySeat(p.seat),
         dead: !isAlive(p),
         ...(spectatorPicksOf(p.seat).length > 0 ? { spectatorPicks: spectatorPicksOf(p.seat) } : {}),
-        spoke: floats.spoke[p.seat] !== undefined,
         // roleArt 는 meDead && spectate 한 곳(spectate 상수)에서만 만든다 — 살아 있는 사람 화면에는 이 입력과 코드 경로가 없다(결정 0021·0002).
         // 살아 있는 다른 자리만 직업 캐릭터로 그리고, 탈락한 자리와 내 자리는 DayTable 이 유령으로 그린다.
         ...(spectate !== undefined && p.seat !== view.me.seat && isAlive(p) && jobOf(p.seat) !== undefined ? { roleArt: jobOf(p.seat)! } : {}),
         // 아침: 방금 탈락한 한 자리는 어둡게 층 위(z 31)에 남고, 밤 → 아침을 직접 본 경우에만 400ms 맥동한다(재접속은 z 만).
         ...(eliminatedSeat !== undefined && p.seat === eliminatedSeat ? { spotlit: true, ...(sawNightToMorning ? { pulse: true } : {}) } : {}),
-        emoji: e ? { key: e.key, icon: e.icon, z: e.z } : null,
         // 누를 수 있는 자리: 살아 있는 사람. 마피아 화면은 자신·동료도 눌리지 않는 이전 마크업이다(D-02 개정).
         ...(actor && isAlive(p) && !(myRole === "mafia" && (p.seat === view.me.seat || allies.includes(p.seat)))
           ? { onPick: () => pressPick(p.seat) }
@@ -284,38 +261,11 @@ export function DayScene({ view, connection, myRoleButton, testButton, arrivedFr
             // 낮 시작 하단(UX-01 빈 칸 1): 생존자·탈락자 모두 같은 두 줄. 아침 하단과 같은 규칙이라 meDead 분기보다 앞이다.
             <NightPanel title={PHASE_GUIDE_FILL.dayAnnounce.title} guide={PHASE_GUIDE_FILL.dayAnnounce.guide} />
           ) : meDead ? (
-            // 관전 하단(UI-SPEC N-6): 채팅 읽기 전용 + 읽기 전용 안내 줄. 보내기 줄은 그리지 않는다.
-            <>
-              {isNight ? (
-                <MessageLog
-                  lines={chatLines}
-                  players={view.players}
-                  mySeat={view.me.seat}
-                  label="마피아 채팅(관전)"
-                  systemLine="관전 중 · 마피아 채팅"
-                  more={false}
-                />
-              ) : (
-                <MessageLog lines={chatLines} players={view.players} mySeat={view.me.seat} />
-              )}
-              <ReadOnlyRow guide />
-            </>
-          ) : view.phase === "discussion" ? (
-            <>
-              <MessageLog lines={chatLines} players={view.players} mySeat={view.me.seat} />
-              <DiscussionControls view={view} connection={connection} showToast={showToast} />
-            </>
-          ) : mafiaNight ? (
-            <>
-              <MessageLog
-                lines={chatLines}
-                players={view.players}
-                mySeat={view.me.seat}
-                label="마피아 채팅"
-                systemLine={NIGHT_PANEL_TEXT.mafiaChatNotice}
-              />
-              <DiscussionControls view={view} connection={connection} showToast={showToast} templates={NIGHT_TEMPLATE_ORDER} />
-            </>
+            // 관전 하단(UI-SPEC N-6): 읽기 전용 안내 줄만. 채팅 패널은 07-13·07-15 가 붙인다.
+            <ReadOnlyRow guide />
+          ) : view.phase === "discussion" || mafiaNight ? (
+            // 낮 토론·밤 마피아 하단은 비어 있다(07-13·07-15 가 채팅 패널을 붙인다, 가정 A1)
+            null
           ) : pickPanelRole ? (
             <NightPanel title={NIGHT_PANEL_TEXT[pickPanelRole].title} guide={NIGHT_PANEL_TEXT[pickPanelRole].guide}>
               <PickPill pick={pickPillOf()} />
@@ -326,11 +276,6 @@ export function DayScene({ view, connection, myRoleButton, testButton, arrivedFr
             </NightPanel>
           ) : null}
         </section>
-        {inFloatPhase ? (
-          <p className="mf-sr-only" aria-live="polite">
-            {lastEmoji ? `${nicknameOf(lastEmoji.seat) ?? ""}: ${EMOJI_TEXT[lastEmoji.icon].name}` : ""}
-          </p>
-        ) : null}
         {verdict?.liveLine !== undefined ? (
           <p className="mf-sr-only mf-dayscene__verdict-live" aria-live="polite">
             {verdict.liveLine}

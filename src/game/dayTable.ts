@@ -10,7 +10,7 @@
 //   4~8명 모두 캐릭터 상자가 장면 안(최소 여백 4.6)이고 양옆 캐릭터는 발 줄에서 테이블 면과 6.2px 이상 떨어진다.
 // - 이름표 여유 49(RX_TAG_HALF)는 칼날 경계다: 99px(5글자) 이름표의 반폭 49.5 − E2E 허용 0.5. 4·8명판 양옆 자리의 5글자 이름표는
 //   장면 상자 밖으로 나가고 폰 가장자리에 정확히 −0.5 로 닿는다(E2E 봇 이름은 3글자라 시험되지 않는다). 걸리면 49 → 50 (390폭 rx 145·면 214).
-// - 캐릭터 상자·이름표·이모티콘은 모두 같은 (x, y)(발 위치)에서 계산한다. 떠 있는 층을 따로 가두는(clamp) 계산은 없다.
+// - 캐릭터 상자·이름표는 모두 같은 (x, y)(발 위치)에서 계산한다. 떠 있는 층을 따로 가두는(clamp) 계산은 없다.
 // - 이름표는 이름 한 줄(높이 22)이고 발 y 에 바로 붙는다(간격 0). 이름표 층(z 1~11)은 항상 캐릭터 층(z 12~22) 아래다:
 //   이름표는 어떤 캐릭터의 얼굴도 덮지 못하고, 가까운 캐릭터가 먼 사람의 이름표를 덮을 수는 있다
 //   (가려질 수 있는 쪽은 이름표다 — 사용자 결정 F2, 3.1 UI-SPEC).
@@ -113,10 +113,6 @@ export const BUBBLE_TAIL = 5;
 /** 말풍선이 자리 상자 위로 올라가는 거리(배율 적용). 승인 시안(f12.css)은 30 이지만 8명판 자리 1·7 의 말풍선이 이웃 얼굴을 4.1px 덮어 26 으로 정했다. */
 export const BUBBLE_TOP = 26;
 
-export const EMOJI_SIZE = 32;
-/** 이모티콘은 머리 위에서 이만큼 더 위에 뜬다 */
-export const EMOJI_LIFT = 36;
-
 export interface DayGeometry {
   cx: number;
   cy: number;
@@ -179,8 +175,6 @@ export interface DaySeatPlace {
   tagLeft: number;
   tagTop: number;
   tagZ: number;
-  emojiLeft: number;
-  emojiTop: number;
 }
 
 /**
@@ -223,8 +217,6 @@ export function daySeatLayout(
       tagLeft: x,
       tagTop: y + TAG_GAP_Y,
       tagZ,
-      emojiLeft: x - EMOJI_SIZE / 2,
-      emojiTop: Math.max(0, y - FIG_H * scale - EMOJI_LIFT),
     };
   });
 }
