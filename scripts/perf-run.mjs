@@ -147,6 +147,14 @@ async function interactiveOnce(browser, o, origin, index) {
       issues.push(`대상 밖 요청 막음: ${u.origin}`);
       return route.abort();
     });
+    // 맵 로비 테스트 훅(window.__mfWorld)은 ?e2e=1 세션 플래그가 켠다. 방에 들어가면 주소에서 쿼리가 사라지므로 E2E 와 같이 세션 저장소에 미리 쓴다(src/world/testHooks.ts WORLD_TEST_KEY).
+    await context.addInitScript((key) => {
+      try {
+        window.sessionStorage.setItem(key, "1");
+      } catch {
+        /* 저장소가 막힌 환경은 훅이 꺼진 채로 둔다 — 아래 대기가 시간 초과로 실패한다 */
+      }
+    }, "minifia:e2e");
     page = await context.newPage();
     page.setDefaultTimeout(INTERACTIVE_STEP_MS);
     page.on("pageerror", (e) => issues.push(`페이지 오류: ${e.message}`));
@@ -234,6 +242,22 @@ async function interactiveOnce(browser, o, origin, index) {
     await page.screenshot({ path: png });
     await leaveLobby(page);
     return { run: index + 1, enterToInteractiveMs, ringMs, startMs, roomEnterAt: marks.roomEnter, mapInteractiveAt: marks.interactive, screenshot: png, issues: [...new Set(issues)].slice(0, 8) };
+  } catch (e) {
+    // 어디서 막혔는지 남긴다: 주소·훅·맵 상태·보이는 글자 앞부분(토큰·코드는 싣지 않는다)
+    const diag = page
+      ? await page
+          .evaluate(() => ({
+            path: location.pathname.replace(/\d{4}/g, "####"),
+            hook: !!window.__mfWorld,
+            status: window.__mfWorld?.status?.() ?? null,
+            e2eFlag: (() => { try { return sessionStorage.getItem("minifia:e2e"); } catch { return "읽기 실패"; } })(),
+            marks: performance.getEntriesByType("mark").map((m) => m.name),
+            text: (document.body?.innerText ?? "").replace(/\d{4}/g, "####").slice(0, 120),
+          }))
+          .catch(() => null)
+      : null;
+    const err = new Error(`${e instanceof Error ? e.message.split("\n")[0] : String(e)} | 진단 ${JSON.stringify(diag)} | 신호 ${JSON.stringify([...new Set(issues)].slice(0, 4))}`);
+    throw err;
   } finally {
     await context.close().catch(() => {});
   }
