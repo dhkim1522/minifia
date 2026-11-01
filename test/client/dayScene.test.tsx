@@ -557,3 +557,97 @@ describe("DayScene 배경 장면 (단계 → 장면 규칙표 PHASE_SCENE, 결�
     expect(style("night")).toBe("");
   });
 });
+
+// ---- 07-19: 키보드가 열려도 장면은 다시 배치하지 않고 패널만 키보드 위로 올린다 (CHAT-05, UI-SPEC 테이블 화면 붙이기) ----
+
+describe("DayScene 키보드 열림·닫힘 (CHAT-05)", () => {
+  const INNER_H = 844;
+  const realInnerH = window.innerHeight;
+  interface FakeVV extends EventTarget {
+    height: number;
+    offsetTop: number;
+  }
+  const installVV = (height: number, offsetTop = 0): FakeVV => {
+    const vv = Object.assign(new EventTarget(), { height, offsetTop }) as FakeVV;
+    Object.defineProperty(window, "visualViewport", { value: vv, configurable: true, writable: true });
+    return vv;
+  };
+  const advance = (ms: number) => act(() => void vi.advanceTimersByTime(ms));
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
+    Object.defineProperty(window, "innerHeight", { value: INNER_H, configurable: true, writable: true });
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    Object.defineProperty(window, "innerHeight", { value: realInnerH, configurable: true, writable: true });
+    Reflect.deleteProperty(window, "visualViewport");
+  });
+
+  const panelOf = (c: HTMLElement) => c.querySelector("section.mf-dayscene__panel") as HTMLElement;
+  const logOf = (c: HTMLElement) => c.querySelector("[data-chat-log]") as HTMLElement;
+  const rootOf = (c: HTMLElement) => c.querySelector("main.mf-dayscene") as HTMLElement;
+
+  it("낮 토론: 포커스 + lift 336 이면 패널에 --kb·기록 칸 72·루트 --mf-kb-lift 336px, 테이블 노드와 패널 높이 변수는 그대로", () => {
+    const vv = installVV(INNER_H);
+    const { container } = scene(makeView({ phase: "discussion", role: "citizen", chat: "all" }));
+    const table = container.querySelector(".mf-dt");
+    const panelH = panelOf(container).style.getPropertyValue("--mf-chat-panel-h");
+    expect(panelH).toBe("244px");
+    expect(logOf(container).style.height).toBe("152px");
+    expect(panelOf(container).classList.contains("mf-dayscene__panel--kb")).toBe(false);
+
+    act(() => container.querySelector<HTMLInputElement>("[data-chat-input]")!.focus());
+    vv.height = INNER_H - 336;
+    act(() => void vv.dispatchEvent(new Event("resize")));
+    advance(20);
+    expect(panelOf(container).classList.contains("mf-dayscene__panel--kb")).toBe(true);
+    expect(rootOf(container).style.getPropertyValue("--mf-kb-lift")).toBe("336px");
+    expect(logOf(container).style.height).toBe("72px");
+    expect(container.querySelector(".mv-chat.is-compact")).not.toBeNull();
+    // 장면을 다시 배치하지 않는다: 테이블은 같은 노드, 패널이 차지하는 자리(높이 변수)는 그대로
+    expect(container.querySelector(".mf-dt")).toBe(table);
+    expect(panelOf(container).style.getPropertyValue("--mf-chat-panel-h")).toBe(panelH);
+  });
+
+  it("블러하면 원래대로 돌아온다", () => {
+    const vv = installVV(INNER_H);
+    const { container } = scene(makeView({ phase: "discussion", role: "citizen", chat: "all" }));
+    const input = container.querySelector<HTMLInputElement>("[data-chat-input]")!;
+    act(() => input.focus());
+    vv.height = INNER_H - 336;
+    act(() => void vv.dispatchEvent(new Event("resize")));
+    advance(20);
+    act(() => input.blur());
+    expect(panelOf(container).classList.contains("mf-dayscene__panel--kb")).toBe(false);
+    expect(rootOf(container).style.getPropertyValue("--mf-kb-lift")).toBe("0px");
+    expect(logOf(container).style.height).toBe("152px");
+  });
+
+  it("lift 60(열림 경계 아래)은 열림이 아니다", () => {
+    const vv = installVV(INNER_H);
+    const { container } = scene(makeView({ phase: "discussion", role: "citizen", chat: "all" }));
+    act(() => container.querySelector<HTMLInputElement>("[data-chat-input]")!.focus());
+    vv.height = INNER_H - 60;
+    act(() => void vv.dispatchEvent(new Event("resize")));
+    advance(20);
+    expect(panelOf(container).classList.contains("mf-dayscene__panel--kb")).toBe(false);
+    expect(logOf(container).style.height).toBe("152px");
+  });
+
+  it("스타일 계약: --kb 패널은 bottom 이 --mf-kb-lift, 높이 150·아래 여백 8, 차지하던 자리는 위 여백으로 채운다", () => {
+    const css = readFileSync("src/styles/day.css", "utf8");
+    const rule = css.match(/\.mf-dayscene__panel[^{]*\.mf-dayscene__panel--kb\s*\{[^}]*\}/)?.[0] ?? "";
+    expect(rule).toContain("bottom: var(--mf-kb-lift, 0px)");
+    expect(rule).toContain("height: 150px");
+    expect(rule).toContain("padding-bottom: 8px");
+    expect(rule).toContain("margin-top: calc(var(--mf-chat-panel-h) + env(safe-area-inset-bottom) - 150px)");
+    expect(14 + 72 + 8 + 48 + 8).toBe(150);
+  });
+
+  it("스타일 계약: 위쪽 바는 vv.offsetTop 만큼 내려와 보이는 영역 맨 위에 머문다", () => {
+    const css = readFileSync("src/styles/day.css", "utf8");
+    expect(css).toMatch(/\.mf-dayscene > \.mf-dayscene__enter:first-child[^}]*translateY\(var\(--mf-vv-top, 0px\)\)/);
+  });
+});
