@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { act, cleanup, fireEvent, render, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { RoleId } from "../../shared/game/roles";
-import type { MorningView, PhaseId, RoomView, SpectateView, VoteLogEntry } from "../../shared/protocol";
+import type { ChatChannel, MorningView, PhaseId, RoomView, SpectateView, VoteLogEntry } from "../../shared/protocol";
 import type { RoomConnection } from "../../src/net/useRoomConnection";
 import { DayScene } from "../../src/screens/DayScene";
 import { ChatStore } from "../../src/net/chatStore";
@@ -28,12 +28,15 @@ interface ViewOpts {
   morning?: MorningView;
   /** 날짜별 공개 투표 기록 (기본 없음) */
   voteLog?: VoteLogEntry[];
+  /** 서버가 보낸 내 채널(view.me.chat). 없으면 키가 없다 */
+  chat?: ChatChannel;
 }
 
 function makeView(o: ViewOpts): RoomView {
   const me: RoomView["me"] = { seat: 0, isHost: false };
   if (o.role !== undefined) me.role = o.role;
   if (o.allies !== undefined) me.allies = o.allies;
+  if (o.chat !== undefined) me.chat = o.chat;
   const dead = o.dead ?? [];
   const view: RoomView = {
     code: "0042",
@@ -134,17 +137,19 @@ describe("DayScene 낮 토론 하단·테이블 (03.1 UI-SPEC B, 07-04 이후 �
     expect(panel.textContent).toContain("탈락했어요 · 볼 수만 있어요");
   });
 
-  it("마피아(allies [2])와 시민 화면의 낮 토론 패널 HTML 이 같다 (T-02-25)", () => {
+  it("마피아(allies [2])와 시민 화면의 낮 토론 패널 HTML 이 같다 — 채팅 패널(all)도 같고 역할 단어·마피아 채널 문구가 없다 (T-02-25, T-07-40)", () => {
     const panelHtml = (v: RoomView) => {
       const r = scene(v);
       const html = r.container.querySelector(".mf-dayscene__panel")?.outerHTML ?? "";
       cleanup();
       return html;
     };
-    const mafia = panelHtml(makeView({ phase: "discussion", role: "mafia", allies: [2] }));
-    const citizen = panelHtml(makeView({ phase: "discussion", role: "citizen" }));
+    const mafia = panelHtml(makeView({ phase: "discussion", role: "mafia", allies: [2], chat: "all" }));
+    const citizen = panelHtml(makeView({ phase: "discussion", role: "citizen", chat: "all" }));
     expect(mafia.length).toBeGreaterThan(0);
+    expect(mafia).toContain("data-chat-panel");
     expect(mafia).toBe(citizen);
+    expect(/마피아|유령/.test(mafia)).toBe(false);
   });
 
   it("마피아 화면에서만 동료 자리(2)의 그림에 진홍 후광(mf-figure--halo-crimson)", () => {

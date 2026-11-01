@@ -1,28 +1,21 @@
 /// <reference types="node" />
 import { readFileSync } from "node:fs";
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import "../helpers/singleLineErrors";
 import type { RoomView } from "../../shared/protocol";
 import type { RoomConnection } from "../../src/net/useRoomConnection";
-import { DefensePanel } from "../../src/components/DefensePanel";
-import {
-  VERDICT_BLUR_PX,
-  VERDICT_DIM_PERCENT,
-  VERDICT_TEXT,
-  defenseDisconnected,
-  defenseStatus,
-} from "../../src/game/verdict";
+import { VERDICT_BLUR_PX, VERDICT_DIM_PERCENT, defenseStartLine } from "../../src/game/verdict";
 
-// RoomScreen 한 경로(Task 3)용: 연결 훅만 가짜로 바꾼다. DefensePanel 단위 시험은 이 훅을 쓰지 않는다.
+// RoomScreen 한 경로용: 연결 훅만 가짜로 바꾼다.
 const connectionMock = vi.hoisted(() => ({ current: null as unknown }));
 vi.mock("../../src/net/useRoomConnection", () => ({
   useRoomConnection: () => connectionMock.current,
 }));
 const { RoomScreen } = await import("../../src/screens/RoomScreen");
 
-// 최후 변론(defense) 04-21. Task 2: 남의 변론 하단 DefensePanel 단위 시험. Task 3: RoomScreen 한 경로(아래 이어서).
-// 서버와는 view 픽스처와 이벤트 발행기로만 만난다.
+// 최후 변론(defense) 04-21, 07-15 개정: 하단은 후보 포함 살아 있는 모두에게 ChatPanel(채널 all), 탈락자에게 ChatPanel(ghost)이다(CHAT-01·03, 결정 0053).
+// 후보 상태 줄("{닉네임}님이 변론하는 중 · N초")은 없어지고 기록 첫 줄 시스템 줄과 헤더 타이머가 대신한다. 서버와는 view 픽스처로만 만난다.
 
 const NOW = 1_700_000_000_000;
 
@@ -64,32 +57,6 @@ function conn(view: RoomView, over: Partial<RoomConnection> = {}): RoomConnectio
   };
 }
 
-interface PanelOpts {
-  over?: Partial<RoomConnection>;
-  view?: RoomView;
-  candidateConnected?: boolean;
-  readOnly?: boolean;
-}
-function panel(o: PanelOpts = {}) {
-  const view = o.view ?? makeView();
-  const c = conn(view, o.over);
-  const utils = render(
-    <DefensePanel
-      view={view}
-      connection={c}
-      candidateNickname="민지"
-      candidateConnected={o.candidateConnected ?? true}
-      readOnly={o.readOnly ?? false}
-    />,
-  );
-  return { ...utils, conn: c };
-}
-
-const advance = (ms: number) =>
-  act(() => {
-    vi.advanceTimersByTime(ms);
-  });
-
 beforeEach(() => {
   vi.useFakeTimers();
   vi.setSystemTime(NOW);
@@ -97,75 +64,6 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.useRealTimers();
-});
-
-describe("DefensePanel: 남의 변론 하단 (UI-SPEC 8.4·7.2, D-13·D-35)", () => {
-  it(".st-row(.stat) 하나뿐이고 TurnPanel 의 클래스를 그대로 쓴다 — 채팅 로그·버튼이 없다", () => {
-    const { container } = panel();
-    const root = container.querySelector(".mf-turnpanel")!;
-    expect(root.children.length).toBe(1);
-    expect(root.firstElementChild?.classList.contains("st-row")).toBe(true);
-    expect(root.querySelector(".stat")).not.toBeNull();
-    expect(container.querySelector(".mf-msglog")).toBeNull();
-    expect(container.querySelectorAll("button").length).toBe(0);
-  });
-
-  it("상태 줄: 굵은 `{이름}님이 변론하는 중` + 오른쪽 `{N}초`(헤더 타이머와 같은 카운트다운)", () => {
-    const { container } = panel();
-    expect(container.querySelector(".stat b")?.textContent).toBe(defenseStatus("민지"));
-    expect(container.querySelector(".stat b")?.textContent).toBe("민지님이 변론하는 중");
-    expect(container.querySelector(".stat span")?.textContent).toBe("10초");
-    advance(3_000);
-    expect(container.querySelector(".stat span")?.textContent).toBe("7초");
-  });
-
-  it("후보가 연결이 끊겨 있으면 상태 줄이 끊김 문구 + 초다", () => {
-    const { container } = panel({ candidateConnected: false });
-    expect(container.querySelector(".stat b")?.textContent).toBe(defenseDisconnected("민지"));
-    expect(container.querySelector(".stat b")?.textContent).toBe("민지님은 연결이 끊겨 있어요");
-    expect(container.querySelector(".stat span")?.textContent).toBe("10초");
-  });
-
-  it("마감이 없으면 초를 그리지 않는다", () => {
-    const { container } = panel({ view: makeView({ phaseEndsAt: null, phaseDurationMs: null }) });
-    expect(container.querySelector(".stat span")).toBeNull();
-  });
-
-  it("닉네임은 글자로만 그린다 (T-04-40)", () => {
-    const view = makeView();
-    const evil = { ...view, players: view.players.map((p) => (p.seat === 2 ? { ...p, nickname: "<b>x</b>" } : p)) };
-    const c = conn(evil);
-    const { container } = render(
-      <DefensePanel view={evil} connection={c} candidateNickname="<b>x</b>" candidateConnected readOnly={false} />,
-    );
-    expect(container.querySelector(".stat b")?.textContent).toBe("<b>x</b>님이 변론하는 중");
-    expect(container.querySelector(".stat b b")).toBeNull();
-  });
-});
-
-describe("DefensePanel: 관전 (탈락 viewer, D-35)", () => {
-  it("알약 `관전 중 · 볼 수만 있어요` 뿐이다: 상태 줄·채팅 로그·버튼 없음", () => {
-    const { container } = panel({ readOnly: true });
-    expect(container.querySelector(".mf-ro")?.textContent).toBe(VERDICT_TEXT.spectatorPill);
-    expect(container.querySelector(".st-row")).toBeNull();
-    expect(container.querySelector(".mf-msglog")).toBeNull();
-    expect(container.querySelectorAll("button").length).toBe(0);
-  });
-});
-
-describe("DefensePanel: 직업 비공개 (T-04-57, D-09)", () => {
-  it("입력에 역할 필드가 없고(후보 닉네임·접속 여부뿐) 부품은 직업 문구 표를 읽지 않는다", () => {
-    const src = readFileSync("src/components/DefensePanel.tsx", "utf8");
-    const props = /export interface DefensePanelProps\s*\{([^}]*)\}/.exec(src)?.[1] ?? "";
-    expect(props).toContain("candidateNickname");
-    expect(/\brole/i.test(props.replace(/\/\*\*[^]*?\*\//g, ""))).toBe(false);
-    expect(src).not.toMatch(/roleText|ROLE_TEXT|ROLE_IDS/);
-  });
-
-  it("후보의 직업을 모르는 view(me.role 만 있음)에서 상태 줄에 직업 단어가 없다", () => {
-    const { container } = panel({ view: makeView({ me: { seat: 0, isHost: true, role: "mafia" } }) });
-    expect(container.querySelector(".stat")?.textContent).not.toMatch(/마피아|경찰|의사|시민/);
-  });
 });
 
 // ---- Task 3: RoomScreen 한 경로 (defense 연결) ----
@@ -187,7 +85,7 @@ function roomView(o: { me?: number; candidate?: number | null; dead?: number[]; 
       isHost: seat === 0,
       ...(dead.includes(seat) ? { alive: false } : {}),
     })),
-    me: { seat: me, isHost: me === 0, role: o.mafia ? "mafia" : "citizen" },
+    me: { seat: me, isHost: me === 0, role: o.mafia ? "mafia" : "citizen", chat: dead.includes(me) ? "ghost" : "all" },
     day: {
       n: 1,
       roles: ["mafia", "police", "citizen"],
@@ -221,7 +119,7 @@ const haloSeats = (c: HTMLElement, kind: "white" | "crimson") =>
 const announce = (c: HTMLElement) => c.querySelector<HTMLElement>(".mf-room > p.mf-sr-only[aria-live]")?.textContent;
 
 describe("defense 화면 한 경로 (VOTE-03, D-15·D-16·D-29, COMM-03)", () => {
-  it("남의 변론: 헤더 `낮 · 최후 변론`/`1일차 · 민지님의 변론`, 후보 center·흰 후광 하나, 어둡게 층 하나, 원뿔 하나, 하단 DefensePanel, 안내 `민지님의 최후 변론`", () => {
+  it("남의 변론: 헤더 `낮 · 최후 변론`/`1일차 · 민지님의 변론`, 후보 center·흰 후광 하나, 어둡게 층 하나, 원뿔 하나, 하단 ChatPanel(all), 안내 `민지님의 최후 변론`", () => {
     const { container } = renderRoom(roomView());
     expect(screen.queryByText("연결 중…")).toBeNull();
     expect(screen.queryByRole("heading", { name: "낮 · 최후 변론" })).not.toBeNull();
@@ -232,8 +130,12 @@ describe("defense 화면 한 경로 (VOTE-03, D-15·D-16·D-29, COMM-03)", () =>
     expect(seatOf(container, 2).style.zIndex).toBe("31");
     expect(container.querySelectorAll(".mf-dt__dim--verdict").length).toBe(1);
     expect(container.querySelectorAll(".mf-dt__cone").length).toBe(1);
-    expect(panelOf(container).querySelector(".stat b")?.textContent).toBe("민지님이 변론하는 중");
-    expect(panelOf(container).querySelector(".stat span")?.textContent).toBe("10초");
+    const chatPanel = panelOf(container).querySelector("[data-chat-panel]");
+    expect(chatPanel?.getAttribute("data-chat-channel")).toBe("all");
+    expect(panelOf(container).querySelector("[data-chat-input]")?.getAttribute("aria-label")).toBe("채팅 입력");
+    expect(panelOf(container).classList.contains("mf-dayscene__panel--chat")).toBe(true);
+    // 옛 상태 줄(`~님이 변론하는 중 · N초`)은 없다: 남은 시간은 헤더 타이머만 보인다
+    expect(panelOf(container).querySelector(".st-row, .stat")).toBeNull();
     expect(announce(container)).toBe("민지님의 최후 변론");
   });
 
@@ -248,21 +150,29 @@ describe("defense 화면 한 경로 (VOTE-03, D-15·D-16·D-29, COMM-03)", () =>
     expect(/dimPercent:\s*\d|blurPx:\s*\d/.test(src)).toBe(false);
   });
 
-  it("후보 본인: 안내 `1일차 · 내 변론`, 하단은 다른 사람과 같은 상태 줄뿐이다 — 제목·칩·입력·버튼이 없고 아무것도 보내지 않는다, 안내문 `내 최후 변론`", () => {
+  it("후보 본인도 같은 ChatPanel(all)을 쓴다 — 후보만 말하기 제한이 없다. 안내 `1일차 · 내 변론`, 칩·버튼은 보내기뿐, 안내문 `내 최후 변론`", () => {
     const { container, send } = renderRoom(roomView({ me: 2 }));
     expect(screen.queryByText("1일차 · 내 변론")).not.toBeNull();
     const section = panelOf(container);
     expect(section.tagName).toBe("SECTION");
-    expect(section.className).toBe("mf-dayscene__panel mf-dayscene__enter");
-    expect(section.querySelector(".mf-turnpanel > .st-row .stat b")?.textContent).toBe("민지님이 변론하는 중");
+    expect(section.querySelector("[data-chat-panel]")?.getAttribute("data-chat-channel")).toBe("all");
+    expect(section.querySelector(".mf-turnpanel")).toBeNull();
     expect(section.querySelector("h2")).toBeNull();
-    expect(section.querySelector(".mf-claimpanel__guide")).toBeNull();
     expect(section.querySelector(".mf-defchips")).toBeNull();
     expect(section.querySelector(".mf-msglog")).toBeNull();
-    expect(section.querySelectorAll("button, input, textarea").length).toBe(0);
+    expect([...section.querySelectorAll("button")].map((b) => b.getAttribute("aria-label"))).toEqual(["보내기"]);
+    expect(section.querySelectorAll("input").length).toBe(1);
     expect(send).not.toHaveBeenCalled();
     expect(haloSeats(container, "white")).toBe("2");
     expect(announce(container)).toBe("내 최후 변론");
+  });
+
+  it("변론 하단에서 보낸 글은 변론 단계 키(1:defense)와 본문만 서버로 간다", () => {
+    const { container, send } = renderRoom(roomView({ me: 2 }));
+    const input = container.querySelector<HTMLInputElement>("[data-chat-input]")!;
+    fireEvent.change(input, { target: { value: "저는 시민이에요" } });
+    fireEvent.submit(input.closest("form")!);
+    expect(send.mock.calls[0]?.[0]).toEqual({ t: "chat", text: "저는 시민이에요", pk: "1:defense" });
   });
 
   it("후보 본인 화면에서도 가운데 이동·어둡게 층·원뿔은 그대로다", () => {
@@ -273,19 +183,54 @@ describe("defense 화면 한 경로 (VOTE-03, D-15·D-16·D-29, COMM-03)", () =>
     expect(seatOf(container, 2).style.zIndex).toBe("31");
   });
 
-  it("후보 본인이 연결이 끊긴 채 돌아와도(재접속) 하단은 끊김 문구 한 줄이고 버튼이 없다", () => {
-    const { container } = renderRoom(roomView({ me: 2, disconnected: [2] }));
-    expect(panelOf(container).querySelector(".stat b")?.textContent).toBe("민지님은 연결이 끊겨 있어요");
-    expect(panelOf(container).querySelectorAll("button").length).toBe(0);
+  it("변론으로 넘어오는 렌더에 point 아이콘 + `민지 님이 변론하는 중` 시스템 줄이 기록 첫 줄로 한 번 생긴다(같은 변론을 다시 그려도 늘지 않는다)", () => {
+    const r = renderRoom({ ...roomView(), phase: "candidateVoteReveal" });
+    expect(r.container.querySelector("[data-chat-log]")).toBeNull();
+    r.rerenderRoom(roomView());
+    const sys = () => [...r.container.querySelectorAll("[data-chat-log] > p.mv-chat__sys")];
+    expect(sys().map((p) => p.textContent?.trim())).toEqual(["민지 님이 변론하는 중"]);
+    expect(sys()[0]?.querySelector("svg path")?.getAttribute("d")?.startsWith("M3 9.5")).toBe(true);
+    expect(defenseStartLine("민지", true)).toBe("민지 님이 변론하는 중");
+    r.rerenderRoom({ ...roomView(), serverNow: NOW + 500 });
+    expect(sys().length).toBe(1);
+    // 변론 시작 줄은 후보 본인 화면에도 같은 문장이다
+    const mine = renderRoom({ ...roomView({ me: 2 }), phase: "candidateVoteReveal" });
+    mine.rerenderRoom(roomView({ me: 2 }));
+    expect([...mine.container.querySelectorAll("[data-chat-log] > p.mv-chat__sys")].map((p) => p.textContent?.trim())).toEqual(["민지 님이 변론하는 중"]);
   });
 
-  it("탈락 viewer: 하단은 관전 알약뿐이고, 좌석은 버튼이 아니다(기록 카드 열림 없음)", () => {
+  it("후보가 연결이 끊긴 채 변론이 시작되면 `민지 님은 연결이 끊겨 있어요` 한 줄이고, 재접속으로 처음 받은 변론 view 에는 시작 줄이 없다", () => {
+    const r = renderRoom({ ...roomView({ disconnected: [2] }), phase: "candidateVoteReveal" });
+    r.rerenderRoom(roomView({ disconnected: [2] }));
+    expect([...r.container.querySelectorAll("[data-chat-log] > p.mv-chat__sys")].map((p) => p.textContent?.trim())).toEqual(["민지 님은 연결이 끊겨 있어요"]);
+    expect(defenseStartLine("민지", false)).toBe("민지 님은 연결이 끊겨 있어요");
+    cleanup();
+    // 재접속: 처음부터 변론 view 로 마운트 / 연결 epoch 가 바뀌며 변론 view 를 받음 → 시작 줄 없음
+    const fresh = renderRoom(roomView());
+    expect(fresh.container.querySelectorAll("[data-chat-log] > p.mv-chat__sys").length).toBe(0);
+    cleanup();
+    const re = renderRoom({ ...roomView(), phase: "candidateVoteReveal" });
+    re.rerenderRoom(roomView(), { epoch: 2 });
+    expect(re.container.querySelectorAll("[data-chat-log] > p.mv-chat__sys").length).toBe(0);
+  });
+
+  it("탈락 viewer: 하단은 ChatPanel(ghost) — 관전 알약이 아니다. 좌석은 버튼이 아니다(기록 카드 열림 없음)", () => {
     const { container } = renderRoom(roomView({ me: 1, dead: [1] }));
-    expect(panelOf(container).querySelector(".mf-ro")?.textContent).toBe(VERDICT_TEXT.spectatorPill);
+    expect(panelOf(container).querySelector("[data-chat-panel]")?.getAttribute("data-chat-channel")).toBe("ghost");
+    expect(panelOf(container).querySelector("[data-chat-input]")?.getAttribute("aria-label")).toBe("유령 채팅 입력");
+    expect(panelOf(container).querySelector(".mf-ro")).toBeNull();
     expect(panelOf(container).querySelector(".st-row")).toBeNull();
     expect(container.querySelectorAll("button.mf-dt__seat").length).toBe(0);
     fireEvent.click(seatOf(container, 3));
     expect(document.querySelector("dialog")).toBeNull();
+  });
+
+  it("서버 채널이 없는 탈락 view(옛 서버)는 패널 없이 관전 알약으로 안전하게 그린다", () => {
+    const view = roomView({ me: 1, dead: [1] });
+    const { chat: _chat, ...me } = view.me;
+    const { container } = renderRoom({ ...view, me });
+    expect(container.querySelector("[data-chat-panel]")).toBeNull();
+    expect(panelOf(container).querySelector(".mf-ro")?.textContent).toBe("탈락했어요 · 볼 수만 있어요");
   });
 
   it("살아 있는 viewer 의 좌석도 버튼이 아니다 — 누를 수 없다", () => {
@@ -294,12 +239,11 @@ describe("defense 화면 한 경로 (VOTE-03, D-15·D-16·D-29, COMM-03)", () =>
     expect(container.querySelectorAll(".mf-dt__seat[role='group']").length).toBe(4);
   });
 
-  it("후보 연결 끊김: 그림은 끊김 흐림 + 흰 후광, 하단 상태 줄은 끊김 문구", () => {
+  it("후보 연결 끊김: 그림은 끊김 흐림 + 흰 후광", () => {
     const { container } = renderRoom(roomView({ disconnected: [2] }));
     const img = seatOf(container, 2).querySelector("img")!;
     expect(img.classList.contains("mf-figure--disconnected")).toBe(true);
     expect(img.classList.contains("mf-figure--halo-white")).toBe(true);
-    expect(panelOf(container).querySelector(".stat b")?.textContent).toBe("민지님은 연결이 끊겨 있어요");
   });
 
   it("마피아 동료의 진홍 후광은 유지되고(후보 흰 + 동료 진홍), 합이 3 을 넘으면 진홍부터 꺼지며 마름모는 남는다", () => {
