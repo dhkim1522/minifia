@@ -28,14 +28,12 @@ import {
   joinTestRoom,
   leaveFromResult,
   leaveLobby,
-  openChatHistory,
   openGuestJoinPage,
   openHostPage,
   openPerfPage,
   openRoleCard,
   openTestSheet,
   pickCandidate,
-  pickChip,
   readAtmosphere,
   readLinkState,
   readChatLines,
@@ -99,7 +97,6 @@ import {
   candidateChecks,
   candidateGuideChecks,
   candidateRevealMs,
-  claimChatIssues,
   colorRuleChecks,
   consoleIssues,
   contextLeakChecks,
@@ -145,6 +142,7 @@ import {
   paintedFromStats,
   parseBarMask,
   pickTapTargets,
+  worldTapRanking,
   deployHoldChecks,
   deployObservedOf,
   reconnectChecks,
@@ -477,11 +475,12 @@ async function worldFlow(ctx) {
     const [gScreens, hScreens] = await Promise.all([screensOfWorld(gp, centers), screensOfWorld(hp, centers)]);
     const inStage = (sc, st) => !!sc && !!st && Number.isFinite(sc.sx) && sc.sx > pad && sc.sx < ctx.size.w - pad && sc.sy > st.top + pad && sc.sy < st.bottom - pad;
     const onScreen = centers.map((c, i) => ({ ...c, sx: gScreens[i]?.sx, sy: gScreens[i]?.sy, hx: hScreens[i]?.sx, hy: hScreens[i]?.sy })).filter((c, i) => inStage(gScreens[i], gw.stage) && inStage(hScreens[i], hw.stage));
-    const ranked = pickTapTargets(onScreen, from, { minDist: 3 });
+    // 3 단위 이상 먼 칸이 없는 낮은 스테이지(360x560 의 248)는 보이는 칸 중 가장 먼 칸과 더 짧은 걷는 길이 하한을 쓴다(worldTapRanking, 07-20)
+    const { ranked, low, minWalkMs } = worldTapRanking(onScreen, from);
     const probe = ranked.slice(0, 40);
     const [gHits, hHits] = await Promise.all([hitsInputSurface(gp, probe), hitsInputSurface(hp, probe.map((c) => ({ sx: c.hx, sy: c.hy })))]);
     const target = probe.find((_, i) => gHits[i] && hHits[i]);
-    if (!target) throw new SetupError(`탭할 목적지를 찾지 못함(두 화면에 보이는 칸 ${onScreen.length}개, 3 단위 이상 먼 칸 ${ranked.length}개)`);
+    if (!target) throw new SetupError(`탭할 목적지를 찾지 못함(두 화면에 보이는 칸 ${onScreen.length}개, ${low ? "1.5" : "3"} 단위 이상 먼 칸 ${ranked.length}개)`);
 
     // 손님이 바닥을 한 번 누른다
     const tap = await tapWorld(gp, gt, gSeat, target.x, target.z);
@@ -499,7 +498,7 @@ async function worldFlow(ctx) {
       });
       const seg = tap.move;
       const dur = segmentDurationMs(seg);
-      rec(sc, "W5", "걷는 길이가 충분함(≥ 1.5초)", dur >= 1500, `구간 ${Math.round(dur)}ms (목적지까지 ${Math.round(Math.hypot(target.x - from.x, target.z - from.z) * 100) / 100} 단위)`);
+      rec(sc, "W5", `걷는 길이가 충분함(≥ ${minWalkMs / 1000}초${low ? ", 낮은 스테이지 기준" : ""})`, dur >= minWalkMs, `구간 ${Math.round(dur)}ms (목적지까지 ${Math.round(Math.hypot(target.x - from.x, target.z - from.z) * 100) / 100} 단위)`);
 
       // 걷는 동안 50ms 간격 5번: 같은 서버 시각 t 로 두 페이지의 손님 위치를 읽는다. t = 구간 출발 시각 + (구간을 받은 뒤 지난 시간)
       const a = [];
@@ -919,6 +918,10 @@ async function chatKeyboardFlow(ctx) {
 const CHAT_TABLE_TEXT = "저는 시민이에요";
 /** chat-table 에서 마피아 방장이 밤에 보내는 글 */
 const CHAT_MAFIA_TEXT = "오늘 밤은 조용히 가요";
+/** vote5·result-c 의 최후 변론에서 방장이 보내는 글 */
+const CHAT_DEFENSE_TEXT = "저는 마피아가 아니에요";
+/** police5 의 chat 상태에서 방장이 낮 토론에 보내는 글 */
+const CHAT_GAME_TEXT = "오늘은 의견을 나눠 봐요";
 /** chat-ghost 에서 탈락한 방장이 보내는 글 */
 const CHAT_GHOST_TEXT = "나는 유령이에요";
 // 테이블 채팅 패널 치수(UI-SPEC 구조 표). src/game/chatUi.ts 의 값을 그대로 옮긴 사본이다 — 값을 바꾸려면 UI-SPEC 과 chatUi.ts 를 먼저 바꾼다.
@@ -1521,17 +1524,20 @@ function recD9(rec, scenario, days) {
   rec(scenario, "D9", "이름표끼리 안 겹침", true, relaxed.map((x) => `${x.d.state}: ${x.r.detail}`).join("; "), relaxed.length > 0);
 }
 
-/** 낮 장면 상태(claim·discussion·night·morning) 한 장: 스냅숏 + G + D1~D6·D8 + T2. 테이블 면·이름표·장면 상자는 흐름 끝의 D7·D9·T1 용으로 모아 둔다. */
-async function dayState(ctx, flowId, state) {
+/**
+ * 낮 장면 상태(discussion·night·morning 등) 한 장: 스냅숏 + G + D1~D6·D8 + T2. 테이블 면·이름표·장면 상자는 흐름 끝의 D7·D9·T1 용으로 모아 둔다.
+ * chat = 이 상태에서 하단에 채팅 패널이 붙어야 하는가(낮 토론·밤의 마피아·탈락자의 낮 토론과 밤). 기대 하단 높이: 붙으면 LOG_H + 92(188·244), 아니면 157 (07-20).
+ */
+async function dayState(ctx, flowId, state, { chat = false } = {}) {
   const rec = recorder(ctx);
   const snap = await checkState(ctx, flowId, state);
   const mySeat = ctx.host.tracker.last()?.me?.seat ?? -1;
-  for (const r of dayChecks(snap, { w: ctx.size.w, h: ctx.size.h })) rec(`${flowId}/${state}`, r.id, r.label, r.ok, r.detail, r.relaxed === true);
+  for (const r of dayChecks(snap, { w: ctx.size.w, h: ctx.size.h, chat })) rec(`${flowId}/${state}`, r.id, r.label, r.ok, r.detail, r.relaxed === true);
   recOne(rec, `${flowId}/${state}`, crownChecks(snap, { expect: 0 })); // W1: 게임 중에는 왕관이 없다
   const stage = await readStage(ctx.host.page);
   const t2 = feltGapChecks(stage);
   rec(`${flowId}/${state}`, t2.id, t2.label, t2.ok, t2.detail);
-  (ctx.dayStates ??= []).push({ state, felt: snap.felt, tags: snap.tags, stage, mySeat });
+  (ctx.dayStates ??= []).push({ state, felt: snap.felt, tags: snap.tags, stage, mySeat, chat, roomH: Number.isFinite(snap.roomH) ? snap.roomH : ctx.size.h });
   return { snap, mySeat };
 }
 
@@ -1543,7 +1549,7 @@ async function grabLobbyStage(ctx, state, waitMs = 0) {
   if (waitMs > 0) await sleep(waitMs);
   const stage = await readStage(ctx.host.page);
   const mySeat = ctx.host.tracker.last()?.me?.seat ?? -1;
-  (ctx.dayStates ??= []).push({ state, felt: stage.felt, tags: stage.tags, stage, mySeat });
+  (ctx.dayStates ??= []).push({ state, felt: stage.felt, tags: stage.tags, stage, mySeat, chat: false, roomH: ctx.size.h });
 }
 
 /**
@@ -1615,7 +1621,7 @@ async function dayIntro(ctx, id) {
     mkdirSync(OUT_DIR, { recursive: true });
     await shot(page, join(OUT_DIR, `${id}-day-intro-${ctx.size.label}.png`)); // 낮 시작 문구가 떠 있는 동안의 사진(--shots 한정)
   }
-  (ctx.dayStates ??= []).push({ state: "dayAnnounce", felt: stage.felt, tags: stage.tags, stage, mySeat });
+  (ctx.dayStates ??= []).push({ state: "dayAnnounce", felt: stage.felt, tags: stage.tags, stage, mySeat, chat: false, roomH: ctx.size.h });
   if (!(await guideState(ctx, id, "day-intro", "dayAnnounce"))) throw new SetupError("낮 시작 안내를 읽는 동안 낮 시작(2초)이 끝남"); // UX1·UX2
   recOne(rec, sc, sceneIntroChecks(await readIntroWatch(page), { kind: "day" })); // N8
   const n9 = await attempt(async () => {
@@ -1644,7 +1650,7 @@ function nightStaticChecks(ctx, flowId, role, snap) {
   if (role === "police") n1 = { ok: has("조사할 사람을 고르세요", "선택 안 함"), detail: `패널 글자 "${text.slice(0, 60)}"` };
   else if (role === "doctor") n1 = { ok: has("지킬 사람을 고르세요", "선택 안 함"), detail: `패널 글자 "${text.slice(0, 60)}"` };
   else if (role === "citizen") n1 = { ok: has("밤이 되었어요", "이번 밤에는 할 수 있는 행동이 없어요"), detail: `패널 글자 "${text.slice(0, 60)}"` };
-  else n1 = { ok: snap.mafiaLog && has("마피아끼리만 보여요", "빠른 메시지"), detail: `마피아 로그 ${snap.mafiaLog}, 패널 글자 "${text.slice(0, 60)}"` };
+  else n1 = { ok: snap.panel?.hasChat === true && snap.panel.chatChannel === "mafia", detail: `채팅 패널 ${snap.panel?.hasChat}, 채널 ${snap.panel?.chatChannel}` };
   rec(sc, "N1", "역할별 하단", n1.ok, n1.detail);
 
   // N4: 하단 안내 2줄 이하(경찰·의사·시민), 패널 자식이 모두 패널 안
@@ -1739,93 +1745,6 @@ const recAll = (rec, scenario, list) => {
 /** 렌더 두 프레임만 기다린다(짧은 봇 차례 안에서 찍을 때). */
 const frames = (page) => page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
 
-/** 내 차례: 첫 차례는 방장이다(결정 0027-3). K1·K2, 칩 하나를 눌러 잠김(K2b)을 확인한다. */
-async function claimMine(ctx, id, role) {
-  const rec = recorder(ctx);
-  const { page, tracker } = ctx.host;
-  const sc = `${id}/claim-mine`;
-  await skipTo(page, tracker, "claim");
-  await settle(page);
-  const mySeat = mySeatOf(tracker);
-  const v = tracker.last();
-  if (v.phase !== "claim" || v.day?.turn?.seat !== mySeat) throw new SetupError(`첫 차례가 내 자리가 아님 (단계 ${v.phase}, 차례 ${v.day?.turn?.seat}, 내 자리 ${mySeat})`);
-  const { snap } = await dayState(ctx, id, "claim-mine");
-  recAll(rec, sc, turnChecks(snap, { myTurn: true, jobs: jobNames(v) }));
-  const after = tracker.last();
-  if (after.phase !== "claim" || after.day?.turn?.seat !== mySeat) throw new SetupError("내 차례 스냅숏 중에 차례가 넘어감");
-
-  // 누른 직후(React 갱신 직후, 서버 답이 오기 전)의 칩 상태를 문서 수준 리스너가 붙잡아 둔다
-  await page.evaluate(() => {
-    window.__chipAfter = null;
-    document.addEventListener(
-      "click",
-      () => {
-        queueMicrotask(() => {
-          window.__chipAfter = [...document.querySelectorAll('[aria-label="주장할 직업"] button')].map((b) => ({ t: (b.textContent || "").trim(), p: b.getAttribute("aria-pressed") === "true", d: b.disabled }));
-        });
-      },
-      { once: true, capture: false },
-    );
-  });
-  const label = role === "citizen" ? ROLE_NAME.citizen : jobNames(v)[0];
-  const k2b = await attempt(async () => {
-    await pickChip(page, tracker, label);
-    const chips = await page.evaluate(() => window.__chipAfter);
-    if (!chips || chips.length === 0) return { ok: false, detail: "눌린 직후 칩 상태를 읽지 못함" };
-    const pressed = chips.filter((c) => c.p).map((c) => c.t);
-    const enabled = chips.filter((c) => !c.d).map((c) => c.t);
-    return pressed.length === 1 && pressed[0] === label && enabled.length === 0 ? true : { ok: false, detail: `눌린 칩 [${pressed.join(",")}] (기대 ${label}), 켜진 칩 [${enabled.join(",")}]` };
-  });
-  rec(sc, "K2b", "칩 잠금", k2b.ok, k2b.detail);
-}
-
-/** 남의 차례: 봇 차례(0.5~3.5초)가 끝나기 전에 찍는다. 찍는 동안 차례가 넘어갔으면 그 결과를 버리고 다음 남의 차례에서 다시 찍는다. */
-async function claimOther(ctx, id) {
-  const rec = recorder(ctx);
-  const { page, tracker } = ctx.host;
-  const mySeat = mySeatOf(tracker);
-  const sc = `${id}/claim-other`;
-  for (let tries = 0; tries < 3; tries++) {
-    const v = await tracker.waitFor((n) => n.phase === "claim" && n.day?.turn !== undefined && n.day.turn.seat !== mySeat, 15_000, "남의 차례");
-    const seat = v.day.turn.seat;
-    const ends = v.phaseEndsAt;
-    const mark = ctx.results.length;
-    const dmark = (ctx.dayStates ??= []).length;
-    await frames(page);
-    const { snap } = await dayState(ctx, id, "claim-other");
-    recAll(rec, sc, turnChecks(snap, { myTurn: false }));
-    const now = tracker.last();
-    if (now.phase === "claim" && now.day?.turn?.seat === seat && now.phaseEndsAt === ends) return;
-    ctx.results.length = mark;
-    ctx.dayStates.length = dmark;
-  }
-  throw new SetupError("남의 차례 스냅숏이 매번 차례 전환과 겹침");
-}
-
-/** 한 바퀴가 끝난 직후(토론 진입): 채팅 내역 줄(K3), 낮에 캐릭터를 누르면 기록 카드(X1). */
-async function claimDone(ctx, id) {
-  const rec = recorder(ctx);
-  const { page, tracker } = ctx.host;
-  const sc = `${id}/claim-done`;
-  await skipTo(page, tracker, "discussion");
-  await settle(page);
-  const v = tracker.last();
-  if (v.phase !== "discussion") throw new SetupError(`토론 진입 실패 (지금 ${v.phase})`);
-  const alive = v.players.filter((p) => p.alive !== false).length;
-  await openChatHistory(page);
-  const snap = await collectSnapshot(page);
-  // 청크 순서: 주장이 먼저 올라오고 토론 말이 그 뒤에 온다 — 앞의 alive 줄만 본다(토론 중 봇의 줄은 K3 의 대상이 아니다)
-  recOne(rec, sc, claimChatIssues(snap.chatHistory.slice(0, alive), { alive }));
-  await closeSheet(page, "채팅 내역");
-
-  const mySeat = mySeatOf(tracker);
-  const bot = v.players.find((p) => p.seat !== mySeat && p.alive !== false);
-  await inspectSeat(page, bot.seat);
-  const s2 = await collectSnapshot(page);
-  recOne(rec, sc, inspectChecks(s2, { nick: bot.nickname, night: false }));
-  await closeSheet(page, `${bot.nickname} 기록`);
-}
-
 /** 아침 직후 역할 카드 버튼(R1)과 밤 끝 알림이 없음(R6, 모든 역할). */
 function morningRoleChecks(ctx, id, role, snap) {
   const rec = recorder(ctx);
@@ -1885,33 +1804,29 @@ async function gameFlow(ctx, { id, players, role, states }) {
   rec(`${id}/setup`, "S3", "인원·지정 직업", s3Ok, `인원 ${v0.players.length}/${players}, 직업 ${v0.me.role}/${role}`);
 
   for (const state of states) {
-    if (state === "claim-mine") await claimMine(ctx, id, role);
-    else if (state === "claim-other") await claimOther(ctx, id);
-    else if (state === "claim-done") await claimDone(ctx, id);
-    else if (state === "discussion") {
+    if (state === "discussion") {
       await skipTo(page, tracker, "discussion");
       await settle(page);
       await stageChecks(ctx, id, "discussion", "discussion");
       await atmosphereState(ctx, id, "discussion", "discussion", { vignette: 0, glow: 0 }); // AT1·AT2: 토론에는 두 층이 없다
-      const { snap } = await dayState(ctx, id, "discussion");
-      recAll(rec, `${id}/discussion`, turnChecks(snap, { expectNone: true }));
+      // 낮 토론의 하단은 채팅 패널(채널 all, 높이 LOG_H + 92) — dayState 의 D6 이 expectedPanelH 로 본다(07-20, 순차 주장은 없어졌다)
+      const { snap } = await dayState(ctx, id, "discussion", { chat: true });
+      recAll(rec, `${id}/discussion`, turnChecks(snap));
       if (id === "police5") {
         const bad = snap.buttonTexts.filter((t) => /연장|넘기기/.test(t));
         rec(`${id}/discussion`, "C3", "연장·넘기기 버튼 없음", bad.length === 0, `버튼 ${bad.join(", ")}`);
       }
     } else if (state === "chat") {
-      const c1 = await attempt(async () => {
-        await openChatHistory(page);
-        const title = await page.locator('dialog[aria-label="채팅 내역"] h2').first().textContent();
-        return title?.trim() === "채팅 내역" ? true : { ok: false, detail: `제목 "${title?.trim()}"` };
+      // 낮 토론 채팅(07-20): 보낸 한 줄이 기록 칸에 보인다(예전 `채팅 내역` 모달은 기록 칸이 대신한다)
+      const sc = `${id}/chat`;
+      await typeAndSendChat(page, CHAT_GAME_TEXT);
+      const got = await attempt(async () => {
+        await waitChatLine(page, CHAT_GAME_TEXT);
       });
-      rec(`${id}/chat`, "C1", "채팅 내역 모달 열림", c1.ok, c1.detail);
+      rec(sc, "C1", "보낸 한 줄이 하단 기록 칸에 보임", got.ok, got.detail);
+      const mine = ((await readChatLines(page)) ?? []).filter((l) => l.text === CHAT_GAME_TEXT);
+      rec(sc, "C2", "그 줄은 정확히 한 번, 채널 all, 이름 '나'", mine.length === 1 && mine[0].ch === "all" && mine[0].name === "나", `${mine.length}줄 · ch ${mine[0]?.ch} · 이름 "${mine[0]?.name}"`);
       await checkState(ctx, id, "chat");
-      const c2 = await attempt(async () => {
-        await closeSheet(page, "채팅 내역");
-        return (await page.locator('dialog[aria-label="채팅 내역"]').count()) === 0;
-      });
-      rec(`${id}/chat`, "C2", "채팅 내역 모달 닫힘", c2.ok, c2.detail);
     } else if (state === "night") {
       await skipTo(page, tracker, "night");
       // N6: 밤에 막 들어선 직후(settle 전)에는 '밤이 되었습니다' 문구가 떠 있다. 아래 밤 검사는 문구가 아직 떠 있을 수 있는 시점에도 그대로 돌려
@@ -1920,8 +1835,9 @@ async function gameFlow(ctx, { id, players, role, states }) {
       await waitSceneIntro(page, 4000);
       recOne(rec, `${id}/night`, sceneIntroChecks(await readSceneIntro(page)));
       await settle(page);
-      const { snap, mySeat } = await dayState(ctx, id, "night");
-      recAll(rec, `${id}/night`, turnChecks(snap, { expectNone: true }));
+      // 밤 하단: 마피아만 채팅 패널(채널 mafia), 경찰·의사·시민은 기존 NightPanel(157)
+      const { snap, mySeat } = await dayState(ctx, id, "night", { chat: role === "mafia" });
+      recAll(rec, `${id}/night`, turnChecks(snap));
       nightStaticChecks(ctx, id, role, snap);
       await nightActions(ctx, id, role, snap, mySeat);
       // X1(밤): 어떤 자리를 눌러도 기록 카드가 열리지 않는다(행위자는 선택만 됨)
@@ -1945,7 +1861,7 @@ async function gameFlow(ctx, { id, players, role, states }) {
       const v = tracker.last();
       if (v?.phase !== "morning") throw new SetupError("아침 스냅숏 중에 아침이 끝남");
       if (isDeadView(v)) throw new SetupError("방장이 첫 밤에 탈락해 살아 있는 사람 흐름이 아님");
-      recAll(rec, `${id}/morning`, turnChecks(snap, { expectNone: true }));
+      recAll(rec, `${id}/morning`, turnChecks(snap));
       const m1 = morningCardIssues(snap, { w: ctx.size.w, mySeat });
       rec(`${id}/morning`, "M1", m1.label, m1.ok, m1.detail);
       const t = snap.panel?.text ?? "";
@@ -1957,11 +1873,11 @@ async function gameFlow(ctx, { id, players, role, states }) {
     else if (state === "rolecard-btn") await roleCardViaButton(ctx, id, role);
     else if (state === "rolecard-citizen") await roleCardCitizen(ctx, id);
     else if (state === "next-day") {
-      // 아침이 끝난 뒤 첫 낮 장면: 카드·어둡게 층이 없고(M4) 고정물 검사가 그대로 통과한다
-      await tracker.waitFor((n) => n.phase === "claim" && (n.day?.n ?? 0) >= 2, 25_000, "다음 낮 직업 공개");
+      // 아침이 끝난 뒤 다음 날 낮 토론 장면: 카드·어둡게 층이 없고(M4) 고정물 검사가 그대로 통과한다
+      await tracker.waitFor((n) => n.phase === "discussion" && (n.day?.n ?? 0) >= 2, 25_000, "다음 날 낮 토론");
       await settle(page);
-      await stageChecks(ctx, id, "next-day", "claim");
-      const { snap } = await dayState(ctx, id, "next-day");
+      await stageChecks(ctx, id, "next-day", "discussion");
+      const { snap } = await dayState(ctx, id, "next-day", { chat: true });
       recOne(rec, `${id}/next-day`, morningGoneChecks(snap));
     }
   }
@@ -1969,11 +1885,11 @@ async function gameFlow(ctx, { id, players, role, states }) {
   // 흐름 끝: 낮 장면 상태 전부의 D7(테이블 그대로)·D9(모든 인원 이름표), 살아 있는 사람 V2·V3
   const days = ctx.dayStates ?? [];
   if (days.length >= 2) {
-    const f = feltStable(days.map((d) => ({ state: d.state, rect: d.felt })));
+    const f = feltStable(days.map((d) => ({ state: d.state, rect: d.felt, chat: d.chat })));
     rec(`${id}/table`, "D7", f.label, f.ok, f.detail);
   }
   recD9(rec, `${id}/table`, days);
-  const t1 = stageStable(days.map((d) => ({ state: d.state, stage: d.stage, mySeat: d.mySeat })));
+  const t1 = stageStable(days.map((d) => ({ state: d.state, stage: d.stage, mySeat: d.mySeat, chat: d.chat, roomH: d.roomH })), { roomH: ctx.size.h });
   rec(`${id}/table`, t1.id, t1.label, t1.ok, t1.detail);
   const fin = await collectSnapshot(page);
   recOne(rec, `${id}/table`, livingRoleArtChecks(fin, { myJob: role }));
@@ -2012,7 +1928,6 @@ async function specFlow(ctx) {
       await page.waitForTimeout(800); // 대기실 화면이 다시 그려지는 동안 시트 닫기 버튼이 움직인다
       await startGame(page, tracker);
     }
-    await skipTo(page, tracker, "claim");
     await skipTo(page, tracker, "discussion");
     await skipTo(page, tracker, "night");
     await sleep(7000); // 봇 밤 지목(1~6초)이 끝나도록
@@ -2045,7 +1960,8 @@ async function specFlow(ctx) {
   await settle(page);
   {
     const sc = `${id}/discussion`;
-    const { snap } = await dayState(ctx, id, "discussion");
+    // 탈락한 방장의 낮 토론 하단은 채널 ghost 채팅 패널(LOG_H + 92)
+    const { snap } = await dayState(ctx, id, "discussion", { chat: true });
     recOne(rec, sc, spectatorChecks(snap, { spectate: specOf(tracker.last()), mySeat }));
     const bot = aliveBot();
     await inspectSeat(page, bot.seat);
@@ -2072,7 +1988,7 @@ async function specFlow(ctx) {
   await settle(page);
   {
     const sc = `${id}/night`;
-    const { snap } = await dayState(ctx, id, "night");
+    const { snap } = await dayState(ctx, id, "night", { chat: true }); // 탈락자의 밤 하단도 ghost 채팅 패널
     recOne(rec, sc, spectatorChecks(snap, { spectate: specOf(tracker.last()), mySeat }));
     const buttons = snap.seats.filter((s) => s.isButton).map((s) => s.seat);
     rec(sc, "V1", "관전자 밤에는 어떤 자리도 버튼이 아님", buttons.length === 0, `버튼 자리 ${buttons.join(",")}`);
@@ -2082,11 +1998,11 @@ async function specFlow(ctx) {
 
   const days = ctx.dayStates ?? [];
   if (days.length >= 2) {
-    const f = feltStable(days.map((d) => ({ state: d.state, rect: d.felt })));
+    const f = feltStable(days.map((d) => ({ state: d.state, rect: d.felt, chat: d.chat })));
     rec(`${id}/table`, "D7", f.label, f.ok, f.detail);
   }
   recD9(rec, `${id}/table`, days);
-  const t1 = stageStable(days.map((d) => ({ state: d.state, stage: d.stage, mySeat: d.mySeat })));
+  const t1 = stageStable(days.map((d) => ({ state: d.state, stage: d.stage, mySeat: d.mySeat, chat: d.chat, roomH: d.roomH })), { roomH: ctx.size.h });
   rec(`${id}/table`, t1.id, t1.label, t1.ok, t1.detail);
   rec(`${id}/setup`, "S4", "단계 도달", true);
   await resetAndLeave(page, tracker);
@@ -2126,8 +2042,8 @@ async function voteFlow(ctx) {
   await settle(page);
   await stageChecks(ctx, id, "discussion", "discussion");
   {
-    const { snap } = await dayState(ctx, id, "discussion");
-    recAll(rec, `${id}/discussion`, turnChecks(snap, { expectNone: true }));
+    const { snap } = await dayState(ctx, id, "discussion", { chat: true }); // 낮 토론 하단은 채팅 패널(LOG_H + 92)
+    recAll(rec, `${id}/discussion`, turnChecks(snap));
   }
 
   // 2) exec-intro: 관찰자와 시계열 표본기를 단계를 넘기기 전에 시작한다(skipTo 는 시트를 닫느라 약 1초 걸려 카드 도착을 놓친다, 04-31 SUMMARY 4번)
@@ -2158,7 +2074,7 @@ async function voteFlow(ctx) {
     recOne(rec, sc, voteChecks(v));
     colorRule(sc, v);
     const { snap } = await dayState(ctx, id, "exec-vote");
-    recAll(rec, sc, turnChecks(snap, { expectNone: true, crimsonAllowed: false })); // K4: 방장이 시민이면 투표 단계에 진홍 후광 0
+    recAll(rec, sc, turnChecks(snap, { crimsonAllowed: false })); // K4: 방장이 시민이면 투표 단계에 진홍 후광 0
     await stageChecks(ctx, id, "exec-vote", "execVote");
     const flip = await attempt(async () => {
       const tally = async () => (await read()).bottom.tally.replace(/아직.*$/, "").trim();
@@ -2221,7 +2137,7 @@ async function voteFlow(ctx) {
     colorRule(sc, v);
     await stageChecks(ctx, id, "cand-vote", "candidateVote");
     const { snap } = await dayState(ctx, id, "cand-vote");
-    recAll(rec, sc, turnChecks(snap, { expectNone: true, crimsonAllowed: false }));
+    recAll(rec, sc, turnChecks(snap, { crimsonAllowed: false }));
     still("candidateVote", "후보 선택 검사");
   }
 
@@ -2250,7 +2166,7 @@ async function voteFlow(ctx) {
     }
     await stageChecks(ctx, id, "reveal", "candidateVoteReveal");
     const { snap } = await dayState(ctx, id, "reveal");
-    recAll(rec, sc, turnChecks(withoutAmberHalo(snap), { expectNone: true, crimsonAllowed: false })); // K4: 앰버(박동 중)는 빼고 흰·진홍만
+    recAll(rec, sc, turnChecks(withoutAmberHalo(snap), { crimsonAllowed: false })); // K4: 앰버(박동 중)는 빼고 흰·진홍만
     const all = await series;
     const kept = all.filter((x) => x.value.inPhase);
     recOne(rec, sc, revealChecks(kept.map((x) => ({ t: x.t, reveal: x.value.v.reveal, dt: x.value.v.dt, crimsonNew: x.value.v.crimsonNew })), { n, size: ctx.size }));
@@ -2263,7 +2179,7 @@ async function voteFlow(ctx) {
     if (kept.length > 0) colorRule(sc, kept[kept.length - 1].value.v);
   }
 
-  // 6) defense: 후보는 남(봇) — 후보 가운데·어둡게·원뿔·패널 157, 변론 줄, 이모티콘
+  // 6) defense: 후보는 남(봇) — 후보 가운데·어둡게·원뿔·채팅 패널(LOG_H + 92), 누구나 보낼 수 있는 변론 채팅
   const candidateSeat = tracker.last().day?.candidate ?? target;
   {
     const sc = `${id}/defense`;
@@ -2271,21 +2187,16 @@ async function voteFlow(ctx) {
     await settle(page);
     still("defense", "변론 도착");
     const v = await read();
-    recOne(rec, sc, defenseChecks(v, { isCandidate: candidateSeat === mySeat }));
+    recOne(rec, sc, defenseChecks(v));
     colorRule(sc, v);
     await checkState(ctx, id, "defense");
     await stageChecks(ctx, id, "defense", "defense");
-    // 후보 봇의 변론 줄(1~5초 뒤)이 하단 채팅에 보임. 안 오면 건너뜀(봇은 세 문장 중 하나를 보낸다)
-    const line = await page.waitForSelector(".mf-turnpanel .mf-msglog__item", { state: "attached", timeout: 6000 }).then(() => true, () => false);
-    if (line) rec(sc, "P5", "후보의 변론 줄이 하단 채팅에 보임", (await page.locator(".mf-turnpanel .mf-msglog__item").count()) >= 1, "채팅 줄 없음");
-    // 이모티콘 하나: 트레이에서 보내면 머리 위에 뜬다
-    const emoji = await attempt(async () => {
-      await page.getByRole("button", { name: "이모티콘", exact: true }).first().click({ timeout: 4000 });
-      await page.locator('dialog[aria-label="이모티콘"] .mf-emojitray__cell').first().click({ timeout: 4000 });
-      await page.waitForSelector(".mf-dt__emoji", { state: "attached", timeout: 3000 });
-      await closeSheet(page, "이모티콘");
+    // 변론 채팅(07-20, CHAT-01): 후보가 아닌 방장도 기록 칸에 줄을 보낼 수 있다(순차 주장·변론 칩·이모티콘은 없어졌다)
+    const sent = await attempt(async () => {
+      await typeAndSendChat(page, CHAT_DEFENSE_TEXT);
+      await waitChatLine(page, CHAT_DEFENSE_TEXT);
     });
-    rec(sc, "P5", "변론 중 이모티콘이 머리 위에 뜸", emoji.ok, emoji.detail);
+    rec(sc, "P5", "변론 중 후보가 아닌 방장도 기록 칸에 줄을 보낼 수 있음", sent.ok, sent.detail);
   }
 
   // 7) execution: 5초뿐이라 읽기부터
@@ -2305,11 +2216,11 @@ async function voteFlow(ctx) {
   const tableChecks = () => {
     const days = ctx.dayStates ?? [];
     if (days.length >= 2) {
-      const f = feltStable(days.map((d) => ({ state: d.state, rect: d.felt })));
+      const f = feltStable(days.map((d) => ({ state: d.state, rect: d.felt, chat: d.chat })));
       rec(`${id}/table`, "D7", f.label, f.ok, f.detail);
     }
     recD9(rec, `${id}/table`, days);
-    const t1 = stageStable(days.map((d) => ({ state: d.state, stage: d.stage, mySeat: d.mySeat })));
+    const t1 = stageStable(days.map((d) => ({ state: d.state, stage: d.stage, mySeat: d.mySeat, chat: d.chat, roomH: d.roomH })), { roomH: ctx.size.h });
     rec(`${id}/table`, t1.id, t1.label, t1.ok, t1.detail);
     rec(`${id}/setup`, "S4", "단계 도달", true);
   };
@@ -2327,7 +2238,7 @@ async function voteFlow(ctx) {
   await stageChecks(ctx, id, "night", "night");
   {
     const { snap } = await dayState(ctx, id, "night");
-    recAll(rec, `${id}/night`, turnChecks(snap, { expectNone: true }));
+    recAll(rec, `${id}/night`, turnChecks(snap));
   }
   tableChecks();
   await resetAndLeave(page, tracker);
@@ -2363,11 +2274,11 @@ async function verdictRoom(ctx, id, { players, role, vote }) {
 function tableChecksOf(ctx, rec, id) {
   const days = ctx.dayStates ?? [];
   if (days.length >= 2) {
-    const f = feltStable(days.map((d) => ({ state: d.state, rect: d.felt })));
+    const f = feltStable(days.map((d) => ({ state: d.state, rect: d.felt, chat: d.chat })));
     rec(`${id}/table`, "D7", f.label, f.ok, f.detail);
   }
   recD9(rec, `${id}/table`, days);
-  const t1 = stageStable(days.map((d) => ({ state: d.state, stage: d.stage, mySeat: d.mySeat })));
+  const t1 = stageStable(days.map((d) => ({ state: d.state, stage: d.stage, mySeat: d.mySeat, chat: d.chat, roomH: d.roomH })), { roomH: ctx.size.h });
   rec(`${id}/table`, t1.id, t1.label, t1.ok, t1.detail);
   rec(`${id}/setup`, "S4", "단계 도달", true);
 }
@@ -2407,7 +2318,7 @@ async function noExecFlow(ctx) {
   await skipTo(page, tracker, "discussion");
   await settle(page);
   await stageChecks(ctx, id, "discussion", "discussion");
-  await dayState(ctx, id, "discussion");
+  await dayState(ctx, id, "discussion", { chat: true });
 
   // 처형 여부 투표에서 방장도 반대 → 던진 표 5 중 찬성 0 = notMajority
   await skipTo(page, tracker, "execVote");
@@ -2467,7 +2378,7 @@ async function resultCitizenFlow(ctx) {
   await skipTo(page, tracker, "discussion");
   await settle(page);
   await stageChecks(ctx, id, "discussion", "discussion");
-  await dayState(ctx, id, "discussion");
+  await dayState(ctx, id, "discussion", { chat: true });
 
   await skipTo(page, tracker, "execVote");
   await voteAs(page, tracker, "찬성");
@@ -2479,23 +2390,23 @@ async function resultCitizenFlow(ctx) {
   const candidateSeat = tracker.last().day?.candidate;
   if (candidateSeat !== mySeat) throw new SetupError(`후보가 방장이 아님 (후보 ${candidateSeat}, 방장 ${mySeat})`);
 
-  // 후보 본인 변론: 패널 236·칩 6개
+  // 후보 본인 변론: 후보도 같은 채팅 패널(LOG_H + 92)에서 보낸다
   {
     const sc = `${id}/defense`;
     await skipTo(page, tracker, "defense");
     await settle(page);
     still("defense", "변론 도착");
     const v = await read();
-    recOne(rec, sc, defenseChecks(v, { isCandidate: true }));
+    recOne(rec, sc, defenseChecks(v));
     colorRule(sc, v);
     await checkState(ctx, id, "defense");
     await stageChecks(ctx, id, "defense", "defense");
     const sent = await attempt(async () => {
-      await page.locator(".mf-defchips__b", { hasText: "저 아니에요" }).first().click({ timeout: 4000 });
-      await page.waitForFunction(() => (document.querySelector(".mf-claimpanel__guide")?.textContent ?? "").trim() === "보냈어요 · 저 아니에요", null, { timeout: 2500 });
+      await typeAndSendChat(page, CHAT_DEFENSE_TEXT);
+      await waitChatLine(page, CHAT_DEFENSE_TEXT);
     });
-    rec(sc, "P5", "칩을 보내면 안내 줄이 `보냈어요 · 저 아니에요`", sent.ok, sent.detail);
-    still("defense", "변론 칩 보내기");
+    rec(sc, "P5", "후보 본인도 기록 칸에 변론 줄을 보낼 수 있음", sent.ok, sent.detail);
+    still("defense", "변론 채팅 보내기");
   }
 
   // 처형: 방장이 탈락하는 쪽(관전) viewer
@@ -2522,7 +2433,7 @@ async function resultMafiaFlow(ctx) {
   await skipTo(page, tracker, "discussion");
   await settle(page);
   await stageChecks(ctx, id, "discussion", "discussion");
-  await dayState(ctx, id, "discussion");
+  await dayState(ctx, id, "discussion", { chat: true });
 
   await skipTo(page, tracker, "execVote");
   await voteAs(page, tracker, "찬성");
@@ -2543,7 +2454,7 @@ async function resultMafiaFlow(ctx) {
     await page.waitForSelector(".mf-sceneintro", { state: "detached", timeout: 4000 }).catch(() => {});
     await settle(page);
     still("night", "밤 도착");
-    const { snap } = await dayState(ctx, id, "night");
+    const { snap } = await dayState(ctx, id, "night", { chat: true }); // 마피아 방장의 밤 하단은 채널 mafia 채팅 패널
     nightStaticChecks(ctx, id, "mafia", snap);
     const target = alive().find((x) => x !== mySeat);
     const n2 = await attempt(async () => {
@@ -2601,11 +2512,11 @@ async function pcFlow(ctx) {
   recOne(rec, "pc/lobby", pcCenterChecks({ ...(await readRootRect(page)), where: "대기실" }, { w }));
   await checkState(ctx, "pc", "lobby");
 
-  // ③ 낮(claim): 봇 3명 → 시작 → 첫 낮
+  // ③ 낮(discussion): 봇 3명 → 시작 → 첫 낮 토론
   await openTestSheet(page);
   await setBots(page, tracker, 3);
   await startGame(page, tracker);
-  await skipTo(page, tracker, "claim");
+  await skipTo(page, tracker, "discussion");
   await settle(page);
   ctx.stage = "play";
   recOne(rec, "pc/day", pcCenterChecks({ ...(await readRootRect(page)), where: "낮" }, { w }));
@@ -2722,7 +2633,6 @@ async function wakeLockFlow(ctx) {
 }
 
 const game = (id, players, role, states) => (ctx) => gameFlow(ctx, { id, players, role, states });
-const CLAIMS = ["claim-mine", "claim-other", "claim-done", "discussion"];
 
 export const FLOWS = [
   // lobby·world 는 LOBBY_SIZES 6개 크기로 돈다: 기본 크기 4개에 더해 390x844·402x874 (run.mjs 의 extraSizes)
@@ -2742,10 +2652,11 @@ export const FLOWS = [
   { id: "reconnect", run: reconnectFlow, size: RECONNECT_SIZE },
   { id: "deployhold", run: deployHoldFlow, size: RECONNECT_SIZE, skipByDefault: true },
   { id: "perfbudget", run: perfBudgetFlow, size: PERF_SIZE },
-  { id: "police5", run: game("police5", 5, "police", [...CLAIMS, "chat", "night", "morning", "day-intro", "rolecard-btn", "next-day"]) },
-  { id: "citizen4", run: game("citizen4", 4, "citizen", [...CLAIMS, "night", "morning", "day-intro", "rolecard-citizen", "next-day"]) },
-  { id: "mafia8", run: game("mafia8", 8, "mafia", [...CLAIMS, "night", "morning", "day-intro", "rolecard-btn", "next-day"]) },
-  { id: "doctor5", run: game("doctor5", 5, "doctor", [...CLAIMS, "night", "morning", "day-intro", "rolecard-btn", "next-day"]) },
+  // 게임 흐름은 낮 시작(dayAnnounce) 다음이 바로 discussion 이다(순차 주장 단계는 7페이즈에서 없어졌다, CHAT-06). police5 만 chat 상태(보낸 줄이 기록 칸에 보임)를 더 본다
+  { id: "police5", run: game("police5", 5, "police", ["discussion", "chat", "night", "morning", "day-intro", "rolecard-btn", "next-day"]) },
+  { id: "citizen4", run: game("citizen4", 4, "citizen", ["discussion", "night", "morning", "day-intro", "rolecard-citizen", "next-day"]) },
+  { id: "mafia8", run: game("mafia8", 8, "mafia", ["discussion", "night", "morning", "day-intro", "rolecard-btn", "next-day"]) },
+  { id: "doctor5", run: game("doctor5", 5, "doctor", ["discussion", "night", "morning", "day-intro", "rolecard-btn", "next-day"]) },
   { id: "spec4", run: specFlow },
   { id: "vote5", run: voteFlow },
   { id: "noexec", run: noExecFlow },

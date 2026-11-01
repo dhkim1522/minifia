@@ -80,6 +80,9 @@ import {
   ownTagInStageChecks,
   parseBarMask,
   pickTapTargets,
+  worldTapRanking,
+  WORLD_WALK_MIN_MS,
+  WORLD_WALK_MIN_MS_LOW,
   tagStackChecks,
   walkableCenters,
   worldSyncChecks,
@@ -2922,6 +2925,22 @@ test("parseBarMask·walkableCenters: shared/game/map.ts 원문에서 28줄 마�
   assert.deepEqual(first, { x: -7 + rows[2].indexOf(".") * 0.5 + 0.25, z: -7 + 2 * 0.5 + 0.25 });
   assert.throws(() => parseBarMask("export const X = 1;"), /BAR_MASK/);
   assert.throws(() => parseBarMask('export const BAR_MASK: readonly string[] = ["..", "."];'), /정사각/);
+});
+
+test("worldTapRanking: 3 단위 이상 먼 칸이 있으면 그 칸과 1.5초 하한, 없으면(낮은 스테이지) 1.5 단위 이상 먼 칸과 0.8초 하한", () => {
+  const from = { x: 0, z: 0 };
+  const tall = worldTapRanking([{ x: 4, z: 0 }, { x: 1, z: 0 }, { x: 0, z: 3.5 }], from);
+  assert.equal(tall.low, false);
+  assert.equal(tall.minWalkMs, WORLD_WALK_MIN_MS);
+  assert.deepEqual(tall.ranked.map((p) => p.x + "," + p.z), ["4,0", "0,3.5"]);
+  const low = worldTapRanking([{ x: 2.2, z: 0 }, { x: 1, z: 0 }, { x: 0, z: 1.6 }], from);
+  assert.equal(low.low, true);
+  assert.equal(low.minWalkMs, WORLD_WALK_MIN_MS_LOW);
+  assert.deepEqual(low.ranked.map((p) => p.x + "," + p.z), ["2.2,0", "0,1.6"]);
+  // 1.5 단위 이상도 없으면 후보가 비어 SetupError 로 이어진다(조용히 통과하지 않는다)
+  assert.deepEqual(worldTapRanking([{ x: 1, z: 0 }], from).ranked, []);
+  assert.equal(WORLD_WALK_MIN_MS, 1500);
+  assert.equal(WORLD_WALK_MIN_MS_LOW, 800);
 });
 
 test("pickTapTargets: minDist 이상만, 먼 순서, visible 이 거짓인 점은 뺀다", () => {

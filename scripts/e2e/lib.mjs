@@ -1989,6 +1989,23 @@ export function pickTapTargets(centers, from, { minDist = 3, visible = () => tru
     .sort((p, q) => q.d - p.d);
 }
 
+/**
+ * world 흐름의 목적지 고르기 기준(07-20). 보이는 칸 중 3 단위 이상 먼 칸이 있으면 그 칸들(먼 순서)과 걷는 길이 1.5초 이상을 쓴다.
+ * 로비 스테이지가 채팅 패널로 낮아진 폰(360×560 의 스테이지 248)에는 카메라가 내 캐릭터를 따라 두 화면에 보이는 칸이 모두 3 단위 안이라 그런 칸이 없다 —
+ * 그때는 보이는 칸 중 1.5 단위 이상 먼 칸을 먼 순서로 쓰고 걷는 길이 하한을 0.8초로 둔다(걷는 동안 5번 읽는 데 필요한 시간 ≈ 0.5초 + 여유).
+ * 걷는 길이 하한은 측정이 걷는 도중에 일어나게 하는 준비 조건이다 — 누르기 44·글자 크기·가로 넘침 같은 화면 판정 기준이 아니다.
+ * 반환: { ranked: 먼 순서의 칸, low: 낮은 스테이지 기준을 썼는가, minWalkMs }.
+ */
+export const WORLD_TAP_MIN_DIST = 3;
+export const WORLD_TAP_MIN_DIST_LOW = 1.5;
+export const WORLD_WALK_MIN_MS = 1500;
+export const WORLD_WALK_MIN_MS_LOW = 800;
+export function worldTapRanking(onScreen, from) {
+  const far = pickTapTargets(onScreen, from, { minDist: WORLD_TAP_MIN_DIST });
+  if (far.length > 0) return { ranked: far, low: false, minWalkMs: WORLD_WALK_MIN_MS };
+  return { ranked: pickTapTargets(onScreen, from, { minDist: WORLD_TAP_MIN_DIST_LOW }), low: true, minWalkMs: WORLD_WALK_MIN_MS_LOW };
+}
+
 // ---- 재접속·렌더 예산·메모리 검사 (06-18, CONN-04·MAP-05·성공 기준 4 의 자동 몫) ----
 
 /** 재접속 흐름이 종류마다 되풀이하는 횟수(UI-SPEC CONN-04: 각각 10회). 줄이지 않는다. */

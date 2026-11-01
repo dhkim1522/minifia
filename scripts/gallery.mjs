@@ -4,7 +4,7 @@ import { existsSync } from "node:fs";
 import { findChrome } from "./e2e/lib.mjs";
 import { expectedOrigin, exitIfV1 } from "./deploy-target.mjs";
 const B = await import("./e2e/browser.mjs");
-const { createTestRoom, openHostPage, openTestSheet, closeSheet, setBots, chooseRole, startGame, skipTo, sleep, launchChrome, setBotVote, voteAs, pickCandidate, inspectSeat, openRoleCard, selectRoleCardTab, closeRoleCard, openChatHistory, waitTurnSeat, pickChip, tapSeat } = B;
+const { createTestRoom, openHostPage, openTestSheet, closeSheet, setBots, chooseRole, startGame, skipTo, sleep, launchChrome, setBotVote, voteAs, pickCandidate, inspectSeat, openRoleCard, selectRoleCardTab, closeRoleCard, tapSeat, typeAndSendChat } = B;
 const ORIGIN = expectedOrigin();
 exitIfV1(ORIGIN); // 맨 앞에서 v1.0 거부(DEPLOY-02)
 const OUT = process.argv[2];
@@ -43,40 +43,30 @@ await setBotVote(page, tracker, { exec: "yes", pick: "other" });
 await closeSheet(page);
 await sleep(800);
 await snap(page, `03-lobby-${ROLE}`);
+// 로비 자유 채팅(07-20): 방장이 두 줄을 보낸 기록 칸 — 순차 주장·빠른 메시지·이모티콘 화면을 대신한다
+await step("lobby-chat", async () => {
+  await typeAndSendChat(page, "다들 왔나요?"); await sleep(1100); // 보내기 간격 하한(CHAT_MIN_GAP_MS 600)보다 길게
+  await typeAndSendChat(page, "곧 시작할게요"); await sleep(900);
+  await snap(page, `03b-lobby-chat-${ROLE}`);
+});
 
 await startGame(page, tracker, { onAssigning: async () => { await snap(page, `04-assigning-${ROLE}`); } });
 await sleep(900);
 await snap(page, `05-role-back-${ROLE}`);
 await step("flip", async () => { await page.getByRole("button", { name: "역할 카드 뒤집기" }).click(); await sleep(1100); await snap(page, `06-role-front-${ROLE}`); });
 
-// 낮 시작 → 주장
+// 낮 시작 → 토론(순차 주장 단계는 없다, CHAT-06)
 await tracker.waitFor((x) => x.phase === "dayAnnounce", 20_000, "낮 시작");
 await sleep(700);
 await snap(page, `07-day-intro-${ROLE}`);
-await tracker.waitFor((x) => x.phase === "claim", 5_000, "주장");
-const mySeat = v().me.seat;
-await step("claim", async () => {
-  let other = false, mine = false;
-  const claim = { police: "경찰", mafia: "시민", doctor: "의사", citizen: "시민" }[ROLE];
-  for (let i = 0; i < 400 && v().phase === "claim" && !(other && mine); i++) {
-    const t = v().day?.turn?.seat;
-    if (t === mySeat && !mine) { await sleep(900); await snap(page, `09-claim-mine-${ROLE}`); mine = true; await pickChip(page, tracker, claim); continue; }
-    if (t !== undefined && t !== mySeat && !other) { await sleep(1500); await snap(page, `08-claim-other-${ROLE}`); other = true; continue; }
-    await sleep(150);
-  }
-});
 await tracker.waitFor((x) => x.phase === "discussion", 60_000, "토론");
+const mySeat = v().me.seat;
 await sleep(2500);
 await snap(page, `10-discussion-${ROLE}`);
-await step("quick", async () => {
-  await page.locator(".mf-discuss__quick").click(); await sleep(800);
-  await snap(page, `11-quickmsg-${ROLE}`);
-  await page.keyboard.press("Escape"); await sleep(600);
-});
-await step("emoji", async () => {
-  await page.locator(".mf-discuss__emoji").click(); await sleep(800);
-  await snap(page, `12-emoji-${ROLE}`);
-  await page.keyboard.press("Escape"); await sleep(600);
+// 토론 자유 채팅: 방장이 한 줄 보낸 기록 칸
+await step("discussion-chat", async () => {
+  await typeAndSendChat(page, "저는 수상한 사람이 없는 것 같아요"); await sleep(1500);
+  await snap(page, `11-discussion-chat-${ROLE}`);
 });
 await step("record", async () => {
   const other = v().players.find((p) => p.seat !== mySeat && p.alive !== false);
@@ -91,7 +81,6 @@ await step("rolecard", async () => {
   await snap(page, `15-journal-${ROLE}`);
   await closeRoleCard(page); await sleep(500);
 });
-await step("chat", async () => { await openChatHistory(page); await sleep(500); await snap(page, `16-chat-${ROLE}`); await page.keyboard.press("Escape"); await sleep(600); });
 
 // 처형 투표
 await step("execvote", async () => {
@@ -124,6 +113,13 @@ await step("night", async () => {
   await tracker.waitFor((x) => x.phase === "night" || x.phase === "ended", 20_000, "밤");
   if (v().phase !== "night") return;
   await sleep(2600); await snap(page, `27-night-${ROLE}`);
+  // 밤 마피아 채팅(마피아 방장만 채팅 패널이 붙는다)
+  if (ROLE === "mafia" && v().me.chat === "mafia") {
+    await step("night-chat", async () => {
+      await typeAndSendChat(page, "오늘 밤은 누구로 할까요"); await sleep(1200);
+      await snap(page, `27b-night-mafia-chat-${ROLE}`);
+    });
+  }
   if (v().players.find((p) => p.seat === mySeat)?.alive !== false) {
     const other = v().players.find((p) => p.seat !== mySeat && p.alive !== false);
     await tapSeat(page, other.seat).catch(() => {}); await sleep(800);

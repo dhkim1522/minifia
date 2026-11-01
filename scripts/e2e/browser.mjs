@@ -634,7 +634,8 @@ export async function collectSnapshot(page) {
         const z = parseInt(getComputedStyle(el).zIndex, 10);
         return Number.isFinite(z) ? z : Number.NaN;
       };
-      const chatTexts = (root) => [...root.querySelectorAll(".mf-msglog__item:not(.mf-msglog__item--sys) .mf-msglog__text")].map((e) => (e.textContent || "").trim());
+      // 채팅 기록 칸([data-chat-log])의 사람 줄 본문 — 시스템 줄(.mv-chat__sys)은 싣지 않는다(07-20: 옛 .mf-msglog 대신)
+      const chatTexts = (root) => [...root.querySelectorAll("[data-chat-log] .mv-chat__msg .mv-chat__text")].map((e) => (e.textContent || "").trim());
       const stepper = q(".mf-tt-sheet__stepper");
       const ttSheet = q(".mf-tt-sheet");
       const stepBtn = (label) => {
@@ -751,7 +752,7 @@ export async function collectSnapshot(page) {
         if (size < 14) smallText.push({ desc: desc(el), size });
       }
 
-      const stEmoji = panel?.querySelector('.st-row [aria-label="이모티콘"]') ?? null;
+      const chatPanel = panel?.querySelector("[data-chat-panel]") ?? null;
 
       return {
         vw: window.innerWidth,
@@ -774,10 +775,9 @@ export async function collectSnapshot(page) {
               rect: rectOf(panel),
               text: (panel.innerText || "").replace(/\s+/g, " ").trim(),
               children: [...panel.querySelectorAll("*")].filter(visible).map((c) => ({ desc: desc(c), rect: rectOf(c) })),
-              chips: [...panel.querySelectorAll('[aria-label="주장할 직업"] button')].map((b) => (b.textContent || "").replace(/\s+/g, " ").trim()),
-              stRow: !!panel.querySelector(".st-row"),
-              emojiBtn: stEmoji ? { rect: rectOf(stEmoji) } : null,
-              quickBtn: [...panel.querySelectorAll("button")].some((b) => /빠른 메시지/.test(`${b.getAttribute("aria-label") ?? ""} ${b.textContent ?? ""}`)),
+              // 채팅 패널이 붙은 하단인가와 그 채널(all|mafia|ghost) — D6·T1 이 기대 높이를 고르는 근거(07-20)
+              hasChat: !!chatPanel,
+              chatChannel: chatPanel ? chatPanel.getAttribute("data-chat-channel") : null,
             }
           : null,
         guide: guide ? { rect: rectOf(guide), lineHeight: lineHeightOf(guide), text: (guide.textContent || "").trim() } : null,
@@ -794,7 +794,6 @@ export async function collectSnapshot(page) {
             haloWhiteSeats: [...document.querySelectorAll("img.mf-figure--halo-white")].map(seatOf),
             legacyCircles: document.querySelectorAll(".mf-dt__spot, .mf-dt__ring, .mf-dt__ring--me, .mf-dt__ring--mate, .mf-dt__sel").length,
             tagInverted: document.querySelectorAll(".mf-dt__tag--turn, .mf-dt__tag--spoke").length,
-            legacyRows: document.querySelectorAll(".mf-dt__claim").length,
           };
         })(),
         halo: (() => {
@@ -816,8 +815,9 @@ export async function collectSnapshot(page) {
         crowns: document.querySelectorAll(".mf-dt__crown").length,
         dim: dim ? { rect: rectOf(dim), z: zOf(dim), pointerEvents: getComputedStyle(dim).pointerEvents } : null,
         card: rectOf(card),
+        // 방(.mf-dayscene) 높이 — 채팅 패널 기대 높이(LOG_H 선택)의 기준. 낮 장면이 아니면 null
+        roomH: q(".mf-dayscene") ? q(".mf-dayscene").getBoundingClientRect().height : null,
         chatLines: chatTexts(document),
-        chatHistory: chatTexts(q('dialog[aria-label="채팅 내역"][open]') ?? document.createElement("div")),
         legacyRecordsBtn: !!q("button.mf-records-btn") || [...document.querySelectorAll("button")].some((b) => /^수사 기록/.test(b.getAttribute("aria-label") ?? "")),
         roleCard: {
           button: rcBtn
@@ -855,7 +855,6 @@ export async function collectSnapshot(page) {
         })),
         smallText,
         buttonTexts: [...document.querySelectorAll("button")].filter(visible).map((b) => (b.textContent || "").replace(/\s+/g, " ").trim()),
-        mafiaLog: !!q('[aria-label="마피아 채팅"]'),
         lobbyCount: q("[data-lobby-start]")?.getAttribute("aria-label") ?? "",
         testSheet: ttSheet
           ? {
@@ -1567,8 +1566,8 @@ export async function startGame(page, tracker, { onAssigning } = {}) {
 }
 
 /**
- * 시트를 열어 둔 채 [다음 단계로 넘기기] 를 눌러 목표 단계까지 간다. claim 에서 한 번은 차례 한 번이다(결정 0027-9)라
- * 진행 신호를 「단계 또는 마감 시각이 바뀜」으로 잡고 상한을 24 로 둔다(8명판 8차례 + 다른 단계). 끝나면 시트를 닫는다.
+ * 시트를 열어 둔 채 [다음 단계로 넘기기] 를 눌러 목표 단계까지 간다. 진행 신호를 「단계 또는 마감 시각이 바뀜」으로 잡고
+ * 상한을 24 로 둔다(여유 있는 상한 — 단계는 한 번에 하나씩 넘어간다). 끝나면 시트를 닫는다.
  */
 export async function skipTo(page, tracker, phase) {
   await openTestSheet(page);
@@ -1581,23 +1580,6 @@ export async function skipTo(page, tracker, phase) {
   }
   if (tracker.last()?.phase !== phase) throw new SetupError(`목표 단계 ${phase} 에 도달하지 못함 (지금 ${tracker.last()?.phase})`);
   await closeSheet(page);
-}
-
-/** claim 에서 차례가 그 자리로 올 때까지 기다린다(받은 state 의 day.turn.seat 기준). */
-export function waitTurnSeat(tracker, seat, ms = 15_000) {
-  return tracker.waitFor((v) => v.phase === "claim" && v.day?.turn?.seat === seat, ms, `자리 ${seat} 차례`);
-}
-
-/** 내 차례 하단 칩을 글자로 눌러 차례나 단계가 넘어가길 기다린다. */
-export async function pickChip(page, tracker, label) {
-  const v = tracker.last();
-  const before = { phase: v?.phase, seat: v?.day?.turn?.seat, ends: v?.phaseEndsAt };
-  await page.locator('[aria-label="주장할 직업"]').getByRole("button", { name: label, exact: true }).click();
-  await tracker.waitFor(
-    (n) => n.phase !== before.phase || n.day?.turn?.seat !== before.seat || n.phaseEndsAt !== before.ends,
-    4000,
-    `칩 ${label} 뒤 다음 차례`,
-  );
 }
 
 /** 대상 자리 버튼을 실제로 누른다. 다른 요소에 가려지면 Playwright 실행 가능성 검사가 실패를 낸다. */
@@ -1648,18 +1630,11 @@ export async function closeRoleCard(page) {
   await closeSheet(page, "역할 카드");
 }
 
-/** 채팅 줄 오른쪽 ^ 버튼으로 채팅 내역 시트를 연다. */
-export async function openChatHistory(page) {
-  await page.locator('[aria-label="채팅 내역 크게 보기"]').click();
-  await page.locator('dialog[aria-label="채팅 내역"].mf-dialog--open').waitFor({ state: "attached", timeout: 5000 });
-  await page.waitForTimeout(300);
-}
-
 /** 최선 노력: 열린 시트를 닫고 [대기실로 되돌리기] → 대기실에서 [나가기]. 실패는 무시한다. */
 export async function resetAndLeave(page, tracker) {
   try {
     const open = await page.evaluate(() => [...document.querySelectorAll("dialog[open]")].map((d) => d.getAttribute("aria-label") ?? ""));
-    for (const label of open) if (label === "역할 카드" || label === "채팅 내역" || label.endsWith(" 기록")) await closeSheet(page, label).catch(() => {});
+    for (const label of open) if (label === "역할 카드" || label.endsWith(" 기록")) await closeSheet(page, label).catch(() => {});
     await openTestSheet(page);
     await clickInDialog(page, TT_LABEL, "대기실로 되돌리기");
     await tracker.waitFor((v) => v.phase === "lobby", 3000, "대기실 복귀");
@@ -1760,6 +1735,9 @@ export async function readVerdict(page, colors = { crimson: [], gray: [] }) {
           })
         : [],
       height: panel ? panel.getBoundingClientRect().height : 0,
+      // 07-20: 변론 하단은 채팅 패널이다 — 채팅 패널이 붙었는가와 방(.mf-dayscene) 높이(기대 패널 높이 expectedPanelH 의 입력)
+      chat: !!(panel && q("[data-chat-panel]", panel)),
+      roomH: q(".mf-dayscene") ? q(".mf-dayscene").getBoundingClientRect().height : Number.NaN,
     };
 
     // ---- 낮 테이블 장면 ----
