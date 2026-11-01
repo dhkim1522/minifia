@@ -5,16 +5,16 @@ milestone_name: 같은 공간
 current_phase: 06
 current_phase_name: 월드 뼈대
 status: executing
-stopped_at: Completed 06-16-PLAN.md
-last_updated: "2026-11-01T00:28:58.592Z"
+stopped_at: Completed 06-21-PLAN.md
+last_updated: "2026-11-01T00:34:23.946Z"
 last_activity: 2026-11-01
 last_activity_desc: Phase 06 execution started
-state_head: 3a19dafbdb7ae7a4b247dddae37947097aaf2912
+state_head: bac15f810cbe69d84e4f963d2b0b2386d5cb5ee2
 progress:
   total_phases: 7
   completed_phases: 0
   total_plans: 21
-  completed_plans: 16
+  completed_plans: 17
   percent: 0
 ---
 
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-10-30)
 ## Current Position
 
 Phase: 06 (월드 뼈대) — EXECUTING
-Plan: 17 of 21
+Plan: 18 of 21
 Status: Ready to execute
 Last activity: 2026-11-01 — Phase 06 execution started
 
@@ -74,6 +74,7 @@ Progress: [░░░░░░░░░░] 0% (0/7 phases)
 | Phase 06 P07 | 3min | 3 tasks | 9 files |
 | Phase 06 P15 | 20 min | 3 tasks | 22 files |
 | Phase 06 P16 | 12 min | 2 tasks | 6 files |
+| Phase 06 P21 | 15min | 3 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -123,6 +124,7 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 06]: 로비 알림 억제는 서버 view 차이에서 온 입장·방장 알림에만 건다 — 내가 누른 일의 답(나가기 실패 문구)은 띠가 떠 있어도 보인다
 - [Phase 06]: EXIT_CURTAIN_MS(420)는 runtime.ts 한 곳에서 WorldStage 가림막과 RoomScreen 단계 전환 지연이 같이 쓴다
 - [Phase 06]: 06-16: Icon crown 정의와 DayTableSeat.onPress 는 삭제 목록 밖이라 남김(정리 후보); 자리 전이 훅은 06-15 에서 이미 삭제됨
+- [Phase 06]: 06-21: 저장된 토큰으로 바로 들어가는 Home 길은 room-enter 표식을 찍지 않는다(3초 측정은 처음 방문 입장 기준, 테스트로 고정)
 
 ### Pending Todos
 
@@ -159,8 +161,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-01T00:28:58.560Z
-Stopped at: Completed 06-16-PLAN.md
+Last session: 2026-11-01T00:34:23.913Z
+Stopped at: Completed 06-21-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
