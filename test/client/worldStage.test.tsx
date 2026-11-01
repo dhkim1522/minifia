@@ -523,6 +523,51 @@ describe("이름표 층 (MAP-01, MAP-07)", () => {
   });
 });
 
+describe("이름표 위 입력 중 알약 (CHAT-04, 07-18)", () => {
+  const pills = (utils: ReturnType<typeof render>): HTMLElement[] => Array.from(utils.container.querySelectorAll<HTMLElement>(".mf-world__tags .mv-typing"));
+
+  it("typingSeats {2, 5} 이면 좌석 2·5 이름표에만 data-typing 과 알약이 있다", async () => {
+    const players = Array.from({ length: 6 }, (_, i) => player(i, `사람${i}`));
+    const ents = players.map((p) => seg(p.seat, [p.seat * 40, 0]));
+    const s = await open({ typingSeats: new Set([2, 5]) }, { players, ents });
+    const on = [0, 1, 2, 3, 4, 5].filter((i) => tagOf(s.utils, i)!.querySelector('[data-typing="true"]') !== null);
+    expect(on.join(",")).toBe("2,5");
+    expect(pills(s.utils)).toHaveLength(2);
+  });
+
+  it("typingSeats 가 없거나 비어 있으면 알약이 없다", async () => {
+    const s = await open();
+    expect(pills(s.utils)).toHaveLength(0);
+    s.rerender({ typingSeats: new Set() });
+    expect(pills(s.utils)).toHaveLength(0);
+  });
+
+  it("8좌석 모두 입력 중이면 알약 8개가 각자 자기 [data-seat] 이름표 안에 하나씩 있다", async () => {
+    const players = Array.from({ length: 8 }, (_, i) => player(i, `사람${i}`));
+    const ents = players.map((p) => seg(p.seat, [p.seat * 30, 0]));
+    const s = await open({ typingSeats: new Set(players.map((p) => p.seat)) }, { players, ents });
+    expect(pills(s.utils)).toHaveLength(8);
+    for (const p of players) expect(tagOf(s.utils, p.seat)!.querySelectorAll(".mv-typing")).toHaveLength(1);
+  });
+
+  it("알약은 글자가 없고 이름표 층과 함께 aria-hidden 이라 읽지 않는다", async () => {
+    const s = await open({ typingSeats: new Set([0]) });
+    const pill = pills(s.utils)[0]!;
+    expect(pill.textContent).toBe("");
+    expect(pill.children).toHaveLength(3);
+    expect(pill.closest('[aria-hidden="true"]')).not.toBeNull();
+  });
+
+  it("알약이 켜지고 꺼지는 것은 속성 하나로 따라간다 (내 이름표 위로 즉시)", async () => {
+    const s = await open();
+    expect(pills(s.utils)).toHaveLength(0);
+    s.rerender({ typingSeats: new Set([0]) });
+    expect(tagOf(s.utils, 0)!.querySelector('[data-typing="true"]')).not.toBeNull();
+    s.rerender({ typingSeats: new Set() });
+    expect(pills(s.utils)).toHaveLength(0);
+  });
+});
+
 describe("이름표 맨 앞 겹침 data-front (G-06-4)", () => {
   const realWidth = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "offsetWidth");
   let reads = 0;

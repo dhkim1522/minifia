@@ -174,6 +174,30 @@ describe("낮 토론 화면 — 위쪽 바와 하단 (CHAT-06, 가정 A1)", () =
     expect(line?.querySelector(".mv-chat__name")?.textContent).toBe("나");
   });
 
+  it("서버가 보낸 입력 중 좌석의 이름표 위에만 알약이 뜨고, 4.5초 뒤 저절로 꺼진다 (CHAT-04, 07-18)", () => {
+    const view = makeView({ chat: "all" });
+    const c = conn(view);
+    const chat = new ChatStore();
+    render(<DayScene view={view} connection={c} chat={chat} myRoleButton={<button type="button">내 역할</button>} />);
+    expect(document.querySelectorAll(".mf-dt__typing")).toHaveLength(0);
+    act(() => chat.apply({ t: "typing", seat: 2, on: true }, 1, Date.now()));
+    expect(document.querySelectorAll(".mf-dt__typing")).toHaveLength(1);
+    expect(document.querySelector('.mf-dt__tag[data-seat="2"] .mf-dt__typing')).not.toBeNull();
+    advance(4500);
+    expect(document.querySelectorAll(".mf-dt__typing")).toHaveLength(0);
+  });
+
+  it("내가 입력칸에 글자를 넣으면 서버 왕복 없이 내 이름표 위에 알약이 뜨고, 비우면 사라진다 (CHAT-04, 07-18)", () => {
+    const view = makeView({ chat: "all" });
+    const c = conn(view);
+    render(<DayScene view={view} connection={c} chat={new ChatStore()} myRoleButton={<button type="button">내 역할</button>} />);
+    const input = document.querySelector<HTMLInputElement>("[data-chat-input]")!;
+    fireEvent.change(input, { target: { value: "가" } });
+    expect(document.querySelector('.mf-dt__tag[data-seat="0"] .mf-dt__typing')).not.toBeNull();
+    fireEvent.change(input, { target: { value: "" } });
+    expect(document.querySelectorAll(".mf-dt__typing")).toHaveLength(0);
+  });
+
   it("화면은 낮 토론에서 아무것도 보내지 않는다(say·emoji·extend·skip)", () => {
     const r = scene(makeView({ isHost: true }));
     const labels = [...r.container.querySelectorAll("button")].map((b) => b.textContent ?? "").join("|");

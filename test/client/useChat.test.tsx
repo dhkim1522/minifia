@@ -244,3 +244,178 @@ describe("useChat: 연결 끊김과 복원 (UI-SPEC 입력 상태표, D2)", () =
     expect(result.current.messages[0]?.name).toBe("민수");
   });
 });
+
+// ---- 07-18: 입력 중 보내기·받기 규칙 (CHAT-04, T-07-46·47) ----
+
+const typings = () => sent.filter((m): m is Extract<ClientMessage, { t: "typing" }> => m.t === "typing");
+/** 보낸 입력 중 신호를 "on|off" 열로 — TAP 보고서가 한 줄로 남게 스칼라로 비교한다 */
+const typingTrail = () => typings().map((m) => (m.on ? "on" : "off")).join(",");
+const tick = (ms: number) =>
+  act(() => {
+    vi.advanceTimersByTime(ms);
+  });
+
+describe("useChat: 입력 중 보내기 (CHAT-04, UI-SPEC 머리 위 입력 중)", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  it("빈 칸의 첫 글자에 켜짐 1번, 이어지는 글자는 2초가 차기 전까지 더 보내지 않고, 2초가 차면 갱신 1번", () => {
+    const { type } = mount();
+    type("가");
+    expect(typingTrail()).toBe("on");
+    expect(typings()[0]?.pk).toBe("0:lobby");
+    tick(1000);
+    type("가나");
+    expect(typingTrail()).toBe("on");
+    tick(1000);
+    type("가나다");
+    expect(typingTrail()).toBe("on,on");
+  });
+
+  it("마지막 입력 변화 뒤 4초에 꺼짐 1번(값은 남음), 3999ms 에는 아직 켜져 있고, 다시 입력하면 켜진다", () => {
+    const { result, type } = mount();
+    type("가");
+    tick(3999);
+    expect(typingTrail()).toBe("on");
+    expect(result.current.typingSeats.has(1)).toBe(true);
+    tick(1);
+    expect(typingTrail()).toBe("on,off");
+    expect(result.current.value).toBe("가");
+    expect(result.current.typingSeats.has(1)).toBe(false);
+    type("가나");
+    expect(typingTrail()).toBe("on,off,on");
+    expect(result.current.typingSeats.has(1)).toBe(true);
+  });
+
+  it("입력이 계속되면 무입력 4초 타이머가 마지막 변화부터 다시 센다", () => {
+    const { type } = mount();
+    type("가");
+    tick(3000);
+    type("가나");
+    tick(3000);
+    expect(typingTrail()).toBe("on,on");
+    tick(1000);
+    expect(typingTrail()).toBe("on,on,off");
+  });
+
+  it("빈 칸에서 조합이 시작되면(글자 없이 onComposingChange(true)) 켜짐이고, 글자 없이 조합이 끝나면 꺼짐이다", () => {
+    const { result } = mount();
+    act(() => result.current.onComposingChange?.(true));
+    expect(typingTrail()).toBe("on");
+    expect(result.current.typingSeats.has(1)).toBe(true);
+    act(() => result.current.onComposingChange?.(false));
+    expect(typingTrail()).toBe("on,off");
+  });
+
+  it("칸을 비우면 꺼짐, 보내면(onSend 뒤 칸이 비워짐) 꺼짐, 포커스를 잃으면 꺼짐이다", () => {
+    const { result, type, submit } = mount();
+    type("가");
+    type("");
+    expect(typingTrail()).toBe("on,off");
+    type("나");
+    submit("나");
+    expect(typingTrail()).toBe("on,off,on,off");
+    type("다");
+    act(() => result.current.onInputBlur?.());
+    expect(typingTrail()).toBe("on,off,on,off,on,off");
+    expect(result.current.typingSeats.has(1)).toBe(false);
+  });
+
+  it("단계 키가 바뀌면 꺼짐, 서버가 정한 채널이 바뀌어도 꺼짐이다", () => {
+    const { type, rerender } = mount();
+    type("가");
+    rerender({ view: makeView({ phase: "discussion", day: { n: 1 } as RoomView["day"] }), canSend: true });
+    expect(typingTrail()).toBe("on,off");
+    type("가나");
+    expect(typingTrail()).toBe("on,off,on");
+    rerender({ view: makeView({ phase: "discussion", day: { n: 1 } as RoomView["day"] }, { chat: "ghost" }), canSend: true });
+    expect(typingTrail()).toBe("on,off,on,off");
+  });
+
+  it("꺼져 있을 때의 비움·블러·단계 변경은 아무것도 보내지 않는다", () => {
+    const { result, type, rerender } = mount();
+    type("");
+    act(() => result.current.onInputBlur?.());
+    act(() => result.current.onComposingChange?.(false));
+    rerender({ view: makeView({ phase: "discussion", day: { n: 1 } as RoomView["day"] }), canSend: true });
+    expect(sent.length).toBe(0);
+  });
+
+  it("연결이 끊긴 동안(canSend 거짓)은 입력 중을 보내지 않고, 내 알약도 켜지 않는다", () => {
+    const { result, type } = mount(makeView(), false);
+    type("가");
+    expect(typings().length).toBe(0);
+    expect(result.current.typingSeats.has(1)).toBe(false);
+  });
+
+  it("켜 둔 채 연결이 끊기면 내 알약은 꺼지고, 연결이 돌아온 뒤 다음 입력에 다시 켜진다", () => {
+    const { result, type, rerender } = mount();
+    type("가");
+    rerender({ view: makeView(), canSend: false });
+    expect(result.current.typingSeats.has(1)).toBe(false);
+    expect(typingTrail()).toBe("on");
+    rerender({ view: makeView(), canSend: true });
+    type("가나");
+    expect(typingTrail()).toBe("on,on");
+    expect(result.current.typingSeats.has(1)).toBe(true);
+  });
+
+  it("내 좌석은 켜짐 직후 서버 왕복 없이 typingSeats 에 들어 있다", () => {
+    const { result, type } = mount();
+    expect(result.current.typingSeats.size).toBe(0);
+    type("가");
+    expect([...result.current.typingSeats].join(",")).toBe("1");
+  });
+
+  it("화면이 사라지면(단계 전환으로 화면이 바뀜) 켜져 있던 입력 중을 끈다", () => {
+    const { type, unmount } = mount();
+    type("가");
+    unmount();
+    expect(typingTrail()).toBe("on,off");
+  });
+});
+
+describe("useChat: 입력 중 받기 (CHAT-04, T-07-46)", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  it("서버가 보낸 좌석만 typingSeats 에 들어가고, 신호 뒤 4.5초에 저절로 빠진다", () => {
+    const { result, receive } = mount();
+    receive({ t: "typing", seat: 0, on: true });
+    expect([...result.current.typingSeats].join(",")).toBe("0");
+    tick(4499);
+    expect([...result.current.typingSeats].join(",")).toBe("0");
+    tick(1);
+    expect(result.current.typingSeats.size).toBe(0);
+  });
+
+  it("그 사람의 채팅 줄이 도착하면 함께 꺼진다", () => {
+    const { result, receive } = mount();
+    receive({ t: "typing", seat: 0, on: true });
+    receive({ t: "chat", ...line(1, 0, "안녕") });
+    expect(result.current.typingSeats.size).toBe(0);
+  });
+
+  it("꺼짐 신호가 오면 바로 빠진다", () => {
+    const { result, receive } = mount();
+    receive({ t: "typing", seat: 0, on: true });
+    receive({ t: "typing", seat: 0, on: false });
+    expect(result.current.typingSeats.size).toBe(0);
+  });
+
+  it("연결이 끊긴 사람(view.players 의 connected 거짓)의 좌석은 typingSeats 에 없다", () => {
+    const view = makeView({ players: [player(0, "민수", { connected: false }), player(1, "하윤")] });
+    const { result, receive } = mount(view);
+    receive({ t: "typing", seat: 0, on: true });
+    expect(result.current.typingSeats.size).toBe(0);
+  });
+
+  it("8명이 동시에 입력해도 좌석마다 하나씩 들어 있다 (화면에서 만들어 내는 다른 좌석은 없다)", () => {
+    const players = Array.from({ length: 8 }, (_, i) => player(i, `사람${i}`));
+    const { result, receive } = mount(makeView({ players, me: { seat: 7, isHost: false } }));
+    for (let i = 0; i < 7; i++) receive({ t: "typing", seat: i, on: true });
+    expect([...result.current.typingSeats].sort().join(",")).toBe("0,1,2,3,4,5,6");
+  });
+});

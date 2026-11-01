@@ -276,6 +276,49 @@ describe("DayTable: 머리 위 이모티콘·말풍선 층이 없다 (CHAT-06)",
   });
 });
 
+describe("DayTable: 이름표 위 입력 중 알약 (CHAT-04, 07-18)", () => {
+  const pillsOf = (c: HTMLElement) => Array.from(c.querySelectorAll<HTMLElement>(".mf-dt__typing"));
+
+  it("seat.typing true 인 자리의 이름표에 span.mv-typing(aria-hidden, 점 3개, 글자 없음) 하나가 있다", () => {
+    const { container } = render(<DayTable seats={five({ 2: { typing: true } })} mySeat={0} width={366} />);
+    const pills = pillsOf(container);
+    expect(pills).toHaveLength(1);
+    const pill = pills[0]!;
+    expect(pill.matches("span.mv-typing.mf-dt__typing")).toBe(true);
+    expect(pill.getAttribute("aria-hidden")).toBe("true");
+    expect(pill.children).toHaveLength(3);
+    expect(pill.textContent).toBe("");
+    expect(tagEl(container, 2).contains(pill)).toBe(true);
+  });
+
+  it("typing 이 없거나 false 면 알약이 없다, 옛 말풍선·이모티콘도 없다", () => {
+    const { container } = render(<DayTable seats={five({ 1: { typing: false } })} mySeat={0} width={366} />);
+    expect(pillsOf(container)).toHaveLength(0);
+    expect(container.querySelectorAll(".mf-dt__bubble, .mf-dt__emoji")).toHaveLength(0);
+  });
+
+  it("다섯 자리가 모두 입력 중이면 각자 자기 이름표 안에 하나씩 뜬다", () => {
+    const all = five({ 0: { typing: true }, 1: { typing: true }, 2: { typing: true }, 3: { typing: true }, 4: { typing: true } });
+    const { container } = render(<DayTable seats={all} mySeat={0} width={366} />);
+    expect(pillsOf(container)).toHaveLength(5);
+    for (let n = 0; n < 5; n++) expect(tagEl(container, n).querySelectorAll(".mf-dt__typing")).toHaveLength(1);
+  });
+
+  it("daytable.css: .mf-dt__typing 은 이름표 위 가운데(옛 말풍선 자리)에 놓이고 클릭을 가로채지 않는다", () => {
+    const css = readFileSync("src/styles/daytable.css", "utf8");
+    const rule = /\.mf-dt__typing\s*\{([^}]*)\}/.exec(css)?.[1] ?? "";
+    expect(rule).toContain("position: absolute");
+    expect(rule).toMatch(/bottom:\s*100%/);
+    expect(rule).toContain("left: 50%");
+    expect(rule).toContain("pointer-events: none");
+  });
+
+  it("v2.css: 모션 줄이기면 입력 중 점 애니메이션이 꺼진다 (점 3개는 정지한 채 보인다)", () => {
+    const css = readFileSync("src/styles/v2.css", "utf8");
+    expect(css).toMatch(/prefers-reduced-motion: reduce\)\s*\{[^]*\.mv-typing i\s*\{\s*animation:\s*none/);
+  });
+});
+
 describe("Icon 3개 추가", () => {
   it.each(["changed", "crown", "chevronUp", "speech"])("%s 는 24×24 viewBox svg 로 그려진다", (name) => {
     const { container } = render(<Icon name={name as IconName} />);
