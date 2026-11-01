@@ -12,6 +12,7 @@ import { PhaseHeader } from "../components/v2/PhaseHeader";
 import { TopToast, useTopToast } from "../components/v2/TopToast";
 import { WorldStage } from "../components/WorldStage";
 import type { ChatStore } from "../net/chatStore";
+import { CHAT_TEXT } from "../game/chatText";
 import { diffRoomViews, toastForDiff } from "../net/roomDiff";
 import { useChat } from "../net/useChat";
 import { useChatLogHeight } from "../net/useKeyboardLift";
@@ -63,10 +64,16 @@ export function Lobby({ view, store, chat, send, canSend = true, epoch = 0, offs
       prevEpoch.current = epoch;
       prevView.current = null;
     }
-    const t = toastForDiff(diffRoomViews(prevView.current, view));
+    const diff = diffRoomViews(prevView.current, view);
     prevView.current = view;
+    const t = toastForDiff(diff);
     if (t && !bannerVisible) show(t.text, t.icon);
-  }, [view, epoch, bannerVisible, show]);
+    // 입장·퇴장은 위 알림과 같은 문구로 기록 칸에도 시스템 줄로 남긴다. 재접속 띠가 떠 있어도 기록은 남기고,
+    // 재연결 첫 상태(prevView 가 비어 diff 가 빈 결과)에서는 만들지 않는다. 방장 변경은 기록에 남기지 않는다(A1).
+    const at = Date.now();
+    for (const p of diff.joined) chat.addSystem(CHAT_TEXT.joined(p.nickname), { scope: "all", at });
+    for (const p of diff.left) chat.addSystem(CHAT_TEXT.left(p.nickname), { scope: "all", at });
+  }, [view, epoch, bannerVisible, show, chat]);
 
   // 열려 있는 시트. 화면이 기억하는 상태는 이것과 [시작] 잠금·안내 접힘뿐이다.
   // 내보내기는 누른 시점의 닉네임을 같이 들고 있어 그사이 view 가 바뀌어도 제목이 흔들리지 않는다.
