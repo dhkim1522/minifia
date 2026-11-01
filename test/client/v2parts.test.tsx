@@ -187,6 +187,13 @@ describe("DotProgress (결정 0051-4)", () => {
     const { container } = render(<DotProgress count={5} total={8} />);
     expect(container.querySelector(".mv-dots")?.getAttribute("aria-label")).toBe("5/8");
   });
+
+  it("활성 [시작](면 gray-100) 안의 점은 night-900 으로 칠해 바탕에 묻히지 않는다 (UI-SPEC 방장 · 시작 가능)", () => {
+    const dot = rulesFor(V2_CSS, ".mf-act--primary .mv-dots__dot").join(";");
+    expect(dot).toMatch(/border-color:\s*var\(--night-900\)/);
+    const on = rulesFor(V2_CSS, ".mf-act--primary .mv-dots__dot.is-on").join(";");
+    expect(on).toMatch(/background:\s*var\(--night-900\)/);
+  });
 });
 
 describe("TopToast (UI-SPEC E7)", () => {

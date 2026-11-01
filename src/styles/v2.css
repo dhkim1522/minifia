@@ -42,6 +42,9 @@
 .mf-act { display: flex; align-items: center; justify-content: center; gap: 8px; min-width: 0; min-height: var(--control-button); box-sizing: border-box; padding: 0 12px; border-radius: var(--radius-md); border: 1px solid transparent; font-family: inherit; font-size: 16px; font-weight: 700; white-space: nowrap; cursor: pointer; }
 .mf-act__label { white-space: nowrap; }
 .mf-act--primary { background: var(--gray-100); border-color: var(--gray-100); color: var(--night-900); }
+/* 활성 면이 gray-100 이라 점도 글자처럼 night-900 (UI-SPEC 방장 · 시작 가능) */
+.mf-act--primary .mv-dots__dot { border-color: var(--night-900); }
+.mf-act--primary .mv-dots__dot.is-on { background: var(--night-900); border-color: var(--night-900); }
 .mf-act--inactive { background: var(--night-700); border-color: var(--night-600); color: var(--gray-100); opacity: 0.45; }
 .mf-act--flat { background: transparent; border-color: transparent; color: var(--gray-300); cursor: default; }
 .mf-act:focus-visible { outline: 2px solid var(--gray-100); outline-offset: 2px; }
