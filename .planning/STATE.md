@@ -5,16 +5,16 @@ milestone_name: 같은 공간
 current_phase: 07
 current_phase_name: 자유 채팅
 status: executing
-stopped_at: Completed 07-01-PLAN.md
-last_updated: "2026-11-01T12:18:47.176Z"
+stopped_at: Completed 07-02-PLAN.md
+last_updated: "2026-11-01T12:28:45.330Z"
 last_activity: 2026-11-01
 last_activity_desc: Phase 07 execution started
-state_head: e5ad62757451e902b40366ccd1e145caf93e85d2
+state_head: c2662a6fe75a18c96fd86ad7e6fde0546582ec4f
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 45
-  completed_plans: 24
+  completed_plans: 25
   percent: 14
 ---
 
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-11-01)
 ## Current Position
 
 Phase: 07 (자유 채팅) — EXECUTING
-Plan: 2 of 22
+Plan: 3 of 22
 Status: Ready to execute
 Last activity: 2026-11-01 — Phase 07 execution started
 
@@ -82,6 +82,7 @@ Progress: [█░░░░░░░░░] 14% (1/7 phases)
 | Phase 06 P22 | 6min | 3 tasks | 12 files |
 | Phase 06 P23 | 14 min | 3 tasks | 6 files |
 | Phase 07 P01 | 5 min | 2 tasks | 6 files |
+| Phase 07 P02 | 9 min | 3 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -142,6 +143,9 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 06]: 06-23: dropSockets 는 합성 close(1006)를 먼저 dispatch 한 뒤 ws.close() — 배포 서버의 약 10초 close 지연에 의존하지 않는다 (G-06-6)
 - [Phase 06]: 06-23: deployhold 배포 주소는 /api/health version 변화가 있을 때만 판정하고 없으면 DH0 미확인 행(통과로 세지 않음), 6분 띠 대기 제거
 - [Phase 07]: 0058: 채팅 줄은 DO storage chat: 키에 수신자 마스크와 함께 보관, 재접속은 채널별 최근 30줄(마스크 복원), 상한 all 100/mafia 300/ghost 300, 0017-7 개정
+- [Phase 07]: 07-02: channelOf 는 밤의 산 비마피아에게 null — 폐기하고 all 로 돌리지 않는다. 채널은 서버 상태로만 정한다
+- [Phase 07]: 07-02: sanitizeChatText 는 채움 문자(U+115F 등)를 공백으로 접는다(닉네임식 거절 아님) — 글자 사이 위장 차단
+- [Phase 07]: 07-02: chatLog 복원은 보낼 때 저장한 수신자 마스크로만, 채널별 연번·상한 all100/mafia300/ghost300, 20줄 묶음 정리
 
 ### Pending Todos
 
@@ -178,8 +182,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-01T12:18:47.121Z
-Stopped at: Completed 07-01-PLAN.md
+Last session: 2026-11-01T12:28:45.184Z
+Stopped at: Completed 07-02-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
