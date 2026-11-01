@@ -484,7 +484,9 @@ describe("이름표 층 (MAP-01, MAP-07)", () => {
   });
 
   it("발끝 화면 y 가 큰 쪽이 위에 온다 — 이름표를 밀어서 피하지 않는다", async () => {
-    const s = await open();
+    // 내 이름표(seat 2)는 멀리 서 있다 — seat 0·1 의 순서는 오직 발 y 로만 정해진다
+    const players = [player(0, "민지"), player(1, "철수"), player(2, "영희")];
+    const s = await open({}, { players, mySeat: 2, ents: [seg(0, [200, 100]), seg(1, [-300, 50]), seg(2, [0, 0])] });
     frame();
     const z0 = Number(tagOf(s.utils, 0)!.style.zIndex);
     const z1 = Number(tagOf(s.utils, 1)!.style.zIndex);
@@ -494,7 +496,7 @@ describe("이름표 층 (MAP-01, MAP-07)", () => {
     expect(Number(tagOf(s.utils, 1)!.style.zIndex)).toBeGreaterThan(Number(tagOf(s.utils, 0)!.style.zIndex));
   });
 
-  it("같은 자리에 8명이 모여도 이름표는 서로 다른 순위를 갖고 모두 같은 좌표다(밀지 않음)", async () => {
+  it("같은 자리에 8명이 모여도 이름표는 서로 다른 순위를 갖고 모두 같은 좌표다(밀지 않음) — 내 이름표(seat 0)가 맨 위다", async () => {
     const players = Array.from({ length: 8 }, (_, i) => player(i, `사람${i}`));
     const ents = players.map((p) => seg(p.seat, [100, 100]));
     const s = await open({}, { players, ents });
@@ -503,6 +505,14 @@ describe("이름표 층 (MAP-01, MAP-07)", () => {
     expect(new Set(styles).size).toBe(1);
     const zs = players.map((p) => Number(tagOf(s.utils, p.seat)!.style.zIndex));
     expect(new Set(zs).size).toBe(8);
+    expect(zs[0]).toBe(Math.max(...zs));
+  });
+
+  it("내 이름표는 내 발이 뒤여도 발 sy 가 더 큰 다른 이름표보다 위다(G-06-4)", async () => {
+    // seat 0 발 sy 310 > seat 1 발 sy 305 인데 내 seat 이 1 이다
+    const s = await open({}, { mySeat: 1 });
+    frame();
+    expect(Number(tagOf(s.utils, 1)!.style.zIndex)).toBeGreaterThan(Number(tagOf(s.utils, 0)!.style.zIndex));
   });
 
   it("이름표 안에서 닉네임은 텍스트로만 그려진다", async () => {
@@ -510,6 +520,69 @@ describe("이름표 층 (MAP-01, MAP-07)", () => {
     const s = await open({}, { players });
     expect(s.utils.container.querySelector(".mf-world__tags img")).toBeNull();
     expect(tagOf(s.utils, 0)!.textContent).toContain("<img src=x onerror=alert(1)>");
+  });
+});
+
+describe("이름표 맨 앞 겹침 data-front (G-06-4)", () => {
+  const realWidth = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "offsetWidth");
+  let reads = 0;
+
+  beforeEach(() => {
+    reads = 0;
+    Object.defineProperty(HTMLElement.prototype, "offsetWidth", {
+      configurable: true,
+      get(this: HTMLElement) {
+        if (this.classList.contains("mf-world__tag")) {
+          reads++;
+          return 100;
+        }
+        return 0;
+      },
+    });
+  });
+
+  afterEach(() => {
+    if (realWidth !== undefined) Object.defineProperty(HTMLElement.prototype, "offsetWidth", realWidth);
+  });
+
+  const front = (s: Setup, seat: number): string | null => tagOf(s.utils, seat)!.getAttribute("data-front");
+  const three = [player(0, "민지"), player(1, "철수"), player(2, "영희")];
+  const near = [seg(0, [100, 100]), seg(1, [130, 100]), seg(2, [-600, -300])];
+
+  it("겹친 두 이름표 중 위의 것에만 붙고, 멀리 떨어지면 사라진다", async () => {
+    // 내 이름표(seat 2)는 멀리. seat 0·1 은 sx 210·213 으로 폭 100 이름표가 겹치고 발 y 가 같아 seat 1 이 위
+    const s = await open({}, { players: three, mySeat: 2, ents: near });
+    frame();
+    expect(front(s, 1)).toBe("true");
+    expect(front(s, 0)).toBeNull();
+    expect(front(s, 2)).toBeNull();
+    move(s.store, seg(1, [1500, 100]));
+    frame();
+    expect(front(s, 1)).toBeNull();
+    expect(front(s, 0)).toBeNull();
+  });
+
+  it("8명이 한 점에 모이면 하나만 붙고 그것은 내 이름표다", async () => {
+    const players = Array.from({ length: 8 }, (_, i) => player(i, `사람${i}`));
+    const s = await open({}, { players, mySeat: 3, ents: players.map((p) => seg(p.seat, [100, 100])) });
+    frame();
+    const marked = players.filter((p) => front(s, p.seat) === "true").map((p) => p.seat);
+    expect(marked).toEqual([3]);
+  });
+
+  it("이름표 폭은 처음 한 번만 읽고 프레임마다 읽지 않으며, view 갱신 뒤에만 다시 읽는다", async () => {
+    const s = await open({}, { players: three, mySeat: 2, ents: near });
+    frame();
+    const first = reads;
+    expect(first).toBe(3);
+    frames(20 * 16);
+    expect(reads).toBe(first);
+    s.rerender({ view: makeView([...three], 2) });
+    frame();
+    expect(reads).toBeGreaterThan(first);
+    const second = reads;
+    frames(20 * 16);
+    expect(reads).toBe(second);
   });
 });
 

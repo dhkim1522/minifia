@@ -19,6 +19,7 @@ afterEach(() => {
 // 여기서는 말줄임이 없다는 스타일 계약(nowrap·max-width 없음·ellipsis 없음)과 마크업을 고정한다.
 
 const V2_CSS = readFileSync("src/styles/v2.css", "utf8");
+const WORLD_CSS = readFileSync("src/styles/world.css", "utf8");
 
 // 주석을 지운 규칙 본문 중 선택자가 `selector` 로 시작하는 것만 모은다(`.mf-act` 가 `.mf-act-row` 를 끌어오지 않게 다음 글자가 이름 글자가 아니어야 한다).
 function rulesFor(css: string, selector: string): string[] {
@@ -122,6 +123,12 @@ describe("v2.css 이름표 스타일 계약 (MAP-07, 결정 0052-2)", () => {
     const dot = rulesFor(V2_CSS, ".mv-tag__dot").join(";");
     expect(dot).toContain("width: 8px");
     expect(dot).toContain("height: 8px");
+  });
+
+  it("겹친 이름표 중 맨 앞(data-front)만 면이 overlay-ink-strong 이고 기본 면은 overlay-ink 그대로다 (G-06-4)", () => {
+    const front = rulesFor(WORLD_CSS, '.mf-world__tag[data-front="true"] .mv-tag').join(";");
+    expect(front).toContain("background: var(--overlay-ink-strong)");
+    expect(rulesFor(V2_CSS, ".mv-tag")[0] ?? "").toContain("background: var(--overlay-ink);");
   });
 
   it("내 이름표는 안쪽 테두리 1.5px gray-100, 끊긴 이름표는 불투명도 0.55 와 점 gray-700", () => {
