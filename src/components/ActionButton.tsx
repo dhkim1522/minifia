@@ -25,9 +25,11 @@ export interface ActionButtonProps {
   onClick?: MouseEventHandler<HTMLButtonElement>;
   /** 읽어 주는 이름이 라벨과 다를 때. 예: "게임 시작, 5명 모임" */
   "aria-label"?: string;
+  /** E2E·검사용 data 속성 하나. 예: data-lobby-start (값은 빈 문자열) */
+  data?: Record<`data-${string}`, string>;
 }
 
-export function ActionButton({ variant, label, icon, dots, onClick, "aria-label": ariaLabel }: ActionButtonProps) {
+export function ActionButton({ variant, label, icon, dots, onClick, "aria-label": ariaLabel, data }: ActionButtonProps) {
   return (
     <button
       type="button"
@@ -36,6 +38,7 @@ export function ActionButton({ variant, label, icon, dots, onClick, "aria-label"
       aria-disabled={variant === "inactive" ? "true" : undefined}
       disabled={variant === "flat"}
       onClick={onClick}
+      {...data}
     >
       {icon ? <V2Icon name={icon} size={22} /> : null}
       <span className="mf-act__label">{label}</span>

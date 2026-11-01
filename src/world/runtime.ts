@@ -95,6 +95,8 @@ export const WALK_CUE_KEY = "mf-hint-walk";
 export const ENTER_MS = 420;
 /** 나간 사람 퇴장 연출 길이(ms) = dur-fast */
 export const EXIT_MS = 180;
+/** 로비를 떠날 때 맵을 night-900 으로 덮는 시간(ms) = dur-med. WorldStage 의 가림막과 RoomScreen 의 단계 전환 지연이 같은 값을 쓴다 */
+export const EXIT_CURTAIN_MS = 420;
 /** 탭 뒤 이 시간 안에 내 서버 구간이 없으면 응답 없음 */
 export const MOVE_ACK_TIMEOUT_MS = 1500;
 

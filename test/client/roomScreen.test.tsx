@@ -64,7 +64,7 @@ describe("RoomScreen: 재접속 띠 (C-02)", () => {
   it("view 가 있고 reconnecting 이면 본문보다 앞에 52px 띠 '연결이 끊겼어요 · 다시 연결하는 중'", () => {
     connectionMock.current = conn({ status: "reconnecting", banner: "reconnecting", canSend: false });
     const { container } = render(<RoomScreen code="0042" token={"t".repeat(43)} onExit={vi.fn()} />);
-    const banner = screen.getByRole("status");
+    const banner = container.querySelector(".mf-reconnect") as HTMLElement;
     expect(banner.textContent).toContain("연결이 끊겼어요 · 다시 연결하는 중");
     expect(banner.className).toContain("mf-reconnect");
     const body = container.querySelector(".mf-room__body") as HTMLElement;
@@ -77,13 +77,13 @@ describe("RoomScreen: 재접속 띠 (C-02)", () => {
 
   it("restored 면 '다시 연결됐어요'", () => {
     connectionMock.current = conn({ banner: "restored" });
-    render(<RoomScreen code="0042" token={"t".repeat(43)} onExit={vi.fn()} />);
-    expect(screen.getByRole("status").textContent).toContain("다시 연결됐어요");
+    const { container } = render(<RoomScreen code="0042" token={"t".repeat(43)} onExit={vi.fn()} />);
+    expect(container.querySelector(".mf-reconnect")?.textContent).toContain("다시 연결됐어요");
   });
 
   it("banner 가 hidden 이면 띠가 없다", () => {
-    render(<RoomScreen code="0042" token={"t".repeat(43)} onExit={vi.fn()} />);
-    expect(screen.queryByRole("status")).toBeNull();
+    const { container } = render(<RoomScreen code="0042" token={"t".repeat(43)} onExit={vi.fn()} />);
+    expect(container.querySelector(".mf-reconnect")).toBeNull();
   });
 
   it("view 가 없으면 띠 대신 전체 화면 '연결 중…'", () => {

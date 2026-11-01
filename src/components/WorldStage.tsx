@@ -5,7 +5,7 @@ import { MOVE_COORD_LIMIT } from "../../shared/protocol";
 import { useReducedMotion } from "../net/useReducedMotion";
 import { HEADER_BOTTOM, PANEL_HEIGHT } from "../world/camera";
 import { createTapTracker } from "../world/input";
-import { createWorldRuntime, EXIT_MS } from "../world/runtime";
+import { createWorldRuntime, EXIT_CURTAIN_MS, EXIT_MS } from "../world/runtime";
 import type { WorldModules, WorldRuntime } from "../world/runtime";
 import { initialMapStatus } from "../world/status";
 import type { MapStatusState } from "../world/status";
@@ -18,9 +18,6 @@ import "../styles/world.css";
 // 로비 맵 화면: 캔버스 한 장 + 입력 면 + 이름표 층. three 는 world/runtime 의 import() 로만 열린다(이 파일은 three 를 모른다).
 // 위치·카메라·투영은 런타임의 rAF 한 루프가 한다 — 프레임마다 React 가 다시 그리지 않는다. React 는 틀과 글(이름표 내용·접근성)만 맡는다.
 // 닉네임은 React 텍스트 노드로만 그린다(innerHTML 없음, T-06-29).
-
-/** 나가는 가림막이 덮는 시간(ms) = dur-med. 다 덮인 뒤 WebGL 자원을 해제한다 */
-const EXIT_CURTAIN_MS = 420;
 
 function sessionStore(): Storage | null {
   try {

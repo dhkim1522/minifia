@@ -1,36 +1,31 @@
-/* 대기실(S-03). 값은 tokens.css 변수만 쓴다(색 직접 지정 없음).
-   테이블은 낮·역할 배정과 같은 DayTable(daytable.css)이고, 장면 상자도 낮과 같다(결정 0028):
-   위 = 머리 119.2, 아래 = 시트 157(+안전 영역), 좌우 여백 12(폰 폭 < 390 이면 4). 시트 위쪽이 비어도 늘어나지 않는다.
-   세 화면(낮 day.css · 대기실 · 역할 배정 phase.css)의 이 숫자는 test/client/stageBox.test.tsx 가 교차로 지킨다. */
+/* 대기실(S-03) 맵 로비 틀(06-15). 값은 tokens.css 변수만 쓴다(색 직접 지정 없음, 진홍·놋쇠 없음 — 따뜻한 빛은 3D 장면 안에서만).
+   캔버스(WorldStage) 한 장이 방 화면 본문을 채우고, 가림막·헤더·알림·[테스트]·아래 패널이 그 위에 얹힌다.
+   캔버스는 헤더·패널·재접속 띠 때문에 크기가 줄지 않는다(크기 변화는 WebGL 재할당과 카메라 튐) — 카메라 중심만 스테이지 사각형(헤더 아래 ~ 패널 위)으로 옮긴다.
+   안전 영역: 앱 틀(#root 패딩 · .mf-room 높이)이 이미 비켜 있어 여기서 env() 를 더하지 않는다. 폭 > 430 인 PC 는 앱 틀의 한 열(최대 430) 안에서만 그려지고 바깥은 night-950 이다. */
 
-/* 대기실 틀: 방 화면(.mf-room)이 이미 뷰포트 높이로 고정되어 있어 배경은 남는 높이를 채운다(낮 배경과 같다). */
-.mf-lobby__backdrop { flex: 1 1 0; min-height: 0; height: auto; }
-.mf-lobby { height: 100%; display: flex; flex-direction: column; overflow: hidden; }
+.mf-lobby { position: relative; flex: 1 1 0; min-height: 0; overflow: hidden; isolation: isolate; background: var(--night-950); }
 
-/* 머리 높이 119.2: 낮 PhaseBar 의 실측 높이(16 + 50.4 + 8 + 28.8 + 16)와 같다. 안쪽은 나가기·공유 버튼 44×44(top 16)와
-   가운데 방 코드(라벨 19.6 + 코드 43.2, 아래 끝 78.8)라 여유가 있다. */
-.mf-lobby__bar { flex: none; position: relative; box-sizing: border-box; height: 119.2px; padding: var(--space-md) var(--space-md) 0; text-align: center; }
-.mf-lobby__bar-center { display: flex; flex-direction: column; align-items: center; }
-.mf-lobby__bar-left, .mf-lobby__bar-right { position: absolute; top: var(--space-md); }
-.mf-lobby__bar-left { left: var(--space-md); }
-.mf-lobby__bar-right { right: var(--space-md); }
-.mf-lobby__bar .mf-t-label { color: var(--gray-100); text-shadow: var(--shadow-text); }
-.mf-lobby__code { font-size: 36px; line-height: 1.2; font-weight: 700; letter-spacing: 0.12em; padding-left: 0.12em; font-variant-numeric: tabular-nums; color: var(--gray-50); margin: 0; text-shadow: var(--shadow-text); }
+/* 맵: 자기 쌓임 맥락을 가진다 — 맵 안의 가림막(z-modal)이 헤더를 덮지 않아, 맵을 불러오는 동안에도 나갈 수 있다. */
+.mf-lobby > .mf-world { z-index: var(--z-world); }
 
-/* 장면 상자(낮 .mf-dayscene__scene 과 같다): 좌우 여백 12, 폰 폭 < 390 이면 4. DayTable 루트(100%×100%)가 이 크기를 잰다. */
-.mf-lobby__scene { position: relative; flex: 1; min-height: 0; padding: 0 12px; }
-@media (max-width: 389px) {
-  .mf-lobby__scene { padding: 0 4px; }
-}
+/* 위쪽 가림막: night-900 88% → 70px 에서 60% → 120px 에서 0. 헤더 글씨 대비를 지킨다. 입력을 가로채지 않는다. */
+.mf-lobby__scrim { position: absolute; top: 0; left: 0; right: 0; height: 120px; z-index: 2; pointer-events: none; background: linear-gradient(to bottom, color-mix(in srgb, var(--night-900) 88%, transparent) 0, color-mix(in srgb, var(--night-900) 60%, transparent) 70px, transparent 120px); }
 
-/* 하단 시트: 높이 157(+안전 영역)로 고정이라 손님·방장이 같은 높이다. 낮 하단 패널(.mf-dayscene__panel)과 같은 면·여백·간격.
-   내용: 방장 8 + 안내 24 + 8 + 버튼 52 + 12 = 104, 손님 8 + 24 + 8 + (19.6 + 8 + 52) + 12 = 131.6. 손잡이 막대는 없다. */
-.mf-lobby__sheet { flex: none; box-sizing: border-box; height: calc(157px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: var(--space-sm); padding: 8px var(--space-md) calc(12px + env(safe-area-inset-bottom)); background: var(--night-800); border-radius: var(--radius-lg) var(--radius-lg) 0 0; }
-.mf-lobby__status { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-md); }
-.mf-lobby__guide { margin: 0; font-size: 16px; line-height: 1.5; font-weight: 700; color: var(--gray-50); word-break: keep-all; }
-.mf-lobby__resend { display: flex; flex-direction: column; gap: var(--space-sm); }
-.mf-lobby__resend-text { margin: 0; font-size: 14px; line-height: 1.4; font-weight: 400; color: var(--gray-300); word-break: keep-all; }
-.mf-lobby__count { margin: 0; flex: none; font-size: 14px; line-height: 1.4; font-weight: 400; color: var(--gray-300); font-variant-numeric: tabular-nums; }
+/* 헤더: 위 18, 좌우 16, 버튼 44×44 → 블록 아래 끝 62. 맵 탭을 가로채지 않도록 버튼만 입력을 받는다. */
+.mf-lobby__header { position: absolute; top: 0; left: 0; right: 0; z-index: var(--z-toast); box-sizing: border-box; height: 62px; padding: 18px var(--space-md) 0; display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-sm); pointer-events: none; }
+.mf-lobby__header .mf-btn { pointer-events: auto; }
+.mf-lobby__header-gap { flex: none; width: var(--tap-min); height: var(--tap-min); }
+.mf-lobby__header .mv-phase { flex: 1 1 auto; min-width: 0; justify-content: center; text-align: center; }
+.mf-lobby__header .mv-phase__text { align-items: center; }
+.mf-lobby__header .mv-phase__title, .mf-lobby__header .mv-phase__hint { text-shadow: var(--shadow-text); }
+/* 접히는 안내 줄 높이(한 줄)만큼만 헤더 아래로 삐져나온다 */
+.mf-lobby__header .mv-phase__text { gap: 0; }
 
-/* 토스트는 방 코드 아래 가운데 */
-.mf-lobby__backdrop .mf-toast--top { top: calc(var(--space-md) + 64px + var(--space-sm) + env(safe-area-inset-top)); }
+/* [테스트] 버튼 자리: 헤더 아래 8, 왼쪽 16 */
+.mf-lobby__test { position: absolute; top: 70px; left: var(--space-md); z-index: var(--z-overlay); }
+
+/* 아래 패널: night-800 97%, 위 모서리 radius-lg, 안쪽 14 16 22, 행동 줄 하나(52) → 높이 88. 7페이즈 채팅은 이 안 행동 줄 위에 들어와 패널이 자란다. */
+.mf-lobby__panel { position: absolute; left: 0; right: 0; bottom: 0; z-index: var(--z-overlay); box-sizing: border-box; display: flex; flex-direction: column; gap: 10px; padding: 14px var(--space-md) 22px; background: color-mix(in srgb, var(--night-800) 97%, transparent); border-radius: var(--radius-lg) var(--radius-lg) 0 0; }
+
+/* 재접속 띠(떠 있는 변형): 방 화면 루트(.mf-room) 위에 헤더 아래 top 72, 가로 전체. 높이 52·문구·아이콘·색은 v1.0 그대로. 흐름을 밀지 않는다. */
+.mf-reconnect--floating { position: absolute; top: 72px; left: 0; right: 0; z-index: var(--z-overlay); }

@@ -1,45 +1,55 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import type { ClientMessage, RoomView } from "../../shared/protocol";
 import { connectedCount } from "../../shared/game/room";
-import { Backdrop } from "../components/Backdrop";
+import { ActionButton, ActionRow } from "../components/ActionButton";
 import { Button } from "../components/Button";
 import { ConfirmSheet } from "../components/ConfirmSheet";
 import { Icon } from "../components/Icon";
 import { ShareSheet } from "../components/ShareSheet";
-import { DayTable } from "../components/DayTable";
-import type { DayTableSeat } from "../components/DayTable";
-import { Toast, useToast } from "../components/Toast";
+import { PhaseHeader } from "../components/v2/PhaseHeader";
+import { TopToast, useTopToast } from "../components/v2/TopToast";
+import { WorldStage } from "../components/WorldStage";
 import { diffRoomViews, toastForDiff } from "../net/roomDiff";
-import { useSeatTransitions } from "../net/useSeatTransitions";
+import type { WorldStore } from "../world/store";
 import "../styles/lobby.css";
 import "../styles/sheet.css";
 import "../styles/testtools.css";
 
 const START_LOCK_MS = 2000;
+/** 맵이 열린 뒤 안내 한 줄이 보이는 시간(결정 0051-5: 안내는 한 번, 그리고 사라진다) */
+const HINT_MS = 2500;
 
 interface LobbyProps {
   view: RoomView;
+  /** RoomScreen 이 연결과 같은 수명으로 만들어 world 프레임을 먹이는 위치 스토어 */
+  store: WorldStore;
   /** 보냈으면 true, 소켓이 닫혀 못 보냈으면 false. 반환값이 없는 함수(void)는 보낸 것으로 본다 */
   send: (msg: ClientMessage) => boolean | void;
   /** 연결이 열려 있어 서버로 보낼 수 있는가. 기본 true */
   canSend?: boolean;
   /** 소켓이 새로 열릴 때마다 바뀌는 번호. 기본 0 */
   epoch?: number;
+  /** 서버시각 − 로컬시각(ms). 위치를 서버 시각으로 읽는 데 쓴다 */
+  offset?: number;
+  /** 재접속 띠가 떠 있는가. 떠 있는 동안은 입장·방장 알림을 띄우지 않는다(UI-SPEC 화면 틀) */
+  bannerVisible?: boolean;
+  /** 게임이 시작되어 로비를 떠나는 중. 맵을 night-900 으로 덮고 자원을 해제한다 */
+  exiting?: boolean;
   /** [나가기] 확인 뒤 불린다. 방을 나간 결과와 관계없이 첫 화면으로 간다(01-13 의 RoomScreen 이 onExit("left") 를 넘긴다) */
   onLeave?: () => void;
-  /** 테스트 방 방장의 [테스트] 버튼(결정 0022). 있으면 장면 상자 왼쪽 위에 놓는다 */
+  /** 테스트 방 방장의 [테스트] 버튼(결정 0022). 있으면 헤더 아래 왼쪽에 놓는다 */
   testButton?: ReactNode;
 }
 
-// S-03 대기실: 대기 장면 위 테이블, 위쪽 바(방 코드), 하단 시트.
-// 테이블은 낮·역할 배정과 같은 DayTable 이고 장면 상자도 같다(머리 119.2 · 시트 157, 결정 0028): 사람이 들어오고 나가면
-// n 명이 좌석 번호 순서로 고르게 앉는 새 자리로 나머지가 미끄러진다(slide).
-// 화면은 서버가 보낸 view 만으로 다시 그린다. 닉네임은 React 텍스트·title 로만 그린다.
-export function Lobby({ view, send, canSend = true, epoch = 0, onLeave, testButton }: LobbyProps) {
-  // 입장·방장 변경 토스트: 서버가 보낸 스냅샷 두 개의 차이로만 만든다. 처음 열 때·epoch 가 바뀐 직후(재연결)에는
-  // 직전 스냅샷을 비워 지난 일을 다시 알리지 않는다.
-  const { toast, show } = useToast();
+// S-03 대기실(06-15): 지하 재즈 바 맵(WorldStage) 위에 승인 로비 틀을 얹는다 — 위쪽 가림막, 헤더([나가기]·PhaseHeader "대기실"·[공유]),
+// 위 알림(TopToast), 아래 패널의 행동 줄 하나. 방 코드는 공유 시트 안에서만 보인다. 읽을 글은 "대기실" 과 접히는 한 줄뿐이다(3초 규칙).
+// 화면은 서버가 보낸 view 만으로 다시 그린다. 닉네임(이름표)은 WorldStage 가 React 텍스트 노드로만 그린다.
+export function Lobby({ view, store, send, canSend = true, epoch = 0, offset = 0, bannerVisible = false, exiting = false, onLeave, testButton }: LobbyProps) {
+  // 입장·방장 변경 알림: 서버가 보낸 스냅샷 두 개의 차이로만 만든다. 처음 열 때·epoch 가 바뀐 직후(재연결)에는
+  // 직전 스냅샷을 비워 지난 일을 다시 알리지 않는다. 재접속 띠가 떠 있는 동안은 알림을 띄우지 않되 기준선은 갱신한다.
+  const toast = useTopToast();
+  const { show } = toast;
   const prevView = useRef<RoomView | null>(null);
   const prevEpoch = useRef(epoch);
   useEffect(() => {
@@ -49,44 +59,73 @@ export function Lobby({ view, send, canSend = true, epoch = 0, onLeave, testButt
     }
     const text = toastForDiff(diffRoomViews(prevView.current, view));
     prevView.current = view;
-    if (text) show(text);
-  }, [view, epoch, show]);
+    if (text && !bannerVisible) show(text);
+  }, [view, epoch, bannerVisible, show]);
 
-  const seated = useSeatTransitions(view.players, epoch);
-
-  // 열려 있는 시트. 화면이 기억하는 상태는 이것과 [게임 시작] 잠금뿐이다.
+  // 열려 있는 시트. 화면이 기억하는 상태는 이것과 [시작] 잠금·안내 접힘뿐이다.
   // 내보내기는 누른 시점의 닉네임을 같이 들고 있어 그사이 view 가 바뀌어도 제목이 흔들리지 않는다.
   const [sheet, setSheet] = useState<{ kind: "leave" } | { kind: "share" } | { kind: "kick"; seat: number; nickname: string } | null>(null);
   const closeSheet = () => setSheet(null);
 
-  // [게임 시작] 2초 잠금 — 화면이 기억하는 상태는 이것뿐이다. 시작이 거절되면 서버가 다시 보낸 view 대로 그린다.
+  // 안내 한 줄: 맵이 열린 뒤에만 보이고 2.5초 뒤 접힌다. 로비를 열 때마다(맵이 새로 열릴 때마다) 다시 보인다.
+  const [hintOn, setHintOn] = useState(false);
+  const hintTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const onReady = useCallback(() => {
+    setHintOn(true);
+    if (hintTimer.current !== undefined) clearTimeout(hintTimer.current);
+    hintTimer.current = setTimeout(() => {
+      hintTimer.current = undefined;
+      setHintOn(false);
+    }, HINT_MS);
+  }, []);
+
+  // [시작] 2초 잠금. 시작이 거절되면 서버가 다시 보낸 view 대로 그린다.
   const [locked, setLocked] = useState(false);
   const lockTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   useEffect(
     () => () => {
       if (lockTimer.current !== undefined) clearTimeout(lockTimer.current);
+      if (hintTimer.current !== undefined) clearTimeout(hintTimer.current);
     },
     [],
   );
 
+  // 스테이지 사각형: 위 끝 = 헤더 블록 아래, 아래 끝 = 아래 패널 위. 캔버스는 화면 전체 크기 그대로 두고 카메라 중심만 이 사각형에 맞춘다.
+  // 재서 넘기는 값이라 7페이즈에서 패널이 자라도(채팅) 같은 길로 따라간다. 측정이 0 이면(레이아웃 없는 환경) 넘기지 않고 WorldStage 기본값을 쓴다.
+  const headerRef = useRef<HTMLElement>(null);
+  const panelRef = useRef<HTMLElement>(null);
+  const [insets, setInsets] = useState<{ top: number; bottom: number } | undefined>(undefined);
+  useLayoutEffect(() => {
+    const header = headerRef.current;
+    const panel = panelRef.current;
+    if (header === null || panel === null) return;
+    const measure = (): void => {
+      const top = header.offsetTop + header.offsetHeight;
+      const bottom = panel.offsetHeight;
+      if (top <= 0 || bottom <= 0) return;
+      setInsets((prev) => (prev !== undefined && prev.top === top && prev.bottom === bottom ? prev : { top, bottom }));
+    };
+    measure();
+    if (typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(measure);
+    ro.observe(header);
+    ro.observe(panel);
+    return () => ro.disconnect();
+  }, []);
+
   const connected = connectedCount(view.players);
   const isHost = view.me.isHost;
   const host = view.players.find((p) => p.isHost);
-  const hostConnected = host?.connected !== false;
   const full = view.players.length >= view.maxPlayers;
-  // 서버 checkStart 와 같은 기준(연결된 사람 수)을 쓴다. 버튼 활성은 표시용이고 판정은 서버가 한다.
+  // 서버 checkStart 와 같은 기준(연결된 사람 수)을 쓴다. 버튼 모양은 표시용이고 판정은 서버가 한다.
   const enoughPlayers = connected >= view.minPlayers;
-  const guide = isHost
-    ? enoughPlayers
-      ? "모두 모였으면 시작하세요"
-      : `${view.minPlayers}명부터 시작할 수 있어요`
-    : hostConnected
-      ? "방장이 시작하길 기다리는 중이에요"
-      : "방장 연결을 기다리는 중이에요";
-  const countText = full ? `${view.maxPlayers} / ${view.maxPlayers}명 · 가득 찼어요` : `${connected} / ${view.maxPlayers}명`;
 
-  const start = () => {
-    if (!canSend || locked || !enoughPlayers) return;
+  const pressStart = () => {
+    if (!canSend || locked) return;
+    if (!enoughPlayers) {
+      show(`${view.minPlayers}명부터 시작해요`);
+      return;
+    }
     send({ t: "start" });
     setLocked(true);
     lockTimer.current = setTimeout(() => {
@@ -94,79 +133,60 @@ export function Lobby({ view, send, canSend = true, epoch = 0, onLeave, testButt
       setLocked(false);
     }, START_LOCK_MS);
   };
-
-  const allies = view.me.allies ?? [];
-  // 자리 입력은 퇴장 중인 사람까지 포함한 seated 에서 만든다. 방장이 끊긴 다른 사람 자리만 누를 수 있다(D-16, 판정은 서버가 다시 한다).
-  const seats: DayTableSeat[] = seated.map((p) => {
-    const pressable = isHost && canSend && !p.connected && p.seat !== view.me.seat && p.transition !== "leaving";
-    return {
-      seat: p.seat,
-      nickname: p.nickname,
-      connected: p.connected,
-      isHost: p.isHost,
-      isMe: p.seat === view.me.seat,
-      isAlly: allies.includes(p.seat),
-      transition: p.transition,
-      ...(pressable ? { onPress: () => setSheet({ kind: "kick", seat: p.seat, nickname: p.nickname }) } : {}),
-    };
-  });
+  const startLabel = enoughPlayers ? `게임 시작, ${connected}명 모임` : `게임 시작, ${connected}명 모임, ${view.minPlayers}명부터 시작할 수 있어요`;
 
   return (
-    <Backdrop layout="game" scene="lobby" className="mf-lobby__backdrop">
-      <main className="mf-root mf-lobby">
-        <header className="mf-lobby__bar">
-          <Button
-            variant="secondary"
-            compact
-            className="mf-iconbtn mf-lobby__bar-left"
-            aria-label="나가기"
-            icon={<Icon name="back" />}
-            disabled={!canSend}
-            onClick={() => setSheet({ kind: "leave" })}
-          />
-          <div className="mf-lobby__bar-center">
-            <p className="mf-t-label">방 코드</p>
-            <p className="mf-lobby__code" aria-label={`방 코드 ${view.code}`}>
-              {view.code}
-            </p>
-          </div>
-          {view.code ? (
-            <Button
-              variant="secondary"
-              compact
-              className="mf-iconbtn mf-lobby__bar-right"
-              aria-label="공유"
-              icon={<Icon name="share" />}
-              onClick={() => setSheet({ kind: "share" })}
-            />
-          ) : null}
-        </header>
-        <div className="mf-lobby__scene">
-          {testButton ? <div className="mf-tt-anchor">{testButton}</div> : null}
-          <DayTable seats={seats} mySeat={view.me.seat} slide hostCrown />
-        </div>
-        <section className="mf-lobby__sheet">
-          <div className="mf-lobby__status">
-            <p className="mf-lobby__guide" data-guide="">
-              {guide}
-            </p>
-            <p className="mf-lobby__count">{countText}</p>
-          </div>
+    <main className="mf-root mf-lobby">
+      <WorldStage
+        view={view}
+        store={store}
+        send={send}
+        canSend={canSend}
+        offset={offset}
+        {...(insets ? { stageInsets: insets } : {})}
+        onNotice={(text) => show(text)}
+        onKick={(seat, nickname) => setSheet({ kind: "kick", seat, nickname })}
+        onLeave={() => setSheet({ kind: "leave" })}
+        onReady={onReady}
+        exiting={exiting}
+      />
+      <div className="mf-lobby__scrim" aria-hidden="true" />
+      <header ref={headerRef} className="mf-lobby__header">
+        <Button
+          variant="secondary"
+          compact
+          className="mf-iconbtn"
+          aria-label="나가기"
+          icon={<Icon name="back" />}
+          disabled={!canSend}
+          onClick={() => setSheet({ kind: "leave" })}
+        />
+        <PhaseHeader title="대기실" hint="바닥을 눌러 걸어요" showHint={hintOn} guide />
+        {view.code ? (
+          <Button variant="secondary" compact className="mf-iconbtn" aria-label="공유" icon={<Icon name="share" />} onClick={() => setSheet({ kind: "share" })} />
+        ) : (
+          <span className="mf-lobby__header-gap" aria-hidden="true" />
+        )}
+      </header>
+      <TopToast {...toast.props} />
+      {testButton ? <div className="mf-lobby__test">{testButton}</div> : null}
+      <section ref={panelRef} className="mf-lobby__panel" data-world-panel="">
+        <ActionRow>
           {isHost ? (
-            <Button variant="primary" block disabled={!enoughPlayers || !canSend || locked} onClick={start}>
-              게임 시작
-            </Button>
+            <ActionButton
+              variant={enoughPlayers && canSend && !locked ? "primary" : "inactive"}
+              label="시작"
+              icon="play"
+              dots={{ count: connected, total: view.maxPlayers }}
+              aria-label={startLabel}
+              data={{ "data-lobby-start": "" }}
+              onClick={pressStart}
+            />
           ) : (
-            <div className="mf-lobby__resend">
-              <p className="mf-lobby__resend-text">친구가 더 오면 링크를 다시 보낼 수 있어요</p>
-              <Button variant="secondary" block icon={<Icon name="share" />} onClick={() => setSheet({ kind: "share" })}>
-                링크 공유
-              </Button>
-            </div>
+            <ActionButton variant="flat" label="방장을 기다리는 중…" />
           )}
-        </section>
-      </main>
-      <Toast toast={toast} placement="top" />
+        </ActionRow>
+      </section>
       {sheet?.kind === "leave" ? (
         <ConfirmSheet
           title="방에서 나갈까요?"
@@ -189,9 +209,7 @@ export function Lobby({ view, send, canSend = true, epoch = 0, onLeave, testButt
           onClose={closeSheet}
         />
       ) : null}
-      {sheet?.kind === "share" ? (
-        <ShareSheet code={view.code} hostNickname={host?.nickname ?? ""} full={full} onClose={closeSheet} />
-      ) : null}
-    </Backdrop>
+      {sheet?.kind === "share" ? <ShareSheet code={view.code} hostNickname={host?.nickname ?? ""} full={full} onClose={closeSheet} /> : null}
+    </main>
   );
 }

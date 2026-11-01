@@ -13,8 +13,11 @@ import { VERDICT_TEXT, defenseAnnounce, noExecutionPrefix, winnerText } from "..
 import { preloadDuskAssets, preloadRoleAssets } from "../net/assets";
 import { usePhaseArrival } from "../net/phaseArrival";
 import { loadSeenCount, saveSeenCount, unseenCount } from "../net/recordsSeen";
+import { useReducedMotion } from "../net/useReducedMotion";
 import { useRoomConnection } from "../net/useRoomConnection";
 import { useWakeLock } from "../net/useWakeLock";
+import { EXIT_CURTAIN_MS } from "../world/runtime";
+import { WorldStore } from "../world/store";
 import { Assigning } from "./Assigning";
 import { DayScene } from "./DayScene";
 import { Lobby } from "./Lobby";
@@ -115,10 +118,43 @@ function sceneKey(phase: PhaseId): string {
     : phase;
 }
 
-// 방 화면 틀: 맨 위 재접속 띠(흐름 안, 본문을 밀어냄) + 본문. 단계 화면은 본문 자리에 붙는다.
+// 방 화면 틀: 재접속 띠(대기실에서는 맵 위에 떠 있고, 그 밖의 단계에서는 흐름 안에서 본문을 밀어냄) + 본문. 단계 화면은 본문 자리에 붙는다.
 export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
   const connection = useRoomConnection(code, token);
   const { status, banner, view, removedReason } = connection;
+
+  // 로비 맵의 위치 스토어: 연결과 같은 수명이다. 연결 훅 바로 뒤에 world 프레임을 구독해 첫 snap 을 놓치지 않는다(MAP-05).
+  // 로비를 떠났다 돌아와도 같은 스토어를 쓴다 — 돌아오면 서버가 다시 보낸 snap 이 구간을 통째로 바꾼다.
+  const [store] = useState(() => new WorldStore());
+  const { onEvent } = connection;
+  useEffect(
+    () =>
+      onEvent((e, meta) => {
+        if (e.t === "world") store.applyFrame(e, meta.epoch);
+      }),
+    [onEvent, store],
+  );
+
+  // 게임이 시작되어 로비를 떠날 때: 마지막 로비 view 로 Lobby 를 EXIT_CURTAIN_MS(dur-med) 동안 더 그려 맵을 night-900 으로 덮은 뒤 v1.0 단계 화면으로 넘어간다.
+  // 모션 줄이기면 가림막 없이 바로 넘어간다. 대기실로 돌아오거나 로비 밖에서 로비 밖으로 가는 전환에는 없다.
+  const reducedMotion = useReducedMotion();
+  const [lastView, setLastView] = useState<RoomView | null>(view);
+  const [curtain, setCurtain] = useState<RoomView | null>(null);
+  if (view !== lastView) {
+    setLastView(view);
+    if (view === null || view.phase === "lobby") {
+      if (curtain !== null) setCurtain(null);
+    } else if (lastView?.phase === "lobby" && !reducedMotion) {
+      setCurtain(lastView);
+    }
+  }
+  useEffect(() => {
+    if (curtain === null) return;
+    const timer = setTimeout(() => setCurtain(null), EXIT_CURTAIN_MS);
+    return () => clearTimeout(timer);
+  }, [curtain]);
+  // 지금 화면에 그리는 view: 가림막 동안은 마지막 로비 view 다.
+  const shown = curtain ?? view;
 
   // 방을 보여 주는 동안 화면이 꺼지지 않게 한다(D-12, P5-7 기본값: 대기실 포함 — 꺼지면 소켓이 끊겨 친구에게 "나갔다" 로 보인다).
   useWakeLock(view !== null && view.phase !== "ended" && status !== "replaced" && status !== "failed" && status !== "removed");
@@ -212,7 +248,7 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
 
   return (
     <div className="mf-root mf-room">
-      {view && banner !== "hidden" && <ReconnectBanner mode={banner} />}
+      {view && banner !== "hidden" && <ReconnectBanner mode={banner} floating={shown?.phase === "lobby"} />}
       <div className="mf-room__body">{renderBody()}</div>
       {view && roleCard.open ? (
         // 역할 확인에서 앞면을 본 적이 없을 때만 뒷면. 낮부터는 항상 앞면 내용이다(D-19 의 취지).
@@ -269,9 +305,11 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
     if (!view) return connecting();
 
     // 화면은 서버가 정한 단계만 따른다. key 가 장면이라 장면이 바뀔 때만 새로 나타난다(phase-enter 300ms).
+    // 가림막 동안은 마지막 로비 view 와 로비 키를 그대로 써 Lobby·맵이 다시 마운트되지 않는다.
+    const current = curtain ?? view;
     return (
-      <div key={sceneKey(view.phase)} className="mf-phase-enter">
-        {renderPhase(view)}
+      <div key={sceneKey(current.phase)} className="mf-phase-enter">
+        {renderPhase(current)}
       </div>
     );
   }
@@ -294,6 +332,10 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
             send={connection.send}
             canSend={connection.canSend}
             epoch={connection.epoch}
+            store={store}
+            offset={connection.offset}
+            bannerVisible={banner !== "hidden"}
+            exiting={curtain !== null}
             onLeave={() => onExit("left")}
             testButton={testButton}
           />

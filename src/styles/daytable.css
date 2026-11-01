@@ -144,7 +144,7 @@
 .mf-dt__seat--pulse .mf-figure { animation: mf-dt-bright 400ms var(--ease-out); }
 
 /* 대기실(결정 0028): 입장·퇴장 전이. 그림(.mf-figure)만 움직여 자리의 scale 변환과 곱해지지 않는다. 이름표는 페이드만.
-   퇴장 320ms 는 토큰에 없는 길이라 지역 상수(--mf-seat-leave-ms, useSeatTransitions 의 SEAT_LEAVE_MS 와 같은 값). 입장은 --dur-med. */
+   퇴장 320ms 는 토큰에 없는 길이라 지역 상수(--mf-seat-leave-ms). 입장은 --dur-med. */
 .mf-dt__seat--enter .mf-figure { animation: mf-dt-seat-enter var(--dur-med) var(--ease-out) both; }
 .mf-dt__seat--leave .mf-figure { animation: mf-dt-seat-leave var(--mf-seat-leave-ms) var(--ease-out) both; }
 .mf-dt__tag--enter { animation: mf-dt-fade var(--dur-med) var(--ease-out) both; }
