@@ -13,14 +13,13 @@ import "../styles/daytable.css";
 // 이름표는 이름 한 줄이다(남의 주장은 이름표가 아니라 채팅에서만 본다, 결정 0023). 동료 표시(isAlly)는 서버가 마피아에게만 보낸
 // me.allies 에서 화면이 만든 값이다.
 // 한 자리는 밤에는 onPick 이 있으면 대상 버튼, 낮에는 onInspect 가 있으면 기록 카드 버튼, 대기실에는 onPress 가 있으면 누르는 버튼이다
-// (함께 있으면 onPick > onInspect > onPress). 대기실·역할 배정도 이 부품을 그대로 쓴다(결정 0028) — transition 은 입장·퇴장 표시,
-// slide 는 인원이 바뀔 때 나머지가 새 자리로 미끄러지게 한다(첫 프레임 뒤에 켜서 처음 배치는 미끄러지지 않는다).
+// (함께 있으면 onPick > onInspect > onPress). 역할 배정도 이 부품을 그대로 쓴다(결정 0028). 대기실은 맵 로비로 바뀌어(06-15) 이 부품을 쓰지 않는다.
 // roleArt(직업 그림)는 탈락한 본인(관전자) 화면만 만든다 — 살아 있는 사람의 입력에는 이 값이 없다(결정 0021).
 // 테이블·캐릭터 기하는 모든 상황에서 시안 P2 값으로 고정이다(결정 0028): 390폭 면 216×108, rx 146, 다른 폭은 game/dayTable.ts 의 규칙.
 // 장면 여백(scenePad)은 prop, 없으면 루트의 CSS 변수 --mf-scene-pad(daytable.css 한 곳), 비었으면 12.
 // 발밑 원과 이름표 반전은 없다(결정 0030). 말하는 차례·내가 밤에 고른 대상은 그림의 흰 후광, 마피아 동료(관전자 화면의 모든 마피아)는 진홍 후광이고
 // 한 자리가 둘 다면 흰 후광이 이긴다. 내 표시는 후광 없이 내 이름표 테두리뿐이다. 말하는 중(주장 차례·빠른 메시지 3초)은 머리 위 '…' 말풍선이고,
-// 같은 자리에 이모티콘이 있으면 말풍선 대신 이모티콘만 보인다. 방장 왕관은 hostCrown(대기실)일 때만 그린다.
+// 같은 자리에 이모티콘이 있으면 말풍선 대신 이모티콘만 보인다.
 // 캐릭터 상자·이름표·이모티콘의 좌표는 game/dayTable.ts 의 daySeatLayout 한 번의 결과에서 나온다(떠 있는 층을 따로 가두지 않는다).
 // 최후 변론·처형 무대(04-21): 좌석 center 는 그 자리를 candidateCenter(game/verdict.ts) 한 곳의 가운데 자리로 옮기고(x·발 y·배율 1.7), root verdict 는
 // 어둡게+흐림 층(z 30)을 그린다. center 좌석이 있으면 위에서 내려오는 원뿔 층 하나도 그린다(어둡게 층 뒤 같은 z). 수치는 prop 에서만 온다 —
@@ -61,8 +60,6 @@ export interface DayTableSeat {
   onInspect?: () => void;
   /** 관전자 전용: 이 살아 있는 자리를 중립 인물 대신 이 직업 그림으로 그린다. 장면이 탈락한 본인의 서버 값으로만 만든다(결정 0021) */
   roleArt?: RoleId;
-  /** 대기실: 입장·퇴장 중인 자리 표시(서버 스냅샷의 차이에서 화면이 만든다). 자리 그림과 이름표에 전이 클래스가 붙는다 */
-  transition?: "entering" | "leaving" | null;
   /** 대기실: 누를 수 있는 자리(방장이 끊긴 사람을 내보낼 때). onPick·onInspect 가 없을 때만 쓰인다 */
   onPress?: () => void;
   /**
@@ -123,10 +120,6 @@ export interface DayTableProps {
   pickDisabled?: boolean;
   /** 동료 마름모의 읽기 이름. 기본 "동료", 관전 화면은 "마피아" */
   allyMarkLabel?: string;
-  /** 대기실: 인원이 바뀌면 나머지 자리가 짧은 CSS 전이로 새 자리로 미끄러진다. 마운트 직후 첫 프레임에는 켜지 않는다 */
-  slide?: boolean;
-  /** 방장 왕관을 그린다. 대기실만 켠다(역할 배정·낮·밤·아침은 왕관이 없다, 결정 0030) */
-  hostCrown?: boolean;
   /** 아침 어둡게 층. exitDelayMs 는 퇴장 페이드를 시작하기까지의 지연(아침 길이 − 300ms) */
   dim?: { exitDelayMs: number };
   /** 최후 변론·처형: 어둡게+흐림 층. 값은 CSS 변수(--mf-verdict-dim·--mf-verdict-blur)로 내려간다. 있으면 root 에 mf-dt--verdict(좌석 이동 전이 600ms). 아침 dim 과 함께 쓰지 않는다 */
@@ -230,10 +223,8 @@ export function DayTable({
   pickVerb = "선택",
   pickDisabled,
   allyMarkLabel = "동료",
-  hostCrown,
   dim,
   verdict,
-  slide,
   layer,
 }: DayTableProps): ReactElement {
   const rootRef = useRef<HTMLDivElement>(null);
@@ -269,17 +260,6 @@ export function DayTable({
     return () => ro.disconnect();
   }, [needMeasure, scenePad]);
 
-  // 미끄러짐은 첫 프레임이 그려진 뒤에 켠다 — 처음 배치(마운트·단계 전환 직후)가 튀어 보이지 않는다
-  const [slideOn, setSlideOn] = useState(false);
-  useEffect(() => {
-    if (!slide) {
-      setSlideOn(false);
-      return;
-    }
-    const id = requestAnimationFrame(() => setSlideOn(true));
-    return () => cancelAnimationFrame(id);
-  }, [slide]);
-
   const sceneW = width ?? measured.w;
   const sceneH = height ?? measured.h;
   const pad = scenePad ?? measured.pad;
@@ -291,7 +271,7 @@ export function DayTable({
   const hasCenter = seats.some((s) => s.center === true);
 
   return (
-    <div ref={rootRef} className={`mf-root mf-dt${slide && slideOn ? " mf-dt--slide" : ""}${verdict ? " mf-dt--verdict" : ""}`} role="group" aria-label={label}>
+    <div ref={rootRef} className={`mf-root mf-dt${verdict ? " mf-dt--verdict" : ""}`} role="group" aria-label={label}>
       <div
         className="mf-dt__felt"
         aria-hidden="true"
@@ -309,9 +289,7 @@ export function DayTable({
           zIndex: s.spotlit ? SPOTLIT_Z : p.z,
         };
         const art = s.dead ? undefined : s.roleArt;
-        const seatClass = `mf-dt__seat${s.beat ? ` mf-dt__seat--${s.beat}` : ""}${s.beat === "clinch" && s.beatAlt ? " mf-dt__seat--alt" : ""}${s.spotlit ? " mf-dt__seat--spotlit" : ""}${s.spotlit && s.pulse ? " mf-dt__seat--pulse" : ""}${
-          s.transition === "entering" ? " mf-dt__seat--enter" : s.transition === "leaving" ? " mf-dt__seat--leave" : ""
-        }`;
+        const seatClass = `mf-dt__seat${s.beat ? ` mf-dt__seat--${s.beat}` : ""}${s.beat === "clinch" && s.beatAlt ? " mf-dt__seat--alt" : ""}${s.spotlit ? " mf-dt__seat--spotlit" : ""}${s.spotlit && s.pulse ? " mf-dt__seat--pulse" : ""}`;
         // 후광은 그림 img 하나에만 붙는다. halo 가 있으면 그 값, 없으면 파생: 흰(차례·내가 고른 대상) > 진홍(동료)
         const derivedHalo = s.turn || s.pick?.mine ? "mf-figure--halo-white" : s.isAlly ? "mf-figure--halo-crimson" : undefined;
         const haloClass = s.halo !== undefined ? HALO_CLASS[s.halo] : derivedHalo;
@@ -331,11 +309,6 @@ export function DayTable({
               />
             )}
             {s.isAlly ? <Icon name="diamond" label={allyMarkLabel} className="mf-dt__mark" /> : null}
-            {hostCrown && s.isHost ? (
-              <span className="mf-dt__crown" role="img" aria-label="방장">
-                <img src="/characters/host/host_badge.svg" alt="" aria-hidden="true" draggable={false} />
-              </span>
-            ) : null}
             {(s.turn || s.spoke) && !s.emoji ? (
               <span className={`mf-dt__bubble mf-dt__bubble--${s.turn ? "turn" : "spoke"}`} aria-hidden="true">
                 <i />
@@ -413,9 +386,7 @@ export function DayTable({
         return (
           <div
             key={`t${p.seat}`}
-            className={`mf-dt__tag${s.isMe ? " mf-dt__tag--me" : ""}${s.dead ? " mf-dt__tag--dead" : ""}${
-              s.transition === "entering" ? " mf-dt__tag--enter" : s.transition === "leaving" ? " mf-dt__tag--leave" : ""
-            }`}
+            className={`mf-dt__tag${s.isMe ? " mf-dt__tag--me" : ""}${s.dead ? " mf-dt__tag--dead" : ""}`}
             data-seat={p.seat}
             title={s.nickname}
             style={{ left: px(p.tagLeft), top: px(p.tagTop), zIndex: p.tagZ }}

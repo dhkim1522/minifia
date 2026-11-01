@@ -95,7 +95,7 @@
 }
 @keyframes mf-vd-in { from { opacity: 0; } to { opacity: 1; } }
 
-/* 후보 이동: 좌석 위치 → 가운데, 600ms ease-in-out (대기실 mf-dt--slide 와 같은 방식). 이름표도 같이 간다. 안 움직이는 좌석은 값이 같아 전이가 없다 */
+/* 후보 이동: 좌석 위치 → 가운데, 600ms ease-in-out. 이름표도 같이 간다. 안 움직이는 좌석은 값이 같아 전이가 없다 */
 .mf-dt--verdict .mf-dt__seat { transition: left 600ms ease-in-out, top 600ms ease-in-out, transform 600ms ease-in-out; }
 .mf-dt--verdict .mf-dt__tag { transition: left 600ms ease-in-out, top 600ms ease-in-out; }
 

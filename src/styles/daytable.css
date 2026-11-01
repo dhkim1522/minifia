@@ -8,7 +8,7 @@
 
 /* 장면 상자를 100%×100% 로 채운다. 가로로 자르지 않는다(이름표·이모티콘이 장면 밖으로 조금 나가도 보인다). */
 .mf-dt {
-  position: relative; width: 100%; height: 100%; isolation: isolate; --mf-scene-pad: 12px; --mf-seat-leave-ms: 320ms;
+  position: relative; width: 100%; height: 100%; isolation: isolate; --mf-scene-pad: 12px;
   /* 후광(승인 시안 17차 값): 그림 윤곽을 따르는 안쪽 2px + 바깥 9px 두 겹. 한 곳에만 적고 아래 클래스가 var() 로 쓴다 */
   --mf-halo-white: drop-shadow(0 0 2px color-mix(in srgb, var(--gray-50) 95%, transparent)) drop-shadow(0 0 9px color-mix(in srgb, var(--gray-50) 75%, transparent));
   --mf-halo-crimson: drop-shadow(0 0 2px color-mix(in srgb, var(--crimson-400) 95%, transparent)) drop-shadow(0 0 9px color-mix(in srgb, var(--crimson-400) 70%, transparent));
@@ -67,10 +67,8 @@
 /* 탈락 이름표: gray-500 글자는 시안 승인 예외(UI-SPEC C3). 아랫줄 '탈락'은 없다 */
 .mf-dt__tag--dead .mf-dt__name { color: var(--gray-500); }
 
-/* 캐릭터 상자 안: 동료 마름모, 방장 왕관 배지(대기실만) */
+/* 캐릭터 상자 안: 동료 마름모 */
 .mf-dt__mark { position: absolute; top: 4%; right: 8%; width: 26%; height: auto; aspect-ratio: 1; color: var(--crimson-400); pointer-events: none; }
-.mf-dt__crown { position: absolute; left: -6px; top: -6px; width: 22px; height: 22px; pointer-events: none; }
-.mf-dt__crown img { display: block; width: 100%; height: 100%; }
 
 /* 말하는 중(주장 차례·빠른 메시지 3초): 머리 위 '…' 말풍선. 자리 상자 안이라 상자와 함께 줄어들고 자리 쌓임 맥락(12~22)을 벗어나지 않는다.
    높이 26·좌우 11·모서리 13·꼬리 5, 위 -26px(승인 시안은 -30 이지만 8명판 이웃 얼굴을 덮어 -26). 점 셋은 차례로 깜박인다.
@@ -143,20 +141,6 @@
 .mf-dt__seat--pulse { animation: mf-dt-pulse 400ms var(--ease-out); }
 .mf-dt__seat--pulse .mf-figure { animation: mf-dt-bright 400ms var(--ease-out); }
 
-/* 대기실(결정 0028): 입장·퇴장 전이. 그림(.mf-figure)만 움직여 자리의 scale 변환과 곱해지지 않는다. 이름표는 페이드만.
-   퇴장 320ms 는 토큰에 없는 길이라 지역 상수(--mf-seat-leave-ms). 입장은 --dur-med. */
-.mf-dt__seat--enter .mf-figure { animation: mf-dt-seat-enter var(--dur-med) var(--ease-out) both; }
-.mf-dt__seat--leave .mf-figure { animation: mf-dt-seat-leave var(--mf-seat-leave-ms) var(--ease-out) both; }
-.mf-dt__tag--enter { animation: mf-dt-fade var(--dur-med) var(--ease-out) both; }
-.mf-dt__tag--leave { animation: mf-dt-fade-out var(--mf-seat-leave-ms) var(--ease-out) both; }
-@keyframes mf-dt-seat-enter { from { opacity: 0; transform: translateY(-14px) scale(0.6); } to { opacity: 1; transform: translateY(0) scale(1); } }
-@keyframes mf-dt-seat-leave { from { opacity: 1; transform: translateY(0) scale(1); } to { opacity: 0; transform: translateY(6px) scale(0.85); } }
-@keyframes mf-dt-fade-out { from { opacity: 1; } to { opacity: 0; } }
-
-/* 대기실(결정 0028): 인원이 바뀌면 나머지가 새 등간격 자리로 미끄러진다. 루트 클래스는 첫 프레임 뒤에 DayTable 이 붙인다. */
-.mf-dt--slide .mf-dt__seat { transition: left var(--dur-med) var(--ease-out), top var(--dur-med) var(--ease-out), transform var(--dur-med) var(--ease-out); }
-.mf-dt--slide .mf-dt__tag { transition: left var(--dur-med) var(--ease-out), top var(--dur-med) var(--ease-out); }
-
 @keyframes mf-dt-fade { from { opacity: 0; } to { opacity: 1; } }
 @keyframes mf-dt-dot { 0% { opacity: 0.3; } 20% { opacity: 1; } 50% { opacity: 0.3; } 100% { opacity: 0.3; } }
 @keyframes mf-dt-dim-in { from { opacity: 0; } to { opacity: 1; } }
@@ -172,6 +156,4 @@
   .mf-figure--role { animation: none; }
   .mf-dt__bubble, .mf-dt__bubble i { animation: none; }
   .mf-dt__seat .mf-figure { transition: none; }
-  .mf-dt__seat--enter .mf-figure, .mf-dt__seat--leave .mf-figure, .mf-dt__tag--enter, .mf-dt__tag--leave { animation: none; }
-  .mf-dt--slide .mf-dt__seat, .mf-dt--slide .mf-dt__tag { transition: none; }
 }
