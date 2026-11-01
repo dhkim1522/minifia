@@ -22,10 +22,10 @@ progress:
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-10-30)
+See: .planning/PROJECT.md (updated 2026-11-01)
 
 **Core value:** 링크 하나로 모인 친구들이 설명 없이 정통 마피아 한 판(6~10분)을 끝까지 마치는 것
-**Current focus:** Phase 06 — 월드 뼈대
+**Current focus:** Phase 7 — 자유 채팅
 
 ## Current Position
 
@@ -34,7 +34,7 @@ Plan: Not started
 Status: Ready to plan
 Last activity: 2026-11-01 — Phase 06 complete, transitioned to Phase 7
 
-Progress: [█░░░░░░░░░] 14% (0/7 phases)
+Progress: [█░░░░░░░░░] 14% (1/7 phases)
 
 ## Performance Metrics
 
