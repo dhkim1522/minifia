@@ -46,7 +46,7 @@ interface LobbyProps {
 // 위 알림(TopToast), 아래 패널의 행동 줄 하나. 방 코드는 공유 시트 안에서만 보인다. 읽을 글은 "대기실" 과 접히는 한 줄뿐이다(3초 규칙).
 // 화면은 서버가 보낸 view 만으로 다시 그린다. 닉네임(이름표)은 WorldStage 가 React 텍스트 노드로만 그린다.
 export function Lobby({ view, store, send, canSend = true, epoch = 0, offset = 0, bannerVisible = false, exiting = false, onLeave, testButton }: LobbyProps) {
-  // 입장·방장 변경 알림: 서버가 보낸 스냅샷 두 개의 차이로만 만든다. 처음 열 때·epoch 가 바뀐 직후(재연결)에는
+  // 입장·퇴장·방장 변경 알림: 서버가 보낸 스냅샷 두 개의 차이로만 만든다. 처음 열 때·epoch 가 바뀐 직후(재연결)에는
   // 직전 스냅샷을 비워 지난 일을 다시 알리지 않는다. 재접속 띠가 떠 있는 동안은 알림을 띄우지 않되 기준선은 갱신한다.
   const toast = useTopToast();
   const { show } = toast;
@@ -57,9 +57,9 @@ export function Lobby({ view, store, send, canSend = true, epoch = 0, offset = 0
       prevEpoch.current = epoch;
       prevView.current = null;
     }
-    const text = toastForDiff(diffRoomViews(prevView.current, view));
+    const t = toastForDiff(diffRoomViews(prevView.current, view));
     prevView.current = view;
-    if (text && !bannerVisible) show(text);
+    if (t && !bannerVisible) show(t.text, t.icon);
   }, [view, epoch, bannerVisible, show]);
 
   // 열려 있는 시트. 화면이 기억하는 상태는 이것과 [시작] 잠금·안내 접힘뿐이다.
