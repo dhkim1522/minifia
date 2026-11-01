@@ -1,6 +1,6 @@
 // 서버가 보낸 줄만 든다(낙관적 표시 없음). 받을 권리가 없는 줄은 서버가 보내지 않는다 — visibleLines 는 표시 흐름
 // 선택이지 보안 경계가 아니다(결정 0002·0021). React 밖이라 프레임마다 리렌더하지 않는다(WorldStore 와 같은 형태).
-import type { ChatChannel, ChatLogFrame, ChatLineFrame, ChatRejectFrame, TypingFrame } from "../../shared/protocol";
+import type { ChatChannel, ChatLogFrame, ChatLineFrame, ChatRejectFrame, ChatRejectWhy, TypingFrame } from "../../shared/protocol";
 import type { V2IconName } from "../components/v2/V2Icon";
 
 /** 기록 칸의 한 줄. scope = 이 줄이 보이는 흐름(사람 줄은 ch 와 같고, 시스템 줄은 만든 쪽이 정한다) */
@@ -58,6 +58,29 @@ export class ChatStore {
   visibleLines(_channel: ChatChannel | null): readonly ChatStoreLine[] {
     return this.all.filter((l) => l.scope === "all");
   }
+
+  // RED 뼈대: 아래 메서드는 GREEN 에서 채운다.
+  addSystem(_text: string, _opts: { scope: ChatChannel; icon?: V2IconName; at: number }): void {}
+  typingSeats(_now: number): ReadonlySet<number> {
+    return new Set();
+  }
+  nextTypingExpiry(): number | null {
+    return null;
+  }
+  clearTypingSeat(_seat: number): void {}
+  notice(_now: number): ChatRejectWhy | null {
+    return null;
+  }
+  noticeExpiry(): number | null {
+    return null;
+  }
+  lastReject(): { why: ChatRejectWhy; at: number; n: number } | null {
+    return null;
+  }
+  lastWasReplay(): boolean {
+    return false;
+  }
+  reset(): void {}
 
   /** 줄·입력 중·알림이 바뀔 때마다 1 씩 늘어난다(useSyncExternalStore 스냅샷용) */
   revision(): number {

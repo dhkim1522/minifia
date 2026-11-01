@@ -25,3 +25,7 @@ export const CHAT_TEXT = {
   joined: (name: string) => `${name} 님 입장`,
   left: (name: string) => `${name} 님 퇴장`,
 } as const;
+
+// RED 뼈대: GREEN 에서 채운다.
+import type { EmoteId } from "../../shared/protocol";
+export const EMOTE_LABEL = {} as Readonly<Record<EmoteId, string>>;
