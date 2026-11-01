@@ -114,3 +114,28 @@ describe("ClientMessageSchema claim (07-08, CHAT-06)", () => {
     expect(ClientMessageSchema.safeParse(msg).success).toBe(false);
   });
 });
+
+// 07-10: 입력 중은 ClientMessage 유니온의 멤버다. 채널·좌석은 보내지 않는다(결정 0002) — 덧붙은 키는 거부한다(T-07-19).
+describe("ClientMessageSchema typing (07-10, CHAT-04)", () => {
+  it("입력 중 {t, on, pk} 를 받는다", () => {
+    expect(ClientMessageSchema.safeParse({ t: "typing", on: true, pk: "0:lobby" }).success).toBe(true);
+    expect(ClientMessageSchema.safeParse({ t: "typing", on: false, pk: "1:night" }).success).toBe(true);
+  });
+
+  it.each([
+    ["덧붙은 seat", { t: "typing", on: true, pk: "0:lobby", seat: 3 }],
+    ["덧붙은 ch", { t: "typing", on: true, pk: "0:lobby", ch: "mafia" }],
+    ["덧붙은 id", { t: "typing", on: true, pk: "0:lobby", id: "x" }],
+    ["pk 33자", { t: "typing", on: true, pk: "a".repeat(33) }],
+    ["pk 빈 문자열", { t: "typing", on: true, pk: "" }],
+    ["pk 빠짐", { t: "typing", on: true }],
+    ["on 빠짐", { t: "typing", pk: "0:lobby" }],
+    ["on 문자열", { t: "typing", on: "true", pk: "0:lobby" }],
+  ])("입력 중 %s 는 거부한다", (_name, msg) => {
+    expect(ClientMessageSchema.safeParse(msg).success).toBe(false);
+  });
+
+  it("pk 32자는 받는다", () => {
+    expect(ClientMessageSchema.safeParse({ t: "typing", on: true, pk: "a".repeat(32) }).success).toBe(true);
+  });
+});

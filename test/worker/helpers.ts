@@ -434,3 +434,16 @@ export async function wanderTimes(code: string): Promise<number[]> {
   });
   return times;
 }
+
+// ---- 7페이즈 입력 중 도우미(07-10) ----
+
+/** 소켓이 마지막으로 본 view 의 단계 키 '일차:단계'(phaseKey 와 같은 모양, 일차가 없으면 0). */
+export function phaseKeyOf(sock: TestSocket): string {
+  const view = lastViewOf(sock);
+  return `${view.day?.n ?? 0}:${view.phase}`;
+}
+
+/** 입력 중 신호를 보낸다. 단계 키는 그 소켓이 마지막으로 받은 view 에서 만든다(클라이언트가 하는 대로). */
+export function typingSend(sock: TestSocket, on: boolean): void {
+  send(sock, { t: "typing", on, pk: phaseKeyOf(sock) });
+}

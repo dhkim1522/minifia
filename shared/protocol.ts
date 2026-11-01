@@ -225,7 +225,9 @@ export type ClientMessage =
   // 봇 투표 규칙(절대값, 대기실에서만, 테스트 방 방장 도구 — 결정 0022·0024 확장, P-13). exec = 모든 봇의 처형 여부 표, pick = 모든 봇의 후보 선택.
   | { t: "testBotVote"; exec: BotVoteExec; pick: BotVotePick }
   // 로비 이동 — 목적지 두 정수뿐, 신원·속도·시각 없음(결정 0044-17)
-  | MoveMessage;
+  | MoveMessage
+  // 입력 중 — 채널 필드 없음, 서버가 보낸 사람 상태로 채널을 정한다(결정 0002). 받는 사람은 audience(07-10)
+  | TypingSendMessage;
 
 // 테스트 방 봇 투표 선택(결정 0022·0024 확장, P-13). 무작위가 기본이고 고정 값은 방장이 대기실에서 정한다.
 export type BotVoteExec = "random" | "yes" | "no";
@@ -303,7 +305,7 @@ export type WorldFrame =
 // ---- 7페이즈 자유 채팅 계약(결정 0058, 07-02) ----
 // 키 이름은 ch·seat·seq·text·at·on·why·lines·pk 만 쓴다 — test/worker/leak.test.ts 의 FORBIDDEN_KEYS 에 id·playerId 가 있다.
 // 채널 필드는 클라이언트 → 서버 메시지에 없다(결정 0002): 채널은 서버가 보낸 사람의 상태로만 정한다(shared/game/audience.ts).
-// 이 구역의 타입은 아직 ClientMessage·ServerMessage 유니온 밖에 있다. 유니온에 넣는 일은 07-10·07-11 이다.
+// 이 구역의 타입 가운데 TypingSendMessage·TypingFrame 은 07-10 이 유니온에 넣었다. 나머지는 07-11 이 넣는다.
 /** 채팅 채널: all = 로비·낮의 공개, mafia = 밤의 마피아(와 탈락자 관전), ghost = 탈락자끼리. */
 export type ChatChannel = "all" | "mafia" | "ghost";
 /** 서버 → 클라이언트로 나가는 채팅 한 줄. 채널마다 따로 센 seq 와 보낸 사람 seat 뿐이다 — id·역할·수신자 마스크는 싣지 않는다. */
@@ -355,6 +357,7 @@ export type ServerMessage =
   | { t: "error"; code: WsErrorCode }
   | { t: "emoji"; seat: number; icon: EmojiId; at: number }
   | ChatEvent
-  | WorldFrame;
+  | WorldFrame
+  | TypingFrame; // 입력 중 — 같은 채널의 다른 소켓에만 간다(audience, 07-10)
 export const CLOSE_CODES = { REPLACED: 4001, REMOVED: 4003 } as const;
 export type RemovedReason = "left" | "kicked" | "invalid_token" | "room_closed";
