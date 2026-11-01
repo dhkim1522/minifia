@@ -1930,3 +1930,156 @@ export function pickTapTargets(centers, from, { minDist = 3, visible = () => tru
     .filter((p) => p.d >= minDist && visible(p.x, p.z))
     .sort((p, q) => q.d - p.d);
 }
+
+// ---- 재접속·렌더 예산·메모리 검사 (06-18, CONN-04·MAP-05·성공 기준 4 의 자동 몫) ----
+
+/** 재접속 흐름이 종류마다 되풀이하는 횟수(UI-SPEC CONN-04: 각각 10회). 줄이지 않는다. */
+export const RECONNECT_ROUNDS = 10;
+/** 복구한 뒤 이 시간(ms)이 지나도 재접속 띠가 남아 있으면 안 된다 — 앱의 RESTORED_MS(2000) + 여유 0.5초. */
+export const RESTORED_GONE_MS = 2500;
+/** 재접속 흐름의 다섯 종류. id 는 시나리오 이름(reconnect/{id})이 된다. */
+export const RECONNECT_KINDS = [
+  { id: "offline", label: "끊김·복귀(오프라인 3초)", requireBannerSeen: true, requirePainted: false },
+  { id: "frozen", label: "화면 껐다 켜기(frozen 5초)", requireBannerSeen: false, requirePainted: false },
+  { id: "reload", label: "새로 고침", requireBannerSeen: false, requirePainted: false },
+  { id: "lose", label: "WebGL 소실·복구", requireBannerSeen: false, requirePainted: true },
+  { id: "lose-idle", label: "WebGL 소실 후 방치(재생성)", requireBannerSeen: false, requirePainted: true },
+];
+
+/**
+ * 콘솔 경고·오류 허용 목록. 재접속 때문에 생기는 메시지가 아니거나, 시험이 일부러 만든 조건을 브라우저 자신이 기록한 것만 올린다.
+ * 앱이 만든 경고·오류는 하나도 올리지 않는다(예: 앱이 던지는 THREE 경고는 허용하지 않고 고친다).
+ * kinds = 적용하는 재접속 종류(null 이면 전부), localOnly = 로컬 개발 서버(localhost)에서만.
+ */
+export const CONSOLE_ALLOW = [
+  {
+    id: "preload-unused",
+    type: "warning",
+    pattern: /was preloaded using link preload but not used within a few seconds/,
+    kinds: null,
+    localOnly: false,
+    reason: "v1.0 index.html 의 링크 프리로드(역할 카드·일지·배경 그림)가 로비에서 안 쓰여 브라우저가 17개 한 묶음으로 알리는 경고 — 재접속과 무관한 v1.0 의 기존 동작(로비에 머무는 동안 반복해 나옴)",
+  },
+  {
+    id: "offline-net",
+    type: null,
+    pattern: /ERR_INTERNET_DISCONNECTED/,
+    kinds: ["offline"],
+    localOnly: false,
+    reason: "시험이 일부러 켠 오프라인 상태에서 브라우저가 실패한 요청·소켓 연결을 직접 기록한 메시지",
+  },
+  {
+    id: "dev-strictmode-socket",
+    type: "warning",
+    pattern: /WebSocket connection to .* failed: WebSocket is closed before the connection is established/,
+    kinds: ["reload"],
+    localOnly: true,
+    reason: "개발 서버의 React StrictMode 가 첫 마운트의 연결 중 소켓을 정리에서 닫을 때 브라우저가 남기는 경고(배포 빌드에는 없다)",
+  },
+];
+
+/** 주소가 이 PC 의 로컬 개발 서버인가(deployhold 의 파일 시각 갱신을 허용하는 유일한 조건, T-06-41). */
+export function isLocalOrigin(origin) {
+  try {
+    return LOCAL_HOSTS.includes(new URL(origin).hostname);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * 콘솔 항목 [{ type, text }] 을 허용 목록으로 나눈다. warning·error 가 아닌 항목은 처음부터 보지 않는다.
+ * 돌려주는 값: { issues: string[] (허용되지 않은 것), allowed: { [id]: 개수 } }
+ */
+export function consoleIssues(entries, { kind = null, local = false } = {}) {
+  const issues = [];
+  const allowed = {};
+  for (const e of Array.isArray(entries) ? entries : []) {
+    if (e?.type !== "warning" && e?.type !== "error") continue;
+    const text = String(e.text ?? "");
+    const hit = CONSOLE_ALLOW.find((a) => (a.type === null || a.type === e.type) && a.pattern.test(text) && (a.kinds === null || a.kinds.includes(kind)) && (!a.localOnly || local));
+    if (hit) allowed[hit.id] = (allowed[hit.id] ?? 0) + 1;
+    else issues.push(`[${e.type}] ${text.slice(0, 120)}`);
+  }
+  return { issues, allowed };
+}
+
+const isNumber = (v) => typeof v === "number" && Number.isFinite(v);
+
+/**
+ * 재접속 한 종류를 되풀이한 결과 판정(CONN-04·MAP-05, UI-SPEC "연결·복귀 상태"). rounds = 라운드마다
+ * { n, console: string[] (허용되지 않은 콘솔 경고·오류), bannerLeft: boolean|null (복구 + 2.5초 뒤 .mf-reconnect 가 남았나, null = 못 읽음),
+ *   bannerSeen: boolean (끊긴 동안 띠가 떴나), posDiff: number (같은 순간 두 페이지의 같은 캐릭터 위치 차 최대),
+ *   drift: number (복구 전 위치 대비 어긋남 최대), replayed: string[] (복구 뒤 다시 뜬 입장·퇴장 알림), recovered: boolean (카드·띠가 사라지고 맵이 ready),
+ *   painted: boolean|null (다시 그려진 첫 프레임이 한 가지 색이 아님) }.
+ * opts = { expectedRounds, requireBannerSeen, requirePainted, tol }. 라운드 수가 모자라면 실패다 — 횟수를 줄여 초록을 만들 수 없다.
+ */
+export function reconnectChecks(rounds, { expectedRounds = RECONNECT_ROUNDS, requireBannerSeen = false, requirePainted = false, tol = WORLD_SYNC_TOL } = {}) {
+  const list = Array.isArray(rounds) ? rounds : [];
+  const rows = [];
+  const each = (pick) => list.map(pick).filter((x) => x !== null);
+
+  const count = list.length;
+  const recoveredBad = list.filter((r) => r.recovered !== true).map((r) => `${r.n}회`);
+  rows.push(
+    result("RC5", `${expectedRounds}회 모두 복구(카드·띠가 사라지고 맵이 열림)`, [
+      ...(count === expectedRounds ? [] : [`라운드 ${count}/${expectedRounds}회만 돌았다`]),
+      ...(recoveredBad.length > 0 ? [`복구 못 함: ${recoveredBad.slice(0, 5).join(", ")}`] : []),
+    ]),
+  );
+
+  const consoleBad = each((r) => (Array.isArray(r.console) && r.console.length > 0 ? `${r.n}회 ${r.console[0]}${r.console.length > 1 ? ` 외 ${r.console.length - 1}개` : ""}` : null));
+  const consoleUnread = list.filter((r) => !Array.isArray(r.console)).map((r) => `${r.n}회`);
+  rows.push(result("RC1", "콘솔 경고·오류 0건", [...(consoleUnread.length > 0 ? [`측정값 없음: ${consoleUnread.slice(0, 5).join(", ")}`] : []), ...consoleBad.slice(0, 3)]));
+
+  const bannerBad = list.filter((r) => r.bannerLeft !== false).map((r) => `${r.n}회 ${r.bannerLeft === true ? "띠가 남음" : "측정값 없음"}`);
+  rows.push(result("RC2", `재접속 띠가 사라지고 남지 않음(복구 ${RESTORED_GONE_MS}ms 뒤)`, bannerBad.slice(0, 5)));
+
+  const posBad = list
+    .filter((r) => !isNumber(r.posDiff) || !isNumber(r.drift) || r.posDiff > tol || r.drift > tol)
+    .map((r) => `${r.n}회 두 페이지 차 ${isNumber(r.posDiff) ? Math.round(r.posDiff * 1000) / 1000 : "측정값 없음"}, 복구 전 대비 ${isNumber(r.drift) ? Math.round(r.drift * 1000) / 1000 : "측정값 없음"} (상한 ${tol})`);
+  rows.push(result("RC3", `두 페이지 캐릭터 위치 어긋남 0건(≤ ${tol} 단위)`, posBad.slice(0, 3)));
+
+  const replayBad = list.filter((r) => !Array.isArray(r.replayed) || r.replayed.length > 0).map((r) => `${r.n}회 ${Array.isArray(r.replayed) ? r.replayed.join(" / ") : "측정값 없음"}`);
+  rows.push(result("RC4", "복구 뒤 지난 입장·퇴장 알림 재표시 0건", replayBad.slice(0, 3)));
+
+  if (requireBannerSeen) {
+    const seenBad = list.filter((r) => r.bannerSeen !== true).map((r) => `${r.n}회`);
+    rows.push(result("RC6", "끊긴 동안 재접속 띠가 뜸(띠가 떴다 사라짐)", seenBad.length > 0 ? [`띠가 안 뜬 회: ${seenBad.slice(0, 5).join(", ")}`] : []));
+  }
+  if (requirePainted) {
+    const paintBad = list.filter((r) => r.painted !== true).map((r) => `${r.n}회 ${r.painted === false ? "한 가지 색" : "측정값 없음"}`);
+    rows.push(result("RC7", "복구 뒤 첫 프레임이 같은 씬으로 다시 그려짐(한 가지 색이 아님)", paintBad.slice(0, 3)));
+  }
+  return rows;
+}
+
+/** 라운드 결과를 한 줄 기록으로(참고 행): 횟수·허용 경고·위치 차 최대·띠 본 횟수. 판정이 아니다. */
+export function reconnectSummary(rounds, allowedTotals = {}) {
+  const list = Array.isArray(rounds) ? rounds : [];
+  const max = (pick) => {
+    const v = list.map(pick).filter(isNumber);
+    return v.length === 0 ? "읽지 못함" : (Math.round(Math.max(...v) * 10000) / 10000).toString();
+  };
+  const allowed = Object.entries(allowedTotals)
+    .map(([id, n]) => `${id} ${n}`)
+    .join(", ");
+  return `${list.length}회 · 콘솔 경고·오류 ${list.reduce((a, r) => a + (Array.isArray(r.console) ? r.console.length : 0), 0)}건 · 띠 잔류 ${list.filter((r) => r.bannerLeft === true).length}건 · 위치 차 최대 ${max((r) => r.posDiff)} · 복구 전 대비 최대 ${max((r) => r.drift)} · 띠 본 횟수 ${list.filter((r) => r.bannerSeen).length} · 허용 목록 적용 ${allowed === "" ? "없음" : allowed}`;
+}
+
+/**
+ * 화면 그림 통계로 "한 가지 바탕색이 아닌가"를 판정한다(소실 후 재생성 뒤 같은 씬으로 첫 프레임이 다시 그려졌나, RESEARCH A9).
+ * stats = { distinct: 양자화한 서로 다른 색 수, dominantShare: 가장 흔한 색이 차지하는 비율 }.
+ */
+export function paintedFromStats(stats) {
+  if (!stats || !isNumber(stats.distinct) || !isNumber(stats.dominantShare)) return null;
+  return stats.distinct >= 8 && stats.dominantShare < 0.9;
+}
+
+/**
+ * 실행할 흐름 고르기(06-18): --only 가 없으면 skipByDefault 흐름(deployhold)을 뺀 전부, 있으면 id 에 부분 문자열이 들어 있거나 --only 가 id 로 시작하는 흐름
+ * (skipByDefault 라도 --only 로 고르면 돈다).
+ */
+export function selectFlows(flows, only) {
+  return flows.filter((f) => (only === null || only === undefined ? f.skipByDefault !== true : f.id.includes(only) || only.startsWith(f.id)));
+}

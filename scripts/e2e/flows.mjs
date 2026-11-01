@@ -1,12 +1,14 @@
 // 화면 E2E 흐름(결정 0025): 흐름마다 새 테스트 방 하나와 방장 페이지 하나. 검사 ID 는 계획 261025-h1j 의 "검사 목록" 과 같다.
 // 결과는 { scenario: "흐름/상태", size, id, label, ok, detail } 로 ctx.results 에 쌓인다.
 import { join } from "node:path";
-import { mkdirSync, readFileSync } from "node:fs";
+import { mkdirSync, readFileSync, utimesSync } from "node:fs";
 import {
   SetupError,
   armIntroWatch,
   armVerdictWatch,
   chooseRole,
+  clearToasts,
+  consoleCollector,
   clickAt,
   clickInDialog,
   clickTopmostPoint,
@@ -14,6 +16,7 @@ import {
   closeSheet,
   collectSnapshot,
   createTestRoom,
+  dropSockets,
   findBlankScenePoint,
   findTagPassThroughPoint,
   hitsInputSurface,
@@ -29,8 +32,11 @@ import {
   pickCandidate,
   pickChip,
   readAtmosphere,
+  readLinkState,
   readLobbyFrame,
+  readPaintStats,
   readWorld,
+  reconnectInit,
   sampleWorld,
   screensOfWorld,
   readBackdropLayers,
@@ -49,6 +55,7 @@ import {
   selectRoleCardTab,
   setBotVote,
   setBots,
+  setLifecycle,
   settle,
   shot,
   skipTo,
@@ -66,6 +73,9 @@ import {
   INTRO_GONE_MS,
   JOIN_FIT_MIN_H,
   LOBBY_EXTRA_SIZES,
+  RECONNECT_KINDS,
+  RECONNECT_ROUNDS,
+  RESTORED_GONE_MS,
   ROLE_NAME,
   WORLD_SYNC_TOL,
   backdropSceneChecks,
@@ -75,6 +85,7 @@ import {
   candidateRevealMs,
   claimChatIssues,
   colorRuleChecks,
+  consoleIssues,
   dayChecks,
   defenseChecks,
   dimChecks,
@@ -88,6 +99,7 @@ import {
   headerContrastChecks,
   inspectChecks,
   introChecks,
+  isLocalOrigin,
   joinFitChecks,
   journalChecks,
   lineCount,
@@ -111,8 +123,11 @@ import {
   lobbyStartChecks,
   nameTagFitChecks,
   ownTagInStageChecks,
+  paintedFromStats,
   parseBarMask,
   pickTapTargets,
+  reconnectChecks,
+  reconnectSummary,
   tagStackChecks,
   walkableCenters,
   worldSyncChecks,
@@ -159,12 +174,12 @@ export async function attempt(fn) {
 }
 
 /** 방 만들기 → 방장 페이지 → S1·S2. */
-export async function startHost(ctx, flowId, { nickname = HOST_NICK } = {}) {
+export async function startHost(ctx, flowId, { nickname = HOST_NICK, initScripts = [] } = {}) {
   const rec = recorder(ctx);
   const room = await createTestRoom(ctx.origin, nickname);
   ctx.secrets.push(room.token);
   ctx.roomCode = room.code; // 링크 참가 probe(UX2-J)용. 방 코드는 비밀이 아니다 — 토큰은 남기지 않는다
-  const host = await openHostPage(ctx.browser, { origin: ctx.origin, code: room.code, token: room.token, size: ctx.size, dpr: ctx.shots ? 2 : 1, mobile: ctx.size.mobile !== false });
+  const host = await openHostPage(ctx.browser, { origin: ctx.origin, code: room.code, token: room.token, size: ctx.size, dpr: ctx.shots ? 2 : 1, mobile: ctx.size.mobile !== false, initScripts });
   ctx.host = host;
   const v = host.tracker.last();
   rec(`${flowId}/setup`, "S1", "방장으로 연결", v?.me?.isHost === true && v?.me?.testMode === true, `isHost ${v?.me?.isHost}, testMode ${v?.me?.testMode}`);
@@ -404,10 +419,10 @@ function segmentDurationMs(seg) {
 }
 
 /** 두 페이지에 같은 방의 손님을 붙인다(HTTP 참가 → 손님 페이지). 토큰은 ctx.secrets 에 넣어 출력에서 가린다. */
-async function openGuest(ctx, nickname) {
+async function openGuest(ctx, nickname, { initScripts = [] } = {}) {
   const joined = await joinTestRoom(ctx.origin, ctx.roomCode, nickname);
   ctx.secrets.push(joined.token);
-  const guest = await openHostPage(ctx.browser, { origin: ctx.origin, code: joined.code, token: joined.token, size: ctx.size, dpr: 1, mobile: ctx.size.mobile !== false, guest: true });
+  const guest = await openHostPage(ctx.browser, { origin: ctx.origin, code: joined.code, token: joined.token, size: ctx.size, dpr: 1, mobile: ctx.size.mobile !== false, guest: true, initScripts });
   return { guest, seat: joined.seat };
 }
 
@@ -530,6 +545,260 @@ async function worldFlow(ctx) {
   if (!probe.ok) rec("world/emoji", "NT2", "내 이름표 폭 기록(참고, 판정 아님)", false, probe.detail);
 
   await leaveLobby(hp);
+}
+
+// ---- reconnect·deployhold (06-18, CONN-04·MAP-05) ----
+
+/** reconnect·deployhold 흐름의 고정 크기(UI-SPEC 의 기본 폰). */
+const RECONNECT_SIZE = { w: 390, h: 664, label: "390x664" };
+/** 복구 대기 상한(ms). 이 안에 끝나지 않으면 그 회는 복구 못 함(recovered false)으로 센다 — 상한을 늘려 초록을 만들지 않는다. */
+const RECOVER_LIMIT_MS = 15_000;
+/** deployhold: 로컬 흉내에서 띠가 뜨기를 기다리는 시간(ms), 실제 배포 직후에는 최대 6분(UI-SPEC). */
+const DEPLOY_LOCAL_WAIT_MS = 40_000;
+const DEPLOY_REAL_WAIT_MS = 360_000;
+
+const dist = (p, q) => (p && q ? Math.hypot(p.x - q.x, p.z - q.z) : Number.NaN);
+
+/** 방장 + 손님이 같은 방 로비에서 서로를 보고, 손님이 한 번 걸어 간 뒤의 상태. 위치 기준선(baseline)을 남긴다. */
+async function openPair(ctx, flowId) {
+  const host = await startHost(ctx, flowId, { nickname: LOBBY_HOST_NICK, initScripts: [reconnectInit] });
+  const { guest, seat: gSeat } = await openGuest(ctx, WORLD_GUEST_NICK, { initScripts: [reconnectInit] });
+  const hSeat = host.tracker.last().me.seat;
+  const hp = host.page;
+  const gp = guest.page;
+  await Promise.all([host.tracker.waitFor((v) => v.players.length === 2, 5000, "방장 쪽 인원 2"), guest.tracker.waitFor((v) => v.players.length === 2, 5000, "손님 쪽 인원 2")]);
+  await Promise.all([waitWorldReady(hp, 2), waitWorldReady(gp, 2)]);
+  await Promise.all([settle(hp), settle(gp)]);
+
+  // 손님이 한 번 걷는다: 두 화면에 모두 보이는 가장 먼 칸(worldFlow 와 같은 고르기)
+  const [hw, gw] = await Promise.all([readWorld(hp), readWorld(gp)]);
+  const from = await sampleWorld(gp, gSeat);
+  if (!from) throw new SetupError("손님 위치를 읽지 못함(sample)");
+  const centers = walkableCentersOfApp();
+  const pad = 28;
+  const [gScreens, hScreens] = await Promise.all([screensOfWorld(gp, centers), screensOfWorld(hp, centers)]);
+  const inStage = (sc, st) => !!sc && !!st && Number.isFinite(sc.sx) && sc.sx > pad && sc.sx < ctx.size.w - pad && sc.sy > st.top + pad && sc.sy < st.bottom - pad;
+  const onScreen = centers.map((c, i) => ({ ...c, sx: gScreens[i]?.sx, sy: gScreens[i]?.sy, hx: hScreens[i]?.sx, hy: hScreens[i]?.sy })).filter((c, i) => inStage(gScreens[i], gw.stage) && inStage(hScreens[i], hw.stage));
+  const probe = pickTapTargets(onScreen, from, { minDist: 3 }).slice(0, 40);
+  const [gHits, hHits] = await Promise.all([hitsInputSurface(gp, probe), hitsInputSurface(hp, probe.map((c) => ({ sx: c.hx, sy: c.hy })))]);
+  const target = probe.find((_, i) => gHits[i] && hHits[i]);
+  if (!target) throw new SetupError("탭할 목적지를 찾지 못함");
+  const tap = await tapWorld(gp, guest.tracker, gSeat, target.x, target.z);
+  if (!tap.move) throw new SetupError("손님 구간이 오지 않음");
+  await sleep(segmentDurationMs(tap.move) + 1500);
+
+  const seats = [hSeat, gSeat];
+  const baseline = {};
+  for (const seat of seats) {
+    const [a, b] = await Promise.all([sampleWorld(hp, seat), sampleWorld(gp, seat)]);
+    if (!a || !b || dist(a, b) > WORLD_SYNC_TOL) throw new SetupError(`시작 위치가 두 페이지에서 다름(자리 ${seat}: ${dist(a, b)})`);
+    baseline[seat] = a;
+  }
+  return {
+    host,
+    guest,
+    hp,
+    gp,
+    gctx: guest.context,
+    hc: consoleCollector(hp),
+    gc: consoleCollector(gp),
+    seats,
+    baseline,
+    local: isLocalOrigin(ctx.origin),
+    close: async () => {
+      await guest.context.close().catch(() => {});
+    },
+  };
+}
+
+const linkCalm = (st) => !!st && st.hook && st.banners === 0 && st.cards === 0 && st.status === "ready" && !st.toastOn;
+/** 복구 조건: 맵이 열려 있고(카드 없음) 마지막 소켓이 열려 있고 띠는 없거나 "다시 연결됐어요" 이다. */
+const linkRecovered = (st) => !!st && st.hook && st.cards === 0 && st.status === "ready" && st.lastSocketOpen && (st.banners === 0 || st.banner === "다시 연결됐어요");
+
+/** 조건이 참이 될 때까지 두 페이지를 읽는다. 시간 안에 못 맞추면 false. */
+async function waitLink(pages, pred, ms) {
+  const start = performance.now();
+  for (;;) {
+    const states = await Promise.all(pages.map((p) => readLinkState(p)));
+    if (states.every(pred)) return true;
+    if (performance.now() - start > ms) return false;
+    await sleep(100);
+  }
+}
+
+/** 라운드 시작 전: 두 페이지가 평온(띠·카드 없음, 맵 열림, 토스트 없음)해지길 기다리고, 토스트 기록과 콘솔 수집을 비운다. */
+async function calmPair(pair) {
+  await waitLink([pair.hp, pair.gp], linkCalm, 10_000);
+  await Promise.all([clearToasts(pair.hp).catch(() => {}), clearToasts(pair.gp).catch(() => {})]);
+  pair.hc.take();
+  pair.gc.take();
+}
+
+/**
+ * 복구 뒤 라운드 결과를 모은다(reconnectChecks 의 입력 모양): 복구 + RESTORED_GONE_MS 뒤 띠 잔류, 두 페이지 위치 차·복구 전 대비 어긋남,
+ * 다시 뜬 입장·퇴장 알림, 허용되지 않은 콘솔 경고·오류, (요청 시) 첫 프레임이 다시 그려졌는지.
+ */
+async function collectRound(ctx, pair, { n, kind, recovered, bannerSeen, paint = false }) {
+  await sleep(RESTORED_GONE_MS);
+  const [hs, gs] = await Promise.all([readLinkState(pair.hp), readLinkState(pair.gp)]);
+  const bannerLeft = !hs || !gs ? null : hs.banners > 0 || gs.banners > 0;
+  let posDiff = 0;
+  let drift = 0;
+  for (const seat of pair.seats) {
+    const [a, b] = await Promise.all([sampleWorld(pair.hp, seat).catch(() => null), sampleWorld(pair.gp, seat).catch(() => null)]);
+    const d = dist(a, b);
+    posDiff = Number.isNaN(d) || Number.isNaN(posDiff) ? Number.NaN : Math.max(posDiff, d);
+    for (const p of [a, b]) {
+      const e = dist(p, pair.baseline[seat]);
+      drift = Number.isNaN(e) || Number.isNaN(drift) ? Number.NaN : Math.max(drift, e);
+    }
+  }
+  const replayed = [...(hs?.toasts ?? []), ...(gs?.toasts ?? [])].filter((t) => /입장|퇴장/.test(t));
+  const c = consoleIssues([...pair.hc.take(), ...pair.gc.take()], { kind, local: pair.local });
+  let painted = null;
+  if (paint) painted = paintedFromStats(await readPaintStats(pair.gp).catch(() => null));
+  return { n, console: c.issues, allowed: c.allowed, bannerLeft, bannerSeen, posDiff, drift, replayed, recovered, painted };
+}
+
+/** 종류별 동작 한 번. 오프라인은 setOffline(true) 와 소켓 닫기를 함께 한다(헤드리스 Chrome 은 오프라인 전환만으로 열린 소켓을 끊지 않는다). */
+async function reconnectAction(pair, kind) {
+  const { gp, gctx } = pair;
+  switch (kind) {
+    case "offline":
+      await gctx.setOffline(true);
+      await dropSockets(gp);
+      await sleep(3000);
+      await gctx.setOffline(false);
+      return;
+    case "frozen":
+      await setLifecycle(gp, "frozen");
+      await sleep(5000);
+      await setLifecycle(gp, "active");
+      return;
+    case "reload":
+      await gp.reload({ waitUntil: "domcontentloaded" });
+      return;
+    case "lose":
+      await gp.evaluate(() => window.__mfWorld.debug.loseContext());
+      await sleep(1000);
+      await gp.evaluate(() => window.__mfWorld.debug.restoreContext());
+      return;
+    case "lose-idle":
+      await gp.evaluate(() => window.__mfWorld.debug.loseContext());
+      return;
+  }
+}
+
+async function reconnectFlow(ctx) {
+  const rec = recorder(ctx);
+  const pair = await openPair(ctx, "reconnect");
+  try {
+    for (const k of RECONNECT_KINDS) {
+      const sc = `reconnect/${k.id}`;
+      const rounds = [];
+      for (let n = 1; n <= RECONNECT_ROUNDS; n++) {
+        await calmPair(pair);
+        const watch = { stop: false, seen: false };
+        const poll = (async () => {
+          while (!watch.stop) {
+            const st = await readLinkState(pair.gp);
+            if (st && st.banners > 0) watch.seen = true;
+            await sleep(100);
+          }
+        })();
+        let round;
+        try {
+          await reconnectAction(pair, k.id);
+          let recovered = await waitLink([pair.hp, pair.gp], linkRecovered, RECOVER_LIMIT_MS);
+          if (recovered && k.id === "reload") recovered = await attempt(() => waitWorldReady(pair.gp, 2, RECOVER_LIMIT_MS)).then((r) => r.ok);
+          watch.stop = true;
+          await poll;
+          round = await collectRound(ctx, pair, { n, kind: k.id, recovered, bannerSeen: watch.seen, paint: k.requirePainted });
+        } catch (e) {
+          watch.stop = true;
+          await poll.catch(() => {});
+          await pair.gctx.setOffline(false).catch(() => {});
+          const msg = String(e instanceof Error ? e.message : e).split("\n")[0].slice(0, 120);
+          round = { n, console: [`(실행 오류) ${msg}`], allowed: {}, bannerLeft: null, bannerSeen: watch.seen, posDiff: Number.NaN, drift: Number.NaN, replayed: [], recovered: false, painted: null };
+        }
+        rounds.push(round);
+      }
+      for (const r of reconnectChecks(rounds, { expectedRounds: RECONNECT_ROUNDS, requireBannerSeen: k.requireBannerSeen, requirePainted: k.requirePainted })) recOne(rec, sc, r);
+      const allowed = {};
+      for (const r of rounds) for (const [id, c] of Object.entries(r.allowed ?? {})) allowed[id] = (allowed[id] ?? 0) + c;
+      infoRow(ctx, sc, "RC9", `${k.label} 요약(참고, 판정 아님)`, reconnectSummary(rounds, allowed));
+    }
+  } finally {
+    pair.hc.stop();
+    pair.gc.stop();
+    await pair.close();
+  }
+  await leaveLobby(pair.hp);
+}
+
+/** 두 페이지에서 .mf-reconnect 가 나타났다가 사라질 때까지 기다린다. 돌려주는 값: { hostSeen, guestSeen, gone } */
+async function waitBannerCycle(pair, ms) {
+  const seen = { hostSeen: false, guestSeen: false, gone: false };
+  const start = performance.now();
+  for (;;) {
+    const [hs, gs] = await Promise.all([readLinkState(pair.hp), readLinkState(pair.gp)]);
+    if (hs && hs.banners > 0) seen.hostSeen = true;
+    if (gs && gs.banners > 0) seen.guestSeen = true;
+    if (seen.hostSeen && seen.guestSeen && hs && gs && hs.banners === 0 && gs.banners === 0) {
+      seen.gone = true;
+      return seen;
+    }
+    if (performance.now() - start > ms) return seen;
+    await sleep(100);
+  }
+}
+
+/** worker/room.ts 의 파일 시각만 지금으로 갱신한다(내용·git diff 는 그대로) — 로컬 개발 서버가 workerd 를 다시 띄우게 하려고(가정 A1, T-06-41). */
+function touchWorkerFile() {
+  const file = new URL("../../worker/room.ts", import.meta.url);
+  const now = new Date();
+  utimesSync(file, now, now);
+}
+
+/**
+ * 배포 직후 재접속(deployhold, CONN-04·MAP-05): 로비의 두 페이지가 기다리다 재접속 띠가 떴다 사라지면 위치·콘솔을 본다.
+ * 로컬(localhost)에서는 worker/room.ts 의 파일 시각을 갱신해 배포를 10회 흉내 낸다 — 소켓이 끊기지 않으면 "미확인"으로 남긴다(가정 A1).
+ * 배포본 주소에서는 파일을 건드리지 않고 한 회만, 06-19 가 배포와 동시에 돌리며 띠가 뜰 때까지 최대 6분 기다린다.
+ */
+async function deployHoldFlow(ctx) {
+  const rec = recorder(ctx);
+  const sc = "deployhold/lobby";
+  const pair = await openPair(ctx, "deployhold");
+  const rounds = [];
+  let unconfirmed = false;
+  try {
+    const total = pair.local ? RECONNECT_ROUNDS : 1;
+    const waitMs = pair.local ? DEPLOY_LOCAL_WAIT_MS : DEPLOY_REAL_WAIT_MS;
+    for (let n = 1; n <= total; n++) {
+      await calmPair(pair);
+      if (pair.local) touchWorkerFile();
+      const seen = await waitBannerCycle(pair, waitMs);
+      if (pair.local && n === 1 && !seen.hostSeen && !seen.guestSeen) {
+        unconfirmed = true;
+        break;
+      }
+      const recovered = seen.gone && (await waitLink([pair.hp, pair.gp], linkRecovered, RECOVER_LIMIT_MS));
+      rounds.push(await collectRound(ctx, pair, { n, kind: "deploy", recovered, bannerSeen: seen.hostSeen && seen.guestSeen }));
+    }
+    if (unconfirmed) {
+      infoRow(ctx, sc, "DH0", "배포 직후 흉내: 미확인(참고, 판정 아님)", `worker/room.ts 의 파일 시각을 갱신해도 ${DEPLOY_LOCAL_WAIT_MS / 1000}초 안에 소켓이 끊겨 띠가 뜨지 않음 — 06-08 의 퇴거 복원 테스트와 06-19 의 실제 배포 1회로 갈음(가정 A1)`);
+    } else {
+      for (const r of reconnectChecks(rounds, { expectedRounds: pair.local ? RECONNECT_ROUNDS : 1, requireBannerSeen: true })) recOne(rec, sc, r);
+      const allowed = {};
+      for (const r of rounds) for (const [id, c] of Object.entries(r.allowed ?? {})) allowed[id] = (allowed[id] ?? 0) + c;
+      infoRow(ctx, sc, "RC9", `배포 직후${pair.local ? "(로컬 흉내)" : ""} 요약(참고, 판정 아님)`, reconnectSummary(rounds, allowed));
+    }
+  } finally {
+    pair.hc.stop();
+    pair.gc.stop();
+    await pair.close();
+  }
+  await leaveLobby(pair.hp);
 }
 
 const w360 = (ctx) => ctx.size.w <= 360;
@@ -1758,6 +2027,9 @@ export const FLOWS = [
   // lobby·world 는 LOBBY_SIZES 6개 크기로 돈다: 기본 크기 4개에 더해 390x844·402x874 (run.mjs 의 extraSizes)
   { id: "lobby", run: lobbyFlow, extraSizes: LOBBY_EXTRA_SIZES },
   { id: "world", run: worldFlow, extraSizes: LOBBY_EXTRA_SIZES },
+  // 재접속·예산(06-18): 폰 크기와 곱하지 않고 자기 크기로 한 번. deployhold 는 배포와 동시에 돌리는 흐름(06-19)이라 --only 없이는 빠진다
+  { id: "reconnect", run: reconnectFlow, size: RECONNECT_SIZE },
+  { id: "deployhold", run: deployHoldFlow, size: RECONNECT_SIZE, skipByDefault: true },
   { id: "police5", run: game("police5", 5, "police", [...CLAIMS, "chat", "night", "morning", "day-intro", "rolecard-btn", "next-day"]) },
   { id: "citizen4", run: game("citizen4", 4, "citizen", [...CLAIMS, "night", "morning", "day-intro", "rolecard-citizen", "next-day"]) },
   { id: "mafia8", run: game("mafia8", 8, "mafia", [...CLAIMS, "night", "morning", "day-intro", "rolecard-btn", "next-day"]) },

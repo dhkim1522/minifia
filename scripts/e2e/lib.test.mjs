@@ -106,6 +106,16 @@ import {
   vignetteChecks,
   glowChecks,
   wakeLockChecks,
+  CONSOLE_ALLOW,
+  RECONNECT_KINDS,
+  RECONNECT_ROUNDS,
+  RESTORED_GONE_MS,
+  consoleIssues,
+  isLocalOrigin,
+  paintedFromStats,
+  reconnectChecks,
+  reconnectSummary,
+  selectFlows,
 } from "./lib.mjs";
 
 const PROD = "https://minifia-v2.dhplay.workers.dev\n";
@@ -2972,4 +2982,146 @@ test("결정 0056 개정 P10: 칩이 6 그래핌 이상 이름의 이름표와 �
   const none = placementChecks(snapWith("봇가나다라마바사", rect(300, 400, 36, 32)));
   assert.equal(none.ok, true);
   assert.equal(none.relaxed, undefined);
+});
+
+// ---- 재접속·예산·메모리 검사 (06-18) ----
+
+const goodRound = (n, over = {}) => ({ n, console: [], bannerLeft: false, bannerSeen: true, posDiff: 0.001, drift: 0.002, replayed: [], recovered: true, painted: true, ...over });
+const rounds10 = (over = {}) => Array.from({ length: 10 }, (_, i) => goodRound(i + 1, typeof over === "function" ? over(i + 1) : over));
+
+test("재접속 상수: 종류마다 10회·복구 2.5초·다섯 종류", () => {
+  assert.equal(RECONNECT_ROUNDS, 10);
+  assert.equal(RESTORED_GONE_MS, 2500);
+  assert.deepEqual(RECONNECT_KINDS.map((k) => k.id), ["offline", "frozen", "reload", "lose", "lose-idle"]);
+  // 끊김 종류만 띠가 떠야 하고, WebGL 두 종류만 다시 그려졌는지를 본다
+  assert.deepEqual(RECONNECT_KINDS.filter((k) => k.requireBannerSeen).map((k) => k.id), ["offline"]);
+  assert.deepEqual(RECONNECT_KINDS.filter((k) => k.requirePainted).map((k) => k.id), ["lose", "lose-idle"]);
+});
+
+test("consoleIssues: warning·error 만 보고, 허용 목록에 없는 것은 모두 issues 로 남는다", () => {
+  const r = consoleIssues(
+    [
+      { type: "log", text: "THREE.WebGLRenderer: Context Lost." },
+      { type: "debug", text: "[vite] connected." },
+      { type: "warning", text: "THREE.WebGLRenderer: WEBGL_lose_context extension not supported." },
+      { type: "error", text: "Uncaught TypeError: x" },
+    ],
+    { kind: "lose" },
+  );
+  assert.equal(r.issues.length, 2);
+  assert.match(r.issues[0], /\[warning\] THREE.*extension not supported/);
+  assert.match(r.issues[1], /\[error\] Uncaught/);
+  assert.deepEqual(r.allowed, {});
+  assert.deepEqual(consoleIssues(undefined), { issues: [], allowed: {} });
+});
+
+test("consoleIssues: 허용 목록은 이유·종류·로컬 조건이 맞을 때만 적용된다 (앱이 낸 경고는 어느 종류에서도 허용되지 않는다)", () => {
+  const preload = { type: "warning", text: "The resource http://localhost:5173/journals/a.svg was preloaded using link preload but not used within a few seconds from the window's load event." };
+  assert.deepEqual(consoleIssues([preload], { kind: "frozen" }), { issues: [], allowed: { "preload-unused": 1 } });
+  const off = { type: "error", text: "WebSocket connection to 'ws://localhost:5173/api/rooms/1/ws' failed: Error in connection establishment: net::ERR_INTERNET_DISCONNECTED" };
+  assert.equal(consoleIssues([off], { kind: "offline" }).issues.length, 0);
+  assert.equal(consoleIssues([off], { kind: "frozen" }).issues.length, 1); // 오프라인 종류가 아니면 허용하지 않는다
+  assert.equal(consoleIssues([{ type: "error", text: "Failed to load resource: net::ERR_CONNECTION_REFUSED" }], { kind: "offline" }).issues.length, 1); // 다른 네트워크 오류는 아니다
+  const dev = { type: "warning", text: "WebSocket connection to 'ws://localhost:5173/api/rooms/8961/ws' failed: WebSocket is closed before the connection is established." };
+  assert.equal(consoleIssues([dev], { kind: "reload", local: true }).issues.length, 0);
+  assert.equal(consoleIssues([dev], { kind: "reload", local: false }).issues.length, 1); // 배포 주소에서는 허용하지 않는다
+  assert.equal(consoleIssues([dev], { kind: "offline", local: true }).issues.length, 1);
+  for (const a of CONSOLE_ALLOW) assert.ok(a.reason.length > 10, `${a.id} 에 이유가 있다`);
+});
+
+test("isLocalOrigin: localhost·127.0.0.1 만 참이고 배포 주소·잘못된 값은 거짓이다 (T-06-41)", () => {
+  assert.equal(isLocalOrigin("http://localhost:5173"), true);
+  assert.equal(isLocalOrigin("http://127.0.0.1:5173"), true);
+  assert.equal(isLocalOrigin("https://minifia-v2.dhplay.workers.dev"), false);
+  assert.equal(isLocalOrigin("https://localhost.evil.example"), false);
+  assert.equal(isLocalOrigin("not a url"), false);
+});
+
+test("reconnectChecks: 열 번 모두 깨끗하면 RC1~RC5 가 통과한다 (끊김 종류는 RC6, WebGL 종류는 RC7 도)", () => {
+  const base = reconnectChecks(rounds10());
+  assert.deepEqual(base.map((x) => x.id), ["RC5", "RC1", "RC2", "RC3", "RC4"]);
+  for (const x of base) assert.equal(x.ok, true, `${x.id} ${x.detail}`);
+  const off = reconnectChecks(rounds10(), { requireBannerSeen: true, requirePainted: true });
+  assert.deepEqual(off.map((x) => x.id), ["RC5", "RC1", "RC2", "RC3", "RC4", "RC6", "RC7"]);
+  for (const x of off) assert.equal(x.ok, true, `${x.id} ${x.detail}`);
+});
+
+test("reconnectChecks RC5: 열 번을 채우지 못하거나 복구하지 못한 회가 있으면 실패한다 — 횟수를 줄여 초록을 만들 수 없다", () => {
+  const few = reconnectChecks(rounds10().slice(0, 9));
+  assert.equal(few.find((x) => x.id === "RC5").ok, false);
+  assert.match(few.find((x) => x.id === "RC5").detail, /9\/10/);
+  const stuck = reconnectChecks(rounds10((n) => (n === 4 ? { recovered: false } : {})));
+  assert.match(stuck.find((x) => x.id === "RC5").detail, /4회/);
+  assert.equal(reconnectChecks([]).find((x) => x.id === "RC5").ok, false);
+  assert.equal(reconnectChecks(undefined).find((x) => x.id === "RC5").ok, false);
+  // 기대 횟수를 바꾸면(deployhold 의 배포 직후 1회) 그 횟수에 맞는다
+  assert.equal(reconnectChecks(rounds10().slice(0, 1), { expectedRounds: 1 }).every((x) => x.ok), true);
+});
+
+test("reconnectChecks RC1: 콘솔 항목이 하나라도 있으면 실패하고 첫 항목을 보인다, 못 읽은 회는 측정값 없음", () => {
+  const r = reconnectChecks(rounds10((n) => (n === 2 ? { console: ["[warning] THREE x", "[error] y"] } : {})));
+  const c = r.find((x) => x.id === "RC1");
+  assert.equal(c.ok, false);
+  assert.match(c.detail, /2회 \[warning\] THREE x 외 1개/);
+  const unread = reconnectChecks(rounds10((n) => (n === 3 ? { console: undefined } : {})));
+  assert.match(unread.find((x) => x.id === "RC1").detail, /측정값 없음: 3회/);
+});
+
+test("reconnectChecks RC2: 띠가 남았거나 못 읽은 회는 실패한다", () => {
+  const stuck = reconnectChecks(rounds10((n) => (n === 5 ? { bannerLeft: true } : {})));
+  assert.match(stuck.find((x) => x.id === "RC2").detail, /5회 띠가 남음/);
+  const unread = reconnectChecks(rounds10((n) => (n === 6 ? { bannerLeft: null } : {})));
+  assert.match(unread.find((x) => x.id === "RC2").detail, /6회 측정값 없음/);
+});
+
+test("reconnectChecks RC3: 두 페이지 차나 복구 전 대비 어긋남이 0.3 을 넘거나 NaN 이면 실패한다 (경계 0.3 은 통과)", () => {
+  const over = reconnectChecks(rounds10((n) => (n === 1 ? { posDiff: 0.31 } : {})));
+  assert.equal(over.find((x) => x.id === "RC3").ok, false);
+  assert.match(over.find((x) => x.id === "RC3").detail, /1회 두 페이지 차 0\.31/);
+  assert.equal(reconnectChecks(rounds10((n) => (n === 1 ? { drift: 0.5 } : {}))).find((x) => x.id === "RC3").ok, false);
+  assert.equal(reconnectChecks(rounds10((n) => (n === 1 ? { posDiff: Number.NaN } : {}))).find((x) => x.id === "RC3").ok, false);
+  assert.equal(reconnectChecks(rounds10((n) => (n === 1 ? { posDiff: 0.3, drift: 0.3 } : {}))).find((x) => x.id === "RC3").ok, true);
+});
+
+test("reconnectChecks RC4: 복구 뒤 입장·퇴장 알림이 다시 뜨면 실패한다", () => {
+  const r = reconnectChecks(rounds10((n) => (n === 7 ? { replayed: ["손님 님 입장"] } : {})));
+  assert.equal(r.find((x) => x.id === "RC4").ok, false);
+  assert.match(r.find((x) => x.id === "RC4").detail, /7회 손님 님 입장/);
+});
+
+test("reconnectChecks RC6·RC7: 끊겨도 띠가 안 뜨거나 다시 그리지 못한 회가 있으면 해당 종류만 실패한다", () => {
+  const noBanner = reconnectChecks(rounds10((n) => (n === 8 ? { bannerSeen: false } : {})), { requireBannerSeen: true });
+  assert.match(noBanner.find((x) => x.id === "RC6").detail, /8회/);
+  const flat = reconnectChecks(rounds10((n) => (n === 9 ? { painted: false } : n === 10 ? { painted: null } : {})), { requirePainted: true });
+  assert.match(flat.find((x) => x.id === "RC7").detail, /9회 한 가지 색.*10회 측정값 없음/);
+  // 요구하지 않은 종류는 띠를 못 봐도, 그림 검사가 없어도 영향이 없다
+  assert.equal(reconnectChecks(rounds10({ bannerSeen: false, painted: null })).every((x) => x.ok), true);
+});
+
+test("reconnectSummary: 횟수·콘솔 건수·띠 잔류·위치 차 최대·허용 목록 적용을 한 줄로 남긴다", () => {
+  const line = reconnectSummary(rounds10((n) => (n === 2 ? { posDiff: 0.0123, console: ["x"] } : {})), { "preload-unused": 17 });
+  assert.match(line, /^10회/);
+  assert.match(line, /콘솔 경고·오류 1건/);
+  assert.match(line, /띠 잔류 0건/);
+  assert.match(line, /위치 차 최대 0\.0123/);
+  assert.match(line, /preload-unused 17/);
+  assert.match(reconnectSummary([]), /^0회.*위치 차 최대 읽지 못함.*없음/);
+});
+
+test("paintedFromStats: 색이 8가지 이상이고 한 색이 90% 미만이어야 그려진 것이다, 값이 없으면 null", () => {
+  assert.equal(paintedFromStats({ distinct: 200, dominantShare: 0.4 }), true);
+  assert.equal(paintedFromStats({ distinct: 1, dominantShare: 1 }), false); // 바탕색 한 가지
+  assert.equal(paintedFromStats({ distinct: 30, dominantShare: 0.95 }), false);
+  assert.equal(paintedFromStats({ distinct: 7, dominantShare: 0.2 }), false);
+  assert.equal(paintedFromStats(null), null);
+  assert.equal(paintedFromStats({ distinct: Number.NaN, dominantShare: 0.2 }), null);
+});
+
+test("selectFlows: --only 가 없으면 skipByDefault 흐름만 빠지고, --only 로 고르면 skipByDefault 라도 돈다", () => {
+  const flows = [{ id: "lobby" }, { id: "reconnect" }, { id: "deployhold", skipByDefault: true }, { id: "perfbudget" }];
+  assert.deepEqual(selectFlows(flows, null).map((f) => f.id), ["lobby", "reconnect", "perfbudget"]);
+  assert.deepEqual(selectFlows(flows, undefined).map((f) => f.id), ["lobby", "reconnect", "perfbudget"]);
+  assert.deepEqual(selectFlows(flows, "deployhold").map((f) => f.id), ["deployhold"]);
+  assert.deepEqual(selectFlows(flows, "reconnect").map((f) => f.id), ["reconnect"]);
+  assert.deepEqual(selectFlows(flows, "nothing"), []);
 });

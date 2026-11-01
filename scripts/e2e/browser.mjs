@@ -1062,6 +1062,154 @@ export async function leaveLobby(page) {
   }
 }
 
+// ---- 재접속·예산 도우미 (06-18) ----
+
+/**
+ * 재접속 흐름의 페이지 init 스크립트(시험 컨텍스트에만 들어간다, 함수라 직렬화되므로 바깥 값을 쓰지 않는다):
+ *  1) window.WebSocket 을 감싸 만들어진 소켓을 window.__e2eSockets 에 모은다 — 헤드리스 Chrome 은 오프라인 전환만으로 이미 열린 소켓을 끊지 않으므로(06-18 에서 잼)
+ *     시험이 setOffline(true) 와 함께 마지막 소켓을 닫아 네트워크 단절을 흉내 낸다. 앱 코드는 바뀌지 않는다.
+ *  2) 위쪽 토스트(.mv-toast.is-on)가 켜질 때마다 글자를 window.__e2eToasts 에 쌓는다(복구 뒤 지난 입장·퇴장 알림이 다시 뜨는지 보려고).
+ */
+export function reconnectInit() {
+  const Native = window.WebSocket;
+  const sockets = (window.__e2eSockets = []);
+  function Wrapped(...args) {
+    const ws = new Native(...args);
+    sockets.push(ws);
+    return ws;
+  }
+  Wrapped.prototype = Native.prototype;
+  for (const k of ["CONNECTING", "OPEN", "CLOSING", "CLOSED"]) Wrapped[k] = Native[k];
+  window.WebSocket = Wrapped;
+
+  const toasts = (window.__e2eToasts = []);
+  let wasOn = false;
+  let lastText = "";
+  const watch = () => {
+    new MutationObserver(() => {
+      const el = document.querySelector(".mv-toast.is-on");
+      const text = (el?.textContent ?? "").trim();
+      if (el && (!wasOn || text !== lastText) && text !== "") toasts.push(text);
+      wasOn = !!el;
+      lastText = text;
+    }).observe(document.documentElement, { subtree: true, childList: true, attributes: true, characterData: true });
+  };
+  if (document.documentElement) watch();
+  else document.addEventListener("DOMContentLoaded", watch);
+}
+
+/** 페이지의 warning·error 콘솔 메시지를 모은다(재접속 흐름의 RC1). take() 가 모은 것을 돌려주고 비운다. 어떤 것을 허용하는지는 lib.mjs 의 consoleIssues 가 정한다. */
+export function consoleCollector(page) {
+  let entries = [];
+  const onConsole = (m) => {
+    const type = m.type();
+    if (type === "warning" || type === "error") entries.push({ type, text: m.text() });
+  };
+  const onPageError = (e) => entries.push({ type: "error", text: String(e?.message ?? e) });
+  page.on("console", onConsole);
+  page.on("pageerror", onPageError);
+  return {
+    take() {
+      const out = entries;
+      entries = [];
+      return out;
+    },
+    stop() {
+      page.off("console", onConsole);
+      page.off("pageerror", onPageError);
+    },
+  };
+}
+
+/** CDP 로 페이지 수명 상태를 바꾼다("frozen" | "active") — 화면을 껐다 켠 것처럼. */
+export async function setLifecycle(page, state) {
+  const cdp = await page.context().newCDPSession(page);
+  try {
+    await cdp.send("Page.setWebLifecycleState", { state });
+  } finally {
+    await cdp.detach().catch(() => {});
+  }
+}
+
+/**
+ * 오프라인 흉내의 절반: 앱의 방 소켓(/api/rooms/…/ws)만 닫는다(reconnectInit 이 있어야 한다). 닫은 소켓 수를 돌려준다.
+ * 개발 서버의 vite HMR 소켓은 건드리지 않는다 — 닫으면 vite 클라이언트가 서버를 다시 찾아 페이지를 새로 불러온다(06-18 에서 잼).
+ */
+export function dropSockets(page) {
+  return page.evaluate(() => {
+    const list = window.__e2eSockets ?? [];
+    let n = 0;
+    for (const ws of list) {
+      if (!String(ws.url).includes("/api/rooms/")) continue;
+      if (ws.readyState === 0 || ws.readyState === 1) {
+        ws.close();
+        n += 1;
+      }
+    }
+    return n;
+  });
+}
+
+/** 재접속 상태 한 장: 띠·맵 카드·맵 상태·캔버스 수·토스트 켜짐·마지막 소켓이 열려 있나·쌓인 토스트. 페이지가 다시 불러오는 중이라 읽지 못하면 null. */
+export async function readLinkState(page) {
+  try {
+    return await page.evaluate(() => ({
+      banners: document.querySelectorAll(".mf-reconnect").length,
+      banner: document.querySelector(".mf-reconnect")?.textContent ?? null,
+      cards: document.querySelectorAll(".mf-mapcard").length,
+      card: document.querySelector(".mf-mapcard")?.textContent ?? null,
+      status: window.__mfWorld?.status?.() ?? null,
+      hook: !!window.__mfWorld,
+      canvases: document.querySelectorAll(".mf-world__canvas canvas").length,
+      toastOn: !!document.querySelector(".mv-toast.is-on"),
+      lastSocketOpen: (() => {
+        const list = (window.__e2eSockets ?? []).filter((ws) => String(ws.url).includes("/api/rooms/"));
+        return list.length > 0 && list[list.length - 1].readyState === 1;
+      })(),
+      toasts: [...(window.__e2eToasts ?? [])],
+    }));
+  } catch {
+    return null;
+  }
+}
+
+/** 쌓인 토스트 기록을 비운다. */
+export function clearToasts(page) {
+  return page.evaluate(() => {
+    if (window.__e2eToasts) window.__e2eToasts.length = 0;
+  });
+}
+
+/**
+ * 맵 캔버스만 찍어(겹쳐 얹힌 가림막·이름표·헤더는 가려서) 색 통계를 낸다 — 복구 뒤 첫 프레임이 바탕색 한 가지가 아닌지 보려고(RESEARCH A9).
+ * 돌려주는 값: { distinct (4비트로 줄인 서로 다른 색 수), dominantShare (가장 흔한 색의 비율) } 또는 캔버스가 없으면 null.
+ */
+export async function readPaintStats(page) {
+  const canvas = page.locator(".mf-world__canvas canvas").first();
+  if ((await canvas.count()) === 0) return null;
+  const png = await canvas.screenshot({ style: ".mf-lobby__scrim,.mf-world__tags,.mf-world__input,.mf-lobby__header,.mf-lobby__panel,.mf-lobby__test,.mv-toast,.mf-reconnect,.mf-mapcard{visibility:hidden !important}", timeout: 5000 });
+  const b64 = png.toString("base64");
+  return page.evaluate(async (data) => {
+    const blob = await (await fetch(`data:image/png;base64,${data}`)).blob();
+    const bmp = await createImageBitmap(blob);
+    const c = document.createElement("canvas");
+    c.width = bmp.width;
+    c.height = bmp.height;
+    const ctx = c.getContext("2d");
+    ctx.drawImage(bmp, 0, 0);
+    const px = ctx.getImageData(0, 0, c.width, c.height).data;
+    const counts = new Map();
+    let total = 0;
+    for (let i = 0; i < px.length; i += 12) {
+      const key = ((px[i] >> 4) << 8) | ((px[i + 1] >> 4) << 4) | (px[i + 2] >> 4);
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+      total += 1;
+    }
+    const top = Math.max(...counts.values());
+    return { distinct: counts.size, dominantShare: total === 0 ? 1 : top / total };
+  }, b64);
+}
+
 // ---- 게임 흐름 조작(과제 2) ----
 
 const stepTo = async (tracker, pred, label) => tracker.waitFor(pred, 3000, label);

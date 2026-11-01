@@ -8,7 +8,9 @@ import { NICKNAME_MAX_GRAPHEMES, countGraphemes } from "../../shared/nickname";
 import { TIMELESS_PHASES } from "../../src/game/scenes";
 import { BLANK_TAP_SLOP_PX } from "../../src/game/blankTap";
 import { EXEC_INTRO_MS, VERDICT_TEXT } from "../../src/game/verdict";
+import { RESTORED_MS } from "../../src/net/linkReducer";
 import { STAGE_SIZES } from "../../src/world/camera";
+import { FAIL_AFTER_MS, RECREATE_AFTER_MS } from "../../src/world/status";
 // 타입 선언이 없는 .mjs 다(allowJs 없음).
 // @ts-expect-error -- 선언 없는 스크립트 모듈
 import * as e2eLib from "../../scripts/e2e/lib.mjs";
@@ -84,5 +86,18 @@ describe("E2E 가 shared/game/map.ts 원문에서 읽는 걸을 수 있는 칸 (
       expect(lib.graphemeCount(t)).toBe(countGraphemes(t));
     }
     expect(lib.graphemeCount("방장이름여덟글자")).toBe(NICKNAME_MAX_GRAPHEMES);
+  });
+});
+
+describe("E2E 재접속·예산 사본과 앱 상수 (06-18)", () => {
+  const lib = e2eLib as { RESTORED_GONE_MS: number };
+
+  it("RESTORED_GONE_MS 는 앱의 띠 유지 시간(RESTORED_MS) 보다 길다 — 복구 뒤 이 시간에 띠가 남았으면 앱이 못 지운 것이다", () => {
+    expect(lib.RESTORED_GONE_MS).toBeGreaterThan(RESTORED_MS);
+  });
+
+  it("복구 대기 상한(15초)이 앱의 재생성(3초)·포기(5초) 시각보다 충분히 크다", () => {
+    expect(RECREATE_AFTER_MS).toBeLessThan(FAIL_AFTER_MS);
+    expect(FAIL_AFTER_MS + 2_000 + RECREATE_AFTER_MS).toBeLessThan(15_000);
   });
 });

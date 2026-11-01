@@ -21,6 +21,7 @@ import {
   parseArgs,
   redact,
   resolveTarget,
+  selectFlows,
 } from "./lib.mjs";
 
 const secrets = [];
@@ -84,7 +85,8 @@ try {
   process.exit(2);
 }
 
-const flows = FLOWS.filter((f) => args.only === null || f.id.includes(args.only) || args.only.startsWith(f.id));
+// skipByDefault 흐름(deployhold, 06-18)은 --only 로 고를 때만 돈다 — 배포와 동시에 돌리는 흐름이라 전체 실행에서는 뺀다.
+const flows = selectFlows(FLOWS, args.only);
 if (flows.length === 0) {
   emit(`중단: --only ${args.only} 에 맞는 흐름이 없음 (흐름: ${FLOWS.map((f) => f.id).join(", ")})`);
   process.exit(2);
