@@ -154,7 +154,7 @@ export function DayScene({ view, connection, myRoleButton, testButton, arrivedFr
   const isAllySeat = (seat: number): boolean => allies.includes(seat) || (spectate !== undefined && seat !== view.me.seat && jobOf(seat) === "mafia");
   // 투표 구간(execVote~)이면 제목·안내·타이머 톤·하단·좌석 덧입힘을 이 값이 정한다. 아니면 null 이라 낮·밤·아침 경로는 그대로다(verdictScene.tsx).
 // 필드마다 `verdict?.field ?? 기존` 으로 읽는다 — 처형 무효로 온 밤은 layer(회색 카드)·introDelayMs(밤 시작 문구 지연)만 채워져 나머지는 기존 밤 값이 쓰인다(04-24).
-  const verdict = useVerdictScene({ view, connection, meAlive, showToast, lines: chatLines, onInspect: setInspectSeat, isAllySeat });
+  const verdict = useVerdictScene({ view, connection, meAlive, showToast, onInspect: setInspectSeat, isAllySeat });
   // 기록 카드가 열릴 수 있는 단계(04-27): 투표 구간은 verdict 가 정하고(처형 여부 모두·후보 선택 탈락 viewer·그 밖 닫힘), 아니면 낮 세 단계다.
   // 열려 있는데 허용되지 않는 단계가 되면 렌더 중 상태 조정으로 닫는다(밤 규칙과 같은 방식). 낮 → 낮 사이에는 닫히지 않는다.
   const inspectAllowed = verdict?.inspectAllowed ?? inspectable;
@@ -274,7 +274,7 @@ export function DayScene({ view, connection, myRoleButton, testButton, arrivedFr
           {verdict?.sceneOverlay}
         </div>
         {isMorning ? <MorningCard {...morningCardText(view.day?.morning, nicknameOf)} exitDelayMs={morningExit.delay} /> : null}
-        <section key={`panel-${view.phase}`} className={`mf-dayscene__panel mf-dayscene__enter${verdict?.panelClassName ? ` ${verdict.panelClassName}` : ""}`}>
+        <section key={`panel-${view.phase}`} className="mf-dayscene__panel mf-dayscene__enter">
           {verdict?.bottom !== undefined ? (
             verdict.bottom
           ) : isMorning ? (

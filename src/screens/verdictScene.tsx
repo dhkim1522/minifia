@@ -1,10 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { isAlive } from "../../shared/game/alive";
-import type { ChatLine, RoomView } from "../../shared/protocol";
+import type { RoomView } from "../../shared/protocol";
 import { CandidateVotePanel } from "../components/CandidateVotePanel";
 import type { DayTableLayout, DayTableProps, DayTableSeat } from "../components/DayTable";
-import { DefenseChips } from "../components/DefenseChips";
 import { DefensePanel } from "../components/DefensePanel";
 import { ExecIntroCard } from "../components/ExecIntroCard";
 import { ExecVotePanel } from "../components/ExecVotePanel";
@@ -38,7 +37,7 @@ import { useViewChoice } from "../net/useViewChoice";
 // 이 훅은 서버 view 만 따른다. 단계나 승패를 화면이 스스로 정하지 않고, 역할 문자열을 만들지 않는다.
 // 투표 단계에는 말하기·이모티콘 입구가 없다(D-12 개정, P-7): FLOAT_PHASES·CHAT_PHASES 에 이 단계들이 없어 말풍선·이모티콘·채팅 줄도 뜨지 않는다.
 // 처형(execution, 04-23)은 변론 무대를 그대로 이어 간다(후보는 같은 가운데 자리, 유령으로 바뀌고 앰버 카드가 뜬다). 하단은 모두에게 같은 두 줄이고 입구가 없다.
-// 최후 변론(defense, 04-21)은 예외다 — 후보의 변론이 말풍선·채팅 줄이 되고 나머지 생존자는 이모티콘을 보낸다(두 집합에 defense 가 있다). 후보 본인의 변론 칩 6개(DefenseChips, 04-22)는 같은 자리에서 하단 패널을 236 으로 키운다.
+// 최후 변론(defense)의 하단은 후보 본인을 포함한 모두에게 같은 상태 줄(DefensePanel)이고, 탈락 viewer 는 관전 알약이다 — 빠른 메시지·이모티콘 입구가 없다(CHAT-06).
 
 export interface VerdictSceneCtx {
   view: RoomView;
@@ -47,8 +46,6 @@ export interface VerdictSceneCtx {
   meAlive: boolean;
   /** 위쪽 토스트 */
   showToast: (text: string) => void;
-  /** 이 폰이 이 단계에서 받은 채팅 줄(최후 변론의 하단 채팅 3줄, DayScene 의 useDayChat) */
-  lines: ChatLine[];
   /** 좌석을 눌렀을 때 열 기록 카드(DayScene 이 쥔 상태) */
   onInspect: (seat: number) => void;
   /** 이 자리가 마피아 동료로 보이는가(살아 있는 마피아의 me.allies, 관전자 화면의 모든 마피아). DayScene 이 마름모를 그리는 규칙과 같은 값이다 */
@@ -78,8 +75,6 @@ export interface VerdictScene {
   layer?: DayTableProps["layer"];
   /** DayScene 루트(<main>)에 더할 클래스: 최후 변론·처형은 헤더와 하단 패널을 어둡게 층 위로 올린다(mf-dayscene--verdict) */
   rootClassName?: string;
-  /** 하단 패널 <section> 에 더할 클래스: 최후 변론의 후보 본인만 높이 236 변형(mf-dayscene__panel--tall, 04-22) */
-  panelClassName?: string;
   /** 장면 상자(.mf-dayscene__scene) 안, DayTable 뒤에 그릴 덧그림: 처형 단계의 앰버 카드(04-23) */
   sceneOverlay?: ReactNode;
   /** DayTable 에 그대로 잇는 선택 prop(어둡게+흐림 층 verdict) */
@@ -102,7 +97,7 @@ function stageHalos(view: RoomView, candidate: number, isAllySeat: (seat: number
 // 서버가 보낸 행동을 거절하는 단계: 여부 투표와 후보 선택(04-18 이 같은 효과를 쓴다). 밤 대상 선택의 토스트는 DayScene 이 밤에만 구독하므로 겹치지 않는다.
 const REJECTING_PHASES: ReadonlySet<RoomView["phase"]> = new Set<RoomView["phase"]>(["execVote", "candidateVote"]);
 
-export function useVerdictScene({ view, connection, meAlive, showToast, lines, onInspect, isAllySeat }: VerdictSceneCtx): VerdictScene | null {
+export function useVerdictScene({ view, connection, meAlive, showToast, onInspect, isAllySeat }: VerdictSceneCtx): VerdictScene | null {
   const rejecting = REJECTING_PHASES.has(view.phase);
   const { onEvent } = connection;
   useEffect(() => {
@@ -269,24 +264,11 @@ export function useVerdictScene({ view, connection, meAlive, showToast, lines, o
       instruction: defenseInstruction(n, mine ? null : cand.nickname),
       calm: true,
       inspectAllowed: false,
-      // 후보 본인: 제목·안내·변론 칩 6개(04-22, 높이 236 변형). 그 밖: 변론하는 중 + 이모티콘, 탈락 viewer 는 관전 알약
-      bottom: mine ? (
-        <DefenseChips view={view} connection={connection} showToast={showToast} />
-      ) : (
-        <DefensePanel
-          view={view}
-          connection={connection}
-          showToast={showToast}
-          lines={lines}
-          candidateNickname={cand.nickname}
-          candidateConnected={cand.connected}
-          readOnly={!meAlive}
-        />
-      ),
+      // 후보 본인·다른 사람 모두 같은 상태 줄(변론하는 중 · N초), 탈락 viewer 는 관전 알약
+      bottom: <DefensePanel view={view} connection={connection} candidateNickname={cand.nickname} candidateConnected={cand.connected} readOnly={!meAlive} />,
       // 좌석은 버튼이 아니다(onPick·onInspect 없음): 기록 카드가 열리지 않는다
       seatPatch: (seat) => ({ halo: kinds.get(seat) ?? "none", ...(seat === candidate ? { center: true } : {}) }),
       rootClassName: "mf-dayscene--verdict",
-      ...(mine ? { panelClassName: "mf-dayscene__panel--tall" } : {}),
       tableProps: { verdict: { dimPercent: VERDICT_DIM_PERCENT, blurPx: VERDICT_BLUR_PX } },
     };
   }

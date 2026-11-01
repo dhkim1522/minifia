@@ -94,7 +94,7 @@ function nightAnnounceBase(view: RoomView): string {
   }
 }
 
-// 최후 변론 안내: 후보 본인이면 `내 최후 변론. 변론할 말을 고르세요`, 남이면 `{이름}님의 최후 변론`. 후보를 못 찾으면(서버 이상) `최후 변론`.
+// 최후 변론 안내: 후보 본인이면 `내 최후 변론`, 남이면 `{이름}님의 최후 변론`. 후보를 못 찾으면(서버 이상) `최후 변론`.
 function defenseAnnounceOf(view: RoomView): string {
   const seat = view.day?.candidate;
   if (seat === undefined) return "최후 변론";

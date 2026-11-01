@@ -40,7 +40,6 @@ export const CHIP_H = 24; // UI-SPEC 8.3: 표수 칩 높이
 export const CHIP_H_LEAD = 32; // UI-SPEC 4·8.3: 강조(유일한 최다 득표) 칩 높이
 export const CHIP_W = 28; // UI-SPEC 8.3: 표수 칩 최소 폭
 export const CHIP_W_LEAD = 36; // UI-SPEC 8.3: 강조 칩 폭
-export const DEFENSE_SENT_MS = 2000; // UI-SPEC 8.4 P-8: 후보 본인 안내 줄이 '보냈어요 · 문장' 으로 바뀌는 시간
 export const RESULT_BANNER_MS = 360; // UI-SPEC 11.2: 배너 팝
 export const RESULT_FLIP_AT_MS = 300; // UI-SPEC 11.2: 카드가 직업 그림으로 바뀌는 시각
 export const RESULT_FLIP_MS = 360; // UI-SPEC 11.2: 카드 scale 1 → 1.06 → 1
@@ -429,8 +428,6 @@ export const VERDICT_TEXT = {
   // candidateVoteReveal: 첫 화살표(단계 시작 400ms 뒤) 전에만 보이는 기본 제목. 진행 중·끝 상태 문구는 revealCaption 이 만든다
   revealIntroTitle: "투표 공개",
   // defense
-  defenseChooseTitle: "변론할 말을 고르세요",
-  defenseChooseHint: "한 번에 하나씩 보낼 수 있어요",
   // execution
   executionCardSub: "처형이 집행됐어요",
   executionDoneTitle: "처형이 끝났어요", // P-10: 이 시점 클라이언트는 승패를 모른다
@@ -468,13 +465,9 @@ export function defenseDisconnected(name: string): string {
 export function defenseInstruction(n: number, name: string | null): string {
   return name === null ? `${n}일차 · 내 변론` : `${n}일차 · ${name}님의 변론`;
 }
-/** 후보 본인이 말을 보낸 직후 DEFENSE_SENT_MS 동안의 안내 줄 (P-8) */
-export function defenseSent(sentence: string): string {
-  return `보냈어요 · ${sentence}`;
-}
 /** 변론 단계 안내(aria-live). name 이 null 이면 후보 본인 */
 export function defenseAnnounce(name: string | null): string {
-  return name === null ? "내 최후 변론. 변론할 말을 고르세요" : `${name}님의 최후 변론`;
+  return name === null ? "내 최후 변론" : `${name}님의 최후 변론`;
 }
 
 /** 처형 여부 투표 집계 줄: 앞(굵게)과 뒤(회색). 남은 사람 수 = 생존자 − (찬성 + 반대), 음수면 0 (D-35) */
