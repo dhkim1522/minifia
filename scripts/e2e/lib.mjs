@@ -1945,6 +1945,12 @@ export const RECONNECT_KINDS = [
   { id: "lose", label: "WebGL 소실·복구", requireBannerSeen: false, requirePainted: true },
   { id: "lose-idle", label: "WebGL 소실 후 방치(재생성)", requireBannerSeen: false, requirePainted: true },
 ];
+/** src/world/renderer.ts 의 DRAW_CALL_BUDGET 과 같다 — test/unit/e2eContract.test.ts 가 고정한다. */
+export const DRAW_CALL_BUDGET = 120;
+/** 동적 점광원 상한(UI-SPEC 렌더 성능 게이트 예산: 동적 광원 ≤ 3 + 반구광 1). */
+export const POINT_LIGHT_BUDGET = 3;
+/** 맵을 5번 열고 닫는 횟수(UI-SPEC 메모리 행). */
+export const REOPEN_ROUNDS = 5;
 
 /**
  * 콘솔 경고·오류 허용 목록. 재접속 때문에 생기는 메시지가 아니거나, 시험이 일부러 만든 조건을 브라우저 자신이 기록한 것만 올린다.
@@ -2065,6 +2071,77 @@ export function reconnectSummary(rounds, allowedTotals = {}) {
     .map(([id, n]) => `${id} ${n}`)
     .join(", ");
   return `${list.length}회 · 콘솔 경고·오류 ${list.reduce((a, r) => a + (Array.isArray(r.console) ? r.console.length : 0), 0)}건 · 띠 잔류 ${list.filter((r) => r.bannerLeft === true).length}건 · 위치 차 최대 ${max((r) => r.posDiff)} · 복구 전 대비 최대 ${max((r) => r.drift)} · 띠 본 횟수 ${list.filter((r) => r.bannerSeen).length} · 허용 목록 적용 ${allowed === "" ? "없음" : allowed}`;
+}
+
+/**
+ * 한 장면의 렌더 예산 판정(성공 기준 4 의 자동 몫, RESEARCH R2.3-6). info = { calls, pointLights?, ... } (window.__mfWorld.debug.info() 또는 __mfPerf.result.renderer).
+ * maxCalls 는 draw call 상한, maxPointLights 가 숫자면 점광원도 본다. 값이 없으면 통과하지 않고 측정값 없음으로 실패한다.
+ * scene = 결과 표의 구분 글자.
+ */
+export function budgetChecks(info, { maxCalls = DRAW_CALL_BUDGET, maxPointLights = null, scene = "" } = {}) {
+  const tag = scene === "" ? "" : `(${scene})`;
+  const rows = [];
+  const callsBad = !info || !isNumber(info.calls) ? ["측정값 없음(calls)"] : info.calls > maxCalls ? [`draw call ${info.calls} > ${maxCalls}`] : info.calls <= 0 ? [`draw call ${info.calls} (그려지지 않음)`] : [];
+  rows.push(result("B1", `draw call ≤ ${maxCalls}${tag}`, callsBad));
+  if (maxPointLights !== null) {
+    const lightsBad = !info || !isNumber(info.pointLights) ? ["측정값 없음(pointLights)"] : info.pointLights > maxPointLights ? [`점광원 ${info.pointLights} > ${maxPointLights}`] : [];
+    rows.push(result("B2", `동적 점광원 ≤ ${maxPointLights}${tag}`, lightsBad));
+  }
+  return rows;
+}
+
+/**
+ * 맵 열고 닫기 뒤 메모리 원복(UI-SPEC 메모리 행): snapshots = [{ geometries, textures }] 첫 칸이 처음 연 맵이고 나머지가 다시 연 맵.
+ * 다시 열 때마다 geometries·textures 가 처음 값보다 늘지 않아야 한다(증가 0). expected = 전체 표본 수(처음 + 다시 열기).
+ */
+export function memoryStableChecks(snapshots, { expected = REOPEN_ROUNDS + 1 } = {}) {
+  const label = `맵 ${expected - 1}번 열고 닫아도 geometries·textures 가 늘지 않음`;
+  const list = Array.isArray(snapshots) ? snapshots : [];
+  const bad = [];
+  if (list.length !== expected) bad.push(`표본 ${list.length}/${expected}개`);
+  const base = list[0];
+  if (!base || !isNumber(base.geometries) || !isNumber(base.textures)) bad.push("측정값 없음(처음 연 맵의 geometries·textures)");
+  else {
+    list.slice(1).forEach((s, i) => {
+      if (!s || !isNumber(s.geometries) || !isNumber(s.textures)) bad.push(`${i + 1}번째 다시 열기: 측정값 없음`);
+      else {
+        if (s.geometries > base.geometries) bad.push(`${i + 1}번째 geometries ${s.geometries} > 처음 ${base.geometries}`);
+        if (s.textures > base.textures) bad.push(`${i + 1}번째 textures ${s.textures} > 처음 ${base.textures}`);
+      }
+    });
+  }
+  return result("M1", label, bad);
+}
+
+/** 콘솔에 "Too many active WebGL contexts" 경고가 없다(맵을 여러 번 열고 닫을 때 컨텍스트가 새지 않는다). entries = [{ type, text }]. */
+export function contextLeakChecks(entries) {
+  const hits = (Array.isArray(entries) ? entries : []).filter((e) => /Too many active WebGL contexts/i.test(String(e?.text ?? "")));
+  return result("M2", "'Too many active WebGL contexts' 경고 없음", hits.length > 0 ? [`${hits.length}건: ${String(hits[0].text).slice(0, 100)}`] : []);
+}
+
+/** 월드 청크(three 렌더러·캐릭터 모듈) 요청 주소인가 — 개발 서버(/src/world/threeRenderer.ts)와 빌드(assets/threeRenderer-해시.js) 모두. */
+export function isWorldChunkUrl(url) {
+  let path;
+  try {
+    path = new URL(url).pathname;
+  } catch {
+    return false;
+  }
+  return /(?:^|\/)(?:threeRenderer|character)(?:[-.][\w-]+)?\.(?:ts|js)$/.test(path);
+}
+
+/**
+ * 월드 청크 요청을 막았을 때의 화면 판정(UI-SPEC UI Considerations E1 error): "맵을 불러오지 못했어요" 카드와 [다시 시도] 가 보이고, 캔버스가 없어 흰·검은 화면이 남지 않는다.
+ * v = { title: string|null, retryVisible: boolean, canvases: number }
+ */
+export function chunkFailChecks(v) {
+  const label = "청크 요청 실패 → '맵을 불러오지 못했어요' 카드·[다시 시도], 캔버스 없음";
+  if (!v || typeof v !== "object") return result("E1", label, ["측정값 없음"]);
+  const bad = [];
+  if (v.title !== "맵을 불러오지 못했어요") bad.push(`카드 제목 ${v.title === null ? "없음" : `"${v.title}"`}`);
+  if (v.retryVisible !== true) bad.push("[다시 시도] 버튼이 안 보임");
+  if (v.canvases !== 0) bad.push(`캔버스 ${v.canvases}개가 남음(흰·검은 화면)`);
+  return result("E1", label, bad);
 }
 
 /**

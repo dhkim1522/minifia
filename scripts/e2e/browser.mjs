@@ -60,10 +60,11 @@ export function launchChrome(executablePath) {
 /**
  * 방장으로 붙은 휴대폰 크기 페이지를 연다.
  * 선택 인자(05-07): mobile = true(거짓이면 isMobile·hasTouch 를 꺼 데스크톱 창처럼 연다), guest = true(06-17: 방장이 아니라 손님으로 붙는다 — 방장 확인 대신 로비 도달을 기다린다),
- * initScripts = [] (세션 init 스크립트 다음에 순서대로 addInitScript 할 함수 또는 문자열 — 시험 컨텍스트에만 들어간다).
+ * initScripts = [] (세션 init 스크립트 다음에 순서대로 addInitScript 할 함수 또는 문자열 — 시험 컨텍스트에만 들어간다),
+ * preRoute = async (context) => {} (06-18: 페이지를 열기 전에 컨텍스트에 요청 가로채기를 더한다 — 막아야 할 요청이 첫 요청일 때. route.fallback() 으로 넘기면 아래 대상 밖 차단이 이어 받는다).
  * 돌려주는 값: { context, page, tracker, takeIssues, fontOk, fontDetail }
  */
-export async function openHostPage(browser, { origin, code, token, size, dpr, mobile = true, initScripts = [], guest = false }) {
+export async function openHostPage(browser, { origin, code, token, size, dpr, mobile = true, initScripts = [], guest = false, preRoute = null }) {
   const context = await browser.newContext({
     viewport: { width: size.w, height: size.h },
     deviceScaleFactor: dpr,
@@ -108,6 +109,7 @@ export async function openHostPage(browser, { origin, code, token, size, dpr, mo
     }
   }, WORLD_HOOK_KEY);
   for (const script of initScripts) await context.addInitScript(script);
+  if (preRoute) await preRoute(context);
 
   const page = await context.newPage();
   page.setDefaultTimeout(8000);
@@ -1208,6 +1210,42 @@ export async function readPaintStats(page) {
     const top = Math.max(...counts.values());
     return { distinct: counts.size, dominantShare: total === 0 ? 1 : top / total };
   }, b64);
+}
+
+/**
+ * 성능 스파이크 페이지(?perf=1…)를 세션 없이 새 컨텍스트로 연다. openHostPage 와 같은 뷰포트·모바일 설정·대상 밖 요청 차단.
+ * 돌려주는 값: { context, page, console } — console 은 consoleCollector. 부른 쪽이 context 를 닫는다.
+ */
+export async function openPerfPage(browser, { origin, size, query, dpr = 1 }) {
+  const context = await browser.newContext({ viewport: { width: size.w, height: size.h }, deviceScaleFactor: dpr, isMobile: true, hasTouch: true, locale: "ko-KR" });
+  try {
+    await context.route("**/*", (route) => {
+      let u;
+      try {
+        u = new URL(route.request().url());
+      } catch {
+        return route.continue();
+      }
+      if (u.origin === origin || FONT_HOSTS.includes(u.hostname)) return route.continue();
+      return route.abort();
+    });
+    const page = await context.newPage();
+    page.setDefaultTimeout(8000);
+    const collector = consoleCollector(page);
+    await page.goto(`${origin}/?${query}`, { waitUntil: "domcontentloaded" });
+    return { context, page, console: collector };
+  } catch (e) {
+    await context.close().catch(() => {});
+    throw e;
+  }
+}
+
+/** 게임 중(또는 역할 확인 중)에서 [테스트] 시트의 [대기실로 되돌리기] 를 눌러 대기실로 돌아온다(방은 남는다). */
+export async function backToLobby(page, tracker) {
+  await openTestSheet(page);
+  await clickInDialog(page, TT_LABEL, "대기실로 되돌리기");
+  await tracker.waitFor((v) => v.phase === "lobby", 5000, "대기실 복귀");
+  await page.waitForTimeout(300);
 }
 
 // ---- 게임 흐름 조작(과제 2) ----

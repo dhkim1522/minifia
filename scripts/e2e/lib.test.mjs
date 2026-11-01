@@ -107,11 +107,19 @@ import {
   glowChecks,
   wakeLockChecks,
   CONSOLE_ALLOW,
+  DRAW_CALL_BUDGET,
+  POINT_LIGHT_BUDGET,
   RECONNECT_KINDS,
   RECONNECT_ROUNDS,
+  REOPEN_ROUNDS,
   RESTORED_GONE_MS,
+  budgetChecks,
+  chunkFailChecks,
   consoleIssues,
+  contextLeakChecks,
   isLocalOrigin,
+  isWorldChunkUrl,
+  memoryStableChecks,
   paintedFromStats,
   reconnectChecks,
   reconnectSummary,
@@ -2989,10 +2997,13 @@ test("결정 0056 개정 P10: 칩이 6 그래핌 이상 이름의 이름표와 �
 const goodRound = (n, over = {}) => ({ n, console: [], bannerLeft: false, bannerSeen: true, posDiff: 0.001, drift: 0.002, replayed: [], recovered: true, painted: true, ...over });
 const rounds10 = (over = {}) => Array.from({ length: 10 }, (_, i) => goodRound(i + 1, typeof over === "function" ? over(i + 1) : over));
 
-test("재접속 상수: 종류마다 10회·복구 2.5초·다섯 종류", () => {
+test("재접속 상수: 종류마다 10회·복구 2.5초·다섯 종류·예산 120/3·열고 닫기 5회", () => {
   assert.equal(RECONNECT_ROUNDS, 10);
   assert.equal(RESTORED_GONE_MS, 2500);
   assert.deepEqual(RECONNECT_KINDS.map((k) => k.id), ["offline", "frozen", "reload", "lose", "lose-idle"]);
+  assert.equal(DRAW_CALL_BUDGET, 120);
+  assert.equal(POINT_LIGHT_BUDGET, 3);
+  assert.equal(REOPEN_ROUNDS, 5);
   // 끊김 종류만 띠가 떠야 하고, WebGL 두 종류만 다시 그려졌는지를 본다
   assert.deepEqual(RECONNECT_KINDS.filter((k) => k.requireBannerSeen).map((k) => k.id), ["offline"]);
   assert.deepEqual(RECONNECT_KINDS.filter((k) => k.requirePainted).map((k) => k.id), ["lose", "lose-idle"]);
@@ -3106,6 +3117,89 @@ test("reconnectSummary: 횟수·콘솔 건수·띠 잔류·위치 차 최대·�
   assert.match(line, /위치 차 최대 0\.0123/);
   assert.match(line, /preload-unused 17/);
   assert.match(reconnectSummary([]), /^0회.*위치 차 최대 읽지 못함.*없음/);
+});
+
+test("budgetChecks: calls ≤ 120 이면 B1 통과, 넘으면 실패하고 숫자를 말한다 (경계 120 은 통과)", () => {
+  assert.equal(budgetChecks({ calls: 120 }, { maxCalls: 120 })[0].ok, true);
+  const over = budgetChecks({ calls: 121 }, { maxCalls: 120 })[0];
+  assert.equal(over.ok, false);
+  assert.match(over.detail, /121 > 120/);
+  assert.equal(budgetChecks({ calls: 0 })[0].ok, false); // 그려지지 않은 장면은 통과가 아니다
+  assert.equal(budgetChecks({}, { maxCalls: 120 })[0].ok, false);
+  assert.match(budgetChecks(null)[0].detail, /측정값 없음/);
+  assert.match(budgetChecks({ calls: 5 }, { scene: "vote" })[0].label, /\(vote\)/);
+});
+
+test("budgetChecks B2: maxPointLights 를 주면 점광원 3 이하를 본다 (넘거나 값이 없으면 실패)", () => {
+  const ok = budgetChecks({ calls: 80, pointLights: 3 }, { maxCalls: 120, maxPointLights: 3 });
+  assert.deepEqual(ok.map((x) => x.id), ["B1", "B2"]);
+  assert.equal(ok.every((x) => x.ok), true);
+  const four = budgetChecks({ calls: 80, pointLights: 4 }, { maxCalls: 120, maxPointLights: 3 })[1];
+  assert.equal(four.ok, false);
+  assert.match(four.detail, /4 > 3/);
+  assert.equal(budgetChecks({ calls: 80 }, { maxCalls: 120, maxPointLights: 3 })[1].ok, false);
+  assert.equal(budgetChecks({ calls: 80 }, { maxCalls: 120 }).length, 1);
+});
+
+test("memoryStableChecks: 처음 연 맵 + 다시 연 5번이 모두 처음 값 이하면 통과, 하나라도 늘면 실패한다", () => {
+  const snap = (g = 40, t = 12) => ({ geometries: g, textures: t });
+  const six = [snap(), snap(), snap(), snap(), snap(), snap()];
+  assert.equal(memoryStableChecks(six).ok, true);
+  assert.equal(memoryStableChecks([snap(), snap(39), snap(40, 11), snap(), snap(), snap()]).ok, true); // 줄어드는 것은 새는 것이 아니다
+  const leak = memoryStableChecks([snap(), snap(), snap(), snap(42), snap(), snap(40, 13)]);
+  assert.equal(leak.ok, false);
+  assert.match(leak.detail, /3번째 geometries 42 > 처음 40/);
+  assert.match(leak.detail, /5번째 textures 13 > 처음 12/);
+});
+
+test("memoryStableChecks: 표본이 모자라거나 값이 없으면 통과하지 않는다", () => {
+  assert.match(memoryStableChecks([{ geometries: 1, textures: 1 }]).detail, /표본 1\/6개/);
+  assert.match(memoryStableChecks([]).detail, /표본 0\/6개/);
+  assert.match(memoryStableChecks(undefined).detail, /표본 0\/6개/);
+  const missing = memoryStableChecks([{ geometries: 40, textures: 12 }, null, {}, { geometries: 40 }, { geometries: 40, textures: 12 }, { geometries: 40, textures: 12 }]);
+  assert.equal(missing.ok, false);
+  assert.match(missing.detail, /1번째 다시 열기: 측정값 없음/);
+  assert.match(memoryStableChecks([{}, {}]  , { expected: 2 }).detail, /처음 연 맵/);
+  assert.equal(memoryStableChecks([{ geometries: 1, textures: 1 }, { geometries: 1, textures: 1 }], { expected: 2 }).ok, true);
+});
+
+test("contextLeakChecks: 'Too many active WebGL contexts' 경고가 있으면 실패한다", () => {
+  assert.equal(contextLeakChecks([{ type: "log", text: "x" }, { type: "warning", text: "something else" }]).ok, true);
+  const bad = contextLeakChecks([{ type: "warning", text: "WARNING: Too many active WebGL contexts. Oldest context will be lost." }]);
+  assert.equal(bad.ok, false);
+  assert.match(bad.detail, /1건/);
+  assert.equal(contextLeakChecks(undefined).ok, true);
+});
+
+test("isWorldChunkUrl: 개발 서버 모듈과 빌드 청크의 렌더러·캐릭터 모듈만 참이다", () => {
+  const yes = [
+    "http://localhost:5173/src/world/threeRenderer.ts",
+    "http://localhost:5173/src/world/threeRenderer.ts?t=1730000000",
+    "http://localhost:5173/src/world/character.ts",
+    "https://minifia-v2.dhplay.workers.dev/assets/threeRenderer-Ab12_cD.js",
+    "https://minifia-v2.dhplay.workers.dev/assets/character-9xZ.js",
+  ];
+  const no = [
+    "http://localhost:5173/src/world/characterData.ts",
+    "http://localhost:5173/src/world/runtime.ts",
+    "http://localhost:5173/src/world/renderer.ts",
+    "http://localhost:5173/characters/roles/police_default.png",
+    "http://localhost:5173/api/rooms/1/ws",
+    "그냥 글자",
+  ];
+  for (const u of yes) assert.equal(isWorldChunkUrl(u), true, u);
+  for (const u of no) assert.equal(isWorldChunkUrl(u), false, u);
+});
+
+test("chunkFailChecks: 카드 제목·[다시 시도]·캔버스 없음이 모두 맞아야 통과한다", () => {
+  assert.equal(chunkFailChecks({ title: "맵을 불러오지 못했어요", retryVisible: true, canvases: 0 }).ok, true);
+  const bad = chunkFailChecks({ title: null, retryVisible: false, canvases: 1 });
+  assert.equal(bad.ok, false);
+  assert.match(bad.detail, /카드 제목 없음/);
+  assert.match(bad.detail, /\[다시 시도\]/);
+  assert.match(bad.detail, /캔버스 1개/);
+  assert.match(chunkFailChecks({ title: "화면을 다시 그리지 못했어요", retryVisible: true, canvases: 0 }).detail, /카드 제목/);
+  assert.match(chunkFailChecks(null).detail, /측정값 없음/);
 });
 
 test("paintedFromStats: 색이 8가지 이상이고 한 색이 90% 미만이어야 그려진 것이다, 값이 없으면 null", () => {

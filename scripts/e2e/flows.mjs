@@ -6,6 +6,7 @@ import {
   SetupError,
   armIntroWatch,
   armVerdictWatch,
+  backToLobby,
   chooseRole,
   clearToasts,
   consoleCollector,
@@ -27,6 +28,7 @@ import {
   openChatHistory,
   openGuestJoinPage,
   openHostPage,
+  openPerfPage,
   openRoleCard,
   openTestSheet,
   pickCandidate,
@@ -75,17 +77,21 @@ import {
   LOBBY_EXTRA_SIZES,
   RECONNECT_KINDS,
   RECONNECT_ROUNDS,
+  REOPEN_ROUNDS,
   RESTORED_GONE_MS,
   ROLE_NAME,
   WORLD_SYNC_TOL,
   backdropSceneChecks,
+  budgetChecks,
   cancelTapChecks,
+  chunkFailChecks,
   candidateChecks,
   candidateGuideChecks,
   candidateRevealMs,
   claimChatIssues,
   colorRuleChecks,
   consoleIssues,
+  contextLeakChecks,
   dayChecks,
   defenseChecks,
   dimChecks,
@@ -100,10 +106,12 @@ import {
   inspectChecks,
   introChecks,
   isLocalOrigin,
+  isWorldChunkUrl,
   joinFitChecks,
   journalChecks,
   lineCount,
   livingRoleArtChecks,
+  memoryStableChecks,
   morningCardIssues,
   morningGoneChecks,
   sceneIntroChecks,
@@ -551,6 +559,8 @@ async function worldFlow(ctx) {
 
 /** reconnect·deployhold 흐름의 고정 크기(UI-SPEC 의 기본 폰). */
 const RECONNECT_SIZE = { w: 390, h: 664, label: "390x664" };
+/** perfbudget 흐름의 고정 크기: 승인 보드 폭(390×844). */
+const PERF_SIZE = { w: 390, h: 844, label: "390x844" };
 /** 복구 대기 상한(ms). 이 안에 끝나지 않으면 그 회는 복구 못 함(recovered false)으로 센다 — 상한을 늘려 초록을 만들지 않는다. */
 const RECOVER_LIMIT_MS = 15_000;
 /** deployhold: 로컬 흉내에서 띠가 뜨기를 기다리는 시간(ms), 실제 배포 직후에는 최대 6분(UI-SPEC). */
@@ -799,6 +809,126 @@ async function deployHoldFlow(ctx) {
     await pair.close();
   }
   await leaveLobby(pair.hp);
+}
+
+// ---- perfbudget (06-18, 성공 기준 4 의 자동 몫) ----
+
+const readInfo = (page) => page.evaluate(() => window.__mfWorld?.debug?.info?.() ?? null);
+const infoLine = (i) => (i ? `calls ${i.calls} · triangles ${i.triangles} · geometries ${i.geometries} · textures ${i.textures} · programs ${i.programs} · pointLights ${i.pointLights}` : "측정값 없음");
+
+async function perfBudgetFlow(ctx) {
+  const rec = recorder(ctx);
+  const sc = "perfbudget/talk";
+  const host = await startHost(ctx, "perfbudget", { nickname: LOBBY_HOST_NICK });
+  const { page, tracker } = host;
+  const cc = consoleCollector(page);
+  try {
+    // 1) 8명 로비(talk): 방장 + 봇 7
+    await waitWorldReady(page, 1);
+    await openTestSheet(page);
+    await setBots(page, tracker, 7);
+    await closeSheet(page);
+    await tracker.waitFor((v) => v.players.length === 8, 3000, "인원 8");
+    await waitWorldReady(page, 8);
+    await sleep(2000);
+    const talk = await readInfo(page);
+    for (const r of budgetChecks(talk, { maxCalls: 120, maxPointLights: 3, scene: "로비 8명" })) recOne(rec, sc, r);
+    infoRow(ctx, sc, "B0", "8명 로비 info() 기록(참고, 판정 아님)", infoLine(talk));
+
+    // 2) 성능 스파이크 vote 장면: 가장 무거운 조명. 가장 큰 프레임(callsMax)으로 본다
+    const perf = await openPerfPage(ctx.browser, { origin: ctx.origin, size: ctx.size, query: "perf=1&scene=vote&minutes=0.1&e2e=1" });
+    try {
+      const done = await attempt(async () => {
+        await perf.page.waitForFunction(() => window.__mfPerf?.result != null, null, { timeout: 45_000 });
+      });
+      if (!done.ok) rec("perfbudget/vote", "B1", "draw call ≤ 120(vote)", false, `결과가 45초 안에 나오지 않음: ${done.detail}`);
+      else {
+        const res = await perf.page.evaluate(() => window.__mfPerf.result.renderer);
+        for (const r of budgetChecks(res ? { calls: res.callsMax, pointLights: res.pointLights } : null, { maxCalls: 120, maxPointLights: 3, scene: "vote 스파이크" })) recOne(rec, "perfbudget/vote", r);
+        infoRow(ctx, "perfbudget/vote", "B0", "vote 스파이크 결과 기록(참고, 판정 아님)", res ? `${infoLine(res)} · callsMax ${res.callsMax}` : "측정값 없음");
+      }
+    } finally {
+      perf.console.stop();
+      await perf.context.close().catch(() => {});
+    }
+
+    // 3) 로비 → [시작] → 대기실 복귀를 5번: 다시 열린 맵의 geometries·textures 가 처음 값 이하, WebGL 컨텍스트 경고 없음.
+    // 봇은 서버 배회로 걸어 다녀 어느 캐릭터가 화면에 들어와 있는지에 따라 geometries 가 열 때마다 달라진다(같은 세션에서 29~52로 잼) — 늘었는지 아닌지를 가를 수 없다.
+    // 그래서 이 구간은 봇을 모두 내리고 가만히 서 있는 사람 손님 3명(방장 포함 4명, 시작 최소 인원)으로 돈다. 그러면 열 때마다 같은 장면이다.
+    await openTestSheet(page);
+    await setBots(page, tracker, 0);
+    await closeSheet(page);
+    const guests = [];
+    try {
+      for (let i = 1; i <= 3; i++) guests.push((await openGuest(ctx, `손님${i}`)).guest);
+      await tracker.waitFor((v) => v.players.length === 4, 5000, "인원 4");
+      await Promise.all([waitWorldReady(page, 4), ...guests.map((g) => waitWorldReady(g.page, 4))]);
+      await sleep(2000);
+      cc.take();
+      const snapshots = [await readInfo(page)];
+      const reopen = await attempt(async () => {
+        for (let i = 1; i <= REOPEN_ROUNDS; i++) {
+          await startGame(page, tracker);
+          await sleep(400);
+          await backToLobby(page, tracker);
+          await waitWorldReady(page, 4);
+          await sleep(1500);
+          snapshots.push(await readInfo(page));
+        }
+      });
+      if (!reopen.ok) rec("perfbudget/reopen", "M1", "맵 열고 닫기 5번", false, `${reopen.detail} (표본 ${snapshots.length}개)`);
+      else {
+        recOne(rec, "perfbudget/reopen", memoryStableChecks(snapshots));
+        recOne(rec, "perfbudget/reopen", contextLeakChecks(cc.take()));
+      }
+      infoRow(ctx, "perfbudget/reopen", "M0", "열고 닫기 표(처음, 1~5번째: geometries/textures)", snapshots.map((s) => (s ? `${s.geometries}/${s.textures}` : "없음")).join(" · "));
+    } finally {
+      for (const g of guests) await g.context.close().catch(() => {});
+    }
+  } finally {
+    cc.stop();
+  }
+  await leaveLobby(page);
+
+  // 4) 월드 청크 요청 실패: 카드 + [다시 시도], 흰·검은 화면 없음, 막기를 풀고 다시 시도하면 열림
+  const room = await createTestRoom(ctx.origin, LOBBY_HOST_NICK);
+  ctx.secrets.push(room.token);
+  let blocked = true;
+  const failed = await openHostPage(ctx.browser, {
+    origin: ctx.origin,
+    code: room.code,
+    token: room.token,
+    size: ctx.size,
+    dpr: 1,
+    preRoute: async (context) => {
+      await context.route("**/*", (route) => (blocked && isWorldChunkUrl(route.request().url()) ? route.abort() : route.fallback()));
+    },
+  });
+  try {
+    const fp = failed.page;
+    const card = await attempt(async () => {
+      await fp.waitForSelector(".mf-mapcard h2", { timeout: 15_000 });
+    });
+    if (!card.ok) rec("perfbudget/chunk", "E1", "청크 요청 실패 카드", false, `카드가 15초 안에 뜨지 않음: ${card.detail}`);
+    else {
+      await sleep(300);
+      const view = await fp.evaluate(() => ({
+        title: document.querySelector(".mf-mapcard h2")?.textContent?.trim() ?? null,
+        retryVisible: [...document.querySelectorAll(".mf-mapcard button")].some((b) => (b.textContent ?? "").trim() === "다시 시도" && b.getBoundingClientRect().width > 0),
+        canvases: document.querySelectorAll(".mf-world__canvas canvas").length,
+      }));
+      recOne(rec, "perfbudget/chunk", chunkFailChecks(view));
+      blocked = false;
+      const retry = await attempt(async () => {
+        await fp.getByRole("button", { name: "다시 시도" }).click({ timeout: 3000 });
+        await waitWorldReady(fp, 1, 20_000);
+      });
+      rec("perfbudget/chunk", "E1b", "막기를 풀고 [다시 시도] 하면 맵이 열림", retry.ok, retry.detail);
+    }
+    await leaveLobby(fp);
+  } finally {
+    await failed.context.close().catch(() => {});
+  }
 }
 
 const w360 = (ctx) => ctx.size.w <= 360;
@@ -2030,6 +2160,7 @@ export const FLOWS = [
   // 재접속·예산(06-18): 폰 크기와 곱하지 않고 자기 크기로 한 번. deployhold 는 배포와 동시에 돌리는 흐름(06-19)이라 --only 없이는 빠진다
   { id: "reconnect", run: reconnectFlow, size: RECONNECT_SIZE },
   { id: "deployhold", run: deployHoldFlow, size: RECONNECT_SIZE, skipByDefault: true },
+  { id: "perfbudget", run: perfBudgetFlow, size: PERF_SIZE },
   { id: "police5", run: game("police5", 5, "police", [...CLAIMS, "chat", "night", "morning", "day-intro", "rolecard-btn", "next-day"]) },
   { id: "citizen4", run: game("citizen4", 4, "citizen", [...CLAIMS, "night", "morning", "day-intro", "rolecard-citizen", "next-day"]) },
   { id: "mafia8", run: game("mafia8", 8, "mafia", [...CLAIMS, "night", "morning", "day-intro", "rolecard-btn", "next-day"]) },

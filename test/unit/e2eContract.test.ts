@@ -10,7 +10,8 @@ import { BLANK_TAP_SLOP_PX } from "../../src/game/blankTap";
 import { EXEC_INTRO_MS, VERDICT_TEXT } from "../../src/game/verdict";
 import { RESTORED_MS } from "../../src/net/linkReducer";
 import { STAGE_SIZES } from "../../src/world/camera";
-import { FAIL_AFTER_MS, RECREATE_AFTER_MS } from "../../src/world/status";
+import { DRAW_CALL_BUDGET } from "../../src/world/renderer";
+import { FAIL_AFTER_MS, MAP_STATUS_COPY, RECREATE_AFTER_MS } from "../../src/world/status";
 // 타입 선언이 없는 .mjs 다(allowJs 없음).
 // @ts-expect-error -- 선언 없는 스크립트 모듈
 import * as e2eLib from "../../scripts/e2e/lib.mjs";
@@ -90,7 +91,11 @@ describe("E2E 가 shared/game/map.ts 원문에서 읽는 걸을 수 있는 칸 (
 });
 
 describe("E2E 재접속·예산 사본과 앱 상수 (06-18)", () => {
-  const lib = e2eLib as { RESTORED_GONE_MS: number };
+  const lib = e2eLib as { DRAW_CALL_BUDGET: number; RESTORED_GONE_MS: number; isWorldChunkUrl: (u: string) => boolean };
+
+  it("DRAW_CALL_BUDGET 사본이 src/world/renderer.ts 의 DRAW_CALL_BUDGET 과 같다 (예산을 낮춰도 E2E 가 따라온다)", () => {
+    expect(lib.DRAW_CALL_BUDGET).toBe(DRAW_CALL_BUDGET);
+  });
 
   it("RESTORED_GONE_MS 는 앱의 띠 유지 시간(RESTORED_MS) 보다 길다 — 복구 뒤 이 시간에 띠가 남았으면 앱이 못 지운 것이다", () => {
     expect(lib.RESTORED_GONE_MS).toBeGreaterThan(RESTORED_MS);
@@ -99,5 +104,17 @@ describe("E2E 재접속·예산 사본과 앱 상수 (06-18)", () => {
   it("복구 대기 상한(15초)이 앱의 재생성(3초)·포기(5초) 시각보다 충분히 크다", () => {
     expect(RECREATE_AFTER_MS).toBeLessThan(FAIL_AFTER_MS);
     expect(FAIL_AFTER_MS + 2_000 + RECREATE_AFTER_MS).toBeLessThan(15_000);
+  });
+
+  it("청크 실패 카드의 제목이 E2E 가 기다리는 글자와 같다", () => {
+    expect(MAP_STATUS_COPY.loadFailed.title).toBe("맵을 불러오지 못했어요");
+    expect(MAP_STATUS_COPY.loadFailed.action).toBe("다시 시도");
+  });
+
+  it("isWorldChunkUrl 이 runtime.ts 가 import() 하는 두 모듈(threeRenderer·character)의 개발 서버 주소를 잡는다", () => {
+    const source = readFileSync(new URL("../../src/world/runtime.ts", import.meta.url), "utf8");
+    const modules = [...source.matchAll(/import\("\.\/(\w+)"\)/g)].map((m) => m[1]);
+    expect(modules.sort()).toEqual(["character", "threeRenderer"]);
+    for (const m of modules) expect(lib.isWorldChunkUrl(`http://localhost:5173/src/world/${m}.ts`)).toBe(true);
   });
 });
