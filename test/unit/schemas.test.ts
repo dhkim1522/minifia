@@ -173,3 +173,13 @@ describe("빠른 메시지(say)는 와이어에서 사라졌다 (07-11, CHAT-06)
     expect(ClientMessageSchema.safeParse(msg).success).toBe(false);
   });
 });
+
+describe("텍스트 이모티콘(emoji)은 와이어에서 사라졌다 (07-12, CHAT-06)", () => {
+  it.each([
+    ["웃는 얼굴", { t: "emoji", icon: "smile" }],
+    ["느낌표", { t: "emoji", icon: "exclaim" }],
+    ["모르는 아이콘", { t: "emoji", icon: "nope" }],
+  ])("%s 의 emoji 는 거부한다", (_name, msg) => {
+    expect(ClientMessageSchema.safeParse(msg).success).toBe(false);
+  });
+});
