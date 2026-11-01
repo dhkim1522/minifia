@@ -45,7 +45,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 **Milestone Goal:** 친구들이 한 공간에서 움직이고 떠들고 몸짓하며 서로를 의심하는 게임으로 바꿔 대면 마피아의 사교와 정치질을 옮긴다(결정 0044). 배포는 `minifia-v2` Worker.
 
-- [ ] **Phase 6: 월드 뼈대** - `minifia-v2` 에 배포하고, 로비 맵에서 서로의 캐릭터가 걸어 다니며, 이 방식이 실제 폰에서 버티는지 게이트로 확인한다
+- [x] **Phase 6: 월드 뼈대** - `minifia-v2` 에 배포하고, 로비 맵에서 서로의 캐릭터가 걸어 다니며, 이 방식이 실제 폰에서 버티는지 게이트로 확인한다 (completed 2026-11-01)
 - [ ] **Phase 7: 자유 채팅** - 로비부터 자유롭게 떠들고, 밤 마피아 채팅과 탈락자 채팅은 다른 편에게 네트워크로도 새지 않는다
 - [ ] **Phase 8: 낮 처형과 유령** - 토론 → 지목 → 변론 → 찬반 → 처형이 맵 위에서 돌고, 처형된 사람은 유령이 되어 끝까지 지켜본다
 - [ ] **Phase 9: 밤과 아침** - 마피아만 맵에서 움직여 암살하고 시민 편은 어둠 속에 있으며, 아침에 현장·유언·쪽지가 공개되어 한 판이 처음으로 맵 위에서 끝까지 돈다
@@ -66,7 +66,7 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. 화면을 껐다 켜거나 새로 고치거나 배포로 연결이 끊겼다 돌아와도 모든 캐릭터가 지금 위치로 이어지고, 보류했던 연결 계층 경고(WR-01~04)가 더는 나지 않는다. 시작 이후 한 판은 v1.0 흐름 그대로 끝까지 돈다 (MAP-05, CONN-04)
   4. 렌더 성능 게이트: three.js 아이소메트릭 맵(지하 재즈 바, 블록아웃 `design/v2.0/blockout/`, 결정 0050) 위에서 3D 조립 캐릭터 8명(원본 `design/v2.0/blockout/character.js`, 결정 0048)이 걷고 동작 2개를 하는 스파이크가 사용자 폰과 크롬 CPU 4배 스로틀(저가폰 대신, 결정 0055)에서 5분 평균 55fps 이상, 카메라 이동 끊김·발열·메모리 경고 없이 돌고 로비 조작이 3초 안에 반응한다. 미달이면 그림자·광원·건물 예산을 줄이고, 그래도 모자라면 맵을 시간대별 미리 구운 이미지로 바꾸기로 결정 기록에 남긴다 (MAP-01~03 의 렌더 방식 확정, 결정 0046)
 
-**Plans:** 23/23 plans executed (10 waves + 갭 닫기 2)
+**Plans:** 23/23 plans complete (10 waves + 갭 닫기 2)
 
 Plans:
 **Wave 1**
@@ -219,7 +219,7 @@ Phases execute in numeric order: 6 → 7 → 8 → 9 → 10 → 11 → 12 (소�
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 6. 월드 뼈대 | v2.0 | 23/23 | In Progress | - |
+| 6. 월드 뼈대 | v2.0 | 23/23 | Complete    | 2026-11-01 |
 | 7. 자유 채팅 | v2.0 | 0/TBD | Not started | - |
 | 8. 낮 처형과 유령 | v2.0 | 0/TBD | Not started | - |
 | 9. 밤과 아침 | v2.0 | 0/TBD | Not started | - |
