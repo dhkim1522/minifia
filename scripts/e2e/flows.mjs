@@ -134,6 +134,8 @@ import {
   paintedFromStats,
   parseBarMask,
   pickTapTargets,
+  deployHoldChecks,
+  deployObservedOf,
   reconnectChecks,
   reconnectSummary,
   tagStackChecks,
@@ -566,9 +568,13 @@ const RECONNECT_SIZE = { w: 390, h: 664, label: "390x664" };
 const PERF_SIZE = { w: 390, h: 844, label: "390x844" };
 /** 복구 대기 상한(ms). 이 안에 끝나지 않으면 그 회는 복구 못 함(recovered false)으로 센다 — 상한을 늘려 초록을 만들지 않는다. */
 const RECOVER_LIMIT_MS = 15_000;
-/** deployhold: 로컬 흉내에서 띠가 뜨기를 기다리는 시간(ms), 실제 배포 직후에는 최대 6분(UI-SPEC). */
+/** deployhold: 로컬 흉내에서 띠가 뜨기를 기다리는 시간(ms). */
 const DEPLOY_LOCAL_WAIT_MS = 40_000;
-const DEPLOY_REAL_WAIT_MS = 360_000;
+/**
+ * deployhold: 배포 주소의 관찰 창(ms). 배포는 소켓을 끊지 않으므로(Durable Object 하이버네이션) 띠를 6분 기다리지 않는다.
+ * 0 이 아닌 이유: 관찰이 도는 동안 사용자가 배포 한 번을 넣을 수 있어야 한다.
+ */
+const DEPLOY_REAL_OBSERVE_MS = 120_000;
 
 const dist = (p, q) => (p && q ? Math.hypot(p.x - q.x, p.z - q.z) : Number.NaN);
 
@@ -773,10 +779,29 @@ function touchWorkerFile() {
   utimesSync(file, now, now);
 }
 
+/** 대상 주소의 /api/health version(배포 표식). 읽지 못하거나 모양이 다르면 빈 글자. */
+async function healthVersion(origin) {
+  try {
+    const res = await fetch(`${origin}/api/health`, { cache: "no-store" });
+    const body = await res.json();
+    return typeof body?.version === "string" ? body.version : "";
+  } catch {
+    return "";
+  }
+}
+
+/** 두 페이지의 앱 방 소켓 수가 앞뒤로 그대로이고 마지막 소켓이 열려 있나. 못 읽으면 null. */
+function socketsKeptOf(beforeStates, afterStates) {
+  if (![...beforeStates, ...afterStates].every((st) => st && Number.isFinite(st.roomSockets))) return null;
+  return beforeStates.every((b, i) => b.roomSockets === afterStates[i].roomSockets && afterStates[i].lastSocketOpen === true);
+}
+
 /**
- * 배포 직후 재접속(deployhold, CONN-04·MAP-05): 로비의 두 페이지가 기다리다 재접속 띠가 떴다 사라지면 위치·콘솔을 본다.
- * 로컬(localhost)에서는 worker/room.ts 의 파일 시각을 갱신해 배포를 10회 흉내 낸다 — 소켓이 끊기지 않으면 "미확인"으로 남긴다(가정 A1).
- * 배포본 주소에서는 파일을 건드리지 않고 한 회만, 06-19 가 배포와 동시에 돌리며 띠가 뜰 때까지 최대 6분 기다린다.
+ * 배포 직후 재접속(deployhold, CONN-04·MAP-05).
+ * 로컬(localhost): 로비의 두 페이지가 기다리다 재접속 띠가 떴다 사라지면 위치·콘솔을 본다. worker/room.ts 의 파일 시각을 갱신해 배포를 10회 흉내 낸다 —
+ *   40초 안에 소켓이 끊기지 않으면 첫 회에 "미확인"(DH0)으로 남긴다(가정 A1).
+ * 배포 주소: 파일을 건드리지 않고 1회, 관찰 창(DEPLOY_REAL_OBSERVE_MS) 동안 기다린다. 배포는 소켓을 끊지 않으므로 띠를 기다리지 않는다.
+ *   관찰 창 앞뒤 /api/health version 이 바뀌었을 때(배포 신호)만 deployHoldChecks 가 '띠 없음·소켓 유지·위치 차·콘솔 0' 을 판정하고, 아니면 DH0 미확인 참고 행이다.
  */
 async function deployHoldFlow(ctx) {
   const rec = recorder(ctx);
@@ -786,22 +811,32 @@ async function deployHoldFlow(ctx) {
   let unconfirmed = false;
   try {
     const total = pair.local ? RECONNECT_ROUNDS : 1;
-    const waitMs = pair.local ? DEPLOY_LOCAL_WAIT_MS : DEPLOY_REAL_WAIT_MS;
     for (let n = 1; n <= total; n++) {
       await calmPair(pair);
-      if (pair.local) touchWorkerFile();
-      const seen = await waitBannerCycle(pair, waitMs);
-      if (pair.local && n === 1 && !seen.hostSeen && !seen.guestSeen) {
-        unconfirmed = true;
-        break;
+      if (pair.local) {
+        touchWorkerFile();
+        const seen = await waitBannerCycle(pair, DEPLOY_LOCAL_WAIT_MS);
+        if (n === 1 && !seen.hostSeen && !seen.guestSeen) {
+          unconfirmed = true;
+          break;
+        }
+        const recovered = seen.gone && (await waitLink([pair.hp, pair.gp], linkRecovered, RECOVER_LIMIT_MS));
+        rounds.push(await collectRound(ctx, pair, { n, kind: "deploy", recovered, bannerSeen: seen.hostSeen && seen.guestSeen }));
+        continue;
       }
-      const recovered = seen.gone && (await waitLink([pair.hp, pair.gp], linkRecovered, RECOVER_LIMIT_MS));
-      rounds.push(await collectRound(ctx, pair, { n, kind: "deploy", recovered, bannerSeen: seen.hostSeen && seen.guestSeen }));
+      const before = await Promise.all([readLinkState(pair.hp), readLinkState(pair.gp)]);
+      const versionBefore = await healthVersion(ctx.origin);
+      const seen = await waitBannerCycle(pair, DEPLOY_REAL_OBSERVE_MS);
+      const versionAfter = await healthVersion(ctx.origin);
+      const recovered = await waitLink([pair.hp, pair.gp], linkRecovered, RECOVER_LIMIT_MS);
+      const after = await Promise.all([readLinkState(pair.hp), readLinkState(pair.gp)]);
+      const round = await collectRound(ctx, pair, { n, kind: "deploy", recovered, bannerSeen: seen.hostSeen || seen.guestSeen });
+      rounds.push({ ...round, socketsKept: socketsKeptOf(before, after), deployObserved: deployObservedOf(versionBefore, versionAfter) });
     }
     if (unconfirmed) {
       infoRow(ctx, sc, "DH0", "배포 직후 흉내: 미확인(참고, 판정 아님)", `worker/room.ts 의 파일 시각을 갱신해도 ${DEPLOY_LOCAL_WAIT_MS / 1000}초 안에 소켓이 끊겨 띠가 뜨지 않음 — 06-08 의 퇴거 복원 테스트와 06-19 의 실제 배포 1회로 갈음(가정 A1)`);
     } else {
-      for (const r of reconnectChecks(rounds, { expectedRounds: pair.local ? RECONNECT_ROUNDS : 1, requireBannerSeen: true })) recOne(rec, sc, r);
+      for (const r of deployHoldChecks(rounds, { local: pair.local })) recOne(rec, sc, r);
       const allowed = {};
       for (const r of rounds) for (const [id, c] of Object.entries(r.allowed ?? {})) allowed[id] = (allowed[id] ?? 0) + c;
       infoRow(ctx, sc, "RC9", `배포 직후${pair.local ? "(로컬 흉내)" : ""} 요약(참고, 판정 아님)`, reconnectSummary(rounds, allowed));
@@ -1164,7 +1199,7 @@ const mySeatOf = (tracker) => tracker.last()?.me?.seat ?? -1;
 const nickOf = (view, seat) => view?.players.find((p) => p.seat === seat)?.nickname ?? "";
 const jobNames = (view) => (view?.day?.roles ?? []).map((r) => ROLE_NAME[r]);
 const isDeadView = (view) => view?.players.find((p) => p.seat === view.me.seat)?.alive === false;
-const recOne = (rec, scenario, r) => rec(scenario, r.id, r.label, r.ok, r.detail, r.relaxed === true);
+const recOne = (rec, scenario, r) => rec(scenario, r.id, r.label, r.ok, r.detail, r.relaxed === true || r.info === true);
 const recAll = (rec, scenario, list) => {
   for (const r of list) recOne(rec, scenario, r);
 };

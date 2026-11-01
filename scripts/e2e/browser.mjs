@@ -1157,7 +1157,7 @@ export function dropSockets(page) {
   });
 }
 
-/** 재접속 상태 한 장: 띠·맵 카드·맵 상태·캔버스 수·토스트 켜짐·마지막 소켓이 열려 있나·쌓인 토스트. 페이지가 다시 불러오는 중이라 읽지 못하면 null. */
+/** 재접속 상태 한 장: 띠·맵 카드·맵 상태·캔버스 수·토스트 켜짐·마지막 소켓이 열려 있나·앱 방 소켓 총수(roomSockets, 재연결하면 늘어난다)·쌓인 토스트. 페이지가 다시 불러오는 중이라 읽지 못하면 null. */
 export async function readLinkState(page) {
   try {
     return await page.evaluate(() => ({
@@ -1173,6 +1173,7 @@ export async function readLinkState(page) {
         const list = (window.__e2eSockets ?? []).filter((ws) => String(ws.url).includes("/api/rooms/"));
         return list.length > 0 && list[list.length - 1].readyState === 1;
       })(),
+      roomSockets: (window.__e2eSockets ?? []).filter((ws) => String(ws.url).includes("/api/rooms/")).length,
       toasts: [...(window.__e2eToasts ?? [])],
     }));
   } catch {

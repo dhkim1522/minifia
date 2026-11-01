@@ -2105,13 +2105,45 @@ export function reconnectChecks(rounds, { expectedRounds = RECONNECT_ROUNDS, req
   return rows;
 }
 
-/** (06-23 RED 임시 뼈대 — 다음 커밋에서 구현) */
-export function deployObservedOf() {
-  return false;
+/** 관찰 창 앞뒤 /api/health version 이 둘 다 비어 있지 않은 글자이고 서로 다르면 true, 아니면 false(읽지 못함 포함). 배포가 있었다는 유일한 신호다. */
+export function deployObservedOf(beforeVersion, afterVersion) {
+  const readable = (v) => typeof v === "string" && v.trim() !== "";
+  return readable(beforeVersion) && readable(afterVersion) && beforeVersion !== afterVersion;
 }
-/** (06-23 RED 임시 뼈대 — 다음 커밋에서 구현) */
-export function deployHoldChecks() {
-  return [];
+
+/**
+ * deployhold(CONN-04·MAP-05) 판정. 라운드 = collectRound 결과 + { socketsKept: boolean|null, deployObserved: boolean|null }.
+ * 로컬(local): 이전 판정 그대로 — 10회, 띠가 떠야 통과(reconnectChecks 의 RC1~RC6).
+ * 배포 주소: Durable Object 하이버네이션 때문에 배포가 소켓을 끊지 않으므로 띠를 기다리지 않는다. 배포 신호(deployObserved)가 있는 1회만 판정한다:
+ *   RC5·RC1~RC4(RC6 없음) + DH1. 신호가 없으면(false·null·없음) 배포 없이 조용히 지나간 창이 초록이 되지 않게, 통과로 세지 않는 DH0 참고 행({ ok: true, info: true }) 하나만 돌려준다.
+ * DH1 통과: (bannerSeen false 이고 socketsKept true) 또는 (bannerSeen true 이고 recovered true).
+ * DH1 실패: bannerSeen false 인데 socketsKept 가 true 가 아님(소켓이 조용히 바뀜 또는 측정 못 함), bannerSeen true 인데 recovered 가 true 가 아님.
+ */
+export function deployHoldChecks(rounds, { local = false } = {}) {
+  if (local) return reconnectChecks(rounds, { expectedRounds: RECONNECT_ROUNDS, requireBannerSeen: true });
+  const list = Array.isArray(rounds) ? rounds : [];
+  if (list.length === 0 || list.some((r) => r?.deployObserved !== true)) {
+    return [
+      {
+        id: "DH0",
+        label: "배포 직후 확인: 미확인(참고, 판정 아님)",
+        ok: true,
+        info: true,
+        detail: "관찰 창 앞뒤 /api/health version 이 같거나 읽지 못함 — 배포 신호 없음 — 통과로 세지 않음. 배포와 함께 다시 돌려야 한다",
+      },
+    ];
+  }
+  const rows = reconnectChecks(list, { expectedRounds: 1, requireBannerSeen: false });
+  const bad = [];
+  for (const r of list) {
+    if (r.bannerSeen === true) {
+      if (r.recovered !== true) bad.push(`${r.n}회 띠가 떴으나 복구하지 못함`);
+    } else if (r.socketsKept !== true) {
+      bad.push(`${r.n}회 띠 없이 소켓이 조용히 바뀜${r.socketsKept === null || r.socketsKept === undefined ? "(소켓 유지 측정값 없음)" : ""}`);
+    }
+  }
+  rows.push(result("DH1", "배포 직후: 띠 없이 소켓이 유지되거나, 띠가 떴으면 사라지고 복구됨", bad.slice(0, 3)));
+  return rows;
 }
 
 /** 라운드 결과를 한 줄 기록으로(참고 행): 횟수·허용 경고·위치 차 최대·띠 본 횟수. 판정이 아니다. */
