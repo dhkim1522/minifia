@@ -300,7 +300,11 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
     // 소실·재생성 동안만 1초 tick 으로 시간을 알린다
     const ticking = next.status === "lost" || next.status === "recreating";
     if (ticking && tickTimer === null) {
-      tickTimer = setInterval(() => dispatch({ t: "tick", now: Date.now() }), TICK_MS);
+      tickTimer = setInterval(() => {
+        // 숨은 탭에서는 세지 않는다. 돌아오면 onVisibility 의 visible 이벤트가 시계를 그때부터 다시 시작한다(06 리뷰 WR-02).
+        if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
+        dispatch({ t: "tick", now: Date.now() });
+      }, TICK_MS);
     } else if (!ticking && tickTimer !== null) {
       clearInterval(tickTimer);
       tickTimer = null;

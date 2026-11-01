@@ -985,6 +985,53 @@ describe("화면 숨김·복귀 (UI-SPEC 연결·복귀 상태)", () => {
     expect(r.views.at(-1)!.target.x).toBeCloseTo(Math.min(4.8, pos.x), 6);
   });
 
+  it("숨은 채 소실되면 숨은 시간은 세지 않는다: 오래 숨었다 돌아와도 곧바로 실패 카드가 되지 않고 돌아온 때부터 센다 (WR-02)", async () => {
+    const s = await open();
+    const r = s.world.renderers[0]!;
+    setVisibility("hidden");
+    r.lost = true;
+    act(() => r.emit({ t: "lost" }));
+    act(() => {
+      vi.advanceTimersByTime(20000); // 숨어 있는 20초 — 예전에는 3초에 재생성, 5초에 영구 실패
+    });
+    expect(r.recreate).not.toHaveBeenCalled();
+    expect(screen.queryByText("화면을 다시 그리지 못했어요")).toBeNull();
+    setVisibility("visible");
+    expect(screen.getByText("화면을 다시 그리는 중…")).toBeTruthy();
+    act(() => {
+      vi.advanceTimersByTime(1100);
+    });
+    expect(screen.queryByText("화면을 다시 그리지 못했어요")).toBeNull();
+    expect(r.recreate).not.toHaveBeenCalled();
+    act(() => {
+      vi.advanceTimersByTime(2200); // 돌아온 뒤 3초 → 재생성 한 번
+    });
+    await flush();
+    expect(r.recreate).toHaveBeenCalledTimes(1);
+    expect(rootOf(s.utils).classList.contains("is-open")).toBe(true);
+  });
+
+  it("재생성 중에 숨었다 돌아와도 숨은 시간 때문에 영구 실패로 굳지 않는다 (WR-02)", async () => {
+    const s = await open();
+    const r = s.world.renderers[0]!;
+    r.recreate = vi.fn(() => new Promise<void>(() => {}));
+    r.lost = true;
+    act(() => r.emit({ t: "lost" }));
+    frames(3200); // 재생성 시작
+    expect(r.recreate).toHaveBeenCalledTimes(1);
+    setVisibility("hidden");
+    act(() => {
+      vi.advanceTimersByTime(30000);
+    });
+    expect(screen.queryByText("화면을 다시 그리지 못했어요")).toBeNull();
+    setVisibility("visible");
+    act(() => {
+      vi.advanceTimersByTime(1100);
+    });
+    expect(screen.queryByText("화면을 다시 그리지 못했어요")).toBeNull();
+    expect(r.recreate).toHaveBeenCalledTimes(1);
+  });
+
   it("다시 보일 때 컨텍스트가 이미 소실돼 있으면 소실 경로로 들어간다", async () => {
     const s = await open();
     const r = s.world.renderers[0]!;

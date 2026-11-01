@@ -192,9 +192,18 @@ describe("숨김 중 소실 (visible 이벤트)", () => {
     expect(again).toEqual({ status: "lost", lostAt: 30000 });
     expect(mapStatusReducer(again, { t: "tick", now: 30500 })).toBe(again);
   });
-  it("recreating 중 visible(true) 는 재생성 시계를 되돌리지 않는다 (재생성은 한 번)", () => {
+  it("recreating 중 visible(true) 는 상태를 그대로 두고 숨은 시간만 세지 않는다: 시계를 돌아온 때로 옮기고 재생성은 다시 시작하지 않는다 (WR-02)", () => {
     const rec = run([{ t: "ready" }, { t: "lost", at: 1000 }, { t: "tick", now: 4000 }]);
-    expect(mapStatusReducer(rec, { t: "visible", contextLost: true, at: 4100 })).toBe(rec);
+    const back = mapStatusReducer(rec, { t: "visible", contextLost: true, at: 60000 });
+    expect(back).toEqual({ status: "recreating", lostAt: 60000 });
+    expect(shouldRecreate(rec, back)).toBe(false); // 재생성은 소실 한 번에 한 번(T-06-06)
+    // 숨어 있던 59초 때문에 곧바로 failed 로 굳지 않는다
+    expect(mapStatusReducer(back, { t: "tick", now: 60500 })).toBe(back);
+    expect(mapStatusReducer(back, { t: "tick", now: 65000 })).toEqual({ status: "failed", lostAt: 60000 });
+  });
+  it("recreating 중 visible(true) 의 at 이 소실 시각 이하이면 시계를 되돌리지 않는다", () => {
+    const rec = run([{ t: "ready" }, { t: "lost", at: 1000 }, { t: "tick", now: 4000 }]);
+    expect(mapStatusReducer(rec, { t: "visible", contextLost: true, at: 1000 })).toBe(rec);
   });
   it("lost 에서 visible(false) 는 그대로(복구는 restored 이벤트로만)", () => {
     const l = lostAt(1000);

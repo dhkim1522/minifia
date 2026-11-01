@@ -70,7 +70,10 @@ export function mapStatusReducer(s: MapStatusState, e: MapStatusEvent): MapStatu
     case "visible": {
       if (!e.contextLost) return s;
       if (s.status === "ready") return { status: "lost", lostAt: e.at };
-      if (s.status === "lost" && s.lostAt !== null && e.at > s.lostAt) return { status: "lost", lostAt: e.at };
+      // lost·recreating 모두 시계를 돌아온 때로 옮긴다(상태는 그대로라 shouldRecreate 가 다시 참이 되지 않는다: 재생성은 한 번).
+      if ((s.status === "lost" || s.status === "recreating") && s.lostAt !== null && e.at > s.lostAt) {
+        return { status: s.status, lostAt: e.at };
+      }
       return s;
     }
   }
