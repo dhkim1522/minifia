@@ -268,6 +268,22 @@ describe("탈락자 채팅 (CHAT-03, 채널 ghost)", () => {
     expect(r.container.textContent).not.toContain("밤 · 마피아 채팅");
   });
 
+  it("처형 직후 곧바로 밤이 와서 사이에 다른 줄이 없으면 유령 시작 줄은 연달아 두 번 보이지 않고, 사이에 말이 오갔으면 밤마다 다시 생긴다", () => {
+    const r = scene(makeView({ phase: "execution", role: "citizen", chat: "all" }));
+    vi.setSystemTime(T0 + 500);
+    r.rerender(makeView({ phase: "execution", role: "citizen", dead: [0], chat: "ghost" }));
+    vi.setSystemTime(T0 + 1000);
+    r.rerender(ghostView("night"));
+    expect(sysTexts(r.container)).toEqual(["유령 채팅 · 산 사람에게 안 보여요"]);
+    // 아침·낮을 지나며 말이 오간 뒤의 다음 밤에는 다시 안내가 나온다
+    r.rerender(ghostView("morning", 1));
+    r.rerender(ghostView("discussion", 2));
+    receive(r.chat, "all", 2, 1, "낮 이야기", T0 + 1500);
+    vi.setSystemTime(T0 + 2000);
+    r.rerender(ghostView("night", 2));
+    expect(sysTexts(r.container)).toEqual(["유령 채팅 · 산 사람에게 안 보여요", "유령 채팅 · 산 사람에게 안 보여요"]);
+  });
+
   it("재접속(epoch 변화)이나 처음 마운트한 밤에는 유령 시작 줄을 만들지 않는다", () => {
     const first = scene(ghostView("night"));
     expect(sysTexts(first.container)).toEqual([]);

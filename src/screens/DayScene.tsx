@@ -180,8 +180,12 @@ export function DayScene({ view, connection, chat, myRoleButton, testButton, arr
     if (cur.channel === "mafia") {
       if (cur.phase === "night" && (phaseChanged || prev.channel !== "mafia")) chat.addSystem(CHAT_TEXT.channelStart.mafia, { scope: "mafia", icon: "roleMafia", at });
     } else if (cur.channel === "ghost") {
-      // 탈락했을 때(채널이 ghost 로 바뀐 렌더)와 탈락자의 밤마다
-      if (prev.channel !== "ghost" || (phaseChanged && cur.phase === "night")) chat.addSystem(CHAT_TEXT.channelStart.ghost, { scope: "ghost", icon: "ghost", at });
+      // 탈락했을 때(채널이 ghost 로 바뀐 렌더)와 탈락자의 밤마다. 처형 직후 곧바로 밤이 와서 사이에 다른 줄이 없으면 같은 안내가 연달아 두 번 보이지 않게 한다.
+      if (prev.channel !== "ghost" || (phaseChanged && cur.phase === "night")) {
+        const last = chat.lines().at(-1);
+        const repeated = last !== undefined && last.kind === "system" && last.text === CHAT_TEXT.channelStart.ghost;
+        if (!repeated) chat.addSystem(CHAT_TEXT.channelStart.ghost, { scope: "ghost", icon: "ghost", at });
+      }
     }
   }, [view, connection.epoch, connection.offset, chat]);
   const verdict = useVerdictScene({ view, connection, meAlive, showToast, onInspect: setInspectSeat, isAllySeat, chatBottom });
