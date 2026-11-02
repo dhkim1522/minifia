@@ -34,6 +34,18 @@ export interface WorldState {
   segs: Readonly<Record<string, Segment>>;
   lastMoveAt: Readonly<Record<string, number>>;
   wanderAt: Readonly<Record<string, number>>;
+  lay?: LayoutMemo;
+}
+
+/** RED 자리표시자 */
+export interface LayoutMemo {
+  key: string;
+  slots: Readonly<Record<string, readonly [number, number]>>;
+}
+
+/** RED 자리표시자 */
+export function forceSegment(w: WorldState, _playerId: string, _seg: Segment): WorldState {
+  return w;
 }
 
 /** 고정소수점 실수 좌표(반올림 전)의 구간 위치. 누적 길이 선형 보간, 길이 0 선분은 건너뛴다. */
@@ -177,6 +189,7 @@ export function moveFrame(seat: number, seg: Segment): Extract<WorldFrame, { k: 
 export interface StoredWorld {
   v: 1;
   segs: Record<string, Segment>;
+  lay?: LayoutMemo;
 }
 
 /** 퇴장: 구간·간격·배회 기록을 모두 지운다. */

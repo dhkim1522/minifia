@@ -20,6 +20,7 @@ import {
   compactWorld,
   despawnPlayer,
   emptyWorld,
+  forceSegment,
   moveFrame,
   nextWanderAt,
   planMoveSegment,
@@ -675,5 +676,150 @@ describe("nextWanderAt", () => {
     expect(nextWanderAt(w, [])).toBeNull();
     expect(nextWanderAt(w, ["zzz"])).toBeNull();
     expect(nextWanderAt(emptyWorld(), ["a"])).toBeNull();
+  });
+});
+
+// ---- 08-04: 무대 한 점 복원·forceSegment·배치 기억 lay (사용자 확정 2026-11-02, Pitfall 5·6, T-08-19) ----
+describe("restoreWorld — 무대 한 점 구간 (Pitfall 6)", () => {
+  it("한 점 [0,0] 구간은 그대로 복원한다(입장 지점으로 보내지 않는다)", () => {
+    const r = restoreWorld({ v: 1, segs: { [ID(0)]: { p: [0, 0], t0: 1, v: 180 } } }, PLAYERS, 5000, BAR_MAP);
+    expect(r.segs[ID(0)]).toEqual({ p: [0, 0], t0: 1, v: 180 });
+  });
+
+  it("무대에서 걸어 나오는 구간 [0,0, 265,0] 도 복원한다", () => {
+    const stored = { v: 1, segs: { [ID(0)]: { p: [0, 0, 265, 0], t0: 1, v: 180 } } };
+    expect(restoreWorld(stored, PLAYERS, 5000, BAR_MAP).segs[ID(0)]!.p).toEqual([0, 0, 265, 0]);
+  });
+
+  it("무대 근처 막힌 점 [10,0] 은 입장 지점으로 보낸다(예외는 정확히 한 점)", () => {
+    const r = restoreWorld({ v: 1, segs: { [ID(0)]: { p: [10, 0], t0: 1, v: 180 } } }, PLAYERS, 5000, BAR_MAP);
+    expect(r.segs[ID(0)]).toEqual({ p: SPAWNS_FX[0], t0: 5000, v: 180 });
+  });
+
+  it("무대를 가로지르는 구간 [-265,0, 265,0] 은 여전히 입장 지점으로 보낸다", () => {
+    const r = restoreWorld({ v: 1, segs: { [ID(0)]: { p: [-265, 0, 265, 0], t0: 1, v: 180 } } }, PLAYERS, 5000, BAR_MAP);
+    expect(r.segs[ID(0)]).toEqual({ p: SPAWNS_FX[0], t0: 5000, v: 180 });
+  });
+
+  it("무대에 선 사람의 구간은 compactWorld → JSON → restoreWorld 를 거쳐도 [0,0] 이다", () => {
+    const w = forceSegment(spawnPlayer(emptyWorld(), ID(0), 0, 1000, BAR_MAP), ID(0), restSegment(0, 0, 2000));
+    const restored = restoreWorld(JSON.parse(JSON.stringify(compactWorld(w, 3000))), PLAYERS, 3100, BAR_MAP);
+    expect(restored.segs[ID(0)]!.p).toEqual([0, 0]);
+  });
+
+  it("planMoveSegment: 무대 자리에서 출발하는 길은 [0,0, …] 으로 시작해 목적지에서 끝난다", () => {
+    const seg = planMoveSegment(restSegment(0, 0, 1000), { x: 360, z: 40 }, 2000, BAR_MAP);
+    expect(`${seg.p[0]},${seg.p[1]}`).toBe("0,0");
+    expect(`${seg.p.at(-2)},${seg.p.at(-1)}`).toBe("360,40");
+    for (let i = 0; i + 3 < seg.p.length; i += 2) {
+      expect(lineWalkable(BAR_MAP, { x: seg.p[i]!, z: seg.p[i + 1]! }, { x: seg.p[i + 2]!, z: seg.p[i + 3]! })).toBe(true);
+    }
+  });
+});
+
+describe("forceSegment — 서버 주도 이동 (Pitfall 5)", () => {
+  const seg: Segment = { p: [0, 265, 187, 187], t0: 5000, v: 180 };
+
+  it("그 사람 구간만 바꾸고 lastMoveAt·wanderAt 은 같은 객체 그대로다(간격 검사를 건드리지 않는다)", () => {
+    const base = requestMove(busyWorld(), ID(7), { x: 40, z: 360 }, 3000, BAR_MAP);
+    const w = must(base).world;
+    const out = forceSegment(w, ID(7), seg);
+    expect(out.segs[ID(7)]).toEqual(seg);
+    for (const pl of PLAYERS) if (pl.id !== ID(7)) expect(out.segs[pl.id]).toBe(w.segs[pl.id]);
+    expect(out.lastMoveAt).toBe(w.lastMoveAt);
+    expect(out.wanderAt).toBe(w.wanderAt);
+    expect(out.lastMoveAt[ID(7)]).toBe(3000);
+  });
+
+  it("간격(150ms) 안이어도 적용된다 — 사람이 바로 탭해도 막히지 않는다", () => {
+    const w = must(requestMove(busyWorld(), ID(7), { x: 40, z: 360 }, 3000, BAR_MAP)).world;
+    expect(forceSegment(w, ID(7), seg).segs[ID(7)]).toEqual(seg);
+  });
+
+  it("방에 없는 사람이면 입력 그대로(toBe)", () => {
+    const w = busyWorld();
+    expect(forceSegment(w, "nobody", seg)).toBe(w);
+  });
+
+  it("입력 월드를 바꾸지 않는다", () => {
+    const w = deepFreeze(busyWorld());
+    expect(() => forceSegment(w, ID(1), seg)).not.toThrow();
+    expect(w.segs[ID(1)]).not.toEqual(seg);
+  });
+});
+
+describe("배치 기억 lay — 저장·복원 (T-08-19)", () => {
+  const LAY = { key: "2:ring", slots: { [ID(0)]: [0, 265], [ID(1)]: [-187, 187] } } as const;
+  const withLay = (): WorldState => ({ ...busyWorld(), lay: { key: LAY.key, slots: { [ID(0)]: [0, 265], [ID(1)]: [-187, 187] } } });
+
+  it("lay 가 없는 월드의 저장값에는 lay 키가 없다(옛 모양 그대로)", () => {
+    expect(Object.keys(compactWorld(busyWorld(), 3000)).sort()).toEqual(["segs", "v"]);
+  });
+
+  it("compactWorld 가 lay 를 싣고 JSON 을 거친 restoreWorld 가 되살린다", () => {
+    const stored = JSON.parse(JSON.stringify(compactWorld(withLay(), 3000)));
+    expect(stored.lay).toEqual(LAY);
+    const r = restoreWorld(stored, PLAYERS, 3100, BAR_MAP);
+    expect(r.lay).toEqual(LAY);
+  });
+
+  it("lay 없는 옛 저장값({v:1, segs})도 그대로 읽힌다 — lay 는 없다", () => {
+    const r = restoreWorld(compactWorld(busyWorld(), 3000), PLAYERS, 3100, BAR_MAP);
+    expect(r.lay).toBeUndefined();
+    expect(Object.keys(r).sort()).toEqual(["lastMoveAt", "segs", "wanderAt"]);
+  });
+
+  it.each([
+    ["문자열", "x"],
+    ["배열", []],
+    ["key 가 숫자", { key: 3, slots: {} }],
+    ["key 없음", { slots: {} }],
+    ["slots 가 배열", { key: "2:ring", slots: [] }],
+    ["slots 없음", { key: "2:ring" }],
+  ])("lay 모양이 틀리면(%s) lay 만 버리고 나머지는 복원한다", (_name, lay) => {
+    const stored = { ...JSON.parse(JSON.stringify(compactWorld(busyWorld(), 3000))), lay };
+    const r = restoreWorld(stored, PLAYERS, 3100, BAR_MAP);
+    expect(r.lay).toBeUndefined();
+    for (const pl of PLAYERS) expect(r.segs[pl.id]).toEqual(compactWorld(busyWorld(), 3000).segs[pl.id]);
+  });
+
+  it.each([
+    ["좌표가 정수가 아님", [1.5, 2]],
+    ["좌표가 700 밖", [701, 0]],
+    ["좌표가 -700 밖", [0, -701]],
+    ["길이가 2가 아님", [1, 2, 3]],
+    ["숫자가 아님", ["a", "b"]],
+  ])("슬롯 좌표가 틀리면(%s) 그 슬롯만 버린다", (_name, bad) => {
+    const stored = {
+      ...JSON.parse(JSON.stringify(compactWorld(busyWorld(), 3000))),
+      lay: { key: "2:ring", slots: { [ID(0)]: [0, 265], [ID(1)]: bad } },
+    };
+    const r = restoreWorld(stored, PLAYERS, 3100, BAR_MAP);
+    expect(r.lay).toEqual({ key: "2:ring", slots: { [ID(0)]: [0, 265] } });
+  });
+
+  it("방에 없는 id 의 슬롯은 버린다", () => {
+    const stored = {
+      ...JSON.parse(JSON.stringify(compactWorld(busyWorld(), 3000))),
+      lay: { key: "2:ring", slots: { [ID(0)]: [0, 265], stranger: [-187, 187] } },
+    };
+    const r = restoreWorld(stored, PLAYERS, 3100, BAR_MAP);
+    expect(Object.keys(r.lay!.slots)).toEqual([ID(0)]);
+  });
+
+  it("compactWorld 의 lay 는 입력과 객체를 공유하지 않는다", () => {
+    const w = withLay();
+    const stored = compactWorld(w, 3000);
+    (stored.lay!.slots as Record<string, readonly [number, number]>)[ID(0)] = [1, 1];
+    expect(w.lay!.slots[ID(0)]).toEqual([0, 265]);
+  });
+
+  it("requestMove·spawnPlayer 는 lay 를 지우지 않고, despawnPlayer 는 그 사람 슬롯만 지운다, respawnAll 은 lay 가 없다", () => {
+    const w = withLay();
+    expect(must(requestMove(w, ID(3), { x: 40, z: 360 }, 9000, BAR_MAP)).world.lay).toEqual(w.lay);
+    expect(spawnPlayer(w, ID(5), 5, 9000, BAR_MAP).lay).toEqual(w.lay);
+    expect(despawnPlayer(w, ID(1)).lay).toEqual({ key: "2:ring", slots: { [ID(0)]: [0, 265] } });
+    expect(respawnAll(w, PLAYERS, 9000, BAR_MAP).lay).toBeUndefined();
+    expect(emptyWorld().lay).toBeUndefined();
   });
 });

@@ -27,7 +27,12 @@ export interface MapDef {
   size: number;
   mask: Uint8Array;
   spawns: readonly Spawn[];
+  /** 무대 자리(RED 자리표시자 — GREEN 이 예외 규칙을 붙인다) */
+  stage?: { x: number; z: number };
 }
+
+export const STAGE_SPOT = { x: 0, z: 0 } as const;
+export const STAGE_REACH_FX = 300;
 
 /**
  * 캐릭터 머리 꼭대기에서 카메라 쪽으로 가는 평행 광선 방향 = 카메라 위치 − 주시점.
@@ -135,7 +140,7 @@ export const BAR_SPAWNS: readonly Spawn[] = [
 ];
 
 /** 재즈 바 이동 맵(모듈 로드 때 마스크 문자열을 한 번 변환한다 — 결정적). */
-export const BAR_MAP: MapDef = { id: "bar", size: GRID_SIZE, mask: parseMask(BAR_MASK), spawns: BAR_SPAWNS };
+export const BAR_MAP: MapDef = { id: "bar", size: GRID_SIZE, mask: parseMask(BAR_MASK), spawns: BAR_SPAWNS, stage: STAGE_SPOT };
 
 /** 칸 한 변(고정소수점) = CELL × UNIT */
 const CELL_FX = 50;

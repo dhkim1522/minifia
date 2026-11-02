@@ -13,6 +13,8 @@ import {
   HEAD_TOP_Y,
   type MapDef,
   type Obstacle,
+  STAGE_REACH_FX,
+  STAGE_SPOT,
   TO_CAMERA,
   UNIT,
   WALK_HALF,
@@ -787,5 +789,156 @@ describe("map.ts 소스 규약", () => {
   it("DOM·workerd API 를 쓰지 않고 import 가 없다(순수 모듈)", () => {
     expect(source).not.toMatch(/\b(document|window|crypto|fetch)\b/);
     expect(source).not.toMatch(/^\s*import\s/m);
+  });
+});
+
+// ---- 08-04: 무대 자리 단일 예외 (사용자 확정 2026-11-02, 결정 0060-7, T-08-18) ----
+// 변론자가 서는 STAGE_SPOT(0,0)은 무대 원기둥 안이라 막힌 칸이다. 예외는 정확히 그 한 점과, 그 점에 닿는 300 안의 짧은 선분뿐이다.
+describe("STAGE_SPOT 단일 예외 (결정 0060-7)", () => {
+  const S = { x: STAGE_SPOT.x, z: STAGE_SPOT.z };
+  /** 무대 예외가 없는 같은 맵: 예외 밖의 판정이 그대로인지 비교하는 기준. */
+  const NO_STAGE: MapDef = { ...BAR_MAP, stage: undefined };
+  /** RESEARCH 패턴 4 의 8곳(서로 203) */
+  const SLOTS8 = [
+    [0, 265],
+    [-187, 187],
+    [-265, 0],
+    [-187, -187],
+    [0, -265],
+    [187, -187],
+    [265, 0],
+    [187, 187],
+  ].map(([x, z]) => ({ x: x!, z: z! }));
+
+  it("상수: STAGE_SPOT 은 (0,0), 닿는 거리는 300 이고 BAR_MAP.stage 가 같은 점이다", () => {
+    expect(`${STAGE_SPOT.x},${STAGE_SPOT.z}`).toBe("0,0");
+    expect(STAGE_REACH_FX).toBe(300);
+    expect(BAR_MAP.stage).toEqual({ x: 0, z: 0 });
+  });
+
+  it("무대 자리는 예외가 없으면 막힌 점이다(무대 원기둥 안)", () => {
+    expect(lineWalkable(NO_STAGE, S, S)).toBe(false);
+  });
+
+  it("lineWalkable: 두 끝이 모두 STAGE_SPOT 이면 true", () => {
+    expect(lineWalkable(BAR_MAP, S, S)).toBe(true);
+  });
+
+  it("lineWalkable: 슬롯 8곳 → STAGE_SPOT, STAGE_SPOT → 슬롯 8곳 모두 true(방향 무관)", () => {
+    for (const q of SLOTS8) {
+      expect(lineWalkable(NO_STAGE, q, q)).toBe(true); // 슬롯 자체는 걸을 수 있는 점
+      expect(`${q.x},${q.z}:${lineWalkable(BAR_MAP, q, S)}`).toBe(`${q.x},${q.z}:true`);
+      expect(`${q.x},${q.z}:${lineWalkable(BAR_MAP, S, q)}`).toBe(`${q.x},${q.z}:true`);
+    }
+  });
+
+  it("lineWalkable: 다른 점(10,0)·(-10,0)·(0,10)의 한 점 판정은 그대로 막혀 있다", () => {
+    for (const q of [
+      { x: 10, z: 0 },
+      { x: -10, z: 0 },
+      { x: 0, z: 10 },
+      { x: 0, z: -10 },
+      { x: 1, z: 1 },
+    ]) {
+      expect(lineWalkable(BAR_MAP, q, q)).toBe(false);
+    }
+  });
+
+  it("lineWalkable: (0,350) → STAGE_SPOT 은 닿는 거리 300 밖이라 false", () => {
+    expect(lineWalkable(NO_STAGE, { x: 0, z: 350 }, { x: 0, z: 350 })).toBe(true); // 걸을 수 있는 점이지만
+    expect(lineWalkable(BAR_MAP, { x: 0, z: 350 }, S)).toBe(false);
+    expect(lineWalkable(BAR_MAP, S, { x: 0, z: 350 })).toBe(false);
+  });
+
+  it("lineWalkable: 막힌 점 → STAGE_SPOT 은 false", () => {
+    for (const q of [
+      { x: 100, z: 0 },
+      { x: 0, z: 100 },
+      { x: 60, z: 60 },
+    ]) {
+      expect(lineWalkable(NO_STAGE, q, q)).toBe(false);
+      expect(lineWalkable(BAR_MAP, q, S)).toBe(false);
+      expect(lineWalkable(BAR_MAP, S, q)).toBe(false);
+    }
+  });
+
+  it("예외는 정확히 한 점에만 붙는다: 25 간격 격자에서 STAGE_SPOT 과의 선분은 '걸을 수 있는 끝점 + 거리 300 이내' 일 때만 true", () => {
+    const bad: string[] = [];
+    for (let x = -600; x <= 600; x += 25) {
+      for (let z = -600; z <= 600; z += 25) {
+        if (x === 0 && z === 0) continue;
+        const q = { x, z };
+        const expected = lineWalkable(NO_STAGE, q, q) && x * x + z * z <= STAGE_REACH_FX * STAGE_REACH_FX;
+        if (lineWalkable(BAR_MAP, S, q) !== expected || lineWalkable(BAR_MAP, q, S) !== expected) bad.push(`${x},${z}`);
+      }
+    }
+    expect(bad.join(" ")).toBe("");
+  });
+
+  it("무대가 아닌 두 점의 판정은 예외 없는 맵과 같다(무대 둘레 막힌 칸을 걸어 지나가지 못한다)", () => {
+    const bad: string[] = [];
+    const pts: { x: number; z: number }[] = [];
+    for (let x = -550; x <= 550; x += 110) for (let z = -550; z <= 550; z += 110) if (x !== 0 || z !== 0) pts.push({ x, z });
+    for (const a of pts) {
+      for (const b of pts) {
+        if (lineWalkable(BAR_MAP, a, b) !== lineWalkable(NO_STAGE, a, b)) bad.push(`${a.x},${a.z}>${b.x},${b.z}`);
+      }
+    }
+    expect(bad.join(" ")).toBe("");
+    // 무대를 가로지르는 선분은 그대로 막혀 있다.
+    expect(lineWalkable(BAR_MAP, { x: -265, z: 0 }, { x: 265, z: 0 })).toBe(false);
+    expect(lineWalkable(BAR_MAP, { x: 0, z: -265 }, { x: 0, z: 265 })).toBe(false);
+  });
+
+  it("snapToWalkable(STAGE_SPOT) 은 그 자리에 둔다, 근처 점은 걸을 수 있는 곳으로 옮긴다", () => {
+    expect(snapToWalkable(BAR_MAP, S)).toEqual({ x: 0, z: 0, snapped: false });
+    const near = snapToWalkable(BAR_MAP, { x: 10, z: 0 });
+    expect(near.snapped).toBe(true);
+    expect(lineWalkable(NO_STAGE, near, near)).toBe(true);
+  });
+
+  it("routeFx: 무대에서 입장 지점으로 — 첫 점 [0,0], 끝 점은 그 입장 지점, 모든 선분 lineWalkable (8곳)", () => {
+    for (const [i, sp] of BAR_SPAWNS.entries()) {
+      const to = { x: Math.round(sp.x * UNIT), z: Math.round(sp.z * UNIT) };
+      const flat = routeFx(BAR_MAP, S, to);
+      expect(`${i}:${flat[0]},${flat[1]}`).toBe(`${i}:0,0`);
+      expect(`${i}:${flat.at(-2)},${flat.at(-1)}`).toBe(`${i}:${to.x},${to.z}`);
+      expect(`${i}:${allSegmentsWalkable(BAR_MAP, flat)}`).toBe(`${i}:true`);
+    }
+  });
+
+  it("routeFx: 입장 지점에서 무대로 — 끝 점 [0,0], 첫 점은 그 입장 지점, 모든 선분 lineWalkable (8곳)", () => {
+    for (const [i, sp] of BAR_SPAWNS.entries()) {
+      const from = { x: Math.round(sp.x * UNIT), z: Math.round(sp.z * UNIT) };
+      const flat = routeFx(BAR_MAP, from, S);
+      expect(`${i}:${flat.at(-2)},${flat.at(-1)}`).toBe(`${i}:0,0`);
+      expect(`${i}:${flat[0]},${flat[1]}`).toBe(`${i}:${from.x},${from.z}`);
+      expect(`${i}:${allSegmentsWalkable(BAR_MAP, flat)}`).toBe(`${i}:true`);
+    }
+  });
+
+  it("routeFx: 무대 → 슬롯 8곳 · 슬롯 8곳 → 무대는 곧바로 두 점(닿는 거리 안)", () => {
+    for (const q of SLOTS8) {
+      expect(routeFx(BAR_MAP, S, q)).toEqual([0, 0, q.x, q.z]);
+      expect(routeFx(BAR_MAP, q, S)).toEqual([q.x, q.z, 0, 0]);
+    }
+  });
+
+  it("routeFx: 무대 → 무대는 제자리, 무대가 없는 맵은 예전과 같다", () => {
+    expect(routeFx(BAR_MAP, S, S)).toEqual([0, 0, 0, 0]);
+    const from = { x: 360, z: 40 };
+    const to = { x: -420, z: 20 };
+    expect(routeFx(BAR_MAP, from, to)).toEqual(routeFx(NO_STAGE, from, to));
+  });
+
+  it("routeFx: 일반 길은 무대 자리를 지나지 않는다(칸 중심 경로) — 시드 입장 지점 쌍 56개", () => {
+    const pts = BAR_SPAWNS.map((sp) => ({ x: Math.round(sp.x * UNIT), z: Math.round(sp.z * UNIT) }));
+    for (const a of pts) {
+      for (const b of pts) {
+        if (a === b) continue;
+        const flat = routeFx(BAR_MAP, a, b);
+        expect(allSegmentsWalkable(NO_STAGE, flat)).toBe(true); // 예외 없이도 걸을 수 있는 길
+      }
+    }
   });
 });
