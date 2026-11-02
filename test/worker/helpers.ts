@@ -577,3 +577,13 @@ export async function toPhase(
 export function pointAs(sock: TestSocket, target: number): void {
   send(sock, { t: "point", target });
 }
+
+/** 찬반 한 표를 보낸다(찬성 true / 반대 false). 행위자는 소켓 첨부 playerId 로만 정해진다. */
+export function verdictAs(sock: TestSocket, agree: boolean): void {
+  send(sock, { t: "verdict", agree });
+}
+
+/** 토론 끝내기를 누르거나(on true) 취소한다(on false). */
+export function endAs(sock: TestSocket, on: boolean): void {
+  send(sock, { t: "endDiscussion", on });
+}

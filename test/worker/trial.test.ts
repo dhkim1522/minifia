@@ -3,7 +3,8 @@
 // 실패 출력은 한 줄이어야 해서(TAP) 프레임 목록은 summary() 한 줄 문자열로 비교한다.
 import { describe, expect, it } from "vitest";
 import type { RoomView, ServerMessage } from "../../shared/protocol";
-import { mark, pause, pointAs, send, settle, startedGame, storedRoom, summary, toPhase } from "./helpers";
+import { PHASE_DEFS } from "../../shared/game/phases";
+import { alarmOf, endAs, killSeats, mark, mapPlayers, pause, pointAs, send, settle, startedGame, storedRoom, summary, toPhase, verdictAs } from "./helpers";
 import type { Game } from "./helpers";
 
 const viewsOf = (msgs: ServerMessage[]): RoomView[] =>
@@ -109,3 +110,130 @@ async function storedRoomSeats(code: string): Promise<number[]> {
   const room = (await storedRoom(code)) as unknown as { players: Array<{ seat: number }> };
   return room.players.map((p) => p.seat).sort((x, y) => x - y);
 }
+
+// ---- 찬반 (DAY-06, 결정 0053·0060-4, T-08-02) ----
+
+/** 방장 + 손님 4 = 5명 판을 시작해 찬반 단계로 옮긴다. 변론자는 마지막 좌석 사람(actors[4])이다. */
+async function verdictRoom(): Promise<Game> {
+  const g = await startedGame("discussion", 4);
+  const defender = g.actors[4]!;
+  await toPhase(g.code, "verdict", (room) => ({ ...room, verdict: { passed: false, candidate: defender.seat } }));
+  return g;
+}
+
+const votedOf = (v: RoomView | undefined): string => JSON.stringify(v?.day?.voted);
+
+describe("찬반 방송 규율 (DAY-06, 결정 0053, T-08-02)", () => {
+  it("처음 던지면 다섯 소켓 모두에게 한 프레임이고 모두의 day.voted 에 그 좌석이 들어가며 me.verdictVote 는 본인만이다", async () => {
+    const g = await verdictRoom();
+    const a = g.actors[1]!;
+    const frames = await castAll(g, () => verdictAs(a.sock, true));
+    expect(lines(frames)).toBe("[state:verdict] [state:verdict] [state:verdict] [state:verdict] [state:verdict]");
+    expect(frames.map((f) => votedOf(viewsOf(f)[0])).join("|")).toBe(Array(5).fill(JSON.stringify([a.seat])).join("|"));
+    expect(frames.map((f) => String(viewsOf(f)[0]?.me.verdictVote)).join(" ")).toBe("undefined true undefined undefined undefined");
+  });
+
+  it("이미 던진 사람이 값을 바꾸면 본인 소켓만 state(me.verdictVote false)를 받고 나머지 네 소켓은 프레임이 없다", async () => {
+    const g = await verdictRoom();
+    const a = g.actors[1]!;
+    await castAll(g, () => verdictAs(a.sock, true));
+    const flip = await castAll(g, () => verdictAs(a.sock, false));
+    expect(lines(flip)).toBe("[] [state:verdict] [] [] []");
+    expect(String(viewsOf(flip[1]!)[0]?.me.verdictVote)).toBe("false");
+    expect(votedOf(viewsOf(flip[1]!)[0])).toBe(JSON.stringify([a.seat]));
+  });
+
+  it("같은 값을 다시 보내면 프레임이 없고, 다른 사람이 처음 던지면 모두의 day.voted 가 좌석 오름차순으로 늘어난다", async () => {
+    const g = await verdictRoom();
+    const [a, b] = [g.actors[1]!, g.actors[2]!];
+    await castAll(g, () => verdictAs(a.sock, true));
+    expect(lines(await castAll(g, () => verdictAs(a.sock, true)))).toBe("[] [] [] [] []");
+    const frames = await castAll(g, () => verdictAs(b.sock, false));
+    expect(lines(frames)).toBe("[state:verdict] [state:verdict] [state:verdict] [state:verdict] [state:verdict]");
+    const want = JSON.stringify([a.seat, b.seat].sort((x, y) => x - y));
+    expect(frames.map((f) => votedOf(viewsOf(f)[0])).join("|")).toBe(Array(5).fill(want).join("|"));
+  });
+
+  it("어떤 소켓 프레임에도 남의 찬반 값이 없다 — 던지지 않은 소켓에는 verdictVote 키가 없고 모든 프레임에 agree 키가 없다", async () => {
+    const g = await verdictRoom();
+    const [a, b] = [g.actors[1]!, g.actors[2]!];
+    await castAll(g, () => verdictAs(a.sock, true));
+    await castAll(g, () => verdictAs(b.sock, false));
+    await castAll(g, () => verdictAs(a.sock, false));
+    const mentions = g.socks.map((s) => s.frames.filter((f) => f.includes('"verdictVote"')).length > 0);
+    expect(mentions.join(" ")).toBe("false true true false false");
+    expect(g.socks.some((s) => s.frames.some((f) => f.includes('"agree"')))).toBe(false);
+    // 본인 소켓의 마지막 값은 본인 값뿐이다.
+    const own = g.socks.map((s) => {
+      const views = s.frames.map((f) => JSON.parse(f) as ServerMessage).filter((m): m is Extract<ServerMessage, { t: "state" }> => m.t === "state");
+      return String(views.at(-1)!.view.me.verdictVote);
+    });
+    expect(own.join(" ")).toBe("undefined false false undefined undefined");
+  });
+
+  it("변론자 본인의 찬반은 BAD_MESSAGE 이고 저장은 그대로다", async () => {
+    const g = await verdictRoom();
+    const c = g.actors[4]!;
+    expect(lines(await castAll(g, () => verdictAs(c.sock, true)))).toBe("[] [] [] [] [error:BAD_MESSAGE,state:verdict]");
+    const room = (await storedRoom(g.code)) as unknown as { players: Array<{ verdictVote?: boolean }> };
+    expect(room.players.filter((p) => p.verdictVote !== undefined).length).toBe(0);
+  });
+
+  it("죽은 사람의 찬반은 BAD_MESSAGE 이다", async () => {
+    const g = await verdictRoom();
+    const d = g.actors[3]!;
+    await toPhase(g.code, "verdict", (room) =>
+      mapPlayers({ ...room, verdict: { passed: false, candidate: g.actors[4]!.seat } }, (p) => (p.seat === d.seat ? { ...p, alive: false } : p)),
+    );
+    expect(lines(await castAll(g, () => verdictAs(d.sock, true)))).toBe("[] [] [] [error:BAD_MESSAGE,state:verdict] []");
+  });
+});
+
+// ---- 토론 끝내기 (DAY-03) ----
+
+describe("토론 끝내기 (DAY-03, 결정 0060-2)", () => {
+  it("누르면 네 소켓 모두의 day.endCount 가 1 이고 me.endDiscussion 은 누른 사람에게만 있다; 취소하면 0 이고 키가 사라진다", async () => {
+    const g = await startedGame("discussion", 3);
+    const a = g.actors[1]!;
+    const on = await castAll(g, () => endAs(a.sock, true));
+    expect(lines(on)).toBe("[state:discussion] [state:discussion] [state:discussion] [state:discussion]");
+    expect(on.map((f) => String(viewsOf(f)[0]?.day?.endCount)).join(" ")).toBe("1 1 1 1");
+    expect(on.map((f) => String(viewsOf(f)[0]?.me.endDiscussion)).join(" ")).toBe("undefined true undefined undefined");
+    expect(on.map((f) => Object.hasOwn(viewsOf(f)[0]?.me ?? {}, "endDiscussion")).join(" ")).toBe("false true false false");
+    const off = await castAll(g, () => endAs(a.sock, false));
+    expect(off.map((f) => String(viewsOf(f)[0]?.day?.endCount)).join(" ")).toBe("0 0 0 0");
+    expect(off.map((f) => Object.hasOwn(viewsOf(f)[0]?.me ?? {}, "endDiscussion")).join(" ")).toBe("false false false false");
+  });
+
+  it("같은 값을 다시 누르면 프레임이 없다", async () => {
+    const g = await startedGame("discussion", 3);
+    const a = g.actors[1]!;
+    await castAll(g, () => endAs(a.sock, true));
+    expect(lines(await castAll(g, () => endAs(a.sock, true)))).toBe("[] [] [] []");
+  });
+
+  it("과반(산 4 중 3)에 닿는 순간 마감을 지금으로 당겨 다음 단계로 넘기고 새 마감은 now + 다음 단계 길이이며 알람이 따라 옮겨진다", async () => {
+    const g = await startedGame("discussion", 3);
+    const [a, b, c] = [g.actors[1]!, g.actors[2]!, g.actors[3]!];
+    await castAll(g, () => endAs(a.sock, true));
+    const two = await castAll(g, () => endAs(b.sock, true));
+    expect(two.map((f) => String(viewsOf(f)[0]?.day?.endCount)).join(" ")).toBe("2 2 2 2");
+    const next = PHASE_DEFS[PHASE_DEFS.discussion.next];
+    const before = Date.now();
+    const third = await castAll(g, () => endAs(c.sock, true));
+    const after = Date.now();
+    expect(third.map((f) => viewsOf(f).at(-1)?.phase).join(" ")).toBe(Array(4).fill(PHASE_DEFS.discussion.next).join(" "));
+    const stored = await storedRoom(g.code);
+    expect(stored.phase).toBe(PHASE_DEFS.discussion.next);
+    const dur = next.durationMs!;
+    expect(stored.phaseEndsAt! >= before + dur - 50 && stored.phaseEndsAt! <= after + dur + 50).toBe(true);
+    expect(await alarmOf(g.code)).toBe(stored.phaseEndsAt);
+  });
+
+  it("유령의 토론 끝내기는 BAD_MESSAGE 이다", async () => {
+    const g = await startedGame("discussion", 3);
+    const ghost = g.actors[3]!;
+    await killSeats(g, [ghost.seat]);
+    expect(lines(await castAll(g, () => endAs(ghost.sock, true)))).toBe("[] [] [] [error:BAD_MESSAGE,state:discussion]");
+  });
+});

@@ -266,10 +266,10 @@ const DAY_VIEW_PHASES: ReadonlySet<PhaseId> = new Set([
   "dayAnnounce", "discussion", "execVote", "candidateVote", "candidateVoteReveal", "defense", "execution", "night", "morning", "ended",
 ]);
 const ME_KEYS: ReadonlySet<string> = new Set([
-  "seat", "isHost", "role", "allies", "testMode", "testRole", "testBots", "testBotVote", "pick", "allyPicks", "records", "voteAgree", "voteTarget", "chat",
+  "seat", "isHost", "role", "allies", "testMode", "testRole", "testBots", "testBotVote", "pick", "allyPicks", "records", "voteAgree", "voteTarget", "chat", "endDiscussion", "verdictVote",
 ]);
 const DAY_KEYS: ReadonlySet<string> = new Set([
-  "n", "roles", "voteLog", "morning", "execTally", "candidate", "execution", "noExecution",
+  "n", "roles", "voteLog", "morning", "execTally", "candidate", "execution", "noExecution", "points", "endCount", "voted", "verdict",
 ]);
 const keysOf = (value: unknown): string => Object.keys((value ?? {}) as object).sort().join(",");
 
@@ -285,7 +285,8 @@ function phaseKeyViolations(s: RoomState, viewer: Player, view: RoomView, phase:
   for (const key of Object.keys(view)) if (!TOP_KEYS.has(key)) out.push(`${tag}: top-level key ${key}`);
   if (("result" in view) !== (phase === "ended")) out.push(`${tag}: result presence ${"result" in view}`);
   for (const key of Object.keys(view.me)) if (!ME_KEYS.has(key)) out.push(`${tag}: me key ${key}`);
-  for (const path of keyPaths(view)) if (SERVER_ONLY_KEYS.includes(lastKey(path))) out.push(`${tag}: server-only key at ${path}`);
+  // 8페이즈: day.verdict({yes,no,passed}, execution 단계)는 서버 전용 RoomState.verdict 와 이름만 같은 공개 와이어 필드다 — 그 한 경로만 허용한다.
+  for (const path of keyPaths(view)) if (SERVER_ONLY_KEYS.includes(lastKey(path)) && path !== "day.verdict") out.push(`${tag}: server-only key at ${path}`);
 
   // 내 채널(07-10): 서버 상태로 정한 channelOf 와 같고, 말할 수 없으면 키가 없다. 본인 view 의 me 밖에는 chat 키가 없다.
   const wantChat = channelOf(s, viewer.id);
@@ -1541,5 +1542,87 @@ describe("buildView me.chat — 서버가 정한 내 채널 (07-10, CHAT-02·03)
   it.each(["assigning", "roleReveal", "ended"] as const)("%s: 모두 키 없음 (탈락자 포함)", (phase) => {
     const s = withDead(stateAt(phase, 6, 1), 1);
     expect(chatLine(s)).toBe(everyone(s, "-"));
+  });
+});
+
+// ---- 8페이즈 낮 처형 필드 (08-07, DAY-03~06, 결정 0053·0060) ----
+// 흐름 전환(08-11) 전이라 지목·찬반 단계는 실제 전이로 닿지 못한다 — 상태를 손으로 세우되 규칙 함수 모양(키 이름·값)은 그대로 쓴다.
+describe("buildView 낮 처형 필드 (08-07, DAY-03~06)", () => {
+  const base = (): RoomState => startedAt(5, 1, "discussion");
+  const withPlayer = (s: RoomState, seat: number, patch: Partial<Player>): RoomState => ({
+    ...s,
+    players: s.players.map((p) => (p.seat === seat ? { ...p, ...patch } : p)),
+  });
+  const wireKeys = (day: RoomView["day"]): string => Object.keys(day ?? {}).filter((k) => ["points", "endCount", "voted", "verdict"].includes(k)).sort().join(",");
+
+  /** 후보 seat 2 가 변론자인 찬반·처형 단계 상태. */
+  const trial = (phase: "nomination" | "verdict" | "execution"): RoomState => {
+    const s = base();
+    const day = s.day ?? 1;
+    const common: RoomState = { ...s, phase, verdict: { passed: false, candidate: 2 } };
+    if (phase === "execution") {
+      return { ...common, verdict: { passed: true, candidate: 2 }, execution: { seat: 2, phrase: 0 }, voteLog: [{ n: day, exec: { yes: 3, no: 1, passed: true }, cand: { votes: [], candidate: 2 } }] };
+    }
+    return common;
+  };
+
+  it("공개 필드는 자기 단계에서만 생긴다: discussion=endCount, nomination=points, verdict=voted, execution=verdict (모든 viewer)", () => {
+    const states: Array<[PhaseId, RoomState]> = [
+      ["discussion", base()],
+      ["nomination", trial("nomination")],
+      ["verdict", trial("verdict")],
+      ["execution", trial("execution")],
+    ];
+    const got = states.map(([phase, s]) => `${phase}:${[...new Set(s.players.map((p) => wireKeys(buildView(s, p.id, START_AT).day)))].join("|")}`);
+    expect(got.join(" ")).toBe("discussion:endCount nomination:points verdict:voted execution:verdict");
+  });
+
+  it("nomination: day.points 는 산 사람이 산 대상을 가리킨 줄만 좌석 순이고 모든 viewer 가 같다; 후보 키는 아직 없다", () => {
+    let s = trial("nomination");
+    s = withPlayer(s, 1, { nominate: 3 });
+    s = withPlayer(s, 3, { nominate: 1 });
+    s = withPlayer(s, 4, { nominate: 0, alive: false }); // 탈락자의 남은 값은 줄이 아니다
+    const lines = new Set(s.players.map((p) => JSON.stringify(buildView(s, p.id, START_AT).day?.points)));
+    expect([...lines].join("|")).toBe(JSON.stringify([{ seat: 1, target: 3 }, { seat: 3, target: 1 }]));
+    expect(s.players.every((p) => !("candidate" in (buildView(s, p.id, START_AT).day ?? {})))).toBe(true);
+  });
+
+  it("discussion: day.endCount 는 누른 산 사람 수이고 me.endDiscussion 은 누른 산 본인에게만, 키는 다른 경로에 없다", () => {
+    let s = base();
+    s = withPlayer(s, 0, { endVote: true });
+    s = withPlayer(s, 1, { endVote: true });
+    s = withPlayer(s, 4, { endVote: true, alive: false }); // 죽은 사람의 남은 값은 세지 않는다
+    const views = s.players.map((p) => ({ seat: p.seat, view: buildView(s, p.id, START_AT) }));
+    expect(views.map((v) => String(v.view.day?.endCount)).join(" ")).toBe("2 2 2 2 2");
+    expect(views.map((v) => String(v.view.me.endDiscussion)).join(" ")).toBe("true true undefined undefined undefined");
+    expect(views.map((v) => Object.hasOwn(v.view.me, "endDiscussion")).join(" ")).toBe("true true false false false");
+    const stray = views.flatMap((v) => keyPaths(v.view).filter((path) => ["endDiscussion", "endVote"].includes(lastKey(path)) && path !== "me.endDiscussion"));
+    expect(stray.join(",")).toBe("");
+  });
+
+  it("verdict: day.voted 는 던진 유권자 좌석(오름차순, 값 없음), day.candidate 가 있고, me.verdictVote 는 본인(산 사람)에게만이며 남의 값·서버 키는 어느 경로에도 없다", () => {
+    let s = trial("verdict");
+    s = withPlayer(s, 3, { verdictVote: false });
+    s = withPlayer(s, 0, { verdictVote: true });
+    s = withPlayer(s, 2, { verdictVote: true }); // 변론자의 남은 값은 던진 것이 아니다
+    s = withPlayer(s, 4, { verdictVote: true, alive: false }); // 죽은 사람도 던진 것이 아니다
+    const views = s.players.map((p) => buildView(s, p.id, START_AT));
+    expect(new Set(views.map((v) => JSON.stringify(v.day?.voted))).size).toBe(1);
+    expect(JSON.stringify(views[0]!.day?.voted)).toBe(JSON.stringify([0, 3]));
+    expect(views.map((v) => String(v.day?.candidate)).join(" ")).toBe("2 2 2 2 2");
+    expect(views.map((v) => String(v.me.verdictVote)).join(" ")).toBe("true undefined undefined false undefined");
+    const stray = views.flatMap((v) => keyPaths(v).filter((path) => ["verdictVote", "nominate", "endVote"].includes(lastKey(path)) && path !== "me.verdictVote"));
+    expect(stray.join(",")).toBe("");
+  });
+
+  it("execution: day.verdict 는 그날 voteLog 줄의 {yes,no,passed} 세 키뿐이고, 줄이 없으면 키가 없다; day 에 역할 키가 없다", () => {
+    const s = trial("execution");
+    const views = s.players.map((p) => buildView(s, p.id, START_AT));
+    expect(views.map((v) => JSON.stringify(v.day?.verdict)).join("|")).toBe(Array(5).fill(JSON.stringify({ yes: 3, no: 1, passed: true })).join("|"));
+    expect(keysOf(views[0]!.day?.verdict)).toBe("no,passed,yes");
+    const dayKeys = views.flatMap((v) => keyPaths(v.day).map(lastKey));
+    expect(dayKeys.filter((k) => ["role", "job"].includes(k)).join(",")).toBe("");
+    const noLine: RoomState = { ...s, voteLog: [] };
+    expect(noLine.players.every((p) => !("verdict" in (buildView(noLine, p.id, START_AT).day ?? {})))).toBe(true);
   });
 });
