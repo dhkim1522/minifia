@@ -175,9 +175,9 @@ describe("dayEvents — 지목 차이 (DAY-04)", () => {
     expect(events.lines[0]!.text).toBe("<b>민준</b> → 도윤");
   });
 
-  it("앉은 사람 목록에 없는 seat 의 지목은 줄 없이 건너뛴다", () => {
+  it("앉은 사람 목록에 없는 seat 의 지목은 vote 줄·알림 없이 건너뛴다(득표 집계에는 남는다)", () => {
     const events = dayEvents(nominationOf([]), nominationOf([[9, 2]]));
-    same(events.lines, []);
+    same(events.lines.filter((l) => l.kind === "vote"), []);
     same(events.toasts, []);
   });
 
