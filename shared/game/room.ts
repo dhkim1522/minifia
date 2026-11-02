@@ -90,8 +90,6 @@ export interface RoomState {
   voteLog?: VoteLogEntry[];
   /** 처형 발표(seat·문구). enterDiscussion 이 지운다. */
   execution?: ExecutionView;
-  /** 마지막 처형 문구 번호 — 아침의 lastPhrase 와 따로 센다(연달아 같은 문구 방지). */
-  lastExecPhrase?: number;
   /** 밤별 지목·사망 기록(판 요약 재료). 서버 전용이고 종료 전에는 어디에도 싣지 않는다. */
   nightLog?: NightLogEntry[];
   /** 승리 팀 — 종료 진입 때 기록한다. */

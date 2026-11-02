@@ -35,7 +35,7 @@ import type { RoomState } from "./room";
 import { verdictVotersOf, votedSeatsOf } from "./verdict";
 
 /**
- * view.day 가 생기는 단계: 낮 네 단계(발표·토론·지목·찬반)·처형 다섯 단계·밤·아침·종료. 이 밖의 단계 뷰에는 day 키 자체가 없다(D-07).
+ * view.day 가 생기는 단계: 낮 단계(발표·토론·지목·변론·찬반·처형)·밤·아침·종료. 이 밖의 단계 뷰에는 day 키 자체가 없다(D-07).
  * ended 도 넣는다: day 에는 공개 정보(일차·구성·투표 기록)만 있어 누출이 없고, 결과 화면이 테이블을 다시 쓸 수 있다.
  */
 const DAY_PHASES: ReadonlySet<PhaseId> = new Set([
@@ -43,9 +43,6 @@ const DAY_PHASES: ReadonlySet<PhaseId> = new Set([
   "discussion",
   "nomination",
   "verdict",
-  "execVote",
-  "candidateVote",
-  "candidateVoteReveal",
   "defense",
   "execution",
   "night",
@@ -81,13 +78,13 @@ function buildDay(state: RoomState): DayView {
   if (state.phase === "nomination") day.points = pointLinesOf(state);
   // 후보·처형 발표는 모두에게 같다(공개 정보). 직업은 싣지 않는다 — 필드별로 복사한다(D-09).
   if (
-    (state.phase === "candidateVoteReveal" || state.phase === "defense" || state.phase === "verdict" || state.phase === "execution") &&
+    (state.phase === "defense" || state.phase === "verdict" || state.phase === "execution") &&
     state.verdict?.candidate !== undefined
   ) {
     day.candidate = state.verdict.candidate;
   }
   if (state.phase === "execution" && state.execution !== undefined) {
-    day.execution = { seat: state.execution.seat, phrase: state.execution.phrase };
+    day.execution = { seat: state.execution.seat };
   }
   // 찬반 결과 수는 처형 단계에서 그날 voteLog 줄의 exec 세 키를 필드별로 복사한다(결정 0060-4). 줄이 없으면 키가 없다. 역할 키는 어디에도 없다(T-08-03).
   if (state.phase === "execution") {

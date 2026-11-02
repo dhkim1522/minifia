@@ -19,14 +19,13 @@ export const MAX_FRAME_BYTES = 1024; // WebSocket 프레임 상한
 export const MAX_BODY_BYTES = 1024; // HTTP 본문 상한
 
 // 낮 두 단계(dayAnnounce·discussion)와 밤·아침(night·morning)은 단계 표(shared/game/phases.ts)의 한 줄씩이다.
-// discussion 다음에 처형 여부 투표(execVote) → 후보 선택(candidateVote) → 선택 공개(candidateVoteReveal) → 최후 변론(defense) → 처형(execution)이 이어지고,
-// 여부 투표 마감에서 통과하지 못하면 바로 night 로 간다(분기는 shared/game/tick.ts). 종료 단계 ended 는 마감이 없다.
+// discussion 다음에 지목(nomination) → 최후 변론(defense) → 찬반(verdict) → 처형(execution)이 이어지고(결정 0060),
+// 지목이 동률·0표면 바로 night 로 간다(분기는 shared/game/tick.ts). 종료 단계 ended 는 마감이 없다.
 // 순차 직업 주장 단계(claim)는 7페이즈에서 없어졌다 — 낮 시작 발표 다음이 바로 자유 채팅 토론이다(CHAT-06). 옛 공개 연출 단계도 없다(결정 0027).
 export type PhaseId =
   | "lobby" | "assigning" | "roleReveal" | "dayAnnounce" | "discussion"
-  | "execVote" | "candidateVote" | "candidateVoteReveal" | "defense" | "execution"
-  | "night" | "morning" | "ended"
-  | "nomination" | "verdict"; // 8페이즈(결정 0060): 지목 15초 → defense, 찬반 10초 → execution. 옛 단계는 08-21 이 지운다
+  | "nomination" | "defense" | "verdict" | "execution"
+  | "night" | "morning" | "ended"; // 8페이즈(결정 0060): 지목 15초 → 변론 20초 → 찬반 10초 → 처형 5초. 옛 처형 여부·후보 선택·후보 공개 단계는 08-22 에 지웠다
 
 // ---- 밤·아침 계약(3페이즈) ----
 /**
@@ -75,8 +74,6 @@ export interface SpectateView {
 }
 
 // ---- 처형·승패 계약(4페이즈) ----
-/** 처형 문구 번호는 1..EXECUTION_PHRASE_COUNT (D-11). 서버(문구 추첨)와 화면(문장 표)이 같은 값을 읽는다. */
-export const EXECUTION_PHRASE_COUNT = 4;
 /** 후보 선택 한 줄: 누가 누구를 골랐는지. 던진 표만 있다(무효표는 줄이 없다). 공개 구간 이후에만 모두에게 실린다(D-07). */
 export interface CandidateVoteLine {
   seat: number;
@@ -96,13 +93,12 @@ export interface PointLine {
   seat: number;
   target: number;
 }
-/** 처형 발표: 탈락한 seat 와 문구 번호. 직업은 싣지 않는다(D-09). */
+/** 처형 발표: 탈락한 seat 뿐이다(결정 0060-5 — 문구 번호 없음). 직업은 싣지 않는다(D-09). */
 export interface ExecutionView {
   seat: number;
-  phrase: number;
 }
-/** 처형이 성립하지 않아 밤으로 온 이유 코드(D-34): 과반 못 채움 · 후보 동률 · 후보 선택 0표. */
-export type NoExecutionReason = "notMajority" | "tie" | "noVotes";
+/** 처형이 성립하지 않아 밤으로 온 이유 코드(D-34): 지목 동률 · 지목 0표. 찬반 부결은 처형 단계가 알린다(결정 0060-4). */
+export type NoExecutionReason = "tie" | "noVotes";
 /** 판 요약 한 줄(종료 뒤에만 모두에게, D-17·D-27). died false 는 지목했으나 죽지 않은 밤(의사가 지킴)이다. */
 export interface SummaryRow {
   n: number;
@@ -127,7 +123,7 @@ export interface DayView {
   // ---- 4페이즈 처형 필드 ----
   // 서버는 낮 단계마다(빈 배열 포함) 항상 싣는다. 타입을 optional 로 둔 이유: 필수로 하면 화면 테스트의 DayView 리터럴이 서버 웨이브에서 한꺼번에 바뀐다(화면 계획이 필요하면 필수로 올린다).
   voteLog?: VoteLogEntry[];
-  candidate?: number; // candidateVoteReveal·defense·execution 에서, 후보가 있을 때만
+  candidate?: number; // defense·verdict·execution 에서, 변론자가 있을 때만
   execution?: ExecutionView; // execution 단계에서만
   noExecution?: { reason: NoExecutionReason }; // 처형이 성립하지 않아 밤으로 온 그 밤 단계에서만(D-34)
   // ---- 8페이즈 낮 처형 필드(결정 0060). 서버가 채우는 일은 08-07 이후 — 지금은 타입만이다. ----

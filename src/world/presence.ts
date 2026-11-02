@@ -83,15 +83,12 @@ export function cameraModeOf(view: RoomView, stageH: number): CameraMode {
 
 /**
  * 단계 조명(UI-SPEC): 낮 시작·토론 talk, 지목·찬반 vote, 변론·처형 trial, 밤 night, 아침 morning.
- * 옛 처형 단계(execVote·candidateVote·candidateVoteReveal, 08-21 이 지운다)는 vote 로 둔다. 로비·종료는 talk.
+ * 로비·종료는 talk.
  */
 export function lightingOf(phase: PhaseId): LightingStage {
   switch (phase) {
     case "nomination":
     case "verdict":
-    case "execVote":
-    case "candidateVote":
-    case "candidateVoteReveal":
       return "vote";
     case "defense":
     case "execution":

@@ -9,7 +9,7 @@ import { RoleCardButton } from "../components/RoleCardButton";
 import { RoleCardSheet } from "../components/RoleCardSheet";
 import type { RoleCardTab } from "../components/RoleCardSheet";
 import { TestToolsButton, TestToolsSheet } from "../components/TestTools";
-import { executionTitle, morningCardText } from "../game/eliminationText";
+import { morningCardText } from "../game/eliminationText";
 import { VERDICT_TEXT, defenseAnnounce, noExecutionPrefix, winnerText } from "../game/verdict";
 import { preloadDuskAssets, preloadRoleAssets } from "../net/assets";
 import { ChatStore } from "../net/chatStore";
@@ -47,9 +47,6 @@ const PHASE_ANNOUNCE: Record<PhaseId, (view: RoomView) => string> = {
   discussion: () => "낮 토론",
   night: nightAnnounce,
   morning: morningAnnounce,
-  execVote: () => VERDICT_TEXT.announce.execVote,
-  candidateVote: () => VERDICT_TEXT.announce.candidateVote,
-  candidateVoteReveal: () => VERDICT_TEXT.announce.candidateVoteReveal,
   defense: defenseAnnounceOf,
   execution: executionAnnounceOf,
   nomination: () => "지목", // 8페이즈: 서버가 아직 이 단계를 만들지 않는다 — 문구는 08-13 이 다시 본다
@@ -97,16 +94,15 @@ function defenseAnnounceOf(view: RoomView): string {
   return nickname === undefined ? "최후 변론" : defenseAnnounce(nickname);
 }
 
-// 처형 안내: 카드 제목과 같은 문장(`{이름}님이 {꼬리}`). 처형된 자리를 못 찾으면(서버 이상) `처형`.
+// 처형 안내(결정 0060-5): `{닉네임} 님 처형` 하나뿐이다(문구 번호 없음). 처형된 자리를 못 찾으면(서버 이상) `처형`.
 function executionAnnounceOf(view: RoomView): string {
   const seat = view.day?.execution?.seat ?? view.day?.candidate;
   const nickname = seat === undefined ? undefined : view.players.find((p) => p.seat === seat)?.nickname;
-  return nickname === undefined ? "처형" : executionTitle(view.day?.execution?.phrase, nickname);
+  return nickname === undefined ? "처형" : `${nickname} 님 처형`;
 }
 
 // 장면 키: 낮 시작·토론·지목·최후 변론·찬반·처형(8페이즈 지도 단계)은 같은 장면(GameMap)이라 같은 키를 쓴다 — 단계가 바뀌어도 맵(three 렌더러)을 다시 만들지 않는다(DAY-07).
-// 밤·아침(08-18 임시 틀, UI-SPEC A1)도 같은 맵이다. 옛 투표 세 단계(execVote·candidateVote·candidateVoteReveal)는 08-19 에 화면을 지워 renderPhase 에 분기가 없고
-// 08-22 가 PhaseId 에서 지울 때까지 단계 이름 키의 연결 중 화면이다. 낮 시작 전용 화면은 없다(결정 0030).
+// 밤·아침(08-18 임시 틀, UI-SPEC A1)도 같은 맵이다. 옛 투표 세 단계는 08-19 에 화면을 지웠고 08-22 에 PhaseId 에서도 지웠다. 낮 시작 전용 화면은 없다(결정 0030).
 // 래퍼와 장면은 장면에 들어올 때만 mf-phase-enter 가 돈다. 그 밖은 단계 이름이 키다.
 function sceneKey(phase: PhaseId): string {
   switch (phase) {

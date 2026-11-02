@@ -1,32 +1,24 @@
 // 처형 진입 훅(찬반 통과 시 변론자 탈락)과 처형 무효 이유. 순수 모듈이다 — 현재 시각·전역 난수를 읽지 않고, 입력 상태는 바꾸지 않는다.
-// 난수는 인자 randInt 로만 받는다(방 DO 는 cryptoRandInt, 테스트는 seededRandInt).
+// 난수를 부르지 않는다 — 처형 문구 번호는 08-22 에 없어졌다(결정 0060-5).
 //
 // 이 파일은 플레이어의 role 을 읽지 않는다: 후보(변론자)는 직업이 아니라 지목이 정하고(결정 0060), 처형 발표에는 직업을 싣지 않는다(D-09).
-// 난수 호출 순서 계약(인자 0 호출은 없다 — cryptoRandInt(0) 은 RangeError):
-//   enterExecution: 찬반을 통과한 변론자가 있을 때 처형 문구에서 randInt(후보 문구 수) 한 번, 아니면 호출 없음.
-import { EXECUTION_PHRASE_COUNT } from "../protocol";
 import type { NoExecutionReason } from "../protocol";
 import type { RoomState } from "./room";
-import type { RandInt } from "./tick";
 
 /**
  * execution 진입 훅: 후보를 탈락(alive false)시키고 처형 발표(execution { seat, phrase })를 기록한다(D-06, D-11).
  * 직업은 어디에도 싣지 않는다(D-09) — 처형된 본인은 탈락자 관전(결정 0021)으로 모두의 직업을 받는다.
- * 문구는 1..EXECUTION_PHRASE_COUNT 에서 직전 처형 문구(lastExecPhrase)를 뺀 오름차순 후보 중 randInt(후보 수) 한 번이다(아침 문구와 따로 센다).
- * 찬반이 통과하지 않았거나(부결) 후보가 없거나 후보가 방에 없으면 입력 그대로이고 난수를 부르지 않는다(결정 0060-1, DAY-06).
+ * 발표에는 탈락한 seat 뿐이다(문구 번호 없음, 결정 0060-5) — 난수를 부르지 않는다.
+ * 찬반이 통과하지 않았거나(부결) 후보가 없거나 후보가 방에 없으면 입력 그대로다(결정 0060-1, DAY-06).
  */
-export function enterExecution(state: RoomState, randInt: RandInt): RoomState {
+export function enterExecution(state: RoomState): RoomState {
   if (state.verdict?.passed !== true) return state;
   const seat = state.verdict.candidate;
   if (seat === undefined || !state.players.some((p) => p.seat === seat)) return state;
-  const phrases: number[] = [];
-  for (let n = 1; n <= EXECUTION_PHRASE_COUNT; n += 1) if (n !== state.lastExecPhrase) phrases.push(n);
-  const phrase = phrases[randInt(phrases.length)]!;
   return {
     ...state,
     players: state.players.map((p) => (p.seat === seat ? { ...p, alive: false } : p)),
-    execution: { seat, phrase },
-    lastExecPhrase: phrase,
+    execution: { seat },
   };
 }
 
@@ -38,7 +30,7 @@ export function enterExecution(state: RoomState, randInt: RandInt): RoomState {
  *   cand.candidate 가 있음(변론·찬반이 있었다)                  → 없음 — 통과든 부결이든 결과는 처형 단계에서 이미 알렸다
  *   cand.candidate 가 없고 cand.votes 가 비어 있음              → noVotes
  *   cand.candidate 가 없고 cand.votes 가 있음(최다 동률)        → tie
- * notMajority 는 더 나오지 않는다(찬반 부결은 처형 단계가 알린다). 반환은 새 객체 리터럴이다(키는 reason 하나).
+ * 찬반 부결은 처형 단계가 알린다(이유 코드는 tie·noVotes 둘뿐). 반환은 새 객체 리터럴이다(키는 reason 하나).
  */
 export function noExecutionOf(state: RoomState): { reason: NoExecutionReason } | undefined {
   if (state.phase !== "night") return undefined;

@@ -7,7 +7,7 @@ import type { Player, RoomState } from "./room";
 
 /**
  * 지도 위에서 보이는 단계 8개. 오디언스(위치 프레임 받는 사람)와 이동 권한이 이 한 곳으로 지도 단계를 판정한다.
- * 옛 투표 단계(execVote 등)는 08-21 이 지울 때까지 들지 않는다 — 그 사이 그 단계에는 아무도 움직이지 않는다(가정 A3).
+ * 옛 투표 단계(execVote 등)는 08-22 에 PhaseId 에서 지웠다 — 저장 방은 정규화가 discussion 으로 옮긴다.
  */
 export const MAP_PHASES: ReadonlySet<PhaseId> = new Set<PhaseId>([
   "dayAnnounce",

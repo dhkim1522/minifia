@@ -40,12 +40,9 @@ export const PHASE_SCENE: Readonly<Record<PhaseId, SceneId>> = Object.freeze({
   discussion: "day",
   night: "night",
   morning: "morning",
-  execVote: "dusk",
-  candidateVote: "dusk",
-  candidateVoteReveal: "dusk",
   defense: "dusk",
   execution: "dusk",
-  nomination: "dusk", // 8페이즈: defense 와 같은 값. 옛 단계 행은 08-21·22 가 PhaseId 와 함께 지운다
+  nomination: "dusk", // 8페이즈: defense 와 같은 값
   verdict: "dusk",
   ended: "night",
 });

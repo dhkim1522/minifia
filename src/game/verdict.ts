@@ -25,12 +25,6 @@ export const VERDICT_TEXT = {
   summaryTitle: "이번 판 기록",
   homeButton: "처음으로",
   roomCloseNote: "이 방은 30분 뒤에 닫혀요", // P-6
-  /** 단계 안내(aria-live) 중 고정 문구. 옛 세 단계 이름은 08-21·22 가 PhaseId 와 함께 지운다. */
-  announce: {
-    execVote: "처형 여부 투표. 오늘 처형을 할까요?",
-    candidateVote: "후보 선택 투표. 처형할 사람을 고르세요",
-    candidateVoteReveal: "투표 공개",
-  },
 } as const;
 
 /** 변론 단계 안내(aria-live). name 이 null 이면 후보 본인 */
@@ -41,8 +35,6 @@ export function defenseAnnounce(name: string | null): string {
 /** 처형 무효 카드 부제 (D-34) */
 export function noExecutionText(reason: NoExecutionReason): string {
   switch (reason) {
-    case "notMajority":
-      return "찬성이 과반이 아니에요";
     case "tie":
       return "동률이라 처형하지 않아요";
     case "noVotes":
