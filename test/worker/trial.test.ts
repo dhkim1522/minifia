@@ -1,5 +1,5 @@
-// DAY-03~06 DO 시험, 결정 0060. 08-11 이 실제 흐름으로 넓힌다.
-// 아직 흐름은 v1.0 그대로라 시험은 저장 상태를 지목·찬반 단계로 옮겨(toPhase) 들어간다.
+// DAY-03~06 DO 시험, 결정 0060. 위쪽 describe 는 저장 상태를 지목·찬반 단계로 옮겨(toPhase) 들어가고,
+// 맨 아래 "실제 흐름" describe(08-11)가 토론 끝내기부터 마감 훅으로 한 판을 끝까지 돈다.
 // 실패 출력은 한 줄이어야 해서(TAP) 프레임 목록은 summary() 한 줄 문자열로 비교한다.
 import { describe, expect, it } from "vitest";
 import type { RoomView, ServerMessage } from "../../shared/protocol";
@@ -252,7 +252,7 @@ describe("토론 끝내기 (DAY-03, 결정 0060-2)", () => {
 
 
 // ---- 모이기·무대 배치 (DAY-04·05, 결정 0060-7, Pitfall 4·5) ----
-// 흐름 전환(08-11) 전이라 지목·변론 단계는 저장 상태 편집(toPhase)과 마감 당기기로 들어간다(가정 A3).
+// 지목 단계는 저장 상태 편집(toPhase)으로 들어가되, 변론은 지목 표를 저장해 두고 실제 마감 훅(resolveNomination)으로 들어간다(08-11).
 
 /** 한 소켓이 mark 이후 받은 world.move 의 (seat -> 끝점 'x,z'). 같은 좌석이 여러 번이면 마지막 것. */
 function movesSince(sock: Game["socks"][number], from: number): Map<number, string> {
@@ -272,6 +272,12 @@ async function flushAll(g: Game, marks: number[]): Promise<void> {
 async function dueAgo(code: string, ago: number): Promise<void> {
   await editRoom(code, (room) => ({ ...room, phaseEndsAt: Date.now() - ago }));
   expect(await runDurableObjectAlarm(env.ROOM.getByName(code))).toBe(true);
+}
+
+/** 저장 상태 patch: 산 사람 모두가 target 좌석을 지목해 둔다(target 본인은 다른 사람) — 지목 마감 훅(resolveNomination)이 target 을 변론자로 정한다(08-11, 실제 마감 경로). */
+function pointedAt(target: number): (room: Record<string, unknown>) => Record<string, unknown> {
+  return (room) =>
+    mapPlayers(room, (p) => ({ ...p, nominate: p.seat === target ? ((target + 1) % 5) : target }));
 }
 
 describe("모이기·무대 배치(결정 0060-7)", () => {
@@ -329,7 +335,7 @@ describe("모이기·무대 배치(결정 0060-7)", () => {
   it("지목이 끝나 변론이 되면 변론자만 무대 [0,0] 으로 걷고 나머지는 새 프레임이 없다", async () => {
     const g = await startedGame("discussion", 4);
     const defender = g.actors[3]!;
-    await toPhase(g.code, "nomination", (room) => ({ ...room, verdict: { passed: false, candidate: defender.seat } }));
+    await toPhase(g.code, "nomination", pointedAt(defender.seat));
     await flushAll(g, g.socks.map(mark));
     const marks = g.socks.map(mark);
     await dueAgo(g.code, 1);
@@ -346,7 +352,7 @@ describe("모이기·무대 배치(결정 0060-7)", () => {
   it("알람이 늦어 지목 배치 없이 변론에 닿아도 변론자는 무대로, 나머지 넷은 둘레 자리로 선다", async () => {
     const g = await startedGame("discussion", 4);
     const defender = g.actors[3]!;
-    await toPhase(g.code, "nomination", (room) => ({ ...room, verdict: { passed: false, candidate: defender.seat } }));
+    await toPhase(g.code, "nomination", pointedAt(defender.seat));
     const marks = g.socks.map(mark);
     await dueAgo(g.code, 5_000); // 지목 마감을 5초 지나 처음 깨어난다 — 지목 배치는 한 번도 돌지 않았다
     await flushAll(g, marks);
@@ -364,13 +370,18 @@ describe("모이기·무대 배치(결정 0060-7)", () => {
     for (const passed of [false, true]) {
       const g = await startedGame("discussion", 4);
       const defender = g.actors[3]!;
-      await toPhase(g.code, "nomination", (room) => ({ ...room, verdict: { passed, candidate: defender.seat } }));
+      await toPhase(g.code, "nomination", pointedAt(defender.seat));
       await flushAll(g, g.socks.map(mark));
       const ringSlotOfDefender = (await layOf(g.code)).slots[(await storedRoomIdOf(g.code, defender.seat))]!;
       await dueAgo(g.code, 1); // -> defense (변론자 무대)
       await flushAll(g, g.socks.map(mark));
       await flushWorld(g.code); // toPhase 는 DO 를 퇴거시킨다 — 디바운스 중인 위치·배치 기억을 먼저 저장한다
-      await toPhase(g.code, "execution", (room) => ({ ...room, verdict: { passed, candidate: defender.seat } }));
+      // 실제 마감 훅은 그날 voteLog 줄(exec.passed)과 verdict 를 함께 채운다 — 배치는 줄을 먼저 보므로 둘을 같이 맞춘다.
+      await toPhase(g.code, "execution", (room) => ({
+        ...room,
+        verdict: { passed, candidate: defender.seat },
+        voteLog: ((room.voteLog as Array<{ exec: object }> | undefined) ?? []).map((line) => ({ ...line, exec: { yes: passed ? 3 : 1, no: passed ? 1 : 3, passed } })),
+      }));
       const marks = g.socks.map(mark);
       await flushAll(g, marks);
       const moves = movesSince(g.socks[0]!, marks[0]!);
