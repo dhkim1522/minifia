@@ -65,9 +65,9 @@
 | `data-chat-newdot` | 새 줄 점 | 위로 올려 읽는 중 새 줄이 올 때만 생김 |
 | `data-seat` · `data-ch` | 기록의 줄마다 | 보낸 자리 번호 · 채널 표식(`all` · `mafia` · `ghost`) |
 | `data-typing="true"` | 이름표 머리 스택(`HeadStack`) | 머리 위 입력 중 "…" 알약이 떠 있다. 알약은 이름표 위 22px 를 더한다 |
-| `window.__mfWorld` | 전역 | `sample(seat, t)` 로 걷는 중 위치를 읽음. `?e2e=1` 또는 개발 빌드에서만 생김 |
+| `window.__mfWorld` | 전역 | `sample(seat, t)` 로 걷는 중 서버 구간 위치를 읽음. `shown(seat)` = 마지막 프레임에 그린 위치(내 예측·구간 섞기 포함)와 프레임 시각. `?e2e=1` 또는 개발 빌드에서만 생김 |
 
-3D 캐릭터는 DOM 에 위치가 없으므로 위치 비교는 `__mfWorld.sample` 로 한다. 자동 검사 묶음 G · H 를 폰 크기 6종에 적용한다(H 는 위쪽 가림막 위에서 잰다). 6페이즈 E2E 는 06-17, 채팅 패널 계약(`chat-lobby` · `chat-keyboard` · `chat-ime` · `chat-table` · `chat-ghost`)은 7페이즈(07-15~07-20)가 `scripts/e2e/` 에 더했다.
+3D 캐릭터는 DOM 에 위치가 없으므로 위치 비교는 `__mfWorld.sample` 로 한다. W11·W12(탭 뒤 화면 출발·한 프레임 튐)는 `shown` 으로 잰다(결정 0059, 07-26). 자동 검사 묶음 G · H 를 폰 크기 6종에 적용한다(H 는 위쪽 가림막 위에서 잰다). 6페이즈 E2E 는 06-17, 채팅 패널 계약(`chat-lobby` · `chat-keyboard` · `chat-ime` · `chat-table` · `chat-ghost`)은 7페이즈(07-15~07-20)가 `scripts/e2e/` 에 더했다.
 
 ## 폰 폭별 장면 · 테이블
 
