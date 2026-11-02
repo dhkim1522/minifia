@@ -2,29 +2,28 @@
 // 입력 상태를 바꾸지 않으며, DOM·workerd API 를 쓰지 않는다.
 //
 // 이 파일은 "계획"만 만든다: 단계에 들어갈 때 어떤 봇이 언제 무엇을 할지(BotStep)를 정해 RoomState.botPlan 에 둔다.
-// 행동의 실행과 검증은 방 DO 가 사람과 같은 처리기(applyChat·pickTarget·castExecVote·castCandidateVote)로 한다 — 봇은 특권이 없다.
+// 행동의 실행과 검증은 방 DO 가 사람과 같은 처리기(applyChat·pickTarget·toggleEnd·castPoint·castVerdict)로 한다 — 봇은 특권이 없다.
 // 단계가 바뀌면 계획 키(단계:마감)가 달라져 남은 행동은 저절로 버려지고 새 단계 계획이 선다.
 //
-// 07-08: 순차 직업 주장(claim) 단계와 그 봇 계획이 없어졌다. 봇 계획이 서는 단계는 discussion·night·execVote·candidateVote·defense 다.
-// 08-07: 낮 처형 단계(결정 0060)가 더해져 nomination·verdict 에도 계획이 선다. discussion 에는 토론 끝내기 한 번이 더해진다. 옛 단계(execVote·candidateVote)의 행은 08-21 이 지운다.
+// 07-08: 순차 직업 주장(claim) 단계와 그 봇 계획이 없어졌다. 08-07: 낮 처형 단계(결정 0060)가 더해져 nomination·verdict 에도 계획이 선다.
+// 08-21: 옛 처형 여부·후보 선택 단계의 계획과 행동이 없어졌다. 봇 계획이 서는 단계는 discussion·nomination·verdict·night·defense 다.
 //
-// 구현됨(결정 0024, 0036): 처형 여부 투표(execVote)에는 찬성·반대 하나, 후보 선택(candidateVote)에는 자기를 뺀 살아 있는 한 명(역할을 보지 않는다),
-// 최후 변론(defense)에서는 후보인 봇만 고정 문구(BOT_DEFENSE_LINES) 하나를 자유 채팅으로 보낸다. 공개·처형·종료 단계에는 계획이 없다.
+// 구현됨(결정 0024, 0060-13): 토론(discussion)에는 채팅 두 줄과 토론 끝내기 한 번, 지목(nomination)에는 자기를 뺀 살아 있는 한 명(역할을 보지 않는다),
+// 찬반(verdict)에는 변론자가 아닌 산 봇의 찬성·반대 하나, 최후 변론(defense)에서는 변론자인 봇만 고정 문구(BOT_DEFENSE_LINES) 하나를 자유 채팅으로 보낸다. 공개·처형·종료 단계에는 계획이 없다.
 // 07-11: 봇은 고정 문구 목록에서 자유 채팅 줄(chat)을 보낸다 — 낮 토론 두 줄(BOT_CHAT_LINES), 밤 산 마피아 60% 한 줄(BOT_NIGHT_LINES), 후보 봇의 변론 한 줄.
 // 이모티콘·빠른 메시지(say)는 더 이상 보내지 않는다. 로비에서는 말하지 않는다(계획이 서지 않는다). 줄은 사람과 같은 applyChat 본체를 지나 단계 키·채널·D5 제한을 그대로 받는다.
 //
 // 난수 호출 순서가 계약이다(시드 테스트가 고정한다). randInt(0) 호출은 어디에도 없다(cryptoRandInt(0) 은 RangeError).
 // 새 단계의 난수는 새 분기 안에서만 늘어난다. 07-08 에서 claim 분기의 난수 호출이 빠져 시드 고정 값이 새 호출 순서로 다시 고정됐다(다른 단계의 호출 수는 그대로).
-// 07-11: 봇 자유 채팅으로 discussion·night 의 호출 순서가 바뀌어 시드 고정 값을 다시 고정했다(execVote·candidateVote·defense 의 호출 수는 그대로).
+// 07-11: 봇 자유 채팅으로 discussion·night 의 호출 순서가 바뀌어 시드 고정 값을 다시 고정했다(옛 투표·defense 의 호출 수는 그대로였다).
 // 봇 하나당 순서: discussion = (randInt(첫 지연 폭) → randInt(8)) → (randInt(둘째 지연 폭) → randInt(8)),
 // night = (대상이 있으면) randInt(대상 수) → randInt(pick 지연 폭), 마피아면 이어서 randInt(10) → (< 6 이면) randInt(채팅 지연 폭) → randInt(3),
-// execVote = randInt(100) → randInt(지연 폭), candidateVote = (후보가 있으면) randInt(후보 수) → randInt(지연 폭),
 // defense(후보 봇만) = randInt(문구 수 3) → randInt(지연 폭).
 // 테스트 방 방장이 봇 투표를 고정한 경우(RoomState.testBotVote, P-13): 고정 값이면 결정 난수(randInt(100)·randInt(후보 수))를 건너뛰고 지연 난수는 그대로 부른다.
 // 고정 설정이 없거나 pick 조건이 안 맞아 무작위로 돌아가면 위 순서와 똑같다.
 // 08-07 순서 추가: discussion 은 위 두 줄 뒤에 randInt(토론 끝내기 폭 30000) 한 번이 붙는다(봇당 5번: 폭·문구 수·폭·문구 수·끝내기 폭, 시드 고정 값을 다시 고정했다).
-// nomination = (후보가 있으면) randInt(후보 수) → randInt(지목 지연 폭 6000) — candidateVote 와 같은 결정 함수(botCandidateTarget)라 고정 pick(host·other)도 같다(결정 0060-13: pick 은 봇 지목 대상).
-// verdict(변론자가 아닌 산 봇만) = randInt(100) → randInt(찬반 지연 폭 5000) — execVote 와 같은 결정 함수(botExecAgree)라 고정 exec(yes·no)도 같다(exec 는 봇 찬반).
+// nomination = (후보가 있으면) randInt(후보 수) → randInt(지목 지연 폭 6000) — 결정 함수(botPointTarget)는 자기를 뺀 산 사람 하나를 고르고 고정 pick(host·other)도 같다(결정 0060-13: pick 은 봇 지목 대상).
+// verdict(변론자가 아닌 산 봇만) = randInt(100) → randInt(찬반 지연 폭 5000) — 결정 함수(botExecAgree)는 찬성 확률 EXEC_YES_PERCENT 이고 고정 exec(yes·no)도 같다(exec 는 봇 찬반).
 import { isAlive } from "./alive";
 import type { Player, RoomState } from "./room";
 import type { RandInt } from "./tick";
@@ -48,14 +47,8 @@ const NIGHT_CHAT_TENTHS = 6;
 const NIGHT_CHAT_BASE_MS = 8_000;
 const NIGHT_CHAT_SPAN_MS = 6_000;
 
-/** 처형 여부 투표: 찬성 확률(%). 테스트 방에서 처형 경로가 자주 열리게 높인 바뀔 수 있는 기본값(결정 0036). */
+/** 찬반: 찬성 확률(%). 테스트 방에서 처형 경로가 자주 열리게 높인 바뀔 수 있는 기본값(결정 0036). */
 export const EXEC_YES_PERCENT = 70;
-/** 여부 투표 지연: 1000 + [0, 6000) ms (단계 13초 − 마감 여유 안). */
-const EXEC_VOTE_BASE_MS = 1_000;
-const EXEC_VOTE_SPAN_MS = 6_000;
-/** 후보 선택 지연: 1000 + [0, 9000) ms (단계 15초 안). */
-const CANDIDATE_VOTE_BASE_MS = 1_000;
-const CANDIDATE_VOTE_SPAN_MS = 9_000;
 /** 토론 끝내기: now + 30000 + [0, 30000) ms 에 켜짐 한 번(결정 0060-2). 마감 − 500 보다 늦은 행동은 계획에서 버려지므로 토론이 길수록 더 많은 봇이 누른다. */
 const END_DISCUSSION_BASE_MS = 30_000;
 const END_DISCUSSION_SPAN_MS = 30_000;
@@ -90,8 +83,6 @@ export const BOT_DEFENSE_LINES: readonly string[] = ["저 아니에요", "저는
 export type BotAct =
   | { t: "chat"; text: string }
   | { t: "pick"; target: number }
-  | { t: "execVote"; agree: boolean }
-  | { t: "candidateVote"; target: number }
   // 8페이즈(결정 0060): 토론 끝내기(켜짐만)·지목·찬반. 사람과 같은 메시지 이름을 쓰고 방 DO 가 같은 apply* 본체로 처리한다.
   | { t: "endDiscussion" }
   | { t: "point"; target: number }
@@ -139,12 +130,12 @@ export function botExecAgree(randInt: RandInt, fixed?: "yes" | "no"): boolean {
 }
 
 /**
- * 후보 선택에서 이 봇이 고를 대상 seat. 후보는 자기 자신을 뺀 살아 있는 사람 seat 오름차순이고 역할을 보지 않는다(봇이 마피아를 아는 척하지 않는다).
+ * 지목에서 이 봇이 고를 대상 seat. 후보는 자기 자신을 뺀 살아 있는 사람 seat 오름차순이고 역할을 보지 않는다(봇이 마피아를 아는 척하지 않는다).
  * 탈락한 봇·후보 없음은 undefined(randInt 를 부르지 않는다).
  * 고정(pick, P-13): host 는 방장이 살아 있고 이 봇이 아니면 방장 seat, other 는 방장도 자기도 아닌 살아 있는 사람 중 가장 낮은 seat 이며 randInt 를 부르지 않는다.
  * 조건이 안 맞으면(방장 탈락·후보 없음) 위 무작위로 돌아가 기존과 같이 한 번 부른다.
  */
-export function botCandidateTarget(
+export function botPointTarget(
   state: RoomState,
   bot: Player,
   randInt: RandInt,
@@ -163,9 +154,9 @@ export function botCandidateTarget(
   return candidates[randInt(candidates.length)]!.seat;
 }
 
-/** 봇 계획이 필요한 단계(discussion·nomination·verdict·night·execVote·candidateVote·defense)의 키 "단계:마감". 그 밖은 null. */
+/** 봇 계획이 필요한 단계(discussion·nomination·verdict·night·defense)의 키 "단계:마감". 그 밖은 null. */
 export function botPlanKey(state: RoomState): string | null {
-  const planned: readonly string[] = ["discussion", "nomination", "verdict", "night", "execVote", "candidateVote", "defense"];
+  const planned: readonly string[] = ["discussion", "nomination", "verdict", "night", "defense"];
   if (!planned.includes(state.phase)) return null;
   return `${state.phase}:${state.phaseEndsAt}`;
 }
@@ -188,11 +179,11 @@ function planFor(state: RoomState, bot: Player, now: number, randInt: RandInt): 
     // 토론 끝내기(08-07): 채팅 두 줄 다음 난수 한 번. 사람과 같은 toggleEnd 를 지난다.
     add(now + END_DISCUSSION_BASE_MS + randInt(END_DISCUSSION_SPAN_MS), { t: "endDiscussion" });
   } else if (state.phase === "nomination") {
-    // 지목(08-07): 후보 선택(candidateVote)과 같은 결정 함수 — 자기를 뺀 산 사람, 고정 pick(host·other)도 같다(결정 0060-13).
-    const target = botCandidateTarget(state, bot, randInt, state.testBotVote?.pick);
+    // 지목(08-07): 자기를 뺀 산 사람 하나, 고정 pick(host·other)도 같다(결정 0060-13).
+    const target = botPointTarget(state, bot, randInt, state.testBotVote?.pick);
     if (target !== undefined) add(now + POINT_BASE_MS + randInt(POINT_SPAN_MS), { t: "point", target });
   } else if (state.phase === "verdict") {
-    // 찬반(08-07): 변론자 봇은 던지지 않는다(castVerdict 가 거절한다). 결정 함수는 여부 투표와 같고 고정 exec(yes·no)도 같다(결정 0060-13).
+    // 찬반(08-07): 변론자 봇은 던지지 않는다(castVerdict 가 거절한다). 고정 exec(yes·no)도 따른다(결정 0060-13).
     if (state.verdict?.candidate !== bot.seat) {
       const agree = botExecAgree(randInt, state.testBotVote?.exec);
       add(now + VERDICT_BASE_MS + randInt(VERDICT_SPAN_MS), { t: "verdict", agree });
@@ -206,12 +197,6 @@ function planFor(state: RoomState, bot: Player, now: number, randInt: RandInt): 
       const at = now + NIGHT_CHAT_BASE_MS + randInt(NIGHT_CHAT_SPAN_MS);
       add(at, { t: "chat", text: BOT_NIGHT_LINES[randInt(BOT_NIGHT_LINES.length)]! });
     }
-  } else if (state.phase === "execVote") {
-    const agree = botExecAgree(randInt, state.testBotVote?.exec);
-    add(now + EXEC_VOTE_BASE_MS + randInt(EXEC_VOTE_SPAN_MS), { t: "execVote", agree });
-  } else if (state.phase === "candidateVote") {
-    const target = botCandidateTarget(state, bot, randInt, state.testBotVote?.pick);
-    if (target !== undefined) add(now + CANDIDATE_VOTE_BASE_MS + randInt(CANDIDATE_VOTE_SPAN_MS), { t: "candidateVote", target });
   } else if (state.phase === "defense") {
     // 변론은 후보 봇만 한다(서버는 산 사람 누구의 변론 채팅도 받지만 봇은 후보만 말한다). 후보가 아닌 봇은 아무것도 하지 않는다.
     if (state.verdict?.candidate === bot.seat) {

@@ -77,11 +77,6 @@ export interface SpectateView {
 // ---- 처형·승패 계약(4페이즈) ----
 /** 처형 문구 번호는 1..EXECUTION_PHRASE_COUNT (D-11). 서버(문구 추첨)와 화면(문장 표)이 같은 값을 읽는다. */
 export const EXECUTION_PHRASE_COUNT = 4;
-/** 여부 투표의 실시간 집계 — 던진 표만 센다(안 던진 사람은 어느 쪽도 아니다). 모든 viewer 에게 같은 값이다(D-02). */
-export interface ExecTally {
-  yes: number;
-  no: number;
-}
 /** 후보 선택 한 줄: 누가 누구를 골랐는지. 던진 표만 있다(무효표는 줄이 없다). 공개 구간 이후에만 모두에게 실린다(D-07). */
 export interface CandidateVoteLine {
   seat: number;
@@ -132,7 +127,6 @@ export interface DayView {
   // ---- 4페이즈 처형 필드 ----
   // 서버는 낮 단계마다(빈 배열 포함) 항상 싣는다. 타입을 optional 로 둔 이유: 필수로 하면 화면 테스트의 DayView 리터럴이 서버 웨이브에서 한꺼번에 바뀐다(화면 계획이 필요하면 필수로 올린다).
   voteLog?: VoteLogEntry[];
-  execTally?: ExecTally; // execVote 단계에서만, 모든 viewer 에게 같은 값
   candidate?: number; // candidateVoteReveal·defense·execution 에서, 후보가 있을 때만
   execution?: ExecutionView; // execution 단계에서만
   noExecution?: { reason: NoExecutionReason }; // 처형이 성립하지 않아 밤으로 온 그 밤 단계에서만(D-34)
@@ -233,8 +227,6 @@ export interface MyInfo {
   role?: RoleId; // 내 역할 — 채우는 일은 01-07
   allies?: number[]; // 같은 마피아 동료의 seat — 채우는 일은 01-07
   pick?: number; // 밤에 본인이 고른 seat(본인에게만)
-  voteAgree?: boolean; // execVote 단계에서 본인이 던진 여부 표(본인에게만, 남의 표는 어떤 키로도 싣지 않는다)
-  voteTarget?: number; // candidateVote 단계에서 본인이 고른 후보 seat(본인에게만). 취소하면 키가 없다(결정 0040)
   allyPicks?: number[]; // 생존 마피아에게만: 동료들이 고른 대상 seat 오름차순·중복 없음(누가 골랐는지는 싣지 않는다)
   records?: RoleRecord[]; // 본인 역할의 일지 하나(경찰 수사·마피아 암살·의사 치료), 본인에게만
   testMode?: true; // 테스트 방 방장 본인만(결정 0022). 손님·일반 방·미리보기에는 키 자체가 없다

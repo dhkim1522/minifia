@@ -26,7 +26,6 @@ import { pickRecipientIds, pickTarget } from "../shared/game/night";
 import { resetToLobby, setBotCount, setBotVote, setTestRole, skipPhase } from "../shared/game/testTools";
 import type { RoleId } from "../shared/game/roles";
 import { nextWakeAt, tick } from "../shared/game/tick";
-import { castCandidateVote, castExecVote } from "../shared/game/vote";
 import { castPoint } from "../shared/game/nomination";
 import { castVerdict } from "../shared/game/verdict";
 import { endReached, toggleEnd } from "../shared/game/discussion";
@@ -419,35 +418,6 @@ export class Room extends DurableObject<Env> {
     return null;
   }
 
-  // 마감이 바뀌지 않으니 reschedule 은 필요 없다(D-28). 같은 값을 다시 보내면 같은 객체라 저장·전송도 하지 않는다.
-  // 받아들여지면 pick 과 달리 모든 소켓이 각자 view 를 받는다: 집계 수(day.execTally)는 모두에게 공개되는 실시간 정보이고(D-02),
-  // 개인 표는 view 허용 목록이 본인 프레임(me.voteAgree)으로만 제한한다. 받는 사람을 줄이면 오히려 집계가 모두에게 같지 않게 된다.
-  private async applyExecVote(playerId: string, agree: boolean): Promise<WsErrorCode | null> {
-    if (!this.room) return "BAD_MESSAGE";
-    const result = castExecVote(this.room, playerId, agree);
-    if (!result.ok) return result.error;
-    if (result.state === this.room) return null;
-    this.room = result.state;
-    await this.persistAndBroadcast();
-    return null;
-  }
-
-  // 마감이 바뀌지 않으니 reschedule 은 필요 없다(D-28). 같은 값을 다시 보내면 같은 객체라 저장·전송도 하지 않는다.
-  // 받아들여지면 투표자 본인 한 명에게만 state 를 보낸다: 여부 투표(전원 방송, 집계가 모두에게 공개)와 달리 후보 선택은 진행 중에 공개 집계가 없고
-  // (공개는 공개 구간에서 서버가 정한 순서로 한 번에), 전원 방송은 "누가 언제 골랐는지" 타이밍을 흘린다(Pitfall 7).
-  // 관전자(탈락자)에게도 보내지 않는다 — 탈락자는 투표 자격이 없고 남의 진행을 알 이유가 없다(A7, 결정 0036 기본값. 바꾸려면 이 한 곳).
-  // 취소(null)도 같은 길이다: 받아들이면 투표자 본인에게만 state, 고른 표 없는 취소는 입력 그대로라 저장·전송 없음(결정 0040).
-  private async applyCandidateVote(playerId: string, target: number | null): Promise<WsErrorCode | null> {
-    if (!this.room) return "BAD_MESSAGE";
-    const result = castCandidateVote(this.room, playerId, target);
-    if (!result.ok) return result.error;
-    if (result.state === this.room) return null;
-    this.room = result.state;
-    await this.ctx.storage.put("room", this.room);
-    this.sendViewTo([playerId]);
-    return null;
-  }
-
   // 지목(8페이즈, DAY-04): 신원은 소켓 첨부의 playerId 뿐이다 — 메시지에 seat·id 가 없다(T-08-04).
   private async handlePoint(ws: WebSocket, target: number): Promise<void> {
     const att = this.attachmentOf(ws);
@@ -563,13 +533,6 @@ export class Room extends DurableObject<Env> {
         return;
       case "pick":
         await this.applyPick(step.botId, act.target);
-        return;
-      // 투표도 사람과 같은 본체를 지난다(특권 없음, 결정 0024-6): 여부 투표는 전원 방송, 후보 선택은 투표자(봇이라 소켓 없음)에게만 간다.
-      case "execVote":
-        await this.applyExecVote(step.botId, act.agree);
-        return;
-      case "candidateVote":
-        await this.applyCandidateVote(step.botId, act.target);
         return;
       // 8페이즈(결정 0060-13): 토론 끝내기·지목·찬반도 사람과 같은 본체를 지난다(특권 없음, 결정 0024-6). 거부는 알릴 소켓이 없어 버린다.
       case "endDiscussion":

@@ -6,7 +6,7 @@ import type { PointLine } from "../protocol";
 import { isAlive } from "./alive";
 import type { RoomState } from "./room";
 import type { DeadlineResult } from "./tick";
-import type { VoteError } from "./vote";
+import type { VoteError } from "./discussion";
 
 /**
  * 산 사람 수의 과반 수 = ⌊n ÷ 2⌋ + 1 (2명 → 2, 5명 → 3, 8명 → 5). 지목 과반 표시와 토론 끝내기 과반이 이 한 곳을 쓴다.

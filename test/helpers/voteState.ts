@@ -1,5 +1,5 @@
 // 투표 단계 상태를 실제 전이(startGame, tick)와 실제 투표 주입(castPoint, castVerdict)으로 만드는 테스트 도우미.
-// 8페이즈(08-11) 흐름 전환 뒤 낮은 토론 → 지목 → 변론 → 찬반 → 처형이다. 옛 표 도우미(castExecVotes·castCandidateVotes)는 쓰는 곳이 없어지면 08-21 이 지운다.
+// 8페이즈(08-11) 흐름 전환 뒤 낮은 토론 → 지목 → 변론 → 찬반 → 처형이다. 옛 표 도우미(처형 여부·후보 선택)는 08-21 에 지웠다.
 // 테스트에서만 import 한다 — 서버는 쓰지 않는다. 상태를 손으로 짜 맞추지 않는 이유(Pitfall 12): view.test.ts 의 stateAt 처럼
 // "다음 단계 표" 만 따라가면 분기 단계(지목 결과에 따라 갈리는 단계)에 닿지 못하고, 손으로 만든 상태는 규칙이 바뀌어도 초록으로 남는다.
 // 난수는 seededRandInt 로 주입한다(시드가 같으면 같은 판).
@@ -8,7 +8,6 @@ import { attachConnection, createRoomState, joinRoom, startGame } from "../../sh
 import type { RoomState } from "../../shared/game/room";
 import { tick } from "../../shared/game/tick";
 import { castPoint } from "../../shared/game/nomination";
-import { castCandidateVote, castExecVote } from "../../shared/game/vote";
 import { castVerdict } from "../../shared/game/verdict";
 import type { PhaseId } from "../../shared/protocol";
 import { seededRandInt } from "./seededRandom";
@@ -57,28 +56,6 @@ const seatToId = (state: RoomState, seat: number): string => {
   if (!player) throw new Error(`no player at seat ${seat}`);
   return player.id;
 };
-
-/** seat → 찬성 여부를 실제 castExecVote 로 주입한다. 거부되면 테스트 준비가 틀린 것이다. */
-export function castExecVotes(state: RoomState, agreeBySeat: Record<number, boolean>): RoomState {
-  let current = state;
-  for (const [seat, agree] of Object.entries(agreeBySeat)) {
-    const result = castExecVote(current, seatToId(current, Number(seat)), agree);
-    if (!result.ok) throw new Error(`castExecVote rejected seat ${seat}: ${result.error}`);
-    current = result.state;
-  }
-  return current;
-}
-
-/** seat → 고른 seat 를 실제 castCandidateVote 로 주입한다. 거부되면 테스트 준비가 틀린 것이다. */
-export function castCandidateVotes(state: RoomState, targetBySeat: Record<number, number>): RoomState {
-  let current = state;
-  for (const [seat, target] of Object.entries(targetBySeat)) {
-    const result = castCandidateVote(current, seatToId(current, Number(seat)), target);
-    if (!result.ok) throw new Error(`castCandidateVote rejected seat ${seat}: ${result.error}`);
-    current = result.state;
-  }
-  return current;
-}
 
 /** seat → 지목 대상 seat 를 실제 castPoint 로 주입한다(지목 단계여야 한다). 거부되면 테스트 준비가 틀린 것이다. */
 export function castPoints(state: RoomState, targetBySeat: Record<number, number>): RoomState {

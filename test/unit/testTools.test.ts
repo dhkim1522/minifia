@@ -694,7 +694,7 @@ describe("skipPhase: 지목·찬반에서 안 던진 봇이 먼저 던진다", (
   /** 그날 voteLog 줄의 찬반 집계. */
   const tally = (s: RoomState): string => JSON.stringify(s.voteLog?.[0]?.exec);
 
-  it("nomination: 안 던진 봇이 botCandidateTarget 대로 지목하고(봇마다 randInt(후보 수) 한 번), 이미 지목한 봇은 그대로다", () => {
+  it("nomination: 안 던진 봇이 botPointTarget 대로 지목하고(봇마다 randInt(후보 수) 한 번), 이미 지목한 봇은 그대로다", () => {
     const state = trial("nomination");
     const first = botsIn(state)[0]!; // seat 1
     const cast = castPoint(state, first.id, 4);

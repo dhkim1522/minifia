@@ -7,7 +7,7 @@
 import { isAlive } from "./alive";
 import type { Player, RoomState } from "./room";
 import type { DeadlineResult } from "./tick";
-import type { VoteError } from "./vote";
+import type { VoteError } from "./discussion";
 
 /** 유권자: 산 사람 중 변론자(state.verdict.candidate)를 뺀 사람. 변론자가 없으면 산 사람 전원이다. */
 export function verdictVotersOf(state: RoomState): Player[] {

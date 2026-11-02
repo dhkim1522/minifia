@@ -6,9 +6,9 @@
 // 훅은 tick 루프 안에서만 부른다 — 알람이 늦어 여러 단계를 한 번에 따라잡아도 중간 단계 훅이 순서대로 모두 돈다.
 // 알람 핸들러나 DO 에서 훅을 직접 부르지 않는다. 3·4페이즈도 같은 표에 행을 더한다.
 // night: 선택·지난 아침 비움, morning: 판정(난수 사용),
-// discussion: 낮 시작 청소(지난 낮의 verdict·execution 과 개인 키), execVote: 지난 투표 흔적 청소(옛 행 — 닿지 않는다, 08-21 이 지운다), candidateVoteReveal: 후보 선택 집계·서버 셔플 공개 순서(난수 사용), execution: 후보 탈락·처형 문구(난수 사용), ended: winner 기록·방 만료를 진입 + 30분으로 앞당김(endgame.ts).
+// discussion: 낮 시작 청소(지난 낮의 verdict·execution 과 개인 키), execution: 변론자 탈락(찬반 통과일 때만), ended: winner 기록·방 만료를 진입 + 30분으로 앞당김(endgame.ts).
 // 마감 훅(ON_DEADLINE): 단계 마감 때의 집계·분기 처리. 진입 훅과 같이 tick 루프 안에서만 부른다(결정 0016-2).
-// 마감 훅 행: nomination(지목 집계 → 최다 한 명이면 defense, 동률·0표면 night), verdict(찬반 집계 → 항상 execution), 옛 execVote·candidateVoteReveal 행은 닿지 않는다(08-21 이 지운다). execution·morning(승패면 next ended, 아니면 기본 단계 — 판정은 마감 훅에서만, D-10). ended 는 마감이 없는 종단 단계다.
+// 마감 훅 행: nomination(지목 집계 → 최다 한 명이면 defense, 동률·0표면 night), verdict(찬반 집계 → 항상 execution). execution·morning(승패면 next ended, 아니면 기본 단계 — 판정은 마감 훅에서만, D-10). ended 는 마감이 없는 종단 단계다.
 // 새 마감 = 이전 마감 + phaseDurationOf(진입 훅 뒤 상태) — 공개 단계는 훅이 집계한 표 수로 길이가 정해진다(결정 0039).
 // 훅이 stay 를 돌려주면 다음 단계로 가지 않고 같은 단계에서 마감만 "이전 마감 + 단계 길이" 로 옮긴다.
 // 난수는 세 번째 인자로만 받는다 — 방 DO 는 cryptoRandInt, 테스트는 seededRandInt.
@@ -17,12 +17,11 @@
 import type { PhaseId } from "../protocol";
 import { enterDiscussion, phaseDurationOf } from "./discussion";
 import { enterEnded, routeAfterExecution, routeAfterMorning } from "./endgame";
-import { enterCandidateVoteReveal, enterExecution, routeAfterCandidateVote } from "./execution";
+import { enterExecution } from "./execution";
 import { resolveNomination } from "./nomination";
 import { enterMorning, enterNight } from "./night";
 import { PHASE_DEFS } from "./phases";
 import type { RoomState } from "./room";
-import { enterExecVote, resolveExecVote } from "./vote";
 import { resolveVerdict } from "./verdict";
 
 /** 낮 시작 발표 진입: 일차 +1. 연장은 없다(결정 0017-5). */
@@ -45,8 +44,6 @@ export type DeadlineResult = { state: RoomState; stay: boolean; next?: PhaseId }
 const ON_ENTER: Partial<Record<PhaseId, (s: RoomState, randInt: RandInt, at: number) => RoomState>> = {
   dayAnnounce: enterDayAnnounce,
   discussion: enterDiscussion,
-  execVote: enterExecVote,
-  candidateVoteReveal: enterCandidateVoteReveal,
   execution: enterExecution,
   night: enterNight,
   morning: enterMorning,
@@ -57,8 +54,6 @@ const ON_ENTER: Partial<Record<PhaseId, (s: RoomState, randInt: RandInt, at: num
 const ON_DEADLINE: Partial<Record<PhaseId, (s: RoomState) => DeadlineResult>> = {
   nomination: resolveNomination,
   verdict: resolveVerdict,
-  execVote: resolveExecVote,
-  candidateVoteReveal: routeAfterCandidateVote,
   execution: routeAfterExecution,
   morning: routeAfterMorning,
 };

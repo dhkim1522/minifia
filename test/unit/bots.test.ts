@@ -11,7 +11,7 @@ import {
   BOT_NIGHT_LINES,
   EXEC_YES_PERCENT,
   botCount,
-  botCandidateTarget,
+  botPointTarget,
   botNightTarget,
   botPlanKey,
   botWakeAt,
@@ -662,17 +662,17 @@ describe("봇 투표·변론 계획: 키", () => {
   });
 });
 
-describe("봇 투표·변론 계획: 지목 대상 고르기 (botCandidateTarget)", () => {
-  it("botCandidateTarget 은 seat 오름차순 후보에서 randInt(길이) 번째를 고르고 역할을 보지 않는다", () => {
+describe("봇 투표·변론 계획: 지목 대상 고르기 (botPointTarget)", () => {
+  it("botPointTarget 은 seat 오름차순 후보에서 randInt(길이) 번째를 고르고 역할을 보지 않는다", () => {
     const state = verdictAt(8, "defense");
     const bot = botsOf(state)[1]!; // seat 2
     const seen: number[] = [];
-    const target = botCandidateTarget(state, bot, (n) => {
+    const target = botPointTarget(state, bot, (n) => {
       seen.push(n);
       return n - 1;
     });
     expect(`${seen.join(",")}:${target}`).toBe("4:4");
-    expect(String(botCandidateTarget(state, bot, () => 0))).toBe("0");
+    expect(String(botPointTarget(state, bot, () => 0))).toBe("0");
   });
 
   it("살아 있는 다른 사람이 없으면 행이 없고 randInt 를 부르지 않는다", () => {
@@ -680,7 +680,7 @@ describe("봇 투표·변론 계획: 지목 대상 고르기 (botCandidateTarget
     const lastBot = botsOf(base)[0]!;
     const state = markDead(base, ...base.players.filter((p) => p.id !== lastBot.id).map((p) => p.seat));
     expect(planBotSteps(state, nowOf(state), THROWING).length).toBe(0);
-    expect(String(botCandidateTarget(state, lastBot, THROWING))).toBe("undefined");
+    expect(String(botPointTarget(state, lastBot, THROWING))).toBe("undefined");
   });
 });
 
@@ -760,24 +760,24 @@ describe("봇 투표·변론 계획: 회귀", () => {
 });
 
 // ---- P-13: 테스트 방 방장이 고른 봇 투표 설정(결정 0022·0024 확장, 04-15) ----
-describe("봇 투표 고정 설정: botCandidateTarget", () => {
-  it("botCandidateTarget host: 방장이 살아 있고 이 봇이 아니면 방장 seat 이며 randInt 를 부르지 않는다", () => {
+describe("봇 투표 고정 설정: botPointTarget", () => {
+  it("botPointTarget host: 방장이 살아 있고 이 봇이 아니면 방장 seat 이며 randInt 를 부르지 않는다", () => {
     const state = verdictAt(8, "defense");
     const hostSeat = state.players.find((p) => p.id === state.hostId)!.seat;
     for (const bot of botsOf(state)) {
-      expect(`${bot.seat}:${botCandidateTarget(state, bot, THROWING, "host")}`).toBe(`${bot.seat}:${hostSeat}`);
+      expect(`${bot.seat}:${botPointTarget(state, bot, THROWING, "host")}`).toBe(`${bot.seat}:${hostSeat}`);
     }
   });
 
-  it("botCandidateTarget other: 방장도 자기도 아닌 살아 있는 사람 중 가장 낮은 seat 이며 randInt 를 부르지 않는다", () => {
+  it("botPointTarget other: 방장도 자기도 아닌 살아 있는 사람 중 가장 낮은 seat 이며 randInt 를 부르지 않는다", () => {
     const state = verdictAt(8, "defense");
     const [b1, b2, b3] = botsOf(state); // seat 1, 2, 3
-    expect(String(botCandidateTarget(state, b1!, THROWING, "other"))).toBe("2");
-    expect(String(botCandidateTarget(state, b2!, THROWING, "other"))).toBe("1");
-    expect(String(botCandidateTarget(state, b3!, THROWING, "other"))).toBe("1");
+    expect(String(botPointTarget(state, b1!, THROWING, "other"))).toBe("2");
+    expect(String(botPointTarget(state, b2!, THROWING, "other"))).toBe("1");
+    expect(String(botPointTarget(state, b3!, THROWING, "other"))).toBe("1");
     // 가장 낮은 seat 이 탈락했으면 그다음.
     const dead = markDead(state, 1);
-    expect(String(botCandidateTarget(dead, b2!, THROWING, "other"))).toBe("3");
+    expect(String(botPointTarget(dead, b2!, THROWING, "other"))).toBe("3");
   });
 
   it("조건이 안 맞으면 무작위로 돌아가 기존과 같이 randInt(길이) 한 번 부른다", () => {
@@ -787,17 +787,17 @@ describe("봇 투표 고정 설정: botCandidateTarget", () => {
     // host: 방장 탈락 → 살아 있는 다른 사람 3명 중 무작위
     const hostDead = markDead(base, hostSeat);
     const rec1 = recording(2);
-    const t1 = botCandidateTarget(hostDead, bot, rec1.randInt, "host");
+    const t1 = botPointTarget(hostDead, bot, rec1.randInt, "host");
     expect(`${rec1.calls.join(",")}:${t1 !== undefined && t1 !== hostSeat && t1 !== bot.seat}`).toBe("3:true");
     // other: 방장·자기 말고 아무도 없음 → 후보는 방장 하나뿐이라 randInt(1) 한 번
     const alone = markDead(base, ...base.players.filter((p) => p.id !== base.hostId && p.id !== bot.id).map((p) => p.seat));
     const rec2 = recording(2);
-    const t2 = botCandidateTarget(alone, bot, rec2.randInt, "other");
+    const t2 = botPointTarget(alone, bot, rec2.randInt, "other");
     expect(`${rec2.calls.join(",")}:${t2}`).toBe(`1:${hostSeat}`);
     // 후보가 아예 없으면 undefined, 난수 없음
     const none = markDead(alone, hostSeat);
-    expect(String(botCandidateTarget(none, bot, THROWING, "host"))).toBe("undefined");
-    expect(String(botCandidateTarget(none, bot, THROWING, "other"))).toBe("undefined");
+    expect(String(botPointTarget(none, bot, THROWING, "host"))).toBe("undefined");
+    expect(String(botPointTarget(none, bot, THROWING, "other"))).toBe("undefined");
   });
 
   it("고정 설정이 없으면 기존 시그니처 호출과 같다(같은 난수 기록·같은 결과)", () => {
@@ -805,7 +805,7 @@ describe("봇 투표 고정 설정: botCandidateTarget", () => {
     const bot = botsOf(state)[1]!;
     const a = recording(5);
     const b = recording(5);
-    expect(String(botCandidateTarget(state, bot, a.randInt))).toBe(String(botCandidateTarget(state, bot, b.randInt, undefined)));
+    expect(String(botPointTarget(state, bot, a.randInt))).toBe(String(botPointTarget(state, bot, b.randInt, undefined)));
     expect(a.calls.join(",")).toBe(b.calls.join(","));
   });
 });

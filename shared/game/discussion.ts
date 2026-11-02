@@ -7,7 +7,9 @@ import { isAlive } from "./alive";
 import { majorityOf } from "./nomination";
 import { PHASE_DEFS, candidateRevealMs } from "./phases";
 import type { RoomState } from "./room";
-import type { VoteError } from "./vote";
+
+/** 낮 투표류 규칙 함수(토론 끝내기·지목·찬반)의 거부 코드. 단계가 아니면 WRONG_PHASE, 그 밖의 잘못된 입력은 BAD_MESSAGE. */
+export type VoteError = "WRONG_PHASE" | "BAD_MESSAGE";
 
 /**
  * 지금 단계의 전체 길이(ms). 단계 표 길이 그대로이고, 길이가 없는 단계는 null. buildView 가 이 함수로 phaseDurationMs 를 만든다.

@@ -2,10 +2,11 @@
 // 관전(결정 0021): 탈락한 본인에게만 모든 실제 직업과 그 밤의 행동 대상. 살아 있는 사람에게는 어떤 키로도 싣지 않는다 —
 // 결정 0002 를 "살아 있는 사람에게는 보내지 않는다" 로 좁혀 유지. 직업 키 이름은 role 이 아니라 job 이다(누출 검사가 role 키를 me 밖에서 금지).
 // 밤 필드 받는 사람: pick 본인(생존·밤), allyPicks 생존 마피아(밤), records 경찰(수사)·마피아(암살)·의사(치료) 본인 중 본인 역할 일지 하나(역할 공개 단계 전체), morning 모두(아침만).
-// 투표 필드 받는 사람(4페이즈): execTally 모두에게 같은 값(execVote 단계만), voteAgree 본인(생존·execVote), voteTarget 본인(생존·candidateVote, 취소하면 키가 없다 — 결정 0040), voteLog 모두(낮 단계마다 항상, 집계 수만),
-// candidate 모두(공개 구간·변론·처형, 후보가 있을 때), execution 모두(처형 단계만, seat·phrase), noExecution 모두(처형 무효로 온 밤만, reason 하나).
+// 낮 필드 받는 사람(8페이즈): points 모두(지목 단계만, 공개 지목 줄), endCount 모두(토론 단계만, 누른 수뿐), voted 모두(찬반 단계만, 던진 좌석뿐), verdict 모두(처형 단계만, 찬반 수),
+// me.endDiscussion·me.verdictVote 본인만(각각 토론·찬반 단계), voteLog 모두(낮 단계마다 항상, 집계 수만),
+// candidate 모두(변론·찬반·처형, 변론자가 있을 때), execution 모두(처형 단계만, seat·phrase), noExecution 모두(처형 무효로 온 밤만, reason 하나).
 // result(승리 팀·모든 직업·판 요약)는 ended 단계에서만, 생존·탈락 구분 없이 모두에게 같게(D-17). 서버 전용 밤 기록(nightLog)은 buildSummary 만 읽고 판 중에는 어떤 view 에도 없다(결정 0020-3).
-// 남의 여부 표·후보 선택은 어떤 키로도 싣지 않는다 — Player.execVote 는 마감 훅이, Player.candidateVote 는 공개 구간 진입 훅이 키째 지운다(결정 0034·D-02·D-19).
+// 남의 지목·찬반 값·토론 끝내기 누름은 어떤 키로도 싣지 않는다 — Player.nominate·verdictVote 는 마감 훅이 키째 지운다(결정 0060·D-02).
 import type {
   DayView,
   MorningView,
@@ -31,7 +32,6 @@ import { PHASE_DEFS } from "./phases";
 import { rolesInPlay } from "./roles";
 import { hostOf } from "./room";
 import type { RoomState } from "./room";
-import { execTallyOf } from "./vote";
 import { verdictVotersOf, votedSeatsOf } from "./verdict";
 
 /**
@@ -73,8 +73,6 @@ function buildDay(state: RoomState): DayView {
     roles: rolesInPlay(state.players.length),
     voteLog: (state.voteLog ?? []).map(voteLogLine),
   };
-  // 실시간 집계는 모든 viewer 에게 같은 값이다 — 마감 집계와 같은 함수(execTallyOf)를 쓴다.
-  if (state.phase === "execVote") day.execTally = execTallyOf(state);
   // 토론 끝내기는 누른 산 사람 수만 공개한다 — 누가 눌렀는지는 서버 전용(Player.endVote)이고 본인 값만 me.endDiscussion 으로 간다(결정 0060-2).
   if (state.phase === "discussion") day.endCount = endCountOf(state);
   // 찬반은 던진 유권자 좌석만 공개한다(값 없음 — 익명, 결정 0053). 개인 값은 me.verdictVote 로 본인에게만 간다.
@@ -183,11 +181,6 @@ export function buildView(state: RoomState, playerId: string, now: number): Room
     myInfo.pick = me.nightPick;
   }
 
-  // 여부 표는 본인에게만(D-02) — 생존한 본인이 execVote 단계에서 던진 값이 있을 때만 키를 만든다. 남의 값은 어떤 키로도 싣지 않는다.
-  if (state.phase === "execVote" && isAlive(me) && me.execVote !== undefined) {
-    myInfo.voteAgree = me.execVote;
-  }
-
   // 토론 끝내기 누름은 본인에게만(결정 0060-2) — 산 본인이 discussion 에서 눌렀을 때만 키를 만든다. 누른 사람이 누구인지는 어떤 키로도 싣지 않는다.
   if (state.phase === "discussion" && isAlive(me) && me.endVote === true) {
     myInfo.endDiscussion = true;
@@ -196,11 +189,6 @@ export function buildView(state: RoomState, playerId: string, now: number): Room
   // 찬반 값은 본인에게만(결정 0053·0060-4, T-08-02) — verdict 단계에서 유권자(변론자를 뺀 산 사람)인 본인이 던진 값이 있을 때만 키를 만든다. 남의 값은 어떤 키로도 싣지 않는다.
   if (state.phase === "verdict" && me.verdictVote !== undefined && verdictVotersOf(state).some((p) => p.id === me.id)) {
     myInfo.verdictVote = me.verdictVote;
-  }
-
-  // 후보 선택 값은 본인에게만(D-19, A7) — 생존한 본인이 candidateVote 단계에서 고른 값이 있을 때만 키를 만든다. 남의 값은 어떤 키로도 싣지 않는다.
-  if (state.phase === "candidateVote" && isAlive(me) && me.candidateVote !== undefined) {
-    myInfo.voteTarget = me.candidateVote;
   }
 
   // 동료가 고른 대상은 밤에 살아 있는 마피아에게만, 대상 seat 집합으로만(누가 골랐는지는 없다, D-07). 탈락한 마피아는 allies 만 받는다(A3).

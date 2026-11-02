@@ -51,11 +51,7 @@ export interface Player {
   assassinations?: AssassinationRecord[];
   /** 의사 본인의 치료일지 — 뷰에는 그 의사 본인에게만 실린다. */
   treatments?: TreatmentRecord[];
-  // ---- 4페이즈 투표 상태(결정 0034). 모두 optional — 옛 방도 읽힌다. 서버 전용이고 어떤 view 에도 이 키로 실리지 않는다. ----
-  /** 이번 낮 처형 여부 표(찬성 true). 마지막 값이 유효. resolveExecVote(마감 훅)가 집계 직후 키째 지우고 enterExecVote 가 한 번 더 지운다 — 익명을 데이터가 없다는 사실로 지킨다(D-02). */
-  execVote?: boolean;
-  /** 이번 낮 후보 선택(seat). enterExecVote 가 키째 지운다. */
-  candidateVote?: number;
+  // 옛 처형 여부·후보 선택 개인 표 키(execVote·candidateVote)는 08-21 에 지웠다. 옛 저장 방의 잔재는 08-22 정규화가 지운다.
   // ---- 8페이즈 낮 처형 상태(결정 0060). 서버 전용이고 어떤 view 에도 이 키로 실리지 않는다. 모두 optional. ----
   /** 지목 단계에서 가리킨 seat. 마감 훅(resolveNomination)이 키째 지우고 enterDiscussion 이 한 번 더 지운다. 취소는 없다. */
   nominate?: number;
@@ -88,11 +84,11 @@ export interface RoomState {
   /** 마지막 탈락 문구 번호 — 판 내내 유지해 같은 문구가 연달아 나오지 않게 한다(3페이즈). */
   lastPhrase?: number;
   // ---- 4페이즈 처형·승패 상태(결정 0034). 모두 optional 이고 서버 전용이다. 뷰에는 허용 목록으로만 실린다. ----
-  /** 이번 낮 여부 투표 결과(분기 근거). resolveExecVote 가 쓰고 enterExecVote 가 지운다. */
+  /** 이번 낮 찬반 결과(분기 근거). resolveVerdict 가 쓰고 enterDiscussion 이 지운다. */
   verdict?: { passed: boolean; candidate?: number };
-  /** 날짜별 공개 투표 기록(D-08). resolveExecVote 가 줄을 더하고 판 내내 쌓인다. */
+  /** 날짜별 공개 투표 기록(D-08). resolveNomination 이 줄을 더하고 resolveVerdict 가 채우며 판 내내 쌓인다. */
   voteLog?: VoteLogEntry[];
-  /** 처형 발표(seat·문구). enterExecVote 가 지운다. */
+  /** 처형 발표(seat·문구). enterDiscussion 이 지운다. */
   execution?: ExecutionView;
   /** 마지막 처형 문구 번호 — 아침의 lastPhrase 와 따로 센다(연달아 같은 문구 방지). */
   lastExecPhrase?: number;
