@@ -18,6 +18,7 @@ export class WorldStore {
   private ready = false;
   private segs = new Map<number, Segment>();
   private entered = new Set<number>();
+  private moveSeqs = new Map<number, number>();
   private listeners = new Set<WorldStoreListener>();
 
   /** 연결 epoch 와 함께 world 프레임을 적용한다. snap = 모두의 구간을 통째로 바꾼다, move = 한 사람의 새 구간 */
@@ -26,6 +27,7 @@ export class WorldStore {
     if (frame.k === "snap") {
       this.segs = new Map(frame.ents.map((e) => [e.s, { p: [...e.p], t0: e.t0, v: e.v }]));
       this.entered.clear();
+      this.moveSeqs.clear();
       this.epoch = epoch;
       this.ready = true;
       this.notify();
@@ -42,6 +44,7 @@ export class WorldStore {
     if (!this.ready) return;
     if (!this.segs.has(frame.s)) this.entered.add(frame.s);
     this.segs.set(frame.s, { p: [...frame.p], t0: frame.t0, v: frame.v });
+    this.moveSeqs.set(frame.s, (this.moveSeqs.get(frame.s) ?? 0) + 1);
     this.notify();
   }
 
@@ -52,6 +55,7 @@ export class WorldStore {
     this.ready = false;
     this.segs.clear();
     this.entered.clear();
+    this.moveSeqs.clear();
     if (changed) this.notify();
   }
 
@@ -65,9 +69,9 @@ export class WorldStore {
     return this.ready;
   }
 
-  /** (RED 껍데기) */
-  moveSeqOf(_seat: number): number {
-    return 0;
+  /** 이 연결의 snap 뒤 그 자리에 적용된 move 수 — 런타임이 내 이동의 응답을 센다(결정 0059). 없으면 0. */
+  moveSeqOf(seat: number): number {
+    return this.moveSeqs.get(seat) ?? 0;
   }
 
   /** 구간이 있는 seat 오름차순 */
@@ -99,6 +103,7 @@ export class WorldStore {
     for (const s of removed) {
       this.segs.delete(s);
       this.entered.delete(s);
+      this.moveSeqs.delete(s);
     }
     if (removed.length > 0) this.notify();
     return removed;

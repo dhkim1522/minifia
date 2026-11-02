@@ -72,23 +72,80 @@ export function travelYaw(seg: Segment, t: number): number | null {
   return null;
 }
 
-// ---- RED 껍데기 (GREEN 에서 구현) ----
+/** observe 결과: answered = 내 예측을 서버 구간으로 바꿔야 함, reset = 연결이 새로 시작됨(예측을 비움), null = 변화 없음 */
 export type OwnMoveEvent = "answered" | "reset" | null;
+
+/**
+ * 내 이동 추적기(결정 0059-2). 보낸 move 수와 서버가 내 자리에 적용한 move 수(WorldStore.moveSeqOf)를 맞춰
+ * "내가 마지막으로 보낸 이동의 응답이 왔는가"를 판정한다. 응답이 늦어 앞선 탭의 응답이 먼저 와도 마지막 탭의 예측을 끊지 않는다.
+ */
 export interface OwnMoves {
+  /** move 를 보낸 직후: 대기 +1, 예측 = pred(null 이면 예측 없음) */
   sent(pred: Segment | null): void;
+  /** 프레임마다 moveSeqOf(내 자리)·segOf(내 자리)를 넘긴다 */
   observe(seq: number, server: Segment | undefined): OwnMoveEvent;
+  /** 응답 없음 1.5초: 대기가 있었으면 대기·예측을 비우고 true */
   expire(): boolean;
+  /** 새 연결(epoch 변경): 대기·예측을 비우고 기준 seq 를 다시 잡는다 */
   reset(seq: number): void;
+  /** 그릴 구간: 예측 중이면 예측, 아니면 server */
   effective(server: Segment | undefined): Segment | undefined;
   pending(): number;
 }
-export function createOwnMoves(_initialSeq: number): OwnMoves {
+
+/** 두 구간의 끝점(마지막 두 수)이 같은가 */
+function sameEnd(a: Segment, b: Segment): boolean {
+  const n = a.p.length;
+  const m = b.p.length;
+  if (n < 2 || m < 2) return false;
+  return a.p[n - 2] === b.p[m - 2] && a.p[n - 1] === b.p[m - 1];
+}
+
+export function createOwnMoves(initialSeq: number): OwnMoves {
+  let base = initialSeq;
+  let waiting = 0;
+  let predicted: Segment | null = null;
+  const clear = (): void => {
+    waiting = 0;
+    predicted = null;
+  };
   return {
-    sent: () => {},
-    observe: () => null,
-    expire: () => false,
-    reset: () => {},
-    effective: (server) => server,
-    pending: () => 0,
+    sent(pred) {
+      waiting += 1;
+      predicted = pred;
+    },
+    observe(seq, server) {
+      if (seq < base) {
+        base = seq;
+        clear();
+        return "reset";
+      }
+      if (seq === base) return null;
+      const d = seq - base;
+      base = seq;
+      if (waiting === 0) return null; // 내가 보낸 것의 응답이 아니다
+      waiting = Math.max(0, waiting - d);
+      const reachedPrediction = predicted !== null && server !== undefined && sameEnd(server, predicted);
+      if (waiting === 0 || reachedPrediction) {
+        clear();
+        return "answered";
+      }
+      return null; // 앞선 탭의 응답 — 마지막 탭의 예측을 끊지 않는다
+    },
+    expire() {
+      if (waiting === 0) return false;
+      clear();
+      return true;
+    },
+    reset(seq) {
+      base = seq;
+      clear();
+    },
+    effective(server) {
+      return predicted ?? server;
+    },
+    pending() {
+      return waiting;
+    },
   };
 }
