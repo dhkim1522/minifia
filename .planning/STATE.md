@@ -5,16 +5,16 @@ milestone_name: 같은 공간
 current_phase: 08
 current_phase_name: 낮 처형과 유령
 status: executing
-stopped_at: Completed 08-21-PLAN.md
-last_updated: "2026-11-02T15:33:49.763Z"
+stopped_at: Completed 08-22-PLAN.md
+last_updated: "2026-11-02T15:46:09.617Z"
 last_activity: 2026-11-02
 last_activity_desc: Phase 08 execution started
-state_head: 4204dc4633fb05184045f7e52558cfa253d62cbd
+state_head: f501f0c4f5aa722ec87b89892609d04542cddee5
 progress:
   total_phases: 7
   completed_phases: 2
   total_plans: 78
-  completed_plans: 73
+  completed_plans: 74
   percent: 29
 ---
 
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-11-02)
 ## Current Position
 
 Phase: 08 (낮 처형과 유령) — EXECUTING
-Plan: 24 of 28
+Plan: 25 of 28
 Status: Ready to execute
 Last activity: 2026-11-02 — Phase 08 execution started
 
@@ -132,6 +132,7 @@ Progress: [███░░░░░░░] 29% (2/7 phases)
 | Phase 08 P19 | 12min | 2 tasks | 30 files |
 | Phase 08 P20 | 25min | 3 tasks | 29 files |
 | Phase 08 P21 | 6 min | 2 tasks | 18 files |
+| Phase 08 P22 | 11 min | 3 tasks | 38 files |
 
 ## Accumulated Context
 
@@ -273,6 +274,7 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 08]: 08-19: 역할 배정 화면은 사용자 확정대로 테이블 상자만 뺌(빈 패널 margin-top auto 로 위치 유지). 낮 장면 상자에서만 닿던 [테스트] 버튼 좁힘 처리도 함께 삭제
 - [Phase 08]: 08-20: day.css·night.css 는 NightPanel 이 쓰는 동안 남기고 죽은 낮 장면 규칙은 08-24(E2E 재구성)에서 정리. verdict.ts 는 결과 화면·밤 패널·단계 안내 문구와 결과 연출 시각 둘만 남김. chatUi 채팅 패널 덧셈은 CHAT_PANEL_EXTRA(92)
 - [Phase 08]: 08-21: VoteError 를 discussion.ts 로 옮겼고 CandidateVoteLine 은 PointLine 과 합치지 않고 남김(소비자 VoteLogEntry.cand.votes·verdict.test)
+- [Phase 08]: 08-22: 옛 투표 단계 방 정규화는 오늘 일차 voteLog 줄을 지운다(같은 일차 줄 중복 방지). dayStaticGuard 서버 이름 예외는 room.ts 정규화 표 줄 모양 여섯 가지뿐
 
 ### Pending Todos
 
@@ -308,8 +310,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-02T15:33:49.527Z
-Stopped at: Completed 08-21-PLAN.md
+Last session: 2026-11-02T15:46:09.373Z
+Stopped at: Completed 08-22-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
