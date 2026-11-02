@@ -134,10 +134,15 @@ export function dayEvents(prev: RoomView | null, cur: RoomView, opts: { reset?: 
   return events;
 }
 
+// ---- 위 알림 줄 세우기 (UI Considerations E2 #9, 남은 위험 7: 시작값 — 9페이즈 팀 테스트에서 확인) ----
+/** 같은 대상을 가리킨 표를 한 알림으로 합치는 창. 알림은 이 창이 닫힌 뒤에 나온다. */
 export const TOAST_MERGE_MS = 400;
 export const TOAST_MS = 1500;
+/** 대기가 2건 이상일 때 건당 시간 */
 export const TOAST_FAST_MS = 800;
+/** 대기 상한. 넘친 알림은 토스트에서만 건너뛴다(채팅 기록에는 모두 남는다) */
 export const TOAST_QUEUE_MAX = 4;
+/** 합친 알림에 쓰는 이름 수. 넘으면 '…' */
 export const TOAST_NAMES_MAX = 3;
 
 export interface ToastShow {
@@ -146,13 +151,55 @@ export interface ToastShow {
   durationMs: number;
 }
 
-// 자리표시자 — 구현은 다음 커밋.
+interface Pending {
+  toast: PointToast;
+  /** 이 알림이 만들어진 시각(합치기 창의 시작) */
+  since: number;
+}
+
+/**
+ * 위 알림 대기열. 시계는 메서드 인자 now 로만 받는다(가짜 시계 없이 결정적).
+ * - push: 창 안(< 400ms)의 같은 대상 알림이 대기 중이면 이름을 합치고, 아니면 줄 끝에 선다. 대기가 가득이면 건너뛴다.
+ * - next: 보이는 알림이 끝났고 맨 앞 알림의 창이 닫혔으면 하나를 꺼낸다. 대기(꺼내는 것 포함)가 2건 이상이면 0.8초, 1건이면 1.5초.
+ */
 export class ToastQueue {
-  push(_t: PointToast, _now: number): void {}
-  next(_now: number): ToastShow | null {
-    return null;
+  private queue: Pending[] = [];
+  private busyUntil = 0;
+  private lost = 0;
+
+  push(t: PointToast, now: number): void {
+    const open = this.queue.find((p) => p.toast.to === t.to && now - p.since < TOAST_MERGE_MS);
+    if (open) {
+      for (let i = 0; i < t.from.length; i += 1) {
+        if (open.toast.from.includes(t.from[i]!)) continue;
+        open.toast.from.push(t.from[i]!);
+        open.toast.fromNames.push(t.fromNames[i]!);
+      }
+      return;
+    }
+    if (this.queue.length >= TOAST_QUEUE_MAX) {
+      this.lost += 1;
+      return;
+    }
+    // 호출한 쪽의 객체를 합치기로 바꾸지 않도록 복사해 둔다.
+    this.queue.push({ toast: { ...t, from: [...t.from], fromNames: [...t.fromNames] }, since: now });
   }
+
+  next(now: number): ToastShow | null {
+    if (now < this.busyUntil) return null;
+    const head = this.queue[0];
+    if (!head || now - head.since < TOAST_MERGE_MS) return null;
+    const durationMs = this.queue.length >= 2 ? TOAST_FAST_MS : TOAST_MS;
+    this.queue.shift();
+    this.busyUntil = now + durationMs;
+    const names = head.toast.fromNames;
+    const shown = names.slice(0, TOAST_NAMES_MAX).join("·") + (names.length > TOAST_NAMES_MAX ? "…" : "");
+    const changed = head.toast.changed === true && names.length === 1;
+    return { text: DAY_COPY.pointLine(shown, head.toast.toName, changed), icon: "point", durationMs };
+  }
+
+  /** 대기가 가득 차서 토스트에서 건너뛴 알림 수(누적) */
   dropped(): number {
-    return 0;
+    return this.lost;
   }
 }
