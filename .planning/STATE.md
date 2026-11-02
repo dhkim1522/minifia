@@ -5,16 +5,16 @@ milestone_name: 같은 공간
 current_phase: 08
 current_phase_name: 낮 처형과 유령
 status: executing
-stopped_at: Completed 08-17-PLAN.md
-last_updated: "2026-11-02T14:35:17.577Z"
+stopped_at: Completed 08-18-PLAN.md
+last_updated: "2026-11-02T14:48:16.963Z"
 last_activity: 2026-11-02
 last_activity_desc: Phase 08 execution started
-state_head: 9553f5edebcd25eec336f3d154ce78353fc48986
+state_head: 0215b5c56ed4fd7ec4ef8c3b24d77087b58551d7
 progress:
   total_phases: 7
   completed_phases: 2
   total_plans: 78
-  completed_plans: 68
+  completed_plans: 69
   percent: 29
 ---
 
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-11-02)
 ## Current Position
 
 Phase: 08 (낮 처형과 유령) — EXECUTING
-Plan: 19 of 28
+Plan: 20 of 28
 Status: Ready to execute
 Last activity: 2026-11-02 — Phase 08 execution started
 
@@ -127,6 +127,7 @@ Progress: [███░░░░░░░] 29% (2/7 phases)
 | Phase 08 P15 | 30 min | 3 tasks | 5 files |
 | Phase 08 P16 | 40min | 3 tasks | 7 files |
 | Phase 08 P17 | 14 min | 3 tasks | 6 files |
+| Phase 08 P18 | 12min | 3 tasks | 14 files |
 
 ## Accumulated Context
 
@@ -261,6 +262,9 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 08]: 08-16: 처형 떠오름 fading 은 렌더 중 view 차이로 정해 진입 한 프레임 깜빡임 방지, 타이머는 정리만
 - [Phase 08]: 08-17: 유령 분기는 (내 alive 거짓 && view.spectate 있음) 일 때만 그린다. 산 사람 view 에 spectate 가 섞여 와도 분기 없음
 - [Phase 08]: 08-17: 유령이 되는 순간의 채팅 시작 줄은 useDayFx 가 산→탈락 전환에서 만들고(직전 줄 같으면 생략), 화면 연출은 ghostEnter 번호가 바뀔 때만
+- [Phase 08]: 마피아 헤더 안내 '없앨 사람을 눌러요' 는 headerFor night 분기(DAY_COPY.mafiaNightHint)에 둔다 — 경찰·의사·시민 밤 문구는 하단 NIGHT_PANEL_TEXT 표
+- [Phase 08]: 밤 발밑 고리·채팅 패널은 서버가 이 사람에게 보낸 값(me.pick·allyPicks·spectate.picks·me.chat)에서만 만든다 (08-18)
+- [Phase 08]: 아침(산 사람)은 UI-SPEC 단계표에 안내가 없어 [data-guide] 0개 — 08-27 화면당 data-guide 하나 에서 예외 처리 필요
 
 ### Pending Todos
 
@@ -296,8 +300,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-02T14:35:17.353Z
-Stopped at: Completed 08-17-PLAN.md
+Last session: 2026-11-02T14:48:16.726Z
+Stopped at: Completed 08-18-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
