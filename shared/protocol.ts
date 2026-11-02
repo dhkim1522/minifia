@@ -195,9 +195,7 @@ export type ClientMessage =
   | { t: "leave" }
   | { t: "kick"; seat: number }
   | { t: "pick"; target: number } // 밤 행동 — 행동 종류는 보내지 않는다(서버 저장 역할이 정한다)
-  | { t: "execVote"; agree: boolean } // 처형 여부 투표 — 생존자의 찬성 true / 반대 false, 마지막 값이 유효(결정 0034)
-  | { t: "candidateVote"; target: number | null } // 후보 선택 투표 — 자기 자신은 서버가 거부, 진행 중 값은 본인에게만(결정 0034·0036). null = 선택 취소: 고른 표가 있으면 서버가 지우고 본인에게만 알림(결정 0040)
-  // 8페이즈 낮 처형(결정 0060). 옛 두 투표 메시지(execVote·candidateVote)는 흐름이 바뀐 뒤 08-21 이 지운다. 행위자는 모두 소켓 첨부 playerId 뿐이다.
+  // 8페이즈 낮 처형(결정 0060). 옛 투표 메시지(처형 여부·후보 선택)는 08-21 에 지웠다 — 옛 번들이 보내면 스키마가 거부해 BAD_MESSAGE 다. 행위자는 모두 소켓 첨부 playerId 뿐이다.
   | { t: "endDiscussion"; on: boolean } // 토론 끝내기 — 누름(true)/취소(false), 산 사람만. 공개 값은 누른 수뿐이다(DAY-03)
   | { t: "point"; target: number } // 지목 — 대상 seat 하나, 취소 없음, 마감까지 바꿀 수 있다(DAY-04)
   | { t: "verdict"; agree: boolean } // 찬반 — 찬성 true / 반대 false, 변론자·유령은 거부, 마지막 값이 유효(DAY-06)

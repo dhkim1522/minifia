@@ -1,29 +1,24 @@
-// 클라이언트 메시지 스키마(ClientMessageSchema) 입력 검증 — 후보 선택 취소(target null, 결정 0040)가 다른 메시지로 번지지 않는지 본다.
+// 클라이언트 메시지 스키마(ClientMessageSchema) 입력 검증 — 옛 투표 메시지 거부(08-21)와 새 메시지 모양을 본다.
 import { describe, expect, it } from "vitest";
 import { ClientMessageSchema, CreateRoomBodySchema, JoinRoomBodySchema, MoveMessageSchema } from "../../shared/schemas";
 import { NICKNAME_MAX_GRAPHEMES, NICKNAME_MAX_UTF16, countGraphemes, validateNickname } from "../../shared/nickname";
 
-describe("ClientMessageSchema candidateVote (결정 0040: target 은 0..7 정수 또는 null)", () => {
+// 08-21: 처형 여부·후보 선택 투표 메시지는 와이어에서 사라졌다(DAY-07, T-08-10). 옛 번들이 보내도 유니온에 없어 BAD_MESSAGE 다 — 새 메시지로 바꿔 받는 호환 길은 없다.
+describe("옛 투표 메시지(execVote·candidateVote)는 와이어에서 사라졌다 (08-21, DAY-07)", () => {
   it.each([
-    ["null (취소)", { t: "candidateVote", target: null }],
-    ["0", { t: "candidateVote", target: 0 }],
-    ["7", { t: "candidateVote", target: 7 }],
-  ])("받는다: target %s", (_name, msg) => {
-    expect(ClientMessageSchema.safeParse(msg).success).toBe(true);
+    ["처형 여부 찬성", { t: "execVote", agree: true }],
+    ["처형 여부 반대", { t: "execVote", agree: false }],
+    ["후보 선택 0", { t: "candidateVote", target: 0 }],
+    ["후보 선택 7", { t: "candidateVote", target: 7 }],
+    ["후보 선택 취소(null)", { t: "candidateVote", target: null }],
+  ])("%s 는 거부한다", (_name, msg) => {
+    expect(ClientMessageSchema.safeParse(msg).success).toBe(false);
   });
 
-  it.each([
-    ["target 빠짐", { t: "candidateVote" }],
-    ["8", { t: "candidateVote", target: 8 }],
-    ["-1", { t: "candidateVote", target: -1 }],
-    ["1.5", { t: "candidateVote", target: 1.5 }],
-    ['"1"', { t: "candidateVote", target: "1" }],
-    ["true", { t: "candidateVote", target: true }],
-    ["undefined", { t: "candidateVote", target: undefined }],
-    ["덧붙은 키(target null + seat)", { t: "candidateVote", target: null, seat: 1 }],
-    ["덧붙은 키(target 1 + id)", { t: "candidateVote", target: 1, id: "x" }],
-  ])("거부한다: %s", (_name, msg) => {
-    expect(ClientMessageSchema.safeParse(msg).success).toBe(false);
+  it("새 흐름의 세 메시지는 그대로 받는다", () => {
+    expect(ClientMessageSchema.safeParse({ t: "point", target: 2 }).success).toBe(true);
+    expect(ClientMessageSchema.safeParse({ t: "verdict", agree: true }).success).toBe(true);
+    expect(ClientMessageSchema.safeParse({ t: "endDiscussion", on: true }).success).toBe(true);
   });
 
   it("nullable 이 다른 메시지로 번지지 않는다: pick·kick 의 target/seat null 은 거부", () => {

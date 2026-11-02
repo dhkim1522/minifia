@@ -102,6 +102,14 @@ describe("지목 (DAY-04, 결정 0060-3)", () => {
     expect(lines(await castAll(g, () => pointAs(a.sock, b.seat)))).toBe("[] [error:WRONG_PHASE,state:discussion] [] []");
   });
 
+  it("옛 번들의 처형 여부·후보 선택 메시지는 보낸 소켓만 BAD_MESSAGE 를 받는다(08-21, T-08-10)", async () => {
+    const g = await startedGame("discussion", 3);
+    const a = g.actors[1]!;
+    const old1 = await castAll(g, () => send(a.sock, { t: "execVote", agree: true }));
+    const old2 = await castAll(g, () => send(a.sock, { t: "candidateVote", target: 0 }));
+    expect(`${lines(old1)} ${lines(old2)}`).toBe("[] [error:BAD_MESSAGE] [] [] [] [error:BAD_MESSAGE] [] []");
+  });
+
   it("스키마: 덧붙은 키(seat)와 범위 밖 target(8)은 보낸 소켓만 BAD_MESSAGE 를 받고 저장은 그대로다", async () => {
     const g = await nominationRoom();
     const [a, b] = [g.actors[1]!, g.actors[2]!];

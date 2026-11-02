@@ -246,12 +246,6 @@ export class Room extends DurableObject<Env> {
       case "pick":
         await this.handlePick(ws, msg.target);
         return;
-      case "execVote":
-        await this.handleExecVote(ws, msg.agree);
-        return;
-      case "candidateVote":
-        await this.handleCandidateVote(ws, msg.target);
-        return;
       case "endDiscussion":
         await this.handleEndDiscussion(ws, msg.on);
         return;
@@ -425,17 +419,6 @@ export class Room extends DurableObject<Env> {
     return null;
   }
 
-  // 처형 여부 투표: 신원은 소켓 첨부의 playerId 뿐이다 — 메시지에 seat·id 가 없다(T-04-03).
-  private async handleExecVote(ws: WebSocket, agree: boolean): Promise<void> {
-    const att = this.attachmentOf(ws);
-    if (!att || !this.room) {
-      this.sendTo(ws, { t: "error", code: "BAD_MESSAGE" });
-      return;
-    }
-    const error = await this.applyExecVote(att.playerId, agree);
-    if (error !== null) this.sendRejection(ws, att.playerId, error);
-  }
-
   // 마감이 바뀌지 않으니 reschedule 은 필요 없다(D-28). 같은 값을 다시 보내면 같은 객체라 저장·전송도 하지 않는다.
   // 받아들여지면 pick 과 달리 모든 소켓이 각자 view 를 받는다: 집계 수(day.execTally)는 모두에게 공개되는 실시간 정보이고(D-02),
   // 개인 표는 view 허용 목록이 본인 프레임(me.voteAgree)으로만 제한한다. 받는 사람을 줄이면 오히려 집계가 모두에게 같지 않게 된다.
@@ -447,17 +430,6 @@ export class Room extends DurableObject<Env> {
     this.room = result.state;
     await this.persistAndBroadcast();
     return null;
-  }
-
-  // 후보 선택 투표: 신원은 소켓 첨부의 playerId 뿐이다 — 메시지에 seat·id 가 없다(T-04-23).
-  private async handleCandidateVote(ws: WebSocket, target: number | null): Promise<void> {
-    const att = this.attachmentOf(ws);
-    if (!att || !this.room) {
-      this.sendTo(ws, { t: "error", code: "BAD_MESSAGE" });
-      return;
-    }
-    const error = await this.applyCandidateVote(att.playerId, target);
-    if (error !== null) this.sendRejection(ws, att.playerId, error);
   }
 
   // 마감이 바뀌지 않으니 reschedule 은 필요 없다(D-28). 같은 값을 다시 보내면 같은 객체라 저장·전송도 하지 않는다.
