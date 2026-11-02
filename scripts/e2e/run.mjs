@@ -155,6 +155,8 @@ async function runJob({ flow, size }) {
       break;
     } catch (e) {
       lastError = e;
+      // 준비 실패로 다시 도는 시도는 결과 표에 남지 않으므로 어느 조작에서 멈췄는지 한 줄 알린다(08-24: 간헐 재시도 원인을 볼 수 있게)
+      emit(`재시도: ${flow.id} ${size.label} ${attempt}/${MAX_ATTEMPTS} — ${String(e instanceof Error ? e.message : e).split("\n")[0].slice(0, 160)}`);
     } finally {
       await ctx.host?.context.close().catch(() => {});
     }

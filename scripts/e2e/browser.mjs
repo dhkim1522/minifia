@@ -336,7 +336,7 @@ export async function settle(page) {
 export async function readHeaderContrast(page) {
   const probe = await page.evaluate(() => {
     const defs = [
-      { name: "제목", sels: [".mf-phasebar h1", ".mf-assign__bar h1", ".mf-lobby__header .mv-phase__title"] },
+      { name: "제목", sels: [".mf-phasebar h1", ".mf-assign__bar h1", ".mf-lobby__header .mv-phase__title", ".mf-game__header .mv-phase__title"] },
       { name: "타이머", sels: [".mf-timer__num"] },
     ];
     const items = [];
@@ -435,7 +435,7 @@ export async function collectSnapshot(page) {
         if (el.tagName === "SCRIPT" || el.tagName === "STYLE") continue;
         if (deco && el.matches(deco)) continue;
         if (!visible(el)) continue;
-        elements.push({ desc: desc(el), rect: rectOf(el) });
+        elements.push({ desc: desc(el), rect: rectOf(el), inTag: !!el.closest(".mf-world__tag") });
       }
 
       const interactive = [];
@@ -1117,7 +1117,9 @@ const stepTo = async (tracker, pred, label) => tracker.waitFor(pred, 3000, label
 /** 시트가 열려 있어야 한다. [5명 채우기] 뒤 [+]/[−] 로 봇 수를 맞추며 매번 추적 me.testBots 변화를 기다린다. */
 export async function setBots(page, tracker, count) {
   let cur = tracker.last()?.me?.testBots ?? 0;
-  if (cur < 4 && count >= 3) {
+  // [5명 채우기] 는 방을 5명으로 채우는 버튼이라 사람이 방장 하나일 때만 봇 4명이 된다(사람 손님이 있으면 [+] 로만 맞춘다, 08-24)
+  const humans = (tracker.last()?.players?.length ?? 1) - cur;
+  if (cur < 4 && count >= 3 && humans <= 1) {
     await clickInDialog(page, TT_LABEL, "5명 채우기");
     await stepTo(tracker, (v) => v.me.testBots === 4, "봇 4명(5명 채우기)");
     cur = 4;
@@ -1239,3 +1241,248 @@ export async function tapAt(page, pt) {
   await page.touchscreen.tap(pt.x, pt.y);
 }
 
+
+// ---- 맵 게임 화면 읽기·조작 (08-24, DAY-03~07·GHOST-01·02) ----
+// 읽기는 한 번의 evaluate 로 끝낸다. 닉네임·글은 싣지 않고(이름표 글자는 제외) 검사에 필요한 개수·사각형·data-* 값만 싣는다.
+
+/**
+ * 게임 맵 화면 한 장: 루트 data-game-stage 가 없으면 null.
+ * { phase, ghostView, kbOpen, title, guide: { count, text }, header, stage, panel(사각형), chatChannel, hasInput, end: { present, pressed, on, total } | null,
+ *   verdictRow: { hasPicker, hasDots, on, total } | null, verdictBtns, picks: [{ seat, rect, pressed, label }], tags: [{ seat, me, count, lead, sure, mine, done, ring, ghostSeat, roleChip, opacity }],
+ *   announce: { text, fontPx, lineCount, wordBreak } | null, counts: { ghostView, roleChips, ghostSeats, ghostTexts }, ring, testButton, nightPanel }
+ */
+export function readGame(page) {
+  return page.evaluate(() => {
+    const q = (s, r = document) => r.querySelector(s);
+    const qa = (s, r = document) => [...r.querySelectorAll(s)];
+    const rect = (el) => {
+      if (!el) return null;
+      const r = el.getBoundingClientRect();
+      return { left: r.left, top: r.top, width: r.width, height: r.height, right: r.right, bottom: r.bottom };
+    };
+    const root = q("[data-game-stage]");
+    if (!root) return null;
+    const dots = (scope) => {
+      const d = q(".mv-dots", scope);
+      return d ? { on: qa(".mv-dots__dot.is-on", d).length, total: qa(".mv-dots__dot", d).length } : null;
+    };
+    const header = q(".mf-game__header");
+    const panel = q("[data-world-panel]");
+    const endBtn = q("[data-end-discussion]");
+    const vrow = q("[data-verdict-row]");
+    const ann = q("[data-announce]");
+    const annText = ann ? q(".mf-announce__text", ann) : null;
+    const lineCountOf = (el) => {
+      if (!el) return 0;
+      const range = document.createRange();
+      range.selectNodeContents(el);
+      return new Set([...range.getClientRects()].map((r) => Math.round(r.top / 2))).size;
+    };
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+    let ghostTexts = 0;
+    for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+      const t = n.textContent ?? "";
+      if (t.includes("유령끼리만 보여요") || t.includes("유령 채팅")) ghostTexts += 1;
+    }
+    const night = q(".mf-claimpanel__title", panel ?? document);
+    return {
+      phase: root.getAttribute("data-phase") ?? "",
+      vw: window.innerWidth,
+      vh: window.innerHeight,
+      ghostView: root.getAttribute("data-ghost-view") === "true",
+      kbOpen: root.getAttribute("data-kb-open") === "true",
+      title: (q(".mv-phase__title", header ?? document)?.textContent ?? "").trim(),
+      guide: { count: qa("[data-guide]").length, text: (q("[data-guide]")?.textContent ?? "").trim() },
+      header: rect(header),
+      stage: header && panel ? { left: 0, top: header.getBoundingClientRect().bottom, right: window.innerWidth, bottom: panel.getBoundingClientRect().top } : null,
+      panel: rect(panel),
+      chatChannel: q("[data-chat-panel]")?.getAttribute("data-chat-channel") ?? null,
+      hasChat: !!q("[data-chat-panel]"),
+      hasInput: !!q("[data-chat-input]"),
+      end: endBtn ? { pressed: endBtn.getAttribute("aria-pressed") === "true", ...(dots(endBtn) ?? { on: 0, total: 0 }) } : null,
+      verdictRow: vrow ? { hasPicker: !!q(".mv-verdict", vrow), hasDots: !!q(".mv-dots", vrow), ...(dots(vrow) ?? { on: 0, total: 0 }) } : null,
+      verdictBtns: qa("[data-verdict]").map((b) => ({ v: b.getAttribute("data-verdict"), pressed: b.getAttribute("aria-pressed") === "true", disabled: b.disabled === true, rect: rect(b) })),
+      picks: qa("[data-pick]").map((b) => ({ seat: Number(b.getAttribute("data-pick")), rect: rect(b), pressed: b.getAttribute("aria-pressed") === "true", label: b.getAttribute("aria-label") ?? "" })),
+      tags: qa(".mf-world__tag").map((el) => {
+        const head = q(".mv-head", el);
+        return {
+          seat: Number(el.getAttribute("data-seat")),
+          me: el.getAttribute("data-me") === "true",
+          count: head?.getAttribute("data-count") ?? null,
+          lead: head?.hasAttribute("data-lead") === true,
+          sure: head?.hasAttribute("data-sure") === true,
+          mine: head?.hasAttribute("data-mine") === true,
+          done: head?.hasAttribute("data-done") === true,
+          ring: el.getAttribute("data-ring-kind"),
+          ghostSeat: el.hasAttribute("data-ghost-seat"),
+          roleChip: q("[data-role-chip]", el)?.getAttribute("data-role-chip") ?? null,
+          opacity: Number(getComputedStyle(el).opacity),
+        };
+      }),
+      announce: ann && annText ? { text: (annText.textContent ?? "").trim(), fontPx: parseFloat(getComputedStyle(annText).fontSize), lineCount: lineCountOf(annText), wordBreak: getComputedStyle(annText).wordBreak } : null,
+      counts: { ghostView: qa("[data-ghost-view]").length, roleChips: qa("[data-role-chip]").length, ghostSeats: qa("[data-ghost-seat]").length, ghostTexts },
+      ring: q("[data-world-stage]")?.getAttribute("data-ring") ?? null,
+      testButton: !!q(".mf-game__test .mf-tt"),
+      nightPanel: night ? (night.textContent ?? "").trim() : null,
+    };
+  });
+}
+
+/** 지목(밤 선택 포함) 이름표 버튼을 눌러 내 버튼이 aria-pressed 가 될 때까지 기다린다. */
+export async function tapPick(page, seat) {
+  const btn = page.locator(`[data-pick="${seat}"]`);
+  await btn.click({ timeout: 4000 });
+  await page.waitForSelector(`[data-pick="${seat}"][aria-pressed="true"]`, { timeout: 3000 });
+}
+
+/** 찬반 버튼을 눌러 그 쪽이 aria-pressed 가 될 때까지 기다린다. */
+export async function chooseVerdict(page, yes) {
+  const v = yes ? "yes" : "no";
+  await page.locator(`[data-verdict="${v}"]`).click({ timeout: 4000 });
+  await page.waitForSelector(`[data-verdict="${v}"][aria-pressed="true"]`, { timeout: 3000 });
+}
+
+/** [토론 끝내기] 를 눌러 aria-pressed 가 바뀔 때까지 기다린다(on = 누른 뒤 기대 상태). */
+export async function pressEndDiscussion(page, on = true) {
+  await page.locator("[data-end-discussion]").click({ timeout: 4000 });
+  await page.waitForSelector(`[data-end-discussion][aria-pressed="${on ? "true" : "false"}"]`, { timeout: 3000 });
+}
+
+/**
+ * 결과 알림 관찰을 심는다: 40ms 마다 [data-announce] 를 읽어 글자가 바뀔 때마다 { text(없어지면 null), at(page 시계 ms), fontPx, lineCount, wordBreak } 를 쌓는다.
+ * 처형 5초처럼 짧은 구간을 Playwright 호출 지연과 상관없이 놓치지 않으려고 쓴다. readAnnounceWatch 가 읽고 멈춘다.
+ */
+export function armAnnounceWatch(page) {
+  return page.evaluate(() => {
+    window.__annWatch?.stop?.();
+    const log = [];
+    let last;
+    const lineCountOf = (el) => {
+      const range = document.createRange();
+      range.selectNodeContents(el);
+      return new Set([...range.getClientRects()].map((r) => Math.round(r.top / 2))).size;
+    };
+    const timer = setInterval(() => {
+      const el = document.querySelector("[data-announce] .mf-announce__text");
+      const text = el ? (el.textContent ?? "").trim() : null;
+      if (text === last) return;
+      last = text;
+      if (el) {
+        const cs = getComputedStyle(el);
+        log.push({ text, at: performance.now(), fontPx: parseFloat(cs.fontSize), lineCount: lineCountOf(el), wordBreak: cs.wordBreak });
+      } else log.push({ text: null, at: performance.now() });
+    }, 40);
+    window.__annWatch = { log, stop: () => clearInterval(timer) };
+  });
+}
+
+/** armAnnounceWatch 가 쌓은 기록을 읽는다. 기본은 읽고 관찰을 멈춘다(stop false 면 계속 쌓는다). 심지 않았으면 빈 배열. */
+export function readAnnounceWatch(page, { stop = true } = {}) {
+  return page.evaluate((doStop) => {
+    const w = window.__annWatch;
+    if (!w) return [];
+    if (doStop) w.stop();
+    return w.log.slice();
+  }, stop);
+}
+
+/**
+ * 유령 이름표 글자 대비(UI-SPEC 남은 위험 5, A3): [data-ghost-seat] 이름표의 글자 칸을 화면 그림에서 잘라 글자색·면 중 밝은 쪽(p99)과 어두운 쪽(p1) 휘도로 대비를 잰다.
+ * 불투명도 0.6 이 맵·면과 섞인 실제 렌더 값이다. 돌려주는 값: [{ seat, opacity, ratio, hi, lo }] — 판정이 아니라 기록용이다.
+ */
+export async function readGhostTagContrast(page) {
+  const probes = await page.evaluate(() =>
+    [...document.querySelectorAll(".mf-world__tag[data-ghost-seat]")]
+      .map((el) => {
+        const name = el.querySelector(".mv-tag__name");
+        if (!name) return null;
+        const range = document.createRange();
+        range.selectNodeContents(name);
+        const r = range.getBoundingClientRect();
+        if (r.width <= 0 || r.height <= 0) return null;
+        return { seat: Number(el.getAttribute("data-seat")), opacity: Number(getComputedStyle(el).opacity), rect: { left: r.left, top: r.top, width: r.width, height: r.height }, vw: window.innerWidth, vh: window.innerHeight };
+      })
+      .filter(Boolean),
+  );
+  const out = [];
+  for (const p of probes) {
+    const x = Math.max(0, Math.floor(p.rect.left));
+    const y = Math.max(0, Math.floor(p.rect.top));
+    const width = Math.min(p.vw - x, Math.ceil(p.rect.width));
+    const height = Math.min(p.vh - y, Math.ceil(p.rect.height));
+    if (width <= 0 || height <= 0) continue;
+    const png = await page.screenshot({ clip: { x, y, width, height }, scale: "css", type: "png" });
+    const lums = await page.evaluate(async (b64) => {
+      const bin = atob(b64);
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      const bmp = await createImageBitmap(new Blob([bytes], { type: "image/png" }));
+      const canvas = document.createElement("canvas");
+      canvas.width = bmp.width;
+      canvas.height = bmp.height;
+      const g = canvas.getContext("2d");
+      g.drawImage(bmp, 0, 0);
+      const data = g.getImageData(0, 0, bmp.width, bmp.height).data;
+      const lin = (v) => {
+        const c = v / 255;
+        return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+      };
+      const out = [];
+      for (let i = 0; i < data.length; i += 4) out.push(0.2126 * lin(data[i]) + 0.7152 * lin(data[i + 1]) + 0.0722 * lin(data[i + 2]));
+      return out.sort((a, b) => a - b);
+    }, png.toString("base64"));
+    if (lums.length === 0) continue;
+    const lo = lums[Math.floor(lums.length * 0.01)];
+    const hi = lums[Math.min(lums.length - 1, Math.floor(lums.length * 0.99))];
+    out.push({ seat: p.seat, opacity: p.opacity, ratio: (hi + 0.05) / (lo + 0.05), hi, lo });
+  }
+  return out;
+}
+
+/**
+ * 결과 화면(ended) 한 장 — resultChecks 가 받는 { result } 모양. `.mf-result` 가 없으면 { result: null }.
+ * [처음으로] 가 세로 스크롤로 닿는지 보려고 마지막에 그 버튼을 보이는 자리로 스크롤한다.
+ */
+export function readResult(page) {
+  return page.evaluate(() => {
+    const q = (s, r = document) => r.querySelector(s);
+    const qa = (s, r = document) => [...r.querySelectorAll(s)];
+    const text = (el) => (el?.textContent ?? "").replace(/\s+/g, " ").trim();
+    const root = q(".mf-result");
+    if (!root) return { result: null };
+    const cards = qa(".mf-result__card", root).map((el) => {
+      const art = q(".mf-result__art", el);
+      return {
+        seat: Number(el.closest("[data-seat]")?.getAttribute("data-seat") ?? el.getAttribute("data-seat") ?? -1),
+        job: text(q(".mf-result__role", el)),
+        dead: el.classList.contains("mf-result__card--dead"),
+        figOpacity: art ? Number(getComputedStyle(art).opacity) : Number.NaN,
+      };
+    });
+    const scrollers = [document.documentElement, document.body, root];
+    const worst = scrollers.reduce((a, b) => (b.scrollWidth - b.clientWidth > a.scrollWidth - a.clientWidth ? b : a), scrollers[0]);
+    const btn = qa("button", root).find((b) => text(b) === "처음으로") ?? null;
+    let reachedButton = false;
+    if (btn) {
+      btn.scrollIntoView({ block: "nearest", behavior: "instant" });
+      const r = btn.getBoundingClientRect();
+      const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+      reachedButton = r.width > 0 && r.top >= 0 && r.bottom <= window.innerHeight && r.left >= 0 && r.right <= window.innerWidth && !!hit && btn.contains(hit);
+    }
+    return {
+      result: {
+        winner: root.getAttribute("data-winner") ?? "",
+        stage: root.getAttribute("data-stage") ?? "",
+        bannerText: text(q(".mf-result__banner-title", root)),
+        bannerSub: text(q(".mf-result__banner-sub", root)),
+        cards,
+        rows: qa(".mf-result__sm-row", root).length,
+        scrollW: worst.scrollWidth,
+        clientW: worst.clientWidth,
+        reachedButton,
+        glow: q(".mf-result__glow") !== null,
+        hasPhaseBar: q(".mf-phasebar") !== null || q(".mf-timer__num") !== null || q("[data-world-panel]") !== null,
+      },
+    };
+  });
+}
