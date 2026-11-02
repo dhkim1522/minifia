@@ -5,16 +5,16 @@ milestone_name: 같은 공간
 current_phase: 08
 current_phase_name: 낮 처형과 유령
 status: executing
-stopped_at: Completed 08-09-PLAN.md
-last_updated: "2026-11-02T12:07:51.763Z"
+stopped_at: Completed 08-10-PLAN.md
+last_updated: "2026-11-02T12:16:55.112Z"
 last_activity: 2026-11-02
 last_activity_desc: Phase 08 execution started
-state_head: 71f9515c8a0075e02f1714221274e36fc7516f20
+state_head: ba34acc2710c2ba1b1c5c6c81afb08d256ba8b5f
 progress:
   total_phases: 7
   completed_phases: 2
   total_plans: 78
-  completed_plans: 59
+  completed_plans: 60
   percent: 29
 ---
 
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-11-02)
 ## Current Position
 
 Phase: 08 (낮 처형과 유령) — EXECUTING
-Plan: 10 of 28
+Plan: 11 of 28
 Status: Ready to execute
 Last activity: 2026-11-02 — Phase 08 execution started
 
@@ -118,6 +118,7 @@ Progress: [███░░░░░░░] 29% (2/7 phases)
 | Phase 08 P07 | 14 min | 3 tasks | 19 files |
 | Phase 08 P08 | 12min | 3 tasks | 4 files |
 | Phase 08 P09 | 13 min | 3 tasks | 7 files |
+| Phase 08 P10 | 20min | 3 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -237,6 +238,7 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 08]: 08-09: 새 유령 snap(snapNewGhosts)은 advance·testSkip·토론 끝내기 tick 뒤 세 경로에 건다 — worldVisibleTo 가 보낼 좌석을 정하고 비면 보내지도 기록하지도 않는다
 - [Phase 08]: 08-09: 클라이언트 move 목적지가 정확히 STAGE_SPOT(0,0)이면 applyMove 가 조용히 버린다(비켜 보내지 않음). 옆 점은 snapToWalkable 이 칸 중심으로 보정해 무대 자리가 되지 않는다
 - [Phase 08]: 08-09: syncLayout 은 layoutKey 와 world.lay.key 비교로 멱등이며 advance 가 상태 변화 없이도 부른다. 누설 스캔 허용 목록은 넓히지 않고 산 사람 소켓의 world 좌석이 산 좌석의 부분집합이라는 규칙만 더했다
+- [Phase 08]: 08-10: WorldRenderer setTension·setZoom 은 optional(가짜 렌더러 호환), 원뿔 빛은 trial 에서 광원 없이 투명 메시 하나, 단계·긴장·예산은 applyLook 한 곳에서 합친다
 
 ### Pending Todos
 
@@ -272,8 +274,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-02T12:07:51.558Z
-Stopped at: Completed 08-09-PLAN.md
+Last session: 2026-11-02T12:16:54.902Z
+Stopped at: Completed 08-10-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
