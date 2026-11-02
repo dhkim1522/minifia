@@ -222,7 +222,13 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
     : undefined;
 
   // 이름표 쌓임: 득표 배지·선두(맥박)·과반 도장은 서버가 센 집계에서만 나온다. 0표 이름표에는 배지가 없다.
+  const verdicting = view.phase === "verdict";
   const tagProps = useMemo<WorldTagProps | undefined>(() => {
+    // 찬반(DAY-06): 던진 사람의 이름표에 체크만 붙는다. 서버 day.voted 는 좌석뿐이고 무엇을 골랐는지는 어디에도 없다(결정 0053)
+    if (verdicting) {
+      const voted = new Set(view.day?.voted ?? []);
+      return (seat) => (voted.has(seat) ? { done: true } : {});
+    }
     if (!nominating) return undefined;
     const tally = pointsTally(view);
     return (seat) => {
@@ -234,7 +240,7 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
         ...(tally.sure === seat ? { sure: true } : {}),
       };
     };
-  }, [nominating, view, blink, pickSeats]);
+  }, [nominating, verdicting, view, blink, pickSeats]);
 
   const scene = useMemo(() => sceneLook(view, { stageH, ...(mine !== undefined ? { mine } : {}) }), [view, stageH, mine]);
 

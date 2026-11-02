@@ -7,6 +7,8 @@ import { ActionRow } from "../components/ActionButton";
 import { ChatPanel } from "../components/v2/ChatPanel";
 import { DotProgress } from "../components/v2/DotProgress";
 import { V2Icon } from "../components/v2/V2Icon";
+import { VerdictPicker } from "../components/v2/VerdictPicker";
+import type { Verdict } from "../components/v2/VerdictPicker";
 import type { ChatBinding } from "../net/useChat";
 import { useViewChoice } from "../net/useViewChoice";
 
@@ -32,18 +34,22 @@ export interface GamePanelProps {
 
 /**
  * 게임 맵 화면의 아래 패널(UI-SPEC "아래 패널 종류와 높이"). 단계마다 행동 줄이 다르다.
- * 이 계획(08-13)은 낮 토론의 [토론 끝내기] 한 칸만 정한다 — 지목·변론·찬반·처형·유령은 뒤 계획이 이 틀 위에 얹는다.
- * 눌림은 서버 view(me.endDiscussion)가 기준이고, 내가 누른 즉시 바뀌는 것은 눌림 표시 하나뿐이다. 점 개수는 서버가 센 값만 그린다(누가 눌렀는지는 서버가 보내지 않는다).
+ * 낮 토론은 [토론 끝내기], 찬반은 위쪽 찬반 줄(VerdictPicker + DotProgress, 08-16)을 얹는다 — 변론·처형·유령은 채팅만이거나 뒤 계획이 이 틀 위에 얹는다.
+ * 눌림은 서버 view(me.endDiscussion·me.verdictVote)가 기준이고, 내가 누른 즉시 바뀌는 것은 내 눌림 표시 하나뿐이다. 점 개수는 서버가 센 값만 그린다(누가 눌렀는지·무엇을 골랐는지는 서버가 보내지 않는다).
  */
 export function GamePanel({ view, send, canSend, binding, logHeight, kbOpen = false, rejected = 0, inputRef, panelRef }: GamePanelProps) {
   const serverPressed = view.me.endDiscussion === true;
   const [pressed, choose] = useViewChoice<boolean>(view, serverPressed);
   // 거절이 오면 서버 값으로 되돌린다. 처음 그릴 때(거절 0)는 아무것도 하지 않는다.
+  // 찬반도 같다: 내 선택은 누른 즉시 보이되 서버 view(me.verdictVote)가 오면 서버 값이 이긴다(DAY-06).
+  const serverVerdict: Verdict | null = view.me.verdictVote === undefined ? null : view.me.verdictVote ? "yes" : "no";
+  const [verdict, chooseVerdict] = useViewChoice<Verdict | null>(view, serverVerdict);
   const seenRejects = useRef(rejected);
   useEffect(() => {
     if (seenRejects.current === rejected) return;
     seenRejects.current = rejected;
     choose(serverPressed);
+    chooseVerdict(serverVerdict);
     // choose 는 렌더마다 새 함수지만 setState 만 부른다
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rejected]);
@@ -54,6 +60,17 @@ export function GamePanel({ view, send, canSend, binding, logHeight, kbOpen = fa
   const total = majorityOf(view.players.filter(isAlive).length);
   const count = view.day?.endCount ?? 0;
 
+  // 찬반 줄: 변론자가 아닌 산 사람만 던진다(변론자 본인·유령은 8페이즈 결정 0053 대로 줄 없음)
+  const aliveCount = view.players.filter(isAlive).length;
+  const isDefender = view.day?.candidate !== undefined && view.day.candidate === view.me.seat;
+  const showVerdict = view.phase === "verdict" && meAlive && !isDefender && !kbOpen;
+  const voted = view.day?.voted?.length ?? 0;
+  const pressVerdict = (v: Verdict): void => {
+    if (!canSend) return;
+    if (send({ t: "verdict", agree: v === "yes" }) === false) return;
+    chooseVerdict(v);
+  };
+
   const pressEnd = (): void => {
     if (!canSend) return;
     const on = pressed !== true;
@@ -63,6 +80,12 @@ export function GamePanel({ view, send, canSend, binding, logHeight, kbOpen = fa
 
   return (
     <section ref={panelRef} className={kbOpen ? "mf-game__panel mf-game__panel--kb" : "mf-game__panel"} data-world-panel="">
+      {showVerdict ? (
+        <div className="mf-game__verdict" data-verdict-row="">
+          <VerdictPicker {...(verdict ? { value: verdict } : {})} onChange={pressVerdict} {...(canSend ? {} : { disabled: true })} />
+          <DotProgress count={voted} total={Math.max(0, aliveCount - 1)} label="투표한 사람" />
+        </div>
+      ) : null}
       <ChatPanel {...binding} logHeight={logHeight} compact={kbOpen} {...(inputRef ? { inputRef } : {})} />
       {showEnd ? (
         <ActionRow>
