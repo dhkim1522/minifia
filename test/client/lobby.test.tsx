@@ -852,3 +852,15 @@ describe("Lobby — 키보드 배치 스타일 계약 (lobby.css, room.css)", ()
     expect(rule).toContain("height: var(--mf-room-h, calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom)))");
   });
 });
+
+// ---- 08-13: 측정·키보드는 로비와 게임 맵이 한 훅을 쓴다 ----
+describe("Lobby — 측정·키보드 코드는 useMapInsets 훅 하나다 (08-13)", () => {
+  it("훅 파일이 있고 Lobby 가 그 훅을 쓰며 ResizeObserver·useKeyboardLift 를 직접 부르지 않는다", () => {
+    const hook = readFileSync("src/net/useMapInsets.ts", "utf8");
+    expect(hook).toContain("export function useMapInsets");
+    const src = readFileSync("src/screens/Lobby.tsx", "utf8");
+    expect(src).toContain("useMapInsets(");
+    expect(src).not.toContain("new ResizeObserver");
+    expect(src).not.toContain("useKeyboardLift(");
+  });
+});

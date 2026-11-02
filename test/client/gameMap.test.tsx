@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import "../helpers/singleLineErrors";
 import type { ClientMessage, PhaseId, PublicPlayer, RoomView } from "../../shared/protocol";
 import type { WorldStageProps } from "../../src/components/WorldStage";
+import { KB_PANEL_H, LOG_H_KB, LOG_H_SHORT, LOG_H_TALL } from "../../src/game/chatUi";
 import type { RoomConnection } from "../../src/net/useRoomConnection";
 
 // 08-13: 낮 시작~처형은 맵(WorldStage) 위 GameMap 한 화면이다. WorldStage 는 받은 props 만 쥐는 가짜로 바꾼다(캔버스·런타임은 worldStage.test 몫).
@@ -244,5 +245,126 @@ describe("GameMap — 한 장면 키 (DAY-07, 08-13)", () => {
     mount(makeView(), {}, onExit);
     act(() => stage.props?.onLeave());
     expect(onExit).toHaveBeenCalledWith("gaveUp");
+  });
+});
+
+// ---- 08-13 Task 2: 헤더·패널 측정 + 키보드 (useMapInsets, 07-19 규칙 유지) ----
+describe("GameMap — 스테이지 사각형 측정과 키보드 (CHAT-05, 08-13)", () => {
+  const INNER_H = 844;
+  const realInnerH = window.innerHeight;
+  const DISCUSSION_PANEL_H = LOG_H_TALL + 154;
+  let panelH = DISCUSSION_PANEL_H;
+  let resizeCallbacks: Array<() => void> = [];
+
+  interface FakeVV extends EventTarget {
+    height: number;
+    offsetTop: number;
+  }
+  const installVV = (height: number, offsetTop = 0): FakeVV => {
+    const vv = Object.assign(new EventTarget(), { height, offsetTop }) as FakeVV;
+    Object.defineProperty(window, "visualViewport", { value: vv, configurable: true, writable: true });
+    return vv;
+  };
+  /** 패널·헤더의 높이를 DOM 대신 값으로 돌려준다(happy-dom 은 레이아웃이 없다) */
+  const stubLayout = () => {
+    vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockImplementation(function (this: HTMLElement) {
+      if (this.classList.contains("mf-game__panel")) return panelH;
+      if (this.classList.contains("mf-game__header")) return 62;
+      return 0;
+    });
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        constructor(cb: () => void) {
+          resizeCallbacks.push(cb);
+        }
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+      },
+    );
+  };
+  const remeasure = () => act(() => void resizeCallbacks.forEach((cb) => cb()));
+  const advance = (ms: number) =>
+    act(() => {
+      vi.advanceTimersByTime(ms);
+    });
+  const inputOf = (c: ParentNode) => c.querySelector("[data-chat-input]") as HTMLInputElement;
+  const gameOf = (c: ParentNode) => c.querySelector("main.mf-game") as HTMLElement;
+  const logHeight = (c: ParentNode) => (c.querySelector("[data-chat-log]") as HTMLElement).style.height;
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    Object.defineProperty(window, "innerHeight", { value: INNER_H, configurable: true, writable: true });
+    panelH = DISCUSSION_PANEL_H;
+    resizeCallbacks = [];
+    stubLayout();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+    Object.defineProperty(window, "innerHeight", { value: realInnerH, configurable: true, writable: true });
+    Reflect.deleteProperty(window, "visualViewport");
+  });
+
+  const focusWithKeyboard = (container: ParentNode, vv: FakeVV, lift: number) => {
+    act(() => inputOf(container).focus());
+    vv.height = INNER_H - lift;
+    vv.offsetTop = 0;
+    act(() => void vv.dispatchEvent(new Event("resize")));
+    advance(20);
+  };
+
+  it("헤더 아래 끝과 패널 높이를 재서 WorldStage stageInsets 로 넘긴다", () => {
+    const { container } = mount(makeView());
+    expect(container.querySelector(".mf-game__header")).not.toBeNull();
+    expect(stage.props?.stageInsets).toEqual({ top: 62, bottom: DISCUSSION_PANEL_H });
+  });
+
+  it("패널이 자라면(ResizeObserver) 스테이지 아래 끝이 따라간다", () => {
+    mount(makeView());
+    panelH = LOG_H_TALL + 92;
+    remeasure();
+    expect(stage.props?.stageInsets).toEqual({ top: 62, bottom: LOG_H_TALL + 92 });
+  });
+
+  it("키보드 열림(포커스 + lift 336): data-kb-open, 행동 줄([토론 끝내기]) 없음, 기록 칸 72, 패널 --kb, 스테이지 아래 = 150 + 336", () => {
+    const vv = installVV(INNER_H);
+    const { container } = mount(makeView());
+    expect(endButton(container)).not.toBeNull();
+    focusWithKeyboard(container, vv, 336);
+    panelH = KB_PANEL_H;
+    remeasure();
+    expect(gameOf(container).getAttribute("data-kb-open")).toBe("true");
+    expect(endButton(container)).toBeNull();
+    expect(logHeight(container)).toBe(`${LOG_H_KB}px`);
+    expect(container.querySelector(".mv-chat.is-compact")).not.toBeNull();
+    expect(container.querySelector(".mf-game__panel")?.classList.contains("mf-game__panel--kb")).toBe(true);
+    expect(stage.props?.stageInsets).toEqual({ top: 62, bottom: KB_PANEL_H + 336 });
+  });
+
+  it("키보드 열림 경계(lift 60) 아래에서는 행동 줄이 그대로 있고, 블러하면 원래대로 돌아온다", () => {
+    const vv = installVV(INNER_H);
+    const { container } = mount(makeView());
+    focusWithKeyboard(container, vv, 60);
+    expect(gameOf(container).hasAttribute("data-kb-open")).toBe(false);
+    expect(endButton(container)).not.toBeNull();
+    focusWithKeyboard(container, vv, 336);
+    panelH = KB_PANEL_H;
+    remeasure();
+    expect(endButton(container)).toBeNull();
+    act(() => inputOf(container).blur());
+    panelH = DISCUSSION_PANEL_H;
+    remeasure();
+    expect(gameOf(container).hasAttribute("data-kb-open")).toBe(false);
+    expect(endButton(container)).not.toBeNull();
+    expect(logHeight(container)).toBe(`${LOG_H_TALL}px`);
+    expect(stage.props?.stageInsets).toEqual({ top: 62, bottom: DISCUSSION_PANEL_H });
+  });
+
+  it("기록 칸 높이는 방 높이로 한 번 정한다: 방 높이 844 → 152, 짧은 방 → 96", () => {
+    const { container } = mount(makeView());
+    expect([LOG_H_TALL, LOG_H_SHORT]).toContain(Number.parseInt(logHeight(container), 10));
   });
 });
