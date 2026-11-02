@@ -144,6 +144,19 @@ describe("E2E 채팅 패널 치수 사본과 src/game/chatUi.ts (07-20, 05-05 �
     expect(lib.logHeightFor(780)).toBe(LOG_H_TALL);
   });
 
+  it("GAME_PANEL_EXTRA 의 채팅(92)·토론(154)은 앱의 CHAT_PANEL_EXTRA·LOBBY_PANEL_EXTRA 와 같고, 찬반 두 값(203·111)은 UI-SPEC 표 값 그대로다 (08-23)", () => {
+    const extra = (e2eLib as unknown as { GAME_PANEL_EXTRA: Record<string, number>; gamePanelHeight: (h: number, k: string) => number }).GAME_PANEL_EXTRA;
+    const gamePanelHeight = (e2eLib as unknown as { gamePanelHeight: (h: number, k: string) => number }).gamePanelHeight;
+    expect(extra.chat).toBe(CHAT_PANEL_EXTRA);
+    expect(extra.talk).toBe(LOBBY_PANEL_EXTRA);
+    expect(extra.verdictVoter).toBe(203);
+    expect(extra.verdictViewer).toBe(111);
+    for (const roomH of [560, 640, 664, 779, 780, 844, 874, 932]) {
+      expect(gamePanelHeight(roomH, "chat")).toBe(logHeightFor(roomH) + CHAT_PANEL_EXTRA);
+      expect(gamePanelHeight(roomH, "talk")).toBe(logHeightFor(roomH) + LOBBY_PANEL_EXTRA);
+    }
+  });
+
   it("lobbyPanelHeight 사본이 chatUi 와 같고, 채팅 패널 높이는 logH + CHAT_PANEL_EXTRA 다", () => {
     for (const logH of [LOG_H_SHORT, LOG_H_TALL, LOG_H_KB]) expect(lib.lobbyPanelHeight(logH)).toBe(lobbyPanelHeight(logH));
     for (const roomH of [560, 640, 664, 779, 780, 844, 932]) expect(lib.logHeightFor(roomH) + lib.CHAT_PANEL_EXTRA).toBe(logHeightFor(roomH) + CHAT_PANEL_EXTRA);

@@ -277,6 +277,95 @@ export function lobbyPanelHeight(logH) {
   return logH + LOBBY_PANEL_EXTRA;
 }
 
+// ---- 게임 맵 판정 (08-23, 08-UI-SPEC "아래 패널 종류와 높이"·"검사 가능하게 둘 것"). 순수 함수 — 브라우저에서 읽는 값은 08-24 의 readGame 이 만든다. ----
+// 모든 판정은 다른 판정과 같은 { id, label, ok, detail } 줄(들)을 돌려준다. 값이 없거나 숫자가 아니면 조용히 통과하지 않고 `측정값 없음(…)` 으로 실패한다.
+
+/** 게임 맵 아래 패널 높이 덧셈(안전 영역 제외): 토론 = LOG_H + 154, 채팅 = + 92, 찬반 투표자 = + 203, 찬반 보기 = + 111. */
+export const GAME_PANEL_EXTRA = Object.freeze({ talk: 154, chat: CHAT_PANEL_EXTRA, verdictVoter: 203, verdictViewer: 111 });
+
+/** 게임 맵 아래 패널의 기대 높이. kind 는 GAME_PANEL_EXTRA 의 키, roomH = 방(뷰포트) 높이. 알 수 없는 kind 는 던진다. */
+export function gamePanelHeight(roomH, kind) {
+  const extra = Object.hasOwn(GAME_PANEL_EXTRA, kind) ? GAME_PANEL_EXTRA[kind] : undefined;
+  if (extra === undefined) throw new Error(`알 수 없는 패널 종류: ${kind}`);
+  return logHeightFor(roomH) + extra;
+}
+
+/** 지목 이름표 버튼의 개수 상한(산 사람 8명 중 나를 뺀 7명이 최대지만 UI-SPEC 은 버튼 8개까지 본다). */
+export const PICK_BUTTON_MAX = 8;
+
+/**
+ * 지목 이름표 버튼 판정(PK1~PK3). buttons = [{ seat, rect }] — `[data-pick]` 버튼의 사각형.
+ * PK1 개수 1~8 · PK2 각각 44×44 이상(G3 와 같은 0.5px 오차) · PK3 서로 가려지지 않음(겹침 > OVERLAP_EPS 가 없다).
+ */
+export function pickButtonChecks(buttons) {
+  const label1 = "지목 버튼이 1~8개";
+  const label2 = "지목 버튼이 각각 44×44 이상";
+  const label3 = "지목 버튼끼리 가려지지 않음";
+  if (!Array.isArray(buttons)) return [noMeasure("PK1", label1, "buttons"), noMeasure("PK2", label2, "buttons"), noMeasure("PK3", label3, "buttons")];
+  const valid = buttons.filter((b) => b?.rect && [b.rect.width, b.rect.height, b.rect.left, b.rect.top].every(isNum));
+  const lines = [result("PK1", label1, buttons.length >= 1 && buttons.length <= PICK_BUTTON_MAX && valid.length === buttons.length ? [] : [`${buttons.length}개(측정 가능 ${valid.length}개)`])];
+  const small = valid.filter((b) => b.rect.width + 0.5 < TAP_MIN || b.rect.height + 0.5 < TAP_MIN).map((b) => `자리 ${b.seat} ${fmt(b.rect.width)}x${fmt(b.rect.height)}`);
+  lines.push(result("PK2", label2, small));
+  const clashes = [];
+  for (let i = 0; i < valid.length; i++) {
+    for (let j = i + 1; j < valid.length; j++) {
+      if (rectsOverlap(valid[i].rect, valid[j].rect)) clashes.push(`${valid[i].seat}-${valid[j].seat} (${overlapText(valid[i].rect, valid[j].rect)})`);
+    }
+  }
+  lines.push(result("PK3", label3, clashes));
+  return lines;
+}
+
+/**
+ * 결과 알림 판정(AN1~AN3). m = { fontPx, lineCount, wordBreak } — `[data-announce]` 의 계산된 글자 크기·줄 수·word-break.
+ * AN1 글자 36px(28px 로 줄이지 않는다) · AN2 한두 줄 · AN3 word-break keep-all.
+ */
+export function announceChecks(m) {
+  const label1 = "결과 알림 글자 36px";
+  const label2 = "결과 알림이 한두 줄";
+  const label3 = "결과 알림 word-break keep-all";
+  if (!m || typeof m !== "object") return [noMeasure("AN1", label1, "announce"), noMeasure("AN2", label2, "announce"), noMeasure("AN3", label3, "announce")];
+  return [
+    isNum(m.fontPx) ? result("AN1", label1, Math.abs(m.fontPx - 36) <= 0.5 ? [] : [`${fmt(m.fontPx)}px`]) : noMeasure("AN1", label1, "fontPx"),
+    isNum(m.lineCount) ? result("AN2", label2, m.lineCount >= 1 && m.lineCount <= 2 ? [] : [`${m.lineCount}줄`]) : noMeasure("AN2", label2, "lineCount"),
+    typeof m.wordBreak === "string" ? result("AN3", label3, m.wordBreak === "keep-all" ? [] : [`word-break ${m.wordBreak}`]) : noMeasure("AN3", label3, "wordBreak"),
+  ];
+}
+
+/**
+ * 산 사람 화면의 유령 누설 판정(GH1~GH4, UI-SPEC "산 사람 쪽 규칙"). m = { ghostView, roleChips, ghostSeats, ghostTexts } —
+ * `[data-ghost-view]`·`[data-role-chip]`·`[data-ghost-seat]` 요소 수와 유령 문구("유령끼리만 보여요"·"유령 채팅") 를 가진 요소 수. 산 사람이면 모두 0 이어야 한다.
+ */
+export function ghostDomChecks(m) {
+  const spec = [
+    ["GH1", "산 사람 화면에 [data-ghost-view] 0건", "ghostView"],
+    ["GH2", "산 사람 화면에 [data-role-chip] 0건", "roleChips"],
+    ["GH3", "산 사람 화면에 [data-ghost-seat] 0건", "ghostSeats"],
+    ["GH4", "산 사람 화면에 유령 문구 0건", "ghostTexts"],
+  ];
+  return spec.map(([id, label, key]) => (!m || !isNum(m[key]) ? noMeasure(id, label, key) : result(id, label, m[key] === 0 ? [] : [`${key} ${m[key]}건`])));
+}
+
+/**
+ * 찬반 패널 구성 판정(VP1~VP2). m = { kind: "voter"|"viewer", hasPicker, hasDots, kbOpen } —
+ * 투표자(변론자 아닌 산 사람)는 VerdictPicker 와 DotProgress, 보기(변론자·유령)는 DotProgress 만, 키보드가 열려 있으면 둘 다 숨는다.
+ */
+export function verdictPanelChecks(m) {
+  const label1 = "찬반 고르기(VerdictPicker) 구성";
+  const label2 = "찬반 투표 점(DotProgress) 구성";
+  if (!m || (m.kind !== "voter" && m.kind !== "viewer") || typeof m.hasPicker !== "boolean" || typeof m.hasDots !== "boolean") {
+    return [noMeasure("VP1", label1, "kind·hasPicker"), noMeasure("VP2", label2, "kind·hasDots")];
+  }
+  const kb = m.kbOpen === true;
+  const wantPicker = m.kind === "voter" && !kb;
+  const wantDots = !kb;
+  const where = `${m.kind === "voter" ? "투표자" : "보기"}${kb ? "·키보드 열림" : ""}`;
+  return [
+    result("VP1", label1, m.hasPicker === wantPicker ? [] : [`${where}: 고르기 ${m.hasPicker ? "있음" : "없음"} (기대 ${wantPicker ? "있음" : "없음"})`]),
+    result("VP2", label2, m.hasDots === wantDots ? [] : [`${where}: 점 ${m.hasDots ? "있음" : "없음"} (기대 ${wantDots ? "있음" : "없음"})`]),
+  ];
+}
+
 /** 직업 이름(시트 칩 글자). */
 export const ROLE_NAME = { mafia: "마피아", police: "경찰", doctor: "의사", citizen: "시민" };
 

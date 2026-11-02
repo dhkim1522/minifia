@@ -96,6 +96,13 @@ import {
   CHAT_PANEL_EXTRA,
   LOBBY_PANEL_EXTRA,
   lobbyPanelHeight,
+  GAME_PANEL_EXTRA,
+  PICK_BUTTON_MAX,
+  gamePanelHeight,
+  pickButtonChecks,
+  announceChecks,
+  ghostDomChecks,
+  verdictPanelChecks,
 } from "./lib.mjs";
 import { dropSockets } from "./browser.mjs";
 
@@ -609,6 +616,122 @@ test("04-30·06-17·08-23: 닫기 — 승인 목록은 네 건(결정 0056 의 �
   assert.deepEqual(APPROVED_RELAXATIONS.map((x) => x.id), ["M1", "D3a/D3b", "D4", "D3b-5"]);
   assert.equal(OVERLAP_EPS, 0.5);
   assert.equal(TAP_MIN, 44);
+});
+
+// ---- 08-23: 게임 맵 판정 (UI-SPEC "아래 패널 종류와 높이"·"검사 가능하게 둘 것") ----
+
+test("gamePanelHeight: 토론 LOG_H+154 · 채팅 +92 · 찬반 투표자 +203 · 찬반 보기 +111 (UI-SPEC 표의 여섯 폰 값)", () => {
+  assert.equal(gamePanelHeight(780, "talk"), 152 + 154);
+  assert.equal(gamePanelHeight(640, "chat"), 96 + 92);
+  assert.equal(gamePanelHeight(844, "verdictVoter"), 152 + 203);
+  assert.equal(gamePanelHeight(664, "verdictViewer"), 96 + 111);
+  // UI-SPEC 폰 크기 표: [방 높이, 토론, 채팅, 투표자, 보기]
+  for (const [h, talk, chat, voter, viewer] of [[640, 250, 188, 299, 207], [664, 250, 188, 299, 207], [932, 306, 244, 355, 263], [560, 250, 188, 299, 207], [844, 306, 244, 355, 263], [874, 306, 244, 355, 263]]) {
+    assert.deepEqual([gamePanelHeight(h, "talk"), gamePanelHeight(h, "chat"), gamePanelHeight(h, "verdictVoter"), gamePanelHeight(h, "verdictViewer")], [talk, chat, voter, viewer], `방 높이 ${h}`);
+  }
+  assert.deepEqual({ ...GAME_PANEL_EXTRA }, { talk: 154, chat: 92, verdictVoter: 203, verdictViewer: 111 });
+  assert.equal(GAME_PANEL_EXTRA.chat, CHAT_PANEL_EXTRA);
+  assert.throws(() => gamePanelHeight(640, "table"), /알 수 없는 패널 종류/);
+  assert.throws(() => gamePanelHeight(640, "toString"), /알 수 없는 패널 종류/);
+});
+
+const pick = (seat, left, top, w = 44, h = 44) => ({ seat, rect: rect(left, top, w, h) });
+const idsOk = (lines) => Object.fromEntries(lines.map((l) => [l.id, l.ok]));
+
+test("pickButtonChecks: 8개가 44×44 이상이고 서로 안 겹치면 모두 통과, 줄 모양은 { id, label, ok, detail }", () => {
+  const buttons = Array.from({ length: 8 }, (_, i) => pick(i, 10 + (i % 4) * 80, 100 + Math.floor(i / 4) * 80));
+  const lines = pickButtonChecks(buttons);
+  assert.deepEqual(idsOk(lines), { PK1: true, PK2: true, PK3: true });
+  for (const l of lines) assert.deepEqual(Object.keys(l).sort(), ["detail", "id", "label", "ok"]);
+});
+
+test("pickButtonChecks PK2: 44 미만은 실패(43.5 는 G3 와 같은 0.5px 오차로 통과, 43.4 는 실패)하고 자리와 크기를 말한다", () => {
+  assert.equal(idsOk(pickButtonChecks([pick(0, 0, 0, 43.5, 44)])).PK2, true);
+  assert.equal(idsOk(pickButtonChecks([pick(0, 0, 0, 44, 43.5)])).PK2, true);
+  const bad = pickButtonChecks([pick(0, 0, 0), pick(3, 100, 0, 43.4, 44)]).find((l) => l.id === "PK2");
+  assert.equal(bad.ok, false);
+  assert.match(bad.detail, /자리 3 43\.4x44/);
+});
+
+test("pickButtonChecks PK3: 두 버튼이 0.5px 넘게 겹치면 실패하고 쌍을 말한다, 변이 맞닿거나 0.5px 이하 겹침은 통과", () => {
+  const clash = pickButtonChecks([pick(1, 0, 0), pick(2, 30, 10)]).find((l) => l.id === "PK3");
+  assert.equal(clash.ok, false);
+  assert.match(clash.detail, /1-2/);
+  assert.equal(idsOk(pickButtonChecks([pick(1, 0, 0), pick(2, 44, 0)])).PK3, true);
+  assert.equal(idsOk(pickButtonChecks([pick(1, 0, 0), pick(2, 43.6, 0)])).PK3, true);
+  assert.equal(idsOk(pickButtonChecks([pick(1, 0, 0), pick(2, 43.4, 0)])).PK3, false);
+});
+
+test("pickButtonChecks PK1: 0개와 9개 이상은 실패, 입력이 배열이 아니거나 사각형 값이 비면 측정값 없음으로 실패", () => {
+  assert.equal(idsOk(pickButtonChecks([])).PK1, false);
+  const nine = Array.from({ length: 9 }, (_, i) => pick(i, i * 50, 0));
+  assert.equal(idsOk(pickButtonChecks(nine)).PK1, false);
+  assert.equal(PICK_BUTTON_MAX, 8);
+  for (const l of pickButtonChecks(null)) {
+    assert.equal(l.ok, false);
+    assert.match(l.detail, /측정값 없음/);
+  }
+  const broken = pickButtonChecks([{ seat: 0, rect: { left: 0, top: 0, width: Number.NaN, height: 44 } }]);
+  assert.equal(idsOk(broken).PK1, false);
+});
+
+test("announceChecks: 36px·1줄·keep-all 통과, 2줄 통과, 3줄 실패, 28px 실패, word-break 다르면 실패", () => {
+  assert.deepEqual(idsOk(announceChecks({ fontPx: 36, lineCount: 1, wordBreak: "keep-all" })), { AN1: true, AN2: true, AN3: true });
+  assert.equal(idsOk(announceChecks({ fontPx: 36, lineCount: 2, wordBreak: "keep-all" })).AN2, true);
+  const three = announceChecks({ fontPx: 36, lineCount: 3, wordBreak: "keep-all" }).find((l) => l.id === "AN2");
+  assert.equal(three.ok, false);
+  assert.match(three.detail, /3줄/);
+  const small = announceChecks({ fontPx: 28, lineCount: 1, wordBreak: "keep-all" }).find((l) => l.id === "AN1");
+  assert.equal(small.ok, false);
+  assert.match(small.detail, /28px/);
+  assert.equal(idsOk(announceChecks({ fontPx: 36, lineCount: 1, wordBreak: "normal" })).AN3, false);
+  assert.equal(idsOk(announceChecks({ fontPx: 36.4, lineCount: 1, wordBreak: "keep-all" })).AN1, true);
+});
+
+test("announceChecks: 값이 없으면 조용히 통과하지 않고 측정값 없음으로 실패한다", () => {
+  for (const m of [null, undefined, {}, { fontPx: 36 }]) {
+    const lines = announceChecks(m);
+    assert.equal(lines.length, 3);
+    assert.ok(lines.some((l) => !l.ok && /측정값 없음/.test(l.detail)), JSON.stringify(m));
+  }
+});
+
+test("ghostDomChecks: 산 사람 화면은 ghostView·roleChips·ghostSeats·ghostTexts 가 모두 0 일 때만 통과한다", () => {
+  assert.deepEqual(idsOk(ghostDomChecks({ ghostView: 0, roleChips: 0, ghostSeats: 0, ghostTexts: 0 })), { GH1: true, GH2: true, GH3: true, GH4: true });
+  for (const key of ["ghostView", "roleChips", "ghostSeats", "ghostTexts"]) {
+    const m = { ghostView: 0, roleChips: 0, ghostSeats: 0, ghostTexts: 0, [key]: 1 };
+    const lines = ghostDomChecks(m);
+    assert.equal(lines.filter((l) => !l.ok).length, 1, key);
+    assert.match(lines.find((l) => !l.ok).detail, new RegExp(`${key} 1건`));
+  }
+  const missing = ghostDomChecks({ ghostView: 0 });
+  assert.equal(missing.filter((l) => !l.ok).length, 3);
+  assert.ok(ghostDomChecks(null).every((l) => !l.ok && /측정값 없음/.test(l.detail)));
+});
+
+test("verdictPanelChecks: 투표자는 고르기+점, 보기는 점만, 키보드가 열리면 둘 다 없다", () => {
+  assert.deepEqual(idsOk(verdictPanelChecks({ kind: "voter", hasPicker: true, hasDots: true, kbOpen: false })), { VP1: true, VP2: true });
+  assert.deepEqual(idsOk(verdictPanelChecks({ kind: "viewer", hasPicker: false, hasDots: true, kbOpen: false })), { VP1: true, VP2: true });
+  assert.deepEqual(idsOk(verdictPanelChecks({ kind: "voter", hasPicker: false, hasDots: false, kbOpen: true })), { VP1: true, VP2: true });
+  assert.deepEqual(idsOk(verdictPanelChecks({ kind: "viewer", hasPicker: false, hasDots: false, kbOpen: true })), { VP1: true, VP2: true });
+});
+
+test("verdictPanelChecks: 구성이 어긋나면 각각 다른 줄이 실패하고 이유를 말한다", () => {
+  const viewerWithPicker = verdictPanelChecks({ kind: "viewer", hasPicker: true, hasDots: true, kbOpen: false });
+  assert.deepEqual(idsOk(viewerWithPicker), { VP1: false, VP2: true });
+  assert.match(viewerWithPicker[0].detail, /보기: 고르기 있음/);
+  const voterNoPicker = verdictPanelChecks({ kind: "voter", hasPicker: false, hasDots: true, kbOpen: false });
+  assert.deepEqual(idsOk(voterNoPicker), { VP1: false, VP2: true });
+  const kbStillShown = verdictPanelChecks({ kind: "voter", hasPicker: true, hasDots: true, kbOpen: true });
+  assert.deepEqual(idsOk(kbStillShown), { VP1: false, VP2: false });
+  assert.match(kbStillShown[0].detail, /키보드 열림/);
+  assert.deepEqual(idsOk(verdictPanelChecks({ kind: "voter", hasPicker: true, hasDots: false, kbOpen: false })), { VP1: true, VP2: false });
+});
+
+test("verdictPanelChecks: kind 가 없거나 값이 불리언이 아니면 측정값 없음으로 실패한다", () => {
+  for (const m of [null, {}, { kind: "ghost", hasPicker: false, hasDots: true }, { kind: "voter", hasPicker: "y", hasDots: true }]) {
+    assert.ok(verdictPanelChecks(m).every((l) => !l.ok && /측정값 없음/.test(l.detail)), JSON.stringify(m));
+  }
 });
 
 // ---- 5페이즈 순수 검사 (05-05): UX1·UX2·UX2-J·UX2-PC·WL1·WL2 ----
