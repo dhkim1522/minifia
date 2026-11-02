@@ -285,3 +285,37 @@ Phases execute in numeric order: 6 → 7 → 8 → 9 → 10 → 11 → 12 (소�
 | 10. 캐릭터·동작·의상 | v2.0 | 0/TBD | Not started | - |
 | 11. 결과 공개와 다시 하기 | v2.0 | 0/TBD | Not started | - |
 | 12. 소리와 마무리 | v2.0 | 0/TBD | Not started | - |
+
+## Backlog
+
+### Phase 999.1: Follow-up — Phase 07 deferred UAT follow-up: Test 5 (BACKLOG)
+
+**Goal:** Resolve the UAT checkpoint deferred during Phase 07 verification
+**Source phase:** 07
+**Deferred at:** 2026-11-02 during /gsd-verify-work 7 session completion
+**Follow-ups:**
+- [ ] Test 5: iPhone 로비 5분 채팅 부하 체감·열감 (bots.mjs --count 7 --prod --chat 2) — 모든 개발 뒤 실기기 플레이테스트 (deferred 2026-11-02)
+
+### Phase 999.2: Follow-up — Phase 07 deferred UAT follow-up: Test 6 (BACKLOG)
+
+**Goal:** Resolve the UAT checkpoint deferred during Phase 07 verification
+**Source phase:** 07
+**Deferred at:** 2026-11-02 during /gsd-verify-work 7 session completion
+**Follow-ups:**
+- [ ] Test 6: ?chat-mock=1 다섯 줄 iPhone 실기기 확인(6페이즈 이월 표 D) — 모든 개발 뒤 실기기 플레이테스트 (deferred 2026-11-02)
+
+### Phase 999.3: Follow-up — Phase 07 deferred UAT follow-up: Test 7 (BACKLOG)
+
+**Goal:** Resolve the UAT checkpoint deferred during Phase 07 verification
+**Source phase:** 07
+**Deferred at:** 2026-11-02 during /gsd-verify-work 7 session completion
+**Follow-ups:**
+- [ ] Test 7: Android Chrome·삼성 인터넷·카카오톡 인앱(iOS·Android) 입력칸 검사 1·2·4 (CHAT-05, 로드맵 성공 기준 3) — 모든 개발 뒤 실기기 플레이테스트 (deferred 2026-11-02)
+
+### Phase 999.4: Follow-up — Phase 07 deferred UAT follow-up: Test 9 (BACKLOG)
+
+**Goal:** Resolve the UAT checkpoint deferred during Phase 07 verification
+**Source phase:** 07
+**Deferred at:** 2026-11-02 during /gsd-verify-work 7 session completion
+**Follow-ups:**
+- [ ] Test 9: 로비 이동 체감 재확인(결정 0059 예측 이동·섞기, 자동 W11·W12 통과) — 모든 개발 뒤 실기기 플레이테스트 (deferred 2026-11-02)
