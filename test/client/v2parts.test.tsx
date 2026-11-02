@@ -347,10 +347,10 @@ describe("v2.css 이름표 스타일 계약 (MAP-07, 결정 0052-2)", () => {
     expect(V2_CSS).toMatch(/\.mv-tag\.is-away \.mv-tag__dot\s*\{[^}]*var\(--gray-700\)/);
   });
 
-  // 8페이즈(08-03)가 득표 배지·유력 도장(놋쇠)과 직업 칩(마피아 진홍 테두리)을 같은 파일에 더했다 — 그 세 부품 규칙만 이 검사에서 뺀다.
+  // 8페이즈(08-03)가 득표 배지·유력 도장(놋쇠)과 직업 칩(마피아 진홍 테두리)을, 08-05 가 hot 시스템 줄(놋쇠 글자)을 같은 파일에 더했다 — 그 규칙만 이 검사에서 뺀다.
   // 나머지 규칙(이름표·채팅·시간 링 등)은 7페이즈 규칙 그대로다.
   const WITHOUT_PHASE8_PARTS = V2_CSS.replace(/\/\*[\s\S]*?\*\//g, "").replace(/[^{}]*\{[^{}]*\}/g, (rule) =>
-    /^\s*\.mv-(badge|stamp|rolechip)/.test(rule) ? "" : rule,
+    /^\s*\.mv-(badge|stamp|rolechip)|^\s*\.mv-chat__sys\.is-hot/.test(rule) ? "" : rule,
   );
 
   it("hex 색이 없고 놋쇠 토큰을 쓰지 않으며, 진홍은 crimson-300 글자색 하나뿐이다 (07-UI-SPEC Color: 진홍 글자 예약, 면·큰 글자 금지) — 8페이즈 부품 규칙 제외", () => {

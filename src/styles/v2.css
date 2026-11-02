@@ -74,6 +74,8 @@
 .mv-chat__msg.is-mafia .mv-chat__name { color: var(--crimson-300); }
 .mv-chat__sys { display: flex; align-items: center; gap: 6px; font-size: 14px; line-height: 1.4; color: var(--gray-300); }
 .mv-chat__sys > span { min-width: 0; }
+.mv-chat__sys.is-vote { color: var(--gray-100); }
+.mv-chat__sys.is-hot { color: var(--brass-200); }
 .mv-chat__form { display: flex; gap: var(--space-sm); }
 .mv-chat__field { position: relative; display: flex; flex: 1; min-width: 0; }
 .mv-chat__input { flex: 1; min-width: 0; height: var(--control-input); box-sizing: border-box; padding: 0 var(--space-md); border-radius: var(--radius-md); border: 1px solid var(--night-600); background: var(--night-900); color: var(--gray-100); font-family: inherit; font-size: 16px; user-select: text; }

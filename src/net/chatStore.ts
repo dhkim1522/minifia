@@ -8,7 +8,8 @@ import type { V2IconName } from "../components/v2/V2Icon";
 /** 기록 칸의 한 줄. scope = 이 줄이 보이는 흐름(사람 줄은 ch 와 같고, 시스템 줄은 만든 쪽이 정한다) */
 export interface ChatStoreLine {
   key: string;
-  kind: "player" | "system";
+  /** system = 일반 안내 줄, vote = 지목 기록 줄, hot = 선두·과반·결과처럼 눈여겨볼 줄(8페이즈) */
+  kind: "player" | "system" | "vote" | "hot";
   ch?: ChatChannel;
   seat?: number;
   seq?: number;
@@ -101,8 +102,8 @@ export class ChatStore {
   }
 
   /** 클라이언트가 view 변화에서 만드는 시스템 줄(입장·퇴장·채널 시작 등). 서버가 보낸 줄이 아니다 */
-  addSystem(text: string, opts: { scope: ChatChannel; icon?: V2IconName; at: number }): void {
-    const line: ChatStoreLine = { key: `sys:${++this.sysSeq}:${opts.at}`, kind: "system", text, at: opts.at, scope: opts.scope };
+  addSystem(text: string, opts: { scope: ChatChannel; icon?: V2IconName; at: number; kind?: "system" | "vote" | "hot" }): void {
+    const line: ChatStoreLine = { key: `sys:${++this.sysSeq}:${opts.at}`, kind: opts.kind ?? "system", text, at: opts.at, scope: opts.scope };
     if (opts.icon) line.icon = opts.icon;
     this.insertAll([line]);
     this.bump();

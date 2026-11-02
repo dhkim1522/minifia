@@ -25,7 +25,8 @@ import { V2Icon, type V2IconName } from "./V2Icon";
 
 export interface ChatPanelMessage {
   key: string;
-  kind: "player" | "system";
+  /** vote = 지목 기록 줄(앞에 point 14), hot = 눈여겨볼 줄(brass-200, 아이콘 없음). card·divider·tabs 는 9·11페이즈 */
+  kind: "player" | "system" | "vote" | "hot";
   text: string;
   /** 자리 번호 0~7 → 구분색 var(--seat-(n+1)) */
   seat?: number;
@@ -227,9 +228,12 @@ export function ChatPanel(props: ChatPanelProps) {
         >
           {messages.map((m) => {
             if (m.kind !== "player") {
+              // vote 는 아이콘을 point 14 로 정하고, hot 은 아이콘을 그리지 않는다(승인 .mv-chat__sys.is-vote/.is-hot).
+              const icon = m.kind === "vote" ? <V2Icon name="point" size={14} /> : m.kind === "hot" ? null : m.icon ? <V2Icon name={m.icon} size={16} /> : null;
+              const sysCls = m.kind === "vote" ? "mv-chat__sys is-vote" : m.kind === "hot" ? "mv-chat__sys is-hot" : "mv-chat__sys";
               return (
-                <p key={m.key} className="mv-chat__sys">
-                  {m.icon ? <V2Icon name={m.icon} size={16} /> : null}
+                <p key={m.key} className={sysCls}>
+                  {icon}
                   <span>{m.text}</span>
                 </p>
               );

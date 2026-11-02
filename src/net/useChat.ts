@@ -53,8 +53,8 @@ export function useChat({ store, connection, view }: { store: ChatStore; connect
   const messages = useMemo<ChatPanelMessage[]>(() => {
     for (const p of players) names.current.set(p.seat, p.nickname);
     return store.visibleLines(channel).map((line): ChatPanelMessage => {
-      if (line.kind === "system") {
-        const m: ChatPanelMessage = { key: line.key, kind: "system", text: line.text };
+      if (line.kind !== "player") {
+        const m: ChatPanelMessage = { key: line.key, kind: line.kind, text: line.text };
         if (line.icon) m.icon = line.icon;
         return m;
       }
