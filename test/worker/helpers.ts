@@ -607,3 +607,13 @@ export function worldFramesOf(sock: TestSocket, from = 0): Array<Extract<ServerM
     .map(parseFrame)
     .filter((m): m is Extract<ServerMessage, { t: "world" }> => m.t === "world");
 }
+
+/** 모이는 자리 기억(인메모리 world.lay, 08-09)과 서버 주도 이동이 건드리면 안 되는 lastMoveAt 의 사람 수. */
+export async function layOf(code: string): Promise<{ key: string | null; slots: Record<string, [number, number]>; lastMoveAtCount: number }> {
+  let out: { key: string | null; slots: Record<string, [number, number]>; lastMoveAtCount: number } = { key: null, slots: {}, lastMoveAtCount: -1 };
+  await runInDurableObject(env.ROOM.getByName(code), async (instance) => {
+    const world = instance["world"] as { lay?: { key: string; slots: Record<string, [number, number]> }; lastMoveAt: Record<string, number> };
+    out = { key: world.lay?.key ?? null, slots: world.lay?.slots ?? {}, lastMoveAtCount: Object.keys(world.lastMoveAt).length };
+  });
+  return out;
+}
