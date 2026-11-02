@@ -218,13 +218,14 @@ describe("토론 끝내기 (DAY-03, 결정 0060-2)", () => {
     await castAll(g, () => endAs(a.sock, true));
     const two = await castAll(g, () => endAs(b.sock, true));
     expect(two.map((f) => String(viewsOf(f)[0]?.day?.endCount)).join(" ")).toBe("2 2 2 2");
-    const next = PHASE_DEFS[PHASE_DEFS.discussion.next];
+    const nextId = PHASE_DEFS.discussion.next!;
+    const next = PHASE_DEFS[nextId];
     const before = Date.now();
     const third = await castAll(g, () => endAs(c.sock, true));
     const after = Date.now();
-    expect(third.map((f) => viewsOf(f).at(-1)?.phase).join(" ")).toBe(Array(4).fill(PHASE_DEFS.discussion.next).join(" "));
+    expect(third.map((f) => viewsOf(f).at(-1)?.phase).join(" ")).toBe(Array(4).fill(nextId).join(" "));
     const stored = await storedRoom(g.code);
-    expect(stored.phase).toBe(PHASE_DEFS.discussion.next);
+    expect(stored.phase).toBe(nextId);
     const dur = next.durationMs!;
     expect(stored.phaseEndsAt! >= before + dur - 50 && stored.phaseEndsAt! <= after + dur + 50).toBe(true);
     expect(await alarmOf(g.code)).toBe(stored.phaseEndsAt);
