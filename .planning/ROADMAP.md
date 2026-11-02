@@ -205,7 +205,7 @@ Plans:
   4. 단계 시간이 토론 90초·지목 15초·변론 20초·찬반 10초·밤 30초로 돌고, v1.0 의 처형 여부 → 후보 선택 → 한 표씩 공개 흐름과 고정 테이블은 화면에 없다 (DAY-07)
   5. 처형된 사람은 반투명 유령이 되어 맵을 떠다니며 모든 사람의 역할을 본다. 산 사람 폰으로 오가는 메시지에는 유령의 위치·움직임·채팅이 한 번도 없다 (GHOST-01, GHOST-02)
 
-**Plans:** 8/28 plans executed (19 waves)
+**Plans:** 9/28 plans executed (19 waves)
 
 Plans:
 **Wave 1** *(같은 웨이브도 번호 순서로 하나씩 돈다 — use_worktrees false)*
@@ -223,7 +223,7 @@ Plans:
 - [x] 08-08-PLAN.md — presence 장면 상태·고정 카메라 zoom·gatherView (TDD, W3)
 
 **Wave 4**
-- [ ] 08-09-PLAN.md — DO: 단계별 이동 차단·유령 위치는 유령에게만·viewer 별 snap·syncLayout·메타모픽 누설 검사 (TDD, W4)
+- [x] 08-09-PLAN.md — DO: 단계별 이동 차단·유령 위치는 유령에게만·viewer 별 snap·syncLayout·메타모픽 누설 검사 (TDD, W4)
 - [ ] 08-10-PLAN.md — 캐릭터 유령 재질·손가락 유지·발밑 고리·조명 다섯·긴장·확대 (TDD, W4)
 - [ ] 08-28-PLAN.md — 흐름 전환 전 옛 흐름 전용 unit 시험 정리(vote.test 대응표·삭제) (W4)
 
@@ -328,7 +328,7 @@ Phases execute in numeric order: 6 → 7 → 8 → 9 → 10 → 11 → 12 (소�
 |-------|-----------|----------------|--------|-----------|
 | 6. 월드 뼈대 | v2.0 | 23/23 | Complete    | 2026-11-01 |
 | 7. 자유 채팅 | v2.0 | 27/27 | Complete    | 2026-11-02 |
-| 8. 낮 처형과 유령 | v2.0 | 8/28 | In Progress | - |
+| 8. 낮 처형과 유령 | v2.0 | 9/28 | In Progress | - |
 | 9. 밤과 아침 | v2.0 | 0/TBD | Not started | - |
 | 10. 캐릭터·동작·의상 | v2.0 | 0/TBD | Not started | - |
 | 11. 결과 공개와 다시 하기 | v2.0 | 0/TBD | Not started | - |
