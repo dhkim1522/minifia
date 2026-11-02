@@ -68,7 +68,7 @@ export interface SceneIntroDef {
 
 export const PHASE_INTRO: Readonly<Partial<Record<PhaseId, SceneIntroDef>>> = Object.freeze({
   night: Object.freeze({ tone: "night", title: "밤이 되었습니다" } as const),
-  dayAnnounce: Object.freeze({ tone: "day", title: "낮이 되었습니다", sub: "토론 전에 먼저 직업을 공개해요" } as const),
+  dayAnnounce: Object.freeze({ tone: "day", title: "낮이 되었습니다" } as const),
 });
 
 // - 안내 문장 빈 칸 채움(PHASE_GUIDE_FILL): UX-01 점검표(05-UI-SPEC 8)에서 문장이 없던 두 곳 — 낮 시작 하단, 낮 토론 헤더 안내줄.
@@ -76,7 +76,7 @@ export const PHASE_INTRO: Readonly<Partial<Record<PhaseId, SceneIntroDef>>> = Ob
 //   문구는 확인 대기 기본값(P5-6)이라 결정 0038 에 적는다. 토론 문장은 헤더 안내줄(nowrap)에 들어가도록 n ≤ 99 에서 14자 이하여야 한다.
 export const PHASE_GUIDE_FILL = Object.freeze({
   /** 낮 시작 하단 패널(NightPanel) 제목 + 안내. 생존자·탈락자 모두 같은 두 줄 */
-  dayAnnounce: Object.freeze({ title: "낮이 되었어요", guide: "곧 직업 공개가 시작돼요" } as const),
+  dayAnnounce: Object.freeze({ title: "낮이 되었어요", guide: "곧 토론이 시작돼요" } as const),
   /** 낮 토론 헤더 안내줄(살아 있는 viewer 만) */
   discussion: (n: number): string => `${n}일차 · 의견을 나눠요`,
 });
