@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { ComponentProps } from "react";
 import type { ReactNode } from "react";
 import { isAlive } from "../../shared/game/alive";
@@ -13,6 +13,7 @@ import type { WorldPick } from "../components/WorldStage";
 import { LOG_H_KB } from "../game/chatUi";
 import { headerFor, pointsTally } from "../game/dayView";
 import type { ChatStore } from "../net/chatStore";
+import type { DayFx } from "../net/useDayFx";
 import { useCountdown } from "../net/countdown";
 import { useChat } from "../net/useChat";
 import { useViewChoice } from "../net/useViewChoice";
@@ -32,6 +33,27 @@ const REJECT_TEXT = "지금은 고를 수 없어요";
 /** 스테이지 사각형을 아직 못 쟀을 때 WorldStage 기본값(헤더 아래 62 · 패널 250)과 같은 값 — 장면 표의 확대 판정에만 쓴다 */
 const DEFAULT_INSET_TOP = 62;
 const DEFAULT_INSET_BOTTOM = 250;
+
+/** 처음 보는 지목의 깜빡임을 본 적이 있는지 적는 저장소 키(6페이즈 mf-hint-walk 와 같은 방식, UI-SPEC 다르게 2) */
+const POINT_HINT_KEY = "mf-hint-point";
+/** 이름표 깜빡임을 보이는 시간(0.9초 × 3 = 2.7초 애니메이션이 끝난 뒤 꺼진다) */
+const BLINK_MS = 3000;
+
+function pointHintSeen(): boolean {
+  try {
+    return localStorage.getItem(POINT_HINT_KEY) != null;
+  } catch {
+    return false; // 저장소를 못 읽으면 보인다
+  }
+}
+
+function rememberPointHint(): void {
+  try {
+    localStorage.setItem(POINT_HINT_KEY, "1");
+  } catch {
+    // 저장소를 못 쓰는 환경(개인 모드): 이번 방문에서만 본다
+  }
+}
 
 type WorldTagProps = NonNullable<ComponentProps<typeof WorldStage>["tagProps"]>;
 
@@ -53,6 +75,10 @@ interface GameMapProps {
   testButton?: ReactNode;
   /** 지금 띄울 결과 알림 글자(useDayFx 가 서버 view 의 차이로 만든다). 없으면 null */
   announce?: string | null;
+  /** useDayFx 가 만든 지목 위 알림(가장 최근 것). id 가 바뀔 때만 띄운다 — 처음 마운트 때의 값은 지난 알림이라 띄우지 않는다 */
+  toast?: DayFx["toast"];
+  /** 지목 선두가 새 사람으로 바뀌었을 때의 손사래 신호(WorldStage 로 그대로 넘긴다) */
+  deny?: DayFx["deny"];
   /** 연결의 오류 프레임 구독(거절된 행동 알림에 쓴다) */
   onEvent?: RoomConnection["onEvent"];
   /** 맵을 쓸 수 없는 기기의 불가 카드 [처음으로] */
@@ -80,7 +106,7 @@ function MapHeader({ view, offset, hintOn, extra }: { view: RoomView; offset: nu
 // 8페이즈 게임 맵 화면 틀(08-13, UI-SPEC "게임 화면 틀"): 지하 재즈 바 맵(WorldStage) 위에 위쪽 가림막, 헤더(단계 이름 + 접히는 안내 + 시간 링 + [역할 카드]), [테스트], 결과 알림, 아래 패널을 얹는다.
 // 낮 시작·낮 토론·지목·최후 변론·찬반·처형이 이 화면 하나를 같은 장면 키로 그려 단계가 바뀌어도 맵이 다시 만들어지지 않는다.
 // 화면은 서버가 보낸 view 만으로 다시 그린다. 닉네임(이름표)·알림 글자는 React 텍스트 노드로만 그린다.
-export function GameMap({ view, store, chat, send, canSend = true, offset = 0, roleCard, testButton, announce = null, onEvent, onLeave }: GameMapProps) {
+export function GameMap({ view, store, chat, send, canSend = true, offset = 0, roleCard, testButton, announce = null, toast: toastShow = null, deny, onEvent, onLeave }: GameMapProps) {
   const toast = useTopToast();
   const { show } = toast;
   // 측정(스테이지 사각형)·키보드·기록 칸 높이는 대기실과 같은 훅이다. 키보드가 열려 있으면 행동 줄을 숨기고 기록 칸을 72 로 줄인다(07-19).
@@ -108,6 +134,14 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
     });
   }, [onEvent, show]);
 
+  // 지목 위 알림(useDayFx 의 ToastQueue 가 순서·합치기·길이를 정한다): id 가 바뀔 때만 띄운다. 처음 마운트 때의 알림은 지난 것이라 띄우지 않는다.
+  const seenToast = useRef(toastShow?.id);
+  useEffect(() => {
+    if (toastShow === null || toastShow.id === seenToast.current) return;
+    seenToast.current = toastShow.id;
+    show(toastShow.text, toastShow.icon, toastShow.durationMs);
+  }, [toastShow, show]);
+
   // 이동 권한: 산 사람은 낮 시작·토론에서만, 유령은 언제나(MAP-04). 권위는 서버 canMove 이고 화면은 같은 표로 맵 탭만 막는다.
   const me = view.players.find((p) => p.seat === view.me.seat);
   const meAlive = me === undefined || isAlive(me);
@@ -126,6 +160,22 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
     () => (canPick ? new Set(view.players.filter((p) => isAlive(p) && p.seat !== view.me.seat).map((p) => p.seat)) : null),
     [canPick, view.players, view.me.seat],
   );
+  // 처음 보는 지목에서만 누를 수 있는 이름표가 3초 깜빡인다(결정 0051-5 "처음 하는 사람에게만 손짓"). 보고 나면 저장소에 적어 다시 깜빡이지 않고, 누르면 즉시 멈춘다.
+  // 기록은 끝낼 때 한다(개발 모드 이중 실행이 첫 실행의 기록을 읽고 깜빡임을 꺼 버리지 않게). 저장소를 못 쓰면 깜빡인다.
+  const [blink, setBlink] = useState(false);
+  useEffect(() => {
+    if (!canPick || pointHintSeen()) {
+      setBlink(false);
+      return;
+    }
+    setBlink(true);
+    const timer = setTimeout(() => {
+      setBlink(false);
+      rememberPointHint();
+    }, BLINK_MS);
+    return () => clearTimeout(timer);
+  }, [canPick]);
+
   const pick: WorldPick | undefined = pickSeats
     ? {
         seats: pickSeats,
@@ -135,6 +185,10 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
           if (seat === mine) return; // 같은 사람을 다시 눌러도 변하지 않는다(취소 없음)
           if (send({ t: "point", target: seat }) === false) return; // 소켓이 닫혀 못 보냈으면 표시도 바꾸지 않는다
           chooseMine(seat);
+          if (blink) {
+            setBlink(false);
+            rememberPointHint();
+          }
         },
         group: "지목",
       }
@@ -147,12 +201,13 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
     return (seat) => {
       const count = tally.counts[seat] ?? 0;
       return {
+        ...(blink && pickSeats?.has(seat) ? { blink: true } : {}),
         ...(count >= 1 ? { count } : {}),
         ...(tally.leader === seat ? { lead: true } : {}),
         ...(tally.sure === seat ? { sure: true } : {}),
       };
     };
-  }, [nominating, view]);
+  }, [nominating, view, blink, pickSeats]);
 
   const scene = useMemo(() => sceneLook(view, { stageH, ...(mine !== undefined ? { mine } : {}) }), [view, stageH, mine]);
 
@@ -178,6 +233,7 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
         typingSeats={typingSeats}
         scene={scene}
         canWalk={canWalk}
+        {...(deny ? { deny } : {})}
         {...(pick ? { pick } : {})}
         {...(tagProps ? { tagProps } : {})}
         onNotice={(text) => show(text)}

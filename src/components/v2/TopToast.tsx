@@ -32,8 +32,8 @@ const FADE_OUT_MS = 220;
 export interface UseTopToast {
   /** `<TopToast {...toast.props} />` */
   props: TopToastProps;
-  /** 이전 알림이 있으면 바꾸고 타이머를 다시 시작한다 */
-  show(text: string, icon?: V2IconName): void;
+  /** 이전 알림이 있으면 바꾸고 타이머를 다시 시작한다. durationMs 를 주면 그 시간 동안 머문다(기본 TOAST_DURATION_MS) */
+  show(text: string, icon?: V2IconName, durationMs?: number): void;
   dismiss(): void;
 }
 
@@ -61,13 +61,13 @@ export function useTopToast(): UseTopToast {
   }, [stopTimers]);
 
   const show = useCallback(
-    (text: string, icon?: V2IconName) => {
+    (text: string, icon?: V2IconName, durationMs: number = TOAST_DURATION_MS) => {
       stopTimers();
       setState({ text, visible: true, icon });
       hideTimer.current = setTimeout(() => {
         hideTimer.current = undefined;
         dismiss();
-      }, TOAST_DURATION_MS);
+      }, durationMs);
     },
     [stopTimers, dismiss],
   );
