@@ -1265,20 +1265,43 @@ export function hitsInputSurface(page, points) {
  * 페이지 안에서 손 뗌(pointerup) 시각과 data-ring 이 새로 생기는 시각을 MutationObserver 로 재서 ringMs 를 돌려주고,
  * 손 뗌 직전(Node 시계)부터 내 구간 move 프레임이 tracker 에 들어올 때까지를 segmentMs 로 돌려준다(상한 3초, 못 받으면 null).
  * 돌려주는 값: { sx, sy, ringMs, segmentMs, move }  (move = 받은 구간 { p, t0, v, at })
+ * 같은 evaluate 에서 내 캐릭터의 화면 위치(__mfWorld.shown)를 프레임마다 모으기 시작한다 — readWalkWatch 로 읽는다(W11·W12).
  */
 export async function tapWorld(page, tracker, mySeat, x, z) {
   const pt = await page.evaluate(({ px, pz }) => (window.__mfWorld ? window.__mfWorld.screenOf(px, pz) : null), { px: x, pz: z });
   if (!pt) throw new SetupError("screenOf 를 쓸 수 없음(맵 훅 없음 또는 렌더러 없음)");
   const beforeN = tracker.moves.get(mySeat)?.n ?? 0;
-  await page.evaluate(() => {
+  await page.evaluate((seatOfMe) => {
     const root = document.querySelector("[data-world-stage]");
     window.__tapWatch?.obs?.disconnect();
+    if (window.__walkWatch) window.__walkWatch.stop = true;
     const w = { up: null, ring: null, prev: root?.getAttribute("data-ring") ?? null, obs: null };
     window.__tapWatch = w;
+    // 화면 위치 감시(결정 0059): 프레임마다 내 캐릭터가 마지막 프레임에 그린 위치를 모은다. upWall = 손 뗌의 Date.now()
+    const ww = { upWall: null, frames: [], stop: false };
+    window.__walkWatch = ww;
+    const startedAt = Date.now();
+    let lastAt = null;
+    const loop = () => {
+      if (ww.stop) return;
+      const nowMs = Date.now();
+      if (nowMs - startedAt > 5000 || (ww.upWall !== null && nowMs - ww.upWall > 1500)) {
+        ww.stop = true;
+        return;
+      }
+      const s = window.__mfWorld?.shown(seatOfMe);
+      if (s && s.at !== lastAt) {
+        lastAt = s.at;
+        ww.frames.push({ x: s.x, z: s.z, at: s.at });
+      }
+      requestAnimationFrame(loop);
+    };
+    requestAnimationFrame(loop);
     document.addEventListener(
       "pointerup",
       (e) => {
         w.up = e.timeStamp;
+        ww.upWall = Date.now();
       },
       { capture: true, once: true },
     );
@@ -1287,7 +1310,7 @@ export async function tapWorld(page, tracker, mySeat, x, z) {
       if (w.ring === null && v !== null && v !== w.prev) w.ring = performance.now();
     });
     if (root) w.obs.observe(root, { attributes: true, attributeFilter: ["data-ring"] });
-  });
+  }, mySeat);
   await page.mouse.move(pt.sx, pt.sy);
   await page.mouse.down();
   const upAt = performance.now();
@@ -1310,6 +1333,16 @@ export async function tapWorld(page, tracker, mySeat, x, z) {
   });
   const ringMs = watch && typeof watch.up === "number" && typeof watch.ring === "number" ? watch.ring - watch.up : null;
   return { sx: pt.sx, sy: pt.sy, ringMs, segmentMs: move ? Math.max(0, move.at - upAt) : null, move };
+}
+
+/** tapWorld 가 심은 화면 위치 감시를 멈추고 { upWall, frames: [{ x, z, at }] } 를 돌려준다(없으면 null). */
+export async function readWalkWatch(page) {
+  return page.evaluate(() => {
+    const w = window.__walkWatch;
+    if (!w) return null;
+    w.stop = true;
+    return { upWall: w.upWall, frames: w.frames.slice() };
+  });
 }
 
 /** 최선 노력으로 대기실 [나가기] → 확인 [나가기] 를 눌러 방을 지운다. 실패는 무시한다. */

@@ -72,6 +72,7 @@ import {
   tapAt,
   tapSeat,
   tapWorld,
+  readWalkWatch,
   typeAndSendChat,
   voteAs,
   waitChatLine,
@@ -150,6 +151,7 @@ import {
   tagStackChecks,
   walkableCenters,
   worldSyncChecks,
+  walkStartChecks,
   vignetteChecks,
   voidCardChecks,
   voteChecks,
@@ -527,6 +529,9 @@ async function worldFlow(ctx) {
 
       // 도착하고 카메라가 따라잡은 뒤: 내 이름표와 내 발이 스테이지 사각형 안, 링은 사라짐
       await sleep(Math.max(0, seg.at + dur + 1500 - performance.now()));
+      // 손님 탭 한 번의 화면 위치(결정 0059): 탭 뒤 3프레임 안 출발(W11)·걷는 동안 한 프레임 튐 없음(W12)
+      const walkWatch = await readWalkWatch(gp);
+      for (const r of walkStartChecks(walkWatch)) recOne(rec, sc, r);
       const arrived = await readWorld(gp);
       const mine = arrived.tags.find((t) => t.me);
       recOne(rec, "world/arrived", ownTagInStageChecks(mine?.rect ?? null, arrived.stage));

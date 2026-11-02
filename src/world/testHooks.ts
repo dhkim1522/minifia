@@ -10,8 +10,10 @@ export const WORLD_TEST_PARAM = "e2e";
 export const WORLD_TEST_KEY = "minifia:e2e";
 
 export interface WorldTestHooks {
-  /** 서버 시각 t(기본: 지금)의 seat 위치 — 렌더러와 같은 positionAt */
+  /** 서버 시각 t(기본: 지금)의 seat 위치 — 렌더러와 같은 positionAt. 서버 구간 기준(진실) — 화면에 그린 위치는 shown */
   sample(seat: number, t?: number): { x: number; z: number } | null;
+  /** 마지막 프레임에 화면에 그린 seat 위치(내 예측·구간 섞기 포함)와 그 프레임의 Date.now(). 없는 자리는 null (결정 0059) */
+  shown(seat: number): { x: number; z: number; at: number } | null;
   seats(): number[];
   /** 목적지 링의 목표 지점(없으면 null) */
   ring(): { x: number; z: number } | null;
@@ -37,6 +39,7 @@ declare global {
 /** 런타임 중 훅이 읽는 부분 */
 export interface HookRuntime {
   sample(seat: number, t?: number): { x: number; z: number } | null;
+  shown(seat: number): { x: number; z: number; at: number } | null;
   ring(): { x: number; z: number } | null;
   status(): MapStatusState;
   interactiveMs(): number | null;
@@ -78,6 +81,7 @@ export function worldTestHooksEnabled(search: string, storage: StorageLike | nul
 export function installWorldTestHooks(runtime: HookRuntime, store: WorldStore): () => void {
   const hooks: WorldTestHooks = {
     sample: (seat, t) => runtime.sample(seat, t),
+    shown: (seat) => runtime.shown(seat),
     seats: () => store.seats(),
     ring: () => runtime.ring(),
     status: () => runtime.status().status,

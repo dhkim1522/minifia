@@ -1585,7 +1585,7 @@ describe("E2E 훅 (T-06-27)", () => {
 
   it("installWorldTestHooks 가 돌려준 함수를 부르면 전역을 지운다", () => {
     const off = installWorldTestHooks(
-      { sample: () => null, ring: () => null, status: () => ({ status: "ready", lostAt: null }), interactiveMs: () => null, renderer: () => null },
+      { sample: () => null, shown: () => null, ring: () => null, status: () => ({ status: "ready", lostAt: null }), interactiveMs: () => null, renderer: () => null },
       new WorldStore(),
     );
     expect(window.__mfWorld).toBeTruthy();

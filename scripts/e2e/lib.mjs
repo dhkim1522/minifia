@@ -1821,12 +1821,60 @@ export function worldSyncChecks({ a, b, tol = WORLD_SYNC_TOL, ringMs, segmentMs 
   ];
 }
 
-/** 탭 한 번의 화면 위치 감시로 W11·W12 를 판정한다(결정 0059). 아직 구현 전. */
-export function walkStartChecks(_watch) {
-  return [
-    result("W11", "탭 → 내 캐릭터 화면 출발 3프레임 이내(결정 0059)", ["아직 없음"]),
-    result("W12", "걷는 동안 화면 위치가 한 프레임에 튀지 않음(≤ 5.4 단위/초)", ["아직 없음"]),
-  ];
+/** W12 에서 속도를 재는 이웃 프레임 쌍의 시간 간격 범위(ms) — 너무 붙은 쌍(타이머 잡음)과 멈췄다 온 쌍(탭 전환·정지)은 뺀다. */
+const WALK_PAIR_DT_MIN_MS = 4;
+const WALK_PAIR_DT_MAX_MS = 100;
+/** W12 가 판정하려면 필요한 쌍의 최소 개수. */
+const WALK_PAIR_MIN_COUNT = 10;
+
+/**
+ * 탭 한 번의 화면 위치 감시로 W11·W12 를 판정한다(G-07-9, 결정 0059).
+ * watch = { upWall: number|null, frames: [{ x, z, at }] } — at = 런타임 프레임의 Date.now()(오름차순), upWall = 손 뗀 Date.now().
+ * W11: upWall 이전 마지막 프레임(없으면 첫 프레임)을 출발점으로, upWall 보다 늦은 프레임을 세어 출발점에서
+ *   WORLD_START_MOVED_MIN 이상 떨어진 첫 프레임이 WORLD_START_MAX_FRAMES 번째 이내면 통과.
+ * W12: at 차이가 4~100ms 인 이웃 프레임 쌍의 거리/시간 최대가 WORLD_JUMP_SPEED_MAX 이하면 통과(쌍 10개 미만이면 측정값 없음).
+ * watch 가 없거나 upWall 이 수가 아니거나 frames 가 비면 두 행 모두 측정값 없음으로 실패한다.
+ */
+export function walkStartChecks(watch) {
+  const id11 = "W11";
+  const label11 = `탭 → 내 캐릭터 화면 출발 ${WORLD_START_MAX_FRAMES}프레임 이내(결정 0059)`;
+  const id12 = "W12";
+  const label12 = `걷는 동안 화면 위치가 한 프레임에 튀지 않음(≤ ${WORLD_JUMP_SPEED_MAX.toFixed(1)} 단위/초)`;
+  const frames = Array.isArray(watch?.frames) ? watch.frames.filter((f) => f && Number.isFinite(f.x) && Number.isFinite(f.z) && Number.isFinite(f.at)) : [];
+  const up = watch?.upWall;
+  if (typeof up !== "number" || !Number.isFinite(up) || frames.length === 0) {
+    const why = `측정값 없음(화면 위치 감시 ${watch ? `upWall ${String(up)}·프레임 ${frames.length}개` : "없음"})`;
+    return [result(id11, label11, [why]), result(id12, label12, [why])];
+  }
+  // W11
+  const bad11 = [];
+  const before = frames.filter((f) => f.at <= up);
+  const after = frames.filter((f) => f.at > up);
+  const origin = before.length > 0 ? before[before.length - 1] : frames[0];
+  if (after.length === 0) bad11.push("측정값 없음(손 뗀 뒤 프레임 없음)");
+  else {
+    const k = after.findIndex((f) => Math.hypot(f.x - origin.x, f.z - origin.z) >= WORLD_START_MOVED_MIN);
+    if (k < 0) bad11.push(`손 뗀 뒤 프레임 ${after.length}개 동안 화면 출발 없음(이동 < ${WORLD_START_MOVED_MIN})`);
+    else if (k + 1 > WORLD_START_MAX_FRAMES) bad11.push(`${k + 1}번째 프레임(${Math.round(after[k].at - up)}ms 뒤)에 출발 > ${WORLD_START_MAX_FRAMES}프레임`);
+  }
+  // W12
+  const bad12 = [];
+  let worst = -1;
+  let worstAt = 0;
+  let pairs = 0;
+  for (let i = 1; i < frames.length; i++) {
+    const dt = frames[i].at - frames[i - 1].at;
+    if (dt < WALK_PAIR_DT_MIN_MS || dt > WALK_PAIR_DT_MAX_MS) continue;
+    pairs++;
+    const v = (Math.hypot(frames[i].x - frames[i - 1].x, frames[i].z - frames[i - 1].z) / dt) * 1000;
+    if (v > worst) {
+      worst = v;
+      worstAt = frames[i].at - up;
+    }
+  }
+  if (pairs < WALK_PAIR_MIN_COUNT) bad12.push(`측정값 없음(프레임 쌍 ${pairs}개 < ${WALK_PAIR_MIN_COUNT})`);
+  else if (worst > WORLD_JUMP_SPEED_MAX) bad12.push(`최대 ${worst.toFixed(2)} 단위/초 > ${WORLD_JUMP_SPEED_MAX.toFixed(1)}(손 뗀 ${Math.round(worstAt)}ms 뒤)`);
+  return [result(id11, label11, bad11), result(id12, label12, bad12)];
 }
 
 /**

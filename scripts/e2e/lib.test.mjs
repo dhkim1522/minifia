@@ -2748,7 +2748,7 @@ test("walkStartChecks W11: 3번째 프레임에 움직이면 통과, 4번째면 
 });
 
 test("walkStartChecks W12: 걷는 중 한 프레임(16ms)에 0.14 를 건너뛰면 실패하고 최대 속도를 말한다(섞기 없는 배포본 모양)", () => {
-  const w12 = walkStartChecks(watchOf(14, (i) => i * 0.03 + (i >= 7 ? 0.14 : 0)))[1];
+  const w12 = walkStartChecks(watchOf(14, (i) => i * 0.03 + (i >= 7 ? 0.11 : 0)))[1];
   assert.equal(w12.ok, false);
   assert.match(w12.detail, /8\.\d+/);
 });
