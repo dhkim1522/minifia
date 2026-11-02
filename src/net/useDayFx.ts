@@ -10,6 +10,7 @@
 // 유령이 되는 순간(08-17): 직전 view 의 내가 산 사람이었고 지금 view 의 내가 탈락이면 채팅에 유령 시작 줄('유령 채팅 · 산 사람에게 안 보여요', ghost 아이콘)을 한 번 만들고
 //   (직전 줄이 같은 안내면 만들지 않는다 — 07페이즈 DayScene 규칙 그대로) 화면에 `ghostEnter` 신호(번호)를 준다. 화면은 번호가 바뀔 때만 안내·직업 칩 등장을 다시 보인다.
 //   재접속 첫 스냅샷·epoch 직후는 직전 view 가 없어 줄도 신호도 없다. 이전 채팅 기록은 건드리지 않는다.
+// 밤·아침 임시 틀(08-18): 낮 → 밤에 산 마피아의 마피아 채널 시작 줄(DayScene 규칙을 옮김), 밤 → 아침에 v1.0 morningCardText 제목을 결과 알림으로 띄운다.
 // 재접속·새로 고침으로 들어온 첫 스냅샷(직전 view 없음)과 연결 번호(epoch)가 바뀐 첫 스냅샷은 이펙트 없이 정상 상태로 둔다(6페이즈 첫 스냅샷 규칙).
 // 방 화면(RoomScreen)이 이 훅을 쥔다: 낮 시작은 맵이 아닌 화면(역할 확인·밤)에서 들어오므로 맵 화면이 새로 마운트되는 순간 직전 view 를 맵 화면이 알 수 없다.
 // 시계는 Date.now()/setTimeout 뿐이고 서버 단계 시간을 넘기지 않는다(표시 시간표는 dayView.ts).
@@ -17,6 +18,7 @@ import { useEffect, useRef, useState } from "react";
 import { isAlive } from "../../shared/game/alive";
 import type { RoomView } from "../../shared/protocol";
 import { CHAT_TEXT } from "../game/chatText";
+import { morningCardText } from "../game/eliminationText";
 import { dayEvents, GHOST_FADE_END_MS, TOAST_MERGE_MS, ToastQueue } from "../game/dayView";
 import type { ToastShow } from "../game/dayView";
 import { leaderShift } from "../world/presence";
@@ -47,6 +49,9 @@ function meDead(view: RoomView): boolean {
 }
 
 const NO_FADING: ReadonlyMap<number, number> = new Map();
+
+/** 아침 알림을 띄우는 시간의 기본값(서버가 단계 길이를 안 보냈을 때만). 아침은 5초(A3) */
+const MORNING_ANNOUNCE_MS = 5000;
 
 export function useDayFx({ view, epoch, chat }: { view: RoomView | null; epoch: number; chat: ChatStore }): DayFx {
   const [announce, setAnnounce] = useState<string | null>(null);
@@ -162,7 +167,14 @@ export function useDayFx({ view, epoch, chat }: { view: RoomView | null; epoch: 
     for (const line of ev.lines) {
       later(line.at ?? 0, () => chat.addSystem(line.text, { scope: "all", kind: line.kind, at: Date.now() }));
     }
-    for (const a of ev.announces) {
+    // 아침 알림(08-18 임시 틀): 같은 접속에서 아침으로 들어오는 순간 v1.0 morningCardText 의 제목 한 줄을 서버 마감까지 띄운다(새 문구 없음).
+    // 첫 스냅샷·재접속은 prev 가 없거나 reset 이라 알림이 없다. 밤에 당한 사람은 이 알림과 함께 산 사람 화면에서 사라진다(떠오름 없음 — dayEvents 에 fx 가 없다).
+    const announces = [...ev.announces];
+    if (!reset && prev !== null && view.phase === "morning" && prev.phase !== "morning") {
+      const nicknameOf = (seat: number): string | undefined => view.players.find((p) => p.seat === seat)?.nickname;
+      announces.push({ text: morningCardText(view.day?.morning, nicknameOf).title, at: 0, ms: view.phaseDurationMs ?? MORNING_ANNOUNCE_MS });
+    }
+    for (const a of announces) {
       later(a.at, () => {
         setAnnounce(a.text);
         if (hideTimer.current !== undefined) clearTimeout(hideTimer.current);
