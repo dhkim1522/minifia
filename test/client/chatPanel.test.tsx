@@ -4,6 +4,7 @@ import { useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import "../helpers/singleLineErrors";
 import { ChatPanel, type ChatPanelMessage, type ChatPanelProps } from "../../src/components/v2/ChatPanel";
+import { V2Icon } from "../../src/components/v2/V2Icon";
 
 afterEach(() => {
   cleanup();
@@ -492,6 +493,67 @@ describe("ChatPanel 채널 모양 (UI-SPEC 채널별 모양, T-07-08)", () => {
     expect(sys?.querySelector("svg")).not.toBeNull();
     expect(sys?.textContent).toBe("유령 채팅 · 산 사람에게 안 보여요");
     expect(rulesFor(V2_CSS, ".mv-chat__sys").join(";")).not.toContain("nowrap");
+  });
+});
+
+describe("ChatPanel 시스템 줄 종류 vote·hot (DAY-04·05·06)", () => {
+  const KINDS: ChatPanelMessage[] = [
+    { key: "s", kind: "system", text: "지목 시작" },
+    { key: "v", kind: "vote", text: "민준 → 도윤" },
+    { key: "h", kind: "hot", text: "도윤 님이 앞서요" },
+  ];
+
+  it("vote 줄은 p.mv-chat__sys.is-vote 안에 point 아이콘 14 와 글자", () => {
+    const { container } = render(<Harness messages={KINDS} />);
+    const p = container.querySelector("p.mv-chat__sys.is-vote");
+    expect(p).not.toBeNull();
+    expect(p?.querySelectorAll("svg").length).toBe(1);
+    expect(p?.querySelector("svg")?.getAttribute("width")).toBe("14");
+    expect(p?.textContent).toBe("민준 → 도윤");
+  });
+
+  it("vote 줄은 icon 을 따로 줘도 point 14 로 강제한다", () => {
+    const msgs: ChatPanelMessage[] = [{ key: "v", kind: "vote", icon: "ghost", text: "민준 → 도윤" }];
+    const paths = (root: ParentNode | null | undefined) => [...(root?.querySelectorAll("path") ?? [])].map((x) => x.getAttribute("d")).join("|");
+    const point = paths(render(<V2Icon name="point" size={14} />).container);
+    cleanup();
+    const { container } = render(<Harness messages={msgs} />);
+    expect(point.length).toBeGreaterThan(0);
+    expect(paths(container.querySelector(".is-vote"))).toBe(point);
+  });
+
+  it("hot 줄은 p.mv-chat__sys.is-hot 이고 아이콘 요소가 없다 (icon 을 줘도)", () => {
+    const msgs: ChatPanelMessage[] = [{ key: "h", kind: "hot", icon: "check", text: "도윤 님 과반" }];
+    const { container } = render(<Harness messages={msgs} />);
+    const p = container.querySelector("p.mv-chat__sys.is-hot");
+    expect(p).not.toBeNull();
+    expect(p?.querySelectorAll("svg").length).toBe(0);
+    expect(p?.textContent).toBe("도윤 님 과반");
+  });
+
+  it("기존 system 줄 모양은 그대로다: is-vote·is-hot 없음", () => {
+    const { container } = render(<Harness messages={KINDS} />);
+    const first = container.querySelector("[data-chat-log] > p");
+    expect(first?.className).toBe("mv-chat__sys");
+  });
+
+  it("줄 글자는 텍스트 노드다: <b>x</b> 가 그대로 보이고 요소가 생기지 않는다", () => {
+    const msgs: ChatPanelMessage[] = [
+      { key: "v", kind: "vote", text: "<b>x</b> → y" },
+      { key: "h", kind: "hot", text: "<b>x</b> 님 과반" },
+    ];
+    const { container } = render(<Harness messages={msgs} />);
+    expect(container.querySelector("b")).toBeNull();
+    expect(container.querySelector(".is-vote")?.textContent).toBe("<b>x</b> → y");
+    expect(container.querySelector(".is-hot")?.textContent).toBe("<b>x</b> 님 과반");
+  });
+
+  it("CSS: .is-vote 글자 gray-100, .is-hot 글자 brass-200 (둘 다 14px 한 줄 규칙을 물려받는다)", () => {
+    expect(rulesFor(V2_CSS, ".mv-chat__sys.is-vote").length).toBe(1);
+    expect(rulesFor(V2_CSS, ".mv-chat__sys.is-hot").length).toBe(1);
+    expect(rulesFor(V2_CSS, ".mv-chat__sys.is-vote").join(";")).toContain("color: var(--gray-100)");
+    expect(rulesFor(V2_CSS, ".mv-chat__sys.is-hot").join(";")).toContain("color: var(--brass-200)");
+    expect(rulesFor(V2_CSS, ".mv-chat__sys").join(";")).toContain("font-size: 14px");
   });
 });
 

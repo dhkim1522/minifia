@@ -96,6 +96,19 @@ describe("useChat: 보내기 (CHAT-01, T-07-33)", () => {
   });
 });
 
+describe("useChat: 시스템 줄 종류 전달 (DAY-04·06)", () => {
+  it("저장소의 vote·hot·system 줄이 ChatPanel 줄 kind 로 그대로 나온다", () => {
+    const { result } = mount();
+    act(() => {
+      store.addSystem("민준 → 도윤", { scope: "all", kind: "vote", at: 1000 });
+      store.addSystem("도윤 님이 앞서요", { scope: "all", kind: "hot", at: 1001 });
+      store.addSystem("지목 시작", { scope: "all", at: 1002 });
+    });
+    expect(result.current.messages.map((m) => m.kind).join(",")).toBe("vote,hot,system");
+    expect(result.current.messages.map((m) => m.text).join("|")).toBe("민준 → 도윤|도윤 님이 앞서요|지목 시작");
+  });
+});
+
 describe("useChat: 보내기 흐림 (UI-SPEC 입력 상태표)", () => {
   it("보낸 직후 sendDim 이 켜지고 SEND_DIM_MS 뒤 꺼진다, 그동안 입력은 계속 받는다", () => {
     vi.useFakeTimers();

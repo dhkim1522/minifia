@@ -314,6 +314,21 @@ describe("ChatStore: 시스템 줄·reset (A1)", () => {
     expect(store.revision()).toBeGreaterThan(r);
   });
 
+  it("addSystem 에 kind 를 주면 그 종류로 남고(vote·hot), 안 주면 system 이다 (DAY-04·06)", () => {
+    const store = ready();
+    store.addSystem("민준 → 도윤", { scope: "all", kind: "vote", at: 1000 });
+    store.addSystem("도윤 님이 앞서요", { scope: "all", kind: "hot", at: 1001 });
+    store.addSystem("지목 시작", { scope: "all", at: 1002 });
+    expect(store.visibleLines("all").map((l) => l.kind).join(",")).toBe("vote,hot,system");
+  });
+
+  it("vote·hot 줄도 scope 를 따른다 (유령 흐름에는 보이고 마피아 흐름에는 없다)", () => {
+    const store = ready();
+    store.addSystem("민준 → 도윤", { scope: "all", kind: "vote", at: 1000 });
+    expect(store.visibleLines("mafia").length).toBe(0);
+    expect(store.visibleLines("ghost").map((l) => l.kind).join(",")).toBe("vote");
+  });
+
   it("reset 은 줄·입력 중·알림을 모두 비우고 구독자를 부른다", () => {
     const store = ready();
     store.apply(chat("all", 1, 1, "안녕", 1000), 1, 1000);
