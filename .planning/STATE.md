@@ -5,16 +5,16 @@ milestone_name: 같은 공간
 current_phase: 08
 current_phase_name: 낮 처형과 유령
 status: executing
-stopped_at: Completed 08-27-PLAN.md
-last_updated: "2026-11-02T15:03:47.280Z"
+stopped_at: Completed 08-19-PLAN.md
+last_updated: "2026-11-02T15:13:27.504Z"
 last_activity: 2026-11-02
 last_activity_desc: Phase 08 execution started
-state_head: 54dcf36e7c242c4f5eb22b8e3c871e7f4111b6df
+state_head: a245c2ae445320b95432c05e03a57af97e39db13
 progress:
   total_phases: 7
   completed_phases: 2
   total_plans: 78
-  completed_plans: 70
+  completed_plans: 71
   percent: 29
 ---
 
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-11-02)
 ## Current Position
 
 Phase: 08 (낮 처형과 유령) — EXECUTING
-Plan: 21 of 28
+Plan: 22 of 28
 Status: Ready to execute
 Last activity: 2026-11-02 — Phase 08 execution started
 
@@ -129,6 +129,7 @@ Progress: [███░░░░░░░] 29% (2/7 phases)
 | Phase 08 P17 | 14 min | 3 tasks | 6 files |
 | Phase 08 P18 | 12min | 3 tasks | 14 files |
 | Phase 08 P27 | 15min | 3 tasks | 28 files |
+| Phase 08 P19 | 12min | 2 tasks | 30 files |
 
 ## Accumulated Context
 
@@ -267,6 +268,7 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 08]: 밤 발밑 고리·채팅 패널은 서버가 이 사람에게 보낸 값(me.pick·allyPicks·spectate.picks·me.chat)에서만 만든다 (08-18)
 - [Phase 08]: 아침(산 사람)은 UI-SPEC 단계표에 안내가 없어 [data-guide] 0개 — 08-27 화면당 data-guide 하나 에서 예외 처리 필요
 - [Phase 08]: 08-27: phaseScreens.test 는 살아 있는 화면(역할 확인·배정·대기실·역할 카드 시트) 시험이라 지우지 않고 유지. 맵 화면의 화면당 [data-guide] 하나 예외는 낮 시작·처형·아침(산 사람 0개, 유령만 하나, UI-SPEC 단계표)
+- [Phase 08]: 08-19: 역할 배정 화면은 사용자 확정대로 테이블 상자만 뺌(빈 패널 margin-top auto 로 위치 유지). 낮 장면 상자에서만 닿던 [테스트] 버튼 좁힘 처리도 함께 삭제
 
 ### Pending Todos
 
@@ -302,8 +304,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-02T15:03:47.040Z
-Stopped at: Completed 08-27-PLAN.md
+Last session: 2026-11-02T15:13:27.251Z
+Stopped at: Completed 08-19-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
