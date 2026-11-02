@@ -130,7 +130,7 @@ Plans:
   3. 글자 수나 도배 한도를 넘기면 서버가 막고 보낸 사람에게 알린다. 한글 입력(조합 중 Enter)이 깨지지 않고 iOS 키보드가 채팅창을 가리지 않는다 — iPhone·Android·삼성 인터넷·카카오톡 인앱에서 확인 (CHAT-05)
   4. 순차 직업 주장·빠른 메시지·텍스트 이모티콘이 화면과 서버에서 모두 사라지고, 낮 토론은 자유 채팅으로 진행된다 (CHAT-06)
 
-**Plans:** 22/22 plans executed (14 waves)
+**Plans:** 22/27 plans executed (14 waves + 갭 닫기 5)
 
 Plans:
 **Wave 1** *(같은 웨이브도 번호 순서로 하나씩 돈다 — use_worktrees false)*
@@ -182,6 +182,13 @@ Plans:
 
 **Wave 14**
 - [x] 07-22-PLAN.md — 사람 확인 결과 기록·HANDOFF(D1 이월 포함)·push (W14)
+
+**Gap closure** *(07-UAT.md 갭 G-07-9 — 로비 이동 멈칫·튐, 결정 0059 / WR-03 낮 시작 문구, 07-UAT 8 사용자 결정 2026-11-02)*
+- [ ] 07-23-PLAN.md — WR-03: 낮 시작 보조줄 삭제·하단 안내 '곧 토론이 시작돼요', 시험·E2E N8·결정 0030/0038 개정 표시·WR-03 resolved (TDD, gap_closure, wave 1)
+- [ ] 07-24-PLAN.md — G-07-9 순수 핵심: 공용 경로 본체 planMoveSegment·predictSegment·섞기/방향/응답 추적기(motion.ts)·moveSeqOf (TDD, gap_closure, wave 1)
+- [ ] 07-25-PLAN.md — G-07-9 런타임: 탭 즉시 예측 출발·서버 구간 150ms 섞어 맞춤·응답 없음 되돌림·남 섞기·둘째 탭·방향/자세 섞기 (TDD, gap_closure, wave 2)
+- [ ] 07-26-PLAN.md — G-07-9 E2E W11·W12(__mfWorld.shown)·06-UI-SPEC 0059 개정 표시·화면 지도·구조 문서 (TDD, gap_closure, wave 3 — 07-23 과 scripts/e2e 파일 소유 순서)
+- [ ] 07-27-PLAN.md — 가드 체인 배포·배포본 smoke·전체 E2E(W11·W12·N8)·HANDOFF·push (gap_closure, wave 4)
 
 **UI hint**: yes
 **계획 메모**: 연구 권장 — iOS 키보드 + 하단 고정 채팅 + 한글 IME 실기기. 위치·채팅·입력 중이 모두 `audience` 한 함수를 지나게 하고 무차별 `broadcastEvent` 는 지운다. 채널은 서버가 보낸 사람 상태로 정하고 단계 번호가 어긋나면 넓은 채널로 돌리지 말고 폐기한다. 이 표에 동작(이모트) 종류도 같이 정의해 10페이즈가 재사용한다.
