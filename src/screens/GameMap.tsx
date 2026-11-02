@@ -162,6 +162,9 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
   const me = view.players.find((p) => p.seat === view.me.seat);
   const meAlive = me === undefined || isAlive(me);
   const canWalk = canMoveIn(view.phase, meAlive);
+  // 유령 화면(GHOST-02, 결정 0021): 내가 탈락했고 서버가 관전 정보(spectate)를 보냈을 때만 그린다. 서버가 안 보낸 view 에서는 이 분기가 아예 없다 — 받아서 감추는 방식이 아니다.
+  const spectate = !meAlive ? view.spectate : undefined;
+  const ghost = spectate !== undefined;
 
   // 장면 표(보임·유령·카메라·조명·긴장): 서버 공개 정보로만 만든다. view 가 바뀔 때만 새로 만든다(타이머 틱으로 WorldStage 를 흔들지 않는다).
   const stageH = Math.max(0, window.innerHeight - (stageInsets?.top ?? DEFAULT_INSET_TOP) - (stageInsets?.bottom ?? DEFAULT_INSET_BOTTOM));
@@ -226,7 +229,7 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
   // 이름표 쌓임: 득표 배지·선두(맥박)·과반 도장은 서버가 센 집계에서만 나온다. 0표 이름표에는 배지가 없다.
   const verdicting = view.phase === "verdict";
   const defending = view.phase === "defense";
-  const tagProps = useMemo<WorldTagProps | undefined>(() => {
+  const baseTagProps = useMemo<WorldTagProps | undefined>(() => {
     // 찬반(DAY-06): 던진 사람의 이름표에 체크만 붙는다. 서버 day.voted 는 좌석뿐이고 무엇을 골랐는지는 어디에도 없다(결정 0053)
     if (verdicting) {
       const voted = new Set(view.day?.voted ?? []);
@@ -252,10 +255,21 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
     };
   }, [nominating, verdicting, defending, view, blink, pickSeats]);
 
+  // 유령 화면의 이름표: 모든 이름표 위에 그 사람의 직업 칩(spectate.seats 의 job), 죽은 좌석은 반투명. 산 사람 view 에는 spectate 가 없어 이 겹침이 없다.
+  const tagProps = useMemo<WorldTagProps | undefined>(() => {
+    if (spectate === undefined) return baseTagProps;
+    const jobs = new Map(spectate.seats.map((s) => [s.seat, s.job] as const));
+    const deadSeats = new Set(view.players.filter((p) => !isAlive(p)).map((p) => p.seat));
+    return (seat) => {
+      const job = jobs.get(seat);
+      return { ...(baseTagProps?.(seat) ?? {}), ...(job !== undefined ? { role: job } : {}), ...(deadSeats.has(seat) ? { ghost: true } : {}) };
+    };
+  }, [spectate, baseTagProps, view.players]);
+
   const scene = useMemo(() => sceneLook(view, { stageH, ...(fading ? { fading } : {}), ...(mine !== undefined ? { mine } : {}) }), [view, stageH, fading, mine]);
 
   return (
-    <main ref={rootRef} className="mf-root mf-game" data-game-stage="" data-phase={view.phase} data-kb-open={kbOpen ? "true" : undefined}>
+    <main ref={rootRef} className="mf-root mf-game" data-game-stage="" data-phase={view.phase} data-ghost-view={ghost ? "true" : undefined} data-kb-open={kbOpen ? "true" : undefined}>
       {/* DOM 순서 = Tab 순서: 헤더([역할 카드]) → 맵(이름표) → 아래 패널(입력). 층 순서는 z 가 정한다 */}
       <div className="mf-game__scrim" aria-hidden="true" />
       <header ref={headerRef} className="mf-game__header">

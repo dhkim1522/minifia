@@ -272,6 +272,8 @@ export function WorldStage(props: WorldStageProps) {
           const pickable = current && pick !== undefined && pick.seats.has(p.seat);
           const kickable = !pickable && current && canKick && away && !me;
           const { ring, ...extra } = props.tagProps?.(p.seat) ?? {};
+          // 죽은 좌석 표시(유령 화면에서만 생긴다): 유령 viewer 의 장면 표 ghost 이거나 tagProps 가 ghost 를 준 좌석
+          const ghostSeat = extra.ghost === true || scene?.seats[p.seat]?.ghost === true;
           const stack = (
             <HeadStack
               name={p.nickname}
@@ -291,6 +293,7 @@ export function WorldStage(props: WorldStageProps) {
               data-seat={p.seat}
               data-me={me ? "true" : undefined}
               data-away={away ? "true" : undefined}
+              data-ghost-seat={ghostSeat ? "true" : undefined}
               data-lead={extra.lead ? "true" : undefined}
               data-ring-kind={ring}
               aria-hidden={kickable || pickable ? undefined : true}
