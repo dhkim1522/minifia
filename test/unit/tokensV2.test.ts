@@ -1,5 +1,6 @@
 // v2.0 디자인 시스템 토큰이 앱 토큰(design/tokens.json → src/styles/tokens.css)에 같은 값으로 들어 있음을 고정한다.
-// 글꼴(type)·글자 스타일 묶음은 합치지 않는다(7~8페이즈에서 Gowun Batang 과 함께 추가).
+// 명조 글꼴(type.families.serif → --font-serif)은 8페이즈(08-05)에서 합쳤다. 글자 스타일 묶음(.badge-number 등)은 변수가 아니라
+// v2.css 의 배지·도장 규칙에 직접 쓴다(생성기는 :root 변수만 만든다).
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
@@ -65,5 +66,57 @@ describe("v2.0 토큰 합치기", () => {
     }
     const count = FAMILIES.reduce((n, f) => n + tokensOf(app, f).length, 0);
     expect(count).toBeGreaterThanOrEqual(63 + 7 + 4 + 2 + 5 + 3 + 1 + 3 + 22);
+  });
+});
+
+// 08-05: 명조 글꼴 토큰. 값은 승인 v2.0 토큰(design/v2.0/design-system/tokens.json type.families.serif) 그대로다.
+describe("명조 글꼴 토큰 --font-serif (08-05, UI-SPEC Font)", () => {
+  type TypeDoc = { type?: { families?: Record<string, string> } };
+  const fam = (doc: unknown, key: string): string | undefined => (doc as TypeDoc).type?.families?.[key];
+  const V2_CSS = readFileSync(new URL("../../src/styles/v2.css", import.meta.url), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+  const INDEX = readFileSync(new URL("../../index.html", import.meta.url), "utf8");
+  const body = (selector: string): string => {
+    const hit = [...V2_CSS.matchAll(/([^{}]+)\{([^{}]*)\}/g)].find((m) => (m[1] ?? "").trim() === selector);
+    return hit?.[2] ?? "";
+  };
+
+  it("tokens.css 에 --font-serif 한 줄이 생성되어 있다", () => {
+    expect(css.split("\n").filter((l) => l.includes("--font-serif:")).length).toBe(1);
+  });
+
+  it("tokens.css 의 --font-serif 값이 승인 v2.0 serif 와 같다", () => {
+    const m = css.match(/--font-serif: ([^;]+);/);
+    expect(m !== null).toBe(true);
+    expect(m?.[1] === fam(v2, "serif")).toBe(true);
+  });
+
+  it("design/tokens.json type.families.serif 가 v2.0 과 같고 ui 는 그대로다", () => {
+    expect(fam(app, "serif") !== undefined).toBe(true);
+    expect(fam(app, "serif") === fam(v2, "serif")).toBe(true);
+    expect(fam(app, "ui") === fam(v2, "ui")).toBe(true);
+  });
+
+  it("index.html 은 Gowun Batang 700 과 Gowun Dodum 을 한 요청(같은 호스트)으로 부른다", () => {
+    const links = [...INDEX.matchAll(/<link[^>]*href="(https:\/\/fonts\.googleapis\.com\/css2[^"]*)"/g)].map((m) => m[1] ?? "");
+    expect(links.length).toBe(1);
+    expect(links[0]?.includes("family=Gowun+Batang:wght@700")).toBe(true);
+    expect(links[0]?.includes("family=Gowun+Dodum")).toBe(true);
+  });
+
+  it("v2.css 에서 --font-serif 는 배지 숫자와 유력 도장 규칙에만 쓰이고 대체값이 없다", () => {
+    const users = [...V2_CSS.matchAll(/([^{}]+)\{([^{}]*)\}/g)].filter((m) => (m[2] ?? "").includes("--font-serif")).map((m) => (m[1] ?? "").trim());
+    expect(users.join("|")).toBe(".mv-badge__num|.mv-stamp");
+    expect(V2_CSS.includes("var(--font-serif,")).toBe(false);
+  });
+
+  it("글자 스타일: 배지 숫자 22/1/700, 단위 12/1/700(ui), 도장 15/1/700 자간 0.12em", () => {
+    const num = body(".mv-badge__num");
+    expect(num.includes("font-family: var(--font-serif)")).toBe(true);
+    expect(num.includes("font-size: 22px; line-height: 1; font-weight: 700")).toBe(true);
+    const unit = body(".mv-badge__unit");
+    expect(unit.includes("font-family: var(--font-ui)")).toBe(true);
+    expect(unit.includes("font-size: 12px; line-height: 1; font-weight: 700")).toBe(true);
+    const stamp = body(".mv-stamp");
+    expect(stamp.includes("font-size: 15px; line-height: 1; font-weight: 700; letter-spacing: 0.12em")).toBe(true);
   });
 });
