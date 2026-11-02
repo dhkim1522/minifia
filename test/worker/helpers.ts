@@ -587,3 +587,23 @@ export function verdictAs(sock: TestSocket, agree: boolean): void {
 export function endAs(sock: TestSocket, on: boolean): void {
   send(sock, { t: "endDiscussion", on });
 }
+
+// ---- 8페이즈 유령 위치 누설 도우미(08-09) ----
+
+/**
+ * 좌석들을 탈락시키고(killSeats) 모든 소켓을 flush 해 DO 가 저장소의 새 상태로 다시 깬 뒤의 모습을 돌려준다 —
+ * 유령이 된 사람들(ghosts)과 산 사람들(living). 소켓의 마지막 view 는 그대로이므로(탈락은 저장 편집이라 방송이 없다) 좌석으로만 구분한다.
+ */
+export async function ghostsOf(g: Game, seats: number[]): Promise<{ ghosts: Actor[]; living: Actor[] }> {
+  await killSeats(g, seats);
+  for (const sock of g.socks) await settle(sock, mark(sock));
+  return { ghosts: g.actors.filter((a) => seats.includes(a.seat)), living: g.actors.filter((a) => !seats.includes(a.seat)) };
+}
+
+/** 소켓이 받은 world 프레임(move·snap)을 순서대로. from 은 mark 이후만 볼 때의 시작 위치다. */
+export function worldFramesOf(sock: TestSocket, from = 0): Array<Extract<ServerMessage, { t: "world" }>> {
+  return sock.frames
+    .slice(from)
+    .map(parseFrame)
+    .filter((m): m is Extract<ServerMessage, { t: "world" }> => m.t === "world");
+}
