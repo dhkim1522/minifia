@@ -30,6 +30,10 @@ import "../styles/testtools.css";
 const HINT_MS = 2500;
 /** 서버가 단계 어긋난 행동을 거절했을 때 위 알림(UI-SPEC Copywriting Contract, 7페이즈 "지금은 보낼 수 없어요" 문구 계열) */
 const REJECT_TEXT = "지금은 고를 수 없어요";
+/** 지목이 단계 어긋남이 아닌 이유로 거절됐을 때 위 알림 */
+const SEND_FAIL_TEXT = "보내지 못했어요. 다시 해 보세요";
+/** 지목을 보낸 뒤 이 시간 안의 오류 프레임은 그 지목의 거절로 본다(서버는 거절을 곧바로 돌려준다) */
+const PICK_REPLY_MS = 3000;
 /** 스테이지 사각형을 아직 못 쟀을 때 WorldStage 기본값(헤더 아래 62 · 패널 250)과 같은 값 — 장면 표의 확대 판정에만 쓴다 */
 const DEFAULT_INSET_TOP = 62;
 const DEFAULT_INSET_BOTTOM = 250;
@@ -122,12 +126,22 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
     return () => clearTimeout(timer);
   }, [phase]);
 
-  // 서버가 행동을 거절하면(마감 직후 누름 등) 위 알림을 띄우고 내 낙관적 눌림을 서버 값으로 되돌린다. 이동은 조용히 버려지고 오류 프레임이 없다.
+  // 서버가 행동을 거절하면(마감 직후 누름 등) 위 알림을 띄우고 내 낙관적 눌림·선택을 서버 값으로 되돌린다. 이동은 조용히 버려지고 오류 프레임이 없다.
+  // 지목 직후(PICK_REPLY_MS 안, 서버가 아직 내 선택을 확인하지 않았을 때)의 거절은 지목 거절이다: 단계 어긋남(WRONG_PHASE)은 REJECT_TEXT,
+  // 그 밖의 코드는 SEND_FAIL_TEXT. 지목을 보낸 적 없으면 그 밖의 코드는 알림도 되돌림도 만들지 않는다(채팅 속도 제한 등).
   const [rejects, setRejects] = useState(0);
+  const pointSent = useRef<{ target: number; at: number } | null>(null);
   useEffect(() => {
     if (!onEvent) return;
     return onEvent((e) => {
       if (e.t !== "error") return;
+      const sent = pointSent.current;
+      if (sent !== null && Date.now() - sent.at < PICK_REPLY_MS) {
+        pointSent.current = null;
+        show(e.code === "WRONG_PHASE" ? REJECT_TEXT : SEND_FAIL_TEXT);
+        setRejects((n) => n + 1);
+        return;
+      }
       if (e.code !== "WRONG_PHASE" && e.code !== "BAD_MESSAGE") return;
       show(REJECT_TEXT);
       setRejects((n) => n + 1);
@@ -156,6 +170,18 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
   const canPick = nominating && meAlive;
   const serverMine = nominating ? view.day?.points?.find((l) => l.seat === view.me.seat)?.target : undefined;
   const [mine, chooseMine] = useViewChoice<number | undefined>(view, serverMine);
+  // 서버가 내 선택을 확인했으면 더는 거절을 기다리지 않는다. 거절이 오면 내 선택을 서버 값으로 되돌린다(처음 그릴 때는 아무것도 하지 않는다).
+  useEffect(() => {
+    if (pointSent.current !== null && serverMine === pointSent.current.target) pointSent.current = null;
+  }, [view, serverMine]);
+  const seenRejects = useRef(rejects);
+  useEffect(() => {
+    if (seenRejects.current === rejects) return;
+    seenRejects.current = rejects;
+    chooseMine(serverMine);
+    // chooseMine 은 렌더마다 새 함수지만 setState 만 부른다
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rejects]);
   const pickSeats = useMemo(
     () => (canPick ? new Set(view.players.filter((p) => isAlive(p) && p.seat !== view.me.seat).map((p) => p.seat)) : null),
     [canPick, view.players, view.me.seat],
@@ -184,6 +210,7 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
         onPick: (seat) => {
           if (seat === mine) return; // 같은 사람을 다시 눌러도 변하지 않는다(취소 없음)
           if (send({ t: "point", target: seat }) === false) return; // 소켓이 닫혀 못 보냈으면 표시도 바꾸지 않는다
+          pointSent.current = { target: seat, at: Date.now() };
           chooseMine(seat);
           if (blink) {
             setBlink(false);
