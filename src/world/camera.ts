@@ -5,6 +5,7 @@
 // 카메라 = 목표 + (sin(yaw)·17, 12.5, cos(yaw)·17), 주시점 = (목표.x, 0.6, 목표.z), 정사영, 배율 PX_PER_UNIT.
 // 클라이언트 전용이라 삼각함수를 써도 된다(shared 의 서버 판정 모듈 규칙은 여기 적용되지 않는다).
 
+import { STAGE_SPOT, UNIT } from "../../shared/game/map";
 import { lobbyPanelHeight, LOG_H_SHORT, TYPING_PILL_H } from "../game/chatUi";
 
 export interface V3 {
@@ -62,6 +63,13 @@ export const PAN_BOX: Readonly<{ minX: number; maxX: number; minZ: number; maxZ:
  * 스테이지 위(헤더 가림막 뒤)까지는 여유 2 가 덮는다.
  */
 export const PLATE_FAR = 17;
+
+/** 모이는 자리 가운데(월드 단위) = 무대 자리. 지목·변론·찬반·처형 단계의 카메라 고정 목표다(08-08, UI-SPEC 카메라 표) */
+export const GATHER_CENTER: Readonly<{ x: number; z: number }> = { x: STAGE_SPOT.x / UNIT, z: STAGE_SPOT.z / UNIT };
+/** 지목 과반 연출의 확대 배율(8% 다가감, UI-SPEC 카메라 표) */
+export const ZOOM_MAJORITY = 1.08;
+/** 과반 확대는 스테이지 높이(px)가 이 값 이상일 때만 한다. 모자라면 확대 없이 실내등과 도장만(UI-SPEC 카메라 표) */
+export const ZOOM_MIN_STAGE_H = 360;
 
 /** UI-SPEC 의 폰 크기(폰 폭×높이). 스테이지 사각형은 stageRect 로 구한다 */
 export const STAGE_SIZES: readonly { w: number; h: number; label: string }[] = [

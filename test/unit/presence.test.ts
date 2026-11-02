@@ -1,0 +1,205 @@
+// 장면 상태 순수 모듈 시험 — GHOST-01·MAP-04·DAY-04·05, 08-UI-SPEC 카메라·조명.
+// 서버 view 하나에서 그 viewer 의 보이는 좌석·카메라·조명·긴장이 정해진다. 산 사람 화면 상태에는 유령 좌석이 없다.
+// 실패 출력은 한 줄이어야 해서(TAP) 비교는 JSON 문자열로 한다.
+import { describe, expect, it } from "vitest";
+import type { DayView, PhaseId, PublicPlayer, RoomView } from "../../shared/protocol";
+import { GHOST_FADE_END_MS } from "../../src/game/dayView";
+import { GATHER_CENTER, ZOOM_MAJORITY, ZOOM_MIN_STAGE_H } from "../../src/world/camera";
+import { cameraModeOf, lightingOf, sceneLook, tensionOf, visibleSeats } from "../../src/world/presence";
+
+const flat = (value: unknown): string => JSON.stringify(value).replaceAll('"', "");
+const same = (actual: unknown, expected: unknown) => expect(flat(actual)).toBe(flat(expected));
+
+interface ViewOpts {
+  /** 산 사람으로 둘 좌석 수(0부터). 기본 5 */
+  count?: number;
+  /** 탈락(alive:false)으로 둘 좌석 */
+  dead?: number[];
+  day?: Partial<DayView>;
+  mySeat?: number;
+  /** 유령 viewer 의 서버 view 처럼 spectate 를 싣는다 */
+  spectate?: boolean;
+}
+
+function viewOf(phase: PhaseId, opts: ViewOpts = {}): RoomView {
+  const count = opts.count ?? 5;
+  const dead = new Set(opts.dead ?? []);
+  const players: PublicPlayer[] = Array.from({ length: count }, (_, seat) => ({
+    seat,
+    nickname: `p${seat}`,
+    connected: true,
+    isHost: seat === 0,
+    ...(dead.has(seat) ? { alive: false } : {}),
+  }));
+  return {
+    code: "0042",
+    phase,
+    phaseEndsAt: null,
+    phaseDurationMs: null,
+    serverNow: 0,
+    minPlayers: 4,
+    maxPlayers: 8,
+    players,
+    me: { seat: opts.mySeat ?? 0, isHost: false },
+    day: { n: 1, roles: [], ...opts.day },
+    ...(opts.spectate ? { spectate: { seats: [] } } : {}),
+  };
+}
+
+const points = (...pairs: [number, number][]) => pairs.map(([seat, target]) => ({ seat, target }));
+
+describe("visibleSeats (GHOST-01, T-08-25)", () => {
+  it("산 사람 viewer: 탈락한 좌석 3 은 없고 산 좌석은 ghost false 로만 있다", () => {
+    const seats = visibleSeats(viewOf("discussion", { dead: [3], mySeat: 0 }));
+    same(Object.keys(seats).map(Number), [0, 1, 2, 4]);
+    same(Object.values(seats).map((s) => s.ghost), [false, false, false, false]);
+  });
+
+  it("산 사람 viewer 의 상태에는 유령 좌석이 '숨김' 표시로도 없다 (키 자체가 없다)", () => {
+    const seats = visibleSeats(viewOf("discussion", { dead: [3] }));
+    expect(3 in seats).toBe(false);
+    same(Object.values(seats).filter((s) => s.ghost).length, 0);
+  });
+
+  it("유령 viewer(내 좌석 3 이 탈락): 모든 좌석이 보이고 3 은 ghost true, 산 좌석은 ghost false", () => {
+    const seats = visibleSeats(viewOf("discussion", { dead: [3], mySeat: 3 }));
+    same(Object.keys(seats).map(Number), [0, 1, 2, 3, 4]);
+    same(seats[3]?.ghost, true);
+    same([0, 1, 2, 4].map((n) => seats[n]?.ghost), [false, false, false, false]);
+  });
+
+  it("spectate 가 실린 view 도 유령 viewer 로 본다", () => {
+    const seats = visibleSeats(viewOf("discussion", { dead: [1, 3], mySeat: 1, spectate: true }));
+    same(Object.keys(seats).map(Number), [0, 1, 2, 3, 4]);
+    same([seats[1]?.ghost, seats[3]?.ghost], [true, true]);
+  });
+
+  it("방에 없는 viewer(내 좌석이 players 에 없음)는 산 사람 규칙을 따른다", () => {
+    const seats = visibleSeats(viewOf("discussion", { dead: [3], mySeat: 9 }));
+    expect(3 in seats).toBe(false);
+  });
+
+  it("처형 연출 표시 {3: 시작 시각}: 산 사람 viewer 도 3 을 연출 끝(2400ms) 직전까지 본다", () => {
+    const view = viewOf("execution", { dead: [3], mySeat: 0 });
+    const fading = new Map([[3, 1000]]);
+    expect(3 in visibleSeats(view, fading, 1000)).toBe(true);
+    expect(3 in visibleSeats(view, fading, 1000 + GHOST_FADE_END_MS - 1)).toBe(true);
+    expect(3 in visibleSeats(view, fading, 1000 + GHOST_FADE_END_MS)).toBe(false);
+  });
+
+  it("연출 중인 좌석은 fadeAt 으로 시작 시각이 실린다", () => {
+    const seats = visibleSeats(viewOf("execution", { dead: [3] }), new Map([[3, 1000]]), 1500);
+    same(seats[3]?.fadeAt, 1000);
+    same(seats[0]?.fadeAt, undefined);
+  });
+
+  it("연출 표시에 산 좌석이 섞여 있어도 산 좌석 상태는 바뀌지 않는다", () => {
+    const seats = visibleSeats(viewOf("execution", { dead: [3] }), new Map([[1, 0]]), 100);
+    same(Object.keys(seats).map(Number), [0, 1, 2, 4]);
+  });
+});
+
+describe("cameraModeOf (UI-SPEC 카메라 표)", () => {
+  const follow = ["lobby", "assigning", "roleReveal", "dayAnnounce", "discussion", "night", "morning", "ended"] as const;
+  for (const phase of follow) {
+    it(`${phase} → 따라가기`, () => {
+      same(cameraModeOf(viewOf(phase), 500), { mode: "follow" });
+    });
+  }
+
+  for (const phase of ["nomination", "defense", "verdict", "execution"] as const) {
+    it(`${phase} → 모이는 자리 가운데 고정, 확대 1`, () => {
+      same(cameraModeOf(viewOf(phase), 500), { mode: "fixed", target: GATHER_CENTER, zoom: 1 });
+    });
+  }
+
+  it("고정 목표는 {0,0}", () => {
+    same(GATHER_CENTER, { x: 0, z: 0 });
+  });
+
+  const majority = viewOf("nomination", { day: { points: points([0, 2], [1, 2], [3, 2]) } });
+  it("지목 과반 + 스테이지 400 → 확대 1.08", () => {
+    same(cameraModeOf(majority, 400), { mode: "fixed", target: GATHER_CENTER, zoom: ZOOM_MAJORITY });
+  });
+  it("지목 과반 + 스테이지 359 → 확대 1, 360 → 1.08 (경계)", () => {
+    same((cameraModeOf(majority, ZOOM_MIN_STAGE_H - 1) as { zoom: number }).zoom, 1);
+    same((cameraModeOf(majority, ZOOM_MIN_STAGE_H) as { zoom: number }).zoom, ZOOM_MAJORITY);
+  });
+  it("과반이 아닌 지목(선두만)은 스테이지가 커도 확대 1", () => {
+    const lead = viewOf("nomination", { count: 8, day: { points: points([0, 2], [1, 2], [3, 2], [4, 5]) } });
+    same((cameraModeOf(lead, 600) as { zoom: number }).zoom, 1);
+  });
+  it("과반이어도 지목 단계가 아니면 확대 1 (찬반)", () => {
+    const verdict = viewOf("verdict", { day: { points: points([0, 2], [1, 2], [3, 2]), candidate: 2 } });
+    same((cameraModeOf(verdict, 600) as { zoom: number }).zoom, 1);
+  });
+});
+
+describe("lightingOf (UI-SPEC 단계 조명)", () => {
+  const table: [PhaseId, string][] = [
+    ["dayAnnounce", "talk"],
+    ["discussion", "talk"],
+    ["nomination", "vote"],
+    ["verdict", "vote"],
+    ["defense", "trial"],
+    ["execution", "trial"],
+    ["night", "night"],
+    ["morning", "morning"],
+    ["lobby", "talk"],
+  ];
+  for (const [phase, lighting] of table) {
+    it(`${phase} → ${lighting}`, () => {
+      same(lightingOf(phase), lighting);
+    });
+  }
+});
+
+describe("tensionOf (UI-SPEC 단계 조명: 선두·과반·찬반)", () => {
+  it("지목 3:1 (산 8명) → 긴장 1·초점은 선두", () => {
+    const v = viewOf("nomination", { count: 8, day: { points: points([0, 2], [1, 2], [3, 2], [4, 5]) } });
+    same(tensionOf(v), { level: 1, focus: 2 });
+  });
+  it("지목 과반(산 5명 중 3표) → 긴장 2·초점은 그 사람", () => {
+    const v = viewOf("nomination", { day: { points: points([0, 2], [1, 2], [3, 2]) } });
+    same(tensionOf(v), { level: 2, focus: 2 });
+  });
+  it("지목 동점 → 긴장 0·초점 없음", () => {
+    const v = viewOf("nomination", { day: { points: points([0, 2], [1, 3]) } });
+    same(tensionOf(v), { level: 0 });
+  });
+  it("지목 줄이 없으면 긴장 0", () => {
+    same(tensionOf(viewOf("nomination", { day: { points: [] } })), { level: 0 });
+  });
+  it("찬반 → 긴장 1·초점은 변론자", () => {
+    same(tensionOf(viewOf("verdict", { day: { candidate: 4 } })), { level: 1, focus: 4 });
+  });
+  it("찬반인데 변론자가 없으면 긴장 0", () => {
+    same(tensionOf(viewOf("verdict")), { level: 0 });
+  });
+  for (const phase of ["discussion", "defense", "execution", "night", "morning", "dayAnnounce"] as const) {
+    it(`${phase} → 긴장 0`, () => {
+      same(tensionOf(viewOf(phase, { day: { candidate: 2 } })), { level: 0 });
+    });
+  }
+});
+
+describe("sceneLook (위를 묶는다)", () => {
+  it("지목 과반 + 스테이지 400: 고정·확대·vote·긴장 2·초점, 산 사람 viewer 에는 유령 좌석이 없다", () => {
+    const view = viewOf("nomination", { dead: [4], day: { points: points([0, 2], [1, 2], [3, 2]) } });
+    const look = sceneLook(view, { stageH: 400 });
+    same(look.camera, { mode: "fixed", target: GATHER_CENTER, zoom: ZOOM_MAJORITY });
+    same([look.lighting, look.tension, look.focusSeat], ["vote", 2, 2]);
+    same(Object.keys(look.seats).map(Number), [0, 1, 2, 3]);
+  });
+  it("토론: 따라가기·talk·긴장 0·초점 없음", () => {
+    const look = sceneLook(viewOf("discussion"), { stageH: 400 });
+    same(look.camera, { mode: "follow" });
+    same([look.lighting, look.tension, look.focusSeat], ["talk", 0, undefined]);
+  });
+  it("유령 viewer 의 처형 장면: 모든 좌석, 탈락 좌석 ghost", () => {
+    const view = viewOf("execution", { dead: [3], mySeat: 3, day: { execution: { seat: 3, phrase: 1 } } });
+    const look = sceneLook(view, { stageH: 300 });
+    same(Object.keys(look.seats).map(Number), [0, 1, 2, 3, 4]);
+    same(look.seats[3]?.ghost, true);
+  });
+});
