@@ -51,6 +51,8 @@ const PHASE_ANNOUNCE: Record<PhaseId, (view: RoomView) => string> = {
   candidateVoteReveal: () => VERDICT_TEXT.announce.candidateVoteReveal,
   defense: defenseAnnounceOf,
   execution: executionAnnounceOf,
+  nomination: () => "지목", // 8페이즈: 서버가 아직 이 단계를 만들지 않는다 — 문구는 08-13 이 다시 본다
+  verdict: () => "찬반",
   // 결과가 있으면 승리 팀까지 읽는다(result 없는 옛 서버 프레임은 연결 중… 화면이라 짧은 문구)
   ended: (view) => (view.result ? winnerText(view.result.winner).announce : "게임이 끝났습니다"),
 };

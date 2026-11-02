@@ -46,6 +46,8 @@ export const PHASE_SCENE: Readonly<Record<PhaseId, SceneId>> = Object.freeze({
   candidateVoteReveal: "dusk",
   defense: "dusk",
   execution: "dusk",
+  nomination: "dusk", // 8페이즈: defense 와 같은 값 — 맵 화면이 배경을 쓰지 않아 08-20 이 이 표를 정리한다
+  verdict: "dusk",
   ended: "night",
 });
 

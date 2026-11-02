@@ -80,17 +80,19 @@ describe("단계 → 장면 규칙표(PHASE_SCENE)", () => {
       candidateVoteReveal: "dusk",
       defense: "dusk",
       execution: "dusk",
+      nomination: "dusk",
+      verdict: "dusk",
       ended: "night",
     });
     for (const phase of PHASES) expect(sceneOfPhase(phase)).toBe(PHASE_SCENE[phase]);
   });
 
-  it("dusk 는 투표·공개·변론·처형 다섯 단계를 가리키고 verdictDusk 는 등록만 남아 어떤 단계도 가리키지 않는다 (P-1·P-2, D-14·D-29)", () => {
+  it("dusk 는 투표·공개·변론·처형 다섯 단계와 8페이즈 지목·찬반을 가리키고 verdictDusk 는 등록만 남아 어떤 단계도 가리키지 않는다 (P-1·P-2, D-14·D-29)", () => {
     const used = new Set(Object.values(PHASE_SCENE));
     expect(used.has("verdictDusk")).toBe(false);
     expect(used.has("dusk")).toBe(true);
     expect(PHASES.filter((p) => PHASE_SCENE[p] === "dusk").sort()).toEqual(
-      ["candidateVote", "candidateVoteReveal", "defense", "execVote", "execution"].sort(),
+      ["candidateVote", "candidateVoteReveal", "defense", "execVote", "execution", "nomination", "verdict"].sort(),
     );
     expect(PHASE_SCENE.ended).toBe("night");
     expect(SCENE_IDS).toContain("dusk");

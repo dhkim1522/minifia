@@ -824,6 +824,8 @@ export const EXPECTED_SCENE = {
   candidateVoteReveal: "dusk",
   defense: "dusk",
   execution: "dusk",
+  nomination: "dusk",
+  verdict: "dusk",
   ended: "night",
 };
 
