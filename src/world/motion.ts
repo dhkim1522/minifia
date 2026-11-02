@@ -13,3 +13,17 @@ export function predictSegment(base: Segment | undefined, dest: { x: number; z: 
   if (base === undefined) return null;
   return planMoveSegment(base, dest, at, map);
 }
+
+// ---- RED 껍데기 (GREEN 에서 구현) ----
+export const SEG_BLEND_MS = 0;
+export const BLEND_SNAP_DIST = 0;
+export const YAW_TURN_RATE = 0;
+export function blendRemaining(_elapsedMs: number): number {
+  return 1;
+}
+export function travelYaw(_seg: Segment, _t: number): number | null {
+  return null;
+}
+export function stepYaw(cur: number, _target: number, _dtSec: number): number {
+  return cur;
+}
