@@ -1,7 +1,8 @@
 import { act, cleanup, fireEvent, render } from "@testing-library/react";
+import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import "../helpers/singleLineErrors";
-import type { ClientMessage, PhaseId, PublicPlayer, RoomView } from "../../shared/protocol";
+import type { ClientMessage, PhaseId, PublicPlayer, RoleRecord, RoomView } from "../../shared/protocol";
 import type { WorldStageProps } from "../../src/components/WorldStage";
 import { KB_PANEL_H, LOG_H_KB, LOG_H_SHORT, LOG_H_TALL } from "../../src/game/chatUi";
 import type { RoomConnection } from "../../src/net/useRoomConnection";
@@ -37,8 +38,18 @@ const player = (seat: number, extra: Partial<PublicPlayer> = {}): PublicPlayer =
   ...extra,
 });
 
+const NOW = 1_700_000_000_000;
+
 interface ViewOpts {
   phase?: PhaseId;
+  /** 일차 (기본 1) */
+  n?: number;
+  /** 시간 링이 없는 단계처럼 마감이 없는 view */
+  noClock?: boolean;
+  records?: RoleRecord[];
+  verdict?: { yes: number; no: number; passed: boolean };
+  candidate?: number;
+  nicknames?: string[];
   /** 좌석별 생존. 기본 모두 산다 */
   dead?: number[];
   count?: number;
@@ -50,18 +61,26 @@ interface ViewOpts {
 function makeView(o: ViewOpts = {}): RoomView {
   const count = o.count ?? 4;
   const mySeat = o.mySeat ?? 0;
-  const players = Array.from({ length: count }, (_, seat) => player(seat, o.dead?.includes(seat) ? { alive: false } : {}));
+  const players = Array.from({ length: count }, (_, seat) =>
+    player(seat, { ...(o.dead?.includes(seat) ? { alive: false } : {}), ...(o.nicknames?.[seat] !== undefined ? { nickname: o.nicknames[seat]! } : {}) }),
+  );
   return {
     code: "0042",
     phase: o.phase ?? "discussion",
-    phaseEndsAt: 91_000,
-    phaseDurationMs: 90_000,
-    serverNow: 1000,
+    phaseEndsAt: o.noClock ? null : NOW + 90_000,
+    phaseDurationMs: o.noClock ? null : 90_000,
+    serverNow: NOW,
     minPlayers: 4,
     maxPlayers: 8,
     players,
-    me: { seat: mySeat, isHost: mySeat === 0, chat: o.dead?.includes(mySeat) ? "ghost" : "all", ...(o.pressed ? { endDiscussion: true as const } : {}) },
-    day: { n: 1, roles: [], ...(o.endCount !== undefined ? { endCount: o.endCount } : {}) },
+    me: { seat: mySeat, isHost: mySeat === 0, chat: o.dead?.includes(mySeat) ? "ghost" : "all", ...(o.pressed ? { endDiscussion: true as const } : {}), ...(o.records ? { records: o.records } : {}) },
+    day: {
+      n: o.n ?? 1,
+      roles: [],
+      ...(o.endCount !== undefined ? { endCount: o.endCount } : {}),
+      ...(o.verdict ? { verdict: o.verdict } : {}),
+      ...(o.candidate !== undefined ? { candidate: o.candidate } : {}),
+    },
   };
 }
 
@@ -89,7 +108,8 @@ const mount = (view: RoomView, over: Partial<RoomConnection> = {}, onExit: (r: s
   return {
     ...r,
     show: (v: RoomView, o: Partial<RoomConnection> = {}) => {
-      connectionMock.current = conn(v, { send: (connectionMock.current as RoomConnection).send, ...o });
+      const prev = connectionMock.current as RoomConnection;
+      connectionMock.current = conn(v, { send: prev.send, onEvent: prev.onEvent, epoch: prev.epoch, ...o });
       r.rerender(ui());
     },
   };
@@ -366,5 +386,226 @@ describe("GameMap — 스테이지 사각형 측정과 키보드 (CHAT-05, 08-13
   it("기록 칸 높이는 방 높이로 한 번 정한다: 방 높이 844 → 152, 짧은 방 → 96", () => {
     const { container } = mount(makeView());
     expect([LOG_H_TALL, LOG_H_SHORT]).toContain(Number.parseInt(logHeight(container), 10));
+  });
+});
+
+// ---- 08-13 Task 3: 헤더·[역할 카드]·결과 알림·낮 시작 연출·탭 차단·거절 (DAY-07, MAP-04, E1 #4, E5) ----
+describe("GameMap — 헤더·[역할 카드] (UI-SPEC A2)", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
+  });
+  afterEach(() => vi.useRealTimers());
+  const advance = (ms: number) =>
+    act(() => {
+      vi.advanceTimersByTime(ms);
+    });
+
+  it("낮 토론 산 사람: 제목 '낮 토론', 안내 '이야기하며 마피아를 찾아요' [data-guide] 하나, 서버 마감 기준 시간 링 role=timer", () => {
+    const { container } = mount(makeView());
+    const header = container.querySelector(".mf-game__header") as HTMLElement;
+    expect(header.querySelector(".mv-phase__title")?.textContent).toBe("낮 토론");
+    expect(container.querySelectorAll("[data-guide]").length).toBe(1);
+    expect(header.querySelector("[data-guide]")?.textContent).toBe("이야기하며 마피아를 찾아요");
+    const timer = header.querySelector('[role="timer"]');
+    expect(timer).not.toBeNull();
+    expect(timer?.getAttribute("aria-label")).toBe("남은 시간 90초");
+  });
+
+  it("안내는 2500ms 뒤 접히고(.is-folded) 단계가 바뀌면 새 안내가 다시 보였다 접힌다", () => {
+    const m = mount(makeView());
+    const hint = () => m.container.querySelector("[data-guide]") as HTMLElement;
+    expect(hint().classList.contains("is-folded")).toBe(false);
+    advance(2499);
+    expect(hint().classList.contains("is-folded")).toBe(false);
+    advance(1);
+    expect(hint().classList.contains("is-folded")).toBe(true);
+    m.show(makeView({ phase: "nomination" }));
+    expect(hint().textContent).toBe("의심되는 사람을 눌러요");
+    expect(hint().classList.contains("is-folded")).toBe(false);
+    advance(2500);
+    expect(hint().classList.contains("is-folded")).toBe(true);
+  });
+
+  it("낮 시작에는 시간 링이 없다", () => {
+    const { container } = mount(makeView({ phase: "dayAnnounce" }));
+    expect(container.querySelector('.mf-game__header [role="timer"]')).toBeNull();
+  });
+
+  it("유령(탈락)의 안내는 '모두의 직업이 보여요'", () => {
+    const { container } = mount(makeView({ dead: [0] }));
+    expect(container.querySelector("[data-guide]")?.textContent).toBe("모두의 직업이 보여요");
+  });
+
+  it("[역할 카드] 는 글자 없는 44×44 아이콘 버튼이고 헤더 안 시간 링 앞(왼쪽) 형제다 — aria-label '역할 카드'", () => {
+    const { container } = mount(makeView());
+    const btn = container.querySelector(".mf-game__header button") as HTMLButtonElement;
+    expect(btn.getAttribute("aria-label")).toBe("역할 카드");
+    expect(btn.textContent).toBe("");
+    expect(btn.classList.contains("mf-iconbtn")).toBe(true);
+    expect(btn.querySelector("svg")).not.toBeNull();
+    const ring = container.querySelector('.mf-game__header [role="timer"]') as HTMLElement;
+    expect(btn.parentElement).toBe(ring.parentElement);
+    expect(btn.compareDocumentPosition(ring) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // 헤더가 맵보다 DOM 앞이라 Tab 순서가 [역할 카드] → 이름표 → 입력이다
+    expect(container.querySelectorAll("button[aria-label='역할 카드']").length).toBe(1);
+  });
+
+  it("안 읽은 일지가 있으면 이름이 '역할 카드, 새 기록' 이고 gray-100 점이 붙는다(앰버 아님)", () => {
+    const { container } = mount(makeView({ records: [{ n: 1, target: 1, isMafia: false }] }));
+    const btn = container.querySelector(".mf-game__header button") as HTMLButtonElement;
+    expect(btn.getAttribute("aria-label")).toBe("역할 카드, 새 기록");
+    expect(btn.querySelector(".mf-rolecard-btn__dot")).not.toBeNull();
+    const css = readFileSync("src/styles/rolecard.css", "utf8");
+    expect(css).toMatch(/\.mf-rolecard-btn--icon \.mf-rolecard-btn__dot[^}]*var\(--gray-100\)/);
+  });
+
+  it("눌러 열면 역할 카드 시트가 열린다", () => {
+    const { container } = mount(makeView());
+    fireEvent.click(container.querySelector(".mf-game__header button")!);
+    expect(document.querySelector('dialog[aria-label="역할 카드"]')).not.toBeNull();
+  });
+});
+
+describe("GameMap — 이동 차단 canWalk (MAP-04)", () => {
+  it("산 사람은 낮 시작·토론에서만 걷고 지목·변론·찬반·처형에서는 막힌다", () => {
+    const expected: Record<string, boolean> = { dayAnnounce: true, discussion: true, nomination: false, defense: false, verdict: false, execution: false };
+    for (const [phase, can] of Object.entries(expected)) {
+      const { unmount } = mount(makeView({ phase: phase as PhaseId }));
+      expect(`${phase}:${stage.props?.canWalk}`).toBe(`${phase}:${can}`);
+      unmount();
+    }
+  });
+
+  it("유령은 모든 단계에서 걷는다", () => {
+    for (const phase of ["dayAnnounce", "discussion", "nomination", "defense", "verdict", "execution"] as const) {
+      const { unmount } = mount(makeView({ phase, dead: [0] }));
+      expect(`${phase}:${stage.props?.canWalk}`).toBe(`${phase}:true`);
+      unmount();
+    }
+  });
+
+  it("장면 표(scene)를 넘긴다: 낮 토론은 따라가기 카메라와 talk 조명", () => {
+    mount(makeView());
+    expect(stage.props?.scene?.camera).toEqual({ mode: "follow" });
+    expect(stage.props?.scene?.lighting).toBe("talk");
+  });
+});
+
+describe("GameMap — 낮 시작 결과 알림과 채팅 줄 (E5 #17~#19)", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
+  });
+  afterEach(() => vi.useRealTimers());
+  const advance = (ms: number) =>
+    act(() => {
+      vi.advanceTimersByTime(ms);
+    });
+  const announces = (c: ParentNode) => Array.from(c.querySelectorAll("[data-announce]"));
+  const logText = (c: ParentNode) => c.querySelector("[data-chat-log]")?.textContent ?? "";
+
+  it("밤에서 낮 시작으로 들어오면 '낮이 되었습니다'(role=status) 알림과 채팅 시스템 줄 '2일차' 가 나오고 2000ms 뒤 알림이 사라진다", () => {
+    const m = mount(makeView({ phase: "night", n: 1 }));
+    expect(announces(m.container).length).toBe(0);
+    m.show(makeView({ phase: "dayAnnounce", n: 2, noClock: true }));
+    const [el] = announces(m.container);
+    expect(el?.textContent).toBe("낮이 되었습니다");
+    expect(el?.getAttribute("role")).toBe("status");
+    expect(logText(m.container)).toContain("2일차");
+    advance(1999);
+    expect(announces(m.container).length).toBe(1);
+    advance(1);
+    expect(announces(m.container).length).toBe(0);
+  });
+
+  it("처음 받은 스냅샷이 낮 시작이면(재접속·새로 고침) 알림도 '일차' 줄도 없다", () => {
+    const { container } = mount(makeView({ phase: "dayAnnounce", n: 2, noClock: true }));
+    expect(announces(container).length).toBe(0);
+    expect(logText(container)).not.toContain("2일차");
+  });
+
+  it("연결 번호(epoch)가 바뀐 첫 낮 시작 스냅샷도 이펙트 없이 정상 상태로 그린다", () => {
+    const m = mount(makeView({ phase: "night" }));
+    m.show(makeView({ phase: "dayAnnounce", n: 2, noClock: true }), { epoch: 2 });
+    expect(announces(m.container).length).toBe(0);
+    expect(logText(m.container)).not.toContain("2일차");
+  });
+
+  it("알림은 한 번에 하나다: 찬반 결과 알림 뒤 2000ms 에 '처형 없음' 이 이전 알림을 바꾼다", () => {
+    const m = mount(makeView({ phase: "verdict", candidate: 1 }));
+    m.show(makeView({ phase: "execution", candidate: 1, verdict: { yes: 2, no: 3, passed: false } }));
+    expect(announces(m.container).map((e) => e.textContent)).toEqual(["찬성 2 · 반대 3"]);
+    advance(2000);
+    expect(announces(m.container).map((e) => e.textContent)).toEqual(["처형 없음"]);
+  });
+
+  it("알림 문자열은 텍스트 노드다: 닉네임 '<b>영희</b>' 가 HTML 이 아니라 글자로 보인다", () => {
+    const names = ["민수", "<b>영희</b>", "서준", "지아"];
+    const m = mount(makeView({ phase: "verdict", candidate: 1, nicknames: names }));
+    m.show(makeView({ phase: "execution", candidate: 1, nicknames: names, verdict: { yes: 3, no: 0, passed: true } }));
+    advance(2000);
+    const el = announces(m.container)[0]!;
+    expect(el.textContent).toBe("<b>영희</b> 님 처형");
+    expect(el.querySelector("b")).toBeNull();
+  });
+
+  it("결과가 없으면 알림 요소를 만들지 않는다", () => {
+    const { container } = mount(makeView());
+    expect(container.querySelector("[data-announce]")).toBeNull();
+  });
+
+  it("알림 CSS: 위 240·36px 한 줄(keep-all, 28px 로 줄이지 않음)·뒤 night-950 62% 어둡게·움직임 줄이기", () => {
+    const css = readFileSync("src/styles/game.css", "utf8");
+    expect(css).toMatch(/\.mf-announce\s*\{[^}]*240px/);
+    expect(css).toMatch(/\.mf-announce__text\s*\{[^}]*font-size:\s*36px/);
+    expect(css).toMatch(/keep-all/);
+    expect(css).not.toMatch(/font-size:\s*28px/);
+    expect(css).toContain("color-mix(in srgb, var(--night-950) 62%, transparent)");
+    expect(css).toMatch(/prefers-reduced-motion/);
+  });
+});
+
+describe("GameMap — 거절과 끊김 (E1 #4)", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
+  });
+  afterEach(() => vi.useRealTimers());
+  const toastText = (c: ParentNode) => c.querySelector(".mv-toast__text")?.textContent ?? "";
+
+  it("토론 끝내기가 거절되면(WRONG_PHASE) 위 알림 '지금은 고를 수 없어요' 뒤 눌림이 서버 값(눌리지 않음)으로 돌아온다", () => {
+    let listener: ((e: { t: "error"; code: string }, meta: { epoch: number }) => void) | null = null;
+    const onEvent = vi.fn((l: typeof listener) => {
+      listener = l;
+      return () => {};
+    });
+    const { container } = mount(makeView(), { onEvent: onEvent as unknown as RoomConnection["onEvent"] });
+    fireEvent.click(endButton(container)!);
+    expect(endButton(container)?.getAttribute("aria-pressed")).toBe("true");
+    act(() => listener?.({ t: "error", code: "WRONG_PHASE" }, { epoch: 1 }));
+    expect(toastText(container)).toBe("지금은 고를 수 없어요");
+    expect(endButton(container)?.getAttribute("aria-pressed")).toBe("false");
+  });
+
+  it("그 밖의 오류(RATE_LIMITED)는 알림도 되돌림도 만들지 않는다", () => {
+    let listener: ((e: { t: "error"; code: string }, meta: { epoch: number }) => void) | null = null;
+    const onEvent = vi.fn((l: typeof listener) => {
+      listener = l;
+      return () => {};
+    });
+    const { container } = mount(makeView(), { onEvent: onEvent as unknown as RoomConnection["onEvent"] });
+    fireEvent.click(endButton(container)!);
+    act(() => listener?.({ t: "error", code: "RATE_LIMITED" }, { epoch: 1 }));
+    expect(toastText(container)).toBe("");
+    expect(endButton(container)?.getAttribute("aria-pressed")).toBe("true");
+  });
+});
+
+describe("GameMap — 소스 게이트 (T-08-33)", () => {
+  it("결과 알림·맵 화면·아래 패널 소스에 HTML 주입이 없다", () => {
+    for (const f of ["src/components/ResultAnnounce.tsx", "src/screens/GameMap.tsx", "src/screens/GamePanel.tsx"]) {
+      expect(readFileSync(f, "utf8"), f).not.toMatch(/dangerouslySetInnerHTML|innerHTML/);
+    }
   });
 });
