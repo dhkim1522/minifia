@@ -1,6 +1,6 @@
 /* design/v2.0/design-system/components/bundle.css 에서 옮겼다(승인 2026-10-31). 이 페이즈 부품만.
  * 값은 tokens.css 의 변수만 쓴다(hex 없음). 진홍·놋쇠는 7페이즈 UI 에 없었고, 8페이즈 부품(득표 배지·유력 도장=놋쇠, 직업 칩 마피아=진홍 테두리)만 쓴다. 찬반(.mv-verdict)은 쓰지 않는다(08-UI-SPEC Color).
- * 8·10페이즈가 쓰는 부품(득표 배지·도장 등)은 그 페이즈가 같은 파일에 더한다. 채팅·입력 중은 7페이즈(07-03)가 더했다. */
+ * 8·10페이즈가 쓰는 부품(득표 배지·도장 등)은 그 페이즈가 같은 파일에 더한다. 이름표 mine·blink·ghost·done 은 8페이즈(08-05)가 더했다. 채팅·입력 중은 7페이즈(07-03)가 더했다. */
 .mv-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .mv-icon { display: block; flex: none; }
 
@@ -8,8 +8,14 @@
 .mv-head { display: inline-flex; flex-direction: column; align-items: center; gap: var(--space-xs); }
 .mv-tag { display: inline-flex; align-items: center; gap: 6px; padding: 2px var(--space-sm); border-radius: var(--radius-pill); background: var(--overlay-ink); color: var(--gray-50); font-family: var(--font-ui); font-size: 14px; line-height: 1.4; font-weight: 700; white-space: nowrap; text-shadow: var(--shadow-text); }
 .mv-tag.is-me { box-shadow: inset 0 0 0 1.5px var(--gray-100); }
+.mv-tag.is-mine { background: var(--gray-100); color: var(--night-900); text-shadow: none; }
+.mv-tag.is-mine .mv-tag__name { color: var(--night-900); }
+.mv-tag.is-blink { animation: mv-blink 0.9s ease-in-out 3; }
+@keyframes mv-blink { 0%, 100% { box-shadow: inset 0 0 0 0 transparent; } 50% { box-shadow: inset 0 0 0 2px var(--gray-100), 0 0 10px rgba(230, 232, 238, 0.6); } }
 .mv-tag.is-away { opacity: 0.55; }
+.mv-tag.is-ghost { opacity: 0.6; }
 .mv-tag.is-away .mv-tag__dot { background: var(--gray-700) !important; }
+.mv-tag__done { display: inline-flex; align-items: center; flex: none; }
 .mv-tag__dot { width: 8px; height: 8px; border-radius: var(--radius-pill); flex: none; }
 
 /* 머리 위 입력 중 알약(승인 .mv-typing, bundle.css 40-43). 글자 없이 점 세 개. 점 애니메이션 이름은 .mv-dots(DotProgress)와 헷갈리지 않게 mv-typing-dots */
@@ -121,6 +127,6 @@
 @media (prefers-reduced-motion: reduce) {
   .mv-toast, .mv-ring__bar, .mv-phase__hint { transition: none; }
   .mv-chat__newdot i, .mv-typing i { animation: none; }
-  .mv-badge, .mv-badge.is-lead, .mv-stamp { animation: none; }
+  .mv-badge, .mv-badge.is-lead, .mv-stamp, .mv-tag.is-blink { animation: none; }
   .mv-badge.is-lead { transform: scale(1.18); }
 }
