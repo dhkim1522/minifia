@@ -5,7 +5,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import "../helpers/singleLineErrors";
 import { installMemoryStorage, MemoryStorage } from "../helpers/memoryStorage";
 import { BAR_MAP, snapToWalkable } from "../../shared/game/map";
-import { segmentEndsAt } from "../../shared/game/world";
+import { positionAt, segmentEndsAt } from "../../shared/game/world";
+import type { Segment } from "../../shared/game/world";
 import type { PublicPlayer, RoomView, WorldSeg } from "../../shared/protocol";
 import { WorldStage } from "../../src/components/WorldStage";
 import { NETWORK_TEXT } from "../../src/net/copy";
@@ -13,6 +14,7 @@ import type { WorldStageProps } from "../../src/components/WorldStage";
 import { UnsupportedRendererError } from "../../src/world/renderer";
 import type { CharacterHandle, RendererStatusEvent, WorldRenderer } from "../../src/world/renderer";
 import { PAN_BOX, stageOffsetY } from "../../src/world/camera";
+import { predictSegment, SEG_BLEND_MS } from "../../src/world/motion";
 import { ENTER_MS, EXIT_MS, MOVE_ACK_TIMEOUT_MS, WALK_CUE_KEY } from "../../src/world/runtime";
 import type { WorldModules } from "../../src/world/runtime";
 import { installWorldTestHooks, WORLD_TEST_KEY, worldTestHooksEnabled } from "../../src/world/testHooks";
@@ -449,14 +451,87 @@ describe("WorldStage: 입력칸에 포커스가 있을 때의 탭은 키보드�
 });
 
 describe("WorldStage: 서버 구간대로 걷기와 카메라 (MAP-02, MAP-03)", () => {
-  it("서버 구간 전에는 내 캐릭터가 움직이지 않는다(예측 이동 없음)", async () => {
+  // ---- 결정 0059: 탭하면 바로 걷고, 서버 구간이 오면 튀지 않게 맞추고, 응답이 없으면 돌아간다 ----
+  const DEST = { x: 500, z: 400 }; // tapAt(250, 340) 의 바닥 (5, 4) 을 1/100 정수로
+  const dist = (a: { x: number; z: number }, b: { x: number; z: number }): number => Math.hypot(a.x - b.x, a.z - b.z);
+  const posOf = (h: CharacterHandle): { x: number; z: number } => ({ x: h.root.position.x, z: h.root.position.z });
+  const asWorldSeg = (g: Segment, t0 = g.t0): WorldSeg => ({ s: 0, p: g.p, t0, v: g.v });
+
+  it("결정 0059: 탭하면 서버 구간을 기다리지 않고 다음 프레임부터 걷고 서버 위치는 그대로다", async () => {
     const s = await open();
     const mine = s.world.renderers[0]!.chars.get(0)!;
-    const x0 = mine.root.position.x;
     tapAt(surface(s.utils), 250, 340);
-    frames(400);
-    expect(mine.root.position.x).toBeCloseTo(x0, 6);
-    expect(mine.root.position.z).toBeCloseTo(1, 6);
+    frame(16);
+    expect(dist(posOf(mine), { x: 2, z: 1 })).toBeGreaterThan(0.01);
+    const server = s.store.positionOf(0, Date.now())!;
+    expect(server.x).toBeCloseTo(2, 6);
+    expect(server.z).toBeCloseTo(1, 6);
+  });
+
+  it("결정 0059: 예측 중에는 매 프레임 서버와 같은 길(predictSegment)의 위치에 선다", async () => {
+    const s = await open();
+    const mine = s.world.renderers[0]!.chars.get(0)!;
+    const base = s.store.segOf(0);
+    tapAt(surface(s.utils), 250, 340);
+    const pred = predictSegment(base, DEST, Date.now())!;
+    expect(pred).not.toBeNull();
+    for (let t = 0; t < 400; t += 16) {
+      frame(16);
+      const want = positionAt(pred, Date.now());
+      expect(Math.abs(mine.root.position.x - want.x)).toBeLessThan(1e-6);
+      expect(Math.abs(mine.root.position.z - want.z)).toBeLessThan(1e-6);
+    }
+  });
+
+  it("결정 0059: 서버 구간이 RTT/2 늦게 와도 한 프레임에 튀지 않고 SEG_BLEND_MS 뒤 서버 위치에 맞는다", async () => {
+    const s = await open();
+    const mine = s.world.renderers[0]!.chars.get(0)!;
+    const base = s.store.segOf(0);
+    tapAt(surface(s.utils), 250, 340);
+    const sent = Date.now();
+    const pred = predictSegment(base, DEST, sent)!;
+    frames(96);
+    move(s.store, asWorldSeg(pred, sent + 77));
+    const injectedAt = Date.now();
+    let prev = posOf(mine);
+    let maxStep = 0;
+    let checked = 0;
+    for (let t = 0; t < 300; t += 16) {
+      frame(16);
+      const cur = posOf(mine);
+      maxStep = Math.max(maxStep, dist(cur, prev));
+      prev = cur;
+      if (Date.now() - injectedAt >= SEG_BLEND_MS + 32) {
+        const server = s.store.positionOf(0, Date.now())!;
+        expect(Math.abs(cur.x - server.x)).toBeLessThan(1e-6);
+        expect(Math.abs(cur.z - server.z)).toBeLessThan(1e-6);
+        checked++;
+      }
+    }
+    expect(maxStep).toBeLessThanOrEqual(0.04);
+    expect(checked).toBeGreaterThan(0);
+    frames(MOVE_ACK_TIMEOUT_MS * 2);
+    expect(s.props.onNotice).not.toHaveBeenCalled(); // 응답이 왔으니 응답 없음 시계는 멈췄다
+  });
+
+  it("결정 0059: 응답이 없으면 1.5초 뒤 알림 한 번, 링이 사라지고 내 캐릭터는 서버 위치로 150ms 에 걸쳐 돌아간다", async () => {
+    const s = await open();
+    const r = s.world.renderers[0]!;
+    const mine = r.chars.get(0)!;
+    tapAt(surface(s.utils), 250, 340);
+    frames(MOVE_ACK_TIMEOUT_MS - 20);
+    expect(s.props.onNotice).not.toHaveBeenCalled();
+    const before = dist(posOf(mine), { x: 2, z: 1 });
+    expect(before).toBeGreaterThan(1);
+    frame(40); // 이 프레임 안에서 응답 없음 시계가 끝난다
+    expect(s.props.onNotice).toHaveBeenCalledTimes(1);
+    expect(s.props.onNotice).toHaveBeenCalledWith(NETWORK_TEXT);
+    expect(r.markers.filter((m) => m.kind === "ring").at(-1)!.at).toBeNull();
+    expect(dist(posOf(mine), { x: 2, z: 1 })).toBeGreaterThanOrEqual(before / 2); // 한 번에 돌아가지 않는다
+    frames(SEG_BLEND_MS + 32);
+    expect(dist(posOf(mine), { x: 2, z: 1 })).toBeLessThan(1e-6);
+    frames(3000);
+    expect(s.props.onNotice).toHaveBeenCalledTimes(1);
   });
 
   it("처음 열 때 카메라는 날아가지 않고 내 캐릭터에 바로 붙는다", async () => {
