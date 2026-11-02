@@ -9,6 +9,10 @@ import {
   DEFAULT_TARGET,
   FOLLOW_TAU_MS,
   followStep,
+  GATHER_CENTER,
+  GATHER_STACK_H,
+  GATHER_STACK_H_GHOST,
+  gatherView,
   groundToScreen,
   HEAD_STACK_H,
   LOOK_Y,
@@ -25,8 +29,12 @@ import {
   STAGE_SIZES,
   stageOffsetY,
   stageRect,
+  ZOOM_MAJORITY,
+  ZOOM_MIN_STAGE_H,
 } from "../../src/world/camera";
-import { LOG_H_SHORT, lobbyPanelHeight, logHeightFor, TYPING_PILL_H } from "../../src/game/chatUi";
+import { LOG_H_SHORT, lobbyPanelHeight, logHeightFor, tablePanelHeight, TYPING_PILL_H } from "../../src/game/chatUi";
+import { HEAD_TOP_Y as HEAD_TOP } from "../../shared/game/map";
+import { ringSlots } from "../../shared/game/gather";
 
 /** 시드 고정 난수(mulberry32) */
 function rng(seed: number): () => number {
@@ -463,5 +471,146 @@ describe.runIf(process.env.CAMERA_PRINT === "1")("근거 표 출력", () => {
   it("크기별 필요 pan·가장 먼 바닥 점", () => {
     const rows = STAGE_SIZES.map((s) => `${s.label}\t최소 pan ${minPanFor(s)}\t가장 먼 바닥 ${farthestGround(s, PAN_BOX).at}`);
     process.stdout.write(`${rows.join("\n")}\n`);
+  });
+});
+
+// ---- 08-08: zoom 투영과 모이는 자리 고정 구도 ----
+
+describe("zoom 인자 (UI-SPEC 카메라: 과반 연출 확대 1.08)", () => {
+  const target = { x: 0.5, z: -0.75 };
+  const c = { w: 390, h: 844 };
+  const offsetY = 37;
+  const pts = [
+    { x: 0, y: 0, z: 0 },
+    { x: 2.65, y: 2.0335, z: 0 },
+    { x: -1.5, y: 0, z: 1.8 },
+  ];
+
+  it("상수: 확대 1.08, 확대 최소 스테이지 높이 360, 모이는 자리 가운데 {0,0}", () => {
+    expect(ZOOM_MAJORITY).toBe(1.08);
+    expect(ZOOM_MIN_STAGE_H).toBe(360);
+    expect(GATHER_CENTER).toEqual({ x: 0, z: 0 });
+  });
+
+  it("zoom 생략·1 은 기존 결과와 같다 (회귀 0): groundToScreen·screenRay·screenToGround", () => {
+    for (const p of pts) {
+      const a = groundToScreen(p, target, c, offsetY);
+      expect(groundToScreen(p, target, c, offsetY, 1)).toEqual(a);
+      const ra = screenRay(a.sx, a.sy, target, c, offsetY);
+      expect(screenRay(a.sx, a.sy, target, c, offsetY, 1)).toEqual(ra);
+      expect(screenToGround(a.sx, a.sy, target, c, offsetY, 1)).toEqual(screenToGround(a.sx, a.sy, target, c, offsetY));
+    }
+  });
+
+  it("zoom 1.08: 화면 가운데에서의 거리가 1.08 배 — (sx − w/2) 와 (sy − h/2 + offsetY)", () => {
+    for (const p of pts) {
+      const a = groundToScreen(p, target, c, offsetY, 1);
+      const b = groundToScreen(p, target, c, offsetY, 1.08);
+      expect(b.sx - c.w / 2).toBeCloseTo((a.sx - c.w / 2) * 1.08, 9);
+      expect(b.sy - c.h / 2 + offsetY).toBeCloseTo((a.sy - c.h / 2 + offsetY) * 1.08, 9);
+    }
+  });
+
+  it("screenToGround(groundToScreen(p, zoom), zoom) ≈ p (1e-6), 서로의 역", () => {
+    const rand = rng(20261102);
+    for (let i = 0; i < 20; i++) {
+      const p = { x: (rand() - 0.5) * 12, y: 0, z: (rand() - 0.5) * 12 };
+      const t = { x: (rand() - 0.5) * 8, z: (rand() - 0.5) * 8 };
+      for (const zoom of [1, 1.08]) {
+        const s = groundToScreen(p, t, c, offsetY, zoom);
+        const g = screenToGround(s.sx, s.sy, t, c, offsetY, zoom);
+        expect(Math.abs(g.x - p.x)).toBeLessThan(1e-6);
+        expect(Math.abs(g.z - p.z)).toBeLessThan(1e-6);
+      }
+    }
+  });
+
+  it("screenRay 원점은 zoom 에 따라 화면 오프셋이 1/zoom 로 줄어든다", () => {
+    const r1 = screenRay(300, 200, target, c, offsetY, 1);
+    const rz = screenRay(300, 200, target, c, offsetY, 1.08);
+    expect(rz.dir).toEqual(r1.dir);
+    const base = screenRay(c.w / 2, c.h / 2 - offsetY, target, c, offsetY, 1);
+    const d1 = Math.hypot(r1.origin.x - base.origin.x, r1.origin.y - base.origin.y, r1.origin.z - base.origin.z);
+    const dz = Math.hypot(rz.origin.x - base.origin.x, rz.origin.y - base.origin.y, rz.origin.z - base.origin.z);
+    expect(dz).toBeCloseTo(d1 / 1.08, 9);
+  });
+});
+
+describe("gatherView (UI-SPEC 카메라: 이름표가 몸보다 우선, E8 #31 backstop)", () => {
+  /** 산 사람 채팅 패널(지목·변론) 기준 스테이지 = 방 높이 − 62 − (LOG_H + 92) */
+  const chatStage = (size: { w: number; h: number }) => stageRect(size, tablePanelHeight(logHeightFor(size.h)));
+  const stageH = (r: { top: number; bottom: number }) => r.bottom - r.top;
+  const EPS = 1e-6;
+
+  /** 8슬롯 머리 꼭대기·발의 화면 y */
+  function ringY(size: { w: number; h: number }, v: { target: { x: number; z: number }; offsetY: number }, zoom: number) {
+    const heads: number[] = [];
+    const feet: number[] = [];
+    for (const [x, z] of ringSlots(8)) {
+      heads.push(groundToScreen({ x: x / 100, y: HEAD_TOP, z: z / 100 }, v.target, size, v.offsetY, zoom).sy);
+      feet.push(groundToScreen({ x: x / 100, y: 0, z: z / 100 }, v.target, size, v.offsetY, zoom).sy);
+    }
+    return { headTop: Math.min(...heads), headBottom: Math.max(...heads), footBottom: Math.max(...feet) };
+  }
+
+  it("쌓임 상수: 산 사람 122, 유령 154", () => {
+    expect(GATHER_STACK_H).toBe(122);
+    expect(GATHER_STACK_H_GHOST).toBe(154);
+  });
+
+  it("고정 목표는 모이는 자리 가운데다", () => {
+    const size = STAGE_SIZES[0]!;
+    expect(gatherView(chatStage(size), size, { ghost: false }).target).toEqual(GATHER_CENTER);
+  });
+
+  for (const size of STAGE_SIZES) {
+    const rect = chatStage(size);
+    it(`${size.label} (스테이지 ${stageH(rect)}): 8슬롯 이름표 상자(뒤 머리 꼭대기 − 122 ~ 앞 머리 꼭대기)가 스테이지 세로 안에 든다`, () => {
+      expect(stageH(rect)).toBeGreaterThanOrEqual(300);
+      const v = gatherView(rect, size, { ghost: false });
+      const y = ringY(size, v, 1);
+      expect(y.headTop - GATHER_STACK_H).toBeGreaterThanOrEqual(rect.top - EPS);
+      expect(y.headBottom).toBeLessThanOrEqual(rect.bottom + EPS);
+    });
+
+    it(`${size.label}: 몸까지 들어가는 스테이지(앞 발 포함 상자 높이 이상)면 앞 발도 스테이지 안에 든다`, () => {
+      const v = gatherView(rect, size, { ghost: false });
+      const y = ringY(size, v, 1);
+      const bodyBox = y.footBottom - (y.headTop - GATHER_STACK_H);
+      if (stageH(rect) >= bodyBox) {
+        expect(y.footBottom).toBeLessThanOrEqual(rect.bottom + EPS);
+        expect(y.headTop - GATHER_STACK_H).toBeGreaterThanOrEqual(rect.top - EPS);
+      }
+    });
+
+    if (stageH(rect) >= ZOOM_MIN_STAGE_H) {
+      it(`${size.label}: 과반 확대 1.08 에서도 이름표 상자가 스테이지 안에 든다`, () => {
+        const v = gatherView(rect, size, { ghost: false, zoom: ZOOM_MAJORITY });
+        const y = ringY(size, v, ZOOM_MAJORITY);
+        expect(y.headTop - GATHER_STACK_H).toBeGreaterThanOrEqual(rect.top - EPS);
+        expect(y.headBottom).toBeLessThanOrEqual(rect.bottom + EPS);
+      });
+    }
+
+    it(`${size.label}: 유령(쌓임 154)은 상자 높이 이상의 스테이지에서 들어간다`, () => {
+      const v = gatherView(rect, size, { ghost: true });
+      const y = ringY(size, v, 1);
+      const box = y.headBottom - (y.headTop - GATHER_STACK_H_GHOST);
+      if (stageH(rect) >= box) {
+        expect(y.headTop - GATHER_STACK_H_GHOST).toBeGreaterThanOrEqual(rect.top - EPS);
+        expect(y.headBottom).toBeLessThanOrEqual(rect.bottom + EPS);
+      }
+    });
+  }
+
+  it("스테이지가 상자보다 낮으면(360x560 찬반 투표자 199) 앞 머리 꼭대기가 스테이지 아래 끝에 맞는다 — 위쪽 이름표가 잘리는 것은 알려진 한계(E8 #28)", () => {
+    const size = { w: 360, h: 560 };
+    const rect = stageRect(size, 299 + 0);
+    expect(stageH(rect)).toBe(199);
+    const v = gatherView(rect, size, { ghost: false });
+    expect(Number.isFinite(v.offsetY)).toBe(true);
+    const y = ringY(size, v, 1);
+    expect(y.headBottom).toBeCloseTo(rect.bottom, 6);
+    process.stdout.write(`gatherView 360x560 찬반 투표자 199: offsetY ${v.offsetY.toFixed(2)}, 위쪽 이름표 위 끝 ${(y.headTop - GATHER_STACK_H).toFixed(1)} (스테이지 위 ${rect.top})\n`);
   });
 });

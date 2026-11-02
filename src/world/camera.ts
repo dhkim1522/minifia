@@ -111,7 +111,7 @@ export function stageOffsetY(canvasH: number, stageTop: number, stageBottom: num
 }
 
 /** 월드 점 → 화면 좌표(px). 목표가 주시점이고, 오프셋만큼 장면이 위로 올라간다 */
-export function groundToScreen(p: V3, target: { x: number; z: number }, c: Canvas, offsetY: number): { sx: number; sy: number } {
+export function groundToScreen(p: V3, target: { x: number; z: number }, c: Canvas, offsetY: number, _zoom = 1): { sx: number; sy: number } {
   const d: V3 = { x: p.x - target.x, y: p.y - LOOK_Y, z: p.z - target.z };
   const r = d.x * RIGHT.x + d.y * RIGHT.y + d.z * RIGHT.z;
   const u = d.x * UP.x + d.y * UP.y + d.z * UP.z;
@@ -119,7 +119,7 @@ export function groundToScreen(p: V3, target: { x: number; z: number }, c: Canva
 }
 
 /** 화면 점의 정사영 광선: 원점은 카메라 평면 위(주시점에서 카메라 쪽으로 OFFSET_LEN), 방향은 −back */
-export function screenRay(sx: number, sy: number, target: { x: number; z: number }, c: Canvas, offsetY: number): { origin: V3; dir: V3 } {
+export function screenRay(sx: number, sy: number, target: { x: number; z: number }, c: Canvas, offsetY: number, _zoom = 1): { origin: V3; dir: V3 } {
   const dx = (sx - c.w / 2) / PX_PER_UNIT;
   const dy = (c.h / 2 - sy - offsetY) / PX_PER_UNIT;
   return {
@@ -133,7 +133,7 @@ export function screenRay(sx: number, sy: number, target: { x: number; z: number
 }
 
 /** 화면 점 → 바닥(y = 0) 점. groundToScreen 의 역 */
-export function screenToGround(sx: number, sy: number, target: { x: number; z: number }, c: Canvas, offsetY: number): { x: number; z: number } {
+export function screenToGround(sx: number, sy: number, target: { x: number; z: number }, c: Canvas, offsetY: number, _zoom = 1): { x: number; z: number } {
   const { origin, dir } = screenRay(sx, sy, target, c, offsetY);
   const t = origin.y / -dir.y;
   return { x: origin.x + dir.x * t, z: origin.z + dir.z * t };
@@ -159,4 +159,14 @@ export function followStep(cam: { x: number; z: number }, target: { x: number; z
   if (Math.sqrt(dx * dx + dz * dz) < ARRIVE_EPS) return { x: target.x, z: target.z };
   const k = 1 - Math.exp(-dtMs / FOLLOW_TAU_MS);
   return { x: cam.x + dx * k, z: cam.z + dz * k };
+}
+
+/** 머리 위 쌓임 높이(px) 산 사람 최대: 입력 중 26 + 도장 32 + 배지 40 + 이름표 24 (UI-SPEC 카메라) */
+export const GATHER_STACK_H = 122;
+/** 유령 화면 최대: 산 사람 쌓임 + 직업 표시 32 (UI-SPEC 카메라) */
+export const GATHER_STACK_H_GHOST = 154;
+
+// RED 뼈대(Task 3): 아직 동작을 구현하지 않는다
+export function gatherView(_stage: { top: number; bottom: number }, _c: Canvas, _opts: { ghost?: boolean; zoom?: number } = {}): { target: { x: number; z: number }; offsetY: number } {
+  return { target: { x: GATHER_CENTER.x, z: GATHER_CENTER.z }, offsetY: 0 };
 }
