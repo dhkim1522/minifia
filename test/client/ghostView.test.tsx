@@ -337,3 +337,85 @@ describe("유령 조작 없음 · 걷기 · 카메라 (GHOST-01, A4)", () => {
     }
   });
 });
+
+// ---- Task 3: 산 사람 화면 유령 흔적 0건 — 단계 전수 (GHOST-01·02, UI Considerations E6 #23 backstop) ----
+
+describe("산 사람 화면에는 유령의 흔적이 없다 (결정 0021, T-08-44)", () => {
+  const ALL: PhaseId[] = ["dayAnnounce", "discussion", "nomination", "defense", "verdict", "execution"];
+  // 유령 둘(3·4)이 있는 판의 산 사람(0) view — 서버는 산 사람 view 에 spectate 를 싣지 않는다
+  const living = (phase: PhaseId) => makeView({ phase, count: 6, mySeat: 0, dead: [3, 4], candidate: 2 });
+  const aliveSeats = [0, 1, 2, 5];
+
+  it("단계 전수(낮 시작·토론·지목·변론·찬반·처형): [data-ghost-view]·[data-role-chip]·[data-ghost-seat]·[data-ghost] 0개, 유령 문구 0건", () => {
+    for (const phase of ALL) {
+      const { container } = mount(living(phase));
+      expect(container.querySelectorAll("[data-ghost-view]"), phase).toHaveLength(0);
+      expect(container.querySelectorAll("[data-ghost-enter]"), phase).toHaveLength(0);
+      expect(container.querySelectorAll("[data-role-chip]"), phase).toHaveLength(0);
+      expect(container.querySelectorAll("[data-ghost-seat]"), phase).toHaveLength(0);
+      expect(container.querySelectorAll(".mv-head[data-ghost]"), phase).toHaveLength(0);
+      expect(container.querySelectorAll(".mv-rolechip"), phase).toHaveLength(0);
+      const text = container.textContent ?? "";
+      expect(text, phase).not.toContain("유령끼리만 보여요");
+      expect(text, phase).not.toContain("유령 채팅");
+      expect(text, phase).not.toContain("모두의 직업이 보여요");
+      cleanup();
+    }
+  });
+
+  it("이름표 roster 의 좌석 = 산 좌석뿐이고 장면 표에도 죽은 좌석의 키가 없다(숨김 표시도 없다)", () => {
+    for (const phase of ALL) {
+      rt.scenes.length = 0;
+      const { container } = mount(living(phase));
+      const seats = [...container.querySelectorAll<HTMLElement>("[data-seat].mf-world__tag")].map((t) => Number(t.dataset.seat));
+      expect(seats, phase).toEqual(aliveSeats);
+      expect(Object.keys(lastScene().seats).map(Number).sort((a, b) => a - b), phase).toEqual(aliveSeats);
+      expect(Object.values(lastScene().seats).some((l) => l.ghost), phase).toBe(false);
+      cleanup();
+    }
+  });
+
+  it("가짜 렌더러가 받은 장면 표 어디에도 유령 좌석이 없다: 산 사람 화면에서 유령의 캐릭터를 그릴 재료 자체가 없다", () => {
+    mount(living("discussion"));
+    for (const look of rt.scenes as SceneLook[]) {
+      expect(Object.keys(look.seats).map(Number).sort((a, b) => a - b)).toEqual(aliveSeats);
+    }
+  });
+
+  it("받아서 감추는 방식이 아니다: 산 사람 view 에 spectate 가 잘못 섞여 와도 유령 분기를 그리지 않는다(내가 산 사람이므로)", () => {
+    const stray: RoomView = { ...living("discussion"), spectate: { seats: [0, 1, 2, 3, 4, 5].map((seat) => ({ seat, job: "mafia" as RoleId })) } };
+    const { container } = mount(stray);
+    expect(container.querySelectorAll("[data-ghost-view]")).toHaveLength(0);
+    expect(container.querySelectorAll("[data-role-chip]")).toHaveLength(0);
+  });
+
+  it("유령 채널의 채팅·입력 중 신호가 산 사람 연결로 와도(서버가 보내지 않지만) 기록 칸과 이름표에 나타나지 않는다", () => {
+    let handler: ((e: never, meta: { epoch: number }) => void) | undefined;
+    const onEvent = vi.fn((cb: unknown) => {
+      handler = cb as typeof handler;
+      return () => {};
+    });
+    const { container } = mount(living("discussion"), { onEvent: onEvent as unknown as RoomConnection["onEvent"] });
+    act(() => {
+      handler?.({ t: "chat", ch: "ghost", seat: 3, seq: 1, text: "유령끼리 수다", at: NOW } as never, { epoch: 1 });
+      handler?.({ t: "typing", seat: 3, on: true } as never, { epoch: 1 });
+    });
+    expect(container.textContent).not.toContain("유령끼리 수다");
+    expect(container.querySelector('[data-seat="3"]')).toBeNull();
+    expect(container.querySelectorAll('.mv-head[data-typing="true"]')).toHaveLength(0);
+  });
+});
+
+describe("유령은 산 사람과 상호작용하지 않는다 (REQUIREMENTS Out of Scope, T-08-45)", () => {
+  it("유령이 보내는 메시지는 move 와 채팅뿐이다: 어느 낮 단계에서 맵을 탭하고 이름표를 눌러 봐도 point·verdict·endDiscussion 은 나가지 않는다", () => {
+    for (const phase of ["discussion", "nomination", "defense", "verdict", "execution"] as const) {
+      const send = vi.fn<(m: ClientMessage) => boolean>(() => true);
+      const { container } = mount(makeView({ phase, mySeat: 4, dead: [4], candidate: 2 }), { send });
+      for (const tag of container.querySelectorAll<HTMLElement>(".mf-world__tag")) fireEvent.click(tag);
+      for (const b of container.querySelectorAll<HTMLElement>("button")) fireEvent.click(b);
+      const kinds = send.mock.calls.map(([m]) => m.t);
+      expect(kinds.filter((t) => t === "point" || t === "verdict" || t === "endDiscussion"), phase).toEqual([]);
+      cleanup();
+    }
+  });
+});
