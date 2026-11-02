@@ -20,3 +20,16 @@ recorded: 2026-11-02
 | IN-05 | Info | open | 기록만 (WR-01 수정 때 함께 다룰 수 있음) |
 | IN-06 | Info | open | 기록만 |
 | IN-07 | Info | open | 결정 0022 의도 설계, 확인용 |
+
+## 갭 수정 회차 리뷰 (07-23~07-27, `07-REVIEW-GAPS.md`)
+
+치명 0 · 경고 1 · 참고 5. 처리는 `/gsd-verify-work 7` 때 사용자 결정으로 정한다.
+
+| ID | 심각도 | 처리 | 근거 |
+|---|---|---|---|
+| GR-WR-01 | Warning | open | 서버가 150ms 안 둘째 move 를 조용히 버리면 응답 판정이 1.5초 기다린 뒤 거짓 알림·되돌림. 추천: 타이머 콜백에서 `observe` 한 번 더 + 응답 들었으면 알림 없이 비움 + 시험 추가 |
+| GR-IN-01 | Info | open | smoothstep 교정 속도 주석은 왕복 약 200ms 까지만 성립 |
+| GR-IN-02 | Info | open | `runtime.ts` `was` 계산의 `gapMs` 상한 없음, 영향 작음 |
+| GR-IN-03 | Info | open | `notifyMoveSent` 선택 인자 경로를 성능용 메서드로 분리 권장 |
+| GR-IN-04 | Info | open | E2E 보강: W11 ms 상한, 도착점 일치, `before` 없을 때 기준 프레임 |
+| GR-IN-05 | Info | open | `design/design-system/components/PhaseCards/README.md:5` 옛 낮 보조줄 — 메인 세션에서 정리 |
