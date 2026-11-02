@@ -134,6 +134,132 @@ describe("HeadStack 입력 중 칸 (CHAT-04, 07-03)", () => {
   });
 });
 
+describe("HeadStack 8페이즈 칸(DAY-04, GHOST-02)", () => {
+  const order = (head: Element | null) =>
+    Array.from(head?.children ?? [])
+      .map((c) => c.className.split(" ")[0])
+      .join(",");
+
+  it("count 2 · lead 면 .mv-head 안 순서가 VoteBadge(.is-lead) → 이름표이고 data-count=2 · data-lead=true", () => {
+    const { container } = render(<HeadStack name="도윤" color="var(--seat-2)" count={2} lead />);
+    const head = container.querySelector("div.mv-head");
+    expect(order(head)).toBe("mv-badge,mv-tag");
+    expect(head?.querySelector(".mv-badge")?.classList.contains("is-lead")).toBe(true);
+    expect(head?.getAttribute("data-count")).toBe("2");
+    expect(head?.getAttribute("data-lead")).toBe("true");
+  });
+
+  it("typing · role mafia · sure · count 3 이면 자식 순서가 알약 → 직업 칩 → 도장 → 배지 → 이름표", () => {
+    const { container } = render(<HeadStack name="도윤" color="var(--seat-2)" typing role="mafia" sure count={3} />);
+    const head = container.querySelector("div.mv-head");
+    expect(order(head)).toBe("mv-typing,mv-rolechip,mv-stamp,mv-badge,mv-tag");
+    expect(head?.getAttribute("data-sure")).toBe("true");
+    expect(head?.getAttribute("data-count")).toBe("3");
+    expect(head?.querySelector("[data-role-chip]")?.getAttribute("data-role-chip")).toBe("mafia");
+  });
+
+  it("role 이 없으면 직업 칩 요소도 data-role-chip 도 DOM 에 없다 (GHOST-02 산 사람 쪽, T-08-20)", () => {
+    const { container } = render(<HeadStack name="도윤" color="var(--seat-2)" count={1} sure />);
+    expect(container.querySelectorAll("[data-role-chip]").length).toBe(0);
+    expect(container.querySelectorAll(".mv-rolechip").length).toBe(0);
+  });
+
+  it("role 이 있으면 그 역할 칩 하나를 그린다 (police)", () => {
+    const { container } = render(<HeadStack name="도윤" color="var(--seat-2)" role="police" />);
+    expect(container.querySelectorAll("[data-role-chip]").length).toBe(1);
+    expect(container.querySelector("[data-role-chip]")?.getAttribute("data-role-chip")).toBe("police");
+  });
+
+  it("mine 이면 이름표에 is-mine 과 data-mine=true", () => {
+    const { container } = render(<HeadStack name="도윤" color="var(--seat-2)" mine />);
+    expect(container.querySelector(".mv-tag")?.classList.contains("is-mine")).toBe(true);
+    expect(container.querySelector("div.mv-head")?.getAttribute("data-mine")).toBe("true");
+  });
+
+  it("blink 이면 이름표에 is-blink", () => {
+    const { container } = render(<HeadStack name="도윤" color="var(--seat-2)" blink />);
+    expect(container.querySelector(".mv-tag")?.classList.contains("is-blink")).toBe(true);
+  });
+
+  it("ghost 이면 이름표에 is-ghost 와 data-ghost=true", () => {
+    const { container } = render(<HeadStack name="도윤" color="var(--seat-2)" ghost />);
+    expect(container.querySelector(".mv-tag")?.classList.contains("is-ghost")).toBe(true);
+    expect(container.querySelector("div.mv-head")?.getAttribute("data-ghost")).toBe("true");
+  });
+
+  it("done 이면 이름표 안 뒤쪽에 체크 아이콘(role img, 투표함)과 data-done=true", () => {
+    const { container } = render(<HeadStack name="도윤" color="var(--seat-2)" done />);
+    const done = container.querySelector(".mv-tag .mv-tag__done");
+    expect(done).not.toBeNull();
+    expect(done?.querySelector("svg")?.getAttribute("role")).toBe("img");
+    expect(done?.querySelector("svg")?.getAttribute("aria-label")).toBe("투표함");
+    expect(container.querySelector("div.mv-head")?.getAttribute("data-done")).toBe("true");
+    expect(container.querySelector(".mv-tag")?.lastElementChild?.classList.contains("mv-tag__done")).toBe(true);
+  });
+
+  it("아무 속성도 없으면 기존과 같은 DOM: 이름표 하나, data-* 없음, 이름표 안은 점과 이름뿐", () => {
+    const { container } = render(<HeadStack name="도윤" color="var(--seat-2)" />);
+    const head = container.querySelector("div.mv-head");
+    expect(order(head)).toBe("mv-tag");
+    for (const a of ["data-count", "data-lead", "data-sure", "data-mine", "data-done", "data-ghost", "data-typing"]) {
+      expect(head?.hasAttribute(a), a).toBe(false);
+    }
+    expect(container.querySelector(".mv-tag")?.children.length).toBe(2);
+  });
+
+  it("count 0 이면 배지도 data-count 도 없다 (0표 경계)", () => {
+    const { container } = render(<HeadStack name="도윤" color="var(--seat-2)" count={0} lead />);
+    const head = container.querySelector("div.mv-head");
+    expect(container.querySelector(".mv-badge")).toBeNull();
+    expect(head?.hasAttribute("data-count")).toBe(false);
+  });
+
+  it("false 로 끈 속성은 data-* 를 싣지 않는다", () => {
+    const { container } = render(<HeadStack name="도윤" color="var(--seat-2)" lead={false} sure={false} mine={false} done={false} ghost={false} blink={false} />);
+    const head = container.querySelector("div.mv-head");
+    for (const a of ["data-lead", "data-sure", "data-mine", "data-done", "data-ghost"]) {
+      expect(head?.hasAttribute(a), a).toBe(false);
+    }
+    expect(container.querySelector(".mv-tag")?.className).toBe("mv-tag");
+  });
+
+  it("닉네임은 여전히 텍스트 노드이고 새 칸이 있어도 \"(나)\" 가 붙는다", () => {
+    const { container } = render(<HeadStack name="<b>x</b>" color="var(--seat-2)" me count={1} done />);
+    expect(container.querySelector("b")).toBeNull();
+    expect(container.querySelector(".mv-tag__name")?.textContent).toBe("<b>x</b> (나)");
+  });
+
+  it("HeadStack 은 스스로 역할을 판단하지 않는다: 서버 상태·역할 표 값을 불러오지 않는다 (금지 조항)", () => {
+    const src = readFileSync("src/components/v2/HeadStack.tsx", "utf8").replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, "");
+    expect(/from\s+["'][^"']*\/net\//.test(src)).toBe(false);
+    expect(/useGame|useRoom|view\.me/.test(src)).toBe(false);
+    expect(/import\s+\{[^}]*\bROLES?\b[^}]*\}/.test(src)).toBe(false);
+  });
+
+  it("스타일: 쌓임 간격 space-xs, is-mine 은 gray-100 면·night-900 글자, is-ghost 불투명도 0.6", () => {
+    expect(rulesFor(V2_CSS, ".mv-head")[0] ?? "").toContain("gap: var(--space-xs)");
+    const mine = rulesFor(V2_CSS, ".mv-tag.is-mine").join(";");
+    expect(mine).toContain("background: var(--gray-100)");
+    expect(mine).toContain("color: var(--night-900)");
+    const ghost = rulesFor(V2_CSS, ".mv-tag.is-ghost").join(";");
+    expect(ghost).toContain("opacity: 0.6");
+  });
+
+  it("스타일: is-blink 는 0.9초 × 3 깜빡임이고 모션 줄이기면 animation none", () => {
+    const blink = rulesFor(V2_CSS, ".mv-tag.is-blink").join(";");
+    expect(blink).toContain("animation: mv-blink 0.9s ease-in-out 3");
+    expect(V2_CSS).toMatch(/@keyframes mv-blink/);
+    const bare = V2_CSS.replace(/\/\*[\s\S]*?\*\//g, "");
+    const block = bare.slice(bare.indexOf("@media (prefers-reduced-motion: reduce)"));
+    expect(block.includes(".mv-tag.is-blink")).toBe(true);
+  });
+
+  it("스타일: 이름표 체크 칸은 가로로 이름 뒤에 붙는다 (.mv-tag__done)", () => {
+    expect(rulesFor(V2_CSS, ".mv-tag__done").length).toBe(1);
+    expect(rulesFor(V2_CSS, ".mv-tag__done").join(";")).toContain("display: inline-flex");
+  });
+});
+
 describe("V2Icon", () => {
   it("label 이 없으면 aria-hidden svg", () => {
     const { container } = render(<V2Icon name="crown" />);
