@@ -5,16 +5,16 @@ milestone_name: 같은 공간
 current_phase: 08
 current_phase_name: 낮 처형과 유령
 status: executing
-stopped_at: Completed 08-28-PLAN.md
-last_updated: "2026-11-02T12:28:00.055Z"
+stopped_at: Completed 08-11-PLAN.md
+last_updated: "2026-11-02T13:03:28.458Z"
 last_activity: 2026-11-02
 last_activity_desc: Phase 08 execution started
-state_head: 7834285144375a60e3c5c9cc0883acc663198489
+state_head: dd8c015a19093ef9acdd9d879ddaacc445c01b38
 progress:
   total_phases: 7
   completed_phases: 2
   total_plans: 78
-  completed_plans: 61
+  completed_plans: 62
   percent: 29
 ---
 
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-11-02)
 ## Current Position
 
 Phase: 08 (낮 처형과 유령) — EXECUTING
-Plan: 12 of 28
+Plan: 13 of 28
 Status: Ready to execute
 Last activity: 2026-11-02 — Phase 08 execution started
 
@@ -120,6 +120,7 @@ Progress: [███░░░░░░░] 29% (2/7 phases)
 | Phase 08 P09 | 13 min | 3 tasks | 7 files |
 | Phase 08 P10 | 20min | 3 tasks | 8 files |
 | Phase 08 P28 | 30min | 2 tasks | 8 files |
+| Phase 08 P11 | 45 min | 3 tasks | 22 files |
 
 ## Accumulated Context
 
@@ -241,6 +242,8 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 08]: 08-09: syncLayout 은 layoutKey 와 world.lay.key 비교로 멱등이며 advance 가 상태 변화 없이도 부른다. 누설 스캔 허용 목록은 넓히지 않고 산 사람 소켓의 world 좌석이 산 좌석의 부분집합이라는 규칙만 더했다
 - [Phase 08]: 08-10: WorldRenderer setTension·setZoom 은 optional(가짜 렌더러 호환), 원뿔 빛은 trial 에서 광원 없이 투명 메시 하나, 단계·긴장·예산은 applyLook 한 곳에서 합친다
 - [Phase 08]: 08-28: 옛 view 필드 시험은 08-07 새 필드 시험이 같은 뜻을 지켜 삭제, 전수 검사 단계 목록에서 옛 세 단계를 뺌(도우미 걷기·단계 표는 08-11·08-22 몫)
+- [Phase 08]: 08-11: 낮 흐름 전환 — enterExecution 은 찬반 통과일 때만 변론자 탈락, noExecutionOf 는 지목 0표(noVotes)·동률(tie)만(notMajority 는 더 나오지 않음). 옛 단계 행·훅 행은 닿지 않는 채로 08-21·22 가 지운다
+- [Phase 08]: 08-11: 시험 도우미는 옛 시그니처를 유지해 새 흐름(지목·변론·찬반·처형)으로 재건 — stateWithVerdict defense|verdict|execution, worker pointAll·verdictAll. 옛 표 도우미는 08-21 이 지운다
 
 ### Pending Todos
 
@@ -276,8 +279,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-02T12:27:59.845Z
-Stopped at: Completed 08-28-PLAN.md
+Last session: 2026-11-02T13:03:28.250Z
+Stopped at: Completed 08-11-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
