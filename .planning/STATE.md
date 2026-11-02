@@ -5,16 +5,16 @@ milestone_name: 같은 공간
 current_phase: 08
 current_phase_name: 낮 처형과 유령
 status: executing
-stopped_at: Completed 08-07-PLAN.md
-last_updated: "2026-11-02T11:43:12.782Z"
+stopped_at: Completed 08-08-PLAN.md
+last_updated: "2026-11-02T11:52:52.625Z"
 last_activity: 2026-11-02
 last_activity_desc: Phase 08 execution started
-state_head: 89816583ecc192ac6950239a5f4ae52a8aecc96f
+state_head: c4ad472fb810d86a44f35dda1c39e586c8d782ed
 progress:
   total_phases: 7
   completed_phases: 2
   total_plans: 78
-  completed_plans: 57
+  completed_plans: 58
   percent: 29
 ---
 
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-11-02)
 ## Current Position
 
 Phase: 08 (낮 처형과 유령) — EXECUTING
-Plan: 8 of 28
+Plan: 9 of 28
 Status: Ready to execute
 Last activity: 2026-11-02 — Phase 08 execution started
 
@@ -116,6 +116,7 @@ Progress: [███░░░░░░░] 29% (2/7 phases)
 | Phase 08 P05 | 14 min | 3 tasks | 15 files |
 | Phase 08 P06 | 8min | 3 tasks | 2 files |
 | Phase 08 P07 | 14 min | 3 tasks | 19 files |
+| Phase 08 P08 | 12min | 3 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -230,6 +231,8 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 08]: 08-06: 첫 지목 한 표로 선두가 생겨도 hot 앞서요 줄을 만든다(A4), 첫 스냅샷의 유령 상태는 state.executed 로 준다
 - [Phase 08]: 08-07: 지목은 castPoint 검증 뒤 사람당 250ms 간격(DO 메모리), 찬반은 첫 표만 전원·값 변경은 본인 소켓만, 토론 끝내기는 개수만 공개하고 과반이면 마감을 당겨 tick
 - [Phase 08]: 08-07: 처형 단계 공개 필드 day.verdict 는 서버 전용 verdict 키 검사에서 정확한 경로 하나만 예외로 열었다(전체 누설 스캔 개편은 08-09)
+- [Phase 08]: 08-08: gatherView 의 '몸 포함' 기준은 숫자 380 이 아니라 앞 발까지 포함한 상자가 스테이지에 들어가는지(실측 395.5). 상자가 스테이지보다 높으면 앞 머리 꼭대기를 아래 끝에 맞춘다
+- [Phase 08]: 08-08: 산 사람 viewer 좌석 표에는 유령 좌석 키 자체가 없다(숨김 표시도 없음). pointingOf 는 남의 지목은 서버 값만, 내 낙관적 선택만 덮는다. SeatLook.ring 은 근거 없어 만들지 않음
 
 ### Pending Todos
 
@@ -265,8 +268,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-02T11:43:12.583Z
-Stopped at: Completed 08-07-PLAN.md
+Last session: 2026-11-02T11:52:52.427Z
+Stopped at: Completed 08-08-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
