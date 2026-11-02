@@ -103,16 +103,16 @@
 .mv-chat__mark.is-mafia { color: var(--crimson-300); }
 .mv-chat__mark.is-ghost { color: var(--gray-300); }
 
-/* 득표 배지(승인 .mv-badge, bundle.css 5-6·44-46). 0표는 부품이 그리지 않는다. 명조 변수는 08-05 토큰 전까지 대체값(serif) */
+/* 득표 배지(승인 .mv-badge, bundle.css 5-6·44-46). 0표는 부품이 그리지 않는다. 명조(--font-serif)는 배지 숫자와 이 도장에만 쓴다(08-05 토큰, 승인 tokens.css 78~82행 글자 스타일 값) */
 .mv-badge { display: inline-flex; align-items: baseline; justify-content: center; gap: 2px; min-width: var(--badge-min); box-sizing: border-box; padding: 4px 10px 6px; border-radius: var(--radius-badge); background: var(--overlay-ink-strong); border: 2px solid var(--brass-400); box-shadow: var(--shadow-badge); white-space: nowrap; transform-origin: 50% 100%; animation: mv-pop var(--dur-pop) ease-out both; }
 .mv-badge.is-lead { animation: mv-pulse var(--dur-pulse) ease-in-out infinite; filter: drop-shadow(0 0 6px rgba(255, 224, 176, 0.75)); }
-.mv-badge__num { font-family: var(--font-serif, serif); font-size: 22px; line-height: 1; font-weight: 700; color: var(--cream-100); font-variant-numeric: tabular-nums; }
+.mv-badge__num { font-family: var(--font-serif); font-size: 22px; line-height: 1; font-weight: 700; color: var(--cream-100); font-variant-numeric: tabular-nums; }
 .mv-badge__unit { font-family: var(--font-ui); font-size: 12px; line-height: 1; font-weight: 700; color: var(--brass-400); }
 @keyframes mv-pop { 0% { transform: scale(0.4); opacity: 0; } 60% { transform: scale(1.2); opacity: 1; } 100% { transform: scale(1); } }
 @keyframes mv-pulse { 0%, 100% { transform: scale(1.18); } 50% { transform: scale(1.34); } }
 
-/* 유력 도장(승인 .mv-stamp, bundle.css 7·47). 명조 변수는 08-05 토큰 전까지 대체값(serif) */
-.mv-stamp { display: inline-block; padding: 4px 8px 5px 10px; border: 2px solid var(--brass-400); border-radius: var(--radius-stamp); background: var(--overlay-ink-strong); color: var(--brass-200); font-family: var(--font-serif, serif); font-size: 15px; line-height: 1; font-weight: 700; letter-spacing: 0.12em; white-space: nowrap; transform: rotate(-10deg); animation: mv-stamp var(--dur-med) ease-out both; }
+/* 유력 도장(승인 .mv-stamp, bundle.css 7·47). 명조(--font-serif)는 배지 숫자와 이 도장에만 쓴다(08-05 토큰, 승인 tokens.css 78~82행 글자 스타일 값) */
+.mv-stamp { display: inline-block; padding: 4px 8px 5px 10px; border: 2px solid var(--brass-400); border-radius: var(--radius-stamp); background: var(--overlay-ink-strong); color: var(--brass-200); font-family: var(--font-serif); font-size: 15px; line-height: 1; font-weight: 700; letter-spacing: 0.12em; white-space: nowrap; transform: rotate(-10deg); animation: mv-stamp var(--dur-med) ease-out both; }
 @keyframes mv-stamp { 0% { transform: rotate(-10deg) scale(2.2); opacity: 0; } 70% { transform: rotate(-10deg) scale(0.92); opacity: 1; } 100% { transform: rotate(-10deg) scale(1); } }
 
 /* 직업 칩(승인 .mv-rolechip, bundle.css 113-114). 유령 화면 분기에서만 그린다 */

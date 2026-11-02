@@ -96,8 +96,8 @@ describe("v2.css 득표 배지 스타일 계약 (DAY-04)", () => {
     expect(body).not.toMatch(/#[0-9a-fA-F]{3,6}\b/);
   });
 
-  it("숫자·단위 규칙이 있고 숫자는 명조 대체값을 가진다", () => {
-    expect(bodyOf(rulesFor(V2_CSS, ".mv-badge__num"), ".mv-badge__num")).toContain("var(--font-serif, serif)");
+  it("숫자·단위 규칙이 있고 숫자는 명조 토큰 변수를 쓴다(08-05 가 토큰을 더해 대체값을 걷었다)", () => {
+    expect(bodyOf(rulesFor(V2_CSS, ".mv-badge__num"), ".mv-badge__num")).toContain("var(--font-serif)");
     expect(rulesFor(V2_CSS, ".mv-badge__unit").length).toBeGreaterThan(0);
   });
 
@@ -180,7 +180,7 @@ describe("v2.css 도장·직업 칩 스타일 계약 (DAY-04, GHOST-02)", () => 
     expect(body).toContain("var(--brass-400)");
     expect(body).toContain("rotate(-10deg)");
     expect(body).toContain("var(--dur-med)");
-    expect(body).toContain("var(--font-serif, serif)");
+    expect(body).toContain("var(--font-serif)");
     expect(body).not.toMatch(/#[0-9a-fA-F]{3,6}\b/);
   });
 

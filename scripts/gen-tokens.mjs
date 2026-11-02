@@ -14,6 +14,7 @@ const FAMILIES = ["spacing", "radius", "shadow", "size", "duration", "easing", "
 const vars = [
   ...tokens.color.tokens,
   { name: "font-ui", value: tokens.type.families.ui },
+  ...(tokens.type.families.serif ? [{ name: "font-serif", value: tokens.type.families.serif }] : []),
   ...FAMILIES.flatMap((f) => tokens[f]?.tokens ?? []),
 ];
 const css =
