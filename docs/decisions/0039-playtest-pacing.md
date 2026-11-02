@@ -12,7 +12,7 @@
 
 ## 결정
 
-1. **수치**
+1. **수치** (2026-11-02 결정 0060-1 로 v2.0 에서 개정했다: 토론 90초·지목 15초·변론 20초·찬반 10초·처형 5초)
 
    | 항목 | 예전 | 새 값 | 이유 |
    |---|---|---|---|
@@ -32,8 +32,8 @@
    | 확정 두근 `CLINCH_BEAT_MS` | 700 | 700 (그대로) | 닿음 1200 + 700 = 1900 < 다음 화살표 2000 |
    | 모션 줄이기 화살표 유지 | 200 | = `REVEAL_DRAW_MS`(1200) | 완성 화살표가 닿을 때까지 보이고 칩 +1 과 함께 사라진다 |
 
-2. **공개 길이 공식**: `candidateRevealMs(n)` = n ≥ 1 이면 `400 + n×2000 + 600`, n = 0 이면 `2000`. 5표 11000, 8표 17000, 4표 9000. 음수·소수·NaN 은 0 이상 정수로 내린다. 서버는 공개 단계 진입 훅이 그날 `cand.votes` 를 집계한 뒤 그 길이로 마감을 정한다(`tick`: 새 마감 = 이전 마감 + `phaseDurationOf`(진입 훅 뒤 상태)). 모든 viewer 가 같은 `phaseEndsAt`·`phaseDurationMs` 를 받고 DO 알람이 그 마감에 맞춰진다.
-3. **한 출처**: 공개 시간표 상수(앞 400·한 표 2000·뒤 600·빈 공개 2000)와 `candidateRevealMs` 는 `shared/game/phases.ts` 한 곳이다. 서버(`phaseDurationOf`·`tick`)와 화면(`src/game/verdict.ts` 의 `REVEAL_LEAD_MS`·`REVEAL_SLOT_MS`·`REVEAL_TAIL_MS`)이 같은 상수를 import 하고, 화면 시간표의 끝(`endMs`) + 뒤 여유 = 서버 마감이다. E2E(`scripts/e2e/lib.mjs`)와 UAT(`scripts/uat-vote.mjs`)는 TS 를 import 하지 않는 사본을 쓰며, E2E 사본은 `test/unit/e2eContract.test.ts` 가 앱 상수와 대조하고 UAT 는 배포본에서 서버가 보낸 길이를 직접 검사한다.
+2. **공개 길이 공식**: `candidateRevealMs(n)` = n ≥ 1 이면 `400 + n×2000 + 600`, n = 0 이면 `2000`. 5표 11000, 8표 17000, 4표 9000. 음수·소수·NaN 은 0 이상 정수로 내린다. 서버는 공개 단계 진입 훅이 그날 `cand.votes` 를 집계한 뒤 그 길이로 마감을 정한다(`tick`: 새 마감 = 이전 마감 + `phaseDurationOf`(진입 훅 뒤 상태)). 모든 viewer 가 같은 `phaseEndsAt`·`phaseDurationMs` 를 받고 DO 알람이 그 마감에 맞춰진다. (2026-11-02 결정 0060-1 로 v2.0 에서 폐기했다: 후보 공개 단계가 없어 공개 길이 공식도 없다)
+3. **한 출처**: 공개 시간표 상수(앞 400·한 표 2000·뒤 600·빈 공개 2000)와 `candidateRevealMs` 는 `shared/game/phases.ts` 한 곳이다. 서버(`phaseDurationOf`·`tick`)와 화면(`src/game/verdict.ts` 의 `REVEAL_LEAD_MS`·`REVEAL_SLOT_MS`·`REVEAL_TAIL_MS`)이 같은 상수를 import 하고, 화면 시간표의 끝(`endMs`) + 뒤 여유 = 서버 마감이다. E2E(`scripts/e2e/lib.mjs`)와 UAT(`scripts/uat-vote.mjs`)는 TS 를 import 하지 않는 사본을 쓰며, E2E 사본은 `test/unit/e2eContract.test.ts` 가 앱 상수와 대조하고 UAT 는 배포본에서 서버가 보낸 길이를 직접 검사한다. (2026-11-02 결정 0060-1 로 v2.0 에서 개정했다: 단계 시간은 `shared/game/phases.ts` 한 곳, 공개 슬롯 상수는 쓰지 않는다)
 4. **누출 판단**: 공개 길이는 이미 모두에게 공개된 그날 `cand.votes` 길이에서만 파생한다. 진행 중 후보 선택(`candidateVote`)의 `phaseDurationMs` 는 표가 몇 개 들어와도 15000 이다(`discussion.test.ts`·`leak.test.ts` 가 지킨다).
 5. **카드 시각표**(처형 투표, 3000ms): 0~450 낙하(+4px 바운스) → 450~1500 정지(카드 면·`처형 투표` 제목) → 1500~1900 면 지우기·질문 강조, 셰브런 1500 부터 4회 → 1900~2850 질문·셰브런 유지 → 2850~3000 전체 페이드아웃, 3000 에 컴포넌트가 사라진다. 움직임 길이(낙하 450·면 지우기 400·셰브런 260·페이드 150)와 색·크기는 그대로다. 처형 무효 카드는 1.6초 그대로다.
 6. **모션 줄이기와 두근**: 완성된 화살표를 닿을 때까지(1200ms) 보여 주고 칩 +1 과 같은 순간에 사라지기 시작한다. 확정 두근 700ms 는 한 슬롯 안에서 끝나므로 같은 후보에게 표가 더 닿으면 두근은 닿음마다 처음부터 다시 돈다(예전처럼 두근 창이 겹쳐 이어지지 않는다).

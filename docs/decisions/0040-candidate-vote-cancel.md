@@ -13,8 +13,8 @@
 
 ## 결정
 
-1. **와이어**: `{ t: "candidateVote", target: number | null }`. `null` = 선택 취소. 스키마(`shared/schemas.ts`)는 strictObject 에 target 이 0..7 정수 또는 null 이다. 빠진 target·문자열·불리언·범위 밖·소수·덧붙은 키는 `BAD_MESSAGE`. `nullable` 은 이 한 곳뿐이다(`pick`·`say` 의 target 은 null 을 거부한다).
-2. **규칙표** (`shared/game/vote.ts` `castCandidateVote`, 검사 순서 단계 → 행위자 → 취소 → 대상):
+1. **와이어**: `{ t: "candidateVote", target: number | null }`. `null` = 선택 취소. 스키마(`shared/schemas.ts`)는 strictObject 에 target 이 0..7 정수 또는 null 이다. 빠진 target·문자열·불리언·범위 밖·소수·덧붙은 키는 `BAD_MESSAGE`. `nullable` 은 이 한 곳뿐이다(`pick`·`say` 의 target 은 null 을 거부한다). (2026-11-02 결정 0060-3 으로 v2.0 에서 폐기했다: 지목은 바꾸기만 하고 취소(target null)가 없다)
+2. **규칙표** (`shared/game/vote.ts` `castCandidateVote`, 검사 순서 단계 → 행위자 → 취소 → 대상): (2026-11-02 결정 0060-3 으로 v2.0 에서 폐기했다: 후보 선택 규칙표는 지목 규칙으로 대체된다)
 
    | 상황 | 결과 |
    |---|---|
@@ -28,7 +28,7 @@
    | 자기 자신 고르기 | 그대로 `BAD_MESSAGE` |
 
 3. **받는 사람과 누출**: 취소를 받아들이면 투표자 본인 한 명에게만 state(`me.voteTarget` 키가 없는 view)를 보낸다(A7 그대로). 다른 viewer(생존·관전)는 고르기 전·고른 뒤·취소 뒤 view 가 같고 그 사이 프레임을 받지 않는다. 저장된 상태는 취소 뒤 고르기 전과 같다(키가 남지 않는다). 검사: `test/unit/vote.test.ts`(뷰 차분), `test/worker/vote.test.ts`(소켓 프레임), `test/worker/leak.test.ts`(한 판의 모든 프레임), 배포본 `scripts/uat-vote.mjs`.
-4. **화면** (판정 한 곳 `src/game/blankTap.ts`): 빈 곳 = 장면 상자(`.mf-dayscene__scene`) 안에서, 대상이 `[data-seat]`·버튼류·`.mf-tt-anchor`([테스트]) 안이 아니고, 어떤 `[data-seat]` 사람 상자를 `BLANK_TAP_SLOP_PX`(8px) 넓힌 범위 밖인 탭. 이름표는 `pointer-events: none` 이라 이름표를 탭하면 대상이 그 아래 요소가 되므로 좌표 판정이 필요하다. 헤더·하단 패널·시트는 장면 상자 밖이라 대상이 아니다. 후보 선택 단계의 살아 있는 viewer 에게만 켠다. 고른 표가 없거나 보낼 수 없을 때(`canSend` 거짓)는 아무 일도 없다. 다른 사람을 탭하면 다시 고르기(기존), 같은 자리 재탭은 그대로 무시(아래 바뀔 수 있는 기본값). 취소는 낙관적으로 곧바로 알약 `선택 안 함`·흰 후광 0 이 된다.
+4. **화면** (판정 한 곳 `src/game/blankTap.ts`): 빈 곳 = 장면 상자(`.mf-dayscene__scene`) 안에서, 대상이 `[data-seat]`·버튼류·`.mf-tt-anchor`([테스트]) 안이 아니고, 어떤 `[data-seat]` 사람 상자를 `BLANK_TAP_SLOP_PX`(8px) 넓힌 범위 밖인 탭. 이름표는 `pointer-events: none` 이라 이름표를 탭하면 대상이 그 아래 요소가 되므로 좌표 판정이 필요하다. 헤더·하단 패널·시트는 장면 상자 밖이라 대상이 아니다. 후보 선택 단계의 살아 있는 viewer 에게만 켠다. 고른 표가 없거나 보낼 수 없을 때(`canSend` 거짓)는 아무 일도 없다. 다른 사람을 탭하면 다시 고르기(기존), 같은 자리 재탭은 그대로 무시(아래 바뀔 수 있는 기본값). 취소는 낙관적으로 곧바로 알약 `선택 안 함`·흰 후광 0 이 된다. (2026-11-02 결정 0060-3 으로 v2.0 에서 폐기했다: 빈 곳 눌러 취소하는 화면은 없다)
 5. **문구**: 하단 패널 안내 줄(제목 아래 14px 회색 한 줄)만 바뀐다. 네 역할이 같은 글자를 본다. 관전자 문구와 `[data-guide]`(제목 하나)는 그대로다.
 
    | 상태 | 안내 줄 | 폭 (360폭 패널 안 328px, 한글 14px 대략) |
