@@ -681,14 +681,14 @@ describe("buildView 낮 뷰 — 순차 주장 제거 뒤 (07-08, CHAT-06): turn 
     expect(bad.join(",")).toBe("");
   });
 
-  it("dayAnnounce·discussion·night·morning 의 day 키는 n,roles,voteLog(night 는 + noExecution: 표 없이 지나온 밤, morning 은 + morning)이고 turn 키가 없다", () => {
+  it("dayAnnounce·discussion·night·morning 의 day 키는 n,roles,voteLog(discussion 은 + endCount, night 는 + noExecution: 표 없이 지나온 밤, morning 은 + morning)이고 turn 키가 없다", () => {
     const got: string[] = [];
     for (const phase of ["dayAnnounce", "discussion", "night", "morning"] as const) {
       const s = richStateAt(phase, 5, 1);
       const keys = new Set(s.players.map((p) => Object.keys(buildView(s, p.id, START_AT).day ?? {}).sort().join(",")));
       got.push(`${phase}:${[...keys].join("|")}`);
     }
-    expect(got.join(" ")).toBe("dayAnnounce:n,roles,voteLog discussion:n,roles,voteLog night:n,noExecution,roles,voteLog morning:morning,n,roles,voteLog");
+    expect(got.join(" ")).toBe("dayAnnounce:n,roles,voteLog discussion:endCount,n,roles,voteLog night:n,noExecution,roles,voteLog morning:morning,n,roles,voteLog");
   });
 
   it("dayAnnounce 뷰의 day 는 {n, roles, voteLog []} 뿐이다", () => {
@@ -719,11 +719,11 @@ describe("buildView 낮 뷰 — 토론·이튿날 (D-02, D-05, D-15)", () => {
     for (const key of ["claimOrder", "claimIdx", "claimStart", "claimPick"]) expect(text.includes(`"${key}"`)).toBe(false);
   });
 
-  it("discussion: day 의 키는 n,roles,voteLog 이고 messages·extendUsed 키가 없다 (결정 0017-5·0017-7)", () => {
+  it("discussion: day 의 키는 endCount,n,roles,voteLog(8페이즈 토론 끝내기 수) 이고 messages·extendUsed 키가 없다 (결정 0017-5·0017-7)", () => {
     const s = stateAt("discussion", 5, 1);
     for (const viewer of s.players) {
       const view = buildView(s, viewer.id, START_AT);
-      expect(Object.keys(view.day ?? {}).sort().join(",")).toBe("n,roles,voteLog");
+      expect(Object.keys(view.day ?? {}).sort().join(",")).toBe("endCount,n,roles,voteLog");
       expect(roleValueLeaks(view).join(";")).toBe("");
     }
   });

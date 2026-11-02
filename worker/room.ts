@@ -28,7 +28,7 @@ import { nextWakeAt, tick } from "../shared/game/tick";
 import { castCandidateVote, castExecVote } from "../shared/game/vote";
 import { castPoint } from "../shared/game/nomination";
 import { castVerdict } from "../shared/game/verdict";
-import { toggleEnd } from "../shared/game/discussion";
+import { endReached, toggleEnd } from "../shared/game/discussion";
 import { BAR_MAP } from "../shared/game/map";
 import { WORLD_FLUSH_MS, compactWorld, despawnPlayer, emptyWorld, moveFrame, nextWanderAt, planWander, requestMove, respawnAll, restoreWorld, snapFrame, spawnPlayer } from "../shared/game/world";
 import type { Segment, WorldState } from "../shared/game/world";
@@ -511,13 +511,21 @@ export class Room extends DurableObject<Env> {
     if (error !== null) this.sendRejection(ws, att.playerId, error);
   }
 
-  // 껍데기 단계(Task 1): 규칙 함수에 잇고 본인에게만 view 를 보낸다. 방송 규율(처음 투표만 전원, 변경은 본인)은 다음 작업이 정한다.
+  // 마감을 건드리지 않는다(조기 종료 없음 — 모두가 일찍 던져도 10초를 다 채운다, 결정 0060-4). 같은 값을 다시 보내면 같은 객체라 저장·전송이 없다.
+  // 방송 규율(결정 0053·0060-4, T-08-02): 그 사람의 첫 투표는 day.voted(던진 사람 목록)가 모두에게 바뀌므로 모든 소켓이 각자 view 를 받는다.
+  // 이미 던진 사람이 값을 바꾸면 공개 값(day.voted)은 그대로이고 바뀌는 것은 본인 값(me.verdictVote)뿐이다 — 전원에게 보내면 '누군가 마음을 바꿨다' 는 타이밍이 샌다.
+  // 그래서 저장하고 본인 소켓에만 view 를 보낸다(applyCandidateVote 와 같은 모양).
   private async applyVerdict(playerId: string, agree: boolean): Promise<WsErrorCode | null> {
     if (!this.room) return "BAD_MESSAGE";
+    const castBefore = this.room.players.find((p) => p.id === playerId)?.verdictVote !== undefined;
     const result = castVerdict(this.room, playerId, agree);
     if (!result.ok) return result.error;
     if (result.state === this.room) return null;
     this.room = result.state;
+    if (!castBefore) {
+      await this.persistAndBroadcast();
+      return null;
+    }
     await this.ctx.storage.put("room", this.room);
     this.sendViewTo([playerId]);
     return null;
@@ -534,15 +542,22 @@ export class Room extends DurableObject<Env> {
     if (error !== null) this.sendRejection(ws, att.playerId, error);
   }
 
-  // 껍데기 단계(Task 1): 규칙 함수에 잇고 본인에게만 view 를 보낸다. 개수 방송·과반 마감 당기기는 다음 작업이 채운다.
-  private async applyEndDiscussion(playerId: string, on: boolean, _now: number): Promise<WsErrorCode | null> {
+  // 개수(day.endCount)는 모두에게 공개되는 실시간 정보라 바뀔 때마다 모든 소켓이 각자 view 를 받는다(누른 본인 값은 view 허용 목록이 me.endDiscussion 으로만 싣는다). 같은 값이면 같은 객체라 저장·전송이 없다.
+  // 과반(endReached)에 닿는 순간 서버가 마감을 지금으로 당겨 tick 으로 정상 마감과 같은 경로를 탄다(handleTestSkip 과 같다) — 새 마감은 now + 다음 단계 길이이고 알람이 따라 옮겨진다.
+  // 유령·단계 틀림은 규칙 함수가 BAD_MESSAGE·WRONG_PHASE 로 거절한다.
+  private async applyEndDiscussion(playerId: string, on: boolean, now: number): Promise<WsErrorCode | null> {
     if (!this.room) return "BAD_MESSAGE";
     const result = toggleEnd(this.room, playerId, on);
     if (!result.ok) return result.error;
     if (result.state === this.room) return null;
+    if (endReached(result.state)) {
+      this.room = tick({ ...result.state, phaseEndsAt: now }, now, cryptoRandInt);
+      await this.persistAndBroadcast();
+      await this.reschedule();
+      return null;
+    }
     this.room = result.state;
-    await this.ctx.storage.put("room", this.room);
-    this.sendViewTo([playerId]);
+    await this.persistAndBroadcast();
     return null;
   }
 

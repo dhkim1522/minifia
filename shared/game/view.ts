@@ -23,7 +23,7 @@ import { MAX_PLAYERS, MIN_PLAYERS } from "../protocol";
 import { isAlive } from "./alive";
 import { channelOf } from "./audience";
 import { botCount } from "./bots";
-import { phaseDurationOf } from "./discussion";
+import { endCountOf, phaseDurationOf } from "./discussion";
 import { buildSummary } from "./endgame";
 import { noExecutionOf } from "./execution";
 import { pointLinesOf } from "./nomination";
@@ -32,6 +32,7 @@ import { rolesInPlay } from "./roles";
 import { hostOf } from "./room";
 import type { RoomState } from "./room";
 import { execTallyOf } from "./vote";
+import { verdictVotersOf, votedSeatsOf } from "./verdict";
 
 /**
  * view.day 가 생기는 단계: 낮 네 단계(발표·토론·지목·찬반)·처형 다섯 단계·밤·아침·종료. 이 밖의 단계 뷰에는 day 키 자체가 없다(D-07).
@@ -74,17 +75,27 @@ function buildDay(state: RoomState): DayView {
   };
   // 실시간 집계는 모든 viewer 에게 같은 값이다 — 마감 집계와 같은 함수(execTallyOf)를 쓴다.
   if (state.phase === "execVote") day.execTally = execTallyOf(state);
+  // 토론 끝내기는 누른 산 사람 수만 공개한다 — 누가 눌렀는지는 서버 전용(Player.endVote)이고 본인 값만 me.endDiscussion 으로 간다(결정 0060-2).
+  if (state.phase === "discussion") day.endCount = endCountOf(state);
+  // 찬반은 던진 유권자 좌석만 공개한다(값 없음 — 익명, 결정 0053). 개인 값은 me.verdictVote 로 본인에게만 간다.
+  if (state.phase === "verdict") day.voted = votedSeatsOf(state);
   // 지목 줄은 지목 단계 동안 모두에게 같은 공개 목록이다(결정 0060-3) — 필드별 복사 함수(pointLinesOf)로 만든다.
   if (state.phase === "nomination") day.points = pointLinesOf(state);
   // 후보·처형 발표는 모두에게 같다(공개 정보). 직업은 싣지 않는다 — 필드별로 복사한다(D-09).
   if (
-    (state.phase === "candidateVoteReveal" || state.phase === "defense" || state.phase === "execution") &&
+    (state.phase === "candidateVoteReveal" || state.phase === "defense" || state.phase === "verdict" || state.phase === "execution") &&
     state.verdict?.candidate !== undefined
   ) {
     day.candidate = state.verdict.candidate;
   }
   if (state.phase === "execution" && state.execution !== undefined) {
     day.execution = { seat: state.execution.seat, phrase: state.execution.phrase };
+  }
+  // 찬반 결과 수는 처형 단계에서 그날 voteLog 줄의 exec 세 키를 필드별로 복사한다(결정 0060-4). 줄이 없으면 키가 없다. 역할 키는 어디에도 없다(T-08-03).
+  if (state.phase === "execution") {
+    const today = state.day ?? 1;
+    const line = [...(state.voteLog ?? [])].reverse().find((entry) => entry.n === today);
+    if (line !== undefined) day.verdict = { yes: line.exec.yes, no: line.exec.no, passed: line.exec.passed };
   }
   // 처형이 성립하지 않아 밤으로 온 그 밤에만, 이유 코드 하나(D-34). 공개 투표 기록에서 파생해 새 상태 필드가 없다.
   const noExecution = noExecutionOf(state);
@@ -175,6 +186,16 @@ export function buildView(state: RoomState, playerId: string, now: number): Room
   // 여부 표는 본인에게만(D-02) — 생존한 본인이 execVote 단계에서 던진 값이 있을 때만 키를 만든다. 남의 값은 어떤 키로도 싣지 않는다.
   if (state.phase === "execVote" && isAlive(me) && me.execVote !== undefined) {
     myInfo.voteAgree = me.execVote;
+  }
+
+  // 토론 끝내기 누름은 본인에게만(결정 0060-2) — 산 본인이 discussion 에서 눌렀을 때만 키를 만든다. 누른 사람이 누구인지는 어떤 키로도 싣지 않는다.
+  if (state.phase === "discussion" && isAlive(me) && me.endVote === true) {
+    myInfo.endDiscussion = true;
+  }
+
+  // 찬반 값은 본인에게만(결정 0053·0060-4, T-08-02) — verdict 단계에서 유권자(변론자를 뺀 산 사람)인 본인이 던진 값이 있을 때만 키를 만든다. 남의 값은 어떤 키로도 싣지 않는다.
+  if (state.phase === "verdict" && me.verdictVote !== undefined && verdictVotersOf(state).some((p) => p.id === me.id)) {
+    myInfo.verdictVote = me.verdictVote;
   }
 
   // 후보 선택 값은 본인에게만(D-19, A7) — 생존한 본인이 candidateVote 단계에서 고른 값이 있을 때만 키를 만든다. 남의 값은 어떤 키로도 싣지 않는다.

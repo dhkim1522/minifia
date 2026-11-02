@@ -303,7 +303,9 @@ describe("view: me.voteTarget (D-19, A7, T-04-10)", () => {
       const state = stateWithVerdict(6, 2, phase);
       const text = JSON.stringify(state.players.map((p) => viewOf(state, p.seat)));
       for (const key of ["candidateVote", "verdict", "lastExecPhrase", "execVote"]) {
-        expect(`${phase}/${key}: ${text.includes(`"${key}":`)}`).toBe(`${phase}/${key}: false`);
+        // 8페이즈(08-07): 처형 단계에는 공개 와이어 필드 day.verdict({yes,no,passed})가 있다 — 서버 전용 RoomState.verdict 와 이름만 같다.
+        const want = key === "verdict" && phase === "execution";
+        expect(`${phase}/${key}: ${text.includes(`"${key}":`)}`).toBe(`${phase}/${key}: ${want}`);
       }
     }
   });
@@ -483,7 +485,8 @@ describe("새 단계 전수 누출 검사 (4~8명 × 투표 이후 네 단계 ×
               const key = path.slice(path.lastIndexOf(".") + 1);
               if (key === "role" && path !== ".me.role") violations.push(`${tag}: role at ${path}`);
               if (key === "allies" && path !== ".me.allies") violations.push(`${tag}: allies at ${path}`);
-              if (serverOnly.includes(key)) violations.push(`${tag}: server-only key at ${path}`);
+              // 8페이즈(08-07): 처형 단계의 day.verdict 는 공개 와이어 필드다(서버 전용 verdict 와 이름만 같다).
+              if (serverOnly.includes(key) && path !== ".day.verdict") violations.push(`${tag}: server-only key at ${path}`);
             }
             for (const entry of view.players) {
               const keys = Object.keys(entry).sort().join(",");
@@ -491,7 +494,7 @@ describe("새 단계 전수 누출 검사 (4~8명 × 투표 이후 네 단계 ×
             }
             const want = ["n", "roles", "voteLog"];
             if (phase !== "candidateVote") want.push("candidate");
-            if (phase === "execution") want.push("execution");
+            if (phase === "execution") want.push("execution", "verdict"); // 8페이즈(08-07): 처형 단계의 찬반 결과 수 day.verdict
             const got = Object.keys(view.day ?? {}).sort().join(",");
             if (got !== want.sort().join(",")) violations.push(`${tag}: day keys ${got}`);
             // 진행 중 후보 선택(me.voteTarget)은 candidateVote 단계의 생존한 본인에게만

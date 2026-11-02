@@ -316,7 +316,8 @@ describe("ended 전에는 결과·밤 기록이 어떤 view 에도 없다 (T-04-
           if ("result" in view) bad.push(`${name}/seat${p.seat}: result`);
           for (const path of keyPaths(view)) {
             const key = path.slice(path.lastIndexOf(".") + 1);
-            if (["nightLog", "verdict", "lastExecPhrase", "winner"].includes(key)) bad.push(`${name}/seat${p.seat}: ${path}`);
+            // 8페이즈: 처형 단계의 day.verdict({yes,no,passed})는 서버 전용 RoomState.verdict 와 이름만 같은 공개 와이어 필드다(08-07).
+            if (["nightLog", "verdict", "lastExecPhrase", "winner"].includes(key) && path !== ".day.verdict") bad.push(`${name}/seat${p.seat}: ${path}`);
           }
         }
       }
