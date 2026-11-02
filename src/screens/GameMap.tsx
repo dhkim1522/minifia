@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import type { ComponentProps } from "react";
 import type { ReactNode } from "react";
 import { isAlive } from "../../shared/game/alive";
 import { canMoveIn } from "../../shared/game/movement";
@@ -8,11 +9,13 @@ import { RoleCardButton } from "../components/RoleCardButton";
 import { PhaseHeader } from "../components/v2/PhaseHeader";
 import { TopToast, useTopToast } from "../components/v2/TopToast";
 import { WorldStage } from "../components/WorldStage";
+import type { WorldPick } from "../components/WorldStage";
 import { LOG_H_KB } from "../game/chatUi";
-import { headerFor } from "../game/dayView";
+import { headerFor, pointsTally } from "../game/dayView";
 import type { ChatStore } from "../net/chatStore";
 import { useCountdown } from "../net/countdown";
 import { useChat } from "../net/useChat";
+import { useViewChoice } from "../net/useViewChoice";
 import { useMapInsets } from "../net/useMapInsets";
 import type { RoomConnection } from "../net/useRoomConnection";
 import { sceneLook } from "../world/presence";
@@ -29,6 +32,8 @@ const REJECT_TEXT = "지금은 고를 수 없어요";
 /** 스테이지 사각형을 아직 못 쟀을 때 WorldStage 기본값(헤더 아래 62 · 패널 250)과 같은 값 — 장면 표의 확대 판정에만 쓴다 */
 const DEFAULT_INSET_TOP = 62;
 const DEFAULT_INSET_BOTTOM = 250;
+
+type WorldTagProps = NonNullable<ComponentProps<typeof WorldStage>["tagProps"]>;
 
 interface GameMapProps {
   view: RoomView;
@@ -105,11 +110,51 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
 
   // 이동 권한: 산 사람은 낮 시작·토론에서만, 유령은 언제나(MAP-04). 권위는 서버 canMove 이고 화면은 같은 표로 맵 탭만 막는다.
   const me = view.players.find((p) => p.seat === view.me.seat);
-  const canWalk = canMoveIn(view.phase, me === undefined || isAlive(me));
+  const meAlive = me === undefined || isAlive(me);
+  const canWalk = canMoveIn(view.phase, meAlive);
 
   // 장면 표(보임·유령·카메라·조명·긴장): 서버 공개 정보로만 만든다. view 가 바뀔 때만 새로 만든다(타이머 틱으로 WorldStage 를 흔들지 않는다).
   const stageH = Math.max(0, window.innerHeight - (stageInsets?.top ?? DEFAULT_INSET_TOP) - (stageInsets?.bottom ?? DEFAULT_INSET_BOTTOM));
-  const scene = useMemo(() => sceneLook(view, { stageH }), [view, stageH]);
+
+  // 지목 단계(DAY-04): 산 사람은 나를 뺀 산 사람의 이름표를 눌러 가리킨다. 내 선택만 서버 응답 전에 보이고(낙관적), 서버 view 가 오면 서버 값(day.points 의 내 줄, 가정 A1)이 이긴다.
+  // 남의 지목·득표·선두·과반은 서버가 보낸 day.points 로만 그린다(T-08-38).
+  const nominating = view.phase === "nomination";
+  const canPick = nominating && meAlive;
+  const serverMine = nominating ? view.day?.points?.find((l) => l.seat === view.me.seat)?.target : undefined;
+  const [mine, chooseMine] = useViewChoice<number | undefined>(view, serverMine);
+  const pickSeats = useMemo(
+    () => (canPick ? new Set(view.players.filter((p) => isAlive(p) && p.seat !== view.me.seat).map((p) => p.seat)) : null),
+    [canPick, view.players, view.me.seat],
+  );
+  const pick: WorldPick | undefined = pickSeats
+    ? {
+        seats: pickSeats,
+        ...(mine !== undefined ? { mine } : {}),
+        label: (nickname) => `${nickname} 님 가리키기`,
+        onPick: (seat) => {
+          if (seat === mine) return; // 같은 사람을 다시 눌러도 변하지 않는다(취소 없음)
+          if (send({ t: "point", target: seat }) === false) return; // 소켓이 닫혀 못 보냈으면 표시도 바꾸지 않는다
+          chooseMine(seat);
+        },
+        group: "지목",
+      }
+    : undefined;
+
+  // 이름표 쌓임: 득표 배지·선두(맥박)·과반 도장은 서버가 센 집계에서만 나온다. 0표 이름표에는 배지가 없다.
+  const tagProps = useMemo<WorldTagProps | undefined>(() => {
+    if (!nominating) return undefined;
+    const tally = pointsTally(view);
+    return (seat) => {
+      const count = tally.counts[seat] ?? 0;
+      return {
+        ...(count >= 1 ? { count } : {}),
+        ...(tally.leader === seat ? { lead: true } : {}),
+        ...(tally.sure === seat ? { sure: true } : {}),
+      };
+    };
+  }, [nominating, view]);
+
+  const scene = useMemo(() => sceneLook(view, { stageH, ...(mine !== undefined ? { mine } : {}) }), [view, stageH, mine]);
 
   return (
     <main ref={rootRef} className="mf-root mf-game" data-game-stage="" data-phase={view.phase} data-kb-open={kbOpen ? "true" : undefined}>
@@ -133,6 +178,8 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
         typingSeats={typingSeats}
         scene={scene}
         canWalk={canWalk}
+        {...(pick ? { pick } : {})}
+        {...(tagProps ? { tagProps } : {})}
         onNotice={(text) => show(text)}
         onKick={() => {}}
         onLeave={() => onLeave?.()}
