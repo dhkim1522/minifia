@@ -7,13 +7,13 @@ import {
   IME_WAIT_MS,
   KB_OPEN_MIN_LIFT,
   KB_PANEL_H,
+  CHAT_PANEL_EXTRA,
   LOBBY_PANEL_EXTRA,
   LOG_H_KB,
   LOG_H_SHORT,
   LOG_H_TALL,
   NOTICE_MS,
   SEND_DIM_MS,
-  TABLE_PANEL_EXTRA,
   TALL_ROOM_MIN_H,
   TAIL_WINDOW_MS,
   TYPING_EXPIRE_MS,
@@ -22,7 +22,6 @@ import {
   TYPING_REFRESH_MS,
   lobbyPanelHeight,
   logHeightFor,
-  tablePanelHeight,
 } from "../../src/game/chatUi";
 
 // 07-03 Task 3: 채팅 패널 치수·시각 상수 한 곳 (07-UI-SPEC 구조 표). DOM 을 읽지 않는 상수·순수 함수뿐이다.
@@ -52,11 +51,11 @@ describe("패널 높이 식 (UI-SPEC 폰 크기 표)", () => {
     expect(lobbyPanelHeight(152)).toBe(306);
   });
 
-  it("테이블 패널 = LOG_H + 92, 14 + 8 + 48 + 22 에서 나온다", () => {
-    expect(TABLE_PANEL_EXTRA).toBe(92);
-    expect(TABLE_PANEL_EXTRA).toBe(14 + 8 + 48 + 22);
-    expect(tablePanelHeight(96)).toBe(188);
-    expect(tablePanelHeight(152)).toBe(244);
+  it("채팅 패널 = LOG_H + 92, 14 + 8 + 48 + 22 에서 나온다", () => {
+    expect(CHAT_PANEL_EXTRA).toBe(92);
+    expect(CHAT_PANEL_EXTRA).toBe(14 + 8 + 48 + 22);
+    expect(96 + CHAT_PANEL_EXTRA).toBe(188);
+    expect(152 + CHAT_PANEL_EXTRA).toBe(244);
   });
 
   it("키보드 열림 패널 150 = 14 + 72 + 8 + 48 + 8, 열림 판정 lift > 80", () => {
@@ -67,7 +66,7 @@ describe("패널 높이 식 (UI-SPEC 폰 크기 표)", () => {
 
   it("UI-SPEC 폰 표의 여섯 크기가 식으로 나온다", () => {
     const phones: Array<[string, number, number, number, number]> = [
-      // [크기, 방 높이, 로비 패널, 테이블 패널, 기록 칸]
+      // [크기, 방 높이, 로비 패널, 채팅 패널, 기록 칸]
       ["360x640", 640, 250, 188, 96],
       ["390x664", 664, 250, 188, 96],
       ["430x932", 932, 306, 244, 152],
@@ -75,11 +74,11 @@ describe("패널 높이 식 (UI-SPEC 폰 크기 표)", () => {
       ["390x844", 844, 306, 244, 152],
       ["402x874", 874, 306, 244, 152],
     ];
-    for (const [, roomH, lobby, table, log] of phones) {
+    for (const [, roomH, lobby, chat, log] of phones) {
       const h = logHeightFor(roomH);
       expect(h).toBe(log);
       expect(lobbyPanelHeight(h)).toBe(lobby);
-      expect(tablePanelHeight(h)).toBe(table);
+      expect(h + CHAT_PANEL_EXTRA).toBe(chat);
     }
   });
 

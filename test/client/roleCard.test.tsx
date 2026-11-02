@@ -228,7 +228,7 @@ describe("Icon", () => {
     expect(svg.getAttribute("class")).toContain("x");
   });
 
-  it.each(["back", "share", "close", "copy", "check", "card", "diamond", "disconnected"] as const)(
+  it.each(["back", "share", "close", "copy", "check", "card", "disconnected"] as const)(
     "1페이즈 아이콘 %s 는 그릴 도형이 있다",
     (name) => {
       const { container } = render(<Icon name={name} />);

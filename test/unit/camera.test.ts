@@ -32,7 +32,7 @@ import {
   ZOOM_MAJORITY,
   ZOOM_MIN_STAGE_H,
 } from "../../src/world/camera";
-import { LOG_H_SHORT, lobbyPanelHeight, logHeightFor, tablePanelHeight, TYPING_PILL_H } from "../../src/game/chatUi";
+import { CHAT_PANEL_EXTRA, LOG_H_SHORT, lobbyPanelHeight, logHeightFor, TYPING_PILL_H } from "../../src/game/chatUi";
 import { HEAD_TOP_Y as HEAD_TOP } from "../../shared/game/map";
 import { ringSlots } from "../../shared/game/gather";
 
@@ -538,7 +538,7 @@ describe("zoom 인자 (UI-SPEC 카메라: 과반 연출 확대 1.08)", () => {
 
 describe("gatherView (UI-SPEC 카메라: 이름표가 몸보다 우선, E8 #31 backstop)", () => {
   /** 산 사람 채팅 패널(지목·변론) 기준 스테이지 = 방 높이 − 62 − (LOG_H + 92) */
-  const chatStage = (size: { w: number; h: number }) => stageRect(size, tablePanelHeight(logHeightFor(size.h)));
+  const chatStage = (size: { w: number; h: number }) => stageRect(size, logHeightFor(size.h) + CHAT_PANEL_EXTRA);
   const stageH = (r: { top: number; bottom: number }) => r.bottom - r.top;
   const EPS = 1e-6;
 

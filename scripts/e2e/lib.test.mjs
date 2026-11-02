@@ -1506,9 +1506,9 @@ test("headerContrastChecks H1: 제목 항목이 없어도 실패한다(대기실
 
 const layer = (scene, state = "current", image = `url("http://localhost:5173/backgrounds/bg_game_${scene}.webp")`) => ({ scene, state, image });
 
-test("EXPECTED_SCENE: 단계 열세 개가 모두 장면 id 로 정해져 있다", () => {
+test("EXPECTED_SCENE: 단계 열다섯 개가 모두 장면 id 로 정해져 있다", () => {
   assert.deepEqual(Object.keys(EXPECTED_SCENE).sort(), [
-    "assigning", "candidateVote", "candidateVoteReveal", "dayAnnounce", "defense", "discussion", "ended", "execVote", "execution", "lobby", "morning", "night", "roleReveal",
+    "assigning", "candidateVote", "candidateVoteReveal", "dayAnnounce", "defense", "discussion", "ended", "execVote", "execution", "lobby", "morning", "night", "nomination", "roleReveal", "verdict",
   ]);
   for (const p of ["execVote", "candidateVote", "candidateVoteReveal", "defense", "execution"]) assert.equal(EXPECTED_SCENE[p], "dusk", p);
   assert.equal(EXPECTED_SCENE.ended, "night");
@@ -2103,7 +2103,7 @@ test("executionChecks P6: 탈락한 viewer 는 직업 그림 검사를 하지 �
   assert.match(executionChecks(execSnap(), { viewerAlive: true }).detail, /측정값 없음\(.*candidateSeat/);
 });
 
-test("04-30·07-20: 변론 후보 패널 236 승인 완화는 기능과 함께 지웠고 기준 수치는 그대로이며, 상수는 verdict.ts 와 같다", () => {
+test("04-30·07-20: 변론 후보 패널 236 승인 완화는 기능과 함께 지웠고 기준 수치는 그대로다 (verdict.ts 의 기하 상수는 08-20 이 지웠다)", () => {
   assert.equal(PANEL_H, 157);
   assert.equal(AMBER_RGB, "rgb(242, 184, 75)");
   assert.equal(APPROVED_RELAXATIONS.filter((x) => x.id === "P-PANEL-236").length, 0);
@@ -2111,18 +2111,12 @@ test("04-30·07-20: 변론 후보 패널 236 승인 완화는 기능과 함께 �
   assert.equal(TAP_MIN, 44);
   assert.equal(ONE_LINE_FACTOR, 1.6);
   assert.equal(FACE_RATIO, 0.45);
-  const src = readFileSync(new URL("../../src/game/verdict.ts", import.meta.url), "utf8");
-  const num = (name) => Number(new RegExp(`export const ${name} = ([0-9.]+)`).exec(src)?.[1]);
   const spot = defenseSnap();
-  // lib 의 수치가 상수 파일과 같다: 45%·3px·1.7. 다르면 아래 단언이 깨진다.
-  assert.equal(num("VERDICT_DIM_PERCENT"), 45);
-  assert.equal(num("VERDICT_BLUR_PX"), 3);
-  assert.equal(num("VERDICT_CANDIDATE_SCALE"), 1.7);
-  // 기준값 그대로 만든 스냅숏이 통과한다 = lib 수치가 상수와 같다
-  const dim = `rgba(0, 0, 0, ${num("VERDICT_DIM_PERCENT") / 100})`;
-  spot.dt.dim.background = dim;
-  spot.dt.dim.backdropFilter = `blur(${num("VERDICT_BLUR_PX")}px)`;
-  spot.dt.center.scale = num("VERDICT_CANDIDATE_SCALE");
+  // 옛 verdict.ts 의 어둡게 층 45%·흐림 3px·후보 배율 1.7 과 같은 값으로 만든 스냅숏이 통과한다 = lib 수치가 그 값이다.
+  // 상수 파일은 지워져 원문 대조는 없다. 변론 검사(D*) 자체는 08-24 가 새 흐름으로 다시 짓는다.
+  spot.dt.dim.background = "rgba(0, 0, 0, 0.45)";
+  spot.dt.dim.backdropFilter = "blur(3px)";
+  spot.dt.center.scale = 1.7;
   assert.equal(defenseChecks(spot, {}).ok, true);
 });
 
