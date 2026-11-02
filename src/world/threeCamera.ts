@@ -12,7 +12,8 @@ export function createCamera(): OrthographicCamera {
  * 카메라를 목표·캔버스 크기·세로 이동에 맞춘다. 위치 = 목표 + (sin(yaw)·거리, 높이, cos(yaw)·거리), 주시점 = (목표, LOOK_Y).
  * offsetY 는 setViewOffset 으로 건다(양수면 장면이 위로 올라간다). 호출할 때마다 행렬을 모두 다시 계산한다.
  */
-export function configureCamera(camera: OrthographicCamera, target: { x: number; z: number }, canvas: { w: number; h: number }, offsetY: number): void {
+export function configureCamera(camera: OrthographicCamera, target: { x: number; z: number }, canvas: { w: number; h: number }, offsetY: number, zoom = 1): void {
+  void zoom; // RED 뼈대: 아직 반영하지 않는다
   const { w, h } = canvas;
   camera.left = -w / 2 / PX_PER_UNIT;
   camera.right = w / 2 / PX_PER_UNIT;

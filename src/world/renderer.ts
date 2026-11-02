@@ -2,7 +2,7 @@
 // three 본체를 끌고 오지 않는다. three 를 값으로 쓰는 모듈은 threeRenderer.ts·threeCamera.ts·maps/ 이고 06-13 이 import() 로만 연다.
 import type { Object3D } from "three";
 
-export type LightingPhase = "talk" | "vote";
+export type LightingPhase = "talk" | "vote" | "trial" | "night" | "morning";
 
 export interface Budget {
   /** 화면 배율 상한(장치 배율과 작은 쪽을 쓴다) */
@@ -67,6 +67,9 @@ export interface WorldRenderer {
   resize(w: number, h: number): void;
   setView(target: { x: number; z: number }, offsetY: number): void;
   setLighting(phase: LightingPhase): void;
+  /** 긴장 단계(RED 뼈대) */
+  setTension?(level: 0 | 1 | 2, focus?: { x: number; z: number }): void;
+  setZoom?(zoom: number): void;
   addCharacter(seat: number, c: CharacterHandle): void;
   removeCharacter(seat: number): void;
   setMarker(kind: MarkerKind, at: { x: number; z: number } | null, scale: number, opacity: number): void;

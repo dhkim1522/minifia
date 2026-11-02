@@ -1,12 +1,13 @@
 // 재즈 바 장면(maps/bar.ts)을 WebGL 없이 node 에서 검사한다: 병합 구조·예산·조명·연장 판·링.
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { BufferGeometry, DataTexture, DirectionalLight, HemisphereLight, Material, Mesh, MeshBasicMaterial, Object3D, PlaneGeometry, PointLight, Scene, TorusGeometry, Vector3 } from "three";
+import { BufferGeometry, Color, DataTexture, DirectionalLight, HemisphereLight, type Light, Material, Mesh, MeshBasicMaterial, Object3D, PlaneGeometry, PointLight, Scene, TorusGeometry, Vector3 } from "three";
 import { describe, expect, it } from "vitest";
 import { PLATE_FAR } from "../../src/world/camera";
 import { buildBarScene, LIGHT_TUNE } from "../../src/world/maps/bar";
 import { TOKEN_COLORS } from "../../src/world/palette";
-import { LADDER } from "../../src/world/renderer";
+import { createCharacter, figForSeat } from "../../src/world/character";
+import { DRAW_CALL_BUDGET, LADDER, type LightingPhase } from "../../src/world/renderer";
 
 /** 보이는 메시(visible 이고 조상도 visible) 목록. Task 3 의 사다리 테스트가 같은 이름을 쓴다 */
 export function visibleMeshes(root: Object3D): Mesh[] {
@@ -228,5 +229,166 @@ describe("원격 에셋 없음 (T-06-24)", () => {
       expect(src, f).not.toMatch(/https?:\/\//);
       expect(src, f).not.toMatch(/TextureLoader|new Image\b|fetch\(|createElement\(|ImageBitmap/);
     }
+  });
+});
+
+// ---------- 08-10 Task 3: 조명 단계 다섯 · 긴장 단계 (UI-SPEC 단계 조명, 결정 0049) ----------
+
+const STAGES: readonly LightingPhase[] = ["talk", "vote", "trial", "night", "morning"];
+const lightCount = (root: Object3D): number => {
+  let n = 0;
+  root.traverse((o) => {
+    if ((o as Light).isLight) n++;
+  });
+  return n;
+};
+/** 선형 작업 공간 상대 휘도 */
+const lum = (hex: string): number => {
+  const c = new Color(hex);
+  return 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b;
+};
+const room = (bar: ReturnType<typeof buildBarScene>): number => (bar.meshes.emissiveRoom!.material as MeshBasicMaterial).color.r;
+
+describe("조명 단계 다섯 (trial · night · morning, 08-10)", () => {
+  it("LIGHT_TUNE 에 다섯 단계 행이 모두 있다", () => {
+    for (const s of STAGES) {
+      expect(LIGHT_TUNE[s], s).toBeDefined();
+      expect(LIGHT_TUNE[s].sky).toHaveLength(3);
+    }
+  });
+
+  it("단계를 모두 바꿔도 광원 개수는 처음과 같다(새 광원 없음) — 반구 1 · 방향 1 · 점광원 3", () => {
+    const bar = buildBarScene(LADDER[0]!);
+    const first = lightCount(bar.root);
+    expect(first).toBe(5);
+    for (const s of [...STAGES, "talk"] as const) {
+      bar.setLighting(s);
+      expect(lightCount(bar.root), s).toBe(first);
+    }
+    bar.setTension(2, { x: 2.65, z: 0 });
+    expect(lightCount(bar.root)).toBe(first);
+    bar.dispose();
+  });
+
+  it("원뿔 빛 메시는 trial 에서만 보이고 투명 메시 하나다(광원 아님)", () => {
+    const bar = buildBarScene(LADDER[0]!);
+    const cone = bar.meshes.trialCone;
+    expect(cone).toBeDefined();
+    expect((cone!.material as MeshBasicMaterial).transparent).toBe(true);
+    expect((cone!.material as MeshBasicMaterial).depthWrite).toBe(false);
+    for (const s of STAGES) {
+      bar.setLighting(s);
+      expect(cone!.visible, s).toBe(s === "trial");
+    }
+    bar.dispose();
+  });
+
+  it("유령 8명(발밑 고리 포함)이 서 있어도 단계마다 그리기 호출 추정이 DRAW_CALL_BUDGET 이내다(보이는 메시 + 그림자를 드리우는 메시)", () => {
+    const bar = buildBarScene(LADDER[0]!);
+    const chars = Array.from({ length: 8 }, (_, i) => createCharacter(figForSeat(i), "coat"));
+    for (const c of chars) {
+      c.setGhost(true);
+      c.setRing("#cc3333");
+      bar.root.add(c.root);
+    }
+    for (const s of STAGES) {
+      for (const tension of [0, 1, 2] as const) {
+        bar.setLighting(s);
+        bar.setTension(tension, { x: 2.65, z: 0 });
+        const vis = visibleMeshes(bar.root);
+        const calls = vis.length + vis.filter((m) => m.castShadow).length;
+        expect(calls, `${s}/${tension}`).toBeLessThanOrEqual(DRAW_CALL_BUDGET);
+      }
+    }
+    for (const c of chars) c.dispose();
+    bar.dispose();
+  });
+
+  it("새 단계의 하늘·땅·배경 색은 talk 의 같은 칸보다 밝지 않다(아침 포함, 새 밝은 색면 없음)", () => {
+    for (const s of ["trial", "night", "morning"] as const)
+      for (let i = 0; i < 3; i++) expect(lum(LIGHT_TUNE[s].sky[i]!), `${s} sky[${i}]`).toBeLessThanOrEqual(lum(LIGHT_TUNE.talk.sky[i]!));
+  });
+
+  it("단계 값: trial 은 실내 5% · 무대 전구 유지, night 는 무대 점광원 0 · 실내 15%, morning 은 talk 보다 낮은 반구", () => {
+    expect(LIGHT_TUNE.trial.emissive.room).toBeCloseTo(0.05, 9);
+    expect(LIGHT_TUNE.trial.glow.room).toBeCloseTo(0.05, 9);
+    expect(LIGHT_TUNE.trial.stage).toBe(LIGHT_TUNE.vote.stage);
+    expect(LIGHT_TUNE.trial.emissive.vote).toBe(LIGHT_TUNE.vote.emissive.vote);
+    expect(LIGHT_TUNE.night.stage).toBe(0);
+    expect(LIGHT_TUNE.night.emissive.room).toBeCloseTo(0.15, 9);
+    expect(LIGHT_TUNE.night.hemi).toBeLessThan(LIGHT_TUNE.vote.hemi);
+    expect(LIGHT_TUNE.morning.hemi).toBeLessThan(LIGHT_TUNE.talk.hemi);
+    expect(LIGHT_TUNE.morning.stage).toBe(0);
+  });
+
+  it("setLighting 이 단계 값을 장면에 반영한다(반구 세기·무대 점광원·실내 emissive)", () => {
+    const bar = buildBarScene(LADDER[0]!);
+    for (const s of STAGES) {
+      bar.setLighting(s);
+      expect(bar.lights.hemi.intensity, s).toBeCloseTo(LIGHT_TUNE[s].hemi, 9);
+      expect(bar.lights.stage.intensity, s).toBeCloseTo(LIGHT_TUNE[s].stage, 9);
+      expect(room(bar), s).toBeCloseTo(LIGHT_TUNE[s].emissive.room, 9);
+    }
+    bar.dispose();
+  });
+});
+
+describe("긴장 단계 setTension (결정 0049 선두·과반 연출, 08-10)", () => {
+  it("1: 무대 점광원이 초점 위(높이 3.0)로 옮겨 선두 세기가 된다", () => {
+    const bar = buildBarScene(LADDER[0]!);
+    bar.setLighting("vote");
+    bar.setTension(1, { x: 2.65, z: 0 });
+    expect(bar.lights.stage.position.x).toBeCloseTo(2.65, 9);
+    expect(bar.lights.stage.position.y).toBeCloseTo(3.0, 9);
+    expect(bar.lights.stage.position.z).toBeCloseTo(0, 9);
+    expect(bar.lights.stage.intensity).toBeCloseTo(LIGHT_TUNE.tension.lead, 9);
+    expect(LIGHT_TUNE.tension.lead).toBeGreaterThan(LIGHT_TUNE.vote.stage);
+    expect(room(bar)).toBeCloseTo(LIGHT_TUNE.vote.emissive.room, 9); // 1 단계는 실내 그대로
+    bar.dispose();
+  });
+
+  it("2: 1 에 더해 실내 emissive 가 그 단계 값의 절반이다", () => {
+    const bar = buildBarScene(LADDER[0]!);
+    bar.setLighting("vote");
+    bar.setTension(2, { x: 0, z: 2.65 });
+    expect(bar.lights.stage.position.z).toBeCloseTo(2.65, 9);
+    expect(bar.lights.stage.intensity).toBeCloseTo(LIGHT_TUNE.tension.lead, 9);
+    expect(LIGHT_TUNE.tension.halfRoom).toBeCloseTo(0.5, 9);
+    expect(room(bar)).toBeCloseTo(LIGHT_TUNE.vote.emissive.room * 0.5, 9);
+    bar.dispose();
+  });
+
+  it("0: 그 단계 값과 무대 중앙으로 복귀한다", () => {
+    const bar = buildBarScene(LADDER[0]!);
+    bar.setLighting("vote");
+    bar.setTension(2, { x: 2.65, z: 0 });
+    bar.setTension(0);
+    expect(bar.lights.stage.position.x).toBeCloseTo(LIGHT_TUNE.point.stage.x, 9);
+    expect(bar.lights.stage.position.y).toBeCloseTo(LIGHT_TUNE.point.stage.y, 9);
+    expect(bar.lights.stage.position.z).toBeCloseTo(LIGHT_TUNE.point.stage.z, 9);
+    expect(bar.lights.stage.intensity).toBeCloseTo(LIGHT_TUNE.vote.stage, 9);
+    expect(room(bar)).toBeCloseTo(LIGHT_TUNE.vote.emissive.room, 9);
+    bar.dispose();
+  });
+
+  it("긴장은 조명 단계가 바뀌어도 유지되고, 단계 값 위에서 다시 계산된다", () => {
+    const bar = buildBarScene(LADDER[0]!);
+    bar.setLighting("vote");
+    bar.setTension(2, { x: 2.65, z: 0 });
+    bar.setLighting("trial");
+    expect(bar.lights.stage.intensity).toBeCloseTo(LIGHT_TUNE.tension.lead, 9);
+    expect(room(bar)).toBeCloseTo(LIGHT_TUNE.trial.emissive.room * 0.5, 9);
+    bar.setTension(0);
+    expect(room(bar)).toBeCloseTo(LIGHT_TUNE.trial.emissive.room, 9);
+    bar.dispose();
+  });
+
+  it("초점을 주지 않으면 무대 중앙에서 세기만 바뀐다", () => {
+    const bar = buildBarScene(LADDER[0]!);
+    bar.setLighting("vote");
+    bar.setTension(1);
+    expect(bar.lights.stage.position.x).toBeCloseTo(LIGHT_TUNE.point.stage.x, 9);
+    expect(bar.lights.stage.intensity).toBeCloseTo(LIGHT_TUNE.tension.lead, 9);
+    bar.dispose();
   });
 });

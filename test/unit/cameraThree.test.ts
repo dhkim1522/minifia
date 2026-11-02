@@ -97,6 +97,78 @@ describe("three 정사영 카메라 = camera.ts 순수 수학", () => {
   });
 });
 
+describe("카메라 zoom = camera.ts zoom (08-10, 가정 A1: 과반 연출 확대 1.08)", () => {
+  const ZOOM = 1.08;
+  /** 화면 안의 표본 월드 점 9개(목표 둘레 3×3) */
+  const samples = (target: { x: number; z: number }) => {
+    const out: { x: number; y: number; z: number }[] = [];
+    for (const dx of [-3, 0, 3]) for (const dz of [-2.5, 0, 2.5]) out.push({ x: target.x + dx, y: dz === 0 ? 0 : 1.2, z: target.z + dz });
+    return out;
+  };
+
+  it("표본 점 9개 × 폰 6개: Vector3.project 화면 좌표가 groundToScreen(…, 1.08) 과 1e-4 이하로 같다", () => {
+    const cam = createCamera();
+    let checked = 0;
+    forEachPhone((size, offsetY, target) => {
+      configureCamera(cam, target, size, offsetY, ZOOM);
+      for (const p of samples(target)) {
+        const ndc = new Vector3(p.x, p.y, p.z).project(cam);
+        const sx = ((ndc.x + 1) / 2) * size.w;
+        const sy = ((1 - ndc.y) / 2) * size.h;
+        const ref = groundToScreen(p, target, size, offsetY, ZOOM);
+        expect(Math.abs(sx - ref.sx)).toBeLessThanOrEqual(1e-4);
+        expect(Math.abs(sy - ref.sy)).toBeLessThanOrEqual(1e-4);
+        checked++;
+      }
+    });
+    expect(checked).toBe(6 * 2 * 2 * 9);
+  });
+
+  it("바닥 Raycaster 교점이 screenToGround(…, 1.08) 과 1e-4 단위 이하로 같다", () => {
+    const rand = rng(3030);
+    const cam = createCamera();
+    const floor = new Plane(new Vector3(0, 1, 0), 0);
+    const ray = new Raycaster();
+    forEachPhone((size, offsetY, target) => {
+      configureCamera(cam, target, size, offsetY, ZOOM);
+      for (let i = 0; i < 20; i++) {
+        const sx = rand() * size.w;
+        const sy = rand() * size.h;
+        ray.setFromCamera(new Vector2((sx / size.w) * 2 - 1, -((sy / size.h) * 2 - 1)), cam);
+        const hit = ray.ray.intersectPlane(floor, new Vector3());
+        expect(hit).not.toBeNull();
+        const ref = screenToGround(sx, sy, target, size, offsetY, ZOOM);
+        expect(Math.abs(hit!.x - ref.x)).toBeLessThanOrEqual(1e-4);
+        expect(Math.abs(hit!.z - ref.z)).toBeLessThanOrEqual(1e-4);
+      }
+    });
+  });
+
+  it("프러스텀 크기는 캔버스 ÷ (PX_PER_UNIT × zoom) 이고, zoom 을 생략하면 1 과 같다", () => {
+    const cam = createCamera();
+    const size = { w: 390, h: 844 };
+    configureCamera(cam, { x: 0, z: 0 }, size, 0, ZOOM);
+    expect(cam.top - cam.bottom).toBeCloseTo(size.h / (PX_PER_UNIT * ZOOM), 9);
+    expect(cam.right - cam.left).toBeCloseTo(size.w / (PX_PER_UNIT * ZOOM), 9);
+    configureCamera(cam, { x: 0, z: 0 }, size, 0);
+    const omitted = cam.top - cam.bottom;
+    configureCamera(cam, { x: 0, z: 0 }, size, 0, 1);
+    expect(cam.top - cam.bottom).toBe(omitted);
+    expect(omitted).toBeCloseTo(size.h / PX_PER_UNIT, 9);
+  });
+
+  it("zoom 1.08 에서도 offsetY 는 화면 픽셀 그대로 장면을 올린다(확대되지 않는다)", () => {
+    const cam = createCamera();
+    const size = { w: 390, h: 844 };
+    const at = (off: number) => {
+      configureCamera(cam, { x: 0, z: 0 }, size, off, ZOOM);
+      const ndc = new Vector3(1, 0, 1).project(cam);
+      return ((1 - ndc.y) / 2) * size.h;
+    };
+    expect(at(0) - at(70)).toBeCloseTo(70, 6);
+  });
+});
+
 describe("renderer.ts (three 값 import 없음)", () => {
   it("`from \"three\"` 가 있는 줄은 모두 import type 이다", () => {
     const src = readFileSync(resolve(process.cwd(), "src/world/renderer.ts"), "utf8");

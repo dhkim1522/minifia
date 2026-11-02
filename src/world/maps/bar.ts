@@ -66,8 +66,12 @@ export interface PhaseTune {
 }
 
 const PENDANT_TALK = 0.9 * 4;
+function talkRow(): PhaseTune {
+  return { hemi: 1.1 * Math.PI, moon: 0.85 * Math.PI, exposure: 1.25, sky: ["#524b84", "#2a2034", "#15111f"], fog: { near: 20, far: 44 }, stage: 0, pendant: PENDANT_TALK, emissive: { room: 1, vote: 0.2 }, glow: { room: 1, vote: 0 } };
+}
 export const LIGHT_TUNE: Readonly<Record<LightingPhase, PhaseTune>> & {
   point: { stage: { x: number; y: number; z: number; distance: number }; pendantA: { x: number; y: number; z: number; distance: number }; pendantB: { x: number; y: number; z: number; distance: number }; decay: number };
+  tension: { lead: number; halfRoom: number };
   moonPos: { x: number; y: number; z: number };
   moonTarget: { x: number; y: number; z: number };
 } = {
@@ -94,6 +98,10 @@ export const LIGHT_TUNE: Readonly<Record<LightingPhase, PhaseTune>> & {
     emissive: { room: 0.45, vote: 1 },
     glow: { room: 0.45, vote: 1 },
   },
+  trial: { ...talkRow() },
+  night: { ...talkRow() },
+  morning: { ...talkRow() },
+  tension: { lead: 0, halfRoom: 1 },
   point: {
     stage: { x: 0, y: 3.0, z: 0, distance: 6 },
     pendantA: { x: -2.4, y: 2.6, z: -4.6, distance: 5 },
@@ -201,6 +209,8 @@ export interface BarScene {
   /** 마지막으로 적용한 조명 단계의 톤매핑 노출 */
   readonly exposure: number;
   setLighting(phase: LightingPhase): void;
+  /** 긴장 단계(RED 뼈대) */
+  setTension(level: 0 | 1 | 2, focus?: { x: number; z: number }): void;
   /** 예산 단계를 재생성 없이 반영한다(되돌릴 수 있다): 그림자 맵 크기·점광원 core·소품 reduced·안개·빛 무리 */
   applyBudget(budget: Budget): void;
   readonly budget: Budget;
@@ -518,6 +528,7 @@ export function buildBarScene(budget: Budget): BarScene {
       return exposure;
     },
     setLighting,
+    setTension() {},
     applyBudget,
     get budget(): Budget {
       return current;
