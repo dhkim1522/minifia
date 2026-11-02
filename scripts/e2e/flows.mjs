@@ -1585,11 +1585,14 @@ async function dayFlow(ctx) {
 
     // 밤
     {
-      await skipTo(hp, ht, "night");
+      // 처형 5초는 서버 타이머로 밤이 된다. 배포본처럼 지연이 큰 곳에서는 위 판정이 5초를 넘기고, 그 뒤 '다음 단계로 넘기기' 를
+      // 누르면 이미 온 밤을 건너뛰어 아침·다음 날 토론까지 가 버린다 — 눌러 넘기지 않고 자연 전환을 기다린다(판정은 그대로).
       const night = await attempt(async () => {
+        await ht.waitFor((v) => v.phase === "night", 9000, "처형 뒤 밤(서버 타이머)");
         await Promise.all(guests.map((x) => untilGame(x.page, (g) => g.phase === "night", 15_000, "밤 도착")));
       });
-      rec(`${id}/night`, "NT1", "처형 뒤 밤으로 간다", night.ok, night.detail);
+      const nightSeen = night.ok ? "" : ` · 방장 서버 단계 ${ht.last()?.phase} · 손님 화면 단계 ${(await Promise.all(guests.map((x) => readGame(x.page).then((g) => g.phase).catch(() => "읽기 실패")))).join(",")}`;
+      rec(`${id}/night`, "NT1", "처형 뒤 밤으로 간다", night.ok, `${night.detail ?? ""}${nightSeen}`);
     }
   } finally {
     await closeGame(game);
