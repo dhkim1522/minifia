@@ -2,44 +2,44 @@
 gsd_state_version: "1.0"
 milestone: v2.0
 milestone_name: 같은 공간
-current_phase: 7
-current_phase_name: 자유 채팅
-status: verifying
-stopped_at: Completed 07-27-PLAN.md
-last_updated: "2026-11-02T06:14:58.002Z"
+current_phase: 8
+current_phase_name: 낮 처형과 유령
+status: planning
+stopped_at: Phase 07 complete, ready to plan Phase 8
+last_updated: "2026-11-02T06:36:53.661Z"
 last_activity: 2026-11-02
-last_activity_desc: Phase 7 execution started
-state_head: b755a3f4ce7ea1df27a173ffed3083312a1d3020
+last_activity_desc: Phase 07 complete, transitioned to Phase 8
+state_head: a5125b936ad02c33da6bd770157578c9d3fc0b7f
 progress:
   total_phases: 7
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 50
   completed_plans: 50
-  percent: 14
+  percent: 29
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-11-01)
+See: .planning/PROJECT.md (updated 2026-11-02)
 
 **Core value:** 링크 하나로 모인 친구들이 설명 없이 정통 마피아 한 판(6~10분)을 끝까지 마치는 것
-**Current focus:** Phase 7 — 자유 채팅
+**Current focus:** Phase 8 — 낮 처형과 유령
 
 ## Current Position
 
-Phase: 7 (자유 채팅) — EXECUTING
-Plan: 27 of 27
-Status: Phase complete — ready for verification
-Last activity: 2026-11-02 — Phase 7 execution started
+Phase: 8 — 낮 처형과 유령
+Plan: Not started
+Status: Ready to plan
+Last activity: 2026-11-02 — Phase 07 complete, transitioned to Phase 8
 
-Progress: [█░░░░░░░░░] 14% (1/7 phases)
+Progress: [███░░░░░░░] 29% (2/7 phases)
 
 ## Performance Metrics
 
 **Velocity (v2.0):**
-- Total plans completed: 23
+- Total plans completed: 50
 - Average duration: - min
 - Total execution time: 0.0 hours
 
@@ -48,6 +48,7 @@ Progress: [█░░░░░░░░░] 14% (1/7 phases)
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 06 | 23 | - | - |
+| 07 | 27 | - | - |
 
 **Recent Trend:**
 - Last 5 plans: -
@@ -217,10 +218,9 @@ None yet.
 
 ### Blockers/Concerns
 
-- [v2.0 전체] 디자인 선행: 맵·캐릭터는 승인 완료(결정 0046, `design/v2.0/`). 남은 것은 v2.0 디자인 시스템과 화면설계서(채팅창·동작 목록·지목·변론·찬반·밤·아침·결과). 승인 전에는 화면 페이즈(6~12)를 계획하지 않는다
 - [6페이즈] WR-01~04 의 내용이 `DEFERRED-BUGS.md` 에 없다 — 연결 계층 코드(`useRoomConnection`·`linkReducer`·`worker/room.ts`)에서 원인을 확인해야 한다
-- [6페이즈] three.js 맵 + 2D 캐릭터 합치는 방식(빌보드 vs DOM 겹치기)과 성능 게이트 결과로 렌더 예산을 정한다(결정 0046)
-- [6페이즈] `wrangler.jsonc` 이름 변경 전에 배포하면 v1.0 을 덮어쓴다 — 이름·`prod-url.txt`·E2E/smoke 기본 주소·계정 확인 스크립트를 같은 커밋에서 바꾸고 가드 뒤에 첫 배포
+- [7페이즈] 코드 리뷰 경고 3건 open — WR-01 로비 좌석 재사용 시 입장 전 줄 복원, WR-02 로비 시스템 줄 시각 보정 없음, GR-WR-01 150ms 안 둘째 탭 서버 폐기 시 1.5초 뒤 거짓 알림(`07-REVIEW-DISPOSITION.md`)
+- [7페이즈] 실기기 확인은 모든 개발 뒤 한꺼번에(사용자 결정 2026-11-02) — ROADMAP 백로그 999.1~999.4(UAT 5·6·7·9). CHAT-05 의 Android·삼성 인터넷·카카오톡 인앱 확인은 999.3
 - [9페이즈] 아침 시작 위치: 결정 0044-18 은 "밤이 끝난 자리" 이지만 리서치는 정체 누설을 우려해 낮 시작 대형 초기화를 권한다 — 9페이즈 논의에서 확정
 - [12페이즈] iOS 무음 스위치·소리 에셋 상업 이용 약관은 실기기·출시 마일스톤에서 확인한다
 - [출시 전] 수익화는 출시 전에 따로 정한다
@@ -246,11 +246,10 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-02T06:14:57.669Z
-Stopped at: Completed 07-27-PLAN.md
+Last session: 2026-11-02
+Stopped at: Phase 07 complete (UAT 완료, 실기기 항목은 백로그 이월), ready to plan Phase 8
 Resume file: None
 
 ## Operator Next Steps
 
-- 메인 세션에서 v2.0 디자인(디자인 시스템·화면설계서·맵·캐릭터 리그/의상/동작)을 캔버스로 만들어 승인받고, 승인본 사본을 `design/` 에 둔다 (GSD 페이즈 아님)
-- 6페이즈: `/gsd-ui-phase 6` → `/gsd-plan-phase 6 --research-phase` (연구 필수)
+- 8페이즈: `/gsd-ui-phase 8` → `/gsd-plan-phase 8`
