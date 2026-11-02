@@ -28,6 +28,8 @@ export const EXEC_VOTE_MS = 13_000; // 처형 여부 투표(D-01, VOTE-01) — �
 export const CANDIDATE_VOTE_MS = 15_000; // 후보 선택(D-01, VOTE-02)
 export const DEFENSE_MS = 10_000; // 최후 변론(D-01, VOTE-03)
 export const EXECUTION_MS = 5_000; // 처형 발표(D-01, VOTE-04)
+export const NOMINATION_MS = 15_000; // 지목(DAY-04, 결정 0060-1) — 마감까지 바꿀 수 있고 일찍 끝나지 않는다
+export const VERDICT_MS = 10_000; // 찬반(DAY-06, 결정 0060-1·0060-4) — 조기 종료 없이 마감까지
 
 // 후보 선택 공개 구간(결정 0039, D-21 개정): 한 표에 2초. 서버가 그날 공개된 표 수로 단계 길이를 정하고 화면이 같은 상수로 시간표를 만든다.
 /** 첫 화살표가 시작하기까지의 앞 여유. */
@@ -64,4 +66,7 @@ export const PHASE_DEFS: Readonly<Record<PhaseId, PhaseDef>> = Object.freeze({
   night: Object.freeze({ durationMs: NIGHT_MS, next: "morning", revealsOwnRole: true }),
   morning: Object.freeze({ durationMs: MORNING_MS, next: "dayAnnounce", revealsOwnRole: true }),
   ended: Object.freeze({ durationMs: null, next: null, revealsOwnRole: true }), // 마감이 없다 — 방 만료가 끝낸다
+  // 8페이즈 새 단계(결정 0060): 이 계획에서는 닿지 않는다 — discussion.next 는 그대로이고 흐름 전환은 08-11 이다.
+  nomination: Object.freeze({ durationMs: NOMINATION_MS, next: "defense", revealsOwnRole: true }), // 동률·0표면 훅이 night 로
+  verdict: Object.freeze({ durationMs: VERDICT_MS, next: "execution", revealsOwnRole: true }),
 });

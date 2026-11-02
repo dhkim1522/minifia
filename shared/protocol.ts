@@ -5,6 +5,7 @@
 // 서버 전용 검증 스키마는 shared/schemas.ts 에 있고 Worker 만 import 한다.
 // 3페이즈 밤·아침 계약도 이 파일이다 — 밤 행동 메시지·아침 결과·수사 기록·탈락자 관전 타입을 03-01 에서 한 번에 정한다(채우는 일은 03-03·03-05).
 // 4페이즈 처형·승패 계약(결정 0034·0036): 새 단계 여섯·투표 메시지·투표 기록·처형 발표·판 결과 타입을 04-01 에서 한 번에 정한다(채우는 일은 뒤 계획).
+// 8페이즈 낮 처형 계약(결정 0060): 단계 nomination(지목)·verdict(찬반), 지목 줄·토론 끝내기 수·찬반 마친 좌석·결과 수·본인 찬반 타입을 08-02 에서 정한다(채우는 일은 08-07 이후).
 
 // 타입 import·재수출이라 값 import 가 아니다 — 클라이언트 번들에는 아무것도 들어가지 않는다.
 import type { RoleId } from "./game/roles";
@@ -24,7 +25,8 @@ export const MAX_BODY_BYTES = 1024; // HTTP 본문 상한
 export type PhaseId =
   | "lobby" | "assigning" | "roleReveal" | "dayAnnounce" | "discussion"
   | "execVote" | "candidateVote" | "candidateVoteReveal" | "defense" | "execution"
-  | "night" | "morning" | "ended";
+  | "night" | "morning" | "ended"
+  | "nomination" | "verdict"; // 8페이즈(결정 0060): 지목 15초 → defense, 찬반 10초 → execution. 옛 단계는 08-21 이 지운다
 
 // ---- 밤·아침 계약(3페이즈) ----
 /**
@@ -94,6 +96,11 @@ export interface VoteLogEntry {
   exec: { yes: number; no: number; passed: boolean };
   cand?: { votes: CandidateVoteLine[]; candidate?: number };
 }
+/** 지목 한 줄(결정 0060-3): 누가 누구를 가리키는지. 지목 단계 동안 모두에게 공개된다(마감까지 바꿀 수 있다). */
+export interface PointLine {
+  seat: number;
+  target: number;
+}
 /** 처형 발표: 탈락한 seat 와 문구 번호. 직업은 싣지 않는다(D-09). */
 export interface ExecutionView {
   seat: number;
@@ -129,6 +136,11 @@ export interface DayView {
   candidate?: number; // candidateVoteReveal·defense·execution 에서, 후보가 있을 때만
   execution?: ExecutionView; // execution 단계에서만
   noExecution?: { reason: NoExecutionReason }; // 처형이 성립하지 않아 밤으로 온 그 밤 단계에서만(D-34)
+  // ---- 8페이즈 낮 처형 필드(결정 0060). 서버가 채우는 일은 08-07 이후 — 지금은 타입만이다. ----
+  points?: PointLine[]; // nomination 단계에서, 지금 지목 줄(공개)
+  endCount?: number; // discussion 단계에서, 토론 끝내기를 누른 산 사람 수(누가 눌렀는지는 싣지 않는다)
+  voted?: number[]; // verdict 단계에서, 찬반을 던진 좌석(오름차순, 값은 싣지 않는다 — 익명)
+  verdict?: { yes: number; no: number; passed: boolean }; // execution 단계에서, 찬반 결과 수(개인 값 없음)
 }
 
 // ---- HTTP ----
@@ -228,6 +240,8 @@ export interface MyInfo {
   testBots?: number; // 그 방장의 대기실 view 에서만, 서버 봇 수(0 포함, 결정 0024). 손님·일반 방·게임 중에는 키 자체가 없다
   testBotVote?: { exec: BotVoteExec; pick: BotVotePick }; // 그 방장의 대기실 view 에서만, 무작위가 아닌 값이 있을 때만(P-13). 손님·일반 방·게임 중에는 키 자체가 없다
   chat?: ChatChannel; // 서버가 정한 내 채널(channelOf), 본인에게만. 말할 수 없으면 키가 없다
+  endDiscussion?: true; // discussion 단계에서 본인이 토론 끝내기를 누른 상태(본인에게만, 8페이즈 결정 0060)
+  verdictVote?: boolean; // verdict 단계에서 본인이 던진 찬반(본인에게만, 남의 값은 어떤 키로도 싣지 않는다, 8페이즈 결정 0060)
 }
 export interface RoomView {
   code: string;

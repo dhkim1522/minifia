@@ -56,6 +56,13 @@ export interface Player {
   execVote?: boolean;
   /** 이번 낮 후보 선택(seat). enterExecVote 가 키째 지운다. */
   candidateVote?: number;
+  // ---- 8페이즈 낮 처형 상태(결정 0060). 서버 전용이고 어떤 view 에도 이 키로 실리지 않는다. 모두 optional. ----
+  /** 지목 단계에서 가리킨 seat. 마감 훅(resolveNomination)이 키째 지우고 enterDiscussion 이 한 번 더 지운다. 취소는 없다. */
+  nominate?: number;
+  /** 찬반 단계의 본인 찬반(찬성 true). 집계 직후 resolveVerdict 가 키째 지우고 enterDiscussion 이 한 번 더 지운다 — 익명을 데이터가 없다는 사실로 지킨다. */
+  verdictVote?: boolean;
+  /** 토론 끝내기를 누른 표시. 누르면 true, 취소하면 키째 지운다. 누가 눌렀는지는 서버 전용이고 enterDiscussion 이 다음 낮 시작에 지운다. */
+  endVote?: true;
   /**
    * 서버 전용(결정 0024). 테스트 방 서버 봇 표시 — 토큰은 빈 문자열, connId 는 null, connected 는 true 로 고정이고
    * 소켓이 없다. view·미리보기·어떤 프레임에도 싣지 않는다(허용 목록 리터럴이라 저절로 빠진다).

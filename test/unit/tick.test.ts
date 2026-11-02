@@ -55,10 +55,10 @@ function stateIn(
 }
 
 describe("PHASE_DEFS (단계 표, D-01·D-02·D-19·D-20, NIGHT-05·NIGHT-06)", () => {
-  it("단계는 열세 개다 — lobby·assigning·roleReveal, 낮 두 단계(순차 주장·공개 연출 단계 없음, D-07, CHAT-06), 처형 여부 투표·후보 선택·공개·변론·처형, 밤·아침, 판 종료", () => {
+  it("단계는 열다섯 개다 — lobby·assigning·roleReveal, 낮 두 단계(순차 주장·공개 연출 단계 없음, D-07, CHAT-06), 처형 여부 투표·후보 선택·공개·변론·처형, 밤·아침, 판 종료, 8페이즈 지목·찬반(결정 0060)", () => {
     const keys = Object.keys(PHASE_DEFS).sort();
     expect(`${keys.length}:${keys.join(",")}`).toBe(
-      "13:assigning,candidateVote,candidateVoteReveal,dayAnnounce,defense,discussion,ended,execVote,execution,lobby,morning,night,roleReveal",
+      "15:assigning,candidateVote,candidateVoteReveal,dayAnnounce,defense,discussion,ended,execVote,execution,lobby,morning,night,nomination,roleReveal,verdict",
     );
   });
 
