@@ -133,3 +133,26 @@ export function dayEvents(prev: RoomView | null, cur: RoomView, opts: { reset?: 
   }
   return events;
 }
+
+export const TOAST_MERGE_MS = 400;
+export const TOAST_MS = 1500;
+export const TOAST_FAST_MS = 800;
+export const TOAST_QUEUE_MAX = 4;
+export const TOAST_NAMES_MAX = 3;
+
+export interface ToastShow {
+  text: string;
+  icon: "point";
+  durationMs: number;
+}
+
+// 자리표시자 — 구현은 다음 커밋.
+export class ToastQueue {
+  push(_t: PointToast, _now: number): void {}
+  next(_now: number): ToastShow | null {
+    return null;
+  }
+  dropped(): number {
+    return 0;
+  }
+}
