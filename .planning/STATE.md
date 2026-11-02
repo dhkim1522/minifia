@@ -5,16 +5,16 @@ milestone_name: 같은 공간
 current_phase: 7
 current_phase_name: 자유 채팅
 status: executing
-stopped_at: Completed 07-23-PLAN.md
-last_updated: "2026-11-02T05:22:05.367Z"
+stopped_at: Completed 07-24-PLAN.md
+last_updated: "2026-11-02T05:26:42.129Z"
 last_activity: 2026-11-02
 last_activity_desc: Phase 7 execution started
-state_head: ebb718880a6715d5065fcc41b5d933741a8d48fa
+state_head: c4ec59a67c142c80741079cab7289db1092b1be2
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 50
-  completed_plans: 46
+  completed_plans: 47
   percent: 14
 ---
 
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-11-01)
 ## Current Position
 
 Phase: 7 (자유 채팅) — EXECUTING
-Plan: 24 of 27
+Plan: 25 of 27
 Status: Ready to execute
 Last activity: 2026-11-02 — Phase 7 execution started
 
@@ -104,6 +104,7 @@ Progress: [█░░░░░░░░░] 14% (1/7 phases)
 | Phase 07 P21 | 13 min | 2 tasks | 6 files |
 | Phase 07 P22 | 6 min | 2 tasks | 2 files |
 | Phase 7 P23 | 2 min | 3 tasks | 12 files |
+| Phase 07 P24 | 4 min | 3 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -200,6 +201,7 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 07]: 07-21: 배포본(minifia-v2 +4147d32) 자동 확인 통과(smoke·E2E chat·chatload 60.00fps). iPhone 실기기 확인(Task 3)은 사용자 확인 대기로 남김, Android·삼성·카카오톡 인앱은 9페이즈 이월 후보
 - [Phase 07]: 07-22: 사람 확인 답이 없어 07-DEVICE-CHECKS iPhone 칸을 미확인 — 사용자 확인 대기로 유지, CHAT-05 는 열어 둔다
 - [Phase 7]: 07-23: 낮 시작 보조줄 삭제, 하단 안내 '곧 토론이 시작돼요' (07-UAT 8 사용자 결정)
+- [Phase 07]: 07-24: requestMove 본체를 shared planMoveSegment 로 추출해 서버·클라이언트 예측이 같은 계산을 쓴다 (결정 0059-1)
 
 ### Pending Todos
 
@@ -236,8 +238,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-02T05:22:05.100Z
-Stopped at: Completed 07-23-PLAN.md
+Last session: 2026-11-02T05:26:41.836Z
+Stopped at: Completed 07-24-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
