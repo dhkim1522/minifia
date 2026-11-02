@@ -3,9 +3,10 @@
 // 줄은 사람과 같은 `{t:"chat", text, pk}` 로 보낸다. 단계 키(pk)는 봇이 마지막으로 받은 state 의 일차·단계로 만든다.
 // 직업 주장 차례·빠른 메시지·이모티콘은 없다(7페이즈에서 없어졌다).
 // 밤에는 역할대로 행동한다: 마피아·경찰·의사 봇은 살아 있는 사람 중 하나를 pick 하고(마피아는 동료 제외). 탈락한 봇은 멈춘다.
-// 투표 구간(결정 0024·0036, 서버 봇 shared/game/bots.ts 와 같은 성향): 처형 여부 투표(execVote)에는 70% 찬성·30% 반대,
-// 후보 선택(candidateVote)에는 자기를 뺀 살아 있는 한 명, 최후 변론(defense)에서는 자기가 후보일 때만 변론 문구 하나.
-// 단계마다 한 번만 행동하고, 공개·처형·종료(ended) 단계에서는 아무것도 하지 않는다.
+// 낮 처형 구간(결정 0024·0060-13, 서버 봇 shared/game/bots.ts 와 같은 성향): 토론(discussion) 30~60초에 토론 끝내기(endDiscussion) 한 번,
+// 지목(nomination) 2~8초에 자기를 뺀 살아 있는 한 명 지목(point), 최후 변론(defense)에서는 자기가 변론자일 때만 변론 문구 하나,
+// 찬반(verdict) 1~6초에 변론자가 아니면 70% 찬성·30% 반대(verdict).
+// 단계마다 한 번만 행동하고, 처형·밤 밖의 종료(ended) 단계에서는 아무것도 하지 않는다.
 //
 // 로비 채팅 부하(--chat <초>): 로비에 있는 동안 봇마다 그 간격(±30% 흔들기)으로 입력 중 켜짐 → 1초 뒤 고정 문구 chat → 입력 중 꺼짐을 보낸다.
 // 6페이즈 렌더 기준(55fps·끊김 5회)과 비교할 채팅 부하를 만드는 도구다(UI-SPEC 로비 성능 확인 항목). 서버 D5(600ms·5초 5줄·같은 문장 3초)가 그대로 막는다.
@@ -170,11 +171,16 @@ function onState(bot, view) {
   stopLoad(bot);
   const day = view.day?.n ?? 0;
   if (view.phase === "discussion") {
-    // 낮 토론: 낮마다 50% 확률로 고정 문구 한 줄(40초 안의 2~25초 뒤).
+    // 낮 토론: 낮마다 50% 확률로 고정 문구 한 줄(2~25초 뒤), 그리고 30~60초 뒤 토론 끝내기 한 번(과반이면 지목으로 넘어간다, DAY-03).
     const key = `${day}:discussion`;
     if (bot.talkKey === key) return;
     bot.talkKey = key;
     if (Math.random() < 0.5) sayLater(bot, "discussion", day, pick(CHAT_LINES), 2000 + Math.random() * 23000, "토론 채팅");
+    setTimeout(() => {
+      if (bot.view?.phase !== "discussion" || (bot.view?.day?.n ?? 0) !== day) return; // 단계가 넘어갔으면 서버가 막을 메시지라 보내지 않는다
+      sendTo(bot, { t: "endDiscussion", on: true });
+      log(`${bot.nickname}: 토론 끝내기`);
+    }, 30000 + Math.random() * 30000);
   } else if (view.phase === "night") {
     stopTalk(bot);
     // 밤마다 한 번만 고른다(밤 키 = `${일차}:night`). 마피아는 동료가 아닌 살아 있는 사람, 경찰·의사는 살아 있는 아무나, 시민은 행동 없음.
@@ -195,27 +201,36 @@ function onState(bot, view) {
       // 마피아 봇은 가끔 밤 채팅 한 줄(서버가 살아 있는 마피아와 탈락자에게만 보낸다)
       sayLater(bot, "night", day, pick(NIGHT_LINES), 6000 + Math.random() * 6000, "밤 마피아 채팅");
     }
-  } else if (view.phase === "execVote" || view.phase === "candidateVote" || view.phase === "defense") {
+  } else if (view.phase === "nomination" || view.phase === "defense" || view.phase === "verdict") {
     stopTalk(bot);
-    // 투표 구간 행동은 단계마다 한 번만 보낸다(키 = `${일차}:${단계}`). 사람과 같은 메시지 형식이라 서버 검증을 그대로 받는다.
+    // 낮 처형 구간 행동은 단계마다 한 번만 보낸다(키 = `${일차}:${단계}`). 사람과 같은 메시지 형식이라 서버 검증을 그대로 받는다.
     const key = `${day}:${view.phase}`;
     if (bot.voteKey === key) return;
     bot.voteKey = key;
-    if (view.phase === "execVote") {
-      const agree = Math.random() < 0.7;
-      setTimeout(() => { sendTo(bot, { t: "execVote", agree }); log(`${bot.nickname}: 여부 투표 ${agree ? "찬성" : "반대"}`); }, 500 + Math.random() * 5500);
-    } else if (view.phase === "candidateVote") {
+    if (view.phase === "nomination") {
       const candidates = view.players.filter((p) => p.alive !== false && p.seat !== bot.seat).map((p) => p.seat);
       if (candidates.length === 0) return;
       const target = pick(candidates);
-      setTimeout(() => { sendTo(bot, { t: "candidateVote", target }); log(`${bot.nickname}: 후보 선택 ${target}`); }, 1000 + Math.random() * 8000);
+      setTimeout(() => {
+        if (bot.view?.phase !== "nomination") return;
+        sendTo(bot, { t: "point", target });
+        log(`${bot.nickname}: 지목 ${target}`);
+      }, 2000 + Math.random() * 6000);
+    } else if (view.phase === "verdict") {
+      if (view.day?.candidate === bot.seat) return; // 변론자는 자기 처형 찬반에 투표하지 않는다(결정 0053)
+      const agree = Math.random() < 0.7;
+      setTimeout(() => {
+        if (bot.view?.phase !== "verdict") return;
+        sendTo(bot, { t: "verdict", agree });
+        log(`${bot.nickname}: 찬반 ${agree ? "찬성" : "반대"}`);
+      }, 1000 + Math.random() * 5000);
     } else {
-      // 변론은 후보 본인만 한다. 고정 변론 문구 셋 중 하나를 자유 채팅 한 줄로 보낸다.
+      // 변론은 변론자 본인만 한다. 고정 변론 문구 셋 중 하나를 자유 채팅 한 줄로 보낸다.
       if (view.day?.candidate !== bot.seat) return;
       sayLater(bot, "defense", day, pick(DEFENSE_LINES), 1000 + Math.random() * 3000, "변론 채팅");
     }
   } else {
-    // 공개·처형·종료(ended) 등 그 밖의 단계: 행동 없이 대기 중인 채팅만 정리한다.
+    // 처형·종료(ended) 등 그 밖의 단계: 행동 없이 대기 중인 채팅만 정리한다.
     stopTalk(bot);
   }
 }
