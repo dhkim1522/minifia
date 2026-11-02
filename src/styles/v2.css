@@ -111,6 +111,13 @@
 .mv-rolechip { display: grid; place-items: center; width: 28px; height: 28px; border-radius: var(--radius-pill); background: var(--overlay-ink-strong); border: 1.5px solid var(--gray-300); color: var(--gray-100); }
 .mv-rolechip.is-mafia { border-color: var(--crimson-400); color: var(--crimson-300); }
 
+/* 찬반(승인 .mv-verdict, bundle.css 158-163). 면 대비만 쓴다 — 역할 색 없음 */
+.mv-verdict { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-sm); }
+.mv-verdict__btn { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; min-height: 84px; border-radius: var(--radius-md); border: 1px solid var(--night-600); background: var(--night-700); color: var(--gray-100); font-family: var(--font-ui); font-size: 16px; font-weight: 700; cursor: pointer; }
+.mv-verdict__btn.is-on { background: var(--gray-100); border-color: var(--gray-100); color: var(--night-900); }
+.mv-verdict__btn:disabled { opacity: 0.45; cursor: default; }
+.mv-verdict__btn:focus-visible { outline: 2px solid var(--gray-100); outline-offset: 2px; }
+
 @media (prefers-reduced-motion: reduce) {
   .mv-toast, .mv-ring__bar, .mv-phase__hint { transition: none; }
   .mv-chat__newdot i, .mv-typing i { animation: none; }

@@ -6,7 +6,7 @@ import "../../styles/v2.css";
 // 나머지 아이콘은 그것을 쓰는 페이즈(8·9·10페이즈)가 같은 표에 더한다.
 // v1.0 아이콘(src/components/Icon.tsx)과 이름이 겹쳐도(check·crown) 서로 다른 부품이다: v2 화면은 이 파일을 쓴다.
 // 로비 헤더의 [나가기]·[공유] 는 v1.0 Icon 을 그대로 쓴다(UI-SPEC 결정 현황) — 여기에 back·share 를 더하지 않는다.
-export type V2IconName = "point" | "crown" | "play" | "check" | "roleCitizen" | "send" | "ghost" | "roleMafia" | "rolePolice" | "roleDoctor";
+export type V2IconName = "point" | "crown" | "play" | "check" | "roleCitizen" | "send" | "ghost" | "roleMafia" | "rolePolice" | "roleDoctor" | "skip" | "thumbUp" | "thumbDown";
 
 // ["c", cx, cy, r, filled?] 원 · ["p", d, filled?] 경로
 type Part = readonly ["c", number, number, number, boolean?] | readonly ["p", string, boolean?];
@@ -50,6 +50,18 @@ const ICONS: Readonly<Record<V2IconName, readonly Part[]>> = {
     ["c", 12, 12, 9],
     ["p", "M12 7.5v9"],
     ["p", "M7.5 12h9"],
+  ],
+  skip: [
+    ["p", "M4 6.5l7 5.5-7 5.5z"],
+    ["p", "M13 6.5l7 5.5-7 5.5z"],
+  ],
+  thumbUp: [
+    ["p", "M7 10.5V20H4v-9.5z"],
+    ["p", "M7 10.5l4-7a2 2 0 0 1 3.4 1.9L13.5 9h5.2a2 2 0 0 1 2 2.4l-1.3 6.9a2 2 0 0 1-2 1.7H7"],
+  ],
+  thumbDown: [
+    ["p", "M7 13.5V4H4v9.5z"],
+    ["p", "M7 13.5l4 7a2 2 0 0 0 3.4-1.9L13.5 15h5.2a2 2 0 0 0 2-2.4l-1.3-6.9A2 2 0 0 0 17.4 4H7"],
   ],
 };
 
