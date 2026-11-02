@@ -21,7 +21,7 @@
 .mf-tt-anchor { position: relative; height: 0; z-index: var(--z-overlay); }
 .mf-tt-anchor .mf-tt { position: absolute; top: var(--space-sm); left: 0; }
 
-/* 시트(T2): 제목 아래 안내 한 줄 → (대기실만) 내 직업 칸 → (대기실만) 봇 줄 → (대기실만) 봇 처형 투표·봇 후보 선택 → 두 동작 버튼. */
+/* 시트(T2): 제목 아래 안내 한 줄 → (대기실만) 내 직업 칸 → (대기실만) 봇 줄 → (대기실만) 봇 찬반·봇 지목 → 두 동작 버튼. */
 .mf-tt-sheet__note { margin: calc(-1 * var(--space-md)) 0 0; font-size: 14px; line-height: 20px; color: var(--gray-300); word-break: keep-all; }
 .mf-tt-sheet__roles { display: flex; flex-direction: column; gap: var(--space-sm); }
 .mf-tt-sheet__bots { display: flex; flex-direction: column; gap: var(--space-sm); }

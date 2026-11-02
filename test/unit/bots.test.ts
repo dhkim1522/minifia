@@ -813,13 +813,13 @@ describe("봇 투표·변론 계획: 회귀", () => {
     }
   });
 
-  it("discussion·night 계획 고정값 (07-11: 봇 자유 채팅의 새 호출 순서로 다시 고정 — 옛 값 622180622·76649671, 07-08 이전 289874952·760964938)", () => {
+  it("discussion·night 계획 고정값 (08-07: 토론 끝내기 난수가 더해져 discussion 만 다시 고정 — 옛 131523613, night 997718148 은 그대로; 07-11 이전 622180622·76649671, 07-08 이전 289874952·760964938)", () => {
     const digest = (text: string): number => [...text].reduce((h, ch) => (h * 31 + ch.charCodeAt(0)) % 1_000_000_007, 7);
     const got = (["discussion", "night"] as const).map((phase) => {
       const state = stateAt(1, 5, 8, phase);
       return digest(canon(planBotSteps(state, nowOf(state), seededRandInt(42))));
     });
-    expect(got.join(",")).toBe("131523613,997718148");
+    expect(got.join(",")).toBe("856098986,997718148");
   });
 
   it("discussion·night·execVote 계획의 난수 호출 수는 claim 제거 뒤에도 그대로다 (07-08, 리서치 Pitfall 13)", () => {

@@ -15,6 +15,8 @@ import "../styles/testtools.css";
 
 // 테스트 방 방장 도구(결정 0022, 시안 design/screens/night-v1 T1·T2): 점선 [테스트] 버튼과 '테스트 도구' 시트.
 // 화면은 요청만 보낸다 — 단계를 넘기거나 직업을 정하는 판단은 서버가 한다(결정 0002). 이 부품은 방장 + testMode 일 때만 마운트된다.
+// 결정 0060-13(8페이즈): 와이어 testBotVote {exec, pick} 는 그대로 두고 뜻만 바뀐다 — exec 칩 그룹은 "봇 찬반"(봇의 찬반 표), pick 칩 그룹은 "봇 지목"(봇의 지목 대상).
+// 그룹 이름(aria-label)은 E2E 선택자 계약이다 — E2E 도우미(scripts/e2e/browser.mjs)는 08-23 이 새 이름에 맞춘다.
 
 /** 아랫줄 '지금: …' 의 단계 이름. PhaseId 를 모두 키로 두어 4페이즈가 단계를 더하면 타입 오류로 알게 한다. */
 export const TEST_PHASE_LABEL: Readonly<Record<PhaseId, string>> = {
@@ -179,8 +181,8 @@ export function TestToolsSheet({ view, canSend, send, onClose }: TestToolsSheetP
           {isLobby ? (
             <>
               <section className="mf-tt-sheet__botvote">
-                <p className="mf-tt-sheet__label">봇 처형 투표</p>
-                <div className="mf-chips" role="group" aria-label="봇 처형 투표">
+                <p className="mf-tt-sheet__label">봇 찬반</p>
+                <div className="mf-chips" role="group" aria-label="봇 찬반">
                   {BOT_EXEC_CHIPS.map(({ value, label }) => (
                     <Chip key={value} selected={botVote.exec === value} disabled={!canSend} onPress={() => chooseBotVote(value, botVote.pick)}>
                       {label}
@@ -189,8 +191,8 @@ export function TestToolsSheet({ view, canSend, send, onClose }: TestToolsSheetP
                 </div>
               </section>
               <section className="mf-tt-sheet__botvote">
-                <p className="mf-tt-sheet__label">봇 후보 선택</p>
-                <div className="mf-chips" role="group" aria-label="봇 후보 선택">
+                <p className="mf-tt-sheet__label">봇 지목</p>
+                <div className="mf-chips" role="group" aria-label="봇 지목">
                   {BOT_PICK_CHIPS.map(({ value, label }) => (
                     <Chip key={value} selected={botVote.pick === value} disabled={!canSend} onPress={() => chooseBotVote(botVote.exec, value)}>
                       {label}

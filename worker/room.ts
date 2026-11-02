@@ -591,6 +591,16 @@ export class Room extends DurableObject<Env> {
       case "candidateVote":
         await this.applyCandidateVote(step.botId, act.target);
         return;
+      // 8페이즈(결정 0060-13): 토론 끝내기·지목·찬반도 사람과 같은 본체를 지난다(특권 없음, 결정 0024-6). 거부는 알릴 소켓이 없어 버린다.
+      case "endDiscussion":
+        await this.applyEndDiscussion(step.botId, true, Date.now());
+        return;
+      case "point":
+        await this.applyPoint(step.botId, act.target, Date.now());
+        return;
+      case "verdict":
+        await this.applyVerdict(step.botId, act.agree);
+        return;
       default: {
         // 새 봇 행동을 BotAct 에 더하고 여기를 빠뜨리면 컴파일이 실패한다(Pitfall 15).
         const unhandled: never = act;

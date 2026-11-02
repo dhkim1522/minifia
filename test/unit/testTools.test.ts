@@ -889,7 +889,7 @@ describe("skipPhase: 지목·찬반에서 안 던진 봇이 먼저 던진다", (
       return 0; // randInt(100) = 0 < 70 → 찬성
     });
     expect(votes(after)).toBe("1:false,2:undefined,3:true,4:true");
-    expect(calls.join(",")).toBe("100,100");
+    expect(calls.filter((n) => n === 100).join(",")).toBe("100,100"); // 봇 찬반 결정 난수만 센다(그 뒤 tick 이 단계 진입에서 부르는 난수는 제외)
   });
 
   it("verdict: 고정 yes·no 면 봇이 모두 그 값으로 던지고 찬반 결정 난수를 부르지 않는다", () => {
