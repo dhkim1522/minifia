@@ -9,10 +9,6 @@
   background: color-mix(in srgb, var(--night-900) 86%, transparent); color: var(--gray-100);
   font: 700 14px/1.4 var(--font-ui); cursor: pointer; touch-action: manipulation;
 }
-/* 짧은 장면(높이 < 336, TestToolsButton 이 data-compact 를 붙인다): 위치(왼쪽 위)는 그대로, 글자만 시각적으로 숨겨 폭을 탭 하한 44 로 좁힌다.
-   88 → 44 라 장면 폭 360 에서 오른쪽 끝이 48 이고 2번 자리 캐릭터 상자 왼쪽 경계(약 75.5) 안쪽에 든다. 긴 화면은 이 규칙이 닿지 않는다. */
-.mf-tt[data-compact] { width: var(--tap-min); min-width: var(--tap-min); padding: 0; justify-content: center; }
-.mf-tt[data-compact] .mf-tt__label { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .mf-tt:focus-visible { outline: 2px solid var(--gray-100); outline-offset: 2px; }
 .mf-tt svg { width: 18px; height: 18px; flex: none; }
 

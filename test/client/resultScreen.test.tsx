@@ -120,7 +120,6 @@ describe("결과 화면 핵심 (END-01·END-02, D-17·D-18)", () => {
     expect(text(banner.querySelector(".mf-result__banner-sub"))).toBe("마피아가 모두 탈락했어요");
     expect(r.container.querySelector(".mf-phasebar")).toBeNull();
     expect(r.container.querySelector(".mf-timer")).toBeNull();
-    expect(r.container.querySelector(".mf-dayscene__panel")).toBeNull();
     expect(r.container.querySelector(".mf-dt")).toBeNull();
   });
 

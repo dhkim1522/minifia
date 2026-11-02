@@ -1321,7 +1321,7 @@ describe("맵 상태 카드: 실패 (E1 error)", () => {
     expect(screen.getByText("이 기기에서는 맵을 열 수 없어요")).toBeTruthy();
     expect(screen.getByText("다른 브라우저로 열어 주세요")).toBeTruthy();
     expect(s.utils.container.querySelector("canvas")).toBeNull();
-    expect(s.utils.container.querySelector("[class*='mf-table'], [class*='mf-dayscene']")).toBeNull();
+    expect(s.utils.container.querySelector("[class*='mf-table']")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "나가기" }));
     expect(s.props.onLeave).toHaveBeenCalledTimes(1);
     expect(screen.queryByRole("button", { name: "다시 시도" })).toBeNull();

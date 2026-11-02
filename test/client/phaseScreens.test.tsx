@@ -434,7 +434,7 @@ describe("S-06a 낮 시작 발표 개정 (D-20, M6)", () => {
   });
 });
 
-describe("S-06b·S-06c·S-07 한 장면 DayScene (DAY-01, UI-SPEC 장면)", () => {
+describe("S-06b·S-06c·S-07 한 장면 맵 (DAY-01, UI-SPEC 장면)", () => {
   const dayAnnounce = (over: Partial<ViewOpts> = {}) =>
     makeView({ phase: "dayAnnounce", endsIn: 2_000, durationMs: 2_000, role: "citizen", day: 1, ...over });
   const discussion = (over: Partial<ViewOpts> = {}) =>
@@ -701,7 +701,7 @@ describe("G-01-9 시트 계측 — 낮 화면 [역할 카드] 경로 (sheetdebug
   });
 });
 
-// 08-27: 낮 하단 패널(.mf-dayscene__panel) 여백·칩 간격 단언은 맵 화면에 같은 뜻이 없어 지웠다(맵 패널 높이는 gameMap.test 의 측정 시험이 지킨다).
+// 08-27: 낮 하단 패널 여백·칩 간격 단언은 맵 화면에 같은 뜻이 없어 지웠다(맵 패널 높이는 gameMap.test 의 측정 시험이 지킨다).
 describe("헤더 줄바꿈 금지 (03.1-10, D-16, UI-SPEC A)", () => {
   const phaseCss = readFileSync("src/styles/phase.css", "utf8");
   const bodyOf = (css: string, selector: string) => {

@@ -6,7 +6,7 @@ import type { IconName } from "../../src/components/Icon";
 
 afterEach(cleanup);
 
-// 옛 table.test.tsx 에서 옮겼다(결정 0028: 대기실·배정이 DayTable 로 통일되며 옛 Table 과 그 테스트가 없어졌다).
+// 옛 table.test.tsx 에서 옮겼다(결정 0028: 대기실·배정이 고정 테이블로 통일되며 옛 Table 과 그 테스트가 없어졌다).
 const NEW_ICONS: IconName[] = ["plus", "skip", "chat"];
 
 describe("Icon 3개 추가 (D-16, 이모티콘 전용 8종은 07-07 에서 삭제)", () => {

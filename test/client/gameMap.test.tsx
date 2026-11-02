@@ -242,10 +242,10 @@ describe("GameMap — 한 장면 키 (DAY-07, 08-13)", () => {
     expect(stage.mounts).toBe(1);
   });
 
-  it("여섯 단계 어디에도 v1.0 고정 테이블(.mf-dt)·옛 장면(.mf-dayscene)을 대신 그리지 않는다", () => {
+  it("여섯 단계 어디에도 v1.0 고정 테이블(.mf-dt)을 대신 그리지 않는다", () => {
     for (const phase of ["dayAnnounce", "discussion", "nomination", "defense", "verdict", "execution"] as const) {
       const { container, unmount } = mount(makeView({ phase }));
-      expect(container.querySelector(".mf-dt, .mf-dayscene")).toBeNull();
+      expect(container.querySelector(".mf-dt")).toBeNull();
       expect(container.querySelector("main.mf-game")).not.toBeNull();
       unmount();
     }
@@ -606,7 +606,7 @@ describe("GameMap — 거절과 끊김 (E1 #4)", () => {
   });
 });
 
-// 08-27: 옛 낮 토론 화면 시험(discussion.test, DayScene)에서 사용자에게 보이는 뜻만 GameMap 기준으로 옮긴 것이다.
+// 08-27: 옛 낮 토론 화면 시험(discussion.test)에서 사용자에게 보이는 뜻만 GameMap 기준으로 옮긴 것이다.
 describe("GameMap — 낮 토론 채팅 패널·방장 줄 없음 (CHAT-06, DAY-01, 08-27 옮김)", () => {
   beforeEach(() => {
     vi.useFakeTimers();

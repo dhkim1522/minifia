@@ -330,7 +330,7 @@ describe("밤 임시 틀 — 조명·이동·거절 (UI Considerations E7 #27)",
   });
 });
 
-// 08-27: 옛 밤 화면 시험(nightScene.test, DayScene)에서 사용자에게 보이는 뜻만 GameMap 기준으로 옮긴 것이다.
+// 08-27: 옛 밤 화면 시험(nightScene.test)에서 사용자에게 보이는 뜻만 GameMap 기준으로 옮긴 것이다.
 describe("밤 임시 틀 — 대상 선택의 끊김·재선택·탈락 좌석 (08-27 옮김)", () => {
   it("연결이 끊긴 동안(canSend 거짓) 경찰의 대상 버튼은 모두 aria-disabled 이고 눌러도 보내지 않는다", () => {
     const send = vi.fn<(m: ClientMessage) => boolean>(() => true);
@@ -497,12 +497,12 @@ describe("아침 임시 틀 (UI-SPEC 아침, A3)", () => {
     expect(announceText(b.container)).toBe("");
   });
 
-  it("고정 테이블 화면(.mf-dt·.mf-dayscene)은 낮 시작부터 아침까지 어느 단계에서도 그려지지 않는다(DAY-07)", () => {
+  it("고정 테이블 화면(.mf-dt)은 낮 시작부터 아침까지 어느 단계에서도 그려지지 않는다(DAY-07)", () => {
     const phases: PhaseId[] = ["dayAnnounce", "discussion", "nomination", "defense", "verdict", "execution", "night", "morning"];
     for (const phase of phases) {
       const { container } = mount(makeView({ phase, mySeat: 3, ...(phase === "morning" ? { morning: {} } : {}) }));
       expect(container.querySelector("main.mf-game"), phase).not.toBeNull();
-      expect(container.querySelector(".mf-dt, .mf-dayscene"), phase).toBeNull();
+      expect(container.querySelector(".mf-dt"), phase).toBeNull();
       cleanup();
     }
   });

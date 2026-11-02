@@ -164,8 +164,8 @@ describe("헤더 [역할 카드] 버튼 하나 (D-08)", () => {
     }
   });
 
-  it("버튼에는 아이콘 20 이 있고 글자는 `역할 카드` 뿐이다 (옛 투표 단계 — 옛 틀의 글자 모양)", () => {
-    renderRoom(makeView({ phase: "execVote" }));
+  it("버튼에는 아이콘 20 이 있고 글자는 `역할 카드` 뿐이다 (역할 확인 — 글자가 있는 틀; 옛 투표 단계 화면은 08-19 에 지움)", () => {
+    renderRoom(makeView({ phase: "roleReveal" }));
     const svg = headBtn()?.querySelector("svg");
     expect(svg?.getAttribute("width") ?? "(아이콘 없음)").toBe("20");
     expect(headBtn()?.textContent).toBe("역할 카드");
