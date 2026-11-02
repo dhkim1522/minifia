@@ -5,16 +5,16 @@ milestone_name: 같은 공간
 current_phase: 08
 current_phase_name: 낮 처형과 유령
 status: executing
-stopped_at: Completed 08-13-PLAN.md
-last_updated: "2026-11-02T13:38:05.396Z"
+stopped_at: Completed 08-14-PLAN.md
+last_updated: "2026-11-02T14:10:05.413Z"
 last_activity: 2026-11-02
 last_activity_desc: Phase 08 execution started
-state_head: a155195845a0cbeafa61a320ab1e8286b1953a25
+state_head: 80cee2c36368b777c3da9be611d23061db28ec3f
 progress:
   total_phases: 7
   completed_phases: 2
   total_plans: 78
-  completed_plans: 64
+  completed_plans: 65
   percent: 29
 ---
 
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-11-02)
 ## Current Position
 
 Phase: 08 (낮 처형과 유령) — EXECUTING
-Plan: 15 of 28
+Plan: 16 of 28
 Status: Ready to execute
 Last activity: 2026-11-02 — Phase 08 execution started
 
@@ -123,6 +123,7 @@ Progress: [███░░░░░░░] 29% (2/7 phases)
 | Phase 08 P11 | 45 min | 3 tasks | 22 files |
 | Phase 08 P12 | 25min | 3 tasks | 6 files |
 | Phase 08 P13 | 70min | 3 tasks | 27 files |
+| Phase 08 P14 | 85 min | 3 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -250,6 +251,7 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 08]: 08-13: useDayFx 는 GameMap 이 아니라 RoomScreen 이 쥔다 — 낮 시작은 맵이 아닌 화면(역할 확인·밤)에서 들어와 맵 화면이 직전 view 를 모르기 때문이고, announce 문자열만 GameMap 으로 내린다
 - [Phase 08]: 08-13: 맵 화면 전환으로 닿지 않게 된 v1.0 DayScene 시험은 08-27 보다 먼저 맵 화면 기준으로 옮기거나 지웠다(skip 없음, 대응표는 08-13-SUMMARY)
 - [Phase 08]: 08-13: [역할 카드] 는 PhaseHeader extra 슬롯의 44×44 아이콘 버튼(점 gray-100), 맵을 쓸 수 없는 기기의 불가 카드는 onExit('gaveUp') 로 나간다
+- [Phase 08]: 08-14: smoke full 은 첫 낮 시민 처형·그날 밤 시민 암살, 마피아가 남은 날은 마피아 처형으로 어느 인원이든 ended 까지 돈다(전체 제한 720초). 밤 마피아 채널은 마피아와 그 밤의 관전자가 받는다
 
 ### Pending Todos
 
@@ -285,8 +287,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-02T13:38:05.177Z
-Stopped at: Completed 08-13-PLAN.md
+Last session: 2026-11-02T14:10:05.195Z
+Stopped at: Completed 08-14-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
