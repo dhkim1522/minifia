@@ -5,16 +5,16 @@ milestone_name: 같은 공간
 current_phase: 7
 current_phase_name: 자유 채팅
 status: executing
-stopped_at: Completed 07-24-PLAN.md
-last_updated: "2026-11-02T05:26:42.129Z"
+stopped_at: Completed 07-25-PLAN.md
+last_updated: "2026-11-02T05:34:44.523Z"
 last_activity: 2026-11-02
 last_activity_desc: Phase 7 execution started
-state_head: c4ec59a67c142c80741079cab7289db1092b1be2
+state_head: 91d3ea52b2cc0052eec690e4fa1243d03ceb42a2
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 50
-  completed_plans: 47
+  completed_plans: 48
   percent: 14
 ---
 
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-11-01)
 ## Current Position
 
 Phase: 7 (자유 채팅) — EXECUTING
-Plan: 25 of 27
+Plan: 26 of 27
 Status: Ready to execute
 Last activity: 2026-11-02 — Phase 7 execution started
 
@@ -105,6 +105,7 @@ Progress: [█░░░░░░░░░] 14% (1/7 phases)
 | Phase 07 P22 | 6 min | 2 tasks | 2 files |
 | Phase 7 P23 | 2 min | 3 tasks | 12 files |
 | Phase 07 P24 | 4 min | 3 tasks | 6 files |
+| Phase 07 P25 | 6 min | 3 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -202,6 +203,9 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 07]: 07-22: 사람 확인 답이 없어 07-DEVICE-CHECKS iPhone 칸을 미확인 — 사용자 확인 대기로 유지, CHAT-05 는 열어 둔다
 - [Phase 7]: 07-23: 낮 시작 보조줄 삭제, 하단 안내 '곧 토론이 시작돼요' (07-UAT 8 사용자 결정)
 - [Phase 07]: 07-24: requestMove 본체를 shared planMoveSegment 로 추출해 서버·클라이언트 예측이 같은 계산을 쓴다 (결정 0059-1)
+- [Phase 07]: 07-25: 구간 교체 화면 위치 차이는 '새 구간의 직전 프레임 시각 위치' 기준으로 잡아 한 프레임 걸음을 섞지 않는다 (결정 0059-3)
+- [Phase 07]: 07-25: dest 없는 notifyMoveSent 는 예측·추적 없이 있는 서버 구간으로 링만 맞춘다(perfScene 호환)
+- [Phase 07]: 07-25: 방향은 yawGoal(travelYaw)을 stepYaw 로 한 프레임 제한만큼 돌고, 걷기·서기 자세는 POSE_BLEND_MS 120ms 선형 보간
 
 ### Pending Todos
 
@@ -238,8 +242,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-02T05:26:41.836Z
-Stopped at: Completed 07-24-PLAN.md
+Last session: 2026-11-02T05:34:30.054Z
+Stopped at: Completed 07-25-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
