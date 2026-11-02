@@ -15,8 +15,8 @@ export const TALL_ROOM_MIN_H = 780;
 
 /** 로비 패널 = LOG_H + 154 = 14 + LOG_H + 8 + 48(입력줄) + 10 + 52(행동 줄) + 22 */
 export const LOBBY_PANEL_EXTRA = 154;
-/** 테이블 패널 = LOG_H + 92 = 14 + LOG_H + 8 + 48 + 22 */
-export const TABLE_PANEL_EXTRA = 92;
+/** 채팅 패널 = LOG_H + 92 = 14 + LOG_H + 8 + 48 + 22 (UI-SPEC 패널 표). 게임 맵의 채팅 패널 높이 덧셈이다 */
+export const CHAT_PANEL_EXTRA = 92;
 /** 키보드 열림 패널 = 14 + 72 + 8 + 48 + 8(아래 여백, 안전 영역 없음) */
 export const KB_PANEL_H = 150;
 /** 키보드 열림 판정: 입력칸에 포커스가 있고 lift 가 이 값을 넘을 때 */
@@ -52,8 +52,4 @@ export function logHeightFor(roomH: number): number {
 
 export function lobbyPanelHeight(logH: number): number {
   return logH + LOBBY_PANEL_EXTRA;
-}
-
-export function tablePanelHeight(logH: number): number {
-  return logH + TABLE_PANEL_EXTRA;
 }
