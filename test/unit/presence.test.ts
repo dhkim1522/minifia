@@ -90,7 +90,7 @@ describe("visibleSeats (GHOST-01, T-08-25)", () => {
   it("연출 중인 좌석은 fadeAt 으로 시작 시각이 실린다", () => {
     const seats = visibleSeats(viewOf("execution", { dead: [3] }), new Map([[3, 1000]]), 1500);
     same(seats[3]?.fadeAt, 1000);
-    same(seats[0]?.fadeAt, undefined);
+    expect(seats[0]?.fadeAt).toBeUndefined();
   });
 
   it("연출 표시에 산 좌석이 섞여 있어도 산 좌석 상태는 바뀌지 않는다", () => {
