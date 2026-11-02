@@ -1,4 +1,5 @@
 import { act, cleanup, fireEvent, render } from "@testing-library/react";
+import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import "../helpers/singleLineErrors";
 import { installMemoryStorage } from "../helpers/memoryStorage";
@@ -179,5 +180,160 @@ describe("유령 화면 — 서버가 보낸 관전 정보로 그려진다 (GHOS
     expect(container.querySelectorAll("[data-ghost-view]").length).toBe(0);
     expect(container.querySelectorAll("[data-role-chip]").length).toBe(0);
     expect(lastScene()).toBeDefined();
+  });
+});
+
+// ---- Task 2: 유령이 되는 순간 · 유령 걷기 · 유령 조작 없음 · 카메라 (GHOST-01, UI Considerations E6 #20·#22) ----
+
+const ICON_GHOST = "M5 21V11";
+const input = (c: ParentNode): HTMLInputElement | null => c.querySelector("[data-chat-input]");
+const hintEl = (c: ParentNode): Element | null => c.querySelector("[data-guide]");
+const sysLines = (c: ParentNode) =>
+  [...c.querySelectorAll("[data-chat-log] > p.mv-chat__sys")].map((p) => ({
+    text: (p.textContent ?? "").trim(),
+    icon: p.querySelector("svg path")?.getAttribute("d")?.slice(0, 8) ?? "",
+  }));
+const GHOST_LINE = "유령 채팅 · 산 사람에게 안 보여요";
+
+describe("유령이 되는 순간 (UI Considerations E6 #20·#22)", () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
+    vi.setSystemTime(NOW);
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  const alive = (phase: PhaseId) => makeView({ phase, mySeat: 4, dead: [] });
+  const dead = (phase: PhaseId) => makeView({ phase, mySeat: 4, dead: [4] });
+
+  it("산 사람 → 유령으로 바뀐 view: ghost 아이콘 시스템 줄 '유령 채팅 · 산 사람에게 안 보여요' 가 한 번, 같은 유령 view 가 다시 와도 두 번째는 없다", () => {
+    const m = mount(alive("discussion"));
+    expect(sysLines(m.container)).toEqual([]);
+    vi.setSystemTime(NOW + 500);
+    m.show(dead("discussion"));
+    expect(sysLines(m.container)).toEqual([{ text: GHOST_LINE, icon: ICON_GHOST }]);
+    m.show(dead("discussion"));
+    m.show({ ...dead("discussion"), serverNow: NOW + 900 });
+    expect(sysLines(m.container)).toHaveLength(1);
+  });
+
+  it("처형(verdict → execution)으로 내가 탈락해도 줄 한 번, 이전 채팅 기록은 그대로 남는다", () => {
+    const m = mount(alive("verdict"));
+    const log = m.container.querySelector("[data-chat-log]");
+    expect(log).not.toBeNull();
+    m.show(dead("execution"));
+    expect(sysLines(m.container).map((l) => l.text)).toEqual([GHOST_LINE]);
+  });
+
+  it("헤더 안내 '모두의 직업이 보여요' 가 같은 단계 안에서 유령이 된 순간 다시 2.5초 보였다 접힌다", () => {
+    const m = mount(alive("discussion"));
+    act(() => void vi.advanceTimersByTime(3000));
+    expect(hintEl(m.container)?.classList.contains("is-folded")).toBe(true);
+    m.show(dead("discussion"));
+    expect(hintEl(m.container)?.textContent).toBe("모두의 직업이 보여요");
+    expect(hintEl(m.container)?.classList.contains("is-folded")).toBe(false);
+    act(() => void vi.advanceTimersByTime(2400));
+    expect(hintEl(m.container)?.classList.contains("is-folded")).toBe(false);
+    act(() => void vi.advanceTimersByTime(200));
+    expect(hintEl(m.container)?.classList.contains("is-folded")).toBe(true);
+  });
+
+  it("직업 칩 등장: 유령이 된 순간에만 루트에 data-ghost-enter, 2.5초 뒤 사라진다. CSS 는 dur-med 등장 + 모션 줄이기면 none", () => {
+    const m = mount(alive("discussion"));
+    expect(m.container.querySelector("[data-ghost-enter]")).toBeNull();
+    m.show(dead("discussion"));
+    expect(m.container.querySelector("main")?.getAttribute("data-ghost-enter")).toBe("true");
+    expect(chips(m.container)).toHaveLength(5);
+    act(() => void vi.advanceTimersByTime(2600));
+    expect(m.container.querySelector("[data-ghost-enter]")).toBeNull();
+    const css = readFileSync("src/styles/game.css", "utf8");
+    expect(css).toMatch(/\[data-ghost-enter\][^{]*\.mv-rolechip\s*\{[^}]*animation:[^}]*var\(--dur-med\)/);
+    expect(css).toMatch(/prefers-reduced-motion: reduce\)\s*\{[^}]*\[data-ghost-enter\][^}]*animation: none/);
+  });
+
+  it("재접속·새로 고침의 첫 스냅샷이 유령이면 시스템 줄도 등장 연출도 없이 칩·반투명·유령 채널만 있다", () => {
+    const m = mount(dead("discussion"));
+    expect(sysLines(m.container)).toEqual([]);
+    expect(m.container.querySelector("[data-ghost-enter]")).toBeNull();
+    expect(chips(m.container)).toHaveLength(5);
+    expect(m.container.querySelector("main")?.getAttribute("data-ghost-view")).toBe("true");
+    expect(m.container.querySelector('[data-seat="4"]')?.hasAttribute("data-ghost-seat")).toBe(true);
+    expect(input(m.container)?.getAttribute("placeholder")).toBe("유령끼리만 보여요");
+    // epoch 가 바뀐 재접속 첫 스냅샷도 같다
+    m.show(alive("discussion"), { epoch: 2 });
+    m.show(dead("discussion"), { epoch: 3 });
+    expect(m.container.querySelector("[data-ghost-enter]")).toBeNull();
+    expect(sysLines(m.container)).toEqual([]);
+  });
+
+  it("살아 있는 사람 화면은 어느 단계 변화에서도 유령 줄·등장 속성이 생기지 않는다", () => {
+    const m = mount(makeView({ phase: "discussion", mySeat: 0 }));
+    m.show(makeView({ phase: "discussion", mySeat: 0, dead: [4] }));
+    m.show(makeView({ phase: "nomination", mySeat: 0, dead: [4] }));
+    expect(sysLines(m.container).map((l) => l.text)).not.toContain(GHOST_LINE);
+    expect(sysLines(m.container).filter((l) => l.icon === ICON_GHOST)).toEqual([]);
+    expect(m.container.querySelector("[data-ghost-enter]")).toBeNull();
+  });
+});
+
+describe("유령 조작 없음 · 걷기 · 카메라 (GHOST-01, A4)", () => {
+  const phases: PhaseId[] = ["discussion", "nomination", "defense", "verdict", "execution"];
+  const ghostIn = (phase: PhaseId) => makeView({ phase, mySeat: 4, dead: [4], candidate: 2 });
+
+  it("유령 view 의 모든 낮 단계에 지목 버튼·찬반 버튼·토론 끝내기가 없다", () => {
+    for (const phase of phases) {
+      const { container } = mount(ghostIn(phase));
+      expect(container.querySelectorAll("[data-pick]"), phase).toHaveLength(0);
+      expect(container.querySelectorAll("[data-verdict]"), phase).toHaveLength(0);
+      expect(container.querySelectorAll("[data-end-discussion]"), phase).toHaveLength(0);
+      cleanup();
+    }
+  });
+
+  it("같은 단계의 산 사람 view 에는 있다(비교): 지목 버튼 · 찬반 버튼 · 토론 끝내기", () => {
+    const a = mount(makeView({ phase: "nomination", mySeat: 0, candidate: 2 }));
+    expect(a.container.querySelectorAll("[data-pick]").length).toBeGreaterThan(0);
+    cleanup();
+    const b = mount(makeView({ phase: "verdict", mySeat: 0, candidate: 2 }));
+    expect(b.container.querySelectorAll("[data-verdict]")).toHaveLength(2);
+    cleanup();
+    const c = mount(makeView({ phase: "discussion", mySeat: 0 }));
+    expect(c.container.querySelectorAll("[data-end-discussion]")).toHaveLength(1);
+  });
+
+  it("유령은 지목 단계에서도 맵을 탭하면 move 를 보낸다, 산 사람은 지목 단계에서 보내지 않는다", () => {
+    const tapMap = (container: HTMLElement) => {
+      const surface = container.querySelector(".mf-world__input")!;
+      fireEvent.pointerDown(surface, { pointerId: 1, clientX: 100, clientY: 300, pointerType: "touch" });
+      fireEvent.pointerUp(surface, { pointerId: 1, clientX: 100, clientY: 300, pointerType: "touch" });
+    };
+    const sendG = vi.fn<(m: ClientMessage) => boolean>(() => true);
+    const g = mount(ghostIn("nomination"), { send: sendG });
+    tapMap(g.container);
+    expect(sendG.mock.calls.filter(([m]) => m.t === "move")).toHaveLength(1);
+    cleanup();
+    const sendL = vi.fn<(m: ClientMessage) => boolean>(() => true);
+    const l = mount(makeView({ phase: "nomination", mySeat: 0, candidate: 2 }), { send: sendL });
+    tapMap(l.container);
+    expect(sendL.mock.calls.filter(([m]) => m.t === "move")).toHaveLength(0);
+  });
+
+  it("카메라: 유령도 낮 토론은 내 유령을 따라가고(follow) 지목·변론·찬반·처형은 가운데 고정(fixed)", () => {
+    for (const phase of phases) {
+      rt.scenes.length = 0;
+      mount(ghostIn(phase));
+      expect(lastScene().camera.mode, phase).toBe(phase === "discussion" ? "follow" : "fixed");
+      cleanup();
+    }
+  });
+
+  it("유령 채팅 입력칸은 어느 채팅 단계에서든 '유령끼리만 보여요' 안내이고 입력 레이블이 유령 채널이다", () => {
+    for (const phase of ["discussion", "defense"] as const) {
+      const { container } = mount(ghostIn(phase));
+      expect(input(container)?.getAttribute("placeholder")).toBe("유령끼리만 보여요");
+      expect(input(container)?.getAttribute("aria-label")).toBe("유령 채팅 입력");
+      cleanup();
+    }
   });
 });
