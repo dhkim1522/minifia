@@ -1,12 +1,12 @@
 import { createElement } from "react";
 import "../../styles/v2.css";
 
-// v2.0 아이콘 중 6·7페이즈가 쓰는 8종. 24 격자, 선 2px, 둥근 끝, currentColor.
+// v2.0 아이콘 중 6·7·8페이즈가 쓰는 종류(8페이즈: rolePolice·roleDoctor 와 skip·thumbUp·thumbDown). 24 격자, 선 2px, 둥근 끝, currentColor.
 // 경로는 design/v2.0/design-system/components/bundle.js 의 ICONS 에서 그대로 옮겼다(승인 2026-10-31).
 // 나머지 아이콘은 그것을 쓰는 페이즈(8·9·10페이즈)가 같은 표에 더한다.
 // v1.0 아이콘(src/components/Icon.tsx)과 이름이 겹쳐도(check·crown) 서로 다른 부품이다: v2 화면은 이 파일을 쓴다.
 // 로비 헤더의 [나가기]·[공유] 는 v1.0 Icon 을 그대로 쓴다(UI-SPEC 결정 현황) — 여기에 back·share 를 더하지 않는다.
-export type V2IconName = "point" | "crown" | "play" | "check" | "roleCitizen" | "send" | "ghost" | "roleMafia";
+export type V2IconName = "point" | "crown" | "play" | "check" | "roleCitizen" | "send" | "ghost" | "roleMafia" | "rolePolice" | "roleDoctor";
 
 // ["c", cx, cy, r, filled?] 원 · ["p", d, filled?] 경로
 type Part = readonly ["c", number, number, number, boolean?] | readonly ["p", string, boolean?];
@@ -41,6 +41,15 @@ const ICONS: Readonly<Record<V2IconName, readonly Part[]>> = {
     ["p", "M3.5 15.5c3 1.4 14 1.4 17 0"],
     ["p", "M6.5 15V9.5C6.5 6.9 9 5 12 5s5.5 1.9 5.5 4.5V15"],
     ["p", "M6.5 12.5h11"],
+  ],
+  rolePolice: [
+    ["p", "M12 3l7 3v5.5c0 4.5-3 8-7 9.5-4-1.5-7-5-7-9.5V6z"],
+    ["p", "M12 8.5l1.2 2.4 2.6.4-1.9 1.8.5 2.6L12 14.5l-2.4 1.2.5-2.6-1.9-1.8 2.6-.4z", true],
+  ],
+  roleDoctor: [
+    ["c", 12, 12, 9],
+    ["p", "M12 7.5v9"],
+    ["p", "M7.5 12h9"],
   ],
 };
 
