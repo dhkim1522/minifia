@@ -205,11 +205,11 @@ Plans:
   4. 단계 시간이 토론 90초·지목 15초·변론 20초·찬반 10초·밤 30초로 돌고, v1.0 의 처형 여부 → 후보 선택 → 한 표씩 공개 흐름과 고정 테이블은 화면에 없다 (DAY-07)
   5. 처형된 사람은 반투명 유령이 되어 맵을 떠다니며 모든 사람의 역할을 본다. 산 사람 폰으로 오가는 메시지에는 유령의 위치·움직임·채팅이 한 번도 없다 (GHOST-01, GHOST-02)
 
-**Plans:** 28 plans (19 waves)
+**Plans:** 1/28 plans executed (19 waves)
 
 Plans:
 **Wave 1** *(같은 웨이브도 번호 순서로 하나씩 돈다 — use_worktrees false)*
-- [ ] 08-01-PLAN.md — 결정 0060(낮 처형·유령 규칙 14항)·옛 결정 일곱 곳 개정 표시 (W1)
+- [x] 08-01-PLAN.md — 결정 0060(낮 처형·유령 규칙 14항)·옛 결정 일곱 곳 개정 표시 (W1)
 - [ ] 08-02-PLAN.md — 순수 규칙: 지목·찬반·토론 끝내기·청소 + PhaseId nomination·verdict (TDD, W1)
 - [ ] 08-03-PLAN.md — v2 부품 VoteBadge·SureStamp·RoleChip·VerdictPicker·아이콘 다섯 (W1)
 
@@ -253,6 +253,7 @@ Plans:
 - [ ] 08-24-PLAN.md — E2E 새 흐름 day·ghost·noexec·night-roles·result·chat-game (W17)
 - [ ] 08-25-PLAN.md — 낮 흐름 렌더 측정(dayload)·갤러리·로컬 전체 초록 (W18)
 - [ ] 08-26-PLAN.md — 문서·실기기 이월(999.5)·배포·배포본 검증·HANDOFF·push (W19)
+
 **UI hint**: yes
 **계획 메모**: 표준 패턴이라 연구 생략 가능(v1.0 `vote.ts`·단계 표 재사용). 함정: v1.0 `enterExecVote` 가 후보를 지우므로 지우는 시점을 `discussion` 진입으로 옮긴다. 고정 테이블 삭제로 v1.0 탈락자 관전 화면도 사라지므로 유령을 같은 페이즈에 둔다 — 첫 처형부터 죽은 사람이 지켜볼 곳이 있어야 8·9페이즈 팀 확인이 의미 있다. GHOST-02 의 밤 행동 관전은 이 페이즈에서는 v1.0 밤 방식 기준이고, 9페이즈에서 맵 위 밤으로 다시 확인한다.
 
@@ -327,7 +328,7 @@ Phases execute in numeric order: 6 → 7 → 8 → 9 → 10 → 11 → 12 (소�
 |-------|-----------|----------------|--------|-----------|
 | 6. 월드 뼈대 | v2.0 | 23/23 | Complete    | 2026-11-01 |
 | 7. 자유 채팅 | v2.0 | 27/27 | Complete    | 2026-11-02 |
-| 8. 낮 처형과 유령 | v2.0 | 0/26 | Planned | - |
+| 8. 낮 처형과 유령 | v2.0 | 1/28 | In Progress | - |
 | 9. 밤과 아침 | v2.0 | 0/TBD | Not started | - |
 | 10. 캐릭터·동작·의상 | v2.0 | 0/TBD | Not started | - |
 | 11. 결과 공개와 다시 하기 | v2.0 | 0/TBD | Not started | - |

@@ -5,16 +5,16 @@ milestone_name: 같은 공간
 current_phase: 08
 current_phase_name: 낮 처형과 유령
 status: executing
-stopped_at: Phase 8 UI-SPEC approved
-last_updated: "2026-11-02T10:19:55.835Z"
+stopped_at: Completed 08-01-PLAN.md
+last_updated: "2026-11-02T10:33:50.965Z"
 last_activity: 2026-11-02
-last_activity_desc: Phase 07 complete, transitioned to Phase 8
-state_head: fb4a0dd0ed78b5501be3acc53bd7500357d3f11e
+last_activity_desc: Phase 08 execution started
+state_head: 85b14046a6e24b446f9b4355940419d5e9e9232e
 progress:
   total_phases: 7
   completed_phases: 2
   total_plans: 78
-  completed_plans: 50
+  completed_plans: 51
   percent: 29
 ---
 
@@ -25,14 +25,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-11-02)
 
 **Core value:** 링크 하나로 모인 친구들이 설명 없이 정통 마피아 한 판(6~10분)을 끝까지 마치는 것
-**Current focus:** Phase 8 — 낮 처형과 유령
+**Current focus:** Phase 08 — 낮 처형과 유령
 
 ## Current Position
 
-Phase: 08 (낮 처형과 유령) — READY TO EXECUTE
-Plan: Not started
+Phase: 08 (낮 처형과 유령) — EXECUTING
+Plan: 2 of 28
 Status: Ready to execute
-Last activity: 2026-11-02 — Phase 07 complete, transitioned to Phase 8
+Last activity: 2026-11-02 — Phase 08 execution started
 
 Progress: [███░░░░░░░] 29% (2/7 phases)
 
@@ -109,6 +109,7 @@ Progress: [███░░░░░░░] 29% (2/7 phases)
 | Phase 07 P25 | 6 min | 3 tasks | 6 files |
 | Phase 07 P26 | 4 min | 3 tasks | 10 files |
 | Phase 07 P27 | 28 min | 2 tasks | 1 files |
+| Phase 08 P01 | 10 min | 2 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -211,6 +212,7 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 07]: 07-25: 방향은 yawGoal(travelYaw)을 stepYaw 로 한 프레임 제한만큼 돌고, 걷기·서기 자세는 POSE_BLEND_MS 120ms 선형 보간
 - [Phase 07]: 07-26: W11·W12 는 손님 탭 한 번에만 붙이고 W12 는 간격 4~100ms 쌍 10개 이상일 때만 판정(측정값 없음은 실패); 문턱값은 로컬 통과를 위해 조정하지 않음
 - [Phase 07]: 07-27: 배포본 전체 E2E 가 900초 제한을 넘기면 제한·문턱값은 그대로 두고 못 끝낸 흐름을 --only 로 단독 재실행해 가른다
+- [Phase 08]: 결정 0060: 낮 처형 단계 nomination·verdict, 찬반 분모=변론자를 뺀 산 사람, 조기 종료 없음, 변론자 무대 STAGE_SPOT 단일 예외, 유령 위치는 유령에게만
 
 ### Pending Todos
 
@@ -246,9 +248,9 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-02T07:14:58.197Z
-Stopped at: Phase 8 UI-SPEC approved
-Resume file: .planning/phases/08-day-execution-ghost/08-UI-SPEC.md
+Last session: 2026-11-02T10:33:50.628Z
+Stopped at: Completed 08-01-PLAN.md
+Resume file: None
 
 ## Operator Next Steps
 
