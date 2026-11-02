@@ -14,6 +14,7 @@
 - 배포: v1.0 `https://minifia.dhplay.workers.dev` 는 그대로 둔다. v2 배포본 https://minifia-v2.dhplay.workers.dev (Worker `minifia-v2`, 결정 0044-24). `npm run deploy` 가 계정·배포 대상 가드를 거친다.
 - 도구 메모: 버전은 `/api/health`. `npm run e2e` 는 인자가 없으면 배포본을 검사한다(로컬은 `npm run dev` 후 `-- --url http://localhost:5173`). CSS `backdrop-filter` 는 비접두 한 번만.
 - **화면설계서 승인(2026-10-31)**: https://claude.ai/artifact/H3gEwciexb83CxEXK76YXs (사본 `design/v2.0/screens/`, 21화면). 마피아는 걸어가 고르고 둘이 같으면 "확정", 채팅 [전체][마피아][유령] 탭(결정 0054).
+- 2026-11-02 원격 이력 재작성(강제 push): 다른 PC 의 옛 clone 은 새로 clone.
 - 커밋 제외: `design/backgrounds/indoor-draft/`, `Claude outputs/`, `.planning/milestone.lock`, `.planning/state.json`.
 
 ## 확인 대기 (사용자 답·확인이 필요한 것)
@@ -32,3 +33,4 @@
 1. **`/clear` 후 `/gsd-plan-phase 8`** (낮 처형과 유령). UI-SPEC 승인(`08-UI-SPEC.md`, 2026-11-02). 사용자 확정: A1 테이블 삭제 + 밤·아침은 맵 위 임시 틀(9페이즈가 대체, 8·9 합치지 않음), A2 [역할 카드]는 시간 링 왼쪽, A3 지목 과반이어도 마감까지, A4 유령은 모든 단계 이동 가능.
 2. three `0.186.1` 고정, 로비는 재즈 바 고정, 성능 확인 폰은 iPhone 16 Pro + 크롬 CPU 4배 스로틀(결정 0055).
 3. v1.0 산출물 링크는 `CLAUDE.md`.
+4. v2.0 마무리 뒤 이력서용 포트폴리오(GitHub Pages): `docs/portfolio-request.md`.
