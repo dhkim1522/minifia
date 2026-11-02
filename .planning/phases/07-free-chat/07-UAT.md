@@ -1,5 +1,5 @@
 ---
-status: complete
+status: diagnosed
 phase: 07-free-chat
 source: [07-VERIFICATION.md]
 started: 2026-11-01T18:49:34Z
@@ -73,5 +73,20 @@ blocked: 0
   reason: "User reported: 약간 자연스럽지않고 살짝 멈췄다 움직이는 느낌 (움직일 때 핑이 튀는 것처럼 끊김)"
   severity: minor
   test: 9
-  artifacts: []
-  missing: []
+  root_cause: "(1) 코드: 내 캐릭터 포함 모든 캐릭터를 서버 구간으로만 그리고(예측 이동 없음, 06-UI-SPEC '예측 이동 금지' 잠금) 구간이 바뀔 때 섞기가 없다 — 탭 뒤 RTT 동안 정지, 응답 첫 프레임에 MOVE_V×RTT/2 앞으로 튐, 걷는 중 방향 전환·남의 전환 때 최대 MOVE_V×RTT 튐. (2) 환경: 한국 클라이언트가 workers.dev 를 Cloudflare LAX 에서 받아 RTT 약 155ms(측정 p50, 서버 처리 0~1ms) — 증폭 요인, 코드로 못 고침"
+  artifacts:
+    - path: "src/world/runtime.ts"
+      issue: "drawFrame 이 store.positionOf(serverNow) 로만 위치를 정함. 탭은 링만 띄우고 내 캐릭터를 움직이지 않음, 구간 교체 시 섞기 없음"
+    - path: "src/world/store.ts"
+      issue: "applyFrame 이 새 구간으로 즉시 교체"
+    - path: "shared/game/world.ts"
+      issue: "requestMove 의 t0 = 서버 수신 시각이라 클라이언트 첫 프레임이 이미 RTT/2 앞"
+    - path: "src/world/character.ts"
+      issue: "걷기/서기 자세·방향 즉시 전환(작은 증폭 요인)"
+    - path: ".planning/phases/06-world-skeleton/06-UI-SPEC.md"
+      issue: "81·348-360·606·644행 '예측 이동 금지, 출발 300~500ms 정지 허용' 잠금 — 설계대로라 회귀가 아님"
+  missing:
+    - "구간 교체 때 화면 위치 차이를 100~150ms 에 걸쳐 0으로 줄이는 섞기(내 캐릭터·남 모두), 짧은 자세·방향 섞기"
+    - "(사용자 결정 필요) 탭 즉시 내 캐릭터가 공용 routeFx·BAR_MAP·MOVE_V 로 걷기 시작하고 서버 구간 도착 시 서버 기준으로 맞추는 예측 이동 — 06-UI-SPEC 잠금을 푸는 새 결정과 UI-SPEC 갱신 필요"
+    - "막힌 목적지·TOO_SOON 처럼 서버가 조용히 버린 경우 예측 이동을 멈추는 처리(기존 1.5초 응답 없음 경로)"
+  debug_session: .planning/debug/lobby-move-hitch.md
