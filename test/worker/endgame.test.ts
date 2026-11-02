@@ -4,7 +4,7 @@
 // 실패 출력은 한 줄이어야 해서(TAP) 프레임 목록은 summary() 한 줄 문자열로 비교한다.
 import { env, exports } from "cloudflare:workers";
 import { runDurableObjectAlarm } from "cloudflare:test";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { RoomView, ServerMessage } from "../../shared/protocol";
 import {
   actorsOf,
@@ -24,10 +24,13 @@ import {
   settle,
   storedRoom,
   summary,
-  voteCandidate,
-  voteExec,
+  pointAll,
+  verdictAll,
 } from "./helpers";
 import type { Actor, Seated, TestSocket } from "./helpers";
+
+// 08-11: 낮이 지목 → 변론 → 찬반 → 처형으로 길어져(단계 넘김 4번 더) 한 판을 끝까지 돌리는 시험이 기본 5초를 넘는다 — 이 파일만 20초로 둔다(긴 대기 없이 forceDue 로 넘기는 것은 그대로).
+vi.setConfig({ testTimeout: 20_000 });
 
 /** 종료 진입 + 30분(결정 0034, D-28). 순수 규칙의 ENDED_ROOM_TTL_MS 를 읽지 않고 값을 따로 적어 상수가 바뀌면 이 테스트가 잡는다. */
 const ENDED_TTL_MS = 1_800_000;
@@ -46,28 +49,29 @@ interface Game4 {
   c1: Actor;
 }
 
-/** 4명 방(마피아 1·경찰 1·시민 2, 방장 + 연결 손님 3)을 시작해 처형 여부 투표까지 넘긴다. */
-async function atExecVote4(): Promise<Game4> {
+/** 4명 방(마피아 1·경찰 1·시민 2, 방장 + 연결 손님 3)을 시작해 지목까지 넘긴다. */
+async function atNomination4(): Promise<Game4> {
   const r = await seat(3, 0);
   send(r.host, { t: "start" });
   for (const s of allSockets(r)) await nextFrame(s, isPhase("assigning"));
-  await advanceTo(r.code, allSockets(r), "execVote");
+  await advanceTo(r.code, allSockets(r), "nomination");
   const actors = actorsOf(r);
   const [c0, c1] = actors.filter((a) => a.role === "citizen").sort((a, b) => a.seat - b.seat) as [Actor, Actor];
   return { r, actors, mafia: actors.find((a) => a.role === "mafia")!, police: actors.find((a) => a.role === "police")!, c0, c1 };
 }
 
-const allAgree = (actors: Actor[]): Record<number, boolean> => Object.fromEntries(actors.map((a) => [a.seat, true]));
+/** 변론자를 뺀 전원 찬성. */
+const allAgreeExcept = (actors: Actor[], defender: Actor): Record<number, boolean> =>
+  Object.fromEntries(actors.filter((a) => a !== defender).map((a) => [a.seat, true]));
 
-/** 모두 찬성 → 후보 선택(cast) → 공개 → 변론 → 처형 발표까지. 처형 마감은 닫지 않는다. */
-async function toExecution(g: Game4, socks: TestSocket[], actors: Actor[], cast: Record<number, number>): Promise<void> {
-  await voteExec(g.r.code, actors, allAgree(actors));
-  await voteCandidate(g.r.code, actors, cast);
-  await advanceTo(g.r.code, socks, "defense");
-  await advanceTo(g.r.code, socks, "execution");
+/** 지목(cast) → 변론 → 찬반(변론자 뺀 전원 찬성) → 처형 발표까지. 처형 마감은 닫지 않는다. */
+async function toExecution(g: Game4, socks: TestSocket[], actors: Actor[], cast: Record<number, number>, defender: Actor): Promise<void> {
+  await pointAll(g.r.code, actors, cast);
+  await advanceTo(g.r.code, socks, "verdict");
+  await verdictAll(g.r.code, actors, allAgreeExcept(actors, defender));
 }
 
-/** 마피아가 후보가 되는 선택: 마피아 외 모두가 마피아를, 마피아는 경찰을 고른다. */
+/** 마피아가 변론자가 되는 지목: 마피아 외 모두가 마피아를, 마피아는 경찰을 가리킨다. */
 const castMafia = (g: Game4): Record<number, number> => ({
   [g.police.seat]: g.mafia.seat,
   [g.c0.seat]: g.mafia.seat,
@@ -77,9 +81,9 @@ const castMafia = (g: Game4): Record<number, number> => ({
 
 /** 처형으로 끝나는 판: 마피아가 처형되고 처형 마감 알람 뒤 ended. 처형 마감 시각 E 를 함께 돌려준다. */
 async function endedByExecution(): Promise<{ g: Game4; E: number }> {
-  const g = await atExecVote4();
+  const g = await atNomination4();
   const socks = allSockets(g.r);
-  await toExecution(g, socks, g.actors, castMafia(g));
+  await toExecution(g, socks, g.actors, castMafia(g), g.mafia);
   const E = await closePhase(g.r.code);
   for (const s of socks) await nextFrame(s, isPhase("ended"));
   return { g, E };
@@ -87,14 +91,20 @@ async function endedByExecution(): Promise<{ g: Game4; E: number }> {
 
 /** 아침으로 끝나는 판: 1일차에 시민 c0 가 처형되고(1 vs 2), 밤에 마피아가 c1 을 죽여(1 vs 1) 아침 마감 알람 뒤 ended. */
 async function endedByMorning(): Promise<{ g: Game4; E: number; morning: RoomView[] }> {
-  const g = await atExecVote4();
+  const g = await atNomination4();
   const socks = allSockets(g.r);
-  await toExecution(g, socks, g.actors, {
-    [g.police.seat]: g.c0.seat,
-    [g.mafia.seat]: g.c0.seat,
-    [g.c1.seat]: g.c0.seat,
-    [g.c0.seat]: g.mafia.seat,
-  });
+  await toExecution(
+    g,
+    socks,
+    g.actors,
+    {
+      [g.police.seat]: g.c0.seat,
+      [g.mafia.seat]: g.c0.seat,
+      [g.c1.seat]: g.c0.seat,
+      [g.c0.seat]: g.mafia.seat,
+    },
+    g.c0,
+  );
   await advanceTo(g.r.code, socks, "night"); // 처형 마감: 마피아 1 vs 나머지 2 라 아직 끝나지 않는다
   const picked = mark(g.mafia.sock);
   send(g.mafia.sock, { t: "pick", target: g.c1.seat });
@@ -120,7 +130,7 @@ describe("처형으로 끝나는 판 (END-01, END-02, D-10, D-28)", () => {
     expect(result.seats.length).toBe(4);
     for (const s of result.seats) expect(Object.keys(s).sort().join(",")).toBe("job,seat");
     expect(JSON.stringify(result.summary)).toBe(
-      JSON.stringify([{ n: 1, exec: { yes: 4, no: 0, passed: true, candidate: g.mafia.seat } }]),
+      JSON.stringify([{ n: 1, exec: { yes: 3, no: 0, passed: true, candidate: g.mafia.seat } }]),
     );
     const stored = await storedRoom(g.r.code);
     expect(`${stored.phase} ${stored.winner} ${stored.phaseEndsAt}`).toBe("ended citizenWin null");
@@ -141,7 +151,7 @@ describe("아침으로 끝나는 판 (END-01, D-10)", () => {
     expect(views[0]!.result!.seats.length).toBe(4);
     expect(JSON.stringify(views[0]!.result!.summary)).toBe(
       JSON.stringify([
-        { n: 1, exec: { yes: 4, no: 0, passed: true, candidate: g.c0.seat }, night: { target: g.c1.seat, died: true } },
+        { n: 1, exec: { yes: 3, no: 0, passed: true, candidate: g.c0.seat }, night: { target: g.c1.seat, died: true } },
       ]),
     );
     expect(`${(await storedRoom(g.r.code)).expiresAt} ${await alarmOf(g.r.code)}`).toBe(`${E + ENDED_TTL_MS} ${E + ENDED_TTL_MS}`);
@@ -149,7 +159,7 @@ describe("아침으로 끝나는 판 (END-01, D-10)", () => {
 });
 
 describe("종료 중 (D-28)", () => {
-  it("chat·execVote 는 보낸 소켓에만 거절이고 다른 소켓은 프레임이 없으며, say 와 테스트 방이 아닌 방의 testSkip 은 BAD_MESSAGE 뿐이다", async () => {
+  it("chat·verdict 는 보낸 소켓에만 거절이고 다른 소켓은 프레임이 없으며, say 와 테스트 방이 아닌 방의 testSkip 은 BAD_MESSAGE 뿐이다", async () => {
     const { g } = await endedByExecution();
     const actors = g.actors;
     const sender = g.police;
@@ -164,7 +174,7 @@ describe("종료 중 (D-28)", () => {
 
     expect(await send4(sender, chatMsg(sender.sock, "수고했어요"))).toBe(quietOthers("[chatReject,state:ended]"));
     expect(await send4(sender, { t: "say", template: "innocent" })).toBe(quietOthers("[error:BAD_MESSAGE]"));
-    expect(await send4(sender, { t: "execVote", agree: true })).toBe(quietOthers("[error:WRONG_PHASE,state:ended]"));
+    expect(await send4(sender, { t: "verdict", agree: true })).toBe(quietOthers("[error:WRONG_PHASE,state:ended]"));
     expect(await send4(sender, { t: "testSkip" })).toBe(quietOthers("[error:BAD_MESSAGE]"));
     expect((await storedRoom(g.r.code)).phase).toBe("ended");
   });
@@ -189,7 +199,7 @@ describe("종료 중 (D-28)", () => {
 });
 
 describe("끊긴 생존자도 센다 (CONN-02, D-05)", () => {
-  /** 처형 여부 투표가 열린 순간 actor 의 소켓을 닫고, 남은 소켓이 그 자리 connected false 를 받을 때까지 기다린다. */
+  /** 지목이 열린 순간 actor 의 소켓을 닫고, 남은 소켓이 그 자리 connected false 를 받을 때까지 기다린다. */
   async function disconnect(g: Game4, gone: Actor): Promise<{ socks: TestSocket[]; actors: Actor[] }> {
     const actors = g.actors.filter((a) => a !== gone);
     gone.sock.ws.close();
@@ -200,10 +210,10 @@ describe("끊긴 생존자도 센다 (CONN-02, D-05)", () => {
   }
 
   it("시민 한 명이 끊긴 채로도 처형으로 끝나는 판은 같은 winner citizenWin 으로 끝난다", async () => {
-    const g = await atExecVote4();
+    const g = await atNomination4();
     const { socks, actors } = await disconnect(g, g.c1);
     const cast = { [g.police.seat]: g.mafia.seat, [g.c0.seat]: g.mafia.seat, [g.mafia.seat]: g.police.seat };
-    await toExecution(g, socks, actors, cast);
+    await toExecution(g, socks, actors, cast, g.mafia);
     await closePhase(g.r.code);
     for (const s of socks) await nextFrame(s, isPhase("ended"));
     for (const a of actors) {
@@ -213,10 +223,10 @@ describe("끊긴 생존자도 센다 (CONN-02, D-05)", () => {
   });
 
   it("경찰이 끊겨 있어도 그 경찰을 센다: 시민 처형 뒤 마피아 1 vs 둘(끊긴 경찰·시민)이라 끝나지 않고 밤으로 간다", async () => {
-    const g = await atExecVote4();
+    const g = await atNomination4();
     const { socks, actors } = await disconnect(g, g.police);
     const cast = { [g.mafia.seat]: g.c0.seat, [g.c1.seat]: g.c0.seat, [g.c0.seat]: g.mafia.seat };
-    await toExecution(g, socks, actors, cast);
+    await toExecution(g, socks, actors, cast, g.c0);
     await closePhase(g.r.code);
     for (const s of socks) await nextFrame(s, isPhase("night"));
     const stored = await storedRoom(g.r.code);

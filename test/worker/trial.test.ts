@@ -7,8 +7,8 @@ import { PHASE_DEFS } from "../../shared/game/phases";
 import { env } from "cloudflare:workers";
 import { runDurableObjectAlarm } from "cloudflare:test";
 import { ringSlots } from "../../shared/game/gather";
-import { alarmOf, editRoom, endAs, flushWorld, ghostsOf, killSeats, lastViewOf, layOf, mark, mapPlayers, pause, pointAs, send, settle, startedGame, storedRoom, summary, toPhase, verdictAs, worldFramesOf, worldOf } from "./helpers";
-import type { Game } from "./helpers";
+import { alarmOf, chatMsg, editRoom, endAs, flushWorld, ghostsOf, killSeats, lastViewOf, layOf, mark, mapPlayers, pause, pointAs, send, settle, startedGame, storedRoom, summary, toPhase, verdictAs, worldFramesOf, worldOf } from "./helpers";
+import type { Actor, Game } from "./helpers";
 
 const viewsOf = (msgs: ServerMessage[]): RoomView[] =>
   msgs.filter((m): m is Extract<ServerMessage, { t: "state" }> => m.t === "state").map((m) => m.view);
@@ -409,6 +409,16 @@ async function storedFlow(code: string): Promise<{ phase: string; phaseEndsAt: n
   return (await storedRoom(code)) as unknown as Awaited<ReturnType<typeof storedFlow>>;
 }
 
+/** view 안에서 값이 역할 단어인 문자열의 경로(배열 칸은 [] 로 접는다). */
+function roleValuePaths(value: unknown, path = ""): string[] {
+  if (typeof value === "string") return ["mafia", "police", "doctor", "citizen", "none"].includes(value) ? [path] : [];
+  if (Array.isArray(value)) return value.flatMap((item) => roleValuePaths(item, `${path}[]`));
+  if (value !== null && typeof value === "object") {
+    return Object.entries(value as Record<string, unknown>).flatMap(([k, v]) => roleValuePaths(v, `${path}.${k}`));
+  }
+  return [];
+}
+
 /** 모든 소켓의 마지막 view. */
 const lastViews = (g: Game): RoomView[] => g.socks.map((s) => lastViewOf(s));
 
@@ -479,6 +489,19 @@ describe("실제 흐름 (결정 0060-1)", () => {
     );
     const defSock = g.socks[g.actors.indexOf(defender)]!;
     expect(worldFramesOf(defSock, marks[g.actors.indexOf(defender)]!).filter((m) => m.k === "snap").length).toBe(1);
+    // 처형 발표(vote.test 의 "처형 발표" 이전): 모든 소켓이 day.execution {seat, phrase 1..4} 를 받고, 관전은 처형된 소켓만 받는다
+    for (const [i, v] of lastViews(g).entries()) {
+      expect(Object.keys(v.day?.execution ?? {}).sort().join(",")).toBe("phrase,seat");
+      expect(v.day?.execution?.seat).toBe(defender.seat);
+      expect(v.day!.execution!.phrase >= 1 && v.day!.execution!.phrase <= 4).toBe(true);
+      expect(Object.hasOwn(v, "spectate")).toBe(g.actors[i] === defender);
+      expect(v.players.find((p) => p.seat === defender.seat)?.alive).toBe(false);
+      // 살아 있는 소켓에는 역할 단어 값이 본인 역할·구성표 경로 밖에 없다(처형 발표에 직업이 실리지 않는다, D-09)
+      if (g.actors[i] !== defender) {
+        const stray = roleValuePaths(v).filter((path) => ![".me.role", ".day.roles[]", ".me.chat"].includes(path));
+        expect(`${i}:${stray.join(",")}`).toBe(`${i}:`);
+      }
+    }
 
     await dueAgo(g.code, 1);
     await settleAllSocks(g);
@@ -505,6 +528,10 @@ describe("실제 흐름 (결정 0060-1)", () => {
     expect(night.phase).toBe("night");
     expect(night.players.every((p) => p.alive !== false)).toBe(true);
     expect(lastViews(g).map((v) => v.day?.noExecution?.reason).join(",")).toBe("tie,tie,tie,tie,tie");
+    await dueAgo(g.code, 1); // 밤 → 아침: 이유 키는 아침으로 넘어가면 저절로 사라진다
+    await settleAllSocks(g);
+    expect((await storedFlow(g.code)).phase).toBe("morning");
+    expect(lastViews(g).map((v) => Object.hasOwn(v.day ?? {}, "noExecution")).join(",")).toBe("false,false,false,false,false");
   }, 60_000);
 
   it("찬반이 부결(찬성 2 / 반대 2)이면 처형에서 아무도 탈락하지 않고 변론자는 자기 자리로 돌아오며 밤 view 에 noExecution 키가 없다", async () => {
@@ -566,6 +593,55 @@ describe("실제 흐름 (결정 0060-1)", () => {
     }
     expect(lastViews(g).map((v) => String(v.day?.endCount)).join(",")).toBe("0,0,0,0,0");
   }, 90_000);
+
+  it("마감 뒤 도착한 지목은 그 소켓에만 WRONG_PHASE 와 넘어간 단계의 state 가 가고 저장된 지목 기록은 직전 값 그대로다", async () => {
+    const { g } = await toNominationByEnd();
+    const defender = g.actors.find((a) => a.role !== "mafia")!;
+    const [a, b] = g.actors.filter((x) => x.seat !== defender.seat) as [Actor, Actor];
+    await pointAll(g, { [a.seat]: defender.seat, [b.seat]: defender.seat });
+    await editRoom(g.code, (room) => ({ ...room, phaseEndsAt: Date.now() - 1 })); // 알람은 아직 안 돌렸다 — 도착한 메시지가 먼저 tick 을 일으킨다
+    const late = g.actors.find((x) => x !== a && x !== b && x.seat !== defender.seat)!;
+    const marks = g.socks.map(mark);
+    pointAs(late.sock, a.seat);
+    const all: ServerMessage[][] = [];
+    for (let i = 0; i < g.socks.length; i += 1) all.push(await settle(g.socks[i]!, marks[i]!));
+    // 도착한 메시지가 먼저 tick 을 일으켜 모두가 변론 state 를 받고, 늦은 지목은 보낸 소켓만 WRONG_PHASE + 최신 state 를 받는다.
+    const errors = all.map((frames) => frames.filter((m) => m.t === "error").map((m) => (m.t === "error" ? m.code : "")).join(","));
+    expect(errors.join("|")).toBe(g.actors.map((x) => (x === late ? "WRONG_PHASE" : "")).join("|"));
+    expect(all.map((frames) => viewsOf(frames).at(-1)?.phase).join(",")).toBe(g.actors.map(() => "defense").join(","));
+    const line = ((await storedRoom(g.code)) as unknown as { voteLog?: Array<{ cand?: { votes: Array<{ seat: number; target: number }> } }> }).voteLog?.at(-1)?.cand;
+    expect(JSON.stringify(line?.votes)).toBe(JSON.stringify([a, b].sort((x, y) => x.seat - y.seat).map((x) => ({ seat: x.seat, target: defender.seat }))));
+  }, 60_000);
+
+  it("죽은 사람의 지목은 BAD_MESSAGE 이고 저장은 그대로다", async () => {
+    const g = await startedGame("discussion", 3);
+    const ghost = g.actors[3]!;
+    await killSeats(g, [ghost.seat]);
+    await toPhase(g.code, "nomination");
+    await settleAllSocks(g);
+    expect(lines(await castAll(g, () => pointAs(ghost.sock, g.actors[1]!.seat)))).toBe("[] [] [] [error:BAD_MESSAGE,state:nomination]");
+    expect(await storedNominates(g.code)).toBe(g.actors.map((a) => a.seat).sort((x, y) => x - y).map((s) => `${s}:-`).join(" "));
+  }, 40_000);
+
+  it("변론 중 변론자의 chat 은 모두에게 ch all 로 가고 빠른 메시지(say)는 변론자 소켓만 BAD_MESSAGE 이며, 변론자가 아닌 산 사람의 chat 도 모두에게 간다", async () => {
+    const { g } = await toNominationByEnd();
+    const defender = g.actors.find((a) => a.role !== "mafia")!;
+    const others = g.actors.filter((a) => a.seat !== defender.seat);
+    await pointAll(g, Object.fromEntries(others.map((o) => [o.seat, defender.seat])));
+    await dueAgo(g.code, 1);
+    await settleAllSocks(g);
+    expect((await storedFlow(g.code)).phase).toBe("defense");
+    const said = await castAll(g, () => send(defender.sock, chatMsg(defender.sock, "저 아니에요")));
+    expect(said.map(summary).join(" ")).toBe(g.actors.map(() => "[chat]").join(" "));
+    for (const f of said) {
+      const chat = f[0] as Extract<ServerMessage, { t: "chat" }>;
+      expect(`${chat.ch} ${chat.seat} ${chat.text}`).toBe(`all ${defender.seat} 저 아니에요`);
+    }
+    const quick = await castAll(g, () => send(defender.sock, { t: "say", template: "defNotMe" }));
+    expect(quick.map(summary).join(" ")).toBe(g.actors.map((a) => (a === defender ? "[error:BAD_MESSAGE]" : "[]")).join(" "));
+    const by = await castAll(g, () => send(others[0]!.sock, chatMsg(others[0]!.sock, "믿어 주세요")));
+    expect(by.map(summary).join(" ")).toBe(g.actors.map(() => "[chat]").join(" "));
+  }, 60_000);
 
   it("처형으로 승패가 나면(마피아 한 명이 변론자로 통과) 처형 마감에서 ended 가 된다", async () => {
     const { g } = await toNominationByEnd();

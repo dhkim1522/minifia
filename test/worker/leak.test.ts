@@ -2,7 +2,6 @@
 import { env, exports } from "cloudflare:workers";
 import { runDurableObjectAlarm } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
-import { CANDIDATE_VOTE_MS, candidateRevealMs } from "../../shared/game/phases";
 import { MORNING_PHRASE_COUNT } from "../../shared/protocol";
 import type { RoleId, RoomView, ServerMessage } from "../../shared/protocol";
 import {
@@ -84,7 +83,13 @@ const ROLE_PATHS_ALIVE = [".view.me.role", ".view.day.roles[]", ".view.me.chat"]
  * 서버 전용 키: 어떤 프레임의 어떤 경로에도 없어야 한다. 주장 차례(결정 0027-3)와 4페이즈 투표·종료(결정 0036-12)의 서버 상태.
  * winner·execution 은 같은 이름의 view 키(result.winner·day.execution)가 있어 넣지 않고, 경로·단계로 검사한다.
  */
-const SERVER_ONLY_KEYS = ["claimPick", "claimOrder", "claimIdx", "claimStart", "execVote", "candidateVote", "verdict", "nightLog", "lastExecPhrase"];
+const SERVER_ONLY_KEYS = ["claimPick", "claimOrder", "claimIdx", "claimStart", "execVote", "candidateVote", "verdict", "nightLog", "lastExecPhrase", "nominate", "verdictVote", "endVote"];
+/**
+ * 서버 전용 이름과 같은 공개 와이어 필드의 경로(08-11, 결정 0060-3·4) — 이 두 경로만 SERVER_ONLY_KEYS 검사에서 빼고 이유를 단다. 목록은 줄이지 않고, 새 경로는 받을 권리 조건이 있을 때만 더한다.
+ *  - .view.day.verdict: 처형 단계에서 모두에게 같은 {yes,no,passed} 집계(서버 전용 RoomState.verdict 와 이름만 같다).
+ *  - .view.me.verdictVote: 그 소켓 본인이 던진 찬반 값(변론자·유령·던지지 않은 사람에게는 키 자체가 없다). 남의 값은 어떤 경로로도 가지 않는다.
+ */
+const ALLOWED_WIRE_PATHS: ReadonlySet<string> = new Set([".view.day.verdict", ".view.me.verdictVote"]);
 const ROLE_PATHS_DEAD = [...ROLE_PATHS_ALIVE, ".view.spectate.seats[].job"];
 /** ended 단계 프레임에서만 더해지는 허용 경로(D-17, Pitfall 10): 결과 화면의 모든 직업. ended 이전 프레임에서는 누출이다. */
 const ROLE_PATH_ENDED = ".view.result.seats[].job";
@@ -584,10 +589,10 @@ describe("6명 한 판(두 밤·두 아침, 행동·마피아 채팅·탈락·�
 
 // ---- 처형·처형 무효·종료를 지나는 6명 한 판(04-09): 모든 실제 프레임의 받는 사람 규칙 (결정 0036-12) ----
 
-describe("6명 한 판: 처형·처형 무효·종료 전수 프레임 누출 검사 (VOTE-01, VOTE-02, VOTE-04, END-02, D-02, D-09, D-17, D-34)", () => {
+describe("6명 한 판: 낮 처형(토론 끝내기·지목·변론·찬반·처형)·처형 무효·종료 전수 프레임 누출 검사 (DAY-03~07, GHOST-01, 결정 0053·0060, D-09, D-17)", () => {
   it(
-    "1일차 여부 통과 → 후보 → 공개 → 변론 → 처형(마피아 A) → 의사가 지킨 밤 → 2일차 처형 무효 밤 → 3일차 마지막 마피아 처형 → 종료: 모든 프레임이 받는 사람 규칙을 지킨다",
-    { timeout: 60_000 },
+    "1일차 토론 끝내기 → 지목 → 변론 → 찬반(한 사람이 값을 바꿈) → 처형(마피아 A) → 의사가 지킨 밤 → 2일차 지목 동률 밤 → 3일차 마지막 마피아 처형 → 종료: 모든 프레임이 받는 사람 규칙을 지킨다",
+    { timeout: 90_000 },
     async () => {
       const room = await seat(5, 0);
       const code = room.code;
@@ -621,93 +626,114 @@ describe("6명 한 판: 처형·처형 무효·종료 전수 프레임 누출 �
         await waitAll(phase);
       };
       const alive = (dead: ReadonlySet<number>): SeatedActor[] => actors.filter((a) => !dead.has(a.seat));
-
-      // 누가 어느 날 무엇을 던졌는지(프레임 검사의 기대값). 일차 → seat → 값.
-      const execVotes = new Map<number, Map<number, boolean>>();
-      const candidateVotes = new Map<number, Map<number, number>>();
-      // 그날 그 투표자가 (취소 전후 포함) 실제로 고른 값들. 프레임 검사의 voteTarget 기대는 이 집합이다(결정 0040).
-      const candidateEver = new Map<number, Map<number, Set<number>>>();
-      const everPicked = (day: number, seatNo: number): Set<number> => {
-        const byDay = candidateEver.get(day) ?? new Map<number, Set<number>>();
-        candidateEver.set(day, byDay);
-        const set = byDay.get(seatNo) ?? new Set<number>();
-        byDay.set(seatNo, set);
-        return set;
-      };
       const dead = new Set<number>();
-
-      /** 여부 표를 던진다. 던진 직후 모든 소켓의 집계가 같은 값이고, 아직 안 던진 소켓의 me 에는 voteAgree 가 없다. */
-      const castExec = async (who: SeatedActor[], agreeOf: (a: SeatedActor) => boolean, waiting: SeatedActor[]): Promise<void> => {
-        const day = dayNow();
-        const mine = execVotes.get(day) ?? new Map<number, boolean>();
-        execVotes.set(day, mine);
-        for (const a of who) {
-          mine.set(a.seat, agreeOf(a));
-          await act(a, { t: "execVote", agree: agreeOf(a) });
-        }
-        for (const sock of socks) await settle(sock, mark(sock));
-        const want = { yes: [...mine.values()].filter((v) => v).length, no: [...mine.values()].filter((v) => !v).length };
-        // (2) 같은 순간 모든 소켓(생존자·탈락 관전자)의 집계가 같다
-        for (const a of actors) expect(JSON.stringify(lastViewOf(a.sock).day?.execTally)).toBe(JSON.stringify(want));
-        // (1) 아직 안 던진 소켓에는 voteAgree 가 없다
-        for (const a of waiting) expect("voteAgree" in lastViewOf(a.sock).me).toBe(false);
-      };
-
-      /** 후보 선택을 던진다. 첫 투표 직후 투표자가 아닌 소켓(탈락 관전자 포함)은 어떤 프레임도 받지 않는다. */
-      const castCandidates = async (targetOf: (a: SeatedActor) => number, voters: SeatedActor[]): Promise<void> => {
-        const day = dayNow();
-        const mine = candidateVotes.get(day) ?? new Map<number, number>();
-        candidateVotes.set(day, mine);
-        const [first, ...rest] = voters as [SeatedActor, ...SeatedActor[]];
-        mine.set(first.seat, targetOf(first));
-        everPicked(day, first.seat).add(targetOf(first));
-        const others = actors.filter((a) => a !== first);
-        const marks = others.map((a) => mark(a.sock));
-        const own = await act(first, { t: "candidateVote", target: targetOf(first) });
-        expect(summary(own)).toBe("[state:candidateVote]"); // 본인에게만 state(me.voteTarget)
-        for (let i = 0; i < others.length; i += 1) expect(summary(await settle(others[i]!.sock, marks[i]!))).toBe("[]"); // (3)
-        // (3b) 결정 0040: 첫 투표자가 취소하면 그 소켓만 voteTarget 키 없는 state 를 받고, 다른 모든 소켓(탈락 관전자 포함)은 아무것도 받지 않는다. 다시 고르기도 같다.
-        const cancelMarks = others.map((a) => mark(a.sock));
-        const cancelOwn = await act(first, { t: "candidateVote", target: null });
-        expect(summary(cancelOwn)).toBe("[state:candidateVote]");
-        const cancelView = (cancelOwn[0] as Extract<ServerMessage, { t: "state" }>).view;
-        expect(Object.hasOwn(cancelView.me, "voteTarget")).toBe(false);
-        for (let i = 0; i < others.length; i += 1) expect(summary(await settle(others[i]!.sock, cancelMarks[i]!))).toBe("[]");
-        const repickMarks = others.map((a) => mark(a.sock));
-        expect(summary(await act(first, { t: "candidateVote", target: targetOf(first) }))).toBe("[state:candidateVote]");
-        for (let i = 0; i < others.length; i += 1) expect(summary(await settle(others[i]!.sock, repickMarks[i]!))).toBe("[]");
-        for (const a of rest) {
-          mine.set(a.seat, targetOf(a));
-          everPicked(day, a.seat).add(targetOf(a));
-          expect(summary(await act(a, { t: "candidateVote", target: targetOf(a) }))).toBe("[state:candidateVote]");
-        }
-      };
-
-      // 인원 순서(seat 오름차순)로 읽는다.
       const bySeat = [...actors].sort((a, b) => a.seat - b.seat);
 
-      // ---------- 1일차: 낮 → 여부 통과 → 후보 A → 공개 → 변론 → 처형 ----------
-      await advanceTo(code, socks, "execVote");
-      await castExec(bySeat.slice(0, 4), (a) => a.seat % 3 !== 0, bySeat.slice(4)); // 찬성 다수가 되는 섞인 표
-      await castExec(bySeat.slice(4), (a) => a.seat % 3 !== 0, []);
-      await closeInto("candidateVote");
-      await castCandidates((a) => (a === mafiaA ? police.seat : mafiaA.seat), alive(dead));
-      await closeInto("candidateVoteReveal");
-      {
-        const reveals = actors.map((a) => lastViewOf(a.sock).day?.voteLog?.at(-1)?.cand);
-        // (4) 공개 구간부터 모든 소켓의 votes 가 같다(서버가 정한 한 순서)
-        expect(new Set(reveals.map((c) => JSON.stringify(c))).size).toBe(1);
-        expect(reveals[0]?.candidate).toBe(mafiaA.seat);
-        expect(reveals[0]?.votes.length).toBe(6);
-      }
-      await advanceTo(code, socks, "defense");
+      // 누가 그날 무엇을 던졌는지(프레임 검사의 기대값). 일차 → seat → 값. 값을 바꾼 사람은 두 값을 모두 기록한다(그 소켓이 받는 me.verdictVote 는 이 집합 안이다).
+      const pressed = new Map<number, Set<number>>(); // 토론 끝내기를 누른 좌석
+      const verdictEver = new Map<number, Map<number, Set<boolean>>>(); // 찬반을 던진 좌석 → 보낸 값들
+      const verdictFinal = new Map<number, Map<number, boolean>>();
+      const byDay = <T,>(map: Map<number, T>, day: number, make: () => T): T => {
+        const got = map.get(day) ?? make();
+        map.set(day, got);
+        return got;
+      };
+
+      /** 토론 끝내기: 과반(산 사람 수의 ⌊n/2⌋+1)이 누르면 지목으로 넘어간다. 누를 때마다 모든 소켓의 day.endCount 가 같고 me.endDiscussion 은 누른 본인에게만 있다. */
+      const pressEnd = async (who: SeatedActor[]): Promise<void> => {
+        const day = dayNow();
+        const mine = byDay(pressed, day, () => new Set<number>());
+        for (const [i, a] of who.entries()) {
+          mine.add(a.seat);
+          await act(a, { t: "endDiscussion", on: true });
+          for (const sock of socks) await settle(sock, mark(sock));
+          if (i === who.length - 1) break; // 마지막 표는 단계를 넘긴다 — 아래에서 확인
+          const views = actors.map((x) => lastViewOf(x.sock));
+          expect(new Set(views.map((v) => v.day?.endCount)).size).toBe(1);
+          expect(views[0]!.day?.endCount).toBe(i + 1);
+          for (const [j, v] of views.entries()) expect(Object.hasOwn(v.me, "endDiscussion")).toBe(mine.has(actors[j]!.seat));
+        }
+        // 마지막 표(과반)가 마감을 당겨 단계를 넘겼다 — settle 이 이미 그 프레임을 읽었으므로 마지막 view 로 본다.
+        for (const a of actors) expect(lastViewOf(a.sock).phase).toBe("nomination");
+      };
+
+      /** 지목: 모두가 모두에게 공개다 — 던질 때마다 모든 소켓의 day.points 가 같은 목록이다. */
+      const castPoints = async (targetOf: (a: SeatedActor) => number, voters: SeatedActor[]): Promise<void> => {
+        for (const a of voters) {
+          await act(a, { t: "point", target: targetOf(a) });
+          for (const sock of socks) await settle(sock, mark(sock));
+          expect(new Set(actors.map((x) => JSON.stringify(lastViewOf(x.sock).day?.points))).size).toBe(1);
+        }
+        const points = lastViewOf(actors[0]!.sock).day?.points ?? [];
+        expect(points.map((l) => `${l.seat}>${l.target}`).sort().join(",")).toBe(voters.map((a) => `${a.seat}>${targetOf(a)}`).sort().join(","));
+      };
+
+      /**
+       * 찬반: 처음 던지면 모두의 day.voted 가 같고 값은 없다. 첫 투표자는 한 번 값을 바꾼다 — 그 소켓만 새 값을 받고 나머지 모든 소켓(유령 포함)은 프레임이 없다.
+       * 던지지 않은 소켓의 me 에는 verdictVote 키가 없다.
+       */
+      const castVerdicts = async (voters: SeatedActor[], agreeOf: (a: SeatedActor) => boolean, flipFirst: boolean): Promise<void> => {
+        const day = dayNow();
+        const ever = byDay(verdictEver, day, () => new Map<number, Set<boolean>>());
+        const fin = byDay(verdictFinal, day, () => new Map<number, boolean>());
+        const remember = (a: SeatedActor, value: boolean): void => {
+          const set = ever.get(a.seat) ?? new Set<boolean>();
+          set.add(value);
+          ever.set(a.seat, set);
+          fin.set(a.seat, value);
+        };
+        const [first, ...rest] = voters as [SeatedActor, ...SeatedActor[]];
+        remember(first, agreeOf(first));
+        expect(summary(await act(first, { t: "verdict", agree: agreeOf(first) }))).toBe("[state:verdict]");
+        for (const sock of socks) await settle(sock, mark(sock));
+        if (flipFirst) {
+          const others = actors.filter((a) => a !== first);
+          const marks = others.map((a) => mark(a.sock));
+          remember(first, !agreeOf(first));
+          const own = await act(first, { t: "verdict", agree: !agreeOf(first) });
+          expect(summary(own)).toBe("[state:verdict]");
+          expect((own[0] as Extract<ServerMessage, { t: "state" }>).view.me.verdictVote).toBe(!agreeOf(first));
+          for (let i = 0; i < others.length; i += 1) expect(summary(await settle(others[i]!.sock, marks[i]!))).toBe("[]");
+          remember(first, agreeOf(first)); // 원래 값으로 되돌려 최종 값은 agreeOf 와 같다
+          await act(first, { t: "verdict", agree: agreeOf(first) });
+          for (const sock of socks) await settle(sock, mark(sock));
+        }
+        for (const a of rest) {
+          remember(a, agreeOf(a));
+          expect(summary(await act(a, { t: "verdict", agree: agreeOf(a) }))).toBe("[state:verdict]");
+        }
+        for (const sock of socks) await settle(sock, mark(sock));
+        const views = actors.map((x) => lastViewOf(x.sock));
+        // 모든 소켓의 day.voted 가 같고, 던진 좌석만 오름차순으로 있다
+        expect(new Set(views.map((v) => JSON.stringify(v.day?.voted))).size).toBe(1);
+        expect(JSON.stringify(views[0]!.day?.voted)).toBe(JSON.stringify(voters.map((a) => a.seat).sort((a, b) => a - b)));
+        // 던진 본인에게만 값이 있고(최종 값), 던지지 않은 소켓(변론자·유령 포함)에는 키가 없다
+        for (const [j, v] of views.entries()) {
+          const a = actors[j]!;
+          expect(Object.hasOwn(v.me, "verdictVote")).toBe(fin.has(a.seat));
+          if (fin.has(a.seat)) expect(v.me.verdictVote).toBe(fin.get(a.seat));
+        }
+      };
+
+      // ---------- 1일차: 낮 → 토론 끝내기 과반 → 지목 → 변론 → 찬반 → 처형 ----------
+      await advanceTo(code, socks, "discussion");
+      await pressEnd(bySeat.slice(0, 4)); // 6명 판의 과반 4
+      await castPoints((a) => (a === mafiaA ? police.seat : mafiaA.seat), alive(dead));
+      await closeInto("defense");
+      expect(new Set(actors.map((a) => lastViewOf(a.sock).day?.candidate)).size).toBe(1);
+      expect(lastViewOf(actors[0]!.sock).day?.candidate).toBe(mafiaA.seat);
       await act(mafiaA, chatMsg(mafiaA.sock, "저 아니에요"));
-      await advanceTo(code, socks, "execution");
+      await closeInto("verdict");
+      const voters1 = alive(dead).filter((a) => a !== mafiaA);
+      await castVerdicts(voters1, (a) => a.seat !== voters1[1]!.seat, true); // 찬성 4 · 반대 1 → 통과
+      await closeInto("execution");
       dead.add(mafiaA.seat);
       for (const a of actors) {
         const view = lastViewOf(a.sock);
         expect(`${view.day?.execution?.seat} ${Object.keys(view.day?.execution ?? {}).sort().join(",")}`).toBe(`${mafiaA.seat} phrase,seat`);
+        expect(JSON.stringify(view.day?.verdict)).toBe(JSON.stringify({ yes: 4, no: 1, passed: true }));
         expect(view.players.find((p) => p.seat === mafiaA.seat)?.alive).toBe(false);
+        expect(Object.hasOwn(view.me, "verdictVote")).toBe(false); // 처형 단계에서는 개인 값이 없다
       }
 
       // 1일차 밤: 마피아 B 가 X 를, 의사가 같은 X 를 지켜 아무도 죽지 않는다(마피아 1 vs 4 라 판은 이어진다)
@@ -718,32 +744,31 @@ describe("6명 한 판: 처형·처형 무효·종료 전수 프레임 누출 �
       await advanceTo(code, socks, "morning");
       for (const a of actors) expect(JSON.stringify(lastViewOf(a.sock).day?.morning)).toBe("{}");
 
-      // ---------- 2일차: 여부 미통과(처형 무효 밤) ----------
-      await advanceTo(code, socks, "execVote");
+      // ---------- 2일차: 지목 최다 동률(처형 무효 밤) — 둘째 날 토론은 전날 끝내기 표 없이 시작한다 ----------
+      await advanceTo(code, socks, "discussion");
       expect(dayNow()).toBe(2);
-      await castExec(
-        alive(dead),
-        (a) => a === mafiaB || a === victimX, // 찬성 2 · 반대 3 → 불통과
-        [],
-      );
+      for (const a of actors) expect(lastViewOf(a.sock).day?.endCount).toBe(0);
+      for (const a of actors) expect(Object.hasOwn(lastViewOf(a.sock).me, "endDiscussion")).toBe(false);
+      await advanceTo(code, socks, "nomination");
+      const living2 = alive(dead).sort((a, b) => a.seat - b.seat);
+      await castPoints((a) => living2[(living2.indexOf(a) + 1) % living2.length]!.seat, living2); // 모두 한 표씩 → 동률
       await closeInto("night");
       for (const a of actors) {
         const view = lastViewOf(a.sock);
-        expect(JSON.stringify(view.day?.noExecution)).toBe(JSON.stringify({ reason: "notMajority" }));
+        expect(JSON.stringify(view.day?.noExecution)).toBe(JSON.stringify({ reason: "tie" }));
       }
       await act(police, { t: "pick", target: mafiaB.seat }); // 마피아 B 는 고르지 않는다
       await advanceTo(code, socks, "morning");
 
-      // ---------- 3일차: 여부 통과 → 후보 B(마지막 마피아) → 처형 → 종료 ----------
-      await advanceTo(code, socks, "execVote");
+      // ---------- 3일차: 지목 → 변론 → 찬반 → 후보 B(마지막 마피아) 처형 → 종료 ----------
+      await advanceTo(code, socks, "nomination");
       expect(dayNow()).toBe(3);
-      await castExec(alive(dead), () => true, []);
-      await closeInto("candidateVote");
-      await castCandidates((a) => (a === mafiaB ? police.seat : mafiaB.seat), alive(dead));
-      await closeInto("candidateVoteReveal");
-      await advanceTo(code, socks, "defense");
+      await castPoints((a) => (a === mafiaB ? police.seat : mafiaB.seat), alive(dead));
+      await closeInto("defense");
       await act(mafiaB, chatMsg(mafiaB.sock, "한 번만 믿어 주세요"));
-      await advanceTo(code, socks, "execution");
+      await closeInto("verdict");
+      await castVerdicts(alive(dead).filter((a) => a !== mafiaB), () => true, false);
+      await closeInto("execution");
       dead.add(mafiaB.seat);
       await advanceTo(code, socks, "ended");
       for (const sock of socks) await settle(sock, mark(sock));
@@ -756,13 +781,21 @@ describe("6명 한 판: 처형·처형 무효·종료 전수 프레임 누출 �
       for (const t of allTokens) expect(previewText.includes(t)).toBe(false);
       expect(previewText.includes("result")).toBe(false);
 
-      const seen = { agree: new Set<number>(), target: new Set<number>(), noExec: new Set<number>(), result: new Set<number>(), execution: new Set<number>() };
-      let cancelFrames = 0; // 취소 프레임: 그날 candidateVote 에서 voteTarget 이 있던 투표자의 voteTarget 없는 state (결정 0040)
-      const hadTarget = new Set<string>();
+      const seen = {
+        endMine: new Set<number>(),
+        verdictMine: new Set<number>(),
+        points: new Set<number>(),
+        voted: new Set<number>(),
+        verdict: new Set<number>(),
+        noExec: new Set<number>(),
+        result: new Set<number>(),
+        execution: new Set<number>(),
+      };
+      let flipFrames = 0; // 값을 바꾼 사람 소켓이 받은 반대 값 프레임(찬반 마감 전 그 사람 소켓에만 간다)
       for (const a of actors) {
         let isDead = false;
         for (const raw of collect(a.sock)) {
-          // (9) 남의 토큰은 어떤 프레임에도 없다
+          // 남의 토큰은 어떤 프레임에도 없다
           for (const t of allTokens) expect(raw.includes(t)).toBe(false);
           const msg = JSON.parse(raw) as ServerMessage;
           expect(msg.t === "error").toBe(false); // 시나리오의 모든 행동은 받아들여졌다
@@ -771,96 +804,101 @@ describe("6명 한 판: 처형·처형 무효·종료 전수 프레임 누출 �
             const key = path.slice(path.lastIndexOf(".") + 1);
             expect(FORBIDDEN_KEYS.includes(key)).toBe(false);
             if (key === "role" || key === "allies") expect(path).toBe(`.view.me.${key}`);
-            // (7) 서버 전용 키는 어디에도 없다
-            // 8페이즈(08-07): .view.day.verdict 는 공개 와이어 필드(처형 단계, 서버 전용 verdict 와 이름만 같다).
-            expect(path !== ".view.day.verdict" && SERVER_ONLY_KEYS.includes(key)).toBe(false);
-            // (1) 투표 개인 정보는 본인 경로 밖에 없다
-            if (key === "voteAgree") expect(path).toBe(".view.me.voteAgree");
-            if (key === "voteTarget") expect(path).toBe(".view.me.voteTarget");
+            // 서버 전용 키는 어디에도 없다. 같은 이름의 공개 와이어 필드 경로만 이유와 함께 허용한다 — 허용 목록은 받을 권리 조건으로만 넓힌다(결정 0060-3·4).
+            expect(!ALLOWED_WIRE_PATHS.has(path) && SERVER_ONLY_KEYS.includes(key)).toBe(false);
+            // 개인 값은 본인 경로 밖에 없다
+            if (key === "verdictVote") expect(path).toBe(".view.me.verdictVote");
+            if (key === "endDiscussion") expect(path).toBe(".view.me.endDiscussion");
           }
           if (msg.t !== "state") continue;
           const v = msg.view;
           const day = v.day?.n ?? 0;
           if (v.players.find((pl) => pl.seat === a.seat)?.alive === false) isDead = true;
-          for (const pl of v.players) expect(Object.keys(pl).sort()).toEqual(["alive", "connected", "isHost", "nickname", "seat"]); // (9)
+          for (const pl of v.players) expect(Object.keys(pl).sort()).toEqual(["alive", "connected", "isHost", "nickname", "seat"]);
           const has = (prefix: string): boolean => paths.some((pth) => pth === prefix || pth.startsWith(`${prefix}.`) || pth.startsWith(`${prefix}[]`));
 
-          // (4)(5) 역할·주장 값 문자열은 허용 경로에만 — 처형자 X 의 직업도 ended 전에는 살아 있는 소켓에 오지 않는다. ended 에서만 결과 경로가 더해진다.
+          // 역할 값 문자열은 허용 경로에만 — 처형자 A 의 직업도 ended 전에는 살아 있는 소켓에 오지 않는다. ended 에서만 결과 경로가 더해진다.
           const allowed = [...(isDead ? ROLE_PATHS_DEAD : ROLE_PATHS_ALIVE), ...(v.phase === "ended" ? [ROLE_PATH_ENDED] : [])];
           for (const [pth, value] of stringPaths(msg)) if (ROLE_WORDS.has(value)) expect(`${v.phase} ${pth} ${allowed.includes(pth)}`).toBe(`${v.phase} ${pth} true`);
           // 관전은 탈락한 뒤에만(결정 0021)
           expect(has(".view.spectate")).toBe(isDead);
 
-          // (6) result 는 ended 프레임에만
+          // result 는 ended 프레임에만
           expect(has(".view.result")).toBe(v.phase === "ended");
           if (v.phase === "ended") seen.result.add(a.seat);
-          // 집계·후보·처형 발표는 그 단계에만
-          expect(has(".view.day.execTally")).toBe(v.phase === "execVote");
-          expect(has(".view.day.candidate")).toBe(["candidateVoteReveal", "defense", "execution"].includes(v.phase));
+          // 새 공개 키는 그 단계에만, 그리고 모두에게 같은 값일 때만 허용한다(위 라이브 검사가 같은 시점 모든 소켓의 값이 같음을 본다)
+          expect(has(".view.day.endCount")).toBe(v.phase === "discussion"); // 개수만 — 누가 눌렀는지는 없다
+          expect(has(".view.day.points")).toBe(v.phase === "nomination"); // 지목은 중에도 모두에게 공개(결정 0060-3)
+          expect(has(".view.day.voted")).toBe(v.phase === "verdict"); // 던진 좌석만, 값 없음(결정 0053)
+          expect(has(".view.day.verdict")).toBe(v.phase === "execution"); // 집계는 처형 단계에서 한꺼번에(결정 0053)
+          expect(has(".view.day.candidate")).toBe(["defense", "verdict", "execution"].includes(v.phase));
           expect(has(".view.day.execution")).toBe(v.phase === "execution");
-          if (v.phase === "execution") seen.execution.add(a.seat);
-          // 단계 길이는 공개 정보에서만 파생된다: 공개 단계는 그날 공개된 표 수, 진행 중 후보 선택은 표 수와 무관한 고정 길이(결정 0039, T-t40-01)
-          if (v.phase === "candidateVote") expect(v.phaseDurationMs).toBe(CANDIDATE_VOTE_MS);
-          if (v.phase === "candidateVoteReveal") {
-            const todays = v.day?.voteLog?.filter((line) => line.n === day).at(-1);
-            expect(v.phaseDurationMs).toBe(candidateRevealMs(todays?.cand?.votes.length ?? 0));
+          if (v.phase === "nomination" && (v.day?.points?.length ?? 0) > 0) seen.points.add(a.seat);
+          if (v.phase === "verdict" && (v.day?.voted?.length ?? 0) > 0) {
+            seen.voted.add(a.seat);
+            for (const s of v.day!.voted!) expect(Number.isInteger(s)).toBe(true); // 좌석 번호뿐, 값이 아니다
           }
-          // (8) 처형 무효 이유는 처형 무효로 온 밤(2일차)에만, 키는 reason 하나
+          if (v.phase === "execution") {
+            seen.execution.add(a.seat);
+            seen.verdict.add(a.seat);
+          }
+          // 처형 무효 이유는 처형 무효로 온 밤(2일차)에만, 키는 reason 하나. 찬반 부결은 처형 단계가 알리므로 이 키가 아니다.
           const wantNoExecution = v.phase === "night" && day === 2;
           expect(has(".view.day.noExecution")).toBe(wantNoExecution);
           if (wantNoExecution) {
             expect(Object.keys(v.day!.noExecution!)).toEqual(["reason"]);
             seen.noExec.add(a.seat);
           }
-          // 여부 줄은 no·passed·yes 세 키뿐이고, 그날 후보 선택은 공개 구간 전에 voteLog 에 없다
+          // 줄 키: exec 는 no·passed·yes, cand 는 votes(+candidate)
           for (const line of v.day?.voteLog ?? []) {
             expect(Object.keys(line.exec).sort()).toEqual(["no", "passed", "yes"]);
             if (line.cand !== undefined) {
               expect(Object.keys(line.cand).sort()).toEqual(line.cand.candidate === undefined ? ["votes"] : ["candidate", "votes"]);
-              expect(line.n === day && (v.phase === "execVote" || v.phase === "candidateVote")).toBe(false);
               for (const vote of line.cand.votes) expect(Object.keys(vote).sort()).toEqual(["seat", "target"]);
             }
           }
-          // (1) 본인 표: 본인이 던진 값만, 그 단계에서만, 생존 중에만
-          if (v.me.voteAgree !== undefined) {
-            expect(v.phase).toBe("execVote");
+          // 본인 값: 본인이 던진 값만, 그 단계에서만, 생존 중에만 — 남의 값은 어떤 키로도 없다
+          if (v.me.verdictVote !== undefined) {
+            expect(v.phase).toBe("verdict");
             expect(isDead).toBe(false);
-            expect(v.me.voteAgree).toBe(execVotes.get(day)?.get(a.seat));
-            seen.agree.add(a.seat);
+            expect(verdictEver.get(day)?.get(a.seat)?.has(v.me.verdictVote)).toBe(true);
+            seen.verdictMine.add(a.seat);
+            if (v.me.verdictVote !== verdictFinal.get(day)?.get(a.seat)) flipFrames += 1;
           }
-          if (v.me.voteTarget !== undefined) {
-            expect(v.phase).toBe("candidateVote");
+          if (v.me.endDiscussion !== undefined) {
+            expect(v.phase).toBe("discussion");
             expect(isDead).toBe(false);
-            expect(everPicked(day, a.seat).has(v.me.voteTarget)).toBe(true);
-            expect(v.me.voteTarget).toBe(candidateVotes.get(day)?.get(a.seat)); // 이 시나리오의 취소는 같은 값으로 다시 고르므로 프레임 값은 최종 값과 같다
-            seen.target.add(a.seat);
-            hadTarget.add(`${day}:${a.seat}`);
-          } else if (v.phase === "candidateVote" && hadTarget.has(`${day}:${a.seat}`)) {
-            cancelFrames += 1;
+            expect(v.me.endDiscussion).toBe(true);
+            expect(pressed.get(day)?.has(a.seat)).toBe(true);
+            seen.endMine.add(a.seat);
           }
         }
       }
 
       // 받을 사람은 실제로 받았다 — 아무도 못 받는 검사가 되지 않게.
       const everyone = bySeat.map((a) => a.seat);
-      expect([...seen.agree].sort()).toEqual(everyone);
-      expect([...seen.target].sort()).toEqual(everyone);
+      // 누른 사람만 본인 표시를 받는다. 네 번째 표는 과반이라 곧장 지목으로 넘어가 토론 프레임을 더 받지 않는다.
+      expect([...seen.endMine].sort()).toEqual(bySeat.slice(0, 3).map((a) => a.seat));
+      expect([...seen.points].sort()).toEqual(everyone);
+      expect([...seen.voted].sort()).toEqual(everyone);
+      expect([...seen.verdict].sort()).toEqual(everyone);
       expect([...seen.noExec].sort()).toEqual(everyone);
       expect([...seen.result].sort()).toEqual(everyone);
       expect([...seen.execution].sort()).toEqual(everyone);
-      expect(cancelFrames).toBeGreaterThanOrEqual(1); // 취소 프레임을 실제로 하나 이상 봤다(결정 0040)
+      expect(seen.verdictMine.size).toBeGreaterThanOrEqual(5); // 1일차 투표자 5명 중 다섯이 자기 값을 받았다
+      expect(flipFrames).toBeGreaterThanOrEqual(1); // 값을 바꾼 프레임을 실제로 하나 이상 봤다(그 소켓만)
 
-      // (10) 종료: 모든 소켓의 result 가 같고, 요약에 1일차 의사가 지킨 밤과 2일차 불통과가 있다.
+      // 종료: 모든 소켓의 result 가 같고, 요약에 1일차 의사가 지킨 밤과 2일차 동률이 있다.
       const results = actors.map((a) => lastViewOf(a.sock).result);
       expect(new Set(results.map((r) => JSON.stringify(r))).size).toBe(1);
       const result = results[0]!;
       expect(result.winner).toBe("citizenWin");
       expect(result.seats).toEqual(bySeat.map((a) => ({ seat: a.seat, job: a.role })));
       const row = (n: number) => result.summary.find((r) => r.n === n);
-      expect(row(1)?.exec).toEqual({ yes: 4, no: 2, passed: true, candidate: mafiaA.seat });
+      expect(row(1)?.exec).toEqual({ yes: 4, no: 1, passed: true, candidate: mafiaA.seat });
       expect(row(1)?.night).toEqual({ target: victimX.seat, died: false });
-      expect(row(2)?.exec).toEqual({ yes: 2, no: 3, passed: false });
-      expect(row(3)?.exec).toEqual({ yes: 5, no: 0, passed: true, candidate: mafiaB.seat });
+      expect(row(2)?.exec).toEqual({ yes: 0, no: 0, passed: false });
+      expect(row(3)?.exec).toEqual({ yes: 4, no: 0, passed: true, candidate: mafiaB.seat });
     },
   );
 });
@@ -881,7 +919,7 @@ describe("테스트 방 봇 투표 설정은 손님·게임 중 프레임에 새
     expect(summary(await settle(guest, guestFrom))).toBe("[]");
     send(r.host, { t: "start" });
     for (const sock of [r.host, guest]) await nextFrame(sock, (m) => m.t === "state" && m.view.phase === "assigning");
-    await advanceTo(r.code, [r.host, guest], "execVote");
+    await advanceTo(r.code, [r.host, guest], "nomination");
     for (const sock of [r.host, guest]) await flush(sock);
     // 손님이 받은 모든 프레임의 모든 경로 키 이름에 testBotVote 가 없다(허용 경로 목록은 넓히지 않는다)
     for (const raw of collect(guest)) {

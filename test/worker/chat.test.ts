@@ -4,7 +4,7 @@ import { env } from "cloudflare:workers";
 import { runInDurableObject } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 import type { PhaseId, ServerMessage } from "../../shared/protocol";
-import { actorsOf, advanceTo, chatSend, chatsOf, connect, createRoom, editRoom, hello, joinOk, mapPlayers, mark, nextFrame, resetChatRates, seat, send, settle, skipThrough, storedRoom, summary, typingSend, voteCandidate, voteExec } from "./helpers";
+import { actorsOf, advanceTo, chatSend, chatsOf, connect, createRoom, editRoom, hello, joinOk, mapPlayers, mark, nextFrame, resetChatRates, seat, send, settle, skipThrough, storedRoom, summary, typingSend, pointAll, verdictAll } from "./helpers";
 import type { Actor, TestSocket } from "./helpers";
 
 /** settle 이 돌려준 프레임 가운데 typing 만 한 줄 문자열로(실패 보고가 한 줄이어야 한다). */
@@ -382,23 +382,25 @@ describe("채팅 — 채널 (CHAT-02·03)", () => {
   });
 });
 
-/** 처형 여부 투표를 모두 찬성으로 통과시킨 뒤 후보 선택까지 끌고 간다. 후보는 첫 시민이고, 후보는 둘째 시민에게 던진다. */
-async function startedAtVerdictStage(phase: "candidateVote" | "candidateVoteReveal" | "defense" | "execution"): Promise<Game> {
-  const g = await startedAt("execVote");
-  await voteExec(g.code, g.actors, Object.fromEntries(g.actors.map((a) => [a.seat, true])));
-  if (phase !== "candidateVote") {
-    const [candidate, other] = withRole(g, "citizen") as [Actor, Actor];
-    await voteCandidate(g.code, g.actors, Object.fromEntries(g.actors.map((a) => [a.seat, a === candidate ? other.seat : candidate.seat])));
-    if (phase !== "candidateVoteReveal") await advanceTo(g.code, g.socks, phase);
+/** 지목으로 첫 시민을 변론자로 몰고(그는 둘째 시민을 가리킨다) 변론 → 찬반 → 처형까지 끌고 간다(08-11 새 흐름). 찬반은 변론자를 뺀 전원 찬성이다. */
+async function startedAtVerdictStage(phase: "defense" | "verdict" | "execution"): Promise<Game> {
+  const g = await startedAt("nomination");
+  const [candidate, other] = withRole(g, "citizen") as [Actor, Actor];
+  await pointAll(g.code, g.actors, Object.fromEntries(g.actors.map((a) => [a.seat, a === candidate ? other.seat : candidate.seat])));
+  if (phase !== "defense") {
+    await advanceTo(g.code, g.socks, "verdict");
+    if (phase === "execution") {
+      await verdictAll(g.code, g.actors, Object.fromEntries(g.actors.filter((a) => a !== candidate).map((a) => [a.seat, true])));
+    }
   }
   for (const sock of g.socks) await settle(sock, mark(sock));
   return g;
 }
 
 describe("채팅 — 화면 없는 단계도 받는다 (D1, 결정 0044-23)", () => {
-  const stages = ["execVote", "candidateVote", "candidateVoteReveal", "defense", "execution", "morning"] as const;
+  const stages = ["nomination", "defense", "verdict", "execution", "morning"] as const;
   it.each(stages)("단계: %s 에서 산 사람의 줄이 서버 audience 규칙대로 ch all 로 모두에게 간다", async (phase) => {
-    const g = phase === "execVote" || phase === "morning" ? await startedAt(phase) : await startedAtVerdictStage(phase);
+    const g = phase === "nomination" || phase === "morning" ? await startedAt(phase) : await startedAtVerdictStage(phase);
     expect((await storedRoom(g.code)).phase).toBe(phase);
     const sender = withRole(g, "police")[0]!;
     const got = await observe(g, sender, () => chatSend(sender.sock, "투표 신중하게 해요"));

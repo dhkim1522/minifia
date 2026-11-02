@@ -2,7 +2,7 @@ import { env, exports } from "cloudflare:workers";
 import { runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 import type { RoomView, ServerMessage } from "../../shared/protocol";
-import { DISCUSSION_MS, EXEC_VOTE_MS } from "../../shared/game/phases";
+import { DISCUSSION_MS, NOMINATION_MS } from "../../shared/game/phases";
 import { ROOM_TTL_MS, UNCONNECTED_ROOM_TTL_MS } from "../../shared/game/room";
 import { alarmOf, closed, connect, createRoom, editRoom, forceDue, hello, nextFrame, seat, send, storedRoom } from "./helpers";
 import type { Seated } from "./helpers";
@@ -61,7 +61,7 @@ describe("알람", () => {
     expect(await alarmOf(r.code)).toBe(forced + 2000);
   });
 
-  it("낮 한 바퀴와 밤·아침(dayAnnounce → discussion → execVote → night → morning → dayAnnounce)을 알람이 차례로 넘기고 저장된 일차는 2 가 된다", async () => {
+  it("낮 한 바퀴와 밤·아침(dayAnnounce → discussion → nomination → night → morning → dayAnnounce)을 알람이 차례로 넘기고 저장된 일차는 2 가 된다", async () => {
     const r = await startedRoom();
     const stub = env.ROOM.getByName(r.code);
     const advance = async (): Promise<number> => {
@@ -79,7 +79,7 @@ describe("알람", () => {
     const steps: Array<[string, number]> = [
       // 07-08: 순차 주장 단계가 없다 — 낮 시작 발표 마감 다음이 바로 토론이다
       ["discussion", DISCUSSION_MS],
-      ["execVote", EXEC_VOTE_MS], // 표가 없으므로 다음은 night
+      ["nomination", NOMINATION_MS], // 지목이 0표이므로 다음은 night
       ["night", 30_000],
       ["morning", 5_000],
       ["dayAnnounce", 2_000],

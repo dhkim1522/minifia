@@ -187,7 +187,8 @@ export interface StoredRoom {
   voteLog?: Array<{ n: number; exec: { yes: number; no: number; passed: boolean }; cand?: { votes: Array<{ seat: number; target: number }>; candidate?: number } }>;
   winner?: string;
   verdict?: { passed: boolean; candidate?: number };
-  players: Array<{ role?: string; execVote?: boolean; candidateVote?: number; alive?: boolean }>;
+  /** 8페이즈 서버 전용 개인 값: 지목·찬반·토론 끝내기. 마감 훅이 키째 지우고 토론 진입 훅이 끝내기를 지운다(결정 0060). */
+  players: Array<{ role?: string; execVote?: boolean; candidateVote?: number; nominate?: number; verdictVote?: boolean; endVote?: boolean; alive?: boolean }>;
 }
 
 export async function storedRoom(code: string): Promise<StoredRoom> {
@@ -309,29 +310,33 @@ async function untilLeft(actors: Actor[], from: PhaseId): Promise<void> {
 }
 
 /**
- * 처형 여부 투표로 단계를 넘긴다: agreeBySeat 에 든 사람이 execVote 를 보내고(없는 사람은 안 던진다), 모든 actor 가 자기 소켓을 flush 한 뒤
- * 마감을 당겨 execVote 를 벗어난 단계 state 를 모두 받을 때까지 기다린다. 마감 시각을 돌려준다.
+ * 지목으로 단계를 넘긴다(08-11): targetBySeat[행위자 seat] = 대상 seat 에 든 사람이 point 를 보내고(없는 사람은 안 던진다),
+ * 모든 actor 가 자기 소켓을 flush 한 뒤 마감을 당겨 지목을 벗어난 단계 state 를 모두 받을 때까지 기다린다. 마감 시각을 돌려준다.
+ * 최다 한 명이면 변론, 동률·0표면 밤으로 간다(마감 훅).
  */
-export async function voteExec(code: string, actors: Actor[], agreeBySeat: Readonly<Record<number, boolean>>): Promise<number> {
+export async function pointAll(code: string, actors: Actor[], targetBySeat: Readonly<Record<number, number>>): Promise<number> {
   const marks = actors.map((a) => mark(a.sock));
   for (const a of actors) {
-    if (Object.hasOwn(agreeBySeat, a.seat)) send(a.sock, { t: "execVote", agree: agreeBySeat[a.seat] });
+    if (Object.hasOwn(targetBySeat, a.seat)) send(a.sock, { t: "point", target: targetBySeat[a.seat] });
   }
   for (let i = 0; i < actors.length; i += 1) await settle(actors[i]!.sock, marks[i]!);
   const deadline = await closePhase(code);
-  await untilLeft(actors, "execVote");
+  await untilLeft(actors, "nomination");
   return deadline;
 }
 
-/** 후보 선택 투표로 단계를 넘긴다(voteExec 와 같은 모양): targetBySeat[투표자 seat] = 고른 seat. 마감 시각을 돌려준다. */
-export async function voteCandidate(code: string, actors: Actor[], targetBySeat: Readonly<Record<number, number>>): Promise<number> {
+/**
+ * 찬반으로 단계를 넘긴다(pointAll 과 같은 모양): agreeBySeat[유권자 seat] = 찬성 여부. 마감을 당겨 찬반을 벗어난 단계(처형)를 모두 받을 때까지 기다린다.
+ * 마감 시각을 돌려준다. 변론자는 던질 수 없으니 agreeBySeat 에 넣지 않는다.
+ */
+export async function verdictAll(code: string, actors: Actor[], agreeBySeat: Readonly<Record<number, boolean>>): Promise<number> {
   const marks = actors.map((a) => mark(a.sock));
   for (const a of actors) {
-    if (Object.hasOwn(targetBySeat, a.seat)) send(a.sock, { t: "candidateVote", target: targetBySeat[a.seat] });
+    if (Object.hasOwn(agreeBySeat, a.seat)) send(a.sock, { t: "verdict", agree: agreeBySeat[a.seat] });
   }
   for (let i = 0; i < actors.length; i += 1) await settle(actors[i]!.sock, marks[i]!);
   const deadline = await closePhase(code);
-  await untilLeft(actors, "candidateVote");
+  await untilLeft(actors, "verdict");
   return deadline;
 }
 
@@ -357,8 +362,8 @@ export const mapPlayers = (
   fn: (p: Record<string, unknown>) => Record<string, unknown>,
 ): Record<string, unknown> => ({ ...room, players: (room.players as Array<Record<string, unknown>>).map(fn) });
 
-/** 저장된 플레이어 가운데 key 가 정해진 사람 수. */
-export async function votesIn(code: string, key: "execVote" | "candidateVote"): Promise<number> {
+/** 저장된 플레이어 가운데 key 가 정해진 사람 수(서버 전용 개인 표: 지목 nominate·찬반 verdictVote). */
+export async function votesIn(code: string, key: "nominate" | "verdictVote"): Promise<number> {
   return (await storedRoom(code)).players.filter((p) => p[key] !== undefined).length;
 }
 
@@ -376,7 +381,8 @@ export async function skipOnce(seated: Seated): Promise<void> {
   const socks = [seated.host, ...seated.guests.map((g) => g.sock)];
   for (const s of socks) s.cursor = s.frames.length;
   send(seated.host, { t: "testSkip" });
-  for (const s of socks) await nextFrame(s, (m) => m.t === "state");
+  // 08-11: 낮 단계가 늘어(지목·찬반 + 변론자 걷기) 전체 시험이 동시에 돌 때 DO 재기동 뒤 첫 전이가 기본 3초를 넘기는 일이 있어 한도를 넓힌다.
+  for (const s of socks) await nextFrame(s, (m) => m.t === "state", 10_000);
 }
 
 /** 저장된 단계가 phase 가 될 때까지 skipOnce 를 거듭한다. */
@@ -386,20 +392,21 @@ export async function skipThrough(seated: Seated, phase: PhaseId): Promise<void>
 }
 
 /**
- * 시작된 테스트 방(방장 + 봇, 방장 직업은 마피아로 지정해 두어야 한다)을 처형 여부 투표부터 종료까지 끌고 간다.
- * 여부 투표는 봇 전원 찬성(통과), 후보 선택은 봇 전원이 방장(seat 0)을, 방장이 seat 1 을 골라 방장이 후보가 된다 → 마피아 처형 → 시민 승리.
- * hook 은 두 투표 단계에서 표를 손으로 정하기 전에 불린다(봇이 실제로 던지게 하는 데 쓴다).
+ * 시작된 테스트 방(방장 + 봇, 방장 직업은 마피아로 지정해 두어야 한다)을 지목부터 종료까지 끌고 간다(08-11).
+ * 지목은 봇 전원이 방장(seat 0)을, 방장이 seat 1 을 골라 방장이 변론자가 된다. 찬반은 봇 전원 찬성(방장은 변론자라 던지지 않는다) → 통과 → 마피아 처형 → 시민 승리.
+ * hook 은 두 단계에서 표를 손으로 정하기 전에 불린다(봇이 실제로 던지게 하는 데 쓴다).
  */
-export async function driveToEnded(seated: Seated, hook?: (stage: "execVote" | "candidateVote") => Promise<void>): Promise<void> {
-  await skipThrough(seated, "execVote");
-  await hook?.("execVote");
-  await editRoom(seated.code, (room) => mapPlayers(room, (p) => (p.isBot === true ? { ...p, execVote: true } : p)));
-  await skipOnce(seated);
-  expect((await storedRoom(seated.code)).phase).toBe("candidateVote");
-  await hook?.("candidateVote");
+export async function driveToEnded(seated: Seated, hook?: (stage: "nomination" | "verdict") => Promise<void>): Promise<void> {
+  await skipThrough(seated, "nomination");
+  await hook?.("nomination");
   await editRoom(seated.code, (room) =>
-    mapPlayers(room, (p) => (p.isBot === true ? { ...p, candidateVote: 0 } : p.seat === 0 ? { ...p, candidateVote: 1 } : p)),
+    mapPlayers(room, (p) => (p.isBot === true ? { ...p, nominate: 0 } : p.seat === 0 ? { ...p, nominate: 1 } : p)),
   );
+  await skipOnce(seated);
+  expect((await storedRoom(seated.code)).phase).toBe("defense");
+  await skipThrough(seated, "verdict");
+  await hook?.("verdict");
+  await editRoom(seated.code, (room) => mapPlayers(room, (p) => (p.isBot === true ? { ...p, verdictVote: true } : p)));
   await skipThrough(seated, "ended");
 }
 
