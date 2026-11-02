@@ -3,8 +3,9 @@
 // 서버가 보내지 않은 위치는 애초에 없다: 산 사람 viewer 의 좌석 표에는 탈락한 사람이 '숨김' 표시로도 들어가지 않는다(키 자체가 없다, T-08-25).
 // 읽는 것은 공개 정보(players·alive·day.points·day.candidate)와 본인 유령 여부(spectate·내 alive)뿐이다.
 import { isAlive } from "../../shared/game/alive";
+import { STAGE_SPOT, UNIT } from "../../shared/game/map";
 import type { PhaseId, RoomView } from "../../shared/protocol";
-import { GHOST_FADE_END_MS, pointsTally } from "../game/dayView";
+import { GHOST_FADE_END_MS, GHOST_RISE_MS, pointsTally } from "../game/dayView";
 import { GATHER_CENTER, ZOOM_MAJORITY, ZOOM_MIN_STAGE_H } from "./camera";
 
 /** 렌더러가 읽는 조명 단계(UI-SPEC 단계 조명). 렌더러의 LightingPhase 확장은 08-10 이 한다 */
@@ -119,32 +120,84 @@ export function tensionOf(view: RoomView): Tension {
   return { level: 0 };
 }
 
-/** 위 계산을 한 장면으로 묶는다. stageH = 이 단계의 스테이지 사각형 높이(px) */
+/** 위 계산을 한 장면으로 묶는다. stageH = 이 단계의 스테이지 사각형 높이(px), mine = 내 낙관적 지목 대상(서버 응답 전) */
 export function sceneLook(view: RoomView, opts: { stageH: number; fading?: ReadonlyMap<number, number>; now?: number; mine?: number }): SceneLook {
   const tension = tensionOf(view);
+  const seats = visibleSeats(view, opts.fading, opts.now);
+  const pointing = pointingOf(view, opts.mine);
+  for (const [seat, target] of Object.entries(pointing)) {
+    const look = seats[Number(seat)];
+    if (look) look.pointAt = target;
+  }
   return {
     camera: cameraModeOf(view, opts.stageH),
     lighting: lightingOf(view.phase),
     tension: tension.level,
     ...(tension.focus !== undefined ? { focusSeat: tension.focus } : {}),
-    seats: visibleSeats(view, opts.fading, opts.now),
+    seats,
   };
 }
 
-// ---- RED 뼈대(Task 2): 아직 동작을 구현하지 않는다 ----
+// ---- 처형 연출·유령·무대·지목 방향 ----
+
+/** 처형된 사람의 반투명 불투명도(UI-SPEC 유령 모양: 블록아웃 setGhost 의 0.35 보다 UI-SPEC 0.6 이 이긴다) */
+export const GHOST_OPACITY = 0.6;
+/** 처형 연출에서 위로 떠오르는 높이(월드 단위, UI-SPEC 처형 +1.2) */
+export const EXEC_RISE_Y = 1.2;
+/** 유령이 떠 있는 기본 높이(월드 단위) */
+export const GHOST_BASE_Y = 0.35;
+/** 유령 흔들림 진폭(월드 단위) */
+export const GHOST_BOB_Y = 0.08;
+/** 무대 위 윗면 반경(월드 단위). 이 안이면 발이 무대 높이에 선다(블록아웃 bar.js ctx.center 와 같은 점) */
 export const STAGE_TOP_R = 1.18;
-export function executionFade(_elapsedMs: number, _reduced: boolean): { opacity: number; rise: number; hidden: boolean } {
-  return { opacity: 1, rise: 0, hidden: false };
+/** 무대 위 발 높이(월드 단위, 블록아웃 ctx.center.y) */
+export const STAGE_TOP_Y = 0.29;
+
+/**
+ * 처형 연출 시간표(UI-SPEC 처형, 알림 시작 기준 ms): 0~1400 불투명도 1 → 0.6·높이 0 → 1.2, 1400~2400 불투명도 0.6 → 0 (높이 유지), 2400 부터 숨김.
+ * 모션 줄이기면 떠오름 없이 0.6 으로 곧바로 서 있다가 2400 에 사라진다. 음수는 0 으로 본다.
+ */
+export function executionFade(elapsedMs: number, reduced: boolean): { opacity: number; rise: number; hidden: boolean } {
+  const t = Math.max(0, elapsedMs);
+  if (t >= GHOST_FADE_END_MS) return { opacity: 0, rise: reduced ? 0 : EXEC_RISE_Y, hidden: true };
+  if (reduced) return { opacity: GHOST_OPACITY, rise: 0, hidden: false };
+  if (t < GHOST_RISE_MS) {
+    const k = t / GHOST_RISE_MS;
+    return { opacity: 1 - (1 - GHOST_OPACITY) * k, rise: EXEC_RISE_Y * k, hidden: false };
+  }
+  const k = (t - GHOST_RISE_MS) / (GHOST_FADE_END_MS - GHOST_RISE_MS);
+  return { opacity: GHOST_OPACITY * (1 - k), rise: EXEC_RISE_Y, hidden: false };
 }
-export function ghostFloatY(_tSec: number, _reduced: boolean): number {
-  return 0;
+
+/** 유령 떠다님 높이(월드 단위) = 0.35 + sin(2t) × 0.08, t 는 초(주기 π초). 모션 줄이기면 0.35 고정 */
+export function ghostFloatY(tSec: number, reduced: boolean): number {
+  return reduced ? GHOST_BASE_Y : GHOST_BASE_Y + Math.sin(2 * tSec) * GHOST_BOB_Y;
 }
-export function stageLiftY(_pos: { x: number; z: number }): number {
-  return 0;
+
+/** 단위 좌표 발 위치의 무대 위 높이: 무대 윗면 반경 1.18 안(경계 포함)이면 0.29, 아니면 0 */
+export function stageLiftY(pos: { x: number; z: number }): number {
+  return Math.hypot(pos.x - STAGE_SPOT.x / UNIT, pos.z - STAGE_SPOT.z / UNIT) <= STAGE_TOP_R ? STAGE_TOP_Y : 0;
 }
-export function pointingOf(_view: RoomView, _mine?: number): Record<number, number> {
-  return {};
+
+/**
+ * 좌석 → 가리키는 대상 좌석 표(지목 단계). 남의 지목은 서버가 공개한 day.points 만 쓰고(서버 응답 전에 남의 표를 미리 그리지 않는다, T-08-26),
+ * 내 낙관적 선택(mine)이 있으면 내 좌석 한 줄만 덮는다. 내가 유령이거나 나를 고른 값은 덮지 않는다.
+ */
+export function pointingOf(view: RoomView, mine?: number): Record<number, number> {
+  if (view.phase !== "nomination") return {};
+  const out: Record<number, number> = {};
+  for (const line of view.day?.points ?? []) out[line.seat] = line.target;
+  if (mine !== undefined) {
+    const me = view.players.find((p) => p.seat === view.me.seat);
+    if (me !== undefined && isAlive(me) && mine !== view.me.seat) out[view.me.seat] = mine;
+  }
+  return out;
 }
-export function leaderShift(_prev: RoomView | null, _cur: RoomView): number | null {
-  return null;
+
+/** 선두가 새 사람으로 바뀌었으면 그 좌석(결정 0049 손사래 한 번), 아니면 null. 이전 view 가 없으면(첫 스냅샷·재접속) 효과 없이 null */
+export function leaderShift(prev: RoomView | null, cur: RoomView): number | null {
+  if (prev === null) return null;
+  const now = pointsTally(cur).leader;
+  if (now === undefined) return null;
+  return pointsTally(prev).leader === now ? null : now;
 }
