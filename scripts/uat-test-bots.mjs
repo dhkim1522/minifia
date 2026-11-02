@@ -2,9 +2,10 @@
 // 밤 pick 을 저절로 하며, 어떤 프레임에도 봇 표시(isBot·botPlan·token)가 새지 않고, 일반 방·손님·시작 뒤에는 거부되는지 증명한다.
 // 방장 1명(+ 사람 손님 1명)만 사람이고 나머지는 서버 봇이라 외부 봇 스크립트 없이 한 판의 모든 단계가 돈다(전체 약 2분).
 // 봇의 채팅 줄은 사람과 같은 chat 프레임(ch·seat·seq·text·at)으로 올 뿐 봇 표시가 없다. 직업 주장 차례는 없다 — 넘기기 한 번 = 단계 하나다.
-// 낮 토론 뒤는 4페이즈 흐름이다(결정 0034·0036): execVote → (통과하면) candidateVote → candidateVoteReveal → defense → execution → night, 불통과면 곧장 night.
-// 넘기기는 투표 단계에서 안 던진 봇 표를 먼저 채우고(결정 0022·0024) 분기를 따르므로 어느 길로 갈지는 무작위다 — 그래서 넘기기 도우미는
-// "목표 단계 또는 ended 까지" 되풀이하고 지나간 단계를 기록한다. 판이 ended 로 끝나면(마피아가 처형된 경우 등) 결과에 적고 testReset 으로 다음 검사를 잇는다.
+// 낮 토론 뒤는 8페이즈 흐름이다(결정 0060): nomination → (최다 득표 한 명이면) defense → verdict → execution → night, 0표·동률이면 곧장 night.
+// 넘기기는 지목·찬반 단계에서 안 던진 봇 표를 먼저 채우고(결정 0022·0024) 분기를 따른다. 1일차는 testBotVote 로 봇 지목을 방장에게, 봇 찬반을 찬성으로 고정해
+// 처형 구간(방장이 변론자)을 결정적으로 돈다. 그 밖의 길은 무작위라 넘기기 도우미는 "목표 단계 또는 ended 까지" 되풀이하고 지나간 단계를 기록한다.
+// 판이 ended 로 끝나면(마피아가 처형된 경우 등) 결과에 적고 testReset 으로 다음 검사를 잇는다.
 // 스크립트는 전지적이다: 각 클라이언트의 view 로 확인한다. 토큰은 어떤 출력에도 찍지 않는다. Node 22 내장 fetch·WebSocket 만 쓴다.
 //
 // 사용법: node scripts/uat-test-bots.mjs [--prod | <기준 주소>] [--previous-version V]
@@ -44,7 +45,8 @@ const MAX_SKIPS = 12; // 목표 단계에 닿기까지 testSkip 최대 횟수(�
 const DISCUSSION_WAIT_MS = 15_000; // 봇 첫 토론 줄은 단계 진입 2~12초 뒤
 const NIGHT_CHAT_WAIT_MS = 15_000; // 마피아 봇 밤 줄은 60% 확률로 진입 8~14초 뒤 한 번
 const NIGHT_PICK_WAIT_MS = 8000; // 봇 밤 pick 은 단계 진입 1~6초 뒤
-const EXEC_VOTE_WAIT_MS = 9000; // 봇 여부 투표는 단계 진입 1~7초 뒤(단계 길이 13초 안)
+const POINT_WAIT_MS = 10_000; // 봇 지목은 단계 진입 2~8초 뒤(단계 길이 15초 안)
+const VERDICT_WAIT_MS = 8000; // 봇 찬반은 단계 진입 1~6초 뒤(단계 길이 10초 안)
 const MAX_ATTEMPTS = 6; // g 방: 방장·동료 마피아가 둘 다 살아 밤에 닿을 때까지 다시 시도하는 최대 판 수
 const MAX_NIGHTS = 5;
 const BOT_NAMES = ["봇가나다라마바사", "봇아자차카타파하", "봇갸냐댜랴먀뱌샤", "봇야쟈챠캬탸퍄햐", "봇거너더러머버서", "봇어저처커터퍼허", "봇고노도로모보소"];
@@ -106,6 +108,17 @@ function connect(c, code) {
 }
 
 const send = (c, m) => c.ws.send(JSON.stringify(m));
+// 객체를 깊이 훑어 키가 key 인 경로를 out(Set)에 모은다. 배열 칸은 [i] 로 쓴다.
+function keyPaths(value, key, path, out) {
+  if (Array.isArray(value)) value.forEach((v, i) => keyPaths(v, key, `${path}[${i}]`, out));
+  else if (value && typeof value === "object") {
+    for (const [k, v] of Object.entries(value)) {
+      const p = path ? `${path}.${k}` : k;
+      if (k === key) out.add(p);
+      keyPaths(v, key, p, out);
+    }
+  }
+}
 const states = (c) => c.frames.filter((f) => f.msg.t === "state");
 const lastView = (c) => states(c).at(-1)?.msg.view ?? null;
 
@@ -240,6 +253,9 @@ async function main() {
 
   // ---- d. 시작 → 봇 행동 ----
   await act(host, { t: "testRole", role: "citizen" }); // 방장이 시민이면 마피아는 봇이다(사람은 아무도 pick 하지 않는다)
+  // 봇 투표 고정(P-13, 결정 0060-13): pick = 지목 대상(방장), exec = 찬반(찬성). 방장이 변론자가 되는 처형 구간을 결정적으로 돈다.
+  const fixedVote = summary(await act(host, { t: "testBotVote", exec: "yes", pick: "host" }));
+  check("d", "방장 testBotVote {exec yes, pick host} → state 한 개, view.me.testBotVote 가 고정 값", fixedVote === "[state:lobby]" && lastView(host).me.testBotVote?.exec === "yes" && lastView(host).me.testBotVote?.pick === "host", `${fixedVote} ${JSON.stringify(lastView(host).me.testBotVote ?? null)}`);
   send(host, { t: "start" });
   await waitPhase([host], "assigning", 5000, "배정 시작(봇 4 + 방장)");
   check("d", "방장 + 봇 4 로 시작이 통함(봇은 연결된 사람으로 센다)", lastView(host).phase === "assigning" && lastView(host).players.length === 5, String(lastView(host).players.length));
@@ -263,17 +279,34 @@ async function main() {
   const discErrors = host.frames.slice(discMark).filter((f) => f.msg.t === "error" || f.msg.t === "chatReject").length;
   check("d", "discussion: 방장에게 오류·chatReject 프레임이 없음(봇 거부는 소켓에 닿지 않음)", discErrors === 0, String(discErrors));
 
-  // 처형 여부 투표: 봇 네 자리가 저절로 던진다(1~7초 뒤). 방장(사람)은 던지지 않으므로 방장 집계 합계 = 봇 수이고 me.voteAgree 는 없다.
-  await skipTo("execVote");
-  const tallied = await becomes(() => lastView(host).phase === "execVote" && (lastView(host).day?.execTally?.yes ?? 0) + (lastView(host).day?.execTally?.no ?? 0) === botSeats.length, EXEC_VOTE_WAIT_MS);
-  check("d", `execVote: ${EXEC_VOTE_WAIT_MS / 1000}초 안에 봇 네 자리의 표가 방장 day.execTally 합계에 올랐다(방장은 안 던짐)`, tallied, JSON.stringify(lastView(host).day?.execTally ?? null));
-  check("d", "execVote: 방장이 안 던졌으니 방장 me.voteAgree 키가 없음(남의 표는 오지 않음)", lastView(host).me.voteAgree === undefined && !("voteAgree" in lastView(host).me), "");
+  // 지목: 봇 네 자리가 저절로 지목한다(2~8초 뒤, 고정 pick host 라 모두 방장). 방장(사람)은 지목하지 않으므로 방장 day.points 는 봇 줄 4개다. 지목 줄은 공개 정보다.
+  await skipTo("nomination");
+  const pointed = await becomes(() => lastView(host).phase === "nomination" && (lastView(host).day?.points?.length ?? 0) === botSeats.length, POINT_WAIT_MS);
+  const pointLines = lastView(host).day?.points ?? [];
+  check("d", `nomination: ${POINT_WAIT_MS / 1000}초 안에 봇 네 자리의 지목이 방장 day.points 줄 수에 올랐다(방장은 안 지목함)`, pointed, JSON.stringify(pointLines));
+  check("d", "nomination: 봇 지목 대상은 모두 방장(고정 pick host)이고 줄 키는 seat·target 뿐, 방장은 줄에 없음",
+    pointLines.length === botSeats.length && pointLines.every((l) => l.target === host.seat && Object.keys(l).sort().join(",") === "seat,target" && l.seat !== host.seat), "");
+
+  // 변론: 방장이 최다 득표 한 명이라 변론자가 된다.
+  await skipTo("defense");
+  check("d", "defense: 방장이 후보(day.candidate = 방장 seat)", lastView(host).day?.candidate === host.seat, String(lastView(host).day?.candidate));
+
+  // 찬반: 변론자(방장)는 던지지 않고, 봇 네 자리가 저절로 찬성을 던진다(1~6초 뒤). 공개 값은 던진 좌석 목록(day.voted)뿐이다.
+  await skipTo("verdict");
+  const votedAll = await becomes(() => lastView(host).phase === "verdict" && JSON.stringify(lastView(host).day?.voted) === JSON.stringify(botSeats), VERDICT_WAIT_MS);
+  check("d", `verdict: ${VERDICT_WAIT_MS / 1000}초 안에 봇 네 자리의 찬반이 방장 day.voted(좌석 목록)에 올랐다(방장은 변론자라 안 던짐)`, votedAll, JSON.stringify(lastView(host).day?.voted ?? null));
+  check("d", "verdict: 방장이 변론자라 방장 me.verdictVote 키가 없음(남의 값은 오지 않음)", lastView(host).me.verdictVote === undefined && !("verdictVote" in lastView(host).me), "");
+
+  // 처형: 찬성 4·반대 0 → 통과, 방장 처형. 이제 방장은 유령이라 밤에는 관전 정보를 받는다.
+  await skipTo("execution");
+  check("d", "execution: 방장이 처형됨(day.execution.seat = 방장), day.verdict {yes:4, no:0, passed:true}",
+    lastView(host).day?.execution?.seat === host.seat && JSON.stringify(lastView(host).day?.verdict) === JSON.stringify({ yes: botSeats.length, no: 0, passed: true }), JSON.stringify([lastView(host).day?.execution ?? null, lastView(host).day?.verdict ?? null]));
 
   // 밤: 봇 마피아가 저절로 pick 한다. 의사 봇이 구한 밤이면 다음 밤까지 되풀이한다(최대 5밤).
-  // 여부 투표가 통과하면 candidateVote → ... → execution 을 지나 night 이고, 마피아가 처형돼 승패가 나면 ended 에서 멈춘다(그 경우 이 구간은 건너뛴다).
+  // 방장(시민)이 처형돼 마피아·경찰·의사·시민 봇이 남으므로 판은 계속된다. 승패가 나면 ended 에서 멈춘다(그 경우 이 구간은 건너뛴다).
   const toNight = await skipTo("night");
   let gameEnded = toNight.ended;
-  console.log(`1일차 execVote 이후 경로: ${toNight.path.join(" > ")}`);
+  console.log(`1일차 execution 이후 경로: ${toNight.path.join(" > ")}`);
   let eliminated = null;
   let spectateChecked = null;
   let nightsTried = 0;
@@ -308,10 +341,16 @@ async function main() {
   // ---- e. 누출 없음 ----
   const hostText = host.frames.map((f) => f.raw).join("\n");
   const guestText = guest.frames.map((f) => f.raw).join("\n");
-  // 문자열 검색이라 단계 이름 값("phase":"execVote" 등)과 겹치지 않도록 투표·판정 서버 전용 키는 키 꼴(따옴표+콜론)로 찾는다.
-  const LEAK_NEEDLES = ["isBot", "botPlan", '"token"', '"execVote":', '"candidateVote":', '"verdict":', '"nightLog":', '"lastExecPhrase":'];
-  check("e", "방장·손님 프레임 원문에 isBot·botPlan·따옴표 붙은 token 키·서버 전용 키(투표·판정·밤 일지·처형 문구)가 없음",
+  // 문자열 검색이라 단계 이름 값("phase":"verdict" 등)과 겹치지 않도록 지목·토론 끝내기·밤 일지·처형 문구 서버 전용 키는 키 꼴(따옴표+콜론)로 찾는다.
+  // verdict·verdictVote 는 공개 와이어 경로(view.day.verdict 처형 단계의 찬반 수, view.me.verdictVote 본인 값)가 있어 아래에서 경로로 따로 본다.
+  const LEAK_NEEDLES = ["isBot", "botPlan", '"token"', '"nominate":', '"endVote":', '"nightLog":', '"lastExecPhrase":'];
+  check("e", "방장·손님 프레임 원문에 isBot·botPlan·따옴표 붙은 token 키·서버 전용 키(개인 지목·토론 끝내기·밤 일지·처형 문구)가 없음",
     ![hostText, guestText].some((t) => LEAK_NEEDLES.some((needle) => t.includes(needle))), "");
+  const verdictPaths = new Set();
+  const verdictVotePaths = new Set();
+  for (const c of [host, guest]) for (const f of states(c)) { keyPaths(f.msg, "verdict", "", verdictPaths); keyPaths(f.msg, "verdictVote", "", verdictVotePaths); }
+  check("e", "verdict 키는 view.day.verdict(처형 단계 찬반 수) 경로뿐, verdictVote 키는 어느 프레임에도 없음(방장은 변론자라 안 던졌고 봇 값은 서버 안에만)",
+    [...verdictPaths].every((p) => p === "view.day.verdict") && verdictVotePaths.size === 0, `${[...verdictPaths].join(",")} / ${[...verdictVotePaths].join(",")}`);
   check("e", "손님 프레임에 testBots 가 없음", !guestText.includes("testBots"), "");
   // 봇이 보낸 줄도 사람 줄과 같은 모양이다: 키는 ch·seat·seq·text·at 뿐이고(봇 표시·수신자 마스크 없음) 본문은 어떤 고정 목록에도 없는 글이 아니다.
   const chatFrames = [host, guest].flatMap((c) => c.frames.filter((f) => f.msg.t === "chat"));
@@ -321,7 +360,7 @@ async function main() {
   const botSeatSet = new Set(botSeats);
   const oddBotText = chatFrames.filter((f) => botSeatSet.has(f.msg.seat) && !knownLines.has(f.msg.text)).map((f) => f.msg.text);
   check("e", "봇 자리에서 온 모든 chat 본문이 고정 문구 목록 안", oddBotText.length === 0, oddBotText.join(" | "));
-  check("e", "방장은 한 번도 안 던졌으니 방장 프레임 어디에도 voteAgree 키가 없음(남의 여부 표가 새지 않음)", !hostText.includes('"voteAgree"'), "");
+  check("e", "방장은 한 번도 안 던졌으니 방장 프레임 어디에도 agree 키가 없음(남의 찬반 값이 새지 않음)", !hostText.includes('"agree"'), "");
   const badKeys = [host, guest].flatMap((c) => states(c).flatMap((f) => f.msg.view.players.filter((p) => Object.keys(p).sort().join(",") !== PLAYER_KEYS)));
   check("e", "모든 state 의 players 항목 키가 alive·connected·isHost·nickname·seat 다섯", badKeys.length === 0, String(badKeys.length));
   const botDown = states(host).slice().filter((f) => f.msg.view.players.some((p) => p.seat !== host.seat && p.connected !== true));
@@ -350,7 +389,7 @@ async function main() {
   send(h2, { t: "testBots", count: 5 });
   check("g", "방장 testBots 5 → 인원 6", await becomes(() => lobbySize(h2, 6), SKIP_WAIT_MS), String(lastView(h2).players.length));
   await act(h2, { t: "testRole", role: "mafia" });
-  // 1일차 여부 투표가 통과하면 처형이 한 명 나온다(봇 표는 넘기기가 채운다). 방장이나 동료 마피아가 처형되면 이 방의 목적(살아 있는 동료 봇 마피아의
+  // 1일차 지목에 최다 득표 한 명이 나오고 찬반이 통과하면 처형이 한 명 나온다(봇 표는 넘기기가 채운다). 방장이나 동료 마피아가 처형되면 이 방의 목적(살아 있는 동료 봇 마피아의
   // 밤 pick 이 방장에게 보임)을 볼 수 없으므로, 둘 다 살아 밤에 닿을 때까지 대기실로 되돌려 다시 시작한다(최대 MAX_ATTEMPTS 판).
   const skip2 = (next) => skipPhase(h2, next, `R2 ${next}`);
   let attempts = 0;

@@ -1,6 +1,6 @@
 // 테스트 방 방장 도구(결정 0022) 배포본 확인: 단계 넘기기·대기실 복귀·내 직업 지정과 손님·일반 방·시작 뒤 거부를 증명한다.
 // 방장 1명 + 봇 3명(모두 연결)으로 테스트 방(POST /api/rooms 본문 testMode true)을 만들어 단계를 testSkip 으로 넘기므로
-// 토론 40초·밤 30초를 기다리지 않는다(전체 약 1분). 넘기기 한 번 = 단계 하나다(직업 주장 차례는 7페이즈에서 없어졌다).
+// 토론 90초·밤 30초를 기다리지 않는다(전체 약 1분). 넘기기 한 번 = 단계 하나다(직업 주장 차례는 7페이즈에서 없어졌다).
 // 일반 방(본문 nickname 만)에서는 세 요청이 모두 거부되는지도 본다.
 // 스크립트는 전지적이다: 각 클라이언트의 view 로 확인한다. 토큰은 어떤 출력에도 찍지 않는다. Node 22 내장 fetch·WebSocket 만 쓴다.
 //
@@ -178,11 +178,11 @@ async function main() {
   check("d", "역할 확인에서 방장 testRole → WRONG_PHASE", revealRole === "[error:WRONG_PHASE,state:roleReveal]", revealRole);
 
   // ---- e. 단계를 거듭 넘기기 ----
-  // 값이 배열인 이유: 분기가 있는 단계가 있다(결정 0022·0034). 이 방은 사람만 있어 표가 없으므로 execVote 는 후보 없이 night 으로 가지만,
-  // 표가 있으면 candidateVote 쪽으로 갈 수 있다 — 순서 확인은 "허용된 다음 단계 중 하나" 로 본다.
+  // 값이 배열인 이유: 분기가 있는 단계가 있다(결정 0022·0060). 이 방은 사람만 있어 지목이 없으므로 nomination 은 변론 없이 night 으로 가지만,
+  // 지목이 있으면 defense 쪽으로 갈 수 있다 — 순서 확인은 "허용된 다음 단계 중 하나" 로 본다.
   const PHASE_NEXT = {
-    roleReveal: ["dayAnnounce"], dayAnnounce: ["discussion"], discussion: ["execVote"],
-    execVote: ["night", "candidateVote"], night: ["morning"], morning: ["dayAnnounce"],
+    roleReveal: ["dayAnnounce"], dayAnnounce: ["discussion"], discussion: ["nomination"],
+    nomination: ["night", "defense"], night: ["morning"], morning: ["dayAnnounce"],
   };
   const order = [];
   let current = "roleReveal";
@@ -198,14 +198,16 @@ async function main() {
   };
   await skipTo("dayAnnounce");
   await skipTo("discussion");
-  await skipTo("execVote");
-  // 사람만 있는 방이라 아무도 표를 던지지 않았다: 처형 여부 투표는 통과하지 못하고 후보 선택 없이 곧장 night 이다(execTally 도 0:0).
-  check("e", "discussion 다음은 execVote (처형 여부 투표 단계, 집계 day.execTally 가 0:0)",
-    clients.every((c) => lastView(c).phase === "execVote" && lastView(c).day?.execTally?.yes === 0 && lastView(c).day?.execTally?.no === 0),
-    JSON.stringify(lastView(host).day?.execTally ?? null));
+  await skipTo("nomination");
+  // 사람만 있는 방이라 아무도 지목하지 않았다: 지목 0표는 변론 없이 곧장 night 이다(day.points 도 빈 목록).
+  check("e", "discussion 다음은 nomination (지목 단계, 공개 목록 day.points 가 모든 소켓에서 빈 목록)",
+    clients.every((c) => lastView(c).phase === "nomination" && Array.isArray(lastView(c).day?.points) && lastView(c).day.points.length === 0),
+    JSON.stringify(lastView(host).day?.points ?? null));
   await skipTo("night");
-  check("e", "roleReveal → dayAnnounce → discussion → execVote → night 를 넘기기 한 번에 하나씩 네 소켓 모두 3초 안에 받음",
-    orderOk, `${order.join(" → ")} (${Math.round(performance.now() - t0)}ms, 토론 40초·밤 30초를 기다리지 않음)`);
+  check("e", "roleReveal → dayAnnounce → discussion → nomination → night 를 넘기기 한 번에 하나씩 네 소켓 모두 3초 안에 받음",
+    orderOk, `${order.join(" → ")} (${Math.round(performance.now() - t0)}ms, 토론 90초·밤 30초를 기다리지 않음)`);
+  check("e", "지목 0표로 온 밤: 모든 소켓의 day.noExecution 이 {reason:noVotes}",
+    clients.every((c) => same(lastView(c).day?.noExecution, { reason: "noVotes" })), JSON.stringify(lastView(host).day?.noExecution ?? null));
   const victim = guests[0];
   await act(host, { t: "pick", target: victim.seat });
   check("e", "밤에 마피아(방장)의 pick 이 me.pick 으로 돌아옴", lastView(host).me.pick === victim.seat, String(lastView(host).me.pick));

@@ -1,8 +1,8 @@
 // 2페이즈 UAT 를 봇으로 대신 도는 시나리오(7페이즈 자유 채팅 기준). 봇이 방을 만들고 채워 낮 두 바퀴를 돌며 결과 표를 낸다.
 // 직업 주장 차례·빠른 메시지·이모티콘은 없다(7페이즈에서 없어졌다). 낮은 dayAnnounce → discussion 이고, 말은 자유 채팅 `{t:"chat", text, pk}` 다.
 // pk 는 받은 마지막 state 의 `${day.n ?? 0}:${phase}` 로 만든다(test/worker/helpers.ts 의 chatSend 와 같은 규칙).
-// 방장 넘기기는 없다(결정 0017-5): 1일차 토론(40초)·처형 여부 투표(13초, 결정 0036·0039)·밤(30초)·아침(5초)이 서버 타이머로 지나 2일차로 간다.
-// 이 스크립트의 봇은 여부 투표에 표를 던지지 않아(0표 = 미통과) 후보 선택 없이 곧장 밤이 된다.
+// 방장 넘기기는 없다(결정 0017-5): 1일차 토론(90초, 결정 0060-1)은 과반이 토론 끝내기를 누르면 일찍 끝나고(DAY-03), 지목(15초)·밤(30초)·아침(5초)이 서버 타이머로 지나 2일차로 간다.
+// 이 스크립트의 봇은 지목하지 않아(0표) 변론·찬반·처형 없이 곧장 밤이 된다(지목·찬반 규칙은 uat-vote.mjs).
 // 이 스크립트의 봇은 밤에 행동하지 않아 탈락자가 없다 — 밤·아침은 단계 도착 차이 표에만 나온다(밤 시나리오는 uat-night.mjs).
 // 채팅은 state 가 아니라 chat 프레임으로, 입력 중은 typing 프레임으로 온다(CHAT-01·04).
 //   테스트 6: 자유 채팅 — 모두가 한 줄씩 보낸 줄이 보낸 폰 포함 모든 폰에 ch all 로 가고 seq 가 틈 없이 같다(CHAT-01),
@@ -10,6 +10,7 @@
 //             다른 폰에는 아무것도 가지 않는다(CHAT-05), 단계 키(pk)가 틀린 줄은 phase 로 막힌다, 2일차에도 seq 가 이어진다
 //   테스트 7: 입력 중은 typing 프레임(보낸 폰 제외)이고 state 에 typing 키가 없다(CHAT-04),
 //             단계 전환 도착 시각 차이(같은 PC 에서 잰 값)
+//   테스트 4: 토론 길이 90초, 토론 끝내기 과반(절반 + 1) → 토론 마감을 기다리지 않고 지목, 지목 0표 → 밤(noExecution noVotes)
 // 화면 모양·애니메이션 부드러움·실제 폰 시계 차이는 봇으로 볼 수 없다.
 //
 // 사용법: node scripts/uat-day.mjs [--prod | <기준 주소>] [--players 4~8]
@@ -174,18 +175,30 @@ async function main() {
   const messagesInState = clients.some((c) => states(c).some((f) => JSON.stringify(f.msg).includes('"messages"')));
   check(7, "state 에 typing·messages 키가 없음", !typingInState && !messagesInState, "");
 
-  // 넘기기는 없다: 토론 40초가 서버 타이머로 끝나기를 기다려 2일차로 간다
-  console.log("서버 타이머로 토론·여부 투표·밤·아침이 지나 2일차가 되기를 기다림(최대 190초)");
+  // 토론 길이 90초(DAY-07): 과반이 토론 끝내기를 누르면 마감을 기다리지 않고 지목으로 넘어간다(DAY-03). 넘기기(방장 도구)는 없다.
+  const discViews = clients.map((c) => firstState(c, (v) => v.phase === "discussion" && v.day?.n === 1).msg.view);
+  check(4, "discussion 길이 90초, 첫 day.endCount 0", discViews.every((v) => v.phaseDurationMs === 90_000 && v.day.endCount === 0), discViews.map((v) => `${v.phaseDurationMs}/${v.day.endCount}`).join(","));
+  const discEndsAt = discViews[0].phaseEndsAt;
+  const need = Math.floor(N / 2) + 1;
+  for (let k = 0; k < need; k++) {
+    send(clients[k], { t: "endDiscussion", on: true });
+    if (k === need - 1) break;
+    await waitUntil(() => clients.every((c) => lastView(c).phase === "discussion" && lastView(c).day.endCount === k + 1), 5000, `토론 끝내기 ${k + 1}명 뒤 endCount`);
+  }
+  await waitUntil(() => clients.every((c) => firstState(c, (v) => v.phase === "nomination" && v.day?.n === 1)), 8000, "과반 토론 끝내기 뒤 nomination");
+  const nomViews = clients.map((c) => firstState(c, (v) => v.phase === "nomination" && v.day?.n === 1).msg.view);
+  check(4, `토론 끝내기 과반(${need}/${N}) → 토론 마감(90초)을 기다리지 않고 15초 지목 단계로 넘어감`, nomViews.every((v) => v.serverNow < discEndsAt - 10_000 && v.phaseDurationMs === 15_000 && Array.isArray(v.day.points) && v.day.points.length === 0), `진입 ${discEndsAt - nomViews[0].serverNow}ms 일찍`);
+  console.log("서버 타이머로 지목·밤·아침이 지나 2일차가 되기를 기다림(최대 120초)");
 
   // ---- 2일차 ----
-  await waitUntil(() => clients.every((c) => firstState(c, (v) => v.phase === "discussion" && v.day?.n === 2)), 190_000, "2일차 discussion");
-  // 여부 투표(표 0) → 미통과 → 후보 선택 단계 없이 night. 모든 폰의 night 가 처형 무효 이유 noVotes 를 같게 싣는다(결정 0036-8).
+  await waitUntil(() => clients.every((c) => firstState(c, (v) => v.phase === "discussion" && v.day?.n === 2)), 120_000, "2일차 discussion");
+  // 지목 0표 → 변론 없이 night. 모든 폰의 night 가 처형 무효 이유 noVotes 를 같게 싣는다(결정 0060-3).
   const noExec = clients.map((c) => firstState(c, (v) => v.phase === "night" && v.day?.n === 1).msg.view.day.noExecution);
-  check(4, "여부 투표 0표 → 미통과: 1일차 night 의 day.noExecution 이 모든 폰에서 {reason:noVotes}", noExec.every((x) => JSON.stringify(x) === JSON.stringify({ reason: "noVotes" })), JSON.stringify(noExec[0]));
+  check(4, "지목 0표: 1일차 night 의 day.noExecution 이 모든 폰에서 {reason:noVotes}", noExec.every((x) => JSON.stringify(x) === JSON.stringify({ reason: "noVotes" })), JSON.stringify(noExec[0]));
   const seq1 = [];
   for (const f of states(host)) if (f.msg.view.day?.n === 1 && seq1.at(-1) !== f.msg.view.phase) seq1.push(f.msg.view.phase);
   const iDisc1 = seq1.indexOf("discussion");
-  check(4, "1일차 단계 순서: discussion → execVote → night (후보 선택 단계 없음)", seq1[iDisc1 + 1] === "execVote" && seq1[iDisc1 + 2] === "night", seq1.join(" → "));
+  check(4, "1일차 단계 순서: discussion → nomination → night (변론·찬반·처형 단계 없음)", seq1[iDisc1 + 1] === "nomination" && seq1[iDisc1 + 2] === "night", seq1.join(" → "));
 
   // 2일차 토론에서도 seq 가 이어진다(채널 all 은 단계·일차를 넘어 한 줄 번호)
   const lastSeq = seqs1[0].at(-1);
@@ -196,7 +209,7 @@ async function main() {
   check(6, "2일차 토론의 줄도 모든 폰에 가고 seq 가 이어짐", day2Seqs.every((q) => q === lastSeq + 1), `1일차 마지막 ${lastSeq} → ${day2Seqs[0]}`);
 
   // 테스트 7-b: 단계 전환 도착 차이(1일차 dayAnnounce 부터 2일차 discussion 까지)
-  const phases = [["dayAnnounce", 1], ["discussion", 1], ["execVote", 1], ["night", 1], ["morning", 1], ["dayAnnounce", 2], ["discussion", 2]];
+  const phases = [["dayAnnounce", 1], ["discussion", 1], ["nomination", 1], ["night", 1], ["morning", 1], ["dayAnnounce", 2], ["discussion", 2]];
   const worst = [];
   for (const [ph, n] of phases) {
     const ats = clients.map((c) => firstState(c, (v) => v.phase === ph && v.day?.n === n).at);
