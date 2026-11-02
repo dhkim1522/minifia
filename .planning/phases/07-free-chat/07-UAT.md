@@ -1,9 +1,9 @@
 ---
-status: diagnosed
+status: complete
 phase: 07-free-chat
 source: [07-VERIFICATION.md]
 started: 2026-11-01T18:49:34Z
-updated: 2026-11-02T04:21:31.084Z
+updated: 2026-11-02T06:36:15.255Z
 ---
 
 ## Current Test
@@ -33,17 +33,17 @@ note: "사용자 요청으로 Claude 가 배포본에 E2E 실행 — node script
 ### 5. 5분 채팅 부하 체감: iPhone 로비를 둔 채 Mac 에서 node scripts/bots.mjs <방 코드> --count 7 --prod --chat 2 실행
 expected: 끊김 체감 없음/가끔, 5분 뒤 열감 차갑다/미지근 (조건 B 데스크톱은 60.00fps·끊김 0 으로 통과, 결정 0055 로 Mac 숫자만으로 통과 선언 불가)
 result: skipped
-reason: "실기기 항목 — 사용자 결정(2026-11-02): 페이즈마다 실기기 검사를 하지 않고 모든 개발이 끝난 뒤 실기기로 게임을 진행하며 한꺼번에 피드백한다"
+reason: "Deferred follow-up: 실기기 항목 — 사용자 결정(2026-11-02): 페이즈마다 실기기 검사를 하지 않고 모든 개발이 끝난 뒤 실기기로 게임을 진행하며 한꺼번에 피드백한다. 7페이즈 완료로 넘기고 백로그로 이월(2026-11-02 재확인)"
 
 ### 6. https://minifia-v2.dhplay.workers.dev/?chat-mock=1 다섯 줄 (6페이즈 이월, 표 D)
 expected: 입력줄 안 가려짐 / 캔버스 크기 불변 / 내 캐릭터 보임 / 한글 조합 Enter / 닫을 때 튐 없음
 result: skipped
-reason: "실기기 항목 — 사용자 결정(2026-11-02): 페이즈마다 실기기 검사를 하지 않고 모든 개발이 끝난 뒤 실기기로 게임을 진행하며 한꺼번에 피드백한다"
+reason: "Deferred follow-up: 실기기 항목 — 사용자 결정(2026-11-02): 페이즈마다 실기기 검사를 하지 않고 모든 개발이 끝난 뒤 실기기로 게임을 진행하며 한꺼번에 피드백한다. 7페이즈 완료로 넘기고 백로그로 이월(2026-11-02 재확인)"
 
 ### 7. Android Chrome · 삼성 인터넷 · 카카오톡 인앱(iOS·Android) — 로드맵 성공 기준 3 이 명시한 확인 기기
 expected: 위 검사 1·2·4 가 같은 방식으로 통과하거나, 사용자가 9페이즈 팀 테스트로 이월을 결정한다
 result: skipped
-reason: "실기기 항목 — 사용자 결정(2026-11-02): 페이즈마다 실기기 검사를 하지 않고 모든 개발이 끝난 뒤 실기기로 게임을 진행하며 한꺼번에 피드백한다"
+reason: "Deferred follow-up: 실기기 항목 — 사용자 결정(2026-11-02): 페이즈마다 실기기 검사를 하지 않고 모든 개발이 끝난 뒤 실기기로 게임을 진행하며 한꺼번에 피드백한다. 7페이즈 완료로 넘기고 백로그로 이월(2026-11-02 재확인)"
 
 ### 8. WR-03 낮 시작 문구 결정: src/game/scenes.ts 71·79행 '토론 전에 먼저 직업을 공개해요' / '곧 직업 공개가 시작돼요'
 expected: 사라진 직업 공개 단계를 안내하는 문구를 어떻게 바꿀지(deferred-items.md 의 두 안) 사용자가 정한다
@@ -65,11 +65,28 @@ pending: 0
 skipped: 3
 blocked: 0
 
+## Deferred Follow-Ups
+
+- test: 5
+  idea: "iPhone 로비 5분 채팅 부하 체감·열감 (bots.mjs --count 7 --prod --chat 2) — 모든 개발 뒤 실기기 플레이테스트"
+  deferred_at: 2026-11-02
+- test: 6
+  idea: "?chat-mock=1 다섯 줄 iPhone 실기기 확인(6페이즈 이월 표 D) — 모든 개발 뒤 실기기 플레이테스트"
+  deferred_at: 2026-11-02
+- test: 7
+  idea: "Android Chrome·삼성 인터넷·카카오톡 인앱(iOS·Android) 입력칸 검사 1·2·4 (CHAT-05, 로드맵 성공 기준 3) — 모든 개발 뒤 실기기 플레이테스트"
+  deferred_at: 2026-11-02
+- test: 9
+  idea: "로비 이동 체감 재확인(결정 0059 예측 이동·섞기, 자동 W11·W12 통과) — 모든 개발 뒤 실기기 플레이테스트"
+  deferred_at: 2026-11-02
+
 ## Gaps
 
 - gap_id: G-07-9
   truth: "맵을 탭하면 내 캐릭터가 바로 걷기 시작하고, 걷는 중 멈칫하거나 앞으로 튀지 않는다"
-  status: failed
+  status: resolved
+  resolved_by: 07-27-PLAN.md
+  resolved_at: 2026-11-02
   reason: "User reported: 약간 자연스럽지않고 살짝 멈췄다 움직이는 느낌 (움직일 때 핑이 튀는 것처럼 끊김)"
   severity: minor
   test: 9
