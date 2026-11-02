@@ -1545,8 +1545,8 @@ test("backdropSceneChecks B1: 알 수 없는 단계는 실패한다", () => {
   assert.equal(backdropSceneChecks({ layers: [layer("night")] }, { phase: "voting" }).ok, false);
 });
 
-test("sceneIntroChecks N8: 낮 시작 문구 `N일차`+`낮이 되었습니다`+보조줄, 톤 day, pointer-events none, aria-hidden 이면 통과", () => {
-  const good = { texts: ["2일차", "낮이 되었습니다", "토론 전에 먼저 직업을 공개해요"], kind: "day", pointerEvents: "none", ariaHidden: true };
+test("sceneIntroChecks N8: 낮 시작 문구 `N일차`+`낮이 되었습니다` 제목 한 줄, 톤 day, pointer-events none, aria-hidden 이면 통과", () => {
+  const good = { texts: ["2일차", "낮이 되었습니다"], kind: "day", pointerEvents: "none", ariaHidden: true };
   const r = sceneIntroChecks(good, { kind: "day" });
   assert.equal(r.id, "N8");
   assert.equal(r.ok, true, r.detail);
@@ -1554,10 +1554,10 @@ test("sceneIntroChecks N8: 낮 시작 문구 `N일차`+`낮이 되었습니다`+
   for (const bad of [
     null,
     undefined,
-    { ...good, texts: ["2일차", "낮이 되었습니다"] },
-    { ...good, texts: ["2일차", "밤이 되었습니다", good.texts[2]] },
-    { ...good, texts: ["일차", "낮이 되었습니다", good.texts[2]] },
     { ...good, texts: ["2일차", "낮이 되었습니다", "다른 줄"] },
+    { ...good, texts: ["2일차"] },
+    { ...good, texts: ["2일차", "밤이 되었습니다"] },
+    { ...good, texts: ["일차", "낮이 되었습니다"] },
     { ...good, kind: "night" },
     { ...good, pointerEvents: "auto" },
     { ...good, ariaHidden: false },
