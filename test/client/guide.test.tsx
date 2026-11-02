@@ -1,15 +1,13 @@
 /// <reference types="node" />
-import { act, cleanup, render } from "@testing-library/react";
+import { cleanup, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { RoleId } from "../../shared/game/roles";
-import type { MorningView, PhaseId, RoomView } from "../../shared/protocol";
-import { VERDICT_TEXT } from "../../src/game/verdict";
+import type { GameWinner, MorningView, PhaseId, RoomView } from "../../shared/protocol";
 import type { RoomConnection } from "../../src/net/useRoomConnection";
-import { verdictFixture } from "../helpers/verdictViews";
-import type { Viewer, VerdictStage } from "../helpers/verdictViews";
 
 // UX-01 (D-08, D-09): 모든 단계 화면에는 "지금 할 일 한 문장" 요소가 `data-guide` 로 정확히 하나 있다.
-// 이 파일은 방 화면(RoomScreen)을 실제로 그려 14단계 × 시점 점검표(05-UI-SPEC 8)를 고정한다.
+// 이 파일은 방 화면(RoomScreen)을 실제로 그려 단계 × 시점 점검표(05-UI-SPEC 8)를 고정한다. 08-27: 낮 시작~아침은 맵 화면(GameMap) 기준이다.
+// 예외(08-UI-SPEC 단계표 '안내 없음'): 낮 시작·처형·아침의 산 사람 화면은 [data-guide] 가 0개이고, 유령만 헤더 안내 하나다(08-18).
 // 새 문장은 역할로 달라지지 않는다(T-05-01): 속성 값은 빈 문자열이고 4역할·관전자가 같은 글자를 본다.
 
 const connectionMock = vi.hoisted(() => ({ current: null as unknown }));
@@ -43,6 +41,10 @@ interface ViewOpts {
   day?: number;
   morning?: MorningView;
   isHost?: boolean;
+  /** 변론·찬반·처형 단계의 변론자 좌석 */
+  candidate?: number;
+  /** 처형 없이 온 밤 */
+  noExecution?: "tie" | "noVotes";
 }
 
 function makeView(o: ViewOpts): RoomView {
@@ -71,8 +73,10 @@ function makeView(o: ViewOpts): RoomView {
       n: o.day ?? 1,
       roles: ["mafia", "police", "citizen"],
       ...(o.morning !== undefined ? { morning: o.morning } : {}),
+      ...(o.candidate !== undefined ? { candidate: o.candidate } : {}),
+      ...(o.noExecution !== undefined ? { noExecution: { reason: o.noExecution } } : {}),
     },
-  };
+  } as RoomView;
 }
 
 function conn(view: RoomView): RoomConnection {
@@ -127,14 +131,6 @@ const ALL_VIEWPOINTS: readonly Viewpoint[] = ["mafia", "police", "doctor", "citi
 
 // ---- 05-01 Task 2: 밤·아침·투표 구간 (부품이 data-guide 를 맡는다) ----
 
-/** 투표 구간 칸: verdictViews 픽스처로 RoomScreen 을 그린다. 공개 단계는 시간표를 돌려 칩이 그려지게 한다 */
-function renderVerdict(stage: VerdictStage, viewer: Viewer, meIsCandidate = false) {
-  const fx = verdictFixture({ stage, viewer, count: 4, meIsCandidate });
-  connectionMock.current = { ...conn(fx.view), ...fx.over };
-  const r = render(<RoomScreen code="0042" token={"t".repeat(43)} onExit={vi.fn()} />);
-  return r;
-}
-
 // 밤·아침은 08-18 부터 맵 화면(GameMap)이다(임시 틀). 안내는 헤더 안내 줄(.mv-phase__hint) 또는 하단 NightPanel 제목이고 화면당 하나다.
 // 아침은 UI-SPEC 단계표에 안내가 없다(알림 + 채팅): 산 사람 화면에는 [data-guide] 가 0개이고 유령만 헤더 안내가 있다.
 describe("UX-01 맵 화면: night·morning (D-08, 08-18)", () => {
@@ -165,66 +161,15 @@ describe("UX-01 맵 화면: night·morning (D-08, 08-18)", () => {
   });
 });
 
-describe("UX-01 투표 구간 부품: execVote·candidateVote·reveal·noExecution (D-08) — 변론·처형은 08-13 부터 맵 화면", () => {
-  it("execVote 생존·관전: 하나 = `오늘 처형을 할까요?` (제목 h2), 관전 알약 p.mf-ro 에는 속성이 없다", () => {
-    for (const viewer of ["alive", "spectator"] as const) {
-      const { container, unmount } = renderVerdict("execVote", viewer);
-      const g = onlyGuide(container, `execVote/${viewer}`);
-      expect(g.tagName).toBe("H2");
-      expect(squish(g.textContent), `execVote/${viewer}`).toBe("오늘 처형을 할까요?");
-      for (const ro of Array.from(container.querySelectorAll(".mf-ro"))) expect(ro.hasAttribute("data-guide"), `execVote/${viewer} 관전 알약`).toBe(false);
-      unmount();
-    }
-  });
-
-  it("candidateVote: 생존 `처형할 사람을 고르세요`, 관전 `처형할 사람을 고르는 중이에요` — 각각 하나", () => {
-    const alive = renderVerdict("candidateVote", "alive");
-    expect(squish(onlyGuide(alive.container, "candidateVote/alive").textContent)).toBe("처형할 사람을 고르세요");
-    alive.unmount();
-    const spec = renderVerdict("candidateVote", "spectator");
-    expect(squish(onlyGuide(spec.container, "candidateVote/spectator").textContent)).toBe("처형할 사람을 고르는 중이에요");
-    for (const ro of Array.from(spec.container.querySelectorAll(".mf-ro"))) expect(ro.hasAttribute("data-guide")).toBe(false);
-  });
-
-  it("candidateVote 안내 줄(결정 0040): 네 역할이 같은 글자를 본다 — 고르기 전 `아무도 고르지 않으면 무효표가 돼요`, 고른 뒤 `빈 곳을 누르면 선택이 취소돼요`. 관전자는 기존 관전 안내. [data-guide] 는 어디서나 하나", () => {
-    const guideText = (container: HTMLElement): string => squish(container.querySelector(".mf-dayscene__panel .mf-claimpanel__guide")?.textContent);
-    expect(VERDICT_TEXT.candidateGuideNone).toBe("아무도 고르지 않으면 무효표가 돼요");
-    expect(VERDICT_TEXT.candidateGuidePicked).toBe("빈 곳을 누르면 선택이 취소돼요");
-    for (const picked of [false, true]) {
-      const texts = new Set<string>();
-      for (const vp of ["mafia", "police", "doctor", "citizen"] as const) {
-        const viewer: Viewer = vp === "mafia" ? "mafiaAlly" : "alive";
-        const fx = verdictFixture({ stage: "candidateVote", viewer, count: 4 });
-        if (picked) fx.view.me.voteTarget = vp === "mafia" ? 3 : 2;
-        else delete fx.view.me.voteTarget;
-        connectionMock.current = { ...conn(fx.view), ...fx.over };
-        const { container, unmount } = render(<RoomScreen code="0042" token={"t".repeat(43)} onExit={vi.fn()} />);
-        onlyGuide(container, `candidateVote/${vp}/${picked ? "고름" : "안 고름"}`);
-        texts.add(guideText(container));
-        unmount();
-      }
-      expect([...texts], picked ? "고른 뒤" : "고르기 전").toEqual([picked ? VERDICT_TEXT.candidateGuidePicked : VERDICT_TEXT.candidateGuideNone]);
-    }
-    const spec = renderCell("candidateVote", "spectator");
-    onlyGuide(spec.container, "candidateVote/spectator");
-    expect(guideText(spec.container)).toBe(VERDICT_TEXT.candidateSpectatorHint);
-  });
-
-  it("candidateVoteReveal: 하나, 글자가 비어 있지 않다 (공개 caption 제목)", () => {
-    for (const viewer of ["alive", "spectator"] as const) {
-      const { container, unmount } = renderVerdict("candidateVoteReveal", viewer);
-      expect(squish(onlyGuide(container, `candidateVoteReveal/${viewer}`).textContent), `candidateVoteReveal/${viewer}`).not.toBe("");
-      unmount();
-    }
-  });
-
-  it("처형 무효로 온 밤(맵 화면, 08-18): 마피아 하나 = 헤더 `없앨 사람을 눌러요`, 시민 하나 = NightPanel 제목", () => {
-    const mafia = renderVerdict("noExecution", "mafiaAlly");
+// execVote·candidateVote·candidateVoteReveal(옛 투표 세 단계)의 안내 시험은 08-27 에서 지웠다 — 맵 화면으로 대체된 v1.0 부품(제목 h2·후보 선택 안내 줄)만 보던 시험이다.
+describe("UX-01 처형 없이 온 밤 (맵 화면, 08-18)", () => {
+  it("처형 무효로 온 밤: 마피아 하나 = 헤더 `없앨 사람을 눌러요`, 시민 하나 = NightPanel 제목", () => {
+    const mafia = renderRoom(makeView({ phase: "night", viewpoint: "mafia", endsIn: 30_000, noExecution: "tie" }));
     const gm = onlyGuide(mafia.container, "noExecution/마피아");
     expect(gm.classList.contains("mv-phase__hint")).toBe(true);
     expect(squish(gm.textContent)).toBe("없앨 사람을 눌러요");
     mafia.unmount();
-    const citizen = renderVerdict("noExecution", "alive");
+    const citizen = renderRoom(makeView({ phase: "night", viewpoint: "citizen", endsIn: 30_000, noExecution: "noVotes" }));
     const gc = onlyGuide(citizen.container, "noExecution/시민");
     expect(squish(gc.textContent)).toBe("밤이 되었어요");
   });
@@ -236,17 +181,22 @@ describe("UX-01 투표 구간 부품: execVote·candidateVote·reveal·noExecuti
 type CheckViewpoint = Viewpoint | "none";
 
 /**
- * 점검표(05-UI-SPEC 8): 화면이 그리는 PhaseId 13개 × 시점(순차 직업 주장 단계는 화면에서 사라졌다, 07-04). 있을 수 없는 칸은 적지 않는다 —
- * lobby·assigning 은 역할이 없어 none 한 칸, roleReveal 은 살아 있는 사람뿐(관전 없음).
+ * 점검표(05-UI-SPEC 8): 화면이 그리는 PhaseId × 시점. 낮 시작~아침은 맵 화면(GameMap)의 헤더 안내 또는 하단 NightPanel 제목이다.
+ * 있을 수 없는 칸은 적지 않는다 — lobby·assigning 은 역할이 없어 none 한 칸, roleReveal 은 살아 있는 사람뿐(관전 없음).
  * 이 목록은 PhaseId 의 부분집합이어야 한다(satisfies).
  */
 const CHECKED_PHASES = [
   "lobby",
   "assigning",
   "roleReveal",
-  "execVote",
-  "candidateVote",
-  "candidateVoteReveal",
+  "dayAnnounce",
+  "discussion",
+  "nomination",
+  "defense",
+  "verdict",
+  "execution",
+  "night",
+  "morning",
   "ended",
 ] as const satisfies readonly PhaseId[];
 type CheckedPhase = (typeof CHECKED_PHASES)[number];
@@ -255,54 +205,71 @@ const CHECKLIST: Readonly<Record<CheckedPhase, readonly CheckViewpoint[]>> = {
   lobby: ["none"],
   assigning: ["none"],
   roleReveal: ["mafia", "police", "doctor", "citizen"],
-  execVote: ["mafia", "police", "doctor", "citizen", "spectator"],
-  candidateVote: ["mafia", "police", "doctor", "citizen", "spectator"],
-  candidateVoteReveal: ["mafia", "police", "doctor", "citizen", "spectator"],
+  dayAnnounce: ["mafia", "police", "doctor", "citizen", "spectator"],
+  discussion: ["mafia", "police", "doctor", "citizen", "spectator"],
+  nomination: ["mafia", "police", "doctor", "citizen", "spectator"],
+  defense: ["mafia", "police", "doctor", "citizen", "spectator"],
+  verdict: ["mafia", "police", "doctor", "citizen", "spectator"],
+  execution: ["mafia", "police", "doctor", "citizen", "spectator"],
+  night: ["mafia", "police", "doctor", "citizen", "spectator"],
+  morning: ["mafia", "police", "doctor", "citizen", "spectator"],
   ended: ["mafia", "police", "doctor", "citizen", "spectator"],
 };
 
-const VERDICT_PHASES: ReadonlySet<PhaseId> = new Set<PhaseId>(["execVote", "candidateVote", "candidateVoteReveal", "ended"]);
+/** 끝난 판의 view: 결과(승리 팀·좌석 직업)가 실린다 */
+function endedView(vp: Viewpoint, winner: GameWinner = "citizenWin"): RoomView {
+  const view = makeView({ phase: "ended", viewpoint: vp, endsIn: null });
+  view.result = {
+    winner,
+    seats: view.players.map((p) => ({ seat: p.seat, job: p.seat === 2 ? ("mafia" as const) : ("citizen" as const) })),
+    summary: [],
+  };
+  return view;
+}
 
-/** 칸 하나를 그린다. 투표 구간·결과는 verdictViews 픽스처(역할은 마피아/그 밖만 구분), 나머지는 이 파일의 makeView */
+/** 칸 하나를 그린다. 결과는 endedView, 나머지는 이 파일의 makeView(변론·찬반·처형 단계는 좌석 2 가 변론자) */
 function renderCell(phase: CheckedPhase, vp: CheckViewpoint) {
-  if (VERDICT_PHASES.has(phase)) {
-    const viewer: Viewer = vp === "spectator" ? "spectator" : vp === "mafia" ? "mafiaAlly" : "alive";
-    const r = renderVerdict(phase as VerdictStage, viewer);
-    if (phase === "candidateVoteReveal") act(() => vi.advanceTimersByTime(2_000));
-    return r;
-  }
+  if (phase === "ended") return renderRoom(endedView(vp === "none" ? "citizen" : vp));
   const viewpoint: Viewpoint = vp === "none" ? "citizen" : vp;
-  const endsIn = phase === "lobby" ? null : phase === "assigning" ? 3_000 : 15_000;
-  const view = makeView({ phase, viewpoint, endsIn, day: 1 });
+  const endsIn = phase === "lobby" || phase === "dayAnnounce" ? null : phase === "assigning" ? 3_000 : phase === "morning" ? 5_000 : 15_000;
+  const withCandidate = phase === "defense" || phase === "verdict" || phase === "execution";
+  const view = makeView({ phase, viewpoint, endsIn, day: 1, ...(withCandidate ? { candidate: 2 } : {}), ...(phase === "morning" ? { morning: {} } : {}) });
   if (vp === "none") delete view.me.role;
   return renderRoom(view);
 }
 
-describe("UX-01 점검표: 맵 화면(낮 시작~아침)을 뺀 7단계 × 시점 모든 칸의 안내 문장과 남은 시간 (D-08, 05-UI-SPEC 8.4)", () => {
+/** 맵 화면에서 UI-SPEC 단계표가 산 사람에게 안내를 두지 않는 단계. 유령은 어느 단계에서나 헤더 안내가 있다(`모두의 직업이 보여요`) */
+const GUIDELESS_WHEN_ALIVE: ReadonlySet<CheckedPhase> = new Set<CheckedPhase>(["dayAnnounce", "execution", "morning"]);
+/** 맵 화면 중 시간 링이 없는 단계(낮 시작) */
+const NO_CLOCK: ReadonlySet<CheckedPhase> = new Set<CheckedPhase>(["dayAnnounce"]);
+
+describe("UX-01 점검표: 단계 × 시점 모든 칸의 안내 문장과 남은 시간 (D-08, 05-UI-SPEC 8.4, 08-27 맵 화면 기준)", () => {
   const phases = Object.keys(CHECKLIST) as CheckedPhase[];
 
-  it("점검표가 옛 화면이 그리는 7단계를 모두 가진다", () => {
-    expect(phases.length).toBe(7);
+  it("점검표가 화면이 그리는 12단계(대기실·배정·역할 확인·낮 시작~아침 8단계·결과)를 모두 가진다", () => {
+    expect(phases.length).toBe(12);
+    expect([...CHECKED_PHASES].sort()).toEqual([...phases].sort());
   });
 
   for (const phase of phases) {
     for (const vp of CHECKLIST[phase]) {
-      it(`${phase}/${vp}: [data-guide] 정확히 하나·글자 있음·값 빈 문자열, ${TIMELESS_PHASES.includes(phase) ? "타이머 없어도 됨" : "타이머 있음"}`, () => {
+      const none = GUIDELESS_WHEN_ALIVE.has(phase) && vp !== "spectator" && vp !== "none";
+      const clock = TIMELESS_PHASES.includes(phase) || NO_CLOCK.has(phase) ? "타이머 없어도 됨" : "타이머 있음";
+      it(`${phase}/${vp}: ${none ? "[data-guide] 0개(단계표에 안내 없음)" : "[data-guide] 정확히 하나·글자 있음·값 빈 문자열"}, ${clock}`, () => {
         const { container } = renderCell(phase, vp);
         const cell = `${phase}/${vp}`;
-        const g = onlyGuide(container, cell);
-        expect(squish(g.textContent), `${cell}: 안내 글자`).not.toBe("");
-        expect(g.getAttribute("data-guide"), `${cell}: 속성 값`).toBe("");
-        if (!TIMELESS_PHASES.includes(phase)) {
+        if (none) expect(guides(container).length, `${cell}: [data-guide] 개수`).toBe(0);
+        else {
+          const g = onlyGuide(container, cell);
+          expect(squish(g.textContent), `${cell}: 안내 글자`).not.toBe("");
+          expect(g.getAttribute("data-guide"), `${cell}: 속성 값`).toBe("");
+        }
+        if (!TIMELESS_PHASES.includes(phase) && !NO_CLOCK.has(phase)) {
           expect(container.querySelectorAll('[role="timer"]').length, `${cell}: 타이머`).toBeGreaterThanOrEqual(1);
         }
       });
     }
   }
-
-  it("TIMELESS_PHASES 밖의 단계(4개: 역할 확인·옛 투표 셋)는 모두 점검표에 있고 타이머를 시험한다", () => {
-    expect(phases.filter((p) => !TIMELESS_PHASES.includes(p)).length).toBe(4);
-  });
 });
 
 describe("UX-01 대기실·배정·역할 확인·결과의 안내 요소 (D-08)", () => {
@@ -334,12 +301,9 @@ describe("UX-01 대기실·배정·역할 확인·결과의 안내 요소 (D-08)
       ["citizenWin", "시민 팀 승리"],
       ["mafiaWin", "마피아 팀 승리"],
     ] as const) {
-      for (const viewer of ["alive", "spectator"] as const) {
-        const fx = verdictFixture({ stage: "ended", viewer, count: 4 });
-        fx.view.result = { ...fx.view.result!, winner };
-        connectionMock.current = { ...conn(fx.view), ...fx.over };
-        const { container, unmount } = render(<RoomScreen code="0042" token={"t".repeat(43)} onExit={vi.fn()} />);
-        const g = onlyGuide(container, `ended/${winner}/${viewer}`);
+      for (const vp of ["citizen", "spectator"] as const) {
+        const { container, unmount } = renderRoom(endedView(vp, winner));
+        const g = onlyGuide(container, `ended/${winner}/${vp}`);
         expect(g.classList.contains("mf-result__banner-title")).toBe(true);
         expect(squish(g.textContent)).toBe(title);
         unmount();

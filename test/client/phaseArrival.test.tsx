@@ -1,10 +1,21 @@
-import { act, renderHook } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
-import type { PhaseId } from "../../shared/protocol";
+import { act, cleanup, render, renderHook } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import type { PhaseId, RoomView } from "../../shared/protocol";
+import type { RoomConnection } from "../../src/net/useRoomConnection";
 import { usePhaseArrival } from "../../src/net/phaseArrival";
 
+// 08-27: 단계 도착 연출이 맵 화면(GameMap)에서 맵 재마운트 없이 도는지 보려고 방 화면(RoomScreen)을 가짜 연결·가짜 WorldStage 로 그린다.
+const connectionMock = vi.hoisted(() => ({ current: null as unknown }));
+vi.mock("../../src/net/useRoomConnection", () => ({
+  useRoomConnection: () => connectionMock.current,
+}));
+vi.mock("../../src/components/WorldStage", async () => ({ WorldStage: (await import("../helpers/fakeWorldStage")).FakeWorldStage }));
+const { RoomScreen } = await import("../../src/screens/RoomScreen");
+
+afterEach(() => cleanup());
+
 // usePhaseArrival(phase, epoch): 같은 접속(epoch)에서 단계가 바뀐 뒤에는 직전 단계를, 처음 렌더와 epoch 가 함께 바뀐 렌더에서는 null 을 돌려준다.
-// 값은 다음 변화까지 유지된다. 역할 확인 → 낮 시작으로 DayScene 이 새로 마운트될 때 문구·크로스페이드의 근거다.
+// 값은 다음 변화까지 유지된다. 역할 확인 → 낮 시작으로 맵 화면(GameMap)이 새로 마운트될 때 낮 시작 알림·연출의 근거다(맵은 재마운트 없이 단계만 따라간다 — gameMap.test 의 '한 장면 키').
 
 type Props = { phase: PhaseId | undefined; epoch: number };
 const setup = (initial: Props) => renderHook((p: Props) => usePhaseArrival(p.phase, p.epoch), { initialProps: initial });
@@ -68,5 +79,62 @@ describe("usePhaseArrival", () => {
     );
     act(() => rerender({ phase: "dayAnnounce", epoch: 1 }));
     expect(seen.at(-1)).toBe("roleReveal");
+  });
+});
+
+describe("단계 도착 — 맵 화면(GameMap)은 재마운트 없이 단계만 따라간다 (DAY-07, 08-27)", () => {
+  const NOW = 1_700_000_000_000;
+  const view = (phase: PhaseId): RoomView => ({
+    code: "0042",
+    phase,
+    phaseEndsAt: NOW + 15_000,
+    phaseDurationMs: 15_000,
+    serverNow: NOW,
+    minPlayers: 4,
+    maxPlayers: 8,
+    players: [0, 1, 2, 3].map((seat) => ({ seat, nickname: ["민수", "영희", "서준", "지아"][seat]!, connected: true, isHost: seat === 0 })),
+    me: { seat: 0, isHost: true, role: "citizen", chat: "all" },
+    day: { n: 1, roles: [] },
+  });
+  const conn = (v: RoomView, epoch: number): RoomConnection => ({
+    status: "open",
+    banner: "hidden",
+    view: v,
+    offset: 0,
+    epoch,
+    removedReason: null,
+    canSend: true,
+    send: vi.fn(() => true),
+    onEvent: vi.fn(() => () => {}),
+    reconnect: vi.fn(),
+    retry: vi.fn(),
+  });
+
+  it("역할 확인에서 낮 시작으로 들어오면 맵 화면이 한 번 마운트되고, 낮 시작 → 토론 → 지목 → 밤으로 가도 같은 노드다", () => {
+    connectionMock.current = conn(view("roleReveal"), 1);
+    const ui = () => <RoomScreen code="0042" token={"t".repeat(43)} onExit={() => {}} />;
+    const r = render(ui());
+    expect(r.container.querySelector("main.mf-game")).toBeNull();
+    connectionMock.current = conn(view("dayAnnounce"), 1);
+    r.rerender(ui());
+    const root = r.container.querySelector("main.mf-game");
+    const stage = r.container.querySelector("[data-world-stage-fake]");
+    expect(root).not.toBeNull();
+    expect(stage).not.toBeNull();
+    for (const phase of ["discussion", "nomination", "night"] as const) {
+      connectionMock.current = conn(view(phase), 1);
+      r.rerender(ui());
+      expect(r.container.querySelector("main.mf-game"), phase).toBe(root);
+      expect(r.container.querySelector("[data-world-stage-fake]"), phase).toBe(stage);
+    }
+  });
+
+  it("재접속(epoch 변화)으로 낮 시작에 바로 들어와도 맵 화면이 그려지고 도착 단계에 기대지 않는다", () => {
+    connectionMock.current = conn(view("roleReveal"), 1);
+    const ui = () => <RoomScreen code="0042" token={"t".repeat(43)} onExit={() => {}} />;
+    const r = render(ui());
+    connectionMock.current = conn(view("dayAnnounce"), 2);
+    r.rerender(ui());
+    expect(r.container.querySelector("main.mf-game")?.getAttribute("data-phase")).toBe("dayAnnounce");
   });
 });

@@ -512,7 +512,7 @@ describe("[테스트] 닻과 아침 (03.1-10, D-16, UI-SPEC E)", () => {
     expect(/height:\s*0\b/.test(anchor) && /z-index:\s*var\(--z-overlay\)/.test(anchor)).toBe(true);
     expect(/top:\s*var\(--space-sm\)/.test(button) && /left:\s*0\b/.test(button)).toBe(true);
     expect(/--z-overlay:\s*50;/.test(tokens)).toBe(true);
-    // 닻은 DayTable 밖이라 숫자 비교가 아니라 쌓임 순서가 근거다 — 근거 주석이 있다
+    // 닻은 장면 상자 밖이라 숫자 비교가 아니라 쌓임 순서가 근거다 — 근거 주석이 있다
     expect(css.includes("시안 T1 왼쪽 위 유지")).toBe(true);
   });
 

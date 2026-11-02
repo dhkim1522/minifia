@@ -6,23 +6,49 @@ import type { RoleId } from "../../shared/game/roles";
 import type { PhaseId, RoomPreview, RoomView } from "../../shared/protocol";
 import type { RoomConnection } from "../../src/net/useRoomConnection";
 import { installMemoryStorage } from "../helpers/memoryStorage";
-import { NAMES, viewAt } from "../helpers/verdictViews";
-import type { Count } from "../helpers/verdictViews";
 
-// CHAR-01 점검표(UI-SPEC §10, 05-04): 자리 0~7 의 테이블 인물 8장은 서로 다르고, 5명·8명 방의 대기실·낮(토론)·투표(후보 선택)·결과·
-// 링크 참가 화면에서 모든 자리의 닉네임이 그 자리 그림과 함께 보인다. 외형은 자리 번호만으로 정한다(D-02, D-03) — 역할은 입력이 아니다.
-// 소스를 바꾸지 않는 점검이다: 이 시험이 처음부터 통과하는 것이 UI-SPEC §10 "고칠 것 없음" 의 확인이다.
+// CHAR-01 점검표(UI-SPEC §10, 05-04): 자리 0~7 의 인물 8장은 서로 다르고, 5명·8명 방의 낮(토론)·결과·링크 참가 화면에서
+// 모든 자리의 닉네임이 그 자리 그림과 함께 보인다. 외형은 자리 번호만으로 정한다(D-02, D-03) — 역할은 입력이 아니다.
+// 08-27: 낮·밤 화면은 옛 테이블(.mf-dt) 대신 맵 화면(GameMap)의 이름표 기준으로 다시 썼다. 맵의 인물은 3D 캐릭터라 이름표 닉네임과 산·탈락 표시만 DOM 에서 본다
+// (캐릭터 모양은 worldStage·world 시험 몫). 소스를 바꾸지 않는 점검이다.
 
 // RoomScreen 의 연결 훅만 가짜로 바꾼다(phaseScreens.test.tsx 와 같은 방식). 서버와는 view 로만 만난다.
 const connectionMock = vi.hoisted(() => ({ current: null as unknown }));
 vi.mock("../../src/net/useRoomConnection", () => ({
   useRoomConnection: () => connectionMock.current,
 }));
+// 맵 화면: 이름표(DOM)는 진짜 WorldStage 가 그리고, 런타임(three)만 가짜로 바꾼다 — nightMap.test.tsx 와 같은 방식.
+vi.mock("../../src/world/runtime", async (importOriginal) => {
+  const real = await importOriginal<typeof import("../../src/world/runtime")>();
+  return {
+    ...real,
+    createWorldRuntime: () => ({
+      start: () => Promise.resolve(),
+      syncPlayers: () => {},
+      deny: () => {},
+      setScene: () => {},
+      tap: () => ({ x: 1, z: 1 }),
+      notifyMoveSent: () => {},
+      cancelMove: () => {},
+      retry: () => Promise.resolve(),
+      dispose: () => {},
+      sample: () => null,
+      renderer: () => null,
+      characterOf: () => null,
+      ring: () => null,
+      shown: () => null,
+      status: () => ({ status: "ready" }),
+      interactiveMs: () => null,
+    }),
+  };
+});
 const { RoomScreen } = await import("../../src/screens/RoomScreen");
 const { JoinByLink } = await import("../../src/screens/JoinByLink");
 const { figureSrc, ghostSrc } = await import("../../src/net/assets");
 
 const NOW = 1_700_000_000_000;
+/** 5글자 닉네임 여덟 */
+const NAMES = ["지우지우지", "하윤하윤하", "민지민지민", "도현도현도", "서연서연서", "수빈수빈수", "하준하준하", "지호지호지"] as const;
 
 function conn(view: RoomView): RoomConnection {
   return {
@@ -64,27 +90,34 @@ function simpleView(phase: PhaseId, n: number, role?: RoleId): RoomView {
   };
 }
 
-const seatImg = (c: HTMLElement, seat: number): HTMLImageElement[] =>
-  Array.from(c.querySelectorAll<HTMLImageElement>(`.mf-dt__seat[data-seat="${seat}"] img`));
-const tagOf = (c: HTMLElement, seat: number): HTMLElement | null => c.querySelector<HTMLElement>(`.mf-dt__tag[data-seat="${seat}"]`);
+/** 끝난 판의 view: n 명, 결과 카드가 자리마다 한 장씩. 0번이 나 */
+function endedView(n: number): RoomView {
+  const view = simpleView("ended", n, "citizen");
+  const mafia = n === 5 ? [2] : [2, 5, 6];
+  view.phaseEndsAt = null;
+  view.phaseDurationMs = null;
+  view.result = {
+    winner: "citizenWin",
+    seats: Array.from({ length: n }, (_, seat) => ({ seat, job: mafia.includes(seat) ? ("mafia" as const) : ("citizen" as const) })),
+    summary: [],
+  };
+  return view;
+}
 
-/** 테이블 위 모든 자리: 닉네임 이름표가 있고, 그림이 하나 이상 있다. 살아 있는 자리의 그림은 그 자리 번호의 인물이다 */
-function expectEverySeatNamed(c: HTMLElement, n: number, deadSeats: readonly number[] = []): string[] {
-  const srcs: string[] = [];
+/** 맵 화면의 이름표: 산 자리마다 하나, 탈락한 자리는 산 사람 화면에서 이름표가 없다 */
+const tagOf = (c: HTMLElement, seat: number): HTMLElement | null => c.querySelector<HTMLElement>(`.mf-world__tag[data-seat="${seat}"]`);
+
+/** 맵 위 산 자리: 이름표가 있고 그 자리 닉네임을 담는다. 탈락 자리는 이름표 자체가 없다 */
+function expectEverySeatNamed(c: HTMLElement, n: number, deadSeats: readonly number[] = []): void {
   for (let seat = 0; seat < n; seat++) {
     const tag = tagOf(c, seat);
+    if (deadSeats.includes(seat)) {
+      expect(tag, `탈락 자리 ${seat} 이름표`).toBeNull();
+      continue;
+    }
     expect(tag, `자리 ${seat} 이름표`).not.toBeNull();
     expect(tag!.textContent, `자리 ${seat} 닉네임`).toContain(NAMES[seat]);
-    const imgs = seatImg(c, seat);
-    expect(imgs.length, `자리 ${seat} 그림`).toBeGreaterThanOrEqual(1);
-    const want = deadSeats.includes(seat) ? ghostSrc().src : figureSrc(seat).src;
-    expect(
-      imgs.some((img) => img.getAttribute("src") === want),
-      `자리 ${seat} 그림 src`,
-    ).toBe(true);
-    srcs.push(imgs[0]!.getAttribute("src")!);
   }
-  return srcs;
 }
 
 beforeEach(() => {
@@ -111,45 +144,35 @@ describe("CHAR-01: 테이블 인물 8장은 서로 다르고 자리 번호가 �
   });
 });
 
-// 낮 토론은 08-13, 밤·아침은 08-18 부터 맵(WorldStage) 화면이라 테이블 인물 검사는 같은 DayTable 을 쓰는 처형 여부 투표로 옮겼다(테이블은 08-19 가 지울 때 함께 정리).
-describe("CHAR-01: 처형 여부 투표(옛 테이블) — 5명·8명 모두 닉네임과 인물", () => {
-  it.each([5, 8])("%i명: 모든 자리 이름표 닉네임, 인물 src 가 서로 다르다", (n) => {
-    const { container } = renderRoom(simpleView("execVote", n, "citizen"));
-    const srcs = expectEverySeatNamed(container, n);
-    expect(new Set(srcs).size).toBe(n);
+describe("CHAR-01: 맵 화면(낮 토론·밤) — 5명·8명 모두 이름표에 닉네임", () => {
+  it.each([5, 8])("%i명 낮 토론: 모든 자리 이름표에 그 자리 닉네임", (n) => {
+    const { container } = renderRoom(simpleView("discussion", n, "citizen"));
+    expectEverySeatNamed(container, n);
+    expect(container.querySelectorAll(".mf-world__tag").length).toBe(n);
   });
 
-  it("내 역할이 시민이든 마피아든 모든 자리의 인물 그림은 같다 (능력 무관, D-03·T-05-10)", () => {
-    const citizen = renderRoom(simpleView("execVote", 5, "citizen"));
-    const a = expectEverySeatNamed(citizen.container, 5);
-    cleanup();
-    const mafia = renderRoom(simpleView("execVote", 5, "mafia"));
-    const b = expectEverySeatNamed(mafia.container, 5);
-    expect(b).toEqual(a);
+  it("내 역할이 시민이든 마피아든 이름표의 자리·닉네임은 같다 (능력 무관, D-03·T-05-10)", () => {
+    const names = (role: RoleId) => {
+      const { container } = renderRoom(simpleView("discussion", 5, role));
+      const out = [...container.querySelectorAll<HTMLElement>(".mf-world__tag")].map((t) => `${t.dataset.seat}:${t.textContent}`);
+      cleanup();
+      return out;
+    };
+    expect(names("mafia")).toEqual(names("citizen"));
   });
-});
 
-describe("CHAR-01: 투표(후보 선택) — 탈락 자리도 닉네임을 유지한다", () => {
-  it("8명(7번 탈락): 모든 자리 이름표 닉네임, 살아 있는 자리는 그 자리 인물, 탈락 자리는 유령 그림", () => {
-    const view = viewAt("candidateVote", { stage: "candidateVote", viewer: "alive", count: 8 }, false);
+  it("8명(7번 탈락): 산 자리는 닉네임 이름표, 탈락 자리는 산 사람 화면에서 이름표가 사라진다", () => {
+    const view = simpleView("night", 8, "citizen");
+    view.players = view.players.map((p) => (p.seat === 7 ? { ...p, alive: false } : p));
     const { container } = renderRoom(view);
-    const srcs = expectEverySeatNamed(container, 8, [7]);
-    expect(new Set(srcs).size).toBe(8);
-    expect(tagOf(container, 7)!.textContent).toContain(NAMES[7]);
-  });
-
-  it("5명 방도 같다(탈락 없음)", () => {
-    const view = viewAt("candidateVote", { stage: "candidateVote", viewer: "alive", count: 5 as unknown as Count }, false);
-    const { container } = renderRoom(view);
-    const srcs = expectEverySeatNamed(container, 5);
-    expect(new Set(srcs).size).toBe(5);
+    expectEverySeatNamed(container, 8, [7]);
+    expect(container.querySelectorAll(".mf-world__tag").length).toBe(7);
   });
 });
 
 describe("CHAR-01: 결과 — 자리마다 이름표(자리 색 점 + 닉네임)와 그림 (그림은 직업 그림 — P5-8, 바꾸지 않음)", () => {
   it.each([5, 8])("%i명: .mf-result__card 가 %i장, 각 카드에 그 자리 닉네임·자리 색 점·그림", (n) => {
-    const view = viewAt("ended", { stage: "ended", viewer: "alive", count: n as unknown as Count }, false);
-    const { container } = renderRoom(view);
+    const { container } = renderRoom(endedView(n));
     const cards = Array.from(container.querySelectorAll<HTMLElement>(".mf-result__card"));
     expect(cards).toHaveLength(n);
     cards.forEach((card, i) => {

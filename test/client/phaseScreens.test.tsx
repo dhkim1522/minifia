@@ -700,9 +700,9 @@ describe("G-01-9 시트 계측 — 낮 화면 [역할 카드] 경로 (sheetdebug
   });
 });
 
-describe("헤더 줄바꿈 금지·패널 여백·칩 간격 (03.1-10, D-16, UI-SPEC A·S3·S6)", () => {
+// 08-27: 낮 하단 패널(.mf-dayscene__panel) 여백·칩 간격 단언은 맵 화면에 같은 뜻이 없어 지웠다(맵 패널 높이는 gameMap.test 의 측정 시험이 지킨다).
+describe("헤더 줄바꿈 금지 (03.1-10, D-16, UI-SPEC A)", () => {
   const phaseCss = readFileSync("src/styles/phase.css", "utf8");
-  const dayCss = readFileSync("src/styles/day.css", "utf8");
   const bodyOf = (css: string, selector: string) => {
     const at = css.indexOf(`${selector} {`);
     return at < 0 ? "" : css.slice(css.indexOf("{", at) + 1, css.indexOf("}", at));
@@ -712,12 +712,5 @@ describe("헤더 줄바꿈 금지·패널 여백·칩 간격 (03.1-10, D-16, UI-
     const rule = phaseCss.split("\n").find((l) => l.includes(".mf-phasebar .mf-t-heading") && l.includes(".mf-phasebar__do") && l.includes("white-space: nowrap")) ?? "";
     expect(rule !== "").toBe(true);
     expect(/min-height:\s*50\.4px/.test(bodyOf(phaseCss, ".mf-phasebar__row"))).toBe(true);
-  });
-
-  it("day.css: 하단 패널 padding 은 8px 위, 높이 157 그대로이고 .mf-seg 간격은 var(--space-xs)", () => {
-    const panel = bodyOf(dayCss, ".mf-dayscene__panel");
-    expect(panel.includes("padding: 8px var(--space-md) calc(12px + env(safe-area-inset-bottom))")).toBe(true);
-    expect(panel.includes("height: calc(157px + env(safe-area-inset-bottom))")).toBe(true);
-    expect(/gap:\s*var\(--space-xs\)/.test(bodyOf(dayCss, ".mf-seg"))).toBe(true);
   });
 });
