@@ -14,7 +14,7 @@ import type { WorldStageProps } from "../../src/components/WorldStage";
 import { UnsupportedRendererError } from "../../src/world/renderer";
 import type { CharacterHandle, RendererStatusEvent, WorldRenderer } from "../../src/world/renderer";
 import { PAN_BOX, stageOffsetY } from "../../src/world/camera";
-import { predictSegment, SEG_BLEND_MS } from "../../src/world/motion";
+import { predictSegment, SEG_BLEND_MS, YAW_TURN_RATE } from "../../src/world/motion";
 import { ENTER_MS, EXIT_MS, MOVE_ACK_TIMEOUT_MS, WALK_CUE_KEY } from "../../src/world/runtime";
 import type { WorldModules } from "../../src/world/runtime";
 import { installWorldTestHooks, WORLD_TEST_KEY, worldTestHooksEnabled } from "../../src/world/testHooks";
@@ -564,11 +564,177 @@ describe("WorldStage: 서버 구간대로 걷기와 카메라 (MAP-02, MAP-03)",
     const mine = s.world.renderers[0]!.chars.get(0)! as FakeHandle;
     move(s.store, seg(0, [200, 100, 300, 100], Date.now(), 180));
     frames(1200);
-    // 첫 값은 입장 지점의 방향, 그 뒤는 걷는 동안의 이동 방향뿐이다(멈춘 뒤에도 바뀌지 않는다)
-    const afterSpawn = mine.yaws.slice(1);
-    expect(afterSpawn.length).toBeGreaterThan(0);
-    expect(afterSpawn.every((y) => Math.abs(y - Math.PI / 2) < 1e-4)).toBe(true);
+    // 입장 방향에서 걷는 방향으로 짧게 돌고(결정 0059-3) 마지막 값은 걷는 방향이다. 멈춘 뒤에는 새로 정하지 않는다
+    expect(mine.yaws.length).toBeGreaterThan(1);
+    expect(Math.abs(mine.yaws.at(-1)! - Math.PI / 2)).toBeLessThan(1e-4);
+    for (let i = 1; i < mine.yaws.length; i++) expect(Math.abs(mine.yaws[i]! - mine.yaws[i - 1]!)).toBeLessThanOrEqual(YAW_TURN_RATE * 0.016 * 1.01);
     expect(mine.moving.at(-1)).toBe(false);
+    const calls = mine.yaws.length;
+    frames(1000);
+    expect(mine.yaws.length).toBe(calls);
+  });
+});
+
+describe("G-07-9 섞기·방향 (결정 0059)", () => {
+  const dist = (a: { x: number; z: number }, b: { x: number; z: number }): number => Math.hypot(a.x - b.x, a.z - b.z);
+  const posOf = (h: CharacterHandle): { x: number; z: number } => ({ x: h.root.position.x, z: h.root.position.z });
+  const lastRing = (r: FakeRenderer) => r.markers.filter((m) => m.kind === "ring").at(-1);
+
+  it("결정 0059: 남의 캐릭터는 예측하지 않는다 — 내가 탭해 예측 중이어도 남은 매 프레임 서버 위치다", async () => {
+    const s = await open();
+    const other = s.world.renderers[0]!.chars.get(1)!;
+    move(s.store, seg(1, [-300, 50, 100, 50], Date.now(), 180));
+    tapAt(surface(s.utils), 250, 340);
+    for (let t = 0; t < 400; t += 16) {
+      frame(16);
+      const want = s.store.positionOf(1, Date.now())!;
+      expect(Math.abs(other.root.position.x - want.x)).toBeLessThan(1e-6);
+      expect(Math.abs(other.root.position.z - want.z)).toBeLessThan(1e-6);
+    }
+  });
+
+  it("결정 0059: 남의 새 구간이 오면 위치 차이만 150ms 섞는다(바로 새 위치로 가지 않고, 한 프레임 이동 작음)", async () => {
+    const s = await open();
+    const other = s.world.renderers[0]!.chars.get(1)!;
+    move(s.store, seg(1, [-280, 50], Date.now(), 180)); // 서 있던 (−3, 0.5) 에서 0.2 떨어진 점의 새 구간
+    frame(16);
+    const first = posOf(other);
+    expect(first.x).toBeLessThan(-2.9);
+    expect(dist(first, s.store.positionOf(1, Date.now())!)).toBeGreaterThanOrEqual(0.15);
+    const started = Date.now();
+    let prev = first;
+    let blended = false;
+    for (let t = 0; t < 300; t += 16) {
+      frame(16);
+      const cur = posOf(other);
+      expect(dist(cur, prev)).toBeLessThanOrEqual(0.06);
+      prev = cur;
+      if (Date.now() - started >= SEG_BLEND_MS + 32) {
+        expect(dist(cur, s.store.positionOf(1, Date.now())!)).toBeLessThan(1e-6);
+        blended = true;
+      }
+    }
+    expect(blended).toBe(true);
+  });
+
+  it("결정 0059: 3 단위 넘게 떨어진 새 구간(순간이동)은 섞지 않고 바로 맞춘다", async () => {
+    const s = await open();
+    const other = s.world.renderers[0]!.chars.get(1)!;
+    move(s.store, seg(1, [200, 400], Date.now(), 180));
+    frame(16);
+    const want = s.store.positionOf(1, Date.now())!;
+    expect(dist(posOf(other), want)).toBeLessThan(1e-6);
+  });
+
+  it("결정 0059: 응답이 탭 간격보다 늦어도 둘째 탭의 링과 예측은 첫 탭의 응답에 끌려가지 않고 둘째 응답에서 맞춘다", async () => {
+    const s = await open();
+    const r = s.world.renderers[0]!;
+    const mine = r.chars.get(0)!;
+    const root = s.utils.container.querySelector("[data-world-stage]")!;
+    const base = s.store.segOf(0);
+    tapAt(surface(s.utils), 250, 340);
+    const sent1 = Date.now();
+    const pred1 = predictSegment(base, { x: 500, z: 400 }, sent1)!;
+    frames(210);
+    tapAt(surface(s.utils), 150, 320); // 바닥 (−5, 2)
+    const sent2 = Date.now();
+    expect(lastRing(r)!.at).toEqual({ x: -5, z: 2 });
+    move(s.store, { s: 0, p: pred1.p, t0: sent1 + 77, v: pred1.v }); // 첫 탭의 늦은 응답
+    frame(16);
+    expect(root.getAttribute("data-ring")).toBe("-5.00,2.00");
+    let prev = dist(posOf(mine), { x: -5, z: 2 });
+    for (let i = 0; i < 5; i++) {
+      frame(16);
+      const d = dist(posOf(mine), { x: -5, z: 2 });
+      expect(d).toBeLessThan(prev); // 둘째 예측으로 계속 다가간다
+      prev = d;
+    }
+    const seg1 = { p: pred1.p, t0: sent1 + 77, v: pred1.v };
+    const pred2 = predictSegment(seg1, { x: -500, z: 200 }, sent2 + 77)!;
+    move(s.store, { s: 0, p: pred2.p, t0: sent2 + 77, v: pred2.v }); // 둘째 탭의 응답
+    frame(16);
+    expect(root.getAttribute("data-ring")).toBe("-5.00,2.00");
+    frames(SEG_BLEND_MS + 48);
+    const want = s.store.positionOf(0, Date.now())!;
+    expect(dist(posOf(mine), want)).toBeLessThan(1e-6);
+    frames(MOVE_ACK_TIMEOUT_MS * 2);
+    expect(s.props.onNotice).not.toHaveBeenCalled();
+  });
+
+  it("결정 0059: 탭 뒤 새 연결(epoch 변경)이면 링과 예측을 알림 없이 거두고 snap 위치에 선다", async () => {
+    const s = await open();
+    const r = s.world.renderers[0]!;
+    const mine = r.chars.get(0)!;
+    tapAt(surface(s.utils), 250, 340);
+    frames(100);
+    snap(s.store, [seg(0, [-400, -300]), seg(1, [-300, 50])], 2);
+    frame(16);
+    expect(lastRing(r)!.at).toBeNull();
+    expect(s.utils.container.querySelector("[data-world-stage]")!.getAttribute("data-ring")).toBeNull();
+    expect(dist(posOf(mine), { x: -4, z: -3 })).toBeLessThan(1e-6);
+    frames(MOVE_ACK_TIMEOUT_MS * 2);
+    expect(s.props.onNotice).not.toHaveBeenCalled();
+  });
+
+  it("결정 0059: 모션 줄이기면 구간 교체를 섞지 않고 바로 맞춘다(예측 출발은 그대로 한다)", async () => {
+    stubReducedMotion(true);
+    const s = await open();
+    const mine = s.world.renderers[0]!.chars.get(0)!;
+    const base = s.store.segOf(0);
+    tapAt(surface(s.utils), 250, 340);
+    const sent = Date.now();
+    const pred = predictSegment(base, { x: 500, z: 400 }, sent)!;
+    frames(96);
+    expect(dist(posOf(mine), { x: 2, z: 1 })).toBeGreaterThan(0.1);
+    move(s.store, { s: 0, p: pred.p, t0: sent + 77, v: pred.v });
+    frame(16);
+    expect(dist(posOf(mine), s.store.positionOf(0, Date.now())!)).toBeLessThan(1e-6);
+  });
+
+  it("결정 0059: +x 로 걸으면 방향은 한 프레임에 YAW_TURN_RATE × dt 까지만 돌고 150ms 안에 π/2 가 된다", async () => {
+    const s = await open();
+    const mine = s.world.renderers[0]!.chars.get(0)! as FakeHandle;
+    const before = mine.yaws.length;
+    move(s.store, seg(0, [200, 100, 600, 100], Date.now(), 180));
+    const started = Date.now();
+    let reached: number | null = null;
+    let prev = mine.yaws.at(-1)!;
+    for (let t = 0; t < 400; t += 16) {
+      frame(16);
+      const cur = mine.yaws.at(-1)!;
+      expect(Math.abs(cur - prev)).toBeLessThanOrEqual(YAW_TURN_RATE * 0.016 * 1.01);
+      prev = cur;
+      if (reached === null && Math.abs(cur - Math.PI / 2) < 1e-4) reached = Date.now() - started;
+    }
+    expect(mine.yaws.length).toBeGreaterThan(before);
+    expect(reached).not.toBeNull();
+    expect(reached!).toBeLessThanOrEqual(150);
+  });
+
+  it("결정 0059: 반대쪽(−x)으로 걸을 때도 짧은 쪽으로 한 프레임 제한만큼씩 돌아 −π/2 에 닿는다", async () => {
+    const s = await open();
+    const mine = s.world.renderers[0]!.chars.get(0)! as FakeHandle;
+    move(s.store, seg(0, [200, 100, -200, 100], Date.now(), 180));
+    let prev = mine.yaws.at(-1)!;
+    let changed = 0;
+    for (let t = 0; t < 400; t += 16) {
+      frame(16);
+      const cur = mine.yaws.at(-1)!;
+      expect(Math.abs(cur - prev)).toBeLessThanOrEqual(YAW_TURN_RATE * 0.016 * 1.01);
+      if (cur !== prev) changed++;
+      prev = cur;
+    }
+    expect(changed).toBeGreaterThanOrEqual(4); // 한 번에 돌지 않는다
+    expect(Math.abs(prev + Math.PI / 2)).toBeLessThan(1e-4);
+  });
+
+  it("결정 0059: 모션 줄이기면 걷기 시작 다음 프레임에 방향이 바로 π/2 다", async () => {
+    stubReducedMotion(true);
+    const s = await open();
+    const mine = s.world.renderers[0]!.chars.get(0)! as FakeHandle;
+    move(s.store, seg(0, [200, 100, 600, 100], Date.now(), 180));
+    frame(16);
+    expect(Math.abs(mine.yaws.at(-1)! - Math.PI / 2)).toBeLessThan(1e-4);
   });
 });
 
