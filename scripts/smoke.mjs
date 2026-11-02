@@ -695,7 +695,7 @@ async function stageFull(url, args) {
     for (const [i, ev] of execViews.entries()) {
       const c = clients[i];
       if (ev.day.execution?.seat !== victim.seat) fail(`${c.nickname} 의 ${label} day.execution.seat 가 ${victim.seat} 가 아님: ${JSON.stringify(ev.day.execution)}`);
-      if (Object.keys(ev.day.execution).sort().join(",") !== "phrase,seat") fail(`${c.nickname} 의 ${label} day.execution 키 집합이 phrase,seat 가 아님: ${Object.keys(ev.day.execution).sort().join(",")}`);
+      if (Object.keys(ev.day.execution).sort().join(",") !== "seat") fail(`${c.nickname} 의 ${label} day.execution 키 집합이 seat 가 아님(결정 0060-5: 좌석만, 문구 번호·역할 없음): ${Object.keys(ev.day.execution).sort().join(",")}`);
       if (JSON.stringify(ev.day.verdict) !== JSON.stringify({ yes: voters.length, no: 0, passed: true })) fail(`${c.nickname} 의 ${label} day.verdict 가 {yes:${voters.length}, no:0, passed:true} 가 아님: ${JSON.stringify(ev.day.verdict)}`);
       if (ev.phaseDurationMs !== EXECUTION_MS) fail(`${c.nickname} 의 ${label} execution phaseDurationMs 가 ${EXECUTION_MS} 가 아님: ${ev.phaseDurationMs}`);
       const victimRow = ev.players.find((p) => p.seat === victim.seat);
