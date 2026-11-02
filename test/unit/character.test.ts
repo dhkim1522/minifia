@@ -580,3 +580,130 @@ describe("자세 섞기 (결정 0059)", () => {
     expect(r.headY).toBeCloseTo((2.45 + idleY + (walkY - idleY) * k) * CHAR_SCALE, 9);
   });
 });
+
+// ---------- 08-10 Task 1: 유령 setGhost (GHOST-01) ----------
+
+describe("유령 setGhost (GHOST-01)", () => {
+  /** 관절 메시(병합 재질 또는 유령 복제 재질)만 — 원판·고리는 vertexColors 가 없다 */
+  function bodyMeshes(root: Object3D): Mesh[] {
+    return meshes(root).filter((m) => (m.material as MeshStandardMaterial).vertexColors === true);
+  }
+  const matOf = (m: Mesh): MeshStandardMaterial => m.material as MeshStandardMaterial;
+
+  it("켜면 그 캐릭터 관절 메시만 복제 재질(transparent, opacity 0.6, depthWrite false)을 쓰고 다른 캐릭터와 공유 재질은 그대로다", () => {
+    const a = createCharacter(0, "coat");
+    const b = createCharacter(1, "coat");
+    const shared = matOf(bodyMeshes(a.root)[0]);
+    a.setGhost(true);
+    const aMeshes = bodyMeshes(a.root);
+    expect(aMeshes).toHaveLength(6);
+    for (const m of aMeshes) {
+      expect(matOf(m)).not.toBe(shared);
+      expect(matOf(m).transparent).toBe(true);
+      expect(matOf(m).opacity).toBeCloseTo(0.6, 9);
+      expect(matOf(m).depthWrite).toBe(false);
+      expect(matOf(m).vertexColors).toBe(true);
+    }
+    // 여섯 관절이 복제 재질 하나를 함께 쓴다
+    expect(new Set(aMeshes.map((m) => matOf(m))).size).toBe(1);
+    // B 는 그대로, 공유 재질도 그대로
+    for (const m of bodyMeshes(b.root)) expect(matOf(m)).toBe(shared);
+    expect(shared.transparent).toBe(false);
+    expect(shared.opacity).toBe(1);
+    expect(shared.depthWrite).toBe(true);
+  });
+
+  it("켜면 발밑 그림자 원판이 숨고, 끄면 다시 보인다", () => {
+    const c = createCharacter(0, "coat");
+    c.setGhost(true);
+    expect(discOf(c.root)).toBeUndefined();
+    c.setGhost(false);
+    expect(discOf(c.root)).toBeDefined();
+  });
+
+  it("setOpacity 는 유령일 때만 복제 재질의 불투명도를 바꾼다", () => {
+    const c = createCharacter(0, "coat");
+    const shared = matOf(bodyMeshes(c.root)[0]);
+    c.setOpacity(0.3); // 유령이 아니면 효과 없음
+    expect(shared.opacity).toBe(1);
+    expect(matOf(bodyMeshes(c.root)[0])).toBe(shared);
+    c.setGhost(true, 0.5);
+    expect(matOf(bodyMeshes(c.root)[0]).opacity).toBeCloseTo(0.5, 9);
+    c.setOpacity(0.3);
+    for (const m of bodyMeshes(c.root)) expect(matOf(m).opacity).toBeCloseTo(0.3, 9);
+    expect(shared.opacity).toBe(1);
+  });
+
+  it("끄면 관절이 공유 재질로 돌아오고 복제 재질은 정확히 한 번 dispose 된다", () => {
+    const spy = vi.spyOn(MeshStandardMaterial.prototype, "dispose");
+    try {
+      const other = createCharacter(1, "coat");
+      const shared = matOf(bodyMeshes(other.root)[0]);
+      const c = createCharacter(0, "coat");
+      c.setGhost(true);
+      const clone = matOf(bodyMeshes(c.root)[0]);
+      spy.mockClear();
+      c.setGhost(false);
+      for (const m of bodyMeshes(c.root)) expect(matOf(m)).toBe(shared);
+      expect(spy.mock.contexts).toEqual([clone]);
+      expect(shared.transparent).toBe(false);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it("켜기를 두 번 해도 복제 재질은 하나(누수 없음)이고, 왕복 반복 뒤에도 dispose 횟수가 켠 횟수와 같다", () => {
+    const spy = vi.spyOn(MeshStandardMaterial.prototype, "dispose");
+    try {
+      const c = createCharacter(0, "coat");
+      c.setGhost(true);
+      const first = matOf(bodyMeshes(c.root)[0]);
+      c.setGhost(true);
+      expect(matOf(bodyMeshes(c.root)[0])).toBe(first);
+      expect(spy).not.toHaveBeenCalled();
+      c.setGhost(false);
+      for (let n = 0; n < 4; n++) {
+        c.setGhost(true);
+        c.setGhost(false);
+      }
+      expect(spy).toHaveBeenCalledTimes(5);
+      c.setGhost(false); // 이미 꺼져 있으면 아무것도 하지 않는다
+      expect(spy).toHaveBeenCalledTimes(5);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it("유령인 채 dispose 하면 복제 재질도 해제하고, 이후 setGhost 는 무시한다", () => {
+    const spy = vi.spyOn(MeshStandardMaterial.prototype, "dispose");
+    try {
+      const c = createCharacter(0, "coat");
+      c.setGhost(true);
+      const clone = matOf(bodyMeshes(c.root)[0]);
+      spy.mockClear();
+      c.dispose();
+      expect(spy.mock.contexts).toEqual([clone]);
+      c.setGhost(true); // 해제 뒤에는 무시
+      c.setGhost(false);
+      expect(spy).toHaveBeenCalledTimes(1);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it("유령이어도 setDim 의 색 칠하기(paint)는 그대로 동작하고, 의상을 바꿔도 복제 재질을 유지한다", () => {
+    const c = createCharacter(0, "coat");
+    c.setGhost(true);
+    c.setDim(true);
+    const a = bodyMeshes(c.root)[0].geometry.getAttribute("color").array as Float32Array;
+    for (let i = 0; i < a.length; i += 3) {
+      expect(Math.abs(a[i] - a[i + 1])).toBeLessThan(1e-6);
+      expect(Math.abs(a[i + 1] - a[i + 2])).toBeLessThan(1e-6);
+    }
+    const clone = matOf(bodyMeshes(c.root)[0]);
+    c.applyOutfit("police");
+    c.setFace("happy");
+    for (const m of bodyMeshes(c.root)) expect(matOf(m)).toBe(clone);
+    c.setDim(false);
+  });
+});

@@ -702,6 +702,10 @@ export interface WorldCharacter {
   playEmote(id: EmoteId): void;
   /** 표정 바꾸기(원문 setFace) — 머리만 다시 병합(캐시). 모르는 이름은 기본 표정 */
   setFace(id: FaceId): void;
+  /** 유령(반투명) 켜기/끄기 — 08-10 RED 뼈대 */
+  setGhost(on: boolean, opacity?: number): void;
+  /** 유령일 때 불투명도 */
+  setOpacity(alpha: number): void;
   /** 지금 보이는 메시 수(관절 6 + 발밑 원판 + 투명 조각) */
   meshCount(): number;
   /** 이 캐릭터가 만든 지오메트리를 해제한다. 공유 재질·발밑 원판은 건드리지 않는다 */
@@ -890,6 +894,8 @@ export function createCharacter(figIndex: number, outfit: OutfitId = "coat"): Wo
     setFace(id) {
       if (!disposed) showFace(id);
     },
+    setGhost() {},
+    setOpacity() {},
     meshCount() {
       let n = 0;
       root.traverse((x) => {
