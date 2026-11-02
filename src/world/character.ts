@@ -644,6 +644,14 @@ function walkPose(walkPhase: number): Pose {
   return { aAx: sw * 0.5, aAz: 0.12, aBx: -sw * 0.5, aBz: -0.12, fA: 0, fB: 0, lA: -sw * 0.6, lB: sw * 0.6, hx: 0.04, hy: 0, hz: 0, y: Math.abs(Math.cos(walkPhase)) * 0.06, s: 1, ry: 0, face: "base" };
 }
 
+/** 두 자세의 숫자 키를 k(0~1)로 선형 보간한 새 자세. 표정은 기본이다 */
+function blendPose(a: Pose, b: Pose, k: number): Pose {
+  const out = { ...a };
+  for (const key of EMOTE_KEYS) out[key] = a[key] + (b[key] - a[key]) * k;
+  out.face = "base";
+  return out;
+}
+
 /** 재생 중인 동작: id 와 시작 뒤 경과 시간 */
 interface Emote {
   id: EmoteId;
@@ -825,6 +833,8 @@ export function createCharacter(figIndex: number, outfit: OutfitId = "coat"): Wo
   }
 
   let walkPhase = 0;
+  /** 걷기 자세가 섞인 비율(0 = 서 있는 자세, 1 = 걷기 자세). POSE_BLEND_MS 에 걸쳐 오간다 */
+  let walkMix = 0;
   let emote: Emote | null = null;
   function applyPose(p: Pose): void {
     groups.armA.rotation.set(p.aAx, 0, p.aAz);
@@ -848,7 +858,9 @@ export function createCharacter(figIndex: number, outfit: OutfitId = "coat"): Wo
     root,
     update(dt, t, moving) {
       if (moving) walkPhase += dt * WALK_PHASE_RATE;
-      const base = moving ? walkPose(walkPhase) : idlePose(t, root.position.x, fig);
+      walkMix = Math.min(1, Math.max(0, walkMix + ((moving ? 1 : -1) * dt * 1000) / POSE_BLEND_MS));
+      // 0 이하는 서 있는 자세 객체, 1 이상은 걷기 자세 객체 그대로(보간 오차 없음)
+      const base = walkMix >= 1 ? walkPose(walkPhase) : walkMix <= 0 ? idlePose(t, root.position.x, fig) : blendPose(idlePose(t, root.position.x, fig), walkPose(walkPhase), walkMix);
       let pose = base;
       if (emote && moving) emote = null; // 걷기 시작하면 동작이 끊긴다
       if (emote) {
