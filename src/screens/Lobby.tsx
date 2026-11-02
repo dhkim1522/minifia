@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import type { ClientMessage, RoomView } from "../../shared/protocol";
 import { connectedCount } from "../../shared/game/room";
@@ -16,7 +16,7 @@ import { CHAT_TEXT } from "../game/chatText";
 import { LOG_H_KB } from "../game/chatUi";
 import { diffRoomViews, toastForDiff } from "../net/roomDiff";
 import { useChat } from "../net/useChat";
-import { useChatLogHeight, useKeyboardLift } from "../net/useKeyboardLift";
+import { useMapInsets } from "../net/useMapInsets";
 import type { WorldStore } from "../world/store";
 import "../styles/lobby.css";
 import "../styles/sheet.css";
@@ -104,57 +104,9 @@ export function Lobby({ view, store, chat, send, canSend = true, epoch = 0, offs
     [],
   );
 
-  // 키보드(07-19, CHAT-05): 입력칸에 포커스가 있을 때만 visualViewport 로 키보드 높이(lift)를 읽어 CSS 변수(--mf-kb-lift·--mf-vv-top)로 쓴다.
-  // 변수는 방 틀(.mf-room)에 쓴다 — 헤더·알림·패널(로비 안)과 떠 있는 재접속 띠(로비 밖, 방 틀 직속)가 같은 값을 읽는다. 방 틀이 없으면 로비 루트.
-  // 열림(포커스 + lift > 80)이면 행동 줄을 숨기고(D3) 기록 칸을 72 로 줄이며 패널이 키보드 위로 올라간다. 캔버스 크기는 건드리지 않는다.
-  const rootRef = useRef<HTMLElement>(null);
-  const roomRef = useRef<HTMLElement | null>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
-  useLayoutEffect(() => {
-    roomRef.current = rootRef.current?.closest<HTMLElement>(".mf-room") ?? rootRef.current;
-  }, []);
-  const { open: kbOpen, lift } = useKeyboardLift({ inputRef, target: roomRef });
-
-  // 스테이지 사각형: 위 끝 = 헤더 블록 아래, 아래 끝 = 아래 패널 위(키보드가 열려 있으면 패널 + 키보드 높이). 캔버스는 화면 전체 크기 그대로 두고 카메라 중심만 이 사각형에 맞춘다.
-  // 재서 넘기는 값이라 7페이즈에서 패널이 자라도(채팅) 같은 길로 따라간다. 측정이 0 이면(레이아웃 없는 환경) 넘기지 않고 WorldStage 기본값을 쓴다.
-  const headerRef = useRef<HTMLElement>(null);
-  const panelRef = useRef<HTMLElement>(null);
-  const [insets, setInsets] = useState<{ top: number; bottom: number } | undefined>(undefined);
-  useLayoutEffect(() => {
-    const header = headerRef.current;
-    const panel = panelRef.current;
-    if (header === null || panel === null) return;
-    const measure = (): void => {
-      const top = header.offsetTop + header.offsetHeight;
-      const bottom = panel.offsetHeight;
-      if (top <= 0 || bottom <= 0) return;
-      setInsets((prev) => (prev !== undefined && prev.top === top && prev.bottom === bottom ? prev : { top, bottom }));
-    };
-    measure();
-    if (typeof ResizeObserver === "undefined") return;
-    const ro = new ResizeObserver(measure);
-    ro.observe(header);
-    ro.observe(panel);
-    return () => ro.disconnect();
-  }, []);
-
-  // 키보드 높이는 프레임마다 바뀌어도 다시 그리지 않는다: 아래 끝을 getter 로 넘겨 WorldStage 가 프레임마다 읽는 순간의 lift 를 더하게 한다(열림·닫힘만 다시 그린다).
-  const stageInsets = useMemo(
-    () =>
-      insets === undefined
-        ? undefined
-        : {
-            top: insets.top,
-            get bottom() {
-              return insets.bottom + lift();
-            },
-          },
-    [insets, lift],
-  );
-
-  // 아래 패널의 채팅: 기록 칸 높이는 방 높이로 한 번 정하고(키보드·주소창으로 다시 정하지 않는다) 패널 높이는 위 측정이 스테이지 사각형에 넘긴다.
-  // 키보드가 열린 동안만 72 로 줄인다.
-  const logH = useChatLogHeight(rootRef, inputRef);
+  // 키보드(07-19, CHAT-05)·스테이지 사각형 측정(06-15)·기록 칸 높이는 게임 맵(GameMap)과 같은 훅 하나가 맡는다(08-13).
+  // 키보드가 열려 있으면(kbOpen) 행동 줄을 숨기고 기록 칸을 72 로 줄이며 패널이 키보드 위로 올라간다. 아래 패널의 채팅 기록 칸 높이 logH 는 방 높이로 한 번 정한다.
+  const { rootRef, headerRef, panelRef, inputRef, kbOpen, logH, stageInsets } = useMapInsets();
   const { typingSeats, ...binding } = useChat({ store: chat, connection: { send, canSend }, view });
 
   const connected = connectedCount(view.players);

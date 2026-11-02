@@ -3,10 +3,11 @@ import type { ClientMessage, RoomView } from "../../shared/protocol";
 import { PhaseHeader } from "../components/v2/PhaseHeader";
 import { TopToast, useTopToast } from "../components/v2/TopToast";
 import { WorldStage } from "../components/WorldStage";
-import { LOG_H_SHORT } from "../game/chatUi";
+import { LOG_H_KB } from "../game/chatUi";
 import { headerFor } from "../game/dayView";
 import type { ChatStore } from "../net/chatStore";
 import { useChat } from "../net/useChat";
+import { useMapInsets } from "../net/useMapInsets";
 import type { WorldStore } from "../world/store";
 import { GamePanel } from "./GamePanel";
 import "../styles/game.css";
@@ -42,14 +43,16 @@ interface GameMapProps {
 // 화면은 서버가 보낸 view 만으로 다시 그린다. 닉네임(이름표)은 WorldStage 가 React 텍스트 노드로만 그린다.
 export function GameMap({ view, store, chat, send, canSend = true, offset = 0, myRoleButton, testButton, onLeave }: GameMapProps) {
   const toast = useTopToast();
+  // 측정(스테이지 사각형)·키보드·기록 칸 높이는 대기실과 같은 훅이다. 키보드가 열려 있으면 행동 줄을 숨기고 기록 칸을 72 로 줄인다(07-19).
+  const { rootRef, headerRef, panelRef, inputRef, kbOpen, logH, stageInsets } = useMapInsets();
   const { typingSeats, ...binding } = useChat({ store: chat, connection: { send, canSend }, view });
   const header = headerFor(view);
 
   return (
-    <main className="mf-root mf-game" data-game-stage="" data-phase={view.phase}>
+    <main ref={rootRef} className="mf-root mf-game" data-game-stage="" data-phase={view.phase} data-kb-open={kbOpen ? "true" : undefined}>
       {/* DOM 순서 = Tab 순서: 헤더([역할 카드]) → 맵(이름표) → 아래 패널(입력). 층 순서는 z 가 정한다 */}
       <div className="mf-game__scrim" aria-hidden="true" />
-      <header className="mf-game__header">
+      <header ref={headerRef} className="mf-game__header">
         <PhaseHeader title={header.title} {...(header.hint !== undefined ? { hint: header.hint } : {})} guide extra={myRoleButton} />
       </header>
       <WorldStage
@@ -58,6 +61,7 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, m
         send={send}
         canSend={canSend}
         offset={offset}
+        {...(stageInsets ? { stageInsets } : {})}
         typingSeats={typingSeats}
         onNotice={(text) => toast.show(text)}
         onKick={() => {}}
@@ -65,7 +69,16 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, m
       />
       <TopToast {...toast.props} />
       {testButton ? <div className="mf-game__test">{testButton}</div> : null}
-      <GamePanel view={view} send={send} canSend={canSend} binding={binding} logHeight={LOG_H_SHORT} />
+      <GamePanel
+        view={view}
+        send={send}
+        canSend={canSend}
+        binding={binding}
+        logHeight={kbOpen ? LOG_H_KB : logH}
+        kbOpen={kbOpen}
+        inputRef={inputRef}
+        panelRef={panelRef}
+      />
     </main>
   );
 }
