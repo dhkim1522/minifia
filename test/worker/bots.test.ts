@@ -4,6 +4,7 @@ import { env, exports } from "cloudflare:workers";
 import { evictDurableObject, runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 import { BOT_CHAT_LINES } from "../../shared/game/bots";
+import { PHASE_DEFS } from "../../shared/game/phases";
 import type { PhaseId, RoomView, ServerMessage } from "../../shared/protocol";
 import {
   advanceTo,
@@ -18,6 +19,7 @@ import {
   send,
   skipThrough,
   storedRoom,
+  toPhase,
   until,
   votesIn,
 } from "./helpers";
@@ -459,4 +461,100 @@ describe("누출 없음: 투표·변론·처형·종료", () => {
       expect(`${who}:${text.includes('"phase":"ended"')}`).toBe(`${who}:true`);
     }
   }, 60_000);
+});
+
+// ---- 8페이즈: 봇의 토론 끝내기·지목·찬반 (08-07, DAY-03·04·06, 결정 0024·0060-13) ----
+// 흐름 전환(08-11) 전이라 저장 상태를 toPhase 로 옮긴 뒤 알람 한 번으로 봇 계획을 세우고(reschedule), forceBotsDue 로 행동 시각을 당긴다.
+/** 알람을 한 번 돌려 지금 단계의 봇 계획을 세운다. */
+const armBots = async (code: string): Promise<void> => {
+  expect(await runDurableObjectAlarm(env.ROOM.getByName(code))).toBe(true);
+};
+type PlanRaw = { key: string; steps: Array<{ at: number; botId: string; act: { t: string } }> } | undefined;
+const planKinds = async (code: string): Promise<string> => {
+  const plan = (await stored(code)).botPlan as PlanRaw;
+  return (plan?.steps ?? []).map((st) => st.act.t).sort().join(",");
+};
+const countWith = async (code: string, key: string): Promise<number> => ((await playersOf(code)) as unknown as Array<Record<string, unknown>>).filter((p) => p[key] !== undefined).length;
+
+describe("봇 지목·찬반·토론 끝내기", () => {
+  it("nomination: 봇 계획에 산 봇마다 point 가 서고, 행동하면 방장이 봇 지목 줄을 state 로 받는다(남의 키 없음)", async () => {
+    const r = await botRoomAt("discussion");
+    const botSeats = await botSeatsOf(r.code);
+    await toPhase(r.code, "nomination");
+    await armBots(r.code);
+    expect(await planKinds(r.code)).toBe("point,point,point");
+    const from = mark(r.host);
+    await forceBotsDue(r.code);
+    await until("봇 지목 3개", async () => (await countWith(r.code, "nominate")) === 3);
+    const frames = await settle(r.host, from);
+    expect(summary(frames)).toBe("[state:nomination,state:nomination,state:nomination]");
+    const points = (frames.filter((m): m is State => m.t === "state").at(-1)!.view.day?.points ?? []).map((l) => l);
+    expect(points.map((l) => l.seat).sort().join(",")).toBe(botSeats.join(","));
+    expect(points.every((l) => l.target !== l.seat)).toBe(true);
+  }, 30_000);
+
+  it("verdict: 변론자가 아닌 봇만 던지고, 방장은 첫 투표마다 state 를 받으며 day.voted 에 값 없이 좌석만 있다", async () => {
+    const r = await botRoomAt("discussion");
+    const [b1, b2, b3] = await botSeatsOf(r.code);
+    await toPhase(r.code, "verdict", (room) => ({ ...room, verdict: { passed: false, candidate: b1 } }));
+    await armBots(r.code);
+    expect(await planKinds(r.code)).toBe("verdict,verdict");
+    const from = mark(r.host);
+    await forceBotsDue(r.code);
+    await until("봇 찬반 2개", async () => (await countWith(r.code, "verdictVote")) === 2);
+    const frames = await settle(r.host, from);
+    expect(summary(frames)).toBe("[state:verdict,state:verdict]");
+    const last = frames.filter((m): m is State => m.t === "state").at(-1)!.view;
+    expect(JSON.stringify(last.day?.voted)).toBe(JSON.stringify([b2, b3]));
+    expect(Object.hasOwn(last.me, "verdictVote")).toBe(false);
+    expect(frames.some((m) => JSON.stringify(m).includes('"agree"'))).toBe(false);
+  }, 30_000);
+
+  it("discussion: 봇 셋이 모두 토론 끝내기를 누르면 산 넷의 과반(3)이라 다음 단계로 넘어가고 마감이 now + 다음 단계 길이다", async () => {
+    const r = await botRoomAt("discussion");
+    await toPhase(r.code, "discussion");
+    await armBots(r.code);
+    expect((await planKinds(r.code)).split(",").filter((k) => k === "endDiscussion").length).toBe(3);
+    const nextId = PHASE_DEFS.discussion.next!;
+    const before = Date.now();
+    await forceBotsDue(r.code);
+    await until("토론 끝", async () => (await stored(r.code)).phase === nextId);
+    const phaseEndsAt = (await stored(r.code)).phaseEndsAt as number;
+    expect(phaseEndsAt >= before + PHASE_DEFS[nextId].durationMs! - 50 && phaseEndsAt <= Date.now() + PHASE_DEFS[nextId].durationMs! + 50).toBe(true);
+  }, 30_000);
+
+  it("봇 point·verdict 도 사람과 같은 apply 본체를 지난다: 자기 지목·범위 밖 대상·변론자의 찬반은 거절되고 규칙을 지키는 행동만 저장된다", async () => {
+    const r = await botRoomAt("discussion");
+    const bots = await botsOf(r.code);
+    const [b1, b2, b3] = bots as [BotRaw, BotRaw, BotRaw];
+    const past = Date.now() - 1000;
+    await toPhase(r.code, "nomination", (room) => ({
+      ...room,
+      botPlan: {
+        key: `nomination:${String(room.phaseEndsAt)}`,
+        steps: [
+          { at: past, botId: b1.id, act: { t: "point", target: b1.seat } },
+          { at: past + 1, botId: b2.id, act: { t: "point", target: 99 } },
+          { at: past + 2, botId: b3.id, act: { t: "point", target: b1.seat } },
+        ],
+      },
+    }));
+    await armBots(r.code);
+    const room = (await stored(r.code)).players as Array<Record<string, unknown>>;
+    expect(room.filter((p) => p.isBot === true).map((p) => `${String(p.seat)}>${String(p.nominate)}`).join(",")).toBe(`${b1.seat}>undefined,${b2.seat}>undefined,${b3.seat}>${b1.seat}`);
+    await toPhase(r.code, "verdict", (stateRoom) => ({
+      ...stateRoom,
+      verdict: { passed: false, candidate: b1.seat },
+      botPlan: {
+        key: `verdict:${String(stateRoom.phaseEndsAt)}`,
+        steps: [
+          { at: past, botId: b1.id, act: { t: "verdict", agree: true } },
+          { at: past + 1, botId: b2.id, act: { t: "verdict", agree: true } },
+        ],
+      },
+    }));
+    await armBots(r.code);
+    const after = (await stored(r.code)).players as Array<Record<string, unknown>>;
+    expect(after.filter((p) => p.isBot === true).map((p) => `${String(p.seat)}:${String(p.verdictVote)}`).join(",")).toBe(`${b1.seat}:undefined,${b2.seat}:true,${b3.seat}:undefined`);
+  }, 30_000);
 });

@@ -9,6 +9,8 @@ import type { RoomState } from "../../shared/game/room";
 import { pickTarget } from "../../shared/game/night";
 import { isAlive } from "../../shared/game/alive";
 import { castCandidateVote, castExecVote } from "../../shared/game/vote";
+import { castPoint } from "../../shared/game/nomination";
+import { castVerdict } from "../../shared/game/verdict";
 import { resetToLobby, setBotCount, setBotVote, setTestRole, skipPhase } from "../../shared/game/testTools";
 import { tick } from "../../shared/game/tick";
 import { buildPreview, buildView } from "../../shared/game/view";
@@ -835,5 +837,71 @@ describe("skipPhase: 봇 투표 설정을 따른다", () => {
     const after = skipOk(state, state.phaseEndsAt! - 500, seededRandInt(9));
     const votes = [...after.voteLog!.at(-1)!.cand!.votes].sort((a, b) => a.seat - b.seat);
     expect(votes.map((v) => `${v.seat}>${v.target}`).join(",")).toBe("1>2,2>1,3>1,4>1");
+  });
+});
+
+// ---- 8페이즈: 지목·찬반 단계를 넘길 때 안 던진 봇이 먼저 던진다 (08-07, 결정 0024·0060-13) ----
+// 흐름 전환(08-11) 전이라 상태를 손으로 세운다. 지금 tick 표에는 두 단계의 마감 훅이 없어 넘긴 뒤에도 개인 값이 남는다 —
+// 08-11 이 훅을 걸면 이 단언은 그날 voteLog 줄(지목 votes·찬반 exec)로 옮긴다.
+describe("skipPhase: 지목·찬반에서 안 던진 봇이 먼저 던진다", () => {
+  const trial = (phase: "nomination" | "verdict", over: Partial<RoomState> = {}, lobby: RoomState = botLobby()): RoomState => {
+    const base = startedFrom(lobby, 3, "discussion");
+    return { ...base, phase, phaseEndsAt: 100_000 + PHASE_DEFS[phase].durationMs!, ...over };
+  };
+  const THROWING = (): number => {
+    throw new Error("randInt must not be called");
+  };
+  const setting = (lobby: RoomState, exec: "random" | "yes" | "no", pick: "random" | "host" | "other"): RoomState => {
+    const r = setBotVote(lobby, lobby.hostId, exec, pick);
+    if (!r.ok) throw new Error(r.error);
+    return r.state;
+  };
+  const nominates = (s: RoomState): string => botsIn(s).map((b) => `${b.seat}>${String(b.nominate)}`).join(",");
+  const votes = (s: RoomState): string => botsIn(s).map((b) => `${b.seat}:${String(b.verdictVote)}`).join(",");
+
+  it("nomination: 안 던진 봇이 botCandidateTarget 대로 지목하고(봇마다 randInt(후보 수) 한 번), 이미 지목한 봇은 그대로다", () => {
+    const state = trial("nomination");
+    const first = botsIn(state)[0]!; // seat 1
+    const cast = castPoint(state, first.id, 4);
+    if (!cast.ok) throw new Error(cast.error);
+    const calls: number[] = [];
+    const after = skipOk(cast.state, 100_000, (n) => {
+      calls.push(n);
+      return 0; // 후보 중 가장 낮은 seat
+    });
+    expect(nominates(after)).toBe("1>4,2>0,3>0,4>0");
+    expect(calls.join(",")).toBe("4,4,4");
+  });
+
+  it("nomination: pick host 면 봇이 모두 방장을 지목하고 난수를 부르지 않는다", () => {
+    const after = skipOk(trial("nomination", {}, setting(botLobby(), "random", "host")), 100_000, THROWING);
+    expect(nominates(after)).toBe("1>0,2>0,3>0,4>0");
+  });
+
+  it("verdict: 변론자가 아닌 안 던진 봇이 먼저 던지고(봇마다 randInt(100) 한 번) 변론자 봇은 던지지 않으며, 이미 던진 봇은 그대로다", () => {
+    const state = trial("verdict", { verdict: { passed: false, candidate: 2 } });
+    const first = botsIn(state)[0]!; // seat 1
+    const cast = castVerdict(state, first.id, false);
+    if (!cast.ok) throw new Error(cast.error);
+    const calls: number[] = [];
+    const after = skipOk(cast.state, 100_000, (n) => {
+      calls.push(n);
+      return 0; // randInt(100) = 0 < 70 → 찬성
+    });
+    expect(votes(after)).toBe("1:false,2:undefined,3:true,4:true");
+    expect(calls.join(",")).toBe("100,100");
+  });
+
+  it("verdict: 고정 yes·no 면 봇이 모두 그 값으로 던지고 찬반 결정 난수를 부르지 않는다", () => {
+    for (const [exec, want] of [["yes", "true"], ["no", "false"]] as const) {
+      const state = trial("verdict", { verdict: { passed: false, candidate: 0 } }, setting(botLobby(), exec, "random"));
+      const calls: number[] = [];
+      const after = skipOk(state, 100_000, (n) => {
+        calls.push(n);
+        return 0;
+      });
+      expect(`${exec}:${votes(after)}`).toBe(`${exec}:${[1, 2, 3, 4].map((seat) => `${seat}:${want}`).join(",")}`);
+      expect(`${exec}:${calls.includes(100)}`).toBe(`${exec}:false`); // 봇 찬반 결정 난수(randInt(100))는 부르지 않는다(처형 단계 문구 추첨은 tick 이 부른다)
+    }
   });
 });

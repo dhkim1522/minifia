@@ -388,15 +388,15 @@ describe("대기실: 시트의 봇 줄 (U-10)", () => {
   });
 });
 
-describe("대기실: 시트의 봇 처형 투표·봇 후보 선택 (P-13)", () => {
+describe("대기실: 시트의 봇 찬반·봇 지목 (P-13)", () => {
   const openSheet = (o: Opts, over: Partial<RoomConnection> = {}) => {
     const utils = open({ testMode: true, ...o }, over);
     fireEvent.click(testBtn() as HTMLElement);
     return utils;
   };
   const sent = (c: RoomConnection): string => JSON.stringify((c.send as ReturnType<typeof vi.fn>).mock.calls);
-  const execGroup = () => within(sheet()).getByRole("group", { name: "봇 처형 투표" });
-  const pickGroup = () => within(sheet()).getByRole("group", { name: "봇 후보 선택" });
+  const execGroup = () => within(sheet()).getByRole("group", { name: "봇 찬반" });
+  const pickGroup = () => within(sheet()).getByRole("group", { name: "봇 지목" });
   const execChip = (name: string) => within(execGroup()).getByRole("button", { name }) as HTMLButtonElement;
   const pickChip = (name: string) => within(pickGroup()).getByRole("button", { name }) as HTMLButtonElement;
   const pressed = (b: HTMLButtonElement) => b.getAttribute("aria-pressed");
@@ -407,8 +407,8 @@ describe("대기실: 시트의 봇 처형 투표·봇 후보 선택 (P-13)", () 
     openSheet({});
     expect(EXEC_NAMES.map((n) => pressed(execChip(n))).join(",")).toBe("true,false,false");
     expect(PICK_NAMES.map((n) => pressed(pickChip(n))).join(",")).toBe("true,false,false");
-    expect(within(sheet()).getByText("봇 처형 투표").textContent).toBe("봇 처형 투표");
-    expect(within(sheet()).getByText("봇 후보 선택").textContent).toBe("봇 후보 선택");
+    expect(within(sheet()).getByText("봇 찬반").textContent).toBe("봇 찬반");
+    expect(within(sheet()).getByText("봇 지목").textContent).toBe("봇 지목");
   });
 
   it("봇이 0명이어도 칩은 켜져 있다", () => {
@@ -483,8 +483,8 @@ describe("대기실: 시트의 봇 처형 투표·봇 후보 선택 (P-13)", () 
   it("게임 중(낮 토론) 시트에는 두 그룹이 없다", () => {
     open({ testMode: true, phase: "discussion" });
     fireEvent.click(testBtn() as HTMLElement);
-    expect(String(within(sheet()).queryByRole("group", { name: "봇 처형 투표" }))).toBe("null");
-    expect(String(within(sheet()).queryByRole("group", { name: "봇 후보 선택" }))).toBe("null");
+    expect(String(within(sheet()).queryByRole("group", { name: "봇 찬반" }))).toBe("null");
+    expect(String(within(sheet()).queryByRole("group", { name: "봇 지목" }))).toBe("null");
   });
 
   it("두 그룹은 봇 줄 아래, 두 동작 버튼 위에 놓인다", () => {
