@@ -17,3 +17,17 @@ export function phaseDurationOf(state: RoomState): number | null {
   }
   return PHASE_DEFS[state.phase].durationMs;
 }
+
+// RED 단계 자리표시자 — 시험이 불러올 수 있게 이름만 둔다. GREEN 커밋이 구현으로 바꾼다.
+export function toggleEnd(_state: RoomState, _actorId: string, _on: boolean): { ok: false; error: "WRONG_PHASE" | "BAD_MESSAGE" } {
+  return { ok: false, error: "BAD_MESSAGE" };
+}
+export function endCountOf(_state: RoomState): number {
+  return -1;
+}
+export function endReached(_state: RoomState): boolean {
+  return false;
+}
+export function enterDiscussion(state: RoomState): RoomState {
+  return state;
+}
