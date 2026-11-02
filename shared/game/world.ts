@@ -156,6 +156,11 @@ export function requestMove(
   };
 }
 
+/** (RED 껍데기 — GREEN 에서 requestMove 본체로 교체) */
+export function planMoveSegment(_cur: Segment, _dest: { x: number; z: number }, now: number, _map: MapDef): Segment {
+  return { p: [0, 0], t0: now, v: 0 };
+}
+
 /** 한 사람의 새 구간 프레임. 공개 식별자는 seat 뿐이다(playerId·토큰·역할 자리 없음). p 는 복사한다. */
 export function moveFrame(seat: number, seg: Segment): Extract<WorldFrame, { k: "move" }> {
   return { t: "world", k: "move", s: seat, p: [...seg.p], t0: seg.t0, v: seg.v };

@@ -22,6 +22,7 @@ import {
   emptyWorld,
   moveFrame,
   nextWanderAt,
+  planMoveSegment,
   planWander,
   positionAt,
   positionAtFx,
@@ -236,6 +237,44 @@ describe("requestMove — 목적지 하나가 지금 위치에서 서버 구간�
   it("입력 월드는 얼려 있어도 던지지 않는다(새 객체만 만든다)", () => {
     const w = deepFreeze(oneWalker());
     expect(() => requestMove(w, "p0", { x: 40, z: 360 }, 2000, BAR_MAP)).not.toThrow();
+  });
+});
+
+describe("planMoveSegment — requestMove 본체와 같다(결정 0059)", () => {
+  /** 같은 월드·같은 시각에 requestMove 가 만든 구간과 planMoveSegment 의 구간이 깊은 비교로 같다. */
+  function sameAsRequestMove(w: WorldState, dest: { x: number; z: number }, now: number): Segment {
+    const cur = w.segs.p0!;
+    const planned = planMoveSegment(cur, dest, now, BAR_MAP);
+    const served = must(requestMove(w, "p0", dest, now, BAR_MAP)).seg;
+    expect(planned).toEqual(served);
+    return planned;
+  }
+
+  it("서 있다 출발: 같은 목적지·시각이면 requestMove 의 구간과 같다", () => {
+    sameAsRequestMove(oneWalker(1000), { x: 40, z: 360 }, 2000);
+  });
+
+  it("걷는 중 새 목적지: 구간이 같고 첫 점이 지금 위치(positionAtFx)다", () => {
+    const walking = must(requestMove(oneWalker(1000), "p0", { x: -420, z: -120 }, 2000, BAR_MAP)).world;
+    const seg = sameAsRequestMove(walking, { x: 40, z: 360 }, 3000);
+    const at = positionAtFx(walking.segs.p0!, 3000);
+    expect(seg.p.slice(0, 2)).toEqual([at.x, at.z]);
+  });
+
+  it("막힌 목적지(0,0)·맵 밖(9999,-9999)·비유한(NaN) 좌표도 같다", () => {
+    for (const dest of [{ x: 0, z: 0 }, { x: 9999, z: -9999 }, { x: Number.NaN, z: Number.NaN }]) {
+      sameAsRequestMove(oneWalker(1000), dest, 2000);
+    }
+  });
+
+  it("제자리 목적지(지금 위치)는 한 점 구간으로 같다", () => {
+    const seg = sameAsRequestMove(oneWalker(1000), { x: 360, z: 40 }, 2000);
+    expect(seg.p).toEqual([360, 40]);
+  });
+
+  it("입력 구간을 바꾸지 않는다(얼린 입력으로 호출해도 던지지 않는다)", () => {
+    const cur = deepFreeze({ p: [360, 40, 360, 220], t0: 1000, v: MOVE_V });
+    expect(() => planMoveSegment(cur, { x: 40, z: 360 }, 1500, BAR_MAP)).not.toThrow();
   });
 });
 
