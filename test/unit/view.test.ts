@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { isAlive } from "../../shared/game/alive";
 import { channelOf } from "../../shared/game/audience";
 import { pickTarget } from "../../shared/game/night";
-import { DISCUSSION_MS, EXEC_VOTE_MS, MORNING_MS, NIGHT_MS, PHASE_DEFS, candidateRevealMs } from "../../shared/game/phases";
+import { DISCUSSION_MS, EXEC_VOTE_MS, MORNING_MS, NIGHT_MS, PHASE_DEFS } from "../../shared/game/phases";
 import { ROOM_TTL_MS, attachConnection, createRoomState, joinRoom, startGame } from "../../shared/game/room";
 import type { Player, RoomState } from "../../shared/game/room";
 import { rolesInPlay } from "../../shared/game/roles";
@@ -15,16 +15,16 @@ import { castCandidateVotes, castExecVotes, startedAt, stateWithVerdict } from "
 
 const PLAYER_COUNTS = [4, 5, 6, 7, 8] as const;
 const SEEDS = [1, 42, 20260101] as const;
-/** 열세 단계 전부(게임 진행 순서). 4페이즈가 처형 여섯 단계를 더했다(결정 0036). */
+/**
+ * 옛 처형 여부·후보 선택·후보 공개 세 단계를 뺀 열 단계(게임 진행 순서). 옛 흐름 전용 단계의 view 시험은 08-28 이 지웠고(DAY-07),
+ * 새 흐름의 지목·찬반 단계는 흐름 전환(08-11)이 이 목록에 더한다.
+ */
 const PHASES: readonly PhaseId[] = [
   "lobby",
   "assigning",
   "roleReveal",
   "dayAnnounce",
   "discussion",
-  "execVote",
-  "candidateVote",
-  "candidateVoteReveal",
   "defense",
   "execution",
   "night",
@@ -36,9 +36,6 @@ const REVEALING_PHASES = [
   "roleReveal",
   "dayAnnounce",
   "discussion",
-  "execVote",
-  "candidateVote",
-  "candidateVoteReveal",
   "defense",
   "execution",
   "night",
@@ -69,11 +66,11 @@ function lobbyOf(n: number): RoomState {
 
 /**
  * 단계별 상태를 실제 전이(startGame, tick)로 만든다. 그 단계에 처음 들어간 순간이다. 밤 판정에는 시드 난수를 넘긴다.
- * 표 없이 마감만 따라가면 candidateVote 이후(분기 단계)와 ended 에 닿지 못한다(Pitfall 12) — 그 단계들은 실제 투표를 넣는 도우미로 만든다.
+ * 표 없이 마감만 따라가면 변론·처형과 ended 에 닿지 못한다(Pitfall 12) — 그 단계들은 실제 투표를 넣는 도우미로 만든다.
  * 닿지 못하는 단계를 마감만으로 기다리면 끝없이 도는 루프가 되므로 횟수 상한을 둔다.
  */
 function stateAt(phase: PhaseId, n: number, seed: number): RoomState {
-  if (phase === "candidateVote" || phase === "candidateVoteReveal" || phase === "defense" || phase === "execution") {
+  if (phase === "defense" || phase === "execution") {
     return stateWithVerdict(n, seed, phase);
   }
   if (phase === "ended") return endedState(n, seed, "citizen");
@@ -263,20 +260,19 @@ const SERVER_ONLY_KEYS: readonly string[] = [
 ];
 /** view.day 가 있는 열 단계. 이 밖의 단계 뷰에는 day 키 자체가 없다(D-07). */
 const DAY_VIEW_PHASES: ReadonlySet<PhaseId> = new Set([
-  "dayAnnounce", "discussion", "execVote", "candidateVote", "candidateVoteReveal", "defense", "execution", "night", "morning", "ended",
+  "dayAnnounce", "discussion", "defense", "execution", "night", "morning", "ended",
 ]);
 const ME_KEYS: ReadonlySet<string> = new Set([
-  "seat", "isHost", "role", "allies", "testMode", "testRole", "testBots", "testBotVote", "pick", "allyPicks", "records", "voteAgree", "voteTarget", "chat", "endDiscussion", "verdictVote",
+  "seat", "isHost", "role", "allies", "testMode", "testRole", "testBots", "testBotVote", "pick", "allyPicks", "records", "chat", "endDiscussion", "verdictVote",
 ]);
 const DAY_KEYS: ReadonlySet<string> = new Set([
-  "n", "roles", "voteLog", "morning", "execTally", "candidate", "execution", "noExecution", "points", "endCount", "voted", "verdict",
+  "n", "roles", "voteLog", "morning", "candidate", "execution", "noExecution", "points", "endCount", "voted", "verdict",
 ]);
 const keysOf = (value: unknown): string => Object.keys((value ?? {}) as object).sort().join(",");
 
 /**
  * 열네 단계 허용 키와 받는 사람 규칙 한 곳(결정 0036-12, D-17, D-34). richStateAt 이 만드는 상태에 맞춘 기대값이다:
  * 후보가 있는 공개 구간 이후, 표 없이 지나온 밤(처형 무효 noVotes), 일부만 던진 투표 단계.
- *  - execTally 는 execVote 에만(모든 viewer 같은 값), voteAgree·voteTarget 은 본인·그 단계·생존에만
  *  - candidate 는 공개·변론·처형에만, execution 은 처형에만(seat·phrase 두 키), noExecution 은 처형 무효로 온 밤에만(reason 한 키)
  *  - result 는 ended 에만, voteLog 줄은 키가 정해져 있고 그날 cand 는 공개 구간 전에 없다(D-19)
  */
@@ -294,17 +290,6 @@ function phaseKeyViolations(s: RoomState, viewer: Player, view: RoomView, phase:
   else if (wantChat !== null && view.me.chat !== wantChat) out.push(`${tag}: me.chat value ${String(view.me.chat)}`);
   for (const path of keyPaths(view)) if (lastKey(path) === "chat" && path !== "me.chat") out.push(`${tag}: chat key outside me at ${path}`);
 
-  // 본인 표: 생존한 본인이 던졌을 때만, 본인 view 의 me 에만
-  const wantAgree = phase === "execVote" && isAlive(viewer) && viewer.execVote !== undefined;
-  if (("voteAgree" in view.me) !== wantAgree) out.push(`${tag}: me.voteAgree presence ${"voteAgree" in view.me}`);
-  else if (wantAgree && view.me.voteAgree !== viewer.execVote) out.push(`${tag}: me.voteAgree value`);
-  const wantTarget = phase === "candidateVote" && isAlive(viewer) && viewer.candidateVote !== undefined;
-  if (("voteTarget" in view.me) !== wantTarget) out.push(`${tag}: me.voteTarget presence ${"voteTarget" in view.me}`);
-  else if (wantTarget && view.me.voteTarget !== viewer.candidateVote) out.push(`${tag}: me.voteTarget value`);
-  for (const path of keyPaths(view)) {
-    if (["voteAgree", "voteTarget"].includes(lastKey(path)) && !path.startsWith("me.")) out.push(`${tag}: vote field outside me at ${path}`);
-  }
-
   // day: 열한 단계에만, 키는 허용 목록 안
   if (("day" in view) !== DAY_VIEW_PHASES.has(phase)) return [...out, `${tag}: day presence ${"day" in view}`];
   const day = view.day;
@@ -314,15 +299,7 @@ function phaseKeyViolations(s: RoomState, viewer: Player, view: RoomView, phase:
   }
   if (!Array.isArray(day.voteLog)) out.push(`${tag}: day.voteLog is not an array`);
   for (const key of Object.keys(day)) if (!DAY_KEYS.has(key)) out.push(`${tag}: day key ${key}`);
-  const wantTally = phase === "execVote";
-  if (("execTally" in day) !== wantTally) out.push(`${tag}: day.execTally presence`);
-  else if (wantTally) {
-    const living = s.players.filter(isAlive);
-    const want = { yes: living.filter((p) => p.execVote === true).length, no: living.filter((p) => p.execVote === false).length };
-    if (flat(day.execTally) !== flat(want)) out.push(`${tag}: day.execTally ${flat(day.execTally)} want ${flat(want)}`);
-    if (keysOf(day.execTally) !== "no,yes") out.push(`${tag}: execTally keys`);
-  }
-  const wantCandidate = phase === "candidateVoteReveal" || phase === "defense" || phase === "execution";
+  const wantCandidate = phase === "defense" || phase === "execution";
   if (("candidate" in day) !== wantCandidate) out.push(`${tag}: day.candidate presence ${"candidate" in day}`);
   else if (wantCandidate && day.candidate !== s.verdict?.candidate) out.push(`${tag}: day.candidate value`);
   const wantExecution = phase === "execution";
@@ -337,14 +314,12 @@ function phaseKeyViolations(s: RoomState, viewer: Player, view: RoomView, phase:
   else if (wantNoExecution && flat(day.noExecution) !== flat({ reason: "noVotes" })) out.push(`${tag}: day.noExecution ${flat(day.noExecution)}`);
 
   // voteLog: 줄마다 키가 정해져 있다. 여부 줄은 yes·no·passed 세 키뿐(개인 줄 없음), cand 는 votes(+candidate), 그날 cand 는 공개 구간 전에 없다.
-  const today = s.day ?? 1;
   for (const line of day.voteLog ?? []) {
     if (!["exec,n", "cand,exec,n"].includes(keysOf(line))) out.push(`${tag}: voteLog line keys ${keysOf(line)}`);
     if (keysOf(line.exec) !== "no,passed,yes") out.push(`${tag}: voteLog exec keys ${keysOf(line.exec)}`);
     if (line.cand !== undefined) {
       if (!["votes", "candidate,votes"].includes(keysOf(line.cand))) out.push(`${tag}: voteLog cand keys ${keysOf(line.cand)}`);
       for (const v of line.cand.votes) if (keysOf(v) !== "seat,target") out.push(`${tag}: voteLog vote keys ${keysOf(v)}`);
-      if (line.n === today && (phase === "execVote" || phase === "candidateVote")) out.push(`${tag}: voteLog cand before reveal`);
     }
   }
 
@@ -421,19 +396,8 @@ function nightActions(state: RoomState): RoomState {
  * night·morning: 그 토론 뒤 밤 행동과 아침.
  */
 function richStateAt(phase: PhaseId, n: number, seed: number): RoomState {
-  // 투표 단계: execVote·candidateVote 는 일부만 던진 상태(던진 사람과 안 던진 사람이 섞인다), 공개 구간 이후는 후보가 시민/마피아로 갈린다.
-  if (phase === "execVote") {
-    const d = advanceTo(richStateAt("discussion", n, seed), "execVote", seed);
-    const voters = aliveSeats(d).filter((seat) => seat % 4 !== 3);
-    return castExecVotes(d, Object.fromEntries(voters.map((seat) => [seat, (seat + seed) % 3 !== 0])));
-  }
-  if (phase === "candidateVote") {
-    const c = stateWithVerdict(n, seed, "candidateVote", { candidate: "none" });
-    const living = aliveSeats(c);
-    const voters = living.filter((seat) => seat % 2 === 0);
-    return castCandidateVotes(c, Object.fromEntries(voters.map((seat) => [seat, living[(living.indexOf(seat) + 1) % living.length]!])));
-  }
-  if (phase === "candidateVoteReveal" || phase === "defense" || phase === "execution") {
+  // 변론·처형: 후보가 시민/마피아로 갈린다.
+  if (phase === "defense" || phase === "execution") {
     return stateWithVerdict(n, seed, phase, { candidate: seed % 2 === 0 ? "mafia" : "citizen" });
   }
   if (phase === "ended") return endedState(n, seed, seed % 2 === 0 ? "mafia" : "citizen");
@@ -463,16 +427,14 @@ function mafiaSeatsOtherThan(state: RoomState, p: Player): number[] {
 }
 
 describe("buildView 단계 길이 (D-15, 결정 0012)", () => {
-  it("phaseDurationMs 는 단계 길이(공개 단계는 그날 공개 표 수로 파생)를 보내고, phaseEndsAt·serverNow 는 상태·now 그대로다", () => {
+  it("phaseDurationMs 는 단계 길이를 보내고, phaseEndsAt·serverNow 는 상태·now 그대로다", () => {
     const got = PHASES.map((phase) => {
       const s = stateAt(phase, 4, 1);
       const v = buildView(s, s.hostId, 77_777);
       return `${phase}:${v.phaseDurationMs}:${v.phaseEndsAt === s.phaseEndsAt}:${v.serverNow}`;
     });
-    const reveal = stateAt("candidateVoteReveal", 4, 1);
-    const revealVotes = reveal.voteLog!.find((e) => e.n === reveal.day)!.cand!.votes.length;
     expect(got.join(" ")).toBe(
-      `lobby:null:true:77777 assigning:3000:true:77777 roleReveal:15000:true:77777 dayAnnounce:2000:true:77777 discussion:40000:true:77777 execVote:13000:true:77777 candidateVote:15000:true:77777 candidateVoteReveal:${candidateRevealMs(revealVotes)}:true:77777 defense:10000:true:77777 execution:5000:true:77777 night:30000:true:77777 morning:5000:true:77777 ended:null:true:77777`,
+      `lobby:null:true:77777 assigning:3000:true:77777 roleReveal:15000:true:77777 dayAnnounce:2000:true:77777 discussion:40000:true:77777 defense:10000:true:77777 execution:5000:true:77777 night:30000:true:77777 morning:5000:true:77777 ended:null:true:77777`,
     );
   });
 
@@ -498,24 +460,6 @@ describe("buildView 단계 길이 (D-15, 결정 0012)", () => {
     );
     expect(r.phaseEndsAt).toBe(START_AT + 18000);
     expect(a.expiresAt).toBe(START_AT + ROOM_TTL_MS);
-  });
-
-  it("공개 단계: 4~8명 × 시드, 모든 viewer(생존·관전)의 view 가 같은 phaseDurationMs = candidateRevealMs(그날 표 수) 이고 마감 − 길이 = 공개 진입 시각 (결정 0039)", () => {
-    const bad: string[] = [];
-    for (const n of PLAYER_COUNTS) {
-      for (const seed of SEEDS) {
-        const before = stateAt("candidateVote", n, seed);
-        const s = stateAt("candidateVoteReveal", n, seed);
-        const votes = s.voteLog!.find((e) => e.n === s.day)!.cand!.votes.length;
-        const want = candidateRevealMs(votes);
-        for (const p of s.players) {
-          const v = buildView(s, p.id, START_AT);
-          if (v.phaseDurationMs !== want) bad.push(`n${n} s${seed} ${p.seat}: dur ${v.phaseDurationMs} != ${want}`);
-          if (v.phaseEndsAt! - v.phaseDurationMs! !== before.phaseEndsAt) bad.push(`n${n} s${seed} ${p.seat}: start mismatch`);
-        }
-      }
-    }
-    expect(bad.join("\n")).toBe("");
   });
 });
 
@@ -1166,13 +1110,13 @@ describe("buildView 관전 (결정 0021)", () => {
   });
 });
 
-describe("buildView 열네 단계 허용 키 전수 (결정 0036-12, D-17, D-34)", () => {
-  it("day 는 열한 단계(새 다섯 단계와 ended 포함)에만 있고 voteLog 는 배열이다; lobby·assigning·roleReveal 에는 day 키 자체가 없다 (4~8명 × 시드 3)", () => {
+describe("buildView 허용 키 전수 (결정 0036-12, D-17, D-34)", () => {
+  it("day 는 변론·처형·ended 에 있고 voteLog 는 배열이다; lobby·assigning·roleReveal 에는 day 키 자체가 없다 (4~8명 × 시드 3)", () => {
     const bad: string[] = [];
     let seen = 0;
     for (const n of PLAYER_COUNTS) {
       for (const seed of SEEDS) {
-        for (const phase of ["execVote", "candidateVote", "candidateVoteReveal", "defense", "execution", "ended"] as const) {
+        for (const phase of ["defense", "execution", "ended"] as const) {
           const s = richStateAt(phase, n, seed);
           for (const p of s.players) {
             seen += 1;
@@ -1234,51 +1178,15 @@ describe("buildView 열네 단계 허용 키 전수 (결정 0036-12, D-17, D-34)
     }
     expect(bad.join("; ")).toBe("");
   });
-
-  it("후보가 없는 공개 구간(동률·0표)에는 day.candidate 키가 없고, 그날 cand 줄에는 votes 만 있다", () => {
-    const got: string[] = [];
-    for (const candidate of ["tie", "none"] as const) {
-      const s = stateWithVerdict(5, 1, "candidateVoteReveal", { candidate });
-      const days = s.players.map((p) => buildView(s, p.id, START_AT).day!);
-      const line = days[0]!.voteLog![0]!;
-      got.push(`${candidate}:${days.every((d) => !("candidate" in d))}:${keysOf(line.cand)}:${line.cand!.votes.length}`);
-    }
-    expect(got.join(" ")).toBe("tie:true:votes:2 none:true:votes:0");
-  });
 });
 
 describe("buildView 처형 무효 이유 (D-34)", () => {
-  /** 모든 viewer 의 day.noExecution 이 같은 한 값이고 키는 reason 하나. */
-  const reasonsOf = (s: RoomState): string => {
-    const lines = new Set(s.players.map((p) => flat(buildView(s, p.id, START_AT).day?.noExecution)));
-    expect(lines.size).toBe(1);
-    return [...lines][0]!;
-  };
-
-  it("여부 반대 다수 → notMajority, 표 없음 → noVotes, 후보 동률 → tie, 후보 선택 표 없음 → noVotes (4~8명 × 시드 3)", () => {
-    const bad: string[] = [];
-    for (const n of PLAYER_COUNTS) {
-      for (const seed of SEEDS) {
-        const base = startedAt(n, seed, "execVote");
-        const reject = tick(castExecVotes(base, { 0: true, 1: false, 2: false }), base.phaseEndsAt!, seededRandInt(seed));
-        const silent = tick(base, base.phaseEndsAt!, seededRandInt(seed));
-        const tie = advanceTo(stateWithVerdict(n, seed, "candidateVoteReveal", { candidate: "tie" }), "night", seed);
-        const nobody = advanceTo(stateWithVerdict(n, seed, "candidateVoteReveal", { candidate: "none" }), "night", seed);
-        const got = [reject, silent, tie, nobody].map((s) => (s.phase === "night" ? reasonsOf(s) : `phase ${s.phase}`));
-        const want = ["notMajority", "noVotes", "tie", "noVotes"].map((reason) => flat({ reason }));
-        if (got.join(" ") !== want.join(" ")) bad.push(`${n}/${seed}: ${got.join(" ")}`);
-      }
-    }
-    expect(bad.join("; ")).toBe("");
-  });
-
-  it("처형이 이뤄진 날의 밤과 그 아침에는 noExecution 키가 없고, 처형 무효 밤의 다음 아침에도 없다", () => {
+  it("처형이 이뤄진 날의 밤과 그 아침에는 noExecution 키가 없다", () => {
     const bad: string[] = [];
     for (const n of PLAYER_COUNTS) {
       for (const seed of SEEDS) {
         const afterExec = advanceTo(stateWithVerdict(n, seed, "execution", { candidate: "citizen" }), "night", seed);
-        const silentNight = advanceTo(stateAt("execVote", n, seed), "night", seed);
-        for (const [tag, night, wantKey] of [["executed", afterExec, false], ["silent", silentNight, true]] as const) {
+        for (const [tag, night, wantKey] of [["executed", afterExec, false]] as const) {
           for (const p of night.players) if (("noExecution" in (buildView(night, p.id, START_AT).day ?? {})) !== wantKey) bad.push(`${n}/${seed}/${tag}/night/seat${p.seat}`);
           const morning = advanceTo(night, "morning", seed);
           for (const p of morning.players) if ("noExecution" in (buildView(morning, p.id, START_AT).day ?? {})) bad.push(`${n}/${seed}/${tag}/morning/seat${p.seat}`);
@@ -1289,62 +1197,12 @@ describe("buildView 처형 무효 이유 (D-34)", () => {
   });
 });
 
-describe("buildView 여부 투표 익명 차분 (VOTE-01, D-02, T-04-30)", () => {
-  /**
-   * 같은 집계를 서로 다른 투표자 배치로 만든 두 상태. 마지막 좌석은 탈락 관전자로 만든 뒤 던진다.
-   * k 명이 던진다(찬성 k-1, 반대 1): 1 은 반대, 나머지는 찬성 — S1 은 seat 0 이 반대, S2 는 seat k-1 이 반대로 돌려 개인 배치만 다르다.
-   */
-  function twoArrangements(n: number, seed: number, k: number): { s1: RoomState; s2: RoomState; voters: number[]; third: number[]; spectator: number } {
-    const spectator = n - 1;
-    const base = withDead(startedAt(n, seed, "execVote"), spectator);
-    const voters = Array.from({ length: k }, (_, i) => i);
-    const third = aliveSeats(base).filter((seat) => !voters.includes(seat));
-    const arrange = (noSeat: number): RoomState =>
-      castExecVotes(base, Object.fromEntries(voters.map((seat) => [seat, seat !== noSeat])));
-    return { s1: arrange(0), s2: arrange(k - 1), voters, third, spectator };
-  }
-
-  it("집계(찬성 k-1·반대 1)는 같고 개인 배치만 다른 두 상태에서, 표를 안 던진 생존 viewer 와 탈락 관전 viewer 의 view JSON 이 같다 (4~8명 × 시드 3 × 투표자 2·3명)", () => {
-    const bad: string[] = [];
-    let compared = 0;
-    for (const n of PLAYER_COUNTS) {
-      for (const seed of SEEDS) {
-        for (const k of [2, 3]) {
-          if (n - 1 - k < 1) continue; // 안 던진 생존 viewer 가 한 명은 있어야 한다
-          const { s1, s2, voters, third, spectator } = twoArrangements(n, seed, k);
-          const tally = { yes: k - 1, no: 1 };
-          for (const s of [s1, s2]) {
-            const got = buildView(s, s.hostId, START_AT).day?.execTally;
-            if (flat(got) !== flat(tally)) bad.push(`${n}/${seed}/k${k}: tally ${flat(got)}`);
-          }
-          // 개인 배치가 실제로 다르다 — 이 줄이 없으면 아래 비교가 아무것도 증명하지 못한다
-          const own1 = voters.map((seat) => s1.players.find((p) => p.seat === seat)!.execVote);
-          const own2 = voters.map((seat) => s2.players.find((p) => p.seat === seat)!.execVote);
-          if (flat(own1) === flat(own2)) bad.push(`${n}/${seed}/k${k}: arrangements are identical`);
-          for (const seat of [...third, spectator]) {
-            compared += 1;
-            const a = JSON.stringify(buildView(s1, seatId(s1, seat), START_AT));
-            const b = JSON.stringify(buildView(s2, seatId(s2, seat), START_AT));
-            if (a !== b) bad.push(`${n}/${seed}/k${k}/seat${seat}: third-party view differs`);
-            if (a.includes("voteAgree")) bad.push(`${n}/${seed}/k${k}/seat${seat}: voteAgree in third-party view`);
-          }
-          // 던진 본인은 자기 표를 me.voteAgree 로 받는다(받을 사람은 실제로 받는다)
-          for (const seat of voters) {
-            const mine = buildView(s1, seatId(s1, seat), START_AT).me.voteAgree;
-            if (mine !== s1.players.find((p) => p.seat === seat)!.execVote) bad.push(`${n}/${seed}/k${k}/seat${seat}: own voteAgree ${String(mine)}`);
-          }
-        }
-      }
-    }
-    expect(compared > 0).toBe(true);
-    expect(bad.join("; ")).toBe("");
-  });
-
+describe("buildView 마감 뒤 서버 전용 투표 키 (VOTE-01, D-02, T-04-30)", () => {
   it("마감 뒤: 어느 플레이어에도 execVote 키가 없고(서버에도 남지 않는다) voteLog 의 exec 는 no·passed·yes 세 키뿐이며 개인 줄이 없다 (4~8명 × 시드 3)", () => {
     const bad: string[] = [];
     for (const n of PLAYER_COUNTS) {
       for (const seed of SEEDS) {
-        for (const phase of ["candidateVote", "candidateVoteReveal", "defense", "execution"] as const) {
+        for (const phase of ["defense", "execution"] as const) {
           const s = stateWithVerdict(n, seed, phase);
           for (const p of s.players) if ("execVote" in p) bad.push(`${n}/${seed}/${phase}/seat${p.seat}: execVote key kept`);
           const line = buildView(s, s.hostId, START_AT).day!.voteLog![0]!;
@@ -1357,44 +1215,12 @@ describe("buildView 여부 투표 익명 차분 (VOTE-01, D-02, T-04-30)", () =>
   });
 });
 
-describe("buildView 후보 선택 진행 중 비공개 차분 (VOTE-02, D-19, T-04-32)", () => {
-  /** 후보 선택 단계에서 seat 0·1 이 고른 값만 다른 상태와 아무도 안 고른 상태. 마지막 좌석은 탈락 관전자로 만든다. */
-  function candidateStates(n: number, seed: number) {
-    const spectator = n - 1;
-    const base = withDead(stateWithVerdict(n, seed, "candidateVote", { candidate: "none" }), spectator);
-    const none = base;
-    const one = castCandidateVotes(base, { 0: 1, 1: 0 });
-    const two = castCandidateVotes(base, { 0: 2, 1: 2 });
-    return { none, one, two, third: aliveSeats(base).filter((seat) => seat > 1), spectator };
-  }
-
-  it("남의 선택만 다른 세 상태에서 제3자(안 고른 생존자·탈락 관전자)의 view JSON 이 모두 같다 (4~8명 × 시드 3)", () => {
-    const bad: string[] = [];
-    let compared = 0;
-    for (const n of PLAYER_COUNTS) {
-      for (const seed of SEEDS) {
-        const { none, one, two, third, spectator } = candidateStates(n, seed);
-        for (const seat of [...third, spectator]) {
-          compared += 1;
-          const views = [none, one, two].map((s) => JSON.stringify(buildView(s, seatId(s, seat), START_AT)));
-          if (new Set(views).size !== 1) bad.push(`${n}/${seed}/seat${seat}: third-party view changed by others' picks`);
-          if (views[0]!.includes("voteTarget")) bad.push(`${n}/${seed}/seat${seat}: voteTarget in third-party view`);
-        }
-        // 고른 본인은 자기 선택을 me.voteTarget 으로 받고, 같은 단계의 남의 view 에는 그 값이 없다
-        const mine = [buildView(one, seatId(one, 0), START_AT).me.voteTarget, buildView(one, seatId(one, 1), START_AT).me.voteTarget];
-        if (flat(mine) !== flat([1, 0])) bad.push(`${n}/${seed}: own voteTarget ${flat(mine)}`);
-        if ("cand" in (buildView(one, seatId(one, 2), START_AT).day!.voteLog![0] ?? {})) bad.push(`${n}/${seed}: cand before reveal`);
-      }
-    }
-    expect(compared > 0).toBe(true);
-    expect(bad.join("; ")).toBe("");
-  });
-
-  it("공개 구간부터는 모든 viewer 에게 같은 votes 가 실리고 어느 플레이어에도 candidateVote 키가 없다 (4~8명 × 시드 3)", () => {
+describe("buildView 후보 공개 기록 (VOTE-02, D-19, T-04-32)", () => {
+  it("변론부터는 모든 viewer 에게 같은 votes 가 실리고 어느 플레이어에도 candidateVote 키가 없다 (4~8명 × 시드 3)", () => {
     const bad: string[] = [];
     for (const n of PLAYER_COUNTS) {
       for (const seed of SEEDS) {
-        for (const phase of ["candidateVoteReveal", "defense", "execution"] as const) {
+        for (const phase of ["defense", "execution"] as const) {
           const s = stateWithVerdict(n, seed, phase);
           const votes = new Set(s.players.map((p) => flat(buildView(s, p.id, START_AT).day!.voteLog![0]!.cand)));
           if (votes.size !== 1 || [...votes][0] === "undefined") bad.push(`${n}/${seed}/${phase}: cand differs or missing`);
@@ -1505,7 +1331,7 @@ describe("buildView me.chat — 서버가 정한 내 채널 (07-10, CHAT-02·03)
     expect(chatLine(s)).toBe(everyone(s, "all"));
   });
 
-  it.each(["dayAnnounce", "discussion", "execVote", "candidateVote", "candidateVoteReveal", "defense", "execution", "morning"] as const)(
+  it.each(["dayAnnounce", "discussion", "defense", "execution", "morning"] as const)(
     "%s: 살아 있는 사람은 모두 all",
     (phase) => {
       const s = stateAt(phase, 6, 1);

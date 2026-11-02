@@ -12,7 +12,6 @@ import {
   EXEC_YES_PERCENT,
   botCount,
   botCandidateTarget,
-  botExecAgree,
   botNightTarget,
   botPlanKey,
   botWakeAt,
@@ -44,7 +43,6 @@ import { MAX_PLAYERS, MAX_TEST_BOTS } from "../../shared/protocol";
 import type { PhaseId } from "../../shared/protocol";
 import { seededRandInt } from "../helpers/seededRandom";
 import { startedFrom, stateWithVerdict } from "../helpers/voteState";
-import { castCandidateVote, castExecVote } from "../../shared/game/vote";
 import { toggleEnd } from "../../shared/game/discussion";
 import { castPoint } from "../../shared/game/nomination";
 import { castVerdict } from "../../shared/game/verdict";
@@ -532,13 +530,11 @@ describe("botPlanKey·syncBotPlan·planBotSteps", () => {
   it("어떤 단계의 봇 계획에도 say·emoji 행동이 없다", () => {
     const states = [
       ...(["discussion", "night"] as const).map((phase) => stateAt(1, 5, 8, phase)),
-      voteStateAt(2, "execVote"),
-      verdictAt(2, "candidateVote"),
       verdictAt(2, "defense", 3),
     ];
     for (const state of states) {
       const kinds = [...new Set(planBotSteps(state, nowOf(state), seededRandInt(5)).map((s) => s.act.t as string))].sort();
-      expect(`${state.phase}:${kinds.every((k) => ["chat", "pick", "execVote", "candidateVote", "endDiscussion", "point", "verdict"].includes(k))}`).toBe(`${state.phase}:true`);
+      expect(`${state.phase}:${kinds.every((k) => ["chat", "pick", "endDiscussion", "point", "verdict"].includes(k))}`).toBe(`${state.phase}:true`);
     }
   });
 
@@ -627,10 +623,8 @@ describe("takeDueBotSteps·botWakeAt", () => {
   });
 });
 
-// ---- 4페이즈: 여부 투표·후보 선택·후보 봇 변론 (결정 0024, 0036) ----
-/** 사람 1 + 봇 4 테스트 방이 투표 단계에 닿은 상태(표는 아직 없음). */
-const voteStateAt = (seed: number, phase: "execVote"): RoomState => startedFrom(withBots(lobbyOf(1), 4), seed, phase);
-/** 사람 1 + 봇 4 테스트 방의 후보 선택 이후 단계. 여부 투표는 전원 찬성으로 통과시켰다. */
+// ---- 후보 봇 변론과 지목 대상 고르기 (결정 0024, 0036) — 옛 처형 여부·후보 선택 봇 계획 시험은 08-28 이 지웠다 ----
+/** 사람 1 + 봇 4 테스트 방의 후보가 정해진 뒤 단계. 08-11 이 새 흐름(지목·찬반)으로 다시 짓는다. */
 const verdictAt = (
   seed: number,
   phase: "candidateVote" | "defense",
@@ -651,95 +645,24 @@ function recording(seed: number): { calls: number[]; randInt: (n: number) => num
 const rowsOf = (steps: BotStep[], botId: string): BotStep[] => steps.filter((s) => s.botId === botId);
 
 describe("봇 투표·변론 계획: 키", () => {
-  it("execVote·candidateVote·defense 는 `${phase}:${phaseEndsAt}` 이고 공개·처형·종료는 null 이다", () => {
-    const exec = voteStateAt(3, "execVote");
-    expect(String(botPlanKey(exec))).toBe(`execVote:${exec.phaseEndsAt}`);
-    const cand = verdictAt(3, "candidateVote");
-    expect(String(botPlanKey(cand))).toBe(`candidateVote:${cand.phaseEndsAt}`);
+  it("defense 는 `${phase}:${phaseEndsAt}` 이고 처형·종료는 null 이다", () => {
     const def = verdictAt(3, "defense");
     expect(String(botPlanKey(def))).toBe(`defense:${def.phaseEndsAt}`);
-    for (const phase of ["candidateVoteReveal", "execution", "ended"] as const) {
+    for (const phase of ["execution", "ended"] as const) {
       expect(`${phase}:${String(botPlanKey({ ...def, phase }))}`).toBe(`${phase}:null`);
     }
   });
 
-  it("공개·처형·종료 단계에서 syncBotPlan 은 낡은 botPlan 키를 뺀다", () => {
+  it("처형·종료 단계에서 syncBotPlan 은 낡은 botPlan 키를 뺀다", () => {
     const def = verdictAt(4, "defense");
-    for (const phase of ["candidateVoteReveal", "execution", "ended"] as const) {
+    for (const phase of ["execution", "ended"] as const) {
       const result = syncBotPlan({ ...def, phase, botPlan: { key: "old", steps: [] } }, nowOf(def), THROWING);
       expect(`${phase}:${Object.hasOwn(result, "botPlan")}`).toBe(`${phase}:false`);
     }
   });
 });
 
-describe("봇 투표·변론 계획: execVote", () => {
-  it("살아 있는 봇마다 execVote 한 행이고 시각이 1000 이상 ~ 마감 - 500 미만이며 castExecVote 에 통과한다", () => {
-    for (let seed = 1; seed <= 20; seed += 1) {
-      let state = voteStateAt(seed, "execVote");
-      const steps = planBotSteps(state, nowOf(state), seededRandInt(seed));
-      expect(`${seed}:${steps.length}`).toBe(`${seed}:4`);
-      for (const bot of botsOf(state)) {
-        const mine = rowsOf(steps, bot.id);
-        expect(`${seed}:${bot.seat}:${mine.length}`).toBe(`${seed}:${bot.seat}:1`);
-        expect(`${seed}:${bot.seat}:${mine[0]!.act.t}`).toBe(`${seed}:${bot.seat}:execVote`);
-      }
-      expect(steps.every((s) => s.at >= nowOf(state) + 1000 && s.at < state.phaseEndsAt! - 500)).toBe(true);
-      for (const s of steps) {
-        if (s.act.t !== "execVote") continue;
-        const r = castExecVote(state, s.botId, s.act.agree);
-        expect(`${seed}:${r.ok ? "ok" : r.error}`).toBe(`${seed}:ok`);
-        if (r.ok) state = r.state;
-      }
-    }
-  });
-
-  it("같은 시드·같은 now 는 같은 계획이고 randInt 기록 순서는 봇마다 [100, 6000] 이다", () => {
-    const state = voteStateAt(5, "execVote");
-    expect(canon(planBotSteps(state, nowOf(state), seededRandInt(42)))).toBe(canon(planBotSteps(state, nowOf(state), seededRandInt(42))));
-    const rec = recording(7);
-    planBotSteps(state, nowOf(state), rec.randInt);
-    expect(rec.calls.join(",")).toBe([100, 6000, 100, 6000, 100, 6000, 100, 6000].join(","));
-  });
-
-  it("찬성은 randInt(100) < 70 이고 지연은 1000 + randInt(6000) 이다", () => {
-    expect(String(botExecAgree(() => 69))).toBe("true");
-    expect(String(botExecAgree(() => 70))).toBe("false");
-    const state = voteStateAt(6, "execVote");
-    const yes = planBotSteps(state, nowOf(state), (n) => (n === 100 ? 0 : 123));
-    expect(yes.every((s) => s.act.t === "execVote" && s.act.agree && s.at === nowOf(state) + 1123)).toBe(true);
-    const no = planBotSteps(state, nowOf(state), (n) => (n === 100 ? 99 : 0));
-    expect(no.every((s) => s.act.t === "execVote" && !s.act.agree && s.at === nowOf(state) + 1000)).toBe(true);
-  });
-});
-
-describe("봇 투표·변론 계획: candidateVote", () => {
-  it("살아 있는 봇마다 자기 자신이 아닌 살아 있는 seat 하나를 고르고 castCandidateVote 에 통과한다", () => {
-    for (let seed = 1; seed <= 20; seed += 1) {
-      let state = markDead(verdictAt(seed, "candidateVote"), 4);
-      const steps = planBotSteps(state, nowOf(state), seededRandInt(seed));
-      const liveBots = botsOf(state).filter((b) => b.alive !== false);
-      expect(`${seed}:${steps.length}`).toBe(`${seed}:${liveBots.length}`);
-      expect(steps.every((s) => s.at >= nowOf(state) + 1000 && s.at < state.phaseEndsAt! - 500)).toBe(true);
-      for (const s of steps) {
-        const bot = state.players.find((p) => p.id === s.botId)!;
-        expect(`${seed}:${bot.seat}:${s.act.t}`).toBe(`${seed}:${bot.seat}:candidateVote`);
-        if (s.act.t !== "candidateVote") continue;
-        expect(`${seed}:${bot.seat}:${s.act.target !== bot.seat && s.act.target !== 4}`).toBe(`${seed}:${bot.seat}:true`);
-        const r = castCandidateVote(state, s.botId, s.act.target);
-        expect(`${seed}:${bot.seat}:${r.ok ? "ok" : r.error}`).toBe(`${seed}:${bot.seat}:ok`);
-        if (r.ok) state = r.state;
-      }
-    }
-  });
-
-  it("난수 순서는 봇마다 [후보 수, 9000] 이다(살아 있는 다른 사람 수)", () => {
-    const state = markDead(verdictAt(5, "candidateVote"), 4);
-    const rec = recording(3);
-    planBotSteps(state, nowOf(state), rec.randInt);
-    const liveBots = botsOf(state).filter((b) => b.alive !== false).length;
-    expect(rec.calls.join(",")).toBe(Array.from({ length: liveBots }, () => "3,9000").join(","));
-  });
-
+describe("봇 투표·변론 계획: 지목 대상 고르기 (botCandidateTarget)", () => {
   it("botCandidateTarget 은 seat 오름차순 후보에서 randInt(길이) 번째를 고르고 역할을 보지 않는다", () => {
     const state = verdictAt(8, "candidateVote");
     const bot = botsOf(state)[1]!; // seat 2
@@ -799,10 +722,8 @@ describe("봇 투표·변론 계획: defense", () => {
 });
 
 describe("봇 투표·변론 계획: 회귀", () => {
-  it("탈락한 봇·사람이 모두 끊긴 방은 새 세 단계에서도 행동이 없다", () => {
+  it("탈락한 봇·사람이 모두 끊긴 방은 변론 단계에서도 행동이 없다", () => {
     const cases: [string, RoomState][] = [
-      ["execVote", voteStateAt(2, "execVote")],
-      ["candidateVote", verdictAt(2, "candidateVote")],
       ["defense", verdictAt(2, "defense", 3)],
     ];
     for (const [label, state] of cases) {
@@ -822,7 +743,7 @@ describe("봇 투표·변론 계획: 회귀", () => {
     expect(got.join(",")).toBe("856098986,997718148");
   });
 
-  it("discussion·night·execVote 계획의 난수 호출 수는 claim 제거 뒤에도 그대로다 (07-08, 리서치 Pitfall 13)", () => {
+  it("discussion 계획의 난수 호출 수는 claim 제거 뒤에도 그대로다 (07-08, 리서치 Pitfall 13)", () => {
     const countCalls = (state: RoomState): number => {
       let calls = 0;
       const inner = seededRandInt(42);
@@ -834,27 +755,11 @@ describe("봇 투표·변론 계획: 회귀", () => {
     };
     // discussion = 봇당 randInt(폭) + randInt(문구 수) 를 두 번 + 토론 끝내기 간격 한 번(08-07) — 봇당 5번, 봇 5명이면 25번(07-11: 자유 채팅 문구 하나, 이모티콘·종류 난수 없음).
     expect(countCalls(stateAt(1, 5, 8, "discussion"))).toBe(25);
-    // execVote = 봇당 randInt(100) + randInt(지연 폭) 두 번, 봇 4명 → 8번.
-    expect(countCalls(voteStateAt(2, "execVote"))).toBe(8);
   });
 });
 
 // ---- P-13: 테스트 방 방장이 고른 봇 투표 설정(결정 0022·0024 확장, 04-15) ----
-describe("봇 투표 고정 설정: botExecAgree·botCandidateTarget", () => {
-  it("botExecAgree: 고정 yes 는 true, no 는 false 이고 randInt 를 한 번도 부르지 않는다", () => {
-    expect(String(botExecAgree(THROWING, "yes"))).toBe("true");
-    expect(String(botExecAgree(THROWING, "no"))).toBe("false");
-  });
-
-  it("botExecAgree: 고정이 없으면 기존과 같이 randInt(100) 한 번이다", () => {
-    const rec = recording(1);
-    botExecAgree(rec.randInt);
-    botExecAgree(rec.randInt, undefined);
-    expect(rec.calls.join(",")).toBe("100,100");
-    expect(String(botExecAgree(() => 69))).toBe("true");
-    expect(String(botExecAgree(() => 70))).toBe("false");
-  });
-
+describe("봇 투표 고정 설정: botCandidateTarget", () => {
   it("botCandidateTarget host: 방장이 살아 있고 이 봇이 아니면 방장 seat 이며 randInt 를 부르지 않는다", () => {
     const state = verdictAt(8, "candidateVote");
     const hostSeat = state.players.find((p) => p.id === state.hostId)!.seat;
@@ -901,43 +806,6 @@ describe("봇 투표 고정 설정: botExecAgree·botCandidateTarget", () => {
     const b = recording(5);
     expect(String(botCandidateTarget(state, bot, a.randInt))).toBe(String(botCandidateTarget(state, bot, b.randInt, undefined)));
     expect(a.calls.join(",")).toBe(b.calls.join(","));
-  });
-});
-
-describe("봇 투표 고정 설정: planBotSteps", () => {
-  it("execVote: 설정 yes 는 모두 찬성, no 는 모두 반대이고 결정 난수 없이 지연 난수만 부른다", () => {
-    const state = voteStateAt(5, "execVote");
-    for (const exec of ["yes", "no"] as const) {
-      const fixed: RoomState = { ...state, testBotVote: { exec } };
-      const rec = recording(7);
-      const steps = planBotSteps(fixed, nowOf(fixed), rec.randInt);
-      expect(`${exec}:${rec.calls.join(",")}`).toBe(`${exec}:6000,6000,6000,6000`);
-      expect(steps.length).toBe(4);
-      expect(steps.every((s) => s.act.t === "execVote" && s.act.agree === (exec === "yes"))).toBe(true);
-    }
-  });
-
-  it("candidateVote: 설정 pick host 는 모두 방장에게 던지고 지연 난수만 부른다", () => {
-    const state = { ...verdictAt(5, "candidateVote"), testBotVote: { pick: "host" as const } };
-    const hostSeat = state.players.find((p) => p.id === state.hostId)!.seat;
-    const rec = recording(3);
-    const steps = planBotSteps(state, nowOf(state), rec.randInt);
-    expect(rec.calls.join(",")).toBe("9000,9000,9000,9000");
-    expect(steps.length).toBe(4);
-    expect(steps.every((s) => s.act.t === "candidateVote" && s.act.target === hostSeat)).toBe(true);
-  });
-
-  it("설정의 다른 쪽 값은 서로 영향이 없다(exec 만 고정이면 pick 은 무작위 그대로)", () => {
-    const state = { ...verdictAt(5, "candidateVote"), testBotVote: { exec: "yes" as const } };
-    const rec = recording(3);
-    planBotSteps(state, nowOf(state), rec.randInt);
-    expect(rec.calls.join(",")).toBe(Array.from({ length: 4 }, () => "4,9000").join(","));
-  });
-
-  it("설정이 없으면 같은 시드의 계획이 설정 키를 가진 빈 객체와도 같다", () => {
-    const state = voteStateAt(5, "execVote");
-    const plain = canon(planBotSteps(state, nowOf(state), seededRandInt(42)));
-    expect(canon(planBotSteps({ ...state, testBotVote: {} }, nowOf(state), seededRandInt(42)))).toBe(plain);
   });
 });
 
