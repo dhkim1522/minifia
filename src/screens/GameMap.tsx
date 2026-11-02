@@ -83,6 +83,8 @@ interface GameMapProps {
   toast?: DayFx["toast"];
   /** 처형 떠오름 연출 중인 좌석 → 시작 시각(useDayFx). 처형된 사람이 연출이 끝날 때까지 표에 남는다 */
   fading?: DayFx["fading"];
+  /** 내가 유령이 된 순간마다 늘어나는 번호(useDayFx). 번호가 바뀔 때만 안내 한 줄과 직업 칩 등장을 다시 보인다 — 처음 마운트 때의 값은 지난 일이다 */
+  ghostEnter?: DayFx["ghostEnter"];
   /** 지목 선두가 새 사람으로 바뀌었을 때의 손사래 신호(WorldStage 로 그대로 넘긴다) */
   deny?: DayFx["deny"];
   /** 연결의 오류 프레임 구독(거절된 행동 알림에 쓴다) */
@@ -112,7 +114,7 @@ function MapHeader({ view, offset, hintOn, extra }: { view: RoomView; offset: nu
 // 8페이즈 게임 맵 화면 틀(08-13, UI-SPEC "게임 화면 틀"): 지하 재즈 바 맵(WorldStage) 위에 위쪽 가림막, 헤더(단계 이름 + 접히는 안내 + 시간 링 + [역할 카드]), [테스트], 결과 알림, 아래 패널을 얹는다.
 // 낮 시작·낮 토론·지목·최후 변론·찬반·처형이 이 화면 하나를 같은 장면 키로 그려 단계가 바뀌어도 맵이 다시 만들어지지 않는다.
 // 화면은 서버가 보낸 view 만으로 다시 그린다. 닉네임(이름표)·알림 글자는 React 텍스트 노드로만 그린다.
-export function GameMap({ view, store, chat, send, canSend = true, offset = 0, roleCard, testButton, announce = null, toast: toastShow = null, deny, fading, onEvent, onLeave }: GameMapProps) {
+export function GameMap({ view, store, chat, send, canSend = true, offset = 0, roleCard, testButton, announce = null, toast: toastShow = null, deny, fading, ghostEnter = 0, onEvent, onLeave }: GameMapProps) {
   const toast = useTopToast();
   const { show } = toast;
   // 측정(스테이지 사각형)·키보드·기록 칸 높이는 대기실과 같은 훅이다. 키보드가 열려 있으면 행동 줄을 숨기고 기록 칸을 72 로 줄인다(07-19).
@@ -127,6 +129,24 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
     const timer = setTimeout(() => setHintOn(false), HINT_MS);
     return () => clearTimeout(timer);
   }, [phase]);
+
+  // 유령이 된 순간(같은 단계 안이어도): 안내 '모두의 직업이 보여요' 를 2.5초 다시 보이고 직업 칩 등장 연출을 켠다. 처음 마운트 때의 번호는 지난 일이라 연출하지 않는다.
+  const seenGhostEnter = useRef(ghostEnter);
+  const enterTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const [entering, setEntering] = useState(false);
+  useEffect(() => {
+    if (ghostEnter === seenGhostEnter.current) return;
+    seenGhostEnter.current = ghostEnter;
+    setHintOn(true);
+    setEntering(true);
+    clearTimeout(enterTimer.current);
+    // 타이머는 이 효과의 정리가 아니라 언마운트 때만 푼다(개발 모드 이중 실행이 첫 실행의 타이머를 지워 연출이 켜진 채 남지 않게)
+    enterTimer.current = setTimeout(() => {
+      setHintOn(false);
+      setEntering(false);
+    }, HINT_MS);
+  }, [ghostEnter]);
+  useEffect(() => () => clearTimeout(enterTimer.current), []);
 
   // 서버가 행동을 거절하면(마감 직후 누름 등) 위 알림을 띄우고 내 낙관적 눌림·선택을 서버 값으로 되돌린다. 이동은 조용히 버려지고 오류 프레임이 없다.
   // 지목 직후(PICK_REPLY_MS 안, 서버가 아직 내 선택을 확인하지 않았을 때)의 거절은 지목 거절이다: 단계 어긋남(WRONG_PHASE)은 REJECT_TEXT,
@@ -269,7 +289,7 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
   const scene = useMemo(() => sceneLook(view, { stageH, ...(fading ? { fading } : {}), ...(mine !== undefined ? { mine } : {}) }), [view, stageH, fading, mine]);
 
   return (
-    <main ref={rootRef} className="mf-root mf-game" data-game-stage="" data-phase={view.phase} data-ghost-view={ghost ? "true" : undefined} data-kb-open={kbOpen ? "true" : undefined}>
+    <main ref={rootRef} className="mf-root mf-game" data-game-stage="" data-phase={view.phase} data-ghost-view={ghost ? "true" : undefined} data-ghost-enter={ghost && entering ? "true" : undefined} data-kb-open={kbOpen ? "true" : undefined}>
       {/* DOM 순서 = Tab 순서: 헤더([역할 카드]) → 맵(이름표) → 아래 패널(입력). 층 순서는 z 가 정한다 */}
       <div className="mf-game__scrim" aria-hidden="true" />
       <header ref={headerRef} className="mf-game__header">

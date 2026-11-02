@@ -49,3 +49,8 @@
 @keyframes mf-announce-dim { from { opacity: 0; } to { opacity: 1; } }
 @keyframes mf-announce-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 @media (prefers-reduced-motion: reduce) { .mf-announce, .mf-announce__text { animation: none; } }
+
+/* 유령이 되는 순간(08-17, UI-SPEC "유령이 되는 순간"): 이름표 위 직업 칩이 dur-med 동안 나타난다. 재접속 첫 화면에는 data-ghost-enter 가 없어 연출이 없다 */
+.mf-game[data-ghost-enter] .mv-rolechip { animation: mf-chip-in var(--dur-med) var(--ease-out) both; }
+@keyframes mf-chip-in { from { opacity: 0; transform: translateY(6px) scale(0.85); } to { opacity: 1; transform: translateY(0) scale(1); } }
+@media (prefers-reduced-motion: reduce) { .mf-game[data-ghost-enter] .mv-rolechip { animation: none; } }
