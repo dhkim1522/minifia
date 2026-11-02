@@ -3,7 +3,7 @@
 import { BufferGeometry, CircleGeometry, Color, type Group, type Material, type Mesh, MeshStandardMaterial, type Object3D } from "three";
 import { describe, expect, it, vi } from "vitest";
 import { MOVE_SPEED } from "../../shared/game/world";
-import { CHAR_SCALE, characterKit, createCharacter, figForSeat, WALK_PHASE_RATE, type WorldCharacter } from "../../src/world/character";
+import { CHAR_SCALE, characterKit, createCharacter, figForSeat, POSE_BLEND_MS, WALK_PHASE_RATE, type WorldCharacter } from "../../src/world/character";
 import { EMOTE_KEYS, EMOTES, type EmoteId, FACE_IDS, FIGS, OUTFITS, type OutfitId } from "../../src/world/characterData";
 
 function meshes(root: Object3D, visibleOnly = true): Mesh[] {
@@ -59,23 +59,24 @@ describe("기본 코트 인물 하나 (트레이서)", () => {
     expect(WALK_PHASE_RATE).toBeCloseTo((11 * MOVE_SPEED) / 1.245, 9);
   });
 
-  it("걷는 동안 다리가 걸음 위상을 따라 돈다", () => {
+  it("걷는 동안 다리가 걸음 위상을 따라 돈다(POSE_BLEND_MS 이상 걸은 뒤 정확한 값)", () => {
     const c = createCharacter(1, "coat");
     const legA = joint(c.root, "legA");
     const dt = 0.016;
     let phase = 0;
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < 10; i++) {
       c.update(dt, i * dt, true);
       phase += dt * WALK_PHASE_RATE;
     }
+    expect(10 * dt * 1000).toBeGreaterThanOrEqual(POSE_BLEND_MS);
     expect(legA.rotation.x).toBeCloseTo(-Math.sin(phase) * 0.6, 6);
     expect(joint(c.root, "legB").rotation.x).toBeCloseTo(Math.sin(phase) * 0.6, 6);
   });
 
-  it("멈추면 걷기 자세를 풀고 서 있는 자세로 돌아온다", () => {
+  it("멈추면 걷기 자세를 풀고 서 있는 자세로 돌아온다(POSE_BLEND_MS 이상 지난 뒤 정확히 0)", () => {
     const c = createCharacter(1, "coat");
-    for (let i = 0; i < 5; i++) c.update(0.016, i * 0.016, true);
-    c.update(0.016, 0.1, false);
+    for (let i = 0; i < 10; i++) c.update(0.016, i * 0.016, true);
+    for (let i = 0; i < 10; i++) c.update(0.016, 0.2 + i * 0.016, false);
     expect(joint(c.root, "legA").rotation.x).toBe(0);
   });
 
@@ -466,7 +467,8 @@ describe("동작 9종", () => {
     expect(readPose(c).aAx).toBeCloseTo(-1.5, 1);
     c.update(0.016, 0.016, true);
     expect(Math.abs(readPose(c).aAx)).toBeLessThan(0.5);
-    c.update(0.016, 0.032, false);
+    // 걷기→서기도 POSE_BLEND_MS 에 걸쳐 섞이므로(결정 0059) 멈춘 바로 다음 프레임이 아니라 섞기가 끝난 뒤 서 있는 자세를 기대한다
+    for (let i = 0; i < 10; i++) c.update(0.016, 0.032 + i * 0.016, false);
     expect(readPose(c).aAx).toBe(0);
     expect(readPose(c).hy).toBe(0);
   });
@@ -521,5 +523,60 @@ describe("동작 9종", () => {
     const angry = headMesh(c).geometry;
     for (let i = 0; i < 5; i++) c.update(0.016, i * 0.016, false);
     expect(headMesh(c).geometry === angry).toBe(true);
+  });
+});
+
+describe("자세 섞기 (결정 0059)", () => {
+  const walkLegA = (phase: number): number => -Math.sin(phase) * 0.6;
+
+  it("POSE_BLEND_MS 는 100 이상 150 이하다", () => {
+    expect(POSE_BLEND_MS).toBeGreaterThanOrEqual(100);
+    expect(POSE_BLEND_MS).toBeLessThanOrEqual(150);
+  });
+
+  it("서 있던 캐릭터가 한 프레임 움직이면 걷기 자세의 0 초과 1 미만 비율이다(한 번에 걷기 자세가 되지 않는다)", () => {
+    const c = createCharacter(1, "coat");
+    const dt = 0.016;
+    c.update(dt, 0, true);
+    const full = walkLegA(dt * WALK_PHASE_RATE);
+    const ratio = joint(c.root, "legA").rotation.x / full;
+    expect(ratio).toBeGreaterThan(0);
+    expect(ratio).toBeLessThan(1);
+  });
+
+  it("걷다가 멈춘 첫 프레임에는 다리가 아직 0 이 아니고, POSE_BLEND_MS 이상 지나면 정확히 0 이다", () => {
+    const c = createCharacter(1, "coat");
+    for (let i = 0; i < 10; i++) c.update(0.016, i * 0.016, true);
+    c.update(0.016, 0.2, false);
+    expect(joint(c.root, "legA").rotation.x).not.toBe(0);
+    for (let i = 1; i <= 10; i++) c.update(0.016, 0.2 + i * 0.016, false);
+    expect(joint(c.root, "legA").rotation.x).toBe(0);
+  });
+
+  it("섞기 비율 0 은 서 있는 자세, 1 은 걷기 자세 그대로다(보간 반올림 오차 없음)", () => {
+    const idle = createCharacter(1, "coat");
+    const never = createCharacter(1, "coat");
+    idle.update(0.016, 0.5, false);
+    never.update(0.016, 0.5, false);
+    expect(readPose(idle)).toEqual(readPose(never)); // 한 번도 걷지 않은 캐릭터는 서 있는 자세 그대로
+    expect(readPose(idle).aAx).toBe(0);
+    const c = createCharacter(1, "coat");
+    let phase = 0;
+    for (let i = 0; i < 12; i++) {
+      c.update(0.016, i * 0.016, true);
+      phase += 0.016 * WALK_PHASE_RATE;
+    }
+    expect(joint(c.root, "legA").rotation.x).toBe(walkLegA(phase));
+    expect(readPose(c).aAx).toBe(Math.sin(phase) * 0.5);
+  });
+
+  it("머리 꼭대기 높이는 섞인 자세의 y 로 계산된다", () => {
+    const c = createCharacter(1, "coat");
+    const dt = 0.016;
+    const r = c.update(dt, 0, true);
+    const walkY = Math.abs(Math.cos(dt * WALK_PHASE_RATE)) * 0.06;
+    const idleY = Math.sin(0 * 2 + FIGS[1]!.name.length) * 0.012;
+    const k = (dt * 1000) / POSE_BLEND_MS;
+    expect(r.headY).toBeCloseTo((2.45 + idleY + (walkY - idleY) * k) * CHAR_SCALE, 9);
   });
 });

@@ -28,6 +28,8 @@ import { EMOTE_KEYS, EMOTES, EYE, type EmoteId, FACE_IDS, type FaceId, type Fig,
 export const CHAR_SCALE = 0.83;
 /** 걸음 위상 증가율(rad/s). 보드 기준 11 rad/s @ 1.245 단위/초를 로비 이동 속도에 비례시켜 발이 미끄러지지 않게 한다 */
 export const WALK_PHASE_RATE = (11 * MOVE_SPEED) / 1.245;
+/** 걷기·서기 전환 섞기(ms) — 결정 0059-3 짧은 자세 섞기 */
+export const POSE_BLEND_MS = 120;
 
 /** 인물 5명 중 자리 번호가 가리키는 인물 — 같은 방 같은 자리면 어느 폰에서나 같은 인물이다 */
 export function figForSeat(seat: number): number {
