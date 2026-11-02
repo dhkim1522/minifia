@@ -124,6 +124,24 @@ export function spawnPlayer(w: WorldState, playerId: string, seat: number, now: 
 }
 
 /**
+ * 서버·클라이언트 예측 공용 본체(결정 0059). 시각은 인자.
+ * 지금 구간 cur 에서 목적지 dest(1/100 정수 좌표)로 가는 새 구간. requestMove 가 간격 검사 뒤 쓰는 계산과 같다.
+ * 입력은 바꾸지 않는다.
+ */
+export function planMoveSegment(cur: Segment, dest: { x: number; z: number }, now: number, map: MapDef): Segment {
+  const from = positionAtFx(cur, now);
+  // 스키마가 정수·범위를 지키지만 이 함수는 단독으로도 안전하다: 비정상 좌표는 제자리로 본다.
+  const dx = Number.isFinite(dest.x) ? Math.round(dest.x) : from.x;
+  const dz = Number.isFinite(dest.z) ? Math.round(dest.z) : from.z;
+  const clampLimit = (v: number): number => (v < -MOVE_COORD_LIMIT ? -MOVE_COORD_LIMIT : v > MOVE_COORD_LIMIT ? MOVE_COORD_LIMIT : v);
+  const p = routeFx(map, from, { x: clampLimit(dx), z: clampLimit(dz) });
+
+  const stationary = p.length < 4 || (p.length === 4 && p[0] === p[2] && p[1] === p[3]);
+  const seg: Segment = stationary ? restSegment(p[0] ?? from.x, p[1] ?? from.z, now) : { p, t0: now, v: MOVE_V };
+  return seg;
+}
+
+/**
  * 이동 요청. 검사 순서: 방에 있는지 → 간격 150ms → 지금 위치 → 보정된 목적지까지의 경로.
  * 목적지가 막힌 곳·맵 밖이면 보정된 점이 구간의 끝점이다. 걷는 중이면 지금 위치(positionAtFx)에서 새 경로를 만든다.
  * 거절하면 상태를 바꾸지 않는다(간격 시계도 늘리지 않는다).
@@ -140,25 +158,12 @@ export function requestMove(
   const last = Object.prototype.hasOwnProperty.call(w.lastMoveAt, playerId) ? w.lastMoveAt[playerId] : undefined;
   if (last !== undefined && now - last < MOVE_MIN_GAP_MS) return { ok: false, reason: "TOO_SOON" };
 
-  const from = positionAtFx(cur, now);
-  // 스키마가 정수·범위를 지키지만 이 함수는 단독으로도 안전하다: 비정상 좌표는 제자리로 본다.
-  const dx = Number.isFinite(dest.x) ? Math.round(dest.x) : from.x;
-  const dz = Number.isFinite(dest.z) ? Math.round(dest.z) : from.z;
-  const clampLimit = (v: number): number => (v < -MOVE_COORD_LIMIT ? -MOVE_COORD_LIMIT : v > MOVE_COORD_LIMIT ? MOVE_COORD_LIMIT : v);
-  const p = routeFx(map, from, { x: clampLimit(dx), z: clampLimit(dz) });
-
-  const stationary = p.length < 4 || (p.length === 4 && p[0] === p[2] && p[1] === p[3]);
-  const seg: Segment = stationary ? restSegment(p[0] ?? from.x, p[1] ?? from.z, now) : { p, t0: now, v: MOVE_V };
+  const seg = planMoveSegment(cur, dest, now, map);
   return {
     ok: true,
     world: { segs: { ...w.segs, [playerId]: seg }, lastMoveAt: { ...w.lastMoveAt, [playerId]: now }, wanderAt: w.wanderAt },
     seg,
   };
-}
-
-/** (RED 껍데기 — GREEN 에서 requestMove 본체로 교체) */
-export function planMoveSegment(_cur: Segment, _dest: { x: number; z: number }, now: number, _map: MapDef): Segment {
-  return { p: [0, 0], t0: now, v: 0 };
 }
 
 /** 한 사람의 새 구간 프레임. 공개 식별자는 seat 뿐이다(playerId·토큰·역할 자리 없음). p 는 복사한다. */
