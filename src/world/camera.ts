@@ -3,9 +3,11 @@
 //
 // 좌표: 월드 x·z 는 바닥, y 는 위. 화면 sx 는 오른쪽, sy 는 아래쪽(CSS 픽셀).
 // 카메라 = 목표 + (sin(yaw)·17, 12.5, cos(yaw)·17), 주시점 = (목표.x, 0.6, 목표.z), 정사영, 배율 PX_PER_UNIT.
+// 배율은 PX_PER_UNIT × zoom(zoom 은 지목 과반 연출의 확대 1.08, 생략하면 1 — 화면 가운데(오프셋 반영)에서 거리가 zoom 배가 된다).
 // 클라이언트 전용이라 삼각함수를 써도 된다(shared 의 서버 판정 모듈 규칙은 여기 적용되지 않는다).
 
-import { STAGE_SPOT, UNIT } from "../../shared/game/map";
+import { ringSlots } from "../../shared/game/gather";
+import { HEAD_TOP_Y, STAGE_SPOT, UNIT } from "../../shared/game/map";
 import { lobbyPanelHeight, LOG_H_SHORT, TYPING_PILL_H } from "../game/chatUi";
 
 export interface V3 {
@@ -110,18 +112,20 @@ export function stageOffsetY(canvasH: number, stageTop: number, stageBottom: num
   return canvasH / 2 - (stageTop + (stageBottom - stageTop) / 2);
 }
 
-/** 월드 점 → 화면 좌표(px). 목표가 주시점이고, 오프셋만큼 장면이 위로 올라간다 */
-export function groundToScreen(p: V3, target: { x: number; z: number }, c: Canvas, offsetY: number, _zoom = 1): { sx: number; sy: number } {
+/** 월드 점 → 화면 좌표(px). 목표가 주시점이고, 오프셋만큼 장면이 위로 올라간다. zoom 은 화면 가운데 기준 확대(기본 1) */
+export function groundToScreen(p: V3, target: { x: number; z: number }, c: Canvas, offsetY: number, zoom = 1): { sx: number; sy: number } {
+  const scale = PX_PER_UNIT * zoom;
   const d: V3 = { x: p.x - target.x, y: p.y - LOOK_Y, z: p.z - target.z };
   const r = d.x * RIGHT.x + d.y * RIGHT.y + d.z * RIGHT.z;
   const u = d.x * UP.x + d.y * UP.y + d.z * UP.z;
-  return { sx: c.w / 2 + r * PX_PER_UNIT, sy: c.h / 2 - u * PX_PER_UNIT - offsetY };
+  return { sx: c.w / 2 + r * scale, sy: c.h / 2 - u * scale - offsetY };
 }
 
 /** 화면 점의 정사영 광선: 원점은 카메라 평면 위(주시점에서 카메라 쪽으로 OFFSET_LEN), 방향은 −back */
-export function screenRay(sx: number, sy: number, target: { x: number; z: number }, c: Canvas, offsetY: number, _zoom = 1): { origin: V3; dir: V3 } {
-  const dx = (sx - c.w / 2) / PX_PER_UNIT;
-  const dy = (c.h / 2 - sy - offsetY) / PX_PER_UNIT;
+export function screenRay(sx: number, sy: number, target: { x: number; z: number }, c: Canvas, offsetY: number, zoom = 1): { origin: V3; dir: V3 } {
+  const scale = PX_PER_UNIT * zoom;
+  const dx = (sx - c.w / 2) / scale;
+  const dy = (c.h / 2 - sy - offsetY) / scale;
   return {
     origin: {
       x: target.x + RIGHT.x * dx + UP.x * dy + BACK.x * OFFSET_LEN,
@@ -133,8 +137,8 @@ export function screenRay(sx: number, sy: number, target: { x: number; z: number
 }
 
 /** 화면 점 → 바닥(y = 0) 점. groundToScreen 의 역 */
-export function screenToGround(sx: number, sy: number, target: { x: number; z: number }, c: Canvas, offsetY: number, _zoom = 1): { x: number; z: number } {
-  const { origin, dir } = screenRay(sx, sy, target, c, offsetY);
+export function screenToGround(sx: number, sy: number, target: { x: number; z: number }, c: Canvas, offsetY: number, zoom = 1): { x: number; z: number } {
+  const { origin, dir } = screenRay(sx, sy, target, c, offsetY, zoom);
   const t = origin.y / -dir.y;
   return { x: origin.x + dir.x * t, z: origin.z + dir.z * t };
 }
@@ -166,7 +170,32 @@ export const GATHER_STACK_H = 122;
 /** 유령 화면 최대: 산 사람 쌓임 + 직업 표시 32 (UI-SPEC 카메라) */
 export const GATHER_STACK_H_GHOST = 154;
 
-// RED 뼈대(Task 3): 아직 동작을 구현하지 않는다
-export function gatherView(_stage: { top: number; bottom: number }, _c: Canvas, _opts: { ghost?: boolean; zoom?: number } = {}): { target: { x: number; z: number }; offsetY: number } {
-  return { target: { x: GATHER_CENTER.x, z: GATHER_CENTER.z }, offsetY: 0 };
+/**
+ * 모이는 자리 고정 구도(지목·변론·찬반·처형). UI-SPEC 카메라 표: 이름표가 몸보다 우선이다 — 지목은 이름표를 눌러야 하기 때문이다.
+ * 목표는 늘 모이는 자리 가운데이고, 8슬롯(최악의 8명) 이름표 상자 = 뒤 머리 꼭대기 − 쌓임 높이 ~ 앞 머리 꼭대기를 스테이지 사각형 세로 가운데에 두는 offsetY 를 정한다.
+ * 몸까지 들어가는 스테이지(앞 발까지 포함한 상자가 들어갈 만큼, 약 380~395)면 앞 발까지 포함한 상자를 가운데에 둔다.
+ * 상자가 스테이지보다 높으면(300 미만 — 알려진 한계 E8 #28) 앞 머리 꼭대기를 스테이지 아래 끝에 맞춘다(앞 사람 이름표가 우선, 뒤쪽 이름표가 위로 잘림).
+ * zoom 은 과반 연출 확대(같은 확대로 투영해 구도를 잡는다).
+ */
+export function gatherView(stage: { top: number; bottom: number }, c: Canvas, opts: { ghost?: boolean; zoom?: number } = {}): { target: { x: number; z: number }; offsetY: number } {
+  const zoom = opts.zoom ?? 1;
+  const stackH = opts.ghost ? GATHER_STACK_H_GHOST : GATHER_STACK_H;
+  const target = { x: GATHER_CENTER.x, z: GATHER_CENTER.z };
+  let headTop = Infinity;
+  let headBottom = -Infinity;
+  let footBottom = -Infinity;
+  for (const [fx, fz] of ringSlots(8)) {
+    const head = groundToScreen({ x: fx / UNIT, y: HEAD_TOP_Y, z: fz / UNIT }, target, c, 0, zoom).sy;
+    const foot = groundToScreen({ x: fx / UNIT, y: 0, z: fz / UNIT }, target, c, 0, zoom).sy;
+    headTop = Math.min(headTop, head);
+    headBottom = Math.max(headBottom, head);
+    footBottom = Math.max(footBottom, foot);
+  }
+  const boxTop = headTop - stackH;
+  const stageH = stage.bottom - stage.top;
+  const stageMid = stage.top + stageH / 2;
+  const centered = (boxBottom: number): number => (boxTop + boxBottom) / 2 - stageMid;
+  if (stageH >= footBottom - boxTop) return { target, offsetY: centered(footBottom) };
+  if (stageH >= headBottom - boxTop) return { target, offsetY: centered(headBottom) };
+  return { target, offsetY: headBottom - stage.bottom };
 }
