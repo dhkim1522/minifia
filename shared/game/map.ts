@@ -27,11 +27,16 @@ export interface MapDef {
   size: number;
   mask: Uint8Array;
   spawns: readonly Spawn[];
-  /** 무대 자리(RED 자리표시자 — GREEN 이 예외 규칙을 붙인다) */
+  /**
+   * 무대 자리(고정소수점). 있으면 이 한 점이 이동 마스크의 단일 예외다 — lineWalkable 참고. 없는 맵은 예외가 없다.
+   * 무대 원기둥 안이라 마스크로는 막힌 칸이다(변론자가 서는 자리, 결정 0060-7).
+   */
   stage?: { x: number; z: number };
 }
 
+/** 변론자가 서는 무대 위 자리(고정소수점). 블록아웃 design/v2.0/screens/bar.js 의 ctx.center 와 같은 점이다(높이 0.29 는 화면 규칙, A4). */
 export const STAGE_SPOT = { x: 0, z: 0 } as const;
+/** 무대 자리에 닿는 선분의 최대 길이(고정소수점 3.0). 무대 둘레 한 걸음이고, 이보다 먼 점과는 이어지지 않는다. */
 export const STAGE_REACH_FX = 300;
 
 /**
@@ -360,8 +365,29 @@ export function findPath(map: MapDef, from: { c: number; r: number }, to: { c: n
 /**
  * 고정소수점 두 점 사이 선분이 닿는 모든 칸(슈퍼커버: 선분이 칸 경계·꼭짓점에 닿기만 해도 그 칸 포함)이
  * 걸을 수 있는지. 격자 밖에 닿으면 false. 같은 두 점이면 그 점이 닿는 칸 전부를 본다.
+ *
+ * 단일 예외(map.stage, 사용자 확정 2026-11-02, 결정 0060-7): 한 끝이 정확히 무대 자리이고 다른 끝이 걸을 수 있는 점이면서
+ * STAGE_REACH_FX 안이면 true, 두 끝이 모두 무대 자리여도 true 다. 그 밖의 판정은 예외 없는 규칙 그대로다 —
+ * 무대 근처 다른 점이나 무대를 가로지르는 선분은 계속 막혀 있다. snapToWalkable·저장 복원(parseStoredSegment)·routeFx 가 이 함수를 공유한다.
  */
 export function lineWalkable(map: MapDef, a: { x: number; z: number }, b: { x: number; z: number }): boolean {
+  const stage = map.stage;
+  if (stage !== undefined) {
+    const aStage = a.x === stage.x && a.z === stage.z;
+    const bStage = b.x === stage.x && b.z === stage.z;
+    if (aStage && bStage) return true;
+    if (aStage || bStage) {
+      const q = aStage ? b : a;
+      const dx = q.x - stage.x;
+      const dz = q.z - stage.z;
+      if (dx * dx + dz * dz <= STAGE_REACH_FX * STAGE_REACH_FX && lineWalkableBase(map, q, q)) return true;
+    }
+  }
+  return lineWalkableBase(map, a, b);
+}
+
+/** 예외 없는 슈퍼커버 판정(본체). */
+function lineWalkableBase(map: MapDef, a: { x: number; z: number }, b: { x: number; z: number }): boolean {
   const span = map.size * CELL_FX;
   let ax = a.x - ORIGIN_FX;
   let az = a.z - ORIGIN_FX;
@@ -455,6 +481,61 @@ function relaxPath(map: MapDef, pts: { x: number; z: number }[]): { x: number; z
  * 같은 칸이거나 곧바로 보이면 두 점, 아니면 A* 칸 중심 경로를 시선 스무딩하고 꼭짓점을 당긴 점들. 이어지지 않으면 출발점 하나.
  */
 export function routeFx(map: MapDef, from: { x: number; z: number }, to: { x: number; z: number }): number[] {
+  if (map.stage !== undefined) {
+    const s = snapToWalkable(map, from);
+    const e = snapToWalkable(map, to);
+    if (isStageSpot(map, s) || isStageSpot(map, e)) return routeViaStage(map, s, e);
+  }
+  return routeBase(map, from, to);
+}
+
+function isStageSpot(map: MapDef, p: { x: number; z: number }): boolean {
+  return map.stage !== undefined && p.x === map.stage.x && p.z === map.stage.z;
+}
+
+/**
+ * 무대 자리를 걸을 수 있는 칸 중심 하나(무대에서 STAGE_REACH_FX 안)와 이은 선분으로 드나든다: 무대 ↔ other 의 직선 합이 가장 짧은 칸을 고른다
+ * (정수 제곱거리 → 행 → 열 순 결정적 동률 처리). 없으면 null. 일반 A* 길은 칸 중심만 지나므로 무대 자리를 지나지 않는다.
+ */
+function pickStageDoor(map: MapDef, stage: { x: number; z: number }, other: { x: number; z: number }): { x: number; z: number } | null {
+  let best: { x: number; z: number } | null = null;
+  let bestCost = Infinity;
+  for (let r = 0; r < map.size; r++) {
+    for (let c = 0; c < map.size; c++) {
+      if (map.mask[r * map.size + c] !== 1) continue;
+      const m = cellCenterFx(c, r);
+      const d1 = (m.x - stage.x) * (m.x - stage.x) + (m.z - stage.z) * (m.z - stage.z);
+      if (d1 > STAGE_REACH_FX * STAGE_REACH_FX) continue;
+      const cost = Math.sqrt(d1) + Math.sqrt((m.x - other.x) * (m.x - other.x) + (m.z - other.z) * (m.z - other.z));
+      if (cost < bestCost) {
+        bestCost = cost;
+        best = m;
+      }
+    }
+  }
+  return best;
+}
+
+/** 출발이나 도착이 무대 자리일 때의 길. 닿는 거리 안이면 곧바로 두 점, 아니면 가까운 문(칸 중심)까지 일반 길로 간 뒤 무대와 이어진다. */
+function routeViaStage(map: MapDef, s: { x: number; z: number }, e: { x: number; z: number }): number[] {
+  if (lineWalkable(map, s, e)) return [s.x, s.z, e.x, e.z];
+  const fromStage = isStageSpot(map, s);
+  const door = pickStageDoor(map, fromStage ? s : e, fromStage ? e : s);
+  if (door === null) return [s.x, s.z];
+  if (fromStage) {
+    const rest = routeBase(map, door, e);
+    if (rest[rest.length - 2] !== e.x || rest[rest.length - 1] !== e.z) return [s.x, s.z]; // 문에서 목적지로 이어지지 않으면 출발점 하나
+    const same = rest.length === 4 && rest[0] === rest[2] && rest[1] === rest[3];
+    return [s.x, s.z, ...(same ? rest.slice(2) : rest)];
+  }
+  const lead = routeBase(map, s, door);
+  if (lead[lead.length - 2] !== door.x || lead[lead.length - 1] !== door.z) return [s.x, s.z];
+  const same = lead.length === 4 && lead[0] === lead[2] && lead[1] === lead[3];
+  return [...(same ? lead.slice(2) : lead), e.x, e.z];
+}
+
+/** 무대 예외 없는 보통 길(본체). */
+function routeBase(map: MapDef, from: { x: number; z: number }, to: { x: number; z: number }): number[] {
   const s = snapToWalkable(map, from);
   const e = snapToWalkable(map, to);
   const sc = cellOfFx(s.x, s.z);

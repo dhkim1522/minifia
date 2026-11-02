@@ -213,10 +213,10 @@ describe("requestMove — 목적지 하나가 지금 위치에서 서버 구간�
     expect(second.seg.t0).toBe(midTime);
   });
 
-  it("무대 중심(0,0)처럼 막힌 목적지는 보정된 걸을 수 있는 점이 끝점이 된다", () => {
-    const r = must(requestMove(oneWalker(), "p0", { x: 0, z: 0 }, 2000, BAR_MAP));
+  it("무대 근처(10,0)처럼 막힌 목적지는 보정된 걸을 수 있는 점이 끝점이 된다(무대 자리 0,0 은 08-04 의 단일 예외)", () => {
+    const r = must(requestMove(oneWalker(), "p0", { x: 10, z: 0 }, 2000, BAR_MAP));
     const end = { x: r.seg.p.at(-2)!, z: r.seg.p.at(-1)! };
-    expect(end).not.toEqual({ x: 0, z: 0 });
+    expect(end).not.toEqual({ x: 10, z: 0 });
     const cell = cellOfFx(end.x, end.z);
     expect(isWalkable(BAR_MAP, cell.c, cell.r)).toBe(true);
   });
@@ -262,8 +262,8 @@ describe("planMoveSegment — requestMove 본체와 같다(결정 0059)", () => 
     expect(seg.p.slice(0, 2)).toEqual([at.x, at.z]);
   });
 
-  it("막힌 목적지(0,0)·맵 밖(9999,-9999)·비유한(NaN) 좌표도 같다", () => {
-    for (const dest of [{ x: 0, z: 0 }, { x: 9999, z: -9999 }, { x: Number.NaN, z: Number.NaN }]) {
+  it("막힌 목적지(10,0)·무대 자리(0,0)·맵 밖(9999,-9999)·비유한(NaN) 좌표도 같다", () => {
+    for (const dest of [{ x: 10, z: 0 }, { x: 0, z: 0 }, { x: 9999, z: -9999 }, { x: Number.NaN, z: Number.NaN }]) {
       sameAsRequestMove(oneWalker(1000), dest, 2000);
     }
   });
@@ -466,8 +466,8 @@ describe("restoreWorld — 하이버네이션·배포 뒤 복원 (MAP-05, T-06-1
     ["p 가 배열이 아님", { ...base, p: "360,40" }],
     ["p 에 문자열", { ...base, p: ["360", 40] }],
     ["p 에 NaN", { ...base, p: [Number.NaN, 40] }],
-    ["끝점이 막힌 셀(무대 중심)", { ...base, p: [360, 40, 0, 0] }],
-    ["한 점이 막힌 셀(무대 중심)", { ...base, p: [0, 0] }],
+    ["끝점이 무대 자리지만 닿는 거리(300) 밖에서 이은 선분", { ...base, p: [360, 40, 0, 0] }],
+    ["한 점이 막힌 셀(무대 근처 10,0 — 무대 자리 0,0 은 단일 예외)", { ...base, p: [10, 0] }],
     ["v 0", { ...base, v: 0 }],
     ["v 음수", { ...base, v: -5 }],
     ["v 1001", { ...base, v: 1001 }],

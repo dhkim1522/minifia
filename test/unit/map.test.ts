@@ -682,10 +682,10 @@ describe("routeFx 속성 테스트 (재즈 바, 시드 1..200)", () => {
     process.stdout.write(`경로/직선 최댓값(시드 200): ${worst.toFixed(4)}\n`);
   });
 
-  it("막힌 도착점(무대 중심 0,0)은 걸을 수 있는 칸의 보정된 점에서 끝난다", () => {
+  it("막힌 도착점(무대 근처 10,0 — 무대 자리 0,0 은 08-04 의 단일 예외)은 걸을 수 있는 칸의 보정된 점에서 끝난다", () => {
     const from = { x: -420, z: -420 };
-    const flat = routeFx(BAR_MAP, from, { x: 0, z: 0 });
-    const snapped = snapToWalkable(BAR_MAP, { x: 0, z: 0 });
+    const flat = routeFx(BAR_MAP, from, { x: 10, z: 0 });
+    const snapped = snapToWalkable(BAR_MAP, { x: 10, z: 0 });
     expect(snapped.snapped).toBe(true);
     expect(flat.slice(-2)).toEqual([snapped.x, snapped.z]);
     const end = cellOfFx(snapped.x, snapped.z);

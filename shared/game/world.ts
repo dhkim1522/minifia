@@ -29,7 +29,7 @@ export interface Segment {
   v: number;
 }
 
-/** 방의 이동 상태. lastMoveAt·wanderAt 은 저장하지 않는다(하이버네이션·배포 뒤 비어도 무해, 가정 A1). */
+/** 방의 이동 상태. lastMoveAt·wanderAt 은 저장하지 않는다(하이버네이션·배포 뒤 비어도 무해, 가정 A1). lay 는 저장한다(모이는 자리 기억). */
 export interface WorldState {
   segs: Readonly<Record<string, Segment>>;
   lastMoveAt: Readonly<Record<string, number>>;
@@ -37,15 +37,23 @@ export interface WorldState {
   lay?: LayoutMemo;
 }
 
-/** RED 자리표시자 */
+/**
+ * 모이는 자리 기억(결정 0060-7, 08-04 gather.ts layoutFor 의 짝). key 는 마지막으로 적용한 배치('{일차}:{ring|stage|exec}'),
+ * slots 는 사람(player id)마다 둘레 자리의 고정소수점 좌표 — 변론자가 무대에 섰다 돌아올 자리와 퇴거·재시작 뒤 같은 판단의 근거다.
+ * 서버 전용 상태이고 어떤 프레임에도 싣지 않는다.
+ */
 export interface LayoutMemo {
   key: string;
   slots: Readonly<Record<string, readonly [number, number]>>;
 }
 
-/** RED 자리표시자 */
-export function forceSegment(w: WorldState, _playerId: string, _seg: Segment): WorldState {
-  return w;
+/**
+ * 서버 주도 이동(Pitfall 5): 그 사람 구간만 seg 로 바꾼다. requestMove 의 150ms 간격 검사를 거치지 않고 lastMoveAt 도 건드리지 않는다
+ * (직후 사람이 탭해도 막히지 않고, 막히는 단계라 의미도 없다). 방에 없는 사람이면 입력 그대로. 경로는 호출부가 planMoveSegment 로 만든다.
+ */
+export function forceSegment(w: WorldState, playerId: string, seg: Segment): WorldState {
+  if (!Object.prototype.hasOwnProperty.call(w.segs, playerId)) return w;
+  return { ...w, segs: { ...w.segs, [playerId]: seg } };
 }
 
 /** 고정소수점 실수 좌표(반올림 전)의 구간 위치. 누적 길이 선형 보간, 길이 0 선분은 건너뛴다. */
@@ -129,6 +137,7 @@ function withoutKey<T>(rec: Readonly<Record<string, T>>, key: string): Record<st
 export function spawnPlayer(w: WorldState, playerId: string, seat: number, now: number, map: MapDef): WorldState {
   const at = spawnPointFx(seat, map);
   return {
+    ...w,
     segs: { ...w.segs, [playerId]: restSegment(at.x, at.z, now) },
     lastMoveAt: withoutKey(w.lastMoveAt, playerId),
     wanderAt: w.wanderAt,
@@ -173,7 +182,7 @@ export function requestMove(
   const seg = planMoveSegment(cur, dest, now, map);
   return {
     ok: true,
-    world: { segs: { ...w.segs, [playerId]: seg }, lastMoveAt: { ...w.lastMoveAt, [playerId]: now }, wanderAt: w.wanderAt },
+    world: { ...w, segs: { ...w.segs, [playerId]: seg }, lastMoveAt: { ...w.lastMoveAt, [playerId]: now }, wanderAt: w.wanderAt },
     seg,
   };
 }
@@ -185,16 +194,21 @@ export function moveFrame(seat: number, seg: Segment): Extract<WorldFrame, { k: 
 
 // ---- 입장·퇴장·복귀와 저장/복원·스냅샷 ----
 
-/** 저장 모양. 끝난 구간은 한 점으로 접힌다. lastMoveAt·wanderAt 은 싣지 않는다(가정 A1). */
+/** 저장 모양. 끝난 구간은 한 점으로 접힌다. lastMoveAt·wanderAt 은 싣지 않는다(가정 A1). lay 는 있을 때만 싣는다(옛 저장값은 lay 없이 그대로 읽힌다). */
 export interface StoredWorld {
   v: 1;
   segs: Record<string, Segment>;
   lay?: LayoutMemo;
 }
 
-/** 퇴장: 구간·간격·배회 기록을 모두 지운다. */
+/** 퇴장: 구간·간격·배회 기록과 모이는 자리 기억 중 그 사람 슬롯을 지운다. */
 export function despawnPlayer(w: WorldState, playerId: string): WorldState {
-  return { segs: withoutKey(w.segs, playerId), lastMoveAt: withoutKey(w.lastMoveAt, playerId), wanderAt: withoutKey(w.wanderAt, playerId) };
+  const out: WorldState = {
+    segs: withoutKey(w.segs, playerId),
+    lastMoveAt: withoutKey(w.lastMoveAt, playerId),
+    wanderAt: withoutKey(w.wanderAt, playerId),
+  };
+  return w.lay === undefined ? out : { ...out, lay: { key: w.lay.key, slots: withoutKey(w.lay.slots, playerId) } };
 }
 
 /** 대기실 복귀: 방에 있는 모두를 자기 seat 입장 지점 한 점으로 세운다. 방에 없는 사람과 간격·배회 기록은 버린다. */
@@ -216,7 +230,10 @@ function foldSegment(seg: Segment, now: number): Segment {
 export function compactWorld(w: WorldState, now: number): StoredWorld {
   const segs: Record<string, Segment> = {};
   for (const id of Object.keys(w.segs)) segs[id] = foldSegment(w.segs[id]!, now);
-  return { v: 1, segs };
+  if (w.lay === undefined) return { v: 1, segs };
+  const slots: Record<string, readonly [number, number]> = {};
+  for (const id of Object.keys(w.lay.slots)) slots[id] = [w.lay.slots[id]![0], w.lay.slots[id]![1]];
+  return { v: 1, segs, lay: { key: w.lay.key, slots } };
 }
 
 /** 저장된 v 의 상한(MOVE_V 보다 넉넉하게). 이보다 큰 값은 손상으로 본다. */
@@ -248,9 +265,36 @@ function parseStoredSegment(raw: unknown, map: MapDef): Segment | null {
   return { p: [...pts], t0, v };
 }
 
+/** 저장된 lay 키 길이 상한. 이보다 길면 손상으로 본다('{일차}:{ring|stage|exec}' 는 짧다). */
+const MAX_LAY_KEY = 32;
+
+function isCoord(x: unknown): x is number {
+  return typeof x === "number" && Number.isInteger(x) && x >= -MOVE_COORD_LIMIT && x <= MOVE_COORD_LIMIT;
+}
+
+/**
+ * unknown 한 lay 를 형태 검사한다. 키가 문자열이 아니거나 slots 가 객체가 아니면 lay 전체를 버리고(null),
+ * 슬롯은 항목마다 본다 — 방에 있는 id 이고 정수 좌표 둘(±MOVE_COORD_LIMIT)이면 살리고 아니면 그 슬롯만 버린다(T-08-19).
+ */
+function parseStoredLay(raw: unknown, ids: ReadonlySet<string>): LayoutMemo | null {
+  if (!isRecord(raw)) return null;
+  const { key, slots } = raw;
+  if (typeof key !== "string" || key.length === 0 || key.length > MAX_LAY_KEY) return null;
+  if (!isRecord(slots)) return null;
+  const out: Record<string, readonly [number, number]> = {};
+  for (const id of Object.keys(slots)) {
+    if (!ids.has(id)) continue;
+    const v = slots[id];
+    if (!Array.isArray(v) || v.length !== 2) continue;
+    const [x, z] = v as unknown[];
+    if (isCoord(x) && isCoord(z)) out[id] = [x, z];
+  }
+  return { key, slots: out };
+}
+
 /**
  * 하이버네이션·배포 뒤 복원. 모르는 모양·방에 없는 사람·막힌 점·범위 밖 점·v ≤ 0 은 버리고 그 사람을 입장 지점에 세운다.
- * 결과에는 방에 있는 사람만 들어 있고 간격·배회 기록은 비어 있다.
+ * 결과에는 방에 있는 사람만 들어 있고 간격·배회 기록은 비어 있다. lay 는 형태가 맞을 때만 되살린다(없는 옛 저장값은 lay 없이 읽힌다).
  */
 export function restoreWorld(stored: unknown, players: readonly { id: string; seat: number }[], now: number, map: MapDef): WorldState {
   const segsRaw: Record<string, unknown> | null =
@@ -261,7 +305,8 @@ export function restoreWorld(stored: unknown, players: readonly { id: string; se
     const seg = raw === undefined ? null : parseStoredSegment(raw, map);
     out = seg === null ? spawnPlayer(out, pl.id, pl.seat, now, map) : { ...out, segs: { ...out.segs, [pl.id]: seg } };
   }
-  return out;
+  const lay = isRecord(stored) && stored.v === 1 ? parseStoredLay(stored.lay, new Set(players.map((pl) => pl.id))) : null;
+  return lay === null ? out : { ...out, lay };
 }
 
 /** 접속 때 모두의 지금 구간. seat 오름차순, 방에 있고 world 에 있는 사람만, 접기 규칙은 compactWorld 와 같다. */
@@ -316,7 +361,7 @@ export function planWander(
     }
     wanderAt[bot.id] = now + WANDER_MIN_MS + randInt(WANDER_SPAN_MS);
   }
-  return { world: { segs: w.segs, lastMoveAt: w.lastMoveAt, wanderAt }, moves };
+  return { world: { ...w, wanderAt }, moves };
 }
 
 /** 주어진 봇들의 다음 배회 시각(wanderAt 최솟값). 계획이 있는 봇이 없으면 null. */
