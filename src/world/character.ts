@@ -710,6 +710,10 @@ export interface WorldCharacter {
   setGhost(on: boolean, opacity?: number): void;
   /** 유령일 때만 복제 재질의 불투명도를 바꾼다(유령이 아니면 무시) */
   setOpacity(alpha: number): void;
+  /** 동작 하나의 마지막 자세를 해제할 때까지 유지한다(08-10 RED 뼈대) */
+  holdPose(id: "point" | null): void;
+  /** 발밑 고리 붙이기/떼기(08-10 RED 뼈대) */
+  setRing(color: string | null): void;
   /** 지금 보이는 메시 수(관절 6 + 발밑 원판 + 투명 조각) */
   meshCount(): number;
   /** 이 캐릭터가 만든 지오메트리를 해제한다. 공유 재질·발밑 원판은 건드리지 않는다 */
@@ -922,6 +926,8 @@ export function createCharacter(figIndex: number, outfit: OutfitId = "coat"): Wo
       }
       ghostMat.opacity = clamp01(opacity);
     },
+    holdPose() {},
+    setRing() {},
     setOpacity(alpha) {
       if (disposed || !ghostMat) return;
       ghostMat.opacity = clamp01(alpha);

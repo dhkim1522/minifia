@@ -1,6 +1,6 @@
 // 06-11 3D 캐릭터 — 원본 design/v2.0/blockout/character.js(결정 0048)를 관절 병합으로 옮긴 모듈 (MAP-01, MAP-02).
 // WebGL 없이 node 에서 장면 그래프로 검사한다.
-import { BufferGeometry, CircleGeometry, Color, type Group, type Material, type Mesh, MeshStandardMaterial, type Object3D } from "three";
+import { BufferGeometry, CircleGeometry, Color, type Group, type Material, type Mesh, MeshBasicMaterial, MeshStandardMaterial, type Object3D } from "three";
 import { describe, expect, it, vi } from "vitest";
 import { MOVE_SPEED } from "../../shared/game/world";
 import { CHAR_SCALE, characterKit, createCharacter, figForSeat, POSE_BLEND_MS, WALK_PHASE_RATE, type WorldCharacter } from "../../src/world/character";
@@ -705,5 +705,174 @@ describe("유령 setGhost (GHOST-01)", () => {
     c.setFace("happy");
     for (const m of bodyMeshes(c.root)) expect(matOf(m)).toBe(clone);
     c.setDim(false);
+  });
+});
+
+// ---------- 08-10 Task 2: 손가락 유지 자세 holdPose · 발밑 고리 setRing (DAY-04) ----------
+
+describe("손가락 유지 자세 holdPose (DAY-04)", () => {
+  const last = EMOTES.point.frames[1] as Record<string, number | string>;
+  const DT = 0.016;
+  function run(c: WorldCharacter, seconds: number, t0 = 0): number {
+    const n = Math.round(seconds / DT);
+    for (let i = 0; i < n; i++) c.update(DT, t0 + i * DT, false);
+    return t0 + n * DT;
+  }
+  function expectPoint(c: WorldCharacter): void {
+    const p = readPose(c);
+    expect(p.aBx).toBeCloseTo(last.aBx as number, 9);
+    expect(p.aBz).toBeCloseTo(last.aBz as number, 9);
+    expect(p.aAx).toBeCloseTo(last.aAx as number, 9);
+    expect(p.aAz).toBeCloseTo(last.aAz as number, 9);
+    expect(p.hy).toBeCloseTo(last.hy as number, 9);
+  }
+
+  it("holdPose('point') 뒤 update 를 3초 돌려도 팔 자세가 point 의 마지막 프레임 값이다(동작 길이 1.4초에 끝나지 않음)", () => {
+    const c = createCharacter(0, "coat");
+    c.holdPose("point");
+    run(c, 3);
+    expectPoint(c);
+    run(c, 3, 3);
+    expectPoint(c);
+  });
+
+  it("같은 시간 동안 playEmote('point') 만 한 캐릭터는 평소 자세로 끝난다(대조)", () => {
+    const c = createCharacter(0, "coat");
+    c.playEmote("point");
+    run(c, 3);
+    expect(readPose(c).aBx).toBeCloseTo(0, 9);
+  });
+
+  it("holdPose('point') 는 POSE_BLEND_MS 에 걸쳐 섞여 들어간다(한 프레임에 튀지 않는다)", () => {
+    const c = createCharacter(0, "coat");
+    c.holdPose("point");
+    c.update(DT, 0, false);
+    const x = readPose(c).aBx;
+    expect(x).toBeLessThan(0);
+    expect(x).toBeGreaterThan(last.aBx as number);
+  });
+
+  it("holdPose(null) 뒤 POSE_BLEND_MS 이상 지나면 평소 자세(팔 내림)로 돌아온다", () => {
+    const c = createCharacter(0, "coat");
+    c.holdPose("point");
+    const t = run(c, 1);
+    c.holdPose(null);
+    c.update(DT, t, false);
+    expect(readPose(c).aBx).toBeLessThan(0); // 첫 프레임엔 아직 point 쪽에 남아 있다
+    run(c, (POSE_BLEND_MS + 40) / 1000, t + DT);
+    const p = readPose(c);
+    expect(p.aBx).toBe(0);
+    expect(p.aAx).toBe(0);
+    expect(p.aAz).toBeCloseTo(0.12, 9);
+    expect(p.aBz).toBeCloseTo(-0.12, 9);
+    expect(p.hy).toBe(0);
+  });
+
+  it("holdPose 중 playEmote('deny') 는 deny 를 한 번 재생한 뒤 point 유지로 돌아온다", () => {
+    const c = createCharacter(0, "coat");
+    c.holdPose("point");
+    const t = run(c, 1);
+    c.playEmote("deny");
+    // deny 는 머리를 +0.35 쪽으로도 돌린다(point 의 hy 는 −0.25)
+    let maxHy = -Infinity;
+    const total = EMOTES.deny.frames.length * EMOTES.deny.seg * EMOTES.deny.cycles;
+    const n = Math.round(total / DT) + 5;
+    for (let i = 0; i < n; i++) {
+      c.update(DT, t + i * DT, false);
+      maxHy = Math.max(maxHy, readPose(c).hy);
+    }
+    expect(maxHy).toBeGreaterThan(0.2);
+    run(c, 0.2, t + n * DT);
+    expectPoint(c);
+  });
+
+  it("holdPose 를 걸어도 걷기 시작하면 걷기 동작은 걷기 자세 위에 그대로 이어진다(다리는 걷기 값)", () => {
+    const c = createCharacter(0, "coat");
+    c.holdPose("point");
+    for (let i = 0; i < 20; i++) c.update(DT, i * DT, true);
+    expect(readPose(c).lA).not.toBe(0);
+    expect(readPose(c).aBx).toBeCloseTo(last.aBx as number, 9); // 팔은 유지 자세
+  });
+});
+
+describe("발밑 고리 setRing (DAY-04, 밤 임시 틀)", () => {
+  const ringOf = (c: WorldCharacter): Mesh | undefined => c.root.getObjectByName("ring") as Mesh | undefined;
+
+  it("setRing(색) 은 root 자식에 이름 'ring' 고리 메시 하나를 붙이고, 같은 메시의 색만 바꾼다", () => {
+    const c = createCharacter(0, "coat");
+    expect(ringOf(c)).toBeUndefined();
+    c.setRing("#cc3333");
+    const r = ringOf(c)!;
+    expect(r).toBeDefined();
+    expect(r.parent).toBe(c.root);
+    expect((r.material as MeshBasicMaterial).color.getHexString()).toBe("cc3333");
+    expect(c.root.children.filter((x) => x.name === "ring")).toHaveLength(1);
+    c.setRing("#3333cc");
+    expect(ringOf(c)).toBe(r);
+    expect((r.material as MeshBasicMaterial).color.getHexString()).toBe("3333cc");
+    expect(c.root.children.filter((x) => x.name === "ring")).toHaveLength(1);
+  });
+
+  it("고리는 투명 0.85·depthWrite false·바닥에 눕고 그림자 원판과 같은 높이대다", () => {
+    const c = createCharacter(0, "coat");
+    c.setRing("#cc3333");
+    const r = ringOf(c)!;
+    const m = r.material as MeshBasicMaterial;
+    expect(m).toBeInstanceOf(MeshBasicMaterial);
+    expect(m.transparent).toBe(true);
+    expect(m.opacity).toBeCloseTo(0.85, 9);
+    expect(m.depthWrite).toBe(false);
+    expect(r.rotation.x).toBeCloseTo(-Math.PI / 2, 9);
+    expect(Math.abs(r.position.y - discOf(c.root)!.position.y)).toBeLessThan(0.02);
+  });
+
+  it("setRing(null) 은 고리를 떼고 지오메트리·재질을 해제한다. 이미 없으면 아무 일도 없다", () => {
+    const geoSpy = vi.spyOn(BufferGeometry.prototype, "dispose");
+    const matSpy = vi.spyOn(MeshBasicMaterial.prototype, "dispose");
+    try {
+      const c = createCharacter(0, "coat");
+      c.setRing("#cc3333");
+      const r = ringOf(c)!;
+      geoSpy.mockClear();
+      matSpy.mockClear();
+      c.setRing(null);
+      expect(ringOf(c)).toBeUndefined();
+      expect(geoSpy.mock.contexts).toEqual([r.geometry]);
+      expect(matSpy.mock.contexts).toEqual([r.material]);
+      c.setRing(null);
+      expect(geoSpy).toHaveBeenCalledTimes(1);
+    } finally {
+      geoSpy.mockRestore();
+      matSpy.mockRestore();
+    }
+  });
+
+  it("붙인 채 dispose 하면 고리 지오메트리와 재질도 해제한다(공유 재질·원판은 그대로)", () => {
+    const geoSpy = vi.spyOn(BufferGeometry.prototype, "dispose");
+    const matSpy = vi.spyOn(MeshBasicMaterial.prototype, "dispose");
+    try {
+      const c = createCharacter(0, "coat");
+      c.setRing("#cc3333");
+      const r = ringOf(c)!;
+      geoSpy.mockClear();
+      matSpy.mockClear();
+      c.dispose();
+      expect(geoSpy.mock.contexts).toContain(r.geometry);
+      expect(matSpy.mock.contexts).toEqual([r.material]);
+      c.setRing("#33cc33"); // 해제 뒤에는 무시
+      expect(ringOf(c)).toBeUndefined();
+    } finally {
+      geoSpy.mockRestore();
+      matSpy.mockRestore();
+    }
+  });
+
+  it("meshCount 는 고리가 있으면 +1 이다", () => {
+    const c = createCharacter(0, "coat");
+    const before = c.meshCount();
+    c.setRing("#cc3333");
+    expect(c.meshCount()).toBe(before + 1);
+    c.setRing(null);
+    expect(c.meshCount()).toBe(before);
   });
 });
