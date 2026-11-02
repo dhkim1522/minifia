@@ -10,15 +10,16 @@ export function createCamera(): OrthographicCamera {
 
 /**
  * 카메라를 목표·캔버스 크기·세로 이동에 맞춘다. 위치 = 목표 + (sin(yaw)·거리, 높이, cos(yaw)·거리), 주시점 = (목표, LOOK_Y).
+ * zoom 은 화면 가운데 기준 확대(기본 1, 과반 연출 1.08) — 프러스텀을 PX_PER_UNIT × zoom 으로 나눈다. offsetY 는 zoom 과 상관없이 화면 픽셀이다.
  * offsetY 는 setViewOffset 으로 건다(양수면 장면이 위로 올라간다). 호출할 때마다 행렬을 모두 다시 계산한다.
  */
 export function configureCamera(camera: OrthographicCamera, target: { x: number; z: number }, canvas: { w: number; h: number }, offsetY: number, zoom = 1): void {
-  void zoom; // RED 뼈대: 아직 반영하지 않는다
   const { w, h } = canvas;
-  camera.left = -w / 2 / PX_PER_UNIT;
-  camera.right = w / 2 / PX_PER_UNIT;
-  camera.top = h / 2 / PX_PER_UNIT;
-  camera.bottom = -h / 2 / PX_PER_UNIT;
+  const scale = PX_PER_UNIT * zoom; // camera.ts 의 투영과 같은 배율(px/단위)
+  camera.left = -w / 2 / scale;
+  camera.right = w / 2 / scale;
+  camera.top = h / 2 / scale;
+  camera.bottom = -h / 2 / scale;
   camera.position.set(target.x + Math.sin(CAM_YAW) * CAM_DIST, CAM_HEIGHT, target.z + Math.cos(CAM_YAW) * CAM_DIST);
   camera.lookAt(target.x, LOOK_Y, target.z);
   camera.setViewOffset(w, h, 0, offsetY, w, h); // 안에서 updateProjectionMatrix 를 부른다

@@ -84,12 +84,12 @@ describe("재즈 바 장면 구조 (MAP-01, 렌더 예산)", () => {
     bar.dispose();
   });
 
-  it("고유 재질 수는 12 이하다 — 시안처럼 박스마다 새 재질이 아니다", () => {
+  it("고유 재질 수는 13 이하다 — 시안처럼 박스마다 새 재질이 아니다", () => {
     const bar = buildBarScene(LADDER[0]!);
     const set = new Set<Material>();
     for (const m of allMeshes(bar.root)) for (const x of mats(m)) set.add(x);
     expect(set.size).toBeGreaterThan(3);
-    expect(set.size).toBeLessThanOrEqual(12);
+    expect(set.size).toBeLessThanOrEqual(13); // 08-10: 변론 원뿔 빛 재질 하나가 늘었다(12 → 13)
     bar.dispose();
   });
 

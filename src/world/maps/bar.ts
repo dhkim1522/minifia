@@ -66,9 +66,6 @@ export interface PhaseTune {
 }
 
 const PENDANT_TALK = 0.9 * 4;
-function talkRow(): PhaseTune {
-  return { hemi: 1.1 * Math.PI, moon: 0.85 * Math.PI, exposure: 1.25, sky: ["#524b84", "#2a2034", "#15111f"], fog: { near: 20, far: 44 }, stage: 0, pendant: PENDANT_TALK, emissive: { room: 1, vote: 0.2 }, glow: { room: 1, vote: 0 } };
-}
 export const LIGHT_TUNE: Readonly<Record<LightingPhase, PhaseTune>> & {
   point: { stage: { x: number; y: number; z: number; distance: number }; pendantA: { x: number; y: number; z: number; distance: number }; pendantB: { x: number; y: number; z: number; distance: number }; decay: number };
   tension: { lead: number; halfRoom: number };
@@ -98,10 +95,46 @@ export const LIGHT_TUNE: Readonly<Record<LightingPhase, PhaseTune>> & {
     emissive: { room: 0.45, vote: 1 },
     glow: { room: 0.45, vote: 1 },
   },
-  trial: { ...talkRow() },
-  night: { ...talkRow() },
-  morning: { ...talkRow() },
-  tension: { lead: 0, halfRoom: 1 },
+  // 08-10 단계 조명 셋. 정확한 값은 기존 talk·vote 에서 파생한 시작값이고 읽힘의 최종 확인은 실기기 몫이다(가정 A2).
+  // 하늘·안개 색은 모두 talk 의 같은 칸보다 밝지 않다 — 낮도 마피아 분위기(새 밝은 색면 없음).
+  /** 변론·처형: vote 기반으로 실내 5%, 무대 전구는 그대로, 한 줄기 원뿔 빛(원뿔 메시는 trial 에서만 보인다) */
+  trial: {
+    hemi: 0.35 * Math.PI,
+    moon: 0.2 * Math.PI,
+    exposure: 1.25,
+    sky: ["#3a3464", "#1c1428", "#100d19"],
+    fog: { near: 20, far: 44 },
+    stage: 2.0 * 4,
+    pendant: PENDANT_TALK * 0.05,
+    emissive: { room: 0.05, vote: 1 },
+    glow: { room: 0.05, vote: 1 },
+  },
+  /** 밤: 달빛이 반구보다 세고 무대 점광원은 꺼진다 */
+  night: {
+    hemi: 0.45 * Math.PI,
+    moon: 0.7 * Math.PI,
+    exposure: 1.25,
+    sky: ["#2c2c58", "#15122a", "#0a0b16"],
+    fog: { near: 20, far: 44 },
+    stage: 0,
+    pendant: PENDANT_TALK * 0.15,
+    emissive: { room: 0.15, vote: 0.1 },
+    glow: { room: 0.15, vote: 0 },
+  },
+  /** 아침: talk 보다 약간 낮은 반구, 채도 낮은 하늘 */
+  morning: {
+    hemi: 0.85 * Math.PI,
+    moon: 0.4 * Math.PI,
+    exposure: 1.25,
+    sky: ["#4d4a6e", "#26202c", "#14111b"],
+    fog: { near: 20, far: 44 },
+    stage: 0,
+    pendant: PENDANT_TALK * 0.6,
+    emissive: { room: 0.7, vote: 0.2 },
+    glow: { room: 0.6, vote: 0 },
+  },
+  /** 긴장 단계(결정 0049): lead = 1·2 단계에서 초점 위로 옮긴 무대 점광원 세기(vote 의 1.5 배), halfRoom = 2 단계에서 실내 emissive 에 곱하는 값 */
+  tension: { lead: 2.0 * 4 * 1.5, halfRoom: 0.5 },
   point: {
     stage: { x: 0, y: 3.0, z: 0, distance: 6 },
     pendantA: { x: -2.4, y: 2.6, z: -4.6, distance: 5 },
@@ -209,7 +242,10 @@ export interface BarScene {
   /** 마지막으로 적용한 조명 단계의 톤매핑 노출 */
   readonly exposure: number;
   setLighting(phase: LightingPhase): void;
-  /** 긴장 단계(RED 뼈대) */
+  /**
+   * 긴장 단계(결정 0049 선두·과반 연출). 1 = 무대 점광원이 초점 위(높이 3.0)로 옮겨 선두 세기, 2 = 그에 더해 실내 emissive 절반,
+   * 0 = 그 단계 값으로 복귀. 조명 단계가 바뀌어도 유지되고 단계 값 위에서 다시 계산된다
+   */
   setTension(level: 0 | 1 | 2, focus?: { x: number; z: number }): void;
   /** 예산 단계를 재생성 없이 반영한다(되돌릴 수 있다): 그림자 맵 크기·점광원 core·소품 reduced·안개·빛 무리 */
   applyBudget(budget: Budget): void;
@@ -244,6 +280,8 @@ export function buildBarScene(budget: Budget): BarScene {
   const matGlowRoom = glowMat();
   const matGlowVote = glowMat();
   const matPlate = new MeshStandardMaterial({ color: P.plate, roughness: 0.85, metalness: 0 });
+  // 변론 원뿔 빛: 광원이 아니라 투명 메시 하나(새 광원을 더하지 않는다 — 결정 0057 예산)
+  const matCone = new MeshBasicMaterial({ color: P.stageGlow, transparent: true, opacity: 0.12, depthWrite: false, blending: AdditiveBlending, side: DoubleSide, fog: false });
 
   // ----- 묶음 -----
   const shell = new Bundle();
@@ -394,6 +432,15 @@ export function buildBarScene(budget: Budget): BarScene {
   meshes.brass!.castShadow = true;
   meshes.brass!.receiveShadow = true;
   meshes.pendants!.castShadow = false;
+  // 변론(trial) 무대 위 한 줄기 빛: 꼭짓점이 위인 속 빈 원뿔. 무대 윗면(0.29)에서 높이 3.1
+  const trialCone = new Mesh(new ConeGeometry(1.2, 3.1, 32, 1, true), matCone);
+  trialCone.name = "trialCone";
+  trialCone.position.set(0, 0.29 + 3.1 / 2, 0);
+  trialCone.castShadow = false;
+  trialCone.receiveShadow = false;
+  trialCone.visible = false;
+  trialCone.renderOrder = 2;
+  meshes.trialCone = trialCone;
   // 빛 무리는 투명 합성이라 불투명 메시 뒤에 그린다
   meshes.glowRoom!.renderOrder = 2;
   meshes.glowVote!.renderOrder = 2;
@@ -464,9 +511,11 @@ export function buildBarScene(budget: Budget): BarScene {
   let disposed = false;
   let current = budget;
   let phase: LightingPhase = "talk";
+  let tensionLevel: 0 | 1 | 2 = 0;
+  let tensionFocus: { x: number; z: number } | null = null;
 
-  const setLighting = (next: LightingPhase): void => {
-    phase = next;
+  /** 단계·긴장·예산을 모두 합쳐 장면에 반영한다(셋 중 무엇이 바뀌어도 같은 곳에서 다시 계산) */
+  const applyLook = (): void => {
     const t = T[phase];
     const b = current;
     hemi.color.set(t.sky[0]);
@@ -477,21 +526,35 @@ export function buildBarScene(budget: Budget): BarScene {
     fog.near = t.fog.near;
     fog.far = t.fog.far;
     moon.intensity = t.moon;
-    stage.intensity = t.stage;
+    // 긴장 1·2: 무대 점광원이 초점 위로 옮겨 선두 세기(초점이 없으면 무대 중앙). 0: 단계 값과 무대 중앙
+    const lead = tensionLevel >= 1;
+    stage.intensity = lead ? T.tension.lead : t.stage;
+    if (lead && tensionFocus) stage.position.set(tensionFocus.x, T.point.stage.y, tensionFocus.z);
+    else stage.position.set(T.point.stage.x, T.point.stage.y, T.point.stage.z);
     // 점광원 core: 펜던트 둘은 세기 0 + 장면 광원 목록에서 뺀다(셰이더 광원 수가 줄어든다). 벽·촛불 빛은 emissive 와 빛 무리가 이미 낸다
     const pendant = b.lights === "full" ? t.pendant : 0;
     pendantA.intensity = pendant;
     pendantB.intensity = pendant;
     pendantA.visible = b.lights === "full";
     pendantB.visible = b.lights === "full";
-    matEmRoom.color.setScalar(t.emissive.room);
+    matEmRoom.color.setScalar(t.emissive.room * (tensionLevel === 2 ? T.tension.halfRoom : 1));
     matEmVote.color.setScalar(t.emissive.vote);
     matGlowRoom.opacity = t.glow.room;
     matGlowVote.opacity = t.glow.vote;
     meshes.glowRoom!.visible = b.glows && t.glow.room > 0;
     meshes.glowVote!.visible = b.glows && t.glow.vote > 0;
+    trialCone.visible = phase === "trial" && b.glows; // 원뿔 빛은 trial 에서만(빛 무리를 끄는 5단계에선 같이 끈다)
     root.fog = b.fog ? fog : null;
     exposure = t.exposure;
+  };
+  const setLighting = (next: LightingPhase): void => {
+    phase = next;
+    applyLook();
+  };
+  const setTension = (level: 0 | 1 | 2, focus?: { x: number; z: number }): void => {
+    tensionLevel = level;
+    tensionFocus = level >= 1 && focus ? { x: focus.x, z: focus.z } : null;
+    applyLook();
   };
 
   const applyBudget = (b: Budget): void => {
@@ -528,7 +591,7 @@ export function buildBarScene(budget: Budget): BarScene {
       return exposure;
     },
     setLighting,
-    setTension() {},
+    setTension,
     applyBudget,
     get budget(): Budget {
       return current;
