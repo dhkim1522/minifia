@@ -5,16 +5,16 @@ milestone_name: 같은 공간
 current_phase: 08
 current_phase_name: 낮 처형과 유령
 status: executing
-stopped_at: Completed 08-16-PLAN.md
-last_updated: "2026-11-02T14:27:56.787Z"
+stopped_at: Completed 08-17-PLAN.md
+last_updated: "2026-11-02T14:35:17.577Z"
 last_activity: 2026-11-02
 last_activity_desc: Phase 08 execution started
-state_head: d2a747403e7c62bf2eebdf67f447fafd72310ada
+state_head: 9553f5edebcd25eec336f3d154ce78353fc48986
 progress:
   total_phases: 7
   completed_phases: 2
   total_plans: 78
-  completed_plans: 67
+  completed_plans: 68
   percent: 29
 ---
 
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-11-02)
 ## Current Position
 
 Phase: 08 (낮 처형과 유령) — EXECUTING
-Plan: 18 of 28
+Plan: 19 of 28
 Status: Ready to execute
 Last activity: 2026-11-02 — Phase 08 execution started
 
@@ -126,6 +126,7 @@ Progress: [███░░░░░░░] 29% (2/7 phases)
 | Phase 08 P14 | 85 min | 3 tasks | 6 files |
 | Phase 08 P15 | 30 min | 3 tasks | 5 files |
 | Phase 08 P16 | 40min | 3 tasks | 7 files |
+| Phase 08 P17 | 14 min | 3 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -258,6 +259,8 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 08]: 08-15: mf-hint-point 깜빡임 기록은 3초가 끝나거나 이름표를 누를 때 한다(개발 모드 이중 실행 대비)
 - [Phase 08]: 08-16: 변론자 득표 배지·도장은 최후 변론에서만 유지(승인 보드·UI-SPEC), 찬반·처형에서는 이름표 체크만
 - [Phase 08]: 08-16: 처형 떠오름 fading 은 렌더 중 view 차이로 정해 진입 한 프레임 깜빡임 방지, 타이머는 정리만
+- [Phase 08]: 08-17: 유령 분기는 (내 alive 거짓 && view.spectate 있음) 일 때만 그린다. 산 사람 view 에 spectate 가 섞여 와도 분기 없음
+- [Phase 08]: 08-17: 유령이 되는 순간의 채팅 시작 줄은 useDayFx 가 산→탈락 전환에서 만들고(직전 줄 같으면 생략), 화면 연출은 ghostEnter 번호가 바뀔 때만
 
 ### Pending Todos
 
@@ -293,8 +296,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-02T14:27:56.556Z
-Stopped at: Completed 08-16-PLAN.md
+Last session: 2026-11-02T14:35:17.353Z
+Stopped at: Completed 08-17-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
