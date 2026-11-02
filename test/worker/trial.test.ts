@@ -7,7 +7,7 @@ import { PHASE_DEFS } from "../../shared/game/phases";
 import { env } from "cloudflare:workers";
 import { runDurableObjectAlarm } from "cloudflare:test";
 import { ringSlots } from "../../shared/game/gather";
-import { alarmOf, editRoom, endAs, flushWorld, ghostsOf, killSeats, layOf, mark, mapPlayers, pause, pointAs, send, settle, startedGame, storedRoom, summary, toPhase, verdictAs, worldFramesOf, worldOf } from "./helpers";
+import { alarmOf, editRoom, endAs, flushWorld, ghostsOf, killSeats, lastViewOf, layOf, mark, mapPlayers, pause, pointAs, send, settle, startedGame, storedRoom, summary, toPhase, verdictAs, worldFramesOf, worldOf } from "./helpers";
 import type { Game } from "./helpers";
 
 const viewsOf = (msgs: ServerMessage[]): RoomView[] =>
@@ -388,3 +388,191 @@ async function storedRoomIdOf(code: string, seatNo: number): Promise<string> {
   const room = (await storedRoom(code)) as unknown as { players: Array<{ seat: number; id: string }> };
   return room.players.find((p) => p.seat === seatNo)!.id;
 }
+
+
+// ---- 실제 흐름 한 판 (DAY-03·05·06·07, 결정 0060-1, 08-11 트레이서) ----
+// toPhase 없이 소켓 메시지와 마감 당기기만으로 토론 → 지목 → 변론 → 찬반 → 처형 → 밤을 돈다.
+
+/** 저장된 방의 단계·마감·일차·플레이어 서버 전용 키. */
+async function storedFlow(code: string): Promise<{ phase: string; phaseEndsAt: number | null; day?: number; winner?: string; players: Array<Record<string, unknown>>; verdict?: unknown; execution?: unknown }> {
+  return (await storedRoom(code)) as unknown as Awaited<ReturnType<typeof storedFlow>>;
+}
+
+/** 모든 소켓의 마지막 view. */
+const lastViews = (g: Game): RoomView[] => g.socks.map((s) => lastViewOf(s));
+
+/** 방장 포함 5명 판을 토론에서 시작해, 과반(3명)이 토론 끝내기를 눌러 지목으로 넘긴다. */
+async function toNominationByEnd(): Promise<{ g: Game; before: number; after: number }> {
+  const g = await startedGame("discussion", 4);
+  const before = Date.now();
+  for (const a of g.actors.slice(0, 3)) {
+    endAs(a.sock, true);
+    await settle(a.sock, mark(a.sock));
+  }
+  await settleAllSocks(g);
+  return { g, before, after: Date.now() };
+}
+
+/** 사람마다 지목 대상을 정해 던진다(bySeat[행위자 좌석] = 대상 좌석). 사람당 250ms 간격에 걸리지 않게 한 사람이 한 번만 던진다. */
+async function pointAll(g: Game, bySeat: Record<number, number>): Promise<void> {
+  for (const a of g.actors) {
+    if (Object.hasOwn(bySeat, a.seat)) pointAs(a.sock, bySeat[a.seat]!);
+  }
+  await settleAllSocks(g);
+}
+
+/** 변론자를 뺀 유권자가 agreeBySeat 대로 찬반을 던진다. */
+async function verdictAll(g: Game, agreeBySeat: Record<number, boolean>): Promise<void> {
+  for (const a of g.actors) {
+    if (Object.hasOwn(agreeBySeat, a.seat)) verdictAs(a.sock, agreeBySeat[a.seat]!);
+  }
+  await settleAllSocks(g);
+}
+
+describe("실제 흐름 (결정 0060-1)", () => {
+  it("토론 끝내기 과반 → 지목(마감 = 그 시각 + 15000) → 4:1 지목 → 변론(변론자 무대) → 찬반 3:1 → 처형(변론자 탈락·유령) → 밤", async () => {
+    const { g, before, after } = await toNominationByEnd();
+    const stored = await storedFlow(g.code);
+    expect(stored.phase).toBe("nomination");
+    expect(stored.phaseEndsAt! >= before + PHASE_DEFS.nomination.durationMs! - 50).toBe(true);
+    expect(stored.phaseEndsAt! <= after + PHASE_DEFS.nomination.durationMs! + 50).toBe(true);
+
+    const defender = g.actors.find((a) => a.role !== "mafia")!;
+    const others = g.actors.filter((a) => a.seat !== defender.seat);
+    const bySeat: Record<number, number> = { [defender.seat]: others[0]!.seat };
+    for (const o of others) bySeat[o.seat] = defender.seat;
+    await pointAll(g, bySeat);
+
+    await dueAgo(g.code, 1);
+    await settleAllSocks(g);
+    const inDefense = await storedFlow(g.code);
+    expect(inDefense.phase).toBe("defense");
+    expect(inDefense.phaseEndsAt! > Date.now() + 15_000).toBe(true);
+    expect(lastViews(g).map((v) => v.day?.candidate).join(",")).toBe(g.socks.map(() => defender.seat).join(","));
+    expect((await layOf(g.code)).key).toBe("1:stage");
+
+    await dueAgo(g.code, 1);
+    await settleAllSocks(g);
+    expect((await storedFlow(g.code)).phase).toBe("verdict");
+
+    const voters = others;
+    await verdictAll(g, { [voters[0]!.seat]: true, [voters[1]!.seat]: true, [voters[2]!.seat]: true, [voters[3]!.seat]: false });
+    const marks = g.socks.map(mark);
+    await dueAgo(g.code, 1);
+    for (let i = 0; i < g.socks.length; i += 1) await settle(g.socks[i]!, marks[i]!);
+    const inExecution = await storedFlow(g.code);
+    expect(inExecution.phase).toBe("execution");
+    expect(inExecution.players.find((p) => p.seat === defender.seat)!.alive).toBe(false);
+    expect(lastViews(g).map((v) => JSON.stringify(v.day?.verdict)).join("|")).toBe(
+      g.socks.map(() => JSON.stringify({ yes: 3, no: 1, passed: true })).join("|"),
+    );
+    const defSock = g.socks[g.actors.indexOf(defender)]!;
+    expect(worldFramesOf(defSock, marks[g.actors.indexOf(defender)]!).filter((m) => m.k === "snap").length).toBe(1);
+
+    await dueAgo(g.code, 1);
+    await settleAllSocks(g);
+    const night = await storedFlow(g.code);
+    expect(night.phase).toBe("night");
+    expect(lastViews(g).map((v) => Object.hasOwn(v.day ?? {}, "noExecution")).join(",")).toBe("false,false,false,false,false");
+  }, 60_000);
+
+  it("지목 0표면 지목 마감 뒤 곧장 밤이고 night view 의 day.noExecution.reason 은 noVotes", async () => {
+    const { g } = await toNominationByEnd();
+    await dueAgo(g.code, 1);
+    await settleAllSocks(g);
+    expect((await storedFlow(g.code)).phase).toBe("night");
+    expect(lastViews(g).map((v) => v.day?.noExecution?.reason).join(",")).toBe("noVotes,noVotes,noVotes,noVotes,noVotes");
+  }, 60_000);
+
+  it("지목이 2:2 로 갈리면 곧장 밤이고 reason 은 tie 이며 아무도 탈락하지 않는다", async () => {
+    const { g } = await toNominationByEnd();
+    const [s0, s1, s2, s3] = g.actors.map((a) => a.seat);
+    await pointAll(g, { [s0!]: s2!, [s1!]: s2!, [s2!]: s0!, [s3!]: s0! });
+    await dueAgo(g.code, 1);
+    await settleAllSocks(g);
+    const night = await storedFlow(g.code);
+    expect(night.phase).toBe("night");
+    expect(night.players.every((p) => p.alive !== false)).toBe(true);
+    expect(lastViews(g).map((v) => v.day?.noExecution?.reason).join(",")).toBe("tie,tie,tie,tie,tie");
+  }, 60_000);
+
+  it("찬반이 부결(찬성 2 / 반대 2)이면 처형에서 아무도 탈락하지 않고 변론자는 자기 자리로 돌아오며 밤 view 에 noExecution 키가 없다", async () => {
+    const { g } = await toNominationByEnd();
+    const defender = g.actors.find((a) => a.role !== "mafia")!;
+    const others = g.actors.filter((a) => a.seat !== defender.seat);
+    const bySeat: Record<number, number> = { [defender.seat]: others[0]!.seat };
+    for (const o of others) bySeat[o.seat] = defender.seat;
+    await pointAll(g, bySeat);
+    await dueAgo(g.code, 1);
+    await dueAgo(g.code, 1);
+    await settleAllSocks(g);
+    expect((await storedFlow(g.code)).phase).toBe("verdict");
+    await verdictAll(g, { [others[0]!.seat]: true, [others[1]!.seat]: true, [others[2]!.seat]: false, [others[3]!.seat]: false });
+    const marks = g.socks.map(mark);
+    await dueAgo(g.code, 1);
+    for (let i = 0; i < g.socks.length; i += 1) await settle(g.socks[i]!, marks[i]!);
+    const inExecution = await storedFlow(g.code);
+    expect(inExecution.phase).toBe("execution");
+    expect(inExecution.players.every((p) => p.alive !== false)).toBe(true);
+    expect(lastViews(g).map((v) => JSON.stringify(v.day?.verdict)).join("|")).toBe(
+      g.socks.map(() => JSON.stringify({ yes: 2, no: 2, passed: false })).join("|"),
+    );
+    const back = movesSince(g.socks[0]!, marks[0]!);
+    expect([...back.keys()].join(",")).toBe(String(defender.seat));
+    expect(slotKeys(5).has(back.get(defender.seat)!)).toBe(true);
+    await dueAgo(g.code, 1);
+    await settleAllSocks(g);
+    expect((await storedFlow(g.code)).phase).toBe("night");
+    expect(lastViews(g).map((v) => Object.hasOwn(v.day ?? {}, "noExecution")).join(",")).toBe("false,false,false,false,false");
+  }, 60_000);
+
+  it("둘째 날 토론이 시작되면 전날의 endVote·nominate·verdictVote·verdict·execution 이 없고 토론이 바로 끝나지 않는다", async () => {
+    const { g } = await toNominationByEnd();
+    expect((await storedFlow(g.code)).players.filter((p) => p.endVote !== undefined).length).toBe(3);
+    const defender = g.actors.find((a) => a.role !== "mafia")!;
+    const others = g.actors.filter((a) => a.seat !== defender.seat);
+    const bySeat: Record<number, number> = { [defender.seat]: others[0]!.seat };
+    for (const o of others) bySeat[o.seat] = defender.seat;
+    await pointAll(g, bySeat);
+    await dueAgo(g.code, 1);
+    await dueAgo(g.code, 1);
+    await verdictAll(g, Object.fromEntries(others.map((o) => [o.seat, true])));
+    await dueAgo(g.code, 1);
+    await settleAllSocks(g);
+    expect((await storedFlow(g.code)).execution).not.toBeUndefined();
+    // 밤 → 아침 → 낮 시작 발표 → 둘째 날 토론
+    for (let i = 0; i < 6 && (await storedFlow(g.code)).phase !== "discussion"; i += 1) {
+      await dueAgo(g.code, 1);
+      await settleAllSocks(g);
+    }
+    const day2 = await storedFlow(g.code);
+    expect(day2.phase).toBe("discussion");
+    expect(day2.day).toBe(2);
+    expect(day2.verdict).toBeUndefined();
+    expect(day2.execution).toBeUndefined();
+    for (const key of ["endVote", "nominate", "verdictVote"]) {
+      expect(day2.players.filter((p) => p[key] !== undefined).length).toBe(0);
+    }
+    expect(lastViews(g).map((v) => String(v.day?.endCount)).join(",")).toBe("0,0,0,0,0");
+  }, 90_000);
+
+  it("처형으로 승패가 나면(마피아 한 명이 변론자로 통과) 처형 마감에서 ended 가 된다", async () => {
+    const { g } = await toNominationByEnd();
+    const defender = g.actors.find((a) => a.role === "mafia")!;
+    const others = g.actors.filter((a) => a.seat !== defender.seat);
+    const bySeat: Record<number, number> = { [defender.seat]: others[0]!.seat };
+    for (const o of others) bySeat[o.seat] = defender.seat;
+    await pointAll(g, bySeat);
+    await dueAgo(g.code, 1);
+    await dueAgo(g.code, 1);
+    await verdictAll(g, Object.fromEntries(others.map((o) => [o.seat, true])));
+    await dueAgo(g.code, 1);
+    await settleAllSocks(g);
+    expect((await storedFlow(g.code)).phase).toBe("execution");
+    await dueAgo(g.code, 1);
+    await settleAllSocks(g);
+    const ended = await storedFlow(g.code);
+    expect(ended.phase).toBe("ended");
+    expect(ended.winner).toBe("citizenWin");
+  }, 60_000);
+});
