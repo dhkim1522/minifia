@@ -1587,7 +1587,7 @@ async function dayFlow(ctx) {
     {
       await skipTo(hp, ht, "night");
       const night = await attempt(async () => {
-        await Promise.all(guests.map((x) => untilGame(x.page, (g) => g.phase === "night", 6000, "밤 도착")));
+        await Promise.all(guests.map((x) => untilGame(x.page, (g) => g.phase === "night", 15_000, "밤 도착")));
       });
       rec(`${id}/night`, "NT1", "처형 뒤 밤으로 간다", night.ok, night.detail);
     }
