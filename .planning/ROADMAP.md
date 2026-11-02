@@ -205,7 +205,54 @@ Plans:
   4. 단계 시간이 토론 90초·지목 15초·변론 20초·찬반 10초·밤 30초로 돌고, v1.0 의 처형 여부 → 후보 선택 → 한 표씩 공개 흐름과 고정 테이블은 화면에 없다 (DAY-07)
   5. 처형된 사람은 반투명 유령이 되어 맵을 떠다니며 모든 사람의 역할을 본다. 산 사람 폰으로 오가는 메시지에는 유령의 위치·움직임·채팅이 한 번도 없다 (GHOST-01, GHOST-02)
 
-**Plans**: TBD
+**Plans:** 28 plans (19 waves)
+
+Plans:
+**Wave 1** *(같은 웨이브도 번호 순서로 하나씩 돈다 — use_worktrees false)*
+- [ ] 08-01-PLAN.md — 결정 0060(낮 처형·유령 규칙 14항)·옛 결정 일곱 곳 개정 표시 (W1)
+- [ ] 08-02-PLAN.md — 순수 규칙: 지목·찬반·토론 끝내기·청소 + PhaseId nomination·verdict (TDD, W1)
+- [ ] 08-03-PLAN.md — v2 부품 VoteBadge·SureStamp·RoleChip·VerdictPicker·아이콘 다섯 (W1)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+- [ ] 08-04-PLAN.md — 순수 규칙: canMove·world mover/worldVisibleTo·STAGE_SPOT 예외·forceSegment·모이는 자리 (TDD, W2)
+- [ ] 08-05-PLAN.md — HeadStack 쌓임 확장·채팅 vote/hot 줄·명조 토큰 (W2)
+- [ ] 08-06-PLAN.md — dayView: 공개 정보 차이 → 기록 줄·위 알림 큐·결과 알림 시간표·머리 문구 (TDD, W2)
+
+**Wave 3**
+- [ ] 08-07-PLAN.md — DO: endDiscussion·point·verdict 핸들러·방송 규율·view 필드·봇/테스트 도구 (TDD, W3)
+- [ ] 08-08-PLAN.md — presence 장면 상태·고정 카메라 zoom·gatherView (TDD, W3)
+
+**Wave 4**
+- [ ] 08-09-PLAN.md — DO: 단계별 이동 차단·유령 위치는 유령에게만·viewer 별 snap·syncLayout·메타모픽 누설 검사 (TDD, W4)
+- [ ] 08-10-PLAN.md — 캐릭터 유령 재질·손가락 유지·발밑 고리·조명 다섯·긴장·확대 (TDD, W4)
+- [ ] 08-28-PLAN.md — 흐름 전환 전 옛 흐름 전용 unit 시험 정리(vote.test 대응표·삭제) (W4)
+
+**Wave 5**
+- [ ] 08-11-PLAN.md — 흐름 전환: 토론 → 지목 → 변론 → 찬반 → 처형 → 밤, 상태 도우미 새 흐름화·시험 이전 (TDD, W5)
+- [ ] 08-12-PLAN.md — 런타임 setScene·이름표 지목 버튼·canWalk (W5)
+
+**Wave 6**
+- [ ] 08-13-PLAN.md — GameMap 틀·낮 토론(토론 끝내기)·useMapInsets·[역할 카드] A2·결과 알림 (W6)
+- [ ] 08-14-PLAN.md — smoke·손 봇·uat 스크립트 새 흐름 (W6)
+
+**Wave 7~10** *(GameMap 을 차례로 넓힌다)*
+- [ ] 08-15-PLAN.md — 지목 화면: 이름표 누르기·배지·선두·과반·위 알림·손가락 (W7)
+- [ ] 08-16-PLAN.md — 최후 변론·찬반·처형 화면 (W8)
+- [ ] 08-17-PLAN.md — 유령 화면·산 사람 DOM 0건 (W9)
+- [ ] 08-18-PLAN.md — 밤·아침 임시 틀(A1) (W10)
+
+**Wave 11~15** *(대체한 v1.0 코드와 그 시험 삭제 — skip 금지, 시험 일을 코드 삭제 앞에 두어 웨이브마다 초록)*
+- [ ] 08-27-PLAN.md — 화면 시험 먼저: 남길 뜻을 게임 맵 시험으로, 남는 화면 시험 GameMap 기준, 지운 화면만 보던 시험 삭제 (W11)
+- [ ] 08-19-PLAN.md — v1.0 고정 테이블·처형 화면 13파일 삭제, 역할 배정은 테이블만 뺌(사용자 확정) (W12)
+- [ ] 08-20-PLAN.md — 테이블 로직·CSS·아이콘 정리·정적 가드 dayStaticGuard (W13)
+- [ ] 08-21-PLAN.md — 서버 옛 투표 메시지·규칙·핸들러·봇 삭제 (TDD, W14)
+- [ ] 08-22-PLAN.md — 옛 단계 이름·처형 문구 번호 삭제·옛 저장 방 정규화 (TDD, W15)
+
+**Wave 16~19**
+- [ ] 08-23-PLAN.md — E2E: 결정 0056 완화·테이블 판정·옛 흐름 삭제, 게임 맵 판정 (W16)
+- [ ] 08-24-PLAN.md — E2E 새 흐름 day·ghost·noexec·night-roles·result·chat-game (W17)
+- [ ] 08-25-PLAN.md — 낮 흐름 렌더 측정(dayload)·갤러리·로컬 전체 초록 (W18)
+- [ ] 08-26-PLAN.md — 문서·실기기 이월(999.5)·배포·배포본 검증·HANDOFF·push (W19)
 **UI hint**: yes
 **계획 메모**: 표준 패턴이라 연구 생략 가능(v1.0 `vote.ts`·단계 표 재사용). 함정: v1.0 `enterExecVote` 가 후보를 지우므로 지우는 시점을 `discussion` 진입으로 옮긴다. 고정 테이블 삭제로 v1.0 탈락자 관전 화면도 사라지므로 유령을 같은 페이즈에 둔다 — 첫 처형부터 죽은 사람이 지켜볼 곳이 있어야 8·9페이즈 팀 확인이 의미 있다. GHOST-02 의 밤 행동 관전은 이 페이즈에서는 v1.0 밤 방식 기준이고, 9페이즈에서 맵 위 밤으로 다시 확인한다.
 
@@ -280,7 +327,7 @@ Phases execute in numeric order: 6 → 7 → 8 → 9 → 10 → 11 → 12 (소�
 |-------|-----------|----------------|--------|-----------|
 | 6. 월드 뼈대 | v2.0 | 23/23 | Complete    | 2026-11-01 |
 | 7. 자유 채팅 | v2.0 | 27/27 | Complete    | 2026-11-02 |
-| 8. 낮 처형과 유령 | v2.0 | 0/TBD | Not started | - |
+| 8. 낮 처형과 유령 | v2.0 | 0/26 | Planned | - |
 | 9. 밤과 아침 | v2.0 | 0/TBD | Not started | - |
 | 10. 캐릭터·동작·의상 | v2.0 | 0/TBD | Not started | - |
 | 11. 결과 공개와 다시 하기 | v2.0 | 0/TBD | Not started | - |

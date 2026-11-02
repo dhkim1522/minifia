@@ -45,9 +45,9 @@ created: "2026-11-02"
 | Requirement | Behavior | Threat Ref | Test Type | Automated Command | File Exists | Status |
 |-------------|----------|------------|-----------|-------------------|-------------|--------|
 | DAY-03 | 과반 토론 끝내기 → 즉시 지목, 취소 가능, 유령 불가, 청소 시점(discussion 진입) | T-08-07 | unit + worker | `npx vitest run test/unit/discussion.test.ts test/worker/day.test.ts` | 개정 | ⬜ pending |
-| DAY-04 | 지목 규칙(자기 불가·산 사람만·바꾸기·취소 없음), 공개 목록, 모이기 슬롯 | T-08-04, T-08-08 | unit + worker | `npx vitest run test/unit/nomination.test.ts test/unit/gather.test.ts test/worker/vote.test.ts` | ❌ W0 | ⬜ pending |
+| DAY-04 | 지목 규칙(자기 불가·산 사람만·바꾸기·취소 없음), 공개 목록, 모이기 슬롯 | T-08-04, T-08-08 | unit + worker | `npx vitest run test/unit/nomination.test.ts test/unit/gather.test.ts test/worker/trial.test.ts` | ❌ W0 | ⬜ pending |
 | DAY-05 | 최다 한 명 → defense(무대 STAGE_SPOT), 동률·0표 → night, A3(과반이어도 마감까지) | — | unit | `npx vitest run test/unit/nomination.test.ts test/unit/tick.test.ts` | ❌ / 개정 | ⬜ pending |
-| DAY-06 | 분모=변론자 제외 산 사람, 변론자·유령 투표 불가, 기권, 익명, 마감까지 고정(조기 종료 없음), 처형 시 역할 비공개 | T-08-02, T-08-03 | unit + worker | `npx vitest run test/unit/verdict.test.ts test/worker/leak.test.ts` | ❌ W0 | ⬜ pending |
+| DAY-06 | 분모=변론자 제외 산 사람, 변론자·유령 투표 불가, 기권, 익명, 마감까지 고정(조기 종료 없음), 처형 시 역할 비공개 | T-08-02, T-08-03 | unit + worker | `npx vitest run test/unit/verdictRule.test.ts test/worker/trial.test.ts test/worker/leak.test.ts` | ❌ W0 | ⬜ pending |
 | DAY-07 | 단계 길이 90/15/20/10/5/30, v1.0 흐름·고정 테이블 부재(정적 가드) | — | unit(정적) + client | `npx vitest run test/unit/phases.test.ts test/unit/dayStaticGuard.test.ts` | ❌ W0 | ⬜ pending |
 | MAP-04 | 지목·변론·찬반·처형·밤·아침에 산 사람 `move` 프레임 없음, 토론은 가능, 채팅 통과 | T-08-05 | worker | `npx vitest run test/worker/world.test.ts -t "단계별 이동"` | 개정 + 신규 | ⬜ pending |
 | GHOST-01 | 유령 이동·입력 중·채팅이 산 사람 소켓에 0건(메타모픽 비교 + 직접 불변식), 산 사람 snap 에 유령 없음 | T-08-01, T-08-11 | worker(누설) | `npx vitest run test/worker/ghostLeak.test.ts test/worker/chatLeak.test.ts` | ❌ W0 | ⬜ pending |
@@ -62,7 +62,7 @@ created: "2026-11-02"
 
 ## Wave 0 Requirements
 
-- [ ] `test/unit/nomination.test.ts`, `test/unit/verdict.test.ts`(개정/신규), `test/unit/gather.test.ts`(N=2..8 슬롯 걷기 가능·간격 ≥ 2.0·경로, STAGE_SPOT 예외), `test/unit/movement.test.ts`(canMove 단계×신분 전수), `test/unit/audience.test.ts` 개정(world mover·`worldVisibleTo`)
+- [ ] `test/unit/nomination.test.ts`, `test/unit/verdictRule.test.ts`(신규 — 찬반 규칙; `test/unit/verdict.test.ts` 는 화면 문구 시험), `test/worker/trial.test.ts`(신규 — 옛 `test/worker/vote.test.ts` 대체), `test/unit/gather.test.ts`(N=2..8 슬롯 걷기 가능·간격 ≥ 2.0·경로, STAGE_SPOT 예외), `test/unit/movement.test.ts`(canMove 단계×신분 전수), `test/unit/audience.test.ts` 개정(world mover·`worldVisibleTo`)
 - [ ] `test/worker/ghostLeak.test.ts`(메타모픽), `test/worker/helpers.ts` 에 지목/찬반/토론 끝내기/유령 만들기 도우미 — `voteExec`·`voteCandidate`·`votesIn` 대체
 - [ ] `test/unit/dayStaticGuard.test.ts`: 삭제한 이름(`DayTable`·`ExecVotePanel`·`execVote`·`candidateVote`·`UserRecordSheet`·`RevealLayer` …) 재등장 금지
 - [ ] `test/client/gameMap.test.tsx`, `test/client/{voteBadge,verdictPicker,headStackV2}.test.tsx`, `test/unit/dayView.test.ts`
