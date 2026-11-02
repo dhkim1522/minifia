@@ -72,11 +72,12 @@ export const DECORATIVE_ALLOW = [
 /** G3 이 보지 않는 누르는 요소. 비어 있다 — 항목을 더할 때는 selector 와 reason 을 함께 적는다. */
 export const TAP_ALLOW = [];
 /**
- * G7 이 보지 않는 작은 글자(14px 미만). `.mf-journal__new` 하나로 시작한다.
- * 더할 수 있는 것은 테스트 도구 선택자(`.mf-tt*`, 제품 UI 아님)뿐이다 — 단위 테스트가 그 밖 선택자를 거부한다(D-18).
+ * G7 이 보지 않는 작은 글자(14px 미만). `.mf-journal__new` 하나로 시작했고, 08-25 에서 득표 배지 단위 `.mv-badge__unit` 을 더했다(디자인 시스템 승인값).
+ * 더할 수 있는 것은 테스트 도구 선택자(`.mf-tt*`, 제품 UI 아님)와 이 두 승인 항목뿐이다 — 단위 테스트가 그 밖 선택자를 거부한다(D-18).
  */
 export const TEXT_SIZE_ALLOW = [
   { selector: ".mf-journal__new", reason: "NEW 알약 12px — 03 에서 허용된 캡션(UI-SPEC 타이포)" },
+  { selector: ".mv-badge__unit", reason: "득표 배지 단위 '표' 12px — v2.0 디자인 시스템 승인값(tokens.json·README, tokensV2.test 고정)" },
   // 테스트 도구 선택자(.mf-tt*)는 제품 UI 가 아니라 허용할 수 있다. 테스트 방 방장 전용 [테스트] 시트의 12px 보조 줄(testtools.css) 한 곳만.
   { selector: ".mf-tt-sheet__list small", reason: "[테스트] 시트의 12px 보조 줄(지금 단계·인원 유지) — 테스트 방 전용 도구, 제품 UI 아님" },
 ];

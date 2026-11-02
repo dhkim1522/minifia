@@ -308,12 +308,13 @@ test("허용 목록: 모든 항목에 이유가 있고 알려진 결함 요소�
   }
 });
 
-test("TEXT_SIZE_ALLOW: .mf-journal__new 하나로 시작하고, 더할 수 있는 것은 테스트 도구(.mf-tt*)뿐, 이유 필수", () => {
+test("TEXT_SIZE_ALLOW: .mf-journal__new·.mv-badge__unit(승인값) 외에 더할 수 있는 것은 테스트 도구(.mf-tt*)뿐, 이유 필수", () => {
   assert.ok(TEXT_SIZE_ALLOW.some((i) => i.selector === ".mf-journal__new"));
+  assert.ok(TEXT_SIZE_ALLOW.some((i) => i.selector === ".mv-badge__unit"));
   for (const item of TEXT_SIZE_ALLOW) {
     assert.ok(typeof item.reason === "string" && item.reason.trim().length > 0, JSON.stringify(item));
     for (const sel of item.selector.split(",").map((x) => x.trim())) {
-      assert.ok(sel === ".mf-journal__new" || sel.startsWith(".mf-tt"), `허용되지 않는 글자 크기 허용 선택자: ${sel}`);
+      assert.ok(sel === ".mf-journal__new" || sel === ".mv-badge__unit" || sel.startsWith(".mf-tt"), `허용되지 않는 글자 크기 허용 선택자: ${sel}`);
       for (const banned of [".mf-phasebar", ".mf-dt__", ".mf-rolecard", ".mf-journal__row"]) {
         assert.ok(!sel.includes(banned), `${sel} 에 ${banned}`);
       }
@@ -354,6 +355,7 @@ test("G7 smallTextIssues: 14px 미만 글자는 실패, 허용된 줄은 통과,
   assert.equal(bad.ok, false);
   assert.match(bad.detail, /span\.x/);
   assert.equal(smallTextIssues([{ desc: "span.mf-journal__new", size: 12, allowed: true }]).ok, true);
+  assert.equal(smallTextIssues([{ desc: "span.mv-badge__unit", size: 12, allowed: true }]).ok, true);
   assert.equal(smallTextIssues(undefined).ok, false);
   const s = cleanSnap();
   s.smallText = [{ desc: "p.tiny", size: 12 }];
