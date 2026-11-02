@@ -730,7 +730,7 @@ describe("6명 한 판: 낮 처형(토론 끝내기·지목·변론·찬반·처
       dead.add(mafiaA.seat);
       for (const a of actors) {
         const view = lastViewOf(a.sock);
-        expect(`${view.day?.execution?.seat} ${Object.keys(view.day?.execution ?? {}).sort().join(",")}`).toBe(`${mafiaA.seat} phrase,seat`);
+        expect(`${view.day?.execution?.seat} ${Object.keys(view.day?.execution ?? {}).sort().join(",")}`).toBe(`${mafiaA.seat} seat`);
         expect(JSON.stringify(view.day?.verdict)).toBe(JSON.stringify({ yes: 4, no: 1, passed: true }));
         expect(view.players.find((p) => p.seat === mafiaA.seat)?.alive).toBe(false);
         expect(Object.hasOwn(view.me, "verdictVote")).toBe(false); // 처형 단계에서는 개인 값이 없다

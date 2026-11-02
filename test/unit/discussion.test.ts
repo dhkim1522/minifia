@@ -130,7 +130,6 @@ describe("enterDiscussion — 낮 시작 청소 (결정 0060-2, Pitfall 1)", () 
       verdict: { passed: true, candidate: 2 },
       execution: { seat: 2, phrase: 1 },
       voteLog: [{ n: 1, exec: { yes: 4, no: 1, passed: true }, cand: { votes: [{ seat: 0, target: 2 }], candidate: 2 } }],
-      lastExecPhrase: 3,
     });
     return {
       ...base,
@@ -148,6 +147,6 @@ describe("enterDiscussion — 낮 시작 청소 (결정 0060-2, Pitfall 1)", () 
     const before = dirty();
     const r = enterDiscussion(before);
     expect(r.voteLog === before.voteLog).toBe(true);
-    expect(`${r.lastExecPhrase} ${r.day} ${r.players.find((p) => p.seat === 4)?.alive} ${r.players.length}`).toBe("3 1 false 5");
+    expect(`${r.day} ${r.players.find((p) => p.seat === 4)?.alive} ${r.players.length}`).toBe("1 false 5");
   });
 });

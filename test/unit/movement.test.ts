@@ -22,7 +22,7 @@ const withPhase = (phase: PhaseId): RoomState => ({ ...BASE, phase });
 const living: Player = BASE.players[0]!;
 const ghost: Player = { ...BASE.players[0]!, alive: false };
 
-/** 단계 15종 × {산 사람, 유령}: [단계, 산 사람이 움직일 수 있나, 유령이 움직일 수 있나] */
+/** 단계 12종 × {산 사람, 유령}: [단계, 산 사람이 움직일 수 있나, 유령이 움직일 수 있나] */
 const TABLE: [PhaseId, boolean, boolean][] = [
   ["lobby", true, true],
   ["assigning", false, false],
@@ -36,10 +36,6 @@ const TABLE: [PhaseId, boolean, boolean][] = [
   ["night", false, true],
   ["morning", false, true],
   ["ended", false, false],
-  // 옛 투표 단계는 08-21 이 지울 때까지 지도 단계가 아니다(가정 A3): 아무도 움직이지 않는다.
-  ["execVote", false, false],
-  ["candidateVote", false, false],
-  ["candidateVoteReveal", false, false],
 ];
 
 describe("canMove — 단계 × 신분 표 (MAP-04)", () => {
@@ -49,10 +45,10 @@ describe("canMove — 단계 × 신분 표 (MAP-04)", () => {
     expect(`${phase}:ghost:${canMove(s, ghost)}`).toBe(`${phase}:ghost:${ghostCan}`);
   });
 
-  it("표가 PhaseId 15종을 모두 덮는다", () => {
+  it("표가 PhaseId 12종을 모두 덮는다", () => {
     expect(TABLE.map(([phase]) => phase).sort().join(",")).toBe(
       [
-        "lobby", "assigning", "roleReveal", "dayAnnounce", "discussion", "execVote", "candidateVote", "candidateVoteReveal",
+        "lobby", "assigning", "roleReveal", "dayAnnounce", "discussion",
         "defense", "execution", "night", "morning", "ended", "nomination", "verdict",
       ].sort().join(","),
     );

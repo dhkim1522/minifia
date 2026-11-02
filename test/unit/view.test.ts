@@ -277,7 +277,7 @@ const keysOf = (value: unknown): string => Object.keys((value ?? {}) as object).
 /**
  * 열네 단계 허용 키와 받는 사람 규칙 한 곳(결정 0036-12, D-17, D-34). richStateAt 이 만드는 상태에 맞춘 기대값이다:
  * 후보가 있는 공개 구간 이후, 표 없이 지나온 밤(처형 무효 noVotes), 일부만 던진 투표 단계.
- *  - candidate 는 공개·변론·처형에만, execution 은 처형에만(seat·phrase 두 키), noExecution 은 처형 무효로 온 밤에만(reason 한 키)
+ *  - candidate 는 공개·변론·처형에만, execution 은 처형에만(seat 한 키), noExecution 은 처형 무효로 온 밤에만(reason 한 키)
  *  - result 는 ended 에만, voteLog 줄은 키가 정해져 있고 그날 cand 는 공개 구간 전에 없다(D-19)
  */
 function phaseKeyViolations(s: RoomState, viewer: Player, view: RoomView, phase: PhaseId, tag: string): string[] {
@@ -309,7 +309,7 @@ function phaseKeyViolations(s: RoomState, viewer: Player, view: RoomView, phase:
   const wantExecution = phase === "execution";
   if (("execution" in day) !== wantExecution) out.push(`${tag}: day.execution presence ${"execution" in day}`);
   else if (wantExecution) {
-    if (keysOf(day.execution) !== "phrase,seat") out.push(`${tag}: day.execution keys ${keysOf(day.execution)}`);
+    if (keysOf(day.execution) !== "seat") out.push(`${tag}: day.execution keys ${keysOf(day.execution)}`);
     if (day.execution?.seat !== s.verdict?.candidate) out.push(`${tag}: day.execution.seat`);
   }
   // 표 없이 지나온 밤(richStateAt 의 night)에만, 이유 코드 하나
@@ -1237,7 +1237,7 @@ describe("buildView 후보 공개 기록 (VOTE-02, D-19, T-04-32)", () => {
 });
 
 describe("buildView 처형자 직업 비공개 (D-09, T-04-31)", () => {
-  it("처형 발표·그 뒤 밤·아침의 살아 있는 viewer 에게 역할 단어는 me.role·day.roles[] 경로에만 있고, 처형 발표는 seat·phrase 뿐이다 (4~8명 × 시드 3 × 시민·마피아 후보)", () => {
+  it("처형 발표·그 뒤 밤·아침의 살아 있는 viewer 에게 역할 단어는 me.role·day.roles[] 경로에만 있고, 처형 발표는 seat 뿐이다 (4~8명 × 시드 3 × 시민·마피아 후보)", () => {
     const bad: string[] = [];
     let aliveViews = 0;
     for (const n of PLAYER_COUNTS) {
@@ -1260,7 +1260,7 @@ describe("buildView 처형자 직업 비공개 (D-09, T-04-31)", () => {
               } else {
                 bad.push(...roleValueLeaks(view, true).map((leak) => `${tag}: ${leak}`));
               }
-              if (name === "execution" && keysOf(view.day!.execution) !== "phrase,seat") bad.push(`${tag}: execution keys ${keysOf(view.day!.execution)}`);
+              if (name === "execution" && keysOf(view.day!.execution) !== "seat") bad.push(`${tag}: execution keys ${keysOf(view.day!.execution)}`);
             }
           }
         }
@@ -1391,7 +1391,7 @@ describe("buildView 낮 처형 필드 (08-07, DAY-03~06)", () => {
     const day = s.day ?? 1;
     const common: RoomState = { ...s, phase, verdict: { passed: false, candidate: 2 } };
     if (phase === "execution") {
-      return { ...common, verdict: { passed: true, candidate: 2 }, execution: { seat: 2, phrase: 0 }, voteLog: [{ n: day, exec: { yes: 3, no: 1, passed: true }, cand: { votes: [], candidate: 2 } }] };
+      return { ...common, verdict: { passed: true, candidate: 2 }, execution: { seat: 2 }, voteLog: [{ n: day, exec: { yes: 3, no: 1, passed: true }, cand: { votes: [], candidate: 2 } }] };
     }
     return common;
   };

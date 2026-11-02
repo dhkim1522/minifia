@@ -4,7 +4,6 @@ import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { BAR_MASK } from "../../shared/game/map";
 import { MOVE_SPEED } from "../../shared/game/world";
-import { candidateRevealMs } from "../../shared/game/phases";
 import { NICKNAME_MAX_GRAPHEMES, countGraphemes } from "../../shared/nickname";
 import { TIMELESS_PHASES } from "../../src/game/scenes";
 import {
@@ -33,13 +32,6 @@ describe("E2E 의 TIMELESS_PHASES 와 앱 상수", () => {
     expect(Array.isArray(e2e)).toBe(true);
     expect([...e2e].sort()).toEqual([...TIMELESS_PHASES].sort());
     expect(e2e.length).toBe(TIMELESS_PHASES.length);
-  });
-});
-
-describe("E2E 의 시간 사본과 서버 상수 (결정 0039, 08-22 가 후보 공개와 함께 정리)", () => {
-  it("candidateRevealMs(n) 사본이 shared/game/phases 와 n = 0..8 에서 같다", () => {
-    const copy = (e2eLib as { candidateRevealMs: (n: number) => number }).candidateRevealMs;
-    for (let n = 0; n <= 8; n += 1) expect(copy(n)).toBe(candidateRevealMs(n));
   });
 });
 

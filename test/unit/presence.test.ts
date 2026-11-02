@@ -209,7 +209,7 @@ describe("sceneLook (위를 묶는다)", () => {
     same([look.lighting, look.tension, look.focusSeat], ["talk", 0, undefined]);
   });
   it("유령 viewer 의 처형 장면: 모든 좌석, 탈락 좌석 ghost", () => {
-    const view = viewOf("execution", { dead: [3], mySeat: 3, day: { execution: { seat: 3, phrase: 1 } } });
+    const view = viewOf("execution", { dead: [3], mySeat: 3, day: { execution: { seat: 3 } } });
     const look = sceneLook(view, { stageH: 300 });
     same(Object.keys(look.seats).map(Number), [0, 1, 2, 3, 4]);
     same(look.seats[3]?.ghost, true);

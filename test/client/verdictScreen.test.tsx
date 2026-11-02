@@ -130,7 +130,7 @@ function makeView(o: ViewOpts = {}): RoomView {
           }
         : {}),
       ...(phase === "verdict" ? { voted: o.voted ?? [] } : {}),
-      ...(phase === "execution" && o.verdict !== undefined ? { verdict: o.verdict, execution: { seat: o.candidate ?? 3, phrase: 0 } } : {}),
+      ...(phase === "execution" && o.verdict !== undefined ? { verdict: o.verdict, execution: { seat: o.candidate ?? 3 } } : {}),
     },
   };
 }

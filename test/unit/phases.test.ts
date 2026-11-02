@@ -24,10 +24,11 @@ describe("단계 표 (DAY-07, 결정 0060-1)", () => {
   });
 
   it("옛 처형 여부·후보 선택·후보 공개 단계로는 기본 경로로도 가지 않는다", () => {
-    const targets = Object.entries(PHASE_DEFS)
-      .filter(([id]) => !["execVote", "candidateVote", "candidateVoteReveal"].includes(id))
-      .map(([, def]) => def.next);
-    for (const old of ["execVote", "candidateVote", "candidateVoteReveal"] as const) {
+    const OLD = ["execVote", "candidateVote", "candidateVoteReveal"];
+    // 08-22: 단계 표에 옛 행 자체가 없고, 어떤 행의 기본 다음 단계도 옛 단계가 아니다.
+    expect(Object.keys(PHASE_DEFS).filter((id) => OLD.includes(id))).toEqual([]);
+    const targets: Array<string | null> = Object.values(PHASE_DEFS).map((def) => def.next);
+    for (const old of OLD) {
       expect(targets.includes(old)).toBe(false);
     }
   });

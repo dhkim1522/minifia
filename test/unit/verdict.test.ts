@@ -54,7 +54,7 @@ describe("VERDICT_TEXT — UI-SPEC 7.2 와 글자까지 같다", () => {
       homeButton: "처음으로",
       roomCloseNote: "이 방은 30분 뒤에 닫혀요",
     });
-    expect(Object.keys(VERDICT_TEXT).sort()).toEqual(["announce", "candidateNone", "endedTitle", "homeButton", "roomCloseNote", "summaryTitle", "votedSuffix"]);
+    expect(Object.keys(VERDICT_TEXT).sort()).toEqual(["candidateNone", "endedTitle", "homeButton", "roomCloseNote", "summaryTitle", "votedSuffix"]);
   });
 
   it("값이 UI-SPEC 문서에도 그대로 있다 (문서가 있을 때)", () => {
@@ -66,9 +66,7 @@ describe("VERDICT_TEXT — UI-SPEC 7.2 와 글자까지 같다", () => {
   });
 
   it("읽기용 단계 안내와 보조 문구 함수", () => {
-    expect(VERDICT_TEXT.announce.execVote).toBe("처형 여부 투표. 오늘 처형을 할까요?");
-    expect(VERDICT_TEXT.announce.candidateVote).toBe("후보 선택 투표. 처형할 사람을 고르세요");
-    expect(VERDICT_TEXT.announce.candidateVoteReveal).toBe("투표 공개");
+    expect(Object.hasOwn(VERDICT_TEXT, "announce")).toBe(false); // 옛 세 단계 안내 문구 묶음은 08-22 에 PhaseId 와 함께 지웠다
     expect(defenseAnnounce("도윤")).toBe("도윤님의 최후 변론");
     expect(defenseAnnounce(null)).toBe("내 최후 변론");
     expect(endedAnnounce("citizenWin")).toBe("게임이 끝났습니다. 시민 팀 승리");
@@ -78,8 +76,7 @@ describe("VERDICT_TEXT — UI-SPEC 7.2 와 글자까지 같다", () => {
 });
 
 describe("noExecutionText · winnerText (D-34, UI-SPEC 7.2)", () => {
-  it("무효 이유 부제 세 개", () => {
-    expect(noExecutionText("notMajority")).toBe("찬성이 과반이 아니에요");
+  it("무효 이유 부제 둘(찬반 부결은 처형 단계가 알린다)", () => {
     expect(noExecutionText("tie")).toBe("동률이라 처형하지 않아요");
     expect(noExecutionText("noVotes")).toBe("던진 표가 없어요");
   });

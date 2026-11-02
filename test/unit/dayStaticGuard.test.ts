@@ -1,4 +1,4 @@
-// 08-20: 지운 v1.0 낮·처형 화면·로직 이름의 정적 가드 (DAY-07, T-08-49).
+// 08-20·08-22: 지운 v1.0 낮·처형 화면·로직·서버·와이어 이름의 정적 가드 (DAY-07, T-08-49).
 // "옛 테이블·후보 선택 화면이 다시 생기지 않는다" 를 소스 문자열로 고정한다. 동작 시험이 아니라 구조 회귀 시험이다(chatStaticGuard 와 같은 방식).
 // 주석(// 줄·/* */ 블록)은 지우고 본다: 지운 이름을 설명하는 주석은 허용하고, 코드에 남은 이름만 잡는다.
 // stripComments·foundIdentifiers 는 chatStaticGuard 에서 가져온다. 그 파일의 describe 도 이 파일 안에서 한 번 더 도는데, 결과는 같고 무해하다.
@@ -12,8 +12,8 @@ const ROOT = fileURLToPath(new URL("../../", import.meta.url));
 const read = (rel: string): string => readFileSync(`${ROOT}${rel}`, "utf8");
 
 /**
- * 08-19·08-20 이 지운 클라이언트 화면·로직 이름. 이름이 코드에 다시 나타나면 옛 화면이 되살아난 것이다.
- * 08-22 가 서버·와이어 쪽 이름(execVote·candidateVote 등)을 이 목록에 더한다.
+ * 08-19·08-20 이 지운 클라이언트 화면·로직 이름과 08-21·08-22 가 지운 서버·와이어 이름. 이름이 코드에 다시 나타나면 옛 길이 되살아난 것이다.
+ * 서버·와이어 쪽(옛 세 단계 이름, 옛 두 메시지, 옛 규칙 함수, 후보 공개 길이 공식, 처형 문구 번호)은 SERVER_REMOVED_IDENTIFIERS 에 따로 둔다.
  */
 export const REMOVED_DAY_IDENTIFIERS = [
   "DayTable",
@@ -34,6 +34,47 @@ export const REMOVED_DAY_IDENTIFIERS = [
   "tablePanelHeight",
 ] as const;
 
+/**
+ * 08-21·08-22 가 서버·와이어·단계 표에서 지운 이름(옛 처형 여부 투표·후보 선택·후보 공개 흐름). 주석 밖 코드에는 0건이어야 한다.
+ * 예외 하나: shared/game/room.ts 의 normalizeStoredRoom 이 옛 저장 방을 토론으로 옮기려고 문자열로 비교하는 표(LEGACY_*) —
+ * 따옴표 안·구조 분해의 옛 키 이름이라 단어 경계 검색에 걸린다. 그 파일의 해당 줄 모양만 ROOM_LEGACY_LINES 로 허용하고 그 밖의 줄은 실패시킨다.
+ */
+export const SERVER_REMOVED_IDENTIFIERS = [
+  "execVote",
+  "candidateVote",
+  "candidateVoteReveal",
+  "ExecTally",
+  "execTallyOf",
+  "castExecVote",
+  "castCandidateVote",
+  "tallyCandidateVote",
+  "enterExecVote",
+  "enterCandidateVoteReveal",
+  "candidateRevealMs",
+  "EXECUTION_PHRASE_COUNT",
+  "lastExecPhrase",
+] as const;
+
+const ROOM_PATH = "shared/game/room.ts";
+/** room.ts 정규화 표에서 옛 이름이 나타나도 되는 줄 모양(앞뒤 공백 제거). 이유: 옛 저장 방의 단계 이름·키를 문자열로 비교하고 키째 빼야 한다(결정 0060-12). */
+const ROOM_LEGACY_LINES: readonly RegExp[] = [
+  /^(execVote|candidateVote|candidateVoteReveal): "\1",$/,
+  /^const LEGACY_VOTE_PHASES: readonly string\[\] = \[LEGACY_PHASES\.execVote, LEGACY_PHASES\.candidateVote, LEGACY_PHASES\.candidateVoteReveal\];$/,
+  /^const LEGACY_VOTE_PLAYER_KEYS = \["execVote", "candidateVote"\] as const;$/,
+  /^const hasOldVoteRoomKey = Object\.hasOwn\(stored, "lastExecPhrase"\);$/,
+  /^lastExecPhrase: _execPhrase,$/,
+  /^lastExecPhrase\?: unknown;$/,
+];
+
+/** 주석을 지운 room.ts 코드에서 옛 이름이 든 줄 가운데 허용 모양이 아닌 줄을 돌려준다. */
+export function roomLegacyViolations(src: string): string[] {
+  const names = new RegExp(`\\b(${SERVER_REMOVED_IDENTIFIERS.join("|")})\\b`);
+  return stripComments(src)
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => names.test(line) && !ROOM_LEGACY_LINES.some((re) => re.test(line)));
+}
+
 describe("가드 도우미 — 일부러 틀린 사본에서는 실패한다", () => {
   it("코드에 남은 지운 이름은 잡고 주석 속 이름과 이름의 일부는 잡지 않는다", () => {
     const bad = [{ path: "x.tsx", src: 'import { DayTable } from "./DayTable";' }];
@@ -42,6 +83,16 @@ describe("가드 도우미 — 일부러 틀린 사본에서는 실패한다", (
     expect(foundIdentifiers(bad, REMOVED_DAY_IDENTIFIERS).join(",")).toBe("x.tsx:DayTable");
     expect(foundIdentifiers(commentOnly, REMOVED_DAY_IDENTIFIERS)).toEqual([]);
     expect(foundIdentifiers(partial, REMOVED_DAY_IDENTIFIERS)).toEqual([]);
+  });
+
+  it("서버 이름 가드: 코드에 남은 옛 단계 이름·함수는 잡고 주석은 잡지 않으며, room.ts 정규화 표 모양만 허용한다", () => {
+    const bad = [{ path: "s.ts", src: 'if (state.phase === "execVote") castExecVote(s);' }];
+    const commentOnly = [{ path: "c.ts", src: "// candidateRevealMs 는 08-22 에서 지웠다\nconst ok = 1;" }];
+    expect(foundIdentifiers(bad, SERVER_REMOVED_IDENTIFIERS).join(",")).toBe("s.ts:execVote,s.ts:castExecVote");
+    expect(foundIdentifiers(commentOnly, SERVER_REMOVED_IDENTIFIERS)).toEqual([]);
+    expect(roomLegacyViolations('  execVote: "execVote",\n  const x = 1;')).toEqual([]);
+    expect(roomLegacyViolations('if (phase === "execVote") return 1;')).toEqual(['if (phase === "execVote") return 1;']);
+    expect(roomLegacyViolations("lastExecPhrase: phrase,")).toEqual(["lastExecPhrase: phrase,"]);
   });
 
   it("stripComments 는 문자열 안의 // 를 남기고 줄 수를 지킨다", () => {
@@ -54,7 +105,7 @@ describe("가드 도우미 — 일부러 틀린 사본에서는 실패한다", (
 });
 
 describe("지운 v1.0 낮·처형 화면 이름 (DAY-07)", () => {
-  const tracked = execFileSync("git", ["ls-files", "src", "shared"], { cwd: ROOT, encoding: "utf8" })
+  const tracked = execFileSync("git", ["ls-files", "src", "shared", "worker"], { cwd: ROOT, encoding: "utf8" })
     .split("\n")
     .filter((p) => /\.tsx?$/.test(p));
 
@@ -62,6 +113,14 @@ describe("지운 v1.0 낮·처형 화면 이름 (DAY-07)", () => {
     expect(tracked.length).toBeGreaterThan(20); // 검사가 아무것도 못 보는 일이 없게
     const files = tracked.map((path) => ({ path, src: read(path) }));
     expect(foundIdentifiers(files, REMOVED_DAY_IDENTIFIERS).join(",")).toBe("");
+  });
+
+  it("shared·worker·src 의 주석 밖 코드에 지운 서버·와이어 이름이 없다 (room.ts 정규화 표 줄만 예외)", () => {
+    const files = tracked.filter((path) => path !== ROOM_PATH).map((path) => ({ path, src: read(path) }));
+    expect(foundIdentifiers(files, SERVER_REMOVED_IDENTIFIERS).join(",")).toBe("");
+    expect(roomLegacyViolations(read(ROOM_PATH)).join(" | ")).toBe("");
+    // 예외가 실제로 쓰이고 있는지(표가 사라졌는데 예외만 남는 일이 없게)
+    expect(read(ROOM_PATH).includes('"candidateVoteReveal"') || read(ROOM_PATH).includes("candidateVoteReveal:")).toBe(true);
   });
 
   it("지운 파일이 저장소에 없다", () => {
@@ -76,6 +135,7 @@ describe("지운 v1.0 낮·처형 화면 이름 (DAY-07)", () => {
       "src/styles/daytable.css",
       "src/styles/verdict.css",
       "src/styles/urecord.css",
+      "shared/game/vote.ts",
     ];
     const present = new Set(execFileSync("git", ["ls-files", ...gone], { cwd: ROOT, encoding: "utf8" }).split("\n").filter(Boolean));
     expect([...present]).toEqual([]);

@@ -560,7 +560,7 @@ describe("skipPhase: 분기 단계를 따라 끝까지 넘어간다", () => {
 });
 
 describe("resetToLobby: 투표·처형·종료 필드를 모두 지운다 (END-02, 결정 0022)", () => {
-  const GONE = ["voteLog", "verdict", "execution", "lastExecPhrase", "nightLog", "winner"];
+  const GONE = ["voteLog", "verdict", "execution", "nightLog", "winner"];
   const PLAYER_GONE = ["execVote", "candidateVote"];
   function check(before: RoomState, label: string): void {
     const r = resetToLobby(before, before.hostId);
@@ -575,7 +575,6 @@ describe("resetToLobby: 투표·처형·종료 필드를 모두 지운다 (END-0
   const rich = (state: RoomState): RoomState => ({
     ...state,
     everConnected: true,
-    lastExecPhrase: 2,
     nightLog: [],
     players: state.players.map((p) => ({ ...p, execVote: true, candidateVote: 0 })),
   });

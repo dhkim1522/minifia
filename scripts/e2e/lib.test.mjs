@@ -1506,11 +1506,11 @@ test("headerContrastChecks H1: 제목 항목이 없어도 실패한다(대기실
 
 const layer = (scene, state = "current", image = `url("http://localhost:5173/backgrounds/bg_game_${scene}.webp")`) => ({ scene, state, image });
 
-test("EXPECTED_SCENE: 단계 열다섯 개가 모두 장면 id 로 정해져 있다", () => {
+test("EXPECTED_SCENE: 단계 열두 개가 모두 장면 id 로 정해져 있다 (옛 처형 여부·후보 선택·후보 공개 단계는 08-22 에 PhaseId 와 함께 없어졌다)", () => {
   assert.deepEqual(Object.keys(EXPECTED_SCENE).sort(), [
-    "assigning", "candidateVote", "candidateVoteReveal", "dayAnnounce", "defense", "discussion", "ended", "execVote", "execution", "lobby", "morning", "night", "nomination", "roleReveal", "verdict",
+    "assigning", "dayAnnounce", "defense", "discussion", "ended", "execution", "lobby", "morning", "night", "nomination", "roleReveal", "verdict",
   ]);
-  for (const p of ["execVote", "candidateVote", "candidateVoteReveal", "defense", "execution"]) assert.equal(EXPECTED_SCENE[p], "dusk", p);
+  for (const p of ["nomination", "defense", "verdict", "execution"]) assert.equal(EXPECTED_SCENE[p], "dusk", p);
   assert.equal(EXPECTED_SCENE.ended, "night");
   assert.equal(EXPECTED_SCENE.night, "night");
   assert.equal(EXPECTED_SCENE.morning, "morning");

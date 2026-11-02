@@ -497,11 +497,10 @@ describe("실제 흐름 (결정 0060-1)", () => {
     );
     const defSock = g.socks[g.actors.indexOf(defender)]!;
     expect(worldFramesOf(defSock, marks[g.actors.indexOf(defender)]!).filter((m) => m.k === "snap").length).toBe(1);
-    // 처형 발표(vote.test 의 "처형 발표" 이전): 모든 소켓이 day.execution {seat, phrase 1..4} 를 받고, 관전은 처형된 소켓만 받는다
+    // 처형 발표(vote.test 의 "처형 발표" 이전): 모든 소켓이 day.execution {seat}(문구 번호 없음, 결정 0060-5)를 받고, 관전은 처형된 소켓만 받는다
     for (const [i, v] of lastViews(g).entries()) {
-      expect(Object.keys(v.day?.execution ?? {}).sort().join(",")).toBe("phrase,seat");
+      expect(Object.keys(v.day?.execution ?? {}).sort().join(",")).toBe("seat");
       expect(v.day?.execution?.seat).toBe(defender.seat);
-      expect(v.day!.execution!.phrase >= 1 && v.day!.execution!.phrase <= 4).toBe(true);
       expect(Object.hasOwn(v, "spectate")).toBe(g.actors[i] === defender);
       expect(v.players.find((p) => p.seat === defender.seat)?.alive).toBe(false);
       // 살아 있는 소켓에는 역할 단어 값이 본인 역할·구성표 경로 밖에 없다(처형 발표에 직업이 실리지 않는다, D-09)

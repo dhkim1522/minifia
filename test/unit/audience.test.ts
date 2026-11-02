@@ -57,10 +57,9 @@ const chat = (ch: ChatChannel): AudienceEvent => ({ k: "chat", ch });
 const DAY_CHAT_PHASES: PhaseId[] = [
   "dayAnnounce",
   "discussion",
-  "execVote",
-  "candidateVote",
-  "candidateVoteReveal",
+  "nomination",
   "defense",
+  "verdict",
   "execution",
   "morning",
 ];
@@ -194,7 +193,7 @@ describe("CHAT_PHASES", () => {
   it("로비·낮 단계·밤·아침이 들고, assigning·roleReveal·ended·claim 은 들지 않는다", () => {
     expect([...CHAT_PHASES].sort().join(",")).toBe(
       [
-        "lobby", "dayAnnounce", "discussion", "nomination", "execVote", "candidateVote", "candidateVoteReveal",
+        "lobby", "dayAnnounce", "discussion", "nomination",
         "defense", "verdict", "execution", "night", "morning",
       ].sort().join(","),
     );

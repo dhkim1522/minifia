@@ -6,7 +6,6 @@ import { enterExecution, noExecutionOf } from "../../shared/game/execution";
 import type { RoomState } from "../../shared/game/room";
 import { tick } from "../../shared/game/tick";
 import { buildView } from "../../shared/game/view";
-import { EXECUTION_PHRASE_COUNT } from "../../shared/protocol";
 import type { PhaseId, RoomView } from "../../shared/protocol";
 import { seededRandInt } from "../helpers/seededRandom";
 import { castPoints, castVerdicts, startedAt, stateWithVerdict } from "../helpers/voteState";
@@ -39,10 +38,6 @@ function spyRand(returns: (n: number) => number = () => 0): { randInt: (n: numbe
   };
 }
 
-const THROWING_RAND = (): number => {
-  throw new Error("randInt must not be called");
-};
-
 /** JSON 을 걸어 내려가며 (경로, 문자열 값) 을 모은다. 배열 칸은 [] 로 접는다(leak.test.ts 와 같은 방식). */
 function stringPaths(value: unknown, path = ""): Array<[string, string]> {
   if (Array.isArray(value)) return value.flatMap((v) => stringPaths(v, `${path}[]`));
@@ -68,77 +63,54 @@ const passedDefenseOf = (n: number, seed: number, opts: { candidate?: "citizen" 
   return { ...s, verdict: { ...s.verdict!, passed: true } };
 };
 
-describe("enterExecution (VOTE-04, D-06, D-09, D-11)", () => {
+describe("enterExecution (VOTE-04, D-06, D-09, 결정 0060-5)", () => {
   const defenseOf = (seed: number): RoomState => passedDefenseOf(6, seed);
 
-  it("찬반이 통과하지 않았으면(부결) 입력 그대로이고 난수를 부르지 않는다 — 아무도 탈락하지 않는다 (DAY-06)", () => {
+  it("찬반이 통과하지 않았으면(부결) 입력 그대로이다 — 아무도 탈락하지 않는다 (DAY-06)", () => {
     const rejected = stateWithVerdict(6, 1, "defense");
     expect(rejected.verdict?.passed).toBe(false);
-    expect(enterExecution(rejected, THROWING_RAND)).toBe(rejected);
+    expect(enterExecution(rejected)).toBe(rejected);
     const { verdict: _none, ...noVerdict } = rejected;
-    expect(enterExecution(noVerdict as RoomState, THROWING_RAND)).toBe(noVerdict);
+    expect(enterExecution(noVerdict as RoomState)).toBe(noVerdict);
   });
 
-  it("후보만 alive false 가 되고 다른 필드(역할 포함)는 그대로다; execution {seat, phrase}, lastExecPhrase = phrase", () => {
+  it("후보만 alive false 가 되고 다른 필드(역할 포함)는 그대로다; execution 은 {seat} 뿐이고 lastExecPhrase 키는 만들지 않는다", () => {
     for (const seed of SEEDS) {
       const before = defenseOf(seed);
       const x = before.verdict!.candidate!;
-      const after = enterExecution(before, seededRandInt(seed));
+      const after = enterExecution(before);
       const xBefore = before.players.find((p) => p.seat === x)!;
       const xAfter = after.players.find((p) => p.seat === x)!;
       expect(xAfter.alive).toBe(false);
       expect(JSON.stringify({ ...xAfter, alive: undefined })).toBe(JSON.stringify({ ...xBefore, alive: undefined }));
       const others = (s: RoomState) => JSON.stringify(s.players.filter((p) => p.seat !== x));
       expect(others(after)).toBe(others(before));
-      expect(Object.keys(after.execution!).sort().join(",")).toBe("phrase,seat");
+      expect(Object.keys(after.execution!).sort().join(",")).toBe("seat");
       expect(after.execution!.seat).toBe(x);
-      expect(after.lastExecPhrase).toBe(after.execution!.phrase);
-      expect(after.execution!.phrase >= 1 && after.execution!.phrase <= EXECUTION_PHRASE_COUNT).toBe(true);
+      expect(Object.hasOwn(after, "lastExecPhrase")).toBe(false);
     }
   });
 
-  it("문구는 직전 처형 문구를 뺀 오름차순 후보 중 randInt(후보 수) 한 번이다 (0 → 가장 작은 번호, 마지막 → 가장 큰 번호)", () => {
-    const base = defenseOf(1);
-    const phraseWith = (last: number | undefined, pick: (n: number) => number) => {
-      const spy = spyRand(pick);
-      const s = enterExecution(last === undefined ? base : { ...base, lastExecPhrase: last }, spy.randInt);
-      return `${s.execution!.phrase}/${spy.calls.join(",")}`;
-    };
-    // 직전 문구 없음: 후보 [1,2,3,4]
-    expect(phraseWith(undefined, () => 0)).toBe("1/4");
-    expect(phraseWith(undefined, (n) => n - 1)).toBe("4/4");
-    // 직전 문구 2: 후보 [1,3,4]
-    expect(phraseWith(2, () => 0)).toBe("1/3");
-    expect(phraseWith(2, (n) => n - 1)).toBe("4/3");
-    expect(phraseWith(2, () => 1)).toBe("3/3");
-    // 직전 문구 1: 후보 [2,3,4]
-    expect(phraseWith(1, () => 0)).toBe("2/3");
-    // 직전 문구 4: 후보 [1,2,3]
-    expect(phraseWith(4, (n) => n - 1)).toBe("3/3");
-  });
-
-  it("같은 시드로 연속 처형해도 직전 문구는 다시 나오지 않는다 (4~8명 × 시드 3)", () => {
+  it("tick 으로 처형에 들어가도 난수를 한 번도 부르지 않는다 (4~8명 × 시드 3)", () => {
     for (let n = 4; n <= 8; n += 1) {
       for (const seed of SEEDS) {
-        const first = enterExecution(passedDefenseOf(n, seed), seededRandInt(seed));
-        const second = enterExecution(
-          { ...passedDefenseOf(n, seed), lastExecPhrase: first.lastExecPhrase },
-          seededRandInt(seed),
-        );
-        expect(`${n}/${seed}: ${second.execution!.phrase === first.execution!.phrase}`).toBe(`${n}/${seed}: false`);
+        const verdictPhase = stateWithVerdict(n, seed, "verdict");
+        const spy = spyRand();
+        const executed = tick(verdictPhase, verdictPhase.phaseEndsAt!, spy.randInt);
+        expect(`${n}/${seed}: ${executed.phase}/${spy.calls.length}`).toBe(`${n}/${seed}: execution/0`);
       }
     }
   });
 
-  it("후보가 없으면 입력 그대로이고 난수를 부르지 않는다", () => {
+  it("후보가 없으면 입력 그대로이다", () => {
     const { candidate: _drop, ...noCandidate } = defenseOf(1).verdict!;
     const tied: RoomState = { ...defenseOf(1), verdict: noCandidate };
-    expect(enterExecution(tied, THROWING_RAND)).toBe(tied);
+    expect(enterExecution(tied)).toBe(tied);
   });
 
   it("입력 상태를 바꾸지 않는다 (깊은 동결) · 직업 값은 execution 어디에도 없다", () => {
     const before = deepFreeze(defenseOf(2));
-    const after = enterExecution(before, seededRandInt(2));
+    const after = enterExecution(before);
     expect(ROLE_WORDS.has(String(Object.values(after.execution!).join("|")))).toBe(false);
     expect(Object.values(after.execution!).every((v) => typeof v === "number")).toBe(true);
   });
@@ -171,13 +143,13 @@ describe("view: day.candidate · day.execution (D-06, D-09, D-11)", () => {
     expect(rows.join(" ")).toBe(`defense=${x} execution=${x}`);
   });
 
-  it("day.execution 은 execution 단계에만, 키가 정확히 seat·phrase 다", () => {
+  it("day.execution 은 execution 단계에만, 키가 정확히 seat 하나다(문구 번호 없음, 결정 0060-5)", () => {
     const rows: string[] = [];
     for (const phase of ["defense", "execution"] as const) {
       const state = stateWithVerdict(6, 1, phase);
       rows.push(`${phase}:${Object.keys(viewOf(state, 1).day?.execution ?? {}).sort().join(",") || "-"}`);
     }
-    expect(rows.join(" ")).toBe("defense:- execution:phrase,seat");
+    expect(rows.join(" ")).toBe("defense:- execution:seat");
   });
 
   it("처형 직업 비공개 (D-09): execution 단계 살아 있는 viewer 의 view 에서 역할 단어는 .me.role·.day.roles[] 경로에만 있다", () => {

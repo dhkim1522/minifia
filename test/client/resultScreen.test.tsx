@@ -229,7 +229,7 @@ describe("결과 화면 핵심 (END-01·END-02, D-17·D-18)", () => {
     const before = makeView();
     before.phase = "execution";
     delete (before as { result?: unknown }).result;
-    before.day = { ...before.day!, execution: { seat: 2, phrase: 0 } };
+    before.day = { ...before.day!, execution: { seat: 2 } };
     before.me = { ...before.me, isHost: true, testMode: true };
     const r = renderRoom(before);
     fireEvent.click(screen.getByRole("button", { name: /테스트/ }));
@@ -247,7 +247,7 @@ describe("결과 화면 핵심 (END-01·END-02, D-17·D-18)", () => {
     const night = makeView();
     night.phase = "execution";
     delete (night as { result?: unknown }).result;
-    night.day = { ...night.day!, execution: { seat: 2, phrase: 0 } };
+    night.day = { ...night.day!, execution: { seat: 2 } };
     const r = renderRoom(night);
     fireEvent.click(screen.getByRole("button", { name: /역할 카드/ }));
     expect(r.container.querySelector("dialog")).not.toBeNull();
@@ -385,7 +385,7 @@ describe("배경 크로스페이드 (UI-SPEC 11.2, P-2)", () => {
     const v = makeView();
     v.phase = "execution";
     delete (v as { result?: unknown }).result;
-    v.day = { ...v.day!, candidate: 3, execution: { seat: 3, phrase: 0 } };
+    v.day = { ...v.day!, candidate: 3, execution: { seat: 3 } };
     return v;
   };
 
@@ -479,7 +479,7 @@ describe("결과 공개 연출 상태기계 (D-17, UI-SPEC 11.2)", () => {
     const v = makeView();
     v.phase = "execution";
     delete (v as { result?: unknown }).result;
-    v.day = { ...v.day!, candidate: 3, execution: { seat: 3, phrase: 0 } };
+    v.day = { ...v.day!, candidate: 3, execution: { seat: 3 } };
     return v;
   };
   const morningView = (): RoomView => {

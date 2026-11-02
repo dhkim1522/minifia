@@ -1,23 +1,16 @@
 import { describe, expect, it } from "vitest";
 import {
   ASSIGNING_MS,
-  CANDIDATE_REVEAL_EMPTY_MS,
-  CANDIDATE_REVEAL_LEAD_MS,
-  CANDIDATE_REVEAL_SLOT_MS,
-  CANDIDATE_REVEAL_TAIL_MS,
-  CANDIDATE_VOTE_MS,
   DAY_ANNOUNCE_MS,
   DEFENSE_MS,
   DISCUSSION_MS,
   EXECUTION_MS,
-  EXEC_VOTE_MS,
   MORNING_MS,
   NIGHT_MS,
   NOMINATION_MS,
   VERDICT_MS,
   PHASE_DEFS,
   ROLE_REVEAL_MS,
-  candidateRevealMs,
 } from "../../shared/game/phases";
 import { ROOM_TTL_MS } from "../../shared/game/room";
 import type { Player, RoomState } from "../../shared/game/room";
@@ -59,10 +52,10 @@ function stateIn(
 }
 
 describe("PHASE_DEFS (단계 표, D-01·D-02·D-19·D-20, NIGHT-05·NIGHT-06)", () => {
-  it("단계는 열다섯 개다 — lobby·assigning·roleReveal, 낮 두 단계(순차 주장·공개 연출 단계 없음, D-07, CHAT-06), 처형 여부 투표·후보 선택·공개·변론·처형, 밤·아침, 판 종료, 8페이즈 지목·찬반(결정 0060)", () => {
+  it("단계는 열두 개다 — lobby·assigning·roleReveal, 낮 두 단계(순차 주장·공개 연출 단계 없음, D-07, CHAT-06), 지목·변론·찬반·처형(결정 0060, 옛 처형 여부 투표·후보 선택·공개 단계 없음), 밤·아침, 판 종료", () => {
     const keys = Object.keys(PHASE_DEFS).sort();
     expect(`${keys.length}:${keys.join(",")}`).toBe(
-      "15:assigning,candidateVote,candidateVoteReveal,dayAnnounce,defense,discussion,ended,execVote,execution,lobby,morning,night,nomination,roleReveal,verdict",
+      "12:assigning,dayAnnounce,defense,discussion,ended,execution,lobby,morning,night,nomination,roleReveal,verdict",
     );
   });
 
@@ -78,10 +71,6 @@ describe("PHASE_DEFS (단계 표, D-01·D-02·D-19·D-20, NIGHT-05·NIGHT-06)", 
     expect(row("roleReveal")).toBe("15000/dayAnnounce/true");
     expect(row("dayAnnounce")).toBe("2000/discussion/true"); // 낮 시작 발표 다음이 바로 토론(CHAT-06)
     expect(row("discussion")).toBe("90000/nomination/true"); // 토론 다음은 지목(DAY-07, 결정 0060-1)
-    expect(row("execVote")).toBe("13000/candidateVote/true"); // 표가 통과가 아니면 마감 훅이 night 로 보낸다(표의 기본 next 보다 앞선다)
-    expect(row("candidateVote")).toBe("15000/candidateVoteReveal/true");
-    // 표 값은 0표 기준이다. 실제 길이는 phaseDurationOf 가 그날 공개 표 수로 파생한다(결정 0039).
-    expect(row("candidateVoteReveal")).toBe(`${candidateRevealMs(0)}/defense/true`);
     expect(row("defense")).toBe("20000/verdict/true"); // 변론 다음은 찬반(결정 0060-1)
     expect(row("nomination")).toBe("15000/defense/true"); // 동률·0표면 마감 훅이 night 로 보낸다
     expect(row("verdict")).toBe("10000/execution/true"); // 부결이어도 처형 단계가 결과를 알린다
@@ -95,8 +84,6 @@ describe("PHASE_DEFS (단계 표, D-01·D-02·D-19·D-20, NIGHT-05·NIGHT-06)", 
     expect(DISCUSSION_MS).toBe(90000);
     expect(NIGHT_MS).toBe(30000);
     expect(MORNING_MS).toBe(5000);
-    expect(EXEC_VOTE_MS).toBe(13000);
-    expect(CANDIDATE_VOTE_MS).toBe(15000);
     expect(DEFENSE_MS).toBe(20000);
     expect(NOMINATION_MS).toBe(15000);
     expect(VERDICT_MS).toBe(10000);
@@ -365,31 +352,7 @@ describe("nextWakeAt (알람 하나로 단계 마감과 방 만료)", () => {
   });
 });
 
-describe("candidateRevealMs (결정 0039)", () => {
-  it("표 수별 공개 단계 길이: 0표 2000, 1표 3000, 2표 5000, 5표 11000, 8표 17000", () => {
-    expect([0, 1, 2, 5, 8].map((n) => `${n}:${candidateRevealMs(n)}`).join(" ")).toBe("0:2000 1:3000 2:5000 5:11000 8:17000");
-  });
-
-  it("n ≥ 1 이면 앞 + n × 슬롯 + 뒤, n = 0 이면 빈 공개 길이", () => {
-    for (let n = 1; n <= 8; n += 1) {
-      expect(candidateRevealMs(n)).toBe(CANDIDATE_REVEAL_LEAD_MS + n * CANDIDATE_REVEAL_SLOT_MS + CANDIDATE_REVEAL_TAIL_MS);
-    }
-    expect(candidateRevealMs(0)).toBe(CANDIDATE_REVEAL_EMPTY_MS);
-  });
-
-  it("네 상수: 400 · 2000 · 600 · 2000", () => {
-    expect(
-      [CANDIDATE_REVEAL_LEAD_MS, CANDIDATE_REVEAL_SLOT_MS, CANDIDATE_REVEAL_TAIL_MS, CANDIDATE_REVEAL_EMPTY_MS].join(" "),
-    ).toBe("400 2000 600 2000");
-  });
-
-  it("음수·소수·NaN·무한대 입력은 0 이상 정수로 내린다", () => {
-    expect(candidateRevealMs(-3)).toBe(candidateRevealMs(0));
-    expect(candidateRevealMs(Number.NaN)).toBe(candidateRevealMs(0));
-    expect(candidateRevealMs(Number.POSITIVE_INFINITY)).toBe(candidateRevealMs(0));
-    expect(candidateRevealMs(2.9)).toBe(candidateRevealMs(2));
-  });
-
+describe("낮 처형 구간 길이 (결정 0060-1)", () => {
   it("낮 처형 구간(지목 마감부터 처형 마감까지)은 인원과 무관하게 고정 50초다: 지목 15 + 변론 20 + 찬반 10 + 처형 5 (공개 단계가 없다, 결정 0060-1)", () => {
     expect(NOMINATION_MS + DEFENSE_MS + VERDICT_MS + EXECUTION_MS).toBe(50_000);
   });
