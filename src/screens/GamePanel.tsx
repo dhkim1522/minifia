@@ -44,6 +44,11 @@ export function GamePanel({ view, send, canSend, binding, logHeight, kbOpen = fa
   // 찬반도 같다: 내 선택은 누른 즉시 보이되 서버 view(me.verdictVote)가 오면 서버 값이 이긴다(DAY-06).
   const serverVerdict: Verdict | null = view.me.verdictVote === undefined ? null : view.me.verdictVote ? "yes" : "no";
   const [verdict, chooseVerdict] = useViewChoice<Verdict | null>(view, serverVerdict);
+  // 서버는 처형 단계에 내 찬반 값을 보내지 않는다 — 처형 단계의 비활성 찬반 줄은 찬반 때 마지막으로 보인 내 선택을 그대로 보여 준다
+  const lastVerdict = useRef<Verdict | null>(null);
+  useEffect(() => {
+    if (view.phase === "verdict") lastVerdict.current = verdict ?? null;
+  }, [view.phase, verdict]);
   const seenRejects = useRef(rejected);
   useEffect(() => {
     if (seenRejects.current === rejected) return;
@@ -66,6 +71,7 @@ export function GamePanel({ view, send, canSend, binding, logHeight, kbOpen = fa
   const inVerdict = view.phase === "verdict" && !kbOpen;
   const showVerdict = inVerdict && meAlive && !isDefender; // 찬반 버튼 + 점
   const showVerdictDots = inVerdict && !showVerdict; // 변론자 본인·유령: 점만(보기 패널)
+  const showExecPicker = view.phase === "execution" && meAlive && !isDefender && !kbOpen; // 처형 단계: 결과가 나와 비활성(불투명도 0.45)
   const voted = view.day?.voted?.length ?? 0;
   const pressVerdict = (v: Verdict): void => {
     if (!canSend) return;
@@ -82,6 +88,11 @@ export function GamePanel({ view, send, canSend, binding, logHeight, kbOpen = fa
 
   return (
     <section ref={panelRef} className={kbOpen ? "mf-game__panel mf-game__panel--kb" : "mf-game__panel"} data-world-panel="">
+      {showExecPicker ? (
+        <div className="mf-game__verdict" data-verdict-row="">
+          <VerdictPicker {...(lastVerdict.current ? { value: lastVerdict.current } : {})} onChange={() => {}} disabled />
+        </div>
+      ) : null}
       {showVerdict || showVerdictDots ? (
         <div className="mf-game__verdict" data-verdict-row="">
           {showVerdict ? (

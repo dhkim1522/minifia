@@ -81,6 +81,8 @@ interface GameMapProps {
   announce?: string | null;
   /** useDayFx 가 만든 지목 위 알림(가장 최근 것). id 가 바뀔 때만 띄운다 — 처음 마운트 때의 값은 지난 알림이라 띄우지 않는다 */
   toast?: DayFx["toast"];
+  /** 처형 떠오름 연출 중인 좌석 → 시작 시각(useDayFx). 처형된 사람이 연출이 끝날 때까지 표에 남는다 */
+  fading?: DayFx["fading"];
   /** 지목 선두가 새 사람으로 바뀌었을 때의 손사래 신호(WorldStage 로 그대로 넘긴다) */
   deny?: DayFx["deny"];
   /** 연결의 오류 프레임 구독(거절된 행동 알림에 쓴다) */
@@ -110,7 +112,7 @@ function MapHeader({ view, offset, hintOn, extra }: { view: RoomView; offset: nu
 // 8페이즈 게임 맵 화면 틀(08-13, UI-SPEC "게임 화면 틀"): 지하 재즈 바 맵(WorldStage) 위에 위쪽 가림막, 헤더(단계 이름 + 접히는 안내 + 시간 링 + [역할 카드]), [테스트], 결과 알림, 아래 패널을 얹는다.
 // 낮 시작·낮 토론·지목·최후 변론·찬반·처형이 이 화면 하나를 같은 장면 키로 그려 단계가 바뀌어도 맵이 다시 만들어지지 않는다.
 // 화면은 서버가 보낸 view 만으로 다시 그린다. 닉네임(이름표)·알림 글자는 React 텍스트 노드로만 그린다.
-export function GameMap({ view, store, chat, send, canSend = true, offset = 0, roleCard, testButton, announce = null, toast: toastShow = null, deny, onEvent, onLeave }: GameMapProps) {
+export function GameMap({ view, store, chat, send, canSend = true, offset = 0, roleCard, testButton, announce = null, toast: toastShow = null, deny, fading, onEvent, onLeave }: GameMapProps) {
   const toast = useTopToast();
   const { show } = toast;
   // 측정(스테이지 사각형)·키보드·기록 칸 높이는 대기실과 같은 훅이다. 키보드가 열려 있으면 행동 줄을 숨기고 기록 칸을 72 로 줄인다(07-19).
@@ -250,7 +252,7 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
     };
   }, [nominating, verdicting, defending, view, blink, pickSeats]);
 
-  const scene = useMemo(() => sceneLook(view, { stageH, ...(mine !== undefined ? { mine } : {}) }), [view, stageH, mine]);
+  const scene = useMemo(() => sceneLook(view, { stageH, ...(fading ? { fading } : {}), ...(mine !== undefined ? { mine } : {}) }), [view, stageH, fading, mine]);
 
   return (
     <main ref={rootRef} className="mf-root mf-game" data-game-stage="" data-phase={view.phase} data-kb-open={kbOpen ? "true" : undefined}>

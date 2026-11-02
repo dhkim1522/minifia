@@ -184,7 +184,7 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
   const [chat] = useState(() => new ChatStore());
   const { onEvent } = connection;
   // 낮 연출(채팅 시스템 줄·결과 알림): 서버 view 두 개의 공개 정보 차이로만 만든다. 낮 시작은 역할 확인·밤에서 들어오므로 맵 화면이 아니라 방 화면이 직전 view 를 쥐어야 한다.
-  const { announce, toast, deny } = useDayFx({ view, epoch: connection.epoch, chat });
+  const { announce, toast, deny, fading } = useDayFx({ view, epoch: connection.epoch, chat });
   useEffect(
     () =>
       onEvent((e, meta) => {
@@ -444,6 +444,7 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
             announce={announce}
             toast={toast}
             deny={deny}
+            fading={fading}
             onEvent={connection.onEvent}
             onLeave={() => onExit("gaveUp")}
           />

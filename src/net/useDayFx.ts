@@ -3,12 +3,16 @@
 // - 결과 알림: 한 번에 하나, 새 알림이 이전 것을 바꾼다. 지연(at) 뒤에 뜨고 ms 뒤에 사라진다. 상태 `announce` 로 돌려준다.
 // - 지목 위 알림(08-15): dayEvents 의 toasts 를 ToastQueue(400ms 합치기·대기 4건 상한·대기 2건 이상이면 0.8초)에 세우고, 알림이 끝날 때마다 다음을 꺼낸다. 상태 `toast` 로 돌려준다.
 // - 손사래(08-15): 지목 선두가 새 사람으로 바뀌면(leaderShift) `deny` {seat, nonce} 를 갱신한다. WorldStage 가 nonce 가 바뀔 때만 한 번 손사래를 한다.
+// - 처형 떠오름(08-16): dayEvents 의 fx ghostRise 를 `fading`(좌석 → 연출 시작 시각)으로 돌려준다. 처형 단계 view 는 처형된 사람이 이미 탈락으로 오므로 화면이 그 순간부터
+//   연출이 끝날 때(알림 시작 + GHOST_FADE_END_MS)까지 그 좌석을 표에 붙잡아 둔다. 시작 시각은 단계 진입 + at(알림이 처형으로 바뀌는 때)이라 그 전에는 불투명 그대로 서 있다.
+//   표가 렌더 한가운데에서 바뀌어야 진입 순간 한 프레임도 사라졌다 돌아오지 않으므로 이 상태는 렌더 중에 view 차이로 정하고(React 의 "이전 값 기억" 방식), 타이머는 정리만 맡는다.
+//   서버가 보낸 유령 위치가 아니라 처형 이벤트 하나로 화면이 그리는 일회성 연출이다.
 // 재접속·새로 고침으로 들어온 첫 스냅샷(직전 view 없음)과 연결 번호(epoch)가 바뀐 첫 스냅샷은 이펙트 없이 정상 상태로 둔다(6페이즈 첫 스냅샷 규칙).
 // 방 화면(RoomScreen)이 이 훅을 쥔다: 낮 시작은 맵이 아닌 화면(역할 확인·밤)에서 들어오므로 맵 화면이 새로 마운트되는 순간 직전 view 를 맵 화면이 알 수 없다.
 // 시계는 Date.now()/setTimeout 뿐이고 서버 단계 시간을 넘기지 않는다(표시 시간표는 dayView.ts).
 import { useEffect, useRef, useState } from "react";
 import type { RoomView } from "../../shared/protocol";
-import { dayEvents, TOAST_MERGE_MS, ToastQueue } from "../game/dayView";
+import { dayEvents, GHOST_FADE_END_MS, TOAST_MERGE_MS, ToastQueue } from "../game/dayView";
 import type { ToastShow } from "../game/dayView";
 import { leaderShift } from "../world/presence";
 import type { ChatStore } from "./chatStore";
@@ -25,12 +29,30 @@ export interface DayFx {
   toast: PointToastShow | null;
   /** 지목 선두가 새 사람으로 바뀌었을 때 손사래를 할 좌석. nonce 가 바뀔 때마다 한 번 */
   deny: { seat: number; nonce: number } | undefined;
+  /** 처형 떠오름 연출 중인 좌석 → 연출 시작 시각(ms, Date.now 기준). 연출이 끝나면 비워진다. sceneLook 의 fading 으로 그대로 넘긴다 */
+  fading: ReadonlyMap<number, number>;
 }
+
+const NO_FADING: ReadonlyMap<number, number> = new Map();
 
 export function useDayFx({ view, epoch, chat }: { view: RoomView | null; epoch: number; chat: ChatStore }): DayFx {
   const [announce, setAnnounce] = useState<string | null>(null);
   const [toast, setToast] = useState<PointToastShow | null>(null);
   const [deny, setDeny] = useState<{ seat: number; nonce: number } | undefined>(undefined);
+  const [fading, setFading] = useState<ReadonlyMap<number, number>>(NO_FADING);
+  const [seen, setSeen] = useState<{ view: RoomView | null; epoch: number }>({ view, epoch });
+  if (seen.view !== view || seen.epoch !== epoch) {
+    // 렌더 중 상태 갱신: 새 view 가 처형 단계로 들어오면 처형된 좌석을 같은 렌더에서 표에 붙잡는다(첫 스냅샷·epoch 직후는 이벤트가 없다)
+    const reset = seen.epoch !== epoch;
+    setSeen({ view, epoch });
+    const rises = view === null ? [] : dayEvents(reset ? null : seen.view, view, reset ? { reset: true } : {}).fx;
+    if (reset || rises.length > 0) {
+      const next = new Map(reset ? NO_FADING : fading);
+      const now = Date.now();
+      for (const f of rises) if (f.kind === "ghostRise") next.set(f.seat, now + f.at);
+      setFading(next);
+    }
+  }
   const queue = useRef(new ToastQueue());
   const counter = useRef(0);
   const prevView = useRef<RoomView | null>(null);
@@ -97,6 +119,18 @@ export function useDayFx({ view, epoch, chat }: { view: RoomView | null; epoch: 
     const shifted = reset ? null : leaderShift(prev, view);
     if (shifted !== null) setDeny((d) => ({ seat: shifted, nonce: (d?.nonce ?? 0) + 1 }));
 
+    // 처형 떠오름이 끝나면(알림 시작 + 2.4초) 좌석을 놓아준다 — 산 사람 화면에서 그 사람은 영영 없다
+    for (const f of ev.fx) {
+      if (f.kind !== "ghostRise") continue;
+      later(f.at + GHOST_FADE_END_MS, () =>
+        setFading((m) => {
+          if (!m.has(f.seat)) return m;
+          const next = new Map(m);
+          next.delete(f.seat);
+          return next;
+        }),
+      );
+    }
     for (const line of ev.lines) {
       later(line.at ?? 0, () => chat.addSystem(line.text, { scope: "all", kind: line.kind, at: Date.now() }));
     }
@@ -113,5 +147,5 @@ export function useDayFx({ view, epoch, chat }: { view: RoomView | null; epoch: 
     // eslint 규칙 없음 — later/clearAll 은 ref 와 setState 만 쓰므로 의존성에 넣지 않는다
   }, [view, epoch, chat]);
 
-  return { announce, toast, deny };
+  return { announce, toast, deny, fading };
 }
