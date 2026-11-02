@@ -1,3 +1,4 @@
+// 공유 재질(bodyMaterial 등)은 건드리지 않는다 — 반투명이 필요한 캐릭터만 복제 재질을 쓴다(RESEARCH Anti-Pattern, 08-10).
 // 3D 조립 인물 — 원본 design/v2.0/blockout/character.js(r128 전역 THREE, 결정 0047·0048)를 three ES 모듈로 옮겼다.
 // 지오메트리·위치·크기·색·자세는 원문과 같고, 그리기 묶음만 바꿨다: 부품(구·원통)을 관절 단위로
 // 버텍스 컬러 병합해 한 명이 보이는 메시 6개(몸통·머리·팔 2·다리 2) + 발밑 원판 1개다(RESEARCH 개정 B).
@@ -702,9 +703,12 @@ export interface WorldCharacter {
   playEmote(id: EmoteId): void;
   /** 표정 바꾸기(원문 setFace) — 머리만 다시 병합(캐시). 모르는 이름은 기본 표정 */
   setFace(id: FaceId): void;
-  /** 유령(반투명) 켜기/끄기 — 08-10 RED 뼈대 */
+  /**
+   * 유령(처형당한 사람): 이 캐릭터 관절 메시만 복제 재질(transparent·depthWrite false·opacity 기본 0.6)로 바꾸고 발밑 원판을 숨긴다.
+   * 끄면 공유 재질로 돌아오고 복제 재질은 해제한다. 켠 채 다시 켜면 불투명도만 바꾼다(GHOST-01)
+   */
   setGhost(on: boolean, opacity?: number): void;
-  /** 유령일 때 불투명도 */
+  /** 유령일 때만 복제 재질의 불투명도를 바꾼다(유령이 아니면 무시) */
   setOpacity(alpha: number): void;
   /** 지금 보이는 메시 수(관절 6 + 발밑 원판 + 투명 조각) */
   meshCount(): number;
@@ -718,6 +722,9 @@ const bodyMaterial = new MeshStandardMaterial({ vertexColors: true, roughness: 0
 const glassMaterial = new MeshStandardMaterial({ color: "#9ec2ff", transparent: true, opacity: 0.6 });
 const shadowMaterial = new MeshBasicMaterial({ color: "#000000", transparent: true, opacity: 0.3, depthWrite: false });
 const shadowGeometry = new CircleGeometry(0.42, 24);
+/** 유령 기본 불투명도(UI-SPEC 유령 모양, presence.ts GHOST_OPACITY 와 같은 값) */
+const GHOST_DEFAULT_OPACITY = 0.6;
+const clamp01 = (v: number): number => Math.min(1, Math.max(0, v));
 
 /** 병합 색을 원래대로 또는 어둡게(채도 0 + 휘도 × 0.6) 쓴다 */
 function paint(m: Merged, dim: boolean): void {
@@ -744,6 +751,8 @@ export function createCharacter(figIndex: number, outfit: OutfitId = "coat"): Wo
   let lastPoseFace = "base";
   let dim = false;
   let disposed = false;
+  /** 유령일 때만 있는 이 캐릭터 전용 복제 재질 */
+  let ghostMat: MeshStandardMaterial | null = null;
 
   const root = new Group();
   root.scale.setScalar(CHAR_SCALE);
@@ -894,8 +903,29 @@ export function createCharacter(figIndex: number, outfit: OutfitId = "coat"): Wo
     setFace(id) {
       if (!disposed) showFace(id);
     },
-    setGhost() {},
-    setOpacity() {},
+    setGhost(on, opacity = GHOST_DEFAULT_OPACITY) {
+      if (disposed) return;
+      if (!on) {
+        if (!ghostMat) return;
+        for (const j of JOINTS) meshes[j].material = bodyMaterial;
+        ghostMat.dispose();
+        ghostMat = null;
+        disc.visible = true;
+        return;
+      }
+      if (!ghostMat) {
+        ghostMat = bodyMaterial.clone();
+        ghostMat.transparent = true;
+        ghostMat.depthWrite = false;
+        for (const j of JOINTS) meshes[j].material = ghostMat;
+        disc.visible = false;
+      }
+      ghostMat.opacity = clamp01(opacity);
+    },
+    setOpacity(alpha) {
+      if (disposed || !ghostMat) return;
+      ghostMat.opacity = clamp01(alpha);
+    },
     meshCount() {
       let n = 0;
       root.traverse((x) => {
@@ -906,6 +936,10 @@ export function createCharacter(figIndex: number, outfit: OutfitId = "coat"): Wo
     dispose() {
       if (disposed) return;
       disposed = true;
+      if (ghostMat) {
+        ghostMat.dispose();
+        ghostMat = null;
+      }
       for (const g of owned) g.dispose();
       owned.clear();
       cache.clear();
