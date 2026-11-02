@@ -361,6 +361,7 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
         logHeight={kbOpen ? LOG_H_KB : logH}
         kbOpen={kbOpen}
         rejected={rejects}
+        {...(nighting ? { nightPick: mine } : {})}
         inputRef={inputRef}
         panelRef={panelRef}
       />

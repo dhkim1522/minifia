@@ -43,6 +43,8 @@ export const DAY_COPY = {
   defenseHintSelf: "해명할 시간이에요",
   verdictHint: (name: string): string => `${name} 님을 처형할까요?`,
   verdictHintSelf: "결과를 기다려요",
+  /** 밤(임시 틀, 08-18)의 산 마피아 헤더 안내. 경찰·의사·시민의 밤 문구는 하단 NightPanel 표(NIGHT_PANEL_TEXT)가 맡는다 */
+  mafiaNightHint: "없앨 사람을 눌러요",
   ghostHint: "모두의 직업이 보여요",
   ghostNightHint: "모두의 직업과 밤 행동이 보여요",
 } as const;
@@ -281,7 +283,7 @@ export function dayEvents(prev: RoomView | null, cur: RoomView, opts: { reset?: 
 /**
  * 단계 머리(제목 24px + 안내 한 줄): UI-SPEC 단계표 그대로. 안내는 단계 시작 뒤 약 2.5초만 보이고 접히는 것은 화면 몫이다.
  * 유령(내 alive 가 false)은 같은 제목에 '모두의 직업이 보여요'(밤은 '모두의 직업과 밤 행동이 보여요').
- * 밤·아침은 임시 틀이라 제목만 준다 — 밤·아침 하단 문구는 08-18 이 v1.0 표에서 가져온다. 낮 틀이 아닌 단계는 빈 제목.
+ * 밤·아침은 임시 틀이라 제목만 주고(산 마피아의 밤만 '없앨 사람을 눌러요'), 밤·아침 하단 문구는 v1.0 표(NIGHT_PANEL_TEXT)를 GamePanel 이 쓴다. 낮 틀이 아닌 단계는 빈 제목.
  */
 export function headerFor(view: RoomView): { title: string; hint?: string } {
   const title = DAY_COPY.titles[view.phase];
@@ -304,6 +306,8 @@ export function headerFor(view: RoomView): { title: string; hint?: string } {
     case "verdict":
       if (isSelf) return { title, hint: DAY_COPY.verdictHintSelf };
       return defender === undefined ? { title } : { title, hint: DAY_COPY.verdictHint(defender) };
+    case "night":
+      return view.me.role === "mafia" ? { title, hint: DAY_COPY.mafiaNightHint } : { title };
     default:
       return { title };
   }

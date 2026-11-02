@@ -141,6 +141,12 @@ export function useDayFx({ view, epoch, chat }: { view: RoomView | null; epoch: 
       if (!repeated) chat.addSystem(CHAT_TEXT.channelStart.ghost, { scope: "ghost", icon: "ghost", at: Date.now() });
     }
 
+    // 마피아 채널 시작 줄(밤, 08-18 이 DayScene 규칙을 옮김): 같은 접속에서 낮 → 밤으로 넘어올 때, 또는 밤 안에서 내 채널이 mafia 로 바뀔 때 한 번.
+    // 서버가 내 채널을 mafia 로 보낸 view 에서만 문구를 꺼낸다 — 시민 편 화면에는 이 문구가 들어오지 않는다(T-07-40·T-08-47). 재접속 첫 스냅샷은 줄이 없다.
+    if (!reset && prev !== null && view.phase === "night" && view.me.chat === "mafia" && (prev.phase !== "night" || prev.me.chat !== "mafia")) {
+      chat.addSystem(CHAT_TEXT.channelStart.mafia, { scope: "mafia", icon: "roleMafia", at: Date.now() });
+    }
+
     // 처형 떠오름이 끝나면(알림 시작 + 2.4초) 좌석을 놓아준다 — 산 사람 화면에서 그 사람은 영영 없다
     for (const f of ev.fx) {
       if (f.kind !== "ghostRise") continue;
