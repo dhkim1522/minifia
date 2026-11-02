@@ -41,7 +41,7 @@
    - 옛 SVG 8개는 `public/backgrounds` 에서 지웠고 `make-og.mjs` 는 새 입구 WebP 를 읽는다. **`design/backgrounds/A_cute` 폴더는 남긴다.** 결정 0029-5 는 정리를 말하지만 CLAUDE.md 의 문서 지도가 그 폴더를 가리키고 이번 작업은 CLAUDE.md 를 고칠 수 없다. 원본과 앱 SVG 는 동일함을 `cmp` 로 확인한 뒤 앱 쪽 사본만 지웠다.
 5. **장면 전환.**
    - 낮 시작 전용 `Day` 화면을 지웠다. 서버 단계 `dayAnnounce`(2초)는 그대로이고 `claim`·`discussion`·`night`·`morning` 과 같은 테이블 장면(`DayScene`) 위에서 그려진다. 테이블·헤더·패널 위치는 claim 과 같다(E2E T1 이 dayAnnounce 포함).
-   - 밤·낮 시작 문구는 한 부품 `SceneIntro` 다: `N일차` / `밤이 되었습니다`·`낮이 되었습니다`(낮은 보조줄 `토론 전에 먼저 직업을 공개해요` 유지), `PHASE_INTRO` 표, 2초(`SCENE_INTRO_MS = DAY_ANNOUNCE_MS`), 터치 통과·`aria-hidden`. 재접속과 처음 마운트에서는 뜨지 않는다. 역할 확인에서 낮 시작으로 `DayScene` 이 새로 마운트되는 경우도 한 번 뜨도록 `usePhaseArrival(phase, epoch)` 가 같은 접속에서의 직전 단계를 알려 준다. E2E N6~N9.
+   - 밤·낮 시작 문구는 한 부품 `SceneIntro` 다: `N일차` / `밤이 되었습니다`·`낮이 되었습니다`(낮은 보조줄 `토론 전에 먼저 직업을 공개해요` 유지), `PHASE_INTRO` 표, 2초(`SCENE_INTRO_MS = DAY_ANNOUNCE_MS`), 터치 통과·`aria-hidden`. 재접속과 처음 마운트에서는 뜨지 않는다. 역할 확인에서 낮 시작으로 `DayScene` 이 새로 마운트되는 경우도 한 번 뜨도록 `usePhaseArrival(phase, epoch)` 가 같은 접속에서의 직전 단계를 알려 준다. E2E N6~N9. → 2026-11-02 개정(07-UAT 8 사용자 결정, 07-23): 순차 주장 단계가 7페이즈에서 없어져 낮 보조줄을 지웠다. 낮 시작은 N일차 / 낮이 되었습니다 두 줄.
    - 배경은 같은 장면 위에서 0.8초(`SCENE_FADE_MS`, `--dur-slow`) 크로스페이드한다. 새 그림이 준비된 뒤에 시작하고(상한 1.2초), 처음 마운트·재접속은 즉시 한 층, 층은 최대 3개다. 헤더 막은 층과 함께 전환한다.
    - **해·달은 선택 B: 배경만 크로스페이드하고 해·달은 이미지에 맡긴다. 해·달을 따로 그리거나 움직이지 않는다.**
 

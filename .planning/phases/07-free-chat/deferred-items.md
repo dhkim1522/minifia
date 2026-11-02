@@ -104,7 +104,7 @@
 
 ### 낮 시작 문구에 옛 직업 공개 문장이 남아 있음
 
-- status: open
+- status: resolved (07-23)
 - `src/game/scenes.ts` 의 `PHASE_INTRO.dayAnnounce.sub`("토론 전에 먼저 직업을 공개해요")와 `PHASE_GUIDE_FILL.dayAnnounce.guide`("곧 직업 공개가 시작돼요")는 순차 주장(직업 공개) 단계가 7페이즈에서 없어졌는데 그대로다. E2E(`INTRO_SPEC.day`·`N8`)는 앱 문구를 그대로 따라 맞춰 두었다. 문구를 바꾸면 `scenes.test.ts`·`lib.mjs` `INTRO_SPEC`·`NIGHT_PANEL_TEXT` 계열 시험이 같이 바뀐다. 문구는 사용자 확인 사항이라 이 계획에서 고치지 않았다. 담당: 07-21 판정 때 사용자에게 문구 안을 묻는다(결정 0051 글 최소화 기준).
 
 ### E2E reconnect/offline RC1 이 병렬 부하에서 한 번 실패
@@ -120,7 +120,7 @@
 ## 07-21 에서 정리 / 남김
 
 - **perfScene 스테이지 사각형 기본값(07-18 항목)**: 07-21 의 chatload 는 제품 로비(`/?e2e=1`)를 재서 perfScene 을 쓰지 않았다. 6페이즈 `?perf=1` 스파이크 장면을 같은 조건으로 다시 재야 할 일이 생길 때까지 열어 둔다. status: open (필요해질 때만).
-- **낮 시작 문구의 옛 직업 공개 문장(07-20 항목)**: 사용자가 자는 중이라 문구 안을 묻지 못했다. 코드는 바꾸지 않았다. 안(결정 0051 글 최소): `PHASE_INTRO.dayAnnounce.sub` "토론 전에 먼저 직업을 공개해요" → "함께 이야기해 봐요" 또는 문장 삭제, `PHASE_GUIDE_FILL.dayAnnounce.guide` "곧 직업 공개가 시작돼요" → "곧 토론이 시작돼요". 바꾸면 `scenes.test.ts` · `scripts/e2e/lib.mjs` `INTRO_SPEC`·`NIGHT_PANEL_TEXT` 가 같이 바뀐다. status: decided 2026-11-02 — 아래줄 삭제 + "곧 토론이 시작돼요" (07-UAT 8번). 반영은 갭 수정 계획.
+- **낮 시작 문구의 옛 직업 공개 문장(07-20 항목)**: 사용자가 자는 중이라 문구 안을 묻지 못했다. 코드는 바꾸지 않았다. 안(결정 0051 글 최소): `PHASE_INTRO.dayAnnounce.sub` "토론 전에 먼저 직업을 공개해요" → "함께 이야기해 봐요" 또는 문장 삭제, `PHASE_GUIDE_FILL.dayAnnounce.guide` "곧 직업 공개가 시작돼요" → "곧 토론이 시작돼요". 바꾸면 `scenes.test.ts` · `scripts/e2e/lib.mjs` `INTRO_SPEC`·`NIGHT_PANEL_TEXT` 가 같이 바뀐다. status: decided 2026-11-02 — 아래줄 삭제 + "곧 토론이 시작돼요" (07-UAT 8번). 반영은 갭 수정 계획. → 07-23 에서 반영, 닫힘.
 - **테이블 화면 키보드 열림 · `#root min-height: 100dvh`(07-19 항목)**: 실기기 확인(Task 3, 합격 검사 7)이 사용자 확인 대기라 결론이 없다. status: open 그대로. 실기기에서 보일 때만 UI-SPEC "검사 실패 때 내리는 순서" 단계대로 손댄다.
 - **채팅 부하 fps 첫 측정(07-16 항목)**: 닫힘 — 배포본 5분 측정이 평균 60.00fps·끊김 0(`07-DEVICE-CHECKS.md` 표 B). 로컬 개발 서버 1분의 53.5fps 는 개발 서버·타 프로세스 부하 탓으로 보인다.
 - 07-20 의 reconnect RC1 병렬 부하 실패 · gallery citizen: 07-21 범위 밖, 그대로 open.

@@ -12,7 +12,7 @@ recorded: 2026-11-02
 |---|---|---|---|
 | WR-01 | Warning | open | 로비 좌석 재사용 시 입장 전 줄 복원(결정 0058-2 범위 초과)·옛 줄 이름 바뀜. 추천: 좌석 비울 때 마스크 비트 제거 + 수신 시점 이름 고정 + 나가기·재입장 복원 시험 |
 | WR-02 | Warning | open | 로비 입장·퇴장 시스템 줄만 `Date.now()` — `Date.now()+offset` 으로 맞춘다 |
-| WR-03 | Warning | open | 낮 시작 옛 "직업 공개" 문구. 사용자 문구 결정 필요(deferred-items.md 의 안 두 개) |
+| WR-03 | Warning | resolved (07-23) | 07-UAT 8 사용자 결정(2026-11-02): 낮 보조줄 삭제, 하단 안내 곧 토론이 시작돼요 |
 | IN-01 | Info | open | 기록만 |
 | IN-02 | Info | open | 기록만 |
 | IN-03 | Info | open | 기록만 |
