@@ -13,8 +13,9 @@ import { NETWORK_TEXT } from "../../src/net/copy";
 import type { WorldStageProps } from "../../src/components/WorldStage";
 import { UnsupportedRendererError } from "../../src/world/renderer";
 import type { CharacterHandle, RendererStatusEvent, WorldRenderer } from "../../src/world/renderer";
-import { PAN_BOX, stageOffsetY } from "../../src/world/camera";
+import { gatherView, PAN_BOX, stageOffsetY, ZOOM_MAJORITY } from "../../src/world/camera";
 import { predictSegment, SEG_BLEND_MS, YAW_TURN_RATE } from "../../src/world/motion";
+import { GHOST_FADE_END_MS } from "../../src/game/dayView";
 import { ENTER_MS, EXIT_MS, MOVE_ACK_TIMEOUT_MS, WALK_CUE_KEY } from "../../src/world/runtime";
 import type { WorldModules } from "../../src/world/runtime";
 import { installWorldTestHooks, WORLD_TEST_KEY, worldTestHooksEnabled } from "../../src/world/testHooks";
@@ -31,6 +32,8 @@ export interface FakeRenderer extends WorldRenderer {
   chars: Map<number, CharacterHandle>;
   views: { target: { x: number; z: number }; offsetY: number }[];
   markers: { kind: string; at: { x: number; z: number } | null; scale: number; opacity: number }[];
+  setZoom: ReturnType<typeof vi.fn>;
+  setTension: ReturnType<typeof vi.fn>;
   emit(e: RendererStatusEvent): void;
   lost: boolean;
   renders: number;
@@ -56,6 +59,8 @@ export function makeFakeRenderer(): FakeRenderer {
       r.views.push({ target: { ...target }, offsetY });
     },
     setLighting: vi.fn(),
+    setZoom: vi.fn(),
+    setTension: vi.fn(),
     addCharacter(seat: number, c: CharacterHandle) {
       r.chars.set(seat, c);
     },
@@ -1755,5 +1760,214 @@ describe("게임 장면: 보임·유령 (GHOST-01)", () => {
     s.rerender({ scene: sceneOf({ 0: {}, 1: {}, 2: {}, 3: {} }) });
     frame();
     expect(h3.setGhost).toHaveBeenLastCalledWith(false);
+  });
+});
+
+describe("게임 장면(08-12): 카메라·조명·긴장·떠다님·처형 연출·지목 자세", () => {
+  const INSETS = { top: 62, bottom: 250 };
+  const FIXED = (zoom = 1): SceneLook["camera"] => ({ mode: "fixed", target: { x: 0, z: 0 }, zoom });
+  const ALL = { 0: {}, 1: {}, 2: {}, 3: {} };
+  const openGame = (over: Partial<WorldStageProps> = {}) => open({ stageInsets: INSETS, scene: sceneOf(ALL), ...over }, { players: FOUR, ents: FOUR_ENTS() });
+  /** 이 시험 환경의 고정 구도 목표 */
+  const gatherGoal = (zoom = 1) => gatherView({ top: INSETS.top, bottom: window.innerHeight - INSETS.bottom }, { w: window.innerWidth, h: window.innerHeight }, { zoom });
+  const yOf = (s: Setup, seat: number): number => s.world.renderers[0]!.chars.get(seat)!.root.position.y;
+
+  describe("카메라", () => {
+    it("fixed 는 800ms 에 걸쳐 모이는 자리 구도로 옮기고 그 뒤 내 캐릭터가 걸어도 움직이지 않는다", async () => {
+      const s = await openGame();
+      const r = s.world.renderers[0]!;
+      const start = r.views.at(-1)!;
+      expect(start.target.x).toBeCloseTo(2, 6); // 따라가기: 내 캐릭터
+      s.rerender({ scene: sceneOf(ALL, { camera: FIXED() }) });
+      frames(400);
+      const mid = r.views.at(-1)!;
+      const goal = gatherGoal();
+      expect(mid.target.x).toBeLessThan(start.target.x - 0.05); // 가는 중
+      expect(mid.target.x).toBeGreaterThan(goal.target.x + 0.01);
+      frames(500);
+      const done = r.views.at(-1)!;
+      expect(done.target.x).toBeCloseTo(goal.target.x, 2);
+      expect(done.target.z).toBeCloseTo(goal.target.z, 2);
+      expect(done.offsetY).toBeCloseTo(goal.offsetY, 1);
+      move(s.store, seg(0, [200, 100, 600, 100], Date.now(), 180));
+      frames(600);
+      expect(r.views.at(-1)!.target.x).toBeCloseTo(goal.target.x, 6);
+      expect(r.views.at(-1)!.target.z).toBeCloseTo(goal.target.z, 6);
+    });
+
+    it("zoom 은 같은 800ms 에 1 → 1.08 로 setZoom 한다", async () => {
+      const s = await openGame();
+      const r = s.world.renderers[0]!;
+      s.rerender({ scene: sceneOf(ALL, { camera: FIXED(ZOOM_MAJORITY) }) });
+      frames(400);
+      const mid = r.setZoom.mock.calls.at(-1)![0] as number;
+      expect(mid).toBeGreaterThan(1.001);
+      expect(mid).toBeLessThan(ZOOM_MAJORITY - 0.001);
+      frames(500);
+      expect(r.setZoom.mock.calls.at(-1)![0]).toBeCloseTo(ZOOM_MAJORITY, 6);
+      const calls = r.setZoom.mock.calls.length;
+      frames(300);
+      expect(r.setZoom.mock.calls.length).toBe(calls); // 값이 같으면 다시 부르지 않는다
+      const goal = gatherGoal(ZOOM_MAJORITY);
+      expect(r.views.at(-1)!.offsetY).toBeCloseTo(goal.offsetY, 1);
+    });
+
+    it("모션 줄이기면 구도와 확대가 첫 프레임에 바로 바뀐다", async () => {
+      stubReducedMotion(true);
+      const s = await openGame();
+      const r = s.world.renderers[0]!;
+      s.rerender({ scene: sceneOf(ALL, { camera: FIXED(ZOOM_MAJORITY) }) });
+      frame(16);
+      const goal = gatherGoal(ZOOM_MAJORITY);
+      expect(r.views.at(-1)!.target.x).toBeCloseTo(goal.target.x, 6);
+      expect(r.views.at(-1)!.offsetY).toBeCloseTo(goal.offsetY, 6);
+      expect(r.setZoom.mock.calls.at(-1)![0]).toBeCloseTo(ZOOM_MAJORITY, 6);
+    });
+
+    it("follow 로 돌아오면 내 캐릭터를 다시 따라가고 확대가 1 로 돌아온다", async () => {
+      const s = await openGame();
+      const r = s.world.renderers[0]!;
+      s.rerender({ scene: sceneOf(ALL, { camera: FIXED(ZOOM_MAJORITY) }) });
+      frames(1000);
+      s.rerender({ scene: sceneOf(ALL) });
+      frames(1500);
+      expect(r.views.at(-1)!.target.x).toBeCloseTo(2, 2);
+      expect(r.views.at(-1)!.target.z).toBeCloseTo(1, 2);
+      expect(r.setZoom.mock.calls.at(-1)![0]).toBeCloseTo(1, 6);
+      expect(r.views.at(-1)!.offsetY).toBeCloseTo(stageOffsetY(window.innerHeight, INSETS.top, window.innerHeight - INSETS.bottom), 1);
+    });
+  });
+
+  describe("조명·긴장", () => {
+    it("lighting 이 바뀌면 setLighting 을 한 번 부르고 같은 값이면 다시 부르지 않는다", async () => {
+      const s = await openGame();
+      const r = s.world.renderers[0]!;
+      expect(r.setLighting.mock.calls).toEqual([["talk"]]);
+      s.rerender({ scene: sceneOf(ALL, { lighting: "trial" }) });
+      frames(100);
+      s.rerender({ scene: sceneOf(ALL, { lighting: "trial" }) });
+      frames(100);
+      expect(r.setLighting.mock.calls).toEqual([["talk"], ["trial"]]);
+    });
+
+    it("tension 1 + focusSeat 2 면 그 좌석 위치로 setTension, 0 으로 돌아오면 setTension(0)", async () => {
+      const s = await openGame();
+      const r = s.world.renderers[0]!;
+      expect(r.setTension).not.toHaveBeenCalled();
+      s.rerender({ scene: sceneOf(ALL, { tension: 1, focusSeat: 2 }) });
+      frames(100);
+      const [level, at] = r.setTension.mock.calls.at(-1)! as [number, { x: number; z: number }];
+      expect(level).toBe(1);
+      expect(at.x).toBeCloseTo(-1, 6);
+      expect(at.z).toBeCloseTo(4, 6);
+      const n = r.setTension.mock.calls.length;
+      frames(200);
+      expect(r.setTension.mock.calls.length).toBe(n);
+      s.rerender({ scene: sceneOf(ALL) });
+      frames(50);
+      expect(r.setTension.mock.calls.at(-1)![0]).toBe(0);
+    });
+  });
+
+  describe("떠다님·무대 높이·처형 연출", () => {
+    it("ghost 좌석은 높이 0.35 ± 0.08 안에서 시간에 따라 떠다닌다", async () => {
+      const s = await openGame({ scene: sceneOf({ ...ALL, 3: { ghost: true } }) });
+      const ys: number[] = [];
+      for (let t = 0; t < 3200; t += 16) {
+        frame(16);
+        ys.push(yOf(s, 3));
+      }
+      expect(Math.min(...ys)).toBeGreaterThanOrEqual(0.35 - 0.08 - 1e-6);
+      expect(Math.max(...ys)).toBeLessThanOrEqual(0.35 + 0.08 + 1e-6);
+      expect(Math.max(...ys) - Math.min(...ys)).toBeGreaterThan(0.1);
+      expect(yOf(s, 2)).toBe(0); // 산 사람은 뜨지 않는다
+    });
+
+    it("모션 줄이기면 유령 높이는 0.35 로 고정이다", async () => {
+      stubReducedMotion(true);
+      const s = await openGame({ scene: sceneOf({ ...ALL, 3: { ghost: true } }) });
+      for (let t = 0; t < 1000; t += 16) {
+        frame(16);
+        expect(yOf(s, 3)).toBeCloseTo(0.35, 6);
+      }
+    });
+
+    it("무대(0,0) 위에 선 좌석은 높이 0.29 다", async () => {
+      const ents = [seg(0, [200, 100]), seg(1, [-300, 50]), seg(2, [-100, 400]), seg(3, [0, 0])];
+      const s = await open({ scene: sceneOf(ALL) }, { players: FOUR, ents });
+      expect(yOf(s, 3)).toBeCloseTo(0.29, 6);
+      expect(yOf(s, 2)).toBe(0);
+    });
+
+    it("fadeAt 좌석은 떠오르며 흐려지고 2400ms 뒤 캐릭터가 지워진다. 이름표도 같이 흐려진다", async () => {
+      const s = await openGame();
+      const r = s.world.renderers[0]!;
+      const h3 = r.chars.get(3) as FakeHandle;
+      s.rerender({ scene: sceneOf({ ...ALL, 3: { fadeAt: Date.now() } }) });
+      frames(700);
+      const op = (h3.setOpacity as ReturnType<typeof vi.fn>).mock.calls.at(-1)![0] as number;
+      expect(op).toBeGreaterThan(0.77);
+      expect(op).toBeLessThan(0.83);
+      expect(yOf(s, 3)).toBeGreaterThan(0.5);
+      expect(yOf(s, 3)).toBeLessThan(0.7);
+      expect(Number(tagOf(s.utils, 3)!.style.opacity)).toBeLessThan(0.85);
+      frames(GHOST_FADE_END_MS - 700 - 16);
+      expect(r.chars.has(3)).toBe(true);
+      frames(100);
+      expect(r.chars.has(3)).toBe(false);
+      expect(h3.disposed).toBe(1);
+      frames(300);
+      expect(r.chars.has(3)).toBe(false); // 표에 아직 남아 있어도 다시 만들지 않는다
+    });
+
+    it("유령 시점의 ghost 좌석은 fadeAt 이 있어도 지워지지 않고 유령으로 남는다", async () => {
+      const s = await openGame();
+      const r = s.world.renderers[0]!;
+      s.rerender({ scene: sceneOf({ ...ALL, 3: { ghost: true, fadeAt: Date.now() } }) });
+      frames(GHOST_FADE_END_MS + 200);
+      expect(r.chars.has(3)).toBe(true);
+    });
+  });
+
+  describe("지목 자세·손사래", () => {
+    it("pointAt 이 있는 좌석은 holdPose('point') 한 번과 대상 쪽 방향을 얻고, 없어지면 holdPose(null)", async () => {
+      const s = await openGame();
+      const r = s.world.renderers[0]!;
+      const h1 = r.chars.get(1) as FakeHandle;
+      s.rerender({ scene: sceneOf({ ...ALL, 1: { pointAt: 2 } }) });
+      frames(300);
+      expect(h1.holdPose).toHaveBeenCalledTimes(1);
+      expect(h1.holdPose).toHaveBeenCalledWith("point");
+      // 좌석 1 (-3, 0.5) → 좌석 2 (-1, 4)
+      expect(h1.yaws.at(-1)!).toBeCloseTo(Math.atan2(2, 3.5), 4);
+      s.rerender({ scene: sceneOf(ALL) });
+      frames(50);
+      expect(h1.holdPose).toHaveBeenCalledTimes(2);
+      expect(h1.holdPose).toHaveBeenLastCalledWith(null);
+    });
+
+    it("방향은 180ms 안에 돈다(한 프레임에 튀지 않는다)", async () => {
+      const s = await openGame();
+      const h1 = s.world.renderers[0]!.chars.get(1) as FakeHandle;
+      s.rerender({ scene: sceneOf({ ...ALL, 1: { pointAt: 3 } }) });
+      const before = h1.yaws.length;
+      frames(200);
+      const turn = h1.yaws.slice(before);
+      for (let i = 1; i < turn.length; i++) expect(Math.abs(turn[i]! - turn[i - 1]!)).toBeLessThanOrEqual(YAW_TURN_RATE * 0.016 * 1.01);
+    });
+
+    it("deny 속성(seat, nonce)이 바뀔 때마다 그 좌석이 손사래(deny)와 놀란 표정을 한 번 한다", async () => {
+      const s = await openGame();
+      const h2 = s.world.renderers[0]!.chars.get(2) as FakeHandle;
+      expect(h2.playEmote).not.toHaveBeenCalled();
+      s.rerender({ deny: { seat: 2, nonce: 1 } });
+      expect(h2.playEmote).toHaveBeenCalledTimes(1);
+      expect(h2.playEmote).toHaveBeenCalledWith("deny");
+      expect(h2.setFace).toHaveBeenCalledWith("surprise");
+      frames(100);
+      expect(h2.playEmote).toHaveBeenCalledTimes(1);
+      s.rerender({ deny: { seat: 2, nonce: 2 } });
+      expect(h2.playEmote).toHaveBeenCalledTimes(2);
+    });
   });
 });
