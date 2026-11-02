@@ -86,6 +86,11 @@ import {
   tagStackChecks,
   walkableCenters,
   worldSyncChecks,
+  walkStartChecks,
+  WORLD_MOVE_SPEED,
+  WORLD_START_MAX_FRAMES,
+  WORLD_START_MOVED_MIN,
+  WORLD_JUMP_SPEED_MAX,
   tagsOverlap,
   voteChecks,
   candidateRevealMs,
@@ -2704,6 +2709,79 @@ test("worldSyncChecks: 상수는 UI-SPEC 그대로 — 0.3 단위·링 100ms·�
   assert.equal(WORLD_RING_MAX_MS, 100);
   assert.equal(WORLD_SEGMENT_MAX_MS, 500);
   assert.equal(WORLD_MOVED_MIN, 0.1);
+});
+
+// ---- G-07-9 탭 뒤 화면 출발·한 프레임 튐 (결정 0059, 07-26) ----
+
+const UP = 100000;
+/** 손 뗀 뒤 프레임: 출발점 (0,0) 한 프레임(at = UP − 10) + UP 뒤 16ms 간격 n 개. stepOf(i) = i번째(1부터) 프레임의 x */
+const watchOf = (n, xAt) => ({
+  upWall: UP,
+  frames: [{ x: 0, z: 0, at: UP - 10 }, ...Array.from({ length: n }, (_, i) => ({ x: xAt(i + 1), z: 0, at: UP + 6 + i * 16 }))],
+});
+
+test("walkStartChecks: 상수 — 걷는 속도 1.8·3프레임·최소 이동 0.005·튐 상한 5.4", () => {
+  assert.equal(WORLD_MOVE_SPEED, 1.8);
+  assert.equal(WORLD_START_MAX_FRAMES, 3);
+  assert.equal(WORLD_START_MOVED_MIN, 0.005);
+  assert.ok(Math.abs(WORLD_JUMP_SPEED_MAX - 5.4) < 1e-9);
+});
+
+test("walkStartChecks: 첫 프레임부터 한 프레임에 0.03 씩 걸으면 W11(1번째 프레임)·W12(1.875 단위/초) 모두 통과한다", () => {
+  const [w11, w12] = walkStartChecks(watchOf(12, (i) => i * 0.03));
+  assert.equal(w11.id, "W11");
+  assert.equal(w12.id, "W12");
+  assert.equal(w11.ok, true, w11.detail);
+  assert.equal(w12.ok, true, w12.detail);
+});
+
+test("walkStartChecks W11: 손 뗀 뒤 9프레임 동안 서 있다 10번째에 움직이면 실패하고 10번째와 ms 를 말한다(예측 없는 배포본 모양)", () => {
+  const w11 = walkStartChecks(watchOf(14, (i) => (i < 10 ? 0 : (i - 9) * 0.03)))[0];
+  assert.equal(w11.ok, false);
+  assert.match(w11.detail, /10번째/);
+  assert.match(w11.detail, /\d+ms/);
+});
+
+test("walkStartChecks W11: 3번째 프레임에 움직이면 통과, 4번째면 실패한다(경계)", () => {
+  assert.equal(walkStartChecks(watchOf(8, (i) => (i < 3 ? 0 : (i - 2) * 0.03)))[0].ok, true);
+  assert.equal(walkStartChecks(watchOf(8, (i) => (i < 4 ? 0 : (i - 3) * 0.03)))[0].ok, false);
+});
+
+test("walkStartChecks W12: 걷는 중 한 프레임(16ms)에 0.14 를 건너뛰면 실패하고 최대 속도를 말한다(섞기 없는 배포본 모양)", () => {
+  const w12 = walkStartChecks(watchOf(14, (i) => i * 0.03 + (i >= 7 ? 0.14 : 0)))[1];
+  assert.equal(w12.ok, false);
+  assert.match(w12.detail, /8\.\d+/);
+});
+
+test("walkStartChecks W12: at 차이 3ms 쌍과 150ms 쌍은 속도 계산에서 빠지고, 남는 쌍이 10개 미만이면 측정값 없음으로 실패한다", () => {
+  const frames = [{ x: 0, z: 0, at: UP - 10 }];
+  let at = UP + 6;
+  let x = 0;
+  for (let i = 0; i < 12; i++) {
+    x += 0.03;
+    frames.push({ x, z: 0, at });
+    at += 16;
+  }
+  // 3ms 쌍 (건너뜀 1.0 이어도 빠진다)
+  frames.push({ x: x + 1, z: 0, at: at - 16 + 3 });
+  // 150ms 쌍
+  frames.push({ x: x + 5, z: 0, at: at - 16 + 3 + 150 });
+  const ok = walkStartChecks({ upWall: UP, frames })[1];
+  assert.equal(ok.ok, true, ok.detail);
+  const few = walkStartChecks(watchOf(5, (i) => i * 0.03))[1];
+  assert.equal(few.ok, false);
+  assert.match(few.detail, /측정값 없음/);
+});
+
+test("walkStartChecks: watch 가 null·upWall 이 null·frames 가 빈 배열이면 W11·W12 모두 측정값 없음으로 실패한다", () => {
+  for (const w of [null, undefined, { upWall: null, frames: [{ x: 0, z: 0, at: 1 }] }, { upWall: UP, frames: [] }]) {
+    const rows = walkStartChecks(w);
+    assert.equal(rows.length, 2);
+    for (const r of rows) {
+      assert.equal(r.ok, false);
+      assert.match(r.detail, /측정값 없음/);
+    }
+  }
 });
 
 test("worldSyncChecks W2~W4: 두 페이지가 0.3 이하로 같고 링 100ms·구간 500ms 이내면 세 줄 모두 통과한다", () => {

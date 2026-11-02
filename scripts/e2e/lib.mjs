@@ -1765,6 +1765,15 @@ export const WORLD_MOVED_MIN = 0.1;
 /** 이름표 글자 크기 하한(px). */
 export const NAMETAG_FONT_MIN = 14;
 
+/** 앱 MOVE_SPEED(shared/game/world.ts)와 같은 걷는 속도(단위/초) — e2eContract 시험이 같음을 고정한다. */
+export const WORLD_MOVE_SPEED = 1.8;
+/** 손 뗀 뒤 이 프레임 수 안에 화면 출발(결정 0059: 배포본 RTT 약 155ms 에서 예측이 없으면 약 10프레임 뒤). */
+export const WORLD_START_MAX_FRAMES = 3;
+/** 출발로 보는 최소 화면 이동(월드 단위). */
+export const WORLD_START_MOVED_MIN = 0.005;
+/** 걷는 동안 프레임 사이 화면 속도 상한(단위/초) — 진단 측정에서 섞기 없는 응답 순간 튐이 약 8.7 단위/초였다. */
+export const WORLD_JUMP_SPEED_MAX = 3 * WORLD_MOVE_SPEED;
+
 const dist2 = (p, q) => Math.hypot(p.x - q.x, p.z - q.z);
 
 /**
@@ -1809,6 +1818,14 @@ export function worldSyncChecks({ a, b, tol = WORLD_SYNC_TOL, ringMs, segmentMs 
     result("W2", `두 페이지 손님 위치 차 ≤ ${tol} (걷는 중·도착 뒤)`, bad),
     timing("W3", `탭 → 목적지 링 ${WORLD_RING_MAX_MS}ms 이내`, ringMs, WORLD_RING_MAX_MS),
     timing("W4", `탭 → 손님 구간 시작 ${WORLD_SEGMENT_MAX_MS}ms 이내`, segmentMs, WORLD_SEGMENT_MAX_MS),
+  ];
+}
+
+/** 탭 한 번의 화면 위치 감시로 W11·W12 를 판정한다(결정 0059). 아직 구현 전. */
+export function walkStartChecks(_watch) {
+  return [
+    result("W11", "탭 → 내 캐릭터 화면 출발 3프레임 이내(결정 0059)", ["아직 없음"]),
+    result("W12", "걷는 동안 화면 위치가 한 프레임에 튀지 않음(≤ 5.4 단위/초)", ["아직 없음"]),
   ];
 }
 
