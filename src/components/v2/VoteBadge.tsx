@@ -1,0 +1,8 @@
+// RED 단계 임시 뼈대 — 다음 커밋(feat)에서 채운다.
+export interface VoteBadgeProps {
+  count: number;
+  lead?: boolean;
+}
+export function VoteBadge(_props: VoteBadgeProps) {
+  return null;
+}
