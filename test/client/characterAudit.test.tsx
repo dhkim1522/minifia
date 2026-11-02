@@ -111,19 +111,19 @@ describe("CHAR-01: 테이블 인물 8장은 서로 다르고 자리 번호가 �
   });
 });
 
-// 낮 토론은 08-13 부터 맵(WorldStage) 화면이라 테이블 인물 검사는 같은 DayTable 을 쓰는 밤으로 옮겼다(테이블은 08-19 가 지울 때 함께 정리).
-describe("CHAR-01: 밤(옛 테이블) — 5명·8명 모두 닉네임과 인물", () => {
+// 낮 토론은 08-13, 밤·아침은 08-18 부터 맵(WorldStage) 화면이라 테이블 인물 검사는 같은 DayTable 을 쓰는 처형 여부 투표로 옮겼다(테이블은 08-19 가 지울 때 함께 정리).
+describe("CHAR-01: 처형 여부 투표(옛 테이블) — 5명·8명 모두 닉네임과 인물", () => {
   it.each([5, 8])("%i명: 모든 자리 이름표 닉네임, 인물 src 가 서로 다르다", (n) => {
-    const { container } = renderRoom(simpleView("night", n, "citizen"));
+    const { container } = renderRoom(simpleView("execVote", n, "citizen"));
     const srcs = expectEverySeatNamed(container, n);
     expect(new Set(srcs).size).toBe(n);
   });
 
   it("내 역할이 시민이든 마피아든 모든 자리의 인물 그림은 같다 (능력 무관, D-03·T-05-10)", () => {
-    const citizen = renderRoom(simpleView("night", 5, "citizen"));
+    const citizen = renderRoom(simpleView("execVote", 5, "citizen"));
     const a = expectEverySeatNamed(citizen.container, 5);
     cleanup();
-    const mafia = renderRoom(simpleView("night", 5, "mafia"));
+    const mafia = renderRoom(simpleView("execVote", 5, "mafia"));
     const b = expectEverySeatNamed(mafia.container, 5);
     expect(b).toEqual(a);
   });

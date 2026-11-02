@@ -359,15 +359,15 @@ describe("밤·아침 라우팅과 안내 (UI-SPEC C5·접근성, RESEARCH A6)",
   const morning = (over: Partial<ViewOpts> = {}) =>
     makeView({ phase: "morning", endsIn: 5_000, durationMs: 5_000, role: "citizen", day: 1, ...over });
 
-  it("night → morning: 장면 래퍼(.mf-phase-enter)와 테이블 루트(.mf-dt)가 같은 DOM 노드다 (C5, 낮 토론은 08-13 부터 맵 화면)", () => {
+  it("night → morning: 장면 래퍼(.mf-phase-enter)와 맵 화면(GameMap) 루트가 같은 DOM 노드다 (C5, 밤·아침은 08-18 부터 맵 화면)", () => {
     const r = renderRoom(night());
     const scene = r.container.querySelector(".mf-phase-enter");
-    const table = r.container.querySelector(".mf-dt");
+    const stage = r.container.querySelector("[data-game-stage]");
     expect(scene, "장면 래퍼").not.toBeNull();
-    expect(table, "테이블").not.toBeNull();
+    expect(stage, "맵").not.toBeNull();
     rerenderRoom(r.rerender, morning());
     expect(r.container.querySelector(".mf-phase-enter") === scene, "morning 래퍼 유지").toBe(true);
-    expect(r.container.querySelector(".mf-dt") === table, "morning 테이블 유지").toBe(true);
+    expect(r.container.querySelector("[data-game-stage]") === stage, "morning 맵 유지").toBe(true);
   });
 
   it("morning view(eliminated 2, phrase 1) → 안내 '아침이 밝았습니다. 민지님이 조용히 눈을 감았습니다'", () => {
@@ -719,24 +719,5 @@ describe("헤더 줄바꿈 금지·패널 여백·칩 간격 (03.1-10, D-16, UI-
     expect(panel.includes("padding: 8px var(--space-md) calc(12px + env(safe-area-inset-bottom))")).toBe(true);
     expect(panel.includes("height: calc(157px + env(safe-area-inset-bottom))")).toBe(true);
     expect(/gap:\s*var\(--space-xs\)/.test(bodyOf(dayCss, ".mf-seg"))).toBe(true);
-  });
-
-  it("헤더 제목·안내 문구표: 모든 역할에서 같은 제목이다", () => {
-    const table: Array<[PhaseId, string, (n: number) => string]> = [
-      ["night", "밤", (n) => `${n}일차`],
-      ["morning", "아침", (n) => `${n + 1}일차`],
-    ];
-    for (const [phase, heading, guide] of table) {
-      for (const role of ["police", "mafia", "doctor", "citizen"] as const) {
-        const r = renderRoom(
-          makeView({ phase, endsIn: 8_000, durationMs: 8_000, role, day: 1, ...(phase === "morning" ? { morning: {} } : {}) }),
-        );
-        const mafiaNight = phase === "night" && role === "mafia";
-        const expected = mafiaNight ? "1일차 · 함께 지목하세요" : guide(1);
-        const got = `${r.container.querySelector("h1")?.textContent}/${r.container.querySelector(".mf-phasebar__do")?.textContent}`;
-        expect(`${phase}:${role}:${got}`).toBe(`${phase}:${role}:${heading}/${expected}`);
-        cleanup();
-      }
-    }
   });
 });

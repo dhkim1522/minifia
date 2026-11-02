@@ -159,9 +159,9 @@ function viewerProblems(c: HTMLElement, opts: FixtureOpts): string[] {
   return p;
 }
 
-// 변론·처형은 08-13 부터 맵 화면(GameMap)이라 옛 테이블 화면 불변식(마름모·후광·유령 패널 등)은 이 두 단계에서 뺐다.
-// 맵 화면의 같은 뜻(익명·직업 비노출·유령 채널)은 gameMap.test 와 뒤 계획의 화면 시험이 본다.
-const TABLE_STAGES: readonly VerdictStage[] = STAGES.filter((s) => s !== "defense" && s !== "execution");
+// 변론·처형은 08-13 부터, 처형 무효로 온 밤(noExecution)은 08-18 부터 맵 화면(GameMap)이라 옛 테이블 화면 불변식(마름모·후광·유령 패널 등)은 이 세 단계에서 뺐다.
+// 맵 화면의 같은 뜻(익명·직업 비노출·유령 채널·밤 고리)은 gameMap.test·nightMap.test 와 뒤 계획의 화면 시험이 본다.
+const TABLE_STAGES: readonly VerdictStage[] = STAGES.filter((s) => s !== "defense" && s !== "execution" && s !== "noExecution");
 
 describe.each(TABLE_STAGES)("처형 구간 화면 %s", (stage: VerdictStage) => {
   describe.each(VIEWERS)("보는 사람 %s", (viewer: Viewer) => {
@@ -176,7 +176,6 @@ describe.each(TABLE_STAGES)("처형 구간 화면 %s", (stage: VerdictStage) => 
 
 describe("재접속 대조: 같은 접속의 같은 전환에서는 연출이 켜진다", () => {
   const cases: Array<{ stage: VerdictStage; selector: string; attr?: [string, string] }> = [
-    { stage: "noExecution", selector: ".mf-vintro--void" },
     { stage: "ended", selector: ".mf-result", attr: ["data-stage", "neutral"] },
   ];
   it.each(cases)("$stage: epoch 가 같으면 연출이 있고(재접속 칸의 없음이 의미를 가진다)", ({ stage, selector, attr }) => {

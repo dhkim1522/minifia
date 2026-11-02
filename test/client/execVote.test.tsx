@@ -174,8 +174,8 @@ describe("execVote 화면 한 경로 (VOTE-01, D-02, D-14)", () => {
     expect(button("반대").disabled).toBe(true);
   });
 
-  it("night → execVote 로 바뀌어도 테이블 루트(.mf-dt)와 장면 래퍼(.mf-phase-enter)는 같은 DOM 노드다 (낮 토론은 08-13 부터 맵 화면)", () => {
-    const r = renderRoom(makeView({ phase: "night" }));
+  it("candidateVote → execVote 로 바뀌어도 테이블 루트(.mf-dt)와 장면 래퍼(.mf-phase-enter)는 같은 DOM 노드다 (낮 토론은 08-13, 밤·아침은 08-18 부터 맵 화면)", () => {
+    const r = renderRoom(makeView({ phase: "candidateVote" }));
     const scene = r.container.querySelector(".mf-phase-enter");
     const table = r.container.querySelector(".mf-dt");
     expect(scene).not.toBeNull();

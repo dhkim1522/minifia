@@ -3,6 +3,7 @@ import type { ComponentProps } from "react";
 import type { ReactNode } from "react";
 import { isAlive } from "../../shared/game/alive";
 import { canMoveIn } from "../../shared/game/movement";
+import type { RoleId } from "../../shared/game/roles";
 import type { ClientMessage, RoomView } from "../../shared/protocol";
 import { ResultAnnounce } from "../components/ResultAnnounce";
 import { RoleCardButton } from "../components/RoleCardButton";
@@ -20,6 +21,7 @@ import { useViewChoice } from "../net/useViewChoice";
 import { useMapInsets } from "../net/useMapInsets";
 import type { RoomConnection } from "../net/useRoomConnection";
 import { sceneLook } from "../world/presence";
+import type { RingKind } from "../world/runtime";
 import type { WorldStore } from "../world/store";
 import { GamePanel } from "./GamePanel";
 import "../styles/game.css";
@@ -32,7 +34,9 @@ const HINT_MS = 2500;
 const REJECT_TEXT = "지금은 고를 수 없어요";
 /** 지목이 단계 어긋남이 아닌 이유로 거절됐을 때 위 알림 */
 const SEND_FAIL_TEXT = "보내지 못했어요. 다시 해 보세요";
-/** 지목을 보낸 뒤 이 시간 안의 오류 프레임은 그 지목의 거절로 본다(서버는 거절을 곧바로 돌려준다) */
+/** 밤 대상 이름표 버튼의 동사(접근성 이름 "{닉네임}, {동사} 대상", v1.0 DayScene 문구 그대로). 시민은 선택이 없다 */
+const PICK_VERB: Readonly<Partial<Record<RoleId, string>>> = { police: "조사", doctor: "보호", mafia: "지목" };
+/** 지목·밤 선택을 보낸 뒤 이 시간 안의 오류 프레임은 그 선택의 거절로 본다(서버는 거절을 곧바로 돌려준다) */
 const PICK_REPLY_MS = 3000;
 /** 스테이지 사각형을 아직 못 쟀을 때 WorldStage 기본값(헤더 아래 62 · 패널 250)과 같은 값 — 장면 표의 확대 판정에만 쓴다 */
 const DEFAULT_INSET_TOP = 62;
@@ -193,7 +197,12 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
   // 남의 지목·득표·선두·과반은 서버가 보낸 day.points 로만 그린다(T-08-38).
   const nominating = view.phase === "nomination";
   const canPick = nominating && meAlive;
-  const serverMine = nominating ? view.day?.points?.find((l) => l.seat === view.me.seat)?.target : undefined;
+  // 밤 선택(08-18 임시 틀, A1): 산 마피아·경찰·의사가 이름표를 눌러 대상 하나를 보낸다. 서버 값은 view.me.pick(본인에게만 온다). 시민은 선택이 없다.
+  const nighting = view.phase === "night";
+  const myRole = view.me.role;
+  const nightVerb = myRole !== undefined ? PICK_VERB[myRole] : undefined;
+  const nightActor = nighting && meAlive && nightVerb !== undefined;
+  const serverMine = nominating ? view.day?.points?.find((l) => l.seat === view.me.seat)?.target : nighting ? view.me.pick : undefined;
   const [mine, chooseMine] = useViewChoice<number | undefined>(view, serverMine);
   // 서버가 내 선택을 확인했으면 더는 거절을 기다리지 않는다. 거절이 오면 내 선택을 서버 값으로 되돌린다(처음 그릴 때는 아무것도 하지 않는다).
   useEffect(() => {
@@ -207,10 +216,14 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
     // chooseMine 은 렌더마다 새 함수지만 setState 만 부른다
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rejects]);
-  const pickSeats = useMemo(
-    () => (canPick ? new Set(view.players.filter((p) => isAlive(p) && p.seat !== view.me.seat).map((p) => p.seat)) : null),
-    [canPick, view.players, view.me.seat],
-  );
+  // 누를 수 있는 좌석: 지목은 나를 뺀 산 사람. 밤은 v1.0 규칙 그대로 산 사람이고, 마피아는 자신·동료를 뺀다(권위는 서버 pickTarget).
+  const allies = view.me.allies;
+  const pickSeats = useMemo(() => {
+    if (canPick) return new Set(view.players.filter((p) => isAlive(p) && p.seat !== view.me.seat).map((p) => p.seat));
+    if (!nightActor) return null;
+    const mafia = myRole === "mafia";
+    return new Set(view.players.filter((p) => isAlive(p) && !(mafia && (p.seat === view.me.seat || (allies ?? []).includes(p.seat)))).map((p) => p.seat));
+  }, [canPick, nightActor, myRole, allies, view.players, view.me.seat]);
   // 처음 보는 지목에서만 누를 수 있는 이름표가 3초 깜빡인다(결정 0051-5 "처음 하는 사람에게만 손짓"). 보고 나면 저장소에 적어 다시 깜빡이지 않고, 누르면 즉시 멈춘다.
   // 기록은 끝낼 때 한다(개발 모드 이중 실행이 첫 실행의 기록을 읽고 깜빡임을 꺼 버리지 않게). 저장소를 못 쓰면 깜빡인다.
   const [blink, setBlink] = useState(false);
@@ -231,10 +244,10 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
     ? {
         seats: pickSeats,
         ...(mine !== undefined ? { mine } : {}),
-        label: (nickname) => `${nickname} 님 가리키기`,
+        label: (nickname) => (nighting ? `${nickname}, ${nightVerb ?? ""} 대상` : `${nickname} 님 가리키기`),
         onPick: (seat) => {
           if (seat === mine) return; // 같은 사람을 다시 눌러도 변하지 않는다(취소 없음)
-          if (send({ t: "point", target: seat }) === false) return; // 소켓이 닫혀 못 보냈으면 표시도 바꾸지 않는다
+          if (send(nighting ? { t: "pick", target: seat } : { t: "point", target: seat }) === false) return; // 소켓이 닫혀 못 보냈으면 표시도 바꾸지 않는다
           pointSent.current = { target: seat, at: Date.now() };
           chooseMine(seat);
           if (blink) {
@@ -242,7 +255,7 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
             rememberPointHint();
           }
         },
-        group: "지목",
+        group: nighting ? "밤 대상" : "지목",
       }
     : undefined;
 
@@ -262,6 +275,26 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
       if (candidate === undefined || votes === undefined || votes < 1) return undefined;
       return (seat) => (seat === candidate ? { count: votes, sure: true } : {});
     }
+    // 밤 발밑 고리(A2 임시 예외): 서버가 이 사람에게 보낸 값만 그린다. 산 마피아는 내 선택·동료 선택(allyPicks), 산 경찰·의사는 내 선택 하나,
+    // 유령은 서버가 유령에게만 보낸 spectate.picks(한 좌석에 여럿이면 마피아 → 경찰 → 의사 하나). 산 시민과 그 밖의 산 사람 화면에는 고리가 없다(T-08-46).
+    if (nighting) {
+      const rings = new Map<number, RingKind>();
+      const put = (seat: number, kind: RingKind): void => {
+        if (!rings.has(seat)) rings.set(seat, kind);
+      };
+      if (spectate?.picks) {
+        for (const kind of ["mafia", "police", "doctor"] as const) for (const seat of spectate.picks[kind]) put(seat, kind);
+      } else if (nightActor && myRole !== undefined) {
+        const kind: RingKind = myRole === "police" ? "police" : myRole === "doctor" ? "doctor" : "mafia";
+        if (mine !== undefined) put(mine, kind);
+        if (myRole === "mafia") for (const seat of view.me.allyPicks ?? []) put(seat, "mafia");
+      }
+      if (rings.size === 0) return undefined;
+      return (seat) => {
+        const ring = rings.get(seat);
+        return ring !== undefined ? { ring } : {};
+      };
+    }
     if (!nominating) return undefined;
     const tally = pointsTally(view);
     return (seat) => {
@@ -273,7 +306,7 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
         ...(tally.sure === seat ? { sure: true } : {}),
       };
     };
-  }, [nominating, verdicting, defending, view, blink, pickSeats]);
+  }, [nominating, nighting, nightActor, myRole, mine, spectate, verdicting, defending, view, blink, pickSeats]);
 
   // 유령 화면의 이름표: 모든 이름표 위에 그 사람의 직업 칩(spectate.seats 의 job), 죽은 좌석은 반투명. 산 사람 view 에는 spectate 가 없어 이 겹침이 없다.
   const tagProps = useMemo<WorldTagProps | undefined>(() => {

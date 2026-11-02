@@ -154,8 +154,8 @@ describe("헤더 [역할 카드] 버튼 하나 (D-08)", () => {
       const names = buttons.map((b) => b.getAttribute("aria-label") ?? b.textContent ?? "");
       const head = buttons.filter((b) => b.classList.contains("mf-rolecard-btn"));
       expect(`${phase}:${head.length}`).toBe(`${phase}:1`);
-      // 낮 시작·토론은 08-13 부터 맵 화면이라 글자 없는 아이콘 버튼이다(UI-SPEC A2). 이름은 두 모양 모두 `역할 카드`
-      const mapPhase = phase === "dayAnnounce" || phase === "discussion";
+      // 낮 시작~아침은 08-13·08-18 부터 맵 화면이라 글자 없는 아이콘 버튼이다(UI-SPEC A2). 이름은 두 모양 모두 `역할 카드`
+      const mapPhase = phase !== "roleReveal";
       expect(`${phase}:${head[0]!.textContent}`).toBe(`${phase}:${mapPhase ? "" : "역할 카드"}`);
       expect(`${phase}:${head[0]!.getAttribute("aria-label")}`).toBe(`${phase}:역할 카드`);
       expect(`${phase}:${names.some((x) => x.includes("수사 기록"))}`).toBe(`${phase}:false`);
@@ -164,8 +164,8 @@ describe("헤더 [역할 카드] 버튼 하나 (D-08)", () => {
     }
   });
 
-  it("버튼에는 아이콘 20 이 있고 글자는 `역할 카드` 뿐이다 (밤 — 옛 틀의 글자 모양)", () => {
-    renderRoom(makeView({ phase: "night" }));
+  it("버튼에는 아이콘 20 이 있고 글자는 `역할 카드` 뿐이다 (옛 투표 단계 — 옛 틀의 글자 모양)", () => {
+    renderRoom(makeView({ phase: "execVote" }));
     const svg = headBtn()?.querySelector("svg");
     expect(svg?.getAttribute("width") ?? "(아이콘 없음)").toBe("20");
     expect(headBtn()?.textContent).toBe("역할 카드");
@@ -441,7 +441,11 @@ describe("밤 끝 알림 없음 (결정 0028, UI-SPEC D·R6)", () => {
     feed(r, makeView({ role, phase: "morning", records: [rec] }));
     return r;
   };
-  const statusCount = (): number => document.querySelectorAll('[role="status"]').length;
+  // 일지 알림이 없다는 뜻이라, 맵 화면의 구조 자리(맵 불러오는 카드·빈 위 알림 영역)와 아침 결과 알림([data-announce], 08-18)은 세지 않는다
+  const statusCount = (): number =>
+    [...document.querySelectorAll('[role="status"]')].filter(
+      (e) => !e.classList.contains("mf-mapcard") && !e.hasAttribute("data-announce") && (e.textContent ?? "").trim() !== "",
+    ).length;
 
   it.each([
     ["police", { n: 1, target: 2, isMafia: true }],

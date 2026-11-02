@@ -502,7 +502,7 @@ describe("대기실: 시트의 봇 찬반·봇 지목 (P-13)", () => {
   });
 });
 
-describe("[테스트] 닻과 아침 어둡게 층 (03.1-10, D-16, UI-SPEC E)", () => {
+describe("[테스트] 닻과 아침 (03.1-10, D-16, UI-SPEC E)", () => {
   const css = readFileSync("src/styles/testtools.css", "utf8");
   const tokens = readFileSync("src/styles/tokens.css", "utf8");
 
@@ -516,16 +516,10 @@ describe("[테스트] 닻과 아침 어둡게 층 (03.1-10, D-16, UI-SPEC E)", (
     expect(css.includes("시안 T1 왼쪽 위 유지")).toBe(true);
   });
 
-  it("아침(어둡게 층 있음)에도 [테스트] 버튼은 장면 상자 안 닻에 있고 층(.mf-dt__dim)을 가리지 않는다", () => {
+  it("아침(08-18 부터 맵 화면)에도 [테스트] 버튼은 맵 화면의 .mf-game__test 에 있고 눌린다 (어둡게 층은 08-18 에서 맵 조명으로 바뀜)", () => {
     open({ phase: "morning", testMode: true });
     const btn = testBtn() as HTMLElement;
-    const scene = btn.closest(".mf-dayscene__scene");
-    expect(String(scene !== null)).toBe("true");
-    const dim = scene!.querySelector(".mf-dt__dim");
-    expect(String(dim !== null)).toBe("true");
-    // 닻이 테이블(층 포함)보다 문서 순서상 앞이고, 층과 버튼 어느 쪽도 pointer-events 가 막혀 있지 않다
-    const anchor = btn.closest(".mf-tt-anchor") as HTMLElement;
-    expect(String((anchor.compareDocumentPosition(dim as Node) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0)).toBe("true");
+    expect(String(btn.closest("main.mf-game .mf-game__test") !== null)).toBe("true");
     expect(getComputedStyle(btn).pointerEvents).not.toBe("none");
     expect(String((btn as HTMLButtonElement).disabled)).toBe("false");
   });
