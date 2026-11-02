@@ -1571,6 +1571,25 @@ describe("E2E 훅 (T-06-27)", () => {
     expect(window.__mfWorld).toBeUndefined();
   });
 
+  it("결정 0059: __mfWorld.shown(seat) 은 마지막 프레임에 그린 위치와 프레임 시각이고, sample 은 여전히 서버 구간 값이다", async () => {
+    const s = await open();
+    const hooks = window.__mfWorld!;
+    const mine = s.world.renderers[0]!.chars.get(0)!;
+    expect(hooks.shown(9)).toBeNull();
+    tapAt(surface(s.utils), 250, 340);
+    frame(16);
+    const shown = hooks.shown(0)!;
+    expect(shown).not.toBeNull();
+    expect(shown.x).toBeCloseTo(mine.root.position.x, 6);
+    expect(shown.z).toBeCloseTo(mine.root.position.z, 6);
+    expect(shown.at).toBe(Date.now());
+    // 서버 구간은 탭 직후에도 (2, 1) 에 서 있다 — sample 이 화면 위치로 바뀌지 않았다
+    const sampled = hooks.sample(0)!;
+    expect(sampled.x).toBeCloseTo(2, 6);
+    expect(sampled.z).toBeCloseTo(1, 6);
+    expect(Math.hypot(shown.x - sampled.x, shown.z - sampled.z)).toBeGreaterThan(0.01);
+  });
+
   it("개발 빌드가 아니고 ?e2e=1 도 없으면 window.__mfWorld 가 없고 소프트웨어 렌더러를 허용하지 않는다", async () => {
     vi.stubEnv("DEV", false);
     const s = await open();

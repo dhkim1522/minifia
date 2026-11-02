@@ -3,6 +3,7 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { BAR_MASK } from "../../shared/game/map";
+import { MOVE_SPEED } from "../../shared/game/world";
 import { candidateRevealMs } from "../../shared/game/phases";
 import { NICKNAME_MAX_GRAPHEMES, countGraphemes } from "../../shared/nickname";
 import { TIMELESS_PHASES } from "../../src/game/scenes";
@@ -182,5 +183,13 @@ describe("E2E 채팅 패널 치수 사본과 src/game/chatUi.ts (07-20, 05-05 �
     const css = readFileSync(new URL("../../src/styles/day.css", import.meta.url), "utf8");
     const m = /\.mf-dayscene__panel \{[^}]*height: calc\((\d+)px \+ env\(safe-area-inset-bottom\)\)/.exec(css);
     expect(Number(m?.[1])).toBe(lib.PANEL_H);
+  });
+});
+
+describe("E2E 의 걷는 속도 상수와 앱 MOVE_SPEED (결정 0059, G-07-9)", () => {
+  it("WORLD_MOVE_SPEED 는 shared/game/world.ts 의 MOVE_SPEED 와 같고 WORLD_JUMP_SPEED_MAX 는 그 3배다", () => {
+    const lib = e2eLib as { WORLD_MOVE_SPEED: number; WORLD_JUMP_SPEED_MAX: number };
+    expect(lib.WORLD_MOVE_SPEED).toBe(MOVE_SPEED);
+    expect(lib.WORLD_JUMP_SPEED_MAX).toBeCloseTo(3 * MOVE_SPEED, 9);
   });
 });
