@@ -5,16 +5,16 @@ milestone_name: 같은 공간
 current_phase: 08
 current_phase_name: 낮 처형과 유령
 status: executing
-stopped_at: Completed 08-05-PLAN.md
-last_updated: "2026-11-02T11:14:31.610Z"
+stopped_at: Completed 08-06-PLAN.md
+last_updated: "2026-11-02T11:25:48.540Z"
 last_activity: 2026-11-02
 last_activity_desc: Phase 08 execution started
-state_head: 1203aaf1926750e09c9021e72162b56a196ff940
+state_head: 70af8f50dbeda992317bdf1eff4a077f6efaab0d
 progress:
   total_phases: 7
   completed_phases: 2
   total_plans: 78
-  completed_plans: 55
+  completed_plans: 56
   percent: 29
 ---
 
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-11-02)
 ## Current Position
 
 Phase: 08 (낮 처형과 유령) — EXECUTING
-Plan: 6 of 28
+Plan: 7 of 28
 Status: Ready to execute
 Last activity: 2026-11-02 — Phase 08 execution started
 
@@ -114,6 +114,7 @@ Progress: [███░░░░░░░] 29% (2/7 phases)
 | Phase 08 P03 | 6min | 3 tasks | 8 files |
 | Phase 08 P04 | 15min | 3 tasks | 10 files |
 | Phase 08 P05 | 14 min | 3 tasks | 15 files |
+| Phase 08 P06 | 8min | 3 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -224,6 +225,8 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 08]: 배치(layoutFor)는 지금 단계 기준 멱등 동기화 + 저장되는 기억 lay 재사용 — 걷는 도중·퇴거 뒤에도 자리가 뒤섞이지 않음 (08-04)
 - [Phase 08]: 08-05: 글자 스타일 세 개(배지 숫자·단위·도장)는 tokens.css 가 아니라 v2.css 세 규칙에 직접 쓴다 — 생성기는 :root 변수만 만든다
 - [Phase 08]: 08-05: 내가 가리킨 사람(mine) 이름표는 승인 NameTag 대로 point 아이콘 16 을 함께 그린다. is-ghost 대비 판정은 08-24 E2E H 묶음
+- [Phase 08]: 08-06: 위 알림은 합치기 창(400ms)이 닫힌 뒤에 나오고, 결과 알림은 announces 배열(at·ms)로 처형 단계의 두 알림을 지연 시각과 함께 만든다
+- [Phase 08]: 08-06: 첫 지목 한 표로 선두가 생겨도 hot 앞서요 줄을 만든다(A4), 첫 스냅샷의 유령 상태는 state.executed 로 준다
 
 ### Pending Todos
 
@@ -259,8 +262,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-02T11:14:31.402Z
-Stopped at: Completed 08-05-PLAN.md
+Last session: 2026-11-02T11:25:48.333Z
+Stopped at: Completed 08-06-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
