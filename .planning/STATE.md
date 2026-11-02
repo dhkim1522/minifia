@@ -5,16 +5,16 @@ milestone_name: 같은 공간
 current_phase: 08
 current_phase_name: 낮 처형과 유령
 status: executing
-stopped_at: Completed 08-01-PLAN.md
-last_updated: "2026-11-02T10:33:50.965Z"
+stopped_at: Completed 08-02-PLAN.md
+last_updated: "2026-11-02T10:42:46.023Z"
 last_activity: 2026-11-02
 last_activity_desc: Phase 08 execution started
-state_head: 85b14046a6e24b446f9b4355940419d5e9e9232e
+state_head: 356881cc9a2d5c07e54c09c2cb7db28e25a2ca67
 progress:
   total_phases: 7
   completed_phases: 2
   total_plans: 78
-  completed_plans: 51
+  completed_plans: 52
   percent: 29
 ---
 
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-11-02)
 ## Current Position
 
 Phase: 08 (낮 처형과 유령) — EXECUTING
-Plan: 2 of 28
+Plan: 3 of 28
 Status: Ready to execute
 Last activity: 2026-11-02 — Phase 08 execution started
 
@@ -110,6 +110,7 @@ Progress: [███░░░░░░░] 29% (2/7 phases)
 | Phase 07 P26 | 4 min | 3 tasks | 10 files |
 | Phase 07 P27 | 28 min | 2 tasks | 1 files |
 | Phase 08 P01 | 10 min | 2 tasks | 8 files |
+| Phase 08 P02 | 9min | 3 tasks | 16 files |
 
 ## Accumulated Context
 
@@ -213,6 +214,8 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 07]: 07-26: W11·W12 는 손님 탭 한 번에만 붙이고 W12 는 간격 4~100ms 쌍 10개 이상일 때만 판정(측정값 없음은 실패); 문턱값은 로컬 통과를 위해 조정하지 않음
 - [Phase 07]: 07-27: 배포본 전체 E2E 가 900초 제한을 넘기면 제한·문턱값은 그대로 두고 못 끝낸 흐름을 --only 로 단독 재실행해 가른다
 - [Phase 08]: 결정 0060: 낮 처형 단계 nomination·verdict, 찬반 분모=변론자를 뺀 산 사람, 조기 종료 없음, 변론자 무대 STAGE_SPOT 단일 예외, 유령 위치는 유령에게만
+- [Phase 08]: 찬반 분모는 유권자 수 E(변론자를 뺀 산 사람): 찬성×2 > E, 못 던진 사람은 기권(분모에 포함)
+- [Phase 08]: resolveNomination 이 그날 voteLog 줄을 만들고 resolveVerdict 는 그 줄의 exec 만 채운다(두 훅 순서 nomination → verdict 유지)
 
 ### Pending Todos
 
@@ -248,8 +251,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-02T10:33:50.628Z
-Stopped at: Completed 08-01-PLAN.md
+Last session: 2026-11-02T10:42:45.832Z
+Stopped at: Completed 08-02-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
