@@ -29,6 +29,7 @@ import { castCandidateVote, castExecVote } from "../shared/game/vote";
 import { castPoint } from "../shared/game/nomination";
 import { castVerdict } from "../shared/game/verdict";
 import { endReached, toggleEnd } from "../shared/game/discussion";
+import { canMove } from "../shared/game/movement";
 import { BAR_MAP } from "../shared/game/map";
 import { WORLD_FLUSH_MS, compactWorld, despawnPlayer, emptyWorld, moveFrame, nextWanderAt, planWander, requestMove, respawnAll, restoreWorld, snapFrame, spawnPlayer } from "../shared/game/world";
 import type { Segment, WorldState } from "../shared/game/world";
@@ -991,7 +992,7 @@ export class Room extends DurableObject<Env> {
 
   // ======== 로비 이동 구역(06-08): move 처리 · 전송 · 저장/복원 · 봇 배회 ========
   // 규칙 한눈에:
-  //  - 전송: world 프레임은 emitWorld 한 곳으로만 나간다(로비의 연결된 전원). 게임 중에는 어떤 world 프레임도 나가지 않는다(T-06-16).
+  //  - 전송: world 프레임은 emitWorld 한 곳으로만 나간다. 로비는 방 전원, 지도 단계는 움직인 사람 기준(산 사람 → 전원, 유령 → 유령만, 결정 0060-8).
   //  - 순서: 프레임을 먼저 보내고 저장은 뒤에 한다 — output gate 가 쓰기 뒤의 전송을 붙잡기 때문이다(RESEARCH R6).
   //  - 저장: 이동 뒤 2000ms 디바운스 한 번(markWorldDirty). 나가기·내보내기·로비를 떠나는 시작·마지막 사람 연결 끊김·알람에서는 즉시(flushWorld).
   //  - 키: room 키와 분리된 "world" 키. 생성자가 두 키를 한 번에 읽어 restoreWorld 로 되살린다.
@@ -1004,17 +1005,18 @@ export class Room extends DurableObject<Env> {
     this.applyMove(att.playerId, { x, z }, Date.now());
   }
 
-  // 사람과 봇 배회가 같은 본체를 쓴다(특권 없음, 결정 0024). 로비 밖·방에 없는 사람·150ms 안·경로 실패는 모두 조용히 버린다.
+  // 사람과 봇 배회가 같은 본체를 쓴다(특권 없음, 결정 0024). 방에 없는 사람·이 단계에서 못 움직이는 신분(canMove, MAP-04)·150ms 안·경로 실패는 모두 조용히 버린다.
+  // 단계 × 신분 표는 shared/game/movement.ts 한 곳이다: 산 사람은 낮 시작·토론에서만, 유령은 모든 지도 단계에서 걷는다.
   private applyMove(playerId: string, dest: { x: number; z: number }, now: number): void {
     const room = this.room;
-    if (!room || room.phase !== "lobby") return;
+    if (!room) return;
     const me = room.players.find((p) => p.id === playerId);
-    if (!me) return;
+    if (!me || !canMove(room, me)) return;
     const result = requestMove(this.world, playerId, dest, now, BAR_MAP);
     if (!result.ok) return;
     this.world = result.world;
-    // 전송이 먼저, 저장은 뒤(디바운스) — output gate 가 쓰기 뒤의 전송을 붙잡으므로(RESEARCH R6).
-    this.emitWorld(moveFrame(me.seat, result.seg));
+    // 전송이 먼저, 저장은 뒤(디바운스) — output gate 가 쓰기 뒤의 전송을 붙잡으므로(RESEARCH R6). 받는 사람은 움직인 사람 기준이다(emitWorld).
+    this.emitWorld(moveFrame(me.seat, result.seg), playerId);
     this.markWorldDirty();
   }
 
@@ -1090,12 +1092,13 @@ export class Room extends DurableObject<Env> {
     return spawned;
   }
 
-  // world 프레임도 audience 한 길을 지난다(로비가 아니면 빈 집합 — 6페이즈 동작 그대로, T-06-16). 수신자 = 로비의 방 사람 전원.
-  // 이벤트 프레임(world·typing·chat)은 deliver 한 길이다 — 단계를 가리지 않는 무차별 방송 길이 없어 게임 중 위치가 새지 않는다(T-06-16).
-  private emitWorld(frame: WorldFrame): void {
+  // world 프레임도 audience 한 길을 지난다. 로비는 방 전원, 지도 단계는 움직인 사람 기준 — 산 사람은 전원, 유령은 유령만(결정 0060-8, GHOST-01).
+  // mover 가 없는 호출(로비의 입장·재시작 snap)은 지도 단계에서 빈 집합이라 fail-closed 다. mover 는 서버가 소켓 첨부의 playerId 로 넣는다(클라이언트 입력이 아니다).
+  // 이벤트 프레임(world·typing·chat)은 deliver 한 길이다 — 단계를 가리지 않는 무차별 방송 길이 없어 유령 위치가 산 사람 폰으로 새지 않는다(T-06-16, T-08-01).
+  private emitWorld(frame: WorldFrame, moverId?: string): void {
     const room = this.room;
     if (!room) return;
-    this.deliver(audience(room, { k: "world" }), frame);
+    this.deliver(audience(room, { k: "world", mover: moverId }), frame);
   }
 
   private sendTo(ws: WebSocket, msg: ServerMessage): void {
