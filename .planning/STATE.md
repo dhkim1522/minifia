@@ -5,16 +5,16 @@ milestone_name: 같은 공간
 current_phase: 08
 current_phase_name: 낮 처형과 유령
 status: executing
-stopped_at: Completed 08-24-PLAN.md
-last_updated: "2026-11-02T16:50:48.888Z"
+stopped_at: Completed 08-25-PLAN.md
+last_updated: "2026-11-02T18:19:18.504Z"
 last_activity: 2026-11-02
 last_activity_desc: Phase 08 execution started
-state_head: 8318cbe798c28c143324bcf55f2d762845cf4790
+state_head: 429011444507d95c1968ab57ce688486c15695b7
 progress:
   total_phases: 7
   completed_phases: 2
   total_plans: 78
-  completed_plans: 76
+  completed_plans: 77
   percent: 29
 ---
 
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-11-02)
 ## Current Position
 
 Phase: 08 (낮 처형과 유령) — EXECUTING
-Plan: 25 of 28
+Plan: 26 of 28
 Status: Ready to execute
 Last activity: 2026-11-02 — Phase 08 execution started
 
@@ -135,6 +135,7 @@ Progress: [███░░░░░░░] 29% (2/7 phases)
 | Phase 08 P22 | 11 min | 3 tasks | 38 files |
 | Phase 08 P23 | 85 min | 3 tasks | 5 files |
 | Phase 08 P24 | 240 min | 3 tasks | 4 files |
+| Phase 08 P25 | 60min | 3 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -279,6 +280,9 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 08]: 08-22: 옛 투표 단계 방 정규화는 오늘 일차 voteLog 줄을 지운다(같은 일차 줄 중복 방지). dayStaticGuard 서버 이름 예외는 room.ts 정규화 표 줄 모양 여섯 가지뿐
 - [Phase 08]: 08-23: 결정 0056 완화 다섯 항목과 테이블 전용 E2E 판정·흐름 삭제, 남은 승인 완화 네 항목·기준 수치 불변. selectFlows --only 가 쉼표 목록을 받는다
 - [Phase 08]: 08-24: 맵 게임 E2E 흐름 여섯(day·ghost·noexec·night-roles·result·chat-game). G7 '표' 12px 는 디자인 시스템·허용 목록 충돌이라 실패로 두고 사용자 결정 대기. 유령 이름표 대비 4.5:1 미달로 보여 0.8 안 확인 대기
+- [Phase 08]: 08-25: dayload 렌더 측정은 사용자 결정(2026-11-03)으로 실기기 확인 묶음에 미룸 — perf-run 모드·JSON 없음
+- [Phase 08]: 08-25: G7 허용 목록에 .mv-badge__unit('표' 12px, 디자인 시스템 승인값) 추가, 14px 문턱 불변
+- [Phase 08]: 08-25: 유령 이름표 대비(불투명도 0.6, 약 1.9~2.5:1)는 앱 변경 없이 실기기 확인 목록 이월 — 08-26 이 기록
 
 ### Pending Todos
 
@@ -314,8 +318,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-02T16:50:48.619Z
-Stopped at: Completed 08-24-PLAN.md
+Last session: 2026-11-02T18:19:18.257Z
+Stopped at: Completed 08-25-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
