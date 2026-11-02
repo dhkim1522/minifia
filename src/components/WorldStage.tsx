@@ -166,7 +166,7 @@ export function WorldStage(props: WorldStageProps) {
     runtimeRef.current?.syncPlayers();
   }, [view.players]);
 
-  // 탭 하나: 링을 바로 띄우고(런타임) 목적지 정수 두 개만 보낸다. 위치는 서버 구간이 와야 정해진다(예측 이동 없음).
+  // 탭 하나: 링을 바로 띄우고 목적지 정수 두 개만 보낸다. 내 캐릭터는 같은 길로 바로 걷고 서버 구간이 오면 맞춘다(결정 0059).
   const onTap = (clientX: number, clientY: number): void => {
     const { props: p } = live.current;
     const runtime = runtimeRef.current;
@@ -174,9 +174,10 @@ export function WorldStage(props: WorldStageProps) {
     const at = runtime.tap(clientX, clientY);
     if (at === null) return;
     const clamp = (v: number): number => Math.max(-MOVE_COORD_LIMIT, Math.min(MOVE_COORD_LIMIT, Math.round(v * 100)));
-    const sent = p.send({ t: "move", x: clamp(at.x), z: clamp(at.z) });
+    const dest = { x: clamp(at.x), z: clamp(at.z) };
+    const sent = p.send({ t: "move", x: dest.x, z: dest.z });
     if (sent === false) runtime.cancelMove();
-    else runtime.notifyMoveSent(Date.now() + p.offset);
+    else runtime.notifyMoveSent(Date.now() + p.offset, dest);
   };
 
   const mySeat = view.me.seat;

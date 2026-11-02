@@ -1,15 +1,18 @@
 // 로비 맵 런타임: rAF 한 루프가 서버 시각의 위치로 모든 캐릭터를 놓고, 카메라가 내 캐릭터를 따라가고, 렌더하고, 이름표를 투영한다.
-// 위치의 진실은 서버 구간이다 — 이 파일에 예측 이동은 없다(결정 0044-17). 탭은 목적지 링만 먼저 띄운다.
+// 내 캐릭터는 탭하자마자 서버와 같은 공용 길찾기로 예측 구간을 그리고, 내 서버 구간이 오면 그쪽으로 맞춘다(결정 0059).
+// 위치의 진실은 계속 서버 구간이다(sample() 은 서버 값 그대로). 남의 캐릭터는 예측하지 않는다.
+// 그릴 구간이 바뀌면 화면 위치 차이를 SEG_BLEND_MS 에 걸쳐 줄인다.
 //
 // three 는 loadWorld() 의 import() 두 줄로만 끌려온다(이 파일에 three 값 import 가 없다 — 메인 번들 분리, RESEARCH 번들 측정).
 // 렌더러·캐릭터 모듈은 deps.loadModules 로 바꿔 끼울 수 있다(happy-dom 테스트의 가짜, 06-14 의 시나리오 스토어).
 import { BAR_MAP, BAR_SPAWNS, snapToWalkable, UNIT } from "../../shared/game/map";
-import { segmentEndsAt } from "../../shared/game/world";
+import { positionAt, segmentEndsAt } from "../../shared/game/world";
 import type { Segment } from "../../shared/game/world";
 import { NETWORK_TEXT } from "../net/copy";
 import { clampTarget, DEFAULT_TARGET, followStep, NAMETAG_GAP, NAMETAG_MAX_W, RESIZE_SETTLE_MS, stageOffsetY } from "./camera";
 import { FIGS } from "./characterData";
 import { createTapGate } from "./input";
+import { BLEND_SNAP_DIST, blendRemaining, createOwnMoves, predictSegment } from "./motion";
 import { DEFAULT_BUDGET_STEP, nextLadderStep } from "./renderer";
 import type { CharacterHandle, WorldRenderer } from "./renderer";
 import { initialMapStatus, inputBlocked, mapStatusReducer, shouldRecreate } from "./status";
@@ -110,8 +113,6 @@ const PULSE_MS = 1100;
 const PULSE_MAX = 1.15;
 /** 링이 보정된 지점으로 미끄러지는 시간·도착 뒤 사라지는 시간(ms) = dur-fast */
 const RING_MS = 180;
-/** 내 구간의 출발 시각이 보낸 시각보다 이만큼 이르더라도 내 탭의 응답으로 본다(시계 오프셋 추정 오차 허용) */
-const ACK_SLACK_MS = 1000;
 /** 손짓 링: 맵이 열린 뒤 보이기까지(ms)·맥박 횟수·모션 줄이기 고정 시간(ms)·내 앞 거리(월드 단위) */
 const CUE_DELAY_MS = 600;
 const CUE_PULSES = 3;
@@ -166,8 +167,11 @@ export interface WorldRuntime {
   syncPlayers(): void;
   /** 화면 좌표의 탭. 받아들이면 바닥 교점(월드 단위)을 돌려주고 목적지 링을 바로 띄운다 */
   tap(clientX: number, clientY: number): { x: number; z: number } | null;
-  /** move 를 보낸 직후 부른다(서버 시각 at, 응답 없음 시계의 시작) */
-  notifyMoveSent(at: number): void;
+  /**
+   * move 를 보낸 직후 부른다(서버 시각 at, 응답 없음 시계의 시작).
+   * dest(보낸 1/100 정수 목적지)가 있으면 내 캐릭터가 같은 길로 바로 걷기 시작한다. 없으면 예측 없이 서버 구간만 따른다.
+   */
+  notifyMoveSent(at: number, dest?: { x: number; z: number }): void;
   /** move 를 보내지 못했을 때: 링을 거둔다(알림 없음 — 연결 띠가 알린다) */
   cancelMove(): void;
   retry(): Promise<void>;
@@ -179,6 +183,8 @@ export interface WorldRuntime {
   characterOf(seat: number): PlayableCharacter | null;
   /** 지금 목적지 링의 목표 지점(없으면 null) */
   ring(): { x: number; z: number } | null;
+  /** 마지막 프레임에 그린 seat 의 위치(예측·섞기 포함)와 그 프레임의 Date.now(). 없으면 null. sample 과 달리 서버 값이 아니다 */
+  shown(seat: number): { x: number; z: number; at: number } | null;
   /** 지금 맵 상태 */
   status(): MapStatusState;
   /** performance.mark("map-interactive") 의 시각(ms). 아직 안 열렸으면 null */
@@ -212,6 +218,12 @@ interface Actor {
   /** 생성 때 root.scale (캐릭터 자체 크기). 연출 배율은 여기에 곱한다 */
   base: number;
   pos: { x: number; z: number };
+  /** 마지막으로 그린 구간(예측 또는 서버). 바뀌면 화면 위치 차이를 새로 잡는다 */
+  seg: Segment | undefined;
+  /** 구간이 바뀐 순간의 화면 위치 차이(그린 위치 − 새 구간 위치). blendRemaining 만큼 남는다 */
+  off: { x: number; z: number };
+  /** off 를 잡은 Date.now() */
+  offAt: number;
   yaw: number;
   headY: number;
   dim: boolean;
@@ -237,12 +249,9 @@ interface Ring {
   from: { x: number; z: number } | null;
   to: { x: number; z: number } | null;
   slideStart: number;
-  baseSeg: Segment | undefined;
-  sentAt: number | null;
   acked: boolean;
   endsAt: number;
   fadeStart: number | null;
-  timer: ReturnType<typeof setTimeout> | null;
 }
 
 export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
@@ -268,6 +277,10 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
   const pendingEntered = new Set<number>();
   const gate = createTapGate();
   let ring: Ring | null = null;
+  // 내 이동 추적(결정 0059-2): 보낸 move 와 서버가 적용한 move 수를 맞춰 응답을 알아보고, 예측 구간을 든다
+  const own = createOwnMoves(store.moveSeqOf(deps.mySeat()));
+  let ackTimer: ReturnType<typeof setTimeout> | null = null;
+  let lastDrawAt = 0;
   let cue: { at: { x: number; z: number }; start: number } | null = null;
   let cueTimer: ReturnType<typeof setTimeout> | null = null;
   let cueStarted = false;
@@ -470,6 +483,9 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
       handle,
       base: handle.root.scale.x,
       pos: at ?? { x: 0, z: 0 },
+      seg: store.segOf(seat),
+      off: { x: 0, z: 0 },
+      offAt: now,
       yaw: spawnYaw(seat),
       headY: 0,
       dim: false,
@@ -494,9 +510,14 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
 
   // ---------- 링·손짓 링 ----------
 
+  function clearAckTimer(): void {
+    if (ackTimer === null) return;
+    clearTimeout(ackTimer);
+    ackTimer = null;
+  }
+
   function clearRing(): void {
     if (ring === null) return;
-    if (ring.timer !== null) clearTimeout(ring.timer);
     ring = null;
     renderer?.setMarker("ring", null, 1, 0);
     deps.onRing?.(null);
@@ -504,10 +525,6 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
 
   function ackRing(g: Ring, s: Segment, now: number): void {
     g.acked = true;
-    if (g.timer !== null) {
-      clearTimeout(g.timer);
-      g.timer = null;
-    }
     const n = s.p.length;
     const to = n >= 2 ? { x: (s.p[n - 2] ?? 0) / UNIT, z: (s.p[n - 1] ?? 0) / UNIT } : g.at;
     g.endsAt = segmentEndsAt(s);
@@ -525,10 +542,6 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
   function updateRing(r: WorldRenderer, now: number, sNow: number): void {
     const g = ring;
     if (g === null) return;
-    if (!g.acked && g.sentAt !== null) {
-      const s = store.segOf(deps.mySeat());
-      if (s !== undefined && s !== g.baseSeg && s.t0 >= g.sentAt - ACK_SLACK_MS) ackRing(g, s, now);
-    }
     if (g.acked) {
       if (g.from !== null && g.to !== null) {
         const p = Math.min(1, (now - g.slideStart) / RING_MS);
@@ -658,6 +671,19 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
     if (epoch !== lastEpoch) {
       lastEpoch = epoch;
       resync = true;
+      own.reset(store.moveSeqOf(deps.mySeat()));
+      clearAckTimer();
+      clearRing(); // 알림 없이 거둔다 — 새 연결의 서버 위치가 진실이다
+    } else {
+      const ev = own.observe(store.moveSeqOf(deps.mySeat()), store.segOf(deps.mySeat()));
+      if (ev === "answered") {
+        clearAckTimer();
+        const mineSeg = store.segOf(deps.mySeat());
+        if (ring !== null && !ring.acked && mineSeg !== undefined) ackRing(ring, mineSeg, now);
+      } else if (ev === "reset") {
+        clearAckTimer();
+        clearRing();
+      }
     }
 
     for (const seat of store.takeEntered()) pendingEntered.add(seat);
@@ -666,13 +692,29 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
     }
 
     const gone: Actor[] = [];
+    const mySeat = deps.mySeat();
     for (const a of actors.values()) {
-      const live = store.positionOf(a.seat, sNow);
-      if (live === null && a.exit === null) {
+      const server = store.segOf(a.seat);
+      if (server === undefined && a.exit === null) {
         beginExit(a.seat, now); // 구간이 없어졌다(snap 에서 빠짐)
         if (!actors.has(a.seat)) continue; // 모션 줄이기면 바로 지워졌다
       }
-      const at = a.exit === null && live !== null ? live : a.pos;
+      // 그릴 구간: 내 자리는 예측 중이면 예측, 남은 언제나 서버 구간(결정 0059-4)
+      const eff = a.exit !== null || server === undefined ? undefined : a.seat === mySeat ? own.effective(server) : server;
+      const live = eff === undefined ? null : positionAt(eff, sNow);
+      if (eff !== undefined && eff !== a.seg) {
+        // 구간이 바뀌었다: 새 구간이 직전 프레임에도 이어졌다면 있었을 자리와 지금 그린 자리의 차이를 잡는다(한 프레임 걸음은 차이가 아니다)
+        const was = positionAt(eff, sNow - Math.max(gapMs, 0));
+        const ox = a.pos.x - was.x;
+        const oz = a.pos.z - was.z;
+        const far = ox * ox + oz * oz > BLEND_SNAP_DIST * BLEND_SNAP_DIST;
+        a.off = resync || reduced || far ? { x: 0, z: 0 } : { x: ox, z: oz };
+        a.offAt = now;
+      }
+      if (eff !== undefined || a.exit !== null) a.seg = eff;
+      if (resync || reduced) a.off = { x: 0, z: 0 };
+      const keep = live === null ? 0 : blendRemaining(now - a.offAt);
+      const at = live === null ? a.pos : { x: live.x + a.off.x * keep, z: live.z + a.off.z * keep };
       const dx = at.x - a.pos.x;
       const dz = at.z - a.pos.z;
       let moving = false;
@@ -759,6 +801,7 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
       if (a.tag !== null) a.tag.style.opacity = "0";
     }
     resync = false;
+    lastDrawAt = now;
 
     if (status.status === "loading" && store.isReady()) dispatch({ t: "ready" });
     if (status.status === "ready") degrade.frame(gapMs);
@@ -825,18 +868,24 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
     writeCueKey();
     clearRing();
     const here = { x: at.x, z: at.z };
-    ring = { at: here, target: here, from: null, to: null, slideStart: 0, baseSeg: store.segOf(deps.mySeat()), sentAt: null, acked: false, endsAt: 0, fadeStart: null, timer: null };
+    ring = { at: here, target: here, from: null, to: null, slideStart: 0, acked: false, endsAt: 0, fadeStart: null };
     renderer.setMarker("ring", here, 1, 1);
     deps.onRing?.(here);
     return { x: at.x, z: at.z };
   }
 
-  function notifyMoveSent(at: number): void {
-    const g = ring;
-    if (g === null || g.acked) return;
-    g.sentAt = at;
-    g.timer = setTimeout(() => {
-      if (ring !== g || g.acked) return;
+  function notifyMoveSent(at: number, dest?: { x: number; z: number }): void {
+    if (dest === undefined) {
+      // 예측 없이 서버 구간만 따른다(성능 스파이크가 move 를 먼저 넣고 부른다): 이미 있는 내 구간으로 링을 바로 맞춘다
+      const mineSeg = store.segOf(deps.mySeat());
+      if (ring !== null && !ring.acked && mineSeg !== undefined) ackRing(ring, mineSeg, Date.now());
+      return;
+    }
+    own.sent(predictSegment(own.effective(store.segOf(deps.mySeat())), dest, at));
+    clearAckTimer();
+    ackTimer = setTimeout(() => {
+      ackTimer = null;
+      if (disposed || !own.expire()) return;
       clearRing();
       deps.onNotice(NETWORK_TEXT);
     }, MOVE_ACK_TIMEOUT_MS);
@@ -866,7 +915,7 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
       if (resizeTimer !== null) clearTimeout(resizeTimer);
       if (cueTimer !== null) clearTimeout(cueTimer);
       if (tickTimer !== null) clearInterval(tickTimer);
-      if (ring?.timer) clearTimeout(ring.timer);
+      clearAckTimer();
       ring = null;
       cue = null;
       teardownRenderer();
@@ -882,6 +931,10 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
     },
     ring() {
       return ring === null ? null : { ...ring.target };
+    },
+    shown(seat) {
+      const a = actors.get(seat);
+      return a === undefined ? null : { x: a.pos.x, z: a.pos.z, at: lastDrawAt };
     },
     status() {
       return status;
