@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CHAT_PHASES, audience, channelOf, phaseKey } from "../../shared/game/audience";
+import { CHAT_PHASES, audience, channelOf, phaseKey, worldVisibleTo } from "../../shared/game/audience";
 import type { AudienceEvent } from "../../shared/game/audience";
 import { attachConnection, createRoomState, joinRoom, startGame } from "../../shared/game/room";
 import type { Player, RoomState } from "../../shared/game/room";
@@ -137,6 +137,7 @@ describe("audience — 받는 사람 집합", () => {
     const lobby = lobbyOf(5);
     expect(sorted(audience(lobby, { k: "world" }))).toEqual(lobby.players.map((p) => p.id).sort().join(","));
     for (const phase of ["assigning", "roleReveal", "dayAnnounce", "discussion", "night", "morning", "ended"] as PhaseId[]) {
+      // mover 없는 world 는 어느 단계에서도 빈 집합이다(지도 단계도 실패하면 닫힌다 — 아래 world mover 블록).
       expect(audience(sixAt(phase, { day: 1 }), { k: "world" }).size).toBe(0);
     }
   });
@@ -192,8 +193,13 @@ describe("audience — 받는 사람 집합", () => {
 describe("CHAT_PHASES", () => {
   it("로비·낮 단계·밤·아침이 들고, assigning·roleReveal·ended·claim 은 들지 않는다", () => {
     expect([...CHAT_PHASES].sort().join(",")).toBe(
-      ["lobby", "dayAnnounce", "discussion", "execVote", "candidateVote", "candidateVoteReveal", "defense", "execution", "night", "morning"].sort().join(","),
+      [
+        "lobby", "dayAnnounce", "discussion", "nomination", "execVote", "candidateVote", "candidateVoteReveal",
+        "defense", "verdict", "execution", "night", "morning",
+      ].sort().join(","),
     );
+    // 지목·찬반 중에도 채팅은 된다(MAP-04 '채팅은 된다').
+    expect(CHAT_PHASES.has("nomination") && CHAT_PHASES.has("verdict")).toBe(true);
     for (const phase of SILENT_PHASES) expect(CHAT_PHASES.has(phase)).toBe(false);
   });
 });
@@ -235,5 +241,80 @@ describe("phaseKey — 단계 한 번(instance)마다 유일한 키", () => {
       check(state);
     }
     for (const phase of ["dayAnnounce", "discussion", "night", "morning"] as PhaseId[]) expect(seen.has(phase)).toBe(true);
+  });
+});
+
+// ---- 08-04: world 위치 프레임의 받는 사람 (GHOST-01, 결정 0060-8) ----
+// sixAt: 6명, seat 2 가 유령. 지도 단계에서 mover 기준으로 받는 사람이 정해진다.
+const MAP_PHASE_LIST: PhaseId[] = ["dayAnnounce", "discussion", "nomination", "defense", "verdict", "execution", "night", "morning"];
+const world = (mover?: string): AudienceEvent => (mover === undefined ? { k: "world" } : { k: "world", mover });
+
+describe("world mover(GHOST-01)", () => {
+  it("로비: mover 가 누구든 없든 방 전원", () => {
+    const lobby = lobbyOf(6);
+    const everyone = ids(0, 1, 2, 3, 4, 5);
+    expect(sorted(audience(lobby, world(idOf(0))))).toEqual(everyone);
+    expect(sorted(audience(lobby, world()))).toEqual(everyone);
+  });
+
+  it.each(MAP_PHASE_LIST)("%s: mover 가 산 사람이면 방 전원(유령 포함)", (phase) => {
+    expect(sorted(audience(sixAt(phase, { day: 1 }), world(idOf(0))))).toEqual(ids(0, 1, 2, 3, 4, 5));
+  });
+
+  it.each(MAP_PHASE_LIST)("%s: mover 가 유령이면 유령만 — 산 사람은 한 명도 받지 않는다", (phase) => {
+    const s = sixAt(phase, { day: 1, dead: [2, 5] });
+    const got = audience(s, world(idOf(2)));
+    expect(sorted(got)).toEqual(ids(2, 5));
+    for (const seat of [0, 1, 3, 4]) expect(got.has(idOf(seat))).toBe(false);
+  });
+
+  it.each(MAP_PHASE_LIST)("%s: mover 없음은 빈 집합(실패하면 닫힌다)", (phase) => {
+    expect(audience(sixAt(phase, { day: 1 }), world()).size).toBe(0);
+  });
+
+  it.each(MAP_PHASE_LIST)("%s: 방에 없는 mover 는 빈 집합", (phase) => {
+    expect(audience(sixAt(phase, { day: 1 }), world("nobody-in-this-room")).size).toBe(0);
+  });
+
+  it.each(["assigning", "roleReveal", "ended", "execVote", "candidateVote", "candidateVoteReveal"] as PhaseId[])(
+    "%s: 지도 단계가 아니면 mover 가 있어도 빈 집합",
+    (phase) => {
+      expect(audience(sixAt(phase, { day: 1 }), world(idOf(0))).size).toBe(0);
+      expect(audience(sixAt(phase, { day: 1 }), world(idOf(2))).size).toBe(0);
+    },
+  );
+
+  it("alive 필드가 없는 옛 상태의 mover 는 산 사람으로 본다", () => {
+    expect(sorted(audience(sixAt("discussion", { day: 1, dead: [] }), world(idOf(2))))).toEqual(ids(0, 1, 2, 3, 4, 5));
+  });
+});
+
+describe("worldVisibleTo — 접속 스냅샷에 실릴 좌석 (GHOST-01)", () => {
+  it.each(["lobby", "assigning", "roleReveal"] as PhaseId[])("%s: 방 전원", (phase) => {
+    const s = phase === "lobby" ? lobbyOf(6) : sixAt(phase, { day: 1 });
+    expect(sorted(worldVisibleTo(s, idOf(0)))).toEqual(ids(0, 1, 2, 3, 4, 5));
+    expect(sorted(worldVisibleTo(s, idOf(2)))).toEqual(ids(0, 1, 2, 3, 4, 5));
+  });
+
+  it.each(MAP_PHASE_LIST)("%s: viewer 가 산 사람이면 산 사람만", (phase) => {
+    const s = sixAt(phase, { day: 1, dead: [2, 5] });
+    expect(sorted(worldVisibleTo(s, idOf(0)))).toEqual(ids(0, 1, 3, 4));
+  });
+
+  it.each(MAP_PHASE_LIST)("%s: viewer 가 유령이면 전원", (phase) => {
+    const s = sixAt(phase, { day: 1, dead: [2, 5] });
+    expect(sorted(worldVisibleTo(s, idOf(2)))).toEqual(ids(0, 1, 2, 3, 4, 5));
+  });
+
+  it("ended 와 옛 투표 단계는 빈 집합", () => {
+    for (const phase of ["ended", "execVote", "candidateVote", "candidateVoteReveal"] as PhaseId[]) {
+      expect(worldVisibleTo(sixAt(phase, { day: 1 }), idOf(0)).size).toBe(0);
+      expect(worldVisibleTo(sixAt(phase, { day: 1 }), idOf(2)).size).toBe(0);
+    }
+  });
+
+  it("방에 없는 viewer 는 어느 단계에서도 빈 집합", () => {
+    expect(worldVisibleTo(lobbyOf(6), "nobody-in-this-room").size).toBe(0);
+    for (const phase of MAP_PHASE_LIST) expect(worldVisibleTo(sixAt(phase, { day: 1 }), "nobody-in-this-room").size).toBe(0);
   });
 });

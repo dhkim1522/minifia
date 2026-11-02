@@ -7,7 +7,7 @@ import { isAlive } from "./alive";
 import type { Player, RoomState } from "./room";
 
 /** 이벤트 종류와 채널. world 는 로비 위치 프레임(채널이 없다). */
-export type AudienceEvent = { k: "chat" | "typing" | "emote"; ch: ChatChannel } | { k: "world" };
+export type AudienceEvent = { k: "chat" | "typing" | "emote"; ch: ChatChannel } | { k: "world"; mover?: string };
 
 /**
  * 서버가 채팅을 받는 단계. 화면이 없는 낮 단계도 받는다(UI-SPEC D1, 결정 0044-23) — 8·9페이즈는 화면만 붙이면 된다.
@@ -62,4 +62,9 @@ export function audience(state: RoomState, ev: AudienceEvent): ReadonlySet<strin
     case "ghost":
       return pick((p) => !isAlive(p));
   }
+}
+
+/** RED 자리표시자 — GREEN 커밋이 구현으로 바꾼다. */
+export function worldVisibleTo(_state: RoomState, _viewerId: string): ReadonlySet<string> {
+  return new Set();
 }
