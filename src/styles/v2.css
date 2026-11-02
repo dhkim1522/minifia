@@ -95,7 +95,17 @@
 .mv-chat__mark.is-mafia { color: var(--crimson-300); }
 .mv-chat__mark.is-ghost { color: var(--gray-300); }
 
+/* 득표 배지(승인 .mv-badge, bundle.css 5-6·44-46). 0표는 부품이 그리지 않는다. 명조 변수는 08-05 토큰 전까지 대체값(serif) */
+.mv-badge { display: inline-flex; align-items: baseline; justify-content: center; gap: 2px; min-width: var(--badge-min); box-sizing: border-box; padding: 4px 10px 6px; border-radius: var(--radius-badge); background: var(--overlay-ink-strong); border: 2px solid var(--brass-400); box-shadow: var(--shadow-badge); white-space: nowrap; transform-origin: 50% 100%; animation: mv-pop var(--dur-pop) ease-out both; }
+.mv-badge.is-lead { animation: mv-pulse var(--dur-pulse) ease-in-out infinite; filter: drop-shadow(0 0 6px rgba(255, 224, 176, 0.75)); }
+.mv-badge__num { font-family: var(--font-serif, serif); font-size: 22px; line-height: 1; font-weight: 700; color: var(--cream-100); font-variant-numeric: tabular-nums; }
+.mv-badge__unit { font-family: var(--font-ui); font-size: 12px; line-height: 1; font-weight: 700; color: var(--brass-400); }
+@keyframes mv-pop { 0% { transform: scale(0.4); opacity: 0; } 60% { transform: scale(1.2); opacity: 1; } 100% { transform: scale(1); } }
+@keyframes mv-pulse { 0%, 100% { transform: scale(1.18); } 50% { transform: scale(1.34); } }
+
 @media (prefers-reduced-motion: reduce) {
   .mv-toast, .mv-ring__bar, .mv-phase__hint { transition: none; }
   .mv-chat__newdot i, .mv-typing i { animation: none; }
+  .mv-badge, .mv-badge.is-lead { animation: none; }
+  .mv-badge.is-lead { transform: scale(1.18); }
 }
