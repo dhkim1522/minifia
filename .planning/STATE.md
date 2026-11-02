@@ -5,16 +5,16 @@ milestone_name: 같은 공간
 current_phase: 08
 current_phase_name: 낮 처형과 유령
 status: executing
-stopped_at: Completed 08-03-PLAN.md
-last_updated: "2026-11-02T10:49:44.996Z"
+stopped_at: Completed 08-04-PLAN.md
+last_updated: "2026-11-02T11:06:04.499Z"
 last_activity: 2026-11-02
 last_activity_desc: Phase 08 execution started
-state_head: e4820c9c591aef5668f65adb3e85f625cc804678
+state_head: 7bad58229e20fd60948609a048d945238182c17f
 progress:
   total_phases: 7
   completed_phases: 2
   total_plans: 78
-  completed_plans: 53
+  completed_plans: 54
   percent: 29
 ---
 
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-11-02)
 ## Current Position
 
 Phase: 08 (낮 처형과 유령) — EXECUTING
-Plan: 4 of 28
+Plan: 5 of 28
 Status: Ready to execute
 Last activity: 2026-11-02 — Phase 08 execution started
 
@@ -112,6 +112,7 @@ Progress: [███░░░░░░░] 29% (2/7 phases)
 | Phase 08 P01 | 10 min | 2 tasks | 8 files |
 | Phase 08 P02 | 9min | 3 tasks | 16 files |
 | Phase 08 P03 | 6min | 3 tasks | 8 files |
+| Phase 08 P04 | 15min | 3 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -218,6 +219,8 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 08]: 찬반 분모는 유권자 수 E(변론자를 뺀 산 사람): 찬성×2 > E, 못 던진 사람은 기권(분모에 포함)
 - [Phase 08]: resolveNomination 이 그날 voteLog 줄을 만들고 resolveVerdict 는 그 줄의 exec 만 채운다(두 훅 순서 nomination → verdict 유지)
 - [Phase 08]: [08-03] 찬반 버튼·득표 배지는 역할 색을 쓰지 않는다(찬반 규칙 구역 crimson·brass 없음을 시험으로 고정). RoleChip 은 신분을 판단하지 않고 유령 분기가 만든다
+- [Phase 08]: 무대 예외는 정확히 STAGE_SPOT(0,0) 한 점과 300 이내 걸을 수 있는 점 사이 선분뿐 — lineWalkable 한 함수가 snapToWalkable·저장 복원·routeFx 와 공유 (08-04)
+- [Phase 08]: 배치(layoutFor)는 지금 단계 기준 멱등 동기화 + 저장되는 기억 lay 재사용 — 걷는 도중·퇴거 뒤에도 자리가 뒤섞이지 않음 (08-04)
 
 ### Pending Todos
 
@@ -253,8 +256,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-02T10:49:44.796Z
-Stopped at: Completed 08-03-PLAN.md
+Last session: 2026-11-02T11:06:04.298Z
+Stopped at: Completed 08-04-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
