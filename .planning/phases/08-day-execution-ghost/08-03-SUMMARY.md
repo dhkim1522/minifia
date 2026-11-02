@@ -101,7 +101,7 @@ metrics:
 - `npm run typecheck` 종료 0
 - `npx vitest run --project client` 55 파일 1772건 통과
 - 수락 기준: `mv-badge__unit`·`export function VoteBadge`·`rolePolice`·`roleDoctor`·`data-role-chip`·`data-verdict`·`thumbUp`·`skip` grep 성공, VoteBadge hex 없음, 찬반 규칙 구역에 crimson·brass 없음, `test(08-03)` 커밋 3개
-- 저장소 위생 규칙 검사(회사·조직 관련 표현 grep) 변경 파일 결과 없음
+- 저장소 위생 규칙 검사(금지 표현 grep) 변경 파일 결과 없음
 
 ## Known Stubs
 

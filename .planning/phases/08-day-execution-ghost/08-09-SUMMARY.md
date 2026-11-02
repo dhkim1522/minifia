@@ -182,7 +182,7 @@ semanticAssessment: 세 RED 모두 계획한 단언(받아야 할 프레임이 �
 
 - `npm run typecheck` 통과(앱·워커). `npx vitest run` 152 files / 4453 passed (1 skipped 는 이전부터 있던 것). `test/unit/chatStaticGuard.test.ts` 그대로 통과(무차별 방송 이름 0건).
 - 인수 기준: `canMove(room`·`k: "world", mover` 존재; `room.phase !== "lobby") return;` 줄 0건(rc 1); `test(08-09)` 커밋 3건; `worldVisibleTo(`·`ghostSnapped` 존재; `FORBIDDEN_KEYS`·`ROLE_WORDS` 존재; ghostLeak.test.ts `it(` 7개; `private syncLayout(`·`forceSegment(`·`layoutFor(` 존재; `this.syncLayout(` 3건; 시험에 `.skip(`·`.todo(` 없음(rc 1) — 모두 통과.
-- 위생: 저장소 위생 규칙의 금지 표현 검사(`git grep -nIiE "저장소 위생 패턴"`)가 이 계획이 건드린 파일에서 0건.
+- 위생: 저장소 위생 규칙의 금지 표현 검사(저장소 위생 검사)가 이 계획이 건드린 파일에서 0건.
 
 ## Known Stubs
 

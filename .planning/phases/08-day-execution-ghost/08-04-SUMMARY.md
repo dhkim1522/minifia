@@ -169,7 +169,7 @@ semanticAssessment: 세 RED 모두 RED 커밋에 이름만 있는 자리표시�
 - `npx vitest run test/unit/movement.test.ts test/unit/audience.test.ts` 120 passed; `map.test.ts`·`world.test.ts`·`e2eContract.test.ts` 통과(BAR_MASK 줄 diff 0건); `gather.test.ts` 48 passed.
 - `npm run typecheck` 통과(앱·워커). `npx vitest run --project unit` 72 files / 2119 passed (1 skipped 는 이전부터 있던 것), `--project client` 1772 passed, `--project worker` 269 passed.
 - 인수 기준: `canMove`·`worldVisibleTo`·`mover` 존재, `"nomination",` 1건, `STAGE_SPOT`·`forceSegment`·`lay?` 존재, BAR_MASK 줄 diff 없음, `layoutFor`·`RING_RADIUS_FX = 265` 존재, `gather.ts` 에 `Math.sin|cos|atan2` 없음, 시험에 `.skip(`·`.todo(` 없음, `test(08-04)` 커밋 3건 — 모두 통과.
-- 위생: `git grep -nIiE "저장소 위생 패턴"` 이 계획이 건드린 코드·시험에서 0건.
+- 위생: 저장소 위생 검사 이 계획이 건드린 코드·시험에서 0건.
 
 ## Known Stubs
 

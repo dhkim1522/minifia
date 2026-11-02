@@ -172,7 +172,7 @@ completed: 2026-11-02
 - `npx vitest run test/unit/camera.test.ts test/unit/presence.test.ts` — 통과(155 통과, 1 skipped 는 camera 이전 시험에서 이미 있던 것)
 - `npm run typecheck && npx vitest run --project unit` — 통과(74 파일 2342 통과)
 - 인수 기준: `export function visibleSeats`·`cameraModeOf`·`executionFade`·`gatherView`·`GHOST_FADE_END_MS`·`STAGE_TOP_R = 1.18`·`ZOOM_MAJORITY = 1.08` grep 성공, presence.ts 에 three·document·window 없음(grep rc 1), 테스트에 `.skip(`·`.todo(` 없음, `test(08-08):` 커밋 3건
-- 레포 위생 grep(회사·조직 표현) 결과 없음
+- 레포 위생 grep(금지 표현) 결과 없음
 
 ## Known limitations (미해결로 둔 것 — 계획 가정과 같음)
 

@@ -150,7 +150,7 @@ semanticAssessment: 세 RED 모두 이름만 있는 자리표시자(`dayEvents`�
 - `npx vitest run test/unit/dayView.test.ts` 62 passed.
 - `npm run typecheck` 통과(앱·워커), `npx vitest run --project unit` 73 files / 2187 passed (1 skipped 는 이전부터 있던 것).
 - 인수 기준: `export function dayEvents`·`majorityOf`·`TOAST_MERGE_MS = 400`·`TOAST_QUEUE_MAX = 4`·`ANNOUNCE_TALLY_MS = 2000`·`export function headerFor`·`EXECUTION_MS`·"이야기하며 마피아를 찾아요" 존재, `git log --grep="^test\(0?8-06\):"` 3줄.
-- 위생: `git grep -nIiE "저장소 위생 패턴"` 이 두 파일에서 0건.
+- 위생: 저장소 위생 검사 이 두 파일에서 0건.
 
 ## Known Stubs
 

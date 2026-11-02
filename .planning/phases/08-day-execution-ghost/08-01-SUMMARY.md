@@ -63,10 +63,10 @@ coverage:
         status: pass
     human_judgment: false
   - id: D3
-    description: "공개 저장소 위생: 결정 문서에 회사·조직 관련 표현 없음"
+    description: "공개 저장소 위생: 결정 문서에 금지 표현 없음"
     verification:
       - kind: other
-        ref: "git grep -nIiE '저장소 위생 패턴' (0060 및 개정한 7개 문서) 결과 0건"
+        ref: "저장소 위생 검사 (0060 및 개정한 7개 문서) 결과 0건"
         status: pass
     human_judgment: false
   - id: D4
@@ -101,7 +101,7 @@ None - plan executed exactly as written. (참고: 두 작업 모두 `tdd="true"`
 
 - Task 1 automated 통과, `ls docs/decisions | tail -1` = 0060, 번호 항목 14개, `2026-11-02`·`250ms`·`2.65` 포함.
 - Task 2 automated 통과, 7개 문서 모두 `결정 0060` 1건 이상, 줄 수 비감소.
-- `git grep -nIiE "저장소 위생 패턴"` 대상 8개 문서 0건, 0060 에 `회사|조직` 0건.
+- 저장소 위생 검사 대상 8개 문서 0건, 0060 에 금지 낱말 0건.
 - `npx vitest run test/unit/handoff.test.ts` 2 passed.
 
 ## Known Stubs

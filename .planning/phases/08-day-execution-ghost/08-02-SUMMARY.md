@@ -165,7 +165,7 @@ semanticAssessment: 세 RED 모두 이름만 있는 자리표시자 모듈(잘�
 - `npm run typecheck` 통과(앱·워커).
 - `npx vitest run --project unit` 70 files / 1949 passed (1 skipped 는 이전부터 있던 것), `--project client` 1733 passed, `--project worker` 269 passed.
 - 인수 기준: `"nomination"`·`NOMINATION_MS = 15_000`·`resolveNomination` 존재, `next: "execVote"` 그대로, `yes * 2 > `·`verdictVote: _` 존재, verdict.ts 에 `phaseEndsAt` 없음, `toggleEnd`·`enterDiscussion`·화면 새 행 존재, 시험에 `.skip(`·`.todo(` 없음 — 모두 통과.
-- 위생: `git grep -nIiE "저장소 위생 패턴"` 이 계획이 건드린 코드·시험에서 0건.
+- 위생: 저장소 위생 검사 이 계획이 건드린 코드·시험에서 0건.
 
 ## Known Stubs
 

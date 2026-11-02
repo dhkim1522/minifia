@@ -194,7 +194,7 @@ completed: 2026-11-02
 - `npx vitest run test/unit/barScene.test.ts test/unit/cameraThree.test.ts test/unit/character.test.ts` — 98 통과
 - `npm run typecheck && npx vitest run --project unit --project client` — 통과(129 파일 4173 통과, 1 skipped 는 이전부터)
 - 인수 기준: `setGhost(on`·`setGhost?`·`holdPose(id`·`setRing(color`·`"trial"`(renderer.ts)·`setZoom`(threeRenderer.ts)·`setTension`(bar.ts) grep 성공, characterData.ts 변경 0, bar.ts diff 에 새 광원 0건(grep rc 1), 시험에 `.skip(`·`.todo(` 없음(rc 1), `test(08-10):` 커밋 3건
-- 레포 위생 grep: `src` 에 결과 없음. `test/unit/gameRoom.test.ts` 의 `seatOrdered`(이름 일부가 대소문자 무시로 일치한 이전부터의 일반 식별자)만 걸렸고 이 계획과 무관함
+- 레포 위생 grep: `src` 에 결과 없음. 이전부터 있던 시험 변수 이름 하나가 대소문자 무시로 일치했을 뿐이고 이 계획과 무관함
 
 ## Known limitations
 

@@ -118,7 +118,7 @@ HeadStack 을 typing → 직업 칩 → 유력 도장 → 득표 배지 → 이�
 - `npx vitest run test/unit/tokensV2.test.ts` 17건 통과, `npm run tokens:check` 통과
 - `npm run typecheck` 종료 0, `npx vitest run --project client --project unit` 127 파일 3922건 통과(1 skipped 는 기존), `npx vite build` 성공
 - 수락 기준: Task 1 `VoteBadge`·`RoleChip`·`is-mine` grep 성공과 `test(08-05)` 커밋 존재, Task 2 `is-hot`·`"vote"`·`mv-chat__sys.is-hot` grep 성공, Task 3 `--font-serif:`·`Gowun+Batang:wght@700` grep 성공과 `grep -c font-serif src/styles/v2.css` = 4(3 이상)
-- 저장소 위생 규칙 검사(회사·조직 관련 표현 grep) 변경 파일 결과 없음
+- 저장소 위생 규칙 검사(금지 표현 grep) 변경 파일 결과 없음
 
 ## Known Stubs
 
