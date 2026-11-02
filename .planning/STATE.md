@@ -5,11 +5,11 @@ milestone_name: 같은 공간
 current_phase: 8
 current_phase_name: 낮 처형과 유령
 status: planning
-stopped_at: Phase 07 complete, ready to plan Phase 8
-last_updated: "2026-11-02T06:36:53.661Z"
+stopped_at: Phase 8 UI-SPEC approved
+last_updated: "2026-11-02T07:14:58.489Z"
 last_activity: 2026-11-02
 last_activity_desc: Phase 07 complete, transitioned to Phase 8
-state_head: a5125b936ad02c33da6bd770157578c9d3fc0b7f
+state_head: 63fb680545621fd1cb6bbf2199395fa417bd9712
 progress:
   total_phases: 7
   completed_phases: 2
@@ -246,9 +246,9 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-02
-Stopped at: Phase 07 complete (UAT 완료, 실기기 항목은 백로그 이월), ready to plan Phase 8
-Resume file: None
+Last session: 2026-11-02T07:14:58.197Z
+Stopped at: Phase 8 UI-SPEC approved
+Resume file: .planning/phases/08-day-execution-ghost/08-UI-SPEC.md
 
 ## Operator Next Steps
 
