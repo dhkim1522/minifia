@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { StrictMode } from "react";
 import { Object3D } from "three";
@@ -1970,6 +1971,176 @@ describe("게임 장면(08-12): 카메라·조명·긴장·떠다님·처형 연
       expect(h2.playEmote).toHaveBeenCalledTimes(1);
       s.rerender({ deny: { seat: 2, nonce: 2 } });
       expect(h2.playEmote).toHaveBeenCalledTimes(2);
+    });
+  });
+});
+
+describe("게임 이름표: 지목 버튼·tagProps·canWalk (DAY-04, MAP-04)", () => {
+  afterEach(() => {
+    for (const el of document.querySelectorAll("body > input")) el.remove();
+  });
+  const FIVE = [...FOUR, player(4, "다온")];
+  const FIVE_ENTS = (): WorldSeg[] => [...FOUR_ENTS(), seg(4, [300, 300])];
+  const SCENE5 = sceneOf({ 0: {}, 1: {}, 2: {}, 3: {}, 4: {} });
+  const pickOf = (over: Partial<NonNullable<WorldStageProps["pick"]>> = {}): NonNullable<WorldStageProps["pick"]> => ({
+    seats: new Set([1, 2, 4]),
+    mine: 2,
+    label: (n) => `${n} 님 가리키기`,
+    onPick: vi.fn(),
+    group: "지목",
+    ...over,
+  });
+  const openPick = (over: Partial<WorldStageProps> = {}) => open({ scene: SCENE5, pick: pickOf(), ...over }, { players: FIVE, ents: FIVE_ENTS() });
+  const pickBtn = (s: Setup, seat: number): HTMLButtonElement => s.utils.container.querySelector<HTMLButtonElement>(`button[data-pick="${seat}"]`)!;
+
+  describe("지목 버튼", () => {
+    it("pick 좌석의 이름표만 button[data-pick] 이 되고 aria-label·aria-pressed 가 붙는다", async () => {
+      const s = await openPick();
+      expect(s.utils.container.querySelectorAll("button[data-pick]")).toHaveLength(3);
+      expect(pickBtn(s, 1).getAttribute("aria-label")).toBe("철수 님 가리키기");
+      expect(pickBtn(s, 1).getAttribute("type")).toBe("button");
+      expect(pickBtn(s, 2).getAttribute("aria-pressed")).toBe("true");
+      expect(pickBtn(s, 1).getAttribute("aria-pressed")).toBe("false");
+      expect(pickBtn(s, 4).getAttribute("aria-pressed")).toBe("false");
+      expect(pickBtn(s, 0)).toBeNull();
+      expect(pickBtn(s, 3)).toBeNull();
+    });
+
+    it("이름표 층은 role=group 이고 aria-label 이 pick.group 이다. pick 이름표만 aria-hidden 이 없다", async () => {
+      const s = await openPick();
+      const layer = s.utils.container.querySelector(".mf-world__tags")!;
+      expect(layer.getAttribute("role")).toBe("group");
+      expect(layer.getAttribute("aria-label")).toBe("지목");
+      for (const seat of [1, 2, 4]) expect(tagOf(s.utils, seat)!.hasAttribute("aria-hidden")).toBe(false);
+      for (const seat of [0, 3]) expect(tagOf(s.utils, seat)!.getAttribute("aria-hidden")).toBe("true");
+    });
+
+    it("pick 이 없으면 이름표 층에 role 이 없고 버튼도 없다(로비)", async () => {
+      const s = await open();
+      const layer = s.utils.container.querySelector(".mf-world__tags")!;
+      expect(layer.hasAttribute("role")).toBe(false);
+      expect(s.utils.container.querySelector("button[data-pick]")).toBeNull();
+    });
+
+    it("버튼을 누르면 onPick(seat) 이 한 번 불리고, mousedown 은 기본 동작이 막혀 입력칸 포커스를 뺏지 않는다", async () => {
+      const pick = pickOf();
+      const s = await openPick({ pick });
+      const input = document.createElement("input");
+      input.setAttribute("data-chat-input", "");
+      document.body.append(input);
+      input.focus();
+      const notPrevented = fireEvent.mouseDown(pickBtn(s, 4));
+      expect(notPrevented).toBe(false);
+      expect(document.activeElement).toBe(input);
+      fireEvent.click(pickBtn(s, 4));
+      expect(pick.onPick).toHaveBeenCalledTimes(1);
+      expect(pick.onPick).toHaveBeenCalledWith(4);
+      input.remove();
+    });
+
+    it("canSend 가 거짓이면 aria-disabled 이고 눌러도 onPick 이 없다", async () => {
+      const pick = pickOf();
+      const s = await openPick({ pick, canSend: false });
+      expect(pickBtn(s, 1).getAttribute("aria-disabled")).toBe("true");
+      fireEvent.click(pickBtn(s, 1));
+      expect(pick.onPick).not.toHaveBeenCalled();
+    });
+
+    it("버튼 안에는 이름표 쌓임이 그대로 있고 닉네임은 텍스트로만 들어간다", async () => {
+      const s = await open({ scene: SCENE5, pick: pickOf() }, { players: [...FOUR, player(4, "<img src=x onerror=alert(1)>")], ents: FIVE_ENTS() });
+      expect(pickBtn(s, 4).querySelector(".mv-head")).not.toBeNull();
+      expect(pickBtn(s, 4).querySelector("img")).toBeNull();
+      expect(pickBtn(s, 4).textContent).toContain("<img src=x onerror=alert(1)>");
+    });
+
+    it("방장이 끊긴 사람을 내보내는 버튼과 같은 이름표에 겹치지 않는다(pick 좌석이 먼저)", async () => {
+      const players = [player(0, "민지"), player(1, "철수", { connected: false })];
+      const s = await open({ scene: sceneOf({ 0: {}, 1: {} }), pick: pickOf({ seats: new Set([1]), mine: undefined }) }, { players });
+      expect(s.utils.container.querySelectorAll("button[data-pick]")).toHaveLength(1);
+      expect(s.utils.container.querySelector(".mf-world__kick")).toBeNull();
+    });
+
+    it("world.css 에 .mf-world__pick 규칙: 안쪽 11 · 바깥 −11 · pointer-events auto · 포커스 링 gray-100 2px", () => {
+      const css = readFileSync("src/styles/world.css", "utf8");
+      const rule = /\.mf-world__pick\s*\{([^}]*)\}/.exec(css)?.[1] ?? "";
+      expect(rule).toMatch(/padding:\s*11px/);
+      expect(rule).toMatch(/margin:\s*-11px/);
+      expect(rule).toMatch(/pointer-events:\s*auto/);
+      expect(css).toMatch(/\.mf-world__pick:focus-visible\s*\{[^}]*2px solid var\(--gray-100\)/);
+    });
+  });
+
+  describe("tagProps", () => {
+    it("tagProps(seat) 가 주는 속성이 그 이름표 쌓임에 들어간다", async () => {
+      const s = await open(
+        { scene: SCENE5, tagProps: (seat) => (seat === 2 ? { count: 3, lead: true } : seat === 4 ? { sure: true, done: true } : {}) },
+        { players: FIVE, ents: FIVE_ENTS() },
+      );
+      const head2 = tagOf(s.utils, 2)!.querySelector(".mv-head")!;
+      expect(head2.getAttribute("data-count")).toBe("3");
+      expect(head2.getAttribute("data-lead")).toBe("true");
+      expect(head2.querySelector(".mv-badge.is-lead")).not.toBeNull();
+      const head4 = tagOf(s.utils, 4)!.querySelector(".mv-head")!;
+      expect(head4.getAttribute("data-sure")).toBe("true");
+      expect(head4.getAttribute("data-done")).toBe("true");
+      expect(tagOf(s.utils, 1)!.querySelector(".mv-head")!.hasAttribute("data-count")).toBe(false);
+    });
+
+    it("선두 이름표의 z-index 는 다른 이름표보다 높다(순위 + 10)", async () => {
+      const s = await open({ scene: SCENE5, tagProps: (seat) => (seat === 1 ? { count: 2, lead: true } : {}) }, { players: FIVE, ents: FIVE_ENTS() });
+      frame();
+      const z = (seat: number): number => Number(tagOf(s.utils, seat)!.style.zIndex);
+      const others = [0, 2, 3, 4].map(z);
+      expect(Math.max(...others)).toBeLessThanOrEqual(7);
+      expect(z(1)).toBeGreaterThanOrEqual(10);
+      expect(z(1)).toBeGreaterThan(Math.max(...others));
+    });
+
+    it("ring 이 있는 좌석은 이름표에 data-ring-kind 가 붙고 그 캐릭터 발밑 고리 색이 정해진다. 없어지면 고리를 뗀다", async () => {
+      const s = await open({ scene: SCENE5, tagProps: (seat) => (seat === 3 ? { ring: "police" } : seat === 4 ? { ring: "mafia" } : {}) }, { players: FIVE, ents: FIVE_ENTS() });
+      expect(tagOf(s.utils, 3)!.getAttribute("data-ring-kind")).toBe("police");
+      expect(tagOf(s.utils, 4)!.getAttribute("data-ring-kind")).toBe("mafia");
+      expect(tagOf(s.utils, 2)!.hasAttribute("data-ring-kind")).toBe(false);
+      const r = s.world.renderers[0]!;
+      const h3 = r.chars.get(3) as FakeHandle;
+      frame();
+      expect(h3.setRing).toHaveBeenCalledTimes(1);
+      expect(h3.setRing).toHaveBeenCalledWith("#7a8fb8");
+      expect((r.chars.get(4) as FakeHandle).setRing).toHaveBeenCalledWith("#c8102e");
+      expect((r.chars.get(2) as FakeHandle).setRing).not.toHaveBeenCalled();
+      s.rerender({ tagProps: () => ({}) });
+      frame();
+      expect(h3.setRing).toHaveBeenLastCalledWith(null);
+      expect(tagOf(s.utils, 3)!.hasAttribute("data-ring-kind")).toBe(false);
+    });
+  });
+
+  describe("canWalk (MAP-04)", () => {
+    it("canWalk 가 거짓이면 맵 탭은 링도 move 도 보내지 않는다", async () => {
+      const s = await open({ canWalk: false });
+      tapAt(surface(s.utils), 250, 340);
+      expect(s.send).not.toHaveBeenCalled();
+      expect(s.utils.container.querySelector("[data-world-stage]")!.hasAttribute("data-ring")).toBe(false);
+      expect(s.world.renderers[0]!.markers.filter((m) => m.kind === "ring")).toHaveLength(0);
+    });
+
+    it("canWalk 를 켜면(기본값도 켜짐) 다시 걷는다", async () => {
+      const s = await open({ canWalk: false });
+      s.rerender({ canWalk: true });
+      tapAt(surface(s.utils), 250, 340);
+      expect(s.send).toHaveBeenCalledTimes(1);
+    });
+
+    it("canWalk 가 거짓이어도 입력칸 포커스 중 탭은 키보드만 닫는다(D4 그대로)", async () => {
+      const s = await open({ canWalk: false });
+      const input = document.createElement("input");
+      input.setAttribute("data-chat-input", "");
+      document.body.append(input);
+      input.focus();
+      tapAt(surface(s.utils), 250, 340);
+      expect(document.activeElement).not.toBe(input);
+      expect(s.send).not.toHaveBeenCalled();
+      input.remove();
     });
   });
 });

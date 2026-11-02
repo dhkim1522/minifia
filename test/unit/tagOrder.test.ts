@@ -97,3 +97,23 @@ describe("rankTags 맨 앞 겹침 (G-06-4)", () => {
     expect(r.filter((t) => t.front).map((t) => t.seat).sort()).toEqual([1, 3]);
   });
 });
+
+describe("rankTags 선두 가산 (08-12)", () => {
+  it("lead 이름표는 순위에 10 이 더해져 내 이름표보다도 위다", () => {
+    const r = rankTags([box(0, { me: true, foot: 400 }), box(1, { foot: 100, lead: true }), box(2, { foot: 200 })]);
+    expect(zOf(r, 1)).toBe(0 + 10);
+    expect(zOf(r, 0)).toBe(2);
+    expect(zOf(r, 1)).toBeGreaterThan(zOf(r, 0));
+  });
+
+  it("겹친 이름표 가운데 lead 가 맨 앞이다", () => {
+    const r = rankTags([box(0, { me: true }), box(1, { lead: true })]);
+    expect(frontOf(r, 1)).toBe(true);
+    expect(frontOf(r, 0)).toBe(false);
+  });
+
+  it("lead 가 없으면 지금 순위 그대로다(0 부터 n−1)", () => {
+    const r = rankTags([box(0, { foot: 100 }), box(1, { foot: 200 }), box(2, { foot: 300 })]);
+    expect(r.map((t) => t.z)).toEqual([0, 1, 2]);
+  });
+});
