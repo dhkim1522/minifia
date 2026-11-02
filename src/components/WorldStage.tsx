@@ -7,6 +7,7 @@ import { HEADER_BOTTOM, PANEL_HEIGHT } from "../world/camera";
 import { createTapTracker } from "../world/input";
 import { createWorldRuntime, EXIT_CURTAIN_MS, EXIT_MS } from "../world/runtime";
 import type { WorldModules, WorldRuntime } from "../world/runtime";
+import type { SceneLook } from "../world/presence";
 import { initialMapStatus } from "../world/status";
 import type { MapStatusState } from "../world/status";
 import type { WorldStore } from "../world/store";
@@ -49,6 +50,8 @@ export interface WorldStageProps {
   stageInsets?: { top: number; bottom: number };
   /** 머리 위에 입력 중 알약(…)을 그릴 좌석(07-18). 서버가 보낸 신호와 내 입력만 담겨 온다 */
   typingSeats?: ReadonlySet<number>;
+  /** 게임 단계의 장면 상태(08-08). 없으면 로비 — 모든 좌석을 그린다. 있으면 show 인 좌석만 캐릭터·이름표가 생긴다(GHOST-01) */
+  scene?: SceneLook;
   onNotice(text: string): void;
   onKick(seat: number, nickname: string): void;
   onLeave(): void;
@@ -134,6 +137,7 @@ export function WorldStage(props: WorldStageProps) {
       loadModules: live.current.props.loadModules,
     });
     runtimeRef.current = runtime;
+    runtime.setScene(live.current.props.scene ?? null);
     const offHooks = hooksOn ? installWorldTestHooks(runtime, live.current.props.store) : null;
     void runtime.start();
     return () => {
@@ -166,6 +170,11 @@ export function WorldStage(props: WorldStageProps) {
     runtimeRef.current?.syncPlayers();
   }, [view.players]);
 
+  // 장면 상태가 바뀌면 런타임에 건넨다(그리기 전에)
+  useLayoutEffect(() => {
+    runtimeRef.current?.setScene(props.scene ?? null);
+  }, [props.scene]);
+
   // 탭 하나: 링을 바로 띄우고 목적지 정수 두 개만 보낸다. 내 캐릭터는 같은 길로 바로 걷고 서버 구간이 오면 맞춘다(결정 0059).
   const onTap = (clientX: number, clientY: number): void => {
     const { props: p } = live.current;
@@ -182,7 +191,10 @@ export function WorldStage(props: WorldStageProps) {
 
   const mySeat = view.me.seat;
   const here = new Set(view.players.map((p) => p.seat));
-  const roster = [...view.players, ...leaving.filter((p) => !here.has(p.seat))];
+  const scene = props.scene;
+  const shown = (seat: number): boolean => scene === undefined || scene.seats[seat]?.show === true;
+  // 보이지 않는 좌석은 이름표도 만들지 않는다(T-08-30)
+  const roster = [...view.players, ...leaving.filter((p) => !here.has(p.seat))].filter((p) => shown(p.seat));
   const canKick = view.me.isHost && props.canSend;
 
   const stateClass = exiting ? "is-exiting" : mapStatus.status === "ready" ? "is-open" : mapStatus.status === "lost" || mapStatus.status === "recreating" ? "is-redrawing" : "";
@@ -226,7 +238,7 @@ export function WorldStage(props: WorldStageProps) {
           const me = p.seat === mySeat;
           const away = !p.connected;
           const kickable = current && canKick && away && !me;
-          const stack = <HeadStack name={p.nickname} color={seatColor(p.seat)} me={me} away={away} typing={props.typingSeats?.has(p.seat) === true} />;
+          const stack = <HeadStack name={p.nickname} color={seatColor(p.seat)} me={me} away={away} typing={props.typingSeats?.has(p.seat) === true} ghost={scene?.seats[p.seat]?.ghost === true ? true : undefined} />;
           return (
             <div
               key={p.seat}

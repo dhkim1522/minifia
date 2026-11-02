@@ -19,6 +19,7 @@ import { ENTER_MS, EXIT_MS, MOVE_ACK_TIMEOUT_MS, WALK_CUE_KEY } from "../../src/
 import type { WorldModules } from "../../src/world/runtime";
 import { installWorldTestHooks, WORLD_TEST_KEY, worldTestHooksEnabled } from "../../src/world/testHooks";
 import { WorldStore } from "../../src/world/store";
+import type { SceneLook, SeatLook } from "../../src/world/presence";
 
 // 06-13: 로비 맵 화면(WorldStage + 런타임). happy-dom 에는 WebGL 이 없어 loadModules 로 가짜 렌더러·가짜 캐릭터를 주입한다(가정 A1).
 // 실제 GL 경로는 06-14(성능 스파이크)·06-17·06-18(E2E)이 브라우저에서 확인한다.
@@ -91,6 +92,8 @@ export function makeFakeRenderer(): FakeRenderer {
 }
 
 export interface FakeHandle extends CharacterHandle {
+  playEmote?: (id: string) => void;
+  setFace?: (id: string) => void;
   yaws: number[];
   dims: boolean[];
   moving: boolean[];
@@ -121,6 +124,13 @@ export function makeFakeKit(created: FakeHandle[]): WorldModules["characterKit"]
         dispose: vi.fn(() => {
           h.disposed++;
         }),
+        // 08-10 의 optional 메서드(게임 장면 시험이 호출을 본다)
+        setGhost: vi.fn(),
+        setOpacity: vi.fn(),
+        holdPose: vi.fn(),
+        setRing: vi.fn(),
+        playEmote: vi.fn(),
+        setFace: vi.fn(),
       };
       created.push(h);
       return h;
@@ -1673,5 +1683,77 @@ describe("카메라: 날아가지 않고 붙는다, 크기 변화는 다시 맞�
     frames(500);
     const pos = s.store.positionOf(0, Date.now())!;
     expect(r.views.at(-1)!.target.x).toBeCloseTo(pos.x, 6);
+  });
+});
+
+// ---------- 게임 장면 (08-12) ----------
+
+/** 장면 상태 도우미: seats 에 적은 좌석만 그린다(show). 나머지 칸은 기본값 — 따라가기·talk·긴장 0 */
+const sceneOf = (seats: Record<number, Partial<Omit<SeatLook, "show">>>, over: Partial<SceneLook> = {}): SceneLook => ({
+  camera: { mode: "follow" },
+  lighting: "talk",
+  tension: 0,
+  seats: Object.fromEntries(Object.entries(seats).map(([k, v]) => [k, { show: true, ghost: false, ...v } as SeatLook])),
+  ...over,
+});
+
+const FOUR = [player(0, "민지"), player(1, "철수"), player(2, "영희"), player(3, "바다")];
+const FOUR_ENTS = (): WorldSeg[] => [seg(0, [200, 100]), seg(1, [-300, 50]), seg(2, [-100, 400]), seg(3, [400, -200])];
+
+describe("게임 장면: 보임·유령 (GHOST-01)", () => {
+  it("scene 이 없으면(로비) 모든 좌석의 캐릭터·이름표가 6페이즈 그대로 생긴다", async () => {
+    const s = await open({}, { players: FOUR, ents: FOUR_ENTS() });
+    expect([...s.world.renderers[0]!.chars.keys()].sort()).toEqual([0, 1, 2, 3]);
+    for (const seat of [0, 1, 2, 3]) expect(tagOf(s.utils, seat)).not.toBeNull();
+    for (const h of s.world.handles) expect(h.setGhost).not.toHaveBeenCalled();
+  });
+
+  it("scene 에 show 가 없는 좌석은 캐릭터를 만들지 않고 이름표 DOM 도 없다", async () => {
+    const s = await open({ scene: sceneOf({ 0: {}, 1: {}, 2: {} }) }, { players: FOUR, ents: FOUR_ENTS() });
+    const r = s.world.renderers[0]!;
+    expect([...r.chars.keys()].sort()).toEqual([0, 1, 2]);
+    expect(tagOf(s.utils, 3)).toBeNull();
+    expect(s.utils.container.querySelectorAll(".mf-world__tags [data-seat]")).toHaveLength(3);
+  });
+
+  it("그리던 좌석이 scene 에서 빠지면 퇴장 연출 뒤 캐릭터가 지워지고 이름표가 바로 사라진다", async () => {
+    const s = await open({ scene: sceneOf({ 0: {}, 1: {}, 2: {}, 3: {} }) }, { players: FOUR, ents: FOUR_ENTS() });
+    const r = s.world.renderers[0]!;
+    const h3 = r.chars.get(3) as FakeHandle;
+    expect(tagOf(s.utils, 3)).not.toBeNull();
+    s.rerender({ scene: sceneOf({ 0: {}, 1: {}, 2: {} }) });
+    expect(tagOf(s.utils, 3)).toBeNull();
+    frames(EXIT_MS * 2);
+    expect(r.chars.has(3)).toBe(false);
+    expect(h3.disposed).toBe(1);
+    frames(200);
+    expect(r.chars.has(3)).toBe(false); // 서버 구간이 남아 있어도 다시 만들지 않는다
+  });
+
+  it("scene 에 다시 들어오면 캐릭터가 새로 생긴다", async () => {
+    const s = await open({ scene: sceneOf({ 0: {}, 1: {}, 2: {} }) }, { players: FOUR, ents: FOUR_ENTS() });
+    const r = s.world.renderers[0]!;
+    expect(r.chars.has(3)).toBe(false);
+    s.rerender({ scene: sceneOf({ 0: {}, 1: {}, 2: {}, 3: {} }) });
+    frame();
+    expect(r.chars.has(3)).toBe(true);
+    expect(tagOf(s.utils, 3)).not.toBeNull();
+  });
+
+  it("ghost 좌석은 setGhost(true) 를 부르고 이름표에 data-ghost 가 붙는다. 해제하면 setGhost(false)", async () => {
+    const s = await open({ scene: sceneOf({ 0: {}, 1: {}, 2: {}, 3: { ghost: true } }) }, { players: FOUR, ents: FOUR_ENTS() });
+    const r = s.world.renderers[0]!;
+    const h3 = r.chars.get(3) as FakeHandle;
+    const h2 = r.chars.get(2) as FakeHandle;
+    expect(h3.setGhost).toHaveBeenCalledWith(true);
+    expect(h3.setGhost).toHaveBeenCalledTimes(1);
+    expect(h2.setGhost).not.toHaveBeenCalled();
+    expect(tagOf(s.utils, 3)!.querySelector(".mv-head")!.getAttribute("data-ghost")).toBe("true");
+    expect(tagOf(s.utils, 2)!.querySelector(".mv-head")!.hasAttribute("data-ghost")).toBe(false);
+    frames(100);
+    expect(h3.setGhost).toHaveBeenCalledTimes(1); // 프레임마다 다시 부르지 않는다
+    s.rerender({ scene: sceneOf({ 0: {}, 1: {}, 2: {}, 3: {} }) });
+    frame();
+    expect(h3.setGhost).toHaveBeenLastCalledWith(false);
   });
 });

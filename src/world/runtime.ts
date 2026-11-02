@@ -15,6 +15,7 @@ import { createTapGate } from "./input";
 import { BLEND_SNAP_DIST, blendRemaining, createOwnMoves, predictSegment, stepYaw, travelYaw } from "./motion";
 import { DEFAULT_BUDGET_STEP, nextLadderStep } from "./renderer";
 import type { CharacterHandle, WorldRenderer } from "./renderer";
+import type { SceneLook } from "./presence";
 import { initialMapStatus, inputBlocked, mapStatusReducer, shouldRecreate } from "./status";
 import { rankTags } from "./tagOrder";
 import type { TagBox } from "./tagOrder";
@@ -165,6 +166,11 @@ export interface WorldRuntimeDeps {
 export interface WorldRuntime {
   start(): Promise<void>;
   syncPlayers(): void;
+  /**
+   * 게임 단계의 장면 상태(08-08 SceneLook)를 건넨다. 표에 없는(show 아닌) 좌석은 캐릭터를 만들지 않고 이미 있으면 퇴장시키며,
+   * ghost 좌석은 반투명으로 그린다. null 이면 장면이 없는 것(로비) — 6페이즈 동작 그대로다.
+   */
+  setScene(look: SceneLook | null): void;
   /** 화면 좌표의 탭. 받아들이면 바닥 교점(월드 단위)을 돌려주고 목적지 링을 바로 띄운다 */
   tap(clientX: number, clientY: number): { x: number; z: number } | null;
   /**
@@ -229,6 +235,8 @@ interface Actor {
   yawGoal: number | null;
   headY: number;
   dim: boolean;
+  /** 지금 유령으로 그리고 있나(handle.setGhost 에 마지막으로 보낸 값) */
+  ghost: boolean;
   /** 등장 시작 시각(없으면 서 있다) */
   enter: number | null;
   /** 퇴장 시작 시각 */
@@ -274,6 +282,10 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
   let visibilityBound = false;
 
   const degrade = createAutoDegrade({ enabled: deps.autoDegrade !== false, step: deps.budgetStep ?? DEFAULT_BUDGET_STEP, setBudget: (n) => renderer?.setBudget(n) });
+
+  let look: SceneLook | null = null;
+  /** 이 좌석을 그리나: 장면이 없으면 view 의 모든 좌석, 있으면 표에서 show 인 좌석만 */
+  const isShown = (seat: number): boolean => look === null || look.seats[seat]?.show === true;
 
   const actors = new Map<number, Actor>();
   const pendingEntered = new Set<number>();
@@ -492,6 +504,7 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
       yawGoal: null,
       headY: 0,
       dim: false,
+      ghost: false,
       enter: null,
       exit: null,
       tag: null,
@@ -691,16 +704,21 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
 
     for (const seat of store.takeEntered()) pendingEntered.add(seat);
     for (const seat of store.seats()) {
-      if (!actors.has(seat)) createActor(seat, now);
+      if (!actors.has(seat) && isShown(seat)) createActor(seat, now);
     }
 
     const gone: Actor[] = [];
     const mySeat = deps.mySeat();
     for (const a of actors.values()) {
       const server = store.segOf(a.seat);
-      if (server === undefined && a.exit === null) {
-        beginExit(a.seat, now); // 구간이 없어졌다(snap 에서 빠짐)
+      if ((server === undefined || !isShown(a.seat)) && a.exit === null) {
+        beginExit(a.seat, now); // 구간이 없어졌다(snap 에서 빠짐) 또는 장면이 이 좌석을 그리지 않는다
         if (!actors.has(a.seat)) continue; // 모션 줄이기면 바로 지워졌다
+      }
+      const wantGhost = look?.seats[a.seat]?.ghost === true;
+      if (wantGhost !== a.ghost) {
+        a.ghost = wantGhost;
+        a.handle.setGhost?.(wantGhost);
       }
       // 그릴 구간: 내 자리는 예측 중이면 예측, 남은 언제나 서버 구간(결정 0059-4)
       const eff = a.exit !== null || server === undefined ? undefined : a.seat === mySeat ? own.effective(server) : server;
@@ -912,6 +930,9 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
       await boot();
     },
     syncPlayers,
+    setScene(l) {
+      look = l;
+    },
     tap,
     notifyMoveSent,
     cancelMove: clearRing,
