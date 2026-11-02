@@ -767,3 +767,83 @@ describe("normalizeStoredRoom — 저장된 옛 방 (RESEARCH Pattern 6, T-02-14
     expect(normalizeStoredRoom(discussion, 5_000) === discussion).toBe(true);
   });
 });
+
+// 08-22: 배포 순간 옛 처형 여부 투표·후보 선택·후보 공개 단계에 있던 방은 토론으로 옮긴다(결정 0060-12, RESEARCH A9, T-08-10).
+describe("normalizeStoredRoom — 옛 투표 단계로 저장된 방 (08-22, DAY-07)", () => {
+  const OLD_VOTE_PHASES = ["execVote", "candidateVote", "candidateVoteReveal"];
+  const NOW = 5_000;
+  const PRIOR = { n: 1, exec: { yes: 3, no: 1, passed: true }, cand: { votes: [{ seat: 0, target: 2 }], candidate: 2 } };
+  const TODAY = { n: 2, exec: { yes: 3, no: 1, passed: true }, cand: { votes: [{ seat: 1, target: 3 }], candidate: 3 } };
+
+  /** 옛 4페이즈가 저장한 모양: 옛 개인 투표 키·그날 verdict·execution·문구 번호를 쥔 방. 선언이 사라진 키는 단언 캐스트로 만든다. */
+  function oldVoteRoom(phase: string, voteLog: unknown[] = [PRIOR]): RoomState {
+    const base = fullRoom([0, 1, 2, 3]);
+    return {
+      ...base,
+      phase: phase as PhaseId,
+      phaseEndsAt: 77_000,
+      day: 2,
+      voteLog,
+      verdict: { passed: true, candidate: 3 },
+      execution: { seat: 3, phrase: 2 },
+      lastExecPhrase: 2,
+      players: base.players.map((p, i) => ({
+        ...p,
+        execVote: true,
+        candidateVote: i,
+        nominate: 1,
+        verdictVote: false,
+        endVote: true as const,
+      })),
+    } as unknown as RoomState;
+  }
+
+  it.each(OLD_VOTE_PHASES)("%s 로 저장된 방은 discussion · now+DISCUSSION_MS 가 되고 일차는 그대로다", (phase) => {
+    const stored = oldVoteRoom(phase);
+    const got = normalizeStoredRoom(stored, NOW);
+    expect(got === stored).toBe(false);
+    expect(`${got.phase}:${got.phaseEndsAt}:${got.day}`).toBe(`discussion:${NOW + DISCUSSION_MS}:2`);
+    expect(String(stored.phase)).toBe(phase); // 입력은 바꾸지 않는다
+  });
+
+  it.each(OLD_VOTE_PHASES)("%s 방은 옛 개인 투표 키와 그날의 verdict·execution·문구 번호가 키째 빠지고 지난 날 voteLog 는 그대로다", (phase) => {
+    const stored = oldVoteRoom(phase);
+    const got = normalizeStoredRoom(stored, NOW);
+    for (const p of got.players) for (const key of ["execVote", "candidateVote", "nominate", "verdictVote", "endVote"]) expect(Object.hasOwn(p, key)).toBe(false);
+    for (const key of ["verdict", "execution", "lastExecPhrase"]) expect(Object.hasOwn(got, key)).toBe(false);
+    expect(got.voteLog).toEqual([PRIOR]);
+    expect(got.players.map((p) => p.id)).toEqual(stored.players.map((p) => p.id));
+    expect(Object.hasOwn(stored.players[0]!, "execVote")).toBe(true); // 입력은 바꾸지 않는다
+  });
+
+  it("오늘 일차 voteLog 줄(여부 투표 마감이 이미 쌓은 줄)은 빠져 새 지목 마감이 같은 일차 줄을 둘로 만들지 않고 지난 날 줄은 남는다", () => {
+    const got = normalizeStoredRoom(oldVoteRoom("candidateVote", [PRIOR, TODAY]), NOW);
+    expect(got.voteLog).toEqual([PRIOR]);
+  });
+
+  it("정규화한 결과의 view 는 오류 없이 만들어지고 단계는 discussion 이며 처형 필드가 없다", () => {
+    const got = normalizeStoredRoom(oldVoteRoom("candidateVoteReveal"), NOW);
+    const view = buildView(got, "p1", NOW);
+    expect(`${view.phase}:${view.day?.n}:${view.day?.execution === undefined}:${view.day?.candidate === undefined}`).toBe("discussion:2:true:true");
+  });
+
+  it("다시 정규화하면 같은 객체이고, 새 단계(discussion·nomination·verdict·night) 방은 같은 객체다", () => {
+    const once = normalizeStoredRoom(oldVoteRoom("execVote"), NOW);
+    expect(normalizeStoredRoom(once, 6_000) === once).toBe(true);
+    for (const phase of ["discussion", "nomination", "verdict", "defense", "execution", "night"] as const) {
+      const r = { ...fullRoom([0, 1, 2, 3]), phase, phaseEndsAt: 77_000, day: 2 };
+      expect(normalizeStoredRoom(r, NOW) === r).toBe(true);
+    }
+  });
+
+  it("새 단계로 저장된 방의 지목·찬반 개인 키와 verdict 는 건드리지 않는다(옛 투표 키·문구 번호만 어느 단계든 뺀다)", () => {
+    const base = { ...fullRoom([0, 1, 2, 3]), phase: "verdict" as PhaseId, phaseEndsAt: 77_000, day: 2, verdict: { passed: false, candidate: 3 } };
+    const live = { ...base, players: base.players.map((p) => ({ ...p, verdictVote: true })) };
+    expect(normalizeStoredRoom(live, NOW) === live).toBe(true);
+    const stale = { ...live, lastExecPhrase: 1, players: live.players.map((p) => ({ ...p, execVote: true })) } as unknown as RoomState;
+    const got = normalizeStoredRoom(stale, NOW);
+    expect(`${got.phase}:${got.phaseEndsAt}:${Object.hasOwn(got, "lastExecPhrase")}:${got.players.some((p) => Object.hasOwn(p, "execVote"))}`).toBe("verdict:77000:false:false");
+    expect(got.verdict).toEqual({ passed: false, candidate: 3 });
+    expect(got.players.every((p) => (p as unknown as { verdictVote?: boolean }).verdictVote === true)).toBe(true);
+  });
+});

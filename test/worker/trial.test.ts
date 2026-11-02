@@ -3,11 +3,11 @@
 // 실패 출력은 한 줄이어야 해서(TAP) 프레임 목록은 summary() 한 줄 문자열로 비교한다.
 import { describe, expect, it } from "vitest";
 import type { RoomView, ServerMessage } from "../../shared/protocol";
-import { PHASE_DEFS } from "../../shared/game/phases";
+import { DISCUSSION_MS, PHASE_DEFS } from "../../shared/game/phases";
 import { env } from "cloudflare:workers";
 import { runDurableObjectAlarm } from "cloudflare:test";
 import { ringSlots } from "../../shared/game/gather";
-import { alarmOf, chatMsg, editRoom, endAs, flushWorld, ghostsOf, killSeats, lastViewOf, layOf, mark, mapPlayers, pause, pointAs, send, settle, startedGame, storedRoom, summary, toPhase, verdictAs, worldFramesOf, worldOf } from "./helpers";
+import { alarmOf, chatMsg, connect, editRoom, endAs, flushWorld, ghostsOf, hello, killSeats, lastViewOf, layOf, mark, mapPlayers, pause, pointAs, send, settle, startedGame, storedRoom, summary, toPhase, verdictAs, worldFramesOf, worldOf } from "./helpers";
 import type { Actor, Game } from "./helpers";
 
 const viewsOf = (msgs: ServerMessage[]): RoomView[] =>
@@ -670,4 +670,38 @@ describe("실제 흐름 (결정 0060-1)", () => {
     expect(ended.phase).toBe("ended");
     expect(ended.winner).toBe("citizenWin");
   }, 60_000);
+});
+
+// 08-22: 배포 순간 옛 처형 여부 투표·후보 선택·후보 공개 단계에 있던 방(결정 0060-12, T-08-52). 깨어날 때 정규화가 토론으로 옮기고 알람을 새 마감으로 건다.
+describe("옛 투표 단계로 저장된 방 (08-22, DAY-07)", () => {
+  it.each(["execVote", "candidateVote", "candidateVoteReveal"])("%s 로 저장된 방에 다시 접속하면 view 단계는 discussion 이고 알람은 새 마감으로 걸린다", async (oldPhase) => {
+    const g = await startedGame("discussion", 3);
+    const host = g.actors[0]!;
+    await editRoom(g.code, (room) =>
+      mapPlayers(
+        {
+          ...room,
+          phase: oldPhase,
+          phaseEndsAt: Date.now() + 5_000,
+          day: 2,
+          verdict: { passed: true, candidate: 1 },
+          execution: { seat: 1, phrase: 2 },
+          lastExecPhrase: 2,
+        },
+        (p) => ({ ...p, execVote: true, candidateVote: 1, nominate: 1, verdictVote: true, endVote: true }),
+      ),
+    );
+    const before = Date.now();
+    const sock = await connect(g.code);
+    const view = (await hello(sock, host.token)).view;
+    const after = Date.now();
+    expect(`${view.phase}:${view.day?.n}`).toBe("discussion:2");
+    expect(view.phaseEndsAt! >= before + DISCUSSION_MS - 50 && view.phaseEndsAt! <= after + DISCUSSION_MS + 50).toBe(true);
+    const alarm = await alarmOf(g.code);
+    expect(alarm !== null && Math.abs(alarm - view.phaseEndsAt!) < 2_000).toBe(true);
+    const stored = (await storedRoom(g.code)) as unknown as Record<string, unknown> & { players: Array<Record<string, unknown>> };
+    expect(stored.phase).toBe("discussion");
+    for (const key of ["verdict", "execution", "lastExecPhrase"]) expect(Object.hasOwn(stored, key)).toBe(false);
+    for (const p of stored.players) for (const key of ["execVote", "candidateVote", "nominate", "verdictVote", "endVote"]) expect(Object.hasOwn(p, key)).toBe(false);
+  });
 });

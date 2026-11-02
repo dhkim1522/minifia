@@ -291,11 +291,25 @@ export function startGame(
 }
 
 /**
- * 지금의 PhaseId 에 없는 옛 단계 이름 셋 — 이 함수 한 곳에서만 문자열로 비교한다.
+ * 지금의 PhaseId 에 없는 옛 단계 이름 — 이 함수 한 곳에서만 문자열로 비교한다.
  * "day": 1페이즈가 저장한 종착 낮 단계. "claimReveal": 결정 0027: 이 이름은 더는 단계가 아니다(공개 연출 2초 단계 삭제, 결정 0023).
  * "claim": 순차 주장 단계 — 7페이즈(CHAT-06)에서 없어졌다.
+ * "execVote"·"candidateVote"·"candidateVoteReveal": 4페이즈 처형 여부 투표·후보 선택·후보 공개 — 8페이즈(결정 0060-12)에서 없어졌다.
  */
-const LEGACY_PHASES = { day: "day", claimReveal: "claimReveal", claim: "claim" } as const;
+const LEGACY_PHASES = {
+  day: "day",
+  claimReveal: "claimReveal",
+  claim: "claim",
+  execVote: "execVote",
+  candidateVote: "candidateVote",
+  candidateVoteReveal: "candidateVoteReveal",
+} as const;
+/** 8페이즈에서 없어진 옛 투표 단계 셋(결정 0060-12). 이 단계로 저장된 방은 discussion 으로 옮기고 그날의 투표 흔적을 지운다. */
+const LEGACY_VOTE_PHASES: readonly string[] = [LEGACY_PHASES.execVote, LEGACY_PHASES.candidateVote, LEGACY_PHASES.candidateVoteReveal];
+/** 옛 4페이즈 개인 투표 키 둘(처형 여부·후보 선택) — Player 선언은 08-21 에 사라졌다. 어느 단계로 저장됐든 키째 뺀다. */
+const LEGACY_VOTE_PLAYER_KEYS = ["execVote", "candidateVote"] as const;
+/** 옛 투표 단계에서 옮길 때 같이 지우는 그날의 새 흐름 개인 키(지목·찬반·토론 끝내기 누름). 새 단계로 저장된 방에는 쓰지 않는다. */
+const DAY_PERSONAL_KEYS = ["nominate", "verdictVote", "endVote"] as const;
 /** 순차 주장 단계가 방 상태에 쥐던 키 다섯 — 정규화가 키째 뺀다. 필드 선언은 RoomState 에서 사라졌다. */
 const LEGACY_CLAIM_STATE_KEYS = ["claimOrder", "claimIdx", "claimStart", "claimPick", "claimLog"] as const;
 /** 결정 0023 이전 Player 의 주장 필드 — 지금은 방 상태의 claimLog 로 대신한다. */
@@ -309,6 +323,10 @@ const LEGACY_CHAT_ROOM_KEYS = ["nextMessageSeq", "nextNightSeq"] as const;
  *   그런 방은 낮 시작 발표(dayAnnounce)로 옮기고 마감을 now + DAY_ANNOUNCE_MS, 일차를 1로 둔다.
  * - 옛 공개 연출 단계(claimReveal)로 저장된 방은 discussion 으로 옮기고 마감을 now + DISCUSSION_MS 로 둔다(주장 기록은 새 방에 없다).
  * - 순차 주장 단계(claim)로 저장된 방은 discussion 으로 옮기고 마감을 now + DISCUSSION_MS 로 둔다(그날 주장 기록은 사라진다, A1).
+ * - 옛 투표 단계(execVote·candidateVote·candidateVoteReveal)로 저장된 방은 discussion 으로 옮기고 마감을 now + DISCUSSION_MS 로 둔다. 일차와 지난 날 투표 기록(voteLog)은 그대로이고,
+ *   그날의 verdict·execution·오늘 일차 voteLog 줄(있으면)과 개인 키(execVote·candidateVote·nominate·verdictVote·endVote)를 키째 뺀다(결정 0060-12, RESEARCH A9 — 진행 중이던 판이 토론으로 되돌아가는 것은 배포 순간 한 번뿐인 수용 가능한 이전이다).
+ *   호출하는 쪽(DO 생성자)은 마감이 바뀌면 알람을 다시 건다.
+ * - 옛 투표 개인 키(execVote·candidateVote)와 방 키 lastExecPhrase(처형 문구 번호, 08-22 에 없어짐)는 어느 단계에 있든 키째 뺀다.
  * - 방 상태의 주장 키 다섯(claimOrder·claimIdx·claimStart·claimPick·claimLog)은 어느 단계에 있든 키째 뺀다.
  * - 모든 플레이어에서 옛 주장 필드 넷을 키째 뺀다.
  * 채팅은 서버에 저장하지 않는다(결정 0017-7) — 배포 전 저장된 messages 는 깨어날 때 지운다.
@@ -321,11 +339,14 @@ export function normalizeStoredRoom(stored: RoomState, now: number): RoomState {
   const isLegacyDay = phase === LEGACY_PHASES.day;
   const isLegacyReveal = phase === LEGACY_PHASES.claimReveal;
   const isLegacyClaim = phase === LEGACY_PHASES.claim;
+  const isLegacyVote = LEGACY_VOTE_PHASES.includes(phase);
+  const hasOldVoteRoomKey = Object.hasOwn(stored, "lastExecPhrase");
+  const hasOldVotePlayerKeys = stored.players.some((p) => LEGACY_VOTE_PLAYER_KEYS.some((key) => Object.hasOwn(p, key)));
   const hasOldClaimState = LEGACY_CLAIM_STATE_KEYS.some((key) => Object.hasOwn(stored, key));
   const hasOldMessages = Object.hasOwn(stored, "messages");
   const hasOldChatRoomKeys = LEGACY_CHAT_ROOM_KEYS.some((key) => Object.hasOwn(stored, key));
   const hasOldPlayerFields = stored.players.some((p) => LEGACY_CLAIM_KEYS.some((key) => Object.hasOwn(p, key)) || Object.hasOwn(p, "lastSendAt"));
-  if (!isLegacyDay && !isLegacyReveal && !isLegacyClaim && !hasOldClaimState && !hasOldMessages && !hasOldChatRoomKeys && !hasOldPlayerFields) return stored;
+  if (!isLegacyDay && !isLegacyReveal && !isLegacyClaim && !isLegacyVote && !hasOldVoteRoomKey && !hasOldVotePlayerKeys && !hasOldClaimState && !hasOldMessages && !hasOldChatRoomKeys && !hasOldPlayerFields) return stored;
   // 옛 키는 구조 분해로만 뺀다. 필드 선언이 RoomState 에서 사라져도 컴파일되게 지역 교차 타입으로 받는다.
   const {
     messages: _dropped,
@@ -336,8 +357,10 @@ export function normalizeStoredRoom(stored: RoomState, now: number): RoomState {
     claimLog: _log,
     nextMessageSeq: _msgSeq,
     nextNightSeq: _nightSeq,
+    lastExecPhrase: _execPhrase,
     ...rest
   } = stored as RoomState & {
+    lastExecPhrase?: unknown;
     messages?: unknown;
     claimOrder?: unknown;
     claimIdx?: unknown;
@@ -355,6 +378,31 @@ export function normalizeStoredRoom(stored: RoomState, now: number): RoomState {
         const { claimChoice: _a, claimShown: _b, claimLast: _c, claimChanged: _d, lastSendAt: _e, ...kept } = p as typeof p & Record<string, unknown>;
         return kept as typeof p;
       }),
+    };
+  }
+  if (hasOldVotePlayerKeys || isLegacyVote) {
+    const dropKeys: readonly string[] = isLegacyVote ? [...LEGACY_VOTE_PLAYER_KEYS, ...DAY_PERSONAL_KEYS] : LEGACY_VOTE_PLAYER_KEYS;
+    next = {
+      ...next,
+      players: next.players.map((p) => {
+        if (!dropKeys.some((key) => Object.hasOwn(p, key))) return p;
+        const kept: Record<string, unknown> = { ...p };
+        for (const key of dropKeys) delete kept[key];
+        return kept as unknown as typeof p;
+      }),
+    };
+  }
+  if (isLegacyVote) {
+    // 그날의 찬반 결과·처형 발표는 새 토론에 새면 안 된다(RESEARCH Pitfall 1). voteLog 는 지난 날 기록이라 그대로 둔다.
+    // 오늘 줄(candidateVote·candidateVoteReveal 로 저장된 방에는 여부 투표 마감이 이미 쌓았다)은 새 지목 마감이 같은 날 줄을 다시 쌓으므로 지운다 — 같은 일차 줄이 둘이 되지 않게.
+    const { verdict: _verdict, execution: _execution, voteLog, ...cleared } = next;
+    const today = next.day ?? 1;
+    const kept = voteLog?.filter((entry) => entry.n !== today);
+    return {
+      ...cleared,
+      ...(voteLog === undefined ? {} : { voteLog: kept!.length === voteLog.length ? voteLog : kept! }),
+      phase: "discussion",
+      phaseEndsAt: now + DISCUSSION_MS,
     };
   }
   if (isLegacyDay) return { ...next, phase: "dayAnnounce", phaseEndsAt: now + DAY_ANNOUNCE_MS, day: 1 };
