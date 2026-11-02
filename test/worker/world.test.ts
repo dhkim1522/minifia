@@ -106,10 +106,10 @@ describe("로비 이동 — 트레이서 (MAP-02, MAP-01)", () => {
     expect(onHost.v).toBe(180);
   });
 
-  it("걸을 수 없는 무대 중심을 누르면 끝 점이 걸을 수 있는 곳으로 보정된다", async () => {
+  it("걸을 수 없는 무대 중심 옆 점을 누르면 끝 점이 걸을 수 있는 곳으로 보정된다(정확히 (0,0)은 무대 자리라 서버가 버린다, 08-04·08-09)", async () => {
     const s = await seat(1, 0);
     const guest = s.guests[0]!;
-    send(guest.sock, { t: "move", x: 0, z: 0 });
+    send(guest.sock, { t: "move", x: 10, z: 0 });
     const f = (await nextFrame(s.host, isWalk(1))) as MoveFrame;
     const end = { x: f.p[f.p.length - 2]!, z: f.p[f.p.length - 1]! };
     expect(lineWalkable(BAR_MAP, end, end)).toBe(true);
@@ -503,6 +503,8 @@ describe("무대 자리 (0,0) 입력 차단 (08-04 Threat Flag)", () => {
   it("로비에서 목적지가 정확히 무대 자리(0,0)인 move 는 조용히 버려지고, 옆 점은 받아들여진다", async () => {
     const s = await seat(1, 0);
     const guest = s.guests[0]!;
+    await settle(s.host, 0); // 입장 때 늦게 오는 snap·chatLog 가 구간에 끼지 않게 먼저 비운다
+    await settle(guest.sock, 0);
     const mk = [mark(s.host), mark(guest.sock)] as const;
     send(guest.sock, { t: "move", x: 0, z: 0 });
     const a = await settle(guest.sock, mk[1]);

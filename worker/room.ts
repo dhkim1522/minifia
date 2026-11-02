@@ -3,7 +3,8 @@ import { CLOSE_CODES, MAX_FRAME_BYTES } from "../shared/protocol";
 import type { ApiErrorCode, BotVoteExec, BotVotePick, ChatRejectWhy, ClientMessage, RemovedReason, RoomPreview, ServerMessage, WorldFrame, WsErrorCode } from "../shared/protocol";
 import { botWakeAt, isBot, syncBotPlan, takeDueBotSteps } from "../shared/game/bots";
 import type { BotStep } from "../shared/game/bots";
-import { audience, channelOf, phaseKey } from "../shared/game/audience";
+import { isAlive } from "../shared/game/alive";
+import { audience, channelOf, phaseKey, worldVisibleTo } from "../shared/game/audience";
 import { CHAT_KEY_PREFIX, appendLine, chatKey, emptyChatLog, replayFor, restoreChatLog, seatMask, toWire } from "../shared/game/chatLog";
 import type { ChatLog } from "../shared/game/chatLog";
 import { checkChatSend, sanitizeChatText, typingRelay } from "../shared/game/chatRules";
@@ -30,7 +31,7 @@ import { castPoint } from "../shared/game/nomination";
 import { castVerdict } from "../shared/game/verdict";
 import { endReached, toggleEnd } from "../shared/game/discussion";
 import { canMove } from "../shared/game/movement";
-import { BAR_MAP } from "../shared/game/map";
+import { BAR_MAP, STAGE_SPOT } from "../shared/game/map";
 import { WORLD_FLUSH_MS, compactWorld, despawnPlayer, emptyWorld, moveFrame, nextWanderAt, planWander, requestMove, respawnAll, restoreWorld, snapFrame, spawnPlayer } from "../shared/game/world";
 import type { Segment, WorldState } from "../shared/game/world";
 import { buildPreview, buildView } from "../shared/game/view";
@@ -93,6 +94,8 @@ export class Room extends DurableObject<Env> {
   // 지목 간격 기록(사람 id -> 마지막으로 받아들인 지목 ms, DAY-04 결정 0060-3, 가정 A1). 인메모리라 하이버네이션으로 비면 새로 센다 —
   // 한 번 더 받아들일 뿐이다(수용, typingRelays 와 같다). 받아들인 지목만 기록하고 거절·같은 값·간격 안 재전송은 기록하지 않는다.
   private readonly pointAt = new Map<string, number>();
+  // 새 유령 snap 을 이미 보낸 사람 id(08-09, 가정 A1). 인메모리라 하이버네이션·퇴거로 비면 유령에게 snap 이 한 번 더 갈 뿐이다(유령에게만, 무해).
+  private readonly ghostSnapped = new Set<string>();
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
@@ -342,6 +345,7 @@ export class Room extends DurableObject<Env> {
       this.room = null;
       this.dropWorld();
       this.dropChat();
+      this.ghostSnapped.clear();
       return;
     }
     this.room = result.state;
@@ -554,6 +558,7 @@ export class Room extends DurableObject<Env> {
     if (endReached(result.state)) {
       this.room = tick({ ...result.state, phaseEndsAt: now }, now, cryptoRandInt);
       await this.persistAndBroadcast();
+      this.snapNewGhosts(now);
       await this.reschedule();
       return null;
     }
@@ -633,6 +638,7 @@ export class Room extends DurableObject<Env> {
     }
     this.room = result.state;
     await this.persistAndBroadcast();
+    this.snapNewGhosts(Date.now());
     await this.reschedule();
   }
 
@@ -652,6 +658,7 @@ export class Room extends DurableObject<Env> {
     // 보관 줄도 모두 지운다(결정 0058-7): 저장소 키 → 메모리 사본·도배 기록·입력 중 기록. 다음 hello 의 chatLog 는 비고 첫 줄은 seq 1 이다.
     await this.deleteChatKeys([...(await this.ctx.storage.list({ prefix: CHAT_KEY_PREFIX })).keys()]);
     this.dropChat();
+    this.ghostSnapped.clear();
     // 대기실로 돌아오면 모두 자기 입장 지점으로 되돌린다(가정 A1, 11페이즈 다시 하기가 같은 길). state 다음에 모든 소켓이 snap 을 받는다.
     const now = Date.now();
     this.world = respawnAll(this.world, this.room.players, now, BAR_MAP);
@@ -743,6 +750,7 @@ export class Room extends DurableObject<Env> {
       this.room = null;
       this.dropWorld();
       this.dropChat();
+      this.ghostSnapped.clear();
       return;
     }
     // 난수는 여기서만 넣는다 — 아침 판정(03-03)의 동률·문구 추첨
@@ -750,7 +758,23 @@ export class Room extends DurableObject<Env> {
     if (next === room) return;
     this.room = next;
     await this.persistAndBroadcast();
+    this.snapNewGhosts(now);
     await this.reschedule();
+  }
+
+  // 방금 탈락한 사람(처형·아침)에게만 모두의 위치 snap 을 보낸다 — 그 전까지 받지 못한 다른 유령의 위치를 맞춘다(GHOST-01).
+  // 산 사람의 폰에는 가지 않는다: deliver 는 그 사람 한 명의 소켓에만 보내고, 보낼 좌석은 worldVisibleTo(= 유령에게는 전원)로 정한다.
+  // 이미 보낸 사람은 건너뛴다(ghostSnapped). 지도 단계 밖(ended 등)은 보낼 좌석이 없어 아무것도 보내지 않고 기록도 하지 않는다.
+  private snapNewGhosts(now: number): void {
+    const room = this.room;
+    if (!room) return;
+    for (const p of room.players) {
+      if (isAlive(p) || this.ghostSnapped.has(p.id)) continue;
+      const visible = worldVisibleTo(room, p.id);
+      if (visible.size === 0) continue;
+      this.ghostSnapped.add(p.id);
+      this.deliver(new Set([p.id]), snapFrame(this.world, room.players.filter((q) => visible.has(q.id)), now));
+    }
   }
 
   // 알람은 DO 당 하나라 단계 마감·방 만료·다음 봇 행동 중 가장 이른 시각을 여기서만 설정한다.
@@ -841,9 +865,11 @@ export class Room extends DurableObject<Env> {
     ws.serializeAttachment(attachment);
     this.room = attachConnection(room, player.id, connId);
     await this.persistAndBroadcast();
-    // state 다음에 이 소켓에만 모두의 지금 위치를 보낸다(로비일 때만 — 게임 중 위치는 나가지 않는다, T-06-16).
+    // state 다음에 이 소켓에만 지금 위치를 보낸다 — 보는 사람별로 거른다(결정 0060-8, T-08-11): 로비·assigning·roleReveal 은 모두,
+    // 지도 단계는 산 사람이면 산 사람만·유령이면 모두(worldVisibleTo). 보낼 좌석이 없는 단계(ended 등)는 snap 을 보내지 않는다.
     // 클라이언트 epoch 가 첫 state 에서 오르는 규약(WR-03)과 맞는 순서다.
-    if (this.room.phase === "lobby") this.sendTo(ws, snapFrame(this.world, this.room.players, Date.now()));
+    const visible = worldVisibleTo(this.room, player.id);
+    if (visible.size > 0) this.sendTo(ws, snapFrame(this.world, this.room.players.filter((p) => visible.has(p.id)), Date.now()));
     // 그다음 이 소켓에만 보관 줄을 한 프레임으로 돌려준다 — 줄이 없어도 빈 배열로 보낸다(D2, 결정 0058-3).
     // 복원도 보낼 때의 마스크로만 거른다(결정 0058-2): 지금의 역할·생존으로 다시 계산하지 않아 라이브보다 넓어지지 않는다.
     this.sendTo(ws, { t: "chatLog", lines: replayFor(this.chatLog, player.seat) });
@@ -1012,6 +1038,9 @@ export class Room extends DurableObject<Env> {
     if (!room) return;
     const me = room.players.find((p) => p.id === playerId);
     if (!me || !canMove(room, me)) return;
+    // 무대 자리(0,0)는 변론자를 서버가 세우는 한 점이다. 공용 걷기 판정이 그 점만 예외로 받으므로(08-04) 클라이언트 입력으로는 정확히 그 목적지를 버린다 —
+    // 옆 점은 막힌 칸이라 걸을 수 있는 칸 중심으로 보정되어 무대 자리가 되지 않는다.
+    if (dest.x === STAGE_SPOT.x && dest.z === STAGE_SPOT.z) return;
     const result = requestMove(this.world, playerId, dest, now, BAR_MAP);
     if (!result.ok) return;
     this.world = result.world;

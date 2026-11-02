@@ -48,7 +48,7 @@ describe("채팅 보관 — 트레이서 (D2, CHAT-01)", () => {
     expect(Object.keys(lines[0]!).sort().join(",")).toBe("at,ch,seat,seq,text");
   });
 
-  it("게임 중에 다시 hello 하면 [state, chatLog] 이고 world snap 은 없다", async () => {
+  it("게임이 시작된 뒤(역할 배정 중) 다시 hello 하면 [state, world.snap, chatLog] 이다 — 접속 snap 은 보는 사람별로 지도 단계 전에도 간다(08-09)", async () => {
     const s = await seat(3, 0, { testMode: true });
     const guest = s.guests[0]!;
     const mg = mark(guest.sock);
@@ -60,7 +60,7 @@ describe("채팅 보관 — 트레이서 (D2, CHAT-01)", () => {
 
     const again = await connect(s.code);
     const lines = await helloForLog(again, guest.token);
-    expect(kindsOf(framesOf(again))).toBe("state,chatLog");
+    expect(kindsOf(framesOf(again))).toBe("state,world.snap,chatLog");
     expect(lines.map(lineText).join("|")).toBe(`all/${guest.seat}/1/시작 전에`);
   });
 
