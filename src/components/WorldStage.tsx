@@ -19,7 +19,7 @@ import "../styles/world.css";
 
 // 로비 맵 화면: 캔버스 한 장 + 입력 면 + 이름표 층. three 는 world/runtime 의 import() 로만 열린다(이 파일은 three 를 모른다).
 // 위치·카메라·투영은 런타임의 rAF 한 루프가 한다 — 프레임마다 React 가 다시 그리지 않는다. React 는 틀과 글(이름표 내용·접근성)만 맡는다.
-// 닉네임은 React 텍스트 노드로만 그린다(innerHTML 없음, T-06-29).
+// 닉네임은 React 텍스트 노드로만 그린다(HTML 문자열 주입 없음, T-06-29).
 
 function sessionStore(): Storage | null {
   try {
