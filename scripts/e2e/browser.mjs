@@ -1251,7 +1251,7 @@ export async function tapAt(page, pt) {
  *   verdictRow: { hasPicker, hasDots, on, total } | null, verdictBtns, picks: [{ seat, rect, pressed, label }], tags: [{ seat, me, count, lead, sure, mine, done, ring, ghostSeat, roleChip, opacity }],
  *   announce: { text, fontPx, lineCount, wordBreak } | null, counts: { ghostView, roleChips, ghostSeats, ghostTexts }, ring, testButton, nightPanel }
  */
-export function readGame(page) {
+export async function readGame(page) {
   return page.evaluate(() => {
     const q = (s, r = document) => r.querySelector(s);
     const qa = (s, r = document) => [...r.querySelectorAll(s)];
@@ -1317,6 +1317,7 @@ export function readGame(page) {
           ghostSeat: el.hasAttribute("data-ghost-seat"),
           roleChip: q("[data-role-chip]", el)?.getAttribute("data-role-chip") ?? null,
           opacity: Number(getComputedStyle(el).opacity),
+          top: rect(q(".mv-tag", el) ?? el)?.top ?? null,
         };
       }),
       announce: ann && annText ? { text: (annText.textContent ?? "").trim(), fontPx: parseFloat(getComputedStyle(annText).fontSize), lineCount: lineCountOf(annText), wordBreak: getComputedStyle(annText).wordBreak } : null,
@@ -1345,7 +1346,15 @@ export async function chooseVerdict(page, yes) {
 /** [토론 끝내기] 를 눌러 aria-pressed 가 바뀔 때까지 기다린다(on = 누른 뒤 기대 상태). */
 export async function pressEndDiscussion(page, on = true) {
   await page.locator("[data-end-discussion]").click({ timeout: 4000 });
-  await page.waitForSelector(`[data-end-discussion][aria-pressed="${on ? "true" : "false"}"]`, { timeout: 3000 });
+  // 내 눌림으로 과반이 되면 서버가 바로 지목으로 넘겨 [토론 끝내기] 가 사라진다 — 단계가 넘어가 버튼이 없어진 것도 눌린 결과로 본다(on 일 때만)
+  await page.waitForFunction(
+    ({ want }) => {
+      const b = document.querySelector("[data-end-discussion]");
+      return b ? b.getAttribute("aria-pressed") === String(want) : want;
+    },
+    { want: on },
+    { timeout: 3000 },
+  );
 }
 
 /**
@@ -1387,20 +1396,20 @@ export function readAnnounceWatch(page, { stop = true } = {}) {
 }
 
 /**
- * 유령 이름표 글자 대비(UI-SPEC 남은 위험 5, A3): [data-ghost-seat] 이름표의 글자 칸을 화면 그림에서 잘라 글자색·면 중 밝은 쪽(p99)과 어두운 쪽(p1) 휘도로 대비를 잰다.
+ * 유령 이름표 글자 대비(UI-SPEC 남은 위험 5, A3): 유령 모양(.mv-tag.is-ghost, 불투명도 0.6) 이름표의 글자 칸을 화면 그림에서 잘라 글자색·면 중 밝은 쪽(p99)과 어두운 쪽(p1) 휘도로 대비를 잰다.
  * 불투명도 0.6 이 맵·면과 섞인 실제 렌더 값이다. 돌려주는 값: [{ seat, opacity, ratio, hi, lo }] — 판정이 아니라 기록용이다.
  */
 export async function readGhostTagContrast(page) {
   const probes = await page.evaluate(() =>
-    [...document.querySelectorAll(".mf-world__tag[data-ghost-seat]")]
-      .map((el) => {
-        const name = el.querySelector(".mv-tag__name");
+    [...document.querySelectorAll(".mv-tag.is-ghost")]
+      .map((tag) => {
+        const name = tag.querySelector(".mv-tag__name");
         if (!name) return null;
         const range = document.createRange();
         range.selectNodeContents(name);
         const r = range.getBoundingClientRect();
         if (r.width <= 0 || r.height <= 0) return null;
-        return { seat: Number(el.getAttribute("data-seat")), opacity: Number(getComputedStyle(el).opacity), rect: { left: r.left, top: r.top, width: r.width, height: r.height }, vw: window.innerWidth, vh: window.innerHeight };
+        return { seat: Number(tag.closest(".mf-world__tag")?.getAttribute("data-seat") ?? -1), opacity: Number(getComputedStyle(tag).opacity), rect: { left: r.left, top: r.top, width: r.width, height: r.height }, vw: window.innerWidth, vh: window.innerHeight };
       })
       .filter(Boolean),
   );

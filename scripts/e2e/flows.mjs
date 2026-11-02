@@ -11,6 +11,7 @@ import {
   readAnnounceWatch,
   readGame,
   readGhostTagContrast,
+  readResult,
   setBotVote,
   skipTo,
   tapPick,
@@ -104,6 +105,7 @@ import {
   gamePanelHeight,
   ghostDomChecks,
   pickButtonChecks,
+  resultChecks,
   verdictPanelChecks,
 } from "./lib.mjs";
 
@@ -1480,7 +1482,7 @@ async function dayFlow(ctx) {
         }
         await sleep(800);
         const ringAfter = (await readGame(hp)).ring;
-        rec(sc, "NM3", "지목에서는 맵 탭이 move 를 보내지 않는다(카메라 고정)", !!pt && ht.sentMoveAt.length === before && ringAfter === ringBefore, `보낸 move ${ht.sentMoveAt.length - before}개, 링 ${ringBefore} → ${ringAfter}`);
+        rec(sc, "NM3", "지목에서는 맵 탭이 move 를 보내지 않는다(카메라 고정)", !!pt && ht.sentMoveAt.length === before && (ringAfter === null || ringAfter === ringBefore), `보낸 move ${ht.sentMoveAt.length - before}개, 링 ${ringBefore} → ${ringAfter}`);
       }
       // 손님 셋이 방장을 가리킨다
       for (let i = 0; i < guests.length; i++) {
@@ -1543,6 +1545,13 @@ async function dayFlow(ctx) {
       rec(sc, "VD3", "던진 사람 이름표에 체크(data-done)가 붙는다", done.ok, done.detail);
       const leak = await hp.evaluate(() => /찬성|반대/.test(document.body.innerText));
       rec(sc, "VD4", "변론자 화면에는 무엇을 골랐는지(찬성·반대 글자)가 어디에도 없다", !leak, "방장 화면 글자에 찬성/반대가 있음");
+      // E8 #28(알려진 한계, 계획 가정 A2): 찬반 투표자 스테이지가 낮은 폰(방 높이 560 이하)에서 위쪽 이름표가 스테이지 위로 올라간 높이 — 값만 기록하고 판정하지 않는다
+      {
+        const gv = await readGame(guests[0].page);
+        const tops = gv.tags.map((t) => t.top).filter((t) => typeof t === "number");
+        const rise = gv.stage && tops.length > 0 ? Math.max(0, Math.round((gv.stage.top - Math.min(...tops)) * 10) / 10) : null;
+        infoRow(ctx, sc, "VD5k", "알려진 한계(E8 #28): 위쪽 이름표가 스테이지 위로 올라간 높이(판정 아님)", `${rise === null ? "측정값 없음" : `${rise}px`} (스테이지 높이 ${gv.stage ? Math.round(gv.stage.bottom - gv.stage.top) : "?"}px, 방 높이 ${h}px)`);
+      }
       await gameGH(ctx, id, "verdict", host);
       await gameGH(ctx, id, "verdict-guest", guests[0]);
     }
@@ -1646,9 +1655,7 @@ async function ghostFlow(ctx) {
       await sleep(1200);
       // 유령 이름표 글자 대비: 다른 유령(밤에 죽은 손님)의 이름표는 불투명도 0.6 이다. 실제 렌더 값을 기록한다(판정 아님 — 4.5:1 미달이면 이름표 면만 0.8 로 올리는 안은 사용자 결정 전까지 '확인 대기', UI-SPEC 남은 위험 5)
       {
-        const cs = (await readGhostTagContrast(hp).catch(() => [])).sort((a, b) => a.opacity - b.opacity);
-        const faded = cs.filter((c) => c.opacity < 0.95);
-        const pool = faded.length > 0 ? faded : cs;
+        const pool = await readGhostTagContrast(hp).catch(() => []);
         const worst = pool.length > 0 ? Math.min(...pool.map((c) => c.ratio)) : null;
         infoRow(ctx, sc, "GH9", "유령 이름표 글자 대비(참고, 판정 아님)", pool.length === 0 ? "측정한 유령 이름표 없음" : `${pool.map((c) => `자리 ${c.seat} ${Math.round(c.ratio * 100) / 100}:1(불투명도 ${Math.round(c.opacity * 100) / 100})`).join(", ")}${worst < 4.5 ? " — 4.5:1 미달: 이름표 면만 0.8 로 올리는 안 확인 대기(사용자 결정)" : ""}`);
       }
@@ -1735,7 +1742,145 @@ async function noexecFlow(ctx) {
 
 // ---- night-roles: 밤 임시 틀 — 역할마다 이름표 선택·발밑 고리·아래 패널, 아침 알림 ----
 
+const NIGHT_TITLE = { police: "조사할 사람을 고르세요", doctor: "지킬 사람을 고르세요", citizen: "밤이 되었어요" };
+const RING_OF = { mafia: "mafia", police: "police", doctor: "doctor" };
+
+async function nightRolesFlow(ctx) {
+  const id = "night-roles";
+  const rec = recorder(ctx);
+  const h = ctx.size.h;
+  for (const role of ["mafia", "police", "doctor", "citizen"]) {
+    const sc = `${id}/${role}`;
+    const game = await openGame(ctx, id, { guests: 0, bots: 4, role, vote: { exec: "no", pick: "other" }, to: "nomination" });
+    try {
+      const { host, hp, ht, hostSeat } = game;
+      await skipTo(hp, ht, "night"); // 봇이 던진 지목은 찬반에서 부결(봇 반대)되어 밤으로 온다
+      const g = await untilGame(hp, (x) => x.phase === "night", 9000, "밤 도착");
+      await settle(hp);
+      const view = ht.last();
+      const alive = aliveOf(view).length;
+      const allies = view.me.allies?.length ?? 0;
+      rec(sc, "NR1", `내 직업이 ${role} 이다(테스트 방 지정)`, view.me.role === role, `직업 ${view.me.role}`);
+      if (role === "mafia") {
+        rec(sc, "NR2", "마피아 밤 아래 패널은 마피아 채널 채팅(LOG_H + 92)이다", g.hasInput && g.chatChannel === "mafia" && g.nightPanel === null, `채널 ${g.chatChannel}, 입력 ${g.hasInput}`);
+        panelRow(rec, sc, "NR2b", g, h, "chat", "마피아");
+      } else {
+        const title = NIGHT_TITLE[role];
+        rec(sc, "NR2", `${role === "citizen" ? "시민" : role === "police" ? "경찰" : "의사"} 밤 아래 패널은 NightPanel 알약이다(채팅 없음, 문구 '${title}')`, !g.hasChat && g.nightPanel === title && g.guide.count === 1, `패널 글자 ${g.nightPanel}, 채팅 ${g.hasChat}, 안내 ${g.guide.count}`);
+        infoRow(ctx, sc, "NR2b", "NightPanel 높이(참고, 판정 아님 — UI-SPEC 은 v1.0 값 157 이라 적었다)", `실제 ${Math.round((g.panel?.height ?? -1) * 10) / 10}px`);
+      }
+      const wantButtons = role === "citizen" ? 0 : role === "mafia" ? alive - 1 - allies : alive;
+      rec(sc, "NR3", `밤 이름표 선택 가능 좌석 수(${role === "mafia" ? "나·동료 제외" : role === "citizen" ? "선택 없음" : "산 사람 모두"}) = ${wantButtons}`, g.picks.length === wantButtons, `버튼 ${g.picks.length}개`);
+      if (g.picks.length > 0) {
+        const target = g.picks.find((b) => b.seat !== hostSeat)?.seat ?? g.picks[0].seat;
+        const r = await attempt(async () => {
+          await tapPick(hp, target);
+        });
+        rec(sc, "NR4", "이름표 버튼을 누르면 눌림 표시", r.ok, r.detail);
+        const ring = await attempt(async () => {
+          const gg = await untilGame(hp, (x) => x.tags.some((t) => t.seat === target && t.ring === RING_OF[role]), 4000, "발밑 고리");
+          const others = gg.tags.filter((t) => t.ring !== null && t.seat !== target).length;
+          return others === 0 ? true : { ok: false, detail: `다른 자리에도 고리 ${others}개` };
+        });
+        rec(sc, "NR5", `고른 자리에만 발밑 고리(data-ring-kind=${RING_OF[role]})가 붙는다`, ring.ok, ring.detail);
+      } else {
+        rec(sc, "NR4", "시민 밤 화면에는 발밑 고리가 없다", g.tags.every((t) => t.ring === null), "고리가 있음");
+      }
+      await gameGH(ctx, id, role, host);
+      // 아침: 밤 결과 알림(결과 알림 틀)
+      await armAnnounceWatch(hp);
+      await skipTo(hp, ht, "morning");
+      await untilGame(hp, (x) => x.phase === "morning", 6000, "아침 도착");
+      const log = await waitAnnounces(hp, 1, 3000);
+      const first = log.find((a) => a.text);
+      rec(sc, "NR6", "아침에 밤 결과 알림이 뜬다", !!first, "알림을 보지 못함");
+      if (first) {
+        recMany(rec, sc, announceChecks(first), " (아침)");
+        rec(sc, "NR7", "아침 알림에 역할 글자가 없다", !ROLE_WORD_RE.test(first.text), `알림 ${first.text}`);
+      }
+    } finally {
+      await closeGame(game);
+    }
+  }
+}
+
 // ---- result: 새 흐름으로 끝까지 가 결과 화면(시민 승·마피아 승 각 한 번) ----
+
+/** 단계 이름을 오류 첫 줄에 붙인다(어느 조작에서 멈췄는지 결과 표에서 바로 보이게). SetupError 는 SetupError 로 다시 던진다. */
+async function step(name, fn) {
+  try {
+    return await fn();
+  } catch (e) {
+    const msg = `${name}: ${String(e instanceof Error ? e.message : e).split("\n")[0]}`;
+    throw e instanceof SetupError ? new SetupError(msg) : new Error(msg);
+  }
+}
+
+/** ended 까지 넘긴다. 부하로 느려져 마감이 먼저 지나 이미 ended 면(시트 버튼이 없다) 그대로 둔다. */
+async function toEnded(game) {
+  if (game.ht.last().phase === "ended") return;
+  try {
+    await skipTo(game.hp, game.ht, "ended");
+  } catch (e) {
+    if (game.ht.last().phase !== "ended") throw e;
+  }
+}
+
+const summaryRowsOf = (summary) => (summary ?? []).reduce((n, row) => n + (row.exec ? 1 : 0) + (row.night ? 1 : 0), 0);
+
+async function resultState(ctx, id, game, { winner, n }) {
+  const rec = recorder(ctx);
+  const sc = `${id}/ended`;
+  const { hp, ht } = game;
+  await ht.waitFor((v) => v.phase === "ended", 8000, "종료 도달");
+  try {
+    await hp.waitForSelector('.mf-result[data-stage="done"]', { state: "attached", timeout: 8000 });
+  } catch {
+    throw new SetupError("결과 화면 공개 연출(data-stage=done)이 끝나지 않음");
+  }
+  const view = ht.last();
+  rec(sc, "P8", "서버가 정한 승자·요약이 view 에 있음", view.result?.winner === winner && Array.isArray(view.result?.summary), `view.result.winner ${view.result?.winner} ≠ ${winner}`);
+  await checkState(ctx, id, `ended-${winner}`, game.host);
+  recOne(rec, sc, resultChecks(await readResult(hp), { winner, n, summaryRows: summaryRowsOf(view.result?.summary) }));
+}
+
+async function resultFlow(ctx) {
+  const id = "result";
+  // 시민 승: 방장 마피아 + 봇 3(전부 방장을 가리키고 찬성) → 방장이 처형되어 마피아가 없다
+  {
+    const game = await openGame(ctx, id, { guests: 0, bots: 3, role: "mafia", vote: { exec: "yes", pick: "host" }, to: "nomination" });
+    try {
+      await step("시민 승 defense", () => skipTo(game.hp, game.ht, "defense"));
+      await step("시민 승 verdict", () => skipTo(game.hp, game.ht, "verdict"));
+      await step("시민 승 execution", () => skipTo(game.hp, game.ht, "execution"));
+      await step("시민 승 ended", () => toEnded(game));
+      await resultState(ctx, id, game, { winner: "citizenWin", n: 4 });
+    } finally {
+      await closeGame(game);
+    }
+  }
+  // 마피아 승: 방장 마피아 + 봇 3(방장 아닌 사람을 가리키고 찬성) → 낮에 시민 한 명이 처형, 밤에 방장이 한 명을 지목해 1 대 1
+  {
+    const game = await openGame(ctx, id, { guests: 0, bots: 3, role: "mafia", vote: { exec: "yes", pick: "other" }, to: "nomination" });
+    try {
+      const { hp, ht, hostSeat } = game;
+      await skipTo(hp, ht, "defense");
+      await skipTo(hp, ht, "verdict");
+      await untilGame(hp, (g) => g.phase === "verdict" && g.verdictBtns.length === 2, 6000, "찬반 도착");
+      await chooseVerdict(hp, true);
+      await skipTo(hp, ht, "night");
+      const g = await untilGame(hp, (x) => x.phase === "night" && x.picks.length > 0, 9000, "밤 도착(지목 버튼)");
+      const alive = aliveOf(ht.last());
+      if (alive.length !== 3 || !alive.includes(hostSeat)) throw new SetupError(`처형 뒤 생존자가 방장 포함 3명이 아님 (${alive.join(",")})`);
+      await tapPick(hp, g.picks.find((b) => b.seat !== hostSeat).seat); // 4명판에는 의사가 없어 반드시 죽는다
+      await skipTo(hp, ht, "morning");
+      await toEnded(game);
+      await resultState(ctx, id, game, { winner: "mafiaWin", n: 4 });
+    } finally {
+      await closeGame(game);
+    }
+  }
+}
 
 // ---- chat-game: 지목·찬반·처형·아침에 채팅 입력줄이 있고 줄이 오가며, 유령 줄은 산 사람 화면에 없다 (07 D1 이월 해소) ----
 
@@ -1984,6 +2129,8 @@ export const FLOWS = [
   { id: "day", run: dayFlow, extraSizes: LOBBY_EXTRA_SIZES },
   { id: "ghost", run: ghostFlow, extraSizes: LOBBY_EXTRA_SIZES },
   { id: "noexec", run: noexecFlow, size: GAME_SIZE },
+  { id: "night-roles", run: nightRolesFlow, size: GAME_SIZE },
+  { id: "result", run: resultFlow, size: GAME_SIZE },
   { id: "chat-game", run: chatGameFlow, size: GAME_SIZE },
   // 재접속·예산(06-18): 폰 크기와 곱하지 않고 자기 크기로 한 번. deployhold 는 배포와 동시에 돌리는 흐름(06-19)이라 --only 없이는 빠진다
   { id: "reconnect", run: reconnectFlow, size: RECONNECT_SIZE },
