@@ -5,16 +5,16 @@ milestone_name: 같은 공간
 current_phase: 08
 current_phase_name: 낮 처형과 유령
 status: executing
-stopped_at: Completed 08-06-PLAN.md
-last_updated: "2026-11-02T11:25:48.540Z"
+stopped_at: Completed 08-07-PLAN.md
+last_updated: "2026-11-02T11:43:12.782Z"
 last_activity: 2026-11-02
 last_activity_desc: Phase 08 execution started
-state_head: 70af8f50dbeda992317bdf1eff4a077f6efaab0d
+state_head: 89816583ecc192ac6950239a5f4ae52a8aecc96f
 progress:
   total_phases: 7
   completed_phases: 2
   total_plans: 78
-  completed_plans: 56
+  completed_plans: 57
   percent: 29
 ---
 
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-11-02)
 ## Current Position
 
 Phase: 08 (낮 처형과 유령) — EXECUTING
-Plan: 7 of 28
+Plan: 8 of 28
 Status: Ready to execute
 Last activity: 2026-11-02 — Phase 08 execution started
 
@@ -115,6 +115,7 @@ Progress: [███░░░░░░░] 29% (2/7 phases)
 | Phase 08 P04 | 15min | 3 tasks | 10 files |
 | Phase 08 P05 | 14 min | 3 tasks | 15 files |
 | Phase 08 P06 | 8min | 3 tasks | 2 files |
+| Phase 08 P07 | 14 min | 3 tasks | 19 files |
 
 ## Accumulated Context
 
@@ -227,6 +228,8 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 08]: 08-05: 내가 가리킨 사람(mine) 이름표는 승인 NameTag 대로 point 아이콘 16 을 함께 그린다. is-ghost 대비 판정은 08-24 E2E H 묶음
 - [Phase 08]: 08-06: 위 알림은 합치기 창(400ms)이 닫힌 뒤에 나오고, 결과 알림은 announces 배열(at·ms)로 처형 단계의 두 알림을 지연 시각과 함께 만든다
 - [Phase 08]: 08-06: 첫 지목 한 표로 선두가 생겨도 hot 앞서요 줄을 만든다(A4), 첫 스냅샷의 유령 상태는 state.executed 로 준다
+- [Phase 08]: 08-07: 지목은 castPoint 검증 뒤 사람당 250ms 간격(DO 메모리), 찬반은 첫 표만 전원·값 변경은 본인 소켓만, 토론 끝내기는 개수만 공개하고 과반이면 마감을 당겨 tick
+- [Phase 08]: 08-07: 처형 단계 공개 필드 day.verdict 는 서버 전용 verdict 키 검사에서 정확한 경로 하나만 예외로 열었다(전체 누설 스캔 개편은 08-09)
 
 ### Pending Todos
 
@@ -262,8 +265,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-02T11:25:48.333Z
-Stopped at: Completed 08-06-PLAN.md
+Last session: 2026-11-02T11:43:12.583Z
+Stopped at: Completed 08-07-PLAN.md
 Resume file: None
 
 ## Operator Next Steps

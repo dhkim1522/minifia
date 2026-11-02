@@ -180,7 +180,7 @@ semanticAssessment: 세 RED 모두 계획한 단언(없는 길 때문에 받는 
 - **Commit:** 09b2c20, 0cd659d
 
 **3. [Rule 3 - 도우미] `startedGame(phase, guests = 5)` 손님 수 인자**
-- 계획이 4명 방(DAO 시험 "4명 방 시작")을 요구하는데 기존 도우미가 6명 고정이라 기본값을 유지한 채 인자를 더했다. 기존 호출은 그대로다.
+- 계획이 4명 방(DO 시험 "4명 방 시작")을 요구하는데 기존 도우미가 6명 고정이라 기본값을 유지한 채 인자를 더했다. 기존 호출은 그대로다.
 - **Commit:** ec7f1da
 
 **4. [처리 메모] ee72660 시점 `tsconfig.worker.json` 타입 검사가 빨갛다**
@@ -194,7 +194,7 @@ semanticAssessment: 세 RED 모두 계획한 단언(없는 길 때문에 받는 
 
 - `npm run typecheck` 통과(앱·워커). `npx vitest run` 150 files / 4318 passed (1 skipped 는 이전부터 있던 것).
 - 인수 기준: `case "point"`·`castPoint(`·`z.literal("point")`, `votedSeatsOf(`·`endCountOf(`·`phaseEndsAt: now`, `sendViewTo([playerId])` 3건(기준선 1 + 2), `"endDiscussion"`(bots.ts)·`case "verdict"`(room.ts)·`"봇 찬반"`(TestTools.tsx), 시험에 `.skip(`·`.todo(` 없음(rc 1), `test(08-07)` 커밋 4건 — 모두 통과.
-- 위생: `git grep -nIiE "저장소 위생 패턴"` 이 이 계획이 건드린 파일에서 0건.
+- 위생: 저장소 위생 규칙의 금지 표현 검사(`~/personal/CLAUDE.md` 의 git grep)가 이 계획이 건드린 파일에서 0건.
 
 ## Seed-pin changes (난수 호출 순서 변경)
 
