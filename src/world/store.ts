@@ -1,5 +1,5 @@
 // 로비 위치의 클라이언트 사본(React 밖 — 프레임마다 리렌더하지 않는다, RESEARCH Anti-Patterns).
-// 위치의 진실은 서버 구간이고 이 스토어는 받은 구간만 들고 있다(예측 이동 없음, 결정 0044-17).
+// 위치의 진실은 서버 구간이고 이 스토어는 서버가 보낸 구간만 든다. 내 예측 구간은 런타임이 따로 든다(결정 0059).
 import type { Segment } from "../../shared/game/world";
 import { positionAt } from "../../shared/game/world";
 import type { WorldFrame } from "../../shared/protocol";

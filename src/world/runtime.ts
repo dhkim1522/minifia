@@ -12,7 +12,7 @@ import { NETWORK_TEXT } from "../net/copy";
 import { clampTarget, DEFAULT_TARGET, followStep, NAMETAG_GAP, NAMETAG_MAX_W, RESIZE_SETTLE_MS, stageOffsetY } from "./camera";
 import { FIGS } from "./characterData";
 import { createTapGate } from "./input";
-import { BLEND_SNAP_DIST, blendRemaining, createOwnMoves, predictSegment } from "./motion";
+import { BLEND_SNAP_DIST, blendRemaining, createOwnMoves, predictSegment, stepYaw, travelYaw } from "./motion";
 import { DEFAULT_BUDGET_STEP, nextLadderStep } from "./renderer";
 import type { CharacterHandle, WorldRenderer } from "./renderer";
 import { initialMapStatus, inputBlocked, mapStatusReducer, shouldRecreate } from "./status";
@@ -225,6 +225,8 @@ interface Actor {
   /** off 를 잡은 Date.now() */
   offAt: number;
   yaw: number;
+  /** 걷는 선분의 방향(travelYaw). 구간이 끝나도 남겨 두어 돌던 중이면 마저 돈다. 멈춘 뒤에는 새로 정하지 않는다 */
+  yawGoal: number | null;
   headY: number;
   dim: boolean;
   /** 등장 시작 시각(없으면 서 있다) */
@@ -487,6 +489,7 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
       off: { x: 0, z: 0 },
       offAt: now,
       yaw: spawnYaw(seat),
+      yawGoal: null,
       headY: 0,
       dim: false,
       enter: null,
@@ -717,11 +720,20 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
       const at = live === null ? a.pos : { x: live.x + a.off.x * keep, z: live.z + a.off.z * keep };
       const dx = at.x - a.pos.x;
       const dz = at.z - a.pos.z;
-      let moving = false;
-      if (!resync && dx * dx + dz * dz > MOVE_EPS * MOVE_EPS) {
-        moving = true;
-        a.yaw = Math.atan2(dx, dz);
-        a.handle.setYaw(a.yaw);
+      const moving = !resync && dx * dx + dz * dz > MOVE_EPS * MOVE_EPS;
+      // 방향: 걷는 선분의 방향으로 짧은 쪽으로 돌되 한 프레임에 YAW_TURN_RATE × dt 까지만(모션 줄이기면 바로). 복귀 프레임은 건드리지 않는다
+      if (resync) {
+        a.yawGoal = null;
+      } else {
+        const target = eff === undefined ? null : travelYaw(eff, sNow);
+        if (target !== null) a.yawGoal = target;
+        if (a.yawGoal !== null) {
+          const next = reduced ? a.yawGoal : stepYaw(a.yaw, a.yawGoal, dt);
+          if (next !== a.yaw) {
+            a.yaw = next;
+            a.handle.setYaw(a.yaw);
+          }
+        }
       }
       a.pos = { x: at.x, z: at.z };
 
