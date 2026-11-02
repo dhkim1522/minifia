@@ -183,3 +183,66 @@ describe("텍스트 이모티콘(emoji)은 와이어에서 사라졌다 (07-12, 
     expect(ClientMessageSchema.safeParse(msg).success).toBe(false);
   });
 });
+
+// 08-07: 낮 처형 세 메시지(결정 0060). 모두 strictObject — 행위자는 소켓 첨부 playerId 뿐이라 seat·id·ch 가 덧붙으면 거부한다(T-08-04, T-08-24).
+describe("ClientMessageSchema point (08-07, DAY-04: target 은 0..7 정수)", () => {
+  it.each([
+    ["0", { t: "point", target: 0 }],
+    ["7", { t: "point", target: 7 }],
+  ])("받는다: target %s", (_name, msg) => {
+    expect(ClientMessageSchema.safeParse(msg).success).toBe(true);
+  });
+
+  it.each([
+    ["target 빠짐", { t: "point" }],
+    ["8", { t: "point", target: 8 }],
+    ["-1", { t: "point", target: -1 }],
+    ["1.5", { t: "point", target: 1.5 }],
+    ['"1"', { t: "point", target: "1" }],
+    ["null (취소는 없다)", { t: "point", target: null }],
+    ["덧붙은 seat", { t: "point", target: 1, seat: 2 }],
+    ["덧붙은 id", { t: "point", target: 1, id: "x" }],
+    ["덧붙은 ch", { t: "point", target: 1, ch: "all" }],
+  ])("거부한다: %s", (_name, msg) => {
+    expect(ClientMessageSchema.safeParse(msg).success).toBe(false);
+  });
+});
+
+describe("ClientMessageSchema verdict (08-07, DAY-06: agree 는 불리언)", () => {
+  it.each([
+    ["찬성", { t: "verdict", agree: true }],
+    ["반대", { t: "verdict", agree: false }],
+  ])("받는다: %s", (_name, msg) => {
+    expect(ClientMessageSchema.safeParse(msg).success).toBe(true);
+  });
+
+  it.each([
+    ["agree 빠짐", { t: "verdict" }],
+    ['문자열 "true"', { t: "verdict", agree: "true" }],
+    ["숫자 1", { t: "verdict", agree: 1 }],
+    ["null", { t: "verdict", agree: null }],
+    ["덧붙은 seat", { t: "verdict", agree: true, seat: 1 }],
+    ["덧붙은 id", { t: "verdict", agree: true, id: "x" }],
+  ])("거부한다: %s", (_name, msg) => {
+    expect(ClientMessageSchema.safeParse(msg).success).toBe(false);
+  });
+});
+
+describe("ClientMessageSchema endDiscussion (08-07, DAY-03: on 은 불리언)", () => {
+  it.each([
+    ["켜기", { t: "endDiscussion", on: true }],
+    ["끄기", { t: "endDiscussion", on: false }],
+  ])("받는다: %s", (_name, msg) => {
+    expect(ClientMessageSchema.safeParse(msg).success).toBe(true);
+  });
+
+  it.each([
+    ["on 빠짐", { t: "endDiscussion" }],
+    ['문자열 "true"', { t: "endDiscussion", on: "true" }],
+    ["숫자 1", { t: "endDiscussion", on: 1 }],
+    ["덧붙은 seat", { t: "endDiscussion", on: true, seat: 1 }],
+    ["덧붙은 count", { t: "endDiscussion", on: true, count: 99 }],
+  ])("거부한다: %s", (_name, msg) => {
+    expect(ClientMessageSchema.safeParse(msg).success).toBe(false);
+  });
+});

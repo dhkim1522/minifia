@@ -529,11 +529,11 @@ export interface Game {
 }
 
 /**
- * 6명 판(방장 + 손님 5)을 시작해 원하는 단계까지 마감을 당기고, 모든 소켓의 프레임을 ping/pong 으로 flush 해 둔 채 돌려준다.
+ * 6명 판(방장 + 손님 5, guests 로 바꿀 수 있다)을 시작해 원하는 단계까지 마감을 당기고, 모든 소켓의 프레임을 ping/pong 으로 flush 해 둔 채 돌려준다.
  * 역할은 무작위라 dayAnnounce 에서 읽는다. 마피아 둘·경찰·의사·시민 둘이다.
  */
-export async function startedGame(phase: PhaseId): Promise<Game> {
-  const room = await seat(5, 0);
+export async function startedGame(phase: PhaseId, guests = 5): Promise<Game> {
+  const room = await seat(guests, 0);
   const socks = [room.host, ...room.guests.map((g) => g.sock)];
   send(room.host, { t: "start" });
   for (const sock of socks) await nextFrame(sock, (m) => m.t === "state" && m.view.phase === "assigning");
@@ -555,3 +555,25 @@ export async function killSeats(g: Game, seats: number[]): Promise<void> {
 
 /** 잠깐 기다린다(관찰 구간의 길이를 맞출 때). */
 export const pause = (ms: number): Promise<void> => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+// ---- 8페이즈 낮 처형 도우미(08-07) ----
+
+/**
+ * 저장된 방을 phase 로 옮긴다(editRoom 래퍼 — DO 가 evict 되어 저장소에서 다시 읽고 소켓은 하이버네이션으로 남는다). 흐름 전환 전(08-11)이라
+ * 시험은 이렇게 지목·찬반 단계로 들어간다. 마감은 60초 뒤, 일차는 그대로(없으면 1)다. patch 로 후보(verdict)·표 같은 저장 상태를 더 고친다.
+ */
+export async function toPhase(
+  code: string,
+  phase: PhaseId,
+  patch?: (room: Record<string, unknown>) => Record<string, unknown>,
+): Promise<void> {
+  await editRoom(code, (room) => {
+    const next = { ...room, phase, phaseEndsAt: Date.now() + 60_000, day: (room.day as number | undefined) ?? 1 };
+    return patch ? patch(next) : next;
+  });
+}
+
+/** 지목 한 번을 보낸다(대상 좌석). 행위자는 소켓 첨부 playerId 로만 정해진다. */
+export function pointAs(sock: TestSocket, target: number): void {
+  send(sock, { t: "point", target });
+}
