@@ -16,7 +16,18 @@
 
 ## 표 A — 배포본 자동 확인
 
-(08-26 Task 2 에서 채운다)
+| 항목 | 명령 | 결과 |
+|------|------|------|
+| 배포 | `npm run deploy` | 통과 — 계정 확인(개인 Cloudflare 계정) → `vite build` → 배포 대상 확인 `minifia-v2` → `Uploaded minifia-v2`, Version ID `11df41ba-9e7b-4d83-bd31-2322088dd6c0`. 1회 실행. v1.0 주소에는 요청을 보내지 않음 |
+| health 해시 | `curl -s https://minifia-v2.dhplay.workers.dev/api/health` | 통과 — `{"ok":true,"version":"2026-11-02T18:25:46Z+86b9d06"}` (배포 시점 HEAD `86b9d06` 와 일치). 이후 커밋은 `scripts/`·문서뿐이고 `src`·`worker`·`shared`·`public` 은 같다 |
+| smoke full | `node scripts/smoke.mjs --prod --stage full --players 5` | 통과 — `SMOKE OK full code=1733 players=5 spread=9ms discSpread=8ms version=…+86b9d06`. 토론 끝내기 과반 → 지목 5줄 → 변론 → 찬반 찬성 4 반대 0 → 처형 seat 2, 자유 채팅·재접속 복원 통과. **첫 실행은 실패**: 스크립트가 옛 처형 발표 키 집합 `phrase,seat` 를 기대했다(결정 0060-5 로 문구 번호가 없어짐) — 앱이 아니라 검사 스크립트의 낡은 기대라 `seat` 로 고쳤다(커밋 e49747a) |
+| E2E day · ghost · noexec · night-roles · result · chat-game | `node scripts/e2e/run.mjs --url https://minifia-v2.dhplay.workers.dev --only day,ghost,noexec,night-roles,result,chat-game` | 통과 — 마지막 줄 `E2E OK`, 157초, 실패 0. day 360x640 · 390x664 · 430x932 · 360x560 · 390x844 · 402x874 각 99/99, ghost 37/37 (360x560 · 402x874 는 29/29), noexec 390x844 15/15, night-roles 390x844 62/62, result 390x844 10/10, chat-game 390x844 13/13 |
+
+실행 기록 (판정 완화 없음):
+
+- 첫 E2E 는 day 흐름 NT1(처형 뒤 밤으로 간다)이 6개 크기 중 5개에서 실패했다. 원인은 앱이 아니라 흐름 구동 방식이다: 배포본은 지연이 커서 앞 판정이 처형 5초를 넘기고, 그 뒤 '다음 단계로 넘기기' 를 누르면 이미 와 있던 밤을 건너뛰어 다음 날 토론까지 가 버렸다. 눌러 넘기지 않고 서버 타이머 전환을 기다리게 고쳤다(판정·15초 문턱 그대로, 커밋 5f170e3).
+- 고친 뒤 둘째 실행은 ghost 의 한 줄이 `G5 GET /backgrounds/bg_game_morning.webp 502`(Cloudflare 일시 오류)로 실패했다. 같은 파일을 세 번 다시 받아 200 · `image/webp` 였고, 허용 목록은 넓히지 않았다. 셋째 전체 실행이 위 표의 통과다.
+- 이 E2E 는 7페이즈 때와 달리 한 번에 900초 안에 끝나서 나눠 돌리지 않았다.
 
 ## 표 B — 실기기 확인 대기 (iPhone 16 Pro, 사람, 모든 개발 뒤 한꺼번에)
 
