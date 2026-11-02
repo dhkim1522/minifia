@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render } from "@testing-library/react";
+import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import "../helpers/singleLineErrors";
 import { installMemoryStorage } from "../helpers/memoryStorage";
@@ -169,5 +169,172 @@ describe("지목 화면 — 이름표 하나 누르기 (DAY-04, 트레이서)", 
   it("유령(탈락한 나)의 지목 화면에는 지목 버튼이 하나도 없다", () => {
     const { container } = mount(makeView({ dead: [0] }));
     expect(picks(container).length).toBe(0);
+  });
+});
+
+// ---- Task 2: 위 알림 큐·채팅 줄·첫 스냅샷 무연출·처음 지목 깜빡임 (UI Considerations E2 #9·#10) ----
+
+describe("지목 화면 — 위 알림·채팅 줄 (E2 #9)", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
+  });
+  afterEach(() => vi.useRealTimers());
+  const advance = (ms: number) =>
+    act(() => {
+      vi.advanceTimersByTime(ms);
+    });
+  const toastText = (c: ParentNode) => c.querySelector(".mv-toast__text")?.textContent ?? "";
+  const logText = (c: ParentNode) => c.querySelector("[data-chat-log]")?.textContent ?? "";
+  const sysLines = (c: ParentNode, kind: "vote" | "hot"): string[] =>
+    [...c.querySelectorAll(`.mv-chat__sys.is-${kind}`)].map((el) => el.textContent ?? "");
+
+  it("새 지목: 합치기 창(400ms)이 닫힌 뒤 위 알림 '영희 → 서준'(point 아이콘)이 뜨고, 채팅 vote 줄은 바로 같은 글자로 남는다", () => {
+    const m = mount(makeView());
+    m.show(makeView({ points: [[1, 2]] }));
+    expect(sysLines(m.container, "vote")).toEqual(["영희 → 서준"]);
+    expect(toastText(m.container)).toBe("");
+    advance(401);
+    expect(toastText(m.container)).toBe("영희 → 서준");
+    expect(m.container.querySelector(".mv-toast .mv-toast__text svg")).not.toBeNull();
+  });
+
+  it("바꾸면 '(바꿈)': 영희가 서준 → 도윤으로 바꾼 지목은 단독 알림과 vote 줄에 (바꿈)이 붙는다", () => {
+    const m = mount(makeView({ points: [[1, 2]] }));
+    m.show(makeView({ points: [[1, 4]] }));
+    expect(sysLines(m.container, "vote")).toEqual(["영희 → 도윤 (바꿈)"]);
+    advance(401);
+    expect(toastText(m.container)).toBe("영희 → 도윤 (바꿈)");
+  });
+
+  it("400ms 안에 같은 대상을 가리킨 두 표는 알림 하나 '영희·지아 → 서준' 으로 합치고 채팅 줄은 둘이다", () => {
+    const m = mount(makeView());
+    m.show(makeView({ points: [[1, 2]] }));
+    advance(100);
+    m.show(makeView({ points: [[1, 2], [3, 2]] }));
+    advance(301);
+    expect(toastText(m.container)).toBe("영희·지아 → 서준");
+    expect(sysLines(m.container, "vote")).toEqual(["영희 → 서준", "지아 → 서준"]);
+  });
+
+  it("서로 다른 대상 둘은 줄을 세워 하나씩 보인다: 첫 알림 뒤 0.8초 만에 둘째가 이어받는다", () => {
+    const m = mount(makeView());
+    m.show(makeView({ points: [[1, 2]] }));
+    advance(50);
+    m.show(makeView({ points: [[1, 2], [3, 4]] }));
+    advance(351);
+    expect(toastText(m.container)).toBe("영희 → 서준");
+    advance(801);
+    expect(toastText(m.container)).toBe("지아 → 도윤");
+  });
+
+  it("지목이 시작되면(낮 토론 → 지목) 채팅 system 줄 '지목 시작' 이 남는다", () => {
+    const m = mount(makeView({ phase: "discussion" }));
+    m.show(makeView());
+    expect(logText(m.container)).toContain("지목 시작");
+    expect(sysLines(m.container, "hot")).toEqual([]);
+  });
+
+  it("선두가 처음 생기면 hot '서준 님이 앞서요', 과반(산 5명 중 3표)이 되면 hot '서준 님 과반' — vote 줄 다음에 온다", () => {
+    const m = mount(makeView());
+    m.show(makeView({ points: [[1, 2]] }));
+    expect(sysLines(m.container, "hot")).toEqual(["서준 님이 앞서요"]);
+    m.show(makeView({ points: [[1, 2], [3, 2], [4, 2]] }));
+    expect(sysLines(m.container, "hot")).toEqual(["서준 님이 앞서요", "서준 님 과반"]);
+    const texts = [...m.container.querySelectorAll(".mv-chat__sys")].map((el) => el.textContent);
+    expect(texts.indexOf("영희 → 서준")).toBeLessThan(texts.indexOf("서준 님이 앞서요"));
+  });
+
+  it("재접속·새로 고침 첫 화면(직전 view 없음): 배지·선두는 상태로 바로 보이지만 알림·채팅 줄은 새로 만들지 않는다", () => {
+    const { container } = mount(makeView({ points: [[1, 2], [3, 2]] }));
+    expect(headOf(container, 2)?.getAttribute("data-count")).toBe("2");
+    expect(headOf(container, 2)?.getAttribute("data-lead")).toBe("true");
+    advance(2000);
+    expect(toastText(container)).toBe("");
+    expect(container.querySelectorAll(".mv-chat__sys").length).toBe(0);
+  });
+
+  it("연결 번호(epoch)가 바뀐 직후 view 도 이벤트가 없다", () => {
+    const m = mount(makeView());
+    m.show(makeView({ points: [[1, 2]] }), { epoch: 2 });
+    advance(2000);
+    expect(headOf(m.container, 2)?.getAttribute("data-count")).toBe("1");
+    expect(toastText(m.container)).toBe("");
+    expect(m.container.querySelectorAll(".mv-chat__sys").length).toBe(0);
+  });
+
+  it("닉네임은 글자로 그린다: '<b>영희</b>' 가 알림 안에서 HTML 이 되지 않는다", () => {
+    const nicknames = ["민수", "<b>영희</b>", "서준", "지아", "도윤"];
+    const m = mount(makeView({ nicknames }));
+    m.show(makeView({ nicknames, points: [[1, 2]] }));
+    advance(401);
+    expect(toastText(m.container)).toBe("<b>영희</b> → 서준");
+    expect(m.container.querySelector(".mv-toast b")).toBeNull();
+  });
+});
+
+describe("지목 화면 — 처음 보는 지목 깜빡임 (UI-SPEC 다르게 2)", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
+  });
+  afterEach(() => vi.useRealTimers());
+  const advance = (ms: number) =>
+    act(() => {
+      vi.advanceTimersByTime(ms);
+    });
+  const blinking = (c: ParentNode): number => c.querySelectorAll(".mv-tag.is-blink").length;
+
+  it("기록이 없으면 누를 수 있는 이름표 4개가 깜빡이고(내 이름표는 아님) 3초 뒤 꺼지며 mf-hint-point 가 남는다", () => {
+    const { container } = mount(makeView());
+    expect(blinking(container)).toBe(4);
+    expect(headOf(container, 0)?.querySelector(".is-blink")).toBeNull();
+    advance(2999);
+    expect(blinking(container)).toBe(4);
+    advance(1);
+    expect(blinking(container)).toBe(0);
+    expect(localStorage.getItem("mf-hint-point")).not.toBeNull();
+  });
+
+  it("한 번 본 사람은 다음 지목 단계에서 깜빡이지 않는다", () => {
+    const first = mount(makeView());
+    advance(3000);
+    first.unmount();
+    const { container } = mount(makeView());
+    expect(blinking(container)).toBe(0);
+  });
+
+  it("이름표를 누르면 즉시 멈추고 기록한다", () => {
+    const { container } = mount(makeView());
+    expect(blinking(container)).toBe(4);
+    fireEvent.click(pickOf(container, 2)!);
+    expect(blinking(container)).toBe(0);
+    expect(localStorage.getItem("mf-hint-point")).not.toBeNull();
+  });
+
+  it("저장소를 읽거나 쓸 수 없으면(개인 모드) 깜빡이고, 3초 뒤 끄는 데도 오류가 나지 않는다", () => {
+    const broken = {
+      getItem: () => {
+        throw new Error("denied");
+      },
+      setItem: () => {
+        throw new Error("denied");
+      },
+    };
+    vi.stubGlobal("localStorage", broken);
+    const { container } = mount(makeView());
+    expect(blinking(container)).toBe(4);
+    advance(3000);
+    expect(blinking(container)).toBe(0);
+  });
+
+  it("지목이 아닌 단계와 유령 화면에는 깜빡임이 없고 기록도 하지 않는다", () => {
+    const talk = mount(makeView({ phase: "discussion" }));
+    expect(blinking(talk.container)).toBe(0);
+    talk.unmount();
+    const ghost = mount(makeView({ dead: [0] }));
+    expect(blinking(ghost.container)).toBe(0);
+    advance(3000);
+    expect(localStorage.getItem("mf-hint-point")).toBeNull();
   });
 });
