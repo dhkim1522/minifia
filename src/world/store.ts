@@ -65,6 +65,11 @@ export class WorldStore {
     return this.ready;
   }
 
+  /** (RED 껍데기) */
+  moveSeqOf(_seat: number): number {
+    return 0;
+  }
+
   /** 구간이 있는 seat 오름차순 */
   seats(): number[] {
     return [...this.segs.keys()].sort((a, b) => a - b);

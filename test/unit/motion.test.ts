@@ -7,6 +7,7 @@ import {
   SEG_BLEND_MS,
   YAW_TURN_RATE,
   blendRemaining,
+  createOwnMoves,
   predictSegment,
   stepYaw,
   travelYaw,
@@ -127,5 +128,109 @@ describe("travelYaw — 서버 시각 t 에 걷는 선분의 방향 atan2(dx, dz
     expect(travelYaw({ p: [50, 50], t0: 0, v: 180 }, 0)).toBeNull();
     expect(travelYaw({ p: [50, 50, 50, 50], t0: 0, v: 180 }, 100)).toBeNull();
     expect(travelYaw({ p: [0, 0, 0, 0, 100, 0], t0: 0, v: 100 }, 500)).toBe(Math.PI / 2);
+  });
+});
+
+describe("createOwnMoves — 내 이동의 응답 판정 (결정 0059-2)", () => {
+  const seg = (...p: number[]) => ({ p, t0: 0, v: 180 });
+  // 첫 탭은 (100,0) 으로, 둘째 탭은 (0,100) 으로 간다. 끝점이 다르니 어느 응답인지 가려진다.
+  const predA = seg(0, 0, 100, 0);
+  const predB = seg(0, 0, 0, 100);
+  const respA = seg(0, 0, 100, 0);
+  const respB = seg(0, 0, 0, 100);
+
+  it("보낸 뒤에는 예측을 그리고, 응답이 오면 answered 와 함께 서버 구간으로 돌아온다", () => {
+    const own = createOwnMoves(0);
+    own.sent(predA);
+    expect(own.effective(respA)).toBe(predA);
+    expect(own.pending()).toBe(1);
+    expect(own.observe(1, respA)).toBe("answered");
+    expect(own.effective(respA)).toBe(respA);
+    expect(own.pending()).toBe(0);
+  });
+
+  it("탭 두 번 뒤 첫 응답만 오면 마지막 탭의 예측을 끊지 않는다(RTT > 탭 간격), 둘째 응답에서 answered", () => {
+    const own = createOwnMoves(0);
+    own.sent(predA);
+    own.sent(predB);
+    expect(own.observe(1, respA)).toBeNull();
+    expect(own.effective(respA)).toBe(predB);
+    expect(own.pending()).toBe(1);
+    expect(own.observe(2, respB)).toBe("answered");
+    expect(own.effective(respB)).toBe(respB);
+    expect(own.pending()).toBe(0);
+  });
+
+  it("첫 탭이 서버에서 버려지고 둘째 응답만 오면(seq 1 증가, 끝점 = 둘째 예측 끝점) answered", () => {
+    const own = createOwnMoves(0);
+    own.sent(predA);
+    own.sent(predB);
+    expect(own.observe(1, respB)).toBe("answered");
+    expect(own.pending()).toBe(0);
+    expect(own.effective(respB)).toBe(respB);
+  });
+
+  it("같은 목적지로 두 번 탭하면 첫 응답에서 answered 이고, 이어 오는 둘째 응답은 null", () => {
+    const own = createOwnMoves(0);
+    own.sent(predA);
+    own.sent(predA);
+    expect(own.observe(1, respA)).toBe("answered");
+    expect(own.observe(2, respA)).toBeNull();
+    expect(own.pending()).toBe(0);
+  });
+
+  it("보낸 것이 없을 때 seq 가 늘면 null 이고 예측이 생기지 않는다", () => {
+    const own = createOwnMoves(0);
+    expect(own.observe(1, respA)).toBeNull();
+    expect(own.pending()).toBe(0);
+    expect(own.effective(respA)).toBe(respA);
+  });
+
+  it("예측 없이 보낸 것(sent(null))은 서버 구간을 그리고 응답에서 answered", () => {
+    const own = createOwnMoves(0);
+    own.sent(null);
+    expect(own.pending()).toBe(1);
+    expect(own.effective(respA)).toBe(respA);
+    expect(own.observe(1, respA)).toBe("answered");
+    expect(own.pending()).toBe(0);
+  });
+
+  it("seq 가 같으면 아무 일도 없다", () => {
+    const own = createOwnMoves(4);
+    own.sent(predA);
+    expect(own.observe(4, respA)).toBeNull();
+    expect(own.pending()).toBe(1);
+    expect(own.effective(respA)).toBe(predA);
+  });
+
+  it("expire: 대기가 있으면 true 와 함께 예측·대기를 비운다, 없으면 false", () => {
+    const own = createOwnMoves(0);
+    expect(own.expire()).toBe(false);
+    own.sent(predA);
+    expect(own.expire()).toBe(true);
+    expect(own.pending()).toBe(0);
+    expect(own.effective(respB)).toBe(respB);
+    expect(own.expire()).toBe(false);
+  });
+
+  it("기준보다 작은 seq 가 오면 reset: 예측·대기가 비고 기준이 그 seq 가 된다", () => {
+    const own = createOwnMoves(3);
+    own.sent(predA);
+    expect(own.observe(0, respA)).toBe("reset");
+    expect(own.pending()).toBe(0);
+    expect(own.effective(respA)).toBe(respA);
+    expect(own.observe(0, respA)).toBeNull();
+    expect(own.observe(1, respA)).toBeNull();
+  });
+
+  it("reset(seq): 새 연결에서 대기·예측을 비우고 기준을 다시 잡는다", () => {
+    const own = createOwnMoves(0);
+    own.sent(predA);
+    own.reset(5);
+    expect(own.pending()).toBe(0);
+    expect(own.effective(respA)).toBe(respA);
+    expect(own.observe(5, respA)).toBeNull();
+    own.sent(predB);
+    expect(own.observe(6, respB)).toBe("answered");
   });
 });

@@ -163,3 +163,44 @@ describe("WorldStore: currentEpoch (06-13 런타임이 새 연결 첫 프레임�
     expect(store.currentEpoch()).toBe(-1);
   });
 });
+
+describe("WorldStore.moveSeqOf — 이 연결의 snap 뒤 자리에 적용된 move 수 (결정 0059)", () => {
+  it("snap 뒤 0, 같은 epoch move 를 셀 때마다 늘고 다른 자리는 따로 센다", () => {
+    const store = new WorldStore();
+    store.applyFrame(snap([rest(0), rest(1)]), 1);
+    expect(store.moveSeqOf(0)).toBe(0);
+    store.applyFrame(move(0, [100, 100, 500, 100], 1000), 1);
+    store.applyFrame(move(0, [100, 100, 100, 500], 2000), 1);
+    store.applyFrame(move(1, [100, 100, 300, 100], 2000), 1);
+    expect(store.moveSeqOf(0)).toBe(2);
+    expect(store.moveSeqOf(1)).toBe(1);
+    expect(store.moveSeqOf(9)).toBe(0);
+  });
+
+  it("낡은 epoch move·새 epoch 선행 move·준비 전 move 는 세지 않는다", () => {
+    const store = new WorldStore();
+    store.applyFrame(move(0, [100, 100, 500, 100], 1000), 1); // 준비 전
+    expect(store.moveSeqOf(0)).toBe(0);
+    store.applyFrame(snap([rest(0)]), 2);
+    store.applyFrame(move(0, [100, 100, 500, 100], 1000), 1); // 낡은 epoch
+    expect(store.moveSeqOf(0)).toBe(0);
+    store.applyFrame(move(0, [100, 100, 500, 100], 1000), 3); // 새 epoch 가 snap 보다 먼저
+    expect(store.moveSeqOf(0)).toBe(0);
+  });
+
+  it("새 snap·reset() 뒤 0 으로 돌아가고 retainSeats 로 지운 자리는 0 이다", () => {
+    const store = new WorldStore();
+    store.applyFrame(snap([rest(0), rest(1)]), 1);
+    store.applyFrame(move(0, [100, 100, 500, 100], 1000), 1);
+    store.applyFrame(move(1, [100, 100, 500, 100], 1000), 1);
+    expect(store.retainSeats([0])).toEqual([1]);
+    expect(store.moveSeqOf(1)).toBe(0);
+    expect(store.moveSeqOf(0)).toBe(1);
+    store.applyFrame(snap([rest(0)]), 1);
+    expect(store.moveSeqOf(0)).toBe(0);
+    store.applyFrame(move(0, [100, 100, 500, 100], 1000), 1);
+    expect(store.moveSeqOf(0)).toBe(1);
+    store.reset();
+    expect(store.moveSeqOf(0)).toBe(0);
+  });
+});

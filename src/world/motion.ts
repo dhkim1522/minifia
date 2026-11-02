@@ -71,3 +71,24 @@ export function travelYaw(seg: Segment, t: number): number | null {
   }
   return null;
 }
+
+// ---- RED 껍데기 (GREEN 에서 구현) ----
+export type OwnMoveEvent = "answered" | "reset" | null;
+export interface OwnMoves {
+  sent(pred: Segment | null): void;
+  observe(seq: number, server: Segment | undefined): OwnMoveEvent;
+  expire(): boolean;
+  reset(seq: number): void;
+  effective(server: Segment | undefined): Segment | undefined;
+  pending(): number;
+}
+export function createOwnMoves(_initialSeq: number): OwnMoves {
+  return {
+    sent: () => {},
+    observe: () => null,
+    expire: () => false,
+    reset: () => {},
+    effective: (server) => server,
+    pending: () => 0,
+  };
+}
