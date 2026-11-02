@@ -6,7 +6,7 @@ import { useReducedMotion } from "../net/useReducedMotion";
 import { HEADER_BOTTOM, PANEL_HEIGHT } from "../world/camera";
 import { createTapTracker } from "../world/input";
 import { createWorldRuntime, EXIT_CURTAIN_MS, EXIT_MS } from "../world/runtime";
-import type { WorldModules, WorldRuntime } from "../world/runtime";
+import type { RingKind, WorldModules, WorldRuntime } from "../world/runtime";
 import type { SceneLook } from "../world/presence";
 import { initialMapStatus } from "../world/status";
 import type { MapStatusState } from "../world/status";
@@ -14,6 +14,7 @@ import type { WorldStore } from "../world/store";
 import { installWorldTestHooks, worldTestHooksEnabled } from "../world/testHooks";
 import { MapStatusCard } from "./MapStatusCard";
 import { HeadStack } from "./v2/HeadStack";
+import type { HeadStackProps } from "./v2/HeadStack";
 import "../styles/world.css";
 
 // 로비 맵 화면: 캔버스 한 장 + 입력 면 + 이름표 층. three 는 world/runtime 의 import() 로만 열린다(이 파일은 three 를 모른다).
@@ -39,6 +40,18 @@ const SCENE_LABEL = "지하 재즈 바 로비. 바닥을 누르면 그쪽으로 
 /** 이름표는 런타임이 첫 위치를 놓을 때까지 보이지 않는다(옛 자리 0,0 에서 한 프레임 번쩍이지 않게). 값이 늘 같아 React 가 다시 쓰지 않는다. */
 const TAG_INITIAL_STYLE: CSSProperties = { opacity: 0 };
 
+/** 지목 단계의 이름표 버튼(DAY-04): seats 의 이름표가 누르는 버튼이 된다 */
+export interface WorldPick {
+  seats: ReadonlySet<number>;
+  /** 지금 고른 좌석(aria-pressed) */
+  mine?: number;
+  /** 버튼의 접근성 이름. 닉네임을 받아 문장을 만든다("{닉네임} 님 가리키기") */
+  label(nickname: string): string;
+  onPick(seat: number): void;
+  /** 이름표 층(role=group)의 접근성 이름 */
+  group: string;
+}
+
 export interface WorldStageProps {
   view: RoomView;
   store: WorldStore;
@@ -54,6 +67,12 @@ export interface WorldStageProps {
   scene?: SceneLook;
   /** 그 좌석의 캐릭터가 손사래와 놀란 표정을 한 번 한다(결정 0049 — 지목 선두가 바뀐 사람). nonce 가 바뀔 때마다 한 번 */
   deny?: { seat: number; nonce: number };
+  /** 이동이 허용된 단계인가(기본 true). 거짓이면 맵 탭은 링도 move 도 보내지 않는다 — 권위는 서버 canMove 다(MAP-04) */
+  canWalk?: boolean;
+  /** 있으면 그 좌석들의 이름표가 지목 버튼이 된다 */
+  pick?: WorldPick;
+  /** 좌석별 이름표 쌓임 속성(득표 배지·선두·도장·내 선택·투표함·직업 칩 …)과 발밑 고리 종류 */
+  tagProps?: (seat: number) => Partial<Omit<HeadStackProps, "name" | "color">> & { ring?: RingKind };
   onNotice(text: string): void;
   onKick(seat: number, nickname: string): void;
   onLeave(): void;
@@ -190,7 +209,7 @@ export function WorldStage(props: WorldStageProps) {
   const onTap = (clientX: number, clientY: number): void => {
     const { props: p } = live.current;
     const runtime = runtimeRef.current;
-    if (runtime === null || !p.canSend || p.exiting) return;
+    if (p.canWalk === false || runtime === null || !p.canSend || p.exiting) return;
     const at = runtime.tap(clientX, clientY);
     if (at === null) return;
     const clamp = (v: number): number => Math.max(-MOVE_COORD_LIMIT, Math.min(MOVE_COORD_LIMIT, Math.round(v * 100)));
@@ -207,6 +226,7 @@ export function WorldStage(props: WorldStageProps) {
   // 보이지 않는 좌석은 이름표도 만들지 않는다(T-08-30)
   const roster = [...view.players, ...leaving.filter((p) => !here.has(p.seat))].filter((p) => shown(p.seat));
   const canKick = view.me.isHost && props.canSend;
+  const pick = props.pick;
 
   const stateClass = exiting ? "is-exiting" : mapStatus.status === "ready" ? "is-open" : mapStatus.status === "lost" || mapStatus.status === "recreating" ? "is-redrawing" : "";
 
@@ -238,8 +258,9 @@ export function WorldStage(props: WorldStageProps) {
           tracker.cancel(e.pointerId);
         }}
       />
-      <div ref={tagRef} className="mf-world__tags">
-        <ul className="mf-world__sr mf-sr-only" aria-label={`방에 있는 사람 ${view.players.length}명`}>
+      <div ref={tagRef} className="mf-world__tags" role={pick ? "group" : undefined} aria-label={pick?.group}>
+        {/* 지목 단계에는 이름표 버튼이 같은 사람들을 읽으므로 목록은 읽히지 않게 한다(한 벌만 둔다) */}
+        <ul className="mf-world__sr mf-sr-only" aria-label={`방에 있는 사람 ${view.players.length}명`} aria-hidden={pick ? true : undefined}>
           {view.players.map((p) => (
             <li key={p.seat}>{listLabel(p, mySeat)}</li>
           ))}
@@ -248,8 +269,21 @@ export function WorldStage(props: WorldStageProps) {
           const current = here.has(p.seat);
           const me = p.seat === mySeat;
           const away = !p.connected;
-          const kickable = current && canKick && away && !me;
-          const stack = <HeadStack name={p.nickname} color={seatColor(p.seat)} me={me} away={away} typing={props.typingSeats?.has(p.seat) === true} ghost={scene?.seats[p.seat]?.ghost === true ? true : undefined} />;
+          const pickable = current && pick !== undefined && pick.seats.has(p.seat);
+          const kickable = !pickable && current && canKick && away && !me;
+          const { ring, ...extra } = props.tagProps?.(p.seat) ?? {};
+          const stack = (
+            <HeadStack
+              name={p.nickname}
+              color={seatColor(p.seat)}
+              me={me}
+              away={away}
+              typing={props.typingSeats?.has(p.seat) === true}
+              ghost={scene?.seats[p.seat]?.ghost === true ? true : undefined}
+              mine={pickable && pick.mine === p.seat ? true : undefined}
+              {...extra}
+            />
+          );
           return (
             <div
               key={p.seat}
@@ -257,10 +291,28 @@ export function WorldStage(props: WorldStageProps) {
               data-seat={p.seat}
               data-me={me ? "true" : undefined}
               data-away={away ? "true" : undefined}
-              aria-hidden={kickable ? undefined : true}
+              data-lead={extra.lead ? "true" : undefined}
+              data-ring-kind={ring}
+              aria-hidden={kickable || pickable ? undefined : true}
               style={TAG_INITIAL_STYLE}
             >
-              {kickable ? (
+              {pickable ? (
+                <button
+                  type="button"
+                  className="mf-world__pick"
+                  data-pick={p.seat}
+                  aria-label={pick.label(p.nickname)}
+                  aria-pressed={pick.mine === p.seat}
+                  aria-disabled={props.canSend ? undefined : true}
+                  // 버튼을 눌러도 채팅 입력칸의 포커스(키보드)를 뺏지 않는다
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => {
+                    if (live.current.props.canSend) live.current.props.pick?.onPick(p.seat);
+                  }}
+                >
+                  {stack}
+                </button>
+              ) : kickable ? (
                 <button type="button" className="mf-world__kick" aria-label={`${p.nickname} 님 내보내기`} onClick={() => live.current.props.onKick(p.seat, p.nickname)}>
                   {stack}
                 </button>

@@ -139,6 +139,10 @@ const OUTFIT = "coat";
 /** 동작을 재생할 수 있는 캐릭터 핸들(06-11 WorldCharacter). 테스트의 가짜 캐릭터에는 playEmote 가 없을 수 있다 */
 export type PlayableCharacter = CharacterHandle & { playEmote?(id: EmoteId): void; setFace?(id: FaceId): void };
 
+/** 밤 행동 선택의 발밑 고리 종류와 색. 값은 tokens.css 의 crimson-500·seat-1·seat-3 (승인 Ghost 보드 값, 9페이즈가 정식 토큰으로 정한다) */
+export type RingKind = "mafia" | "police" | "doctor";
+export const RING_COLORS: Readonly<Record<RingKind, string>> = { mafia: "#c8102e", police: "#7a8fb8", doctor: "#6fa59a" };
+
 export interface WorldRuntimeDeps {
   host: HTMLElement;
   tagLayer: HTMLElement;
@@ -242,6 +246,8 @@ interface Actor {
   dim: boolean;
   /** 지금 손가락 자세(holdPose("point"))를 유지하나 */
   pointing: boolean;
+  /** handle.setRing 에 마지막으로 보낸 고리 종류(null = 고리 없음) */
+  ringKind: string | null;
   /** 처형 연출로 handle.setOpacity 에 마지막으로 보낸 불투명도(1 = 연출 없음) */
   fadeOpacity: number;
   /** 지금 유령으로 그리고 있나(handle.setGhost 에 마지막으로 보낸 값) */
@@ -533,6 +539,7 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
       headY: 0,
       dim: false,
       pointing: false,
+      ringKind: null,
       fadeOpacity: 1,
       ghost: false,
       enter: null,
@@ -982,7 +989,13 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
       }
       if (tag.style.opacity !== a.tagAlpha) tag.style.opacity = a.tagAlpha;
       const w = a.tagW !== null && a.tagW > 0 ? a.tagW : NAMETAG_MAX_W;
-      boxes.push({ seat: a.seat, me: a.seat === mine, foot: r.project({ x: a.pos.x, y: 0, z: a.pos.z }).sy, x, bottom, w });
+      boxes.push({ seat: a.seat, me: a.seat === mine, lead: tag.hasAttribute("data-lead"), foot: r.project({ x: a.pos.x, y: 0, z: a.pos.z }).sy, x, bottom, w });
+      // 발밑 고리: 이름표(WorldStage)가 data-ring-kind 로 알린 종류를 캐릭터에 옮긴다(바뀔 때만)
+      const kind = tag.getAttribute("data-ring-kind");
+      if (kind !== a.ringKind) {
+        a.ringKind = kind;
+        a.handle.setRing?.(kind !== null && Object.hasOwn(RING_COLORS, kind) ? RING_COLORS[kind as RingKind] : null);
+      }
     }
     const bySeat = new Map(live.map((a) => [a.seat, a]));
     for (const { seat, z, front } of rankTags(boxes)) {
