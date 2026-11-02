@@ -107,20 +107,18 @@ describe("E2E 재접속·예산 사본과 앱 상수 (06-18)", () => {
 });
 
 describe("E2E 채팅 패널 치수 사본과 src/game/chatUi.ts (07-20, 05-05 사본 일치 규약)", () => {
+  // 08-23: 옛 테이블 사본(TABLE_PANEL_EXTRA·tablePanelHeight·expectedPanelH·PANEL_H 157)은 지웠다 — 사본 이름은 앱과 같은 CHAT_PANEL_EXTRA 다.
   type ChatCopy = {
     LOG_H_SHORT: number;
     LOG_H_TALL: number;
     LOG_H_KB: number;
     TALL_ROOM_MIN_H: number;
     LOBBY_PANEL_EXTRA: number;
-    TABLE_PANEL_EXTRA: number; // lib 사본 이름은 옛 그대로(08-24 가 E2E 를 다시 지을 때 바꾼다)
+    CHAT_PANEL_EXTRA: number;
     KB_PANEL_H: number;
     TYPING_PILL_H: number;
-    PANEL_H: number;
     logHeightFor: (roomH: number) => number;
-    tablePanelHeight: (logH: number) => number;
     lobbyPanelHeight: (logH: number) => number;
-    expectedPanelH: (o: { roomH: number; chat?: boolean }) => number;
   };
   const lib = e2eLib as unknown as ChatCopy;
 
@@ -130,9 +128,14 @@ describe("E2E 채팅 패널 치수 사본과 src/game/chatUi.ts (07-20, 05-05 �
     expect(lib.LOG_H_KB).toBe(LOG_H_KB);
     expect(lib.TALL_ROOM_MIN_H).toBe(TALL_ROOM_MIN_H);
     expect(lib.LOBBY_PANEL_EXTRA).toBe(LOBBY_PANEL_EXTRA);
-    expect(lib.TABLE_PANEL_EXTRA).toBe(CHAT_PANEL_EXTRA);
+    expect(lib.CHAT_PANEL_EXTRA).toBe(CHAT_PANEL_EXTRA);
     expect(lib.KB_PANEL_H).toBe(KB_PANEL_H);
     expect(lib.TYPING_PILL_H).toBe(TYPING_PILL_H);
+  });
+
+  it("지운 테이블 상수의 사본은 lib 에 없다(TABLE_PANEL_EXTRA·PANEL_H·tablePanelHeight·expectedPanelH)", () => {
+    const keys = Object.keys(e2eLib as Record<string, unknown>);
+    for (const gone of ["TABLE_PANEL_EXTRA", "PANEL_H", "HEADER_H", "tablePanelHeight", "expectedPanelH"]) expect(keys).not.toContain(gone);
   });
 
   it("logHeightFor 가 경계 779·780 을 포함한 방 높이에서 chatUi 와 같은 값을 낸다", () => {
@@ -141,21 +144,9 @@ describe("E2E 채팅 패널 치수 사본과 src/game/chatUi.ts (07-20, 05-05 �
     expect(lib.logHeightFor(780)).toBe(LOG_H_TALL);
   });
 
-  it("tablePanelHeight 사본은 logH + CHAT_PANEL_EXTRA, lobbyPanelHeight 는 chatUi 와 같고 expectedPanelH 는 채팅 상태에서만 채팅 패널 높이를 낸다", () => {
-    for (const logH of [LOG_H_SHORT, LOG_H_TALL, LOG_H_KB]) {
-      expect(lib.tablePanelHeight(logH)).toBe(logH + CHAT_PANEL_EXTRA);
-      expect(lib.lobbyPanelHeight(logH)).toBe(lobbyPanelHeight(logH));
-    }
-    for (const roomH of [560, 640, 664, 779, 780, 844, 932]) {
-      expect(lib.expectedPanelH({ roomH, chat: true })).toBe(logHeightFor(roomH) + CHAT_PANEL_EXTRA);
-      expect(lib.expectedPanelH({ roomH, chat: false })).toBe(lib.PANEL_H);
-    }
-  });
-
-  it("v1.0 하단 패널 기준 PANEL_H 는 day.css 의 채팅 없는 하단 높이 157 과 같다", () => {
-    const css = readFileSync(new URL("../../src/styles/day.css", import.meta.url), "utf8");
-    const m = /\.mf-dayscene__panel \{[^}]*height: calc\((\d+)px \+ env\(safe-area-inset-bottom\)\)/.exec(css);
-    expect(Number(m?.[1])).toBe(lib.PANEL_H);
+  it("lobbyPanelHeight 사본이 chatUi 와 같고, 채팅 패널 높이는 logH + CHAT_PANEL_EXTRA 다", () => {
+    for (const logH of [LOG_H_SHORT, LOG_H_TALL, LOG_H_KB]) expect(lib.lobbyPanelHeight(logH)).toBe(lobbyPanelHeight(logH));
+    for (const roomH of [560, 640, 664, 779, 780, 844, 932]) expect(lib.logHeightFor(roomH) + lib.CHAT_PANEL_EXTRA).toBe(logHeightFor(roomH) + CHAT_PANEL_EXTRA);
   });
 });
 

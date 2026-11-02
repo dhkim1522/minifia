@@ -94,7 +94,7 @@ import {
 
 export const OUT_DIR = new URL("./out/", import.meta.url).pathname;
 const HOST_NICK = "화면검사기";
-/** lobby·world 흐름의 방장 닉네임: 전각 8자(결정 0052-2·0056 c) — 내 이름표 "… (나)" 가 가장 넓은 한글 경우다. */
+/** lobby·world 흐름의 방장 닉네임: 전각 8자(결정 0052-2) — 내 이름표 "… (나)" 가 가장 넓은 한글 경우다. */
 const LOBBY_HOST_NICK = "방장이름여덟글자";
 /** world 흐름의 손님 닉네임: 전각 8자. */
 const WORLD_GUEST_NICK = "손님이름여덟글자";
@@ -150,8 +150,7 @@ export async function checkState(ctx, flowId, state) {
   }
   const g = genericIssues(snap, ctx.size);
   const bad = g.filter((x) => !x.ok);
-  const relaxedG = g.filter((x) => x.ok && x.relaxed === true); // 결정 0056 개정(G2-8ch) 적용 내용은 통과 행에 남긴다
-  rec(`${flowId}/${state}`, "G", "G 공통 검사", bad.length === 0, bad.length > 0 ? bad.map((x) => `${x.id} ${x.detail}`).join(" / ") : relaxedG.map((x) => `${x.id} ${x.detail}`).join(" / "), relaxedG.length > 0);
+  rec(`${flowId}/${state}`, "G", "G 공통 검사", bad.length === 0, bad.length > 0 ? bad.map((x) => `${x.id} ${x.detail}`).join(" / ") : "");
   return snap;
 }
 

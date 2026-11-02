@@ -424,11 +424,6 @@ export async function collectSnapshot(page) {
         const t = (el.getAttribute("aria-label") || el.textContent || "").replace(/\s+/g, " ").trim().slice(0, 20);
         return `${el.tagName.toLowerCase()}${cls ? `.${cls}` : ""}${t ? `"${t}"` : ""}`;
       };
-      const lineHeightOf = (el) => {
-        const cs = getComputedStyle(el);
-        const lh = parseFloat(cs.lineHeight);
-        return Number.isFinite(lh) ? lh : parseFloat(cs.fontSize) * 1.2;
-      };
       const hitOf = (el, r) => {
         const top = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
         return !!top && el.contains(top);
@@ -440,7 +435,7 @@ export async function collectSnapshot(page) {
         if (el.tagName === "SCRIPT" || el.tagName === "STYLE") continue;
         if (deco && el.matches(deco)) continue;
         if (!visible(el)) continue;
-        elements.push({ desc: desc(el), rect: rectOf(el), fixedTagName: el.closest(".mf-dt__tag")?.getAttribute("title") ?? null }); // 결정 0056 개정(G2-8ch) 범위 판정용: v1.0 고정 테이블 이름표 안쪽이면 그 닉네임
+        elements.push({ desc: desc(el), rect: rectOf(el) });
       }
 
       const interactive = [];
@@ -452,20 +447,6 @@ export async function collectSnapshot(page) {
       }
 
       const tt = q(".mf-tt");
-      const h1 = q(".mf-phasebar h1");
-      const extra = q(".mf-phasebar__extra");
-      const panel = q(".mf-dayscene__panel");
-      const guide = q(".mf-claimpanel__guide");
-      const card = q(".mf-morningcard");
-      const dim = q(".mf-dt__dim");
-      const rcBtn = q(".mf-rolecard-btn");
-      const rcSheet = q('dialog[aria-label="역할 카드"][open]');
-      const zOf = (el) => {
-        const z = parseInt(getComputedStyle(el).zIndex, 10);
-        return Number.isFinite(z) ? z : Number.NaN;
-      };
-      // 채팅 기록 칸([data-chat-log])의 사람 줄 본문 — 시스템 줄(.mv-chat__sys)은 싣지 않는다(07-20: 옛 .mf-msglog 대신)
-      const chatTexts = (root) => [...root.querySelectorAll("[data-chat-log] .mv-chat__msg .mv-chat__text")].map((e) => (e.textContent || "").trim());
       const stepper = q(".mf-tt-sheet__stepper");
       const ttSheet = q(".mf-tt-sheet");
       const stepBtn = (label) => {
@@ -474,101 +455,6 @@ export async function collectSnapshot(page) {
         const rect = rectOf(b);
         return { rect, hit: hitOf(b, rect), disabled: b.disabled === true };
       };
-
-      const seats = [...document.querySelectorAll(".mf-dt__seat")].map((el) => {
-        const r = el.getBoundingClientRect();
-        let reachable = false;
-        for (let i = 0; i < 3 && !reachable; i++) {
-          for (let j = 0; j < 4 && !reachable; j++) {
-            const x = r.left + (r.width * (i + 0.5)) / 3;
-            const y = r.top + (r.height * (j + 0.5)) / 4;
-            if (x < 0 || y < 0 || x > window.innerWidth || y > window.innerHeight) continue;
-            const top = document.elementFromPoint(x, y);
-            if (top && el.contains(top)) reachable = true;
-          }
-        }
-        return {
-          seat: Number(el.getAttribute("data-seat")),
-          rect: toRect(r),
-          isButton: el.tagName === "BUTTON",
-          sel: !!el.querySelector("img.mf-figure--halo-white"),
-          pressed: el.getAttribute("aria-pressed") === "true",
-          reachable,
-          z: zOf(el),
-          imgSrc: el.querySelector("img")?.getAttribute("src") ?? null,
-          spotlit: el.classList.contains("mf-dt__seat--spotlit"),
-        };
-      });
-
-      const tagEls = [...document.querySelectorAll(".mf-dt__tag")];
-      const tags = tagEls.map((el) => ({
-        seat: Number(el.getAttribute("data-seat")),
-        rect: rectOf(el),
-        name: el.getAttribute("title") ?? "", // 결정 0056 완화 범위(6 그래핌 이상 이름) 판정용 — 닉네임은 title 에만 있다
-        z: zOf(el),
-        lines: el.children.length,
-        hasDot: !!el.querySelector(".mf-dt__dot"),
-      }));
-
-      // D3b: 캐릭터 그림(.mf-dt__seat img)을 오프스크린 canvas 에 그려 알파 > 40 픽셀을 읽고, 이름표 사각형을 0.5px 격자(중심점)로 훑어
-      // 어떤 그림의 불투명 픽셀 위에 놓인 점을 센다. 로드 안 된 그림이 하나라도 있거나 canvas 를 못 읽으면 ratio 는 null(조용히 통과시키지 않는다).
-      const figs = [...document.querySelectorAll(".mf-dt__seat img")];
-      const allLoaded = figs.length > 0 && figs.every((im) => im.complete && im.naturalWidth > 0);
-      const alphaOf = new Map();
-      if (allLoaded) {
-        for (const im of figs) {
-          try {
-            const c = document.createElement("canvas");
-            c.width = im.naturalWidth;
-            c.height = im.naturalHeight;
-            const g = c.getContext("2d");
-            g.drawImage(im, 0, 0, c.width, c.height);
-            alphaOf.set(im, g.getImageData(0, 0, c.width, c.height));
-          } catch {
-            alphaOf.clear();
-            break;
-          }
-        }
-      }
-      const measurable = allLoaded && alphaOf.size === figs.length;
-      const figBoxes = measurable
-        ? figs.map((im) => {
-            const r = im.getBoundingClientRect();
-            const iw = im.naturalWidth;
-            const ih = im.naturalHeight;
-            // object-fit: contain 이면 그림은 상자 안에 비율을 지켜 가운데에 놓인다
-            const contain = getComputedStyle(im).objectFit === "contain";
-            const k = contain ? Math.min(r.width / iw, r.height / ih) : null;
-            const dw = contain ? iw * k : r.width;
-            const dh = contain ? ih * k : r.height;
-            const ox = r.left + (r.width - dw) / 2;
-            const oy = r.top + (r.height - dh) / 2;
-            return { data: alphaOf.get(im), iw, ih, ox, oy, dw, dh };
-          })
-        : [];
-      const tagVisibility = tagEls.map((el) => {
-        const seat = Number(el.getAttribute("data-seat"));
-        if (!measurable) return { seat, ratio: null };
-        const r = el.getBoundingClientRect();
-        const near = figBoxes.filter((b) => b.ox < r.right && b.ox + b.dw > r.left && b.oy < r.bottom && b.oy + b.dh > r.top);
-        let total = 0;
-        let covered = 0;
-        for (let y = r.top + 0.25; y < r.bottom; y += 0.5) {
-          for (let x = r.left + 0.25; x < r.right; x += 0.5) {
-            total += 1;
-            for (const b of near) {
-              if (x < b.ox || x >= b.ox + b.dw || y < b.oy || y >= b.oy + b.dh) continue;
-              const u = Math.min(b.iw - 1, Math.floor(((x - b.ox) / b.dw) * b.iw));
-              const v = Math.min(b.ih - 1, Math.floor(((y - b.oy) / b.dh) * b.ih));
-              if (b.data.data[(v * b.iw + u) * 4 + 3] > 40) {
-                covered += 1;
-                break;
-              }
-            }
-          }
-        }
-        return { seat, ratio: total === 0 ? null : 1 - covered / total };
-      });
 
       // G7: 보이는 글자 중 14px 미만(허용 선택자 제외). 읽기 전용 안내(.mf-sr-only)는 화면에 보이지 않으므로 뺀다.
       const smallText = [];
@@ -582,8 +468,6 @@ export async function collectSnapshot(page) {
         if (size < 14) smallText.push({ desc: desc(el), size });
       }
 
-      const chatPanel = panel?.querySelector("[data-chat-panel]") ?? null;
-
       return {
         vw: window.innerWidth,
         vh: window.innerHeight,
@@ -593,99 +477,7 @@ export async function collectSnapshot(page) {
         elements,
         interactive,
         tt: tt ? { rect: rectOf(tt), hit: hitOf(tt, tt.getBoundingClientRect()) } : null,
-        dialogs: [...document.querySelectorAll("dialog[open]")].map((d) => ({
-          label: d.getAttribute("aria-label") ?? "",
-          title: (d.querySelector("h2, h3, .mf-sheet__title")?.textContent || "").trim(),
-        })),
-        h1: h1 ? { rect: rectOf(h1), lineHeight: lineHeightOf(h1), text: (h1.textContent || "").trim() } : null,
-        extra: extra ? { rect: rectOf(extra), children: [...extra.children].map((c) => rectOf(c)) } : null,
-        scene: rectOf(q(".mf-dayscene__scene")),
-        panel: panel
-          ? {
-              rect: rectOf(panel),
-              text: (panel.innerText || "").replace(/\s+/g, " ").trim(),
-              children: [...panel.querySelectorAll("*")].filter(visible).map((c) => ({ desc: desc(c), rect: rectOf(c) })),
-              // 채팅 패널이 붙은 하단인가와 그 채널(all|mafia|ghost) — D6·T1 이 기대 높이를 고르는 근거(07-20)
-              hasChat: !!chatPanel,
-              chatChannel: chatPanel ? chatPanel.getAttribute("data-chat-channel") : null,
-            }
-          : null,
-        guide: guide ? { rect: rectOf(guide), lineHeight: lineHeightOf(guide), text: (guide.textContent || "").trim() } : null,
-        felt: rectOf(q(".mf-dt__felt")),
-        seats,
-        header: rectOf(q(".mf-phasebar")),
-        tags,
-        tagVisibility,
-        // 차례·후광 측정(결정 0030): 말풍선 자리, 후광 img 와 계산된 filter 값만 싣는다. 옛 발밑 원 선택자는 0 임을 증명하려고 여기서만 센다.
-        turn: (() => {
-          const seatOf = (el) => Number(el.closest(".mf-dt__seat")?.getAttribute("data-seat"));
-          return {
-            bubbleTurnSeats: [...document.querySelectorAll(".mf-dt__bubble--turn")].map(seatOf),
-            haloWhiteSeats: [...document.querySelectorAll("img.mf-figure--halo-white")].map(seatOf),
-            legacyCircles: document.querySelectorAll(".mf-dt__spot, .mf-dt__ring, .mf-dt__ring--me, .mf-dt__ring--mate, .mf-dt__sel").length,
-            tagInverted: document.querySelectorAll(".mf-dt__tag--turn, .mf-dt__tag--spoke").length,
-          };
-        })(),
-        halo: (() => {
-          const haloEls = [...document.querySelectorAll(".mf-figure--halo-white, .mf-figure--halo-amber, .mf-figure--halo-crimson")];
-          const items = haloEls.map((el) => {
-            // 후광 filter 는 180ms 전환(transition)이라 차례가 막 바뀐 순간의 계산값은 중간값(0.74px 등)이다. 끝 상태를 읽으려고 진행 중인 전환만 끝낸다(보이는 결과는 같다).
-            for (const a of el.getAnimations()) if (a instanceof CSSTransition) a.finish();
-            const seatEl = el.closest(".mf-dt__seat");
-            return {
-              seat: Number(seatEl?.getAttribute("data-seat")),
-              cls: el.classList.contains("mf-figure--halo-white") ? "white" : el.classList.contains("mf-figure--halo-amber") ? "amber" : "crimson",
-              filter: getComputedStyle(el).filter,
-              seatContext: !!seatEl && Number.isFinite(parseInt(getComputedStyle(seatEl).zIndex, 10)),
-              onImg: el.tagName === "IMG",
-            };
-          });
-          return { items, max: items.length };
-        })(),
-        crowns: document.querySelectorAll(".mf-dt__crown").length,
-        dim: dim ? { rect: rectOf(dim), z: zOf(dim), pointerEvents: getComputedStyle(dim).pointerEvents } : null,
-        card: rectOf(card),
-        // 방(.mf-dayscene) 높이 — 채팅 패널 기대 높이(LOG_H 선택)의 기준. 낮 장면이 아니면 null
-        roomH: q(".mf-dayscene") ? q(".mf-dayscene").getBoundingClientRect().height : null,
-        chatLines: chatTexts(document),
-        legacyRecordsBtn: !!q("button.mf-records-btn") || [...document.querySelectorAll("button")].some((b) => /^수사 기록/.test(b.getAttribute("aria-label") ?? "")),
-        roleCard: {
-          button: rcBtn
-            ? { label: rcBtn.getAttribute("aria-label") ?? "", rect: rectOf(rcBtn), dotRect: rectOf(rcBtn.querySelector(".mf-rolecard-btn__dot")), hit: hitOf(rcBtn, rcBtn.getBoundingClientRect()) }
-            : null,
-          sheet: rcSheet
-            ? {
-                tabs: [...rcSheet.querySelectorAll('[role="tab"]')].map((t) => ({
-                  text: (t.textContent || "").replace(/\s+/g, " ").trim(),
-                  selected: t.getAttribute("aria-selected") === "true",
-                  dotRect: rectOf(t.querySelector(".mf-rolecard__dot")),
-                })),
-                journalName: (rcSheet.querySelector(".mf-journal__h b")?.textContent || "").trim() || null,
-                rows: [...rcSheet.querySelectorAll(".mf-journal__row")].map((r) => ({
-                  day: (r.querySelector(".mf-journal__d")?.textContent || "").trim(),
-                  who: (r.querySelector(".mf-journal__w")?.textContent || "").trim(),
-                  result: (r.querySelector(".mf-journal__rz")?.textContent || "").trim(),
-                  hasNew: !!r.querySelector(".mf-journal__new"),
-                })),
-                emptyText: (rcSheet.querySelector(".mf-journal__empty")?.textContent || "").trim() || null,
-                hasBody: !!rcSheet.querySelector(".mf-rolecard__body"),
-              }
-            : null,
-          // 밤 끝 알림이 없음을 증명하는 측정값: 보이는 [role="status"] 중 옛 알림 문구가 든 것의 글자(요소 클래스에 기대지 않는다)
-          noticeTexts: [...document.querySelectorAll('[role="status"]')]
-            .filter(visible)
-            .map((e) => (e.textContent || "").replace(/\s+/g, " ").trim())
-            .filter((t) => t.includes("일지가 추가됐어요") || t.includes("눌러서 보기")),
-        },
-        roleImgs: [...document.querySelectorAll('img[src*="/characters/roles/"]')].map((im) => ({
-          src: im.getAttribute("src") ?? "",
-          inTable: !!im.closest(".mf-dt"),
-          inDialog: !!im.closest("dialog"),
-          inReveal: !!im.closest(".mf-reveal"),
-        })),
         smallText,
-        buttonTexts: [...document.querySelectorAll("button")].filter(visible).map((b) => (b.textContent || "").replace(/\s+/g, " ").trim()),
-        lobbyCount: q("[data-lobby-start]")?.getAttribute("aria-label") ?? "",
         testSheet: ttSheet
           ? {
               sheet: rectOf(ttSheet),
