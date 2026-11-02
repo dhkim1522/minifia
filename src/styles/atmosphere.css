@@ -1,22 +1,6 @@
-/* 5페이즈 분위기 두 층 (LOOK-01, D-05): 밤 비네팅과 아침 밝아짐.
-   값(타원·멈춤·알파·시간)은 모두 src/game/scenes.ts 상수 한 곳이 인라인 변수로 싣는다. 이 파일은 위치·층·전환만 안다.
-   색은 토큰 변수뿐이고(그라데이션 문자열 안), 접두 짝 선언은 쓰지 않는다 — 04-35 교훈. 두 층 모두 탭을 막지 않는다. */
+/* 분위기 층 (LOOK-01, D-05): 밤 비네팅. 아침 밝아짐 층은 v1.0 테이블 화면과 함께 지웠다(08-20).
+   값(타원·멈춤·알파·시간)은 src/game/scenes.ts 상수 한 곳이 인라인 변수로 싣는다. 이 파일은 위치·층·전환만 안다.
+   색은 토큰 변수뿐이고(그라데이션 문자열 안), 접두 짝 선언은 쓰지 않는다 — 04-35 교훈. 탭을 막지 않는다. */
 
 /* 밤 비네팅: 밤 그림 층(.mf-backdrop__art) 안의 자식. 켜짐·꺼짐은 그림 층의 opacity 전환을 따른다. */
 .mf-backdrop__vignette { position: absolute; inset: 0; pointer-events: none; background: var(--mf-vignette); }
-
-/* 아침 밝아짐: 장면 상자(.mf-dayscene__scene) 첫 자식, DayTable 뒤(z-index -1, Backdrop 의 쌓임 맥락 안이라 그림 층 위·콘텐츠 아래).
-   헤더 영역에 닿지 않는다. 퇴장은 아침 카드와 같은 지연(--mf-morning-exit-delay) 뒤 300ms. 지연은 DayScene 이 변수로 싣는다. */
-.mf-morningglow {
-  position: absolute; inset: 0; z-index: -1; pointer-events: none;
-  background: var(--mf-glow);
-  animation: mf-morningglow-out 300ms linear var(--mf-morning-exit-delay, 4700ms) forwards;
-}
-/* 밤 → 아침을 같은 접속에서 본 렌더만: 상승 + 퇴장을 함께 나열한다. 재접속·중간 입장은 이 수정자가 없어 최대치로 시작한다. */
-.mf-morningglow--rise {
-  animation:
-    mf-morningglow-rise var(--mf-glow-rise-ms, 600ms) var(--ease-out) both,
-    mf-morningglow-out 300ms linear var(--mf-morning-exit-delay, 4700ms) forwards;
-}
-@keyframes mf-morningglow-rise { from { opacity: 0; } to { opacity: 1; } }
-@keyframes mf-morningglow-out { from { opacity: 1; } to { opacity: 0; } }

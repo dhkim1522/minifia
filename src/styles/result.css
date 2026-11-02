@@ -88,7 +88,7 @@
    data-reveal="true" 일 때만(같은 접속의 전환) 움직임이 있다 — 재접속·모션 줄이기는 처음부터 done + reveal false 라 아래 규칙이 아무것도 하지 않는다.
    전이는 opacity·transform·scale 만. 자리는 항상 차지한다(숨김은 opacity·visibility) — 단계가 바뀌어도 레이아웃이 움직이지 않는다. ---- */
 
-/* 0ms: 배너 팝 scale .92 → 1 + opacity, 360ms (RESULT_BANNER_MS) */
+/* 0ms: 배너 팝 scale .92 → 1 + opacity, 360ms */
 .mf-result[data-reveal="true"] .mf-result__banner { animation: mf-result-banner-pop 360ms var(--ease-out) both; }
 @keyframes mf-result-banner-pop { from { opacity: 0; transform: scale(0.92); } to { opacity: 1; transform: scale(1); } }
 

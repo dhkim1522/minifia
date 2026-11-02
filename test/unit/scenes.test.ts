@@ -1,28 +1,21 @@
 // 배경 장면 목록·단계→장면 규칙표·WebP 예산(결정 0030, 사용자 지시 V-04).
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { DAY_ANNOUNCE_MS, PHASE_DEFS } from "../../shared/game/phases";
+import { PHASE_DEFS } from "../../shared/game/phases";
 import type { PhaseId } from "../../shared/protocol";
 import {
   HEADER_SCRIM_LENGTH_PX,
   HEADER_SCRIM_STOPS,
-  MORNING_GLOW_ALPHA,
-  MORNING_GLOW_ELLIPSE,
-  MORNING_GLOW_RISE_MS,
   NIGHT_VIGNETTE_ELLIPSE,
   NIGHT_VIGNETTE_FADE_MS,
   NIGHT_VIGNETTE_STOPS,
-  PHASE_GUIDE_FILL,
-  PHASE_INTRO,
   PHASE_SCENE,
   SCENES,
   SCENE_FADE_MS,
   SCENE_IMAGE_WAIT_MS,
-  SCENE_INTRO_MS,
   SCENE_IDS,
   TIMELESS_PHASES,
   headerScrimGradient,
-  morningGlowGradient,
   nightVignetteGradient,
   sceneOfPhase,
 } from "../../src/game/scenes";
@@ -109,26 +102,6 @@ describe("E2E 기대 장면표(EXPECTED_SCENE)와 PHASE_SCENE", () => {
   });
 });
 
-describe("단계별 시작 문구(PHASE_INTRO, 낮·밤 한 부품)", () => {
-  it("밤과 낮 시작(dayAnnounce) 두 행뿐이고 다른 단계는 문구가 없다 (4페이즈는 행을 더한다)", () => {
-    expect(Object.keys(PHASE_INTRO).sort()).toEqual(["dayAnnounce", "night"]);
-    for (const phase of PHASES) {
-      if (phase !== "night" && phase !== "dayAnnounce") expect(PHASE_INTRO[phase], phase).toBeUndefined();
-    }
-  });
-
-  it("밤: 밤 톤·제목 `밤이 되었습니다`·보조줄 없음. 낮 시작: 낮 톤·제목 `낮이 되었습니다`·보조줄 없음", () => {
-    expect(PHASE_INTRO.night).toEqual({ tone: "night", title: "밤이 되었습니다" });
-    expect(PHASE_INTRO.dayAnnounce).toEqual({ tone: "day", title: "낮이 되었습니다" });
-    expect(PHASE_INTRO.dayAnnounce).not.toHaveProperty("sub");
-  });
-
-  it("문구가 떠 있는 시간 SCENE_INTRO_MS 는 서버 낮 시작 단계 길이(DAY_ANNOUNCE_MS = 2000)와 같다", () => {
-    expect(SCENE_INTRO_MS).toBe(DAY_ANNOUNCE_MS);
-    expect(SCENE_INTRO_MS).toBe(2000);
-  });
-});
-
 describe("전환 상수와 헤더 막", () => {
   it("크로스페이드 0.8초(--dur-slow 와 같다), 새 그림을 기다리는 상한 1.2초", () => {
     expect(SCENE_FADE_MS).toBe(800);
@@ -159,7 +132,7 @@ describe("전환 상수와 헤더 막", () => {
   });
 });
 
-// ---- 5페이즈 두 층: 밤 비네팅·아침 밝아짐 (05-03, LOOK-01, D-05) ----
+// ---- 밤 비네팅 (05-03, LOOK-01, D-05). 아침 밝아짐은 08-20 에서 지웠다 ----
 
 describe("밤 비네팅 상수와 그라데이션 (P5-1 확정)", () => {
   it("타원·멈춤·시간 상수가 UI-SPEC 9.3 값이고 켜짐·꺼짐 시간은 배경 크로스페이드와 같다", () => {
@@ -182,21 +155,6 @@ describe("밤 비네팅 상수와 그라데이션 (P5-1 확정)", () => {
         "color-mix(in srgb, var(--night-950) 72%, transparent) 100%)",
     );
     expect(nightVignetteGradient()).not.toContain("#");
-  });
-});
-
-describe("아침 밝아짐 상수와 그라데이션 (P5-2 확정)", () => {
-  it("타원·중심 알파·상승 시간 상수가 UI-SPEC 9.4 값이다", () => {
-    expect(MORNING_GLOW_ELLIPSE).toBe("85% 60% at 50% 55%");
-    expect(MORNING_GLOW_ALPHA).toBe(0.38);
-    expect(MORNING_GLOW_RISE_MS).toBe(600);
-  });
-
-  it("morningGlowGradient(): dawn 토큰 color-mix 로 시작하고 끝 멈춤이 transparent 이며 # 이 없다", () => {
-    const g = morningGlowGradient();
-    expect(g.startsWith("radial-gradient(ellipse 85% 60% at 50% 55%, color-mix(in srgb, var(--dawn) 38%, transparent)")).toBe(true);
-    expect(g.endsWith("transparent)")).toBe(true);
-    expect(g).not.toContain("#");
   });
 });
 
@@ -286,22 +244,8 @@ describe("캐시 규칙", () => {
   });
 });
 
-describe("PHASE_GUIDE_FILL·TIMELESS_PHASES (UX-01 빈 칸 채움, 05-UI-SPEC 7.2)", () => {
-  it("낮 시작 하단 두 줄과 토론 헤더 문장이 상수 한 곳에 있다", () => {
-    expect(PHASE_GUIDE_FILL.dayAnnounce).toEqual({ title: "낮이 되었어요", guide: "곧 토론이 시작돼요" });
-    expect(PHASE_GUIDE_FILL.discussion(1)).toBe("1일차 · 의견을 나눠요");
-  });
-
-  it("토론 헤더 문장은 99일차에서도 14자 이하다 (헤더 안내줄 nowrap)", () => {
-    expect([...PHASE_GUIDE_FILL.discussion(99)].length).toBeLessThanOrEqual(14);
-  });
-
-  it("객체는 동결돼 있다", () => {
-    expect(Object.isFrozen(PHASE_GUIDE_FILL)).toBe(true);
-    expect(Object.isFrozen(PHASE_GUIDE_FILL.dayAnnounce)).toBe(true);
-  });
-
-  it("TIMELESS_PHASES 는 lobby·assigning·ended 순서의 동결 배열이다", () => {
+describe("TIMELESS_PHASES (D-08 예외)", () => {
+  it("lobby·assigning·ended 순서의 동결 배열이다", () => {
     expect([...TIMELESS_PHASES]).toEqual(["lobby", "assigning", "ended"]);
     expect(Object.isFrozen(TIMELESS_PHASES)).toBe(true);
   });

@@ -27,7 +27,7 @@ vi.mock("../../src/net/assets", async (importOriginal) => ({
 vi.mock("../../src/components/WorldStage", async () => ({ WorldStage: (await import("../helpers/fakeWorldStage")).FakeWorldStage }));
 
 const { RoomScreen } = await import("../../src/screens/RoomScreen");
-const { PHASE_GUIDE_FILL, TIMELESS_PHASES } = await import("../../src/game/scenes");
+const { TIMELESS_PHASES } = await import("../../src/game/scenes");
 
 const NOW = 1_700_000_000_000;
 
@@ -309,12 +309,5 @@ describe("UX-01 대기실·배정·역할 확인·결과의 안내 요소 (D-08)
         unmount();
       }
     }
-  });
-});
-
-describe("UX-01 누출 검사: 새 문장은 역할로 달라지지 않는다 (T-05-01, D-09)", () => {
-  it("새 문장 상수에는 역할 이름이 없다", () => {
-    const sentences = [PHASE_GUIDE_FILL.dayAnnounce.title, PHASE_GUIDE_FILL.dayAnnounce.guide, PHASE_GUIDE_FILL.discussion(1)].join(" ");
-    for (const word of ["마피아", "경찰", "의사", "시민"]) expect(sentences).not.toContain(word);
   });
 });

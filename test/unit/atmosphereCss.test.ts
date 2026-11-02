@@ -1,5 +1,5 @@
 // 5페이즈 새 CSS(atmosphere.css)의 정적 게이트 (05-03, LOOK-01, D-05·D-06·D-07, T-05-06·T-05-08).
-// 두 층(밤 비네팅·아침 밝아짐)이 탭을 가로채지 않고, 값은 상수 한 곳에서만 오며, 금지 속성·색 값이 없음을 CSS 원문으로 지킨다.
+// 밤 비네팅 층이 탭을 가로채지 않고, 값은 상수 한 곳에서만 오며, 금지 속성·색 값이 없음을 CSS 원문으로 지킨다.
 // vitest 는 CSS 를 비워 주므로 `?raw` 대신 readFileSync 로 읽는다(01-17 선례). 실제 쌓임은 E2E AT1·AT2(05-06)가 본다.
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
@@ -74,9 +74,10 @@ describe("atmosphere.css 공통 금지 (D-05·D-07, 04-35)", () => {
     expect(RAW).not.toContain("prefers-reduced-motion");
   });
 
-  it("규칙의 선택자는 두 층(.mf-backdrop__vignette·.mf-morningglow) 것뿐이다 — 다른 요소를 건드리지 않는다", () => {
+  it("규칙의 선택자는 비네팅 층(.mf-backdrop__vignette) 것뿐이다 — 다른 요소를 건드리지 않는다", () => {
     const selectors = RULES.filter((r) => !r.selector.startsWith("@")).map((r) => r.selector);
-    for (const s of selectors) expect(s.startsWith(".mf-backdrop__vignette") || s.startsWith(".mf-morningglow")).toBe(true);
+    expect(selectors.length).toBeGreaterThan(0);
+    for (const s of selectors) expect(s.startsWith(".mf-backdrop__vignette")).toBe(true);
   });
 });
 
@@ -92,36 +93,5 @@ describe("밤 비네팅 .mf-backdrop__vignette (T-05-06)", () => {
   it("켜짐·꺼짐 애니메이션·전환을 따로 두지 않는다 (그림 층의 opacity 전환을 따른다)", () => {
     const r = rule(".mf-backdrop__vignette");
     expect(r.decls.some((d) => d.prop === "animation" || d.prop.startsWith("transition"))).toBe(false);
-  });
-});
-
-describe("아침 밝아짐 .mf-morningglow (T-05-06, D-06)", () => {
-  it("장면 상자를 덮고 DayTable 뒤(z-index -1)에서 탭을 통과시키며 배경은 인라인 변수 하나다", () => {
-    const r = rule(".mf-morningglow");
-    expect(decl(r, "position")).toEqual(["absolute"]);
-    expect(decl(r, "inset")).toEqual(["0"]);
-    expect(decl(r, "z-index")).toEqual(["-1"]);
-    expect(decl(r, "pointer-events")).toEqual(["none"]);
-    expect(decl(r, "background")).toEqual(["var(--mf-glow)"]);
-  });
-
-  it("퇴장: 300ms linear, 지연은 아침 카드와 같은 --mf-morning-exit-delay 변수, forwards", () => {
-    const anim = decl(rule(".mf-morningglow"), "animation").join(" ");
-    expect(anim).toMatch(/mf-morningglow-out 300ms linear var\(--mf-morning-exit-delay[^)]*\) forwards/);
-  });
-
-  it("상승(--rise): 길이는 --mf-glow-rise-ms 변수, 이징은 --ease-out, 퇴장 애니메이션도 함께 나열한다", () => {
-    const anim = decl(rule(".mf-morningglow--rise"), "animation").join(" ");
-    expect(anim).toMatch(/mf-morningglow-rise var\(--mf-glow-rise-ms[^)]*\) var\(--ease-out\) both/);
-    expect(anim).toMatch(/mf-morningglow-out 300ms linear var\(--mf-morning-exit-delay/);
-  });
-
-  it("두 @keyframes 는 opacity 만 바꾼다", () => {
-    const kfs = RULES.filter((r) => r.selector.startsWith("@keyframes "));
-    expect(kfs.map((k) => k.selector).sort()).toEqual(["@keyframes mf-morningglow-out", "@keyframes mf-morningglow-rise"]);
-    for (const k of kfs) {
-      expect(k.children.length).toBeGreaterThan(0);
-      for (const f of k.children) expect(f.decls.map((d) => d.prop)).toEqual(["opacity"]);
-    }
   });
 });

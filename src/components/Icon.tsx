@@ -2,10 +2,9 @@ import { createElement } from "react";
 import type { ReactElement } from "react";
 
 // 인라인 SVG. 이모지·아이콘 폰트 대신 쓴다. 24×24 viewBox, stroke 2, round.
-// 경로는 design/design-system/components/bundle.js 의 ICONS 에서 옮겼다(share·close·check·diamond·disconnected).
-// back·copy·card·plus·minus·skip·chat 은 참고 구현에 없어 같은 규격으로 새로 그렸다.
-// changed·crown·chevronUp 은 낮 화면 승인 시안 9차(design/screens/day-v3/R9-5.dc.html)의 경로를 그대로 옮겼다.
-// target·notebook 은 밤 시안 10차(design/screens/night-v1)의 경로를 그대로 옮겼다.
+// 경로는 design/design-system/components/bundle.js 의 ICONS 에서 옮겼다(share·close·check·disconnected).
+// back·copy·card·plus·minus 는 참고 구현에 없어 같은 규격으로 새로 그렸다.
+// 08-20: v1.0 낮·밤 화면 전용 아이콘(diamond·skip·chat·changed·crown·chevronUp·target·notebook·speech)은 쓰는 곳이 없어 지웠다. v2 아이콘은 v2/Icon 이 따로 가진다.
 export type IconName =
   | "back"
   | "share"
@@ -13,19 +12,10 @@ export type IconName =
   | "copy"
   | "check"
   | "card"
-  | "diamond"
   | "disconnected"
   | "plus"
   | "minus"
-  | "skip"
-  | "chat"
-  | "changed"
-  | "crown"
-  | "chevronUp"
-  | "target"
-  | "notebook"
-  | "wrench"
-  | "speech";
+  | "wrench";
 
 type Part = readonly [tag: "path" | "circle" | "rect", attrs: Readonly<Record<string, string | number>>];
 
@@ -42,39 +32,13 @@ const ICONS: Readonly<Record<IconName, readonly Part[]>> = {
     ["rect", { x: 6, y: 3, width: 12, height: 18, rx: 2.5 }],
     ["path", { d: "M12 9 15 12 12 15 9 12z", fill: "currentColor", stroke: "none" }],
   ],
-  diamond: [["path", { d: "M12 3 20 12 12 21 4 12z", fill: "currentColor", stroke: "none" }]],
   disconnected: [
     ["path", { d: "M2 8.5a15 15 0 0 1 20 0M5.5 12a10 10 0 0 1 8.5-2.6M9 15.5a5 5 0 0 1 4.5-.9M3 3l18 18" }],
     ["circle", { cx: 12, cy: 19.5, r: 1, fill: "currentColor" }],
   ],
   plus: [["path", { d: "M12 5v14M5 12h14" }]],
   minus: [["path", { d: "M5 12h14" }]],
-  skip: [["path", { d: "M6 5l9 7-9 7zM19 5v14" }]],
-  chat: [["path", { d: "M5 5h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-7l-5 4v-4H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z" }]],
-  // 말 바꿈 ↺ (시안 R9-5)
-  changed: [
-    ["path", { d: "M4 12a8 8 0 0 1 14-5.3L20 9" }],
-    ["path", { d: "M20 4v5h-5" }],
-    ["path", { d: "M20 12a8 8 0 0 1-14 5.3L4 15" }],
-    ["path", { d: "M4 20v-5h5" }],
-  ],
-  // 방장 왕관 (시안 R9-5)
-  crown: [["path", { d: "M3 8l4 4 5-7 5 7 4-4-2 11H5z" }]],
-  // 채팅 내역 크게 보기 ^ 버튼 (시안 R9-5)
-  chevronUp: [["path", { d: "M6 15l6-6 6 6" }]],
-  // 밤 행동 표적 배지 (시안 N1)
-  target: [
-    ["circle", { cx: 12, cy: 12, r: 7 }],
-    ["path", { d: "M12 2v5M12 17v5M2 12h5M17 12h5" }],
-  ],
-  // 경찰 조사 수첩 (시안 N2, 03-11 이 쓴다)
-  notebook: [
-    ["path", { d: "M6 3h11a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6z" }],
-    ["path", { d: "M6 3v18M10 8h5M10 12h5" }],
-  ],
   // 테스트 방 방장 도구 [테스트] 버튼 (시안 T1, 결정 0022)
-  // 말풍선 아이콘 (시안 K1). 지금은 화면에서 쓰지 않는다(차례 표시는 CSS 말풍선) — Icon 테스트가 목록으로 본다
-  speech: [["path", { d: "M5 5h14v10H10l-5 4z" }]],
   wrench: [["path", { d: "M14.7 6.3a4 4 0 0 0-5.4 5.1L3 17.7 6.3 21l6.3-6.3a4 4 0 0 0 5.1-5.4l-2.6 2.6-2.5-.7-.7-2.5z" }]],
 };
 
