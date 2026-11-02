@@ -197,7 +197,7 @@ function imgStateOf(sheet: HTMLElement | null): SheetImgState {
 }
 
 function screenKind(doc: Document): string {
-  if (doc.querySelector("main.mf-dayscene, main.mf-game")) return "day";
+  if (doc.querySelector("main.mf-game")) return "day";
   if (doc.querySelector("main.mf-reveal")) return "reveal";
   if (doc.querySelector("main.mf-lobby")) return "lobby";
   if (doc.querySelector("main.mf-assign")) return "assign";
