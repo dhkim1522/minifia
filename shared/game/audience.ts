@@ -1,12 +1,16 @@
-// 채팅·입력 중·동작·로비 위치의 받는 사람을 정하는 함수 하나(ROADMAP 계획 메모, 결정 0002·0021·0058).
+// 채팅·입력 중·동작·위치 프레임의 받는 사람을 정하는 함수 하나(ROADMAP 계획 메모, 결정 0002·0021·0058).
 // 서버(worker/room.ts)와 화면이 같은 규칙을 쓴다. 화면에서 거르는 방식으로 대신하지 않는다 — 받을 권리가 없는 폰에는 네트워크로도 가지 않는다.
 // 순수 모듈이다: 시각·난수를 읽지 않고 입력을 바꾸지 않으며, DOM·workerd API 가 없다(앱·워커 두 tsconfig 에 모두 들어간다).
 // 채널은 클라이언트 입력에서 받지 않는다 — channelOf 의 입력은 서버 상태와 보낸 사람 id 뿐이다.
 import type { ChatChannel, PhaseId } from "../protocol";
 import { isAlive } from "./alive";
+import { MAP_PHASES } from "./movement";
 import type { Player, RoomState } from "./room";
 
-/** 이벤트 종류와 채널. world 는 로비 위치 프레임(채널이 없다). */
+/**
+ * 이벤트 종류와 채널. world 는 위치 프레임(채널이 없다) — 지도 단계에서는 움직인 사람 mover(player id)로 받는 사람이 정해진다.
+ * mover 는 서버가 소켓의 playerId 로 넣는다(클라이언트 입력이 아니다).
+ */
 export type AudienceEvent = { k: "chat" | "typing" | "emote"; ch: ChatChannel } | { k: "world"; mover?: string };
 
 /**
@@ -17,10 +21,12 @@ export const CHAT_PHASES: ReadonlySet<PhaseId> = new Set<PhaseId>([
   "lobby",
   "dayAnnounce",
   "discussion",
+  "nomination",
   "execVote",
   "candidateVote",
   "candidateVoteReveal",
   "defense",
+  "verdict",
   "execution",
   "night",
   "morning",
@@ -47,11 +53,19 @@ export function channelOf(state: RoomState, senderId: string): ChatChannel | nul
 /**
  * 받는 사람 player id 집합. 방어 장치(호출부 버그에도 안전하도록 이 함수가 막는다):
  * CHAT_PHASES 밖이면 빈 집합, mafia 인데 night 가 아니면 빈 집합, ghost 는 탈락자만.
- * world 는 로비일 때 방의 모든 사람, 그 밖은 빈 집합(6페이즈 emitWorld 와 같다).
+ * world: 로비는 방의 모든 사람(6페이즈 emitWorld 와 같다). 지도 단계(MAP_PHASES)는 mover 기준 — mover 가 산 사람이면 방 전원(산 사람 + 유령),
+ * 유령이면 유령만(GHOST-01: 산 사람 폰에는 유령의 위치가 네트워크로도 가지 않는다). mover 가 없거나 방에 없으면 빈 집합(실패하면 닫힌다).
+ * 그 밖의 단계는 빈 집합이다.
  */
 export function audience(state: RoomState, ev: AudienceEvent): ReadonlySet<string> {
   const pick = (pred: (p: Player) => boolean): Set<string> => new Set(state.players.filter(pred).map((p) => p.id));
-  if (ev.k === "world") return state.phase === "lobby" ? pick(() => true) : new Set();
+  if (ev.k === "world") {
+    if (state.phase === "lobby") return pick(() => true);
+    if (!MAP_PHASES.has(state.phase)) return new Set();
+    const mover = ev.mover === undefined ? undefined : state.players.find((p) => p.id === ev.mover);
+    if (mover === undefined) return new Set();
+    return isAlive(mover) ? pick(() => true) : pick((p) => !isAlive(p));
+  }
   if (!CHAT_PHASES.has(state.phase)) return new Set();
   switch (ev.ch) {
     case "all":
@@ -64,7 +78,16 @@ export function audience(state: RoomState, ev: AudienceEvent): ReadonlySet<strin
   }
 }
 
-/** RED 자리표시자 — GREEN 커밋이 구현으로 바꾼다. */
-export function worldVisibleTo(_state: RoomState, _viewerId: string): ReadonlySet<string> {
-  return new Set();
+/**
+ * 접속(hello) 스냅샷에 실릴 좌석의 주인들 — 보는 사람 viewerId 별이다(GHOST-01).
+ * 로비·assigning·roleReveal 은 방 전원(역할 확인 중 재접속해도 낮 시작에 위치가 있게, RESEARCH A6).
+ * 지도 단계는 viewer 가 산 사람이면 산 사람만, 유령이면 전원. ended·옛 투표 단계·방에 없는 viewer 는 빈 집합이다.
+ */
+export function worldVisibleTo(state: RoomState, viewerId: string): ReadonlySet<string> {
+  const viewer = state.players.find((p) => p.id === viewerId);
+  if (viewer === undefined) return new Set();
+  const pick = (pred: (p: Player) => boolean): Set<string> => new Set(state.players.filter(pred).map((p) => p.id));
+  if (state.phase === "lobby" || state.phase === "assigning" || state.phase === "roleReveal") return pick(() => true);
+  if (!MAP_PHASES.has(state.phase)) return new Set();
+  return isAlive(viewer) ? pick(isAlive) : pick(() => true);
 }
