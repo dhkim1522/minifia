@@ -123,19 +123,19 @@ afterEach(() => {
 const ALL_VIEWPOINTS: readonly Viewpoint[] = ["mafia", "police", "doctor", "citizen", "spectator"];
 
 describe("UX-01 트레이서: 낮 시작·낮 토론 빈 칸 두 곳 (D-08, D-09)", () => {
-  it("dayAnnounce 시민 생존: [data-guide] 하나 = `낮이 되었어요`, 하단 패널에 `곧 직업 공개가 시작돼요`", () => {
+  it("dayAnnounce 시민 생존: [data-guide] 하나 = `낮이 되었어요`, 하단 패널에 `곧 토론이 시작돼요`", () => {
     const { container } = renderRoom(makeView({ phase: "dayAnnounce", viewpoint: "citizen", endsIn: 2_000 }));
     const g = onlyGuide(container, "dayAnnounce/citizen");
     expect(squish(g.textContent)).toBe(PHASE_GUIDE_FILL.dayAnnounce.title);
     expect(squish(g.textContent)).toBe("낮이 되었어요");
-    expect(squish(container.querySelector(".mf-dayscene__panel")?.textContent)).toContain("곧 직업 공개가 시작돼요");
+    expect(squish(container.querySelector(".mf-dayscene__panel")?.textContent)).toContain("곧 토론이 시작돼요");
   });
 
   it("dayAnnounce 탈락 관전자도 같은 두 줄이고 [data-guide] 하나다", () => {
     const { container } = renderRoom(makeView({ phase: "dayAnnounce", viewpoint: "spectator", endsIn: 2_000 }));
     const g = onlyGuide(container, "dayAnnounce/spectator");
     expect(squish(g.textContent)).toBe("낮이 되었어요");
-    expect(squish(container.querySelector(".mf-dayscene__panel")?.textContent)).toContain("곧 직업 공개가 시작돼요");
+    expect(squish(container.querySelector(".mf-dayscene__panel")?.textContent)).toContain("곧 토론이 시작돼요");
   });
 
   it("dayAnnounce 의 [data-guide] 글자가 마피아·경찰·의사·시민·관전자에서 모두 같다", () => {
@@ -145,7 +145,7 @@ describe("UX-01 트레이서: 낮 시작·낮 토론 빈 칸 두 곳 (D-08, D-09
       texts.add(`${squish(onlyGuide(container, `dayAnnounce/${vp}`).textContent)}|${squish(container.querySelector(".mf-nightpanel .mf-claimpanel__guide")?.textContent)}`);
       unmount();
     }
-    expect([...texts]).toEqual(["낮이 되었어요|곧 직업 공개가 시작돼요"]);
+    expect([...texts]).toEqual(["낮이 되었어요|곧 토론이 시작돼요"]);
   });
 
   it("discussion 생존 4역할: [data-guide] 는 `.mf-phasebar__do` 하나이고 `1일차 · 의견을 나눠요`", () => {

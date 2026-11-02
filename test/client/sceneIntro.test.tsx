@@ -70,8 +70,6 @@ const intro = (c: HTMLElement) => c.querySelector<HTMLElement>(".mf-sceneintro")
 const introTexts = (c: HTMLElement) => Array.from(intro(c)!.querySelectorAll("p")).map((p) => p.textContent);
 const advance = (ms: number) => act(() => void vi.advanceTimersByTime(ms));
 
-const DAY_TEXTS = ["토론 전에 먼저 직업을 공개해요"];
-
 afterEach(cleanup);
 
 describe("SceneIntro 밤 문구 (결정 0028, U-03)", () => {
@@ -189,7 +187,7 @@ describe("SceneIntro 낮 문구 (낮 시작, 결정 0030)", () => {
     expect(el).not.toBeNull();
     expect(el.classList.contains("mf-sceneintro--day")).toBe(true);
     expect(el.getAttribute("aria-hidden")).toBe("true");
-    expect(introTexts(container)).toEqual(["2일차", "낮이 되었습니다", ...DAY_TEXTS]);
+    expect(introTexts(container)).toEqual(["2일차", "낮이 되었습니다"]);
     expect(el.querySelector("h1")).toBeNull();
     // 장면 제목 h1 은 `낮` 하나뿐이다
     const h1s = container.querySelectorAll("h1");
@@ -207,7 +205,7 @@ describe("SceneIntro 낮 문구 (낮 시작, 결정 0030)", () => {
 
   it("역할 확인에서 새로 마운트될 때(arrivedFrom roleReveal)는 마운트 직후 `1일차` 낮 문구가 뜬다. arrivedFrom 이 없으면 뜨지 않는다", () => {
     const withArrival = scene(makeView({ phase: "dayAnnounce", role: "citizen" }), 1, "roleReveal");
-    expect(introTexts(withArrival.container)).toEqual(["1일차", "낮이 되었습니다", ...DAY_TEXTS]);
+    expect(introTexts(withArrival.container)).toEqual(["1일차", "낮이 되었습니다"]);
     cleanup();
     expect(intro(scene(makeView({ phase: "dayAnnounce", role: "citizen" }), 1, null).container)).toBeNull();
   });
@@ -250,7 +248,7 @@ describe("SceneIntro 낮 문구 (낮 시작, 결정 0030)", () => {
       unmount();
     }
     expect(new Set(texts).size).toBe(1);
-    expect(texts[0]).toBe("1일차낮이 되었습니다토론 전에 먼저 직업을 공개해요");
+    expect(texts[0]).toBe("1일차낮이 되었습니다");
   });
 });
 
@@ -300,7 +298,7 @@ describe("dayAnnounce 는 테이블 장면(DayScene) 위에서 그려진다", ()
     expect(mafia).toContain("mf-figure--halo-crimson");
   });
 
-  it("낮 시작 하단은 생존자·탈락자 모두 같은 두 줄(`낮이 되었어요` / `곧 직업 공개가 시작돼요`)이다 (UX-01, 05-UI-SPEC 7.2)", () => {
+  it("낮 시작 하단은 생존자·탈락자 모두 같은 두 줄(`낮이 되었어요` / `곧 토론이 시작돼요`)이다 (UX-01, 05-UI-SPEC 7.2)", () => {
     const texts: string[] = [];
     for (const dead of [undefined, [0]] as const) {
       const { container, unmount } = scene(makeView({ phase: "dayAnnounce", role: "citizen", ...(dead ? { dead: [...dead] } : {}) }));
@@ -310,7 +308,7 @@ describe("dayAnnounce 는 테이블 장면(DayScene) 위에서 그려진다", ()
       texts.push(panel.textContent ?? "");
       unmount();
     }
-    expect(texts[0]).toBe("낮이 되었어요곧 직업 공개가 시작돼요");
+    expect(texts[0]).toBe("낮이 되었어요곧 토론이 시작돼요");
     expect(texts[1]).toBe(texts[0]);
   });
 

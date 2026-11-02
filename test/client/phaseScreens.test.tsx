@@ -531,7 +531,7 @@ describe("S-06b·S-06c·S-07 한 장면 DayScene (DAY-01, UI-SPEC 장면)", () =
     const intro = r.container.querySelector<HTMLElement>(".mf-sceneintro--day");
     expect(intro).not.toBeNull();
     expect(intro!.getAttribute("aria-hidden")).toBe("true");
-    expect(Array.from(intro!.querySelectorAll("p")).map((p) => p.textContent)).toEqual(["1일차", "낮이 되었습니다", "토론 전에 먼저 직업을 공개해요"]);
+    expect(Array.from(intro!.querySelectorAll("p")).map((p) => p.textContent)).toEqual(["1일차", "낮이 되었습니다"]);
     expect(intro!.querySelector("h1")).toBeNull();
     expect(Array.from(r.container.querySelectorAll<HTMLElement>(".mf-backdrop__art")).map((el) => el.dataset.scene)).toEqual(["lobby", "day"]);
     advance(2_000);

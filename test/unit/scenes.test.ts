@@ -115,9 +115,10 @@ describe("단계별 시작 문구(PHASE_INTRO, 낮·밤 한 부품)", () => {
     }
   });
 
-  it("밤: 밤 톤·제목 `밤이 되었습니다`·보조줄 없음. 낮 시작: 낮 톤·제목 `낮이 되었습니다`·보조줄 `토론 전에 먼저 직업을 공개해요`", () => {
+  it("밤: 밤 톤·제목 `밤이 되었습니다`·보조줄 없음. 낮 시작: 낮 톤·제목 `낮이 되었습니다`·보조줄 없음", () => {
     expect(PHASE_INTRO.night).toEqual({ tone: "night", title: "밤이 되었습니다" });
-    expect(PHASE_INTRO.dayAnnounce).toEqual({ tone: "day", title: "낮이 되었습니다", sub: "토론 전에 먼저 직업을 공개해요" });
+    expect(PHASE_INTRO.dayAnnounce).toEqual({ tone: "day", title: "낮이 되었습니다" });
+    expect(PHASE_INTRO.dayAnnounce).not.toHaveProperty("sub");
   });
 
   it("문구가 떠 있는 시간 SCENE_INTRO_MS 는 서버 낮 시작 단계 길이(DAY_ANNOUNCE_MS = 2000)와 같다", () => {
@@ -285,7 +286,7 @@ describe("캐시 규칙", () => {
 
 describe("PHASE_GUIDE_FILL·TIMELESS_PHASES (UX-01 빈 칸 채움, 05-UI-SPEC 7.2)", () => {
   it("낮 시작 하단 두 줄과 토론 헤더 문장이 상수 한 곳에 있다", () => {
-    expect(PHASE_GUIDE_FILL.dayAnnounce).toEqual({ title: "낮이 되었어요", guide: "곧 직업 공개가 시작돼요" });
+    expect(PHASE_GUIDE_FILL.dayAnnounce).toEqual({ title: "낮이 되었어요", guide: "곧 토론이 시작돼요" });
     expect(PHASE_GUIDE_FILL.discussion(1)).toBe("1일차 · 의견을 나눠요");
   });
 
