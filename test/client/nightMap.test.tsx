@@ -330,6 +330,39 @@ describe("밤 임시 틀 — 조명·이동·거절 (UI Considerations E7 #27)",
   });
 });
 
+// 08-27: 옛 밤 화면 시험(nightScene.test, DayScene)에서 사용자에게 보이는 뜻만 GameMap 기준으로 옮긴 것이다.
+describe("밤 임시 틀 — 대상 선택의 끊김·재선택·탈락 좌석 (08-27 옮김)", () => {
+  it("연결이 끊긴 동안(canSend 거짓) 경찰의 대상 버튼은 모두 aria-disabled 이고 눌러도 보내지 않는다", () => {
+    const send = vi.fn<(m: ClientMessage) => boolean>(() => true);
+    const { container } = mount(makeView({ mySeat: 1 }), { send, canSend: false });
+    const buttons = [...container.querySelectorAll<HTMLElement>("[data-pick]")];
+    expect(buttons.length).toBe(6);
+    expect(buttons.every((b) => b.getAttribute("aria-disabled") === "true")).toBe(true);
+    fireEvent.click(container.querySelector('[data-pick="2"]')!);
+    expect(send.mock.calls.filter(([x]) => x.t === "pick")).toEqual([]);
+  });
+
+  it("같은 대상을 다시 눌러도 pick 을 더 보내지 않고, 새 서버 view(me.pick)가 오면 서버 값이 이긴다", () => {
+    const send = vi.fn<(m: ClientMessage) => boolean>(() => true);
+    const m = mount(makeView({ mySeat: 1 }), { send });
+    fireEvent.click(m.container.querySelector('[data-pick="2"]')!);
+    fireEvent.click(m.container.querySelector('[data-pick="2"]')!);
+    expect(send.mock.calls.filter(([x]) => x.t === "pick")).toEqual([[{ t: "pick", target: 2 }]]);
+    expect(m.container.querySelector('[data-pick="2"]')?.getAttribute("aria-pressed")).toBe("true");
+    m.show(makeView({ mySeat: 1, pick: 3 }));
+    expect(m.container.querySelector('[data-pick="3"]')?.getAttribute("aria-pressed")).toBe("true");
+    expect(m.container.querySelector('[data-pick="2"]')?.getAttribute("aria-pressed")).toBe("false");
+    expect(ringOf(m.container, 3)).toBe("police");
+    expect(ringOf(m.container, 2)).toBeNull();
+  });
+
+  it("탈락한 좌석은 산 경찰 화면에서 대상 버튼도 이름표도 아니다(유령 그림 대신 사라진다)", () => {
+    const { container } = mount(makeView({ mySeat: 1, dead: [4] }));
+    expect(pickSeats(container)).toEqual([0, 1, 2, 3, 5]);
+    expect(container.querySelector('[data-seat="4"]')).toBeNull();
+  });
+});
+
 describe("밤 임시 틀 — 유령이 보는 밤 행동 (GHOST-02, T-08-46)", () => {
   const PICKS: SpectatePicks = { mafia: [2], police: [3], doctor: [2] };
   const ghostNight = () => makeView({ mySeat: 5, dead: [5], picks: PICKS });

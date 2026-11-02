@@ -606,6 +606,99 @@ describe("GameMap — 거절과 끊김 (E1 #4)", () => {
   });
 });
 
+// 08-27: 옛 낮 토론 화면 시험(discussion.test, DayScene)에서 사용자에게 보이는 뜻만 GameMap 기준으로 옮긴 것이다.
+describe("GameMap — 낮 토론 채팅 패널·방장 줄 없음 (CHAT-06, DAY-01, 08-27 옮김)", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
+  });
+  afterEach(() => vi.useRealTimers());
+  const advance = (ms: number) =>
+    act(() => {
+      vi.advanceTimersByTime(ms);
+    });
+  /** 방 화면과 맵 화면이 각각 구독한다 — 모든 구독자에게 같은 프레임을 보낸다 */
+  const feed = () => {
+    const listeners: Array<(e: never, meta: { epoch: number }) => void> = [];
+    const onEvent = vi.fn((l: (typeof listeners)[number]) => {
+      listeners.push(l);
+      return () => {};
+    });
+    return { onEvent: onEvent as unknown as RoomConnection["onEvent"], emit: (e: unknown) => act(() => listeners.forEach((l) => l(e as never, { epoch: 1 }))) };
+  };
+  const sentTypes = (send: unknown): string[] => (send as ReturnType<typeof vi.fn>).mock.calls.map((c) => (c[0] as ClientMessage).t);
+
+  it("산 사람의 낮 토론 아래는 채널 all 채팅 패널이다: 입력칸 '채팅 입력'(안내 문구 없음)·보내기·기록 칸 role=log, 채널 아이콘·빠른 메시지·이모티콘 버튼 없음", () => {
+    const { container } = mount(makeView());
+    const panel = container.querySelector<HTMLElement>("[data-chat-panel]")!;
+    expect(panel.getAttribute("data-chat-channel")).toBe("all");
+    const input = panel.querySelector<HTMLInputElement>("[data-chat-input]")!;
+    expect(input.getAttribute("aria-label")).toBe("채팅 입력");
+    expect(input.getAttribute("placeholder") ?? "").toBe("");
+    expect(panel.querySelector("[data-chat-send]")?.getAttribute("aria-label")).toBe("보내기");
+    expect(container.querySelector('[role="log"]')?.getAttribute("aria-label")).toBe("채팅 기록");
+    expect(panel.querySelector(".mv-chat__chan")).toBeNull();
+    expect(container.querySelector('button[aria-label="빠른 메시지"], button[aria-label="이모티콘"]')).toBeNull();
+  });
+
+  it("보낸 줄은 단계 키(1:discussion)와 본문만 서버로 가고, 내 줄은 서버가 방송해야 기록 칸에 나타난다", () => {
+    const f = feed();
+    const { container } = mount(makeView(), { onEvent: f.onEvent });
+    const input = container.querySelector<HTMLInputElement>("[data-chat-input]")!;
+    fireEvent.change(input, { target: { value: "저는 시민이에요" } });
+    fireEvent.submit(input.closest("form")!);
+    const send = (connectionMock.current as RoomConnection).send;
+    // 입력 중 신호(typing)는 글을 넣을 때 따로 나간다 — 채팅 메시지만 가려 본다.
+    const chats = (send as ReturnType<typeof vi.fn>).mock.calls.map((c) => c[0] as ClientMessage).filter((m) => m.t === "chat");
+    expect(chats).toEqual([{ t: "chat", text: "저는 시민이에요", pk: "1:discussion" }]);
+    expect(container.querySelector("[data-chat-log] .mv-chat__msg")).toBeNull();
+    f.emit({ t: "chat", seat: 0, ch: "all", seq: 1, text: "저는 시민이에요", at: NOW });
+    const line = container.querySelector("[data-chat-log] .mv-chat__msg");
+    expect(line?.getAttribute("data-ch")).toBe("all");
+    expect(line?.querySelector(".mv-chat__name")?.textContent).toBe("나");
+  });
+
+  it("서버가 보낸 입력 중 좌석만 이름표에 입력 중 신호(typingSeats)로 넘기고 4.5초 뒤 저절로 꺼진다 (CHAT-04)", () => {
+    const f = feed();
+    mount(makeView(), { onEvent: f.onEvent });
+    expect(stage.props?.typingSeats?.size ?? 0).toBe(0);
+    f.emit({ t: "typing", seat: 2, on: true });
+    expect([...(stage.props?.typingSeats ?? [])]).toEqual([2]);
+    advance(4500);
+    expect(stage.props?.typingSeats?.size ?? 0).toBe(0);
+  });
+
+  it("내가 입력칸에 글자를 넣으면 서버 왕복 없이 내 좌석이 입력 중이고, 비우면 꺼진다 (CHAT-04)", () => {
+    const { container } = mount(makeView());
+    const input = container.querySelector<HTMLInputElement>("[data-chat-input]")!;
+    fireEvent.change(input, { target: { value: "가" } });
+    expect([...(stage.props?.typingSeats ?? [])]).toEqual([0]);
+    fireEvent.change(input, { target: { value: "" } });
+    expect(stage.props?.typingSeats?.size ?? 0).toBe(0);
+  });
+
+  it("방장(me.isHost)에게도 연장·넘기기 버튼이 없고 화면은 extend·skip 을 보내지 않는다. 옛 서버의 연장 표시가 와도 토스트가 없다 (결정 0017-5)", () => {
+    const view = makeView();
+    expect(view.me.isHost).toBe(true);
+    const m = mount(view);
+    const labels = [...m.container.querySelectorAll("button")].map((b) => `${b.textContent ?? ""}|${b.getAttribute("aria-label") ?? ""}`).join("||");
+    expect(/\+30초 연장|넘기기|이미 연장했어요|빠른 메시지/.test(labels)).toBe(false);
+    // 옛 서버가 보내던 연장 표시를 키로만 넣는다(타입 선언에 기대지 않는다)
+    m.show({ ...view, phaseEndsAt: NOW + 115_000, phaseDurationMs: 120_000, day: { ...view.day!, extendUsed: true } } as unknown as RoomView);
+    advance(100);
+    expect(m.container.textContent).not.toContain("30초를 늘렸어요");
+    expect(m.container.querySelector(".mv-toast__text")?.textContent ?? "").toBe("");
+    const types = sentTypes((connectionMock.current as RoomConnection).send);
+    expect(types.filter((t) => t === "extend" || t === "skip")).toEqual([]);
+  });
+
+  it("다음 낮 시작 view 로 바뀌어도 시트·대화창이 문서에 남지 않는다", () => {
+    const m = mount(makeView());
+    m.show(makeView({ phase: "dayAnnounce", n: 2 }));
+    expect(document.querySelector("dialog")).toBeNull();
+  });
+});
+
 describe("GameMap — 소스 게이트 (T-08-33)", () => {
   it("결과 알림·맵 화면·아래 패널 소스에 HTML 주입이 없다", () => {
     for (const f of ["src/components/ResultAnnounce.tsx", "src/screens/GameMap.tsx", "src/screens/GamePanel.tsx"]) {

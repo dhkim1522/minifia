@@ -299,6 +299,22 @@ describe("최후 변론 화면 (DAY-05)", () => {
   });
 });
 
+// 08-27: 옛 변론 화면 시험(defense.test, DayScene)에서 옮긴 것이다 — 변론 아래 채팅은 변론 단계 키로 간다.
+describe("최후 변론 화면 — 채팅 단계 키 (VOTE-03, COMM-03, 08-27 옮김)", () => {
+  it("변론 아래 채팅에서 보낸 글은 변론 단계 키(1:defense)와 본문만 서버로 간다 — 변론자 본인도 같다", () => {
+    for (const mySeat of [0, 3]) {
+      const send = vi.fn<(m: ClientMessage) => boolean>(() => true);
+      const { container } = mount(makeView({ phase: "defense", candidate: 3, mySeat, count: 6 }), { send });
+      const input = container.querySelector<HTMLInputElement>("[data-chat-input]")!;
+      fireEvent.change(input, { target: { value: "억울해요" } });
+      fireEvent.submit(input.closest("form")!);
+      const chats = send.mock.calls.map(([m]) => m).filter((m) => m.t === "chat");
+      expect(chats, `seat ${mySeat}`).toEqual([{ t: "chat", text: "억울해요", pk: "1:defense" }]);
+      cleanup();
+    }
+  });
+});
+
 describe("찬반 화면 — 신분별 패널·안내·조명 (DAY-06)", () => {
   it("다른 산 사람: 안내 '도윤 님을 처형할까요?' + 찬반 줄(버튼·점), 제목 '찬반'", () => {
     const { container } = mount(makeView({ candidate: 4 }));
