@@ -3,12 +3,19 @@
 import { env } from "cloudflare:workers";
 import { evictDurableObject, runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
-import type { ServerMessage } from "../../shared/protocol";
+import type { PhaseId, ServerMessage } from "../../shared/protocol";
 import { BAR_MAP, lineWalkable } from "../../shared/game/map";
 import { positionAt } from "../../shared/game/world";
 import {
+  advanceTo,
+  chatSend,
+  chatsOf,
   closed,
   connect,
+  ghostsOf,
+  startedGame,
+  toPhase,
+  worldFramesOf,
   createRoom,
   flushWorld,
   hello,
@@ -406,5 +413,104 @@ describe("봇 로비 배회 (결정 0024)", () => {
     await runDurableObjectAlarm(env.ROOM.getByName(s.code));
     const got = await settle(s.host, mk);
     expect(got.filter((m) => m.t === "world").length).toBe(0);
+  });
+});
+
+// ---- 단계별 이동 (MAP-04, 결정 0060-6): 서버가 막는 표. 산 사람은 낮 시작·토론에서만, 유령은 모든 지도 단계에서 ----
+
+type Game5 = Awaited<ReturnType<typeof startedGame>>;
+
+/** 모든 소켓을 flush 해 소켓별 프레임을 돌려준다. 보낸 소켓(first)을 먼저 flush 한다 — 그 소켓의 pong 이 오면 보낸 메시지의 처리·전송이 끝났다는 증거다. */
+async function settleAll(socks: TestSocket[], marks: number[], first: number): Promise<ServerMessage[][]> {
+  const out: ServerMessage[][] = socks.map(() => []);
+  for (const i of [first, ...socks.map((_, k) => k).filter((k) => k !== first)]) out[i] = await settle(socks[i]!, marks[i]!);
+  return out;
+}
+
+/** 5명 판을 phase 단계로 옮긴다. 밤·아침은 실제 흐름으로, 지목·변론·찬반·처형은 저장 상태를 옮겨서(흐름 전환 전, 가정 A3) 들어간다. */
+async function gameAt(phase: PhaseId): Promise<Game5> {
+  if (phase === "night" || phase === "morning" || phase === "discussion") return startedGame(phase, 4);
+  const g = await startedGame("discussion", 4);
+  await toPhase(g.code, phase, (room) => ({ ...room, verdict: { passed: false, candidate: g.actors[1]!.seat } }));
+  for (const sock of g.socks) await settle(sock, mark(sock));
+  return g;
+}
+
+describe("단계별 이동 — 산 사람은 막히고 유령은 걷는다 (MAP-04, T-08-05)", () => {
+  for (const phase of ["nomination", "defense", "verdict", "execution", "night", "morning"] as const) {
+    it(`${phase}: 산 사람의 move 는 어느 소켓에도 world 프레임·오류가 없고, 유령의 move 는 유령 소켓에만 간다`, async () => {
+      const g = await gameAt(phase);
+      const marks = g.socks.map((sock) => mark(sock));
+      const mover = g.actors.find((a) => a.role !== "mafia")!;
+      send(mover.sock, { t: "move", x: 300, z: 100 });
+      // 같은 단계의 채팅은 막히지 않는다. 저장 편집으로 옮긴 단계는 소켓의 마지막 view 가 낡아 단계 키를 저장된 방에서 읽는다.
+      if (phase !== "night") chatSend(mover.sock, "움직이지 못해도 말은 해요", `${(await storedRoom(g.code)).day ?? 0}:${phase}`);
+      const got = await settleAll(g.socks, marks, g.actors.indexOf(mover));
+      expect(got.map((msgs) => msgs.filter((m) => m.t === "world" || m.t === "error").length).join(",")).toBe("0,0,0,0,0");
+      if (phase !== "night") expect(got.map((msgs) => chatsOf(msgs).length).join(",")).toBe("1,1,1,1,1");
+
+      // 같은 단계에서 두 사람이 유령이 되면 그 유령의 걸음은 다른 유령에게만 간다.
+      const doomed = g.actors.filter((a) => a.role !== "mafia").slice(0, 2);
+      const { ghosts, living } = await ghostsOf(g, doomed.map((a) => a.seat));
+      const after = g.socks.map((sock) => mark(sock));
+      send(ghosts[0]!.sock, { t: "move", x: -300, z: 100 });
+      const seen = await settleAll(g.socks, after, g.actors.indexOf(ghosts[0]!));
+      const moves = (a: (typeof g.actors)[number]): string => seen[g.actors.indexOf(a)]!.filter((m) => m.t === "world").map((m) => (m.t === "world" && m.k === "move" ? `move:${m.s}` : "other")).join(",");
+      expect(moves(ghosts[1]!)).toBe(`move:${ghosts[0]!.seat}`);
+      expect(living.map(moves).join("|")).toBe("||");
+    }, 40_000);
+  }
+
+  it("discussion: 산 사람의 move 는 유령을 포함한 모든 소켓이 world.move 로 받는다", async () => {
+    const g = await gameAt("discussion");
+    const marks = g.socks.map((sock) => mark(sock));
+    const mover = g.actors[1]!;
+    send(mover.sock, { t: "move", x: 300, z: 100 });
+    const got = await settleAll(g.socks, marks, g.actors.indexOf(mover));
+    expect(got.map((msgs) => msgs.filter((m) => m.t === "world").length).join(",")).toBe("1,1,1,1,1");
+  }, 40_000);
+
+  it("dayAnnounce: 산 사람의 move 는 모든 소켓이 world.move 로 받는다", async () => {
+    const s = await seat(3, 0);
+    const socks = [s.host, ...s.guests.map((gst) => gst.sock)];
+    send(s.host, { t: "start" });
+    for (const sock of socks) await nextFrame(sock, (m) => m.t === "state" && m.view.phase === "assigning");
+    await advanceTo(s.code, socks, "dayAnnounce");
+    const marks = socks.map((sock) => mark(sock));
+    send(s.guests[0]!.sock, { t: "move", x: 300, z: 100 });
+    const got = await settleAll(socks, marks, 1);
+    expect(got.map((msgs) => msgs.filter((m) => m.t === "world").length).join(",")).toBe("1,1,1,1");
+  }, 30_000);
+
+  it("assigning·roleReveal 에서는 산 사람의 move 가 막힌다", async () => {
+    const s = await seat(3, 0);
+    const socks = [s.host, ...s.guests.map((gst) => gst.sock)];
+    send(s.host, { t: "start" });
+    for (const sock of socks) await nextFrame(sock, (m) => m.t === "state" && m.view.phase === "assigning");
+    let marks = socks.map((sock) => mark(sock));
+    send(s.guests[0]!.sock, { t: "move", x: 300, z: 100 });
+    let got = await settleAll(socks, marks, 1);
+    expect(got.map((msgs) => msgs.filter((m) => m.t === "world").length).join(",")).toBe("0,0,0,0");
+    await advanceTo(s.code, socks, "roleReveal");
+    marks = socks.map((sock) => mark(sock));
+    send(s.guests[0]!.sock, { t: "move", x: 300, z: 100 });
+    got = await settleAll(socks, marks, 1);
+    expect(got.map((msgs) => msgs.filter((m) => m.t === "world").length).join(",")).toBe("0,0,0,0");
+  }, 30_000);
+});
+
+describe("무대 자리 (0,0) 입력 차단 (08-04 Threat Flag)", () => {
+  it("로비에서 목적지가 정확히 무대 자리(0,0)인 move 는 조용히 버려지고, 옆 점은 받아들여진다", async () => {
+    const s = await seat(1, 0);
+    const guest = s.guests[0]!;
+    const mk = [mark(s.host), mark(guest.sock)] as const;
+    send(guest.sock, { t: "move", x: 0, z: 0 });
+    const a = await settle(guest.sock, mk[1]);
+    const b = await settle(s.host, mk[0]);
+    expect(`${a.filter((m) => m.t === "world" || m.t === "error").length},${b.filter((m) => m.t === "world" || m.t === "error").length}`).toBe("0,0");
+    const mk2 = mark(guest.sock);
+    send(guest.sock, { t: "move", x: 10, z: 0 });
+    await settle(guest.sock, mk2);
+    expect(worldFramesOf(guest.sock, mk2).length).toBe(1);
   });
 });

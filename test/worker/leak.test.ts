@@ -91,7 +91,7 @@ const ROLE_PATH_ENDED = ".view.result.seats[].job";
 
 const phaseOf = (phase: string) => (m: ServerMessage) => m.t === "state" && m.view.phase === phase;
 
-// ---- world 프레임(06-08, T-06-16): 로비에서만 나가고, 키·문자열 값은 허용 목록뿐이다 ----
+// ---- world 프레임(06-08, T-06-16 → 08-09 결정 0060-8): 키·문자열 값은 허용 목록뿐이고, 게임 중 산 사람 소켓에는 산 좌석만 간다 ----
 const WORLD_KEY_PATHS = new Set([".t", ".k", ".s", ".p", ".t0", ".v", ".at", ".ents", ".ents[].s", ".ents[].p", ".ents[].t0", ".ents[].v"]);
 const WORLD_STRING_VALUES: Record<string, ReadonlySet<string>> = { ".t": new Set(["world"]), ".k": new Set(["move", "snap"]) };
 
@@ -105,21 +105,34 @@ const CHATLOG_KEY_PATHS = new Set([".t", ".lines", ".lines[].ch", ".lines[].seat
 const CHAT_REJECT_KEY_PATHS = new Set([".t", ".why"]);
 
 /**
- * 각 소켓의 프레임 목록에서 world 프레임을 본다: 첫 "로비가 아닌 단계" state 이후에는 하나도 없고(start 이전에만 있다),
- * 모든 키 경로와 문자열 값이 허용 목록 안이며(토큰·id·역할 없음), 각 소켓이 로비에서 적어도 하나(hello 뒤 snap)는 받았다.
+ * 각 소켓의 프레임 목록에서 world 프레임을 본다(08-09, 결정 0060-8). 게임 중에도 지도 단계에서 world 프레임이 나갈 수 있으나
+ * 산 사람 소켓이 받은 world 프레임의 좌석은 그 시점(마지막으로 받은 state)의 산 좌석뿐이다 — 유령의 위치가 산 사람 폰에 가지 않는다(GHOST-01).
+ * 유령 소켓은 자기가 탈락했다는 state 를 받은 뒤 전원 좌석을 받을 수 있다(새 유령 snap). 허용 목록(키·문자열 값)은 그대로다(토큰·id·역할 없음).
+ * 각 소켓이 로비에서 적어도 하나(hello 뒤 snap)는 받았다.
  */
 function assertWorldFrames(socks: TestSocket[]): void {
   for (const sock of socks) {
     let started = false;
     let worlds = 0;
+    let mySeat = -1;
+    let meAlive = true;
+    let aliveSeats = new Set<number>();
     for (const raw of collect(sock)) {
       const msg = JSON.parse(raw) as ServerMessage;
-      if (msg.t === "state" && msg.view.phase !== "lobby") started = true;
+      if (msg.t === "state") {
+        if (msg.view.phase !== "lobby") started = true;
+        mySeat = msg.view.me.seat;
+        aliveSeats = new Set(msg.view.players.filter((p) => p.alive !== false).map((p) => p.seat));
+        meAlive = aliveSeats.has(mySeat);
+      }
       if (msg.t !== "world") continue;
       worlds += 1;
-      expect(started).toBe(false);
       for (const path of keyPaths(msg)) expect(WORLD_KEY_PATHS.has(path)).toBe(true);
       for (const [path, value] of stringPaths(msg)) expect(WORLD_STRING_VALUES[path]?.has(value) === true).toBe(true);
+      if (!started || !meAlive) continue;
+      // 게임 중 산 사람 소켓: 프레임의 좌석은 모두 그 시점 산 좌석이다.
+      const seats = msg.k === "snap" ? msg.ents.map((e) => e.s) : [msg.s];
+      expect(seats.filter((s) => !aliveSeats.has(s)).join(",")).toBe("");
     }
     expect(worlds).toBeGreaterThan(0);
   }
@@ -260,7 +273,7 @@ describe("6명 한 판(두 밤·두 아침, 행동·마피아 채팅·탈락·�
     // ---- 검사 ----
     const allTokens = players.map((p) => p.token);
 
-    // world 프레임은 첫 start 이전 로비에서만 나왔고 키·문자열이 허용 목록 안이다(06-08).
+    // world 프레임은 키·문자열이 허용 목록 안이고 게임 중 산 사람 소켓에는 그 시점 산 좌석만 갔다(06-08, 08-09).
     assertWorldFrames(players.map((p) => p.sock));
 
     // HTTP 응답: 비인증 응답에는 토큰이 하나도 없고, 본인 응답에는 남의 토큰이 없다.
@@ -736,7 +749,7 @@ describe("6명 한 판: 처형·처형 무효·종료 전수 프레임 누출 �
       for (const sock of socks) await settle(sock, mark(sock));
 
       // ---------- 검사 ----------
-      // 처형·종료까지 간 한 판에서도 world 프레임은 start 이전 로비에서만 나왔다(06-08).
+      // 처형·종료까지 간 한 판에서도 world 프레임의 키·문자열이 허용 목록 안이고 산 사람 소켓에는 산 좌석만 갔다(06-08, 08-09).
       assertWorldFrames(socks);
       const preview = await exports.default.fetch(`http://x/api/rooms/${code}`);
       const previewText = await preview.text();
