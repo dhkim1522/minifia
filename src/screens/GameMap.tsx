@@ -11,7 +11,7 @@ import { TopToast, useTopToast } from "../components/v2/TopToast";
 import { WorldStage } from "../components/WorldStage";
 import type { WorldPick } from "../components/WorldStage";
 import { LOG_H_KB } from "../game/chatUi";
-import { headerFor, pointsTally } from "../game/dayView";
+import { defenderVotes, headerFor, pointsTally } from "../game/dayView";
 import type { ChatStore } from "../net/chatStore";
 import type { DayFx } from "../net/useDayFx";
 import { useCountdown } from "../net/countdown";
@@ -223,11 +223,19 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
 
   // 이름표 쌓임: 득표 배지·선두(맥박)·과반 도장은 서버가 센 집계에서만 나온다. 0표 이름표에는 배지가 없다.
   const verdicting = view.phase === "verdict";
+  const defending = view.phase === "defense";
   const tagProps = useMemo<WorldTagProps | undefined>(() => {
     // 찬반(DAY-06): 던진 사람의 이름표에 체크만 붙는다. 서버 day.voted 는 좌석뿐이고 무엇을 골랐는지는 어디에도 없다(결정 0053)
     if (verdicting) {
       const voted = new Set(view.day?.voted ?? []);
       return (seat) => (voted.has(seat) ? { done: true } : {});
+    }
+    // 최후 변론(DAY-05): 변론자 이름표만 지목 때 받은 득표 배지와 유력 도장을 유지하고 다른 이름표의 배지는 사라진다(공개 기록 voteLog 에서)
+    if (defending) {
+      const candidate = view.day?.candidate;
+      const votes = defenderVotes(view);
+      if (candidate === undefined || votes === undefined || votes < 1) return undefined;
+      return (seat) => (seat === candidate ? { count: votes, sure: true } : {});
     }
     if (!nominating) return undefined;
     const tally = pointsTally(view);
@@ -240,7 +248,7 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
         ...(tally.sure === seat ? { sure: true } : {}),
       };
     };
-  }, [nominating, verdicting, view, blink, pickSeats]);
+  }, [nominating, verdicting, defending, view, blink, pickSeats]);
 
   const scene = useMemo(() => sceneLook(view, { stageH, ...(mine !== undefined ? { mine } : {}) }), [view, stageH, mine]);
 

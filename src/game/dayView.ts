@@ -144,6 +144,18 @@ export function pointsTally(view: RoomView): PointsTally {
   };
 }
 
+/**
+ * 최후 변론에서 변론자 이름표에 유지하는 지목 득표 수(공개 기록). 그날 voteLog 줄의 cand.votes 에서 변론자를 가리킨 수이고,
+ * 변론자가 없거나 줄이 없으면(재접속 직후 등) undefined — 화면은 배지를 그리지 않는다.
+ */
+export function defenderVotes(view: RoomView): number | undefined {
+  const seat = view.day?.candidate;
+  if (seat === undefined) return undefined;
+  const entry = view.day?.voteLog?.find((e) => e.n === view.day?.n);
+  if (!entry?.cand) return undefined;
+  return entry.cand.votes.filter((v) => v.target === seat).length;
+}
+
 const nameOf = (view: RoomView, seat: number): string | undefined => view.players.find((p) => p.seat === seat)?.nickname;
 
 /** 처형 단계 안에서 끝나도록 알림 길이를 자른다(at 은 처형 단계 진입 기준 ms). */

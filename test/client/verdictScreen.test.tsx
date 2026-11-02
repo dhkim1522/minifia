@@ -271,14 +271,14 @@ describe("최후 변론 화면 (DAY-05)", () => {
     const { container } = mount(defense());
     expect(headOf(container, 3)?.getAttribute("data-count")).toBe("4");
     expect(headOf(container, 3)?.getAttribute("data-sure")).toBe("true");
-    expect(container.querySelectorAll("[data-count]").length).toBe(1);
-    expect(container.querySelectorAll("[data-sure]").length).toBe(1);
+    expect(container.querySelectorAll(".mv-head[data-count]").length).toBe(1);
+    expect(container.querySelectorAll(".mv-head[data-sure]").length).toBe(1);
     expect(container.querySelectorAll("[data-lead]").length).toBe(0);
   });
 
   it("voteLog 줄이 없으면(공개 기록이 없을 때) 배지는 없고 변론자 안내만 그대로다", () => {
     const { container } = mount(makeView({ phase: "defense", candidate: 3, count: 6 }));
-    expect(container.querySelectorAll("[data-count]").length).toBe(0);
+    expect(container.querySelectorAll(".mv-head[data-count]").length).toBe(0);
     expect(hintOf(container)).toBe("지아 님의 변론");
   });
 
@@ -327,8 +327,8 @@ describe("찬반 화면 — 신분별 패널·안내·조명 (DAY-06)", () => {
 
   it("변론자 이름표에는 배지·도장이 없다(찬반에서는 사라진다) — 던진 사람에게는 체크", () => {
     const { container } = mount(makeView({ candidate: 3, voted: [1], candVotes: [[0, 3], [1, 3]] }));
-    expect(container.querySelectorAll("[data-count]").length).toBe(0);
-    expect(container.querySelectorAll("[data-sure]").length).toBe(0);
+    expect(container.querySelectorAll(".mv-head[data-count]").length).toBe(0);
+    expect(container.querySelectorAll(".mv-head[data-sure]").length).toBe(0);
     expect(headOf(container, 1)?.getAttribute("data-done")).toBe("true");
   });
 

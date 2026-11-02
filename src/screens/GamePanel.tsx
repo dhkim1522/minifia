@@ -63,7 +63,9 @@ export function GamePanel({ view, send, canSend, binding, logHeight, kbOpen = fa
   // 찬반 줄: 변론자가 아닌 산 사람만 던진다(변론자 본인·유령은 8페이즈 결정 0053 대로 줄 없음)
   const aliveCount = view.players.filter(isAlive).length;
   const isDefender = view.day?.candidate !== undefined && view.day.candidate === view.me.seat;
-  const showVerdict = view.phase === "verdict" && meAlive && !isDefender && !kbOpen;
+  const inVerdict = view.phase === "verdict" && !kbOpen;
+  const showVerdict = inVerdict && meAlive && !isDefender; // 찬반 버튼 + 점
+  const showVerdictDots = inVerdict && !showVerdict; // 변론자 본인·유령: 점만(보기 패널)
   const voted = view.day?.voted?.length ?? 0;
   const pressVerdict = (v: Verdict): void => {
     if (!canSend) return;
@@ -80,9 +82,11 @@ export function GamePanel({ view, send, canSend, binding, logHeight, kbOpen = fa
 
   return (
     <section ref={panelRef} className={kbOpen ? "mf-game__panel mf-game__panel--kb" : "mf-game__panel"} data-world-panel="">
-      {showVerdict ? (
+      {showVerdict || showVerdictDots ? (
         <div className="mf-game__verdict" data-verdict-row="">
-          <VerdictPicker {...(verdict ? { value: verdict } : {})} onChange={pressVerdict} {...(canSend ? {} : { disabled: true })} />
+          {showVerdict ? (
+            <VerdictPicker {...(verdict ? { value: verdict } : {})} onChange={pressVerdict} {...(canSend ? {} : { disabled: true })} />
+          ) : null}
           <DotProgress count={voted} total={Math.max(0, aliveCount - 1)} label="투표한 사람" />
         </div>
       ) : null}
