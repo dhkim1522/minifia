@@ -1,4 +1,5 @@
 import { act, cleanup, fireEvent, render } from "@testing-library/react";
+import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import "../helpers/singleLineErrors";
 import { installMemoryStorage } from "../helpers/memoryStorage";
@@ -242,5 +243,138 @@ describe("찬반 화면 — 한 표 (DAY-06, 트레이서)", () => {
     const tags = m.container.querySelector(".mf-world__tags")!;
     expect(tags.textContent).not.toMatch(/찬성|반대/);
     expect(tags.innerHTML).not.toMatch(/data-agree|data-verdict|data-yes|data-no/);
+  });
+});
+
+// ---- Task 2: 변론·찬반 화면 — 헤더 문구·변론자 배지 유지·보기 패널·키보드 숨김·조명 (DAY-05·06) ----
+
+const hintOf = (c: ParentNode): string => c.querySelector("[data-guide]")?.textContent ?? "";
+const titleOf = (c: ParentNode): string => c.querySelector(".mv-phase__title")?.textContent ?? "";
+
+describe("최후 변론 화면 (DAY-05)", () => {
+  // 변론자 3(지아), 그날 voteLog 의 cand.votes 중 3 을 가리킨 표 4
+  const defense = (mySeat = 0) =>
+    makeView({ phase: "defense", candidate: 3, mySeat, count: 6, candVotes: [[0, 3], [1, 3], [2, 3], [4, 3], [5, 2]] });
+
+  it("제목 '최후 변론', 다른 사람 안내 '지아 님의 변론'", () => {
+    const { container } = mount(defense());
+    expect(titleOf(container)).toBe("최후 변론");
+    expect(hintOf(container)).toBe("지아 님의 변론");
+  });
+
+  it("변론자 본인의 안내는 '해명할 시간이에요'", () => {
+    const { container } = mount(defense(3));
+    expect(hintOf(container)).toBe("해명할 시간이에요");
+  });
+
+  it("변론자 이름표만 득표 배지(data-count=4)와 유력 도장(data-sure)을 유지하고 다른 이름표에는 배지·도장이 없다", () => {
+    const { container } = mount(defense());
+    expect(headOf(container, 3)?.getAttribute("data-count")).toBe("4");
+    expect(headOf(container, 3)?.getAttribute("data-sure")).toBe("true");
+    expect(container.querySelectorAll("[data-count]").length).toBe(1);
+    expect(container.querySelectorAll("[data-sure]").length).toBe(1);
+    expect(container.querySelectorAll("[data-lead]").length).toBe(0);
+  });
+
+  it("voteLog 줄이 없으면(공개 기록이 없을 때) 배지는 없고 변론자 안내만 그대로다", () => {
+    const { container } = mount(makeView({ phase: "defense", candidate: 3, count: 6 }));
+    expect(container.querySelectorAll("[data-count]").length).toBe(0);
+    expect(hintOf(container)).toBe("지아 님의 변론");
+  });
+
+  it("행동 줄이 없다: 찬반 버튼·토론 끝내기·지목 버튼이 하나도 없고 패널은 채팅뿐", () => {
+    const { container } = mount(defense());
+    expect(verdictBtns(container).length).toBe(0);
+    expect(container.querySelector("[data-end-discussion]")).toBeNull();
+    expect(container.querySelector("[data-pick]")).toBeNull();
+    expect(dotsOf(container)).toBeNull();
+    expect(container.querySelector(".mv-chat")).not.toBeNull();
+  });
+
+  it("조명 trial, 긴장 0, 카메라 고정", () => {
+    mount(defense());
+    expect(lastScene().lighting).toBe("trial");
+    expect(lastScene().tension).toBe(0);
+    expect(lastScene().camera.mode).toBe("fixed");
+  });
+});
+
+describe("찬반 화면 — 신분별 패널·안내·조명 (DAY-06)", () => {
+  it("다른 산 사람: 안내 '도윤 님을 처형할까요?' + 찬반 줄(버튼·점), 제목 '찬반'", () => {
+    const { container } = mount(makeView({ candidate: 4 }));
+    expect(titleOf(container)).toBe("찬반");
+    expect(hintOf(container)).toBe("도윤 님을 처형할까요?");
+    expect(verdictBtns(container).length).toBe(2);
+    expect(dotsOf(container)).not.toBeNull();
+  });
+
+  it("변론자 본인: 안내 '결과를 기다려요', 패널은 점 + 채팅뿐(찬반 버튼 없음)", () => {
+    const { container } = mount(makeView({ candidate: 0, voted: [1, 2] }));
+    expect(hintOf(container)).toBe("결과를 기다려요");
+    expect(verdictBtns(container).length).toBe(0);
+    expect(dotsOn(container)).toBe(2);
+    expect(dotsTotal(container)).toBe(4);
+    expect(container.querySelector(".mv-chat")).not.toBeNull();
+  });
+
+  it("유령(탈락한 나): 찬반 버튼 없이 점 + 채팅, 안내는 유령 문구, 점 수는 산 사람(나 빼고 4명) − 1", () => {
+    const { container } = mount(makeView({ candidate: 3, dead: [0], voted: [1] }));
+    expect(verdictBtns(container).length).toBe(0);
+    expect(dotsOf(container)).not.toBeNull();
+    expect(hintOf(container)).toBe("모두의 직업이 보여요");
+    expect(dotsTotal(container)).toBe(3);
+  });
+
+  it("변론자 이름표에는 배지·도장이 없다(찬반에서는 사라진다) — 던진 사람에게는 체크", () => {
+    const { container } = mount(makeView({ candidate: 3, voted: [1], candVotes: [[0, 3], [1, 3]] }));
+    expect(container.querySelectorAll("[data-count]").length).toBe(0);
+    expect(container.querySelectorAll("[data-sure]").length).toBe(0);
+    expect(headOf(container, 1)?.getAttribute("data-done")).toBe("true");
+  });
+
+  it("조명 vote, 긴장 1 에 초점은 변론자 3", () => {
+    mount(makeView({ candidate: 3 }));
+    expect(lastScene().lighting).toBe("vote");
+    expect(lastScene().tension).toBe(1);
+    expect(lastScene().focusSeat).toBe(3);
+  });
+
+  it("찬반에는 지목 이름표 버튼이 없다(이름표를 누르지 않는다)", () => {
+    const { container } = mount(makeView({ candidate: 3 }));
+    expect(container.querySelector("[data-pick]")).toBeNull();
+  });
+});
+
+describe("찬반 줄 — 키보드가 열리면 숨고 닫으면 돌아온다 (E4 #14·#15)", () => {
+  it("키보드 열림: 찬반 버튼과 점이 없고 채팅은 그대로, 닫히면 다시 나온다 (변론자 아닌 사람)", () => {
+    const m = mount(makeView({ candidate: 3 }));
+    expect(verdictBtns(m.container).length).toBe(2);
+    kb.open = true;
+    m.show(makeView({ candidate: 3 }));
+    expect(m.container.querySelector(".mv-verdict")).toBeNull();
+    expect(dotsOf(m.container)).toBeNull();
+    expect(m.container.querySelector(".mv-chat")).not.toBeNull();
+    kb.open = false;
+    m.show(makeView({ candidate: 3 }));
+    expect(verdictBtns(m.container).length).toBe(2);
+    expect(dotsOf(m.container)).not.toBeNull();
+  });
+
+  it("변론자 본인의 점도 키보드가 열리면 숨는다", () => {
+    kb.open = true;
+    const { container } = mount(makeView({ candidate: 0 }));
+    expect(dotsOf(container)).toBeNull();
+  });
+});
+
+describe("찬반 줄 배치 CSS (UI-SPEC 패널 높이 표)", () => {
+  it("찬반 줄 간격 8, 점과 기록 사이는 패널 간격 10, 진홍·놋쇠 변수 없음", () => {
+    const css = readFileSync("src/styles/game.css", "utf8");
+    const rule = css.split("\n").find((l) => l.startsWith(".mf-game__verdict "));
+    expect(rule).toBeDefined();
+    expect(rule).toMatch(/flex-direction:\s*column/);
+    expect(rule).toMatch(/gap:\s*8px/);
+    expect(css).not.toMatch(/crimson|brass/);
+    expect(css).toMatch(/\.mf-game__panel \{[^}]*gap:\s*10px/);
   });
 });
