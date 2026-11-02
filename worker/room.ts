@@ -31,8 +31,9 @@ import { castPoint } from "../shared/game/nomination";
 import { castVerdict } from "../shared/game/verdict";
 import { endReached, toggleEnd } from "../shared/game/discussion";
 import { canMove } from "../shared/game/movement";
+import { layoutFor, layoutKey } from "../shared/game/gather";
 import { BAR_MAP, STAGE_SPOT } from "../shared/game/map";
-import { WORLD_FLUSH_MS, compactWorld, despawnPlayer, emptyWorld, moveFrame, nextWanderAt, planWander, requestMove, respawnAll, restoreWorld, snapFrame, spawnPlayer } from "../shared/game/world";
+import { WORLD_FLUSH_MS, compactWorld, despawnPlayer, emptyWorld, forceSegment, moveFrame, nextWanderAt, planMoveSegment, planWander, requestMove, respawnAll, restoreWorld, snapFrame, spawnPlayer } from "../shared/game/world";
 import type { Segment, WorldState } from "../shared/game/world";
 import { buildPreview, buildView } from "../shared/game/view";
 import { ClientMessageSchema } from "../shared/schemas";
@@ -559,6 +560,7 @@ export class Room extends DurableObject<Env> {
       this.room = tick({ ...result.state, phaseEndsAt: now }, now, cryptoRandInt);
       await this.persistAndBroadcast();
       this.snapNewGhosts(now);
+      this.syncLayout(now);
       await this.reschedule();
       return null;
     }
@@ -639,6 +641,7 @@ export class Room extends DurableObject<Env> {
     this.room = result.state;
     await this.persistAndBroadcast();
     this.snapNewGhosts(Date.now());
+    this.syncLayout(Date.now());
     await this.reschedule();
   }
 
@@ -755,11 +758,38 @@ export class Room extends DurableObject<Env> {
     }
     // 난수는 여기서만 넣는다 — 아침 판정(03-03)의 동률·문구 추첨
     const next = tick(room, now, cryptoRandInt);
-    if (next === room) return;
-    this.room = next;
-    await this.persistAndBroadcast();
-    this.snapNewGhosts(now);
-    await this.reschedule();
+    if (next !== room) {
+      this.room = next;
+      await this.persistAndBroadcast();
+      this.snapNewGhosts(now);
+    }
+    // 배치는 단계가 바뀌었는지와 무관하게 '지금 단계가 요구하는 모습'으로 맞춘다(멱등, 알람 따라잡기·퇴거에도 안전).
+    this.syncLayout(now);
+    if (next !== room) await this.reschedule();
+  }
+
+  // 지금 단계의 배치(지목 둘레 자리·변론 무대·부결 복귀)를 서버가 걷게 한다(DAY-04·05, 결정 0060-7).
+  // 단계 전환 이벤트가 아니라 지금 단계의 배치를 맞춘다 — 알람 따라잡기·퇴거에도 안전(RESEARCH 패턴 4). 키가 world.lay.key 와 같으면 아무것도 하지 않는다(멱등).
+  // 이동마다 지금 위치에서 경로를 만들고(planMoveSegment) 150ms 간격·lastMoveAt 을 건드리지 않는 forceSegment 로 적용한 뒤(Pitfall 5)
+  // 그 사람이 움직인 것으로 emitWorld 한다(산 사람의 이동은 방 전원에게, A2). 배치 기억 lay 는 world 저장에 실려 퇴거 뒤에도 자리가 뒤섞이지 않는다.
+  // 밤에는 배치를 바꾸지 않는다(layoutKey 가 null, 선 자리 그대로 — 9페이즈가 정한다, A4).
+  private syncLayout(now: number): void {
+    const room = this.room;
+    if (!room) return;
+    const key = layoutKey(room);
+    if (key === null || key === this.world.lay?.key) return;
+    const layout = layoutFor(room, this.world, now);
+    if (layout === null) return;
+    for (const m of layout.moves) {
+      const me = room.players.find((p) => p.id === m.playerId);
+      const cur = Object.prototype.hasOwnProperty.call(this.world.segs, m.playerId) ? this.world.segs[m.playerId] : undefined;
+      if (!me || !cur) continue;
+      const seg = planMoveSegment(cur, m.dest, now, BAR_MAP);
+      this.world = forceSegment(this.world, m.playerId, seg);
+      this.emitWorld(moveFrame(me.seat, seg), m.playerId);
+    }
+    this.world = { ...this.world, lay: { key: layout.key, slots: layout.slots } };
+    this.markWorldDirty();
   }
 
   // 방금 탈락한 사람(처형·아침)에게만 모두의 위치 snap 을 보낸다 — 그 전까지 받지 못한 다른 유령의 위치를 맞춘다(GHOST-01).

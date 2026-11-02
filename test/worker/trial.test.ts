@@ -36,10 +36,16 @@ async function storedNominates(code: string): Promise<string> {
 
 const pointsOf = (v: RoomView | undefined): string => JSON.stringify(v?.day?.points);
 
+/** 모든 소켓을 flush 한다(서버가 단계 진입으로 보낸 프레임이 모두 도착해 관찰 구간 앞에 놓이게). */
+async function settleAllSocks(g: Game): Promise<void> {
+  for (const sock of g.socks) await settle(sock, mark(sock));
+}
+
 /** 방장 + 손님 3 = 4명 판을 시작해 지목 단계로 옮긴다. actors[0] 은 방장이다. */
 async function nominationRoom(): Promise<Game> {
   const g = await startedGame("discussion", 3);
   await toPhase(g.code, "nomination");
+  await settleAllSocks(g); // 지목에 들어가면 서버가 산 사람을 둘레 자리로 걷게 한다 — 그 world 프레임을 관찰 구간 밖으로 비운다(08-09)
   return g;
 }
 
@@ -121,6 +127,7 @@ async function verdictRoom(): Promise<Game> {
   const g = await startedGame("discussion", 4);
   const defender = g.actors[4]!;
   await toPhase(g.code, "verdict", (room) => ({ ...room, verdict: { passed: false, candidate: defender.seat } }));
+  await settleAllSocks(g); // 찬반에 들어가면 변론자가 무대로 걷는다(08-09) — 그 world 프레임을 관찰 구간 밖으로 비운다
   return g;
 }
 
@@ -188,6 +195,7 @@ describe("찬반 방송 규율 (DAY-06, 결정 0053, T-08-02)", () => {
     await toPhase(g.code, "verdict", (room) =>
       mapPlayers({ ...room, verdict: { passed: false, candidate: g.actors[4]!.seat } }, (p) => (p.seat === d.seat ? { ...p, alive: false } : p)),
     );
+    await settleAllSocks(g);
     expect(lines(await castAll(g, () => verdictAs(d.sock, true)))).toBe("[] [] [] [error:BAD_MESSAGE,state:verdict] []");
   });
 });
