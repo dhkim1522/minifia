@@ -15,6 +15,7 @@ import { preloadDuskAssets, preloadRoleAssets } from "../net/assets";
 import { ChatStore } from "../net/chatStore";
 import { usePhaseArrival } from "../net/phaseArrival";
 import { loadSeenCount, saveSeenCount, unseenCount } from "../net/recordsSeen";
+import { useDayFx } from "../net/useDayFx";
 import { useReducedMotion } from "../net/useReducedMotion";
 import { useRoomConnection } from "../net/useRoomConnection";
 import { useWakeLock } from "../net/useWakeLock";
@@ -182,6 +183,8 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
   // 같은 구독 하나로 world 와 채팅 프레임을 나눠 먹인다. 시각은 저장소가 읽지 않고 받은 때를 넘긴다.
   const [chat] = useState(() => new ChatStore());
   const { onEvent } = connection;
+  // 낮 연출(채팅 시스템 줄·결과 알림): 서버 view 두 개의 공개 정보 차이로만 만든다. 낮 시작은 역할 확인·밤에서 들어오므로 맵 화면이 아니라 방 화면이 직전 view 를 쥐어야 한다.
+  const { announce } = useDayFx({ view, epoch: connection.epoch, chat });
   useEffect(
     () =>
       onEvent((e, meta) => {
@@ -433,13 +436,13 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
             view={view}
             send={connection.send}
             canSend={connection.canSend}
-            epoch={connection.epoch}
             offset={connection.offset}
             store={store}
             chat={chat}
-            bannerVisible={banner !== "hidden"}
-            myRoleButton={myRoleButton}
+            roleCard={{ unread: unread > 0, onOpen: () => setRoleCard({ open: true, tab: "role" }) }}
             testButton={testButton}
+            announce={announce}
+            onEvent={connection.onEvent}
             onLeave={() => onExit("gaveUp")}
           />
         );

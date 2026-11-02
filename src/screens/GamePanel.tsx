@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import type { RefObject } from "react";
 import { isAlive } from "../../shared/game/alive";
 import { majorityOf } from "../../shared/game/nomination";
@@ -23,6 +24,8 @@ export interface GamePanelProps {
   logHeight: number;
   /** 키보드가 열려 있는가 — 열려 있으면 행동 줄을 그리지 않고 패널이 키보드 위로 올라간다(7페이즈 규칙) */
   kbOpen?: boolean;
+  /** 서버가 행동을 거절한 횟수. 늘어나면 내 낙관적 눌림을 서버 값으로 되돌린다(새 view 가 오지 않아도) */
+  rejected?: number;
   inputRef?: RefObject<HTMLInputElement | null>;
   panelRef?: RefObject<HTMLElement | null>;
 }
@@ -32,8 +35,18 @@ export interface GamePanelProps {
  * 이 계획(08-13)은 낮 토론의 [토론 끝내기] 한 칸만 정한다 — 지목·변론·찬반·처형·유령은 뒤 계획이 이 틀 위에 얹는다.
  * 눌림은 서버 view(me.endDiscussion)가 기준이고, 내가 누른 즉시 바뀌는 것은 눌림 표시 하나뿐이다. 점 개수는 서버가 센 값만 그린다(누가 눌렀는지는 서버가 보내지 않는다).
  */
-export function GamePanel({ view, send, canSend, binding, logHeight, kbOpen = false, inputRef, panelRef }: GamePanelProps) {
-  const [pressed, choose] = useViewChoice<boolean>(view, view.me.endDiscussion === true);
+export function GamePanel({ view, send, canSend, binding, logHeight, kbOpen = false, rejected = 0, inputRef, panelRef }: GamePanelProps) {
+  const serverPressed = view.me.endDiscussion === true;
+  const [pressed, choose] = useViewChoice<boolean>(view, serverPressed);
+  // 거절이 오면 서버 값으로 되돌린다. 처음 그릴 때(거절 0)는 아무것도 하지 않는다.
+  const seenRejects = useRef(rejected);
+  useEffect(() => {
+    if (seenRejects.current === rejected) return;
+    seenRejects.current = rejected;
+    choose(serverPressed);
+    // choose 는 렌더마다 새 함수지만 setState 만 부른다
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rejected]);
 
   const me = view.players.find((p) => p.seat === view.me.seat);
   const meAlive = me === undefined || isAlive(me);

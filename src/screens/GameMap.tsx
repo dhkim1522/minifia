@@ -1,18 +1,34 @@
+import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
+import { isAlive } from "../../shared/game/alive";
+import { canMoveIn } from "../../shared/game/movement";
 import type { ClientMessage, RoomView } from "../../shared/protocol";
+import { ResultAnnounce } from "../components/ResultAnnounce";
+import { RoleCardButton } from "../components/RoleCardButton";
 import { PhaseHeader } from "../components/v2/PhaseHeader";
 import { TopToast, useTopToast } from "../components/v2/TopToast";
 import { WorldStage } from "../components/WorldStage";
 import { LOG_H_KB } from "../game/chatUi";
 import { headerFor } from "../game/dayView";
 import type { ChatStore } from "../net/chatStore";
+import { useCountdown } from "../net/countdown";
 import { useChat } from "../net/useChat";
 import { useMapInsets } from "../net/useMapInsets";
+import type { RoomConnection } from "../net/useRoomConnection";
+import { sceneLook } from "../world/presence";
 import type { WorldStore } from "../world/store";
 import { GamePanel } from "./GamePanel";
 import "../styles/game.css";
 import "../styles/sheet.css";
 import "../styles/testtools.css";
+
+/** 단계가 시작되고 안내 한 줄이 보이는 시간(결정 0051-5: 안내는 한 번, 그리고 사라진다) */
+const HINT_MS = 2500;
+/** 서버가 단계 어긋난 행동을 거절했을 때 위 알림(UI-SPEC Copywriting Contract, 7페이즈 "지금은 보낼 수 없어요" 문구 계열) */
+const REJECT_TEXT = "지금은 고를 수 없어요";
+/** 스테이지 사각형을 아직 못 쟀을 때 WorldStage 기본값(헤더 아래 62 · 패널 250)과 같은 값 — 장면 표의 확대 판정에만 쓴다 */
+const DEFAULT_INSET_TOP = 62;
+const DEFAULT_INSET_BOTTOM = 250;
 
 interface GameMapProps {
   view: RoomView;
@@ -24,36 +40,88 @@ interface GameMapProps {
   send: (msg: ClientMessage) => boolean | void;
   /** 연결이 열려 있어 서버로 보낼 수 있는가. 기본 true */
   canSend?: boolean;
-  /** 소켓이 새로 열릴 때마다 바뀌는 번호. 기본 0 */
-  epoch?: number;
   /** 서버시각 − 로컬시각(ms) */
   offset?: number;
-  /** 재접속 띠가 떠 있는가 */
-  bannerVisible?: boolean;
-  /** 헤더 오른쪽의 [역할 카드] 버튼 */
-  myRoleButton?: ReactNode;
+  /** 헤더의 [역할 카드] 아이콘 버튼 재료: 안 읽은 일지가 있는가와 여는 동작 */
+  roleCard?: { unread: boolean; onOpen: () => void };
   /** 테스트 방 방장의 [테스트] 버튼(결정 0022). 있으면 헤더 아래 왼쪽에 놓는다 */
   testButton?: ReactNode;
+  /** 지금 띄울 결과 알림 글자(useDayFx 가 서버 view 의 차이로 만든다). 없으면 null */
+  announce?: string | null;
+  /** 연결의 오류 프레임 구독(거절된 행동 알림에 쓴다) */
+  onEvent?: RoomConnection["onEvent"];
   /** 맵을 쓸 수 없는 기기의 불가 카드 [처음으로] */
   onLeave?: () => void;
 }
 
-// 8페이즈 게임 맵 화면 틀(08-13, UI-SPEC "게임 화면 틀"): 지하 재즈 바 맵(WorldStage) 위에 위쪽 가림막, 헤더(단계 이름 + 접히는 안내), [테스트], 아래 패널을 얹는다.
+/** 헤더: 제목 + 접히는 안내 + (서버 마감 기준 시간 링) + 링 왼쪽 [역할 카드]. 시간 링의 250ms 다시 그리기가 맵 화면 전체로 번지지 않게 따로 둔다 */
+function MapHeader({ view, offset, hintOn, extra }: { view: RoomView; offset: number; hintOn: boolean; extra: ReactNode }) {
+  const head = headerFor(view);
+  const { seconds } = useCountdown(view.phaseEndsAt ?? 0, view.phaseDurationMs ?? 0, offset);
+  // 낮 시작은 링이 없다(2초 알림 단계). 마감이 없는 view 도 링을 그리지 않는다
+  const ring = view.phase !== "dayAnnounce" && view.phaseEndsAt !== null && view.phaseDurationMs !== null;
+  return (
+    <PhaseHeader
+      title={head.title}
+      {...(head.hint !== undefined ? { hint: head.hint } : {})}
+      showHint={hintOn}
+      guide
+      {...(ring ? { time: seconds, total: (view.phaseDurationMs ?? 0) / 1000 } : {})}
+      extra={extra}
+    />
+  );
+}
+
+// 8페이즈 게임 맵 화면 틀(08-13, UI-SPEC "게임 화면 틀"): 지하 재즈 바 맵(WorldStage) 위에 위쪽 가림막, 헤더(단계 이름 + 접히는 안내 + 시간 링 + [역할 카드]), [테스트], 결과 알림, 아래 패널을 얹는다.
 // 낮 시작·낮 토론·지목·최후 변론·찬반·처형이 이 화면 하나를 같은 장면 키로 그려 단계가 바뀌어도 맵이 다시 만들어지지 않는다.
-// 화면은 서버가 보낸 view 만으로 다시 그린다. 닉네임(이름표)은 WorldStage 가 React 텍스트 노드로만 그린다.
-export function GameMap({ view, store, chat, send, canSend = true, offset = 0, myRoleButton, testButton, onLeave }: GameMapProps) {
+// 화면은 서버가 보낸 view 만으로 다시 그린다. 닉네임(이름표)·알림 글자는 React 텍스트 노드로만 그린다.
+export function GameMap({ view, store, chat, send, canSend = true, offset = 0, roleCard, testButton, announce = null, onEvent, onLeave }: GameMapProps) {
   const toast = useTopToast();
+  const { show } = toast;
   // 측정(스테이지 사각형)·키보드·기록 칸 높이는 대기실과 같은 훅이다. 키보드가 열려 있으면 행동 줄을 숨기고 기록 칸을 72 로 줄인다(07-19).
   const { rootRef, headerRef, panelRef, inputRef, kbOpen, logH, stageInsets } = useMapInsets();
   const { typingSeats, ...binding } = useChat({ store: chat, connection: { send, canSend }, view });
-  const header = headerFor(view);
+
+  // 안내 한 줄: 단계가 시작되면 보이고 2.5초 뒤 접힌다. 단계가 바뀔 때마다 다시 보인다.
+  const phase = view.phase;
+  const [hintOn, setHintOn] = useState(true);
+  useEffect(() => {
+    setHintOn(true);
+    const timer = setTimeout(() => setHintOn(false), HINT_MS);
+    return () => clearTimeout(timer);
+  }, [phase]);
+
+  // 서버가 행동을 거절하면(마감 직후 누름 등) 위 알림을 띄우고 내 낙관적 눌림을 서버 값으로 되돌린다. 이동은 조용히 버려지고 오류 프레임이 없다.
+  const [rejects, setRejects] = useState(0);
+  useEffect(() => {
+    if (!onEvent) return;
+    return onEvent((e) => {
+      if (e.t !== "error") return;
+      if (e.code !== "WRONG_PHASE" && e.code !== "BAD_MESSAGE") return;
+      show(REJECT_TEXT);
+      setRejects((n) => n + 1);
+    });
+  }, [onEvent, show]);
+
+  // 이동 권한: 산 사람은 낮 시작·토론에서만, 유령은 언제나(MAP-04). 권위는 서버 canMove 이고 화면은 같은 표로 맵 탭만 막는다.
+  const me = view.players.find((p) => p.seat === view.me.seat);
+  const canWalk = canMoveIn(view.phase, me === undefined || isAlive(me));
+
+  // 장면 표(보임·유령·카메라·조명·긴장): 서버 공개 정보로만 만든다. view 가 바뀔 때만 새로 만든다(타이머 틱으로 WorldStage 를 흔들지 않는다).
+  const stageH = Math.max(0, window.innerHeight - (stageInsets?.top ?? DEFAULT_INSET_TOP) - (stageInsets?.bottom ?? DEFAULT_INSET_BOTTOM));
+  const scene = useMemo(() => sceneLook(view, { stageH }), [view, stageH]);
 
   return (
     <main ref={rootRef} className="mf-root mf-game" data-game-stage="" data-phase={view.phase} data-kb-open={kbOpen ? "true" : undefined}>
       {/* DOM 순서 = Tab 순서: 헤더([역할 카드]) → 맵(이름표) → 아래 패널(입력). 층 순서는 z 가 정한다 */}
       <div className="mf-game__scrim" aria-hidden="true" />
       <header ref={headerRef} className="mf-game__header">
-        <PhaseHeader title={header.title} {...(header.hint !== undefined ? { hint: header.hint } : {})} guide extra={myRoleButton} />
+        <MapHeader
+          view={view}
+          offset={offset}
+          hintOn={hintOn}
+          extra={roleCard ? <RoleCardButton iconOnly unread={roleCard.unread} onOpen={roleCard.onOpen} /> : null}
+        />
       </header>
       <WorldStage
         view={view}
@@ -63,12 +131,15 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, m
         offset={offset}
         {...(stageInsets ? { stageInsets } : {})}
         typingSeats={typingSeats}
-        onNotice={(text) => toast.show(text)}
+        scene={scene}
+        canWalk={canWalk}
+        onNotice={(text) => show(text)}
         onKick={() => {}}
         onLeave={() => onLeave?.()}
       />
       <TopToast {...toast.props} />
       {testButton ? <div className="mf-game__test">{testButton}</div> : null}
+      <ResultAnnounce text={announce} />
       <GamePanel
         view={view}
         send={send}
@@ -76,6 +147,7 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, m
         binding={binding}
         logHeight={kbOpen ? LOG_H_KB : logH}
         kbOpen={kbOpen}
+        rejected={rejects}
         inputRef={inputRef}
         panelRef={panelRef}
       />

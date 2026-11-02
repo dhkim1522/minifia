@@ -154,18 +154,29 @@ describe("헤더 [역할 카드] 버튼 하나 (D-08)", () => {
       const names = buttons.map((b) => b.getAttribute("aria-label") ?? b.textContent ?? "");
       const head = buttons.filter((b) => b.classList.contains("mf-rolecard-btn"));
       expect(`${phase}:${head.length}`).toBe(`${phase}:1`);
-      expect(`${phase}:${head[0]!.textContent}`).toBe(`${phase}:역할 카드`);
+      // 낮 시작·토론은 08-13 부터 맵 화면이라 글자 없는 아이콘 버튼이다(UI-SPEC A2). 이름은 두 모양 모두 `역할 카드`
+      const mapPhase = phase === "dayAnnounce" || phase === "discussion";
+      expect(`${phase}:${head[0]!.textContent}`).toBe(`${phase}:${mapPhase ? "" : "역할 카드"}`);
+      expect(`${phase}:${head[0]!.getAttribute("aria-label")}`).toBe(`${phase}:역할 카드`);
       expect(`${phase}:${names.some((x) => x.includes("수사 기록"))}`).toBe(`${phase}:false`);
       expect(`${phase}:${names.some((x) => x === "내 역할")}`).toBe(`${phase}:false`);
       r.unmount();
     }
   });
 
-  it("버튼에는 아이콘 20 이 있고 글자는 `역할 카드` 뿐이다", () => {
-    renderRoom(makeView({ phase: "discussion" }));
+  it("버튼에는 아이콘 20 이 있고 글자는 `역할 카드` 뿐이다 (밤 — 옛 틀의 글자 모양)", () => {
+    renderRoom(makeView({ phase: "night" }));
     const svg = headBtn()?.querySelector("svg");
     expect(svg?.getAttribute("width") ?? "(아이콘 없음)").toBe("20");
     expect(headBtn()?.textContent).toBe("역할 카드");
+  });
+
+  it("맵 화면(낮 토론)의 버튼은 아이콘 22 만 있고 글자가 없는 44×44 아이콘 버튼이다 (08-13, UI-SPEC A2)", () => {
+    renderRoom(makeView({ phase: "discussion" }));
+    const svg = headBtn()?.querySelector("svg");
+    expect(svg?.getAttribute("width") ?? "(아이콘 없음)").toBe("22");
+    expect(headBtn()?.textContent).toBe("");
+    expect(headBtn()?.classList.contains("mf-iconbtn")).toBe(true);
   });
 });
 

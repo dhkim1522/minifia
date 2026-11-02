@@ -575,28 +575,32 @@ describe("GameMap — 거절과 끊김 (E1 #4)", () => {
   const toastText = (c: ParentNode) => c.querySelector(".mv-toast__text")?.textContent ?? "";
 
   it("토론 끝내기가 거절되면(WRONG_PHASE) 위 알림 '지금은 고를 수 없어요' 뒤 눌림이 서버 값(눌리지 않음)으로 돌아온다", () => {
-    let listener: ((e: { t: "error"; code: string }, meta: { epoch: number }) => void) | null = null;
-    const onEvent = vi.fn((l: typeof listener) => {
-      listener = l;
+    // 방 화면과 맵 화면이 각각 구독한다 — 모든 구독자에게 같은 프레임을 보낸다
+    const listeners: Array<(e: { t: "error"; code: string }, meta: { epoch: number }) => void> = [];
+    const onEvent = vi.fn((l: (typeof listeners)[number]) => {
+      listeners.push(l);
       return () => {};
     });
+    const listener = (e: { t: "error"; code: string }, meta: { epoch: number }) => listeners.forEach((l) => l(e, meta));
     const { container } = mount(makeView(), { onEvent: onEvent as unknown as RoomConnection["onEvent"] });
     fireEvent.click(endButton(container)!);
     expect(endButton(container)?.getAttribute("aria-pressed")).toBe("true");
-    act(() => listener?.({ t: "error", code: "WRONG_PHASE" }, { epoch: 1 }));
+    act(() => listener({ t: "error", code: "WRONG_PHASE" }, { epoch: 1 }));
     expect(toastText(container)).toBe("지금은 고를 수 없어요");
     expect(endButton(container)?.getAttribute("aria-pressed")).toBe("false");
   });
 
   it("그 밖의 오류(RATE_LIMITED)는 알림도 되돌림도 만들지 않는다", () => {
-    let listener: ((e: { t: "error"; code: string }, meta: { epoch: number }) => void) | null = null;
-    const onEvent = vi.fn((l: typeof listener) => {
-      listener = l;
+    // 방 화면과 맵 화면이 각각 구독한다 — 모든 구독자에게 같은 프레임을 보낸다
+    const listeners: Array<(e: { t: "error"; code: string }, meta: { epoch: number }) => void> = [];
+    const onEvent = vi.fn((l: (typeof listeners)[number]) => {
+      listeners.push(l);
       return () => {};
     });
+    const listener = (e: { t: "error"; code: string }, meta: { epoch: number }) => listeners.forEach((l) => l(e, meta));
     const { container } = mount(makeView(), { onEvent: onEvent as unknown as RoomConnection["onEvent"] });
     fireEvent.click(endButton(container)!);
-    act(() => listener?.({ t: "error", code: "RATE_LIMITED" }, { epoch: 1 }));
+    act(() => listener({ t: "error", code: "RATE_LIMITED" }, { epoch: 1 }));
     expect(toastText(container)).toBe("");
     expect(endButton(container)?.getAttribute("aria-pressed")).toBe("true");
   });
