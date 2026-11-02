@@ -6,15 +6,61 @@
 // 형식은 src/net/roomDiff.ts 선례: 이전 view 가 없으면(첫 스냅샷·재접속) 이벤트 없이 정상 상태만 준다.
 import { isAlive } from "../../shared/game/alive";
 import { majorityOf } from "../../shared/game/nomination";
-import type { RoomView } from "../../shared/protocol";
+import { EXECUTION_MS } from "../../shared/game/phases";
+import type { PhaseId, RoomView } from "../../shared/protocol";
 
-/** 문구 표. UI-SPEC "Copywriting Contract" 원문 — 해요체, 마침표·느낌표 없음. */
+/** 문구 표. UI-SPEC "Copywriting Contract" 원문 — 해요체, 마침표·느낌표 없음. 역할 단어는 토론 안내의 '마피아'(모두에게 같은 문장) 하나뿐이다. */
 export const DAY_COPY = {
+  // ---- 채팅 시스템 줄 ----
   /** 지목 한 줄 '민준 → 도윤', 바꾸면 '(바꿈)' */
   pointLine: (from: string, to: string, changed: boolean): string => `${from} → ${to}${changed ? " (바꿈)" : ""}`,
   leadLine: (name: string): string => `${name} 님이 앞서요`,
   majorityLine: (name: string): string => `${name} 님 과반`,
+  dayLine: (n: number): string => `${n}일차`,
+  nominationStart: "지목 시작",
+  defenseLine: (name: string, votes: number): string => `${name} 님 ${votes}표 · 최후 변론`,
+  verdictStart: "찬반 시작",
+  tallyText: (yes: number, no: number): string => `찬성 ${yes} · 반대 ${no}`,
+  executedText: (name: string): string => `${name} 님 처형`,
+  noExecution: "처형 없음",
+  // ---- 결과 알림(36px) ----
+  announceDay: "낮이 되었습니다",
+  // ---- 단계 제목 ----
+  titles: {
+    dayAnnounce: "낮 토론",
+    discussion: "낮 토론",
+    nomination: "지목",
+    defense: "최후 변론",
+    verdict: "찬반",
+    execution: "처형",
+    night: "밤",
+    morning: "아침",
+  } as Partial<Record<PhaseId, string>>,
+  // ---- 단계 안내 한 줄 ----
+  discussionHint: "이야기하며 마피아를 찾아요",
+  nominationHint: "의심되는 사람을 눌러요",
+  defenseHint: (name: string): string => `${name} 님의 변론`,
+  defenseHintSelf: "해명할 시간이에요",
+  verdictHint: (name: string): string => `${name} 님을 처형할까요?`,
+  verdictHintSelf: "결과를 기다려요",
+  ghostHint: "모두의 직업이 보여요",
+  ghostNightHint: "모두의 직업과 밤 행동이 보여요",
 } as const;
+
+// ---- 결과 알림 시간표 (결정 0060-5, UI-SPEC 남은 위험 8, 가정 A3) ----
+// 표시 시간이며 서버 단계를 넘기지 않는다: ANNOUNCE_TALLY_MS + max(ANNOUNCE_EXEC_MS, ANNOUNCE_NOEXEC_MS) ≤ EXECUTION_MS(처형 5초).
+// 알림이 단계 경계에서 잘리면 다음 단계 알림이 그것을 바꾼다(한 번에 하나).
+/** 처형 단계 0~2.0초: "찬성 n · 반대 m" */
+export const ANNOUNCE_TALLY_MS = 2000;
+/** 통과: 2.0~5.0초 "{이름} 님 처형" */
+export const ANNOUNCE_EXEC_MS = 3000;
+/** 부결(2.0초부터)·지목 동률/0표(밤 시작): "처형 없음" 1.4초 */
+export const ANNOUNCE_NOEXEC_MS = 1400;
+/** 낮 시작 "낮이 되었습니다" — 낮 시작 단계(DAY_ANNOUNCE_MS) 2초 */
+export const ANNOUNCE_DAY_MS = 2000;
+/** 처형된 사람이 반투명으로 떠오르는 시간 → 2.4초까지 사라진다(알림 시작 기준) */
+export const GHOST_RISE_MS = 1400;
+export const GHOST_FADE_END_MS = 2400;
 
 /** 채팅 시스템 줄 한 건. at 은 단계 진입 기준 ms(없으면 즉시) — 지연은 화면이 시계로 실행한다. */
 export interface DayLine {
@@ -100,14 +146,94 @@ export function pointsTally(view: RoomView): PointsTally {
 
 const nameOf = (view: RoomView, seat: number): string | undefined => view.players.find((p) => p.seat === seat)?.nickname;
 
+/** 처형 단계 안에서 끝나도록 알림 길이를 자른다(at 은 처형 단계 진입 기준 ms). */
+const fitExecution = (at: number, ms: number): number => Math.min(ms, EXECUTION_MS - at);
+
+/** 정상 상태: 지목 집계 + 변론자 + 처형 단계에서 찬반이 통과했으면 처형된 사람(유령 상태). */
+function stateOf(view: RoomView): DayState {
+  const state: DayState = { ...pointsTally(view) };
+  const day = view.day;
+  if (day?.candidate !== undefined) state.candidate = day.candidate;
+  if (view.phase === "execution" && day?.verdict?.passed) {
+    const seat = day.execution?.seat ?? day.candidate;
+    if (seat !== undefined) state.executed = seat;
+  }
+  return state;
+}
+
+/** 단계에 들어온 순간의 줄·알림·연출. 지연 이벤트는 at(단계 진입 기준 ms)으로 표시해 화면이 시계로 실행한다. */
+function phaseEntry(prev: RoomView, cur: RoomView, day: NonNullable<RoomView["day"]>, out: DayEvents): void {
+  switch (cur.phase) {
+    case "dayAnnounce":
+      out.lines.push({ kind: "system", text: DAY_COPY.dayLine(day.n) });
+      out.announces.push({ text: DAY_COPY.announceDay, at: 0, ms: ANNOUNCE_DAY_MS });
+      return;
+    case "nomination":
+      out.lines.push({ kind: "system", text: DAY_COPY.nominationStart });
+      return;
+    case "defense": {
+      const seat = day.candidate;
+      const name = seat === undefined ? undefined : nameOf(cur, seat);
+      if (seat === undefined || name === undefined) return;
+      // 가정 A2: 그날 voteLog 줄의 cand.votes 에서 변론자를 가리킨 수(공개 기록). 줄이 없으면 이전 지목 집계.
+      const entry = day.voteLog?.find((e) => e.n === day.n);
+      const votes = entry?.cand
+        ? entry.cand.votes.filter((v) => v.target === seat).length
+        : (pointsTally(prev).counts[seat] ?? 0);
+      out.lines.push({ kind: "hot", text: DAY_COPY.defenseLine(name, votes) });
+      return;
+    }
+    case "verdict":
+      out.lines.push({ kind: "system", text: DAY_COPY.verdictStart });
+      return;
+    case "execution": {
+      const verdict = day.verdict;
+      if (!verdict) return;
+      const tally = DAY_COPY.tallyText(verdict.yes, verdict.no);
+      out.lines.push({ kind: "hot", text: tally });
+      out.announces.push({ text: tally, at: 0, ms: fitExecution(0, ANNOUNCE_TALLY_MS) });
+      if (verdict.passed) {
+        const seat = day.execution?.seat ?? day.candidate;
+        const name = seat === undefined ? undefined : nameOf(cur, seat);
+        if (seat === undefined || name === undefined) return;
+        const text = DAY_COPY.executedText(name);
+        out.lines.push({ kind: "hot", text, at: ANNOUNCE_TALLY_MS });
+        out.announces.push({ text, at: ANNOUNCE_TALLY_MS, ms: fitExecution(ANNOUNCE_TALLY_MS, ANNOUNCE_EXEC_MS) });
+        out.fx.push({ kind: "ghostRise", seat, at: ANNOUNCE_TALLY_MS });
+      } else {
+        out.lines.push({ kind: "system", text: DAY_COPY.noExecution, at: ANNOUNCE_TALLY_MS });
+        out.announces.push({
+          text: DAY_COPY.noExecution,
+          at: ANNOUNCE_TALLY_MS,
+          ms: fitExecution(ANNOUNCE_TALLY_MS, ANNOUNCE_NOEXEC_MS),
+        });
+      }
+      return;
+    }
+    case "night": {
+      // 지목 동률·0표로 처형 없이 온 밤만. 찬반 뒤의 밤은 처형 단계가 이미 알렸다.
+      const reason = day.noExecution?.reason;
+      if (prev.phase !== "nomination" || (reason !== "tie" && reason !== "noVotes")) return;
+      out.lines.push({ kind: "system", text: DAY_COPY.noExecution });
+      out.announces.push({ text: DAY_COPY.noExecution, at: 0, ms: ANNOUNCE_NOEXEC_MS });
+      return;
+    }
+    default:
+      return;
+  }
+}
+
 /**
  * 연속한 서버 view 두 개의 공개 정보 차이에서 연출 이벤트를 만든다.
  * prev 가 null 이거나 opts.reset(epoch 가 바뀐 첫 스냅샷)이면 이벤트 없이 정상 상태만 준다.
  */
 export function dayEvents(prev: RoomView | null, cur: RoomView, opts: { reset?: boolean } = {}): DayEvents {
-  const state = pointsTally(cur);
-  const events: DayEvents = { lines: [], toasts: [], announces: [], fx: [], state: { ...state } };
+  const state = stateOf(cur);
+  const events: DayEvents = { lines: [], toasts: [], announces: [], fx: [], state };
   if (!prev || opts.reset || !cur.day) return events;
+
+  // ---- 단계 진입: 줄·결과 알림·연출 ----
+  if (prev.phase !== cur.phase) phaseEntry(prev, cur, cur.day, events);
 
   // ---- 지목 차이: 새 지목·바꿈은 vote 줄과 위 알림 재료, 선두·과반이 새로 생기면 hot 줄 ----
   const before = new Map(pointsOf(prev).map((l) => [l.seat, l.target]));
@@ -138,6 +264,37 @@ export function dayEvents(prev: RoomView | null, cur: RoomView, opts: { reset?: 
     if (name !== undefined) events.lines.push({ kind: "hot", text: DAY_COPY.majorityLine(name) });
   }
   return events;
+}
+
+/**
+ * 단계 머리(제목 24px + 안내 한 줄): UI-SPEC 단계표 그대로. 안내는 단계 시작 뒤 약 2.5초만 보이고 접히는 것은 화면 몫이다.
+ * 유령(내 alive 가 false)은 같은 제목에 '모두의 직업이 보여요'(밤은 '모두의 직업과 밤 행동이 보여요').
+ * 밤·아침은 임시 틀이라 제목만 준다 — 밤·아침 하단 문구는 08-18 이 v1.0 표에서 가져온다. 낮 틀이 아닌 단계는 빈 제목.
+ */
+export function headerFor(view: RoomView): { title: string; hint?: string } {
+  const title = DAY_COPY.titles[view.phase];
+  if (title === undefined) return { title: "" };
+  const me = view.players.find((p) => p.seat === view.me.seat);
+  if (me !== undefined && !isAlive(me)) {
+    return { title, hint: view.phase === "night" ? DAY_COPY.ghostNightHint : DAY_COPY.ghostHint };
+  }
+  const candidate = view.day?.candidate;
+  const defender = candidate === undefined ? undefined : nameOf(view, candidate);
+  const isSelf = candidate !== undefined && candidate === view.me.seat;
+  switch (view.phase) {
+    case "discussion":
+      return { title, hint: DAY_COPY.discussionHint };
+    case "nomination":
+      return { title, hint: DAY_COPY.nominationHint };
+    case "defense":
+      if (isSelf) return { title, hint: DAY_COPY.defenseHintSelf };
+      return defender === undefined ? { title } : { title, hint: DAY_COPY.defenseHint(defender) };
+    case "verdict":
+      if (isSelf) return { title, hint: DAY_COPY.verdictHintSelf };
+      return defender === undefined ? { title } : { title, hint: DAY_COPY.verdictHint(defender) };
+    default:
+      return { title };
+  }
 }
 
 // ---- 위 알림 줄 세우기 (UI Considerations E2 #9, 남은 위험 7: 시작값 — 9페이즈 팀 테스트에서 확인) ----
@@ -208,16 +365,4 @@ export class ToastQueue {
   dropped(): number {
     return this.lost;
   }
-}
-
-// 자리표시자 — 구현은 다음 커밋.
-export const ANNOUNCE_TALLY_MS = 2000;
-export const ANNOUNCE_EXEC_MS = 3000;
-export const ANNOUNCE_NOEXEC_MS = 1400;
-export const ANNOUNCE_DAY_MS = 2000;
-export const GHOST_RISE_MS = 1400;
-export const GHOST_FADE_END_MS = 2400;
-
-export function headerFor(_view: RoomView): { title: string; hint?: string } {
-  return { title: "" };
 }
