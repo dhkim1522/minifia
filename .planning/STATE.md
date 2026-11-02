@@ -5,16 +5,16 @@ milestone_name: 같은 공간
 current_phase: 08
 current_phase_name: 낮 처형과 유령
 status: executing
-stopped_at: Completed 08-25-PLAN.md
-last_updated: "2026-11-02T18:19:18.504Z"
+stopped_at: Completed 08-26-PLAN.md
+last_updated: "2026-11-02T18:45:37.947Z"
 last_activity: 2026-11-02
 last_activity_desc: Phase 08 execution started
-state_head: 429011444507d95c1968ab57ce688486c15695b7
+state_head: 539dbbe8ce5b2b0cac28e50a731e84d4060d8147
 progress:
   total_phases: 7
   completed_phases: 2
   total_plans: 78
-  completed_plans: 77
+  completed_plans: 78
   percent: 29
 ---
 
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-11-02)
 ## Current Position
 
 Phase: 08 (낮 처형과 유령) — EXECUTING
-Plan: 26 of 28
+Plan: 27 of 28
 Status: Ready to execute
 Last activity: 2026-11-02 — Phase 08 execution started
 
@@ -136,6 +136,7 @@ Progress: [███░░░░░░░] 29% (2/7 phases)
 | Phase 08 P23 | 85 min | 3 tasks | 5 files |
 | Phase 08 P24 | 240 min | 3 tasks | 4 files |
 | Phase 08 P25 | 60min | 3 tasks | 3 files |
+| Phase 08 P26 | 1h | 3 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -283,6 +284,7 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 08]: 08-25: dayload 렌더 측정은 사용자 결정(2026-11-03)으로 실기기 확인 묶음에 미룸 — perf-run 모드·JSON 없음
 - [Phase 08]: 08-25: G7 허용 목록에 .mv-badge__unit('표' 12px, 디자인 시스템 승인값) 추가, 14px 문턱 불변
 - [Phase 08]: 08-25: 유령 이름표 대비(불투명도 0.6, 약 1.9~2.5:1)는 앱 변경 없이 실기기 확인 목록 이월 — 08-26 이 기록
+- [Phase 08]: 08-26: dayload 렌더 측정·유령 이름표 대비는 사용자 결정(2026-11-03)으로 실기기 목록(ROADMAP 999.5)에 이월, 8페이즈 완료를 막지 않는다
 
 ### Pending Todos
 
@@ -318,8 +320,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-02T18:19:18.257Z
-Stopped at: Completed 08-25-PLAN.md
+Last session: 2026-11-02T18:45:37.756Z
+Stopped at: Completed 08-26-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
