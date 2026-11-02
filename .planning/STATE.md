@@ -5,16 +5,16 @@ milestone_name: 같은 공간
 current_phase: 08
 current_phase_name: 낮 처형과 유령
 status: executing
-stopped_at: Completed 08-02-PLAN.md
-last_updated: "2026-11-02T10:42:46.023Z"
+stopped_at: Completed 08-03-PLAN.md
+last_updated: "2026-11-02T10:49:44.996Z"
 last_activity: 2026-11-02
 last_activity_desc: Phase 08 execution started
-state_head: 356881cc9a2d5c07e54c09c2cb7db28e25a2ca67
+state_head: e4820c9c591aef5668f65adb3e85f625cc804678
 progress:
   total_phases: 7
   completed_phases: 2
   total_plans: 78
-  completed_plans: 52
+  completed_plans: 53
   percent: 29
 ---
 
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-11-02)
 ## Current Position
 
 Phase: 08 (낮 처형과 유령) — EXECUTING
-Plan: 3 of 28
+Plan: 4 of 28
 Status: Ready to execute
 Last activity: 2026-11-02 — Phase 08 execution started
 
@@ -111,6 +111,7 @@ Progress: [███░░░░░░░] 29% (2/7 phases)
 | Phase 07 P27 | 28 min | 2 tasks | 1 files |
 | Phase 08 P01 | 10 min | 2 tasks | 8 files |
 | Phase 08 P02 | 9min | 3 tasks | 16 files |
+| Phase 08 P03 | 6min | 3 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -216,6 +217,7 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 08]: 결정 0060: 낮 처형 단계 nomination·verdict, 찬반 분모=변론자를 뺀 산 사람, 조기 종료 없음, 변론자 무대 STAGE_SPOT 단일 예외, 유령 위치는 유령에게만
 - [Phase 08]: 찬반 분모는 유권자 수 E(변론자를 뺀 산 사람): 찬성×2 > E, 못 던진 사람은 기권(분모에 포함)
 - [Phase 08]: resolveNomination 이 그날 voteLog 줄을 만들고 resolveVerdict 는 그 줄의 exec 만 채운다(두 훅 순서 nomination → verdict 유지)
+- [Phase 08]: [08-03] 찬반 버튼·득표 배지는 역할 색을 쓰지 않는다(찬반 규칙 구역 crimson·brass 없음을 시험으로 고정). RoleChip 은 신분을 판단하지 않고 유령 분기가 만든다
 
 ### Pending Todos
 
@@ -251,8 +253,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-02T10:42:45.832Z
-Stopped at: Completed 08-02-PLAN.md
+Last session: 2026-11-02T10:49:44.796Z
+Stopped at: Completed 08-03-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
