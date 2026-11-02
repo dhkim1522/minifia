@@ -16,6 +16,7 @@ import {
   MeshBasicMaterial,
   MeshStandardMaterial,
   type Object3D,
+  RingGeometry,
   SphereGeometry,
   TorusGeometry,
   Uint32BufferAttribute,
@@ -710,9 +711,12 @@ export interface WorldCharacter {
   setGhost(on: boolean, opacity?: number): void;
   /** 유령일 때만 복제 재질의 불투명도를 바꾼다(유령이 아니면 무시) */
   setOpacity(alpha: number): void;
-  /** 동작 하나의 마지막 자세를 해제할 때까지 유지한다(08-10 RED 뼈대) */
+  /**
+   * 동작의 마지막 자세를 해제할 때까지 유지한다(DAY-04 손가락). POSE_BLEND_MS 에 걸쳐 섞여 들어가고 null 이면 섞여 나온다.
+   * 유지 중 playEmote 는 유지 자세 위에서 한 번 재생되고 끝나면 유지로 돌아온다. 동작 표(characterData)는 바꾸지 않는다
+   */
   holdPose(id: "point" | null): void;
-  /** 발밑 고리 붙이기/떼기(08-10 RED 뼈대) */
+  /** 발밑 고리 하나를 붙이거나(색 문자열) 뗀다(null). 이미 붙어 있으면 같은 메시의 색만 바꾼다 */
   setRing(color: string | null): void;
   /** 지금 보이는 메시 수(관절 6 + 발밑 원판 + 투명 조각) */
   meshCount(): number;
@@ -728,6 +732,10 @@ const shadowMaterial = new MeshBasicMaterial({ color: "#000000", transparent: tr
 const shadowGeometry = new CircleGeometry(0.42, 24);
 /** 유령 기본 불투명도(UI-SPEC 유령 모양, presence.ts GHOST_OPACITY 와 같은 값) */
 const GHOST_DEFAULT_OPACITY = 0.6;
+/** 발밑 고리 모양(그림자 원판 반지름 0.42 바깥) */
+const RING_INNER = 0.5;
+const RING_OUTER = 0.62;
+const RING_OPACITY = 0.85;
 const clamp01 = (v: number): number => Math.min(1, Math.max(0, v));
 
 /** 병합 색을 원래대로 또는 어둡게(채도 0 + 휘도 × 0.6) 쓴다 */
@@ -757,6 +765,8 @@ export function createCharacter(figIndex: number, outfit: OutfitId = "coat"): Wo
   let disposed = false;
   /** 유령일 때만 있는 이 캐릭터 전용 복제 재질 */
   let ghostMat: MeshStandardMaterial | null = null;
+  /** 발밑 고리(있을 때만) */
+  let ring: Mesh | null = null;
 
   const root = new Group();
   root.scale.setScalar(CHAR_SCALE);
@@ -853,6 +863,10 @@ export function createCharacter(figIndex: number, outfit: OutfitId = "coat"): Wo
   /** 걷기 자세가 섞인 비율(0 = 서 있는 자세, 1 = 걷기 자세). POSE_BLEND_MS 에 걸쳐 오간다 */
   let walkMix = 0;
   let emote: Emote | null = null;
+  /** 유지하라고 한 동작(null = 해제 요청), 섞는 중 보이는 동작, 유지 자세가 섞인 비율(0~1, POSE_BLEND_MS 에 걸쳐 오간다) */
+  let holdId: EmoteId | null = null;
+  let holdShown: EmoteId | null = null;
+  let holdMix = 0;
   function applyPose(p: Pose): void {
     groups.armA.rotation.set(p.aAx, 0, p.aAz);
     groups.armB.rotation.set(p.aBx, 0, p.aBz);
@@ -878,12 +892,24 @@ export function createCharacter(figIndex: number, outfit: OutfitId = "coat"): Wo
       walkMix = Math.min(1, Math.max(0, walkMix + ((moving ? 1 : -1) * dt * 1000) / POSE_BLEND_MS));
       // 0 이하는 서 있는 자세 객체, 1 이상은 걷기 자세 객체 그대로(보간 오차 없음)
       const base = walkMix >= 1 ? walkPose(walkPhase) : walkMix <= 0 ? idlePose(t, root.position.x, fig) : blendPose(idlePose(t, root.position.x, fig), walkPose(walkPhase), walkMix);
-      let pose = base;
+      // 유지 자세: 동작의 마지막 프레임을 목표로 base 와 섞는다. 1 이상은 목표 그대로, 0 이하는 base 그대로(보간 오차 없음)
+      holdMix = Math.min(1, Math.max(0, holdMix + ((holdId ? 1 : -1) * dt * 1000) / POSE_BLEND_MS));
+      if (holdMix <= 0 && !holdId) holdShown = null;
+      let held = base;
+      if (holdShown && holdMix > 0) {
+        const target = emotePose({ id: holdShown, t: Number.POSITIVE_INFINITY }, base);
+        if (holdMix >= 1) held = target;
+        else {
+          held = blendPose(base, target, holdMix);
+          if (holdMix >= 0.5) held.face = target.face;
+        }
+      }
+      let pose = held;
       if (emote && moving) emote = null; // 걷기 시작하면 동작이 끊긴다
       if (emote) {
         emote.t += dt;
         if (emoteDone(emote)) emote = null;
-        else pose = emotePose(emote, base);
+        else pose = emotePose(emote, held);
       }
       applyPose(pose);
       return { headY: (2.45 + pose.y) * CHAR_SCALE };
@@ -926,8 +952,34 @@ export function createCharacter(figIndex: number, outfit: OutfitId = "coat"): Wo
       }
       ghostMat.opacity = clamp01(opacity);
     },
-    holdPose() {},
-    setRing() {},
+    holdPose(id) {
+      if (disposed) return;
+      if (id !== null && Object.hasOwn(EMOTES, id)) {
+        holdId = id;
+        holdShown = id;
+      } else holdId = null;
+    },
+    setRing(color) {
+      if (disposed) return;
+      if (color === null) {
+        if (!ring) return;
+        root.remove(ring);
+        ring.geometry.dispose();
+        (ring.material as MeshBasicMaterial).dispose();
+        ring = null;
+        return;
+      }
+      if (!ring) {
+        ring = new Mesh(new RingGeometry(RING_INNER, RING_OUTER, 32), new MeshBasicMaterial({ color, transparent: true, opacity: RING_OPACITY, depthWrite: false }));
+        ring.name = "ring";
+        ring.rotation.x = -Math.PI / 2;
+        ring.position.y = 0.016; // 발밑 그림자 원판(0.012) 바로 위
+        ring.castShadow = false;
+        root.add(ring);
+        return;
+      }
+      (ring.material as MeshBasicMaterial).color.set(color);
+    },
     setOpacity(alpha) {
       if (disposed || !ghostMat) return;
       ghostMat.opacity = clamp01(alpha);
@@ -945,6 +997,12 @@ export function createCharacter(figIndex: number, outfit: OutfitId = "coat"): Wo
       if (ghostMat) {
         ghostMat.dispose();
         ghostMat = null;
+      }
+      if (ring) {
+        root.remove(ring);
+        ring.geometry.dispose();
+        (ring.material as MeshBasicMaterial).dispose();
+        ring = null;
       }
       for (const g of owned) g.dispose();
       owned.clear();

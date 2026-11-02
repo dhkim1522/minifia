@@ -39,6 +39,9 @@ export interface CharacterHandle {
   /** 유령(반투명) 켜기/끄기 — 시험 가짜 객체 호환을 위해 optional (08-10) */
   setGhost?(on: boolean, opacity?: number): void;
   setOpacity?(alpha: number): void;
+  /** 손가락 유지 자세·발밑 고리 — optional (08-10) */
+  holdPose?(id: "point" | null): void;
+  setRing?(color: string | null): void;
   dispose(): void;
 }
 /** 06-11 의 characterKit 이 구조적으로 맞춘다 */
