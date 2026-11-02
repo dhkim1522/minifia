@@ -4,17 +4,17 @@ milestone: v2.0
 milestone_name: 같은 공간
 current_phase: 7
 current_phase_name: 자유 채팅
-status: executing
-stopped_at: Completed 07-26-PLAN.md
-last_updated: "2026-11-02T05:41:41.706Z"
+status: verifying
+stopped_at: Completed 07-27-PLAN.md
+last_updated: "2026-11-02T06:14:58.002Z"
 last_activity: 2026-11-02
 last_activity_desc: Phase 7 execution started
-state_head: f2b3ef58a2dd78534235029af92f4698996a77cc
+state_head: b755a3f4ce7ea1df27a173ffed3083312a1d3020
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 50
-  completed_plans: 49
+  completed_plans: 50
   percent: 14
 ---
 
@@ -31,7 +31,7 @@ See: .planning/PROJECT.md (updated 2026-11-01)
 
 Phase: 7 (자유 채팅) — EXECUTING
 Plan: 27 of 27
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-11-02 — Phase 7 execution started
 
 Progress: [█░░░░░░░░░] 14% (1/7 phases)
@@ -107,6 +107,7 @@ Progress: [█░░░░░░░░░] 14% (1/7 phases)
 | Phase 07 P24 | 4 min | 3 tasks | 6 files |
 | Phase 07 P25 | 6 min | 3 tasks | 6 files |
 | Phase 07 P26 | 4 min | 3 tasks | 10 files |
+| Phase 07 P27 | 28 min | 2 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -208,6 +209,7 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 07]: 07-25: dest 없는 notifyMoveSent 는 예측·추적 없이 있는 서버 구간으로 링만 맞춘다(perfScene 호환)
 - [Phase 07]: 07-25: 방향은 yawGoal(travelYaw)을 stepYaw 로 한 프레임 제한만큼 돌고, 걷기·서기 자세는 POSE_BLEND_MS 120ms 선형 보간
 - [Phase 07]: 07-26: W11·W12 는 손님 탭 한 번에만 붙이고 W12 는 간격 4~100ms 쌍 10개 이상일 때만 판정(측정값 없음은 실패); 문턱값은 로컬 통과를 위해 조정하지 않음
+- [Phase 07]: 07-27: 배포본 전체 E2E 가 900초 제한을 넘기면 제한·문턱값은 그대로 두고 못 끝낸 흐름을 --only 로 단독 재실행해 가른다
 
 ### Pending Todos
 
@@ -244,8 +246,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-02T05:41:41.353Z
-Stopped at: Completed 07-26-PLAN.md
+Last session: 2026-11-02T06:14:57.669Z
+Stopped at: Completed 07-27-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
