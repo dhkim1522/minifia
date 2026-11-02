@@ -5,16 +5,16 @@ milestone_name: 같은 공간
 current_phase: 08
 current_phase_name: 낮 처형과 유령
 status: executing
-stopped_at: Completed 08-11-PLAN.md
-last_updated: "2026-11-02T13:03:28.458Z"
+stopped_at: Completed 08-12-PLAN.md
+last_updated: "2026-11-02T13:15:13.762Z"
 last_activity: 2026-11-02
 last_activity_desc: Phase 08 execution started
-state_head: dd8c015a19093ef9acdd9d879ddaacc445c01b38
+state_head: 2d3db73310596ab44a22f7d20462815a5baeebe9
 progress:
   total_phases: 7
   completed_phases: 2
   total_plans: 78
-  completed_plans: 62
+  completed_plans: 63
   percent: 29
 ---
 
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-11-02)
 ## Current Position
 
 Phase: 08 (낮 처형과 유령) — EXECUTING
-Plan: 13 of 28
+Plan: 14 of 28
 Status: Ready to execute
 Last activity: 2026-11-02 — Phase 08 execution started
 
@@ -121,6 +121,7 @@ Progress: [███░░░░░░░] 29% (2/7 phases)
 | Phase 08 P10 | 20min | 3 tasks | 8 files |
 | Phase 08 P28 | 30min | 2 tasks | 8 files |
 | Phase 08 P11 | 45 min | 3 tasks | 22 files |
+| Phase 08 P12 | 25min | 3 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -244,6 +245,7 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 08]: 08-28: 옛 view 필드 시험은 08-07 새 필드 시험이 같은 뜻을 지켜 삭제, 전수 검사 단계 목록에서 옛 세 단계를 뺌(도우미 걷기·단계 표는 08-11·08-22 몫)
 - [Phase 08]: 08-11: 낮 흐름 전환 — enterExecution 은 찬반 통과일 때만 변론자 탈락, noExecutionOf 는 지목 0표(noVotes)·동률(tie)만(notMajority 는 더 나오지 않음). 옛 단계 행·훅 행은 닿지 않는 채로 08-21·22 가 지운다
 - [Phase 08]: 08-11: 시험 도우미는 옛 시그니처를 유지해 새 흐름(지목·변론·찬반·처형)으로 재건 — stateWithVerdict defense|verdict|execution, worker pointAll·verdictAll. 옛 표 도우미는 08-21 이 지운다
+- [Phase 08]: 08-12: 고정 카메라는 진입 시 현재 구도에서 gatherView 목표까지 800ms 전환, 유령 시점 좌석은 fadeAt 연출 없이 유령으로, 선두 z 가산은 rankTags lead 로 순위 안에서 처리, 손사래는 WorldStage deny {seat, nonce} 속성으로 전달
 
 ### Pending Todos
 
@@ -279,8 +281,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-02T13:03:28.250Z
-Stopped at: Completed 08-11-PLAN.md
+Last session: 2026-11-02T13:15:13.551Z
+Stopped at: Completed 08-12-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
