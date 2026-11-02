@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { isAlive } from "../../shared/game/alive";
 import { channelOf } from "../../shared/game/audience";
 import { pickTarget } from "../../shared/game/night";
-import { DISCUSSION_MS, EXEC_VOTE_MS, MORNING_MS, NIGHT_MS, PHASE_DEFS } from "../../shared/game/phases";
+import { DISCUSSION_MS, MORNING_MS, NIGHT_MS, NOMINATION_MS, PHASE_DEFS } from "../../shared/game/phases";
 import { ROOM_TTL_MS, attachConnection, createRoomState, joinRoom, startGame } from "../../shared/game/room";
 import type { Player, RoomState } from "../../shared/game/room";
 import { rolesInPlay } from "../../shared/game/roles";
@@ -11,13 +11,13 @@ import { buildPreview, buildView } from "../../shared/game/view";
 import { MORNING_PHRASE_COUNT } from "../../shared/protocol";
 import type { PhaseId, RoomView } from "../../shared/protocol";
 import { seededRandInt } from "../helpers/seededRandom";
-import { castCandidateVotes, castExecVotes, startedAt, stateWithVerdict } from "../helpers/voteState";
+import { castPoints, castVerdicts, startedAt, stateWithVerdict } from "../helpers/voteState";
 
 const PLAYER_COUNTS = [4, 5, 6, 7, 8] as const;
 const SEEDS = [1, 42, 20260101] as const;
 /**
- * 옛 처형 여부·후보 선택·후보 공개 세 단계를 뺀 열 단계(게임 진행 순서). 옛 흐름 전용 단계의 view 시험은 08-28 이 지웠고(DAY-07),
- * 새 흐름의 지목·찬반 단계는 흐름 전환(08-11)이 이 목록에 더한다.
+ * 옛 처형 여부·후보 선택·후보 공개 세 단계를 뺀 열두 단계(게임 진행 순서). 옛 흐름 전용 단계의 view 시험은 08-28 이 지웠고(DAY-07),
+ * 새 흐름의 지목·찬반 단계는 흐름 전환(08-11)이 이 목록에 더했다.
  */
 const PHASES: readonly PhaseId[] = [
   "lobby",
@@ -25,7 +25,9 @@ const PHASES: readonly PhaseId[] = [
   "roleReveal",
   "dayAnnounce",
   "discussion",
+  "nomination",
   "defense",
+  "verdict",
   "execution",
   "night",
   "morning",
@@ -36,7 +38,9 @@ const REVEALING_PHASES = [
   "roleReveal",
   "dayAnnounce",
   "discussion",
+  "nomination",
   "defense",
+  "verdict",
   "execution",
   "night",
   "morning",
@@ -70,7 +74,7 @@ function lobbyOf(n: number): RoomState {
  * 닿지 못하는 단계를 마감만으로 기다리면 끝없이 도는 루프가 되므로 횟수 상한을 둔다.
  */
 function stateAt(phase: PhaseId, n: number, seed: number): RoomState {
-  if (phase === "defense" || phase === "execution") {
+  if (phase === "defense" || phase === "verdict" || phase === "execution") {
     return stateWithVerdict(n, seed, phase);
   }
   if (phase === "ended") return endedState(n, seed, "citizen");
@@ -89,28 +93,28 @@ function stateAt(phase: PhaseId, n: number, seed: number): RoomState {
 const aliveSeats = (state: RoomState): number[] => state.players.filter(isAlive).map((p) => p.seat).sort((a, b) => a - b);
 
 /**
- * 실제 투표·마감 전이로 종료(ended)까지 끌고 간 상태. 매일 생존자 전원이 찬성하고, team 이 citizen 이면 살아 있는 마피아 한 명을,
- * mafia 이면 살아 있는 비마피아 한 명을 후보로 몰아 처형한다. 밤에는 아무도 행동하지 않아 아무도 죽지 않는다.
+ * 실제 지목·찬반·마감 전이로 종료(ended)까지 끌고 간 상태. 매일 team 이 citizen 이면 살아 있는 마피아 한 명을,
+ * mafia 이면 살아 있는 비마피아 한 명을 지목으로 몰고 변론자를 뺀 생존자 전원이 찬성해 처형한다. 밤에는 아무도 행동하지 않아 아무도 죽지 않는다.
  * 승패가 나는 날까지 반복하고(마피아 수 또는 시민 쪽 수만큼) 상한을 넘으면 던진다 — 승패가 안 나는 판에서 끝없이 돌지 않는다.
  */
 function endedState(n: number, seed: number, team: "citizen" | "mafia"): RoomState {
-  let s = startedAt(n, seed, "execVote");
+  let s = startedAt(n, seed, "nomination");
   for (let day = 1; day <= 10; day += 1) {
-    if (s.phase !== "execVote") throw new Error(`endedState: expected execVote, got ${s.phase}`);
-    s = castExecVotes(s, Object.fromEntries(aliveSeats(s).map((seat) => [seat, true])));
-    s = tick(s, s.phaseEndsAt!, seededRandInt(seed + 2));
-    if (s.phase !== "candidateVote") throw new Error(`endedState: expected candidateVote, got ${s.phase}`);
+    if (s.phase !== "nomination") throw new Error(`endedState: expected nomination, got ${s.phase}`);
     const living = s.players.filter(isAlive).sort((a, b) => a.seat - b.seat);
     const candidate = living.find((p) => (p.role === "mafia") === (team === "citizen"))!.seat;
     const other = living.find((p) => p.seat !== candidate)!.seat;
-    s = castCandidateVotes(s, Object.fromEntries(living.map((p) => [p.seat, p.seat === candidate ? other : candidate])));
-    for (const step of ["candidateVoteReveal", "defense", "execution"] as const) {
+    s = castPoints(s, Object.fromEntries(living.map((p) => [p.seat, p.seat === candidate ? other : candidate])));
+    for (const step of ["defense", "verdict"] as const) {
       s = tick(s, s.phaseEndsAt!, seededRandInt(seed + 3));
       if (s.phase !== step) throw new Error(`endedState: expected ${step}, got ${s.phase}`);
     }
+    s = castVerdicts(s, Object.fromEntries(living.filter((p) => p.seat !== candidate).map((p) => [p.seat, true])));
+    s = tick(s, s.phaseEndsAt!, seededRandInt(seed + 3));
+    if (s.phase !== "execution") throw new Error(`endedState: expected execution, got ${s.phase}`);
     s = tick(s, s.phaseEndsAt!, seededRandInt(seed + 4)); // ended 또는 night
     if (s.phase === "ended") return s;
-    s = advanceTo(s, "execVote", seed); // 밤 → 아침 → 다음 날 낮 두 단계 → 여부 투표(밤에 행동이 없으니 승패는 이 사이에 나지 않는다)
+    s = advanceTo(s, "nomination", seed); // 밤 → 아침 → 다음 날 낮 두 단계 → 지목(밤에 행동이 없으니 승패는 이 사이에 나지 않는다)
   }
   throw new Error(`endedState: no winner for ${n}/${seed}/${team}`);
 }
@@ -260,7 +264,7 @@ const SERVER_ONLY_KEYS: readonly string[] = [
 ];
 /** view.day 가 있는 열 단계. 이 밖의 단계 뷰에는 day 키 자체가 없다(D-07). */
 const DAY_VIEW_PHASES: ReadonlySet<PhaseId> = new Set([
-  "dayAnnounce", "discussion", "defense", "execution", "night", "morning", "ended",
+  "dayAnnounce", "discussion", "nomination", "defense", "verdict", "execution", "night", "morning", "ended",
 ]);
 const ME_KEYS: ReadonlySet<string> = new Set([
   "seat", "isHost", "role", "allies", "testMode", "testRole", "testBots", "testBotVote", "pick", "allyPicks", "records", "chat", "endDiscussion", "verdictVote",
@@ -299,7 +303,7 @@ function phaseKeyViolations(s: RoomState, viewer: Player, view: RoomView, phase:
   }
   if (!Array.isArray(day.voteLog)) out.push(`${tag}: day.voteLog is not an array`);
   for (const key of Object.keys(day)) if (!DAY_KEYS.has(key)) out.push(`${tag}: day key ${key}`);
-  const wantCandidate = phase === "defense" || phase === "execution";
+  const wantCandidate = phase === "defense" || phase === "verdict" || phase === "execution";
   if (("candidate" in day) !== wantCandidate) out.push(`${tag}: day.candidate presence ${"candidate" in day}`);
   else if (wantCandidate && day.candidate !== s.verdict?.candidate) out.push(`${tag}: day.candidate value`);
   const wantExecution = phase === "execution";
@@ -397,14 +401,14 @@ function nightActions(state: RoomState): RoomState {
  */
 function richStateAt(phase: PhaseId, n: number, seed: number): RoomState {
   // 변론·처형: 후보가 시민/마피아로 갈린다.
-  if (phase === "defense" || phase === "execution") {
+  if (phase === "defense" || phase === "verdict" || phase === "execution") {
     return stateWithVerdict(n, seed, phase, { candidate: seed % 2 === 0 ? "mafia" : "citizen" });
   }
   if (phase === "ended") return endedState(n, seed, seed % 2 === 0 ? "mafia" : "citizen");
   if (phase === "night" || phase === "morning") {
     // 밤: 마피아 → 가장 작은 살아 있는 비마피아 seat, 경찰 → 살아 있는 첫 seat, 의사 → 자신(지목된 사람이면 마피아). 아침은 그 밤 뒤(한 명 탈락).
     const d = richStateAt("discussion", n, seed);
-    const s = nightActions(advanceTo(d, "night", seed)); // 토론 뒤 처형 여부 투표(표 없음 → 밤)를 지나 밤에 닿는다
+    const s = nightActions(advanceTo(d, "night", seed)); // 토론 뒤 지목(표 없음 → 밤)을 지나 밤에 닿는다
     if (phase === "night") return s;
     return tick(s, s.phaseEndsAt!, seededRandInt(seed));
   }
@@ -434,28 +438,28 @@ describe("buildView 단계 길이 (D-15, 결정 0012)", () => {
       return `${phase}:${v.phaseDurationMs}:${v.phaseEndsAt === s.phaseEndsAt}:${v.serverNow}`;
     });
     expect(got.join(" ")).toBe(
-      `lobby:null:true:77777 assigning:3000:true:77777 roleReveal:15000:true:77777 dayAnnounce:2000:true:77777 discussion:40000:true:77777 defense:10000:true:77777 execution:5000:true:77777 night:30000:true:77777 morning:5000:true:77777 ended:null:true:77777`,
+      `lobby:null:true:77777 assigning:3000:true:77777 roleReveal:15000:true:77777 dayAnnounce:2000:true:77777 discussion:90000:true:77777 nomination:15000:true:77777 defense:20000:true:77777 verdict:10000:true:77777 execution:5000:true:77777 night:30000:true:77777 morning:5000:true:77777 ended:null:true:77777`,
     );
   });
 
-  it("마감은 이전 마감 + 단계 길이로 이어진다: assigning +3000, roleReveal +15000, dayAnnounce +2000, discussion +40000, execVote +13000, night +30000, morning +5000", () => {
+  it("마감은 이전 마감 + 단계 길이로 이어진다: assigning +3000, roleReveal +15000, dayAnnounce +2000, discussion +90000, nomination +15000, night +30000, morning +5000", () => {
     const a = stateAt("assigning", 4, 1);
     const r = stateAt("roleReveal", 4, 1);
-    const ends = ["assigning", "roleReveal", "dayAnnounce", "discussion", "execVote", "night", "morning"].map(
+    const ends = ["assigning", "roleReveal", "dayAnnounce", "discussion", "nomination", "night", "morning"].map(
       (phase) => stateAt(phase as PhaseId, 4, 1).phaseEndsAt,
     );
     // discussion 은 낮 시작 발표 마감(20000) 바로 뒤에 이어진다(20000 + DISCUSSION_MS)
     const discussionEnd = START_AT + 20000 + DISCUSSION_MS;
-    expect(DISCUSSION_MS).toBe(40000);
+    expect(DISCUSSION_MS).toBe(90000);
     expect(ends.join("/")).toBe(
       [
         START_AT + 3000,
         START_AT + 18000,
         START_AT + 20000,
         discussionEnd,
-        discussionEnd + EXEC_VOTE_MS,
-        discussionEnd + EXEC_VOTE_MS + NIGHT_MS,
-        discussionEnd + EXEC_VOTE_MS + NIGHT_MS + MORNING_MS,
+        discussionEnd + NOMINATION_MS,
+        discussionEnd + NOMINATION_MS + NIGHT_MS,
+        discussionEnd + NOMINATION_MS + NIGHT_MS + MORNING_MS,
       ].join("/"),
     );
     expect(r.phaseEndsAt).toBe(START_AT + 18000);
@@ -530,7 +534,7 @@ describe("buildView 내 역할·마피아 동료 (ROLE-02, D-14)", () => {
 });
 
 describe("buildView 전수 누출 검사 (T-01-23)", () => {
-  it("4~8명 × 열네 단계 × 모든 플레이어 × 시드 3개: token·id 가 없고, role·allies 키는 me 아래에만 있으며, 공개 항목은 다섯 키뿐이다", () => {
+  it("4~8명 × 열두 단계 × 모든 플레이어 × 시드 3개: token·id 가 없고, role·allies 키는 me 아래에만 있으며, 공개 항목은 다섯 키뿐이다", () => {
     const violations: string[] = [];
     let views = 0;
     for (const n of PLAYER_COUNTS) {
@@ -672,11 +676,11 @@ describe("buildView 낮 뷰 — 토론·이튿날 (D-02, D-05, D-15)", () => {
     }
   });
 
-  it("discussion phaseDurationMs 는 40000 이다(옛 상태의 연장 표시와 무관)", () => {
+  it("discussion phaseDurationMs 는 90000 이다(옛 상태의 연장 표시와 무관)", () => {
     const s = stateAt("discussion", 4, 1);
     const old = { ...s, extendUsed: true } as RoomState; // 옛 저장 방: 키로만 넣는다(타입 선언에 기대지 않는다)
-    expect(buildView(s, s.hostId, START_AT).phaseDurationMs).toBe(40_000);
-    expect(buildView(old, s.hostId, START_AT).phaseDurationMs).toBe(40_000);
+    expect(buildView(s, s.hostId, START_AT).phaseDurationMs).toBe(90_000);
+    expect(buildView(old, s.hostId, START_AT).phaseDurationMs).toBe(90_000);
   });
 });
 

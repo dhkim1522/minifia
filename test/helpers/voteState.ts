@@ -1,12 +1,15 @@
-// 투표 단계 상태를 실제 전이(startGame, tick)와 실제 투표 주입(castExecVote, castCandidateVote)으로 만드는 테스트 도우미.
+// 투표 단계 상태를 실제 전이(startGame, tick)와 실제 투표 주입(castPoint, castVerdict)으로 만드는 테스트 도우미.
+// 8페이즈(08-11) 흐름 전환 뒤 낮은 토론 → 지목 → 변론 → 찬반 → 처형이다. 옛 표 도우미(castExecVotes·castCandidateVotes)는 쓰는 곳이 없어지면 08-21 이 지운다.
 // 테스트에서만 import 한다 — 서버는 쓰지 않는다. 상태를 손으로 짜 맞추지 않는 이유(Pitfall 12): view.test.ts 의 stateAt 처럼
-// "다음 단계 표" 만 따라가면 분기 단계(투표 통과 여부에 따라 갈리는 단계)에 닿지 못하고, 손으로 만든 상태는 규칙이 바뀌어도 초록으로 남는다.
+// "다음 단계 표" 만 따라가면 분기 단계(지목 결과에 따라 갈리는 단계)에 닿지 못하고, 손으로 만든 상태는 규칙이 바뀌어도 초록으로 남는다.
 // 난수는 seededRandInt 로 주입한다(시드가 같으면 같은 판).
 import { isAlive } from "../../shared/game/alive";
 import { attachConnection, createRoomState, joinRoom, startGame } from "../../shared/game/room";
 import type { RoomState } from "../../shared/game/room";
 import { tick } from "../../shared/game/tick";
+import { castPoint } from "../../shared/game/nomination";
 import { castCandidateVote, castExecVote } from "../../shared/game/vote";
+import { castVerdict } from "../../shared/game/verdict";
 import type { PhaseId } from "../../shared/protocol";
 import { seededRandInt } from "./seededRandom";
 
@@ -32,7 +35,7 @@ export function lobbyOf(n: number): RoomState {
   return state;
 }
 
-/** 표 없이 다음 단계 표만 따라 목표 단계의 첫 순간까지. 분기 단계(후보 선택 이후)에는 닿지 못한다 — 그쪽은 stateWithVerdict. */
+/** 표 없이 다음 단계 표만 따라 목표 단계의 첫 순간까지. 분기 단계(지목 결과에 따라 갈리는 night 등)에는 닿지 못한다 — 그쪽은 stateWithVerdict. */
 export function startedAt(n: number, seed: number, phase: PhaseId): RoomState {
   return startedFrom(lobbyOf(n), seed, phase);
 }
@@ -77,49 +80,88 @@ export function castCandidateVotes(state: RoomState, targetBySeat: Record<number
   return current;
 }
 
+/** seat → 지목 대상 seat 를 실제 castPoint 로 주입한다(지목 단계여야 한다). 거부되면 테스트 준비가 틀린 것이다. */
+export function castPoints(state: RoomState, targetBySeat: Record<number, number>): RoomState {
+  let current = state;
+  for (const [seat, target] of Object.entries(targetBySeat)) {
+    const result = castPoint(current, seatToId(current, Number(seat)), target);
+    if (!result.ok) throw new Error(`castPoint rejected seat ${seat}: ${result.error}`);
+    current = result.state;
+  }
+  return current;
+}
+
+/** seat → 찬성 여부를 실제 castVerdict 로 주입한다(찬반 단계여야 한다). 거부되면 테스트 준비가 틀린 것이다. */
+export function castVerdicts(state: RoomState, agreeBySeat: Record<number, boolean>): RoomState {
+  let current = state;
+  for (const [seat, agree] of Object.entries(agreeBySeat)) {
+    const result = castVerdict(current, seatToId(current, Number(seat)), agree);
+    if (!result.ok) throw new Error(`castVerdict rejected seat ${seat}: ${result.error}`);
+    current = result.state;
+  }
+  return current;
+}
+
 export type CandidateSpec = "citizen" | "mafia" | number | "tie" | "none";
 
+/** 산 사람 가운데 spec 이 가리키는 후보 좌석. 'tie'·'none' 은 후보가 없어 undefined. */
+function candidateSeatOf(state: RoomState, spec: CandidateSpec): number | undefined {
+  if (spec === "tie" || spec === "none") return undefined;
+  if (typeof spec === "number") return spec;
+  const seat = state.players.filter(isAlive).sort((a, b) => a.seat - b.seat).find((p) => p.role === (spec === "mafia" ? "mafia" : "citizen"))?.seat;
+  if (seat === undefined) throw new Error(`no ${spec} to point at`);
+  return seat;
+}
+
 /**
- * 후보 선택 단계 이후의 상태를 실제 투표와 tick 으로 만든다.
- *  - 여부 투표: 생존자 전원 찬성 → 통과 → candidateVote.
- *  - candidate: 'citizen' / 'mafia' 는 그 직업의 가장 낮은 seat, 숫자는 그 seat 가 최다 득표(나머지 생존자가 모두 그 사람을 고르고 그 사람은 다른 사람을 고른다),
- *    'tie' 는 seat 0 과 1 이 서로를 고른 1:1 동률, 'none' 은 아무도 안 고름(0표). 기본값은 'citizen'.
- *  - phase: candidateVote(투표 직후, 마감 전) · candidateVoteReveal · defense · execution 의 첫 순간. 후보가 없으면 defense·execution 에 닿을 수 없다.
+ * 변론 이후의 상태를 실제 지목·찬반 주입과 tick 으로 만든다(A4: 옛 시그니처와 후보 지정 뜻을 유지한다).
+ *  - 지목: candidate 'citizen' / 'mafia' 는 그 직업의 가장 낮은 seat, 숫자는 그 seat 를 최다 득표시킨다(나머지 산 사람이 모두 그 사람을 가리키고 그 사람은 다른 사람을 가리킨다).
+ *    'tie' 는 seat 0 과 1 이 서로를 가리킨 1:1 동률, 'none' 은 아무도 안 가리킨 0표. 기본값은 'citizen'.
+ *  - 찬반: 변론자를 뺀 산 사람 전원 찬성 → 통과 → execution.
+ *  - phase: defense(지목 마감 직후) · verdict(변론 마감 직후) · execution(찬반 마감 직후, 변론자 탈락) 의 첫 순간. 후보가 없으면(tie·none) 지목 마감이 night 로 가서 닿을 수 없다.
  */
 export function stateWithVerdict(
   n: number,
   seed: number,
-  phase: "candidateVote" | "candidateVoteReveal" | "defense" | "execution",
+  phase: "defense" | "verdict" | "execution",
   opts: { candidate?: CandidateSpec; lobby?: RoomState } = {},
 ): RoomState {
   const spec = opts.candidate ?? "citizen";
-  let state = opts.lobby === undefined ? startedAt(n, seed, "execVote") : startedFrom(opts.lobby, seed, "execVote");
-  const agree: Record<number, boolean> = {};
-  for (const p of state.players) if (isAlive(p)) agree[p.seat] = true;
-  state = castExecVotes(state, agree);
-  state = tick(state, state.phaseEndsAt!, seededRandInt(seed + 2));
-  if (state.phase !== "candidateVote") throw new Error(`expected candidateVote, got ${state.phase}`);
-
+  let state = opts.lobby === undefined ? startedAt(n, seed, "nomination") : startedFrom(opts.lobby, seed, "nomination");
   const alive = state.players.filter(isAlive).sort((a, b) => a.seat - b.seat);
   const targetBySeat: Record<number, number> = {};
   if (spec === "tie") {
     targetBySeat[alive[0]!.seat] = alive[1]!.seat;
     targetBySeat[alive[1]!.seat] = alive[0]!.seat;
   } else if (spec !== "none") {
-    const candidateSeat =
-      typeof spec === "number" ? spec : alive.find((p) => p.role === (spec === "mafia" ? "mafia" : "citizen"))?.seat;
-    if (candidateSeat === undefined) throw new Error(`no ${String(spec)} to elect`);
+    const candidateSeat = candidateSeatOf(state, spec)!;
     const other = alive.find((p) => p.seat !== candidateSeat)!;
     for (const p of alive) targetBySeat[p.seat] = p.seat === candidateSeat ? other.seat : candidateSeat;
   }
-  state = castCandidateVotes(state, targetBySeat);
-  if (phase === "candidateVote") return state;
+  state = castPoints(state, targetBySeat);
 
-  const steps: PhaseId[] = ["candidateVoteReveal", "defense", "execution"];
+  const steps: PhaseId[] = ["defense", "verdict", "execution"];
   for (const step of steps) {
+    if (step === "verdict") {
+      const defender = state.verdict?.candidate;
+      const agree: Record<number, boolean> = {};
+      for (const p of state.players) if (isAlive(p) && p.seat !== defender) agree[p.seat] = true;
+      // 변론 마감 → verdict 진입. 찬반은 verdict 에서 던진다.
+      state = tick(state, state.phaseEndsAt!, seededRandInt(seed + 3));
+      if (state.phase !== "verdict") throw new Error(`expected verdict, got ${state.phase}`);
+      if (phase === "verdict") return state;
+      state = castVerdicts(state, agree);
+      continue;
+    }
+    if (step === "defense") {
+      state = tick(state, state.phaseEndsAt!, seededRandInt(seed + 3));
+      if (state.phase !== "defense") throw new Error(`expected defense, got ${state.phase}`);
+      if (phase === "defense") return state;
+      continue;
+    }
     state = tick(state, state.phaseEndsAt!, seededRandInt(seed + 3));
-    if (state.phase !== step) throw new Error(`expected ${step}, got ${state.phase}`);
-    if (step === phase) return state;
+    if (state.phase !== "execution") throw new Error(`expected execution, got ${state.phase}`);
+    return state;
   }
   throw new Error(`unreachable phase ${phase}`);
 }

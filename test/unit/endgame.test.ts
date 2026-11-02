@@ -188,13 +188,13 @@ describe("buildSummary (END-02, D-27, T-04-21)", () => {
     it(`시드 ${seed}: 처형으로 끝난 판의 마지막 날은 exec 만 있다`, () => {
       const { ended, candidate } = endedByExecution(seed);
       expect(JSON.stringify(buildSummary(ended))).toBe(
-        JSON.stringify([{ n: 1, exec: { yes: 4, no: 0, passed: true, candidate } }]),
+        JSON.stringify([{ n: 1, exec: { yes: 3, no: 0, passed: true, candidate } }]), // 4명 판: 변론자를 뺀 유권자 3명이 모두 찬성(결정 0053-3)
       );
     });
     it(`시드 ${seed}: 아침으로 끝난 판의 마지막 날은 exec 와 night 둘 다 있다`, () => {
       const { ended, candidate, victim } = endedByMorning(seed);
       expect(JSON.stringify(buildSummary(ended))).toBe(
-        JSON.stringify([{ n: 1, exec: { yes: 4, no: 0, passed: true, candidate }, night: { target: victim, died: true } }]),
+        JSON.stringify([{ n: 1, exec: { yes: 3, no: 0, passed: true, candidate }, night: { target: victim, died: true } }]),
       );
     });
   }
@@ -285,9 +285,9 @@ describe("ended 전에는 결과·밤 기록이 어떤 view 에도 없다 (T-04-
   /** 실제 전이로 만든 ended 이전 상태들: 로비부터 처형까지, 밤 기록이 쌓인 아침·다음 날 낮 시작 포함. */
   function preEndedStates(seed: number): Array<[string, RoomState]> {
     const out: Array<[string, RoomState]> = [];
-    const phases: PhaseId[] = ["roleReveal", "dayAnnounce", "discussion", "execVote"];
+    const phases: PhaseId[] = ["roleReveal", "dayAnnounce", "discussion", "nomination"];
     for (const ph of phases) out.push([ph, startedAt(6, seed, ph)]);
-    for (const ph of ["candidateVote", "candidateVoteReveal", "defense", "execution"] as const) {
+    for (const ph of ["defense", "verdict", "execution"] as const) {
       out.push([ph, stateWithVerdict(6, seed, ph)]);
     }
     const exec = stateWithVerdict(6, seed, "execution");

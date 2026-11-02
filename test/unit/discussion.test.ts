@@ -38,14 +38,14 @@ function room(phase: PhaseId, phaseEndsAt: number | null, extra: Record<string, 
 
 // 결과는 한 줄 문자열로 비교한다(TAP 증거 규칙).
 describe("phaseDurationOf - 단계 길이 파생 (결정 0017-5, Pitfall 3)", () => {
-  it("phaseDurationOf 는 단계 표 길이 그대로다: discussion 40000, dayAnnounce 2000, lobby null", () => {
+  it("phaseDurationOf 는 단계 표 길이 그대로다: discussion 90000, dayAnnounce 2000, lobby null", () => {
     const got = (["discussion", "dayAnnounce", "lobby"] as const)
       .map((phase) => `${phase}:${phaseDurationOf(room(phase, phase === "lobby" ? null : 100_000))}`)
       .join(" ");
-    expect(got).toBe("discussion:40000 dayAnnounce:2000 lobby:null");
+    expect(got).toBe("discussion:90000 dayAnnounce:2000 lobby:null");
   });
 
-  it("저장된 옛 상태에 연장 표시(extendUsed true)가 남아 있어도 discussion 길이는 40000 이다", () => {
+  it("저장된 옛 상태에 연장 표시(extendUsed true)가 남아 있어도 discussion 길이는 DISCUSSION_MS(90000) 이다", () => {
     expect(phaseDurationOf(room("discussion", 100_000, { extendUsed: true }))).toBe(DISCUSSION_MS);
   });
 

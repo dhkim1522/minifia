@@ -572,10 +572,10 @@ describe("botPlanKey·syncBotPlan·planBotSteps", () => {
     const discussion = syncBotPlan(discussion0, nowOf(discussion0), seededRandInt(1));
     expect(Object.hasOwn(discussion, "botPlan")).toBe(true);
     expect(syncBotPlan(discussion, nowOf(discussion) + 5, THROWING) === discussion).toBe(true);
-    const execVote = tick(discussion, discussion.phaseEndsAt!, seededRandInt(2));
-    expect(execVote.phase).toBe("execVote");
-    const next = syncBotPlan(execVote, nowOf(execVote), seededRandInt(5));
-    expect(String(next.botPlan?.key)).toBe(`execVote:${execVote.phaseEndsAt}`);
+    const nomination = tick(discussion, discussion.phaseEndsAt!, seededRandInt(2));
+    expect(nomination.phase).toBe("nomination");
+    const next = syncBotPlan(nomination, nowOf(nomination), seededRandInt(5));
+    expect(String(next.botPlan?.key)).toBe(`nomination:${nomination.phaseEndsAt}`);
     expect(stepsOf(next).length > 0).toBe(true);
   });
 
@@ -624,10 +624,10 @@ describe("takeDueBotSteps·botWakeAt", () => {
 });
 
 // ---- 후보 봇 변론과 지목 대상 고르기 (결정 0024, 0036) — 옛 처형 여부·후보 선택 봇 계획 시험은 08-28 이 지웠다 ----
-/** 사람 1 + 봇 4 테스트 방의 후보가 정해진 뒤 단계. 08-11 이 새 흐름(지목·찬반)으로 다시 짓는다. */
+/** 사람 1 + 봇 4 테스트 방의 후보가 정해진 뒤 단계(지목 마감 직후의 변론 — 새 흐름, 08-11). 모두 산 채로 있다. */
 const verdictAt = (
   seed: number,
-  phase: "candidateVote" | "defense",
+  phase: "defense" | "verdict",
   candidate: "citizen" | number = "citizen",
 ): RoomState => stateWithVerdict(5, seed, phase, { lobby: withBots(lobbyOf(1), 4), candidate });
 /** randInt 호출 인자를 기록하고 값은 시드 난수로 준다. */
@@ -664,7 +664,7 @@ describe("봇 투표·변론 계획: 키", () => {
 
 describe("봇 투표·변론 계획: 지목 대상 고르기 (botCandidateTarget)", () => {
   it("botCandidateTarget 은 seat 오름차순 후보에서 randInt(길이) 번째를 고르고 역할을 보지 않는다", () => {
-    const state = verdictAt(8, "candidateVote");
+    const state = verdictAt(8, "defense");
     const bot = botsOf(state)[1]!; // seat 2
     const seen: number[] = [];
     const target = botCandidateTarget(state, bot, (n) => {
@@ -676,7 +676,7 @@ describe("봇 투표·변론 계획: 지목 대상 고르기 (botCandidateTarget
   });
 
   it("살아 있는 다른 사람이 없으면 행이 없고 randInt 를 부르지 않는다", () => {
-    const base = verdictAt(5, "candidateVote");
+    const base = verdictAt(5, "defense");
     const lastBot = botsOf(base)[0]!;
     const state = markDead(base, ...base.players.filter((p) => p.id !== lastBot.id).map((p) => p.seat));
     expect(planBotSteps(state, nowOf(state), THROWING).length).toBe(0);
@@ -734,13 +734,14 @@ describe("봇 투표·변론 계획: 회귀", () => {
     }
   });
 
-  it("discussion·night 계획 고정값 (08-07: 토론 끝내기 난수가 더해져 discussion 만 다시 고정 — 옛 131523613, night 997718148 은 그대로; 07-11 이전 622180622·76649671, 07-08 이전 289874952·760964938)", () => {
+  it("discussion·night 계획 고정값 (08-11: 흐름 전환으로 둘 다 다시 고정 — 08-07 값 856098986·997718148; 07-11 이전 622180622·76649671, 07-08 이전 289874952·760964938)", () => {
     const digest = (text: string): number => [...text].reduce((h, ch) => (h * 31 + ch.charCodeAt(0)) % 1_000_000_007, 7);
     const got = (["discussion", "night"] as const).map((phase) => {
       const state = stateAt(1, 5, 8, phase);
       return digest(canon(planBotSteps(state, nowOf(state), seededRandInt(42))));
     });
-    expect(got.join(",")).toBe("856098986,997718148");
+    // 08-11: 토론이 90초가 되고 밤이 지목 마감 뒤에 닿아 두 계획의 시각(at)이 모두 달라졌다 — 새 흐름 값으로 다시 고정한다.
+    expect(got.join(",")).toBe("34804349,962657041");
   });
 
   it("discussion 계획의 난수 호출 수는 claim 제거 뒤에도 그대로다 (07-08, 리서치 Pitfall 13)", () => {
@@ -761,7 +762,7 @@ describe("봇 투표·변론 계획: 회귀", () => {
 // ---- P-13: 테스트 방 방장이 고른 봇 투표 설정(결정 0022·0024 확장, 04-15) ----
 describe("봇 투표 고정 설정: botCandidateTarget", () => {
   it("botCandidateTarget host: 방장이 살아 있고 이 봇이 아니면 방장 seat 이며 randInt 를 부르지 않는다", () => {
-    const state = verdictAt(8, "candidateVote");
+    const state = verdictAt(8, "defense");
     const hostSeat = state.players.find((p) => p.id === state.hostId)!.seat;
     for (const bot of botsOf(state)) {
       expect(`${bot.seat}:${botCandidateTarget(state, bot, THROWING, "host")}`).toBe(`${bot.seat}:${hostSeat}`);
@@ -769,7 +770,7 @@ describe("봇 투표 고정 설정: botCandidateTarget", () => {
   });
 
   it("botCandidateTarget other: 방장도 자기도 아닌 살아 있는 사람 중 가장 낮은 seat 이며 randInt 를 부르지 않는다", () => {
-    const state = verdictAt(8, "candidateVote");
+    const state = verdictAt(8, "defense");
     const [b1, b2, b3] = botsOf(state); // seat 1, 2, 3
     expect(String(botCandidateTarget(state, b1!, THROWING, "other"))).toBe("2");
     expect(String(botCandidateTarget(state, b2!, THROWING, "other"))).toBe("1");
@@ -780,7 +781,7 @@ describe("봇 투표 고정 설정: botCandidateTarget", () => {
   });
 
   it("조건이 안 맞으면 무작위로 돌아가 기존과 같이 randInt(길이) 한 번 부른다", () => {
-    const base = verdictAt(8, "candidateVote");
+    const base = verdictAt(8, "defense");
     const hostSeat = base.players.find((p) => p.id === base.hostId)!.seat;
     const bot = botsOf(base)[1]!; // seat 2
     // host: 방장 탈락 → 살아 있는 다른 사람 3명 중 무작위
@@ -800,7 +801,7 @@ describe("봇 투표 고정 설정: botCandidateTarget", () => {
   });
 
   it("고정 설정이 없으면 기존 시그니처 호출과 같다(같은 난수 기록·같은 결과)", () => {
-    const state = verdictAt(8, "candidateVote");
+    const state = verdictAt(8, "defense");
     const bot = botsOf(state)[1]!;
     const a = recording(5);
     const b = recording(5);
