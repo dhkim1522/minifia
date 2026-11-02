@@ -3,9 +3,21 @@
 // 실패 출력은 한 줄이어야 해서(TAP) 비교는 JSON 문자열로 한다.
 import { describe, expect, it } from "vitest";
 import type { DayView, PhaseId, PublicPlayer, RoomView } from "../../shared/protocol";
-import { GHOST_FADE_END_MS } from "../../src/game/dayView";
+import { GHOST_FADE_END_MS, GHOST_RISE_MS } from "../../src/game/dayView";
 import { GATHER_CENTER, ZOOM_MAJORITY, ZOOM_MIN_STAGE_H } from "../../src/world/camera";
-import { cameraModeOf, lightingOf, sceneLook, tensionOf, visibleSeats } from "../../src/world/presence";
+import {
+  cameraModeOf,
+  executionFade,
+  ghostFloatY,
+  leaderShift,
+  lightingOf,
+  pointingOf,
+  sceneLook,
+  STAGE_TOP_R,
+  stageLiftY,
+  tensionOf,
+  visibleSeats,
+} from "../../src/world/presence";
 
 const flat = (value: unknown): string => JSON.stringify(value).replaceAll('"', "");
 const same = (actual: unknown, expected: unknown) => expect(flat(actual)).toBe(flat(expected));
@@ -201,5 +213,147 @@ describe("sceneLook (위를 묶는다)", () => {
     const look = sceneLook(view, { stageH: 300 });
     same(Object.keys(look.seats).map(Number), [0, 1, 2, 3, 4]);
     same(look.seats[3]?.ghost, true);
+  });
+});
+
+describe("executionFade (DAY-05, UI-SPEC 처형: 1.4초 떠오름 → 2.4초 사라짐)", () => {
+  const at = (ms: number, reduced = false) => executionFade(ms, reduced);
+  it("시간 상수는 dayView 와 같은 출처다", () => {
+    same([GHOST_RISE_MS, GHOST_FADE_END_MS], [1400, 2400]);
+  });
+  it("0ms: 불투명도 1·높이 0·보임", () => {
+    same(at(0), { opacity: 1, rise: 0, hidden: false });
+  });
+  it("700ms: 불투명도 0.8·높이 0.6", () => {
+    const f = at(700);
+    expect(f.opacity).toBeCloseTo(0.8, 9);
+    expect(f.rise).toBeCloseTo(0.6, 9);
+    expect(f.hidden).toBe(false);
+  });
+  it("1399ms 는 아직 떠오르는 중, 1400ms: 불투명도 0.6·높이 1.2", () => {
+    expect(at(1399).opacity).toBeGreaterThan(0.6);
+    expect(at(1399).rise).toBeLessThan(1.2);
+    expect(at(1400).opacity).toBeCloseTo(0.6, 9);
+    expect(at(1400).rise).toBeCloseTo(1.2, 9);
+  });
+  it("1900ms: 불투명도 0.3·높이 1.2 그대로", () => {
+    expect(at(1900).opacity).toBeCloseTo(0.3, 9);
+    expect(at(1900).rise).toBeCloseTo(1.2, 9);
+    expect(at(1900).hidden).toBe(false);
+  });
+  it("2399ms 는 아직 보이고 2400ms 부터 숨김(불투명도 0)", () => {
+    expect(at(2399).hidden).toBe(false);
+    expect(at(2399).opacity).toBeGreaterThan(0);
+    same(at(2400), { opacity: 0, rise: 1.2, hidden: true });
+    same(at(9999).hidden, true);
+  });
+  it("음수 경과는 0 과 같다", () => {
+    same(at(-50), at(0));
+  });
+  it("모션 줄이기: 0.6 으로 즉시, 떠오름 없이 2399ms 까지 유지, 2400ms 에 숨김", () => {
+    same(at(0, true), { opacity: 0.6, rise: 0, hidden: false });
+    same(at(2399, true), { opacity: 0.6, rise: 0, hidden: false });
+    same(at(2400, true), { opacity: 0, rise: 0, hidden: true });
+  });
+});
+
+describe("ghostFloatY (UI-SPEC 유령 모양: +0.35, 흔들림 ±0.08, 주기 π초)", () => {
+  it("t=0 이면 0.35, t=π/4 초면 0.35+0.08", () => {
+    expect(ghostFloatY(0, false)).toBeCloseTo(0.35, 12);
+    expect(ghostFloatY(Math.PI / 4, false)).toBeCloseTo(0.43, 12);
+    expect(ghostFloatY((3 * Math.PI) / 4, false)).toBeCloseTo(0.27, 12);
+  });
+  it("주기 π초", () => {
+    expect(ghostFloatY(0.3 + Math.PI, false)).toBeCloseTo(ghostFloatY(0.3, false), 9);
+  });
+  it("모션 줄이기면 언제나 0.35", () => {
+    for (const t of [0, 0.4, Math.PI / 4, 3.3, 100]) expect(ghostFloatY(t, true)).toBe(0.35);
+  });
+});
+
+describe("stageLiftY (변론자가 서는 무대 위 높이 0.29)", () => {
+  it("반경 상수 1.18", () => {
+    expect(STAGE_TOP_R).toBe(1.18);
+  });
+  it("무대 가운데·반경 안(1.17)이면 0.29", () => {
+    expect(stageLiftY({ x: 0, z: 0 })).toBe(0.29);
+    expect(stageLiftY({ x: 1.17, z: 0 })).toBe(0.29);
+    expect(stageLiftY({ x: 0, z: -1.17 })).toBe(0.29);
+  });
+  it("반경 밖(1.19)·둘레 자리(2.65)면 0", () => {
+    expect(stageLiftY({ x: 1.19, z: 0 })).toBe(0);
+    expect(stageLiftY({ x: 2.65, z: 0 })).toBe(0);
+    expect(stageLiftY({ x: 0.9, z: 0.9 })).toBe(0);
+  });
+});
+
+describe("pointingOf (T-08-26: 남의 지목은 서버 값만)", () => {
+  const nom = (pairs: [number, number][], mySeat = 0) => viewOf("nomination", { count: 6, mySeat, day: { points: points(...pairs) } });
+  it("공개 day.points 의 좌석 → 대상 표", () => {
+    same(pointingOf(nom([[1, 2], [3, 2]])), { 1: 2, 3: 2 });
+  });
+  it("내가 좌석 1 이고 mine 4 → 내 것만 덮는다", () => {
+    same(pointingOf(nom([[1, 2], [3, 2]], 1), 4), { 1: 4, 3: 2 });
+  });
+  it("서버 줄에 내 지목이 아직 없어도 mine 이 더해진다(남의 것은 늘지 않는다)", () => {
+    same(pointingOf(nom([[3, 2]], 1), 4), { 1: 4, 3: 2 });
+  });
+  it("mine 이 없으면 서버 값 그대로", () => {
+    same(pointingOf(nom([[1, 2]], 1)), { 1: 2 });
+  });
+  it("내 자신을 가리키는 낙관적 선택, 유령인 내 선택은 무시한다", () => {
+    same(pointingOf(nom([[3, 2]], 1), 1), { 3: 2 });
+    const ghost = viewOf("nomination", { count: 6, mySeat: 1, dead: [1], day: { points: points([3, 2]) } });
+    same(pointingOf(ghost, 4), { 3: 2 });
+  });
+  it("지목 단계가 아니면 {}", () => {
+    same(pointingOf(viewOf("discussion", { day: { points: points([1, 2]) } }), 4), {});
+    same(pointingOf(viewOf("verdict", { day: { points: points([1, 2]) } })), {});
+  });
+  it("points 가 없는 지목 view 는 서버 값 없이 mine 만 있다", () => {
+    same(pointingOf(viewOf("nomination", { mySeat: 1 }), 4), { 1: 4 });
+  });
+});
+
+describe("leaderShift (결정 0049: 선두가 새 사람으로 바뀌면 손사래 한 번)", () => {
+  const nom = (pairs: [number, number][]) => viewOf("nomination", { count: 8, day: { points: points(...pairs) } });
+  it("첫 스냅샷(prev 없음)이면 null", () => {
+    expect(leaderShift(null, nom([[0, 2]]))).toBeNull();
+  });
+  it("선두 없음 → 2 이면 2", () => {
+    expect(leaderShift(nom([]), nom([[0, 2]]))).toBe(2);
+  });
+  it("낮 토론 → 지목 첫 표로 선두가 생기면 그 좌석", () => {
+    expect(leaderShift(viewOf("discussion", { count: 8 }), nom([[0, 2]]))).toBe(2);
+  });
+  it("2 → 2 는 null", () => {
+    expect(leaderShift(nom([[0, 2]]), nom([[0, 2], [1, 2]]))).toBeNull();
+  });
+  it("2 → 동점 은 null", () => {
+    expect(leaderShift(nom([[0, 2]]), nom([[0, 2], [1, 3]]))).toBeNull();
+  });
+  it("2 → 3 으로 바뀌면 3", () => {
+    expect(leaderShift(nom([[0, 2]]), nom([[0, 3], [1, 3]]))).toBe(3);
+  });
+  it("지목이 아닌 view 로 가면 null", () => {
+    expect(leaderShift(nom([[0, 2]]), viewOf("defense", { count: 8, day: { candidate: 2 } }))).toBeNull();
+  });
+});
+
+describe("sceneLook 의 pointAt (지목 방향)", () => {
+  const view = viewOf("nomination", { count: 6, mySeat: 1, day: { points: points([1, 2], [3, 2]) } });
+  it("좌석별 가리키는 대상이 실린다", () => {
+    const look = sceneLook(view, { stageH: 400 });
+    same([look.seats[1]?.pointAt, look.seats[3]?.pointAt], [2, 2]);
+    expect(look.seats[0]?.pointAt).toBeUndefined();
+  });
+  it("내 낙관적 선택(mine)이 내 좌석만 덮는다", () => {
+    const look = sceneLook(view, { stageH: 400, mine: 4 });
+    same([look.seats[1]?.pointAt, look.seats[3]?.pointAt], [4, 2]);
+  });
+  it("그리지 않는 좌석(탈락한 산 사람 화면 밖)에는 pointAt 이 생기지 않는다", () => {
+    const v = viewOf("nomination", { count: 6, mySeat: 1, dead: [3], day: { points: points([1, 2], [3, 2]) } });
+    const look = sceneLook(v, { stageH: 400 });
+    expect(3 in look.seats).toBe(false);
   });
 });

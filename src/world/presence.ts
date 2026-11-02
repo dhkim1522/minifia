@@ -130,3 +130,21 @@ export function sceneLook(view: RoomView, opts: { stageH: number; fading?: Reado
     seats: visibleSeats(view, opts.fading, opts.now),
   };
 }
+
+// ---- RED 뼈대(Task 2): 아직 동작을 구현하지 않는다 ----
+export const STAGE_TOP_R = 1.18;
+export function executionFade(_elapsedMs: number, _reduced: boolean): { opacity: number; rise: number; hidden: boolean } {
+  return { opacity: 1, rise: 0, hidden: false };
+}
+export function ghostFloatY(_tSec: number, _reduced: boolean): number {
+  return 0;
+}
+export function stageLiftY(_pos: { x: number; z: number }): number {
+  return 0;
+}
+export function pointingOf(_view: RoomView, _mine?: number): Record<number, number> {
+  return {};
+}
+export function leaderShift(_prev: RoomView | null, _cur: RoomView): number | null {
+  return null;
+}
