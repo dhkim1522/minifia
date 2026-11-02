@@ -26,6 +26,7 @@ import { botCount } from "./bots";
 import { phaseDurationOf } from "./discussion";
 import { buildSummary } from "./endgame";
 import { noExecutionOf } from "./execution";
+import { pointLinesOf } from "./nomination";
 import { PHASE_DEFS } from "./phases";
 import { rolesInPlay } from "./roles";
 import { hostOf } from "./room";
@@ -33,12 +34,14 @@ import type { RoomState } from "./room";
 import { execTallyOf } from "./vote";
 
 /**
- * view.day 가 생기는 단계: 낮 두 단계·처형 다섯 단계·밤·아침·종료. 이 밖의 단계 뷰에는 day 키 자체가 없다(D-07).
+ * view.day 가 생기는 단계: 낮 네 단계(발표·토론·지목·찬반)·처형 다섯 단계·밤·아침·종료. 이 밖의 단계 뷰에는 day 키 자체가 없다(D-07).
  * ended 도 넣는다: day 에는 공개 정보(일차·구성·투표 기록)만 있어 누출이 없고, 결과 화면이 테이블을 다시 쓸 수 있다.
  */
 const DAY_PHASES: ReadonlySet<PhaseId> = new Set([
   "dayAnnounce",
   "discussion",
+  "nomination",
+  "verdict",
   "execVote",
   "candidateVote",
   "candidateVoteReveal",
@@ -71,6 +74,8 @@ function buildDay(state: RoomState): DayView {
   };
   // 실시간 집계는 모든 viewer 에게 같은 값이다 — 마감 집계와 같은 함수(execTallyOf)를 쓴다.
   if (state.phase === "execVote") day.execTally = execTallyOf(state);
+  // 지목 줄은 지목 단계 동안 모두에게 같은 공개 목록이다(결정 0060-3) — 필드별 복사 함수(pointLinesOf)로 만든다.
+  if (state.phase === "nomination") day.points = pointLinesOf(state);
   // 후보·처형 발표는 모두에게 같다(공개 정보). 직업은 싣지 않는다 — 필드별로 복사한다(D-09).
   if (
     (state.phase === "candidateVoteReveal" || state.phase === "defense" || state.phase === "execution") &&

@@ -26,6 +26,9 @@ import { resetToLobby, setBotCount, setBotVote, setTestRole, skipPhase } from ".
 import type { RoleId } from "../shared/game/roles";
 import { nextWakeAt, tick } from "../shared/game/tick";
 import { castCandidateVote, castExecVote } from "../shared/game/vote";
+import { castPoint } from "../shared/game/nomination";
+import { castVerdict } from "../shared/game/verdict";
+import { toggleEnd } from "../shared/game/discussion";
 import { BAR_MAP } from "../shared/game/map";
 import { WORLD_FLUSH_MS, compactWorld, despawnPlayer, emptyWorld, moveFrame, nextWanderAt, planWander, requestMove, respawnAll, restoreWorld, snapFrame, spawnPlayer } from "../shared/game/world";
 import type { Segment, WorldState } from "../shared/game/world";
@@ -57,6 +60,8 @@ function jsonError(error: ApiErrorCode, status: number): Response {
 // 연결당 속도 제한: 1000ms 창에 20개를 넘으면 처리하지 않고 창마다 한 번만 알린다.
 const RATE_WINDOW_MS = 1000;
 const RATE_MAX_MESSAGES = 20;
+// 지목 간격(결정 0060-3, DAY-04): 같은 사람의 받아들인 지목 사이 최소 간격.
+const POINT_MIN_INTERVAL_MS = 250;
 // DO storage.delete(keys[]) 의 한 번 최대 키 수.
 const CHAT_DELETE_MAX = 128;
 
@@ -84,6 +89,9 @@ export class Room extends DurableObject<Env> {
   private chatLog: ChatLog = emptyChatLog();
   // 사람(봇 포함)별 최근 전송 기록(D5 도배 제한). 인메모리라 하이버네이션으로 비면 새로 센다(수용) — 제한이 한 번 느슨해질 뿐이다.
   private readonly chatRates = new Map<string, ChatSenderRate>();
+  // 지목 간격 기록(사람 id -> 마지막으로 받아들인 지목 ms, DAY-04 결정 0060-3, 가정 A1). 인메모리라 하이버네이션으로 비면 새로 센다 —
+  // 한 번 더 받아들일 뿐이다(수용, typingRelays 와 같다). 받아들인 지목만 기록하고 거절·같은 값·간격 안 재전송은 기록하지 않는다.
+  private readonly pointAt = new Map<string, number>();
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
@@ -238,6 +246,15 @@ export class Room extends DurableObject<Env> {
         return;
       case "candidateVote":
         await this.handleCandidateVote(ws, msg.target);
+        return;
+      case "endDiscussion":
+        await this.handleEndDiscussion(ws, msg.on);
+        return;
+      case "point":
+        await this.handlePoint(ws, msg.target);
+        return;
+      case "verdict":
+        await this.handleVerdict(ws, msg.agree);
         return;
       case "testSkip":
         await this.handleTestSkip(ws);
@@ -445,6 +462,82 @@ export class Room extends DurableObject<Env> {
   private async applyCandidateVote(playerId: string, target: number | null): Promise<WsErrorCode | null> {
     if (!this.room) return "BAD_MESSAGE";
     const result = castCandidateVote(this.room, playerId, target);
+    if (!result.ok) return result.error;
+    if (result.state === this.room) return null;
+    this.room = result.state;
+    await this.ctx.storage.put("room", this.room);
+    this.sendViewTo([playerId]);
+    return null;
+  }
+
+  // 지목(8페이즈, DAY-04): 신원은 소켓 첨부의 playerId 뿐이다 — 메시지에 seat·id 가 없다(T-08-04).
+  private async handlePoint(ws: WebSocket, target: number): Promise<void> {
+    const att = this.attachmentOf(ws);
+    if (!att || !this.room) {
+      this.sendTo(ws, { t: "error", code: "BAD_MESSAGE" });
+      return;
+    }
+    const error = await this.applyPoint(att.playerId, target, Date.now());
+    if (error !== null) this.sendRejection(ws, att.playerId, error);
+  }
+
+  // 마감이 바뀌지 않으니 reschedule 은 필요 없다(과반이어도 15초를 다 채운다, 결정 0060-3). 검사는 규칙 함수(castPoint)가 먼저다 —
+  // 같은 값은 같은 객체라 저장·전송이 없고, 거절은 간격 기록에 닿지 않는다. 받아들일 값이 같은 사람의 마지막 수락 250ms 안이면 상태를 바꾸지 않고
+  // 그 사람 소켓에만 서버 값 view 를 돌려준다(오류 프레임 없음, T-08-08 연타 방어). 받아들이면 지목 줄은 모두에게 공개라 모든 소켓이 각자 view 를 받는다.
+  private async applyPoint(playerId: string, target: number, now: number): Promise<WsErrorCode | null> {
+    if (!this.room) return "BAD_MESSAGE";
+    const result = castPoint(this.room, playerId, target);
+    if (!result.ok) return result.error;
+    if (result.state === this.room) return null;
+    const last = this.pointAt.get(playerId);
+    if (last !== undefined && now - last < POINT_MIN_INTERVAL_MS) {
+      this.sendViewTo([playerId]);
+      return null;
+    }
+    this.pointAt.set(playerId, now);
+    this.room = result.state;
+    await this.persistAndBroadcast();
+    return null;
+  }
+
+  // 찬반(8페이즈, DAY-06): 신원은 소켓 첨부의 playerId 뿐이다(T-08-04).
+  private async handleVerdict(ws: WebSocket, agree: boolean): Promise<void> {
+    const att = this.attachmentOf(ws);
+    if (!att || !this.room) {
+      this.sendTo(ws, { t: "error", code: "BAD_MESSAGE" });
+      return;
+    }
+    const error = await this.applyVerdict(att.playerId, agree);
+    if (error !== null) this.sendRejection(ws, att.playerId, error);
+  }
+
+  // 껍데기 단계(Task 1): 규칙 함수에 잇고 본인에게만 view 를 보낸다. 방송 규율(처음 투표만 전원, 변경은 본인)은 다음 작업이 정한다.
+  private async applyVerdict(playerId: string, agree: boolean): Promise<WsErrorCode | null> {
+    if (!this.room) return "BAD_MESSAGE";
+    const result = castVerdict(this.room, playerId, agree);
+    if (!result.ok) return result.error;
+    if (result.state === this.room) return null;
+    this.room = result.state;
+    await this.ctx.storage.put("room", this.room);
+    this.sendViewTo([playerId]);
+    return null;
+  }
+
+  // 토론 끝내기(8페이즈, DAY-03): 신원은 소켓 첨부의 playerId 뿐이다(T-08-04).
+  private async handleEndDiscussion(ws: WebSocket, on: boolean): Promise<void> {
+    const att = this.attachmentOf(ws);
+    if (!att || !this.room) {
+      this.sendTo(ws, { t: "error", code: "BAD_MESSAGE" });
+      return;
+    }
+    const error = await this.applyEndDiscussion(att.playerId, on, Date.now());
+    if (error !== null) this.sendRejection(ws, att.playerId, error);
+  }
+
+  // 껍데기 단계(Task 1): 규칙 함수에 잇고 본인에게만 view 를 보낸다. 개수 방송·과반 마감 당기기는 다음 작업이 채운다.
+  private async applyEndDiscussion(playerId: string, on: boolean, _now: number): Promise<WsErrorCode | null> {
+    if (!this.room) return "BAD_MESSAGE";
+    const result = toggleEnd(this.room, playerId, on);
     if (!result.ok) return result.error;
     if (result.state === this.room) return null;
     this.room = result.state;
