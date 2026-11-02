@@ -5,7 +5,9 @@
 // 실패 출력은 한 줄이어야 해서(TAP) 비교는 가능한 한 문자열 하나로 한다.
 import { describe, expect, it } from "vitest";
 import { resolveNomination } from "../../shared/game/nomination";
+import { PHASE_DEFS } from "../../shared/game/phases";
 import type { RoomState } from "../../shared/game/room";
+import { tick } from "../../shared/game/tick";
 import { castVerdict, resolveVerdict, verdictTallyOf, verdictVotersOf, votedSeatsOf } from "../../shared/game/verdict";
 import { startedAt } from "../helpers/voteState";
 
@@ -164,5 +166,49 @@ describe("resolveVerdict — 분모는 던진 표가 아니라 유권자 수다 
     castVerdict(base, idOf(base, 1), false);
     verdictTallyOf(base);
     expect(`${JSON.stringify(base) === before} ${r.state.phaseEndsAt === base.phaseEndsAt}`).toBe("true true");
+  });
+});
+
+describe("vote.test 에서 옮긴 뜻 (08-28, DAY-06·07)", () => {
+  it("단계 표: 찬반은 10000ms 이고 기본 다음 단계는 execution, 역할 노출은 true 다 (옛 단계 표 시험의 새 흐름 행)", () => {
+    const d = PHASE_DEFS.verdict;
+    expect(`${d.durationMs}/${d.next}/${d.revealsOwnRole}`).toBe("10000/execution/true");
+  });
+
+  it("던져도 마감(phaseEndsAt)은 그대로이고, 마감 전 tick 은 입력 그대로다 (옛 D-28)", () => {
+    let state = verdictOf(5);
+    const ends = state.phaseEndsAt;
+    for (const p of verdictVotersOf(state)) {
+      const r = castVerdict(state, p.id, true);
+      if (!r.ok) throw new Error("rejected");
+      state = r.state;
+    }
+    expect(`${state.phaseEndsAt === ends} ${tick(state, ends! - 1) === state}`).toBe("true true");
+  });
+
+  it("던진 뒤 연결이 끊긴 유권자의 표도 센다 (옛 CONN-02)", () => {
+    const voted = withVotes(verdictOf(5), 3, 0); // 유권자 4 중 3 찬성
+    const dropped: RoomState = {
+      ...voted,
+      players: voted.players.map((p) => (p.seat === 0 ? { ...p, connected: false, connId: null } : p)),
+    };
+    expect(passedOf(dropped, 3, 0)).toBe(true);
+    expect(votedSeatsOf(dropped).join(",")).toBe("0,1,2");
+  });
+
+  it("입력을 깊게 얼려도 castVerdict·verdictTallyOf·resolveVerdict 가 예외 없이 돈다", () => {
+    const freeze = <T>(v: T): T => {
+      if (v !== null && typeof v === "object" && !Object.isFrozen(v)) {
+        Object.freeze(v);
+        for (const c of Object.values(v as Record<string, unknown>)) freeze(c);
+      }
+      return v;
+    };
+    const base = freeze(withVotes(verdictOf(), 4, 1));
+    expect(() => {
+      castVerdict(base, idOf(base, 5), true);
+      verdictTallyOf(base);
+      resolveVerdict(base);
+    }).not.toThrow();
   });
 });

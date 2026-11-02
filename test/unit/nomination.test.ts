@@ -4,7 +4,9 @@
 // 실패 출력은 한 줄이어야 해서(TAP) 비교는 가능한 한 문자열 하나로 한다.
 import { describe, expect, it } from "vitest";
 import { majorityOf, castPoint, pointLinesOf, resolveNomination, tallyPoints } from "../../shared/game/nomination";
+import { PHASE_DEFS } from "../../shared/game/phases";
 import type { RoomState } from "../../shared/game/room";
+import { tick } from "../../shared/game/tick";
 import { startedAt } from "../helpers/voteState";
 
 /** n 명이 산 채로 지목 단계에 있는 방(1일차). */
@@ -172,5 +174,63 @@ describe("resolveNomination — 마감 훅 (DAY-05, 결정 0060-3)", () => {
     castPoint(base, idOf(base, 4), 2);
     tallyPoints(base);
     expect(JSON.stringify(base)).toBe(before);
+  });
+});
+
+describe("vote.test 에서 옮긴 뜻 (08-28, DAY-06·07)", () => {
+  it("단계 표: 지목은 15000ms 이고 기본 다음 단계는 defense, 역할 노출은 true 다 (옛 단계 표 시험의 새 흐름 행)", () => {
+    const d = PHASE_DEFS.nomination;
+    expect(`${d.durationMs}/${d.next}/${d.revealsOwnRole}`).toBe("15000/defense/true");
+  });
+
+  it("던져도 마감(phaseEndsAt)은 그대로이고, 마감 전 tick 은 입력 그대로다 (옛 D-28)", () => {
+    let state = nominationOf();
+    const ends = state.phaseEndsAt;
+    for (const p of state.players) {
+      const target = state.players.find((q) => q.seat !== p.seat)!.seat;
+      const r = castPoint(state, p.id, target);
+      if (!r.ok) throw new Error("rejected");
+      state = r.state;
+    }
+    expect(`${state.phaseEndsAt === ends} ${tick(state, ends! - 1) === state}`).toBe("true true");
+  });
+
+  it("던진 뒤 연결이 끊긴 사람의 표도 센다 (옛 CONN-02)", () => {
+    const base = withPoints(nominationOf(), { 0: 2, 1: 2 });
+    const dropped: RoomState = {
+      ...base,
+      players: base.players.map((p) => (p.seat === 0 ? { ...p, connected: false, connId: null } : p)),
+    };
+    const t = tallyPoints(dropped);
+    expect(`${t.leader} ${JSON.stringify(t.counts)}`).toBe(`2 ${JSON.stringify({ 2: 2 })}`);
+  });
+
+  it("입력을 깊게 얼려도 castPoint·tallyPoints·resolveNomination 이 예외 없이 돈다", () => {
+    const freeze = <T>(v: T): T => {
+      if (v !== null && typeof v === "object" && !Object.isFrozen(v)) {
+        Object.freeze(v);
+        for (const c of Object.values(v as Record<string, unknown>)) freeze(c);
+      }
+      return v;
+    };
+    const base = freeze(withPoints(nominationOf(), { 0: 2, 1: 2, 3: 2 }));
+    expect(() => {
+      castPoint(base, idOf(base, 4), 2);
+      tallyPoints(base);
+      resolveNomination(base);
+    }).not.toThrow();
+  });
+
+  it("4~8명 × 모두 다음 좌석을 가리키는 판과 한 명에게 몰린 판: votes 길이는 던진 사람 수이고 leader 는 최다 득표자다", () => {
+    const got: string[] = [];
+    for (let n = 4; n <= 8; n += 1) {
+      const room = startedAt(n, 1, "discussion");
+      const pointed = { ...room, phase: "nomination" as const };
+      const target: Record<number, number> = {};
+      for (let s = 1; s < n; s += 1) target[s] = 0; // 0번 제외 모두 0번을 가리킨다
+      const t = tallyPoints(withPoints(pointed, target));
+      got.push(`${n}:${t.votes.length}/${t.leader}`);
+    }
+    expect(got.join(" ")).toBe("4:3/0 5:4/0 6:5/0 7:6/0 8:7/0");
   });
 });
