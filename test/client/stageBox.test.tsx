@@ -3,7 +3,8 @@ import { describe, expect, it } from "vitest";
 
 // 장면 상자(결정 0028): 위 = 헤더 119.2, 아래 = 뷰포트 − 하단 패널 157(+안전 영역), 좌우 여백 12(폰 폭 < 390 이면 4).
 // 08-27: 낮은 08-13 부터 맵 화면이라 옛 낮 장면 상자·테이블 여백 변수 행은 지웠다(맵 화면은 이 상자를 쓰지 않는다 — 틀의 값은 gameMap.test.tsx 의
-// 스타일 측정 시험이 지킨다). 남은 것은 역할 배정 장면 상자이고, 이 행들은 배정 화면을 지우는 08-19 가 함께 지운다.
+// 스타일 측정 시험이 지킨다). 08-19: 역할 배정 화면도 테이블 상자를 뺐다(사용자 확정 임시 처리) — 상자의 좌우 여백·flex 행은 지웠고,
+// 남은 것은 배정 화면의 머리·빈 패널·배경 행이다.
 // CSS 를 읽어(vitest 가 CSS import 를 비워 버린다) 확인한다. E2E T1 이 실제 브라우저에서 같은 것을 다시 본다.
 const phase = readFileSync("src/styles/phase.css", "utf8");
 const tokens = readFileSync("src/styles/tokens.css", "utf8");
@@ -59,18 +60,6 @@ describe("장면 상자: 머리 높이 119.2", () => {
   it("배정 바는 height 119.2px 고정이다", () => {
     expect(norm(body(phase, ".mf-assign__bar"))).toMatch(/(?:^|[ ;])height: 119\.2px/);
     expect(norm(body(phase, ".mf-assign__bar"))).toMatch(/flex:\s*none/);
-  });
-});
-
-describe("장면 상자: 좌우 여백 12 (폰 폭 < 390 이면 4), flex 1, min-height 0", () => {
-  it("역할 배정 장면 상자: position relative · flex 1 · min-height 0 · padding 0 12px, max-width 389px 에서 0 4px", () => {
-    const selector = ".mf-assign__scene";
-    const b = norm(body(phase, selector));
-    expect(b, selector).toMatch(/position:\s*relative/);
-    expect(b, selector).toMatch(/flex:\s*1[;\s]/);
-    expect(b, selector).toMatch(/min-height:\s*0/);
-    expect(b, selector).toMatch(/padding:\s*0 12px/);
-    expect(norm(narrowBody(phase, selector)), selector).toMatch(/padding:\s*0 4px/);
   });
 });
 
