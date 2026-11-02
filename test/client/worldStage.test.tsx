@@ -2,6 +2,7 @@ import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { StrictMode } from "react";
 import { Object3D } from "three";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { Mock } from "vitest";
 import "../helpers/singleLineErrors";
 import { installMemoryStorage, MemoryStorage } from "../helpers/memoryStorage";
 import { BAR_MAP, snapToWalkable } from "../../shared/game/map";
@@ -12,7 +13,7 @@ import { WorldStage } from "../../src/components/WorldStage";
 import { NETWORK_TEXT } from "../../src/net/copy";
 import type { WorldStageProps } from "../../src/components/WorldStage";
 import { UnsupportedRendererError } from "../../src/world/renderer";
-import type { CharacterHandle, RendererStatusEvent, WorldRenderer } from "../../src/world/renderer";
+import type { CharacterHandle, LightingPhase, RendererStatusEvent, WorldRenderer } from "../../src/world/renderer";
 import { gatherView, PAN_BOX, stageOffsetY, ZOOM_MAJORITY } from "../../src/world/camera";
 import { predictSegment, SEG_BLEND_MS, YAW_TURN_RATE } from "../../src/world/motion";
 import { GHOST_FADE_END_MS } from "../../src/game/dayView";
@@ -32,8 +33,9 @@ export interface FakeRenderer extends WorldRenderer {
   chars: Map<number, CharacterHandle>;
   views: { target: { x: number; z: number }; offsetY: number }[];
   markers: { kind: string; at: { x: number; z: number } | null; scale: number; opacity: number }[];
-  setZoom: ReturnType<typeof vi.fn>;
-  setTension: ReturnType<typeof vi.fn>;
+  setLighting: Mock<(phase: LightingPhase) => void>;
+  setZoom: Mock<(zoom: number) => void>;
+  setTension: Mock<(level: 0 | 1 | 2, focus?: { x: number; z: number }) => void>;
   emit(e: RendererStatusEvent): void;
   lost: boolean;
   renders: number;

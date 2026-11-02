@@ -9,20 +9,21 @@ import { BAR_MAP, BAR_SPAWNS, snapToWalkable, UNIT } from "../../shared/game/map
 import { positionAt, segmentEndsAt } from "../../shared/game/world";
 import type { Segment } from "../../shared/game/world";
 import { NETWORK_TEXT } from "../net/copy";
-import { clampTarget, DEFAULT_TARGET, followStep, NAMETAG_GAP, NAMETAG_MAX_W, RESIZE_SETTLE_MS, stageOffsetY } from "./camera";
+import { clampTarget, DEFAULT_TARGET, followStep, gatherView, NAMETAG_GAP, NAMETAG_MAX_W, RESIZE_SETTLE_MS, stageOffsetY } from "./camera";
 import { FIGS } from "./characterData";
 import { createTapGate } from "./input";
 import { BLEND_SNAP_DIST, blendRemaining, createOwnMoves, predictSegment, stepYaw, travelYaw } from "./motion";
 import { DEFAULT_BUDGET_STEP, nextLadderStep } from "./renderer";
 import type { CharacterHandle, WorldRenderer } from "./renderer";
+import { executionFade, GHOST_OPACITY, ghostFloatY, stageLiftY } from "./presence";
 import type { SceneLook } from "./presence";
 import { initialMapStatus, inputBlocked, mapStatusReducer, shouldRecreate } from "./status";
 import { rankTags } from "./tagOrder";
 import type { TagBox } from "./tagOrder";
 import type { MapStatusEvent, MapStatusState } from "./status";
-import type { RendererStatusEvent } from "./renderer";
+import type { LightingPhase, RendererStatusEvent } from "./renderer";
 import type { WorldStore } from "./store";
-import type { EmoteId } from "./characterData";
+import type { EmoteId, FaceId } from "./characterData";
 import type { characterKit as CharacterKitType } from "./character";
 import type { createThreeRenderer as CreateThreeRendererType } from "./threeRenderer";
 
@@ -130,11 +131,13 @@ const MOVE_EPS = 1e-6;
 /** 등장 시작 크기·낙하 높이(월드 단위) */
 const ENTER_SCALE = 0.6;
 const ENTER_LIFT = 0.4;
+/** 고정 카메라로 옮기는 시간·확대 전환 시간(ms) = dur-slow */
+const CAM_SLOW_MS = 800;
 /** 6페이즈는 모두 기본 코트(의상 교체는 10페이즈) */
 const OUTFIT = "coat";
 
 /** 동작을 재생할 수 있는 캐릭터 핸들(06-11 WorldCharacter). 테스트의 가짜 캐릭터에는 playEmote 가 없을 수 있다 */
-export type PlayableCharacter = CharacterHandle & { playEmote?(id: EmoteId): void };
+export type PlayableCharacter = CharacterHandle & { playEmote?(id: EmoteId): void; setFace?(id: FaceId): void };
 
 export interface WorldRuntimeDeps {
   host: HTMLElement;
@@ -166,6 +169,8 @@ export interface WorldRuntimeDeps {
 export interface WorldRuntime {
   start(): Promise<void>;
   syncPlayers(): void;
+  /** seat 이 손사래(deny)를 하고 놀란 표정을 한 번 짓는다 — 지목 선두가 바뀌었을 때의 반응(결정 0049). 그릴 캐릭터가 없으면 아무것도 하지 않는다 */
+  deny(seat: number): void;
   /**
    * 게임 단계의 장면 상태(08-08 SceneLook)를 건넨다. 표에 없는(show 아닌) 좌석은 캐릭터를 만들지 않고 이미 있으면 퇴장시키며,
    * ghost 좌석은 반투명으로 그린다. null 이면 장면이 없는 것(로비) — 6페이즈 동작 그대로다.
@@ -235,6 +240,10 @@ interface Actor {
   yawGoal: number | null;
   headY: number;
   dim: boolean;
+  /** 지금 손가락 자세(holdPose("point"))를 유지하나 */
+  pointing: boolean;
+  /** 처형 연출로 handle.setOpacity 에 마지막으로 보낸 불투명도(1 = 연출 없음) */
+  fadeOpacity: number;
   /** 지금 유령으로 그리고 있나(handle.setGhost 에 마지막으로 보낸 값) */
   ghost: boolean;
   /** 등장 시작 시각(없으면 서 있다) */
@@ -284,8 +293,23 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
   const degrade = createAutoDegrade({ enabled: deps.autoDegrade !== false, step: deps.budgetStep ?? DEFAULT_BUDGET_STEP, setBudget: (n) => renderer?.setBudget(n) });
 
   let look: SceneLook | null = null;
+  /** 렌더러에 마지막으로 보낸 조명 단계·긴장 키·확대(바뀔 때만 다시 보낸다) */
+  let lightSent: LightingPhase | null = null;
+  let tensionKey: string | null = "0";
+  let zoomSent = 1;
+  /** 지금 그리는 확대와, 고정 카메라로 옮기는 중인 전환(고정이 아니면 null) */
+  let zoomCur = 1;
+  let fixed: { zoom: number; start: number; from: { x: number; z: number; off: number; zoom: number } } | null = null;
+  let zoomBackFrom = 1;
+  let zoomBackStart = 0;
   /** 이 좌석을 그리나: 장면이 없으면 view 의 모든 좌석, 있으면 표에서 show 인 좌석만 */
   const isShown = (seat: number): boolean => look === null || look.seats[seat]?.show === true;
+  /** 처형 연출이 끝나 사라졌어야 하는 좌석인가(표에 아직 남아 있어도 다시 만들지 않는다). 유령 시점의 ghost 좌석은 연출 없이 유령으로 남는다 */
+  const fadeEnded = (seat: number, now: number): boolean => {
+    const l = look?.seats[seat];
+    return l !== undefined && !l.ghost && l.fadeAt !== undefined && executionFade(now - l.fadeAt, deps.reducedMotion()).hidden;
+  };
+  const mix = (a: number, b: number, e: number): number => (e >= 1 ? b : a + (b - a) * e);
 
   const actors = new Map<number, Actor>();
   const pendingEntered = new Set<number>();
@@ -330,6 +354,9 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
         startCueWait();
       } else {
         resync = true; // 복구·재생성 뒤 첫 프레임: 카메라와 모든 캐릭터를 서버 위치에 바로 놓는다
+        lightSent = null; // 새 렌더러에는 조명·긴장·확대를 다시 보낸다
+        tensionKey = null;
+        zoomSent = Number.NaN;
       }
     }
     // 소실·재생성 동안만 1초 tick 으로 시간을 알린다
@@ -447,7 +474,8 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
     kit = mods.characterKit;
     seenSize = s;
     offRendererStatus = r.onStatus(onRendererStatus);
-    r.setLighting(deps.lighting ?? "talk");
+    lightSent = deps.lighting ?? "talk";
+    r.setLighting(lightSent);
     syncPlayers();
     lastFrameAt = Date.now();
     schedule();
@@ -504,6 +532,8 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
       yawGoal: null,
       headY: 0,
       dim: false,
+      pointing: false,
+      fadeOpacity: 1,
       ghost: false,
       enter: null,
       exit: null,
@@ -704,7 +734,7 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
 
     for (const seat of store.takeEntered()) pendingEntered.add(seat);
     for (const seat of store.seats()) {
-      if (!actors.has(seat) && isShown(seat)) createActor(seat, now);
+      if (!actors.has(seat) && isShown(seat) && !fadeEnded(seat, now)) createActor(seat, now);
     }
 
     const gone: Actor[] = [];
@@ -715,10 +745,23 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
         beginExit(a.seat, now); // 구간이 없어졌다(snap 에서 빠짐) 또는 장면이 이 좌석을 그리지 않는다
         if (!actors.has(a.seat)) continue; // 모션 줄이기면 바로 지워졌다
       }
-      const wantGhost = look?.seats[a.seat]?.ghost === true;
+      if (fadeEnded(a.seat, now)) {
+        // 처형 연출이 끝났다: 산 사람 화면에서 이 좌석은 사라진다
+        removeActor(a);
+        if (a.tag !== null) a.tag.style.opacity = "0";
+        continue;
+      }
+      const seatLook = look?.seats[a.seat];
+      const wantGhost = seatLook?.ghost === true;
       if (wantGhost !== a.ghost) {
         a.ghost = wantGhost;
         a.handle.setGhost?.(wantGhost);
+      }
+      // 손가락 자세: 지목 중인 좌석만 유지하고, 풀리면 평소 자세로 돌아온다
+      const pointAt = seatLook?.pointAt;
+      if ((pointAt !== undefined) !== a.pointing) {
+        a.pointing = pointAt !== undefined;
+        a.handle.holdPose?.(a.pointing ? "point" : null);
       }
       // 그릴 구간: 내 자리는 예측 중이면 예측, 남은 언제나 서버 구간(결정 0059-4)
       const eff = a.exit !== null || server === undefined ? undefined : a.seat === mySeat ? own.effective(server) : server;
@@ -745,6 +788,11 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
       } else {
         const target = eff === undefined ? null : travelYaw(eff, sNow);
         if (target !== null) a.yawGoal = target;
+        else if (pointAt !== undefined) {
+          // 서 있는 채 가리킨다: 대상 쪽을 본다(걷는 중에는 걷는 방향이 먼저)
+          const tp = actors.get(pointAt)?.pos;
+          if (tp !== undefined && (tp.x !== at.x || tp.z !== at.z)) a.yawGoal = Math.atan2(tp.x - at.x, tp.z - at.z);
+        }
         if (a.yawGoal !== null) {
           const next = reduced ? a.yawGoal : stepYaw(a.yaw, a.yawGoal, dt);
           if (next !== a.yaw) {
@@ -772,34 +820,100 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
         alpha = e;
         if (p >= 1) a.enter = null;
       }
+      // 처형 연출(fadeAt): 떠오르며 흐려진다. 유령 시점의 ghost 좌석은 연출 없이 유령으로 남는다
+      let rise = 0;
+      let fade = 1;
+      const fadeAt = wantGhost ? undefined : seatLook?.fadeAt;
+      if (fadeAt !== undefined && a.exit === null) {
+        const f = executionFade(now - fadeAt, reduced);
+        rise = f.rise;
+        fade = f.opacity;
+      }
+      if (fade !== a.fadeOpacity) {
+        a.fadeOpacity = fade;
+        a.handle.setOpacity?.(fade === 1 && a.ghost ? GHOST_OPACITY : fade);
+      }
+      alpha = Math.min(alpha, fade);
+      // 높이: 등장 낙하 + (장면이 있을 때) 무대 위 0.29 + 유령 떠다님 + 처형 떠오름
+      const y = lift + (look === null ? 0 : stageLiftY(at)) + (a.ghost ? ghostFloatY(now / 1000, reduced) : 0) + rise;
       a.handle.root.scale.setScalar(a.base * scale);
-      a.handle.root.position.set(at.x, lift, at.z);
-      a.headY = lift + a.handle.update(dt, now / 1000, moving).headY * scale;
+      a.handle.root.position.set(at.x, y, at.z);
+      a.headY = y + a.handle.update(dt, now / 1000, moving).headY * scale;
       a.tagAlpha = alpha === 1 ? "1" : String(Math.round(alpha * 1000) / 1000);
     }
 
-    // 카메라: 내 캐릭터를 따라간다(한계 상자 안에서)
-    const mine = actors.get(deps.mySeat());
-    const goal = clampTarget(mine ? mine.pos : DEFAULT_TARGET);
-    cam = cam === null || resync ? goal : followStep(cam, goal, dt * 1000, reduced);
-
-    // 스테이지 사각형이 바뀌면(패널 높이·헤더) 장면을 dur-fast 에 걸쳐 옮긴다
+    // 카메라: 기본은 내 캐릭터를 따라간다(한계 상자 안에서). 장면이 고정이면 모이는 자리 구도로 옮긴 뒤 움직이지 않는다(UI-SPEC 카메라 표)
     const s = size();
     const rect = deps.stageRect();
-    const target = stageOffsetY(s.h, rect.top, rect.bottom);
-    if (offsetCur === null || resync || reduced) {
-      offsetCur = target;
-      offsetTarget = target;
-    } else {
-      if (target !== offsetTarget) {
+    const stageOff = stageOffsetY(s.h, rect.top, rect.bottom);
+    const camLook = look?.camera;
+    let offsetGoal = stageOff;
+    let blending = false;
+    if (camLook !== undefined && camLook.mode === "fixed") {
+      const g = gatherView(rect, { w: s.w, h: s.h }, { ghost: look?.seats[deps.mySeat()]?.ghost === true, zoom: camLook.zoom });
+      offsetGoal = g.offsetY;
+      if (fixed === null || fixed.zoom !== camLook.zoom) {
+        const here = cam ?? DEFAULT_TARGET;
+        fixed = { zoom: camLook.zoom, start: now, from: { x: here.x, z: here.z, off: offsetCur ?? stageOff, zoom: zoomCur } };
+      }
+      const p = reduced || resync ? 1 : Math.min(1, (now - fixed.start) / CAM_SLOW_MS);
+      const e = easeOut(p);
+      cam = { x: mix(fixed.from.x, g.target.x, e), z: mix(fixed.from.z, g.target.z, e) };
+      zoomCur = mix(fixed.from.zoom, camLook.zoom, e);
+      if (p < 1) {
+        blending = true;
+        offsetCur = mix(fixed.from.off, g.offsetY, e);
+        offsetTarget = g.offsetY;
         offsetFrom = offsetCur;
-        offsetTarget = target;
         offsetStart = now;
       }
-      const p = Math.min(1, (now - offsetStart) / RESIZE_SETTLE_MS);
-      offsetCur = offsetFrom + (offsetTarget - offsetFrom) * p;
+    } else {
+      if (fixed !== null) {
+        fixed = null;
+        zoomBackFrom = zoomCur;
+        zoomBackStart = now;
+      }
+      const mine = actors.get(deps.mySeat());
+      const goal = clampTarget(mine ? mine.pos : DEFAULT_TARGET);
+      cam = cam === null || resync ? goal : followStep(cam, goal, dt * 1000, reduced);
+      if (zoomCur !== 1) zoomCur = mix(zoomBackFrom, 1, reduced || resync ? 1 : easeOut(Math.min(1, (now - zoomBackStart) / CAM_SLOW_MS)));
     }
+
+    // 스테이지 사각형이 바뀌면(패널 높이·헤더) 장면을 dur-fast 에 걸쳐 옮긴다
+    if (!blending) {
+      if (offsetCur === null || resync || reduced) {
+        offsetCur = offsetGoal;
+        offsetTarget = offsetGoal;
+      } else {
+        if (offsetGoal !== offsetTarget) {
+          offsetFrom = offsetCur;
+          offsetTarget = offsetGoal;
+          offsetStart = now;
+        }
+        const p = Math.min(1, (now - offsetStart) / RESIZE_SETTLE_MS);
+        offsetCur = offsetFrom + (offsetTarget - offsetFrom) * p;
+      }
+    }
+    offsetCur ??= offsetGoal;
     r.setView(cam, offsetCur);
+    if (zoomCur !== zoomSent) {
+      zoomSent = zoomCur;
+      r.setZoom?.(zoomCur);
+    }
+
+    // 단계 조명·긴장: 바뀐 때만 렌더러에 보낸다. 장면이 없으면 부팅 때 정한 조명(로비·성능 스파이크)
+    const wantLight = look?.lighting ?? deps.lighting ?? "talk";
+    if (wantLight !== lightSent) {
+      lightSent = wantLight;
+      r.setLighting(wantLight);
+    }
+    const tension = look?.tension ?? 0;
+    const focusPos = tension > 0 && look?.focusSeat !== undefined ? actors.get(look.focusSeat)?.pos : undefined;
+    const nextTensionKey = tension === 0 ? "0" : `${tension}|${focusPos === undefined ? "-" : `${focusPos.x.toFixed(2)},${focusPos.z.toFixed(2)}`}`;
+    if (nextTensionKey !== tensionKey) {
+      tensionKey = nextTensionKey;
+      r.setTension?.(tension, focusPos === undefined ? undefined : { x: focusPos.x, z: focusPos.z });
+    }
 
     if (s.w !== seenSize.w || s.h !== seenSize.h) {
       seenSize = s;
@@ -932,6 +1046,13 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
     syncPlayers,
     setScene(l) {
       look = l;
+    },
+    deny(seat) {
+      const a = actors.get(seat) ?? null;
+      if (a === null || a.exit !== null) return;
+      const h = a.handle as PlayableCharacter;
+      h.playEmote?.("deny");
+      h.setFace?.("surprise");
     },
     tap,
     notifyMoveSent,

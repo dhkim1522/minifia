@@ -52,6 +52,8 @@ export interface WorldStageProps {
   typingSeats?: ReadonlySet<number>;
   /** 게임 단계의 장면 상태(08-08). 없으면 로비 — 모든 좌석을 그린다. 있으면 show 인 좌석만 캐릭터·이름표가 생긴다(GHOST-01) */
   scene?: SceneLook;
+  /** 그 좌석의 캐릭터가 손사래와 놀란 표정을 한 번 한다(결정 0049 — 지목 선두가 바뀐 사람). nonce 가 바뀔 때마다 한 번 */
+  deny?: { seat: number; nonce: number };
   onNotice(text: string): void;
   onKick(seat: number, nickname: string): void;
   onLeave(): void;
@@ -174,6 +176,15 @@ export function WorldStage(props: WorldStageProps) {
   useLayoutEffect(() => {
     runtimeRef.current?.setScene(props.scene ?? null);
   }, [props.scene]);
+
+  // 손사래: 처음 마운트 때의 값은 지난 일이라 하지 않는다(재접속·화면 전환에서 되살리지 않는다)
+  const denySeen = useRef(props.deny?.nonce);
+  useLayoutEffect(() => {
+    const d = props.deny;
+    if (d === undefined || d.nonce === denySeen.current) return;
+    denySeen.current = d.nonce;
+    runtimeRef.current?.deny(d.seat);
+  }, [props.deny]);
 
   // 탭 하나: 링을 바로 띄우고 목적지 정수 두 개만 보낸다. 내 캐릭터는 같은 길로 바로 걷고 서버 구간이 오면 맞춘다(결정 0059).
   const onTap = (clientX: number, clientY: number): void => {
