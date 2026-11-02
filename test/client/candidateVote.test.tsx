@@ -260,8 +260,8 @@ describe("candidateVote 화면 한 경로 (VOTE-02, D-03, D-19)", () => {
     expect(send).not.toHaveBeenCalled();
   });
 
-  it("가드: execVote·discussion 단계의 테이블 면 클릭은 send 가 없다", () => {
-    for (const phase of ["execVote", "discussion"] as const) {
+  it("가드: execVote 단계의 테이블 면 클릭은 send 가 없다 (낮 토론은 08-13 부터 맵 화면이라 테이블 면이 없다)", () => {
+    for (const phase of ["execVote"] as const) {
       cleanup();
       const { container, send } = renderRoom(makeView({ phase, voteTarget: 2 }));
       fireEvent.click(container.querySelector(".mf-dt__felt")!);

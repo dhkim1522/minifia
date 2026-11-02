@@ -657,10 +657,10 @@ describe("결과 공개 연출 상태기계 (D-17, UI-SPEC 11.2)", () => {
 
   it("ended 화면은 낮 장면과 다른 DOM 노드로 새로 마운트된다 — 이전 투표 카드·층이 남지 않는다", () => {
     const r = renderRoom(execView());
-    const dayScene = r.container.querySelector(".mf-dayscene");
+    const dayScene = r.container.querySelector("[data-game-stage]");
     expect(dayScene).not.toBeNull();
     r.rerenderRoom(makeView());
-    expect(r.container.querySelector(".mf-dayscene")).toBeNull();
+    expect(r.container.querySelector("[data-game-stage]")).toBeNull();
     expect(dayScene!.isConnected).toBe(false);
     expect(r.container.querySelector(".mf-verdict, .mf-defense, .mf-exec")).toBeNull();
   });

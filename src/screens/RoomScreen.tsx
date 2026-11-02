@@ -18,10 +18,11 @@ import { loadSeenCount, saveSeenCount, unseenCount } from "../net/recordsSeen";
 import { useReducedMotion } from "../net/useReducedMotion";
 import { useRoomConnection } from "../net/useRoomConnection";
 import { useWakeLock } from "../net/useWakeLock";
-import { EXIT_CURTAIN_MS } from "../world/runtime";
+import { EXIT_CURTAIN_MS, preloadWorld } from "../world/runtime";
 import { WorldStore } from "../world/store";
 import { Assigning } from "./Assigning";
 import { DayScene } from "./DayScene";
+import { GameMap } from "./GameMap";
 import { Lobby } from "./Lobby";
 import { ResultScreen } from "./ResultScreen";
 import { RoleReveal } from "./RoleReveal";
@@ -103,12 +104,27 @@ function executionAnnounceOf(view: RoomView): string {
   return nickname === undefined ? "처형" : executionTitle(view.day?.execution?.phrase, nickname);
 }
 
-// 장면 키: 낮 시작(dayAnnounce)·낮 두 단계와 밤·아침은 같은 장면(DayScene)이라 같은 키를 쓴다 — 테이블을 다시 마운트하지 않는다(UI-SPEC C5).
-// 낮 시작 전용 화면은 없다(결정 0030). 래퍼와 장면은 장면에 들어올 때만 mf-phase-enter 가 돈다. 그 밖은 단계 이름이 키다.
+// 장면 키: 낮 시작·토론·지목·최후 변론·찬반·처형(8페이즈 지도 단계)은 같은 장면(GameMap)이라 같은 키를 쓴다 — 단계가 바뀌어도 맵(three 렌더러)을 다시 만들지 않는다(DAY-07).
+// 밤·아침과 옛 투표 단계는 08-18 이 옮길 때까지 기존 장면(DayScene)이라 같은 키를 쓴다(UI-SPEC C5). 낮 시작 전용 화면은 없다(결정 0030).
+// 래퍼와 장면은 장면에 들어올 때만 mf-phase-enter 가 돈다. 그 밖은 단계 이름이 키다.
 function sceneKey(phase: PhaseId): string {
-  return phase === "dayAnnounce" || phase === "discussion" || phase === "night" || phase === "morning" || phase === "execVote" || phase === "candidateVote" || phase === "candidateVoteReveal" || phase === "defense" || phase === "execution"
-    ? "dayScene"
-    : phase;
+  switch (phase) {
+    case "dayAnnounce":
+    case "discussion":
+    case "nomination":
+    case "defense":
+    case "verdict":
+    case "execution":
+      return "gameMap";
+    case "night":
+    case "morning":
+    case "execVote":
+    case "candidateVote":
+    case "candidateVoteReveal":
+      return "dayScene";
+    default:
+      return phase;
+  }
 }
 
 /** 채팅 입력칸에 포커스가 있는가(키보드가 열려 있을 수 있는 동안) */
@@ -221,6 +237,10 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
   const arrivedFrom = usePhaseArrival(phase, connection.epoch);
   useEffect(() => {
     if (phase === "lobby" || phase === "assigning") preloadRoleAssets();
+  }, [phase]);
+  // 맵 청크(three)는 역할 확인에서 낮 시작으로 넘어가기 전에 받아 둔다 — 낮 화면이 열릴 때 검은 화면이 단계 시간을 먹지 않게 한다(UI Considerations #32).
+  useEffect(() => {
+    if (phase === "assigning" || phase === "roleReveal") preloadWorld();
   }, [phase]);
   // 낮 토론에 들어서면 투표 단계가 쓸 해질녘 배경 하나를 미리 받는다(P-17). 어떤 역할이든 같은 요청 하나다(Pitfall 20).
   useEffect(() => {
@@ -404,13 +424,30 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
         );
       case "dayAnnounce":
       case "discussion":
+      case "nomination":
+      case "defense":
+      case "verdict":
+      case "execution":
+        return (
+          <GameMap
+            view={view}
+            send={connection.send}
+            canSend={connection.canSend}
+            epoch={connection.epoch}
+            offset={connection.offset}
+            store={store}
+            chat={chat}
+            bannerVisible={banner !== "hidden"}
+            myRoleButton={myRoleButton}
+            testButton={testButton}
+            onLeave={() => onExit("gaveUp")}
+          />
+        );
       case "night":
       case "morning":
       case "execVote":
       case "candidateVote":
       case "candidateVoteReveal":
-      case "defense":
-      case "execution":
         return (
           <DayScene
             view={view}

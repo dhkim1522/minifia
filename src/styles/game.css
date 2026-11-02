@@ -1,0 +1,40 @@
+/* 게임 맵 화면 틀(8페이즈 08-13, UI-SPEC "게임 화면 틀"). 6페이즈 대기실 틀(lobby.css)의 층·z 를 그대로 쓴다. 값은 tokens.css 변수만 쓴다(색 직접 지정 없음).
+   캔버스(WorldStage) 한 장이 방 화면 본문을 채우고, 위쪽 가림막·헤더·알림·[테스트]·아래 패널이 그 위에 얹힌다.
+   캔버스는 헤더·패널 때문에 크기가 줄지 않는다 — 카메라 중심만 스테이지 사각형(헤더 아래 ~ 패널 위)으로 옮긴다.
+   안전 영역: 앱 틀(#root 패딩 · .mf-room 높이)이 이미 비켜 있어 여기서 env() 를 더하지 않는다. */
+
+.mf-game { position: relative; flex: 1 1 0; min-height: 0; overflow: hidden; isolation: isolate; background: var(--night-950); }
+
+/* 맵: 자기 쌓임 맥락을 가진다 — 맵 안의 가림막(z-modal)이 헤더를 덮지 않는다. */
+.mf-game > .mf-world { z-index: var(--z-world); }
+
+/* 위쪽 가림막: night-900 88% → 70px 에서 60% → 120px 에서 0. 헤더 글씨 대비를 지킨다. 입력을 가로채지 않는다. */
+.mf-game__scrim { position: absolute; top: 0; left: 0; right: 0; height: 120px; z-index: 2; pointer-events: none; background: linear-gradient(to bottom, color-mix(in srgb, var(--night-900) 88%, transparent) 0, color-mix(in srgb, var(--night-900) 60%, transparent) 70px, transparent 120px); }
+
+/* 헤더: 위 18, 좌우 16. 제목·안내는 왼쪽, 오른쪽에 [역할 카드] 44×44 + 시간 링 44(간격 8). 맵 탭을 가로채지 않도록 버튼만 입력을 받는다. */
+.mf-game__header { position: absolute; top: 0; left: 0; right: 0; z-index: var(--z-toast); box-sizing: border-box; height: 62px; padding: 18px var(--space-md) 0; pointer-events: none; }
+.mf-game__header .mf-btn { pointer-events: auto; }
+.mf-game__header .mv-phase { align-items: flex-start; }
+.mf-game__header .mv-phase__title, .mf-game__header .mv-phase__hint { text-shadow: var(--shadow-text); }
+/* 접히는 안내 줄 높이(한 줄)만큼만 헤더 아래로 삐져나온다 */
+.mf-game__header .mv-phase__text { gap: 0; }
+
+/* [테스트] 버튼 자리: 헤더 아래 8, 왼쪽 16 (6페이즈 그대로) */
+.mf-game__test { position: absolute; top: 70px; left: var(--space-md); z-index: var(--z-overlay); }
+
+/* 아래 패널: night-800 97%, 위 모서리 radius-lg, 안쪽 14 16 22. 위에서부터 채팅 기록 칸 + 입력줄(48) + 단계별 행동 줄. 높이는 DOM 에서 재서 스테이지 사각형에 넘긴다. */
+.mf-game__panel { position: absolute; left: 0; right: 0; bottom: 0; z-index: var(--z-overlay); box-sizing: border-box; display: flex; flex-direction: column; gap: 10px; padding: 14px var(--space-md) 22px; background: color-mix(in srgb, var(--night-800) 97%, transparent); border-radius: var(--radius-lg) var(--radius-lg) 0 0; }
+
+/* 키보드(7페이즈 규칙 그대로): 패널은 키보드 바로 위로 --mf-kb-lift 만큼 올라가고 아래 여백이 22 → 8 로 줄어든다. 행동 줄은 그리지 않는다. */
+.mf-game__panel--kb { bottom: var(--mf-kb-lift, 0px); padding-bottom: 8px; }
+
+/* iOS 가 키보드를 위해 화면을 위로 밀면 헤더 계열이 그만큼 내려와 보이는 영역 맨 위에 머문다. */
+.mf-game__scrim, .mf-game__header, .mf-game__test, .mf-game .mv-toast { transform: translateY(var(--mf-vv-top, 0px)); }
+
+/* 토론 끝내기(DAY-03): 평소 night-700 면·night-600 테두리·gray-100 글자. 눌렀으면(aria-pressed) gray-100 면·night-900 글자·점 테두리 night-600 (UI-SPEC 낮 토론).
+   서버에 닿지 않는 동안(aria-disabled)은 흐리게 — disabled 속성이 아니라서 눌림은 화면이 받아 거절 이유를 알릴 수 있다. */
+.mf-game__end { background: var(--night-700); border-color: var(--night-600); color: var(--gray-100); }
+.mf-game__end[aria-pressed="true"] { background: var(--gray-100); border-color: var(--gray-100); color: var(--night-900); }
+.mf-game__end[aria-pressed="true"] .mv-dots__dot { border-color: var(--night-600); }
+.mf-game__end[aria-pressed="true"] .mv-dots__dot.is-on { background: var(--night-900); border-color: var(--night-900); }
+.mf-game__end[aria-disabled="true"] { opacity: 0.45; cursor: default; }

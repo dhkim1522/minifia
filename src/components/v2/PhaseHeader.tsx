@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import "../../styles/v2.css";
 
 // 단계 머리: 단계 이름 + 접히는 안내 한 줄(+ 시간 링). design/v2.0/design-system/components/bundle.js :59 를 React 19 로 옮겼다.
@@ -14,16 +15,35 @@ export interface PhaseHeaderProps {
   time?: number;
   /** 단계 전체 초. 있어야 링을 그린다 */
   total?: number;
+  /** 시간 링 왼쪽(링이 없으면 오른쪽 끝)에 놓는 버튼 자리. 8페이즈 게임 화면의 [역할 카드] 44×44 (UI-SPEC A2) */
+  extra?: ReactNode;
 }
 
 const RADIUS = 18;
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 const URGENT_SECONDS = 5;
 
-export function PhaseHeader({ title, hint, showHint, guide, time, total }: PhaseHeaderProps) {
+export function PhaseHeader({ title, hint, showHint, guide, time, total, extra }: PhaseHeaderProps) {
   const hasTime = time != null && !!total;
   const urgent = hasTime && time <= URGENT_SECONDS;
   const frac = hasTime ? Math.max(0, Math.min(1, time / total)) : 0;
+  const ring = hasTime ? (
+    <span className={urgent ? "mv-ring is-urgent" : "mv-ring"} role="timer" aria-label={`남은 시간 ${time}초`}>
+      <svg width={44} height={44} viewBox="0 0 44 44" aria-hidden="true">
+        <circle cx={22} cy={22} r={RADIUS} className="mv-ring__track" />
+        <circle
+          cx={22}
+          cy={22}
+          r={RADIUS}
+          className="mv-ring__bar"
+          strokeDasharray={CIRCUMFERENCE}
+          strokeDashoffset={CIRCUMFERENCE * (1 - frac)}
+          transform="rotate(-90 22 22)"
+        />
+      </svg>
+      {urgent ? <span className="mv-ring__num">{time}</span> : null}
+    </span>
+  ) : null;
   return (
     <header className="mv-phase">
       <div className="mv-phase__text">
@@ -34,23 +54,14 @@ export function PhaseHeader({ title, hint, showHint, guide, time, total }: Phase
           </span>
         ) : null}
       </div>
-      {hasTime ? (
-        <span className={urgent ? "mv-ring is-urgent" : "mv-ring"} role="timer" aria-label={`남은 시간 ${time}초`}>
-          <svg width={44} height={44} viewBox="0 0 44 44" aria-hidden="true">
-            <circle cx={22} cy={22} r={RADIUS} className="mv-ring__track" />
-            <circle
-              cx={22}
-              cy={22}
-              r={RADIUS}
-              className="mv-ring__bar"
-              strokeDasharray={CIRCUMFERENCE}
-              strokeDashoffset={CIRCUMFERENCE * (1 - frac)}
-              transform="rotate(-90 22 22)"
-            />
-          </svg>
-          {urgent ? <span className="mv-ring__num">{time}</span> : null}
-        </span>
-      ) : null}
+      {extra ? (
+        <div className="mv-phase__side">
+          {extra}
+          {ring}
+        </div>
+      ) : (
+        ring
+      )}
     </header>
   );
 }

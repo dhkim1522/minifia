@@ -197,9 +197,9 @@ describe("대기실: 시트의 내 직업 칸 (U-12)", () => {
 });
 
 describe("게임 중: 버튼 자리와 두 동작 (U-03, U-04)", () => {
-  it("낮 토론: 버튼은 .mf-dayscene__scene 안 .mf-tt-anchor 에 있다", () => {
+  it("낮 토론: 버튼은 맵 화면의 로비와 같은 자리 .mf-game__test 에 있다 (08-13)", () => {
     open({ phase: "discussion", testMode: true });
-    expect(String((testBtn() as HTMLElement).closest(".mf-dayscene__scene .mf-tt-anchor") !== null)).toBe("true");
+    expect(String((testBtn() as HTMLElement).closest("main.mf-game .mf-game__test") !== null)).toBe("true");
   });
 
   it("시트에 '내 직업' 칸이 없고 아랫줄이 '지금: 낮 토론'·'인원 유지, 새 판' 이다", () => {
@@ -241,9 +241,9 @@ describe("게임 중: 버튼 자리와 두 동작 (U-03, U-04)", () => {
     expect(String((testBtn() as HTMLElement).closest(".mf-phasebar__extra") !== null)).toBe("true");
   });
 
-  it("낮 시작 발표에서는 버튼이 장면 상자(.mf-dayscene__scene)의 닻(.mf-tt-anchor) 안에 있다", () => {
+  it("낮 시작 발표에서도 버튼은 맵 화면의 .mf-game__test 에 있다 (08-13)", () => {
     open({ phase: "dayAnnounce", testMode: true });
-    expect(String((testBtn() as HTMLElement).closest(".mf-dayscene__scene .mf-tt-anchor") !== null)).toBe("true");
+    expect(String((testBtn() as HTMLElement).closest("main.mf-game .mf-game__test") !== null)).toBe("true");
   });
 
   it("배정 단계에는 버튼이 없다", () => {

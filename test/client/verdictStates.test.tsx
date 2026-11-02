@@ -159,7 +159,11 @@ function viewerProblems(c: HTMLElement, opts: FixtureOpts): string[] {
   return p;
 }
 
-describe.each(STAGES)("처형 구간 화면 %s", (stage: VerdictStage) => {
+// 변론·처형은 08-13 부터 맵 화면(GameMap)이라 옛 테이블 화면 불변식(마름모·후광·유령 패널 등)은 이 두 단계에서 뺐다.
+// 맵 화면의 같은 뜻(익명·직업 비노출·유령 채널)은 gameMap.test 와 뒤 계획의 화면 시험이 본다.
+const TABLE_STAGES: readonly VerdictStage[] = STAGES.filter((s) => s !== "defense" && s !== "execution");
+
+describe.each(TABLE_STAGES)("처형 구간 화면 %s", (stage: VerdictStage) => {
   describe.each(VIEWERS)("보는 사람 %s", (viewer: Viewer) => {
     it.each(COUNTS)("%i명: 연결 중… 이 아닌 화면에 익명·직업 비노출·후광 상한·연결 규칙이 모두 맞다", (count: Count) => {
       const opts: FixtureOpts = { stage, viewer, count };
@@ -172,7 +176,6 @@ describe.each(STAGES)("처형 구간 화면 %s", (stage: VerdictStage) => {
 
 describe("재접속 대조: 같은 접속의 같은 전환에서는 연출이 켜진다", () => {
   const cases: Array<{ stage: VerdictStage; selector: string; attr?: [string, string] }> = [
-    { stage: "execVote", selector: ".mf-vintro--intro" },
     { stage: "noExecution", selector: ".mf-vintro--void" },
     { stage: "ended", selector: ".mf-result", attr: ["data-stage", "neutral"] },
   ];
@@ -192,7 +195,7 @@ describe("내가 후보인 변론 화면 (D-36, D-09, CHAT-01, 07-15)", () => {
   it.each(COUNTS)("%i명: 후보 본인도 남과 같은 채팅 패널이고, 연결이 끊기면 보내기만 꺼지고 입력칸은 쓸 수 있다", (count: Count) => {
     const opts: FixtureOpts = { stage: "defense", viewer: "selfOffline", count, meIsCandidate: true };
     const { container } = mount(opts);
-    const panel = container.querySelector(".mf-dayscene__panel")!;
+    const panel = container.querySelector(".mf-game__panel")!;
     expect(panel.querySelectorAll('[data-chat-panel][data-chat-channel="all"]').length, "채팅 패널").toBe(1);
     expect(panel.querySelectorAll(".mf-turnpanel, .st-row").length, "옛 상태 줄").toBe(0);
     expect([...panel.querySelectorAll("button")].map((b) => b.getAttribute("aria-label")), "버튼").toEqual(["보내기"]);
@@ -204,7 +207,7 @@ describe("내가 후보인 변론 화면 (D-36, D-09, CHAT-01, 07-15)", () => {
   it.each(COUNTS)("%i명: 연결이 멀쩡해도 입구는 채팅 패널 하나뿐이고 직업 그림은 없다", (count: Count) => {
     const opts: FixtureOpts = { stage: "defense", viewer: "alive", count, meIsCandidate: true };
     const { container } = mount(opts);
-    const panel = container.querySelector(".mf-dayscene__panel")!;
+    const panel = container.querySelector(".mf-game__panel")!;
     expect(panel.querySelectorAll('[data-chat-panel][data-chat-channel="all"]').length, "채팅 패널").toBe(1);
     expect(panel.querySelectorAll(".mf-turnpanel, .st-row").length, "옛 상태 줄").toBe(0);
     expect(panel.querySelectorAll("input, textarea").length, "입력칸").toBe(1);

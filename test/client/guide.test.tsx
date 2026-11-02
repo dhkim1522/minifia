@@ -3,9 +3,9 @@ import { act, cleanup, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { RoleId } from "../../shared/game/roles";
 import type { MorningView, PhaseId, RoomView } from "../../shared/protocol";
-import { VERDICT_TEXT, defenseInstruction } from "../../src/game/verdict";
+import { VERDICT_TEXT } from "../../src/game/verdict";
 import type { RoomConnection } from "../../src/net/useRoomConnection";
-import { CANDIDATE_SEAT, NAMES, verdictFixture } from "../helpers/verdictViews";
+import { verdictFixture } from "../helpers/verdictViews";
 import type { Viewer, VerdictStage } from "../helpers/verdictViews";
 
 // UX-01 (D-08, D-09): 모든 단계 화면에는 "지금 할 일 한 문장" 요소가 `data-guide` 로 정확히 하나 있다.
@@ -122,61 +122,8 @@ afterEach(() => {
 
 const ALL_VIEWPOINTS: readonly Viewpoint[] = ["mafia", "police", "doctor", "citizen", "spectator"];
 
-describe("UX-01 트레이서: 낮 시작·낮 토론 빈 칸 두 곳 (D-08, D-09)", () => {
-  it("dayAnnounce 시민 생존: [data-guide] 하나 = `낮이 되었어요`, 하단 패널에 `곧 토론이 시작돼요`", () => {
-    const { container } = renderRoom(makeView({ phase: "dayAnnounce", viewpoint: "citizen", endsIn: 2_000 }));
-    const g = onlyGuide(container, "dayAnnounce/citizen");
-    expect(squish(g.textContent)).toBe(PHASE_GUIDE_FILL.dayAnnounce.title);
-    expect(squish(g.textContent)).toBe("낮이 되었어요");
-    expect(squish(container.querySelector(".mf-dayscene__panel")?.textContent)).toContain("곧 토론이 시작돼요");
-  });
-
-  it("dayAnnounce 탈락 관전자도 같은 두 줄이고 [data-guide] 하나다", () => {
-    const { container } = renderRoom(makeView({ phase: "dayAnnounce", viewpoint: "spectator", endsIn: 2_000 }));
-    const g = onlyGuide(container, "dayAnnounce/spectator");
-    expect(squish(g.textContent)).toBe("낮이 되었어요");
-    expect(squish(container.querySelector(".mf-dayscene__panel")?.textContent)).toContain("곧 토론이 시작돼요");
-  });
-
-  it("dayAnnounce 의 [data-guide] 글자가 마피아·경찰·의사·시민·관전자에서 모두 같다", () => {
-    const texts = new Set<string>();
-    for (const vp of ALL_VIEWPOINTS) {
-      const { container, unmount } = renderRoom(makeView({ phase: "dayAnnounce", viewpoint: vp, endsIn: 2_000 }));
-      texts.add(`${squish(onlyGuide(container, `dayAnnounce/${vp}`).textContent)}|${squish(container.querySelector(".mf-nightpanel .mf-claimpanel__guide")?.textContent)}`);
-      unmount();
-    }
-    expect([...texts]).toEqual(["낮이 되었어요|곧 토론이 시작돼요"]);
-  });
-
-  it("discussion 생존 4역할: [data-guide] 는 `.mf-phasebar__do` 하나이고 `1일차 · 의견을 나눠요`", () => {
-    for (const vp of ["mafia", "police", "doctor", "citizen"] as const) {
-      const { container, unmount } = renderRoom(makeView({ phase: "discussion", viewpoint: vp, endsIn: 90_000 }));
-      const g = onlyGuide(container, `discussion/${vp}`);
-      expect(g.classList.contains("mf-phasebar__do"), `discussion/${vp}`).toBe(true);
-      expect(squish(g.textContent), `discussion/${vp}`).toBe("1일차 · 의견을 나눠요");
-      unmount();
-    }
-  });
-
-  it("discussion 탈락 관전자: 헤더 안내줄은 `1일차`, [data-guide] 는 `p.mf-ro`(`탈락했어요 · 볼 수만 있어요`) 하나", () => {
-    const { container } = renderRoom(makeView({ phase: "discussion", viewpoint: "spectator", endsIn: 90_000 }));
-    expect(squish(container.querySelector(".mf-phasebar__do")?.textContent)).toBe("1일차");
-    const g = onlyGuide(container, "discussion/spectator");
-    expect(g.tagName).toBe("P");
-    expect(g.classList.contains("mf-ro")).toBe(true);
-    expect(squish(g.textContent)).toBe("탈락했어요 · 볼 수만 있어요");
-  });
-
-  it("data-guide 속성 값은 빈 문자열이다 (역할·자리 정보를 싣지 않는다)", () => {
-    for (const phase of ["dayAnnounce", "discussion"] as const) {
-      for (const vp of ALL_VIEWPOINTS) {
-        const { container, unmount } = renderRoom(makeView({ phase, viewpoint: vp }));
-        expect(onlyGuide(container, `${phase}/${vp}`).getAttribute("data-guide"), `${phase}/${vp}`).toBe("");
-        unmount();
-      }
-    }
-  });
-});
+// 낮 시작·낮 토론·변론·처형은 08-13 부터 맵 화면(GameMap)이다 — 옛 테이블 화면의 안내 요소 시험은 이 자리에서 뺐다.
+// 맵 화면의 헤더 안내(`.mv-phase__hint[data-guide]`)는 gameMap.test.tsx 가 본다. 나머지 단계(밤·아침·옛 투표)의 시험은 아래에 그대로 있다.
 
 // ---- 05-01 Task 2: 밤·아침·투표 구간 (부품이 data-guide 를 맡는다) ----
 
@@ -213,7 +160,7 @@ describe("UX-01 낮 장면 부품: night·morning (D-08)", () => {
   });
 });
 
-describe("UX-01 투표 구간 부품: execVote·candidateVote·reveal·defense·execution·noExecution (D-08)", () => {
+describe("UX-01 투표 구간 부품: execVote·candidateVote·reveal·noExecution (D-08) — 변론·처형은 08-13 부터 맵 화면", () => {
   it("execVote 생존·관전: 하나 = `오늘 처형을 할까요?` (제목 h2), 관전 알약 p.mf-ro 에는 속성이 없다", () => {
     for (const viewer of ["alive", "spectator"] as const) {
       const { container, unmount } = renderVerdict("execVote", viewer);
@@ -266,38 +213,6 @@ describe("UX-01 투표 구간 부품: execVote·candidateVote·reveal·defense·
     }
   });
 
-  it("defense: 안내는 헤더 한 줄(`{n}일차 · {이름}님의 변론`, 후보 본인은 `내 변론`)이고 후보 상태 줄은 없다 — 산 사람·탈락 관전자 모두 같다 (07-15)", () => {
-    const own = renderVerdict("defense", "alive", true);
-    const ownGuide = onlyGuide(own.container, "defense/후보 본인");
-    expect(ownGuide.classList.contains("mf-phasebar__do")).toBe(true);
-    expect(squish(ownGuide.textContent)).toBe(defenseInstruction(2, null));
-    own.unmount();
-    const other = renderVerdict("defense", "alive");
-    const g = onlyGuide(other.container, "defense/생존");
-    expect(g.classList.contains("mf-phasebar__do")).toBe(true);
-    expect(squish(g.textContent)).toBe(defenseInstruction(2, NAMES[CANDIDATE_SEAT]!));
-    other.unmount();
-    const spec = renderVerdict("defense", "spectator");
-    const gs = onlyGuide(spec.container, "defense/관전");
-    expect(gs.classList.contains("mf-phasebar__do")).toBe(true);
-    expect(squish(gs.textContent)).toBe(defenseInstruction(2, NAMES[CANDIDATE_SEAT]!));
-    expect(spec.container.querySelector(".mf-dayscene__panel .mf-ro")).toBeNull();
-  });
-
-  it("defense 후보가 끊김: 안내는 같은 헤더 한 줄이고 끊김 문구는 변론 시작 때 기록 줄로만 남는다(재접속 첫 state 에는 없다)", () => {
-    const { container } = renderVerdict("defense", "otherOffline");
-    expect(squish(onlyGuide(container, "defense/후보 끊김").textContent)).toBe(defenseInstruction(2, NAMES[CANDIDATE_SEAT]!));
-    expect(container.querySelector(".mf-dayscene__panel .stat")).toBeNull();
-  });
-
-  it("execution: 하나 = `처형이 끝났어요`", () => {
-    for (const viewer of ["alive", "spectator"] as const) {
-      const { container, unmount } = renderVerdict("execution", viewer);
-      expect(squish(onlyGuide(container, `execution/${viewer}`).textContent), `execution/${viewer}`).toBe("처형이 끝났어요");
-      unmount();
-    }
-  });
-
   it("처형 무효로 온 밤: 마피아 하나 = 헤더, 시민 하나 = NightPanel 제목 (회색 카드가 떠 있어도)", () => {
     const mafia = renderVerdict("noExecution", "mafiaAlly");
     const gm = onlyGuide(mafia.container, "noExecution/마피아");
@@ -324,15 +239,11 @@ const CHECKED_PHASES = [
   "lobby",
   "assigning",
   "roleReveal",
-  "dayAnnounce",
-  "discussion",
   "night",
   "morning",
   "execVote",
   "candidateVote",
   "candidateVoteReveal",
-  "defense",
-  "execution",
   "ended",
 ] as const satisfies readonly PhaseId[];
 type CheckedPhase = (typeof CHECKED_PHASES)[number];
@@ -341,19 +252,15 @@ const CHECKLIST: Readonly<Record<CheckedPhase, readonly CheckViewpoint[]>> = {
   lobby: ["none"],
   assigning: ["none"],
   roleReveal: ["mafia", "police", "doctor", "citizen"],
-  dayAnnounce: ["mafia", "police", "doctor", "citizen", "spectator"],
-  discussion: ["mafia", "police", "doctor", "citizen", "spectator"],
   night: ["mafia", "police", "doctor", "citizen", "spectator"],
   morning: ["mafia", "police", "doctor", "citizen", "spectator"],
   execVote: ["mafia", "police", "doctor", "citizen", "spectator"],
   candidateVote: ["mafia", "police", "doctor", "citizen", "spectator"],
   candidateVoteReveal: ["mafia", "police", "doctor", "citizen", "spectator"],
-  defense: ["mafia", "police", "doctor", "citizen", "spectator"],
-  execution: ["mafia", "police", "doctor", "citizen", "spectator"],
   ended: ["mafia", "police", "doctor", "citizen", "spectator"],
 };
 
-const VERDICT_PHASES: ReadonlySet<PhaseId> = new Set<PhaseId>(["execVote", "candidateVote", "candidateVoteReveal", "defense", "execution", "ended"]);
+const VERDICT_PHASES: ReadonlySet<PhaseId> = new Set<PhaseId>(["execVote", "candidateVote", "candidateVoteReveal", "ended"]);
 
 /** 칸 하나를 그린다. 투표 구간·결과는 verdictViews 픽스처(역할은 마피아/그 밖만 구분), 나머지는 이 파일의 makeView */
 function renderCell(phase: CheckedPhase, vp: CheckViewpoint) {
@@ -370,11 +277,11 @@ function renderCell(phase: CheckedPhase, vp: CheckViewpoint) {
   return renderRoom(view);
 }
 
-describe("UX-01 점검표: 13단계 × 시점 모든 칸의 안내 문장과 남은 시간 (D-08, 05-UI-SPEC 8.4)", () => {
+describe("UX-01 점검표: 맵 화면(낮 시작~처형)을 뺀 9단계 × 시점 모든 칸의 안내 문장과 남은 시간 (D-08, 05-UI-SPEC 8.4)", () => {
   const phases = Object.keys(CHECKLIST) as CheckedPhase[];
 
-  it("점검표가 화면이 그리는 13단계를 모두 가진다", () => {
-    expect(phases.length).toBe(13);
+  it("점검표가 옛 화면이 그리는 9단계를 모두 가진다", () => {
+    expect(phases.length).toBe(9);
   });
 
   for (const phase of phases) {
@@ -392,8 +299,8 @@ describe("UX-01 점검표: 13단계 × 시점 모든 칸의 안내 문장과 남
     }
   }
 
-  it("TIMELESS_PHASES 밖의 단계(10개)는 모두 점검표에 있고 타이머를 시험한다", () => {
-    expect(phases.filter((p) => !TIMELESS_PHASES.includes(p)).length).toBe(10);
+  it("TIMELESS_PHASES 밖의 단계(6개)는 모두 점검표에 있고 타이머를 시험한다", () => {
+    expect(phases.filter((p) => !TIMELESS_PHASES.includes(p)).length).toBe(6);
   });
 });
 
@@ -441,22 +348,6 @@ describe("UX-01 대기실·배정·역할 확인·결과의 안내 요소 (D-08)
 });
 
 describe("UX-01 누출 검사: 새 문장은 역할로 달라지지 않는다 (T-05-01, D-09)", () => {
-  it("dayAnnounce·discussion 의 새 문장이 4역할(·관전자)에서 같은 글자다", () => {
-    const day = new Set<string>();
-    const talk = new Set<string>();
-    for (const vp of ALL_VIEWPOINTS) {
-      const a = renderRoom(makeView({ phase: "dayAnnounce", viewpoint: vp, endsIn: 2_000 }));
-      day.add(squish(a.container.querySelector(".mf-dayscene__panel")?.textContent));
-      a.unmount();
-      if (vp === "spectator") continue; // 탈락자의 토론 안내는 기존 `{n}일차` + 읽기 전용 줄(설계)
-      const d = renderRoom(makeView({ phase: "discussion", viewpoint: vp, endsIn: 90_000 }));
-      talk.add(squish(onlyGuide(d.container, `discussion/${vp}`).textContent));
-      d.unmount();
-    }
-    expect([...day]).toEqual([`${PHASE_GUIDE_FILL.dayAnnounce.title}${PHASE_GUIDE_FILL.dayAnnounce.guide}`]);
-    expect([...talk]).toEqual([PHASE_GUIDE_FILL.discussion(1)]);
-  });
-
   it("새 문장 상수에는 역할 이름이 없다", () => {
     const sentences = [PHASE_GUIDE_FILL.dayAnnounce.title, PHASE_GUIDE_FILL.dayAnnounce.guide, PHASE_GUIDE_FILL.discussion(1)].join(" ");
     for (const word of ["마피아", "경찰", "의사", "시민"]) expect(sentences).not.toContain(word);

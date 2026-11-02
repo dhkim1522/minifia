@@ -132,3 +132,6 @@
   .mv-badge, .mv-badge.is-lead, .mv-stamp, .mv-tag.is-blink { animation: none; }
   .mv-badge.is-lead { transform: scale(1.18); }
 }
+
+/* 단계 머리 오른쪽 묶음: 시간 링 왼쪽에 버튼(extra)이 붙을 때만 쓴다. 링과 버튼 사이 8 (8페이즈 [역할 카드], UI-SPEC A2) */
+.mv-phase__side { display: flex; align-items: flex-start; flex: none; gap: var(--space-sm); }
