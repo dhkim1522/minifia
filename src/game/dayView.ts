@@ -58,13 +58,19 @@ export interface PointsTally {
   sure?: number;
 }
 
+/** 정상 상태: 지목 집계 + 변론자 + (처형 단계에서 찬반이 통과했으면) 처형된 사람 */
+export interface DayState extends PointsTally {
+  candidate?: number;
+  executed?: number;
+}
+
 export interface DayEvents {
   lines: DayLine[];
   toasts: PointToast[];
   announces: DayAnnounce[];
   fx: DayFx[];
-  /** cur 에서 곧바로 그릴 정상 상태(득표·선두·과반). 이벤트가 없어도 항상 있다 */
-  state: PointsTally;
+  /** cur 에서 곧바로 그릴 정상 상태(득표·선두·과반·변론자·처형된 사람). 이벤트가 없어도 항상 있다 */
+  state: DayState;
 }
 
 /** 지목 줄은 지목 단계에서만 의미가 있다 — 다른 단계 view 의 points 는 읽지 않는다. */
@@ -100,7 +106,7 @@ const nameOf = (view: RoomView, seat: number): string | undefined => view.player
  */
 export function dayEvents(prev: RoomView | null, cur: RoomView, opts: { reset?: boolean } = {}): DayEvents {
   const state = pointsTally(cur);
-  const events: DayEvents = { lines: [], toasts: [], announces: [], fx: [], state };
+  const events: DayEvents = { lines: [], toasts: [], announces: [], fx: [], state: { ...state } };
   if (!prev || opts.reset || !cur.day) return events;
 
   // ---- 지목 차이: 새 지목·바꿈은 vote 줄과 위 알림 재료, 선두·과반이 새로 생기면 hot 줄 ----
@@ -202,4 +208,16 @@ export class ToastQueue {
   dropped(): number {
     return this.lost;
   }
+}
+
+// 자리표시자 — 구현은 다음 커밋.
+export const ANNOUNCE_TALLY_MS = 2000;
+export const ANNOUNCE_EXEC_MS = 3000;
+export const ANNOUNCE_NOEXEC_MS = 1400;
+export const ANNOUNCE_DAY_MS = 2000;
+export const GHOST_RISE_MS = 1400;
+export const GHOST_FADE_END_MS = 2400;
+
+export function headerFor(_view: RoomView): { title: string; hint?: string } {
+  return { title: "" };
 }
