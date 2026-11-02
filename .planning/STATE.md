@@ -5,16 +5,16 @@ milestone_name: 같은 공간
 current_phase: 08
 current_phase_name: 낮 처형과 유령
 status: executing
-stopped_at: Completed 08-18-PLAN.md
-last_updated: "2026-11-02T14:48:16.963Z"
+stopped_at: Completed 08-27-PLAN.md
+last_updated: "2026-11-02T15:03:47.280Z"
 last_activity: 2026-11-02
 last_activity_desc: Phase 08 execution started
-state_head: 0215b5c56ed4fd7ec4ef8c3b24d77087b58551d7
+state_head: 54dcf36e7c242c4f5eb22b8e3c871e7f4111b6df
 progress:
   total_phases: 7
   completed_phases: 2
   total_plans: 78
-  completed_plans: 69
+  completed_plans: 70
   percent: 29
 ---
 
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-11-02)
 ## Current Position
 
 Phase: 08 (낮 처형과 유령) — EXECUTING
-Plan: 20 of 28
+Plan: 21 of 28
 Status: Ready to execute
 Last activity: 2026-11-02 — Phase 08 execution started
 
@@ -128,6 +128,7 @@ Progress: [███░░░░░░░] 29% (2/7 phases)
 | Phase 08 P16 | 40min | 3 tasks | 7 files |
 | Phase 08 P17 | 14 min | 3 tasks | 6 files |
 | Phase 08 P18 | 12min | 3 tasks | 14 files |
+| Phase 08 P27 | 15min | 3 tasks | 28 files |
 
 ## Accumulated Context
 
@@ -265,6 +266,7 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 08]: 마피아 헤더 안내 '없앨 사람을 눌러요' 는 headerFor night 분기(DAY_COPY.mafiaNightHint)에 둔다 — 경찰·의사·시민 밤 문구는 하단 NIGHT_PANEL_TEXT 표
 - [Phase 08]: 밤 발밑 고리·채팅 패널은 서버가 이 사람에게 보낸 값(me.pick·allyPicks·spectate.picks·me.chat)에서만 만든다 (08-18)
 - [Phase 08]: 아침(산 사람)은 UI-SPEC 단계표에 안내가 없어 [data-guide] 0개 — 08-27 화면당 data-guide 하나 에서 예외 처리 필요
+- [Phase 08]: 08-27: phaseScreens.test 는 살아 있는 화면(역할 확인·배정·대기실·역할 카드 시트) 시험이라 지우지 않고 유지. 맵 화면의 화면당 [data-guide] 하나 예외는 낮 시작·처형·아침(산 사람 0개, 유령만 하나, UI-SPEC 단계표)
 
 ### Pending Todos
 
@@ -300,8 +302,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-02T14:48:16.726Z
-Stopped at: Completed 08-18-PLAN.md
+Last session: 2026-11-02T15:03:47.040Z
+Stopped at: Completed 08-27-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
