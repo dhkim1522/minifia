@@ -88,7 +88,7 @@ describe("hello 직후 snap 은 보는 사람별로 거른다 (T-08-11)", () => 
 });
 
 describe("산 사람이 유령이 되는 순간 그 사람 소켓에만 전원 snap 이 간다 (GHOST-01)", () => {
-  it("밤에 마피아가 시민 V 를 지목해 아침이 오면 V 의 소켓만 좌석 6개짜리 snap 을 받고 나머지 다섯 소켓에는 world 프레임이 없다", async () => {
+  it("밤에 마피아가 시민 V 를 지목해 아침이 오면 V 의 소켓은 좌석 6개짜리 snap, 산 사람 다섯 소켓은 V 를 뺀 다섯 좌석 snap 을 하나씩만 받는다 (유령 V 의 좌석은 산 사람 snap 에 없다)", async () => {
     const g = await startedGame("night");
     const [mafiaA, mafiaB] = withRole(g, "mafia") as [Actor, Actor];
     const victim = withRole(g, "citizen")[0]!;
@@ -102,7 +102,7 @@ describe("산 사람이 유령이 되는 순간 그 사람 소켓에만 전원 s
 
     for (const a of g.actors) {
       const worlds = worldFramesOf(a.sock, marks.get(a.sock)!).map((m) => (m.k === "snap" ? `snap:${m.ents.map((e) => e.s).sort((p, q) => p - q).join(",")}` : `move:${m.s}`));
-      expect(worlds.join("|")).toBe(a === victim ? "snap:0,1,2,3,4,5" : "");
+      expect(worlds.join("|")).toBe(a === victim ? "snap:0,1,2,3,4,5" : `snap:${g.actors.filter((x) => x !== victim).map((x) => x.seat).sort((p, q) => p - q).join(",")}`);
     }
   }, 30_000);
 });
