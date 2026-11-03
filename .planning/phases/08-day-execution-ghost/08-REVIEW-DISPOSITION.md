@@ -9,7 +9,7 @@ findings:
     title: "찬반 부결인데 처형 단계 화면 읽기가 \"○○ 님 처형\"이라고 알린다"
   - id: WR-01
     severity: warning
-    disposition: open
+    disposition: fixed
     title: "지목 동률·0표인 날의 결과 요약이 \"처형 없음 (찬성 0 · 반대 0)\"으로 나오고 동률/무표 구분이 사라진다"
   - id: WR-02
     severity: warning
@@ -17,7 +17,7 @@ findings:
     title: "게임 중 방장 화면에서 연결이 끊긴 사람의 이름표가 동작 없는 \"내보내기\" 버튼이 된다"
   - id: WR-03
     severity: warning
-    disposition: open
+    disposition: fixed
     title: "E2E 실행기가 준비 실패로 재시도할 때 먼저 기록된 검사 실패를 버려 성공으로 바꿔 놓을 수 있다"
   - id: IN-01
     severity: info
@@ -39,9 +39,9 @@ findings:
     severity: info
     disposition: open
     title: "누설 테스트 보조 코드의 종료 승자 값이 와이어 값과 다르다"
-open: 7
+open: 5
 total: 9
-recorded: 2026-11-03T00:30:20.661Z
+recorded: 2026-11-03T00:30:28.421Z
 ---
 
 # Phase 08: Code Review Disposition
@@ -49,9 +49,9 @@ recorded: 2026-11-03T00:30:20.661Z
 | Finding | Severity | Disposition | Source |
 |---------|----------|-------------|--------|
 | CR-01 | critical | fixed | 08-REVIEW-FIX.md |
-| WR-01 | warning | open | - |
+| WR-01 | warning | fixed | 08-REVIEW-FIX.md |
 | WR-02 | warning | fixed | 08-REVIEW-FIX.md |
-| WR-03 | warning | open | - |
+| WR-03 | warning | fixed | 08-REVIEW-FIX.md |
 | IN-01 | info | open | - |
 | IN-02 | info | open | - |
 | IN-03 | info | open | - |
