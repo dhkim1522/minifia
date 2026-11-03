@@ -2099,6 +2099,21 @@ describe("게임 장면(08-12): 카메라·조명·긴장·떠다님·처형 연
       s.rerender({ deny: { seat: 2, nonce: 2 } });
       expect(h2.playEmote).toHaveBeenCalledTimes(2);
     });
+
+    it("surprise 속성(seat, nonce)이 바뀔 때마다 그 좌석이 놀란 표정만 짓는다(손사래 없음, 09-20 피해자 연출)", async () => {
+      const s = await openGame();
+      const h2 = s.world.renderers[0]!.chars.get(2) as FakeHandle;
+      expect(h2.setFace).not.toHaveBeenCalledWith("surprise");
+      s.rerender({ surprise: { seat: 2, nonce: 1 } });
+      expect(h2.setFace).toHaveBeenCalledWith("surprise");
+      expect(h2.playEmote).not.toHaveBeenCalled();
+      const faceCalls = (): number => vi.mocked(h2.setFace!).mock.calls.length;
+      const calls = faceCalls();
+      frames(100);
+      expect(faceCalls()).toBe(calls);
+      s.rerender({ surprise: { seat: 2, nonce: 2 } });
+      expect(faceCalls()).toBe(calls + 1);
+    });
   });
 });
 
