@@ -26,7 +26,7 @@ import { exitIfV1 } from "./deploy-target.mjs";
 
 const TOTAL_LIMIT_MS = 30_000;
 const STATE_LIMIT_MS = 10_000;
-const FULL_TOTAL_LIMIT_MS = 720_000; // 시작 → ended. 낮 하루(과반 토론 끝내기 → 지목 15 + 변론 20 + 찬반 10 + 처형 5 + 밤 30 + 아침 5 초) 최대 3일 + 여유
+const FULL_TOTAL_LIMIT_MS = 720_000; // 시작 → ended. 낮 하루(과반 토론 끝내기 → 지목 15 + 변론 20 + 찬반 10 + 처형 5 + 밤 30 + 아침 5~15 초) 최대 3일 + 여유
 // 낮 단계 길이(shared/game/phases.ts 와 같은 값, 결정 0060-1). 스크립트는 TS 를 import 하지 않는다.
 const DISCUSSION_MS = 90_000;
 const NOMINATION_MS = 15_000;
@@ -38,11 +38,11 @@ const NOMINATION_WAIT_MS = NOMINATION_MS + STATE_LIMIT_MS;
 const DEFENSE_WAIT_MS = DEFENSE_MS + STATE_LIMIT_MS;
 const VERDICT_WAIT_MS = VERDICT_MS + STATE_LIMIT_MS;
 const EXECUTION_WAIT_MS = EXECUTION_MS + STATE_LIMIT_MS;
-// shared/protocol.ts 의 MORNING_PHRASE_COUNT 와 같은 값(스크립트는 TS 를 import 하지 않는다). 아침 탈락 문구 번호는 1..7.
-const MORNING_PHRASE_COUNT = 7;
-// 밤 30초, 아침 5초 + 여유
+// 아침 문구 번호·문구 수 상수는 없다(결정 0061-17: 서버가 phrase 를 채우지 않는다).
+// 밤 30초, 아침은 최대 길이 15초 + 여유. MORNING_MAX_MS 는 shared/game/phases.ts 의 사본이다(결정 0061-13: 기본 5 + 피해자 2 + 유언 2 + 쪽지 2, 상한 15초).
 const NIGHT_WAIT_MS = 30_000 + STATE_LIMIT_MS;
-const MORNING_WAIT_MS = 5_000 + STATE_LIMIT_MS;
+const MORNING_MAX_MS = 15_000;
+const MORNING_WAIT_MS = 15_000 + STATE_LIMIT_MS;
 // 자유 채팅 와이어(shared/protocol.ts ChatLineWire·TypingFrame·ChatLogFrame·ChatRejectFrame): 이 키 밖은 어떤 프레임에도 없다(CHAT-06).
 // 채널 필드는 서버 → 클라이언트에만 있고(ch), id·역할·토큰·수신자 마스크는 싣지 않는다(결정 0002·0058).
 const CHAT_LINE_KEYS = ["at", "ch", "seat", "seq", "t", "text"];
@@ -91,8 +91,9 @@ const ENDED_ROLE_STRING_PATHS = new Set(["view.result.seats[].job"]);
 // 옛 이름이 scripts 에 문자열로 남지 않았는지 grep 으로 확인하므로 옛 완료 표시 키는 조각으로 잇는다.
 // 4페이즈 서버 전용 키(결정 0036-12): 개인 투표·판정·밤 기록·직전 처형 문구. winner·execution 은 같은 이름의 view 키(result.winner·day.execution)가 있어 넣지 않는다.
 // 7페이즈: 채팅 도배 기록·입력 중 중계 기록·줄 저장 레코드의 마스크(r)·쓰기 순번(g)은 서버 안에만 있다.
+// 9페이즈(결정 0061): 마피아 쪽지 한 줄(nightNote)은 서버 안에만 있고 아침 chat 카드(k:"note")로만 나온다.
 // 8페이즈(결정 0060): 개인 지목(nominate)·토론 끝내기(endVote)·찬반 값(verdictVote)과 판정(verdict)은 서버 안에만 있다.
-const SERVER_ONLY_KEYS = ["claimPick", "claimOrder", "claimIdx", "claimStart", "claim" + "Done", "claims", "claimLog", "turn", "nominate", "endVote", "verdictVote", "verdict", "nightLog", "lastExecPhrase", "chatRates", "typingRelays", "nextSeq"];
+const SERVER_ONLY_KEYS = ["claimPick", "claimOrder", "claimIdx", "claimStart", "claim" + "Done", "claims", "claimLog", "turn", "nominate", "endVote", "verdictVote", "verdict", "nightLog", "lastExecPhrase", "chatRates", "typingRelays", "nextSeq", "nightNote"];
 // 같은 이름의 공개 와이어 경로(이 밖의 경로에 이름이 나오면 실패): 처형 단계의 찬반 수 day.verdict, 본인에게만 가는 me.verdictVote.
 const PUBLIC_KEY_PATHS = { verdict: ["view.day.verdict"], verdictVote: ["view.me.verdictVote"] };
 // 역할별 일지 줄의 키 집합(결정 0027-11)
@@ -755,7 +756,7 @@ async function stageFull(url, args) {
   const citizenClients = clients.filter((c) => c.role === "citizen" && !dead.has(c)); // 처형된 시민은 밤에 행동하지 못한다
   if (mafiaClients.length < 1 || !policeClient || citizenClients.length < 1) fail("밤 시작 때 역할 구성이 이상함");
   if ((doctorClient !== undefined) !== (N >= 5)) fail(`의사 유무가 인원(${N})과 맞지 않음`);
-  // 결정적 행동: 마피아 전원 → 가장 작은 산 시민 seat X, 경찰 → 가장 작은 마피아 seat, 의사 → 자신
+  // 결정적 행동(결정 0061-6: 마피아 확정은 전원 일치 — 산 마피아 모두가 같은 대상을 고른다): 마피아 전원 → 가장 작은 산 시민 seat X, 경찰 → 가장 작은 마피아 seat, 의사 → 자신
   const targetX = Math.min(...citizenClients.map((c) => c.seat));
   const xClient = clients.find((c) => c.seat === targetX);
   const policeTarget = Math.min(...mafiaClients.map((c) => c.seat));
@@ -1095,7 +1096,6 @@ async function stageFull(url, args) {
   });
   const morning = morningViews[0].day.morning;
   if (morning.eliminated !== targetX) fail(`아침 탈락자가 지목한 seat(${targetX})가 아님: ${morning.eliminated}`);
-  if (!Number.isInteger(morning.phrase) || morning.phrase < 1 || morning.phrase > MORNING_PHRASE_COUNT) fail(`아침 문구 번호가 1..${MORNING_PHRASE_COUNT} 정수가 아님: ${morning.phrase}`);
   morningViews.forEach((v, i) => {
     for (const p of v.players) {
       const wantAlive = p.seat !== targetX && p.seat !== e1Client.seat; // 암살당한 X 와 첫 낮에 처형된 시민만 탈락
@@ -1161,7 +1161,7 @@ async function stageFull(url, args) {
   if (nightEnds.size !== 1) fail(`night 의 phaseEndsAt 이 클라이언트마다 다름 (${nightEnds.size}종)`);
   const morningEnds = new Set(morningViews.map((v) => v.phaseEndsAt));
   if (morningEnds.size !== 1) fail(`morning 의 phaseEndsAt 이 클라이언트마다 다름 (${morningEnds.size}종)`);
-  if (morningViews.some((v) => v.phaseDurationMs !== 5_000)) fail("morning phaseDurationMs 가 5000 이 아님");
+  if (morningViews.some((v) => v.phaseDurationMs !== 7_000)) fail("morning phaseDurationMs 가 7000(기본 5 + 피해자 2)이 아님");
 
   for (const c of clients) await closeSocket(c);
 
