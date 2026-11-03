@@ -421,3 +421,31 @@ describe("ChatStore: 카드 줄 (MORN-02, 결정 0061-11)", () => {
     expect(store.visibleLines("all").length).toBe(1);
   });
 });
+
+// 09-11 Task 2 (UI-SPEC 245행): 경찰 조사 결과는 이 화면에만 있는 로컬 카드, 카드 판별은 서버 k 필드뿐이다 (T-09-24)
+describe("ChatStore: 로컬 카드와 위장 방지", () => {
+  it("addLocalCard 는 보류 없이 all 범위에 kind card·card eye 줄로 바로 보인다", () => {
+    const store = ready();
+    store.addLocalCard({ icon: "eye", title: "민준", text: "마피아 아님", at: 5000 });
+    const [line] = store.visibleLines("all", 5000);
+    expect(`${line?.kind}|${line?.card}|${line?.title}|${line?.text}|${line?.scope}`).toBe("card|eye|민준|마피아 아님|all");
+    expect(store.nextCardReveal(5000)).toBeNull();
+  });
+
+  it("reset() 뒤 사라지고 새 epoch 의 chatLog 합치기에서 다시 생기지 않는다", () => {
+    const store = ready();
+    store.addLocalCard({ icon: "eye", title: "민준", text: "마피아 아님", at: 5000 });
+    store.reset();
+    expect(store.lines().length).toBe(0);
+    store.setContext({ pk: "1:day", channel: "all", epoch: 2 });
+    store.apply({ t: "chatLog", lines: [{ ch: "all", seat: 1, seq: 1, text: "안녕", at: 6000 }] }, 2, 6000);
+    expect(store.lines().map((l) => l.kind).join()).toBe("player");
+  });
+
+  it("사람이 보낸 chat 프레임(k 없음)은 본문이 '[유언]' 으로 시작해도 kind player 다", () => {
+    const store = ready();
+    store.apply(chat("all", 2, 1, "[유언] 범인은 3번", 1000), 1, 1000);
+    const [line] = store.visibleLines("all", 1000);
+    expect(`${line?.kind}|${line?.card}|${line?.revealAt}`).toBe("player|undefined|undefined");
+  });
+});

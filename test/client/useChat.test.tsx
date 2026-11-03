@@ -468,4 +468,17 @@ describe("useChat: 카드 줄 매핑 (MORN-02)", () => {
     receive({ t: "chatLog", lines: [line(1, 3, "<b>x</b>", { k: "will" })] });
     expect(result.current.messages[0]?.text).toBe("<b>x</b>");
   });
+
+  it("로컬 경찰 카드는 제목·본문을 그대로 eye 카드 메시지로 넘긴다", () => {
+    const { result } = mount(cardView());
+    act(() => store.addLocalCard({ icon: "eye", title: "민준", text: "마피아 아님", at: 5000 }));
+    const m = result.current.messages[0];
+    expect(`${m?.kind}|${m?.card}|${m?.title}|${m?.icon}|${m?.text}|${m?.tone}`).toBe("card|eye|민준|eye|마피아 아님|undefined");
+  });
+
+  it("사람 줄은 본문이 '[유언]' 이어도 player 메시지다", () => {
+    const { result, receive } = mount(cardView());
+    receive({ t: "chat", ...line(1, 3, "[유언] 가") });
+    expect(`${result.current.messages[0]?.kind}|${result.current.messages[0]?.card}`).toBe("player|undefined");
+  });
 });
