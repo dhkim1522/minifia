@@ -97,7 +97,8 @@ describe("누설 검사 (c) — 단계 키가 틀린 줄은 더 넓은 채널로
 });
 
 describe("누설 검사 (d) — 재접속 chatLog 도 같은 audience 를 지난다 (T-07-35, T-07-36)", () => {
-  const CHATLOG_KEY_PATHS = new Set([".t", ".lines", ".lines[].ch", ".lines[].seat", ".lines[].seq", ".lines[].text", ".lines[].at"]);
+  // 결정 0061-11: ".lines[].k" 는 서버가 사망 전환에서 만든 카드 표시, 공개 정보. 다른 경로는 넓히지 않는다.
+  const CHATLOG_KEY_PATHS = new Set([".t", ".lines", ".lines[].ch", ".lines[].seat", ".lines[].seq", ".lines[].text", ".lines[].at", ".lines[].k"]);
   const keyPaths = (value: unknown, path = ""): string[] => {
     if (Array.isArray(value)) return value.flatMap((v) => keyPaths(v, `${path}[]`));
     if (value !== null && typeof value === "object") {

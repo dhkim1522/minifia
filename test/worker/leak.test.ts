@@ -107,9 +107,11 @@ const WORLD_STRING_VALUES: Record<string, ReadonlySet<string>> = { ".t": new Set
 // ---- typing 프레임(07-10, T-07-18): 키는 t·seat·on 뿐, 문자열 값은 .t "typing" 뿐이다 ----
 const TYPING_KEY_PATHS = new Set([".t", ".seat", ".on"]);
 // ---- chat 프레임(07-11, 누설 검사 (a)(b)(c)): 키는 t·ch·seat·seq·text·at 뿐, .t 는 "chat", .ch 는 all|mafia|ghost 이고 mafia·ghost 는 받을 권리 있는 소켓에서만 나온다 ----
-const CHAT_KEY_PATHS = new Set([".t", ".ch", ".seat", ".seq", ".text", ".at"]);
+// 결정 0061-11: ".k" 는 서버가 사망 전환에서 만든 카드 표시(will|note)이고 공개 정보다. 사람이 보낸 줄에는 없다. 다른 경로는 넓히지 않는다.
+const CHAT_KEY_PATHS = new Set([".t", ".ch", ".seat", ".seq", ".text", ".at", ".k"]);
 // ---- chatLog 프레임(07-14, 누설 검사 (d)): hello 직후 한 번. 키는 t·lines[]·ch·seat·seq·text·at 뿐이고 수신자 마스크(r)·쓰기 순번(g)·일차(n)는 없다 ----
-const CHATLOG_KEY_PATHS = new Set([".t", ".lines", ".lines[].ch", ".lines[].seat", ".lines[].seq", ".lines[].text", ".lines[].at"]);
+// 결정 0061-11: ".lines[].k" 는 서버가 사망 전환에서 만든 카드 표시, 공개 정보. 다른 경로는 넓히지 않는다.
+const CHATLOG_KEY_PATHS = new Set([".t", ".lines", ".lines[].ch", ".lines[].seat", ".lines[].seq", ".lines[].text", ".lines[].at", ".lines[].k"]);
 // ---- chatReject 프레임(07-11): 키는 t·why 뿐, 문자열 값은 .t "chatReject" 와 .why(거절 이유 코드)뿐이다. 보낸 사람 소켓에만 간다 ----
 const CHAT_REJECT_KEY_PATHS = new Set([".t", ".why"]);
 
