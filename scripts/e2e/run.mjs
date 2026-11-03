@@ -142,10 +142,16 @@ for (const flow of flows) if (flow.size) jobs.push({ flow, size: flow.size });
 // 두 번이면 흐름마다 약 1/9 이상으로 실패한다(04-33 로컬 전체 실행에서 관찰: 시도마다 1/2 가까이) — 열 흐름 × 세 폭 전체 실행이 자주 깨져서 네 번으로 늘렸다. 검사 기준과는 무관하다.
 const MAX_ATTEMPTS = 4;
 
-/** 작업 하나: 새 방·새 컨텍스트. 준비 실패(SetupError·시간 초과·선택자 오류)는 새 방으로 다시 돈다(최대 MAX_ATTEMPTS번). 검사 실패는 다시 돌지 않는다. */
+/**
+ * 작업 하나: 새 방·새 컨텍스트. 준비 실패(SetupError·시간 초과·선택자 오류)는 새 방으로 다시 돈다(최대 MAX_ATTEMPTS번). 검사 실패는 다시 돌지 않는다.
+ * 검사 실패(ok:false)를 기록한 뒤 이후 단계에서 던진 시도는 재시도로 덮이지 않게 실패 항목을 따로 모아 두었다가 결과에 합친다(WR-03).
+ */
 async function runJob({ flow, size }) {
   const t0 = performance.now();
   let lastError = null;
+  /** 던진 시도에서 이미 기록된 검사 실패. 재시도가 통과해도 결과 표에 남는다 */
+  const carried = [];
+  const carriedKeys = new Set();
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     const ctx = { origin, size, shots: args.shots, browser, secrets, results: [], host: null, stage: "connect" };
     try {
@@ -155,12 +161,21 @@ async function runJob({ flow, size }) {
       break;
     } catch (e) {
       lastError = e;
+      const failed = ctx.results.filter((r) => r.ok === false);
+      for (const r of failed) {
+        const key = JSON.stringify([r.scenario, r.size, r.id, r.detail]);
+        if (!carriedKeys.has(key)) {
+          carriedKeys.add(key);
+          carried.push(r);
+        }
+      }
       // 준비 실패로 다시 도는 시도는 결과 표에 남지 않으므로 어느 조작에서 멈췄는지 한 줄 알린다(08-24: 간헐 재시도 원인을 볼 수 있게)
-      emit(`재시도: ${flow.id} ${size.label} ${attempt}/${MAX_ATTEMPTS} — ${String(e instanceof Error ? e.message : e).split("\n")[0].slice(0, 160)}`);
+      emit(`재시도: ${flow.id} ${size.label} ${attempt}/${MAX_ATTEMPTS} — ${String(e instanceof Error ? e.message : e).split("\n")[0].slice(0, 160)}${failed.length > 0 ? ` (이 시도에서 기록된 검사 실패 ${failed.length}건은 결과에 남김)` : ""}`);
     } finally {
       await ctx.host?.context.close().catch(() => {});
     }
   }
+  results.push(...carried);
   if (lastError !== null) {
     const msg = String(lastError instanceof Error ? lastError.message : lastError).split("\n")[0].slice(0, 200);
     const setup = lastError instanceof SetupError;
