@@ -44,6 +44,13 @@ export const REMOVED_DAY_IDENTIFIERS = [
   "mafiaNightHint",
   "pickError",
   "mafiaChatNotice",
+  // 9페이즈(09-18) 삭제 목록, 결정 0061-17: v1.0 아침 탈락 문구 체계 — 꼬리 문장 일곱 가지 표, 번호로 고르는 제목 함수, 무사 문구 객체,
+  // 카드 문장 함수와 그 반환 모양. 아침 알림은 morningText(세 문장)가 대신한다.
+  "ELIMINATION_TAILS",
+  "eliminationTitle",
+  "MORNING_SAFE",
+  "morningCardText",
+  "MorningCardContent",
 ] as const;
 
 /**
@@ -65,6 +72,9 @@ export const SERVER_REMOVED_IDENTIFIERS = [
   "candidateRevealMs",
   "EXECUTION_PHRASE_COUNT",
   "lastExecPhrase",
+  // 9페이즈(09-18), 결정 0061-17: 아침 문구 수 상수와 직전 문구 기억 필드. 서버는 문구 번호를 더 이상 채우지 않고 와이어도 싣지 않는다.
+  "MORNING_PHRASE_COUNT",
+  "lastPhrase",
 ] as const;
 
 const ROOM_PATH = "shared/game/room.ts";
@@ -133,6 +143,14 @@ describe("지운 v1.0 낮·처형 화면 이름 (DAY-07)", () => {
     expect(roomLegacyViolations(read(ROOM_PATH)).join(" | ")).toBe("");
     // 예외가 실제로 쓰이고 있는지(표가 사라졌는데 예외만 남는 일이 없게)
     expect(read(ROOM_PATH).includes('"candidateVoteReveal"') || read(ROOM_PATH).includes("candidateVoteReveal:")).toBe(true);
+  });
+
+  it("와이어 MorningView 필드는 eliminated·saved 둘뿐이고 문구 번호 필드가 없다 (결정 0061-12·17)", () => {
+    const code = stripComments(read("shared/protocol.ts"));
+    const body = /export interface MorningView \{([^}]*)\}/.exec(code)?.[1] ?? "";
+    expect(body.length).toBeGreaterThan(0);
+    const keys = [...body.matchAll(/^\s*([A-Za-z]+)\??:/gm)].map((m) => m[1]);
+    expect(keys.sort().join(",")).toBe("eliminated,saved");
   });
 
   it("지운 파일이 저장소에 없다", () => {

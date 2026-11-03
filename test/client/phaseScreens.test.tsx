@@ -395,6 +395,21 @@ describe("밤·아침 라우팅과 안내 (UI-SPEC C5·접근성, RESEARCH A6)",
     expect(liveRegion(r.container).textContent).toBe("아침이 밝았습니다. 민지 님이 당했습니다");
   });
 
+  it("morning view(saved) → '아침이 밝았습니다. 누군가 살아났습니다' (누구인지 없음, 결정 0044-22)", () => {
+    const r = renderRoom(morning({ morning: { saved: true } }));
+    expect(liveRegion(r.container).textContent).toBe("아침이 밝았습니다. 누군가 살아났습니다");
+  });
+
+  it("morning view 에서 피해자 본인(좌석 0 탈락) → '아침이 밝았습니다. 암살당했습니다'", () => {
+    const r = renderRoom(morning({ morning: { eliminated: 0 }, meAlive: false }));
+    expect(liveRegion(r.container).textContent).toBe("아침이 밝았습니다. 암살당했습니다");
+  });
+
+  it("morning view 에서 이미 유령인 사람(처형으로 탈락)은 다른 시민과 같은 문장을 읽는다", () => {
+    const r = renderRoom(morning({ morning: { eliminated: 2 }, meAlive: false }));
+    expect(liveRegion(r.container).textContent).toBe("아침이 밝았습니다. 민지 님이 당했습니다");
+  });
+
   it("morning view({}) → '아침이 밝았습니다. 아무 일도 없었습니다'", () => {
     const r = renderRoom(morning({ morning: {} }));
     expect(liveRegion(r.container).textContent).toBe("아침이 밝았습니다. 아무 일도 없었습니다");
