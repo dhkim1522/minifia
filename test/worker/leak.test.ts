@@ -13,6 +13,8 @@ import {
   connect,
   forceDue,
   editRoom,
+  framesOf,
+  ghostsOf,
   hello,
   lastViewOf,
   mapPlayers,
@@ -87,7 +89,7 @@ const ROLE_PATHS_ALIVE = [".view.me.role", ".view.day.roles[]", ".view.me.chat"]
  * 서버 전용 키: 어떤 프레임의 어떤 경로에도 없어야 한다. 주장 차례(결정 0027-3)와 4페이즈 투표·종료(결정 0036-12)의 서버 상태.
  * winner·execution 은 같은 이름의 view 키(result.winner·day.execution)가 있어 넣지 않고, 경로·단계로 검사한다.
  */
-const SERVER_ONLY_KEYS = ["claimPick", "claimOrder", "claimIdx", "claimStart", "execVote", "candidateVote", "verdict", "nightLog", "lastExecPhrase", "nominate", "verdictVote", "endVote"];
+const SERVER_ONLY_KEYS = ["claimPick", "claimOrder", "claimIdx", "claimStart", "execVote", "candidateVote", "verdict", "nightLog", "lastExecPhrase", "nominate", "verdictVote", "endVote", "nightNote"];
 /**
  * 서버 전용 이름과 같은 공개 와이어 필드의 경로(08-11, 결정 0060-3·4) — 이 두 경로만 SERVER_ONLY_KEYS 검사에서 빼고 이유를 단다. 목록은 줄이지 않고, 새 경로는 받을 권리 조건이 있을 때만 더한다.
  *  - .view.day.verdict: 처형 단계에서 모두에게 같은 {yes,no,passed} 집계(서버 전용 RoomState.verdict 와 이름만 같다).
@@ -974,4 +976,128 @@ describe("아침 카드 프레임은 허용 키 목록 안이다 (09-14, MORN-02
     const logFrame = (await nextFrame(again, (m) => m.t === "chatLog")) as Extract<ServerMessage, { t: "chatLog" }>;
     for (const pth of keyPaths(logFrame)) expect(`${pth}:${CHATLOG_KEY_PATHS.has(pth)}`).toBe(`${pth}:true`);
   }, 40_000);
+});
+
+// ---- 신분 행렬·유언 canary (09-16, WILL-01, NIGHT-12, 결정 0061-7·9·10·12·14, L7·L8·L11) ----
+// 허용 경로는 새로 더하지 않았다: me.will(본인·산 사람), me.note·nightTally·nightSure(밤의 산 마피아)는 아래에서 받을 권리 조건과 함께 단언한다(0061-7·9·10·12).
+// 아침 카드 경로는 앞 describe 의 CHAT_KEY_PATHS·CHATLOG_KEY_PATHS 가 이미 가진 ".k" 뿐이다(0061-11·14).
+describe("신분 여섯 × 유언·쪽지 canary 행렬 (WILL-01, NIGHT-12, L7·L8·L11)", () => {
+  const NOTE = "NOTE-CANARY";
+  type Seated6 = SeatedActor;
+
+  it("유언은 본인 프레임에만, 쪽지·집계는 밤의 산 마피아에게만, 죽은 뒤 유언·쪽지는 카드 줄로만 나온다", async () => {
+    const g = await startedGame("discussion");
+    const [v, ghostC] = withRole(g, "citizen") as [Seated6, Seated6];
+    const mafias = withRole(g, "mafia");
+    const bySeat = new Map(g.actors.map((a) => [a.seat, a]));
+
+    // 판 시작(낮)에 여섯 명이 각자 유언을 남긴다.
+    for (const a of g.actors) send(a.sock, { t: "will", text: `CANARY-${a.seat}` });
+    for (const a of g.actors) await settle(a.sock, mark(a.sock));
+    // 시민 하나는 밤 전에 이미 유령이다(유령 소켓의 쪽지 누설 검사). 저장 편집이라 카드는 없다.
+    await ghostsOf(g, [ghostC.seat]);
+    await advanceTo(g.code, g.socks, "night");
+    for (const a of g.actors) await settle(a.sock, mark(a.sock));
+    // 마피아 전원이 V 를 고르면 확정, 이어서 쪽지.
+    for (const m of mafias) pickAs(m, v.seat);
+    for (const a of g.actors) await settle(a.sock, mark(a.sock));
+    send(mafias[0]!.sock, { t: "note", text: NOTE });
+    for (const a of g.actors) await settle(a.sock, mark(a.sock));
+    // 쪽지 뒤에 경찰·의사가 고르면 그들 소켓이 새 state 를 받는다 — 쪽지가 그 view 에 섞이면 여기서 드러난다(의사는 V 가 아닌 사람을 지킨다).
+    pickAs(withRole(g, "police")[0]!, mafias[1]!.seat);
+    pickAs(withRole(g, "doctor")[0]!, mafias[0]!.seat);
+    for (const a of g.actors) await settle(a.sock, mark(a.sock));
+    const beforeMorning = g.socks.map((sock) => mark(sock));
+
+    /** 이 소켓 주인(a)이 받을 권리 없는 유언·쪽지 글이 프레임에 있으면 설명 한 줄씩. cards 가 true 면 V 의 유언·쪽지 카드 줄은 허용한다. */
+    const violations = (a: Seated6, msgs: ServerMessage[], cards: boolean): string[] => {
+      const out: string[] = [];
+      const isCard = (m: { k?: string; seat: number; text: string }): boolean =>
+        cards && m.seat === v.seat && ((m.k === "will" && m.text === `CANARY-${v.seat}`) || (m.k === "note" && m.text === NOTE));
+      for (const msg of msgs) {
+        const units: Array<{ k?: string; seat: number; text: string } | ServerMessage> = msg.t === "chatLog" ? msg.lines : [msg];
+        for (const unit of units) {
+          const json = JSON.stringify(unit);
+          const hasForeign = [...bySeat.keys()].some((sn) => sn !== a.seat && json.includes(`CANARY-${sn}`));
+          const hasNote = json.includes(NOTE);
+          if (!hasForeign && !hasNote) continue;
+          const asLine = unit as { t?: string; k?: string; seat: number; text: string };
+          const card = (asLine.t === undefined || asLine.t === "chat") && isCard(asLine);
+          const ownNote = msg.t === "state" && msg.view.phase === "night" && msg.view.me.note === NOTE && a.role === "mafia" && !hasForeign;
+          if (!card && !ownNote) out.push(`${a.role}#${a.seat} ${msg.t}: ${json.slice(0, 120)}`);
+        }
+      }
+      return out;
+    };
+
+    // ---- 밤(아침 전) ----
+    for (const a of g.actors) {
+      const i = g.actors.indexOf(a);
+      const msgs = framesOf(a.sock).slice(0, beforeMorning[i]!);
+      expect(violations(a, msgs, false).join("\n")).toBe("");
+    }
+    for (const m of mafias) {
+      const i = g.actors.indexOf(m);
+      expect(framesOf(m.sock).slice(0, beforeMorning[i]!).some((x) => x.t === "state" && x.view.me.note === NOTE)).toBe(true);
+    }
+
+    // ---- 아침 ----
+    await advanceTo(g.code, g.socks, "morning");
+    for (const a of g.actors) await settle(a.sock, mark(a.sock));
+    // 새 소켓 재접속(chatLog 의 카드 줄도 같은 규칙).
+    const again = await connect(g.code);
+    const citizenAgain = g.actors.find((a) => a.role === "doctor")!;
+    send(again, { t: "hello", token: citizenAgain.token });
+    await nextFrame(again, (m) => m.t === "chatLog");
+    await settle(again, 0);
+    expect(violations(citizenAgain, framesOf(again), true).join("\n")).toBe("");
+
+    const allFrames = g.actors.map((a) => framesOf(a.sock));
+    for (const a of g.actors) {
+      const i = g.actors.indexOf(a);
+      expect(violations(a, allFrames[i]!, true).join("\n")).toBe("");
+      const post = allFrames[i]!.slice(beforeMorning[i]!);
+      const cards = post.filter((x): x is Extract<ServerMessage, { t: "chat" }> => x.t === "chat" && x.k !== undefined);
+      expect(cards.map((c) => `${c.ch}/${c.k}/${c.seat}/${c.text}`).join("|")).toBe(`all/will/${v.seat}/CANARY-${v.seat}|all/note/${v.seat}/${NOTE}`);
+    }
+
+    // ---- 모든 실제 프레임의 경로: 받을 권리 조건 ----
+    const sawWill = new Set<number>();
+    for (const a of g.actors) {
+      let phase = "";
+      let alive = true;
+      for (const msg of allFrames[g.actors.indexOf(a)]!) {
+        for (const pth of keyPaths(msg)) {
+          // 서버 전용 키(nightNote 포함)는 어떤 프레임에도 없다. 공개 와이어와 이름이 겹치는 경로는 허용 목록(ALLOWED_WIRE_PATHS)에서만 뺀다.
+          if (!ALLOWED_WIRE_PATHS.has(pth)) expect(SERVER_ONLY_KEYS.includes(pth.slice(pth.lastIndexOf(".") + 1))).toBe(false);
+        }
+        if (msg.t !== "state") continue;
+        phase = msg.view.phase;
+        alive = msg.view.players.find((p) => p.seat === a.seat)?.alive !== false;
+        const me = msg.view.me;
+        if (me.will !== undefined) {
+          // me.will: 그 소켓 본인 유언, 산 본인에게만(0061-10).
+          expect(`${a.seat}:${alive}:${String(me.will)}`).toBe(`${a.seat}:true:CANARY-${a.seat}`);
+          sawWill.add(a.seat);
+        }
+        if (me.note !== undefined) {
+          // me.note: 밤의 산 마피아 본인(0061-9·12).
+          expect(`${a.role}/${alive}/${phase}`).toBe("mafia/true/night");
+          expect(me.note).toBe(NOTE);
+        }
+        if (me.nightTally !== undefined || me.nightSure !== undefined) {
+          // me.nightTally·nightSure: 밤의 산 마피아 본인(0061-7).
+          expect(`${a.role}/${alive}/${phase}`).toBe("mafia/true/night");
+        }
+        if (msg.view.day?.chalk !== undefined) expect(phase === "night").toBe(false);
+      }
+    }
+    // 여섯이 모두 저장 직후 자기 유언을 본인 view 로 받았다(죽기 전) — 시험이 아무것도 안 보는 것이 아님.
+    expect([...sawWill].sort((p, q) => p - q).join(",")).toBe(g.actors.map((a) => a.seat).sort((p, q) => p - q).join(","));
+
+    // 아침 state 의 day.chalk 와 day.morning 은 모든 소켓에서 같다.
+    const morningViews = g.socks.map((sock) => lastViewOf(sock));
+    expect(new Set(morningViews.map((x) => JSON.stringify([x.day?.chalk, x.day?.morning]))).size).toBe(1);
+    expect(JSON.stringify(morningViews[0]!.day?.morning)).toBe(JSON.stringify({ eliminated: v.seat }));
+  }, 120_000);
 });
