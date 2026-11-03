@@ -35,6 +35,7 @@ export interface WorldState {
   lastMoveAt: Readonly<Record<string, number>>;
   wanderAt: Readonly<Record<string, number>>;
   lay?: LayoutMemo;
+  home?: HomeMemo;
 }
 
 /**
@@ -45,6 +46,48 @@ export interface WorldState {
 export interface LayoutMemo {
   key: string;
   slots: Readonly<Record<string, readonly [number, number]>>;
+}
+
+/**
+ * 토론이 끝난 자리 기억(결정 0061-5). day 는 기록한 일차, pos 는 사람(player id)마다 그 순간 구간의 끝점(고정소수점 좌표) —
+ * 밤·아침에 사람들을 이 자리로 되돌리는 근거다(연구 A1: 시각 기준 위치가 아니라 구간 끝점이라 결정적이다).
+ * 서버 전용 상태이고 어떤 프레임에도 그대로 싣지 않는다 — 위치는 snap 프레임으로만 나간다.
+ */
+export interface HomeMemo {
+  day: number;
+  pos: Readonly<Record<string, readonly [number, number]>>;
+}
+
+/**
+ * 토론이 끝난 자리를 기록한다. 같은 일차가 이미 기록돼 있으면 입력 객체를 그대로 돌려준다(멱등 — 재진입·재시도가 자리를 덮지 않는다).
+ * ids 중 구간이 있는 사람마다 p 의 마지막 두 값(걷던 사람은 가던 곳)을 적는다. 시각을 읽지 않는다.
+ */
+export function captureHome(w: WorldState, ids: readonly string[], day: number): WorldState {
+  if (w.home !== undefined && w.home.day === day) return w;
+  const pos: Record<string, readonly [number, number]> = {};
+  for (const id of ids) {
+    if (!Object.prototype.hasOwnProperty.call(w.segs, id)) continue;
+    const p = w.segs[id]!.p;
+    if (p.length < 2) continue;
+    pos[id] = [p[p.length - 2]!, p[p.length - 1]!];
+  }
+  return { ...w, home: { day, pos } };
+}
+
+/**
+ * 기록한 자리로 되돌린다: ids 중 home 점과 구간이 모두 있는 사람만 서 있는 한 점(restSegment)으로 바꾼다(forceSegment — lastMoveAt 은 건드리지 않는다).
+ * home 이 없으면 입력 객체 그대로(fail-safe).
+ */
+export function teleportHome(w: WorldState, ids: readonly string[], now: number): WorldState {
+  const home = w.home;
+  if (home === undefined) return w;
+  let out = w;
+  for (const id of ids) {
+    if (!Object.prototype.hasOwnProperty.call(home.pos, id)) continue;
+    const pt = home.pos[id]!;
+    out = forceSegment(out, id, restSegment(pt[0], pt[1], now));
+  }
+  return out;
 }
 
 /**
@@ -194,21 +237,23 @@ export function moveFrame(seat: number, seg: Segment): Extract<WorldFrame, { k: 
 
 // ---- 입장·퇴장·복귀와 저장/복원·스냅샷 ----
 
-/** 저장 모양. 끝난 구간은 한 점으로 접힌다. lastMoveAt·wanderAt 은 싣지 않는다(가정 A1). lay 는 있을 때만 싣는다(옛 저장값은 lay 없이 그대로 읽힌다). */
+/** 저장 모양. 끝난 구간은 한 점으로 접힌다. lastMoveAt·wanderAt 은 싣지 않는다(가정 A1). lay·home 은 있을 때만 싣는다(옛 저장값은 없이 그대로 읽힌다). */
 export interface StoredWorld {
   v: 1;
   segs: Record<string, Segment>;
   lay?: LayoutMemo;
+  home?: HomeMemo;
 }
 
-/** 퇴장: 구간·간격·배회 기록과 모이는 자리 기억 중 그 사람 슬롯을 지운다. */
+/** 퇴장: 구간·간격·배회 기록과 모이는 자리·토론이 끝난 자리 기억 중 그 사람 몫을 지운다. */
 export function despawnPlayer(w: WorldState, playerId: string): WorldState {
   const out: WorldState = {
     segs: withoutKey(w.segs, playerId),
     lastMoveAt: withoutKey(w.lastMoveAt, playerId),
     wanderAt: withoutKey(w.wanderAt, playerId),
   };
-  return w.lay === undefined ? out : { ...out, lay: { key: w.lay.key, slots: withoutKey(w.lay.slots, playerId) } };
+  const withLay: WorldState = w.lay === undefined ? out : { ...out, lay: { key: w.lay.key, slots: withoutKey(w.lay.slots, playerId) } };
+  return w.home === undefined ? withLay : { ...withLay, home: { day: w.home.day, pos: withoutKey(w.home.pos, playerId) } };
 }
 
 /** 대기실 복귀: 방에 있는 모두를 자기 seat 입장 지점 한 점으로 세운다. 방에 없는 사람과 간격·배회 기록은 버린다. */
@@ -230,10 +275,18 @@ function foldSegment(seg: Segment, now: number): Segment {
 export function compactWorld(w: WorldState, now: number): StoredWorld {
   const segs: Record<string, Segment> = {};
   for (const id of Object.keys(w.segs)) segs[id] = foldSegment(w.segs[id]!, now);
-  if (w.lay === undefined) return { v: 1, segs };
-  const slots: Record<string, readonly [number, number]> = {};
-  for (const id of Object.keys(w.lay.slots)) slots[id] = [w.lay.slots[id]![0], w.lay.slots[id]![1]];
-  return { v: 1, segs, lay: { key: w.lay.key, slots } };
+  const out: StoredWorld = { v: 1, segs };
+  if (w.lay !== undefined) {
+    const slots: Record<string, readonly [number, number]> = {};
+    for (const id of Object.keys(w.lay.slots)) slots[id] = [w.lay.slots[id]![0], w.lay.slots[id]![1]];
+    out.lay = { key: w.lay.key, slots };
+  }
+  if (w.home !== undefined) {
+    const pos: Record<string, readonly [number, number]> = {};
+    for (const id of Object.keys(w.home.pos)) pos[id] = [w.home.pos[id]![0], w.home.pos[id]![1]];
+    out.home = { day: w.home.day, pos };
+  }
+  return out;
 }
 
 /** 저장된 v 의 상한(MOVE_V 보다 넉넉하게). 이보다 큰 값은 손상으로 본다. */
@@ -293,8 +346,28 @@ function parseStoredLay(raw: unknown, ids: ReadonlySet<string>): LayoutMemo | nu
 }
 
 /**
+ * unknown 한 home 을 형태 검사한다. day 가 0 이상 정수가 아니거나 pos 가 객체가 아니면 home 전체를 버리고(null),
+ * pos 는 항목마다 본다 — 방에 있는 id 이고 정수 좌표 둘(±MOVE_COORD_LIMIT)이면 살리고 아니면 그 항목만 버린다(T-09-06).
+ */
+function parseStoredHome(raw: unknown, ids: ReadonlySet<string>): HomeMemo | null {
+  if (!isRecord(raw)) return null;
+  const { day, pos } = raw;
+  if (typeof day !== "number" || !Number.isInteger(day) || day < 0) return null;
+  if (!isRecord(pos)) return null;
+  const out: Record<string, readonly [number, number]> = {};
+  for (const id of Object.keys(pos)) {
+    if (!ids.has(id)) continue;
+    const v = pos[id];
+    if (!Array.isArray(v) || v.length !== 2) continue;
+    const [x, z] = v as unknown[];
+    if (isCoord(x) && isCoord(z)) out[id] = [x, z];
+  }
+  return { day, pos: out };
+}
+
+/**
  * 하이버네이션·배포 뒤 복원. 모르는 모양·방에 없는 사람·막힌 점·범위 밖 점·v ≤ 0 은 버리고 그 사람을 입장 지점에 세운다.
- * 결과에는 방에 있는 사람만 들어 있고 간격·배회 기록은 비어 있다. lay 는 형태가 맞을 때만 되살린다(없는 옛 저장값은 lay 없이 읽힌다).
+ * 결과에는 방에 있는 사람만 들어 있고 간격·배회 기록은 비어 있다. lay·home 은 형태가 맞을 때만 되살린다(없는 옛 저장값은 없이 읽힌다).
  */
 export function restoreWorld(stored: unknown, players: readonly { id: string; seat: number }[], now: number, map: MapDef): WorldState {
   const segsRaw: Record<string, unknown> | null =
@@ -305,8 +378,10 @@ export function restoreWorld(stored: unknown, players: readonly { id: string; se
     const seg = raw === undefined ? null : parseStoredSegment(raw, map);
     out = seg === null ? spawnPlayer(out, pl.id, pl.seat, now, map) : { ...out, segs: { ...out.segs, [pl.id]: seg } };
   }
-  const lay = isRecord(stored) && stored.v === 1 ? parseStoredLay(stored.lay, new Set(players.map((pl) => pl.id))) : null;
-  return lay === null ? out : { ...out, lay };
+  const ids = new Set(players.map((pl) => pl.id));
+  const lay = isRecord(stored) && stored.v === 1 ? parseStoredLay(stored.lay, ids) : null;
+  const home = isRecord(stored) && stored.v === 1 ? parseStoredHome(stored.home, ids) : null;
+  return { ...out, ...(lay === null ? {} : { lay }), ...(home === null ? {} : { home }) };
 }
 
 /** 접속 때 모두의 지금 구간. seat 오름차순, 방에 있고 world 에 있는 사람만, 접기 규칙은 compactWorld 와 같다. */
