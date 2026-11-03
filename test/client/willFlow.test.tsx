@@ -457,3 +457,121 @@ describe("연결 끊김 (UI-SPEC 433행)", () => {
     expect(sent(send)).toEqual([]);
   });
 });
+
+// ---- Task 3: 키보드 배치 -----------------------------------------------------------------------------------
+
+describe("키보드 배치 — 패널 숨김 · compact · 초점 복귀 (UI-SPEC 282·442행)", () => {
+  const INNER_H = 800;
+  const PANEL_H = 250;
+  const SHEET_H = 226;
+  interface FakeVV extends EventTarget {
+    height: number;
+    offsetTop: number;
+  }
+  const installVV = (height: number): FakeVV => {
+    const vv = Object.assign(new EventTarget(), { height, offsetTop: 0 }) as FakeVV;
+    Object.defineProperty(window, "visualViewport", { value: vv, configurable: true, writable: true });
+    return vv;
+  };
+  const frame = (): void => void act(() => void vi.advanceTimersByTime(20));
+  const resize = (vv: FakeVV, height: number): void => {
+    vv.height = height;
+    act(() => void vv.dispatchEvent(new Event("resize")));
+    frame();
+  };
+  const roomOf = (c: HTMLElement): HTMLElement => (c.querySelector("main.mf-game")?.closest(".mf-room") ?? c.querySelector("main.mf-game")) as HTMLElement;
+  const panelOf = (c: ParentNode): HTMLElement => c.querySelector(".mf-game__panel") as HTMLElement;
+
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["requestAnimationFrame", "cancelAnimationFrame", "setTimeout", "clearTimeout"] });
+    Object.defineProperty(window, "innerHeight", { value: INNER_H, configurable: true, writable: true });
+    vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockImplementation(function (this: HTMLElement) {
+      if (this.classList.contains("mf-game__panel")) return PANEL_H;
+      if (this.classList.contains("mf-will-layer")) return SHEET_H;
+      if (this.classList.contains("mf-game__header")) return 62;
+      return 0;
+    });
+  });
+  afterEach(() => {
+    vi.restoreAllMocks();
+    Reflect.deleteProperty(window, "visualViewport");
+  });
+
+  it("시트 textarea 초점도 키보드 lift 를 읽는다: --mf-kb-lift 가 방 틀에 쓰이고, 닫으면 0 으로 돌아간다", () => {
+    const vv = installVV(500);
+    const m = mount(makeView());
+    fireEvent.click(willBtn(m.container)!);
+    frame();
+    expect(roomOf(m.container).style.getPropertyValue("--mf-kb-lift")).toBe("300px");
+    expect(vv.height).toBe(500);
+    fireEvent.click(closeBtn(m.container));
+    frame();
+    expect(roomOf(m.container).style.getPropertyValue("--mf-kb-lift")).toBe("0px");
+  });
+
+  it("패널 + 시트 + 8 이 visualViewport 높이 − 62 를 넘으면 패널을 숨기고(data-will-hide-panel) 시트만 키보드 위에 붙는다", () => {
+    const vv = installVV(500); // 250 + 226 + 8 = 484 > 500 − 62
+    const m = mount(makeView());
+    fireEvent.click(willBtn(m.container)!);
+    frame();
+    expect(panelOf(m.container).getAttribute("data-will-hide-panel")).toBe("true");
+    expect(m.container.querySelector(".mf-will-layer")?.getAttribute("data-panel-hidden")).toBe("true");
+    // 높이가 충분하면 패널이 다시 보인다
+    resize(vv, 700); // 484 <= 700 − 62
+    expect(panelOf(m.container).getAttribute("data-will-hide-panel")).toBeNull();
+    expect(m.container.querySelector(".mf-will-layer")?.getAttribute("data-panel-hidden")).toBeNull();
+    // 닫으면 숨김이 풀린 채 남지 않는다
+    resize(vv, 500);
+    expect(panelOf(m.container).getAttribute("data-will-hide-panel")).toBe("true");
+    fireEvent.click(closeBtn(m.container));
+    frame();
+    expect(panelOf(m.container).getAttribute("data-will-hide-panel")).toBeNull();
+  });
+
+  it("키보드가 없어 넉넉하면(시트 없음 포함) 패널은 숨지 않는다", () => {
+    installVV(INNER_H);
+    const m = mount(makeView());
+    expect(panelOf(m.container).getAttribute("data-will-hide-panel")).toBeNull();
+    fireEvent.click(willBtn(m.container)!);
+    frame();
+    expect(panelOf(m.container).getAttribute("data-will-hide-panel")).toBeNull();
+  });
+
+  it("visualViewport 높이가 300 미만이면 시트 textarea 가 2줄(compact), 300 이상이면 3줄이다", () => {
+    const vv = installVV(280);
+    const m = mount(makeView());
+    fireEvent.click(willBtn(m.container)!);
+    frame();
+    expect(area(m.container).rows).toBe(2);
+    resize(vv, 300);
+    expect(area(m.container).rows).toBe(3);
+    resize(vv, 299);
+    expect(area(m.container).rows).toBe(2);
+  });
+
+  it("시트 textarea 초점·입력·blur 가 채팅 입력 중 상태를 켜지 않는다: typing 0회, 입력 중 알약 없음", () => {
+    installVV(500);
+    const send = vi.fn<(m: ClientMessage) => boolean>(() => true);
+    const m = mount(makeView({ phase: "discussion" }), { send });
+    fireEvent.click(willBtn(m.container)!);
+    frame();
+    fireEvent.change(area(m.container), { target: { value: "쓰는 중" } });
+    frame();
+    act(() => area(m.container).blur());
+    act(() => void vi.advanceTimersByTime(5000));
+    expect(typings(send)).toEqual([]);
+    expect(m.container.querySelector("[data-typing], .mv-typing")).toBeNull();
+  });
+
+  it("채팅 패널은 시트가 열려 키보드가 올라와도 글을 줄이거나 행동 줄을 숨기지 않는다 — 시트를 연 [유언] 버튼이 남아 초점이 돌아온다", () => {
+    installVV(500);
+    const m = mount(makeView());
+    const opener = willBtn(m.container)!;
+    fireEvent.click(opener);
+    frame();
+    expect(willBtn(m.container)).toBe(opener); // 키보드가 열려도 행동 줄이 사라지지 않는다
+    fireEvent.click(closeBtn(m.container));
+    frame();
+    expect(document.activeElement).toBe(opener);
+  });
+});
