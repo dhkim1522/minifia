@@ -1,7 +1,7 @@
 // 채팅 줄 보관의 순수 규칙(결정 0058): 줄 레코드, 채널별 연번, 수신자 좌석 마스크, 채널별 30줄 복원, 채널별 보관 상한.
 // 순수 모듈이다: 시각·난수를 읽지 않고 입력을 바꾸지 않으며, DOM·workerd API 가 없다(앱·워커 두 tsconfig 에 모두 들어간다).
 // 저장 I/O 는 이 파일에 없다 — 방 Durable Object 가 chatKey 로 줄 단위 저장·삭제를 한다(07-14). 이 파일은 무엇을 쓰고 지우고 돌려줄지만 정한다.
-// 마스크(r)·쓰기 순번(g)·일차(n)는 저장 전용이다. 와이어로 나가는 모양은 toWire 가 키 다섯(ch·seat·seq·text·at)만 복사한 것이다.
+// 마스크(r)·쓰기 순번(g)·일차(n)는 저장 전용이다. 와이어로 나가는 모양은 toWire 가 키 다섯(ch·seat·seq·text·at)과, 카드 줄일 때만 k 를 복사한 것이다.
 // 복원은 '지금의 역할·생존'으로 다시 계산하지 않는다 — 보낼 때 audience 가 정한 마스크로만 한다(복원이 라이브보다 넓어지지 않는다).
 import { MAX_PLAYERS } from "../protocol";
 import type { ChatChannel, ChatLineWire } from "../protocol";
@@ -29,6 +29,8 @@ export interface ChatRecord {
   at: number;
   n: number;
   r: number;
+  /** 서버가 사망 전환에서 만든 카드 줄(유언·쪽지, 결정 0061-11). 사람이 보낸 줄에는 키 자체가 없다. */
+  k?: "will" | "note";
 }
 
 export interface ChatLog {
@@ -64,7 +66,7 @@ export function seatMask(players: readonly { id: string; seat: number }[], ids: 
  */
 export function appendLine(
   log: ChatLog,
-  input: { ch: ChatChannel; seat: number; text: string; at: number; n: number; r: number },
+  input: { ch: ChatChannel; seat: number; text: string; at: number; n: number; r: number; k?: "will" | "note" },
 ): { log: ChatLog; record: ChatRecord; evicted: number[] } {
   const record: ChatRecord = {
     g: log.nextG,
@@ -75,6 +77,7 @@ export function appendLine(
     at: input.at,
     n: input.n,
     r: input.r,
+    ...(input.k === undefined ? {} : { k: input.k }),
   };
   let records: ChatRecord[] = [...log.records, record];
   const inChannel = records.filter((x) => x.ch === input.ch);
@@ -92,9 +95,11 @@ export function appendLine(
   };
 }
 
-/** 와이어 모양. 필드별로 복사한다 — 펼쳐 복사하면 마스크·g·일차나 덧붙은 키가 함께 나간다. */
+/** 와이어 모양. 필드별로 복사한다 — 펼쳐 복사하면 마스크·g·일차나 덧붙은 키가 함께 나간다. k 는 카드 줄일 때만 복사한다. */
 export function toWire(record: ChatRecord): ChatLineWire {
-  return { ch: record.ch, seat: record.seat, seq: record.seq, text: record.text, at: record.at };
+  const wire: ChatLineWire = { ch: record.ch, seat: record.seat, seq: record.seq, text: record.text, at: record.at };
+  if (record.k !== undefined) wire.k = record.k;
+  return wire;
 }
 
 /**
@@ -128,7 +133,9 @@ function parseRecord(raw: unknown): ChatRecord | null {
   if (typeof at !== "number" || !Number.isFinite(at)) return null;
   if (typeof n !== "number" || !Number.isInteger(n) || n < 0) return null;
   if (typeof r !== "number" || !Number.isInteger(r) || r < 0 || r > MASK_MAX) return null;
-  return { g, ch, seq, seat, text, at, n, r };
+  if (v.k === undefined) return { g, ch, seq, seat, text, at, n, r };
+  if (v.k !== "will" && v.k !== "note") return null;
+  return { g, ch, seq, seat, text, at, n, r, k: v.k };
 }
 
 /**

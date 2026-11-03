@@ -566,8 +566,9 @@ export class Room extends DurableObject<Env> {
     if (!result.ok) return result.error;
     if (result.state === this.room) return null;
     if (endReached(result.state)) {
+      const prev = this.room;
       this.room = tick({ ...result.state, phaseEndsAt: now }, now, cryptoRandInt);
-      await this.afterTransition(now);
+      await this.afterTransition(prev, now);
       return null;
     }
     this.room = result.state;
@@ -660,8 +661,9 @@ export class Room extends DurableObject<Env> {
       this.rejectTestTool(ws, att.playerId, result.error);
       return;
     }
+    const prev = this.room;
     this.room = result.state;
-    await this.afterTransition(Date.now());
+    await this.afterTransition(prev, Date.now());
   }
 
   // 대기실로 되돌리기: 같은 방·같은 사람(소켓은 닫지 않는다). 알람은 방 만료로 옮겨진다.
@@ -779,7 +781,7 @@ export class Room extends DurableObject<Env> {
     const next = tick(room, now, cryptoRandInt);
     if (next !== room) {
       this.room = next;
-      await this.afterTransition(now);
+      await this.afterTransition(room, now);
       return;
     }
     // 위치는 단계가 바뀌었는지와 무관하게 '지금 단계가 요구하는 모습'으로 맞춘다(멱등, 알람 따라잡기·퇴거에도 안전).
@@ -789,12 +791,50 @@ export class Room extends DurableObject<Env> {
   }
 
   // 단계 전환 뒤처리 한 곳(결정 0061-19): 단계 마감(advance)·토론 끝내기(applyEndDiscussion)·테스트 넘기기(handleTestSkip)가 모두 여기를 지난다.
-  // 순서가 계약이다: home 기억(지목 배치보다 먼저, 즉시 저장) → 저장·방송 → 위치 동기화(밤·아침 home → 새 유령 snap → 지목 배치) → 알람.
-  private async afterTransition(now: number): Promise<void> {
+  // 순서가 계약이다: home 기억(지목 배치보다 먼저, 즉시 저장) → 분필 좌표(저장·방송 전에 채워 모든 view 가 같은 값을 싣는다) → 저장·방송
+  // → 위치 동기화(밤·아침 home → 새 유령 snap → 지목 배치) → 사망 카드(유언·쪽지, 결정 0061-11) → 알람.
+  // prev 는 전환 전 상태다 — 사망은 전후 alive 비교로 찾는다(처형·암살 한 길, 알람 따라잡기로 여러 단계를 지나도 사망마다 한 번).
+  private async afterTransition(prev: RoomState, now: number): Promise<void> {
     if (this.captureHomeNow()) await this.flushWorld();
     await this.persistAndBroadcast();
     await this.syncPositions(now);
+    await this.emitDeathCards(prev, now);
     await this.reschedule();
+  }
+
+  // 이번 전환에서 산 사람 → 탈락이 된 사람의 seat 들(seat 오름차순).
+  private diedSeats(prev: RoomState): number[] {
+    const room = this.room;
+    if (!room) return [];
+    return room.players
+      .filter((p) => !isAlive(p) && prev.players.some((q) => q.id === p.id && isAlive(q)))
+      .map((p) => p.seat)
+      .sort((a, b) => a - b);
+  }
+
+  // 사망 카드(WILL-01·NIGHT-12·MORN-02, 결정 0061-11): 이번 전환에서 탈락한 사람마다 유언이 있으면 will 카드, 그 밤 피해자의 쪽지가 있으면 맨 끝에 note 카드.
+  // 그 밤 피해자의 유언은 다른 사망(앞선 처형)보다 뒤에 둔다. 카드는 서버가 한 번만 만들고 작성자 정보는 없다(seat = 피해자).
+  private async emitDeathCards(prev: RoomState, now: number): Promise<void> {
+    const room = this.room;
+    if (!room) return;
+    for (const seat of this.diedSeats(prev)) {
+      const will = room.players.find((p) => p.seat === seat)?.will;
+      if (will !== undefined && will !== "") await this.appendCard(seat, will, "will", now);
+    }
+  }
+
+  // 카드 한 줄: applyChat 본체와 같은 모양(받는 사람·마스크 한 번 → 보관 → 저장 → 전송)이되 도배·문장 검사는 부르지 않는다(사람이 보낸 줄이 아니다).
+  private async appendCard(seat: number, text: string, k: "will" | "note", now: number): Promise<void> {
+    const room = this.room;
+    if (!room) return;
+    const ids = audience(room, { k: "chat", ch: "all" });
+    if (ids.size === 0) return;
+    const r = seatMask(room.players, ids);
+    const appended = appendLine(this.chatLog, { ch: "all", seat, text, at: now, n: room.day ?? 0, r, k });
+    this.chatLog = appended.log;
+    await this.ctx.storage.put(chatKey(appended.record.g), appended.record);
+    if (appended.evicted.length > 0) await this.deleteChatKeys(appended.evicted.map(chatKey));
+    this.deliver(ids, { t: "chat", ...toWire(appended.record) });
   }
 
   // 그날 처음으로 걷기 단계(dayAnnounce·discussion)를 벗어난 지도 단계에 들어오면 각자 토론이 끝난 자리를 기억한다(결정 0061-5).
