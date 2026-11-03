@@ -5,7 +5,7 @@ import { installMemoryStorage } from "../helpers/memoryStorage";
 import { approachPoint } from "../../shared/game/world";
 import type { RoleId } from "../../shared/game/roles";
 import { faceSrc } from "../../src/net/assets";
-import type { ClientMessage, PhaseId, PublicPlayer, RoomView, SpectatePicks } from "../../shared/protocol";
+import type { ClientMessage, InvestigationRecord, PhaseId, PublicPlayer, RoomView, SpectatePicks } from "../../shared/protocol";
 import type { SceneLook } from "../../src/world/presence";
 import type { RoomConnection } from "../../src/net/useRoomConnection";
 
@@ -77,6 +77,8 @@ interface ViewOpts {
   /** 탈락한 본인에게 싣는 밤 선택 */
   picks?: SpectatePicks;
   morning?: { eliminated?: number; saved?: true };
+  /** 경찰 본인에게 싣는 조사 기록 */
+  records?: InvestigationRecord[];
   noExecution?: "tie" | "noVotes";
 }
 
@@ -109,6 +111,7 @@ function makeView(o: ViewOpts = {}): RoomView {
       ...(o.allyPicks !== undefined ? { allyPicks: o.allyPicks } : {}),
       ...(o.nightTally !== undefined ? { nightTally: o.nightTally } : {}),
       ...(o.nightSure !== undefined ? { nightSure: o.nightSure } : {}),
+      ...(o.records !== undefined ? { records: o.records } : {}),
     },
     day: {
       n: 1,
@@ -666,23 +669,118 @@ describe("아침 알림 (MORN-03, UI-SPEC 아침)", () => {
     expect(lastScene().lighting).toBe("morning");
   });
 
-  it("지목 동률·0표로 온 밤: '처형 없음' 알림이 1.4초 떴다 사라진다(채팅 줄도 남는다)", () => {
+  it("지목 동률·0표로 온 밤: '처형 없음' 알림이 1.4초 떴다가 이어서 '밤이 되었습니다' 가 1.6초 뜬 뒤 사라진다(채팅 줄도 남는다)", () => {
     const m = mount(makeView({ phase: "nomination", mySeat: 3 }));
     m.show(makeView({ phase: "night", mySeat: 3, noExecution: "tie" }));
     expect(announceText(m.container)).toBe("처형 없음");
-    act(() => void vi.advanceTimersByTime(1_399));
+    advance(1_399);
     expect(announceText(m.container)).toBe("처형 없음");
-    act(() => void vi.advanceTimersByTime(2));
+    advance(1);
+    expect(announceText(m.container)).toBe("밤이 되었습니다");
+    advance(1_599);
+    expect(announceText(m.container)).toBe("밤이 되었습니다");
+    advance(1);
     expect(announceText(m.container)).toBe("");
+    expect(sysLines(m.container)).toContain("처형 없음");
   });
 
-  it("처형이 이뤄진 밤·재접속 첫 스냅샷 밤에는 '처형 없음' 알림이 없다", () => {
+  it("처형이 이뤄진 밤: 0초에 '밤이 되었습니다' 하나가 1.6초 뜬다(처형 없음 없음). 재접속 첫 스냅샷 밤에는 알림이 없다", () => {
     const a = mount(makeView({ phase: "execution", mySeat: 3 }));
     a.show(makeView({ phase: "night", mySeat: 3 }));
+    expect(announceText(a.container)).toBe("밤이 되었습니다");
+    expect(a.container.querySelector("[data-announce] svg")).toBeNull();
+    advance(1_599);
+    expect(announceText(a.container)).toBe("밤이 되었습니다");
+    advance(1);
     expect(announceText(a.container)).toBe("");
     cleanup();
     const b = mount(makeView({ phase: "night", mySeat: 3, noExecution: "tie" }));
     expect(announceText(b.container)).toBe("");
+  });
+
+  it("밤에 당한 본인(좌석 2): 다른 문장 대신 0.7초에 '암살당했습니다'(ghost 아이콘, 진홍 아님)가 2초 뜨고, 채팅 hot 줄은 다른 사람과 같은 문장이다", () => {
+    const m = mount(night(2));
+    m.show(morning(2, 2, [2]));
+    advance(699);
+    expect(announceText(m.container)).toBe("");
+    advance(1);
+    expect(announceText(m.container)).toBe("암살당했습니다");
+    const icon = m.container.querySelector<SVGElement>("[data-announce] svg");
+    expect(icon?.getAttribute("width")).toBe("56");
+    expect(icon?.classList.contains("is-death")).toBe(false);
+    expect([...m.container.querySelectorAll("[data-chat-log] > p.is-hot")].map((p) => (p.textContent ?? "").trim())).toEqual(["서준 님이 당했습니다"]);
+    advance(1_999);
+    expect(announceText(m.container)).toBe("암살당했습니다");
+    advance(1);
+    expect(announceText(m.container)).toBe("");
+  });
+
+  describe("경찰 조사 결과 (E6 #35, L8, T-09-40)", () => {
+    const POLICE = 1;
+    const cards = (c: ParentNode): HTMLElement[] => [...c.querySelectorAll<HTMLElement>('[data-card="eye"]')];
+    const police = (phase: PhaseId, records: InvestigationRecord[], extra: Partial<ViewOpts> = {}): RoomView =>
+      makeView({ phase, mySeat: POLICE, records, ...extra });
+
+    it("경찰 화면: 알림이 2.6초에 시작해 2.2초, 2.4초에 eye 카드(제목 대상 닉네임·본문 '마피아 아님')가 이 화면 채팅에 한 장", () => {
+      const m = mount(police("night", []));
+      m.show(police("morning", [{ n: 1, target: 3, isMafia: false }], { morning: {} }));
+      advance(2_399);
+      expect(cards(m.container)).toHaveLength(0);
+      expect(announceText(m.container)).toBe("");
+      advance(1);
+      const [card] = cards(m.container);
+      expect(card?.querySelector(".mv-chat__card-title")?.textContent).toBe("지아");
+      expect(card?.querySelector(".mv-chat__card-text")?.textContent).toBe("마피아 아님");
+      advance(199);
+      expect(announceText(m.container)).toBe("");
+      advance(1);
+      expect(announceText(m.container)).toBe("아무 일도 없었습니다");
+      advance(2_199);
+      expect(announceText(m.container)).toBe("아무 일도 없었습니다");
+      advance(1);
+      expect(announceText(m.container)).toBe("");
+      expect(cards(m.container)).toHaveLength(1);
+    });
+
+    it("대상이 마피아면 본문 '마피아'", () => {
+      const m = mount(police("night", []));
+      m.show(police("morning", [{ n: 1, target: 4, isMafia: true }], { morning: {} }));
+      advance(2_400);
+      expect(cards(m.container)[0]?.querySelector(".mv-chat__card-text")?.textContent).toBe("마피아");
+    });
+
+    it("경찰이 그 밤에 안 골랐으면 카드가 없고 알림은 0.4초다", () => {
+      const m = mount(police("night", []));
+      m.show(police("morning", [], { morning: {} }));
+      advance(400);
+      expect(announceText(m.container)).toBe("아무 일도 없었습니다");
+      advance(3_000);
+      expect(cards(m.container)).toHaveLength(0);
+    });
+
+    it("경찰이 그 밤에 당했어도 카드는 받고 알림은 '암살당했습니다' 0.7초", () => {
+      const m = mount(police("night", []));
+      m.show(police("morning", [{ n: 1, target: 3, isMafia: false }], { morning: { eliminated: POLICE }, dead: [POLICE] }));
+      advance(700);
+      expect(announceText(m.container)).toBe("암살당했습니다");
+      advance(1_700);
+      expect(cards(m.container)).toHaveLength(1);
+    });
+
+    it("시민 화면에는 카드도 결과 문구도 없다", () => {
+      const m = mount(makeView({ phase: "night", mySeat: 3 }));
+      m.show(makeView({ phase: "morning", mySeat: 3, morning: {} }));
+      advance(5_000);
+      expect(cards(m.container)).toHaveLength(0);
+      expect(m.container.textContent).not.toContain("마피아 아님");
+    });
+
+    it("재접속 첫 스냅샷이 아침(경찰 기록 있음)이면 카드도 알림도 없다", () => {
+      const m = mount(police("morning", [{ n: 1, target: 3, isMafia: false }], { morning: {} }));
+      advance(5_000);
+      expect(cards(m.container)).toHaveLength(0);
+      expect(announceText(m.container)).toBe("");
+    });
   });
 
   it("고정 테이블 화면(.mf-dt)은 낮 시작부터 아침까지 어느 단계에서도 그려지지 않는다(DAY-07)", () => {

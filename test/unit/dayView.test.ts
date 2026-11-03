@@ -9,13 +9,20 @@ import {
   ANNOUNCE_EXEC_MS,
   ANNOUNCE_MORNING_AT,
   ANNOUNCE_MORNING_MS,
+  ANNOUNCE_NIGHT_MS,
   ANNOUNCE_NOEXEC_MS,
+  ANNOUNCE_POLICE_AT,
+  ANNOUNCE_POLICE_MS,
   ANNOUNCE_TALLY_MS,
+  ANNOUNCE_VICTIM_AT,
+  ANNOUNCE_VICTIM_MS,
   dayEvents,
   GHOST_FADE_END_MS,
   GHOST_RISE_MS,
   headerFor,
+  POLICE_CARD_AT,
   pointsTally,
+  policeResultOf,
   TOAST_FAST_MS,
   TOAST_MERGE_MS,
   TOAST_MS,
@@ -415,19 +422,32 @@ describe("dayEvents — 찬반 결과·처형·처형 없음 (DAY-06)", () => {
     same(events.fx, []);
   });
 
-  it("지목 → 밤(동률·0표): 즉시 system '처형 없음' 과 1.4초 알림", () => {
+  it("지목 → 밤(동률·0표): 즉시 system '처형 없음' 과 1.4초 알림, 이어 1.4초에 '밤이 되었습니다' 1.6초", () => {
     for (const reason of ["tie", "noVotes"] as const) {
       const events = dayEvents(nominationOf([[0, 1], [1, 0]]), viewOf("night", { day: { noExecution: { reason } } }));
       same(events.lines, [{ kind: "system", text: "처형 없음" }]);
-      same(events.announces, [{ text: "처형 없음", at: 0, ms: 1400 }]);
+      same(events.announces, [
+        { text: "처형 없음", at: 0, ms: 1400 },
+        { text: "밤이 되었습니다", at: 1400, ms: 1600 },
+      ]);
       same(events.fx, []);
     }
   });
 
-  it("처형 → 밤은 이미 알렸으므로 줄이 없다", () => {
+  it("처형 → 밤은 처형이 이미 알렸으므로 줄이 없고, 알림은 0초에 '밤이 되었습니다' 1.6초 하나다", () => {
     const events = dayEvents(executionView(5, 2, true), viewOf("night", { day: { candidate: 3 } }));
     same(events.lines, []);
-    same(events.announces, []);
+    same(events.announces, [{ text: "밤이 되었습니다", at: 0, ms: 1600 }]);
+    expect(ANNOUNCE_NIGHT_MS).toBe(1600);
+  });
+
+  it("부결 처형 → 밤도 '밤이 되었습니다' 알림 하나", () => {
+    same(dayEvents(executionView(2, 5, false), viewOf("night")).announces, [{ text: "밤이 되었습니다", at: 0, ms: 1600 }]);
+  });
+
+  it("첫 스냅샷·reset 인 밤은 알림이 없다", () => {
+    same(dayEvents(null, viewOf("night")).announces, []);
+    same(dayEvents(executionView(5, 2, true), viewOf("night"), { reset: true }).announces, []);
   });
 
   it("첫 스냅샷이 처형 단계면 줄·알림·연출 없이 상태만 준다 (변론자 유령 상태는 state)", () => {
@@ -660,5 +680,124 @@ describe("dayEvents — 아침 알림 (MORN-03)", () => {
 
   it("아침이 아닌 곳에서 아침으로 오는 경우(밤이 아닌 prev)는 아침 알림이 없다", () => {
     same(dayEvents(viewOf("lobby"), morningView({ eliminated: 3 })).announces, []);
+  });
+});
+
+// ---- 09-18 Task 2: 피해자·경찰 순서 (NIGHT-11, E4 #26, E6 #35) ----
+describe("dayEvents — 피해자 본인 '암살당했습니다' (NIGHT-11, 결정 0044-22)", () => {
+  // 나(seat 1)가 밤에는 산 사람, 아침에는 탈락. 피해자 목록에서 seat 1 이 alive false.
+  const alivePlayers = NAMES.map((n, seat) => pl(seat, n));
+  const deadMe = NAMES.map((n, seat) => pl(seat, n, seat !== 1));
+  const nightOfMe = (): RoomView => viewOf("night", { mySeat: 1, players: alivePlayers });
+  const morningOfMe = (): RoomView => viewOf("morning", { mySeat: 1, players: deadMe, day: { morning: { eliminated: 1 } } });
+
+  it("밤의 산 사람 → 아침의 탈락(같은 연결): 0.7초에 ghost 아이콘 '암살당했습니다' 2초 하나뿐이고 다른 알림이 없다", () => {
+    const events = dayEvents(nightOfMe(), morningOfMe());
+    same(events.announces, [{ text: "암살당했습니다", icon: "ghost", at: 700, ms: 2000 }]);
+    same([ANNOUNCE_VICTIM_AT, ANNOUNCE_VICTIM_MS], [700, 2000]);
+  });
+
+  it("채팅 hot 줄은 다른 사람과 같은 '{닉네임} 님이 당했습니다'(0.4초)다", () => {
+    const events = dayEvents(nightOfMe(), morningOfMe());
+    same(events.lines, [{ kind: "hot", text: "민준 님이 당했습니다", at: 400 }]);
+  });
+
+  it("처형으로 이미 탈락한 유령 화면(밤에도 탈락)은 세 문장 중 하나를 받는다 (가정 A3)", () => {
+    const ghostNight = viewOf("night", { mySeat: 1, players: deadMe });
+    const ghostMorning = viewOf("morning", { mySeat: 1, players: deadMe, day: { morning: { eliminated: 3 } } });
+    const events = dayEvents(ghostNight, ghostMorning);
+    same(events.announces, [{ text: "지호 님이 당했습니다", icon: "target", at: 400, ms: 2400 }]);
+  });
+
+  it("의사가 살린 사람(아침에도 산 사람) 화면은 다른 시민과 같은 '누군가 살아났습니다' 다 (T-09-41)", () => {
+    const saved = (mySeat: number) => dayEvents(viewOf("night", { mySeat }), viewOf("morning", { mySeat, day: { morning: { saved: true } } }));
+    same(saved(2).announces, saved(3).announces);
+    same(saved(2).lines, saved(3).lines);
+    same(saved(2).announces, [{ text: "누군가 살아났습니다", icon: "heal", at: 400, ms: 2400 }]);
+  });
+});
+
+describe("policeResultOf — 경찰 조사 결과 판정 (A1, E6 #35, L8)", () => {
+  const withMe = (v: RoomView, me: Partial<RoomView["me"]>): RoomView => ({ ...v, me: { ...v.me, ...me } });
+  const police = (phase: PhaseId, records: NonNullable<RoomView["me"]["records"]>, day: Partial<DayView> = {}, mySeat = 1): RoomView =>
+    withMe(viewOf(phase, { mySeat, day }), { role: "police", records });
+
+  it("밤 → 아침에 me.records 끝에 그 밤 일차의 줄이 새로 생기면 { seat, isMafia }", () => {
+    const prev = police("night", []);
+    expect(policeResultOf(prev, police("morning", [{ n: 1, target: 2, isMafia: false }]))).toEqual({ seat: 2, isMafia: false });
+    expect(policeResultOf(prev, police("morning", [{ n: 1, target: 4, isMafia: true }]))).toEqual({ seat: 4, isMafia: true });
+  });
+
+  it("2일차 밤: 앞선 밤 기록이 있어도 이번 밤 일차의 새 줄만 센다", () => {
+    const old = { n: 1, target: 3, isMafia: false };
+    const prev = police("night", [old], { n: 2 });
+    expect(policeResultOf(prev, police("morning", [old, { n: 2, target: 0, isMafia: true }], { n: 2 }))).toEqual({ seat: 0, isMafia: true });
+    expect(policeResultOf(prev, police("morning", [old], { n: 2 }))).toBeNull();
+  });
+
+  it("경찰이 그 밤에 안 골랐으면(줄이 안 늘었으면) null", () => {
+    expect(policeResultOf(police("night", []), police("morning", []))).toBeNull();
+  });
+
+  it("경찰이 아닌 view(시민·마피아 일지 줄 모양 포함)는 null", () => {
+    const citizenPrev = withMe(viewOf("night"), { role: "citizen" });
+    const citizenCur = withMe(viewOf("morning"), { role: "citizen" });
+    expect(policeResultOf(citizenPrev, citizenCur)).toBeNull();
+    const mafiaCur = withMe(viewOf("morning"), { role: "mafia", records: [{ n: 1, target: 2, died: true }] });
+    expect(policeResultOf(withMe(viewOf("night"), { role: "mafia", records: [] }), mafiaCur)).toBeNull();
+  });
+
+  it("첫 스냅샷(prev 없음)·밤이 아닌 prev·아침이 아닌 cur 는 null", () => {
+    const cur = police("morning", [{ n: 1, target: 2, isMafia: false }]);
+    expect(policeResultOf(null, cur)).toBeNull();
+    expect(policeResultOf(police("lobby", []), cur)).toBeNull();
+    expect(policeResultOf(police("night", []), police("dayAnnounce", [{ n: 1, target: 2, isMafia: false }]))).toBeNull();
+  });
+});
+
+describe("dayEvents — 경찰 화면 순서 (UI-SPEC 245·266행, E6 #35)", () => {
+  const police = (phase: PhaseId, records: NonNullable<RoomView["me"]["records"]>, players?: PublicPlayer[], day: Partial<DayView> = {}): RoomView => {
+    const v = viewOf(phase, { mySeat: 1, day, ...(players ? { players } : {}) });
+    return { ...v, me: { ...v.me, role: "police", records } };
+  };
+
+  it("경찰 화면: 알림 2.6초 2.2초, 채팅 hot 줄도 2.6초, 2.4초에 로컬 카드 { 대상 닉네임, '마피아 아님' }", () => {
+    const events = dayEvents(police("night", []), police("morning", [{ n: 1, target: 2, isMafia: false }], undefined, { morning: {} }));
+    same(events.announces, [{ text: "아무 일도 없었습니다", at: 2600, ms: 2200 }]);
+    same(events.lines, [{ kind: "hot", text: "아무 일도 없었습니다", at: 2600 }]);
+    same(events.localCards, [{ at: 2400, title: "도윤", text: "마피아 아님" }]);
+    same([ANNOUNCE_POLICE_AT, ANNOUNCE_POLICE_MS, POLICE_CARD_AT], [2600, 2200, 2400]);
+  });
+
+  it("대상이 마피아면 본문 '마피아', 피해자 문장도 2.6초", () => {
+    const events = dayEvents(police("night", []), police("morning", [{ n: 1, target: 4, isMafia: true }], undefined, { morning: { eliminated: 3 } }));
+    same(events.announces, [{ text: "지호 님이 당했습니다", icon: "target", at: 2600, ms: 2200 }]);
+    same(events.localCards, [{ at: 2400, title: "하윤", text: "마피아" }]);
+  });
+
+  it("경찰이 그 밤에 고르지 않았으면 0.4초 보통 순서이고 카드가 없다", () => {
+    const events = dayEvents(police("night", []), police("morning", [], undefined, { morning: {} }));
+    same(events.announces, [{ text: "아무 일도 없었습니다", at: 400, ms: 2400 }]);
+    expect(events.localCards ?? []).toEqual([]);
+  });
+
+  it("경찰이 그 밤에 암살당했어도 카드는 받고(A1) 알림은 피해자 문장 0.7초가 이긴다(A2)", () => {
+    const alive = NAMES.map((n, seat) => pl(seat, n));
+    const dead = NAMES.map((n, seat) => pl(seat, n, seat !== 1));
+    const events = dayEvents(police("night", [], alive), police("morning", [{ n: 1, target: 2, isMafia: false }], dead, { morning: { eliminated: 1 } }));
+    same(events.announces, [{ text: "암살당했습니다", icon: "ghost", at: 700, ms: 2000 }]);
+    same(events.localCards, [{ at: 2400, title: "도윤", text: "마피아 아님" }]);
+  });
+
+  it("시민 화면에는 로컬 카드가 없고 결과 문구가 어디에도 없다 (L8, T-09-40)", () => {
+    const events = dayEvents(viewOf("night", { mySeat: 3 }), viewOf("morning", { mySeat: 3, day: { morning: {} } }));
+    expect(events.localCards ?? []).toEqual([]);
+    expect(text(events).includes("마피아")).toBe(false);
+  });
+
+  it("재접속 첫 스냅샷·reset 은 카드가 없다", () => {
+    const cur = police("morning", [{ n: 1, target: 2, isMafia: false }], undefined, { morning: {} });
+    expect(dayEvents(null, cur).localCards ?? []).toEqual([]);
+    expect(dayEvents(police("night", []), cur, { reset: true }).localCards ?? []).toEqual([]);
   });
 });
