@@ -693,3 +693,43 @@ export async function segEndsBySeat(code: string, day: number): Promise<string> 
   const rows = Object.entries(world?.segs ?? {}).map(([id, seg]) => [seats[id]!, seg.p.slice(-2)] as const).sort((a, b) => a[0] - b[0]);
   return `${day}|${rows.map(([s, pt]) => `${s}:${pt[0]},${pt[1]}`).join("|")}`;
 }
+
+// ---- 9페이즈 메타모픽 비교 도우미(09-16) ----
+
+/** snapshotStorage 가 알람 시각을 담아 두는 맵 키(저장소 키와 겹치지 않는다). */
+const ALARM_KEY = "\u0000alarm";
+
+/**
+ * 방 DO 저장소 전체(room·world·chat:* …)와 알람 시각을 떠 둔다. 같은 방·같은 밤 시작 상태에서 두 구간을 돌려 프레임 열을 비교하는 데 쓴다
+ * (메타모픽, UI-SPEC L2). 디바운스 대기 중인 위치 저장은 먼저 비운다 — 그렇지 않으면 스냅샷 뒤에 옛 위치가 덮어쓴다.
+ */
+export async function snapshotStorage(code: string): Promise<Map<string, unknown>> {
+  await flushWorld(code);
+  const snap = new Map<string, unknown>();
+  await runInDurableObject(env.ROOM.getByName(code), async (_i, state) => {
+    for (const [key, value] of await state.storage.list()) snap.set(key, structuredClone(value));
+    snap.set(ALARM_KEY, await state.storage.getAlarm());
+  });
+  return snap;
+}
+
+/**
+ * 저장소를 모두 지우고 스냅샷대로 되돌린 뒤 DO 를 evict 한다(생성자가 저장소에서 다시 읽고 소켓은 하이버네이션으로 남는다). 알람도 스냅샷 때 값으로 되돌린다.
+ * 대기 중인 위치 저장 타이머는 먼저 비워 복원 뒤에 옛 위치가 덮어쓰지 못하게 한다.
+ */
+export async function restoreStorage(code: string, snap: Map<string, unknown>): Promise<void> {
+  await flushWorld(code);
+  const stub = env.ROOM.getByName(code);
+  await runInDurableObject(stub, async (_i, state) => {
+    await state.storage.deleteAll();
+    // put 은 한 번에 키 128개까지라 나눠서 넣는다.
+    const pairs = [...snap].filter(([key]) => key !== ALARM_KEY);
+    for (let i = 0; i < pairs.length; i += 100) {
+      await state.storage.put(Object.fromEntries(pairs.slice(i, i + 100).map(([key, value]) => [key, structuredClone(value)])));
+    }
+    const alarm = snap.get(ALARM_KEY) as number | null | undefined;
+    if (typeof alarm === "number") await state.storage.setAlarm(alarm);
+    else await state.storage.deleteAlarm();
+  });
+  await evictDurableObject(stub);
+}

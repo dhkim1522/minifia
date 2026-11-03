@@ -331,6 +331,8 @@ describe("메타모픽 (i) 무사 밤 (L2)", () => {
     for (const x of g.actors.filter((a) => a.role !== "mafia")) {
       const i = g.actors.indexOf(x);
       expect(`${x.role}:${busy[i]}`).toBe(`${x.role}:${quiet[i]}`);
+      // 열이 비어 있지 않다: 아침 state 와 아침 snap, 낮 시작 state 가 모두 들어 있다.
+      expect(quiet[i]!.includes('"phase":"morning"') && quiet[i]!.includes('"k":"snap"') && quiet[i]!.includes('"phase":"dayAnnounce"')).toBe(true);
       expect(quiet[i]!.includes('"morning":{}')).toBe(true);
     }
     // 대조: 마피아의 열은 두 구간이 달라야 한다(시험이 아무것도 안 보는 것이 아님).
