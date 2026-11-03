@@ -6,7 +6,7 @@ import { env } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
 import type { ServerMessage } from "../../shared/protocol";
 import { PHASE_DEFS } from "../../shared/game/phases";
-import { advanceTo, chatSend, chatKeysOf, connect, editRoom, endAs, lastViewOf, seat, send, skipThrough, flushWorld, homeBySeat, mark, moveAs, nextFrame, observe, pause, pickAs, restoreStorage, segEndsBySeat, settle, snapSeatsOf, snapshotStorage, stable, startedGame, summary, typingSend, withRole, worldFramesOf, worldOf } from "./helpers";
+import { advanceTo, chatSend, chatKeysOf, connect, editRoom, mapPlayers, endAs, lastViewOf, seat, send, skipThrough, flushWorld, homeBySeat, mark, moveAs, nextFrame, observe, pause, pickAs, restoreStorage, segEndsBySeat, settle, snapSeatsOf, snapshotStorage, stable, startedGame, summary, typingSend, withRole, worldFramesOf, worldOf } from "./helpers";
 import type { Game } from "./helpers";
 
 /** 마지막 world snap 의 '좌석:x,z' 오름차순 문자열. snap 이 없으면 'none'. */
@@ -341,4 +341,115 @@ describe("메타모픽 (i) 무사 밤 (L2)", () => {
       expect(busy[i]).not.toBe(quiet[i]);
     }
   }, 90_000);
+});
+
+describe("메타모픽 (ii) 암살 밤 (L2·L5)", () => {
+  it("마피아 둘이 같은 시민 V 를 고르고 같은 쪽지를 남긴 두 밤 — 움직이고 말했든 가만히 있었든 시민 편 소켓의 프레임 열이 같고 V 사망·카드 두 장·같은 분필이다", async () => {
+    const g = await startedGame("night");
+    const mafias = withRole(g, "mafia");
+    const v = withRole(g, "citizen")[0]!;
+    await editRoom(g.code, (room) => mapPlayers(room, (p) => (p.seat === v.seat ? { ...p, will: "VWILL" } : p)));
+    for (const sock of g.socks) await settle(sock, mark(sock));
+    const snap = await snapshotStorage(g.code);
+
+    const assassinate = async (): Promise<void> => {
+      pickAs(mafias[0]!, v.seat);
+      pickAs(mafias[1]!, v.seat);
+      for (const m of mafias) await settle(m.sock, mark(m.sock));
+      send(mafias[0]!.sock, { t: "note", text: "조용히" });
+      await settle(mafias[0]!.sock, mark(mafias[0]!.sock));
+    };
+    const quiet = await segment(g, assassinate);
+    await restoreStorage(g.code, snap);
+    const busy = await segment(g, async () => {
+      await assassinate();
+      await mafiaBusy(mafias);
+    });
+
+    for (const x of g.actors.filter((a) => a.role !== "mafia")) {
+      const i = g.actors.indexOf(x);
+      expect(`${x.role}:${busy[i]}`).toBe(`${x.role}:${quiet[i]}`);
+      const col = quiet[i]!;
+      expect(col.includes(`"morning":{"eliminated":${v.seat}}`)).toBe(true);
+      expect(col.includes('"k":"will"') && col.includes("VWILL") && col.includes('"k":"note"') && col.includes("조용히")).toBe(true);
+      expect(col.includes('"chalk"')).toBe(true);
+    }
+    for (const x of mafias) expect(busy[g.actors.indexOf(x)]).not.toBe(quiet[g.actors.indexOf(x)]);
+  }, 90_000);
+});
+
+describe("재접속 L9 — 밤 중간 hello 의 첫 프레임 열이 구간과 무관하다", () => {
+  it("마피아가 움직이고 말한 밤과 가만히 있던 밤 모두 시민의 새 소켓이 받는 [state, world snap(본인 한 칸), chatLog] 가 같다", async () => {
+    const g = await startedGame("night");
+    const mafias = withRole(g, "mafia");
+    const [c0, c1] = withRole(g, "citizen") as [Actor, Actor];
+    const snap = await snapshotStorage(g.code);
+    const home = await homeBySeat(g.code);
+
+    const quiet = await helloFrames(g.code, c0.token);
+    await restoreStorage(g.code, snap);
+    pickAs(mafias[0]!, c0.seat);
+    pickAs(mafias[1]!, c1.seat);
+    await mafiaBusy(mafias);
+    const busy = await helloFrames(g.code, c0.token);
+
+    expect(kinds(quiet)).toBe("state,world,chatLog");
+    expect(stable(busy)).toBe(stable(quiet));
+    expect(snapSeatsOf(busy)).toBe(String(c0.seat));
+    expect(snapPoints(busy)).toBe(homeRows(home, [c0.seat]));
+  }, 90_000);
+});
+
+/** 값의 모든 키 경로(배열은 [] 로 합친다)를 정렬해 한 줄로. 값은 보지 않는다. */
+function keyPaths(v: unknown, prefix = ""): string[] {
+  if (Array.isArray(v)) return v.flatMap((x) => keyPaths(x, `${prefix}[]`));
+  if (v !== null && typeof v === "object") {
+    return Object.entries(v as Record<string, unknown>).flatMap(([k, x]) => [`${prefix}.${k}`, ...keyPaths(x, `${prefix}.${k}`)]);
+  }
+  return [];
+}
+
+describe("아침 길이·구출 개별 알림 없음 (L6, MORN-03·MORN-04)", () => {
+  /** 구출 / 마피아 미선택 / 마피아 불일치 중 하나의 밤을 아침으로 넘기고 순수 시민 한 명의 아침 view 와 구출 대상·타 시민의 아침 진입 프레임 요약을 돌려준다. */
+  async function morningOf(kind: "saved" | "none" | "split"): Promise<{ g: Game; view: ReturnType<typeof lastViewOf>; savedFrames: string; otherFrames: string }> {
+    const g = await startedGame("night");
+    const mafias = withRole(g, "mafia");
+    const [v, other] = withRole(g, "citizen") as [Actor, Actor];
+    const doctor = withRole(g, "doctor")[0]!;
+    if (kind === "saved") {
+      pickAs(mafias[0]!, v.seat);
+      pickAs(mafias[1]!, v.seat);
+      pickAs(doctor, v.seat);
+    } else if (kind === "split") {
+      pickAs(mafias[0]!, v.seat);
+      pickAs(mafias[1]!, other.seat);
+    }
+    for (const a of g.actors) await settle(a.sock, mark(a.sock));
+    const marks = g.socks.map((s) => mark(s));
+    await advanceTo(g.code, g.socks, "morning");
+    const vi = g.actors.indexOf(v);
+    const oi = g.actors.indexOf(other);
+    const vf = await settle(v.sock, marks[vi]!);
+    const of = await settle(other.sock, marks[oi]!);
+    return { g, view: lastViewOf(other.sock), savedFrames: summary(vf), otherFrames: summary(of) };
+  }
+
+  it("의사 구출·마피아 미선택·마피아 불일치 세 밤 모두 아침 길이가 5000 이고 morning.saved 를 빼면 시민 소켓의 아침 state 모양이 같다", async () => {
+    const runs = [await morningOf("saved"), await morningOf("none"), await morningOf("split")];
+
+    expect(runs.map((r) => r.view.phaseDurationMs).join(",")).toBe("5000,5000,5000");
+    expect(JSON.stringify(runs[0]!.view.day?.morning)).toBe(JSON.stringify({ saved: true }));
+    const shapes = runs.map((r) => {
+      const day = r.view.day === undefined ? undefined : { ...r.view.day, morning: Object.fromEntries(Object.entries(r.view.day.morning ?? {}).filter(([k]) => k !== "saved")) };
+      return keyPaths({ ...r.view, day }).join("|");
+    });
+    expect(shapes[1]).toBe(shapes[0]);
+    expect(shapes[2]).toBe(shapes[0]);
+  }, 120_000);
+
+  it("구출된 시민의 소켓이 받은 아침 진입 프레임의 수·종류가 다른 시민 소켓과 같다 (개별 알림 없음)", async () => {
+    const r = await morningOf("saved");
+    expect(r.otherFrames.includes("state:morning")).toBe(true);
+    expect(r.savedFrames).toBe(r.otherFrames);
+  }, 60_000);
 });
