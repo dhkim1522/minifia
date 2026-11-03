@@ -49,6 +49,8 @@ export function skipPhase(state: RoomState, actorId: string, now: number, randIn
  * 밤을 당겨 끝내면 봇이 알람으로 지목하기 전에 판정이 나 마피아가 아무도 지목하지 않은 밤이 된다.
  * 그래서 아직 고르지 않은 살아 있는 봇(마피아·경찰·의사)이 지금 바로 한 번 고른다 — 사람의 선택은 건드리지 않는다.
  * 같은 순수 규칙(botNightTarget·pickTarget)이라 정상 마감과 같은 판정 경로를 탄다.
+ * 마피아 봇은 botMafiaTarget(결정 0061-18) — 매번 갱신된 상태를 입력으로 받아 사람 마피아와 먼저 고른 봇의 선택을 따라가므로 산 마피아 전원이 같은 대상이 된다(난수 없음).
+ * 난수 호출 순서: 경찰·의사 봇만 seat 오름차순으로 randInt(후보 수) 한 번씩.
  */
 function botsPickNow(state: RoomState, randInt: RandInt): RoomState {
   let next = state;
