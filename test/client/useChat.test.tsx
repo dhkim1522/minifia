@@ -432,3 +432,40 @@ describe("useChat: 입력 중 받기 (CHAT-04, T-07-46)", () => {
     expect([...result.current.typingSeats].sort().join(",")).toBe("0,1,2,3,4,5,6");
   });
 });
+
+// 09-11 (MORN-02): 카드 줄 → ChatPanelMessage card
+describe("useChat: 카드 줄 매핑 (MORN-02)", () => {
+  const cardView = () => makeView({ players: [player(0, "민수"), player(1, "하윤"), player(3, "서연")] });
+
+  it("유언은 '{닉네임} 님의 유언'·quill, 쪽지는 '쪽지'·note·tone mafia 다", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(10_000);
+    const { result, receive } = mount(cardView());
+    receive({ t: "chatLog", lines: [line(1, 3, "범인은 2번", { k: "will" }), line(2, 3, "다음은 너", { k: "note" })] });
+    const [will, note] = result.current.messages;
+    expect(`${will?.kind}|${will?.card}|${will?.title}|${will?.icon}|${will?.text}|${will?.tone}`).toBe("card|will|서연 님의 유언|quill|범인은 2번|undefined");
+    expect(`${note?.kind}|${note?.card}|${note?.title}|${note?.icon}|${note?.text}|${note?.tone}`).toBe("card|note|쪽지|note|다음은 너|mafia");
+  });
+
+  it("라이브 카드는 2800ms 뒤에야 메시지에 나타난다", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(10_000);
+    const { result, receive } = mount(cardView());
+    receive({ t: "chat", ...line(1, 3, "가", { k: "will" }) });
+    expect(result.current.messages.length).toBe(0);
+    act(() => {
+      vi.advanceTimersByTime(2799);
+    });
+    expect(result.current.messages.length).toBe(0);
+    act(() => {
+      vi.advanceTimersByTime(1);
+    });
+    expect(result.current.messages.map((m) => m.card).join()).toBe("will");
+  });
+
+  it("카드 본문 \"<b>x</b>\" 는 문자열 그대로 넘긴다", () => {
+    const { result, receive } = mount(cardView());
+    receive({ t: "chatLog", lines: [line(1, 3, "<b>x</b>", { k: "will" })] });
+    expect(result.current.messages[0]?.text).toBe("<b>x</b>");
+  });
+});

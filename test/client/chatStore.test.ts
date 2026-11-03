@@ -363,3 +363,61 @@ describe("ChatStore: nextTypingExpiry(now) 는 지난 만료를 건너뛴다", (
     expect(store.nextTypingExpiry(7500)).toBeNull();
   });
 });
+
+// 09-11 (MORN-02): 서버 카드 줄(k)은 받은 시각 + 보류 시간 뒤에 보이고, 재접속 chatLog 의 카드는 바로 보인다.
+describe("ChatStore: 카드 줄 (MORN-02, 결정 0061-11)", () => {
+  const card = (k: "will" | "note", seat: number, seq: number, text: string, at: number): ChatLineFrame => ({ ...chat("all", seat, seq, text, at), k });
+
+  it("유언 카드는 받은 시각 + 2800ms 전까지 목록에 없고 그 뒤에 kind card·card will 로 보인다", () => {
+    const store = ready();
+    store.apply(card("will", 3, 9, "범인은 2번", 900), 1, 1000);
+    expect(store.visibleLines("all", 3799).length).toBe(0);
+    const [line] = store.visibleLines("all", 3800);
+    expect(`${line?.kind}|${line?.card}|${line?.seat}|${line?.text}`).toBe("card|will|3|범인은 2번");
+  });
+
+  it("nextCardReveal 은 보류 중인 가장 이른 공개 시각을 알리고, 지난 시각·보류 없음은 null 이다", () => {
+    const store = ready();
+    expect(store.nextCardReveal(0)).toBeNull();
+    store.apply(card("will", 3, 9, "가", 900), 1, 1000);
+    expect(store.nextCardReveal(1000)).toBe(3800);
+    expect(store.nextCardReveal(3800)).toBeNull();
+  });
+
+  it("처형 단계 키(execution)에서는 보류가 2400ms 다", () => {
+    const store = new ChatStore();
+    store.setContext({ pk: "1:execution", channel: "all", epoch: 1 });
+    store.apply(card("will", 3, 9, "가", 900), 1, 1000);
+    expect(store.nextCardReveal(1000)).toBe(3400);
+    expect(store.visibleLines("all", 3399).length).toBe(0);
+    expect(store.visibleLines("all", 3400).length).toBe(1);
+  });
+
+  it("재접속 chatLog 로 받은 카드 줄은 보류 없이 바로 보인다", () => {
+    const store = ready();
+    const log: ChatLogFrame = { t: "chatLog", lines: [{ ch: "all", seat: 3, seq: 9, text: "가", at: 900, k: "note" }] };
+    store.apply(log, 1, 1000);
+    expect(store.visibleLines("all", 1000).map((l) => `${l.kind}|${l.card}`).join()).toBe("card|note");
+    expect(store.nextCardReveal(1000)).toBeNull();
+  });
+
+  it("카드 프레임은 그 좌석의 입력 중 표시를 지우지 않는다", () => {
+    const store = ready();
+    store.apply({ t: "typing", seat: 3, on: true }, 1, 1000);
+    store.apply(card("will", 3, 9, "가", 900), 1, 1100);
+    expect(store.typingSeats(1100).has(3)).toBe(true);
+  });
+
+  it("같은 좌석의 유언 → 쪽지는 서버 seq 순으로 같은 보류를 쓴다 (A2)", () => {
+    const store = ready();
+    store.apply(card("will", 3, 9, "유언", 900), 1, 1000);
+    store.apply(card("note", 3, 10, "쪽지", 900), 1, 1000);
+    expect(store.visibleLines("all", 3800).map((l) => l.card).join()).toBe("will,note");
+  });
+
+  it("now 를 주지 않으면 보류를 적용하지 않는다(기존 호출 호환)", () => {
+    const store = ready();
+    store.apply(card("will", 3, 9, "가", 900), 1, 1000);
+    expect(store.visibleLines("all").length).toBe(1);
+  });
+});

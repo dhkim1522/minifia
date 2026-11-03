@@ -714,3 +714,44 @@ describe("ChatPanel 보내기 상태와 키보드 열림 (UI-SPEC 입력 상태�
     }
   });
 });
+
+// 09-11 (MORN-02): 유언·쪽지·경찰 카드 블록
+describe("ChatPanel card 메시지 (MORN-02)", () => {
+  const will: ChatPanelMessage = { key: "c1", kind: "card", card: "will", title: "서연 님의 유언", icon: "quill", text: "범인은 2번" };
+
+  it("유언 카드는 [data-card=will] 안에 아이콘 16·제목·본문을 그린다", () => {
+    const { container } = render(<Harness messages={[will]} />);
+    const card = container.querySelector('[data-card="will"]');
+    expect(card, "[data-card=will]").toBeInstanceOf(HTMLElement);
+    expect(card?.classList.contains("mv-chat__card")).toBe(true);
+    expect(card?.querySelector(".mv-chat__card-title")?.textContent).toBe("서연 님의 유언");
+    expect(card?.querySelector(".mv-chat__card-title svg")?.getAttribute("width")).toBe("16");
+    expect(card?.querySelector(".mv-chat__card-text")?.textContent).toBe("범인은 2번");
+  });
+
+  it("쪽지 카드는 tone mafia 면 --mafia 변형을 달고, 경찰 카드는 data-card=eye 다", () => {
+    const msgs: ChatPanelMessage[] = [
+      { key: "n", kind: "card", card: "note", title: "쪽지", icon: "note", tone: "mafia", text: "다음은 너" },
+      { key: "e", kind: "card", card: "eye", title: "민준", icon: "eye", text: "마피아 아님" },
+    ];
+    const { container } = render(<Harness messages={msgs} />);
+    expect(container.querySelector('[data-card="note"]')?.classList.contains("mv-chat__card--mafia")).toBe(true);
+    expect(container.querySelector('[data-card="eye"]')?.classList.contains("mv-chat__card--mafia")).toBe(false);
+  });
+
+  it("카드 본문의 HTML 은 글자 그대로 보이고 요소가 생기지 않는다 (T-09-23, E6 #33)", () => {
+    const { container } = render(<Harness messages={[{ ...will, text: "<b>x</b>" }]} />);
+    expect(container.querySelector("b")).toBeNull();
+    expect(container.querySelector(".mv-chat__card-text")?.textContent).toBe("<b>x</b>");
+  });
+
+  it("카드 CSS: 반경 sm·면 night-800·테두리 night-600(쪽지 crimson-700), 제목 14px 700, 본문 16px gray-100·keep-all", () => {
+    expect(rulesFor(V2_CSS, ".mv-chat__card").join(";")).toContain("background: var(--night-800)");
+    expect(rulesFor(V2_CSS, ".mv-chat__card").join(";")).toContain("border: 1px solid var(--night-600)");
+    expect(rulesFor(V2_CSS, ".mv-chat__card").join(";")).toContain("border-radius: var(--radius-sm)");
+    expect(rulesFor(V2_CSS, ".mv-chat__card--mafia").join(";")).toContain("border-color: var(--crimson-700)");
+    expect(rulesFor(V2_CSS, ".mv-chat__card-title").join(";")).toContain("font-size: 14px");
+    expect(rulesFor(V2_CSS, ".mv-chat__card-text").join(";")).toContain("word-break: keep-all");
+    expect(rulesFor(V2_CSS, ".mv-chat__card-text").join(";")).toContain("overflow-wrap: anywhere");
+  });
+});
