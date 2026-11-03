@@ -51,7 +51,8 @@ export function channelOf(state: RoomState, senderId: string): ChatChannel | nul
  * 받는 사람 player id 집합. 방어 장치(호출부 버그에도 안전하도록 이 함수가 막는다):
  * CHAT_PHASES 밖이면 빈 집합, mafia 인데 night 가 아니면 빈 집합, ghost 는 탈락자만.
  * world: 로비는 방의 모든 사람(6페이즈 emitWorld 와 같다). 지도 단계(MAP_PHASES)는 mover 기준 — mover 가 산 사람이면 방 전원(산 사람 + 유령),
- * 유령이면 유령만(GHOST-01: 산 사람 폰에는 유령의 위치가 네트워크로도 가지 않는다). mover 가 없거나 방에 없으면 빈 집합(실패하면 닫힌다).
+ * 유령이면 유령만(GHOST-01: 산 사람 폰에는 유령의 위치가 네트워크로도 가지 않는다).
+ * 밤(NIGHT-07, 결정 0061-2)은 mover 가 산 마피아면 산 마피아 + 유령, 산 비마피아면 빈 집합이다. mover 가 없거나 방에 없으면 빈 집합(실패하면 닫힌다).
  * 그 밖의 단계는 빈 집합이다.
  */
 export function audience(state: RoomState, ev: AudienceEvent): ReadonlySet<string> {
@@ -61,7 +62,11 @@ export function audience(state: RoomState, ev: AudienceEvent): ReadonlySet<strin
     if (!MAP_PHASES.has(state.phase)) return new Set();
     const mover = ev.mover === undefined ? undefined : state.players.find((p) => p.id === ev.mover);
     if (mover === undefined) return new Set();
-    return isAlive(mover) ? pick(() => true) : pick((p) => !isAlive(p));
+    if (!isAlive(mover)) return pick((p) => !isAlive(p));
+    // 밤(NIGHT-07, 결정 0061-2): 산 마피아의 걸음은 산 마피아와 유령에게만 간다. 산 비마피아 mover 는 canMove 가 먼저 거절하지만 여기서도 빈 집합이다(방어선 두 겹).
+    // 시민 편 폰에는 거르는 방식이 아니라 받는 사람 집합에서 빠져 네트워크로도 가지 않는다(결정 0002·0021). 탈락한 마피아는 유령 쪽으로 든다.
+    if (state.phase === "night") return mover.role === "mafia" ? pick((p) => !isAlive(p) || p.role === "mafia") : new Set();
+    return pick(() => true);
   }
   if (!CHAT_PHASES.has(state.phase)) return new Set();
   switch (ev.ch) {

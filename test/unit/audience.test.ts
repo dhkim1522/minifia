@@ -294,8 +294,13 @@ describe("world mover(GHOST-01)", () => {
     expect(sorted(audience(lobby, world()))).toEqual(everyone);
   });
 
-  it.each(MAP_PHASE_LIST)("%s: mover 가 산 사람이면 방 전원(유령 포함)", (phase) => {
+  it.each(MAP_PHASE_LIST.filter((phase) => phase !== "night"))("%s: mover 가 산 사람이면 방 전원(유령 포함)", (phase) => {
     expect(sorted(audience(sixAt(phase, { day: 1 }), world(idOf(0))))).toEqual(ids(0, 1, 2, 3, 4, 5));
+  });
+
+  it("night: mover 가 산 마피아면 산 마피아 + 유령, 산 시민이면 빈 집합 (밤 분기는 아래 블록)", () => {
+    expect(sorted(audience(sixAt("night", { day: 1 }), world(idOf(1))))).toEqual(ids(1, 2, 4));
+    expect(audience(sixAt("night", { day: 1 }), world(idOf(0))).size).toBe(0);
   });
 
   it.each(MAP_PHASE_LIST)("%s: mover 가 유령이면 유령만 — 산 사람은 한 명도 받지 않는다", (phase) => {
