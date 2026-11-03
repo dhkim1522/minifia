@@ -27,6 +27,7 @@ import { botCount } from "./bots";
 import { endCountOf, phaseDurationOf } from "./discussion";
 import { buildSummary } from "./endgame";
 import { noExecutionOf } from "./execution";
+import { confirmedTarget } from "./night";
 import { pointLinesOf } from "./nomination";
 import { PHASE_DEFS } from "./phases";
 import { rolesInPlay } from "./roles";
@@ -178,6 +179,21 @@ export function buildView(state: RoomState, playerId: string, now: number): Room
   // 본인 선택은 본인에게만(D-06) — 남의 nightPick 은 어떤 키로도 싣지 않는다. 밤에 살아 있는 본인이 고른 값이 있을 때만 키를 만든다.
   if (state.phase === "night" && isAlive(me) && me.nightPick !== undefined) {
     myInfo.pick = me.nightPick;
+  }
+
+  // 마피아 집계(결정 0061-7, L8)는 밤에 산 마피아 본인에게만: 앉은 산 비마피아별 산 마피아 선택 수(seat 오름차순, 본인 포함)와 전원 일치로 확정된 대상.
+  // 누가 골랐는지는 싣지 않는다(D-07). 다른 신분·유령·낮·아침 view 에는 두 키 자체가 없다. 저장된 선택은 집계 때 다시 검증한다(탈락자·마피아는 세지 않는다).
+  if (state.phase === "night" && isAlive(me) && me.role === "mafia") {
+    const counts = new Map<number, number>();
+    for (const q of state.players) {
+      if (q.role !== "mafia" || !isAlive(q) || q.nightPick === undefined) continue;
+      const t = state.players.find((r) => r.seat === q.nightPick);
+      if (t === undefined || !isAlive(t) || t.role === "mafia") continue;
+      counts.set(t.seat, (counts.get(t.seat) ?? 0) + 1);
+    }
+    myInfo.nightTally = [...counts].sort((a, b) => a[0] - b[0]).map(([seat, n]) => ({ seat, n }));
+    const sure = confirmedTarget(state);
+    if (sure !== undefined) myInfo.nightSure = sure;
   }
 
   // 토론 끝내기 누름은 본인에게만(결정 0060-2) — 산 본인이 discussion 에서 눌렀을 때만 키를 만든다. 누른 사람이 누구인지는 어떤 키로도 싣지 않는다.
