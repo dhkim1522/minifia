@@ -9,6 +9,7 @@ import { ResultAnnounce } from "../components/ResultAnnounce";
 import { RoleCardButton } from "../components/RoleCardButton";
 import { PhaseHeader } from "../components/v2/PhaseHeader";
 import { TopToast, useTopToast } from "../components/v2/TopToast";
+import { TensionVignette } from "../components/TensionVignette";
 import { WorldStage } from "../components/WorldStage";
 import type { WorldPick } from "../components/WorldStage";
 import { LOG_H_KB } from "../game/chatUi";
@@ -19,8 +20,10 @@ import { useCountdown } from "../net/countdown";
 import { useChat } from "../net/useChat";
 import { useViewChoice } from "../net/useViewChoice";
 import { useMapInsets } from "../net/useMapInsets";
+import { useReducedMotion } from "../net/useReducedMotion";
 import type { RoomConnection } from "../net/useRoomConnection";
 import { sceneLook } from "../world/presence";
+import { worldTestHooksEnabled } from "../world/testHooks";
 import type { RingKind } from "../world/runtime";
 import type { WorldStore } from "../world/store";
 import { GamePanel } from "./GamePanel";
@@ -59,6 +62,24 @@ function rememberPointHint(): void {
   } catch {
     // 저장소를 못 쓰는 환경(개인 모드): 이번 방문에서만 본다
   }
+}
+
+declare global {
+  interface Window {
+    /** 시민 편 긴장 큐가 울린 로컬 시각(Date.now) 목록 — ?e2e=1 문맥·개발 빌드에서만 생긴다(E3 #22) */
+    __mfTension?: number[];
+  }
+}
+
+/** E2E 훅이 켜진 문맥인가(WorldStage 의 window.__mfWorld 와 같은 규칙) */
+function tensionHooksOn(): boolean {
+  let store: Storage | null = null;
+  try {
+    store = typeof sessionStorage === "undefined" ? null : sessionStorage;
+  } catch {
+    store = null;
+  }
+  return worldTestHooksEnabled(window.location.search, store, import.meta.env.DEV);
 }
 
 type WorldTagProps = NonNullable<ComponentProps<typeof WorldStage>["tagProps"]>;
@@ -199,6 +220,18 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
   // 밤 선택: 산 마피아만 지도 이름표를 눌러 대상을 보낸다(결정 0061-6). 경찰·의사는 아래 패널 얼굴 목록(GamePanel)으로 고른다(NIGHT-09). 서버 값은 view.me.pick(본인에게만 온다).
   const nighting = view.phase === "night";
   const nightMafia = nighting && meAlive && view.me.role === "mafia";
+  // 시민 편(산 시민·경찰·의사)의 밤: 같은 어둠 표식과 긴장 비네트를 본다. 역할마다 다르지 않다(NIGHT-10, E3 #20). 마피아·유령·낮에는 없다.
+  const nightDark = nighting && meAlive && !nightMafia;
+  const reducedMotion = useReducedMotion();
+  const recordCue = useMemo(
+    () =>
+      tensionHooksOn()
+        ? (): void => {
+            (window.__mfTension ??= []).push(Date.now());
+          }
+        : undefined,
+    [],
+  );
   const serverMine = nominating ? view.day?.points?.find((l) => l.seat === view.me.seat)?.target : nighting ? view.me.pick : undefined;
   const [mine, chooseMine] = useViewChoice<number | undefined>(view, serverMine);
   // 서버가 내 선택을 확인했으면 더는 거절을 기다리지 않는다. 거절이 오면 내 선택을 서버 값으로 되돌린다(처음 그릴 때는 아무것도 하지 않는다).
@@ -342,7 +375,7 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
   const scene = useMemo(() => sceneLook(view, { stageH, ...(fading ? { fading } : {}), ...(mine !== undefined ? { mine } : {}) }), [view, stageH, fading, mine]);
 
   return (
-    <main ref={rootRef} className="mf-root mf-game" data-game-stage="" data-phase={view.phase} data-ghost-view={ghost ? "true" : undefined} data-ghost-enter={ghost && entering ? "true" : undefined} data-kb-open={kbOpen ? "true" : undefined}>
+    <main ref={rootRef} className="mf-root mf-game" data-game-stage="" data-phase={view.phase} data-night-dark={nightDark ? "true" : undefined} data-ghost-view={ghost ? "true" : undefined} data-ghost-enter={ghost && entering ? "true" : undefined} data-kb-open={kbOpen ? "true" : undefined}>
       {/* DOM 순서 = Tab 순서: 헤더([역할 카드]) → 맵(이름표) → 아래 패널(입력). 층 순서는 z 가 정한다 */}
       <div className="mf-game__scrim" aria-hidden="true" />
       <header ref={headerRef} className="mf-game__header">
@@ -363,6 +396,7 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
         typingSeats={typingSeats}
         scene={scene}
         canWalk={canWalk}
+        {...(nightDark ? { underlay: <TensionVignette reducedMotion={reducedMotion} {...(recordCue ? { onCue: recordCue } : {})} /> } : {})}
         {...(deny ? { deny } : {})}
         {...(pick ? { pick } : {})}
         {...(tagProps ? { tagProps } : {})}

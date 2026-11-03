@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import type { CSSProperties } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import type { ClientMessage, PublicPlayer, RoomView } from "../../shared/protocol";
 import { MOVE_COORD_LIMIT } from "../../shared/protocol";
 import { useReducedMotion } from "../net/useReducedMotion";
@@ -71,6 +71,8 @@ export interface WorldStageProps {
   canWalk?: boolean;
   /** 있으면 그 좌석들의 이름표가 지목 버튼이 된다 */
   pick?: WorldPick;
+  /** 캔버스·입력 면 위, 이름표 층 아래에 깔리는 장식(시민 편 긴장 비네트). 터치를 막지 않는 부품만 넣는다 */
+  underlay?: ReactNode;
   /** 좌석별 이름표 쌓임 속성(득표 배지·선두·도장·내 선택·투표함·직업 칩 …)과 발밑 고리 종류 */
   tagProps?: (seat: number) => Partial<Omit<HeadStackProps, "name" | "color">> & { ring?: RingKind };
   onNotice(text: string): void;
@@ -259,6 +261,7 @@ export function WorldStage(props: WorldStageProps) {
           tracker.cancel(e.pointerId);
         }}
       />
+      {props.underlay}
       <div
         ref={tagRef}
         className="mf-world__tags"

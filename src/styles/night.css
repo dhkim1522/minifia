@@ -1,6 +1,25 @@
 /* 밤 화면 스타일. 8페이즈 밤 알약 패널 규칙(.mf-nightpanel·.mf-pk)은 9페이즈에서 지웠다(경찰·의사는 얼굴 목록으로 고른다, UI-SPEC 삭제 목록).
    아래 아침 발표 카드·밤/낮 시작 문구 규칙은 v1.0 잔재라 12페이즈 일괄 점검에 맡긴다(UI-SPEC 343행). */
 
+/* 시민 편 긴장 비네트(09-15, NIGHT-10, UI-SPEC 140·232행). 밤 산 시민·경찰·의사 화면의 가장자리 진홍 맥박.
+   WorldStage 의 입력 면 뒤·이름표 층 앞에 놓인다: 캔버스와 같은 층(z-world)에서 DOM 순서로 위, 위쪽 가림막(z 2)·이름표 층(z-tags)·아래 패널 아래.
+   불투명도만 움직인다(깜빡임 1초에 3번 미만: 1.3초에 두 번). 터치를 막지 않는다. */
+.mf-tension {
+  position: absolute; inset: 0; z-index: var(--z-world); pointer-events: none;
+  background: radial-gradient(ellipse at 50% 45%, transparent 45%, color-mix(in srgb, var(--crimson-700) 55%, transparent) 100%);
+  opacity: 0.25;
+}
+/* 맥박 한 바퀴 1.3초(TENSION_BEAT_MS): 0.25 → 0.85@12% → 0.35@24% → 0.7@36% → 0.25 */
+.mf-tension.is-beat { animation: mf-tension-beat 1300ms linear infinite; }
+/* 큐: 한 번 평소보다 세게(최대 --mf-tension-peak = TENSION_CUE_PEAK 0.95) 뛰고 바로 한 번 더 약하게, 한 바퀴 뒤 평소 맥박으로 돌아온다 */
+.mf-tension.is-beat.is-cue { animation: mf-tension-cue 1300ms linear 1; }
+@keyframes mf-tension-beat { 0% { opacity: 0.25; } 12% { opacity: 0.85; } 24% { opacity: 0.35; } 36% { opacity: 0.7; } 100% { opacity: 0.25; } }
+@keyframes mf-tension-cue { 0% { opacity: 0.25; } 12% { opacity: var(--mf-tension-peak, 0.95); } 24% { opacity: 0.35; } 36% { opacity: 0.6; } 100% { opacity: 0.25; } }
+/* 모션 줄이기: 애니메이션 없이 고정 불투명도(인라인 0.4, TENSION_REDUCED_OPACITY) */
+@media (prefers-reduced-motion: reduce) {
+  .mf-tension.is-beat, .mf-tension.is-beat.is-cue { animation: none; opacity: 0.4; }
+}
+
 /* 아침 발표 카드(03-10). 시안 night-v1/f6.css 의 .bn·.bn__t·.bn__s 를 토큰으로 옮겼다(UI-SPEC "M 아침 발표").
    카드의 기준 상자는 화면 루트(.mf-dayscene)다 — 위쪽 바를 포함한 좌표에서 top 168. */
 .mf-dayscene { position: relative; }
