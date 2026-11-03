@@ -5,16 +5,16 @@ milestone_name: 같은 공간
 current_phase: 9
 current_phase_name: 밤과 아침
 status: executing
-stopped_at: Phase 9 UI-SPEC approved
-last_updated: "2026-11-03T03:11:06.351Z"
+stopped_at: Completed 09-01-PLAN.md
+last_updated: "2026-11-03T03:44:32.433Z"
 last_activity: 2026-11-03
-last_activity_desc: Phase 08 complete, transitioned to Phase 9
-state_head: d31387ac3ba91bc175ae13732052c2e9ed05a9d4
+last_activity_desc: Phase 9 execution started
+state_head: c76a5a2e1ef656ecdcec839dc427d2875025c992
 progress:
   total_phases: 7
   completed_phases: 3
   total_plans: 101
-  completed_plans: 78
+  completed_plans: 79
   percent: 43
 ---
 
@@ -29,10 +29,10 @@ See: .planning/PROJECT.md (updated 2026-11-03)
 
 ## Current Position
 
-Phase: 9 (밤과 아침) — READY TO EXECUTE
-Plan: Not started
+Phase: 9 (밤과 아침) — EXECUTING
+Plan: 2 of 23
 Status: Ready to execute
-Last activity: 2026-11-03 — Phase 08 complete, transitioned to Phase 9
+Last activity: 2026-11-03 — Phase 9 execution started
 
 Progress: [████░░░░░░] 43% (3/7 phases)
 
@@ -138,6 +138,7 @@ Progress: [████░░░░░░] 43% (3/7 phases)
 | Phase 08 P24 | 240 min | 3 tasks | 4 files |
 | Phase 08 P25 | 60min | 3 tasks | 3 files |
 | Phase 08 P26 | 1h | 3 tasks | 8 files |
+| Phase 09 P01 | 10min | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -286,6 +287,7 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 08]: 08-25: G7 허용 목록에 .mv-badge__unit('표' 12px, 디자인 시스템 승인값) 추가, 14px 문턱 불변
 - [Phase 08]: 08-25: 유령 이름표 대비(불투명도 0.6, 약 1.9~2.5:1)는 앱 변경 없이 실기기 확인 목록 이월 — 08-26 이 기록
 - [Phase 08]: 08-26: dayload 렌더 측정·유령 이름표 대비는 사용자 결정(2026-11-03)으로 실기기 목록(ROADMAP 999.5)에 이월, 8페이즈 완료를 막지 않는다
+- [Phase 09]: 결정 0061: 밤 이동은 산 마피아와 유령만, 마피아 확정은 산 마피아 전원 같은 대상(도착 무관·난수 없음), 밤 진입 snap 은 시민 편 본인 한 칸, 아침은 모두 home 으로
 
 ### Pending Todos
 
@@ -323,9 +325,9 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-03T01:12:51.508Z
-Stopped at: Phase 9 UI-SPEC approved
-Resume file: /Users/dhkim1522/personal/minifia/.planning/phases/09-night-morning/09-UI-SPEC.md
+Last session: 2026-11-03T03:44:32.225Z
+Stopped at: Completed 09-01-PLAN.md
+Resume file: None
 
 ## Operator Next Steps
 
