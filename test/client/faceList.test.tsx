@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import "../helpers/singleLineErrors";
@@ -65,5 +66,103 @@ describe("V2Icon 9페이즈 아이콘 (quill·note·target·eye·heal)", () => {
     const want = NIGHT_ICONS[name];
     expect([...container.querySelectorAll("svg path")].map((p) => p.getAttribute("d"))).toEqual(want.paths);
     expect([...container.querySelectorAll("svg circle")].map((c) => [Number(c.getAttribute("cx")), Number(c.getAttribute("cy")), Number(c.getAttribute("r"))])).toEqual(want.circles);
+  });
+});
+
+const V2_CSS = readFileSync("src/styles/v2.css", "utf8");
+const rulesStarting = (selector: string): string[] => {
+  const bare = V2_CSS.replace(/\/\*[\s\S]*?\*\//g, "");
+  return [...bare.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
+    .filter((m) => (m[1] ?? "").split(",").some((s) => s.trim().startsWith(selector)))
+    .map((m) => `${m[1]}{${m[2]}}`);
+};
+
+describe("FaceList — 고른 칸·줄바꿈·그림 실패·칸 수 (E1 #2~#5)", () => {
+  it("value 칸만 is-on 이고 오른쪽 위 원(.mv-face__mark) 안에 icon 아이콘이 있다", () => {
+    const { container } = render(<FaceList faces={[face(0), face(1)]} value={1} icon="eye" />);
+    const on = container.querySelector('button[data-face="1"]')!;
+    expect(on.classList.contains("is-on")).toBe(true);
+    expect(on.querySelector(".mv-face__mark svg")).toBeTruthy();
+    const off = container.querySelector('button[data-face="0"]')!;
+    expect(off.classList.contains("is-on")).toBe(false);
+    expect(off.querySelector(".mv-face__mark")).toBeNull();
+  });
+
+  it("icon 이 없으면 고른 칸에도 원 안 아이콘이 없다", () => {
+    const { container } = render(<FaceList faces={[face(0)]} value={0} />);
+    expect(container.querySelector(".mv-face__mark")).toBeTruthy();
+    expect(container.querySelector(".mv-face__mark svg")).toBeNull();
+  });
+
+  it("img error → data-face-fallback=true, 자리 구분색 원으로 대신하고 이름·선택은 그대로", () => {
+    const onPick = vi.fn();
+    const { container } = render(<FaceList faces={[face(3, "가나다라마바사아")]} onPick={onPick} />);
+    const btn = container.querySelector('button[data-face="3"]')!;
+    expect(btn.getAttribute("data-face-fallback")).toBeNull();
+    fireEvent.error(btn.querySelector("img")!);
+    expect(btn.getAttribute("data-face-fallback")).toBe("true");
+    expect(btn.querySelector("img")).toBeNull();
+    expect(btn.querySelector(".mv-face--fallback") ?? btn.querySelector(".mv-face__fallback")).toBeTruthy();
+    expect(btn.querySelector(".mv-face__name")?.textContent).toBe("가나다라마바사아");
+    fireEvent.click(btn);
+    expect(onPick).toHaveBeenCalledWith(3);
+  });
+
+  it("disabled 칸은 aria-disabled=true 이고 눌러도 onPick 을 부르지 않는다", () => {
+    const onPick = vi.fn();
+    const { container } = render(<FaceList faces={[face(0), { ...face(1), disabled: true }]} onPick={onPick} />);
+    const blocked = container.querySelector('button[data-face="1"]')!;
+    expect(blocked.getAttribute("aria-disabled")).toBe("true");
+    fireEvent.click(blocked);
+    expect(onPick).not.toHaveBeenCalled();
+    expect(container.querySelector('button[data-face="0"]')!.getAttribute("aria-disabled")).toBeNull();
+  });
+
+  it("목록 disabled 이면 모든 칸이 aria-disabled", () => {
+    const { container } = render(<FaceList faces={[face(0), face(1)]} disabled />);
+    expect([...container.querySelectorAll("button")].every((b) => b.getAttribute("aria-disabled") === "true")).toBe(true);
+  });
+
+  it.each([1, 4, 5, 8])("%i칸이어도 칸 수가 그대로이고 .mv-faces 하나가 4열이다", (n) => {
+    const { container } = render(<FaceList faces={Array.from({ length: n }, (_, i) => face(i))} />);
+    expect(container.querySelectorAll("button[data-face]").length).toBe(n);
+    expect(container.querySelectorAll(".mv-faces").length).toBe(1);
+    const grid = rulesStarting(".mv-faces").filter((r) => /^\s*\.mv-faces\s*\{/.test(r)).join("");
+    expect(grid).toMatch(/display:\s*grid/);
+    expect(grid).toMatch(/grid-template-columns:\s*repeat\(4,/);
+  });
+
+  it("8자 닉네임: 이름은 줄바꿈 가능(keep-all·anywhere)이고 말줄임·nowrap·line-clamp 가 없다", () => {
+    const name = rulesStarting(".mv-face__name").join("");
+    expect(name).toMatch(/word-break:\s*keep-all/);
+    expect(name).toMatch(/overflow-wrap:\s*anywhere/);
+    expect(name).not.toMatch(/nowrap|ellipsis|line-clamp/);
+    expect(name).toMatch(/font-size:\s*14px/);
+    expect(name).toMatch(/font-weight:\s*700/);
+  });
+
+  it("닉네임은 글자로만 그린다(T-09-08): <b> 문자열이 요소가 되지 않는다", () => {
+    const { container } = render(<FaceList faces={[face(0, "<b>해킹</b>")]} />);
+    expect(container.querySelector(".mv-face__name b")).toBeNull();
+    expect(container.querySelector(".mv-face__name")?.textContent).toBe("<b>해킹</b>");
+    expect(container.querySelector("button")!.getAttribute("aria-label")).toBe("<b>해킹</b>");
+  });
+
+  it("고른 칸 테두리 2px gray-100, 안 고른 칸은 brightness .85 saturate .85 (E1 #3)", () => {
+    const face_ = rulesStarting(".mv-face").filter((r) => /^\s*\.mv-face\s*\{/.test(r)).join("");
+    expect(face_).toMatch(/border:\s*2px solid transparent/);
+    // 승인 bundle.css 처럼 얼굴 그림에만 건다(이름·점은 어둡게 하지 않는다)
+    expect(rulesStarting(".mv-face__img").join("")).toMatch(/brightness\(0?\.85\)\s*saturate\(0?\.85\)/);
+    expect(rulesStarting(".mv-face.is-on .mv-face__img").join("")).toMatch(/filter:\s*none/);
+    expect(rulesStarting(".mv-face.is-on").join("")).toMatch(/border-color:\s*var\(--gray-100\)/);
+    expect(rulesStarting(".mv-face__mark").join("")).toMatch(/width:\s*26px/);
+  });
+
+  it("얼굴 목록 CSS 에 진홍·놋쇠가 없고 hex 색도 없다(경찰·의사 같은 생김새, T-09-09)", () => {
+    const css = rulesStarting(".mv-face").join("\n");
+    expect(css.length).toBeGreaterThan(0);
+    expect(css).not.toMatch(/crimson|brass|#[0-9a-fA-F]{3,8}\b/);
+    const tsx = readFileSync("src/components/v2/FaceList.tsx", "utf8");
+    expect(tsx).not.toMatch(/crimson|brass|dangerouslySetInnerHTML|innerHTML/);
   });
 });
