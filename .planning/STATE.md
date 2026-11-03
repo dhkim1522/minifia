@@ -5,16 +5,16 @@ milestone_name: 같은 공간
 current_phase: 9
 current_phase_name: 밤과 아침
 status: executing
-stopped_at: Completed 09-06-PLAN.md
-last_updated: "2026-11-03T04:06:04.337Z"
+stopped_at: Completed 09-07-PLAN.md
+last_updated: "2026-11-03T04:22:15.687Z"
 last_activity: 2026-11-03
 last_activity_desc: Phase 9 execution started
-state_head: 0659786677e961f93a522bb524e302854852e5d7
+state_head: c69f992eca96d754f273d6e133f3aab81ab8a993
 progress:
   total_phases: 7
   completed_phases: 3
   total_plans: 101
-  completed_plans: 84
+  completed_plans: 85
   percent: 43
 ---
 
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-11-03)
 ## Current Position
 
 Phase: 9 (밤과 아침) — EXECUTING
-Plan: 7 of 23
+Plan: 8 of 23
 Status: Ready to execute
 Last activity: 2026-11-03 — Phase 9 execution started
 
@@ -144,6 +144,7 @@ Progress: [████░░░░░░] 43% (3/7 phases)
 | Phase 09 P04 | 10min | 2 tasks | 2 files |
 | Phase 09 P05 | 15min | 3 tasks | 14 files |
 | Phase 09 P06 | 6min | 2 tasks | 3 files |
+| Phase 09 P07 | 9min | 3 tasks | 15 files |
 
 ## Accumulated Context
 
@@ -296,6 +297,7 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 09]: 마피아 봇은 실행 시점에 동료 선택을 따르고 없으면 가장 낮은 산 비마피아를 고른다 (결정 0061-18, 난수 없음)
 - [Phase 09]: 탈락한 마피아는 유령으로 밤 마피아 위치를 받는다 (09-03, 가정 A1)
 - [Phase 09]: 09-06: 긴장 큐 창 28000ms 는 서버 밤 길이를 import 하지 않는 지역 상수, 창 넘는 큐는 버림(첫 두 큐는 항상 창 안)
+- [Phase 09]: 09-07: 산 마피아에게 밤 내내 me.nightTally 를 항상 싣는다(선택 없으면 []), nightSure 는 확정일 때만. MorningView.phrase 타입은 09-18 까지 남긴다.
 
 ### Pending Todos
 
@@ -333,8 +335,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-03T04:06:04.017Z
-Stopped at: Completed 09-06-PLAN.md
+Last session: 2026-11-03T04:22:08.474Z
+Stopped at: Completed 09-07-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
