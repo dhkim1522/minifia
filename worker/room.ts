@@ -29,10 +29,10 @@ import { nextWakeAt, tick } from "../shared/game/tick";
 import { castPoint } from "../shared/game/nomination";
 import { castVerdict } from "../shared/game/verdict";
 import { endReached, toggleEnd } from "../shared/game/discussion";
-import { canMove } from "../shared/game/movement";
+import { MAP_PHASES, canMove } from "../shared/game/movement";
 import { layoutFor, layoutKey } from "../shared/game/gather";
 import { BAR_MAP, STAGE_SPOT } from "../shared/game/map";
-import { WORLD_FLUSH_MS, compactWorld, despawnPlayer, emptyWorld, forceSegment, moveFrame, nextWanderAt, planMoveSegment, planWander, requestMove, respawnAll, restoreWorld, snapFrame, spawnPlayer } from "../shared/game/world";
+import { WORLD_FLUSH_MS, captureHome, compactWorld, despawnPlayer, emptyWorld, forceSegment, moveFrame, nextWanderAt, planMoveSegment, planWander, requestMove, respawnAll, restoreWorld, snapFrame, spawnPlayer, teleportHome } from "../shared/game/world";
 import type { Segment, WorldState } from "../shared/game/world";
 import { buildPreview, buildView } from "../shared/game/view";
 import { ClientMessageSchema } from "../shared/schemas";
@@ -500,10 +500,7 @@ export class Room extends DurableObject<Env> {
     if (result.state === this.room) return null;
     if (endReached(result.state)) {
       this.room = tick({ ...result.state, phaseEndsAt: now }, now, cryptoRandInt);
-      await this.persistAndBroadcast();
-      this.snapNewGhosts(now);
-      this.syncLayout(now);
-      await this.reschedule();
+      await this.afterTransition(now);
       return null;
     }
     this.room = result.state;
@@ -579,10 +576,7 @@ export class Room extends DurableObject<Env> {
       return;
     }
     this.room = result.state;
-    await this.persistAndBroadcast();
-    this.snapNewGhosts(Date.now());
-    this.syncLayout(Date.now());
-    await this.reschedule();
+    await this.afterTransition(Date.now());
   }
 
   // 대기실로 되돌리기: 같은 방·같은 사람(소켓은 닫지 않는다). 알람은 방 만료로 옮겨진다.
@@ -700,19 +694,72 @@ export class Room extends DurableObject<Env> {
     const next = tick(room, now, cryptoRandInt);
     if (next !== room) {
       this.room = next;
-      await this.persistAndBroadcast();
-      this.snapNewGhosts(now);
+      await this.afterTransition(now);
+      return;
     }
-    // 배치는 단계가 바뀌었는지와 무관하게 '지금 단계가 요구하는 모습'으로 맞춘다(멱등, 알람 따라잡기·퇴거에도 안전).
+    // 위치는 단계가 바뀌었는지와 무관하게 '지금 단계가 요구하는 모습'으로 맞춘다(멱등, 알람 따라잡기·퇴거에도 안전).
+    await this.syncPositions(now);
+  }
+
+  // 단계 전환 뒤처리 한 곳(결정 0061-19): 단계 마감(advance)·토론 끝내기(applyEndDiscussion)·테스트 넘기기(handleTestSkip)가 모두 여기를 지난다.
+  // 순서가 계약이다: home 기억(지목 배치보다 먼저, 즉시 저장) → 저장·방송 → 위치 동기화(밤·아침 home → 새 유령 snap → 지목 배치) → 알람.
+  private async afterTransition(now: number): Promise<void> {
+    if (this.captureHomeNow()) await this.flushWorld();
+    await this.persistAndBroadcast();
+    await this.syncPositions(now);
+    await this.reschedule();
+  }
+
+  // 그날 처음으로 걷기 단계(dayAnnounce·discussion)를 벗어난 지도 단계에 들어오면 각자 토론이 끝난 자리를 기억한다(결정 0061-5).
+  // captureHome 이 같은 일차면 입력을 그대로 돌려주므로(멱등) 지목 → 변론 → 밤처럼 이어지는 단계에서 자리를 덮지 않는다. 바뀌었으면 true.
+  private captureHomeNow(): boolean {
+    const room = this.room;
+    if (!room || room.day === undefined) return false;
+    if (!MAP_PHASES.has(room.phase) || room.phase === "dayAnnounce" || room.phase === "discussion") return false;
+    const next = captureHome(
+      this.world,
+      room.players.map((p) => p.id),
+      room.day,
+    );
+    if (next === this.world) return false;
+    this.world = next;
+    return true;
+  }
+
+  // 위치 동기화 한 번: 밤·아침 home → 방금 탈락한 사람 snap → 지목 배치. 모두 지금 단계 키와 world.lay.key 비교로 멱등이다.
+  private async syncPositions(now: number): Promise<void> {
+    await this.syncHome(now);
+    this.snapNewGhosts(now);
     this.syncLayout(now);
-    if (next !== room) await this.reschedule();
+  }
+
+  // 밤 위치(결정 0061-3): 키 '{일차}:night' 가 world.lay.key 와 다르면 산 사람 전원을 home 으로 순간이동하고 보는 사람 한 명씩 snap 을 보낸다.
+  // home 이 없는 사람은 teleportHome 이 건드리지 않는다(fail-safe). 전송은 새 길을 만들지 않는다: 소켓마다 worldVisibleTo 로 거른 snapFrame 을 deliver 한 명씩(연구 Don't Hand-Roll).
+  // 밤의 시민 편은 본인 한 칸이다.
+  private async syncHome(now: number): Promise<void> {
+    const room = this.room;
+    if (!room || room.day === undefined) return;
+    if (room.phase !== "night") return;
+    const key = `${room.day}:${room.phase}`;
+    if (key === this.world.lay?.key) return;
+    this.world = {
+      ...teleportHome(this.world, room.players.filter(isAlive).map((p) => p.id), now),
+      lay: { key, slots: this.world.lay?.slots ?? {} },
+    };
+    await this.flushWorld();
+    for (const viewer of room.players) {
+      const visible = worldVisibleTo(room, viewer.id);
+      if (visible.size === 0) continue;
+      if (!isAlive(viewer)) this.ghostSnapped.add(viewer.id);
+      this.deliver(new Set([viewer.id]), snapFrame(this.world, room.players.filter((q) => visible.has(q.id)), now));
+    }
   }
 
   // 지금 단계의 배치(지목 둘레 자리·변론 무대·부결 복귀)를 서버가 걷게 한다(DAY-04·05, 결정 0060-7).
   // 단계 전환 이벤트가 아니라 지금 단계의 배치를 맞춘다 — 알람 따라잡기·퇴거에도 안전(RESEARCH 패턴 4). 키가 world.lay.key 와 같으면 아무것도 하지 않는다(멱등).
   // 이동마다 지금 위치에서 경로를 만들고(planMoveSegment) 150ms 간격·lastMoveAt 을 건드리지 않는 forceSegment 로 적용한 뒤(Pitfall 5)
   // 그 사람이 움직인 것으로 emitWorld 한다(산 사람의 이동은 방 전원에게, A2). 배치 기억 lay 는 world 저장에 실려 퇴거 뒤에도 자리가 뒤섞이지 않는다.
-  // 밤에는 배치를 바꾸지 않는다(layoutKey 가 null, 선 자리 그대로 — 9페이즈가 정한다, A4).
+  // 밤·아침은 layoutKey 가 null 이고 syncHome 이 맞춘다(결정 0061-3·4).
   private syncLayout(now: number): void {
     const room = this.room;
     if (!room) return;
