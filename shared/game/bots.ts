@@ -17,7 +17,8 @@
 // 새 단계의 난수는 새 분기 안에서만 늘어난다. 07-08 에서 claim 분기의 난수 호출이 빠져 시드 고정 값이 새 호출 순서로 다시 고정됐다(다른 단계의 호출 수는 그대로).
 // 07-11: 봇 자유 채팅으로 discussion·night 의 호출 순서가 바뀌어 시드 고정 값을 다시 고정했다(옛 투표·defense 의 호출 수는 그대로였다).
 // 봇 하나당 순서: discussion = (randInt(첫 지연 폭) → randInt(8)) → (randInt(둘째 지연 폭) → randInt(8)),
-// night = (대상이 있으면) randInt(대상 수) → randInt(pick 지연 폭), 마피아면 이어서 randInt(10) → (< 6 이면) randInt(채팅 지연 폭) → randInt(3),
+// night = (경찰·의사만, 대상이 있으면) randInt(대상 수) → randInt(pick 지연 폭), 마피아면 대상 난수 없이 randInt(pick 지연 폭) → randInt(10) → (< 6 이면) randInt(채팅 지연 폭) → randInt(3),
+// 09-02: 마피아 봇 협응(결정 0061-18)으로 마피아의 대상 난수가 없어져 night 호출 순서가 바뀌었고 시드 고정 값을 다시 고정했다.
 // defense(후보 봇만) = randInt(문구 수 3) → randInt(지연 폭).
 // 테스트 방 방장이 봇 투표를 고정한 경우(RoomState.testBotVote, P-13): 고정 값이면 결정 난수(randInt(100)·randInt(후보 수))를 건너뛰고 지연 난수는 그대로 부른다.
 // 고정 설정이 없거나 pick 조건이 안 맞아 무작위로 돌아가면 위 순서와 똑같다.
@@ -104,15 +105,31 @@ export const botCount = (state: RoomState): number => state.players.filter(isBot
 const bySeat = (a: Player, b: Player): number => a.seat - b.seat;
 
 /**
- * 밤에 이 봇이 고를 대상 seat. 후보는 seat 오름차순 — 마피아는 살아 있는 비마피아, 경찰은 살아 있는 다른 사람,
- * 의사는 자신 포함 살아 있는 모두. 그 밖 역할·탈락한 봇·후보 없음은 undefined(randInt 를 부르지 않는다).
+ * 마피아 봇이 밤에 고를 대상 seat(결정 0061-18). 산 마피아 봇이 아니면 undefined.
+ * 후보는 산 비마피아 seat 오름차순이다. 다른 산 마피아가 이미 고른 후보가 있으면 그 중 가장 낮은 seat 을 따라가고,
+ * 없으면 후보 중 가장 낮은 seat 이다 — 새 규칙(산 마피아 전원 일치만 확정)에서 봇끼리·봇과 사람이 같은 대상으로 모인다.
+ * 난수를 부르지 않는다. 마피아 본인이 view 로도 받는 정보(동료 선택·생존·역할 구성)만 쓰고 경찰·의사의 선택은 읽지 않는다(결정 0024-6).
+ */
+export function botMafiaTarget(state: RoomState, bot: Player): number | undefined {
+  if (!isAlive(bot) || bot.role !== "mafia") return undefined;
+  const candidates = state.players.filter((p) => isAlive(p) && p.role !== "mafia").map((p) => p.seat);
+  if (candidates.length === 0) return undefined;
+  const followed = state.players
+    .filter((p) => isAlive(p) && p.role === "mafia" && p.id !== bot.id && p.nightPick !== undefined && candidates.includes(p.nightPick))
+    .map((p) => p.nightPick!);
+  return followed.length > 0 ? Math.min(...followed) : Math.min(...candidates);
+}
+
+/**
+ * 밤에 이 봇이 고를 대상 seat. 마피아는 botMafiaTarget(난수 없음, 결정 0061-18), 경찰은 살아 있는 다른 사람,
+ * 의사는 자신 포함 살아 있는 모두(둘 다 seat 오름차순 후보에서 randInt). 그 밖 역할·탈락한 봇·후보 없음은 undefined(randInt 를 부르지 않는다).
  */
 export function botNightTarget(state: RoomState, bot: Player, randInt: RandInt): number | undefined {
   if (!isAlive(bot)) return undefined;
+  if (bot.role === "mafia") return botMafiaTarget(state, bot);
   const living = state.players.filter(isAlive).sort(bySeat);
   let candidates: Player[];
-  if (bot.role === "mafia") candidates = living.filter((p) => p.role !== "mafia");
-  else if (bot.role === "police") candidates = living.filter((p) => p.id !== bot.id);
+  if (bot.role === "police") candidates = living.filter((p) => p.id !== bot.id);
   else if (bot.role === "doctor") candidates = living;
   else return undefined;
   if (candidates.length === 0) return undefined;

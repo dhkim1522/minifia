@@ -582,7 +582,7 @@ describe("botPlanKey·syncBotPlan·planBotSteps", () => {
     }
   });
 
-  it("night 마피아 봇의 chat 은 randInt(10) < 6 일 때만 서고 난수 순서는 [대상 수, 5000, 10, 6000, 3] 이다", () => {
+  it("night 마피아 봇의 chat 은 randInt(10) < 6 일 때만 서고 난수 순서는 [5000, 10, 6000, 3] 이다 (09-02 재고정: 마피아 대상 난수 없음)", () => {
     let found: { state: RoomState; botId: string } | null = null;
     for (let seed = 1; seed <= 60 && found === null; seed += 1) {
       const base = stateAt(1, 5, seed, "night");
@@ -601,9 +601,9 @@ describe("botPlanKey·syncBotPlan·planBotSteps", () => {
       return { calls, texts: steps.filter((s) => s.botId === botId && s.act.t === "chat").map((s) => (s.act.t === "chat" ? s.act.text : "")) };
     };
     const talk = run(5);
-    expect(`${talk.calls.join(",")}|${talk.texts.join("/")}`).toBe(`1,5000,10,6000,3|${BOT_NIGHT_LINES[0]}`);
+    expect(`${talk.calls.join(",")}|${talk.texts.join("/")}`).toBe(`5000,10,6000,3|${BOT_NIGHT_LINES[0]}`);
     const quiet = run(6);
-    expect(`${quiet.calls.join(",")}|${quiet.texts.length}`).toBe("1,5000,10|0");
+    expect(`${quiet.calls.join(",")}|${quiet.texts.length}`).toBe("5000,10|0");
   });
 
   it("어떤 단계의 봇 계획에도 say·emoji 행동이 없다", () => {
@@ -813,14 +813,14 @@ describe("봇 투표·변론 계획: 회귀", () => {
     }
   });
 
-  it("discussion·night 계획 고정값 (08-11: 흐름 전환으로 둘 다 다시 고정 — 08-07 값 856098986·997718148; 07-11 이전 622180622·76649671, 07-08 이전 289874952·760964938)", () => {
+  it("discussion·night 계획 고정값 (09-02 재고정: night 962657041 → 554531902, 마피아 대상 난수 없음; 08-11: 흐름 전환으로 둘 다 다시 고정 — 08-07 값 856098986·997718148; 07-11 이전 622180622·76649671, 07-08 이전 289874952·760964938)", () => {
     const digest = (text: string): number => [...text].reduce((h, ch) => (h * 31 + ch.charCodeAt(0)) % 1_000_000_007, 7);
     const got = (["discussion", "night"] as const).map((phase) => {
       const state = stateAt(1, 5, 8, phase);
       return digest(canon(planBotSteps(state, nowOf(state), seededRandInt(42))));
     });
     // 08-11: 토론이 90초가 되고 밤이 지목 마감 뒤에 닿아 두 계획의 시각(at)이 모두 달라졌다 — 새 흐름 값으로 다시 고정한다.
-    expect(got.join(",")).toBe("34804349,962657041");
+    expect(got.join(",")).toBe("34804349,554531902");
   });
 
   it("discussion 계획의 난수 호출 수는 claim 제거 뒤에도 그대로다 (07-08, 리서치 Pitfall 13)", () => {

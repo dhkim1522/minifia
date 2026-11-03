@@ -1,7 +1,7 @@
 import { DurableObject } from "cloudflare:workers";
 import { CLOSE_CODES, MAX_FRAME_BYTES } from "../shared/protocol";
 import type { ApiErrorCode, BotVoteExec, BotVotePick, ChatRejectWhy, ClientMessage, RemovedReason, RoomPreview, ServerMessage, WorldFrame, WsErrorCode } from "../shared/protocol";
-import { botWakeAt, isBot, syncBotPlan, takeDueBotSteps } from "../shared/game/bots";
+import { botMafiaTarget, botWakeAt, isBot, syncBotPlan, takeDueBotSteps } from "../shared/game/bots";
 import type { BotStep } from "../shared/game/bots";
 import { isAlive } from "../shared/game/alive";
 import { audience, channelOf, phaseKey, worldVisibleTo } from "../shared/game/audience";
@@ -531,9 +531,14 @@ export class Room extends DurableObject<Env> {
       case "chat":
         await this.applyChat(step.botId, act.text, phaseKey({ phase: room.phase, day: room.day }), Date.now());
         return;
-      case "pick":
-        await this.applyPick(step.botId, act.target);
+      // 마피아 봇은 실행 시점 상태로 대상을 다시 구한다(결정 0061-18): 동료(사람 포함)가 먼저 고른 대상을 따라간다. 값이 없으면 계획의 대상.
+      // 같은 applyPick 본체를 지나므로 특권이 없다(결정 0024-6).
+      case "pick": {
+        const bot = room.players.find((p) => p.id === step.botId);
+        const target = bot?.role === "mafia" ? (botMafiaTarget(room, bot) ?? act.target) : act.target;
+        await this.applyPick(step.botId, target);
         return;
+      }
       // 8페이즈(결정 0060-13): 토론 끝내기·지목·찬반도 사람과 같은 본체를 지난다(특권 없음, 결정 0024-6). 거부는 알릴 소켓이 없어 버린다.
       case "endDiscussion":
         await this.applyEndDiscussion(step.botId, true, Date.now());
