@@ -338,7 +338,7 @@ describe("worldVisibleTo — 접속 스냅샷에 실릴 좌석 (GHOST-01)", () =
     expect(sorted(worldVisibleTo(s, idOf(2)))).toEqual(ids(0, 1, 2, 3, 4, 5));
   });
 
-  it.each(MAP_PHASE_LIST)("%s: viewer 가 산 사람이면 산 사람만", (phase) => {
+  it.each(MAP_PHASE_LIST.filter((phase) => phase !== "night"))("%s: viewer 가 산 사람이면 산 사람만", (phase) => {
     const s = sixAt(phase, { day: 1, dead: [2, 5] });
     expect(sorted(worldVisibleTo(s, idOf(0)))).toEqual(ids(0, 1, 3, 4));
   });
@@ -346,6 +346,39 @@ describe("worldVisibleTo — 접속 스냅샷에 실릴 좌석 (GHOST-01)", () =
   it.each(MAP_PHASE_LIST)("%s: viewer 가 유령이면 전원", (phase) => {
     const s = sixAt(phase, { day: 1, dead: [2, 5] });
     expect(sorted(worldVisibleTo(s, idOf(2)))).toEqual(ids(0, 1, 2, 3, 4, 5));
+  });
+
+  describe("밤 분기 (NIGHT-07, 결정 0061-3)", () => {
+    const night = sixAt("night", { day: 1 });
+
+    it("시민·경찰·의사 viewer 는 본인 한 칸뿐이다", () => {
+      expect(sorted(worldVisibleTo(night, idOf(0)))).toEqual(ids(0));
+      expect(sorted(worldVisibleTo(night, idOf(3)))).toEqual(ids(3));
+      expect(sorted(worldVisibleTo(night, idOf(5)))).toEqual(ids(5));
+    });
+
+    it("산 마피아 viewer 는 산 사람 전원을 본다(유령은 빼고)", () => {
+      expect(sorted(worldVisibleTo(night, idOf(1)))).toEqual(ids(0, 1, 3, 4, 5));
+      expect(sorted(worldVisibleTo(night, idOf(4)))).toEqual(ids(0, 1, 3, 4, 5));
+    });
+
+    it("유령 viewer 는 전원을 본다", () => {
+      expect(sorted(worldVisibleTo(night, idOf(2)))).toEqual(ids(0, 1, 2, 3, 4, 5));
+    });
+
+    it("탈락한 마피아는 유령이라 전원을 본다", () => {
+      const s = sixAt("night", { day: 1, dead: [2, 4] });
+      expect(sorted(worldVisibleTo(s, idOf(4)))).toEqual(ids(0, 1, 2, 3, 4, 5));
+      expect(sorted(worldVisibleTo(s, idOf(0)))).toEqual(ids(0));
+    });
+
+    it("아침·토론·지목의 결과는 바뀌지 않는다(산 viewer 는 산 사람, 유령은 전원)", () => {
+      for (const phase of ["morning", "discussion", "nomination"] as PhaseId[]) {
+        const s = sixAt(phase, { day: 1 });
+        expect(sorted(worldVisibleTo(s, idOf(0)))).toEqual(ids(0, 1, 3, 4, 5));
+        expect(sorted(worldVisibleTo(s, idOf(2)))).toEqual(ids(0, 1, 2, 3, 4, 5));
+      }
+    });
   });
 
   it("ended 와 옛 투표 단계는 빈 집합", () => {

@@ -543,6 +543,36 @@ describe("밤 마피아 이동 (NIGHT-07, 결정 0061-2)", () => {
   }, 40_000);
 });
 
+/** 새 소켓으로 hello 하고 chatLog 까지 받은 뒤 snap 프레임의 좌석 목록('0,2,3')을 돌려준다. snap 이 없으면 'none'. (ghostLeak.test.ts 와 같은 모양) */
+async function reconnectSnapSeats(code: string, token: string): Promise<string> {
+  const sock = await connect(code);
+  send(sock, { t: "hello", token });
+  await nextFrame(sock, (m) => m.t === "chatLog");
+  const snap = worldFramesOf(sock).find((m) => m.k === "snap");
+  return snap === undefined || snap.k !== "snap" ? "none" : snap.ents.map((e) => e.s).sort((a, b) => a - b).join(",");
+}
+
+describe("밤 재접속 첫 snap (NIGHT-07, L9, 결정 0061-3)", () => {
+  it("밤에 시민이 새 소켓으로 hello 하면 첫 world snap 의 좌석이 본인 하나뿐이고, 마피아가 hello 하면 산 사람 좌석 전부다", async () => {
+    const g = await startedGame("night");
+    const citizen = withRole(g, "citizen")[0]!;
+    const mafia = withRole(g, "mafia")[0]!;
+    expect(await reconnectSnapSeats(g.code, citizen.token)).toBe(`${citizen.seat}`);
+    expect(await reconnectSnapSeats(g.code, mafia.token)).toBe(g.actors.map((a) => a.seat).sort((a, b) => a - b).join(","));
+  }, 40_000);
+
+  it("밤에 경찰·의사도 본인 한 칸이고, 유령이 hello 하면 전원이다", async () => {
+    const g = await startedGame("night");
+    const police = withRole(g, "police")[0]!;
+    const doctor = withRole(g, "doctor")[0]!;
+    expect(await reconnectSnapSeats(g.code, police.token)).toBe(`${police.seat}`);
+    expect(await reconnectSnapSeats(g.code, doctor.token)).toBe(`${doctor.seat}`);
+    const victim = withRole(g, "citizen")[0]!;
+    const { ghosts } = await ghostsOf(g, [victim.seat]);
+    expect(await reconnectSnapSeats(g.code, ghosts[0]!.token)).toBe(g.actors.map((a) => a.seat).sort((a, b) => a - b).join(","));
+  }, 40_000);
+});
+
 describe("무대 자리 (0,0) 입력 차단 (08-04 Threat Flag)", () => {
   it("로비에서 목적지가 정확히 무대 자리(0,0)인 move 는 조용히 버려지고, 옆 점은 받아들여진다", async () => {
     const s = await seat(1, 0);
