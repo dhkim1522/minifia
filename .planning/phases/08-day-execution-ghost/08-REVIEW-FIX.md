@@ -23,7 +23,7 @@ status: all_fixed
 
 서버 규칙(결정 0002)은 바꾸지 않았다. 수정은 모두 클라이언트 문구·컴포넌트 속성·E2E 실행기에 한정된다.
 
-## 수정한 지적
+## Fixed Issues
 
 ### CR-01: 찬반 부결인데 처형 단계 화면 읽기가 "○○ 님 처형"이라고 알린다
 
@@ -32,7 +32,7 @@ status: all_fixed
 **적용한 수정:** `executionAnnounceOf` 가 `view.day?.verdict?.passed !== true` 이면 `처형 없음` 을 돌려주고, 통과일 때만 `execution.seat ?? candidate` 로 `○○ 님 처형` 을 만든다(`dayView.phaseEntry` 와 같은 기준). phaseScreens 테스트에 통과(`하윤 님 처형`)와 부결(`처형 없음`, 변론자 이름 없음) 두 경우를 더했다. 수정 전 코드에서 부결 테스트가 `하윤 님 처형` 으로 실패하는 것을 확인했다.
 **참고:** 처형 단계에서 `day.verdict` 가 아예 없는 view 도 `처형 없음` 이 된다(리뷰 제안 코드와 같은 동작). 서버는 처형 단계에 항상 verdict 를 싣는다.
 
-### WR-01: 지목 동률·0표인 날의 결과 요약이 "처형 없음 (찬성 0 · 반대 0)"으로 나온다
+### WR-01: 지목 동률·0표인 날의 결과 요약이 "처형 없음 (찬성 0 · 반대 0)"으로 나오고 동률/무표 구분이 사라진다
 
 **수정한 파일:** `src/game/verdict.ts`, `test/unit/verdict.test.ts`, `test/client/resultScreen.test.tsx`
 **커밋:** d5282cc
@@ -45,7 +45,7 @@ status: all_fixed
 **커밋:** 3b479ca
 **적용한 수정:** `WorldStage` 의 `onKick` 을 선택 속성으로 바꾸고 `canKick` 에 `props.onKick !== undefined` 를 더했다. `GameMap` 은 빈 함수 `onKick={() => {}}` 를 넘기지 않는다. 대기실(`Lobby`)은 그대로 `onKick` 을 넘긴다. worldStage 테스트에 `onKick` 이 없으면 방장 화면에도 내보내기 버튼이 없음을 확인하는 케이스를 더했다. `onKick` 이 선택 속성이 되어 생긴 타입 오류를 막으려고 lobby 테스트의 `props().onKick(` 호출 다섯 곳을 `props().onKick!(` 로 고쳤다(동작 변화 없음).
 
-### WR-03: E2E 실행기가 준비 실패로 재시도할 때 먼저 기록된 검사 실패를 버린다
+### WR-03: E2E 실행기가 준비 실패로 재시도할 때 먼저 기록된 검사 실패를 버려 성공으로 바꿔 놓을 수 있다
 
 **수정한 파일:** `scripts/e2e/run.mjs`
 **커밋:** afdce12
