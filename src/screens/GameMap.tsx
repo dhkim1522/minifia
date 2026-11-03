@@ -347,7 +347,6 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
         {...(pick ? { pick } : {})}
         {...(tagProps ? { tagProps } : {})}
         onNotice={(text) => show(text)}
-        onKick={() => {}}
         onLeave={() => onLeave?.()}
       />
       <TopToast {...toast.props} />

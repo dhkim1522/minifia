@@ -74,7 +74,8 @@ export interface WorldStageProps {
   /** 좌석별 이름표 쌓임 속성(득표 배지·선두·도장·내 선택·투표함·직업 칩 …)과 발밑 고리 종류 */
   tagProps?: (seat: number) => Partial<Omit<HeadStackProps, "name" | "color">> & { ring?: RingKind };
   onNotice(text: string): void;
-  onKick(seat: number, nickname: string): void;
+  /** 있을 때만 연결이 끊긴 사람의 이름표가 [내보내기] 버튼이 된다(대기실 전용 — 게임 중 서버는 CANNOT_KICK) */
+  onKick?(seat: number, nickname: string): void;
   onLeave(): void;
   onReady?(): void;
   exiting?: boolean;
@@ -225,7 +226,7 @@ export function WorldStage(props: WorldStageProps) {
   const shown = (seat: number): boolean => scene === undefined || scene.seats[seat]?.show === true;
   // 보이지 않는 좌석은 이름표도 만들지 않는다(T-08-30)
   const roster = [...view.players, ...leaving.filter((p) => !here.has(p.seat))].filter((p) => shown(p.seat));
-  const canKick = view.me.isHost && props.canSend;
+  const canKick = view.me.isHost && props.canSend && props.onKick !== undefined;
   const pick = props.pick;
 
   const stateClass = exiting ? "is-exiting" : mapStatus.status === "ready" ? "is-open" : mapStatus.status === "lost" || mapStatus.status === "recreating" ? "is-redrawing" : "";
@@ -316,7 +317,7 @@ export function WorldStage(props: WorldStageProps) {
                   {stack}
                 </button>
               ) : kickable ? (
-                <button type="button" className="mf-world__kick" aria-label={`${p.nickname} 님 내보내기`} onClick={() => live.current.props.onKick(p.seat, p.nickname)}>
+                <button type="button" className="mf-world__kick" aria-label={`${p.nickname} 님 내보내기`} onClick={() => live.current.props.onKick?.(p.seat, p.nickname)}>
                   {stack}
                 </button>
               ) : (

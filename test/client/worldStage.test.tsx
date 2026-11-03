@@ -985,6 +985,12 @@ describe("접근성 목록과 내보내기 이름표 (MAP-07)", () => {
     expect(screen.getAllByRole("button")).toHaveLength(1);
   });
 
+  it("onKick 을 넘기지 않으면(게임 중 맵) 방장 화면에서도 끊긴 사람 이름표가 내보내기 버튼이 되지 않는다 (WR-02)", async () => {
+    await open({ onKick: undefined }, { players, mySeat: 0, ents });
+    expect(screen.queryByRole("button", { name: /내보내기/ })).toBeNull();
+    expect(document.querySelector(".mf-world__kick")).toBeNull();
+  });
+
   it("손님 화면에는 내보내기 버튼이 없다", async () => {
     await open({}, { players, mySeat: 1, ents });
     expect(screen.queryByRole("button", { name: /내보내기/ })).toBeNull();

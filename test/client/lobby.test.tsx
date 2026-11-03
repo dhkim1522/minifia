@@ -595,7 +595,7 @@ describe("Lobby — 공유 시트와 끊긴 사람 내보내기 (ROOM-01, D-16)"
   it("이름표의 내보내기(onKick 2, 영희) → '영희님을 내보낼까요?' → [내보내기] → send kick seat 2", () => {
     const send = vi.fn();
     render(lobby(makeView([player(0, "민수"), player(1, "서준"), player(2, "영희", { connected: false })], 0), { send }));
-    act(() => props().onKick(2, "영희"));
+    act(() => props().onKick!(2, "영희"));
     expect(screen.getByRole("heading", { name: "영희님을 내보낼까요?" })).toBeTruthy();
     expect(send).not.toHaveBeenCalled();
     fireEvent.click(within(screen.getByRole("dialog", { name: "영희님을 내보낼까요?" })).getByRole("button", { name: "내보내기" }));
@@ -607,7 +607,7 @@ describe("Lobby — 공유 시트와 끊긴 사람 내보내기 (ROOM-01, D-16)"
     vi.useFakeTimers();
     const send = vi.fn();
     render(lobby(makeView([player(0, "민수"), player(1, "서준", { connected: false })], 0), { send }));
-    act(() => props().onKick(1, "서준"));
+    act(() => props().onKick!(1, "서준"));
     fireEvent.click(within(kickDialog()).getByRole("button", { name: "취소" }));
     advance(260);
     expect(send).not.toHaveBeenCalled();
@@ -617,7 +617,7 @@ describe("Lobby — 공유 시트와 끊긴 사람 내보내기 (ROOM-01, D-16)"
   it("canSend 가 거짓이면 시트의 [내보내기] 가 꺼진다", () => {
     const send = vi.fn();
     render(lobby(makeView([player(0, "민수"), player(1, "서준", { connected: false })], 0), { send, canSend: false }));
-    act(() => props().onKick(1, "서준"));
+    act(() => props().onKick!(1, "서준"));
     const confirm = within(kickDialog()).getByRole("button", { name: "내보내기" }) as HTMLButtonElement;
     expect(confirm.disabled).toBe(true);
   });
@@ -625,7 +625,7 @@ describe("Lobby — 공유 시트와 끊긴 사람 내보내기 (ROOM-01, D-16)"
   it("누른 시점의 닉네임을 쥐고 있어, 그사이 view 가 바뀌어도 제목이 흔들리지 않는다", () => {
     const players = [player(0, "민수"), player(1, "서준", { connected: false })];
     const { rerender } = render(lobby(makeView(players, 0)));
-    act(() => props().onKick(1, "서준"));
+    act(() => props().onKick!(1, "서준"));
     rerender(lobby(makeView([players[0]!, player(1, "서준")], 0)));
     expect(kickDialog()).toBeTruthy();
   });
@@ -633,7 +633,7 @@ describe("Lobby — 공유 시트와 끊긴 사람 내보내기 (ROOM-01, D-16)"
   it("내보낼 사람의 닉네임이 길어도 말줄임 없이 제목에 그대로 들어간다", () => {
     const long = "가나다라마바사아";
     render(lobby(makeView([player(0, "민수"), player(1, long, { connected: false })], 0)));
-    act(() => props().onKick(1, long));
+    act(() => props().onKick!(1, long));
     expect(screen.getByRole("heading", { name: `${long}님을 내보낼까요?` })).toBeTruthy();
   });
 });
