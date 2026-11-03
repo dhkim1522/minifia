@@ -6,6 +6,7 @@ import { canMoveIn } from "../../shared/game/movement";
 import { APPROACH_DIST_FX, approachPoint, positionAtFx } from "../../shared/game/world";
 import type { ClientMessage, RoomView } from "../../shared/protocol";
 import { ResultAnnounce } from "../components/ResultAnnounce";
+import { SceneCurtain } from "../components/SceneCurtain";
 import { RoleCardButton } from "../components/RoleCardButton";
 import { PhaseHeader } from "../components/v2/PhaseHeader";
 import { TopToast, useTopToast } from "../components/v2/TopToast";
@@ -439,6 +440,8 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
       />
       <TopToast {...toast.props} />
       {testButton ? <div className="mf-game__test">{testButton}</div> : null}
+      {/* 장면 전환 막(09-20): 결과 알림보다 앞(DOM 순서)에 두어 막을 붙잡는 동안 알림이 막 위로 올라올 수 있게 한다. 덮기는 공개 마감만의 함수다 */}
+      <SceneCurtain view={view} offset={offset} reducedMotion={reducedMotion} />
       <ResultAnnounce text={announce?.text ?? null} {...(announce?.icon !== undefined ? { icon: announce.icon } : {})} />
       <GamePanel
         view={view}

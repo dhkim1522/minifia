@@ -20,6 +20,17 @@
   .mf-tension.is-beat, .mf-tension.is-beat.is-cue { animation: none; opacity: 0.4; }
 }
 
+/* 장면 전환 막(09-20, E8 #41, UI-SPEC 143·214~220행): 낮 → 밤·밤 → 아침의 위치 되돌림·조명 전환을 가리는 night-950 한 장. 터치를 막지 않는다.
+   덮는 중 dur-med(420ms) 동안 0 → 1, 덮인 동안 1, 걷는 중 dur-slow(800ms) 동안 1 → 0. 모션 줄이기는 전역 규칙이 지속 시간을 거의 0 으로 줄이고,
+   부품(SceneCurtain)이 마감 시각에 바로 덮는 상태로 시작한다. 피해자 연출로 막을 붙잡는 동안(.is-held)에는 막 위에 뜨는 결과 알림이 막보다 위에 놓인다. */
+.mf-curtain { position: absolute; inset: 0; z-index: calc(var(--z-toast) + 8); background: var(--night-950); pointer-events: none; opacity: 0; }
+.mf-curtain.is-covering { animation: mf-curtain-in var(--dur-med) linear both; }
+.mf-curtain.is-covered { opacity: 1; }
+.mf-curtain.is-lifting { animation: mf-curtain-out var(--dur-slow) var(--ease-out) both; }
+.mf-curtain.is-held ~ .mf-announce { z-index: calc(var(--z-toast) + 10); }
+@keyframes mf-curtain-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes mf-curtain-out { from { opacity: 1; } to { opacity: 0; } }
+
 /* 유언·쪽지 시트 층(09-17, WILL-01·NIGHT-12, UI-SPEC "유언 쓰기"). 아래 패널(z-overlay) 위 끝에서 8 위, 키보드가 열려 있으면 그 위.
    폭(부모 − 20)과 안쪽 모양은 부품(.mv-will)이 갖는다. --mf-panel-h 는 화면 틀이 패널을 재서 쓴다. */
 .mf-will-layer {
