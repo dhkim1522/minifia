@@ -43,7 +43,7 @@ key-decisions:
   - "와이어 이름: 메시지 will·note, view me.will·me.note·me.nightTally·me.nightSure·day.chalk·day.morning.saved, 채팅 줄 k, 서버 함수 afterTransition"
   - "아침 길이 5초 + 탈락 2 + 유언 2 + 쪽지 2, 상한 15초. 유언·쪽지 저장 간격 500ms"
 
-requirements-completed: [NIGHT-07, NIGHT-08, NIGHT-09, NIGHT-10, NIGHT-11, NIGHT-12, MORN-01, MORN-02, MORN-03, MORN-04, WILL-01]
+requirements-completed: []  # 문서 계획: 요구사항은 구현 계획이 끝낼 때 완료 처리한다
 
 duration: 약 10분
 completed: 2026-11-03
