@@ -60,6 +60,38 @@ describe("밤 사슬 불변식 (NIGHT-01·06, ELIM-01)", () => {
         const elim = (views[0]!.v.day?.morning as { eliminated?: number } | undefined)?.eliminated;
         if (dead.length === 1) expect(elim).toBe(dead[0]!.seat);
         else expect(elim).toBeUndefined();
+        // 무작위 선택에서 마피아 전원 일치는 드물다 — 불일치·미선택이면 {} 또는 { saved } 뿐이고, 키는 eliminated·saved 밖에 없다(결정 0061-6·12).
+        expect(Object.keys(views[0]!.v.day?.morning ?? {}).every((k) => k === "eliminated" || k === "saved")).toBe(true);
+      }
+    });
+  }
+});
+
+describe("밤 사슬 불변식 — 마피아 전원 일치 (NIGHT-08, MORN-03)", () => {
+  for (const n of [4, 5, 6, 7, 8]) {
+    it(`${n}명 판 시드 1..40: 산 마피아 전원이 같은 비마피아를 고르면 그 사람이 탈락하거나(의사가 지키면 { saved: true }) 아무도 안 죽고, 모든 viewer 의 day.morning 이 같다`, () => {
+      for (let seed = 1; seed <= 40; seed += 1) {
+        let s = nightOf(n, seed);
+        const rnd = seededRandInt(seed * 13 + 5);
+        const others = s.players.filter((p) => isAlive(p) && p.role !== "mafia");
+        const target = others[rnd(others.length)]!;
+        for (const m of s.players.filter((p) => p.role === "mafia")) {
+          const r = pickTarget(s, m.id, target.seat);
+          if (!r.ok) throw new Error("mafia pick rejected");
+          s = r.state;
+        }
+        const doctor = s.players.find((p) => p.role === "doctor");
+        const doctorSaves = doctor !== undefined && rnd(2) === 0;
+        if (doctor !== undefined && doctorSaves) {
+          const r = pickTarget(s, doctor.id, target.seat);
+          if (!r.ok) throw new Error("doctor pick rejected");
+          s = r.state;
+        }
+        const m = tick(s, s.phaseEndsAt!);
+        const views = m.players.map((p) => buildView(m, p.id, 99_000));
+        const want = doctorSaves ? '{"saved":true}' : JSON.stringify({ eliminated: target.seat });
+        for (const v of views) expect(JSON.stringify(v.day?.morning)).toBe(want);
+        expect(m.players.filter((p) => !isAlive(p)).length).toBe(doctorSaves ? 0 : 1);
       }
     });
   }

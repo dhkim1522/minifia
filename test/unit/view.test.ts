@@ -259,7 +259,7 @@ function spectateViolations(s: RoomState, viewer: Player, view: RoomView, phase:
 const SERVER_ONLY_KEYS: readonly string[] = [
   "claimLast", "claimChoice", "claimShown", "claimChanged", "claimPick", "claimOrder", "claimIdx",
   "claimStart", "claimDone", "claims", "nightPick", "investigations", "lastPhrase",
-  "execVote", "candidateVote", "verdict", "nightLog", "lastExecPhrase",
+  "execVote", "candidateVote", "verdict", "nightLog", "lastExecPhrase", "nightNote",
 ];
 /** view.day 가 있는 열 단계. 이 밖의 단계 뷰에는 day 키 자체가 없다(D-07). */
 const DAY_VIEW_PHASES: ReadonlySet<PhaseId> = new Set([
@@ -267,6 +267,7 @@ const DAY_VIEW_PHASES: ReadonlySet<PhaseId> = new Set([
 ]);
 const ME_KEYS: ReadonlySet<string> = new Set([
   "seat", "isHost", "role", "allies", "testMode", "testRole", "testBots", "testBotVote", "pick", "allyPicks", "records", "chat", "endDiscussion", "verdictVote",
+  "nightTally", "nightSure", // 밤 산 마피아 본인에게만(결정 0061-7) — 아래 "마피아 집계" describe 가 조건을 단언한다
 ]);
 const DAY_KEYS: ReadonlySet<string> = new Set([
   "n", "roles", "voteLog", "morning", "candidate", "execution", "noExecution", "points", "endCount", "voted", "verdict",
@@ -1457,5 +1458,119 @@ describe("buildView 낮 처형 필드 (08-07, DAY-03~06)", () => {
     expect(dayKeys.filter((k) => ["role", "job"].includes(k)).join(",")).toBe("");
     const noLine: RoomState = { ...s, voteLog: [] };
     expect(noLine.players.every((p) => !("verdict" in (buildView(noLine, p.id, START_AT).day ?? {})))).toBe(true);
+  });
+});
+
+describe("마피아 집계 me.nightTally·me.nightSure (NIGHT-08, 결정 0061-7, L8)", () => {
+  const viewOf = (s: RoomState, seat: number) => buildView(s, seatId(s, seat), START_AT);
+  const night6 = () => {
+    const s0 = stateAt("night", 6, 1);
+    const [m1, m2] = [seatOfRole(s0, "mafia", 0), seatOfRole(s0, "mafia", 1)];
+    const [c1, c2] = nonMafiaSeats(s0);
+    return { s0, m1, m2, c1: c1!, c2: c2! };
+  };
+
+  it("아직 아무도 안 골랐으면 산 마피아의 nightTally 는 [] 이고 nightSure 키는 없다", () => {
+    const { s0, m1, m2 } = night6();
+    for (const m of [m1, m2]) {
+      const me = viewOf(s0, m).me;
+      expect(flat(me.nightTally)).toBe("[]");
+      expect("nightSure" in me).toBe(false);
+    }
+  });
+
+  it("마피아 둘이 갈라 고르면 대상 seat 별 1표씩(seat 오름차순, 본인 포함) 이고 nightSure 가 없다 — 누가 골랐는지는 없다", () => {
+    const { s0, m1, m2, c1, c2 } = night6();
+    const s = actAt(actAt(s0, m1, c2), m2, c1);
+    const want = flat([c1, c2].sort((a, b) => a - b).map((seat) => ({ seat, n: 1 })));
+    for (const m of [m1, m2]) {
+      const me = viewOf(s, m).me;
+      expect(flat(me.nightTally)).toBe(want);
+      expect("nightSure" in me).toBe(false);
+    }
+  });
+
+  it("마피아 둘이 같은 대상을 고르면 [{seat, n:2}] 이고 nightSure 가 그 seat 다", () => {
+    const { s0, m1, m2, c1 } = night6();
+    const s = actAt(actAt(s0, m1, c1), m2, c1);
+    for (const m of [m1, m2]) {
+      const me = viewOf(s, m).me;
+      expect(flat(me.nightTally)).toBe(flat([{ seat: c1, n: 2 }]));
+      expect(me.nightSure).toBe(c1);
+    }
+    const half = actAt(s0, m1, c1);
+    expect("nightSure" in viewOf(half, m1).me).toBe(false);
+    expect(flat(viewOf(half, m1).me.nightTally)).toBe(flat([{ seat: c1, n: 1 }]));
+  });
+
+  it("마피아 1명 판은 선택 즉시 nightSure 다", () => {
+    const s0 = stateAt("night", 4, 1);
+    const m = seatOfRole(s0, "mafia");
+    const x = nonMafiaSeats(s0)[0]!;
+    const s = actAt(s0, m, x);
+    expect(viewOf(s, m).me.nightSure).toBe(x);
+    expect(flat(viewOf(s, m).me.nightTally)).toBe(flat([{ seat: x, n: 1 }]));
+  });
+
+  it("시민·경찰·의사 view 에는 두 키가 없다(밤, 마피아가 모두 고른 뒤에도)", () => {
+    const { s0, m1, m2, c1, c2 } = night6();
+    const s = actAt(actAt(s0, m1, c1), m2, c1);
+    for (const seat of [c1, c2, seatOfRole(s0, "police"), seatOfRole(s0, "doctor")]) {
+      const me = viewOf(s, seat).me;
+      expect(["nightTally" in me, "nightSure" in me]).toEqual([false, false]);
+    }
+  });
+
+  it("탈락한 사람(유령)·탈락한 마피아의 view 에도 두 키가 없다", () => {
+    const { s0, m1, m2, c1, c2 } = night6();
+    const picked = actAt(actAt(s0, m1, c1), m2, c1);
+    const dead: RoomState = { ...picked, players: picked.players.map((p) => (p.seat === c2 || p.seat === m2 ? { ...p, alive: false } : p)) };
+    for (const seat of [c2, m2]) {
+      const me = viewOf(dead, seat).me;
+      expect(["nightTally" in me, "nightSure" in me]).toEqual([false, false]);
+    }
+    expect(viewOf(dead, m1).me.nightSure).toBe(c1); // 산 마피아 1명이 된 밤: 그 한 명의 선택이 확정
+  });
+
+  it("낮·아침 단계의 마피아 view 에는 두 키가 없다", () => {
+    const { s0, m1, m2, c1 } = night6();
+    const picked = actAt(actAt(s0, m1, c1), m2, c1);
+    const morning = tick(picked, picked.phaseEndsAt!, seededRandInt(1));
+    const day = advanceTo(morning, "discussion", 1);
+    for (const s of [morning, day]) {
+      const me = viewOf(s, m1).me;
+      expect(["nightTally" in me, "nightSure" in me]).toEqual([false, false]);
+    }
+  });
+
+  it("저장된 선택이 탈락자·마피아를 가리키면 집계에 들지 않는다(방어적 재검증)", () => {
+    const { s0, m1, m2, c1, c2 } = night6();
+    const raw: RoomState = {
+      ...s0,
+      players: s0.players.map((p) =>
+        p.seat === m1 ? { ...p, nightPick: m2 } : p.seat === m2 ? { ...p, nightPick: c2 } : p.seat === c2 ? { ...p, alive: false } : p,
+      ),
+    };
+    const me = viewOf(raw, m1).me;
+    expect(flat(me.nightTally)).toBe("[]");
+    expect("nightSure" in me).toBe(false);
+    expect(c1).toBeGreaterThanOrEqual(0);
+  });
+});
+
+describe("buildView 아침 morning.saved (MORN-03, 결정 0061-12)", () => {
+  it("의사가 확정 대상을 지키면 모든 viewer 의 day.morning 이 { saved: true } 뿐이다(보호 대상 seat 없음)", () => {
+    const s0 = stateAt("night", 6, 1);
+    const x = nonMafiaSeats(s0).filter((t) => t !== seatOfRole(s0, "doctor"))[0]!;
+    const picked = actAt(
+      actAt(actAt(s0, seatOfRole(s0, "mafia", 0), x), seatOfRole(s0, "mafia", 1), x),
+      seatOfRole(s0, "doctor"),
+      x,
+    );
+    const m = tick(picked, picked.phaseEndsAt!, seededRandInt(1));
+    for (const p of m.players) {
+      const day = buildView(m, p.id, START_AT).day;
+      expect(flat(day?.morning)).toBe(flat({ saved: true }));
+    }
   });
 });

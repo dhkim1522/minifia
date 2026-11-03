@@ -156,6 +156,55 @@ describe("밤 행동 한 줄 (NIGHT-02)", () => {
   });
 });
 
+describe("마피아 전원 일치 (NIGHT-08, 결정 0061-6)", () => {
+  it("6명 판: 마피아 둘이 같은 시민을 고르고 마감하면 모든 소켓이 같은 day.morning { eliminated } 를 받는다", async () => {
+    const r = await startedAtNight(6);
+    const actors = actorsOf(r);
+    const [a, b] = withRole(actors, "mafia") as [Actor, Actor];
+    const victim = withRole(actors, "citizen")[0]!;
+    await pick(a, victim.seat);
+    await pick(b, victim.seat);
+
+    await advanceTo(r.code, allSockets(r), "morning");
+
+    const mornings = actors.map((x) => viewsIn(x.sock, "morning").at(-1)!);
+    for (const v of mornings) expect(JSON.stringify(v.day?.morning)).toBe(JSON.stringify({ eliminated: victim.seat }));
+  });
+
+  it("6명 판: 마피아 둘이 갈라 고르고 마감하면 모든 소켓의 day.morning 이 {} 이고 아무도 탈락하지 않는다", async () => {
+    const r = await startedAtNight(6);
+    const actors = actorsOf(r);
+    const [a, b] = withRole(actors, "mafia") as [Actor, Actor];
+    const [c1, c2] = withRole(actors, "citizen") as [Actor, Actor];
+    await pick(a, c1.seat);
+    await pick(b, c2.seat);
+
+    await advanceTo(r.code, allSockets(r), "morning");
+
+    const mornings = actors.map((x) => viewsIn(x.sock, "morning").at(-1)!);
+    for (const v of mornings) {
+      expect(JSON.stringify(v.day?.morning)).toBe("{}");
+      expect(v.players.every((p) => p.alive)).toBe(true);
+    }
+  });
+
+  it("밤 중 마피아 소켓만 me.nightTally·me.nightSure 를 받고 시민 편 소켓은 두 키가 없다", async () => {
+    const r = await startedAtNight(6);
+    const actors = actorsOf(r);
+    const [a, b] = withRole(actors, "mafia") as [Actor, Actor];
+    const victim = withRole(actors, "citizen")[0]!;
+    await pick(a, victim.seat);
+    await pick(b, victim.seat);
+    const mv = lastView(a.sock).me;
+    expect(JSON.stringify(mv.nightTally)).toBe(JSON.stringify([{ seat: victim.seat, n: 2 }]));
+    expect(mv.nightSure).toBe(victim.seat);
+    for (const x of actors.filter((y) => y.role !== "mafia")) {
+      const me = lastView(x.sock).me;
+      expect(["nightTally" in me, "nightSure" in me]).toEqual([false, false]);
+    }
+  });
+});
+
 /** 행동을 보내고, 받은 소켓(들)과 못 받아야 하는 소켓(들)의 프레임 요약을 돌려준다. */
 async function sendAndSettle(
   from: Actor,

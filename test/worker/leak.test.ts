@@ -2,7 +2,6 @@
 import { env, exports } from "cloudflare:workers";
 import { runDurableObjectAlarm } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
-import { MORNING_PHRASE_COUNT } from "../../shared/protocol";
 import type { RoleId, RoomView, ServerMessage } from "../../shared/protocol";
 import {
   actorsOf,
@@ -371,7 +370,7 @@ describe("6명 한 판(두 밤·두 아침, 행동·마피아 채팅·탈락·�
     const sawChatMafia = new Set<number>(); // me.chat 이 "mafia" 인 view 를 받은 seat
     const morningsByDay = new Map<number, Set<string>>(); // 일차 → day.morning JSON 모음
     const morningSeen = new Map<number, Set<number>>(); // 일차 → 아침 state 를 받은 seat
-    const saw = { ally: new Set<number>(), records: new Set<number>(), pick: new Set<number>(), spectatePicksX: false };
+    const saw = { ally: new Set<number>(), records: new Set<number>(), pick: new Set<number>(), tally: new Set<number>(), sure: new Set<number>(), spectatePicksX: false };
 
     for (const a of actors) {
       let dead = false;
@@ -429,6 +428,12 @@ describe("6명 한 판(두 밤·두 아침, 행동·마피아 채팅·탈락·�
           expect(a.role).toBe("mafia");
           expect(dead).toBe(false);
           saw.ally.add(a.seat);
+        }
+        // 마피아 집계(결정 0061-7): 밤에 산 마피아 본인 소켓에서만 나온다. 마피아가 아닌 소켓·탈락자·낮·아침에서 이 경로가 나오면 실패한다.
+        if (paths.some((pth) => pth.startsWith(".view.me.nightTally") || pth === ".view.me.nightSure")) {
+          expect(`${a.role}/${dead}/${phase}`).toBe("mafia/false/night");
+          if (paths.includes(".view.me.nightTally")) saw.tally.add(a.seat);
+          if (paths.includes(".view.me.nightSure")) saw.sure.add(a.seat);
         }
         if (msg.t === "state" && msg.view.me.pick !== undefined) {
           expect(phase).toBe("night");
@@ -509,19 +514,20 @@ describe("6명 한 판(두 밤·두 아침, 행동·마피아 채팅·탈락·�
     expect([...saw.records].sort()).toEqual([police.seat, mafiaA.seat, mafiaB.seat, doctor.seat].sort());
     expect([...saw.ally].sort()).toEqual([mafiaA.seat, mafiaB.seat].sort());
     expect([...saw.pick].sort()).toEqual([mafiaA.seat, mafiaB.seat, police.seat, doctor.seat].sort());
+    expect([...saw.tally].sort()).toEqual([mafiaA.seat, mafiaB.seat].sort()); // 집계는 산 마피아 둘만 받았고, 둘 다 같은 대상을 골라 확정도 받았다
+    expect([...saw.sure].sort()).toEqual([mafiaA.seat, mafiaB.seat].sort());
 
-    // (5) 두 아침 각각 모든 소켓이 같은 day.morning 이고 첫 아침은 {eliminated: X, phrase: 1..MORNING_PHRASE_COUNT}.
+    // (5) 두 아침 각각 모든 소켓이 같은 day.morning 이고 각각 {eliminated} 하나뿐이다(문구 번호 없음, 결정 0061-17).
     for (const day of [1, 2]) {
       expect(morningsByDay.get(day)!.size).toBe(1);
       expect(morningSeen.get(day)!.size).toBe(6);
     }
-    const morning1 = JSON.parse([...morningsByDay.get(1)!][0]!) as { eliminated?: number; phrase?: number };
-    const morning2 = JSON.parse([...morningsByDay.get(2)!][0]!) as { eliminated?: number; phrase?: number };
-    expect(Object.keys(morning1).sort()).toEqual(["eliminated", "phrase"]);
+    const morning1 = JSON.parse([...morningsByDay.get(1)!][0]!) as { eliminated?: number };
+    const morning2 = JSON.parse([...morningsByDay.get(2)!][0]!) as { eliminated?: number };
+    expect(Object.keys(morning1)).toEqual(["eliminated"]);
     expect(morning1.eliminated).toBe(victimX.seat);
-    expect(morning1.phrase! >= 1 && morning1.phrase! <= MORNING_PHRASE_COUNT).toBe(true);
+    expect(Object.keys(morning2)).toEqual(["eliminated"]);
     expect(morning2.eliminated).toBe(victimY.seat);
-    expect(morning2.phrase).not.toBe(morning1.phrase); // 문구 연속 반복 없음
 
     // 일지는 본인 역할의 것만: 마피아 둘은 같은 암살일지(두 밤 모두 died true), 의사는 자기 치료일지, 시민은 키 없음.
     const lastOf = (a: Actor) => lastViews[actors.findIndex((x) => x === a)]!;
@@ -742,7 +748,8 @@ describe("6명 한 판: 낮 처형(토론 끝내기·지목·변론·찬반·처
       await act(doctor, { t: "pick", target: victimX.seat });
       await act(police, { t: "pick", target: mafiaB.seat });
       await advanceTo(code, socks, "morning");
-      for (const a of actors) expect(JSON.stringify(lastViewOf(a.sock).day?.morning)).toBe("{}");
+      // 마피아 B 혼자 산 마피아라 B 의 선택이 곧 확정이고, 의사가 지켜 { saved: true } 만 공개된다(보호받은 사람은 싣지 않는다, 결정 0061-12).
+      for (const a of actors) expect(JSON.stringify(lastViewOf(a.sock).day?.morning)).toBe('{"saved":true}');
 
       // ---------- 2일차: 지목 최다 동률(처형 무효 밤) — 둘째 날 토론은 전날 끝내기 표 없이 시작한다 ----------
       await advanceTo(code, socks, "discussion");
