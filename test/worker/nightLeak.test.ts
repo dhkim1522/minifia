@@ -6,7 +6,7 @@ import { env } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
 import type { ServerMessage } from "../../shared/protocol";
 import { PHASE_DEFS } from "../../shared/game/phases";
-import { advanceTo, chatSend, connect, editRoom, endAs, lastViewOf, seat, send, skipThrough, flushWorld, homeBySeat, mark, moveAs, nextFrame, observe, pause, pickAs, segEndsBySeat, settle, snapSeatsOf, stable, startedGame, summary, typingSend, withRole, worldFramesOf } from "./helpers";
+import { advanceTo, chatSend, chatKeysOf, connect, editRoom, endAs, lastViewOf, seat, send, skipThrough, flushWorld, homeBySeat, mark, moveAs, nextFrame, observe, pause, pickAs, restoreStorage, segEndsBySeat, settle, snapSeatsOf, snapshotStorage, stable, startedGame, summary, typingSend, withRole, worldFramesOf, worldOf } from "./helpers";
 import type { Game } from "./helpers";
 
 /** 마지막 world snap 의 '좌석:x,z' 오름차순 문자열. snap 이 없으면 'none'. */
@@ -255,4 +255,88 @@ describe("재접속 첫 snap — 라이브 진입 snap 과 같은 좌석 규칙 
     expect(kinds(frames)).toBe("state,world,chatLog");
     expect(snapPoints(frames)).toBe(homeRows(home, g.actors.map((a) => a.seat)));
   }, 40_000);
+});
+
+// ---- 메타모픽 비교 (09-16, NIGHT-07, UI-SPEC L2) ----
+// 같은 방·같은 밤 시작 상태(저장소 스냅샷)에서 두 구간을 돌려 시민 편 소켓의 프레임 열이 같음을 보인다.
+// 휘발 필드(serverNow·phaseEndsAt·t0·at·c·seq)만 stable() 이 지운다. 목록을 넓히거나 마피아 행동을 대본에서 빼서 초록을 만들지 않는다(L11).
+
+type Actor = Game["actors"][number];
+
+/** 밤 진입 직후 상태에서 script 를 돌리고 아침 → 낮 시작까지 넘긴 뒤, 소켓마다 그 구간의 프레임 열(stable)을 돌려준다. */
+async function segment(g: Game, script: () => Promise<void>): Promise<string[]> {
+  const marks = g.socks.map((s) => mark(s));
+  await script();
+  await advanceTo(g.code, g.socks, "morning");
+  await advanceTo(g.code, g.socks, "dayAnnounce");
+  const cols: string[] = [];
+  for (let i = 0; i < g.socks.length; i += 1) cols.push(stable(await settle(g.socks[i]!, marks[i]!)));
+  return cols;
+}
+
+/** 마피아가 잔뜩 움직이고 말한다: move ×3, chat, typing. 대상 pick 은 호출부가 정한다. */
+async function mafiaBusy(mafias: Actor[]): Promise<void> {
+  const [a, b] = mafias as [Actor, Actor];
+  for (const [px, pz] of [
+    [200, 200],
+    [-200, 100],
+    [100, -250],
+  ] as const) {
+    moveAs(a, px, pz);
+    moveAs(b, pz, px);
+    await pause(150);
+  }
+  chatSend(a.sock, "오늘 밤은 저 사람");
+  typingSend(b.sock, true);
+  await pause(250);
+  typingSend(b.sock, false);
+  for (const m of mafias) await settle(m.sock, mark(m.sock));
+}
+
+describe("저장소 스냅샷·복원 도우미", () => {
+  it("스냅샷 뒤 저장소를 바꿔도 복원하면 room·world·chat 키가 스냅샷 때와 같다", async () => {
+    const g = await startedGame("night");
+    await flushWorld(g.code);
+    const snap = await snapshotStorage(g.code);
+    const before = JSON.stringify([await worldOf(g.code), await chatKeysOf(g.code), await homeBySeat(g.code)]);
+
+    const mafia = withRole(g, "mafia")[0]!;
+    chatSend(mafia.sock, "복원 확인");
+    moveAs(mafia, 250, 250);
+    await settle(mafia.sock, mark(mafia.sock));
+    await advanceTo(g.code, g.socks, "morning");
+    expect(JSON.stringify([await worldOf(g.code), await chatKeysOf(g.code), await homeBySeat(g.code)])).not.toBe(before);
+
+    await restoreStorage(g.code, snap);
+    expect(JSON.stringify([await worldOf(g.code), await chatKeysOf(g.code), await homeBySeat(g.code)])).toBe(before);
+  }, 40_000);
+});
+
+describe("메타모픽 (i) 무사 밤 (L2)", () => {
+  it("마피아가 서로 다른 시민을 고르고 움직이고 말해도 가만히 있던 밤과 시민·경찰·의사 소켓의 프레임 열이 같다 (둘 다 무사)", async () => {
+    const g = await startedGame("night");
+    const mafias = withRole(g, "mafia");
+    const citizens = withRole(g, "citizen");
+    await flushWorld(g.code);
+    const snap = await snapshotStorage(g.code);
+
+    const quiet = await segment(g, async () => {});
+    await restoreStorage(g.code, snap);
+    const busy = await segment(g, async () => {
+      pickAs(mafias[0]!, citizens[0]!.seat);
+      pickAs(mafias[1]!, citizens[1]!.seat);
+      await mafiaBusy(mafias);
+    });
+
+    for (const x of g.actors.filter((a) => a.role !== "mafia")) {
+      const i = g.actors.indexOf(x);
+      expect(`${x.role}:${busy[i]}`).toBe(`${x.role}:${quiet[i]}`);
+      expect(quiet[i]!.includes('"morning":{}')).toBe(true);
+    }
+    // 대조: 마피아의 열은 두 구간이 달라야 한다(시험이 아무것도 안 보는 것이 아님).
+    for (const x of mafias) {
+      const i = g.actors.indexOf(x);
+      expect(busy[i]).not.toBe(quiet[i]);
+    }
+  }, 90_000);
 });
