@@ -498,6 +498,65 @@ describe("skipPhase: 밤을 넘길 때 봇이 먼저 행동한다", () => {
   });
 });
 
+describe("skipPhase: 밤을 넘길 때 마피아 봇은 같은 대상으로 모인다 (09-02, 결정 0061-18)", () => {
+  /** 사람 1(방장, seat 0) + 봇 5 의 밤. 역할은 seat 별로 직접 정한다(나머지는 시민). */
+  function arrangedNight(roles: Record<number, RoleId>): RoomState {
+    const base = stateAt(6, 3, "night");
+    return {
+      ...base,
+      players: base.players.map((p) => ({ ...p, role: roles[p.seat] ?? "citizen", ...(p.id === base.hostId ? {} : { isBot: true as const }) })),
+    };
+  }
+  const teamTargets = (s: RoomState): string =>
+    s.players
+      .filter((p) => p.role === "mafia")
+      .map((p) => (p.assassinations ?? []).map((a) => a.target).join("+") || "none")
+      .join(",");
+
+  it("사람 마피아가 시민 seat 3 을 골랐으면 마피아 봇이 따라가 산 마피아 전원이 같은 대상이 된다", () => {
+    for (let seed = 1; seed <= 20; seed += 1) {
+      const state = arrangedNight({ 0: "mafia", 4: "mafia", 2: "police", 5: "doctor" });
+      const picked = pickTarget(state, state.hostId, 3);
+      if (!picked.ok) throw new Error(picked.error);
+      const r = skipPhase(picked.state, state.hostId, START_AT, seededRandInt(seed));
+      if (!r.ok) throw new Error(r.error);
+      expect(`${seed}:${teamTargets(r.state)}`).toBe(`${seed}:3,3`);
+    }
+  });
+
+  it("마피아 봇 둘만 있고 아무도 안 골랐으면 둘 다 가장 낮은 산 비마피아를 고른다", () => {
+    for (let seed = 1; seed <= 20; seed += 1) {
+      const state = arrangedNight({ 2: "mafia", 4: "mafia", 3: "police", 5: "doctor" });
+      const r = skipPhase(state, state.hostId, START_AT, seededRandInt(seed));
+      if (!r.ok) throw new Error(r.error);
+      expect(`${seed}:${teamTargets(r.state)}`).toBe(`${seed}:0,0`);
+    }
+  });
+
+  it("경찰·의사 봇은 기존대로 randInt(후보 수) 를 seat 오름차순으로 한 번씩 부르고 마피아 봇은 난수를 부르지 않는다", () => {
+    const state = arrangedNight({ 2: "mafia", 4: "mafia", 3: "police", 5: "doctor" });
+    const calls: number[] = [];
+    const inner = seededRandInt(5);
+    const r = skipPhase(state, state.hostId, START_AT, (n) => {
+      calls.push(n);
+      return inner(n);
+    });
+    if (!r.ok) throw new Error(r.error);
+    // 경찰 seat 3 → 자기를 뺀 산 사람 5, 의사 seat 5 → 산 사람 6. 그 뒤 tick 이 아침 문구 등에 부르는 난수는 이 둘 뒤에 온다.
+    expect(calls.slice(0, 2).join(",")).toBe("5,6");
+  });
+
+  it("이미 고른 봇의 선택은 바뀌지 않는다", () => {
+    const state = arrangedNight({ 2: "mafia", 4: "mafia", 3: "police", 5: "doctor" });
+    const picked = pickTarget(state, state.players.find((p) => p.seat === 4)!.id, 5);
+    if (!picked.ok) throw new Error(picked.error);
+    const r = skipPhase(picked.state, state.hostId, START_AT, seededRandInt(2));
+    if (!r.ok) throw new Error(r.error);
+    // seat 4 가 5 를 골랐으므로 seat 2 봇이 따라가 팀 대상은 5 다.
+    expect(teamTargets(r.state)).toBe("5,5");
+  });
+});
+
 // ---- 4페이즈: 투표 단계 넘기기와 대기실 복귀 (결정 0022, 0024, END-02) ----
 /** 사람 1(방장) + 봇 4 테스트 방 대기실. 봇 id 는 순서대로 만든다. */
 function botLobby(): RoomState {
