@@ -71,6 +71,9 @@ interface ViewOpts {
   /** 서버가 이 사람에게 싣는 밤 정보 */
   pick?: number;
   allyPicks?: number[];
+  /** 서버가 산 마피아에게 싣는 선택 수 집계와 전원 일치 확정 좌석(결정 0061-7) */
+  nightTally?: Array<{ seat: number; n: number }>;
+  nightSure?: number;
   /** 탈락한 본인에게 싣는 밤 선택 */
   picks?: SpectatePicks;
   morning?: { eliminated?: number; phrase?: number };
@@ -104,6 +107,8 @@ function makeView(o: ViewOpts = {}): RoomView {
       ...(chat !== undefined ? { chat } : {}),
       ...(o.pick !== undefined ? { pick: o.pick } : {}),
       ...(o.allyPicks !== undefined ? { allyPicks: o.allyPicks } : {}),
+      ...(o.nightTally !== undefined ? { nightTally: o.nightTally } : {}),
+      ...(o.nightSure !== undefined ? { nightSure: o.nightSure } : {}),
     },
     day: {
       n: 1,
@@ -265,6 +270,60 @@ describe("밤 마피아 — 다가가기(결정 0061-2·6, NIGHT-07·08, E2 #9)"
       expect(m.container.querySelector("main.mf-game"), phase).not.toBeNull();
     }
     expect(rt.created).toBe(created);
+  });
+});
+
+const headOf = (c: ParentNode, seat: number): Element | null => c.querySelector(`[data-seat="${seat}"] .mv-head`);
+const countOf = (c: ParentNode, seat: number): string | null => headOf(c, seat)?.getAttribute("data-count") ?? null;
+const sureOf = (c: ParentNode, seat: number): string | null => headOf(c, seat)?.getAttribute("data-sure") ?? null;
+
+describe("밤 마피아 — 선택 수 배지·'확정' 도장 (서버 집계, 결정 0061-7, E2 #10~#12)", () => {
+  it("서로 다른 대상을 고르면 각 좌석에 배지 1, 도장 없음", () => {
+    const { container } = mount(makeView({ mySeat: 0, pick: 2, allyPicks: [5], nightTally: [{ seat: 2, n: 1 }, { seat: 5, n: 1 }] }));
+    expect(countOf(container, 2)).toBe("1");
+    expect(countOf(container, 5)).toBe("1");
+    expect(sureOf(container, 2)).toBeNull();
+    expect(container.querySelectorAll(".mv-stamp")).toHaveLength(0);
+    expect(container.querySelectorAll(".mv-badge")).toHaveLength(2);
+  });
+
+  it("전원 일치(nightSure)면 그 좌석은 배지 대신 '확정' 도장이다. 일치가 깨지면 도장이 사라지고 배지로 돌아간다", () => {
+    const m = mount(makeView({ mySeat: 0, pick: 2, allyPicks: [2], nightTally: [{ seat: 2, n: 2 }], nightSure: 2 }));
+    expect(sureOf(m.container, 2)).toBe("true");
+    expect(countOf(m.container, 2)).toBeNull();
+    expect(headOf(m.container, 2)?.querySelector(".mv-stamp")?.textContent).toBe("확정");
+    expect(headOf(m.container, 2)?.querySelector(".mv-badge")).toBeNull();
+    m.show(makeView({ mySeat: 0, pick: 2, allyPicks: [3], nightTally: [{ seat: 2, n: 1 }, { seat: 3, n: 1 }] }));
+    expect(m.container.querySelectorAll(".mv-stamp")).toHaveLength(0);
+    expect(countOf(m.container, 2)).toBe("1");
+    expect(countOf(m.container, 3)).toBe("1");
+  });
+
+  it("마피아 1명 방: 고르는 즉시 도장이다(서버 집계가 확정으로 보낸다)", () => {
+    const { container } = mount(makeView({ mySeat: 0, pick: 2, nightTally: [{ seat: 2, n: 1 }], nightSure: 2 }));
+    expect(sureOf(container, 2)).toBe("true");
+    expect(headOf(container, 2)?.querySelector(".mv-stamp")?.textContent).toBe("확정");
+  });
+
+  it("아무도 안 골랐으면(nightTally 빈 배열) 배지·도장·고리가 없다", () => {
+    const { container } = mount(makeView({ mySeat: 0, nightTally: [] }));
+    expect(container.querySelectorAll(".mv-badge, .mv-stamp")).toHaveLength(0);
+    expect(ringSeats(container)).toEqual([]);
+  });
+
+  it("마피아가 아닌 view(시민·경찰·의사·유령)에 nightTally·nightSure 가 섞여 와도 배지·도장이 0개다 — 마피아 분기에서만 읽는다", () => {
+    for (const [seat, dead] of [[3, []], [1, []], [2, []], [5, [5]]] as const) {
+      const base = makeView({ mySeat: seat, dead: [...dead], ...(dead.length ? { picks: { mafia: [2], police: [], doctor: [] } } : {}) });
+      const v: RoomView = { ...base, me: { ...base.me, nightTally: [{ seat, n: 2 }, { seat: 2, n: 2 }], nightSure: seat } };
+      const { container } = mount(v);
+      expect(container.querySelectorAll(".mv-badge, .mv-stamp"), `seat ${seat}`).toHaveLength(0);
+      cleanup();
+    }
+  });
+
+  it("배지·도장 요소에 진홍 클래스가 없다(진홍은 고리·동료 칩·채널 이름에만, UI-SPEC 230행)", () => {
+    const { container } = mount(makeView({ mySeat: 0, pick: 2, allyPicks: [3], nightTally: [{ seat: 2, n: 1 }, { seat: 3, n: 1 }] }));
+    for (const el of container.querySelectorAll(".mv-head, .mv-head *")) expect(el.className.toString(), el.outerHTML.slice(0, 80)).not.toMatch(/crimson/);
   });
 });
 
