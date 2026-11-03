@@ -5,16 +5,16 @@ milestone_name: 같은 공간
 current_phase: 9
 current_phase_name: 밤과 아침
 status: executing
-stopped_at: Completed 09-21-PLAN.md
-last_updated: "2026-11-03T06:54:57.603Z"
+stopped_at: Completed 09-22-PLAN.md
+last_updated: "2026-11-03T07:38:29.660Z"
 last_activity: 2026-11-03
 last_activity_desc: Phase 9 execution started
-state_head: aaae70ccbc919dc3cd35bf494c652fb3889f2ac1
+state_head: 8eea37434d09eb8b5e4cd658571aee6c6e64a03a
 progress:
   total_phases: 7
   completed_phases: 3
   total_plans: 101
-  completed_plans: 99
+  completed_plans: 100
   percent: 43
 ---
 
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-11-03)
 ## Current Position
 
 Phase: 9 (밤과 아침) — EXECUTING
-Plan: 22 of 23
+Plan: 23 of 23
 Status: Ready to execute
 Last activity: 2026-11-03 — Phase 9 execution started
 
@@ -159,6 +159,7 @@ Progress: [████░░░░░░] 43% (3/7 phases)
 | Phase 09 P19 | 20min | 2 tasks | 1 files |
 | Phase 09 P20 | 35min | 3 tasks | 12 files |
 | Phase 09 P21 | 10min | 2 tasks | 4 files |
+| Phase 09 P22 | 95min | 3 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -325,6 +326,7 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 09]: 09-18: 피해자 본인 aria 문장은 day.morning.eliminated===me.seat 로 판정 — 처형으로 이미 유령인 사람은 세 문장을 읽는다
 - [Phase 09]: 09-18: 경찰 화면의 hot 줄은 알림과 같은 2.6초, 보통 화면은 0.4초
 - [Phase 09]: 09-21: UI-SPEC 표의 402 폭 한 행 패널 높이 215 를 식 값 211 로 바로잡음; gamePanelHeight 에 opts 인자 추가
+- [Phase 09]: 09-22: night 흐름은 390x844 한 번, 폰 6종 기하는 night-sizes 흐름으로 나눔. 줄바꿈 얼굴 목록 + 360x560 경찰 이름표 위치는 UI-SPEC 알려진 한계 참고 줄(SZ4k)로만 남김(사용자 확인 대기)
 
 ### Pending Todos
 
@@ -362,8 +364,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-03T06:54:57.197Z
-Stopped at: Completed 09-21-PLAN.md
+Last session: 2026-11-03T07:38:29.292Z
+Stopped at: Completed 09-22-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
