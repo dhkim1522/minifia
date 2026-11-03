@@ -5,6 +5,7 @@
 import { isAlive } from "./alive";
 import { sanitizeChatText } from "./chatRules";
 import { MAP_PHASES } from "./movement";
+import { confirmedTarget } from "./night";
 import type { Player, RoomState } from "./room";
 
 /** 사람마다 유언·쪽지 저장 최소 간격(ms, 가정 A1·연구 A5). 안의 요청은 방 DO 가 오류 없이 버린다 — 서버 한 곳. */
@@ -48,4 +49,40 @@ export function saveWill(
     ok: true,
     state: { ...state, players: state.players.map((p) => (p.id === actorId ? { ...p, will: body.text } : p)) },
   };
+}
+
+/**
+ * 쪽지 저장(NIGHT-12, 결정 0061-9). 검사 순서가 계약이다: 단계(night 아니면 WRONG_PHASE) → 행위자(산 마피아, 아니면 BAD_MESSAGE)
+ * → 확정 대상(confirmedTarget)이 없으면 BAD_MESSAGE → 본문(공백뿐이면 지움, 아니면 sanitizeChatText, 실패면 BAD_MESSAGE) → 같은 값이면 입력 그대로 → nightNote 만 바뀐 새 상태.
+ * 작성자를 저장하지 않는다 — 마지막 저장이 이기고 누가 썼는지는 상태 어디에도 없다. 지움도 확정일 때만 받는다(가정 A2: 확정이 풀리면 글은 임시로 남고 아침 판정이 버린다).
+ */
+export function saveNote(
+  state: RoomState,
+  actorId: string,
+  text: string,
+): { ok: true; state: RoomState } | { ok: false; error: WillError } {
+  if (state.phase !== "night") return { ok: false, error: "WRONG_PHASE" };
+  const actor = state.players.find((p) => p.id === actorId);
+  if (!actor || !isAlive(actor) || actor.role !== "mafia") return { ok: false, error: "BAD_MESSAGE" };
+  if (confirmedTarget(state) === undefined) return { ok: false, error: "BAD_MESSAGE" };
+  const body = readBody(text);
+  if (body === null) return { ok: false, error: "BAD_MESSAGE" };
+  if (body.erase) {
+    if (state.nightNote === undefined) return { ok: true, state };
+    const { nightNote: _nightNote, ...rest } = state;
+    return { ok: true, state: rest };
+  }
+  if (state.nightNote === body.text) return { ok: true, state };
+  return { ok: true, state: { ...state, nightNote: body.text } };
+}
+
+/**
+ * 쪽지 저장 뒤 state 를 받는 사람 — 산 마피아뿐이다(seat 오름차순). 유령(관전자)에게는 보내지 않는다: 쪽지는 아침에 카드로 공개될 때까지
+ * 마피아끼리의 것이고, 보내면 '쓰는 중' 타이밍이 샌다(L7 "본인과 산 마피아끼리의 쪽지 제외"). pickRecipientIds 와 달리 spectators 를 더하지 않는다.
+ */
+export function noteRecipientIds(state: RoomState): string[] {
+  return state.players
+    .filter((p) => p.role === "mafia" && isAlive(p))
+    .sort((a, b) => a.seat - b.seat)
+    .map((p) => p.id);
 }

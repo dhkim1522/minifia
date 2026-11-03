@@ -202,6 +202,11 @@ export function buildView(state: RoomState, playerId: string, now: number): Room
     myInfo.will = me.will;
   }
 
+  // 쪽지는 밤의 산 마피아에게만, 마피아끼리 같은 글이다(결정 0061-9). 작성자는 어디에도 없다. 유령·시민 편·아침 view 에는 키 자체가 없다.
+  if (state.phase === "night" && isAlive(me) && me.role === "mafia" && state.nightNote !== undefined) {
+    myInfo.note = state.nightNote;
+  }
+
   // 토론 끝내기 누름은 본인에게만(결정 0060-2) — 산 본인이 discussion 에서 눌렀을 때만 키를 만든다. 누른 사람이 누구인지는 어떤 키로도 싣지 않는다.
   if (state.phase === "discussion" && isAlive(me) && me.endVote === true) {
     myInfo.endDiscussion = true;

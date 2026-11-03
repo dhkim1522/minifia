@@ -23,7 +23,7 @@ import {
 import type { JoinError } from "../shared/game/room";
 import type { RoomState } from "../shared/game/room";
 import { pickRecipientIds, pickTarget } from "../shared/game/night";
-import { WILL_MIN_GAP_MS, saveWill } from "../shared/game/will";
+import { WILL_MIN_GAP_MS, noteRecipientIds, saveNote, saveWill } from "../shared/game/will";
 import { resetToLobby, setBotCount, setBotVote, setTestRole, skipPhase } from "../shared/game/testTools";
 import type { RoleId } from "../shared/game/roles";
 import { nextWakeAt, tick } from "../shared/game/tick";
@@ -286,7 +286,7 @@ export class Room extends DurableObject<Env> {
         await this.handleWill(ws, msg.text);
         return;
       case "note":
-        // 쪽지 처리기는 Task 2 에서 잇는다(스키마는 이미 받는다).
+        await this.handleNote(ws, msg.text);
         return;
       default: {
         // 새 메시지를 ClientMessage 에 더하고 여기를 빠뜨리면 컴파일이 실패한다 — 조용히 무시되지 않게(Pitfall 15).
@@ -454,6 +454,34 @@ export class Room extends DurableObject<Env> {
     this.room = result.state;
     await this.ctx.storage.put("room", this.room);
     this.sendViewTo([playerId]);
+    return null;
+  }
+
+  // 쪽지(9페이즈, NIGHT-12, 결정 0061-9): 신원은 소켓 첨부의 playerId 뿐이고 쪽지에 작성자는 저장하지 않는다(익명).
+  private async handleNote(ws: WebSocket, text: string): Promise<void> {
+    const att = this.attachmentOf(ws);
+    if (!att || !this.room) {
+      this.sendTo(ws, { t: "error", code: "BAD_MESSAGE" });
+      return;
+    }
+    const error = await this.applyNote(att.playerId, text, Date.now());
+    if (error !== null) this.sendRejection(ws, att.playerId, error);
+  }
+
+  // applyWill 과 같은 모양이다. 받아들이면 산 마피아 소켓에만 state 를 보낸다 — 유령에게도 보내지 않는다(쪽지는 아침 카드가 공개 시점, L7).
+  // persistAndBroadcast 를 부르지 않는다. 간격 키는 `note:{id}` — 마피아마다 따로라 B 가 A 직후에 덮어쓸 수 있다(마지막 저장이 이김).
+  private async applyNote(playerId: string, text: string, now: number): Promise<WsErrorCode | null> {
+    if (!this.room) return "BAD_MESSAGE";
+    const key = `note:${playerId}`;
+    const last = this.writeAt.get(key);
+    if (last !== undefined && now - last < WILL_MIN_GAP_MS) return null;
+    const result = saveNote(this.room, playerId, text);
+    if (!result.ok) return result.error;
+    if (result.state === this.room) return null;
+    this.writeAt.set(key, now);
+    this.room = result.state;
+    await this.ctx.storage.put("room", this.room);
+    this.sendViewTo(noteRecipientIds(this.room));
     return null;
   }
 
