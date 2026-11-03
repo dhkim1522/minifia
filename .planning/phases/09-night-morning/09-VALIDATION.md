@@ -71,6 +71,37 @@ created: "2026-11-03"
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
+### 작업 ID 지도 (plan-phase 2026-11-03)
+
+위 표의 행마다 그 검증을 만드는 계획·작업(Tn = 작업 번호). 계획 쪽 명령이 위 표와 다른 곳은 비고에 적었다.
+
+| Requirement · 행 | 작업 ID | 비고 |
+|------------------|---------|------|
+| NIGHT-07 받는 사람·0프레임 | 09-03-T1·T2, 09-09-T1~T3 | 시민 snap 본인 한 칸은 09-03-T2(재접속)·09-09-T1(진입) |
+| NIGHT-07 메타모픽 | 09-16-T1·T2 | `npx vitest run test/worker/nightLeak.test.ts` |
+| NIGHT-07 home | 09-04-T1·T2, 09-09-T1 | worker 쪽은 `test/worker/world.test.ts`·`nightLeak.test.ts` |
+| NIGHT-08 confirmedTarget | 09-07-T1 | |
+| NIGHT-08 worker·봇 | 09-07-T3, 09-02-T1·T2, 09-12-T3 | |
+| NIGHT-09 규칙 | 09-07-T3(기존 시험 유지 확인) | |
+| NIGHT-09 FaceList | 09-05-T1~T3, 09-15-T1 | 패널 장착 시험은 `test/client/nightMap.test.tsx` |
+| NIGHT-10 스케줄러 | 09-06-T1 | |
+| NIGHT-10 정적 검사 | 09-06-T2, 09-15-T3 | 09-15 가 TensionVignette.tsx 를 GUARDED 에 더한다 |
+| NIGHT-10 DOM | 09-15-T3, 09-22-T2 | |
+| NIGHT-11 | 09-18-T2(알림), 09-20-T2(이펙트) | 이펙트 시험 파일 `test/client/killFx.test.tsx` |
+| NIGHT-12 | 09-12-T2, 09-14-T2, 09-17-T2 | |
+| MORN-01 | 09-14-T2(서버), 09-10-T1·T3(그리기) | 서버 분필 시험은 `test/worker/morningCards.test.ts` (표의 night.test -t 분필 대신) |
+| MORN-02 worker | 09-14-T1~T3 | `test/worker/morningCards.test.ts`·`chatReplay.test.ts` |
+| MORN-02 client | 09-11-T1·T2 | 보류·경찰 카드 시험은 `test/client/chatStore.test.ts` |
+| MORN-03 | 09-07-T1, 09-16-T2, 09-18-T1 | |
+| MORN-04 | 09-07-T2, 09-16-T2 | |
+| WILL-01 worker | 09-12-T1, 09-14-T1, 09-16-T3 | canary 는 `test/worker/leak.test.ts` |
+| WILL-01 시트·흐름 | 09-08-T1·T2, 09-11-T3, 09-17-T1~T3 | 화면 흐름 시험 `test/client/willFlow.test.tsx` |
+| (공통) 허용 목록·신분 행렬 | 09-07-T3, 09-14-T3, 09-16-T3 | |
+| (공통) 지운 이름 | 09-15-T2, 09-18-T3 | |
+| (공통) 봇 자동 완주 | 09-02-T1·T2, 09-12-T3, 09-19-T1 | smoke 는 로컬 dev 서버 |
+| (공통) E2E | 09-21-T1·T2, 09-22-T1·T2, 09-23-T2 | 흐름 id `night` |
+| (공통) 렌더 측정 | 09-22-T3 | `node scripts/perf-run.mjs --mode nightload …` — 판정은 실기기(999.6) |
+
 ---
 
 ## Wave 0 Requirements
