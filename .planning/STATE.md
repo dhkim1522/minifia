@@ -5,16 +5,16 @@ milestone_name: 같은 공간
 current_phase: 9
 current_phase_name: 밤과 아침
 status: executing
-stopped_at: Completed 09-14-PLAN.md
-last_updated: "2026-11-03T05:42:26.598Z"
+stopped_at: Completed 09-15-PLAN.md
+last_updated: "2026-11-03T05:51:30.323Z"
 last_activity: 2026-11-03
 last_activity_desc: Phase 9 execution started
-state_head: 310841bab0811810ac080ad297f3b82549a9d667
+state_head: efdfd34155d59524b19f9db509389138c835c51e
 progress:
   total_phases: 7
   completed_phases: 3
   total_plans: 101
-  completed_plans: 92
+  completed_plans: 93
   percent: 43
 ---
 
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-11-03)
 ## Current Position
 
 Phase: 9 (밤과 아침) — EXECUTING
-Plan: 15 of 23
+Plan: 16 of 23
 Status: Ready to execute
 Last activity: 2026-11-03 — Phase 9 execution started
 
@@ -152,6 +152,7 @@ Progress: [████░░░░░░] 43% (3/7 phases)
 | Phase 09 P12 | 30min | 3 tasks | 11 files |
 | Phase 09 P13 | 25min | 3 tasks | 9 files |
 | Phase 09 P14 | 35분 | 3 tasks | 9 files |
+| Phase 09 P15 | 50min | 3 tasks | 14 files |
 
 ## Accumulated Context
 
@@ -311,6 +312,8 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 09]: 09-12: 유언·쪽지 간격 검사(500ms)를 규칙 함수보다 앞에 두고, 쪽지 응답은 산 마피아에게만(유령 제외) 보낸다
 - [Phase 09]: 09-13: 다가가기 목적지는 store.segOf + positionAtFx(고정소수점)로 계산해 일반 move 로 보낸다
 - [Phase 09]: 09-14: 사망 카드는 afterTransition 전후 alive 비교로 한 번만 만들고, 분필은 저장·방송 전에 채운다
+- [Phase 09]: 09-15: 역할이 없는 산 사람의 밤은 시민 안내·시민 어둠으로 본다 (09-13 nightCitizen 규칙과 일치)
+- [Phase 09]: 09-15: 경찰·의사 선택 표시는 얼굴 목록 눌림이 맡고 지도 고리는 그리지 않는다 (UI-SPEC 318행)
 
 ### Pending Todos
 
@@ -348,8 +351,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-03T05:42:26.263Z
-Stopped at: Completed 09-14-PLAN.md
+Last session: 2026-11-03T05:51:29.940Z
+Stopped at: Completed 09-15-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
