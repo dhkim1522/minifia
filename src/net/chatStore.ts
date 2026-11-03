@@ -5,11 +5,16 @@ import { MAX_PLAYERS } from "../../shared/protocol";
 import type { ChatChannel, ChatLogFrame, ChatLineFrame, ChatRejectFrame, ChatRejectWhy, ChatLineWire, TypingFrame } from "../../shared/protocol";
 import type { V2IconName } from "../components/v2/V2Icon";
 
+/** 아침에 받은 서버 카드(유언·쪽지)가 채팅창에 나타나기까지의 보류 ms — 화면 몫이고 서버는 진입 즉시 보낸다(UI-SPEC 263행, 결정 0061-11) */
+export const CARD_HOLD_MS = 2800;
+/** 처형 단계에서 받은 카드의 보류 ms(UI-SPEC 276행) */
+export const CARD_HOLD_EXEC_MS = 2400;
+
 /** 기록 칸의 한 줄. scope = 이 줄이 보이는 흐름(사람 줄은 ch 와 같고, 시스템 줄은 만든 쪽이 정한다) */
 export interface ChatStoreLine {
   key: string;
-  /** system = 일반 안내 줄, vote = 지목 기록 줄, hot = 선두·과반·결과처럼 눈여겨볼 줄(8페이즈) */
-  kind: "player" | "system" | "vote" | "hot";
+  /** system = 일반 안내 줄, vote = 지목 기록 줄, hot = 선두·과반·결과처럼 눈여겨볼 줄(8페이즈), card = 유언·쪽지·경찰 카드(9페이즈) */
+  kind: "player" | "system" | "vote" | "hot" | "card";
   ch?: ChatChannel;
   seat?: number;
   seq?: number;
@@ -17,6 +22,12 @@ export interface ChatStoreLine {
   at: number;
   icon?: V2IconName;
   scope: ChatChannel;
+  /** kind card 일 때 종류. will·note = 서버 카드 줄(k), eye = 이 화면이 만든 경찰 조사 카드 */
+  card?: "will" | "note" | "eye";
+  /** 로컬 카드(eye)의 제목. 서버 카드의 제목은 부르는 쪽(useChat)이 좌석 닉네임으로 만든다 */
+  title?: string;
+  /** 이 시각 전에는 목록에 내지 않는다(라이브로 받은 서버 카드의 보류). 없으면 바로 보인다 */
+  revealAt?: number;
 }
 
 export type ChatStoreFrame = ChatLineFrame | TypingFrame | ChatLogFrame | ChatRejectFrame;
@@ -58,7 +69,13 @@ export class ChatStore {
     }
     switch (frame.t) {
       case "chat": {
-        if (this.insertAll([playerLine(frame)])) {
+        if (frame.k) {
+          // 서버 카드 줄: 입력 중은 건드리지 않는다(카드는 사람이 보낸 글이 아니다, 연구 Pitfall 9)
+          if (this.insertAll([cardLine(frame, frame.k, now + (this.ctx?.pk.endsWith(":execution") ? CARD_HOLD_EXEC_MS : CARD_HOLD_MS))])) {
+            this.replay = false;
+            changed = true;
+          }
+        } else if (this.insertAll([playerLine(frame)])) {
           this.replay = false;
           this.typing.delete(frame.seat);
           changed = true;
@@ -66,7 +83,7 @@ export class ChatStore {
         break;
       }
       case "chatLog": {
-        const inserted = this.insertAll(frame.lines.map(playerLine));
+        const inserted = this.insertAll(frame.lines.map((f) => (f.k ? cardLine(f, f.k) : playerLine(f))));
         if (inserted || !this.replay) changed = true;
         this.replay = true;
         break;
@@ -109,6 +126,12 @@ export class ChatStore {
     this.bump();
   }
 
+  /** 이 화면만 가진 카드 줄(경찰 조사 결과). 서버 채널 기록이 아니라 재접속 복원 대상이 아니고 보류 없이 바로 보인다 */
+  addLocalCard(opts: { icon: "eye"; title: string; text: string; at: number }): void {
+    this.insertAll([{ key: `local:${++this.sysSeq}:${opts.at}`, kind: "card", card: "eye", title: opts.title, text: opts.text, at: opts.at, icon: opts.icon, scope: "all" }]);
+    this.bump();
+  }
+
   lines(): readonly ChatStoreLine[] {
     return this.all;
   }
@@ -116,16 +139,35 @@ export class ChatStore {
   /**
    * 채널의 표시 흐름(받은 줄 중 무엇을 이어서 보여 줄지 고르는 것).
    * all(또는 null) = all 줄 + 공개 시스템 줄 / mafia = mafia 줄 + 마피아 시스템 줄 / ghost = 받은 줄 전부 시간 순
+   * now 를 주면 아직 보류 중인 카드 줄(revealAt > now)을 뺀다. 주지 않으면 보류를 적용하지 않는다.
    */
-  visibleLines(channel: ChatChannel | null): readonly ChatStoreLine[] {
+  visibleLines(channel: ChatChannel | null, now?: number): readonly ChatStoreLine[] {
     const ch: ChatChannel = channel ?? "all";
-    if (ch === "ghost") return this.all;
-    let v = this.views.get(ch);
-    if (!v) {
-      v = this.all.filter((l) => l.scope === ch);
-      this.views.set(ch, v);
+    let v: readonly ChatStoreLine[];
+    if (ch === "ghost") v = this.all;
+    else {
+      let cached = this.views.get(ch);
+      if (!cached) {
+        cached = this.all.filter((l) => l.scope === ch);
+        this.views.set(ch, cached);
+      }
+      v = cached;
     }
-    return v;
+    if (now === undefined || !v.some((l) => l.revealAt !== undefined && l.revealAt > now)) return v;
+    return v.filter((l) => l.revealAt === undefined || l.revealAt <= now);
+  }
+
+  /**
+   * 아직 보이지 않는 카드 줄 중 가장 이른 공개 시각(없으면 null) — 부르는 쪽이 이 시각에 타이머를 걸어 다시 그린다.
+   * 이미 지난 시각은 건너뛴다(nextTypingExpiry 와 같은 규칙)
+   */
+  nextCardReveal(now: number): number | null {
+    let min: number | null = null;
+    for (const l of this.all) {
+      if (l.revealAt === undefined || l.revealAt <= now) continue;
+      if (min === null || l.revealAt < min) min = l.revealAt;
+    }
+    return min;
   }
 
   /** now 에 켜져 있는 좌석(만료 시각이 now 이하인 좌석은 꺼진 것) */
@@ -239,4 +281,11 @@ export class ChatStore {
 
 function playerLine(f: ChatLineWire): ChatStoreLine {
   return { key: `${f.ch}:${f.seq}:${f.at}`, kind: "player", ch: f.ch, seat: f.seat, seq: f.seq, text: f.text, at: f.at, scope: f.ch };
+}
+
+/** 서버가 만든 카드 줄(유언·쪽지). k 필드만 보고 판별한다 — 본문 내용으로는 판단하지 않는다(위장 방지, T-09-24) */
+function cardLine(f: ChatLineWire, card: "will" | "note", revealAt?: number): ChatStoreLine {
+  const line: ChatStoreLine = { key: `${f.ch}:${f.seq}:${f.at}`, kind: "card", card, ch: f.ch, seat: f.seat, seq: f.seq, text: f.text, at: f.at, scope: f.ch };
+  if (revealAt !== undefined) line.revealAt = revealAt;
+  return line;
 }

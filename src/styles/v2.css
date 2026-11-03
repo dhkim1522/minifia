@@ -76,6 +76,12 @@
 .mv-chat__sys > span { min-width: 0; }
 .mv-chat__sys.is-vote { color: var(--gray-100); }
 .mv-chat__sys.is-hot { color: var(--brass-200); }
+/* 채팅 카드(유언·쪽지·경찰 조사 결과, 09-UI-SPEC 271행) */
+.mv-chat__card { display: flex; flex-direction: column; gap: 4px; padding: 8px 10px; border-radius: var(--radius-sm); background: var(--night-800); border: 1px solid var(--night-600); }
+.mv-chat__card--mafia { border-color: var(--crimson-700); }
+.mv-chat__card-title { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; line-height: 1.4; font-weight: 700; color: var(--gray-50); }
+.mv-chat__card--mafia .mv-chat__card-title { color: var(--crimson-300); }
+.mv-chat__card-text { margin: 0; font-size: 16px; line-height: 1.5; color: var(--gray-100); word-break: keep-all; overflow-wrap: anywhere; }
 .mv-chat__form { display: flex; gap: var(--space-sm); }
 .mv-chat__field { position: relative; display: flex; flex: 1; min-width: 0; }
 .mv-chat__input { flex: 1; min-width: 0; height: var(--control-input); box-sizing: border-box; padding: 0 var(--space-md); border-radius: var(--radius-md); border: 1px solid var(--night-600); background: var(--night-900); color: var(--gray-100); font-family: inherit; font-size: 16px; user-select: text; }

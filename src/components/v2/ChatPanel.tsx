@@ -25,8 +25,8 @@ import { V2Icon, type V2IconName } from "./V2Icon";
 
 export interface ChatPanelMessage {
   key: string;
-  /** vote = 지목 기록 줄(앞에 point 14), hot = 눈여겨볼 줄(brass-200, 아이콘 없음). card·divider·tabs 는 9·11페이즈 */
-  kind: "player" | "system" | "vote" | "hot";
+  /** vote = 지목 기록 줄(앞에 point 14), hot = 눈여겨볼 줄(brass-200, 아이콘 없음), card = 유언·쪽지·경찰 카드(9페이즈). divider·tabs 는 11페이즈 */
+  kind: "player" | "system" | "vote" | "hot" | "card";
   text: string;
   /** 자리 번호 0~7 → 구분색 var(--seat-(n+1)) */
   seat?: number;
@@ -34,6 +34,12 @@ export interface ChatPanelMessage {
   me?: boolean;
   ch?: "all" | "mafia" | "ghost";
   icon?: V2IconName;
+  /** kind card 일 때 종류(data-card 값) */
+  card?: "will" | "note" | "eye";
+  /** 카드 제목 */
+  title?: string;
+  /** mafia = 쪽지 카드(진홍 테두리·제목) */
+  tone?: "mafia";
 }
 
 export interface ChatPanelProps {
@@ -227,6 +233,18 @@ export function ChatPanel(props: ChatPanelProps) {
           onScroll={onScroll}
         >
           {messages.map((m) => {
+            if (m.kind === "card") {
+              // 카드 본문·제목은 React 텍스트 노드로만 그린다(T-09-23). 종류는 서버 k 로 정해진 값이다.
+              return (
+                <div key={m.key} className={m.tone === "mafia" ? "mv-chat__card mv-chat__card--mafia" : "mv-chat__card"} data-card={m.card ?? "will"}>
+                  <span className="mv-chat__card-title">
+                    {m.icon ? <V2Icon name={m.icon} size={16} /> : null}
+                    <span>{m.title ?? ""}</span>
+                  </span>
+                  <p className="mv-chat__card-text">{m.text}</p>
+                </div>
+              );
+            }
             if (m.kind !== "player") {
               // vote 는 아이콘을 point 14 로 정하고, hot 은 아이콘을 그리지 않는다(승인 .mv-chat__sys.is-vote/.is-hot).
               const icon = m.kind === "vote" ? <V2Icon name="point" size={14} /> : m.kind === "hot" ? null : m.icon ? <V2Icon name={m.icon} size={16} /> : null;

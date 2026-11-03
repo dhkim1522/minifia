@@ -26,6 +26,9 @@ export const CHAT_TEXT = {
   // 6페이즈 TopToast 와 같은 문구
   joined: (name: string) => `${name} 님 입장`,
   left: (name: string) => `${name} 님 퇴장`,
+  // 9페이즈 카드 제목 (09-UI-SPEC 427행)
+  cardWill: (name: string) => `${name} 님의 유언`,
+  cardNote: "쪽지",
 } as const;
 
 // 10페이즈 동작 버튼의 접근성 이름. 7페이즈 화면에는 버튼이 없다 (UI-SPEC 동작 종류 표, 키 순서는 EMOTE_IDS 와 같다)

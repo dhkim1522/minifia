@@ -50,11 +50,29 @@ export function useChat({ store, connection, view }: { store: ChatStore; connect
   const channel = view.me.chat ?? null;
   const { players } = view;
   const mySeat = view.me.seat;
+  // 라이브 카드의 보류(CARD_HOLD_MS): 저장소는 시각을 읽지 않으니 가장 이른 공개 시각에 타이머를 걸어 다시 그린다.
+  const [cardTick, setCardTick] = useState(0);
+  useEffect(() => {
+    const at = store.nextCardReveal(Date.now());
+    if (at === null) return;
+    const timer = setTimeout(() => setCardTick((n) => n + 1), Math.max(0, at - Date.now()));
+    return () => clearTimeout(timer);
+  }, [store, revision, cardTick]);
   const messages = useMemo<ChatPanelMessage[]>(() => {
     for (const p of players) names.current.set(p.seat, p.nickname);
-    return store.visibleLines(channel).map((line): ChatPanelMessage => {
+    return store.visibleLines(channel, Date.now()).map((line): ChatPanelMessage => {
+      if (line.kind === "card" && line.card) {
+        // 카드는 서버 k 줄과 이 화면의 경찰 카드뿐이다. 서버 카드의 제목은 좌석 닉네임으로 만든다(UI-SPEC 427행).
+        const m: ChatPanelMessage = { key: line.key, kind: "card", card: line.card, text: line.text, icon: line.card === "will" ? "quill" : line.card === "note" ? "note" : "eye" };
+        if (line.card === "will") m.title = CHAT_TEXT.cardWill(line.seat === undefined ? "" : (names.current.get(line.seat) ?? ""));
+        else if (line.card === "note") {
+          m.title = CHAT_TEXT.cardNote;
+          m.tone = "mafia";
+        } else m.title = line.title ?? "";
+        return m;
+      }
       if (line.kind !== "player") {
-        const m: ChatPanelMessage = { key: line.key, kind: line.kind, text: line.text };
+        const m: ChatPanelMessage = { key: line.key, kind: line.kind === "card" ? "system" : line.kind, text: line.text };
         if (line.icon) m.icon = line.icon;
         return m;
       }
@@ -68,7 +86,7 @@ export function useChat({ store, connection, view }: { store: ChatStore; connect
       return m;
     });
     // revision 이 줄 변화를 알린다(저장소는 React 밖이라 visibleLines 만으로는 의존성이 보이지 않는다)
-  }, [store, revision, channel, players, mySeat]);
+  }, [store, revision, cardTick, channel, players, mySeat]);
 
   // 보낸 직후 흐림
   const [sendDim, setSendDim] = useState(false);
