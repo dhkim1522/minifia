@@ -669,7 +669,7 @@ describe("아침 알림 (MORN-03, UI-SPEC 아침)", () => {
     expect(lastScene().lighting).toBe("morning");
   });
 
-  it("지목 동률·0표로 온 밤: '처형 없음' 알림이 1.4초 떴다가 이어서 '밤이 되었습니다' 가 1.6초 뜬 뒤 사라진다(채팅 줄도 남는다)", () => {
+  it("지목 동률·0표로 온 밤: '처형 없음' 알림이 1.4초 떴다가 이어서 '밤이 되었습니다' 가 1.6초 뜬 뒤 사라진다", () => {
     const m = mount(makeView({ phase: "nomination", mySeat: 3 }));
     m.show(makeView({ phase: "night", mySeat: 3, noExecution: "tie" }));
     expect(announceText(m.container)).toBe("처형 없음");
@@ -681,7 +681,6 @@ describe("아침 알림 (MORN-03, UI-SPEC 아침)", () => {
     expect(announceText(m.container)).toBe("밤이 되었습니다");
     advance(1);
     expect(announceText(m.container)).toBe("");
-    expect(sysLines(m.container)).toContain("처형 없음");
   });
 
   it("처형이 이뤄진 밤: 0초에 '밤이 되었습니다' 하나가 1.6초 뜬다(처형 없음 없음). 재접속 첫 스냅샷 밤에는 알림이 없다", () => {

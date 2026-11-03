@@ -172,6 +172,10 @@ export function useDayFx({ view, epoch, chat }: { view: RoomView | null; epoch: 
     // 결과 알림: 한 번에 하나, 새 알림이 이전 것을 바꾼다. 첫 스냅샷·재접속은 dayEvents 가 알림을 만들지 않는다.
     // 밤에 당한 사람은 아침 알림("암살당했습니다")과 함께 산 사람 화면에서 사라진다(떠오름 없음 — dayEvents 에 fx 가 없다).
     const announces = ev.announces;
+    // 경찰 조사 결과 카드(이 화면에만): 채널 기록이 아니라 화면이 만든 내 일지 카드다 — 재접속 복원 대상이 아니다(L8, T-09-40)
+    for (const c of ev.localCards ?? []) {
+      later(c.at, () => chat.addLocalCard({ icon: "eye", title: c.title, text: c.text, at: Date.now() }));
+    }
     for (const a of announces) {
       later(a.at, () => {
         setAnnounce({ text: a.text, ...(a.icon !== undefined ? { icon: a.icon } : {}) });

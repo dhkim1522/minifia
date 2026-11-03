@@ -9,7 +9,7 @@ import { majorityOf } from "../../shared/game/nomination";
 import { EXECUTION_MS } from "../../shared/game/phases";
 import type { ChatChannel, PhaseId, RoomView } from "../../shared/protocol";
 import type { V2IconName } from "../components/v2/V2Icon";
-import { morningText } from "./eliminationText";
+import { MORNING_TEXT, morningText } from "./eliminationText";
 
 /** 문구 표. UI-SPEC "Copywriting Contract" 원문 — 해요체, 마침표·느낌표 없음. 역할 단어는 토론 안내의 '마피아'(모두에게 같은 문장) 하나뿐이다. */
 export const DAY_COPY = {
@@ -27,6 +27,8 @@ export const DAY_COPY = {
   noExecution: "처형 없음",
   // ---- 결과 알림(36px) ----
   announceDay: "낮이 되었습니다",
+  /** 밤 진입 알림(UI-SPEC 218행). 모든 역할에게 같다 */
+  announceNight: "밤이 되었습니다",
   // ---- 단계 제목 ----
   titles: {
     dayAnnounce: "낮 토론",
@@ -75,6 +77,15 @@ export const GHOST_FADE_END_MS = 2400;
 /** 아침 36px 알림 시작(막이 걷히는 0.4초 뒤)과 길이 */
 export const ANNOUNCE_MORNING_AT = 400;
 export const ANNOUNCE_MORNING_MS = 2400;
+/** 밤 진입 "밤이 되었습니다" 길이. 처형 없음으로 온 밤은 그 알림(ANNOUNCE_NOEXEC_MS) 뒤에 이어진다 */
+export const ANNOUNCE_NIGHT_MS = 1600;
+/** 피해자 본인 화면: 0.7초에 "암살당했습니다" 2초(다른 문장 대신) */
+export const ANNOUNCE_VICTIM_AT = 700;
+export const ANNOUNCE_VICTIM_MS = 2000;
+/** 경찰 화면 순서(그 사람 화면 안의 일, 서버 길이·메시지는 같다): 결과 카드 2.4초, 36px 알림 2.6초에 시작해 2.2초 */
+export const POLICE_CARD_AT = 2400;
+export const ANNOUNCE_POLICE_AT = 2600;
+export const ANNOUNCE_POLICE_MS = 2200;
 
 /** 채팅 시스템 줄 한 건. at 은 단계 진입 기준 ms(없으면 즉시) — 지연은 화면이 시계로 실행한다. */
 export interface DayLine {
@@ -133,8 +144,17 @@ export interface DayState extends PointsTally {
   executed?: number;
 }
 
+/** 이 화면에만 남는 채팅 카드(경찰 조사 결과). 서버 채널 기록이 아니다. at 은 단계 진입 기준 ms */
+export interface LocalCard {
+  at: number;
+  title: string;
+  text: string;
+}
+
 export interface DayEvents {
   lines: DayLine[];
+  /** 경찰 화면에서만 생긴다(L8). 없으면 키 자체가 없다 */
+  localCards?: LocalCard[];
   toasts: PointToast[];
   announces: DayAnnounce[];
   fx: DayFx[];
@@ -196,6 +216,31 @@ function stateOf(view: RoomView): DayState {
   return state;
 }
 
+/** 경찰 결과 카드 본문. 경찰 분기(policeResultOf 가 null 이 아닐 때) 밖에서 쓰지 않는다 */
+const POLICE_TEXT = { mafia: "마피아", clear: "마피아 아님" } as const;
+
+/** 내가 같은 연결의 밤 view 에서는 산 사람이었고 아침 view 에서 탈락했는가(피해자 본인) */
+function diedThisNight(prev: RoomView, cur: RoomView): boolean {
+  const before = prev.players.find((p) => p.seat === prev.me.seat);
+  const now = cur.players.find((p) => p.seat === cur.me.seat);
+  return before !== undefined && isAlive(before) && now !== undefined && !isAlive(now);
+}
+
+/**
+ * 경찰 조사 결과(가정 A1): 같은 연결에서 밤 → 아침으로 오며 내 me.records 에 그 밤 일차의 조사 줄이 새로 생겼으면 { seat, isMafia }.
+ * 경찰이 그 밤에 당했어도 받는다(v1.0 동시 해결). 고르지 않았거나 경찰이 아니거나 첫 스냅샷이면 null.
+ * 본인에게만 오는 me.records 에서만 읽는다 — 서버가 경찰이 아닌 사람에게는 이 줄을 보내지 않는다.
+ */
+export function policeResultOf(prev: RoomView | null, cur: RoomView): { seat: number; isMafia: boolean } | null {
+  if (prev === null || prev.phase !== "night" || cur.phase !== "morning" || cur.me.role !== "police") return null;
+  const n = cur.day?.n;
+  if (n === undefined) return null;
+  const isTonight = (r: NonNullable<RoomView["me"]["records"]>[number]): r is typeof r & { isMafia: boolean } => "isMafia" in r && r.n === n;
+  if ((prev.me.records ?? []).some(isTonight)) return null;
+  const line = (cur.me.records ?? []).find(isTonight);
+  return line === undefined ? null : { seat: line.target, isMafia: line.isMafia };
+}
+
 /** 단계에 들어온 순간의 줄·알림·연출. 지연 이벤트는 at(단계 진입 기준 ms)으로 표시해 화면이 시계로 실행한다. */
 function phaseEntry(prev: RoomView, cur: RoomView, day: NonNullable<RoomView["day"]>, out: DayEvents): void {
   switch (cur.phase) {
@@ -246,19 +291,39 @@ function phaseEntry(prev: RoomView, cur: RoomView, day: NonNullable<RoomView["da
       return;
     }
     case "night": {
-      // 지목 동률·0표로 처형 없이 온 밤만. 찬반 뒤의 밤은 처형 단계가 이미 알렸다.
+      // 지목 동률·0표로 처형 없이 온 밤은 "처형 없음"(0~1.4초) 뒤에 "밤이 되었습니다"가 이어진다. 찬반 뒤의 밤은 처형 단계가 이미 알렸다.
       const reason = day.noExecution?.reason;
-      if (prev.phase !== "nomination" || (reason !== "tie" && reason !== "noVotes")) return;
-      out.lines.push({ kind: "system", text: DAY_COPY.noExecution });
-      out.announces.push({ text: DAY_COPY.noExecution, at: 0, ms: ANNOUNCE_NOEXEC_MS });
+      let at = 0;
+      if (prev.phase === "nomination" && (reason === "tie" || reason === "noVotes")) {
+        out.lines.push({ kind: "system", text: DAY_COPY.noExecution });
+        out.announces.push({ text: DAY_COPY.noExecution, at: 0, ms: ANNOUNCE_NOEXEC_MS });
+        at = ANNOUNCE_NOEXEC_MS;
+      }
+      out.announces.push({ text: DAY_COPY.announceNight, at, ms: ANNOUNCE_NIGHT_MS });
       return;
     }
     case "morning": {
-      // 밤 → 아침으로 들어올 때만. 공개 정보(day.morning·players)만 읽는다 — 누가 살아났는지는 view 에 없다(결정 0044-22)
+      // 밤 → 아침으로 들어올 때만. 공개 정보(day.morning·players)와 본인 기록(me.records)만 읽는다 — 누가 살아났는지는 view 에 없다(결정 0044-22)
       if (prev.phase !== "night") return;
       const m = morningText(day.morning, (seat) => nameOf(cur, seat));
-      out.announces.push({ text: m.text, ...(m.icon !== undefined ? { icon: m.icon } : {}), at: ANNOUNCE_MORNING_AT, ms: ANNOUNCE_MORNING_MS });
-      out.lines.push({ kind: "hot", text: m.text, at: ANNOUNCE_MORNING_AT });
+      const police = policeResultOf(prev, cur);
+      const victim = diedThisNight(prev, cur);
+      // 36px 알림은 한 번에 하나: 피해자 본인 문장(0.7초)이 먼저, 경찰은 결과 카드 뒤 2.6초, 나머지는 0.4초(가정 A2)
+      let announce: DayAnnounce = { text: m.text, ...(m.icon !== undefined ? { icon: m.icon } : {}), at: ANNOUNCE_MORNING_AT, ms: ANNOUNCE_MORNING_MS };
+      let lineAt = ANNOUNCE_MORNING_AT;
+      if (victim) {
+        announce = { text: MORNING_TEXT.victim, icon: "ghost", at: ANNOUNCE_VICTIM_AT, ms: ANNOUNCE_VICTIM_MS };
+      } else if (police !== null) {
+        announce = { ...announce, at: ANNOUNCE_POLICE_AT, ms: ANNOUNCE_POLICE_MS };
+        lineAt = ANNOUNCE_POLICE_AT;
+      }
+      out.announces.push(announce);
+      out.lines.push({ kind: "hot", text: m.text, at: lineAt });
+      if (police !== null) {
+        // 결과 문구는 이 경찰 분기 안에서만 만든다(L8, T-09-40) — 다른 신분 화면의 DOM 에 없다
+        const target = nameOf(cur, police.seat);
+        if (target !== undefined) out.localCards = [{ at: POLICE_CARD_AT, title: target, text: police.isMafia ? POLICE_TEXT.mafia : POLICE_TEXT.clear }];
+      }
       return;
     }
     default:
