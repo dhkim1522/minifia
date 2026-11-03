@@ -463,6 +463,29 @@ describe("useChat: 카드 줄 매핑 (MORN-02)", () => {
     expect(result.current.messages.map((m) => m.card).join()).toBe("will");
   });
 
+  it("다음 공개 시각은 줄 목록을 만든 시각 기준으로 구한다 — 렌더 뒤 효과 전에 시각이 지나도 카드가 빠지지 않는다 (09-22)", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(10_000);
+    const { receive } = mount(cardView());
+    const listedAt: number[] = [];
+    const revealAsked: number[] = [];
+    const listed = store.visibleLines.bind(store);
+    const reveal = store.nextCardReveal.bind(store);
+    vi.spyOn(store, "visibleLines").mockImplementation((channel, now) => {
+      if (now !== undefined) listedAt.push(now);
+      const out = listed(channel, now);
+      vi.setSystemTime(Date.now() + 5); // 렌더가 끝나고 효과가 돌기까지 시계가 흐른 것처럼
+      return out;
+    });
+    vi.spyOn(store, "nextCardReveal").mockImplementation((now) => {
+      revealAsked.push(now);
+      return reveal(now);
+    });
+    receive({ t: "chat", ...line(1, 3, "가", { k: "will" }) });
+    expect(revealAsked.length).toBeGreaterThan(0);
+    expect(revealAsked[revealAsked.length - 1]).toBe(listedAt[listedAt.length - 1]);
+  });
+
   it("카드 본문 \"<b>x</b>\" 는 문자열 그대로 넘긴다", () => {
     const { result, receive } = mount(cardView());
     receive({ t: "chatLog", lines: [line(1, 3, "<b>x</b>", { k: "will" })] });

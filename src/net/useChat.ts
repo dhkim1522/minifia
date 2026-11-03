@@ -51,16 +51,21 @@ export function useChat({ store, connection, view }: { store: ChatStore; connect
   const { players } = view;
   const mySeat = view.me.seat;
   // 라이브 카드의 보류(CARD_HOLD_MS): 저장소는 시각을 읽지 않으니 가장 이른 공개 시각에 타이머를 걸어 다시 그린다.
+  // 공개 시각 비교는 줄 목록을 만든(렌더) 시각 기준이다: 효과 시각으로 비교하면 렌더 뒤 효과 전에 공개 시각이 지난 카드(두 카드의 시각이 몇 ms 차이일 때)가
+  // 목록에서는 빠졌는데 타이머도 걸리지 않아 다음 갱신까지 안 보였다(09-22 E2E 에서 쪽지 카드가 빠지던 간헐 결함).
   const [cardTick, setCardTick] = useState(0);
+  const renderedAt = useRef(0);
   useEffect(() => {
-    const at = store.nextCardReveal(Date.now());
+    const at = store.nextCardReveal(renderedAt.current);
     if (at === null) return;
     const timer = setTimeout(() => setCardTick((n) => n + 1), Math.max(0, at - Date.now()));
     return () => clearTimeout(timer);
   }, [store, revision, cardTick]);
   const messages = useMemo<ChatPanelMessage[]>(() => {
     for (const p of players) names.current.set(p.seat, p.nickname);
-    return store.visibleLines(channel, Date.now()).map((line): ChatPanelMessage => {
+    const now = Date.now();
+    renderedAt.current = now;
+    return store.visibleLines(channel, now).map((line): ChatPanelMessage => {
       if (line.kind === "card" && line.card) {
         // 카드는 서버 k 줄과 이 화면의 경찰 카드뿐이다. 서버 카드의 제목은 좌석 닉네임으로 만든다(UI-SPEC 427행).
         const m: ChatPanelMessage = { key: line.key, kind: "card", card: line.card, text: line.text, icon: line.card === "will" ? "quill" : line.card === "note" ? "note" : "eye" };
