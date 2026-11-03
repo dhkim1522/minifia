@@ -2,6 +2,7 @@ import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import "../helpers/singleLineErrors";
 import { installMemoryStorage } from "../helpers/memoryStorage";
+import { approachPoint } from "../../shared/game/world";
 import type { RoleId } from "../../shared/game/roles";
 import { morningCardText } from "../../src/game/eliminationText";
 import type { ClientMessage, PhaseId, PublicPlayer, RoomView, SpectatePicks } from "../../shared/protocol";
@@ -167,24 +168,85 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe("밤 임시 틀 트레이서 — 산 마피아 이름표 하나 (A1, GHOST-02)", () => {
-  it("산 마피아 밤: 자신·동료를 뺀 산 좌석만 이름표 버튼이 된다(마피아-마피아 거부 규칙을 화면이 먼저 막는다)", () => {
+/** 이 연결의 world 프레임 구독자에게 snap 한 번을 먹인다(RoomScreen 이 WorldStore 로 넘긴다). 좌표는 고정소수점 정수이고 구간은 제자리(v 0)다 */
+function feedSnap(handlers: Array<(e: never, meta: { epoch: number }) => void>, pos: Record<number, [number, number]>): void {
+  const ents = Object.entries(pos).map(([s, p]) => ({ s: Number(s), p: [...p], t0: NOW - 1000, v: 0 }));
+  act(() => handlers.forEach((h) => h({ t: "world", k: "snap", at: NOW, ents } as never, { epoch: 1 })));
+}
+function withHandlers(): { handlers: Array<(e: never, meta: { epoch: number }) => void>; onEvent: RoomConnection["onEvent"] } {
+  const handlers: Array<(e: never, meta: { epoch: number }) => void> = [];
+  const onEvent = vi.fn((cb: unknown) => {
+    handlers.push(cb as (typeof handlers)[number]);
+    return () => {};
+  });
+  return { handlers, onEvent: onEvent as unknown as RoomConnection["onEvent"] };
+}
+const moves = (send: ReturnType<typeof vi.fn<(m: ClientMessage) => boolean>>): ClientMessage[] => send.mock.calls.map(([x]) => x).filter((x) => x.t === "move");
+const nightSends = (send: ReturnType<typeof vi.fn<(m: ClientMessage) => boolean>>): ClientMessage[] => send.mock.calls.map(([x]) => x).filter((x) => x.t === "pick" || x.t === "move");
+const tapFloor = (c: HTMLElement): void => {
+  const surface = c.querySelector(".mf-world__input")!;
+  fireEvent.pointerDown(surface, { pointerId: 1, clientX: 100, clientY: 300, pointerType: "touch" });
+  fireEvent.pointerUp(surface, { pointerId: 1, clientX: 100, clientY: 300, pointerType: "touch" });
+};
+
+describe("밤 마피아 — 다가가기(결정 0061-2·6, NIGHT-07·08, E2 #9)", () => {
+  it("산 마피아 밤: 자신·동료를 뺀 산 좌석만 이름표 버튼이 되고 접근성 이름은 '{닉네임} 님에게 다가가기', 묶음은 '밤 대상'이다", () => {
     const { container } = mount(makeView({ mySeat: 0 }));
     expect(container.querySelector("main.mf-game")?.getAttribute("data-phase")).toBe("night");
     expect(pickSeats(container)).toEqual([1, 2, 3, 5]);
+    expect(container.querySelector('[data-pick="2"]')?.getAttribute("aria-label")).toBe("서준 님에게 다가가기");
+    expect(container.querySelector('[role="group"][aria-label="밤 대상"]')).not.toBeNull();
   });
 
-  it("이름표를 누르면 pick 을 보내고, 서버 view(me.pick·allyPicks)가 오면 고른 좌석과 동료가 고른 좌석 발밑 고리가 마피아 종류다", () => {
+  it("이름표를 누르면 pick 뒤에 그 사람 옆(approachPoint) 목적지로 move 를 보낸다. 같은 사람을 다시 누르면 아무것도 보내지 않고, 다른 사람은 다시 pick + move", () => {
+    const send = vi.fn<(m: ClientMessage) => boolean>(() => true);
+    const { handlers, onEvent } = withHandlers();
+    const m = mount(makeView({ mySeat: 0 }), { send, onEvent });
+    feedSnap(handlers, { 0: [100, 100], 2: [500, 100], 3: [100, 700] });
+    fireEvent.click(m.container.querySelector('[data-pick="2"]')!);
+    expect(nightSends(send)).toEqual([{ t: "pick", target: 2 }, { t: "move", ...approachPoint({ x: 500, z: 100 }, { x: 100, z: 100 }, 80) }]);
+    expect(m.container.querySelector('[data-pick="2"]')?.getAttribute("aria-pressed")).toBe("true");
+    send.mockClear();
+    fireEvent.click(m.container.querySelector('[data-pick="2"]')!);
+    expect(nightSends(send)).toEqual([]);
+    fireEvent.click(m.container.querySelector('[data-pick="3"]')!);
+    expect(nightSends(send)).toEqual([{ t: "pick", target: 3 }, { t: "move", ...approachPoint({ x: 100, z: 700 }, { x: 100, z: 100 }, 80) }]);
+    expect(m.container.querySelector('[data-pick="3"]')?.getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("대상 위치를 store 가 모르면 pick 만 나간다", () => {
     const send = vi.fn<(m: ClientMessage) => boolean>(() => true);
     const m = mount(makeView({ mySeat: 0 }), { send });
-    expect(ringSeats(m.container)).toEqual([]);
     fireEvent.click(m.container.querySelector('[data-pick="2"]')!);
-    expect(send.mock.calls.filter(([x]) => x.t === "pick")).toEqual([[{ t: "pick", target: 2 }]]);
+    expect(nightSends(send)).toEqual([{ t: "pick", target: 2 }]);
+  });
+
+  it("서버 view(me.pick·allyPicks)가 오면 내가 고른 좌석은 mafia 고리, 동료만 고른 좌석은 mafia-ally 고리다. 아무도 안 골랐으면 고리가 없다", () => {
+    const m = mount(makeView({ mySeat: 0 }));
+    expect(ringSeats(m.container)).toEqual([]);
     m.show(makeView({ mySeat: 0, pick: 2, allyPicks: [3] }));
     expect(ringOf(m.container, 2)).toBe("mafia");
-    expect(ringOf(m.container, 3)).toBe("mafia");
+    expect(ringOf(m.container, 3)).toBe("mafia-ally");
     expect(ringSeats(m.container).sort()).toEqual([2, 3]);
     expect(m.container.querySelector('[data-pick="2"]')?.getAttribute("aria-pressed")).toBe("true");
+    // 같은 좌석을 나도 동료도 골랐으면 내 고리(mafia)가 이긴다
+    m.show(makeView({ mySeat: 0, pick: 2, allyPicks: [2] }));
+    expect(ringOf(m.container, 2)).toBe("mafia");
+  });
+
+  it("산 마피아는 밤에 바닥을 눌러 걷는다(NIGHT-07), 산 시민·경찰·의사는 걷지 못한다", () => {
+    const sendM = vi.fn<(m: ClientMessage) => boolean>(() => true);
+    const a = mount(makeView({ mySeat: 0 }), { send: sendM });
+    tapFloor(a.container);
+    expect(moves(sendM)).toHaveLength(1);
+    cleanup();
+    for (const seat of [1, 2, 3]) {
+      const send = vi.fn<(m: ClientMessage) => boolean>(() => true);
+      const b = mount(makeView({ mySeat: seat }), { send });
+      tapFloor(b.container);
+      expect(moves(send), `seat ${seat}`).toHaveLength(0);
+      cleanup();
+    }
   });
 
   it("산 시민 밤: 이름표 버튼 0개", () => {
