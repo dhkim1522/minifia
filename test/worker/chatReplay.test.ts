@@ -5,7 +5,7 @@ import { env } from "cloudflare:workers";
 import { evictDurableObject, runInDurableObject } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 import type { ServerMessage } from "../../shared/protocol";
-import { actorsOf, chatKeysOf, chatLogOf, chatRecordsOf, chatSend, chatsOf, connect, createRoom, editRoom, framesOf, hello, helloForLog, joinOk, lineText, mapPlayers, mark, nextFrame, seat, send, settle, skipThrough, storedRoom } from "./helpers";
+import { actorsOf, advanceTo, chatKeysOf, chatLogOf, chatRecordsOf, chatSend, chatsOf, connect, createRoom, editRoom, framesOf, hello, helloForLog, joinOk, lineText, mapPlayers, mark, nextFrame, pickAs, seat, send, settle, skipThrough, startedGame, storedRoom } from "./helpers";
 import type { Actor, Seated } from "./helpers";
 
 /** 프레임 목록을 'state,world.snap,chatLog' 같은 한 줄 종류 열로(실패 보고가 한 줄이어야 한다). */
@@ -237,4 +237,51 @@ describe("채팅 보관 — 상한·리셋·방 삭제 (결정 0058-4·7, T-07-3
     await host.closedPromise;
     expect((await chatKeysOf(code)).length).toBe(0);
   });
+});
+
+// ---- 09-14: 아침 카드(유언·쪽지, k)와 분필은 재접속 복원에도 그대로 따른다 (MORN-02 다시 읽기, E5 #29) ----
+describe("아침 카드 재접속 복원 (MORN-02, 결정 0061-11)", () => {
+  /** 밤: 시민 V 가 유언을 남겼고 마피아 전원이 V 를 골라 확정, 마피아 A 가 쪽지를 남긴 채 아침으로 넘긴다. */
+  async function morningWithCards(): Promise<{ g: Awaited<ReturnType<typeof startedGame>>; v: Actor }> {
+    const g = await startedGame("night");
+    const v = withRole(g.actors, "citizen")[0]!;
+    await editRoom(g.code, (room) => mapPlayers(room, (p) => (p.seat === v.seat ? { ...p, will: "2번을 봐요" } : p)));
+    const mafias = withRole(g.actors, "mafia");
+    for (const m of mafias) pickAs(m, v.seat);
+    for (const a of g.actors) await settle(a.sock, mark(a.sock));
+    send(mafias[0]!.sock, { t: "note", text: "다음은 너" });
+    for (const a of g.actors) await settle(a.sock, mark(a.sock));
+    await advanceTo(g.code, g.socks, "morning");
+    for (const a of g.actors) await settle(a.sock, mark(a.sock));
+    return { g, v };
+  }
+
+  it("산 시민과 유령 V 가 다시 hello 하면 chatLog 에 k will·k note 줄이 본문 그대로 seq 순으로 있다", async () => {
+    const { g, v } = await morningWithCards();
+    const alive = g.actors.find((a) => a.seat !== v.seat && a.role === "citizen")!;
+    for (const who of [alive, v]) {
+      const lines = await helloForLog(await connect(g.code), who.token);
+      expect(lines.map((l) => `${l.ch}/${l.k ?? "-"}/${l.seat}/${l.seq}/${l.text}`).join("|")).toBe(`all/will/${v.seat}/1/2번을 봐요|all/note/${v.seat}/2/다음은 너`);
+    }
+  }, 40_000);
+
+  it("재접속한 소켓의 첫 state 에 day.chalk 가 있다", async () => {
+    const { g, v } = await morningWithCards();
+    const alive = g.actors.find((a) => a.seat !== v.seat)!;
+    const again = await connect(g.code);
+    send(again, { t: "hello", token: alive.token });
+    const state = (await nextFrame(again, (m) => m.t === "state")) as Extract<ServerMessage, { t: "state" }>;
+    expect(Object.keys(state.view.day?.chalk ?? {}).sort().join(",")).toBe("x,z");
+  }, 40_000);
+
+  it("사람이 보낸 chat 에 k 를 덧붙이면 스키마가 거절하고 줄도 저장되지 않는다 — 카드 위장 불가", async () => {
+    const { g } = await morningWithCards();
+    const speaker = g.actors.find((a) => a.role === "citizen" && a.seat !== withRole(g.actors, "citizen")[0]!.seat) ?? g.actors[0]!;
+    const before = (await chatKeysOf(g.code)).length;
+    const m = mark(speaker.sock);
+    send(speaker.sock, { t: "chat", text: "가짜 유언", pk: `${1}:morning`, k: "will" });
+    const got = await settle(speaker.sock, m);
+    expect(got.map((x) => (x.t === "error" ? `error:${x.code}` : x.t)).join(",")).toBe("error:BAD_MESSAGE");
+    expect((await chatKeysOf(g.code)).length).toBe(before);
+  }, 40_000);
 });

@@ -2,7 +2,7 @@
 // "오지 않았음" 은 settle(ping/pong)로 증명한다. 6명 판(마피아 둘·경찰·의사·시민 둘)을 실제로 시작해 돌린다.
 import { describe, expect, it } from "vitest";
 import type { ServerMessage } from "../../shared/protocol";
-import { advanceTo, chatKeysOf, chatSend, chatsOf, connect, helloForLog, killSeats, mark, pause, send, settle, startedGame, summary, typingSend, withRole } from "./helpers";
+import { advanceTo, chatKeysOf, chatSend, chatsOf, connect, editRoom, helloForLog, killSeats, mapPlayers, mark, pause, send, settle, startedGame, summary, typingSend, withRole } from "./helpers";
 import type { Actor, Game } from "./helpers";
 
 /** settle 이 돌려준 프레임 가운데 typing 만 한 줄 문자열로. */
@@ -140,4 +140,21 @@ describe("누설 검사 (d) — 재접속 chatLog 도 같은 audience 를 지난
       for (const path of keyPaths(frame)) expect(CHATLOG_KEY_PATHS.has(path)).toBe(true);
     }
   }, 30_000);
+
+  it("아침 카드(k)가 든 재접속 chatLog 의 키는 허용 목록 안이고 k 값은 will·note 뿐이다", async () => {
+    const g = await startedGame("night");
+    const v = withRole(g, "citizen")[0]!;
+    await editRoom(g.code, (room) => mapPlayers(room, (p) => (p.seat === v.seat ? { ...p, will: "유언" } : p)));
+    const mafias = withRole(g, "mafia");
+    for (const m of mafias) send(m.sock, { t: "pick", target: v.seat });
+    for (const a of g.actors) await settle(a.sock, mark(a.sock));
+    send(mafias[0]!.sock, { t: "note", text: "쪽지" });
+    for (const a of g.actors) await settle(a.sock, mark(a.sock));
+    await advanceTo(g.code, g.socks, "morning");
+    const again = await connect(g.code);
+    const lines = await helloForLog(again, g.actors.find((a) => a.seat !== v.seat && a.role === "citizen")!.token);
+    expect(lines.map((l) => l.k).join(",")).toBe("will,note");
+    const raw = again.frames.find((f) => (JSON.parse(f) as ServerMessage).t === "chatLog")!;
+    for (const path of keyPaths(JSON.parse(raw))) expect(`${path}:${CHATLOG_KEY_PATHS.has(path)}`).toBe(`${path}:true`);
+  }, 40_000);
 });

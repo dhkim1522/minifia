@@ -12,16 +12,21 @@ import {
   collect,
   connect,
   forceDue,
+  editRoom,
   hello,
   lastViewOf,
+  mapPlayers,
   mark,
   nextFrame,
   phaseKeyOf,
+  pickAs,
   resetChatRates,
   seat,
   send,
   settle,
+  startedGame,
   summary,
+  withRole,
 } from "./helpers";
 import type { Actor as SeatedActor, TestSocket } from "./helpers";
 
@@ -938,4 +943,33 @@ describe("테스트 방 봇 투표 설정은 손님·게임 중 프레임에 새
       if (m.t === "state" && m.view.phase !== "lobby") expect(Object.hasOwn(m.view.me, "testBotVote")).toBe(false);
     }
   });
+});
+
+describe("아침 카드 프레임은 허용 키 목록 안이다 (09-14, MORN-02, 결정 0061-11)", () => {
+  it("유언·쪽지 카드를 받은 모든 소켓의 chat 프레임 키는 CHAT_KEY_PATHS, 재접속 chatLog 줄 키는 CHATLOG_KEY_PATHS 안이고 k 값은 will·note 뿐이다", async () => {
+    const g = await startedGame("night");
+    const v = withRole(g, "citizen")[0]!;
+    await editRoom(g.code, (room) => mapPlayers(room, (p) => (p.seat === v.seat ? { ...p, will: "유언" } : p)));
+    const mafias = withRole(g, "mafia");
+    for (const m of mafias) pickAs(m, v.seat);
+    for (const a of g.actors) await settle(a.sock, mark(a.sock));
+    send(mafias[0]!.sock, { t: "note", text: "쪽지" });
+    for (const a of g.actors) await settle(a.sock, mark(a.sock));
+    const marks = g.socks.map((s) => mark(s));
+    await advanceTo(g.code, g.socks, "morning");
+    let cards = 0;
+    for (let i = 0; i < g.socks.length; i += 1) {
+      for (const msg of await settle(g.socks[i]!, marks[i]!)) {
+        if (msg.t !== "chat") continue;
+        cards += 1;
+        for (const pth of keyPaths(msg)) expect(`${pth}:${CHAT_KEY_PATHS.has(pth)}`).toBe(`${pth}:true`);
+        expect(["will", "note"].includes(String(msg.k))).toBe(true);
+      }
+    }
+    expect(cards).toBe(g.socks.length * 2);
+    const again = await connect(g.code);
+    send(again, { t: "hello", token: g.actors[0]!.token });
+    const logFrame = (await nextFrame(again, (m) => m.t === "chatLog")) as Extract<ServerMessage, { t: "chatLog" }>;
+    for (const pth of keyPaths(logFrame)) expect(`${pth}:${CHATLOG_KEY_PATHS.has(pth)}`).toBe(`${pth}:true`);
+  }, 40_000);
 });
