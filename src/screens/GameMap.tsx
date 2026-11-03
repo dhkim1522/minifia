@@ -5,6 +5,7 @@ import { isAlive } from "../../shared/game/alive";
 import { canMoveIn } from "../../shared/game/movement";
 import { APPROACH_DIST_FX, approachPoint, positionAtFx } from "../../shared/game/world";
 import type { ClientMessage, RoomView } from "../../shared/protocol";
+import { KillFx } from "../components/KillFx";
 import { ResultAnnounce } from "../components/ResultAnnounce";
 import { SceneCurtain } from "../components/SceneCurtain";
 import { RoleCardButton } from "../components/RoleCardButton";
@@ -50,6 +51,10 @@ const DEFAULT_INSET_TOP = 62;
 const DEFAULT_INSET_BOTTOM = 250;
 /** 보이는 화면(visualViewport) 높이가 이보다 낮으면 유언 시트 입력칸을 2줄로 줄인다(UI-SPEC 282행) */
 const COMPACT_VV_MAX = 300;
+
+/** 암살당한 본인의 연출 시간표(UI-SPEC 247~252행, 아침 view 를 받은 시각 기준): 0.7초에 놀란 표정, 2.8초까지 막 유지 */
+const KILL_SURPRISE_MS = 700;
+const KILL_HOLD_MS = 2800;
 
 /** 처음 보는 지목의 깜빡임을 본 적이 있는지 적는 저장소 키(6페이즈 mf-hint-walk 와 같은 방식, UI-SPEC 다르게 2) */
 const POINT_HINT_KEY = "mf-hint-point";
@@ -116,6 +121,8 @@ interface GameMapProps {
   fading?: DayFx["fading"];
   /** 내가 유령이 된 순간마다 늘어나는 번호(useDayFx). 번호가 바뀔 때만 안내 한 줄과 직업 칩 등장을 다시 보인다 — 처음 마운트 때의 값은 지난 일이다 */
   ghostEnter?: DayFx["ghostEnter"];
+  /** 암살당한 본인의 아침 연출 신호(useDayFx). 번호가 바뀔 때만 번쩍임·베기·놀란 표정을 한 번 재생하고 막을 2.8초까지 붙잡는다 — 처음 마운트 때의 값은 지난 일이다 */
+  killFx?: DayFx["killFx"];
   /** 지목 선두가 새 사람으로 바뀌었을 때의 손사래 신호(WorldStage 로 그대로 넘긴다) */
   deny?: DayFx["deny"];
   /** 연결의 오류 프레임 구독(거절된 행동 알림에 쓴다) */
@@ -145,7 +152,7 @@ function MapHeader({ view, offset, hintOn, extra }: { view: RoomView; offset: nu
 // 8페이즈 게임 맵 화면 틀(08-13, UI-SPEC "게임 화면 틀"): 지하 재즈 바 맵(WorldStage) 위에 위쪽 가림막, 헤더(단계 이름 + 접히는 안내 + 시간 링 + [역할 카드]), [테스트], 결과 알림, 아래 패널을 얹는다.
 // 낮 시작·낮 토론·지목·최후 변론·찬반·처형이 이 화면 하나를 같은 장면 키로 그려 단계가 바뀌어도 맵이 다시 만들어지지 않는다.
 // 화면은 서버가 보낸 view 만으로 다시 그린다. 닉네임(이름표)·알림 글자는 React 텍스트 노드로만 그린다.
-export function GameMap({ view, store, chat, send, canSend = true, offset = 0, roleCard, testButton, announce = null, toast: toastShow = null, deny, fading, ghostEnter = 0, onEvent, onLeave }: GameMapProps) {
+export function GameMap({ view, store, chat, send, canSend = true, offset = 0, roleCard, testButton, announce = null, toast: toastShow = null, deny, fading, ghostEnter = 0, killFx = null, onEvent, onLeave }: GameMapProps) {
   const toast = useTopToast();
   const { show } = toast;
   // 측정(스테이지 사각형)·키보드·기록 칸 높이는 대기실과 같은 훅이다. 키보드가 열려 있으면 행동 줄을 숨기고 기록 칸을 72 로 줄인다(07-19).
@@ -180,6 +187,25 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
     }, HINT_MS);
   }, [ghostEnter]);
   useEffect(() => () => clearTimeout(enterTimer.current), []);
+
+  // 암살당한 본인: 번호가 바뀐 뒤 0.7초에 내 캐릭터가 놀란 표정을 짓는다(모션 줄이기면 표정 연출도 없이 바로 유령 상태). 처음 마운트 때의 번호는 지난 일이라 하지 않는다.
+  // 번쩍임·베기는 KillFx 가, 막 붙잡기는 SceneCurtain(holdUntil)이 맡는다. 타이머는 언마운트 때만 푼다(ghostEnter 와 같은 이유).
+  const reducedMotion = useReducedMotion();
+  const killNonce = killFx?.nonce ?? 0;
+  const seenKill = useRef(killNonce);
+  const killTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const [surprise, setSurprise] = useState<{ seat: number; nonce: number } | undefined>(undefined);
+  useEffect(() => {
+    if (killNonce === seenKill.current) return;
+    seenKill.current = killNonce;
+    if (reducedMotion) return;
+    const seat = view.me.seat;
+    clearTimeout(killTimer.current);
+    killTimer.current = setTimeout(() => setSurprise((s) => ({ seat, nonce: (s?.nonce ?? 0) + 1 })), KILL_SURPRISE_MS);
+    // view 는 번호가 바뀐 그 렌더의 값(내 좌석)만 읽는다
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [killNonce]);
+  useEffect(() => () => clearTimeout(killTimer.current), []);
 
   // 서버가 행동을 거절하면(마감 직후 누름 등) 위 알림을 띄우고 내 낙관적 눌림·선택을 서버 값으로 되돌린다. 이동은 조용히 버려지고 오류 프레임이 없다.
   // 지목 직후(PICK_REPLY_MS 안, 서버가 아직 내 선택을 확인하지 않았을 때)의 거절은 지목 거절이다: 단계 어긋남(WRONG_PHASE)은 REJECT_TEXT,
@@ -234,7 +260,6 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
   const nightMafia = nighting && meAlive && view.me.role === "mafia";
   // 시민 편(산 시민·경찰·의사)의 밤: 같은 어둠 표식과 긴장 비네트를 본다. 역할마다 다르지 않다(NIGHT-10, E3 #20). 마피아·유령·낮에는 없다.
   const nightDark = nighting && meAlive && !nightMafia;
-  const reducedMotion = useReducedMotion();
   const recordCue = useMemo(
     () =>
       tensionHooksOn()
@@ -433,6 +458,7 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
         canWalk={canWalk}
         {...(nightDark ? { underlay: <TensionVignette reducedMotion={reducedMotion} {...(recordCue ? { onCue: recordCue } : {})} /> } : {})}
         {...(deny ? { deny } : {})}
+        {...(surprise ? { surprise } : {})}
         {...(pick ? { pick } : {})}
         {...(tagProps ? { tagProps } : {})}
         onNotice={(text) => show(text)}
@@ -441,7 +467,8 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
       <TopToast {...toast.props} />
       {testButton ? <div className="mf-game__test">{testButton}</div> : null}
       {/* 장면 전환 막(09-20): 결과 알림보다 앞(DOM 순서)에 두어 막을 붙잡는 동안 알림이 막 위로 올라올 수 있게 한다. 덮기는 공개 마감만의 함수다 */}
-      <SceneCurtain view={view} offset={offset} reducedMotion={reducedMotion} />
+      <SceneCurtain view={view} offset={offset} reducedMotion={reducedMotion} {...(killFx !== null ? { holdUntil: killFx.at + KILL_HOLD_MS } : {})} />
+      <KillFx nonce={killNonce} reducedMotion={reducedMotion} />
       <ResultAnnounce text={announce?.text ?? null} {...(announce?.icon !== undefined ? { icon: announce.icon } : {})} />
       <GamePanel
         view={view}

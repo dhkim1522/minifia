@@ -31,6 +31,22 @@
 @keyframes mf-curtain-in { from { opacity: 0; } to { opacity: 1; } }
 @keyframes mf-curtain-out { from { opacity: 1; } to { opacity: 0; } }
 
+/* 암살 이펙트(09-20, NIGHT-11, E4 #25·#27, UI-SPEC 247~252행): 암살당한 본인 화면에서만 한 번. 막(z-toast + 8) 위, 붙잡힌 알림(+10) 아래.
+   붉은 번쩍임은 불투명도 0 → 0.8@15% → 0 한 주기(900ms)이고 반복 횟수 1 이다(1초에 3번 이상 깜빡이지 않는다, T-09-44). 흰 베기는 -28° 로 scaleX 0 → 1(700ms) 뒤 사라진다.
+   부품(KillFx)이 모션 줄이기에서는 요소를 만들지 않는다 — 아래 규칙은 그래도 켜지지 않게 하는 안전망이다. */
+.mf-killfx { position: absolute; inset: 0; z-index: calc(var(--z-toast) + 9); overflow: hidden; pointer-events: none; }
+.mf-killfx__flash { position: absolute; inset: 0; background: var(--crimson-700); opacity: 0; animation: mf-killfx-flash 900ms linear 1 both; animation-iteration-count: 1; }
+.mf-killfx__slash {
+  position: absolute; left: 5%; width: 90%; top: 42%; height: 4px; transform-origin: left center; opacity: 0;
+  background: linear-gradient(to right, transparent, var(--gray-50) 20%, var(--gray-50) 80%, transparent);
+  box-shadow: 0 0 14px 3px color-mix(in srgb, var(--crimson-400) 70%, transparent);
+  transform: rotate(-28deg) scaleX(0);
+  animation: mf-killfx-slash 700ms var(--ease-out) 1 both; animation-iteration-count: 1;
+}
+@keyframes mf-killfx-flash { 0% { opacity: 0; } 15% { opacity: 0.8; } 100% { opacity: 0; } }
+@keyframes mf-killfx-slash { 0% { opacity: 1; transform: rotate(-28deg) scaleX(0); } 75% { opacity: 1; transform: rotate(-28deg) scaleX(1); } 100% { opacity: 0; transform: rotate(-28deg) scaleX(1); } }
+@media (prefers-reduced-motion: reduce) { .mf-killfx { display: none; } }
+
 /* 유언·쪽지 시트 층(09-17, WILL-01·NIGHT-12, UI-SPEC "유언 쓰기"). 아래 패널(z-overlay) 위 끝에서 8 위, 키보드가 열려 있으면 그 위.
    폭(부모 − 20)과 안쪽 모양은 부품(.mv-will)이 갖는다. --mf-panel-h 는 화면 틀이 패널을 재서 쓴다. */
 .mf-will-layer {

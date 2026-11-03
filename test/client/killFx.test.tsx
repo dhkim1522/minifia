@@ -355,11 +355,13 @@ describe("피해자 암살 이펙트 (NIGHT-11, E4 #25~#27, UI-SPEC 247~252행)"
     const curtain = (): HTMLElement | null => m.container.querySelector<HTMLElement>("[data-curtain]");
     expect(curtain()?.classList.contains("is-covered")).toBe(true);
     m.show(morningOf(VICTIM, VICTIM));
-    advance(2_799);
+    advance(1_999);
+    expect(announceText(m.container)).toBe("암살당했습니다");
+    expect(curtain()?.classList.contains("is-held")).toBe(true);
+    advance(800);
     expect(curtain()?.classList.contains("is-covered")).toBe(true);
     expect(curtain()?.classList.contains("is-lifting")).toBe(false);
     expect(curtain()?.classList.contains("is-held")).toBe(true);
-    expect(announceText(m.container)).toBe("암살당했습니다");
     advance(1);
     expect(curtain()?.classList.contains("is-lifting")).toBe(true);
     expect(curtain()?.classList.contains("is-held")).toBe(false);
@@ -430,7 +432,7 @@ describe("피해자 암살 이펙트 (NIGHT-11, E4 #25~#27, UI-SPEC 247~252행)"
     expect(flash).toMatch(/crimson-700/);
     expect(flash).toMatch(/animation-iteration-count:\s*1\b/);
     expect(flash).not.toMatch(/infinite/);
-    const frames = css.match(/@keyframes mf-killfx-flash\s*\{([\s\S]*?)\}\s*\}/)?.[1] ?? "";
+    const frames = css.match(/@keyframes mf-killfx-flash\s*\{[\s\S]*?\}\s*\}/)?.[0] ?? "";
     expect(frames).toMatch(/0%\s*\{\s*opacity:\s*0;?\s*\}/);
     expect(frames).toMatch(/15%\s*\{\s*opacity:\s*0\.8;?\s*\}/);
     expect(frames).toMatch(/100%\s*\{\s*opacity:\s*0;?\s*\}/);

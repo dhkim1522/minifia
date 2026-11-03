@@ -192,6 +192,8 @@ export interface WorldRuntime {
   syncPlayers(): void;
   /** seat 이 손사래(deny)를 하고 놀란 표정을 한 번 짓는다 — 지목 선두가 바뀌었을 때의 반응(결정 0049). 그릴 캐릭터가 없으면 아무것도 하지 않는다 */
   deny(seat: number): void;
+  /** seat 이 놀란 표정(surprise)만 한 번 짓는다 — 손사래 없음. 암살당한 본인의 0.7초 연출(09-20, NIGHT-11). 그릴 캐릭터가 없으면 아무것도 하지 않는다 */
+  surprise(seat: number): void;
   /**
    * 게임 단계의 장면 상태(08-08 SceneLook)를 건넨다. 표에 없는(show 아닌) 좌석은 캐릭터를 만들지 않고 이미 있으면 퇴장시키며,
    * ghost 좌석은 반투명으로 그린다. null 이면 장면이 없는 것(로비) — 6페이즈 동작 그대로다.
@@ -1118,6 +1120,11 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
       const h = a.handle as PlayableCharacter;
       h.playEmote?.("deny");
       h.setFace?.("surprise");
+    },
+    surprise(seat) {
+      const a = actors.get(seat) ?? null;
+      if (a === null || a.exit !== null) return;
+      (a.handle as PlayableCharacter).setFace?.("surprise");
     },
     tap,
     notifyMoveSent,

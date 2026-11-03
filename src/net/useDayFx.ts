@@ -11,6 +11,7 @@
 //   (직전 줄이 같은 안내면 만들지 않는다 — 07페이즈 DayScene 규칙 그대로) 화면에 `ghostEnter` 신호(번호)를 준다. 화면은 번호가 바뀔 때만 안내·직업 칩 등장을 다시 보인다.
 //   재접속 첫 스냅샷·epoch 직후는 직전 view 가 없어 줄도 신호도 없다. 이전 채팅 기록은 건드리지 않는다.
 // 밤·아침(08-18 임시 틀 → 09-18 교체): 낮 → 밤에 산 마피아의 마피아 채널 시작 줄(DayScene 규칙을 옮김). 밤·아침 결과 알림(문장·아이콘·시각)은 dayEvents 가 정하고 이 훅은 시계로 띄울 뿐이다.
+// 암살당한 본인(09-20, NIGHT-11): 같은 연결에서 밤(산 사람) → 아침(탈락)이 되는 렌더에서 `killFx` 신호를 세운다(재접속·의사가 살린 사람·남의 화면에는 없다). 화면(GameMap)이 시간표를 쥔다.
 // 재접속·새로 고침으로 들어온 첫 스냅샷(직전 view 없음)과 연결 번호(epoch)가 바뀐 첫 스냅샷은 이펙트 없이 정상 상태로 둔다(6페이즈 첫 스냅샷 규칙).
 // 방 화면(RoomScreen)이 이 훅을 쥔다: 낮 시작은 맵이 아닌 화면(역할 확인·밤)에서 들어오므로 맵 화면이 새로 마운트되는 순간 직전 view 를 맵 화면이 알 수 없다.
 // 시계는 Date.now()/setTimeout 뿐이고 서버 단계 시간을 넘기지 않는다(표시 시간표는 dayView.ts).
@@ -45,6 +46,11 @@ export interface DayFx {
   fading: ReadonlyMap<number, number>;
   /** 내가 산 사람에서 유령이 될 때마다 늘어나는 번호(0 에서 시작). 화면은 번호가 바뀔 때만 유령 안내·직업 칩 등장을 보인다 */
   ghostEnter: number;
+  /**
+   * 암살당한 본인의 아침 연출 신호(NIGHT-11, 09-20): 같은 연결에서 밤(산 사람) → 아침(탈락)으로 올 때만 nonce 가 늘고 at(Date.now)이 정해진다.
+   * 재접속·연결 번호가 바뀐 첫 스냅샷, 의사가 살린 사람, 다른 사람 화면에서는 생기지 않는다. 없으면 null.
+   */
+  killFx: { nonce: number; at: number } | null;
 }
 
 /** 이 view 에서 내가 탈락했는가(내 좌석이 목록에 없으면 산 사람으로 본다 — GameMap 의 meAlive 와 같다) */
@@ -61,12 +67,17 @@ export function useDayFx({ view, epoch, chat }: { view: RoomView | null; epoch: 
   const [deny, setDeny] = useState<{ seat: number; nonce: number } | undefined>(undefined);
   const [fading, setFading] = useState<ReadonlyMap<number, number>>(NO_FADING);
   const [ghostEnter, setGhostEnter] = useState(0);
+  const [killFx, setKillFx] = useState<{ nonce: number; at: number } | null>(null);
   const [seen, setSeen] = useState<{ view: RoomView | null; epoch: number }>({ view, epoch });
   if (seen.view !== view || seen.epoch !== epoch) {
     // 렌더 중 상태 갱신: 새 view 가 처형 단계로 들어오면 처형된 좌석을 같은 렌더에서 표에 붙잡는다(첫 스냅샷·epoch 직후는 이벤트가 없다)
     const reset = seen.epoch !== epoch;
     setSeen({ view, epoch });
     if (!reset && seen.view !== null && view !== null && meDead(view) && !meDead(seen.view)) setGhostEnter((n) => n + 1);
+    // 암살당한 본인(공개 정보 alive 변화로 화면이 판정, 별도 메시지 없음): 밤 → 아침 view 를 받은 같은 렌더에서 신호를 세운다 — 막이 같은 렌더의 holdUntil 을 읽어야 한다(밤 판정이 끝난 뒤, A3)
+    if (!reset && seen.view !== null && view !== null && seen.view.phase === "night" && view.phase === "morning" && meDead(view) && !meDead(seen.view)) {
+      setKillFx((k) => ({ nonce: (k?.nonce ?? 0) + 1, at: Date.now() }));
+    }
     const rises = view === null ? [] : dayEvents(reset ? null : seen.view, view, reset ? { reset: true } : {}).fx;
     if (reset || rises.length > 0) {
       const next = new Map(reset ? NO_FADING : fading);
@@ -189,5 +200,5 @@ export function useDayFx({ view, epoch, chat }: { view: RoomView | null; epoch: 
     // eslint 규칙 없음 — later/clearAll 은 ref 와 setState 만 쓰므로 의존성에 넣지 않는다
   }, [view, epoch, chat]);
 
-  return { announce, toast, deny, fading, ghostEnter };
+  return { announce, toast, deny, fading, ghostEnter, killFx };
 }

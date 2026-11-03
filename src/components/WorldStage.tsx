@@ -67,6 +67,8 @@ export interface WorldStageProps {
   scene?: SceneLook;
   /** 그 좌석의 캐릭터가 손사래와 놀란 표정을 한 번 한다(결정 0049 — 지목 선두가 바뀐 사람). nonce 가 바뀔 때마다 한 번 */
   deny?: { seat: number; nonce: number };
+  /** 그 좌석의 캐릭터가 놀란 표정만 한 번 짓는다(손사래 없음 — 암살당한 본인의 연출, 09-20). nonce 가 바뀔 때마다 한 번 */
+  surprise?: { seat: number; nonce: number };
   /** 이동이 허용된 단계인가(기본 true). 거짓이면 맵 탭은 링도 move 도 보내지 않는다 — 권위는 서버 canMove 다(MAP-04) */
   canWalk?: boolean;
   /** 있으면 그 좌석들의 이름표가 지목 버튼이 된다 */
@@ -207,6 +209,15 @@ export function WorldStage(props: WorldStageProps) {
     denySeen.current = d.nonce;
     runtimeRef.current?.deny(d.seat);
   }, [props.deny]);
+
+  // 놀란 표정: deny 와 같은 규칙(처음 마운트 때의 값은 지난 일이다)
+  const surpriseSeen = useRef(props.surprise?.nonce);
+  useLayoutEffect(() => {
+    const d = props.surprise;
+    if (d === undefined || d.nonce === surpriseSeen.current) return;
+    surpriseSeen.current = d.nonce;
+    runtimeRef.current?.surprise(d.seat);
+  }, [props.surprise]);
 
   // 탭 하나: 링을 바로 띄우고 목적지 정수 두 개만 보낸다. 내 캐릭터는 같은 길로 바로 걷고 서버 구간이 오면 맞춘다(결정 0059).
   const onTap = (clientX: number, clientY: number): void => {
