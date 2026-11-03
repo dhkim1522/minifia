@@ -17,6 +17,7 @@ import {
   MOVE_V,
   type Segment,
   type WorldState,
+  captureHome,
   compactWorld,
   despawnPlayer,
   emptyWorld,
@@ -34,6 +35,7 @@ import {
   segmentEndsAt,
   snapFrame,
   spawnPlayer,
+  teleportHome,
 } from "../../shared/game/world";
 
 /** 재귀적으로 얼려서 입력 변형 시 던지게 한다(ES 모듈은 strict). */
@@ -821,5 +823,108 @@ describe("배치 기억 lay — 저장·복원 (T-08-19)", () => {
     expect(despawnPlayer(w, ID(1)).lay).toEqual({ key: "2:ring", slots: { [ID(0)]: [0, 265] } });
     expect(respawnAll(w, PLAYERS, 9000, BAR_MAP).lay).toBeUndefined();
     expect(emptyWorld().lay).toBeUndefined();
+  });
+});
+
+// ---- 09-04: home 기억 — 토론이 끝난 자리 (결정 0061-5, 연구 A1, T-09-06) ----
+describe("home 기억 (결정 0061-5)", () => {
+  const A = "A";
+  const B = "B";
+  const C = "C";
+  /** A 는 [0,0]→[300,0] 을 걷는 중, B 는 [100,100] 한 점, C 는 구간 없음 */
+  const threeWorld = (): WorldState => ({
+    segs: {
+      [A]: { p: [0, 0, 300, 0], t0: 1000, v: MOVE_V },
+      [B]: { p: [100, 100], t0: 1000, v: MOVE_V },
+    },
+    lastMoveAt: { [A]: 1000, [B]: 1500 },
+    wanderAt: {},
+  });
+
+  it("captureHome: 구간이 있는 사람마다 구간의 끝점을 적는다(걷던 사람은 가던 곳)", () => {
+    const h = captureHome(threeWorld(), [A, B, C], 2).home;
+    expect(h).toEqual({ day: 2, pos: { [A]: [300, 0], [B]: [100, 100] } });
+  });
+
+  it("captureHome: 같은 일차는 같은 객체(멱등), 다른 일차는 새로 기록한다", () => {
+    const once = captureHome(threeWorld(), [A, B, C], 2);
+    expect(captureHome(once, [A, B, C], 2)).toBe(once);
+    const moved: WorldState = { ...once, segs: { ...once.segs, [B]: { p: [200, 200], t0: 1, v: MOVE_V } } };
+    expect(captureHome(moved, [A, B, C], 2)).toBe(moved);
+    expect(captureHome(moved, [A, B, C], 3).home).toEqual({ day: 3, pos: { [A]: [300, 0], [B]: [200, 200] } });
+  });
+
+  it("새 함수는 입력을 바꾸지 않는다(깊이 얼려도 던지지 않는다)", () => {
+    const w = deepFreeze(captureHome(threeWorld(), [A, B], 1));
+    expect(() => captureHome(w, [A, B], 2)).not.toThrow();
+    expect(() => teleportHome(w, [A, B], 5000)).not.toThrow();
+  });
+
+  it("compactWorld → JSON → restoreWorld 왕복에서 home 이 보존된다", () => {
+    const w = captureHome(busyWorld(), PLAYERS.map((p) => p.id), 2);
+    const stored = JSON.parse(JSON.stringify(compactWorld(w, 3000)));
+    expect(stored.home.day).toBe(2);
+    const r = restoreWorld(stored, PLAYERS, 3100, BAR_MAP);
+    expect(r.home).toEqual(w.home);
+  });
+
+  it("home 이 없는 월드의 저장값에는 home 키가 없고, 옛 저장값은 home 없이 구간 그대로 읽힌다", () => {
+    expect("home" in compactWorld(busyWorld(), 3000)).toBe(false);
+    const stored = JSON.parse(JSON.stringify(compactWorld(busyWorld(), 3000)));
+    const r = restoreWorld(stored, PLAYERS, 3100, BAR_MAP);
+    expect(r.home).toBeUndefined();
+    expect(r.segs[ID(0)]).toEqual(compactWorld(busyWorld(), 3000).segs[ID(0)]);
+  });
+
+  it.each([
+    ["day 음수", { day: -1, pos: {} }],
+    ["day 소수", { day: 1.5, pos: {} }],
+    ["day 문자열", { day: "2", pos: {} }],
+    ["pos 가 배열", { day: 2, pos: [] }],
+    ["pos 없음", { day: 2 }],
+    ["문자열 통째", "home"],
+  ])("home 모양이 틀리면(%s) home 만 버리고 나머지는 복원한다", (_n, home) => {
+    const stored = { ...JSON.parse(JSON.stringify(compactWorld(busyWorld(), 3000))), home };
+    const r = restoreWorld(stored, PLAYERS, 3100, BAR_MAP);
+    expect(r.home).toBeUndefined();
+    expect(Object.keys(r.segs)).toHaveLength(8);
+  });
+
+  it("pos 의 틀린 항목([1]·소수·범위 밖·방에 없는 id)만 버린다", () => {
+    const home = {
+      day: 2,
+      pos: { [ID(0)]: [10, 20], [ID(1)]: [1], [ID(2)]: [1.5, 2], [ID(3)]: [999999999, 0], stranger: [5, 5] },
+    };
+    const stored = { ...JSON.parse(JSON.stringify(compactWorld(busyWorld(), 3000))), home };
+    expect(restoreWorld(stored, PLAYERS, 3100, BAR_MAP).home).toEqual({ day: 2, pos: { [ID(0)]: [10, 20] } });
+  });
+
+  it("compactWorld 의 home 은 입력과 객체를 공유하지 않는다", () => {
+    const w = captureHome(threeWorld(), [A, B], 2);
+    const stored = compactWorld(w, 3000);
+    (stored.home!.pos as Record<string, readonly [number, number]>)[A] = [1, 1];
+    expect(w.home!.pos[A]).toEqual([300, 0]);
+  });
+
+  it("teleportHome: home 점과 구간이 모두 있는 사람만 서 있는 한 점으로 바꾸고 lastMoveAt 은 그대로", () => {
+    const base = captureHome(threeWorld(), [A, B], 2);
+    // A 는 home 뒤에 다른 곳으로 갔고, C 는 home 이 없고, D 는 구간이 없다
+    const moved: WorldState = {
+      ...base,
+      segs: { ...base.segs, [A]: { p: [0, 0, 50, 50], t0: 3000, v: MOVE_V }, [C]: { p: [9, 9], t0: 1, v: MOVE_V } },
+      home: { day: 2, pos: { ...base.home!.pos, D: [7, 7] } },
+    };
+    const r = teleportHome(moved, [A, B, C, "D"], 5000);
+    expect(r.segs[A]).toEqual({ p: [300, 0], t0: 5000, v: MOVE_V });
+    expect(r.segs[B]).toEqual({ p: [100, 100], t0: 5000, v: MOVE_V });
+    expect(r.segs[C]).toEqual(moved.segs[C]);
+    expect(r.segs).not.toHaveProperty("D");
+    expect(r.lastMoveAt).toEqual(moved.lastMoveAt);
+    expect(r.home).toBe(moved.home);
+  });
+
+  it("teleportHome: home 이 없으면 입력 객체 그대로(fail-safe)", () => {
+    const w = threeWorld();
+    expect(teleportHome(w, [A, B], 5000)).toBe(w);
   });
 });
