@@ -263,6 +263,25 @@ export function respawnAll(_w: WorldState, players: readonly { id: string; seat:
   return out;
 }
 
+/** 마피아가 대상 옆에 서는 거리(고정소수점, 0.8 단위). */
+export const APPROACH_DIST_FX = 80;
+
+/**
+ * 마피아 다가가기 목적지(UI-SPEC 다르게 하는 곳 6) — 화면과 봇이 같은 함수, 서버 applyMove 가 걷기 가능 칸으로 보정한다.
+ * target 에서 from 쪽으로 distFx 만큼 떨어진 정수 좌표. from 과 target 이 같으면 target 의 +x 쪽 distFx 점이다.
+ */
+export function approachPoint(
+  target: { x: number; z: number },
+  from: { x: number; z: number },
+  distFx: number,
+): { x: number; z: number } {
+  const dx = from.x - target.x;
+  const dz = from.z - target.z;
+  const len = Math.sqrt(dx * dx + dz * dz);
+  if (len === 0) return { x: Math.round(target.x + distFx), z: Math.round(target.z) };
+  return { x: Math.round(target.x + (dx / len) * distFx), z: Math.round(target.z + (dz / len) * distFx) };
+}
+
 /** 저장·스냅샷 공통 접기 규칙: 끝난 구간은 [끝x, 끝z] 한 점, 진행 중이면 그대로. 배열은 복사한다. */
 function foldSegment(seg: Segment, now: number): Segment {
   if (now >= segmentEndsAt(seg) && seg.p.length >= 2) {
