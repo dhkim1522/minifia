@@ -307,6 +307,37 @@ describe("봇 행동", () => {
   }, 30_000);
 });
 
+describe("마피아 봇 협응 (09-02, 결정 0061-18)", () => {
+  it("밤: 계획에 적힌 대상이 서로 달라도 마피아 봇 둘은 실행 시점에 같은 seat 을 고른다", async () => {
+    const r = await seatQuiet(0, { testMode: true });
+    send(r.host, { t: "testBots", count: 5 });
+    await nextFrame(r.host, lobbyOf(6));
+    send(r.host, { t: "testRole", role: "citizen" });
+    await start(r);
+    await skipDayToNight(r);
+    await waitForPlan(r.code);
+    // 계획 시점의 대상을 일부러 서로 다르게 만든다 — 실행 시점 재계산이 없으면 두 봇이 다른 대상을 고른다.
+    await editRoom(r.code, (room) => {
+      const players = room.players as Array<{ id: string; seat: number; role?: string; alive?: boolean }>;
+      const mafiaIds = players.filter((p) => p.role === "mafia").map((p) => p.id);
+      const targets = players.filter((p) => p.role !== "mafia" && p.alive !== false).map((p) => p.seat).sort((a, b) => b - a);
+      const plan = room.botPlan as { key: string; steps: Array<{ botId: string; act: { t: string; target?: number } }> };
+      let i = 0;
+      const steps = plan.steps.map((st) => {
+        if (st.act.t !== "pick" || !mafiaIds.includes(st.botId)) return st;
+        const target = targets[i % targets.length]!;
+        i += 1;
+        return { ...st, act: { ...st.act, target } };
+      });
+      return { ...room, botPlan: { ...plan, steps } };
+    });
+    await forceBotsDue(r.code);
+    const players = (await stored(r.code)).players as Array<{ role?: string; nightPick?: number }>;
+    const picks = players.filter((p) => p.role === "mafia").map((p) => String(p.nightPick));
+    expect(picks.length >= 2 && picks.every((x) => x !== "undefined") && new Set(picks).size === 1).toBe(true);
+  }, 30_000);
+});
+
 describe("알람", () => {
   it("봇 있는 테스트 방 discussion 에서 알람은 봇 행동 시각이고 단계 마감보다 이르다", async () => {
     const r = await seatQuiet(1, { testMode: true });

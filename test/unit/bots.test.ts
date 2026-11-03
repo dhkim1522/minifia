@@ -11,6 +11,7 @@ import {
   BOT_NIGHT_LINES,
   EXEC_YES_PERCENT,
   botCount,
+  botMafiaTarget,
   botPointTarget,
   botNightTarget,
   botPlanKey,
@@ -402,6 +403,84 @@ describe("botNightTarget", () => {
     const mafia = state.players.find((p) => p.role === "mafia")!;
     const alone: RoomState = { ...state, players: state.players.map((p) => (p.role === "mafia" ? p : { ...p, alive: false })) };
     expect(String(botNightTarget(alone, { ...mafia }, THROWING))).toBe("undefined");
+  });
+});
+
+describe("마피아 봇 협응(결정 0061-18)", () => {
+  /** 밤 상태에서 seat 별 역할을 직접 정하고(나머지는 시민) 선택·생존을 덮어쓴다. */
+  const arranged = (
+    roles: Record<number, "mafia" | "police" | "doctor">,
+    over: Record<number, { nightPick?: number; alive?: false }> = {},
+  ): RoomState => {
+    const base = stateAt(1, 5, 3, "night");
+    return {
+      ...base,
+      players: base.players.map((p) => {
+        const { nightPick: _drop, ...rest } = p;
+        return { ...rest, role: roles[p.seat] ?? "citizen", ...(over[p.seat] ?? {}) };
+      }),
+    };
+  };
+  const bot = (s: RoomState, seat: number): Player => s.players.find((p) => p.seat === seat)!;
+
+  it("아무도 안 골랐으면 가장 낮은 산 비마피아다(마피아 둘 seat 2·4)", () => {
+    const s = arranged({ 2: "mafia", 4: "mafia" });
+    expect(`${botMafiaTarget(s, bot(s, 2))}/${botMafiaTarget(s, bot(s, 4))}`).toBe("0/0");
+  });
+
+  it("동료가 고른 산 비마피아가 있으면 그것을 따라간다", () => {
+    const s = arranged({ 2: "mafia", 4: "mafia" }, { 4: { nightPick: 3 } });
+    expect(String(botMafiaTarget(s, bot(s, 2)))).toBe("3");
+  });
+
+  it("동료 선택이 여럿이면 가장 낮은 seat 이다(마피아 셋)", () => {
+    const s = arranged({ 2: "mafia", 3: "mafia", 4: "mafia" }, { 3: { nightPick: 5 }, 4: { nightPick: 1 } });
+    expect(String(botMafiaTarget(s, bot(s, 2)))).toBe("1");
+  });
+
+  it("동료가 고른 대상이 이미 탈락이면 무시하고 가장 낮은 산 비마피아다", () => {
+    const s = arranged({ 2: "mafia", 4: "mafia" }, { 4: { nightPick: 3 }, 3: { alive: false } });
+    expect(String(botMafiaTarget(s, bot(s, 2)))).toBe("0");
+  });
+
+  it("탈락한 동료의 선택은 따라가지 않는다", () => {
+    const s = arranged({ 2: "mafia", 4: "mafia" }, { 4: { nightPick: 3, alive: false } });
+    expect(String(botMafiaTarget(s, bot(s, 2)))).toBe("0");
+  });
+
+  it("시민·경찰·탈락한 마피아·후보 없음은 undefined 다", () => {
+    const s = arranged({ 2: "mafia", 4: "police" });
+    const dead = arranged({ 2: "mafia" }, { 2: { alive: false } });
+    const alone: RoomState = { ...s, players: s.players.map((p) => (p.role === "mafia" ? p : { ...p, alive: false })) };
+    expect(`${botMafiaTarget(s, bot(s, 0))}/${botMafiaTarget(s, bot(s, 4))}/${botMafiaTarget(dead, bot(dead, 2))}/${botMafiaTarget(alone, bot(alone, 2))}`).toBe(
+      "undefined/undefined/undefined/undefined",
+    );
+  });
+
+  it("경찰·의사가 고른 대상은 읽지 않는다 (T-09-03)", () => {
+    const base = { 2: "mafia", 3: "police", 4: "doctor" } as const;
+    const a = arranged(base, { 3: { nightPick: 0 }, 4: { nightPick: 1 } });
+    const b = arranged(base, { 3: { nightPick: 5 }, 4: { nightPick: 5 } });
+    expect(`${botMafiaTarget(a, bot(a, 2))}/${botMafiaTarget(b, bot(b, 2))}`).toBe("0/0");
+  });
+
+  it("botNightTarget 마피아 분기는 난수를 부르지 않고 경찰 분기는 randInt(후보 수) 한 번이다", () => {
+    const s = arranged({ 2: "mafia", 3: "police", 4: "mafia" }, { 4: { nightPick: 5 } });
+    expect(String(botNightTarget(s, bot(s, 2), THROWING))).toBe("5");
+    const calls: number[] = [];
+    botNightTarget(s, bot(s, 3), (n) => {
+      calls.push(n);
+      return 0;
+    });
+    expect(calls.join(",")).toBe("5");
+  });
+
+  it("planFor night: 마피아 봇이 둘이면 pick 대상이 같다(대상 난수 없음)", () => {
+    const s = arranged({ 2: "mafia", 4: "mafia" });
+    const picks = planBotSteps(s, nowOf(s), seededRandInt(9))
+      .filter((st) => st.act.t === "pick")
+      .map((st) => (st.act.t === "pick" ? `${st.botId === bot(s, 2).id ? 2 : 4}:${st.act.target}` : ""));
+    expect(picks.sort().join(",")).toBe("2:0,4:0");
   });
 });
 
