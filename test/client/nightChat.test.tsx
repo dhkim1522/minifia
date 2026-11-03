@@ -203,11 +203,11 @@ describe("시민 편 화면에는 비공개 채널의 흔적이 없다 (T-07-40)
   };
 
   for (const r of ["citizen", "police", "doctor"] as const) {
-    it(`산 ${r} 의 밤: ChatPanel 이 없고 밤 알약 패널이며 DOM 에 마피아·유령 채널 문구·표식이 0건`, () => {
+    it(`산 ${r} 의 밤: ChatPanel 이 없고 밤 알약 패널도 없으며 DOM 에 마피아·유령 채널 문구·표식이 0건`, () => {
       const { container } = scene(makeView({ role: r }));
       expect(chatPanel(container)).toBeNull();
       expect(input(container)).toBeNull();
-      expect(container.querySelector(".mf-game__panel .mf-nightpanel")).not.toBeNull();
+      expect(container.querySelector(".mf-game__panel .mf-nightpanel")).toBeNull();
       expect(clean(container)).toEqual({ traces: [], mafiaLines: 0, ghostLines: 0, mafiaCh: 0 });
     });
   }

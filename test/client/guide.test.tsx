@@ -131,14 +131,14 @@ const ALL_VIEWPOINTS: readonly Viewpoint[] = ["mafia", "police", "doctor", "citi
 
 // ---- 05-01 Task 2: 밤·아침·투표 구간 (부품이 data-guide 를 맡는다) ----
 
-// 밤·아침은 08-18 부터 맵 화면(GameMap)이다(임시 틀). 안내는 헤더 안내 줄(.mv-phase__hint) 또는 하단 NightPanel 제목이고 화면당 하나다.
+// 밤·아침은 맵 화면(GameMap)이다. 밤 안내는 역할마다 헤더 안내 줄(.mv-phase__hint) 하나다(09-15: 경찰·의사·시민도 헤더, 밤 알약 패널은 지웠다).
 // 아침은 UI-SPEC 단계표에 안내가 없다(알림 + 채팅): 산 사람 화면에는 [data-guide] 가 0개이고 유령만 헤더 안내가 있다.
 describe("UX-01 맵 화면: night·morning (D-08, 08-18)", () => {
-  it("night 경찰·의사·시민은 NightPanel 제목, 마피아는 헤더 `대상에게 다가가요`, 탈락은 헤더 `모두의 직업과 밤 행동이 보여요`", () => {
+  it("night 경찰·의사·시민·마피아는 역할별 헤더 안내 하나, 탈락은 헤더 `모두의 직업과 밤 행동이 보여요`", () => {
     const expected: Readonly<Record<Viewpoint, string>> = {
-      police: "조사할 사람을 고르세요",
-      doctor: "지킬 사람을 고르세요",
-      citizen: "밤이 되었어요",
+      police: "조사할 사람을 골라요",
+      doctor: "지킬 사람을 골라요",
+      citizen: "날이 밝길 기다려요",
       mafia: "대상에게 다가가요",
       spectator: "모두의 직업과 밤 행동이 보여요",
     };
@@ -163,7 +163,7 @@ describe("UX-01 맵 화면: night·morning (D-08, 08-18)", () => {
 
 // execVote·candidateVote·candidateVoteReveal(옛 투표 세 단계)의 안내 시험은 08-27 에서 지웠다 — 맵 화면으로 대체된 v1.0 부품(제목 h2·후보 선택 안내 줄)만 보던 시험이다.
 describe("UX-01 처형 없이 온 밤 (맵 화면, 08-18)", () => {
-  it("처형 무효로 온 밤: 마피아 하나 = 헤더 `대상에게 다가가요`, 시민 하나 = NightPanel 제목", () => {
+  it("처형 무효로 온 밤: 마피아 하나 = 헤더 `대상에게 다가가요`, 시민 하나 = 헤더 `날이 밝길 기다려요`", () => {
     const mafia = renderRoom(makeView({ phase: "night", viewpoint: "mafia", endsIn: 30_000, noExecution: "tie" }));
     const gm = onlyGuide(mafia.container, "noExecution/마피아");
     expect(gm.classList.contains("mv-phase__hint")).toBe(true);
@@ -171,7 +171,8 @@ describe("UX-01 처형 없이 온 밤 (맵 화면, 08-18)", () => {
     mafia.unmount();
     const citizen = renderRoom(makeView({ phase: "night", viewpoint: "citizen", endsIn: 30_000, noExecution: "noVotes" }));
     const gc = onlyGuide(citizen.container, "noExecution/시민");
-    expect(squish(gc.textContent)).toBe("밤이 되었어요");
+    expect(squish(gc.textContent)).toBe("날이 밝길 기다려요");
+    expect(gc.classList.contains("mv-phase__hint")).toBe(true);
   });
 });
 
@@ -181,7 +182,7 @@ describe("UX-01 처형 없이 온 밤 (맵 화면, 08-18)", () => {
 type CheckViewpoint = Viewpoint | "none";
 
 /**
- * 점검표(05-UI-SPEC 8): 화면이 그리는 PhaseId × 시점. 낮 시작~아침은 맵 화면(GameMap)의 헤더 안내 또는 하단 NightPanel 제목이다.
+ * 점검표(05-UI-SPEC 8): 화면이 그리는 PhaseId × 시점. 낮 시작~아침은 맵 화면(GameMap)의 헤더 안내다.
  * 있을 수 없는 칸은 적지 않는다 — lobby·assigning 은 역할이 없어 none 한 칸, roleReveal 은 살아 있는 사람뿐(관전 없음).
  * 이 목록은 PhaseId 의 부분집합이어야 한다(satisfies).
  */
