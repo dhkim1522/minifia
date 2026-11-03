@@ -48,7 +48,7 @@
 
 ### 밤 (NIGHT)
 
-- [ ] **NIGHT-07**: 밤이 되면 각자 토론이 끝난 자리로 돌아가고, 마피아만 맵을 움직인다. 시민 편 화면은 깜깜하고 다른 사람이 보이지 않으며, 마피아 위치는 시민 편에게 네트워크로도 가지 않는다
+- [x] **NIGHT-07**: 밤이 되면 각자 토론이 끝난 자리로 돌아가고, 마피아만 맵을 움직인다. 시민 편 화면은 깜깜하고 다른 사람이 보이지 않으며, 마피아 위치는 시민 편에게 네트워크로도 가지 않는다
 - [ ] **NIGHT-08**: 마피아는 대상에게 다가가 암살한다. 살아 있는 마피아가 모두 같은 대상을 골라야 확정되고, 맞추지 못하면 그 밤에는 아무도 죽지 않는다
 - [ ] **NIGHT-09**: 경찰·의사는 깜깜한 화면에 비친 얼굴 목록에서 대상을 고른다
 - [ ] **NIGHT-10**: 시민 편 깜깜한 화면에 발소리·심장 소리 같은 긴장 연출이 나온다. 연출은 실제 마피아 움직임과 무관하다
@@ -145,7 +145,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | DAY-07 | Phase 8 | Complete |
 | GHOST-01 | Phase 8 | Complete |
 | GHOST-02 | Phase 8 | Complete |
-| NIGHT-07 | Phase 9 | Pending |
+| NIGHT-07 | Phase 9 | Complete |
 | NIGHT-08 | Phase 9 | Pending |
 | NIGHT-09 | Phase 9 | Pending |
 | NIGHT-10 | Phase 9 | Pending |
