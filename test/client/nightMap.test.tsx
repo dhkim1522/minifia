@@ -668,3 +668,116 @@ describe("아침 임시 틀 (UI-SPEC 아침, A3)", () => {
     }
   });
 });
+
+// ---- 09-15 Task 3: 시민 편 어둠 표식 + 긴장 비네트 (NIGHT-10, L3·L10, E3 #20~#22) ----
+
+describe("밤 시민 편 — 어둠 표식과 긴장 비네트 (NIGHT-10, E3 #20~#22)", () => {
+  const vignettes = (c: ParentNode): HTMLElement[] => [...c.querySelectorAll<HTMLElement>('[data-tension-pulse="true"]')];
+  const darkOf = (c: ParentNode): string | null => c.querySelector("main.mf-game")?.getAttribute("data-night-dark") ?? null;
+  const cued = (c: ParentNode): boolean => vignettes(c)[0]?.classList.contains("is-cue") === true;
+
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
+    vi.setSystemTime(NOW);
+    vi.spyOn(Math, "random").mockReturnValue(0); // 큐 2개: 5000ms, 9000ms (planTensionCues)
+  });
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.useRealTimers();
+    vi.unstubAllEnvs();
+    sessionStorage.removeItem("minifia:e2e");
+    window.history.replaceState({}, "", "/");
+    delete window.__mfTension;
+  });
+
+  it("밤 산 시민·경찰·의사: 게임 맵 루트에 data-night-dark='true'(세 역할 같은 값)와 aria-hidden 비네트 하나, 산 마피아·유령·낮·아침 화면에는 둘 다 없다", () => {
+    const values: Array<string | null> = [];
+    for (const seat of [1, 2, 3]) {
+      const { container } = mount(makeView({ mySeat: seat }));
+      values.push(darkOf(container));
+      expect(vignettes(container), `seat ${seat}`).toHaveLength(1);
+      expect(vignettes(container)[0]?.getAttribute("aria-hidden")).toBe("true");
+      cleanup();
+    }
+    expect(values).toEqual(["true", "true", "true"]);
+    const none: Array<[string, RoomView]> = [
+      ["산 마피아", makeView({ mySeat: 0 })],
+      ["유령", makeView({ mySeat: 3, dead: [3] })],
+      ["토론", makeView({ phase: "discussion", mySeat: 3 })],
+      ["아침", makeView({ phase: "morning", mySeat: 3, morning: {} })],
+    ];
+    for (const [name, view] of none) {
+      const { container } = mount(view);
+      expect(darkOf(container), name).toBeNull();
+      expect(vignettes(container), name).toHaveLength(0);
+      cleanup();
+    }
+  });
+
+  it("비네트는 이름표 층 아래에 있다(맵 상자 안, 이름표 층보다 앞) — 이름표가 비네트 위에 그려진다", () => {
+    const { container } = mount(makeView({ mySeat: 3 }));
+    const v = vignettes(container)[0]!;
+    const tags = container.querySelector(".mf-world__tags")!;
+    expect(v.closest("[data-world-stage]")).not.toBeNull();
+    expect(tags.contains(v)).toBe(false);
+    expect(v.compareDocumentPosition(tags) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("밤이 끝나 단계가 바뀌면 비네트가 사라진다", () => {
+    const m = mount(makeView({ mySeat: 3 }));
+    expect(vignettes(m.container)).toHaveLength(1);
+    m.show(makeView({ phase: "morning", mySeat: 3, morning: {} }));
+    expect(vignettes(m.container)).toHaveLength(0);
+    expect(darkOf(m.container)).toBeNull();
+  });
+
+  it("큐 시각에 강한 맥박 클래스(is-cue)가 잠깐 붙었다 떨어진다. 평소에는 맥박 클래스(is-beat)가 있다", () => {
+    const m = mount(makeView({ mySeat: 3 }));
+    expect(vignettes(m.container)[0]?.classList.contains("is-beat")).toBe(true);
+    expect(cued(m.container)).toBe(false);
+    act(() => void vi.advanceTimersByTime(4_999));
+    expect(cued(m.container)).toBe(false);
+    act(() => void vi.advanceTimersByTime(2));
+    expect(cued(m.container)).toBe(true);
+    act(() => void vi.advanceTimersByTime(1_400));
+    expect(cued(m.container)).toBe(false);
+    act(() => void vi.advanceTimersByTime(3_000)); // 9000ms 의 두 번째 큐
+    expect(cued(m.container)).toBe(true);
+  });
+
+  it("모션 줄이기: 맥박 클래스·큐가 없고 인라인 불투명도가 0.4 로 고정이다", () => {
+    vi.stubGlobal("matchMedia", (q: string) => ({ matches: q.includes("reduce"), media: q, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} }));
+    const m = mount(makeView({ mySeat: 3 }));
+    const v = vignettes(m.container)[0]!;
+    expect(v.classList.contains("is-beat")).toBe(false);
+    expect(v.style.opacity).toBe("0.4");
+    act(() => void vi.advanceTimersByTime(30_000));
+    expect(v.classList.contains("is-cue")).toBe(false);
+  });
+
+  it("?e2e=1 문맥에서는 큐가 울릴 때마다 window.__mfTension 에 시각이 쌓이고, 언마운트하면 남은 큐가 멈춘다", () => {
+    vi.stubEnv("DEV", false);
+    window.history.replaceState({}, "", "/?e2e=1");
+    const m = mount(makeView({ mySeat: 3 }));
+    expect(window.__mfTension ?? []).toEqual([]);
+    act(() => void vi.advanceTimersByTime(5_001));
+    expect(window.__mfTension).toHaveLength(1);
+    m.unmount();
+    act(() => void vi.advanceTimersByTime(30_000));
+    expect(window.__mfTension).toHaveLength(1);
+  });
+
+  it("개발 빌드가 아니고 ?e2e=1 도 없으면 큐가 울려도 window.__mfTension 이 없다", () => {
+    vi.stubEnv("DEV", false);
+    mount(makeView({ mySeat: 3 }));
+    act(() => void vi.advanceTimersByTime(30_000));
+    expect(window.__mfTension).toBeUndefined();
+  });
+
+  it("L10: 밤 산 시민 DOM 에는 내 이름표 외 이름표가 없고 직업 칩·채팅 패널도 없다", () => {
+    const { container } = mount(makeView({ mySeat: 3 }));
+    expect(rosterSeats(container)).toEqual([3]);
+    expect(container.querySelectorAll("[data-role-chip]")).toHaveLength(0);
+    expect(container.querySelectorAll("[data-chat-panel]")).toHaveLength(0);
+  });
+});
