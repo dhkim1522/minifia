@@ -115,9 +115,25 @@
 | `data-ghost-seat` · `data-role-chip` | 유령 · 직업 표시 | 유령 화면에서만 존재 |
 | `data-ring-kind="mafia\|police\|doctor"` | 발밑 고리 | 밤 임시 틀의 내 선택(마피아는 같은 마피아에게만 보임) |
 
+9페이즈(밤·아침)가 더한 표식 11개(`NIGHT_MARKERS`, `scripts/e2e/lib.mjs`). 이름이 바뀌면 `test/unit/e2eContract.test.ts` 가 먼저 깨진다:
+
+| 값 | 위치 | 뜻 |
+|---|---|---|
+| `data-night-dark` | 게임 맵 루트 | 시민 편 밤 어둠. 시민·경찰·의사가 같은 값(`"true"`), 마피아·유령에는 없음 |
+| `data-tension-pulse` | 맥박 비네트 | 시민 편 밤에만 1개 |
+| `data-face-list` · `data-face="{seat}"` | 경찰·의사 얼굴 목록 · 칸 | 칸은 `aria-pressed`. 8자 이름이 칸 안에 들어가야 함(`faceNameFits`) |
+| `data-will-button` · `data-will-sheet="will\|note"` | 깃펜 · 유언·쪽지 시트 | 밤 시민 편은 아래 [유언] 줄이 깃펜을 대신함 |
+| `data-note-button` | [쪽지] | 마피아 밤. 전원 일치 확정 전에는 `aria-disabled` |
+| `data-card="will\|note\|eye"` | 채팅 카드 | 유언 · 쪽지 · 이 화면이 만든 경찰 조사 카드 |
+| `data-chalk="x,z"` | 이름표 층 루트 | 암살 현장 분필. 피해자가 있는 아침에만 |
+| `data-curtain` | 장면 전환 막 | 진한 동안만(없으면 요소 없음) |
+| `data-kill-fx` | 암살 번쩍임 | 피해자 본인 화면, 아침에 한 번 |
+
+밤 아래 패널 세 종류의 높이(안전 영역 제외, E2E 가 DOM 에서 잰 값과 견줌): 마피아 `LOG_H + 154`(250 · 306, `gamePanelHeight` 의 `nightMafia`) · 경찰·의사 얼굴 목록 `faceListPanelH`(14 + 행 × (칸 폭 + 26.2) + 행 사이 8 + 10 + 52 + 22, 이름이 줄바꿈된 행마다 +18, 오차 ±2) · 시민 88 고정(`nightCitizen`).
+
 ## 자동 검사 (배포본 E2E, 결정 0025)
 
-`npm run e2e` 가 시스템 Chrome 으로 배포본을 열어 네 크기(360×640, 390×664, 430×932, 360×560)와 고정 흐름(pc 1280×800, wakelock 360×640 등)을 돈다. 결과는 흐름 × 크기 표다. 8페이즈에서 v1.0 테이블 흐름 열한 개(police5 · citizen4 · mafia8 · doctor5 · spec4 · vote5 · noexec · result-c · result-m · chat-table · chat-ghost)를 지우고 맵 게임 흐름 여섯 개를 더했다: `day`(토론 끝내기 · 지목 · 변론 · 찬반 · 처형 알림 · 밤, 폰 6종) · `ghost`(유령 화면 · 누설 없음, 폰 6종) · `noexec`(지목 동률 · 처형 없음) · `night-roles`(밤 임시 틀 역할별) · `result`(결과 화면) · `chat-game`(게임 중 채팅 채널). 배포본 전체가 900초를 넘으면 `--only` 로 나눠 돌린다. 기준값은 낮추지 않고, 승인된 예외만 `APPROVED_RELAXATIONS` 에 이유와 함께 둔다.
+`npm run e2e` 가 시스템 Chrome 으로 배포본을 열어 네 크기(360×640, 390×664, 430×932, 360×560)와 고정 흐름(pc 1280×800, wakelock 360×640 등)을 돈다. 결과는 흐름 × 크기 표다. 8페이즈에서 v1.0 테이블 흐름 열한 개(police5 · citizen4 · mafia8 · doctor5 · spec4 · vote5 · noexec · result-c · result-m · chat-table · chat-ghost)를 지우고 맵 게임 흐름 여섯 개를 더했다: `day`(토론 끝내기 · 지목 · 변론 · 찬반 · 처형 알림 · 밤, 폰 6종) · `ghost`(유령 화면 · 누설 없음, 폰 6종) · `noexec`(지목 동률 · 처형 없음) · `night`(밤 임시 틀 역할별 흐름을 9페이즈에서 다시 씀) · `result`(결과 화면) · `chat-game`(게임 중 채팅 채널). 9페이즈(09-22)의 night 흐름은 암살(다가가기 · 확정 · 쪽지 → 아침 분필 · 알림 · 유언 · 쪽지 카드) · 구출 · 불일치 · 처형 유언 · 경찰 결과 · 피해자 이펙트(막 · 번쩍임 · 유령 화면) 여섯 시나리오와 시민 편 DOM 누설 검사 · 묶음 G · H 를 승인 보드 폭(390×844)에서 돌고, `night-sizes` 가 폰 6종에서 내 이름표가 스테이지 안에 완전히 들어오는지(`tagInStage`) · 마피아 이름표 버튼 44×44 · 얼굴 칸 이름 · 패널 높이를 잰다. 줄바꿈된 얼굴 목록 + 가장 짧은 폰(360×560)에서 이름표가 스테이지 위로 올라가는 것은 UI-SPEC 알려진 한계라 참고 줄(`SZ4k`)로만 남긴다. 낮 · 밤 · 아침 렌더 부하는 `node scripts/perf-run.mjs --mode nightload`(CPU 4× 감속, 결과 `.planning/phases/09-night-morning/perf/`)로 재고 판정은 실기기 확인이 한다. 배포본 전체가 900초를 넘으면 `--only` 로 나눠 돌린다. 기준값은 낮추지 않고, 승인된 예외만 `APPROVED_RELAXATIONS` 에 이유와 함께 둔다.
 
 | 묶음 | 무엇을 재나 |
 |---|---|

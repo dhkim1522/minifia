@@ -7,7 +7,7 @@
 //
 //   밤1: 마피아 전원 → 시민 X 지목, 경찰 → 마피아 조사, 의사 → 자신 보호, 마피아 한 명이 밤 채팅(chat ch mafia)·입력 중(typing).
 //        마피아가 둘(6명 이상)이면 서로 다른 시민 A·B 를 골라 동률 추첨을 본다(탈락자는 둘 중 하나). 경찰의 밤 chat → chatReject phase(보낸 폰에만).
-//   아침1: 모든 폰이 같은 day.morning(탈락자 = 지목한 사람, 문구 1..MORNING_PHRASE_COUNT), players[].alive 일치, 경찰 기록 1건·isMafia true,
+//   아침1: 모든 폰이 같은 day.morning(탈락자 = 지목한 사람, 문구 번호는 없다 — 결정 0061-17), players[].alive 일치, 경찰 기록 1건·isMafia true,
 //          마피아 전원 같은 암살일지 1건(target = 탈락자, died true), 의사 치료일지 1건(target = 자신),
 //          그 역할 밖 프레임에는 records 키 없음·줄 키는 역할별, 살아 있는 비마피아는 밤 chat·typing 0,
 //          탈락자만 spectate(모든 직업), 아침 중 pick → WRONG_PHASE.
@@ -44,8 +44,7 @@ const results = [];
 const check = (test, label, ok, detail = "") => results.push({ test, label, ok, detail });
 const EXEC_VOTE_MS = 13_000; // 처형 여부 투표(shared/game/phases.ts EXEC_VOTE_MS): 하루마다 표를 안 던지고 지나간다
 const OVERALL_LIMIT_MS = 540_000 + 2 * EXEC_VOTE_MS;
-// shared/protocol.ts 의 MORNING_PHRASE_COUNT 와 같은 값(스크립트는 TS 를 import 하지 않는다). 아침 탈락 문구 번호는 1..7.
-const MORNING_PHRASE_COUNT = 7;
+// 9페이즈(결정 0061-17)에서 서버가 아침 문구 번호(phrase)를 채우지 않는다 — 문장은 화면이 만든다. 이 스크립트의 낮 흐름·동률 추첨·allyPicks 단언은 8·9페이즈 규칙으로 아직 갱신되지 않았다(09-22 는 phrase 단언만 지움).
 // 역할별 일지 줄의 키 집합
 const RECORD_KEYS = { police: "isMafia,n,target", mafia: "died,n,target", doctor: "n,target" };
 
@@ -196,7 +195,6 @@ async function main() {
   const sameMorning = m1.every((v) => same(v.day.morning, morning1));
   check("아침1", "모든 폰이 같은 day.morning", sameMorning, JSON.stringify(morning1));
   check("아침1", dual ? "탈락자가 두 후보(A·B) 중 하나 (동률 추첨)" : "탈락자 = 마피아가 지목한 시민", picks1.includes(X), `후보 ${picks1.join("·")} → 탈락 ${X}`);
-  check("아침1", `탈락 문구 번호 1..${MORNING_PHRASE_COUNT} 정수`, Number.isInteger(morning1.phrase) && morning1.phrase >= 1 && morning1.phrase <= MORNING_PHRASE_COUNT, `문구 ${morning1.phrase}`);
   const aliveOk = m1.every((v) => v.players.every((p) => p.alive === (p.seat !== X)));
   check("아침1", "players[].alive 가 탈락자만 false", aliveOk, "");
   const xClient = bySeatClient(X);

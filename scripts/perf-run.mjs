@@ -22,6 +22,11 @@
 //              같은 JSON 의 baseline 칸에 적을 뿐 판정하지 않는다. 제품 코드는 바뀌지 않고, 제품 런타임의 자동 강등(10초 평균 45fps 미만)은 켜진 그대로다(가정 A2).
 //              방은 끝에 나가서 지운다. v1.0 주소는 어떤 요청보다 먼저 거부한다.
 //   --bots     chatload 소켓 봇 수(0~7, 기본 7). 0 이면 채팅 부하 없는 대조 측정이다(같은 환경에서 채팅 때문인지 가르는 용도, --file 로 이름을 달리한다)
+//   --mode nightload (09-22, 결정 0055): 테스트 방(방장 + 봇 --bots, 기본 7)에서 낮 토론·지목·변론·찬반·처형·밤·아침을 방장 넘기기로 되풀이하며(방장 마피아 판, 이어서 시민 판 —
+//              시민 판은 어둠·맥박 화면) CPU 감속 아래 장면마다 머무는 동안(--minutes 를 두 판이 반씩) 페이지 안 rAF 간격을 재 평균 fps·끊김·p95 를 장면별 칸(scenes)과 함께
+//              `nightload-{크기}-x{감속}.json`(기본 폴더 .planning/phases/09-night-morning/perf/)으로 저장한다. 넘기기·시트 조작 동안은 기록을 멈춘다. 6페이즈 기준(5분 평균 55fps, 끊김 5회)은
+//              baseline 칸에 적을 뿐 판정하지 않는다 — 합격 판정은 실기기 확인(사용자 결정 2026-11-02). 방은 끝에 나가서 지운다. v1.0 주소는 어떤 요청보다 먼저 거부한다.
+//   사용 예:   node scripts/perf-run.mjs --mode nightload --url http://localhost:5173 --minutes 5 --throttle 4 --size 390x844
 // 종료 코드: 0 = 결과 저장, 1 = 인자·주소·Chrome·시간 초과·페이지 오류.
 // 가정(A1): 헤드리스 시스템 Chrome 의 CPU 4배 스로틀은 DevTools 와 같은 메커니즘이다. 헤드리스 여부·Chrome 버전은 결과 JSON 의 runner 에 적는다.
 // 결과를 서버로 보내지 않는다. 대상 주소에 보내는 요청은 페이지 자신의 에셋 요청뿐이다.
@@ -31,12 +36,46 @@ import { fileURLToPath } from "node:url";
 import { chromium } from "playwright-core";
 import { exitIfV1, expectedOrigin } from "./deploy-target.mjs";
 import { FONT_HOSTS, findChrome, parseBarMask, pickTapTargets, walkableCenters } from "./e2e/lib.mjs";
-import { hitsInputSurface, leaveLobby, readChatLines, readWorld, screensOfWorld, sleep, waitWorldReady } from "./e2e/browser.mjs";
+import {
+  backToLobby,
+  chooseRole,
+  createTestRoom,
+  hitsInputSurface,
+  leaveLobby,
+  openHostPage,
+  openTestSheet,
+  readChatLines,
+  readGame,
+  readWorld,
+  screensOfWorld,
+  setBotVote,
+  setBots,
+  skipTo,
+  sleep,
+  startGame,
+  tapPick,
+  waitWorldReady,
+} from "./e2e/browser.mjs";
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const DEFAULT_OUT = join(REPO, ".planning/phases/06-world-skeleton/perf");
 /** chatload 의 기본 저장 폴더(7페이즈) */
 const CHATLOAD_OUT = join(REPO, ".planning/phases/07-free-chat/perf");
+/** nightload 의 기본 저장 폴더(9페이즈) */
+const NIGHTLOAD_OUT = join(REPO, ".planning/phases/09-night-morning/perf");
+/** nightload: 장면마다 머무는 시간(ms). 합 50초 = 한 바퀴. 처형·아침은 서버 타이머가 5초 안팎이라 그보다 짧게 머문다 */
+const NIGHTLOAD_DWELL = [
+  ["discussion", 10_000],
+  ["nomination", 6_000],
+  ["defense", 6_000],
+  ["verdict", 6_000],
+  ["execution", 4_000],
+  ["night", 14_000],
+  ["morning", 4_000],
+];
+/** nightload: 판 순서 — 마피아 판(맵·고리·이동) 다음 시민 판(어둠·맥박 비네트) */
+const NIGHTLOAD_PASSES = ["mafia", "citizen"];
+const NIGHTLOAD_NICK = "측정기";
 /** 결과 카드가 뜬 뒤 스크린샷 전에 잠깐 기다린다(ms) */
 const CARD_SETTLE_MS = 400;
 /** 측정 시간 말고 더 기다려 주는 여유(ms): 모듈 받기·맵 만들기·CPU 감속으로 늘어난 시간 */
@@ -71,7 +110,7 @@ const CHATLOAD_LINES = ["저 아니에요", "누가 수상해요?", "조용한 �
 const CHATLOAD_BASELINE = { avgFps: 55, jankMax: 5, perMinutes: 5, jankMs: JANK_MS, source: "06-PERF-RESULTS.md 조건 B · UI-SPEC 합격 기준 — 5분 평균 ≥ 55fps, 끊김(>50ms) ≤ 5회/5분" };
 
 const USAGE =
-  "사용법: node scripts/perf-run.mjs [--mode perf|interactive|chatload] [--url 주소] [--scene talk|vote] [--minutes 5] [--dpr 2] [--throttle 4] [--size 390x844] [--out 폴더] [--headed] [--budget 0] [--seed 1] [--runs 3] [--bots 7] [--shot [--file 이름]]";
+  "사용법: node scripts/perf-run.mjs [--mode perf|interactive|chatload|nightload] [--url 주소] [--scene talk|vote] [--minutes 5] [--dpr 2] [--throttle 4] [--size 390x844] [--out 폴더] [--headed] [--budget 0] [--seed 1] [--runs 3] [--bots 7] [--shot [--file 이름]]";
 
 class UsageError extends Error {}
 
@@ -111,7 +150,7 @@ export function parseArgs(argv) {
       }
       case "--mode": {
         const v = need(a, i++);
-        if (v !== "perf" && v !== "interactive" && v !== "chatload") throw new UsageError(`--mode 는 perf, interactive 또는 chatload: ${v}`);
+        if (v !== "perf" && v !== "interactive" && v !== "chatload" && v !== "nightload") throw new UsageError(`--mode 는 perf, interactive, chatload 또는 nightload: ${v}`);
         o.mode = v;
         break;
       }
@@ -126,6 +165,7 @@ export function parseArgs(argv) {
   }
   // chatload 는 --out 이 없으면 7페이즈 폴더에 저장한다(06 폴더는 06 결과의 것이다)
   if (o.mode === "chatload" && !o.outGiven) o.out = CHATLOAD_OUT;
+  if (o.mode === "nightload" && !o.outGiven) o.out = NIGHTLOAD_OUT;
   return o;
 }
 
@@ -134,6 +174,7 @@ export function outputBase(o) {
   if (o.file) return o.file;
   if (o.mode === "interactive") return `interactive-dpr${o.dpr}-x${o.throttle}`;
   if (o.mode === "chatload") return `chatload-${o.size.w}x${o.size.h}-x${o.throttle}`;
+  if (o.mode === "nightload") return `nightload-${o.size.w}x${o.size.h}-x${o.throttle}`;
   const base = `desktop-${o.scene}-dpr${o.dpr}-x${o.throttle}`;
   return o.shot ? `shot-${base}` : base;
 }
@@ -589,6 +630,166 @@ async function runChatload(browser, o, origin, chrome) {
   return 0;
 }
 
+/**
+ * nightload 한 번(09-22): 테스트 방에 봇을 채우고 방장 마피아 판·시민 판을 장면별로 머물며 rAF 간격을 잰다. 실패는 던진다.
+ * 기록기는 페이지 안 배열이고, 넘기기·시트 조작 동안은 멈춘다(그 구간은 측정에 넣지 않는다). 프레임마다 장면 번호(tag)를 함께 적는다.
+ */
+async function nightloadOnce(browser, o, origin, chrome) {
+  const room = await createTestRoom(origin, NIGHTLOAD_NICK);
+  const host = await openHostPage(browser, { origin, code: room.code, token: room.token, size: { w: o.size.w, h: o.size.h }, dpr: o.dpr });
+  const { page, tracker, context } = host;
+  const issues = [];
+  page.on("pageerror", (e) => issues.push(`페이지 오류: ${e.message}`));
+  page.on("crash", () => issues.push("페이지 충돌(crash)"));
+  try {
+    page.setDefaultTimeout(INTERACTIVE_STEP_MS);
+    const cdp = await context.newCDPSession(page);
+    await cdp.send("Emulation.setCPUThrottlingRate", { rate: o.throttle });
+
+    await openTestSheet(page);
+    await setBots(page, tracker, o.bots);
+    await setBotVote(page, tracker, { exec: "no", pick: "other" });
+
+    // 한 바퀴(50초)까지 넘겨 재는 경우가 있어 측정 시간에 여유 2분을 더한 240Hz 분량
+    const cap = Math.ceil((o.minutes * 60 + 120) * 240);
+    await page.evaluate((capacity) => {
+      const gaps = new Float32Array(capacity);
+      const tags = new Uint8Array(capacity);
+      const rec = { n: 0, stopped: false, paused: true, prev: null, tag: 0 };
+      const loop = (t) => {
+        if (rec.stopped) return;
+        if (rec.paused) rec.prev = null;
+        else {
+          if (rec.prev !== null && rec.n < capacity) {
+            gaps[rec.n] = t - rec.prev;
+            tags[rec.n++] = rec.tag;
+          }
+          rec.prev = t;
+        }
+        requestAnimationFrame(loop);
+      };
+      window.__nightload = { rec, gaps, tags };
+      requestAnimationFrame(loop);
+    }, cap);
+    const labels = [];
+    const mark = (key, paused) => {
+      let i = labels.indexOf(key);
+      if (i < 0) i = labels.push(key) - 1;
+      return page.evaluate(([tag, p]) => {
+        const r = window.__nightload.rec;
+        r.tag = tag;
+        r.paused = p;
+      }, [i, paused]);
+    };
+    const renderBefore = await page.evaluate(() => window.__mfWorld?.debug?.info?.() ?? null);
+    const startedAt = new Date().toISOString();
+    const perPassMs = (o.minutes * 60_000) / NIGHTLOAD_PASSES.length;
+    const cycles = {};
+
+    for (const role of NIGHTLOAD_PASSES) {
+      await openTestSheet(page);
+      await chooseRole(page, tracker, role);
+      let measured = 0;
+      cycles[role] = 0;
+      while (measured < perPassMs) {
+        await mark(`${role}:setup`, true);
+        await startGame(page, tracker);
+        await skipTo(page, tracker, "discussion");
+        for (const [phase, ms] of NIGHTLOAD_DWELL) {
+          await mark(`${role}:setup`, true);
+          await skipTo(page, tracker, phase);
+          // 마피아 판의 밤: 대상 이름표를 눌러 내 캐릭터가 걷게 한다(이동·고리). 실패해도 측정은 이어 간다
+          if (role === "mafia" && phase === "night") {
+            const g = await readGame(page).catch(() => null);
+            const seat = g?.picks?.map((b) => b.seat).sort((a, b) => a - b)[0];
+            if (seat !== undefined) await tapPick(page, seat).catch(() => {});
+          }
+          await mark(`${role}:${phase}`, false);
+          await sleep(ms);
+          measured += ms;
+        }
+        await mark(`${role}:setup`, true);
+        await backToLobby(page, tracker);
+        cycles[role] += 1;
+      }
+    }
+
+    const { gaps, tags } = await page.evaluate(() => {
+      const f = window.__nightload;
+      f.rec.stopped = true;
+      return { gaps: Array.from(f.gaps.subarray(0, f.rec.n)), tags: Array.from(f.tags.subarray(0, f.rec.n)) };
+    });
+    const renderAfter = await page.evaluate(() => window.__mfWorld?.debug?.info?.() ?? null);
+    const endedAt = new Date().toISOString();
+    const stats = frameStats(gaps);
+    if (!stats) throw new Error("rAF 간격이 하나도 기록되지 않음");
+    const scenes = {};
+    for (const [i, key] of labels.entries()) {
+      if (key.endsWith(":setup")) continue;
+      const part = gaps.filter((_, k) => tags[k] === i);
+      const st = frameStats(part);
+      if (st) scenes[key] = { ...st, jankPer5min: (st.jank * 300) / st.seconds };
+    }
+    const passes = {};
+    for (const role of NIGHTLOAD_PASSES) {
+      const idx = new Set(labels.map((k, i) => (k.startsWith(`${role}:`) && !k.endsWith(":setup") ? i : -1)).filter((i) => i >= 0));
+      const st = frameStats(gaps.filter((_, k) => idx.has(tags[k])));
+      if (st) passes[role] = { ...st, jankPer5min: (st.jank * 300) / st.seconds, cycles: cycles[role] };
+    }
+    const png = join(o.out, `${outputBase(o)}.png`);
+    await page.screenshot({ path: png });
+    await leaveLobby(page);
+    return {
+      runner: {
+        tool: "scripts/perf-run.mjs --mode nightload",
+        throttle: o.throttle,
+        dpr: o.dpr,
+        size: `${o.size.w}x${o.size.h}`,
+        headless: !o.headed,
+        chrome: browser.version(),
+        platform: `${process.platform}/${process.arch}`,
+        node: process.version,
+        url: origin,
+        chromeBinary: chrome,
+      },
+      schema: "nightload-1",
+      startedAt,
+      endedAt,
+      params: { minutes: o.minutes, bots: o.bots, passes: NIGHTLOAD_PASSES, dwellMs: Object.fromEntries(NIGHTLOAD_DWELL), note: "넘기기·시트 조작 구간은 기록하지 않는다. 시민 판 아침은 봇 마피아가 방장을 노려 피해자 연출이 함께 잡힌다" },
+      frames: { ...stats, jankPer5min: (stats.jank * 300) / stats.seconds },
+      passes,
+      scenes,
+      baseline: CHATLOAD_BASELINE,
+      renderer: { before: renderBefore, after: renderAfter, note: "제품 런타임의 자동 강등(10초 평균 45fps 미만) 단계는 테스트 훅이 주지 않는다. calls·triangles 가 처음보다 크게 줄었으면 강등 의심" },
+      screenshot: png,
+      issues: [...new Set(issues)].slice(0, 8),
+    };
+  } finally {
+    await context.close().catch(() => {});
+  }
+}
+
+async function runNightload(browser, o, origin, chrome) {
+  let result;
+  try {
+    result = await nightloadOnce(browser, o, origin, chrome);
+  } catch (e) {
+    console.error(`측정 실패: ${e instanceof Error ? e.message.split("\n")[0] : String(e)}`);
+    return 1;
+  }
+  const json = join(o.out, `${outputBase(o)}.json`);
+  writeFileSync(json, `${JSON.stringify(result, null, 2)}\n`);
+  const f = result.frames;
+  console.log(`결과 저장: ${json}`);
+  console.log(`스크린샷: ${result.screenshot}`);
+  console.log(`전체 평균 ${f.avgFps.toFixed(1)}fps · 끊김(>${f.jankMs}ms) ${f.jank} · p50 ${f.p50.toFixed(1)}ms · p95 ${f.p95.toFixed(1)}ms · 최장 ${f.max.toFixed(1)}ms · rAF ${f.rafHz}Hz (${f.seconds.toFixed(0)}초, ${f.count}프레임)`);
+  for (const [role, st] of Object.entries(result.passes)) console.log(`  ${role} 판: 평균 ${st.avgFps.toFixed(1)}fps · 끊김 ${st.jank} · p95 ${st.p95.toFixed(1)}ms (${st.seconds.toFixed(0)}초, ${st.cycles}바퀴)`);
+  for (const [key, st] of Object.entries(result.scenes)) console.log(`    ${key}: 평균 ${st.avgFps.toFixed(1)}fps · 끊김 ${st.jank} · p95 ${st.p95.toFixed(1)}ms (${st.seconds.toFixed(0)}초)`);
+  console.log(`기준(06 조건 B, 판정 없음): 평균 ≥ ${CHATLOAD_BASELINE.avgFps}fps · 끊김 ≤ ${CHATLOAD_BASELINE.jankMax}회/${CHATLOAD_BASELINE.perMinutes}분`);
+  if (result.issues.length > 0) console.error(`페이지 신호 ${result.issues.length}건:\n${result.issues.join("\n")}`);
+  return 0;
+}
+
 async function main() {
   let o;
   try {
@@ -627,6 +828,15 @@ async function main() {
     let c = 1;
     try {
       c = await runChatload(browser, o, origin, chrome);
+    } finally {
+      await browser.close().catch(() => {});
+    }
+    process.exit(c);
+  }
+  if (o.mode === "nightload") {
+    let c = 1;
+    try {
+      c = await runNightload(browser, o, origin, chrome);
     } finally {
       await browser.close().catch(() => {});
     }
