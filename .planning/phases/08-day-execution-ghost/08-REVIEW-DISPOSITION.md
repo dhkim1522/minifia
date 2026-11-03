@@ -3,6 +3,14 @@ phase: 08
 review: 08-REVIEW.md
 titles: json
 findings:
+  - id: IN-06
+    severity: info
+    disposition: open
+    title: "`summaryLines` 마지막 `else` 의 삼항식이 도달하지 않는 갈래가 됐다"
+  - id: IN-07
+    severity: info
+    disposition: open
+    title: "실행기가 모은 이전 시도의 검사 실패에 중복·재시도 원인 오인 가능성이 있다"
   - id: CR-01
     severity: critical
     disposition: fixed
@@ -39,24 +47,26 @@ findings:
     severity: info
     disposition: open
     title: "누설 테스트 보조 코드의 종료 승자 값이 와이어 값과 다르다"
-open: 5
-total: 9
-recorded: 2026-11-03T00:30:28.421Z
+open: 7
+total: 11
+recorded: 2026-11-03T00:36:55.489Z
 ---
 
 # Phase 08: Code Review Disposition
 
 | Finding | Severity | Disposition | Source |
 |---------|----------|-------------|--------|
-| CR-01 | critical | fixed | 08-REVIEW-FIX.md |
-| WR-01 | warning | fixed | 08-REVIEW-FIX.md |
-| WR-02 | warning | fixed | 08-REVIEW-FIX.md |
-| WR-03 | warning | fixed | 08-REVIEW-FIX.md |
-| IN-01 | info | open | - |
-| IN-02 | info | open | - |
-| IN-03 | info | open | - |
-| IN-04 | info | open | - |
-| IN-05 | info | open | - |
+| IN-06 | info | open | - |
+| IN-07 | info | open | - |
+| CR-01 | critical | fixed | 08-REVIEW-FIX.md (not in the current review) |
+| WR-01 | warning | fixed | 08-REVIEW-FIX.md (not in the current review) |
+| WR-02 | warning | fixed | 08-REVIEW-FIX.md (not in the current review) |
+| WR-03 | warning | fixed | 08-REVIEW-FIX.md (not in the current review) |
+| IN-01 | info | open | - (not in the current review) |
+| IN-02 | info | open | - (not in the current review) |
+| IN-03 | info | open | - (not in the current review) |
+| IN-04 | info | open | - (not in the current review) |
+| IN-05 | info | open | - (not in the current review) |
 
 Dispositions: `open` (recorded, not yet triaged), `fixed`, `skipped`, `deferred`.
 Set `deferred` by hand and put the reason in the Source cell; both are preserved. A `|` in the reason is kept as prose and escaped on the next run.
