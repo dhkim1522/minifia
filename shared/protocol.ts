@@ -29,11 +29,6 @@ export type PhaseId =
   | "night" | "morning" | "ended"; // 8페이즈(결정 0060): 지목 15초 → 변론 20초 → 찬반 10초 → 처형 5초. 옛 처형 여부·후보 선택·후보 공개 단계는 08-22 에 지웠다
 
 // ---- 밤·아침 계약(3페이즈) ----
-/**
- * 아침 탈락 문구 번호는 1..MORNING_PHRASE_COUNT (D-18). 서버(문구 추첨)와 화면(문장 표)이 같은 값을 읽는다.
- * 결정 0036 9항: 첫 문구를 처형 묶음으로 옮겨 번호가 한 칸 당겨졌다(8 → 7).
- */
-export const MORNING_PHRASE_COUNT = 7;
 /** 경찰 본인에게만 보이는 수사 기록 한 줄: 그 밤의 일차·대상 seat·마피아인지 불리언 하나. 직업 이름은 싣지 않는다. */
 export interface InvestigationRecord {
   n: number;
@@ -53,10 +48,9 @@ export interface TreatmentRecord {
 }
 /** 본인 역할의 일지 한 줄 — 줄 모양은 키로 구별되고 화면은 me.role 로 해석한다(결정 0027). */
 export type RoleRecord = InvestigationRecord | AssassinationRecord | TreatmentRecord;
-/** 아침 결과. 키 없는 객체는 지난밤 무사(D-12·D-13: 의사 구출도 무사로 보인다). */
+/** 아침 결과. 키 없는 객체는 지난밤 무사. 결정 0061-12·17: eliminated·saved 둘뿐이고 문장은 화면이 만든다(문구 번호 없음). */
 export interface MorningView {
   eliminated?: number; // 탈락한 seat
-  phrase?: number; // 탈락 문구 번호 1..MORNING_PHRASE_COUNT — 서버는 더 이상 채우지 않는다(결정 0061-17). 화면이 아직 읽어 타입만 남기고 09-18 이 화면과 함께 지운다
   saved?: true; // 의사가 확정 대상을 지킨 아침. 누구인지는 싣지 않는다(결정 0061-12, 0044-22)
 }
 /** 탈락자 전용 관전 정보(결정 0021): 한 사람의 실제 직업. 키 이름은 role 이 아니라 job 이다(누출 테스트 불변식). */

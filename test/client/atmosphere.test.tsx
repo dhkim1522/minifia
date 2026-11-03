@@ -188,7 +188,7 @@ describe("밤 분위기 — 맵 조명 night (D-04·D-05)", () => {
 
 describe("아침 분위기 — 맵 조명 morning (D-05)", () => {
   it("재접속처럼 첫 렌더가 아침: 조명 morning 이고 v1.0 밝아짐 층·어둡게 층은 없다", () => {
-    const { container } = scene(makeView({ phase: "morning", role: "citizen", morning: { eliminated: 2, phrase: 1 } }));
+    const { container } = scene(makeView({ phase: "morning", role: "citizen", morning: { eliminated: 2 } }));
     expect(lighting()).toBe("morning");
     expect(oldLayers(container)).toBe(0);
   });
@@ -212,7 +212,7 @@ describe("아침 분위기 — 맵 조명 morning (D-05)", () => {
     ];
     const out = cases.map(([name, o]) => {
       rt.scenes.length = 0;
-      const r = scene(makeView({ phase: "morning", morning: { eliminated: 2, phrase: 1 }, ...o }));
+      const r = scene(makeView({ phase: "morning", morning: { eliminated: 2 }, ...o }));
       const s = `${lighting()}|${oldLayers(r.container)}`;
       r.unmount();
       return [name, s] as const;

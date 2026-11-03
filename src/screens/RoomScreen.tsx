@@ -9,7 +9,7 @@ import { RoleCardButton } from "../components/RoleCardButton";
 import { RoleCardSheet } from "../components/RoleCardSheet";
 import type { RoleCardTab } from "../components/RoleCardSheet";
 import { TestToolsButton, TestToolsSheet } from "../components/TestTools";
-import { morningText } from "../game/eliminationText";
+import { MORNING_TEXT, morningText } from "../game/eliminationText";
 import { VERDICT_TEXT, defenseAnnounce, noExecutionPrefix, winnerText } from "../game/verdict";
 import { preloadDuskAssets, preloadRoleAssets } from "../net/assets";
 import { ChatStore } from "../net/chatStore";
@@ -55,10 +55,12 @@ const PHASE_ANNOUNCE: Record<PhaseId, (view: RoomView) => string> = {
   ended: (view) => (view.result ? winnerText(view.result.winner).announce : "게임이 끝났습니다"),
 };
 
-// 아침 안내: "아침이 밝았습니다. " + 36px 알림과 같은 출처의 세 문장 중 하나(결정 0061-17).
+// 아침 안내: "아침이 밝았습니다. " + 36px 알림과 같은 출처의 세 문장 중 하나(결정 0061-17). 피해자 본인(이번 아침 탈락자가 나)은 '암살당했습니다'.
 function morningAnnounce(view: RoomView): string {
+  const morning = view.day?.morning;
+  if (morning?.eliminated !== undefined && morning.eliminated === view.me.seat) return `아침이 밝았습니다. ${MORNING_TEXT.victim}`;
   const nicknameOf = (seat: number) => view.players.find((p) => p.seat === seat)?.nickname;
-  return `아침이 밝았습니다. ${morningText(view.day?.morning, nicknameOf).text}`;
+  return `아침이 밝았습니다. ${morningText(morning, nicknameOf).text}`;
 }
 
 // 밤 안내: "{N}일차 밤. " 뒤에 내 처지에 맞는 한 줄. 탈락한 사람은 역할과 무관하게 관전 문구다(결정 0021).
