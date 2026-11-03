@@ -1574,3 +1574,14 @@ describe("buildView 아침 morning.saved (MORN-03, 결정 0061-12)", () => {
     }
   });
 });
+
+describe("buildView 분필 day.chalk (MORN-01, 결정 0061-14)", () => {
+  it("chalk 가 있는 아침 상태 → 모든 viewer 의 day.chalk 가 { x, z } 필드별 복사, 없으면 키 자체가 없다", () => {
+    const { s } = morningWithVictim(5, 1);
+    const without = s.players.map((p) => "chalk" in (buildView(s, p.id, START_AT).day ?? {})).filter(Boolean).length;
+    expect(without).toBe(0);
+    const marked: RoomState = { ...s, chalk: { x: 120, z: -80 } };
+    const got = marked.players.map((p) => flat(buildView(marked, p.id, START_AT).day?.chalk));
+    expect(got.join("|")).toBe(marked.players.map(() => flat({ x: 120, z: -80 })).join("|"));
+  });
+});
