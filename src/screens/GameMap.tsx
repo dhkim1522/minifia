@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ComponentProps } from "react";
 import type { ReactNode } from "react";
 import { isAlive } from "../../shared/game/alive";
@@ -9,6 +9,7 @@ import { ResultAnnounce } from "../components/ResultAnnounce";
 import { RoleCardButton } from "../components/RoleCardButton";
 import { PhaseHeader } from "../components/v2/PhaseHeader";
 import { TopToast, useTopToast } from "../components/v2/TopToast";
+import { WillSheet } from "../components/v2/WillSheet";
 import { TensionVignette } from "../components/TensionVignette";
 import { WorldStage } from "../components/WorldStage";
 import type { WorldPick } from "../components/WorldStage";
@@ -19,6 +20,7 @@ import type { DayFx } from "../net/useDayFx";
 import { useCountdown } from "../net/countdown";
 import { useChat } from "../net/useChat";
 import { useViewChoice } from "../net/useViewChoice";
+import { useWill } from "../net/useWill";
 import { useMapInsets } from "../net/useMapInsets";
 import { useReducedMotion } from "../net/useReducedMotion";
 import type { RoomConnection } from "../net/useRoomConnection";
@@ -175,6 +177,7 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
   // 지목 직후(PICK_REPLY_MS 안, 서버가 아직 내 선택을 확인하지 않았을 때)의 거절은 지목 거절이다: 단계 어긋남(WRONG_PHASE)은 REJECT_TEXT,
   // 그 밖의 코드는 SEND_FAIL_TEXT. 지목을 보낸 적 없으면 그 밖의 코드는 알림도 되돌림도 만들지 않는다(채팅 속도 제한 등).
   const [rejects, setRejects] = useState(0);
+  const willBusy = useRef(false); // 유언·쪽지 저장 확인을 기다리는 중(useWill 이 쓴다)
   const pointSent = useRef<{ target: number; at: number } | null>(null);
   useEffect(() => {
     if (!onEvent) return;
@@ -188,7 +191,8 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
         return;
       }
       if (e.code !== "WRONG_PHASE" && e.code !== "BAD_MESSAGE") return;
-      show(REJECT_TEXT);
+      // 유언·쪽지 저장 중의 거절은 useWill 이 "보내지 못했어요" 한 번으로 알린다(알림 이중 방지)
+      if (!willBusy.current) show(REJECT_TEXT);
       setRejects((n) => n + 1);
     });
   }, [onEvent, show]);
@@ -372,6 +376,15 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
     };
   }, [spectate, baseTagProps, view.players]);
 
+  // 유언·쪽지 시트(WILL-01·NIGHT-12): 상태와 저장 흐름은 useWill 이 쥔다. 실패 알림은 위 알림 한 문구다.
+  const will = useWill({ view, send, canSend, rejected: rejects, onFail: () => show(SEND_FAIL_TEXT), busyRef: willBusy });
+
+  // 시트 층의 아래 끝 = 아래 패널 위 끝 + 8(키보드가 열려 있으면 그 위, CSS 의 --mf-kb-lift). 패널 높이는 DOM 에서 잰다(6페이즈 규칙).
+  const layerRef = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    layerRef.current?.style.setProperty("--mf-panel-h", `${panelRef.current?.offsetHeight ?? 0}px`);
+  });
+
   const scene = useMemo(() => sceneLook(view, { stageH, ...(fading ? { fading } : {}), ...(mine !== undefined ? { mine } : {}) }), [view, stageH, fading, mine]);
 
   return (
@@ -417,9 +430,24 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
         onNightPickSent={(target) => {
           pointSent.current = { target, at: Date.now() };
         }}
+        onOpenWill={(opener) => will.openSheet("will", opener)}
+        willOpen={will.open === "will"}
         inputRef={inputRef}
         panelRef={panelRef}
       />
+      {will.open !== null ? (
+        <div ref={layerRef} className="mf-will-layer">
+          <WillSheet
+            key={will.open}
+            value={will.draft}
+            onChange={will.setDraft}
+            onSave={will.save}
+            onClose={will.close}
+            saved={will.saved}
+            {...(canSend ? {} : { disabled: true })}
+          />
+        </div>
+      ) : null}
     </main>
   );
 }

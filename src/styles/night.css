@@ -20,6 +20,17 @@
   .mf-tension.is-beat, .mf-tension.is-beat.is-cue { animation: none; opacity: 0.4; }
 }
 
+/* 유언·쪽지 시트 층(09-17, WILL-01·NIGHT-12, UI-SPEC "유언 쓰기"). 아래 패널(z-overlay) 위 끝에서 8 위, 키보드가 열려 있으면 그 위.
+   폭(부모 − 20)과 안쪽 모양은 부품(.mv-will)이 갖는다. --mf-panel-h 는 화면 틀이 패널을 재서 쓴다. */
+.mf-will-layer {
+  position: absolute; left: 0; right: 0; z-index: var(--z-modal);
+  bottom: calc(var(--mf-kb-lift, 0px) + var(--mf-panel-h, 0px) + 8px);
+}
+/* 밤 시민 편 아래 행동 줄 [유언] (UI-SPEC 237행): night-700 면·gray-100 글자, 눌리면 gray-100 면 + night-900 글자. 진홍·놋쇠는 쓰지 않는다 */
+.mf-game__will { background: var(--night-700); border-color: var(--night-600); color: var(--gray-100); }
+.mf-game__will[aria-pressed="true"] { background: var(--gray-100); border-color: var(--gray-100); color: var(--night-900); }
+.mf-game__will[aria-disabled="true"] { opacity: 0.45; cursor: default; }
+
 /* 아침 발표 카드(03-10). 시안 night-v1/f6.css 의 .bn·.bn__t·.bn__s 를 토큰으로 옮겼다(UI-SPEC "M 아침 발표").
    카드의 기준 상자는 화면 루트(.mf-dayscene)다 — 위쪽 바를 포함한 좌표에서 top 168. */
 .mf-dayscene { position: relative; }

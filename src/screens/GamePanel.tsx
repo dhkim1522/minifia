@@ -32,6 +32,10 @@ export interface GamePanelProps {
   rejected?: number;
   /** 경찰·의사가 얼굴을 눌러 pick 을 보낸 직후에 부른다. 화면 틀이 "보낸 선택" 을 기억해 거절 응답을 그 선택의 거절로 읽는다 */
   onNightPickSent?: (target: number) => void;
+  /** [유언] 버튼(밤 시민·경찰·의사의 행동 줄)이 시트를 연다. opener 는 닫을 때 초점이 돌아갈 버튼 */
+  onOpenWill?: (opener: HTMLElement | null) => void;
+  /** 유언 시트가 열려 있는가 — [유언] 버튼의 눌림 */
+  willOpen?: boolean;
   inputRef?: RefObject<HTMLInputElement | null>;
   panelRef?: RefObject<HTMLElement | null>;
 }
@@ -41,7 +45,7 @@ export interface GamePanelProps {
  * 낮 토론은 [토론 끝내기], 찬반은 위쪽 찬반 줄(VerdictPicker + DotProgress, 08-16)을 얹는다 — 변론·처형·유령은 채팅만이거나 뒤 계획이 이 틀 위에 얹는다.
  * 눌림은 서버 view(me.endDiscussion·me.verdictVote)가 기준이고, 내가 누른 즉시 바뀌는 것은 내 눌림 표시 하나뿐이다. 점 개수는 서버가 센 값만 그린다(누가 눌렀는지·무엇을 골랐는지는 서버가 보내지 않는다).
  */
-export function GamePanel({ view, send, canSend, binding, logHeight, kbOpen = false, rejected = 0, onNightPickSent, inputRef, panelRef }: GamePanelProps) {
+export function GamePanel({ view, send, canSend, binding, logHeight, kbOpen = false, rejected = 0, onNightPickSent, onOpenWill, willOpen = false, inputRef, panelRef }: GamePanelProps) {
   const serverPressed = view.me.endDiscussion === true;
   const [pressed, choose] = useViewChoice<boolean>(view, serverPressed);
   // 거절이 오면 서버 값으로 되돌린다. 처음 그릴 때(거절 0)는 아무것도 하지 않는다.
@@ -105,6 +109,9 @@ export function GamePanel({ view, send, canSend, binding, logHeight, kbOpen = fa
     chooseNightPick(seat);
   };
 
+  // 밤 시민 편은 입력줄이 없어 아래 행동 줄의 [유언] 이 깃펜을 대신한다(UI-SPEC 237행). 산 사람 + 밤 시민·경찰·의사에게만.
+  const showWillRow = (nightCitizen || nightFaces !== null) && onOpenWill !== undefined;
+
   const pressEnd = (): void => {
     if (!canSend) return;
     const on = pressed !== true;
@@ -141,6 +148,24 @@ export function GamePanel({ view, send, canSend, binding, logHeight, kbOpen = fa
         ) : null
       ) : nightCitizen ? null : chatChannelOk ? (
         <ChatPanel {...binding} logHeight={logHeight} compact={kbOpen} {...(inputRef ? { inputRef } : {})} />
+      ) : null}
+      {showWillRow ? (
+        <ActionRow>
+          <button
+            type="button"
+            className="mf-act mf-game__will"
+            aria-pressed={willOpen}
+            aria-disabled={canSend ? undefined : "true"}
+            data-will-button=""
+            onClick={(e) => {
+              if (!canSend) return;
+              onOpenWill?.(e.currentTarget);
+            }}
+          >
+            <V2Icon name="quill" size={22} />
+            <span className="mf-act__label">유언</span>
+          </button>
+        </ActionRow>
       ) : null}
       {showEnd ? (
         <ActionRow>

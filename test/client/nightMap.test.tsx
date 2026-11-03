@@ -417,7 +417,8 @@ describe("밤 경찰·의사 — 얼굴 목록(NIGHT-09, E1 #1·#3·#6·#7)", ()
   it("후보가 0명(경찰 혼자 산 가짜 view)이면 얼굴 목록도 경고 글도 없다", () => {
     const { container } = mount(makeView({ mySeat: 1, dead: [0, 2, 3, 4, 5] }));
     expect(container.querySelector("[data-face-list]")).toBeNull();
-    expect(container.querySelector(".mf-game__panel")?.textContent ?? "").toBe("");
+    // 얼굴 목록 대신 아래 행동 줄 [유언] 하나만 남는다(09-17, 경고 글 없음)
+    expect(container.querySelector(".mf-game__panel")?.textContent ?? "").toBe("유언");
   });
 
   it("아무것도 안 골랐으면 눌린 칸이 없고 경고 글이 없다", () => {
@@ -426,7 +427,7 @@ describe("밤 경찰·의사 — 얼굴 목록(NIGHT-09, E1 #1·#3·#6·#7)", ()
     expect(container.querySelector(".mf-game__panel")?.textContent).not.toMatch(/고르지|선택 안|경고/);
   });
 
-  it("산 시민 밤: 아래 패널은 비어 있고(밤 알약 없음) 얼굴 목록·이름표 버튼·채팅 패널·고리가 0개다", () => {
+  it("산 시민 밤: 아래 패널은 [유언] 행동 줄뿐이고(밤 알약 없음) 얼굴 목록·이름표 버튼·채팅 패널·고리가 0개다", () => {
     const { container } = mount(makeView({ mySeat: 3 }));
     expect(container.querySelector(".mf-game__panel .mf-nightpanel, .mf-game__panel .mf-pk")).toBeNull();
     expect(container.querySelector("[data-face-list]")).toBeNull();
