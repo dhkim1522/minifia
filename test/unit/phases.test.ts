@@ -1,6 +1,15 @@
 // 단계 길이와 기본 다음 단계 표(DAY-07, 결정 0060-1). 낮은 토론 → 지목 → 변론 → 찬반 → 처형 → 밤으로 돈다.
 import { describe, expect, it } from "vitest";
-import { DEFENSE_MS, DISCUSSION_MS, PHASE_DEFS } from "../../shared/game/phases";
+import {
+  DEFENSE_MS,
+  DISCUSSION_MS,
+  MORNING_MAX_MS,
+  MORNING_MS,
+  MORNING_NOTE_MS,
+  MORNING_VICTIM_MS,
+  MORNING_WILL_MS,
+  PHASE_DEFS,
+} from "../../shared/game/phases";
 
 describe("단계 표 (DAY-07, 결정 0060-1)", () => {
   it("낮 단계 길이: 토론 90000·지목 15000·변론 20000·찬반 10000·처형 5000, 밤 30000", () => {
@@ -31,5 +40,14 @@ describe("단계 표 (DAY-07, 결정 0060-1)", () => {
     for (const old of OLD) {
       expect(targets.includes(old)).toBe(false);
     }
+  });
+});
+
+describe("아침 길이 상수 (MORN-04, 결정 0061-13)", () => {
+  it("기본 5000 + 탈락 2000 + 유언 2000 + 쪽지 2000, 상한 15000 이고 단계 표 morning 행은 기본 길이다", () => {
+    expect(`${MORNING_MS},${MORNING_VICTIM_MS},${MORNING_WILL_MS},${MORNING_NOTE_MS},${MORNING_MAX_MS}`).toBe(
+      "5000,2000,2000,2000,15000",
+    );
+    expect(PHASE_DEFS.morning.durationMs).toBe(MORNING_MS);
   });
 });

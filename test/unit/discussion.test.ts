@@ -1,8 +1,8 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import * as discussionModule from "../../shared/game/discussion";
-import { endCountOf, endReached, enterDiscussion, phaseDurationOf, toggleEnd } from "../../shared/game/discussion";
+import { endCountOf, endReached, enterDiscussion, morningMsOf, phaseDurationOf, toggleEnd } from "../../shared/game/discussion";
 import * as phasesModule from "../../shared/game/phases";
-import { DISCUSSION_MS } from "../../shared/game/phases";
+import { DISCUSSION_MS, MORNING_MAX_MS, MORNING_MS } from "../../shared/game/phases";
 import { ROOM_TTL_MS } from "../../shared/game/room";
 import type { Player, RoomState } from "../../shared/game/room";
 import type { PhaseId } from "../../shared/protocol";
@@ -49,8 +49,8 @@ describe("phaseDurationOf - 단계 길이 파생 (결정 0017-5, Pitfall 3)", ()
     expect(phaseDurationOf(room("discussion", 100_000, { extendUsed: true }))).toBe(DISCUSSION_MS);
   });
 
-  it("discussion 모듈이 내보내는 것은 단계 길이 파생과 토론 끝내기 네 함수뿐이다 (연장 함수는 없다, 8페이즈 결정 0060)", () => {
-    expect(Object.keys(discussionModule).sort().join(",")).toBe("endCountOf,endReached,enterDiscussion,phaseDurationOf,toggleEnd");
+  it("discussion 모듈이 내보내는 것은 단계 길이 파생(아침 길이 포함)과 토론 끝내기 네 함수뿐이다 (연장 함수는 없다, 8페이즈 결정 0060)", () => {
+    expect(Object.keys(discussionModule).sort().join(",")).toBe("endCountOf,endReached,enterDiscussion,morningMsOf,phaseDurationOf,toggleEnd");
   });
 
   it("phases 모듈에 연장 길이 상수가 없다", () => {
@@ -148,5 +148,63 @@ describe("enterDiscussion — 낮 시작 청소 (결정 0060-2, Pitfall 1)", () 
     const r = enterDiscussion(before);
     expect(r.voteLog === before.voteLog).toBe(true);
     expect(`${r.day} ${r.players.find((p) => p.seat === 4)?.alive} ${r.players.length}`).toBe("1 false 5");
+  });
+});
+
+// ---- 09-07 Task 2: 아침 길이 공식 (MORN-04, L6, 결정 0061-13) ----
+describe("morningMsOf - 아침 길이는 공개 내용만의 함수 (MORN-04, 결정 0061-13)", () => {
+  const withWill = (seat: number, will: string): Partial<RoomState> => ({
+    players: [0, 1, 2, 3, 4].map((i) => (i === seat ? { ...player(i), will } : player(i))),
+  });
+
+  it("morning 이 없거나 {} 이거나 { saved: true } 이면 5000 이다", () => {
+    expect(
+      [room("morning", 1), room("morning", 1, { morning: {} }), room("morning", 1, { morning: { saved: true } })]
+        .map(morningMsOf)
+        .join(","),
+    ).toBe(`${MORNING_MS},${MORNING_MS},${MORNING_MS}`);
+    expect(MORNING_MS).toBe(5000);
+  });
+
+  it("탈락이면 기본 5000 + 2000, 유언이 있으면 +2000, 쪽지까지 있으면 +2000 이다", () => {
+    const base = { morning: { eliminated: 1 } };
+    expect(morningMsOf(room("morning", 1, base))).toBe(7000);
+    expect(morningMsOf(room("morning", 1, { ...base, ...withWill(1, "유언") }))).toBe(9000);
+    expect(morningMsOf(room("morning", 1, { ...base, ...withWill(1, "유언"), nightNote: "쪽지" }))).toBe(11000);
+    expect(morningMsOf(room("morning", 1, { ...base, nightNote: "쪽지" }))).toBe(9000);
+  });
+
+  it("공백 문자열 유언은 유언 없음으로 센다(빈 문자열)", () => {
+    expect(morningMsOf(room("morning", 1, { morning: { eliminated: 1 }, ...withWill(1, "") }))).toBe(7000);
+  });
+
+  it("다른 사람의 유언·쪽지는 길이에 들지 않는다(피해자의 유언만)", () => {
+    expect(morningMsOf(room("morning", 1, { morning: { eliminated: 1 }, ...withWill(2, "남의 유언") }))).toBe(7000);
+  });
+
+  it("MORNING_MAX_MS(15000)로 자른다 — 가산 상수를 크게 바꾼 가상 값으로도 넘지 않는다", async () => {
+    expect(MORNING_MAX_MS).toBe(15_000);
+    vi.resetModules();
+    vi.doMock("../../shared/game/phases", async (orig) => ({
+      ...(await orig<typeof import("../../shared/game/phases")>()),
+      MORNING_VICTIM_MS: 9_000,
+      MORNING_WILL_MS: 9_000,
+      MORNING_NOTE_MS: 9_000,
+    }));
+    try {
+      const fresh = await import("../../shared/game/discussion");
+      const s = room("morning", 1, { morning: { eliminated: 1 }, nightNote: "쪽지", ...withWill(1, "유언") });
+      expect(fresh.morningMsOf(s)).toBe(MORNING_MAX_MS);
+    } finally {
+      vi.doUnmock("../../shared/game/phases");
+      vi.resetModules();
+    }
+  });
+
+  it("phaseDurationOf: morning 이면 morningMsOf, 다른 단계는 표 값이다", () => {
+    const m = room("morning", 1, { morning: { eliminated: 1 }, nightNote: "쪽지" });
+    expect(phaseDurationOf(m)).toBe(morningMsOf(m));
+    expect(phaseDurationOf(m)).toBe(9000);
+    expect(phaseDurationOf(room("night", 1))).toBe(30_000);
   });
 });

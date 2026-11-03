@@ -371,3 +371,48 @@ describe("tick - 낮 흐름에 순차 주장 단계가 없다 (07-08, CHAT-06)",
     expect(`${out.phase}/${out.day}/${out.phaseEndsAt}`).toBe(`discussion/1/${19_000 + DAY_ANNOUNCE_MS + DISCUSSION_MS}`);
   });
 });
+
+// ---- 09-07 Task 2: 아침 마감은 진입 훅 뒤 상태의 길이로 정해진다 (MORN-04, L6) ----
+describe("tick: 아침 마감 = 진입 + morningMsOf (MORN-04, 결정 0061-13)", () => {
+  const T = 100_000;
+  /** 5명, p0 마피아·p1~p4 시민. 마피아가 p1 을 고른 밤이고 p1 은 유언을 남겼다. */
+  function nightWith(extra: Partial<RoomState> = {}, doctorSaves = false): RoomState {
+    const base = stateIn("night", T + NIGHT_MS);
+    const players = [0, 1, 2, 3].map((i): Player => {
+      const p = player(i, true);
+      if (i === 0) return { ...p, role: "mafia", nightPick: 1 };
+      if (i === 2 && doctorSaves) return { ...p, role: "doctor", nightPick: 1 };
+      return { ...p, role: "citizen", ...(i === 1 ? { will: "유언" } : {}) };
+    });
+    return { ...base, day: 1, players, ...extra };
+  }
+
+  it("확정·탈락(피해자 유언 있음)이면 마감이 진입 + 9000 이다", () => {
+    const morning = tick(nightWith(), T + NIGHT_MS);
+    expect(`${morning.phase}/${morning.morning?.eliminated}/${morning.phaseEndsAt}`).toBe(`morning/1/${T + NIGHT_MS + 9000}`);
+  });
+
+  it("쪽지까지 있으면 진입 + 11000, 구출이면 쪽지가 지워져 진입 + 5000 이다", () => {
+    const withNote = tick(nightWith({ nightNote: "쪽지" }), T + NIGHT_MS);
+    expect(withNote.phaseEndsAt).toBe(T + NIGHT_MS + 11000);
+    const saved = tick(nightWith({ nightNote: "쪽지" }, true), T + NIGHT_MS);
+    expect(JSON.stringify(saved.morning)).toBe('{"saved":true}');
+    expect("nightNote" in saved).toBe(false);
+    expect(saved.phaseEndsAt).toBe(T + NIGHT_MS + 5000);
+  });
+
+  it("확정이 없는 밤(마피아 미선택)도 진입 + 5000 이다", () => {
+    const s = nightWith({ nightNote: "쪽지" });
+    const none: RoomState = { ...s, players: s.players.map(({ nightPick: _n, ...p }) => p) };
+    expect(tick(none, T + NIGHT_MS).phaseEndsAt).toBe(T + NIGHT_MS + 5000);
+  });
+
+  it("난수 인자 없이 night → morning 을 넘겨도 예외가 없다", () => {
+    expect(() => tick(nightWith(), T + NIGHT_MS)).not.toThrow();
+  });
+
+  it("따라잡기: 늦게 불려도 아침 마감은 밤 마감 + 아침 길이에서 이어진다", () => {
+    const caught = tick(nightWith(), T + NIGHT_MS + 9000 + 1);
+    expect(`${caught.phase}/${caught.phaseEndsAt}`).toBe(`dayAnnounce/${T + NIGHT_MS + 9000 + DAY_ANNOUNCE_MS}`);
+  });
+});
