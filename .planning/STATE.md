@@ -5,16 +5,16 @@ milestone_name: 같은 공간
 current_phase: 9
 current_phase_name: 밤과 아침
 status: executing
-stopped_at: Completed 09-01-PLAN.md
-last_updated: "2026-11-03T03:44:32.433Z"
+stopped_at: Completed 09-02-PLAN.md
+last_updated: "2026-11-03T03:50:40.656Z"
 last_activity: 2026-11-03
 last_activity_desc: Phase 9 execution started
-state_head: c76a5a2e1ef656ecdcec839dc427d2875025c992
+state_head: 01b2398a42d52208ad4a7c1a7c164c8862d61751
 progress:
   total_phases: 7
   completed_phases: 3
   total_plans: 101
-  completed_plans: 79
+  completed_plans: 80
   percent: 43
 ---
 
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-11-03)
 ## Current Position
 
 Phase: 9 (밤과 아침) — EXECUTING
-Plan: 2 of 23
+Plan: 3 of 23
 Status: Ready to execute
 Last activity: 2026-11-03 — Phase 9 execution started
 
@@ -139,6 +139,7 @@ Progress: [████░░░░░░] 43% (3/7 phases)
 | Phase 08 P25 | 60min | 3 tasks | 3 files |
 | Phase 08 P26 | 1h | 3 tasks | 8 files |
 | Phase 09 P01 | 10min | 2 tasks | 7 files |
+| Phase 09 P02 | 25min | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -288,6 +289,7 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 08]: 08-25: 유령 이름표 대비(불투명도 0.6, 약 1.9~2.5:1)는 앱 변경 없이 실기기 확인 목록 이월 — 08-26 이 기록
 - [Phase 08]: 08-26: dayload 렌더 측정·유령 이름표 대비는 사용자 결정(2026-11-03)으로 실기기 목록(ROADMAP 999.5)에 이월, 8페이즈 완료를 막지 않는다
 - [Phase 09]: 결정 0061: 밤 이동은 산 마피아와 유령만, 마피아 확정은 산 마피아 전원 같은 대상(도착 무관·난수 없음), 밤 진입 snap 은 시민 편 본인 한 칸, 아침은 모두 home 으로
+- [Phase 09]: 마피아 봇은 실행 시점에 동료 선택을 따르고 없으면 가장 낮은 산 비마피아를 고른다 (결정 0061-18, 난수 없음)
 
 ### Pending Todos
 
@@ -325,8 +327,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-03T03:44:32.225Z
-Stopped at: Completed 09-01-PLAN.md
+Last session: 2026-11-03T03:50:40.375Z
+Stopped at: Completed 09-02-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
