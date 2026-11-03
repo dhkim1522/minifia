@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render } from "@testing-library/react";
+import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import "../helpers/singleLineErrors";
 import { installMemoryStorage } from "../helpers/memoryStorage";
@@ -217,5 +217,243 @@ describe("유언 한 번 저장 — 밤 시민 [유언] (WILL-01, 트레이서)"
     fireEvent.click(closeBtn(m.container));
     expect(typings(send)).toEqual([]);
     expect(sent(send).every((x) => x.t === "will")).toBe(true);
+  });
+});
+
+// ---- Task 2: 깃펜 배선 · 실패 · 사망 · 쪽지 -----------------------------------------------------------------
+
+function withHandlers(): { handlers: Array<(e: never, meta: { epoch: number }) => void>; onEvent: RoomConnection["onEvent"] } {
+  const handlers: Array<(e: never, meta: { epoch: number }) => void> = [];
+  const onEvent = vi.fn((cb: unknown) => {
+    handlers.push(cb as (typeof handlers)[number]);
+    return () => {};
+  });
+  return { handlers, onEvent: onEvent as unknown as RoomConnection["onEvent"] };
+}
+const emitError = (handlers: Array<(e: never, meta: { epoch: number }) => void>, code: string): void => {
+  act(() => handlers.forEach((h) => h({ t: "error", code } as never, { epoch: 1 })));
+};
+const toastText = (c: ParentNode): string => c.querySelector(".mv-toast__text")?.textContent ?? "";
+const noteBtn = (c: ParentNode): HTMLButtonElement | null => c.querySelector<HTMLButtonElement>("[data-note-button]");
+const FAIL = "보내지 못했어요. 다시 해 보세요";
+
+describe("깃펜 배선 (WILL-01, UI-SPEC 281행)", () => {
+  it("낮 토론 산 사람: 채팅 입력줄 깃펜이 있고 누르면 유언 시트, 닫으면 초점이 깃펜으로 돌아간다", () => {
+    const m = mount(makeView({ phase: "discussion" }));
+    const pen = willBtn(m.container)!;
+    expect(pen.classList.contains("mv-chat__will")).toBe(true);
+    expect(pen.getAttribute("aria-label")).toBe("유언 쓰기");
+    fireEvent.click(pen);
+    expect(sheet(m.container)).not.toBeNull();
+    expect(pen.getAttribute("aria-pressed")).toBe("true");
+    fireEvent.click(closeBtn(m.container));
+    expect(sheet(m.container)).toBeNull();
+    expect(document.activeElement).toBe(willBtn(m.container));
+  });
+
+  it("me.will 이 있으면 깃펜 aria-label 이 '유언 쓰기, 저장됨'이고 점이 켜진다. 아침 단계에도 있다", () => {
+    const m = mount(makeView({ phase: "morning", will: "남긴 말" }));
+    expect(willBtn(m.container)?.getAttribute("aria-label")).toBe("유언 쓰기, 저장됨");
+    expect(m.container.querySelector(".mv-chat__will-dot")).not.toBeNull();
+  });
+
+  it("유령 화면(낮·밤)과 로비에는 깃펜·[유언]·시트가 0개다 (UI-SPEC 286행)", () => {
+    for (const phase of ["discussion", "night", "morning"] as const) {
+      const g = mount(makeView({ phase, mySeat: 5, dead: [5] }));
+      expect(g.container.querySelectorAll("[data-will-button]"), phase).toHaveLength(0);
+      expect(g.container.querySelector("[data-will-sheet]"), phase).toBeNull();
+      cleanup();
+    }
+    const lobby = mount(makeView({ phase: "lobby" }));
+    expect(lobby.container.querySelectorAll("[data-will-button]")).toHaveLength(0);
+    expect(lobby.container.querySelector("[data-will-sheet]")).toBeNull();
+  });
+
+  it("밤 경찰·의사: 얼굴 목록 아래에 [유언] 행동 줄이 있다", () => {
+    for (const seat of [1, 2]) {
+      const m = mount(makeView({ mySeat: seat }));
+      expect(m.container.querySelector("[data-face-list]")).not.toBeNull();
+      expect(m.container.querySelectorAll("[data-will-button]"), `seat ${seat}`).toHaveLength(1);
+      cleanup();
+    }
+  });
+});
+
+describe("저장 실패 · 빈 칸 · 사망 (E7 #36~#38)", () => {
+  it("소켓이 닫혀 못 보내면(send false) 위 알림 뒤 시트가 열린 채 '저장'이다", () => {
+    const send = vi.fn<(m: ClientMessage) => boolean>(() => false);
+    const m = mount(makeView(), { send });
+    fireEvent.click(willBtn(m.container)!);
+    fireEvent.change(area(m.container), { target: { value: "급해" } });
+    fireEvent.click(saveBtn(m.container));
+    expect(toastText(m.container)).toBe(FAIL);
+    expect(sheet(m.container)).not.toBeNull();
+    expect(saveBtn(m.container).textContent).toBe("저장");
+  });
+
+  it("보낸 뒤 거절(error)이 오면 같은 알림 한 번만(지금은 고를 수 없어요 가 겹치지 않는다)이고 '저장됨'이 되지 않는다", () => {
+    const { handlers, onEvent } = withHandlers();
+    const m = mount(makeView(), { onEvent });
+    fireEvent.click(willBtn(m.container)!);
+    fireEvent.change(area(m.container), { target: { value: "급해" } });
+    fireEvent.click(saveBtn(m.container));
+    emitError(handlers, "WRONG_PHASE");
+    expect(toastText(m.container)).toBe(FAIL);
+    expect(saveBtn(m.container).textContent).toBe("저장");
+    expect(sheet(m.container)).not.toBeNull();
+  });
+
+  it("3초 동안 me.will 이 안 바뀌면 같은 알림이다. 그 전에 서버 값이 오면 알림이 없다", () => {
+    vi.useFakeTimers();
+    const m = mount(makeView());
+    fireEvent.click(willBtn(m.container)!);
+    fireEvent.change(area(m.container), { target: { value: "느림" } });
+    fireEvent.click(saveBtn(m.container));
+    act(() => void vi.advanceTimersByTime(2900));
+    expect(toastText(m.container)).toBe("");
+    act(() => void vi.advanceTimersByTime(200));
+    expect(toastText(m.container)).toBe(FAIL);
+    expect(saveBtn(m.container).textContent).toBe("저장");
+    cleanup();
+    // 제때 오면 알림 없음
+    const ok = mount(makeView());
+    fireEvent.click(willBtn(ok.container)!);
+    fireEvent.change(area(ok.container), { target: { value: "빠름" } });
+    fireEvent.click(saveBtn(ok.container));
+    ok.show(makeView({ will: "빠름" }));
+    act(() => void vi.advanceTimersByTime(5000));
+    expect(toastText(ok.container)).toBe("");
+    expect(saveBtn(ok.container).textContent).toBe("저장됨");
+  });
+
+  it("앞뒤 공백·겹친 공백은 서버가 정리한 값과 같으면 저장됨이다(실패로 오인하지 않는다)", () => {
+    vi.useFakeTimers();
+    const m = mount(makeView());
+    fireEvent.click(willBtn(m.container)!);
+    fireEvent.change(area(m.container), { target: { value: "  두  칸 " } });
+    fireEvent.click(saveBtn(m.container));
+    m.show(makeView({ will: "두 칸" }));
+    act(() => void vi.advanceTimersByTime(5000));
+    expect(toastText(m.container)).toBe("");
+    expect(saveBtn(m.container).textContent).toBe("저장됨");
+  });
+
+  it("빈 칸으로 저장하면 {t:'will', text:''} 를 보내고 서버 me.will 이 없어지면 '저장됨'·점이 꺼진다. 확인을 묻지 않는다", () => {
+    const send = vi.fn<(m: ClientMessage) => boolean>(() => true);
+    const m = mount(makeView({ phase: "discussion", will: "지울 말" }), { send });
+    expect(m.container.querySelector(".mv-chat__will-dot")).not.toBeNull();
+    fireEvent.click(willBtn(m.container)!);
+    fireEvent.change(area(m.container), { target: { value: "" } });
+    expect(saveBtn(m.container).textContent).toBe("저장");
+    fireEvent.click(saveBtn(m.container));
+    expect(sent(send).filter((x) => x.t === "will")).toEqual([{ t: "will", text: "" }]);
+    expect(m.container.querySelector('[role="alertdialog"], [role="dialog"]:not(.mv-will)')).toBeNull();
+    m.show(makeView({ phase: "discussion" }));
+    expect(saveBtn(m.container).textContent).toBe("저장됨");
+    expect(m.container.querySelector(".mv-chat__will-dot")).toBeNull();
+  });
+
+  it("시트가 열린 채 내가 죽은 view 가 오면 시트가 닫히고 깃펜이 없다. 단계가 로비로 가도 닫힌다", () => {
+    const m = mount(makeView({ phase: "discussion" }));
+    fireEvent.click(willBtn(m.container)!);
+    expect(sheet(m.container)).not.toBeNull();
+    m.show(makeView({ phase: "discussion", dead: [3] }));
+    expect(sheet(m.container)).toBeNull();
+    expect(m.container.querySelectorAll("[data-will-button]")).toHaveLength(0);
+    cleanup();
+    const n = mount(makeView({ phase: "discussion" }));
+    fireEvent.click(willBtn(n.container)!);
+    n.show(makeView({ phase: "lobby" }));
+    expect(n.container.querySelector("[data-will-sheet]")).toBeNull();
+  });
+});
+
+describe("마피아 [쪽지] (NIGHT-12, E2 #18·#19)", () => {
+  it("확정 전: [쪽지]는 불투명 비활성(aria-disabled)이고 숨은 설명만 달며 눌러도 시트가 없다", () => {
+    const m = mount(makeView({ mySeat: 0 }));
+    const note = noteBtn(m.container)!;
+    expect(note.getAttribute("aria-disabled")).toBe("true");
+    const desc = m.container.querySelector(`[id="${note.getAttribute("aria-describedby")}"]`);
+    expect(desc?.textContent).toBe("암살 대상을 모두 같게 고르면 쓸 수 있어요");
+    expect(desc?.classList.contains("mf-sr-only")).toBe(true);
+    fireEvent.click(note);
+    expect(sheet(m.container, "note")).toBeNull();
+  });
+
+  it("확정(me.nightSure)이면 눌러 쪽지 시트(진홍 테두리 계열 mv-will--mafia)가 열리고 {t:'note'} 로 저장, me.note 로 채운다", () => {
+    const send = vi.fn<(m: ClientMessage) => boolean>(() => true);
+    const m = mount(makeView({ mySeat: 0, nightSure: 2 }), { send });
+    const note = noteBtn(m.container)!;
+    expect(note.getAttribute("aria-disabled")).toBeNull();
+    fireEvent.click(note);
+    const s = sheet(m.container, "note")!;
+    expect(s.classList.contains("mv-will--mafia")).toBe(true);
+    expect(s.getAttribute("aria-label")).toBe("쪽지");
+    expect(area(m.container).getAttribute("placeholder")).toBe("이름 없이 아침에 공개돼요");
+    fireEvent.change(area(m.container), { target: { value: "조용히 끝냈다" } });
+    fireEvent.click(saveBtn(m.container));
+    expect(sent(send).filter((x) => x.t === "note")).toEqual([{ t: "note", text: "조용히 끝냈다" }]);
+    m.show(makeView({ mySeat: 0, nightSure: 2, note: "조용히 끝냈다" }));
+    expect(saveBtn(m.container).textContent).toBe("저장됨");
+    expect(area(m.container).value).toBe("조용히 끝냈다");
+  });
+
+  it("쪽지 시트가 열린 동안 확정이 풀리면 시트가 닫히고, 다시 확정되어 열면 쓰던 글이 이어진다", () => {
+    const m = mount(makeView({ mySeat: 0, nightSure: 2 }));
+    fireEvent.click(noteBtn(m.container)!);
+    fireEvent.change(area(m.container), { target: { value: "쓰던 글" } });
+    m.show(makeView({ mySeat: 0 }));
+    expect(sheet(m.container, "note")).toBeNull();
+    expect(noteBtn(m.container)?.getAttribute("aria-disabled")).toBe("true");
+    m.show(makeView({ mySeat: 0, nightSure: 2 }));
+    fireEvent.click(noteBtn(m.container)!);
+    expect(area(m.container).value).toBe("쓰던 글");
+  });
+
+  it("마피아가 아닌 사람·낮에는 [쪽지]가 없다", () => {
+    for (const v of [makeView({ mySeat: 3 }), makeView({ mySeat: 1 }), makeView({ mySeat: 0, phase: "discussion" }), makeView({ mySeat: 4, dead: [4] })]) {
+      expect(noteBtn(mount(v).container)).toBeNull();
+      cleanup();
+    }
+  });
+
+  it("[쪽지]·[유언] 버튼 면에는 진홍·놋쇠 클래스가 없다 (UI-SPEC 다르게 하는 곳 2)", () => {
+    const a = mount(makeView({ mySeat: 0, nightSure: 2 }));
+    const note = noteBtn(a.container)!;
+    expect(note.className).not.toMatch(/crimson|brass/);
+    expect(note.querySelector("svg")?.getAttribute("class") ?? "").not.toMatch(/brass/);
+    cleanup();
+    const b = mount(makeView());
+    expect(willBtn(b.container)?.className ?? "").not.toMatch(/crimson|brass/);
+  });
+});
+
+describe("연결 끊김 (UI-SPEC 433행)", () => {
+  it("canSend 거짓이면 [유언]·[쪽지]·깃펜이 aria-disabled 이고 눌러도 시트가 없고 보내지 않는다", () => {
+    const send = vi.fn<(m: ClientMessage) => boolean>(() => true);
+    for (const v of [makeView(), makeView({ phase: "discussion" })]) {
+      const m = mount(v, { send, canSend: false });
+      const b = willBtn(m.container)!;
+      expect(b.getAttribute("aria-disabled")).toBe("true");
+      fireEvent.click(b);
+      expect(sheet(m.container)).toBeNull();
+      cleanup();
+    }
+    const n = mount(makeView({ mySeat: 0, nightSure: 2 }), { send, canSend: false });
+    expect(noteBtn(n.container)?.getAttribute("aria-disabled")).toBe("true");
+    fireEvent.click(noteBtn(n.container)!);
+    expect(sheet(n.container, "note")).toBeNull();
+    expect(sent(send)).toEqual([]);
+  });
+
+  it("시트가 열린 채 끊기면 [저장]이 aria-disabled 이고 눌러도 보내지 않는다", () => {
+    const send = vi.fn<(m: ClientMessage) => boolean>(() => true);
+    const m = mount(makeView(), { send });
+    fireEvent.click(willBtn(m.container)!);
+    fireEvent.change(area(m.container), { target: { value: "끊김" } });
+    m.show(makeView(), { canSend: false });
+    expect(saveBtn(m.container).getAttribute("aria-disabled")).toBe("true");
+    fireEvent.click(saveBtn(m.container));
+    expect(sent(send)).toEqual([]);
   });
 });
