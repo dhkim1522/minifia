@@ -1,7 +1,7 @@
 # Requirements: minifia v2.0 같은 공간
 
 **Defined:** 2026-10-30
-**Core Value:** 링크 하나로 모인 친구들이 설명 없이 정통 마피아 한 판(6~10분)을 끝까지 마치는 것. v2.0 은 그 한 판을 "같은 공간에서 움직이고 떠들고 몸짓하며" 하게 만든다.
+**Core Value:** 링크 하나로 모인 친구들이 설명 없이 정통 마피아 한 판(평균 10~15분, 참고 목표)을 끝까지 마치는 것. v2.0 은 그 한 판을 "같은 공간에서 움직이고 떠들고 몸짓하며" 하게 만든다.
 
 범위 원천: `docs/decisions/0044-v2-same-space.md`(1~24항). 리서치: `.planning/research/SUMMARY.md`. v1.0 요구사항(검증됨)은 `.planning/milestones/v1.0-REQUIREMENTS.md`.
 
