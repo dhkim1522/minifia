@@ -12,6 +12,7 @@ import {
   backdropUrl,
   duskPreloadList,
   entryPreloadList,
+  faceSrc,
   figureSrc,
   ghostSrc,
   journalArt,
@@ -45,6 +46,15 @@ describe("그림 URL 헬퍼", () => {
     expect(figureSrc(9)).toEqual(figureSrc(1));
     expect(figureSrc(-1).src).toContain("fig8_girl_tanhat");
     expect(figureSrc(-1)).toEqual(figureSrc(7));
+  });
+
+  it("얼굴: /characters/faces/face-{seat % 8}.png (09-05, NIGHT-09)", () => {
+    expect(faceSrc(0)).toBe("/characters/faces/face-0.png");
+    expect(faceSrc(9)).toBe("/characters/faces/face-1.png");
+    expect(faceSrc(-1)).toBe("/characters/faces/face-7.png");
+    for (let seat = 0; seat < 8; seat++) {
+      expect(characterFiles.has(`/public${faceSrc(seat)}`), `public 에 ${faceSrc(seat)} 파일`).toBe(true);
+    }
   });
 
   it("직업 그림: src 는 @2x, srcSet 은 150px 표시라 1x·2x", () => {
