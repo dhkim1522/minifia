@@ -37,6 +37,8 @@ export interface FakeRenderer extends WorldRenderer {
   setLighting: Mock<(phase: LightingPhase) => void>;
   setZoom: Mock<(zoom: number) => void>;
   setTension: Mock<(level: 0 | 1 | 2, focus?: { x: number; z: number }) => void>;
+  setChalk: Mock<(at: { x: number; z: number } | null, opacity: number) => void>;
+  setSelfLight: Mock<(at: { x: number; z: number } | null) => void>;
   emit(e: RendererStatusEvent): void;
   lost: boolean;
   renders: number;
@@ -64,6 +66,8 @@ export function makeFakeRenderer(): FakeRenderer {
     setLighting: vi.fn(),
     setZoom: vi.fn(),
     setTension: vi.fn(),
+    setChalk: vi.fn(),
+    setSelfLight: vi.fn(),
     addCharacter(seat: number, c: CharacterHandle) {
       r.chars.set(seat, c);
     },
@@ -1875,6 +1879,43 @@ describe("게임 장면(08-12): 카메라·조명·긴장·떠다님·처형 연
       s.rerender({ scene: sceneOf(ALL) });
       frames(50);
       expect(r.setTension.mock.calls.at(-1)![0]).toBe(0);
+    });
+  });
+
+  describe("분필 (MORN-01, E5 #28·#29)", () => {
+    it("scene.chalk 가 있으면 이름표 층 루트에 data-chalk=\"x,z\"(소수 둘째 자리), 없으면 속성이 없다", async () => {
+      const s = await openGame({ scene: sceneOf(ALL, { chalk: { x: 1.2, z: -3.4 } }) });
+      const tags = s.utils.container.querySelector(".mf-world__tags")!;
+      expect(tags.getAttribute("data-chalk")).toBe("1.20,-3.40");
+      s.rerender({ scene: sceneOf(ALL) });
+      expect(tags.hasAttribute("data-chalk")).toBe(false);
+    });
+
+    it("처음 장면(재접속)부터 chalk 가 있으면 첫 프레임에 setChalk(자리, 0.85). 없어지면 setChalk(null)", async () => {
+      const s = await openGame({ scene: sceneOf(ALL, { chalk: { x: 1.2, z: -3.4 } }) });
+      const r = s.world.renderers[0]!;
+      frames(50);
+      expect(r.setChalk.mock.calls[0]).toEqual([{ x: 1.2, z: -3.4 }, 0.85]);
+      s.rerender({ scene: sceneOf(ALL) });
+      frames(50);
+      expect(r.setChalk.mock.calls.at(-1)![0]).toBeNull();
+    });
+
+    it("같은 자리면 프레임마다 다시 보내지 않는다", async () => {
+      const s = await openGame({ scene: sceneOf(ALL, { chalk: { x: 1.2, z: -3.4 } }) });
+      const r = s.world.renderers[0]!;
+      frames(100);
+      const n = r.setChalk.mock.calls.length;
+      frames(300);
+      expect(r.setChalk.mock.calls.length).toBe(n);
+    });
+
+    it("렌더러에 setChalk 가 없어도(가짜 렌더러 호환) 예외 없이 돈다", async () => {
+      const s = await openGame({ scene: sceneOf(ALL) });
+      const r = s.world.renderers[0]!;
+      delete (r as { setChalk?: unknown }).setChalk;
+      s.rerender({ scene: sceneOf(ALL, { chalk: { x: 1, z: 1 } }) });
+      expect(() => frames(100)).not.toThrow();
     });
   });
 

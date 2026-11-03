@@ -392,3 +392,45 @@ describe("긴장 단계 setTension (결정 0049 선두·과반 연출, 08-10)", 
     bar.dispose();
   });
 });
+
+describe("분필 윤곽 (MORN-01, 결정 0061-14, 블록아웃 blockout.js 276~284행)", () => {
+  const chalkOf = (bar: ReturnType<typeof buildBarScene>): Mesh => bar.meshes.chalk!;
+
+  it("처음부터 만들어 두고 숨겨 둔다(그리기 +1, 예산 안)", () => {
+    const bar = buildBarScene(LADDER[0]!);
+    const chalk = chalkOf(bar);
+    expect(chalk).toBeDefined();
+    expect(chalk.visible).toBe(false);
+    expect(visibleMeshCount(bar.root)).toBeLessThanOrEqual(DRAW_CALL_BUDGET);
+    bar.dispose();
+  });
+
+  it("튜브 반지름 0.022, 투명 재질, 크림색 불투명 0.85, 닫힌 한 메시", () => {
+    const bar = buildBarScene(LADDER[0]!);
+    const chalk = chalkOf(bar);
+    expect((chalk.geometry as { parameters: { radius: number; closed: boolean } }).parameters.radius).toBeCloseTo(0.022, 9);
+    expect((chalk.geometry as { parameters: { closed: boolean } }).parameters.closed).toBe(true);
+    const m = chalk.material as MeshBasicMaterial;
+    expect(m.transparent).toBe(true);
+    expect(m.opacity).toBeCloseTo(0.85, 9);
+    expect(m.color.getHexString()).toBe("e8e6dc");
+    expect(chalk.rotation.y).toBeCloseTo(0.7, 9);
+    bar.dispose();
+  });
+
+  it("setChalk({1.2,-3.4}, 0.85) → 보이고 바닥 y 0.015 에 놓이고 불투명도가 반영된다. null 이면 숨는다", () => {
+    const bar = buildBarScene(LADDER[0]!);
+    const chalk = chalkOf(bar);
+    bar.setChalk({ x: 1.2, z: -3.4 }, 0.85);
+    expect(chalk.visible).toBe(true);
+    expect(chalk.position.x).toBeCloseTo(1.2, 9);
+    expect(chalk.position.y).toBeCloseTo(0.015, 9);
+    expect(chalk.position.z).toBeCloseTo(-3.4, 9);
+    expect((chalk.material as MeshBasicMaterial).opacity).toBeCloseTo(0.85, 9);
+    bar.setChalk({ x: 1.2, z: -3.4 }, 0.3);
+    expect((chalk.material as MeshBasicMaterial).opacity).toBeCloseTo(0.3, 9);
+    bar.setChalk(null, 0.85);
+    expect(chalk.visible).toBe(false);
+    bar.dispose();
+  });
+});

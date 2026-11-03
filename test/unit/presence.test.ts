@@ -357,3 +357,23 @@ describe("sceneLook 의 pointAt (지목 방향)", () => {
     expect(3 in look.seats).toBe(false);
   });
 });
+
+describe("sceneLook 의 chalk (MORN-01, 결정 0061-14)", () => {
+  it("day.chalk 고정소수점 {120, -340} 은 월드 단위 {1.2, -3.4} 로 look.chalk 에 실린다", () => {
+    const look = sceneLook(viewOf("morning", { day: { chalk: { x: 120, z: -340 } } }), { stageH: 400 });
+    expect(look.chalk).toEqual({ x: 1.2, z: -3.4 });
+  });
+
+  it("day.chalk 가 없으면 look 에 chalk 키 자체가 없다", () => {
+    const look = sceneLook(viewOf("morning"), { stageH: 400 });
+    expect("chalk" in look).toBe(false);
+  });
+
+  it("유령 viewer 도 산 사람 viewer 도 같은 자리를 본다", () => {
+    const day = { chalk: { x: -50, z: 75 } };
+    const alive = sceneLook(viewOf("talk", { day }), { stageH: 400 });
+    const ghost = sceneLook(viewOf("talk", { day, dead: [0], spectate: true }), { stageH: 400 });
+    expect(alive.chalk).toEqual({ x: -0.5, z: 0.75 });
+    expect(ghost.chalk).toEqual({ x: -0.5, z: 0.75 });
+  });
+});
