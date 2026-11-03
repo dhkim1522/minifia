@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { isAlive } from "../../shared/game/alive";
 import { canMoveIn } from "../../shared/game/movement";
 import type { RoleId } from "../../shared/game/roles";
+import { APPROACH_DIST_FX, approachPoint, positionAtFx } from "../../shared/game/world";
 import type { ClientMessage, RoomView } from "../../shared/protocol";
 import { ResultAnnounce } from "../components/ResultAnnounce";
 import { RoleCardButton } from "../components/RoleCardButton";
@@ -185,7 +186,8 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
   // 이동 권한: 산 사람은 낮 시작·토론에서만, 유령은 언제나(MAP-04). 권위는 서버 canMove 이고 화면은 같은 표로 맵 탭만 막는다.
   const me = view.players.find((p) => p.seat === view.me.seat);
   const meAlive = me === undefined || isAlive(me);
-  const canWalk = canMoveIn(view.phase, meAlive);
+  // 밤에는 산 마피아만 걷는다(NIGHT-07, 결정 0061-2). 역할은 서버가 이 사람에게만 보낸 view.me.role 이다.
+  const canWalk = canMoveIn(view.phase, meAlive, view.me.role === "mafia");
   // 유령 화면(GHOST-02, 결정 0021): 내가 탈락했고 서버가 관전 정보(spectate)를 보냈을 때만 그린다. 서버가 안 보낸 view 에서는 이 분기가 아예 없다 — 받아서 감추는 방식이 아니다.
   const spectate = !meAlive ? view.spectate : undefined;
   const ghost = spectate !== undefined;
@@ -202,6 +204,7 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
   const myRole = view.me.role;
   const nightVerb = myRole !== undefined ? PICK_VERB[myRole] : undefined;
   const nightActor = nighting && meAlive && nightVerb !== undefined;
+  const nightMafia = nightActor && myRole === "mafia";
   const serverMine = nominating ? view.day?.points?.find((l) => l.seat === view.me.seat)?.target : nighting ? view.me.pick : undefined;
   const [mine, chooseMine] = useViewChoice<number | undefined>(view, serverMine);
   // 서버가 내 선택을 확인했으면 더는 거절을 기다리지 않는다. 거절이 오면 내 선택을 서버 값으로 되돌린다(처음 그릴 때는 아무것도 하지 않는다).
@@ -240,16 +243,28 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
     return () => clearTimeout(timer);
   }, [canPick]);
 
+  // 마피아 다가가기(UI-SPEC 다르게 하는 곳 6): 고른 사람 옆 목적지를 일반 move 로 보낸다. 서버 applyMove 가 걷기 가능 칸으로 보정한다.
+  // 대상이나 내 위치를 store 가 모르면 pick 만 나간다(A3).
+  const approach = (target: number): void => {
+    const now = Date.now() + offset;
+    const targetSeg = store.segOf(target);
+    const mySeg = store.segOf(view.me.seat);
+    if (targetSeg === undefined || mySeg === undefined) return;
+    const dest = approachPoint(positionAtFx(targetSeg, now), positionAtFx(mySeg, now), APPROACH_DIST_FX);
+    send({ t: "move", x: dest.x, z: dest.z });
+  };
+
   const pick: WorldPick | undefined = pickSeats
     ? {
         seats: pickSeats,
         ...(mine !== undefined ? { mine } : {}),
-        label: (nickname) => (nighting ? `${nickname}, ${nightVerb ?? ""} 대상` : `${nickname} 님 가리키기`),
+        label: (nickname) => (nighting ? (nightMafia ? `${nickname} 님에게 다가가기` : `${nickname}, ${nightVerb ?? ""} 대상`) : `${nickname} 님 가리키기`),
         onPick: (seat) => {
           if (seat === mine) return; // 같은 사람을 다시 눌러도 변하지 않는다(취소 없음)
           if (send(nighting ? { t: "pick", target: seat } : { t: "point", target: seat }) === false) return; // 소켓이 닫혀 못 보냈으면 표시도 바꾸지 않는다
           pointSent.current = { target: seat, at: Date.now() };
           chooseMine(seat);
+          if (nightMafia) approach(seat);
           if (blink) {
             setBlink(false);
             rememberPointHint();
@@ -287,7 +302,8 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
       } else if (nightActor && myRole !== undefined) {
         const kind: RingKind = myRole === "police" ? "police" : myRole === "doctor" ? "doctor" : "mafia";
         if (mine !== undefined) put(mine, kind);
-        if (myRole === "mafia") for (const seat of view.me.allyPicks ?? []) put(seat, "mafia");
+        // 내가 고른 좌석이 먼저 서므로 동료도 같은 좌석을 골랐으면 내 고리(crimson-500)가 이긴다. 동료만 고른 좌석은 crimson-400
+        if (myRole === "mafia") for (const seat of view.me.allyPicks ?? []) put(seat, "mafiaAlly");
       }
       if (rings.size === 0) return undefined;
       return (seat) => {
