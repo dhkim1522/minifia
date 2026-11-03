@@ -5,16 +5,16 @@ milestone_name: 같은 공간
 current_phase: 9
 current_phase_name: 밤과 아침
 status: executing
-stopped_at: Completed 09-09-PLAN.md
-last_updated: "2026-11-03T04:56:08.469Z"
+stopped_at: Completed 09-10-PLAN.md
+last_updated: "2026-11-03T05:06:30.504Z"
 last_activity: 2026-11-03
 last_activity_desc: Phase 9 execution started
-state_head: 3cbb944d20ca0a23f14248fedc15d323b3168b72
+state_head: ad81de0ac84408bc7a2686855426e10b0c981adc
 progress:
   total_phases: 7
   completed_phases: 3
   total_plans: 101
-  completed_plans: 87
+  completed_plans: 88
   percent: 43
 ---
 
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-11-03)
 ## Current Position
 
 Phase: 9 (밤과 아침) — EXECUTING
-Plan: 10 of 23
+Plan: 11 of 23
 Status: Ready to execute
 Last activity: 2026-11-03 — Phase 9 execution started
 
@@ -147,6 +147,7 @@ Progress: [████░░░░░░] 43% (3/7 phases)
 | Phase 09 P07 | 9min | 3 tasks | 15 files |
 | Phase 09 P08 | 12min | 2 tasks | 6 files |
 | Phase 09 P09 | 40min | 3 tasks | 6 files |
+| Phase 09 P10 | 55min | 3 tasks | 13 files |
 
 ## Accumulated Context
 
@@ -302,6 +303,7 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 09]: 09-07: 산 마피아에게 밤 내내 me.nightTally 를 항상 싣는다(선택 없으면 []), nightSure 는 확정일 때만. MorningView.phrase 타입은 09-18 까지 남긴다.
 - [Phase 09]: 09-08: 유언·쪽지 시트는 send·입력 중 경로 없이 onChange·onSave(text)·onClose(text) 만 가지며, 조합 중 저장·닫기는 compositionend 또는 IME_WAIT_MS 뒤 확정 값으로 한 번 부른다
 - [Phase 09]: 09-09: advance 무변화 경로는 syncHome·syncLayout 만, 새 유령 snap(snapNewGhosts)은 전환(afterTransition) 때만 — 퇴거 뒤 중복 snap 방지
+- [Phase 09]: 09-10: 내 캐릭터 빛은 예산 core 에서도 visible 을 끄지 않는다(점광원 수 불변). 밤 시민 편 장면 표는 내 좌석 하나뿐
 
 ### Pending Todos
 
@@ -339,8 +341,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-03T04:56:08.171Z
-Stopped at: Completed 09-09-PLAN.md
+Last session: 2026-11-03T05:06:30.184Z
+Stopped at: Completed 09-10-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
