@@ -329,12 +329,13 @@ describe("판 요약 카드 `이번 판 기록` (UI-SPEC 7.2·11.1)", () => {
 
   it("나머지 문구: 동률 · 던진 표 없음 · 의사가 지킴 · 지목 없음", () => {
     const summary: SummaryRow[] = [
-      { n: 1, exec: { yes: 3, no: 1, passed: true }, night: { target: 1, died: false } },
-      { n: 2, exec: { yes: 3, no: 1, passed: true }, night: { died: false } },
+      { n: 1, exec: { yes: 0, no: 0, passed: false }, night: { target: 1, died: false } },
+      { n: 2, exec: { yes: 0, no: 0, passed: false }, night: { died: false } },
     ];
+    // 8페이즈 서버가 쌓는 모양: 지목 동률·0표면 찬반 없이 exec {0,0,false}, cand 에 candidate 가 없다
     const voteLog: VoteLogEntry[] = [
-      { n: 1, exec: { yes: 3, no: 1, passed: true }, cand: { votes: [{ seat: 0, target: 3 }, { seat: 1, target: 4 }] } },
-      { n: 2, exec: { yes: 3, no: 1, passed: true }, cand: { votes: [] } },
+      { n: 1, exec: { yes: 0, no: 0, passed: false }, cand: { votes: [{ seat: 0, target: 3 }, { seat: 1, target: 4 }] } },
+      { n: 2, exec: { yes: 0, no: 0, passed: false }, cand: { votes: [] } },
     ];
     const r = renderRoom(makeView({ summary, voteLog }));
     expect(summaryRows(r.container)).toEqual([

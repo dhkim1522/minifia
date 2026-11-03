@@ -94,16 +94,17 @@ describe("summaryLines · endedSubtitle (D-27, UI-SPEC 7.2 ended)", () => {
   const voteLog: VoteLogEntry[] = [
     { n: 1, exec: { yes: 3, no: 1, passed: true }, cand: { votes: sameSeatVotes([[0, 2], [1, 2], [3, 4]]), candidate: 2 } },
     { n: 2, exec: { yes: 1, no: 3, passed: false } },
-    { n: 3, exec: { yes: 3, no: 0, passed: true }, cand: { votes: [] } },
-    { n: 4, exec: { yes: 3, no: 0, passed: true }, cand: { votes: sameSeatVotes([[0, 1], [3, 4]]) } },
+    // 8페이즈 서버가 실제로 쌓는 모양: 지목 0표·동률이면 찬반 없이 exec {0,0,false}, cand 에 candidate 가 없다
+    { n: 3, exec: { yes: 0, no: 0, passed: false }, cand: { votes: [] } },
+    { n: 4, exec: { yes: 0, no: 0, passed: false }, cand: { votes: sameSeatVotes([[0, 1], [3, 4]]) } },
   ];
 
   it("낮 → 밤 순서로 일차 오름차순, 낮은 처형·무효 네 갈래", () => {
     const summary: SummaryRow[] = [
       { n: 2, exec: { yes: 1, no: 3, passed: false }, night: { target: 1, died: true } },
       { n: 1, exec: { yes: 3, no: 1, passed: true, candidate: 2 }, night: { target: 3, died: false } },
-      { n: 3, exec: { yes: 3, no: 0, passed: true } },
-      { n: 4, exec: { yes: 3, no: 0, passed: true }, night: { died: false } },
+      { n: 3, exec: { yes: 0, no: 0, passed: false } },
+      { n: 4, exec: { yes: 0, no: 0, passed: false }, night: { died: false } },
     ];
     const lines = summaryLines(summary, voteLog, nameOf);
     expect(lines.map((l) => [l.label, l.text])).toEqual([
@@ -115,6 +116,31 @@ describe("summaryLines · endedSubtitle (D-27, UI-SPEC 7.2 ended)", () => {
       ["4일차 낮", "처형 없음 (동률)"],
       ["4일차 밤", "아무 일도 없었어요"],
     ]);
+  });
+
+  it("저장 방 이전 모양(passed:true + candidate 없음)도 동률·던진 표 없음으로 읽는다", () => {
+    const legacyLog: VoteLogEntry[] = [
+      { n: 1, exec: { yes: 3, no: 0, passed: true }, cand: { votes: [] } },
+      { n: 2, exec: { yes: 3, no: 0, passed: true }, cand: { votes: sameSeatVotes([[0, 1], [3, 4]]) } },
+    ];
+    const lines = summaryLines(
+      [
+        { n: 1, exec: { yes: 3, no: 0, passed: true } },
+        { n: 2, exec: { yes: 3, no: 0, passed: true } },
+      ],
+      legacyLog,
+      nameOf,
+    );
+    expect(lines.map((l) => l.text)).toEqual(["처형 없음 (던진 표 없음)", "처형 없음 (동률)"]);
+  });
+
+  it("찬반 부결(candidate 가 있는 날)은 여전히 찬성·반대 수를 보인다", () => {
+    const lines = summaryLines(
+      [{ n: 1, exec: { yes: 1, no: 3, passed: false, candidate: 2 } }],
+      [{ n: 1, exec: { yes: 1, no: 3, passed: false }, cand: { votes: sameSeatVotes([[0, 2], [1, 2]]), candidate: 2 } }],
+      nameOf,
+    );
+    expect(lines.map((l) => l.text)).toEqual(["처형 없음 (찬성 1 · 반대 3)"]);
   });
 
   it("exec 가 없는 일차는 낮 행이 없고 night 가 없으면 밤 행이 없다", () => {

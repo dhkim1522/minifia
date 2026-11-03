@@ -86,6 +86,10 @@ export function summaryLines(
           log?.cand === undefined
             ? `${name}님 처형`
             : `${name}님 처형 (${log.cand.votes.filter((v) => v.target === candidate).length}표)`;
+      } else if (log?.cand !== undefined && log.cand.candidate === undefined) {
+        // 8페이즈 서버: 지목이 동률·0표면 찬반 없이 밤으로 가며 줄은 passed:false · cand:{votes}(candidate 없음)다.
+        // 찬반이 없었으니 찬성·반대 수를 보이지 않고 동률/무표를 가른다.
+        text = log.cand.votes.length === 0 ? "처형 없음 (던진 표 없음)" : "처형 없음 (동률)";
       } else if (!passed) {
         text = `처형 없음 (찬성 ${yes} · 반대 ${no})`;
       } else {
