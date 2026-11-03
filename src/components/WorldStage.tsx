@@ -5,7 +5,7 @@ import { MOVE_COORD_LIMIT } from "../../shared/protocol";
 import { useReducedMotion } from "../net/useReducedMotion";
 import { HEADER_BOTTOM, PANEL_HEIGHT } from "../world/camera";
 import { createTapTracker } from "../world/input";
-import { createWorldRuntime, EXIT_CURTAIN_MS, EXIT_MS } from "../world/runtime";
+import { createWorldRuntime, EXIT_CURTAIN_MS, EXIT_MS, ringKindAttr } from "../world/runtime";
 import type { RingKind, WorldModules, WorldRuntime } from "../world/runtime";
 import type { SceneLook } from "../world/presence";
 import { initialMapStatus } from "../world/status";
@@ -302,7 +302,8 @@ export function WorldStage(props: WorldStageProps) {
               data-away={away ? "true" : undefined}
               data-ghost-seat={ghostSeat ? "true" : undefined}
               data-lead={extra.lead ? "true" : undefined}
-              data-ring-kind={ring}
+              // 속성 값은 kebab-case: mafiaAlly → "mafia-ally" (ringKindAttr)
+              data-ring-kind={ring === undefined ? undefined : ringKindAttr(ring)}
               aria-hidden={kickable || pickable ? undefined : true}
               style={TAG_INITIAL_STYLE}
             >

@@ -135,15 +135,30 @@ const ENTER_LIFT = 0.4;
 const CAM_SLOW_MS = 800;
 /** 분필 윤곽이 다 그려진 불투명도(블록아웃 값, bar.ts CHALK_OPACITY 와 같다) */
 const CHALK_FULL = 0.85;
+/** 분필이 그려지는 시간(ms) = dur-slow */
+const CHALK_DRAW_MS = 800;
 /** 6페이즈는 모두 기본 코트(의상 교체는 10페이즈) */
 const OUTFIT = "coat";
 
 /** 동작을 재생할 수 있는 캐릭터 핸들(06-11 WorldCharacter). 테스트의 가짜 캐릭터에는 playEmote 가 없을 수 있다 */
 export type PlayableCharacter = CharacterHandle & { playEmote?(id: EmoteId): void; setFace?(id: FaceId): void };
 
-/** 밤 행동 선택의 발밑 고리 종류와 색. 값은 tokens.css 의 crimson-500·seat-1·seat-3 (승인 Ghost 보드 값, 9페이즈가 정식 토큰으로 정한다) */
-export type RingKind = "mafia" | "police" | "doctor";
-export const RING_COLORS: Readonly<Record<RingKind, string>> = { mafia: "#c8102e", police: "#7a8fb8", doctor: "#6fa59a" };
+/**
+ * 밤 행동 선택의 발밑 고리 종류와 색. 값은 tokens.css 의 crimson-500·seat-1·seat-3 (승인 Ghost 보드 값, 9페이즈가 정식 토큰으로 정한다).
+ * mafiaAlly = 마피아 화면에서 동료가 고른 사람의 고리(crimson-400, UI-SPEC 226·318행). 이름표 속성 data-ring-kind 값은 "mafia-ally" 로 쓴다.
+ */
+export type RingKind = "mafia" | "mafiaAlly" | "police" | "doctor";
+export const RING_COLORS: Readonly<Record<RingKind, string>> = { mafia: "#c8102e", mafiaAlly: "#e0344b", police: "#7a8fb8", doctor: "#6fa59a" };
+/** RingKind → 이름표 속성 값(data-ring-kind). 속성은 kebab-case 다 */
+export function ringKindAttr(kind: RingKind): string {
+  return kind === "mafiaAlly" ? "mafia-ally" : kind;
+}
+/** 이름표 속성 값 → 고리 색. 모르는 값이면 null */
+function ringColorOfAttr(attr: string | null): string | null {
+  if (attr === null) return null;
+  const kind: RingKind | undefined = attr === "mafia-ally" ? "mafiaAlly" : (["mafia", "police", "doctor"] as const).find((k) => k === attr);
+  return kind === undefined ? null : RING_COLORS[kind];
+}
 
 export interface WorldRuntimeDeps {
   host: HTMLElement;
@@ -306,6 +321,10 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
   let tensionKey: string | null = "0";
   /** 분필 윤곽: 마지막으로 렌더러에 보낸 자리·불투명도 키(바뀔 때만 다시 보낸다) */
   let chalkKey: string | null = "-";
+  /** 분필 자리 키(불투명도 제외)와 그려지기 시작한 시각(ms, 그리는 중이 아니면 null). 장면이 있는 프레임에서 분필이 없던 적이 있어야 '새로 나타남' 이다(첫 장면·재접속은 즉시) */
+  let chalkPos = "-";
+  let chalkDrawFrom: number | null = null;
+  let chalkSawNone = false;
   /** 내 캐릭터 빛: 마지막으로 보낸 자리 키(nightCitizen 이 아니면 "-") */
   let selfLightKey: string | null = "-";
   let zoomSent = 1;
@@ -938,12 +957,21 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
       selfLightKey = nextSelfKey;
       r.setSelfLight?.(selfAt === null ? null : { x: selfAt.x, z: selfAt.z });
     }
-    // 분필 윤곽(MORN-01): 서버가 공개한 자리가 있으면 바닥에 그 자리 그대로. 없으면 숨김. 렌더러에 setChalk 가 없으면(가짜 렌더러) 건너뛴다
+    // 분필 윤곽(MORN-01): 서버가 공개한 자리가 있으면 바닥에 그 자리 그대로. 없으면 숨김. 렌더러에 setChalk 가 없으면(가짜 렌더러) 건너뛴다.
+    // 같은 연결에서 새로 나타나면 dur-slow(800ms) 동안 0 → 0.85 로 그려진다. 모션 줄이기·첫 장면(재접속)은 바로 0.85 (UI-SPEC 262행, E5 #29)
     const chalk = look?.chalk ?? null;
-    const nextChalkKey = chalk === null ? "-" : `${chalk.x.toFixed(3)},${chalk.z.toFixed(3)}|${CHALK_FULL}`;
+    const nextChalkPos = chalk === null ? "-" : `${chalk.x.toFixed(3)},${chalk.z.toFixed(3)}`;
+    if (nextChalkPos !== chalkPos) {
+      chalkPos = nextChalkPos;
+      chalkDrawFrom = chalk !== null && !reduced && chalkSawNone ? now : null;
+    }
+    if (look !== null && chalk === null) chalkSawNone = true;
+    if (chalkDrawFrom !== null && now - chalkDrawFrom >= CHALK_DRAW_MS) chalkDrawFrom = null;
+    const chalkOpacity = chalkDrawFrom === null ? CHALK_FULL : CHALK_FULL * Math.max(0, Math.min(1, (now - chalkDrawFrom) / CHALK_DRAW_MS));
+    const nextChalkKey = chalk === null ? "-" : `${chalkPos}|${chalkOpacity.toFixed(3)}`;
     if (nextChalkKey !== chalkKey) {
       chalkKey = nextChalkKey;
-      r.setChalk?.(chalk === null ? null : { x: chalk.x, z: chalk.z }, CHALK_FULL);
+      r.setChalk?.(chalk === null ? null : { x: chalk.x, z: chalk.z }, chalkOpacity);
     }
 
     if (s.w !== seenSize.w || s.h !== seenSize.h) {
@@ -1018,7 +1046,7 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
       const kind = tag.getAttribute("data-ring-kind");
       if (kind !== a.ringKind) {
         a.ringKind = kind;
-        a.handle.setRing?.(kind !== null && Object.hasOwn(RING_COLORS, kind) ? RING_COLORS[kind as RingKind] : null);
+        a.handle.setRing?.(ringColorOfAttr(kind));
       }
     }
     const bySeat = new Map(live.map((a) => [a.seat, a]));
