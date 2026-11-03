@@ -6,7 +6,7 @@ import { env } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
 import type { ServerMessage } from "../../shared/protocol";
 import { PHASE_DEFS } from "../../shared/game/phases";
-import { advanceTo, chatSend, editRoom, flushWorld, homeBySeat, mark, moveAs, nextFrame, observe, pause, pickAs, segEndsBySeat, settle, snapSeatsOf, stable, startedGame, summary, typingSend, withRole, worldFramesOf } from "./helpers";
+import { advanceTo, chatSend, connect, editRoom, endAs, lastViewOf, seat, send, skipThrough, flushWorld, homeBySeat, mark, moveAs, nextFrame, observe, pause, pickAs, segEndsBySeat, settle, snapSeatsOf, stable, startedGame, summary, typingSend, withRole, worldFramesOf } from "./helpers";
 import type { Game } from "./helpers";
 
 /** 마지막 world snap 의 '좌석:x,z' 오름차순 문자열. snap 이 없으면 'none'. */
@@ -170,5 +170,89 @@ describe("직접 불변식 L1 — 밤 동안 시민 편 소켓은 마피아 활�
     const quiet = g.actors.filter((x) => x.role !== "mafia");
     expect(quiet.length).toBe(4);
     expect(quiet.map((x) => summary(got[g.actors.indexOf(x)]!)).join(",")).toBe("[],[],[],[]");
+  }, 40_000);
+});
+
+/** 새 소켓으로 hello 하고 chatLog 까지 받은 뒤 받은 프레임 전부를 순서대로 돌려준다. */
+async function helloFrames(code: string, token: string): Promise<ServerMessage[]> {
+  const sock = await connect(code);
+  send(sock, { t: "hello", token });
+  await nextFrame(sock, (m) => m.t === "chatLog");
+  return sock.frames.map((raw) => JSON.parse(raw) as ServerMessage);
+}
+
+/** 이 프레임 열 중 state·world·chatLog 의 종류 순서('state,world,chatLog'). */
+const kinds = (msgs: ServerMessage[]): string =>
+  msgs
+    .filter((m) => m.t === "state" || m.t === "world" || m.t === "chatLog")
+    .map((m) => m.t)
+    .join(",");
+
+describe("세 경로 동일성 — 테스트 넘기기·토론 끝내기도 단계 마감과 같은 밤·home (결정 0061-19, T-09-20)", () => {
+  it("테스트 방에서 testSkip 으로 토론 → 지목 → 밤에 가도 home 이 기록되고 시민 편 소켓의 밤 snap 이 본인 한 칸(home)이다", async () => {
+    const r = await seat(3, 0, { testMode: true });
+    const socks = [r.host, ...r.guests.map((g) => g.sock)];
+    for (const sock of socks) await settle(sock, mark(sock));
+    send(r.host, { t: "testRole", role: "mafia" });
+    await settle(r.host, mark(r.host));
+    send(r.host, { t: "start" });
+    for (const sock of socks) await nextFrame(sock, (m) => m.t === "state" && m.view.phase === "assigning");
+    await skipThrough(r, "nomination");
+    const home = await homeBySeat(r.code);
+    expect(home.split("|")[0]).toBe("1");
+    for (const sock of socks) await settle(sock, mark(sock));
+    const marks = socks.map((sock) => mark(sock));
+
+    await skipThrough(r, "night");
+    const got = await Promise.all(socks.map((sock, i) => settle(sock, marks[i]!)));
+
+    const mine = (i: number): number => lastViewOf(socks[i]!).me.seat;
+    const everyone = socks.map((_, i) => mine(i)).sort((p, q) => p - q);
+    expect(snapPoints(got[0]!)).toBe(homeRows(home, everyone));
+    for (let i = 1; i < socks.length; i += 1) {
+      if (lastViewOf(socks[i]!).me.role === "mafia") continue;
+      expect(snapPoints(got[i]!)).toBe(homeRows(home, [mine(i)]));
+    }
+  }, 40_000);
+
+  it("산 사람 전원이 토론 끝내기를 눌러 과반으로 지목에 들어가도 토론 마지막 자리가 home 으로 기록된다", async () => {
+    const g = await startedGame("discussion");
+    moveAs(withRole(g, "citizen")[0]!, -120, 60);
+    for (const sock of g.socks) await settle(sock, mark(sock));
+    await flushWorld(g.code);
+    const before = await segEndsBySeat(g.code, 1);
+
+    for (const a of g.actors) endAs(a.sock, true);
+    for (const sock of g.socks) await nextFrame(sock, (m) => m.t === "state" && m.view.phase === "nomination");
+
+    expect(await homeBySeat(g.code)).toBe(before);
+  }, 40_000);
+});
+
+describe("재접속 첫 snap — 라이브 진입 snap 과 같은 좌석 규칙 (L9, 결정 0061-3·4)", () => {
+  it("밤 중간에 시민이 새 소켓으로 hello 하면 첫 프레임 열이 [state, world snap(본인 한 칸, home), chatLog] 이고 마피아는 산 사람 전원이다", async () => {
+    const g = await startedGame("night");
+    const home = await homeBySeat(g.code);
+    const citizen = withRole(g, "citizen")[0]!;
+    const mafia = withRole(g, "mafia")[0]!;
+
+    const asCitizen = await helloFrames(g.code, citizen.token);
+    expect(kinds(asCitizen)).toBe("state,world,chatLog");
+    expect(snapPoints(asCitizen)).toBe(homeRows(home, [citizen.seat]));
+
+    const asMafia = await helloFrames(g.code, mafia.token);
+    expect(kinds(asMafia)).toBe("state,world,chatLog");
+    expect(snapPoints(asMafia)).toBe(homeRows(home, g.actors.map((a) => a.seat)));
+  }, 40_000);
+
+  it("아침 중간에 시민이 hello 하면 산 사람 전원의 home 좌표 snap 을 받는다", async () => {
+    const g = await startedGame("morning");
+    const home = await homeBySeat(g.code);
+    const citizen = withRole(g, "citizen")[0]!;
+
+    const frames = await helloFrames(g.code, citizen.token);
+
+    expect(kinds(frames)).toBe("state,world,chatLog");
+    expect(snapPoints(frames)).toBe(homeRows(home, g.actors.map((a) => a.seat)));
   }, 40_000);
 });
