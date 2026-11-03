@@ -44,8 +44,12 @@ export const DAY_COPY = {
   defenseHintSelf: "해명할 시간이에요",
   verdictHint: (name: string): string => `${name} 님을 처형할까요?`,
   verdictHintSelf: "결과를 기다려요",
-  /** 밤 산 마피아 헤더 안내(UI-SPEC 단계표 202행). 이 문자열은 마피아 분기 안에서만 만든다 — 다른 신분 DOM 에 없다(T-09-29). 경찰·의사·시민의 밤 문구는 하단 NightPanel 표(NIGHT_PANEL_TEXT)가 맡는다 */
+  /** 밤 산 마피아 헤더 안내(UI-SPEC 단계표 202행). 이 문자열은 마피아 분기 안에서만 만든다 — 다른 신분 DOM 에 없다(T-09-29) */
   nightHintMafia: "대상에게 다가가요",
+  /** 밤 산 시민·경찰·의사 헤더 안내(UI-SPEC 단계표 203~205행). 각 문자열은 그 역할 분기 안에서만 만든다 — 다른 신분 DOM 에 없다(T-09-33) */
+  nightHintCitizen: "날이 밝길 기다려요",
+  nightHintPolice: "조사할 사람을 골라요",
+  nightHintDoctor: "지킬 사람을 골라요",
   /** 마피아 전원 일치 확정이 새로 섰을 때 마피아 채팅의 hot 줄(UI-SPEC 330행) */
   sureLine: (name: string): string => `${name} · 확정`,
   ghostHint: "모두의 직업이 보여요",
@@ -296,7 +300,7 @@ export function dayEvents(prev: RoomView | null, cur: RoomView, opts: { reset?: 
 /**
  * 단계 머리(제목 24px + 안내 한 줄): UI-SPEC 단계표 그대로. 안내는 단계 시작 뒤 약 2.5초만 보이고 접히는 것은 화면 몫이다.
  * 유령(내 alive 가 false)은 같은 제목에 '모두의 직업이 보여요'(밤은 '모두의 직업과 밤 행동이 보여요').
- * 밤·아침은 임시 틀이라 제목만 주고(산 마피아의 밤만 '대상에게 다가가요'), 밤·아침 하단 문구는 v1.0 표(NIGHT_PANEL_TEXT)를 GamePanel 이 쓴다. 낮 틀이 아닌 단계는 빈 제목.
+ * 밤은 산 사람마다 역할별 한 줄(마피아 '대상에게 다가가요', 경찰 '조사할 사람을 골라요', 의사 '지킬 사람을 골라요', 시민 '날이 밝길 기다려요'). 아침은 제목만. 낮 틀이 아닌 단계는 빈 제목.
  */
 export function headerFor(view: RoomView): { title: string; hint?: string } {
   const title = DAY_COPY.titles[view.phase];
@@ -320,7 +324,16 @@ export function headerFor(view: RoomView): { title: string; hint?: string } {
       if (isSelf) return { title, hint: DAY_COPY.verdictHintSelf };
       return defender === undefined ? { title } : { title, hint: DAY_COPY.verdictHint(defender) };
     case "night":
-      return view.me.role === "mafia" ? { title, hint: DAY_COPY.nightHintMafia } : { title };
+      switch (view.me.role) {
+        case "mafia":
+          return { title, hint: DAY_COPY.nightHintMafia };
+        case "police":
+          return { title, hint: DAY_COPY.nightHintPolice };
+        case "doctor":
+          return { title, hint: DAY_COPY.nightHintDoctor };
+        default:
+          return { title, hint: DAY_COPY.nightHintCitizen };
+      }
     default:
       return { title };
   }

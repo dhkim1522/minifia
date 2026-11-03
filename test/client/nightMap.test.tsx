@@ -554,14 +554,14 @@ describe("밤 임시 틀 — 유령이 보는 밤 행동 (GHOST-02, T-08-46)", (
     expect(ringSeats(mount(stray).container)).toEqual([]);
     cleanup();
     const strayPolice: RoomView = { ...makeView({ mySeat: 1, pick: 4 }), spectate: { seats: [], picks: PICKS } };
-    expect(ringSeats(mount(strayPolice).container)).toEqual([4]);
+    expect(ringSeats(mount(strayPolice).container)).toEqual([]); // 경찰의 선택은 지도 고리가 아니라 얼굴 목록이 보인다(09-15)
   });
 
   it("산 경찰·의사·시민 화면의 고리는 서버가 보낸 내 선택뿐이고 allyPicks 가 와도 마피아 고리가 아니다", () => {
     const police: RoomView = { ...makeView({ mySeat: 1, pick: 4 }) };
     police.me = { ...police.me, allyPicks: [2] };
     const { container } = mount(police);
-    // 09-10: 밤 시민 편은 지도에 내 이름표뿐이라 고른 좌석(4)의 고리도 지도에 없다(선택 표시는 09-15 얼굴 목록 몫). 어느 쪽이든 마피아 고리는 없다.
+    // 밤 시민 편은 지도에 내 이름표뿐이고 경찰의 선택 표시는 얼굴 목록(09-15)이 맡는다. 마피아 고리는 없다.
     expect(ringSeats(container)).toEqual([]);
     expect(container.querySelectorAll('[data-ring-kind="mafia"]')).toHaveLength(0);
   });

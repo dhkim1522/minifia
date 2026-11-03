@@ -5,11 +5,12 @@ import { majorityOf } from "../../shared/game/nomination";
 import type { ClientMessage, RoomView } from "../../shared/protocol";
 import { ActionRow } from "../components/ActionButton";
 import { ChatPanel } from "../components/v2/ChatPanel";
-import { NIGHT_PANEL_TEXT, NightPanel, NoticePill, PickPill } from "../components/NightPanel";
 import { DotProgress } from "../components/v2/DotProgress";
+import { FaceList } from "../components/v2/FaceList";
 import { V2Icon } from "../components/v2/V2Icon";
 import { VerdictPicker } from "../components/v2/VerdictPicker";
 import type { Verdict } from "../components/v2/VerdictPicker";
+import { faceSrc } from "../net/assets";
 import type { ChatBinding } from "../net/useChat";
 import { useViewChoice } from "../net/useViewChoice";
 
@@ -29,8 +30,8 @@ export interface GamePanelProps {
   kbOpen?: boolean;
   /** 서버가 행동을 거절한 횟수. 늘어나면 내 낙관적 눌림을 서버 값으로 되돌린다(새 view 가 오지 않아도) */
   rejected?: number;
-  /** 밤(임시 틀)에 내가 지금 보는 선택 좌석(서버 view.me.pick, 누른 즉시는 낙관적 값). 경찰·의사의 선택 알약이 그린다 */
-  nightPick?: number | undefined;
+  /** 경찰·의사가 얼굴을 눌러 pick 을 보낸 직후에 부른다. 화면 틀이 "보낸 선택" 을 기억해 거절 응답을 그 선택의 거절로 읽는다 */
+  onNightPickSent?: (target: number) => void;
   inputRef?: RefObject<HTMLInputElement | null>;
   panelRef?: RefObject<HTMLElement | null>;
 }
@@ -40,7 +41,7 @@ export interface GamePanelProps {
  * 낮 토론은 [토론 끝내기], 찬반은 위쪽 찬반 줄(VerdictPicker + DotProgress, 08-16)을 얹는다 — 변론·처형·유령은 채팅만이거나 뒤 계획이 이 틀 위에 얹는다.
  * 눌림은 서버 view(me.endDiscussion·me.verdictVote)가 기준이고, 내가 누른 즉시 바뀌는 것은 내 눌림 표시 하나뿐이다. 점 개수는 서버가 센 값만 그린다(누가 눌렀는지·무엇을 골랐는지는 서버가 보내지 않는다).
  */
-export function GamePanel({ view, send, canSend, binding, logHeight, kbOpen = false, rejected = 0, nightPick, inputRef, panelRef }: GamePanelProps) {
+export function GamePanel({ view, send, canSend, binding, logHeight, kbOpen = false, rejected = 0, onNightPickSent, inputRef, panelRef }: GamePanelProps) {
   const serverPressed = view.me.endDiscussion === true;
   const [pressed, choose] = useViewChoice<boolean>(view, serverPressed);
   // 거절이 오면 서버 값으로 되돌린다. 처음 그릴 때(거절 0)는 아무것도 하지 않는다.
@@ -52,12 +53,15 @@ export function GamePanel({ view, send, canSend, binding, logHeight, kbOpen = fa
   useEffect(() => {
     if (view.phase === "verdict") lastVerdict.current = verdict ?? null;
   }, [view.phase, verdict]);
+  // 밤 경찰·의사의 선택(NIGHT-09): 내가 누른 얼굴은 즉시 눌린 모양이 되고 서버 view(me.pick)가 오면 서버 값이 이긴다.
+  const [nightPick, chooseNightPick] = useViewChoice<number | undefined>(view, view.me.pick);
   const seenRejects = useRef(rejected);
   useEffect(() => {
     if (seenRejects.current === rejected) return;
     seenRejects.current = rejected;
     choose(serverPressed);
     chooseVerdict(serverVerdict);
+    chooseNightPick(view.me.pick);
     // choose 는 렌더마다 새 함수지만 setState 만 부른다
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rejected]);
@@ -82,15 +86,24 @@ export function GamePanel({ view, send, canSend, binding, logHeight, kbOpen = fa
     chooseVerdict(v);
   };
 
-  // 밤(임시 틀, A1·UI-SPEC 아래 패널 종류): 산 마피아 = 마피아 채널 채팅, 산 경찰·의사·시민 = v1.0 NightPanel 알약(채팅 없음), 유령 = 유령 채널 채팅.
-  // 채팅 패널은 서버가 보낸 view.me.chat 이 그 채널일 때만 그린다(서버 값이 기준, T-08-47). 알약 문구는 NIGHT_PANEL_TEXT 한 곳에서만 가져온다.
+  // 밤(UI-SPEC 아래 패널 종류): 산 마피아 = 마피아 채널 채팅, 산 경찰·의사 = 얼굴 목록(NIGHT-09), 산 시민 = 비어 있음(유언 줄은 09-17), 유령 = 유령 채널 채팅.
+  // 채팅 패널은 서버가 보낸 view.me.chat 이 그 채널일 때만 그린다(서버 값이 기준, T-08-47).
   const night = view.phase === "night";
   const myRole = view.me.role;
-  const nightPill = night && meAlive && myRole !== "mafia" ? (myRole === "police" || myRole === "doctor" ? myRole : "citizen") : null;
+  const nightFaces = night && meAlive && (myRole === "police" || myRole === "doctor") ? myRole : null;
+  const nightCitizen = night && meAlive && myRole !== "mafia" && nightFaces === null;
   const chatChannelOk = !night || view.me.chat === (meAlive ? "mafia" : "ghost");
-  const nicknameOf = (seat: number): string | undefined => view.players.find((p) => p.seat === seat)?.nickname;
-  const pickLabel = nightPick === undefined ? undefined : nightPick === view.me.seat ? "나" : nicknameOf(nightPick);
-  const pillPick = nightPick !== undefined && pickLabel !== undefined ? { seat: nightPick, label: pickLabel } : null;
+  // 후보: 산 사람(경찰은 자기 제외, 의사는 자기 포함). 좌석 오름차순. 후보가 없으면 목록을 그리지 않는다(E1 #1).
+  const faces = nightFaces === null ? [] : view.players
+    .filter((p) => isAlive(p) && !(nightFaces === "police" && p.seat === view.me.seat))
+    .sort((a, b) => a.seat - b.seat)
+    .map((p) => ({ seat: p.seat, name: p.nickname, img: faceSrc(p.seat), color: `var(--seat-${(p.seat % 8) + 1})` }));
+  const pickFace = (seat: number): void => {
+    if (!canSend) return;
+    if (send({ t: "pick", target: seat }) === false) return; // 소켓이 닫혀 못 보냈으면 눌림도 바꾸지 않는다
+    onNightPickSent?.(seat);
+    chooseNightPick(seat);
+  };
 
   const pressEnd = (): void => {
     if (!canSend) return;
@@ -114,11 +127,19 @@ export function GamePanel({ view, send, canSend, binding, logHeight, kbOpen = fa
           <DotProgress count={voted} total={Math.max(0, aliveCount - 1)} label="투표한 사람" />
         </div>
       ) : null}
-      {nightPill !== null ? (
-        <NightPanel title={NIGHT_PANEL_TEXT[nightPill].title} guide={NIGHT_PANEL_TEXT[nightPill].guide}>
-          {nightPill === "citizen" ? <NoticePill text={NIGHT_PANEL_TEXT.citizen.pill} /> : <PickPill pick={pillPick} />}
-        </NightPanel>
-      ) : chatChannelOk ? (
+      {nightFaces !== null ? (
+        faces.length > 0 ? (
+          <FaceList
+            faces={faces}
+            {...(nightPick !== undefined ? { value: nightPick } : {})}
+            onPick={pickFace}
+            icon={nightFaces === "police" ? "eye" : "heal"}
+            label={nightFaces === "police" ? "조사할 사람" : "지킬 사람"}
+            ariaLabel={(name) => (nightFaces === "police" ? `${name} 조사` : `${name} 보호`)}
+            {...(canSend ? {} : { disabled: true })}
+          />
+        ) : null
+      ) : nightCitizen ? null : chatChannelOk ? (
         <ChatPanel {...binding} logHeight={logHeight} compact={kbOpen} {...(inputRef ? { inputRef } : {})} />
       ) : null}
       {showEnd ? (
