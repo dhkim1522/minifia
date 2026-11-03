@@ -19,7 +19,7 @@ import { useEffect, useRef, useState } from "react";
 import { isAlive } from "../../shared/game/alive";
 import type { RoomView } from "../../shared/protocol";
 import { CHAT_TEXT } from "../game/chatText";
-import { dayEvents, GHOST_FADE_END_MS, TOAST_MERGE_MS, ToastQueue } from "../game/dayView";
+import { dayEvents, GHOST_FADE_END_MS, POLICE_CARD_AT, policeResultOf, TOAST_MERGE_MS, ToastQueue } from "../game/dayView";
 import type { AnnounceIcon, ToastShow } from "../game/dayView";
 import { leaderShift } from "../world/presence";
 import type { ChatStore } from "./chatStore";
@@ -51,6 +51,11 @@ export interface DayFx {
    * 재접속·연결 번호가 바뀐 첫 스냅샷, 의사가 살린 사람, 다른 사람 화면에서는 생기지 않는다. 없으면 null.
    */
   killFx: { nonce: number; at: number } | null;
+  /**
+   * 경찰 조사 결과 카드(NIGHT-09, 09-20): 같은 연결에서 밤 → 아침으로 오며 내 조사 기록에 그 밤의 새 줄이 생겼을 때만 0 ~ 2.4초 동안 값이 있다.
+   * id 는 새 결과마다 늘어난다. 경찰이 아니거나 안 골랐거나 첫 스냅샷이면 null — 다른 신분 화면에는 결과 문구가 아예 만들어지지 않는다.
+   */
+  policeResult: { id: number; seat: number; isMafia: boolean } | null;
 }
 
 /** 이 view 에서 내가 탈락했는가(내 좌석이 목록에 없으면 산 사람으로 본다 — GameMap 의 meAlive 와 같다) */
@@ -68,6 +73,7 @@ export function useDayFx({ view, epoch, chat }: { view: RoomView | null; epoch: 
   const [fading, setFading] = useState<ReadonlyMap<number, number>>(NO_FADING);
   const [ghostEnter, setGhostEnter] = useState(0);
   const [killFx, setKillFx] = useState<{ nonce: number; at: number } | null>(null);
+  const [policeResult, setPoliceResult] = useState<DayFx["policeResult"]>(null);
   const [seen, setSeen] = useState<{ view: RoomView | null; epoch: number }>({ view, epoch });
   if (seen.view !== view || seen.epoch !== epoch) {
     // 렌더 중 상태 갱신: 새 view 가 처형 단계로 들어오면 처형된 좌석을 같은 렌더에서 표에 붙잡는다(첫 스냅샷·epoch 직후는 이벤트가 없다)
@@ -125,6 +131,7 @@ export function useDayFx({ view, epoch, chat }: { view: RoomView | null; epoch: 
       queue.current = new ToastQueue();
       setAnnounce(null);
       setToast(null);
+      setPoliceResult(null);
     }
     if (view === null) {
       prevView.current = null;
@@ -183,7 +190,15 @@ export function useDayFx({ view, epoch, chat }: { view: RoomView | null; epoch: 
     // 결과 알림: 한 번에 하나, 새 알림이 이전 것을 바꾼다. 첫 스냅샷·재접속은 dayEvents 가 알림을 만들지 않는다.
     // 밤에 당한 사람은 아침 알림("암살당했습니다")과 함께 산 사람 화면에서 사라진다(떠오름 없음 — dayEvents 에 fx 가 없다).
     const announces = ev.announces;
-    // 경찰 조사 결과 카드(이 화면에만): 채널 기록이 아니라 화면이 만든 내 일지 카드다 — 재접속 복원 대상이 아니다(L8, T-09-40)
+    // 경찰 조사 결과 카드(NIGHT-09): 본인 기록(me.records)의 같은 연결 view 차이에서만 만든다 — 첫 스냅샷·재접속은 prev 가 없어 null
+    const police = reset ? null : policeResultOf(prev, view);
+    if (police !== null) {
+      counter.current += 1;
+      const id = counter.current;
+      setPoliceResult({ id, seat: police.seat, isMafia: police.isMafia });
+      later(POLICE_CARD_AT, () => setPoliceResult((r) => (r?.id === id ? null : r)));
+    }
+    // 경찰 조사 결과 채팅 카드(이 화면에만): 채널 기록이 아니라 화면이 만든 내 일지 카드다 — 재접속 복원 대상이 아니다(L8, T-09-40)
     for (const c of ev.localCards ?? []) {
       later(c.at, () => chat.addLocalCard({ icon: "eye", title: c.title, text: c.text, at: Date.now() }));
     }
@@ -200,5 +215,5 @@ export function useDayFx({ view, epoch, chat }: { view: RoomView | null; epoch: 
     // eslint 규칙 없음 — later/clearAll 은 ref 와 setState 만 쓰므로 의존성에 넣지 않는다
   }, [view, epoch, chat]);
 
-  return { announce, toast, deny, fading, ghostEnter, killFx };
+  return { announce, toast, deny, fading, ghostEnter, killFx, policeResult };
 }

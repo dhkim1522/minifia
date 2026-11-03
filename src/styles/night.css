@@ -47,6 +47,23 @@
 @keyframes mf-killfx-slash { 0% { opacity: 1; transform: rotate(-28deg) scaleX(0); } 75% { opacity: 1; transform: rotate(-28deg) scaleX(1); } 100% { opacity: 0; transform: rotate(-28deg) scaleX(1); } }
 @media (prefers-reduced-motion: reduce) { .mf-killfx { display: none; } }
 
+/* 경찰 조사 결과 카드(09-20, NIGHT-09, UI-SPEC 245행·363행): 경찰 본인 화면의 아침 진입 0~2.4초. 폭 220·안쪽 16·얼굴 140·간격 10·위 170, 반경 20, 면 night-800.
+   마피아면 테두리 crimson-500·글자 crimson-300(UI-SPEC 407행 진홍 ⑦), 아니면 테두리 night-600·글자 gray-100. 결과 알림(+5)보다 위·막(+8)보다 아래. 가운데 맞춤은 left 로 해서 transform 은 등장 모션이 쓴다. */
+.mf-police-card {
+  position: absolute; left: calc(50% - 110px); top: 170px; z-index: calc(var(--z-toast) + 6); box-sizing: border-box; width: 220px;
+  display: flex; flex-direction: column; align-items: center; gap: 10px; padding: var(--space-md); border-radius: 20px;
+  background: var(--night-800); border: 2px solid var(--night-600); box-shadow: var(--shadow-card); pointer-events: none;
+}
+.mf-police-card.is-mafia { border-color: var(--crimson-500); }
+.mf-police-card.is-enter { animation: mf-police-in var(--dur-med) var(--ease-out) both; }
+.mf-police-card__face { display: block; width: 140px; height: 140px; border-radius: var(--radius-md); object-fit: contain; }
+.mf-police-card__face--fallback { display: flex; align-items: center; justify-content: center; background: var(--night-900); }
+.mf-police-card__face--fallback i { display: block; width: 72px; height: 72px; border-radius: var(--radius-pill); }
+.mf-police-card__label { display: inline-flex; align-items: center; gap: 6px; font-family: var(--font-ui); font-size: 16px; line-height: 1.2; font-weight: 700; color: var(--gray-100); word-break: keep-all; }
+.mf-police-card.is-mafia .mf-police-card__label { color: var(--crimson-300); }
+.mf-police-card__icon { display: inline-flex; flex: none; }
+@keyframes mf-police-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
 /* 유언·쪽지 시트 층(09-17, WILL-01·NIGHT-12, UI-SPEC "유언 쓰기"). 아래 패널(z-overlay) 위 끝에서 8 위, 키보드가 열려 있으면 그 위.
    폭(부모 − 20)과 안쪽 모양은 부품(.mv-will)이 갖는다. --mf-panel-h 는 화면 틀이 패널을 재서 쓴다. */
 .mf-will-layer {
