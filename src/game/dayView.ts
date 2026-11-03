@@ -9,6 +9,7 @@ import { majorityOf } from "../../shared/game/nomination";
 import { EXECUTION_MS } from "../../shared/game/phases";
 import type { ChatChannel, PhaseId, RoomView } from "../../shared/protocol";
 import type { V2IconName } from "../components/v2/V2Icon";
+import { morningText } from "./eliminationText";
 
 /** 문구 표. UI-SPEC "Copywriting Contract" 원문 — 해요체, 마침표·느낌표 없음. 역할 단어는 토론 안내의 '마피아'(모두에게 같은 문장) 하나뿐이다. */
 export const DAY_COPY = {
@@ -70,6 +71,10 @@ export const ANNOUNCE_DAY_MS = 2000;
 /** 처형된 사람이 반투명으로 떠오르는 시간 → 2.4초까지 사라진다(알림 시작 기준) */
 export const GHOST_RISE_MS = 1400;
 export const GHOST_FADE_END_MS = 2400;
+// 09-18: 아침 알림(UI-SPEC 아침 시간표, 시작값). 아침 진입 시각 0 기준.
+/** 아침 36px 알림 시작(막이 걷히는 0.4초 뒤)과 길이 */
+export const ANNOUNCE_MORNING_AT = 400;
+export const ANNOUNCE_MORNING_MS = 2400;
 
 /** 채팅 시스템 줄 한 건. at 은 단계 진입 기준 ms(없으면 즉시) — 지연은 화면이 시계로 실행한다. */
 export interface DayLine {
@@ -95,9 +100,14 @@ export interface PointToast {
 /** 결과 알림(36px) 한 건 — 한 번에 하나, 새 알림이 이전 것을 바꾼다. at·ms 는 단계 진입 기준 ms. */
 export interface DayAnnounce {
   text: string;
+  /** 알림 앞 아이콘(56). 없으면 글자만 */
+  icon?: AnnounceIcon;
   at: number;
   ms: number;
 }
+
+/** 결과 알림 앞 아이콘 이름: target(피해자 있음, 진홍), heal(누군가 살아남), ghost(피해자 본인) */
+export type AnnounceIcon = "target" | "heal" | "ghost";
 
 /** 일회성 연출. ghostRise = 처형된 사람이 반투명으로 떠오르며 사라진다(서버가 유령 위치를 보내는 것이 아니다). */
 export interface DayFx {
@@ -241,6 +251,14 @@ function phaseEntry(prev: RoomView, cur: RoomView, day: NonNullable<RoomView["da
       if (prev.phase !== "nomination" || (reason !== "tie" && reason !== "noVotes")) return;
       out.lines.push({ kind: "system", text: DAY_COPY.noExecution });
       out.announces.push({ text: DAY_COPY.noExecution, at: 0, ms: ANNOUNCE_NOEXEC_MS });
+      return;
+    }
+    case "morning": {
+      // 밤 → 아침으로 들어올 때만. 공개 정보(day.morning·players)만 읽는다 — 누가 살아났는지는 view 에 없다(결정 0044-22)
+      if (prev.phase !== "night") return;
+      const m = morningText(day.morning, (seat) => nameOf(cur, seat));
+      out.announces.push({ text: m.text, ...(m.icon !== undefined ? { icon: m.icon } : {}), at: ANNOUNCE_MORNING_AT, ms: ANNOUNCE_MORNING_MS });
+      out.lines.push({ kind: "hot", text: m.text, at: ANNOUNCE_MORNING_AT });
       return;
     }
     default:

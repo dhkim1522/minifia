@@ -84,3 +84,7 @@
    글씨 뒤의 별도 요소라 E2E H1(글씨를 투명하게 한 사진에서 배경 휘도를 잼)에 반영된다. text-shadow 는 반영되지 않는다. */
 .mf-phasebar__text, .mf-lobby__bar-center { position: relative; isolation: isolate; }
 .mf-phasebar__text::before, .mf-lobby__bar-center::before { content: ""; position: absolute; z-index: -1; inset: -10px -22px -10px -18px; border-radius: 24px; pointer-events: none; background: color-mix(in srgb, var(--night-900) 45%, transparent); filter: blur(8px); }
+
+/* 9페이즈(09-18): 아침 알림 아이콘 중 피해자 있음(target)만 crimson-400 (UI-SPEC 아침 시간표). 나머지 아이콘은 game.css 의 gray-300.
+   진홍 검사가 걸린 game.css·v2.css 를 피해 진홍 예약 규칙을 모아 둔 이 파일에 둔다. */
+.mf-announce__icon.is-death { color: var(--crimson-400); }

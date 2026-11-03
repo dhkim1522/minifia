@@ -107,8 +107,8 @@ interface GameMapProps {
   roleCard?: { unread: boolean; onOpen: () => void };
   /** 테스트 방 방장의 [테스트] 버튼(결정 0022). 있으면 헤더 아래 왼쪽에 놓는다 */
   testButton?: ReactNode;
-  /** 지금 띄울 결과 알림 글자(useDayFx 가 서버 view 의 차이로 만든다). 없으면 null */
-  announce?: string | null;
+  /** 지금 띄울 결과 알림 글자·아이콘(useDayFx 가 서버 view 의 차이로 만든다). 없으면 null */
+  announce?: DayFx["announce"];
   /** useDayFx 가 만든 지목 위 알림(가장 최근 것). id 가 바뀔 때만 띄운다 — 처음 마운트 때의 값은 지난 알림이라 띄우지 않는다 */
   toast?: DayFx["toast"];
   /** 처형 떠오름 연출 중인 좌석 → 시작 시각(useDayFx). 처형된 사람이 연출이 끝날 때까지 표에 남는다 */
@@ -439,7 +439,7 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
       />
       <TopToast {...toast.props} />
       {testButton ? <div className="mf-game__test">{testButton}</div> : null}
-      <ResultAnnounce text={announce} />
+      <ResultAnnounce text={announce?.text ?? null} {...(announce?.icon !== undefined ? { icon: announce.icon } : {})} />
       <GamePanel
         view={view}
         send={send}
