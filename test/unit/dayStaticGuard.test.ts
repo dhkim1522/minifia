@@ -32,6 +32,18 @@ export const REMOVED_DAY_IDENTIFIERS = [
   "recordRows",
   "dayTableGeometry",
   "tablePanelHeight",
+  // 9페이즈 삭제 목록(UI-SPEC 335행), 결정 0061: 8페이즈 밤 임시 틀 — 밤 알약 패널 부품 셋, 알약 문구 표, GamePanel 의 밤 알약 변수,
+  // 경찰·의사 지도 이름표 동사 표, 옛 마피아 밤 안내 키, v1.0 선택 오류·마피아 채팅 안내 문구 키. 경찰·의사는 얼굴 목록(FaceList)으로 고른다.
+  "NightPanel",
+  "PickPill",
+  "NoticePill",
+  "NIGHT_PANEL_TEXT",
+  "nightPill",
+  "pillPick",
+  "PICK_VERB",
+  "mafiaNightHint",
+  "pickError",
+  "mafiaChatNotice",
 ] as const;
 
 /**
@@ -131,6 +143,7 @@ describe("지운 v1.0 낮·처형 화면 이름 (DAY-07)", () => {
       "src/screens/DayScene.tsx",
       "src/screens/verdictScene.tsx",
       "src/components/DayTable.tsx",
+      "src/components/NightPanel.tsx",
       "src/net/useRevealState.ts",
       "src/styles/daytable.css",
       "src/styles/verdict.css",

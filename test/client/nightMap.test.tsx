@@ -331,7 +331,6 @@ describe("밤 마피아 — 선택 수 배지·'확정' 도장 (서버 집계, �
 // ---- Task 2: 밤 역할별 패널·안내·조명·유령 고리·거절 알림 (A1, GHOST-02, UI Considerations E7 #25~#27) ----
 
 const sysLines = (c: ParentNode): string[] => [...c.querySelectorAll("[data-chat-log] > p.mv-chat__sys")].map((p) => (p.textContent ?? "").trim());
-const panelTitle = (c: ParentNode): string | null => c.querySelector(".mf-game__panel .mf-nightpanel h2")?.textContent ?? null;
 const chatChannel = (c: ParentNode): string | null => c.querySelector("[data-chat-panel]")?.getAttribute("data-chat-channel") ?? null;
 const hintText = (c: ParentNode): string | null => c.querySelector(".mf-game__header [data-guide]")?.textContent ?? null;
 const titleText = (c: ParentNode): string | null => c.querySelector(".mf-game__header .mv-phase__title")?.textContent ?? null;
