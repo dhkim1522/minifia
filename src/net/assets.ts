@@ -42,6 +42,12 @@ export function figureSrc(seat: number): { src: string; srcSet: string } {
   return { src: png("table", id, 2), srcSet: `${png("table", id, 2)} 2x, ${png("table", id, 4)} 4x` };
 }
 
+// 경찰·의사 얼굴 목록의 얼굴 그림(9페이즈 NIGHT-09). 좌석 번호 → face-0~7 (design/v2.0/design-system/assets/Faces 의 복사본).
+// 10페이즈가 각자의 의상 얼굴로 바꾼다.
+export function faceSrc(seat: number): string {
+  return `/characters/faces/face-${((seat % 8) + 8) % 8}.png`;
+}
+
 // 탈락한 사람의 자리에 인물 대신 쓰는 유령 그림(ASSET_SPEC §6, 결정 0021). 좌석별 유형 없음. 72px 표시 기준 밀도.
 export function ghostSrc(): { src: string; srcSet: string } {
   return { src: png("ghost", "ghost", 2), srcSet: `${png("ghost", "ghost", 2)} 2x, ${png("ghost", "ghost", 4)} 4x` };
