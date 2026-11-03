@@ -374,10 +374,10 @@ describe("밤 임시 틀 — 역할별 하단 패널 (v1.0 문구 그대로)", (
     expect(ringSeats(container)).toEqual([]);
   });
 
-  it("산 마피아: 마피아 채널 채팅 패널과 헤더 안내 '없앨 사람을 눌러요', 밤 알약은 없다", () => {
+  it("산 마피아: 마피아 채널 채팅 패널과 헤더 안내 '대상에게 다가가요', 밤 알약은 없다", () => {
     const { container } = mount(makeView({ mySeat: 0 }));
     expect(chatChannel(container)).toBe("mafia");
-    expect(hintText(container)).toBe("없앨 사람을 눌러요");
+    expect(hintText(container)).toBe("대상에게 다가가요");
     expect(container.querySelector(".mf-game__panel .mf-nightpanel")).toBeNull();
   });
 
@@ -409,9 +409,27 @@ describe("밤 임시 틀 — 역할별 하단 패널 (v1.0 문구 그대로)", (
       m.show(makeView({ mySeat: seat }));
       expect(m.container.textContent, `seat ${seat}`).not.toContain("마피아 채팅");
       expect(m.container.textContent, `seat ${seat}`).not.toContain("마피아끼리만 보여요");
-      expect(m.container.textContent, `seat ${seat}`).not.toContain("없앨 사람을 눌러요");
+      expect(m.container.textContent, `seat ${seat}`).not.toContain("다가가요");
       cleanup();
     }
+    // 유령(마피아였어도)은 모두의 직업과 밤 행동 안내 그대로, 마피아 안내 문자열이 DOM 에 없다
+    const ghost = mount(makeView({ mySeat: 5, dead: [5], picks: { mafia: [2], police: [], doctor: [] } }));
+    expect(ghost.container.textContent).not.toContain("다가가요");
+    expect(ghost.container.textContent).not.toContain("확정");
+  });
+
+  it("마피아 확정이 새로 서면 마피아 채팅에 hot 줄 '{이름} · 확정' 이 한 번 남고, 같은 확정을 다시 받아도 늘지 않는다. 첫 스냅샷에서는 줄이 없다", () => {
+    const hotLines = (c: ParentNode): string[] => [...c.querySelectorAll("[data-chat-log] > p.is-hot")].map((p) => (p.textContent ?? "").trim());
+    const m = mount(makeView({ mySeat: 0, pick: 2, nightTally: [{ seat: 2, n: 1 }] }));
+    expect(hotLines(m.container)).toEqual([]);
+    m.show(makeView({ mySeat: 0, pick: 2, allyPicks: [2], nightTally: [{ seat: 2, n: 2 }], nightSure: 2 }));
+    expect(hotLines(m.container)).toEqual(["서준 · 확정"]);
+    m.show({ ...makeView({ mySeat: 0, pick: 2, allyPicks: [2], nightTally: [{ seat: 2, n: 2 }], nightSure: 2 }), serverNow: NOW + 900 });
+    expect(hotLines(m.container)).toEqual(["서준 · 확정"]);
+    cleanup();
+    const fresh = mount(makeView({ mySeat: 0, pick: 2, allyPicks: [2], nightTally: [{ seat: 2, n: 2 }], nightSure: 2 }));
+    expect(hotLines(fresh.container)).toEqual([]);
+    expect(sureOf(fresh.container, 2)).toBe("true");
   });
 });
 

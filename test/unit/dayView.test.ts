@@ -491,6 +491,37 @@ describe("dayEvents — 공개 정보만 (T-08-22)", () => {
   });
 });
 
+describe("dayEvents — 마피아 확정 hot 줄 (NIGHT-08, E2 #16)", () => {
+  const nightOf = (over: { role?: "mafia" | "police"; nightSure?: number } = {}): RoomView => {
+    const v = viewOf("night");
+    return { ...v, me: { ...v.me, role: over.role ?? "mafia", ...(over.nightSure !== undefined ? { nightSure: over.nightSure } : {}) } };
+  };
+  const HOT = { kind: "hot", text: "도윤 · 확정", scope: "mafia", icon: "target" };
+
+  it("직전 view 에 확정이 없고 지금 있으면 마피아 채널 hot 줄 한 건", () => {
+    expect(dayEvents(nightOf(), nightOf({ nightSure: 2 })).lines).toEqual([HOT]);
+  });
+
+  it("확정 대상이 바뀌면 새 대상으로 한 번 더 남는다", () => {
+    const lines = dayEvents(nightOf({ nightSure: 2 }), nightOf({ nightSure: 3 })).lines;
+    expect(lines).toEqual([{ ...HOT, text: "지호 · 확정" }]);
+  });
+
+  it("둘 다 같은 확정이면 줄이 없고, 확정이 깨져도 줄이 없다", () => {
+    expect(dayEvents(nightOf({ nightSure: 2 }), nightOf({ nightSure: 2 })).lines).toEqual([]);
+    expect(dayEvents(nightOf({ nightSure: 2 }), nightOf()).lines).toEqual([]);
+  });
+
+  it("첫 스냅샷(reset·prev 없음)에는 줄이 없다", () => {
+    expect(dayEvents(nightOf(), nightOf({ nightSure: 2 }), { reset: true }).lines).toEqual([]);
+    expect(dayEvents(null, nightOf({ nightSure: 2 })).lines).toEqual([]);
+  });
+
+  it("마피아가 아닌 view 에는 nightSure 가 섞여 와도 줄이 없다", () => {
+    expect(dayEvents(nightOf({ role: "police" }), nightOf({ role: "police", nightSure: 2 })).lines).toEqual([]);
+  });
+});
+
 describe("알림 시간표 (UI-SPEC 남은 위험 8)", () => {
   it("상수 값", () => {
     same(
@@ -555,6 +586,14 @@ describe("headerFor — 단계표의 제목·안내 (UI-SPEC)", () => {
     same(hdr(executionView(5, 2, true, g)), { title: "처형", hint: "모두의 직업이 보여요" });
     same(hdr(viewOf("morning", g)), { title: "아침", hint: "모두의 직업이 보여요" });
     same(hdr(viewOf("night", g)), { title: "밤", hint: "모두의 직업과 밤 행동이 보여요" });
+  });
+
+  it("밤 산 마피아는 '대상에게 다가가요', 마피아가 아닌 산 사람은 제목만이다", () => {
+    const night = (role: "mafia" | "police" | "doctor" | "citizen"): RoomView => ({ ...viewOf("night"), me: { seat: 0, isHost: false, role } });
+    same(hdr(night("mafia")), { title: "밤", hint: "대상에게 다가가요" });
+    for (const role of ["police", "doctor", "citizen"] as const) same(hdr(night(role)), { title: "밤" });
+    const ghost = { ...viewOf("night", { players: ghostPlayers, mySeat: 0 }), me: { seat: 0, isHost: false, role: "mafia" as const } };
+    same(hdr(ghost), { title: "밤", hint: "모두의 직업과 밤 행동이 보여요" });
   });
 
   it("변론자 정보가 없으면 안내를 만들지 않는다", () => {
