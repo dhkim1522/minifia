@@ -2248,6 +2248,9 @@ async function nightVictim(ctx, shared) {
     // 봇 마피아가 알람으로 방장(가장 낮은 seat)을 고른다. 밤 30초가 자연스럽게 끝나기를 기다린다
     await armAnnounceWatch(hp);
     await ht.waitFor((v) => v.phase === "morning", 40_000, "밤 뒤 아침(서버 타이머)");
+    // 맥박 큐 시각 기록(window.__mfTension, ?e2e=1·개발 빌드만): 밤 30초 동안 2~4개(09-06 tension.ts)
+    const cues = await hp.evaluate(() => window.__mfTension ?? null);
+    rec(sc, "VC11", "시민 밤에 맥박 큐가 2~4개 기록된다(window.__mfTension)", Array.isArray(cues) && cues.length >= 2 && cues.length <= 4, `큐 ${Array.isArray(cues) ? cues.length : cues}개`);
     const { log, morning: victimAnn } = await waitMorningAnnounce(hp, 6000, /^암살당했습니다$/);
     rec(sc, "VC6", "피해자 본인 화면 알림이 '암살당했습니다' 이다", !!victimAnn, `알림 ${log.filter((a) => a.text).map((a) => a.text).join(" → ") || "없음"}`);
     if (victimAnn) recMany(rec, sc, announceChecks(victimAnn), " (피해자)");
