@@ -241,3 +241,20 @@ describe("ClientMessageSchema endDiscussion (08-07, DAY-03: on 은 불리언)", 
     expect(ClientMessageSchema.safeParse(msg).success).toBe(false);
   });
 });
+
+describe("ClientMessageSchema will·note (09-12, 결정 0061-9·10: 본문 text 하나뿐)", () => {
+  it.each(["will", "note"])("받는다: %s", (t) => {
+    expect(ClientMessageSchema.safeParse({ t, text: "a" }).success).toBe(true);
+    expect(ClientMessageSchema.safeParse({ t, text: "" }).success).toBe(true);
+    expect(ClientMessageSchema.safeParse({ t, text: "a".repeat(300) }).success).toBe(true);
+  });
+
+  it.each(["will", "note"])("거부한다: %s", (t) => {
+    expect(ClientMessageSchema.safeParse({ t, text: "a".repeat(301) }).success).toBe(false);
+    expect(ClientMessageSchema.safeParse({ t, text: 1 }).success).toBe(false);
+    expect(ClientMessageSchema.safeParse({ t }).success).toBe(false);
+    for (const extra of [{ seat: 1 }, { id: "x" }, { ch: "all" }, { pk: "k" }]) {
+      expect(ClientMessageSchema.safeParse({ t, text: "a", ...extra }).success).toBe(false);
+    }
+  });
+});
