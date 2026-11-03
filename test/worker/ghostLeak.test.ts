@@ -3,18 +3,8 @@
 // "오지 않았음" 은 settle(ping/pong)로 증명한다. 실패 출력은 한 줄이어야 해서(TAP) 프레임은 요약 문자열로 비교한다.
 import { describe, expect, it } from "vitest";
 import type { ServerMessage } from "../../shared/protocol";
-import { advanceTo, chatSend, chatsOf, connect, ghostsOf, mark, nextFrame, pause, resetChatRates, seat, send, settle, startedGame, summary, toPhase, typingSend, withRole, worldFramesOf } from "./helpers";
+import { advanceTo, chatSend, chatsOf, connect, ghostsOf, mark, nextFrame, observe, pause, resetChatRates, seat, send, settle, stable, startedGame, summary, toPhase, typingSend, withRole, worldFramesOf } from "./helpers";
 import type { Actor, Game } from "./helpers";
-
-/** 행동 직전 모든 소켓의 위치를 적고, 행동하고, 모든 소켓을 flush 해 소켓별 프레임을 돌려준다. 보낸 쪽 flush 가 먼저다(처리를 마쳤다는 증거). */
-async function observe(g: Game, first: Actor, act: () => void | Promise<void>): Promise<ServerMessage[][]> {
-  const marks = g.socks.map((s) => mark(s));
-  await act();
-  const order = [first, ...g.actors.filter((a) => a !== first)];
-  const out: ServerMessage[][] = g.actors.map(() => []);
-  for (const a of order) out[g.actors.indexOf(a)] = await settle(a.sock, marks[g.actors.indexOf(a)]!);
-  return out;
-}
 
 /** world move 프레임만 'seat' 모양으로. */
 const moveSeats = (msgs: ServerMessage[]): string =>
@@ -118,20 +108,6 @@ describe("산 사람이 유령이 되는 순간 그 사람 소켓에만 전원 s
 });
 
 // ---- 메타모픽: 유령이 무엇을 하든 산 사람 소켓의 프레임 열은 같다 (RESEARCH 메타모픽 설계) ----
-
-const VOLATILE = new Set(["serverNow", "phaseEndsAt", "t0", "at", "c", "seq"]);
-
-/** 휘발 필드(서버 시각·마감·구간 시작·줄 시각·핑 번호·채널별 줄 번호)를 지운 프레임 열 한 줄. 두 구간은 같은 방의 앞뒤라 줄 번호만 다르다. */
-function stable(msgs: ServerMessage[]): string {
-  const strip = (v: unknown): unknown => {
-    if (Array.isArray(v)) return v.map(strip);
-    if (v !== null && typeof v === "object") {
-      return Object.fromEntries(Object.entries(v as Record<string, unknown>).filter(([k]) => !VOLATILE.has(k)).map(([k, x]) => [k, strip(x)]));
-    }
-    return v;
-  };
-  return msgs.map((m) => JSON.stringify(strip(m))).join("|");
-}
 
 interface Rounds {
   g: Game;

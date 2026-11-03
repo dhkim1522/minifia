@@ -416,6 +416,8 @@ export async function driveToEnded(seated: Seated, hook?: (stage: "nomination" |
 export interface StoredWorldRecord {
   v: number;
   segs: Record<string, { p: number[]; t0: number; v: number }>;
+  /** 토론이 끝난 자리 기억(결정 0061-5, 09-04). 지도 단계의 낮 지목부터 있다. */
+  home?: { day: number; pos: Record<string, [number, number]> };
 }
 
 export async function worldOf(code: string): Promise<StoredWorldRecord | undefined> {
@@ -623,4 +625,71 @@ export async function layOf(code: string): Promise<{ key: string | null; slots: 
     out = { key: world.lay?.key ?? null, slots: world.lay?.slots ?? {}, lastMoveAtCount: Object.keys(world.lastMoveAt).length };
   });
   return out;
+}
+
+// ---- 9페이즈 밤·아침 누설 도우미(09-09): ghostLeak.test.ts 의 지역 도우미를 옮겨 nightLeak.test.ts 와 함께 쓴다 ----
+
+/** 행동 직전 모든 소켓의 위치를 적고, 행동하고, 모든 소켓을 flush 해 소켓별 프레임을 돌려준다. 보낸 쪽 flush 가 먼저다(처리를 마쳤다는 증거). */
+export async function observe(g: Game, first: Actor, act: () => void | Promise<void>): Promise<ServerMessage[][]> {
+  const marks = g.socks.map((s) => mark(s));
+  await act();
+  const order = [first, ...g.actors.filter((a) => a !== first)];
+  const out: ServerMessage[][] = g.actors.map(() => []);
+  for (const a of order) out[g.actors.indexOf(a)] = await settle(a.sock, marks[g.actors.indexOf(a)]!);
+  return out;
+}
+
+/** 두 구간을 비교할 때 달라도 되는 휘발 필드. */
+export const VOLATILE = new Set(["serverNow", "phaseEndsAt", "t0", "at", "c", "seq"]);
+
+/** 휘발 필드(서버 시각·마감·구간 시작·줄 시각·핑 번호·채널별 줄 번호)를 지운 프레임 열 한 줄. 두 구간은 같은 방의 앞뒤라 줄 번호만 다르다. */
+export function stable(msgs: ServerMessage[]): string {
+  const strip = (v: unknown): unknown => {
+    if (Array.isArray(v)) return v.map(strip);
+    if (v !== null && typeof v === "object") {
+      return Object.fromEntries(Object.entries(v as Record<string, unknown>).filter(([k]) => !VOLATILE.has(k)).map(([k, x]) => [k, strip(x)]));
+    }
+    return v;
+  };
+  return msgs.map((m) => JSON.stringify(strip(m))).join("|");
+}
+
+/** 이동 한 번을 보낸다. 행위자는 소켓 첨부 playerId 로만 정해진다. */
+export function moveAs(actor: Actor, x: number, z: number): void {
+  send(actor.sock, { t: "move", x, z });
+}
+
+/** 밤 지목 한 번을 보낸다(대상 좌석). */
+export function pickAs(actor: Actor, seatNo: number): void {
+  send(actor.sock, { t: "pick", target: seatNo });
+}
+
+/** 프레임 열 중 마지막 world snap 의 좌석 오름차순 문자열('0,2,3'). snap 이 없으면 'none'. */
+export function snapSeatsOf(msgs: ServerMessage[]): string {
+  const snaps = msgs.filter((m): m is Extract<ServerMessage, { t: "world"; k: "snap" }> => m.t === "world" && m.k === "snap");
+  const last = snaps.at(-1);
+  return last === undefined ? "none" : last.ents.map((e) => e.s).sort((a, b) => a - b).join(",");
+}
+
+/** 저장된 방의 id → 좌석. */
+async function seatOfId(code: string): Promise<Record<string, number>> {
+  const room = (await storedRoom(code)) as unknown as { players: Array<{ id: string; seat: number }> };
+  return Object.fromEntries(room.players.map((p) => [p.id, p.seat]));
+}
+
+/** 저장된 home 기억을 '좌석:x,z' 오름차순 문자열로('일차|0:100,200|1:...'). 기억이 없으면 'none'. */
+export async function homeBySeat(code: string): Promise<string> {
+  const world = await worldOf(code);
+  if (world?.home === undefined) return "none";
+  const seats = await seatOfId(code);
+  const rows = Object.entries(world.home.pos).map(([id, pt]) => [seats[id]!, pt] as const).sort((a, b) => a[0] - b[0]);
+  return `${world.home.day}|${rows.map(([s, pt]) => `${s}:${pt[0]},${pt[1]}`).join("|")}`;
+}
+
+/** 저장된 위치의 구간 끝점(걷던 사람은 가던 곳)을 homeBySeat 와 같은 모양으로('일차' 자리는 day). */
+export async function segEndsBySeat(code: string, day: number): Promise<string> {
+  const world = await worldOf(code);
+  const seats = await seatOfId(code);
+  const rows = Object.entries(world?.segs ?? {}).map(([id, seg]) => [seats[id]!, seg.p.slice(-2)] as const).sort((a, b) => a[0] - b[0]);
+  return `${day}|${rows.map(([s, pt]) => `${s}:${pt[0]},${pt[1]}`).join("|")}`;
 }

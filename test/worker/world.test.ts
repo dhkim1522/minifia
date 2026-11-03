@@ -28,6 +28,9 @@ import {
   settle,
   storedRoom,
   alarmOf,
+  homeBySeat,
+  moveAs,
+  segEndsBySeat,
   until,
   wanderTimes,
   withRole,
@@ -589,4 +592,21 @@ describe("무대 자리 (0,0) 입력 차단 (08-04 Threat Flag)", () => {
     await settle(guest.sock, mk2);
     expect(worldFramesOf(guest.sock, mk2).length).toBe(1);
   });
+});
+
+describe("home 기억 (결정 0061-5)", () => {
+  it("토론이 끝나 지목에 들어가는 순간 각자 토론 마지막 구간의 끝점이 일차와 함께 즉시 저장된다 (지목 배치 슬롯이 아니다)", async () => {
+    const g = await startedGame("discussion");
+    const walker = withRole(g, "citizen")[0]!;
+    const mafia = withRole(g, "mafia")[0]!;
+    moveAs(walker, -120, 60);
+    moveAs(mafia, 160, -80);
+    for (const sock of g.socks) await settle(sock, mark(sock));
+    await flushWorld(g.code);
+    const before = await segEndsBySeat(g.code, 1);
+
+    await advanceTo(g.code, g.socks, "nomination");
+
+    expect(await homeBySeat(g.code)).toBe(before);
+  }, 40_000);
 });
