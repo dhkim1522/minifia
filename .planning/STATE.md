@@ -2,44 +2,44 @@
 gsd_state_version: "1.0"
 milestone: v2.0
 milestone_name: 같은 공간
-current_phase: 08
-current_phase_name: 낮 처형과 유령
-status: executing
-stopped_at: Completed 08-26-PLAN.md
-last_updated: "2026-11-02T18:45:37.947Z"
-last_activity: 2026-11-02
-last_activity_desc: Phase 08 execution started
-state_head: 539dbbe8ce5b2b0cac28e50a731e84d4060d8147
+current_phase: 9
+current_phase_name: 밤과 아침
+status: planning
+stopped_at: Phase 08 complete, ready to plan Phase 9
+last_updated: "2026-11-03T00:40:20.013Z"
+last_activity: 2026-11-03
+last_activity_desc: Phase 08 complete, transitioned to Phase 9
+state_head: 1f963e486a120d63de97df9f8adc3c93e2c05e19
 progress:
   total_phases: 7
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 78
   completed_plans: 78
-  percent: 29
+  percent: 43
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-11-02)
+See: .planning/PROJECT.md (updated 2026-11-03)
 
 **Core value:** 링크 하나로 모인 친구들이 설명 없이 정통 마피아 한 판(6~10분)을 끝까지 마치는 것
-**Current focus:** Phase 08 — 낮 처형과 유령
+**Current focus:** Phase 9 — 밤과 아침
 
 ## Current Position
 
-Phase: 08 (낮 처형과 유령) — EXECUTING
-Plan: 27 of 28
-Status: Ready to execute
-Last activity: 2026-11-02 — Phase 08 execution started
+Phase: 9 — 밤과 아침
+Plan: Not started
+Status: Ready to plan
+Last activity: 2026-11-03 — Phase 08 complete, transitioned to Phase 9
 
-Progress: [███░░░░░░░] 29% (2/7 phases)
+Progress: [████░░░░░░] 43% (3/7 phases)
 
 ## Performance Metrics
 
 **Velocity (v2.0):**
-- Total plans completed: 50
+- Total plans completed: 78
 - Average duration: - min
 - Total execution time: 0.0 hours
 
@@ -49,6 +49,7 @@ Progress: [███░░░░░░░] 29% (2/7 phases)
 |-------|-------|-------|----------|
 | 06 | 23 | - | - |
 | 07 | 27 | - | - |
+| 08 | 28 | - | - |
 
 **Recent Trend:**
 - Last 5 plans: -
@@ -295,6 +296,8 @@ None yet.
 - [6페이즈] WR-01~04 의 내용이 `DEFERRED-BUGS.md` 에 없다 — 연결 계층 코드(`useRoomConnection`·`linkReducer`·`worker/room.ts`)에서 원인을 확인해야 한다
 - [7페이즈] 코드 리뷰 경고 3건 open — WR-01 로비 좌석 재사용 시 입장 전 줄 복원, WR-02 로비 시스템 줄 시각 보정 없음, GR-WR-01 150ms 안 둘째 탭 서버 폐기 시 1.5초 뒤 거짓 알림(`07-REVIEW-DISPOSITION.md`)
 - [7페이즈] 실기기 확인은 모든 개발 뒤 한꺼번에(사용자 결정 2026-11-02) — ROADMAP 백로그 999.1~999.4(UAT 5·6·7·9). CHAT-05 의 Android·삼성 인터넷·카카오톡 인앱 확인은 999.3
+- [8페이즈] 코드 리뷰 CR-01·WR-01~03 수정(미배포, 배포본 `+86b9d06`), Info 7건 open(IN-01~07, `08-REVIEW-DISPOSITION.md`). WR-03 E2E 재시도 경로는 배포본 E2E 로 아직 안 돌려 봄
+- [8페이즈] 실기기 확인(5분 성능·조명·유령 이름표 대비·스크린 리더 청취 등)은 모든 개발 뒤 한꺼번에 — ROADMAP 백로그 999.5
 - [9페이즈] 아침 시작 위치: 결정 0044-18 은 "밤이 끝난 자리" 이지만 리서치는 정체 누설을 우려해 낮 시작 대형 초기화를 권한다 — 9페이즈 논의에서 확정
 - [12페이즈] iOS 무음 스위치·소리 에셋 상업 이용 약관은 실기기·출시 마일스톤에서 확인한다
 - [출시 전] 수익화는 출시 전에 따로 정한다
@@ -320,10 +323,10 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-02T18:45:37.756Z
-Stopped at: Completed 08-26-PLAN.md
+Last session: 2026-11-03T00:40:56.982Z
+Stopped at: Phase 08 complete, ready to plan Phase 9
 Resume file: None
 
 ## Operator Next Steps
 
-- 8페이즈: `/gsd-ui-phase 8` → `/gsd-plan-phase 8`
+- 9페이즈: `/gsd-ui-phase 9` → `/gsd-plan-phase 9` (밤과 아침, 밤·아침 임시 틀 교체, 아침 시작 위치 결정 포함)
