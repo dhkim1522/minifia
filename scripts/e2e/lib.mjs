@@ -313,6 +313,45 @@ export function gamePanelHeight(roomH, kind, opts) {
   return logHeightFor(roomH) + extra;
 }
 
+// ---- 9페이즈 표식·판정 (09-21, 09-UI-SPEC "검사 가능하게 둘 것" 450~455행). 8페이즈 표식(data-game-stage·data-announce·data-pick 등)은 그대로라 여기 없다. ----
+
+/** 9페이즈가 새로 더한 DOM 표식 11개. test/unit/e2eContract.test.ts 가 각각이 src/ 에 실제로 있는지 확인한다(이름 오타 방지). */
+export const NIGHT_MARKERS = Object.freeze([
+  "data-night-dark", // 시민 편 어둠(게임 맵 루트, 세 역할 같은 값)
+  "data-tension-pulse", // 맥박 비네트
+  "data-face-list", // 경찰·의사 얼굴 목록
+  "data-face", // 얼굴 칸 data-face="{seat}"
+  "data-will-button", // 깃펜
+  "data-will-sheet", // 유언 시트 will|note
+  "data-note-button", // [쪽지]
+  "data-card", // 채팅 카드 will|note
+  "data-chalk", // 분필 "x,z"
+  "data-curtain", // 장면 전환 막(진한 동안만)
+  "data-kill-fx", // 암살 번쩍임
+]);
+
+/** 사각형 값 하나라도 숫자가 아니면 측정 불가 — 조용히 통과시키지 않고 거짓으로 돌려준다. */
+const allNum = (...xs) => xs.every(isNum);
+
+/**
+ * 이름표 사각형이 스테이지 사각형 안에 완전히 들어오는가("밤마다 내 이름표가 스테이지 안", 450~455행).
+ * tag = { x, y, w, h }(왼쪽 위 + 크기), stage = { top, bottom, left, right }. 부동소수 오차 0.01px 만 봐주고 1px 라도 밖이면 false. 측정값이 없으면 false.
+ */
+export function tagInStage({ tag, stage } = {}) {
+  if (!tag || !stage || !allNum(tag.x, tag.y, tag.w, tag.h, stage.top, stage.bottom, stage.left, stage.right)) return false;
+  const e = 0.01;
+  return tag.x >= stage.left - e && tag.y >= stage.top - e && tag.x + tag.w <= stage.right + e && tag.y + tag.h <= stage.bottom + e;
+}
+
+/**
+ * 얼굴 칸의 이름이 칸 밖으로 넘치지 않는가(8자 이름, 450~455행). cell·name = DOMRect 모양 { left, top, right, bottom }. 측정값이 없으면 false.
+ */
+export function faceNameFits({ cell, name } = {}) {
+  if (!cell || !name || !allNum(cell.left, cell.top, cell.right, cell.bottom, name.left, name.top, name.right, name.bottom)) return false;
+  const e = 0.01;
+  return name.left >= cell.left - e && name.top >= cell.top - e && name.right <= cell.right + e && name.bottom <= cell.bottom + e;
+}
+
 /** 지목 이름표 버튼의 개수 상한(산 사람 8명 중 나를 뺀 7명이 최대지만 UI-SPEC 은 버튼 8개까지 본다). */
 export const PICK_BUTTON_MAX = 8;
 
