@@ -5,16 +5,16 @@ milestone_name: 같은 공간
 current_phase: 9
 current_phase_name: 밤과 아침
 status: executing
-stopped_at: Completed 09-05-PLAN.md
-last_updated: "2026-11-03T04:03:46.047Z"
+stopped_at: Completed 09-06-PLAN.md
+last_updated: "2026-11-03T04:06:04.337Z"
 last_activity: 2026-11-03
 last_activity_desc: Phase 9 execution started
-state_head: 3f8102d4a0a680d4d7d3722aa16801311b661e79
+state_head: 0659786677e961f93a522bb524e302854852e5d7
 progress:
   total_phases: 7
   completed_phases: 3
   total_plans: 101
-  completed_plans: 83
+  completed_plans: 84
   percent: 43
 ---
 
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-11-03)
 ## Current Position
 
 Phase: 9 (밤과 아침) — EXECUTING
-Plan: 6 of 23
+Plan: 7 of 23
 Status: Ready to execute
 Last activity: 2026-11-03 — Phase 9 execution started
 
@@ -143,6 +143,7 @@ Progress: [████░░░░░░] 43% (3/7 phases)
 | Phase 09 P03 | 20min | 2 tasks | 5 files |
 | Phase 09 P04 | 10min | 2 tasks | 2 files |
 | Phase 09 P05 | 15min | 3 tasks | 14 files |
+| Phase 09 P06 | 6min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -294,6 +295,7 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 09]: 결정 0061: 밤 이동은 산 마피아와 유령만, 마피아 확정은 산 마피아 전원 같은 대상(도착 무관·난수 없음), 밤 진입 snap 은 시민 편 본인 한 칸, 아침은 모두 home 으로
 - [Phase 09]: 마피아 봇은 실행 시점에 동료 선택을 따르고 없으면 가장 낮은 산 비마피아를 고른다 (결정 0061-18, 난수 없음)
 - [Phase 09]: 탈락한 마피아는 유령으로 밤 마피아 위치를 받는다 (09-03, 가정 A1)
+- [Phase 09]: 09-06: 긴장 큐 창 28000ms 는 서버 밤 길이를 import 하지 않는 지역 상수, 창 넘는 큐는 버림(첫 두 큐는 항상 창 안)
 
 ### Pending Todos
 
@@ -331,8 +333,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-03T04:03:45.731Z
-Stopped at: Completed 09-05-PLAN.md
+Last session: 2026-11-03T04:06:04.017Z
+Stopped at: Completed 09-06-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
