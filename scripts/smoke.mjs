@@ -318,6 +318,8 @@ function collectRoleStringPaths(value, path, out) {
 }
 
 const sortedKeys = (o) => Object.keys(o).sort().join(",");
+// 서버가 만든 사망 카드 줄(유언)만 k 키를 더 싣는다(결정 0061-11). 일반 대화 줄에는 k 가 없어야 한다.
+const lineKeys = (line, base) => [...base, ...(line.k === "will" ? ["k"] : [])].sort().join(",");
 // 클라이언트가 지금 보는 단계 키 '일차:단계'(shared/game/audience.ts phaseKey 와 같은 모양). 로비는 day 가 없어 0.
 const pkOf = (c) => {
   const v = lastView(c);
@@ -724,6 +726,17 @@ async function stageFull(url, args) {
   const allCitizens = clients.filter((c) => c.role === "citizen");
   if (allCitizens.length < 2) fail("낮 시작 때 시민이 2명 미만임");
   const e1Client = allCitizens.reduce((a, b) => (b.seat > a.seat ? b : a));
+  // 유언(WILL-01, 가정 A2): 첫 밤 피해자가 될 시민(처형 대상 e1 을 뺀 가장 작은 seat 의 시민)이 첫 토론에 유언을 저장한다.
+  // 저장은 본인 소켓의 me.will 로만 돌아오고, 다른 클라이언트는 아침 카드 전까지 이 문장을 받지 않는다(결정 0061-10·11).
+  const WILL_TEXT = "스모크 유언";
+  const willClient = allCitizens.filter((c) => c !== e1Client).reduce((a, b) => (b.seat < a.seat ? b : a));
+  const willAt = performance.now();
+  willClient.ws.send(JSON.stringify({ t: "will", text: WILL_TEXT }));
+  await waitUntil(() => lastView(willClient)?.me.will === WILL_TEXT, STATE_LIMIT_MS, "유언 저장 뒤 본인 view.me.will 이 저장한 본문으로 오지 않음");
+  for (const c of clients) {
+    if (c === willClient) continue;
+    if (c.frames.some((f) => f.at >= willAt && f.raw.includes(WILL_TEXT))) fail(`${c.nickname} 가 아침 전에 다른 사람의 유언 본문을 받음`);
+  }
   const trial1 = await runExecutionDay(1, e1Client);
 
   // (14) 밤: 처형 마감 뒤 모든 클라이언트가 night 를 받는다(넘기기 없이 서버 타이머). 처형이 성립한 날이라 처형 무효 이유가 없다.
@@ -759,6 +772,7 @@ async function stageFull(url, args) {
   // 결정적 행동(결정 0061-6: 마피아 확정은 전원 일치 — 산 마피아 모두가 같은 대상을 고른다): 마피아 전원 → 가장 작은 산 시민 seat X, 경찰 → 가장 작은 마피아 seat, 의사 → 자신
   const targetX = Math.min(...citizenClients.map((c) => c.seat));
   const xClient = clients.find((c) => c.seat === targetX);
+  if (xClient !== willClient) fail(`첫 밤 피해자(seat ${targetX})가 유언을 저장한 클라이언트(seat ${willClient.seat})와 다름`);
   const policeTarget = Math.min(...mafiaClients.map((c) => c.seat));
   const nightStartAt = (c) => firstState(c, "night").at;
   const hasPicked = (c, seat) => lastView(c)?.phase === "night" && lastView(c).me.pick === seat;
@@ -767,6 +781,7 @@ async function stageFull(url, args) {
   if (doctorClient) doctorClient.ws.send(JSON.stringify({ t: "pick", target: doctorClient.seat }));
   const actors = [...mafiaClients.map((m) => [m, targetX]), [policeClient, policeTarget], ...(doctorClient ? [[doctorClient, doctorClient.seat]] : [])];
   await waitUntil(() => actors.every(([c, seat]) => hasPicked(c, seat)), STATE_LIMIT_MS, "밤 행동 뒤 본인 선택(me.pick)이 행위자 화면에 오지 않음");
+  const nightTown = clients.filter((c) => c.role !== "mafia" && !dead.has(c)); // 밤에 산 시민 편(시민·경찰·의사)
   // 마피아 한 명이 밤 채팅·입력 중 → ch mafia 로 마피아(보낸 사람 포함)에게만. 살아 있는 비마피아에게는 chat·typing 프레임이 가지 않는다(CHAT-02).
   const talker = mafiaClients[0];
   const NIGHT_TEXT = "밤 마피아 스모크 줄";
@@ -794,6 +809,30 @@ async function stageFull(url, args) {
 
   // (15) 아침: 모든 클라이언트가 morning 을, 그다음 승패가 나지 않았으면 2일차 dayAnnounce 를 서버 타이머로 받는다
   await waitUntil(() => clients.every((c) => firstState(c, "morning")), NIGHT_WAIT_MS, "밤 마감 뒤 morning 이 모든 클라이언트에 오지 않음");
+  // (15a) 시민 편의 밤(NIGHT-07, L1): 밤 진입 때 받은 world snap 은 본인 좌석 하나뿐이고, 그 snap 뒤 아침 state 전까지 world·typing·mafia 채널 chat 프레임이 0개다.
+  for (const c of nightTown) {
+    const mornAt = firstState(c, "morning").at;
+    const snaps = c.frames.filter((f) => f.at >= firstState(c, "execution").at && f.at < mornAt && f.msg?.t === "world" && f.msg.k === "snap");
+    const snap = snaps.at(-1);
+    if (!snap) fail(`밤 시민 편 ${c.nickname} 가 밤 진입 world snap 을 받지 못함`);
+    const seats = snap.msg.ents.map((e) => e.s).join(",");
+    if (seats !== String(c.seat)) fail(`밤 시민 편 ${c.nickname} 의 밤 진입 snap 좌석이 본인(${c.seat}) 하나가 아님: ${seats}`);
+    const after = c.frames.filter((f) => f.at > snap.at && f.at < mornAt);
+    const worldN = after.filter((f) => f.msg?.t === "world").length;
+    const typedN = after.filter((f) => f.msg?.t === "typing").length;
+    const mafiaChatN = after.filter((f) => f.msg?.t === "chat" && f.msg.ch === "mafia").length;
+    if (worldN + typedN + mafiaChatN !== 0) fail(`밤 시민 편 ${c.nickname} 가 밤 snap 뒤 아침 전에 world ${worldN}·typing ${typedN}·mafia chat ${mafiaChatN} 프레임을 받음`);
+  }
+  info(`밤 시민 편 ${nightTown.length}명: 진입 snap 본인 한 칸, snap 뒤 아침 전 world·typing·mafia chat 0프레임`);
+  // 아침 전에는 유언 본문이 카드 줄 밖의 어떤 프레임에도 없다(피해자 본인의 state 는 me.will 로 가지므로 뺀다)
+  for (const c of clients) {
+    if (c === willClient) continue;
+    const mornAt = firstState(c, "morning").at;
+    if (c.frames.some((f) => f.at < mornAt && f.raw.includes(WILL_TEXT) && !(f.msg?.t === "chat" && f.msg.k === "will"))) fail(`${c.nickname} 가 아침 전에 다른 사람의 유언 본문을 받음`);
+  }
+  // 아침 카드(MORN-02, WILL-01): 모든 클라이언트(탈락자 포함)가 피해자 seat 의 유언 카드 한 줄(k will, ch all)을 받는다.
+  const hasWillCard = (c) => chatsOf(c).some((f) => f.msg.k === "will" && f.msg.ch === "all" && f.msg.seat === targetX && f.msg.text === WILL_TEXT);
+  await waitUntil(() => clients.every(hasWillCard), STATE_LIMIT_MS, "아침 유언 카드(k will)가 모든 클라이언트에 오지 않음");
   // (15b) 탈락자 채널(CHAT-03): 아침에 탈락한 X 의 줄은 ch ghost 로 탈락자(X와 처형된 시민)에게만 간다. 산 사람 쪽 0건은 아래 최종 단언이 본다.
   const ghostClient = xClient;
   xClient.ghostFrom = firstState(xClient, "morning").at;
@@ -808,11 +847,11 @@ async function stageFull(url, args) {
   // 마피아가 다시 붙으면 공개 줄에 더해 밤 마피아 줄도 돌아온다. 복원이 라이브보다 넓어지지 않는다(T-07-35).
   const townLines = await reconnectAndReplay(policeClient, "산 시민 편");
   if (townLines.some((l) => l.ch !== "all")) fail(`산 시민 편 재접속 chatLog 에 ch all 밖의 줄이 있음: ${[...new Set(townLines.map((l) => l.ch))].join(",")}`);
-  if (townLines.map((l) => l.text).join("|") !== DAY_TEXTS.join("|")) fail("산 시민 편 재접속 chatLog 의 낮 줄 순서·본문이 보낸 순서와 다름");
+  if (townLines.map((l) => l.text).join("|") !== [...DAY_TEXTS, WILL_TEXT].join("|")) fail("산 시민 편 재접속 chatLog 의 낮 줄 + 유언 카드 순서·본문이 받은 순서와 다름");
   const mafiaLines = await reconnectAndReplay(talker, "마피아");
   if (!mafiaLines.some((l) => l.ch === "mafia" && l.text === NIGHT_TEXT && l.seat === talker.seat)) fail("마피아 재접속 chatLog 에 밤 마피아 줄이 없음");
   if (mafiaLines.some((l) => l.ch === "ghost")) fail("마피아 재접속 chatLog 에 ghost 줄이 있음");
-  info(`재접속 복원: 산 시민 편 ${townLines.length}줄(전부 ch all), 마피아 ${mafiaLines.length}줄`);
+  info(`재접속 복원: 산 시민 편 ${townLines.length}줄(전부 ch all, 유언 카드 포함), 마피아 ${mafiaLines.length}줄`);
 
   // (16) 다음 낮들: 승패가 날 때까지 낮을 같은 방식으로 돈다. 마피아가 남은 날은 마피아 한 명을 처형하고(처형으로 끝나는 판 포함),
   //      그 밤에는 아무도 행동하지 않아 아침에 탈락자가 없다. 마지막은 모든 클라이언트가 ended 에서 같은 승리 팀을 본다.
@@ -979,7 +1018,8 @@ async function stageFull(url, args) {
     for (const f of c.frames) {
       const m = f.msg;
       if (m?.t === "chat") {
-        if (sortedKeys(m) !== CHAT_LINE_KEYS.join(",")) fail(`${c.nickname} 의 chat 프레임 키 집합이 다름: ${sortedKeys(m)} (기대 ${CHAT_LINE_KEYS.join(",")})`);
+        const wantKeys = lineKeys(m, CHAT_LINE_KEYS);
+        if (sortedKeys(m) !== wantKeys) fail(`${c.nickname} 의 chat 프레임 키 집합이 다름: ${sortedKeys(m)} (기대 ${wantKeys})`);
         if (!CHANNELS.includes(m.ch)) fail(`${c.nickname} 의 chat 프레임 ch 가 채널 이름이 아님: ${m.ch}`);
         if (!Number.isInteger(m.seq) || m.seq < 1) fail(`${c.nickname} 의 chat 프레임 seq 가 1 이상 정수가 아님: ${m.seq}`);
         if (!Number.isInteger(m.seat) || typeof m.text !== "string" || typeof m.at !== "number") fail(`${c.nickname} 의 chat 프레임 값 형식이 다름`);
@@ -993,14 +1033,23 @@ async function stageFull(url, args) {
         if (sortedKeys(m) !== CHAT_LOG_KEYS.join(",")) fail(`${c.nickname} 의 chatLog 프레임 키 집합이 다름: ${sortedKeys(m)}`);
         if (!Array.isArray(m.lines)) fail(`${c.nickname} 의 chatLog.lines 가 배열이 아님`);
         for (const l of m.lines) {
-          if (sortedKeys(l) !== CHAT_LOG_LINE_KEYS.join(",")) fail(`${c.nickname} 의 chatLog 줄 키 집합이 다름: ${sortedKeys(l)}`);
+          if (sortedKeys(l) !== lineKeys(l, CHAT_LOG_LINE_KEYS)) fail(`${c.nickname} 의 chatLog 줄 키 집합이 다름: ${sortedKeys(l)}`);
           if (!CHANNELS.includes(l.ch)) fail(`${c.nickname} 의 chatLog 줄 ch 가 채널 이름이 아님: ${l.ch}`);
         }
       }
     }
   }
   // (b) 공개 채널(CHAT-01): ch all 줄은 모든 클라이언트가 같은 {seat, seq, text, at} 로, seq 1 부터 틈 없이 보낸 순서대로 받는다.
-  const allLines = clients.map((c) => chatsOf(c).filter((f) => f.msg.ch === "all").map((f) => f.msg));
+  const allLinesWithCards = clients.map((c) => chatsOf(c).filter((f) => f.msg.ch === "all").map((f) => f.msg));
+  // 유언 카드(k will)는 일반 줄과 같은 seq 번호를 이어 받는다: 보낸 줄 4개 다음 5번, 피해자 seat, 본문은 저장한 유언, 모든 클라이언트가 같다.
+  allLinesWithCards.forEach((all, i) => {
+    const cards = all.filter((l) => l.k !== undefined);
+    if (cards.length !== 1 || cards[0].k !== "will" || cards[0].seat !== targetX || cards[0].text !== WILL_TEXT || cards[0].seq !== DAY_TEXTS.length + 1) {
+      fail(`${clients[i].nickname} 가 받은 사망 카드가 유언 한 줄(seq ${DAY_TEXTS.length + 1}, seat ${targetX})이 아님: ${JSON.stringify(cards)}`);
+    }
+    if (JSON.stringify(cards[0]) !== JSON.stringify(allLinesWithCards[0].find((l) => l.k !== undefined))) fail(`${clients[i].nickname} 가 받은 유언 카드가 방장과 다름`);
+  });
+  const allLines = allLinesWithCards.map((all) => all.filter((l) => l.k === undefined));
   allLines.forEach((lines, i) => {
     if (lines.map((l) => l.seq).join(",") !== DAY_TEXTS.map((_, k) => k + 1).join(",")) fail(`${clients[i].nickname} 가 받은 ch all 줄 seq 가 1..${DAY_TEXTS.length} 틈 없는 순서가 아님: ${lines.map((l) => l.seq).join(",")}`);
     if (lines.map((l) => l.text).join("|") !== DAY_TEXTS.join("|")) fail(`${clients[i].nickname} 가 받은 ch all 줄의 본문 순서가 보낸 순서와 다름`);
@@ -1095,6 +1144,8 @@ async function stageFull(url, args) {
     if (JSON.stringify(v.day?.morning) !== morningJson) fail(`${clients[i].nickname} 의 day.morning 이 다른 클라이언트와 다름`);
   });
   const morning = morningViews[0].day.morning;
+  // day.morning 은 탈락자 seat 하나뿐이다(문구 번호·유언 본문·쪽지가 없다, 결정 0061-17). 유언은 chat 카드로만 간다.
+  if (Object.keys(morning).sort().join(",") !== "eliminated") fail(`아침 day.morning 의 키가 eliminated 하나가 아님: ${Object.keys(morning).sort().join(",")}`);
   if (morning.eliminated !== targetX) fail(`아침 탈락자가 지목한 seat(${targetX})가 아님: ${morning.eliminated}`);
   morningViews.forEach((v, i) => {
     for (const p of v.players) {
@@ -1161,7 +1212,8 @@ async function stageFull(url, args) {
   if (nightEnds.size !== 1) fail(`night 의 phaseEndsAt 이 클라이언트마다 다름 (${nightEnds.size}종)`);
   const morningEnds = new Set(morningViews.map((v) => v.phaseEndsAt));
   if (morningEnds.size !== 1) fail(`morning 의 phaseEndsAt 이 클라이언트마다 다름 (${morningEnds.size}종)`);
-  if (morningViews.some((v) => v.phaseDurationMs !== 7_000)) fail("morning phaseDurationMs 가 7000(기본 5 + 피해자 2)이 아님");
+  // 아침 길이(MORN-04, 결정 0061-13): 기본 5 + 피해자 2 + 유언 2 = 9초(쪽지 없음). 모든 클라이언트가 같다.
+  if (morningViews.some((v) => v.phaseDurationMs !== 9_000)) fail(`morning phaseDurationMs 가 9000(피해자 + 유언)이 아님: ${morningViews.map((v) => v.phaseDurationMs).join(",")}`);
 
   for (const c of clients) await closeSocket(c);
 
