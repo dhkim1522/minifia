@@ -1919,6 +1919,31 @@ describe("게임 장면(08-12): 카메라·조명·긴장·떠다님·처형 연
     });
   });
 
+  describe("내 캐릭터 빛 (NIGHT-07, UI-SPEC 단계 조명)", () => {
+    it("nightCitizen 조명에서는 내 캐릭터 자리로 setSelfLight, 다른 단계에서는 null", async () => {
+      const s = await openGame({ scene: sceneOf({ 0: {}, 1: {}, 2: {}, 3: {} }, { lighting: "nightCitizen" }) });
+      const r = s.world.renderers[0]!;
+      frames(100);
+      const at = r.setSelfLight.mock.calls.at(-1)![0] as { x: number; z: number };
+      expect(at.x).toBeCloseTo(2, 2);
+      expect(at.z).toBeCloseTo(1, 2);
+      expect(r.setLighting.mock.calls.at(-1)).toEqual(["nightCitizen"]);
+      const n = r.setSelfLight.mock.calls.length;
+      frames(200);
+      expect(r.setSelfLight.mock.calls.length).toBe(n);
+      s.rerender({ scene: sceneOf(ALL, { lighting: "night" }) });
+      frames(50);
+      expect(r.setSelfLight.mock.calls.at(-1)![0]).toBeNull();
+    });
+
+    it("렌더러에 setSelfLight 가 없어도 예외 없이 돈다", async () => {
+      const s = await openGame({ scene: sceneOf(ALL) });
+      delete (s.world.renderers[0] as { setSelfLight?: unknown }).setSelfLight;
+      s.rerender({ scene: sceneOf(ALL, { lighting: "nightCitizen" }) });
+      expect(() => frames(100)).not.toThrow();
+    });
+  });
+
   describe("떠다님·무대 높이·처형 연출", () => {
     it("ghost 좌석은 높이 0.35 ± 0.08 안에서 시간에 따라 떠다닌다", async () => {
       const s = await openGame({ scene: sceneOf({ ...ALL, 3: { ghost: true } }) });

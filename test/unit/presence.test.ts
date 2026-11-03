@@ -2,6 +2,7 @@
 // 서버 view 하나에서 그 viewer 의 보이는 좌석·카메라·조명·긴장이 정해진다. 산 사람 화면 상태에는 유령 좌석이 없다.
 // 실패 출력은 한 줄이어야 해서(TAP) 비교는 JSON 문자열로 한다.
 import { describe, expect, it } from "vitest";
+import type { RoleId } from "../../shared/game/roles";
 import type { DayView, PhaseId, PublicPlayer, RoomView } from "../../shared/protocol";
 import { GHOST_FADE_END_MS, GHOST_RISE_MS } from "../../src/game/dayView";
 import { GATHER_CENTER, ZOOM_MAJORITY, ZOOM_MIN_STAGE_H } from "../../src/world/camera";
@@ -10,6 +11,7 @@ import {
   executionFade,
   ghostFloatY,
   leaderShift,
+  lightingFor,
   lightingOf,
   pointingOf,
   sceneLook,
@@ -375,5 +377,57 @@ describe("sceneLook 의 chalk (MORN-01, 결정 0061-14)", () => {
     const ghost = sceneLook(viewOf("discussion", { day, dead: [0], spectate: true }), { stageH: 400 });
     expect(alive.chalk).toEqual({ x: -0.5, z: 0.75 });
     expect(ghost.chalk).toEqual({ x: -0.5, z: 0.75 });
+  });
+});
+
+// ---- 09-10 Task 2: 밤 조명·좌석 표 (NIGHT-07, NIGHT-10, E3 #20) ----
+const asRole = (view: RoomView, role: RoleId): RoomView => ({ ...view, me: { ...view.me, role } });
+
+describe("lightingFor (UI-SPEC 단계 조명: 밤은 보는 사람마다 다르다)", () => {
+  it("밤·산 시민·경찰·의사 → nightCitizen", () => {
+    for (const role of ["citizen", "police", "doctor"] as const) expect(lightingFor(asRole(viewOf("night", { mySeat: 1 }), role)), role).toBe("nightCitizen");
+  });
+  it("밤·산 마피아 → night, 밤·유령 → nightGhost", () => {
+    expect(lightingFor(asRole(viewOf("night", { mySeat: 1 }), "mafia"))).toBe("night");
+    expect(lightingFor(asRole(viewOf("night", { mySeat: 1, dead: [1] }), "citizen"))).toBe("nightGhost");
+    expect(lightingFor(asRole(viewOf("night", { mySeat: 1, dead: [1], spectate: true }), "mafia"))).toBe("nightGhost");
+  });
+  it("아침은 누구나 morning, 낮 단계는 lightingOf 와 같다", () => {
+    for (const role of ["citizen", "mafia"] as const) expect(lightingFor(asRole(viewOf("morning"), role))).toBe("morning");
+    expect(lightingFor(viewOf("discussion"))).toBe("talk");
+    expect(lightingFor(viewOf("nomination"))).toBe("vote");
+    expect(lightingFor(viewOf("defense"))).toBe("trial");
+    expect(lightingFor(viewOf("verdict"))).toBe("vote");
+  });
+});
+
+describe("visibleSeats — 밤 시민 편 좌석 표 (T-09-21, 결정 0002·0021)", () => {
+  it("밤·산 시민·경찰·의사 viewer 는 내 좌석 하나뿐이다(서버가 남의 위치를 보내지 않는다)", () => {
+    for (const role of ["citizen", "police", "doctor"] as const) {
+      const seats = visibleSeats(asRole(viewOf("night", { mySeat: 2 }), role));
+      same(Object.keys(seats).map(Number), [2]);
+      same(seats[2], { show: true, ghost: false });
+    }
+  });
+  it("밤·산 마피아는 산 좌석 전부, 밤·유령은 모두(탈락 좌석 ghost), 아침·산 사람은 산 좌석 전부", () => {
+    same(Object.keys(visibleSeats(asRole(viewOf("night", { mySeat: 1, dead: [4] }), "mafia"))).map(Number), [0, 1, 2, 3]);
+    const ghost = visibleSeats(asRole(viewOf("night", { mySeat: 4, dead: [4] }), "citizen"));
+    same(Object.keys(ghost).map(Number), [0, 1, 2, 3, 4]);
+    expect(ghost[4]?.ghost).toBe(true);
+    same(Object.keys(visibleSeats(asRole(viewOf("morning", { mySeat: 1, dead: [4] }), "citizen"))).map(Number), [0, 1, 2, 3]);
+  });
+  it("낮 단계의 시민은 산 좌석 전부를 본다(밤에만 줄어든다)", () => {
+    same(Object.keys(visibleSeats(asRole(viewOf("discussion", { mySeat: 1 }), "citizen"))).map(Number), [0, 1, 2, 3, 4]);
+  });
+});
+
+describe("sceneLook — 시민·경찰·의사의 밤 장면 값이 같다 (NIGHT-07, NIGHT-10, E3 #20)", () => {
+  it("seats·lighting·camera·tension 이 역할과 무관하게 같고 lighting 은 nightCitizen 이다", () => {
+    const looks = (["citizen", "police", "doctor"] as const).map((role) => sceneLook(asRole(viewOf("night", { mySeat: 3 }), role), { stageH: 400 }));
+    expect(flat(looks[1])).toBe(flat(looks[0]));
+    expect(flat(looks[2])).toBe(flat(looks[0]));
+    expect(looks[0]!.lighting).toBe("nightCitizen");
+    same(Object.keys(looks[0]!.seats).map(Number), [3]);
+    same(looks[0]!.camera, { mode: "follow" });
   });
 });

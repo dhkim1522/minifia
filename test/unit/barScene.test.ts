@@ -62,9 +62,9 @@ describe("재즈 바 장면 구조 (MAP-01, 렌더 예산)", () => {
     bar.dispose();
   });
 
-  it("점광원 3 · 반구광 1 · 달빛 방향광 1(그림자 1024)", () => {
+  it("점광원 4(무대·펜던트 둘·내 캐릭터) · 반구광 1 · 달빛 방향광 1(그림자 1024)", () => {
     const bar = buildBarScene(LADDER[0]!);
-    expect(lightsOf(bar.root, PointLight)).toHaveLength(3);
+    expect(lightsOf(bar.root, PointLight)).toHaveLength(4);
     expect(lightsOf(bar.root, HemisphereLight)).toHaveLength(1);
     const dirs = lightsOf(bar.root, DirectionalLight);
     expect(dirs).toHaveLength(1);
@@ -432,6 +432,99 @@ describe("분필 윤곽 (MORN-01, 결정 0061-14, 블록아웃 blockout.js 276~2
     expect((chalk.material as MeshBasicMaterial).opacity).toBeCloseTo(0.3, 9);
     bar.setChalk(null, 0.85);
     expect(chalk.visible).toBe(false);
+    bar.dispose();
+  });
+});
+
+describe("시민 편 어둠·유령 밤 조명·내 캐릭터 빛 (NIGHT-07, NIGHT-10, UI-SPEC 단계 조명, Pitfall 7)", () => {
+  const ALL_PHASES: LightingPhase[] = ["talk", "vote", "trial", "night", "nightCitizen", "nightGhost", "morning"];
+  const room = (bar: ReturnType<typeof buildBarScene>): number => (bar.meshes.emissiveRoom!.material as MeshBasicMaterial).color.r;
+  const vote = (bar: ReturnType<typeof buildBarScene>): number => (bar.meshes.emissiveVote!.material as MeshBasicMaterial).color.r;
+  const lum = (hex: string): number => {
+    const c = new Color(hex);
+    return c.r + c.g + c.b;
+  };
+
+  it("nightCitizen 행: 반구 0.05π · 달빛 0.08π · 노출 0.75 · 무대·펜던트·실내 emissive 0 · 내 빛 1.4×4", () => {
+    const t = LIGHT_TUNE.nightCitizen;
+    expect(t.hemi).toBeCloseTo(0.05 * Math.PI, 9);
+    expect(t.moon).toBeCloseTo(0.08 * Math.PI, 9);
+    expect(t.exposure).toBeCloseTo(0.75, 9);
+    expect([t.stage, t.pendant, t.emissive.room, t.emissive.vote, t.glow.room, t.glow.vote]).toEqual([0, 0, 0, 0, 0, 0]);
+    expect(t.self).toBeCloseTo(1.4 * 4, 9);
+  });
+
+  it("nightGhost 행: night 달빛·반구와 같고 무대 쪽 기운(vote 그룹)은 night 의 0.4 배", () => {
+    const g = LIGHT_TUNE.nightGhost;
+    const n = LIGHT_TUNE.night;
+    expect([g.hemi, g.moon, g.exposure, g.stage, g.pendant]).toEqual([n.hemi, n.moon, n.exposure, n.stage, n.pendant]);
+    expect(g.emissive.vote).toBeCloseTo(n.emissive.vote * 0.4, 9);
+    expect(g.glow.vote).toBeCloseTo(n.glow.vote * 0.4, 9);
+    expect(g.self).toBe(0);
+  });
+
+  it("두 새 행의 하늘·안개 색은 night 보다 밝지 않다(낮도 마피아 분위기)", () => {
+    for (const k of ["nightCitizen", "nightGhost"] as const) {
+      for (let i = 0; i < 3; i++) expect(lum(LIGHT_TUNE[k].sky[i]!), `${k}[${i}]`).toBeLessThanOrEqual(lum(LIGHT_TUNE.night.sky[i]!) + 1e-9);
+    }
+  });
+
+  it("내 캐릭터 빛은 처음부터 있고 nightCitizen 외 모든 단계에서 세기 0 이다", () => {
+    const bar = buildBarScene(LADDER[0]!);
+    expect(bar.lights.self).toBeInstanceOf(PointLight);
+    expect(bar.lights.self.intensity).toBe(0);
+    for (const phase of ALL_PHASES) {
+      bar.setLighting(phase);
+      if (phase === "nightCitizen") expect(bar.lights.self.intensity).toBeCloseTo(LIGHT_TUNE.nightCitizen.self, 9);
+      else expect(bar.lights.self.intensity, phase).toBe(0);
+    }
+    bar.dispose();
+  });
+
+  it("조명 단계가 어떻게 바뀌어도 장면의 점광원 수·보이는 점광원 수가 변하지 않는다(셰이더 재컴파일 방지)", () => {
+    for (const step of [0, 3]) {
+      const bar = buildBarScene(LADDER[step]!);
+      const total = lightsOf(bar.root, PointLight).length;
+      let visible = 0;
+      bar.root.traverseVisible((o) => {
+        if (o instanceof PointLight) visible++;
+      });
+      for (const phase of ALL_PHASES) {
+        bar.setLighting(phase);
+        let v = 0;
+        bar.root.traverseVisible((o) => {
+          if (o instanceof PointLight) v++;
+        });
+        expect(lightsOf(bar.root, PointLight), `${step}/${phase} total`).toHaveLength(total);
+        expect(v, `${step}/${phase} visible`).toBe(visible);
+      }
+      bar.dispose();
+    }
+  });
+
+  it("nightCitizen 에서 실내 emissive 가 0, nightGhost 에서 vote 그룹 emissive 가 night 의 0.4 배로 장면에 반영된다", () => {
+    const bar = buildBarScene(LADDER[0]!);
+    bar.setLighting("nightCitizen");
+    expect(room(bar)).toBe(0);
+    expect(vote(bar)).toBe(0);
+    expect(bar.lights.stage.intensity).toBe(0);
+    expect(bar.lights.pendantA.intensity).toBe(0);
+    expect(bar.exposure).toBeCloseTo(0.75, 9);
+    bar.setLighting("nightGhost");
+    expect(vote(bar)).toBeCloseTo(LIGHT_TUNE.night.emissive.vote * 0.4, 9);
+    expect(room(bar)).toBeCloseTo(LIGHT_TUNE.night.emissive.room, 9);
+    bar.dispose();
+  });
+
+  it("setSelfLight({x,z}) → 빛 위치 (x, 2.0, z), null 이면 기본 자리로 돌아간다", () => {
+    const bar = buildBarScene(LADDER[0]!);
+    bar.setSelfLight({ x: 1.5, z: -2.5 });
+    expect(bar.lights.self.position.x).toBeCloseTo(1.5, 9);
+    expect(bar.lights.self.position.y).toBeCloseTo(2.0, 9);
+    expect(bar.lights.self.position.z).toBeCloseTo(-2.5, 9);
+    bar.setSelfLight(null);
+    expect(bar.lights.self.position.y).toBeCloseTo(2.0, 9);
+    expect(bar.lights.self.position.x).toBe(0);
     bar.dispose();
   });
 });

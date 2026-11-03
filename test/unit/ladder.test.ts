@@ -182,7 +182,7 @@ describe("BarScene 에 예산 반영 (재생성 없이)", () => {
     expect(bar.lights.pendantA.intensity).toBe(0);
     expect(bar.lights.stage.intensity).toBeGreaterThan(0);
     expect(bar.lights.stage.visible).toBe(true);
-    expect(pointLightsOf(bar.root).filter((l) => l.visible)).toHaveLength(1);
+    expect(pointLightsOf(bar.root).filter((l) => l.visible)).toHaveLength(2); // 무대 + 내 캐릭터 빛(09-10, 광원 수 불변)
     bar.dispose();
   });
 
@@ -259,9 +259,9 @@ describe("threeRenderer: 예산·재생성·통계·해제 (가짜 WebGLRenderer
 
   it("info(): 그리기 호출·삼각형·지오메트리·텍스처·프로그램·보이는 점광원 수. core 단계에서 점광원이 줄어든다", async () => {
     const r = await make();
-    expect(r.info()).toEqual({ calls: 7, triangles: 99, geometries: 3, textures: 2, programs: 4, pointLights: 3 });
+    expect(r.info()).toEqual({ calls: 7, triangles: 99, geometries: 3, textures: 2, programs: 4, pointLights: 4 });
     r.setBudget(3);
-    expect(r.info().pointLights).toBe(1);
+    expect(r.info().pointLights).toBe(2);
     r.dispose();
   });
 
@@ -332,7 +332,7 @@ describe("threeRenderer: 예산·재생성·통계·해제 (가짜 WebGLRenderer
     const after = r.project({ x: 0, y: 0, z: 0 });
     expect(after.sx).toBeCloseTo(before.sx, 9);
     expect(after.sy).toBeCloseTo(before.sy, 9);
-    expect(r.info().pointLights).toBe(1);
+    expect(r.info().pointLights).toBe(2);
     r.dispose();
   });
 
