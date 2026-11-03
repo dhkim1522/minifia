@@ -259,7 +259,13 @@ export function WorldStage(props: WorldStageProps) {
           tracker.cancel(e.pointerId);
         }}
       />
-      <div ref={tagRef} className="mf-world__tags" role={pick ? "group" : undefined} aria-label={pick?.group}>
+      <div
+        ref={tagRef}
+        className="mf-world__tags"
+        data-chalk={scene?.chalk === undefined ? undefined : `${scene.chalk.x.toFixed(2)},${scene.chalk.z.toFixed(2)}`}
+        role={pick ? "group" : undefined}
+        aria-label={pick?.group}
+      >
         {/* 지목 단계에는 이름표 버튼이 같은 사람들을 읽으므로 목록은 읽히지 않게 한다(한 벌만 둔다) */}
         <ul className="mf-world__sr mf-sr-only" aria-label={`방에 있는 사람 ${view.players.length}명`} aria-hidden={pick ? true : undefined}>
           {view.players.map((p) => (

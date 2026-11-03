@@ -69,6 +69,8 @@ export interface WorldRenderer {
   setLighting(phase: LightingPhase): void;
   /** 긴장 단계 0·1·2 (결정 0049): 1 = 무대 점광원이 초점 위로 선두 세기, 2 = 그에 더해 실내 emissive 절반. 시험 가짜 렌더러 호환을 위해 optional (08-10) */
   setTension?(level: 0 | 1 | 2, focus?: { x: number; z: number }): void;
+  /** 암살 현장 분필 윤곽: 자리(월드 단위)와 불투명도, null 이면 숨김. 시험 가짜 렌더러 호환을 위해 optional (08-10 선례) */
+  setChalk?(at: { x: number; z: number } | null, opacity: number): void;
   /** 카메라 확대(과반 연출 1.08, 기본 1). camera.ts 투영의 zoom 인자와 같은 배율 */
   setZoom?(zoom: number): void;
   addCharacter(seat: number, c: CharacterHandle): void;

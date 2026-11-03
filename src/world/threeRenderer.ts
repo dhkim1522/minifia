@@ -145,6 +145,9 @@ async function build(opts: Opts): Promise<WorldRenderer> {
       zoom = Number.isFinite(z) && z > 0 ? z : 1;
       configureCamera(camera, target, size, offsetY, zoom);
     },
+    setChalk(at: { x: number; z: number } | null, opacity: number): void {
+      bar.setChalk(at, opacity);
+    },
     setTension(level: 0 | 1 | 2, focus?: { x: number; z: number }): void {
       bar.setTension(level, focus);
     },

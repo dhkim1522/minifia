@@ -13,6 +13,7 @@ import {
   BoxGeometry,
   BufferAttribute,
   BufferGeometry,
+  CatmullRomCurve3,
   Color,
   ConeGeometry,
   CylinderGeometry,
@@ -36,10 +37,12 @@ import {
   Scene,
   SphereGeometry,
   TorusGeometry,
+  TubeGeometry,
   Vector3,
 } from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import { cameraBasis, PLATE_FAR } from "../camera";
+import { CHAR_SCALE } from "../character";
 import { PALETTE, TOKEN_COLORS } from "../palette";
 import type { Budget, LightingPhase } from "../renderer";
 
@@ -229,6 +232,17 @@ export interface MarkerRing {
   outline: Mesh;
 }
 
+/**
+ * 분필 윤곽(MORN-01, 결정 0061-14) — design/v2.0/screens/blockout.js 276~284행을 그대로 옮긴다.
+ * 점 21개(× K, K = 캐릭터 배율 0.83) 닫힌 CatmullRom(0.2) → TubeGeometry(120, 0.022, 6, 닫힘), 크림 #e8e6dc 투명 0.85, rotation.y 0.7.
+ */
+export const CHALK_RADIUS = 0.022;
+export const CHALK_OPACITY = 0.85;
+const CHALK_POINTS: readonly (readonly [number, number])[] = [
+  [0.12, 1.15], [0.35, 1.3], [0.3, 1.62], [0, 1.76], [-0.3, 1.62], [-0.35, 1.3], [-0.12, 1.15], [-0.7, 1.0], [-0.76, 0.88], [-0.2, 0.9], [-0.26, 0.35],
+  [-0.56, -0.05], [-0.4, -0.13], [-0.05, 0.25], [0.05, 0.25], [0.4, -0.13], [0.56, -0.05], [0.26, 0.35], [0.2, 0.9], [0.76, 0.96], [0.72, 1.08],
+];
+
 export interface BarScene {
   /** 맵 전체(조명·배경·안개 포함). 캐릭터 그룹은 렌더러가 여기에 붙인다 */
   root: Scene;
@@ -242,6 +256,8 @@ export interface BarScene {
   /** 마지막으로 적용한 조명 단계의 톤매핑 노출 */
   readonly exposure: number;
   setLighting(phase: LightingPhase): void;
+  /** 분필 윤곽을 그 자리(월드 단위, 바닥 y 0.015)에 보인다. null 이면 숨긴다. 메시는 처음부터 만들어 두고 보이기·불투명도만 바꾼다 */
+  setChalk(at: { x: number; z: number } | null, opacity: number): void;
   /**
    * 긴장 단계(결정 0049 선두·과반 연출). 1 = 무대 점광원이 초점 위(높이 3.0)로 옮겨 선두 세기, 2 = 그에 더해 실내 emissive 절반,
    * 0 = 그 단계 값으로 복귀. 조명 단계가 바뀌어도 유지되고 단계 값 위에서 다시 계산된다
@@ -446,6 +462,30 @@ export function buildBarScene(budget: Budget): BarScene {
   meshes.glowVote!.renderOrder = 2;
   for (const m of Object.values(meshes)) root.add(m);
 
+  // 분필 윤곽: 처음부터 만들어 두고 숨긴다(보이기만 바꾼다). 바닥에 눕는 선이라 이동을 막지 않는다
+  const chalk = new Mesh(
+    new TubeGeometry(
+      new CatmullRomCurve3(
+        CHALK_POINTS.map(([px, pz]) => new Vector3(px * CHAR_SCALE, 0, -pz * CHAR_SCALE + 0.75 * CHAR_SCALE)),
+        true,
+        "catmullrom",
+        0.2,
+      ),
+      120,
+      CHALK_RADIUS,
+      6,
+      true,
+    ),
+    new MeshBasicMaterial({ color: "#e8e6dc", transparent: true, opacity: CHALK_OPACITY }),
+  );
+  chalk.name = "chalk";
+  chalk.rotation.y = 0.7;
+  chalk.visible = false;
+  chalk.castShadow = false;
+  chalk.receiveShadow = false;
+  meshes.chalk = chalk;
+  root.add(chalk);
+
   // 연장 판: 바닥 색과 같은 어두운 정사각형 한 장(걸을 수 없는 영역). 안개가 먼 가장자리를 어둠에 녹인다
   const plate = new Mesh(new PlaneGeometry(PLATE_FAR * 2, PLATE_FAR * 2), matPlate);
   plate.name = "plate";
@@ -551,6 +591,15 @@ export function buildBarScene(budget: Budget): BarScene {
     phase = next;
     applyLook();
   };
+  const setChalk = (at: { x: number; z: number } | null, opacity: number): void => {
+    if (at === null) {
+      chalk.visible = false;
+      return;
+    }
+    chalk.visible = true;
+    chalk.position.set(at.x, 0.015, at.z);
+    (chalk.material as MeshBasicMaterial).opacity = opacity;
+  };
   const setTension = (level: 0 | 1 | 2, focus?: { x: number; z: number }): void => {
     tensionLevel = level;
     tensionFocus = level >= 1 && focus ? { x: focus.x, z: focus.z } : null;
@@ -591,6 +640,7 @@ export function buildBarScene(budget: Budget): BarScene {
       return exposure;
     },
     setLighting,
+    setChalk,
     setTension,
     applyBudget,
     get budget(): Budget {

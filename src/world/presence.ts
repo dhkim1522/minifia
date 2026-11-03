@@ -38,6 +38,8 @@ export interface SceneLook {
   tension: 0 | 1 | 2;
   focusSeat?: number;
   seats: Record<number, SeatLook>;
+  /** 암살 현장 분필 자리(월드 단위). 서버 공개 값 day.chalk 를 UNIT 으로 나눈 것이고 유령·산 사람 viewer 가 같은 자리를 본다(결정 0061-14) */
+  chalk?: { x: number; z: number };
 }
 
 /** 이 viewer 가 유령인지: 서버가 탈락한 본인 view 에만 싣는 spectate 가 있거나, 내 좌석이 탈락으로 내려온 경우 */
@@ -122,6 +124,7 @@ export function sceneLook(view: RoomView, opts: { stageH: number; fading?: Reado
   const tension = tensionOf(view);
   const seats = visibleSeats(view, opts.fading, opts.now);
   const pointing = pointingOf(view, opts.mine);
+  const chalk = view.day?.chalk;
   for (const [seat, target] of Object.entries(pointing)) {
     const look = seats[Number(seat)];
     if (look) look.pointAt = target;
@@ -132,6 +135,7 @@ export function sceneLook(view: RoomView, opts: { stageH: number; fading?: Reado
     tension: tension.level,
     ...(tension.focus !== undefined ? { focusSeat: tension.focus } : {}),
     seats,
+    ...(chalk !== undefined ? { chalk: { x: chalk.x / UNIT, z: chalk.z / UNIT } } : {}),
   };
 }
 

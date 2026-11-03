@@ -133,6 +133,8 @@ const ENTER_SCALE = 0.6;
 const ENTER_LIFT = 0.4;
 /** 고정 카메라로 옮기는 시간·확대 전환 시간(ms) = dur-slow */
 const CAM_SLOW_MS = 800;
+/** 분필 윤곽이 다 그려진 불투명도(블록아웃 값, bar.ts CHALK_OPACITY 와 같다) */
+const CHALK_FULL = 0.85;
 /** 6페이즈는 모두 기본 코트(의상 교체는 10페이즈) */
 const OUTFIT = "coat";
 
@@ -302,6 +304,8 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
   /** 렌더러에 마지막으로 보낸 조명 단계·긴장 키·확대(바뀔 때만 다시 보낸다) */
   let lightSent: LightingPhase | null = null;
   let tensionKey: string | null = "0";
+  /** 분필 윤곽: 마지막으로 렌더러에 보낸 자리·불투명도 키(바뀔 때만 다시 보낸다) */
+  let chalkKey: string | null = "-";
   let zoomSent = 1;
   /** 지금 그리는 확대와, 고정 카메라로 옮기는 중인 전환(고정이 아니면 null) */
   let zoomCur = 1;
@@ -362,6 +366,7 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
         resync = true; // 복구·재생성 뒤 첫 프레임: 카메라와 모든 캐릭터를 서버 위치에 바로 놓는다
         lightSent = null; // 새 렌더러에는 조명·긴장·확대를 다시 보낸다
         tensionKey = null;
+        chalkKey = null;
         zoomSent = Number.NaN;
       }
     }
@@ -920,6 +925,14 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
     if (nextTensionKey !== tensionKey) {
       tensionKey = nextTensionKey;
       r.setTension?.(tension, focusPos === undefined ? undefined : { x: focusPos.x, z: focusPos.z });
+    }
+
+    // 분필 윤곽(MORN-01): 서버가 공개한 자리가 있으면 바닥에 그 자리 그대로. 없으면 숨김. 렌더러에 setChalk 가 없으면(가짜 렌더러) 건너뛴다
+    const chalk = look?.chalk ?? null;
+    const nextChalkKey = chalk === null ? "-" : `${chalk.x.toFixed(3)},${chalk.z.toFixed(3)}|${CHALK_FULL}`;
+    if (nextChalkKey !== chalkKey) {
+      chalkKey = nextChalkKey;
+      r.setChalk?.(chalk === null ? null : { x: chalk.x, z: chalk.z }, CHALK_FULL);
     }
 
     if (s.w !== seenSize.w || s.h !== seenSize.h) {

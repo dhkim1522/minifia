@@ -1,7 +1,7 @@
 // 재즈 바 장면(maps/bar.ts)을 WebGL 없이 node 에서 검사한다: 병합 구조·예산·조명·연장 판·링.
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { BufferGeometry, Color, DataTexture, DirectionalLight, HemisphereLight, type Light, Material, Mesh, MeshBasicMaterial, Object3D, PlaneGeometry, PointLight, Scene, TorusGeometry, Vector3 } from "three";
+import { BufferGeometry, Color, DataTexture, DirectionalLight, HemisphereLight, type Light, Material, Mesh, MeshBasicMaterial, Object3D, PlaneGeometry, PointLight, Scene, TorusGeometry, TubeGeometry, Vector3 } from "three";
 import { describe, expect, it } from "vitest";
 import { PLATE_FAR } from "../../src/world/camera";
 import { buildBarScene, LIGHT_TUNE } from "../../src/world/maps/bar";
@@ -84,12 +84,12 @@ describe("재즈 바 장면 구조 (MAP-01, 렌더 예산)", () => {
     bar.dispose();
   });
 
-  it("고유 재질 수는 13 이하다 — 시안처럼 박스마다 새 재질이 아니다", () => {
+  it("고유 재질 수는 14 이하다 — 시안처럼 박스마다 새 재질이 아니다", () => {
     const bar = buildBarScene(LADDER[0]!);
     const set = new Set<Material>();
     for (const m of allMeshes(bar.root)) for (const x of mats(m)) set.add(x);
     expect(set.size).toBeGreaterThan(3);
-    expect(set.size).toBeLessThanOrEqual(13); // 08-10: 변론 원뿔 빛 재질 하나가 늘었다(12 → 13)
+    expect(set.size).toBeLessThanOrEqual(14); // 08-10: 변론 원뿔 빛 재질 하나가 늘었다(12 → 13), 09-10: 분필 윤곽 재질 하나(13 → 14)
     bar.dispose();
   });
 
@@ -408,8 +408,9 @@ describe("분필 윤곽 (MORN-01, 결정 0061-14, 블록아웃 blockout.js 276~2
   it("튜브 반지름 0.022, 투명 재질, 크림색 불투명 0.85, 닫힌 한 메시", () => {
     const bar = buildBarScene(LADDER[0]!);
     const chalk = chalkOf(bar);
-    expect((chalk.geometry as { parameters: { radius: number; closed: boolean } }).parameters.radius).toBeCloseTo(0.022, 9);
-    expect((chalk.geometry as { parameters: { closed: boolean } }).parameters.closed).toBe(true);
+    const params = (chalk.geometry as TubeGeometry).parameters;
+    expect(params.radius).toBeCloseTo(0.022, 9);
+    expect(params.closed).toBe(true);
     const m = chalk.material as MeshBasicMaterial;
     expect(m.transparent).toBe(true);
     expect(m.opacity).toBeCloseTo(0.85, 9);

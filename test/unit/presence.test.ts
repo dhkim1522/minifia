@@ -371,8 +371,8 @@ describe("sceneLook 의 chalk (MORN-01, 결정 0061-14)", () => {
 
   it("유령 viewer 도 산 사람 viewer 도 같은 자리를 본다", () => {
     const day = { chalk: { x: -50, z: 75 } };
-    const alive = sceneLook(viewOf("talk", { day }), { stageH: 400 });
-    const ghost = sceneLook(viewOf("talk", { day, dead: [0], spectate: true }), { stageH: 400 });
+    const alive = sceneLook(viewOf("discussion", { day }), { stageH: 400 });
+    const ghost = sceneLook(viewOf("discussion", { day, dead: [0], spectate: true }), { stageH: 400 });
     expect(alive.chalk).toEqual({ x: -0.5, z: 0.75 });
     expect(ghost.chalk).toEqual({ x: -0.5, z: 0.75 });
   });
