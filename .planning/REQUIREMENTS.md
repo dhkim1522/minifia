@@ -57,8 +57,8 @@
 
 ### 아침 (MORN)
 
-- [ ] **MORN-01**: 아침에 희생자가 쓰러진 자리에 분필 윤곽이 그날 낮 동안 남는다
-- [ ] **MORN-02**: 아침에 희생자의 유언과 마피아 쪽지가 공개되고, 채팅창에 카드로 남아 낮에 다시 읽을 수 있다
+- [x] **MORN-01**: 아침에 희생자가 쓰러진 자리에 분필 윤곽이 그날 낮 동안 남는다
+- [x] **MORN-02**: 아침에 희생자의 유언과 마피아 쪽지가 공개되고, 채팅창에 카드로 남아 낮에 다시 읽을 수 있다
 - [x] **MORN-03**: 의사가 살렸으면 "누군가 살아났습니다" 만 알린다(누구인지는 비공개)
 - [x] **MORN-04**: 아침 길이는 서버가 내용에 맞춰 정한다(아무 일 없으면 짧게, 유언·쪽지가 있으면 길게)
 
@@ -151,8 +151,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | NIGHT-10 | Phase 9 | Pending |
 | NIGHT-11 | Phase 9 | Pending |
 | NIGHT-12 | Phase 9 | Pending |
-| MORN-01 | Phase 9 | Pending |
-| MORN-02 | Phase 9 | Pending |
+| MORN-01 | Phase 9 | Complete |
+| MORN-02 | Phase 9 | Complete |
 | MORN-03 | Phase 9 | Complete |
 | MORN-04 | Phase 9 | Complete |
 | WILL-01 | Phase 9 | Pending |
