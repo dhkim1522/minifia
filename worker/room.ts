@@ -733,19 +733,19 @@ export class Room extends DurableObject<Env> {
     this.syncLayout(now);
   }
 
-  // 밤 위치(결정 0061-3): 키 '{일차}:night' 가 world.lay.key 와 다르면 산 사람 전원을 home 으로 순간이동하고 보는 사람 한 명씩 snap 을 보낸다.
-  // home 이 없는 사람은 teleportHome 이 건드리지 않는다(fail-safe). 전송은 새 길을 만들지 않는다: 소켓마다 worldVisibleTo 로 거른 snapFrame 을 deliver 한 명씩(연구 Don't Hand-Roll).
-  // 밤의 시민 편은 본인 한 칸이다.
+  // 밤·아침 위치(결정 0061-3·4): 키 '{일차}:night'·'{일차}:morning' 이 world.lay.key 와 다르면 home 으로 순간이동하고 보는 사람 한 명씩 snap 을 보낸다.
+  // 밤은 산 사람 전원, 아침은 산 사람 + 그 밤의 피해자(마피아가 걸은 구간을 버린다, UI-SPEC A1). home 이 없는 사람은 teleportHome 이 건드리지 않는다(fail-safe).
+  // 전송은 새 길을 만들지 않는다: 소켓마다 worldVisibleTo 로 거른 snapFrame 을 deliver 한 명씩(연구 Don't Hand-Roll).
+  // 밤의 시민 편은 본인 한 칸, 아침은 산 사람 소켓 모두가 같은 좌석·같은 좌표다. 방금 탈락한 피해자는 이 snap 으로 ghostSnapped 에 올라 같은 snap 을 두 번 받지 않는다(A3).
   private async syncHome(now: number): Promise<void> {
     const room = this.room;
     if (!room || room.day === undefined) return;
-    if (room.phase !== "night") return;
+    if (room.phase !== "night" && room.phase !== "morning") return;
     const key = `${room.day}:${room.phase}`;
     if (key === this.world.lay?.key) return;
-    this.world = {
-      ...teleportHome(this.world, room.players.filter(isAlive).map((p) => p.id), now),
-      lay: { key, slots: this.world.lay?.slots ?? {} },
-    };
+    const victimSeat = room.phase === "morning" ? room.morning?.eliminated : undefined;
+    const moved = room.players.filter((p) => isAlive(p) || (victimSeat !== undefined && p.seat === victimSeat)).map((p) => p.id);
+    this.world = { ...teleportHome(this.world, moved, now), lay: { key, slots: this.world.lay?.slots ?? {} } };
     await this.flushWorld();
     for (const viewer of room.players) {
       const visible = worldVisibleTo(room, viewer.id);
