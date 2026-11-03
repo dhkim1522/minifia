@@ -99,6 +99,7 @@ import {
   GAME_PANEL_EXTRA,
   PICK_BUTTON_MAX,
   gamePanelHeight,
+  faceListPanelH,
   pickButtonChecks,
   announceChecks,
   ghostDomChecks,
@@ -631,10 +632,38 @@ test("gamePanelHeight: 토론 LOG_H+154 · 채팅 +92 · 찬반 투표자 +203 �
   for (const [h, talk, chat, voter, viewer] of [[640, 250, 188, 299, 207], [664, 250, 188, 299, 207], [932, 306, 244, 355, 263], [560, 250, 188, 299, 207], [844, 306, 244, 355, 263], [874, 306, 244, 355, 263]]) {
     assert.deepEqual([gamePanelHeight(h, "talk"), gamePanelHeight(h, "chat"), gamePanelHeight(h, "verdictVoter"), gamePanelHeight(h, "verdictViewer")], [talk, chat, voter, viewer], `방 높이 ${h}`);
   }
-  assert.deepEqual({ ...GAME_PANEL_EXTRA }, { talk: 154, chat: 92, verdictVoter: 203, verdictViewer: 111 });
+  assert.deepEqual({ ...GAME_PANEL_EXTRA }, { talk: 154, chat: 92, verdictVoter: 203, verdictViewer: 111, nightMafia: 154 });
   assert.equal(GAME_PANEL_EXTRA.chat, CHAT_PANEL_EXTRA);
   assert.throws(() => gamePanelHeight(640, "table"), /알 수 없는 패널 종류/);
   assert.throws(() => gamePanelHeight(640, "toString"), /알 수 없는 패널 종류/);
+});
+
+// ---- 09-21: 밤 패널 세 종류의 기대 높이 (UI-SPEC "아래 패널 종류와 높이", 149~172행) ----
+
+test("faceListPanelH: 폭 4종 × 2행·1행이 UI-SPEC 표 값(약, ±1)이고 줄바꿈 행마다 +18 (NIGHT-09)", () => {
+  const near = (a, b) => assert.ok(Math.abs(a - b) <= 1, `${a} ≈ ${b}`);
+  // 후보 5명 이상 = 2행: 310 · 325 · 331 · 345
+  for (const [w, h] of [[360, 310], [390, 325], [402, 331], [430, 345]]) near(faceListPanelH({ w, n: 5 }), h);
+  // 후보 4명 이하 = 1행: 200 · 208 · 215 · 218
+  for (const [w, h] of [[360, 200], [390, 208], [402, 215], [430, 218]]) near(faceListPanelH({ w, n: 4 }), h);
+  near(faceListPanelH({ w: 360, n: 5, wrappedRows: 1 }), 328);
+  near(faceListPanelH({ w: 360, n: 5, wrappedRows: 2 }), 346);
+  // 식 그대로: 14 + 행들 + 행 사이 8 + 10 + 52 + 22
+  assert.equal(faceListPanelH({ w: 360, n: 1 }), 14 + (76 + 26.2) + 10 + 52 + 22);
+  assert.equal(faceListPanelH({ w: 360, n: 8 }), 14 + 2 * (76 + 26.2) + 8 + 10 + 52 + 22);
+});
+
+test("gamePanelHeight: nightMafia = LOG_H + 154 · nightCitizen = 88(방 높이와 무관) · faceList 는 faceListPanelH (09-21)", () => {
+  assert.equal(GAME_PANEL_EXTRA.nightMafia, 154);
+  for (const [h, mafia] of [[640, 250], [560, 250], [932, 306], [874, 306]]) {
+    assert.equal(gamePanelHeight(h, "nightMafia"), mafia, `방 높이 ${h}`);
+    assert.equal(gamePanelHeight(h, "nightMafia"), gamePanelHeight(h, "talk"));
+    assert.equal(gamePanelHeight(h, "nightCitizen"), 88, `방 높이 ${h}`);
+  }
+  assert.equal(gamePanelHeight(640, "faceList", { w: 360, n: 5 }), faceListPanelH({ w: 360, n: 5 }));
+  assert.equal(gamePanelHeight(932, "faceList", { w: 430, n: 4, wrappedRows: 1 }), faceListPanelH({ w: 430, n: 4, wrappedRows: 1 }));
+  assert.throws(() => gamePanelHeight(640, "faceList"), /w·n/);
+  assert.throws(() => gamePanelHeight(640, "table"), /알 수 없는 패널 종류/);
 });
 
 const pick = (seat, left, top, w = 44, h = 44) => ({ seat, rect: rect(left, top, w, h) });
