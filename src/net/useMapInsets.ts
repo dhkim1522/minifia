@@ -21,6 +21,8 @@ export interface MapInsets {
   inputRef: RefObject<HTMLInputElement | null>;
   /** 포커스 + 키보드 lift > 80 */
   kbOpen: boolean;
+  /** 키보드 초점이 채팅 입력칸이 아니라 유언·쪽지 시트의 textarea 에 있다(09-17) */
+  kbInSheet: boolean;
   /** 키보드가 닫혀 있을 때의 기록 칸 높이(96 · 152). 열림 중에는 화면이 LOG_H_KB 를 쓴다 */
   logH: number;
   /** WorldStage 로 넘길 스테이지 사각형. 측정 전(또는 레이아웃이 없는 환경)에는 undefined */
@@ -37,7 +39,7 @@ export function useMapInsets(): MapInsets {
   useLayoutEffect(() => {
     roomRef.current = rootRef.current?.closest<HTMLElement>(".mf-room") ?? rootRef.current;
   }, []);
-  const { open: kbOpen, lift } = useKeyboardLift({ inputRef, target: roomRef });
+  const { open: kbOpen, lift, inSheet: kbInSheet } = useKeyboardLift({ inputRef, target: roomRef });
 
   const [insets, setInsets] = useState<{ top: number; bottom: number } | undefined>(undefined);
   useLayoutEffect(() => {
@@ -74,5 +76,5 @@ export function useMapInsets(): MapInsets {
 
   const logH = useChatLogHeight(rootRef, inputRef);
 
-  return { rootRef, headerRef, panelRef, inputRef, kbOpen, logH, stageInsets };
+  return { rootRef, headerRef, panelRef, inputRef, kbOpen, kbInSheet, logH, stageInsets };
 }

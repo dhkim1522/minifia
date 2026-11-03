@@ -9,6 +9,10 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { RefObject } from "react";
 import { KB_OPEN_MIN_LIFT, logHeightFor } from "../game/chatUi";
 
+/** 유언·쪽지 시트 층(09-17). 이 안의 textarea 도 채팅 입력칸과 같은 키보드 lift 규칙을 받는다 — 시트 부품(WillSheet)은 바꾸지 않고 선택자로 알아본다 */
+const SHEET_LAYER = ".mf-will-layer";
+const inSheetLayer = (t: EventTarget | null): boolean => t instanceof Element && t.closest(SHEET_LAYER) !== null;
+
 /** 포커스·블러 뒤에 값을 한 번씩 더 읽는 시각(WebKit 은 이벤트 직후 값이 틀리고 지연 뒤 맞는 경우가 있다) */
 const REREAD_MS = [100, 300, 1000] as const;
 
@@ -16,11 +20,13 @@ export function useKeyboardLift(opts: {
   inputRef: RefObject<HTMLInputElement | null>;
   target: RefObject<HTMLElement | null>;
   enabled?: boolean;
-}): { open: boolean; lift: () => number } {
+}): { open: boolean; lift: () => number; /** 키보드 초점이 입력칸이 아니라 시트 층의 textarea 에 있다 */ inSheet: boolean } {
   const { inputRef, target, enabled = true } = opts;
   const [open, setOpen] = useState(false);
   const liftRef = useRef(0);
   const openRef = useRef(false);
+  const [inSheet, setInSheet] = useState(false);
+  const inSheetRef = useRef(false);
   const lift = useRef(() => liftRef.current).current;
 
   useEffect(() => {
@@ -68,16 +74,31 @@ export function useKeyboardLift(opts: {
       timers = REREAD_MS.map((ms) => setTimeout(read, ms));
     };
 
-    const isInput = (e: Event) => e.target !== null && e.target === inputRef.current;
+    const markSheet = (on: boolean) => {
+      if (inSheetRef.current === on) return;
+      inSheetRef.current = on;
+      setInSheet(on);
+    };
+    const isInput = (e: Event) => e.target !== null && (e.target === inputRef.current || inSheetLayer(e.target));
     const onFocus = (e: Event) => {
-      if (!isInput(e)) return;
+      if (!isInput(e)) {
+        // 시트가 닫히며 초점이 다른 요소(시트를 연 버튼)로 옮겨 가면 입력칸 blur 가 오지 않을 수 있다 — 입력 초점이 끝난 것으로 본다
+        if (focused) {
+          focused = false;
+          markSheet(false);
+          write(0, 0);
+        }
+        return;
+      }
       focused = true;
+      markSheet(inSheetLayer(e.target));
       schedule();
       rereadLater();
     };
     const onBlur = (e: Event) => {
       if (!isInput(e)) return;
       focused = false;
+      markSheet(false);
       if (raf) {
         cancelAnimationFrame(raf);
         raf = 0;
@@ -107,7 +128,29 @@ export function useKeyboardLift(opts: {
     };
   }, [enabled, inputRef, target]);
 
-  return { open, lift };
+  return { open, lift, inSheet };
+}
+
+/**
+ * 보이는 화면(visualViewport) 높이. 시트가 열려 있는 동안(enabled)만 크기 변화를 듣는다 — 키보드가 올라오면 줄어든다.
+ * 시트가 패널을 숨길지(패널 + 시트 > 높이 − 헤더)와 textarea 를 2줄로 줄일지(높이 < 300)를 정하는 재료다.
+ */
+export function useVisualViewportHeight(enabled: boolean): number {
+  const read = () => window.visualViewport?.height ?? window.innerHeight;
+  const [height, setHeight] = useState(read);
+  useEffect(() => {
+    if (!enabled) return;
+    const on = () => setHeight(read());
+    on();
+    const vv = window.visualViewport;
+    vv?.addEventListener("resize", on);
+    window.addEventListener("resize", on);
+    return () => {
+      vv?.removeEventListener("resize", on);
+      window.removeEventListener("resize", on);
+    };
+  }, [enabled]);
+  return height;
 }
 
 /**

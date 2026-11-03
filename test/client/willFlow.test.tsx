@@ -542,11 +542,11 @@ describe("키보드 배치 — 패널 숨김 · compact · 초점 복귀 (UI-SPE
     const m = mount(makeView());
     fireEvent.click(willBtn(m.container)!);
     frame();
-    expect(area(m.container).rows).toBe(2);
+    expect(Number(area(m.container).rows)).toBe(2);
     resize(vv, 300);
-    expect(area(m.container).rows).toBe(3);
+    expect(Number(area(m.container).rows)).toBe(3);
     resize(vv, 299);
-    expect(area(m.container).rows).toBe(2);
+    expect(Number(area(m.container).rows)).toBe(2);
   });
 
   it("시트 textarea 초점·입력·blur 가 채팅 입력 중 상태를 켜지 않는다: typing 0회, 입력 중 알약 없음", () => {

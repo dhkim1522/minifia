@@ -26,6 +26,9 @@
   position: absolute; left: 0; right: 0; z-index: var(--z-modal);
   bottom: calc(var(--mf-kb-lift, 0px) + var(--mf-panel-h, 0px) + 8px);
 }
+/* 패널 + 시트가 보이는 높이를 넘으면 패널을 가리고 시트만 키보드 위에 붙인다(UI-SPEC 282행). 가려도 높이는 그대로라 스테이지 판이 흔들리지 않는다 */
+.mf-game__panel[data-will-hide-panel="true"] { visibility: hidden; pointer-events: none; }
+.mf-will-layer[data-panel-hidden="true"] { bottom: calc(var(--mf-kb-lift, 0px) + 8px); }
 /* 밤 시민 편 아래 행동 줄 [유언] (UI-SPEC 237행): night-700 면·gray-100 글자, 눌리면 gray-100 면 + night-900 글자. 진홍·놋쇠는 쓰지 않는다 */
 .mf-game__will { background: var(--night-700); border-color: var(--night-600); color: var(--gray-100); }
 .mf-game__will[aria-pressed="true"] { background: var(--gray-100); border-color: var(--gray-100); color: var(--night-900); }

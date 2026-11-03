@@ -21,6 +21,7 @@ import { useCountdown } from "../net/countdown";
 import { useChat } from "../net/useChat";
 import { useViewChoice } from "../net/useViewChoice";
 import { useWill } from "../net/useWill";
+import { useVisualViewportHeight } from "../net/useKeyboardLift";
 import { useMapInsets } from "../net/useMapInsets";
 import { useReducedMotion } from "../net/useReducedMotion";
 import type { RoomConnection } from "../net/useRoomConnection";
@@ -46,6 +47,8 @@ const PICK_REPLY_MS = 3000;
 /** 스테이지 사각형을 아직 못 쟀을 때 WorldStage 기본값(헤더 아래 62 · 패널 250)과 같은 값 — 장면 표의 확대 판정에만 쓴다 */
 const DEFAULT_INSET_TOP = 62;
 const DEFAULT_INSET_BOTTOM = 250;
+/** 보이는 화면(visualViewport) 높이가 이보다 낮으면 유언 시트 입력칸을 2줄로 줄인다(UI-SPEC 282행) */
+const COMPACT_VV_MAX = 300;
 
 /** 처음 보는 지목의 깜빡임을 본 적이 있는지 적는 저장소 키(6페이즈 mf-hint-walk 와 같은 방식, UI-SPEC 다르게 2) */
 const POINT_HINT_KEY = "mf-hint-point";
@@ -145,7 +148,9 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
   const toast = useTopToast();
   const { show } = toast;
   // 측정(스테이지 사각형)·키보드·기록 칸 높이는 대기실과 같은 훅이다. 키보드가 열려 있으면 행동 줄을 숨기고 기록 칸을 72 로 줄인다(07-19).
-  const { rootRef, headerRef, panelRef, inputRef, kbOpen, logH, stageInsets } = useMapInsets();
+  const { rootRef, headerRef, panelRef, inputRef, kbOpen: kbLifted, kbInSheet, logH, stageInsets } = useMapInsets();
+  // 키보드가 시트의 textarea 때문에 열린 것이면 채팅 패널을 줄이거나 행동 줄을 숨기지 않는다(시트를 연 버튼이 남아야 닫을 때 초점이 돌아온다). 패널은 키보드 위로 올라간다(lifted).
+  const kbOpen = kbLifted && !kbInSheet;
   const { typingSeats, ...binding } = useChat({ store: chat, connection: { send, canSend }, view });
 
   // 안내 한 줄: 단계가 시작되면 보이고 2.5초 뒤 접힌다. 단계가 바뀔 때마다 다시 보인다.
@@ -382,15 +387,29 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
   const will = useWill({ view, send, canSend, rejected: rejects, onFail: () => show(SEND_FAIL_TEXT), busyRef: willBusy });
 
   // 시트 층의 아래 끝 = 아래 패널 위 끝 + 8(키보드가 열려 있으면 그 위, CSS 의 --mf-kb-lift). 패널 높이는 DOM 에서 잰다(6페이즈 규칙).
+  // 패널 + 시트 + 8 이 보이는 높이(visualViewport − 헤더 62)를 넘으면 패널을 가리고 시트만 키보드 위에 붙인다(UI-SPEC 282행).
+  // 가린 동안은 숨기기 직전에 잰 패널 높이를 기억해 판정한다(가린 패널은 줄어들지 않으므로 같은 값이다).
   const layerRef = useRef<HTMLDivElement>(null);
+  const sheetOpen = will.open !== null;
+  const vvHeight = useVisualViewportHeight(sheetOpen);
+  const panelHeight = useRef(0);
+  const [veiled, setVeiled] = useState(false);
   useLayoutEffect(() => {
-    layerRef.current?.style.setProperty("--mf-panel-h", `${panelRef.current?.offsetHeight ?? 0}px`);
+    const layer = layerRef.current;
+    if (!sheetOpen || layer === null) {
+      if (veiled) setVeiled(false);
+      return;
+    }
+    if (!veiled) panelHeight.current = panelRef.current?.offsetHeight ?? 0;
+    layer.style.setProperty("--mf-panel-h", `${panelHeight.current}px`);
+    const hide = panelHeight.current + layer.offsetHeight + 8 > vvHeight - (stageInsets?.top ?? DEFAULT_INSET_TOP);
+    if (hide !== veiled) setVeiled(hide);
   });
 
   const scene = useMemo(() => sceneLook(view, { stageH, ...(fading ? { fading } : {}), ...(mine !== undefined ? { mine } : {}) }), [view, stageH, fading, mine]);
 
   return (
-    <main ref={rootRef} className="mf-root mf-game" data-game-stage="" data-phase={view.phase} data-night-dark={nightDark ? "true" : undefined} data-ghost-view={ghost ? "true" : undefined} data-ghost-enter={ghost && entering ? "true" : undefined} data-kb-open={kbOpen ? "true" : undefined}>
+    <main ref={rootRef} className="mf-root mf-game" data-game-stage="" data-phase={view.phase} data-night-dark={nightDark ? "true" : undefined} data-ghost-view={ghost ? "true" : undefined} data-ghost-enter={ghost && entering ? "true" : undefined} data-kb-open={kbLifted ? "true" : undefined}>
       {/* DOM 순서 = Tab 순서: 헤더([역할 카드]) → 맵(이름표) → 아래 패널(입력). 층 순서는 z 가 정한다 */}
       <div className="mf-game__scrim" aria-hidden="true" />
       <header ref={headerRef} className="mf-game__header">
@@ -428,6 +447,8 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
         binding={binding}
         logHeight={kbOpen ? LOG_H_KB : logH}
         kbOpen={kbOpen}
+        lifted={kbLifted}
+        veiled={veiled}
         rejected={rejects}
         onNightPickSent={(target) => {
           pointSent.current = { target, at: Date.now() };
@@ -442,7 +463,7 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
         panelRef={panelRef}
       />
       {will.open !== null ? (
-        <div ref={layerRef} className="mf-will-layer">
+        <div ref={layerRef} className="mf-will-layer" {...(veiled ? { "data-panel-hidden": "true" } : {})}>
           <WillSheet
             key={will.open}
             {...(will.open === "note" ? { title: "쪽지", icon: "note" as const, tone: "mafia" as const, placeholder: NOTE_PLACEHOLDER } : {})}
@@ -451,6 +472,7 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
             onSave={will.save}
             onClose={will.close}
             saved={will.saved}
+            {...(vvHeight < COMPACT_VV_MAX ? { compact: true } : {})}
             {...(canSend ? {} : { disabled: true })}
           />
         </div>

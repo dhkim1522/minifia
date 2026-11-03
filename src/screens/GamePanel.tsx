@@ -29,6 +29,10 @@ export interface GamePanelProps {
   logHeight: number;
   /** 키보드가 열려 있는가 — 열려 있으면 행동 줄을 그리지 않고 패널이 키보드 위로 올라간다(7페이즈 규칙) */
   kbOpen?: boolean;
+  /** 키보드가 열려 있으면(시트 textarea 초점 포함) 패널이 키보드 위로 올라간다. 주지 않으면 kbOpen 을 따른다 */
+  lifted?: boolean;
+  /** 유언·쪽지 시트가 키보드 위 자리를 차지해 패널을 가린다(패널 + 시트가 보이는 높이를 넘을 때, UI-SPEC 282행) */
+  veiled?: boolean;
   /** 서버가 행동을 거절한 횟수. 늘어나면 내 낙관적 눌림을 서버 값으로 되돌린다(새 view 가 오지 않아도) */
   rejected?: number;
   /** 경찰·의사가 얼굴을 눌러 pick 을 보낸 직후에 부른다. 화면 틀이 "보낸 선택" 을 기억해 거절 응답을 그 선택의 거절로 읽는다 */
@@ -54,7 +58,7 @@ export interface GamePanelProps {
  * 낮 토론은 [토론 끝내기], 찬반은 위쪽 찬반 줄(VerdictPicker + DotProgress, 08-16)을 얹는다 — 변론·처형·유령은 채팅만이거나 뒤 계획이 이 틀 위에 얹는다.
  * 눌림은 서버 view(me.endDiscussion·me.verdictVote)가 기준이고, 내가 누른 즉시 바뀌는 것은 내 눌림 표시 하나뿐이다. 점 개수는 서버가 센 값만 그린다(누가 눌렀는지·무엇을 골랐는지는 서버가 보내지 않는다).
  */
-export function GamePanel({ view, send, canSend, binding, logHeight, kbOpen = false, rejected = 0, onNightPickSent, onOpenWill, willOpen = false, onOpenNote, noteOpen = false, noteReady = false, willSaved = false, inputRef, panelRef }: GamePanelProps) {
+export function GamePanel({ view, send, canSend, binding, logHeight, kbOpen = false, lifted, veiled = false, rejected = 0, onNightPickSent, onOpenWill, willOpen = false, onOpenNote, noteOpen = false, noteReady = false, willSaved = false, inputRef, panelRef }: GamePanelProps) {
   const serverPressed = view.me.endDiscussion === true;
   const [pressed, choose] = useViewChoice<boolean>(view, serverPressed);
   // 거절이 오면 서버 값으로 되돌린다. 처음 그릴 때(거절 0)는 아무것도 하지 않는다.
@@ -134,7 +138,12 @@ export function GamePanel({ view, send, canSend, binding, logHeight, kbOpen = fa
   };
 
   return (
-    <section ref={panelRef} className={kbOpen ? "mf-game__panel mf-game__panel--kb" : "mf-game__panel"} data-world-panel="">
+    <section
+      ref={panelRef}
+      className={lifted ?? kbOpen ? "mf-game__panel mf-game__panel--kb" : "mf-game__panel"}
+      data-world-panel=""
+      {...(veiled ? { "data-will-hide-panel": "true" } : {})}
+    >
       {showExecPicker ? (
         <div className="mf-game__verdict" data-verdict-row="">
           <VerdictPicker {...(lastVerdict.current ? { value: lastVerdict.current } : {})} onChange={() => {}} disabled />
