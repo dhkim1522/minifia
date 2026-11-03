@@ -305,10 +305,22 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
         // 내가 고른 좌석이 먼저 서므로 동료도 같은 좌석을 골랐으면 내 고리(crimson-500)가 이긴다. 동료만 고른 좌석은 crimson-400
         if (myRole === "mafia") for (const seat of view.me.allyPicks ?? []) put(seat, "mafiaAlly");
       }
-      if (rings.size === 0) return undefined;
+      // 선택 수 배지·확정 도장(결정 0061-7): 서버가 산 마피아에게만 보낸 집계(me.nightTally·nightSure)를 그대로 그린다. 마피아가 아니면 읽지 않는다.
+      // 확정 좌석은 배지 대신 "확정" 도장 하나. 확정이 깨지면 서버가 nightSure 를 빼므로 도장이 사라지고 배지로 돌아간다.
+      const counts = new Map<number, number>();
+      let sureSeat: number | undefined;
+      if (nightMafia) {
+        for (const t of view.me.nightTally ?? []) if (t.n >= 1) counts.set(t.seat, t.n);
+        sureSeat = view.me.nightSure;
+      }
+      if (rings.size === 0 && counts.size === 0 && sureSeat === undefined) return undefined;
       return (seat) => {
         const ring = rings.get(seat);
-        return ring !== undefined ? { ring } : {};
+        const count = counts.get(seat);
+        return {
+          ...(ring !== undefined ? { ring } : {}),
+          ...(seat === sureSeat ? { sure: true, sureLabel: "확정" } : count !== undefined ? { count } : {}),
+        };
       };
     }
     if (!nominating) return undefined;
@@ -322,7 +334,7 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
         ...(tally.sure === seat ? { sure: true } : {}),
       };
     };
-  }, [nominating, nighting, nightActor, myRole, mine, spectate, verdicting, defending, view, blink, pickSeats]);
+  }, [nominating, nighting, nightActor, nightMafia, myRole, mine, spectate, verdicting, defending, view, blink, pickSeats]);
 
   // 유령 화면의 이름표: 모든 이름표 위에 그 사람의 직업 칩(spectate.seats 의 job), 죽은 좌석은 반투명. 산 사람 view 에는 spectate 가 없어 이 겹침이 없다.
   const tagProps = useMemo<WorldTagProps | undefined>(() => {

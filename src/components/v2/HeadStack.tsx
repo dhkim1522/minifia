@@ -68,10 +68,12 @@ export type HeadStackProps = NameTagProps & {
   lead?: boolean;
   /** 유력 도장 */
   sure?: boolean;
+  /** 도장 글자. 없으면 "유력", 밤 마피아 화면은 "확정" */
+  sureLabel?: string;
 };
 
 // 바닥 가운데를 캐릭터 머리 꼭대기에 translate(-50%, -100%) 로 놓는 일은 쓰는 쪽(이름표 층, 06-13)이 한다.
-export function HeadStack({ name, color, me, away, typing, role, count, lead, sure, mine, done, blink, ghost }: HeadStackProps) {
+export function HeadStack({ name, color, me, away, typing, role, count, lead, sure, sureLabel, mine, done, blink, ghost }: HeadStackProps) {
   const hasBadge = count !== undefined && count >= 1;
   return (
     <div
@@ -92,7 +94,7 @@ export function HeadStack({ name, color, me, away, typing, role, count, lead, su
         </span>
       ) : null}
       {role ? <RoleChip role={role} /> : null}
-      {sure ? <SureStamp /> : null}
+      {sure ? <SureStamp {...(sureLabel !== undefined ? { label: sureLabel } : {})} /> : null}
       {hasBadge ? <VoteBadge count={count} lead={lead} /> : null}
       <NameTag name={name} color={color} me={me} away={away} mine={mine} done={done} blink={blink} ghost={ghost} />
     </div>
