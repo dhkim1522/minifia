@@ -434,3 +434,31 @@ describe("restoreChatLog", () => {
     expect(log.records[0]!.text).toBe("먼저");
   });
 });
+
+// 09-14: 카드 표시 k(결정 0061-11) — 서버가 사망 전환에서 만든 유언·쪽지 카드. 사람 줄에는 키가 없다.
+describe("카드 표시 k (결정 0061-11)", () => {
+  it("appendLine 에 k 를 주면 record.k 가 그 값이고, 주지 않으면 키 자체가 없다", () => {
+    const withK = appendLine(emptyChatLog(), { ...line("all", 2, "억울해요", 255), k: "will" }).record;
+    expect(withK.k).toBe("will");
+    const plain = appendLine(emptyChatLog(), line("all", 2, "안녕", 255)).record;
+    expect(Object.keys(plain).includes("k")).toBe(false);
+  });
+
+  it("toWire 는 k 가 있을 때만 k 를 복사한다", () => {
+    const card = appendLine(emptyChatLog(), { ...line("all", 2, "쪽지", 255), k: "note" }).record;
+    expect(json(toWire(card))).toBe(json({ ch: "all", seat: 2, seq: 1, text: "쪽지", at: 1000, k: "note" }));
+    const plain = appendLine(emptyChatLog(), line("all", 2, "안녕", 255)).record;
+    expect(Object.keys(toWire(plain)).sort().join(",")).toBe("at,ch,seat,seq,text");
+  });
+
+  it("replayFor 가 k 를 그대로 싣는다", () => {
+    const log = appendLine(emptyChatLog(), { ...line("all", 2, "유언", 255), k: "will" }).log;
+    expect(replayFor(log, 0)[0]!.k).toBe("will");
+  });
+
+  it("restoreChatLog 는 k 가 will·note 가 아닌 줄을 버리고 note 줄은 살린다", () => {
+    const base: ChatRecord = { g: 1, ch: "all", seq: 1, seat: 0, text: "글", at: 1, n: 1, r: 255 };
+    const log = restoreChatLog([{ ...base, g: 1, k: "x" }, { ...base, g: 2, seq: 2, k: "note" }, { ...base, g: 3, seq: 3, k: "will" }, { ...base, g: 4, seq: 4 }]);
+    expect(log.records.map((x) => `${x.g}:${x.k ?? "-"}`).join(",")).toBe("2:note,3:will,4:-");
+  });
+});
