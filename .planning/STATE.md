@@ -5,16 +5,16 @@ milestone_name: 같은 공간
 current_phase: 9
 current_phase_name: 밤과 아침
 status: executing
-stopped_at: Completed 09-20-PLAN.md
-last_updated: "2026-11-03T06:50:59.774Z"
+stopped_at: Completed 09-21-PLAN.md
+last_updated: "2026-11-03T06:54:57.603Z"
 last_activity: 2026-11-03
 last_activity_desc: Phase 9 execution started
-state_head: 8307862cc3b4df7b4fe139cda2bbd8625da162ff
+state_head: aaae70ccbc919dc3cd35bf494c652fb3889f2ac1
 progress:
   total_phases: 7
   completed_phases: 3
   total_plans: 101
-  completed_plans: 98
+  completed_plans: 99
   percent: 43
 ---
 
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-11-03)
 ## Current Position
 
 Phase: 9 (밤과 아침) — EXECUTING
-Plan: 21 of 23
+Plan: 22 of 23
 Status: Ready to execute
 Last activity: 2026-11-03 — Phase 9 execution started
 
@@ -158,6 +158,7 @@ Progress: [████░░░░░░] 43% (3/7 phases)
 | Phase 09 P18 | 35min | 3 tasks | 15 files |
 | Phase 09 P19 | 20min | 2 tasks | 1 files |
 | Phase 09 P20 | 35min | 3 tasks | 12 files |
+| Phase 09 P21 | 10min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -323,6 +324,7 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 09]: 09-18: 경찰 결과 문구는 경찰 분기 안에서만 만든다(POLICE_TEXT 모듈 상수, DAY_COPY 아님)
 - [Phase 09]: 09-18: 피해자 본인 aria 문장은 day.morning.eliminated===me.seat 로 판정 — 처형으로 이미 유령인 사람은 세 문장을 읽는다
 - [Phase 09]: 09-18: 경찰 화면의 hot 줄은 알림과 같은 2.6초, 보통 화면은 0.4초
+- [Phase 09]: 09-21: UI-SPEC 표의 402 폭 한 행 패널 높이 215 를 식 값 211 로 바로잡음; gamePanelHeight 에 opts 인자 추가
 
 ### Pending Todos
 
@@ -360,8 +362,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-03T06:50:59.362Z
-Stopped at: Completed 09-20-PLAN.md
+Last session: 2026-11-03T06:54:57.197Z
+Stopped at: Completed 09-21-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
