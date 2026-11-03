@@ -1,6 +1,7 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useId, useRef } from "react";
 import type { RefObject } from "react";
 import { isAlive } from "../../shared/game/alive";
+import { MAP_PHASES } from "../../shared/game/movement";
 import { majorityOf } from "../../shared/game/nomination";
 import type { ClientMessage, RoomView } from "../../shared/protocol";
 import { ActionRow } from "../components/ActionButton";
@@ -36,6 +37,14 @@ export interface GamePanelProps {
   onOpenWill?: (opener: HTMLElement | null) => void;
   /** 유언 시트가 열려 있는가 — [유언] 버튼의 눌림 */
   willOpen?: boolean;
+  /** 밤 마피아의 [쪽지] 버튼이 쪽지 시트를 연다 */
+  onOpenNote?: (opener: HTMLElement | null) => void;
+  /** 쪽지 시트가 열려 있는가 */
+  noteOpen?: boolean;
+  /** 쪽지를 쓸 수 있는가(서버가 확정을 알렸다, me.nightSure) */
+  noteReady?: boolean;
+  /** 저장된 유언이 있는가 — 깃펜 점(본인에게만) */
+  willSaved?: boolean;
   inputRef?: RefObject<HTMLInputElement | null>;
   panelRef?: RefObject<HTMLElement | null>;
 }
@@ -45,7 +54,7 @@ export interface GamePanelProps {
  * 낮 토론은 [토론 끝내기], 찬반은 위쪽 찬반 줄(VerdictPicker + DotProgress, 08-16)을 얹는다 — 변론·처형·유령은 채팅만이거나 뒤 계획이 이 틀 위에 얹는다.
  * 눌림은 서버 view(me.endDiscussion·me.verdictVote)가 기준이고, 내가 누른 즉시 바뀌는 것은 내 눌림 표시 하나뿐이다. 점 개수는 서버가 센 값만 그린다(누가 눌렀는지·무엇을 골랐는지는 서버가 보내지 않는다).
  */
-export function GamePanel({ view, send, canSend, binding, logHeight, kbOpen = false, rejected = 0, onNightPickSent, onOpenWill, willOpen = false, inputRef, panelRef }: GamePanelProps) {
+export function GamePanel({ view, send, canSend, binding, logHeight, kbOpen = false, rejected = 0, onNightPickSent, onOpenWill, willOpen = false, onOpenNote, noteOpen = false, noteReady = false, willSaved = false, inputRef, panelRef }: GamePanelProps) {
   const serverPressed = view.me.endDiscussion === true;
   const [pressed, choose] = useViewChoice<boolean>(view, serverPressed);
   // 거절이 오면 서버 값으로 되돌린다. 처음 그릴 때(거절 0)는 아무것도 하지 않는다.
@@ -110,6 +119,11 @@ export function GamePanel({ view, send, canSend, binding, logHeight, kbOpen = fa
   };
 
   // 밤 시민 편은 입력줄이 없어 아래 행동 줄의 [유언] 이 깃펜을 대신한다(UI-SPEC 237행). 산 사람 + 밤 시민·경찰·의사에게만.
+  // 채팅 입력줄이 있는 화면(낮·아침·밤 마피아)은 깃펜, 산 사람 + 지도 단계에만(유령·로비·역할 확인에는 없다, UI-SPEC 281·286행)
+  const penOn = meAlive && MAP_PHASES.has(view.phase) && onOpenWill !== undefined;
+  const nightMafia = night && meAlive && myRole === "mafia";
+  const showNoteRow = nightMafia && onOpenNote !== undefined;
+  const noteHintId = useId();
   const showWillRow = (nightCitizen || nightFaces !== null) && onOpenWill !== undefined;
 
   const pressEnd = (): void => {
@@ -147,7 +161,47 @@ export function GamePanel({ view, send, canSend, binding, logHeight, kbOpen = fa
           />
         ) : null
       ) : nightCitizen ? null : chatChannelOk ? (
-        <ChatPanel {...binding} logHeight={logHeight} compact={kbOpen} {...(inputRef ? { inputRef } : {})} />
+        <ChatPanel
+          {...binding}
+          logHeight={logHeight}
+          compact={kbOpen}
+          {...(inputRef ? { inputRef } : {})}
+          {...(penOn
+            ? {
+                onWill: () => {
+                  if (canSend) onOpenWill?.(panelRef?.current?.querySelector<HTMLElement>("[data-will-button]") ?? null);
+                },
+                willOpen,
+                willSaved,
+              }
+            : {})}
+        />
+      ) : null}
+      {showNoteRow ? (
+        <ActionRow>
+          <button
+            type="button"
+            className="mf-act mf-game__note"
+            aria-pressed={noteOpen}
+            aria-disabled={noteReady && canSend ? undefined : "true"}
+            {...(noteReady ? {} : { "aria-describedby": noteHintId })}
+            data-note-button=""
+            onClick={(e) => {
+              if (!noteReady || !canSend) return;
+              onOpenNote?.(e.currentTarget);
+            }}
+          >
+            <span className="mf-game__note-icon" aria-hidden="true">
+              <V2Icon name="note" size={22} />
+            </span>
+            <span className="mf-act__label">쪽지</span>
+          </button>
+        </ActionRow>
+      ) : null}
+      {showNoteRow && !noteReady ? (
+        <span id={noteHintId} className="mf-sr-only">
+          암살 대상을 모두 같게 고르면 쓸 수 있어요
+        </span>
       ) : null}
       {showWillRow ? (
         <ActionRow>

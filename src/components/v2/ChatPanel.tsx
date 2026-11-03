@@ -303,6 +303,7 @@ export function ChatPanel(props: ChatPanelProps) {
               data-will-button=""
               aria-label={willSaved ? CHAT_TEXT.willSaved : CHAT_TEXT.will}
               aria-pressed={willOpen ? "true" : "false"}
+              aria-disabled={sendDisabled ? "true" : undefined}
               onClick={() => latest.current.onWill?.()}
               // 포커스가 버튼으로 옮겨 가 키보드가 닫히지 않게 한다(보내기 버튼과 같다). 입력 중 경로(onChange)는 부르지 않는다.
               onMouseDown={(e) => e.preventDefault()}

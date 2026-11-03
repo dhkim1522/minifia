@@ -31,6 +31,12 @@
 .mf-game__will[aria-pressed="true"] { background: var(--gray-100); border-color: var(--gray-100); color: var(--night-900); }
 .mf-game__will[aria-disabled="true"] { opacity: 0.45; cursor: default; }
 
+/* 밤 마피아 아래 행동 줄 [쪽지] (UI-SPEC 228행): 면 night-700·글자 gray-100. 진홍은 아이콘 하나에만(면·테두리에는 쓰지 않는다), 확정 전은 불투명도 0.45 */
+.mf-game__note { background: var(--night-700); border-color: var(--night-600); color: var(--gray-100); }
+.mf-game__note-icon { display: inline-flex; color: var(--crimson-300); }
+.mf-game__note[aria-pressed="true"] { background: var(--gray-100); border-color: var(--gray-100); color: var(--night-900); }
+.mf-game__note[aria-disabled="true"] { opacity: 0.45; cursor: default; }
+
 /* 아침 발표 카드(03-10). 시안 night-v1/f6.css 의 .bn·.bn__t·.bn__s 를 토큰으로 옮겼다(UI-SPEC "M 아침 발표").
    카드의 기준 상자는 화면 루트(.mf-dayscene)다 — 위쪽 바를 포함한 좌표에서 top 168. */
 .mf-dayscene { position: relative; }

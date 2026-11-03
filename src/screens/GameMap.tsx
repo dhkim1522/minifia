@@ -39,6 +39,8 @@ const HINT_MS = 2500;
 const REJECT_TEXT = "지금은 고를 수 없어요";
 /** 지목이 단계 어긋남이 아닌 이유로 거절됐을 때 위 알림 */
 const SEND_FAIL_TEXT = "보내지 못했어요. 다시 해 보세요";
+/** 쪽지 시트 입력칸 안내(UI-SPEC 쪽지: 이름 없이 아침에 공개된다) */
+const NOTE_PLACEHOLDER = "이름 없이 아침에 공개돼요";
 /** 지목·밤 선택을 보낸 뒤 이 시간 안의 오류 프레임은 그 선택의 거절로 본다(서버는 거절을 곧바로 돌려준다) */
 const PICK_REPLY_MS = 3000;
 /** 스테이지 사각형을 아직 못 쟀을 때 WorldStage 기본값(헤더 아래 62 · 패널 250)과 같은 값 — 장면 표의 확대 판정에만 쓴다 */
@@ -432,6 +434,10 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
         }}
         onOpenWill={(opener) => will.openSheet("will", opener)}
         willOpen={will.open === "will"}
+        willSaved={will.hasWill}
+        onOpenNote={(opener) => will.openSheet("note", opener)}
+        noteOpen={will.open === "note"}
+        noteReady={will.noteReady}
         inputRef={inputRef}
         panelRef={panelRef}
       />
@@ -439,6 +445,7 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
         <div ref={layerRef} className="mf-will-layer">
           <WillSheet
             key={will.open}
+            {...(will.open === "note" ? { title: "쪽지", icon: "note" as const, tone: "mafia" as const, placeholder: NOTE_PLACEHOLDER } : {})}
             value={will.draft}
             onChange={will.setDraft}
             onSave={will.save}
