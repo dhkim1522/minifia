@@ -11,7 +11,7 @@
 
 ## 결정
 
-1. **단계**: `night` 30초, `morning` 5초. 흐름은 `discussion → night → morning → dayAnnounce` 다(4페이즈 전 임시 — 4페이즈가 discussion 과 night 사이에 투표·처형을 끼운다). 일차는 `dayAnnounce` 진입에서만 오른다. 모두가 일찍 골라도 밤은 30초가 다 지나야 끝난다(행동은 마감을 바꾸지 않는다).
+1. **단계**: `night` 30초, `morning` 5초. 흐름은 `discussion → night → morning → dayAnnounce` 다(4페이즈 전 임시 — 4페이즈가 discussion 과 night 사이에 투표·처형을 끼운다). 일차는 `dayAnnounce` 진입에서만 오른다. 모두가 일찍 골라도 밤은 30초가 다 지나야 끝난다(행동은 마감을 바꾸지 않는다). (2026-11-03 결정 0061-13 으로 v2.0 에서 개정했다: 아침 길이는 공개되는 내용에 따라 5~15초)
 2. **밤 행동 메시지는 `{ t: "pick", target }` 하나**다. 행동 종류(살해 지목·조사·보호)는 보내지 않고 서버 저장 역할이 정한다. 같은 값 재선택은 저장도 전송도 없다. 마감까지 바꿀 수 있고, 마감 뒤에는 `WRONG_PHASE` 다. 아무 행동도 마감 시각을 바꾸지 않는다.
 3. **판정 규칙표** (아침 진입 때 한 번 돈다):
 
@@ -30,13 +30,13 @@
    | 탈락 처리 | 대상 `alive: false`. 아침 발표에 직업은 싣지 않는다 |
    | 아침 문구 | 탈락자가 있을 때만 번호 1..7 중 하나(결정 0036-9 로 8 → 7). 직전 번호를 뺀 후보에서 고른다 — 문구 연속 반복 없음 |
 
-   난수는 `tick` 의 세 번째 인자(`cryptoRandInt`)이고, 필요할 때만(동률·문구) 정해진 순서로 부른다. 난수 없이 탈락이 생기는 밤을 마감하면 예외를 던진다(조용히 틀리지 않는다). **A1·A2 는 사용자가 나중에 바꿀 수 있는 기본값**이다. 바뀌면 규칙표와 `test/unit/night.test.ts` 만 고친다.
+   난수는 `tick` 의 세 번째 인자(`cryptoRandInt`)이고, 필요할 때만(동률·문구) 정해진 순서로 부른다. 난수 없이 탈락이 생기는 밤을 마감하면 예외를 던진다(조용히 틀리지 않는다). **A1·A2 는 사용자가 나중에 바꿀 수 있는 기본값**이다. 바뀌면 규칙표와 `test/unit/night.test.ts` 만 고친다. (2026-11-03 결정 0061-6·12·17 로 v2.0 에서 개정했다: 산 마피아 전원 일치만 확정·난수 없음, 구출은 saved 로 공개, 문구 번호 삭제)
 4. **view 필드** (`shared/protocol.ts`):
    - `players[].alive` — 항상 싣는다(공개 정보). `players[]` 키는 `alive`·`connected`·`isHost`·`nickname`·`seat` 다섯이다.
    - `me.pick` — 밤·생존 본인이 고른 seat. 본인에게만.
    - `me.allyPicks` — 밤·생존 마피아에게만. 동료가 고른 대상 seat 오름차순·중복 없음. 누가 골랐는지는 싣지 않는다.
    - `me.records` — 경찰 본인에게만. 역할을 싣는 모든 단계에서, 탈락한 뒤에도 보인다. `{ n, target, isMafia }` 만 있고 직업 이름은 없다.
-   - `day.morning` — 아침 단계에서 모든 소켓이 같은 JSON(`{ eliminated?, phrase? }`). 키 없는 객체는 지난밤 무사다.
+   - `day.morning` — 아침 단계에서 모든 소켓이 같은 JSON(`{ eliminated?, phrase? }`). 키 없는 객체는 지난밤 무사다. (2026-11-03 결정 0061-12·17: `{ eliminated?, saved? }`)
    - `day.claims` — 낮 토론에 이어 밤·아침에도 싣는다(공개된 주장).
    - `spectate { seats[{ seat, job }], picks { mafia, police, doctor } }` — 탈락한 **본인 view 에만**, 탈락한 아침 state 부터(결정 0021). `picks` 는 밤에만 있고 지난 밤 정보는 없다. 키 이름은 `role` 이 아니라 `job`·`isMafia` 다 — 누출 검사가 `role`·`allies` 키를 `view.me` 밖에서 금지하기 때문이다.
 5. **받는 사람 규칙**:
