@@ -755,3 +755,60 @@ describe("ChatPanel card 메시지 (MORN-02)", () => {
     expect(rulesFor(V2_CSS, ".mv-chat__card-text").join(";")).toContain("overflow-wrap: anywhere");
   });
 });
+
+// 09-11 Task 3 (WILL-01, 결정 0054, UI-SPEC 281·329행): 입력줄 왼쪽 깃펜 버튼
+describe("ChatPanel 깃펜 버튼 (WILL-01)", () => {
+  const pen = (c: HTMLElement) => c.querySelector("button[data-will-button]");
+
+  it("onWill 이 있으면 입력칸 앞에 접근성 이름 '유언 쓰기' 버튼이 있고, 눌러도 onWill 1회·onChange 0회다", () => {
+    const onWill = vi.fn();
+    const onChangeSpy = vi.fn();
+    const { container } = render(<Harness onWill={onWill} onChangeSpy={onChangeSpy} />);
+    const btn = pen(container);
+    expect(btn, "button[data-will-button]").toBeInstanceOf(HTMLButtonElement);
+    expect(btn?.getAttribute("aria-label")).toBe("유언 쓰기");
+    expect(btn?.getAttribute("type")).toBe("button");
+    expect(btn?.classList.contains("mv-chat__will")).toBe(true);
+    expect(btn?.querySelector("svg")).not.toBeNull();
+    // 입력칸(field)보다 앞
+    expect(btn?.compareDocumentPosition(container.querySelector(".mv-chat__field") as Element) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    fireEvent.click(btn as Element);
+    expect(onWill).toHaveBeenCalledTimes(1);
+    expect(onChangeSpy).toHaveBeenCalledTimes(0);
+  });
+
+  it("저장됨이면 이름이 '유언 쓰기, 저장됨' 이고 점이 있다, 열려 있으면 aria-pressed true 다", () => {
+    const { container, rerender } = render(<Harness onWill={() => {}} willSaved willOpen />);
+    expect(pen(container)?.getAttribute("aria-label")).toBe("유언 쓰기, 저장됨");
+    expect(container.querySelector(".mv-chat__will-dot")).not.toBeNull();
+    expect(pen(container)?.getAttribute("aria-pressed")).toBe("true");
+    rerender(<Harness onWill={() => {}} />);
+    expect(pen(container)?.getAttribute("aria-label")).toBe("유언 쓰기");
+    expect(container.querySelector(".mv-chat__will-dot")).toBeNull();
+    expect(pen(container)?.getAttribute("aria-pressed")).toBe("false");
+  });
+
+  it("onWill 이 없으면 버튼이 없다(유령·로비)", () => {
+    const { container } = render(<Harness />);
+    expect(pen(container)).toBeNull();
+  });
+
+  it("버튼 mousedown 의 기본 동작을 막아 입력칸 포커스(키보드)를 유지한다", () => {
+    const { container } = render(<Harness onWill={() => {}} />);
+    const ev = new MouseEvent("mousedown", { bubbles: true, cancelable: true });
+    (pen(container) as Element).dispatchEvent(ev);
+    expect(ev.defaultPrevented).toBe(true);
+  });
+
+  it("CSS: 48×48 면 night-700 아이콘 gray-100 반경 badge, 점은 gray-100 8px", () => {
+    const rule = rulesFor(V2_CSS, ".mv-chat__will").join(";");
+    expect(rule).toContain("width: var(--control-input)");
+    expect(rule).toContain("height: var(--control-input)");
+    expect(rule).toContain("background: var(--night-700)");
+    expect(rule).toContain("color: var(--gray-100)");
+    expect(rule).toContain("border-radius: var(--radius-badge)");
+    const dot = rulesFor(V2_CSS, ".mv-chat__will-dot").join(";");
+    expect(dot).toContain("width: 8px");
+    expect(dot).toContain("background: var(--gray-100)");
+  });
+});
