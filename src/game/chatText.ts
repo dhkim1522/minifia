@@ -29,6 +29,9 @@ export const CHAT_TEXT = {
   // 9페이즈 카드 제목 (09-UI-SPEC 427행)
   cardWill: (name: string) => `${name} 님의 유언`,
   cardNote: "쪽지",
+  // 입력줄 깃펜 버튼의 접근성 이름 (09-UI-SPEC 281행)
+  will: "유언 쓰기",
+  willSaved: "유언 쓰기, 저장됨",
 } as const;
 
 // 10페이즈 동작 버튼의 접근성 이름. 7페이즈 화면에는 버튼이 없다 (UI-SPEC 동작 종류 표, 키 순서는 EMOTE_IDS 와 같다)

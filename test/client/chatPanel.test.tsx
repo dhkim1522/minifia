@@ -771,7 +771,7 @@ describe("ChatPanel 깃펜 버튼 (WILL-01)", () => {
     expect(btn?.classList.contains("mv-chat__will")).toBe(true);
     expect(btn?.querySelector("svg")).not.toBeNull();
     // 입력칸(field)보다 앞
-    expect(btn?.compareDocumentPosition(container.querySelector(".mv-chat__field") as Element) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect((btn as Element).compareDocumentPosition(container.querySelector(".mv-chat__field") as Element) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     fireEvent.click(btn as Element);
     expect(onWill).toHaveBeenCalledTimes(1);
     expect(onChangeSpy).toHaveBeenCalledTimes(0);
