@@ -95,8 +95,11 @@ function defenseAnnounceOf(view: RoomView): string {
 }
 
 // 처형 안내(결정 0060-5): `{닉네임} 님 처형` 하나뿐이다(문구 번호 없음). 처형된 자리를 못 찾으면(서버 이상) `처형`.
+// 찬반이 부결이면 서버는 day.execution 을 싣지 않고 candidate 만 남기므로, 통과가 아니면 처형 문구를 만들지 않고 `처형 없음` 을 읽는다
+// (화면의 시각 알림 dayView.phaseEntry 가 verdict.passed 로 가르는 것과 같은 기준).
 function executionAnnounceOf(view: RoomView): string {
-  const seat = view.day?.execution?.seat ?? view.day?.candidate;
+  if (view.day?.verdict?.passed !== true) return "처형 없음";
+  const seat = view.day.execution?.seat ?? view.day.candidate;
   const nickname = seat === undefined ? undefined : view.players.find((p) => p.seat === seat)?.nickname;
   return nickname === undefined ? "처형" : `${nickname} 님 처형`;
 }

@@ -319,6 +319,28 @@ describe("단계 안내 aria-live · 단계 전환 (UI-SPEC 접근성·Motion)",
     expect(liveRegion(first.container).textContent).toBe("낮 토론");
   });
 
+  // CR-01: 서버는 찬반이 통과한 판에만 day.execution 을 싣는다. 부결이면 candidate 만 남는다.
+  const executionView = (day: NonNullable<RoomView["day"]>): RoomView => {
+    const base = makeView({ phase: "execution", endsIn: 6_000, durationMs: 6_000, role: "citizen", day: 1 });
+    return { ...base, day: { ...base.day!, ...day } };
+  };
+
+  it("처형 단계: 찬반이 통과하면 '{이름} 님 처형' 을 읽는다", () => {
+    const r = renderRoom(
+      executionView({ n: 1, roles: ["mafia", "police", "citizen"], candidate: 1, execution: { seat: 1 }, verdict: { yes: 3, no: 0, passed: true } }),
+    );
+    expect(liveRegion(r.container).textContent).toBe("하윤 님 처형");
+  });
+
+  it("처형 단계: 찬반이 부결이면(day.execution 없음, candidate 만 있음) 변론자 이름 대신 '처형 없음' 을 읽는다", () => {
+    const r = renderRoom(
+      executionView({ n: 1, roles: ["mafia", "police", "citizen"], candidate: 1, verdict: { yes: 1, no: 2, passed: false } }),
+    );
+    const text = liveRegion(r.container).textContent;
+    expect(text).toBe("처형 없음");
+    expect(text).not.toContain("하윤");
+  });
+
   it("단계 표 라벨(TEST_PHASE_LABEL)은 PhaseId 와 같은 키 집합이다", () => {
     const phases: Record<PhaseId, true> = {
       lobby: true,
