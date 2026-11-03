@@ -281,11 +281,33 @@ export function lobbyPanelHeight(logH) {
 // ---- 게임 맵 판정 (08-23, 08-UI-SPEC "아래 패널 종류와 높이"·"검사 가능하게 둘 것"). 순수 함수 — 브라우저에서 읽는 값은 08-24 의 readGame 이 만든다. ----
 // 모든 판정은 다른 판정과 같은 { id, label, ok, detail } 줄(들)을 돌려준다. 값이 없거나 숫자가 아니면 조용히 통과하지 않고 `측정값 없음(…)` 으로 실패한다.
 
-/** 게임 맵 아래 패널 높이 덧셈(안전 영역 제외): 토론 = LOG_H + 154, 채팅 = + 92, 찬반 투표자 = + 203, 찬반 보기 = + 111. */
-export const GAME_PANEL_EXTRA = Object.freeze({ talk: 154, chat: CHAT_PANEL_EXTRA, verdictVoter: 203, verdictViewer: 111 });
+/** 게임 맵 아래 패널 높이 덧셈(안전 영역 제외): 토론 = LOG_H + 154, 채팅 = + 92, 찬반 투표자 = + 203, 찬반 보기 = + 111, 밤 마피아 = + 154(토론 패널과 같다, 09-UI-SPEC 149~157행). */
+export const GAME_PANEL_EXTRA = Object.freeze({ talk: 154, chat: CHAT_PANEL_EXTRA, verdictVoter: 203, verdictViewer: 111, nightMafia: 154 });
 
-/** 게임 맵 아래 패널의 기대 높이. kind 는 GAME_PANEL_EXTRA 의 키, roomH = 방(뷰포트) 높이. 알 수 없는 kind 는 던진다. */
-export function gamePanelHeight(roomH, kind) {
+/** 밤 시민 패널 높이: 행동 줄 52 [유언] 하나 = 88 고정(09-UI-SPEC 157행, 방 높이와 무관). */
+export const NIGHT_CITIZEN_PANEL_H = 88;
+
+/**
+ * 밤 얼굴 목록 패널 높이(09-UI-SPEC 160행 식, 안전 영역 제외). w = 폰 폭, n = 후보 수(밤 동안 변하지 않는다), wrappedRows = 이름이 줄바꿈된 행 수.
+ * 한 칸 fw = (w − 32 − 24) / 4, 한 행 = fw + 26.2, 행 수 = ceil(n / 4), 행 사이 8. 패널 = 14 + 행들 + 10 + 52 + 22 + 줄바꿈 행마다 18.
+ * 표의 값은 이 식의 반올림이고 E2E 는 패널 높이를 DOM 에서 재 이 식과 ±2px 로 비교한다(가정 A1).
+ */
+export function faceListPanelH({ w, n, wrappedRows = 0 }) {
+  const rows = Math.max(1, Math.ceil(n / 4));
+  const fw = (w - 56) / 4;
+  return 14 + rows * (fw + 26.2) + (rows - 1) * 8 + 10 + 52 + 22 + wrappedRows * 18;
+}
+
+/**
+ * 게임 맵 아래 패널의 기대 높이. kind 는 GAME_PANEL_EXTRA 의 키 또는 "nightCitizen"(88 고정)·"faceList"(opts = { w, n, wrappedRows? }), roomH = 방(뷰포트) 높이.
+ * 알 수 없는 kind 는 던진다.
+ */
+export function gamePanelHeight(roomH, kind, opts) {
+  if (kind === "nightCitizen") return NIGHT_CITIZEN_PANEL_H;
+  if (kind === "faceList") {
+    if (!opts || !isNum(opts.w) || !isNum(opts.n)) throw new Error("faceList 패널 높이는 opts.w·n 이 필요하다");
+    return faceListPanelH(opts);
+  }
   const extra = Object.hasOwn(GAME_PANEL_EXTRA, kind) ? GAME_PANEL_EXTRA[kind] : undefined;
   if (extra === undefined) throw new Error(`알 수 없는 패널 종류: ${kind}`);
   return logHeightFor(roomH) + extra;

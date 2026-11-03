@@ -644,8 +644,8 @@ test("faceListPanelH: 폭 4종 × 2행·1행이 UI-SPEC 표 값(약, ±1)이고 
   const near = (a, b) => assert.ok(Math.abs(a - b) <= 1, `${a} ≈ ${b}`);
   // 후보 5명 이상 = 2행: 310 · 325 · 331 · 345
   for (const [w, h] of [[360, 310], [390, 325], [402, 331], [430, 345]]) near(faceListPanelH({ w, n: 5 }), h);
-  // 후보 4명 이하 = 1행: 200 · 208 · 215 · 218
-  for (const [w, h] of [[360, 200], [390, 208], [402, 215], [430, 218]]) near(faceListPanelH({ w, n: 4 }), h);
+  // 후보 4명 이하 = 1행: 200 · 208 · 211 · 218 (UI-SPEC 표의 402 값 215 는 식(160행)과 4px 어긋난 오기 — 식을 따라 211, 09-21 SUMMARY 편차)
+  for (const [w, h] of [[360, 200], [390, 208], [402, 211], [430, 218]]) near(faceListPanelH({ w, n: 4 }), h);
   near(faceListPanelH({ w: 360, n: 5, wrappedRows: 1 }), 328);
   near(faceListPanelH({ w: 360, n: 5, wrappedRows: 2 }), 346);
   // 식 그대로: 14 + 행들 + 행 사이 8 + 10 + 52 + 22
