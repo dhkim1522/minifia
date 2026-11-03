@@ -53,7 +53,7 @@
 - [x] **NIGHT-09**: 경찰·의사는 깜깜한 화면에 비친 얼굴 목록에서 대상을 고른다
 - [x] **NIGHT-10**: 시민 편 깜깜한 화면에 발소리·심장 소리 같은 긴장 연출이 나온다. 연출은 실제 마피아 움직임과 무관하다
 - [x] **NIGHT-11**: 암살당한 사람은 깜깜한 화면에서 암살 이펙트를 본다(밤 판정이 끝난 뒤)
-- [ ] **NIGHT-12**: 마피아는 확정된 암살에 익명 쪽지를 남길 수 있다
+- [x] **NIGHT-12**: 마피아는 확정된 암살에 익명 쪽지를 남길 수 있다
 
 ### 아침 (MORN)
 
@@ -64,7 +64,7 @@
 
 ### 유언 (WILL)
 
-- [ ] **WILL-01**: 누구나 역할과 관계없이 언제든 유언을 쓰고 고칠 수 있고, 죽을 때(처형·암살) 모두에게 공개된다. 쓰는 동안 다른 사람에게 아무 신호도 가지 않는다
+- [x] **WILL-01**: 누구나 역할과 관계없이 언제든 유언을 쓰고 고칠 수 있고, 죽을 때(처형·암살) 모두에게 공개된다. 쓰는 동안 다른 사람에게 아무 신호도 가지 않는다
 
 ### 유령 (GHOST)
 
@@ -150,12 +150,12 @@ Which phases cover which requirements. Updated during roadmap creation.
 | NIGHT-09 | Phase 9 | Complete |
 | NIGHT-10 | Phase 9 | Complete |
 | NIGHT-11 | Phase 9 | Complete |
-| NIGHT-12 | Phase 9 | Pending |
+| NIGHT-12 | Phase 9 | Complete |
 | MORN-01 | Phase 9 | Complete |
 | MORN-02 | Phase 9 | Complete |
 | MORN-03 | Phase 9 | Complete |
 | MORN-04 | Phase 9 | Complete |
-| WILL-01 | Phase 9 | Pending |
+| WILL-01 | Phase 9 | Complete |
 | AVTR-01 | Phase 10 | Pending |
 | AVTR-02 | Phase 10 | Pending |
 | AVTR-03 | Phase 10 | Pending |
