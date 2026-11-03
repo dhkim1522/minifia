@@ -69,6 +69,35 @@ describe("canMove — 단계 × 신분 표 (MAP-04)", () => {
   });
 });
 
+describe("canMoveIn — 밤은 산 마피아만 (NIGHT-07, 결정 0061-2)", () => {
+  it("밤: 산 마피아 true · 산 비마피아 false · 기본값 false · 유령 true", () => {
+    expect(`night:${canMoveIn("night", true, true)}`).toBe("night:true");
+    expect(`night:${canMoveIn("night", true, false)}`).toBe("night:false");
+    expect(`night:${canMoveIn("night", true)}`).toBe("night:false");
+    expect(`night:${canMoveIn("night", false, true)}`).toBe("night:true");
+    expect(`night:${canMoveIn("night", false, false)}`).toBe("night:true");
+  });
+
+  it("밤 밖의 단계는 isMafia 가 결과를 바꾸지 않는다", () => {
+    for (const [phase, aliveCan, ghostCan] of TABLE) {
+      if (phase === "night") continue;
+      expect(`${phase}:${canMoveIn(phase, true, true)}`).toBe(`${phase}:${aliveCan}`);
+      expect(`${phase}:${canMoveIn(phase, false, true)}`).toBe(`${phase}:${ghostCan}`);
+    }
+    expect(`morning:${canMoveIn("morning", true, true)}`).toBe("morning:false");
+    expect(`discussion:${canMoveIn("discussion", true, false)}`).toBe("discussion:true");
+  });
+
+  it("canMove 는 역할이 마피아인 산 사람만 밤에 허용한다", () => {
+    const night = withPhase("night");
+    expect(`mafia:${canMove(night, { ...living, role: "mafia" })}`).toBe("mafia:true");
+    expect(`citizen:${canMove(night, { ...living, role: "citizen" })}`).toBe("citizen:false");
+    expect(`police:${canMove(night, { ...living, role: "police" })}`).toBe("police:false");
+    expect(`doctor:${canMove(night, { ...living, role: "doctor" })}`).toBe("doctor:false");
+    expect(`deadMafia:${canMove(night, { ...ghost, role: "mafia" })}`).toBe("deadMafia:true");
+  });
+});
+
 describe("MAP_PHASES — 지도 단계 8개", () => {
   it("낮 시작·토론·지목·변론·찬반·처형·밤·아침이고 로비·역할 단계·종료·옛 투표 단계는 들지 않는다", () => {
     expect([...MAP_PHASES].sort().join(",")).toBe(

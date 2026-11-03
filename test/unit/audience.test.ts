@@ -189,6 +189,44 @@ describe("audience — 받는 사람 집합", () => {
   });
 });
 
+describe("audience world 밤 분기 (NIGHT-07, 결정 0061-2)", () => {
+  const night = sixAt("night", { day: 1 });
+  const world = (mover: number): AudienceEvent => ({ k: "world", mover: idOf(mover) });
+
+  it("산 마피아가 움직이면 산 마피아 + 유령뿐이다", () => {
+    expect(sorted(audience(night, world(1)))).toEqual(ids(1, 2, 4));
+    expect(sorted(audience(night, world(4)))).toEqual(ids(1, 2, 4));
+  });
+
+  it("산 비마피아 mover 는 빈 집합이다(fail-closed, A2)", () => {
+    for (const seat of [0, 3, 5]) expect(audience(night, world(seat)).size).toBe(0);
+  });
+
+  it("유령이 움직이면 유령만 받는다", () => {
+    expect(sorted(audience(night, world(2)))).toEqual(ids(2));
+  });
+
+  it("탈락한 마피아가 있어도 유령으로 든다(A1) — 마피아 1명 남은 판", () => {
+    const one = sixAt("night", { day: 1, dead: [2, 4] });
+    expect(sorted(audience(one, world(1)))).toEqual(ids(1, 2, 4));
+    expect(sorted(audience(one, world(4)))).toEqual(ids(2, 4));
+  });
+
+  it("마피아가 한 명뿐인 판도 마피아와 유령만 받는다", () => {
+    const solo: RoomState = { ...night, players: night.players.map((p) => (p.seat === 4 ? { ...p, role: "citizen" as RoleId } : p)) };
+    expect(sorted(audience(solo, world(1)))).toEqual(ids(1, 2));
+  });
+
+  it("다른 지도 단계·로비의 결과는 그대로다", () => {
+    for (const phase of ["dayAnnounce", "discussion", "nomination", "defense", "verdict", "execution", "morning"] as PhaseId[]) {
+      expect(sorted(audience(sixAt(phase, { day: 1 }), world(1)))).toEqual(ids(0, 1, 2, 3, 4, 5));
+      expect(sorted(audience(sixAt(phase, { day: 1 }), world(0)))).toEqual(ids(0, 1, 2, 3, 4, 5));
+      expect(sorted(audience(sixAt(phase, { day: 1 }), world(2)))).toEqual(ids(2));
+    }
+    expect(sorted(audience(lobbyOf(6), { k: "world", mover: idOf(1) }))).toEqual(ids(0, 1, 2, 3, 4, 5));
+  });
+});
+
 describe("CHAT_PHASES", () => {
   it("로비·낮 단계·밤·아침이 들고, assigning·roleReveal·ended·claim 은 들지 않는다", () => {
     expect([...CHAT_PHASES].sort().join(",")).toBe(

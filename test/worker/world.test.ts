@@ -30,6 +30,7 @@ import {
   alarmOf,
   until,
   wanderTimes,
+  withRole,
   worldDirty,
   worldOf,
 } from "./helpers";
@@ -497,6 +498,49 @@ describe("단계별 이동 — 산 사람은 막히고 유령은 걷는다 (MAP-
     got = await settleAll(socks, marks, 1);
     expect(got.map((msgs) => msgs.filter((m) => m.t === "world").length).join(",")).toBe("0,0,0,0");
   }, 30_000);
+});
+
+describe("밤 마피아 이동 (NIGHT-07, 결정 0061-2)", () => {
+  const worldCounts = (got: ServerMessage[][]): string => got.map((msgs) => msgs.filter((m) => m.t === "world").length).join(",");
+
+  it("산 마피아의 move 는 산 마피아 소켓과 유령 소켓에만 world.move 로 가고 시민·경찰·의사 소켓은 world 프레임 0개다", async () => {
+    const g = await startedGame("night");
+    const [mafiaA, mafiaB] = withRole(g, "mafia") as [(typeof g.actors)[number], (typeof g.actors)[number]];
+    const marks = g.socks.map((sock) => mark(sock));
+    send(mafiaA.sock, { t: "move", x: 300, z: 100 });
+    const got = await settleAll(g.socks, marks, g.actors.indexOf(mafiaA));
+    const counts = got.map((msgs) => msgs.filter((m) => m.t === "world" || m.t === "error").length);
+    for (const a of g.actors) {
+      const expected = a === mafiaA || a === mafiaB ? 1 : 0;
+      expect(`${a.role}:${counts[g.actors.indexOf(a)]}`).toBe(`${a.role}:${expected}`);
+    }
+    const seenByB = got[g.actors.indexOf(mafiaB)]!.filter(isMove);
+    expect(seenByB.map((m) => m.s).join(",")).toBe(`${mafiaA.seat}`);
+  }, 40_000);
+
+  it("유령 소켓도 산 마피아의 걸음을 받고, 시민 편 산 사람은 여전히 0프레임이다", async () => {
+    const g = await startedGame("night");
+    const [mafiaA] = withRole(g, "mafia") as [(typeof g.actors)[number]];
+    const doomed = withRole(g, "citizen").slice(0, 1);
+    const { ghosts, living } = await ghostsOf(g, doomed.map((a) => a.seat));
+    const marks = g.socks.map((sock) => mark(sock));
+    send(mafiaA.sock, { t: "move", x: 300, z: 100 });
+    const got = await settleAll(g.socks, marks, g.actors.indexOf(mafiaA));
+    const countOf = (a: (typeof g.actors)[number]): number => got[g.actors.indexOf(a)]!.filter((m) => m.t === "world").length;
+    expect(`ghost:${countOf(ghosts[0]!)}`).toBe("ghost:1");
+    const nonMafiaLiving = living.filter((a) => a.role !== "mafia");
+    expect(nonMafiaLiving.map(countOf).join(",")).toBe(nonMafiaLiving.map(() => 0).join(","));
+  }, 40_000);
+
+  it("산 비마피아의 move 는 어느 소켓에도 프레임·오류가 없다", async () => {
+    const g = await startedGame("night");
+    const marks = g.socks.map((sock) => mark(sock));
+    const mover = g.actors.find((a) => a.role === "citizen")!;
+    send(mover.sock, { t: "move", x: 300, z: 100 });
+    const got = await settleAll(g.socks, marks, g.actors.indexOf(mover));
+    expect(got.map((msgs) => msgs.filter((m) => m.t === "world" || m.t === "error").length).join(",")).toBe("0,0,0,0,0,0");
+    expect(worldCounts(got)).toBe("0,0,0,0,0,0");
+  }, 40_000);
 });
 
 describe("무대 자리 (0,0) 입력 차단 (08-04 Threat Flag)", () => {
