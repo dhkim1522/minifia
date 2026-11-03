@@ -1,7 +1,7 @@
 // 유언·쪽지 워커 통합 테스트(09-12, WILL-01·NIGHT-12, 결정 0061-9·10): 저장한 소켓에만 state, 다른 소켓은 프레임 0개(L7).
 import { describe, expect, it } from "vitest";
 import type { ServerMessage } from "../../shared/protocol";
-import { lastViewOf, mark, pause, send, settle, startedGame, storedRoom, summary, toPhase, withRole } from "./helpers";
+import { ghostsOf, lastViewOf, mark, pause, pickAs, send, settle, startedGame, storedRoom, summary, toPhase, withRole } from "./helpers";
 import type { Game } from "./helpers";
 
 type State = Extract<ServerMessage, { t: "state" }>;
@@ -88,5 +88,76 @@ describe("유언 저장 (WILL-01)", () => {
     const r = await sendWill(g, me, { t: "will", text: "a", seat: 0 });
     expect(summary(r.mine)).toBe("[error:BAD_MESSAGE]");
     expect(await willOf(g, me.seat)).toBeUndefined();
+  });
+});
+
+// ---- 쪽지 (NIGHT-12) ----
+/** 밤 6명 판에서 시민 한 명을 유령으로 만들고, 산 마피아 전원이 다른 시민을 골라 확정시킨 뒤 소켓을 비운다. */
+async function confirmedNightGame(confirm = true): Promise<{ g: Game; mafias: Game["actors"]; others: Game["actors"]; ghost: Game["actors"][number] }> {
+  const g = await startedGame("night");
+  const citizens = withRole(g, "citizen");
+  const ghostSeat = citizens[0]!.seat;
+  const { ghosts } = await ghostsOf(g, [ghostSeat]);
+  const mafias = withRole(g, "mafia");
+  if (confirm) for (const m of mafias) pickAs(m, citizens[1]!.seat);
+  for (const a of g.actors) await settle(a.sock, mark(a.sock));
+  return { g, mafias, others: g.actors.filter((a) => !mafias.includes(a) && a !== ghosts[0]), ghost: ghosts[0]! };
+}
+
+describe("쪽지 저장 (NIGHT-12)", () => {
+  it("확정 뒤 마피아 A 의 note 는 산 마피아 둘에게만 같은 me.note state 로 가고 시민 편 소켓·유령 소켓은 프레임 0개다", async () => {
+    const { g, mafias, others, ghost } = await confirmedNightGame();
+    const marks = new Map(g.actors.map((a) => [a, mark(a.sock)]));
+    send(mafias[0]!.sock, { t: "note", text: "미안해요" });
+    for (const m of mafias) {
+      const got = await settle(m.sock, marks.get(m)!);
+      expect(summary(got)).toBe("[state:night]");
+      expect((got[0] as State).view.me.note).toBe("미안해요");
+    }
+    for (const o of [...others, ghost]) expect(summary(await settle(o.sock, marks.get(o)!))).toBe("[]");
+    const stored = (await storedRoom(g.code)) as unknown as Stored;
+    expect(stored.nightNote).toBe("미안해요");
+    expect(JSON.stringify(stored.players)).not.toContain("미안해요");
+  });
+
+  it("이어서 마피아 B 가 다른 글을 보내면 두 마피아 화면이 B 의 글이다(마지막 저장이 이김)", async () => {
+    const { g, mafias } = await confirmedNightGame();
+    send(mafias[0]!.sock, { t: "note", text: "첫 글" });
+    for (const m of mafias) await settle(m.sock, mark(m.sock));
+    // B 의 간격 기록은 따로다 — 같은 사람이 아니므로 바로 받는다.
+    const marks = new Map(mafias.map((a) => [a, mark(a.sock)]));
+    send(mafias[1]!.sock, { t: "note", text: "둘째 글" });
+    for (const m of mafias) {
+      await settle(m.sock, marks.get(m)!);
+      expect(lastViewOf(m.sock).me.note).toBe("둘째 글");
+    }
+  });
+
+  it("확정 전 note 는 보낸 소켓에만 error BAD_MESSAGE + state 이고 저장되지 않는다", async () => {
+    const { g, mafias, others } = await confirmedNightGame(false);
+    const marks = new Map(g.actors.map((a) => [a, mark(a.sock)]));
+    send(mafias[0]!.sock, { t: "note", text: "이른 글" });
+    expect(summary(await settle(mafias[0]!.sock, marks.get(mafias[0]!)!))).toBe("[error:BAD_MESSAGE,state:night]");
+    expect(summary(await settle(mafias[1]!.sock, marks.get(mafias[1]!)!))).toBe("[]");
+    for (const o of others) expect(summary(await settle(o.sock, marks.get(o)!))).toBe("[]");
+    expect(((await storedRoom(g.code)) as unknown as Stored).nightNote).toBeUndefined();
+  });
+
+  it("시민 편의 note 는 그 소켓에만 error BAD_MESSAGE + state 이고 마피아 소켓은 프레임 0개다", async () => {
+    const { g, mafias, others } = await confirmedNightGame();
+    const marks = new Map(g.actors.map((a) => [a, mark(a.sock)]));
+    send(others[0]!.sock, { t: "note", text: "가짜 쪽지" });
+    expect(summary(await settle(others[0]!.sock, marks.get(others[0]!)!))).toBe("[error:BAD_MESSAGE,state:night]");
+    for (const m of mafias) expect(summary(await settle(m.sock, marks.get(m)!))).toBe("[]");
+    expect(((await storedRoom(g.code)) as unknown as Stored).nightNote).toBeUndefined();
+  });
+
+  it("낮에 note 는 WRONG_PHASE 이다", async () => {
+    const g = await startedGame("discussion");
+    const m = withRole(g, "mafia")[0]!;
+    const marks = new Map(g.actors.map((a) => [a, mark(a.sock)]));
+    send(m.sock, { t: "note", text: "낮 글" });
+    expect(summary(await settle(m.sock, marks.get(m)!))).toBe("[error:WRONG_PHASE,state:discussion]");
+    for (const a of g.actors) if (a !== m) expect(summary(await settle(a.sock, marks.get(a)!))).toBe("[]");
   });
 });

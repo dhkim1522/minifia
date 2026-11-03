@@ -4,7 +4,8 @@ import { attachConnection, createRoomState, joinRoom, startGame } from "../../sh
 import type { Player, RoomState } from "../../shared/game/room";
 import { tick } from "../../shared/game/tick";
 import { buildView } from "../../shared/game/view";
-import { saveWill } from "../../shared/game/will";
+import { pickTarget } from "../../shared/game/night";
+import { noteRecipientIds, saveNote, saveWill } from "../../shared/game/will";
 import { seededRandInt } from "../helpers/seededRandom";
 
 const START_AT = 10_000;
@@ -137,5 +138,117 @@ describe("view.me.will (A4, L7)", () => {
     const me = citizenOf(s);
     const dead: RoomState = { ...s, players: s.players.map((p) => (p.id === me.id ? { ...p, alive: false, will: "x" } : p)) };
     expect(buildView(dead, me.id, 1).me.will).toBeUndefined();
+  });
+});
+
+// ---- 쪽지 (NIGHT-12, 결정 0061-9) ----
+const mafiasOf = (s: RoomState): Player[] => s.players.filter((p) => p.role === "mafia").sort((a, b) => a.seat - b.seat);
+
+/** 산 마피아 전원이 같은 시민을 골라 확정된 밤. */
+function confirmedNight(): { state: RoomState; target: Player } {
+  let state = stateAt("night");
+  const target = state.players.find((p) => p.role === "citizen")!;
+  for (const m of mafiasOf(state)) {
+    const r = pickTarget(state, m.id, target.seat);
+    if (!r.ok) throw new Error(`pickTarget rejected: ${r.error}`);
+    state = r.state;
+  }
+  return { state, target };
+}
+
+describe("saveNote (NIGHT-12, 결정 0061-9)", () => {
+  it("밤·산 마피아·확정이면 nightNote 가 저장되고 작성자 흔적이 상태 어디에도 없다", () => {
+    const { state } = confirmedNight();
+    const [a, b] = mafiasOf(state);
+    const r = saveNote(state, a!.id, "미안해요");
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.state.nightNote).toBe("미안해요");
+    const diff = JSON.stringify({ ...r.state, nightNote: undefined });
+    expect(diff).toBe(JSON.stringify({ ...state, nightNote: undefined }));
+    // 마지막 저장이 이긴다
+    const r2 = saveNote(r.state, b!.id, "두 번째");
+    expect(r2.ok && r2.state.nightNote).toBe("두 번째");
+  });
+
+  it("확정이 아니면 BAD_MESSAGE", () => {
+    const s = stateAt("night");
+    expect(saveNote(s, mafiasOf(s)[0]!.id, "a")).toEqual({ ok: false, error: "BAD_MESSAGE" });
+  });
+
+  it("시민·경찰·의사·유령은 BAD_MESSAGE", () => {
+    const { state } = confirmedNight();
+    for (const role of ["citizen", "police", "doctor"] as const) {
+      const p = state.players.find((q) => q.role === role)!;
+      expect(saveNote(state, p.id, "a")).toEqual({ ok: false, error: "BAD_MESSAGE" });
+    }
+    const m = mafiasOf(state)[0]!;
+    const ghosted: RoomState = { ...state, players: state.players.map((p) => (p.id === m.id ? { ...p, alive: false } : p)) };
+    expect(saveNote(ghosted, m.id, "a")).toEqual({ ok: false, error: "BAD_MESSAGE" });
+  });
+
+  it("낮이면 WRONG_PHASE (단계 검사가 먼저)", () => {
+    const s = stateAt("discussion");
+    expect(saveNote(s, mafiasOf(s)[0]!.id, "a")).toEqual({ ok: false, error: "WRONG_PHASE" });
+    expect(saveNote(s, "nobody", "a")).toEqual({ ok: false, error: "WRONG_PHASE" });
+  });
+
+  it("공백뿐이면 지움(키 없음), 같은 값은 입력 그대로", () => {
+    const { state } = confirmedNight();
+    const m = mafiasOf(state)[0]!;
+    const first = saveNote(state, m.id, "글");
+    if (!first.ok) throw new Error("setup");
+    const same = saveNote(first.state, m.id, "글");
+    expect(same.ok && same.state === first.state).toBe(true);
+    const erased = saveNote(first.state, m.id, "   ");
+    expect(erased.ok).toBe(true);
+    if (!erased.ok) return;
+    expect(Object.hasOwn(erased.state, "nightNote")).toBe(false);
+    const none = saveNote(state, m.id, "  ");
+    expect(none.ok && none.state === state).toBe(true);
+  });
+
+  it("101 자소는 BAD_MESSAGE", () => {
+    const { state } = confirmedNight();
+    expect(saveNote(state, mafiasOf(state)[0]!.id, "가".repeat(101))).toEqual({ ok: false, error: "BAD_MESSAGE" });
+  });
+});
+
+describe("noteRecipientIds", () => {
+  it("산 마피아 id 만 seat 오름차순이고 유령은 없다", () => {
+    const { state } = confirmedNight();
+    const ms = mafiasOf(state);
+    expect(noteRecipientIds(state)).toEqual(ms.map((m) => m.id));
+    const ghosted: RoomState = { ...state, players: state.players.map((p) => (p.id === ms[0]!.id ? { ...p, alive: false } : p)) };
+    expect(noteRecipientIds(ghosted)).toEqual([ms[1]!.id]);
+  });
+});
+
+describe("view.me.note (결정 0061-9)", () => {
+  it("밤 산 마피아 둘에게 같은 me.note, 그 밖에는 없다", () => {
+    const { state } = confirmedNight();
+    const m = mafiasOf(state)[0]!;
+    const saved = saveNote(state, m.id, "쪽지본문");
+    if (!saved.ok) throw new Error("setup");
+    const s = saved.state;
+    for (const p of s.players) {
+      const v = buildView(s, p.id, 1);
+      if (p.role === "mafia") expect(v.me.note).toBe("쪽지본문");
+      else {
+        expect(v.me.note).toBeUndefined();
+        expect(JSON.stringify(v)).not.toContain("쪽지본문");
+      }
+    }
+  });
+
+  it("죽은 마피아와 아침 view 에는 없다", () => {
+    const { state } = confirmedNight();
+    const ms = mafiasOf(state);
+    const saved = saveNote(state, ms[0]!.id, "쪽지본문");
+    if (!saved.ok) throw new Error("setup");
+    const ghosted: RoomState = { ...saved.state, players: saved.state.players.map((p) => (p.id === ms[0]!.id ? { ...p, alive: false } : p)) };
+    expect(buildView(ghosted, ms[0]!.id, 1).me.note).toBeUndefined();
+    const morning: RoomState = { ...saved.state, phase: "morning" };
+    expect(buildView(morning, ms[1]!.id, 1).me.note).toBeUndefined();
   });
 });
