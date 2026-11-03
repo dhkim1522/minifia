@@ -5,16 +5,16 @@ milestone_name: 같은 공간
 current_phase: 9
 current_phase_name: 밤과 아침
 status: executing
-stopped_at: Completed 09-12-PLAN.md
-last_updated: "2026-11-03T05:25:20.379Z"
+stopped_at: Completed 09-13-PLAN.md
+last_updated: "2026-11-03T05:30:31.647Z"
 last_activity: 2026-11-03
 last_activity_desc: Phase 9 execution started
-state_head: 08e33169fa07ff45868a869c2a79c4111a657724
+state_head: 85a0e2162f8d0b777cd9a104622e8b8053a645b3
 progress:
   total_phases: 7
   completed_phases: 3
   total_plans: 101
-  completed_plans: 90
+  completed_plans: 91
   percent: 43
 ---
 
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-11-03)
 ## Current Position
 
 Phase: 9 (밤과 아침) — EXECUTING
-Plan: 13 of 23
+Plan: 14 of 23
 Status: Ready to execute
 Last activity: 2026-11-03 — Phase 9 execution started
 
@@ -150,6 +150,7 @@ Progress: [████░░░░░░] 43% (3/7 phases)
 | Phase 09 P10 | 55min | 3 tasks | 13 files |
 | Phase 09 P11 | 25min | 3 tasks | 9 files |
 | Phase 09 P12 | 30min | 3 tasks | 11 files |
+| Phase 09 P13 | 25min | 3 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -307,6 +308,7 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 09]: 09-09: advance 무변화 경로는 syncHome·syncLayout 만, 새 유령 snap(snapNewGhosts)은 전환(afterTransition) 때만 — 퇴거 뒤 중복 snap 방지
 - [Phase 09]: 09-10: 내 캐릭터 빛은 예산 core 에서도 visible 을 끄지 않는다(점광원 수 불변). 밤 시민 편 장면 표는 내 좌석 하나뿐
 - [Phase 09]: 09-12: 유언·쪽지 간격 검사(500ms)를 규칙 함수보다 앞에 두고, 쪽지 응답은 산 마피아에게만(유령 제외) 보낸다
+- [Phase 09]: 09-13: 다가가기 목적지는 store.segOf + positionAtFx(고정소수점)로 계산해 일반 move 로 보낸다
 
 ### Pending Todos
 
@@ -344,8 +346,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-03T05:25:20.055Z
-Stopped at: Completed 09-12-PLAN.md
+Last session: 2026-11-03T05:30:31.310Z
+Stopped at: Completed 09-13-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
