@@ -135,3 +135,20 @@
 
 /* 단계 머리 오른쪽 묶음: 시간 링 왼쪽에 버튼(extra)이 붙을 때만 쓴다. 링과 버튼 사이 8 (8페이즈 [역할 카드], UI-SPEC A2) */
 .mv-phase__side { display: flex; align-items: flex-start; flex: none; gap: var(--space-sm); }
+
+/* 얼굴 목록(승인 .mv-faces, bundle.css 124-132, 9페이즈 NIGHT-09). 역할마다 생김새가 같다 — 진홍·놋쇠 없음, 면 대비와 테두리만 쓴다.
+   칸 크기는 승인 값 그대로(안쪽 4 2 6, 테두리 2, 원 26, 점 7). 애니메이션 없음. */
+.mv-faces { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-sm); }
+.mv-face { position: relative; display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 0; min-height: 100px; padding: 4px 2px 6px; border-radius: var(--radius-md); border: 2px solid transparent; background: var(--night-800); color: var(--gray-50); font-family: var(--font-ui); cursor: pointer; }
+.mv-face.is-on { border-color: var(--gray-100); }
+.mv-face[aria-disabled="true"] { opacity: 0.35; cursor: default; }
+.mv-face:focus-visible { outline: 2px solid var(--gray-100); outline-offset: 2px; }
+.mv-face__img { width: 100%; aspect-ratio: 1; object-fit: contain; filter: brightness(0.85) saturate(0.85); }
+.mv-face.is-on .mv-face__img { filter: none; }
+/* 그림이 안 떠도 이름과 선택은 그대로: 자리 구분색 원이 그림 자리를 채운다 */
+.mv-face--fallback { display: grid; place-items: center; width: 100%; aspect-ratio: 1; }
+.mv-face--fallback i { width: 56%; aspect-ratio: 1; border-radius: var(--radius-pill); }
+/* 8자 닉네임은 칸 안에서 두 줄까지 줄바꿈한다. 말줄임·nowrap 없음(UI-SPEC 다르게 하는 곳 9) */
+.mv-face__name { display: inline-flex; align-items: center; justify-content: center; gap: 4px; max-width: 100%; font-size: 14px; line-height: 1.3; font-weight: 700; text-align: center; word-break: keep-all; overflow-wrap: anywhere; }
+.mv-face__dot { flex: none; width: 7px; height: 7px; border-radius: var(--radius-pill); }
+.mv-face__mark { position: absolute; top: 6px; right: 6px; display: grid; place-items: center; width: 26px; height: 26px; border-radius: var(--radius-pill); background: var(--gray-100); color: var(--night-900); }

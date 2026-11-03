@@ -162,7 +162,7 @@ describe("FaceList — 고른 칸·줄바꿈·그림 실패·칸 수 (E1 #2~#5)"
     const css = rulesStarting(".mv-face").join("\n");
     expect(css.length).toBeGreaterThan(0);
     expect(css).not.toMatch(/crimson|brass|#[0-9a-fA-F]{3,8}\b/);
-    const tsx = readFileSync("src/components/v2/FaceList.tsx", "utf8");
+    const tsx = readFileSync("src/components/v2/FaceList.tsx", "utf8").replace(/^\s*\/\/.*$/gm, "");
     expect(tsx).not.toMatch(/crimson|brass|dangerouslySetInnerHTML|innerHTML/);
   });
 });

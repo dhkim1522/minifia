@@ -1,5 +1,6 @@
 import { useState } from "react";
 import "../../styles/v2.css";
+import { V2Icon } from "./V2Icon";
 
 // 얼굴 목록(FaceList). design/v2.0/design-system/components/FaceList 와 bundle.css 124-132 를 React 19 로 옮겼다(승인 2026-10-31, 9페이즈 NIGHT-09).
 // 깜깜한 밤에 경찰(조사)·의사(살리기)가 비친 얼굴을 눌러 대상을 고른다. 4열 격자, 얼굴 그림 + 자리 구분색 점 + 닉네임.
@@ -34,19 +35,24 @@ export interface FaceListProps {
   ariaLabel?: (name: string) => string;
 }
 
-export function FaceList({ faces, value, onPick, label = "대상", disabled, ariaLabel }: FaceListProps) {
+export function FaceList({ faces, value, onPick, icon, label = "대상", disabled, ariaLabel }: FaceListProps) {
+  // 얼굴 그림이 안 뜬 좌석(onError). 칸 이름·선택은 그대로 두고 그림 자리만 색 원으로 바꾼다(E1 #5)
+  const [failed, setFailed] = useState<ReadonlySet<number>>(() => new Set());
   return (
     <div className="mv-faces" data-face-list="" role="group" aria-label={label}>
       {faces.map((f) => {
         const on = f.seat === value;
         const blocked = !!disabled || !!f.disabled;
+        const broken = failed.has(f.seat);
         return (
           <button
             key={f.seat}
             type="button"
             className={["mv-face", on && "is-on"].filter(Boolean).join(" ")}
             data-face={f.seat}
+            data-face-fallback={broken ? "true" : undefined}
             aria-pressed={on}
+            aria-disabled={blocked ? "true" : undefined}
             aria-label={ariaLabel ? ariaLabel(f.name) : f.name}
             onMouseDown={(e) => e.preventDefault()}
             onClick={() => {
@@ -54,11 +60,24 @@ export function FaceList({ faces, value, onPick, label = "대상", disabled, ari
               onPick?.(f.seat);
             }}
           >
-            <img className="mv-face__img" src={f.img} alt="" draggable={false} />
+            {broken ? (
+              <span className="mv-face--fallback">
+                <i style={{ background: f.color }} />
+              </span>
+            ) : (
+              <img
+                className="mv-face__img"
+                src={f.img}
+                alt=""
+                draggable={false}
+                onError={() => setFailed((prev) => new Set(prev).add(f.seat))}
+              />
+            )}
             <span className="mv-face__name">
               <i className="mv-face__dot" style={{ background: f.color }} />
               {f.name}
             </span>
+            {on && <span className="mv-face__mark">{icon && <V2Icon name={icon} size={18} />}</span>}
           </button>
         );
       })}
