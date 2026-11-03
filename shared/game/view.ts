@@ -109,6 +109,9 @@ function buildDay(state: RoomState): DayView {
     }
     day.morning = morning;
   }
+  // 암살 현장 분필(MORN-01, 결정 0061-14): 방 DO 가 채운 좌표를 그날 낮 동안 모두에게 같은 값으로 싣는다. 필드별 복사이고, 없으면 키 자체가 없다.
+  // 구출·무효 밤에는 DO 가 채우지 않으므로 어디에도 드러나지 않는다(결정 0044-22). 다음 밤 진입 훅이 지운다.
+  if (state.chalk !== undefined) day.chalk = { x: state.chalk.x, z: state.chalk.z };
   return day;
 }
 

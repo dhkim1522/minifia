@@ -198,6 +198,6 @@ describe("분필 좌표 (MORN-01, 결정 0061-14)", () => {
     const got = await chatsSince(g, marks);
     const want = [`all/will/${x.seat}/처형 유언`, `all/will/${v.seat}/암살 유언`, `all/note/${v.seat}/다음은 너`].join("|");
     expect(got.map((c) => c.map(cardText).join("|")).join(" ; ")).toBe(g.socks.map(() => want).join(" ; "));
-    expect(JSON.stringify((await storedRoom(g.code)).chalk)).toBe(homeOf(home, v.seat));
+    expect(JSON.stringify(((await storedRoom(g.code)) as unknown as { chalk?: { x: number; z: number } }).chalk)).toBe(homeOf(home, v.seat));
   }, 40_000);
 });

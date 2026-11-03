@@ -796,6 +796,7 @@ export class Room extends DurableObject<Env> {
   // prev 는 전환 전 상태다 — 사망은 전후 alive 비교로 찾는다(처형·암살 한 길, 알람 따라잡기로 여러 단계를 지나도 사망마다 한 번).
   private async afterTransition(prev: RoomState, now: number): Promise<void> {
     if (this.captureHomeNow()) await this.flushWorld();
+    this.fillChalk(prev);
     await this.persistAndBroadcast();
     await this.syncPositions(now);
     await this.emitDeathCards(prev, now);
@@ -812,15 +813,42 @@ export class Room extends DurableObject<Env> {
       .sort((a, b) => a - b);
   }
 
+  // 그 밤의 피해자(morning.eliminated)가 이번 전환에서 탈락했으면 그 seat, 아니면 undefined.
+  private nightVictimNow(prev: RoomState): number | undefined {
+    const victim = this.room?.morning?.eliminated;
+    return victim !== undefined && this.diedSeats(prev).includes(victim) ? victim : undefined;
+  }
+
+  // 암살 현장 분필(MORN-01, 결정 0061-14): 그 밤 피해자의 home 좌표(같은 일차 기억), 없으면 현재 구간 끝점(fail-safe). 처형에는 분필이 없다.
+  // 저장·방송 전에 채우므로 같은 전환의 모든 view 가 같은 값을 싣는다. 구출·무효 밤에는 피해자가 없어 아무것도 하지 않는다(결정 0044-22).
+  private fillChalk(prev: RoomState): void {
+    const room = this.room;
+    if (!room) return;
+    const seat = this.nightVictimNow(prev);
+    if (seat === undefined) return;
+    const victim = room.players.find((p) => p.seat === seat);
+    if (!victim) return;
+    const home = this.world.home;
+    const memo = home !== undefined && home.day === room.day && Object.prototype.hasOwnProperty.call(home.pos, victim.id) ? home.pos[victim.id] : undefined;
+    const seg = Object.prototype.hasOwnProperty.call(this.world.segs, victim.id) ? this.world.segs[victim.id] : undefined;
+    const end = memo ?? (seg !== undefined && seg.p.length >= 2 ? ([seg.p[seg.p.length - 2]!, seg.p[seg.p.length - 1]!] as const) : undefined);
+    if (end === undefined) return;
+    this.room = { ...room, chalk: { x: end[0], z: end[1] } };
+  }
+
   // 사망 카드(WILL-01·NIGHT-12·MORN-02, 결정 0061-11): 이번 전환에서 탈락한 사람마다 유언이 있으면 will 카드, 그 밤 피해자의 쪽지가 있으면 맨 끝에 note 카드.
   // 그 밤 피해자의 유언은 다른 사망(앞선 처형)보다 뒤에 둔다. 카드는 서버가 한 번만 만들고 작성자 정보는 없다(seat = 피해자).
   private async emitDeathCards(prev: RoomState, now: number): Promise<void> {
     const room = this.room;
     if (!room) return;
-    for (const seat of this.diedSeats(prev)) {
+    const night = this.nightVictimNow(prev);
+    const died = this.diedSeats(prev);
+    const order = [...died.filter((s) => s !== night), ...(night === undefined ? [] : [night])];
+    for (const seat of order) {
       const will = room.players.find((p) => p.seat === seat)?.will;
       if (will !== undefined && will !== "") await this.appendCard(seat, will, "will", now);
     }
+    if (night !== undefined && room.nightNote !== undefined && room.nightNote !== "") await this.appendCard(night, room.nightNote, "note", now);
   }
 
   // 카드 한 줄: applyChat 본체와 같은 모양(받는 사람·마스크 한 번 → 보관 → 저장 → 전송)이되 도배·문장 검사는 부르지 않는다(사람이 보낸 줄이 아니다).
