@@ -22,7 +22,12 @@ export const ROLE_REVEAL_MS = 15_000;
 export const DAY_ANNOUNCE_MS = 2_000; // D-20
 export const DISCUSSION_MS = 90_000; // DAY-07 — 낮 토론 90초(결정 0060-1). 과반이 토론 끝내기를 누르면 일찍 끝난다(DAY-03)
 export const NIGHT_MS = 30_000; // NIGHT-05
-export const MORNING_MS = 5_000; // NIGHT-06
+// 아침 기본 길이 — 무사·구출·미선택(NIGHT-06, 결정 0061-13). 탈락이 있으면 morningMsOf(discussion.ts)가 아래 가산을 더한다.
+export const MORNING_MS = 5_000;
+export const MORNING_VICTIM_MS = 2_000; // 탈락 발표(MORN-04)
+export const MORNING_WILL_MS = 2_000; // 피해자 유언이 비어 있지 않을 때
+export const MORNING_NOTE_MS = 2_000; // 마피아 쪽지가 비어 있지 않을 때(탈락한 밤에만 남는다)
+export const MORNING_MAX_MS = 15_000; // 아침 길이 상한
 export const DEFENSE_MS = 20_000; // 최후 변론(DAY-07, 결정 0060-1) — 변론자가 무대에서 말하는 20초
 export const EXECUTION_MS = 5_000; // 처형 발표(D-01, VOTE-04)
 export const NOMINATION_MS = 15_000; // 지목(DAY-04, 결정 0060-1) — 마감까지 바꿀 수 있고 일찍 끝나지 않는다

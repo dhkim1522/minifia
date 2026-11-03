@@ -5,16 +5,34 @@
 // 순수 모듈이다 — 입력 상태는 바꾸지 않는다.
 import { isAlive } from "./alive";
 import { majorityOf } from "./nomination";
-import { PHASE_DEFS } from "./phases";
+import { MORNING_MAX_MS, MORNING_MS, MORNING_NOTE_MS, MORNING_VICTIM_MS, MORNING_WILL_MS, PHASE_DEFS } from "./phases";
 import type { RoomState } from "./room";
 
 /** 낮 투표류 규칙 함수(토론 끝내기·지목·찬반)의 거부 코드. 단계가 아니면 WRONG_PHASE, 그 밖의 잘못된 입력은 BAD_MESSAGE. */
 export type VoteError = "WRONG_PHASE" | "BAD_MESSAGE";
 
 /**
- * 지금 단계의 전체 길이(ms). 단계 표 길이 그대로이고, 길이가 없는 단계는 null. buildView 가 이 함수로 phaseDurationMs 를 만든다.
+ * 아침 길이(ms, MORN-04, 결정 0061-13): 탈락이 없으면 MORNING_MS, 있으면 MORNING_MS + 탈락 + (피해자 유언이 비어 있지 않으면 유언) + (쪽지가 비어 있지 않으면 쪽지), 상한 MORNING_MAX_MS.
+ * 공개 내용만의 함수다(L6) — 구출·무효 밤은 enterMorning 이 쪽지를 이미 지워서 5초이고, 경찰 선택·마피아 이동·보호 대상은 읽지 않는다.
+ * 피해자 유언은 죽은 뒤 바꿀 수 없어(A2) 아침 동안 길이가 변하지 않는다.
+ */
+export function morningMsOf(state: RoomState): number {
+  const seat = state.morning?.eliminated;
+  if (seat === undefined) return MORNING_MS;
+  const will = state.players.find((p) => p.seat === seat)?.will;
+  const ms =
+    MORNING_MS +
+    MORNING_VICTIM_MS +
+    (will !== undefined && will !== "" ? MORNING_WILL_MS : 0) +
+    (state.nightNote !== undefined && state.nightNote !== "" ? MORNING_NOTE_MS : 0);
+  return Math.min(MORNING_MAX_MS, ms);
+}
+
+/**
+ * 지금 단계의 전체 길이(ms). 단계 표 길이 그대로이고(아침은 morningMsOf), 길이가 없는 단계는 null. buildView 가 이 함수로 phaseDurationMs 를 만든다.
  */
 export function phaseDurationOf(state: RoomState): number | null {
+  if (state.phase === "morning") return morningMsOf(state);
   return PHASE_DEFS[state.phase].durationMs;
 }
 
