@@ -100,6 +100,9 @@ import {
   PICK_BUTTON_MAX,
   gamePanelHeight,
   faceListPanelH,
+  NIGHT_MARKERS,
+  tagInStage,
+  faceNameFits,
   pickButtonChecks,
   announceChecks,
   ghostDomChecks,
@@ -664,6 +667,40 @@ test("gamePanelHeight: nightMafia = LOG_H + 154 · nightCitizen = 88(방 높이�
   assert.equal(gamePanelHeight(932, "faceList", { w: 430, n: 4, wrappedRows: 1 }), faceListPanelH({ w: 430, n: 4, wrappedRows: 1 }));
   assert.throws(() => gamePanelHeight(640, "faceList"), /w·n/);
   assert.throws(() => gamePanelHeight(640, "table"), /알 수 없는 패널 종류/);
+});
+
+// ---- 09-21: 9페이즈 표식 목록·판정 도우미 (UI-SPEC 450~455행) ----
+
+test("NIGHT_MARKERS: 표식 11개, 중복 없음, 얼려 있다 (09-21)", () => {
+  assert.equal(NIGHT_MARKERS.length, 11);
+  assert.equal(new Set(NIGHT_MARKERS).size, 11);
+  assert.ok(Object.isFrozen(NIGHT_MARKERS));
+  for (const m of ["data-night-dark", "data-tension-pulse", "data-face-list", "data-face", "data-will-button", "data-will-sheet", "data-note-button", "data-card", "data-chalk", "data-curtain", "data-kill-fx"]) {
+    assert.ok(NIGHT_MARKERS.includes(m), m);
+  }
+});
+
+test("tagInStage: 완전히 안이면 true, 1px 라도 밖이면 false, 측정값이 없으면 false (밤마다 내 이름표가 스테이지 안, 09-21)", () => {
+  const stage = { top: 62, bottom: 400, left: 0, right: 360 };
+  assert.equal(tagInStage({ tag: { x: 100, y: 100, w: 80, h: 30 }, stage }), true);
+  assert.equal(tagInStage({ tag: { x: 0, y: 62, w: 360, h: 338 }, stage }), true); // 꼭 맞음
+  assert.equal(tagInStage({ tag: { x: -1, y: 100, w: 80, h: 30 }, stage }), false); // 왼쪽 1px
+  assert.equal(tagInStage({ tag: { x: 100, y: 61, w: 80, h: 30 }, stage }), false); // 위 1px
+  assert.equal(tagInStage({ tag: { x: 281, y: 100, w: 80, h: 30 }, stage }), false); // 오른쪽 1px
+  assert.equal(tagInStage({ tag: { x: 100, y: 371, w: 80, h: 30 }, stage }), false); // 아래 1px
+  assert.equal(tagInStage({ tag: { x: NaN, y: 100, w: 80, h: 30 }, stage }), false);
+  assert.equal(tagInStage({ tag: null, stage }), false);
+  assert.equal(tagInStage({ tag: { x: 100, y: 100, w: 80, h: 30 }, stage: { top: 62, bottom: 400 } }), false);
+});
+
+test("faceNameFits: 이름 사각형이 칸 사각형 안이면 true, 넘치면 false (8자 이름, 09-21)", () => {
+  const cell = rect(10, 100, 76, 102);
+  assert.equal(faceNameFits({ cell, name: rect(14, 180, 68, 18) }), true);
+  assert.equal(faceNameFits({ cell, name: rect(10, 180, 76, 18) }), true); // 꼭 맞음
+  assert.equal(faceNameFits({ cell, name: rect(8, 180, 80, 18) }), false); // 양옆으로 넘침
+  assert.equal(faceNameFits({ cell, name: rect(14, 180, 68, 24) }), false); // 아래로 넘침
+  assert.equal(faceNameFits({ cell, name: null }), false);
+  assert.equal(faceNameFits({ cell: { left: 1 }, name: rect(14, 180, 68, 18) }), false);
 });
 
 const pick = (seat, left, top, w = 44, h = 44) => ({ seat, rect: rect(left, top, w, h) });

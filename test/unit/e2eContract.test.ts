@@ -1,6 +1,7 @@
 // E2E 순수 도우미(scripts/e2e/lib.mjs)와 앱 상수의 동일성 (05-05, T-05-12).
 // 두 목록이 어긋나면 UX1(안내·타이머 검사)이 거짓 통과·거짓 실패한다 — scenes.test.ts 의 EXPECTED_SCENE 비교와 같은 방식.
 import { describe, expect, it } from "vitest";
+import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { BAR_MASK } from "../../shared/game/map";
 import { MOVE_SPEED } from "../../shared/game/world";
@@ -168,5 +169,28 @@ describe("E2E 의 걷는 속도 상수와 앱 MOVE_SPEED (결정 0059, G-07-9)",
     const lib = e2eLib as { WORLD_MOVE_SPEED: number; WORLD_JUMP_SPEED_MAX: number };
     expect(lib.WORLD_MOVE_SPEED).toBe(MOVE_SPEED);
     expect(lib.WORLD_JUMP_SPEED_MAX).toBeCloseTo(3 * MOVE_SPEED, 9);
+  });
+});
+
+describe("9페이즈 E2E 표식·패널(09-21)", () => {
+  const lib = e2eLib as unknown as { NIGHT_MARKERS: readonly string[]; GAME_PANEL_EXTRA: Record<string, number> };
+
+  // git 이 추적하는 src/ 파일만 읽는다(내려받은 파일·생성물이 표식을 우연히 담아도 통과시키지 않는다).
+  const root = new URL("../../", import.meta.url);
+  const tracked = execFileSync("git", ["ls-files", "src"], { cwd: root, encoding: "utf8" })
+    .split("\n")
+    .filter((f) => /\.(tsx?|css)$/.test(f));
+  const sources = tracked.map((f) => ({ f, text: readFileSync(new URL(f, root), "utf8") }));
+
+  it("NIGHT_MARKERS 가 11개이고 각 표식이 src/ 추적 파일 어딘가에 있다(표식 이름 오타 방지)", () => {
+    expect(tracked.length).toBeGreaterThan(20);
+    expect(lib.NIGHT_MARKERS.length).toBe(11);
+    const missing = lib.NIGHT_MARKERS.filter((m) => !sources.some((s) => s.text.includes(m)));
+    expect(missing).toEqual([]);
+  });
+
+  it("lib 의 nightMafia 덧셈이 앱 LOBBY_PANEL_EXTRA(154)와 같다 — 어긋나면 E2E 가 거짓 통과·거짓 실패한다", () => {
+    expect(lib.GAME_PANEL_EXTRA.nightMafia).toBe(LOBBY_PANEL_EXTRA);
+    expect(lib.GAME_PANEL_EXTRA.nightMafia).toBe(lib.GAME_PANEL_EXTRA.talk);
   });
 });
