@@ -7,6 +7,8 @@ import { EXECUTION_MS } from "../../shared/game/phases";
 import {
   ANNOUNCE_DAY_MS,
   ANNOUNCE_EXEC_MS,
+  ANNOUNCE_MORNING_AT,
+  ANNOUNCE_MORNING_MS,
   ANNOUNCE_NOEXEC_MS,
   ANNOUNCE_TALLY_MS,
   dayEvents,
@@ -382,7 +384,6 @@ describe("dayEvents — 단계 진입 줄 (DAY-05·06)", () => {
 
   it("낮 시작 → 낮 토론, 아침·로비로 갈 때는 줄이 없다", () => {
     same(dayEvents(viewOf("dayAnnounce"), viewOf("discussion")).lines, []);
-    same(dayEvents(viewOf("night"), viewOf("morning")).lines, []);
     same(dayEvents(viewOf("morning"), viewOf("lobby")).lines, []);
   });
 });
@@ -617,5 +618,47 @@ describe("headerFor — 단계표의 제목·안내 (UI-SPEC)", () => {
       const h = headerFor(v);
       for (const t of [h.title, h.hint ?? ""]) expect(/[.!]$/.test(t)).toBe(false);
     }
+  });
+});
+
+// ---- 09-18: 아침 알림 (MORN-03, UI-SPEC 아침) ----
+describe("dayEvents — 아침 알림 (MORN-03)", () => {
+  const nightView = (): RoomView => viewOf("night", { mySeat: 1 });
+  const morningView = (morning: DayView["morning"], opts: ViewOpts = {}): RoomView =>
+    viewOf("morning", { mySeat: 1, ...opts, day: { morning, ...opts.day } });
+
+  it("상수 값: 0.4초에 시작해 2.4초", () => {
+    same([ANNOUNCE_MORNING_AT, ANNOUNCE_MORNING_MS], [400, 2400]);
+  });
+
+  it("밤 → 아침(피해자 3): 0.4초 target 알림 '지호 님이 당했습니다' 2.4초, 같은 문장의 hot 줄(범위 all) 0.4초", () => {
+    const events = dayEvents(nightView(), morningView({ eliminated: 3 }));
+    same(events.announces, [{ text: "지호 님이 당했습니다", icon: "target", at: 400, ms: 2400 }]);
+    same(events.lines, [{ kind: "hot", text: "지호 님이 당했습니다", at: 400 }]);
+    expect(events.lines[0]?.scope).toBeUndefined();
+  });
+
+  it("밤 → 아침(saved): heal 알림 '누군가 살아났습니다'. 누가 살아났는지 어디에도 없다", () => {
+    const events = dayEvents(nightView(), morningView({ saved: true }));
+    same(events.announces, [{ text: "누군가 살아났습니다", icon: "heal", at: 400, ms: 2400 }]);
+    same(events.lines, [{ kind: "hot", text: "누군가 살아났습니다", at: 400 }]);
+    for (const n of NAMES) expect(text(events).includes(n)).toBe(false);
+  });
+
+  it("밤 → 아침(아무 일 없음): 아이콘 없는 '아무 일도 없었습니다'", () => {
+    const events = dayEvents(nightView(), morningView({}));
+    same(events.announces, [{ text: "아무 일도 없었습니다", at: 400, ms: 2400 }]);
+    expect("icon" in events.announces[0]!).toBe(false);
+    same(events.lines, [{ kind: "hot", text: "아무 일도 없었습니다", at: 400 }]);
+  });
+
+  it("첫 스냅샷(prev 없음)·reset 은 알림도 줄도 없다 (MORN-03 재접속)", () => {
+    const cur = morningView({ eliminated: 3 });
+    same([dayEvents(null, cur).announces, dayEvents(null, cur).lines], [[], []]);
+    same([dayEvents(nightView(), cur, { reset: true }).announces, dayEvents(nightView(), cur, { reset: true }).lines], [[], []]);
+  });
+
+  it("아침이 아닌 곳에서 아침으로 오는 경우(밤이 아닌 prev)는 아침 알림이 없다", () => {
+    same(dayEvents(viewOf("lobby"), morningView({ eliminated: 3 })).announces, []);
   });
 });

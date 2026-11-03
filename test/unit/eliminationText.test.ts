@@ -1,67 +1,44 @@
 import { describe, expect, it } from "vitest";
-import { MORNING_PHRASE_COUNT } from "../../shared/protocol";
-import { ELIMINATION_TAILS, eliminationTitle, MORNING_SAFE, morningCardText } from "../../src/game/eliminationText";
+import { MORNING_TEXT, morningText } from "../../src/game/eliminationText";
 
-// 탈락 문구 표(UI-SPEC M, 시안 M1·M2). 서버는 번호만 보내고 문장은 화면이 만든다. 이름 뒤는 받침과 무관하게 항상 '님이'. 처형 꼬리 문장 표는 08-22 에 없어졌다(결정 0060-5).
+// 아침 알림 문장 표(결정 0061-17, UI-SPEC 아침). 사회자 문체 세 문장 — 피해자 있음·의사가 살림·아무 일 없음. 서버는 탈락 seat 와 saved 플래그만 보내고 문장은 화면이 만든다.
 
-describe("ELIMINATION_TAILS", () => {
-  it("길이가 서버 MORNING_PHRASE_COUNT(7) 와 같다", () => {
-    expect(MORNING_PHRASE_COUNT).toBe(7);
-    expect(ELIMINATION_TAILS.length).toBe(MORNING_PHRASE_COUNT);
+describe("MORNING_TEXT", () => {
+  it("세 문장과 피해자 본인 문장의 글자가 UI-SPEC 과 같다", () => {
+    expect(MORNING_TEXT.killed("서연")).toBe("서연 님이 당했습니다");
+    expect(MORNING_TEXT.saved).toBe("누군가 살아났습니다");
+    expect(MORNING_TEXT.quiet).toBe("아무 일도 없었습니다");
+    expect(MORNING_TEXT.victim).toBe("암살당했습니다");
   });
 
-  it("아침 일곱 문장과 순서·글자가 같다 (D-11: 처형 쪽으로 옮긴 첫 문구가 빠졌다)", () => {
-    expect(ELIMINATION_TAILS.join("|")).toBe(
-      [
-        "조용히 눈을 감았습니다",
-        "억울하게 목숨을 잃었습니다",
-        "차갑게 식은 채 발견되었습니다",
-        "끝내 아침을 맞지 못했습니다",
-        "어둠 속으로 사라졌습니다",
-        "마지막 숨을 거두었습니다",
-        "밤사이 변을 당했습니다",
-      ].join("|"),
-    );
-  });
-
-  it("처형 쪽으로 옮긴 문장이 아침 묶음에 없다 (D-11)", () => {
-    expect((ELIMINATION_TAILS as readonly string[]).includes("이슬이 되어 사라졌습니다")).toBe(false);
+  it("이름 뒤는 받침과 무관하게 항상 ' 님이'", () => {
+    expect(MORNING_TEXT.killed("민")).toBe("민 님이 당했습니다");
+    expect(MORNING_TEXT.killed("가나다라마")).toBe("가나다라마 님이 당했습니다");
   });
 });
 
-describe("eliminationTitle", () => {
-  it("이름 뒤에 받침과 무관하게 항상 '님이'", () => {
-    expect(eliminationTitle(1, "서연")).toBe("서연님이 조용히 눈을 감았습니다");
-    expect(eliminationTitle(2, "지호")).toBe("지호님이 억울하게 목숨을 잃었습니다");
-    expect(eliminationTitle(3, "가나다라마").startsWith("가나다라마님이 ")).toBe(true);
-    expect(eliminationTitle(7, "민")).toBe("민님이 밤사이 변을 당했습니다");
+describe("morningText", () => {
+  const nick = (seat: number) => (seat === 3 ? "서연" : undefined);
+
+  it("피해자가 있으면 '{닉네임} 님이 당했습니다' 와 target 아이콘", () => {
+    expect(morningText({ eliminated: 3 }, nick)).toEqual({ text: "서연 님이 당했습니다", icon: "target" });
   });
 
-  it("범위 밖 번호(0·8·1.5·NaN·undefined)는 첫 문구를 쓴다(예외 없음)", () => {
-    const first = "서연님이 조용히 눈을 감았습니다";
-    expect(eliminationTitle(0, "서연")).toBe(first);
-    expect(eliminationTitle(8, "서연")).toBe(first);
-    expect(eliminationTitle(1.5, "서연")).toBe(first);
-    expect(eliminationTitle(Number.NaN, "서연")).toBe(first);
-    expect(eliminationTitle(undefined, "서연")).toBe(first);
-  });
-});
-
-describe("morningCardText", () => {
-  const nick = (seat: number) => (seat === 2 ? "민지" : undefined);
-
-  it("{} 와 undefined 는 무사 문구", () => {
-    expect(JSON.stringify(morningCardText({}, nick))).toBe(JSON.stringify(MORNING_SAFE));
-    expect(JSON.stringify(morningCardText(undefined, nick))).toBe(JSON.stringify(MORNING_SAFE));
+  it("saved 이면 '누군가 살아났습니다' 와 heal 아이콘 — 누구인지는 어디에도 없다", () => {
+    expect(morningText({ saved: true }, nick)).toEqual({ text: "누군가 살아났습니다", icon: "heal" });
   });
 
-  it("{eliminated 2, phrase 4} + 닉네임 '민지' → 제목 하나(sub 없음)", () => {
-    const t = morningCardText({ eliminated: 2, phrase: 4 }, nick);
-    expect(t.title).toBe("민지님이 끝내 아침을 맞지 못했습니다");
-    expect(t.sub === undefined).toBe(true);
+  it("{}·undefined 는 '아무 일도 없었습니다' 이고 아이콘이 없다", () => {
+    expect(morningText({}, nick)).toEqual({ text: "아무 일도 없었습니다" });
+    expect(morningText(undefined, nick)).toEqual({ text: "아무 일도 없었습니다" });
+    expect("icon" in morningText({}, nick)).toBe(false);
   });
 
-  it("닉네임을 못 찾으면 무사 문구", () => {
-    expect(JSON.stringify(morningCardText({ eliminated: 4, phrase: 1 }, nick))).toBe(JSON.stringify(MORNING_SAFE));
+  it("닉네임을 못 찾으면 무사 문장", () => {
+    expect(morningText({ eliminated: 4 }, nick)).toEqual({ text: "아무 일도 없었습니다" });
+  });
+
+  it("피해자와 saved 가 함께 와도(있을 수 없는 조합) 피해자 문장이 이긴다", () => {
+    expect(morningText({ eliminated: 3, saved: true }, nick).text).toBe("서연 님이 당했습니다");
   });
 });

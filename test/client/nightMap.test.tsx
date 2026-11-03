@@ -4,7 +4,6 @@ import "../helpers/singleLineErrors";
 import { installMemoryStorage } from "../helpers/memoryStorage";
 import { approachPoint } from "../../shared/game/world";
 import type { RoleId } from "../../shared/game/roles";
-import { morningCardText } from "../../src/game/eliminationText";
 import { faceSrc } from "../../src/net/assets";
 import type { ClientMessage, PhaseId, PublicPlayer, RoomView, SpectatePicks } from "../../shared/protocol";
 import type { SceneLook } from "../../src/world/presence";
@@ -77,7 +76,7 @@ interface ViewOpts {
   nightSure?: number;
   /** 탈락한 본인에게 싣는 밤 선택 */
   picks?: SpectatePicks;
-  morning?: { eliminated?: number; phrase?: number };
+  morning?: { eliminated?: number; saved?: true };
   noExecution?: "tie" | "noVotes";
 }
 
@@ -578,7 +577,7 @@ const announceText = (c: ParentNode): string => c.querySelector("[data-announce]
 const rosterSeats = (c: ParentNode): number[] => [...c.querySelectorAll<HTMLElement>(".mf-world__tag")].map((t) => Number(t.dataset.seat));
 const GHOST_LINE = "유령 채팅 · 산 사람에게 안 보여요";
 
-describe("아침 임시 틀 (UI-SPEC 아침, A3)", () => {
+describe("아침 알림 (MORN-03, UI-SPEC 아침)", () => {
   beforeEach(() => {
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
     vi.setSystemTime(NOW);
@@ -586,42 +585,70 @@ describe("아침 임시 틀 (UI-SPEC 아침, A3)", () => {
   afterEach(() => {
     vi.useRealTimers();
   });
+  const advance = (ms: number) => act(() => void vi.advanceTimersByTime(ms));
 
   const night = (mySeat = 3, dead: number[] = []) => makeView({ phase: "night", mySeat, dead });
-  const morning = (mySeat: number, eliminated?: number, dead: number[] = []) =>
-    makeView({ phase: "morning", mySeat, dead, ...(eliminated !== undefined ? { morning: { eliminated, phrase: 1 } } : { morning: {} }) });
+  const morning = (mySeat: number, eliminated?: number, dead: number[] = [], saved = false) =>
+    makeView({
+      phase: "morning",
+      mySeat,
+      dead,
+      morning: eliminated !== undefined ? { eliminated } : saved ? { saved: true } : {},
+    });
 
-  it("밤 → 아침(탈락 있음): 36px 알림은 morningCardText 제목('{닉네임}님이 …'), 채팅 패널 all, 아침 조명, 탈락자 캐릭터·이름표가 산 사람 화면에서 사라진다(떠오름 없음)", () => {
+  it("밤 → 아침(탈락 있음): 0.4초에 36px 알림 '{닉네임} 님이 당했습니다'(target 아이콘 56), 채팅 패널 all, 아침 조명, 탈락자 캐릭터·이름표가 산 사람 화면에서 사라진다(떠오름 없음)", () => {
     const m = mount(night());
     expect(announceText(m.container)).toBe("");
     expect(rosterSeats(m.container)).toEqual([3]); // 09-10: 밤 시민 편 이름표 층에는 내 이름표 하나뿐이다
     m.show(morning(3, 2, [2]));
-    expect(announceText(m.container)).toBe(morningCardText({ eliminated: 2, phrase: 1 }, (seat) => NAMES[seat]).title);
-    expect(announceText(m.container)).toContain("서준님이");
+    expect(announceText(m.container)).toBe(""); // 막이 걷히는 0.4초 전
+    advance(399);
+    expect(announceText(m.container)).toBe("");
+    advance(1);
+    expect(announceText(m.container)).toBe("서준 님이 당했습니다");
     expect(m.container.querySelector('[data-announce]')?.getAttribute("role")).toBe("status");
+    const icon = m.container.querySelector<SVGElement>("[data-announce] svg");
+    expect(icon?.getAttribute("width")).toBe("56");
+    expect(icon?.classList.contains("is-death")).toBe(true);
     expect(lastScene().lighting).toBe("morning");
     expect(rosterSeats(m.container)).toEqual([0, 1, 3, 4, 5]);
     expect(lastScene().seats[2]).toBeUndefined();
     expect(Object.values(lastScene().seats).some((look) => look.fadeAt !== undefined)).toBe(false);
     expect(chatChannel(m.container)).toBe("all");
     expect(titleText(m.container)).toBe("아침");
+    // 같은 시각 채팅에 같은 문장의 hot 줄(범위 all)
+    expect([...m.container.querySelectorAll("[data-chat-log] > p.is-hot")].map((p) => (p.textContent ?? "").trim())).toEqual(["서준 님이 당했습니다"]);
   });
 
-  it("무사한 아침: 알림 '아무 일도 없었습니다', 전원이 그대로 서 있다", () => {
+  it("무사한 아침: 0.4초에 아이콘 없는 '아무 일도 없었습니다', 전원이 그대로 서 있다", () => {
     const m = mount(night());
     m.show(morning(3));
+    advance(400);
     expect(announceText(m.container)).toBe("아무 일도 없었습니다");
+    expect(m.container.querySelector("[data-announce] svg")).toBeNull();
     expect(rosterSeats(m.container)).toEqual([0, 1, 2, 3, 4, 5]);
   });
 
-  it("알림은 아침 길이(서버 마감 5초)가 지나면 사라진다 — 단계를 넘기는 것은 서버 마감이다(A3)", () => {
-    const m = mount(night());
-    m.show({ ...morning(3), phaseEndsAt: NOW + 5_000, phaseDurationMs: 5_000 });
-    expect(announceText(m.container)).toBe("아무 일도 없었습니다");
-    act(() => void vi.advanceTimersByTime(4_999));
-    expect(announceText(m.container)).toBe("아무 일도 없었습니다");
-    act(() => void vi.advanceTimersByTime(2));
-    expect(announceText(m.container)).toBe("");
+  it("의사가 살린 아침: '누군가 살아났습니다'(heal 아이콘, 진홍 아님)가 0.4~2.8초에 뜨고 사라진다. 구출된 사람 화면과 다른 시민 화면이 같다 (T-09-41)", () => {
+    const seenBy = (seat: number): string[] => {
+      const m = mount(night(seat));
+      m.show(morning(seat, undefined, [], true));
+      advance(400);
+      const out = [announceText(m.container), m.container.querySelector("[data-announce] svg")?.getAttribute("class") ?? ""];
+      advance(2_399);
+      out.push(announceText(m.container));
+      advance(1);
+      out.push(announceText(m.container) === "" ? "gone" : "still");
+      cleanup();
+      return out;
+    };
+    const saved = seenBy(2); // 의사가 지킨 좌석 자리의 시민 편 화면이라고 가정(공개 view 는 누구인지 싣지 않는다)
+    const other = seenBy(3);
+    expect(saved).toEqual(other);
+    expect(saved[0]).toBe("누군가 살아났습니다");
+    expect(saved[1]).not.toContain("is-death");
+    expect(saved[2]).toBe("누군가 살아났습니다");
+    expect(saved[3]).toBe("gone");
   });
 
   it("밤에 당한 본인(좌석 2): 아침에 유령 view 로 바뀌며 08-17 유령 시작 줄이 한 번 생기고 직업 칩이 보인다", () => {
@@ -631,7 +658,6 @@ describe("아침 임시 틀 (UI-SPEC 아침, A3)", () => {
     expect(sysLines(m.container).filter((t) => t === GHOST_LINE)).toHaveLength(1);
     expect(m.container.querySelector("main.mf-game")?.getAttribute("data-ghost-view")).toBe("true");
     expect(chatChannel(m.container)).toBe("ghost");
-    expect(announceText(m.container)).toContain("서준님이");
   });
 
   it("첫 스냅샷이 아침이면(재접속) 알림이 없다", () => {
