@@ -165,7 +165,7 @@ export function useDayFx({ view, epoch, chat }: { view: RoomView | null; epoch: 
       );
     }
     for (const line of ev.lines) {
-      later(line.at ?? 0, () => chat.addSystem(line.text, { scope: "all", kind: line.kind, at: Date.now() }));
+      later(line.at ?? 0, () => chat.addSystem(line.text, { scope: line.scope ?? "all", kind: line.kind, ...(line.icon !== undefined ? { icon: line.icon } : {}), at: Date.now() }));
     }
     // 아침 알림(08-18 임시 틀): 같은 접속에서 아침으로 들어오는 순간 v1.0 morningCardText 의 제목 한 줄을 서버 마감까지 띄운다(새 문구 없음).
     // 첫 스냅샷·재접속은 prev 가 없거나 reset 이라 알림이 없다. 밤에 당한 사람은 이 알림과 함께 산 사람 화면에서 사라진다(떠오름 없음 — dayEvents 에 fx 가 없다).

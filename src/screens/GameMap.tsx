@@ -302,7 +302,7 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
       } else if (nightActor && myRole !== undefined) {
         const kind: RingKind = myRole === "police" ? "police" : myRole === "doctor" ? "doctor" : "mafia";
         if (mine !== undefined) put(mine, kind);
-        // 내가 고른 좌석이 먼저 서므로 동료도 같은 좌석을 골랐으면 내 고리(crimson-500)가 이긴다. 동료만 고른 좌석은 crimson-400
+        // 내가 고른 좌석이 먼저 서므로 동료도 같은 좌석을 골랐으면 내 고리(mafia)가 이긴다. 동료만 고른 좌석은 연한 고리(mafiaAlly)
         if (myRole === "mafia") for (const seat of view.me.allyPicks ?? []) put(seat, "mafiaAlly");
       }
       // 선택 수 배지·확정 도장(결정 0061-7): 서버가 산 마피아에게만 보낸 집계(me.nightTally·nightSure)를 그대로 그린다. 마피아가 아니면 읽지 않는다.

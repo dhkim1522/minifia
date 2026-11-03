@@ -7,7 +7,8 @@
 import { isAlive } from "../../shared/game/alive";
 import { majorityOf } from "../../shared/game/nomination";
 import { EXECUTION_MS } from "../../shared/game/phases";
-import type { PhaseId, RoomView } from "../../shared/protocol";
+import type { ChatChannel, PhaseId, RoomView } from "../../shared/protocol";
+import type { V2IconName } from "../components/v2/V2Icon";
 
 /** 문구 표. UI-SPEC "Copywriting Contract" 원문 — 해요체, 마침표·느낌표 없음. 역할 단어는 토론 안내의 '마피아'(모두에게 같은 문장) 하나뿐이다. */
 export const DAY_COPY = {
@@ -43,8 +44,10 @@ export const DAY_COPY = {
   defenseHintSelf: "해명할 시간이에요",
   verdictHint: (name: string): string => `${name} 님을 처형할까요?`,
   verdictHintSelf: "결과를 기다려요",
-  /** 밤(임시 틀, 08-18)의 산 마피아 헤더 안내. 경찰·의사·시민의 밤 문구는 하단 NightPanel 표(NIGHT_PANEL_TEXT)가 맡는다 */
-  mafiaNightHint: "없앨 사람을 눌러요",
+  /** 밤 산 마피아 헤더 안내(UI-SPEC 단계표 202행). 이 문자열은 마피아 분기 안에서만 만든다 — 다른 신분 DOM 에 없다(T-09-29). 경찰·의사·시민의 밤 문구는 하단 NightPanel 표(NIGHT_PANEL_TEXT)가 맡는다 */
+  nightHintMafia: "대상에게 다가가요",
+  /** 마피아 전원 일치 확정이 새로 섰을 때 마피아 채팅의 hot 줄(UI-SPEC 330행) */
+  sureLine: (name: string): string => `${name} · 확정`,
   ghostHint: "모두의 직업이 보여요",
   ghostNightHint: "모두의 직업과 밤 행동이 보여요",
 } as const;
@@ -69,6 +72,10 @@ export interface DayLine {
   kind: "system" | "vote" | "hot";
   text: string;
   at?: number;
+  /** 이 줄이 보이는 채팅 흐름. 없으면 all */
+  scope?: ChatChannel;
+  /** 줄 앞 아이콘. 없으면 종류별 기본 */
+  icon?: V2IconName;
 }
 
 /** 위 알림 재료 한 건: from 이 to 를 가리켰다. 이름은 만든 순간의 닉네임이다. */
@@ -277,13 +284,19 @@ export function dayEvents(prev: RoomView | null, cur: RoomView, opts: { reset?: 
     const name = nameOf(cur, state.sure);
     if (name !== undefined) events.lines.push({ kind: "hot", text: DAY_COPY.majorityLine(name) });
   }
+
+  // ---- 밤 마피아 확정: 서버가 산 마피아에게만 보낸 me.nightSure 가 새로 서거나 바뀌면 마피아 채널에 한 줄(깨질 때는 줄 없음). 마피아가 아닌 view 는 읽지 않는다 ----
+  if (cur.me.role === "mafia" && cur.phase === "night" && cur.me.nightSure !== undefined && cur.me.nightSure !== prev.me.nightSure) {
+    const name = nameOf(cur, cur.me.nightSure);
+    if (name !== undefined) events.lines.push({ kind: "hot", text: DAY_COPY.sureLine(name), scope: "mafia", icon: "target" });
+  }
   return events;
 }
 
 /**
  * 단계 머리(제목 24px + 안내 한 줄): UI-SPEC 단계표 그대로. 안내는 단계 시작 뒤 약 2.5초만 보이고 접히는 것은 화면 몫이다.
  * 유령(내 alive 가 false)은 같은 제목에 '모두의 직업이 보여요'(밤은 '모두의 직업과 밤 행동이 보여요').
- * 밤·아침은 임시 틀이라 제목만 주고(산 마피아의 밤만 '없앨 사람을 눌러요'), 밤·아침 하단 문구는 v1.0 표(NIGHT_PANEL_TEXT)를 GamePanel 이 쓴다. 낮 틀이 아닌 단계는 빈 제목.
+ * 밤·아침은 임시 틀이라 제목만 주고(산 마피아의 밤만 '대상에게 다가가요'), 밤·아침 하단 문구는 v1.0 표(NIGHT_PANEL_TEXT)를 GamePanel 이 쓴다. 낮 틀이 아닌 단계는 빈 제목.
  */
 export function headerFor(view: RoomView): { title: string; hint?: string } {
   const title = DAY_COPY.titles[view.phase];
@@ -307,7 +320,7 @@ export function headerFor(view: RoomView): { title: string; hint?: string } {
       if (isSelf) return { title, hint: DAY_COPY.verdictHintSelf };
       return defender === undefined ? { title } : { title, hint: DAY_COPY.verdictHint(defender) };
     case "night":
-      return view.me.role === "mafia" ? { title, hint: DAY_COPY.mafiaNightHint } : { title };
+      return view.me.role === "mafia" ? { title, hint: DAY_COPY.nightHintMafia } : { title };
     default:
       return { title };
   }
