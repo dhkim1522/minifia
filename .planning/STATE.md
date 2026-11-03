@@ -5,16 +5,16 @@ milestone_name: 같은 공간
 current_phase: 9
 current_phase_name: 밤과 아침
 status: executing
-stopped_at: Completed 09-17-PLAN.md
-last_updated: "2026-11-03T06:12:33.300Z"
+stopped_at: Completed 09-18-PLAN.md
+last_updated: "2026-11-03T06:23:16.483Z"
 last_activity: 2026-11-03
 last_activity_desc: Phase 9 execution started
-state_head: 6628374d01457f6623f3382256252a8a6c5c4d6b
+state_head: 31e73e46e48ac909755c7459508837b67f6b0699
 progress:
   total_phases: 7
   completed_phases: 3
   total_plans: 101
-  completed_plans: 95
+  completed_plans: 96
   percent: 43
 ---
 
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-11-03)
 ## Current Position
 
 Phase: 9 (밤과 아침) — EXECUTING
-Plan: 18 of 23
+Plan: 19 of 23
 Status: Ready to execute
 Last activity: 2026-11-03 — Phase 9 execution started
 
@@ -155,6 +155,7 @@ Progress: [████░░░░░░] 43% (3/7 phases)
 | Phase 09 P15 | 50min | 3 tasks | 14 files |
 | Phase 09 P16 | 25min | 3 tasks | 3 files |
 | Phase 09 P17 | 25 min | 3 tasks | 10 files |
+| Phase 09 P18 | 35min | 3 tasks | 15 files |
 
 ## Accumulated Context
 
@@ -317,6 +318,9 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 09]: 09-15: 역할이 없는 산 사람의 밤은 시민 안내·시민 어둠으로 본다 (09-13 nightCitizen 규칙과 일치)
 - [Phase 09]: 09-15: 경찰·의사 선택 표시는 얼굴 목록 눌림이 맡고 지도 고리는 그리지 않는다 (UI-SPEC 318행)
 - [Phase 09]: 09-17: 유언·쪽지 저장 확인은 서버 me.will·me.note 가 정리한 값(sanitizeChatText)과 같아지는 것으로 하고 3초·거절은 실패. 시트 textarea 키보드는 채팅 패널 압축을 일으키지 않는다(kbInSheet)
+- [Phase 09]: 09-18: 경찰 결과 문구는 경찰 분기 안에서만 만든다(POLICE_TEXT 모듈 상수, DAY_COPY 아님)
+- [Phase 09]: 09-18: 피해자 본인 aria 문장은 day.morning.eliminated===me.seat 로 판정 — 처형으로 이미 유령인 사람은 세 문장을 읽는다
+- [Phase 09]: 09-18: 경찰 화면의 hot 줄은 알림과 같은 2.6초, 보통 화면은 0.4초
 
 ### Pending Todos
 
@@ -354,8 +358,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-03T06:12:32.957Z
-Stopped at: Completed 09-17-PLAN.md
+Last session: 2026-11-03T06:23:16.129Z
+Stopped at: Completed 09-18-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
