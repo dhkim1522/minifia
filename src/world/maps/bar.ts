@@ -66,11 +66,13 @@ export interface PhaseTune {
   emissive: { room: number; vote: number };
   /** 빛 무리 쿼드 불투명도 배율 */
   glow: { room: number; vote: number };
+  /** 내 캐릭터 위 작은 점광원 세기(밤·시민 편 nightCitizen 에서만 0 보다 크다) */
+  self: number;
 }
 
 const PENDANT_TALK = 0.9 * 4;
 export const LIGHT_TUNE: Readonly<Record<LightingPhase, PhaseTune>> & {
-  point: { stage: { x: number; y: number; z: number; distance: number }; pendantA: { x: number; y: number; z: number; distance: number }; pendantB: { x: number; y: number; z: number; distance: number }; decay: number };
+  point: { stage: { x: number; y: number; z: number; distance: number }; pendantA: { x: number; y: number; z: number; distance: number }; pendantB: { x: number; y: number; z: number; distance: number }; self: { x: number; y: number; z: number; distance: number }; decay: number };
   tension: { lead: number; halfRoom: number };
   moonPos: { x: number; y: number; z: number };
   moonTarget: { x: number; y: number; z: number };
@@ -86,6 +88,7 @@ export const LIGHT_TUNE: Readonly<Record<LightingPhase, PhaseTune>> & {
     // 시안은 vote 그룹이 talk 에서 0 이지만, 무대 가장자리 전구가 꺼진 구슬로 보이게 0.2 로 둔다(map-bar.png 에 점선 구슬이 보인다)
     emissive: { room: 1, vote: 0.2 },
     glow: { room: 1, vote: 0 },
+    self: 0,
   },
   vote: {
     hemi: 0.7 * Math.PI,
@@ -97,6 +100,7 @@ export const LIGHT_TUNE: Readonly<Record<LightingPhase, PhaseTune>> & {
     pendant: PENDANT_TALK * 0.45,
     emissive: { room: 0.45, vote: 1 },
     glow: { room: 0.45, vote: 1 },
+    self: 0,
   },
   // 08-10 단계 조명 셋. 정확한 값은 기존 talk·vote 에서 파생한 시작값이고 읽힘의 최종 확인은 실기기 몫이다(가정 A2).
   // 하늘·안개 색은 모두 talk 의 같은 칸보다 밝지 않다 — 낮도 마피아 분위기(새 밝은 색면 없음).
@@ -111,6 +115,7 @@ export const LIGHT_TUNE: Readonly<Record<LightingPhase, PhaseTune>> & {
     pendant: PENDANT_TALK * 0.05,
     emissive: { room: 0.05, vote: 1 },
     glow: { room: 0.05, vote: 1 },
+    self: 0,
   },
   /** 밤: 달빛이 반구보다 세고 무대 점광원은 꺼진다 */
   night: {
@@ -123,6 +128,37 @@ export const LIGHT_TUNE: Readonly<Record<LightingPhase, PhaseTune>> & {
     pendant: PENDANT_TALK * 0.15,
     emissive: { room: 0.15, vote: 0.1 },
     glow: { room: 0.15, vote: 0 },
+    self: 0,
+  },
+  /**
+   * 밤·산 시민 편(NIGHT-07·10, 가정 A1): 블록아웃 값 반구 0.05·달빛 0.08·노출 0.75·내 캐릭터 빛 1.4 를 단위 변환(반구·달빛 × π, 점광원 × 4)한 거의 깜깜한 방.
+   * "밤 전용 빛 0.15" 는 night 행의 펜던트·실내 emissive 0.15 배와 같은 뜻이라 여기서는 0(내 캐릭터 외 아무도 안 그린다).
+   * 하늘·안개 색은 night 보다 어둡다. 읽힘의 최종 확인은 실기기 몫이다.
+   */
+  nightCitizen: {
+    hemi: 0.05 * Math.PI,
+    moon: 0.08 * Math.PI,
+    exposure: 0.75,
+    sky: ["#1a1a36", "#0c0a1a", "#05060c"],
+    fog: { near: 20, far: 44 },
+    stage: 0,
+    pendant: 0,
+    emissive: { room: 0, vote: 0 },
+    glow: { room: 0, vote: 0 },
+    self: 1.4 * 4,
+  },
+  /** 밤·유령(가정 A3): 마피아 화면(night)과 같은 달빛·반구, 무대 쪽 기운(vote 그룹 emissive·빛 무리)만 night 의 0.4 배. 모두 보인다 */
+  nightGhost: {
+    hemi: 0.45 * Math.PI,
+    moon: 0.7 * Math.PI,
+    exposure: 1.25,
+    sky: ["#2c2c58", "#15122a", "#0a0b16"],
+    fog: { near: 20, far: 44 },
+    stage: 0,
+    pendant: PENDANT_TALK * 0.15,
+    emissive: { room: 0.15, vote: 0.1 * 0.4 },
+    glow: { room: 0.15, vote: 0 }, // night 의 vote 빛 무리는 0 이라 0.4 배도 0
+    self: 0,
   },
   /** 아침: talk 보다 약간 낮은 반구, 채도 낮은 하늘 */
   morning: {
@@ -135,6 +171,7 @@ export const LIGHT_TUNE: Readonly<Record<LightingPhase, PhaseTune>> & {
     pendant: PENDANT_TALK * 0.6,
     emissive: { room: 0.7, vote: 0.2 },
     glow: { room: 0.6, vote: 0 },
+    self: 0,
   },
   /** 긴장 단계(결정 0049): lead = 1·2 단계에서 초점 위로 옮긴 무대 점광원 세기(vote 의 1.5 배), halfRoom = 2 단계에서 실내 emissive 에 곱하는 값 */
   tension: { lead: 2.0 * 4 * 1.5, halfRoom: 0.5 },
@@ -142,6 +179,8 @@ export const LIGHT_TUNE: Readonly<Record<LightingPhase, PhaseTune>> & {
     stage: { x: 0, y: 3.0, z: 0, distance: 6 },
     pendantA: { x: -2.4, y: 2.6, z: -4.6, distance: 5 },
     pendantB: { x: 4.4, y: 2.6, z: -3.2, distance: 5 },
+    /** 내 캐릭터 위(높이 2.0)에서 비추는 작은 빛. 자리는 setSelfLight 가 따라간다 */
+    self: { x: 0, y: 2.0, z: 0, distance: 4 },
     decay: 2,
   },
   // 시안 blockout.js: moon.position = (t0.x − 5, 12, t0.z + 7), target = t0 = (−0.4, −0.4)
@@ -246,7 +285,7 @@ const CHALK_POINTS: readonly (readonly [number, number])[] = [
 export interface BarScene {
   /** 맵 전체(조명·배경·안개 포함). 캐릭터 그룹은 렌더러가 여기에 붙인다 */
   root: Scene;
-  lights: { hemi: HemisphereLight; moon: DirectionalLight; stage: PointLight; pendantA: PointLight; pendantB: PointLight };
+  lights: { hemi: HemisphereLight; moon: DirectionalLight; stage: PointLight; pendantA: PointLight; pendantB: PointLight; self: PointLight };
   /** 병합된 그리기 단위(이름은 파일 머리 주석의 번호) */
   meshes: Record<string, Mesh>;
   /** 목적지 링(ring)과 첫 방문 손짓 링(cue) — 같은 모양의 두 겹 */
@@ -258,6 +297,8 @@ export interface BarScene {
   setLighting(phase: LightingPhase): void;
   /** 분필 윤곽을 그 자리(월드 단위, 바닥 y 0.015)에 보인다. null 이면 숨긴다. 메시는 처음부터 만들어 두고 보이기·불투명도만 바꾼다 */
   setChalk(at: { x: number; z: number } | null, opacity: number): void;
+  /** 내 캐릭터 빛을 그 자리(월드 단위) 위 높이 2.0 으로 옮긴다. null 이면 기본 자리. 광원은 처음부터 있고 세기만 조명 단계가 바꾼다(광원 수 불변, Pitfall 7) */
+  setSelfLight(at: { x: number; z: number } | null): void;
   /**
    * 긴장 단계(결정 0049 선두·과반 연출). 1 = 무대 점광원이 초점 위(높이 3.0)로 옮겨 선두 세기, 2 = 그에 더해 실내 emissive 절반,
    * 0 = 그 단계 값으로 복귀. 조명 단계가 바뀌어도 유지되고 단계 값 위에서 다시 계산된다
@@ -540,7 +581,10 @@ export function buildBarScene(budget: Budget): BarScene {
   stage.color.set(P.stageGlow);
   const pendantA = point(T.point.pendantA);
   const pendantB = point(T.point.pendantB);
-  root.add(hemi, moon, moon.target, stage, pendantA, pendantB);
+  // 내 캐릭터 빛: 세기 0 으로 처음부터 만든다 — 조명 단계가 바뀌어도 점광원 개수가 변하지 않아 셰이더를 다시 컴파일하지 않는다(연구 Pitfall 7).
+  // 예산 core 에서도 visible 을 끄지 않는다(끄면 개수가 변한다)
+  const self = point(T.point.self);
+  root.add(hemi, moon, moon.target, stage, pendantA, pendantB, self);
 
   const background = new Color(T.talk.sky[2]);
   const fog = new Fog(T.talk.sky[2], T.talk.fog.near, T.talk.fog.far);
@@ -566,6 +610,7 @@ export function buildBarScene(budget: Budget): BarScene {
     fog.near = t.fog.near;
     fog.far = t.fog.far;
     moon.intensity = t.moon;
+    self.intensity = t.self;
     // 긴장 1·2: 무대 점광원이 초점 위로 옮겨 선두 세기(초점이 없으면 무대 중앙). 0: 단계 값과 무대 중앙
     const lead = tensionLevel >= 1;
     stage.intensity = lead ? T.tension.lead : t.stage;
@@ -590,6 +635,10 @@ export function buildBarScene(budget: Budget): BarScene {
   const setLighting = (next: LightingPhase): void => {
     phase = next;
     applyLook();
+  };
+  const setSelfLight = (at: { x: number; z: number } | null): void => {
+    if (at === null) self.position.set(T.point.self.x, T.point.self.y, T.point.self.z);
+    else self.position.set(at.x, T.point.self.y, at.z);
   };
   const setChalk = (at: { x: number; z: number } | null, opacity: number): void => {
     if (at === null) {
@@ -632,7 +681,7 @@ export function buildBarScene(budget: Budget): BarScene {
 
   return {
     root,
-    lights: { hemi, moon, stage, pendantA, pendantB },
+    lights: { hemi, moon, stage, pendantA, pendantB, self },
     meshes,
     markers,
     plate,
@@ -641,6 +690,7 @@ export function buildBarScene(budget: Budget): BarScene {
     },
     setLighting,
     setChalk,
+    setSelfLight,
     setTension,
     applyBudget,
     get budget(): Budget {

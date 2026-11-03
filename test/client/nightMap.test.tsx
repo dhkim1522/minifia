@@ -215,7 +215,8 @@ const hintText = (c: ParentNode): string | null => c.querySelector(".mf-game__he
 const titleText = (c: ParentNode): string | null => c.querySelector(".mf-game__header .mv-phase__title")?.textContent ?? null;
 
 describe("밤 임시 틀 — 역할별 하단 패널 (v1.0 문구 그대로)", () => {
-  it("산 경찰: 제목 '조사할 사람을 고르세요' + 선택 알약, 채팅 패널 없음, 헤더 제목 '밤'과 30초 링", () => {
+  // 09-10: 밤 시민 편 장면 표는 내 좌석 하나뿐이라 지도 이름표로 대상을 고르는 8페이즈 임시 틀이 더는 성립하지 않는다. 09-15 가 얼굴 목록(NIGHT-09)으로 바꿔 쓴다.
+  it.skip("산 경찰: 제목 '조사할 사람을 고르세요' + 선택 알약, 채팅 패널 없음, 헤더 제목 '밤'과 30초 링", () => {
     const { container } = mount(makeView({ mySeat: 1 }));
     expect(titleText(container)).toBe("밤");
     expect(container.querySelector('.mf-game__header [role="timer"]')).not.toBeNull();
@@ -235,7 +236,8 @@ describe("밤 임시 틀 — 역할별 하단 패널 (v1.0 문구 그대로)", (
     expect(ringOf(m.container, 2)).toBe("doctor");
   });
 
-  it("산 경찰의 선택: 고른 좌석 한 곳에만 police 고리", () => {
+  // 09-10: 밤 시민 편 장면 표는 내 좌석 하나뿐이라 지도 이름표로 대상을 고르는 8페이즈 임시 틀이 더는 성립하지 않는다. 09-15 가 얼굴 목록(NIGHT-09)으로 바꿔 쓴다.
+  it.skip("산 경찰의 선택: 고른 좌석 한 곳에만 police 고리", () => {
     const m = mount(makeView({ mySeat: 1, pick: 4 }));
     expect(ringSeats(m.container)).toEqual([4]);
     expect(ringOf(m.container, 4)).toBe("police");
@@ -301,7 +303,7 @@ describe("밤 임시 틀 — 조명·이동·거절 (UI Considerations E7 #27)",
     };
     const sendL = vi.fn<(m: ClientMessage) => boolean>(() => true);
     const l = mount(makeView({ mySeat: 3 }), { send: sendL });
-    expect(lastScene().lighting).toBe("night");
+    expect(lastScene().lighting).toBe("nightCitizen"); // 09-10: 밤·산 시민 편은 거의 깜깜한 조명
     tap(l.container);
     expect(sendL.mock.calls.filter(([m]) => m.t === "move")).toHaveLength(0);
     cleanup();
@@ -311,7 +313,8 @@ describe("밤 임시 틀 — 조명·이동·거절 (UI Considerations E7 #27)",
     expect(sendG.mock.calls.filter(([m]) => m.t === "move")).toHaveLength(1);
   });
 
-  it("선택이 거절되면 위 알림 '보내지 못했어요. 다시 해 보세요' 뒤 내 눌림이 서버 값으로 돌아간다", () => {
+  // 09-10: 밤 시민 편 장면 표는 내 좌석 하나뿐이라 지도 이름표로 대상을 고르는 8페이즈 임시 틀이 더는 성립하지 않는다. 09-15 가 얼굴 목록(NIGHT-09)으로 바꿔 쓴다.
+  it.skip("선택이 거절되면 위 알림 '보내지 못했어요. 다시 해 보세요' 뒤 내 눌림이 서버 값으로 돌아간다", () => {
     const handlers: Array<(e: never, meta: { epoch: number }) => void> = [];
     const onEvent = vi.fn((cb: unknown) => {
       handlers.push(cb as (typeof handlers)[number]);
@@ -332,7 +335,8 @@ describe("밤 임시 틀 — 조명·이동·거절 (UI Considerations E7 #27)",
 
 // 08-27: 옛 밤 화면 시험(nightScene.test)에서 사용자에게 보이는 뜻만 GameMap 기준으로 옮긴 것이다.
 describe("밤 임시 틀 — 대상 선택의 끊김·재선택·탈락 좌석 (08-27 옮김)", () => {
-  it("연결이 끊긴 동안(canSend 거짓) 경찰의 대상 버튼은 모두 aria-disabled 이고 눌러도 보내지 않는다", () => {
+  // 09-10: 밤 시민 편 장면 표는 내 좌석 하나뿐이라 지도 이름표로 대상을 고르는 8페이즈 임시 틀이 더는 성립하지 않는다. 09-15 가 얼굴 목록(NIGHT-09)으로 바꿔 쓴다.
+  it.skip("연결이 끊긴 동안(canSend 거짓) 경찰의 대상 버튼은 모두 aria-disabled 이고 눌러도 보내지 않는다", () => {
     const send = vi.fn<(m: ClientMessage) => boolean>(() => true);
     const { container } = mount(makeView({ mySeat: 1 }), { send, canSend: false });
     const buttons = [...container.querySelectorAll<HTMLElement>("[data-pick]")];
@@ -342,7 +346,8 @@ describe("밤 임시 틀 — 대상 선택의 끊김·재선택·탈락 좌석 (
     expect(send.mock.calls.filter(([x]) => x.t === "pick")).toEqual([]);
   });
 
-  it("같은 대상을 다시 눌러도 pick 을 더 보내지 않고, 새 서버 view(me.pick)가 오면 서버 값이 이긴다", () => {
+  // 09-10: 밤 시민 편 장면 표는 내 좌석 하나뿐이라 지도 이름표로 대상을 고르는 8페이즈 임시 틀이 더는 성립하지 않는다. 09-15 가 얼굴 목록(NIGHT-09)으로 바꿔 쓴다.
+  it.skip("같은 대상을 다시 눌러도 pick 을 더 보내지 않고, 새 서버 view(me.pick)가 오면 서버 값이 이긴다", () => {
     const send = vi.fn<(m: ClientMessage) => boolean>(() => true);
     const m = mount(makeView({ mySeat: 1 }), { send });
     fireEvent.click(m.container.querySelector('[data-pick="2"]')!);
@@ -356,7 +361,8 @@ describe("밤 임시 틀 — 대상 선택의 끊김·재선택·탈락 좌석 (
     expect(ringOf(m.container, 2)).toBeNull();
   });
 
-  it("탈락한 좌석은 산 경찰 화면에서 대상 버튼도 이름표도 아니다(유령 그림 대신 사라진다)", () => {
+  // 09-10: 밤 시민 편 장면 표는 내 좌석 하나뿐이라 지도 이름표로 대상을 고르는 8페이즈 임시 틀이 더는 성립하지 않는다. 09-15 가 얼굴 목록(NIGHT-09)으로 바꿔 쓴다.
+  it.skip("탈락한 좌석은 산 경찰 화면에서 대상 버튼도 이름표도 아니다(유령 그림 대신 사라진다)", () => {
     const { container } = mount(makeView({ mySeat: 1, dead: [4] }));
     expect(pickSeats(container)).toEqual([0, 1, 2, 3, 5]);
     expect(container.querySelector('[data-seat="4"]')).toBeNull();
@@ -400,7 +406,8 @@ describe("밤 임시 틀 — 유령이 보는 밤 행동 (GHOST-02, T-08-46)", (
     const police: RoomView = { ...makeView({ mySeat: 1, pick: 4 }) };
     police.me = { ...police.me, allyPicks: [2] };
     const { container } = mount(police);
-    expect(ringSeats(container)).toEqual([4]);
+    // 09-10: 밤 시민 편은 지도에 내 이름표뿐이라 고른 좌석(4)의 고리도 지도에 없다(선택 표시는 09-15 얼굴 목록 몫). 어느 쪽이든 마피아 고리는 없다.
+    expect(ringSeats(container)).toEqual([]);
     expect(container.querySelectorAll('[data-ring-kind="mafia"]')).toHaveLength(0);
   });
 
@@ -432,7 +439,7 @@ describe("아침 임시 틀 (UI-SPEC 아침, A3)", () => {
   it("밤 → 아침(탈락 있음): 36px 알림은 morningCardText 제목('{닉네임}님이 …'), 채팅 패널 all, 아침 조명, 탈락자 캐릭터·이름표가 산 사람 화면에서 사라진다(떠오름 없음)", () => {
     const m = mount(night());
     expect(announceText(m.container)).toBe("");
-    expect(rosterSeats(m.container)).toContain(2);
+    expect(rosterSeats(m.container)).toEqual([3]); // 09-10: 밤 시민 편 이름표 층에는 내 이름표 하나뿐이다
     m.show(morning(3, 2, [2]));
     expect(announceText(m.container)).toBe(morningCardText({ eliminated: 2, phrase: 1 }, (seat) => NAMES[seat]).title);
     expect(announceText(m.container)).toContain("서준님이");

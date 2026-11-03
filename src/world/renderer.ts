@@ -2,7 +2,8 @@
 // three 본체를 끌고 오지 않는다. three 를 값으로 쓰는 모듈은 threeRenderer.ts·threeCamera.ts·maps/ 이고 06-13 이 import() 로만 연다.
 import type { Object3D } from "three";
 
-export type LightingPhase = "talk" | "vote" | "trial" | "night" | "morning";
+/** nightCitizen = 밤·산 시민 편(거의 깜깜 + 내 캐릭터 빛), nightGhost = 밤·유령(달빛 + 약한 무대 기운). 마피아의 밤은 night (09-10) */
+export type LightingPhase = "talk" | "vote" | "trial" | "night" | "nightCitizen" | "nightGhost" | "morning";
 
 export interface Budget {
   /** 화면 배율 상한(장치 배율과 작은 쪽을 쓴다) */
@@ -69,6 +70,8 @@ export interface WorldRenderer {
   setLighting(phase: LightingPhase): void;
   /** 긴장 단계 0·1·2 (결정 0049): 1 = 무대 점광원이 초점 위로 선두 세기, 2 = 그에 더해 실내 emissive 절반. 시험 가짜 렌더러 호환을 위해 optional (08-10) */
   setTension?(level: 0 | 1 | 2, focus?: { x: number; z: number }): void;
+  /** 내 캐릭터에만 비치는 작은 빛(밤·시민 편)의 자리(월드 단위 x·z, 높이는 맵이 정한다). null 이면 기본 자리. 세기는 조명 단계가 정한다. 시험 가짜 렌더러 호환을 위해 optional */
+  setSelfLight?(at: { x: number; z: number } | null): void;
   /** 암살 현장 분필 윤곽: 자리(월드 단위)와 불투명도, null 이면 숨김. 시험 가짜 렌더러 호환을 위해 optional (08-10 선례) */
   setChalk?(at: { x: number; z: number } | null, opacity: number): void;
   /** 카메라 확대(과반 연출 1.08, 기본 1). camera.ts 투영의 zoom 인자와 같은 배율 */

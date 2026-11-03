@@ -9,7 +9,7 @@ import { GHOST_FADE_END_MS, GHOST_RISE_MS, pointsTally } from "../game/dayView";
 import { GATHER_CENTER, ZOOM_MAJORITY, ZOOM_MIN_STAGE_H } from "./camera";
 
 /** 렌더러가 읽는 조명 단계(UI-SPEC 단계 조명). 렌더러의 LightingPhase 확장은 08-10 이 한다 */
-export type LightingStage = "talk" | "vote" | "trial" | "night" | "morning";
+export type LightingStage = "talk" | "vote" | "trial" | "night" | "nightCitizen" | "nightGhost" | "morning";
 
 /** 따라가기 = 내 캐릭터(6페이즈 규칙), 고정 = 모이는 자리 가운데에서 움직이지 않음(zoom 은 과반 연출) */
 export type CameraMode = { mode: "follow" } | { mode: "fixed"; target: { x: number; z: number }; zoom: number };
@@ -56,7 +56,11 @@ function isGhostViewer(view: RoomView): boolean {
 export function visibleSeats(view: RoomView, fading?: ReadonlyMap<number, number>, now?: number): Record<number, SeatLook> {
   const ghostViewer = isGhostViewer(view);
   const seats: Record<number, SeatLook> = {};
+  // 밤·산 시민 편(시민·경찰·의사): 내 좌석 하나뿐이다. 서버가 이 밤에 남의 위치를 한 번도 보내지 않으므로(09-03·09-09, 결정 0061-3)
+  // 장면 표도 그 사실을 따른다 — 받은 위치를 화면에서만 숨기는 방식이 아니다(결정 0002·0021, T-09-21). 세 역할이 같은 값이다.
+  const nightCitizen = view.phase === "night" && !ghostViewer && view.me.role !== "mafia";
   for (const p of view.players) {
+    if (nightCitizen && p.seat !== view.me.seat) continue;
     const dead = !isAlive(p);
     const startedAt = fading?.get(p.seat);
     const fadingNow = dead && startedAt !== undefined && (now === undefined || now - startedAt < GHOST_FADE_END_MS);
@@ -104,6 +108,16 @@ export function lightingOf(phase: PhaseId): LightingStage {
   }
 }
 
+/**
+ * 보는 사람의 단계 조명(NIGHT-07·10): 밤에는 유령 nightGhost, 산 마피아 night, 산 비마피아 nightCitizen.
+ * 밤이 아니면 lightingOf(phase) — 아침 이후는 역할과 무관하다.
+ */
+export function lightingFor(view: RoomView): LightingStage {
+  if (view.phase !== "night") return lightingOf(view.phase);
+  if (isGhostViewer(view)) return "nightGhost";
+  return view.me.role === "mafia" ? "night" : "nightCitizen";
+}
+
 /** 긴장(UI-SPEC 단계 조명): 지목 선두 1(초점 선두), 과반 2, 찬반 1(초점 변론자), 그 밖 0 */
 export function tensionOf(view: RoomView): Tension {
   if (view.phase === "nomination") {
@@ -131,7 +145,7 @@ export function sceneLook(view: RoomView, opts: { stageH: number; fading?: Reado
   }
   return {
     camera: cameraModeOf(view, opts.stageH),
-    lighting: lightingOf(view.phase),
+    lighting: lightingFor(view),
     tension: tension.level,
     ...(tension.focus !== undefined ? { focusSeat: tension.focus } : {}),
     seats,

@@ -125,7 +125,7 @@ afterEach(() => {
 describe("밤 분위기 — 맵 조명 night (D-04·D-05)", () => {
   it("밤 렌더(재접속처럼 첫 렌더가 밤): 조명 night 이고 v1.0 비네팅·그림 층은 그려지지 않는다", () => {
     const { container } = scene(makeView({ phase: "night", role: "citizen" }));
-    expect(lighting()).toBe("night");
+    expect(lighting()).toBe("nightCitizen"); // 09-10: 밤·산 시민 편은 거의 깜깜한 조명
     expect(oldLayers(container)).toBe(0);
   });
 
@@ -156,7 +156,7 @@ describe("밤 분위기 — 맵 조명 night (D-04·D-05)", () => {
     const stage = r.container.querySelector("[data-game-stage]");
     expect(lighting()).toBe("talk");
     r.show(makeView({ phase: "night", role: "citizen" }));
-    expect(lighting()).toBe("night");
+    expect(lighting()).toBe("nightCitizen");
     expect(oldLayers(r.container)).toBe(0);
     r.show(makeView({ phase: "morning", role: "citizen", morning: {} }));
     expect(lighting()).toBe("morning");
@@ -164,7 +164,7 @@ describe("밤 분위기 — 맵 조명 night (D-04·D-05)", () => {
     expect(r.container.querySelector("[data-game-stage]")).toBe(stage);
   });
 
-  it("4역할·관전자 viewer 의 밤 렌더에서 조명이 같고 v1.0 층이 없다 (D-09, T-05-07)", () => {
+  it("4역할·관전자 viewer 의 밤 렌더에서 조명이 시민 편 셋 같고(마피아·유령은 따로) v1.0 층이 없다 (D-09, T-05-07)", () => {
     const spectate: SpectateView = { seats: NAMES.map((_, seat) => ({ seat, job: seat === 1 ? "mafia" : "citizen" })) };
     const cases: Array<[string, ViewOpts]> = [
       ["citizen", { role: "citizen" }],
@@ -180,8 +180,9 @@ describe("밤 분위기 — 맵 조명 night (D-04·D-05)", () => {
       r.unmount();
       return [name, s] as const;
     });
-    expect(out[0]![1]).toBe("night|0");
-    expect(out.filter(([, s]) => s !== out[0]![1]).map(([n]) => n).join(",")).toBe("");
+    // 09-10: 밤 조명은 보는 사람마다 다르다 — 시민·경찰·의사 nightCitizen, 마피아 night, 유령 nightGhost. v1.0 층은 누구에게도 없다.
+    const byName = Object.fromEntries(out);
+    expect(byName).toEqual({ citizen: "nightCitizen|0", mafia: "night|0", police: "nightCitizen|0", doctor: "nightCitizen|0", spectator: "nightGhost|0" });
   });
 });
 

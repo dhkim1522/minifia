@@ -162,7 +162,7 @@ describe("CHAR-01: 맵 화면(낮 토론·밤) — 5명·8명 모두 이름표�
   });
 
   it("8명(7번 탈락): 산 자리는 닉네임 이름표, 탈락 자리는 산 사람 화면에서 이름표가 사라진다", () => {
-    const view = simpleView("night", 8, "citizen");
+    const view = simpleView("night", 8, "mafia"); // 09-10: 밤·산 시민 편 화면은 내 이름표 하나뿐이라 산 좌석 전부를 보는 마피아 viewer 로 본다
     view.players = view.players.map((p) => (p.seat === 7 ? { ...p, alive: false } : p));
     const { container } = renderRoom(view);
     expectEverySeatNamed(container, 8, [7]);

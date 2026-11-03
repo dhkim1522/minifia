@@ -234,7 +234,7 @@ describe("원격 에셋 없음 (T-06-24)", () => {
 
 // ---------- 08-10 Task 3: 조명 단계 다섯 · 긴장 단계 (UI-SPEC 단계 조명, 결정 0049) ----------
 
-const STAGES: readonly LightingPhase[] = ["talk", "vote", "trial", "night", "morning"];
+const STAGES: readonly LightingPhase[] = ["talk", "vote", "trial", "night", "nightCitizen", "nightGhost", "morning"];
 const lightCount = (root: Object3D): number => {
   let n = 0;
   root.traverse((o) => {
@@ -257,10 +257,10 @@ describe("조명 단계 다섯 (trial · night · morning, 08-10)", () => {
     }
   });
 
-  it("단계를 모두 바꿔도 광원 개수는 처음과 같다(새 광원 없음) — 반구 1 · 방향 1 · 점광원 3", () => {
+  it("단계를 모두 바꿔도 광원 개수는 처음과 같다(새 광원 없음) — 반구 1 · 방향 1 · 점광원 4", () => {
     const bar = buildBarScene(LADDER[0]!);
     const first = lightCount(bar.root);
-    expect(first).toBe(5);
+    expect(first).toBe(6);
     for (const s of [...STAGES, "talk"] as const) {
       bar.setLighting(s);
       expect(lightCount(bar.root), s).toBe(first);

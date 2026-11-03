@@ -145,6 +145,9 @@ async function build(opts: Opts): Promise<WorldRenderer> {
       zoom = Number.isFinite(z) && z > 0 ? z : 1;
       configureCamera(camera, target, size, offsetY, zoom);
     },
+    setSelfLight(at: { x: number; z: number } | null): void {
+      bar.setSelfLight(at);
+    },
     setChalk(at: { x: number; z: number } | null, opacity: number): void {
       bar.setChalk(at, opacity);
     },

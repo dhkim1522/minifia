@@ -306,6 +306,8 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
   let tensionKey: string | null = "0";
   /** 분필 윤곽: 마지막으로 렌더러에 보낸 자리·불투명도 키(바뀔 때만 다시 보낸다) */
   let chalkKey: string | null = "-";
+  /** 내 캐릭터 빛: 마지막으로 보낸 자리 키(nightCitizen 이 아니면 "-") */
+  let selfLightKey: string | null = "-";
   let zoomSent = 1;
   /** 지금 그리는 확대와, 고정 카메라로 옮기는 중인 전환(고정이 아니면 null) */
   let zoomCur = 1;
@@ -367,6 +369,7 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
         lightSent = null; // 새 렌더러에는 조명·긴장·확대를 다시 보낸다
         tensionKey = null;
         chalkKey = null;
+        selfLightKey = null;
         zoomSent = Number.NaN;
       }
     }
@@ -927,6 +930,14 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
       r.setTension?.(tension, focusPos === undefined ? undefined : { x: focusPos.x, z: focusPos.z });
     }
 
+    // 내 캐릭터 빛(NIGHT-07): nightCitizen 조명에서만 내 캐릭터 위로 따라가고, 다른 단계에서는 기본 자리(세기는 조명 단계가 0 으로 만든다).
+    // 광원은 렌더러가 처음부터 갖고 있다 — 여기서 만들거나 지우지 않는다(Pitfall 7)
+    const selfAt = wantLight === "nightCitizen" ? (actors.get(deps.mySeat())?.pos ?? null) : null;
+    const nextSelfKey = selfAt === null ? "-" : `${selfAt.x.toFixed(3)},${selfAt.z.toFixed(3)}`;
+    if (nextSelfKey !== selfLightKey) {
+      selfLightKey = nextSelfKey;
+      r.setSelfLight?.(selfAt === null ? null : { x: selfAt.x, z: selfAt.z });
+    }
     // 분필 윤곽(MORN-01): 서버가 공개한 자리가 있으면 바닥에 그 자리 그대로. 없으면 숨김. 렌더러에 setChalk 가 없으면(가짜 렌더러) 건너뛴다
     const chalk = look?.chalk ?? null;
     const nextChalkKey = chalk === null ? "-" : `${chalk.x.toFixed(3)},${chalk.z.toFixed(3)}|${CHALK_FULL}`;
