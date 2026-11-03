@@ -22,6 +22,7 @@
 // defense(후보 봇만) = randInt(문구 수 3) → randInt(지연 폭).
 // 테스트 방 방장이 봇 투표를 고정한 경우(RoomState.testBotVote, P-13): 고정 값이면 결정 난수(randInt(100)·randInt(후보 수))를 건너뛰고 지연 난수는 그대로 부른다.
 // 고정 설정이 없거나 pick 조건이 안 맞아 무작위로 돌아가면 위 순서와 똑같다.
+// 09-12: will(1일차 토론 시작 3초 뒤 유언 한 줄)·approach(마피아 봇이 pick 계획 200ms 뒤 대상 곁으로 걷기)는 난수를 부르지 않는다 — 위 호출 순서와 시드 고정 값은 그대로다(결정 0061-18, 가정 A3).
 // 08-07 순서 추가: discussion 은 위 두 줄 뒤에 randInt(토론 끝내기 폭 30000) 한 번이 붙는다(봇당 5번: 폭·문구 수·폭·문구 수·끝내기 폭, 시드 고정 값을 다시 고정했다).
 // nomination = (후보가 있으면) randInt(후보 수) → randInt(지목 지연 폭 6000) — 결정 함수(botPointTarget)는 자기를 뺀 산 사람 하나를 고르고 고정 pick(host·other)도 같다(결정 0060-13: pick 은 봇 지목 대상).
 // verdict(변론자가 아닌 산 봇만) = randInt(100) → randInt(찬반 지연 폭 5000) — 결정 함수(botExecAgree)는 찬성 확률 EXEC_YES_PERCENT 이고 고정 exec(yes·no)도 같다(exec 는 봇 찬반).
@@ -80,6 +81,13 @@ export const BOT_NIGHT_LINES: readonly string[] = ["동의해요", "그 사람�
 /** 최후 변론에서 후보인 봇이 고르는 문구(3개). 길이를 옛 템플릿 목록과 같은 3 으로 두어 defense 의 시드 호출 수가 그대로다. */
 export const BOT_DEFENSE_LINES: readonly string[] = ["저 아니에요", "저는 시민이에요", "한 번만 믿어 주세요"];
 
+/** 1일차 토론에서 봇이 남기는 유언 문장(3개, 역할 단어 없음). 봇 seat % 길이 번째 줄을 쓴다 — 난수 없음. sanitizeChatText 를 그대로 통과하며 자소 100 이하다(결정 0061-18). */
+export const BOT_WILL_LINES: readonly string[] = ["다들 끝까지 힘내요", "저는 믿어 주세요", "좋은 판이었어요"];
+/** 1일차 토론 시작 이만큼 뒤에 산 봇이 유언을 쓴다(ms). */
+export const BOT_WILL_AT_MS = 3_000;
+/** 밤에 마피아 봇이 pick 계획 이만큼 뒤에 대상 곁으로 걷는다(ms). */
+export const BOT_APPROACH_AFTER_MS = 200;
+
 /** 봇 행동 한 가지 — 사람 ClientMessage 의 같은 칸 이름을 쓴다(chat 은 본문 text 만, 단계 키는 실행할 때 서버 상태에서 만든다). */
 export type BotAct =
   | { t: "chat"; text: string }
@@ -87,7 +95,10 @@ export type BotAct =
   // 8페이즈(결정 0060): 토론 끝내기(켜짐만)·지목·찬반. 사람과 같은 메시지 이름을 쓰고 방 DO 가 같은 apply* 본체로 처리한다.
   | { t: "endDiscussion" }
   | { t: "point"; target: number }
-  | { t: "verdict"; agree: boolean };
+  | { t: "verdict"; agree: boolean }
+  // 9페이즈(결정 0061-18): 유언 한 줄(방 DO 의 applyWill 본체)·마피아 다가가기(applyMove 본체, 대상 seat 은 계획 시점 값이고 실행 시점에 botMafiaTarget 으로 다시 구한다). 둘 다 난수 없음.
+  | { t: "will"; text: string }
+  | { t: "approach"; target: number };
 export interface BotStep {
   at: number;
   botId: string;
@@ -195,6 +206,8 @@ function planFor(state: RoomState, bot: Player, now: number, randInt: RandInt): 
     add(second, discussionAct(randInt));
     // 토론 끝내기(08-07): 채팅 두 줄 다음 난수 한 번. 사람과 같은 toggleEnd 를 지난다.
     add(now + END_DISCUSSION_BASE_MS + randInt(END_DISCUSSION_SPAN_MS), { t: "endDiscussion" });
+    // 유언(09-12): 1일차에만 한 번, 고정 문장, 난수 없음 — 위 난수 호출 순서가 그대로다.
+    if ((state.day ?? 1) === 1) add(now + BOT_WILL_AT_MS, { t: "will", text: BOT_WILL_LINES[bot.seat % BOT_WILL_LINES.length]! });
   } else if (state.phase === "nomination") {
     // 지목(08-07): 자기를 뺀 산 사람 하나, 고정 pick(host·other)도 같다(결정 0060-13).
     const target = botPointTarget(state, bot, randInt, state.testBotVote?.pick);
@@ -208,7 +221,12 @@ function planFor(state: RoomState, bot: Player, now: number, randInt: RandInt): 
   } else if (state.phase === "night") {
     if (bot.role === "mafia" || bot.role === "police" || bot.role === "doctor") {
       const target = botNightTarget(state, bot, randInt);
-      if (target !== undefined) add(now + NIGHT_PICK_BASE_MS + randInt(NIGHT_PICK_SPAN_MS), { t: "pick", target });
+      if (target !== undefined) {
+        const pickAt = now + NIGHT_PICK_BASE_MS + randInt(NIGHT_PICK_SPAN_MS);
+        add(pickAt, { t: "pick", target });
+        // 다가가기(09-12): 마피아 봇만, 난수 없이 pick 시각 + 200ms. 대상은 실행 시점에 방 DO 가 botMafiaTarget 으로 다시 구한다.
+        if (bot.role === "mafia") add(pickAt + BOT_APPROACH_AFTER_MS, { t: "approach", target });
+      }
     }
     if (bot.role === "mafia" && randInt(10) < NIGHT_CHAT_TENTHS) {
       const at = now + NIGHT_CHAT_BASE_MS + randInt(NIGHT_CHAT_SPAN_MS);

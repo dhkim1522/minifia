@@ -569,9 +569,10 @@ describe("botPlanKey·syncBotPlan·planBotSteps", () => {
         }
       }
       expect(steps.every((s) => s.at < state.phaseEndsAt! - 500 && s.at > nowOf(state))).toBe(true);
-      expect(steps.every((s) => s.act.t === "pick" || (s.act.t === "chat" && BOT_NIGHT_LINES.includes(s.act.text)))).toBe(true);
+      expect(steps.every((s) => s.act.t === "pick" || s.act.t === "approach" || (s.act.t === "chat" && BOT_NIGHT_LINES.includes(s.act.text)))).toBe(true);
       const rates = new Map<string, ChatSenderRate>();
       for (const s of steps) {
+        if (s.act.t === "approach") continue; // 09-12: 다가가기는 아래 전용 시험이 본다
         if (s.act.t === "pick") {
           const r = pickTarget(state, s.botId, s.act.target);
           expect(`${seed}:${r.ok ? "ok" : r.error}`).toBe(`${seed}:ok`);

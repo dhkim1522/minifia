@@ -33,7 +33,7 @@ import { endReached, toggleEnd } from "../shared/game/discussion";
 import { MAP_PHASES, canMove } from "../shared/game/movement";
 import { layoutFor, layoutKey } from "../shared/game/gather";
 import { BAR_MAP, STAGE_SPOT } from "../shared/game/map";
-import { WORLD_FLUSH_MS, captureHome, compactWorld, despawnPlayer, emptyWorld, forceSegment, moveFrame, nextWanderAt, planMoveSegment, planWander, requestMove, respawnAll, restoreWorld, snapFrame, spawnPlayer, teleportHome } from "../shared/game/world";
+import { APPROACH_DIST_FX, WORLD_FLUSH_MS, approachPoint, captureHome, compactWorld, despawnPlayer, emptyWorld, forceSegment, moveFrame, nextWanderAt, planMoveSegment, planWander, positionAtFx, requestMove, respawnAll, restoreWorld, snapFrame, spawnPlayer, teleportHome } from "../shared/game/world";
 import type { Segment, WorldState } from "../shared/game/world";
 import { buildPreview, buildView } from "../shared/game/view";
 import { ClientMessageSchema } from "../shared/schemas";
@@ -607,6 +607,24 @@ export class Room extends DurableObject<Env> {
       case "endDiscussion":
         await this.applyEndDiscussion(step.botId, true, Date.now());
         return;
+      // 9페이즈(결정 0061-18): 유언 한 줄은 사람과 같은 applyWill 본체를 지난다(500ms 간격·단계·생존 검사, 특권 없음). 거부는 버린다.
+      case "will":
+        await this.applyWill(step.botId, act.text, Date.now());
+        return;
+      // 마피아 봇 다가가기: 실행 시점 대상(botMafiaTarget, 없으면 계획의 대상) 곁 APPROACH_DIST_FX 점으로 사람과 같은 applyMove(단계·150ms·걷기 가능 칸 보정)를 지난다.
+      // 대상·봇의 위치는 서버 world 구간에서 읽는다(시각 기준 위치). 어느 쪽이든 구간이 없으면 조용히 버린다.
+      case "approach": {
+        const bot = room.players.find((p) => p.id === step.botId);
+        if (!bot) return;
+        const targetSeat = botMafiaTarget(room, bot) ?? act.target;
+        const target = room.players.find((p) => p.seat === targetSeat);
+        const botSeg = Object.prototype.hasOwnProperty.call(this.world.segs, bot.id) ? this.world.segs[bot.id] : undefined;
+        const targetSeg = target && Object.prototype.hasOwnProperty.call(this.world.segs, target.id) ? this.world.segs[target.id] : undefined;
+        if (!botSeg || !targetSeg) return;
+        const now = Date.now();
+        this.applyMove(bot.id, approachPoint(positionAtFx(targetSeg, now), positionAtFx(botSeg, now), APPROACH_DIST_FX), now);
+        return;
+      }
       case "point":
         await this.applyPoint(step.botId, act.target, Date.now());
         return;
