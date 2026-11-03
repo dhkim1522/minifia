@@ -9,6 +9,7 @@ import {
   BOT_DEFENSE_LINES,
   BOT_NAMES,
   BOT_NIGHT_LINES,
+  BOT_WILL_LINES,
   EXEC_YES_PERCENT,
   botCount,
   botMafiaTarget,
@@ -547,7 +548,7 @@ describe("botPlanKey·syncBotPlan·planBotSteps", () => {
       }
       expect(steps.every((s) => s.at < state.phaseEndsAt! - 500 && s.at > nowOf(state))).toBe(true);
       expect(chats.every((s) => s.act.t === "chat" && BOT_CHAT_LINES.includes(s.act.text))).toBe(true);
-      expect(steps.every((s) => s.act.t === "chat" || s.act.t === "endDiscussion")).toBe(true);
+      expect(steps.every((s) => s.act.t === "chat" || s.act.t === "endDiscussion" || s.act.t === "will")).toBe(true);
       const rates = new Map<string, ChatSenderRate>();
       for (const s of chats) expect(`${seed}:${chatVerdict(state, s, rates)}`).toBe(`${seed}:null`);
     }
@@ -613,7 +614,7 @@ describe("botPlanKey·syncBotPlan·planBotSteps", () => {
     ];
     for (const state of states) {
       const kinds = [...new Set(planBotSteps(state, nowOf(state), seededRandInt(5)).map((s) => s.act.t as string))].sort();
-      expect(`${state.phase}:${kinds.every((k) => ["chat", "pick", "endDiscussion", "point", "verdict"].includes(k))}`).toBe(`${state.phase}:true`);
+      expect(`${state.phase}:${kinds.every((k) => ["chat", "pick", "endDiscussion", "point", "verdict", "will", "approach"].includes(k))}`).toBe(`${state.phase}:true`);
     }
   });
 
@@ -817,7 +818,9 @@ describe("봇 투표·변론 계획: 회귀", () => {
     const digest = (text: string): number => [...text].reduce((h, ch) => (h * 31 + ch.charCodeAt(0)) % 1_000_000_007, 7);
     const got = (["discussion", "night"] as const).map((phase) => {
       const state = stateAt(1, 5, 8, phase);
-      return digest(canon(planBotSteps(state, nowOf(state), seededRandInt(42))));
+      // 09-12: will·approach 는 난수 없는 덧붙임 행동이다 — 걸러내면 기존 시드 고정 값이 그대로여야 한다(난수 호출 순서 불변 증명).
+      const steps = planBotSteps(state, nowOf(state), seededRandInt(42)).filter((st) => st.act.t !== "will" && st.act.t !== "approach");
+      return digest(canon(steps));
     });
     // 08-11: 토론이 90초가 되고 밤이 지목 마감 뒤에 닿아 두 계획의 시각(at)이 모두 달라졌다 — 새 흐름 값으로 다시 고정한다.
     expect(got.join(",")).toBe("34804349,554531902");
@@ -1026,6 +1029,67 @@ describe("봇 계획: 찬반 (DAY-06, 결정 0060-13)", () => {
       const steps = planBotSteps({ ...state, testBotVote: { exec } }, nowOf(state), rec.randInt);
       expect(`${exec}:${rec.calls.join(",")}`).toBe(`${exec}:5000,5000,5000,5000`);
       expect(`${exec}:${steps.map((s) => (s.act.t === "verdict" ? String(s.act.agree) : "?")).join(",")}`).toBe(`${exec}:${Array(4).fill(want).join(",")}`);
+    }
+  });
+});
+
+describe("봇 유언·다가가기 계획 (09-12, 결정 0061-18, 가정 A3)", () => {
+  it("BOT_WILL_LINES 는 짧은 중립 문장 3개이고 sanitizeChatText 를 그대로 통과하며 역할 단어가 없다", () => {
+    expect(BOT_WILL_LINES.length).toBe(3);
+    for (const line of BOT_WILL_LINES) {
+      const clean = sanitizeChatText(line);
+      expect(clean.ok && clean.text === line).toBe(true);
+      expect(/마피아|경찰|의사|시민/.test(line)).toBe(false);
+    }
+  });
+
+  it("1일차 discussion: 산 봇마다 now+3000 에 will 한 줄(BOT_WILL_LINES[seat % 길이])이 더해지고 죽은 봇에는 없다", () => {
+    for (let seed = 1; seed <= 10; seed += 1) {
+      const state = markDead(stateAt(1, 5, seed, "discussion"), 3);
+      const steps = planBotSteps(state, nowOf(state), seededRandInt(seed));
+      for (const bot of botsOf(state)) {
+        const mine = steps.filter((s) => s.botId === bot.id && s.act.t === "will");
+        expect(`${seed}:${bot.seat}:${mine.length}`).toBe(`${seed}:${bot.seat}:${bot.alive === false ? 0 : 1}`);
+        const one = mine[0];
+        if (one !== undefined && one.act.t === "will") {
+          expect(one.at).toBe(nowOf(state) + 3000);
+          expect(one.act.text).toBe(BOT_WILL_LINES[bot.seat % BOT_WILL_LINES.length]);
+        }
+      }
+    }
+  });
+
+  it("2일차 discussion 에는 will 이 없다", () => {
+    const state = { ...stateAt(1, 5, 4, "discussion"), day: 2 };
+    expect(planBotSteps(state, nowOf(state), seededRandInt(4)).filter((s) => s.act.t === "will").length).toBe(0);
+  });
+
+  it("will 을 더해도 난수 호출 순서가 같다: 호출 기록이 봇당 5번(폭·문구·폭·문구·끝내기 폭) 그대로다", () => {
+    const state = stateAt(1, 5, 8, "discussion");
+    const calls: number[] = [];
+    planBotSteps(state, nowOf(state), (n) => {
+      calls.push(n);
+      return 0;
+    });
+    expect(calls.length).toBe(botsOf(state).length * 5);
+  });
+
+  it("night: 산 마피아 봇마다 pick 계획 시각 + 200 에 같은 대상으로 approach 한 줄, 경찰·의사·시민 봇에는 없다", () => {
+    for (let seed = 1; seed <= 20; seed += 1) {
+      const state = markDead(stateAt(1, 5, seed, "night"), 4);
+      const steps = planBotSteps(state, nowOf(state), seededRandInt(seed));
+      for (const bot of botsOf(state)) {
+        const mine = steps.filter((s) => s.botId === bot.id);
+        const approach = mine.filter((s) => s.act.t === "approach");
+        const pick = mine.find((s) => s.act.t === "pick");
+        const wants = bot.alive !== false && bot.role === "mafia" && pick !== undefined;
+        expect(`${seed}:${bot.seat}:${approach.length}`).toBe(`${seed}:${bot.seat}:${wants ? 1 : 0}`);
+        const a = approach[0];
+        if (a !== undefined && a.act.t === "approach" && pick !== undefined && pick.act.t === "pick") {
+          expect(a.at).toBe(pick.at + 200);
+          expect(a.act.target).toBe(pick.act.target);
+        }
+      }
     }
   });
 });

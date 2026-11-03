@@ -3,7 +3,7 @@
 import { env, exports } from "cloudflare:workers";
 import { evictDurableObject, runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
-import { BOT_CHAT_LINES } from "../../shared/game/bots";
+import { BOT_CHAT_LINES, BOT_WILL_LINES } from "../../shared/game/bots";
 import { PHASE_DEFS } from "../../shared/game/phases";
 import type { PhaseId, RoomView, ServerMessage } from "../../shared/protocol";
 import {
@@ -13,6 +13,7 @@ import {
   collect,
   driveToEnded,
   editRoom,
+  flushWorld,
   mapPlayers,
   nextFrame,
   seat,
@@ -23,6 +24,8 @@ import {
   toPhase,
   until,
   votesIn,
+  worldFramesOf,
+  worldOf,
 } from "./helpers";
 import type { Seated, TestSocket } from "./helpers";
 
@@ -576,5 +579,53 @@ describe("봇 지목·찬반·토론 끝내기", () => {
     await armBots(r.code);
     const after = (await stored(r.code)).players as Array<Record<string, unknown>>;
     expect(after.filter((p) => p.isBot === true).map((p) => `${String(p.seat)}:${String(p.verdictVote)}`).join(",")).toBe(`${b1.seat}:undefined,${b2.seat}:true,${b3.seat}:undefined`);
+  }, 30_000);
+});
+
+describe("봇 유언·다가가기 (09-12, 결정 0061-18)", () => {
+  it("1일차 토론: 봇이 같은 applyWill 본체로 BOT_WILL_LINES 중 한 줄을 저장하고 사람 소켓에는 프레임이 없다", async () => {
+    const r = await seatQuiet(1, { testMode: true });
+    send(r.host, { t: "testBots", count: 3 });
+    await nextFrame(r.host, lobbyOf(5));
+    await start(r);
+    await skipUntil(r, "discussion");
+    for (const sock of allSockets(r)) await settle(sock, mark(sock));
+    const marks = allSockets(r).map(mark);
+    await forceBotsDue(r.code);
+    const bots = (await playersOf(r.code)).filter((p) => p.isBot === true) as Array<BotRaw & { will?: string }>;
+    expect(bots.length).toBe(3);
+    for (const b of bots) expect(`${b.seat}:${BOT_WILL_LINES.includes(b.will ?? "")}`).toBe(`${b.seat}:true`);
+    for (const [i, sock] of allSockets(r).entries()) {
+      const frames = (await settle(sock, marks[i]!)).filter((m) => m.t === "error" || m.t === "chatReject");
+      expect(frames.length).toBe(0);
+    }
+  }, 30_000);
+
+  it("밤: 마피아 봇이 approach 로 대상 곁까지 걷고, 시민 편 사람 소켓은 world 프레임이 0개다", async () => {
+    const r = await seatQuiet(0, { testMode: true });
+    send(r.host, { t: "testBots", count: 5 });
+    await nextFrame(r.host, lobbyOf(6));
+    send(r.host, { t: "testRole", role: "citizen" });
+    await start(r);
+    await skipDayToNight(r);
+    await waitForPlan(r.code);
+    await flushWorld(r.code);
+    const before = (await worldOf(r.code))!;
+    const hostMark = mark(r.host);
+    await forceBotsDue(r.code);
+    expect(worldFramesOf(r.host, hostMark).length).toBe(0);
+    await flushWorld(r.code);
+    const after = (await worldOf(r.code))!;
+    const players = (await playersOf(r.code)) as Array<BotRaw & { role?: string; nightPick?: number }>;
+    const mafias = players.filter((p) => p.role === "mafia");
+    const target = players.find((p) => p.seat === mafias[0]!.nightPick)!;
+    const at = (w: typeof after, id: string): [number, number] => [w.segs[id]!.p.at(-2)!, w.segs[id]!.p.at(-1)!];
+    const [tx, tz] = at(after, target.id);
+    for (const m of mafias) {
+      const [bx, bz] = at(after, m.id);
+      const [px, pz] = at(before, m.id);
+      expect(`${m.seat}:${Math.hypot(bx - tx, bz - tz) <= 400}`).toBe(`${m.seat}:true`);
+      expect(`${m.seat}:${bx !== px || bz !== pz}`).toBe(`${m.seat}:true`);
+    }
   }, 30_000);
 });
