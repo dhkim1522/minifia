@@ -571,10 +571,10 @@ describe("headerFor — 단계표의 제목·안내 (UI-SPEC)", () => {
     same(hdr(verdictView({ mySeat: 3 })), { title: "찬반", hint: "결과를 기다려요" });
   });
 
-  it("처형·아침·밤은 제목만", () => {
+  it("처형·아침은 제목만, 역할이 없는 산 사람의 밤은 시민 안내", () => {
     same(hdr(executionView(5, 2, true)), { title: "처형" });
     same(hdr(viewOf("morning")), { title: "아침" });
-    same(hdr(viewOf("night")), { title: "밤" });
+    same(hdr(viewOf("night")), { title: "밤", hint: "날이 밝길 기다려요" });
   });
 
   it("유령은 같은 제목에 '모두의 직업이 보여요'(밤은 '모두의 직업과 밤 행동이 보여요')", () => {
@@ -588,10 +588,12 @@ describe("headerFor — 단계표의 제목·안내 (UI-SPEC)", () => {
     same(hdr(viewOf("night", g)), { title: "밤", hint: "모두의 직업과 밤 행동이 보여요" });
   });
 
-  it("밤 산 마피아는 '대상에게 다가가요', 마피아가 아닌 산 사람은 제목만이다", () => {
+  it("밤 안내는 역할마다 한 줄: 마피아 '대상에게 다가가요', 경찰 '조사할 사람을 골라요', 의사 '지킬 사람을 골라요', 시민 '날이 밝길 기다려요'", () => {
     const night = (role: "mafia" | "police" | "doctor" | "citizen"): RoomView => ({ ...viewOf("night"), me: { seat: 0, isHost: false, role } });
     same(hdr(night("mafia")), { title: "밤", hint: "대상에게 다가가요" });
-    for (const role of ["police", "doctor", "citizen"] as const) same(hdr(night(role)), { title: "밤" });
+    same(hdr(night("police")), { title: "밤", hint: "조사할 사람을 골라요" });
+    same(hdr(night("doctor")), { title: "밤", hint: "지킬 사람을 골라요" });
+    same(hdr(night("citizen")), { title: "밤", hint: "날이 밝길 기다려요" });
     const ghost = { ...viewOf("night", { players: ghostPlayers, mySeat: 0 }), me: { seat: 0, isHost: false, role: "mafia" as const } };
     same(hdr(ghost), { title: "밤", hint: "모두의 직업과 밤 행동이 보여요" });
   });
