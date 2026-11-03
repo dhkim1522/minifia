@@ -6,6 +6,7 @@
 // 3페이즈 밤·아침 계약도 이 파일이다 — 밤 행동 메시지·아침 결과·수사 기록·탈락자 관전 타입을 03-01 에서 한 번에 정한다(채우는 일은 03-03·03-05).
 // 4페이즈 처형·승패 계약(결정 0034·0036): 새 단계 여섯·투표 메시지·투표 기록·처형 발표·판 결과 타입을 04-01 에서 한 번에 정한다(채우는 일은 뒤 계획).
 // 8페이즈 낮 처형 계약(결정 0060): 단계 nomination(지목)·verdict(찬반), 지목 줄·토론 끝내기 수·찬반 마친 좌석·결과 수·본인 찬반 타입을 08-02 에서 정한다(채우는 일은 08-07 이후).
+// 9페이즈 밤·아침 계약(결정 0061): MorningView.saved·DayView.chalk·MyInfo.nightTally/nightSure/will/note·ChatLineWire.k 를 09-07 에서 한 번에 정한다(채우는 일은 09-07 view, 09-12 유언·쪽지, 09-14 분필).
 
 // 타입 import·재수출이라 값 import 가 아니다 — 클라이언트 번들에는 아무것도 들어가지 않는다.
 import type { RoleId } from "./game/roles";
@@ -55,7 +56,8 @@ export type RoleRecord = InvestigationRecord | AssassinationRecord | TreatmentRe
 /** 아침 결과. 키 없는 객체는 지난밤 무사(D-12·D-13: 의사 구출도 무사로 보인다). */
 export interface MorningView {
   eliminated?: number; // 탈락한 seat
-  phrase?: number; // 탈락 문구 번호 1..MORNING_PHRASE_COUNT
+  phrase?: number; // 탈락 문구 번호 1..MORNING_PHRASE_COUNT — 서버는 더 이상 채우지 않는다(결정 0061-17). 화면이 아직 읽어 타입만 남기고 09-18 이 화면과 함께 지운다
+  saved?: true; // 의사가 확정 대상을 지킨 아침. 누구인지는 싣지 않는다(결정 0061-12, 0044-22)
 }
 /** 탈락자 전용 관전 정보(결정 0021): 한 사람의 실제 직업. 키 이름은 role 이 아니라 job 이다(누출 테스트 불변식). */
 export interface SpectateSeat {
@@ -120,6 +122,7 @@ export interface DayView {
   n: number; // 일차(1부터)
   roles: RoleId[]; // 이번 판 직업(구성표 순서, 공개 정보)
   morning?: MorningView; // morning 단계에서만
+  chalk?: { x: number; z: number }; // 암살 현장 분필 자국 위치(고정소수점, 결정 0061-14). 채우는 일은 09-14
   // ---- 4페이즈 처형 필드 ----
   // 서버는 낮 단계마다(빈 배열 포함) 항상 싣는다. 타입을 optional 로 둔 이유: 필수로 하면 화면 테스트의 DayView 리터럴이 서버 웨이브에서 한꺼번에 바뀐다(화면 계획이 필요하면 필수로 올린다).
   voteLog?: VoteLogEntry[];
@@ -231,6 +234,10 @@ export interface MyInfo {
   testBotVote?: { exec: BotVoteExec; pick: BotVotePick }; // 그 방장의 대기실 view 에서만, 무작위가 아닌 값이 있을 때만(P-13). 손님·일반 방·게임 중에는 키 자체가 없다
   chat?: ChatChannel; // 서버가 정한 내 채널(channelOf), 본인에게만. 말할 수 없으면 키가 없다
   endDiscussion?: true; // discussion 단계에서 본인이 토론 끝내기를 누른 상태(본인에게만, 8페이즈 결정 0060)
+  nightTally?: Array<{ seat: number; n: number }>; // 밤, 산 마피아 본인에게만: 대상 seat 별 산 마피아 선택 수(seat 오름차순, 본인 포함, 누가 골랐는지는 없다, 결정 0061-7)
+  nightSure?: number; // 밤, 산 마피아 본인에게만: 전원 일치로 확정된 대상 seat(결정 0061-7). 채우는 일은 09-07 view
+  will?: string; // 산 본인에게만: 본인이 남긴 유언(결정 0061-10). 채우는 일은 09-12
+  note?: string; // 밤, 산 마피아에게만: 남긴 쪽지(결정 0061-9). 채우는 일은 09-12
   verdictVote?: boolean; // verdict 단계에서 본인이 던진 찬반(본인에게만, 남의 값은 어떤 키로도 싣지 않는다, 8페이즈 결정 0060)
 }
 export interface RoomView {
@@ -291,6 +298,7 @@ export interface ChatLineWire {
   seq: number;
   text: string;
   at: number;
+  k?: "will" | "note"; // 서버가 만든 카드 줄(유언·쪽지, 결정 0061-11). 일반 대화 줄에는 키가 없다
 }
 /** 막힌 이유: 도배 간격·같은 문장 반복·길이·단계/채널 불일치·그 밖(보이는 글자 없음). 보낸 사람에게만 알린다. */
 export type ChatRejectWhy = "rate" | "repeat" | "length" | "phase" | "other";

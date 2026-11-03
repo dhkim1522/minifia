@@ -59,6 +59,8 @@ export interface Player {
   verdictVote?: boolean;
   /** 토론 끝내기를 누른 표시. 누르면 true, 취소하면 키째 지운다. 누가 눌렀는지는 서버 전용이고 enterDiscussion 이 다음 낮 시작에 지운다. */
   endVote?: true;
+  /** 서버 전용(결정 0061-10). 본인이 남긴 유언 — saveWill(09-12)만 쓰고, 사후에도 바꿀 수 없다. 아침에 서버가 채팅 카드로 만들어 보내며 view 의 me.will 로 산 본인에게만 간다. */
+  will?: string;
   /**
    * 서버 전용(결정 0024). 테스트 방 서버 봇 표시 — 토큰은 빈 문자열, connId 는 null, connected 는 true 로 고정이고
    * 소켓이 없다. view·미리보기·어떤 프레임에도 싣지 않는다(허용 목록 리터럴이라 저절로 빠진다).
@@ -81,8 +83,10 @@ export interface RoomState {
   day?: number;
   /** 지난밤 결과 한 곳 — enterMorning 이 쓰고 enterNight 가 지운다. 없으면 아직 아침이 오지 않았다(3페이즈, 모두 optional). */
   morning?: MorningView;
-  /** 마지막 탈락 문구 번호 — 판 내내 유지해 같은 문구가 연달아 나오지 않게 한다(3페이즈). */
-  lastPhrase?: number;
+  /** 서버 전용(결정 0061-9). 이번 밤 마피아가 남긴 쪽지 — saveNote(09-12)가 쓰고 enterMorning(탈락 없는 밤)·enterNight 가 키째 지운다. 구출·무효 밤의 쪽지는 폐기된다. */
+  nightNote?: string;
+  /** 서버 전용(결정 0061-14). 암살 현장 분필 자국(고정소수점) — 방 DO 가 채우고 enterNight 가 지운다(09-14). */
+  chalk?: { x: number; z: number };
   // ---- 4페이즈 처형·승패 상태(결정 0034). 모두 optional 이고 서버 전용이다. 뷰에는 허용 목록으로만 실린다. ----
   /** 이번 낮 찬반 결과(분기 근거). resolveVerdict 가 쓰고 enterDiscussion 이 지운다. */
   verdict?: { passed: boolean; candidate?: number };

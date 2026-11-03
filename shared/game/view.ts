@@ -96,12 +96,14 @@ function buildDay(state: RoomState): DayView {
   const noExecution = noExecutionOf(state);
   if (noExecution !== undefined) day.noExecution = { reason: noExecution.reason };
   if (state.phase === "morning") {
-    // 아침 결과는 모두에게 같은 값이다. 탈락자가 있을 때만 키를 만들고, 값은 필드별로 복사한다(의사 구출·지목 없음은 둘 다 {}, D-13).
+    // 아침 결과는 모두에게 같은 값이다. 탈락자가 있을 때만 eliminated, 의사 구출일 때만 saved 를 만들고 값은 필드별로 복사한다(지목 없음·불일치는 {}, 결정 0061-12).
     const morning: MorningView = {};
     const result = state.morning;
     if (result?.eliminated !== undefined) {
       morning.eliminated = result.eliminated;
-      if (result.phrase !== undefined) morning.phrase = result.phrase;
+    } else if (result?.saved === true) {
+      // 의사 구출은 saved 하나만 공개한다 — 보호받은 사람이 누구인지·쪽지는 어디에도 싣지 않는다(결정 0061-12, 0044-22).
+      morning.saved = true;
     }
     day.morning = morning;
   }

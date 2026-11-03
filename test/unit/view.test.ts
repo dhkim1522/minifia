@@ -8,7 +8,6 @@ import type { Player, RoomState } from "../../shared/game/room";
 import { rolesInPlay } from "../../shared/game/roles";
 import { tick } from "../../shared/game/tick";
 import { buildPreview, buildView } from "../../shared/game/view";
-import { MORNING_PHRASE_COUNT } from "../../shared/protocol";
 import type { PhaseId, RoomView } from "../../shared/protocol";
 import { seededRandInt } from "../helpers/seededRandom";
 import { castPoints, castVerdicts, startedAt, stateWithVerdict } from "../helpers/voteState";
@@ -419,7 +418,10 @@ function richStateAt(phase: PhaseId, n: number, seed: number): RoomState {
 function morningWithVictim(n: number, seed: number) {
   const s0 = stateAt("night", n, seed);
   const x = nonMafiaSeats(s0)[0]!;
-  const picked = actAt(s0, seatOfRole(s0, "mafia"), x);
+  // 마피아 전원이 같은 대상을 골라야 확정이다(NIGHT-08, 결정 0061-6).
+  const picked = s0.players
+    .filter((p) => p.role === "mafia")
+    .reduce((s, p) => actAt(s, p.seat, x), s0);
   return { s: tick(picked, picked.phaseEndsAt!, seededRandInt(seed)), x };
 }
 
@@ -865,7 +867,7 @@ describe("buildView 역할별 일지 (D-09·D-10·D-11)", () => {
     expect(Object.keys((recordsOf(s, m1) ?? [])[0] ?? {}).sort().join(",")).toBe("died,n,target");
   });
 
-  it("의사가 X 를 막은 판: 마피아 둘 다 died:false 이고 아침 day.morning 은 {} 로 구출을 알리지 않는다; 의사 줄은 키가 n,target 뿐이다", () => {
+  it("의사가 X 를 막은 판: 마피아 둘 다 died:false 이고 아침 day.morning 은 { saved: true } 뿐(누구인지 없음); 의사 줄은 키가 n,target 뿐이다", () => {
     const s0 = stateAt("night", 6, 1);
     const x = nonMafiaSeats(s0).filter((t) => t !== seatOfRole(s0, "doctor"))[0]!;
     const doctor = seatOfRole(s0, "doctor");
@@ -876,7 +878,7 @@ describe("buildView 역할별 일지 (D-09·D-10·D-11)", () => {
     const miss = flat([{ n: 1, target: x, died: false }]);
     expect(flat(recordsOf(s, m1))).toBe(miss);
     expect(flat(recordsOf(s, m2))).toBe(miss);
-    expect(flat(buildView(s, seatId(s, m1), START_AT).day?.morning)).toBe("{}");
+    expect(flat(buildView(s, seatId(s, m1), START_AT).day?.morning)).toBe(flat({ saved: true }));
     expect(flat(recordsOf(s, doctor))).toBe(flat([{ n: 1, target: x }]));
     expect(Object.keys((recordsOf(s, doctor) ?? [])[0] ?? {}).sort().join(",")).toBe("n,target");
   });
@@ -964,21 +966,22 @@ describe("buildView 아침 결과 (NIGHT-06·D-13)", () => {
   const morningsOf = (s: RoomState): string[] => s.players.map((p) => flat(buildView(s, p.id, START_AT).day?.morning));
   const toMorning = (s: RoomState): RoomState => tick(s, s.phaseEndsAt!, seededRandInt(1));
 
-  it("마피아가 시민 X 지목 → 모든 viewer 의 day.morning 이 같은 {eliminated: X, phrase: 1..MORNING_PHRASE_COUNT}", () => {
+  it("마피아 전원이 시민 X 지목 → 모든 viewer 의 day.morning 이 같은 {eliminated: X} 하나(문구 번호 없음)", () => {
     const s0 = stateAt("night", 5, 1);
     const x = seatOfRole(s0, "citizen");
-    const s = toMorning(actAt(s0, seatOfRole(s0, "mafia"), x));
+    const s = toMorning(s0.players.filter((p) => p.role === "mafia").reduce((acc, p) => actAt(acc, p.seat, x), s0));
     const got = morningsOf(s);
     expect(new Set(got).size).toBe(1);
     const m = buildView(s, s.hostId, START_AT).day?.morning ?? {};
-    expect(`${Object.keys(m).sort().join(",")} ${m.eliminated} ${(m.phrase ?? 0) >= 1 && (m.phrase ?? 0) <= MORNING_PHRASE_COUNT}`).toBe(`eliminated,phrase ${x} true`);
+    expect(`${Object.keys(m).sort().join(",")} ${m.eliminated}`).toBe(`eliminated ${x}`);
   });
 
-  it("의사가 X 를 지킴 → {}, 아무도 안 고름 → {}", () => {
+  it("의사가 X 를 지킴 → { saved: true }, 아무도 안 고름 → {}", () => {
     const s0 = stateAt("night", 5, 1);
     const x = seatOfRole(s0, "citizen");
-    const saved = toMorning(actAt(actAt(s0, seatOfRole(s0, "mafia"), x), seatOfRole(s0, "doctor"), x));
-    expect(`${morningsOf(saved).join(" ")}`).toBe(Array(5).fill("{}").join(" "));
+    const mafiaPicked = s0.players.filter((p) => p.role === "mafia").reduce((acc, p) => actAt(acc, p.seat, x), s0);
+    const saved = toMorning(actAt(mafiaPicked, seatOfRole(s0, "doctor"), x));
+    expect(`${morningsOf(saved).join(" ")}`).toBe(Array(5).fill(flat({ saved: true })).join(" "));
     const quiet = toMorning(s0);
     expect(`${morningsOf(quiet).join(" ")}`).toBe(Array(5).fill("{}").join(" "));
   });

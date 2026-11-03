@@ -181,17 +181,20 @@ describe("skipPhase 동작", () => {
     });
   }
 
-  it("밤에 마피아가 시민을 고른 뒤 넘기면 아침에 그 시민이 탈락하고 문구가 있다", () => {
+  it("밤에 마피아 전원이 같은 시민을 고른 뒤 넘기면 아침에 그 시민이 탈락한다(문구 번호 없음)", () => {
     const night = stateAt(6, 4, "night");
-    const mafia = night.players.find((p) => p.role === "mafia")!;
     const citizen = night.players.find((p) => p.role === "citizen")!;
-    const picked = pickTarget(night, mafia.id, citizen.seat);
-    if (!picked.ok) throw new Error(`pickTarget failed: ${picked.error}`);
-    const r = skipPhase(picked.state, night.hostId, night.phaseEndsAt! - 1000, seededRandInt(5));
+    let picked: RoomState = night;
+    for (const mafia of night.players.filter((p) => p.role === "mafia")) {
+      const step = pickTarget(picked, mafia.id, citizen.seat);
+      if (!step.ok) throw new Error(`pickTarget failed: ${step.error}`);
+      picked = step.state;
+    }
+    const r = skipPhase(picked, night.hostId, night.phaseEndsAt! - 1000, seededRandInt(5));
     if (!r.ok) throw new Error(`skipPhase failed: ${r.error}`);
     expect(r.state.phase).toBe("morning");
     expect(String(r.state.morning?.eliminated)).toBe(String(citizen.seat));
-    expect(r.state.morning?.phrase === undefined).toBe(false);
+    expect(Object.keys(r.state.morning ?? {}).join(",")).toBe("eliminated");
     expect(String(r.state.players.find((p) => p.id === citizen.id)!.alive)).toBe("false");
   });
 
