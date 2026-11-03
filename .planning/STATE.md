@@ -5,16 +5,16 @@ milestone_name: 같은 공간
 current_phase: 9
 current_phase_name: 밤과 아침
 status: executing
-stopped_at: Completed 09-11-PLAN.md
-last_updated: "2026-11-03T05:10:57.790Z"
+stopped_at: Completed 09-12-PLAN.md
+last_updated: "2026-11-03T05:25:20.379Z"
 last_activity: 2026-11-03
 last_activity_desc: Phase 9 execution started
-state_head: be1d706b20b9e507492001295532722cc63845d9
+state_head: 08e33169fa07ff45868a869c2a79c4111a657724
 progress:
   total_phases: 7
   completed_phases: 3
   total_plans: 101
-  completed_plans: 89
+  completed_plans: 90
   percent: 43
 ---
 
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-11-03)
 ## Current Position
 
 Phase: 9 (밤과 아침) — EXECUTING
-Plan: 12 of 23
+Plan: 13 of 23
 Status: Ready to execute
 Last activity: 2026-11-03 — Phase 9 execution started
 
@@ -149,6 +149,7 @@ Progress: [████░░░░░░] 43% (3/7 phases)
 | Phase 09 P09 | 40min | 3 tasks | 6 files |
 | Phase 09 P10 | 55min | 3 tasks | 13 files |
 | Phase 09 P11 | 25min | 3 tasks | 9 files |
+| Phase 09 P12 | 30min | 3 tasks | 11 files |
 
 ## Accumulated Context
 
@@ -305,6 +306,7 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 09]: 09-08: 유언·쪽지 시트는 send·입력 중 경로 없이 onChange·onSave(text)·onClose(text) 만 가지며, 조합 중 저장·닫기는 compositionend 또는 IME_WAIT_MS 뒤 확정 값으로 한 번 부른다
 - [Phase 09]: 09-09: advance 무변화 경로는 syncHome·syncLayout 만, 새 유령 snap(snapNewGhosts)은 전환(afterTransition) 때만 — 퇴거 뒤 중복 snap 방지
 - [Phase 09]: 09-10: 내 캐릭터 빛은 예산 core 에서도 visible 을 끄지 않는다(점광원 수 불변). 밤 시민 편 장면 표는 내 좌석 하나뿐
+- [Phase 09]: 09-12: 유언·쪽지 간격 검사(500ms)를 규칙 함수보다 앞에 두고, 쪽지 응답은 산 마피아에게만(유령 제외) 보낸다
 
 ### Pending Todos
 
@@ -342,8 +344,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-03T05:10:57.461Z
-Stopped at: Completed 09-11-PLAN.md
+Last session: 2026-11-03T05:25:20.055Z
+Stopped at: Completed 09-12-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
