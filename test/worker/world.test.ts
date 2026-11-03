@@ -565,10 +565,10 @@ describe("밤 재접속 첫 snap (NIGHT-07, L9, 결정 0061-3)", () => {
     const g = await startedGame("night");
     const police = withRole(g, "police")[0]!;
     const doctor = withRole(g, "doctor")[0]!;
+    const victim = withRole(g, "citizen")[0]!;
+    const { ghosts } = await ghostsOf(g, [victim.seat]); // 같은 토큰으로 재접속하면 옛 소켓이 닫히므로 탈락을 먼저 만든다
     expect(await reconnectSnapSeats(g.code, police.token)).toBe(`${police.seat}`);
     expect(await reconnectSnapSeats(g.code, doctor.token)).toBe(`${doctor.seat}`);
-    const victim = withRole(g, "citizen")[0]!;
-    const { ghosts } = await ghostsOf(g, [victim.seat]);
     expect(await reconnectSnapSeats(g.code, ghosts[0]!.token)).toBe(g.actors.map((a) => a.seat).sort((a, b) => a - b).join(","));
   }, 40_000);
 });

@@ -83,7 +83,7 @@ export function audience(state: RoomState, ev: AudienceEvent): ReadonlySet<strin
 /**
  * 접속(hello) 스냅샷에 실릴 좌석의 주인들 — 보는 사람 viewerId 별이다(GHOST-01).
  * 로비·assigning·roleReveal 은 방 전원(역할 확인 중 재접속해도 낮 시작에 위치가 있게, RESEARCH A6).
- * 지도 단계는 viewer 가 산 사람이면 산 사람만, 유령이면 전원. ended·옛 투표 단계·방에 없는 viewer 는 빈 집합이다.
+ * 지도 단계는 viewer 가 산 사람이면 산 사람만, 유령이면 전원. 밤(NIGHT-07, 결정 0061-3)은 산 시민·경찰·의사면 본인 한 칸뿐이다. ended·옛 투표 단계·방에 없는 viewer 는 빈 집합이다.
  */
 export function worldVisibleTo(state: RoomState, viewerId: string): ReadonlySet<string> {
   const viewer = state.players.find((p) => p.id === viewerId);
@@ -91,5 +91,8 @@ export function worldVisibleTo(state: RoomState, viewerId: string): ReadonlySet<
   const pick = (pred: (p: Player) => boolean): Set<string> => new Set(state.players.filter(pred).map((p) => p.id));
   if (state.phase === "lobby" || state.phase === "assigning" || state.phase === "roleReveal") return pick(() => true);
   if (!MAP_PHASES.has(state.phase)) return new Set();
-  return isAlive(viewer) ? pick(isAlive) : pick(() => true);
+  if (!isAlive(viewer)) return pick(() => true);
+  // 밤: 시민 편은 본인 한 칸(사용자 확정 2026-11-03, 결정 0061-3) — handleHello·밤/아침 진입 snap 이 모두 이 함수를 쓴다(L9).
+  if (state.phase === "night" && viewer.role !== "mafia") return new Set([viewerId]);
+  return pick(isAlive);
 }
