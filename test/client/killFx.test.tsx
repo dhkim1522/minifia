@@ -5,6 +5,7 @@ import "../helpers/singleLineErrors";
 import { installMemoryStorage } from "../helpers/memoryStorage";
 import type { RoleId } from "../../shared/game/roles";
 import type { ClientMessage, PhaseId, PublicPlayer, RoomView } from "../../shared/protocol";
+import { faceSrc } from "../../src/net/assets";
 import { SceneCurtain } from "../../src/components/SceneCurtain";
 import type { RoomConnection } from "../../src/net/useRoomConnection";
 
@@ -441,6 +442,120 @@ describe("피해자 암살 이펙트 (NIGHT-11, E4 #25~#27, UI-SPEC 247~252행)"
     expect(slash).toMatch(/gray-50/);
     expect(slash).toMatch(/crimson-400/);
     expect(css).toMatch(/\.mf-killfx\s*\{[^}]*z-index:\s*calc\(var\(--z-toast\)\s*\+\s*9\)/);
+  });
+});
+
+describe("경찰 조사 결과 카드 (NIGHT-09, UI-SPEC 245행)", () => {
+  beforeEach(() => {
+    vi.useRealTimers();
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
+    vi.setSystemTime(NOW);
+    installMemoryStorage();
+  });
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+  });
+
+  const POLICE = 1;
+  const cards = (c: ParentNode): HTMLElement[] => [...c.querySelectorAll<HTMLElement>("[data-police-card]")];
+  const policeNight = (): RoomView => screenView({ phase: "night", mySeat: POLICE, records: [] });
+  const policeMorning = (records: Array<{ n: number; target: number; isMafia: boolean }>, extra: Partial<ScreenViewOpts> = {}): RoomView =>
+    screenView({ phase: "morning", mySeat: POLICE, morning: {}, records, ...extra });
+
+  it("경찰 화면 밤 → 아침(대상 2 가 마피아): 카드 하나 — 얼굴 faceSrc(2), 글자 '마피아', roleMafia 아이콘, is-mafia. 2400ms 뒤 사라진다", () => {
+    const m = mount(policeNight());
+    expect(cards(m.container)).toHaveLength(0);
+    m.show(policeMorning([{ n: 1, target: 2, isMafia: true }]));
+    const [card] = cards(m.container);
+    expect(cards(m.container)).toHaveLength(1);
+    expect(card?.querySelector("img")?.getAttribute("src")).toBe(faceSrc(2));
+    expect(card?.textContent).toContain("마피아");
+    expect(card?.textContent).not.toContain("마피아 아님");
+    expect(card?.classList.contains("is-mafia")).toBe(true);
+    expect(card?.querySelector('[data-icon="roleMafia"]')).not.toBeNull();
+    expect(card?.getAttribute("aria-hidden")).not.toBe("true");
+    advance(2_399);
+    expect(cards(m.container)).toHaveLength(1);
+    advance(1);
+    expect(cards(m.container)).toHaveLength(0);
+  });
+
+  it("대상이 마피아가 아니면 '마피아 아님' 과 check 아이콘, is-mafia 없음", () => {
+    const m = mount(policeNight());
+    m.show(policeMorning([{ n: 1, target: 3, isMafia: false }]));
+    const [card] = cards(m.container);
+    expect(card?.querySelector("img")?.getAttribute("src")).toBe(faceSrc(3));
+    expect(card?.textContent).toContain("마피아 아님");
+    expect(card?.classList.contains("is-mafia")).toBe(false);
+    expect(card?.querySelector('[data-icon="check"]')).not.toBeNull();
+    expect(card?.querySelector('[data-icon="roleMafia"]')).toBeNull();
+  });
+
+  it("경찰이 그 밤에 안 골랐으면(새 줄 없음) 카드가 없다. 경찰이 그 밤에 당했어도 카드는 받는다", () => {
+    const a = mount(policeNight());
+    a.show(policeMorning([]));
+    advance(3_000);
+    expect(cards(a.container)).toHaveLength(0);
+    cleanup();
+    const b = mount(policeNight());
+    b.show(policeMorning([{ n: 1, target: 3, isMafia: false }], { dead: [POLICE], morning: { eliminated: POLICE } }));
+    expect(cards(b.container)).toHaveLength(1);
+  });
+
+  it("시민·마피아·의사·유령 화면에는 카드도 '마피아 아님' 문자열도 없다 (T-09-40)", () => {
+    for (const seat of [3, 0, 2]) {
+      const m = mount(screenView({ phase: "night", mySeat: seat }));
+      m.show(screenView({ phase: "morning", mySeat: seat, morning: {} }));
+      advance(3_000);
+      expect(cards(m.container), `seat ${seat}`).toHaveLength(0);
+      expect(m.container.textContent, `seat ${seat}`).not.toContain("마피아 아님");
+      cleanup();
+    }
+    const ghost = mount(screenView({ phase: "night", mySeat: 5, dead: [5] }));
+    ghost.show(screenView({ phase: "morning", mySeat: 5, dead: [5], morning: {} }));
+    expect(cards(ghost.container)).toHaveLength(0);
+    expect(ghost.container.textContent).not.toContain("마피아 아님");
+  });
+
+  it("재접속 첫 스냅샷이 아침(경찰 기록 있음)이면 카드가 없다", () => {
+    const m = mount(policeMorning([{ n: 1, target: 3, isMafia: false }]));
+    advance(3_000);
+    expect(cards(m.container)).toHaveLength(0);
+  });
+
+  it("모션 줄이기: 등장 모션 클래스(is-enter) 없이 2400ms 표시된다", () => {
+    const a = mount(policeNight());
+    a.show(policeMorning([{ n: 1, target: 2, isMafia: true }]));
+    expect(cards(a.container)[0]?.classList.contains("is-enter")).toBe(true);
+    cleanup();
+    vi.stubGlobal("matchMedia", (q: string) => ({ matches: q.includes("reduce"), media: q, addEventListener: () => {}, removeEventListener: () => {}, addListener: () => {}, removeListener: () => {} }));
+    const b = mount(policeNight());
+    b.show(policeMorning([{ n: 1, target: 2, isMafia: true }]));
+    expect(cards(b.container)).toHaveLength(1);
+    expect(cards(b.container)[0]?.classList.contains("is-enter")).toBe(false);
+    advance(2_399);
+    expect(cards(b.container)).toHaveLength(1);
+    advance(1);
+    expect(cards(b.container)).toHaveLength(0);
+  });
+
+  it("카드 치수·색 규칙: 폭 220·반경 20·위 170·night-800 면·기본 테두리 night-600, 마피아는 crimson-500 테두리·crimson-300 글자, 토큰 변수만", () => {
+    const css = readFileSync("src/styles/night.css", "utf8");
+    const base = css.match(/\.mf-police-card\s*\{([^}]*)\}/)?.[1] ?? "";
+    expect(base).toMatch(/width:\s*220px/);
+    expect(base).toMatch(/top:\s*170px/);
+    expect(base).toMatch(/border-radius:\s*20px|border-radius:\s*var\(--radius-lg\)/);
+    expect(base).toMatch(/var\(--night-800\)/);
+    expect(base).toMatch(/border:\s*2px solid var\(--night-600\)/);
+    expect(base).not.toMatch(/#[0-9a-fA-F]{3,8}\b/);
+    const mafia = css.match(/\.mf-police-card\.is-mafia\s*\{([^}]*)\}/)?.[1] ?? "";
+    expect(mafia).toMatch(/crimson-500/);
+    expect(css).toMatch(/\.mf-police-card\.is-mafia[^{]*\{[^}]*crimson-300/);
+    const label = css.match(/\.mf-police-card__label\s*\{([^}]*)\}/)?.[1] ?? "";
+    expect(label).toMatch(/font-size:\s*16px/);
+    expect(label).toMatch(/font-weight:\s*700/);
   });
 });
 
