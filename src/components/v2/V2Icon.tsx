@@ -1,12 +1,12 @@
 import { createElement } from "react";
 import "../../styles/v2.css";
 
-// v2.0 아이콘 중 6·7·8·9페이즈가 쓰는 종류(9페이즈: quill·note·target·eye·heal. 8페이즈: rolePolice·roleDoctor 와 skip·thumbUp·thumbDown). 24 격자, 선 2px, 둥근 끝, currentColor.
+// v2.0 아이콘 중 6·7·8·9페이즈가 쓰는 종류(9페이즈: quill·note·target·eye·heal·close. 8페이즈: rolePolice·roleDoctor 와 skip·thumbUp·thumbDown). 24 격자, 선 2px, 둥근 끝, currentColor.
 // 경로는 design/v2.0/design-system/components/bundle.js 의 ICONS 에서 그대로 옮겼다(승인 2026-10-31).
 // 나머지 아이콘은 그것을 쓰는 페이즈(8·9·10페이즈)가 같은 표에 더한다.
 // v1.0 아이콘(src/components/Icon.tsx)과 이름이 겹쳐도(check·crown) 서로 다른 부품이다: v2 화면은 이 파일을 쓴다.
 // 로비 헤더의 [나가기]·[공유] 는 v1.0 Icon 을 그대로 쓴다(UI-SPEC 결정 현황) — 여기에 back·share 를 더하지 않는다.
-export type V2IconName = "point" | "crown" | "play" | "check" | "roleCitizen" | "send" | "ghost" | "roleMafia" | "rolePolice" | "roleDoctor" | "skip" | "thumbUp" | "thumbDown" | "quill" | "note" | "target" | "eye" | "heal";
+export type V2IconName = "point" | "crown" | "play" | "check" | "roleCitizen" | "send" | "ghost" | "roleMafia" | "rolePolice" | "roleDoctor" | "skip" | "thumbUp" | "thumbDown" | "quill" | "note" | "target" | "eye" | "heal" | "close";
 
 // ["c", cx, cy, r, filled?] 원 · ["p", d, filled?] 경로
 type Part = readonly ["c", number, number, number, boolean?] | readonly ["p", string, boolean?];
@@ -62,6 +62,10 @@ const ICONS: Readonly<Record<V2IconName, readonly Part[]>> = {
   thumbDown: [
     ["p", "M7 13.5V4H4v9.5z"],
     ["p", "M7 13.5l4 7a2 2 0 0 0 3.4-1.9L13.5 15h5.2a2 2 0 0 0 2-2.4l-1.3-6.9A2 2 0 0 0 17.4 4H7"],
+  ],
+  close: [
+    ["p", "M6 6l12 12"],
+    ["p", "M18 6L6 18"],
   ],
   // 9페이즈(밤·아침): 유언 깃펜·쪽지·지목 과녁·경찰 조사(눈)·의사 살리기(십자)
   quill: [
