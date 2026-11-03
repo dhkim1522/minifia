@@ -18,7 +18,7 @@ import type { CharacterHandle, LightingPhase, RendererStatusEvent, WorldRenderer
 import { gatherView, PAN_BOX, stageOffsetY, ZOOM_MAJORITY } from "../../src/world/camera";
 import { predictSegment, SEG_BLEND_MS, YAW_TURN_RATE } from "../../src/world/motion";
 import { GHOST_FADE_END_MS } from "../../src/game/dayView";
-import { ENTER_MS, EXIT_MS, MOVE_ACK_TIMEOUT_MS, WALK_CUE_KEY } from "../../src/world/runtime";
+import { ENTER_MS, EXIT_MS, MOVE_ACK_TIMEOUT_MS, RING_COLORS, WALK_CUE_KEY } from "../../src/world/runtime";
 import type { WorldModules } from "../../src/world/runtime";
 import { installWorldTestHooks, WORLD_TEST_KEY, worldTestHooksEnabled } from "../../src/world/testHooks";
 import { WorldStore } from "../../src/world/store";
@@ -1919,6 +1919,61 @@ describe("게임 장면(08-12): 카메라·조명·긴장·떠다님·처형 연
     });
   });
 
+  describe("분필 그려짐 연출 (UI-SPEC 262행, E5 #29)", () => {
+    const withChalk = (): SceneLook => sceneOf(ALL, { chalk: { x: 1.2, z: -3.4 } });
+    const opacities = (r: FakeRenderer): number[] => r.setChalk.mock.calls.filter((c) => c[0] !== null).map((c) => c[1] as number);
+
+    it("같은 연결에서 분필이 없다가 생기면 800ms 동안 0 → 0.85 로 여러 번 부르고 끝에 정확히 0.85", async () => {
+      const s = await openGame();
+      const r = s.world.renderers[0]!;
+      frames(100);
+      expect(r.setChalk.mock.calls.every((c) => c[0] === null) || r.setChalk.mock.calls.length === 0).toBe(true);
+      s.rerender({ scene: withChalk() });
+      frames(400);
+      const mid = opacities(r);
+      expect(mid.length).toBeGreaterThan(5);
+      expect(mid[0]!).toBeLessThan(0.1);
+      expect(Math.max(...mid)).toBeLessThan(0.85);
+      expect(mid.every((v, i) => i === 0 || v >= mid[i - 1]!)).toBe(true);
+      frames(600);
+      const all = opacities(r);
+      expect(all.at(-1)).toBe(0.85);
+      expect(all.every((v) => v >= 0 && v <= 0.85)).toBe(true);
+      const n = r.setChalk.mock.calls.length;
+      frames(300);
+      expect(r.setChalk.mock.calls.length).toBe(n);
+    });
+
+    it("첫 장면(재접속)부터 분필이 있으면 첫 호출부터 0.85", async () => {
+      const s = await openGame({ scene: withChalk() });
+      frames(100);
+      expect(opacities(s.world.renderers[0]!)[0]).toBe(0.85);
+    });
+
+    it("모션 줄이기면 새로 생겨도 첫 호출부터 0.85", async () => {
+      stubReducedMotion(true);
+      const s = await openGame();
+      const r = s.world.renderers[0]!;
+      frames(50);
+      s.rerender({ scene: withChalk() });
+      frames(100);
+      expect(opacities(r)[0]).toBe(0.85);
+    });
+
+    it("분필이 사라졌다가 다시 생기면 다시 그려진다(첫 장면이 아니다)", async () => {
+      const s = await openGame({ scene: withChalk() });
+      const r = s.world.renderers[0]!;
+      frames(100);
+      s.rerender({ scene: sceneOf(ALL) });
+      frames(100);
+      expect(r.setChalk.mock.calls.at(-1)![0]).toBeNull();
+      r.setChalk.mockClear();
+      s.rerender({ scene: withChalk() });
+      frames(100);
+      expect(opacities(r)[0]!).toBeLessThan(0.1);
+    });
+  });
+
   describe("내 캐릭터 빛 (NIGHT-07, UI-SPEC 단계 조명)", () => {
     it("nightCitizen 조명에서는 내 캐릭터 자리로 setSelfLight, 다른 단계에서는 null", async () => {
       const s = await openGame({ scene: sceneOf({ 0: {}, 1: {}, 2: {}, 3: {} }, { lighting: "nightCitizen" }) });
@@ -2184,6 +2239,23 @@ describe("게임 이름표: 지목 버튼·tagProps·canWalk (DAY-04, MAP-04)", 
       frame();
       expect(h3.setRing).toHaveBeenLastCalledWith(null);
       expect(tagOf(s.utils, 3)!.hasAttribute("data-ring-kind")).toBe(false);
+    });
+  });
+
+  describe("동료 선택 고리 mafiaAlly (UI-SPEC 226·318행)", () => {
+    it("RING_COLORS: mafiaAlly 는 crimson-400, mafia 는 crimson-500 그대로", () => {
+      expect(RING_COLORS.mafiaAlly).toBe("#e0344b");
+      expect(RING_COLORS.mafia).toBe("#c8102e");
+    });
+
+    it("ring \"mafiaAlly\" 좌석의 이름표는 data-ring-kind=\"mafia-ally\" 이고 발밑 고리는 crimson-400, mafia 는 그대로 \"mafia\"", async () => {
+      const s = await open({ scene: SCENE5, tagProps: (seat) => (seat === 3 ? { ring: "mafiaAlly" } : seat === 4 ? { ring: "mafia" } : {}) }, { players: FIVE, ents: FIVE_ENTS() });
+      expect(tagOf(s.utils, 3)!.getAttribute("data-ring-kind")).toBe("mafia-ally");
+      expect(tagOf(s.utils, 4)!.getAttribute("data-ring-kind")).toBe("mafia");
+      const r = s.world.renderers[0]!;
+      frame();
+      expect((r.chars.get(3) as FakeHandle).setRing).toHaveBeenCalledWith("#e0344b");
+      expect((r.chars.get(4) as FakeHandle).setRing).toHaveBeenCalledWith("#c8102e");
     });
   });
 
