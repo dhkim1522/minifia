@@ -448,8 +448,9 @@ describe("마감 뒤 행동", () => {
     await nextFrame(police.sock, (m) => m.t === "error");
     await nextFrame(police.sock, (m) => m.t === "state");
 
-    expect(summary(await settle(police.sock, marks.get(police)!))).toBe("[state:morning,error:WRONG_PHASE,state:morning]");
-    for (const x of others) expect(summary(await settle(x.sock, marks.get(x)!))).toBe("[state:morning]");
+    // 아침 진입에서 산 사람 소켓 모두가 같은 위치 snap 을 하나씩 받는다(결정 0061-4) — state 다음에 world.
+    expect(summary(await settle(police.sock, marks.get(police)!))).toBe("[state:morning,world,error:WRONG_PHASE,state:morning]");
+    for (const x of others) expect(summary(await settle(x.sock, marks.get(x)!))).toBe("[state:morning,world]");
     expect((await storedRoom(r.code)).phase).toBe("morning");
   });
 });
