@@ -216,10 +216,10 @@ describe("WillSheet — 쪽지 모드·compact (NIGHT-12, UI-SPEC Color)", () =>
 
   it("textarea rows: 기본 3, compact 면 2", () => {
     const a = render(<Harness />);
-    expect(area(a.container).rows).toBe(3);
+    expect(area(a.container).getAttribute("rows")).toBe("3");
     cleanup();
     const b = render(<Harness compact />);
-    expect(area(b.container).rows).toBe(2);
+    expect(area(b.container).getAttribute("rows")).toBe("2");
   });
 
   it("카운터는 tabular-nums 를 CSS 로 갖는다", () => {

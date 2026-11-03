@@ -152,3 +152,19 @@
 .mv-face__name { display: inline-flex; align-items: center; justify-content: center; gap: 4px; max-width: 100%; font-size: 14px; line-height: 1.3; font-weight: 700; text-align: center; word-break: keep-all; overflow-wrap: anywhere; }
 .mv-face__dot { flex: none; width: 7px; height: 7px; border-radius: var(--radius-pill); }
 .mv-face__mark { position: absolute; top: 6px; right: 6px; display: grid; place-items: center; width: 26px; height: 26px; border-radius: var(--radius-pill); background: var(--gray-100); color: var(--night-900); }
+
+/* 유언·쪽지 시트(9페이즈 WILL-01·NIGHT-12). 폭 = 부모 − 20(좌우 10). 진홍은 .mv-will--mafia(쪽지)에만 있다 */
+.mv-will { display: flex; flex-direction: column; gap: 10px; box-sizing: border-box; width: calc(100% - 20px); margin: 0 auto; padding: 12px; border-radius: var(--radius-lg); background: var(--night-800); border: 1px solid var(--night-600); box-shadow: var(--shadow-card); font-family: var(--font-ui); color: var(--gray-100); }
+.mv-will__head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-sm); }
+.mv-will__title { display: inline-flex; align-items: center; gap: 6px; min-height: var(--tap-min); padding-left: 4px; font-size: 16px; font-weight: 700; color: var(--gray-50); }
+.mv-will__close { display: grid; place-items: center; width: var(--tap-min); height: var(--tap-min); padding: 0; border: 0; border-radius: var(--radius-md); background: none; color: var(--gray-300); cursor: pointer; }
+.mv-will__text { width: 100%; box-sizing: border-box; padding: 12px; border-radius: var(--radius-md); border: 1px solid var(--night-600); background: var(--night-900); color: var(--gray-100); font-family: inherit; font-size: 16px; line-height: 1.5; resize: none; user-select: text; }
+.mv-will__text::placeholder { color: var(--gray-300); }
+.mv-will__foot { display: flex; align-items: center; justify-content: space-between; gap: var(--space-sm); }
+.mv-will__count { font-size: 14px; color: var(--gray-300); font-variant-numeric: tabular-nums; }
+.mv-will__save { display: inline-flex; align-items: center; gap: 6px; min-height: var(--control-input); padding: 0 var(--space-md); border-radius: var(--radius-md); border: 0; background: var(--gray-100); color: var(--night-900); font-family: inherit; font-size: 16px; font-weight: 700; cursor: pointer; }
+.mv-will__save[disabled] { background: var(--night-700); color: var(--gray-300); cursor: default; }
+.mv-will__save[aria-disabled="true"] { opacity: 0.6; cursor: default; }
+.mv-will--mafia { border-color: var(--crimson-700); }
+.mv-will--mafia .mv-will__title { color: var(--crimson-300); }
+.mv-will__text:focus-visible, .mv-will__save:focus-visible, .mv-will__close:focus-visible { outline: 2px solid var(--gray-100); outline-offset: 2px; }
