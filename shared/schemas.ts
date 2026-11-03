@@ -2,7 +2,7 @@
 import { z } from "zod";
 import { NICKNAME_MAX_UTF16 } from "./nickname";
 import { CHAT_TEXT_MAX_UTF16, MAX_TEST_BOTS, MOVE_COORD_LIMIT, PHASE_KEY_MAX } from "./protocol";
-import type { ChatSendMessage, ClientMessage, CreateRoomBody, JoinRoomBody, MoveMessage, TypingSendMessage } from "./protocol";
+import type { ChatSendMessage, ClientMessage, CreateRoomBody, JoinRoomBody, MoveMessage, NoteSendMessage, TypingSendMessage, WillSendMessage } from "./protocol";
 
 // 상한은 UTF-16 길이다. 제품 규칙(8 자소)은 validateNickname 이 판정한다 — 여기서 64 처럼 낮게 잡으면
 // 자소 8 개짜리 유효 이름(가족 이모지 88 단위)이 스키마에서 먼저 400 으로 막힌다(06 리뷰 WR-03).
@@ -36,6 +36,18 @@ export const ChatMessageSchema = z.strictObject({
   pk: z.string().min(1).max(PHASE_KEY_MAX),
 }) satisfies z.ZodType<ChatSendMessage>;
 
+// 유언·쪽지(09-12, 결정 0061-9·10): 본문뿐이다. 행위자는 소켓 첨부 playerId 로만 정해지므로 seat·id·ch·pk 가 덧붙으면 거부한다(T-09-28, ASVS V5).
+// 상한은 UTF-16 300(프레임 1024B 안). 제품 규칙(자소 100)은 sanitizeChatText 가 saveWill·saveNote 안에서 판정한다.
+// ClientMessageSchema 의 멤버다 — 이 값이 먼저 선언되어야 유니온이 쓸 수 있다(TDZ).
+export const WillMessageSchema = z.strictObject({
+  t: z.literal("will"),
+  text: z.string().max(CHAT_TEXT_MAX_UTF16),
+}) satisfies z.ZodType<WillSendMessage>;
+export const NoteMessageSchema = z.strictObject({
+  t: z.literal("note"),
+  text: z.string().max(CHAT_TEXT_MAX_UTF16),
+}) satisfies z.ZodType<NoteSendMessage>;
+
 export const ClientMessageSchema = z.discriminatedUnion("t", [
   z.object({ t: z.literal("hello"), token: z.string().min(16).max(128) }),
   z.object({ t: z.literal("ping"), c: z.number() }),
@@ -63,4 +75,6 @@ export const ClientMessageSchema = z.discriminatedUnion("t", [
   MoveMessageSchema,
   TypingMessageSchema,
   ChatMessageSchema,
+  WillMessageSchema,
+  NoteMessageSchema,
 ]) satisfies z.ZodType<ClientMessage>;

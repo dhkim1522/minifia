@@ -27,6 +27,7 @@ import { botCount } from "./bots";
 import { endCountOf, phaseDurationOf } from "./discussion";
 import { buildSummary } from "./endgame";
 import { noExecutionOf } from "./execution";
+import { MAP_PHASES } from "./movement";
 import { confirmedTarget } from "./night";
 import { pointLinesOf } from "./nomination";
 import { PHASE_DEFS } from "./phases";
@@ -194,6 +195,11 @@ export function buildView(state: RoomState, playerId: string, now: number): Room
     myInfo.nightTally = [...counts].sort((a, b) => a[0] - b[0]).map(([seat, n]) => ({ seat, n }));
     const sure = confirmedTarget(state);
     if (sure !== undefined) myInfo.nightSure = sure;
+  }
+
+  // 유언은 지도 단계의 산 본인에게만(결정 0061-10, A4). 저장된 값이 있을 때만 키를 만든다 — 다른 사람 view 어디에도 본문이 없다(L7).
+  if (MAP_PHASES.has(state.phase) && isAlive(me) && me.will !== undefined) {
+    myInfo.will = me.will;
   }
 
   // 토론 끝내기 누름은 본인에게만(결정 0060-2) — 산 본인이 discussion 에서 눌렀을 때만 키를 만든다. 누른 사람이 누구인지는 어떤 키로도 싣지 않는다.

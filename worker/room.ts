@@ -23,6 +23,7 @@ import {
 import type { JoinError } from "../shared/game/room";
 import type { RoomState } from "../shared/game/room";
 import { pickRecipientIds, pickTarget } from "../shared/game/night";
+import { WILL_MIN_GAP_MS, saveWill } from "../shared/game/will";
 import { resetToLobby, setBotCount, setBotVote, setTestRole, skipPhase } from "../shared/game/testTools";
 import type { RoleId } from "../shared/game/roles";
 import { nextWakeAt, tick } from "../shared/game/tick";
@@ -94,6 +95,9 @@ export class Room extends DurableObject<Env> {
   // 지목 간격 기록(사람 id -> 마지막으로 받아들인 지목 ms, DAY-04 결정 0060-3, 가정 A1). 인메모리라 하이버네이션으로 비면 새로 센다 —
   // 한 번 더 받아들일 뿐이다(수용, typingRelays 와 같다). 받아들인 지목만 기록하고 거절·같은 값·간격 안 재전송은 기록하지 않는다.
   private readonly pointAt = new Map<string, number>();
+  // 유언·쪽지 저장 간격 기록(키 `will:{id}`·`note:{id}` -> 마지막으로 받아들인 저장 ms, 결정 0061-10, 가정 A1, T-09-27). 인메모리라 하이버네이션으로 비면 새로 센다 — 한 번 더 받아들일 뿐이다(수용).
+  // 받아들여 상태가 바뀐 저장만 기록하고, 거절·같은 값은 기록하지 않는다. 간격 안의 요청은 오류 프레임 없이 버린다.
+  private readonly writeAt = new Map<string, number>();
   // 새 유령 snap 을 이미 보낸 사람 id(08-09, 가정 A1). 인메모리라 하이버네이션·퇴거로 비면 유령에게 snap 이 한 번 더 갈 뿐이다(유령에게만, 무해).
   private readonly ghostSnapped = new Set<string>();
 
@@ -278,6 +282,12 @@ export class Room extends DurableObject<Env> {
       case "chat":
         await this.handleChat(ws, msg.text, msg.pk);
         return;
+      case "will":
+        await this.handleWill(ws, msg.text);
+        return;
+      case "note":
+        // 쪽지 처리기는 Task 2 에서 잇는다(스키마는 이미 받는다).
+        return;
       default: {
         // 새 메시지를 ClientMessage 에 더하고 여기를 빠뜨리면 컴파일이 실패한다 — 조용히 무시되지 않게(Pitfall 15).
         const unhandled: never = msg;
@@ -415,6 +425,35 @@ export class Room extends DurableObject<Env> {
     this.room = result.state;
     await this.ctx.storage.put("room", this.room);
     this.sendViewTo(pickRecipientIds(this.room, playerId));
+    return null;
+  }
+
+  // 유언(9페이즈, WILL-01, 결정 0061-10): 신원은 소켓 첨부의 playerId 뿐이다 — 메시지에 seat·id 가 없다(T-09-28).
+  private async handleWill(ws: WebSocket, text: string): Promise<void> {
+    const att = this.attachmentOf(ws);
+    if (!att || !this.room) {
+      this.sendTo(ws, { t: "error", code: "BAD_MESSAGE" });
+      return;
+    }
+    const error = await this.applyWill(att.playerId, text, Date.now());
+    if (error !== null) this.sendRejection(ws, att.playerId, error);
+  }
+
+  // 마감이 바뀌지 않으니 reschedule 은 필요 없다. 검사는 규칙 함수(saveWill)가 하고, 받아들이면 저장한 본인 소켓에만 state 를 보낸다 —
+  // persistAndBroadcast 를 부르지 않는다(L7): 전원 방송이나 '누군가 썼다' 는 타이밍이 다른 폰에 새면 안 된다. 같은 값은 같은 객체라 저장·전송이 없다.
+  // 간격(WILL_MIN_GAP_MS) 안의 요청은 상태를 바꾸지 않고 오류 없이 버린다(T-09-27). 봇도 같은 본체를 지난다(특권 없음).
+  private async applyWill(playerId: string, text: string, now: number): Promise<WsErrorCode | null> {
+    if (!this.room) return "BAD_MESSAGE";
+    const key = `will:${playerId}`;
+    const last = this.writeAt.get(key);
+    if (last !== undefined && now - last < WILL_MIN_GAP_MS) return null;
+    const result = saveWill(this.room, playerId, text);
+    if (!result.ok) return result.error;
+    if (result.state === this.room) return null;
+    this.writeAt.set(key, now);
+    this.room = result.state;
+    await this.ctx.storage.put("room", this.room);
+    this.sendViewTo([playerId]);
     return null;
   }
 

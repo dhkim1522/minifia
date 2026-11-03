@@ -205,7 +205,11 @@ export type ClientMessage =
   // 입력 중 — 채널 필드 없음, 서버가 보낸 사람 상태로 채널을 정한다(결정 0002). 받는 사람은 audience(07-10)
   | TypingSendMessage
   // 자유 채팅 한 줄 — 본문과 단계 키뿐, 채널 필드 없음(결정 0002). 정리·제한·채널은 서버가 정한다(07-11)
-  | ChatSendMessage;
+  | ChatSendMessage
+  // 유언·쪽지 저장(9페이즈 결정 0061-9·10) — 본문 text 하나뿐이다. 행위자는 소켓 첨부 playerId 뿐이고 seat·id·채널은 없다.
+  // 응답은 저장한 본인(유언)·산 마피아(쪽지)에게만 간다 — 전원 방송이 없다(L7). 빈 값(공백뿐)은 지움이다.
+  | WillSendMessage
+  | NoteSendMessage;
 
 // 테스트 방 봇 투표 선택(결정 0022·0024 확장, P-13). 무작위가 기본이고 고정 값은 방장이 대기실에서 정한다.
 export type BotVoteExec = "random" | "yes" | "no";
@@ -236,8 +240,8 @@ export interface MyInfo {
   endDiscussion?: true; // discussion 단계에서 본인이 토론 끝내기를 누른 상태(본인에게만, 8페이즈 결정 0060)
   nightTally?: Array<{ seat: number; n: number }>; // 밤, 산 마피아 본인에게만: 대상 seat 별 산 마피아 선택 수(seat 오름차순, 본인 포함, 누가 골랐는지는 없다, 결정 0061-7)
   nightSure?: number; // 밤, 산 마피아 본인에게만: 전원 일치로 확정된 대상 seat(결정 0061-7). 채우는 일은 09-07 view
-  will?: string; // 산 본인에게만: 본인이 남긴 유언(결정 0061-10). 채우는 일은 09-12
-  note?: string; // 밤, 산 마피아에게만: 남긴 쪽지(결정 0061-9). 채우는 일은 09-12
+  will?: string; // 산 본인에게만: 본인이 남긴 유언(결정 0061-10). 지도 단계에서 저장된 값이 있을 때만(09-12)
+  note?: string; // 밤, 산 마피아에게만: 남긴 쪽지(결정 0061-9). 산 마피아끼리 같은 글(09-12)
   verdictVote?: boolean; // verdict 단계에서 본인이 던진 찬반(본인에게만, 남의 값은 어떤 키로도 싣지 않는다, 8페이즈 결정 0060)
 }
 export interface RoomView {
@@ -316,6 +320,16 @@ export interface ChatLogFrame {
 export interface ChatRejectFrame {
   t: "chatReject";
   why: ChatRejectWhy;
+}
+/** 유언 저장(지도 단계의 산 사람, 결정 0061-10). 본문 정리·100 자소 제한은 서버(saveWill)가 정한다. */
+export interface WillSendMessage {
+  t: "will";
+  text: string;
+}
+/** 쪽지 저장(밤의 산 마피아, 확정 대상이 있을 때만, 결정 0061-9). 작성자를 싣지 않는다 — 익명이다. */
+export interface NoteSendMessage {
+  t: "note";
+  text: string;
 }
 /** pk = phaseKey(단계 한 번을 가리키는 '일차:단계'). 어긋나면 서버가 더 넓은 채널로 돌리지 않고 폐기한다. */
 export interface ChatSendMessage {
