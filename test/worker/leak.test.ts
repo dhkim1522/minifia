@@ -31,7 +31,9 @@ import {
   settle,
   startedGame,
   storedRoom,
+  showdownAll,
   summary,
+  threeAliveGame,
   verdictAll,
   withRole,
 } from "./helpers";
@@ -101,7 +103,7 @@ const ROLE_PATHS_ALIVE = [
  * 서버 전용 키: 어떤 프레임의 어떤 경로에도 없어야 한다. 주장 차례(결정 0027-3)와 4페이즈 투표·종료(결정 0036-12)·순차 지목 차례(pickTurn, 결정 0063-1)의 서버 상태.
  * winner·execution 은 같은 이름의 view 키(result.winner·day.execution)가 있어 넣지 않고, 경로·단계로 검사한다.
  */
-const SERVER_ONLY_KEYS = ["claimPick", "claimOrder", "claimIdx", "claimStart", "execVote", "candidateVote", "verdict", "nightLog", "lastExecPhrase", "nominate", "verdictVote", "endVote", "nightNote", "pickTurn", "runoffVote"];
+const SERVER_ONLY_KEYS = ["claimPick", "claimOrder", "claimIdx", "claimStart", "execVote", "candidateVote", "verdict", "nightLog", "lastExecPhrase", "nominate", "verdictVote", "endVote", "nightNote", "pickTurn", "runoffVote", "showdownPick"];
 /**
  * 서버 전용 이름과 같은 공개 와이어 필드의 경로(08-11, 결정 0060-3·4) — 이 두 경로만 SERVER_ONLY_KEYS 검사에서 빼고 이유를 단다. 목록은 줄이지 않고, 새 경로는 받을 권리 조건이 있을 때만 더한다.
  *  - .view.day.verdict: 처형 단계에서 모두에게 같은 {yes,no,passed} 집계(서버 전용 RoomState.verdict 와 이름만 같다).
@@ -114,6 +116,30 @@ const ALLOWED_WIRE_PATHS: ReadonlySet<string> = new Set([".view.day.verdict", ".
  *  - .view.me.ballot: 그 소켓 본인이 던진 후보 좌석(runoff step 1·2, 산 유권자 본인만). 남의 선택은 어떤 경로로도 가지 않는다.
  */
 const RUNOFF_WIRE_PATHS: ReadonlySet<string> = new Set([".view.day.runoff", ".view.day.runoff.cand", ".view.day.runoff.step", ".view.day.runoff.voted", ".view.day.runoff.tally", ".view.me.ballot"]);
+/**
+ * 정치·긴장 장치(결정 0066)가 와이어에 더한 공개 경로 전부(L24) — 01·02·04·06 이 더한 것을 한 상수로 모았다. 이 목록을 넓히면 아래 "경로 목록 고정" 시험이 먼저 실패한다 —
+ * 넓히려면 받을 권리(누가 언제 받는지)와 근거를 이 주석에 적고 시험의 기대 목록을 같이 고친다. 끝이 `.*` 인 항목은 그 아래 모든 경로다.
+ *  - .view.players[].badge·badgeSwapped: 직업 주장(공개 값, 0066-1).
+ *  - .to · .lines[].to: 귓속말 줄의 상대 좌석(공개 사실, 0066-2). .view.me.whisperUsed: 오늘 귓속말을 보냈는지(본인만).
+ *  - .view.me.ballot: 본인이 고른 좌석(결선 0066-4·마지막 3인 0066-5, 본인만). .view.day.runoff.*: 결선 공개 값(cand·step·voted·tally).
+ *  - .view.day.showdown.*: 마지막 3인 결전 공개 값(order·i·endsAt·doneAt·skip·word·voted·points, 0066-5 — 모두에게 같다, 개인 선택은 없다).
+ *  - .view.day.verdict.last: 마지막 3인 결전으로 온 처형 표시(0066-5). .view.day.ballots.*: 찬반 기록 좌석 목록(0066-3, 처형 단계만).
+ */
+const POLITICS_ALLOWED_PATHS: readonly string[] = [
+  ".view.players[].badge",
+  ".view.players[].badgeSwapped",
+  ".to",
+  ".lines[].to",
+  ".view.me.ballot",
+  ".view.me.whisperUsed",
+  ".view.day.runoff.*",
+  ".view.day.showdown.*",
+  ".view.day.verdict.last",
+  ".view.day.ballots.*",
+];
+/** path 가 POLITICS_ALLOWED_PATHS 에 드는가(`.*` 로 끝나는 항목은 그 경로 자신 또는 그 아래). */
+const politicsAllowed = (path: string): boolean =>
+  POLITICS_ALLOWED_PATHS.some((p) => (p.endsWith(".*") ? path === p.slice(0, -2) || path.startsWith(`${p.slice(0, -1)}`) : path === p));
 const ROLE_PATHS_DEAD = [...ROLE_PATHS_ALIVE, ".view.spectate.seats[].job"];
 /** ended 단계 프레임에서만 더해지는 허용 경로(D-17, Pitfall 10): 결과 화면의 모든 직업. ended 이전 프레임에서는 누출이다. */
 const ROLE_PATH_ENDED = ".view.result.seats[].job";
@@ -1433,6 +1459,71 @@ describe("동점 결선 프레임 전수 (결정 0066-4, L20·L24)", () => {
       if (wantBallot[a.seat] === undefined) {
         expect(frames.some((m) => m.t === "state" && m.view.me.ballot !== undefined)).toBe(false);
       }
+    });
+  });
+});
+
+describe("마지막 3인 결전 프레임 전수 (결정 0066-5, L21·L24)", () => {
+  it("POLITICS_ALLOWED_PATHS 는 정확히 이 목록이다 — 넓히려면 이유를 적고 이 기대값을 같이 고친다 (L24)", () => {
+    expect([...POLITICS_ALLOWED_PATHS]).toEqual([
+      ".view.players[].badge",
+      ".view.players[].badgeSwapped",
+      ".to",
+      ".lines[].to",
+      ".view.me.ballot",
+      ".view.me.whisperUsed",
+      ".view.day.runoff.*",
+      ".view.day.showdown.*",
+      ".view.day.verdict.last",
+      ".view.day.ballots.*",
+    ]);
+    expect(politicsAllowed(".view.day.showdown.points[].seat")).toBe(true);
+    expect(politicsAllowed(".view.day.showdown")).toBe(true);
+    expect(politicsAllowed(".view.day.showdownX")).toBe(false);
+    expect(politicsAllowed(".view.day.verdict.passed")).toBe(false);
+  });
+
+  it("결전 전 과정의 모든 소켓 프레임: 서버 전용 이름은 없고 새 경로는 POLITICS_ALLOWED_PATHS 뿐이며 개인 선택은 마감 전 본인 me.ballot 에만 있다", { timeout: 90_000 }, async () => {
+    const g = await threeAliveGame();
+    const starts = g.socks.map((sock) => mark(sock));
+    await closePhase(g.code); // 낮 시작 발표 마감 → showdown
+    const points: Record<number, number> = { 0: 2, 1: 2, 2: 0 };
+    await showdownAll(g.code, g.actors, { words: { 0: "저는 아니에요", 1: "쟤가 수상해요" }, points });
+    for (const a of g.actors) await settle(a.sock, mark(a.sock));
+    g.actors.forEach((a, i) => {
+      const frames = framesOf(a.sock).slice(starts[i]!);
+      let sawWindow = false;
+      for (const msg of frames) {
+        for (const path of keyPaths(msg)) {
+          const key = path.slice(path.lastIndexOf(".") + 1);
+          expect(SERVER_ONLY_KEYS.includes(key) && !ALLOWED_WIRE_PATHS.has(path)).toBe(false);
+          if (path.startsWith(".view.day.showdown")) expect(`${path}:${politicsAllowed(path)}`).toBe(`${path}:true`);
+          if (key === "ballot") expect(path).toBe(".view.me.ballot");
+          if (key === "last") expect(path).toBe(".view.day.verdict.last");
+        }
+        if (msg.t !== "state") continue;
+        const v = msg.view;
+        expect(Object.hasOwn(v.day ?? {}, "showdown")).toBe(v.phase === "showdown");
+        if (v.phase === "showdown") {
+          const sd = v.day!.showdown!;
+          if (sd.i === 3) {
+            sawWindow = true;
+            // 지목 창: 던진 좌석뿐 — 대상(target)이 어디에도 없고 points 키도 없다
+            expect(JSON.stringify(msg)).not.toContain('"target"');
+            expect(Object.hasOwn(sd, "points")).toBe(false);
+          }
+          if (sd.i === 4) expect(sd.points).toEqual([{ seat: 0, target: 2 }, { seat: 1, target: 2 }, { seat: 2, target: 0 }]);
+        }
+        if (v.me.ballot !== undefined) {
+          expect(v.phase).toBe("showdown");
+          expect(v.me.ballot).toBe(points[a.seat]); // 남의 값이 아니라 본인이 던진 값
+        }
+        if (v.phase === "execution") expect(v.day!.verdict!.last).toBe(true);
+        else if (v.day?.verdict !== undefined) expect(Object.hasOwn(v.day.verdict, "last")).toBe(false);
+      }
+      expect(sawWindow).toBe(true);
+      // 유령(좌석 3)은 어느 프레임에도 me.ballot 이 없다
+      if (a.seat === 3) expect(frames.some((m) => m.t === "state" && m.view.me.ballot !== undefined)).toBe(false);
     });
   });
 });

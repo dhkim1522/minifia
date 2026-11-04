@@ -381,6 +381,22 @@ export async function runoffAll(code: string, actors: Actor[], voteBySeat: Reado
   return deadline;
 }
 
+/** 4명 판에서 좌석 3 을 죽인 낮 시작 발표 — 산 사람 정확히 셋(좌석 0·1·2). 지난 낮의 개인 키를 일부러 남겨 청소를 확인한다. */
+export async function threeAliveGame(): Promise<Game> {
+  // startedGame 은 목표 단계 state 를 이미 읽어 버려서 dayAnnounce 에는 쓸 수 없다 — 시작해 낮 시작 발표에 머문다.
+  const room = await seat(3, 0);
+  const socks = [room.host, ...room.guests.map((x) => x.sock)];
+  send(room.host, { t: "start" });
+  for (const sock of socks) await nextFrame(sock, (m) => m.t === "state" && m.view.phase === "assigning");
+  await advanceTo(room.code, socks, "dayAnnounce");
+  for (const sock of socks) await settle(sock, mark(sock));
+  const g: Game = { code: room.code, socks, actors: actorsOf(room) };
+  await editRoom(g.code, (stored) =>
+    mapPlayers(stored, (p) => ({ ...p, ...(p.seat === 3 ? { alive: false } : {}), nominate: 1, verdictVote: true, endVote: true })),
+  );
+  return g;
+}
+
 /**
  * 마지막 3인 결전을 끝까지 걷는다(09.1.1-06, 결정 0066-5): 저장된 방을 읽어 showdown 인 동안 한 걸음씩 마감을 당긴다.
  * 한마디 차례(i 0..2)에 차례 주인이 words[seat] 에 있으면 그 소켓에서 기존 `chat` 한 줄을 보내고(없으면 시간 초과로 넘긴다),

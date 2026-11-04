@@ -54,10 +54,10 @@ function stateIn(
 }
 
 describe("PHASE_DEFS (단계 표, D-01·D-02·D-19·D-20, NIGHT-05·NIGHT-06)", () => {
-  it("단계는 열세 개다 — lobby·assigning·roleReveal, 낮 두 단계(순차 주장·공개 연출 단계 없음, D-07, CHAT-06), 지목·동점 결선·변론·찬반·처형(결정 0060·0066-4, 옛 처형 여부 투표·후보 선택·공개 단계 없음), 밤·아침, 판 종료", () => {
+  it("단계는 열네 개다 — lobby·assigning·roleReveal, 낮 두 단계(순차 주장·공개 연출 단계 없음, D-07, CHAT-06), 지목·동점 결선·마지막 3인 결전·변론·찬반·처형(결정 0060·0066-4·0066-5, 옛 처형 여부 투표·후보 선택·공개 단계 없음), 밤·아침, 판 종료", () => {
     const keys = Object.keys(PHASE_DEFS).sort();
     expect(`${keys.length}:${keys.join(",")}`).toBe(
-      "13:assigning,dayAnnounce,defense,discussion,ended,execution,lobby,morning,night,nomination,roleReveal,runoff,verdict",
+      "14:assigning,dayAnnounce,defense,discussion,ended,execution,lobby,morning,night,nomination,roleReveal,runoff,showdown,verdict",
     );
   });
 
@@ -69,6 +69,7 @@ describe("PHASE_DEFS (단계 표, D-01·D-02·D-19·D-20, NIGHT-05·NIGHT-06)", 
       return `${d?.durationMs}/${d?.next}/${d?.revealsOwnRole}`;
     };
     expect(row("lobby")).toBe("null/null/false");
+    expect(row("showdown")).toBe("2000/night/true"); // 마지막 3인 결전 모이기 2초 → 기본 다음은 night(결정 0066-5, 2표 이상이면 훅이 execution 으로)
     expect(row("runoff")).toBe("1000/defense/true"); // 동점 결선 앞머리 1초 → 기본 다음은 최후 변론(결정 0066-4, 결선도 동점이면 훅이 night 로)
     expect(row("assigning")).toBe("3000/roleReveal/false");
     expect(row("roleReveal")).toBe("15000/dayAnnounce/true");

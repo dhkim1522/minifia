@@ -9,8 +9,9 @@ import { attachConnection, createRoomState, joinRoom, startGame } from "../../sh
 import type { RoomState } from "../../shared/game/room";
 import { tick } from "../../shared/game/tick";
 import { castTurnPoint, nominationStepMs, stepNomination } from "../../shared/game/nomination";
-import { PICK_TURN_MS } from "../../shared/game/phases";
+import { PICK_TURN_MS, SHOWDOWN_POINT_MS, SHOWDOWN_TURN_MS } from "../../shared/game/phases";
 import { castRunoffVote, runoffStepMs, stepRunoff } from "../../shared/game/runoff";
+import { acceptLastWord, castShowdownPoint, showdownStepMs, stepShowdown } from "../../shared/game/showdown";
 import { castVerdict } from "../../shared/game/verdict";
 import type { PhaseId } from "../../shared/protocol";
 import { seededRandInt } from "./seededRandom";
@@ -224,4 +225,56 @@ export function castRunoff(state: RoomState, voteBySeat: Record<number, number>)
   }
   if (s.runoff!.step === 1) advance();
   return s;
+}
+
+/**
+ * 마지막 3인 결전(09.1.1-06, 결정 0066-5)을 실제 stepShowdown·acceptLastWord·castShowdownPoint 로 걷는다(순수 도우미): 모이기 → 한마디 차례 셋 →
+ * 동시 지목 창에서 seat → 대상 좌석을 주입 → 공개(i 4)까지. words[seat] 가 있으면 그 차례에 한마디를 확정하고, 없으면 시간 초과로 넘어간다.
+ * 돌려주는 상태는 공개 자리(i 4, points 확정)다 — 다음 tick(phaseEndsAt) 이 집계한다(2표 이상이면 execution, 아니면 night). 거부되면 테스트 준비가 틀린 것이다.
+ */
+export function castShowdown(
+  state: RoomState,
+  script: { words?: Record<number, string>; points?: Record<number, number> } = {},
+): RoomState {
+  if (state.phase !== "showdown" || state.showdown === undefined) throw new Error(`castShowdown: showdown 단계가 아니다(${state.phase})`);
+  let s = state;
+  /** 마감 시각에 한 걸음: 새 마감은 지난 마감 + 새 단계 길이(tick 의 사슬 규약). */
+  const advance = (): void => {
+    const at = s.phaseEndsAt;
+    if (at === null) throw new Error("showdown has no deadline");
+    const r = stepShowdown(s, at);
+    if (!r.stay) throw new Error("showdown resolved before the reveal");
+    s = { ...r.state, phaseEndsAt: at + showdownStepMs(r.state) };
+  };
+  for (let guard = 0; s.showdown!.i < 4; guard += 1) {
+    if (guard > 40) throw new Error("castShowdown: walk did not finish");
+    const sd = s.showdown!;
+    if (sd.i >= 0 && sd.i <= 2 && sd.doneAt === undefined) {
+      const seat = sd.order[sd.i]!;
+      const word = script.words?.[seat];
+      if (word !== undefined) {
+        const r = acceptLastWord(s, seatToId(s, seat), word, (sd.endsAt ?? 0) - SHOWDOWN_TURN_MS + 100);
+        if (r.kind !== "ok") throw new Error(`acceptLastWord rejected seat ${seat}: ${r.kind}`);
+        s = r.state;
+        continue;
+      }
+    }
+    if (sd.i === 3) {
+      for (const [seat, target] of Object.entries(script.points ?? {})) {
+        const r = castShowdownPoint(s, seatToId(s, Number(seat)), target, (sd.endsAt ?? 0) - SHOWDOWN_POINT_MS + 100);
+        if (!r.ok) throw new Error(`castShowdownPoint rejected seat ${seat}: ${r.error}`);
+        s = r.state;
+      }
+    }
+    advance();
+  }
+  return s;
+}
+
+/** n 명 판에서 좌석 deadSeat 들이 죽은 마지막 3인 낮 시작 발표(산 사람이 정확히 셋이어야 한다). 실제 전이로 만든다. */
+export function threeAliveAt(n: number, seed: number, deadSeats: number[]): RoomState {
+  const s = startedAt(n, seed, "dayAnnounce");
+  const dead: RoomState = { ...s, players: s.players.map((p) => (deadSeats.includes(p.seat) ? { ...p, alive: false } : p)) };
+  if (dead.players.filter((p) => p.alive !== false).length !== 3) throw new Error("threeAliveAt: 산 사람이 셋이 아니다");
+  return dead;
 }

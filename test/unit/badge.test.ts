@@ -97,9 +97,9 @@ describe("setBadge — 말 바꿈 표 (O-1 직전 값 기준)", () => {
 });
 
 describe("setBadge — 거절 (단계 -> 행위자 -> 값)", () => {
-  it("낮 시작 발표·토론·지목은 받는다", () => {
-    const got = (["dayAnnounce", "discussion", "nomination"] as const).map((ph) => `${ph}:${setBadge(room(ph), "p1", "police").ok}`).join(" ");
-    expect(got).toBe("dayAnnounce:true discussion:true nomination:true");
+  it("낮 시작 발표·토론·지목·마지막 3인 결전은 받는다", () => {
+    const got = (["dayAnnounce", "discussion", "nomination", "showdown"] as const).map((ph) => `${ph}:${setBadge(room(ph), "p1", "police").ok}`).join(" ");
+    expect(got).toBe("dayAnnounce:true discussion:true nomination:true showdown:true");
   });
   it("마감 뒤와 대기실은 WRONG_PHASE", () => {
     const phases: PhaseId[] = ["lobby", "assigning", "defense", "verdict", "execution", "night", "morning", "ended"];
@@ -108,7 +108,7 @@ describe("setBadge — 거절 (단계 -> 행위자 -> 값)", () => {
       return `${ph}:${r.ok ? "ok" : r.error}`;
     });
     expect(got.join(" ")).toBe(phases.map((ph) => `${ph}:WRONG_PHASE`).join(" "));
-    expect([...BADGE_PHASES].sort().join(",")).toBe("dayAnnounce,discussion,nomination");
+    expect([...BADGE_PHASES].sort().join(",")).toBe("dayAnnounce,discussion,nomination,showdown");
   });
   it("단계 검사가 행위자 검사보다 먼저다(창 밖의 유령도 WRONG_PHASE)", () => {
     const s = room("defense", 6, (p) => (p.id === "p1" ? { ...p, alive: false } : p));

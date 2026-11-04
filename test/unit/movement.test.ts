@@ -98,10 +98,10 @@ describe("canMoveIn — 밤은 산 마피아만 (NIGHT-07, 결정 0061-2)", () =
   });
 });
 
-describe("MAP_PHASES — 지도 단계 9개", () => {
-  it("낮 시작·토론·지목·동점 결선·변론·찬반·처형·밤·아침이고 로비·역할 단계·종료·옛 투표 단계는 들지 않는다", () => {
+describe("MAP_PHASES — 지도 단계 10개", () => {
+  it("낮 시작·토론·지목·동점 결선·마지막 3인 결전·변론·찬반·처형·밤·아침이고 로비·역할 단계·종료·옛 투표 단계는 들지 않는다", () => {
     expect([...MAP_PHASES].sort().join(",")).toBe(
-      ["dayAnnounce", "discussion", "nomination", "runoff", "defense", "verdict", "execution", "night", "morning"].sort().join(","),
+      ["dayAnnounce", "discussion", "nomination", "runoff", "showdown", "defense", "verdict", "execution", "night", "morning"].sort().join(","),
     );
   });
 });

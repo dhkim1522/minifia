@@ -12,7 +12,8 @@ import { buildPreview, buildView } from "../../shared/game/view";
 import type { PhaseId, RoomView } from "../../shared/protocol";
 import { seededRandInt } from "../helpers/seededRandom";
 import { castRunoffVote } from "../../shared/game/runoff";
-import { castPoints, castRunoff, castVerdicts, runoffStateOf, startedAt, stateWithVerdict } from "../helpers/voteState";
+import { acceptLastWord, castShowdownPoint } from "../../shared/game/showdown";
+import { castPoints, castRunoff, castShowdown, castVerdicts, runoffStateOf, startedAt, stateWithVerdict, threeAliveAt } from "../helpers/voteState";
 
 const PLAYER_COUNTS = [4, 5, 6, 7, 8] as const;
 const SEEDS = [1, 42, 20260101] as const;
@@ -101,21 +102,29 @@ const aliveSeats = (state: RoomState): number[] => state.players.filter(isAlive)
 function endedState(n: number, seed: number, team: "citizen" | "mafia"): RoomState {
   let s = startedAt(n, seed, "nomination");
   for (let day = 1; day <= 10; day += 1) {
-    if (s.phase !== "nomination") throw new Error(`endedState: expected nomination, got ${s.phase}`);
+    if (s.phase !== "nomination" && s.phase !== "showdown") throw new Error(`endedState: expected nomination or showdown, got ${s.phase}`);
     const living = s.players.filter(isAlive).sort((a, b) => a.seat - b.seat);
     const candidate = living.find((p) => (p.role === "mafia") === (team === "citizen"))!.seat;
     const other = living.find((p) => p.seat !== candidate)!.seat;
-    s = castPoints(s, Object.fromEntries(living.map((p) => [p.seat, p.seat === candidate ? other : candidate])));
-    for (const step of ["defense", "verdict"] as const) {
+    const points = Object.fromEntries(living.map((p) => [p.seat, p.seat === candidate ? other : candidate]));
+    if (s.phase === "showdown") {
+      // 산 사람이 셋인 낮(09.1.1-06, 결정 0066-5): 변론·찬반 없이 동시 지목 → 후보가 2표를 받아 곧바로 처형 단계
+      s = castShowdown(s, { points });
       s = tick(s, s.phaseEndsAt!, seededRandInt(seed + 3));
-      if (s.phase !== step) throw new Error(`endedState: expected ${step}, got ${s.phase}`);
+      if (s.phase !== "execution") throw new Error(`endedState: expected execution after showdown, got ${s.phase}`);
+    } else {
+      s = castPoints(s, points);
+      for (const step of ["defense", "verdict"] as const) {
+        s = tick(s, s.phaseEndsAt!, seededRandInt(seed + 3));
+        if (s.phase !== step) throw new Error(`endedState: expected ${step}, got ${s.phase}`);
+      }
+      s = castVerdicts(s, Object.fromEntries(living.filter((p) => p.seat !== candidate).map((p) => [p.seat, true])));
+      s = tick(s, s.phaseEndsAt!, seededRandInt(seed + 3));
+      if (s.phase !== "execution") throw new Error(`endedState: expected execution, got ${s.phase}`);
     }
-    s = castVerdicts(s, Object.fromEntries(living.filter((p) => p.seat !== candidate).map((p) => [p.seat, true])));
-    s = tick(s, s.phaseEndsAt!, seededRandInt(seed + 3));
-    if (s.phase !== "execution") throw new Error(`endedState: expected execution, got ${s.phase}`);
     s = tick(s, s.phaseEndsAt!, seededRandInt(seed + 4)); // ended 또는 night
     if (s.phase === "ended") return s;
-    s = advanceTo(s, "nomination", seed); // 밤 → 아침 → 다음 날 낮 두 단계 → 지목(밤에 행동이 없으니 승패는 이 사이에 나지 않는다)
+    s = advanceToVote(s, seed); // 밤 → 아침 → 다음 날 낮 두 단계 → 지목(산 사람이 셋이면 마지막 3인 결전). 밤에 행동이 없으니 승패는 이 사이에 나지 않는다
   }
   throw new Error(`endedState: no winner for ${n}/${seed}/${team}`);
 }
@@ -265,22 +274,23 @@ const SERVER_ONLY_KEYS: readonly string[] = [
   "claimLast", "claimChoice", "claimShown", "claimChanged", "claimPick", "claimOrder", "claimIdx",
   "claimStart", "claimDone", "claims", "nightPick", "investigations", "lastPhrase",
   "execVote", "candidateVote", "verdict", "nightLog", "lastExecPhrase", "nightNote",
+  "showdownPick", // 마지막 3인 동시 지목의 개인 선택(결정 0066-5): 서버 전용 — 본인 값은 me.ballot, 공개는 day.showdown 의 voted·points 뿐
   "runoffVote", // 동점 결선의 개인 선택(결정 0066-4): 서버 전용 — 본인 값은 me.ballot, 공개는 day.runoff 의 voted·tally 뿐
   "whispers", // 귓속말 본문 보관(결정 0066-2, O-20): 서버 전용, 11페이즈 입력 — 판 중에는 어떤 view 에도 없다
   "badgeLog", // 직업 주장 이력(결정 0066-1, O-20): 서버 전용, 11페이즈 입력 — 판 중에는 어떤 view 에도 없다
 ];
 /** view.day 가 있는 열 단계. 이 밖의 단계 뷰에는 day 키 자체가 없다(D-07). */
 const DAY_VIEW_PHASES: ReadonlySet<PhaseId> = new Set([
-  "dayAnnounce", "discussion", "nomination", "runoff", "defense", "verdict", "execution", "night", "morning", "ended",
+  "dayAnnounce", "discussion", "nomination", "runoff", "showdown", "defense", "verdict", "execution", "night", "morning", "ended",
 ]);
 const ME_KEYS: ReadonlySet<string> = new Set([
   "seat", "isHost", "role", "allies", "testMode", "testRole", "testBots", "testBotVote", "pick", "allyPicks", "records", "chat", "endDiscussion", "verdictVote",
   "whisperUsed", // 오늘 귓속말을 이미 보냈다(결정 0066-2) — 토론 단계의 산 본인에게만, 값은 true 뿐
-  "ballot", // 동점 결선에서 본인이 고른 후보 좌석(결정 0066-4) — runoff 투표 창·결과의 산 유권자 본인에게만, 값은 후보 좌석 하나
+  "ballot", // 동점 결선(결정 0066-4)·마지막 3인 동시 지목(결정 0066-5)에서 본인이 고른 좌석 — 투표 창·결과/지목 창·공개의 산 본인에게만, 값은 좌석 하나
   "nightTally", "nightSure", // 밤 산 마피아 본인에게만(결정 0061-7) — 아래 "마피아 집계" describe 가 조건을 단언한다
 ]);
 const DAY_KEYS: ReadonlySet<string> = new Set([
-  "n", "roles", "voteLog", "morning", "candidate", "execution", "noExecution", "points", "endCount", "voted", "verdict", "turn", "ballots", "runoff",
+  "n", "roles", "voteLog", "morning", "candidate", "execution", "noExecution", "points", "endCount", "voted", "verdict", "turn", "ballots", "runoff", "showdown",
 ]);
 const keysOf = (value: unknown): string => Object.keys((value ?? {}) as object).sort().join(",");
 
@@ -390,6 +400,16 @@ function advanceTo(state: RoomState, phase: PhaseId, seed: number): RoomState {
   let s = state;
   for (let guard = 0; s.phase !== phase; guard += 1) {
     if (s.phaseEndsAt === null || guard > 20) throw new Error(`advanceTo ${phase} failed at ${s.phase}`);
+    s = tick(s, s.phaseEndsAt, seededRandInt(seed));
+  }
+  return s;
+}
+
+/** 다음 낮의 표 단계(지목, 산 사람이 정확히 셋이면 마지막 3인 결전)까지 마감을 연쇄로 넘긴다. */
+function advanceToVote(state: RoomState, seed: number): RoomState {
+  let s = state;
+  for (let guard = 0; s.phase !== "nomination" && s.phase !== "showdown"; guard += 1) {
+    if (s.phaseEndsAt === null || guard > 20) throw new Error(`advanceToVote failed at ${s.phase}`);
     s = tick(s, s.phaseEndsAt, seededRandInt(seed));
   }
   return s;
@@ -977,9 +997,11 @@ describe("buildView 역할별 일지 (D-09·D-10·D-11)", () => {
         const day2 = advanceTo(morning1, "dayAnnounce", seed);
         const night2 = advanceTo(day2, "night", seed);
         const morning2 = advanceTo(nightActions(night2), "morning", seed);
+        // 2일차 낮에 산 사람이 정확히 셋이면(4명 판) 토론 대신 마지막 3인 결전이다(결정 0066-5).
+        const afterAnnounce: PhaseId = day2.players.filter(isAlive).length === 3 ? "showdown" : "discussion";
         const stages: Array<[PhaseId, RoomState]> = [
           ["dayAnnounce", day2],
-          ["discussion", advanceTo(day2, "discussion", seed)],
+          [afterAnnounce, advanceTo(day2, afterAnnounce, seed)],
           ["night", night2],
           ["morning", morning2],
         ];
@@ -1845,5 +1867,91 @@ describe("동점 결선 day.runoff·me.ballot (결정 0066-4, L20)", () => {
     const shown = castRunoff(runoffStateOf(6, 1), { 2: 0 });
     expect(buildView(shown, shown.hostId, START_AT).day!.runoff!.cand === shown.runoff!.cand).toBe(false);
     expect(open.runoff!.step).toBe(1);
+  });
+});
+
+describe("마지막 3인 day.showdown·me.ballot·day.verdict.last (결정 0066-5, L21)", () => {
+  const idOf = (s: RoomState, seat: number): string => s.players.find((q) => q.seat === seat)!.id;
+  const viewsOfAll = (s: RoomState): RoomView[] => s.players.map((q) => buildView(s, q.id, START_AT));
+  /** 4명 판에서 좌석 3 이 죽은 낮의 결전 모이기. */
+  const gather = (): RoomState => {
+    const s = threeAliveAt(4, 7, [3]);
+    return tick(s, s.phaseEndsAt!, seededRandInt(4));
+  };
+  /** 지목 창(i 3)에서 좌석 0 은 2, 좌석 1 은 2 를 골랐고 좌석 2 는 아직이다. */
+  const atPointWindow = (): RoomState => {
+    let s = gather();
+    for (let i = 0; i < 7; i += 1) s = tick(s, s.phaseEndsAt!, seededRandInt(4));
+    for (const [seat, target] of [[0, 2], [1, 2]] as const) {
+      const r = castShowdownPoint(s, idOf(s, seat), target, s.phaseEndsAt! - 100);
+      if (!r.ok) throw new Error("준비 실패");
+      s = r.state;
+    }
+    return s;
+  };
+
+  it("모이기: 모두에게 같은 {order, i} 뿐이다 — 유령(탈락자)에게도 같고 me.ballot 은 없다", () => {
+    const views = viewsOfAll(gather());
+    expect(new Set(views.map((v) => JSON.stringify(v.day?.showdown))).size).toBe(1);
+    expect(JSON.stringify(views[0]!.day!.showdown)).toBe(JSON.stringify({ order: [0, 1, 2], i: -1 }));
+    for (const v of views) expect(Object.hasOwn(v.me, "ballot")).toBe(false);
+  });
+
+  it("지목 창(i 3): 모두에게 같은 voted(던진 좌석 오름차순) — 대상 값이 없고, 개인 선택은 본인 me.ballot 에만, 던지지 않은 사람·유령에는 키가 없다", () => {
+    const s = atPointWindow();
+    const views = viewsOfAll(s);
+    for (const v of views) {
+      expect(Object.keys(v.day!.showdown!).sort().join(",")).toBe("endsAt,i,order,voted");
+      expect(v.day!.showdown!.voted).toEqual([0, 1]);
+      expect(Object.hasOwn(v.day!.showdown!, "points")).toBe(false);
+    }
+    const ballotBySeat = Object.fromEntries(views.map((v) => [v.me.seat, v.me.ballot]));
+    expect(ballotBySeat[0]).toBe(2);
+    expect(ballotBySeat[1]).toBe(2);
+    for (const seat of [2, 3]) expect(Object.hasOwn(views.find((v) => v.me.seat === seat)!.me, "ballot")).toBe(false);
+    // 남의 선택이 어떤 키로도 실리지 않는다: 좌석 2 의 직렬화 view 에는 좌석 0·1 이 누구를 골랐는지 흔적이 없다
+    const v2 = JSON.stringify(views.find((v) => v.me.seat === 2)!);
+    expect(v2).not.toContain("showdownPick");
+    expect(v2).not.toContain('"target"');
+  });
+
+  it("공개(i 4): 모두에게 같은 points 줄이 실리고 voted 는 없다, 본인 me.ballot 은 그대로", () => {
+    let s = atPointWindow();
+    s = tick(s, s.phaseEndsAt!, seededRandInt(4));
+    const views = viewsOfAll(s);
+    for (const v of views) {
+      expect(Object.keys(v.day!.showdown!).sort().join(",")).toBe("i,order,points");
+      expect(v.day!.showdown!.points).toEqual([{ seat: 0, target: 2 }, { seat: 1, target: 2 }]);
+    }
+    expect(views.find((v) => v.me.seat === 0)!.me.ballot).toBe(2);
+  });
+
+  it("한마디: 확정된 word·doneAt 이 모두에게 같다, 확정 전에는 키가 없다", () => {
+    const turn = tick(gather(), gather().phaseEndsAt!, seededRandInt(4));
+    for (const v of viewsOfAll(turn)) expect(Object.hasOwn(v.day!.showdown!, "word")).toBe(false);
+    const done = acceptLastWord(turn, idOf(turn, 0), "저는 아니에요", turn.showdown!.endsAt! - 1000);
+    if (done.kind !== "ok") throw new Error("준비 실패");
+    const views = viewsOfAll(done.state);
+    expect(new Set(views.map((v) => JSON.stringify(v.day!.showdown))).size).toBe(1);
+    expect(views[0]!.day!.showdown!.word).toBe("저는 아니에요");
+  });
+
+  it("처형 단계의 day.verdict 에 last:true 가 붙고 day.ballots 는 없다, 공개 voteLog 줄에는 last 키가 없다", () => {
+    const s = castShowdown(gather(), { points: { 0: 2, 1: 2, 2: 0 } });
+    const exec = tick(s, s.phaseEndsAt!, seededRandInt(4)); // 공개 뒤 집계 → execution
+    expect(exec.phase).toBe("execution");
+    for (const v of viewsOfAll(exec)) {
+      expect(JSON.stringify(v.day!.verdict)).toBe(JSON.stringify({ yes: 0, no: 0, passed: true, last: true }));
+      expect(Object.hasOwn(v.day!, "ballots")).toBe(false);
+      expect(Object.hasOwn(v.day!.voteLog!.at(-1)!, "last")).toBe(false); // 공개 voteLog 줄에는 last 가 없다(L24 — 새 공개 경로는 day.verdict.last 하나)
+      expect(v.day!.candidate).toBe(2);
+    }
+  });
+
+  it("showdown 이 아닌 단계(토론·지목)의 view 에는 day.showdown 키가 없다", () => {
+    for (const phase of ["discussion", "nomination"] as const) {
+      const s = startedAt(6, 3, phase);
+      for (const v of viewsOfAll(s)) expect(Object.hasOwn(v.day!, "showdown")).toBe(false);
+    }
   });
 });

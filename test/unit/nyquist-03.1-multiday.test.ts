@@ -2,7 +2,7 @@
 // 개별 규칙 단위 테스트가 놓치기 쉬운 '낮이 거듭될 때의 누적' 을 본다: 낮 시작 발표 다음이 바로 토론인지·일지 누적·누출 키 부재.
 import { describe, expect, it } from "vitest";
 import { pickTarget } from "../../shared/game/night";
-import { DISCUSSION_MS } from "../../shared/game/phases";
+import { DISCUSSION_MS, SHOWDOWN_GATHER_MS } from "../../shared/game/phases";
 import { attachConnection, createRoomState, joinRoom, startGame } from "../../shared/game/room";
 import type { Player, RoomState } from "../../shared/game/room";
 import { tick } from "../../shared/game/tick";
@@ -44,7 +44,7 @@ function actNight(s: RoomState): RoomState {
 describe("여러 날 낮 흐름 + 일지 누적 (CHAT-06, NIGHT-04, ELIM-01)", () => {
   for (const n of [5, 6, 7, 8]) {
     for (const seed of [1, 2, 3]) {
-      it(`${n}명 seed ${seed}: 날마다 낮 시작 발표 다음이 바로 토론이고 일지가 독립 모델과 같다`, () => {
+      it(`${n}명 seed ${seed}: 날마다 낮 시작 발표 다음이 바로 토론(산 사람이 셋이면 마지막 3인 결전)이고 일지가 독립 모델과 같다`, () => {
         const rand = seededRandInt(seed);
         const lobby = lobbyOf(n);
         const started = startGame(lobby, lobby.hostId, 10_000, rand);
@@ -61,10 +61,12 @@ describe("여러 날 낮 흐름 + 일지 누적 (CHAT-06, NIGHT-04, ELIM-01)", (
               const v = JSON.stringify(buildView(s, p.id, s.phaseEndsAt! - 1));
               for (const k of ["claimPick", "claimOrder", "claimIdx", "claimStart", "turn"]) expect(v).not.toContain(`"${k}"`);
             }
-            // 낮 시작 발표 마감 다음이 바로 토론이고, 마감은 이전 마감 + DISCUSSION_MS 다
+            // 낮 시작 발표 마감 다음이 바로 토론이고, 마감은 이전 마감 + DISCUSSION_MS 다.
+            // 단 산 사람이 정확히 셋이면 토론 대신 마지막 3인 결전(모이기 SHOWDOWN_GATHER_MS)이다(결정 0066-5).
+            const last3 = living(s).length === 3;
             const after = tick(s, s.phaseEndsAt!, rand);
-            expect(after.phase).toBe("discussion");
-            expect(after.phaseEndsAt).toBe(s.phaseEndsAt! + DISCUSSION_MS);
+            expect(after.phase).toBe(last3 ? "showdown" : "discussion");
+            expect(after.phaseEndsAt).toBe(s.phaseEndsAt! + (last3 ? SHOWDOWN_GATHER_MS : DISCUSSION_MS));
             for (const k of ["claimPick", "claimOrder", "claimIdx", "claimStart", "claimLog"]) expect(Object.hasOwn(after, k)).toBe(false);
           }
           if (s.phase === "night") s = actNight(s);
