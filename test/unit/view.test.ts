@@ -264,6 +264,7 @@ const SERVER_ONLY_KEYS: readonly string[] = [
   "claimLast", "claimChoice", "claimShown", "claimChanged", "claimPick", "claimOrder", "claimIdx",
   "claimStart", "claimDone", "claims", "nightPick", "investigations", "lastPhrase",
   "execVote", "candidateVote", "verdict", "nightLog", "lastExecPhrase", "nightNote",
+  "whispers", // 귓속말 본문 보관(결정 0066-2, O-20): 서버 전용, 11페이즈 입력 — 판 중에는 어떤 view 에도 없다
   "badgeLog", // 직업 주장 이력(결정 0066-1, O-20): 서버 전용, 11페이즈 입력 — 판 중에는 어떤 view 에도 없다
 ];
 /** view.day 가 있는 열 단계. 이 밖의 단계 뷰에는 day 키 자체가 없다(D-07). */
@@ -272,6 +273,7 @@ const DAY_VIEW_PHASES: ReadonlySet<PhaseId> = new Set([
 ]);
 const ME_KEYS: ReadonlySet<string> = new Set([
   "seat", "isHost", "role", "allies", "testMode", "testRole", "testBots", "testBotVote", "pick", "allyPicks", "records", "chat", "endDiscussion", "verdictVote",
+  "whisperUsed", // 오늘 귓속말을 이미 보냈다(결정 0066-2) — 토론 단계의 산 본인에게만, 값은 true 뿐
   "nightTally", "nightSure", // 밤 산 마피아 본인에게만(결정 0061-7) — 아래 "마피아 집계" describe 가 조건을 단언한다
 ]);
 const DAY_KEYS: ReadonlySet<string> = new Set([

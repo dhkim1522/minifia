@@ -6,6 +6,7 @@ import {
   CHAT_KEY_PREFIX,
   CHAT_REPLAY_PER_CHANNEL,
   appendLine,
+  appendWhisperPair,
   chatKey,
   emptyChatLog,
   replayFor,
@@ -460,5 +461,63 @@ describe("카드 표시 k (결정 0061-11)", () => {
     const base: ChatRecord = { g: 1, ch: "all", seq: 1, seat: 0, text: "글", at: 1, n: 1, r: 255 };
     const log = restoreChatLog([{ ...base, g: 1, k: "x" }, { ...base, g: 2, seq: 2, k: "note" }, { ...base, g: 3, seq: 3, k: "will" }, { ...base, g: 4, seq: 4 }]);
     expect(log.records.map((x) => `${x.g}:${x.k ?? "-"}`).join(",")).toBe("2:note,3:will,4:-");
+  });
+});
+
+// 09.1.1-02: 귓속말 두 줄(결정 0066-2) — 본문(당사자 마스크)과 사실(나머지 마스크)이 같은 all 채널 seq 를 쓴다.
+describe("appendWhisperPair (결정 0066-2)", () => {
+  const PARTY = (1 << 1) | (1 << 2); // 좌석 1·2
+  const OTHERS = 255 & ~PARTY;
+  const pair = (log: ChatLog, text = "비밀"): ReturnType<typeof appendWhisperPair> => appendWhisperPair(log, { seat: 1, to: 2, text, at: 9, n: 2, partyMask: PARTY, othersMask: OTHERS });
+
+  it("두 레코드가 같은 seq 를 쓰고 all 채널 번호는 한 번만 소비된다", () => {
+    const first = appendLine(emptyChatLog(), line("all", 0, "앞 줄", 255)).log;
+    const r = pair(first);
+    expect(`${r.body.seq}|${r.fact.seq}|${r.log.nextSeq.all}|${r.log.nextSeq.mafia}|${r.log.nextSeq.ghost}`).toBe("2|2|3|1|1");
+  });
+  it("g 는 둘이 따로 받는다(저장 키 두 개)", () => {
+    const r = pair(emptyChatLog());
+    expect(`${r.body.g}|${r.fact.g}|${r.log.nextG}`).toBe("1|2|3");
+  });
+  it("본문 레코드는 k whisper·당사자 마스크·본문, 사실 레코드는 k whispered·나머지 마스크·빈 본문, 둘 다 to 가 있다", () => {
+    const r = pair(emptyChatLog());
+    expect(json([r.body.k, r.body.r, r.body.text, r.body.to, r.fact.k, r.fact.r, r.fact.text, r.fact.to])).toBe(json(["whisper", PARTY, "비밀", 2, "whispered", OTHERS, "", 2]));
+  });
+  it("toWire 는 k·to 를 싣고 마스크·g·일차는 싣지 않는다", () => {
+    const r = pair(emptyChatLog());
+    expect(json(toWire(r.body))).toBe(json({ ch: "all", seat: 1, seq: 1, text: "비밀", at: 9, k: "whisper", to: 2 }));
+    expect(json(toWire(r.fact))).toBe(json({ ch: "all", seat: 1, seq: 1, text: "", at: 9, k: "whispered", to: 2 }));
+  });
+  it("replayFor: 당사자는 본문 줄만, 나머지는 사실 줄만 받는다(seq 하나에 줄 하나)", () => {
+    const log = pair(emptyChatLog()).log;
+    const kinds = (seat: number): string => replayFor(log, seat).map((l) => `${l.seq}:${l.k}`).join(",");
+    expect([kinds(1), kinds(2), kinds(0), kinds(5)].join("|")).toBe("1:whisper|1:whisper|1:whispered|1:whispered");
+  });
+  it("입력 로그는 바꾸지 않는다", () => {
+    const log = appendLine(emptyChatLog(), line("all", 0, "앞 줄", 255)).log;
+    const before = json(log);
+    pair(log);
+    expect(json(log)).toBe(before);
+  });
+  it("all 채널 상한(100)을 넘기면 오래된 줄이 지워지고 새 두 줄은 남는다", () => {
+    let log = emptyChatLog();
+    for (let i = 0; i < CHAT_KEEP.all - 1; i += 1) log = appendLine(log, line("all", 0, `줄${i}`, 255)).log;
+    const r = pair(log); // 99 + 2 = 101 > 100
+    expect(r.evicted.length).toBe(CHAT_EVICT_BATCH);
+    expect(r.evicted.includes(r.body.g) || r.evicted.includes(r.fact.g)).toBe(false);
+    expect(r.log.records.some((x) => x.g === r.body.g) && r.log.records.some((x) => x.g === r.fact.g)).toBe(true);
+    expect(r.evicted[0]).toBe(1);
+  });
+  it("restoreChatLog 왕복: 두 종류 모두 살아 돌아오고 to 가 없거나 범위 밖이면 버린다", () => {
+    const r = pair(emptyChatLog());
+    const bad = { ...r.body, g: 3, seq: 2, to: undefined };
+    const out = { ...r.body, g: 4, seq: 3, to: 8 };
+    const restored = restoreChatLog([r.fact, r.body, bad, out]);
+    expect(restored.records.map((x) => `${x.g}:${x.k}:${x.to}`).join(",")).toBe("1:whisper:2,2:whispered:2");
+  });
+  it("will·note 줄에 붙은 to 는 버린다", () => {
+    const base: ChatRecord = { g: 1, ch: "all", seq: 1, seat: 0, text: "글", at: 1, n: 1, r: 255 };
+    const restored = restoreChatLog([{ ...base, k: "will", to: 3 }]);
+    expect(json(restored.records[0])).toBe(json({ ...base, k: "will" }));
   });
 });

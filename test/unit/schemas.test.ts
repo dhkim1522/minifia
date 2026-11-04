@@ -125,6 +125,32 @@ describe("ClientMessageSchema badge (09.1.1-01, 결정 0066-1)", () => {
   });
 });
 
+// 09.1.1-02: 귓속말(결정 0066-2) — 대상 좌석(0..7 정수)과 본문(1..200 UTF-16)뿐이고 덧붙은 키는 거부한다. 신원은 소켓 첨부 playerId.
+describe("ClientMessageSchema whisper (09.1.1-02, 결정 0066-2)", () => {
+  it.each([
+    [{ t: "whisper", to: 0, text: "a" }],
+    [{ t: "whisper", to: 7, text: "비밀이에요" }],
+    [{ t: "whisper", to: 3, text: "가".repeat(200) }],
+  ])("받는다: %j", (msg) => {
+    expect(ClientMessageSchema.safeParse(msg).success).toBe(true);
+  });
+  it.each([
+    ["덧붙은 키(from)", { t: "whisper", to: 1, text: "안녕", from: 2 }],
+    ["덧붙은 키(seat)", { t: "whisper", to: 1, text: "안녕", seat: 2 }],
+    ["to 없음", { t: "whisper", text: "안녕" }],
+    ["text 없음", { t: "whisper", to: 1 }],
+    ["빈 본문", { t: "whisper", to: 1, text: "" }],
+    ["201자", { t: "whisper", to: 1, text: "가".repeat(201) }],
+    ["to 8", { t: "whisper", to: 8, text: "안녕" }],
+    ["to -1", { t: "whisper", to: -1, text: "안녕" }],
+    ["to 소수", { t: "whisper", to: 1.5, text: "안녕" }],
+    ["to 문자열", { t: "whisper", to: "1", text: "안녕" }],
+    ["text 숫자", { t: "whisper", to: 1, text: 5 }],
+  ])("거부: %s", (_name, msg) => {
+    expect(ClientMessageSchema.safeParse(msg).success).toBe(false);
+  });
+});
+
 // 07-10: 입력 중은 ClientMessage 유니온의 멤버다. 채널·좌석은 보내지 않는다(결정 0002) — 덧붙은 키는 거부한다(T-07-19).
 describe("ClientMessageSchema typing (07-10, CHAT-04)", () => {
   it("입력 중 {t, on, pk} 를 받는다", () => {
