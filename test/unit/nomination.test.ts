@@ -3,8 +3,25 @@
 // 실제 전이(startGame)로 만든 낮 상태에서 단계만 nomination 으로 둔다(흐름 전환은 08-11).
 // 실패 출력은 한 줄이어야 해서(TAP) 비교는 가능한 한 문자열 하나로 한다.
 import { describe, expect, it } from "vitest";
-import { majorityOf, castPoint, pointLinesOf, resolveNomination, tallyPoints } from "../../shared/game/nomination";
-import { PHASE_DEFS } from "../../shared/game/phases";
+import {
+  castPoint,
+  castTurnPoint,
+  enterNomination,
+  majorityOf,
+  nominationStepMs,
+  pointLinesOf,
+  resolveNomination,
+  stepNomination,
+  tallyPoints,
+} from "../../shared/game/nomination";
+import {
+  NOMINATION_END_MS,
+  NOMINATION_GATHER_MS,
+  PHASE_DEFS,
+  PICK_GAP_MS,
+  PICK_TURN_MS,
+  nominationMaxMs,
+} from "../../shared/game/phases";
 import type { RoomState } from "../../shared/game/room";
 import { tick } from "../../shared/game/tick";
 import { startedAt } from "../helpers/voteState";
@@ -232,5 +249,154 @@ describe("vote.test 에서 옮긴 뜻 (08-28, DAY-06·07)", () => {
       got.push(`${n}:${t.votes.length}/${t.leader}`);
     }
     expect(got.join(" ")).toBe("4:3/0 5:4/0 6:5/0 7:6/0 8:7/0");
+  });
+});
+
+// ---- 순차 지목 엔진 (09.1-01, 결정 0063-1·0063-4, M-5) ----
+// 이 계획은 tick 표에 엔진을 걸지 않는다 — 시험은 진입 함수를 직접 부른다(09.1-04 가 건다).
+describe("순차 지목 엔진 (결정 0063-1·0063-4)", () => {
+  const T = 100_000;
+  /** n 명 판의 지목 진입 직후: 모이기 3초 마감이 걸린 상태. */
+  const enteredAt = (n = 4, seed = 1): RoomState => {
+    const s = enterNomination(startedAt(n, seed, "nomination"));
+    return { ...s, phaseEndsAt: T + nominationStepMs(s) };
+  };
+  /** 한 걸음: 마감 시각 at 에 stepNomination 을 적용하고 새 마감(at + 단계 길이)을 건다. */
+  const run = (s: RoomState, at: number): RoomState => {
+    const r = stepNomination(s, at);
+    return { ...r.state, phaseEndsAt: r.stay ? at + nominationStepMs(r.state) : null };
+  };
+  const turnOf = (s: RoomState): string => JSON.stringify(s.pickTurn);
+
+  it("시간 상수와 최악 길이 공식: 모이기 3000 · 차례 8000 · 사이 900 · 끝 2000, 최악은 3000 + n × 8900 + 2000", () => {
+    expect([NOMINATION_GATHER_MS, PICK_TURN_MS, PICK_GAP_MS, NOMINATION_END_MS].join(" ")).toBe("3000 8000 900 2000");
+    expect([8, 4, 2].map(nominationMaxMs).join(" ")).toBe("76200 40600 22800");
+  });
+
+  it("enterNomination: 산 사람 좌석 오름차순 order, i -1, 남은 nominate 는 모두 지워지고 입력은 그대로다", () => {
+    const base = withDead(withPoints(nominationOf(5), { 0: 1, 2: 3, 4: 0 }), [3]);
+    const before = JSON.stringify(base);
+    const s = enterNomination(base);
+    expect(JSON.stringify(s.pickTurn)).toBe(JSON.stringify({ order: [0, 1, 2, 4], i: -1 }));
+    expect(hasNominateKey(s)).toBe(false);
+    expect(JSON.stringify(base)).toBe(before);
+  });
+
+  it("nominationStepMs: 모이기 3000 · 차례 중 8000 · 확정 뒤 900 · 끝 알림 2000 · pickTurn 없으면 단계 표 값", () => {
+    const entered = enteredAt();
+    const turn = run(entered, T + 3000);
+    const done = castTurnPoint(turn, idOf(turn, 0), 1, T + 5000);
+    if (!done.ok) throw new Error("rejected");
+    const end: RoomState = { ...turn, pickTurn: { order: [0, 1, 2, 3], i: 4 } };
+    const none: RoomState = { ...turn };
+    delete none.pickTurn;
+    const got = [entered, turn, done.state, end, none].map(nominationStepMs);
+    expect(got.join(" ")).toBe(`3000 8000 900 2000 ${PHASE_DEFS.nomination.durationMs}`);
+  });
+
+  it("stepNomination 한 걸음씩: 모이기 → 첫 차례 → 기권 → 사이 뒤 다음 차례 → 마지막 뒤 끝 알림 → 집계", () => {
+    const s0 = enteredAt();
+    const r0 = stepNomination(s0, T + 3000);
+    const s1 = r0.state;
+    const r1 = stepNomination(s1, T + 11_000); // 미확정 → 기권
+    const r2 = stepNomination(r1.state, T + 11_900); // 사이 끝 → 다음 차례
+    const lastDone: RoomState = { ...r2.state, pickTurn: { order: [0, 1, 2, 3], i: 3, endsAt: T + 30_000, doneAt: T + 20_000 } };
+    const r3 = stepNomination(lastDone, T + 20_900); // 마지막 확정 뒤 → 끝 알림
+    const r4 = stepNomination(r3.state, T + 22_900); // 끝 알림 뒤 → 집계
+    expect(
+      [r0, r1, r2, r3, r4]
+        .map((r) => `${String(r.stay)}:${JSON.stringify(r.state.pickTurn)}`)
+        .join("\n"),
+    ).toBe(
+      [
+        `true:{"order":[0,1,2,3],"i":0,"endsAt":${T + 11_000}}`,
+        `true:{"order":[0,1,2,3],"i":0,"endsAt":${T + 11_000},"doneAt":${T + 11_000},"skip":true}`,
+        `true:{"order":[0,1,2,3],"i":1,"endsAt":${T + 19_900}}`,
+        `true:{"order":[0,1,2,3],"i":4}`,
+        `false:undefined`,
+      ].join("\n"),
+    );
+  });
+
+  it("pickTurn 이 없으면 안전장치로 바로 집계한다(resolveNomination 결과)", () => {
+    const s = nominationOf(4);
+    expect(JSON.stringify(stepNomination(s, T))).toBe(JSON.stringify(resolveNomination(s)));
+  });
+
+  it("castTurnPoint: 차례 주인의 지목은 그 차례를 즉시 확정하고 마감을 now + 900 으로 옮긴다", () => {
+    const turn = run(enteredAt(), T + 3000);
+    const r = castTurnPoint(turn, idOf(turn, 0), 2, T + 4000);
+    if (!r.ok) throw new Error("rejected");
+    const p = r.state.players.find((q) => q.seat === 0)!;
+    expect(`${String(p.nominate)} ${turnOf(r.state)} ${String(r.state.phaseEndsAt)}`).toBe(
+      `2 {"order":[0,1,2,3],"i":0,"endsAt":${T + 11_000},"doneAt":${T + 4000}} ${T + 4900}`,
+    );
+  });
+
+  it("4명 한 바퀴: 자리 순서 · 8초 차례 · 기권 · 0.9초 사이 · 끝 2초 · 집계 — 마감 사슬을 한 문자열로 고정한다", () => {
+    let s = enteredAt();
+    const trace: string[] = [`enter ${s.phaseEndsAt}`];
+    const pick = (seat: number, target: number, at: number): void => {
+      const r = castTurnPoint(s, idOf(s, seat), target, at);
+      if (!r.ok) throw new Error(`rejected ${seat}->${target}: ${r.error}`);
+      s = r.state;
+      trace.push(`pick${seat}>${target}@${at} ${s.phaseEndsAt}`);
+    };
+    const step = (at: number): void => {
+      s = run(s, at);
+      trace.push(`step@${at} i=${String(s.pickTurn?.i)} end=${String(s.pickTurn?.endsAt)} next=${String(s.phaseEndsAt)}`);
+    };
+    step(T + 3000); // seat0 차례 시작
+    pick(0, 1, T + 5000);
+    step(T + 5900); // seat1 차례
+    step(T + 13_900); // seat1 기권
+    step(T + 14_800); // seat2 차례
+    pick(2, 1, T + 15_000);
+    step(T + 15_900); // seat3 차례
+    pick(3, 1, T + 16_000);
+    step(T + 16_900); // 끝 알림
+    const last = stepNomination(s, T + 18_900);
+    const verdict = JSON.stringify(last.state.verdict);
+    const cand = JSON.stringify(last.state.voteLog?.at(-1)?.cand);
+    expect(trace.join("\n")).toBe(
+      [
+        `enter ${T + 3000}`,
+        `step@${T + 3000} i=0 end=${T + 11_000} next=${T + 11_000}`,
+        `pick0>1@${T + 5000} ${T + 5900}`,
+        `step@${T + 5900} i=1 end=${T + 13_900} next=${T + 13_900}`,
+        `step@${T + 13_900} i=1 end=${T + 13_900} next=${T + 14_800}`,
+        `step@${T + 14_800} i=2 end=${T + 22_800} next=${T + 22_800}`,
+        `pick2>1@${T + 15_000} ${T + 15_900}`,
+        `step@${T + 15_900} i=3 end=${T + 23_900} next=${T + 23_900}`,
+        `pick3>1@${T + 16_000} ${T + 16_900}`,
+        `step@${T + 16_900} i=4 end=undefined next=${T + 18_900}`,
+      ].join("\n"),
+    );
+    expect(`${String(last.stay)} ${String(last.next)} ${verdict} ${cand} ${String("pickTurn" in last.state)}`).toBe(
+      `false undefined {"passed":false,"candidate":1} {"votes":[{"seat":0,"target":1},{"seat":2,"target":1},{"seat":3,"target":1}],"candidate":1} false`,
+    );
+  });
+
+  it("과반(4명 중 3표)이 나와도 마지막 차례까지 돈다 — i 가 order.length 에 닿을 때까지 stay true (0063-4)", () => {
+    let s = enteredAt();
+    let at = T + 3000;
+    const stays: string[] = [];
+    s = run(s, at); // seat0 차례
+    for (const [seat, target] of [[0, 1], [1, 2], [2, 1], [3, 1]] as const) {
+      const r = castTurnPoint(s, idOf(s, seat), target, at + 100);
+      if (!r.ok) throw new Error("rejected");
+      s = r.state;
+      at = s.phaseEndsAt!;
+      const step = stepNomination(s, at);
+      stays.push(`${seat}:${String(step.stay)}:${String(step.state.pickTurn?.i)}`);
+      s = { ...step.state, phaseEndsAt: at + nominationStepMs(step.state) };
+    }
+    const fin = stepNomination(s, s.phaseEndsAt!);
+    expect(`${stays.join(" ")} fin:${String(fin.stay)}`).toBe("0:true:1 1:true:2 2:true:3 3:true:4 fin:false");
+  });
+
+  it("resolveNomination 결과에는 pickTurn 키가 없다", () => {
+    const s = enteredAt();
+    expect("pickTurn" in resolveNomination(s).state).toBe(false);
   });
 });
