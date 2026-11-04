@@ -3,11 +3,13 @@
 // 테스트에서만 import 한다 — 서버는 쓰지 않는다. 상태를 손으로 짜 맞추지 않는 이유(Pitfall 12): view.test.ts 의 stateAt 처럼
 // "다음 단계 표" 만 따라가면 분기 단계(지목 결과에 따라 갈리는 단계)에 닿지 못하고, 손으로 만든 상태는 규칙이 바뀌어도 초록으로 남는다.
 // 난수는 seededRandInt 로 주입한다(시드가 같으면 같은 판).
+// 09.1-03: 지목 방식과 무관 — pickTurn 이 있으면 차례를 걷는다(결정 0063-1).
 import { isAlive } from "../../shared/game/alive";
 import { attachConnection, createRoomState, joinRoom, startGame } from "../../shared/game/room";
 import type { RoomState } from "../../shared/game/room";
 import { tick } from "../../shared/game/tick";
-import { castPoint } from "../../shared/game/nomination";
+import { castPoint, castTurnPoint, nominationStepMs, stepNomination } from "../../shared/game/nomination";
+import { PICK_TURN_MS } from "../../shared/game/phases";
 import { castVerdict } from "../../shared/game/verdict";
 import type { PhaseId } from "../../shared/protocol";
 import { seededRandInt } from "./seededRandom";
@@ -57,15 +59,67 @@ const seatToId = (state: RoomState, seat: number): string => {
   return player.id;
 };
 
-/** seat → 지목 대상 seat 를 실제 castPoint 로 주입한다(지목 단계여야 한다). 거부되면 테스트 준비가 틀린 것이다. */
+/**
+ * seat → 지목 대상 seat 를 실제 규칙 함수로 주입한다(지목 단계여야 한다). 거부되면 테스트 준비가 틀린 것이다.
+ *  - pickTurn 이 없으면(동시 지목) 모두를 castPoint 로 한 번에 던진다.
+ *  - pickTurn 이 있으면(순차 지목) 차례를 좌석 순으로 끝 알림까지 걷는다: 대상이 정해진 사람만 자기 차례에 castTurnPoint,
+ *    나머지는 기권으로 한 걸음 넘긴다. 돌려주는 상태는 끝 알림 자리(i = order.length)다 — 다음 tick(phaseEndsAt) 이 집계한다.
+ */
 export function castPoints(state: RoomState, targetBySeat: Record<number, number>): RoomState {
-  let current = state;
-  for (const [seat, target] of Object.entries(targetBySeat)) {
-    const result = castPoint(current, seatToId(current, Number(seat)), target);
-    if (!result.ok) throw new Error(`castPoint rejected seat ${seat}: ${result.error}`);
-    current = result.state;
+  if (state.pickTurn === undefined) {
+    let current = state;
+    for (const [seat, target] of Object.entries(targetBySeat)) {
+      const result = castPoint(current, seatToId(current, Number(seat)), target);
+      if (!result.ok) throw new Error(`castPoint rejected seat ${seat}: ${result.error}`);
+      current = result.state;
+    }
+    return current;
   }
-  return current;
+  let s = state;
+  const order = state.pickTurn.order;
+  for (const seat of Object.keys(targetBySeat)) {
+    if (!order.includes(Number(seat))) throw new Error(`seat ${seat} has no pick turn`);
+  }
+  /** 마감 시각에 한 걸음: 새 마감은 지난 마감 + 새 단계 길이(tick 의 사슬 규약). */
+  const advance = (): void => {
+    const at = s.phaseEndsAt;
+    if (at === null) throw new Error("pick turn has no deadline");
+    const r = stepNomination(s, at);
+    if (!r.stay) throw new Error("nomination resolved before the end notice");
+    s = { ...r.state, phaseEndsAt: at + nominationStepMs(r.state) };
+  };
+  for (let guard = 0; s.pickTurn !== undefined && s.pickTurn.i < s.pickTurn.order.length; guard += 1) {
+    if (guard > 400) throw new Error("pick turn walk did not finish");
+    const turn = s.pickTurn;
+    const seat = turn.order[turn.i];
+    const target = seat === undefined ? undefined : targetBySeat[seat];
+    if (turn.i < 0 || turn.doneAt !== undefined || seat === undefined || target === undefined) {
+      advance();
+      continue;
+    }
+    const result = castTurnPoint(s, seatToId(s, seat), target, (turn.endsAt ?? 0) - PICK_TURN_MS);
+    if (!result.ok) throw new Error(`castTurnPoint rejected seat ${seat}: ${result.error}`);
+    s = result.state;
+  }
+  return s;
+}
+
+/**
+ * 지목 단계 첫 순간 상태에서 phase 가 바뀔 때까지 마감 사슬을 따라가 지목 전체 길이(ms)를 돌려준다(아무도 안 던진 경우).
+ * 시작 시각은 첫 마감 − 첫 단계 길이다. 지금은 단계 표의 15000, 순차 지목이면 모이기부터 끝 알림까지의 합이다.
+ * 지목 단계가 아닌 상태를 받으면 Error.
+ */
+export function nominationSpanMs(state: RoomState, seed: number): number {
+  if (state.phase !== "nomination" || state.phaseEndsAt === null) throw new Error(`expected nomination, got ${state.phase}`);
+  const start = state.phaseEndsAt - nominationStepMs(state);
+  let s = state;
+  let last = state.phaseEndsAt;
+  for (let guard = 0; s.phase === "nomination"; guard += 1) {
+    if (s.phaseEndsAt === null || guard > 400) throw new Error("nomination chain did not end");
+    last = s.phaseEndsAt;
+    s = tick(s, last, seededRandInt(seed));
+  }
+  return last - start;
 }
 
 /** seat → 찬성 여부를 실제 castVerdict 로 주입한다(찬반 단계여야 한다). 거부되면 테스트 준비가 틀린 것이다. */

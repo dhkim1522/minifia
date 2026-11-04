@@ -25,7 +25,7 @@ import {
 import { enterDiscussion, phaseDurationOf } from "../../shared/game/discussion";
 import type { RoomState } from "../../shared/game/room";
 import { tick } from "../../shared/game/tick";
-import { startedAt } from "../helpers/voteState";
+import { castPoints, nominationSpanMs, startedAt } from "../helpers/voteState";
 
 /** n 명이 산 채로 지목 단계에 있는 방(1일차). */
 function nominationOf(n = 5): RoomState {
@@ -510,5 +510,28 @@ describe("단계 길이와 지움 (09.1-01)", () => {
   it("enterDiscussion 결과에는 pickTurn 키가 없다", () => {
     const entered = enterNomination(startedAt(4, 1, "nomination"));
     expect("pickTurn" in enterDiscussion(entered)).toBe(false);
+  });
+});
+
+describe("시험 도우미: 지목 방식과 무관 (09.1-03)", () => {
+  it("castPoints 는 pickTurn 이 있으면 차례를 걸어 끝 알림 자리에 서고, 대상 없는 좌석은 기권, 나머지는 nominate", () => {
+    const entered = enterNomination(startedAt(4, 1, "nomination"));
+    const s = castPoints({ ...entered, phaseEndsAt: 100_000 + nominationStepMs(entered) }, { 0: 1, 2: 1, 3: 1 });
+    const nominates = s.players.map((p) => `${p.seat}>${p.nominate ?? "-"}`).join(",");
+    expect(`${String(s.pickTurn?.i)} ${nominates}`).toBe("4 0>1,1>-,2>1,3>1");
+  });
+
+  it("castPoints 는 pickTurn 이 없으면 지금처럼 한 번에 던진다", () => {
+    const s = castPoints(nominationOf(4), { 0: 1, 1: 0 });
+    expect(s.players.map((p) => `${p.seat}>${p.nominate ?? "-"}`).join(",")).toBe("0>1,1>0,2>-,3>-");
+  });
+
+  it("nominationSpanMs: 지금(전환 전) startedAt 의 지목 길이는 단계 표 값이다", () => {
+    // 09.1-04 가 이 단언을 nominationMaxMs(4) 로 바꾼다(전환 뒤에는 차례 사슬 전체 길이).
+    expect(nominationSpanMs(startedAt(4, 1, "nomination"), 2)).toBe(PHASE_DEFS.nomination.durationMs);
+  });
+
+  it("nominationSpanMs 는 지목이 아닌 상태를 받으면 Error", () => {
+    expect(() => nominationSpanMs(startedAt(4, 1, "discussion"), 2)).toThrow();
   });
 });
