@@ -229,8 +229,9 @@ async function main() {
   check("b", "방장 testBots 3 → 방장·손님 모두 인원 5 lobby", grew, `${lastView(host).players.length}/${lastView(guest).players.length}`);
   check("b", "방장 view 의 me.testBots 가 3", lastView(host).me.testBots === 3, String(lastView(host).me.testBots));
   const botPlayers = lastView(host).players.filter((p) => p.seat !== host.seat && p.seat !== guest.seat);
-  check("b", "봇 자리 셋은 connected true 이고 닉네임이 고정 목록 안",
-    botPlayers.length === 3 && botPlayers.every((p) => p.connected === true && BOT_NAMES.includes(p.nickname)), botPlayers.map((p) => `${p.seat}${p.nickname}`).join(","));
+  // 09-24: 봇 이름 길이는 1~8자 무작위(첫 봇만 8자) — 고정 목록 이름의 앞부분이면 된다
+  check("b", "봇 자리 셋은 connected true 이고 닉네임이 고정 목록 이름의 앞부분(1~8자)",
+    botPlayers.length === 3 && botPlayers.every((p) => p.connected === true && BOT_NAMES.some((name) => p.nickname.length >= 1 && name.startsWith(p.nickname))), botPlayers.map((p) => `${p.seat}${p.nickname}`).join(","));
   check("b", "손님 프레임 원문에 testBots 가 없음", !guest.frames.slice(guestMark).some((f) => f.raw.includes("testBots")), "");
   // 손님이 나가면 방장 view 인원 4(사람 1 + 봇 3)
   guest.leaving = true;

@@ -739,7 +739,7 @@ export class Room extends DurableObject<Env> {
       this.sendTo(ws, { t: "error", code: "BAD_MESSAGE" });
       return;
     }
-    const result = setBotCount(this.room, att.playerId, count, () => crypto.randomUUID());
+    const result = setBotCount(this.room, att.playerId, count, () => crypto.randomUUID(), cryptoRandInt);
     if (!result.ok) {
       this.rejectTestTool(ws, att.playerId, result.error);
       return;

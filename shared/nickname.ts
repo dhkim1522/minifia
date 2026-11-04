@@ -35,6 +35,18 @@ export function countGraphemes(s: string): number {
   return n;
 }
 
+/** 앞에서 n 그래핌만 남긴 문자열(n 이 전체 길이 이상이면 그대로). 서버 봇 이름처럼 규칙 안에서 이름을 줄일 때 쓴다. */
+export function graphemePrefix(s: string, n: number): string {
+  let out = "";
+  let i = 0;
+  for (const part of segmenter.segment(s)) {
+    if (i >= n) break;
+    out += part.segment;
+    i += 1;
+  }
+  return out;
+}
+
 /** NFC → 앞뒤 공백 제거 → 안쪽 공백(Zs) 연속을 공백 하나로. 탭·줄바꿈(Cc)은 건드리지 않고 검증에서 거부한다. */
 export function normalizeNickname(raw: string): string {
   return raw.normalize("NFC").trim().replace(/\p{Zs}+/gu, " ");

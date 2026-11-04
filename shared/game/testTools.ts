@@ -4,7 +4,7 @@
 // → 방장이 아니면 NOT_HOST → 단계가 맞지 않으면 WRONG_PHASE → (testRole 만) 직업이 구성에 없으면 BAD_MESSAGE
 // (testBots 는 대기실 다음에 개수 범위가 틀리면 BAD_MESSAGE, 결정 0024. testBotVote 는 대기실 다음에 값이 범위 밖이면 BAD_MESSAGE, P-13).
 // 결정 0017-5(방장 연장·넘기기 제거)와 0020 은 일반 방에서 그대로다. 이 도구는 테스트 방 전용 예외다.
-import { validateNickname } from "../nickname";
+import { NICKNAME_MAX_GRAPHEMES, graphemePrefix, validateNickname } from "../nickname";
 import { MAX_PLAYERS, MAX_TEST_BOTS } from "../protocol";
 import type { BotVoteExec, BotVotePick } from "../protocol";
 import { isAlive } from "./alive";
@@ -147,13 +147,28 @@ export function setTestRole(state: RoomState, actorId: string, role: RoleId | nu
   return { ok: true, state: { ...state, testRole: role } };
 }
 
+/** 봇 이름 하나: 방에 없는 기본 이름 중 첫 것의 앞 wantLen 그래핌(겹치면 길이를 늘림). 쓸 수 있는 이름이 없으면 null. */
+function botNickname(keys: ReadonlySet<string>, wantLen: number): { nickname: string; key: string } | null {
+  for (const base of BOT_NAMES) {
+    const full = validateNickname(base);
+    if (!full.ok || keys.has(full.key)) continue;
+    for (let len = wantLen; len <= NICKNAME_MAX_GRAPHEMES; len += 1) {
+      const checked = validateNickname(graphemePrefix(base, len));
+      if (checked.ok && !keys.has(checked.key)) return { nickname: checked.nickname, key: checked.key };
+    }
+  }
+  return null;
+}
+
 /**
  * 테스트 방 서버 봇 수를 count(원하는 봇 수, 절대값)로 맞춘다(결정 0024). 대기실에서만, 사람 + 봇 <= MAX_PLAYERS 로 잘라 정확히 그만큼 둔다.
  * 더할 때는 가장 낮은 빈 자리에 BOT_NAMES 중 방에 같은 비교 키가 없는 첫 이름으로 앉히고, 뺄 때는 가장 높은 자리 봇부터 뺀다. 사람은 손대지 않는다.
+ * 09-24: 이름 길이는 1~8 그래핌 무작위다(결정 0052-3 개정, feedback-10) — 봇이 0명일 때 더해지는 첫 봇만 8자 그대로 두어 가장 넓은 이름표를 늘 시험하고,
+ * 나머지는 길이 1 + randInt(8) 로 그 기본 이름의 앞부분을 쓴다. 겹치면 길이를 하나씩 늘리고, 8자까지 늘려도 겹치면 그 기본 이름은 건너뛴다.
  * 사람이 봇 이름을 쓰고 있어 쓸 수 있는 이름이 모자라면 그 수까지만 둔다. 잘린 결과가 지금과 같으면 입력 상태를 그대로 돌려준다.
  * 봇은 토큰이 없고(빈 문자열) 소켓이 없으며 connected 가 항상 true 다 — makeId 는 호출하는 쪽(방 DO 는 crypto.randomUUID)이 준다.
  */
-export function setBotCount(state: RoomState, actorId: string, count: number, makeId: () => string): TestToolResult {
+export function setBotCount(state: RoomState, actorId: string, count: number, makeId: () => string, randInt: RandInt): TestToolResult {
   const denied = checkTestHost(state, actorId);
   if (denied !== null) return { ok: false, error: denied };
   if (state.phase !== "lobby") return { ok: false, error: "WRONG_PHASE" };
@@ -184,14 +199,8 @@ export function setBotCount(state: RoomState, actorId: string, count: number, ma
   let nextJoinSeq = state.nextJoinSeq;
   for (let added = current; added < target; added += 1) {
     const keys = new Set(players.map((p) => p.nicknameKey));
-    let nickname: { nickname: string; key: string } | null = null;
-    for (const name of BOT_NAMES) {
-      const checked = validateNickname(name);
-      if (checked.ok && !keys.has(checked.key)) {
-        nickname = { nickname: checked.nickname, key: checked.key };
-        break;
-      }
-    }
+    const wantLen = added === 0 ? NICKNAME_MAX_GRAPHEMES : 1 + randInt(NICKNAME_MAX_GRAPHEMES);
+    const nickname = botNickname(keys, wantLen);
     if (nickname === null) break;
     const bot: Player = {
       id: makeId(),
