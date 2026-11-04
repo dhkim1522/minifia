@@ -361,13 +361,22 @@ describe("rolecard.css — 시트 규약", () => {
     expect(dot).not.toContain("transition");
   });
 
-  it("액자: 128×160, 반경 12px, 패딩 8, 시트 높이 min(420px, 80dvh)", () => {
+  it("액자: 128×160, 반경 12px, 패딩 8", () => {
     const art = rule(".mf-rolecard__art");
     expect(art).toContain("width: 128px");
     expect(art).toContain("height: 160px");
     expect(art).toContain("border-radius: 12px");
     expect(art).toContain("padding: 8px");
-    expect(rule(".mf-sheet.mf-sheet--rolecard")).toContain("height: min(420px, 80dvh)");
+  });
+
+  it("시트 높이는 내용에 맞춘다: height auto, max-height min(420px, 80dvh), 고정 height 없음 (feedback-7)", () => {
+    const sheet = rule(".mf-sheet.mf-sheet--rolecard");
+    expect(sheet).toContain("height: auto");
+    expect(sheet).toContain("max-height: min(420px, 80dvh)");
+    expect(sheet).not.toMatch(/(^|[^-])height: min\(420px, 80dvh\)/);
+    // 기록이 길면 최대 높이 안에서 줄어든다: 탭 본문·일지는 min-height 0 이고 일지가 넘치는 것을 안에서 다룬다
+    expect(rule(".mf-rolecard__panel")).toContain("min-height: 0");
+    expect(rule(".mf-journal")).toContain("min-height: 0");
   });
 
   it("키보드 포커스 링과 탭 줄 간격", () => {
