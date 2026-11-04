@@ -700,6 +700,29 @@ describe("판결 순간 연출 — 시간표 (09.1.1-13)", () => {
     expect(root.style.getPropertyValue("--mf-panel-h")).toMatch(/px$/);
   });
 
+  // 알림이 두 줄로 감기면(8자 이름 "… 님 처형", 알림 아랫변 158) 묶음 윗변이 알림 아랫변 + 16 으로 내려간다 — 한 줄이면 131 그대로(E2E BF2)
+  it("묶음 윗변 변수 --mf-ballot-top: 알림 아랫변이 115 이하면 131, 158.4 면 175(올림), 묶음이 없으면 변수가 없다", () => {
+    const bottomOf = { v: 115 };
+    const spy = vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
+      const isBody = this.classList.contains("mf-announce__body");
+      const b = isBody ? bottomOf.v : 0;
+      return { x: 0, y: 0, left: 0, top: 0, right: 0, bottom: b, width: 0, height: 0, toJSON: () => ({}) } as DOMRect;
+    });
+    try {
+      const m = enter();
+      const root = m.container.querySelector("main.mf-game") as HTMLElement;
+      advance(600);
+      expect(root.style.getPropertyValue("--mf-ballot-top")).toBe("131px");
+      bottomOf.v = 158.4;
+      advance(2000); // 2.6초: 알림이 바뀐다
+      expect(root.style.getPropertyValue("--mf-ballot-top")).toBe("175px");
+      advance(2000); // 4.6초: 묶음이 사라진다
+      expect(root.style.getPropertyValue("--mf-ballot-top")).toBe("");
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
   it("어둡게 막 CSS: verdict 상태는 불투명도 1(= night-950 45% 그대로)에 dur-med 로 켜진다", () => {
     const css = readFileSync("src/styles/game.css", "utf8");
     const rule = css.split("\n").find((l) => l.startsWith('.mf-game__dim[data-dim="verdict"]')) ?? "";

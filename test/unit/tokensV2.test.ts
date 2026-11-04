@@ -301,7 +301,7 @@ describe("찬반 기록 CSS 규칙 (09.1.1-12)", () => {
   it("영역은 포인터 이벤트를 받지 않고 알약 높이 32·묶음 머리 28이다", () => {
     const body = (sel: string) => NEW.find((r) => r.selector === sel)?.body ?? "";
     expect(body(".mv-ballots")).toMatch(/pointer-events:\s*none/);
-    expect(body(".mv-ballots")).toMatch(/top:\s*131px/);
+    expect(body(".mv-ballots")).toMatch(/top:\s*var\(--mf-ballot-top,\s*131px\)/);
     expect(body(".mv-ballots")).toMatch(/--mf-panel-h/);
     expect(body(".mv-ballots__pill")).toMatch(/height:\s*32px/);
     expect(body(".mv-ballots__head")).toMatch(/height:\s*28px/);
