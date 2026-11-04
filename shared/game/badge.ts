@@ -25,6 +25,8 @@ export function badgeChoicesOf(playerCount: number): BadgeId[] {
 /**
  * 주장 걸기·바꾸기. 검사 순서가 계약이다: 단계(BADGE_PHASES 밖이면 WRONG_PHASE) → 행위자(방에 있고 산 사람, 아니면 BAD_MESSAGE)
  * → 값(badgeChoicesOf 안, 아니면 BAD_MESSAGE) → 같은 값이면 입력 상태 그대로 ok → 그 사람의 badge 만 바뀐 새 상태.
+ * 말 바꿈(O-1, 직전 값 기준): 직전 값(player.badge ?? "none")이 none 이 아니고 새 값과 다르면 badgeSwapped 가 켜지고 판이 끝날 때까지 꺼지지 않는다.
+ * 첫 걸기(직전 값 none)는 바뀐 것이 아니다. 확정 변경마다 서버 전용 badgeLog 에 {n: 일차, v: 새 값} 한 줄이 쌓인다(O-20, 11페이즈 입력).
  */
 export function setBadge(
   state: RoomState,
@@ -36,11 +38,16 @@ export function setBadge(
   if (!actor || !isAlive(actor)) return { ok: false, error: "BAD_MESSAGE" };
   if (!badgeChoicesOf(state.players.length).includes(badge)) return { ok: false, error: "BAD_MESSAGE" };
   if ((actor.badge ?? "none") === badge) return { ok: true, state };
+  const previous: BadgeId = actor.badge ?? "none";
+  const swapped = actor.badgeSwapped === true || previous !== "none"; // 여기까지 왔으면 새 값은 직전 값과 다르다
+  const log = [...(actor.badgeLog ?? []), { n: state.day ?? 1, v: badge }];
   return {
     ok: true,
     state: {
       ...state,
-      players: state.players.map((p) => (p.id === actorId ? { ...p, badge } : p)),
+      players: state.players.map((p) =>
+        p.id === actorId ? { ...p, badge, badgeLog: log, ...(swapped ? { badgeSwapped: true as const } : {}) } : p,
+      ),
     },
   };
 }

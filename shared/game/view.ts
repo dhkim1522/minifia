@@ -154,7 +154,10 @@ export function buildView(state: RoomState, playerId: string, now: number): Room
         alive: isAlive(p), // 탈락 여부는 공개 정보다(ELIM-01)
       };
       // 공개 직업 주장(결정 0066-1): 산 사람이고 값이 있을 때만 키를 만든다. 실제 역할이 아니고 badgeLog(서버 전용)는 어떤 경로로도 싣지 않는다.
-      if (isAlive(p) && p.badge !== undefined && DAY_PHASES.has(state.phase)) row.badge = p.badge;
+      if (isAlive(p) && p.badge !== undefined && DAY_PHASES.has(state.phase)) {
+        row.badge = p.badge;
+        if (p.badgeSwapped === true) row.badgeSwapped = true; // 말 바꿈은 사실 하나 — 이전 값은 싣지 않는다
+      }
       return row;
     });
 
