@@ -22,6 +22,7 @@ import { ENTER_MS, EXIT_MS, MOVE_ACK_TIMEOUT_MS, RING_COLORS, WALK_CUE_KEY } fro
 import type { WorldModules } from "../../src/world/runtime";
 import { installWorldTestHooks, WORLD_TEST_KEY, worldTestHooksEnabled } from "../../src/world/testHooks";
 import { WorldStore } from "../../src/world/store";
+import { cameraModeOf } from "../../src/world/presence";
 import type { SceneLook, SeatLook } from "../../src/world/presence";
 
 // 06-13: 로비 맵 화면(WorldStage + 런타임). happy-dom 에는 WebGL 이 없어 loadModules 로 가짜 렌더러·가짜 캐릭터를 주입한다(가정 A1).
@@ -1879,7 +1880,7 @@ describe("E2E 훅 window.__mfPin (09.1.1-11, T-09.1.1-31)", () => {
   it("훅이 켜진 문맥: 처음엔 꺼짐 상태, 차례가 시작되면 seat 와 strength 가 오르고, 사라지면 seat null · strength 0, 언마운트 때 지워진다", async () => {
     const s = await openPin();
     frames(32);
-    expect(window.__mfPin).toEqual({ seat: null, moving: false, strength: 0 });
+    expect(window.__mfPin).toEqual({ seat: null, moving: false, strength: 0, zoom: 1 });
     s.rerender({ scene: pinScene({ mode: "turn", seat: 2 }) });
     frames(100);
     expect(window.__mfPin!.seat).toBe(2);
@@ -1889,9 +1890,25 @@ describe("E2E 훅 window.__mfPin (09.1.1-11, T-09.1.1-31)", () => {
     expect(window.__mfPin!.strength).toBeCloseTo(1, 6);
     s.rerender({ scene: pinScene(null) });
     frames(600);
-    expect(window.__mfPin).toEqual({ seat: null, moving: false, strength: 0 });
+    expect(window.__mfPin).toEqual({ seat: null, moving: false, strength: 0, zoom: 1 });
     s.utils.unmount();
     expect(window.__mfPin).toBeUndefined();
+  });
+
+  it("zoom: 카메라 줌을 소수 셋째 자리로 싣는다(처음 1, 느린 확대 뒤 1.1, 돌아오면 1)", async () => {
+    const s = await openPin();
+    frames(32);
+    expect(window.__mfPin!.zoom).toBe(1);
+    const cam = (zoom: number): SceneLook["camera"] => ({ mode: "fixed", target: { x: 0, z: 0 }, zoom, zoomMs: 600 });
+    s.rerender({ scene: sceneOf({ 0: {}, 1: {}, 2: {}, 3: {} }, { camera: cam(1.1) }) });
+    frames(300);
+    expect(window.__mfPin!.zoom).toBeGreaterThan(1.03);
+    expect(window.__mfPin!.zoom).toBeLessThan(1.07);
+    frames(500);
+    expect(window.__mfPin!.zoom).toBe(1.1);
+    s.rerender({ scene: sceneOf({ 0: {}, 1: {}, 2: {}, 3: {} }, { camera: cam(1) }) });
+    frames(800);
+    expect(window.__mfPin!.zoom).toBe(1);
   });
 
   it("slide: 이동 중에는 moving 이 참, 진행 0.5 이후 seat 가 지목받은 사람, 끝나면 moving 거짓", async () => {
@@ -1911,7 +1928,7 @@ describe("E2E 훅 window.__mfPin (09.1.1-11, T-09.1.1-31)", () => {
     const s = await openPin();
     s.rerender({ scene: pinScene({ mode: "turn", seat: 7 }) });
     frames(300);
-    expect(window.__mfPin).toEqual({ seat: null, moving: false, strength: 0 });
+    expect(window.__mfPin).toEqual({ seat: null, moving: false, strength: 0, zoom: 1 });
   });
 
   it("훅이 꺼진 문맥(?e2e=0)에서는 객체 자체가 없다", async () => {
@@ -1984,6 +2001,65 @@ describe("게임 장면(08-12): 카메라·조명·긴장·떠다님·처형 연
       expect(r.setZoom.mock.calls.length).toBe(calls); // 값이 같으면 다시 부르지 않는다
       const goal = gatherGoal(ZOOM_MAJORITY);
       expect(r.views.at(-1)!.offsetY).toBeCloseTo(goal.offsetY, 1);
+    });
+
+    // 09.1.1-13(O-15): zoomMs 가 있는 고정 구도는 그 시간에 ease-in-out 으로 줌한다(위치·세로 오프셋도 같은 진행)
+    const SLOW = (zoom: number): SceneLook["camera"] => ({ mode: "fixed", target: { x: 0, z: 0 }, zoom, zoomMs: 600 });
+    it("zoomMs 600: 1 → 1.10 이 ease-in-out — 300ms 에 중점, 600ms 에 1.10, 끝나면 다시 부르지 않는다", async () => {
+      const s = await openGame();
+      const r = s.world.renderers[0]!;
+      s.rerender({ scene: sceneOf(ALL, { camera: FIXED() }) });
+      frames(1000);
+      s.rerender({ scene: sceneOf(ALL, { camera: SLOW(1.1) }) });
+      frames(300);
+      expect(r.setZoom.mock.calls.at(-1)![0]).toBeCloseTo(1.05, 2);
+      frames(100);
+      const near = r.setZoom.mock.calls.at(-1)![0] as number;
+      expect(near).toBeGreaterThan(1.05);
+      expect(near).toBeLessThan(1.1);
+      frames(250);
+      expect(r.setZoom.mock.calls.at(-1)![0]).toBeCloseTo(1.1, 6);
+      const calls = r.setZoom.mock.calls.length;
+      frames(300);
+      expect(r.setZoom.mock.calls.length).toBe(calls);
+    });
+
+    it("zoomMs 600: 1.10 → 1 로 돌아올 때도 같은 시간(300ms 에 1.05)", async () => {
+      const s = await openGame();
+      const r = s.world.renderers[0]!;
+      s.rerender({ scene: sceneOf(ALL, { camera: SLOW(1.1) }) });
+      frames(1500);
+      expect(r.setZoom.mock.calls.at(-1)![0]).toBeCloseTo(1.1, 6);
+      s.rerender({ scene: sceneOf(ALL, { camera: SLOW(1) }) });
+      frames(300);
+      expect(r.setZoom.mock.calls.at(-1)![0]).toBeCloseTo(1.05, 2);
+      frames(350);
+      expect(r.setZoom.mock.calls.at(-1)![0]).toBeCloseTo(1, 6);
+    });
+
+    it("첫 장면(재접속·새로 고침)이 이미 1.10 이면 애니메이션 없이 곧바로 1.10", async () => {
+      const s = await openGame({ scene: sceneOf(ALL, { camera: SLOW(1.1) }) });
+      const r = s.world.renderers[0]!;
+      frame(16);
+      expect(r.setZoom.mock.calls.at(-1)![0]).toBeCloseTo(1.1, 6);
+    });
+
+    it("모션 줄이기: zoomMs 장면도 줌하지 않는다(1 유지)", async () => {
+      stubReducedMotion(true);
+      const s = await openGame();
+      const r = s.world.renderers[0]!;
+      s.rerender({ scene: sceneOf(ALL, { camera: SLOW(1.1) }) });
+      frames(800);
+      expect(r.setZoom.mock.calls.every((c) => c[0] === 1)).toBe(true);
+    });
+
+    it("높이 360 미만 스테이지: sceneLook 이 줌 없는 카메라를 주므로 렌더러는 1.10 을 받지 않는다", async () => {
+      const s = await openGame();
+      const r = s.world.renderers[0]!;
+      const small = cameraModeOf({ phase: "execution" } as RoomView, 359, { verdictZoom: 1.1 });
+      s.rerender({ scene: sceneOf(ALL, { camera: small }) });
+      frames(1000);
+      expect(r.setZoom.mock.calls.every((c) => (c[0] as number) <= 1.0001)).toBe(true);
     });
 
     it("모션 줄이기면 구도와 확대가 첫 프레임에 바로 바뀐다", async () => {

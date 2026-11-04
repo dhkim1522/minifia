@@ -142,6 +142,31 @@ describe("cameraModeOf (UI-SPEC 카메라 표)", () => {
   it("확대 상수는 그대로 남아 있다(다른 곳에서 쓸 수 있다)", () => {
     expect(ZOOM_MAJORITY).toBeGreaterThan(1);
   });
+  // 09.1.1-13(O-15): 판결 순간 느린 확대는 처형 단계에서 호출 쪽이 배율을 줄 때만, 스테이지 높이 360 이상에서만
+  describe("판결 순간 확대 (verdictZoom)", () => {
+    const exec = viewOf("execution", { day: { candidate: 2 } });
+    it("처형 단계 + 높이 360 이상: zoom 과 zoomMs 600", () => {
+      same(cameraModeOf(exec, ZOOM_MIN_STAGE_H, { verdictZoom: 1.1 }), { mode: "fixed", target: GATHER_CENTER, zoom: 1.1, zoomMs: 600 });
+      same(cameraModeOf(exec, 900, { verdictZoom: 1 }), { mode: "fixed", target: GATHER_CENTER, zoom: 1, zoomMs: 600 });
+    });
+    it("높이 360 미만은 줌 없이 지금과 같다(핀 조명과 막만)", () => {
+      same(cameraModeOf(exec, ZOOM_MIN_STAGE_H - 1, { verdictZoom: 1.1 }), { mode: "fixed", target: GATHER_CENTER, zoom: 1 });
+    });
+    it("배율을 주지 않으면 지금과 같고, 처형이 아닌 단계는 배율을 줘도 무시한다", () => {
+      same(cameraModeOf(exec, 800), { mode: "fixed", target: GATHER_CENTER, zoom: 1 });
+      same(cameraModeOf(viewOf("verdict"), 800, { verdictZoom: 1.1 }), { mode: "fixed", target: GATHER_CENTER, zoom: 1 });
+      same(cameraModeOf(viewOf("night"), 800, { verdictZoom: 1.1 }), { mode: "follow" });
+    });
+    it("역할에 따라 달라지지 않는다(유령·변론자·시민 같은 값)", () => {
+      const base = cameraModeOf(exec, 800, { verdictZoom: 1.1 });
+      same(cameraModeOf(viewOf("execution", { day: { candidate: 2 }, mySeat: 2 }), 800, { verdictZoom: 1.1 }), base);
+      same(cameraModeOf(viewOf("execution", { day: { candidate: 2 }, spectate: true }), 800, { verdictZoom: 1.1 }), base);
+    });
+    it("sceneLook 이 배율을 카메라로 넘긴다", () => {
+      same(sceneLook(exec, { stageH: 500, verdictZoom: 1.1 }).camera, { mode: "fixed", target: GATHER_CENTER, zoom: 1.1, zoomMs: 600 });
+      same(sceneLook(exec, { stageH: 500 }).camera, { mode: "fixed", target: GATHER_CENTER, zoom: 1 });
+    });
+  });
   it("과반이어도 지목 단계가 아니면 확대 1 (찬반)", () => {
     const verdict = viewOf("verdict", { day: { points: points([0, 2], [1, 2], [3, 2]), candidate: 2 } });
     same((cameraModeOf(verdict, 600) as { zoom: number }).zoom, 1);
