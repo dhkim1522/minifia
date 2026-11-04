@@ -5,16 +5,16 @@ milestone_name: 같은 공간
 current_phase: 9
 current_phase_name: 밤과 아침
 status: verifying
-stopped_at: Completed 09.1-09-PLAN.md
-last_updated: "2026-11-04T14:44:22.592Z"
+stopped_at: Completed 09.1-10-PLAN.md
+last_updated: "2026-11-04T14:51:45.826Z"
 last_activity: 2026-11-03
 last_activity_desc: Phase 9 execution started
-state_head: 7b44317c37161a2785ed9cb6a39aefbd8e9e0fb6
+state_head: c126063138b1f3109309639440c55d8a31788401
 progress:
   total_phases: 8
   completed_phases: 3
   total_plans: 120
-  completed_plans: 117
+  completed_plans: 118
   percent: 38
 ---
 
@@ -177,6 +177,7 @@ Progress: [████░░░░░░] 38% (3/7 phases)
 | Phase 09.1 P07 | 40min | 3 tasks | 15 files |
 | Phase 09.1 P08 | 70min | 2 tasks | 11 files |
 | Phase 09.1 P09 | 50min | 3 tasks | 17 files |
+| Phase 09.1 P10 | 20min | 3 tasks | 22 files |
 
 ## Accumulated Context
 
@@ -361,6 +362,7 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 09.1]: 09.1-08: 지목 스테이지 윗변은 알약 블록 전체가 아니라 막대 아랫변 + 4 (블록에 투명 위 한 줄이 있어 전체를 쓰면 표보다 28 낮아진다)
 - [Phase 09.1]: 09.1-08: E2E 봇 차례·8자 이름 알약은 noexec (b), dayFlow 는 4자 이름 사람 4명(N=4)
 - [Phase 09.1]: 09.1-09: 유령 직업 의상은 spectate 가 있을 때만 장면 표 SeatLook.outfit 으로 만들고 런타임이 같은 프레임에 안개 재질(0.26·#d8e4ff·0.85)과 함께 입힌다. 유령 이름표는 불투명
+- [Phase 09.1]: 09.1-10: ChatStore.holdCardsUntil 은 (at, now) — 저장소가 시계를 읽지 않고 이미 보이는 옛 카드를 다시 숨기지 않기 위함
 
 ### Pending Todos
 
@@ -399,8 +401,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-04T14:44:22.072Z
-Stopped at: Completed 09.1-09-PLAN.md
+Last session: 2026-11-04T14:51:45.291Z
+Stopped at: Completed 09.1-10-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
