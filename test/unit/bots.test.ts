@@ -12,6 +12,8 @@ import {
   BOT_TYPING_LEAD_MS,
   BOT_WILL_LINES,
   EXEC_YES_PERCENT,
+  RUNOFF_BOT_BASE_MS,
+  RUNOFF_BOT_SPAN_MS,
   botCount,
   botMafiaTarget,
   botPointTarget,
@@ -46,10 +48,12 @@ import { buildPreview, buildView } from "../../shared/game/view";
 import { MAX_PLAYERS, MAX_TEST_BOTS } from "../../shared/protocol";
 import type { PhaseId } from "../../shared/protocol";
 import { seededRandInt } from "../helpers/seededRandom";
-import { startedFrom, stateWithVerdict } from "../helpers/voteState";
+import { castPoints, startedFrom, stateWithVerdict } from "../helpers/voteState";
 import { toggleEnd } from "../../shared/game/discussion";
 import { castTurnPoint, enterNomination, nominationStepMs, stepNomination } from "../../shared/game/nomination";
 import { castVerdict } from "../../shared/game/verdict";
+import { castRunoffVote, runoffStepMs, stepRunoff } from "../../shared/game/runoff";
+import { RUNOFF_VOTE_MS } from "../../shared/game/phases";
 
 const START_AT = 10_000;
 const HOST_ID = "player-id-0000-aaaa";
@@ -1252,5 +1256,111 @@ describe("봇 채팅 앞 입력 중 단계 (09-24)", () => {
     const steps = planBotSteps(cut, now, () => 0);
     const kinds = steps.filter((s) => s.act.t === "chat" || s.act.t === "typing").map((s) => `${s.act.t}@${s.at - now}`);
     expect(kinds.join(",")).toBe("typing@500,chat@2000");
+  });
+});
+
+// ---- 결선 투표 계획(09.1.1-05, 결정 0066-4) ----
+/** 사람 1(좌석 0) + 봇 5(좌석 1~5) 테스트 방의 결선 투표 창(step 1) 첫 순간. 후보는 좌석 0(방장)·1(봇), 투표자는 봇 2~5. */
+function runoffVoteAt(seed: number, step: 0 | 1 | 2 = 1): RoomState {
+  const started = startedFrom(withBots(lobbyOf(1), 5), seed, "nomination");
+  const nominated = castPoints(started, { 0: 1, 1: 0 });
+  let s = tick(nominated, nominated.phaseEndsAt!, seededRandInt(seed + 5));
+  if (s.phase !== "runoff") throw new Error(`expected runoff, got ${s.phase}`);
+  for (let guard = 0; guard < 4 && (s.runoff?.step ?? 0) < step; guard += 1) {
+    const at = s.phaseEndsAt!;
+    const r = stepRunoff(s, at);
+    s = { ...r.state, phaseEndsAt: at + runoffStepMs(r.state) };
+  }
+  return s;
+}
+const runoffNow = (s: RoomState): number => s.phaseEndsAt! - RUNOFF_VOTE_MS;
+
+describe("봇 결선 투표 계획 (09.1.1-05)", () => {
+  it("상수: 500 + [0, 2500) ms — 투표 창 5초에서 마감 − 500 안에 든다", () => {
+    expect(RUNOFF_BOT_BASE_MS).toBe(500);
+    expect(RUNOFF_BOT_SPAN_MS).toBe(2_500);
+    expect(RUNOFF_BOT_BASE_MS + RUNOFF_BOT_SPAN_MS).toBeLessThan(RUNOFF_VOTE_MS - 500);
+  });
+
+  it("계획 키는 'runoff:{마감}' 이고 단계(step)가 바뀌어 마감이 달라지면 새 계획이 선다", () => {
+    const open = runoffVoteAt(3);
+    expect(String(botPlanKey(open))).toBe(`runoff:${open.phaseEndsAt}`);
+    const synced = syncBotPlan(open, runoffNow(open), seededRandInt(3));
+    expect(synced.botPlan?.key).toBe(`runoff:${open.phaseEndsAt}`);
+    expect(syncBotPlan(synced, runoffNow(open), THROWING) === synced).toBe(true);
+    const result = runoffVoteAt(3, 2);
+    expect(String(botPlanKey(result))).not.toBe(String(botPlanKey(open)));
+  });
+
+  it("step 1: 후보가 아닌 산 봇마다 point 한 행(후보 둘 중 하나, 500~3000ms, 마감 − 500 안), 입력 중 신호는 없다", () => {
+    for (let seed = 1; seed <= 20; seed += 1) {
+      const state = runoffVoteAt(seed);
+      expect(`${seed}:${state.runoff?.cand.join(",")}:${state.runoff?.step}`).toBe(`${seed}:0,1:1`);
+      const now = runoffNow(state);
+      const steps = planBotSteps(state, now, seededRandInt(seed));
+      expect(`${seed}:${steps.map((st) => st.act.t).join(",")}`).toBe(`${seed}:point,point,point,point`);
+      expect(`${seed}:${[...steps].map((st) => state.players.find((p) => p.id === st.botId)!.seat).sort().join(",")}`).toBe(`${seed}:2,3,4,5`);
+      for (const st of steps) {
+        if (st.act.t !== "point") throw new Error("expected point");
+        expect([0, 1].includes(st.act.target)).toBe(true);
+        expect(st.at >= now + RUNOFF_BOT_BASE_MS && st.at < now + RUNOFF_BOT_BASE_MS + RUNOFF_BOT_SPAN_MS).toBe(true);
+        expect(st.at < state.phaseEndsAt! - 500).toBe(true);
+      }
+    }
+  });
+
+  it("봇 표는 사람과 같은 규칙(castRunoffVote)을 모두 통과한다", () => {
+    for (let seed = 1; seed <= 10; seed += 1) {
+      const state = runoffVoteAt(seed);
+      for (const st of planBotSteps(state, runoffNow(state), seededRandInt(seed))) {
+        if (st.act.t !== "point") throw new Error("expected point");
+        const r = castRunoffVote(state, st.botId, st.act.target, st.at);
+        expect(`${seed}:${r.ok}`).toBe(`${seed}:true`);
+      }
+    }
+  });
+
+  it("후보 봇(좌석 1)·탈락한 봇·앞머리(step 0)·결과(step 2)에는 행동이 없고 randInt 를 부르지 않는다", () => {
+    const open = runoffVoteAt(4);
+    const dead = markDead(open, 2, 3, 4, 5);
+    expect(planBotSteps(dead, runoffNow(open), THROWING).length).toBe(0);
+    for (const step of [0, 2] as const) {
+      const state = runoffVoteAt(4, step);
+      expect(`${step}:${planBotSteps(state, runoffNow(state), THROWING).length}`).toBe(`${step}:0`);
+    }
+    const onlyOne = markDead(open, 3, 4, 5);
+    expect(planBotSteps(onlyOne, runoffNow(open), seededRandInt(1)).map((st) => st.botId).join(",")).toBe(open.players.find((p) => p.seat === 2)!.id);
+  });
+
+  it("난수 순서는 봇마다 [2, 2500] 이고 좌석 오름차순이다; 후보 선택은 randInt(2) 번째 후보다", () => {
+    const state = runoffVoteAt(6);
+    const rec = recording(9);
+    planBotSteps(state, runoffNow(state), rec.randInt);
+    expect(rec.calls.join(",")).toBe("2,2500,2,2500,2,2500,2,2500");
+    for (const pick of [0, 1]) {
+      const steps = planBotSteps(state, runoffNow(state), (n) => (n === 2 ? pick : 0));
+      expect(steps.map((st) => (st.act.t === "point" ? st.act.target : -1)).join(",")).toBe([pick, pick, pick, pick].join(","));
+    }
+  });
+
+  it("고정 pick: host 는 방장 후보에게, other 는 방장이 아닌 후보에게 던지고 결정 난수는 건너뛴다(지연 난수는 그대로)", () => {
+    const state = runoffVoteAt(6);
+    for (const [pick, want] of [["host", 0], ["other", 1]] as const) {
+      const rec = recording(9);
+      const steps = planBotSteps({ ...state, testBotVote: { pick } }, runoffNow(state), rec.randInt);
+      expect(`${pick}:${rec.calls.join(",")}`).toBe(`${pick}:2500,2500,2500,2500`);
+      expect(`${pick}:${steps.map((st) => (st.act.t === "point" ? st.act.target : -1)).join(",")}`).toBe(`${pick}:${[want, want, want, want].join(",")}`);
+    }
+    // 방장이 후보가 아니면 host 고정은 적용되지 않고 무작위로 돌아간다
+    const hostOut = { ...state, hostId: state.players.find((p) => p.seat === 3)!.id, testBotVote: { pick: "host" as const } };
+    const rec = recording(9);
+    planBotSteps(hostOut, runoffNow(state), rec.randInt);
+    expect(rec.calls.filter((n) => n === 2).length).toBe(4);
+  });
+
+  it("사람이 모두 끊기면 계획이 비어 있다", () => {
+    const state = runoffVoteAt(2);
+    const gone: RoomState = { ...state, players: state.players.map((p) => (isBot(p) ? p : { ...p, connected: false })) };
+    expect(planBotSteps(gone, runoffNow(state), THROWING).length).toBe(0);
   });
 });

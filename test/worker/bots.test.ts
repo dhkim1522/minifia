@@ -500,6 +500,41 @@ describe("봇 투표·변론", () => {
   }, 30_000);
 });
 
+describe("봇 결선 투표 (09.1.1-05, 결정 0066-4)", () => {
+  it("결선 투표 창(step 1)에서 후보가 아닌 봇이 사람과 같은 길로 한 표씩 던지고, 집계 뒤 변론 또는 밤으로 이어지며, 프레임에는 개인 선택·봇 계획이 새지 않는다", async () => {
+    const r = await botRoomAt("nomination"); // 방장(좌석 0) + 봇 3(좌석 1~3)
+    const botSeats = await botSeatsOf(r.code);
+    expect(botSeats.join(",")).toBe("1,2,3");
+    // 방장과 봇 1 이 후보인 결선 앞머리를 세운다(지목 집계가 만드는 모양 그대로).
+    await editRoom(r.code, (room) => {
+      const { pickTurn: _pickTurn, botPlan: _botPlan, ...rest } = room as Record<string, unknown>;
+      return { ...rest, phase: "runoff", runoff: { cand: [0, 1], step: 0 }, phaseEndsAt: Date.now() + 600_000 };
+    });
+    for (const sock of allSockets(r)) await settle(sock, mark(sock));
+    await closePhase(r.code); // 앞머리 → 투표 창
+    expect(String(((await stored(r.code)).runoff as { step: number }).step)).toBe("1");
+    const from = mark(r.host);
+    await forceBotsDue(r.code);
+    await until("봇 표", async () => (await playersOf(r.code)).filter((p) => (p as unknown as { runoffVote?: number }).runoffVote !== undefined).length === 2);
+    const voters = ((await stored(r.code)).players as Array<{ seat: number; runoffVote?: number }>).filter((p) => p.runoffVote !== undefined);
+    expect(voters.map((p) => p.seat).sort().join(",")).toBe("2,3");
+    expect(voters.every((p) => p.runoffVote === 0 || p.runoffVote === 1)).toBe(true);
+    // 후보 봇(1)·방장(0)은 던지지 않는다.
+    const frames = await settle(r.host, from);
+    const text = JSON.stringify(frames);
+    expect(text.includes("runoffVote") || text.includes("botPlan") || text.includes("isBot")).toBe(false);
+    const view = (frames.filter((m): m is State => m.t === "state").at(-1)!).view;
+    expect(JSON.stringify(view.day?.runoff?.voted)).toBe("[2,3]");
+    expect(Object.hasOwn(view.me, "ballot")).toBe(false);
+    // 결과(step 2) → 집계
+    await closePhase(r.code);
+    await closePhase(r.code);
+    const after = await stored(r.code);
+    expect(["defense", "night"].includes(String(after.phase))).toBe(true);
+    expect(after.runoff).toBeUndefined();
+  }, 60_000);
+});
+
 describe("누출 없음: 투표·변론·처형·종료", () => {
   it("봇이 던지는 투표와 종료까지 방장·손님 프레임 어디에도 isBot·botPlan·봇 id·token 이 없다", async () => {
     const r = await seatQuiet(1, { testMode: true });
