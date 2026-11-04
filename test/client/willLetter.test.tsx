@@ -224,7 +224,7 @@ describe("유언 편지 — 암살 아침 (0063-3, C-1·C-2)", () => {
     for (const [name, value] of [
       ["--letter-paper", "#f3efe4"],
       ["--letter-ink", "#1c2a4d"],
-      ["--letter-label", "#6a7388"],
+      ["--letter-label", "#5f687b"],
       ["--letter-wax-1", "#e0485c"],
       ["--letter-wax-2", "#a3132a"],
       ["--letter-wax-3", "#650a18"],
@@ -317,6 +317,24 @@ describe("편지 글 크기 3단·편지지 높이 (C-3)", () => {
     const root = letterOf(r.container)!;
     expect(pv(root, "--lw-top")).toBe("135px");
     expect(pv(root, "--lw-h")).toBe("311px");
+  });
+
+  it("긴 글이 인장 자리에 닿으면 머리글 아래에 붙이고 인장 옆 줄(윗변에서 192 아래)의 오른쪽을 88 비운다", () => {
+    const bands: Array<unknown> = [];
+    const split = (text: string, tier: { font: number; line: number }, band: { from: number; side: number } | null): string[] => {
+      bands.push(band);
+      const n = tier.font === 28 ? (band === null ? 7 : 8) : 20;
+      return Array.from({ length: n }, (_, i) => `${i + 1}줄`);
+    };
+    const r = render(<WillLetter letter={letterOf2()} reducedMotion={false} splitLines={split} />);
+    tick(400);
+    expect(bands).toContainEqual({ from: 192, side: 88 });
+    const block = r.container.querySelector<HTMLElement>(".mf-letter__text")!;
+    expect(block.style.top).toBe("52px");
+    const lines = lineEls(r.container);
+    expect(lines.length).toBe(8);
+    expect(lines.map((l) => l.style.marginRight)).toEqual(["", "", "", "", "", "", "88px", "88px"]);
+    expect(pv(paperOf(r.container), "--lw-pos")).toBe("52px");
   });
 
   it("글 덩어리는 가운데에 놓이되 인장 윗변 위로 올린다: blockTop", () => {

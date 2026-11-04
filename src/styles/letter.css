@@ -6,7 +6,7 @@
   --letter-paper: #f3efe4;
   --letter-rule: rgba(70, 90, 130, 0.22);
   --letter-ink: #1c2a4d;
-  --letter-label: #6a7388;
+  --letter-label: #5f687b; /* 시안 #6a7388 은 종이 위 4.14:1 이라 14px 머리글 4.5:1 에 모자라 한 단계 어둡게(09.1-11) */
   --letter-wax-1: #e0485c;
   --letter-wax-2: #a3132a;
   --letter-wax-3: #650a18;

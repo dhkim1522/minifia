@@ -16,6 +16,12 @@ import type { WriteSchedule } from "../../game/willLetter";
 import type { WillLetter as WillLetterState } from "../../net/useWillLetter";
 import { V2Icon } from "./V2Icon";
 
+/** 인장 자리 피하기: 글 덩어리 윗변에서 from(px) 아래로 닿는 줄은 가로를 오른쪽에서 side(px) 만큼 좁혀(왼쪽 영역에서 가운데 맞춤) 인장 옆에 앉힌다 */
+export interface SealBand {
+  from: number;
+  side: number;
+}
+
 /** 글 크기(px)와 줄 높이(px) */
 export interface LetterTier {
   font: number;
@@ -27,8 +33,11 @@ export interface WillLetterProps {
   letter: WillLetterState;
   /** 모션 줄이기: 처음부터 완성된 모양, 막대 가득 정지 */
   reducedMotion: boolean;
-  /** 본문을 그 단계 글꼴 크기에서 보이는 줄로 나눈다. 기본은 숨은 측정 틀의 글자 사각형(Range)으로 나눈다 */
-  splitLines?: (text: string, tier: LetterTier) => string[];
+  /**
+   * 본문을 그 단계 글꼴 크기에서 보이는 줄로 나눈다. 기본은 숨은 측정 틀의 글자 사각형(Range)으로 나눈다.
+   * band 가 있으면 인장 자리: 글 덩어리 윗변에서 band.from 아래로 내려간 줄은 오른쪽을 band.side 만큼 비워 인장을 피한다
+   */
+  splitLines?: (text: string, tier: LetterTier, band: SealBand | null) => string[];
   /** 채팅 입력줄 윗변의 y(편지 틀 기준 px). 모르면(null) 편지지는 340 으로 두고 CSS 기본 자리에 앉는다 */
   getInputTop?: () => number | null;
   /** 편지가 화면에 보이는 동안 true (알림을 위로 올리는 쪽이 읽는다) */
@@ -48,6 +57,10 @@ const AVAIL_REST = 40 + 30;
 const HEAD_BOTTOM = 52;
 const SEAL_BOX = 84 + 8;
 const SEAL_GAP = 4;
+/** 인장 옆 줄의 오른쪽을 비우는 폭: 인장 왼쪽 가장자리(종이 오른쪽에서 100)에서 안쪽 패딩 24 를 뺀 76 + 회전·간격 12 */
+const BAND_SIDE = 88;
+/** 글 덩어리 아래 여백 */
+const BLOCK_BOTTOM = 24;
 
 /**
  * 글 덩어리 윗변 y(편지지 안). 기본은 편지지 세로 가운데이고(시안), 덩어리 아래끝이 인장 윗변을 침범하면 머리글 아래까지 올려 인장 위에 맞춘다.
@@ -62,36 +75,52 @@ export function blockTop(paperH: number, lines: number, line: number): number {
   return Math.max(0, centered);
 }
 
-/** 측정 틀의 글 요소에서 Range 글자 사각형의 top 으로 보이는 줄을 나눈다. 사각형을 못 읽는 환경은 한 줄(텍스트 노드는 그대로) */
-function splitByRects(el: HTMLElement, text: string, tier: LetterTier): string[] {
+/**
+ * 측정 틀의 글 요소(el)에서 보이는 줄을 나눈다. 남은 글을 그 줄의 가로(인장 자리 줄은 좁게)로 놓아 보고 첫 줄의 Range 글자 사각형 top 으로 끊는 일을 되풀이한다.
+ * 줄바꿈 규칙(keep-all·anywhere)은 브라우저가 정한다. 사각형을 못 읽는 환경은 한 줄(텍스트 노드는 그대로).
+ */
+function splitByRects(el: HTMLElement, text: string, tier: LetterTier, band: SealBand | null): string[] {
+  if (typeof document.createRange !== "function") return [text];
   el.style.fontSize = `${tier.font}px`;
   el.style.lineHeight = `${tier.line}px`;
-  const node = el.firstChild;
-  if (node === null || node.nodeType !== 3 || typeof document.createRange !== "function") return [text];
+  el.style.width = "";
+  const full = el.getBoundingClientRect().width;
   const range = document.createRange();
   const out: string[] = [];
-  let cur = "";
-  let lineTop: number | null = null;
-  let offset = 0;
-  let seen = false;
-  for (const ch of Array.from(text)) {
-    range.setStart(node, offset);
-    range.setEnd(node, offset + ch.length);
-    offset += ch.length;
-    const rect = typeof range.getClientRects === "function" ? range.getClientRects()[0] : undefined;
-    if (rect !== undefined && rect.width > 0) {
-      seen = true;
-      if (lineTop !== null && Math.abs(rect.top - lineTop) > tier.line / 2) {
-        out.push(cur);
-        cur = "";
-        lineTop = rect.top;
-      } else if (lineTop === null) lineTop = rect.top;
+  let rest = text.trim();
+  let seenRects = false;
+  while (rest !== "" && out.length < 60) {
+    const narrow = band !== null && (out.length + 1) * tier.line > band.from;
+    el.style.width = narrow ? `${Math.max(1, full - band.side)}px` : "";
+    el.textContent = "";
+    const node = el.appendChild(document.createTextNode(rest));
+    let lineTop: number | null = null;
+    let end = rest.length;
+    let offset = 0;
+    for (const ch of Array.from(rest)) {
+      range.setStart(node, offset);
+      range.setEnd(node, offset + ch.length);
+      const rect = typeof range.getClientRects === "function" ? range.getClientRects()[0] : undefined;
+      if (rect !== undefined && rect.width > 0) {
+        seenRects = true;
+        if (lineTop === null) lineTop = rect.top;
+        else if (Math.abs(rect.top - lineTop) > tier.line / 2) {
+          end = offset;
+          break;
+        }
+      }
+      offset += ch.length;
     }
-    cur += ch;
+    if (!seenRects) return [text];
+    const line = rest.slice(0, end).trim();
+    if (line === "") break;
+    out.push(line);
+    rest = rest.slice(end).trim();
   }
-  out.push(cur);
-  const lines = out.map((l) => l.trim()).filter((l) => l !== "");
-  return seen && lines.length > 0 ? lines : [text];
+  el.textContent = "";
+  el.style.width = "";
+  if (rest !== "") out.push(rest);
+  return out.length > 0 ? out : [text];
 }
 
 interface Plan {
@@ -99,6 +128,8 @@ interface Plan {
   tier: LetterTier;
   paperH: number;
   blockTop: number;
+  /** 인장 옆으로 좁힌 줄이 있으면 그 줄을 가리키는 기준(글 덩어리 윗변에서 from 아래) */
+  bandFrom: number | null;
   schedule: WriteSchedule | null;
   /** 입력줄 윗변을 알 때만: 묶음 윗변 y, 묶음 높이 */
   box?: { top: number; h: number };
@@ -151,24 +182,48 @@ export function WillLetter({ letter, reducedMotion, splitLines, getInputTop, onL
     if (font === "wait") return;
     const shell = shellRef.current;
     const textEl = shell?.querySelector<HTMLElement>("[data-measure-text]") ?? null;
-    const split = (tier: LetterTier): string[] => (splitLines !== undefined ? splitLines(text, tier) : textEl !== null ? splitByRects(textEl, text, tier) : [text]);
+    const split = (tier: LetterTier, band: SealBand | null): string[] => (splitLines !== undefined ? splitLines(text, tier, band) : textEl !== null ? splitByRects(textEl, text, tier, band) : [text]);
     const announceH = shell?.querySelector("[data-measure-announce]")?.getBoundingClientRect().height ?? 0;
     const ah = announceH > 0 ? announceH : ANNOUNCE_H_GUESS;
     const rawInputTop = getInputTop?.() ?? null;
     const inputTop = rawInputTop !== null && rawInputTop > 0 ? rawInputTop : null;
-    const avail = inputTop === null ? paperHeight(Number.POSITIVE_INFINITY) : inputTop - ANNOUNCE_TOP - ah - AVAIL_REST;
+    const avail = inputTop === null ? Number.POSITIVE_INFINITY : inputTop - ANNOUNCE_TOP - ah - AVAIL_REST;
+
+    /**
+     * 편지지 높이 p 에서 글 단계·줄·덩어리 윗변을 정한다. 먼저 chooseTier(안쪽 p − 56)가 고른 단계의 줄이 가운데(또는 인장 윗변 위)에 앉으면 그대로 두고,
+     * 인장에 닿는 긴 글은 머리글 아래에 붙이고 인장 옆 줄을 좁혀 다시 나눈다. 그래도 안 들어가면 한 단계 작게(3단계까지). ok=false 면 3단계로도 안 들어간 것.
+     */
+    const fit = (p: number): { tier: LetterTier; lines: string[]; top: number; band: number | null; ok: boolean } => {
+      const sealTop = p - SEAL_BOX - SEAL_GAP;
+      const band: SealBand = { from: sealTop - HEAD_BOTTOM, side: BAND_SIDE };
+      const choice = chooseTier((t) => split(t, null).length, p - 56);
+      for (let i = choice.tier - 1; i < LETTER_TIERS.length; i++) {
+        const tier = { font: LETTER_TIERS[i]!.font, line: LETTER_TIERS[i]!.line };
+        const plain = split(tier, null);
+        const top = blockTop(p, plain.length, tier.line);
+        if (plain.length * tier.line <= p - 56 && top + plain.length * tier.line <= sealTop + 0.5) return { tier, lines: plain, top, band: null, ok: true };
+        const banded = split(tier, band);
+        if (HEAD_BOTTOM + banded.length * tier.line <= p - BLOCK_BOTTOM) return { tier, lines: banded, top: HEAD_BOTTOM, band: band.from, ok: true };
+      }
+      const last = LETTER_TIERS[LETTER_TIERS.length - 1]!;
+      const tier = { font: last.font, line: last.line };
+      return { tier, lines: split(tier, band), top: HEAD_BOTTOM, band: band.from, ok: false };
+    };
     let paperH = paperHeight(avail);
-    const choice = chooseTier((tier) => split(tier).length, paperH - 56);
-    // 3단계로도 넘으면 편지지를 가용 높이까지 키운다(하한 220 유지)
-    if (choice.overflow) paperH = Math.max(LETTER_PAPER_MIN_H, avail === Number.POSITIVE_INFINITY ? paperH : avail);
-    const tier = { font: choice.font, line: choice.line };
-    const lines = split(tier);
+    let chosen = fit(paperH);
+    // 3단계로도 안 들어가면 편지지를 가용 높이까지 키운다(하한 220 유지)
+    if (!chosen.ok && Number.isFinite(avail) && avail > paperH) {
+      paperH = Math.max(LETTER_PAPER_MIN_H, avail);
+      chosen = fit(paperH);
+    }
+    const { tier, lines } = chosen;
     const top = ANNOUNCE_TOP + ah + ANNOUNCE_GAP;
     setPlan({
       lines,
       tier,
       paperH,
-      blockTop: blockTop(paperH, lines.length, tier.line),
+      blockTop: chosen.top,
+      bandFrom: chosen.band,
       schedule: writeSchedule(lines),
       ...(inputTop !== null && inputTop - INPUT_GAP - top > 0 ? { box: { top, h: inputTop - INPUT_GAP - top } } : {}),
     });
@@ -223,9 +278,7 @@ export function WillLetter({ letter, reducedMotion, splitLines, getInputTop, onL
   const shell =
     plan === null ? (
       <div ref={shellRef} className={font === "fallback" ? "mf-letter-measure is-fallback" : "mf-letter-measure"} aria-hidden="true" data-letter-measure="">
-        <p className="mf-letter-measure__text" data-measure-text="">
-          {text}
-        </p>
+        <p className="mf-letter-measure__text" data-measure-text="" />
         <div className="mf-letter-measure__announce" data-measure-announce="">
           <div className="mf-announce__body">
             {letter.announce.icon !== undefined && <V2Icon name={letter.announce.icon} size={56} />}
@@ -272,7 +325,12 @@ export function WillLetter({ letter, reducedMotion, splitLines, getInputTop, onL
                       data-will-line=""
                       data-write-at={w.at}
                       data-write-steps={w.steps}
-                      style={css({ "--lw-delay": ms(w.at), "--lw-ms": `${w.ms}ms`, "--lw-steps": w.steps })}
+                      style={css({
+                        "--lw-delay": ms(w.at),
+                        "--lw-ms": `${w.ms}ms`,
+                        "--lw-steps": w.steps,
+                        ...(plan.bandFrom !== null && (i + 1) * plan.tier.line > plan.bandFrom ? { marginRight: BAND_SIDE } : {}),
+                      })}
                     >
                       {line}
                     </p>
