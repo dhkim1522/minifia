@@ -3015,7 +3015,7 @@ async function wakeLockFlow(ctx) {
 }
 
 // 정치 긴장 화면(09.1.1-10·11): 직업 배지·귓속말·지목 핀 조명. 흐름 본문은 politics.mjs, 도우미만 넘긴다
-const { politicsBadgeFlow, politicsWhisperFlow, politicsPinFlow, politicsVerdictFlow, politicsRunoffFlow, politicsRunoffTieFlow } = makePoliticsFlows({ recorder, openGame, closeGame, allAt, attempt, gameGH, walkableCentersOfApp, GAME_HOST_NICK });
+const { politicsBadgeFlow, politicsWhisperFlow, politicsPinFlow, politicsVerdictFlow, politicsRunoffFlow, politicsRunoffTieFlow, politicsShowdownFlow, politicsShowdownTieFlow } = makePoliticsFlows({ recorder, openGame, closeGame, allAt, attempt, gameGH, walkableCentersOfApp, GAME_HOST_NICK });
 
 export const FLOWS = [
   // lobby·world 는 LOBBY_SIZES 6개 크기로 돈다: 기본 크기 4개에 더해 390x844·402x874 (run.mjs 의 extraSizes)
@@ -3046,6 +3046,9 @@ export const FLOWS = [
   // 동점 결선(09.1.1-14): 사람 4명이 2:2 동점 → 결선 투표(바꾸기·done 체크·득표 배지) → 변론. 폰 6종 / 결선도 동점이면 처형 없음 → 밤 한 번
   { id: "politics-runoff", run: politicsRunoffFlow, extraSizes: LOBBY_EXTRA_SIZES },
   { id: "politics-runoff-tie", run: politicsRunoffTieFlow, size: GAME_SIZE },
+  // 마지막 3인 결전(09.1.1-16): 방장 처형 → 산 손님 셋의 한마디 3번 → 동시 지목 → 공개 → 2표 처형, 폰 6종
+  { id: "politics-showdown", run: politicsShowdownFlow, extraSizes: LOBBY_EXTRA_SIZES },
+  { id: "politics-showdown-tie", run: politicsShowdownTieFlow, size: GAME_SIZE },
   // 재접속·예산(06-18): 폰 크기와 곱하지 않고 자기 크기로 한 번. deployhold 는 배포와 동시에 돌리는 흐름(06-19)이라 --only 없이는 빠진다
   { id: "reconnect", run: reconnectFlow, size: RECONNECT_SIZE },
   { id: "deployhold", run: deployHoldFlow, size: RECONNECT_SIZE, skipByDefault: true },

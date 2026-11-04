@@ -1,10 +1,10 @@
-// 정치 긴장 화면 E2E 흐름 (09.1.1-10·11·13·14, 결정 0066, UI-SPEC 흐름 E2E ①②③④⑥): politics-badge(직업 배지)·politics-whisper(귓속말)·politics-pin(지목 차례 핀 조명)·politics-verdict(판결 순간)·politics-runoff(동점 결선, 사람 4명)·politics-runoff-tie(결선도 동점 → 처형 없음).
+// 정치 긴장 화면 E2E 흐름 (09.1.1-10·11·13·14·16, 결정 0066, UI-SPEC 흐름 E2E ①②③④⑤⑥): politics-badge(직업 배지)·politics-whisper(귓속말)·politics-pin(지목 차례 핀 조명)·politics-verdict(판결 순간)·politics-runoff(동점 결선, 사람 4명)·politics-runoff-tie(결선도 동점 → 처형 없음)·politics-showdown(마지막 3인 결전, 폰 6종)·politics-showdown-tie(1-1-1 → 처형 없음).
 // flows.mjs 가 이미 3천 줄이라 흐름 본문은 이 파일에 둔다. flows.mjs 의 도우미는 `makePoliticsFlows(helpers)` 로 받는다(서로 import 하지 않는다 — 순환 없음).
 // 두 흐름 모두 폰 6종(LOBBY_EXTRA_SIZES)으로 돈다. 방장 화면과 손님 화면 둘을 함께 본다.
 // 판정 문턱은 lib.mjs 의 순수 검사 함수(floatButtonChecks·sheetFitChecks·claimBadgeChecks·pickButtonChecks)에 있고 여기서는 낮추지 않는다.
 // 귓속말 본문(canary)은 결과 표와 오류 문구에 쓰지 않는다 — 있는지 없는지(불리언)만 남긴다(T-09.1.1-28).
-import { hitsInputSurface, installFakeViewport, readGame, sampleWorld, screensOfWorld, SetupError, settle, skipTo, sleep, tapTurnPick, tapWorld } from "./browser.mjs";
-import { ballotFitChecks, claimBadgeChecks, floatButtonChecks, graphemeCount, pickButtonChecks, runoffChecks, sheetFitChecks, verdictTimelineChecks } from "./lib.mjs";
+import { chooseVerdict, hitsInputSurface, installFakeViewport, readGame, readChatLines, sampleWorld, screensOfWorld, SetupError, settle, skipTo, sleep, tapTurnPick, tapWorld } from "./browser.mjs";
+import { ballotFitChecks, claimBadgeChecks, floatButtonChecks, gamePanelHeight, graphemeCount, pickButtonChecks, rectInside, rectsOverlap, runoffChecks, sheetFitChecks, showdownChecks, verdictTimelineChecks } from "./lib.mjs";
 
 /** 31자소 본문: 입력칸이 30자소로 자르는지 본다. 앞 30자소가 실제로 서버에 가는 본문(canary)이다 */
 const LONG_31 = "귓속말카나리아본문은제삼자에게보이면안돼요가나다라마바사아자차";
@@ -228,6 +228,141 @@ function installRunoffLog(page, candSeats) {
     tick();
   }, candSeats);
 }
+
+// ---- 마지막 3인 결전 (09.1.1-16, UI-SPEC E) ----
+
+/** 한마디 첫 칩(shared/game/showdown.ts LAST_WORD_CHIPS[0]) */
+const SD_CHIP = "저는 아니에요";
+/** 직접 쓰기 31자소 본문: 입력칸이 30자소로 자르는지 본다. 앞 30자소가 실제로 서버에 가는 한마디다 */
+const SD_WRITE_31 = "직접쓴한마디는서른자소까지만보내져요가나다라마바사아자차카타파";
+const SD_WRITE_30 = Array.from(SD_WRITE_31).slice(0, 30).join("");
+if (graphemeCount(SD_WRITE_31) !== 31 || graphemeCount(SD_WRITE_30) !== 30) throw new Error("politics.mjs: 한마디 본문 상수의 자소 수가 31/30 이 아님");
+/** 삼각형 자리(shared/game/gather.ts ringSlots(3), 고정소수점 /100 = 월드 단위) */
+const SHOWDOWN_SLOT_WORLD = [
+  { x: 0, z: 2.65 },
+  { x: -2.29, z: -1.33 },
+  { x: 2.29, z: -1.33 },
+];
+/** 삼각형 자리 허용 거리(월드 단위, 걸어서 도착한 뒤) */
+const SHOWDOWN_SLOT_TOL = 0.35;
+
+/** 마지막 3인 화면에서 readGame 이 싣지 않는 것: 단계·알약 조각·한마디 시트·인용 카드·한 줄 시트·지목 묶음 이름·직업 칩 수·떠 있는 버튼 수. 글자(한마디 본문)는 돌려주지 않고 같은지만 돌려준다 */
+function readShowdown(page, expectQuote = "") {
+  return page.evaluate((want) => {
+    const q = (s, r = document) => r.querySelector(s);
+    const qa = (s, r = document) => [...r.querySelectorAll(s)];
+    const rect = (el) => {
+      if (!el) return null;
+      const r = el.getBoundingClientRect();
+      return { left: r.left, top: r.top, width: r.width, height: r.height, right: r.right, bottom: r.bottom };
+    };
+    const tb = q("[data-turn-block]");
+    const pill = tb ? q(".mf-turn__pill", tb) : null;
+    const sheet = q("[data-speak-sheet]");
+    const chipEls = sheet ? [...qa("[data-speak-chip]", sheet), ...qa("[data-speak-write]", sheet)] : [];
+    const qEl = q("[data-last-word]");
+    const qcs = qEl ? getComputedStyle(qEl) : null;
+    const lh = qcs ? parseFloat(qcs.lineHeight) : NaN;
+    const pad = qcs ? parseFloat(qcs.paddingTop) + parseFloat(qcs.paddingBottom) : 0;
+    const ls = q("[data-line-sheet]");
+    const input = ls ? q("[data-line-input]", ls) : null;
+    const group = q('[role="group"][aria-label="지목"]');
+    return {
+      step: tb?.getAttribute("data-showdown-step") ?? "",
+      mode: tb?.getAttribute("data-turn-mode") ?? "",
+      parts: pill ? [...pill.children].map((c) => (c.textContent ?? "").trim()) : null,
+      sheet: sheet ? { rect: rect(sheet), chips: chipEls.map(rect), chipCount: qa("[data-speak-chip]", sheet).length, hasWrite: q("[data-speak-write]", sheet) !== null } : null,
+      quote: qEl ? { rect: rect(qEl), fontPx: parseFloat(qcs.fontSize), lines: Number.isFinite(lh) && lh > 0 ? Math.round((qEl.scrollHeight - pad) / lh) : null, same: want !== "" && (qEl.textContent ?? "").trim() === want } : null,
+      lineSheet: ls
+        ? {
+            rect: rect(ls),
+            title: (q(".mv-line__name", ls)?.textContent ?? "").trim(),
+            count: (q(".mv-line__count", ls)?.textContent ?? "").trim(),
+            graphemes: input ? Array.from(new Intl.Segmenter("ko", { granularity: "grapheme" }).segment(input.value)).length : null,
+            same: want !== "" && input !== null && input.value === want,
+            close: rect(q("[data-line-close]", ls)),
+          }
+        : null,
+      group: group ? { label: group.getAttribute("aria-label"), buttons: qa("[data-pick]", group).length } : null,
+      roleChips: qa("[data-role-chip]").length,
+      floats: qa("[data-float]").length,
+      floatRects: qa("[data-float]").map((b) => ({ kind: b.getAttribute("data-float"), rect: rect(b) })),
+      hint: (q(".mv-phase__hint")?.textContent ?? "").trim(),
+      skipText: (document.body.innerText ?? "").includes("건너뜀"),
+      hasChatPanel: q("[data-chat-panel]") !== null,
+    };
+  }, expectQuote);
+}
+
+/** 마지막 3인 동안 한 페이지의 화면 상태를 40ms 마다 보고 바뀔 때만 쌓는 기록기(페이지 안). 한마디 본문은 불리언(quote)·길이로만 남는다 */
+function installShowdownLog(page) {
+  return page.evaluate(() => {
+    const log = (window.__sdLog = []);
+    let key = "";
+    const q = (s, r = document) => r.querySelector(s);
+    const qa = (s, r = document) => [...r.querySelectorAll(s)];
+    const tick = () => {
+      const stage = q("[data-game-stage]");
+      const tb = q("[data-turn-block]");
+      const pill = tb ? q(".mf-turn__pill", tb) : null;
+      const lineEl = tb ? q(".mf-turn__line", tb) : null;
+      const pin = window.__mfPin ? { seat: window.__mfPin.seat, zoom: window.__mfPin.zoom, strength: window.__mfPin.strength } : null;
+      const counts = qa(".mf-world__tag")
+        .map((el) => [el.getAttribute("data-seat"), q(".mv-head", el)?.getAttribute("data-count") ?? ""])
+        .filter(([, c]) => c !== "")
+        .map(([sx, c]) => `${sx}:${c}`)
+        .join(",");
+      const doneSeats = qa(".mf-world__tag")
+        .filter((el) => q(".mv-head[data-done]", el) !== null)
+        .map((el) => el.getAttribute("data-seat"))
+        .join(",");
+      const e = {
+        t: performance.now(),
+        phase: stage?.getAttribute("data-phase") ?? "",
+        title: (q(".mv-phase__title")?.textContent ?? "").trim(),
+        step: tb?.getAttribute("data-showdown-step") ?? "",
+        mode: tb?.getAttribute("data-turn-mode") ?? "",
+        no: tb?.getAttribute("data-turn-no") ?? "",
+        tone: tb?.getAttribute("data-turn-tone") ?? "",
+        pill: pill !== null,
+        parts: pill ? [...pill.children].map((c) => (c.textContent ?? "").trim()).join("|") : "",
+        sec: pill ? (q(".mf-turn__sec", pill)?.textContent ?? "").trim() : "",
+        line: lineEl && lineEl.classList.contains("is-on") ? (lineEl.textContent ?? "").trim() : "",
+        quote: (q("[data-last-word]")?.textContent ?? "").trim(),
+        sheet: q("[data-speak-sheet]") !== null,
+        lineSheet: q("[data-line-sheet]") !== null,
+        picks: qa("[data-pick]").length,
+        pressed: qa("[data-pick][aria-pressed='true']").length,
+        mine: qa(".mv-head[data-mine]").length,
+        done: doneSeats,
+        counts,
+        announce: (q("[data-announce] .mf-announce__text")?.textContent ?? "").trim(),
+        ballots: q("[data-ballots]") !== null,
+        roleChips: qa("[data-role-chip]").length,
+        floats: qa("[data-float]").length,
+        pin,
+      };
+      const k = [e.phase, e.title, e.step, e.mode, e.no, e.tone, e.parts, e.line, e.quote, e.sheet, e.lineSheet, e.picks, e.pressed, e.mine, e.done, e.counts, e.announce, e.ballots, e.roleChips, e.floats, pin ? `${pin.seat}|${pin.zoom}|${pin.strength.toFixed(1)}` : ""].join("\u0001");
+      if (k !== key) {
+        key = k;
+        log.push(e);
+      }
+    };
+    window.__sdTimer = setInterval(tick, 40);
+    tick();
+  });
+}
+
+/** installShowdownLog 가 쌓은 기록 */
+function readShowdownLog(page) {
+  return page.evaluate(() => window.__sdLog ?? []);
+}
+
+/** 초 글자("5초")를 숫자로. 아니면 null */
+const secOf = (text) => {
+  const m = /^(\d+)초$/.exec(text ?? "");
+  return m ? Number(m[1]) : null;
+};
 
 export function makePoliticsFlows(h) {
   const { recorder, openGame, closeGame, allAt, attempt, gameGH, walkableCentersOfApp, GAME_HOST_NICK } = h;
@@ -1332,5 +1467,440 @@ export function makePoliticsFlows(h) {
     }
   }
 
-  return { politicsBadgeFlow, politicsWhisperFlow, politicsPinFlow, politicsVerdictFlow, politicsRunoffFlow, politicsRunoffTieFlow };
+  // ---- 마지막 3인 (09.1.1-16): 방장 처형 → 산 세 사람(손님 셋) → 마지막 셋 ----
+  const aliveSeats = (view) => view.players.filter((p) => p.alive !== false).map((p) => p.seat);
+
+  /**
+   * 사람 4명(방장 citizen + 손님 3, 봇 0)이 1일차 지목에서 모두 방장을 가리키고(방장은 첫 손님) 손님 셋이 찬성해 방장을 처형한다.
+   * 그 밤을 [넘기기]로 지나 2일차 낮 시작 발표 뒤 마지막 3인(showdown)이 열리기 바로 앞(밤)까지 데려간다. 못 만들면 SetupError(실패 항목이 아니라 중단).
+   * 돌려주는 값: { hs(좌석 오름차순 4명), pages(4), hostEntry, guestsBySeat(산 손님 셋, 좌석 오름차순) }
+   */
+  async function buildThreeDay(game) {
+    const hs = humansOf(game);
+    const pages = hs.map((x) => x.page);
+    const { hp, ht } = game;
+    const hostEntry = hs.find((x) => x.who === "방장");
+    const firstGuest = hs.find((x) => x.who !== "방장");
+    try {
+      await allAt(pages, "nomination");
+      await ht.waitFor((v) => v.phase === "nomination" && (v.day?.turn?.order?.length ?? 0) === 4, 8000, "지목 차례 순서");
+      const order = ht.last().day.turn.order;
+      for (let i = 0; i < 4; i++) {
+        const x = hs.find((y) => y.seat === order[i]);
+        await Promise.all(pages.map((p) => untilG(p, (g) => !!g.turn?.pill && g.turn.seat === order[i], 14_000, `${x.who} 차례 알약`)));
+        await untilG(x.page, (g) => g.picks.length === 3, 3000, `${x.who} 이름표 버튼`);
+        await tapTurnPick(x.page, x.who === "방장" ? firstGuest.seat : hostEntry.seat);
+      }
+      await ht.waitFor((v) => v.phase === "defense", 9000, "마지막 차례 뒤 변론");
+      await skipTo(hp, ht, "verdict");
+      for (const x of hs.filter((y) => y.who !== "방장")) {
+        await untilG(x.page, (g) => g.phase === "verdict" && g.verdictBtns.length === 2, 6000, `${x.who} 찬반 도착`);
+        await chooseVerdict(x.page, true);
+      }
+      await skipTo(hp, ht, "execution");
+      await ht.waitFor((v) => !aliveSeats(v).includes(hostEntry.seat), 6000, "방장 처형");
+      await skipTo(hp, ht, "night");
+      await Promise.all(pages.map((p) => untilG(p, (g) => g.phase === "night", 8000, "밤 화면")));
+    } catch (err) {
+      throw err instanceof SetupError ? err : new SetupError(`3명 낮을 만들지 못함: ${err?.message ?? err}`);
+    }
+    const alive = aliveSeats(ht.last());
+    if (alive.length !== 3 || alive.includes(hostEntry.seat)) throw new SetupError(`산 사람이 손님 셋이 아님: ${alive.join(",")}`);
+    return { hs, pages, hostEntry, guests: hs.filter((x) => x.who !== "방장") };
+  }
+
+  /** 밤에서 [넘기기]로 마지막 3인(showdown)까지 간다. 기록기는 그 전에 심어 둔다 */
+  async function enterShowdown(game, pages) {
+    const { hp, ht } = game;
+    const hasHook = await hp.evaluate(() => window.__mfPin !== undefined);
+    if (!hasHook) throw new SetupError("window.__mfPin 훅이 없음(?e2e=1 세션이 아님)");
+    await Promise.all(pages.map((p) => installShowdownLog(p)));
+    await skipTo(hp, ht, "showdown");
+    const sd = ht.last().day?.showdown;
+    if (!sd || sd.order.length !== 3) throw new SetupError(`마지막 3인 정보가 없음: ${JSON.stringify(sd)}`);
+    return sd.order;
+  }
+
+  /** 한마디 차례 k(0..2)의 미확정 창이 열릴 때까지 기다린다(서버 기준) */
+  const untilTurn = (ht, k) => ht.waitFor((v) => v.phase === "showdown" && v.day?.showdown?.i === k && v.day.showdown.doneAt === undefined, 16_000, `한마디 차례 ${k + 1}`);
+  /** 모든 페이지가 pred 를 만족할 때까지(읽기 쌍) 기다린다 */
+  const untilAll = (pages, pred, ms, label, expectQuote = "") =>
+    Promise.all(
+      pages.map(async (p) => {
+        const t0 = performance.now();
+        for (;;) {
+          const [g, x] = await Promise.all([readGame(p).catch(() => null), readShowdown(p, expectQuote).catch(() => null)]);
+          if (g && x && pred(g, x)) return { g, x };
+          if (performance.now() - t0 > ms) throw new Error(`${label} (${ms / 1000}초 안에 보이지 않음)`);
+          await sleep(60);
+        }
+      }),
+    );
+
+  /** showdownChecks 입력을 한 화면의 읽기 묶음에서 만든다 */
+  const sdInput = (g, x, mode, extra = {}) => ({
+    mode,
+    pill: g.turn?.pill ? { rect: g.turn.pill, minFontPx: g.turn.minFontPx, parts: x.parts } : null,
+    bar: g.turn?.bar ?? null,
+    panel: g.panel,
+    viewport: { w: g.vw, h: g.vh },
+    compact: g.turn?.compact === true,
+    ...extra,
+  });
+
+  // ---- politics-showdown: 사람 4명 → 방장 처형 → 산 손님 셋의 마지막 3인. 한마디 3번 → 동시 지목 → 공개 → 2표 처형. 폰 6종 ----
+  async function politicsShowdownFlow(ctx) {
+    const id = "politics-showdown";
+    const rec = recorder(ctx);
+    const sc = `${id}/main`;
+    const game = await openGame(ctx, id, { guests: 3, bots: 0, role: "citizen", to: "nomination", hostNick: GAME_HOST_NICK });
+    let where = "3명 낮 만들기";
+    try {
+      const { hp, ht } = game;
+      const day = await buildThreeDay(game);
+      const { hs, pages, hostEntry, guests } = day;
+      const order = await enterShowdown(game, pages);
+      const byseat = (seat) => hs.find((x) => x.seat === seat);
+      const [A, B, C] = order.map(byseat); // 한마디 순서 = 좌석 오름차순
+      const nameA = nameOf(ht.last(), A.seat);
+      const nameB = nameOf(ht.last(), B.seat);
+      const nameC = nameOf(ht.last(), C.seat);
+      const alive = [A, B, C];
+      const ghosts = [hostEntry];
+      const panelWant = gamePanelHeight(ctx.size.h, "chat");
+
+      where = "S1 모이기";
+      // S1 모이기: 제목 '마지막 셋'·위 한 줄 '마지막 셋이에요'(압축형은 줄 요소 없음)·알약 없음 — 기록기에서 본다
+      {
+        await untilTurn(ht, 0);
+        const logs = await Promise.all(pages.map((p) => readShowdownLog(p)));
+        logs.forEach((log, k) => {
+          const gather = log.filter((e) => e.step === "gather");
+          rec(`${sc}/gather`, "SD1a", `모이는 동안 헤더 제목이 '마지막 셋' 이고 알약이 없다 (${hs[k].who})`, gather.length >= 1 && gather.every((e) => e.title === "마지막 셋" && e.pill === false), `모이기 기록 ${gather.length}개 · 제목 ${[...new Set(gather.map((e) => e.title))].join("/")} · 알약 ${[...new Set(gather.map((e) => e.pill))].join("/")}`);
+          const compact = ctx.size.h <= 560;
+          const lineOk = compact ? gather.every((e) => e.line === "") : gather.some((e) => e.line === "마지막 셋이에요");
+          rec(`${sc}/gather`, "SD1b", `위 한 줄이 '마지막 셋이에요' (압축형 360x560 은 줄 없음) (${hs[k].who})`, gather.length >= 1 && lineOk, `줄 ${[...new Set(gather.map((e) => e.line))].join("/")}`);
+        });
+      }
+
+      where = "S2 한마디 1";
+      // S2 한마디 1: 내 화면(A) 칩 시트 + showdownChecks, 나머지 화면은 알약 `1 / 3` + 이름 + 초·시트 없음
+      let first;
+      {
+        const s2 = `${sc}/speak1`;
+        await A.page.waitForSelector("[data-speak-sheet]", { timeout: 4000 });
+        await sleep(450); // 시트 등장·알약 자리 잡힘
+        first = await Promise.all(pages.map(async (p) => ({ g: await readGame(p), x: await readShowdown(p) })));
+        for (const [k, x] of hs.entries()) {
+          const { g, x: e } = first[k];
+          if (x.seat === A.seat) {
+            recLines(rec, s2, showdownChecks(sdInput(g, e, "speak", { sheet: e.sheet?.rect ?? null, chips: e.sheet?.chips ?? null })), ` (${x.who}, 내 차례)`);
+            rec(s2, "SD2a", `내 차례 시트에 빠른 칩 4개와 [직접 쓰기] 가 있다 (${x.who})`, e.sheet?.chipCount === 4 && e.sheet?.hasWrite === true, `칩 ${e.sheet?.chipCount} · 직접 쓰기 ${e.sheet?.hasWrite}`);
+            rec(s2, "SD2b", `시트 높이가 패널 높이 ${panelWant} 이다(UI-SPEC 폰 크기 표) (${x.who})`, Math.abs((e.sheet?.rect?.height ?? -99) - panelWant) <= 1, `시트 ${r1(e.sheet?.rect?.height)} · 기대 ${panelWant}`);
+            rec(s2, "SD2c", `시트가 화면 안에 있다 (${x.who})`, !!e.sheet && rectInside(e.sheet.rect, { left: 0, top: 0, right: g.vw, bottom: g.vh }), `시트 ${JSON.stringify(e.sheet?.rect && { l: r1(e.sheet.rect.left), t: r1(e.sheet.rect.top), r: r1(e.sheet.rect.right), b: r1(e.sheet.rect.bottom) })}`);
+            rec(s2, "SD2d", `내 차례 헤더 안내가 '한마디를 골라요' (${x.who})`, e.hint === "한마디를 골라요" || e.hint === "", `안내 "${e.hint}"`); // 약 2.5초 뒤 접히면 빈 글일 수 있다
+          } else {
+            recLines(rec, s2, showdownChecks(sdInput(g, e, "speak")), ` (${x.who}, 구경)`);
+            rec(s2, "SD2e", `내 차례가 아닌 화면에는 한마디 시트가 없고 채팅 패널이 그대로다 (${x.who})`, e.sheet === null && e.hasChatPanel, `시트 ${e.sheet ? "있음" : "없음"} · 채팅 ${e.hasChatPanel}`);
+          }
+          rec(s2, "SD2f", `알약이 '1 / 3' 과 차례 이름 '${nameA}' 를 보인다 (${x.who})`, e.parts?.[0] === "1 / 3" && e.parts?.[1] === `${nameA} 님 차례` && secOf(e.parts?.[2]) !== null, `조각 ${JSON.stringify(e.parts)}`);
+          rec(s2, "SD2g", `헤더 제목이 '마지막 셋' 이다 (${x.who})`, g.title === "마지막 셋", `제목 "${g.title}"`);
+          rec(s2, "SD2h", `압축형 여부가 폰 크기와 맞다(360x560 만 압축) (${x.who})`, (g.turn?.compact === true) === (ctx.size.h <= 560), `compact ${g.turn?.compact} · 높이 ${ctx.size.h}`);
+        }
+        // 직업 칩(L21·L23): 산 세 사람 DOM 0건, 유령 화면은 직업 칩이 있고 지목 버튼·떠 있는 버튼이 없다
+        for (const [k, x] of hs.entries()) {
+          const e = first[k].x;
+          if (x.seat === hostEntry.seat) {
+            rec(s2, "SD3a", "방장(유령) 화면은 직업 칩이 기존대로 보이고 떠 있는 버튼이 없다", e.roleChips >= 1 && e.floats === 0, `직업 칩 ${e.roleChips}개 · 떠 있는 버튼 ${e.floats}개`);
+          } else {
+            rec(s2, "SD3b", `산 사람 화면 DOM 에 [data-role-chip] 이 0건이다 (${x.who}, L21·L23)`, e.roleChips === 0, `직업 칩 ${e.roleChips}개`);
+          }
+        }
+        // 직접 쓰기 차례는 세 번째: 첫 번째는 칩. 칩을 누르면 즉시 확정되어 시트가 사라지고 모두에게 인용 카드가 뜬다. 카드는 사이 0.9초 동안만 보이므로 보이는 순간의 읽기를 그대로 쓴다
+        let cards = [];
+        const pressed = await attempt(async () => {
+          await A.page.locator("[data-speak-chip]", { hasText: SD_CHIP }).click({ timeout: 4000 });
+          cards = await untilAll(pages, (_g, x) => x.quote !== null, 4000, "인용 카드", SD_CHIP);
+        });
+        rec(s2, "SD4a", "칩 하나를 누르면 모든 화면(방장 유령 포함)에 인용 카드가 뜬다", pressed.ok, pressed.detail);
+        if (!pressed.ok) throw new Error(`칩을 눌러도 인용 카드가 오지 않음: ${pressed.detail}`);
+        for (const [k, x] of hs.entries()) {
+          const { g, x: e } = cards[k];
+          rec(s2, "SD4b", `인용 카드의 글이 누른 칩과 같다 (${x.who})`, e.quote?.same === true, `카드 ${e.quote ? "있음" : "없음"} · 같음 ${e.quote?.same}`);
+          recLines(rec, s2, showdownChecks(sdInput(g, e, "speak", { quote: e.quote ? { rect: e.quote.rect, fontPx: e.quote.fontPx, lines: e.quote.lines } : null })).filter((l) => l.id === "SH4" || l.id === "SH6"), ` (${x.who}, 인용 카드)`);
+          rec(s2, "SD4c", `인용 카드가 화면 안에 있다 (${x.who})`, !!e.quote && rectInside(e.quote.rect, { left: 0, top: 0, right: g.vw, bottom: g.vh }), `카드 ${e.quote ? "있음" : "없음"}`);
+          if (x.seat === A.seat) rec(s2, "SD4d", "확정되면 시트가 사라지고 채팅 패널이 돌아온다", e.sheet === null && e.hasChatPanel, `시트 ${e.sheet ? "있음" : "없음"} · 채팅 ${e.hasChatPanel}`);
+        }
+        // 채팅 줄(다시 읽기): 산 사람 화면에 그 글이 사람 줄로 남는다. 유령 화면은 참고만(유령 채널은 산 사람 채팅이 아닐 수 있다)
+        for (const [k, x] of hs.entries()) {
+          const lines = await readChatLines(pages[k]);
+          const has = (lines ?? []).filter((l) => l.text === SD_CHIP && l.seat === String(A.seat)).length;
+          if (x.seat === hostEntry.seat) rec(s2, "SD4e", `유령 화면의 채팅 줄 수(참고, 판정 아님) (${x.who})`, true, `한마디 줄 ${has}개`, true);
+          else rec(s2, "SD4e", `채팅에도 그 한마디 줄이 한 번 남는다 (${x.who})`, has === 1, `줄 ${has}개`);
+        }
+        // 삼각형 자리: 산 세 사람이 ringSlots(3) 에 선다(걸어서 도착할 때까지 3초 기다린다)
+        const tri = await attempt(async () => {
+          const t0 = performance.now();
+          let detail = "";
+          while (performance.now() - t0 < 3500) {
+            const ps = await Promise.all(order.map((sx) => A.page.evaluate((s) => window.__mfWorld?.shown(s) ?? null, sx)));
+            if (ps.some((q) => q === null)) throw new Error("산 사람 위치를 읽지 못함(맵 훅)");
+            const taken = new Set();
+            const offs = ps.map((q) => {
+              const d = SHOWDOWN_SLOT_WORLD.map((sl) => Math.hypot(q.x - sl.x, q.z - sl.z));
+              const best = d.indexOf(Math.min(...d));
+              taken.add(best);
+              return d[best];
+            });
+            detail = `자리와 거리 ${offs.map(r1).join("/")} · 서로 다른 자리 ${taken.size}`;
+            if (taken.size === 3 && offs.every((o) => o <= SHOWDOWN_SLOT_TOL)) return { ok: true, detail };
+            await sleep(120);
+          }
+          return { ok: false, detail: `${detail} (허용 ${SHOWDOWN_SLOT_TOL})` };
+        });
+        rec(`${sc}/gather`, "SD1c", "산 세 사람이 삼각형 자리(ringSlots(3))에 선다", tri.ok, tri.detail);
+        // 공통 검사 한 번(내 차례 화면)
+        await gameGH(ctx, id, "speak1", A.handle);
+
+      }
+
+      where = "S3 한마디 2";
+      // S3 한마디 2: 칩을 누르지 않는다 → 시간 초과로 말없이 넘어간다(인용 카드 없음·'건너뜀' 글 없음). 남은 5초 이하 진홍(기록기에서 본다)
+      {
+        const s3 = `${sc}/speak2`;
+        await untilTurn(ht, 1);
+        await sleep(700); // 앞 차례 카드가 걷힌 뒤
+        const mid = await Promise.all(pages.map(async (p) => ({ g: await readGame(p), x: await readShowdown(p) })));
+        mid.forEach(({ x: e }, k) => rec(s3, "SD5a", `두 번째 차례 시작에 앞 차례 인용 카드가 걷혀 있다 (${hs[k].who})`, e.quote === null, `카드 ${e.quote ? "있음" : "없음"}`));
+        mid.forEach(({ g, x: e }, k) => rec(s3, "SD5b", `알약이 '2 / 3' 과 차례 이름 '${nameB}' (${hs[k].who})`, e.parts?.[0] === "2 / 3" && e.parts?.[1] === `${nameB} 님 차례`, `조각 ${JSON.stringify(e.parts)}`));
+        await ht.waitFor((v) => v.phase === "showdown" && v.day?.showdown?.i === 1 && v.day.showdown.doneAt !== undefined, 11_000, "시간 초과로 넘어감");
+        await sleep(300);
+        const after = await Promise.all(pages.map(async (p) => ({ x: await readShowdown(p), lines: await readChatLines(p) })));
+        after.forEach(({ x: e, lines }, k) => {
+          rec(s3, "SD5c", `시간 초과 차례에는 인용 카드가 없다 (${hs[k].who})`, e.quote === null, `카드 ${e.quote ? "있음" : "없음"}`);
+          rec(s3, "SD5d", `'건너뜀' 글이 어디에도 없다 (${hs[k].who})`, e.skipText === false, `건너뜀 글 ${e.skipText}`);
+          const fromB = (lines ?? []).filter((l) => l.seat === String(B.seat)).length;
+          rec(s3, "SD5e", `시간 초과 차례 주인의 채팅 줄이 없다 (${hs[k].who})`, hs[k].seat === hostEntry.seat || fromB === 0, `줄 ${fromB}개`);
+        });
+      }
+
+      where = "S4 한마디 3";
+      // S4 한마디 3: [직접 쓰기] → 한 줄 시트('한마디' 제목·n/30) → 31자소 입력이 30자소로 잘림 → 닫으면 칩으로 복귀 → 다시 열어 보내기 → 카드
+      {
+        const s4 = `${sc}/speak3`;
+        await untilTurn(ht, 2);
+        await C.page.waitForSelector("[data-speak-sheet]", { timeout: 4000 });
+        await sleep(350);
+        await C.page.locator("[data-speak-write]").click({ timeout: 4000 });
+        await C.page.waitForSelector("[data-line-sheet]", { timeout: 3000 });
+        await sleep(300);
+        const open = await readShowdown(C.page);
+        const gC = await readGame(C.page);
+        rec(s4, "SD6a", "직접 쓰기를 누르면 한 줄 시트가 열리고 제목이 '한마디', 글자 수가 '0/30' 이다", open.lineSheet?.title === "한마디" && open.lineSheet?.count === "0/30", `제목 "${open.lineSheet?.title}" · 수 "${open.lineSheet?.count}"`);
+        rec(s4, "SD6b", "한 줄 시트가 화면 안에 있다", !!open.lineSheet && rectInside(open.lineSheet.rect, { left: 0, top: 0, right: gC.vw, bottom: gC.vh }), `시트 ${open.lineSheet ? "있음" : "없음"}`);
+        await C.page.locator("[data-line-close]").click({ timeout: 4000 });
+        await C.page.waitForSelector("[data-speak-sheet]", { timeout: 3000 });
+        rec(s4, "SD6c", "한 줄 시트를 닫으면 칩 시트로 돌아온다", (await readShowdown(C.page)).lineSheet === null, "한 줄 시트가 남음");
+        await C.page.locator("[data-speak-write]").click({ timeout: 4000 });
+        await C.page.waitForSelector("[data-line-sheet]", { timeout: 3000 });
+        await C.page.locator("[data-line-input]").fill(SD_WRITE_31);
+        await sleep(200);
+        const filled = await readShowdown(C.page, SD_WRITE_30);
+        rec(s4, "SD6d", "31자소를 넣어도 입력은 30자소로 잘리고 글자 수가 '30/30' 이다", filled.lineSheet?.graphemes === 30 && filled.lineSheet?.count === "30/30" && filled.lineSheet?.same === true, `자소 ${filled.lineSheet?.graphemes} · 수 "${filled.lineSheet?.count}" · 앞 30자소와 같음 ${filled.lineSheet?.same}`);
+        await C.page.locator("[data-line-send]").click({ timeout: 4000 });
+        let cards = [];
+        const sent = await attempt(async () => {
+          cards = await untilAll(pages, (_g, x) => x.quote !== null, 4000, "직접 쓴 인용 카드", SD_WRITE_30);
+        });
+        rec(s4, "SD6e", "보내면 모든 화면에 인용 카드가 뜬다", sent.ok, sent.detail);
+        if (!sent.ok) throw new Error(`보내도 인용 카드가 오지 않음: ${sent.detail}`);
+        cards.forEach(({ g, x: e }, k) => {
+          rec(s4, "SD6f", `인용 카드 글이 보낸 30자소와 같고 두 줄 이하이다 (${hs[k].who})`, e.quote?.same === true && (e.quote?.lines ?? 9) <= 2, `같음 ${e.quote?.same} · 줄 ${e.quote?.lines}`);
+          recLines(rec, s4, showdownChecks(sdInput(g, e, "speak", { quote: e.quote ? { rect: e.quote.rect, fontPx: e.quote.fontPx, lines: e.quote.lines } : null })).filter((l) => l.id === "SH4"), ` (${hs[k].who}, 30자소 카드)`);
+        });
+        rec(s4, "SD6g", "보낸 뒤 한 줄 시트·칩 시트가 모두 닫힌다", cards[hs.indexOf(C)].x.lineSheet === null && cards[hs.indexOf(C)].x.sheet === null, "시트가 남음");
+      }
+
+      where = "S5 동시 지목";
+      // S5 동시 지목
+      const pickTimeline = {};
+      {
+        const s5 = `${sc}/point`;
+        await ht.waitFor((v) => v.phase === "showdown" && v.day?.showdown?.i === 3, 6000, "동시 지목");
+        await sleep(450);
+        const pt = await Promise.all(pages.map(async (p) => ({ g: await readGame(p), x: await readShowdown(p) })));
+        for (const [k, x] of hs.entries()) {
+          const { g, x: e } = pt[k];
+          const dead = x.seat === hostEntry.seat;
+          recLines(rec, s5, showdownChecks(sdInput(g, e, "point", dead ? {} : { buttons: g.picks.map((b) => ({ seat: b.seat, rect: b.rect })) })), ` (${x.who}${dead ? ", 유령" : ""})`);
+          rec(s5, "SD7a", `알약이 '지목'·'모두 동시에'·초 이고 지목 단계 표식이다 (${x.who})`, e.step === "point" && e.mode === "point" && e.parts?.[0] === "지목" && e.parts?.[1] === "모두 동시에", `단계 ${e.step} · 모드 ${e.mode} · 조각 ${JSON.stringify(e.parts)}`);
+          if (dead) {
+            rec(s5, "SD7b", "방장(유령) 화면에는 지목 버튼과 떠 있는 버튼이 없고 직업 칩이 있다", g.picks.length === 0 && e.floats === 0 && e.roleChips >= 1, `지목 버튼 ${g.picks.length}개 · 떠 있는 버튼 ${e.floats}개 · 직업 칩 ${e.roleChips}개`);
+          } else {
+            const others = order.filter((sx) => sx !== x.seat);
+            rec(s5, "SD7c", `산 화면에는 지목 버튼이 나를 뺀 두 사람이고 묶음 이름이 '지목' 이다 (${x.who})`, g.picks.map((b) => b.seat).sort((a, b) => a - b).join(",") === others.join(",") && e.group?.label === "지목", `버튼 ${g.picks.map((b) => b.seat).join(",")} · 묶음 "${e.group?.label}"`);
+            const covered = e.floatRects.filter((f) => g.picks.some((b) => rectsOverlap(b.rect, f.rect))).map((f) => f.kind);
+            rec(s5, "SD7e", `지목 버튼이 떠 있는 버튼에 가려지지 않는다 (${x.who})`, covered.length === 0, `가린 떠 있는 버튼 ${covered.join(",")} · 버튼 ${g.picks.map((b) => `${b.seat}:${r1(b.rect.left)}~${r1(b.rect.right)}x${r1(b.rect.top)}~${r1(b.rect.bottom)}`).join(" ")} · 떠 있는 ${e.floatRects.map((f) => `${f.kind}:${r1(f.rect.left)}~${r1(f.rect.right)}x${r1(f.rect.top)}~${r1(f.rect.bottom)}`).join(" ")}`);
+            rec(s5, "SD7d", `헤더 안내가 '의심되는 사람을 눌러요' (접히면 빈 글) (${x.who})`, e.hint === "의심되는 사람을 눌러요" || e.hint === "", `안내 "${e.hint}"`);
+            rec(s5, "SD3c", `산 사람 화면 DOM 에 [data-role-chip] 이 0건이다 (${x.who}, L23)`, e.roleChips === 0, `직업 칩 ${e.roleChips}개`);
+          }
+        }
+
+        const doneOf = (g) => g.tags.filter((t) => t.done).map((t) => t.seat).sort((a, b) => a - b).join(",");
+        const mineOf = (g) => g.tags.filter((t) => t.mine).map((t) => t.seat).sort((a, b) => a - b).join(",");
+        // 남의 선택 비공개: chooser 가 아닌 화면에는 mine·눌림·득표 배지가 없다
+        const noLeak = async (chooser, label, id2) => {
+          const ds = await Promise.all(
+            hs.map(async (x, k) => ({ x, g: await readGame(pages[k]) })),
+          );
+          const bad = ds.filter(({ x, g }) => x.seat !== chooser.seat && (mineOf(g) !== "" || g.picks.some((b) => b.pressed) || g.tags.some((t) => t.count !== null && t.count !== ""))).map(({ x }) => x.who);
+          rec(s5, id2, `남의 선택이 DOM 에 없다: ${label} (mine·눌림·득표 배지 없음)`, bad.length === 0, `표시 있는 화면 ${bad.join(",")}`);
+          return ds;
+        };
+        // A 가 B 를 눌렀다가 C 로 바꾼다. B 는 C 를, C 는 A 를 누른다(C 가 2표)
+        await tapTurnPick(A.page, B.seat);
+        await Promise.all(pages.map((p, k) => (hs[k].seat === A.seat ? Promise.resolve() : untilG(p, (g) => doneOf(g).split(",").includes(String(A.seat)), 3000, "던진 사람 done 체크"))));
+        {
+          const ds = await noLeak(A, `${A.who} 가 한 번 눌렀을 때`, "SD8a");
+          rec(s5, "SD8b", `${A.who} 가 누르면 다른 화면에 이름표 done 체크만 붙는다`, ds.every(({ x, g }) => doneOf(g) === String(A.seat) || (x.seat === A.seat && doneOf(g).includes(String(A.seat)))), `done ${ds.map(({ g }) => doneOf(g)).join(" | ")}`);
+          const mineA = mineOf(ds[hs.indexOf(A)].g);
+          rec(s5, "SD8c", `내가 누른 사람만 내 화면에서 mine 이다 (${A.who})`, mineA === String(B.seat), `mine ${mineA}`);
+        }
+        await tapTurnPick(A.page, C.seat);
+        {
+          const g = await readGame(A.page);
+          rec(s5, "SD8d", `마감 전에 다른 사람으로 바꿀 수 있다 (mine 이 하나, 새 대상)`, mineOf(g) === String(C.seat), `mine ${mineOf(g)}`);
+        }
+        await tapTurnPick(B.page, C.seat);
+        await tapTurnPick(C.page, A.seat);
+        await Promise.all(pages.map((p) => untilG(p, (g) => doneOf(g) === [...order].sort((a, b) => a - b).join(","), 3000, "세 사람 모두 done")));
+        {
+          const ds = await Promise.all(hs.map(async (x, k) => ({ x, g: await readGame(pages[k]) })));
+          rec(s5, "SD8e", "세 사람이 모두 누르면 세 이름표에 done 체크가 붙는다 (모든 화면)", ds.every(({ g }) => doneOf(g) === [...order].sort((a, b) => a - b).join(",")), `done ${ds.map(({ g }) => doneOf(g)).join(" | ")}`);
+          const bad = ds.filter(({ x, g }) => (x.seat === hostEntry.seat ? mineOf(g) !== "" : mineOf(g).split(",").length !== 1)).map(({ x }) => x.who);
+          rec(s5, "SD8f", "유령은 mine 이 없고 산 사람은 자기 선택 하나만 mine 이다", bad.length === 0, `어긋난 화면 ${bad.join(",")}`);
+          const counts = ds.filter(({ g }) => g.tags.some((t) => t.count !== null && t.count !== ""));
+          rec(s5, "SD8g", "마감 전에는 득표 배지가 어느 화면에도 없다", counts.length === 0, `배지 있는 화면 ${counts.length}`);
+        }
+        await gameGH(ctx, id, "point", B.handle);
+      }
+
+      where = "S6 공개·처형";
+      // S6 공개 → 처형: C 가 2표를 받는다. 짧은 구간이라 기록기에서 본다
+      {
+        const s6 = `${sc}/reveal`;
+        await ht.waitFor((v) => v.phase === "showdown" && v.day?.showdown?.i === 4, 9000, "동시 공개");
+        await ht.waitFor((v) => v.phase === "execution" || v.phase === "ended" || v.phase === "night", 6000, "공개 뒤 단계");
+        await sleep(3800); // 처형 알림 3.0초 + 여유
+        const logs = await Promise.all(pages.map((p) => readShowdownLog(p)));
+        logs.forEach((log, k) => {
+          const rv = log.filter((e) => e.step === "reveal");
+          rec(s6, "SD9a", `공개 단계에 ${nameC} 머리 위 득표 배지 2 가 뜬다 (${hs[k].who})`, rv.some((e) => e.counts.split(",").includes(`${C.seat}:2`)), `공개 기록 ${rv.length}개 · 배지 ${[...new Set(rv.map((e) => e.counts))].join(" / ")}`);
+          rec(s6, "SD9b", `공개 단계에는 위 한 줄이 없다 (${hs[k].who})`, rv.length >= 1 && rv.every((e) => e.line === ""), `줄 ${[...new Set(rv.map((e) => e.line))].join("/")}`);
+          const ex = log.filter((e) => e.phase === "execution");
+          const texts = [...new Set(ex.map((e) => e.announce).filter((t) => t !== ""))];
+          rec(s6, "SD9c", `처형 알림이 '${nameC} 님 처형' 이다 (${hs[k].who})`, texts.includes(`${nameC} 님 처형`), `알림 ${texts.length}개 · 처형 알림 ${texts.includes(`${nameC} 님 처형`)}`);
+          rec(s6, "SD9d", `'찬성 n · 반대 m' 알림이 없고 찬반 묶음([data-ballots])이 없다 (${hs[k].who})`, !texts.some((t) => /찬성|반대/.test(t)) && ex.every((e) => e.ballots === false), `찬반 알림 ${texts.filter((t) => /찬성|반대/.test(t)).length}개 · 묶음 ${ex.filter((e) => e.ballots).length}`);
+          const zooms = ex.map((e) => e.pin?.zoom).filter((z) => typeof z === "number");
+          rec(s6, "SD9e", `처형 동안 카메라 줌이 올라가지 않는다 (__mfPin.zoom 1) (${hs[k].who})`, ex.length >= 1 && zooms.length >= 1 && zooms.every((z) => z === 1), `줌 ${[...new Set(zooms)].join("/") || "기록 없음"} · 처형 기록 ${ex.length}개`);
+          const lit = ex.filter((e) => e.pin && e.pin.seat === C.seat && e.pin.strength >= 0.5);
+          rec(s6, "SD9f", `처형 핀이 ${nameC} 의 좌석에 켜진다 (${hs[k].who})`, lit.length >= 1, `핀 좌석 ${[...new Set(ex.map((e) => e.pin?.seat))].join("/")}`);
+        });
+        // 한마디 구간 기록: 두 번째(시간 초과) 차례의 시간 색, 첫째·셋째 차례 인용 카드, 직업 칩, 떠 있는 버튼
+        logs.forEach((log, k) => {
+          const t2 = log.filter((e) => e.step === "speak" && e.no === "2");
+          const bySec = new Map();
+          for (const e of t2) {
+            const sec = secOf(e.sec);
+            if (sec === null) continue;
+            if (!bySec.has(sec)) bySec.set(sec, new Set());
+            bySec.get(sec).add(e.tone);
+          }
+          const secs = [...bySec.keys()].sort((a, b) => b - a);
+          const lowOk = secs.filter((v) => v >= 1 && v <= 4).every((v) => [...bySec.get(v)].every((t) => t === "urgent"));
+          const highOk = secs.filter((v) => v >= 6).every((v) => ![...bySec.get(v)].includes("urgent"));
+          rec(s6, "SD10a", `시간 초과 차례의 알약 색: 남은 5초 이하는 진홍(urgent), 6초 이상은 아니다 (${hs[k].who})`, secs.some((v) => v <= 4) && secs.some((v) => v >= 6) && lowOk && highOk, `초 기록 ${secs.join(",")} · 색 ${secs.map((v) => `${v}:${[...bySec.get(v)].join("+")}`).join(" ")}`);
+          rec(s6, "SD10b", `시간 초과 차례에는 인용 카드가 한 번도 뜨지 않는다 (${hs[k].who})`, t2.length >= 1 && t2.filter((e) => e.sec !== "" && secOf(e.sec) !== null && secOf(e.sec) <= 7).every((e) => e.quote === ""), `차례 기록 ${t2.length}개 · 카드가 보인 기록 ${t2.filter((e) => e.quote !== "" && secOf(e.sec) !== null && secOf(e.sec) <= 7).length}`);
+          const allSd = log.filter((e) => e.phase === "showdown");
+          if (hs[k].seat === hostEntry.seat) rec(s6, "SD3d", "방장(유령) 화면은 마지막 3인 내내 직업 칩이 있고 지목 버튼·떠 있는 버튼이 없다", allSd.length >= 1 && allSd.filter((e) => e.step !== "").every((e) => e.roleChips >= 1 && e.picks === 0 && e.floats === 0), `기록 ${allSd.length}개 · 직업 칩 없는 기록 ${allSd.filter((e) => e.roleChips < 1).length} · 지목 버튼 있는 기록 ${allSd.filter((e) => e.picks > 0).length} · 떠 있는 버튼 기록 ${allSd.filter((e) => e.floats > 0).length}`);
+          else rec(s6, "SD3e", `산 사람 화면 DOM 에 마지막 3인 내내 [data-role-chip] 이 0건이다 (${hs[k].who}, L21·L23)`, allSd.length >= 1 && allSd.every((e) => e.roleChips === 0), `기록 ${allSd.length}개 · 직업 칩 있는 기록 ${allSd.filter((e) => e.roleChips > 0).length}`);
+          const pointTimes = log.filter((e) => e.step === "point");
+          const ps = [...new Set(pointTimes.map((e) => secOf(e.sec)).filter((v) => v !== null))];
+          const urgentPoint = pointTimes.filter((e) => secOf(e.sec) !== null && secOf(e.sec) >= 1 && secOf(e.sec) <= 4);
+          rec(s6, "SD10c", `동시 지목도 남은 5초 이하는 진홍이다 (${hs[k].who})`, urgentPoint.length >= 1 && urgentPoint.every((e) => e.tone === "urgent"), `초 기록 ${ps.join(",")} · 진홍 아닌 기록 ${urgentPoint.filter((e) => e.tone !== "urgent").length}`);
+        });
+        // 끝: 마피아 한 명이 남는 판이면 ended, 아니면 밤 — 서버 흐름대로(어느 쪽이든 단계가 하나로 정해진다)
+        const endPh = ht.last().phase;
+        rec(s6, "SD11", "공개 뒤 단계가 서버 흐름대로 이어진다(처형 → 끝 또는 밤)", ["execution", "ended", "night"].includes(endPh), `단계 ${endPh}`);
+        const exec = ht.last().players.filter((p) => p.alive === false).map((p) => p.seat);
+        rec(s6, "SD12", `처형된 사람이 ${nameC} 이다(2표)`, exec.includes(C.seat) && !aliveSeats(ht.last()).includes(C.seat), `탈락 좌석 ${exec.join(",")}`);
+      }
+      // 마지막 확인: 모든 화면에서 알약·시트·카드가 화면 안(SH1·SD2c·SD4c 가 이미 각 순간에 잰다)
+    } catch (err) {
+      if (err instanceof SetupError) throw err;
+      const msgLines = String(err?.message ?? err).split("\n");
+      const why = msgLines.find((l) => /intercepts|not visible|outside of the viewport|not stable|detached|disabled/.test(l));
+      throw new Error(`${where}: ${msgLines[0]}${why ? ` · ${why.trim().slice(0, 140)}` : ""}`);
+    } finally {
+      await closeGame(game);
+    }
+  }
+
+  // ---- politics-showdown-tie: 같은 3명 낮에서 한마디는 모두 시간 초과, 1-1-1 지목 → '처형 없음' → 밤 (390×844 한 번) ----
+  async function politicsShowdownTieFlow(ctx) {
+    const id = "politics-showdown-tie";
+    const rec = recorder(ctx);
+    const sc = `${id}/main`;
+    const game = await openGame(ctx, id, { guests: 3, bots: 0, role: "citizen", to: "nomination", hostNick: GAME_HOST_NICK });
+    try {
+      const { ht } = game;
+      const day = await buildThreeDay(game);
+      const { hs, pages, hostEntry } = day;
+      const order = await enterShowdown(game, pages);
+      const [A, B, C] = order.map((sx) => hs.find((x) => x.seat === sx));
+      // 한마디 세 차례를 모두 시간 초과로 넘긴다
+      await ht.waitFor((v) => v.phase === "showdown" && v.day?.showdown?.i === 3, 40_000, "동시 지목");
+      await sleep(400);
+      // 1-1-1: A→B, B→C, C→A
+      const voted = await attempt(async () => {
+        await tapTurnPick(A.page, B.seat);
+        await tapTurnPick(B.page, C.seat);
+        await tapTurnPick(C.page, A.seat);
+      });
+      rec(sc, "ST1", "세 사람이 서로 한 명씩 지목한다(1-1-1)", voted.ok, voted.detail);
+      await ht.waitFor((v) => v.phase === "showdown" && v.day?.showdown?.i === 4, 9000, "동시 공개");
+      // 알림은 1.4초라 읽기를 촘촘히 한다
+      const noExec = await attempt(async () => {
+        const seen = new Set();
+        const t0 = performance.now();
+        while (performance.now() - t0 < 9000) {
+          const g = await readGame(pages[1]).catch(() => null);
+          if (g?.announce?.text) seen.add(g.announce.text);
+          if (seen.has("처형 없음") && ht.last().phase === "night") break;
+          await sleep(60);
+        }
+        if (!seen.has("처형 없음")) throw new Error(`알림 ${[...seen].join(" / ") || "없음"}`);
+        await ht.waitFor((v) => v.phase === "night", 6000, "밤");
+      });
+      rec(sc, "ST2", "'처형 없음' 알림이 뜨고 밤으로 이어진다", noExec.ok, noExec.detail);
+      const alive = aliveSeats(ht.last());
+      rec(sc, "ST3", "아무도 처형되지 않아 산 사람이 그대로 셋이다", alive.length === 3 && !alive.includes(hostEntry.seat), `산 사람 ${alive.join(",")}`);
+      const logs = await Promise.all(pages.map((p) => readShowdownLog(p)));
+      logs.forEach((log, k) => {
+        const sp = log.filter((e) => e.step === "speak");
+        rec(sc, "ST4", `한마디를 아무도 하지 않으면 인용 카드가 한 번도 뜨지 않는다 (${hs[k].who})`, sp.length >= 1 && sp.every((e) => e.quote === ""), `한마디 기록 ${sp.length}개 · 카드 기록 ${sp.filter((e) => e.quote !== "").length}`);
+        const rv = log.filter((e) => e.step === "reveal");
+        rec(sc, "ST5", `공개 단계에 세 사람 모두 득표 배지 1 이 뜬다 (${hs[k].who})`, rv.some((e) => order.every((sx) => e.counts.split(",").includes(`${sx}:1`))), `배지 ${[...new Set(rv.map((e) => e.counts))].join(" / ")}`);
+        const ex = log.filter((e) => e.phase === "execution");
+        rec(sc, "ST6", `처형 단계가 없다 (${hs[k].who})`, ex.length === 0, `처형 기록 ${ex.length}개`);
+      });
+      const bodyHasSkip = await Promise.all(pages.map(async (p) => (await readShowdown(p)).skipText));
+      rec(sc, "ST7", "'건너뜀' 글이 어디에도 없다", bodyHasSkip.every((v) => v === false), `건너뜀 글 ${bodyHasSkip.filter(Boolean).length}곳`);
+      await gameGH(ctx, id, "night", B.handle);
+    } finally {
+      await closeGame(game);
+    }
+  }
+
+  return { politicsBadgeFlow, politicsWhisperFlow, politicsPinFlow, politicsVerdictFlow, politicsRunoffFlow, politicsRunoffTieFlow, politicsShowdownFlow, politicsShowdownTieFlow };
 }
