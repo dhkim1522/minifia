@@ -252,7 +252,7 @@
 .mv-chat__ballots-name { font-size: 14px; line-height: 1.4; font-weight: 400; color: var(--gray-100); word-break: keep-all; overflow-wrap: anywhere; }
 
 /* 찬반 기록 공개(09.1.1-12, UI-SPEC C-2): 결과 알림 아래 위 131 · 좌우 16 · 아래는 패널 윗변 위 8. 찬반은 색이 아니라 위치·아이콘·테두리(gray-100 / gray-500)로 구별한다. 진홍·놋쇠·초록 없음 */
-.mv-ballots { position: absolute; top: 131px; left: var(--space-md); right: var(--space-md); bottom: calc(var(--mf-kb-lift, 0px) + var(--mf-panel-h, 0px) + 8px); z-index: calc(var(--z-overlay) + 1); overflow: hidden; pointer-events: none; font-family: var(--font-ui); }
+.mv-ballots { position: absolute; top: var(--mf-ballot-top, 131px); left: var(--space-md); right: var(--space-md); bottom: calc(var(--mf-kb-lift, 0px) + var(--mf-panel-h, 0px) + 8px); z-index: calc(var(--z-overlay) + 1); overflow: hidden; pointer-events: none; font-family: var(--font-ui); }
 .mv-ballots__body { display: flex; flex-direction: column; gap: var(--space-md); }
 .mv-ballots__group { display: flex; flex-direction: column; gap: var(--space-sm); }
 .mv-ballots__group.is-pending { visibility: hidden; }

@@ -754,8 +754,9 @@ export function makePoliticsFlows(h) {
   async function politicsVerdictFlow(ctx) {
     const id = "politics-verdict";
     const rec = recorder(ctx);
+    // 방장(변론자) 닉네임을 8자로 두어 처형 알림 "○○○○○○○○ 님 처형"이 폭 360 에서 두 줄로 감기는 최악 모양에서 묶음이 알림과 겹치지 않는지(BF2, 3.2초)까지 본다.
     // 봇 이름은 1~8자 무작위라 이름 글자 수 합 36 이상(평균 5 이상)이 될 때까지 다시 앉혀 알약이 한 줄 2개로 접히는 8인판 최악 모양(R=4)에 가깝게 만든다
-    const OPEN = { guests: 0, bots: 7, role: "citizen", vote: { exec: "yes", pick: "host" }, to: "discussion", hostNick: GAME_HOST_NICK, minBotNameChars: 36 };
+    const OPEN = { guests: 0, bots: 7, role: "citizen", vote: { exec: "yes", pick: "host" }, to: "discussion", hostNick: "방장님이방장님이", minBotNameChars: 36 };
     const sc = `${id}/main`;
 
     // ---- 첫째 판 ----
