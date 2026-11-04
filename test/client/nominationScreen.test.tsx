@@ -65,6 +65,19 @@ interface ViewOpts {
   /** [지목한 사람, 대상] 쌍 */
   points?: Array<[number, number]>;
   nicknames?: string[];
+  /** 순차 지목 차례(09.1). 생략하면 내 차례(남은 8초), null 이면 day.turn 없음 */
+  turn?: TurnOpts | null;
+}
+
+interface TurnOpts {
+  /** -1 모이는 중 · 0.. 차례 · order.length 끝 알림 */
+  i: number;
+  order?: number[];
+  /** 차례 마감까지 남은 ms(시험 시각 NOW 기준). 기본 8000 */
+  left?: number;
+  /** 확정 시점의 남은 ms. 있으면 doneAt = endsAt − doneLeft */
+  doneLeft?: number;
+  skip?: boolean;
 }
 
 function makeView(o: ViewOpts = {}): RoomView {
@@ -86,7 +99,27 @@ function makeView(o: ViewOpts = {}): RoomView {
     day: {
       n: 1,
       roles: [],
-      ...((o.phase ?? "nomination") === "nomination" ? { points: (o.points ?? []).map(([seat, target]) => ({ seat, target })) } : {}),
+      ...((o.phase ?? "nomination") === "nomination"
+        ? { points: (o.points ?? []).map(([seat, target]) => ({ seat, target })), ...turnPart(o, players, mySeat) }
+        : {}),
+    },
+  };
+}
+
+function turnPart(o: ViewOpts, players: PublicPlayer[], mySeat: number): { turn?: NonNullable<RoomView["day"]>["turn"] } {
+  if (o.turn === null) return {};
+  const alive = players.filter((p) => p.alive !== false).map((p) => p.seat);
+  const t = o.turn ?? { i: Math.max(0, alive.indexOf(mySeat)) };
+  const order = t.order ?? alive;
+  const endsAt = NOW + (t.left ?? 8000);
+  const inTurn = t.i >= 0 && t.i < order.length;
+  return {
+    turn: {
+      order,
+      i: t.i,
+      ...(inTurn ? { endsAt } : {}),
+      ...(inTurn && t.doneLeft !== undefined ? { doneAt: endsAt - t.doneLeft } : {}),
+      ...(t.skip === true ? { skip: true as const } : {}),
     },
   };
 }
@@ -540,5 +573,143 @@ describe("지목 화면 — 역할 표식 없음·8명·긴 닉네임 (T-08-40)"
     expect(pickOf(container, 2)?.textContent).toContain("가나다라마바사아");
     expect(pickOf(container, 2)?.getAttribute("aria-label")).toBe("가나다라마바사아 님 가리키기");
     expect(readFileSync("src/styles/v2.css", "utf8")).not.toMatch(/\.mv-tag__name[^}]*text-overflow:\s*ellipsis/);
+  });
+});
+
+
+// ---- 09.1-07 Task 1: 차례 알약 · 막대 · 위 한 줄 · 헤더 링 (UI-SPEC A-1~A-6) ----
+
+describe("차례 알약 (결정 0063-1, UI-SPEC A-1~A-6)", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
+  });
+  afterEach(() => vi.useRealTimers());
+  const advance = (ms: number) =>
+    act(() => {
+      vi.advanceTimersByTime(ms);
+    });
+  const block = (c: ParentNode): HTMLElement | null => c.querySelector("[data-turn-block]");
+  const ring = (c: ParentNode): HTMLElement | null => c.querySelector(".mv-ring");
+  const line = (c: ParentNode): string | undefined => c.querySelector(".mf-turn__line.is-on")?.textContent ?? undefined;
+  const readable = (el: Element): string => {
+    const copy = el.cloneNode(true) as Element;
+    copy.querySelectorAll("[aria-hidden='true']").forEach((n) => n.remove());
+    return copy.textContent ?? "";
+  };
+  // 4명, 내 좌석 0, 차례는 1번(영희) — 2 / 4
+  const turn4 = (turn: TurnOpts, extra: Partial<ViewOpts> = {}) => makeView({ count: 4, turn, ...extra });
+
+  it("차례 중(남은 7.2초, 2/4): 알약에 '2 / 4'·'영희 님 차례'·'8초', 표식 no·seat·tone=calm, 읽히는 글은 이름만", () => {
+    const { container } = mount(turn4({ i: 1, left: 7200 }));
+    expect(container.querySelectorAll("[data-turn-block]").length).toBe(1);
+    const b = block(container)!;
+    expect(b.getAttribute("data-turn-no")).toBe("2");
+    expect(b.getAttribute("data-turn-seat")).toBe("1");
+    expect(b.getAttribute("data-turn-tone")).toBe("calm");
+    expect(b.textContent).toContain("2 / 4");
+    expect(b.textContent).toContain("영희 님 차례");
+    expect(b.textContent).toContain("8초");
+    const status = b.querySelector('[role="status"]')!;
+    expect(readable(status)).toBe("영희 님 차례");
+    expect(b.querySelector(".mf-turn__bar")).not.toBeNull();
+  });
+
+  it("남은 5.0초 근처 세 시각(4.9·5.0·5.1)에서 알약 표식과 헤더 링 색이 일치한다", () => {
+    for (const [left, tone] of [[4900, "urgent"], [5000, "urgent"], [5100, "calm"]] as const) {
+      const { container, unmount } = mount(turn4({ i: 1, left }));
+      expect(block(container)!.getAttribute("data-turn-tone"), `${left}`).toBe(tone);
+      expect(ring(container)!.classList.contains("is-urgent"), `${left}`).toBe(tone === "urgent");
+      unmount();
+    }
+  });
+
+  it("시계가 흘러 5초 이하가 되면 알약·헤더 링이 같은 순간 진홍으로 바뀐다", () => {
+    const { container } = mount(turn4({ i: 1, left: 6500 }));
+    expect(block(container)!.getAttribute("data-turn-tone")).toBe("calm");
+    expect(block(container)!.textContent).toContain("7초");
+    advance(1499);
+    expect(block(container)!.textContent).toContain("6초");
+    expect(block(container)!.getAttribute("data-turn-tone")).toBe("calm");
+    advance(1);
+    expect(block(container)!.textContent).toContain("5초");
+    expect(block(container)!.getAttribute("data-turn-tone")).toBe("urgent");
+    expect(ring(container)!.classList.contains("is-urgent")).toBe(true);
+    expect(ring(container)!.getAttribute("aria-label")).toBe("남은 시간 5초");
+  });
+
+  it("헤더 링은 차례 초 / 8: 지목 단계 마감이 아니라 차례 마감을 쓴다", () => {
+    const { container } = mount(turn4({ i: 1, left: 7200 }));
+    expect(ring(container)!.getAttribute("aria-label")).toBe("남은 시간 8초");
+  });
+
+  it("확정된 차례는 그 값에서 멈춘다: 시계를 옮겨도 초·막대 폭이 그대로", () => {
+    const { container } = mount(turn4({ i: 1, left: 8000, doneLeft: 3000 }, { points: [[1, 2]] }));
+    const width = (): string => (block(container)!.querySelector(".mf-turn__fill") as HTMLElement).style.width;
+    expect(block(container)!.textContent).toContain("3초");
+    expect(width()).toBe("37.5%");
+    advance(2000);
+    expect(block(container)!.textContent).toContain("3초");
+    expect(width()).toBe("37.5%");
+    expect(ring(container)!.getAttribute("aria-label")).toBe("남은 시간 3초");
+  });
+
+  it("모이는 중: 알약·막대·헤더 링이 없고, 라이브로 들어오면 위 한 줄 '가운데로 모여요'", () => {
+    const m = mount(makeView({ count: 4, phase: "discussion" }));
+    expect(block(m.container)).toBeNull();
+    m.show(turn4({ i: -1 }));
+    expect(block(m.container)).not.toBeNull();
+    expect(m.container.querySelector(".mf-turn__pill")).toBeNull();
+    expect(m.container.querySelector(".mf-turn__bar")).toBeNull();
+    expect(ring(m.container)).toBeNull();
+    expect(line(m.container)).toBe("가운데로 모여요");
+  });
+
+  it("끝 알림: 알약 없음, 위 한 줄 '모두 골랐어요 · {이름} 님 {k}표'(단독 최다) 또는 '모두 골랐어요'", () => {
+    const m = mount(turn4({ i: 3 }));
+    m.show(turn4({ i: 4 }, { points: [[0, 2], [1, 2], [3, 1]] }));
+    expect(m.container.querySelector(".mf-turn__pill")).toBeNull();
+    expect(ring(m.container)).toBeNull();
+    expect(line(m.container)).toBe("모두 골랐어요 · 서준 님 2표");
+    m.show(turn4({ i: 4 }, { points: [[0, 2], [1, 3]] }));
+    expect(line(m.container)).toBe("모두 골랐어요");
+  });
+
+  it("재접속 첫 화면(확정 직후 차례): 알약은 지금 값으로 바로 보이고 위 한 줄은 만들지 않는다. 그 뒤 차례가 넘어가면 줄이 생긴다", () => {
+    const m = mount(turn4({ i: 1, left: 8000, doneLeft: 3000 }, { points: [[1, 2]] }));
+    expect(m.container.querySelector(".mf-turn__pill")).not.toBeNull();
+    expect(m.container.querySelector(".mf-turn__pill.is-still")).not.toBeNull();
+    expect(line(m.container)).toBeUndefined();
+    m.show(turn4({ i: 2, left: 8000 }, { points: [[1, 2]] }));
+    expect(line(m.container)).toBeUndefined(); // 차례 중에는 줄이 없다
+    m.show(turn4({ i: 2, left: 8000, doneLeft: 2000 }, { points: [[1, 2], [2, 3]] }));
+    expect(line(m.container)).toBe("서준 님이 지아 님을 가리켜요");
+  });
+
+  it("지목이 아닌 단계에는 [data-turn-block] 이 없다", () => {
+    const { container } = mount(makeView({ phase: "discussion" }));
+    expect(block(container)).toBeNull();
+  });
+
+  it("day.turn 이 없는 지목 view 에는 알약도 헤더 링도 없다", () => {
+    const { container } = mount(makeView({ turn: null }));
+    expect(container.querySelector(".mf-turn__pill")).toBeNull();
+    expect(ring(container)).toBeNull();
+  });
+
+  it("닉네임은 글자로 그린다: '<b>영희</b>' 가 알약 안에서 HTML 이 되지 않는다", () => {
+    const { container } = mount(turn4({ i: 1 }, { nicknames: ["민수", "<b>영희</b>", "서준", "지아"] }));
+    expect(block(container)!.textContent).toContain("<b>영희</b> 님 차례");
+    expect(block(container)!.querySelector("b")).toBeNull();
+  });
+
+  it("game.css 규칙: .mf-turn · .mf-turn__pill · .mf-turn__fill · .mf-game__dim 이 있고 위 100·pointer-events none", () => {
+    const css = readFileSync("src/styles/game.css", "utf8");
+    expect(css).toMatch(/\.mf-turn\s*\{[^}]*top:\s*100px[^}]*pointer-events:\s*none/);
+    expect(css).toMatch(/\.mf-turn\.is-compact\s*\{[^}]*top:\s*72px/);
+    expect(css).toMatch(/\.mf-turn__pill\s*\{/);
+    expect(css).toMatch(/\.mf-turn__fill\s*\{/);
+    expect(css).toMatch(/\.mf-game__dim\s*\{[^}]*pointer-events:\s*none/);
+    expect(css).toMatch(/\.mf-game__dim\[data-dim="on"\]\s*\{[^}]*opacity:\s*0\.4/);
   });
 });
