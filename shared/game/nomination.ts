@@ -4,7 +4,7 @@
 // 마감(phaseEndsAt)은 읽거나 쓰지 않는다 — 과반이어도 15초를 다 채운다(결정 0060-3).
 // 순차 지목(결정 0063-1·0063-4): 시각은 인자로만 받고 연결·역할·난수를 읽지 않는다(M-3).
 // 모이기 → 산 사람 좌석 순서로 한 명씩 차례 → 확정 뒤 사이 → 끝 알림 → 기존 집계(resolveNomination). 과반이어도 끝까지 돈다.
-import type { PointLine } from "../protocol";
+import type { PickTurnView, PointLine } from "../protocol";
 import { isAlive } from "./alive";
 import { NOMINATION_END_MS, NOMINATION_GATHER_MS, PHASE_DEFS, PICK_GAP_MS, PICK_TURN_MS } from "./phases";
 import type { PickTurn, RoomState } from "./room";
@@ -150,7 +150,11 @@ export function stepNomination(state: RoomState, at: number): DeadlineResult {
 }
 
 /**
- * 차례 주인의 지목: 대상을 정하고 그 차례를 즉시 확정한다(doneAt = now, 마감 = now + 사이). 거절 규칙은 Task 2.
+ * 차례 주인의 지목: 대상을 정하고 그 차례를 즉시 확정한다(doneAt = now, 마감 = now + 사이). 바꾸기·취소는 없다.
+ * 검사 순서가 계약이다: 단계(nomination 아니면 WRONG_PHASE) → 행위자(방에 있고 산 사람, 아니면 BAD_MESSAGE — 유령은 차례와 무관)
+ * → 차례(pickTurn 이 있고 차례 중이며 행위자 좌석이 order[i], 아직 미확정, now < endsAt — 아니면 WRONG_PHASE)
+ * → 대상(정수·앉은 산 사람·자기 자신 아님, 아니면 BAD_MESSAGE). 거절이면 입력 상태는 그대로다.
+ * 연결 상태는 읽지 않는다(M-3) — 끊긴 사람도 마감 전에 돌아오면 고를 수 있다.
  */
 export function castTurnPoint(
   state: RoomState,
@@ -158,8 +162,23 @@ export function castTurnPoint(
   target: number,
   now: number,
 ): { ok: true; state: RoomState } | { ok: false; error: VoteError } {
+  if (state.phase !== "nomination") return { ok: false, error: "WRONG_PHASE" };
+  const actor = state.players.find((p) => p.id === actorId);
+  if (!actor || !isAlive(actor)) return { ok: false, error: "BAD_MESSAGE" };
   const turn = state.pickTurn;
-  if (turn === undefined) return { ok: false, error: "WRONG_PHASE" };
+  if (
+    turn === undefined ||
+    turn.i < 0 ||
+    turn.i >= turn.order.length ||
+    turn.order[turn.i] !== actor.seat ||
+    turn.doneAt !== undefined ||
+    turn.endsAt === undefined ||
+    now >= turn.endsAt
+  ) {
+    return { ok: false, error: "WRONG_PHASE" };
+  }
+  const chosen = Number.isInteger(target) ? state.players.find((p) => p.seat === target) : undefined;
+  if (!chosen || !isAlive(chosen) || chosen.seat === actor.seat) return { ok: false, error: "BAD_MESSAGE" };
   return {
     ok: true,
     state: {
@@ -169,4 +188,15 @@ export function castTurnPoint(
       phaseEndsAt: now + PICK_GAP_MS,
     },
   };
+}
+
+/** 공개 차례 정보(day.turn). 좌석 순서·마감·확정만 필드별로 복사하고 없는 키는 만들지 않는다 — 역할·연결을 읽지 않는다(L14). pickTurn 이 없으면 undefined. */
+export function turnViewOf(state: RoomState): PickTurnView | undefined {
+  const turn = state.pickTurn;
+  if (turn === undefined) return undefined;
+  const view: PickTurnView = { order: [...turn.order], i: turn.i };
+  if (turn.endsAt !== undefined) view.endsAt = turn.endsAt;
+  if (turn.doneAt !== undefined) view.doneAt = turn.doneAt;
+  if (turn.skip === true) view.skip = true;
+  return view;
 }

@@ -4,7 +4,7 @@
 // tick 표의 ON_ENTER.discussion 이 enterDiscussion 을 건다(08-11).
 // 순수 모듈이다 — 입력 상태는 바꾸지 않는다.
 import { isAlive } from "./alive";
-import { majorityOf } from "./nomination";
+import { majorityOf, nominationStepMs } from "./nomination";
 import { MORNING_MAX_MS, MORNING_MS, MORNING_NOTE_MS, MORNING_VICTIM_MS, MORNING_WILL_MS, PHASE_DEFS } from "./phases";
 import type { RoomState } from "./room";
 
@@ -33,6 +33,7 @@ export function morningMsOf(state: RoomState): number {
  */
 export function phaseDurationOf(state: RoomState): number | null {
   if (state.phase === "morning") return morningMsOf(state);
+  if (state.phase === "nomination" && state.pickTurn !== undefined) return nominationStepMs(state);
   return PHASE_DEFS[state.phase].durationMs;
 }
 
@@ -80,7 +81,7 @@ export function endReached(state: RoomState): boolean {
  * 날짜별 기록(voteLog)과 그 밖의 키는 그대로 둔다.
  */
 export function enterDiscussion(state: RoomState): RoomState {
-  const { verdict: _verdict, execution: _execution, ...rest } = state;
+  const { verdict: _verdict, execution: _execution, pickTurn: _pickTurn, ...rest } = state;
   return {
     ...rest,
     players: state.players.map((p) => {

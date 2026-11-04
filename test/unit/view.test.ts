@@ -1674,7 +1674,7 @@ describe("day.turn (결정 0063-1, L14)", () => {
     expect([...points].join("|")).toBe(JSON.stringify([{ seat: 0, target: 2 }]));
     const other = (phase: PhaseId): string =>
       r.state.players.map((p) => String("turn" in (buildView({ ...r.state, phase }, p.id, T).day ?? {}))).join(",");
-    expect(["discussion", "defense", "verdict", "execution"].map(other).join(" ")).toBe(
+    expect((["discussion", "defense", "verdict", "execution"] as const).map(other).join(" ")).toBe(
       "false,false,false,false,false,false false,false,false,false,false,false false,false,false,false,false,false false,false,false,false,false,false",
     );
   });

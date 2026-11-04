@@ -6,6 +6,7 @@
 // 3페이즈 밤·아침 계약도 이 파일이다 — 밤 행동 메시지·아침 결과·수사 기록·탈락자 관전 타입을 03-01 에서 한 번에 정한다(채우는 일은 03-03·03-05).
 // 4페이즈 처형·승패 계약(결정 0034·0036): 새 단계 여섯·투표 메시지·투표 기록·처형 발표·판 결과 타입을 04-01 에서 한 번에 정한다(채우는 일은 뒤 계획).
 // 8페이즈 낮 처형 계약(결정 0060): 단계 nomination(지목)·verdict(찬반), 지목 줄·토론 끝내기 수·찬반 마친 좌석·결과 수·본인 찬반 타입을 08-02 에서 정한다(채우는 일은 08-07 이후).
+// 09.1 순차 지목 계약(결정 0063-1): DayView.turn·PickTurnView 를 09.1-01 에서 정한다. 새 메시지 종류는 없다(point 그대로).
 // 9페이즈 밤·아침 계약(결정 0061): MorningView.saved·DayView.chalk·MyInfo.nightTally/nightSure/will/note·ChatLineWire.k 를 09-07 에서 한 번에 정한다(채우는 일은 09-07 view, 09-12 유언·쪽지, 09-14 분필).
 
 // 타입 import·재수출이라 값 import 가 아니다 — 클라이언트 번들에는 아무것도 들어가지 않는다.
@@ -128,6 +129,16 @@ export interface DayView {
   endCount?: number; // discussion 단계에서, 토론 끝내기를 누른 산 사람 수(누가 눌렀는지는 싣지 않는다)
   voted?: number[]; // verdict 단계에서, 찬반을 던진 좌석(오름차순, 값은 싣지 않는다 — 익명)
   verdict?: { yes: number; no: number; passed: boolean }; // execution 단계에서, 찬반 결과 수(개인 값 없음)
+  turn?: PickTurnView; // nomination 단계에서만, 모두에게 같은 차례 정보(결정 0063-1, L14)
+}
+
+/** 공개 지목 차례(결정 0063-1). 서버 전용 PickTurn 과 같은 모양이지만 view 가 필드별로 복사한 값이고 역할·연결과 무관하다. */
+export interface PickTurnView {
+  order: number[]; // 차례 순서 — 지목 시작 때 산 사람 좌석 오름차순
+  i: number; // -1 모이는 중 · 0..order.length-1 차례 · order.length 끝 알림
+  endsAt?: number; // 이번 차례 마감(차례 중에만)
+  doneAt?: number; // 이번 차례가 확정된 시각
+  skip?: true; // 시간 안에 못 골라 기권으로 확정됨
 }
 
 // ---- HTTP ----
