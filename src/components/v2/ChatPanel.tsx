@@ -9,8 +9,9 @@ import { V2Icon, type V2IconName } from "./V2Icon";
 // bundle.css 의 .mv-chat* 를 React 19 로 옮겼다(승인 2026-10-31). 같은 클래스 이름(mv-chat*)을 쓴다.
 //
 // 이 페이즈 속성 범위: messages·value·onChange·onSend·inputId + 변형 logHeight(고정 높이)·compact(키보드 열림)·channel(채널 아이콘).
-// 승인 속성 emotes·onEmote·tabs 는 받지 않는다(10·11페이즈). onWill·willOpen·willSaved 는 9페이즈에서 받는다(결정 0054 깃펜 위치):
-// form 이 flex 이고 입력칸이 flex 1 이라 입력줄 왼쪽의 깃펜 버튼(48×48)이 들어올 자리를 막지 않는다.
+// 승인 속성 emotes·onEmote·tabs 는 받지 않는다(10·11페이즈). onWill·willOpen·willSaved 는 9페이즈에서 받는다:
+// 깃펜은 입력줄 오른쪽 끝, 보내기 버튼 뒤에 둔다(사용자 결정 2026-11-03, 결정 0062 가 0054 의 위치를 바꾼다).
+// form 이 flex 이고 입력칸이 flex 1 이라 깃펜 버튼(48×48)이 들어올 자리를 막지 않는다.
 //
 // 규칙
 // - 줄 본문·닉네임은 React 텍스트 노드로만 그린다(HTML 주입·링크 변환·마크다운 없음, T-07-07).
@@ -62,7 +63,7 @@ export interface ChatPanelProps {
   onInputFocus?(): void;
   onInputBlur?(): void;
   onComposingChange?(composing: boolean): void;
-  /** 있으면 입력줄 왼쪽에 깃펜(유언 쓰기) 버튼을 그린다. 입력 중 신호와 무관하다(WILL-01) */
+  /** 있으면 입력줄 오른쪽 끝(보내기 버튼 뒤)에 깃펜(유언 쓰기) 버튼을 그린다. 입력 중 신호와 무관하다(WILL-01) */
   onWill?(): void;
   /** 유언 시트가 열려 있다(aria-pressed) */
   willOpen?: boolean;
@@ -296,22 +297,6 @@ export function ChatPanel(props: ChatPanelProps) {
       </div>
       {onSend ? (
         <form className="mv-chat__form" onSubmit={onSubmit}>
-          {onWill ? (
-            <button
-              type="button"
-              className="mv-chat__will"
-              data-will-button=""
-              aria-label={willSaved ? CHAT_TEXT.willSaved : CHAT_TEXT.will}
-              aria-pressed={willOpen ? "true" : "false"}
-              aria-disabled={sendDisabled ? "true" : undefined}
-              onClick={() => latest.current.onWill?.()}
-              // 포커스가 버튼으로 옮겨 가 키보드가 닫히지 않게 한다(보내기 버튼과 같다). 입력 중 경로(onChange)는 부르지 않는다.
-              onMouseDown={(e) => e.preventDefault()}
-            >
-              <V2Icon name="quill" />
-              {willSaved ? <i className="mv-chat__will-dot" /> : null}
-            </button>
-          ) : null}
           <div className="mv-chat__field">
             {ui.icon ? (
               <span className={channel === "mafia" ? "mv-chat__chan is-mafia" : "mv-chat__chan is-ghost"}>
@@ -353,6 +338,22 @@ export function ChatPanel(props: ChatPanelProps) {
           >
             <V2Icon name="send" />
           </button>
+          {onWill ? (
+            <button
+              type="button"
+              className="mv-chat__will"
+              data-will-button=""
+              aria-label={willSaved ? CHAT_TEXT.willSaved : CHAT_TEXT.will}
+              aria-pressed={willOpen ? "true" : "false"}
+              aria-disabled={sendDisabled ? "true" : undefined}
+              onClick={() => latest.current.onWill?.()}
+              // 포커스가 버튼으로 옮겨 가 키보드가 닫히지 않게 한다(보내기 버튼과 같다). 입력 중 경로(onChange)는 부르지 않는다.
+              onMouseDown={(e) => e.preventDefault()}
+            >
+              <V2Icon name="quill" />
+              {willSaved ? <i className="mv-chat__will-dot" /> : null}
+            </button>
+          ) : null}
         </form>
       ) : null}
     </section>

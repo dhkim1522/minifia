@@ -87,8 +87,8 @@
 .mv-chat__input { flex: 1; min-width: 0; height: var(--control-input); box-sizing: border-box; padding: 0 var(--space-md); border-radius: var(--radius-md); border: 1px solid var(--night-600); background: var(--night-900); color: var(--gray-100); font-family: inherit; font-size: 16px; user-select: text; }
 .mv-chat__send { display: grid; place-items: center; flex: none; width: var(--control-input); height: var(--control-input); padding: 0; border: 0; border-radius: var(--radius-md); background: var(--gray-100); color: var(--night-900); cursor: pointer; }
 .mv-chat__send[aria-disabled="true"] { background: var(--night-700); color: var(--gray-500); cursor: default; }
-/* 입력줄 깃펜(유언 쓰기, 09-UI-SPEC 281행): 폭 360 에서 깃펜 48 + 8 + 입력칸 + 8 + 보내기 48 */
-.mv-chat__will { position: relative; display: grid; place-items: center; flex: none; width: var(--control-input); height: var(--control-input); padding: 0; border: 0; border-radius: var(--radius-badge); background: var(--night-700); color: var(--gray-100); cursor: pointer; }
+/* 입력줄 깃펜(유언 쓰기): [입력칸][보내기][깃펜], 보내기와 16px(form gap 8 + margin-left 8, 오터치 방지, feedback-11) */
+.mv-chat__will { margin-left: var(--space-sm); position: relative; display: grid; place-items: center; flex: none; width: var(--control-input); height: var(--control-input); padding: 0; border: 0; border-radius: var(--radius-badge); background: var(--night-700); color: var(--gray-100); cursor: pointer; }
 .mv-chat__will[aria-pressed="true"] { box-shadow: inset 0 0 0 2px var(--gray-100); }
 .mv-chat__will[aria-disabled="true"] { opacity: 0.45; cursor: default; }
 .mv-chat__will-dot { position: absolute; top: 6px; right: 6px; width: 8px; height: 8px; border-radius: var(--radius-pill); background: var(--gray-100); }
