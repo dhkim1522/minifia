@@ -117,3 +117,17 @@ export function turnTopLine(view: RoomView): string | null {
   const leaderName = tops.length === 1 ? nameOf(view, tops[0]![0]) : undefined;
   return leaderName === undefined ? TURN_COPY.allPicked : TURN_COPY.allPickedTop(leaderName, top);
 }
+
+/** 알약·막대 아랫변 기본값(UI-SPEC A-1 표): 위 100 + 알약 48 + 간격 8 + 막대 4 = 160, 압축형은 위 72 + 40 + 8 + 4 = 124. 막대를 아직 못 쟀을 때(모이는 중·측정 전)만 쓴다. */
+export const TURN_BOTTOM_DEFAULT = 160;
+export const TURN_BOTTOM_COMPACT = 124;
+
+/** 지목 스테이지 윗변(UI-SPEC A-1): 알약·막대 아랫변 + 4. 알약이 없으면(null) 헤더 아래, 헤더보다 위로는 올라가지 않는다. */
+export function mapStageTop(headerBottom: number, turnBottom: number | null): number {
+  return turnBottom === null ? headerBottom : Math.max(headerBottom, turnBottom + 4);
+}
+
+/** 압축형 알약인가: 8페이즈 기준 스테이지(헤더 아래 62 ~ 패널 위) 높이가 360 미만이면 true. 지금은 360×560 하나. */
+export function turnCompact(viewportH: number, panelH: number): boolean {
+  return viewportH - panelH - 62 < 360;
+}

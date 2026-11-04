@@ -139,9 +139,9 @@ function MapHeader({ view, offset, hintOn, extra }: { view: RoomView; offset: nu
 }
 
 /** 차례 알약·막대·위 한 줄. 초 경계마다 다시 그리는 시계(useTurnLook)를 이 부품 안에 가둔다 */
-function TurnBlock({ view, offset, line, reducedMotion }: { view: RoomView; offset: number; line: string | null; reducedMotion: boolean }) {
+function TurnBlock({ view, offset, line, compact, reducedMotion }: { view: RoomView; offset: number; line: string | null; compact: boolean; reducedMotion: boolean }) {
   const look = useTurnLook(view, offset);
-  return <PickTurnBlock look={look} line={line} reducedMotion={reducedMotion} />;
+  return <PickTurnBlock look={look} line={line} compact={compact} reducedMotion={reducedMotion} />;
 }
 
 // 8페이즈 게임 맵 화면 틀(08-13, UI-SPEC "게임 화면 틀"): 지하 재즈 바 맵(WorldStage) 위에 위쪽 가림막, 헤더(단계 이름 + 접히는 안내 + 시간 링 + [역할 카드]), [테스트], 결과 알림, 아래 패널을 얹는다.
@@ -151,7 +151,8 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
   const toast = useTopToast();
   const { show } = toast;
   // 측정(스테이지 사각형)·키보드·기록 칸 높이는 대기실과 같은 훅이다. 키보드가 열려 있으면 행동 줄을 숨기고 기록 칸을 72 로 줄인다(07-19).
-  const { rootRef, headerRef, panelRef, inputRef, kbOpen: kbLifted, kbInSheet, logH, stageInsets } = useMapInsets();
+  // 지목이면 스테이지 윗변을 차례 알약 아랫변 + 4 로 내리고(UI-SPEC A-1) 작은 폰은 압축형 알약을 받는다(turnCompact). 알약 요소는 훅이 루트에서 `[data-turn-block]` 으로 찾는다.
+  const { rootRef, headerRef, panelRef, inputRef, kbOpen: kbLifted, kbInSheet, logH, turnCompact: compactTurn, stageInsets } = useMapInsets(turnStageOf(view) !== null);
   // 키보드가 시트의 textarea 때문에 열린 것이면 채팅 패널을 줄이거나 행동 줄을 숨기지 않는다(시트를 연 버튼이 남아야 닫을 때 초점이 돌아온다). 패널은 키보드 위로 올라간다(lifted).
   const kbOpen = kbLifted && !kbInSheet;
   const { typingSeats, ...binding } = useChat({ store: chat, connection: { send, canSend }, view });
@@ -462,7 +463,7 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
         onLeave={() => onLeave?.()}
       />
       <TopToast {...toast.props} />
-      <TurnBlock view={view} offset={offset} line={topLine} reducedMotion={reducedMotion} />
+      <TurnBlock view={view} offset={offset} line={topLine} compact={compactTurn} reducedMotion={reducedMotion} />
       {testButton ? <div className="mf-game__test">{testButton}</div> : null}
       {/* 장면 전환 막(09-20): 결과 알림보다 앞(DOM 순서)에 두어 막을 붙잡는 동안 알림이 막 위로 올라올 수 있게 한다. 덮기는 공개 마감만의 함수다 */}
       <SceneCurtain view={view} offset={offset} reducedMotion={reducedMotion} {...(killFx !== null ? { holdUntil: killFx.at + KILL_HOLD_MS } : {})} />
