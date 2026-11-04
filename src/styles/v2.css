@@ -18,7 +18,7 @@
 .mv-tag__done { display: inline-flex; align-items: center; flex: none; }
 .mv-tag__dot { width: 8px; height: 8px; border-radius: var(--radius-pill); flex: none; }
 
-/* 머리 위 입력 중 알약(승인 .mv-typing, bundle.css 40-43). 글자 없이 점 세 개. 점 애니메이션 이름은 .mv-dots(DotProgress)와 헷갈리지 않게 mv-typing-dots */
+/* 머리 위 입력 중 알약(승인 .mv-typing, bundle.css 40-43). 글자 없이 점 세 개. 점 애니메이션 이름은 mv-typing-dots */
 .mv-typing { display: inline-flex; gap: 3px; padding: 6px 10px; border-radius: var(--radius-pill); background: var(--gray-100); }
 .mv-typing i { width: 6px; height: 6px; border-radius: var(--radius-pill); background: var(--night-900); animation: mv-typing-dots 1s infinite; }
 .mv-typing i:nth-child(2) { animation-delay: 0.2s; }
@@ -38,10 +38,8 @@
 /* 원본은 급할 때 진홍으로 바꾼다. 진홍은 이 페이즈 UI 에 없으므로(UI-SPEC Color) 숫자만 나타나고 색은 그대로 둔다. 진홍은 시간 링을 쓰는 페이즈가 정한다 */
 .mv-ring__num { position: relative; font-size: 16px; line-height: 1; font-weight: 700; color: var(--gray-50); font-variant-numeric: tabular-nums; }
 
-/* 점 진행 */
-.mv-dots { display: inline-flex; align-items: center; flex: none; gap: 5px; }
-.mv-dots__dot { width: 9px; height: 9px; border-radius: var(--radius-pill); box-sizing: border-box; border: 1.5px solid var(--gray-300); }
-.mv-dots__dot.is-on { background: var(--gray-100); border-color: var(--gray-100); }
+/* 인원·진행 숫자 '현재 / 최대'(feedback-13). 버튼 라벨과 같은 16px 700, 색은 놓인 자리의 글자색을 따른다 */
+.mv-count { flex: none; font-size: 16px; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; color: inherit; }
 
 /* 화면 위 알림. 위에서 toast-top, 가운데. 비어 있으면 자리를 차지하지 않는다 */
 .mv-toast { display: flex; justify-content: center; pointer-events: none; opacity: 0; transition: opacity 220ms; }
@@ -55,9 +53,6 @@
 .mf-act { display: flex; align-items: center; justify-content: center; gap: 8px; min-width: 0; min-height: var(--control-button); box-sizing: border-box; padding: 0 12px; border-radius: var(--radius-md); border: 1px solid transparent; font-family: inherit; font-size: 16px; font-weight: 700; white-space: nowrap; cursor: pointer; }
 .mf-act__label { white-space: nowrap; }
 .mf-act--primary { background: var(--gray-100); border-color: var(--gray-100); color: var(--night-900); }
-/* 활성 면이 gray-100 이라 점도 글자처럼 night-900 (UI-SPEC 방장 · 시작 가능) */
-.mf-act--primary .mv-dots__dot { border-color: var(--night-900); }
-.mf-act--primary .mv-dots__dot.is-on { background: var(--night-900); border-color: var(--night-900); }
 .mf-act--inactive { background: var(--night-700); border-color: var(--night-600); color: var(--gray-100); opacity: 0.45; }
 .mf-act--flat { background: transparent; border-color: transparent; color: var(--gray-300); cursor: default; }
 .mf-act:focus-visible { outline: 2px solid var(--gray-100); outline-offset: 2px; }

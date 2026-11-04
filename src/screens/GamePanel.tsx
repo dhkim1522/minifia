@@ -6,12 +6,12 @@ import { majorityOf } from "../../shared/game/nomination";
 import type { ClientMessage, RoomView } from "../../shared/protocol";
 import { ActionRow } from "../components/ActionButton";
 import { ChatPanel } from "../components/v2/ChatPanel";
-import { DotProgress } from "../components/v2/DotProgress";
+import { HeadCount } from "../components/v2/HeadCount";
 import { FaceList } from "../components/v2/FaceList";
 import { V2Icon } from "../components/v2/V2Icon";
 import { VerdictPicker } from "../components/v2/VerdictPicker";
 import type { Verdict } from "../components/v2/VerdictPicker";
-import { faceSrc } from "../net/assets";
+import { faceSrc, seatColorVar } from "../net/assets";
 import type { ChatBinding } from "../net/useChat";
 import { useViewChoice } from "../net/useViewChoice";
 
@@ -55,8 +55,8 @@ export interface GamePanelProps {
 
 /**
  * 게임 맵 화면의 아래 패널(UI-SPEC "아래 패널 종류와 높이"). 단계마다 행동 줄이 다르다.
- * 낮 토론은 [토론 끝내기], 찬반은 위쪽 찬반 줄(VerdictPicker + DotProgress, 08-16)을 얹는다 — 변론·처형·유령은 채팅만이거나 뒤 계획이 이 틀 위에 얹는다.
- * 눌림은 서버 view(me.endDiscussion·me.verdictVote)가 기준이고, 내가 누른 즉시 바뀌는 것은 내 눌림 표시 하나뿐이다. 점 개수는 서버가 센 값만 그린다(누가 눌렀는지·무엇을 골랐는지는 서버가 보내지 않는다).
+ * 낮 토론은 [토론 끝내기], 찬반은 위쪽 찬반 줄(VerdictPicker + HeadCount, 08-16)을 얹는다 — 변론·처형·유령은 채팅만이거나 뒤 계획이 이 틀 위에 얹는다.
+ * 눌림은 서버 view(me.endDiscussion·me.verdictVote)가 기준이고, 내가 누른 즉시 바뀌는 것은 내 눌림 표시 하나뿐이다. 숫자는 서버가 센 값만 그린다(누가 눌렀는지·무엇을 골랐는지는 서버가 보내지 않는다).
  */
 export function GamePanel({ view, send, canSend, binding, logHeight, kbOpen = false, lifted, veiled = false, rejected = 0, onNightPickSent, onOpenWill, willOpen = false, onOpenNote, noteOpen = false, noteReady = false, willSaved = false, inputRef, panelRef }: GamePanelProps) {
   const serverPressed = view.me.endDiscussion === true;
@@ -93,8 +93,8 @@ export function GamePanel({ view, send, canSend, binding, logHeight, kbOpen = fa
   const aliveCount = view.players.filter(isAlive).length;
   const isDefender = view.day?.candidate !== undefined && view.day.candidate === view.me.seat;
   const inVerdict = view.phase === "verdict" && !kbOpen;
-  const showVerdict = inVerdict && meAlive && !isDefender; // 찬반 버튼 + 점
-  const showVerdictDots = inVerdict && !showVerdict; // 변론자 본인·유령: 점만(보기 패널)
+  const showVerdict = inVerdict && meAlive && !isDefender; // 찬반 버튼 + 숫자
+  const showVerdictDots = inVerdict && !showVerdict; // 변론자 본인·유령: 숫자만(보기 패널)
   const showExecPicker = view.phase === "execution" && meAlive && !isDefender && !kbOpen; // 처형 단계: 결과가 나와 비활성(불투명도 0.45)
   const voted = view.day?.voted?.length ?? 0;
   const pressVerdict = (v: Verdict): void => {
@@ -114,7 +114,7 @@ export function GamePanel({ view, send, canSend, binding, logHeight, kbOpen = fa
   const faces = nightFaces === null ? [] : view.players
     .filter((p) => isAlive(p) && !(nightFaces === "police" && p.seat === view.me.seat))
     .sort((a, b) => a.seat - b.seat)
-    .map((p) => ({ seat: p.seat, name: p.nickname, img: faceSrc(p.seat), color: `var(--seat-${(p.seat % 8) + 1})` }));
+    .map((p) => ({ seat: p.seat, name: p.nickname, img: faceSrc(p.seat), color: seatColorVar(p.seat) }));
   const pickFace = (seat: number): void => {
     if (!canSend) return;
     if (send({ t: "pick", target: seat }) === false) return; // 소켓이 닫혀 못 보냈으면 눌림도 바꾸지 않는다
@@ -154,7 +154,7 @@ export function GamePanel({ view, send, canSend, binding, logHeight, kbOpen = fa
           {showVerdict ? (
             <VerdictPicker {...(verdict ? { value: verdict } : {})} onChange={pressVerdict} {...(canSend ? {} : { disabled: true })} />
           ) : null}
-          <DotProgress count={voted} total={Math.max(0, aliveCount - 1)} label="투표한 사람" />
+          <HeadCount count={voted} total={Math.max(0, aliveCount - 1)} label="투표한 사람" />
         </div>
       ) : null}
       {nightFaces !== null ? (
@@ -243,7 +243,7 @@ export function GamePanel({ view, send, canSend, binding, logHeight, kbOpen = fa
           >
             <V2Icon name="skip" size={22} />
             <span className="mf-act__label">토론 끝내기</span>
-            <DotProgress count={count} total={total} label={`${count}/${total}`} />
+            <HeadCount count={count} total={total} label={`${count}/${total}`} />
           </button>
         </ActionRow>
       ) : null}

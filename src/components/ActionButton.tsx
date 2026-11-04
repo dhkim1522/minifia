@@ -1,12 +1,12 @@
 import { Children } from "react";
 import type { MouseEventHandler, ReactNode } from "react";
 import "../styles/v2.css";
-import { DotProgress } from "./v2/DotProgress";
+import { HeadCount } from "./v2/HeadCount";
 import { V2Icon } from "./v2/V2Icon";
 import type { V2IconName } from "./v2/V2Icon";
 
 // 단계 버튼(승인 보드 Main.dc.html 의 act())과 행동 줄. 부품이 아니라 보드의 인라인 규칙이라 v2/ 밖에 둔다.
-// 높이 52·반경 14·테두리 1px·글자 16px 700·안쪽 0 12px·아이콘 22px + 라벨 + 점(간격 8)은 v2.css 의 .mf-act 가 정한다.
+// 높이 52·반경 14·테두리 1px·글자 16px 700·안쪽 0 12px·아이콘 22px + 라벨 + 숫자(간격 8)은 v2.css 의 .mf-act 가 정한다.
 //
 // 세 모양
 //   primary  — gray-100 면·night-900 글자. 눌러서 진행하는 버튼([시작])
@@ -20,8 +20,8 @@ export interface ActionButtonProps {
   variant: ActionVariant;
   label: string;
   icon?: V2IconName;
-  /** 라벨 뒤 점 진행. 예: 시작 + 모인 사람 수 */
-  dots?: { count: number; total: number };
+  /** 라벨 뒤 숫자 '현재 / 최대'. 예: 시작 + 모인 사람 수 */
+  count?: { count: number; total: number };
   onClick?: MouseEventHandler<HTMLButtonElement>;
   /** 읽어 주는 이름이 라벨과 다를 때. 예: "게임 시작, 5명 모임" */
   "aria-label"?: string;
@@ -29,7 +29,7 @@ export interface ActionButtonProps {
   data?: Record<`data-${string}`, string>;
 }
 
-export function ActionButton({ variant, label, icon, dots, onClick, "aria-label": ariaLabel, data }: ActionButtonProps) {
+export function ActionButton({ variant, label, icon, count, onClick, "aria-label": ariaLabel, data }: ActionButtonProps) {
   return (
     <button
       type="button"
@@ -42,7 +42,7 @@ export function ActionButton({ variant, label, icon, dots, onClick, "aria-label"
     >
       {icon ? <V2Icon name={icon} size={22} /> : null}
       <span className="mf-act__label">{label}</span>
-      {dots ? <DotProgress count={dots.count} total={dots.total} label={label} /> : null}
+      {count ? <HeadCount count={count.count} total={count.total} label={label} /> : null}
     </button>
   );
 }

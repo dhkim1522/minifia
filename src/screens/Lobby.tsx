@@ -176,7 +176,7 @@ export function Lobby({ view, store, chat, send, canSend = true, epoch = 0, offs
                 variant={enoughPlayers && canSend && !locked ? "primary" : "inactive"}
                 label="시작"
                 icon="play"
-                dots={{ count: connected, total: view.maxPlayers }}
+                count={{ count: connected, total: view.maxPlayers }}
                 aria-label={startLabel}
                 data={{ "data-lobby-start": "" }}
                 onClick={pressStart}
