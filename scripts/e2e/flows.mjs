@@ -2196,7 +2196,12 @@ async function nightAssassin(ctx) {
       await tapPick(hp, target);
     });
     rec(sc, "NA6", "이름표 버튼을 누르면 눌림 표시", tap.ok, tap.detail);
-    const aim1 = await readAim(hp);
+    // 테두리 색은 0.15초 전환이라 끝난 값을 기다려 읽는다
+    let aim1 = await readAim(hp);
+    for (let i = 0; i < 10 && aim1.find((t) => t.seat === target)?.borderColor !== "rgb(200, 16, 46)"; i++) {
+      await sleep(100);
+      aim1 = await readAim(hp);
+    }
     const mineTag = aim1.find((t) => t.seat === target);
     rec(sc, "NA6b", "고른 뒤: 대상 이름표만 mine + is-picked + 3px 실선 진홍(#c8102e) 테두리 + 표식, 나머지 후보는 cand", mineTag?.aim === "mine" && /is-picked/.test(mineTag.cls ?? "") && mineTag.borderStyle === "solid" && mineTag.borderWidth === 3 && mineTag.borderColor === "rgb(200, 16, 46)" && mineTag.mark === true && aim1.filter((t) => t.aim === "mine").length === 1 && aim1.filter((t) => t.aim === "cand").length === g.picks.length - 1 && aim1.filter((t) => t.mark).length === 1, `대상 ${JSON.stringify(mineTag)}, mine ${aim1.filter((t) => t.aim === "mine").length}, cand ${aim1.filter((t) => t.aim === "cand").length}, 표식 ${aim1.filter((t) => t.mark).length}`);
     // 다가가기는 일반 move 를 보낸다(목적지 링 data-ring 은 맵 탭에서만 생긴다) — 내 구간이 새로 오고 위치가 실제로 옮겨지는지로 본다
