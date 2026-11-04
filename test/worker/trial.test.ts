@@ -594,10 +594,29 @@ describe("실제 흐름 (결정 0060-1)", () => {
     expect(lastViews(g).map((v) => v.day?.noExecution?.reason).join(",")).toBe("noVotes,noVotes,noVotes,noVotes,noVotes");
   }, 60_000);
 
-  it("지목이 2:2 로 갈리면 곧장 밤이고 reason 은 tie 이며 아무도 탈락하지 않는다", async () => {
+  it("지목이 2:2 로 갈려 결선도 동점(아무도 안 던짐)이면 결선 세 걸음 뒤 밤이고 reason 은 tie 이며 아무도 탈락하지 않는다 (결정 0066-4)", async () => {
     const { g } = await toNominationByEnd();
     const [s0, s1, s2, s3] = g.actors.map((a) => a.seat);
     await pointAll(g, { [s0!]: s2!, [s1!]: s2!, [s2!]: s0!, [s3!]: s0! });
+    await dueAgo(g.code, 1); // 지목 집계 → 결선 앞머리
+    await settleAllSocks(g);
+    expect((await storedFlow(g.code)).phase).toBe("runoff");
+    await dueAgo(g.code, 1); // 앞머리 → 투표
+    await dueAgo(g.code, 1); // 투표 → 결과
+    await settleAllSocks(g);
+    expect((await storedFlow(g.code)).phase).toBe("runoff");
+    await dueAgo(g.code, 1); // 결과 → 집계(0:0 동점) → 밤
+    await settleAllSocks(g);
+    const night = await storedFlow(g.code);
+    expect(night.phase).toBe("night");
+    expect(night.players.every((p) => p.alive !== false)).toBe(true);
+    expect(lastViews(g).map((v) => v.day?.noExecution?.reason).join(",")).toBe("tie,tie,tie,tie,tie");
+  }, 60_000);
+
+  it("지목이 세 명 이상 동점이면 결선 없이 곧장 밤이고 reason 은 tie 이며 아무도 탈락하지 않는다", async () => {
+    const { g } = await toNominationByEnd();
+    const [s0, s1, s2] = g.actors.map((a) => a.seat);
+    await pointAll(g, { [s0!]: s1!, [s1!]: s2!, [s2!]: s0! });
     await dueAgo(g.code, 1);
     await settleAllSocks(g);
     const night = await storedFlow(g.code);

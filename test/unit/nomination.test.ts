@@ -117,11 +117,24 @@ describe("resolveNomination — 마감 훅 (DAY-05, 결정 0060-3)", () => {
     expect(hasNominateKey(r.state)).toBe(false);
   });
 
-  it("동률이면 next 가 night 이고 후보가 없다", () => {
-    const r = resolveNomination(withPoints(nominationOf(), { 0: 2, 1: 2, 2: 0, 3: 0, 4: 1 }));
+  it("최다가 셋 이상 동률이면 next 가 night 이고 후보가 없다 (결선 없음, 결정 0066-4)", () => {
+    // 0→1, 1→2, 2→0: 세 명이 한 표씩 최다 동점
+    const r = resolveNomination(withPoints(nominationOf(), { 0: 1, 1: 2, 2: 0 }));
     const cand = r.state.voteLog?.at(-1)?.cand;
     expect(`${String(r.next)} ${keysOf(cand ?? {})} ${JSON.stringify(r.state.verdict)}`).toBe(`night ${keysOf({ votes: 1 })} ${JSON.stringify({ passed: false })}`);
+    expect(r.state.runoff).toBeUndefined();
     expect(hasNominateKey(r.state)).toBe(false);
+  });
+
+  it("최다가 정확히 둘 동점이면 next 가 runoff 이고 후보 둘이 낮은 좌석부터 서며 그날 줄에는 candidate 가 없다 (결정 0066-4)", () => {
+    const r = resolveNomination(withPoints(nominationOf(), { 0: 2, 1: 2, 2: 0, 3: 0, 4: 1 }));
+    const cand = r.state.voteLog?.at(-1)?.cand;
+    expect(`${String(r.next)} ${keysOf(cand ?? {})} ${JSON.stringify(r.state.verdict)} ${JSON.stringify(r.state.runoff)}`).toBe(
+      `runoff ${keysOf({ votes: 1 })} ${JSON.stringify({ passed: false })} ${JSON.stringify({ cand: [0, 2], step: 0 })}`,
+    );
+    expect(r.stay).toBe(false);
+    expect(hasNominateKey(r.state)).toBe(false);
+    expect(r.state.pickTurn).toBeUndefined();
   });
 
   it("0표여도 그날 줄은 항상 쌓이고 next 가 night 이다", () => {

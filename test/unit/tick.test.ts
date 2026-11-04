@@ -54,10 +54,10 @@ function stateIn(
 }
 
 describe("PHASE_DEFS (단계 표, D-01·D-02·D-19·D-20, NIGHT-05·NIGHT-06)", () => {
-  it("단계는 열두 개다 — lobby·assigning·roleReveal, 낮 두 단계(순차 주장·공개 연출 단계 없음, D-07, CHAT-06), 지목·변론·찬반·처형(결정 0060, 옛 처형 여부 투표·후보 선택·공개 단계 없음), 밤·아침, 판 종료", () => {
+  it("단계는 열세 개다 — lobby·assigning·roleReveal, 낮 두 단계(순차 주장·공개 연출 단계 없음, D-07, CHAT-06), 지목·동점 결선·변론·찬반·처형(결정 0060·0066-4, 옛 처형 여부 투표·후보 선택·공개 단계 없음), 밤·아침, 판 종료", () => {
     const keys = Object.keys(PHASE_DEFS).sort();
     expect(`${keys.length}:${keys.join(",")}`).toBe(
-      "12:assigning,dayAnnounce,defense,discussion,ended,execution,lobby,morning,night,nomination,roleReveal,verdict",
+      "13:assigning,dayAnnounce,defense,discussion,ended,execution,lobby,morning,night,nomination,roleReveal,runoff,verdict",
     );
   });
 
@@ -69,6 +69,7 @@ describe("PHASE_DEFS (단계 표, D-01·D-02·D-19·D-20, NIGHT-05·NIGHT-06)", 
       return `${d?.durationMs}/${d?.next}/${d?.revealsOwnRole}`;
     };
     expect(row("lobby")).toBe("null/null/false");
+    expect(row("runoff")).toBe("1000/defense/true"); // 동점 결선 앞머리 1초 → 기본 다음은 최후 변론(결정 0066-4, 결선도 동점이면 훅이 night 로)
     expect(row("assigning")).toBe("3000/roleReveal/false");
     expect(row("roleReveal")).toBe("15000/dayAnnounce/true");
     expect(row("dayAnnounce")).toBe("2000/discussion/true"); // 낮 시작 발표 다음이 바로 토론(CHAT-06)
@@ -171,11 +172,28 @@ describe("tick (순수 단계 진행)", () => {
     const oneEnd = castPoints(nomination, { 0: 2, 1: 2, 2: 3 });
     const one = tick(oneEnd, oneEnd.phaseEndsAt!);
     expect(`${one.phase}/${one.phaseEndsAt}/${JSON.stringify(one.verdict)}`).toBe(`defense/${oneEnd.phaseEndsAt! + DEFENSE_MS}/{"passed":false,"candidate":2}`);
-    const tieEnd = castPoints(nomination, { 0: 2, 1: 2, 2: 0, 3: 0 });
+    // 최다가 셋 이상 동점(0→1, 1→2, 2→0 한 표씩)이면 결선 없이 밤 — 정확히 둘 동점은 아래 결선 시험이 맡는다(결정 0066-4)
+    const tieEnd = castPoints(nomination, { 0: 1, 1: 2, 2: 0 });
     const tie = tick(tieEnd, tieEnd.phaseEndsAt!);
     expect(`${tie.phase}/${tie.phaseEndsAt}`).toBe(`night/${tieEnd.phaseEndsAt! + NIGHT_MS}`);
     expect(tie.voteLog?.[0]?.cand?.candidate).toBeUndefined();
-    expect(tie.voteLog?.[0]?.cand?.votes.length).toBe(4);
+    expect(tie.voteLog?.[0]?.cand?.votes.length).toBe(3);
+  });
+
+  it("지목 마감에 최다가 정확히 둘 동점이면 결선(마감 +1000)으로, 아무도 안 던지고 결선을 지나면 밤(마감 사슬 1000+5000+1500)으로 간다 (결정 0066-4)", () => {
+    const T = 100_000;
+    const nomination = tick({ ...stateIn("discussion", T), day: 1 }, T);
+    const tieEnd = castPoints(nomination, { 0: 2, 1: 2, 2: 0, 3: 0 });
+    const lead = tick(tieEnd, tieEnd.phaseEndsAt!);
+    expect(`${lead.phase}/${lead.phaseEndsAt}/${JSON.stringify(lead.runoff)}`).toBe(`runoff/${tieEnd.phaseEndsAt! + 1000}/{"cand":[0,2],"step":0}`);
+    const open = tick(lead, lead.phaseEndsAt!);
+    expect(`${open.phase}/${open.phaseEndsAt! - lead.phaseEndsAt!}/${open.runoff?.step}`).toBe("runoff/5000/1");
+    const shown = tick(open, open.phaseEndsAt!);
+    expect(`${shown.phase}/${shown.phaseEndsAt! - open.phaseEndsAt!}/${shown.runoff?.step}`).toBe("runoff/1500/2");
+    const night = tick(shown, shown.phaseEndsAt!);
+    expect(`${night.phase}/${night.phaseEndsAt}`).toBe(`night/${shown.phaseEndsAt! + NIGHT_MS}`);
+    expect(night.runoff).toBeUndefined();
+    expect(night.voteLog?.[0]?.cand?.candidate).toBeUndefined();
   });
 
   it("찬반 마감은 부결이어도 처형으로 간다: 마감 +EXECUTION_MS, 아무도 탈락하지 않고 voteLog 의 exec 가 채워진다", () => {

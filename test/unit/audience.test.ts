@@ -231,7 +231,7 @@ describe("CHAT_PHASES", () => {
   it("로비·낮 단계·밤·아침이 들고, assigning·roleReveal·ended·claim 은 들지 않는다", () => {
     expect([...CHAT_PHASES].sort().join(",")).toBe(
       [
-        "lobby", "dayAnnounce", "discussion", "nomination",
+        "lobby", "dayAnnounce", "discussion", "nomination", "runoff",
         "defense", "verdict", "execution", "night", "morning",
       ].sort().join(","),
     );
