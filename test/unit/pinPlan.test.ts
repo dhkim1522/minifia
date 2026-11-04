@@ -1,8 +1,8 @@
 // 핀 조명 계획(결정 0066-6, UI-SPEC F): 공개 값(day.turn·day.points)에서 "무엇을 비출지"(pinOf)와 시각에 따른 위치(pinAt)를 순수하게 낸다.
 import { describe, expect, it } from "vitest";
-import { PICK_GAP_MS } from "../../shared/game/phases";
+import { EXECUTION_MS, PICK_GAP_MS } from "../../shared/game/phases";
 import type { DayView, PhaseId, PublicPlayer, RoomView } from "../../shared/protocol";
-import { easeInOut, PIN_DIM, PIN_OFF_MS, PIN_ON_MS, PIN_STRENGTH, pinAt, pinLevel, pinLights, pinOf } from "../../src/world/pinPlan";
+import { easeInOut, PIN_DIM, PIN_OFF_EXEC_AT, PIN_OFF_NO_EXEC_AT, PIN_OFF_MS, PIN_ON_MS, PIN_STRENGTH, pinAt, pinLevel, pinLights, pinOf } from "../../src/world/pinPlan";
 
 function viewOf(phase: PhaseId, day: Partial<DayView> = {}, count = 4): RoomView {
   const players: PublicPlayer[] = Array.from({ length: count }, (_, seat) => ({ seat, nickname: `p${seat}`, connected: true, isHost: seat === 0 }));
@@ -142,5 +142,35 @@ describe("pinLevel / pinLights", () => {
     const half = pinLights(0.5);
     expect(half.strength).toBeCloseTo(0.45, 9);
     expect(half.dim).toBeCloseTo(0.8, 9);
+  });
+});
+
+describe("pinOf — 판결 순간(처형 단계, 09.1.1-13)", () => {
+  const exec = (verdict: DayView["verdict"], extra: Partial<DayView> = {}, endsAt: number | null = 100_000 + EXECUTION_MS): RoomView => ({
+    ...viewOf("execution", { candidate: 4, ballots: { yes: [0, 1], no: [2] }, ...(verdict !== undefined ? { verdict } : {}), ...extra }, 8),
+    phaseEndsAt: endsAt,
+  });
+
+  it("처형(passed): 변론자에게 고정 핀, 켜진 창은 처형 진입 시각부터 5.0초", () => {
+    expect(pinOf(exec({ yes: 2, no: 1, passed: true }))).toEqual({ mode: "fixed", seat: 4, startAt: 100_000, endAt: 100_000 + PIN_OFF_EXEC_AT });
+  });
+
+  it("부결: 창이 4.0초에 닫힌다", () => {
+    expect(pinOf(exec({ yes: 1, no: 2, passed: false }))).toEqual({ mode: "fixed", seat: 4, startAt: 100_000, endAt: 100_000 + PIN_OFF_NO_EXEC_AT });
+  });
+
+  it("마지막 3인 처형(last)·찬반 기록 없음·변론자 없음·마감 시각 없음은 핀 없음", () => {
+    expect(pinOf(exec({ yes: 0, no: 0, passed: true, last: true }))).toBeNull();
+    expect(pinOf({ ...exec({ yes: 2, no: 1, passed: true }), day: { n: 1, roles: [], candidate: 4, verdict: { yes: 2, no: 1, passed: true } } })).toBeNull();
+    expect(pinOf(exec({ yes: 2, no: 1, passed: true }, { candidate: undefined }))).toBeNull();
+    expect(pinOf(exec({ yes: 2, no: 1, passed: true }, {}, null))).toBeNull();
+  });
+
+  it("pinAt: 고정 핀은 [startAt, endAt) 안에서만 켜지고 같은 좌석을 비춘다(역할 분기 없음)", () => {
+    const d = pinOf(exec({ yes: 2, no: 1, passed: true }))!;
+    expect(pinAt(d, 99_999, false)).toMatchObject({ on: false });
+    expect(pinAt(d, 100_000, false)).toMatchObject({ on: true, seat: 4, moving: false, t: 0 });
+    expect(pinAt(d, 104_999, true)).toMatchObject({ on: true, seat: 4 });
+    expect(pinAt(d, 105_000, false)).toMatchObject({ on: false });
   });
 });

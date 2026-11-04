@@ -86,7 +86,11 @@ interface ViewOpts {
   /** 내 찬반(본인에게만 오는 값) */
   verdictVote?: boolean;
   /** 처형 단계의 찬반 결과 */
-  verdict?: { yes: number; no: number; passed: boolean };
+  verdict?: { yes: number; no: number; passed: boolean; last?: true };
+  /** 처형 단계의 찬반 기록(day.ballots, 09.1.1-13) */
+  ballots?: { yes: number[]; no: number[] };
+  /** 단계 마감 시각(기본 NOW + 10초) */
+  phaseEndsAt?: number;
   /** 그날 voteLog 의 cand.votes: [지목한 사람, 대상] 쌍 */
   candVotes?: Array<[number, number]>;
   nicknames?: string[];
@@ -102,7 +106,7 @@ function makeView(o: ViewOpts = {}): RoomView {
   return {
     code: "0042",
     phase,
-    phaseEndsAt: NOW + 10_000,
+    phaseEndsAt: o.phaseEndsAt ?? NOW + 10_000,
     phaseDurationMs: 10_000,
     serverNow: NOW,
     minPlayers: 4,
@@ -131,6 +135,7 @@ function makeView(o: ViewOpts = {}): RoomView {
         : {}),
       ...(phase === "verdict" ? { voted: o.voted ?? [] } : {}),
       ...(phase === "execution" && o.verdict !== undefined ? { verdict: o.verdict, execution: { seat: o.candidate ?? 3 } } : {}),
+      ...(phase === "execution" && o.ballots !== undefined ? { ballots: o.ballots } : {}),
     },
   };
 }
@@ -554,5 +559,143 @@ describe("처형 화면 (DAY-06)", () => {
     expect(lastScene().seats[4]?.fadeAt).toBeDefined();
     advance(5000);
     expect(m.container.querySelector("[data-ghost]")).toBeNull();
+  });
+});
+
+// 09.1.1-13: 판결 순간 연출(UI-SPEC C-1, 결정 0066-7). 처형 진입 시각 T = phaseEndsAt - 5600 기준으로 막·핀·줌·알림 위치·찬반 묶음이 시간표대로 이어진다.
+describe("판결 순간 연출 — 시간표 (09.1.1-13)", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
+  });
+  afterEach(() => vi.useRealTimers());
+  const advance = (ms: number) =>
+    act(() => {
+      vi.advanceTimersByTime(ms);
+    });
+  const BALLOTS = { yes: [0, 1, 2, 5, 6], no: [3, 7] };
+  const ENDS_AT = NOW + 5600; // 진입 시각 T = NOW
+  const execView = (extra: Partial<ViewOpts> = {}) =>
+    makeView({ phase: "execution", count: 8, candidate: 4, dead: [4], verdict: { yes: 5, no: 2, passed: true }, ballots: BALLOTS, phaseEndsAt: ENDS_AT, ...extra });
+  const enter = (to: RoomView = execView(), from: Partial<ViewOpts> = {}) => {
+    const m = mount(makeView({ phase: "verdict", count: 8, candidate: 4, ...from }));
+    m.show(to);
+    return m;
+  };
+  const reveal = (c: ParentNode): HTMLElement | null => c.querySelector("[data-ballots]");
+  const dimOf = (c: ParentNode): string | null => c.querySelector(".mf-game__dim")?.getAttribute("data-dim") ?? null;
+  const announce = (c: ParentNode): Element | null => c.querySelector("[data-announce]");
+
+  it("진입 직후: 어둡게 막이 켜지고(data-dim=verdict) 찬반 묶음은 아직 없다. 줌 1.10(0.6초 ease)과 변론자 고정 핀 창이 장면 표에 선다", () => {
+    const m = enter();
+    expect(dimOf(m.container)).toBe("verdict");
+    expect(reveal(m.container)).toBeNull();
+    const cam = lastScene().camera;
+    expect(cam).toMatchObject({ mode: "fixed", zoom: 1.1, zoomMs: 600 });
+    expect(lastScene().pin).toEqual({ mode: "fixed", seat: 4, startAt: NOW, endAt: NOW + 5000 });
+  });
+
+  it("0.6초에 찬성 묶음, 1.0초에 반대 묶음, 4.6초에 묶음이 사라지고 막이 걷히며 줌 목표가 1 로 돌아온다", () => {
+    const m = enter();
+    advance(599);
+    expect(reveal(m.container)).toBeNull();
+    advance(1);
+    expect(reveal(m.container)?.getAttribute("data-stage")).toBe("yes");
+    advance(399);
+    expect(reveal(m.container)?.getAttribute("data-stage")).toBe("yes");
+    advance(1);
+    expect(reveal(m.container)?.getAttribute("data-stage")).toBe("both");
+    expect(dimOf(m.container)).toBe("verdict");
+    advance(3599);
+    expect(reveal(m.container)).not.toBeNull();
+    advance(1);
+    expect(reveal(m.container)).toBeNull();
+    expect(dimOf(m.container)).not.toBe("verdict");
+    expect(lastScene().camera).toMatchObject({ mode: "fixed", zoom: 1, zoomMs: 600 });
+  });
+
+  it("결과 알림은 위 72(is-top) 자리에 뜬다", () => {
+    const m = enter();
+    advance(600);
+    expect(announce(m.container)?.className).toContain("is-top");
+  });
+
+  it("모든 viewer 가 같은 연출을 본다: 변론자(탈락)·살아 있는 시민·유령 시점 모두 같은 묶음 시간표와 같은 장면 표", () => {
+    const seen: string[] = [];
+    for (const mySeat of [4, 0, 3]) {
+      cleanup();
+      rt.scenes.length = 0;
+      const m = enter(execView({ mySeat }), { mySeat });
+      const timeline: string[] = [dimOf(m.container) ?? "-", reveal(m.container)?.getAttribute("data-stage") ?? "-"];
+      for (const ms of [600, 400, 3600]) {
+        advance(ms);
+        timeline.push(reveal(m.container)?.getAttribute("data-stage") ?? "-");
+      }
+      timeline.push(JSON.stringify({ cam: lastScene().camera, pin: lastScene().pin }));
+      seen.push(timeline.join("|"));
+    }
+    expect(seen[1]).toBe(seen[0]);
+    expect(seen[2]).toBe(seen[0]);
+  });
+
+  it("부결(passed false)도 같은 시간표 — 핀 창만 4.0초에 닫힌다", () => {
+    const m = enter(execView({ verdict: { yes: 2, no: 5, passed: false }, dead: [] }));
+    expect(lastScene().pin).toEqual({ mode: "fixed", seat: 4, startAt: NOW, endAt: NOW + 4000 });
+    advance(1000);
+    expect(reveal(m.container)?.getAttribute("data-stage")).toBe("both");
+    advance(3600);
+    expect(reveal(m.container)).toBeNull();
+  });
+
+  it("재접속·새로 고침: 진입 후 2.0초에 처음 그리면 애니메이션 없이 묶음이 바로 보이고 줌 1.10·막이 이미 켜져 있다", () => {
+    const m = mount(execView({ phaseEndsAt: NOW + 5600 - 2000 }));
+    const el = reveal(m.container);
+    expect(el?.getAttribute("data-stage")).toBe("both");
+    expect(el?.querySelector(".is-enter")).toBeNull();
+    expect(el?.querySelector(".is-pending")).toBeNull();
+    expect(dimOf(m.container)).toBe("verdict");
+    expect(lastScene().camera).toMatchObject({ zoom: 1.1 });
+    advance(2600);
+    expect(reveal(m.container)).toBeNull();
+  });
+
+  it("재접속이 4.6초를 지났으면 묶음·막이 없고 핀 창도 이미 지난 값이다", () => {
+    const m = mount(execView({ phaseEndsAt: NOW + 5600 - 5200 }));
+    expect(reveal(m.container)).toBeNull();
+    expect(dimOf(m.container)).not.toBe("verdict");
+    expect(lastScene().camera).toMatchObject({ zoom: 1 });
+  });
+
+  it("마지막 3인 처형(verdict.last)·찬반 기록이 없는 처형 단계에는 묶음·막이 없다", () => {
+    const a = enter(execView({ verdict: { yes: 0, no: 0, passed: true, last: true } }));
+    advance(1500);
+    expect(reveal(a.container)).toBeNull();
+    expect(dimOf(a.container)).not.toBe("verdict");
+    cleanup();
+    const b = enter(execView({ ballots: undefined }));
+    advance(1500);
+    expect(reveal(b.container)).toBeNull();
+    expect(lastScene().camera).toMatchObject({ zoom: 1 });
+  });
+
+  it("모션 줄이기: 줌 없이 막·묶음만 쓴다", () => {
+    vi.stubGlobal("matchMedia", (q: string) => ({ matches: q.includes("reduce"), media: q, addEventListener: () => {}, removeEventListener: () => {}, addListener: () => {}, removeListener: () => {} }));
+    const m = enter();
+    expect(lastScene().camera).toMatchObject({ mode: "fixed", zoom: 1 });
+    expect((lastScene().camera as { zoomMs?: number }).zoomMs).toBeUndefined();
+    expect(dimOf(m.container)).toBe("verdict");
+  });
+
+  it("타이머는 언마운트에서 정리된다(시간표가 끝나기 전에 닫아도 남는 타이머 없음)", () => {
+    const m = enter();
+    advance(100);
+    m.unmount();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("--mf-panel-h 는 루트(<main>)에 한 번 설정된다(떠 있는 버튼 묶음이 따로 설정하지 않는다)", () => {
+    const m = mount(makeView({ phase: "verdict", count: 8, candidate: 4 }));
+    const root = m.container.querySelector("main.mf-game") as HTMLElement;
+    expect(root.style.getPropertyValue("--mf-panel-h")).toMatch(/px$/);
   });
 });
