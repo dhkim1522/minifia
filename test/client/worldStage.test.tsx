@@ -138,6 +138,7 @@ export function makeFakeKit(created: FakeHandle[]): WorldModules["characterKit"]
         }),
         // 08-10 의 optional 메서드(게임 장면 시험이 호출을 본다)
         setGhost: vi.fn(),
+        applyOutfit: vi.fn(),
         setOpacity: vi.fn(),
         holdPose: vi.fn(),
         setRing: vi.fn(),
@@ -1773,6 +1774,66 @@ describe("게임 장면: 보임·유령 (GHOST-01)", () => {
     s.rerender({ scene: sceneOf({ 0: {}, 1: {}, 2: {}, 3: {} }) });
     frame();
     expect(h3.setGhost).toHaveBeenLastCalledWith(false);
+  });
+});
+
+// ---------- 09.1-09: 유령 직업 의상 + 안개 (UI-SPEC B-1·B-3, L13) ----------
+describe("유령 직업 의상 안개 (09.1-09)", () => {
+  const MIST_GLOW = { color: "#d8e4ff", intensity: 0.85 };
+  const calls = (h: FakeHandle) => [
+    ...(h.applyOutfit as ReturnType<typeof vi.fn>).mock.invocationCallOrder.map((o, i) => ({ o, name: "applyOutfit", args: (h.applyOutfit as ReturnType<typeof vi.fn>).mock.calls[i] })),
+    ...(h.setGhost as ReturnType<typeof vi.fn>).mock.invocationCallOrder.map((o, i) => ({ o, name: "setGhost", args: (h.setGhost as ReturnType<typeof vi.fn>).mock.calls[i] })),
+  ].sort((a, b) => a.o - b.o);
+
+  it("ghost + outfit 좌석: 같은 프레임에 applyOutfit(직업 의상) 다음 setGhost(true, 0.26, 발광) 이 한 번씩", async () => {
+    const s = await open({ scene: sceneOf({ 0: {}, 1: {}, 2: {}, 3: { ghost: true, outfit: "mafia" } }) }, { players: FOUR, ents: FOUR_ENTS() });
+    const h3 = s.world.renderers[0]!.chars.get(3) as FakeHandle;
+    expect(calls(h3).map((c) => c.name)).toEqual(["applyOutfit", "setGhost"]);
+    expect(h3.applyOutfit).toHaveBeenCalledWith("mafia");
+    expect(h3.setGhost).toHaveBeenCalledWith(true, 0.26, MIST_GLOW);
+    frames(100);
+    expect(h3.applyOutfit).toHaveBeenCalledTimes(1); // 바뀔 때만
+    expect(h3.setGhost).toHaveBeenCalledTimes(1);
+    // 산 좌석은 아무것도 받지 않는다
+    for (const seat of [0, 1, 2]) {
+      const h = s.world.renderers[0]!.chars.get(seat) as FakeHandle;
+      expect(h.applyOutfit).not.toHaveBeenCalled();
+      expect(h.setGhost).not.toHaveBeenCalled();
+    }
+  });
+
+  it("의상이 바뀌면(드문 경우) 한 번 더 applyOutfit, 같은 의상이면 다시 부르지 않는다", async () => {
+    const s = await open({ scene: sceneOf({ 0: {}, 1: {}, 2: {}, 3: { ghost: true, outfit: "police" } }) }, { players: FOUR, ents: FOUR_ENTS() });
+    const h3 = s.world.renderers[0]!.chars.get(3) as FakeHandle;
+    s.rerender({ scene: sceneOf({ 0: {}, 1: {}, 2: {}, 3: { ghost: true, outfit: "police" } }) });
+    frame();
+    expect(h3.applyOutfit).toHaveBeenCalledTimes(1);
+    s.rerender({ scene: sceneOf({ 0: {}, 1: {}, 2: {}, 3: { ghost: true, outfit: "doctor" } }) });
+    frame();
+    expect(h3.applyOutfit).toHaveBeenLastCalledWith("doctor");
+  });
+
+  it("유령 좌석의 불투명도 유지값은 안개 0.26(처형 연출의 0.6 이 아니다) — 연출이 없는 프레임에 setOpacity 를 덮어쓰지 않는다", async () => {
+    const s = await open({ scene: sceneOf({ 0: {}, 1: {}, 2: {}, 3: { ghost: true, outfit: "coat" } }) }, { players: FOUR, ents: FOUR_ENTS() });
+    const h3 = s.world.renderers[0]!.chars.get(3) as FakeHandle;
+    frames(100);
+    for (const c of (h3.setOpacity as ReturnType<typeof vi.fn>).mock.calls) expect(c[0]).not.toBe(0.6);
+  });
+
+  it("산 사람 화면(outfit 없음): applyOutfit 호출 0, 처형 연출은 기본 코트에서 0.6 → 0 으로 그대로 (T-09.1-24)", async () => {
+    const s = await open({ scene: sceneOf({ 0: {}, 1: {}, 2: {}, 3: { fadeAt: Date.now() } }) }, { players: FOUR, ents: FOUR_ENTS() });
+    frames(GHOST_FADE_END_MS - 50);
+    for (const h of s.world.handles) {
+      expect(h.applyOutfit).not.toHaveBeenCalled();
+      expect(h.setGhost).not.toHaveBeenCalled();
+    }
+  });
+
+  it("ghost 이지만 outfit 이 없으면(spectate 없는 유령) 지금처럼 setGhost(true) 만 — 의상 호출 없음", async () => {
+    const s = await open({ scene: sceneOf({ 0: {}, 1: {}, 2: {}, 3: { ghost: true } }) }, { players: FOUR, ents: FOUR_ENTS() });
+    const h3 = s.world.renderers[0]!.chars.get(3) as FakeHandle;
+    expect(h3.applyOutfit).not.toHaveBeenCalled();
+    expect(h3.setGhost).toHaveBeenCalledWith(true);
   });
 });
 

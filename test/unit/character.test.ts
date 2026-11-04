@@ -613,6 +613,43 @@ describe("유령 setGhost (GHOST-01)", () => {
     expect(shared.depthWrite).toBe(true);
   });
 
+  it("안개(09.1-09): setGhost(true, 0.26, 발광) — 불투명도 0.26, 발광 #d8e4ff 세기 0.85, 투명·깊이쓰기 끔, 원판 숨김", () => {
+    const c = createCharacter(0, "coat");
+    c.setGhost(true, 0.26, { color: "#d8e4ff", intensity: 0.85 });
+    const list = bodyMeshes(c.root);
+    expect(list).toHaveLength(6);
+    for (const m of list) {
+      expect(matOf(m).opacity).toBeCloseTo(0.26, 9);
+      expect(matOf(m).emissive.getHexString()).toBe("d8e4ff");
+      expect(matOf(m).emissiveIntensity).toBeCloseTo(0.85, 9);
+      expect(matOf(m).transparent).toBe(true);
+      expect(matOf(m).depthWrite).toBe(false);
+    }
+    expect(discOf(c.root)).toBeUndefined();
+  });
+
+  it("glow 없이 부르면 발광 0 이고 공유 재질은 발광이 없다(처형 연출 경로 그대로)", () => {
+    const c = createCharacter(0, "coat");
+    const shared = matOf(bodyMeshes(c.root)[0]);
+    c.setGhost(true, 0.6, { color: "#d8e4ff", intensity: 0.85 });
+    c.setGhost(true, 0.6); // 안개 → 발광 없음으로 되돌린다
+    expect(matOf(bodyMeshes(c.root)[0]).emissive.getHex()).toBe(0);
+    c.setGhost(false);
+    expect(matOf(bodyMeshes(c.root)[0])).toBe(shared);
+    expect(shared.emissive.getHex()).toBe(0);
+    expect(shared.emissiveIntensity).toBe(1);
+  });
+
+  it("꾸민 의상(detective)에 직업 의상(mafia)을 입힌 뒤 안개를 켜면 의상이 바뀌고 재질은 복제 하나다", () => {
+    const c = createCharacter(0, "detective");
+    c.applyOutfit("mafia");
+    c.setGhost(true, 0.26, { color: "#d8e4ff", intensity: 0.85 });
+    expect(new Set(bodyMeshes(c.root).map((m) => matOf(m))).size).toBe(1);
+    // 의상이 바뀌어도(병합 지오메트리 교체) 복제 재질이 유지된다
+    c.applyOutfit("police");
+    for (const m of bodyMeshes(c.root)) expect(matOf(m).opacity).toBeCloseTo(0.26, 9);
+  });
+
   it("켜면 발밑 그림자 원판이 숨고, 끄면 다시 보인다", () => {
     const c = createCharacter(0, "coat");
     c.setGhost(true);
