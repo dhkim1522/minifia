@@ -28,9 +28,15 @@
 // 09.1: 지목(nomination, 결정 0063-1)은 차례인 봇 하나만 randInt(후보 수) 한 번(지연 난수 없음) — 차례가 아닌 봇·모이는 중·확정 뒤 사이·끝 알림에는 계획과 난수가 없다. 결정 함수(botPointTarget)는 자기를 뺀 산 사람 하나를 고르고 고정 pick(host·other)도 같다(결정 0060-13: pick 은 봇 지목 대상). 09.1-05 가 옛 지연 지목(2000 + [0, 6000) ms)의 난수 계약을 지웠다.
 // 09.1.1-05: 동점 결선(runoff, 결정 0066-4)은 투표 창(step 1)에서만, 후보가 아닌 산 봇이 좌석 오름차순으로 randInt(2)(후보 둘 중 하나, 고정 pick 이면 건너뜀) → randInt(RUNOFF_BOT_SPAN_MS) 를 부른다.
 // 앞머리(step 0)·결과(step 2)·후보 봇·탈락한 봇에는 계획과 난수가 없다. 단계가 바뀔 때마다 마감이 달라 계획 키("runoff:{마감}")가 새로 선다. 새 난수는 이 새 분기 안에서만 늘어나 기존 단계의 시드 고정 값은 그대로다.
+// 09.1.1-07: 마지막 3인 결전(showdown, 결정 0066-5)은 두 곳에서만 계획이 선다. ① 한마디 차례(i 0..2) 중 차례 주인이 산 봇이고 아직 확정 전이면 차례 시작 시각(endsAt − SHOWDOWN_TURN_MS)에
+// chat 한 줄(LAST_WORD_CHIPS[randInt(4)], 지연 난수·입력 중 신호 없음) — 난수는 그 봇의 randInt(4) 한 번뿐. ② 동시 지목(i 3)에서는 산 봇마다 좌석 오름차순으로 randInt(후보 수 = 자기를 뺀 산 사람 2) →
+// randInt(SHOWDOWN_BOT_POINT_SPAN_MS) (고정 pick 이면 앞의 결정 난수는 건너뛴다). 모이기·사람 차례·확정 뒤 사이·공개에는 계획과 난수가 없다. 단계가 바뀔 때마다 마감이 달라 계획 키("showdown:{마감}")가 새로 서고
+// 새 난수는 이 새 분기 안에서만 늘어나 기존 단계의 시드 고정 값은 그대로다. 실행은 사람과 같은 applyChat(한마디 확정 포함)·applyPoint(castShowdownPoint) 본체를 지난다 — 봇은 특권이 없다.
 // verdict(변론자가 아닌 산 봇만) = randInt(100) → randInt(찬반 지연 폭 5000) — 결정 함수(botExecAgree)는 찬성 확률 EXEC_YES_PERCENT 이고 고정 exec(yes·no)도 같다(exec 는 봇 찬반).
 import { isAlive } from "./alive";
+import { SHOWDOWN_TURN_MS } from "./phases";
 import type { Player, RoomState } from "./room";
+import { LAST_WORD_CHIPS } from "./showdown";
 import type { RandInt } from "./tick";
 
 /** 봇 닉네임(8자 고정 목록, scripts/bots.mjs 의 NAMES 와 같다). */
@@ -63,6 +69,9 @@ const VERDICT_SPAN_MS = 5_000;
 /** 결선 투표 지연: 500 + [0, 2500) ms (투표 창 5초에서 마감 − 500 안, 결정 0066-4). */
 export const RUNOFF_BOT_BASE_MS = 500;
 export const RUNOFF_BOT_SPAN_MS = 2_500;
+/** 마지막 3인 동시 지목 지연: 500 + [0, 2500) ms (지목 창 8초에서 마감 − 500 안, 결정 0066-5). */
+export const SHOWDOWN_BOT_POINT_BASE_MS = 500;
+export const SHOWDOWN_BOT_POINT_SPAN_MS = 2_500;
 /** 최후 변론 지연: 1000 + [0, 4000) ms (단계 10초 안). */
 const DEFENSE_SAY_BASE_MS = 1_000;
 const DEFENSE_SAY_SPAN_MS = 4_000;
@@ -189,9 +198,9 @@ export function botPointTarget(
   return candidates[randInt(candidates.length)]!.seat;
 }
 
-/** 봇 계획이 필요한 단계(discussion·nomination·runoff·verdict·night·defense)의 키 "단계:마감". 그 밖은 null. */
+/** 봇 계획이 필요한 단계(discussion·nomination·runoff·showdown·verdict·night·defense)의 키 "단계:마감". 그 밖은 null. */
 export function botPlanKey(state: RoomState): string | null {
-  const planned: readonly string[] = ["discussion", "nomination", "runoff", "verdict", "night", "defense"];
+  const planned: readonly string[] = ["discussion", "nomination", "runoff", "showdown", "verdict", "night", "defense"];
   if (!planned.includes(state.phase)) return null;
   return `${state.phase}:${state.phaseEndsAt}`;
 }
@@ -244,6 +253,27 @@ function runoffPointSteps(state: RoomState, bot: Player, now: number, randInt: R
   return [{ at: now + RUNOFF_BOT_BASE_MS + randInt(RUNOFF_BOT_SPAN_MS), botId: bot.id, act: { t: "point", target } }];
 }
 
+/**
+ * 마지막 3인 결전 계획(09.1.1-07, 결정 0066-5).
+ *   한마디 차례(i 0..2): 차례 주인이 이 봇이고 미확정이면 차례 시작 시각에 chat 한 줄(LAST_WORD_CHIPS[randInt(4)]). 사람 차례·확정 뒤 사이·모이는 중은 빈 배열.
+ *   동시 지목(i 3): 자기를 뺀 산 사람 하나(botPointTarget — 고정 pick 포함)에게 SHOWDOWN_BOT_POINT_BASE_MS + randInt(SPAN) 뒤 point 한 번. 공개(i 4)는 빈 배열.
+ * 탈락한 봇은 빈 배열이고 randInt 를 부르지 않는다. 연결 상태·역할은 읽지 않는다.
+ */
+function showdownSteps(state: RoomState, bot: Player, now: number, randInt: RandInt): BotStep[] {
+  const sd = state.showdown;
+  if (state.phase !== "showdown" || sd === undefined || !isAlive(bot)) return [];
+  if (sd.i >= 0 && sd.i <= 2) {
+    if (sd.doneAt !== undefined || sd.endsAt === undefined || sd.order[sd.i] !== bot.seat) return [];
+    return [{ at: sd.endsAt - SHOWDOWN_TURN_MS, botId: bot.id, act: { t: "chat", text: LAST_WORD_CHIPS[randInt(LAST_WORD_CHIPS.length)]! } }];
+  }
+  if (sd.i === 3) {
+    const target = botPointTarget(state, bot, randInt, state.testBotVote?.pick);
+    if (target === undefined) return [];
+    return [{ at: now + SHOWDOWN_BOT_POINT_BASE_MS + randInt(SHOWDOWN_BOT_POINT_SPAN_MS), botId: bot.id, act: { t: "point", target } }];
+  }
+  return [];
+}
+
 function planFor(state: RoomState, bot: Player, now: number, randInt: RandInt): BotStep[] {
   const steps: BotStep[] = [];
   const add = (at: number, act: BotAct): void => {
@@ -268,6 +298,8 @@ function planFor(state: RoomState, bot: Player, now: number, randInt: RandInt): 
     steps.push(...turnPointSteps(state, bot, now, randInt));
   } else if (state.phase === "runoff") {
     steps.push(...runoffPointSteps(state, bot, now, randInt));
+  } else if (state.phase === "showdown") {
+    steps.push(...showdownSteps(state, bot, now, randInt));
   } else if (state.phase === "verdict") {
     // 찬반(08-07): 변론자 봇은 던지지 않는다(castVerdict 가 거절한다). 고정 exec(yes·no)도 따른다(결정 0060-13).
     if (state.verdict?.candidate !== bot.seat) {

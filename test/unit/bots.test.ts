@@ -1437,7 +1437,7 @@ describe("봇 마지막 3인 계획 (09.1.1-07)", () => {
       const text = (steps[0]!.act as { text: string }).text;
       expect(LAST_WORD_CHIPS.includes(text)).toBe(true);
       // 사람과 같은 규칙(정리 → 30자소)을 지나 그 차례의 한마디가 된다
-      expect(sanitizeChatText(text)).toBe(text);
+      expect(sanitizeChatText(text)).toEqual({ ok: true, text });
       expect(acceptLastWord(s, idAt(s, seat), text, steps[0]!.at).kind).toBe("ok");
     }
     const s = showdownTurnAt(5, 1);
