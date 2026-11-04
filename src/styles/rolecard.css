@@ -58,8 +58,9 @@
 .mf-journal__empty { padding: var(--space-sm) 0; font-size: 14px; line-height: 20px; color: var(--gray-300); }
 
 /* ---- 역할 카드 시트(RoleCardSheet) ---- */
-/* 높이는 시트가 정한다: 일지가 비어도 내용이 많아도 탭을 바꿀 때 시트가 출렁이지 않는다. */
-.mf-sheet.mf-sheet--rolecard { height: min(420px, 80dvh); }
+/* 높이는 내용에 맞춘다(feedback-7). 기록이 길면 최대 높이 안에서 목록이 스크롤. 탭을 바꿀 때 높이가 달라지는 것은 받아들인다.
+   시트(.mf-sheet)가 이미 flex 열이라 탭 본문·일지가 최대 높이 안에서 줄어든다. */
+.mf-sheet.mf-sheet--rolecard { height: auto; max-height: min(420px, 80dvh); }
 
 /* 탭 줄(시안 CSS 없음 — UI-SPEC D 계약): 2열, 간격 8 */
 .mf-rolecard__tabs { flex: none; display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-sm); }
