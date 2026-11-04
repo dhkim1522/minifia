@@ -88,9 +88,9 @@ export function WillSheet(props: WillSheetProps) {
 
   const save = () => {
     if (disabled || saved) return;
-    composed.settle((text) => onSave(confirmed(text)));
+    composed.settle((text) => onSave(confirmed(text)), "save");
   };
-  const close = () => composed.settle((text) => onClose(confirmed(text)));
+  const close = () => composed.settle((text) => onClose(confirmed(text)), "close");
 
   const shown = confirmed(value);
   const rootCls = ["mv-will", tone === "mafia" && "mv-will--mafia"].filter(Boolean).join(" ");

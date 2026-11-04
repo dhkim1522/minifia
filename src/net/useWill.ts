@@ -179,6 +179,13 @@ export function useWill({ view, send, canSend = true, rejected = 0, onFail, busy
   const close = useCallback(
     (text: string) => {
       if (open === null) return;
+      const waiting = pendingRef.current;
+      // 같은 글을 이미 보내고 확인을 기다리는 중이면(저장 뒤 바로 닫기) 다시 보내지 않고 글만 남긴 채 닫는다(IN-01)
+      if (waiting !== null && waiting.kind === open && waiting.text === text) {
+        kept.current[open] = text;
+        finish(true);
+        return;
+      }
       const result = submit(open, text);
       if (result === "failed") live.current.onFail();
       // 서버가 이미 가진 값이면 남길 글이 없고, 아니면 확인이 올 때까지(또는 못 보냈으면 계속) 남겨 다시 열면 이어 쓴다
