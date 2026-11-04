@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { URGENT_MS, countdown, formatMmSs } from "../../src/net/countdown";
+import { URGENT_MS, WARN_MS, countdown, formatMmSs, timerTone } from "../../src/net/countdown";
 
 // 역할 확인 15초: 서버 마감 20000, 시작 5000. 서버 시각 = 로컬 시각 + 오프셋.
 const ENDS = 20_000;
@@ -65,5 +65,49 @@ describe("formatMmSs", () => {
     [75, "1:15"],
   ])("%i초 → %s", (seconds, text) => {
     expect(formatMmSs(seconds)).toBe(text);
+  });
+});
+
+describe("timerTone (feedback-4, 모든 단계 타이머가 함께 쓰는 색 규칙)", () => {
+  it("문턱 값: 경고 10초, 임박 5초", () => {
+    expect(WARN_MS).toBe(10_000);
+    expect(URGENT_MS).toBe(5_000);
+  });
+
+  it.each([
+    [11_000, "calm"],
+    [10_001, "calm"],
+    [10_000, "warn"],
+    [5_001, "warn"],
+    [5_000, "urgent"],
+    [1, "urgent"],
+    [0, "calm"],
+  ])("60초 단계에서 남은 %i ms → %s", (remaining, tone) => {
+    expect(timerTone(remaining, 60_000)).toBe(tone);
+  });
+
+  it("8초 단계(전체가 10초 이하)는 경고 없이 바로 임박: 6000 → calm, 5000 → urgent", () => {
+    expect(timerTone(6_000, 8_000)).toBe("calm");
+    expect(timerTone(5_000, 8_000)).toBe("urgent");
+  });
+
+  it("10초 단계는 정확히 문턱 길이라 경고를 건너뛴다", () => {
+    expect(timerTone(10_000, 10_000)).toBe("calm");
+    expect(timerTone(5_000, 10_000)).toBe("urgent");
+  });
+
+  it("5초 단계(전체가 5초 이하)는 어느 색도 없다(v1.0 아침 calm 규칙 일반화)", () => {
+    expect(timerTone(5_000, 5_000)).toBe("calm");
+    expect(timerTone(3_000, 5_000)).toBe("calm");
+  });
+
+  it("12초 아침: 10000 → warn, 4000 → urgent", () => {
+    expect(timerTone(10_000, 12_000)).toBe("warn");
+    expect(timerTone(4_000, 12_000)).toBe("urgent");
+  });
+
+  it("countdown().urgent 는 기존 규칙 그대로다", () => {
+    expect(countdown(ENDS, DUR, 0, 15_000).urgent).toBe(true);
+    expect(countdown(ENDS, DUR, 0, 14_999).urgent).toBe(false);
   });
 });
