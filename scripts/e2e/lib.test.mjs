@@ -132,6 +132,8 @@ import {
   floatButtonChecks,
   sheetFitChecks,
   claimBadgeChecks,
+  ballotFitChecks,
+  verdictTimelineChecks,
   parseRgb,
 } from "./lib.mjs";
 import { dropSockets } from "./browser.mjs";
@@ -2209,5 +2211,153 @@ test("claimBadgeChecks CB5: 말 바꿈 점이 있으면 지름 16±1, 없으면 
 test("claimBadgeChecks: 측정값이 없으면 통과시키지 않는다", () => {
   const lines = claimBadgeChecks({ badge: null, tag: null });
   assert.equal(lines.length, 4);
+  assert.ok(lines.every((l) => l.ok === false && /측정값 없음/.test(l.detail)));
+});
+
+// ---- 판결 순간 연출 (09.1.1-13) ----
+const VIEW_360x640 = { w: 360, h: 640 };
+/** 8인판 R=4 모양: 찬성 묶음 알약 4줄(2개씩), 반대는 비었다. 알림 아랫변 115, 패널 윗변 640-188 */
+const ballotGood = (over = {}) => ({
+  root: rect(16, 131, 328, 313),
+  groups: [
+    { side: "yes", rect: rect(16, 131, 328, 28 + 4 * 40) },
+    { side: "no", rect: rect(16, 131 + 28 + 4 * 40 + 16, 328, 28) },
+  ],
+  pills: [
+    { side: "yes", rect: rect(16, 167, 150, 32), nameFont: 14 },
+    { side: "yes", rect: rect(174, 167, 150, 32), nameFont: 14 },
+    { side: "no", rect: rect(16, 360, 150, 32), nameFont: 14 },
+  ],
+  panelTop: 452,
+  announceBottom: 115,
+  viewport: VIEW_360x640,
+  compact: false,
+  ...over,
+});
+
+test("ballotFitChecks: 기대 모양(R=4)은 BF1~BF6 이 모두 통과하고 줄 모양은 { id, label, ok, detail }", () => {
+  const lines = ballotFitChecks(ballotGood());
+  assert.deepEqual(idsOk(lines), { BF1: true, BF2: true, BF3: true, BF4: true, BF5: true, BF6: true });
+  for (const l of lines) assert.deepEqual(Object.keys(l).sort(), ["detail", "id", "label", "ok"]);
+});
+
+test("ballotFitChecks BF1: 묶음이나 알약이 화면 밖으로 나가면 실패한다(0.5px 오차 허용)", () => {
+  assert.equal(idsOk(ballotFitChecks(ballotGood({ pills: [{ side: "yes", rect: rect(300, 167, 70, 32), nameFont: 14 }, { side: "no", rect: rect(16, 360, 150, 32), nameFont: 14 }] }))).BF1, false);
+  assert.equal(idsOk(ballotFitChecks(ballotGood({ groups: [{ side: "yes", rect: rect(16.4, 131, 343.6, 100) }, { side: "no", rect: rect(16, 250, 328, 28) }] }))).BF1, true);
+});
+
+test("ballotFitChecks BF2: 묶음 윗변이 알림 아랫변 + 16 보다 위면 실패(0.5px 허용), 알림이 두 줄이면 겹쳐 실패", () => {
+  assert.equal(idsOk(ballotFitChecks(ballotGood({ announceBottom: 130 }))).BF2, false);
+  assert.equal(idsOk(ballotFitChecks(ballotGood({ announceBottom: 115.4 }))).BF2, true);
+  assert.equal(idsOk(ballotFitChecks(ballotGood({ announceBottom: null }))).BF2, true, "알림이 없으면 이 검사는 건너뛴다(통과)");
+});
+
+test("ballotFitChecks BF3: 묶음 아랫변이 패널 윗변 − 8 을 넘으면 실패", () => {
+  assert.equal(idsOk(ballotFitChecks(ballotGood({ panelTop: 400 }))).BF3, false);
+  assert.equal(idsOk(ballotFitChecks(ballotGood({ panelTop: 360 + 32 + 8 }))).BF3, true);
+});
+
+test("ballotFitChecks BF4: 이름이 있는 알약 글자가 14 미만이면 실패, 2단계(compact)는 이름이 없어 건너뛴다", () => {
+  const small = ballotGood({ pills: [{ side: "yes", rect: rect(16, 167, 150, 32), nameFont: 13 }, { side: "no", rect: rect(16, 360, 150, 32), nameFont: 14 }] });
+  assert.equal(idsOk(ballotFitChecks(small)).BF4, false);
+  const faces = ballotGood({ compact: true, pills: [{ side: "yes", rect: rect(16, 167, 32, 32), nameFont: null }, { side: "no", rect: rect(16, 360, 32, 32), nameFont: null }] });
+  assert.equal(idsOk(ballotFitChecks(faces)).BF4, true);
+});
+
+test("ballotFitChecks BF5: 찬성 묶음이 반대 묶음보다 위가 아니면 실패, 묶음이 하나뿐이면 측정값 없음으로 실패", () => {
+  const swapped = ballotGood();
+  swapped.groups = [swapped.groups[1], swapped.groups[0]].map((g, i) => ({ ...g, side: i === 0 ? "yes" : "no" }));
+  assert.equal(idsOk(ballotFitChecks(swapped)).BF5, false);
+  const one = ballotFitChecks(ballotGood({ groups: [ballotGood().groups[0]] })).find((l) => l.id === "BF5");
+  assert.equal(one.ok, false);
+  assert.match(one.detail, /측정값 없음/);
+});
+
+test("ballotFitChecks BF6: 알약 높이 32±1(compact 는 얼굴 지름 32±1)", () => {
+  const tall = ballotGood({ pills: [{ side: "yes", rect: rect(16, 167, 150, 34), nameFont: 14 }, { side: "no", rect: rect(16, 360, 150, 32), nameFont: 14 }] });
+  assert.equal(idsOk(ballotFitChecks(tall)).BF6, false);
+  const ok = ballotGood({ pills: [{ side: "yes", rect: rect(16, 167, 150, 32.9), nameFont: 14 }, { side: "no", rect: rect(16, 360, 150, 31.2), nameFont: 14 }] });
+  assert.equal(idsOk(ballotFitChecks(ok)).BF6, true);
+  const faces = ballotGood({ compact: true, pills: [{ side: "yes", rect: rect(16, 167, 24, 24), nameFont: null }, { side: "no", rect: rect(16, 360, 32, 32), nameFont: null }] });
+  assert.equal(idsOk(ballotFitChecks(faces)).BF6, false);
+});
+
+test("ballotFitChecks: 측정값이 없으면 통과시키지 않는다", () => {
+  const lines = ballotFitChecks({ root: null, groups: null, pills: null, panelTop: null, announceBottom: null, viewport: null, compact: false });
+  assert.equal(lines.length, 6);
+  assert.ok(lines.every((l) => l.ok === false && /측정값 없음/.test(l.detail)));
+});
+
+/** 시간표 기록(변할 때만): t 는 ms, 처형 진입 관찰 시각 1000 을 0 으로 본다. 처형 시나리오 */
+const tl = (over = {}) => [
+  { t: 900, phase: "verdict", stage: null, yes: false, no: false, seat: null, strength: 0, zoom: 1, dim: "off" },
+  { t: 1000, phase: "execution", stage: null, yes: false, no: false, seat: null, strength: 0, zoom: 1, dim: "verdict" },
+  { t: 1010, phase: "execution", stage: null, yes: false, no: false, seat: 4, strength: 0.1, zoom: 1, dim: "verdict" },
+  { t: 1200, phase: "execution", stage: null, yes: false, no: false, seat: 4, strength: 1, zoom: 1.04, dim: "verdict" },
+  { t: 1600, phase: "execution", stage: "yes", yes: true, no: false, seat: 4, strength: 1, zoom: 1.1, dim: "verdict" },
+  { t: 2000, phase: "execution", stage: "both", yes: true, no: true, seat: 4, strength: 1, zoom: 1.1, dim: "verdict" },
+  { t: 5600, phase: "execution", stage: null, yes: false, no: false, seat: 4, strength: 1, zoom: 1.1, dim: "off" },
+  { t: 5700, phase: "execution", stage: null, yes: false, no: false, seat: 4, strength: 1, zoom: 1.05, dim: "off" },
+  { t: 6000, phase: "execution", stage: null, yes: false, no: false, seat: null, strength: 0.6, zoom: 1, dim: "off" },
+  { t: 6420, phase: "execution", stage: null, yes: false, no: false, seat: null, strength: 0, zoom: 1, dim: "off" },
+  ...(over.extra ?? []),
+];
+const VT = { passed: true, candidate: 4, expectZoom: true };
+const vtIds = (lines) => Object.fromEntries(lines.map((l) => [l.id, l.ok]));
+
+test("verdictTimelineChecks: 처형 시나리오 기대 시간표(0.6/1.0/4.6초, 핀 5.0초, 줌 1.10)는 모두 통과한다", () => {
+  const lines = verdictTimelineChecks(tl(), VT);
+  assert.ok(lines.every((l) => l.ok), lines.filter((l) => !l.ok).map((l) => `${l.id} ${l.detail}`).join(" / "));
+  for (const l of lines) assert.deepEqual(Object.keys(l).sort(), ["detail", "id", "label", "ok"]);
+  assert.deepEqual(lines.map((l) => l.id), ["VT1", "VT2", "VT3", "VT4", "VT5", "VT6"]);
+});
+
+test("verdictTimelineChecks VT1: 찬성 묶음이 0.3초 안에 이미 있으면 실패, 1.0초 넘어 나타나도 실패", () => {
+  const early = tl().map((e) => (e.t === 1600 ? { ...e, t: 1200 } : e)).filter((e) => !(e.t === 1200 && e.zoom === 1.04));
+  assert.equal(vtIds(verdictTimelineChecks(early, VT)).VT1, false);
+  const late = tl().map((e) => (e.t === 1600 ? { ...e, t: 2200 } : e)).sort((a, b) => a.t - b.t);
+  assert.equal(vtIds(verdictTimelineChecks(late, VT)).VT1, false);
+});
+
+test("verdictTimelineChecks VT2: 반대 묶음은 찬성 묶음보다 0.2~0.6초 뒤에 나타나고 그 순간 찬성은 이미 있다", () => {
+  const same = tl().map((e) => (e.t === 2000 ? { ...e, t: 1620 } : e));
+  assert.equal(vtIds(verdictTimelineChecks(same, VT)).VT2, false);
+  const together = tl().map((e) => (e.t === 1600 ? { ...e, stage: "both", no: true } : e));
+  assert.equal(vtIds(verdictTimelineChecks(together, VT)).VT2, false);
+});
+
+test("verdictTimelineChecks VT3: 묶음이 4.6초(±0.4)에 사라진다 — 3.5초에 사라지거나 한참 남아도 실패", () => {
+  const early = tl().map((e) => (e.t === 5600 ? { ...e, t: 4500 } : e));
+  assert.equal(vtIds(verdictTimelineChecks(early, VT)).VT3, false);
+  const never = tl().map((e) => (e.t >= 5600 ? { ...e, stage: "both", yes: true, no: true } : e));
+  assert.equal(vtIds(verdictTimelineChecks(never, VT)).VT3, false);
+});
+
+test("verdictTimelineChecks VT4: 핀이 변론자에게 켜지고(세기 0.5 이상) 처형은 5.0초·부결은 4.0초(±0.4)에 꺼지기 시작한다", () => {
+  assert.equal(vtIds(verdictTimelineChecks(tl(), VT)).VT4, true);
+  assert.equal(vtIds(verdictTimelineChecks(tl(), { ...VT, passed: false })).VT4, false, "부결이면 4.0초에 꺼져야 한다");
+  const other = tl().map((e) => (e.seat === 4 ? { ...e, seat: 2 } : e));
+  assert.equal(vtIds(verdictTimelineChecks(other, VT)).VT4, false);
+  const noPin = tl().map((e) => ({ ...e, seat: null, strength: 0 }));
+  assert.equal(vtIds(verdictTimelineChecks(noPin, VT)).VT4, false);
+});
+
+test("verdictTimelineChecks VT5: 0.7초 뒤 줌 1.10±0.01 (높이 360 미만이면 모든 순간 1)", () => {
+  assert.equal(vtIds(verdictTimelineChecks(tl(), VT)).VT5, true);
+  const never = tl().map((e) => ({ ...e, zoom: 1 }));
+  assert.equal(vtIds(verdictTimelineChecks(never, VT)).VT5, false);
+  assert.equal(vtIds(verdictTimelineChecks(never, { ...VT, expectZoom: false })).VT5, true);
+  assert.equal(vtIds(verdictTimelineChecks(tl(), { ...VT, expectZoom: false })).VT5, false, "작은 스테이지에서 줌이 켜지면 실패");
+});
+
+test("verdictTimelineChecks VT6: 5.45초에 줌이 1 로 돌아와 있다(처형 단계가 끝나기 전)", () => {
+  assert.equal(vtIds(verdictTimelineChecks(tl(), VT)).VT6, true);
+  const stuck = tl().map((e) => (e.t >= 6000 ? { ...e, zoom: 1.1 } : e));
+  assert.equal(vtIds(verdictTimelineChecks(stuck, VT)).VT6, false);
+});
+
+test("verdictTimelineChecks: 처형 단계 기록이 없으면 모든 줄이 측정값 없음으로 실패한다", () => {
+  const lines = verdictTimelineChecks([{ t: 1, phase: "verdict", stage: null, yes: false, no: false, seat: null, strength: 0, zoom: 1, dim: "off" }], VT);
+  assert.equal(lines.length, 6);
   assert.ok(lines.every((l) => l.ok === false && /측정값 없음/.test(l.detail)));
 });
