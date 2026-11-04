@@ -21,6 +21,7 @@ import {
   mark,
   nextFrame,
   phaseKeyOf,
+  pause,
   pickAs,
   pointAll,
   resetChatRates,
@@ -87,7 +88,14 @@ function stringPaths(value: unknown, path = ""): Array<[string, string]> {
 
 const ROLE_WORDS = new Set(["mafia", "police", "doctor", "citizen", "none"]);
 /** 살아 있는 소켓이 역할 값 문자열을 받아도 되는 경로. 탈락 뒤에는 여기에 관전 직업 경로가 더해진다(결정 0021). */
-const ROLE_PATHS_ALIVE = [".view.me.role", ".view.day.roles[]", ".view.me.chat"];
+const ROLE_PATHS_ALIVE = [
+  ".view.me.role",
+  ".view.day.roles[]",
+  ".view.me.chat",
+  // 결정 0066-1, 공개 주장 값 — 증명은 badge.test.ts L18(실제 역할만 다른 두 판의 열이 같다). 허용 경로는 이 하나뿐이고,
+  // 6명 한 판 전수 검사는 이 경로의 값이 항상 방금 보낸 주장 대본의 값(실제 역할이 아니다)임을 단언한다.
+  ".view.players[].badge",
+];
 /**
  * 서버 전용 키: 어떤 프레임의 어떤 경로에도 없어야 한다. 주장 차례(결정 0027-3)와 4페이즈 투표·종료(결정 0036-12)·순차 지목 차례(pickTurn, 결정 0063-1)의 서버 상태.
  * winner·execution 은 같은 이름의 view 키(result.winner·day.execution)가 있어 넣지 않고, 경로·단계로 검사한다.
@@ -757,6 +765,17 @@ describe("6명 한 판: 낮 처형(토론 끝내기·지목·변론·찬반·처
 
       // ---------- 1일차: 낮 → 토론 끝내기 과반 → 지목 → 변론 → 찬반 → 처형 ----------
       await advanceTo(code, socks, "discussion");
+      // 직업 주장 대본(결정 0066-1): 마피아 A 가 citizen 을 걸었다가 police 로 바꾸고(말 바꿈), 시민 X 가 mafia 를 건다. 프레임 검사는 players[].badge 값이 이 대본의 값뿐임을 본다.
+      const badgeScript = new Map<number, ReadonlySet<string>>([
+        [mafiaA.seat, new Set(["citizen", "police"])],
+        [victimX.seat, new Set(["mafia"])],
+      ]);
+      await act(mafiaA, { t: "badge", role: "citizen" });
+      await act(victimX, { t: "badge", role: "mafia" });
+      await pause(300); // 같은 사람의 주장 간격(250ms) 밖
+      await act(mafiaA, { t: "badge", role: "police" });
+      for (const sock of socks) await settle(sock, mark(sock));
+      expect(lastViewOf(actors[0]!.sock).players.find((pl) => pl.seat === mafiaA.seat)?.badge).toBe("police");
       await pressEnd(bySeat.slice(0, 4)); // 6명 판의 과반 4
       await castPoints((a) => (a === mafiaA ? police.seat : mafiaA.seat), alive(dead));
       await closeInto("defense");
@@ -855,7 +874,20 @@ describe("6명 한 판: 낮 처형(토론 끝내기·지목·변론·찬반·처
           const v = msg.view;
           const day = v.day?.n ?? 0;
           if (v.players.find((pl) => pl.seat === a.seat)?.alive === false) isDead = true;
-          for (const pl of v.players) expect(Object.keys(pl).sort()).toEqual(["alive", "connected", "isHost", "nickname", "seat"]);
+          for (const pl of v.players) {
+            // 공개 주장(결정 0066-1): badge·badgeSwapped 는 대본에 있는 산 사람 줄에만, 값은 항상 대본의 값이다(실제 역할이 아니다).
+            const scripted = badgeScript.get(pl.seat);
+            const base = ["alive", "connected", "isHost", "nickname", "seat"];
+            if (pl.badge === undefined) {
+              expect(Object.keys(pl).sort()).toEqual(base);
+              continue;
+            }
+            expect(pl.alive).toBe(true); // 탈락한 사람의 줄에는 주장이 없다
+            expect(`${pl.seat}:${scripted !== undefined && scripted.has(pl.badge)}`).toBe(`${pl.seat}:true`);
+            const swapKeys = pl.badgeSwapped === true ? ["badgeSwapped"] : [];
+            expect(Object.keys(pl).sort()).toEqual([...base, "badge", ...swapKeys].sort());
+            if (pl.badgeSwapped === true) expect(`${pl.seat}:${pl.badge}`).toBe(`${mafiaA.seat}:police`);
+          }
           const has = (prefix: string): boolean => paths.some((pth) => pth === prefix || pth.startsWith(`${prefix}.`) || pth.startsWith(`${prefix}[]`));
 
           // 역할 값 문자열은 허용 경로에만 — 처형자 A 의 직업도 ended 전에는 살아 있는 소켓에 오지 않는다. ended 에서만 결과 경로가 더해진다.
