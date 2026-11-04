@@ -5,6 +5,9 @@
   Cache-Control: public, max-age=86400
 /backgrounds/*
   Cache-Control: public, max-age=86400
+# 손글씨 글꼴 조각(scripts/fetch-pen-font.mjs 가 한 번 받아 둔 것)은 이름이 바뀌지 않으므로 1일 캐시한다(결정 M-10).
+/fonts/*
+  Cache-Control: public, max-age=86400
 /assets/*
   Cache-Control: public, max-age=31536000, immutable
 /og.png
