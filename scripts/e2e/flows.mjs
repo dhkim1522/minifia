@@ -10,6 +10,7 @@ import {
   pressEndDiscussion,
   readAnnounceWatch,
   readGame,
+  readGhostOutfits,
   readGhostTagContrast,
   readResult,
   readResultFit,
@@ -1708,6 +1709,28 @@ async function executeHost(game) {
   await skipTo(hp, ht, "execution");
 }
 
+/** 직업 → 의상 대응(앱 src/world/ghostOutfit.ts 의 표 사본, UI-SPEC B-2). 알 수 없으면 coat */
+const GHOST_JOB_OUTFIT = { mafia: "mafia", police: "police", doctor: "doctor", citizen: "coat" };
+const sortedEntries = (o) => Object.entries(o).map(([k, v]) => [Number(k), v]).sort((a, b) => a[0] - b[0]);
+
+/** 유령 페이지의 의상 표가 탈락 좌석 전부의 spectate 직업 대응과 같아질 때까지 6초 기다린다. detail 에 좌석:직업→의상 을 남긴다 */
+async function ghostOutfitMatch(hp, view) {
+  const dead = view.players.filter((p) => p.alive === false).map((p) => p.seat);
+  const jobs = Object.fromEntries(dead.map((seat) => [seat, view.spectate?.seats?.find((x) => x.seat === seat)?.job]));
+  const want = Object.fromEntries(dead.map((seat) => [seat, GHOST_JOB_OUTFIT[jobs[seat]] ?? "coat"]));
+  const label = dead.map((seat) => `${seat}:${jobs[seat]}→${want[seat]}`).join(", ");
+  const r = await attempt(async () => {
+    const start = performance.now();
+    for (;;) {
+      const o = await readGhostOutfits(hp);
+      if (o.outfits !== null && JSON.stringify(sortedEntries(o.outfits)) === JSON.stringify(sortedEntries(want))) return;
+      if (performance.now() - start > 6000) throw new Error(`기대 ${JSON.stringify(want)} · 실제 ${JSON.stringify(o.outfits)}`);
+      await sleep(150);
+    }
+  });
+  return { ...r, label };
+}
+
 async function ghostFlow(ctx) {
   const id = "ghost";
   const rec = recorder(ctx);
@@ -1735,6 +1758,21 @@ async function ghostFlow(ctx) {
       }
     }
 
+    // 직업 의상(09.1-09, 결정 0063-2): 유령 페이지는 탈락 좌석마다 spectate 직업의 의상을 입고, 산 사람 페이지에는 의상 재료가 없다(L13)
+    {
+      const sc = `${id}/outfit`;
+      const got = await ghostOutfitMatch(hp, ht.last());
+      rec(sc, "GH14", "유령 페이지의 직업 의상 표가 탈락 좌석 전부와 spectate 직업 대응(마피아·경찰·의사 같은 이름, 시민 coat)과 같다", got.ok, got.ok ? got.label : got.detail, true);
+      const dom = await readGhostOutfits(hp);
+      rec(sc, "GH14b", "유령 페이지에도 의상은 DOM 속성이 아니다([data-ghost-outfit] 0개)", dom.domCount === 0, `DOM ${dom.domCount}개`);
+      for (let i = 0; i < guests.length; i++) {
+        const g = guests[i];
+        if (!aliveOf(g.tracker.last()).includes(g.seat)) continue;
+        const r = await readGhostOutfits(g.page);
+        rec(sc, "GH15", `산 사람 페이지에는 직업 의상 표가 없거나 비어 있고 [data-ghost-outfit] 이 0개다 — L13 (손님${i + 1})`, (r.outfits === null || Object.keys(r.outfits).length === 0) && r.domCount === 0, `표 ${JSON.stringify(r.outfits)}, DOM ${r.domCount}개`);
+      }
+    }
+
     // 다음 날 지목에서도 유령은 맵을 걷는다. 산 사람 페이지의 world 기록에는 유령 좌석 구간이 없다
     {
       const sc = `${id}/walk`;
@@ -1750,11 +1788,24 @@ async function ghostFlow(ctx) {
         rec(sc, "GH10b", "유령 화면에는 지목 버튼이 없다", (await readGame(hp)).picks.length === 0, "유령에게 이름표 버튼이 있음");
       }
       await sleep(1200);
-      // 유령 이름표 글자 대비: 다른 유령(밤에 죽은 손님)의 이름표는 불투명도 0.6 이다. 실제 렌더 값을 기록한다(판정 아님 — 4.5:1 미달이면 이름표 면만 0.8 로 올리는 안은 사용자 결정 전까지 '확인 대기', UI-SPEC 남은 위험 5)
+      // 유령 이름표 글자 대비(09.1-09 판정): 이름표가 불투명이 되었으므로 4.5:1 이상이다. 문턱을 낮추지 않는다. GH9(참고 줄)는 이 줄로 대체됐다
       {
+        // 유령은 떠다녀(±4px) 이름표가 프레임마다 움직인다 — 재는 동안만 모션 줄이기로 띄우기만 남겨 이름표 위치를 고정한다(판정 문턱은 그대로)
+        await hp.emulateMedia({ reducedMotion: "reduce" });
+        // 처형 알림 막(data-announce)이 걷힌 뒤에 잰다 — 막이 있으면 글자도 같이 어두워진다
+        await hp.waitForFunction(() => !document.querySelector("[data-announce]"), null, { timeout: 9000 }).catch(() => {});
+        await sleep(400);
         const pool = await readGhostTagContrast(hp).catch(() => []);
+        await hp.emulateMedia({ reducedMotion: "no-preference" });
         const worst = pool.length > 0 ? Math.min(...pool.map((c) => c.ratio)) : null;
-        infoRow(ctx, sc, "GH9", "유령 이름표 글자 대비(참고, 판정 아님)", pool.length === 0 ? "측정한 유령 이름표 없음" : `${pool.map((c) => `자리 ${c.seat} ${Math.round(c.ratio * 100) / 100}:1(불투명도 ${Math.round(c.opacity * 100) / 100})`).join(", ")}${worst < 4.5 ? " — 4.5:1 미달: 이름표 면만 0.8 로 올리는 안 확인 대기(사용자 결정)" : ""}`);
+        const detail = pool.length === 0 ? "측정한 유령 이름표 없음" : pool.map((c) => `자리 ${c.seat} ${Math.round(c.ratio * 100) / 100}:1(불투명도 ${Math.round(c.opacity * 100) / 100}, 밝은 ${Math.round(c.hi * 1000) / 1000}, 어두운 ${Math.round(c.lo * 1000) / 1000})`).join(", ");
+        rec(sc, "GH13", "유령 이름표 글자 대비가 4.5:1 이상이다(이름표는 불투명)", worst !== null && worst >= 4.5, detail, true);
+        rec(sc, "GH13b", "유령 이름표 불투명도가 1 이다(이름표 면에 흐림이 없다)", pool.length > 0 && pool.every((c) => c.opacity === 1), detail, true);
+      }
+      // 밤에 더 죽은 사람이 있으면 그 직업 의상도 같은 표에 들어 있다(마피아·경찰·의사 의상까지 보인다)
+      {
+        const again = await ghostOutfitMatch(hp, ht.last());
+        rec(sc, "GH14c", "다음 날에도 의상 표가 탈락 좌석 전부의 직업 대응과 같다(밤에 죽은 사람 포함)", again.ok, again.ok ? again.label : again.detail, true);
       }
       for (let i = 0; i < guests.length; i++) {
         const g = guests[i];

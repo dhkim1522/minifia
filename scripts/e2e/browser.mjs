@@ -1450,8 +1450,20 @@ export function readAnnounceWatch(page, { stop = true } = {}) {
 }
 
 /**
- * 유령 이름표 글자 대비(UI-SPEC 남은 위험 5, A3): 유령 모양(.mv-tag.is-ghost, 불투명도 0.6) 이름표의 글자 칸을 화면 그림에서 잘라 글자색·면 중 밝은 쪽(p99)과 어두운 쪽(p1) 휘도로 대비를 잰다.
- * 불투명도 0.6 이 맵·면과 섞인 실제 렌더 값이다. 돌려주는 값: [{ seat, opacity, ratio, hi, lo }] — 판정이 아니라 기록용이다.
+ * 유령 직업 의상 표(09.1-09, L13): e2e 전용 window.__mfGhostOutfits(좌석 → 의상 id)와 DOM 의 [data-ghost-outfit] 개수.
+ * 표가 없으면 outfits 는 null 이다(훅이 없는 페이지). 의상은 DOM 이 아니라 이 표로만 읽는다.
+ */
+export async function readGhostOutfits(page) {
+  return page.evaluate(() => ({
+    outfits: window.__mfGhostOutfits === undefined ? null : { ...window.__mfGhostOutfits },
+    domCount: document.querySelectorAll("[data-ghost-outfit]").length,
+  }));
+}
+
+/**
+ * 유령 이름표 글자 대비(UI-SPEC 남은 위험 5, A3): 유령 모양(.mv-tag.is-ghost) 이름표의 글자 칸을 화면 그림에서 잘라 글자색·면 중 밝은 쪽(p99)과 어두운 쪽(p1) 휘도로 대비를 잰다.
+ * 이름표 불투명도(opacity)와 맵·면이 섞인 실제 렌더 값이다(09.1-09 부터 이름표는 불투명이라 판정에 쓴다). 돌려주는 값: [{ seat, opacity, ratio, hi, lo }].
+ * 가리는 것(알림 막 등)이 있으면 글자도 같이 어두워지므로 부르는 쪽이 [data-announce] 가 걷힌 뒤에 부른다.
  */
 export async function readGhostTagContrast(page) {
   const probes = await page.evaluate(() =>
@@ -1459,6 +1471,9 @@ export async function readGhostTagContrast(page) {
       .map((tag) => {
         const name = tag.querySelector(".mv-tag__name");
         if (!name) return null;
+        // 14px 글자의 획은 DPR 1 에서 1px 남짓이라 가장자리 번짐 때문에 가장 밝은 픽셀도 글자색에 닿지 않는다(실제 글자색 gray-50 이 0.19 로 잰다).
+        // 글자 색·이름표 면은 그대로 두고 획만 굵게 해 글자 픽셀이 글자색에 닿게 한 뒤 잰다(measureEnd 에서 되돌린다)
+        name.style.webkitTextStroke = "1.4px currentColor";
         const range = document.createRange();
         range.selectNodeContents(name);
         const r = range.getBoundingClientRect();
@@ -1499,6 +1514,9 @@ export async function readGhostTagContrast(page) {
     const hi = lums[Math.min(lums.length - 1, Math.floor(lums.length * 0.99))];
     out.push({ seat: p.seat, opacity: p.opacity, ratio: (hi + 0.05) / (lo + 0.05), hi, lo });
   }
+  await page.evaluate(() => {
+    for (const n of document.querySelectorAll(".mv-tag.is-ghost .mv-tag__name")) n.style.webkitTextStroke = "";
+  });
   return out;
 }
 
