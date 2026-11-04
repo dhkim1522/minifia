@@ -10,6 +10,7 @@ import type {
   InvestigationRecord,
   MorningView,
   PhaseId,
+  PointLine,
   TreatmentRecord,
   VoteLogEntry,
 } from "../protocol";
@@ -61,6 +62,8 @@ export interface Player {
   verdictVote?: boolean;
   /** 서버 전용(결정 0066-4). 동점 결선에서 본인이 고른 후보 좌석. castRunoffVote 가 쓰고 resolveRunoff·enterDiscussion 이 키째 지운다. 마감 전에는 본인 view(me.ballot)로만 간다. */
   runoffVote?: number;
+  /** 서버 전용(결정 0066-5). 마지막 3인 동시 지목에서 고른 대상 좌석. resolveShowdown·enterDiscussion 이 키째 지운다. 마감 전에는 본인 me.ballot 에만 간다. */
+  showdownPick?: number;
   /** 토론 끝내기를 누른 표시. 누르면 true, 취소하면 키째 지운다. 누가 눌렀는지는 서버 전용이고 enterDiscussion 이 다음 낮 시작에 지운다. */
   endVote?: true;
   /** 서버 전용(결정 0061-10). 본인이 남긴 유언 — saveWill(09-12)만 쓰고, 사후에도 바꿀 수 없다. 아침에 서버가 채팅 카드로 만들어 보내며 view 의 me.will 로 산 본인에게만 간다. */
@@ -102,6 +105,20 @@ export interface RunoffState {
   cand: [number, number];
   step: 0 | 1 | 2;
   tally?: [number, number];
+}
+
+/**
+ * 서버 전용(결정 0066-5). 마지막 3인 결전 진행. startShowdown 이 만들고 resolveShowdown·enterDiscussion 이 지운다.
+ * order: 산 세 사람 좌석 오름차순 · i: -1 모이기, 0..2 한마디 차례, 3 동시 지목, 4 공개 · endsAt: 차례·지목 창 마감 · doneAt/skip/word: 한마디 확정 · points: i 4 에서 확정된 공개 지목 줄.
+ */
+export interface ShowdownState {
+  order: number[];
+  i: number;
+  endsAt?: number;
+  doneAt?: number;
+  skip?: true;
+  word?: string;
+  points?: PointLine[];
 }
 
 /** 서버 전용(결정 0066-2, O-20). 귓속말 본문 보관 한 줄 — 판이 끝날 때까지 쌓이고 어떤 view·프레임에도 싣지 않는다(11페이즈 공개 입력). */
@@ -166,6 +183,8 @@ export interface RoomState {
   pickTurn?: PickTurn;
   /** 서버 전용(결정 0066-4). 동점 결선 진행. resolveNomination 이 세우고 resolveRunoff·enterDiscussion 이 지운다. 공개 모양은 view 의 day.runoff(필드별 복사). */
   runoff?: RunoffState;
+  /** 서버 전용(결정 0066-5). 마지막 3인 결전 진행. dayAnnounce 마감 훅이 세우고 resolveShowdown·enterDiscussion 이 지운다. 공개 모양은 view 의 day.showdown(필드별 복사). */
+  showdown?: ShowdownState;
 }
 
 export type CreateRoomStateResult = { ok: true; state: RoomState } | { ok: false; error: "NICKNAME_INVALID" };

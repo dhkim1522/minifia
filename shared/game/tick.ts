@@ -11,6 +11,7 @@
 // 마감 훅 행: nomination(지목 집계 → 최다 한 명이면 defense, 동률·0표면 night), verdict(찬반 집계 → 항상 execution). execution·morning(승패면 next ended, 아니면 기본 단계 — 판정은 마감 훅에서만, D-10). ended 는 마감이 없는 종단 단계다.
 // 새 마감 = 이전 마감 + phaseDurationOf(진입 훅 뒤 상태) — 단계 표(PHASE_DEFS) 길이 그대로다.
 // 훅이 stay 를 돌려주면 다음 단계로 가지 않고 같은 단계에서 마감만 "이전 마감 + 그 상태의 단계 길이(phaseDurationOf)" 로 옮긴다.
+// dayAnnounce: 낮 시작 발표 마감에 산 사람이 정확히 셋이면 next "showdown"(마지막 3인 결전, 결정 0066-5 — 낮 시작 청소 enterDiscussion 은 startShowdown 이 한다). showdown: stepShowdown 이 모이기 → 한마디 셋 → 동시 지목 → 공개를 stay 사슬로 걷고 집계(2표면 execution, 아니면 night).
 // nomination: 순차 지목(결정 0063-1) — 진입 enterNomination, 마감마다 stepNomination 이 같은 단계에 머물며(stay) 다음 마감은 이전 마감 + 그 단계 길이(모이기·차례·사이·끝 알림)다.
 // runoff: 동점 결선(결정 0066-4) — 지목 집계가 최다 정확히 둘 동점이면 next "runoff". stepRunoff 가 앞머리 → 투표 → 결과를 stay 사슬로 걷고 마지막에 집계(많이 받은 후보면 defense, 동점이면 night).
 // 난수는 세 번째 인자로만 받는다 — 방 DO 는 cryptoRandInt, 테스트는 seededRandInt.
@@ -22,6 +23,7 @@ import { enterEnded, routeAfterExecution, routeAfterMorning } from "./endgame";
 import { enterExecution } from "./execution";
 import { enterNomination, stepNomination } from "./nomination";
 import { stepRunoff } from "./runoff";
+import { routeAfterDayAnnounce, stepShowdown } from "./showdown";
 import { enterMorning, enterNight } from "./night";
 import { PHASE_DEFS } from "./phases";
 import type { RoomState } from "./room";
@@ -56,6 +58,8 @@ const ON_ENTER: Partial<Record<PhaseId, (s: RoomState, randInt: RandInt, at: num
 
 /** 마감 훅. at 은 지난 마감 시각이다(늦게 불려도 실제 호출 시각이 아니다). stay 면 같은 단계에 머문다(지목 차례). 상태만 바꾸고 새 마감은 tick 이 정한다. */
 const ON_DEADLINE: Partial<Record<PhaseId, (s: RoomState, at: number) => DeadlineResult>> = {
+  dayAnnounce: routeAfterDayAnnounce,
+  showdown: stepShowdown,
   nomination: stepNomination,
   runoff: stepRunoff,
   verdict: resolveVerdict,

@@ -31,6 +31,7 @@ import { MAP_PHASES } from "./movement";
 import { confirmedTarget } from "./night";
 import { pointLinesOf, turnViewOf } from "./nomination";
 import { runoffVotersOf, runoffViewOf } from "./runoff";
+import { showdownViewOf } from "./showdown";
 import { PHASE_DEFS } from "./phases";
 import { rolesInPlay } from "./roles";
 import { hostOf } from "./room";
@@ -47,6 +48,7 @@ const DAY_PHASES: ReadonlySet<PhaseId> = new Set([
   "discussion",
   "nomination",
   "runoff",
+  "showdown",
   "verdict",
   "defense",
   "execution",
@@ -58,6 +60,7 @@ const DAY_PHASES: ReadonlySet<PhaseId> = new Set([
 /** 투표 기록 한 줄을 필드별로 복사한다(펼쳐 복사 금지): exec 는 yes·no·passed 세 키, cand 는 있을 때만 votes 를 {seat, target} 으로, candidate 는 있을 때만. */
 function voteLogLine(entry: VoteLogEntry): VoteLogEntry {
   const line: VoteLogEntry = { n: entry.n, exec: { yes: entry.exec.yes, no: entry.exec.no, passed: entry.exec.passed } };
+  if (entry.last === true) line.last = true;
   if (entry.cand !== undefined) {
     line.cand = { votes: entry.cand.votes.map((v) => ({ seat: v.seat, target: v.target })) };
     if (entry.cand.candidate !== undefined) line.cand.candidate = entry.cand.candidate;
@@ -91,6 +94,11 @@ function buildDay(state: RoomState): DayView {
     const runoff = runoffViewOf(state);
     if (runoff !== undefined) day.runoff = runoff;
   }
+  // 마지막 3인 결전(결정 0066-5)의 공개 값은 모두에게 같다 — 진행·확정된 한마디, 지목 중엔 던진 좌석(voted)뿐, 공개 뒤엔 지목 줄(points)이다. 개인 선택은 me.ballot 으로 본인에게만(L21).
+  if (state.phase === "showdown") {
+    const showdown = showdownViewOf(state);
+    if (showdown !== undefined) day.showdown = showdown;
+  }
   // 후보·처형 발표는 모두에게 같다(공개 정보). 직업은 싣지 않는다 — 필드별로 복사한다(D-09).
   if (
     (state.phase === "defense" || state.phase === "verdict" || state.phase === "execution") &&
@@ -105,7 +113,10 @@ function buildDay(state: RoomState): DayView {
   if (state.phase === "execution") {
     const today = state.day ?? 1;
     const line = [...(state.voteLog ?? [])].reverse().find((entry) => entry.n === today);
-    if (line !== undefined) day.verdict = { yes: line.exec.yes, no: line.exec.no, passed: line.exec.passed };
+    if (line !== undefined) {
+      day.verdict = { yes: line.exec.yes, no: line.exec.no, passed: line.exec.passed };
+      if (line.last === true) day.verdict.last = true; // 마지막 3인 결전으로 온 처형(찬반 없음, 결정 0066-5)
+    }
     // 찬반 기록 공개(결정 0066-3): 마감 뒤인 처형 단계에서만, 모두에게 같은 좌석 목록을 필드별 복사로 싣는다. 진행 중(verdict)에는 목록이 만들어지지도 않는다(L19).
     const ballots = state.verdict?.ballots;
     if (ballots !== undefined) day.ballots = { yes: [...ballots.yes], no: [...ballots.no] };
@@ -258,6 +269,18 @@ export function buildView(state: RoomState, playerId: string, now: number): Room
     runoffVotersOf(state).some((p) => p.id === me.id)
   ) {
     myInfo.ballot = me.runoffVote;
+  }
+
+  // 마지막 3인 동시 지목 선택은 본인에게만(결정 0066-5, L21) — showdown 의 지목 창·공개 단계에서 산 본인이 던진 값이 있을 때만 키를 만든다. 유령·미투표자에는 키가 없다.
+  if (
+    state.phase === "showdown" &&
+    state.showdown !== undefined &&
+    state.showdown.i >= 3 &&
+    me.showdownPick !== undefined &&
+    isAlive(me) &&
+    state.showdown.order.includes(me.seat)
+  ) {
+    myInfo.ballot = me.showdownPick;
   }
 
   // 동료가 고른 대상은 밤에 살아 있는 마피아에게만, 대상 seat 집합으로만(누가 골랐는지는 없다, D-07). 탈락한 마피아는 allies 만 받는다(A3).

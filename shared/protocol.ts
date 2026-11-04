@@ -29,7 +29,7 @@ export const MAX_BODY_BYTES = 1024; // HTTP 본문 상한
 // 순차 직업 주장 단계(claim)는 7페이즈에서 없어졌다 — 낮 시작 발표 다음이 바로 자유 채팅 토론이다(CHAT-06). 옛 공개 연출 단계도 없다(결정 0027).
 export type PhaseId =
   | "lobby" | "assigning" | "roleReveal" | "dayAnnounce" | "discussion"
-  | "nomination" | "runoff" | "defense" | "verdict" | "execution"
+  | "nomination" | "runoff" | "showdown" | "defense" | "verdict" | "execution"
   | "night" | "morning" | "ended"; // 8페이즈(결정 0060): 지목 15초 → 변론 20초 → 찬반 10초 → 처형 5.6초(결정 0066-7). 옛 처형 여부·후보 선택·후보 공개 단계는 08-22 에 지웠다
 
 // ---- 밤·아침 계약(3페이즈) ----
@@ -87,6 +87,8 @@ export interface VoteLogEntry {
   n: number;
   exec: { yes: number; no: number; passed: boolean };
   cand?: { votes: CandidateVoteLine[]; candidate?: number };
+  /** 마지막 3인 결전(결정 0066-5)으로 끝난 날의 줄이다 — 찬반 없이 지목만으로 처형이 정해졌다(exec 는 0·0). */
+  last?: true;
 }
 /** 지목 한 줄(결정 0060-3): 누가 누구를 가리키는지. 지목 단계 동안 모두에게 공개된다(마감까지 바꿀 수 있다). */
 export interface PointLine {
@@ -131,10 +133,26 @@ export interface DayView {
   points?: PointLine[]; // nomination 단계에서, 지금 지목 줄(공개)
   endCount?: number; // discussion 단계에서, 토론 끝내기를 누른 산 사람 수(누가 눌렀는지는 싣지 않는다)
   voted?: number[]; // verdict 단계에서, 찬반을 던진 좌석(오름차순, 값은 싣지 않는다 — 익명)
-  verdict?: { yes: number; no: number; passed: boolean }; // execution 단계에서, 찬반 결과 수(개인 값 없음)
+  verdict?: { yes: number; no: number; passed: boolean; last?: true }; // execution 단계에서, 찬반 결과 수(개인 값 없음). last 는 마지막 3인 결전으로 온 처형(찬반 없음, 결정 0066-5)
   ballots?: { yes: number[]; no: number[] }; // execution 단계에서만, 찬성·반대한 좌석(오름차순, 변론자·미투표자 제외 — 결정 0066-3). 찬반 진행 중에는 없다
   turn?: PickTurnView; // nomination 단계에서만, 모두에게 같은 차례 정보(결정 0063-1, L14)
   runoff?: RunoffView; // runoff 단계에서만, 모두에게 같은 동점 결선 정보(결정 0066-4, L20)
+  showdown?: ShowdownView; // showdown 단계에서만, 모두에게 같은 마지막 3인 결전 정보(결정 0066-5, L21)
+}
+
+/**
+ * 공개 마지막 3인 결전(결정 0066-5). order 는 산 세 사람 좌석 오름차순, i 는 -1 모이기 · 0..2 한마디 차례 · 3 동시 지목 · 4 공개.
+ * 한마디(word)는 확정된 공개 값이다. 지목 중(i 3)에는 던진 좌석(voted)만, 공개(i 4)에는 누가 누구를 지목했는지(points)를 싣는다. 개인 선택은 어떤 키로도 없다(본인은 me.ballot).
+ */
+export interface ShowdownView {
+  order: number[];
+  i: number;
+  endsAt?: number; // 이번 차례·지목 창 마감(진행 중에만)
+  doneAt?: number; // 이번 한마디가 확정된 시각
+  skip?: true; // 시간 안에 말하지 못해 넘어감
+  word?: string; // 확정된 한마디
+  voted?: number[]; // i 3 에서만, 던진 좌석(오름차순, 값 없음)
+  points?: PointLine[]; // i 4 에서만, 공개된 지목 줄(좌석 오름차순)
 }
 
 /**
@@ -268,7 +286,7 @@ export interface MyInfo {
   nightSure?: number; // 밤, 산 마피아 본인에게만: 전원 일치로 확정된 대상 seat(결정 0061-7). 채우는 일은 09-07 view
   will?: string; // 산 본인에게만: 본인이 남긴 유언(결정 0061-10). 지도 단계에서 저장된 값이 있을 때만(09-12)
   note?: string; // 밤, 산 마피아에게만: 남긴 쪽지(결정 0061-9). 산 마피아끼리 같은 글(09-12)
-  ballot?: number; // runoff step 1·2 에서 산 유권자 본인이 고른 후보 좌석(본인에게만, 결정 0066-4). 후보·유령·미투표자에는 키가 없다
+  ballot?: number; // runoff step 1·2 또는 showdown i 3·4 에서 산 본인이 고른 좌석(본인에게만, 결정 0066-4·0066-5). 후보·유령·미투표자에는 키가 없다
   verdictVote?: boolean; // verdict 단계에서 본인이 던진 찬반(본인에게만, 남의 값은 어떤 키로도 싣지 않는다, 8페이즈 결정 0060)
 }
 export interface RoomView {

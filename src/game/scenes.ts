@@ -41,6 +41,7 @@ export const PHASE_SCENE: Readonly<Record<PhaseId, SceneId>> = Object.freeze({
   night: "night",
   morning: "morning",
   runoff: "dusk",
+  showdown: "dusk", // 09.1.1-06: 마지막 3인 결전 — 변론·지목과 같은 해질녘
   defense: "dusk",
   execution: "dusk",
   nomination: "dusk", // 8페이즈: defense 와 같은 값

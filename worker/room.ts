@@ -32,6 +32,7 @@ import type { RoleId } from "../shared/game/roles";
 import { nextWakeAt, tick } from "../shared/game/tick";
 import { castTurnPoint, turnStartOf } from "../shared/game/nomination";
 import { castRunoffVote } from "../shared/game/runoff";
+import { acceptLastWord, castShowdownPoint } from "../shared/game/showdown";
 import { castVerdict } from "../shared/game/verdict";
 import { endReached, toggleEnd } from "../shared/game/discussion";
 import { MAP_PHASES, canMove } from "../shared/game/movement";
@@ -581,6 +582,7 @@ export class Room extends DurableObject<Env> {
   private async applyPoint(playerId: string, target: number, now: number): Promise<WsErrorCode | null> {
     if (!this.room) return "BAD_MESSAGE";
     if (this.room.phase === "runoff") return this.applyRunoffVote(playerId, target, now);
+    if (this.room.phase === "showdown") return this.applyShowdownPoint(playerId, target, now);
     const result = castTurnPoint(this.room, playerId, target, now);
     if (!result.ok) return result.error;
     this.room = result.state;
@@ -596,6 +598,25 @@ export class Room extends DurableObject<Env> {
     if (!this.room) return "BAD_MESSAGE";
     const castBefore = this.room.players.find((p) => p.id === playerId)?.runoffVote !== undefined;
     const result = castRunoffVote(this.room, playerId, target, now);
+    if (!result.ok) return result.error;
+    if (result.state === this.room) return null;
+    this.room = result.state;
+    if (!castBefore) {
+      await this.persistAndBroadcast();
+      return null;
+    }
+    await this.ctx.storage.put("room", this.room);
+    this.sendViewTo([playerId]);
+    return null;
+  }
+
+  // 마지막 3인 동시 지목(결정 0066-5): 메시지는 기존 point 를 단계별로 분기한다. 마감을 건드리지 않는다(8초를 다 채운다, O-12) — reschedule 이 필요 없다.
+  // 방송 규율(applyRunoffVote 와 같다): 그 사람의 첫 표는 day.showdown.voted(던진 좌석 목록)가 모두에게 바뀌므로 전원이 각자 view 를 받는다.
+  // 이미 던진 사람이 값을 바꾸면 공개 값은 그대로이고 바뀌는 것은 본인 값(me.ballot)뿐이다 — 전원에게 보내면 '누군가 마음을 바꿨다' 는 타이밍이 샌다.
+  private async applyShowdownPoint(playerId: string, target: number, now: number): Promise<WsErrorCode | null> {
+    if (!this.room) return "BAD_MESSAGE";
+    const castBefore = this.room.players.find((p) => p.id === playerId)?.showdownPick !== undefined;
+    const result = castShowdownPoint(this.room, playerId, target, now);
     if (!result.ok) return result.error;
     if (result.state === this.room) return null;
     this.room = result.state;
@@ -1298,6 +1319,9 @@ export class Room extends DurableObject<Env> {
     if (!me) return "phase";
     const clean = sanitizeChatText(text);
     if (!clean.ok) return clean.why;
+    // 마지막 3인 결전의 한마디(결정 0066-5): 차례 주인이 자기 창 안에서 보낸 글만 한마디 후보다 — 30자소를 넘으면 줄을 만들지 않고 거절한다(차례 유지). 아니면 지금 경로 그대로.
+    const word = acceptLastWord(room, playerId, clean.text, now);
+    if (word.kind === "tooLong") return "length";
     const sent = checkChatSend(this.chatRates.get(playerId), clean.text, now);
     if (!sent.ok) return sent.why;
     this.chatRates.set(playerId, sent.next);
@@ -1309,6 +1333,15 @@ export class Room extends DurableObject<Env> {
     await this.ctx.storage.put(chatKey(appended.record.g), appended.record);
     if (appended.evicted.length > 0) await this.deleteChatKeys(appended.evicted.map(chatKey));
     this.deliver(ids, { t: "chat", ...toWire(appended.record) });
+    if (word.kind === "ok" && this.room) {
+      // 저장 await 사이에 방이 바뀌었을 수 있어 지금 방에서 다시 판정한다 — 그 차례가 아직 열려 있을 때만 확정한다.
+      const confirmed = acceptLastWord(this.room, playerId, clean.text, now);
+      if (confirmed.kind === "ok") {
+        this.room = confirmed.state;
+        await this.persistAndBroadcast();
+        await this.reschedule();
+      }
+    }
     return null;
   }
 

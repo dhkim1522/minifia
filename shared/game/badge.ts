@@ -7,8 +7,8 @@ import type { VoteError } from "./discussion";
 import type { RoomState } from "./room";
 import { rolesInPlay } from "./roles";
 
-/** 주장을 걸 수 있는 단계: 낮 시작 발표·토론·지목. 마감(변론부터) 뒤에는 거절한다. */
-export const BADGE_PHASES: ReadonlySet<PhaseId> = new Set<PhaseId>(["dayAnnounce", "discussion", "nomination"]);
+/** 주장을 걸 수 있는 단계: 낮 시작 발표·토론·지목·마지막 3인 결전(결정 0066-1). 마감(변론부터) 뒤에는 거절한다. */
+export const BADGE_PHASES: ReadonlySet<PhaseId> = new Set<PhaseId>(["dayAnnounce", "discussion", "nomination", "showdown"]);
 
 /** 화면 선택지 고정 순서(시민·경찰·의사·마피아·none). */
 export const BADGE_ORDER: readonly BadgeId[] = ["citizen", "police", "doctor", "mafia", "none"];

@@ -48,6 +48,12 @@ export const RUNOFF_INTRO_MS = 1_000; // 결정 0066-4 · 플레이테스트 뒤
 export const RUNOFF_VOTE_MS = 5_000; // 결정 0066-4 · 플레이테스트 뒤 이 줄만 고친다 — 후보가 아닌 산 사람이 둘 중 하나를 고르는 창
 export const RUNOFF_END_MS = 1_500; // 결정 0066-4 · 플레이테스트 뒤 이 줄만 고친다 — 득표 수를 보여 주는 결과
 
+// 마지막 3인 결전(결정 0066-5). 모이기 → 세 사람이 차례로 한마디 → 셋이 동시에 한 명 지목 → 동시 공개가 서버 시각 사슬이다. 플레이테스트 뒤 이 네 줄만 고친다.
+export const SHOWDOWN_GATHER_MS = 2_000; // 결정 0066-5 · 플레이테스트 뒤 이 줄만 고친다 — 셋이 무대에 모이는 앞머리
+export const SHOWDOWN_TURN_MS = 8_000; // 결정 0066-5 · 플레이테스트 뒤 이 줄만 고친다 — 한 사람의 '마지막 한마디' 차례(못 하면 말없이 넘어감)
+export const SHOWDOWN_POINT_MS = 8_000; // 결정 0066-5 · 플레이테스트 뒤 이 줄만 고친다 — 셋이 동시에 한 명을 지목하는 창
+export const SHOWDOWN_REVEAL_MS = 1_500; // 결정 0066-5 · 플레이테스트 뒤 이 줄만 고친다 — 누가 누구를 지목했는지 동시 공개
+
 export const VERDICT_MS = 10_000; // 찬반(DAY-06, 결정 0060-1·0060-4) — 조기 종료 없이 마감까지
 
 export const PHASE_DEFS: Readonly<Record<PhaseId, PhaseDef>> = Object.freeze({
@@ -64,5 +70,6 @@ export const PHASE_DEFS: Readonly<Record<PhaseId, PhaseDef>> = Object.freeze({
   // 8페이즈 단계(결정 0060): discussion.next 가 nomination 이다. 옛 처형 여부·후보 선택·후보 공개 행은 08-22 에 지웠다.
   nomination: Object.freeze({ durationMs: NOMINATION_GATHER_MS, next: "defense", revealsOwnRole: true }), // 지목 진입 길이 = 모이기, 그 뒤 길이는 차례 사슬 nominationStepMs. 동률·0표면 훅이 night 로
   runoff: Object.freeze({ durationMs: RUNOFF_INTRO_MS, next: "defense", revealsOwnRole: true }), // 지목 동점(최다 정확히 둘) 결선 — 진입 길이 = 앞머리, 그 뒤 길이는 runoffStepMs. 결선도 동점이면 훅이 night 로
+  showdown: Object.freeze({ durationMs: SHOWDOWN_GATHER_MS, next: "night", revealsOwnRole: true }), // 마지막 3인 결전 — 진입 길이 = 모이기, 그 뒤 길이는 showdownStepMs. 2표 이상이면 훅이 execution 으로
   verdict: Object.freeze({ durationMs: VERDICT_MS, next: "execution", revealsOwnRole: true }),
 });

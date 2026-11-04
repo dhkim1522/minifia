@@ -5,13 +5,20 @@ import { describe, expect, it } from "vitest";
 import type { RoomView, ServerMessage } from "../../shared/protocol";
 import { SHOWDOWN_GATHER_MS, SHOWDOWN_POINT_MS, SHOWDOWN_REVEAL_MS, SHOWDOWN_TURN_MS, PICK_GAP_MS } from "../../shared/game/phases";
 import {
-  chatSend, chatsOf, closePhase, editRoom, framesOf, lastViewOf, mapPlayers, mark, pointAs, settle, showdownAll, startedGame, storedRoom,
+  actorsOf, advanceTo, chatSend, chatsOf, closePhase, editRoom, framesOf, lastViewOf, mapPlayers, mark, nextFrame, pointAs, send, seat, settle, showdownAll, storedRoom,
 } from "./helpers";
 import type { Game } from "./helpers";
 
 /** 4명 판에서 좌석 3 을 죽인 낮 시작 발표 — 산 사람 정확히 셋(좌석 0·1·2). 지난 낮의 개인 키를 일부러 남겨 청소를 확인한다. */
 async function threeGame(): Promise<Game> {
-  const g = await startedGame("dayAnnounce", 3);
+  // startedGame 은 목표 단계 state 를 이미 읽어 버려서 dayAnnounce 에는 쓸 수 없다 — 시작해 낮 시작 발표에 머문다.
+  const room = await seat(3, 0);
+  const socks = [room.host, ...room.guests.map((x) => x.sock)];
+  send(room.host, { t: "start" });
+  for (const sock of socks) await nextFrame(sock, (m) => m.t === "state" && m.view.phase === "assigning");
+  await advanceTo(room.code, socks, "dayAnnounce");
+  for (const sock of socks) await settle(sock, mark(sock));
+  const g: Game = { code: room.code, socks, actors: actorsOf(room) };
   await editRoom(g.code, (room) =>
     mapPlayers(room, (p) => ({ ...p, ...(p.seat === 3 ? { alive: false } : {}), nominate: 1, verdictVote: true, endVote: true })),
   );

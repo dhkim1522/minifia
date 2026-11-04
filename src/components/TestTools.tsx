@@ -30,6 +30,7 @@ export const TEST_PHASE_LABEL: Readonly<Record<PhaseId, string>> = {
   execution: "처형",
   nomination: "지목",
   runoff: "동점 결선",
+  showdown: "마지막 3인",
   verdict: "찬반",
   ended: "판 종료",
 };
