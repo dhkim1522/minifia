@@ -610,9 +610,11 @@ describe("GameMap — 낮 시작 결과 알림과 채팅 줄 (E5 #17~#19)", () =
     expect(logText(m.container)).not.toContain("2일차");
   });
 
-  it("알림은 한 번에 하나다: 찬반 결과 알림 뒤 2000ms 에 '처형 없음' 이 이전 알림을 바꾼다", () => {
+  it("알림은 한 번에 하나다: 판결 앞머리 600ms 뒤 찬반 결과 알림, 그 뒤 2000ms 에 '처형 없음' 이 이전 알림을 바꾼다", () => {
     const m = mount(makeView({ phase: "verdict", candidate: 1 }));
     m.show(makeView({ phase: "execution", candidate: 1, verdict: { yes: 2, no: 3, passed: false } }));
+    expect(announces(m.container).length).toBe(0);
+    advance(600);
     expect(announces(m.container).map((e) => e.textContent)).toEqual(["찬성 2 · 반대 3"]);
     advance(2000);
     expect(announces(m.container).map((e) => e.textContent)).toEqual(["처형 없음"]);
@@ -622,7 +624,7 @@ describe("GameMap — 낮 시작 결과 알림과 채팅 줄 (E5 #17~#19)", () =
     const names = ["민수", "<b>영희</b>", "서준", "지아"];
     const m = mount(makeView({ phase: "verdict", candidate: 1, nicknames: names }));
     m.show(makeView({ phase: "execution", candidate: 1, nicknames: names, verdict: { yes: 3, no: 0, passed: true } }));
-    advance(2000);
+    advance(2600);
     const el = announces(m.container)[0]!;
     expect(el.textContent).toBe("<b>영희</b> 님 처형");
     expect(el.querySelector("b")).toBeNull();

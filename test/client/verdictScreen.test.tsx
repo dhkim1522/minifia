@@ -427,8 +427,13 @@ describe("처형 화면 (DAY-06)", () => {
     return m;
   };
 
-  it("처형 단계 진입(0ms): 결과 알림 '찬성 5 · 반대 2' 와 같은 글자의 hot 줄, 아직 처형 알림은 없다", () => {
+  it("처형 단계 진입(0ms)은 판결 앞머리 0.6초라 알림·hot 줄이 없고, 0.6초에 결과 알림 '찬성 5 · 반대 2' 와 같은 글자의 hot 줄이 선다 (결정 0066-7)", () => {
     const m = enter();
+    expect(announceText(m.container)).toBe("");
+    expect(hotLines(m.container)).toEqual([]);
+    advance(599);
+    expect(announceText(m.container)).toBe("");
+    advance(2);
     expect(announceText(m.container)).toBe("찬성 5 · 반대 2");
     expect(hotLines(m.container)).toEqual(["찬성 5 · 반대 2"]);
   });
@@ -441,28 +446,28 @@ describe("처형 화면 (DAY-06)", () => {
     expect(countOf(m.container)).toBeNull();
   });
 
-  it("2.0초: 알림이 '도윤 님 처형' 으로 바뀌고 hot 줄 '도윤 님 처형' 이 더해진다(찬성·반대 줄은 다시 만들지 않는다)", () => {
+  it("2.6초: 알림이 '도윤 님 처형' 으로 바뀌고 hot 줄 '도윤 님 처형' 이 더해진다(찬성·반대 줄은 다시 만들지 않는다)", () => {
     const m = enter();
-    advance(1999);
+    advance(2599);
     expect(announceText(m.container)).toBe("찬성 5 · 반대 2");
     advance(2);
     expect(announceText(m.container)).toBe("도윤 님 처형");
     expect(hotLines(m.container)).toEqual(["찬성 5 · 반대 2", "도윤 님 처형"]);
   });
 
-  it("처형된 도윤은 단계 진입 순간부터 한 번도 사라지지 않고 서 있다가, 알림 시작(2.0초)에 fadeAt 이 걸리고 2.4초 뒤(4.4초)에 장면 표에서 빠진다", () => {
+  it("처형된 도윤은 단계 진입 순간부터 한 번도 사라지지 않고 서 있다가, 알림 시작(2.6초)에 fadeAt 이 걸리고 2.4초 뒤(5.0초)에 장면 표에서 빠진다", () => {
     const m = mount(verdictView());
     const from = rt.scenes.length;
     m.show(passedView());
-    // 진입 직후: 연출 대기 중이라 표에 있고 fadeAt 은 2.0초 시각
+    // 진입 직후: 연출 대기 중이라 표에 있고 fadeAt 은 2.6초 시각
     expect(lastScene().seats[4]?.show).toBe(true);
     expect(lastScene().seats[4]?.ghost).toBe(false);
-    expect(lastScene().seats[4]?.fadeAt).toBe(NOW + 2000);
+    expect(lastScene().seats[4]?.fadeAt).toBe(NOW + 2600);
     // 진입 렌더부터 도윤 좌석이 빠진 장면은 한 번도 없다(떠오르기 전에 깜빡 사라졌다 돌아오지 않는다)
     expect((rt.scenes.slice(from) as SceneLook[]).every((s) => s.seats[4]?.show === true)).toBe(true);
     expect(seatTag(m.container, 4)).not.toBeNull();
-    advance(2000);
-    expect(lastScene().seats[4]?.fadeAt).toBe(NOW + 2000);
+    advance(2600);
+    expect(lastScene().seats[4]?.fadeAt).toBe(NOW + 2600);
     advance(2399);
     expect(lastScene().seats[4]?.show).toBe(true);
     advance(2);
@@ -475,7 +480,7 @@ describe("처형 화면 (DAY-06)", () => {
 
   it("연출이 끝난 뒤 새 view 가 와도(타이머 이후 같은 단계의 갱신) 산 사람 화면에 도윤은 다시 나타나지 않는다", () => {
     const m = enter();
-    advance(4500);
+    advance(5100);
     m.show(passedView());
     expect(lastScene().seats[4]).toBeUndefined();
     expect(seatTag(m.container, 4)).toBeNull();
@@ -483,13 +488,14 @@ describe("처형 화면 (DAY-06)", () => {
     expect(lastScene().seats[4]).toBeUndefined();
   });
 
-  it("부결(passed false): 2.0초에 '처형 없음' 알림이 1.4초 뜨고 사라지며, 연출(fadeAt)은 어떤 좌석에도 없다", () => {
+  it("부결(passed false): 2.6초에 '처형 없음' 알림이 1.4초 뜨고 사라지며, 연출(fadeAt)은 어떤 좌석에도 없다", () => {
     const m = enter(failedView());
+    advance(601);
     expect(announceText(m.container)).toBe("찬성 2 · 반대 5");
     advance(2001);
     expect(announceText(m.container)).toBe("처형 없음");
     expect(sysLines(m.container)).toContain("처형 없음");
-    advance(1398);
+    advance(1396);
     expect(announceText(m.container)).toBe("처형 없음");
     advance(3);
     expect(announceText(m.container)).toBe("");
@@ -522,7 +528,7 @@ describe("처형 화면 (DAY-06)", () => {
     const nicknames = [...NAMES.slice(0, 4), nick, ...NAMES.slice(5)];
     const m = mount(makeView({ phase: "verdict", count: 8, candidate: 4, nicknames }));
     m.show(makeView({ phase: "execution", count: 8, candidate: 4, dead: [4], nicknames, verdict: { yes: 5, no: 2, passed: true } }));
-    advance(2001);
+    advance(2601);
     expect(announceText(m.container)).toBe(`${nick} 님 처형`);
     expect(m.container.querySelectorAll(".mf-announce__text").length).toBe(1);
     const css = readFileSync("src/styles/game.css", "utf8");
