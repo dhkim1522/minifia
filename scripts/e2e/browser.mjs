@@ -581,7 +581,7 @@ export async function readLobbyFrame(page) {
       return { rect: toRect(r), hit: !!top && el.contains(top) };
     };
     const start = document.querySelector("[data-lobby-start]");
-    const dots = start ? [...start.querySelectorAll(".mv-dots__dot")] : [];
+    const countEl = start ? start.querySelector(".mv-count") : null;
     return {
       header: { leave: boxOf(document.querySelector('.mf-lobby__header [aria-label="나가기"]')), share: boxOf(document.querySelector('.mf-lobby__header [aria-label="공유"]')) },
       start: start
@@ -589,8 +589,7 @@ export async function readLobbyFrame(page) {
             ...boxOf(start),
             ariaDisabled: start.getAttribute("aria-disabled"),
             opacity: Number(getComputedStyle(start).opacity),
-            dots: dots.length,
-            dotsOn: dots.filter((d) => d.classList.contains("is-on")).length,
+            countText: countEl ? (countEl.textContent ?? "").replace(/\s+/g, " ").trim() : null,
             label: start.getAttribute("aria-label") ?? "",
           }
         : null,
@@ -1248,7 +1247,7 @@ export async function tapAt(page, pt) {
 /**
  * 게임 맵 화면 한 장: 루트 data-game-stage 가 없으면 null.
  * { phase, ghostView, kbOpen, title, guide: { count, text }, header, stage, panel(사각형), chatChannel, hasInput, end: { present, pressed, on, total } | null,
- *   verdictRow: { hasPicker, hasDots, on, total } | null, verdictBtns, picks: [{ seat, rect, pressed, label }], tags: [{ seat, me, count, lead, sure, mine, done, ring, ghostSeat, roleChip, opacity }],
+ *   verdictRow: { hasPicker, hasCount, on, total } | null, verdictBtns, picks: [{ seat, rect, pressed, label }], tags: [{ seat, me, count, lead, sure, mine, done, ring, ghostSeat, roleChip, opacity }],
  *   announce: { text, fontPx, lineCount, wordBreak } | null, counts: { ghostView, roleChips, ghostSeats, ghostTexts }, ring, testButton, nightPanel }
  */
 export async function readGame(page) {
@@ -1262,9 +1261,10 @@ export async function readGame(page) {
     };
     const root = q("[data-game-stage]");
     if (!root) return null;
-    const dots = (scope) => {
-      const d = q(".mv-dots", scope);
-      return d ? { on: qa(".mv-dots__dot.is-on", d).length, total: qa(".mv-dots__dot", d).length } : null;
+    // 숫자 '현재 / 최대'(.mv-count)를 읽는다. 모양이 다르면 null
+    const count = (scope) => {
+      const m = /^(\d+) \/ (\d+)$/.exec((q(".mv-count", scope)?.textContent ?? "").replace(/\s+/g, " ").trim());
+      return m ? { on: Number(m[1]), total: Number(m[2]) } : null;
     };
     const header = q(".mf-game__header");
     const panel = q("[data-world-panel]");
@@ -1299,8 +1299,8 @@ export async function readGame(page) {
       chatChannel: q("[data-chat-panel]")?.getAttribute("data-chat-channel") ?? null,
       hasChat: !!q("[data-chat-panel]"),
       hasInput: !!q("[data-chat-input]"),
-      end: endBtn ? { pressed: endBtn.getAttribute("aria-pressed") === "true", ...(dots(endBtn) ?? { on: 0, total: 0 }) } : null,
-      verdictRow: vrow ? { hasPicker: !!q(".mv-verdict", vrow), hasDots: !!q(".mv-dots", vrow), ...(dots(vrow) ?? { on: 0, total: 0 }) } : null,
+      end: endBtn ? { pressed: endBtn.getAttribute("aria-pressed") === "true", ...(count(endBtn) ?? { on: 0, total: 0 }) } : null,
+      verdictRow: vrow ? { hasPicker: !!q(".mv-verdict", vrow), hasCount: !!q(".mv-count", vrow), ...(count(vrow) ?? { on: 0, total: 0 }) } : null,
       verdictBtns: qa("[data-verdict]").map((b) => ({ v: b.getAttribute("data-verdict"), pressed: b.getAttribute("aria-pressed") === "true", disabled: b.disabled === true, rect: rect(b) })),
       picks: qa("[data-pick]").map((b) => ({ seat: Number(b.getAttribute("data-pick")), rect: rect(b), pressed: b.getAttribute("aria-pressed") === "true", label: b.getAttribute("aria-label") ?? "" })),
       tags: qa(".mf-world__tag").map((el) => {

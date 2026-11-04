@@ -409,22 +409,22 @@ export function ghostDomChecks(m) {
 }
 
 /**
- * 찬반 패널 구성 판정(VP1~VP2). m = { kind: "voter"|"viewer", hasPicker, hasDots, kbOpen } —
- * 투표자(변론자 아닌 산 사람)는 VerdictPicker 와 DotProgress, 보기(변론자·유령)는 DotProgress 만, 키보드가 열려 있으면 둘 다 숨는다.
+ * 찬반 패널 구성 판정(VP1~VP2). m = { kind: "voter"|"viewer", hasPicker, hasCount, kbOpen } —
+ * 투표자(변론자 아닌 산 사람)는 VerdictPicker 와 숫자(.mv-count), 보기(변론자·유령)는 숫자만, 키보드가 열려 있으면 둘 다 숨는다.
  */
 export function verdictPanelChecks(m) {
   const label1 = "찬반 고르기(VerdictPicker) 구성";
-  const label2 = "찬반 투표 점(DotProgress) 구성";
-  if (!m || (m.kind !== "voter" && m.kind !== "viewer") || typeof m.hasPicker !== "boolean" || typeof m.hasDots !== "boolean") {
-    return [noMeasure("VP1", label1, "kind·hasPicker"), noMeasure("VP2", label2, "kind·hasDots")];
+  const label2 = "찬반 투표 숫자(.mv-count) 구성";
+  if (!m || (m.kind !== "voter" && m.kind !== "viewer") || typeof m.hasPicker !== "boolean" || typeof m.hasCount !== "boolean") {
+    return [noMeasure("VP1", label1, "kind·hasPicker"), noMeasure("VP2", label2, "kind·hasCount")];
   }
   const kb = m.kbOpen === true;
   const wantPicker = m.kind === "voter" && !kb;
-  const wantDots = !kb;
+  const wantCount = !kb;
   const where = `${m.kind === "voter" ? "투표자" : "보기"}${kb ? "·키보드 열림" : ""}`;
   return [
     result("VP1", label1, m.hasPicker === wantPicker ? [] : [`${where}: 고르기 ${m.hasPicker ? "있음" : "없음"} (기대 ${wantPicker ? "있음" : "없음"})`]),
-    result("VP2", label2, m.hasDots === wantDots ? [] : [`${where}: 점 ${m.hasDots ? "있음" : "없음"} (기대 ${wantDots ? "있음" : "없음"})`]),
+    result("VP2", label2, m.hasCount === wantCount ? [] : [`${where}: 숫자 ${m.hasCount ? "있음" : "없음"} (기대 ${wantCount ? "있음" : "없음"})`]),
   ];
 }
 
@@ -951,11 +951,11 @@ export function lobbyHeaderChecks(m, { w, h }) {
 
 /**
  * L8 [시작] 버튼 상태(ROOM-03, UI-SPEC 행동 줄): 방장의 [시작] 은 연결된 사람이 4명 미만이면 흐림(aria-disabled="true", 불투명도 < 1),
- * 4명 이상이면 활성(aria-disabled 없음, 불투명도 1)이고, 점은 항상 최대 인원(8)개이며 켜진 점은 연결된 사람 수와 같다.
- * s = browser.readLobbyFrame().start — { ariaDisabled, opacity, dots, dotsOn, rect, hit } | null.
+ * 4명 이상이면 활성(aria-disabled 없음, 불투명도 1)이고, 버튼 안 숫자는 "연결된 사람 수 / 최대 인원"(예: "4 / 8")이다.
+ * s = browser.readLobbyFrame().start — { ariaDisabled, opacity, countText, rect, hit } | null.
  */
 export function lobbyStartChecks(s, { n, min = 4, max = 8 }) {
-  const label = `[시작] ${n}명: ${n >= min ? "활성" : "흐림"}·점 ${max}개 중 ${n}개 켜짐`;
+  const label = `[시작] ${n}명: ${n >= min ? "활성" : "흐림"}·숫자 ${n} / ${max}`;
   if (!s) return result("L8", label, ["측정값 없음([시작] 버튼 없음)"]);
   const bad = [];
   const dim = s.ariaDisabled === "true";
@@ -963,8 +963,8 @@ export function lobbyStartChecks(s, { n, min = 4, max = 8 }) {
   if (n < min && !dim) bad.push("흐려야 하는데 aria-disabled 아님");
   if (n >= min && !(s.opacity >= 0.99)) bad.push(`활성인데 불투명도 ${s.opacity}`);
   if (n < min && !(s.opacity < 0.99)) bad.push(`흐려야 하는데 불투명도 ${s.opacity}`);
-  if (s.dots !== max) bad.push(`점 ${s.dots}개 ≠ ${max}`);
-  if (s.dotsOn !== n) bad.push(`켜진 점 ${s.dotsOn}개 ≠ ${n}`);
+  const wantText = `${n} / ${max}`;
+  if (s.countText !== wantText) bad.push(`숫자 '${s.countText ?? ""}' ≠ '${wantText}'`);
   if (s.rect.height + OVERLAP_EPS < TAP_MIN) bad.push(`높이 ${rd(s.rect.height)} < ${TAP_MIN}`);
   return result("L8", label, bad);
 }

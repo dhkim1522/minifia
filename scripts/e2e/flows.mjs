@@ -299,7 +299,7 @@ async function lobbyFlow(ctx) {
   });
   rec("lobby/sheet", "L5", "[+]/[−] 로 숫자가 바뀜", l5.ok, l5.detail);
 
-  // 8명: 점 8개가 모두 켜지고, 8자 이름 8개가 한 맵에서 잘리지 않는다 + 겹친 이름표는 앞뒤가 정해진다
+  // 8명: [시작] 숫자가 8 / 8 이고, 8자 이름 8개가 한 맵에서 잘리지 않는다 + 겹친 이름표는 앞뒤가 정해진다
   const full = await attempt(async () => {
     await setBots(page, tracker, 7);
     await tracker.waitFor((v) => v.players.length === 8, 3000, "인원 8");
@@ -1412,17 +1412,17 @@ async function dayFlow(ctx) {
     const { host, hp, ht, hostSeat, guests } = game;
     const humans = [{ page: hp, tracker: ht, handle: host, who: "방장" }, ...guests.map((x, i) => ({ page: x.page, tracker: x.tracker, handle: x, who: `손님${i + 1}` }))];
     const pages = humans.map((x) => x.page);
-    const N = humans.length; // 산 사람 4명: 과반 3, 지목 버튼 3, 찬반 점 3
+    const N = humans.length; // 산 사람 4명: 과반 3, 지목 버튼 3, 찬반 숫자 3
     await allAt(pages, "discussion");
     await Promise.all(pages.map((p) => settle(p)));
 
-    // 낮 토론: 패널 LOG_H + 154, [토론 끝내기] 점 = 과반, 지목 버튼 없음. 맵 탭은 걷기(move)를 보낸다(대조)
+    // 낮 토론: 패널 LOG_H + 154, [토론 끝내기] 숫자 최대 = 과반, 지목 버튼 없음. 맵 탭은 걷기(move)를 보낸다(대조)
     {
       const sc = `${id}/discussion`;
       for (const x of humans) {
         const g = await readGame(x.page);
         panelRow(rec, sc, "DY1", g, h, "talk", x.who);
-        rec(sc, "DY2", `[토론 끝내기]가 있고 점이 과반(${majorityOf(N)})이다 (${x.who})`, !!g.end && g.end.total === majorityOf(N) && g.end.pressed === false, `end ${JSON.stringify(g.end)}`);
+        rec(sc, "DY2", `[토론 끝내기]가 있고 숫자 최대가 과반(${majorityOf(N)})이다 (${x.who})`, !!g.end && g.end.total === majorityOf(N) && g.end.pressed === false, `end ${JSON.stringify(g.end)}`);
         rec(sc, "DY2b", `토론에는 지목 버튼이 없다 (${x.who})`, g.picks.length === 0, `지목 버튼 ${g.picks.length}개`);
       }
       const g0 = await readGame(hp);
@@ -1444,7 +1444,7 @@ async function dayFlow(ctx) {
         rec(sc, "DY3", `[토론 끝내기] 누르면 눌림 표시 (${humans[i].who})`, r.ok, r.detail);
       }
       const seen = await attempt(async () => {
-        const g = await untilGame(humans[N - 1].page, (x) => (x.end?.on ?? 0) >= majorityOf(N) - 1, 4000, "끝내기 점");
+        const g = await untilGame(humans[N - 1].page, (x) => (x.end?.on ?? 0) >= majorityOf(N) - 1, 4000, "끝내기 숫자");
         return g.phase === "discussion" ? true : { ok: false, detail: `과반 전인데 ${g.phase} 로 넘어감` };
       });
       rec(sc, "DY4", "과반 전에는 토론이 이어지고 점이 눌린 수만큼 켜진다", seen.ok, seen.detail);
@@ -1522,7 +1522,7 @@ async function dayFlow(ctx) {
       }
     }
 
-    // 찬반: 투표자(손님)는 고르기+점 LOG_H + 203, 보기(변론자 방장)는 점만 LOG_H + 111. 누르면 눌림, 던진 사람 이름표에 체크, 찬반 값은 어디에도 없다
+    // 찬반: 투표자(손님)는 고르기+숫자 LOG_H + 203, 보기(변론자 방장)는 숫자만 LOG_H + 111. 누르면 눌림, 던진 사람 이름표에 체크, 찬반 값은 어디에도 없다
     {
       const sc = `${id}/verdict`;
       await skipTo(hp, ht, "verdict");
@@ -1531,9 +1531,9 @@ async function dayFlow(ctx) {
       for (const x of humans) {
         const g = await readGame(x.page);
         const viewer = x.handle === host;
-        recMany(rec, sc, verdictPanelChecks({ kind: viewer ? "viewer" : "voter", hasPicker: !!g.verdictRow?.hasPicker, hasDots: !!g.verdictRow?.hasDots, kbOpen: g.kbOpen }), ` (${x.who})`);
+        recMany(rec, sc, verdictPanelChecks({ kind: viewer ? "viewer" : "voter", hasPicker: !!g.verdictRow?.hasPicker, hasCount: !!g.verdictRow?.hasCount, kbOpen: g.kbOpen }), ` (${x.who})`);
         panelRow(rec, sc, "VD1", g, h, viewer ? "verdictViewer" : "verdictVoter", x.who);
-        rec(sc, "VD1b", `찬반 점 total = 산 사람 − 1 = ${N - 1} (${x.who})`, g.verdictRow?.total === N - 1, `total ${g.verdictRow?.total}`);
+        rec(sc, "VD1b", `찬반 숫자 total = 산 사람 − 1 = ${N - 1} (${x.who})`, g.verdictRow?.total === N - 1, `total ${g.verdictRow?.total}`);
       }
       for (let i = 0; i < guests.length; i++) {
         const r = await attempt(async () => {
