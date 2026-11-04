@@ -1946,7 +1946,7 @@ describe("E2E 훅 window.__mfPin (09.1.1-11, T-09.1.1-31)", () => {
 
   it("다른 설치가 덮어썼으면 언마운트가 지우지 않는다", async () => {
     const s = await openPin();
-    const other = { seat: 9, moving: false, strength: 0 };
+    const other = { seat: 9, moving: false, strength: 0, zoom: 1 };
     window.__mfPin = other;
     s.utils.unmount();
     expect(window.__mfPin).toBe(other);
@@ -2040,8 +2040,9 @@ describe("게임 장면(08-12): 카메라·조명·긴장·떠다님·처형 연
     it("첫 장면(재접속·새로 고침)이 이미 1.10 이면 애니메이션 없이 곧바로 1.10", async () => {
       const s = await openGame({ scene: sceneOf(ALL, { camera: SLOW(1.1) }) });
       const r = s.world.renderers[0]!;
-      frame(16);
-      expect(r.setZoom.mock.calls.at(-1)![0]).toBeCloseTo(1.1, 6);
+      frames(300);
+      expect(r.setZoom.mock.calls.at(-1)![0]).toBeCloseTo(1.1, 6); // 첫 프레임 뒤 1 로 되돌아가 다시 다가오지 않는다
+      expect(r.setZoom.mock.calls.every((c) => c[0] === 1.1)).toBe(true);
     });
 
     it("모션 줄이기: zoomMs 장면도 줌하지 않는다(1 유지)", async () => {

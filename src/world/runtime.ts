@@ -17,7 +17,7 @@ import { DEFAULT_BUDGET_STEP, nextLadderStep } from "./renderer";
 import type { CharacterHandle, WorldRenderer } from "./renderer";
 import { GHOST_MIST } from "./ghostOutfit";
 import { executionFade, GHOST_OPACITY, ghostFloatY, stageLiftY } from "./presence";
-import { pinAt, pinLevel, pinLights } from "./pinPlan";
+import { easeInOut, pinAt, pinLevel, pinLights } from "./pinPlan";
 import type { SceneLook } from "./presence";
 import { initialMapStatus, inputBlocked, mapStatusReducer, shouldRecreate } from "./status";
 import { rankTags } from "./tagOrder";
@@ -194,6 +194,8 @@ export interface WorldRuntimeDeps {
   onGhostOutfits?: (outfits: Readonly<Record<number, string>>) => void;
   /** 핀 조명이 지금 비추는 좌석(없으면 null)·이동 중 여부·켜짐 수준(0~1)이 바뀔 때 불린다 — E2E 훅 window.__mfPin 용(09.1.1-11). 제품은 넘기지 않는다 */
   onPin?: (pin: { seat: number | null; moving: boolean; strength: number }) => void;
+  /** 카메라 줌이 렌더러에 새로 보내질 때 소수 셋째 자리로 불린다 — E2E 훅 window.__mfPin.zoom 용(09.1.1-13). 제품은 넘기지 않는다 */
+  onZoom?: (zoom: number) => void;
 }
 
 export interface WorldRuntime {
@@ -979,16 +981,21 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
     let offsetGoal = stageOff;
     let blending = false;
     if (camLook !== undefined && camLook.mode === "fixed") {
-      const g = gatherView(rect, { w: s.w, h: s.h }, { ghost: look?.seats[deps.mySeat()]?.ghost === true, zoom: camLook.zoom });
+      // zoomMs 가 있는 구도(판결 순간 느린 확대, 09.1.1-13): 위치·세로 오프셋·줌이 모두 그 시간에 ease-in-out 으로 같이 간다. 모션 줄이기는 줌 없이 1 을 지킨다
+      const slow = camLook.zoomMs !== undefined;
+      const goalZoom = slow && reduced ? 1 : camLook.zoom;
+      const g = gatherView(rect, { w: s.w, h: s.h }, { ghost: look?.seats[deps.mySeat()]?.ghost === true, zoom: goalZoom });
       offsetGoal = g.offsetY;
-      if (fixed === null || fixed.zoom !== camLook.zoom) {
+      if (fixed === null || fixed.zoom !== goalZoom) {
         const here = cam ?? DEFAULT_TARGET;
-        fixed = { zoom: camLook.zoom, start: now, from: { x: here.x, z: here.z, off: offsetCur ?? stageOff, zoom: zoomCur } };
+        fixed = { zoom: goalZoom, start: now, from: { x: here.x, z: here.z, off: offsetCur ?? stageOff, zoom: zoomCur } };
       }
-      const p = reduced || resync ? 1 : Math.min(1, (now - fixed.start) / CAM_SLOW_MS);
-      const e = easeOut(p);
+      // 모션 줄이기·재접속 첫 프레임은 블렌드를 끝난 것으로 만든다(다음 프레임에 처음 값으로 되돌아가 다시 시작하지 않게)
+      if (reduced || resync) fixed.start = Number.NEGATIVE_INFINITY;
+      const p = Math.min(1, (now - fixed.start) / (camLook.zoomMs ?? CAM_SLOW_MS));
+      const e = slow ? easeInOut(p) : easeOut(p);
       cam = { x: mix(fixed.from.x, g.target.x, e), z: mix(fixed.from.z, g.target.z, e) };
-      zoomCur = mix(fixed.from.zoom, camLook.zoom, e);
+      zoomCur = mix(fixed.from.zoom, goalZoom, e);
       if (p < 1) {
         blending = true;
         offsetCur = mix(fixed.from.off, g.offsetY, e);
@@ -1028,6 +1035,7 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
     if (zoomCur !== zoomSent) {
       zoomSent = zoomCur;
       r.setZoom?.(zoomCur);
+      deps.onZoom?.(Math.round(zoomCur * 1000) / 1000);
     }
 
     // 단계 조명·긴장: 바뀐 때만 렌더러에 보낸다. 장면이 없으면 부팅 때 정한 조명(로비·성능 스파이크)

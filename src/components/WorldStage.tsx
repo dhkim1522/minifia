@@ -171,6 +171,7 @@ export function WorldStage(props: WorldStageProps) {
       },
       onGhostOutfits: outfitsHook?.set,
       onPin: pinHook?.set,
+      onZoom: pinHook?.setZoom,
       allowSoftware: hooksOn,
       loadModules: live.current.props.loadModules,
     });

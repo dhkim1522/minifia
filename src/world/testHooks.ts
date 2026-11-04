@@ -35,8 +35,8 @@ declare global {
     __mfWorld?: WorldTestHooks;
     /** 유령 직업 의상 표(좌석 → 의상 id, 09.1-09). 런타임이 이미 그리는 의상뿐이고 산 사람 페이지는 늘 빈 객체다(L13) */
     __mfGhostOutfits?: Readonly<Record<number, string>>;
-    /** 핀 조명(09.1.1-11): 지금 비추는 좌석(없으면 null)·이동 중 여부·켜짐 수준(0~1). 런타임이 이미 정한 값뿐이다 */
-    __mfPin?: { seat: number | null; moving: boolean; strength: number };
+    /** 핀 조명(09.1.1-11): 지금 비추는 좌석(없으면 null)·이동 중 여부·켜짐 수준(0~1)·카메라 줌(09.1.1-13, 소수 셋째 자리). 런타임이 이미 정한 값뿐이다 */
+    __mfPin?: { seat: number | null; moving: boolean; strength: number; zoom: number };
   }
 }
 
@@ -126,12 +126,16 @@ export function installGhostOutfitsHook(): { set(outfits: Readonly<Record<number
  * window.__mfPin 을 설치하고(처음엔 꺼짐 상태) 갱신·해제 함수를 돌려준다. 테스트 훅이 켜진 문맥에서만 부른다(T-09.1.1-31).
  * 해제는 다른 설치가 덮어썼으면 지우지 않는다.
  */
-export function installPinHook(): { set(pin: { seat: number | null; moving: boolean; strength: number }): void; off(): void } {
-  let mine = { seat: null as number | null, moving: false, strength: 0 };
+export function installPinHook(): { set(pin: { seat: number | null; moving: boolean; strength: number }): void; setZoom(zoom: number): void; off(): void } {
+  let mine = { seat: null as number | null, moving: false, strength: 0, zoom: 1 };
   window.__mfPin = mine;
   return {
     set(pin) {
-      mine = { seat: pin.seat, moving: pin.moving, strength: pin.strength };
+      mine = { seat: pin.seat, moving: pin.moving, strength: pin.strength, zoom: mine.zoom };
+      window.__mfPin = mine;
+    },
+    setZoom(zoom) {
+      mine = { ...mine, zoom };
       window.__mfPin = mine;
     },
     off() {
