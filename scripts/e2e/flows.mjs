@@ -1713,7 +1713,7 @@ async function executeHost(game) {
 const GHOST_JOB_OUTFIT = { mafia: "mafia", police: "police", doctor: "doctor", citizen: "coat" };
 const sortedEntries = (o) => Object.entries(o).map(([k, v]) => [Number(k), v]).sort((a, b) => a[0] - b[0]);
 
-/** 유령 페이지의 의상 표가 탈락 좌석 전부의 spectate 직업 대응과 같아질 때까지 6초 기다린다. detail 에 좌석:직업→의상 을 남긴다 */
+/** window.__mfGhostOutfits(e2e 전용 의상 표)를 읽어 유령 페이지의 의상 표가 탈락 좌석 전부의 spectate 직업 대응과 같아질 때까지 6초 기다린다. detail 에 좌석:직업→의상 을 남긴다 */
 async function ghostOutfitMatch(hp, view) {
   const dead = view.players.filter((p) => p.alive === false).map((p) => p.seat);
   const jobs = Object.fromEntries(dead.map((seat) => [seat, view.spectate?.seats?.find((x) => x.seat === seat)?.job]));

@@ -138,6 +138,7 @@ export function WorldStage(props: WorldStageProps) {
     if (host === null || tagLayer === null) return;
     // 테스트 훅은 ?e2e=1(세션 저장) 또는 개발 빌드에서만 — 같은 조건에서 소프트웨어 렌더러도 허용한다(E2E 헤드리스, RESEARCH A13)
     const hooksOn = worldTestHooksEnabled(window.location.search, sessionStore(), import.meta.env.DEV);
+    // window.__mfGhostOutfits(유령 직업 의상 표, 09.1-09): 같은 훅 문맥에서만. 의상은 DOM 속성으로 싣지 않는다(L13)
     const outfitsHook = hooksOn ? installGhostOutfitsHook() : null;
     const runtime = createWorldRuntime({
       host,

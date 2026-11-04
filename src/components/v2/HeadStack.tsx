@@ -35,7 +35,7 @@ export interface NameTagProps {
   done?: boolean;
   /** 처음 보는 지목의 처음 3초: 이름표 깜빡임 */
   blink?: boolean;
-  /** 유령: 불투명도 0.6 */
+  /** 유령 표식(is-ghost). 이름표는 불투명 — 몸이 0.26 안개라 직업은 RoleChip 이 알린다(09.1-09) */
   ghost?: boolean;
 }
 
