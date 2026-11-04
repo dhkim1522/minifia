@@ -92,6 +92,16 @@ export interface PickTurn {
   skip?: true;
 }
 
+/** 서버 전용(결정 0066-2, O-20). 귓속말 본문 보관 한 줄 — 판이 끝날 때까지 쌓이고 어떤 view·프레임에도 싣지 않는다(11페이즈 공개 입력). */
+export interface WhisperRecord {
+  /** 일차. */
+  n: number;
+  from: number;
+  to: number;
+  text: string;
+  at: number;
+}
+
 export interface RoomState {
   code: string;
   createdAt: number;
@@ -122,6 +132,8 @@ export interface RoomState {
   nightLog?: NightLogEntry[];
   /** 승리 팀 — 종료 진입 때 기록한다. */
   winner?: GameWinner;
+  /** 서버 전용(결정 0066-2, O-20). 귓속말 본문 — sendWhisper 만 쓴다. 채팅 보관 상한(all 100줄)에 밀리지 않는다. 어떤 view 에도 싣지 않는다. */
+  whispers?: WhisperRecord[];
   hostId: string;
   nextJoinSeq: number;
   players: Player[];

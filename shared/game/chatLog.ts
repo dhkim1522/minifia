@@ -1,7 +1,7 @@
 // 채팅 줄 보관의 순수 규칙(결정 0058): 줄 레코드, 채널별 연번, 수신자 좌석 마스크, 채널별 30줄 복원, 채널별 보관 상한.
 // 순수 모듈이다: 시각·난수를 읽지 않고 입력을 바꾸지 않으며, DOM·workerd API 가 없다(앱·워커 두 tsconfig 에 모두 들어간다).
 // 저장 I/O 는 이 파일에 없다 — 방 Durable Object 가 chatKey 로 줄 단위 저장·삭제를 한다(07-14). 이 파일은 무엇을 쓰고 지우고 돌려줄지만 정한다.
-// 마스크(r)·쓰기 순번(g)·일차(n)는 저장 전용이다. 와이어로 나가는 모양은 toWire 가 키 다섯(ch·seat·seq·text·at)과, 카드 줄일 때만 k 를 복사한 것이다.
+// 마스크(r)·쓰기 순번(g)·일차(n)는 저장 전용이다. 와이어로 나가는 모양은 toWire 가 키 다섯(ch·seat·seq·text·at)과, 카드·귓속말 줄일 때만 k(귓속말은 to 도)를 복사한 것이다.
 // 복원은 '지금의 역할·생존'으로 다시 계산하지 않는다 — 보낼 때 audience 가 정한 마스크로만 한다(복원이 라이브보다 넓어지지 않는다).
 import { MAX_PLAYERS } from "../protocol";
 import type { ChatChannel, ChatLineWire } from "../protocol";
@@ -29,9 +29,18 @@ export interface ChatRecord {
   at: number;
   n: number;
   r: number;
-  /** 서버가 사망 전환에서 만든 카드 줄(유언·쪽지, 결정 0061-11). 사람이 보낸 줄에는 키 자체가 없다. */
-  k?: "will" | "note";
+  /**
+   * 서버가 만든 특수 줄. 카드(will·note, 결정 0061-11)는 사망 전환에서, 귓속말(결정 0066-2)은 appendWhisperPair 가 만든다:
+   * whisper = 당사자에게 가는 본문 줄, whispered = 나머지에게 가는 본문 없는 사실 줄. 일반 대화 줄에는 키 자체가 없다.
+   */
+  k?: ChatKind;
+  /** 귓속말 상대 좌석(결정 0066-2). k 가 whisper·whispered 일 때만 있다. */
+  to?: number;
 }
+
+export type ChatKind = "will" | "note" | "whisper" | "whispered";
+const KINDS: readonly ChatKind[] = ["will", "note", "whisper", "whispered"];
+const isWhisperKind = (k: ChatKind): boolean => k === "whisper" || k === "whispered";
 
 export interface ChatLog {
   /** g 오름차순. */
@@ -95,10 +104,37 @@ export function appendLine(
   };
 }
 
-/** 와이어 모양. 필드별로 복사한다 — 펼쳐 복사하면 마스크·g·일차나 덧붙은 키가 함께 나간다. k 는 카드 줄일 때만 복사한다. */
+/**
+ * 귓속말 한 쌍을 더한다(결정 0066-2): 본문 레코드(k whisper, 마스크 partyMask = 당사자 둘)와 사실 레코드(k whispered, 본문 없음, 마스크 othersMask = 나머지)가
+ * 같은 seq 를 쓴다(all 채널 번호를 한 번만 소비) — 어느 소켓이든 그 seq 에 줄이 정확히 하나라서 seq 틈으로 귓속말 횟수가 새지 않는다.
+ * g 는 둘이 따로 받는다(저장 키). 상한 처리는 appendLine 과 같은 규칙이고 두 레코드를 all 채널 줄로 센다. 새 두 줄은 지우지 않는다.
+ */
+export function appendWhisperPair(
+  log: ChatLog,
+  input: { seat: number; to: number; text: string; at: number; n: number; partyMask: number; othersMask: number },
+): { log: ChatLog; body: ChatRecord; fact: ChatRecord; evicted: number[] } {
+  const seq = log.nextSeq.all;
+  const base = { ch: "all" as const, seq, seat: input.seat, at: input.at, n: input.n, to: input.to };
+  const body: ChatRecord = { g: log.nextG, ...base, text: input.text, r: input.partyMask, k: "whisper" };
+  const fact: ChatRecord = { g: log.nextG + 1, ...base, text: "", r: input.othersMask, k: "whispered" };
+  let records: ChatRecord[] = [...log.records, body, fact];
+  const inChannel = records.filter((x) => x.ch === "all");
+  const over = inChannel.length - CHAT_KEEP.all;
+  let evicted: number[] = [];
+  if (over > 0) {
+    const fresh = new Set([body.g, fact.g]);
+    evicted = inChannel.filter((x) => !fresh.has(x.g)).slice(0, Math.max(CHAT_EVICT_BATCH, over)).map((x) => x.g);
+    const gone = new Set(evicted);
+    records = records.filter((x) => !gone.has(x.g));
+  }
+  return { log: { records, nextG: log.nextG + 2, nextSeq: { ...log.nextSeq, all: seq + 1 } }, body, fact, evicted };
+}
+
+/** 와이어 모양. 필드별로 복사한다 — 펼쳐 복사하면 마스크·g·일차나 덧붙은 키가 함께 나간다. k 는 특수 줄일 때만, to 는 귓속말 줄일 때만 복사한다. */
 export function toWire(record: ChatRecord): ChatLineWire {
   const wire: ChatLineWire = { ch: record.ch, seat: record.seat, seq: record.seq, text: record.text, at: record.at };
   if (record.k !== undefined) wire.k = record.k;
+  if (record.to !== undefined) wire.to = record.to;
   return wire;
 }
 
@@ -134,8 +170,13 @@ function parseRecord(raw: unknown): ChatRecord | null {
   if (typeof n !== "number" || !Number.isInteger(n) || n < 0) return null;
   if (typeof r !== "number" || !Number.isInteger(r) || r < 0 || r > MASK_MAX) return null;
   if (v.k === undefined) return { g, ch, seq, seat, text, at, n, r };
-  if (v.k !== "will" && v.k !== "note") return null;
-  return { g, ch, seq, seat, text, at, n, r, k: v.k };
+  const k = KINDS.find((x) => x === v.k);
+  if (k === undefined) return null;
+  // 귓속말 줄은 상대 좌석(to)이 필수, 다른 종류에는 to 가 없다 — 저장 복원이 모양을 지킨다.
+  if (!isWhisperKind(k)) return { g, ch, seq, seat, text, at, n, r, k };
+  const to = v.to;
+  if (typeof to !== "number" || !Number.isInteger(to) || to < 0 || to >= MAX_PLAYERS) return null;
+  return { g, ch, seq, seat, text, at, n, r, k, to };
 }
 
 /**

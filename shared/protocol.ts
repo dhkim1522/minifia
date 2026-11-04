@@ -199,6 +199,7 @@ export type ClientMessage =
   // 8페이즈 낮 처형(결정 0060). 옛 투표 메시지(처형 여부·후보 선택)는 08-21 에 지웠다 — 옛 번들이 보내면 스키마가 거부해 BAD_MESSAGE 다. 행위자는 모두 소켓 첨부 playerId 뿐이다.
   | { t: "endDiscussion"; on: boolean } // 토론 끝내기 — 누름(true)/취소(false), 산 사람만. 공개 값은 누른 수뿐이다(DAY-03)
   | { t: "point"; target: number } // 지목 — 대상 seat 하나, 취소 없음, 마감까지 바꿀 수 있다(DAY-04)
+  | { t: "whisper"; to: number; text: string } // 귓속말(결정 0066-2) — 낮 토론, 하루 1번, 산 다른 사람 한 명에게 30자소 이하. 본문은 보낸·받은 사람 소켓에만 간다
   | { t: "badge"; role: BadgeId } // 직업 주장(결정 0066-1) — 서버가 정하는 것은 값의 형식뿐 참·거짓은 판정하지 않는다. 낮 시작 발표·토론·지목 단계에서만
   | { t: "verdict"; agree: boolean } // 찬반 — 찬성 true / 반대 false, 변론자·유령은 거부, 마지막 값이 유효(DAY-06)
   // 테스트 방 방장 도구(결정 0022). 일반 방은 BAD_MESSAGE 로 거부한다. role null = 무작위.
@@ -313,7 +314,8 @@ export interface ChatLineWire {
   seq: number;
   text: string;
   at: number;
-  k?: "will" | "note"; // 서버가 만든 카드 줄(유언·쪽지, 결정 0061-11). 일반 대화 줄에는 키가 없다
+  k?: "will" | "note" | "whisper" | "whispered"; // 서버가 만든 카드 줄(유언·쪽지, 결정 0061-11)·귓속말 줄(결정 0066-2: whisper = 당사자에게 본문, whispered = 나머지에게 본문 없는 사실). 일반 대화 줄에는 키가 없다
+  to?: number; // 귓속말 상대 좌석(결정 0066-2). 누가 누구에게 보냈는지는 공개 사실이다 — 귓속말 줄(whisper·whispered)에만 있다
 }
 /** 막힌 이유: 도배 간격·같은 문장 반복·길이·단계/채널 불일치·그 밖(보이는 글자 없음). 보낸 사람에게만 알린다. */
 export type ChatRejectWhy = "rate" | "repeat" | "length" | "phase" | "other";

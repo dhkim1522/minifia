@@ -63,6 +63,8 @@ export const ClientMessageSchema = z.discriminatedUnion("t", [
   z.strictObject({ t: z.literal("endDiscussion"), on: z.boolean() }),
   z.strictObject({ t: z.literal("point"), target: z.number().int().min(0).max(7) }),
   z.strictObject({ t: z.literal("verdict"), agree: z.boolean() }),
+  // 귓속말(결정 0066-2): 대상 좌석과 본문뿐 — 행위자는 소켓 첨부 playerId 로만 정해진다. UTF-16 상한 200 은 프레임 크기 방어이고 정확한 판정(30자소·산 사람·하루 1번)은 shared/game/whisper.ts 가 한다.
+  z.strictObject({ t: z.literal("whisper"), to: z.number().int().min(0).max(7), text: z.string().min(1).max(200) }),
   // 직업 주장(결정 0066-1): 값은 enum 뿐 — 이번 판 구성에 있는 직업인지·단계·산 사람은 서버 규칙(shared/game/badge.ts)이 본다. 참·거짓은 판정하지 않는다.
   z.strictObject({ t: z.literal("badge"), role: z.enum(["mafia", "police", "doctor", "citizen", "none"]) }),
   // 테스트 방 방장 도구(결정 0022). 덧붙은 키는 거부한다. 방장·testMode·단계 검사는 서버 규칙(shared/game/testTools.ts)이 한다.

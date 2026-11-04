@@ -5,7 +5,7 @@ import { botMafiaTarget, botWakeAt, isBot, syncBotPlan, takeDueBotSteps } from "
 import type { BotStep } from "../shared/game/bots";
 import { isAlive } from "../shared/game/alive";
 import { audience, channelOf, phaseKey, worldVisibleTo } from "../shared/game/audience";
-import { CHAT_KEY_PREFIX, appendLine, chatKey, emptyChatLog, replayFor, restoreChatLog, seatMask, toWire } from "../shared/game/chatLog";
+import { CHAT_KEY_PREFIX, appendLine, appendWhisperPair, chatKey, emptyChatLog, replayFor, restoreChatLog, seatMask, toWire } from "../shared/game/chatLog";
 import type { ChatLog } from "../shared/game/chatLog";
 import { checkChatSend, sanitizeChatText, typingRelay } from "../shared/game/chatRules";
 import type { ChatSenderRate, TypingRelayState } from "../shared/game/chatRules";
@@ -24,6 +24,7 @@ import type { JoinError } from "../shared/game/room";
 import type { RoomState } from "../shared/game/room";
 import { pickRecipientIds, pickTarget } from "../shared/game/night";
 import { BADGE_MIN_GAP_MS, setBadge } from "../shared/game/badge";
+import { sendWhisper } from "../shared/game/whisper";
 import { WILL_MIN_GAP_MS, noteRecipientIds, saveNote, saveWill } from "../shared/game/will";
 import { resetToLobby, setBotCount, setBotVote, setTestRole, skipPhase } from "../shared/game/testTools";
 import type { RoleId } from "../shared/game/roles";
@@ -281,6 +282,9 @@ export class Room extends DurableObject<Env> {
       case "badge":
         await this.handleBadge(ws, msg.role);
         return;
+      case "whisper":
+        await this.handleWhisper(ws, msg.to, msg.text);
+        return;
       case "will":
         await this.handleWill(ws, msg.text);
         return;
@@ -451,6 +455,51 @@ export class Room extends DurableObject<Env> {
     this.writeAt.set(key, now);
     this.room = result.state;
     await this.persistAndBroadcast();
+    return null;
+  }
+
+  // 귓속말(09.1.1, 결정 0066-2): 신원은 소켓 첨부의 playerId 뿐이다 — 메시지에 보낸 사람 seat·id 가 없다(대상 seat 만 있다).
+  private async handleWhisper(ws: WebSocket, to: number, text: string): Promise<void> {
+    const att = this.attachmentOf(ws);
+    if (!att || !this.room) {
+      this.sendTo(ws, { t: "error", code: "BAD_MESSAGE" });
+      return;
+    }
+    const error = await this.applyWhisper(att.playerId, to, text, Date.now());
+    if (error !== null) this.sendRejection(ws, att.playerId, error);
+  }
+
+  // 규칙 함수(sendWhisper)가 검사하고 본문을 RoomState.whispers 에 보관한다(O-20). 받는 사람은 audience 한 번으로 정해 당사자 둘(보낸·받은 사람)과 나머지로 나눈다 —
+  // 본문 줄(k whisper)은 당사자 마스크, 사실 줄(k whispered, 본문 없음)은 나머지 마스크로 같은 seq 에 저장하고 그 집합 그대로 보낸다(복원도 같은 마스크).
+  // persistAndBroadcast 를 부르지 않는다 — 타인에게 state 나 '누가 썼다' 는 신호가 가지 않는다(귓속말 사실 줄 외에는). 연결이 끊긴 대상에게도 저장된다(O-5).
+  private async applyWhisper(playerId: string, to: number, text: string, now: number): Promise<WsErrorCode | null> {
+    if (!this.room) return "BAD_MESSAGE";
+    const result = sendWhisper(this.room, playerId, to, text, now);
+    if (!result.ok) return result.error;
+    this.room = result.state;
+    await this.ctx.storage.put("room", this.room);
+    const room = this.room;
+    const target = room.players.find((p) => p.seat === to);
+    const everyone = audience(room, { k: "chat", ch: "all" });
+    const party = new Set<string>([playerId, ...(target ? [target.id] : [])]);
+    const others = new Set([...everyone].filter((id) => !party.has(id)));
+    const sender = room.players.find((p) => p.id === playerId);
+    if (!sender) return null;
+    const appended = appendWhisperPair(this.chatLog, {
+      seat: sender.seat,
+      to,
+      text: result.record.text,
+      at: now,
+      n: room.day ?? 0,
+      partyMask: seatMask(room.players, party),
+      othersMask: seatMask(room.players, others),
+    });
+    this.chatLog = appended.log;
+    await this.ctx.storage.put(chatKey(appended.body.g), appended.body);
+    await this.ctx.storage.put(chatKey(appended.fact.g), appended.fact);
+    if (appended.evicted.length > 0) await this.deleteChatKeys(appended.evicted.map(chatKey));
+    this.deliver(party, { t: "chat", ...toWire(appended.body) });
+    this.deliver(others, { t: "chat", ...toWire(appended.fact) });
     return null;
   }
 
