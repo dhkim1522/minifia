@@ -175,6 +175,18 @@ describe("BallotReveal — 측정해서 2단계로 (360×560 여유 1)", () => {
     expect(container.querySelector("[data-ballots]")?.getAttribute("data-compact")).toBe("true");
   });
 
+  it("자리가 나중에 줄어들면(알림이 두 줄로 감겨 윗변이 내려감) fitKey 가 바뀔 때 다시 재서 얼굴만으로 줄인다", () => {
+    measure(233, 232, 152);
+    const { container, rerender } = render(<BallotReveal yes={SEVEN_Y} no={SEVEN_N} stage="both" fitKey={131} />);
+    expect(container.querySelector("[data-ballots]")?.getAttribute("data-compact")).toBe("false");
+    measure(190, 232, 152);
+    rerender(<BallotReveal yes={SEVEN_Y} no={SEVEN_N} stage="both" fitKey={172} />);
+    expect(container.querySelector("[data-ballots]")?.getAttribute("data-compact")).toBe("true");
+    measure(233, 232, 152);
+    rerender(<BallotReveal yes={SEVEN_Y} no={SEVEN_N} stage="both" fitKey={131} />);
+    expect(container.querySelector("[data-ballots]")?.getAttribute("data-compact")).toBe("true");
+  });
+
   it("얼굴 원은 compact 에서 32px, 평소 24px", () => {
     const { container, rerender } = render(<BallotReveal yes={[voter(0)]} no={[]} stage="both" />);
     expect(container.querySelector<HTMLElement>(".mv-ballots__face")?.style.width).toBe("24px");

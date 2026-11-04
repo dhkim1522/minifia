@@ -608,16 +608,20 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
 
   // 찬반 묶음 윗변(--mf-ballot-top): 기본은 알림 한 줄 아래(131). 8자 이름 "… 님 처형" 처럼 알림이 두 줄로 감기면 알림 아랫변 + 16 으로 내려간다 — 묶음은 알림과 겹치지 않는다
   const announceText = shownAnnounce?.text;
+  const [ballotTop, setBallotTop] = useState(BALLOT_TOP);
   useLayoutEffect(() => {
     const root = rootRef.current;
     if (!root) return;
     if (ballots === null) {
       root.style.removeProperty("--mf-ballot-top");
+      setBallotTop(BALLOT_TOP);
       return;
     }
     const body = root.querySelector<HTMLElement>("[data-announce] .mf-announce__body");
     const bottom = body ? body.getBoundingClientRect().bottom - root.getBoundingClientRect().top : 0;
-    root.style.setProperty("--mf-ballot-top", `${Math.max(BALLOT_TOP, Math.ceil(bottom + BALLOT_GAP))}px`);
+    const top = Math.max(BALLOT_TOP, Math.ceil(bottom + BALLOT_GAP));
+    root.style.setProperty("--mf-ballot-top", `${top}px`);
+    setBallotTop(top);
   }, [ballots === null, announceText]);
 
   const scene = useMemo(
@@ -674,7 +678,7 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
       <SceneCurtain view={view} offset={offset} reducedMotion={reducedMotion} {...(killFx !== null ? { holdUntil: killFx.at + KILL_HOLD_MS } : {})} />
       <KillFx nonce={killNonce} reducedMotion={reducedMotion} />
       <ResultAnnounce text={shownAnnounce?.text || null} {...(shownAnnounce?.icon !== undefined ? { icon: shownAnnounce.icon } : {})} {...(letter !== null || moment.active ? { placement: "top" as const } : {})} />
-      {ballots !== null ? <BallotReveal yes={ballots.yes} no={ballots.no} stage={moment.stage === "yes" ? "yes" : "both"} instant={moment.instant} reducedMotion={reducedMotion} /> : null}
+      {ballots !== null ? <BallotReveal yes={ballots.yes} no={ballots.no} stage={moment.stage === "yes" ? "yes" : "both"} instant={moment.instant} reducedMotion={reducedMotion} fitKey={ballotTop} /> : null}
       {letter !== null ? <WillLetter key={`${letter.t0}:${letter.seat}`} letter={letter} reducedMotion={reducedMotion} getInputTop={letterInputTop} onLive={setLetterLive} /> : null}
       {policeResult !== null ? (
         <PoliceResultCard

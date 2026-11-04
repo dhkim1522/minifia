@@ -23,6 +23,8 @@ export interface BallotRevealProps {
   /** 처음부터 얼굴만 그린다(측정이 넘침을 알아도 이 값이 켜진다) */
   compact?: boolean;
   reducedMotion?: boolean;
+  /** 자기 영역의 윗변이 바뀔 때마다 바뀌는 값(GameMap 의 --mf-ballot-top). 자식 효과가 부모 효과보다 먼저 돌아 첫 측정이 옛 윗변으로 되므로, 윗변이 내려오면 다시 잰다 */
+  fitKey?: number;
 }
 
 function Face({ voter, size }: { voter: Voter; size: number }) {
@@ -60,7 +62,7 @@ function Group({ side, voters, shown, animate, compact }: { side: "yes" | "no"; 
   );
 }
 
-export function BallotReveal({ yes, no, stage, instant, compact, reducedMotion }: BallotRevealProps) {
+export function BallotReveal({ yes, no, stage, instant, compact, reducedMotion, fitKey }: BallotRevealProps) {
   const ref = useRef<HTMLDivElement>(null);
   const [tight, setTight] = useState(false);
   const small = !!compact || tight;
@@ -70,7 +72,7 @@ export function BallotReveal({ yes, no, stage, instant, compact, reducedMotion }
     const el = ref.current;
     if (!el || small) return;
     if (el.scrollHeight > el.clientHeight) setTight(true);
-  }, [small, yes.length, no.length]);
+  }, [small, yes.length, no.length, fitKey]);
 
   const still = !!instant || !!reducedMotion;
   const showYes = still || stage !== "none";
