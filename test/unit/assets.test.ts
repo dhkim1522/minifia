@@ -21,6 +21,7 @@ import {
   preloadRoleAssets,
   roleArtSrc,
   rolePreloadList,
+  seatColorVar,
 } from "../../src/net/assets";
 
 // node:fs 대신 Vite 의 import.meta.glob 으로 public/ 의 실제 파일 목록을 얻는다.
@@ -46,6 +47,13 @@ describe("그림 URL 헬퍼", () => {
     expect(figureSrc(9)).toEqual(figureSrc(1));
     expect(figureSrc(-1).src).toContain("fig8_girl_tanhat");
     expect(figureSrc(-1)).toEqual(figureSrc(7));
+  });
+
+  it("seatColorVar: 좌석 0~7 → var(--seat-1)~var(--seat-8), 범위 밖은 8칸 돌려 쓴다 (WR-02)", () => {
+    expect(seatColorVar(0)).toBe("var(--seat-1)");
+    expect(seatColorVar(7)).toBe("var(--seat-8)");
+    expect(seatColorVar(8)).toBe("var(--seat-1)");
+    expect(seatColorVar(-1)).toBe("var(--seat-8)");
   });
 
   it("얼굴: /characters/faces/face-{seat % 8}.png (09-05, NIGHT-09)", () => {

@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { act, cleanup, render } from "@testing-library/react";
+import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import "../helpers/singleLineErrors";
 import { installMemoryStorage } from "../helpers/memoryStorage";
@@ -491,6 +491,22 @@ describe("경찰 조사 결과 카드 (NIGHT-09, UI-SPEC 245행)", () => {
     expect(card?.classList.contains("is-mafia")).toBe(false);
     expect(card?.querySelector('[data-icon="check"]')).not.toBeNull();
     expect(card?.querySelector('[data-icon="roleMafia"]')).toBeNull();
+  });
+
+  it("WR-02: 얼굴 그림이 실패하면 대체 원이 좌석 0 은 var(--seat-1), 좌석 5 는 var(--seat-6) 색이다", () => {
+    for (const [target, color] of [
+      [0, "var(--seat-1)"],
+      [5, "var(--seat-6)"],
+    ] as const) {
+      const m = mount(policeNight());
+      m.show(policeMorning([{ n: 1, target, isMafia: false }]));
+      const [card] = cards(m.container);
+      fireEvent.error(card?.querySelector("img") as HTMLImageElement);
+      const dot = cards(m.container)[0]?.querySelector<HTMLElement>("[data-face-fallback] i");
+      expect(dot, `target ${target} 대체 원`).not.toBeNull();
+      expect(dot?.style.background, `target ${target}`).toBe(color);
+      cleanup();
+    }
   });
 
   it("경찰이 그 밤에 안 골랐으면(새 줄 없음) 카드가 없다. 경찰이 그 밤에 당했어도 카드는 받는다", () => {
