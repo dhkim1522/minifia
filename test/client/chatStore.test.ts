@@ -521,3 +521,100 @@ describe("ChatStore: holdCardsUntil·liveCard (09.1-10)", () => {
     expect(store.liveCard("note", 3)?.text).toBe("쪽지");
   });
 });
+
+// 09.1.1-09: 귓속말 줄(결정 0066-2) — 카드가 아닌 새 줄 종류. whisper = 당사자 본문, whispered = 나머지에게 본문 없는 사실
+const whisperFrame = (k: "whisper" | "whispered", from: number, to: number, seq: number, text: string, at: number): ChatLineFrame => ({ t: "chat", ch: "all", seat: from, seq, text, at, k, to });
+
+describe("ChatStore: 귓속말 줄 (09.1.1-09, UI-SPEC B-3)", () => {
+  it("k whisper 프레임은 카드가 아니라 귓속말 줄이다: 보류 없음(revealAt 없음)·seat·to·본문", () => {
+    const store = ready();
+    store.apply(whisperFrame("whisper", 1, 0, 5, "비밀이에요", 1000), 1, 1000);
+    const [line] = store.lines();
+    expect(line).toMatchObject({ kind: "whisper", seat: 1, to: 0, text: "비밀이에요", scope: "all" });
+    expect(line?.card).toBeUndefined();
+    expect(line?.revealAt).toBeUndefined();
+    expect(store.visibleLines("all", 1000)).toHaveLength(1);
+  });
+
+  it("k whispered 프레임은 공개 사실 줄이다: kind system + whisper 아이콘 + seat·to, 본문 없음", () => {
+    const store = ready();
+    store.apply(whisperFrame("whispered", 1, 2, 5, "", 1000), 1, 1000);
+    const [line] = store.lines();
+    expect(line).toMatchObject({ kind: "system", icon: "whisper", seat: 1, to: 2, scope: "all" });
+    expect(line?.card).toBeUndefined();
+    expect(line?.revealAt).toBeUndefined();
+  });
+
+  it("같은 channel·seq·at 의 줄은 한 번만 들어간다(재접속 복원과 라이브가 겹쳐도)", () => {
+    const store = ready();
+    store.apply(whisperFrame("whisper", 1, 0, 5, "비밀", 1000), 1, 1000);
+    store.apply({ t: "chatLog", lines: [{ ch: "all", seat: 1, seq: 5, text: "비밀", at: 1000, k: "whisper", to: 0 }] }, 1, 1100);
+    store.apply(whisperFrame("whisper", 1, 0, 5, "비밀", 1000), 1, 1200);
+    expect(store.lines()).toHaveLength(1);
+  });
+
+  it("복원(chatLog)으로 온 귓속말 줄도 같은 모양이다", () => {
+    const store = ready();
+    store.apply(
+      {
+        t: "chatLog",
+        lines: [
+          { ch: "all", seat: 1, seq: 1, text: "복원 본문", at: 100, k: "whisper", to: 0 },
+          { ch: "all", seat: 2, seq: 2, text: "", at: 200, k: "whispered", to: 3 },
+        ],
+      },
+      1,
+      400,
+    );
+    expect(store.lines().map((l) => [l.kind, l.seat, l.to])).toEqual([
+      ["whisper", 1, 0],
+      ["system", 2, 3],
+    ]);
+  });
+
+  it("liveWhisperIn(내 좌석): 라이브로 받은 본문 줄의 보낸 좌석과 번호 — 받을 때마다 번호가 늘어난다", () => {
+    const store = ready();
+    expect(store.liveWhisperIn(0)).toBeNull();
+    store.apply(whisperFrame("whisper", 1, 0, 1, "하나", 1000), 1, 1000);
+    const first = store.liveWhisperIn(0);
+    expect(first).toMatchObject({ seat: 1 });
+    store.apply(whisperFrame("whisper", 2, 0, 2, "둘", 1001), 1, 1001);
+    const second = store.liveWhisperIn(0);
+    expect(second).toMatchObject({ seat: 2 });
+    expect(second!.nonce).toBeGreaterThan(first!.nonce);
+  });
+
+  it("복원 줄·보낸 줄·사실 줄·같은 줄 다시 받기는 liveWhisperIn 을 만들지 않는다", () => {
+    const store = ready();
+    store.apply({ t: "chatLog", lines: [{ ch: "all", seat: 1, seq: 1, text: "복원", at: 100, k: "whisper", to: 0 }] }, 1, 400);
+    expect(store.liveWhisperIn(0)).toBeNull();
+    store.apply(whisperFrame("whisper", 0, 3, 2, "내가 보냄", 1000), 1, 1000);
+    expect(store.liveWhisperIn(0)).toBeNull();
+    store.apply(whisperFrame("whispered", 2, 3, 3, "", 1001), 1, 1001);
+    expect(store.liveWhisperIn(0)).toBeNull();
+    store.apply(whisperFrame("whisper", 1, 0, 4, "받음", 1002), 1, 1002);
+    const got = store.liveWhisperIn(0);
+    store.apply(whisperFrame("whisper", 1, 0, 4, "받음", 1002), 1, 1003);
+    expect(store.liveWhisperIn(0)).toEqual(got);
+  });
+
+  it("복원으로 먼저 들어온 줄이 뒤늦게 라이브로 또 와도(중복) 받음 신호는 없다", () => {
+    const store = ready();
+    store.apply({ t: "chatLog", lines: [{ ch: "all", seat: 1, seq: 7, text: "복원", at: 100, k: "whisper", to: 0 }] }, 1, 400);
+    store.apply(whisperFrame("whisper", 1, 0, 7, "복원", 100), 1, 500);
+    expect(store.liveWhisperIn(0)).toBeNull();
+  });
+
+  it("reset 이 받음 신호를 지운다", () => {
+    const store = ready();
+    store.apply(whisperFrame("whisper", 1, 0, 1, "하나", 1000), 1, 1000);
+    store.reset();
+    expect(store.liveWhisperIn(0)).toBeNull();
+  });
+
+  it("카드(will·note)는 이전처럼 보류 규칙을 받는다 — 귓속말 분기가 카드를 삼키지 않는다", () => {
+    const store = ready();
+    store.apply({ t: "chat", ch: "all", seat: 3, seq: 1, text: "유언", at: 900, k: "will" }, 1, 1000);
+    expect(store.lines()[0]).toMatchObject({ kind: "card", card: "will", revealAt: 3800 });
+  });
+});
