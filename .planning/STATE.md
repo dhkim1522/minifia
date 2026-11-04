@@ -5,16 +5,16 @@ milestone_name: 같은 공간
 current_phase: 9
 current_phase_name: 밤과 아침
 status: verifying
-stopped_at: Completed 09.1.1-02-PLAN.md
-last_updated: "2026-11-04T17:31:34.329Z"
+stopped_at: Completed 09.1.1-03-PLAN.md
+last_updated: "2026-11-04T17:47:16.634Z"
 last_activity: 2026-11-03
 last_activity_desc: Phase 9 execution started
-state_head: 17b045363b43e1f10c88b5c98b4bc0ee8b37cb8d
+state_head: 014b1994392d53f1fd3212e325b8303a88da4282
 progress:
   total_phases: 9
   completed_phases: 3
   total_plans: 137
-  completed_plans: 122
+  completed_plans: 123
   percent: 33
 ---
 
@@ -182,6 +182,7 @@ Progress: [███░░░░░░░] 33% (3/7 phases)
 | Phase 09.1 P12 | 80min | 3 tasks | 15 files |
 | Phase 09.1.1 P01 | 35min | 3 tasks | 12 files |
 | Phase 09.1.1 P02 | 50min | 3 tasks | 14 files |
+| Phase 09.1.1 P03 | 55min | 3 tasks | 24 files |
 
 ## Accumulated Context
 
@@ -372,6 +373,7 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 09.1]: 결정 0064: 09.1 계획 값(M-3~M-13)·유언 50자·10페이즈 감정표현 몸 동작만
 - [Phase 09.1.1]: 09.1.1-01: 주장 말 바꿈은 직전 값 기준(O-1), 이력 badgeLog 는 서버 전용(O-20), 와이어·상태 이름은 badge/badgeSwapped/badgeLog
 - [Phase 09.1.1]: 09.1.1-02: 귓속말은 본문·사실 두 레코드를 같은 all 채널 seq 로 저장하고 당사자/나머지 마스크로 나눈다. 거절은 단계 외 모두 BAD_MESSAGE, 본문은 RoomState.whispers(서버 전용)에 보관
+- [Phase 09.1.1]: 09.1.1-03: 찬반 기록은 마감 훅이 verdict.ballots 로 남기고 처형 단계 view 에서만 공개, 처형 단계 5600ms(판결 앞머리 600), ballots 카드는 보관 상한 면제·복원 최근 3장 (O-6~O-8)
 
 ### Pending Todos
 
@@ -410,8 +412,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-04T17:31:33.785Z
-Stopped at: Completed 09.1.1-02-PLAN.md
+Last session: 2026-11-04T17:47:16.083Z
+Stopped at: Completed 09.1.1-03-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
