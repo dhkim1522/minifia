@@ -5,6 +5,7 @@
 // 순수 모듈이다 — 입력 상태는 바꾸지 않는다.
 import { isAlive } from "./alive";
 import { majorityOf, nominationStepMs } from "./nomination";
+import { runoffStepMs } from "./runoff";
 import { MORNING_MAX_MS, MORNING_MS, MORNING_NOTE_MS, MORNING_VICTIM_MS, MORNING_WILL_MS, PHASE_DEFS } from "./phases";
 import type { RoomState } from "./room";
 
@@ -34,6 +35,7 @@ export function morningMsOf(state: RoomState): number {
 export function phaseDurationOf(state: RoomState): number | null {
   if (state.phase === "morning") return morningMsOf(state);
   if (state.phase === "nomination" && state.pickTurn !== undefined) return nominationStepMs(state);
+  if (state.phase === "runoff" && state.runoff !== undefined) return runoffStepMs(state);
   return PHASE_DEFS[state.phase].durationMs;
 }
 
@@ -81,11 +83,11 @@ export function endReached(state: RoomState): boolean {
  * 날짜별 기록(voteLog)과 그 밖의 키는 그대로 둔다.
  */
 export function enterDiscussion(state: RoomState): RoomState {
-  const { verdict: _verdict, execution: _execution, pickTurn: _pickTurn, ...rest } = state;
+  const { verdict: _verdict, execution: _execution, pickTurn: _pickTurn, runoff: _runoff, ...rest } = state;
   return {
     ...rest,
     players: state.players.map((p) => {
-      const { nominate: _nominate, verdictVote: _verdictVote, endVote: _endVote, ...kept } = p;
+      const { nominate: _nominate, verdictVote: _verdictVote, endVote: _endVote, runoffVote: _runoffVote, ...kept } = p;
       return kept;
     }),
   };

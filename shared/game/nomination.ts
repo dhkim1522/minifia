@@ -10,6 +10,7 @@ import { NOMINATION_END_MS, NOMINATION_GATHER_MS, PHASE_DEFS, PICK_GAP_MS, PICK_
 import type { PickTurn, RoomState } from "./room";
 import type { DeadlineResult } from "./tick";
 import type { VoteError } from "./discussion";
+import { startRunoff } from "./runoff";
 
 /**
  * 산 사람 수의 과반 수 = ⌊n ÷ 2⌋ + 1 (2명 → 2, 5명 → 3, 8명 → 5). 지목 과반 표시와 토론 끝내기 과반이 이 한 곳을 쓴다.
@@ -36,12 +37,14 @@ export function pointLinesOf(state: RoomState): PointLine[] {
  *   0표                    → votes [] · leader 없음
  *   최다 득표가 한 명      → 그 사람이 leader
  *   최다 동률              → leader 없음 (난수로 고르지 않는다)
+ * leaders 는 최다 득표자 전원 좌석 오름차순이다(0표면 빈 배열) — 정확히 둘이면 동점 결선(결정 0066-4)이다.
  * majority 는 지금 산 사람 수의 과반 수(majorityOf)다 — 화면 표시용이고 판정(변론자 결정)은 최다 한 명이면 과반이 아니어도 난다.
  */
 export function tallyPoints(state: RoomState): {
   votes: PointLine[];
   counts: Record<number, number>;
   leader?: number;
+  leaders: number[];
   majority: number;
 } {
   const votes = pointLinesOf(state);
@@ -50,18 +53,19 @@ export function tallyPoints(state: RoomState): {
   const top = Math.max(0, ...Object.values(counts));
   const leaders = Object.entries(counts)
     .filter(([, count]) => count === top && top > 0)
-    .map(([seat]) => Number(seat));
+    .map(([seat]) => Number(seat))
+    .sort((a, b) => a - b);
   const majority = majorityOf(state.players.filter(isAlive).length);
-  return leaders.length === 1 ? { votes, counts, leader: leaders[0]!, majority } : { votes, counts, majority };
+  return leaders.length === 1 ? { votes, counts, leader: leaders[0]!, leaders, majority } : { votes, counts, leaders, majority };
 }
 
 /**
  * nomination 마감 훅(결정 0060-3, DAY-05). 그날 voteLog 줄 {n, exec:{0,0,false}, cand:{votes, candidate?}} 을 항상 쌓는다 —
  * 찬반 마감(resolveVerdict)이 같은 줄의 exec 를 채운다. 최다 한 명이면 verdict {passed:false, candidate} 로 표의 기본 다음 단계(defense),
- * 동률·0표면 next "night" 다. 집계 직후 모든 플레이어의 nominate 키를 구조 분해로 지운다.
+ * 동률·0표면 next "night" 다. 단 최다 득표자가 정확히 둘이면 동점 결선 runoff 로 간다(결정 0066-4, 그날 줄은 candidate 없이 쌓고 결선이 채운다). 집계 직후 모든 플레이어의 nominate 키를 구조 분해로 지운다.
  */
 export function resolveNomination(state: RoomState): DeadlineResult {
-  const { votes, leader } = tallyPoints(state);
+  const { votes, leader, leaders } = tallyPoints(state);
   const players = state.players.map((p) => {
     const { nominate: _nominate, ...kept } = p;
     return kept;
@@ -78,6 +82,7 @@ export function resolveNomination(state: RoomState): DeadlineResult {
     voteLog: [...(state.voteLog ?? []), line],
     verdict: leader === undefined ? { passed: false } : { passed: false, candidate: leader },
   };
+  if (leaders.length === 2) return { state: startRunoff(next, [leaders[0]!, leaders[1]!]), stay: false, next: "runoff" };
   return leader === undefined ? { state: next, stay: false, next: "night" } : { state: next, stay: false };
 }
 

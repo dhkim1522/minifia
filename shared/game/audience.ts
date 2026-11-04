@@ -22,6 +22,7 @@ export const CHAT_PHASES: ReadonlySet<PhaseId> = new Set<PhaseId>([
   "dayAnnounce",
   "discussion",
   "nomination",
+  "runoff",
   "defense",
   "verdict",
   "execution",

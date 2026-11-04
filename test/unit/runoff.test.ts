@@ -41,7 +41,7 @@ describe("지목 집계 분기 (결정 0066-4)", () => {
   });
 
   it("최다가 셋 이상 동점이거나 0표면 runoff 없이 night(처형 없음)", () => {
-    for (const points of [{ 0: 1, 1: 0, 2: 3, 3: 2, 4: 5, 5: 4 }, {}, { 0: 3, 1: 3, 2: 4, 3: 4, 4: 5, 5: 5 }]) {
+    for (const points of [{ 0: 1, 1: 0, 2: 3, 3: 2, 4: 5, 5: 4 }, {}, { 0: 1, 1: 2, 2: 3 }] as Array<Record<number, number>>) {
       const nominated = castPoints(startedAt(6, 3, "nomination"), points);
       const s = tick(nominated, nominated.phaseEndsAt!, rand);
       expect(s.phase).toBe("night");

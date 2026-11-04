@@ -30,6 +30,7 @@ import { noExecutionOf } from "./execution";
 import { MAP_PHASES } from "./movement";
 import { confirmedTarget } from "./night";
 import { pointLinesOf, turnViewOf } from "./nomination";
+import { runoffVotersOf, runoffViewOf } from "./runoff";
 import { PHASE_DEFS } from "./phases";
 import { rolesInPlay } from "./roles";
 import { hostOf } from "./room";
@@ -45,6 +46,7 @@ const DAY_PHASES: ReadonlySet<PhaseId> = new Set([
   "dayAnnounce",
   "discussion",
   "nomination",
+  "runoff",
   "verdict",
   "defense",
   "execution",
@@ -83,6 +85,11 @@ function buildDay(state: RoomState): DayView {
   if (state.phase === "nomination") {
     const turn = turnViewOf(state);
     if (turn !== undefined) day.turn = turn;
+  }
+  // 동점 결선(결정 0066-4)의 공개 값은 모두에게 같다 — 마감 전엔 던진 좌석(voted)뿐, 마감 뒤엔 득표 수(tally)뿐이다. 개인 선택은 me.ballot 으로 본인에게만(L20).
+  if (state.phase === "runoff") {
+    const runoff = runoffViewOf(state);
+    if (runoff !== undefined) day.runoff = runoff;
   }
   // 후보·처형 발표는 모두에게 같다(공개 정보). 직업은 싣지 않는다 — 필드별로 복사한다(D-09).
   if (
@@ -240,6 +247,17 @@ export function buildView(state: RoomState, playerId: string, now: number): Room
   // 찬반 값은 본인에게만(결정 0053·0060-4, T-08-02) — verdict 단계에서 유권자(변론자를 뺀 산 사람)인 본인이 던진 값이 있을 때만 키를 만든다. 남의 값은 어떤 키로도 싣지 않는다.
   if (state.phase === "verdict" && me.verdictVote !== undefined && verdictVotersOf(state).some((p) => p.id === me.id)) {
     myInfo.verdictVote = me.verdictVote;
+  }
+
+  // 결선 선택은 본인에게만(결정 0066-4, L20) — runoff 의 투표 창·결과 단계에서 산 유권자 본인이 던진 값이 있을 때만 키를 만든다. 후보·유령·미투표자에는 키가 없다.
+  if (
+    state.phase === "runoff" &&
+    state.runoff !== undefined &&
+    state.runoff.step >= 1 &&
+    me.runoffVote !== undefined &&
+    runoffVotersOf(state).some((p) => p.id === me.id)
+  ) {
+    myInfo.ballot = me.runoffVote;
   }
 
   // 동료가 고른 대상은 밤에 살아 있는 마피아에게만, 대상 seat 집합으로만(누가 골랐는지는 없다, D-07). 탈락한 마피아는 allies 만 받는다(A3).

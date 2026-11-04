@@ -40,6 +40,7 @@ export const PHASE_SCENE: Readonly<Record<PhaseId, SceneId>> = Object.freeze({
   discussion: "day",
   night: "night",
   morning: "morning",
+  runoff: "dusk",
   defense: "dusk",
   execution: "dusk",
   nomination: "dusk", // 8페이즈: defense 와 같은 값

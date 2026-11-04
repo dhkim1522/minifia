@@ -59,6 +59,8 @@ export interface Player {
   nominate?: number;
   /** 찬반 단계의 본인 찬반(찬성 true). 집계 직후 resolveVerdict 가 키째 지우고 enterDiscussion 이 한 번 더 지운다 — 익명을 데이터가 없다는 사실로 지킨다. */
   verdictVote?: boolean;
+  /** 서버 전용(결정 0066-4). 동점 결선에서 본인이 고른 후보 좌석. castRunoffVote 가 쓰고 resolveRunoff·enterDiscussion 이 키째 지운다. 마감 전에는 본인 view(me.ballot)로만 간다. */
+  runoffVote?: number;
   /** 토론 끝내기를 누른 표시. 누르면 true, 취소하면 키째 지운다. 누가 눌렀는지는 서버 전용이고 enterDiscussion 이 다음 낮 시작에 지운다. */
   endVote?: true;
   /** 서버 전용(결정 0061-10). 본인이 남긴 유언 — saveWill(09-12)만 쓰고, 사후에도 바꿀 수 없다. 아침에 서버가 채팅 카드로 만들어 보내며 view 의 me.will 로 산 본인에게만 간다. */
@@ -90,6 +92,16 @@ export interface PickTurn {
   doneAt?: number;
   /** 시간 안에 못 골라 기권으로 확정됐다. */
   skip?: true;
+}
+
+/**
+ * 서버 전용(결정 0066-4). 동점 결선 진행. resolveNomination(startRunoff)이 만들고 resolveRunoff·enterDiscussion 이 지운다.
+ * cand: 후보 좌석 둘(낮은 좌석부터) · step: 0 앞머리, 1 투표, 2 결과 · tally: step 2 에서 후보 순서 득표 수.
+ */
+export interface RunoffState {
+  cand: [number, number];
+  step: 0 | 1 | 2;
+  tally?: [number, number];
 }
 
 /** 서버 전용(결정 0066-2, O-20). 귓속말 본문 보관 한 줄 — 판이 끝날 때까지 쌓이고 어떤 view·프레임에도 싣지 않는다(11페이즈 공개 입력). */
@@ -152,6 +164,8 @@ export interface RoomState {
   botPlan?: BotPlan;
   /** 서버 전용(결정 0063-1). 지목 차례 진행. enterNomination 이 만들고 resolveNomination·enterDiscussion 이 지운다. 공개 모양은 view 의 day.turn(필드별 복사). i: -1 모이는 중 · 0..order.length-1 차례 · order.length 끝 알림. */
   pickTurn?: PickTurn;
+  /** 서버 전용(결정 0066-4). 동점 결선 진행. resolveNomination 이 세우고 resolveRunoff·enterDiscussion 이 지운다. 공개 모양은 view 의 day.runoff(필드별 복사). */
+  runoff?: RunoffState;
 }
 
 export type CreateRoomStateResult = { ok: true; state: RoomState } | { ok: false; error: "NICKNAME_INVALID" };

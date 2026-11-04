@@ -14,6 +14,7 @@ export const MAP_PHASES: ReadonlySet<PhaseId> = new Set<PhaseId>([
   "dayAnnounce",
   "discussion",
   "nomination",
+  "runoff",
   "defense",
   "verdict",
   "execution",

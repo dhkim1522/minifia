@@ -25,11 +25,11 @@ export const MAX_BODY_BYTES = 1024; // HTTP 본문 상한
 
 // 낮 두 단계(dayAnnounce·discussion)와 밤·아침(night·morning)은 단계 표(shared/game/phases.ts)의 한 줄씩이다.
 // discussion 다음에 지목(nomination) → 최후 변론(defense) → 찬반(verdict) → 처형(execution)이 이어지고(결정 0060),
-// 지목이 동률·0표면 바로 night 로 간다(분기는 shared/game/tick.ts). 종료 단계 ended 는 마감이 없다.
+// 지목이 동률·0표면 바로 night 로 가고, 최다가 정확히 둘 동점이면 동점 결선 runoff 를 거친다(결정 0066-4, 분기는 shared/game/tick.ts). 종료 단계 ended 는 마감이 없다.
 // 순차 직업 주장 단계(claim)는 7페이즈에서 없어졌다 — 낮 시작 발표 다음이 바로 자유 채팅 토론이다(CHAT-06). 옛 공개 연출 단계도 없다(결정 0027).
 export type PhaseId =
   | "lobby" | "assigning" | "roleReveal" | "dayAnnounce" | "discussion"
-  | "nomination" | "defense" | "verdict" | "execution"
+  | "nomination" | "runoff" | "defense" | "verdict" | "execution"
   | "night" | "morning" | "ended"; // 8페이즈(결정 0060): 지목 15초 → 변론 20초 → 찬반 10초 → 처형 5.6초(결정 0066-7). 옛 처형 여부·후보 선택·후보 공개 단계는 08-22 에 지웠다
 
 // ---- 밤·아침 계약(3페이즈) ----
@@ -134,6 +134,18 @@ export interface DayView {
   verdict?: { yes: number; no: number; passed: boolean }; // execution 단계에서, 찬반 결과 수(개인 값 없음)
   ballots?: { yes: number[]; no: number[] }; // execution 단계에서만, 찬성·반대한 좌석(오름차순, 변론자·미투표자 제외 — 결정 0066-3). 찬반 진행 중에는 없다
   turn?: PickTurnView; // nomination 단계에서만, 모두에게 같은 차례 정보(결정 0063-1, L14)
+  runoff?: RunoffView; // runoff 단계에서만, 모두에게 같은 동점 결선 정보(결정 0066-4, L20)
+}
+
+/**
+ * 공개 동점 결선(결정 0066-4). cand 는 후보 좌석 둘(낮은 좌석부터), step 0 앞머리 · 1 투표 · 2 결과.
+ * 마감 전(step 0·1)에는 던진 유권자 좌석(voted)만, 마감 뒤(step 2)에는 후보 순서 득표 수(tally)만 싣는다. 개인 선택은 어떤 키로도 없다(본인은 me.ballot).
+ */
+export interface RunoffView {
+  cand: [number, number];
+  step: 0 | 1 | 2;
+  voted?: number[]; // step 1 에서만, 던진 유권자 좌석(오름차순, 값 없음)
+  tally?: [number, number]; // step 2 에서만, 후보 순서 득표 수
 }
 
 /** 공개 지목 차례(결정 0063-1). 서버 전용 PickTurn 과 같은 모양이지만 view 가 필드별로 복사한 값이고 역할·연결과 무관하다. */
@@ -256,6 +268,7 @@ export interface MyInfo {
   nightSure?: number; // 밤, 산 마피아 본인에게만: 전원 일치로 확정된 대상 seat(결정 0061-7). 채우는 일은 09-07 view
   will?: string; // 산 본인에게만: 본인이 남긴 유언(결정 0061-10). 지도 단계에서 저장된 값이 있을 때만(09-12)
   note?: string; // 밤, 산 마피아에게만: 남긴 쪽지(결정 0061-9). 산 마피아끼리 같은 글(09-12)
+  ballot?: number; // runoff step 1·2 에서 산 유권자 본인이 고른 후보 좌석(본인에게만, 결정 0066-4). 후보·유령·미투표자에는 키가 없다
   verdictVote?: boolean; // verdict 단계에서 본인이 던진 찬반(본인에게만, 남의 값은 어떤 키로도 싣지 않는다, 8페이즈 결정 0060)
 }
 export interface RoomView {

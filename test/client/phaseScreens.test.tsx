@@ -353,6 +353,7 @@ describe("단계 안내 aria-live · 단계 전환 (UI-SPEC 접근성·Motion)",
       defense: true,
       execution: true,
       nomination: true,
+      runoff: true,
       verdict: true,
       ended: true,
     };

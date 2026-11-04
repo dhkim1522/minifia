@@ -31,6 +31,7 @@ import { resetToLobby, setBotCount, setBotVote, setTestRole, skipPhase } from ".
 import type { RoleId } from "../shared/game/roles";
 import { nextWakeAt, tick } from "../shared/game/tick";
 import { castTurnPoint, turnStartOf } from "../shared/game/nomination";
+import { castRunoffVote } from "../shared/game/runoff";
 import { castVerdict } from "../shared/game/verdict";
 import { endReached, toggleEnd } from "../shared/game/discussion";
 import { MAP_PHASES, canMove } from "../shared/game/movement";
@@ -579,11 +580,31 @@ export class Room extends DurableObject<Env> {
   // 마감이 앞당겨지므로 알람과 봇 계획을 옮긴다(reschedule).
   private async applyPoint(playerId: string, target: number, now: number): Promise<WsErrorCode | null> {
     if (!this.room) return "BAD_MESSAGE";
+    if (this.room.phase === "runoff") return this.applyRunoffVote(playerId, target, now);
     const result = castTurnPoint(this.room, playerId, target, now);
     if (!result.ok) return result.error;
     this.room = result.state;
     await this.persistAndBroadcast();
     await this.reschedule();
+    return null;
+  }
+
+  // 동점 결선(결정 0066-4): 메시지는 기존 point 를 단계별로 분기한다. 마감을 건드리지 않는다(5초를 다 채운다) — reschedule 이 필요 없다.
+  // 방송 규율(applyVerdict 와 같다): 그 사람의 첫 표는 day.runoff.voted(던진 좌석 목록)가 모두에게 바뀌므로 전원이 각자 view 를 받는다.
+  // 이미 던진 사람이 값을 바꾸면 공개 값은 그대로이고 바뀌는 것은 본인 값(me.ballot)뿐이다 — 전원에게 보내면 '누군가 마음을 바꿨다' 는 타이밍이 샌다.
+  private async applyRunoffVote(playerId: string, target: number, now: number): Promise<WsErrorCode | null> {
+    if (!this.room) return "BAD_MESSAGE";
+    const castBefore = this.room.players.find((p) => p.id === playerId)?.runoffVote !== undefined;
+    const result = castRunoffVote(this.room, playerId, target, now);
+    if (!result.ok) return result.error;
+    if (result.state === this.room) return null;
+    this.room = result.state;
+    if (!castBefore) {
+      await this.persistAndBroadcast();
+      return null;
+    }
+    await this.ctx.storage.put("room", this.room);
+    this.sendViewTo([playerId]);
     return null;
   }
 

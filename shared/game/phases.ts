@@ -2,7 +2,7 @@
 // 이후 페이즈는 이 표에 행을 더하는 방식으로만 단계를 늘린다(D-01).
 // 역할 확인(roleReveal) 뒤에는 낮 두 단계(dayAnnounce → discussion)가 돈다. 순차 주장 단계는 7페이즈에서 없어졌다(CHAT-06).
 // 8페이즈 낮 흐름(결정 0060-1, DAY-07, 지목은 순차 — 결정 0063-1): discussion → nomination → defense → verdict → execution → night → morning → dayAnnounce.
-// 승패가 나면 execution·morning 의 마감에서 ended(마감 없음)로 간다. 분기(지목 동률·0표 → night 등)는 tick.ts 의 ON_DEADLINE 이
+// 승패가 나면 execution·morning 의 마감에서 ended(마감 없음)로 간다. 지목 동점(최다 정확히 둘) → runoff → defense | night 이다. 분기(지목 동률·0표 → night 등)는 tick.ts 의 ON_DEADLINE 이
 // next 로 정한다 — 이 표의 next 는 "기본 다음 단계" 데이터일 뿐이다.
 // 단계 길이는 이 파일 한 곳에서만 정한다(6페이즈 플레이테스트가 여기만 고친다).
 // 표는 데이터만 둔다 — 진입 전이(훅)는 tick.ts 의 ON_ENTER 표에 있다.
@@ -43,6 +43,11 @@ export function nominationMaxMs(turns: number): number {
   return NOMINATION_GATHER_MS + turns * (PICK_TURN_MS + PICK_GAP_MS) + NOMINATION_END_MS;
 }
 
+// 동점 결선(결정 0066-4). 앞머리 → 투표 → 결과가 서버 시각 사슬이다. 플레이테스트 뒤 이 세 줄만 고친다.
+export const RUNOFF_INTRO_MS = 1_000; // 결정 0066-4 · 플레이테스트 뒤 이 줄만 고친다 — 후보 둘이 무대에 서는 앞머리
+export const RUNOFF_VOTE_MS = 5_000; // 결정 0066-4 · 플레이테스트 뒤 이 줄만 고친다 — 후보가 아닌 산 사람이 둘 중 하나를 고르는 창
+export const RUNOFF_END_MS = 1_500; // 결정 0066-4 · 플레이테스트 뒤 이 줄만 고친다 — 득표 수를 보여 주는 결과
+
 export const VERDICT_MS = 10_000; // 찬반(DAY-06, 결정 0060-1·0060-4) — 조기 종료 없이 마감까지
 
 export const PHASE_DEFS: Readonly<Record<PhaseId, PhaseDef>> = Object.freeze({
@@ -58,5 +63,6 @@ export const PHASE_DEFS: Readonly<Record<PhaseId, PhaseDef>> = Object.freeze({
   ended: Object.freeze({ durationMs: null, next: null, revealsOwnRole: true }), // 마감이 없다 — 방 만료가 끝낸다
   // 8페이즈 단계(결정 0060): discussion.next 가 nomination 이다. 옛 처형 여부·후보 선택·후보 공개 행은 08-22 에 지웠다.
   nomination: Object.freeze({ durationMs: NOMINATION_GATHER_MS, next: "defense", revealsOwnRole: true }), // 지목 진입 길이 = 모이기, 그 뒤 길이는 차례 사슬 nominationStepMs. 동률·0표면 훅이 night 로
+  runoff: Object.freeze({ durationMs: RUNOFF_INTRO_MS, next: "defense", revealsOwnRole: true }), // 지목 동점(최다 정확히 둘) 결선 — 진입 길이 = 앞머리, 그 뒤 길이는 runoffStepMs. 결선도 동점이면 훅이 night 로
   verdict: Object.freeze({ durationMs: VERDICT_MS, next: "execution", revealsOwnRole: true }),
 });
