@@ -307,3 +307,86 @@ describe("찬반 기록 CSS 규칙 (09.1.1-12)", () => {
     expect(body(".mv-ballots__head")).toMatch(/height:\s*28px/);
   });
 });
+
+// 09.1.1-15: 마지막 3인 한마디 칩 시트·인용 카드 CSS 정적 검사 (UI-SPEC E-2·E-4, "Color"·"Typography"·"접근성 · 모션 · 입력")
+describe("마지막 3인 CSS 규칙 (09.1.1-15)", () => {
+  const V2 = readFileSync(new URL("../../src/styles/v2.css", import.meta.url), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+  const rules = [...V2.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({ selector: (m[1] ?? "").trim(), body: m[2] ?? "" }));
+  const NEW = rules.filter((r) => /(mv-speak|mv-quote)/.test(r.selector));
+  const body = (sel: string) => NEW.find((r) => r.selector === sel)?.body ?? "";
+  const tokenPx = (name: string): number => Number(new RegExp(`${name}:\\s*(\\d+)px`).exec(css)?.[1]);
+
+  it("새 규칙이 있다(시트·칩·인용 카드, 4곳 이상)", () => {
+    for (const sel of [".mv-speak-sheet", ".mv-speak-chip", ".mv-quote", ".mv-quote.is-on"]) expect(NEW.some((r) => r.selector === sel), sel).toBe(true);
+    expect((V2.match(/mv-speak|mv-quote/g) ?? []).length).toBeGreaterThanOrEqual(4);
+  });
+
+  it("hex·rgb 색 리터럴이 없다", () => {
+    for (const r of NEW) {
+      expect(r.body, r.selector).not.toMatch(/#[0-9a-fA-F]{3,8}\b/);
+      expect(r.body, r.selector).not.toMatch(/\brgba?\(/);
+    }
+  });
+
+  it("진홍·놋쇠 등 의미 색 변수가 없다 — 진홍은 알약 숫자·막대의 data-turn-tone 기존 규칙만, 여기는 night/gray 뿐", () => {
+    for (const r of NEW) {
+      expect(r.body, r.selector).not.toMatch(/--(crimson|brass|cream|green|amber|felt)-/);
+      for (const m of r.body.matchAll(/var\(--([a-z0-9-]+)\)/g)) {
+        const name = m[1] ?? "";
+        if (/^(space|radius|tap|control|font|shadow|dur|ease|z|mf)-?/.test(name)) continue;
+        expect(name, `${r.selector}: --${name}`).toMatch(/^(night|gray)/);
+      }
+    }
+  });
+
+  it("글자 크기는 16px 한 가지(14 미만 없음)", () => {
+    for (const r of NEW) for (const m of r.body.matchAll(/font-size:\s*([^;]+);/g)) expect((m[1] ?? "").trim(), r.selector).toBe("16px");
+    expect(body(".mv-speak-chip")).toMatch(/font-size:\s*16px/);
+    expect(body(".mv-quote")).toMatch(/font-size:\s*16px; line-height: 1\.5; font-weight: 700/);
+  });
+
+  it("인용 카드: 테두리 1.5px gray-100, 면 night-800 92%, radius-lg, 안쪽 8 16, 두 줄까지(keep-all·anywhere), 누를 수 없다", () => {
+    const q = body(".mv-quote");
+    expect(q).toMatch(/border:\s*1\.5px solid var\(--gray-100\)/);
+    expect(q).toMatch(/background:\s*color-mix\(in srgb, var\(--night-800\) 92%, transparent\)/);
+    expect(q).toMatch(/border-radius:\s*var\(--radius-lg\)/);
+    expect(q).toMatch(/padding:\s*var\(--space-sm\) var\(--space-md\)/);
+    expect(q).toMatch(/color:\s*var\(--gray-50\)/);
+    expect(q).toMatch(/word-break:\s*keep-all/);
+    expect(q).toMatch(/overflow-wrap:\s*anywhere/);
+    expect(q).toMatch(/-webkit-line-clamp:\s*2/);
+    expect(q).toMatch(/pointer-events:\s*none/);
+    expect(q).toMatch(/transition:\s*opacity var\(--dur-med\)/);
+  });
+
+  it("한마디 시트: 패널 높이(--mf-panel-h)와 같은 높이, 면은 패널과 같은 night-800 97%, 칩 높이 44·좌우 16·사이 8", () => {
+    const sheet = body(".mv-speak-sheet");
+    expect(sheet).toMatch(/height:\s*var\(--mf-panel-h/);
+    expect(sheet).toMatch(/background:\s*color-mix\(in srgb, var\(--night-800\) 97%, transparent\)/);
+    expect(sheet).toMatch(/flex-wrap:\s*wrap/);
+    expect(sheet).toMatch(/gap:\s*var\(--space-sm\)/);
+    expect(sheet).toMatch(/padding:\s*12px var\(--space-md\)/);
+    const chip = body(".mv-speak-chip");
+    expect(chip).toMatch(/min-height:\s*var\(--tap-min\)/);
+    expect(chip).toMatch(/padding:\s*0 var\(--space-md\)/);
+  });
+
+  it("칩 3줄 + 안쪽이 패널 188 안에 들어간다: 44×3 + 8×2 + 12×2 = 172 ≤ 188 (토큰 값으로 계산)", () => {
+    const tap = tokenPx("--tap-min");
+    const gap = tokenPx("--space-sm");
+    expect(tap).toBe(44);
+    expect(gap).toBe(8);
+    const rows = 3;
+    const inner = 12 * 2;
+    const total = tap * rows + gap * (rows - 1) + inner;
+    expect(total).toBe(172);
+    expect(total).toBeLessThanOrEqual(188);
+  });
+
+  it("모션 줄이기: 시트에는 애니메이션이 없고 인용 카드 페이드는 transition: none, 이름표 깜빡임은 gray-100 2px 고정 테두리", () => {
+    for (const r of NEW) expect(r.body, r.selector).not.toMatch(/animation/);
+    const reduce = [...readFileSync(new URL("../../src/styles/v2.css", import.meta.url), "utf8").matchAll(/@media \(prefers-reduced-motion: reduce\)\s*\{([\s\S]*?)\n\}|@media \(prefers-reduced-motion: reduce\)\s*\{([^{}]*\{[^{}]*\}\s*)+\}/g)].map((m) => m[0]).join("\n");
+    expect(reduce).toMatch(/\.mv-quote\s*\{\s*transition:\s*none/);
+    expect(reduce).toMatch(/\.mv-tag\.is-blink\s*\{[^}]*box-shadow:\s*inset 0 0 0 2px var\(--gray-100\)/);
+  });
+});
