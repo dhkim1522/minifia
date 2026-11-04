@@ -161,7 +161,7 @@ describe("장면 전환 막 — 공개 마감 420ms 전 덮기 → 다음 단계
     const { container, rerender } = render(<SceneCurtain view={curtainView({ phase: "nomination", turn: 5, endsIn: 1000, points: [{ seat: 1, target: 2 }, { seat: 2, target: 3 }] })} offset={0} reducedMotion={false} />);
     advance(2000);
     expect(curtain(container)).toBeNull();
-    rerender(<SceneCurtain view={curtainView({ phase: "nomination", turn: "end", endsIn: 2000, points: [{ seat: 1, target: 2 }, { seat: 2, target: 3 }] })} offset={0} reducedMotion={false} />);
+    rerender(<SceneCurtain view={curtainView({ phase: "nomination", turn: "end", endsIn: 4000, points: [{ seat: 1, target: 2 }, { seat: 2, target: 3 }] })} offset={0} reducedMotion={false} />);
     advance(1579);
     expect(curtain(container)).toBeNull();
     advance(1);

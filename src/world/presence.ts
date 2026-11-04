@@ -6,7 +6,7 @@ import { isAlive } from "../../shared/game/alive";
 import { STAGE_SPOT, UNIT } from "../../shared/game/map";
 import type { PhaseId, RoomView } from "../../shared/protocol";
 import { GHOST_FADE_END_MS, GHOST_RISE_MS, pointsTally } from "../game/dayView";
-import { GATHER_CENTER, ZOOM_MAJORITY, ZOOM_MIN_STAGE_H } from "./camera";
+import { GATHER_CENTER } from "./camera";
 
 /** 렌더러가 읽는 조명 단계(UI-SPEC 단계 조명). 렌더러의 LightingPhase 확장은 08-10 이 한다 */
 export type LightingStage = "talk" | "vote" | "trial" | "night" | "nightCitizen" | "nightGhost" | "morning";
@@ -78,13 +78,12 @@ const FIXED_PHASES: ReadonlySet<PhaseId> = new Set<PhaseId>(["nomination", "defe
 
 /**
  * 카메라 구도(UI-SPEC 카메라 표): 지목·변론·찬반·처형은 모이는 자리 가운데 고정, 그 밖(낮 시작·토론·밤·아침·로비)은 따라가기.
- * 확대 1.08 은 지목 과반이고 스테이지 높이(px)가 360 이상일 때만 — 모자라면 확대 없이 실내등과 도장만.
+ * 09.1(M-4): 지목은 배지 숫자만이다 — 과반이어도 확대하지 않는다(과반 확대 상수는 camera.ts 에 그대로 있다).
+ * stageH 인자는 호출부 모양을 지키려 남겨 두었다.
  */
-export function cameraModeOf(view: RoomView, stageH: number): CameraMode {
+export function cameraModeOf(view: RoomView, _stageH: number): CameraMode {
   if (!FIXED_PHASES.has(view.phase)) return { mode: "follow" };
-  const majority = view.phase === "nomination" && pointsTally(view).sure !== undefined;
-  const zoom = majority && stageH >= ZOOM_MIN_STAGE_H ? ZOOM_MAJORITY : 1;
-  return { mode: "fixed", target: { x: GATHER_CENTER.x, z: GATHER_CENTER.z }, zoom };
+  return { mode: "fixed", target: { x: GATHER_CENTER.x, z: GATHER_CENTER.z }, zoom: 1 };
 }
 
 /**
@@ -118,14 +117,8 @@ export function lightingFor(view: RoomView): LightingStage {
   return view.me.role === "mafia" ? "night" : "nightCitizen";
 }
 
-/** 긴장(UI-SPEC 단계 조명): 지목 선두 1(초점 선두), 과반 2, 찬반 1(초점 변론자), 그 밖 0 */
+/** 긴장(UI-SPEC 단계 조명): 찬반 1(초점 변론자), 그 밖 0. 09.1(M-4): 지목은 배지 숫자만이라 선두·과반이어도 0 이다 */
 export function tensionOf(view: RoomView): Tension {
-  if (view.phase === "nomination") {
-    const tally = pointsTally(view);
-    if (tally.sure !== undefined) return { level: 2, focus: tally.sure };
-    if (tally.leader !== undefined) return { level: 1, focus: tally.leader };
-    return { level: 0 };
-  }
   if (view.phase === "verdict") {
     const candidate = view.day?.candidate;
     return candidate !== undefined ? { level: 1, focus: candidate } : { level: 0 };

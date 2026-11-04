@@ -24,10 +24,17 @@ export const CURTAIN_LIFT_MS = 800;
 
 type Mode = "none" | "covering" | "covered" | "lifting";
 
-/** 이 view 의 단계가 끝나면 막이 필요한가: 처형·밤은 언제나(다음이 밤·아침), 지목은 공개 집계에 단독 선두가 없을 때(다음이 밤). 그 밖의 단계는 맵이 그대로 이어진다 */
+/**
+ * 이 view 의 단계가 끝나면 막이 필요한가: 처형·밤은 언제나(다음이 밤·아침).
+ * 지목(09.1)은 끝 알림 단계(day.turn.i === order.length)이고 공개 집계에 단독 선두가 없을 때만(다음이 밤) — 차례 중·모이는 중에는 차례 마감이 와도 덮지 않는다.
+ * 그 밖의 단계는 맵이 그대로 이어진다. 공개 정보(day.turn·day.points)만 읽는다.
+ */
 export function coversNext(view: RoomView): boolean {
   if (view.phase === "execution" || view.phase === "night") return true;
-  if (view.phase === "nomination") return pointsTally(view).leader === undefined;
+  if (view.phase === "nomination") {
+    const turn = view.day?.turn;
+    return turn !== undefined && turn.i >= turn.order.length && pointsTally(view).leader === undefined;
+  }
   return false;
 }
 
