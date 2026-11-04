@@ -18,7 +18,7 @@
   left: 32px;
   right: 32px;
   top: var(--lw-top, 196px);
-  bottom: var(--lw-bottom, auto);
+  height: var(--lw-h, auto);
   z-index: calc(var(--z-overlay) + 1);
   box-sizing: border-box;
   display: flex;
@@ -56,10 +56,15 @@
   background-size: 100% var(--lw-line, 56px);
   background-position: 0 var(--lw-pos, 0px);
   color: var(--letter-ink);
+}
+/* 글 덩어리: 윗변·높이는 부품이 잰 값(가운데, 길면 인장 위로) */
+.mf-letter__text {
+  position: absolute;
+  left: 24px;
+  right: 24px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
 }
 .mf-letter__head {
   position: absolute;
@@ -153,7 +158,8 @@
   font-weight: 400;
 }
 .mf-letter-measure.is-fallback .mf-letter-measure__text { font-family: var(--font-serif); font-weight: 700; }
-.mf-letter-measure__announce { display: block; position: absolute; left: 16px; right: 16px; }
+/* 아침 알림 글자와 같은 모양(.mf-announce__body·__text)을 알림이 서는 폭(좌우 16)에서 재어 가용 높이에 쓴다 */
+.mf-letter-measure__announce { position: absolute; left: -16px; right: -16px; top: 0; display: flex; justify-content: center; }
 
 @keyframes mf-letter-rise {
   from { opacity: 0; transform: translateY(60px) rotate(-3deg) scale(0.92); }

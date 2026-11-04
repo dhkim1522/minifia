@@ -7,6 +7,8 @@ export interface ResultAnnounceProps {
   text: string | null;
   /** 글자 위 아이콘(56). 없으면 글자만. target 은 피해자 있음(진홍 글자색), heal·ghost 는 gray-300 */
   icon?: AnnounceIcon;
+  /** top = 유언 편지가 있는 아침: 헤더 아래 위 72 로 올라가 편지 묶음 머리에 선다(09.1-11, UI-SPEC C-2). 기본은 위 240 */
+  placement?: "top";
 }
 
 // 결과 알림(8페이즈, UI-SPEC "결과 알림"): 가운데 위 240 에 36px. 뒤 맵을 night-950 62% 로 어둡게 한다. 모든 단계 공용 틀이다.
@@ -14,10 +16,10 @@ export interface ResultAnnounceProps {
 // 한 번에 하나다 — 새 알림은 이전 것을 바꾼다(부르는 쪽 useDayFx 가 하나의 알림만 넘기고, key 가 글자라 바뀔 때 등장 모션이 다시 돈다).
 // 결과가 없으면 요소 자체를 만들지 않는다. 글자는 React 텍스트 노드로만 그린다(닉네임이 들어가므로 HTML 로 읽히지 않는다, T-08-33).
 // 아이콘은 장식(aria-hidden)이라 읽는 글자는 그대로 하나다. 알림은 입력을 가로채지 않는다(맵 탭·이름표 버튼이 그대로 눌린다).
-export function ResultAnnounce({ text, icon }: ResultAnnounceProps) {
+export function ResultAnnounce({ text, icon, placement }: ResultAnnounceProps) {
   if (text === null) return null;
   return (
-    <div className="mf-announce" data-announce="" role="status">
+    <div className={placement === "top" ? "mf-announce is-top" : "mf-announce"} data-announce="" role="status">
       <div key={text} className="mf-announce__body">
         {icon !== undefined && <V2Icon name={icon} size={56} className={icon === "target" ? "mf-announce__icon is-death" : "mf-announce__icon"} />}
         <span className="mf-announce__text">{text}</span>

@@ -265,7 +265,7 @@ function fontsFake(load: (font: string, text: string) => Promise<unknown[]>) {
 }
 function visibility(state: "visible" | "hidden") {
   Object.defineProperty(document, "visibilityState", { value: state, configurable: true });
-  document.dispatchEvent(new Event("visibilitychange"));
+  act(() => void document.dispatchEvent(new Event("visibilitychange")));
 }
 const tick = (ms: number) => act(() => void vi.advanceTimersByTime(ms));
 const flush = () => act(async () => void (await Promise.resolve()));
