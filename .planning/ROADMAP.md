@@ -342,7 +342,7 @@ Plans:
 
 **UI hint**: yes
 **계획 메모**: UI-SPEC 먼저(`/gsd-ui-phase 09.1`).
-**Plans:** 8/12 plans executed
+**Plans:** 9/12 plans executed
 
 Plans:
 
@@ -369,7 +369,7 @@ Plans:
 - [x] 09.1-08-PLAN.md — 지목 스테이지 윗변·압축형, E2E 순차 지목(폰 6종) (TDD, W7)
 
 **Wave 8**
-- [ ] 09.1-09-PLAN.md — 직업 의상 안개 유령·불투명 이름표·L13·E2E ghost (TDD, W8)
+- [x] 09.1-09-PLAN.md — 직업 의상 안개 유령·불투명 이름표·L13·E2E ghost (TDD, W8)
 
 **Wave 9**
 - [ ] 09.1-10-PLAN.md — 손글씨 글꼴 자체 호스팅(OFL)·편지 시간표·카드 보류·편지 훅 (TDD, W9)
