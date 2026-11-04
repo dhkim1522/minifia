@@ -319,8 +319,8 @@ describe("6명 한 판(두 밤·두 아침, 행동·마피아 채팅·탈락·�
         // 8페이즈(08-07): 처형 단계의 .view.day.verdict({yes,no,passed})는 공개 와이어 필드다(서버 전용 verdict 와 이름만 같다). 전체 누설 스캔 개편은 08-09.
         for (const path of paths) expect(path !== ".view.day.verdict" && SERVER_ONLY_KEYS.includes(path.slice(path.lastIndexOf(".") + 1))).toBe(false);
         if (msg.t !== "state") continue;
-        // day.turn 은 어느 단계에도 없다(07-08: 순차 주장 제거).
-        expect(`${msg.view.phase}:${Object.hasOwn(msg.view.day ?? {}, "turn")}`).toBe(`${msg.view.phase}:false`);
+        // day.turn 은 지목 단계에만 있다(07-08: 순차 주장 제거, 09.1: 순차 지목의 공개 차례 정보 — 결정 0063-1).
+        expect(`${msg.view.phase}:${Object.hasOwn(msg.view.day ?? {}, "turn")}`).toBe(`${msg.view.phase}:${msg.view.phase === "nomination"}`);
         for (const pl of msg.view.players) {
           expect(Object.keys(pl).sort()).toEqual(["alive", "connected", "isHost", "nickname", "seat"]);
         }
