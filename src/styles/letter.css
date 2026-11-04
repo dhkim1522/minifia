@@ -1,0 +1,183 @@
+/* 유언 편지(09.1-11, 결정 0063-3·0063-4, UI-SPEC C-1~C-5, 시안 design/v2.0/mockups-b/WillCenter.dc.html envelope).
+   색 지역 변수는 이 부품 안(.mf-letter)에서만 선언한다 — 전역 토큰이 아니다(장면 소품 색, 8페이즈 "아침 밝은 색면 금지"의 예외는 편지지 하나).
+   시간(지연·길이)은 부품이 T0 기준으로 계산해 --lw-* 로 준다. 글자 크기·줄 높이·가운데 줄 위치도 부품이 잰 값이다.
+   기본값은 390×844 에서의 자리다. 치수는 4 배수(안쪽 28/24·좌우 바깥 32·인장 우16/하8). */
+.mf-letter {
+  --letter-paper: #f3efe4;
+  --letter-rule: rgba(70, 90, 130, 0.22);
+  --letter-ink: #1c2a4d;
+  --letter-label: #6a7388;
+  --letter-wax-1: #e0485c;
+  --letter-wax-2: #a3132a;
+  --letter-wax-3: #650a18;
+  --letter-wax-edge: #7a0c1f;
+  --letter-wax-hi-1: #e8707f;
+  --letter-wax-hi-2: #f0909b;
+  --letter-wax-hi-3: #ffd0d6;
+  position: absolute;
+  left: 32px;
+  right: 32px;
+  top: var(--lw-top, 196px);
+  bottom: var(--lw-bottom, auto);
+  z-index: calc(var(--z-overlay) + 1);
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+/* 접힘 — 채팅 쪽(아래)으로 120px·0.5배·투명(M-8, 420ms) */
+.mf-letter__fold {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-md);
+  animation: mf-letter-fold var(--dur-med) ease-in var(--lw-fold-delay, 5000ms) forwards;
+}
+.mf-letter__rise {
+  width: 100%;
+  filter: drop-shadow(0 18px 24px rgba(0, 0, 0, 0.65));
+  animation: mf-letter-rise 700ms cubic-bezier(0.2, 0.8, 0.2, 1) var(--lw-rise-delay, 0ms) both;
+}
+.mf-letter__paper {
+  position: relative;
+  box-sizing: border-box;
+  width: 100%;
+  height: var(--lw-paper-h, 340px);
+  padding: 28px 24px;
+  border-radius: 6px;
+  transform: rotate(-1.5deg);
+  background-color: var(--letter-paper);
+  /* 줄 쳐진 선: 줄 높이마다 1px. 위치는 글 덩어리 윗변(--lw-pos)에 맞춘다 */
+  background-image: linear-gradient(to bottom, transparent calc(var(--lw-line, 56px) - 1px), var(--letter-rule) calc(var(--lw-line, 56px) - 1px));
+  background-size: 100% var(--lw-line, 56px);
+  background-position: 0 var(--lw-pos, 0px);
+  color: var(--letter-ink);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+.mf-letter__head {
+  position: absolute;
+  left: 24px;
+  top: 24px;
+  margin: 0;
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1.4;
+  font-weight: 400;
+  color: var(--letter-label);
+}
+.mf-letter__line {
+  margin: 0;
+  width: fit-content;
+  max-width: 100%;
+  text-align: center;
+  white-space: nowrap;
+  font-family: "Nanum Pen Script", var(--font-serif);
+  font-weight: 400;
+  font-size: var(--lw-font, 46px);
+  line-height: var(--lw-line, 56px);
+  color: var(--letter-ink);
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+  /* 왼쪽에서 오른쪽으로 열리는 쓰기. 단계 수 = 그 줄 글자 수 */
+  animation: mf-letter-write var(--lw-ms, 1200ms) steps(var(--lw-steps)) var(--lw-delay, 800ms) both;
+}
+/* 글꼴을 1초 안에 못 받으면 대체 글꼴(명조 700)로 그대로 진행한다(C-3) */
+.mf-letter.is-fallback .mf-letter__line,
+.mf-letter-measure.is-fallback .mf-letter__line {
+  font-family: var(--font-serif);
+  font-weight: 700;
+}
+
+/* 인장 — 오른쪽 아래 16/8, 84×84, -8° */
+.mf-letter__seal {
+  position: absolute;
+  right: 16px;
+  bottom: 8px;
+  width: 84px;
+  height: 84px;
+  transform: rotate(-8deg);
+  filter: drop-shadow(0 3px 5px rgba(0, 0, 0, 0.45));
+  animation: mf-letter-seal 500ms ease-out var(--lw-delay, 3200ms) both;
+}
+.mf-letter__wax-1 { stop-color: var(--letter-wax-1); }
+.mf-letter__wax-2 { stop-color: var(--letter-wax-2); }
+.mf-letter__wax-3 { stop-color: var(--letter-wax-3); }
+.mf-letter__seal-ring { fill: none; stroke: var(--letter-wax-edge); stroke-width: 3; }
+.mf-letter__seal-ring-hi { fill: none; stroke: var(--letter-wax-hi-1); stroke-width: 1; opacity: 0.5; }
+.mf-letter__seal-glyph { font-family: var(--font-serif); font-weight: 700; font-size: 38px; text-anchor: middle; }
+.mf-letter__seal-glyph.is-dark { fill: var(--letter-wax-edge); }
+.mf-letter__seal-glyph.is-light { fill: var(--letter-wax-hi-2); opacity: 0.55; }
+.mf-letter__seal-gloss { fill: none; stroke: var(--letter-wax-hi-3); stroke-width: 3; stroke-linecap: round; opacity: 0.45; }
+
+/* 접힘 안내 — 편지지 아래 간격 16, 가운데. 막대 220×4 (바탕 gray-50 14%, 채움 brass-400, 5000ms linear) */
+.mf-letter__guide {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-sm);
+}
+.mf-letter__guide-text { margin: 0; font-family: var(--font-ui); font-size: 14px; line-height: 1.4; font-weight: 400; color: var(--gray-300); }
+.mf-letter__bar { width: 220px; max-width: 100%; height: 4px; border-radius: 4px; overflow: hidden; background: color-mix(in srgb, var(--gray-50) 14%, transparent); }
+.mf-letter__fill { height: 100%; background: var(--brass-400); animation: mf-letter-write 5000ms linear var(--lw-delay, 0ms) both; }
+
+/* 숨은 읽기 줄 — 스크린리더용 한 줄 "{이름} 님의 유언: {본문}" */
+.mf-letter__read { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
+
+/* 보이지 않는 측정 틀: 편지지와 같은 좌우(32)·안쪽 폭(24)에서 글 줄을 나눠 본다. 화면에 그리지 않고 입력도 받지 않는다 */
+.mf-letter-measure {
+  position: absolute;
+  left: 32px;
+  right: 32px;
+  top: 0;
+  z-index: -1;
+  box-sizing: border-box;
+  padding: 0 24px;
+  visibility: hidden;
+  pointer-events: none;
+}
+.mf-letter-measure__text {
+  margin: 0;
+  width: 100%;
+  text-align: center;
+  white-space: normal;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+  font-family: "Nanum Pen Script", var(--font-serif);
+  font-weight: 400;
+}
+.mf-letter-measure.is-fallback .mf-letter-measure__text { font-family: var(--font-serif); font-weight: 700; }
+.mf-letter-measure__announce { display: block; position: absolute; left: 16px; right: 16px; }
+
+@keyframes mf-letter-rise {
+  from { opacity: 0; transform: translateY(60px) rotate(-3deg) scale(0.92); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes mf-letter-write {
+  from { clip-path: inset(0 100% 0 0); }
+  to { clip-path: inset(0 0 0 0); }
+}
+@keyframes mf-letter-seal {
+  from { opacity: 0; transform: scale(1.8) rotate(-20deg); }
+  to { opacity: 1; transform: scale(1) rotate(-8deg); }
+}
+@keyframes mf-letter-fold {
+  from { opacity: 1; transform: none; }
+  to { opacity: 0; transform: translateY(120px) scale(0.5); }
+}
+
+/* 모션 줄이기: 처음부터 완성된 모양(모든 줄·인장 보임), 막대는 가득 찬 채 정지. 제거 시각은 부품이 그대로 지킨다(C-5) */
+.mf-letter.is-still .mf-letter__fold,
+.mf-letter.is-still .mf-letter__rise,
+.mf-letter.is-still .mf-letter__line,
+.mf-letter.is-still .mf-letter__seal,
+.mf-letter.is-still .mf-letter__fill { animation: none; }
+@media (prefers-reduced-motion: reduce) {
+  .mf-letter__fold, .mf-letter__rise, .mf-letter__line, .mf-letter__seal, .mf-letter__fill { animation: none; }
+}

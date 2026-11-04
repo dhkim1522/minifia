@@ -8,6 +8,8 @@ import type { ClientMessage, RoomView } from "../../shared/protocol";
 import { KillFx } from "../components/KillFx";
 import { PoliceResultCard } from "../components/PoliceResultCard";
 import { ResultAnnounce } from "../components/ResultAnnounce";
+import { WillLetter } from "../components/v2/WillLetter";
+import type { WillLetter as WillLetterState } from "../net/useWillLetter";
 import { SceneCurtain } from "../components/SceneCurtain";
 import { PickTurnBlock } from "../components/v2/PickTurnBlock";
 import { RoleCardButton } from "../components/RoleCardButton";
@@ -107,6 +109,8 @@ interface GameMapProps {
   killFx?: DayFx["killFx"];
   /** 경찰 조사 결과 카드 신호(useDayFx). 값이 있는 0~2.4초 동안만 카드를 그린다 — 경찰 본인 화면에서만 값이 생긴다 */
   policeResult?: DayFx["policeResult"];
+  /** 암살 유언 편지(useWillLetter, 결정 0063-3). 있으면 T0 에 화면 가운데로 올라오고, 편지가 보이는 동안 아침 알림은 편지 쪽(letter.announce)이 대신한다 */
+  letter?: WillLetterState | null;
   /** 지목 선두가 새 사람으로 바뀌었을 때의 손사래 신호(WorldStage 로 그대로 넘긴다) */
   deny?: DayFx["deny"];
   /** 연결의 오류 프레임 구독(거절된 행동 알림에 쓴다) */
@@ -147,7 +151,7 @@ function TurnBlock({ view, offset, line, compact, reducedMotion }: { view: RoomV
 // 8페이즈 게임 맵 화면 틀(08-13, UI-SPEC "게임 화면 틀"): 지하 재즈 바 맵(WorldStage) 위에 위쪽 가림막, 헤더(단계 이름 + 접히는 안내 + 시간 링 + [역할 카드]), [테스트], 결과 알림, 아래 패널을 얹는다.
 // 낮 시작·낮 토론·지목·최후 변론·찬반·처형이 이 화면 하나를 같은 장면 키로 그려 단계가 바뀌어도 맵이 다시 만들어지지 않는다.
 // 화면은 서버가 보낸 view 만으로 다시 그린다. 닉네임(이름표)·알림 글자는 React 텍스트 노드로만 그린다.
-export function GameMap({ view, store, chat, send, canSend = true, offset = 0, roleCard, testButton, announce = null, deny, fading, ghostEnter = 0, killFx = null, policeResult = null, onEvent, onLeave }: GameMapProps) {
+export function GameMap({ view, store, chat, send, canSend = true, offset = 0, roleCard, testButton, announce = null, deny, fading, ghostEnter = 0, killFx = null, policeResult = null, letter = null, onEvent, onLeave }: GameMapProps) {
   const toast = useTopToast();
   const { show } = toast;
   // 측정(스테이지 사각형)·키보드·기록 칸 높이는 대기실과 같은 훅이다. 키보드가 열려 있으면 행동 줄을 숨기고 기록 칸을 72 로 줄인다(07-19).
@@ -189,6 +193,9 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
   // 암살당한 본인: 번호가 바뀐 뒤 0.7초에 내 캐릭터가 놀란 표정을 짓는다(모션 줄이기면 표정 연출도 없이 바로 유령 상태). 처음 마운트 때의 번호는 지난 일이라 하지 않는다.
   // 번쩍임·베기는 KillFx 가, 막 붙잡기는 SceneCurtain(holdUntil)이 맡는다. 타이머는 언마운트 때만 푼다(ghostEnter 와 같은 이유).
   const reducedMotion = useReducedMotion();
+  // 유언 편지: 편지가 화면에 보이는 동안(letterLive) 아침 알림은 편지가 대신 쥔다. 편지가 걷히면 알림도 함께 걷힌다(알림 시간은 편지보다 짧다)
+  const [letterLive, setLetterLive] = useState(false);
+  const shownAnnounce = letter !== null ? (letterLive ? letter.announce : null) : announce;
   const killNonce = killFx?.nonce ?? 0;
   const seenKill = useRef(killNonce);
   const killTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -468,7 +475,8 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
       {/* 장면 전환 막(09-20): 결과 알림보다 앞(DOM 순서)에 두어 막을 붙잡는 동안 알림이 막 위로 올라올 수 있게 한다. 덮기는 공개 마감만의 함수다 */}
       <SceneCurtain view={view} offset={offset} reducedMotion={reducedMotion} {...(killFx !== null ? { holdUntil: killFx.at + KILL_HOLD_MS } : {})} />
       <KillFx nonce={killNonce} reducedMotion={reducedMotion} />
-      <ResultAnnounce text={announce?.text ?? null} {...(announce?.icon !== undefined ? { icon: announce.icon } : {})} />
+      <ResultAnnounce text={shownAnnounce?.text || null} {...(shownAnnounce?.icon !== undefined ? { icon: shownAnnounce.icon } : {})} />
+      {letter !== null ? <WillLetter key={`${letter.t0}:${letter.seat}`} letter={letter} reducedMotion={reducedMotion} onLive={setLetterLive} /> : null}
       {policeResult !== null ? (
         <PoliceResultCard
           key={policeResult.id}
