@@ -275,3 +275,146 @@ describe("결선 — 막과 레이아웃 연결", () => {
     expect(coversNext(makeRunoff({ step: 1 }))).toBe(false);
   });
 });
+
+// ---- Task 2: 결선 상호작용 — 이름표 직접 누르기·바꾸기·done 체크·득표 배지·내 캐릭터 가리킴 (UI-SPEC D-2·D-4) ----
+
+const picks = (c: ParentNode): HTMLButtonElement[] => [...c.querySelectorAll<HTMLButtonElement>("[data-pick]")];
+const pickOf = (c: ParentNode, seat: number): HTMLButtonElement | null => c.querySelector(`[data-pick="${seat}"]`);
+const headOf = (c: ParentNode, seat: number): HTMLElement | null => c.querySelector(`[data-seat="${seat}"] .mv-head`);
+const lastScene = (): SceneLook => rt.scenes.at(-1) as SceneLook;
+
+describe("결선 투표 — 후보 이름표 직접 누르기 (UI-SPEC D-2)", () => {
+  it("후보가 아닌 산 사람 투표 중: 후보 둘(2·3)만 버튼이고 이름은 '{닉네임} 님에게 투표', 묶음 role=group '결선', 둘 다 깜빡인다", () => {
+    const { container } = mount(makeRunoff());
+    expect(picks(container).map((b) => b.getAttribute("data-pick"))).toEqual(["2", "3"]);
+    expect(pickOf(container, 2)?.getAttribute("aria-label")).toBe("서준 님에게 투표");
+    expect(pickOf(container, 3)?.getAttribute("aria-label")).toBe("지아 님에게 투표");
+    expect(container.querySelector('[role="group"][aria-label="결선"]')).not.toBeNull();
+    expect(container.querySelectorAll(".mv-tag.is-blink").length).toBe(2);
+  });
+
+  it("후보 본인, 유령, 앞머리·결과, 연결 끊김에는 버튼이 없다", () => {
+    expect(picks(mount(makeRunoff({ mySeat: 2 })).container).length).toBe(0);
+    cleanup();
+    expect(picks(mount(makeRunoff({ dead: [0] })).container).length).toBe(0);
+    cleanup();
+    expect(picks(mount(makeRunoff({ step: 0, left: 1000 })).container).length).toBe(0);
+    cleanup();
+    expect(picks(mount(makeRunoff({ step: 2, left: 1500, tally: [1, 1] })).container).length).toBe(0);
+    cleanup();
+    expect(picks(mount(makeRunoff(), { canSend: false }).container).length).toBe(0);
+    cleanup();
+    expect(mount(makeRunoff({ mySeat: 2 })).container.querySelectorAll(".mv-tag.is-blink").length).toBe(0);
+  });
+
+  it("후보 2 를 누르면 point {target: 2} 한 번, 그 이름표가 즉시 mine, 내 캐릭터가 후보 2 를 가리킨다", () => {
+    const send = vi.fn<(m: ClientMessage) => boolean>(() => true);
+    const { container } = mount(makeRunoff(), { send });
+    fireEvent.click(pickOf(container, 2)!);
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(send).toHaveBeenCalledWith({ t: "point", target: 2 });
+    expect(headOf(container, 2)?.getAttribute("data-mine")).toBe("true");
+    expect(headOf(container, 3)?.hasAttribute("data-mine")).toBe(false);
+    expect(lastScene().seats[0]?.pointAt).toBe(2);
+    // 마감까지 버튼은 남는다(바꾸기)
+    expect(picks(container).length).toBe(2);
+  });
+
+  it("같은 후보를 다시 누르면 보내지 않고, 다른 후보를 누르면 보내 바꾼다", () => {
+    const send = vi.fn<(m: ClientMessage) => boolean>(() => true);
+    const { container } = mount(makeRunoff(), { send });
+    fireEvent.click(pickOf(container, 3)!);
+    fireEvent.click(pickOf(container, 3)!);
+    expect(send).toHaveBeenCalledTimes(1);
+    fireEvent.click(pickOf(container, 2)!);
+    expect(send).toHaveBeenCalledTimes(2);
+    expect(send).toHaveBeenLastCalledWith({ t: "point", target: 2 });
+    expect(headOf(container, 2)?.getAttribute("data-mine")).toBe("true");
+    expect(headOf(container, 3)?.hasAttribute("data-mine")).toBe(false);
+    expect(lastScene().seats[0]?.pointAt).toBe(2);
+  });
+
+  it("서버 값(me.ballot)이 오면 새로 고침해도 내 선택이 이름표에 남는다(mine)", () => {
+    const { container } = mount(makeRunoff({ ballot: 3 }));
+    expect(headOf(container, 3)?.getAttribute("data-mine")).toBe("true");
+    expect(lastScene().seats[0]?.pointAt).toBe(3);
+  });
+
+  it("소켓이 닫혀 못 보냈으면(send false) 표시도 바꾸지 않는다", () => {
+    const send = vi.fn<(m: ClientMessage) => boolean>(() => false);
+    const { container } = mount(makeRunoff(), { send });
+    fireEvent.click(pickOf(container, 2)!);
+    expect(headOf(container, 2)?.hasAttribute("data-mine")).toBe(false);
+  });
+
+  it("마감 직후 눌러 서버가 거절하면 '지금은 고를 수 없어요' 를 띄우고 낙관 표시를 서버 값으로 되돌린다", () => {
+    const listeners: Array<(e: { t: "error"; code: string }, meta: { epoch: number }) => void> = [];
+    const onEvent = vi.fn((l: (typeof listeners)[number]) => {
+      listeners.push(l);
+      return () => {};
+    }) as unknown as RoomConnection["onEvent"];
+    const m = mount(makeRunoff(), { onEvent });
+    fireEvent.click(pickOf(m.container, 2)!);
+    expect(headOf(m.container, 2)?.getAttribute("data-mine")).toBe("true");
+    act(() => listeners.forEach((l) => l({ t: "error", code: "WRONG_PHASE" }, { epoch: 1 })));
+    expect(m.container.querySelector(".mv-toast__text")?.textContent).toBe("지금은 고를 수 없어요");
+    expect(headOf(m.container, 2)?.hasAttribute("data-mine")).toBe(false);
+  });
+});
+
+describe("결선 — 던진 사람 done 체크와 득표 배지 (UI-SPEC D-2)", () => {
+  it("day.runoff.voted 의 좌석 이름표에만 done 체크가 붙는다. 남의 선택(누가 누구를)은 DOM 어디에도 없다", () => {
+    const { container } = mount(makeRunoff({ voted: [1, 4], count: 6 }));
+    expect([...container.querySelectorAll("[data-done]")].map((el) => el.closest("[data-seat]")?.getAttribute("data-seat"))).toEqual(["1", "4"]);
+    // 후보 이름표는 버튼이지만 남이 누른 흔적(mine)은 내 것만
+    expect(container.querySelectorAll("[data-mine]").length).toBe(0);
+  });
+
+  it("마감 전(앞머리·투표)에는 후보 머리 위 배지가 지목 때 받은 득표(voteLog)이고, 후보 아닌 사람에게는 배지가 없다", () => {
+    const view = makeRunoff();
+    const votes = [{ seat: 0, target: 2 }, { seat: 1, target: 3 }, { seat: 2, target: 3 }, { seat: 3, target: 2 }];
+    const withLog: RoomView = { ...view, day: { ...view.day!, voteLog: [{ n: 1, exec: { yes: 0, no: 0, passed: false }, cand: { votes } }] } };
+    const expected2 = 2;
+    const expected3 = 2;
+    const { container } = mount(withLog);
+    expect(headOf(container, 2)?.getAttribute("data-count")).toBe(String(expected2));
+    expect(headOf(container, 3)?.getAttribute("data-count")).toBe(String(expected3));
+    expect(headOf(container, 1)?.hasAttribute("data-count")).toBe(false);
+  });
+
+  it("결과(step 2): 후보 배지가 결선 득표 tally 로 바뀌고 0표는 배지가 없다. 선두·유력 도장은 없다", () => {
+    const { container } = mount(makeRunoff({ step: 2, left: 1500, tally: [3, 0] }));
+    expect(headOf(container, 2)?.getAttribute("data-count")).toBe("3");
+    expect(headOf(container, 3)?.hasAttribute("data-count")).toBe(false);
+    expect(container.querySelector("[data-lead]")).toBeNull();
+    expect(container.querySelector("[data-sure]")).toBeNull();
+  });
+});
+
+describe("결선 — 장면 (UI-SPEC D-1, D-4)", () => {
+  it("카메라는 가운데 고정 배율 1, 조명 vote, 핀은 후보 가운데 한 점(전 구간)", () => {
+    for (const step of [0, 1, 2] as const) {
+      cleanup();
+      mount(makeRunoff({ step, ...(step === 2 ? { tally: [1, 1] as [number, number] } : {}) }));
+      const look = lastScene();
+      expect(look.camera).toEqual({ mode: "fixed", target: { x: 0, z: 0 }, zoom: 1 });
+      expect(look.lighting).toBe("vote");
+      expect(look.pin).toMatchObject({ mode: "point" });
+    }
+  });
+
+  it("DOM 어둡게(dimOn): 결선 전 구간 켜짐", () => {
+    for (const step of [0, 1, 2] as const) {
+      cleanup();
+      const { container } = mount(makeRunoff({ step, ...(step === 2 ? { tally: [1, 1] as [number, number] } : {}) }));
+      expect(container.querySelector(".mf-game__dim")?.getAttribute("data-dim")).toBe("on");
+    }
+  });
+
+  it("닉네임은 글자로 그린다: 버튼 이름에 '<b>' 가 HTML 이 되지 않는다", () => {
+    const nicknames = ["민수", "영희", "<b>서준</b>", "지아", "도윤"];
+    const { container } = mount(makeRunoff({ nicknames }));
+    expect(pickOf(container, 2)?.getAttribute("aria-label")).toBe("<b>서준</b> 님에게 투표");
+    expect(container.querySelector(".mf-world__tags b")).toBeNull();
+  });
+});
