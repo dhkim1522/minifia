@@ -5,16 +5,16 @@ milestone_name: 같은 공간
 current_phase: 9
 current_phase_name: 밤과 아침
 status: verifying
-stopped_at: Completed 09.1-03-PLAN.md
-last_updated: "2026-11-04T12:51:30.267Z"
+stopped_at: Completed 09.1-04-PLAN.md
+last_updated: "2026-11-04T13:16:28.941Z"
 last_activity: 2026-11-03
 last_activity_desc: Phase 9 execution started
-state_head: 7614ac8f038819b4f7cae567415ba6c170080248
+state_head: 8947efece57d7e39e442019ef39e25b29ac613ec
 progress:
   total_phases: 8
   completed_phases: 3
   total_plans: 120
-  completed_plans: 111
+  completed_plans: 112
   percent: 38
 ---
 
@@ -171,6 +171,7 @@ Progress: [████░░░░░░] 38% (3/7 phases)
 | Phase 09.1 P01 | 12min | 2 tasks | 8 files |
 | Phase 09.1 P02 | 20min | 2 tasks | 4 files |
 | Phase 09.1 P03 | 25min | 2 tasks | 7 files |
+| Phase 09.1 P04 | 25min | 3 tasks | 16 files |
 
 ## Accumulated Context
 
@@ -344,6 +345,9 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 09]: 결과 화면은 .mf-result__inner 안에서 .mf-result__body 만 스크롤하고 [처음으로] 줄(.mf-result__foot)은 아래 고정 (09-29, feedback-6)
 - [Phase 09]: 0062: 묶음 A 12건 결정 기록(깃펜 오른쪽 끝, 현재/최대 숫자, 타이머 한 규칙 등)
 - [Phase 09.1]: M-3: 연결이 끊긴 사람의 차례도 8초를 다 기다린다(엔진은 connected 를 읽지 않는다)
+- [Phase 09.1]: 09.1-04: 봇 계획 now 는 지목 차례 중이면 차례 시작 시각(turnStartOf)으로 넘긴다 — 봇은 차례가 시작되면 곧바로 지목
+- [Phase 09.1]: 09.1-04: DO 의 250ms 지목 간격 규칙을 지웠다 — 순차 지목은 바꾸기·재전송이 없고 확정 뒤 재전송은 WRONG_PHASE 한 프레임
+- [Phase 09.1]: 09.1-04: 차례 없는 옛 지목 방은 깨어날 때 지목을 모이기부터 다시 시작한다(그날 지목 표는 지워짐)
 
 ### Pending Todos
 
@@ -382,8 +386,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-04T12:51:29.786Z
-Stopped at: Completed 09.1-03-PLAN.md
+Last session: 2026-11-04T13:16:28.449Z
+Stopped at: Completed 09.1-04-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
