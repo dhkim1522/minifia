@@ -71,8 +71,8 @@ export class ChatStore {
     }
     switch (frame.t) {
       case "chat": {
-        // 귓속말 줄(결정 0066-2)은 화면이 붙기 전(09.1.1-09)까지 이 저장소가 받지 않는다 — 카드 줄로 잘못 그려지지 않게 한다.
-        if (frame.k === "whisper" || frame.k === "whispered") break;
+        // 귓속말 줄(결정 0066-2)·찬반 기록 카드(결정 0066-3)는 화면이 붙기 전(09.1.1-09·10)까지 이 저장소가 받지 않는다 — 유언·쪽지 카드 줄로 잘못 그려지지 않게 한다.
+        if (frame.k === "whisper" || frame.k === "whispered" || frame.k === "ballots") break;
         if (frame.k) {
           // 서버 카드 줄: 입력 중은 건드리지 않는다(카드는 사람이 보낸 글이 아니다, 연구 Pitfall 9)
           const hold = now + (this.ctx?.pk.endsWith(":execution") ? CARD_HOLD_EXEC_MS : CARD_HOLD_MS);
@@ -88,7 +88,7 @@ export class ChatStore {
         break;
       }
       case "chatLog": {
-        const inserted = this.insertAll(frame.lines.flatMap((f) => (f.k === "whisper" || f.k === "whispered" ? [] : [f.k ? cardLine(f, f.k) : playerLine(f)])));
+        const inserted = this.insertAll(frame.lines.flatMap((f) => (f.k === "whisper" || f.k === "whispered" || f.k === "ballots" ? [] : [f.k ? cardLine(f, f.k) : playerLine(f)])));
         if (inserted || !this.replay) changed = true;
         this.replay = true;
         break;

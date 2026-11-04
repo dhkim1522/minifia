@@ -2,6 +2,7 @@
 // 순수 모듈이다: 시각·난수를 읽지 않고 입력을 바꾸지 않으며, DOM·workerd API 가 없다(앱·워커 두 tsconfig 에 모두 들어간다).
 // 저장 I/O 는 이 파일에 없다 — 방 Durable Object 가 chatKey 로 줄 단위 저장·삭제를 한다(07-14). 이 파일은 무엇을 쓰고 지우고 돌려줄지만 정한다.
 // 마스크(r)·쓰기 순번(g)·일차(n)는 저장 전용이다. 와이어로 나가는 모양은 toWire 가 키 다섯(ch·seat·seq·text·at)과, 카드·귓속말 줄일 때만 k(귓속말은 to 도)를 복사한 것이다.
+// 찬반 기록 카드(k ballots, 결정 0066-3)는 보관 상한 계수·삭제에서 빠지고, 복원 때 채널 30줄 한도와 별도로 최근 3장을 더한다(CHAT_REPLAY_BALLOTS).
 // 복원은 '지금의 역할·생존'으로 다시 계산하지 않는다 — 보낼 때 audience 가 정한 마스크로만 한다(복원이 라이브보다 넓어지지 않는다).
 import { MAX_PLAYERS } from "../protocol";
 import type { ChatChannel, ChatLineWire } from "../protocol";
@@ -10,6 +11,8 @@ import type { ChatChannel, ChatLineWire } from "../protocol";
 export const CHAT_KEY_PREFIX = "chat:";
 /** 복원 줄 수: 채널마다 최근 이만큼(최대 3채널 × 30). 값은 이 상수 하나에서 조정한다(결정 0058-3). */
 export const CHAT_REPLAY_PER_CHANNEL = 30;
+/** 복원 때 채널 30줄 선택과 별도로 더하는 찬반 기록 카드 수: 마스크에 든 ballots 카드 중 최근 이만큼(결정 0066-3, O-8). */
+export const CHAT_REPLAY_BALLOTS = 3;
 /** 채널별 보관 상한. 11페이즈 공개가 판 전체의 마피아·유령 줄을 쓰므로 둘을 공개 줄보다 넉넉히 둔다(결정 0058-4). */
 export const CHAT_KEEP: Readonly<Record<ChatChannel, number>> = { all: 100, mafia: 300, ghost: 300 };
 /** 상한을 넘으면 그 채널의 가장 오래된 줄부터 이만큼씩 묶어 지운다(삭제 쓰기 횟수를 줄인다). */
@@ -38,8 +41,12 @@ export interface ChatRecord {
   to?: number;
 }
 
-export type ChatKind = "will" | "note" | "whisper" | "whispered";
-const KINDS: readonly ChatKind[] = ["will", "note", "whisper", "whispered"];
+export type ChatKind = "will" | "note" | "whisper" | "whispered" | "ballots";
+const KINDS: readonly ChatKind[] = ["will", "note", "whisper", "whispered", "ballots"];
+/**
+ * 보관 상한을 세고 지울 후보가 되는 줄인가. 찬반 기록 카드(ballots, 결정 0066-3)는 낮마다 한 장뿐인 공개 기록이라 상한 계산·삭제에서 빠진다(O-8).
+ */
+const countsTowardKeep = (x: ChatRecord): boolean => x.k !== "ballots";
 const isWhisperKind = (k: ChatKind): boolean => k === "whisper" || k === "whispered";
 
 export interface ChatLog {
@@ -70,12 +77,13 @@ export function seatMask(players: readonly { id: string; seat: number }[], ids: 
 
 /**
  * 줄 하나를 더한다. 입력 로그는 바꾸지 않고 새 객체를 돌려준다.
+ * (ballots 카드는 상한을 세지 않고 지우지도 않는다 — 카드를 더하는 호출은 아무것도 지우지 않는다.)
  * 그 채널의 줄이 보관 상한을 넘으면 그 채널의 가장 오래된 줄부터 CHAT_EVICT_BATCH 줄을 지울 쓰기 순번(g, 오름차순)을 evicted 로 돌려준다.
  * 새 줄은 지우지 않고, 다른 채널 줄도 건드리지 않는다. 번호는 지워도 되돌아가지 않는다.
  */
 export function appendLine(
   log: ChatLog,
-  input: { ch: ChatChannel; seat: number; text: string; at: number; n: number; r: number; k?: "will" | "note" },
+  input: { ch: ChatChannel; seat: number; text: string; at: number; n: number; r: number; k?: "will" | "note" | "ballots" },
 ): { log: ChatLog; record: ChatRecord; evicted: number[] } {
   const record: ChatRecord = {
     g: log.nextG,
@@ -89,10 +97,10 @@ export function appendLine(
     ...(input.k === undefined ? {} : { k: input.k }),
   };
   let records: ChatRecord[] = [...log.records, record];
-  const inChannel = records.filter((x) => x.ch === input.ch);
+  const inChannel = records.filter((x) => x.ch === input.ch && countsTowardKeep(x));
   const over = inChannel.length - CHAT_KEEP[input.ch];
   let evicted: number[] = [];
-  if (over > 0) {
+  if (over > 0 && countsTowardKeep(record)) {
     evicted = inChannel.slice(0, Math.max(CHAT_EVICT_BATCH, over)).map((x) => x.g);
     const gone = new Set(evicted);
     records = records.filter((x) => !gone.has(x.g));
@@ -118,7 +126,7 @@ export function appendWhisperPair(
   const body: ChatRecord = { g: log.nextG, ...base, text: input.text, r: input.partyMask, k: "whisper" };
   const fact: ChatRecord = { g: log.nextG + 1, ...base, text: "", r: input.othersMask, k: "whispered" };
   let records: ChatRecord[] = [...log.records, body, fact];
-  const inChannel = records.filter((x) => x.ch === "all");
+  const inChannel = records.filter((x) => x.ch === "all" && countsTowardKeep(x));
   const over = inChannel.length - CHAT_KEEP.all;
   let evicted: number[] = [];
   if (over > 0) {
@@ -141,6 +149,7 @@ export function toWire(record: ChatRecord): ChatLineWire {
 /**
  * 접속한 좌석이 받을 복원 줄. 보낼 때 저장한 마스크에 이 좌석 비트가 켜진 줄만, 채널별 최근 perChannel 줄,
  * 보낸 순서(g 오름차순)로 돌려준다. 같은 대본에서 라이브로 받은 줄의 채널별 최근 줄과 같다.
+ * 단 하나의 예외: 찬반 기록 카드(ballots)는 채널 30줄 선택 뒤에 따로 최근 CHAT_REPLAY_BALLOTS 장을 더한다(이미 든 줄은 중복 없음, 결정 0066-3, O-8).
  */
 export function replayFor(log: ChatLog, seat: number, perChannel: number = CHAT_REPLAY_PER_CHANNEL): ChatLineWire[] {
   if (!Number.isInteger(seat) || seat < 0 || seat >= MAX_PLAYERS) return [];
@@ -149,6 +158,7 @@ export function replayFor(log: ChatLog, seat: number, perChannel: number = CHAT_
   for (const ch of CHANNELS) {
     for (const x of mine.filter((m) => m.ch === ch).slice(-perChannel)) picked.add(x.g);
   }
+  for (const x of mine.filter((m) => m.k === "ballots").slice(-CHAT_REPLAY_BALLOTS)) picked.add(x.g);
   return mine.filter((x) => picked.has(x.g)).map(toWire);
 }
 

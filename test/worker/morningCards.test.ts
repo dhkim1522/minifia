@@ -9,10 +9,10 @@ import type { Game } from "./helpers";
 
 type Card = Extract<ServerMessage, { t: "chat" }>;
 
-/** 소켓마다 mark 이후의 chat 프레임을 모은다. */
+/** 소켓마다 mark 이후의 chat 프레임을 모은다. 처형 진입 때 나가는 찬반 기록 카드(ballots, 09.1.1-03)는 유언·쪽지 카드가 아니라 뺀다(ballots.test.ts 가 맡는다). */
 async function chatsSince(g: Game, marks: number[]): Promise<Card[][]> {
   const out: Card[][] = [];
-  for (let i = 0; i < g.socks.length; i += 1) out.push(chatsOf(await settle(g.socks[i]!, marks[i]!)));
+  for (let i = 0; i < g.socks.length; i += 1) out.push(chatsOf(await settle(g.socks[i]!, marks[i]!)).filter((c) => c.k !== "ballots"));
   return out;
 }
 
@@ -49,7 +49,7 @@ describe("처형된 사람의 유언 카드 (WILL-01, MORN-02)", () => {
     const { g, marks } = await execute(undefined);
     const got = await chatsSince(g, marks);
     expect(got.map((c) => c.length).join(",")).toBe(g.socks.map(() => 0).join(","));
-    expect(Object.values(await chatRecordsOf(g.code)).filter((r) => r.k !== undefined).length).toBe(0);
+    expect(Object.values(await chatRecordsOf(g.code)).filter((r) => r.k !== undefined && r.k !== "ballots").length).toBe(0);
   }, 40_000);
 
   it("처형에는 분필이 없다: 처형 직후 모든 소켓의 day.chalk 가 없다", async () => {
@@ -125,7 +125,7 @@ describe("아침 카드: 피해자 유언 + 마피아 쪽지 (WILL-01, NIGHT-12,
       expect(chalkOf(sock)).toBe(undefined);
       expect(JSON.stringify(lastViewOf(sock).day?.morning)).toBe(JSON.stringify({ saved: true }));
     }
-    expect(Object.values(await chatRecordsOf(g.code)).filter((r) => r.k !== undefined).length).toBe(0);
+    expect(Object.values(await chatRecordsOf(g.code)).filter((r) => r.k !== undefined && r.k !== "ballots").length).toBe(0);
   }, 40_000);
 
   it("마피아 선택이 갈려 아침이 무효이면 카드 0장, 분필 없음이다", async () => {

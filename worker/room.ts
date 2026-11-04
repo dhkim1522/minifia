@@ -4,6 +4,7 @@ import type { ApiErrorCode, BadgeId, BotVoteExec, BotVotePick, ChatRejectWhy, Cl
 import { botMafiaTarget, botWakeAt, isBot, syncBotPlan, takeDueBotSteps } from "../shared/game/bots";
 import type { BotStep } from "../shared/game/bots";
 import { isAlive } from "../shared/game/alive";
+import { ballotsCardText } from "../shared/game/ballots";
 import { audience, channelOf, phaseKey, worldVisibleTo } from "../shared/game/audience";
 import { CHAT_KEY_PREFIX, appendLine, appendWhisperPair, chatKey, emptyChatLog, replayFor, restoreChatLog, seatMask, toWire } from "../shared/game/chatLog";
 import type { ChatLog } from "../shared/game/chatLog";
@@ -875,7 +876,18 @@ export class Room extends DurableObject<Env> {
     await this.persistAndBroadcast();
     await this.syncPositions(now);
     await this.emitDeathCards(prev, now);
+    await this.emitBallotsCard(prev, now);
     await this.reschedule();
+  }
+
+  // 찬반 기록 카드(결정 0066-3, O-8): 찬반 마감이 verdict.ballots 를 남긴 전환에서 all 채널에 한 장, 보낸 사람 자리는 변론자다(작성자가 아니다).
+  // 알람 따라잡기로 여러 단계를 지나도 afterTransition 은 한 번이므로 "전 상태엔 없고 지금은 있다" 로 잡아 한 번만 낸다. 변론자가 없는 경로는 내지 않는다.
+  private async emitBallotsCard(prev: RoomState, now: number): Promise<void> {
+    const room = this.room;
+    const ballots = room?.verdict?.ballots;
+    const defender = room?.verdict?.candidate;
+    if (!room || ballots === undefined || defender === undefined || prev.verdict?.ballots !== undefined) return;
+    await this.appendCard(defender, ballotsCardText(ballots), "ballots", now);
   }
 
   // 이번 전환에서 산 사람 → 탈락이 된 사람의 seat 들(seat 오름차순).
@@ -927,7 +939,7 @@ export class Room extends DurableObject<Env> {
   }
 
   // 카드 한 줄: applyChat 본체와 같은 모양(받는 사람·마스크 한 번 → 보관 → 저장 → 전송)이되 도배·문장 검사는 부르지 않는다(사람이 보낸 줄이 아니다).
-  private async appendCard(seat: number, text: string, k: "will" | "note", now: number): Promise<void> {
+  private async appendCard(seat: number, text: string, k: "will" | "note" | "ballots", now: number): Promise<void> {
     const room = this.room;
     if (!room) return;
     const ids = audience(room, { k: "chat", ch: "all" });

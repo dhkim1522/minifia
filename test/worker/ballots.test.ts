@@ -149,23 +149,25 @@ describe("ballots 카드 (결정 0066-3, O-8)", () => {
     const { g, defender, voters } = await toVerdict();
     const first = await decide(g, voters, 3, 1);
     await cardsSince(g, first.marks);
-    const talker = voters[0]!;
+    // hello 는 같은 사람의 옛 소켓을 대체하므로(옛 소켓은 닫힌다) 보는 사람 하나를 판 진행에서 빼 둔다 — 마피아가 아닌 유권자.
+    const viewer = voters.find((v) => v.role !== "mafia")!;
+    const talker = voters.find((v) => v.seat !== viewer.seat)!;
+    const rest: Game = { code: g.code, socks: g.socks.filter((_, i) => g.actors[i] !== viewer), actors: g.actors.filter((a) => a !== viewer) };
     await bulkChat(g.code, talker.seat, Array.from({ length: 40 }, (_, i) => `대화${i}`));
-    const viewer = voters[1]!;
     const cardsOf = (lines: Awaited<ReturnType<typeof helloForLog>>): string => lines.filter((l) => l.k === "ballots").map((l) => `${l.seat}/${l.text}`).join(",");
     const firstCard = `${defender.seat}/${first.yes.join(",")}|${first.no.join(",")}`;
     expect(cardsOf(await helloForLog(await connect(g.code), viewer.token))).toBe(firstCard);
-    // 일반 줄은 채널 30줄 한도라 카드가 그 밖이어도 따로 더해진다(40줄 위에 카드는 30줄 밖)
+    // 카드 뒤에 일반 줄이 40줄 쌓여 카드는 채널 30줄 밖이다 — 그래도 따로 더해져 온다
     // 다음 낮(discussion, 2일차)
-    await advanceTo(g.code, g.socks, "discussion");
+    await advanceTo(g.code, rest.socks, "discussion");
     expect((await storedRoom(g.code)).day).toBe(2);
     expect(cardsOf(await helloForLog(await connect(g.code), viewer.token))).toBe(firstCard);
     // 2일차 처형(마피아 한 명이 변론자 — 승패가 나지 않는 판이다)
-    await advanceTo(g.code, g.socks, "nomination");
-    const mafia = g.actors.find((a) => a.role === "mafia")!;
-    const voters2 = await toVerdictFor(g, mafia);
-    const second = await decide(g, voters2, 2, 1);
-    await cardsSince(g, second.marks);
+    await advanceTo(g.code, rest.socks, "nomination");
+    const mafia = rest.actors.find((a) => a.role === "mafia")!;
+    const voters2 = await toVerdictFor(rest, mafia);
+    const second = await decide(rest, voters2, 2, 1);
+    await cardsSince(rest, second.marks);
     const secondCard = `${mafia.seat}/${second.yes.join(",")}|${second.no.join(",")}`;
     expect(cardsOf(await helloForLog(await connect(g.code), viewer.token))).toBe(`${firstCard},${secondCard}`);
   }, 120_000);

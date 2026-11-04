@@ -316,7 +316,7 @@ export interface ChatLineWire {
   seq: number;
   text: string;
   at: number;
-  k?: "will" | "note" | "whisper" | "whispered"; // 서버가 만든 카드 줄(유언·쪽지, 결정 0061-11)·귓속말 줄(결정 0066-2: whisper = 당사자에게 본문, whispered = 나머지에게 본문 없는 사실). 일반 대화 줄에는 키가 없다
+  k?: "will" | "note" | "whisper" | "whispered" | "ballots"; // 서버가 만든 카드 줄(유언·쪽지, 결정 0061-11)·귓속말 줄(결정 0066-2: whisper = 당사자에게 본문, whispered = 나머지에게 본문 없는 사실). 일반 대화 줄에는 키가 없다. ballots = 찬반 기록 카드(결정 0066-3, 본문은 shared/game/ballots.ts 형식)
   to?: number; // 귓속말 상대 좌석(결정 0066-2). 누가 누구에게 보냈는지는 공개 사실이다 — 귓속말 줄(whisper·whispered)에만 있다
 }
 /** 막힌 이유: 도배 간격·같은 문장 반복·길이·단계/채널 불일치·그 밖(보이는 글자 없음). 보낸 사람에게만 알린다. */
