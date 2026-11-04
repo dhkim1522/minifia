@@ -4,7 +4,7 @@ import { exports } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
 import { NOMINATION_GATHER_MS } from "../../shared/game/phases";
 import type { PhaseId, RoomView, ServerMessage } from "../../shared/protocol";
-import { alarmOf, advanceTo, closePhase, collect, createRoom, driveToEnded, editRoom, nextFrame, seat, send, skipOnce, skipThrough, storedRoom, wanderTimes } from "./helpers";
+import { alarmOf, advanceTo, closePhase, collect, createRoom, driveToEnded, editRoom, mapPlayers, nextFrame, seat, send, skipOnce, skipThrough, storedRoom, wanderTimes } from "./helpers";
 import type { Seated, TestSocket } from "./helpers";
 
 const allSockets = (r: Seated): TestSocket[] => [r.host, ...r.guests.map((g) => g.sock)];
@@ -532,4 +532,38 @@ describe("testBotVote: 넘기기가 설정을 따른다", () => {
     expect(guestText.includes("testBotVote")).toBe(false);
     expect(guestText.includes("testMode")).toBe(false);
   }, 30_000);
+});
+
+describe("testSkip: 마지막 3인 결전을 한 번에 끝낸다 (09.1.1-07, 결정 0066-5)", () => {
+  for (const i of [-1, 1, 3] as const) {
+    it(`showdown i ${i} 에서 testSkip 한 번: 남은 산 봇의 지목이 채워져 집계되고(봇 표 모두 방장 → 처형 단계) showdown·개인 표가 남지 않는다`, async () => {
+      const r = await seatQuiet(0, { testMode: true });
+      send(r.host, { t: "testBots", count: 3 });
+      await nextFrame(r.host, lobbyOf(4));
+      await sendAndSettle(r.host, { t: "testBotVote", exec: "random", pick: "host" }); // 봇 표는 방장에게 — 결과를 고정한다
+      await start(r);
+      await skipThrough(r, "nomination");
+      // 봇 3 이 죽은 마지막 3인(방장 0 · 봇 1·2)을 세운다 — 한마디 차례는 사람 한 명이 끼어 있다.
+      await editRoom(r.code, (room) => {
+        const { pickTurn: _pickTurn, botPlan: _botPlan, ...rest } = room as Record<string, unknown>;
+        const ends = Date.now() + 600_000;
+        return {
+          ...mapPlayers(rest as never, (p) => (p.seat === 3 ? { ...p, alive: false } : p)),
+          phase: "showdown",
+          showdown: i < 0 ? { order: [0, 1, 2], i } : { order: [0, 1, 2], i, endsAt: ends },
+          phaseEndsAt: ends,
+        };
+      });
+      const from = mark(r.host);
+      send(r.host, { t: "testSkip" });
+      await nextFrame(r.host, (m) => m.t === "state" && m.view.phase !== "showdown");
+      const frames = await settle(r.host, from);
+      const room = await stored(r.code);
+      expect(String(room.phase)).toBe("execution");
+      expect(String((room.verdict as { candidate: number }).candidate)).toBe("0");
+      expect(Object.hasOwn(room, "showdown")).toBe(false);
+      for (const p of room.players as Array<Raw>) expect(`${p.seat}:${Object.hasOwn(p, "showdownPick")}`).toBe(`${p.seat}:false`);
+      expect(JSON.stringify(frames).includes("showdownPick")).toBe(false);
+    }, 60_000);
+  }
 });

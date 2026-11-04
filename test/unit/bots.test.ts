@@ -14,6 +14,8 @@ import {
   EXEC_YES_PERCENT,
   RUNOFF_BOT_BASE_MS,
   RUNOFF_BOT_SPAN_MS,
+  SHOWDOWN_BOT_POINT_BASE_MS,
+  SHOWDOWN_BOT_POINT_SPAN_MS,
   botCount,
   botMafiaTarget,
   botPointTarget,
@@ -53,7 +55,8 @@ import { toggleEnd } from "../../shared/game/discussion";
 import { castTurnPoint, enterNomination, nominationStepMs, stepNomination } from "../../shared/game/nomination";
 import { castVerdict } from "../../shared/game/verdict";
 import { castRunoffVote, runoffStepMs, stepRunoff } from "../../shared/game/runoff";
-import { RUNOFF_VOTE_MS } from "../../shared/game/phases";
+import { RUNOFF_VOTE_MS, SHOWDOWN_POINT_MS, SHOWDOWN_TURN_MS } from "../../shared/game/phases";
+import { LAST_WORD_CHIPS, acceptLastWord, castShowdownPoint, showdownStepMs, stepShowdown } from "../../shared/game/showdown";
 
 const START_AT = 10_000;
 const HOST_ID = "player-id-0000-aaaa";
@@ -1362,5 +1365,133 @@ describe("봇 결선 투표 계획 (09.1.1-05)", () => {
     const state = runoffVoteAt(2);
     const gone: RoomState = { ...state, players: state.players.map((p) => (isBot(p) ? p : { ...p, connected: false })) };
     expect(planBotSteps(gone, runoffNow(state), THROWING).length).toBe(0);
+  });
+});
+
+// ---- 마지막 3인 결전 봇 계획(09.1.1-07, 결정 0066-5) ----
+/** 사람 1(좌석 0, 방장) + 봇 4(좌석 1~4) 중 봇 3·4 가 죽은 낮 — 산 사람 0·1·2 의 마지막 3인 모이기(i -1). 차례 순서 [0, 1, 2], 봇은 1·2. */
+function showdownGatherOf(seed: number): RoomState {
+  const day = startedFrom(withBots(lobbyOf(1), 4), seed, "dayAnnounce");
+  const arranged = markDead(day, 3, 4);
+  const s = tick(arranged, arranged.phaseEndsAt!, seededRandInt(seed + 1));
+  if (s.phase !== "showdown") throw new Error(`expected showdown, got ${s.phase}`);
+  return s;
+}
+/** 마감 시각에 한 걸음(시간 초과로 넘김). 새 마감은 지난 마감 + 새 단계 길이. */
+function showdownStep(s: RoomState): RoomState {
+  const at = s.phaseEndsAt!;
+  const r = stepShowdown(s, at);
+  if (!r.stay) throw new Error("showdown resolved early");
+  return { ...r.state, phaseEndsAt: at + showdownStepMs(r.state) };
+}
+/** 차례 i(0..2) 시작 순간 / 동시 지목 창(i 3) 시작 순간. 앞 차례는 시간 초과로 넘긴다. */
+function showdownTurnAt(seed: number, i: number): RoomState {
+  let s = showdownGatherOf(seed);
+  for (let guard = 0; guard < 20 && !(s.showdown!.i === i && s.showdown!.doneAt === undefined); guard += 1) s = showdownStep(s);
+  return s;
+}
+const turnNow = (s: RoomState): number => s.phaseEndsAt! - SHOWDOWN_TURN_MS;
+const pointNow = (s: RoomState): number => s.phaseEndsAt! - SHOWDOWN_POINT_MS;
+const idAt = (s: RoomState, seat: number): string => s.players.find((p) => p.seat === seat)!.id;
+
+describe("봇 마지막 3인 계획 (09.1.1-07)", () => {
+  it("상수: 지목 지연 500 + [0, 2500) ms — 지목 창 8초에서 마감 − 500 안에 든다", () => {
+    expect(SHOWDOWN_BOT_POINT_BASE_MS).toBe(500);
+    expect(SHOWDOWN_BOT_POINT_SPAN_MS).toBe(2_500);
+    expect(SHOWDOWN_BOT_POINT_BASE_MS + SHOWDOWN_BOT_POINT_SPAN_MS).toBeLessThan(SHOWDOWN_POINT_MS - 500);
+  });
+
+  it("계획 키는 'showdown:{마감}' 이고 세부 단계가 넘어가 마감이 달라질 때마다 새 계획이 선다", () => {
+    let s = showdownGatherOf(3);
+    const keys: string[] = [];
+    for (let k = 0; k < 8 && s.phase === "showdown"; k += 1) {
+      expect(String(botPlanKey(s))).toBe(`showdown:${s.phaseEndsAt}`);
+      keys.push(String(botPlanKey(s)));
+      s = showdownStep(s);
+    }
+    expect(new Set(keys).size).toBe(keys.length);
+    const synced = syncBotPlan(showdownTurnAt(3, 1), turnNow(showdownTurnAt(3, 1)), seededRandInt(3));
+    expect(synced.botPlan?.key).toBe(`showdown:${synced.phaseEndsAt}`);
+  });
+
+  it("모이는 중·사람 차례·확정 뒤 사이·공개에는 봇 행동이 없고 randInt 를 부르지 않는다", () => {
+    const gather = showdownGatherOf(4);
+    expect(`gather:${planBotSteps(gather, gather.phaseEndsAt! - 2000, THROWING).length}`).toBe("gather:0");
+    const human = showdownTurnAt(4, 0); // 차례 주인은 사람(좌석 0)
+    expect(`human:${planBotSteps(human, turnNow(human), THROWING).length}`).toBe("human:0");
+    const gap = showdownStep(showdownTurnAt(4, 1)); // 봇 차례가 시간 초과로 확정된 뒤 사이
+    expect(`gap:${gap.showdown!.doneAt !== undefined}:${planBotSteps(gap, gap.phaseEndsAt!, THROWING).length}`).toBe("gap:true:0");
+    let reveal = showdownTurnAt(4, 3);
+    reveal = showdownStep(reveal);
+    expect(`reveal:${reveal.showdown!.i}:${planBotSteps(reveal, reveal.phaseEndsAt!, THROWING).length}`).toBe("reveal:4:0");
+  });
+
+  it("봇 차례: 차례 시작 시각에 LAST_WORD_CHIPS 중 하나를 chat 한 줄로 — 그 봇만, 입력 중 단계 없이, randInt(4) 한 번뿐", () => {
+    for (const [i, seat] of [[1, 1], [2, 2]] as const) {
+      const s = showdownTurnAt(5, i);
+      expect(`${i}:${s.showdown!.order[i]}`).toBe(`${i}:${seat}`);
+      const rec = recording(7);
+      const steps = planBotSteps(s, turnNow(s), rec.randInt);
+      expect(`${i}:${rec.calls.join(",")}`).toBe(`${i}:4`);
+      expect(`${i}:${steps.map((st) => `${st.act.t}:${st.botId === idAt(s, seat)}:${st.at - turnNow(s)}`).join("|")}`).toBe(`${i}:chat:true:0`);
+      const text = (steps[0]!.act as { text: string }).text;
+      expect(LAST_WORD_CHIPS.includes(text)).toBe(true);
+      // 사람과 같은 규칙(정리 → 30자소)을 지나 그 차례의 한마디가 된다
+      expect(sanitizeChatText(text)).toBe(text);
+      expect(acceptLastWord(s, idAt(s, seat), text, steps[0]!.at).kind).toBe("ok");
+    }
+    const s = showdownTurnAt(5, 1);
+    for (let k = 0; k < LAST_WORD_CHIPS.length; k += 1) {
+      const steps = planBotSteps(s, turnNow(s), (n) => (n === 4 ? k : 0));
+      expect((steps[0]!.act as { text: string }).text).toBe(LAST_WORD_CHIPS[k]);
+    }
+  });
+
+  it("동시 지목: 산 봇마다 좌석 오름차순으로 [2, 2500] — 자기를 뺀 산 사람 하나, 500~3000ms, 마감 − 500 안, 사람과 같은 규칙을 통과한다", () => {
+    for (let seed = 1; seed <= 20; seed += 1) {
+      const s = showdownTurnAt(seed, 3);
+      expect(`${seed}:${s.showdown!.i}`).toBe(`${seed}:3`);
+      const now = pointNow(s);
+      const rec = recording(seed);
+      const steps = planBotSteps(s, now, rec.randInt);
+      expect(`${seed}:${rec.calls.join(",")}`).toBe(`${seed}:2,2500,2,2500`);
+      expect(`${seed}:${steps.map((st) => st.act.t).join(",")}`).toBe(`${seed}:point,point`);
+      expect(`${seed}:${steps.map((st) => s.players.find((p) => p.id === st.botId)!.seat).sort().join(",")}`).toBe(`${seed}:1,2`);
+      for (const st of steps) {
+        if (st.act.t !== "point") throw new Error("expected point");
+        const seat = s.players.find((p) => p.id === st.botId)!.seat;
+        expect(`${seed}:${seat}:${st.act.target !== seat && [0, 1, 2].includes(st.act.target)}`).toBe(`${seed}:${seat}:true`);
+        expect(st.at >= now + SHOWDOWN_BOT_POINT_BASE_MS && st.at < now + SHOWDOWN_BOT_POINT_BASE_MS + SHOWDOWN_BOT_POINT_SPAN_MS).toBe(true);
+        expect(st.at < s.phaseEndsAt! - 500).toBe(true);
+        expect(`${seed}:${seat}:${castShowdownPoint(s, st.botId, st.act.target, st.at).ok}`).toBe(`${seed}:${seat}:true`);
+      }
+    }
+  });
+
+  it("지목 대상은 randInt(2) 번째 후보다(자기를 뺀 산 사람 좌석 오름차순): 봇 1 은 [0, 2], 봇 2 는 [0, 1]", () => {
+    const s = showdownTurnAt(6, 3);
+    for (const pick of [0, 1]) {
+      const steps = planBotSteps(s, pointNow(s), (n) => (n === 2 ? pick : 0));
+      const bySeatTarget = steps.map((st) => `${s.players.find((p) => p.id === st.botId)!.seat}>${st.act.t === "point" ? st.act.target : "-"}`).join(",");
+      expect(`${pick}:${bySeatTarget}`).toBe(pick === 0 ? "0:1>0,2>0" : "1:1>2,2>1");
+    }
+  });
+
+  it("고정 pick: host 는 방장에게, other 는 방장이 아닌 사람에게 — 결정 난수는 건너뛰고 지연 난수만 부른다", () => {
+    const s = showdownTurnAt(6, 3);
+    for (const [pick, want] of [["host", "1>0,2>0"], ["other", "1>2,2>1"]] as const) {
+      const rec = recording(9);
+      const steps = planBotSteps({ ...s, testBotVote: { pick } }, pointNow(s), rec.randInt);
+      expect(`${pick}:${rec.calls.join(",")}`).toBe(`${pick}:2500,2500`);
+      expect(`${pick}:${steps.map((st) => `${s.players.find((p) => p.id === st.botId)!.seat}>${st.act.t === "point" ? st.act.target : "-"}`).join(",")}`).toBe(`${pick}:${want}`);
+    }
+  });
+
+  it("탈락한 봇·사람이 모두 끊긴 방에는 계획이 없다", () => {
+    const s = showdownTurnAt(2, 3);
+    const gone: RoomState = { ...s, players: s.players.map((p) => (isBot(p) ? p : { ...p, connected: false })) };
+    expect(planBotSteps(gone, pointNow(s), THROWING).length).toBe(0);
+    const oneDead = markDead(s, 2);
+    expect(planBotSteps(oneDead, pointNow(s), seededRandInt(1)).map((st) => st.botId).join(",")).toBe(idAt(s, 1));
   });
 });

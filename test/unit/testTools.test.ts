@@ -10,9 +10,10 @@ import { pickTarget } from "../../shared/game/night";
 import { isAlive } from "../../shared/game/alive";
 import { castTurnPoint, enterNomination, nominationStepMs, stepNomination } from "../../shared/game/nomination";
 import { castVerdict } from "../../shared/game/verdict";
-import { finishNomination, finishRunoff, resetToLobby, setBotCount, setBotVote, setTestRole, skipPhase } from "../../shared/game/testTools";
+import { finishNomination, finishRunoff, finishShowdown, resetToLobby, setBotCount, setBotVote, setTestRole, skipPhase } from "../../shared/game/testTools";
 import { tick } from "../../shared/game/tick";
 import { runoffStepMs, stepRunoff } from "../../shared/game/runoff";
+import { acceptLastWord, castShowdownPoint, showdownStepMs, stepShowdown } from "../../shared/game/showdown";
 import { buildPreview, buildView } from "../../shared/game/view";
 import type { PhaseId } from "../../shared/protocol";
 import { seededRandInt } from "../helpers/seededRandom";
@@ -1002,5 +1003,101 @@ describe("넘기기: 동점 결선 (09.1.1-05)", () => {
     if (!r.ok) throw new Error(r.error);
     expect(Object.hasOwn(r.state, "runoff")).toBe(false);
     expect(r.state.players.some((p) => Object.hasOwn(p, "runoffVote"))).toBe(false);
+  });
+});
+
+// ---- 09.1.1-07: 넘기기가 마지막 3인 결전을 한 번에 끝낸다 (결정 0066-5) ----
+describe("넘기기: 마지막 3인 결전 (09.1.1-07)", () => {
+  /** 방장(좌석 0, 사람) + 봇 4 중 봇 3·4 가 죽은 낮의 모이기(i -1). 차례 순서 [0, 1, 2], 산 봇은 1·2. */
+  const gatherOf = (lobby: RoomState = botLobby()): RoomState => {
+    const day = startedFrom(lobby, 3, "dayAnnounce");
+    const arranged: RoomState = { ...day, players: day.players.map((p) => (p.seat >= 3 ? { ...p, alive: false } : p)) };
+    const s = tick(arranged, arranged.phaseEndsAt!, seededRandInt(8));
+    if (s.phase !== "showdown") throw new Error(`expected showdown, got ${s.phase}`);
+    return s;
+  };
+  const step = (s: RoomState): RoomState => {
+    const at = s.phaseEndsAt!;
+    const r = stepShowdown(s, at);
+    if (!r.stay) throw new Error("resolved early");
+    return { ...r.state, phaseEndsAt: at + showdownStepMs(r.state) };
+  };
+  const stepsTo = (s: RoomState, i: number): RoomState => {
+    let out = s;
+    for (let g = 0; g < 20 && !(out.showdown!.i === i && out.showdown!.doneAt === undefined); g += 1) out = step(out);
+    return out;
+  };
+  const picksOf = (s: RoomState): string => s.players.map((p) => `${p.seat}>${p.showdownPick === undefined ? "-" : p.showdownPick}`).join(",");
+  const rec = (value: (n: number, i: number) => number = () => 0): { calls: number[]; randInt: (n: number) => number } => {
+    const calls: number[] = [];
+    return { calls, randInt: (n) => (calls.push(n), value(n, calls.length - 1)) };
+  };
+  const THROWING = (): number => {
+    throw new Error("randInt must not be called");
+  };
+
+  it("finishShowdown: 모이기·한마디·지목 창 어디서든 아직 안 던진 산 봇이 좌석 순 randInt(2) 한 번씩 던지고 공개(i 4, points 확정)가 된다; 입력은 바뀌지 않는다", () => {
+    for (const from of [-1, 0, 1, 3]) {
+      const state = from < 0 ? gatherOf() : stepsTo(gatherOf(), from);
+      const before = JSON.stringify(state);
+      const r = rec();
+      const after = finishShowdown(state, r.randInt);
+      expect(`${from}:${r.calls.join(",")}`).toBe(`${from}:2,2`);
+      expect(`${from}:${picksOf(after)}`).toBe(`${from}:0>-,1>0,2>0,3>-,4>-`);
+      expect(`${from}:${after.showdown!.i}:${JSON.stringify(after.showdown!.points)}`).toBe(`${from}:4:${JSON.stringify([{ seat: 1, target: 0 }, { seat: 2, target: 0 }])}`);
+      expect(JSON.stringify(state)).toBe(before);
+    }
+  });
+
+  it("사람의 한마디·지목과 이미 던진 봇의 표는 그대로고 그 봇의 난수는 부르지 않는다", () => {
+    const turn0 = stepsTo(gatherOf(), 0);
+    const spoken = acceptLastWord(turn0, turn0.hostId, "저는 아니에요", turn0.phaseEndsAt! - 7_000);
+    if (spoken.kind !== "ok") throw new Error("word rejected");
+    const pointWindow = stepsTo(spoken.state, 3);
+    const humanPick = castShowdownPoint(pointWindow, pointWindow.hostId, 2, pointWindow.phaseEndsAt! - 7_000);
+    if (!humanPick.ok) throw new Error("point rejected");
+    const bot1 = humanPick.state.players.find((p) => p.seat === 1)!;
+    const prepared: RoomState = { ...humanPick.state, players: humanPick.state.players.map((p) => (p.id === bot1.id ? { ...p, showdownPick: 2 } : p)) };
+    const r = rec((n) => n - 1);
+    const after = finishShowdown(prepared, r.randInt);
+    expect(r.calls.join(",")).toBe("2"); // 봇 2 만
+    expect(picksOf(after)).toBe("0>2,1>2,2>1,3>-,4>-");
+    expect(after.showdown!.i).toBe(4);
+  });
+
+  it("공개(i 4)이거나 마지막 3인이 아니면 입력 그대로이고 난수를 부르지 않는다", () => {
+    const reveal = finishShowdown(stepsTo(gatherOf(), 3), () => 0);
+    expect(finishShowdown(reveal, THROWING) === reveal).toBe(true);
+    const discussion = startedFrom(botLobby(), 3, "discussion");
+    expect(finishShowdown(discussion, THROWING) === discussion).toBe(true);
+  });
+
+  it("고정 pick: host 는 방장에게, other 는 방장이 아닌 사람에게 던지고 결정 난수를 부르지 않는다", () => {
+    for (const [pick, want] of [["host", "0>-,1>0,2>0,3>-,4>-"], ["other", "0>-,1>2,2>1,3>-,4>-"]] as const) {
+      const after = finishShowdown(gatherOf(setting(botLobby(), "random", pick)), THROWING);
+      expect(`${pick}:${picksOf(after)}`).toBe(`${pick}:${want}`);
+    }
+  });
+
+  it("skipPhase: 어느 세부 단계에서든 한 번이면 showdown 을 벗어난다 — 2표면 처형 단계(결전 표시·찬반 없음), 아니면 처형 없는 밤; showdown·개인 표는 남지 않는다", () => {
+    for (const from of [-1, 0, 3]) {
+      const state = from < 0 ? gatherOf() : stepsTo(gatherOf(), from);
+      const exec = skipOk(state, state.phaseEndsAt!, () => 0); // 봇 둘 모두 방장(좌석 0)을 지목
+      expect(`${from}:${exec.phase}:${exec.verdict?.candidate}`).toBe(`${from}:execution:0`);
+      expect(Object.hasOwn(exec, "showdown")).toBe(false);
+      expect(exec.players.some((p) => Object.hasOwn(p, "showdownPick"))).toBe(false);
+      expect(exec.voteLog?.at(-1)?.last).toBe(true);
+      const night = skipOk(state, state.phaseEndsAt!, () => 1); // 봇 1>2, 봇 2>1 — 한 표씩
+      expect(`${from}:${night.phase}`).toBe(`${from}:night`);
+      expect(Object.hasOwn(night, "showdown")).toBe(false);
+    }
+  });
+
+  it("skipPhase 거부: 일반 방은 BAD_MESSAGE, 손님은 NOT_HOST", () => {
+    const state = gatherOf();
+    const normal: RoomState = { ...state, testMode: undefined };
+    expect(JSON.stringify(skipPhase(normal, normal.hostId, 1, THROWING))).toBe(JSON.stringify({ ok: false, error: "BAD_MESSAGE" }));
+    const guest = state.players.find((p) => p.seat === 1)!;
+    expect(JSON.stringify(skipPhase(state, guest.id, 1, THROWING))).toBe(JSON.stringify({ ok: false, error: "NOT_HOST" }));
   });
 });

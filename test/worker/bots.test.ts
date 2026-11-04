@@ -4,6 +4,7 @@ import { env, exports } from "cloudflare:workers";
 import { evictDurableObject, runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 import { BOT_CHAT_LINES, BOT_WILL_LINES } from "../../shared/game/bots";
+import { LAST_WORD_CHIPS } from "../../shared/game/showdown";
 import { PHASE_DEFS, PICK_TURN_MS } from "../../shared/game/phases";
 import type { PhaseId, RoomView, ServerMessage } from "../../shared/protocol";
 import {
@@ -731,4 +732,57 @@ describe("봇 유언·다가가기 (09-12, 결정 0061-18)", () => {
       expect(`${m.seat}:${bx !== px || bz !== pz}`).toBe(`${m.seat}:true`);
     }
   }, 30_000);
+});
+
+describe("봇 마지막 3인 (09.1.1-07, 결정 0066-5)", () => {
+  /** 방장(좌석 0) + 봇 3(좌석 1~3) 중 봇 3 이 죽은 낮의 마지막 3인(차례 순서 [0, 1, 2], 봇은 1·2)을 세운다. 단계 마감은 멀리 둔다. */
+  async function showdownRoom(i: number): Promise<Seated> {
+    const r = await botRoomAt("nomination");
+    await editRoom(r.code, (room) => {
+      const { pickTurn: _pickTurn, botPlan: _botPlan, ...rest } = room as Record<string, unknown>;
+      const ends = Date.now() + 600_000;
+      return {
+        ...mapPlayers(rest as never, (p) => (p.seat === 3 ? { ...p, alive: false } : p)),
+        phase: "showdown",
+        showdown: { order: [0, 1, 2], i, endsAt: ends },
+        phaseEndsAt: ends,
+      };
+    });
+    for (const sock of allSockets(r)) await settle(sock, mark(sock));
+    await waitForPlanKey(r.code);
+    return r;
+  }
+
+  it("봇 차례: 봇이 사람과 같은 chat 길로 LAST_WORD_CHIPS 한 줄을 말해 모두 ch all 로 받고 그 차례의 한마디가 된다; 프레임에 봇 계획이 새지 않는다", async () => {
+    const r = await showdownRoom(1);
+    const from = mark(r.host);
+    await forceBotsDue(r.code);
+    const chat = await nextFrame(r.host, (m) => m.t === "chat" && m.seat === 1);
+    expect(chat.t === "chat" && LAST_WORD_CHIPS.includes(chat.text)).toBe(true);
+    await until("한마디 확정", async () => ((await stored(r.code)).showdown as { word?: string }).word !== undefined);
+    const sd = (await stored(r.code)).showdown as { word: string; doneAt: number; i: number };
+    expect(`${sd.i}:${LAST_WORD_CHIPS.includes(sd.word)}`).toBe("1:true");
+    const frames = await settle(r.host, from);
+    const text = JSON.stringify(frames);
+    expect(text.includes("botPlan") || text.includes("isBot")).toBe(false);
+    expect(summary(frames.filter((m) => m.t === "error" || m.t === "chatReject"))).toBe("[]");
+    const view = (frames.filter((m): m is State => m.t === "state").at(-1)!).view;
+    expect(view.day?.showdown?.word).toBe(sd.word);
+  }, 60_000);
+
+  it("동시 지목: 산 봇 둘이 자기를 뺀 산 사람에게 point 하고 voted 에 좌석만 공개되며 대상은 프레임 어디에도 없다 (방장은 던지지 않았으니 me.ballot 없음)", async () => {
+    const r = await showdownRoom(3);
+    const from = mark(r.host);
+    await forceBotsDue(r.code);
+    await until("봇 지목", async () => (await playersOf(r.code)).filter((p) => (p as unknown as { showdownPick?: number }).showdownPick !== undefined).length === 2);
+    const picks = ((await stored(r.code)).players as Array<{ seat: number; showdownPick?: number }>).filter((p) => p.showdownPick !== undefined);
+    expect(picks.map((p) => p.seat).sort().join(",")).toBe("1,2");
+    expect(picks.every((p) => p.showdownPick !== p.seat && [0, 1, 2].includes(p.showdownPick!))).toBe(true);
+    const frames = await settle(r.host, from);
+    const text = JSON.stringify(frames);
+    expect(text.includes("showdownPick") || text.includes("botPlan") || text.includes("isBot")).toBe(false);
+    const view = (frames.filter((m): m is State => m.t === "state").at(-1)!).view;
+    expect(JSON.stringify(view.day?.showdown?.voted)).toBe("[1,2]");
+    expect(Object.hasOwn(view.me, "ballot")).toBe(false);
+  }, 60_000);
 });
