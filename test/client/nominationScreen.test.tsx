@@ -751,13 +751,15 @@ describe("차례 알약 (결정 0063-1, UI-SPEC A-1~A-6)", () => {
     expect(line(m.container)).toBe("가운데로 모여요");
   });
 
-  it("끝 알림: 알약 없음, 위 한 줄 '모두 골랐어요 · {이름} 님 {k}표'(단독 최다) 또는 '모두 골랐어요'", () => {
+  it("끝 알림: 알약 없음, 위 한 줄 '모두 골랐어요 · {이름} 님 {k}표'(단독 최다), '동점이에요'(정확히 둘 동점) 또는 '모두 골랐어요'", () => {
     const m = mount(turn4({ i: 3 }));
     m.show(turn4({ i: 4 }, { points: [[0, 2], [1, 2], [3, 1]] }));
     expect(m.container.querySelector(".mf-turn__pill")).toBeNull();
     expect(ring(m.container)).toBeNull();
     expect(line(m.container)).toBe("모두 골랐어요 · 서준 님 2표");
     m.show(turn4({ i: 4 }, { points: [[0, 2], [1, 3]] }));
+    expect(line(m.container)).toBe("동점이에요"); // 09.1.1-14: 최다가 정확히 둘 동점이면 결선이 열린다
+    m.show(turn4({ i: 4 }, { points: [] }));
     expect(line(m.container)).toBe("모두 골랐어요");
   });
 

@@ -704,3 +704,63 @@ describe("dayEvents — 경찰 화면 순서 (UI-SPEC 245·266행, E6 #35)", () 
     expect(dayEvents(police("night", []), cur, { reset: true }).localCards ?? []).toEqual([]);
   });
 });
+
+// ---- 09.1.1-14: 결선(runoff) 채팅 줄·알림·헤더 (UI-SPEC D, Copywriting Contract) ----
+const runoffOf = (step: 0 | 1 | 2, opts: ViewOpts & { tally?: [number, number]; cand?: [number, number] } = {}): RoomView =>
+  viewOf("runoff", { ...opts, day: { runoff: { cand: opts.cand ?? [2, 3], step, ...(opts.tally !== undefined ? { tally: opts.tally } : {}) }, ...opts.day } });
+
+describe("dayEvents — 결선 (09.1.1-14)", () => {
+  it("지목 → 결선: system 줄 '결선 시작', 알림 없음", () => {
+    const events = dayEvents(nominationOf([[0, 2], [1, 3], [2, 3], [3, 2]]), runoffOf(0));
+    same(events.lines, [{ kind: "system", text: "결선 시작" }]);
+    same(events.announces, []);
+  });
+
+  it("결선 → 최후 변론: hot '{이름} 님 결선 {k}표 · 최후 변론' (k 는 직전 view 의 tally 에서 승자 칸)", () => {
+    const toDefense = (candidate: number) => viewOf("defense", { day: { candidate, voteLog: VOTE_LOG } });
+    same(dayEvents(runoffOf(2, { tally: [3, 1] }), toDefense(2)).lines, [{ kind: "hot", text: "도윤 님 결선 3표 · 최후 변론" }]);
+    same(dayEvents(runoffOf(2, { tally: [1, 2] }), toDefense(3)).lines, [{ kind: "hot", text: "지호 님 결선 2표 · 최후 변론" }]);
+  });
+
+  it("결선 → 변론인데 직전 view 에 tally 가 없으면 기존 변론 줄로 돌아간다", () => {
+    const events = dayEvents(runoffOf(1), viewOf("defense", { day: { candidate: 3, voteLog: VOTE_LOG } }));
+    same(events.lines, [{ kind: "hot", text: "지호 님 4표 · 최후 변론" }]);
+  });
+
+  it("결선 → 밤(또 동점): '처형 없음' 줄과 알림, 이어 '밤이 되었습니다'", () => {
+    const events = dayEvents(runoffOf(2, { tally: [2, 2] }), viewOf("night", { day: { noExecution: { reason: "tie" } } }));
+    same(events.lines, [{ kind: "system", text: "처형 없음" }]);
+    same(events.announces, [
+      { text: "처형 없음", at: 0, ms: 1400 },
+      { text: "밤이 되었습니다", at: 1400, ms: 1600 },
+    ]);
+  });
+
+  it("지목 → 밤은 여전히 같다", () => {
+    const events = dayEvents(nominationOf([[0, 1], [1, 0]]), viewOf("night", { day: { noExecution: { reason: "tie" } } }));
+    same(events.lines, [{ kind: "system", text: "처형 없음" }]);
+  });
+
+  it("결선 줄에 역할 단어가 없다", () => {
+    for (const [a, b] of [[nominationOf([]), runoffOf(0)], [runoffOf(2, { tally: [3, 1] }), defenseView()]] as [RoomView, RoomView][]) {
+      const out = text(dayEvents(a, b));
+      for (const word of ROLE_WORDS) expect(out.includes(word)).toBe(false);
+    }
+  });
+});
+
+describe("headerFor — 결선 (UI-SPEC D-2)", () => {
+  it("제목 '결선'. 후보 아닌 산 사람은 투표 중에만 '둘 중 한 명을 눌러요', 앞머리·결과는 제목만", () => {
+    same(headerFor(runoffOf(1)), { title: "결선", hint: "둘 중 한 명을 눌러요" });
+    same(headerFor(runoffOf(0)), { title: "결선" });
+    same(headerFor(runoffOf(2, { tally: [1, 1] })), { title: "결선" });
+  });
+  it("후보 본인은 '결과를 기다려요'", () => {
+    same(headerFor(runoffOf(1, { mySeat: 2 })), { title: "결선", hint: "결과를 기다려요" });
+    same(headerFor(runoffOf(1, { mySeat: 3 })), { title: "결선", hint: "결과를 기다려요" });
+  });
+  it("유령은 기존 '모두의 직업이 보여요'", () => {
+    const players = NAMES.map((name, seat) => pl(seat, name, seat !== 0));
+    same(headerFor(runoffOf(1, { players })), { title: "결선", hint: "모두의 직업이 보여요" });
+  });
+});

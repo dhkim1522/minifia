@@ -1,9 +1,9 @@
 // 순차 지목 화면 순수 모델 시험 — 결정 0063-1, UI-SPEC A-2·A-3·A-5.
 // view 는 리터럴로 만든다(players·me·day.turn·day.points 만). 시각은 인자 serverNow 로만 들어간다.
 import { describe, expect, it } from "vitest";
-import { PICK_TURN_MS } from "../../shared/game/phases";
-import type { PickTurnView, PointLine, PublicPlayer, RoomView } from "../../shared/protocol";
-import { TURN_COPY, mapStageTop, turnCompact, turnLook, turnStageOf, turnTopLine } from "../../src/game/pickTurn";
+import { PICK_TURN_MS, RUNOFF_VOTE_MS } from "../../shared/game/phases";
+import type { PickTurnView, PointLine, PublicPlayer, RoomView, RunoffView } from "../../shared/protocol";
+import { TURN_COPY, blockLook, blockModeOf, mapStageTop, turnCompact, turnLook, turnStageOf, turnTopLine } from "../../src/game/pickTurn";
 
 const NAMES = ["서연", "민준", "도윤", "지호", "하윤"];
 const pl = (seat: number, alive = true): PublicPlayer => ({
@@ -164,8 +164,12 @@ describe("turnTopLine — 위 한 줄 (UI-SPEC A-5)", () => {
     const points = [{ seat: 0, target: 2 }, { seat: 1, target: 2 }, { seat: 2, target: 0 }];
     expect(turnTopLine(view({ turn: { order: ORDER, i: 4 }, points }))).toBe("모두 골랐어요 · 도윤 님 2표");
   });
-  it("끝 알림: 동률·0표는 '모두 골랐어요'", () => {
-    expect(turnTopLine(view({ turn: { order: ORDER, i: 4 }, points: [{ seat: 0, target: 2 }, { seat: 1, target: 3 }] }))).toBe("모두 골랐어요");
+  it("끝 알림: 최다가 정확히 둘 동점이면 '동점이에요' (UI-SPEC D-1, 결선이 열린다)", () => {
+    expect(turnTopLine(view({ turn: { order: ORDER, i: 4 }, points: [{ seat: 0, target: 2 }, { seat: 1, target: 3 }] }))).toBe("동점이에요");
+  });
+  it("끝 알림: 셋 이상 동률·0표는 '모두 골랐어요'", () => {
+    const three = [{ seat: 0, target: 1 }, { seat: 1, target: 2 }, { seat: 2, target: 3 }];
+    expect(turnTopLine(view({ turn: { order: ORDER, i: 4 }, points: three }))).toBe("모두 골랐어요");
     expect(turnTopLine(view({ turn: { order: ORDER, i: 4 }, points: [] }))).toBe("모두 골랐어요");
   });
 });
@@ -228,5 +232,84 @@ describe("turnCompact — 작은 폰은 압축형 (UI-SPEC A-1 표)", () => {
   it("경계: 스테이지 높이 360 은 압축 아님, 359 는 압축", () => {
     expect(turnCompact(62 + 188 + 360, 188)).toBe(false);
     expect(turnCompact(62 + 188 + 359, 188)).toBe(true);
+  });
+});
+
+// ---- 09.1.1-14: 결선(runoff) — 지목과 같은 부품(blockLook)에서 나오는 알약·막대·링·위 한 줄 ----
+const RT = 200_000;
+function runoffView(step: 0 | 1 | 2, o: { endsIn?: number; cand?: [number, number]; tally?: [number, number]; mySeat?: number; dead?: number[]; voted?: number[] } = {}): RoomView {
+  const v = view({ phase: "runoff", mySeat: o.mySeat ?? 0, ...(o.dead !== undefined ? { dead: o.dead } : {}) });
+  const runoff: RunoffView = { cand: o.cand ?? [2, 3], step, ...(o.voted !== undefined ? { voted: o.voted } : {}), ...(o.tally !== undefined ? { tally: o.tally } : {}) };
+  return { ...v, phaseEndsAt: RT + (o.endsIn ?? RUNOFF_VOTE_MS), phaseDurationMs: step === 1 ? RUNOFF_VOTE_MS : 1000, day: { ...v.day!, runoff } };
+}
+
+describe("blockModeOf — 알약 부품이 그릴 모드", () => {
+  it("지목 + day.turn → pick, 결선 + day.runoff → runoff, 그 밖은 null", () => {
+    expect(blockModeOf(view({ turn: during(0) }))).toBe("pick");
+    expect(blockModeOf(view())).toBeNull();
+    expect(blockModeOf(runoffView(1))).toBe("runoff");
+    const noRunoff = { ...runoffView(1), day: { n: 1, roles: [] } } as RoomView;
+    expect(blockModeOf(noRunoff)).toBeNull();
+    expect(blockModeOf(view({ phase: "discussion" }))).toBeNull();
+  });
+});
+
+describe("blockLook — 지목은 값이 그대로, mode·totalMs 만 더한다", () => {
+  it("pick: 기존 turnLook 필드 + mode pick + totalMs PICK_TURN_MS", () => {
+    const v = view({ turn: during(1) });
+    const a = blockLook(v, T0 + 2_500)!;
+    expect(a).toMatchObject({ mode: "pick", totalMs: PICK_TURN_MS, stage: "turn", no: 2, seat: 1, seconds: 6 });
+    const { mode: _m, totalMs: _t, ...rest } = a;
+    expect(JSON.stringify(rest)).toBe(JSON.stringify(turnLook(v, T0 + 2_500)));
+  });
+  it("지목도 결선도 아니면 null", () => {
+    expect(blockLook(view({ phase: "discussion" }), T0)).toBeNull();
+  });
+});
+
+describe("blockLook — 결선 (UI-SPEC D-1·D-3)", () => {
+  it("앞머리(step 0): gather, 알약 없음, 위 한 줄 '동점이에요'", () => {
+    const v = runoffView(0, { endsIn: 1000 });
+    const look = blockLook(v, RT)!;
+    expect(look).toMatchObject({ mode: "runoff", stage: "gather", no: 0, myTurn: false });
+    expect(turnTopLine(v)).toBe("동점이에요");
+  });
+  it("투표(step 1): turn, 서버 endsAt 기준 올림 초·비율, 항상 calm", () => {
+    const at = (remaining: number) => blockLook(runoffView(1, { endsIn: RUNOFF_VOTE_MS }), RT + RUNOFF_VOTE_MS - remaining)!;
+    expect(at(5_000)).toMatchObject({ mode: "runoff", stage: "turn", seconds: 5, totalMs: RUNOFF_VOTE_MS, tone: "calm" });
+    expect(at(5_000).ratio).toBe(1);
+    expect(at(2_500)).toMatchObject({ seconds: 3, tone: "calm" });
+    expect(at(2_500).ratio).toBeCloseTo(0.5, 6);
+    expect(at(1)).toMatchObject({ seconds: 1, tone: "calm" });
+    expect(at(0)).toMatchObject({ seconds: 0, tone: "calm", remainingMs: 0 });
+    for (let r = 0; r <= RUNOFF_VOTE_MS; r += 111) expect(at(r).tone).toBe("calm");
+    expect(turnTopLine(runoffView(1))).toBeNull();
+  });
+  it("결과(step 2): end, 알약 없음. 많이 받은 사람이 있으면 '{이름} 님 {k}표', 아니면 '또 동점이에요'", () => {
+    const win0 = runoffView(2, { tally: [3, 1] });
+    expect(blockLook(win0, RT)).toMatchObject({ mode: "runoff", stage: "end" });
+    expect(turnTopLine(win0)).toBe("도윤 님 3표");
+    expect(turnTopLine(runoffView(2, { tally: [1, 2] }))).toBe("지호 님 2표");
+    expect(turnTopLine(runoffView(2, { tally: [2, 2] }))).toBe("또 동점이에요");
+    expect(turnTopLine(runoffView(2, { tally: [0, 0] }))).toBe("또 동점이에요");
+  });
+  it("결과인데 tally 가 아직 없으면 위 한 줄 없음(null)", () => {
+    expect(turnTopLine(runoffView(2))).toBeNull();
+  });
+  it("역할·spectate 를 읽지 않는다", () => {
+    const snap = (o: Opts) => JSON.stringify([blockLook({ ...runoffView(1), ...(o.role !== undefined ? { me: { seat: 0, isHost: false, role: o.role } } : {}) } as RoomView, RT + 1_000), turnTopLine(runoffView(2, { tally: [2, 1] }))]);
+    expect(snap({ role: "mafia" })).toBe(snap({}));
+  });
+});
+
+describe("TURN_COPY — 결선 문구 (UI-SPEC Copywriting Contract 원문)", () => {
+  it("원문 그대로, 마침표·느낌표 없음", () => {
+    expect(TURN_COPY.tie).toBe("동점이에요");
+    expect(TURN_COPY.runoffPill).toBe("결선");
+    expect(TURN_COPY.runoffWait).toBe("결과를 기다려요");
+    expect(TURN_COPY.runoffPick).toBe("둘 중 한 명을 눌러요");
+    expect(TURN_COPY.runoffVotes("민준", 3)).toBe("민준 님 3표");
+    expect(TURN_COPY.runoffTie).toBe("또 동점이에요");
+    for (const s of [TURN_COPY.tie, TURN_COPY.runoffPill, TURN_COPY.runoffWait, TURN_COPY.runoffPick, TURN_COPY.runoffTie]) expect(s).not.toMatch(/[.!]/);
   });
 });
