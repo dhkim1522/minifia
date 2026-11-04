@@ -186,3 +186,72 @@ describe("직업 배지 CSS 규칙 (09.1.1-08)", () => {
     expect(mine(V2, /^\.mv-claim-chip$/)[0]?.body ?? "").toMatch(/min-height:\s*var\(--tap-min\)/);
   });
 });
+
+// 09.1.1-09: 귓속말 한 줄 시트·비공개 줄 CSS 정적 검사 (UI-SPEC B, "쓰지 않을 것")
+describe("귓속말 CSS 규칙 (09.1.1-09)", () => {
+  const V2 = readFileSync(new URL("../../src/styles/v2.css", import.meta.url), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+  const rules = [...V2.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({ selector: (m[1] ?? "").trim(), body: m[2] ?? "" }));
+  const NEW = rules.filter((r) => /(mv-line|mv-chat__whisper)/.test(r.selector));
+
+  it("새 규칙이 있다(한 줄 시트·윗줄·입력줄·비공개 블록)", () => {
+    expect(NEW.length).toBeGreaterThanOrEqual(10);
+    for (const sel of [".mv-line-sheet", ".mv-line__head", ".mv-line__row", ".mv-line__input", ".mv-line__send", ".mv-chat__whisper"]) expect(NEW.some((r) => r.selector === sel), sel).toBe(true);
+  });
+
+  it("hex·rgb 색 리터럴이 없다 — tokens.css 변수만", () => {
+    for (const r of NEW) {
+      expect(r.body, r.selector).not.toMatch(/#[0-9a-fA-F]{3,8}\b/);
+      expect(r.body, r.selector).not.toMatch(/\brgba?\(/);
+    }
+  });
+
+  it("밝은 종이 면·진홍·놋쇠·초록·호박이 없다 — 색 변수는 night/gray 계열뿐", () => {
+    for (const r of NEW) {
+      for (const m of r.body.matchAll(/var\(--([a-z0-9-]+)\)/g)) {
+        const name = m[1] ?? "";
+        if (/^(space|radius|tap|control|font|shadow|dur|ease|z)-?/.test(name)) continue;
+        expect(name, `${r.selector}: --${name}`).toMatch(/^(night|gray)-/);
+      }
+      expect(r.body, r.selector).not.toMatch(/--(crimson|brass|cream|journal|amber|felt)-/);
+    }
+  });
+
+  it("글자 크기는 14 이상(14·16 중 하나)이다", () => {
+    for (const r of NEW) for (const m of r.body.matchAll(/font-size:\s*([^;]+);/g)) expect(["14px", "16px"], `${r.selector}: ${m[1]}`).toContain((m[1] ?? "").trim());
+    expect(NEW.some((r) => /font-size/.test(r.body))).toBe(true);
+  });
+
+  it("시트 틀은 유언 시트와 같은 값 — night-800 면·night-600 테두리·radius-lg·안쪽 12·폭 부모 − 20", () => {
+    const body = NEW.find((r) => r.selector === ".mv-line-sheet")?.body ?? "";
+    expect(body).toMatch(/background:\s*var\(--night-800\)/);
+    expect(body).toMatch(/border:\s*1px solid var\(--night-600\)/);
+    expect(body).toMatch(/border-radius:\s*var\(--radius-lg\)/);
+    expect(body).toMatch(/padding:\s*12px/);
+    expect(body).toMatch(/width:\s*calc\(100% - 20px\)/);
+  });
+
+  it("윗줄 높이 44(tap-min), 입력줄·입력칸·보내기 48(control-input), 닫기 44×44", () => {
+    const body = (sel: string) => NEW.find((r) => r.selector === sel)?.body ?? "";
+    expect(body(".mv-line__head")).toMatch(/height:\s*var\(--tap-min\)/);
+    expect(body(".mv-line__row")).toMatch(/height:\s*var\(--control-input\)/);
+    expect(body(".mv-line__input")).toMatch(/height:\s*var\(--control-input\)/);
+    expect(body(".mv-line__send")).toMatch(/width:\s*var\(--control-input\)/);
+    expect(body(".mv-line__send")).toMatch(/height:\s*var\(--control-input\)/);
+    expect(body(".mv-line__close")).toMatch(/width:\s*var\(--tap-min\)/);
+    expect(body(".mv-line__close")).toMatch(/height:\s*var\(--tap-min\)/);
+  });
+
+  it("입력칸 16px night-900 면, 보내기 gray-100 면 night-900 글자, 글자 수 tabular-nums", () => {
+    const body = (sel: string) => NEW.find((r) => r.selector === sel)?.body ?? "";
+    expect(body(".mv-line__input")).toMatch(/font-size:\s*16px/);
+    expect(body(".mv-line__input")).toMatch(/background:\s*var\(--night-900\)/);
+    expect(body(".mv-line__send")).toMatch(/background:\s*var\(--gray-100\)/);
+    expect(body(".mv-line__send")).toMatch(/color:\s*var\(--night-900\)/);
+    expect(body(".mv-line__count")).toMatch(/tabular-nums/);
+  });
+
+  it("귓속말 모드의 이름표 깜빡임은 모션 줄이기에서 gray-100 2px 고정 테두리다(기존 .mv-tag.is-blink 규칙)", () => {
+    const reduce = V2.match(/@media \(prefers-reduced-motion: reduce\)\s*\{[\s\S]*?\n\}/g)?.join("\n") ?? "";
+    expect(reduce).toMatch(/\.mv-tag\.is-blink\s*\{\s*animation:\s*none;\s*box-shadow:\s*inset 0 0 0 2px var\(--gray-100\)/);
+  });
+});

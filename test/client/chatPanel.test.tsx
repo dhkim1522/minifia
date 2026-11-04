@@ -818,3 +818,59 @@ describe("ChatPanel 깃펜 버튼 (WILL-01)", () => {
     expect(dot).toContain("background: var(--gray-100)");
   });
 });
+
+describe("ChatPanel 귓속말 줄 (09.1.1-09, UI-SPEC B-3)", () => {
+  const WHISPERS: ChatPanelMessage[] = [
+    { key: "w1", kind: "whisper", whisper: "in", icon: "whisper", title: "영희 → 나", text: "받은 본문" },
+    { key: "w2", kind: "whisper", whisper: "out", icon: "whisper", title: "나 → 서준", text: "보낸 본문" },
+    { key: "w3", kind: "system", whisper: "public", icon: "whisper", text: "지아 → 도윤 귓속말" },
+  ];
+
+  it("세 가지 줄: 받은·보낸 블록은 제목 + 본문, 공개 줄은 whisper 아이콘 + 한 줄", () => {
+    const { container } = render(<Harness messages={WHISPERS} />);
+    const inB = container.querySelector('[data-whisper="in"]')!;
+    expect(inB.querySelector(".mv-chat__whisper-title")?.textContent).toBe("영희 → 나");
+    expect(inB.querySelector(".mv-chat__whisper-text")?.textContent).toBe("받은 본문");
+    expect(inB.querySelector(".mv-chat__whisper-title svg")).not.toBeNull();
+    expect(container.querySelector('[data-whisper="out"] .mv-chat__whisper-title')?.textContent).toBe("나 → 서준");
+    const pub = container.querySelector('[data-whisper="public"]')!;
+    expect(pub.className).toBe("mv-chat__sys");
+    expect(pub.querySelector("svg")).not.toBeNull();
+    expect(pub.textContent).toBe("지아 → 도윤 귓속말");
+  });
+
+  it("비공개 블록 CSS: night-700 면, 반경 8, 안쪽 8/12, 왼쪽 3px gray-100 막대, 본문 14px 감김", () => {
+    const body = rulesFor(V2_CSS, ".mv-chat__whisper").join(";");
+    expect(body).toContain("background: var(--night-700)");
+    expect(body).toContain("border-radius: var(--radius-sm)");
+    expect(body).toContain("padding: var(--space-sm) 12px");
+    expect(body).toContain("border-left: 3px solid var(--gray-100)");
+    const text = rulesFor(V2_CSS, ".mv-chat__whisper-text").join(";");
+    expect(text).toContain("font-size: 14px");
+    expect(text).toContain("font-weight: 400");
+    expect(text).toContain("color: var(--gray-100)");
+    expect(text).toContain("word-break: keep-all");
+    expect(text).toContain("overflow-wrap: anywhere");
+    const title = rulesFor(V2_CSS, ".mv-chat__whisper-title").join(";");
+    expect(title).toContain("font-weight: 700");
+    expect(title).toContain("color: var(--gray-50)");
+  });
+
+  it("새 귓속말 줄도 위로 올려 읽는 중이면 새 메시지 점을 켠다(복원이면 quiet 라 꺼진다)", () => {
+    const g = (log: HTMLElement) => {
+      Object.defineProperty(log, "scrollHeight", { configurable: true, get: () => 500 });
+      Object.defineProperty(log, "clientHeight", { configurable: true, get: () => 100 });
+      Object.defineProperty(log, "scrollTop", { configurable: true, get: () => 300, set: () => {} });
+    };
+    const { container, rerender } = render(<Harness />);
+    g(logOf(container));
+    fireEvent.scroll(logOf(container));
+    rerender(<Harness messages={[...TWO_LINES, WHISPERS[0]!]} />);
+    expect(container.querySelector("[data-chat-newdot]")).not.toBeNull();
+    const q = render(<Harness />);
+    g(logOf(q.container));
+    fireEvent.scroll(logOf(q.container));
+    q.rerender(<Harness messages={[...TWO_LINES, WHISPERS[0]!]} quiet />);
+    expect(q.container.querySelector("[data-chat-newdot]")).toBeNull();
+  });
+});

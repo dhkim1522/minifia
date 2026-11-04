@@ -509,3 +509,102 @@ describe("시트 위치 (UI-SPEC B-2)", () => {
     expect(document.activeElement).toBe(floatBtn(container));
   });
 });
+
+// ---- Task 3: 본문 DOM 분리(L23)·접근성·줄 스타일 ----
+const CANARY = "카나리아-본문-7f3a";
+/** 같은 대본(당사자 본문 + 제3자 사실)을 viewer 마다 다르게 먹인다 */
+const feedScript = (): void => {
+  emit(wireLine("whisper", 0, 1, 1, CANARY, NOW + 1));
+  emit(wireLine("whispered", 0, 1, 1, "", NOW + 1));
+};
+
+describe("본문 DOM 은 당사자 화면에만 있다 (L23, T-09.1.1-25)", () => {
+  it("받는 사람 viewer: 받은 블록(data-whisper=in)에 본문, 공개 줄은 없다", () => {
+    const { container } = mount(makeView({ mySeat: 1 }));
+    feedScript();
+    expect(log(container).querySelectorAll('[data-whisper="in"]')).toHaveLength(1);
+    expect(log(container).querySelector('[data-whisper="in"]')?.textContent).toContain(CANARY);
+    expect(log(container).querySelectorAll('[data-whisper="public"]')).toHaveLength(0);
+    expect(log(container).querySelectorAll('[data-whisper="out"]')).toHaveLength(0);
+  });
+
+  it("보낸 사람 viewer: 보낸 블록(data-whisper=out)에 본문, 공개 줄은 없다", () => {
+    const { container } = mount(makeView({ mySeat: 0 }));
+    feedScript();
+    expect(log(container).querySelectorAll('[data-whisper="out"]')).toHaveLength(1);
+    expect(log(container).querySelector('[data-whisper="out"]')?.textContent).toContain(CANARY);
+    expect(log(container).querySelectorAll('[data-whisper="public"]')).toHaveLength(0);
+  });
+
+  it("제3자 viewer: 본문이 DOM 어디에도 없고 공개 줄(data-whisper=public)만 있다(본문 프레임이 잘못 와도 그리지 않는다)", () => {
+    const { container } = mount(makeView({ mySeat: 2 }));
+    feedScript();
+    expect(container.innerHTML).not.toContain(CANARY);
+    expect(container.querySelectorAll('[data-whisper="in"], [data-whisper="out"]')).toHaveLength(0);
+    const pub = log(container).querySelectorAll('[data-whisper="public"]');
+    expect(pub).toHaveLength(1);
+    expect(pub[0]?.textContent).toBe("민수 → 영희 귓속말");
+  });
+
+  it("유령 viewer: 본문이 DOM 에 없고 공개 줄만 있다", () => {
+    const { container } = mount(makeView({ mySeat: 5, dead: [5] }));
+    feedScript();
+    expect(container.innerHTML).not.toContain(CANARY);
+    expect(log(container).querySelectorAll('[data-whisper="public"]')).toHaveLength(1);
+    expect(log(container).querySelectorAll('[data-whisper="in"], [data-whisper="out"]')).toHaveLength(0);
+  });
+
+  it("닉네임과 본문은 텍스트 노드다 — 태그가 든 본문도 요소가 되지 않는다(T-09.1.1-26)", () => {
+    const { container } = mount(makeView({ mySeat: 1 }));
+    emit(wireLine("whisper", 0, 1, 1, "<img src=x onerror=alert(1)><b>굵게</b>", NOW + 1));
+    expect(log(container).querySelector("img")).toBeNull();
+    expect(log(container).querySelector("b")).toBeNull();
+    expect(log(container).textContent).toContain("<b>굵게</b>");
+  });
+});
+
+describe("접근성 (UI-SPEC 접근성 · 모션 · 입력)", () => {
+  it("비공개 줄은 role=note 가 아니라 일반 항목이고 읽히는 글은 '{A} → 나, {본문}'", () => {
+    const { container } = mount(makeView({ mySeat: 1 }));
+    emit(wireLine("whisper", 0, 1, 1, "안녕하세요", NOW + 1));
+    const block = log(container).querySelector<HTMLElement>('[data-whisper="in"]')!;
+    expect(block.getAttribute("role")).toBeNull();
+    expect(container.querySelector('[role="note"]')).toBeNull();
+    expect(block.textContent).toBe("민수 → 나, 안녕하세요");
+  });
+
+  it("시트 입력에 aria-label, 보내기·닫기 버튼 이름은 '보내기'·'닫기'", () => {
+    const { container } = mount(makeView());
+    openSheet(container, 2);
+    expect(input(container).getAttribute("aria-label")).toBe("귓속말 입력");
+    expect(sendBtn(container).getAttribute("aria-label")).toBe("보내기");
+    expect(container.querySelector("[data-line-close]")?.getAttribute("aria-label")).toBe("닫기");
+  });
+
+  it("시트의 Tab 순서: 입력 → 보내기, 닫기가 맨 앞(윗줄)", () => {
+    const { container } = mount(makeView());
+    openSheet(container, 2);
+    const order = [...sheet(container)!.querySelectorAll("button, input")].map((el) => el.getAttribute("data-line-close") !== null ? "close" : el.getAttribute("data-line-input") !== null ? "input" : "send");
+    expect(order).toEqual(["close", "input", "send"]);
+  });
+
+  it("버튼·시트 버튼은 mousedown 기본 동작을 막아 키보드를 유지한다", () => {
+    const { container } = mount(makeView());
+    const down = (el: Element): boolean => fireEvent.mouseDown(el);
+    expect(down(floatBtn(container)!)).toBe(false);
+    openSheet(container, 2);
+    expect(down(sendBtn(container))).toBe(false);
+    expect(down(container.querySelector("[data-line-close]")!)).toBe(false);
+  });
+
+  it("상대 칩 얼굴 그림이 실패하면 자리 구분색 원으로 바뀐다", () => {
+    const { container } = mount(makeView());
+    openSheet(container, 2);
+    const img = sheet(container)!.querySelector("img.mv-line__face")!;
+    expect(img.getAttribute("src")).toBe("/characters/faces/face-2.png");
+    fireEvent.error(img);
+    const dot = sheet(container)!.querySelector<HTMLElement>(".mv-line__face.is-fallback")!;
+    expect(dot).not.toBeNull();
+    expect(dot.getAttribute("style")).toContain("--seat-3");
+  });
+});

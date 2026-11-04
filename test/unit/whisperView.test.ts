@@ -85,6 +85,15 @@ describe("whisperLine: 줄 모델 (UI-SPEC B-3)", () => {
     expect(m).toEqual({ kind: "whisper", whisper: "out", icon: "whisper", title: "나 → 지아", text: "믿어요" });
   });
 
+  it("당사자(보낸·받은 사람)에게는 사실 줄이 와도 그리지 않는다 — 비공개 줄 하나만 본다", () => {
+    expect(whisperLine({ kind: "system", icon: "whisper", seat: 0, to: 2, text: "" }, 0, nameOf)).toBeNull();
+    expect(whisperLine({ kind: "system", icon: "whisper", seat: 1, to: 0, text: "" }, 0, nameOf)).toBeNull();
+  });
+
+  it("당사자가 아닌 사람에게 본문 줄이 잘못 와도 그리지 않는다", () => {
+    expect(whisperLine({ kind: "whisper", seat: 1, to: 2, text: "남의 비밀" }, 0, nameOf)).toBeNull();
+  });
+
   it("귓속말 줄이 아니면 null (to 없는 시스템 줄·사람 줄)", () => {
     expect(whisperLine({ kind: "system", text: "민수 님 입장" }, 0, nameOf)).toBeNull();
     expect(whisperLine({ kind: "player", seat: 1, text: "안녕" }, 0, nameOf)).toBeNull();
