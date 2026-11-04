@@ -8,9 +8,9 @@ import { attachConnection, createRoomState, joinRoom, startGame } from "../../sh
 import type { RoomState } from "../../shared/game/room";
 import { pickTarget } from "../../shared/game/night";
 import { isAlive } from "../../shared/game/alive";
-import { castPoint } from "../../shared/game/nomination";
+import { castPoint, castTurnPoint, enterNomination, nominationStepMs, stepNomination } from "../../shared/game/nomination";
 import { castVerdict } from "../../shared/game/verdict";
-import { resetToLobby, setBotCount, setBotVote, setTestRole, skipPhase } from "../../shared/game/testTools";
+import { finishNomination, resetToLobby, setBotCount, setBotVote, setTestRole, skipPhase } from "../../shared/game/testTools";
 import { tick } from "../../shared/game/tick";
 import { buildPreview, buildView } from "../../shared/game/view";
 import type { PhaseId } from "../../shared/protocol";
@@ -573,6 +573,11 @@ const skipOk = (state: RoomState, now: number, randInt: (n: number) => number): 
   if (!r.ok) throw new Error(`skipPhase failed: ${r.error}`);
   return r.state;
 };
+const setting = (lobby: RoomState, exec: "random" | "yes" | "no", pick: "random" | "host" | "other"): RoomState => {
+  const r = setBotVote(lobby, lobby.hostId, exec, pick);
+  if (!r.ok) throw new Error(r.error);
+  return r.state;
+};
 const botsIn = (state: RoomState) => state.players.filter((p) => p.isBot === true).sort((a, b) => a.seat - b.seat);
 
 /** 변론자를 뺀 산 사람 전원이 찬성한 찬반 상태로 만든다(skipPhase 가 봇 찬반을 무작위로 던지지 않게 — 통과를 고정). */
@@ -732,6 +737,96 @@ describe("setBotVote", () => {
   });
 });
 
+// ---- 09.1: 순차 지목(차례 있음)에서 넘기기는 남은 차례를 한 번에 마무리한다 (결정 0063-1) ----
+describe("넘기기 지목 마무리 (결정 0063-1)", () => {
+  const T0 = 100_000;
+  /** 방장(seat 0, 사람) + 봇 4 의 순차 지목 진입 직후(모이는 중). 마감 사슬은 09.1-01 엔진을 직접 걸어 만든다. */
+  const gathering = (): RoomState => {
+    const base = startedFrom(botLobby(), 3, "discussion");
+    const entered = enterNomination({ ...base, phase: "nomination" });
+    return { ...entered, phaseEndsAt: T0 + nominationStepMs(entered) };
+  };
+  const advance = (s: RoomState): RoomState => {
+    const at = s.phaseEndsAt!;
+    const r = stepNomination(s, at);
+    return { ...r.state, phaseEndsAt: at + nominationStepMs(r.state) };
+  };
+  /** seat1(봇)이 자기 차례에 seat4 를 지목해 확정한 뒤 seat2(봇) 차례(i 2). */
+  const atSeatTwo = (): RoomState => {
+    const s1 = advance(advance(advance(gathering())));
+    const bot1 = s1.players.find((p) => p.seat === 1)!;
+    const cast = castTurnPoint(s1, bot1.id, 4, s1.phaseEndsAt! - 8000);
+    if (!cast.ok) throw new Error(cast.error);
+    return advance(cast.state);
+  };
+  const nominateOf = (s: RoomState): string => s.players.map((p) => `${p.seat}>${p.nominate === undefined ? "-" : p.nominate}`).join(",");
+  const calls = (): { calls: number[]; randInt: (n: number) => number } => {
+    const c: number[] = [];
+    return { calls: c, randInt: (n) => (c.push(n), 0) };
+  };
+
+  it("지금 seat2 차례: seat1 은 그대로, seat2·3·4 봇이 좌석 순 [후보 수] 한 번씩 지목하고 방장은 기권이며 pickTurn 은 끝 알림 자리다", () => {
+    const state = atSeatTwo();
+    const before = JSON.stringify(state);
+    const rec = calls();
+    const after = finishNomination(state, rec.randInt);
+    expect(`${state.pickTurn?.i}|${nominateOf(state)}`).toBe("2|0>-,1>4,2>-,3>-,4>-");
+    expect(nominateOf(after)).toBe("0>-,1>4,2>0,3>0,4>0");
+    expect(rec.calls.join(",")).toBe("4,4,4");
+    expect(JSON.stringify(after.pickTurn)).toBe(JSON.stringify({ order: state.pickTurn!.order, i: state.pickTurn!.order.length }));
+    expect(JSON.stringify(state)).toBe(before);
+  });
+
+  it("지금 차례 주인이 이미 확정했으면 다시 고르지 않고 다음 차례부터 채운다", () => {
+    const state = atSeatTwo();
+    const bot2 = state.players.find((p) => p.seat === 2)!;
+    const cast = castTurnPoint(state, bot2.id, 3, state.phaseEndsAt! - 8000);
+    if (!cast.ok) throw new Error(cast.error);
+    const rec = calls();
+    const after = finishNomination(cast.state, rec.randInt);
+    expect(nominateOf(after)).toBe("0>-,1>4,2>3,3>0,4>0");
+    expect(rec.calls.join(",")).toBe("4,4");
+  });
+
+  it("모이는 중이면 산 봇 모두가 좌석 순으로 한 번씩 지목한다", () => {
+    const rec = calls();
+    const after = finishNomination(gathering(), rec.randInt);
+    expect(nominateOf(after)).toBe("0>-,1>0,2>0,3>0,4>0");
+    expect(rec.calls.join(",")).toBe("4,4,4,4");
+    expect(String(after.pickTurn?.i)).toBe("5");
+  });
+
+  it("탈락한 봇은 지목하지 않고, 차례가 없는 상태·지목이 아닌 단계는 입력 그대로다", () => {
+    const g = gathering();
+    const dead: RoomState = { ...g, players: g.players.map((p) => (p.seat === 3 ? { ...p, alive: false } : p)) };
+    const rec = calls();
+    const after = finishNomination(dead, rec.randInt);
+    expect(nominateOf(after)).toBe("0>-,1>0,2>0,3>-,4>0");
+    const { pickTurn: _drop, ...noTurn } = g;
+    expect(finishNomination(noTurn, calls().randInt) === noTurn).toBe(true);
+    const discussion = startedFrom(botLobby(), 3, "discussion");
+    expect(finishNomination(discussion, calls().randInt) === discussion).toBe(true);
+  });
+
+  it("skipPhase: 차례 있는 지목은 지목에 머물지 않고 그날 voteLog 줄이 봇 지목과 같다", () => {
+    const state = atSeatTwo();
+    const after = skipOk(state, state.phaseEndsAt!, () => 0);
+    expect(["defense", "night"]).toContain(after.phase);
+    expect(after.pickTurn === undefined).toBe(true);
+    expect((after.voteLog?.[0]?.cand?.votes ?? []).map((v) => `${v.seat}>${v.target}`).join(",")).toBe("1>4,2>0,3>0,4>0");
+  });
+
+  it("skipPhase: 고정 pick host 면 방장이 변론자이고 지목 결정에 난수를 부르지 않는다", () => {
+    const base = startedFrom(setting(botLobby(), "random", "host"), 3, "discussion");
+    const entered = enterNomination({ ...base, phase: "nomination" });
+    const gather: RoomState = { ...entered, phaseEndsAt: T0 + nominationStepMs(entered) };
+    const after = skipOk(gather, gather.phaseEndsAt!, () => {
+      throw new Error("randInt must not be called");
+    });
+    expect(`${after.phase}:${after.verdict?.candidate}`).toBe("defense:0");
+  });
+});
+
 // ---- 8페이즈: 지목·찬반 단계를 넘길 때 안 던진 봇이 먼저 던진다 (08-07, 결정 0024·0060-13) ----
 // 두 단계의 마감 훅(resolveNomination·resolveVerdict)이 tick 에 걸려 있어 넘긴 뒤 개인 값(nominate·verdictVote)은 키째 지워진다 —
 // 08-11: 단언은 그날 voteLog 줄(지목 cand.votes·찬반 exec)로 옮겼다.
@@ -744,11 +839,6 @@ describe("skipPhase: 지목·찬반에서 안 던진 봇이 먼저 던진다", (
   };
   const THROWING = (): number => {
     throw new Error("randInt must not be called");
-  };
-  const setting = (lobby: RoomState, exec: "random" | "yes" | "no", pick: "random" | "host" | "other"): RoomState => {
-    const r = setBotVote(lobby, lobby.hostId, exec, pick);
-    if (!r.ok) throw new Error(r.error);
-    return r.state;
   };
   /** 그날 voteLog 줄의 지목 목록: "행위자>대상" 을 좌석 오름차순으로. 마감 훅이 개인 키를 지웠으므로 기록은 이 줄뿐이다. */
   const nominates = (s: RoomState): string => (s.voteLog?.[0]?.cand?.votes ?? []).map((v) => `${v.seat}>${v.target}`).join(",");
