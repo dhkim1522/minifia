@@ -511,6 +511,7 @@ describe("봇 결선 투표 (09.1.1-05, 결정 0066-4)", () => {
       return { ...rest, phase: "runoff", runoff: { cand: [0, 1], step: 0 }, phaseEndsAt: Date.now() + 600_000 };
     });
     for (const sock of allSockets(r)) await settle(sock, mark(sock));
+    await waitForPlanKey(r.code); // 앞머리의 빈 계획이 저장될 때까지(깨어난 방의 reschedule 이 끝난 뒤에 마감을 당긴다)
     await closePhase(r.code); // 앞머리 → 투표 창
     expect(String(((await stored(r.code)).runoff as { step: number }).step)).toBe("1");
     const from = mark(r.host);
