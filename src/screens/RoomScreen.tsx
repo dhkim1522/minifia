@@ -21,6 +21,7 @@ import { useRoomConnection } from "../net/useRoomConnection";
 import { useWakeLock } from "../net/useWakeLock";
 import { EXIT_CURTAIN_MS, preloadWorld } from "../world/runtime";
 import { WorldStore } from "../world/store";
+import { PreGame } from "./PreGame";
 import { Assigning } from "./Assigning";
 import { GameMap } from "./GameMap";
 import { Lobby } from "./Lobby";
@@ -119,6 +120,10 @@ function sceneKey(phase: PhaseId): string {
     case "night":
     case "morning":
       return "gameMap";
+    // 역할 배정·역할 확인은 같은 3D 무대(PreGame)라 같은 키 — 두 단계 사이에 무대를 다시 만들지 않는다(feedback-3).
+    case "assigning":
+    case "roleReveal":
+      return "preGame";
     default:
       return phase;
   }
@@ -416,10 +421,15 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
           />
         );
       case "assigning":
-        return <Assigning view={view} />;
       case "roleReveal":
         return (
-          <RoleReveal view={view} offset={connection.offset} myRoleButton={withTest(myRoleButton)} onSeenFront={onSeenFront} />
+          <PreGame view={view} store={store} send={connection.send} canSend={connection.canSend} offset={connection.offset} onLeave={() => onExit("gaveUp")}>
+            {view.phase === "assigning" ? (
+              <Assigning view={view} />
+            ) : (
+              <RoleReveal view={view} offset={connection.offset} myRoleButton={withTest(myRoleButton)} onSeenFront={onSeenFront} />
+            )}
+          </PreGame>
         );
       case "dayAnnounce":
       case "discussion":

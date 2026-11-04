@@ -421,7 +421,10 @@ describe("RoomScreen: 맵 로비 연결 (MAP-01, MAP-05, CONN-04, 06-15)", () =>
     connectionMock.current = conn({ view: at("roleReveal") });
     rerender(<RoomScreen code="0042" token={"t".repeat(43)} onExit={vi.fn()} />);
     expect(container.querySelector("main.mf-lobby")).toBeNull();
-    expect(stage.props).toBeNull();
+    // feedback-3: 배정·확인은 3D 무대(PreGame) 위. 무대는 가림막(exiting)·걷기 없이 깔리고 두 단계 사이에 이어진다
+    expect(stage.props).not.toBeNull();
+    expect(stage.props!.exiting).toBeFalsy();
+    expect(stage.props!.canWalk).toBe(false);
   });
 
   it("로비의 재접속 띠는 떠 있는 변형이다(.mf-reconnect--floating), 문구·아이콘·role 은 v1.0 그대로", () => {

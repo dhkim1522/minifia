@@ -359,17 +359,22 @@ describe("단계 안내 aria-live · 단계 전환 (UI-SPEC 접근성·Motion)",
     expect(Object.keys(TEST_PHASE_LABEL).sort().join(",")).toBe(Object.keys(phases).sort().join(","));
   });
 
-  it("단계 화면 루트에 mf-phase-enter 가 있고 단계가 바뀌면 새 요소로 바뀐다", () => {
+  it("단계 화면 루트에 mf-phase-enter 가 있고 장면이 바뀌면 새 요소로 바뀐다 (배정 → 확인은 같은 3D 무대라 같은 요소, feedback-3)", () => {
     const r = renderRoom(makeView({ phase: "assigning" }));
     const before = r.container.querySelector(".mf-phase-enter");
     expect(before).not.toBeNull();
     rerenderRoom(r.rerender, makeView({ phase: "roleReveal", endsIn: 15_000, role: "mafia", allies: [2] }));
     const after = r.container.querySelector(".mf-phase-enter");
     expect(after).not.toBeNull();
-    expect(after === before).toBe(false);
+    expect(after === before).toBe(true);
     // 같은 단계 안 갱신은 같은 요소(다시 나타나지 않는다)
     rerenderRoom(r.rerender, makeView({ phase: "roleReveal", endsIn: 14_000, role: "mafia", allies: [2] }));
     expect(r.container.querySelector(".mf-phase-enter") === after).toBe(true);
+    // 장면이 바뀌면(역할 확인 → 낮 시작) 새 요소
+    rerenderRoom(r.rerender, makeView({ phase: "dayAnnounce", endsIn: 5_000, role: "mafia", allies: [2], day: 1 }));
+    const next = r.container.querySelector(".mf-phase-enter");
+    expect(next).not.toBeNull();
+    expect(next === after).toBe(false);
   });
 });
 

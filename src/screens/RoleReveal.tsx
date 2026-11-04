@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import type { RoomView } from "../../shared/protocol";
-import { Backdrop } from "../components/Backdrop";
 import { PhaseBar } from "../components/PhaseBar";
 import { RoleCard } from "../components/RoleCard";
 import { Timer } from "../components/Timer";
@@ -20,7 +19,7 @@ export interface RoleRevealProps {
   onSeenFront: () => void;
 }
 
-// S-05 역할 확인(15초). 테이블은 그리지 않는다(D-13 개정). 카드 면은 cardFace 가 정하고,
+// S-05 역할 확인(15초). 테이블은 그리지 않는다(D-13 개정). 뒤 3D 무대는 PreGame 이 깐다. 카드 면은 cardFace 가 정하고,
 // 타이머는 서버 마감 시각 하나만 본다. 마감이 지나도 화면이 스스로 단계를 넘기지 않는다(서버 view 만 따름, T-01-46).
 export function RoleReveal({ view, offset, myRoleButton, onSeenFront }: RoleRevealProps) {
   const role = view.me.role ?? null;
@@ -63,25 +62,23 @@ export function RoleReveal({ view, offset, myRoleButton, onSeenFront }: RoleReve
   const allies = allyNicknames(view);
 
   return (
-    <Backdrop layout="game" scene="lobby" className="mf-reveal__backdrop">
-      <main className="mf-root mf-reveal">
-        <div className="mf-reveal__dim" aria-hidden="true" />
-        <PhaseBar
-          title="역할 확인"
-          instruction={front ? "내 직업이에요" : "카드를 눌러 확인하세요"}
-          extra={myRoleButton}
-          timer={endsAt !== null && durationMs !== null ? <Timer endsAt={endsAt} durationMs={durationMs} offset={offset} /> : null}
-        />
-        <section className="mf-reveal__stage">
-          <RoleCard role={role} face={card.face} allies={allies} onFlip={() => setCard((s) => onTap(s, hasRole))} />
-        </section>
-        <div className="mf-reveal__hints">
-          <p className="mf-reveal__hint" data-guide="">
-            {front ? "확인했으면 그대로 기다리세요" : "카드를 눌러 직업을 확인하세요"}
-          </p>
-          <p className="mf-reveal__sub">{front ? "카드를 다시 누르면 가려져요" : "다른 사람에게 보이지 않게 가려 주세요"}</p>
-        </div>
-      </main>
-    </Backdrop>
+    <main className="mf-root mf-reveal">
+      <div className="mf-reveal__dim" aria-hidden="true" />
+      <PhaseBar
+        title="역할 확인"
+        instruction={front ? "내 직업이에요" : "카드를 눌러 확인하세요"}
+        extra={myRoleButton}
+        timer={endsAt !== null && durationMs !== null ? <Timer endsAt={endsAt} durationMs={durationMs} offset={offset} /> : null}
+      />
+      <section className="mf-reveal__stage">
+        <RoleCard role={role} face={card.face} allies={allies} onFlip={() => setCard((s) => onTap(s, hasRole))} />
+      </section>
+      <div className="mf-reveal__hints">
+        <p className="mf-reveal__hint" data-guide="">
+          {front ? "확인했으면 그대로 기다리세요" : "카드를 눌러 직업을 확인하세요"}
+        </p>
+        <p className="mf-reveal__sub">{front ? "카드를 다시 누르면 가려져요" : "다른 사람에게 보이지 않게 가려 주세요"}</p>
+      </div>
+    </main>
   );
 }
