@@ -64,8 +64,8 @@ describe("장면 상자: 머리 높이 119.2", () => {
 });
 
 describe("장면 상자: 배경은 남는 높이를 채운다(고정 높이 아님)", () => {
-  it("역할 배정 배경: flex 1 1 0 · min-height 0 · height auto", () => {
-    const selector = ".mf-assign__backdrop";
+  it("역할 배정·확인 무대 틀(PreGame, feedback-3): flex 1 1 0 · min-height 0 · height auto", () => {
+    const selector = ".mf-pregame";
     const b = norm(body(phase, selector));
     expect(b, selector).toMatch(/flex:\s*1 1 0/);
     expect(b, selector).toMatch(/min-height:\s*0/);
