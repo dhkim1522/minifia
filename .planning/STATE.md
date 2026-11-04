@@ -5,16 +5,16 @@ milestone_name: 같은 공간
 current_phase: 9
 current_phase_name: 밤과 아침
 status: verifying
-stopped_at: Completed 09-28-PLAN.md
-last_updated: "2026-11-04T07:20:00.611Z"
+stopped_at: Completed 09-29-PLAN.md
+last_updated: "2026-11-04T07:23:41.319Z"
 last_activity: 2026-11-03
 last_activity_desc: Phase 9 execution started
-state_head: 12055c8fcf91f4ce9f7ad4b0e93a82c4ba394371
+state_head: 93410c257a4ca71c9c56f6529196a31210572c32
 progress:
   total_phases: 7
   completed_phases: 3
   total_plans: 108
-  completed_plans: 106
+  completed_plans: 107
   percent: 43
 ---
 
@@ -166,6 +166,7 @@ Progress: [████░░░░░░] 43% (3/7 phases)
 | Phase 09 P26 | 25min | 2 tasks | 11 files |
 | Phase 09 P27 | 20min | 3 tasks | 14 files |
 | Phase 09 P28 | 10min | 2 tasks | 8 files |
+| Phase 09 P29 | 12min | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -336,6 +337,7 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 09]: 09-24: 알람 따라잡기로 아침을 건너뛰면 syncHome 이 밤 키(':night')를 보고 home 되돌림 + snap 을 한 번 보낸다(snapEachViewer 공용)
 - [Phase 09]: 09-24: 봇 입력 중은 서버 안 relayTyping(사람 typing 과 같은 audience), 새 클라이언트 메시지 없음. 테스트 봇 이름은 첫 봇 8자, 나머지 1~8자 무작위(결정 0052-3 개정은 09-30)
 - [Phase 09]: 09-25: 깃펜은 입력줄 오른쪽 끝(보내기와 16px), settle 은 키별 대기 목록, seatColorVar 한 곳
+- [Phase 09]: 결과 화면은 .mf-result__inner 안에서 .mf-result__body 만 스크롤하고 [처음으로] 줄(.mf-result__foot)은 아래 고정 (09-29, feedback-6)
 
 ### Pending Todos
 
@@ -373,8 +375,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-04T07:20:00.163Z
-Stopped at: Completed 09-28-PLAN.md
+Last session: 2026-11-04T07:23:40.830Z
+Stopped at: Completed 09-29-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
