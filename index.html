@@ -1,0 +1,318 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>미니피아</title>
+<meta name="description" content="친구들이 각자 폰으로 한 방에 모이는 실시간 마피아 웹 게임, 미니피아.">
+<meta property="og:title" content="미니피아">
+<meta property="og:description" content="친구들이 각자 폰으로 한 방에 모이는 실시간 마피아 웹 게임.">
+<meta property="og:image" content="img/lobby.webp">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@700&family=Gowun+Dodum&family=Noto+Sans+KR:wght@400;500;700;800&display=swap">
+<style>
+/* 레이아웃: 게임 소개 한 장. 표지 → 왜 → 한 판의 흐름 → 캐릭터·맵 → 시스템 아키텍처 → 설계 결정 → 만든 방식 → 저장소.
+   색·글꼴은 v2.0 디자인 시스템 토큰(밤 남색 60 · 패널 30 · 놋쇠/진홍 10). 런마고치 포트폴리오와 같은 틀 */
+:root {
+  --bg: #0e1326; --surface: #151c36; --soft: #1e2847; --line: #2a3760; --line-strong: #6b7180;
+  --ink: #f1f2f5; --body: #e6e8ee; --muted: #a9aebb; --brass: #c9a46a; --brass-hi: #e8d3a8; --crimson: #f2556a;
+  --shot-edge: rgba(241,242,245,.12); --shadow: rgba(0,0,0,.7);
+  --font-sans: "Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+  --font-ui: "Gowun Dodum", "Noto Sans KR", system-ui, sans-serif;
+  --font-serif: "Gowun Batang", "Noto Serif KR", serif;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { background: var(--bg); color: var(--body); font: 500 16px/1.65 var(--font-sans); margin: 0; }
+img { max-width: 100%; display: block; }
+h1, h2, h3 { color: var(--ink); text-wrap: balance; word-break: keep-all; margin: 0; }
+p, li { word-break: keep-all; }
+p { margin: 0; }
+a { color: var(--brass-hi); }
+a:focus-visible { outline: 2px solid var(--body); outline-offset: 3px; }
+.wrap { max-width: 1080px; margin: 0 auto; padding-left: max(20px, env(safe-area-inset-left, 0px)); padding-right: max(20px, env(safe-area-inset-right, 0px)); }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.shot { width: 100%; height: auto; border-radius: 18px; background: var(--surface); box-shadow: 0 0 0 1px var(--shot-edge), 0 18px 36px -24px var(--shadow); }
+
+/* 버튼: 테두리 알약, 왼쪽 아이콘 + 글자 + 새 탭 화살표. 놋쇠는 hover 때만 */
+.btn { display: inline-flex; align-items: center; gap: 12px; min-height: 52px; padding: 10px 22px 10px 20px; border-radius: 999px;
+  border: 2px solid var(--line-strong); background: var(--soft); color: var(--ink); font-weight: 700; font-size: 16px; text-decoration: none;
+  transition: background-color .15s, border-color .15s, color .15s, transform .15s; }
+.btn svg { width: 20px; height: 20px; flex: none; }
+.btn .ext { width: 16px; height: 16px; opacity: .7; transition: transform .15s, opacity .15s; }
+.btn:hover { background: var(--brass); color: #0e1326; border-color: var(--brass-hi); transform: translateY(-1px); }
+.btn:hover .ext { opacity: 1; transform: translate(2px, -2px); }
+.btn:active { transform: translateY(0); }
+
+/* 표지 */
+.cover { padding-block: 64px 24px; background: radial-gradient(ellipse 70% 60% at 80% 10%, rgba(201,212,255,.10), transparent 70%); }
+.cover-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 48px; align-items: center; }
+.tags { display: flex; flex-wrap: wrap; gap: 8px; font-size: 13px; font-weight: 700; color: var(--muted); }
+.tags span { background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 8px 14px; line-height: 1; }
+.cover h1 { font-family: var(--font-serif); font-size: clamp(52px, 7.5vw, 84px); line-height: 1.05; letter-spacing: -.02em; margin-top: 20px; }
+.tagline { font-family: var(--font-ui); font-size: clamp(20px, 2.4vw, 24px); color: var(--ink); margin-top: 14px; }
+.lede { font-size: 17px; color: var(--muted); max-width: 30em; margin-top: 12px; }
+.status { display: inline-block; margin-top: 16px; font-size: 13px; font-weight: 700; color: var(--brass-hi); border: 1px solid rgba(201,164,106,.45); border-radius: 6px; padding: 4px 10px; }
+.actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 28px; }
+main { padding-bottom: 72px; }
+.trio { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; align-items: start; }
+.trio .shot:nth-child(2) { margin-top: 44px; }
+.trio .shot:nth-child(3) { margin-top: 18px; }
+
+section { padding-block: 80px 0; }
+.eyebrow { font-family: var(--font-ui); color: var(--brass); font-size: 14px; letter-spacing: .14em; }
+section h2 { font-size: clamp(26px, 3.4vw, 34px); font-weight: 800; letter-spacing: -.02em; margin-top: 6px; }
+.intro { font-size: 17px; color: var(--muted); max-width: 42em; margin-top: 12px; }
+
+/* 카드 묶음 (왜 · 만든 방식) */
+.cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-top: 28px; }
+.cards div { background: var(--surface); border: 1px solid var(--line); border-radius: 22px; padding: 22px 24px; min-width: 0; }
+.cards h3 { font-size: 18px; font-weight: 800; }
+.cards p { color: var(--muted); font-size: 15px; margin-top: 6px; }
+
+/* 한 판의 흐름 */
+.steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 36px 24px; margin-top: 32px; }
+.step { margin: 0; min-width: 0; display: grid; grid-template-columns: minmax(0, 150px) minmax(0, 1fr); gap: 16px; align-items: start; }
+.step .frame { aspect-ratio: 390 / 844; overflow: hidden; border-radius: 14px; box-shadow: 0 0 0 1px var(--shot-edge), 0 18px 36px -24px var(--shadow); background: var(--surface); }
+.step .frame img { width: 100%; height: 100%; object-fit: cover; }
+.step .n { font-family: var(--font-serif); color: var(--brass); font-size: 22px; line-height: 1; }
+.step h3 { font-size: 18px; font-weight: 800; margin-top: 8px; }
+.step p { color: var(--muted); font-size: 15px; margin-top: 6px; }
+.strip { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px; margin-top: 40px; }
+.strip figure { margin: 0; min-width: 0; }
+.strip figcaption { font-size: 13px; color: var(--muted); text-align: center; margin-top: 8px; }
+
+/* 캐릭터·맵 */
+.maps { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-top: 28px; }
+.maps figure, .roles figure { margin: 0; }
+.maps img { width: 100%; border-radius: 16px; box-shadow: 0 0 0 1px var(--shot-edge); }
+.maps figcaption, .roles figcaption { font-size: 14px; color: var(--muted); margin-top: 8px; }
+.outfits { display: grid; grid-template-columns: repeat(9, minmax(0, 1fr)); gap: 6px; margin-top: 18px; padding: 18px 14px 10px; background: var(--surface); border: 1px solid var(--line); border-radius: 22px; }
+.outfits figure { margin: 0; text-align: center; }
+.outfits figcaption { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.roles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin-top: 14px; }
+.roles figure { background: var(--surface); border: 1px solid var(--line); border-radius: 22px; padding: 14px 14px 12px; text-align: center; }
+.roles img { width: 72%; margin: 0 auto; }
+.roles .mafia figcaption { color: var(--crimson); }
+
+/* 시스템 아키텍처 */
+.arch { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); gap: 40px; margin-top: 32px; align-items: start; }
+.diagram { background: var(--surface); border: 1px solid var(--line); border-radius: 22px; padding: 26px 24px; display: grid; gap: 10px; }
+.node { border: 1px solid var(--line-strong); border-radius: 14px; padding: 14px 16px; background: var(--soft); }
+.node b { color: var(--ink); font-size: 16px; }
+.node small { display: block; color: var(--muted); font-size: 13.5px; margin-top: 2px; line-height: 1.55; }
+.node.room { border-color: var(--brass); }
+.node.room b { color: var(--brass-hi); }
+.phones { display: flex; gap: 6px; margin-top: 8px; }
+.phones i { width: 16px; height: 26px; border-radius: 4px; border: 1.5px solid var(--muted); }
+.wire { text-align: center; color: var(--muted); font-size: 13px; line-height: 1.3; }
+.wire::before { content: "↕"; display: block; color: var(--brass); font-size: 18px; }
+.points { list-style: none; padding: 0; margin: 0; display: grid; gap: 0; }
+.points li { padding: 16px 0; border-top: 1px solid var(--line); }
+.points li:first-child { border-top: 0; padding-top: 0; }
+.points h3 { font-size: 17px; font-weight: 800; }
+.points p { color: var(--muted); font-size: 15px; margin-top: 4px; }
+code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .88em; background: var(--soft); border-radius: 5px; padding: 1px 6px; color: var(--body); }
+
+/* 설계 결정 */
+.decisions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-top: 28px; }
+.decisions a { display: block; background: var(--surface); border: 1px solid var(--line); border-radius: 22px; padding: 20px 22px; text-decoration: none; color: inherit; transition: border-color .15s; min-width: 0; }
+.decisions a:hover { border-color: var(--brass); }
+.decisions .no { font-family: var(--font-serif); color: var(--brass); font-size: 15px; }
+.decisions h3 { font-size: 17px; font-weight: 800; margin-top: 4px; }
+.decisions p { color: var(--muted); font-size: 14.5px; margin-top: 6px; }
+
+/* 숫자 */
+.nums { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 14px; margin-top: 28px; }
+.nums div { border-top: 2px solid var(--brass); padding-top: 12px; min-width: 0; }
+.nums b { display: block; font-family: var(--font-serif); font-size: clamp(26px, 3vw, 34px); color: var(--ink); line-height: 1.1; }
+.nums span { color: var(--muted); font-size: 14px; }
+
+.gh { background: var(--surface); border: 1px solid var(--line); border-radius: 24px; padding: 24px 28px; display: flex; flex-wrap: wrap; gap: 16px 24px; align-items: center; justify-content: space-between; }
+.gh h2 { font-size: 20px; font-weight: 800; margin: 0; }
+.gh p { color: var(--muted); font-size: 15px; margin-top: 4px; }
+footer { padding-block: 0 48px; color: var(--muted); font-size: 14px; }
+.serif { font-family: var(--font-serif); }
+
+@media (max-width: 960px) {
+  .cover-grid, .arch { grid-template-columns: minmax(0, 1fr); }
+  .trio { max-width: 520px; }
+  .cards, .decisions { grid-template-columns: minmax(0, 1fr); }
+  .steps { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .strip { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .outfits { grid-template-columns: repeat(5, minmax(0, 1fr)); row-gap: 14px; }
+  .nums { grid-template-columns: repeat(3, minmax(0, 1fr)); row-gap: 22px; }
+}
+@media (max-width: 600px) {
+  .cover { padding-block: 40px 16px; }
+  .steps { grid-template-columns: minmax(0, 1fr); }
+  .step { grid-template-columns: minmax(0, 120px) minmax(0, 1fr); }
+  .maps, .roles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .nums { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .actions .btn { width: 100%; justify-content: center; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head><body>
+
+<header class="cover"><div class="wrap">
+  <div class="cover-grid">
+    <div>
+      <div class="tags"><span>Web · 실시간 멀티플레이</span><span>React · Cloudflare Durable Objects</span><span>three.js</span></div>
+      <h1>미니피아</h1>
+      <p class="tagline">친구들이 각자 폰으로 한 방에 모이는 실시간 마피아 게임</p>
+      <p class="lede">설치 없이 링크 하나로 4~8명이 같은 방에 들어와요. 3D 지하 재즈 바를 걸어 다니며 떠들고, 손가락으로 지목하고, 조명이 꺼진 무대에서 변론해요. 대면 마피아의 눈치 싸움을 온라인으로 옮기는 게 목표예요.</p>
+      <p class="status">v2.0 "같은 공간" 개발 중 · 2026년 11월 기준</p>
+      <div class="actions">
+        <a class="btn" href="https://minifia-v2.dhplay.workers.dev" target="_blank" rel="noopener">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 4v16l13-8z"/></svg>
+          v2.0 배포본 열기
+          <svg class="ext" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7M9 7h8v8"/></svg><span class="sr-only"> (새 탭에서 열림)</span>
+        </a>
+        <a class="btn" href="https://github.com/dhkim1522/minifia/tree/v2" target="_blank" rel="noopener">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5M16 7l5 5-5 5M14 4l-4 16"/></svg>
+          GitHub 저장소
+          <svg class="ext" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7M9 7h8v8"/></svg><span class="sr-only"> (새 탭에서 열림)</span>
+        </a>
+      </div>
+    </div>
+    <div class="trio" aria-label="게임 화면: 대기실, 역할 확인, 지목">
+      <img class="shot" src="img/lobby.webp" alt="대기실: 3D 재즈 바 안을 캐릭터들이 걸어 다니고 아래에 채팅" width="585" height="1266">
+      <img class="shot" src="img/role.webp" alt="역할 확인: 마피아 카드와 동료 이름" width="585" height="1266">
+      <img class="shot" src="img/nomination.webp" alt="지목: 캐릭터 머리 위 득표 배지와 지목 화살표" width="585" height="1266">
+    </div>
+  </div>
+</div></header>
+
+<main>
+<section><div class="wrap">
+  <p class="eyebrow">WHY</p>
+  <h2>대면 마피아의 눈치 싸움을 온라인으로</h2>
+  <p class="intro">v1.0은 고정된 자리와 정해진 채팅 문구로 진행했어요. 친구들과 실제로 해 보니 대면 마피아의 재미인 수다, 묘한 정치질, 거짓말할 때 달라지는 모습이 빠져 단조로웠어요. 그래서 v2.0은 모두가 한 공간에 있는 느낌을 만드는 쪽으로 다시 설계했어요.</p>
+  <div class="cards">
+    <div><h3>같은 공간</h3><p>방에 들어오면 캐릭터가 생기고, 3D 맵 안을 자유롭게 걸어 다녀요. 기다리는 동안에도 모여서 놀 수 있어요.</p></div>
+    <div><h3>자유 채팅과 몸짓</h3><p>템플릿 대신 자유 채팅을 쓰고, 감정 표현은 캐릭터가 목 긋기·손사래·박수 같은 동작으로 직접 해요.</p></div>
+    <div><h3>글보다 장면</h3><p>단계는 조명으로, 표 수는 배지로, 남은 시간은 링으로 보여 줘요. 읽을 글은 한 줄 이하, 행동은 대상을 직접 눌러요.</p></div>
+  </div>
+</div></section>
+
+<section><div class="wrap">
+  <p class="eyebrow">HOW IT PLAYS</p>
+  <h2>한 판은 이렇게 흘러가요</h2>
+  <div class="steps">
+    <figure class="step"><div class="frame"><img src="img/lobby.webp" alt="대기실" loading="lazy"></div>
+      <figcaption><span class="n">1</span><h3>대기실</h3><p>방 코드나 링크로 들어와 닉네임만 정하면 돼요. 맵을 걸어 다니며 채팅하다가 방장이 시작해요.</p></figcaption></figure>
+    <figure class="step"><div class="frame"><img src="img/role.webp" alt="역할 확인" loading="lazy"></div>
+      <figcaption><span class="n">2</span><h3>역할 확인</h3><p>카드를 눌러 몰래 확인해요. 마피아·경찰·의사·시민, 마피아는 동료 이름도 받아요.</p></figcaption></figure>
+    <figure class="step"><div class="frame"><img src="img/discussion.webp" alt="낮 토론" loading="lazy"></div>
+      <figcaption><span class="n">3</span><h3>낮 토론</h3><p>자유롭게 떠들고 돌아다니며 의심 가는 사람을 찾아요. 모두가 끝내기를 누르면 바로 넘어가요.</p></figcaption></figure>
+    <figure class="step"><div class="frame"><img src="img/nomination.webp" alt="지목" loading="lazy"></div>
+      <figcaption><span class="n">4</span><h3>지목 · 변론 · 찬반</h3><p>캐릭터를 눌러 지목하면 머리 위에 표가 쌓여요. 가장 많이 지목된 사람이 무대에서 변론하고 찬반으로 처형을 정해요.</p></figcaption></figure>
+    <figure class="step"><div class="frame"><img src="img/night-mafia.webp" alt="밤" loading="lazy"></div>
+      <figcaption><span class="n">5</span><h3>밤</h3><p>불이 꺼지고 마피아만 움직여요. 마피아끼리만 보이는 채팅으로 대상을 맞추고, 경찰·의사는 얼굴 목록에서 골라요.</p></figcaption></figure>
+    <figure class="step"><div class="frame"><img src="img/morning.webp" alt="아침" loading="lazy"></div>
+      <figcaption><span class="n">6</span><h3>아침과 결과</h3><p>쓰러진 자리에 분필 윤곽과 유언 카드가 남아요. 마피아 수가 나머지 생존자 수와 같아지거나 마피아가 모두 잡히면 끝나요.</p></figcaption></figure>
+  </div>
+  <div class="strip" aria-label="그 밖의 장면">
+    <figure><img class="shot" src="img/entry.webp" alt="첫 화면" loading="lazy"><figcaption>첫 화면</figcaption></figure>
+    <figure><img class="shot" src="img/defense.webp" alt="최후 변론" loading="lazy"><figcaption>최후 변론</figcaption></figure>
+    <figure><img class="shot" src="img/verdict.webp" alt="찬반 투표" loading="lazy"><figcaption>찬반 투표</figcaption></figure>
+    <figure><img class="shot" src="img/execution.webp" alt="처형 발표" loading="lazy"><figcaption>처형 발표</figcaption></figure>
+    <figure><img class="shot" src="img/night-police.webp" alt="밤, 시민 편 시점" loading="lazy"><figcaption>밤 (시민 편 시점)</figcaption></figure>
+    <figure><img class="shot" src="img/result.webp" alt="게임 결과" loading="lazy"><figcaption>결과</figcaption></figure>
+  </div>
+</div></section>
+
+<section><div class="wrap">
+  <p class="eyebrow">CHARACTERS &amp; MAPS</p>
+  <h2>코드로 조립한 3D 캐릭터와 맵</h2>
+  <p class="intro">캐릭터는 three.js의 구·원통을 조립한 인물이에요. 외부 모델 파일이나 애니메이션 라이브러리 없이 관절 키프레임으로 걷고 동작해요. 맵·의상·역할 그림은 디자인 시스템에서 먼저 정하고 승인한 뒤 화면에 옮겼어요.</p>
+  <div class="maps">
+    <figure><img src="img/map-bar.webp" alt="지하 재즈 바 맵" loading="lazy" width="560" height="320"><figcaption>지하 재즈 바</figcaption></figure>
+    <figure><img src="img/map-plaza.webp" alt="시계탑 광장 맵" loading="lazy" width="560" height="320"><figcaption>시계탑 광장</figcaption></figure>
+  </div>
+  <div class="outfits" aria-label="의상 9종">
+    <figure><img src="img/outfit-coat.webp" alt="" loading="lazy"><figcaption>기본 코트</figcaption></figure>
+    <figure><img src="img/outfit-noir.webp" alt="" loading="lazy"><figcaption>누아르</figcaption></figure>
+    <figure><img src="img/outfit-mafia.webp" alt="" loading="lazy"><figcaption>마피아</figcaption></figure>
+    <figure><img src="img/outfit-police.webp" alt="" loading="lazy"><figcaption>경찰</figcaption></figure>
+    <figure><img src="img/outfit-doctor.webp" alt="" loading="lazy"><figcaption>의사</figcaption></figure>
+    <figure><img src="img/outfit-detective.webp" alt="" loading="lazy"><figcaption>탐정</figcaption></figure>
+    <figure><img src="img/outfit-reporter.webp" alt="" loading="lazy"><figcaption>기자</figcaption></figure>
+    <figure><img src="img/outfit-elder.webp" alt="" loading="lazy"><figcaption>어르신</figcaption></figure>
+    <figure><img src="img/outfit-hood.webp" alt="" loading="lazy"><figcaption>후드</figcaption></figure>
+  </div>
+  <div class="roles" aria-label="역할 카드 4종">
+    <figure class="mafia"><img src="img/role-mafia.webp" alt="" loading="lazy"><figcaption>마피아</figcaption></figure>
+    <figure><img src="img/role-police.webp" alt="" loading="lazy"><figcaption>경찰</figcaption></figure>
+    <figure><img src="img/role-doctor.webp" alt="" loading="lazy"><figcaption>의사</figcaption></figure>
+    <figure><img src="img/role-citizen.webp" alt="" loading="lazy"><figcaption>시민</figcaption></figure>
+  </div>
+</div></section>
+
+<section><div class="wrap">
+  <p class="eyebrow">ARCHITECTURE</p>
+  <h2>방 하나에 서버 하나, 판정은 모두 서버가</h2>
+  <div class="arch">
+    <div class="diagram" aria-label="구조도">
+      <div class="node"><b>플레이어 폰 4~8대</b><small>React 앱. 받은 상태를 그리고 행동만 보내요</small><div class="phones" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></div></div>
+      <div class="wire">WebSocket</div>
+      <div class="node"><b>Cloudflare Worker</b><small>방 코드로 해당 방에 연결해요. 정적 파일도 같은 곳에서 배포해요</small></div>
+      <div class="wire">방 코드로 라우팅</div>
+      <div class="node room"><b>Room Durable Object (방마다 하나)</b><small>참가자·역할·단계·타이머·이동·투표 집계와 판정. 플레이어마다 볼 수 있는 정보만 골라서 보내요</small></div>
+    </div>
+    <ul class="points">
+      <li><h3>서버 권위</h3><p>단계 전환, 타이머, 판정, 캐릭터 이동까지 방 서버가 정해요. 클라이언트는 목적지와 행동만 보내고, 서버가 걸을 수 있는 경로로 바꿔 모두에게 나눠 줘요.</p></li>
+      <li><h3>보낼 사람은 한 곳에서 정해요</h3><p>채팅·이동·입력 중 표시를 누가 받을지는 함수 하나(<code>audience</code>)가 정하고, 전송도 한 길로만 나가요. 시민의 소켓에는 다른 사람의 역할이 실리지 않고, 탈락자(유령)의 채팅과 위치는 산 사람에게 가지 않아요. 단위 테스트와 E2E 누설 검사로 확인해요.</p></li>
+      <li><h3>비밀 투표</h3><p>찬반은 누가 무엇을 골랐는지 어떤 소켓에도 싣지 않아요. 투표를 마쳤는지와 집계 수만 공개하고, 개인 값은 집계 직후 지워요.</p></li>
+      <li><h3>끊겨도 이어지는 판</h3><p>참가할 때 받은 토큰으로 같은 자리에 다시 붙어요. iOS Safari처럼 화면이 꺼지면 연결이 끊기는 환경을 기본으로 보고, 끊긴 사람을 기다리지 않고 서버 타이머대로 진행해요.</p></li>
+      <li><h3>대기 비용과 공용 규칙</h3><p>WebSocket Hibernation으로 조용한 방의 비용을 줄였어요. 게임 규칙은 <code>shared/</code>에 순수 함수로 두어 서버와 브라우저가 함께 쓰고, 입력은 zod로 검증해요.</p></li>
+    </ul>
+  </div>
+</div></section>
+
+<section><div class="wrap">
+  <p class="eyebrow">DECISIONS</p>
+  <h2>주요 설계 결정</h2>
+  <p class="intro">결정은 63개의 기록으로 남겼어요. 그중 방향을 정한 여섯 개예요.</p>
+  <div class="decisions">
+    <a href="https://github.com/dhkim1522/minifia/blob/v2/docs/decisions/0002-cloudflare-durable-objects.md" target="_blank" rel="noopener"><span class="no">0002</span><h3>방마다 Durable Object 하나</h3><p>방 상태와 판정을 한 객체에 모아 동시성 문제 없이 서버 권위로 진행해요.</p></a>
+    <a href="https://github.com/dhkim1522/minifia/blob/v2/docs/decisions/0044-v2-same-space.md" target="_blank" rel="noopener"><span class="no">0044</span><h3>v2.0은 "같은 공간"</h3><p>v1.0 실게임 피드백으로 고정 자리·템플릿 채팅을 버리고 맵 이동·자유 채팅·동작 캐릭터로 바꿨어요.</p></a>
+    <a href="https://github.com/dhkim1522/minifia/blob/v2/docs/decisions/0047-v2-3d-characters-and-gather-devices.md" target="_blank" rel="noopener"><span class="no">0047</span><h3>코드로 조립한 3D 캐릭터</h3><p>2D 그림 대신 맵과 같은 장면에서 그리는 조립 인물로, 의상·표정·동작을 부품처럼 바꿔요.</p></a>
+    <a href="https://github.com/dhkim1522/minifia/blob/v2/docs/decisions/0051-v2-text-minimal-interaction-ui.md" target="_blank" rel="noopener"><span class="no">0051</span><h3>글은 최소, 조작은 직접</h3><p>3초 규칙: 한 화면에서 읽을 글은 단계 이름과 한 줄 이하. 기획부터 디자인까지 가장 먼저 따르는 지침이에요.</p></a>
+    <a href="https://github.com/dhkim1522/minifia/blob/v2/docs/decisions/0060-v2-day-execution-ghost.md" target="_blank" rel="noopener"><span class="no">0060</span><h3>처형과 유령의 정보 경계</h3><p>유령은 모두의 역할을 보지만, 산 사람의 소켓과 화면에는 유령의 흔적이 전혀 남지 않게 했어요.</p></a>
+    <a href="https://github.com/dhkim1522/minifia/blob/v2/docs/decisions/0042-deploy-account-guard.md" target="_blank" rel="noopener"><span class="no">0042</span><h3>배포 전 계정·대상 확인</h3><p>배포 스크립트가 계정, 빌드 산출물의 대상, 고정 인자를 차례로 확인하고 하나라도 어긋나면 멈춰요.</p></a>
+  </div>
+</div></section>
+
+<section><div class="wrap">
+  <p class="eyebrow">BUILT WITH</p>
+  <h2>AI 에이전트와 함께 만든 방식</h2>
+  <p class="intro">Claude Code로 개발했어요. 요구사항 → 로드맵 → 페이즈마다 계획·실행·검증을 거치는 흐름을 쓰고, 사람은 방향과 승인을, 에이전트는 구현과 검사를 맡았어요. 빠르게 만들되 품질은 기록과 자동 검사로 지켰어요.</p>
+  <div class="nums">
+    <div><b>2026.10.21~</b><span>개발 시작</span></div>
+    <div><b>1,800여</b><span>커밋</span></div>
+    <div><b>63</b><span>결정 기록</span></div>
+    <div><b>3,500여</b><span>자동 테스트</span></div>
+    <div><b>2.4만 줄</b><span>앱 코드 (테스트 코드 5.2만 줄)</span></div>
+  </div>
+  <div class="cards">
+    <div><h3>디자인 먼저</h3><p>화면을 만들기 전에 디자인 시스템과 전체 화면설계서를 먼저 만들어 승인받고, 승인본을 저장소에 사본으로 두어 에이전트가 그대로 따르게 했어요.</p></div>
+    <div><h3>세 갈래 테스트와 화면 E2E</h3><p>순수 규칙은 Node, 화면은 happy-dom, 방 서버는 workerd 안에서 테스트해요. 배포본에는 Playwright로 폰 폭 5종 화면 검사와 정보 누설 검사를 돌려요.</p></div>
+    <div><h3>결정 기록과 인계</h3><p>바뀐 결정은 번호를 붙여 기록하고, 작업이 끝날 때마다 인계 문서를 갱신해 Mac과 Windows PC, 다음 세션이 그대로 이어 가요.</p></div>
+  </div>
+</div></section>
+
+<section><div class="wrap">
+  <div class="gh">
+    <div><h2>코드와 문서는 GitHub에</h2><p>게임 코드, 기획서, 설계서, 결정 기록, 디자인 사본을 볼 수 있어요.</p></div>
+    <a class="btn" href="https://github.com/dhkim1522/minifia/tree/v2" target="_blank" rel="noopener">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5M16 7l5 5-5 5M14 4l-4 16"/></svg>
+      GitHub 저장소
+      <svg class="ext" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7M9 7h8v8"/></svg><span class="sr-only"> (새 탭에서 열림)</span>
+    </a>
+  </div>
+</div></section>
+</main>
+
+<footer><div class="wrap">미니피아 · <span class="serif">minifia</span> · 개발 코드명이며 정식 이름은 출시 전에 정해요</div></footer>
+</body></html>
