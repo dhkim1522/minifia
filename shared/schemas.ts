@@ -63,6 +63,8 @@ export const ClientMessageSchema = z.discriminatedUnion("t", [
   z.strictObject({ t: z.literal("endDiscussion"), on: z.boolean() }),
   z.strictObject({ t: z.literal("point"), target: z.number().int().min(0).max(7) }),
   z.strictObject({ t: z.literal("verdict"), agree: z.boolean() }),
+  // 직업 주장(결정 0066-1): 값은 enum 뿐 — 이번 판 구성에 있는 직업인지·단계·산 사람은 서버 규칙(shared/game/badge.ts)이 본다. 참·거짓은 판정하지 않는다.
+  z.strictObject({ t: z.literal("badge"), role: z.enum(["mafia", "police", "doctor", "citizen", "none"]) }),
   // 테스트 방 방장 도구(결정 0022). 덧붙은 키는 거부한다. 방장·testMode·단계 검사는 서버 규칙(shared/game/testTools.ts)이 한다.
   z.strictObject({ t: z.literal("testSkip") }),
   z.strictObject({ t: z.literal("testReset") }),

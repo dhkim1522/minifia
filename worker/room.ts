@@ -1,6 +1,6 @@
 import { DurableObject } from "cloudflare:workers";
 import { CLOSE_CODES, MAX_FRAME_BYTES } from "../shared/protocol";
-import type { ApiErrorCode, BotVoteExec, BotVotePick, ChatRejectWhy, ClientMessage, RemovedReason, RoomPreview, ServerMessage, WorldFrame, WsErrorCode } from "../shared/protocol";
+import type { ApiErrorCode, BadgeId, BotVoteExec, BotVotePick, ChatRejectWhy, ClientMessage, RemovedReason, RoomPreview, ServerMessage, WorldFrame, WsErrorCode } from "../shared/protocol";
 import { botMafiaTarget, botWakeAt, isBot, syncBotPlan, takeDueBotSteps } from "../shared/game/bots";
 import type { BotStep } from "../shared/game/bots";
 import { isAlive } from "../shared/game/alive";
@@ -23,6 +23,7 @@ import {
 import type { JoinError } from "../shared/game/room";
 import type { RoomState } from "../shared/game/room";
 import { pickRecipientIds, pickTarget } from "../shared/game/night";
+import { BADGE_MIN_GAP_MS, setBadge } from "../shared/game/badge";
 import { WILL_MIN_GAP_MS, noteRecipientIds, saveNote, saveWill } from "../shared/game/will";
 import { resetToLobby, setBotCount, setBotVote, setTestRole, skipPhase } from "../shared/game/testTools";
 import type { RoleId } from "../shared/game/roles";
@@ -277,6 +278,9 @@ export class Room extends DurableObject<Env> {
       case "chat":
         await this.handleChat(ws, msg.text, msg.pk);
         return;
+      case "badge":
+        await this.handleBadge(ws, msg.role);
+        return;
       case "will":
         await this.handleWill(ws, msg.text);
         return;
@@ -420,6 +424,33 @@ export class Room extends DurableObject<Env> {
     this.room = result.state;
     await this.ctx.storage.put("room", this.room);
     this.sendViewTo(pickRecipientIds(this.room, playerId));
+    return null;
+  }
+
+  // 직업 주장(09.1.1, 결정 0066-1): 신원은 소켓 첨부의 playerId 뿐이다 — 메시지에 seat·id 가 없다.
+  private async handleBadge(ws: WebSocket, role: BadgeId): Promise<void> {
+    const att = this.attachmentOf(ws);
+    if (!att || !this.room) {
+      this.sendTo(ws, { t: "error", code: "BAD_MESSAGE" });
+      return;
+    }
+    const error = await this.applyBadge(att.playerId, role, Date.now());
+    if (error !== null) this.sendRejection(ws, att.playerId, error);
+  }
+
+  // 규칙 함수(setBadge)만 부른다 — 실제 역할은 읽지 않는다(L18). 주장은 공개 값이라 바뀌면 모든 소켓이 각자 view 를 받는다(persistAndBroadcast).
+  // 마감이 바뀌지 않으니 reschedule 은 필요 없다. 같은 값은 같은 객체라 저장·전송이 없다. 간격(BADGE_MIN_GAP_MS) 안의 요청은 오류 없이 버린다(T-09.1.1-03).
+  private async applyBadge(playerId: string, role: BadgeId, now: number): Promise<WsErrorCode | null> {
+    if (!this.room) return "BAD_MESSAGE";
+    const key = `badge:${playerId}`;
+    const last = this.writeAt.get(key);
+    if (last !== undefined && now - last < BADGE_MIN_GAP_MS) return null;
+    const result = setBadge(this.room, playerId, role);
+    if (!result.ok) return result.error;
+    if (result.state === this.room) return null;
+    this.writeAt.set(key, now);
+    this.room = result.state;
+    await this.persistAndBroadcast();
     return null;
   }
 

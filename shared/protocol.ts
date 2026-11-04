@@ -13,6 +13,9 @@
 import type { RoleId } from "./game/roles";
 export type { RoleId } from "./game/roles";
 
+/** 직업 주장 값(결정 0066-1): 이번 판 직업 하나 또는 none(주장 안 함). 참·거짓은 서버가 판정하지 않는다. */
+export type BadgeId = RoleId | "none";
+
 export const MIN_PLAYERS = 4;
 export const MAX_PLAYERS = 8;
 /** 테스트 방 방장이 한 번에 요청할 수 있는 봇 수의 상한(결정 0024). 서버가 총 인원 MAX_PLAYERS 로 한 번 더 자른다. */
@@ -196,6 +199,7 @@ export type ClientMessage =
   // 8페이즈 낮 처형(결정 0060). 옛 투표 메시지(처형 여부·후보 선택)는 08-21 에 지웠다 — 옛 번들이 보내면 스키마가 거부해 BAD_MESSAGE 다. 행위자는 모두 소켓 첨부 playerId 뿐이다.
   | { t: "endDiscussion"; on: boolean } // 토론 끝내기 — 누름(true)/취소(false), 산 사람만. 공개 값은 누른 수뿐이다(DAY-03)
   | { t: "point"; target: number } // 지목 — 대상 seat 하나, 취소 없음, 마감까지 바꿀 수 있다(DAY-04)
+  | { t: "badge"; role: BadgeId } // 직업 주장(결정 0066-1) — 서버가 정하는 것은 값의 형식뿐 참·거짓은 판정하지 않는다. 낮 시작 발표·토론·지목 단계에서만
   | { t: "verdict"; agree: boolean } // 찬반 — 찬성 true / 반대 false, 변론자·유령은 거부, 마지막 값이 유효(DAY-06)
   // 테스트 방 방장 도구(결정 0022). 일반 방은 BAD_MESSAGE 로 거부한다. role null = 무작위.
   | { t: "testSkip" }
@@ -228,6 +232,8 @@ export interface PublicPlayer {
   connected: boolean;
   isHost: boolean;
   alive?: boolean; // 서버는 항상 싣는다(공개 정보, 03-05). 없으면 생존
+  badge?: BadgeId; // 공개 직업 주장(결정 0066-1). 산 사람이 건 값이 있을 때만 — 실제 역할의 함수가 아니다
+  badgeSwapped?: true; // 직업을 건 뒤 다른 값으로 바꾼 적이 있다(결정 0066-1). 이전 값은 어디에도 없다
 }
 export interface MyInfo {
   seat: number;

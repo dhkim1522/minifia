@@ -145,13 +145,18 @@ export function buildView(state: RoomState, playerId: string, now: number): Room
 
   const players: PublicPlayer[] = [...state.players]
     .sort((a, b) => a.seat - b.seat)
-    .map((p) => ({
-      seat: p.seat,
-      nickname: p.nickname,
-      connected: p.connected,
-      isHost: p.id === state.hostId,
-      alive: isAlive(p), // 탈락 여부는 공개 정보다(ELIM-01)
-    }));
+    .map((p) => {
+      const row: PublicPlayer = {
+        seat: p.seat,
+        nickname: p.nickname,
+        connected: p.connected,
+        isHost: p.id === state.hostId,
+        alive: isAlive(p), // 탈락 여부는 공개 정보다(ELIM-01)
+      };
+      // 공개 직업 주장(결정 0066-1): 산 사람이고 값이 있을 때만 키를 만든다. 실제 역할이 아니고 badgeLog(서버 전용)는 어떤 경로로도 싣지 않는다.
+      if (isAlive(p) && p.badge !== undefined && DAY_PHASES.has(state.phase)) row.badge = p.badge;
+      return row;
+    });
 
   // 내 정보도 허용 목록으로만 만든다. role·allies 는 조건을 채울 때만 키 자체를 만든다(undefined 로 남기지 않는다).
   const myInfo: MyInfo = { seat: me.seat, isHost: me.id === state.hostId };

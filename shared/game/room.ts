@@ -4,6 +4,7 @@ import { validateNickname } from "../nickname";
 import { MAX_PLAYERS, MIN_PLAYERS } from "../protocol";
 import type {
   AssassinationRecord,
+  BadgeId,
   ExecutionView,
   GameWinner,
   InvestigationRecord,
@@ -62,6 +63,12 @@ export interface Player {
   endVote?: true;
   /** 서버 전용(결정 0061-10). 본인이 남긴 유언 — saveWill(09-12)만 쓰고, 사후에도 바꿀 수 없다. 아침에 서버가 채팅 카드로 만들어 보내며 view 의 me.will 로 산 본인에게만 간다. */
   will?: string;
+  /** 공개 직업 주장(결정 0066-1). setBadge 만 쓴다. 실제 역할과 무관한 값이고 view 에는 산 사람 것만 players[].badge 로 실린다. */
+  badge?: BadgeId;
+  /** 직업을 건 뒤 다른 값으로 바꾼 적이 있음(결정 0066-1, O-1). 한 번 켜지면 판이 끝날 때까지 끄지 않는다. 이전 값은 어디에도 없다. */
+  badgeSwapped?: true;
+  /** 서버 전용(O-20, 결정 0066-1). 확정 변경마다 {n: 일차, v: 새 값}. 어떤 view 에도 싣지 않는다 — 11페이즈 결과 화면 입력. */
+  badgeLog?: Array<{ n: number; v: BadgeId }>;
   /**
    * 서버 전용(결정 0024). 테스트 방 서버 봇 표시 — 토큰은 빈 문자열, connId 는 null, connected 는 true 로 고정이고
    * 소켓이 없다. view·미리보기·어떤 프레임에도 싣지 않는다(허용 목록 리터럴이라 저절로 빠진다).
