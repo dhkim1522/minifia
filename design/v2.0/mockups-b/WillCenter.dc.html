@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>유언 중앙 공개</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Nanum+Pen+Script&amp;family=Gowun+Batang:wght@400;700&amp;family=Gowun+Dodum&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#0e1326}
+.wc-btn:focus-visible{outline:2px solid #e6e8ee;outline-offset:2px}
+@keyframes wcRise{from{opacity:0;transform:translateY(60px) rotate(-3deg) scale(.92)}to{opacity:1;transform:none}}
+@keyframes wcWrite{from{clip-path:inset(0 100% 0 0)}to{clip-path:inset(0 0 0 0)}}
+@keyframes wcSeal{0%{opacity:0;transform:scale(1.8) rotate(-20deg)}100%{opacity:1;transform:scale(1) rotate(-8deg)}}
+@media (prefers-reduced-motion: reduce){*{animation:none!important}}
+</style>
+</helmet>
+<div style="--bg: #0e1326; width: 390px; height: 844px; position: relative; overflow: hidden; background: radial-gradient(ellipse at 50% 38%, #26305a 0%, #121936 55%, #080b1a 100%); color: #e6e8ee; font-family: 'Gowun Dodum', sans-serif; word-break: keep-all; user-select: none">
+
+<div aria-hidden="true" style="position: absolute; inset: 0; background: repeating-linear-gradient(115deg, rgba(255,255,255,0.025) 0 2px, transparent 2px 22px)"></div>
+
+<div style="position: absolute; left: 0; top: 0; width: 390px; box-sizing: border-box; padding: 24px 16px 0; text-align: center">
+<p style="margin: 0; font-size: 24px; font-weight: 700; color: #f3f4f7">아침</p>
+</div>
+
+<p style="position: absolute; left: 16px; right: 16px; top: 78px; margin: 0; text-align: center; font-size: 30px; font-weight: 700; color: #f3f4f7; text-shadow: 0 2px 12px rgba(0,0,0,.8)">서연 님이 당했어요</p>
+
+<sc-if value="{{ isScroll }}" hint-placeholder-val="{{ true }}">
+<div key="{{ replay }}" role="status" aria-label="서연 님의 유언: 현우 님 말투가 이상해요" style="position: absolute; left: 36px; right: 36px; top: 190px; animation: wcRise 700ms cubic-bezier(.2,.8,.2,1) both; filter: drop-shadow(0 18px 24px rgba(0,0,0,.6))">
+<div style="height: 22px; border-radius: 12px; background: linear-gradient(#a9784a, #7a502d 60%, #5a3a20); margin: 0 -10px"></div>
+<div style="background: linear-gradient(#e7d5a8, #dcc58e 70%, #cfb577); padding: 26px 22px 30px; color: #3b2a17; font-family: 'Gowun Batang', serif; text-align: center; box-shadow: inset 0 0 40px rgba(120,80,30,.35)">
+<p style="margin: 0 0 14px; font-size: 15px; letter-spacing: 6px; color: #7a5a30">유 언</p>
+<p style="margin: 0; font-family: 'Nanum Pen Script', cursive; font-size: 44px; line-height: 1.25; color: #2b1d10; animation: wcWrite 1400ms steps(18) 700ms both">현우 님 말투가 이상해요</p>
+<p style="margin: 22px 0 0; font-size: 15px; color: #7a5a30">서연 남김</p>
+</div>
+<div style="height: 22px; border-radius: 12px; background: linear-gradient(#a9784a, #7a502d 60%, #5a3a20); margin: 0 -10px"></div>
+</div>
+</sc-if>
+
+<sc-if value="{{ isEnvelope }}" hint-placeholder-val="{{ false }}">
+<div key="{{ replay }}" role="status" aria-label="서연 님의 유언: 현우 님 말투가 이상해요" style="position: absolute; left: 30px; right: 30px; top: 170px; animation: wcRise 700ms cubic-bezier(.2,.8,.2,1) both; filter: drop-shadow(0 18px 24px rgba(0,0,0,.65))">
+<div style="position: relative; height: 340px; background: #f3efe4; border-radius: 6px; transform: rotate(-1.5deg); padding: 28px 26px; box-sizing: border-box; background-image: repeating-linear-gradient(transparent 0 55px, rgba(70,90,130,.22) 55px 56px); background-position: 0 40px; color: #1d2433; display: flex; flex-direction: column; align-items: center; justify-content: center">
+<p style="position: absolute; left: 26px; top: 22px; margin: 0; font-size: 14px; color: #6a7388">서연이 남긴 편지</p>
+<p style="margin: 0; width: 100%; text-align: center; font-family: 'Nanum Pen Script', cursive; font-size: 46px; line-height: 56px; color: #1c2a4d; animation: wcWrite 1200ms steps(12) 800ms both">현우 님 말투가</p>
+<p style="margin: 0; width: 100%; text-align: center; font-family: 'Nanum Pen Script', cursive; font-size: 46px; line-height: 56px; color: #1c2a4d; animation: wcWrite 1000ms steps(8) 2100ms both">이상해요</p>
+<svg aria-hidden="true" viewBox="0 0 100 100" width="84" height="84" style="position: absolute; right: 14px; bottom: 10px; transform: rotate(-8deg); animation: wcSeal 500ms ease-out 3200ms both; filter: drop-shadow(0 3px 5px rgba(0,0,0,.45))">
+<defs><radialGradient id="wcWax" cx="38%" cy="30%" r="75%"><stop offset="0" stop-color="#e0485c"/><stop offset=".55" stop-color="#a3132a"/><stop offset="1" stop-color="#650a18"/></radialGradient></defs>
+<path d="M50 4c10 0 14 6 22 7 9 1 18 6 18 16 0 7 4 10 4 20 0 8-5 12-4 20 1 10-8 17-17 18-8 1-12 8-23 8s-14-7-22-8C19 84 9 77 10 66c1-8-4-12-4-20 0-9 5-12 5-20C11 16 22 11 30 10 38 9 41 4 50 4z" fill="url(#wcWax)"/>
+<circle cx="50" cy="50" r="30" fill="none" stroke="#7a0c1f" stroke-width="3"/>
+<circle cx="50" cy="50" r="30" fill="none" stroke="#e8707f" stroke-width="1" opacity=".5" transform="translate(-1.5 -1.5)"/>
+<text x="50" y="63" text-anchor="middle" font-family="Gowun Batang, serif" font-weight="700" font-size="38" fill="#7a0c1f">M</text>
+<text x="49" y="62" text-anchor="middle" font-family="Gowun Batang, serif" font-weight="700" font-size="38" fill="#f0909b" opacity=".55">M</text>
+<path d="M22 28c4-8 12-12 22-12" stroke="#ffd0d6" stroke-width="3" stroke-linecap="round" fill="none" opacity=".45"/>
+</svg>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ isNote }}" hint-placeholder-val="{{ false }}">
+<div key="{{ replay }}" role="status" aria-label="서연 님의 유언: 현우 님 말투가 이상해요" style="position: absolute; left: 40px; right: 40px; top: 200px; animation: wcRise 700ms cubic-bezier(.2,.8,.2,1) both; filter: drop-shadow(0 16px 20px rgba(0,0,0,.6))">
+<div style="position: relative; background: #ece7d8; transform: rotate(2deg); padding: 34px 22px 30px; color: #1c1a15; clip-path: polygon(0 3%, 6% 0, 14% 3%, 24% 0, 36% 3%, 50% 0, 62% 3%, 76% 0, 88% 3%, 100% 0, 100% 97%, 92% 100%, 80% 97%, 66% 100%, 52% 97%, 38% 100%, 24% 97%, 10% 100%, 0 97%)">
+<div aria-hidden="true" style="position: absolute; left: 50%; top: -6px; width: 84px; height: 24px; margin-left: -42px; background: rgba(214,166,66,.75); transform: rotate(-3deg)"></div>
+<p style="margin: 0 0 12px; font-size: 13px; color: #8a0f22; font-weight: 700">마지막 한마디</p>
+<p style="margin: 0; font-family: 'Nanum Pen Script', cursive; font-size: 46px; line-height: 1.2; color: #14110d; animation: wcWrite 1400ms steps(18) 700ms both">현우 님 말투가 이상해요</p>
+<div aria-hidden="true" style="position: absolute; right: 22px; bottom: 16px; width: 18px; height: 34px; border-radius: 50% 50% 50% 50% / 30% 30% 70% 70%; background: #8a0f22; opacity: .85"></div>
+<p style="margin: 20px 0 0; font-size: 15px; color: #5c564a">서연</p>
+</div>
+</div>
+</sc-if>
+
+<div style="position: absolute; left: 24px; right: 24px; top: 560px; display: flex; flex-direction: column; align-items: center; gap: 6px">
+<p style="margin: 0; font-size: 14px; color: #a9aebb">채팅에도 남아요 · 5초 뒤 접혀요</p>
+<div style="width: 220px; height: 4px; border-radius: 4px; background: rgba(255,255,255,.14); overflow: hidden"><div key="{{ replay }}" style="height: 100%; background: #d6a642; animation: wcWrite 5000ms linear both"></div></div>
+</div>
+
+<section style="position: absolute; left: 0; bottom: 0; width: 390px; box-sizing: border-box; padding: 14px 16px 22px; background: rgba(21, 28, 54, 0.97); border-radius: 20px 20px 0 0; display: flex; flex-direction: column; gap: 10px">
+<div role="group" aria-label="시안 조절: 유언 모양" style="display: flex; align-items: center; gap: 6px; padding: 6px; border-radius: 12px; border: 1px dashed #3a4778">
+<span style="font-size: 12px; color: #a9aebb; padding: 0 4px">시안</span>
+<sc-for list="{{ styles }}" as="o" hint-placeholder-count="3">
+<button type="button" class="wc-btn" onClick="{{ o.pick }}" aria-pressed="{{ o.pressed }}" style="flex: 1; min-height: 40px; border-radius: 8px; border: 0; background: {{ o.bg }}; color: {{ o.fg }}; font-family: inherit; font-size: 14px; cursor: pointer">{{ o.label }}</button>
+</sc-for>
+</div>
+<button type="button" class="wc-btn" onClick="{{ again }}" style="min-height: 44px; border-radius: 10px; border: 1px solid #2a3760; background: #1e2847; color: #e6e8ee; font-family: inherit; font-size: 15px; cursor: pointer">다시 보기</button>
+<p style="margin: 0; font-size: 13px; line-height: 1.5; color: #a9aebb">{{ caption }}</p>
+</section>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+var STYLES = [
+  ['scroll', '두루마리', '양피지 두루마리가 가운데로 올라오고 글씨가 한 글자씩 써져요. 가장 유서답고 읽기 쉬워요.'],
+  ['envelope', '편지', '줄 쳐진 편지지에 손글씨가 써지고 끝에 붉은 밀랍 인장이 찍혀요. 밝은 종이가 어두운 장면에서 가장 눈에 띕니다.'],
+  ['note', '찢은 쪽지', '찢어 낸 종이에 테이프가 붙어 있고 붉은 얼룩이 있어요. 마피아 장르 느낌이 가장 강해요.']
+];
+
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { style: 'envelope', replay: 0 };
+  }
+
+  renderVals() {
+    var self = this, s = this.state, cur = STYLES.filter(function (x) { return x[0] === s.style; })[0];
+    return {
+      isScroll: s.style === 'scroll', isEnvelope: s.style === 'envelope', isNote: s.style === 'note', replay: s.replay, caption: cur[2],
+      again: function () { self.setState({ replay: s.replay + 1 }); },
+      styles: STYLES.map(function (m) {
+        var on = s.style === m[0];
+        return { label: m[1], pressed: on ? 'true' : 'false', bg: on ? '#e6e8ee' : '#1e2847', fg: on ? '#0e1326' : '#e6e8ee', pick: function () { self.setState({ style: m[0], replay: s.replay + 1 }); } };
+      })
+    };
+  }
+}
+</script>
+</body>
+</html>

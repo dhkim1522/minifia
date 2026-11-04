@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>직업 의상 유령</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="ds/minifiav2/tokens.css">
+<link rel="stylesheet" href="ds/minifiav2/components/bundle.css">
+<script src="ds/minifiav2/components/bundle.js"></script>
+<script src="./three.min.js"></script>
+<script src="./character.js"></script>
+<script src="./blockout.js"></script>
+<script src="./bar.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0;background:#0e1326}
+.gc-btn:focus-visible{outline:2px solid #e6e8ee;outline-offset:2px}
+@media (prefers-reduced-motion: reduce){*{animation:none!important}}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; position: relative; overflow: hidden; background: var(--night-950); color: var(--gray-100); font-family: var(--font-ui); word-break: keep-all; user-select: none">
+
+<canvas id="sdCanvas" aria-label="직업 의상을 입은 유령 네 명이 떠 있는 재즈 바" style="position: absolute; left: 0; top: 0; width: 390px; height: 844px; display: block"></canvas>
+
+<div style="position: absolute; left: 0; top: 0; width: 390px; height: 844px; pointer-events: none">
+<sc-for list="{{ people }}" as="p" hint-placeholder-count="8">
+<div id="sdPlate{{ p.i }}" style="position: absolute; left: 0; top: 0; width: 0; height: 0; will-change: transform; z-index: {{ p.z }}">
+<div style="position: absolute; left: 0; top: 0; transform: translate(-50%, -100%)">
+<x-import component-from-global-scope="MinifiaV2.HeadStack" name="{{ p.name }}" color="{{ p.color }}" role="{{ p.role }}"></x-import>
+</div>
+</div>
+</sc-for>
+</div>
+
+<div aria-hidden="true" style="position: absolute; left: 0; top: 0; width: 390px; height: 120px; pointer-events: none; background: linear-gradient(to bottom, rgba(14, 19, 38, 0.88) 0px, rgba(14, 19, 38, 0.6) 70px, rgba(14, 19, 38, 0) 120px)"></div>
+<div style="position: absolute; left: 0; top: 0; width: 390px; box-sizing: border-box; padding: 18px 16px 0; z-index: 40">
+<x-import component-from-global-scope="MinifiaV2.PhaseHeader" title="유령" hint="모두의 직업이 보여요" show-hint="true" time="30" total="30"></x-import>
+</div>
+
+<section style="position: absolute; left: 0; bottom: 0; width: 390px; box-sizing: border-box; padding: 14px 16px 22px; background: rgba(21, 28, 54, 0.97); border-radius: 20px 20px 0 0; display: flex; flex-direction: column; gap: 10px; z-index: 50">
+<div role="group" aria-label="시안 조절: 유령 모습" style="display: flex; align-items: center; gap: 6px; padding: 6px; border-radius: 12px; border: 1px dashed #3a4778">
+<span style="font-size: 12px; color: #a9aebb; padding: 0 4px">시안</span>
+<sc-for list="{{ styles }}" as="o" hint-placeholder-count="3">
+<button type="button" class="gc-btn" onClick="{{ o.pick }}" aria-pressed="{{ o.pressed }}" style="flex: 1; min-height: 40px; border-radius: 8px; border: 0; background: {{ o.bg }}; color: {{ o.fg }}; font-family: inherit; font-size: 14px; cursor: pointer">{{ o.label }}</button>
+</sc-for>
+</div>
+<p style="margin: 0; font-size: 13px; line-height: 1.5; color: #a9aebb">{{ caption }}</p>
+<div style="display: flex; gap: 6px; flex-wrap: wrap">
+<sc-for list="{{ legend }}" as="l" hint-placeholder-count="4">
+<span style="font-size: 12px; padding: 4px 8px; border-radius: 8px; background: #1e2847; color: #e6e8ee">{{ l }}</span>
+</sc-for>
+</div>
+</section>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+var W = 390, H = 844;
+var NAMES = [['지호', '#7a8fb8'], ['민준', '#6fa59a'], ['서연', '#b89a6f'], ['도윤', '#b87a5c'], ['하은', '#a9aebb'], ['태오', '#8f86b0'], ['수아', '#7f9f7a'], ['현우', '#a88f9a']];
+// 탈락한 네 명: 서연 마피아, 도윤 경찰, 하은 시민, 수아 의사. 나머지는 살아 있는 사람(유령 눈에만 보인다)
+var GHOSTS = { 2: ['mafia', 'mafia'], 3: ['police', 'police'], 4: ['coat', 'citizen'], 6: ['doctor', 'doctor'] };
+var LIVING = { 0: 'citizen', 1: 'citizen', 5: 'citizen', 7: 'mafia' };
+var STYLES = [
+  ['glow', '푸른 빛', '직업 의상 그대로, 반투명하게 푸른 빛이 돕니다. 둥둥 떠 있어서 산 사람과 한눈에 구분돼요.'],
+  ['mono', '흑백', '의상 색을 거의 빼서 회색으로 만들고 조금 더 진하게 남겨요. 의상 모양으로 직업이 읽힙니다.'],
+  ['mist', '안개', '아주 옅고 하얀 안개빛이에요. 가장 유령답지만 의상이 흐려 직업은 이름표 마크가 알려 줘요.']
+];
+var LEGEND = ['서연 · 마피아 정장', '도윤 · 경찰 제복', '수아 · 의사 가운', '하은 · 시민 코트'];
+
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { style: 'mist' };
+  }
+
+  componentDidMount() {
+    var self = this;
+    this.alive = true;
+    (function boot() {
+      if (!self.alive) return;
+      var canvas = document.getElementById('sdCanvas');
+      if (!window.THREE || !window.MFChar || !window.MFB || !MFB.CONCEPTS.bar || !canvas || !document.getElementById('sdPlate7')) { setTimeout(boot, 60); return; }
+      self.start(canvas);
+    })();
+  }
+
+  componentWillUnmount() {
+    this.alive = false;
+    cancelAnimationFrame(this.raf);
+    if (this.io) this.io.disconnect();
+    if (this.st) this.st.dispose();
+  }
+
+  start(canvas) {
+    var self = this;
+    canvas.addEventListener('webglcontextlost', function (e) { e.preventDefault(); });
+    var st = this.st = MFB.createStage(canvas, 'bar', { width: W, height: H, offsetY: 110 });
+    st.setPhase('talk', { view: 'ghost', me: 3 });
+    Object.keys(GHOSTS).forEach(function (k) { MFChar.applyOutfit(st.people[+k], GHOSTS[k][0]); });
+    MFChar.applyOutfit(st.people[7], 'mafia');
+    MFChar.applyOutfit(st.people[1], 'police');
+    this.applyStyle(this.state.style);
+    var plates = NAMES.map(function (n, i) { return document.getElementById('sdPlate' + i); });
+    this.visible = true;
+    if (window.IntersectionObserver) { this.io = new IntersectionObserver(function (es) { self.visible = es[0].isIntersecting; }); this.io.observe(canvas); }
+    var last = performance.now(), acc = 0;
+    function frame(now) {
+      if (!self.alive) return;
+      var dt = Math.min((now - last) / 1000, 0.1); last = now; acc += dt;
+      if (self.visible && !document.hidden && acc >= 1 / 30) {
+        st.frame(Math.min(acc, 0.05));
+        st.people.forEach(function (c, i) {
+          var el = plates[i]; if (!el) return;
+          el.style.transform = 'translate(' + c.sx.toFixed(1) + 'px,' + c.sy.toFixed(1) + 'px)';
+        });
+        acc = 0;
+      }
+      self.raf = requestAnimationFrame(frame);
+    }
+    this.raf = requestAnimationFrame(frame);
+  }
+
+  // 탈락한 사람마다 유령 모습을 다시 입힌다
+  applyStyle(id) {
+    var st = this.st;
+    if (!st) return;
+    Object.keys(GHOSTS).forEach(function (k) {
+      var i = +k;
+      st.setGhost(i, false);
+      st.setGhost(i, true);
+      st.people[i].root.traverse(function (o) {
+        var m = o.material;
+        if (!m || !m.color) return;
+        if (!o.userData.c0) o.userData.c0 = m.color.clone();
+        m.color.copy(o.userData.c0);
+        if (m.emissive) m.emissive.set('#000000');
+        if (id === 'glow') { m.opacity = 0.5; if (m.emissive) { m.emissive.set('#5b7fe0'); m.emissiveIntensity = 0.55; } }
+        if (id === 'mono') {
+          var hsl = { h: 0, s: 0, l: 0 }; m.color.getHSL(hsl); m.color.setHSL(hsl.h, hsl.s * 0.08, Math.min(0.85, hsl.l * 0.9 + 0.08)); m.opacity = 0.72;
+        }
+        if (id === 'mist') { m.opacity = 0.26; if (m.emissive) { m.emissive.set('#d8e4ff'); m.emissiveIntensity = 0.85; } }
+        m.needsUpdate = true;
+      });
+    });
+  }
+
+  renderVals() {
+    var self = this, s = this.state, cur = STYLES.filter(function (x) { return x[0] === s.style; })[0];
+    return {
+      caption: cur[2], legend: LEGEND,
+      people: NAMES.map(function (n, i) {
+        var role = GHOSTS[i] ? GHOSTS[i][1] : LIVING[i];
+        return { i: i, name: n[0], color: n[1], role: role, z: 10 };
+      }),
+      styles: STYLES.map(function (m) {
+        var on = s.style === m[0];
+        return { label: m[1], pressed: on ? 'true' : 'false', bg: on ? '#e6e8ee' : '#1e2847', fg: on ? '#0e1326' : '#e6e8ee', pick: function () { self.setState({ style: m[0] }); self.applyStyle(m[0]); } };
+      })
+    };
+  }
+}
+</script>
+</body>
+</html>
