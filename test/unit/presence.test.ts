@@ -357,6 +357,27 @@ describe("sceneLook 의 pointAt (지목 방향)", () => {
   });
 });
 
+describe("sceneLook 의 pin (결정 0066-6, 09.1.1-11)", () => {
+  const turn = (i: number, extra: Record<string, unknown> = {}) => ({ order: [0, 1, 2, 3], i, ...extra });
+  it("지목 차례 중이면 차례 주인에게 turn 핀", () => {
+    const look = sceneLook(viewOf("nomination", { day: { turn: turn(1, { endsAt: 9000 }) } }), { stageH: 400 });
+    same(look.pin, { mode: "turn", seat: 1 });
+  });
+  it("확정 뒤 사이면 지목받은 사람으로 slide 핀(시작 시각은 서버 doneAt)", () => {
+    const look = sceneLook(viewOf("nomination", { day: { turn: turn(0, { doneAt: 4000 }), points: points([0, 2]) } }), { stageH: 400 });
+    same(look.pin, { mode: "slide", from: 0, to: 2, startAt: 4000, durationMs: 900 });
+  });
+  it("모이는 중·끝 알림·다른 단계는 null, 선두·과반이어도 비추지 않는다", () => {
+    same(sceneLook(viewOf("nomination", { day: { turn: turn(-1) } }), { stageH: 400 }).pin, null);
+    same(sceneLook(viewOf("nomination", { day: { turn: turn(4), points: points([0, 2], [1, 2], [3, 2]) } }), { stageH: 400 }).pin, null);
+    same(sceneLook(viewOf("discussion"), { stageH: 400 }).pin, null);
+  });
+  it("시각을 받지 않아 같은 view 면 같은 값이다 (타이머 틱으로 달라지지 않는다)", () => {
+    const v = viewOf("nomination", { day: { turn: turn(1, { endsAt: 9000 }) } });
+    same(sceneLook(v, { stageH: 400, now: 1 }).pin, sceneLook(v, { stageH: 400, now: 99999 }).pin);
+  });
+});
+
 describe("sceneLook 의 chalk (MORN-01, 결정 0061-14)", () => {
   it("day.chalk 고정소수점 {120, -340} 은 월드 단위 {1.2, -3.4} 로 look.chalk 에 실린다", () => {
     const look = sceneLook(viewOf("morning", { day: { chalk: { x: 120, z: -340 } } }), { stageH: 400 });

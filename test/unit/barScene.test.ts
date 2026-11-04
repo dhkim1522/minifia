@@ -333,6 +333,89 @@ describe("조명 단계 다섯 (trial · night · morning, 08-10)", () => {
   });
 });
 
+describe("핀 조명 setPin (결정 0066-6, 09.1.1-11)", () => {
+  const voteEm = (bar: ReturnType<typeof buildBarScene>): number => (bar.meshes.emissiveVote!.material as MeshBasicMaterial).color.r;
+  const lightCount = (bar: ReturnType<typeof buildBarScene>): number => {
+    let n = 0;
+    bar.root.traverse((o) => {
+      if ((o as Light).isLight) n += 1;
+    });
+    return n;
+  };
+
+  it("핀이 있으면 무대 점광이 그 자리 위로 가고 세기는 단계 값과 선두 세기 사이, 실내·투표 발광은 dim 배", () => {
+    const bar = buildBarScene(LADDER[0]!);
+    bar.setLighting("vote");
+    bar.setPin({ x: 2.65, z: -1.5, strength: 0.9 }, 0.6);
+    const stage = bar.lights.stage;
+    expect(stage.position.x).toBeCloseTo(2.65, 9);
+    expect(stage.position.z).toBeCloseTo(-1.5, 9);
+    expect(stage.position.y).toBeCloseTo(LIGHT_TUNE.point.stage.y, 9);
+    const want = LIGHT_TUNE.vote.stage + (LIGHT_TUNE.tension.lead - LIGHT_TUNE.vote.stage) * 0.9;
+    expect(stage.intensity).toBeCloseTo(want, 9);
+    expect(room(bar)).toBeCloseTo(LIGHT_TUNE.vote.emissive.room * 0.6, 9);
+    expect(voteEm(bar)).toBeCloseTo(LIGHT_TUNE.vote.emissive.vote * 0.6, 9);
+    bar.dispose();
+  });
+
+  it("strength 0 이면 단계 값 그대로이고(위치만 따라간다) null 이면 무대 중앙·단계 값으로 돌아간다", () => {
+    const bar = buildBarScene(LADDER[0]!);
+    bar.setLighting("vote");
+    bar.setPin({ x: 1, z: 1, strength: 0 }, 1);
+    expect(bar.lights.stage.intensity).toBeCloseTo(LIGHT_TUNE.vote.stage, 9);
+    expect(room(bar)).toBeCloseTo(LIGHT_TUNE.vote.emissive.room, 9);
+    bar.setPin({ x: 1, z: 1, strength: 0.9 }, 0.6);
+    bar.setPin(null, 1);
+    expect(bar.lights.stage.position.x).toBeCloseTo(LIGHT_TUNE.point.stage.x, 9);
+    expect(bar.lights.stage.position.z).toBeCloseTo(LIGHT_TUNE.point.stage.z, 9);
+    expect(bar.lights.stage.intensity).toBeCloseTo(LIGHT_TUNE.vote.stage, 9);
+    expect(room(bar)).toBeCloseTo(LIGHT_TUNE.vote.emissive.room, 9);
+    expect(voteEm(bar)).toBeCloseTo(LIGHT_TUNE.vote.emissive.vote, 9);
+    bar.dispose();
+  });
+
+  it("조명 단계가 바뀌어도 핀 상태가 살아 있고 새 단계 값 위에서 다시 계산된다", () => {
+    const bar = buildBarScene(LADDER[0]!);
+    bar.setLighting("vote");
+    bar.setPin({ x: 2, z: 3, strength: 0.9 }, 0.6);
+    bar.setLighting("trial");
+    expect(bar.lights.stage.position.x).toBeCloseTo(2, 9);
+    expect(bar.lights.stage.position.z).toBeCloseTo(3, 9);
+    expect(bar.lights.stage.intensity).toBeCloseTo(LIGHT_TUNE.trial.stage + (LIGHT_TUNE.tension.lead - LIGHT_TUNE.trial.stage) * 0.9, 9);
+    expect(room(bar)).toBeCloseTo(LIGHT_TUNE.trial.emissive.room * 0.6, 9);
+    bar.dispose();
+  });
+
+  it("setTension 과 동시에 켜지면 핀이 위치·세기를 이기고, 긴장 2 의 방 절반 위에 dim 이 곱해진다", () => {
+    const bar = buildBarScene(LADDER[0]!);
+    bar.setLighting("vote");
+    bar.setTension(2, { x: 5, z: 5 });
+    bar.setPin({ x: -2, z: 1, strength: 0.5 }, 0.8);
+    expect(bar.lights.stage.position.x).toBeCloseTo(-2, 9);
+    expect(bar.lights.stage.position.z).toBeCloseTo(1, 9);
+    expect(bar.lights.stage.intensity).toBeCloseTo(LIGHT_TUNE.tension.lead, 9); // 이미 선두 세기라 lerp 결과도 같다
+    expect(room(bar)).toBeCloseTo(LIGHT_TUNE.vote.emissive.room * 0.5 * 0.8, 9);
+    bar.setPin(null, 1);
+    expect(bar.lights.stage.position.x).toBeCloseTo(5, 9);
+    expect(room(bar)).toBeCloseTo(LIGHT_TUNE.vote.emissive.room * 0.5, 9);
+    bar.dispose();
+  });
+
+  it("새 광원·새 메시를 만들지 않는다 (광원 수·메시 수 불변)", () => {
+    const bar = buildBarScene(LADDER[0]!);
+    const lights = lightCount(bar);
+    const meshes = allMeshes(bar.root).length;
+    const pointLights = lightsOf(bar.root, PointLight).length;
+    bar.setPin({ x: 1, z: 1, strength: 0.9 }, 0.6);
+    bar.setLighting("trial");
+    bar.setPin(null, 1);
+    expect(lightCount(bar)).toBe(lights);
+    expect(allMeshes(bar.root).length).toBe(meshes);
+    expect(lightsOf(bar.root, PointLight).length).toBe(pointLights);
+    bar.dispose();
+  });
+});
+
 describe("긴장 단계 setTension (결정 0049 선두·과반 연출, 08-10)", () => {
   it("1: 무대 점광원이 초점 위(높이 3.0)로 옮겨 선두 세기가 된다", () => {
     const bar = buildBarScene(LADDER[0]!);

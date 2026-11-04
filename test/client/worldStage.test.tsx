@@ -37,6 +37,7 @@ export interface FakeRenderer extends WorldRenderer {
   setLighting: Mock<(phase: LightingPhase) => void>;
   setZoom: Mock<(zoom: number) => void>;
   setTension: Mock<(level: 0 | 1 | 2, focus?: { x: number; z: number }) => void>;
+  setPin: Mock<(pin: { x: number; z: number; strength: number } | null, dim: number) => void>;
   setChalk: Mock<(at: { x: number; z: number } | null, opacity: number) => void>;
   setSelfLight: Mock<(at: { x: number; z: number } | null) => void>;
   emit(e: RendererStatusEvent): void;
@@ -66,6 +67,7 @@ export function makeFakeRenderer(): FakeRenderer {
     setLighting: vi.fn(),
     setZoom: vi.fn(),
     setTension: vi.fn(),
+    setPin: vi.fn(),
     setChalk: vi.fn(),
     setSelfLight: vi.fn(),
     addCharacter(seat: number, c: CharacterHandle) {
@@ -1973,6 +1975,103 @@ describe("게임 장면(08-12): 카메라·조명·긴장·떠다님·처형 연
       s.rerender({ scene: sceneOf(ALL) });
       frames(50);
       expect(r.setTension.mock.calls.at(-1)![0]).toBe(0);
+    });
+  });
+
+  describe("핀 조명 (결정 0066-6, 09.1.1-11)", () => {
+    // 좌석 2 는 (-1,4), 좌석 1 은 (-3,0.5): 5 번 줄(FOUR_ENTS 와 같은 좌표)
+    const turnScene = (seat: number) => sceneOf(ALL, { pin: { mode: "turn", seat } });
+
+    it("차례 핀: 처음엔 부르지 않고, 켜지면 그 좌석 위치로 세기가 180ms 에 걸쳐 0.9 까지, 실내등은 0.6 까지", async () => {
+      const s = await openGame();
+      const r = s.world.renderers[0]!;
+      expect(r.setPin).not.toHaveBeenCalled();
+      s.rerender({ scene: turnScene(2) });
+      frames(40);
+      const first = r.setPin.mock.calls.at(-1)!;
+      expect(first[0]).not.toBeNull();
+      expect(first[0]!.x).toBeCloseTo(-1, 6);
+      expect(first[0]!.z).toBeCloseTo(4, 6);
+      expect(first[0]!.strength).toBeGreaterThan(0);
+      expect(first[0]!.strength).toBeLessThan(0.9);
+      frames(300);
+      const full = r.setPin.mock.calls.at(-1)!;
+      expect(full[0]!.strength).toBeCloseTo(0.9, 6);
+      expect(full[1]).toBeCloseTo(0.6, 6);
+      const n = r.setPin.mock.calls.length;
+      frames(300);
+      expect(r.setPin.mock.calls.length).toBe(n); // 값이 안 바뀌면 다시 부르지 않는다
+    });
+
+    it("pin 이 사라지면 420ms 에 걸쳐 꺼지고 setPin(null, 1) 로 끝난다, 그 뒤엔 부르지 않는다", async () => {
+      const s = await openGame();
+      const r = s.world.renderers[0]!;
+      s.rerender({ scene: turnScene(2) });
+      frames(400);
+      s.rerender({ scene: sceneOf(ALL) });
+      frames(200);
+      const mid = r.setPin.mock.calls.at(-1)!;
+      expect(mid[0]).not.toBeNull();
+      expect(mid[0]!.strength).toBeGreaterThan(0);
+      expect(mid[0]!.strength).toBeLessThan(0.9);
+      frames(400);
+      expect(r.setPin.mock.calls.at(-1)).toEqual([null, 1]);
+      const n = r.setPin.mock.calls.length;
+      frames(300);
+      expect(r.setPin.mock.calls.length).toBe(n);
+    });
+
+    it("slide 핀: 도착까지 from → to 위치를 ease 로 지나간다 (끝 위치는 to 좌석)", async () => {
+      const s = await openGame();
+      const r = s.world.renderers[0]!;
+      s.rerender({ scene: turnScene(1) });
+      frames(400);
+      const start = Date.now();
+      s.rerender({ scene: sceneOf(ALL, { pin: { mode: "slide", from: 1, to: 2, startAt: start, durationMs: 900 } }) });
+      frames(450);
+      const mid = r.setPin.mock.calls.at(-1)![0]!;
+      const x1 = -3;
+      const x2 = -1;
+      expect(mid.x).toBeGreaterThan(x1);
+      expect(mid.x).toBeLessThan(x2);
+      frames(600);
+      const end = r.setPin.mock.calls.at(-1)![0]!;
+      expect(end.x).toBeCloseTo(x2, 6);
+      expect(end.z).toBeCloseTo(4, 6);
+    });
+
+    it("모션 줄이기: 이동 없이 대상 위치로 즉시, 세기도 즉시 0.9", async () => {
+      stubReducedMotion(true);
+      const s = await openGame();
+      const r = s.world.renderers[0]!;
+      s.rerender({ scene: sceneOf(ALL, { pin: { mode: "slide", from: 1, to: 2, startAt: Date.now(), durationMs: 900 } }) });
+      frames(32);
+      const call = r.setPin.mock.calls.at(-1)!;
+      expect(call[0]!.x).toBeCloseTo(-1, 6);
+      expect(call[0]!.strength).toBeCloseTo(0.9, 6);
+      expect(call[1]).toBeCloseTo(0.6, 6);
+    });
+
+    it("대상 좌석의 캐릭터가 없으면 핀을 켜지 않는다 (예외 없음)", async () => {
+      const s = await openGame();
+      const r = s.world.renderers[0]!;
+      s.rerender({ scene: sceneOf(ALL, { pin: { mode: "turn", seat: 7 } }) });
+      frames(500);
+      expect(r.setPin).not.toHaveBeenCalled();
+    });
+
+    it("다음 차례로 건너뛰면(다른 좌석) 세기를 0 에서 다시 켠다", async () => {
+      const s = await openGame();
+      const r = s.world.renderers[0]!;
+      s.rerender({ scene: turnScene(1) });
+      frames(500);
+      s.rerender({ scene: turnScene(2) });
+      frames(16);
+      const call = r.setPin.mock.calls.at(-1)![0]!;
+      expect(call.x).toBeCloseTo(-1, 6);
+      expect(call.strength).toBeLessThan(0.45);
+      frames(300);
+      expect(r.setPin.mock.calls.at(-1)![0]!.strength).toBeCloseTo(0.9, 6);
     });
   });
 
