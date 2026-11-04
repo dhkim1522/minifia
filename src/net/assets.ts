@@ -48,6 +48,11 @@ export function faceSrc(seat: number): string {
   return `/characters/faces/face-${((seat % 8) + 8) % 8}.png`;
 }
 
+// 자리 구분색 --seat-1~8 (WR-02). 좌석 0~7 → 1~8 이라 faceSrc 와 같은 정규화에 +1 을 한다.
+export function seatColorVar(seat: number): string {
+  return `var(--seat-${(((seat % 8) + 8) % 8) + 1})`;
+}
+
 // 탈락한 사람의 자리에 인물 대신 쓰는 유령 그림(ASSET_SPEC §6, 결정 0021). 좌석별 유형 없음. 72px 표시 기준 밀도.
 export function ghostSrc(): { src: string; srcSet: string } {
   return { src: png("ghost", "ghost", 2), srcSet: `${png("ghost", "ghost", 2)} 2x, ${png("ghost", "ghost", 4)} 4x` };

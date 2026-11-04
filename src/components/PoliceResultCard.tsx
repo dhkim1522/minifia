@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { faceSrc } from "../net/assets";
+import { faceSrc, seatColorVar } from "../net/assets";
 import { V2Icon } from "./v2/V2Icon";
 import "../styles/night.css";
 
@@ -25,7 +25,7 @@ export function PoliceResultCard({ seat, name, isMafia, reducedMotion = false }:
     <div className={cls} data-police-card="">
       {broken ? (
         <span className="mf-police-card__face mf-police-card__face--fallback" data-face-fallback="true">
-          <i style={{ background: `var(--seat-${((seat % 8) + 8) % 8})` }} />
+          <i style={{ background: seatColorVar(seat) }} />
         </span>
       ) : (
         <img className="mf-police-card__face" src={faceSrc(seat)} alt={name} draggable={false} onError={() => setBroken(true)} />
