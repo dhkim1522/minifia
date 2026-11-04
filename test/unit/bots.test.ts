@@ -47,7 +47,7 @@ import type { PhaseId } from "../../shared/protocol";
 import { seededRandInt } from "../helpers/seededRandom";
 import { startedFrom, stateWithVerdict } from "../helpers/voteState";
 import { toggleEnd } from "../../shared/game/discussion";
-import { castPoint } from "../../shared/game/nomination";
+import { castPoint, castTurnPoint, enterNomination, nominationStepMs, stepNomination } from "../../shared/game/nomination";
 import { castVerdict } from "../../shared/game/verdict";
 
 const START_AT = 10_000;
@@ -1033,6 +1033,95 @@ describe("봇 계획: 지목 (DAY-04, 결정 0060-13)", () => {
     const steps = planBotSteps(fixed, nowOf(state), rec.randInt);
     expect(rec.calls.join(",")).toBe([6000, 6000, 6000, 6000].join(","));
     expect(steps.map((s) => (s.act.t === "point" ? s.act.target : -1)).join(",")).toBe("0,0,0,0");
+  });
+});
+
+describe("봇 차례 지목 (결정 0063-1)", () => {
+  const T0 = 100_000;
+  /** 사람(방장 seat 0) 1 + 봇 4 의 순차 지목 진입 직후(모이는 중). 마감은 호출한 쪽이 건다(09.1-01). */
+  const gathering = (seed: number): RoomState => {
+    const base = startedFrom(withBots(lobbyOf(1), 4), seed, "discussion");
+    const entered = enterNomination({ ...base, phase: "nomination" });
+    return { ...entered, phaseEndsAt: T0 + nominationStepMs(entered) };
+  };
+  /** 마감 한 걸음: 지난 마감 시각을 at 으로 stepNomination 을 걸고 다음 마감을 건다. */
+  const advance = (s: RoomState): RoomState => {
+    const at = s.phaseEndsAt!;
+    const r = stepNomination(s, at);
+    return { ...r.state, phaseEndsAt: at + nominationStepMs(r.state) };
+  };
+  /** 방장(사람) 차례를 기권으로 넘겨 봇 seat1 차례(i 1)까지. */
+  const botOneTurn = (seed: number): RoomState => advance(advance(advance(gathering(seed))));
+  const pointsOf = (steps: BotStep[]): BotStep[] => steps.filter((x) => x.act.t === "point");
+
+  it("모이는 중·방장 차례에는 point 가 없고 난수를 부르지 않는다", () => {
+    const g = gathering(3);
+    const first = recording(7);
+    const a = planBotSteps(g, T0, first.randInt);
+    const host = advance(g);
+    const second = recording(7);
+    const b = planBotSteps(host, host.phaseEndsAt! - 8000, second.randInt);
+    expect(`${g.pickTurn?.i}:${host.pickTurn?.i}`).toBe("-1:0");
+    expect(`${a.length}|${first.calls.length}|${b.length}|${second.calls.length}`).toBe("0|0|0|0");
+  });
+
+  it("봇 seat1 차례에는 그 봇 point 한 개가 now 에 서고 castTurnPoint 를 통과하며 난수는 [후보 수] 한 번뿐이다", () => {
+    for (let seed = 1; seed <= 10; seed += 1) {
+      const state = botOneTurn(seed);
+      const now = state.phaseEndsAt! - 8000;
+      const rec = recording(seed);
+      const steps = planBotSteps(state, now, rec.randInt);
+      const points = pointsOf(steps);
+      const bot = state.players.find((p) => p.seat === 1)!;
+      expect(`${seed}:${state.pickTurn?.i}:${points.length}:${steps.length}`).toBe(`${seed}:1:1:1`);
+      const step = points[0]!;
+      expect(`${step.botId === bot.id}:${step.at === now}`).toBe("true:true");
+      expect(rec.calls.join(",")).toBe("4");
+      const target = step.act.t === "point" ? step.act.target : -1;
+      expect(`${target !== 1 && state.players.find((p) => p.seat === target)?.alive !== false}`).toBe("true");
+      const r = castTurnPoint(state, step.botId, target, step.at);
+      expect(`${seed}:${r.ok ? "ok" : r.error}`).toBe(`${seed}:ok`);
+      expect(r.ok ? String(r.state.pickTurn?.doneAt) : "-").toBe(String(now));
+    }
+  });
+
+  it("고정 pick host 면 대상은 방장이고 난수를 부르지 않으며, other 면 방장도 자기도 아닌 가장 낮은 seat 이다", () => {
+    const state = botOneTurn(4);
+    const now = state.phaseEndsAt! - 8000;
+    const host = recording(7);
+    const hostSteps = planBotSteps({ ...state, testBotVote: { pick: "host" } }, now, host.randInt);
+    expect(`${hostSteps.map((x) => (x.act.t === "point" ? x.act.target : -1)).join(",")}|${host.calls.length}`).toBe("0|0");
+    const other = recording(7);
+    const otherSteps = planBotSteps({ ...state, testBotVote: { pick: "other" } }, now, other.randInt);
+    expect(`${otherSteps.map((x) => (x.act.t === "point" ? x.act.target : -1)).join(",")}|${other.calls.length}`).toBe("2|0");
+  });
+
+  it("같은 시드는 같은 대상이다(값 고정)", () => {
+    const state = botOneTurn(4);
+    const now = state.phaseEndsAt! - 8000;
+    const run = (seed: number): string => planBotSteps(state, now, seededRandInt(seed)).map((x) => (x.act.t === "point" ? x.act.target : -1)).join(",");
+    expect(`${run(11)}|${run(11)}`).toBe("TBD");
+  });
+
+  it("확정 뒤 사이·끝 알림·탈락한 봇 차례에는 point 가 없다", () => {
+    const state = botOneTurn(5);
+    const now = state.phaseEndsAt! - 8000;
+    const bot = state.players.find((p) => p.seat === 1)!;
+    const cast = castTurnPoint(state, bot.id, 0, now);
+    if (!cast.ok) throw new Error(cast.error);
+    const gap = planBotSteps(cast.state, now, seededRandInt(1));
+    let end = cast.state;
+    for (let guard = 0; guard < 20 && (end.pickTurn?.i ?? 0) < end.pickTurn!.order.length; guard += 1) end = advance(end);
+    const endSteps = planBotSteps(end, end.phaseEndsAt! - 2000, seededRandInt(1));
+    const dead = markDead(state, 1);
+    const deadSteps = planBotSteps(dead, now, seededRandInt(1));
+    expect(`${pointsOf(gap).length}|${end.pickTurn?.i}|${endSteps.length}|${pointsOf(deadSteps).length}`).toBe("0|5|0|0");
+  });
+
+  it("차례 있는 계획은 차례마다 키가 달라진다", () => {
+    const a = botOneTurn(2);
+    const b = advance(advance(a));
+    expect(`${planKeyOf(a) === planKeyOf(b)}`).toBe("false");
   });
 });
 
