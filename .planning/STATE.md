@@ -5,16 +5,16 @@ milestone_name: 같은 공간
 current_phase: 9
 current_phase_name: 밤과 아침
 status: verifying
-stopped_at: Completed 09.1.1-11-PLAN.md
-last_updated: "2026-11-04T20:36:23.261Z"
+stopped_at: Completed 09.1.1-12-PLAN.md
+last_updated: "2026-11-04T20:48:24.770Z"
 last_activity: 2026-11-03
 last_activity_desc: Phase 9 execution started
-state_head: 573bb3927c4b2fbdccfcb750234076be9705da5b
+state_head: e0974029cb80d173faad6720819d725530fcd203
 progress:
   total_phases: 9
   completed_phases: 3
   total_plans: 137
-  completed_plans: 131
+  completed_plans: 132
   percent: 33
 ---
 
@@ -191,6 +191,7 @@ Progress: [███░░░░░░░] 33% (3/7 phases)
 | Phase 09.1.1 P09 | 60min | 3 tasks | 19 files |
 | Phase 09.1.1 P10 | 40min | 3 tasks | 5 files |
 | Phase 09.1.1 P11 | 55m | 3 tasks | 13 files |
+| Phase 09.1.1 P12 | 50min | 3 tasks | 18 files |
 
 ## Accumulated Context
 
@@ -394,6 +395,7 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 09.1.1]: 09.1.1-10: 귓속말 대상이 화면 밖이면 이름표를 누를 수 없다(카메라가 내 캐릭터를 따라감) — 제품은 그대로 두고 E2E 가 걸어서 다가가며 사용자 결정 후보로 올림
 - [Phase 09.1.1]: 11: 핀 조명 O-14 확정 — 켜진 세기 0.9(단계 값→선두 세기 비율)·실내등 x0.6, setPin dim 은 곱하는 값 그대로(lerp 시 0.64 어긋남 방지)
 - [Phase 09.1.1]: 11: 다른 좌석으로 건너뛰는 전환은 켜짐 수준 0 에서 180ms 재점등(한 점광이라 교차 페이드 대신 켜고 끈다)
+- [Phase 09.1.1]: 09.1.1-12: 찬반 묶음 자리를 is-pending(visibility)으로 미리 잡아 두고 넘침 측정을 마운트 때 한 번만 한다; ballots 카드 보류 4600ms 는 편지 바닥값을 받지 않는다
 
 ### Pending Todos
 
@@ -432,8 +434,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-04T20:36:22.659Z
-Stopped at: Completed 09.1.1-11-PLAN.md
+Last session: 2026-11-04T20:48:24.176Z
+Stopped at: Completed 09.1.1-12-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
