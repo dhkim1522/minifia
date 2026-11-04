@@ -5,16 +5,16 @@ milestone_name: 같은 공간
 current_phase: 9
 current_phase_name: 밤과 아침
 status: verifying
-stopped_at: Completed 09.1.1-13-PLAN.md
-last_updated: "2026-11-04T21:25:38.455Z"
+stopped_at: Completed 09.1.1-14-PLAN.md
+last_updated: "2026-11-04T21:57:45.117Z"
 last_activity: 2026-11-03
 last_activity_desc: Phase 9 execution started
-state_head: 9203ef98dfc31edd01d7a32d6b0ca5b07b6b5898
+state_head: 1352504066bae7a385c82dbdf76079c35c712d84
 progress:
   total_phases: 9
   completed_phases: 3
   total_plans: 137
-  completed_plans: 133
+  completed_plans: 134
   percent: 33
 ---
 
@@ -193,6 +193,7 @@ Progress: [███░░░░░░░] 33% (3/7 phases)
 | Phase 09.1.1 P11 | 55m | 3 tasks | 13 files |
 | Phase 09.1.1 P12 | 50min | 3 tasks | 18 files |
 | Phase 09.1.1 P13 | 130min | 3 tasks | 19 files |
+| Phase 09.1.1 P14 | 70min (Task 3) | 3 tasks | 24 files |
 
 ## Accumulated Context
 
@@ -400,6 +401,8 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 09.1.1]: [09.1.1-13] pinOf 처형 단계 핀은 view 만으로 정해지는 고정 창 {fixed, seat, startAt, endAt}(부결 4.0초·처형 5.0초). 런타임은 fixed 를 turn 과 같은 좌석 핀으로 처리
 - [Phase 09.1.1]: [09.1.1-13] zoomMs 가 있는 고정 구도는 위치·세로 오프셋·줌을 같은 시간·같은 ease-in-out 으로 옮기고, 재접속·모션 줄이기 첫 프레임은 블렌드를 끝난 것으로 시작
 - [Phase 09.1.1]: [09.1.1-13] 찬반 묶음 윗변은 기본 131, 알림이 두 줄로 감기면 GameMap 이 --mf-ballot-top 으로 알림 아랫변 + 16 으로 내린다(8자 이름 처형 알림 겹침 수정)
+- [Phase 09.1.1]: [14] 결선 후보 두 점을 (10,200)/(200,10)로 넓혀 화면 간격 약 156px(UI-SPEC D-4 140px 충족), 중점 (105,105) 불변
+- [Phase 09.1.1]: [14] 결선 핀은 좌석이 아닌 두 후보 중점 한 점(PinDesc point), 결선 남은 시간은 투표 창 길이로 자름
 
 ### Pending Todos
 
@@ -438,8 +441,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-04T21:25:37.826Z
-Stopped at: Completed 09.1.1-13-PLAN.md
+Last session: 2026-11-04T21:57:44.486Z
+Stopped at: Completed 09.1.1-14-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
