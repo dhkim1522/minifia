@@ -7,6 +7,8 @@ import { STAGE_SPOT, UNIT } from "../../shared/game/map";
 import type { PhaseId, RoomView } from "../../shared/protocol";
 import { GHOST_FADE_END_MS, GHOST_RISE_MS, pointsTally } from "../game/dayView";
 import { GATHER_CENTER } from "./camera";
+import type { OutfitId } from "./characterData";
+import { jobOutfit } from "./ghostOutfit";
 
 /** 렌더러가 읽는 조명 단계(UI-SPEC 단계 조명). 렌더러의 LightingPhase 확장은 08-10 이 한다 */
 export type LightingStage = "talk" | "vote" | "trial" | "night" | "nightCitizen" | "nightGhost" | "morning";
@@ -30,6 +32,10 @@ export interface SeatLook {
   pointAt?: number;
   /** 처형 연출 시작 시각(ms). 산 사람 viewer 는 연출 끝(GHOST_FADE_END_MS)에 좌석이 사라진다 */
   fadeAt?: number;
+  /**
+   * 탈락자가 입는 직업 의상(결정 0063-2). 유령 viewer 의 spectate 가 있을 때만 키가 생긴다 — 산 사람 표에는 키 자체가 없다(L13).
+   */
+  outfit?: OutfitId;
 }
 
 export interface SceneLook {
@@ -56,6 +62,8 @@ function isGhostViewer(view: RoomView): boolean {
 export function visibleSeats(view: RoomView, fading?: ReadonlyMap<number, number>, now?: number): Record<number, SeatLook> {
   const ghostViewer = isGhostViewer(view);
   const seats: Record<number, SeatLook> = {};
+  // 직업 표는 서버가 유령에게만 보낸 spectate 에서만 만든다(없으면 비어 있다 — 산 사람 viewer 는 이 표를 한 번도 갖지 않는다)
+  const jobBySeat = ghostViewer && view.spectate ? new Map(view.spectate.seats.map((s) => [s.seat, s.job] as const)) : undefined;
   // 밤·산 시민 편(시민·경찰·의사): 내 좌석 하나뿐이다. 서버가 이 밤에 남의 위치를 한 번도 보내지 않으므로(09-03·09-09, 결정 0061-3)
   // 장면 표도 그 사실을 따른다 — 받은 위치를 화면에서만 숨기는 방식이 아니다(결정 0002·0021, T-09-21). 세 역할이 같은 값이다.
   const nightCitizen = view.phase === "night" && !ghostViewer && view.me.role !== "mafia";
@@ -69,6 +77,7 @@ export function visibleSeats(view: RoomView, fading?: ReadonlyMap<number, number
       show: true,
       ghost: dead && ghostViewer,
       ...(fadingNow ? { fadeAt: startedAt } : {}),
+      ...(dead && jobBySeat ? { outfit: jobOutfit(jobBySeat.get(p.seat)) } : {}),
     };
   }
   return seats;
