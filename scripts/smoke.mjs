@@ -1265,11 +1265,17 @@ async function stageFull(url, args) {
     { k: "will", seat: targetX, text: WILL_TEXT, seq: DAY_TEXTS.length + 2 },
   ];
   allLinesWithCards.forEach((all, i) => {
-    const cards = all.filter((l) => l.k !== undefined);
+    const allCards = all.filter((l) => l.k !== undefined);
+    // 인원이 많으면(예: 8명) 2일차 이후에도 처형 낮이 이어져 같은 종류의 찬반 기록 카드(k ballots)가 seq 순으로 더 온다 — 첫 두 장(1일차 찬반 기록·아침 유언)은 그대로 고정하고, 그 뒤 카드는 찬반 기록 카드만 허용한다
+    const cards = allCards.slice(0, cardSpec.length);
+    const laterCards = allCards.slice(cardSpec.length);
+    if (laterCards.some((l, k) => l.k !== "ballots" || l.seq <= (k === 0 ? cardSpec[cardSpec.length - 1].seq : laterCards[k - 1].seq))) {
+      fail(`${clients[i].nickname} 가 받은 2일차 이후 카드가 seq 순서의 찬반 기록 카드만이 아님: ${JSON.stringify(laterCards)}`);
+    }
     if (JSON.stringify(cards.map((l) => ({ k: l.k, seat: l.seat, text: l.text, seq: l.seq }))) !== JSON.stringify(cardSpec)) {
       fail(`${clients[i].nickname} 가 받은 카드가 [찬반 기록(seq ${DAY_TEXTS.length + 1}, seat ${trial1.victimSeat}), 유언(seq ${DAY_TEXTS.length + 2}, seat ${targetX})] 가 아님: ${JSON.stringify(cards)}`);
     }
-    if (JSON.stringify(cards) !== JSON.stringify(allLinesWithCards[0].filter((l) => l.k !== undefined))) fail(`${clients[i].nickname} 가 받은 카드가 방장과 다름`);
+    if (JSON.stringify(allCards) !== JSON.stringify(allLinesWithCards[0].filter((l) => l.k !== undefined))) fail(`${clients[i].nickname} 가 받은 카드가 방장과 다름`);
   });
   const wantAll = [...DAY_TEXTS.map((text) => ({ text })), ...showdownLines];
   const allLines = allLinesWithCards.map((all) => all.filter((l) => l.k === undefined));
