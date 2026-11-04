@@ -1449,6 +1449,28 @@ export async function readGhostTagContrast(page) {
 }
 
 /**
+ * 결과 화면 [처음으로] 가 스크롤 없이 화면 안인지 재는 값 — resultFitChecks 가 받는 모양 (09-29, feedback-6).
+ * readResult 와 달리 버튼을 스크롤해 보이게 하지 않는다. 버튼이 없으면 home: null.
+ */
+export function readResultFit(page) {
+  return page.evaluate(() => {
+    const root = document.querySelector(".mf-result");
+    const btn = root ? [...root.querySelectorAll("button")].find((b) => (b.textContent ?? "").replace(/\s+/g, " ").trim() === "처음으로") : null;
+    let home = null;
+    if (btn) {
+      const r = btn.getBoundingClientRect();
+      const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+      home = { rect: { left: r.left, top: r.top, width: r.width, height: r.height }, hit: !!hit && btn.contains(hit) };
+    }
+    return {
+      home,
+      scrollTop: root ? root.scrollTop : Number.NaN,
+      docScroll: Math.max(document.documentElement.scrollHeight, document.body.scrollHeight) - window.innerHeight,
+    };
+  });
+}
+
+/**
  * 결과 화면(ended) 한 장 — resultChecks 가 받는 { result } 모양. `.mf-result` 가 없으면 { result: null }.
  * [처음으로] 가 세로 스크롤로 닿는지 보려고 마지막에 그 버튼을 보이는 자리로 스크롤한다.
  */

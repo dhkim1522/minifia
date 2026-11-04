@@ -12,6 +12,7 @@ import {
   readGame,
   readGhostTagContrast,
   readResult,
+  readResultFit,
   setBotVote,
   skipTo,
   tapPick,
@@ -109,6 +110,8 @@ import {
   ghostDomChecks,
   pickButtonChecks,
   resultChecks,
+  resultFitChecks,
+  LOBBY_SIZES,
   verdictPanelChecks,
 } from "./lib.mjs";
 
@@ -2378,6 +2381,18 @@ async function resultState(ctx, id, game, { winner, n }) {
   const view = ht.last();
   rec(sc, "P8", "서버가 정한 승자·요약이 view 에 있음", view.result?.winner === winner && Array.isArray(view.result?.summary), `view.result.winner ${view.result?.winner} ≠ ${winner}`);
   await checkState(ctx, id, `ended-${winner}`, game.host);
+  // [처음으로] 가 스크롤 없이 화면 안인지 폰 6종 크기로 바꿔 가며 잰다(09-29, feedback-6). readResult 는 버튼을 스크롤해 보이게 하므로 그보다 먼저 잰다.
+  const back = hp.viewportSize() ?? { width: GAME_SIZE.w, height: GAME_SIZE.h };
+  try {
+    for (const size of LOBBY_SIZES) {
+      await hp.setViewportSize({ width: size.w, height: size.h });
+      await hp.waitForTimeout(250);
+      recOne(rec, `${sc}/${size.label}`, resultFitChecks(await readResultFit(hp), size));
+    }
+  } finally {
+    await hp.setViewportSize(back);
+    await hp.waitForTimeout(250);
+  }
   recOne(rec, sc, resultChecks(await readResult(hp), { winner, n, summaryRows: summaryRowsOf(view.result?.summary) }));
 }
 

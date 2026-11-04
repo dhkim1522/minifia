@@ -612,6 +612,36 @@ export function resultChecks(v, { winner, n, summaryRows } = {}) {
   return result("P8", label, bad);
 }
 
+/**
+ * RS-FIT 결과 화면 [처음으로] 가 폰 크기마다 스크롤 없이 화면 안에 있고 눌린다 (09-29, feedback-6).
+ * m = { home: { rect:{left,top,width,height}, hit }, scrollTop(.mf-result 의 scrollTop), docScroll(문서 스크롤 높이 − 뷰포트 높이) }, size = { w, h, label }.
+ * 버튼 사각형이 뷰포트(0,0,w,h) 안, elementFromPoint 가 버튼(hit), 스크롤 0(scrollTop 0 · docScroll ≤ 1). 측정값이 없으면 실패한다.
+ */
+export function resultFitChecks(m, size) {
+  const label = `결과 화면 [처음으로] 스크롤 없이 화면 안${size?.label ? ` (${size.label})` : ""}`;
+  const miss = [];
+  if (!size || !isNum(size.w) || !isNum(size.h)) miss.push("측정값 없음(size)");
+  const rc = m?.home?.rect;
+  if (!rc || !isNum(rc.left) || !isNum(rc.top) || !isNum(rc.width) || !isNum(rc.height)) miss.push("측정값 없음(home.rect)");
+  if (typeof m?.home?.hit !== "boolean") miss.push("측정값 없음(home.hit)");
+  if (!isNum(m?.scrollTop)) miss.push("측정값 없음(scrollTop)");
+  if (!isNum(m?.docScroll)) miss.push("측정값 없음(docScroll)");
+  if (miss.length > 0) return result("RS-FIT", label, miss);
+
+  const bad = [];
+  const bottomY = rc.top + rc.height;
+  const rightX = rc.left + rc.width;
+  if (rc.width <= 0 || rc.height <= 0) bad.push("[처음으로] 크기가 0");
+  if (rc.top < 0) bad.push(`버튼 위 ${fmt(rc.top)} 가 화면 위 밖`);
+  if (bottomY > size.h) bad.push(`버튼 아래 끝 ${fmt(bottomY)} 가 화면 높이 ${size.h} 아래로 나감(화면 밖)`);
+  if (rc.left < 0) bad.push(`버튼 왼쪽 ${fmt(rc.left)} 가 화면 왼쪽 밖`);
+  if (rightX > size.w) bad.push(`버튼 오른쪽 끝 ${fmt(rightX)} 가 화면 폭 ${size.w} 밖`);
+  if (!m.home.hit) bad.push("버튼 가운데 점이 버튼이 아님(가려져 눌리지 않음)");
+  if (m.scrollTop !== 0) bad.push(`.mf-result scrollTop ${m.scrollTop} ≠ 0(스크롤을 내려야 보임)`);
+  if (m.docScroll > 1) bad.push(`문서 스크롤 여유 ${m.docScroll}px > 1(문서 스크롤)`);
+  return result("RS-FIT", label, bad);
+}
+
 // ---- 5페이즈 순수 검사 (05-05) ----
 
 /** 측정값이 빠졌거나 모양이 틀린 입력은 조용히 통과하지 않는다(T-05-11). */
