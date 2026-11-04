@@ -11,6 +11,7 @@
 | **v2.0 디자인 시스템(승인 2026-10-31)**: 색·글자·3D 공간·단계 조명·지목 연출 규칙 + 게임 겹침 부품 15종(`window.MinifiaV2`), 그림 에셋(맵·의상·직업·얼굴) | https://claude.ai/artifact/L4eeQTUD9rCa9Vmzv6fKpU | `design-system/` — `README.md`(규칙), `tokens.json`·`tokens.css`, `components/bundle.js`·`bundle.css`·`index.d.ts`, 부품별 `README.md`·`preview.html`, `assets/`(Maps·Outfits·Roles·Faces PNG) |
 | **v2.0 화면설계서**: 묶음 A(로비·역할·토론·지목·변론·찬반·처형), 묶음 B(밤 마피아·시민·경찰·의사, 암살, 아침, 유언, 유령) | https://claude.ai/artifact/H3gEwciexb83CxEXK76YXs | `screens/` — 보드 `*.dc.html`(화면마다 `var SCREEN` 만 다르다. A 틀은 `Main.dc.html`, B 틀은 `NightMafia.dc.html`), `canvas.json`, 장면 엔진 `blockout.js`(밤 시점·발밑 고리·분필 윤곽·유령 포함)·`bar.js`·`character.js`. 그림은 아티팩트 `/_blob/` 주소라 저장소에서는 `design-system/assets/` 를 본다 |
 | **묶음 B 시안(결정 0063)**: 순차 지목·직업 의상 유령(옅은 안개)·유언 중앙 공개(편지) | https://claude.ai/artifact/VtRcJw7vUTUpRBe1J8vTQk | `mockups-b/` — `PickSeq`·`GhostCostume`·`WillCenter` 보드(엔진 파일은 `screens/` 와 같다) |
+| **마피아 밤 선택 효과 시안(결정 0065)**: 후보 점선 → 누르는 중 실선·빛 → 고른 뒤 3px 진홍 맥박 테두리 + 몸 윤곽 + 고리 조임(추천 "몸 테두리", 조준선·붉은 조명 2안은 채택하지 않음) | https://claude.ai/artifact/VtRcJw7vUTUpRBe1J8vTQk (보드 C1) | `mockups-b/NightAim.dc.html` (엔진 파일은 `screens/` 와 같다) |
 | 지목·변론 배경 5안 블록아웃(결정 0050: 재즈 바·광장 채택) + **득표 표시 숫자 배지(결정 0049 확정)** | https://claude.ai/artifact/1hzgEyAufgnDPVMvPvxdhP | `blockout/` — `blockout.js`(카메라·단계 조명·8명 배치·긴장 연출), 안별 맵 `bar.js` 등, `character.js`(0048 + `setFace` 내보내기), 보드 `*.dc.html`. 득표 표시는 `VoteHand.dc.html`(STYLE `number`). three.min.js 는 cdnjs r128 판과 같아 넣지 않았다 |
 
 ## 배경
