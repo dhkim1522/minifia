@@ -22,6 +22,7 @@ import {
   nextFrame,
   phaseKeyOf,
   pickAs,
+  pointAll,
   resetChatRates,
   seat,
   send,
@@ -29,9 +30,10 @@ import {
   startedGame,
   storedRoom,
   summary,
+  verdictAll,
   withRole,
 } from "./helpers";
-import type { Actor as SeatedActor, TestSocket } from "./helpers";
+import type { Actor as SeatedActor, Game, TestSocket } from "./helpers";
 
 interface Player {
   nickname: string;
@@ -87,10 +89,10 @@ const ROLE_WORDS = new Set(["mafia", "police", "doctor", "citizen", "none"]);
 /** 살아 있는 소켓이 역할 값 문자열을 받아도 되는 경로. 탈락 뒤에는 여기에 관전 직업 경로가 더해진다(결정 0021). */
 const ROLE_PATHS_ALIVE = [".view.me.role", ".view.day.roles[]", ".view.me.chat"];
 /**
- * 서버 전용 키: 어떤 프레임의 어떤 경로에도 없어야 한다. 주장 차례(결정 0027-3)와 4페이즈 투표·종료(결정 0036-12)의 서버 상태.
+ * 서버 전용 키: 어떤 프레임의 어떤 경로에도 없어야 한다. 주장 차례(결정 0027-3)와 4페이즈 투표·종료(결정 0036-12)·순차 지목 차례(pickTurn, 결정 0063-1)의 서버 상태.
  * winner·execution 은 같은 이름의 view 키(result.winner·day.execution)가 있어 넣지 않고, 경로·단계로 검사한다.
  */
-const SERVER_ONLY_KEYS = ["claimPick", "claimOrder", "claimIdx", "claimStart", "execVote", "candidateVote", "verdict", "nightLog", "lastExecPhrase", "nominate", "verdictVote", "endVote", "nightNote"];
+const SERVER_ONLY_KEYS = ["claimPick", "claimOrder", "claimIdx", "claimStart", "execVote", "candidateVote", "verdict", "nightLog", "lastExecPhrase", "nominate", "verdictVote", "endVote", "nightNote", "pickTurn"];
 /**
  * 서버 전용 이름과 같은 공개 와이어 필드의 경로(08-11, 결정 0060-3·4) — 이 두 경로만 SERVER_ONLY_KEYS 검사에서 빼고 이유를 단다. 목록은 줄이지 않고, 새 경로는 받을 권리 조건이 있을 때만 더한다.
  *  - .view.day.verdict: 처형 단계에서 모두에게 같은 {yes,no,passed} 집계(서버 전용 RoomState.verdict 와 이름만 같다).
@@ -1115,6 +1117,25 @@ describe("신분 여섯 × 유언·쪽지 canary 행렬 (WILL-01, NIGHT-12, L7·
         if (msg.view.day?.chalk !== undefined) expect(phase === "night").toBe(false);
       }
     }
+    // ---- L16 (09.1-05, UI-SPEC): V 의 유언 본문은 죽기 전에 V 본인의 me.will 밖 어느 프레임에도 없고, 죽을 때 all 채널 k:"will" 카드로만 나간다 ----
+    const willBody = `CANARY-${v.seat}`;
+    const l16: string[] = [];
+    for (const a of g.actors) {
+      const i = g.actors.indexOf(a);
+      let cardCount = 0;
+      for (const [idx, m] of allFrames[i]!.entries()) {
+        if (!JSON.stringify(m).includes(willBody)) continue;
+        const dead = idx >= beforeMorning[i]!;
+        const isCard = m.t === "chat" && m.ch === "all" && m.k === "will" && m.seat === v.seat && m.text === willBody;
+        const paths = m.t === "state" ? stringPaths(m).filter(([, value]) => value.includes(willBody)).map(([pth]) => pth) : [];
+        const ownBeforeDeath = !dead && a === v && m.t === "state" && paths.length === 1 && paths[0] === ".view.me.will";
+        if (isCard && dead) cardCount += 1;
+        else if (!ownBeforeDeath) l16.push(`${a.role}#${a.seat} frame#${idx} dead=${dead} ${m.t}`);
+      }
+      if (cardCount !== 1) l16.push(`${a.role}#${a.seat} cards=${cardCount}`);
+    }
+    expect(l16.join("\n")).toBe("");
+
     // 여섯이 모두 저장 직후 자기 유언을 본인 view 로 받았다(죽기 전) — 시험이 아무것도 안 보는 것이 아님.
     expect([...sawWill].sort((p, q) => p - q).join(",")).toBe(g.actors.map((a) => a.seat).sort((p, q) => p - q).join(","));
 
@@ -1123,4 +1144,204 @@ describe("신분 여섯 × 유언·쪽지 canary 행렬 (WILL-01, NIGHT-12, L7·
     expect(new Set(morningViews.map((x) => JSON.stringify([x.day?.chalk, x.day?.morning]))).size).toBe(1);
     expect(JSON.stringify(morningViews[0]!.day?.morning)).toBe(JSON.stringify({ eliminated: v.seat }));
   }, 120_000);
+});
+
+// ---- 순차 지목·탈락 직후 누설 (09.1-05, 결정 0063-1·0021·0037, UI-SPEC L12·L14·L15) ----
+// 허용 목록(ALLOWED_WIRE_PATHS·ROLE_PATHS_*)은 초록을 만들려고 넓히지 않았다. day.turn 은 좌석·시각만 싣는 공개 정보이고, pickTurn 은 SERVER_ONLY_KEYS 에 있다.
+
+/** 모든 소켓이 차례를 걸을 수 있도록 지목 상태에서 지금 차례 주인의 좌석(없으면 undefined). */
+const turnOwnerOf = (turn: { order: number[]; i: number; doneAt?: number }): number | undefined =>
+  turn.i >= 0 && turn.i < turn.order.length && turn.doneAt === undefined ? turn.order[turn.i] : undefined;
+
+/** 지목 단계 state 프레임 열. 시각은 방마다 절대값이 달라 그 프레임의 마감(view.phaseEndsAt) 기준 상대값으로만 싣는다(차례 중 endsAt 은 마감과 같다, 확정 뒤 endsAt 은 값이 있다는 사실만). */
+function nominationColumn(sock: TestSocket): string[] {
+  const out: string[] = [];
+  for (const m of framesOf(sock)) {
+    if (m.t !== "state" || m.view.phase !== "nomination") continue;
+    const turn = m.view.day!.turn!;
+    const end = m.view.phaseEndsAt!;
+    out.push(
+      JSON.stringify({
+        turn: {
+          order: turn.order,
+          i: turn.i,
+          skip: turn.skip ?? null,
+          endsAt: turn.endsAt === undefined ? null : turn.doneAt === undefined ? turn.endsAt - end : "set",
+          doneAt: turn.doneAt === undefined ? null : turn.doneAt - end,
+        },
+        points: m.view.day!.points,
+      }),
+    );
+  }
+  return out;
+}
+
+/** 지목 단계를 걷는다: order 의 pickIdx 번째 차례 주인은 다음 사람을 지목하고 나머지 차례는 마감으로 기권시킨다. 끝나면 모든 소켓을 flush 한다. */
+async function walkNomination(g: Game, pickIdx: ReadonlySet<number>): Promise<void> {
+  for (let guard = 0; guard < 60; guard += 1) {
+    const room = await storedRoom(g.code);
+    const turn = room.pickTurn;
+    if (room.phase !== "nomination" || turn === undefined) break;
+    const owner = turnOwnerOf(turn);
+    if (owner !== undefined && pickIdx.has(turn.i)) {
+      const who = g.actors.find((a) => a.seat === owner)!;
+      const marks = g.actors.map((a) => mark(a.sock));
+      send(who.sock, { t: "point", target: turn.order[(turn.i + 1) % turn.order.length] });
+      for (const [i, a] of g.actors.entries()) await settle(a.sock, marks[i]!);
+      continue;
+    }
+    await closePhase(g.code);
+  }
+  for (const sock of g.socks) await settle(sock, mark(sock));
+}
+
+describe("지목 차례는 역할의 함수가 아니다 (L14, 결정 0063-1)", () => {
+  const TABLES: Record<"a" | "b", RoleId[]> = {
+    a: ["mafia", "mafia", "police", "doctor", "citizen", "citizen"],
+    b: ["citizen", "police", "mafia", "citizen", "mafia", "doctor"],
+  };
+
+  /** 6명 판을 지목 모이기에서 시작해 역할만 table 로 고치고 같은 행동으로 걷는다. 소켓마다 지목 단계 열과 저장된 역할 배정을 돌려준다. */
+  async function play(table: RoleId[]): Promise<{ columns: string[][]; roles: string }> {
+    const g = await startedGame("nomination");
+    await editRoom(g.code, (room) => {
+      const seats = (room.players as Array<{ seat: number }>).map((p) => p.seat).sort((p, q) => p - q);
+      return mapPlayers(room, (p) => ({ ...p, role: table[seats.indexOf(p.seat as number)] }));
+    });
+    const roles = (await storedRoom(g.code)).players.map((p) => p.role).join(",");
+    await walkNomination(g, new Set([0, 2, 3]));
+    return { columns: g.socks.map((sock) => nominationColumn(sock)), roles };
+  }
+
+  it("역할 배정만 다른 두 판을 같은 행동으로 진행하면 소켓마다 지목 차례 프레임 열이 같고, 한 판 안의 모든 소켓이 같은 열을 받는다", { timeout: 60_000 }, async () => {
+    const a = await play(TABLES.a);
+    const b = await play(TABLES.b);
+    expect(a.roles).not.toBe(b.roles);
+    // 시험이 아무것도 안 보는 것이 아님: 모이기·차례·기권·확정·끝 알림을 지나며 열이 길다.
+    expect(a.columns[0]!.length).toBeGreaterThan(10);
+    expect(a.columns[0]!.some((f) => f.includes('"skip":true'))).toBe(true);
+    expect(a.columns[0]!.some((f) => /"seat":\d+,"target":\d+/.test(f))).toBe(true);
+    for (const col of a.columns) expect(col.join("\n")).toBe(a.columns[0]!.join("\n"));
+    for (const col of b.columns) expect(col.join("\n")).toBe(b.columns[0]!.join("\n"));
+    for (const [k, col] of a.columns.entries()) expect(`${k}:${col.join("\n")}`).toBe(`${k}:${b.columns[k]!.join("\n")}`);
+  });
+});
+
+describe("차례 아닌 지목은 보낸 사람에게만 (L15, 결정 0063-1)", () => {
+  it("지목 단계 내내(모이기·차례·확정 뒤·끝 알림) 차례 아닌 산 사람·유령의 point 는 보낸 소켓에만 오류+state 가 가고 다른 소켓은 프레임 0, 저장 상태는 그대로다", { timeout: 90_000 }, async () => {
+    const g = await startedGame("discussion");
+    const ghost = withRole(g, "citizen")[0]!;
+    await ghostsOf(g, [ghost.seat]);
+    await advanceTo(g.code, g.socks, "nomination");
+    for (const sock of g.socks) await settle(sock, mark(sock));
+    const living = g.actors.filter((a) => a !== ghost);
+
+    let sent = 0;
+    /** 이 순간 차례 주인이 아닌 모두가 차례로 point 를 보낸다. */
+    const probe = async (): Promise<void> => {
+      const room = await storedRoom(g.code);
+      const owner = turnOwnerOf(room.pickTurn!);
+      const snapshot = JSON.stringify([room.players, room.pickTurn, room.phaseEndsAt]);
+      for (const a of g.actors) {
+        if (a.seat === owner) continue;
+        const marks = g.actors.map((x) => mark(x.sock));
+        send(a.sock, { t: "point", target: living.find((x) => x.seat !== a.seat)!.seat });
+        sent += 1;
+        for (const [i, x] of g.actors.entries()) {
+          const frames = summary(await settle(x.sock, marks[i]!));
+          if (x === a) expect(`${a.seat}:${frames}`).toMatch(/^\d+:\[error:(WRONG_PHASE|BAD_MESSAGE),state:nomination\]$/);
+          else expect(`${x.seat}:${frames}`).toBe(`${x.seat}:[]`);
+        }
+      }
+      const after = await storedRoom(g.code);
+      expect(JSON.stringify([after.players, after.pickTurn, after.phaseEndsAt])).toBe(snapshot);
+    };
+
+    await probe(); // 모이기
+    for (let guard = 0; guard < 40; guard += 1) {
+      const room = await storedRoom(g.code);
+      const turn = room.pickTurn;
+      if (room.phase !== "nomination" || turn === undefined) break;
+      const owner = turnOwnerOf(turn);
+      if (owner !== undefined && turn.i % 2 === 0) {
+        const who = g.actors.find((a) => a.seat === owner)!;
+        const marks = g.actors.map((a) => mark(a.sock));
+        send(who.sock, { t: "point", target: living.find((x) => x.seat !== owner)!.seat });
+        for (const [i, a] of g.actors.entries()) await settle(a.sock, marks[i]!);
+        await probe(); // 확정 뒤 사이 구간 — 방금 지목한 사람의 재전송도 차례 아님이다
+        continue;
+      }
+      await closePhase(g.code);
+      for (const sock of g.socks) await settle(sock, mark(sock));
+      if ((await storedRoom(g.code)).phase === "nomination") await probe();
+    }
+    expect(sent).toBeGreaterThanOrEqual(30);
+    // 서버 전용 차례 키 pickTurn 은 어떤 프레임의 어떤 경로에도 없다.
+    for (const sock of g.socks) {
+      for (const m of framesOf(sock)) for (const pth of keyPaths(m)) expect(`${pth}:${pth.endsWith(".pickTurn")}`).toBe(`${pth}:false`);
+    }
+  });
+});
+
+describe("탈락 직후 산 사람 (L12, 결정 0021·0037)", () => {
+  /** 산 사람 소켓 프레임에서 역할 값 문자열이 ROLE_PATHS_ALIVE 밖에 있거나 `.job` 키 경로가 있으면 설명 한 줄씩. */
+  const jobLeaks = (msgs: ServerMessage[]): string[] => {
+    const out: string[] = [];
+    for (const m of msgs) {
+      for (const [pth, value] of stringPaths(m)) if (ROLE_WORDS.has(value) && !ROLE_PATHS_ALIVE.includes(pth)) out.push(`${m.t} ${pth}=${value}`);
+      for (const pth of keyPaths(m)) if (pth.endsWith(".job")) out.push(`${m.t} ${pth}`);
+    }
+    return out;
+  };
+
+  /** 한 산 사람이 새 소켓으로 다시 붙은 첫 state·chatLog. */
+  const reconnectFrames = async (code: string, who: SeatedActor): Promise<ServerMessage[]> => {
+    const again = await connect(code);
+    send(again, { t: "hello", token: who.token });
+    await nextFrame(again, (m) => m.t === "chatLog");
+    await settle(again, mark(again));
+    return framesOf(again);
+  };
+
+  it("처형 전환(지목 → 변론 → 찬반 → 처형) 때 산 사람 소켓 프레임과 직후 재접속 스냅샷에 탈락자의 직업이 없다", { timeout: 90_000 }, async () => {
+    const g = await startedGame("nomination");
+    const victim = withRole(g, "citizen")[0]!;
+    const living = g.actors.filter((a) => a !== victim);
+    const from = g.actors.map((a) => mark(a.sock));
+    await pointAll(g.code, g.actors, Object.fromEntries(living.map((a) => [a.seat, victim.seat])));
+    for (let guard = 0; guard < 40 && (await storedRoom(g.code)).phase !== "verdict"; guard += 1) await closePhase(g.code);
+    for (const a of g.actors) await nextFrame(a.sock, phaseOf("verdict"));
+    await verdictAll(g.code, g.actors, Object.fromEntries(living.map((a) => [a.seat, true])));
+    for (const a of g.actors) await settle(a.sock, mark(a.sock));
+
+    expect((await storedRoom(g.code)).players.find((p) => (p as unknown as { seat: number }).seat === victim.seat)!.alive).toBe(false);
+    for (const a of living) {
+      const frames = framesOf(a.sock).slice(from[g.actors.indexOf(a)]!);
+      expect(frames.some((m) => m.t === "state" && m.view.phase === "execution")).toBe(true);
+      expect(jobLeaks(frames).join("\n")).toBe("");
+    }
+    const again = await reconnectFrames(g.code, living[0]!);
+    expect(again.some((m) => m.t === "state" && m.view.phase === "execution")).toBe(true);
+    expect(jobLeaks(again).join("\n")).toBe("");
+  });
+
+  it("암살 아침 전환 때 산 사람 소켓 프레임과 직후 재접속 스냅샷에 탈락자의 직업이 없다", { timeout: 60_000 }, async () => {
+    const g = await startedGame("night");
+    const victim = withRole(g, "citizen")[0]!;
+    for (const m of withRole(g, "mafia")) pickAs(m, victim.seat);
+    for (const a of g.actors) await settle(a.sock, mark(a.sock));
+    await advanceTo(g.code, g.socks, "morning");
+    for (const a of g.actors) await settle(a.sock, mark(a.sock));
+
+    expect((await storedRoom(g.code)).players.find((p) => (p as unknown as { seat: number }).seat === victim.seat)!.alive).toBe(false);
+    const living = g.actors.filter((a) => a !== victim);
+    for (const a of living) {
+      const frames = framesOf(a.sock);
+      expect(frames.some((m) => m.t === "state" && m.view.phase === "morning")).toBe(true);
+      expect(jobLeaks(frames).join("\n")).toBe("");
+    }
+    const again = await reconnectFrames(g.code, living.find((a) => a.role !== "mafia")!);
+    expect(again.some((m) => m.t === "state" && m.view.phase === "morning")).toBe(true);
+    expect(jobLeaks(again).join("\n")).toBe("");
+  });
 });
