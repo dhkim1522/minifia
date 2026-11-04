@@ -2380,7 +2380,9 @@ async function nightSaved(ctx, shared) {
     await sleep(3300); // 카드 공개(2.8초)가 지난 뒤에도 없어야 한다
     const after = await readNight(hp);
     rec(sc, "SV6", "구출한 아침에는 분필이 없다", after?.chalk === null, `chalk ${after?.chalk}`);
-    rec(sc, "SV7", "구출한 아침에는 유언·쪽지 카드가 없다", (after?.cards.length ?? -1) === 0, `카드 ${JSON.stringify(after?.cards)}`);
+    // 찬반 결과 채팅 카드(data-card="ballots", 09.1.1-13)는 낮의 기록이라 아침 카드가 아니다 — 아침 카드(유언·쪽지 등)만 센다
+    const morningCards = (after?.cards ?? []).filter((c) => c.kind !== "ballots");
+    rec(sc, "SV7", "구출한 아침에는 유언·쪽지 카드가 없다", after !== null && morningCards.length === 0, `카드 ${JSON.stringify(morningCards)}`);
     rec(sc, "SV8", "구출한 아침에는 암살 번쩍임이 없다", (await readSeen(hp)).kill === 0, `번쩍임 ${(await readSeen(hp)).kill}회`);
     rec(sc, "SV9", "구출한 아침에도 방장은 산 사람이다(유령 화면이 아니다)", after?.ghostView === false && aliveOf(ht.last()).includes(hostSeat), `유령 화면 ${after?.ghostView}`);
   } finally {
@@ -2428,7 +2430,9 @@ async function nightMismatch(ctx) {
     rec(sc, "MM4", "아침 알림이 '아무 일도 없었습니다' 이다", morning?.text === "아무 일도 없었습니다", `알림 ${log.filter((a) => a.text).map((a) => a.text).join(" → ") || "없음"}`);
     await sleep(3300);
     const after = await readNight(hp);
-    rec(sc, "MM5", "불일치한 아침에는 분필·카드가 없고 모두 산다", after?.chalk === null && (after?.cards.length ?? -1) === 0 && aliveOf(ht.last()).length === 6, `chalk ${after?.chalk}, 카드 ${after?.cards.length}, 산 사람 ${aliveOf(ht.last()).length}`);
+    // 찬반 결과 채팅 카드(ballots)는 낮의 기록이라 아침 카드가 아니다(09.1.1-13) — 아침 카드만 센다
+    const morningCards = (after?.cards ?? []).filter((c) => c.kind !== "ballots");
+    rec(sc, "MM5", "불일치한 아침에는 분필·카드가 없고 모두 산다", after?.chalk === null && after !== null && morningCards.length === 0 && aliveOf(ht.last()).length === 6, `chalk ${after?.chalk}, 카드 ${morningCards.length}, 산 사람 ${aliveOf(ht.last()).length}`);
   } finally {
     await closeGame(game);
   }
