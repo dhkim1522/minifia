@@ -196,9 +196,9 @@ describe("resolveNomination — 마감 훅 (DAY-05, 결정 0060-3)", () => {
 });
 
 describe("vote.test 에서 옮긴 뜻 (08-28, DAY-06·07)", () => {
-  it("단계 표: 지목은 15000ms 이고 기본 다음 단계는 defense, 역할 노출은 true 다 (옛 단계 표 시험의 새 흐름 행)", () => {
+  it("단계 표: 지목 진입 길이는 모이기 3000ms 이고 기본 다음 단계는 defense, 역할 노출은 true 다 (옛 단계 표 시험의 새 흐름 행)", () => {
     const d = PHASE_DEFS.nomination;
-    expect(`${d.durationMs}/${d.next}/${d.revealsOwnRole}`).toBe("15000/defense/true");
+    expect(`${d.durationMs}/${d.next}/${d.revealsOwnRole}`).toBe("3000/defense/true");
   });
 
   it("던져도 마감(phaseEndsAt)은 그대로이고, 마감 전 tick 은 입력 그대로다 (옛 D-28)", () => {
@@ -526,9 +526,8 @@ describe("시험 도우미: 지목 방식과 무관 (09.1-03)", () => {
     expect(s.players.map((p) => `${p.seat}>${p.nominate ?? "-"}`).join(",")).toBe("0>1,1>0,2>-,3>-");
   });
 
-  it("nominationSpanMs: 지금(전환 전) startedAt 의 지목 길이는 단계 표 값이다", () => {
-    // 09.1-04 가 이 단언을 nominationMaxMs(4) 로 바꾼다(전환 뒤에는 차례 사슬 전체 길이).
-    expect(nominationSpanMs(startedAt(4, 1, "nomination"), 2)).toBe(PHASE_DEFS.nomination.durationMs);
+  it("nominationSpanMs: 전환 뒤 startedAt 의 지목 길이는 차례 사슬 전체 길이 nominationMaxMs(4) 다 (전원 기권)", () => {
+    expect(nominationSpanMs(startedAt(4, 1, "nomination"), 2)).toBe(nominationMaxMs(4));
   });
 
   it("nominationSpanMs 는 지목이 아닌 상태를 받으면 Error", () => {

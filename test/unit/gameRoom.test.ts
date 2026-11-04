@@ -15,7 +15,7 @@ import {
   startGame,
 } from "../../shared/game/room";
 import type { RoomState } from "../../shared/game/room";
-import { ASSIGNING_MS, DAY_ANNOUNCE_MS, DISCUSSION_MS, ROLE_REVEAL_MS } from "../../shared/game/phases";
+import { ASSIGNING_MS, DAY_ANNOUNCE_MS, DISCUSSION_MS, NOMINATION_GATHER_MS, ROLE_REVEAL_MS } from "../../shared/game/phases";
 import { tick } from "../../shared/game/tick";
 import type { PhaseId } from "../../shared/protocol";
 import { ROLE_IDS, ROLE_TABLE } from "../../shared/game/roles";
@@ -650,6 +650,25 @@ describe("normalizeStoredRoom — 저장된 옛 방 (RESEARCH Pattern 6, T-02-14
   it("이미 새 모양인 방은 다시 정규화해도 같은 객체다 (T-03.1-04)", () => {
     const once = normalizeStoredRoom(withOldClaimFields({ ...fullRoom([0, 1, 2]), phase: "discussion", phaseEndsAt: 77_000 }), 5_000);
     expect(normalizeStoredRoom(once, 6_000) === once).toBe(true);
+  });
+
+  // 09.1-04(결정 0063-1): 배포 순간 진행 중이던 옛 지목 방(차례 정보 없음)은 지목을 지금 시각부터 다시 시작한다.
+  it("차례 없는 옛 지목 방은 지목을 다시 시작한다 (결정 0063-1)", () => {
+    const base = { ...fullRoom([0, 1, 2, 3]), phase: "nomination" as PhaseId, phaseEndsAt: 77_000, day: 2 };
+    const stored: RoomState = { ...base, players: base.players.map((p, i) => (i < 2 ? { ...p, nominate: 3 } : p)) };
+    const got = normalizeStoredRoom(stored, 5_000);
+    expect(got === stored).toBe(false);
+    expect(`${got.phase}:${got.phaseEndsAt}:${got.day}`).toBe(`nomination:${5_000 + NOMINATION_GATHER_MS}:2`);
+    expect(JSON.stringify(got.pickTurn)).toBe(JSON.stringify({ order: [0, 1, 2, 3], i: -1 }));
+    expect(got.players.some((p) => Object.hasOwn(p, "nominate"))).toBe(false);
+    expect(stored.players.filter((p) => p.nominate === 3).length).toBe(2); // 입력은 바꾸지 않는다
+  });
+
+  it("차례가 있는 지목 방과 다른 단계의 방은 같은 객체다 (결정 0063-1)", () => {
+    const base = { ...fullRoom([0, 1, 2, 3]), phase: "nomination" as PhaseId, phaseEndsAt: 77_000 };
+    const turned: RoomState = { ...base, pickTurn: { order: [0, 1, 2, 3], i: 1, endsAt: 77_000 } };
+    const other: RoomState = { ...base, phase: "defense" };
+    expect([turned, other].map((r) => normalizeStoredRoom(r, 5_000) === r).join(",")).toBe("true,true");
   });
 
   it("messages 키가 없고 phase 가 day 가 아니면 같은 객체를 돌려준다", () => {

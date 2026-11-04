@@ -3,7 +3,7 @@ import { isAlive } from "../../shared/game/alive";
 import { channelOf } from "../../shared/game/audience";
 import { pickTarget } from "../../shared/game/night";
 import { castTurnPoint, enterNomination, nominationStepMs, stepNomination, turnViewOf } from "../../shared/game/nomination";
-import { DISCUSSION_MS, MORNING_MS, NIGHT_MS, NOMINATION_MS, PHASE_DEFS } from "../../shared/game/phases";
+import { DISCUSSION_MS, MORNING_MS, NIGHT_MS, NOMINATION_GATHER_MS, PHASE_DEFS, nominationMaxMs } from "../../shared/game/phases";
 import { ROOM_TTL_MS, attachConnection, createRoomState, joinRoom, startGame } from "../../shared/game/room";
 import type { Player, RoomState } from "../../shared/game/room";
 import { rolesInPlay } from "../../shared/game/roles";
@@ -442,11 +442,11 @@ describe("buildView 단계 길이 (D-15, 결정 0012)", () => {
       return `${phase}:${v.phaseDurationMs}:${v.phaseEndsAt === s.phaseEndsAt}:${v.serverNow}`;
     });
     expect(got.join(" ")).toBe(
-      `lobby:null:true:77777 assigning:3000:true:77777 roleReveal:15000:true:77777 dayAnnounce:2000:true:77777 discussion:90000:true:77777 nomination:15000:true:77777 defense:20000:true:77777 verdict:10000:true:77777 execution:5000:true:77777 night:30000:true:77777 morning:5000:true:77777 ended:null:true:77777`,
+      `lobby:null:true:77777 assigning:3000:true:77777 roleReveal:15000:true:77777 dayAnnounce:2000:true:77777 discussion:90000:true:77777 nomination:3000:true:77777 defense:20000:true:77777 verdict:10000:true:77777 execution:5000:true:77777 night:30000:true:77777 morning:5000:true:77777 ended:null:true:77777`,
     );
   });
 
-  it("마감은 이전 마감 + 단계 길이로 이어진다: assigning +3000, roleReveal +15000, dayAnnounce +2000, discussion +90000, nomination +15000, night +30000, morning +5000", () => {
+  it("마감은 이전 마감 + 단계 길이로 이어진다: assigning +3000, roleReveal +15000, dayAnnounce +2000, discussion +90000, nomination +3000(모이기), night +nominationMaxMs(4)(전원 기권) + 30000, morning +5000", () => {
     const a = stateAt("assigning", 4, 1);
     const r = stateAt("roleReveal", 4, 1);
     const ends = ["assigning", "roleReveal", "dayAnnounce", "discussion", "nomination", "night", "morning"].map(
@@ -461,9 +461,9 @@ describe("buildView 단계 길이 (D-15, 결정 0012)", () => {
         START_AT + 18000,
         START_AT + 20000,
         discussionEnd,
-        discussionEnd + NOMINATION_MS,
-        discussionEnd + NOMINATION_MS + NIGHT_MS,
-        discussionEnd + NOMINATION_MS + NIGHT_MS + MORNING_MS,
+        discussionEnd + NOMINATION_GATHER_MS,
+        discussionEnd + nominationMaxMs(4) + NIGHT_MS,
+        discussionEnd + nominationMaxMs(4) + NIGHT_MS + MORNING_MS,
       ].join("/"),
     );
     expect(r.phaseEndsAt).toBe(START_AT + 18000);
@@ -604,9 +604,9 @@ describe("buildView 전수 누출 검사 (T-01-23)", () => {
             violations.push(...journalViolations(s, viewer, view, phase, tag));
             violations.push(...phaseKeyViolations(s, viewer, view, phase, tag));
             if ("morning" in (view.day ?? {}) !== (phase === "morning")) violations.push(`${tag}: day.morning presence`);
-            // me 에는 어느 단계에서도 claim 키가 없고 day 에는 turn 키가 없다(07-08: 순차 주장 제거).
+            // me 에는 어느 단계에서도 claim 키가 없고(07-08: 순차 주장 제거), day.turn 은 지목 단계에만 있다(09.1, 결정 0063-1).
             if ("claim" in view.me) violations.push(`${tag}: claim key in me`);
-            if ("turn" in (view.day ?? {})) violations.push(`${tag}: day.turn present`);
+            if ("turn" in (view.day ?? {}) !== (phase === "nomination")) violations.push(`${tag}: day.turn presence`);
             // 역할 값은 허용 경로(me.role, day.roles[])에만 있다
             violations.push(...spectateViolations(s, viewer, view, phase, tag));
           }
