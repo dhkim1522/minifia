@@ -17,22 +17,28 @@ import { PickTurnBlock } from "../components/v2/PickTurnBlock";
 import { RoleCardButton } from "../components/RoleCardButton";
 import { PhaseHeader } from "../components/v2/PhaseHeader";
 import { TopToast, useTopToast } from "../components/v2/TopToast";
+import { CLAIM_ICON } from "../components/v2/ClaimBadge";
+import { ClaimSheet } from "../components/v2/ClaimSheet";
+import { FloatAction, FloatActions } from "../components/v2/FloatAction";
 import { WillSheet } from "../components/v2/WillSheet";
 import { TensionVignette } from "../components/TensionVignette";
 import { WorldStage } from "../components/WorldStage";
 import type { WorldPick } from "../components/WorldStage";
 import { PICK_TURN_MS } from "../../shared/game/phases";
 import { LOG_H_KB } from "../game/chatUi";
+import { BADGE_TEXT, chipsOf, claimLook, floatLabel } from "../game/badgeView";
 import { defenderVotes, headerFor, pointsTally } from "../game/dayView";
 import { isMyTurn, turnStageOf, turnTopLine } from "../game/pickTurn";
 import type { ChatStore } from "../net/chatStore";
 import type { DayFx } from "../net/useDayFx";
 import { useCountdown } from "../net/countdown";
+import { useBadge } from "../net/useBadge";
 import { useChat } from "../net/useChat";
 import { useTurnLook } from "../net/useTurnLook";
+import { useSendGuard } from "../net/useSendGuard";
+import { useSheetLayer } from "../net/useSheetLayer";
 import { useViewChoice } from "../net/useViewChoice";
 import { useWill } from "../net/useWill";
-import { useVisualViewportHeight } from "../net/useKeyboardLift";
 import { useMapInsets } from "../net/useMapInsets";
 import { useReducedMotion } from "../net/useReducedMotion";
 import type { RoomConnection } from "../net/useRoomConnection";
@@ -117,6 +123,8 @@ interface GameMapProps {
   deny?: DayFx["deny"];
   /** 연결의 오류 프레임 구독(거절된 행동 알림에 쓴다) */
   onEvent?: RoomConnection["onEvent"];
+  /** 연결 번호. 바뀐 첫 스냅샷은 배지 효과(팝·알약)를 내지 않고 현재 상태로 바로 그린다(09.1.1-08). 기본 0 */
+  epoch?: number;
   /** 맵을 쓸 수 없는 기기의 불가 카드 [처음으로] */
   onLeave?: () => void;
 }
@@ -153,7 +161,7 @@ function TurnBlock({ view, offset, line, compact, reducedMotion }: { view: RoomV
 // 8페이즈 게임 맵 화면 틀(08-13, UI-SPEC "게임 화면 틀"): 지하 재즈 바 맵(WorldStage) 위에 위쪽 가림막, 헤더(단계 이름 + 접히는 안내 + 시간 링 + [역할 카드]), [테스트], 결과 알림, 아래 패널을 얹는다.
 // 낮 시작·낮 토론·지목·최후 변론·찬반·처형이 이 화면 하나를 같은 장면 키로 그려 단계가 바뀌어도 맵이 다시 만들어지지 않는다.
 // 화면은 서버가 보낸 view 만으로 다시 그린다. 닉네임(이름표)·알림 글자는 React 텍스트 노드로만 그린다.
-export function GameMap({ view, store, chat, send, canSend = true, offset = 0, roleCard, testButton, announce = null, deny, fading, ghostEnter = 0, killFx = null, policeResult = null, letter = null, onEvent, onLeave }: GameMapProps) {
+export function GameMap({ view, store, chat, send, canSend = true, offset = 0, roleCard, testButton, announce = null, deny, fading, ghostEnter = 0, killFx = null, policeResult = null, letter = null, onEvent, epoch = 0, onLeave }: GameMapProps) {
   const toast = useTopToast();
   const { show } = toast;
   // 측정(스테이지 사각형)·키보드·기록 칸 높이는 대기실과 같은 훅이다. 키보드가 열려 있으면 행동 줄을 숨기고 기록 칸을 72 로 줄인다(07-19).
@@ -223,12 +231,21 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
   // 지목 직후(PICK_REPLY_MS 안, 서버가 아직 내 선택을 확인하지 않았을 때)의 거절은 지목 거절이다: 단계 어긋남(WRONG_PHASE)은 REJECT_TEXT,
   // 그 밖의 코드는 SEND_FAIL_TEXT. 지목을 보낸 적 없으면 그 밖의 코드는 알림도 되돌림도 만들지 않는다(채팅 속도 제한 등).
   const [rejects, setRejects] = useState(0);
+  // 직업 배지(09.1.1-08)의 거절은 따로 센다 — 지목·유언 되돌림(rejects)과 섞이지 않게
+  const [badgeRejects, setBadgeRejects] = useState(0);
+  const sendGuard = useSendGuard();
   const willBusy = useRef(false); // 유언·쪽지 저장 확인을 기다리는 중(useWill 이 쓴다)
   const pointSent = useRef<{ target: number; at: number } | null>(null);
   useEffect(() => {
     if (!onEvent) return;
     return onEvent((e) => {
       if (e.t !== "error") return;
+      // 직업 배지: 최근 3초 안에 보냈고 단계 어긋남·잘못된 요청이면 그 거절이다. 그 밖의 코드는 이 분기를 지나친다
+      if ((e.code === "WRONG_PHASE" || e.code === "BAD_MESSAGE") && sendGuard.take() === "badge") {
+        show(BADGE_TEXT.reject);
+        setBadgeRejects((n) => n + 1);
+        return;
+      }
       const sent = pointSent.current;
       if (sent !== null && Date.now() - sent.at < PICK_REPLY_MS) {
         pointSent.current = null;
@@ -241,7 +258,7 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
       if (!willBusy.current) show(REJECT_TEXT);
       setRejects((n) => n + 1);
     });
-  }, [onEvent, show]);
+  }, [onEvent, show, sendGuard]);
 
   // 09.1: 지목마다 띄우던 위 알림은 없다(차례 위 한 줄이 대신, UI-SPEC A-7). TopToast 는 거절 알림(REJECT_TEXT)에만 쓴다.
 
@@ -410,24 +427,28 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
   // 유언·쪽지 시트(WILL-01·NIGHT-12): 상태와 저장 흐름은 useWill 이 쥔다. 실패 알림은 위 알림 한 문구다.
   const will = useWill({ view, send, canSend, rejected: rejects, onFail: () => show(SEND_FAIL_TEXT), busyRef: willBusy });
 
-  // 시트 층의 아래 끝 = 아래 패널 위 끝 + 8(키보드가 열려 있으면 그 위, CSS 의 --mf-kb-lift). 패널 높이는 DOM 에서 잰다(6페이즈 규칙).
-  // 패널 + 시트 + 8 이 보이는 높이(visualViewport − 헤더 62)를 넘으면 패널을 가리고 시트만 키보드 위에 붙인다(UI-SPEC 282행).
-  // 가린 동안은 숨기기 직전에 잰 패널 높이를 기억해 판정한다(가린 패널은 줄어들지 않으므로 같은 값이다).
-  const layerRef = useRef<HTMLDivElement>(null);
-  const sheetOpen = will.open !== null;
-  const vvHeight = useVisualViewportHeight(sheetOpen);
-  const panelHeight = useRef(0);
-  const [veiled, setVeiled] = useState(false);
+  // 직업 주장 배지(09.1.1-08, UI-SPEC A): 칩 시트·낙관 값·거절 되돌림은 useBadge 가 쥔다. 유언 시트와 배지 시트는 같은 시트 층을 번갈아 쓴다(동시에 열리지 않는다).
+  const badge = useBadge({ view, send, canSend, rejected: badgeRejects, guard: sendGuard });
+  const layerKind: "will" | "claim" | null = will.open !== null ? "will" : badge.open && badge.allowed ? "claim" : null;
+  // 시트 층의 아래 끝 = 아래 패널 위 끝 + 8 (키보드 위). 패널을 가릴지 판정하는 논리는 useSheetLayer 로 옮겼다(논리 변경 없음).
+  const { layerRef, veiled, vvHeight } = useSheetLayer({ open: layerKind !== null, panelRef, stageTop: stageInsets?.top ?? DEFAULT_INSET_TOP });
+
+  // 이름표 모서리 배지: 서버 view.players 에서만 만든다(내 좌석만 낙관 값을 겹친다). 기존 키는 덮어쓰지 않는다. 주장이 하나도 없고 낙관 값도 없으면 기존 함수 그대로(이름표에 넘기는 속성이 없다)
+  const claimTagProps = useMemo<WorldTagProps | undefined>(() => {
+    const anyClaim = view.players.some((p) => p.badge !== undefined);
+    if (!anyClaim && badge.shown === badge.server) return tagProps;
+    return (seat) => {
+      const base = tagProps?.(seat) ?? {};
+      const look = claimLook(view, seat, seat === view.me.seat ? badge.shown : undefined);
+      if (look === null) return base;
+      return { claim: look.claim, claimSwapped: look.swapped, ...base };
+    };
+  }, [tagProps, view, badge.shown, badge.server]);
+
+  // 떠 있는 버튼 묶음의 아래 끝 = 키보드 올림(CSS 상속) + 패널 높이 + 8. 패널 높이는 DOM 에서 잰다(패널이 자라도 따라간다)
+  const floatRef = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
-    const layer = layerRef.current;
-    if (!sheetOpen || layer === null) {
-      if (veiled) setVeiled(false);
-      return;
-    }
-    if (!veiled) panelHeight.current = panelRef.current?.offsetHeight ?? 0;
-    layer.style.setProperty("--mf-panel-h", `${panelHeight.current}px`);
-    const hide = panelHeight.current + layer.offsetHeight + 8 > vvHeight - (stageInsets?.top ?? DEFAULT_INSET_TOP);
-    if (hide !== veiled) setVeiled(hide);
+    floatRef.current?.style.setProperty("--mf-panel-h", `${panelRef.current?.offsetHeight ?? 0}px`);
   });
 
   // 위 한 줄: 처음 마운트한 view(재접속·새로 고침)의 (단계, 차례) 와 같은 동안은 만들지 않는다(A-6)
@@ -474,7 +495,7 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
         {...(deny ? { deny } : {})}
         {...(surprise ? { surprise } : {})}
         {...(pick ? { pick } : {})}
-        {...(tagProps ? { tagProps } : {})}
+        {...(claimTagProps ? { tagProps: claimTagProps } : {})}
         onNotice={(text) => show(text)}
         onLeave={() => onLeave?.()}
       />
@@ -508,28 +529,54 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
         onNightPickSent={(target) => {
           pointSent.current = { target, at: Date.now() };
         }}
-        onOpenWill={(opener) => will.openSheet("will", opener)}
+        onOpenWill={(opener) => {
+          badge.setOpen(false);
+          will.openSheet("will", opener);
+        }}
         willOpen={will.open === "will"}
         willSaved={will.hasWill}
-        onOpenNote={(opener) => will.openSheet("note", opener)}
+        onOpenNote={(opener) => {
+          badge.setOpen(false);
+          will.openSheet("note", opener);
+        }}
         noteOpen={will.open === "note"}
         noteReady={will.noteReady}
         inputRef={inputRef}
         panelRef={panelRef}
       />
-      {will.open !== null ? (
-        <div ref={layerRef} className="mf-will-layer" {...(veiled ? { "data-panel-hidden": "true" } : {})}>
-          <WillSheet
-            key={will.open}
-            {...(will.open === "note" ? { title: "쪽지", icon: "note" as const, tone: "mafia" as const, placeholder: NOTE_PLACEHOLDER, max: CHAT_MAX_GRAPHEMES } : { max: WILL_MAX_GRAPHEMES })}
-            value={will.draft}
-            onChange={will.setDraft}
-            onSave={will.save}
-            onClose={will.close}
-            saved={will.saved}
-            {...(vvHeight < COMPACT_VV_MAX ? { compact: true } : {})}
-            {...(canSend ? {} : { disabled: true })}
+      {badge.allowed ? (
+        <FloatActions ref={floatRef}>
+          <FloatAction
+            ref={badge.buttonRef}
+            kind="claim"
+            icon={CLAIM_ICON[badge.shown]}
+            label={floatLabel(badge.shown)}
+            pressed={layerKind === "claim"}
+            disabled={!canSend}
+            onPress={() => {
+              if (will.open !== null) return;
+              badge.toggle();
+            }}
           />
+        </FloatActions>
+      ) : null}
+      {layerKind !== null ? (
+        <div ref={layerRef} className="mf-will-layer" data-sheet-layer={layerKind} {...(veiled ? { "data-panel-hidden": "true" } : {})}>
+          {layerKind === "will" && will.open !== null ? (
+            <WillSheet
+              key={will.open}
+              {...(will.open === "note" ? { title: "쪽지", icon: "note" as const, tone: "mafia" as const, placeholder: NOTE_PLACEHOLDER, max: CHAT_MAX_GRAPHEMES } : { max: WILL_MAX_GRAPHEMES })}
+              value={will.draft}
+              onChange={will.setDraft}
+              onSave={will.save}
+              onClose={will.close}
+              saved={will.saved}
+              {...(vvHeight < COMPACT_VV_MAX ? { compact: true } : {})}
+              {...(canSend ? {} : { disabled: true })}
+            />
+          ) : (
+            <ClaimSheet chips={chipsOf(view)} value={badge.shown} onPick={badge.pick} onClose={() => badge.setOpen(false)} {...(canSend ? {} : { disabled: true })} />
+          )}
         </div>
       ) : null}
     </main>

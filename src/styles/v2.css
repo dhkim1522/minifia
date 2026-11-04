@@ -6,7 +6,7 @@
 
 /* 머리 위 쌓임. 이름표는 최대 폭이 없고 말줄임하지 않는다(MAP-07, 결정 0052-2) */
 .mv-head { display: inline-flex; flex-direction: column; align-items: center; gap: var(--space-xs); }
-.mv-tag { display: inline-flex; align-items: center; gap: 6px; padding: 2px var(--space-sm); border-radius: var(--radius-pill); background: var(--overlay-ink); color: var(--gray-50); font-family: var(--font-ui); font-size: 14px; line-height: 1.4; font-weight: 700; white-space: nowrap; text-shadow: var(--shadow-text); }
+.mv-tag { position: relative; display: inline-flex; align-items: center; gap: 6px; padding: 2px var(--space-sm); border-radius: var(--radius-pill); background: var(--overlay-ink); color: var(--gray-50); font-family: var(--font-ui); font-size: 14px; line-height: 1.4; font-weight: 700; white-space: nowrap; text-shadow: var(--shadow-text); }
 .mv-tag.is-me { box-shadow: inset 0 0 0 1.5px var(--gray-100); }
 .mv-tag.is-mine { background: var(--gray-100); color: var(--night-900); text-shadow: none; }
 .mv-tag.is-mine .mv-tag__name { color: var(--night-900); }
@@ -186,3 +186,42 @@
 .mf-turn[data-turn-tone="urgent"] .mf-turn__pill { border-color: var(--crimson-500); }
 .mf-turn[data-turn-tone="urgent"] .mf-turn__sec { color: var(--crimson-400); }
 .mf-turn[data-turn-tone="urgent"] .mf-turn__fill { background: var(--crimson-500); }
+
+/* 직업 주장 배지(09.1.1-08, UI-SPEC A-1): 이름표 오른쪽 위 모서리에 걸친다. 표시 전용(포인터 없음). 면 overlay-ink-strong·테두리와 아이콘 gray-100 — 어떤 직업도 진홍을 쓰지 않는다.
+   앵커(.mv-claim-anchor)는 이름표(.mv-tag, position: relative) 전체를 덮어 이름표 폭·쌓임 높이를 늘리지 않는다. */
+.mv-claim-anchor { position: absolute; inset: 0; pointer-events: none; }
+.mv-claim { position: absolute; top: -8px; right: calc(var(--space-xs) * -1); display: grid; place-items: center; box-sizing: border-box; width: 20px; height: 20px; border-radius: var(--radius-pill); background: var(--overlay-ink-strong); border: 1.5px solid var(--gray-100); color: var(--gray-100); text-shadow: none; pointer-events: none; }
+.mv-claim.is-quiet { border-style: dashed; }
+.mv-claim.is-pop { animation: mv-claim-pop var(--dur-pop) ease-out both; }
+@keyframes mv-claim-pop { 0% { transform: scale(0.4); opacity: 0; } 60% { transform: scale(1.25); opacity: 1; } 100% { transform: scale(1); } }
+/* 말 바꿈 점: 지름 16, 면 gray-100, 안에 swap 12(night-900). 배지 오른쪽 아래 모서리에 걸친다 */
+.mv-claim__swap { position: absolute; right: calc(var(--space-xs) * -1); bottom: calc(var(--space-xs) * -1); display: grid; place-items: center; width: 16px; height: 16px; border-radius: var(--radius-pill); background: var(--gray-100); color: var(--night-900); }
+/* 바꾼 순간의 글자 알약: 이름표 위에 겹쳐 뜬다(쌓임을 밀지 않는다). dur-med 에 떠서 2.4초 뒤 dur-fast 에 사라진다. 불투명도만 움직인다 */
+.mv-claim__notice { position: absolute; left: 50%; bottom: calc(100% + var(--space-xs)); transform: translateX(-50%); padding: var(--space-xs) var(--space-sm); border-radius: var(--radius-pill); background: color-mix(in srgb, var(--night-800) 92%, transparent); border: 1.5px solid var(--gray-100); color: var(--gray-50); font-family: var(--font-ui); font-size: 14px; line-height: 1.4; font-weight: 700; white-space: nowrap; text-shadow: none; pointer-events: none; animation: mv-claim-in var(--dur-med) ease-out both, mv-claim-out var(--dur-fast) ease-in 2.4s forwards; }
+@keyframes mv-claim-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes mv-claim-out { from { opacity: 1; } to { opacity: 0; } }
+
+/* 오른쪽 아래 떠 있는 둥근 버튼(09.1.1-08, UI-SPEC A-2·B-1): 지름 48(control-input), 면 night-700, 테두리 1px night-600, 안에 아이콘 24. 시트가 열려 있으면 안쪽 테두리 2px gray-100 */
+.mv-float { position: relative; display: grid; place-items: center; flex: none; box-sizing: border-box; width: var(--control-input); height: var(--control-input); padding: 0; border-radius: var(--radius-pill); border: 1px solid var(--night-600); background: var(--night-700); color: var(--gray-100); font-family: var(--font-ui); cursor: pointer; pointer-events: auto; }
+.mv-float[aria-pressed="true"] { box-shadow: inset 0 0 0 2px var(--gray-100); }
+.mv-float[aria-disabled="true"] { opacity: 0.45; cursor: default; }
+.mv-float:focus-visible { outline: 2px solid var(--gray-100); outline-offset: 2px; }
+.mv-float__dot { position: absolute; top: 6px; right: 6px; width: 8px; height: 8px; border-radius: var(--radius-pill); background: var(--gray-100); }
+
+/* 배지 칩 시트(09.1.1-08): 틀은 유언 시트(.mv-will)와 같은 값. 칩 높이 44(tap-min)·안쪽 좌우 16·pill, 선택 칩은 gray-100 면·night-900 글자. 진홍·놋쇠 없음 */
+.mv-claim-sheet { display: flex; flex-direction: column; gap: var(--space-sm); box-sizing: border-box; width: calc(100% - 20px); margin: 0 auto; padding: 12px; border-radius: var(--radius-lg); background: var(--night-800); border: 1px solid var(--night-600); box-shadow: var(--shadow-card); font-family: var(--font-ui); color: var(--gray-100); animation: mv-claim-sheet-in var(--dur-fast) ease-out both; }
+@keyframes mv-claim-sheet-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+.mv-claim-sheet__head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-sm); }
+.mv-claim-sheet__title { display: inline-flex; align-items: center; min-height: var(--tap-min); padding-left: var(--space-xs); font-size: 16px; line-height: 1.5; font-weight: 700; color: var(--gray-50); }
+.mv-claim-sheet__close { display: grid; place-items: center; width: var(--tap-min); height: var(--tap-min); padding: 0; border: 0; border-radius: var(--radius-md); background: none; color: var(--gray-300); cursor: pointer; }
+.mv-claim-sheet__chips { display: flex; flex-wrap: wrap; gap: var(--space-sm); }
+.mv-claim-chip { display: inline-flex; align-items: center; gap: var(--space-xs); min-height: var(--tap-min); padding: 0 var(--space-md); box-sizing: border-box; border-radius: var(--radius-pill); border: 1px solid var(--night-600); background: var(--night-700); color: var(--gray-100); font-family: inherit; font-size: 16px; line-height: 1.5; font-weight: 700; white-space: nowrap; cursor: pointer; }
+.mv-claim-chip[aria-pressed="true"] { background: var(--gray-100); border-color: var(--gray-100); color: var(--night-900); }
+.mv-claim-chip[aria-disabled="true"] { opacity: 0.45; cursor: default; }
+.mv-claim-sheet__hint { margin: 0; font-size: 14px; line-height: 1.4; color: var(--gray-300); }
+.mv-claim-chip:focus-visible, .mv-claim-sheet__close:focus-visible { outline: 2px solid var(--gray-100); outline-offset: 2px; }
+
+/* 모션 줄이기(O-22): 배지 팝·알약 페이드·시트 등장 애니메이션 없이 즉시. 알약은 즉시 나타나 2.4초 뒤 즉시 사라진다(타이머가 요소를 걷는다) */
+@media (prefers-reduced-motion: reduce) {
+  .mv-claim.is-pop, .mv-claim__notice, .mv-claim-sheet { animation: none; }
+}

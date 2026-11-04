@@ -83,3 +83,7 @@
 .mf-game__dim { position: absolute; inset: 0; z-index: calc(var(--z-world) + 1); pointer-events: none; background: color-mix(in srgb, var(--night-950) 45%, transparent); opacity: 0; transition: opacity 500ms; }
 .mf-game__dim[data-dim="on"] { opacity: 0.4; }
 @media (prefers-reduced-motion: reduce) { .mf-game__dim { transition: none; } }
+
+/* 오른쪽 아래 떠 있는 버튼 묶음(09.1.1-08, UI-SPEC A-2): 오른쪽 16, 아래 = 키보드 올림 + 패널 높이(--mf-panel-h, 화면 틀이 잰다) + 8.
+   배지 버튼이 위, 귓속말 버튼(09.1.1-09)이 아래라 두 칸(48 + 8 + 48)을 항상 잡아 둔다 — 버튼이 하나일 때도 위 칸 자리는 그대로다. 빈 칸은 포인터를 받지 않는다(땅 탭 걷기를 가리지 않는다). 시트 아래(z-overlay − 1) */
+.mf-float { position: absolute; right: var(--space-md); bottom: calc(var(--mf-kb-lift, 0px) + var(--mf-panel-h, 0px) + var(--space-sm)); z-index: calc(var(--z-overlay) - 1); display: flex; flex-direction: column; gap: var(--space-sm); min-height: calc(var(--control-input) * 2 + var(--space-sm)); pointer-events: none; }

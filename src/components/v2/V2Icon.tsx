@@ -6,7 +6,7 @@ import "../../styles/v2.css";
 // 나머지 아이콘은 그것을 쓰는 페이즈(8·9·10페이즈)가 같은 표에 더한다.
 // v1.0 아이콘(src/components/Icon.tsx)과 이름이 겹쳐도(check·crown) 서로 다른 부품이다: v2 화면은 이 파일을 쓴다.
 // 로비 헤더의 [나가기]·[공유] 는 v1.0 Icon 을 그대로 쓴다(UI-SPEC 결정 현황) — 여기에 back·share 를 더하지 않는다.
-export type V2IconName = "point" | "crown" | "play" | "check" | "roleCitizen" | "send" | "ghost" | "roleMafia" | "rolePolice" | "roleDoctor" | "skip" | "thumbUp" | "thumbDown" | "quill" | "note" | "target" | "eye" | "heal" | "close";
+export type V2IconName = "point" | "crown" | "play" | "check" | "roleCitizen" | "send" | "ghost" | "roleMafia" | "rolePolice" | "roleDoctor" | "skip" | "thumbUp" | "thumbDown" | "quill" | "note" | "target" | "eye" | "heal" | "close" | "whisper" | "swap" | "quiet";
 
 // ["c", cx, cy, r, filled?] 원 · ["p", d, filled?] 경로
 type Part = readonly ["c", number, number, number, boolean?] | readonly ["p", string, boolean?];
@@ -92,6 +92,21 @@ const ICONS: Readonly<Record<V2IconName, readonly Part[]>> = {
     ["c", 12, 12, 3],
   ],
   heal: [["p", "M9.5 4h5v5.5H20v5h-5.5V20h-5v-5.5H4v-5h5.5z"]],
+  // 09.1.1-08(정치·긴장 장치): 직접 그린 새 셋. 말풍선 + 입가 짧은 선(귓속말) · 좌우 화살표 둘(말 바꿈) · 원 + 사선(말 안 함)
+  whisper: [
+    ["p", "M5 4.5h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-6.5L8 20.5v-4H5a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2z"],
+    ["p", "M8 10.5h5"],
+  ],
+  swap: [
+    ["p", "M4 8h14"],
+    ["p", "M14.5 4.5L18 8l-3.5 3.5"],
+    ["p", "M20 16H6"],
+    ["p", "M9.5 12.5L6 16l3.5 3.5"],
+  ],
+  quiet: [
+    ["c", 12, 12, 8.5],
+    ["p", "M6 6l12 12"],
+  ],
 };
 
 export interface V2IconProps {

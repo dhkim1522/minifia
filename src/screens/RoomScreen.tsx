@@ -462,6 +462,7 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
             policeResult={policeResult}
             letter={letter}
             onEvent={connection.onEvent}
+            epoch={connection.epoch}
             onLeave={() => onExit("gaveUp")}
           />
         );

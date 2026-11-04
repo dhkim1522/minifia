@@ -1,6 +1,9 @@
 import "../../styles/v2.css";
 import { CHAT_TEXT } from "../../game/chatText";
 import type { RoleId } from "../../../shared/game/roles";
+import type { BadgeId } from "../../../shared/protocol";
+import type { ReactNode } from "react";
+import { ClaimBadge } from "./ClaimBadge";
 import { RoleChip } from "./RoleChip";
 import { SureStamp } from "./SureStamp";
 import { V2Icon } from "./V2Icon";
@@ -12,6 +15,7 @@ import { VoteBadge } from "./VoteBadge";
 // 쌓임 순서(위 → 아래): typing → RoleChip(role) → SureStamp(sure) → VoteBadge(count·lead) → 이름표.
 // role 은 부르는 쪽(유령 화면 분기)이 넘길 때만 칩을 그린다 — 이 부품은 역할을 스스로 판단하지 않는다(T-08-20).
 // 상태 속성(data-count·lead·sure·mine·done·ghost)은 켜질 때만 .mv-head 에 실린다(E2E·누설 검사가 읽는다).
+// 직업 주장 배지(09.1.1-08)는 이름표(.mv-tag) 안 오른쪽 위 모서리에 걸린다(절대 위치) — 쌓임 순서·높이를 바꾸지 않는다.
 // 입력 중 알약에는 글자가 없다(점 세 개) — 채팅 본문을 머리 위 말풍선으로 띄우지 않는다.
 //
 // 닉네임은 React 텍스트 노드로만 그린다(innerHTML 없음, T-06-26). 말줄임도 하지 않는다:
@@ -37,9 +41,11 @@ export interface NameTagProps {
   blink?: boolean;
   /** 유령 표식(is-ghost). 이름표는 불투명 — 몸이 0.26 안개라 직업은 RoleChip 이 알린다(09.1-09) */
   ghost?: boolean;
+  /** 이름표 모서리에 걸 요소(직업 주장 배지). 이름표 폭·쌓임 높이를 늘리지 않는다 */
+  children?: ReactNode;
 }
 
-export function NameTag({ name, color, me, away, mine, done, blink, ghost }: NameTagProps) {
+export function NameTag({ name, color, me, away, mine, done, blink, ghost, children }: NameTagProps) {
   const cls = ["mv-tag", me && "is-me", away && "is-away", blink && "is-blink", mine && "is-mine", ghost && "is-ghost"]
     .filter(Boolean)
     .join(" ");
@@ -53,6 +59,7 @@ export function NameTag({ name, color, me, away, mine, done, blink, ghost }: Nam
           <V2Icon name="check" size={16} label={DONE_LABEL} />
         </span>
       ) : null}
+      {children}
     </span>
   );
 }
@@ -70,10 +77,18 @@ export type HeadStackProps = NameTagProps & {
   sure?: boolean;
   /** 도장 글자. 없으면 "유력", 밤 마피아 화면은 "확정" */
   sureLabel?: string;
+  /** 직업 주장 배지(09.1.1-08, UI-SPEC A-1). 서버 view.players[].badge 만 넘긴다. 없으면 배지 요소도 DOM 에 없다. data-role-chip 과 섞이지 않는다 */
+  claim?: BadgeId;
+  /** 말 바꿈 점 */
+  claimSwapped?: boolean;
+  /** 배지 팝 횟수(바뀔 때마다 늘어난다 — key 로 다시 마운트해 한 번 돈다). 없거나 0 이면 팝 없음 */
+  claimPop?: number;
+  /** "말 바꿈" 글자 알약을 지금 띄운다 */
+  claimNotice?: boolean;
 };
 
 // 바닥 가운데를 캐릭터 머리 꼭대기에 translate(-50%, -100%) 로 놓는 일은 쓰는 쪽(이름표 층, 06-13)이 한다.
-export function HeadStack({ name, color, me, away, typing, role, count, lead, sure, sureLabel, mine, done, blink, ghost }: HeadStackProps) {
+export function HeadStack({ name, color, me, away, typing, role, count, lead, sure, sureLabel, mine, done, blink, ghost, claim, claimSwapped, claimPop, claimNotice }: HeadStackProps) {
   const hasBadge = count !== undefined && count >= 1;
   return (
     <div
@@ -96,7 +111,11 @@ export function HeadStack({ name, color, me, away, typing, role, count, lead, su
       {role ? <RoleChip role={role} /> : null}
       {sure ? <SureStamp {...(sureLabel !== undefined ? { label: sureLabel } : {})} /> : null}
       {hasBadge ? <VoteBadge count={count} lead={lead} /> : null}
-      <NameTag name={name} color={color} me={me} away={away} mine={mine} done={done} blink={blink} ghost={ghost} />
+      <NameTag name={name} color={color} me={me} away={away} mine={mine} done={done} blink={blink} ghost={ghost}>
+        {claim !== undefined ? (
+          <ClaimBadge key={claimPop ?? 0} claim={claim} swapped={claimSwapped === true} pop={claimPop !== undefined && claimPop > 0} notice={claimNotice === true} />
+        ) : null}
+      </NameTag>
     </div>
   );
 }
