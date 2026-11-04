@@ -1,10 +1,10 @@
-// 정치 긴장 화면 E2E 흐름 (09.1.1-10·11, 결정 0066, UI-SPEC 흐름 E2E ①②⑥): politics-badge(직업 배지)·politics-whisper(귓속말)·politics-pin(지목 차례 핀 조명).
+// 정치 긴장 화면 E2E 흐름 (09.1.1-10·11·13, 결정 0066, UI-SPEC 흐름 E2E ①②③⑥): politics-badge(직업 배지)·politics-whisper(귓속말)·politics-pin(지목 차례 핀 조명)·politics-verdict(판결 순간).
 // flows.mjs 가 이미 3천 줄이라 흐름 본문은 이 파일에 둔다. flows.mjs 의 도우미는 `makePoliticsFlows(helpers)` 로 받는다(서로 import 하지 않는다 — 순환 없음).
 // 두 흐름 모두 폰 6종(LOBBY_EXTRA_SIZES)으로 돈다. 방장 화면과 손님 화면 둘을 함께 본다.
 // 판정 문턱은 lib.mjs 의 순수 검사 함수(floatButtonChecks·sheetFitChecks·claimBadgeChecks·pickButtonChecks)에 있고 여기서는 낮추지 않는다.
 // 귓속말 본문(canary)은 결과 표와 오류 문구에 쓰지 않는다 — 있는지 없는지(불리언)만 남긴다(T-09.1.1-28).
 import { hitsInputSurface, installFakeViewport, readGame, sampleWorld, screensOfWorld, SetupError, settle, skipTo, sleep, tapTurnPick, tapWorld } from "./browser.mjs";
-import { claimBadgeChecks, floatButtonChecks, graphemeCount, pickButtonChecks, sheetFitChecks } from "./lib.mjs";
+import { ballotFitChecks, claimBadgeChecks, floatButtonChecks, graphemeCount, pickButtonChecks, sheetFitChecks, verdictTimelineChecks } from "./lib.mjs";
 
 /** 31자소 본문: 입력칸이 30자소로 자르는지 본다. 앞 30자소가 실제로 서버에 가는 본문(canary)이다 */
 const LONG_31 = "귓속말카나리아본문은제삼자에게보이면안돼요가나다라마바사아자차";
@@ -745,5 +745,229 @@ export function makePoliticsFlows(h) {
     }
   }
 
-  return { politicsBadgeFlow, politicsWhisperFlow, politicsPinFlow };
+
+  /**
+   * 판결 순간(09.1.1-13, UI-SPEC 흐름 E2E ③, 결정 0066-3·7): 방장 + 봇 7(8인판, 이름 8자), 봇은 모두 찬성·방장을 지목 → 방장이 변론자.
+   * 둘째 판(봇 모두 반대 → 부결, 변론자가 산 채로 남음)에서 처형 진입 2.0초에 새로 고침을 건다. 시계는 페이지가 처형 단계를 처음 그린 시각(= 0)이고, 서버 시각과의 어긋남(지연)만큼 허용 오차가 있다(lib.mjs VERDICT_TOL).
+   * 첫째 판: 시간표(VT1~VT6)·묶음 배치(BF1~BF6, 알림 한 줄인 1.6초와 처형 알림 3.2초 두 번)·채팅 카드·직업 칩 없음·찬반 진행 중 view 에 day.ballots 없음.
+   */
+  async function politicsVerdictFlow(ctx) {
+    const id = "politics-verdict";
+    const rec = recorder(ctx);
+    // 봇 이름은 1~8자 무작위라 이름 글자 수 합 36 이상(평균 5 이상)이 될 때까지 다시 앉혀 알약이 한 줄 2개로 접히는 8인판 최악 모양(R=4)에 가깝게 만든다
+    const OPEN = { guests: 0, bots: 7, role: "citizen", vote: { exec: "yes", pick: "host" }, to: "discussion", hostNick: GAME_HOST_NICK, minBotNameChars: 36 };
+    const sc = `${id}/main`;
+
+    // ---- 첫째 판 ----
+    const game = await openGame(ctx, id, OPEN);
+    try {
+      const { hp, ht, hostSeat } = game;
+      await allAt([hp], "discussion");
+      // 처형 단계 기록기: 변할 때만 { t, phase, stage, yes, no, seat, strength, zoom, dim } 를 쌓는다(t = performance.now)
+      const hasHook = await hp.evaluate(() => window.__mfPin !== undefined);
+      if (!hasHook) throw new SetupError("window.__mfPin 훅이 없음(?e2e=1 세션이 아님)");
+      await hp.evaluate(() => {
+        const log = (window.__vLog = []);
+        let key = "";
+        const tick = () => {
+          const root = document.querySelector("[data-game-stage]");
+          const reveal = document.querySelector("[data-ballots]");
+          const shown = (side) => !!reveal && !!reveal.querySelector(`[data-ballot-side="${side}"]:not(.is-pending)`);
+          const p = window.__mfPin;
+          const e = {
+            phase: root?.getAttribute("data-phase") ?? "",
+            stage: reveal?.getAttribute("data-stage") ?? null,
+            yes: shown("yes"),
+            no: shown("no"),
+            seat: p ? p.seat : null,
+            strength: p ? Math.round(p.strength * 100) / 100 : 0,
+            zoom: p ? p.zoom : 1,
+            dim: document.querySelector(".mf-game__dim")?.getAttribute("data-dim") ?? null,
+          };
+          const k = JSON.stringify(e);
+          if (k !== key) {
+            key = k;
+            log.push({ t: performance.now(), ...e });
+          }
+          requestAnimationFrame(tick);
+        };
+        requestAnimationFrame(tick);
+      });
+      const relNow = () => hp.evaluate(() => {
+        const first = (window.__vLog ?? []).find((e) => e.phase === "execution");
+        return first ? performance.now() - first.t : null;
+      });
+      const waitRel = async (ms, label) => {
+        const started = performance.now();
+        for (;;) {
+          const r = await relNow();
+          if (r !== null && r >= ms) return r;
+          if (performance.now() - started > 12_000) throw new Error(`${label} (처형 단계 기록이 ${ms}ms 에 닿지 않음)`);
+          await sleep(Math.max(15, Math.min(150, r === null ? 80 : ms - r - 10)));
+        }
+      };
+
+      // 찬반 진행 중에는 view 에 day.ballots 가 없다(L19): 처형으로 넘기기 전 방장 view 와 찬반 단계 동안 보이는 마지막 view 를 본다
+      await skipTo(hp, ht, "verdict");
+      await allAt([hp], "verdict");
+      const during = await attempt(async () => {
+        const v = ht.last();
+        if (v.phase !== "verdict") throw new SetupError(`찬반 단계가 아님: ${v.phase}`);
+        if (v.day?.candidate !== hostSeat) throw new SetupError(`변론자가 방장이 아님: ${v.day?.candidate}`);
+        const leaked = v.day?.ballots !== undefined || JSON.stringify(v).includes('"ballots"');
+        return leaked ? { ok: false, detail: "찬반 진행 중 view 에 ballots 가 있다" } : true;
+      });
+      rec(sc, "V0", "찬반 진행 중에는 view 에 day.ballots 가 없다", during.ok, during.detail);
+      await skipTo(hp, ht, "execution");
+      await ht.waitFor((v) => v.phase === "execution" && v.day?.ballots !== undefined && v.day?.verdict !== undefined, 4000, "처형 단계 view(찬반 기록 포함)");
+      const exec = ht.last();
+      const passed = exec.day.verdict.passed === true;
+      const bots = exec.players.filter((p) => p.seat !== hostSeat);
+      if (bots.length !== 7) throw new SetupError(`봇이 7명이 아님: ${bots.length}`);
+
+      // V7 묶음 배치 — 알림이 한 줄인 1.6초
+      await waitRel(1500, "처형 단계를 못 봄");
+      const measure = () =>
+        hp.evaluate(() => {
+          const q = (s, r = document) => r.querySelector(s);
+          const qa = (s, r = document) => [...r.querySelectorAll(s)];
+          const rect = (el) => {
+            if (!el) return null;
+            const r = el.getBoundingClientRect();
+            return { left: r.left, top: r.top, width: r.width, height: r.height, right: r.right, bottom: r.bottom };
+          };
+          const root = q("[data-ballots]");
+          if (!root) return null;
+          const ann = q("[data-announce] .mf-announce__body");
+          const panel = q("[data-world-panel]");
+          const header = q(".mf-game__header");
+          return {
+            root: rect(root),
+            groups: qa("[data-ballot-side]", root).map((g) => ({ side: g.getAttribute("data-ballot-side"), rect: rect(g) })),
+            pills: qa("[data-ballot-seat]", root).map((p) => {
+              const nm = q(".mv-ballots__name", p);
+              return { side: p.classList.contains("is-no") ? "no" : "yes", rect: rect(p), nameFont: nm ? parseFloat(getComputedStyle(nm).fontSize) : null };
+            }),
+            panelTop: panel ? panel.getBoundingClientRect().top : null,
+            announceBottom: ann ? ann.getBoundingClientRect().bottom : null,
+            announceText: ann ? (ann.textContent ?? "").trim() : null,
+            viewport: { w: window.innerWidth, h: window.innerHeight },
+            compact: root.getAttribute("data-compact") === "true",
+            stageH: header && panel ? panel.getBoundingClientRect().top - header.getBoundingClientRect().bottom : null,
+            roleChips: qa("[data-role-chip]").length,
+            pillCount: qa("[data-ballot-seat]", root).length,
+          };
+        });
+      const m1 = await measure();
+      if (m1 === null) throw new Error("1.6초에 찬반 묶음이 없다");
+      recLines(rec, `${id}/fit`, ballotFitChecks(m1), " (1.6초 알림 한 줄)");
+      const rows = new Set(m1.pills.map((p) => Math.round(p.rect.top))).size;
+      rec(`${id}/fit`, "BF7", "알약이 봇 7명(찬성 7 · 반대 0)이다", m1.pillCount === 7, `알약 ${m1.pillCount}개 · 줄 수 R=${rows} · 이름 글자 수 ${bots.map((b) => graphemeCount(b.nickname)).join(",")} · ${m1.compact ? "얼굴만(2단계)" : "이름 알약"} · 알림 "${m1.announceText}"`, true);
+      // 처형된 변론자(방장)는 이 순간부터 유령 시점이라 칩이 정상이다 — 산 사람 화면의 칩 없음은 부결 판(둘째 판)에서 본다
+      const expectZoom = m1.stageH !== null && m1.stageH >= 360;
+      // G 공통 검사는 묶음이 있는 지금 한 번
+      await gameGH(ctx, id, "reveal", game.host);
+
+      // 처형(또는 부결) 알림이 선 뒤(3.2초): 알림이 한 줄이면 묶음과 겹치지 않는다
+      await waitRel(3200, "3.2초");
+      const m2 = await measure();
+      if (m2 === null) throw new Error("3.2초에 찬반 묶음이 없다");
+      recLines(rec, `${id}/fit`, ballotFitChecks(m2), " (3.2초 처형 알림)");
+
+      // V6 4.6초 뒤: 묶음은 없고 채팅 카드가 있다
+      await waitRel(4900, "4.9초");
+      const after = await hp.evaluate(() => {
+        const q = (s, r = document) => r.querySelector(s);
+        const qa = (s, r = document) => [...r.querySelectorAll(s)];
+        const card = q('[data-card="ballots"]');
+        const side = (k) => (card ? qa(`[data-ballot-side="${k}"] .mv-chat__ballots-name`, card).map((n) => (n.textContent ?? "").trim()) : null);
+        return { reveal: q("[data-ballots]") !== null, card: card !== null, yes: side("yes"), no: side("no") };
+      });
+      const botNames = bots.map((b) => b.nickname).sort();
+      const cardOk = after.card && JSON.stringify([...(after.yes ?? [])].sort()) === JSON.stringify(botNames) && (after.no ?? []).length === 0;
+      rec(sc, "V6", "4.6초 뒤 묶음은 사라지고 채팅 카드(찬성 7명 = 변론자 외 봇, 반대 0명)가 같은 시각에 도착해 있다", !after.reveal && cardOk, `묶음 ${after.reveal ? "남음" : "없음"} · 카드 ${after.card ? "있음" : "없음"} · 찬성 ${after.yes?.length ?? "-"} · 반대 ${after.no?.length ?? "-"}`);
+
+      // V1~V5 시간표(기록기)
+      await waitRel(5800, "5.8초");
+      const log = await hp.evaluate(() => window.__vLog);
+      recLines(rec, `${id}/timeline`, verdictTimelineChecks(log, { passed, candidate: hostSeat, expectZoom }), ` (${passed ? "처형" : "부결"}, 스테이지 높이 ${m1.stageH === null ? "?" : Math.round(m1.stageH)})`);
+      const t0 = log.find((e) => e.phase === "execution")?.t ?? 0;
+      const yesAt = log.find((e) => e.t >= t0 && e.yes)?.t;
+      const noAt = log.find((e) => e.t >= t0 && e.no)?.t;
+      rec(`${id}/timeline`, "VT-info", "측정 시각(참고)", true, `찬성 ${yesAt ? Math.round(yesAt - t0) : "-"}ms · 반대 ${noAt ? Math.round(noAt - t0) : "-"}ms · 어둡게 막 ${log.some((e) => e.t >= t0 && e.dim === "verdict") ? "켜짐" : "없음"}`, true);
+      const dimSeen = log.some((e) => e.t >= t0 && e.dim === "verdict");
+      rec(sc, "V3b", "어둡게 막(data-dim=verdict)이 처형 진입 때 켜졌다가 4.6초 뒤 걷힌다", dimSeen && log.some((e) => e.t > t0 + 4000 && e.phase === "execution" && e.dim !== "verdict"), `켜짐 ${dimSeen}`);
+    } finally {
+      await closeGame(game);
+    }
+
+    // ---- 둘째 판: 처형 진입 2.0초에 새로 고침 → 첫 화면에 묶음이 애니메이션 없이 바로 있다 ----
+    // 둘째 판은 모두 반대(부결)라 변론자 방장이 산 채로 남는다 — 산 사람 화면의 직업 칩 없음(V8)을 본다
+    const game2 = await openGame(ctx, id, { ...OPEN, vote: { exec: "no", pick: "host" } });
+    try {
+      const { hp, ht, hostSeat } = game2;
+      const sc2 = `${id}/reload`;
+      await skipTo(hp, ht, "verdict");
+      await skipTo(hp, ht, "execution");
+      const t0Node = performance.now();
+      await ht.waitFor((v) => v.phase === "execution" && v.day?.ballots !== undefined, 4000, "처형 단계 view");
+      const waitMs = 2000 - (performance.now() - t0Node);
+      if (waitMs > 0) await sleep(waitMs);
+      await hp.reload({ waitUntil: "domcontentloaded" });
+      const first = await attempt(async () => {
+        let handle;
+        try {
+          handle = await hp.waitForFunction(
+            () => {
+              const el = document.querySelector("[data-ballots]");
+              if (!el) return false;
+              return {
+                stage: el.getAttribute("data-stage"),
+                enter: el.querySelectorAll(".is-enter").length,
+                pending: el.querySelectorAll(".is-pending").length,
+                pills: el.querySelectorAll("[data-ballot-seat]").length,
+                dim: document.querySelector(".mf-game__dim")?.getAttribute("data-dim") ?? null,
+              };
+            },
+            null,
+            { polling: "raf", timeout: 3200 },
+          );
+        } catch {
+          throw new SetupError("새로 고침 뒤 4.6초 안에 묶음을 못 봄(느린 새로 고침)");
+        }
+        const s = await handle.jsonValue();
+        if (s.stage !== "both" || s.enter !== 0 || s.pending !== 0 || s.pills !== 7) return { ok: false, detail: `첫 화면 묶음 stage ${s.stage} · 등장 모션 ${s.enter} · 대기 ${s.pending} · 알약 ${s.pills}` };
+        return { ok: true, detail: `stage ${s.stage} · 알약 ${s.pills}` };
+      });
+      rec(sc2, "V9", "(부결 판) 처형 진입 2.0초에 새로 고침하면 첫 화면에 찬반 묶음이 애니메이션 없이 바로 있다(두 묶음·알약 7개)", first.ok, first.detail);
+      const alive = await hp.evaluate(() => ({ chips: document.querySelectorAll("[data-role-chip]").length, ghost: document.querySelector("[data-ghost-view]") !== null }));
+      rec(sc2, "V8", "산 사람 화면(부결로 살아남은 변론자)에 직업 칩이 없다", alive.chips === 0 && !alive.ghost, `칩 ${alive.chips}개 · 유령 시점 ${alive.ghost}`);
+      const dimNow = await hp.evaluate(() => document.querySelector(".mf-game__dim")?.getAttribute("data-dim") ?? null);
+      rec(sc2, "V9b", "새로 고침 뒤에도 어둡게 막이 켜져 있다", dimNow === "verdict", `data-dim ${dimNow}`);
+      // 줌: 훅의 첫 1 이 아닌 값이 곧바로 1.10 이다(아래 stageH 조건이 맞을 때만)
+      const z = await attempt(async () => {
+        const stage = await readGame(hp);
+        const stageH = stage?.stage ? stage.stage.bottom - stage.stage.top : null;
+        if (stageH === null) throw new SetupError("스테이지를 못 읽음");
+        if (stageH < 360) {
+          const peek = await hp.evaluate(() => window.__mfPin?.zoom ?? null);
+          return peek === 1 || peek === null ? { ok: true, detail: `스테이지 ${Math.round(stageH)} < 360 이라 줌 없음` } : { ok: false, detail: `작은 스테이지에서 줌 ${peek}` };
+        }
+        let h;
+        try {
+          h = await hp.waitForFunction(() => (window.__mfPin && window.__mfPin.zoom !== 1 ? window.__mfPin.zoom : false), null, { polling: "raf", timeout: 2500 });
+        } catch {
+          return { ok: false, detail: "줌이 1.10 으로 오르지 않음" };
+        }
+        const v = await h.jsonValue();
+        return Math.abs(v - 1.1) <= 0.01 ? { ok: true, detail: `첫 값 ${v}` } : { ok: false, detail: `첫 값 ${v} (애니메이션으로 시작)` };
+      });
+      rec(sc2, "V9c", "새로 고침 뒤 줌이 현재 값(1.10, 높이 360 미만은 1)으로 시작한다", z.ok, z.detail);
+      void hostSeat;
+    } finally {
+      await closeGame(game2);
+    }
+  }
+
+  return { politicsBadgeFlow, politicsWhisperFlow, politicsPinFlow, politicsVerdictFlow };
 }

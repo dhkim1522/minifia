@@ -1334,7 +1334,7 @@ async function untilGame(page, pred, ms = 6000, label = "게임 화면") {
 }
 
 /** 방장 + 손님(사람 페이지) + 봇 → 시작 → to 단계까지. 돌려주는 값: { host, hp, ht, hostSeat, guests: [{ context, page, tracker, takeIssues, seat }] } */
-async function openGame(ctx, flowId, { guests = 0, bots = 3, role = "citizen", vote = { exec: "yes", pick: "host" }, to = "discussion", hostNick = undefined, guestInitScripts = [] } = {}) {
+async function openGame(ctx, flowId, { guests = 0, bots = 3, role = "citizen", vote = { exec: "yes", pick: "host" }, to = "discussion", hostNick = undefined, guestInitScripts = [], minBotNameChars = 0 } = {}) {
   const host = await startHost(ctx, flowId, hostNick ? { nickname: hostNick } : {});
   const { page: hp, tracker: ht } = host;
   const pages = [];
@@ -1345,6 +1345,13 @@ async function openGame(ctx, flowId, { guests = 0, bots = 3, role = "citizen", v
   await ht.waitFor((v) => v.players.length === guests + 1, 6000, `방장 쪽 인원 ${guests + 1}`);
   await openTestSheet(hp);
   if (bots > 0) await setBots(hp, ht, bots);
+  // 봇 이름 길이는 1~8자 무작위(첫 봇만 8자)라, 가장 넓은 이름표·찬반 알약 모양이 필요한 흐름은 이름 글자 수 합이 찰 때까지 봇을 다시 앉힌다(최대 12번)
+  for (let tries = 0; bots > 0 && minBotNameChars > 0 && tries < 12; tries++) {
+    const total = ht.last().players.filter((p) => p.seat !== ht.last().me.seat).reduce((n, p) => n + graphemeCount(p.nickname), 0);
+    if (total >= minBotNameChars) break;
+    await setBots(hp, ht, 0);
+    await setBots(hp, ht, bots);
+  }
   if (bots > 0) await setBotVote(hp, ht, vote);
   await chooseRole(hp, ht, role);
   await startGame(hp, ht);
@@ -3008,7 +3015,7 @@ async function wakeLockFlow(ctx) {
 }
 
 // 정치 긴장 화면(09.1.1-10·11): 직업 배지·귓속말·지목 핀 조명. 흐름 본문은 politics.mjs, 도우미만 넘긴다
-const { politicsBadgeFlow, politicsWhisperFlow, politicsPinFlow } = makePoliticsFlows({ recorder, openGame, closeGame, allAt, attempt, gameGH, walkableCentersOfApp, GAME_HOST_NICK });
+const { politicsBadgeFlow, politicsWhisperFlow, politicsPinFlow, politicsVerdictFlow } = makePoliticsFlows({ recorder, openGame, closeGame, allAt, attempt, gameGH, walkableCentersOfApp, GAME_HOST_NICK });
 
 export const FLOWS = [
   // lobby·world 는 LOBBY_SIZES 6개 크기로 돈다: 기본 크기 4개에 더해 390x844·402x874 (run.mjs 의 extraSizes)
@@ -3034,6 +3041,8 @@ export const FLOWS = [
   { id: "politics-whisper", run: politicsWhisperFlow, extraSizes: LOBBY_EXTRA_SIZES },
   // 지목 차례 핀 조명(09.1.1-11): 모이는 중 없음 → 차례 주인에게 켜짐 → 확정 때 0.9초 이동 → 끝 알림에서 꺼짐. window.__mfPin 훅을 읽는다. 폰 6종
   { id: "politics-pin", run: politicsPinFlow, extraSizes: LOBBY_EXTRA_SIZES },
+  // 판결 순간(09.1.1-13): 처형 진입 기준 어둡게 막·핀·줌·찬성/반대 묶음 시간표, 8인판 R=4 배치, 채팅 카드, 새로 고침 즉시 표시. 폰 6종
+  { id: "politics-verdict", run: politicsVerdictFlow, extraSizes: LOBBY_EXTRA_SIZES },
   // 재접속·예산(06-18): 폰 크기와 곱하지 않고 자기 크기로 한 번. deployhold 는 배포와 동시에 돌리는 흐름(06-19)이라 --only 없이는 빠진다
   { id: "reconnect", run: reconnectFlow, size: RECONNECT_SIZE },
   { id: "deployhold", run: deployHoldFlow, size: RECONNECT_SIZE, skipByDefault: true },
