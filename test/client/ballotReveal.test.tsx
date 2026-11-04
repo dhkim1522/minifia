@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import "../helpers/singleLineErrors";
@@ -127,5 +128,86 @@ describe("BallotReveal — compact (2단계)", () => {
     expect(container.querySelectorAll(".mv-ballots__name").length).toBe(0);
     expect(container.querySelectorAll("[data-ballot-seat]").length).toBe(5);
     expect(root.querySelector(".mv-sr")?.textContent).toContain("서연");
+  });
+});
+
+// 09.1.1-12 Task 3 (UI-SPEC C-2 2단계): 자기 영역에 내용이 넘치면 얼굴만. happy-dom 은 레이아웃을 재지 못해 높이를 정의해 준다.
+function measure(clientHeight: number, full: number, compactH: number) {
+  const proto = HTMLElement.prototype;
+  Object.defineProperty(proto, "clientHeight", { configurable: true, get: () => clientHeight });
+  Object.defineProperty(proto, "scrollHeight", {
+    configurable: true,
+    get(this: HTMLElement) {
+      return this.querySelector(".mv-ballots__name") ? full : compactH;
+    },
+  });
+}
+const unmeasure = () => {
+  delete (HTMLElement.prototype as unknown as Record<string, unknown>).clientHeight;
+  delete (HTMLElement.prototype as unknown as Record<string, unknown>).scrollHeight;
+};
+
+describe("BallotReveal — 측정해서 2단계로 (360×560 여유 1)", () => {
+  afterEach(unmeasure);
+  const SEVEN_Y = [0, 1, 2, 3].map((s) => voter(s));
+  const SEVEN_N = [4, 5, 6].map((s) => voter(s));
+
+  it("R=4 필요 232 가 가용 233 에 들어가면 이름 있는 알약을 유지한다", () => {
+    measure(233, 232, 152);
+    const { container } = render(<BallotReveal yes={SEVEN_Y} no={SEVEN_N} stage="both" />);
+    expect(container.querySelector("[data-ballots]")?.getAttribute("data-compact")).toBe("false");
+    expect(container.querySelectorAll(".mv-ballots__name").length).toBe(7);
+  });
+
+  it("232 필요가 가용 200 을 넘으면 얼굴만 그린다 — 요약 한 줄(이름 포함)은 그대로", () => {
+    measure(200, 232, 152);
+    const { container } = render(<BallotReveal yes={SEVEN_Y} no={SEVEN_N} stage="both" />);
+    const root = container.querySelector("[data-ballots]")!;
+    expect(root.getAttribute("data-compact")).toBe("true");
+    expect(container.querySelectorAll(".mv-ballots__name").length).toBe(0);
+    expect(container.querySelectorAll("[data-ballot-seat]").length).toBe(7);
+    expect(root.querySelector(".mv-sr")?.textContent).toContain("서연");
+  });
+
+  it("얼굴만으로도 넘치면 더 줄이지 않는다(되돌아가 깜빡이지 않는다)", () => {
+    measure(100, 232, 152);
+    const { container } = render(<BallotReveal yes={SEVEN_Y} no={SEVEN_N} stage="both" />);
+    expect(container.querySelector("[data-ballots]")?.getAttribute("data-compact")).toBe("true");
+  });
+
+  it("얼굴 원은 compact 에서 32px, 평소 24px", () => {
+    const { container, rerender } = render(<BallotReveal yes={[voter(0)]} no={[]} stage="both" />);
+    expect(container.querySelector<HTMLElement>(".mv-ballots__face")?.style.width).toBe("24px");
+    rerender(<BallotReveal yes={[voter(0)]} no={[]} stage="both" compact />);
+    expect(container.querySelector<HTMLElement>(".mv-ballots__face")?.style.width).toBe("32px");
+  });
+});
+
+describe("BallotReveal — 이름 8자 전각 7명", () => {
+  it("이름이 말줄임 없이 그려지고(keep-all 클래스 규칙) 알약이 줄 바꿈 가능한 flex-wrap 묶음 안에 있다", () => {
+    const long = "가나다라마바사아";
+    const yes = [0, 1, 2, 3].map((s): Voter => ({ ...voter(s), name: long }));
+    const no = [4, 5, 6].map((s): Voter => ({ ...voter(s), name: long }));
+    const { container } = render(<BallotReveal yes={yes} no={no} stage="both" />);
+    const names = [...container.querySelectorAll(".mv-ballots__name")].map((n) => n.textContent);
+    expect(names).toEqual(Array(7).fill(long));
+    const css = readFileSync("src/styles/v2.css", "utf8");
+    expect(css).toMatch(/\.mv-ballots__row\s*\{[^}]*flex-wrap:\s*wrap/);
+    expect(css).toMatch(/\.mv-ballots__name\s*\{[^}]*word-break:\s*keep-all/);
+    expect(css).not.toMatch(/\.mv-ballots[^{]*\{[^}]*text-overflow/);
+  });
+});
+
+describe("BallotReveal — 재접속·모션 줄이기 CSS", () => {
+  it("instant 는 등장 클래스도 숨김 클래스도 없다(재접속 0.6~4.6초 사이)", () => {
+    const { container } = render(<BallotReveal yes={YES} no={NO} stage="none" instant />);
+    expect(container.querySelector(".is-enter, .is-pending")).toBeNull();
+    expect(container.querySelectorAll("[data-ballot-seat]").length).toBe(5);
+  });
+
+  it("prefers-reduced-motion 에서 mv-ballots 애니메이션·전환이 none", () => {
+    const css = readFileSync("src/styles/v2.css", "utf8");
+    const reduce = css.match(/@media \(prefers-reduced-motion: reduce\)\s*\{[\s\S]*?\n\}/g)?.join("\n") ?? "";
+    expect(reduce).toMatch(/\.mv-ballots[^{]*\{[^}]*animation:\s*none/);
   });
 });

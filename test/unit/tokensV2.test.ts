@@ -255,3 +255,55 @@ describe("귓속말 CSS 규칙 (09.1.1-09)", () => {
     expect(reduce).toMatch(/\.mv-tag\.is-blink\s*\{\s*animation:\s*none;\s*box-shadow:\s*inset 0 0 0 2px var\(--gray-100\)/);
   });
 });
+
+// 09.1.1-12: 찬반 기록 공개·카드 CSS 정적 검사 (UI-SPEC C-2 "찬성/반대 구별", Typography, "쓰지 않을 것")
+describe("찬반 기록 CSS 규칙 (09.1.1-12)", () => {
+  const V2 = readFileSync(new URL("../../src/styles/v2.css", import.meta.url), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+  const rules = [...V2.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({ selector: (m[1] ?? "").trim(), body: m[2] ?? "" }));
+  const NEW = rules.filter((r) => /(mv-ballots|mv-chat__ballots|mv-chat__card--ballots)/.test(r.selector));
+
+  it("새 규칙이 있다(머리·알약·얼굴·이름·채팅 카드)", () => {
+    for (const sel of [".mv-ballots", ".mv-ballots__head", ".mv-ballots__pill", ".mv-ballots__face", ".mv-ballots__name", ".mv-chat__ballots-name"]) {
+      expect(NEW.some((r) => r.selector === sel), sel).toBe(true);
+    }
+  });
+
+  it("hex·rgb 색 리터럴이 없다 — tokens.css 변수만", () => {
+    for (const r of NEW) {
+      expect(r.body, r.selector).not.toMatch(/#[0-9a-fA-F]{3,8}\b/);
+      expect(r.body, r.selector).not.toMatch(/\brgba?\(/);
+    }
+  });
+
+  it("진홍·놋쇠·초록 등 의미 색 변수가 없다 — 색 변수는 night/gray/overlay/seat 계열뿐", () => {
+    for (const r of NEW) {
+      for (const m of r.body.matchAll(/var\(--([a-z0-9-]+)\)/g)) {
+        const name = m[1] ?? "";
+        if (/^(space|radius|tap|control|font|shadow|dur|ease|z|mf)-?/.test(name)) continue;
+        expect(name, `${r.selector}: --${name}`).toMatch(/^(night|gray|overlay-ink|ballot-seat)/);
+      }
+      expect(r.body, r.selector).not.toMatch(/--(crimson|brass|cream|green|amber|felt)-/);
+    }
+  });
+
+  it("글자 크기는 14·16 뿐이다", () => {
+    for (const r of NEW) for (const m of r.body.matchAll(/font-size:\s*([^;]+);/g)) expect(["14px", "16px"], `${r.selector}: ${m[1]}`).toContain((m[1] ?? "").trim());
+    expect(NEW.some((r) => /font-size/.test(r.body))).toBe(true);
+  });
+
+  it("찬성/반대 알약은 테두리 변수 gray-100 / gray-500 으로만 갈린다", () => {
+    const body = (sel: string) => NEW.find((r) => r.selector === sel)?.body ?? "";
+    expect(body(".mv-ballots__pill")).toMatch(/border:\s*1\.5px solid var\(--gray-100\)/);
+    expect(body(".mv-ballots__pill.is-no")).toMatch(/border-color:\s*var\(--gray-500\)/);
+    expect(body(".mv-ballots__pill")).toMatch(/background:\s*var\(--overlay-ink\)/);
+  });
+
+  it("영역은 포인터 이벤트를 받지 않고 알약 높이 32·묶음 머리 28이다", () => {
+    const body = (sel: string) => NEW.find((r) => r.selector === sel)?.body ?? "";
+    expect(body(".mv-ballots")).toMatch(/pointer-events:\s*none/);
+    expect(body(".mv-ballots")).toMatch(/top:\s*131px/);
+    expect(body(".mv-ballots")).toMatch(/--mf-panel-h/);
+    expect(body(".mv-ballots__pill")).toMatch(/height:\s*32px/);
+    expect(body(".mv-ballots__head")).toMatch(/height:\s*28px/);
+  });
+});
