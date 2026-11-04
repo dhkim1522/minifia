@@ -5,9 +5,11 @@ import { describe, expect, it } from "vitest";
 import type { RoomView, ServerMessage } from "../../shared/protocol";
 import { SHOWDOWN_GATHER_MS, SHOWDOWN_POINT_MS, SHOWDOWN_REVEAL_MS, SHOWDOWN_TURN_MS, PICK_GAP_MS } from "../../shared/game/phases";
 import {
-  chatSend, chatsOf, closePhase, connect, editRoom, framesOf, hello, lastViewOf, mapPlayers, mark, pointAs, settle, showdownAll, storedRoom, summary, threeAliveGame,
+  chatSend, chatsOf, closePhase, connect, editRoom, framesOf, hello, lastViewOf, layOf, mapPlayers, mark, pointAs, settle, showdownAll, storedRoom, summary, threeAliveGame,
+  worldFramesOf,
 } from "./helpers";
 import type { Game } from "./helpers";
+import { ringSlots } from "../../shared/game/gather";
 
 /** 마감을 한 번 넘기고 모든 소켓이 그 state 를 받은 뒤의 마지막 view 들. */
 async function stepViews(g: Game): Promise<RoomView[]> {
@@ -305,4 +307,39 @@ describe("마지막 3인 — 재접속 (결정 0066-5)", () => {
     expect(Object.hasOwn(other.view.me, "ballot")).toBe(false);
     expect(other.view.day?.showdown?.voted).toEqual([0]);
   }, 60_000);
+});
+
+/** 한 소켓이 from 이후 받은 world.move 의 (좌석 -> 마지막 끝점 'x,z'). */
+function movesSince(sock: Game["socks"][number], from: number): Map<number, string> {
+  const out = new Map<number, string>();
+  for (const m of worldFramesOf(sock, from)) if (m.k === "move") out.set(m.s, `${m.p[m.p.length - 2]},${m.p[m.p.length - 1]}`);
+  return out;
+}
+
+describe("마지막 3인 — 모이기 배치 (결정 0066-5, 09.1.1-07)", () => {
+  it("3명 낮 진입 직후 산 세 사람의 world move 가 방 전원에게 가고 끝점이 ringSlots(3) 다; 키는 '{일차}:showdown'", async () => {
+    const g = await threeAliveGame();
+    const marks = g.socks.map((sock) => mark(sock));
+    await closePhase(g.code); // 낮 시작 발표 → 모이기
+    for (const sock of g.socks) await settle(sock, mark(sock));
+    expect((await storedRoom(g.code)).phase).toBe("showdown");
+    const triangle = ringSlots(3).map(([x, z]) => `${x},${z}`).sort().join("|");
+    for (const [i, sock] of g.socks.entries()) {
+      const moves = movesSince(sock, marks[i]!);
+      expect(`${i}/${[...moves.keys()].sort().join(",")}`).toBe(`${i}/0,1,2`);
+      expect(`${i}/${[...moves.values()].sort().join("|")}`).toBe(`${i}/${triangle}`);
+    }
+    expect((await layOf(g.code)).key).toMatch(/^\d+:showdown$/);
+  }, 60_000);
+
+  it("처형으로 이어져도 같은 자리를 쓴다: 처형 단계 전환에 새 move 프레임이 없다 (키 '{일차}:exec')", async () => {
+    const g = await threeAliveGame();
+    await stepViews(g);
+    const marks = g.socks.map((sock) => mark(sock));
+    await showdownAll(g.code, g.actors, { points: { 0: 1, 2: 1 } });
+    for (const sock of g.socks) await settle(sock, mark(sock));
+    expect((await storedRoom(g.code)).phase).toBe("execution");
+    expect(g.socks.map((s, i) => movesSince(s, marks[i]!).size).join(",")).toBe(g.socks.map(() => "0").join(","));
+    expect((await layOf(g.code)).key).toMatch(/^\d+:exec$/);
+  }, 90_000);
 });

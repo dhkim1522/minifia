@@ -404,6 +404,71 @@ describe("layoutFor — 결선: 두 후보가 가운데 마주 선다 (결정 00
   });
 });
 
+describe("layoutFor — 마지막 3인: 산 세 사람이 삼각형 자리로 (결정 0066-5)", () => {
+  // 5명 판 2일차: 좌석 3·4 가 유령이라 산 사람은 0·1·2.
+  const DEAD = [3, 4];
+  const showdownState = (day = 2): RoomState => stateAt("showdown", 5, { day, dead: DEAD });
+
+  it("layoutKey: showdown → '{일차}:showdown'", () => {
+    expect(layoutKey(showdownState(3))).toBe("3:showdown");
+  });
+
+  it("산 세 사람이 ringSlots(3) 의 서로 다른 세 점으로 간다(유령은 움직이지 않는다)", () => {
+    const lay = layoutFor(showdownState(), worldOf(5), 1000)!;
+    expect(lay.key).toBe("2:showdown");
+    expect(lay.moves.map((m) => m.playerId).join(",")).toBe([0, 1, 2].map(idOf).join(","));
+    expect(sortedStr(lay.moves.map((m) => str(m.dest)))).toBe(sortedStr(ringSlots(3).map(str)));
+    expect(sortedStr(Object.values(lay.slots).map(str))).toBe(sortedStr(ringSlots(3).map(str)));
+    expect(Object.keys(lay.slots).sort().join(",")).toBe([0, 1, 2].map(idOf).join(","));
+  });
+
+  it("멱등: 적용하고 lay 를 저장한 뒤 다시 부르면 이동이 없다 — 걷는 도중에도", () => {
+    const applied = applyLayout(showdownState(), worldOf(5), 1000);
+    for (const now of [1000, 1400, 3000, 90_000]) expect(layoutFor(showdownState(), applied, now)!.moves.length).toBe(0);
+    expect(sortedStr([0, 1, 2].map((i) => endOf(applied.segs[idOf(i)]!)))).toBe(sortedStr(ringSlots(3).map(str)));
+  });
+
+  it("지난 일차의 둘레 자리 기억은 쓰지 않는다 — 새로 배정받는다", () => {
+    const yesterday = applyLayout(stateAt("nomination", 5, { day: 1, dead: [4] }), worldOf(5), 1000);
+    expect(yesterday.lay!.key).toBe("1:ring");
+    const lay = layoutFor(showdownState(2), yesterday, 90_000)!;
+    expect(sortedStr(Object.values(lay.slots).map(str))).toBe(sortedStr(ringSlots(3).map(str)));
+    expect(lay.moves.length).toBe(3);
+  });
+
+  it("처형 단계는 결전 때 기억한 자리를 이어 쓴다: 이동 없음, 자리 기억 그대로 (key '2:exec')", () => {
+    const atShowdown = applyLayout(showdownState(), worldOf(5), 1000);
+    const exec = stateAt("execution", 5, { day: 2, dead: DEAD, candidate: 1, passed: true });
+    const lay = layoutFor(exec, atShowdown, 60_000)!;
+    expect(lay.key).toBe("2:exec");
+    expect(lay.moves.length).toBe(0);
+    for (const i of [0, 1, 2]) expect(str(lay.slots[idOf(i)]!)).toBe(str(atShowdown.lay!.slots[idOf(i)]!));
+  });
+
+  it("처형 단계에서 처형된 사람(이미 유령)도 결전 자리를 잃지 않는다", () => {
+    const atShowdown = applyLayout(showdownState(), worldOf(5), 1000);
+    const exec = stateAt("execution", 5, { day: 2, dead: [1, 3, 4], candidate: 1, passed: true });
+    const lay = layoutFor(exec, atShowdown, 60_000)!;
+    expect(lay.moves.length).toBe(0);
+  });
+
+  it("무대 원기둥이 막혀 있어도 ringSlots(3) 어느 자리에서든, 입장 지점·결선 자리·다른 둘레 자리에서 정확히 도착한다", () => {
+    const froms: Slot[] = [
+      ...ringSlots(3),
+      ...ringSlots(8),
+      ...ringSlots(5),
+      ...RUNOFF_SPOTS,
+      ...BAR_SPAWNS.map((sp): Slot => [Math.round(sp.x * UNIT), Math.round(sp.z * UNIT)]),
+    ];
+    for (const from of froms) {
+      for (const spot of ringSlots(3)) {
+        const seg = planMoveSegment(restSegment(from[0], from[1], 0), { x: spot[0], z: spot[1] }, 0, BAR_MAP);
+        expect(`${from}>${seg.p[seg.p.length - 2]},${seg.p[seg.p.length - 1]}`).toBe(`${from}>${str(spot)}`);
+      }
+    }
+  });
+});
+
 describe("layoutFor — 변론·찬반: 변론자는 무대, 나머지는 자기 자리 (DAY-05)", () => {
   it.each(["defense", "verdict"] as PhaseId[])("%s: 지목 때의 lay 가 있으면 변론자만 무대(0,0)로 가고 나머지는 이동 없음, key '2:stage'", (phase) => {
     const nom = stateAt("nomination", 6);
