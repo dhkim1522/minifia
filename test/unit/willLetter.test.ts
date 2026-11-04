@@ -1,7 +1,7 @@
 // 유언 편지 순수 모델 시험 (09.1-10, 결정 0063-3, UI-SPEC C-1~C-3, M-7·M-8·M-9)
 import { describe, expect, it } from "vitest";
 import type { DayView, PhaseId, PublicPlayer, RoomView } from "../../shared/protocol";
-import type { RoomState } from "../../shared/game/state";
+import type { RoomState } from "../../shared/game/room";
 import { morningMsOf } from "../../shared/game/discussion";
 import {
   chooseTier,
