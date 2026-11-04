@@ -505,3 +505,34 @@ describe("useChat: 카드 줄 매핑 (MORN-02)", () => {
     expect(`${result.current.messages[0]?.kind}|${result.current.messages[0]?.card}`).toBe("player|undefined");
   });
 });
+
+// 09.1.1-12 (UI-SPEC C-3): ballots 카드 → ChatPanelMessage{card ballots}. 이름은 view.players 에서 좌석으로 찾는다
+describe("useChat: ballots 카드 (09.1.1-12)", () => {
+  const bView = () => makeView({ players: [player(0, "민수"), player(1, "하윤"), player(2, "서연"), player(3, "지호")] });
+
+  it("복원된 카드는 좌석 → 이름 목록으로 바뀐다(좌석 못 찾으면 줄에서 뺀다)", () => {
+    const { result, receive } = mount(bView());
+    receive({ t: "chatLog", lines: [line(1, 3, "0,2,7|1", { k: "ballots" })] });
+    const m = result.current.messages[0];
+    expect(`${m?.kind}|${m?.card}`).toBe("card|ballots");
+    expect(JSON.stringify(m?.ballots)).toBe(JSON.stringify({ yes: [{ seat: 0, name: "민수" }, { seat: 2, name: "서연" }], no: [{ seat: 1, name: "하윤" }] }));
+  });
+
+  it("본문이 틀리면 카드를 그리지 않는다(예외 없음, T-09.1.1-35)", () => {
+    const { result, receive } = mount(bView());
+    receive({ t: "chatLog", lines: [line(1, 3, "가나다", { k: "ballots" }), line(2, 3, "1|1", { k: "ballots" })] });
+    expect(result.current.messages.length).toBe(0);
+  });
+
+  it("라이브 카드는 4600ms 뒤에 나타난다", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(10_000);
+    const { result, receive } = mount(bView());
+    receive({ t: "chat", ...line(1, 3, "0|1", { k: "ballots" }) });
+    expect(result.current.messages.length).toBe(0);
+    act(() => {
+      vi.advanceTimersByTime(4600);
+    });
+    expect(result.current.messages.map((m) => m.card).join()).toBe("ballots");
+  });
+});

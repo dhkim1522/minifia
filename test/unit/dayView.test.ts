@@ -3,10 +3,11 @@
 // 실패 출력은 한 줄이어야 해서(TAP) 비교는 가능한 한 JSON 문자열로 한다.
 import { describe, expect, it } from "vitest";
 import type { DayView, PhaseId, PickTurnView, PublicPlayer, RoomView } from "../../shared/protocol";
-import { EXECUTION_MS } from "../../shared/game/phases";
+import { EXECUTION_MS, VERDICT_LEAD_MS } from "../../shared/game/phases";
 import {
   ANNOUNCE_DAY_MS,
   ANNOUNCE_EXEC_MS,
+  ANNOUNCE_LEAD_MS,
   ANNOUNCE_MORNING_AT,
   ANNOUNCE_MORNING_MS,
   ANNOUNCE_NIGHT_MS,
@@ -270,30 +271,38 @@ describe("dayEvents — 단계 진입 줄 (DAY-05·06)", () => {
 });
 
 describe("dayEvents — 찬반 결과·처형·처형 없음 (DAY-06)", () => {
-  it("찬반 → 처형(통과): 즉시 '찬성 5 · 반대 2', 2.0초에 '{이름} 님 처형' 알림과 유령 떠오름", () => {
+  it("찬반 → 처형(통과): 0.6초에 '찬성 5 · 반대 2', 2.6초에 '{이름} 님 처형' 알림과 유령 떠오름 (판결 앞머리 0.6초, 결정 0066-7)", () => {
     const events = dayEvents(verdictView(), executionView(5, 2, true));
     same(events.lines, [
-      { kind: "hot", text: "찬성 5 · 반대 2" },
-      { kind: "hot", text: "지호 님 처형", at: 2000 },
+      { kind: "hot", text: "찬성 5 · 반대 2", at: 600 },
+      { kind: "hot", text: "지호 님 처형", at: 2600 },
     ]);
     same(events.announces, [
-      { text: "찬성 5 · 반대 2", at: 0, ms: 2000 },
-      { text: "지호 님 처형", at: 2000, ms: 3000 },
+      { text: "찬성 5 · 반대 2", at: 600, ms: 2000 },
+      { text: "지호 님 처형", at: 2600, ms: 3000 },
     ]);
-    same(events.fx, [{ kind: "ghostRise", seat: 3, at: 2000 }]);
+    same(events.fx, [{ kind: "ghostRise", seat: 3, at: 2600 }]);
   });
 
-  it("찬반 → 처형(부결): 2.0초에 system '처형 없음' 과 1.4초 알림, 연출 없음", () => {
+  it("찬반 → 처형(부결): 0.6초 득표, 2.6초에 system '처형 없음' 과 1.4초 알림, 연출 없음", () => {
     const events = dayEvents(verdictView(), executionView(2, 5, false));
     same(events.lines, [
-      { kind: "hot", text: "찬성 2 · 반대 5" },
-      { kind: "system", text: "처형 없음", at: 2000 },
+      { kind: "hot", text: "찬성 2 · 반대 5", at: 600 },
+      { kind: "system", text: "처형 없음", at: 2600 },
     ]);
     same(events.announces, [
-      { text: "찬성 2 · 반대 5", at: 0, ms: 2000 },
-      { text: "처형 없음", at: 2000, ms: 1400 },
+      { text: "찬성 2 · 반대 5", at: 600, ms: 2000 },
+      { text: "처형 없음", at: 2600, ms: 1400 },
     ]);
     same(events.fx, []);
+  });
+
+  it("마지막 3인 처형(day.verdict.last): 득표 줄·알림 없이 0초에 '{이름} 님 처형' 3.0초, 유령은 0초 (결정 0066-5)", () => {
+    const last = executionView(0, 0, true, { day: { verdict: { yes: 0, no: 0, passed: true, last: true } } });
+    const events = dayEvents(verdictView(), last);
+    same(events.lines, [{ kind: "hot", text: "지호 님 처형", at: 0 }]);
+    same(events.announces, [{ text: "지호 님 처형", at: 0, ms: 3000 }]);
+    same(events.fx, [{ kind: "ghostRise", seat: 3, at: 0 }]);
   });
 
   it("지목 → 밤(동률·0표): 즉시 system '처형 없음' 과 1.4초 알림, 이어 1.4초에 '밤이 되었습니다' 1.6초", () => {
@@ -425,8 +434,9 @@ describe("알림 시간표 (UI-SPEC 남은 위험 8)", () => {
     );
   });
 
-  it("찬반 결과 알림 + 처형(또는 처형 없음) 알림이 처형 단계 길이(EXECUTION_MS) 안이다", () => {
-    expect(ANNOUNCE_TALLY_MS + Math.max(ANNOUNCE_EXEC_MS, ANNOUNCE_NOEXEC_MS)).toBeLessThanOrEqual(EXECUTION_MS);
+  it("찬반 결과 알림 + 처형(또는 처형 없음) 알림이 처형 단계 길이(EXECUTION_MS) 안이다 (판결 앞머리 포함)", () => {
+    expect(ANNOUNCE_LEAD_MS).toBe(VERDICT_LEAD_MS);
+    expect(ANNOUNCE_LEAD_MS + ANNOUNCE_TALLY_MS + Math.max(ANNOUNCE_EXEC_MS, ANNOUNCE_NOEXEC_MS)).toBeLessThanOrEqual(EXECUTION_MS);
   });
 
   it("유령 떠오름·사라짐이 처형 알림 시간 안이다", () => {
@@ -440,6 +450,8 @@ describe("알림 시간표 (UI-SPEC 남은 위험 8)", () => {
       const events = dayEvents(verdictView(), executionView(passed ? 5 : 2, passed ? 2 : 5, passed));
       for (const a of events.announces) expect(a.at + a.ms).toBeLessThanOrEqual(EXECUTION_MS);
     }
+    const last = executionView(0, 0, true, { day: { verdict: { yes: 0, no: 0, passed: true, last: true } } });
+    for (const a of dayEvents(verdictView(), last).announces) expect(a.at + a.ms).toBeLessThanOrEqual(EXECUTION_MS);
   });
 });
 

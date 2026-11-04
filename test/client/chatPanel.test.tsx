@@ -874,3 +874,59 @@ describe("ChatPanel 귓속말 줄 (09.1.1-09, UI-SPEC B-3)", () => {
     expect(q.container.querySelector("[data-chat-newdot]")).toBeNull();
   });
 });
+
+// 09.1.1-12 (UI-SPEC C-3): 찬반 기록 카드 — 제목 줄 없이 머리 "찬성 n"/"반대 m" + 이름들(자리 구분색 점 + 이름)
+describe("ChatPanel ballots 카드 (09.1.1-12)", () => {
+  const card: ChatPanelMessage = {
+    key: "b1",
+    kind: "card",
+    card: "ballots",
+    text: "0,2|1",
+    ballots: { yes: [{ seat: 0, name: "서연" }, { seat: 2, name: "도윤" }], no: [{ seat: 1, name: "민준" }] },
+  };
+
+  it("[data-card=ballots] 안에 찬성·반대 두 묶음(머리 + 이름들)이 있고 제목 줄은 없다", () => {
+    const { container } = render(<ChatPanel messages={[card]} value="" onChange={() => {}} logHeight={200} />);
+    const el = container.querySelector('[data-card="ballots"]')!;
+    expect(el.classList.contains("mv-chat__card")).toBe(true);
+    expect(el.querySelector(".mv-chat__card-title")).toBeNull();
+    const sides = [...el.querySelectorAll("[data-ballot-side]")];
+    expect(sides.map((n) => n.getAttribute("data-ballot-side"))).toEqual(["yes", "no"]);
+    expect(sides[0]!.querySelector(".mv-chat__ballots-head")?.textContent).toBe("찬성 2");
+    expect(sides[1]!.querySelector(".mv-chat__ballots-head")?.textContent).toBe("반대 1");
+    expect([...sides[0]!.querySelectorAll(".mv-chat__ballots-name")].map((n) => n.textContent)).toEqual(["서연", "도윤"]);
+    expect(sides[1]!.querySelector(".mv-chat__ballots-name")?.textContent).toBe("민준");
+  });
+
+  it("이름 앞 점은 자리 구분색이고 쉼표 글자가 없다", () => {
+    const { container } = render(<ChatPanel messages={[card]} value="" onChange={() => {}} logHeight={200} />);
+    const dot = container.querySelector<HTMLElement>('[data-card="ballots"] .mv-chat__ballots-dot')!;
+    expect(dot.style.getPropertyValue("--ballot-seat")).toBe("var(--seat-1)");
+    expect(dot.getAttribute("aria-hidden")).toBe("true");
+    expect(container.querySelector('[data-card="ballots"]')?.textContent).not.toContain(",");
+  });
+
+  it("0명 묶음도 머리를 그린다", () => {
+    const m: ChatPanelMessage = { ...card, ballots: { yes: [], no: [{ seat: 1, name: "민준" }] } };
+    const { container } = render(<ChatPanel messages={[m]} value="" onChange={() => {}} logHeight={200} />);
+    expect(container.querySelector('[data-ballot-side="yes"] .mv-chat__ballots-head')?.textContent).toBe("찬성 0");
+  });
+
+  it("이름은 텍스트 노드다 (T-09.1.1-34)", () => {
+    const m: ChatPanelMessage = { ...card, ballots: { yes: [{ seat: 0, name: "<b>x</b>" }], no: [] } };
+    const { container } = render(<ChatPanel messages={[m]} value="" onChange={() => {}} logHeight={200} />);
+    expect(container.querySelector('[data-card="ballots"] b')).toBeNull();
+    expect(container.querySelector(".mv-chat__ballots-name")?.textContent).toBe("<b>x</b>");
+  });
+
+  it("역할 칩이 없다 (T-09.1.1-33)", () => {
+    const { container } = render(<ChatPanel messages={[card]} value="" onChange={() => {}} logHeight={200} />);
+    expect(container.querySelector("[data-role-chip]")).toBeNull();
+  });
+
+  it("기존 will 카드 렌더는 그대로다", () => {
+    const will: ChatPanelMessage = { key: "c1", kind: "card", card: "will", title: "서연 님의 유언", icon: "quill", text: "범인은 2번" };
+    const { container } = render(<ChatPanel messages={[will]} value="" onChange={() => {}} logHeight={200} />);
+    expect(container.querySelector('[data-card="will"] .mv-chat__card-title')?.textContent).toBe("서연 님의 유언");
+  });
+});
