@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>정치·박진감 장치</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="ds/minifiav2/tokens.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0;background:#0e1326}
+.pk-btn:focus-visible{outline:2px solid #e6e8ee;outline-offset:2px}
+.pk-chip{min-height:44px;padding:0 14px;border-radius:22px;border:1px solid #3a4778;background:#1e2847;color:#e6e8ee;font-family:inherit;font-size:15px;cursor:pointer}
+.pk-chip[aria-pressed="true"]{background:#e6e8ee;color:#0e1326;border-color:#e6e8ee}
+.pk-face{display:flex;flex-direction:column;align-items:center;gap:4px;font-size:12px;color:#e6e8ee}
+.pk-dot{width:44px;height:44px;border-radius:50%;border:2px solid #3a4778;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;color:#0e1326}
+@keyframes pkIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+@keyframes pkPulse{0%,100%{box-shadow:0 0 0 0 rgba(230,232,238,.5)}50%{box-shadow:0 0 0 8px rgba(230,232,238,0)}}
+@media (prefers-reduced-motion: reduce){*{animation:none!important}}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; position: relative; overflow: hidden; background: radial-gradient(ellipse at 50% 40%, #26305a 0%, #121936 55%, #080b1a 100%); color: #e6e8ee; font-family: var(--font-ui); word-break: keep-all; user-select: none">
+
+<div style="position:absolute;left:0;top:0;width:390px;box-sizing:border-box;padding:18px 16px 0;text-align:center">
+<p style="margin:0;font-size:24px;font-weight:700;color:#f3f4f7">{{ title }}</p>
+<p style="margin:6px 0 0;font-size:14px;color:#a9aebb">{{ hint }}</p>
+</div>
+
+<sc-if value="{{ isClaim }}" hint-placeholder-val="{{ true }}">
+<div style="position:absolute;left:0;top:110px;width:390px;height:340px;display:flex;flex-wrap:wrap;justify-content:center;gap:28px 22px;padding:30px 20px;box-sizing:border-box">
+<sc-for list="{{ faces }}" as="f" hint-placeholder-count="8">
+<div class="pk-face">
+<span style="font-size:12px;padding:2px 8px;border-radius:10px;background:{{ f.bbg }};color:{{ f.bfg }};min-height:18px">{{ f.badge }}</span>
+<div class="pk-dot" style="background:{{ f.color }}">{{ f.n }}</div>
+<span>{{ f.name }}</span>
+</div>
+</sc-for>
+</div>
+<section style="position:absolute;left:0;bottom:0;width:390px;box-sizing:border-box;padding:16px;background:rgba(21,28,54,.97);border-radius:20px 20px 0 0;display:flex;flex-direction:column;gap:10px;animation:pkIn 250ms both">
+<p style="margin:0;font-size:14px;color:#a9aebb">내 직업 배지</p>
+<div role="group" aria-label="직업 배지 고르기" style="display:flex;gap:8px;flex-wrap:wrap">
+<sc-for list="{{ claims }}" as="c" hint-placeholder-count="5">
+<button type="button" class="pk-chip pk-btn" aria-pressed="{{ c.on }}" onClick="{{ c.pick }}">{{ c.label }}</button>
+</sc-for>
+</div>
+<p style="margin:0;font-size:12px;color:#a9aebb">{{ claimNote }}</p>
+</section>
+</sc-if>
+
+<sc-if value="{{ isWhisper }}" hint-placeholder-val="{{ false }}">
+<div style="position:absolute;left:0;top:110px;width:390px;display:flex;flex-direction:column;align-items:center;gap:14px;padding:20px;box-sizing:border-box">
+<p style="margin:0;font-size:14px;color:#a9aebb;padding:8px 12px;border-radius:12px;background:rgba(255,255,255,.07)">현우 → 서연 귓속말</p>
+<p style="margin:0;font-size:13px;color:#8b92a6">모두에게는 이 줄만 보여요</p>
+</div>
+<section style="position:absolute;left:0;bottom:0;width:390px;box-sizing:border-box;padding:16px;background:rgba(21,28,54,.97);border-radius:20px 20px 0 0;display:flex;flex-direction:column;gap:10px;animation:pkIn 250ms both">
+<div style="display:flex;justify-content:space-between;font-size:14px"><span>서연 님에게 귓속말</span><span style="color:#a9aebb">오늘 1번 남음</span></div>
+<div style="min-height:48px;border-radius:12px;background:#1e2847;border:1px solid #3a4778;padding:12px 14px;font-size:16px;color:#e6e8ee">도윤 님 같이 지목해요</div>
+<div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:13px;color:#a9aebb">10/30</span><button type="button" class="pk-chip pk-btn" style="background:#e6e8ee;color:#0e1326">보내기</button></div>
+</section>
+</sc-if>
+
+<sc-if value="{{ isReveal }}" hint-placeholder-val="{{ false }}">
+<div style="position:absolute;left:0;top:120px;width:390px;padding:0 20px;box-sizing:border-box;display:flex;flex-direction:column;gap:22px">
+<div style="animation:pkIn 300ms both">
+<p style="margin:0 0 10px;font-size:16px;font-weight:700;color:#cfd3dd">찬성 3</p>
+<div style="display:flex;gap:16px"><div class="pk-face"><div class="pk-dot" style="background:#7a8fb8">지</div>지호</div><div class="pk-face"><div class="pk-dot" style="background:#6fa59a">민</div>민준</div><div class="pk-face"><div class="pk-dot" style="background:#b89a6f">서</div>서연</div></div>
+</div>
+<div style="animation:pkIn 300ms 500ms both">
+<p style="margin:0 0 10px;font-size:16px;font-weight:700;color:#cfd3dd">반대 2</p>
+<div style="display:flex;gap:16px"><div class="pk-face"><div class="pk-dot" style="background:#a9aebb">하</div>하은</div><div class="pk-face"><div class="pk-dot" style="background:#8f86b0">태</div>태오</div></div>
+</div>
+<p style="margin:0;text-align:center;font-size:20px;font-weight:700;color:#f3f4f7;animation:pkIn 300ms 1000ms both">도윤 님 처형</p>
+</div>
+</sc-if>
+
+<sc-if value="{{ isTie }}" hint-placeholder-val="{{ false }}">
+<div style="position:absolute;left:0;top:120px;width:390px;display:flex;justify-content:center;gap:56px;padding-top:50px">
+<div class="pk-face" style="animation:pkPulse 1.2s infinite;border-radius:50%"><div class="pk-dot" style="background:#b89a6f;width:72px;height:72px;font-size:20px">서</div>서연 2표</div>
+<div class="pk-face"><div class="pk-dot" style="background:#b87a5c;width:72px;height:72px;font-size:20px">도</div>도윤 2표</div>
+</div>
+<p style="position:absolute;left:0;top:300px;width:390px;margin:0;text-align:center;font-size:40px;font-weight:700;color:#e6e8ee">5</p>
+<div style="position:absolute;left:0;bottom:0;width:390px;box-sizing:border-box;padding:16px;background:rgba(21,28,54,.97);border-radius:20px 20px 0 0;display:flex;gap:10px">
+<button type="button" class="pk-chip pk-btn" style="flex:1">서연</button><button type="button" class="pk-chip pk-btn" style="flex:1">도윤</button>
+</div>
+</sc-if>
+
+<sc-if value="{{ isLast3 }}" hint-placeholder-val="{{ false }}">
+<div style="position:absolute;left:0;top:120px;width:390px;display:flex;justify-content:center;gap:24px;padding-top:30px">
+<div class="pk-face"><div class="pk-dot" style="background:#6fa59a">민</div>민준<span style="font-size:12px;color:#a9aebb">한마디 끝</span></div>
+<div class="pk-face" style="animation:pkPulse 1.2s infinite;border-radius:50%"><div class="pk-dot" style="background:#e6e8ee;width:56px;height:56px">서</div>서연<span style="font-size:12px;color:#e6e8ee">지금 8초</span></div>
+<div class="pk-face" style="opacity:.55"><div class="pk-dot" style="background:#b87a5c">도</div>도윤<span style="font-size:12px;color:#a9aebb">다음</span></div>
+</div>
+<p style="position:absolute;left:0;top:300px;width:390px;margin:0;text-align:center;font-size:20px;font-weight:700;color:#f3f4f7">"저는 시민이에요"</p>
+<div style="position:absolute;left:0;bottom:0;width:390px;box-sizing:border-box;padding:16px;background:rgba(21,28,54,.97);border-radius:20px 20px 0 0;display:flex;gap:8px;flex-wrap:wrap">
+<button type="button" class="pk-chip pk-btn">저는 시민이에요</button><button type="button" class="pk-chip pk-btn">쟤가 수상해요</button><button type="button" class="pk-chip pk-btn">믿어 주세요</button>
+</div>
+</sc-if>
+
+<section style="position:absolute;left:0;top:0;right:0;display:none"></section>
+
+<div role="group" aria-label="시안 조절: 장면" style="position:absolute;right:8px;top:70px;display:flex;flex-direction:column;gap:4px;padding:6px;border-radius:12px;border:1px dashed #3a4778;background:rgba(14,19,38,.85);z-index:60">
+<sc-for list="{{ scenes }}" as="o" hint-placeholder-count="5">
+<button type="button" class="pk-btn" onClick="{{ o.pick }}" aria-pressed="{{ o.pressed }}" style="min-height:36px;padding:0 8px;border-radius:8px;border:0;background:{{ o.bg }};color:{{ o.fg }};font-family:inherit;font-size:12px;cursor:pointer">{{ o.label }}</button>
+</sc-for>
+</div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+var NAMES = [['지호', '#7a8fb8'], ['민준', '#6fa59a'], ['서연', '#b89a6f'], ['도윤', '#b87a5c'], ['하은', '#a9aebb'], ['태오', '#8f86b0'], ['수아', '#7f9f7a'], ['현우', '#a88f9a']];
+var SCENES = [['claim', '직업 주장'], ['whisper', '귓속말'], ['reveal', '찬반 공개'], ['tie', '동점 결선'], ['last3', '마지막 3인']];
+var TEXT = {
+  claim: ['낮', '이름표 위 배지로 직업을 말해요'],
+  whisper: ['낮', '한 사람에게만 한 줄'],
+  reveal: ['판결', '누가 어느 쪽이었는지 보여요'],
+  tie: ['결선', '둘 중 한 명을 누르세요'],
+  last3: ['마지막 셋', '한 명씩 8초 한마디']
+};
+var CLAIMS = ['시민', '경찰', '의사', '마피아', '말 안 함'];
+class Component extends DCLogic {
+  constructor(props) { super(props); this.state = { scene: 'claim', claim: 1 }; }
+  renderVals() {
+    var self = this, s = this.state, t = TEXT[s.scene];
+    return {
+      title: t[0], hint: t[1],
+      isClaim: s.scene === 'claim', isWhisper: s.scene === 'whisper', isReveal: s.scene === 'reveal', isTie: s.scene === 'tie', isLast3: s.scene === 'last3',
+      claimNote: s.claim === 4 ? '아직 말하지 않았어요' : '바꾸면 "말 바꿈"이 표시돼요',
+      faces: NAMES.map(function (n, i) {
+        var badge = i === 1 ? '경찰' : i === 2 ? '의사' : i === 3 ? '말 바꿈' : i === 5 ? '시민' : i === 7 && s.claim !== 4 ? CLAIMS[s.claim] : '';
+        return { name: n[0], n: n[0].charAt(0), color: n[1], badge: badge, bbg: badge ? (i === 3 ? '#3a2a30' : '#e6e8ee') : 'transparent', bfg: badge ? (i === 3 ? '#ff9aa6' : '#0e1326') : 'transparent' };
+      }),
+      claims: CLAIMS.map(function (c, i) { return { label: c, on: s.claim === i ? 'true' : 'false', pick: function () { self.setState({ claim: i }); } }; }),
+      scenes: SCENES.map(function (m) { var on = s.scene === m[0]; return { label: m[1], pressed: on ? 'true' : 'false', bg: on ? '#e6e8ee' : '#1e2847', fg: on ? '#0e1326' : '#e6e8ee', pick: function () { self.setState({ scene: m[0] }); } }; })
+    };
+  }
+}
+</script>
+</body>
+</html>
