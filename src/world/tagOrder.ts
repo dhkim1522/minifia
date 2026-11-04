@@ -11,9 +11,11 @@ export interface TagBox {
   w: number;
   /** 최다 득표 선두의 이름표(08-12): 순위에 LEAD_Z_BOOST 를 더해 내 이름표보다도 위에 둔다 */
   lead?: boolean;
+  /** 지목에서 지금 차례인 사람의 이름표(09.1-07, UI-SPEC A-1): lead 와 같은 가산을 받는다(둘 다여도 한 번만) */
+  turn?: boolean;
 }
 
-/** 선두 이름표가 다른 이름표(0~7)보다 높게 놓이도록 순위에 더하는 값 */
+/** 선두·차례 이름표가 다른 이름표(0~7)보다 높게 놓이도록 순위에 더하는 값 */
 export const LEAD_Z_BOOST = 10;
 
 export interface TagRank {
@@ -25,14 +27,14 @@ export interface TagRank {
 }
 
 /**
- * z 순위: 내 이름표가 맨 위, 나머지는 발끝 화면 y 가 큰 쪽이 위(동점이면 seat 이 큰 쪽). lead 는 순위에 10 을 더한다(선두 이름표가 겹쳐도 가려지지 않게).
+ * z 순위: 내 이름표가 맨 위, 나머지는 발끝 화면 y 가 큰 쪽이 위(동점이면 seat 이 큰 쪽). lead·turn 은 순위에 10 을 더한다(선두·차례 이름표가 겹쳐도 가려지지 않게).
  * front: 이름표 사각형 [x − w/2, x + w/2] × [bottom − h, bottom] 이 면적을 가지고 겹치는(변만 맞닿으면 아님)
  * 이름표 가운데, 겹친 모두보다 z 가 높은 것만 true. 이름표를 밀지 않는다.
  */
 export function rankTags(boxes: readonly TagBox[], h: number = NAMETAG_H): TagRank[] {
   const order = [...boxes].sort((p, q) => Number(p.me) - Number(q.me) || p.foot - q.foot || p.seat - q.seat);
   const z = new Map<TagBox, number>();
-  order.forEach((b, rank) => z.set(b, rank + (b.lead === true ? LEAD_Z_BOOST : 0)));
+  order.forEach((b, rank) => z.set(b, rank + (b.lead === true || b.turn === true ? LEAD_Z_BOOST : 0)));
   const overlap = (p: TagBox, q: TagBox): boolean =>
     Math.abs(p.x - q.x) < (p.w + q.w) / 2 && Math.abs(p.bottom - q.bottom) < h;
   return boxes.map((b) => {

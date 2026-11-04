@@ -76,7 +76,7 @@ export interface WorldStageProps {
   /** 캔버스·입력 면 위, 이름표 층 아래에 깔리는 장식(시민 편 긴장 비네트). 터치를 막지 않는 부품만 넣는다 */
   underlay?: ReactNode;
   /** 좌석별 이름표 쌓임 속성(득표 배지·선두·도장·내 선택·투표함·직업 칩 …)과 발밑 고리 종류 */
-  tagProps?: (seat: number) => Partial<Omit<HeadStackProps, "name" | "color">> & { ring?: RingKind };
+  tagProps?: (seat: number) => Partial<Omit<HeadStackProps, "name" | "color">> & { ring?: RingKind; turn?: boolean };
   onNotice(text: string): void;
   /** 있을 때만 연결이 끊긴 사람의 이름표가 [내보내기] 버튼이 된다(대기실 전용 — 게임 중 서버는 CANNOT_KICK) */
   onKick?(seat: number, nickname: string): void;
@@ -292,7 +292,7 @@ export function WorldStage(props: WorldStageProps) {
           const away = !p.connected;
           const pickable = current && pick !== undefined && pick.seats.has(p.seat);
           const kickable = !pickable && current && canKick && away && !me;
-          const { ring, ...extra } = props.tagProps?.(p.seat) ?? {};
+          const { ring, turn, ...extra } = props.tagProps?.(p.seat) ?? {};
           // 죽은 좌석 표시(유령 화면에서만 생긴다): 유령 viewer 의 장면 표 ghost 이거나 tagProps 가 ghost 를 준 좌석
           const ghostSeat = extra.ghost === true || scene?.seats[p.seat]?.ghost === true;
           const stack = (
@@ -316,6 +316,8 @@ export function WorldStage(props: WorldStageProps) {
               data-away={away ? "true" : undefined}
               data-ghost-seat={ghostSeat ? "true" : undefined}
               data-lead={extra.lead ? "true" : undefined}
+              // 지목에서 지금 차례인 사람: 런타임이 이름표를 겹침 맨 앞으로 올린다(HeadStack 으로는 넘기지 않는다)
+              data-turn={turn ? "true" : undefined}
               // 속성 값은 kebab-case: mafiaAlly → "mafia-ally" (ringKindAttr)
               data-ring-kind={ring === undefined ? undefined : ringKindAttr(ring)}
               aria-hidden={kickable || pickable ? undefined : true}

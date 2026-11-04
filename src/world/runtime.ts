@@ -147,8 +147,9 @@ export type PlayableCharacter = CharacterHandle & { playEmote?(id: EmoteId): voi
  * 밤 행동 선택의 발밑 고리 종류와 색. 값은 tokens.css 의 crimson-500·seat-1·seat-3 (승인 Ghost 보드 값, 9페이즈가 정식 토큰으로 정한다).
  * mafiaAlly = 마피아 화면에서 동료가 고른 사람의 고리(crimson-400, UI-SPEC 226·318행). 이름표 속성 data-ring-kind 값은 "mafia-ally" 로 쓴다.
  */
-export type RingKind = "mafia" | "mafiaAlly" | "police" | "doctor";
-export const RING_COLORS: Readonly<Record<RingKind, string>> = { mafia: "#c8102e", mafiaAlly: "#e0344b", police: "#7a8fb8", doctor: "#6fa59a" };
+export type RingKind = "mafia" | "mafiaAlly" | "police" | "doctor" | "turn";
+// turn = 순차 지목에서 지금 차례인 사람의 고리(09.1-07, UI-SPEC A-1). 색은 토큰 gray-100. 밤 고리와 같은 발밑 고리 메시를 쓰고 새 모델은 만들지 않는다.
+export const RING_COLORS: Readonly<Record<RingKind, string>> = { mafia: "#c8102e", mafiaAlly: "#e0344b", police: "#7a8fb8", doctor: "#6fa59a", turn: "#e6e8ee" };
 /** RingKind → 이름표 속성 값(data-ring-kind). 속성은 kebab-case 다 */
 export function ringKindAttr(kind: RingKind): string {
   return kind === "mafiaAlly" ? "mafia-ally" : kind;
@@ -156,7 +157,7 @@ export function ringKindAttr(kind: RingKind): string {
 /** 이름표 속성 값 → 고리 색. 모르는 값이면 null */
 function ringColorOfAttr(attr: string | null): string | null {
   if (attr === null) return null;
-  const kind: RingKind | undefined = attr === "mafia-ally" ? "mafiaAlly" : (["mafia", "police", "doctor"] as const).find((k) => k === attr);
+  const kind: RingKind | undefined = attr === "mafia-ally" ? "mafiaAlly" : (["mafia", "police", "doctor", "turn"] as const).find((k) => k === attr);
   return kind === undefined ? null : RING_COLORS[kind];
 }
 
@@ -1043,7 +1044,7 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
       }
       if (tag.style.opacity !== a.tagAlpha) tag.style.opacity = a.tagAlpha;
       const w = a.tagW !== null && a.tagW > 0 ? a.tagW : NAMETAG_MAX_W;
-      boxes.push({ seat: a.seat, me: a.seat === mine, lead: tag.hasAttribute("data-lead"), foot: r.project({ x: a.pos.x, y: 0, z: a.pos.z }).sy, x, bottom, w });
+      boxes.push({ seat: a.seat, me: a.seat === mine, lead: tag.hasAttribute("data-lead"), turn: tag.hasAttribute("data-turn"), foot: r.project({ x: a.pos.x, y: 0, z: a.pos.z }).sy, x, bottom, w });
       // 발밑 고리: 이름표(WorldStage)가 data-ring-kind 로 알린 종류를 캐릭터에 옮긴다(바뀔 때만)
       const kind = tag.getAttribute("data-ring-kind");
       if (kind !== a.ringKind) {
