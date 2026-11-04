@@ -1837,6 +1837,38 @@ describe("유령 직업 의상 안개 (09.1-09)", () => {
   });
 });
 
+describe("E2E 훅 window.__mfGhostOutfits (09.1-09, T-09.1-23)", () => {
+  it("유령 의상이 입혀지면 좌석 → 의상 id 표가 생기고, 산 사람 장면에서는 빈 표이며, 언마운트 때 지워진다", async () => {
+    const s = await open({ scene: sceneOf({ 0: {}, 1: {}, 2: {}, 3: { ghost: true, outfit: "doctor" } }) }, { players: FOUR, ents: FOUR_ENTS() });
+    expect(window.__mfGhostOutfits).toEqual({ 3: "doctor" });
+    s.rerender({ scene: sceneOf({ 0: {}, 1: {}, 2: {}, 3: { ghost: true, outfit: "doctor" }, }) });
+    frames(50);
+    expect(window.__mfGhostOutfits).toEqual({ 3: "doctor" });
+    s.utils.unmount();
+    expect(window.__mfGhostOutfits).toBeUndefined();
+  });
+
+  it("산 사람 화면: 표는 없거나 비어 있고 DOM 에 [data-ghost-outfit] 은 없다", async () => {
+    const s = await open({ scene: sceneOf({ 0: {}, 1: {}, 2: {}, 3: {} }) }, { players: FOUR, ents: FOUR_ENTS() });
+    expect(window.__mfGhostOutfits ?? {}).toEqual({});
+    expect(s.utils.container.querySelectorAll("[data-ghost-outfit]")).toHaveLength(0);
+  });
+
+  it("WorldStage 소스는 의상을 DOM 속성으로 싣지 않는다", () => {
+    expect(readFileSync("src/components/WorldStage.tsx", "utf8")).not.toContain("data-ghost-outfit");
+    expect(readFileSync("src/components/v2/HeadStack.tsx", "utf8")).not.toContain("data-ghost-outfit");
+  });
+
+  it("다른 설치가 덮어썼으면 언마운트가 지우지 않는다", async () => {
+    const s = await open({ scene: sceneOf({ 0: {}, 1: {}, 2: {}, 3: { ghost: true, outfit: "mafia" } }) }, { players: FOUR, ents: FOUR_ENTS() });
+    const other = { 9: "coat" };
+    window.__mfGhostOutfits = other;
+    s.utils.unmount();
+    expect(window.__mfGhostOutfits).toBe(other);
+    delete window.__mfGhostOutfits;
+  });
+});
+
 describe("게임 장면(08-12): 카메라·조명·긴장·떠다님·처형 연출·지목 자세", () => {
   const INSETS = { top: 62, bottom: 250 };
   const FIXED = (zoom = 1): SceneLook["camera"] => ({ mode: "fixed", target: { x: 0, z: 0 }, zoom });

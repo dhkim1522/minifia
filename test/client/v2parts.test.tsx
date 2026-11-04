@@ -246,13 +246,14 @@ describe("HeadStack 8페이즈 칸(DAY-04, GHOST-02)", () => {
     expect(/import\s+\{[^}]*\bROLES?\b[^}]*\}/.test(src)).toBe(false);
   });
 
-  it("스타일: 쌓임 간격 space-xs, is-mine 은 gray-100 면·night-900 글자, is-ghost 불투명도 0.6", () => {
+  it("스타일: 쌓임 간격 space-xs, is-mine 은 gray-100 면·night-900 글자, is-ghost 는 불투명(불투명도 규칙 없음, 09.1-09)", () => {
     expect(rulesFor(V2_CSS, ".mv-head")[0] ?? "").toContain("gap: var(--space-xs)");
     const mine = rulesFor(V2_CSS, ".mv-tag.is-mine").join(";");
     expect(mine).toContain("background: var(--gray-100)");
     expect(mine).toContain("color: var(--night-900)");
+    // 09.1-09(UI-SPEC 시안과 다르게 7): 몸이 0.26 안개라 이름표는 불투명, 직업은 RoleChip 이 알린다
     const ghost = rulesFor(V2_CSS, ".mv-tag.is-ghost").join(";");
-    expect(ghost).toContain("opacity: 0.6");
+    expect(ghost).not.toContain("opacity");
   });
 
   it("스타일: is-blink 는 0.9초 주기 무한 반복이고 모션 줄이기면 animation none + 2px gray-100 고정 테두리 (09.1-07, UI-SPEC 다르게 5)", () => {
