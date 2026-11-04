@@ -54,3 +54,33 @@
 .mf-game[data-ghost-enter] .mv-rolechip { animation: mf-chip-in var(--dur-med) var(--ease-out) both; }
 @keyframes mf-chip-in { from { opacity: 0; transform: translateY(6px) scale(0.85); } to { opacity: 1; transform: translateY(0) scale(1); } }
 @media (prefers-reduced-motion: reduce) { .mf-game[data-ghost-enter] .mv-rolechip { animation: none; } }
+
+/* 순차 지목 차례 알약 · 막대 · 위 한 줄(09.1-07, UI-SPEC A-1~A-3·A-5, 시안 PickSeq). 위 100, 좌우 16, 가운데, 입력을 가로채지 않는다.
+   알약 면 night-800 92%·테두리 1.5px gray-100(마지막 5초 crimson-500)·pill·안쪽 8/16. n / N 14 400 gray-300, 이름 16 700 gray-50, 초 24 700 tabular-nums(마지막 5초 crimson-400).
+   막대 220×4 반경 4, 바탕 gray-50 14%·채움 gray-100(마지막 5초 crimson-500). 색은 timerTone 한 호출의 결과(data-turn-tone)다. */
+.mf-turn { position: absolute; top: 100px; left: var(--space-md); right: var(--space-md); z-index: calc(var(--z-toast) + 4); display: flex; flex-direction: column; align-items: center; gap: var(--space-sm); pointer-events: none; transform: translateY(var(--mf-vv-top, 0px)); }
+.mf-turn__pill { display: flex; align-items: center; gap: var(--space-sm); max-width: 100%; box-sizing: border-box; padding: var(--space-sm) var(--space-md); border-radius: var(--radius-pill); background: color-mix(in srgb, var(--night-800) 92%, transparent); border: 1.5px solid var(--gray-100); animation: mf-turn-in var(--dur-med) var(--ease-out) both; transition: border-color 300ms; }
+.mf-turn__pill.is-still { animation: none; }
+.mf-turn__count { flex: none; font-family: var(--font-ui); font-size: 14px; line-height: 1.4; font-weight: 400; color: var(--gray-300); }
+.mf-turn__name { min-width: 0; font-family: var(--font-ui); font-size: 16px; line-height: 1.5; font-weight: 700; color: var(--gray-50); word-break: keep-all; overflow-wrap: anywhere; }
+.mf-turn__sec { flex: none; min-width: 2ch; text-align: right; font-family: var(--font-ui); font-size: 24px; line-height: 1.2; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--gray-50); transition: color 300ms; }
+.mf-turn__bar { width: 220px; max-width: 100%; height: 4px; border-radius: 4px; overflow: hidden; background: color-mix(in srgb, var(--gray-50) 14%, transparent); }
+.mf-turn__fill { height: 100%; background: var(--gray-100); transition: width 1000ms linear, background-color 300ms; }
+.mf-turn__fill.is-hold { transition: background-color 300ms; }
+.mf-turn[data-turn-tone="urgent"] .mf-turn__pill { border-color: var(--crimson-500); }
+.mf-turn[data-turn-tone="urgent"] .mf-turn__sec { color: var(--crimson-400); }
+.mf-turn[data-turn-tone="urgent"] .mf-turn__fill { background: var(--crimson-500); }
+/* 위 한 줄: 결과 문장만. 14 400 gray-50 + shadow-text, 바탕 없음, 400ms 페이드, 두 줄까지 가운데 맞춤으로 감긴다 */
+.mf-turn__line { margin: 0; max-width: 100%; text-align: center; font-family: var(--font-ui); font-size: 14px; line-height: 1.4; font-weight: 400; color: var(--gray-50); text-shadow: var(--shadow-text); word-break: keep-all; overflow-wrap: anywhere; opacity: 0; transition: opacity 400ms; }
+.mf-turn__line.is-on { opacity: 1; }
+/* 압축형(스테이지 높이 360 미만, 켜는 조건은 09.1-08): 위 72, 초 16 700, 위 한 줄 없음 */
+.mf-turn.is-compact { top: 72px; }
+.mf-turn.is-compact .mf-turn__sec { font-size: 16px; line-height: 1.5; }
+.mf-turn.is-compact .mf-turn__line { display: none; }
+@keyframes mf-turn-in { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
+@media (prefers-reduced-motion: reduce) { .mf-turn__pill { animation: none; } .mf-turn__fill { transition: none; } .mf-turn__line { transition: none; } }
+
+/* 지목 동안 화면을 살짝 어둡게(UI-SPEC A-1): night-950 45% 면에 불투명도 0.4 로 모이기에 켜져 끝 알림에 500ms 로 걷힌다. 캔버스 위·이름표 층 아래, 입력을 가로채지 않는다. */
+.mf-game__dim { position: absolute; inset: 0; z-index: calc(var(--z-world) + 1); pointer-events: none; background: color-mix(in srgb, var(--night-950) 45%, transparent); opacity: 0; transition: opacity 500ms; }
+.mf-game__dim[data-dim="on"] { opacity: 0.4; }
+@media (prefers-reduced-motion: reduce) { .mf-game__dim { transition: none; } }

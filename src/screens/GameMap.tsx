@@ -9,6 +9,7 @@ import { KillFx } from "../components/KillFx";
 import { PoliceResultCard } from "../components/PoliceResultCard";
 import { ResultAnnounce } from "../components/ResultAnnounce";
 import { SceneCurtain } from "../components/SceneCurtain";
+import { PickTurnBlock } from "../components/v2/PickTurnBlock";
 import { RoleCardButton } from "../components/RoleCardButton";
 import { PhaseHeader } from "../components/v2/PhaseHeader";
 import { TopToast, useTopToast } from "../components/v2/TopToast";
@@ -16,12 +17,15 @@ import { WillSheet } from "../components/v2/WillSheet";
 import { TensionVignette } from "../components/TensionVignette";
 import { WorldStage } from "../components/WorldStage";
 import type { WorldPick } from "../components/WorldStage";
+import { PICK_TURN_MS } from "../../shared/game/phases";
 import { LOG_H_KB } from "../game/chatUi";
 import { defenderVotes, headerFor, pointsTally } from "../game/dayView";
+import { turnStageOf, turnTopLine } from "../game/pickTurn";
 import type { ChatStore } from "../net/chatStore";
 import type { DayFx } from "../net/useDayFx";
 import { useCountdown } from "../net/countdown";
 import { useChat } from "../net/useChat";
+import { useTurnLook } from "../net/useTurnLook";
 import { useViewChoice } from "../net/useViewChoice";
 import { useWill } from "../net/useWill";
 import { useVisualViewportHeight } from "../net/useKeyboardLift";
@@ -132,22 +136,33 @@ interface GameMapProps {
   onLeave?: () => void;
 }
 
-/** 헤더: 제목 + 접히는 안내 + (서버 마감 기준 시간 링) + 링 왼쪽 [역할 카드]. 시간 링의 250ms 다시 그리기가 맵 화면 전체로 번지지 않게 따로 둔다 */
+/** 헤더: 제목 + 접히는 안내 + (서버 마감 기준 시간 링) + 링 왼쪽 [역할 카드]. 시간 링의 다시 그리기가 맵 화면 전체로 번지지 않게 따로 둔다 */
 function MapHeader({ view, offset, hintOn, extra }: { view: RoomView; offset: number; hintOn: boolean; extra: ReactNode }) {
   const head = headerFor(view);
-  const { seconds } = useCountdown(view.phaseEndsAt ?? 0, view.phaseDurationMs ?? 0, offset);
-  // 낮 시작은 링이 없다(2초 알림 단계). 마감이 없는 view 도 링을 그리지 않는다
-  const ring = view.phase !== "dayAnnounce" && view.phaseEndsAt !== null && view.phaseDurationMs !== null;
+  // 지목은 단계 마감이 아니라 차례 마감과 알약·막대와 같은 값(turnLook)으로 링을 그린다(UI-SPEC A-3). 단계 길이 3000/8000/900/2000 은 세부 단계라 링 비율에 쓰지 않는다.
+  const nominating = view.phase === "nomination";
+  const look = useTurnLook(view, offset);
+  const { seconds } = useCountdown(nominating ? 0 : (view.phaseEndsAt ?? 0), view.phaseDurationMs ?? 0, offset);
+  // 낮 시작은 링이 없다(2초 알림 단계). 마감이 없는 view 도 링을 그리지 않는다. 지목의 모이는 중·끝 알림에도 없다
+  const timing = nominating ? look !== null && (look.stage === "turn" || look.stage === "done") : view.phase !== "dayAnnounce" && view.phaseEndsAt !== null && view.phaseDurationMs !== null;
+  const time = nominating ? (look?.seconds ?? 0) : seconds;
+  const total = nominating ? PICK_TURN_MS / 1000 : (view.phaseDurationMs ?? 0) / 1000;
   return (
     <PhaseHeader
       title={head.title}
       {...(head.hint !== undefined ? { hint: head.hint } : {})}
       showHint={hintOn}
       guide
-      {...(ring ? { time: seconds, total: (view.phaseDurationMs ?? 0) / 1000 } : {})}
+      {...(timing ? { time, total } : {})}
       extra={extra}
     />
   );
+}
+
+/** 차례 알약·막대·위 한 줄. 초 경계마다 다시 그리는 시계(useTurnLook)를 이 부품 안에 가둔다 */
+function TurnBlock({ view, offset, line, reducedMotion }: { view: RoomView; offset: number; line: string | null; reducedMotion: boolean }) {
+  const look = useTurnLook(view, offset);
+  return <PickTurnBlock look={look} line={line} reducedMotion={reducedMotion} />;
 }
 
 // 8페이즈 게임 맵 화면 틀(08-13, UI-SPEC "게임 화면 틀"): 지하 재즈 바 맵(WorldStage) 위에 위쪽 가림막, 헤더(단계 이름 + 접히는 안내 + 시간 링 + [역할 카드]), [테스트], 결과 알림, 아래 패널을 얹는다.
@@ -427,6 +442,12 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
     if (hide !== veiled) setVeiled(hide);
   });
 
+  // 위 한 줄: 처음 마운트한 view(재접속·새로 고침)의 (단계, 차례) 와 같은 동안은 만들지 않는다(A-6)
+  const turnKey = turnStageOf(view) === null ? null : `${turnStageOf(view)}:${view.day?.turn?.i}`;
+  const firstTurnKey = useRef<string | null | undefined>(undefined);
+  if (firstTurnKey.current === undefined) firstTurnKey.current = turnKey;
+  const topLine = turnKey !== null && turnKey === firstTurnKey.current ? null : turnTopLine(view);
+
   const scene = useMemo(() => sceneLook(view, { stageH, ...(fading ? { fading } : {}), ...(mine !== undefined ? { mine } : {}) }), [view, stageH, fading, mine]);
 
   return (
@@ -460,6 +481,7 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
         onLeave={() => onLeave?.()}
       />
       <TopToast {...toast.props} />
+      <TurnBlock view={view} offset={offset} line={topLine} reducedMotion={reducedMotion} />
       {testButton ? <div className="mf-game__test">{testButton}</div> : null}
       {/* 장면 전환 막(09-20): 결과 알림보다 앞(DOM 순서)에 두어 막을 붙잡는 동안 알림이 막 위로 올라올 수 있게 한다. 덮기는 공개 마감만의 함수다 */}
       <SceneCurtain view={view} offset={offset} reducedMotion={reducedMotion} {...(killFx !== null ? { holdUntil: killFx.at + KILL_HOLD_MS } : {})} />
