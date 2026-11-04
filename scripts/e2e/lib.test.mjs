@@ -105,6 +105,13 @@ import {
   tagInStage,
   faceNameFits,
   pickButtonChecks,
+  turnBlockChecks,
+  nominationMaxMs,
+  NOMINATION_GATHER_MS,
+  PICK_TURN_MS,
+  PICK_GAP_MS,
+  NOMINATION_END_MS,
+  TURN_FONT_MIN,
   announceChecks,
   ghostDomChecks,
   verdictPanelChecks,
@@ -1787,4 +1794,68 @@ test("deployHoldChecks 배포 주소: 위치 차 초과는 RC3, 콘솔 항목은
   assert.equal(con.find((r) => r.id === "RC3").ok, true);
   const left = deployHoldChecks([deployRound({ bannerLeft: true })], { local: false });
   assert.equal(left.find((r) => r.id === "RC2").ok, false);
+});
+
+// ---- 순차 지목 (09.1-08) ----
+
+test("지목 시간 상수 사본과 nominationMaxMs: 8명 76200ms, 4명 41000ms", () => {
+  assert.equal(NOMINATION_GATHER_MS, 3000);
+  assert.equal(PICK_TURN_MS, 8000);
+  assert.equal(PICK_GAP_MS, 900);
+  assert.equal(NOMINATION_END_MS, 2000);
+  assert.equal(nominationMaxMs(8), 76200);
+  assert.equal(nominationMaxMs(4), 3000 + 4 * 8900 + 2000);
+});
+
+const goodTurn = (over = {}) => ({
+  pill: { left: 40, top: 100, right: 350, bottom: 148 },
+  pillScrollW: 310,
+  pillClientW: 310,
+  docScrollW: 390,
+  docClientW: 390,
+  minFontPx: 14,
+  no: 2,
+  seat: 1,
+  ...over,
+});
+const turnOk = (t, vw = 390, vh = 844) => Object.fromEntries(turnBlockChecks(t, vw, vh).map((l) => [l.id, l.ok]));
+
+test("turnBlockChecks: 화면 안·넘침 없음·글자 14px·숫자 속성이면 NT-A1~A4 모두 통과, 줄 모양은 { id, label, ok, detail }", () => {
+  const lines = turnBlockChecks(goodTurn(), 390, 844);
+  assert.deepEqual(lines.map((l) => l.id), ["NT-A1", "NT-A2", "NT-A3", "NT-A4"]);
+  assert.ok(lines.every((l) => l.ok && l.detail === "" && typeof l.label === "string"));
+});
+
+test("turnBlockChecks NT-A1: 알약이 화면 밖으로 나가면 실패(0.5px 오차는 통과)하고 어느 쪽인지 말한다", () => {
+  assert.equal(turnOk(goodTurn({ pill: { left: -0.5, top: 0, right: 390.5, bottom: 844.5 } }))["NT-A1"], true);
+  assert.equal(turnOk(goodTurn({ pill: { left: -0.6, top: 100, right: 350, bottom: 148 } }))["NT-A1"], false);
+  assert.equal(turnOk(goodTurn({ pill: { left: 40, top: 100, right: 391, bottom: 148 } }))["NT-A1"], false);
+  assert.equal(turnOk(goodTurn({ pill: { left: 40, top: -2, right: 350, bottom: 148 } }))["NT-A1"], false);
+  assert.equal(turnOk(goodTurn({ pill: { left: 40, top: 100, right: 350, bottom: 845 } }))["NT-A1"], false);
+  const bad = turnBlockChecks(goodTurn({ pill: { left: 40, top: 100, right: 400, bottom: 148 } }), 390, 844).find((l) => l.id === "NT-A1");
+  assert.match(bad.detail, /오른쪽/);
+});
+
+test("turnBlockChecks NT-A2: 알약 안·문서 가로 넘침(1px 오차까지 통과)", () => {
+  assert.equal(turnOk(goodTurn({ pillScrollW: 311 }))["NT-A2"], true);
+  assert.equal(turnOk(goodTurn({ pillScrollW: 312 }))["NT-A2"], false);
+  assert.equal(turnOk(goodTurn({ docScrollW: 391 }))["NT-A2"], true);
+  assert.equal(turnOk(goodTurn({ docScrollW: 392 }))["NT-A2"], false);
+});
+
+test("turnBlockChecks NT-A3·A4: 글자 14 미만 실패, 속성이 숫자가 아니면 실패", () => {
+  assert.equal(TURN_FONT_MIN, 14);
+  assert.equal(turnOk(goodTurn({ minFontPx: 13.9 }))["NT-A3"], false);
+  assert.equal(turnOk(goodTurn({ minFontPx: 16 }))["NT-A3"], true);
+  assert.equal(turnOk(goodTurn({ seat: NaN }))["NT-A4"], false);
+  assert.equal(turnOk(goodTurn({ no: undefined }))["NT-A4"], false);
+});
+
+test("turnBlockChecks: 측정값이 없으면 조용히 통과하지 않고 '측정값 없음' 으로 실패", () => {
+  for (const t of [null, undefined, {}, goodTurn({ pill: null })]) {
+    const lines = turnBlockChecks(t, 390, 844);
+    assert.equal(lines.length, 4);
+    assert.ok(lines.some((l) => !l.ok && /측정값 없음/.test(l.detail)));
+  }
+  assert.ok(turnBlockChecks({}, 390, 844).every((l) => !l.ok));
 });

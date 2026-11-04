@@ -1247,6 +1247,8 @@ export async function tapAt(page, pt) {
 /**
  * 게임 맵 화면 한 장: 루트 data-game-stage 가 없으면 null.
  * { phase, ghostView, kbOpen, title, guide: { count, text }, header, stage, panel(사각형), chatChannel, hasInput, end: { present, pressed, on, total } | null,
+ *   turn: { compact, no, seat, tone, block, pill, bar, pillScrollW, pillClientW, docScrollW, docClientW, minFontPx, line: { text } | null, hasLineEl } | null(09.1-08, 지목 차례 알약),
+ *   dim: "on" | "off" | null(어둡게 막), 지목 단계의 stage.top = 알약·막대 아랫변 + 4,
  *   verdictRow: { hasPicker, hasCount, on, total } | null, verdictBtns, picks: [{ seat, rect, pressed, label }], tags: [{ seat, me, count, lead, sure, mine, done, ring, ghostSeat, roleChip, opacity }],
  *   announce: { text, fontPx, lineCount, wordBreak } | null, counts: { ghostView, roleChips, ghostSeats, ghostTexts }, ring, testButton, nightPanel }
  */
@@ -1285,6 +1287,37 @@ export async function readGame(page) {
       if (t.includes("유령끼리만 보여요") || t.includes("유령 채팅")) ghostTexts += 1;
     }
     const night = q(".mf-claimpanel__title", panel ?? document);
+    // 순차 지목(09.1-08): 차례 알약 블록. 알약 사각형·넘침·글자 크기·속성, 위 한 줄. 막대가 있으면 스테이지 윗변 = 막대 아랫변 + 4, 없으면 앱 기본값(알약 위 + 60 · 압축 52)에 맞춘다(useMapInsets).
+    const tb = q("[data-turn-block]");
+    const pill = tb ? q(".mf-turn__pill", tb) : null;
+    const bar = tb ? q(".mf-turn__bar", tb) : null;
+    const lineEl = tb ? q(".mf-turn__line", tb) : null;
+    const numAttr = (el, name) => (el && el.hasAttribute(name) && el.getAttribute(name) !== "" ? Number(el.getAttribute(name)) : null);
+    const minFont = (el) => {
+      if (!el) return null;
+      const sizes = [el, ...qa("*", el)].filter((n) => (n.textContent ?? "").trim() !== "" && [...n.childNodes].some((c) => c.nodeType === 3 && (c.textContent ?? "").trim() !== "")).map((n) => parseFloat(getComputedStyle(n).fontSize));
+      return sizes.length > 0 ? Math.min(...sizes) : null;
+    };
+    const turn = tb
+      ? {
+          compact: tb.classList.contains("is-compact"),
+          no: numAttr(tb, "data-turn-no"),
+          seat: numAttr(tb, "data-turn-seat"),
+          tone: tb.getAttribute("data-turn-tone") ?? null,
+          block: rect(tb),
+          pill: rect(pill),
+          bar: rect(bar),
+          pillScrollW: pill ? pill.scrollWidth : null,
+          pillClientW: pill ? pill.clientWidth : null,
+          docScrollW: document.documentElement.scrollWidth,
+          docClientW: document.documentElement.clientWidth,
+          minFontPx: minFont(pill),
+          line: lineEl && lineEl.classList.contains("is-on") ? { text: (lineEl.textContent ?? "").trim() } : null,
+          hasLineEl: !!lineEl,
+        }
+      : null;
+    const headerBottom = header ? header.getBoundingClientRect().bottom : null;
+    const turnStageTop = tb ? (bar ? bar.getBoundingClientRect().bottom + 4 : tb.getBoundingClientRect().top + (tb.classList.contains("is-compact") ? 52 : 60) + 4) : null;
     return {
       phase: root.getAttribute("data-phase") ?? "",
       vw: window.innerWidth,
@@ -1294,7 +1327,9 @@ export async function readGame(page) {
       title: (q(".mv-phase__title", header ?? document)?.textContent ?? "").trim(),
       guide: { count: qa("[data-guide]").length, text: (q("[data-guide]")?.textContent ?? "").trim() },
       header: rect(header),
-      stage: header && panel ? { left: 0, top: header.getBoundingClientRect().bottom, right: window.innerWidth, bottom: panel.getBoundingClientRect().top } : null,
+      stage: header && panel ? { left: 0, top: Math.max(headerBottom, turnStageTop ?? 0), right: window.innerWidth, bottom: panel.getBoundingClientRect().top } : null,
+      turn,
+      dim: q(".mf-game__dim")?.getAttribute("data-dim") ?? null,
       panel: rect(panel),
       chatChannel: q("[data-chat-panel]")?.getAttribute("data-chat-channel") ?? null,
       hasChat: !!q("[data-chat-panel]"),
@@ -1334,6 +1369,25 @@ export async function tapPick(page, seat) {
   const btn = page.locator(`[data-pick="${seat}"]`);
   await btn.click({ timeout: 4000 });
   await page.waitForSelector(`[data-pick="${seat}"][aria-pressed="true"]`, { timeout: 3000 });
+}
+
+/**
+ * 순차 지목에서 내 차례에 이름표 버튼을 눌러, 그 좌석 이름표가 mine 이 될 때까지 기다린다(09.1-08).
+ * 누르면 버튼이 사라지므로(서버 확인 전에도 즉시) aria-pressed 를 기다리지 않는다. tapPick 은 밤 마피아용으로 그대로 둔다.
+ */
+export async function tapTurnPick(page, seat) {
+  const btn = page.locator(`[data-pick="${seat}"]`);
+  await btn.click({ timeout: 4000 });
+  await page.waitForSelector(`[data-seat="${seat}"] .mv-head[data-mine]`, { timeout: 3000 });
+}
+
+/** 기록 칸에 시스템 줄(.mv-chat__sys)이 생기고 글자가 text 와 같을 때까지 기다린다(예: '{이름} · 기권'). 시간 안에 안 오면 던진다. */
+export async function waitSysLine(page, text, ms = 12_000) {
+  try {
+    await page.waitForFunction((t) => [...document.querySelectorAll("[data-chat-log] .mv-chat__sys")].some((el) => (el.textContent ?? "").trim() === t), text, { timeout: ms });
+  } catch {
+    throw new Error(`시스템 줄이 ${ms / 1000}초 안에 오지 않음`);
+  }
 }
 
 /** 찬반 버튼을 눌러 그 쪽이 aria-pressed 가 될 때까지 기다린다. */

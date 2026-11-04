@@ -378,6 +378,55 @@ export function pickButtonChecks(buttons) {
   return lines;
 }
 
+// ---- 순차 지목 (09.1-08, 결정 0063-1, UI-SPEC A-1·A-2) ----
+// 앱 상수 사본. 스크립트는 shared 를 import 하지 않는다(e2eContract.test.ts 가 shared/game/phases.ts 와 같은 값인지 본다).
+export const NOMINATION_GATHER_MS = 3000;
+export const PICK_TURN_MS = 8000;
+export const PICK_GAP_MS = 900;
+export const NOMINATION_END_MS = 2000;
+
+/** 차례 수 n 인 판의 지목 최악 길이(전원 기권) = 모이기 + n × (차례 + 사이) + 끝 알림. shared/game/phases.ts nominationMaxMs 와 같은 식. */
+export function nominationMaxMs(n) {
+  return NOMINATION_GATHER_MS + n * (PICK_TURN_MS + PICK_GAP_MS) + NOMINATION_END_MS;
+}
+
+/** 차례 알약 글자 하한(이름 16·초 24·n/N 14). 낮추지 않는다 — NAMETAG_FONT_MIN 과 같은 14. */
+export const TURN_FONT_MIN = 14;
+
+/**
+ * 차례 알약 판정(NT-A1~NT-A4). turn = readGame().turn — { pill, pillScrollW, pillClientW, docScrollW, docClientW, minFontPx, no, seat }.
+ * NT-A1 알약 사각형이 화면 안에 완전히(OVERLAP_EPS 오차) · NT-A2 가로 넘침 없음(알약 안·문서) · NT-A3 글자 14px 이상 · NT-A4 data-turn-no·data-turn-seat 가 숫자.
+ * vw·vh = 화면 크기. 값이 없으면 통과시키지 않고 `측정값 없음` 으로 실패한다.
+ */
+export function turnBlockChecks(turn, vw, vh) {
+  const L1 = "차례 알약이 화면 안에 완전히 들어온다";
+  const L2 = "차례 알약에 가로 넘침이 없다";
+  const L3 = `차례 알약 글자가 ${TURN_FONT_MIN}px 이상`;
+  const L4 = "data-turn-no·data-turn-seat 가 숫자";
+  if (!turn || typeof turn !== "object") return [noMeasure("NT-A1", L1, "turn"), noMeasure("NT-A2", L2, "turn"), noMeasure("NT-A3", L3, "turn"), noMeasure("NT-A4", L4, "turn")];
+  const out = [];
+  const r = turn.pill;
+  if (!r || !allNum(r.left, r.top, r.right, r.bottom, vw, vh)) out.push(noMeasure("NT-A1", L1, "pill"));
+  else {
+    const bad = [];
+    if (r.left < -OVERLAP_EPS) bad.push(`왼쪽 ${fmt(r.left)}`);
+    if (r.right > vw + OVERLAP_EPS) bad.push(`오른쪽 ${fmt(r.right)} > ${vw}`);
+    if (r.top < -OVERLAP_EPS) bad.push(`위 ${fmt(r.top)}`);
+    if (r.bottom > vh + OVERLAP_EPS) bad.push(`아래 ${fmt(r.bottom)} > ${vh}`);
+    out.push(result("NT-A1", L1, bad));
+  }
+  if (!allNum(turn.pillScrollW, turn.pillClientW, turn.docScrollW, turn.docClientW)) out.push(noMeasure("NT-A2", L2, "scrollWidth"));
+  else {
+    const bad = [];
+    if (turn.pillScrollW > turn.pillClientW + 1) bad.push(`알약 안 ${turn.pillScrollW} > ${turn.pillClientW}`);
+    if (turn.docScrollW > turn.docClientW + 1) bad.push(`문서 ${turn.docScrollW} > ${turn.docClientW}`);
+    out.push(result("NT-A2", L2, bad));
+  }
+  out.push(isNum(turn.minFontPx) ? result("NT-A3", L3, turn.minFontPx + 0.01 >= TURN_FONT_MIN ? [] : [`${fmt(turn.minFontPx)}px`]) : noMeasure("NT-A3", L3, "minFontPx"));
+  out.push(isNum(turn.no) && isNum(turn.seat) ? result("NT-A4", L4, []) : noMeasure("NT-A4", L4, `no ${turn.no} seat ${turn.seat}`));
+  return out;
+}
+
 /**
  * 결과 알림 판정(AN1~AN3). m = { fontPx, lineCount, wordBreak } — `[data-announce]` 의 계산된 글자 크기·줄 수·word-break.
  * AN1 글자 36px(28px 로 줄이지 않는다) · AN2 한두 줄 · AN3 word-break keep-all.
