@@ -249,6 +249,7 @@ export interface MyInfo {
   testBots?: number; // 그 방장의 대기실 view 에서만, 서버 봇 수(0 포함, 결정 0024). 손님·일반 방·게임 중에는 키 자체가 없다
   testBotVote?: { exec: BotVoteExec; pick: BotVotePick }; // 그 방장의 대기실 view 에서만, 무작위가 아닌 값이 있을 때만(P-13). 손님·일반 방·게임 중에는 키 자체가 없다
   chat?: ChatChannel; // 서버가 정한 내 채널(channelOf), 본인에게만. 말할 수 없으면 키가 없다
+  whisperUsed?: true; // 오늘 귓속말을 이미 보냈다(결정 0066-2) — discussion 단계의 산 본인에게만, 다른 소켓·다른 단계·다음 일차에는 키가 없다
   endDiscussion?: true; // discussion 단계에서 본인이 토론 끝내기를 누른 상태(본인에게만, 8페이즈 결정 0060)
   nightTally?: Array<{ seat: number; n: number }>; // 밤, 산 마피아 본인에게만: 대상 seat 별 산 마피아 선택 수(seat 오름차순, 본인 포함, 누가 골랐는지는 없다, 결정 0061-7)
   nightSure?: number; // 밤, 산 마피아 본인에게만: 전원 일치로 확정된 대상 seat(결정 0061-7). 채우는 일은 09-07 view

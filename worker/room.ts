@@ -471,7 +471,7 @@ export class Room extends DurableObject<Env> {
 
   // 규칙 함수(sendWhisper)가 검사하고 본문을 RoomState.whispers 에 보관한다(O-20). 받는 사람은 audience 한 번으로 정해 당사자 둘(보낸·받은 사람)과 나머지로 나눈다 —
   // 본문 줄(k whisper)은 당사자 마스크, 사실 줄(k whispered, 본문 없음)은 나머지 마스크로 같은 seq 에 저장하고 그 집합 그대로 보낸다(복원도 같은 마스크).
-  // persistAndBroadcast 를 부르지 않는다 — 타인에게 state 나 '누가 썼다' 는 신호가 가지 않는다(귓속말 사실 줄 외에는). 연결이 끊긴 대상에게도 저장된다(O-5).
+  // persistAndBroadcast 를 부르지 않는다 — 보낸 사람 본인 외에는 state 가 가지 않고 '누가 썼다' 는 신호는 사실 줄뿐이다. 연결이 끊긴 대상에게도 저장된다(O-5).
   private async applyWhisper(playerId: string, to: number, text: string, now: number): Promise<WsErrorCode | null> {
     if (!this.room) return "BAD_MESSAGE";
     const result = sendWhisper(this.room, playerId, to, text, now);
@@ -500,6 +500,8 @@ export class Room extends DurableObject<Env> {
     if (appended.evicted.length > 0) await this.deleteChatKeys(appended.evicted.map(chatKey));
     this.deliver(party, { t: "chat", ...toWire(appended.body) });
     this.deliver(others, { t: "chat", ...toWire(appended.fact) });
+    // 보낸 사람 본인에게만 '오늘 보냄' state 를 준다(me.whisperUsed). 다른 소켓에는 state 가 가지 않는다.
+    this.sendViewTo([playerId]);
     return null;
   }
 

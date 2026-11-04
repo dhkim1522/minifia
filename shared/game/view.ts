@@ -35,6 +35,7 @@ import { rolesInPlay } from "./roles";
 import { hostOf } from "./room";
 import type { RoomState } from "./room";
 import { verdictVotersOf, votedSeatsOf } from "./verdict";
+import { WHISPER_PER_DAY, whisperUsedToday } from "./whisper";
 
 /**
  * view.day 가 생기는 단계: 낮 단계(발표·토론·지목·변론·찬반·처형)·밤·아침·종료. 이 밖의 단계 뷰에는 day 키 자체가 없다(D-07).
@@ -221,6 +222,11 @@ export function buildView(state: RoomState, playerId: string, now: number): Room
   // 쪽지는 밤의 산 마피아에게만, 마피아끼리 같은 글이다(결정 0061-9). 작성자는 어디에도 없다. 유령·시민 편·아침 view 에는 키 자체가 없다.
   if (state.phase === "night" && isAlive(me) && me.role === "mafia" && state.nightNote !== undefined) {
     myInfo.note = state.nightNote;
+  }
+
+  // 귓속말 사용함 표시는 본인에게만(결정 0066-2) — discussion 의 산 본인이 오늘 이미 보냈을 때만 키를 만든다. 본문·상대는 어떤 view 에도 없다(whispers 는 서버 전용).
+  if (state.phase === "discussion" && isAlive(me) && whisperUsedToday(state, me.seat) >= WHISPER_PER_DAY) {
+    myInfo.whisperUsed = true;
   }
 
   // 토론 끝내기 누름은 본인에게만(결정 0060-2) — 산 본인이 discussion 에서 눌렀을 때만 키를 만든다. 누른 사람이 누구인지는 어떤 키로도 싣지 않는다.
