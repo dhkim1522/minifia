@@ -277,6 +277,67 @@ describe("밤 마피아 — 다가가기(결정 0061-2·6, NIGHT-07·08, E2 #9)"
   });
 });
 
+const aimOf = (c: ParentNode, seat: number): string | null => c.querySelector(`[data-seat="${seat}"]`)?.getAttribute("data-night-pick") ?? null;
+const aimSeats = (c: ParentNode): number[] => [...c.querySelectorAll<HTMLElement>("[data-night-pick]")].map((t) => Number(t.dataset.seat));
+
+describe("마피아 밤 선택 효과 (09.1-q2, 결정 0065)", () => {
+  it("산 마피아: 후보(나·동료 제외) 이름표만 cand, 고르면 그 좌석만 mine(클래스 is-picked·표식), 나·동료는 속성이 없다", () => {
+    const m = mount(makeView({ mySeat: 0 }));
+    // 0 나, 4 동료 → 후보는 1·2·3·5
+    expect(aimSeats(m.container)).toEqual([1, 2, 3, 5]);
+    expect([1, 2, 3, 5].every((s) => aimOf(m.container, s) === "cand")).toBe(true);
+    expect(m.container.querySelector('[data-pick="2"]')?.classList.contains("is-cand")).toBe(true);
+    fireEvent.click(m.container.querySelector('[data-pick="2"]')!);
+    expect(aimOf(m.container, 2)).toBe("mine");
+    expect(aimOf(m.container, 3)).toBe("cand");
+    const b = m.container.querySelector('[data-pick="2"]')!;
+    expect(b.classList.contains("is-picked")).toBe(true);
+    expect(b.querySelector("[data-night-mark]")).not.toBeNull();
+    expect(m.container.querySelectorAll("[data-night-mark]")).toHaveLength(1);
+  });
+
+  it("서버 view(me.pick)가 오면 그 좌석이 mine. 동료만 고른 좌석(allyPicks)은 cand 그대로 — 동료 선택에는 테두리 효과가 없다", () => {
+    const m = mount(makeView({ mySeat: 0 }));
+    m.show(makeView({ mySeat: 0, pick: 2, allyPicks: [3] }));
+    expect(aimOf(m.container, 2)).toBe("mine");
+    expect(aimOf(m.container, 3)).toBe("cand");
+    expect(m.container.querySelectorAll("[data-night-mark]")).toHaveLength(1);
+  });
+
+  it("누르는 동안 preview, 떼면 cand", () => {
+    const m = mount(makeView({ mySeat: 0 }));
+    const b = m.container.querySelector('[data-pick="3"]')!;
+    fireEvent.pointerDown(b, { pointerId: 2, pointerType: "touch" });
+    expect(aimOf(m.container, 3)).toBe("preview");
+    expect(b.classList.contains("is-preview")).toBe(true);
+    fireEvent.pointerUp(b, { pointerId: 2, pointerType: "touch" });
+    expect(aimOf(m.container, 3)).toBe("cand");
+  });
+
+  it("누설 규칙: 산 시민·경찰·의사·유령 화면에는 data-night-pick·표식·is-cand 가 0개다(서버 me.pick 이 섞여 와도)", () => {
+    for (const seat of [3, 1, 2]) {
+      const m = mount(makeView({ mySeat: seat, pick: 5 }));
+      expect(aimSeats(m.container), `seat ${seat}`).toEqual([]);
+      expect(m.container.querySelectorAll("[data-night-mark], .is-cand, .is-picked, .is-preview"), `seat ${seat}`).toHaveLength(0);
+      cleanup();
+    }
+    const g = mount(makeView({ mySeat: 5, dead: [5], picks: { mafia: [2], police: [], doctor: [] } }));
+    expect(aimSeats(g.container)).toEqual([]);
+    expect(g.container.querySelectorAll("[data-night-mark], .is-cand, .is-picked, .is-preview")).toHaveLength(0);
+    cleanup();
+    // 탈락한 마피아도 없다
+    const dead = mount(makeView({ mySeat: 0, dead: [0] }));
+    expect(aimSeats(dead.container)).toEqual([]);
+  });
+
+  it("낮 지목 단계의 이름표 버튼은 그대로다: 밤 효과 속성·클래스·표식이 없다", () => {
+    const m = mount(makeView({ phase: "nomination", mySeat: 0 }));
+    expect(aimSeats(m.container)).toEqual([]);
+    expect(m.container.querySelectorAll("[data-night-mark], .is-cand, .is-picked, .is-preview")).toHaveLength(0);
+    for (const b of m.container.querySelectorAll("button.mf-world__pick")) expect(b.className).toBe("mf-world__pick");
+  });
+});
+
 const headOf = (c: ParentNode, seat: number): Element | null => c.querySelector(`[data-seat="${seat}"] .mv-head`);
 const countOf = (c: ParentNode, seat: number): string | null => headOf(c, seat)?.getAttribute("data-count") ?? null;
 const sureOf = (c: ParentNode, seat: number): string | null => headOf(c, seat)?.getAttribute("data-sure") ?? null;

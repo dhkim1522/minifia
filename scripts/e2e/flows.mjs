@@ -1975,6 +1975,8 @@ function readNight(page) {
       nightDark: root.getAttribute("data-night-dark"),
       tensionPulse: qa("[data-tension-pulse]").length,
       tagCount: qa(".mf-world__tag").length,
+      aimTags: qa("[data-night-pick]").length,
+      aimMarks: qa("[data-night-mark]").length,
       roleChips: qa("[data-role-chip]").length,
       chatPanels: qa("[data-chat-panel]").length,
       myTag: mb ? { x: mb.left, y: mb.top, w: mb.width, h: mb.height } : null,
@@ -1995,6 +1997,25 @@ function readNight(page) {
       announce: (q("[data-announce] .mf-announce__text")?.textContent ?? "").trim() || null,
     };
   });
+}
+
+/** 마피아 밤 선택 효과(결정 0065): 이름표마다 상태(data-night-pick)·버튼 클래스·표식·::after 테두리(스타일·굵기·색)를 읽는다 */
+function readAim(page) {
+  return page.evaluate(() =>
+    [...document.querySelectorAll(".mf-world__tag")].map((t) => {
+      const b = t.querySelector("button.mf-world__pick");
+      const cs = b ? getComputedStyle(b, "::after") : null;
+      return {
+        seat: Number(t.getAttribute("data-seat")),
+        aim: t.getAttribute("data-night-pick"),
+        cls: b ? b.className : null,
+        mark: t.querySelector("[data-night-mark]") !== null,
+        borderStyle: cs ? cs.borderTopStyle : null,
+        borderWidth: cs ? parseFloat(cs.borderTopWidth) : null,
+        borderColor: cs ? cs.borderTopColor : null,
+      };
+    }),
+  );
 }
 
 /** 번쩍임([data-kill-fx])·막([data-curtain])이 DOM 에 생기고 사라진 횟수를 센다(짧은 구간을 호출 지연과 상관없이 놓치지 않게 MutationObserver). */
@@ -2161,6 +2182,11 @@ async function nightAssassin(ctx) {
     rec(sc, "NA5", "밤 마피아 화면에는 어둠·맥박이 없다(시민 편만)", n0?.nightDark === null && n0?.tensionPulse === 0, `어둠 ${n0?.nightDark}, 맥박 ${n0?.tensionPulse}`);
     await gameGH(ctx, id, "night-mafia", host);
 
+    // 선택 효과(결정 0065): 고르기 전 후보 이름표는 점선 테두리(cand), 나·동료는 없다
+    const aim0 = await readAim(hp);
+    const cand0 = aim0.filter((t) => t.aim === "cand");
+    rec(sc, "NA3b", "고르기 전: 후보 이름표 전부가 cand + 점선 테두리고 표식은 없다", cand0.length === g.picks.length && cand0.every((t) => t.borderStyle === "dashed" && !t.mark) && aim0.every((t) => t.aim === "cand" || t.aim === null), `cand ${cand0.length}/${g.picks.length}, 점선 ${cand0.filter((t) => t.borderStyle === "dashed").length}, 상태 ${aim0.map((t) => t.aim).join(",")}`);
+
     // 다가가기: 봇이 고르는 가장 낮은 seat 의 산 비마피아를 방장이 누른다 → 내 캐릭터가 움직이고(목적지 링) 봇 마피아와 일치해 확정된다
     const target = g.picks.map((b) => b.seat).sort((a, b) => a - b)[0];
     const posBefore = await sampleWorld(hp, game.hostSeat).catch(() => null);
@@ -2170,6 +2196,9 @@ async function nightAssassin(ctx) {
       await tapPick(hp, target);
     });
     rec(sc, "NA6", "이름표 버튼을 누르면 눌림 표시", tap.ok, tap.detail);
+    const aim1 = await readAim(hp);
+    const mineTag = aim1.find((t) => t.seat === target);
+    rec(sc, "NA6b", "고른 뒤: 대상 이름표만 mine + is-picked + 3px 실선 진홍(#c8102e) 테두리 + 표식, 나머지 후보는 cand", mineTag?.aim === "mine" && /is-picked/.test(mineTag.cls ?? "") && mineTag.borderStyle === "solid" && mineTag.borderWidth === 3 && mineTag.borderColor === "rgb(200, 16, 46)" && mineTag.mark === true && aim1.filter((t) => t.aim === "mine").length === 1 && aim1.filter((t) => t.aim === "cand").length === g.picks.length - 1 && aim1.filter((t) => t.mark).length === 1, `대상 ${JSON.stringify(mineTag)}, mine ${aim1.filter((t) => t.aim === "mine").length}, cand ${aim1.filter((t) => t.aim === "cand").length}, 표식 ${aim1.filter((t) => t.mark).length}`);
     // 다가가기는 일반 move 를 보낸다(목적지 링 data-ring 은 맵 탭에서만 생긴다) — 내 구간이 새로 오고 위치가 실제로 옮겨지는지로 본다
     const moved = await attempt(async () => {
       const start = performance.now();
@@ -2263,6 +2292,7 @@ function sideChecks(rec, sc, who, n, g) {
   rec(sc, "L3", `${who}: 직업 칩(data-role-chip)이 0개다`, n.roleChips === 0, `칩 ${n.roleChips}개`);
   rec(sc, "L4", `${who}: 채팅 패널이 0개다`, n.chatPanels === 0, `채팅 패널 ${n.chatPanels}개`);
   rec(sc, "L5", `${who}: 아래에 [유언] 깃펜 줄이 있다`, n.willButton === true, `깃펜 ${n.willButton}`);
+  rec(sc, "L7", `${who}: 마피아 밤 선택 효과(data-night-pick·표식)가 0개다`, n.aimTags === 0 && n.aimMarks === 0, `속성 ${n.aimTags}개, 표식 ${n.aimMarks}개`);
 }
 
 /** 경찰·의사 얼굴 목록: 칸 수, 8자 이름이 칸 안(faceNameFits), 패널 높이가 UI-SPEC 160행 식(±2, 가정 A1) */
@@ -2614,6 +2644,9 @@ async function nightSizesFlow(ctx) {
       recMany(rec, sc, pickButtonChecks(g.picks), " (마피아 밤)");
       recTagInStage(rec, sc, "SZ2", "마피아", n);
       panelRow(rec, sc, "SZ3", g, h, "nightMafia", "마피아 밤");
+      const aim = await readAim(game.hp);
+      const cands = aim.filter((t) => t.aim === "cand");
+      rec(sc, "SZ3b", "마피아: 후보 이름표 버튼이 모두 선택 효과 상태(cand, 점선 테두리)다", cands.length === g.picks.length && cands.every((t) => t.borderStyle === "dashed"), `cand ${cands.length}/${g.picks.length}, 점선 ${cands.filter((t) => t.borderStyle === "dashed").length}`);
     } finally {
       await closeGame(game);
     }

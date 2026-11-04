@@ -913,3 +913,109 @@ describe("발밑 고리 setRing (DAY-04, 밤 임시 틀)", () => {
     expect(c.meshCount()).toBe(before);
   });
 });
+
+// ---------- 09.1-q2: 마피아 밤 선택 효과 setPickMark (결정 0065) ----------
+describe("밤 선택 표시 setPickMark (결정 0065)", () => {
+  const shells = (c: WorldCharacter): Mesh[] => meshes(c.root).filter((m) => m.userData.isOutline === true);
+  const ringOf = (c: WorldCharacter): Mesh | undefined => c.root.getObjectByName("ring") as Mesh | undefined;
+  const run = (c: WorldCharacter, seconds: number, t0 = 0): number => {
+    const n = Math.round(seconds / 0.016);
+    for (let i = 0; i < n; i++) c.update(0.016, t0 + i * 0.016, false);
+    return t0 + n * 0.016;
+  };
+
+  it("켜면 관절 메시 여섯 개마다 붉은 뒷면 껍질(배율 1.14)이 붙고, 끄면 모두 떼고 재질·껍질을 해제한다", () => {
+    const matSpy = vi.spyOn(MeshBasicMaterial.prototype, "dispose");
+    try {
+      const c = createCharacter(0, "coat");
+      expect(shells(c)).toHaveLength(0);
+      c.setPickMark(true, { color: "#e0344b", animate: true });
+      const list = shells(c);
+      expect(list).toHaveLength(6);
+      for (const h of list) {
+        expect(h.scale.x).toBeCloseTo(1.14, 9);
+        const m = h.material as MeshBasicMaterial;
+        expect(m).toBeInstanceOf(MeshBasicMaterial);
+        expect(m.side).toBe(1); // BackSide
+        expect(m.color.getHexString()).toBe("e0344b");
+      }
+      c.setPickMark(true, { color: "#e0344b", animate: true }); // 다시 켜도 늘지 않는다
+      expect(shells(c)).toHaveLength(6);
+      matSpy.mockClear();
+      c.setPickMark(false);
+      expect(shells(c)).toHaveLength(0);
+      expect(matSpy).toHaveBeenCalledTimes(1);
+      c.setPickMark(false); // 이미 없으면 아무 일도 없다
+      expect(matSpy).toHaveBeenCalledTimes(1);
+    } finally {
+      matSpy.mockRestore();
+    }
+  });
+
+  it("껍질은 의상·표정이 바뀌어도 그 관절의 새 지오메트리를 따라간다", () => {
+    const c = createCharacter(0, "coat");
+    c.setPickMark(true, { color: "#e0344b", animate: true });
+    c.applyOutfit("police");
+    const bodyGeo = (c.root.getObjectByName("body") as Group).children.find((x) => (x as Mesh).isMesh && !x.userData.isOutline) as Mesh;
+    const shell = bodyGeo.children.find((x) => x.userData.isOutline) as Mesh;
+    expect(shell.geometry).toBe(bodyGeo.geometry);
+  });
+
+  it("고리는 2.4 배에서 420ms 에 걸쳐 1 배로 조여지고, 그 뒤 1 근처에서 가볍게 맥박친다", () => {
+    const c = createCharacter(0, "coat");
+    c.setRing("#c8102e");
+    c.setPickMark(true, { color: "#e0344b", animate: true });
+    c.update(0.001, 0, false);
+    expect(ringOf(c)!.scale.x).toBeGreaterThan(2.3);
+    let t = run(c, 0.2);
+    const mid = ringOf(c)!.scale.x;
+    expect(mid).toBeLessThan(2.4);
+    expect(mid).toBeGreaterThan(1.0);
+    t = run(c, 0.3, t);
+    // 420ms 가 지난 뒤: 1 ± 0.07 안
+    const after: number[] = [];
+    for (let i = 0; i < 60; i++) {
+      c.update(0.016, t + i * 0.016, false);
+      after.push(ringOf(c)!.scale.x);
+    }
+    expect(Math.min(...after)).toBeGreaterThanOrEqual(0.92);
+    expect(Math.max(...after)).toBeLessThanOrEqual(1.08);
+    expect(Math.max(...after) - Math.min(...after)).toBeGreaterThan(0.01); // 맥박이 있다
+  });
+
+  it("animate 가 거짓이면(움직임 줄이기) 윤곽만 붙고 고리는 늘 1 배다", () => {
+    const c = createCharacter(0, "coat");
+    c.setRing("#c8102e");
+    c.setPickMark(true, { color: "#e0344b", animate: false });
+    expect(shells(c)).toHaveLength(6);
+    for (let i = 0; i < 40; i++) {
+      c.update(0.016, i * 0.016, false);
+      expect(ringOf(c)!.scale.x).toBe(1);
+    }
+  });
+
+  it("끄면 고리 배율이 1 로 돌아온다. 고리가 나중에 붙어도 조임이 적용된다", () => {
+    const c = createCharacter(0, "coat");
+    c.setPickMark(true, { color: "#e0344b", animate: true });
+    c.setRing("#c8102e"); // 고리가 뒤에 생겼다
+    c.update(0.001, 0, false);
+    expect(ringOf(c)!.scale.x).toBeGreaterThan(2.3);
+    c.setPickMark(false);
+    c.update(0.016, 1, false);
+    expect(ringOf(c)!.scale.x).toBe(1);
+  });
+
+  it("dispose 는 껍질 재질도 해제한다", () => {
+    const matSpy = vi.spyOn(MeshBasicMaterial.prototype, "dispose");
+    try {
+      const c = createCharacter(0, "coat");
+      c.setPickMark(true, { color: "#e0344b", animate: true });
+      matSpy.mockClear();
+      c.dispose();
+      expect(matSpy).toHaveBeenCalled();
+      expect(shells(c)).toHaveLength(0);
+    } finally {
+      matSpy.mockRestore();
+    }
+  });
+});
