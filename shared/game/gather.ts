@@ -135,7 +135,7 @@ export function assignSlots(people: readonly { id: string; x: number; z: number 
   return out;
 }
 
-/** 지금 단계가 요구하는 배치의 키: 지목 '{일차}:ring' · 결선 '{일차}:runoff' · 변론·찬반 '{일차}:stage' · 처형 '{일차}:exec' · 그 밖은 null(아무것도 안 한다). */
+/** 지금 단계가 요구하는 배치의 키: 지목 '{일차}:ring' · 결선 '{일차}:runoff' · 마지막 3인 '{일차}:showdown' · 변론·찬반 '{일차}:stage' · 처형 '{일차}:exec' · 그 밖은 null(아무것도 안 한다). */
 export function layoutKey(state: RoomState): string | null {
   const day = state.day ?? 0;
   switch (state.phase) {
@@ -143,6 +143,8 @@ export function layoutKey(state: RoomState): string | null {
       return `${day}:ring`;
     case "runoff":
       return `${day}:runoff`;
+    case "showdown":
+      return `${day}:showdown`;
     case "defense":
     case "verdict":
       return `${day}:stage`;
@@ -173,6 +175,7 @@ export interface GatherLayout {
 /**
  * 지금 단계가 요구하는 배치(멱등). 단계가 배치 단계가 아니면 null.
  *   nomination      산 사람 → 둘레 자리
+ *   showdown        산 세 사람 → ringSlots(3) 삼각형 자리(변론자 없음; 처형 단계가 같은 일차 기억을 이어 쓴다, 결정 0066-5)
  *   runoff          후보 둘 → RUNOFF_SPOTS(낮은 좌석이 [0]), 나머지 산 사람 → 둘레 자리(후보의 둘레 자리는 변론에서 진 쪽이 돌아올 자리로 기억에 남는다)
  *   defense·verdict 변론자 → 무대(STAGE_SPOT), 나머지 산 사람 → 자기 둘레 자리
  *   execution       통과면 변론자 목적지 없음(무대 유지, 유령이 되어 떠오른다), 부결이면 변론자 → 자기 둘레 자리
@@ -185,7 +188,7 @@ export function layoutFor(state: RoomState, w: WorldState, now: number): GatherL
   if (key === null) return null;
   const day = state.day ?? 0;
   const trial = state.phase !== "nomination";
-  const defender = trial && state.phase !== "runoff" ? state.verdict?.candidate : undefined;
+  const defender = trial && state.phase !== "runoff" && state.phase !== "showdown" ? state.verdict?.candidate : undefined;
   const runoffCand = state.phase === "runoff" ? state.runoff?.cand : undefined;
 
   const participants = [...state.players]
