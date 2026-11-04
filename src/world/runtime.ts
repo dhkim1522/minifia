@@ -15,6 +15,7 @@ import { createTapGate } from "./input";
 import { BLEND_SNAP_DIST, blendRemaining, createOwnMoves, predictSegment, stepYaw, travelYaw } from "./motion";
 import { DEFAULT_BUDGET_STEP, nextLadderStep } from "./renderer";
 import type { CharacterHandle, WorldRenderer } from "./renderer";
+import { GHOST_MIST } from "./ghostOutfit";
 import { executionFade, GHOST_OPACITY, ghostFloatY, stageLiftY } from "./presence";
 import type { SceneLook } from "./presence";
 import { initialMapStatus, inputBlocked, mapStatusReducer, shouldRecreate } from "./status";
@@ -186,6 +187,8 @@ export interface WorldRuntimeDeps {
   storage?: Storage | null;
   /** 목적지 링이 생기거나(탭)·보정되거나(구간 끝점)·없어질 때 한 번씩 불린다 — 루트의 data-ring 용 */
   onRing?: (at: { x: number; z: number } | null) => void;
+  /** 지금 입힌 유령 직업 의상 표(좌석 → 의상 id)가 바뀔 때만 한 번 불린다 — E2E 훅 window.__mfGhostOutfits 용(09.1-09). 산 사람 화면은 늘 빈 표다 */
+  onGhostOutfits?: (outfits: Readonly<Record<number, string>>) => void;
 }
 
 export interface WorldRuntime {
@@ -272,6 +275,8 @@ interface Actor {
   fadeOpacity: number;
   /** 지금 유령으로 그리고 있나(handle.setGhost 에 마지막으로 보낸 값) */
   ghost: boolean;
+  /** 유령 직업 의상 + 안개를 입었나(그 의상 id, 없으면 null) — 장면 표에 outfit 이 있을 때만(spectate 를 받은 유령 분기) */
+  ghostOutfit: string | null;
   /** 등장 시작 시각(없으면 서 있다) */
   enter: number | null;
   /** 퇴장 시작 시각 */
@@ -525,7 +530,18 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
     a.handle.setDim(dim);
   }
 
+  /** 유령 직업 의상 표가 바뀌었나(적용·해제·액터 제거) — 프레임 끝에서 한 번 알린다 */
+  let ghostOutfitsDirty = false;
+  function emitGhostOutfits(): void {
+    if (!ghostOutfitsDirty) return;
+    ghostOutfitsDirty = false;
+    const map: Record<number, string> = {};
+    for (const a of actors.values()) if (a.ghostOutfit !== null) map[a.seat] = a.ghostOutfit;
+    deps.onGhostOutfits?.(map);
+  }
+
   function removeActor(a: Actor): void {
+    if (a.ghostOutfit !== null) ghostOutfitsDirty = true;
     renderer?.removeCharacter(a.seat);
     a.handle.dispose();
     actors.delete(a.seat);
@@ -572,6 +588,7 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
       ringKind: null,
       fadeOpacity: 1,
       ghost: false,
+      ghostOutfit: null,
       enter: null,
       exit: null,
       tag: null,
@@ -790,9 +807,23 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
       }
       const seatLook = look?.seats[a.seat];
       const wantGhost = seatLook?.ghost === true;
-      if (wantGhost !== a.ghost) {
+      // 유령 직업 의상 + 안개(09.1-09, B-3): 의상 교체와 재질은 같은 프레임에 — 의상 먼저, 그다음 안개. 의상은 장면 표(spectate 에서 온 값)에 있을 때만
+      const wantOutfit = wantGhost ? (seatLook?.outfit ?? null) : null;
+      if (wantOutfit !== null) {
+        if (wantOutfit !== a.ghostOutfit || !a.ghost) {
+          if (wantOutfit !== a.ghostOutfit) a.handle.applyOutfit?.(wantOutfit);
+          a.ghost = true;
+          a.ghostOutfit = wantOutfit;
+          a.handle.setGhost?.(true, GHOST_MIST.opacity, { color: GHOST_MIST.emissive, intensity: GHOST_MIST.intensity });
+          ghostOutfitsDirty = true;
+        }
+      } else if (wantGhost !== a.ghost) {
         a.ghost = wantGhost;
         a.handle.setGhost?.(wantGhost);
+        if (a.ghostOutfit !== null) {
+          a.ghostOutfit = null;
+          ghostOutfitsDirty = true;
+        }
       }
       // 손가락 자세: 지목 중인 좌석만 유지하고, 풀리면 평소 자세로 돌아온다
       const pointAt = seatLook?.pointAt;
@@ -868,7 +899,7 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
       }
       if (fade !== a.fadeOpacity) {
         a.fadeOpacity = fade;
-        a.handle.setOpacity?.(fade === 1 && a.ghost ? GHOST_OPACITY : fade);
+        a.handle.setOpacity?.(fade === 1 && a.ghost ? (a.ghostOutfit !== null ? GHOST_MIST.opacity : GHOST_OPACITY) : fade);
       }
       alpha = Math.min(alpha, fade);
       // 높이: 등장 낙하 + (장면이 있을 때) 무대 위 0.29 + 유령 떠다님 + 처형 떠오름
@@ -1006,6 +1037,7 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
       removeActor(a);
       if (a.tag !== null) a.tag.style.opacity = "0";
     }
+    emitGhostOutfits();
     resync = false;
     lastDrawAt = now;
 

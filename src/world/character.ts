@@ -706,9 +706,10 @@ export interface WorldCharacter {
   setFace(id: FaceId): void;
   /**
    * 유령(처형당한 사람): 이 캐릭터 관절 메시만 복제 재질(transparent·depthWrite false·opacity 기본 0.6)로 바꾸고 발밑 원판을 숨긴다.
-   * 끄면 공유 재질로 돌아오고 복제 재질은 해제한다. 켠 채 다시 켜면 불투명도만 바꾼다(GHOST-01)
+   * 끄면 공유 재질로 돌아오고 복제 재질은 해제한다. 켠 채 다시 켜면 불투명도·발광만 바꾼다(GHOST-01).
+   * glow(09.1-09, 안개 유령)가 있으면 복제 재질의 emissive·emissiveIntensity 를 정한다 — 색은 의상 원래 색을 두고 발광이 덮는다. 없으면 발광 0
    */
-  setGhost(on: boolean, opacity?: number): void;
+  setGhost(on: boolean, opacity?: number, glow?: GhostGlow): void;
   /** 유령일 때만 복제 재질의 불투명도를 바꾼다(유령이 아니면 무시) */
   setOpacity(alpha: number): void;
   /**
@@ -722,6 +723,12 @@ export interface WorldCharacter {
   meshCount(): number;
   /** 이 캐릭터가 만든 지오메트리를 해제한다. 공유 재질·발밑 원판은 건드리지 않는다 */
   dispose(): void;
+}
+
+/** 안개 유령의 발광(09.1-09, 시안 GhostCostume 'mist'): 복제 재질의 emissive 색과 세기 */
+export interface GhostGlow {
+  color: string;
+  intensity: number;
 }
 
 /** 모든 캐릭터가 함께 쓰는 병합 재질(버텍스 컬러). 피부 0.7·놋쇠 금속감의 작은 차이는 합친다(가정 A1) */
@@ -933,7 +940,7 @@ export function createCharacter(figIndex: number, outfit: OutfitId = "coat"): Wo
     setFace(id) {
       if (!disposed) showFace(id);
     },
-    setGhost(on, opacity = GHOST_DEFAULT_OPACITY) {
+    setGhost(on, opacity = GHOST_DEFAULT_OPACITY, glow) {
       if (disposed) return;
       if (!on) {
         if (!ghostMat) return;
@@ -951,6 +958,14 @@ export function createCharacter(figIndex: number, outfit: OutfitId = "coat"): Wo
         disc.visible = false;
       }
       ghostMat.opacity = clamp01(opacity);
+      // 발광은 복제 재질에만 — 공유 재질(bodyMaterial)은 건드리지 않는다
+      if (glow) {
+        ghostMat.emissive.set(glow.color);
+        ghostMat.emissiveIntensity = glow.intensity;
+      } else {
+        ghostMat.emissive.set(0x000000);
+        ghostMat.emissiveIntensity = 0;
+      }
     },
     holdPose(id) {
       if (disposed) return;
