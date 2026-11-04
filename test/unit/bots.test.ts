@@ -1100,7 +1100,7 @@ describe("봇 차례 지목 (결정 0063-1)", () => {
     const state = botOneTurn(4);
     const now = state.phaseEndsAt! - 8000;
     const run = (seed: number): string => planBotSteps(state, now, seededRandInt(seed)).map((x) => (x.act.t === "point" ? x.act.target : -1)).join(",");
-    expect(`${run(11)}|${run(11)}`).toBe("TBD");
+    expect(`${run(11)}|${run(11)}`).toBe("3|3");
   });
 
   it("확정 뒤 사이·끝 알림·탈락한 봇 차례에는 point 가 없다", () => {
