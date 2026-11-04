@@ -73,6 +73,8 @@ export interface WhisperLineModel {
 export function whisperLine(line: WhisperSource, mySeat: number, nameOf: (seat: number) => string): WhisperLineModel | null {
   if (line.seat === undefined || line.to === undefined) return null;
   if (line.kind === "system" && line.icon === "whisper") {
+    // 보낸·받은 사람은 공개 사실 줄 대신 비공개 줄 하나만 본다(중복 없음). 서버가 당사자에게 사실 줄을 보내지 않지만, 혹시 와도 겹쳐 그리지 않는다
+    if (line.seat === mySeat || line.to === mySeat) return null;
     return { kind: "system", whisper: "public", icon: "whisper", text: WHISPER_TEXT.fact(nameOf(line.seat), nameOf(line.to)) };
   }
   if (line.kind !== "whisper") return null;

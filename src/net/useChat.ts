@@ -72,13 +72,15 @@ export function useChat({ store, connection, view }: { store: ChatStore; connect
     const now = Date.now();
     renderedAt.current = now;
     const nameOf = (seat: number): string => names.current.get(seat) ?? "";
-    return store.visibleLines(channel, now).map((line): ChatPanelMessage => {
+    return store.visibleLines(channel, now).flatMap((line): ChatPanelMessage[] => {
       // 귓속말: 본문 줄(받은·보낸 비공개 블록)과 공개 사실 줄. 이름은 좌석으로 찾는다(저장소는 이름을 모른다)
-      const w = whisperLine(line, mySeat, nameOf);
-      if (w !== null) {
+      // 내가 당사자가 아닌 본문 줄·당사자에게 온 사실 줄은 그리지 않는다(서버가 보내지 않지만, 와도 본문을 일반 줄로 흘리지 않는다 — T-09.1.1-25)
+      if (line.to !== undefined && (line.kind === "whisper" || line.icon === "whisper")) {
+        const w = whisperLine(line, mySeat, nameOf);
+        if (w === null) return [];
         const m: ChatPanelMessage = { key: line.key, kind: w.kind, whisper: w.whisper, icon: w.icon, text: w.text };
         if (w.title !== undefined) m.title = w.title;
-        return m;
+        return [m];
       }
       if (line.kind === "card" && line.card) {
         // 카드는 서버 k 줄과 이 화면의 경찰 카드뿐이다. 서버 카드의 제목은 좌석 닉네임으로 만든다(UI-SPEC 427행).
@@ -88,12 +90,13 @@ export function useChat({ store, connection, view }: { store: ChatStore; connect
           m.title = CHAT_TEXT.cardNote;
           m.tone = "mafia";
         } else m.title = line.title ?? "";
-        return m;
+        return [m];
       }
+      if (line.kind === "whisper") return []; // 받는 사람 없는 귓속말 본문은 그리지 않는다
       if (line.kind !== "player") {
-        const m: ChatPanelMessage = { key: line.key, kind: line.kind === "card" || line.kind === "whisper" ? "system" : line.kind, text: line.text };
+        const m: ChatPanelMessage = { key: line.key, kind: line.kind === "card" ? "system" : line.kind, text: line.text };
         if (line.icon) m.icon = line.icon;
-        return m;
+        return [m];
       }
       const m: ChatPanelMessage = { key: line.key, kind: "player", text: line.text };
       if (line.seat !== undefined) {
@@ -102,7 +105,7 @@ export function useChat({ store, connection, view }: { store: ChatStore; connect
         m.me = line.seat === mySeat;
       }
       if (line.ch) m.ch = line.ch;
-      return m;
+      return [m];
     });
     // revision 이 줄 변화를 알린다(저장소는 React 밖이라 visibleLines 만으로는 의존성이 보이지 않는다)
   }, [store, revision, cardTick, channel, players, mySeat]);

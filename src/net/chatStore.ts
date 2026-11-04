@@ -373,7 +373,8 @@ function cardLine(f: ChatLineWire, card: "will" | "note", revealAt?: number): Ch
  */
 function whisperLine(f: ChatLineWire): ChatStoreLine | null {
   if (f.to === undefined) return null;
-  const key = `whisper:${f.ch}:${f.seq}:${f.at}`;
+  // 본문(whisper)과 사실(whispered)은 같은 채널·seq 를 쓰지만 한 소켓에는 하나만 온다. 키는 종류를 포함해 서로 가리지 않게 한다
+  const key = `${f.k}:${f.ch}:${f.seq}:${f.at}`;
   if (f.k === "whisper") return { key, kind: "whisper", ch: f.ch, seat: f.seat, to: f.to, seq: f.seq, text: f.text, at: f.at, scope: f.ch };
   return { key, kind: "system", icon: "whisper", ch: f.ch, seat: f.seat, to: f.to, seq: f.seq, text: "", at: f.at, scope: f.ch };
 }
