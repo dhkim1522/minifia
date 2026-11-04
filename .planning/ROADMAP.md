@@ -342,7 +342,7 @@ Plans:
 
 **UI hint**: yes
 **계획 메모**: UI-SPEC 먼저(`/gsd-ui-phase 09.1`).
-**Plans:** 2/12 plans executed
+**Plans:** 3/12 plans executed
 
 Plans:
 
@@ -351,7 +351,7 @@ Plans:
 
 **Wave 2**
 - [x] 09.1-02-PLAN.md — 봇 차례 즉시 지목·넘기기 지목 마무리(차례 있을 때만 타는 경로) (TDD, W2)
-- [ ] 09.1-03-PLAN.md — 지목을 지나가는 시험 도우미를 지목 방식과 무관하게 (W2)
+- [x] 09.1-03-PLAN.md — 지목을 지나가는 시험 도우미를 지목 방식과 무관하게 (W2)
 
 **Wave 3**
 - [ ] 09.1-04-PLAN.md — 전환: tick 표·방 DO applyPoint 배선, 옛 지목 방 정규화, 시험 기대값 (TDD, W3)
