@@ -6,12 +6,14 @@ import { describe, expect, it } from "vitest";
 import {
   RING_RADIUS_FX,
   RING_SLOTS,
+  RUNOFF_SPOTS,
   assignSlots,
   layoutFor,
   layoutKey,
   ringSlots,
 } from "../../shared/game/gather";
 import { BAR_MAP, BAR_SPAWNS, STAGE_SPOT, UNIT, lineWalkable } from "../../shared/game/map";
+import { PX_PER_UNIT, groundToScreen } from "../../src/world/camera";
 import { attachConnection, createRoomState, joinRoom } from "../../shared/game/room";
 import type { Player, RoomState } from "../../shared/game/room";
 import {
@@ -55,6 +57,8 @@ interface Opts {
   dead?: number[];
   candidate?: number;
   passed?: boolean;
+  /** 결선 후보 좌석 둘(낮은 좌석 먼저). 주면 runoff 상태 step 0 을 싣는다. */
+  runoff?: [number, number];
 }
 
 /** n 명 판의 단계 상태. dead 좌석은 유령, candidate 는 변론자 seat, passed 는 그날 찬반 결과(voteLog 와 verdict 에 같이 싣는다). */
@@ -75,6 +79,7 @@ function stateAt(phase: PhaseId, n: number, o: Opts = {}): RoomState {
     day,
     players: base.players.map((p): Player => ({ ...p, alive: dead.has(p.seat) ? false : undefined })),
     ...withVerdict,
+    ...(o.runoff === undefined ? {} : { runoff: { cand: o.runoff, step: 0 as const } }),
   };
 }
 
@@ -310,6 +315,87 @@ describe("layoutFor — 지목: 산 사람이 둘레 자리로 (DAY-04, E8 #31)"
     expect(Object.keys(lay.slots).sort().map((id) => `${id}=${str(lay.slots[id]!)}`).join(" ")).toBe(
       Object.keys(fresh.slots).sort().map((id) => `${id}=${str(fresh.slots[id]!)}`).join(" "),
     );
+  });
+});
+
+describe("layoutFor — 결선: 두 후보가 가운데 마주 선다 (결정 0066-4, O-19)", () => {
+  const RO: [number, number] = [1, 4];
+
+  it("layoutKey: runoff → '{일차}:runoff'", () => {
+    expect(layoutKey(stateAt("runoff", 6, { day: 3, runoff: RO }))).toBe("3:runoff");
+  });
+
+  it("RUNOFF_SPOTS: 정수 두 점, 서로 180 이상 떨어지고, 화면에서 가로로 나란하다(왼쪽 = 낮은 좌석 쪽)", () => {
+    const [a, b] = RUNOFF_SPOTS;
+    expect([a, b].every((s) => s.every(Number.isInteger))).toBe(true);
+    expect((a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2).toBeGreaterThanOrEqual(180 * 180);
+    const canvas = { w: 390, h: 844 };
+    const at = (s: Slot) => groundToScreen({ x: s[0] / 100, y: 0, z: s[1] / 100 }, { x: 0, z: 0 }, canvas, 0);
+    const sa = at(a);
+    const sb = at(b);
+    expect(Math.abs(sa.sy - sb.sy)).toBeLessThan(1);
+    expect(sb.sx - sa.sx).toBeGreaterThan(PX_PER_UNIT);
+  });
+
+  it("두 후보 모두 무대 윗면(반지름 1.18) 안에 선다", () => {
+    for (const s of RUNOFF_SPOTS) expect(s[0] ** 2 + s[1] ** 2).toBeLessThan(118 * 118);
+  });
+
+  it("후보 둘은 RUNOFF_SPOTS(낮은 좌석이 [0])로, 나머지 산 사람은 둘레 자리로 간다 (key '2:runoff')", () => {
+    const state = stateAt("runoff", 6, { runoff: RO });
+    const lay = layoutFor(state, worldOf(6), 1000)!;
+    expect(lay.key).toBe("2:runoff");
+    const dest = (seat: number) => lay.moves.find((m) => m.playerId === idOf(seat))?.dest;
+    expect(str(dest(1)!)).toBe(str(RUNOFF_SPOTS[0]));
+    expect(str(dest(4)!)).toBe(str(RUNOFF_SPOTS[1]));
+    const others = lay.moves.filter((m) => ![1, 4].map(idOf).includes(m.playerId));
+    expect(others.length).toBe(4);
+    expect(others.every((m) => ringSlots(6).some((s) => str(s) === str(m.dest)))).toBe(true);
+  });
+
+  it("지목에서 걸은 둘레 자리를 그대로 쓴다: 후보를 뺀 사람은 이동 없음, 후보 슬롯은 기억에 남는다", () => {
+    const laid = applyLayout(stateAt("nomination", 6), worldOf(6), 1000);
+    const state = stateAt("runoff", 6, { runoff: RO });
+    const lay = layoutFor(state, laid, 60_000)!;
+    expect(lay.moves.map((m) => m.playerId).join(",")).toBe([1, 4].map(idOf).join(","));
+    expect(str(lay.slots[idOf(1)]!)).toBe(str(laid.lay!.slots[idOf(1)]!));
+    expect(str(lay.slots[idOf(4)]!)).toBe(str(laid.lay!.slots[idOf(4)]!));
+  });
+
+  it("멱등: 적용하고 lay 를 저장한 뒤 다시 부르면 이동이 없다 — 걷는 도중에도", () => {
+    const state = stateAt("runoff", 7, { runoff: [0, 6], dead: [3] });
+    const applied = applyLayout(state, applyLayout(stateAt("nomination", 7, { dead: [3] }), worldOf(7), 1000), 5000);
+    for (const now of [5000, 5400, 9000, 90_000]) expect(layoutFor(state, applied, now)!.moves.length).toBe(0);
+    expect(endOf(applied.segs[idOf(0)]!)).toBe(str(RUNOFF_SPOTS[0]));
+    expect(endOf(applied.segs[idOf(6)]!)).toBe(str(RUNOFF_SPOTS[1]));
+  });
+
+  it("지목 기억이 없어도(퇴거 뒤 복원) 나머지는 새로 배정되고 후보는 마주 선다", () => {
+    const lay = layoutFor(stateAt("runoff", 5, { runoff: [2, 3] }), worldOf(5), 1000)!;
+    expect(lay.moves.length).toBe(5);
+    expect(sortedStr(Object.values(lay.slots).map(str))).toBe(sortedStr(ringSlots(5).map(str)));
+    expect(str(lay.moves.find((m) => m.playerId === idOf(2))!.dest)).toBe(str(RUNOFF_SPOTS[0]));
+  });
+
+  it("둘레 자리 어디서든 RUNOFF_SPOTS 두 점으로 걸어 정확히 도착한다 (8곳 × 2점)", () => {
+    for (const from of ringSlots(8)) {
+      for (const spot of RUNOFF_SPOTS) {
+        const seg = planMoveSegment(restSegment(from[0], from[1], 0), { x: spot[0], z: spot[1] }, 0, BAR_MAP);
+        expect(`${from}>${seg.p[seg.p.length - 2]},${seg.p[seg.p.length - 1]}`).toBe(`${from}>${str(spot)}`);
+      }
+    }
+  });
+
+  it("결선 → 변론: 승자는 무대로, 진 후보는 자기 둘레 자리로 돌아간다", () => {
+    const nom = applyLayout(stateAt("nomination", 6), worldOf(6), 1000);
+    const atRunoff = applyLayout(stateAt("runoff", 6, { runoff: RO }), nom, 60_000);
+    const state = stateAt("defense", 6, { candidate: 4 });
+    const lay = layoutFor(state, atRunoff, 90_000)!;
+    expect(lay.key).toBe("2:stage");
+    const dest = (seat: number) => lay.moves.find((m) => m.playerId === idOf(seat))?.dest;
+    expect(str(dest(4)!)).toBe("0,0");
+    expect(str(dest(1)!)).toBe(str(nom.lay!.slots[idOf(1)]!));
+    expect(lay.moves.length).toBe(2);
   });
 });
 

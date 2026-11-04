@@ -3,8 +3,9 @@
 import { describe, expect, it } from "vitest";
 import type { RoleId, RoomView, ServerMessage } from "../../shared/protocol";
 import { RUNOFF_END_MS, RUNOFF_INTRO_MS, RUNOFF_VOTE_MS } from "../../shared/game/phases";
+import { RUNOFF_SPOTS, ringSlots } from "../../shared/game/gather";
 import {
-  closePhase, connect, editRoom, forceDue, framesOf, hello, killSeats, lastViewOf, mapPlayers, mark, nextFrame, pointAll, runoffAll, send, settle, startedGame, storedRoom,
+  closePhase, connect, editRoom, forceDue, framesOf, hello, killSeats, lastViewOf, layOf, mapPlayers, mark, nextFrame, pointAll, runoffAll, send, settle, startedGame, storedRoom, worldFramesOf,
 } from "./helpers";
 import type { Game } from "./helpers";
 
@@ -265,4 +266,47 @@ describe("L20 — 결선 마감 전 비공개 (결정 0066-4, T-09.1.1-10)", () 
     expect(columns[0]!.join("#")).toBe(columns[1]!.join("#"));
     expect(columns[0]![0]!.includes("defense")).toBe(true);
   }, 120_000);
+});
+
+/** 한 소켓이 from 이후 받은 world.move 의 (좌석 -> 마지막 끝점 'x,z'). */
+function movesSince(sock: Game["socks"][number], from: number): Map<number, string> {
+  const out = new Map<number, string>();
+  for (const m of worldFramesOf(sock, from)) if (m.k === "move") out.set(m.s, `${m.p[m.p.length - 2]},${m.p[m.p.length - 1]}`);
+  return out;
+}
+
+describe("결선 배치 — 두 후보가 가운데 마주 선다 (결정 0066-4, O-19)", () => {
+  it("결선 진입 때 후보 둘의 world move 가 전원에게 가고 끝점이 RUNOFF_SPOTS 다; 나머지는 움직이지 않는다. 변론으로 가면 승자는 무대로, 진 후보는 둘레 자리로", async () => {
+    const g = await startedGame("nomination");
+    const marks = g.socks.map((sock) => mark(sock));
+    await pointAll(g.code, g.actors, TIE_POINTS);
+    for (const sock of g.socks) await settle(sock, mark(sock));
+    expect((await storedRoom(g.code)).phase).toBe("runoff");
+    const spot = (i: 0 | 1): string => `${RUNOFF_SPOTS[i][0]},${RUNOFF_SPOTS[i][1]}`;
+    for (const [i, sock] of g.socks.entries()) {
+      const moves = movesSince(sock, marks[i]!);
+      expect(`${i}/${[...moves.entries()].sort((a, b) => a[0] - b[0]).map(([s, e]) => `${s}:${e}`).join("|")}`).toBe(`${i}/${CAND_A}:${spot(0)}|${CAND_B}:${spot(1)}`);
+    }
+    expect((await layOf(g.code)).key).toMatch(/^\d+:runoff$/);
+
+    const after = g.socks.map((sock) => mark(sock));
+    await runoffAll(g.code, g.actors, { 2: CAND_A, 3: CAND_A, 4: CAND_A, 5: CAND_B });
+    for (const sock of g.socks) await settle(sock, mark(sock));
+    expect((await storedRoom(g.code)).phase).toBe("defense");
+    const ring = new Set(ringSlots(6).map(([x, z]) => `${x},${z}`));
+    const back = movesSince(g.socks[0]!, after[0]!);
+    expect(back.get(CAND_A)).toBe("0,0");
+    expect(ring.has(back.get(CAND_B) ?? "")).toBe(true);
+    expect([...back.keys()].sort().join(",")).toBe(`${CAND_A},${CAND_B}`);
+  }, 90_000);
+
+  it("같은 상태에서 메시지가 한 번 더 와도 새 world 프레임이 없다(멱등)", async () => {
+    const g = await startedGame("nomination");
+    await pointAll(g.code, g.actors, TIE_POINTS);
+    for (const sock of g.socks) await settle(sock, mark(sock));
+    const marks = g.socks.map((sock) => mark(sock));
+    send(g.actors[3]!.sock, { t: "point", target: CAND_A }); // 앞머리 중 시도 — 거절만, 배치 프레임 없음
+    for (const [i, sock] of g.socks.entries()) await settle(sock, marks[i]!);
+    expect(g.socks.map((s, i) => worldFramesOf(s, marks[i]!).length).join(",")).toBe(g.socks.map(() => "0").join(","));
+  }, 60_000);
 });
