@@ -608,6 +608,10 @@ export class Room extends DurableObject<Env> {
       case "endDiscussion":
         await this.applyEndDiscussion(step.botId, true, Date.now());
         return;
+      // 9페이즈 보완(09-24): 채팅 줄 직전 입력 중 켜짐. 사람의 typing 메시지와 같은 relayTyping 본체를 지난다(꺼짐은 보내지 않는다 — 줄이 오면 클라이언트가 지운다). 유언·쪽지 행동에는 붙이지 않는다(WILL-01).
+      case "typing":
+        this.relayTyping(step.botId, true);
+        return;
       // 9페이즈(결정 0061-18): 유언 한 줄은 사람과 같은 applyWill 본체를 지난다(500ms 간격·단계·생존 검사, 특권 없음). 거부는 버린다.
       case "will":
         await this.applyWill(step.botId, act.text, Date.now());
@@ -1140,15 +1144,23 @@ export class Room extends DurableObject<Env> {
     const room = this.room;
     if (!att || !room) return;
     if (pk !== phaseKey({ phase: room.phase, day: room.day })) return;
-    const ch = channelOf(room, att.playerId);
+    this.relayTyping(att.playerId, on);
+  }
+
+  // 입력 중 중계 본체(09-24): 사람의 typing 메시지(handleTyping)와 서버 봇의 typing 행동이 같은 길을 지난다.
+  // 채널·간격 제한·받는 사람(audience)을 사람과 똑같이 정한다 — 밤 마피아의 입력 중은 산 마피아·유령 소켓에만 가고 산 시민 편은 받는 사람에 없다(이미 채팅이 보이는 채널에만 간다).
+  private relayTyping(playerId: string, on: boolean): void {
+    const room = this.room;
+    if (!room) return;
+    const ch = channelOf(room, playerId);
     if (ch === null) return;
-    const me = room.players.find((p) => p.id === att.playerId);
+    const me = room.players.find((p) => p.id === playerId);
     if (!me) return;
-    const decided = typingRelay(this.typingRelays.get(att.playerId), on, Date.now());
-    this.typingRelays.set(att.playerId, decided.next);
+    const decided = typingRelay(this.typingRelays.get(playerId), on, Date.now());
+    this.typingRelays.set(playerId, decided.next);
     if (!decided.relay) return;
     const others = new Set(audience(room, { k: "typing", ch }));
-    others.delete(att.playerId);
+    others.delete(playerId);
     this.deliver(others, { t: "typing", seat: me.seat, on });
   }
 

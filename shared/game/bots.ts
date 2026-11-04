@@ -23,6 +23,7 @@
 // 테스트 방 방장이 봇 투표를 고정한 경우(RoomState.testBotVote, P-13): 고정 값이면 결정 난수(randInt(100)·randInt(후보 수))를 건너뛰고 지연 난수는 그대로 부른다.
 // 고정 설정이 없거나 pick 조건이 안 맞아 무작위로 돌아가면 위 순서와 똑같다.
 // 09-12: will(1일차 토론 시작 3초 뒤 유언 한 줄)·approach(마피아 봇이 pick 계획 200ms 뒤 대상 곁으로 걷기)는 난수를 부르지 않는다 — 위 호출 순서와 시드 고정 값은 그대로다(결정 0061-18, 가정 A3).
+// 09-24: 채팅 줄마다 그 앞에 입력 중(typing) 단계가 붙는다(at = 줄 시각 − BOT_TYPING_LEAD_MS, 지금보다 앞서지 않음) — 난수를 부르지 않으므로 위 호출 순서와 시드 고정 값은 그대로다.
 // 08-07 순서 추가: discussion 은 위 두 줄 뒤에 randInt(토론 끝내기 폭 30000) 한 번이 붙는다(봇당 5번: 폭·문구 수·폭·문구 수·끝내기 폭, 시드 고정 값을 다시 고정했다).
 // nomination = (후보가 있으면) randInt(후보 수) → randInt(지목 지연 폭 6000) — 결정 함수(botPointTarget)는 자기를 뺀 산 사람 하나를 고르고 고정 pick(host·other)도 같다(결정 0060-13: pick 은 봇 지목 대상).
 // verdict(변론자가 아닌 산 봇만) = randInt(100) → randInt(찬반 지연 폭 5000) — 결정 함수(botExecAgree)는 찬성 확률 EXEC_YES_PERCENT 이고 고정 exec(yes·no)도 같다(exec 는 봇 찬반).
@@ -87,6 +88,8 @@ export const BOT_WILL_LINES: readonly string[] = ["다들 끝까지 힘내요", 
 export const BOT_WILL_AT_MS = 3_000;
 /** 밤에 마피아 봇이 pick 계획 이만큼 뒤에 대상 곁으로 걷는다(ms). */
 export const BOT_APPROACH_AFTER_MS = 200;
+/** 봇은 채팅 한 줄을 보내기 이만큼 전에 입력 중 신호를 켠다(ms, 09-24). 서버 typingRelay 의 켜짐 간격(1500ms)과 같다 — 같은 봇의 두 줄 사이(8000ms 이상)에는 항상 새로 중계된다. */
+export const BOT_TYPING_LEAD_MS = 1_500;
 
 /** 봇 행동 한 가지 — 사람 ClientMessage 의 같은 칸 이름을 쓴다(chat 은 본문 text 만, 단계 키는 실행할 때 서버 상태에서 만든다). */
 export type BotAct =
@@ -98,7 +101,9 @@ export type BotAct =
   | { t: "verdict"; agree: boolean }
   // 9페이즈(결정 0061-18): 유언 한 줄(방 DO 의 applyWill 본체)·마피아 다가가기(applyMove 본체, 대상 seat 은 계획 시점 값이고 실행 시점에 botMafiaTarget 으로 다시 구한다). 둘 다 난수 없음.
   | { t: "will"; text: string }
-  | { t: "approach"; target: number };
+  | { t: "approach"; target: number }
+  // 9페이즈 보완(09-24, feedback-1): 채팅 줄 직전에 서버 안에서 입력 중 켜짐을 중계한다(방 DO 의 relayTyping 본체, 사람의 typing 메시지와 같은 길). 난수 없음, 꺼짐은 보내지 않는다.
+  | { t: "typing" };
 export interface BotStep {
   at: number;
   botId: string;
@@ -189,9 +194,9 @@ export function botPlanKey(state: RoomState): string | null {
   return `${state.phase}:${state.phaseEndsAt}`;
 }
 
-/** 낮 토론의 한 행동: 고정 문구 목록에서 randInt(8) 번째 줄. */
-function discussionAct(randInt: RandInt): BotAct {
-  return { t: "chat", text: BOT_CHAT_LINES[randInt(BOT_CHAT_LINES.length)]! };
+/** 낮 토론의 한 줄: 고정 문구 목록에서 randInt(8) 번째 줄. */
+function discussionText(randInt: RandInt): string {
+  return BOT_CHAT_LINES[randInt(BOT_CHAT_LINES.length)]!;
 }
 
 function planFor(state: RoomState, bot: Player, now: number, randInt: RandInt): BotStep[] {
@@ -199,11 +204,16 @@ function planFor(state: RoomState, bot: Player, now: number, randInt: RandInt): 
   const add = (at: number, act: BotAct): void => {
     steps.push({ at, botId: bot.id, act });
   };
+  // 채팅 한 줄: 바로 앞에 같은 봇의 typing 단계를 둔다(09-24). planBotSteps 가 짝(typing 바로 다음 chat)이 버려지면 typing 도 버린다.
+  const addChat = (at: number, text: string): void => {
+    add(Math.max(now, at - BOT_TYPING_LEAD_MS), { t: "typing" });
+    add(at, { t: "chat", text });
+  };
   if (state.phase === "discussion") {
     const first = now + DISCUSSION_FIRST_BASE_MS + randInt(DISCUSSION_FIRST_SPAN_MS);
-    add(first, discussionAct(randInt));
+    addChat(first, discussionText(randInt));
     const second = first + DISCUSSION_GAP_BASE_MS + randInt(DISCUSSION_GAP_SPAN_MS);
-    add(second, discussionAct(randInt));
+    addChat(second, discussionText(randInt));
     // 토론 끝내기(08-07): 채팅 두 줄 다음 난수 한 번. 사람과 같은 toggleEnd 를 지난다.
     add(now + END_DISCUSSION_BASE_MS + randInt(END_DISCUSSION_SPAN_MS), { t: "endDiscussion" });
     // 유언(09-12): 1일차에만 한 번, 고정 문장, 난수 없음 — 위 난수 호출 순서가 그대로다.
@@ -230,13 +240,13 @@ function planFor(state: RoomState, bot: Player, now: number, randInt: RandInt): 
     }
     if (bot.role === "mafia" && randInt(10) < NIGHT_CHAT_TENTHS) {
       const at = now + NIGHT_CHAT_BASE_MS + randInt(NIGHT_CHAT_SPAN_MS);
-      add(at, { t: "chat", text: BOT_NIGHT_LINES[randInt(BOT_NIGHT_LINES.length)]! });
+      addChat(at, BOT_NIGHT_LINES[randInt(BOT_NIGHT_LINES.length)]!);
     }
   } else if (state.phase === "defense") {
     // 변론은 후보 봇만 한다(서버는 산 사람 누구의 변론 채팅도 받지만 봇은 후보만 말한다). 후보가 아닌 봇은 아무것도 하지 않는다.
     if (state.verdict?.candidate === bot.seat) {
       const text = BOT_DEFENSE_LINES[randInt(BOT_DEFENSE_LINES.length)]!;
-      add(now + DEFENSE_SAY_BASE_MS + randInt(DEFENSE_SAY_SPAN_MS), { t: "chat", text });
+      addChat(now + DEFENSE_SAY_BASE_MS + randInt(DEFENSE_SAY_SPAN_MS), text);
     }
   }
   return steps;
@@ -252,7 +262,13 @@ export function planBotSteps(state: RoomState, now: number, randInt: RandInt): B
   const limit = state.phaseEndsAt - BOT_END_MARGIN_MS;
   const all: BotStep[] = [];
   for (const bot of state.players.filter((p) => isBot(p) && isAlive(p)).sort(bySeat)) {
-    for (const step of planFor(state, bot, now, randInt)) if (step.at < limit) all.push(step);
+    const planned = planFor(state, bot, now, randInt);
+    planned.forEach((step, i) => {
+      if (step.at >= limit) return;
+      // typing 은 바로 다음 단계(짝 chat)가 마감 여유 안일 때만 남긴다(09-24).
+      if (step.act.t === "typing" && !(planned[i + 1] !== undefined && planned[i + 1]!.act.t === "chat" && planned[i + 1]!.at < limit)) return;
+      all.push(step);
+    });
   }
   return all
     .map((step, index) => ({ step, index }))
