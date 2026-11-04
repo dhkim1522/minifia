@@ -1,10 +1,10 @@
-// 정치 긴장 화면 E2E 흐름 (09.1.1-10·11·13, 결정 0066, UI-SPEC 흐름 E2E ①②③⑥): politics-badge(직업 배지)·politics-whisper(귓속말)·politics-pin(지목 차례 핀 조명)·politics-verdict(판결 순간).
+// 정치 긴장 화면 E2E 흐름 (09.1.1-10·11·13·14, 결정 0066, UI-SPEC 흐름 E2E ①②③④⑥): politics-badge(직업 배지)·politics-whisper(귓속말)·politics-pin(지목 차례 핀 조명)·politics-verdict(판결 순간)·politics-runoff(동점 결선, 사람 4명)·politics-runoff-tie(결선도 동점 → 처형 없음).
 // flows.mjs 가 이미 3천 줄이라 흐름 본문은 이 파일에 둔다. flows.mjs 의 도우미는 `makePoliticsFlows(helpers)` 로 받는다(서로 import 하지 않는다 — 순환 없음).
 // 두 흐름 모두 폰 6종(LOBBY_EXTRA_SIZES)으로 돈다. 방장 화면과 손님 화면 둘을 함께 본다.
 // 판정 문턱은 lib.mjs 의 순수 검사 함수(floatButtonChecks·sheetFitChecks·claimBadgeChecks·pickButtonChecks)에 있고 여기서는 낮추지 않는다.
 // 귓속말 본문(canary)은 결과 표와 오류 문구에 쓰지 않는다 — 있는지 없는지(불리언)만 남긴다(T-09.1.1-28).
 import { hitsInputSurface, installFakeViewport, readGame, sampleWorld, screensOfWorld, SetupError, settle, skipTo, sleep, tapTurnPick, tapWorld } from "./browser.mjs";
-import { ballotFitChecks, claimBadgeChecks, floatButtonChecks, graphemeCount, pickButtonChecks, sheetFitChecks, verdictTimelineChecks } from "./lib.mjs";
+import { ballotFitChecks, claimBadgeChecks, floatButtonChecks, graphemeCount, pickButtonChecks, runoffChecks, sheetFitChecks, verdictTimelineChecks } from "./lib.mjs";
 
 /** 31자소 본문: 입력칸이 30자소로 자르는지 본다. 앞 30자소가 실제로 서버에 가는 본문(canary)이다 */
 const LONG_31 = "귓속말카나리아본문은제삼자에게보이면안돼요가나다라마바사아자차";
@@ -153,6 +153,81 @@ async function until(page, pred, ms, label, canary = "") {
 }
 
 const r1 = (n) => (typeof n === "number" ? Math.round(n * 10) / 10 : n);
+
+/** 결선 두 후보의 자리(서버 배치 shared/game/gather.ts RUNOFF_SPOTS, 고정소수점 /100 = 월드 단위). [0] = 낮은 좌석 */
+const RUNOFF_SPOT_WORLD = [
+  { x: 0.1, z: 2.0 },
+  { x: 2.0, z: 0.1 },
+];
+/** 서 있는 자리와 RUNOFF_SPOTS 의 허용 거리(월드 단위, 걸어서 도착한 뒤) */
+const RUNOFF_SPOT_TOL = 0.15;
+/** 결선 변론 채팅 줄(src/game/dayView.ts DAY_COPY.runoffDefenseLine 과 같은 모양) */
+const runoffDefenseLine = (name, k) => `${name} 님 결선 ${k}표 · 최후 변론`;
+
+/** 게임 화면이 pred 를 만족할 때까지 읽는다. 시간 안에 안 오면 던진다 */
+async function untilG(page, pred, ms, label) {
+  const start = performance.now();
+  for (;;) {
+    const g = await readGame(page).catch(() => null);
+    if (g && pred(g)) return g;
+    if (performance.now() - start > ms) throw new Error(`${label} (${ms / 1000}초 안에 보이지 않음)`);
+    await sleep(60);
+  }
+}
+
+/** 결선 화면에서 readGame 이 싣지 않는 것: 알약 안 조각 글자, 헤더 안내 글 */
+function readRunoffExtra(page) {
+  return page.evaluate(() => {
+    const pill = document.querySelector("[data-turn-block] .mf-turn__pill");
+    return {
+      parts: pill ? [...pill.children].map((c) => (c.textContent ?? "").trim()) : null,
+      hint: (document.querySelector(".mv-phase__hint")?.textContent ?? "").trim(),
+      pressed: document.querySelectorAll("[data-pick][aria-pressed='true']").length,
+    };
+  });
+}
+
+/** 결선 알약·제목·후보 이름표 보임을 40ms 마다 보고 바뀔 때만 쌓는 기록기(페이지 안). 값이 바뀌는 순간만 남아 가볍다 */
+function installRunoffLog(page, candSeats) {
+  return page.evaluate((cands) => {
+    const log = (window.__rfLog = []);
+    let key = "";
+    const tick = () => {
+      const tb = document.querySelector("[data-turn-block]");
+      const pill = tb ? tb.querySelector(".mf-turn__pill") : null;
+      const hd = document.querySelector(".mf-game__header");
+      const pn = document.querySelector("[data-world-panel]");
+      const vw = window.innerWidth;
+      let tagsIn = 0;
+      if (hd && pn) {
+        const hb = hd.getBoundingClientRect().bottom;
+        const pt = pn.getBoundingClientRect().top;
+        for (const sx of cands) {
+          const mv = document.querySelector(`.mf-world__tag[data-seat="${sx}"] .mv-tag`);
+          if (!mv) continue;
+          const r = mv.getBoundingClientRect();
+          if (r.left >= 0 && r.right <= vw && r.top >= hb && r.bottom <= pt) tagsIn += 1;
+        }
+      }
+      const e = {
+        t: performance.now(),
+        title: (document.querySelector(".mv-phase__title")?.textContent ?? "").trim(),
+        pill: pill !== null,
+        sec: pill ? (pill.querySelector(".mf-turn__sec")?.textContent ?? "").trim() : "",
+        tone: tb?.getAttribute("data-turn-tone") ?? "",
+        mode: tb?.getAttribute("data-turn-mode") ?? "",
+        tagsIn,
+      };
+      const k = `${e.title}|${e.pill}|${e.sec}|${e.tone}|${e.mode}|${e.tagsIn}`;
+      if (k !== key) {
+        key = k;
+        log.push(e);
+      }
+    };
+    window.__rfTimer = setInterval(tick, 40);
+    tick();
+  }, candSeats);
+}
 
 export function makePoliticsFlows(h) {
   const { recorder, openGame, closeGame, allAt, attempt, gameGH, walkableCentersOfApp, GAME_HOST_NICK } = h;
@@ -970,5 +1045,292 @@ export function makePoliticsFlows(h) {
     }
   }
 
-  return { politicsBadgeFlow, politicsWhisperFlow, politicsPinFlow, politicsVerdictFlow };
+
+  // ---- 동점 결선(09.1.1-14, UI-SPEC D, 흐름 E2E ④): 사람 4명(봇 0)이 지목 2:2 동점을 만들고 결선 → 변론 / 결선도 동점 → 처형 없음 → 밤 ----
+
+  /** 이름표가 스테이지(헤더 아래 ~ 패널 위, 좌우 8px 안쪽)에 통째로 보이는가. 결선에는 떠 있는 버튼이 없어 tagVisible 의 떠 있는 버튼 자리 규칙은 쓰지 않는다 */
+  const tagInStage = (page, seat) =>
+    page.evaluate((sx) => {
+      const mv = document.querySelector(`.mf-world__tag[data-seat="${sx}"] .mv-tag`);
+      const hd = document.querySelector(".mf-game__header");
+      const pn = document.querySelector("[data-world-panel]");
+      if (!mv || !hd || !pn) return null;
+      const r = mv.getBoundingClientRect();
+      const ok = r.left >= 8 && r.right <= window.innerWidth - 8 && r.top >= hd.getBoundingClientRect().bottom + 8 && r.bottom <= pn.getBoundingClientRect().top - 8;
+      return { ok, left: Math.round(r.left), right: Math.round(r.right), top: Math.round(r.top), bottom: Math.round(r.bottom), floats: document.querySelectorAll("[data-float]").length };
+    }, seat);
+
+  /** 사람 넷을 좌석 오름차순으로: [{ page, tracker, handle, seat, who }] */
+  const humansOf = (game) =>
+    [
+      { page: game.hp, tracker: game.ht, handle: game.host, seat: game.hostSeat, who: "방장" },
+      ...game.guests.map((x, i) => ({ page: x.page, tracker: x.tracker, handle: x, seat: x.seat, who: `손님${i + 1}` })),
+    ].sort((a, b) => a.seat - b.seat);
+
+  /** 위 한 줄이 want 인가. 압축형(360×560)은 위 한 줄 요소를 아예 그리지 않는다(UI-SPEC A-1) — 그때는 줄 요소 없음이 맞다 */
+  const topLineIs = (g, want) => (g.turn?.compact ? g.turn.hasLineEl === false : g.turn?.line?.text === want);
+
+  /**
+   * 좌석 0..3(오름차순) 이 자기 차례에 2,3,3,2 번째 좌석(order[2], order[3], order[3], order[2])을 눌러 득표 2:2 동점(후보 = order[2], order[3])을 만든다.
+   * 자기 자신은 못 누르므로 이 조합이다. 마지막 차례 뒤 끝 알림에서 위 한 줄 '동점이에요'(R1)를 모든 화면에서 본다.
+   */
+  async function makeTwoWayTie(game, rec, sc) {
+    const hs = humansOf(game);
+    const pages = hs.map((x) => x.page);
+    const order = hs.map((x) => x.seat);
+    await allAt(pages, "nomination");
+    await game.ht.waitFor((v) => v.phase === "nomination" && (v.day?.turn?.order?.length ?? 0) === 4, 8000, "지목 차례 순서");
+    const serverOrder = game.ht.last().day?.turn?.order ?? [];
+    if (serverOrder.join(",") !== order.join(",")) throw new SetupError(`서버 차례 ${serverOrder.join(",")} ≠ 좌석 순서 ${order.join(",")}`);
+    const targets = [order[2], order[3], order[3], order[2]];
+    for (let i = 0; i < 4; i++) {
+      await Promise.all(pages.map((p) => untilG(p, (g) => !!g.turn?.pill && g.turn.seat === order[i], 14_000, `${hs[i].who} 차례 알약`)));
+      await untilG(hs[i].page, (g) => g.picks.length === 3, 3000, `${hs[i].who} 이름표 버튼`);
+      await tapTurnPick(hs[i].page, targets[i]);
+    }
+    const noted = await attempt(async () => {
+      await Promise.all(pages.map((p) => untilG(p, (g) => topLineIs(g, "동점이에요"), 5000, "끝 알림 동점이에요")));
+    });
+    rec(sc, "R1", "지목 끝 알림 동안 위 한 줄이 '동점이에요' (압축형은 줄 요소 없음)", noted.ok, noted.detail);
+    return { hs, pages, order, cand: [order[2], order[3]] };
+  }
+
+  /** 후보 둘의 지금 화면 위치를 RUNOFF_SPOTS(월드 단위)와 견준다: 낮은 좌석이 [0]. 서로 거리도 돌려준다 */
+  async function candidateSpots(page, cand) {
+    const shown = await page.evaluate((seats) => seats.map((sx) => window.__mfWorld?.shown(sx) ?? null), cand);
+    if (shown.some((x) => x === null)) throw new Error("후보 위치를 읽지 못함(맵 훅)");
+    const off = shown.map((p, i) => Math.hypot(p.x - RUNOFF_SPOT_WORLD[i].x, p.z - RUNOFF_SPOT_WORLD[i].z));
+    return { shown, off, gap: Math.hypot(shown[0].x - shown[1].x, shown[0].z - shown[1].z) };
+  }
+
+  /** 결선 투표 중(step 1) 한 화면의 읽기 묶음 */
+  async function readVote(page) {
+    const [g, x] = await Promise.all([readGame(page), readRunoffExtra(page)]);
+    return { g, x };
+  }
+
+  /** runoffChecks 입력을 만든다: 후보 이름표 버튼 둘([data-pick])·알약·막대·화면 크기 */
+  const runoffInput = ({ g, x }) => ({
+    pill: g.turn?.pill ? { rect: g.turn.pill, minFontPx: g.turn.minFontPx, parts: x.parts, tone: g.turn.tone } : null,
+    bar: g.turn?.bar ?? null,
+    candidates: g.picks.map((b) => ({ seat: b.seat, rect: b.rect })),
+    viewport: { w: g.vw, h: g.vh },
+    compact: g.turn?.compact === true,
+  });
+
+  /**
+   * 동점 결선 한 판의 공통 앞부분: 동점 → 결선 진입(R2) → 투표 창(R3) 읽기. 돌려주는 값은 투표 창 처음 읽은 화면 묶음과 기록기 접근자.
+   */
+  async function enterRunoff(game, rec, sc, ctx) {
+    const { hs, pages, order, cand } = await makeTwoWayTie(game, rec, sc);
+    const ht = game.ht;
+    const nameOf0 = nameOf(ht.last(), cand[0]);
+    const P = hs.map((h) => h.page);
+    await installRunoffLog(P[0], cand);
+
+    // R2 결선 진입: 제목 '결선'(모든 화면), 앞머리에는 알약이 없다
+    const entered = await attempt(async () => {
+      await Promise.all(P.map((p) => untilG(p, (g) => g.phase === "runoff", 8000, "결선 도착")));
+    });
+    rec(sc, "R2a", "지목이 동점이면 모든 화면이 결선(runoff) 단계로 간다", entered.ok, entered.detail);
+    if (!entered.ok) throw new Error(entered.detail);
+
+    // 투표 창: 알약이 켜진다. 후보가 걸어 와 가운데 마주 설 때까지 기다린 뒤(R2c) 모든 화면을 읽는다 — 이름표 사이 거리(RF3)는 도착한 자리에서 재야 뜻이 있다.
+    // 후보 아닌 둘은 후보 이름표 버튼 둘, 후보 둘은 버튼 없음. 앞머리 1초 안에 못 끝난 걷기는 투표 창 앞쪽 1~2초 안에 끝난다(서버 MOVE_V 1.8 단위/초)
+    await Promise.all(P.map((p) => untilG(p, (g) => !!g.turn?.pill, 4000, "결선 알약")));
+    const spot = await attempt(async () => {
+      const t0 = performance.now();
+      let last = null;
+      while (performance.now() - t0 < 2500) {
+        last = await candidateSpots(P[0], cand);
+        if (last.off.every((d) => d <= RUNOFF_SPOT_TOL)) return { ok: true, detail: `자리와 거리 ${last.off.map(r1).join("/")} · 서로 ${r1(last.gap)}` };
+        await sleep(100);
+      }
+      return { ok: false, detail: `자리와 거리 ${last.off.map(r1).join("/")} (허용 ${RUNOFF_SPOT_TOL})` };
+    });
+    rec(sc, "R2c", "두 후보가 가운데 마주 선다(서버 RUNOFF_SPOTS 에 도착, 낮은 좌석이 왼쪽 자리)", spot.ok, spot.detail);
+    const reads = await Promise.all(P.map((p) => readVote(p)));
+    return { hs, pages: P, order, cand, reads, nameOf0, ht };
+  }
+
+  /** 기록기에서 앞머리(알약 없음)·카운트다운(알약 있음) 줄을 꺼낸다 */
+  async function readRunoffLog(page) {
+    return page.evaluate(() => window.__rfLog ?? []);
+  }
+
+  async function runoffChecksAll(rec, sc, e, ctx, id) {
+    const { hs, reads, cand } = e;
+    const voters = [0, 1];
+    const waiters = [2, 3];
+    // R2b 제목 '결선' 이 모든 화면 헤더에, 알약은 calm
+    for (let k = 0; k < 4; k++) {
+      const { g } = reads[k];
+      rec(sc, "R2b", `헤더 제목이 '결선' 이다 (${hs[k].who})`, g.title === "결선", `제목 "${g.title}"`);
+    }
+    // R3 후보 아닌 둘: 후보 이름표 버튼 둘 + runoffChecks + pickButtonChecks, 안내 '둘 중 한 명을 눌러요'
+    for (const k of voters) {
+      const r = reads[k];
+      recLines(rec, sc, runoffChecks(runoffInput(r)), ` (${hs[k].who}, 투표자)`);
+      recLines(rec, sc, pickButtonChecks(r.g.picks), ` (${hs[k].who}, 투표자)`);
+      const seats = r.g.picks.map((b) => b.seat).sort((a, b) => a - b);
+      rec(sc, "R3a", `후보 아닌 화면에는 [data-pick] 이 정확히 후보 둘(좌석 ${cand.join("·")})이다 (${hs[k].who})`, seats.join(",") === cand.join(","), `버튼 좌석 ${seats.join(",")}`);
+      rec(sc, "R3b", `안내가 '둘 중 한 명을 눌러요' 이다 (${hs[k].who})`, r.x.hint === "둘 중 한 명을 눌러요", `안내 "${r.x.hint}"`);
+    }
+    // 후보 둘: 버튼 없음·안내 '결과를 기다려요'
+    for (const k of waiters) {
+      const r = reads[k];
+      rec(sc, "R3c", `후보 화면에는 [data-pick] 이 없고 안내가 '결과를 기다려요' 이다 (${hs[k].who})`, r.g.picks.length === 0 && r.x.hint === "결과를 기다려요", `버튼 ${r.g.picks.length}개 · 안내 "${r.x.hint}"`);
+      recLines(rec, sc, runoffChecks({ ...runoffInput(r), candidates: [{ seat: cand[0], rect: { left: 0, top: 0, right: 160, bottom: 60 } }, { seat: cand[1], rect: { left: 200, top: 0, right: 360, bottom: 60 } }] }).filter((l) => l.id === "RF1" || l.id === "RF4" || l.id === "RF5"), ` (${hs[k].who}, 후보)`);
+    }
+    // 후보 이름표가 스테이지 안에 보인다(투표자 둘 화면)
+    for (const k of voters) {
+      for (const c of cand) {
+        const v = await tagInStage(hs[k].page, c);
+        rec(sc, "R3d", `후보 이름표(좌석 ${c})가 스테이지 안에 보이고 떠 있는 버튼이 없다 (${hs[k].who})`, v !== null && v.ok && v.floats === 0, v === null ? "이름표를 못 찾음" : `가로 ${v.left}~${v.right} 세로 ${v.top}~${v.bottom} · 떠 있는 버튼 ${v.floats}개`);
+      }
+    }
+  }
+
+  // ---- politics-runoff: 사람 4명 2:2 동점 → 결선 투표(바꾸기 포함) → 후보 득표 배지 → 변론. 폰 6종 ----
+  async function politicsRunoffFlow(ctx) {
+    const id = "politics-runoff";
+    const rec = recorder(ctx);
+    const sc = `${id}/main`;
+    const game = await openGame(ctx, id, { guests: 3, bots: 0, role: "citizen", to: "nomination", hostNick: GAME_HOST_NICK });
+    try {
+      const e = await enterRunoff(game, rec, sc, ctx);
+      const { hs, pages, order, cand, ht } = e;
+      const [v0, v1] = [hs[0], hs[1]];
+      const gh = gameGH(ctx, id, "runoff", hs[2].handle).catch((err) => rec(sc, "G", "G 공통 검사 실행", false, err?.message ?? String(err)));
+      await runoffChecksAll(rec, sc, e, ctx, id);
+
+      // R4 투표: 좌석 0 이 후보 3 을 눌렀다가 후보 2 로 바꾸고, 좌석 1 이 후보 2 를 누른다 (후보 = order[2], order[3])
+      const [c0, c1] = cand;
+      const doneOn = (g, seat) => g.tags.find((t) => t.seat === seat)?.done === true;
+      const mineOn = (g) => g.tags.filter((t) => t.mine).map((t) => t.seat);
+      const first = await attempt(async () => {
+        await tapTurnPick(v0.page, c1);
+        await Promise.all([1, 2, 3].map((k) => untilG(pages[k], (g) => doneOn(g, v0.seat), 3000, `${hs[k].who} 화면의 done 체크`)));
+      });
+      rec(sc, "R4a", `${v0.who} 가 후보 ${c1} 를 누르면 즉시 mine 이 되고 던진 사람 이름표에 done 체크가 다른 화면에도 붙는다`, first.ok, first.detail);
+      {
+        // 남의 선택은 DOM 어디에도 없다: 아직 던지지 않은 화면(손님1·후보 둘)에는 mine 이 없고 후보 버튼은 눌림이 아니다
+        const others = await Promise.all([1, 2, 3].map(async (k) => ({ k, g: await readGame(pages[k]), x: await readRunoffExtra(pages[k]) })));
+        const bad = others.filter(({ g, x }) => mineOn(g).length > 0 || x.pressed > 0).map(({ k }) => hs[k].who);
+        rec(sc, "R4b", "남의 선택이 DOM 에 없다: 던진 사람은 done 체크뿐, 다른 화면에는 mine·눌림이 없다", bad.length === 0, `고른 표시가 있는 화면 ${bad.join(",")}`);
+      }
+      const change = await attempt(async () => {
+        await tapTurnPick(v0.page, c0);
+        const g = await untilG(v0.page, (x) => mineOn(x).join(",") === String(c0), 3000, "바꾼 선택이 mine");
+        return doneOn(g, hs[1].seat) === false ? true : { ok: false, detail: "아직 안 던진 사람에 done" };
+      });
+      rec(sc, "R4c", `${v0.who} 가 마감 전에 후보 ${c0} 로 바꿀 수 있다 (mine 이 하나, 새 후보)`, change.ok, change.detail);
+      const second = await attempt(async () => {
+        await tapTurnPick(v1.page, c0);
+        await Promise.all([0, 2, 3].map((k) => untilG(pages[k], (g) => doneOn(g, v1.seat) && doneOn(g, v0.seat), 3000, `${hs[k].who} 화면의 done 체크 둘`)));
+      });
+      rec(sc, "R4d", `${v1.who} 가 후보 ${c0} 를 누르면 done 체크가 둘이 된다`, second.ok, second.detail);
+      {
+        const w = await Promise.all([2, 3].map(async (k) => ({ k, g: await readGame(pages[k]), x: await readRunoffExtra(pages[k]) })));
+        const bad = w.filter(({ g, x }) => mineOn(g).length > 0 || x.pressed > 0).map(({ k }) => hs[k].who);
+        rec(sc, "R4e", "후보 화면에는 끝까지 고른 표시(mine·눌림)가 없고 누가 누구를 골랐는지 알 수 없다", bad.length === 0, `표시 있는 화면 ${bad.join(",")}`);
+        const own = await readGame(v1.page);
+        rec(sc, "R4f", `${v1.who} 화면에는 ${v1.who} 자신의 선택만 mine 이다(남의 선택 없음)`, mineOn(own).join(",") === String(c0), `mine ${mineOn(own).join(",")}`);
+      }
+      // R5 마감: 후보 2(order[2]) 득표 배지 2, 후보 3 은 없음, 위 한 줄 '{후보2} 님 2표'
+      const nm0 = nameOf(ht.last(), c0);
+      const result = await attempt(async () => {
+        await ht.waitFor((v) => v.phase === "runoff" && v.day?.runoff?.step === 2, 8000, "결선 결과");
+        await Promise.all(pages.map((p) => untilG(p, (g) => topLineIs(g, `${nm0} 님 2표`), 3000, "위 한 줄 득표")));
+        const gs = await Promise.all(pages.map((p) => readGame(p)));
+        const bad = [];
+        gs.forEach((g, k) => {
+          const a = g.tags.find((t) => t.seat === c0)?.count ?? null;
+          const b = g.tags.find((t) => t.seat === c1)?.count ?? null;
+          if (a !== "2") bad.push(`${hs[k].who}: 후보 ${c0} 배지 ${a}`);
+          if (b !== null && b !== "0") bad.push(`${hs[k].who}: 후보 ${c1} 배지 ${b}`);
+        });
+        return bad.length === 0 ? true : { ok: false, detail: bad.join(" / ") };
+      });
+      rec(sc, "R5a", `마감 뒤 후보 ${c0} 의 득표 배지가 2, 후보 ${c1} 는 없고 위 한 줄이 '{이름} 님 2표' 이다 (압축형은 줄 요소 없음)`, result.ok, result.detail);
+
+      // 변론: 변론자 = 후보 2, 채팅 hot 줄
+      const defense = await attempt(async () => {
+        await ht.waitFor((v) => v.phase === "defense", 6000, "결선 뒤 변론");
+        if (ht.last().day?.candidate !== c0) throw new Error(`변론자 ${ht.last().day?.candidate} (기대 ${c0})`);
+        const want = runoffDefenseLine(nm0, 2);
+        await Promise.all(pages.map((p) => p.waitForFunction((t) => [...document.querySelectorAll("[data-chat-log] .mv-chat__sys.is-hot")].some((el) => (el.textContent ?? "").trim() === t), want, { timeout: 4000 })));
+      });
+      rec(sc, "R5b", `이어서 최후 변론이 열리고 변론자는 후보 ${c0}, 채팅에 hot 줄 '{이름} 님 결선 2표 · 최후 변론'`, defense.ok, defense.detail);
+
+      // 기록기: 앞머리(알약 없음·제목 결선·후보 이름표 보임) / 카운트다운 / 색
+      const log = await readRunoffLog(pages[0]);
+      const intro = log.filter((x) => x.title === "결선" && !x.pill);
+      const pills = log.filter((x) => x.pill && x.mode === "runoff");
+      const secs = pills.map((x) => parseInt(x.sec, 10)).filter(Number.isFinite);
+      rec(sc, "R2d", "앞머리(1초)에는 제목 '결선' 만 있고 알약이 없다", intro.length >= 1 && log.findIndex((x) => x.pill && x.mode === "runoff") > log.findIndex((x) => x.title === "결선"), `앞머리 기록 ${intro.length}개 · 첫 결선 기록 ${JSON.stringify(log.find((x) => x.title === "결선"))}`);
+      rec(sc, "R2e", "앞머리 동안 후보 이름표 둘이 화면 안에 보인다(누를 수 있는 자리)", intro.length >= 1 && intro[intro.length - 1].tagsIn === 2, `이름표 보임 ${intro.map((x) => x.tagsIn).join("/")}`);
+      const nonInc = secs.every((v, i) => i === 0 || v <= secs[i - 1]);
+      rec(sc, "R4g", "알약 카운트다운이 5에서 0 쪽으로 줄어든다(4·3·2·1 을 모두 지난다)", secs.length > 0 && secs[0] <= 5 && nonInc && [4, 3, 2, 1].every((v) => secs.includes(v)), `초 기록 ${secs.join(",")}`);
+      rec(sc, "R4h", "알약 색(data-turn-tone)이 끝까지 calm 이다", pills.length > 0 && pills.every((x) => x.tone === "calm"), `색 ${[...new Set(pills.map((x) => x.tone))].join(",")}`);
+      await gh;
+    } finally {
+      await closeGame(game);
+    }
+  }
+
+  // ---- politics-runoff-tie: 같은 동점 뒤 결선도 1:1 → 또 동점이에요 → 처형 없음 → 밤 (390×844 한 번) ----
+  async function politicsRunoffTieFlow(ctx) {
+    const id = "politics-runoff-tie";
+    const rec = recorder(ctx);
+    const sc = `${id}/main`;
+    const game = await openGame(ctx, id, { guests: 3, bots: 0, role: "citizen", to: "nomination", hostNick: GAME_HOST_NICK });
+    try {
+      const { hs, pages, cand } = await enterRunoff(game, rec, sc, ctx);
+      const ht = game.ht;
+      const [c0, c1] = cand;
+      const voted = await attempt(async () => {
+        await tapTurnPick(hs[0].page, c0);
+        await tapTurnPick(hs[1].page, c1);
+      });
+      rec(sc, "T1", `${hs[0].who} 는 후보 ${c0}, ${hs[1].who} 는 후보 ${c1} 에 투표한다`, voted.ok, voted.detail);
+
+      const tie = await attempt(async () => {
+        await ht.waitFor((v) => v.phase === "runoff" && v.day?.runoff?.step === 2, 8000, "결선 결과");
+        await Promise.all(pages.map((p) => untilG(p, (g) => topLineIs(g, "또 동점이에요"), 3000, "또 동점이에요")));
+        const gs = await Promise.all(pages.map((p) => readGame(p)));
+        const bad = [];
+        gs.forEach((g, k) => {
+          for (const c of cand) {
+            const n = g.tags.find((t) => t.seat === c)?.count ?? null;
+            if (n !== "1") bad.push(`${hs[k].who}: 후보 ${c} 배지 ${n}`);
+          }
+        });
+        return bad.length === 0 ? true : { ok: false, detail: bad.join(" / ") };
+      });
+      rec(sc, "T2", "결선도 1:1 이면 두 후보 배지가 1 이고 위 한 줄이 '또 동점이에요' (압축형은 줄 요소 없음)", tie.ok, tie.detail);
+
+      // 처형 없음 알림 → 밤. 알림은 1.4초라 읽기를 촘촘히 한다
+      const noExec = await attempt(async () => {
+        const seen = new Set();
+        const t0 = performance.now();
+        while (performance.now() - t0 < 8000) {
+          const g = await readGame(pages[0]).catch(() => null);
+          if (g?.announce?.text) seen.add(g.announce.text);
+          if (seen.has("처형 없음") && ht.last().phase === "night") break;
+          await sleep(60);
+        }
+        if (!seen.has("처형 없음")) throw new Error(`알림 ${[...seen].join(" / ") || "없음"}`);
+        await ht.waitFor((v) => v.phase === "night", 6000, "밤");
+        if (ht.last().day?.candidate !== undefined && ht.last().day?.execution) throw new Error("처형이 일어남");
+      });
+      rec(sc, "T3", "'처형 없음' 알림이 뜨고 변론 없이 밤으로 간다", noExec.ok, noExec.detail);
+      await Promise.all(pages.map((p) => untilG(p, (g) => g.phase === "night", 6000, "밤 화면")));
+      await gameGH(ctx, id, "night", hs[0].handle);
+    } finally {
+      await closeGame(game);
+    }
+  }
+
+  return { politicsBadgeFlow, politicsWhisperFlow, politicsPinFlow, politicsVerdictFlow, politicsRunoffFlow, politicsRunoffTieFlow };
 }
