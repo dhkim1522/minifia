@@ -625,6 +625,7 @@ describe("판결 순간 연출 — 시간표 (09.1.1-13)", () => {
     for (const mySeat of [4, 0, 3]) {
       cleanup();
       rt.scenes.length = 0;
+      vi.setSystemTime(NOW);
       const m = enter(execView({ mySeat }), { mySeat });
       const timeline: string[] = [dimOf(m.container) ?? "-", reveal(m.container)?.getAttribute("data-stage") ?? "-"];
       for (const ms of [600, 400, 3600]) {
@@ -697,5 +698,12 @@ describe("판결 순간 연출 — 시간표 (09.1.1-13)", () => {
     const m = mount(makeView({ phase: "verdict", count: 8, candidate: 4 }));
     const root = m.container.querySelector("main.mf-game") as HTMLElement;
     expect(root.style.getPropertyValue("--mf-panel-h")).toMatch(/px$/);
+  });
+
+  it("어둡게 막 CSS: verdict 상태는 불투명도 1(= night-950 45% 그대로)에 dur-med 로 켜진다", () => {
+    const css = readFileSync("src/styles/game.css", "utf8");
+    const rule = css.split("\n").find((l) => l.startsWith('.mf-game__dim[data-dim="verdict"]')) ?? "";
+    expect(rule).toMatch(/opacity:\s*1/);
+    expect(rule).toMatch(/var\(--dur-med\)/);
   });
 });

@@ -82,6 +82,8 @@
 /* 지목 동안 화면을 살짝 어둡게(UI-SPEC A-1): night-950 45% 면에 불투명도 0.4 로 모이기에 켜져 끝 알림에 500ms 로 걷힌다. 캔버스 위·이름표 층 아래, 입력을 가로채지 않는다. */
 .mf-game__dim { position: absolute; inset: 0; z-index: calc(var(--z-world) + 1); pointer-events: none; background: color-mix(in srgb, var(--night-950) 45%, transparent); opacity: 0; transition: opacity 500ms; }
 .mf-game__dim[data-dim="on"] { opacity: 0.4; }
+/* 판결 순간(09.1.1-13, UI-SPEC C-1): night-950 45% 를 그대로 켠다(dur-med). 4.6초에 걷힌다 */
+.mf-game__dim[data-dim="verdict"] { opacity: 1; transition-duration: var(--dur-med); }
 @media (prefers-reduced-motion: reduce) { .mf-game__dim { transition: none; } }
 
 /* 오른쪽 아래 떠 있는 버튼 묶음(09.1.1-08, UI-SPEC A-2): 오른쪽 16, 아래 = 키보드 올림 + 패널 높이(--mf-panel-h, 화면 틀이 잰다) + 8.

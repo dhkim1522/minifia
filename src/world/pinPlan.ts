@@ -1,7 +1,7 @@
 // 핀 조명 계획(결정 0066-6, UI-SPEC F): "무엇을 비출지"(PinDesc)와 "시각에 따른 위치"(pinAt)를 나눈 순수 모듈.
 // 판결 순간(12)·결선(14)·마지막 3인(15) 계획이 pinOf 에 자기 단계를 더해 같은 장치(렌더러 setPin)를 재사용한다.
 // L22: 대상 좌석은 서버가 모두에게 공개한 값(day.turn·day.points)에서만 나온다. 연결·스토어·개인 정보는 읽지 않는다(정적 시험 pinStaticGuard).
-import { PICK_GAP_MS } from "../../shared/game/phases";
+import { EXECUTION_MS, PICK_GAP_MS } from "../../shared/game/phases";
 import type { RoomView } from "../../shared/protocol";
 
 /** 핀이 켜졌을 때 무대 점광 세기의 비율: 단계 값(0)과 선두 세기(1) 사이에서 0.9 (UI-SPEC O-14 — 육안 조정은 이 상수 한 곳) */
@@ -13,11 +13,32 @@ export const PIN_ON_MS = 180;
 /** 꺼질 때 dur-med */
 export const PIN_OFF_MS = 420;
 
-/** 무엇을 비출지. turn = 한 사람 머리 위, slide = from 에서 to 로 미끄러짐(startAt 은 서버 시각) */
-export type PinDesc = { mode: "turn"; seat: number } | { mode: "slide"; from: number; to: number; startAt: number; durationMs: number };
+/** 판결 순간 핀이 꺼지는 시각(처형 진입 기준 ms): 부결은 "처형 없음" 알림이 끝난 때, 처형은 유령이 사라지는 때 (verdictMoment 가 같은 값을 다시 내보낸다) */
+export const PIN_OFF_NO_EXEC_AT = 4000;
+export const PIN_OFF_EXEC_AT = 5000;
 
-/** 순차 지목의 핀. 다른 단계의 핀은 각 계획이 이 함수를 확장한다 */
+/**
+ * 무엇을 비출지. turn = 한 사람 머리 위, slide = from 에서 to 로 미끄러짐(startAt 은 서버 시각),
+ * fixed = 한 사람을 서버 시각 [startAt, endAt) 동안만 비춘다(판결 순간: 창 밖은 꺼짐)
+ */
+export type PinDesc =
+  | { mode: "turn"; seat: number }
+  | { mode: "slide"; from: number; to: number; startAt: number; durationMs: number }
+  | { mode: "fixed"; seat: number; startAt: number; endAt: number };
+
+/** 처형 단계(판결 순간)의 핀: 변론자에게 처형 진입 시각부터 부결 4.0초·처형 5.0초까지. 마지막 3인 처형(last)은 이 핀이 없다 */
+function executionPin(view: RoomView): PinDesc | null {
+  const seat = view.day?.candidate;
+  const verdict = view.day?.verdict;
+  if (typeof seat !== "number" || verdict === undefined || verdict.last === true) return null;
+  if (view.day?.ballots === undefined || view.phaseEndsAt === null) return null;
+  const startAt = view.phaseEndsAt - EXECUTION_MS;
+  return { mode: "fixed", seat, startAt, endAt: startAt + (verdict.passed ? PIN_OFF_EXEC_AT : PIN_OFF_NO_EXEC_AT) };
+}
+
+/** 단계별 핀. 순차 지목(차례·이동)과 판결 순간(변론자 고정). 다른 단계의 핀은 각 계획이 이 함수를 확장한다 */
 export function pinOf(view: RoomView): PinDesc | null {
+  if (view.phase === "execution") return executionPin(view);
   if (view.phase !== "nomination") return null;
   const turn = view.day?.turn;
   if (turn === undefined) return null;
@@ -54,6 +75,7 @@ export interface PinAt {
 export function pinAt(desc: PinDesc | null, serverNow: number, reduced: boolean): PinAt {
   if (desc === null) return { on: false, t: 0, moving: false };
   if (desc.mode === "turn") return { on: true, seat: desc.seat, t: 0, moving: false };
+  if (desc.mode === "fixed") return serverNow >= desc.startAt && serverNow < desc.endAt ? { on: true, seat: desc.seat, t: 0, moving: false } : { on: false, t: 0, moving: false };
   const raw = desc.durationMs > 0 ? (serverNow - desc.startAt) / desc.durationMs : 1;
   const t = reduced ? 1 : easeInOut(raw);
   const moving = !reduced && raw > 0 && raw < 1;

@@ -6,7 +6,8 @@ import { isAlive } from "../../shared/game/alive";
 import { STAGE_SPOT, UNIT } from "../../shared/game/map";
 import type { PhaseId, RoomView } from "../../shared/protocol";
 import { GHOST_FADE_END_MS, GHOST_RISE_MS, pointsTally } from "../game/dayView";
-import { GATHER_CENTER } from "./camera";
+import { ZOOM_IN_MS } from "../game/verdictMoment";
+import { GATHER_CENTER, ZOOM_MIN_STAGE_H } from "./camera";
 import type { OutfitId } from "./characterData";
 import { jobOutfit } from "./ghostOutfit";
 import { pinOf, type PinDesc } from "./pinPlan";
@@ -15,7 +16,7 @@ import { pinOf, type PinDesc } from "./pinPlan";
 export type LightingStage = "talk" | "vote" | "trial" | "night" | "nightCitizen" | "nightGhost" | "morning";
 
 /** 따라가기 = 내 캐릭터(6페이즈 규칙), 고정 = 모이는 자리 가운데에서 움직이지 않음(zoom 은 과반 연출) */
-export type CameraMode = { mode: "follow" } | { mode: "fixed"; target: { x: number; z: number }; zoom: number };
+export type CameraMode = { mode: "follow" } | { mode: "fixed"; target: { x: number; z: number }; zoom: number; zoomMs?: number };
 
 /** 긴장 단계: 0 평상시, 1 선두·찬반(초점에 점광), 2 과반(실내등 절반) */
 export interface Tension {
@@ -93,9 +94,12 @@ const FIXED_PHASES: ReadonlySet<PhaseId> = new Set<PhaseId>(["nomination", "defe
  * 09.1(M-4): 지목은 배지 숫자만이다 — 과반이어도 확대하지 않는다(과반 확대 상수는 camera.ts 에 그대로 있다).
  * stageH 인자는 호출부 모양을 지키려 남겨 두었다.
  */
-export function cameraModeOf(view: RoomView, _stageH: number): CameraMode {
+export function cameraModeOf(view: RoomView, stageH: number, opts: { verdictZoom?: number } = {}): CameraMode {
   if (!FIXED_PHASES.has(view.phase)) return { mode: "follow" };
-  return { mode: "fixed", target: { x: GATHER_CENTER.x, z: GATHER_CENTER.z }, zoom: 1 };
+  const target = { x: GATHER_CENTER.x, z: GATHER_CENTER.z };
+  // 판결 순간(09.1.1-13, O-15): 처형 단계에서 호출 쪽이 배율을 주면 0.6초 ease-in-out 으로 다가갔다 돌아온다. 스테이지가 낮으면(360 미만) 줌 없이 핀 조명과 막만 한다. 역할은 보지 않는다
+  if (view.phase === "execution" && opts.verdictZoom !== undefined && stageH >= ZOOM_MIN_STAGE_H) return { mode: "fixed", target, zoom: opts.verdictZoom, zoomMs: ZOOM_IN_MS };
+  return { mode: "fixed", target, zoom: 1 };
 }
 
 /**
@@ -139,7 +143,7 @@ export function tensionOf(view: RoomView): Tension {
 }
 
 /** 위 계산을 한 장면으로 묶는다. stageH = 이 단계의 스테이지 사각형 높이(px), mine = 내 낙관적 지목 대상(서버 응답 전) */
-export function sceneLook(view: RoomView, opts: { stageH: number; fading?: ReadonlyMap<number, number>; now?: number; mine?: number }): SceneLook {
+export function sceneLook(view: RoomView, opts: { stageH: number; fading?: ReadonlyMap<number, number>; now?: number; mine?: number; verdictZoom?: number }): SceneLook {
   const tension = tensionOf(view);
   const seats = visibleSeats(view, opts.fading, opts.now);
   const pointing = pointingOf(view, opts.mine);
@@ -149,7 +153,7 @@ export function sceneLook(view: RoomView, opts: { stageH: number; fading?: Reado
     if (look) look.pointAt = target;
   }
   return {
-    camera: cameraModeOf(view, opts.stageH),
+    camera: cameraModeOf(view, opts.stageH, opts.verdictZoom !== undefined ? { verdictZoom: opts.verdictZoom } : {}),
     lighting: lightingFor(view),
     tension: tension.level,
     ...(tension.focus !== undefined ? { focusSeat: tension.focus } : {}),

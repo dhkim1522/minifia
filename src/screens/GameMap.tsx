@@ -9,6 +9,7 @@ import { APPROACH_DIST_FX, approachPoint, positionAtFx } from "../../shared/game
 import type { ClientMessage, RoomView } from "../../shared/protocol";
 import { KillFx } from "../components/KillFx";
 import { PoliceResultCard } from "../components/PoliceResultCard";
+import { BallotReveal } from "../components/v2/BallotReveal";
 import { ResultAnnounce } from "../components/ResultAnnounce";
 import { WillLetter } from "../components/v2/WillLetter";
 import type { WillLetter as WillLetterState } from "../net/useWillLetter";
@@ -37,6 +38,8 @@ import { useCountdown } from "../net/countdown";
 import { useBadge, useBadgeFx } from "../net/useBadge";
 import { useChat } from "../net/useChat";
 import { useTurnLook } from "../net/useTurnLook";
+import { useVerdictMoment } from "../net/useVerdictMoment";
+import { ballotsOf } from "../game/ballotsView";
 import { useSendGuard } from "../net/useSendGuard";
 import { useSheetLayer } from "../net/useSheetLayer";
 import { useViewChoice } from "../net/useViewChoice";
@@ -481,10 +484,11 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
     return (seat) => ({ ...(claimTagProps?.(seat) ?? {}), ...(whisper.targets.has(seat) ? { blink: true } : {}) });
   }, [whisper.mode, whisper.targets, claimTagProps]);
 
-  // 떠 있는 버튼 묶음의 아래 끝 = 키보드 올림(CSS 상속) + 패널 높이 + 8. 패널 높이는 DOM 에서 잰다(패널이 자라도 따라간다)
+  // 아래 패널 높이(--mf-panel-h)는 DOM 에서 재서 루트에 한 번 정한다(패널이 자라도 따라간다). 떠 있는 버튼 묶음(아래 끝 = 키보드 올림 + 패널 높이 + 8)과
+  // 찬반 기록 묶음(09.1.1-13)이 CSS 상속으로 같은 값을 읽는다
   const floatRef = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
-    floatRef.current?.style.setProperty("--mf-panel-h", `${panelRef.current?.offsetHeight ?? 0}px`);
+    rootRef.current?.style.setProperty("--mf-panel-h", `${panelRef.current?.offsetHeight ?? 0}px`);
   });
 
   // 위 한 줄: 처음 마운트한 view(재접속·새로 고침)의 (단계, 차례) 와 같은 동안은 만들지 않는다(A-6)
@@ -496,7 +500,15 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
   const turnStage = turnStageOf(view);
   const dimOn = turnStage === "gather" || turnStage === "turn" || turnStage === "done";
 
-  const scene = useMemo(() => sceneLook(view, { stageH, ...(fading ? { fading } : {}), ...(mine !== undefined ? { mine } : {}) }), [view, stageH, fading, mine]);
+  // 판결 순간(09.1.1-13, UI-SPEC C-1): 처형 진입 시각 기준 어둡게 막·찬반 묶음·카메라 줌. 모션 줄이기는 줌 없이 막·핀·묶음만 쓴다
+  const moment = useVerdictMoment(view, offset);
+  const verdictZoom = moment.active && !reducedMotion ? moment.zoom : undefined;
+  const ballots = moment.active && moment.stage !== "none" && moment.stage !== "gone" ? ballotsOf(view) : null;
+
+  const scene = useMemo(
+    () => sceneLook(view, { stageH, ...(fading ? { fading } : {}), ...(mine !== undefined ? { mine } : {}), ...(verdictZoom !== undefined ? { verdictZoom } : {}) }),
+    [view, stageH, fading, mine, verdictZoom],
+  );
 
   return (
     <main ref={rootRef} className="mf-root mf-game" data-game-stage="" data-phase={view.phase} data-night-dark={nightDark ? "true" : undefined} data-ghost-view={ghost ? "true" : undefined} data-ghost-enter={ghost && entering ? "true" : undefined} data-kb-open={kbLifted ? "true" : undefined}>
@@ -526,7 +538,7 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
             <TensionVignette reducedMotion={reducedMotion} {...(recordCue ? { onCue: recordCue } : {})} />
           ) : (
             // 지목 동안 화면을 살짝 어둡게(UI-SPEC A-1): 모이기·차례·확정에 켜고 끝 알림에 걷는다. 캔버스 위·이름표 층 아래라서 WorldStage 의 underlay 자리에 둔다
-            <div className="mf-game__dim" aria-hidden="true" data-dim={dimOn ? "on" : "off"} />
+            <div className="mf-game__dim" aria-hidden="true" data-dim={moment.darken ? "verdict" : dimOn ? "on" : "off"} />
           )
         }
         {...(deny ? { deny } : {})}
@@ -546,7 +558,8 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
       {/* 장면 전환 막(09-20): 결과 알림보다 앞(DOM 순서)에 두어 막을 붙잡는 동안 알림이 막 위로 올라올 수 있게 한다. 덮기는 공개 마감만의 함수다 */}
       <SceneCurtain view={view} offset={offset} reducedMotion={reducedMotion} {...(killFx !== null ? { holdUntil: killFx.at + KILL_HOLD_MS } : {})} />
       <KillFx nonce={killNonce} reducedMotion={reducedMotion} />
-      <ResultAnnounce text={shownAnnounce?.text || null} {...(shownAnnounce?.icon !== undefined ? { icon: shownAnnounce.icon } : {})} {...(letter !== null ? { placement: "top" as const } : {})} />
+      <ResultAnnounce text={shownAnnounce?.text || null} {...(shownAnnounce?.icon !== undefined ? { icon: shownAnnounce.icon } : {})} {...(letter !== null || moment.active ? { placement: "top" as const } : {})} />
+      {ballots !== null ? <BallotReveal yes={ballots.yes} no={ballots.no} stage={moment.stage === "yes" ? "yes" : "both"} instant={moment.instant} reducedMotion={reducedMotion} /> : null}
       {letter !== null ? <WillLetter key={`${letter.t0}:${letter.seat}`} letter={letter} reducedMotion={reducedMotion} getInputTop={letterInputTop} onLive={setLetterLive} /> : null}
       {policeResult !== null ? (
         <PoliceResultCard

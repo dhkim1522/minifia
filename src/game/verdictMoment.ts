@@ -3,7 +3,9 @@
 // 모든 값은 공개 정보(처형 단계 진입 시각·통과 여부)의 함수라 어느 소켓에서도 같다 — 역할을 읽지 않는다(C-4).
 import { EXECUTION_MS } from "../../shared/game/phases";
 import type { RoomView } from "../../shared/protocol";
-import { easeInOut } from "../world/pinPlan";
+import { easeInOut, PIN_OFF_EXEC_AT, PIN_OFF_NO_EXEC_AT } from "../world/pinPlan";
+
+export { PIN_OFF_EXEC_AT, PIN_OFF_NO_EXEC_AT };
 
 /** 판결 순간 카메라 줌 배율(O-15). 한 곳에서만 정한다 */
 export const VERDICT_ZOOM = 1.1;
@@ -17,9 +19,7 @@ export const BALLOT_YES_AT = 600;
 export const BALLOT_NO_AT = 1000;
 /** 묶음이 사라지고 채팅 카드가 도착하는 시각. 어둡게 막도 이때 걷힌다 */
 export const BALLOT_END_AT = 4600;
-/** 핀 조명이 꺼지는 시각: 부결은 "처형 없음" 알림이 끝난 때, 처형은 유령이 사라지는 때 */
-export const PIN_OFF_NO_EXEC_AT = 4000;
-export const PIN_OFF_EXEC_AT = 5000;
+/** 핀 조명이 꺼지는 시각(부결 4.0초·처형 5.0초)은 pinPlan.ts 에 있고 여기서 다시 내보낸다 — pinOf 가 같은 값으로 핀 창을 만든다 */
 /** 어둡게 막(night-950)의 불투명도 */
 export const DARKEN_ALPHA = 0.45;
 
