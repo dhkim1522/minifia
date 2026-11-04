@@ -176,7 +176,7 @@ describe("지목 화면 — 이름표 하나 누르기 (DAY-04, 트레이서)", 
 
 // ---- Task 2: 위 알림 큐·채팅 줄·첫 스냅샷 무연출·처음 지목 깜빡임 (UI Considerations E2 #9·#10) ----
 
-describe("지목 화면 — 위 알림·채팅 줄 (E2 #9)", () => {
+describe("지목 화면 — 채팅 줄·위 알림 없음 (E2 #9 → 09.1)", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.setSystemTime(NOW);
@@ -191,43 +191,36 @@ describe("지목 화면 — 위 알림·채팅 줄 (E2 #9)", () => {
   const sysLines = (c: ParentNode, kind: "vote" | "hot"): string[] =>
     [...c.querySelectorAll(`.mv-chat__sys.is-${kind}`)].map((el) => el.textContent ?? "");
 
-  it("새 지목: 합치기 창(400ms)이 닫힌 뒤 위 알림 '영희 → 서준'(point 아이콘)이 뜨고, 채팅 vote 줄은 바로 같은 글자로 남는다", () => {
+  it("지목해도 TopToast 가 뜨지 않는다(09.1): 채팅 vote 줄 '영희 → 서준' 만 바로 남는다", () => {
     const m = mount(makeView());
     m.show(makeView({ points: [[1, 2]] }));
     expect(sysLines(m.container, "vote")).toEqual(["영희 → 서준"]);
+    advance(2000);
     expect(toastText(m.container)).toBe("");
-    advance(401);
-    expect(toastText(m.container)).toBe("영희 → 서준");
-    expect(m.container.querySelector(".mv-toast .mv-toast__text svg")).not.toBeNull();
+    expect(m.container.querySelector(".mv-toast.is-on")).toBeNull();
   });
 
-  it("바꾸면 '(바꿈)': 영희가 서준 → 도윤으로 바꾼 지목은 단독 알림과 vote 줄에 (바꿈)이 붙는다", () => {
-    const m = mount(makeView({ points: [[1, 2]] }));
-    m.show(makeView({ points: [[1, 4]] }));
-    expect(sysLines(m.container, "vote")).toEqual(["영희 → 도윤 (바꿈)"]);
-    advance(401);
-    expect(toastText(m.container)).toBe("영희 → 도윤 (바꿈)");
-  });
-
-  it("400ms 안에 같은 대상을 가리킨 두 표는 알림 하나 '영희·지아 → 서준' 으로 합치고 채팅 줄은 둘이다", () => {
+  it("여러 지목이 겹쳐도 알림은 없고 채팅 줄만 쌓인다 — '(바꿈)'·합친 이름도 없다", () => {
     const m = mount(makeView());
     m.show(makeView({ points: [[1, 2]] }));
     advance(100);
     m.show(makeView({ points: [[1, 2], [3, 2]] }));
-    advance(301);
-    expect(toastText(m.container)).toBe("영희·지아 → 서준");
+    advance(2000);
+    expect(toastText(m.container)).toBe("");
     expect(sysLines(m.container, "vote")).toEqual(["영희 → 서준", "지아 → 서준"]);
+    expect(logText(m.container)).not.toContain("바꿈");
   });
 
-  it("서로 다른 대상 둘은 줄을 세워 하나씩 보인다: 첫 알림 뒤 0.8초 만에 둘째가 이어받는다", () => {
-    const m = mount(makeView());
-    m.show(makeView({ points: [[1, 2]] }));
-    advance(50);
-    m.show(makeView({ points: [[1, 2], [3, 4]] }));
-    advance(351);
-    expect(toastText(m.container)).toBe("영희 → 서준");
-    advance(801);
-    expect(toastText(m.container)).toBe("지아 → 도윤");
+  it("거절 알림은 그대로 뜬다: 지목 뒤 WRONG_PHASE 를 받으면 '지금은 고를 수 없어요'", () => {
+    const listeners: Array<(e: { t: "error"; code: string }, meta: { epoch: number }) => void> = [];
+    const onEvent = vi.fn((l: (typeof listeners)[number]) => {
+      listeners.push(l);
+      return () => {};
+    }) as unknown as RoomConnection["onEvent"];
+    const m = mount(makeView(), { onEvent });
+    fireEvent.click(pickOf(m.container, 2)!);
+    act(() => listeners.forEach((l) => l({ t: "error", code: "WRONG_PHASE" }, { epoch: 1 })));
+    expect(toastText(m.container)).toBe("지금은 고를 수 없어요");
   });
 
   it("지목이 시작되면(낮 토론 → 지목) 채팅 system 줄 '지목 시작' 이 남는다", () => {
@@ -237,14 +230,14 @@ describe("지목 화면 — 위 알림·채팅 줄 (E2 #9)", () => {
     expect(sysLines(m.container, "hot")).toEqual([]);
   });
 
-  it("선두가 처음 생기면 hot '서준 님이 앞서요', 과반(산 5명 중 3표)이 되면 hot '서준 님 과반' — vote 줄 다음에 온다", () => {
+  it("선두·과반이 생겨도 hot 줄('앞서요'·'과반')이 없다 — 득표는 배지 숫자만(09.1, M-4)", () => {
     const m = mount(makeView());
     m.show(makeView({ points: [[1, 2]] }));
-    expect(sysLines(m.container, "hot")).toEqual(["서준 님이 앞서요"]);
     m.show(makeView({ points: [[1, 2], [3, 2], [4, 2]] }));
-    expect(sysLines(m.container, "hot")).toEqual(["서준 님이 앞서요", "서준 님 과반"]);
-    const texts = [...m.container.querySelectorAll(".mv-chat__sys")].map((el) => el.textContent);
-    expect(texts.indexOf("영희 → 서준")).toBeLessThan(texts.indexOf("서준 님이 앞서요"));
+    expect(sysLines(m.container, "hot")).toEqual([]);
+    expect(logText(m.container)).not.toContain("앞서요");
+    expect(logText(m.container)).not.toContain("과반");
+    expect(sysLines(m.container, "vote")).toEqual(["영희 → 서준", "지아 → 서준", "도윤 → 서준"]);
   });
 
   it("재접속·새로 고침 첫 화면(직전 view 없음): 배지·선두는 상태로 바로 보이지만 알림·채팅 줄은 새로 만들지 않는다", () => {
@@ -265,13 +258,12 @@ describe("지목 화면 — 위 알림·채팅 줄 (E2 #9)", () => {
     expect(m.container.querySelectorAll(".mv-chat__sys").length).toBe(0);
   });
 
-  it("닉네임은 글자로 그린다: '<b>영희</b>' 가 알림 안에서 HTML 이 되지 않는다", () => {
+  it("닉네임은 글자로 그린다: '<b>영희</b>' 가 채팅 줄 안에서 HTML 이 되지 않는다", () => {
     const nicknames = ["민수", "<b>영희</b>", "서준", "지아", "도윤"];
     const m = mount(makeView({ nicknames }));
     m.show(makeView({ nicknames, points: [[1, 2]] }));
-    advance(401);
-    expect(toastText(m.container)).toBe("<b>영희</b> → 서준");
-    expect(m.container.querySelector(".mv-toast b")).toBeNull();
+    expect(sysLines(m.container, "vote")).toEqual(["<b>영희</b> → 서준"]);
+    expect(m.container.querySelector("[data-chat-log] b")).toBeNull();
   });
 });
 

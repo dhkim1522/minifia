@@ -2,7 +2,7 @@
 // 서버 view 두 개의 공개 정보 차이에서만 채팅 줄·위 알림·결과 알림·연출 이벤트가 나온다.
 // 실패 출력은 한 줄이어야 해서(TAP) 비교는 가능한 한 JSON 문자열로 한다.
 import { describe, expect, it } from "vitest";
-import type { DayView, PhaseId, PublicPlayer, RoomView } from "../../shared/protocol";
+import type { DayView, PhaseId, PickTurnView, PublicPlayer, RoomView } from "../../shared/protocol";
 import { EXECUTION_MS } from "../../shared/game/phases";
 import {
   ANNOUNCE_DAY_MS,
@@ -23,14 +23,8 @@ import {
   POLICE_CARD_AT,
   pointsTally,
   policeResultOf,
-  TOAST_FAST_MS,
-  TOAST_MERGE_MS,
-  TOAST_MS,
-  TOAST_NAMES_MAX,
-  TOAST_QUEUE_MAX,
-  ToastQueue,
 } from "../../src/game/dayView";
-import type { DayEvents, PointToast } from "../../src/game/dayView";
+import type { DayEvents } from "../../src/game/dayView";
 
 // TAP 의 YAML 진단이 깨지지 않도록 따옴표 없는 한 줄 문자열로 만들어 비교한다.
 const flat = (value: unknown): string => JSON.stringify(value).replaceAll('"', "");
@@ -110,30 +104,22 @@ describe("pointsTally — 지목 집계(공개 정보만)", () => {
 });
 
 describe("dayEvents — 지목 차이 (DAY-04)", () => {
-  it("새 지목은 vote 줄 '민준 → 도윤' 과 위 알림 재료 한 건을 만든다", () => {
+  it("새 지목은 vote 줄 '민준 → 도윤' 한 줄만 만든다 (위 알림 재료 없음)", () => {
     const events = dayEvents(nominationOf([]), nominationOf([[1, 2]]));
-    same(events.lines[0], { kind: "vote", text: "민준 → 도윤" });
-    same(events.toasts, [{ to: 2, from: [1], toName: "도윤", fromNames: ["민준"] }]);
+    same(events.lines, [{ kind: "vote", text: "민준 → 도윤" }]);
+    expect("toasts" in events).toBe(false);
     same(events.announces, []);
     same(events.fx, []);
   });
 
-  it("대상을 바꾸면 '민준 → 지호 (바꿈)' 줄과 changed 알림", () => {
-    const events = dayEvents(nominationOf([[1, 2]]), nominationOf([[1, 3]]));
-    same(events.lines[0], { kind: "vote", text: "민준 → 지호 (바꿈)" });
-    same(events.toasts, [{ to: 3, from: [1], toName: "지호", fromNames: ["민준"], changed: true }]);
-  });
-
-  it("같은 대상을 다시 보낸 것(변화 없음)은 줄도 알림도 없다", () => {
+  it("같은 대상을 다시 보낸 것(변화 없음)은 줄이 없다", () => {
     const events = dayEvents(nominationOf([[1, 2]]), nominationOf([[1, 2]]));
     same(events.lines, []);
-    same(events.toasts, []);
   });
 
   it("이전 view 가 없으면(첫 스냅샷·재접속) 이벤트 없이 정상 상태만 준다", () => {
     const events = dayEvents(null, nominationOf([[1, 2]]));
     same(events.lines, []);
-    same(events.toasts, []);
     same(events.announces, []);
     same(events.fx, []);
     same(events.state.counts, { 2: 1 });
@@ -143,57 +129,7 @@ describe("dayEvents — 지목 차이 (DAY-04)", () => {
   it("reset 옵션(epoch 가 바뀐 첫 스냅샷)도 이벤트 없이 상태만 준다", () => {
     const events = dayEvents(nominationOf([]), nominationOf([[1, 2], [3, 2]]), { reset: true });
     same(events.lines, []);
-    same(events.toasts, []);
     same(events.state.counts, { 2: 2 });
-  });
-
-  it("선두가 새로 생기면 hot '{이름} 님이 앞서요' 가 vote 줄 뒤에 온다", () => {
-    const events = dayEvents(nominationOf([]), nominationOf([[1, 2]]));
-    same(events.lines, [
-      { kind: "vote", text: "민준 → 도윤" },
-      { kind: "hot", text: "도윤 님이 앞서요" },
-    ]);
-  });
-
-  it("선두가 다른 사람으로 바뀌면 새 선두에게 hot 줄", () => {
-    const events = dayEvents(nominationOf([[1, 2], [4, 3]]), nominationOf([[1, 2], [4, 3], [0, 3]]));
-    same(events.lines, [
-      { kind: "vote", text: "서연 → 지호" },
-      { kind: "hot", text: "지호 님이 앞서요" },
-    ]);
-  });
-
-  it("선두가 그대로면 hot 줄이 없다", () => {
-    const events = dayEvents(nominationOf([[1, 2], [3, 2]]), nominationOf([[1, 2], [3, 2], [0, 4]]));
-    same(events.lines, [{ kind: "vote", text: "서연 → 하윤" }]);
-  });
-
-  it("동점이 되어 선두가 사라지면 hot 줄을 만들지 않는다", () => {
-    const events = dayEvents(nominationOf([[1, 2], [3, 2], [4, 0]]), nominationOf([[1, 2], [3, 2], [4, 0], [2, 0]]));
-    same(events.lines, [{ kind: "vote", text: "도윤 → 서연" }]);
-    expect(events.state.leader).toBeUndefined();
-  });
-
-  it("산 사람 5명 → 과반 3, 표가 3으로 처음 모이면 hot '도윤 님 과반'", () => {
-    const events = dayEvents(nominationOf([[1, 2], [3, 2]]), nominationOf([[1, 2], [3, 2], [4, 2]]));
-    same(events.lines, [
-      { kind: "vote", text: "하윤 → 도윤" },
-      { kind: "hot", text: "도윤 님 과반" },
-    ]);
-    expect(events.state.sure).toBe(2);
-  });
-
-  it("과반이 풀렸다가 다시 닿으면 줄을 다시 만든다 (가정 A1)", () => {
-    const hold = nominationOf([[1, 2], [3, 2], [4, 2]]);
-    const released = nominationOf([[1, 2], [3, 2], [4, 0]]);
-    same(dayEvents(hold, released).lines.filter((l) => l.kind === "hot"), []);
-    const again = dayEvents(released, nominationOf([[1, 2], [3, 2], [4, 2]]));
-    same(again.lines.filter((l) => l.kind === "hot"), [{ kind: "hot", text: "도윤 님 과반" }]);
-  });
-
-  it("이미 과반인 채 다른 사람이 바꾼 표는 과반 줄을 반복하지 않는다", () => {
-    const events = dayEvents(nominationOf([[1, 2], [3, 2], [4, 2]]), nominationOf([[1, 2], [3, 2], [4, 2], [0, 3]]));
-    same(events.lines, [{ kind: "vote", text: "서연 → 지호" }]);
   });
 
   it("닉네임에 HTML 이 있어도 문자열 그대로 둔다", () => {
@@ -202,10 +138,9 @@ describe("dayEvents — 지목 차이 (DAY-04)", () => {
     expect(events.lines[0]!.text).toBe("<b>민준</b> → 도윤");
   });
 
-  it("앉은 사람 목록에 없는 seat 의 지목은 vote 줄·알림 없이 건너뛴다(득표 집계에는 남는다)", () => {
+  it("앉은 사람 목록에 없는 seat 의 지목은 vote 줄 없이 건너뛴다(득표 집계에는 남는다)", () => {
     const events = dayEvents(nominationOf([]), nominationOf([[9, 2]]));
     same(events.lines.filter((l) => l.kind === "vote"), []);
-    same(events.toasts, []);
   });
 
   it("지목 줄 순서는 좌석 오름차순(서버 view 순서와 무관)", () => {
@@ -214,124 +149,63 @@ describe("dayEvents — 지목 차이 (DAY-04)", () => {
   });
 });
 
-// ---- ToastQueue — 위 알림 합치기·줄 세우기 (UI Considerations E2 #9) ----
-// 시계는 메서드 인자 now 로만 받는다(가짜 시계 없이도 결정적). 알림은 합치기 창(400ms)이 닫힌 뒤에 나온다.
+describe("순차 지목 채팅 줄 (0063-1)", () => {
+  const ORDER = [0, 1, 2, 3, 4];
+  const turnView = (turn: PickTurnView, pairs: [number, number][] = [], opts: ViewOpts = {}): RoomView =>
+    nominationOf(pairs, { ...opts, day: { turn, ...opts.day } });
+  const running = (i: number, extra: Partial<PickTurnView> = {}): PickTurnView => ({ order: ORDER, i, endsAt: 8_000, ...extra });
 
-const toast = (to: number, toName: string, from: number, fromName: string, changed = false): PointToast => ({
-  to,
-  from: [from],
-  toName,
-  fromNames: [fromName],
-  ...(changed ? { changed: true } : {}),
-});
-const DOYUN = (from: number, fromName: string, changed = false) => toast(2, "도윤", from, fromName, changed);
-
-describe("ToastQueue — 상수", () => {
-  it("합치기 400ms · 1.5초 · 0.8초 · 대기 4건 · 이름 3명 (시작값)", () => {
-    same([TOAST_MERGE_MS, TOAST_MS, TOAST_FAST_MS, TOAST_QUEUE_MAX, TOAST_NAMES_MAX], [400, 1500, 800, 4, 3]);
-  });
-});
-
-describe("ToastQueue — 같은 대상 합치기", () => {
-  it("한 건은 합치기 창이 닫힌 뒤 1.5초짜리 point 알림으로 나온다", () => {
-    const q = new ToastQueue();
-    q.push(DOYUN(1, "민준"), 0);
-    expect(q.next(399)).toBeNull();
-    same(q.next(400), { text: "민준 → 도윤", icon: "point", durationMs: 1500 });
+  it("선두가 새로 생겨도 '앞서요' 줄이 없다", () => {
+    const events = dayEvents(turnView(running(1, { doneAt: 1 }), []), turnView(running(1, { doneAt: 1 }), [[1, 2]]));
+    same(events.lines, [{ kind: "vote", text: "민준 → 도윤" }]);
   });
 
-  it("399ms 안의 같은 대상은 '지호·민준 → 도윤' 한 건으로 합친다", () => {
-    const q = new ToastQueue();
-    q.push(DOYUN(3, "지호"), 0);
-    q.push(DOYUN(1, "민준"), 399);
-    same(q.next(400), { text: "지호·민준 → 도윤", icon: "point", durationMs: 1500 });
-    expect(q.next(5000)).toBeNull();
+  it("과반에 닿아도 '과반' 줄이 없다", () => {
+    const events = dayEvents(turnView(running(4), [[1, 2], [3, 2]]), turnView(running(4, { doneAt: 2 }), [[1, 2], [3, 2], [4, 2]]));
+    same(events.lines, [{ kind: "vote", text: "하윤 → 도윤" }]);
+    expect(events.lines.some((l) => l.kind === "hot")).toBe(false);
   });
 
-  it("400ms 에 온 같은 대상은 합치지 않고 따로 줄 선다", () => {
-    const q = new ToastQueue();
-    q.push(DOYUN(3, "지호"), 0);
-    q.push(DOYUN(1, "민준"), 400);
-    expect(q.next(400)!.text).toBe("지호 → 도윤");
-    expect(q.next(1200)!.text).toBe("민준 → 도윤");
+  it("지금 차례가 새로 기권이 되면 vote 줄 '{이름} · 기권'", () => {
+    const events = dayEvents(turnView(running(2)), turnView(running(2, { doneAt: 8_000, skip: true })));
+    same(events.lines, [{ kind: "vote", text: "도윤 · 기권" }]);
   });
 
-  it("이름은 3명까지 쓰고 4명째부터 '…' 로 줄인다", () => {
-    const three = new ToastQueue();
-    [["지호", 3], ["민준", 1], ["서연", 0]].forEach(([name, seat], i) => three.push(DOYUN(seat as number, name as string), i));
-    expect(three.next(400)!.text).toBe("지호·민준·서연 → 도윤");
-    const four = new ToastQueue();
-    [["지호", 3], ["민준", 1], ["서연", 0], ["하윤", 4]].forEach(([name, seat], i) => four.push(DOYUN(seat as number, name as string), i));
-    expect(four.next(400)!.text).toBe("지호·민준·서연… → 도윤");
+  it("이미 기권인 차례가 다시 와도(같은 차례) 줄을 반복하지 않는다", () => {
+    const skipped = running(2, { doneAt: 8_000, skip: true });
+    same(dayEvents(turnView(skipped), turnView(skipped)).lines, []);
   });
 
-  it("같은 사람의 중복 알림은 이름을 두 번 쓰지 않는다", () => {
-    const q = new ToastQueue();
-    q.push(DOYUN(1, "민준"), 0);
-    q.push(DOYUN(1, "민준"), 100);
-    expect(q.next(400)!.text).toBe("민준 → 도윤");
+  it("기권이 아닌 확정(지목)에는 기권 줄이 없다", () => {
+    const events = dayEvents(turnView(running(2)), turnView(running(2, { doneAt: 3_000 }), [[2, 3]]));
+    same(events.lines, [{ kind: "vote", text: "도윤 → 지호" }]);
   });
 
-  it("(바꿈) 은 단독 알림에만 붙는다", () => {
-    const solo = new ToastQueue();
-    solo.push(toast(3, "지호", 1, "민준", true), 0);
-    expect(solo.next(400)!.text).toBe("민준 → 지호 (바꿈)");
-    const merged = new ToastQueue();
-    merged.push(toast(3, "지호", 1, "민준", true), 0);
-    merged.push(toast(3, "지호", 0, "서연"), 10);
-    expect(merged.next(400)!.text).toBe("민준·서연 → 지호");
-  });
-});
-
-describe("ToastQueue — 줄 세우기·속도·대기 상한", () => {
-  it("서로 다른 대상 둘이 대기하면 하나씩, 앞은 0.8초 뒤는 대기가 1건이라 1.5초", () => {
-    const q = new ToastQueue();
-    q.push(DOYUN(1, "민준"), 0);
-    q.push(toast(3, "지호", 4, "하윤"), 0);
-    same(q.next(400), { text: "민준 → 도윤", icon: "point", durationMs: 800 });
-    expect(q.next(1199)).toBeNull();
-    same(q.next(1200), { text: "하윤 → 지호", icon: "point", durationMs: 1500 });
+  it("모이기 → 첫 차례 같은 단계 안 이동은 줄이 없다", () => {
+    same(dayEvents(turnView({ order: ORDER, i: -1 }), turnView(running(0))).lines, []);
   });
 
-  it("보이는 동안에는 다음 알림을 내지 않는다", () => {
-    const q = new ToastQueue();
-    q.push(DOYUN(1, "민준"), 0);
-    expect(q.next(400)).not.toBeNull();
-    q.push(toast(3, "지호", 4, "하윤"), 500);
-    expect(q.next(1000)).toBeNull();
-    expect(q.next(1900)!.text).toBe("하윤 → 지호");
+  it("토론 → 지목은 시스템 줄 '지목 시작'", () => {
+    same(dayEvents(viewOf("discussion"), turnView({ order: ORDER, i: -1 })).lines, [{ kind: "system", text: "지목 시작" }]);
   });
 
-  it("대기 5번째는 토스트에서 버려지고 버린 수를 센다", () => {
-    const q = new ToastQueue();
-    const targets: [number, string][] = [[0, "서연"], [1, "민준"], [2, "도윤"], [3, "지호"], [4, "하윤"]];
-    targets.forEach(([to, name]) => q.push(toast(to, name, 9, "손님"), 0));
-    expect(q.dropped()).toBe(1);
-    const shown: string[] = [];
-    for (let now = 400; now < 20_000; now += 100) {
-      const t = q.next(now);
-      if (t) shown.push(t.text);
-    }
-    same(shown, ["손님 → 서연", "손님 → 민준", "손님 → 도윤", "손님 → 지호"]);
+  it("첫 스냅샷·reset 은 기권 줄도 만들지 않는다", () => {
+    const skipped = turnView(running(2, { doneAt: 8_000, skip: true }));
+    same(dayEvents(null, skipped).lines, []);
+    same(dayEvents(turnView(running(2)), skipped, { reset: true }).lines, []);
   });
 
-  it("대기가 가득 차도 창 안의 같은 대상은 합쳐지며 버려지지 않는다", () => {
-    const q = new ToastQueue();
-    [0, 1, 2, 3].forEach((to) => q.push(toast(to, `대상${to}`, 9, "손님"), 0));
-    q.push(toast(3, "대상3", 8, "민준"), 100);
-    expect(q.dropped()).toBe(0);
-  });
-
-  it("버려진 수는 계속 누적된다", () => {
-    const q = new ToastQueue();
-    for (let to = 0; to < 7; to += 1) q.push(toast(to, `대상${to}`, 9, "손님"), 0);
-    expect(q.dropped()).toBe(3);
+  it("role·spectate 를 넣어도 줄이 같다", () => {
+    const a = turnView(running(2));
+    const b = turnView(running(2, { doneAt: 8_000, skip: true }));
+    const priv = (v: RoomView) => ({ ...v, me: { ...v.me, role: "mafia" }, spectate: { seats: [] } }) as unknown as RoomView;
+    expect(JSON.stringify(dayEvents(priv(a), priv(b)).lines)).toBe(JSON.stringify(dayEvents(a, b).lines));
   });
 });
 
 // ---- 단계 진입 이벤트 (DAY-05·06, 결정 0060-5) ----
 const ROLE_WORDS = ["마피아", "시민", "경찰", "의사"];
-const text = (e: DayEvents): string => JSON.stringify([e.lines, e.announces, e.fx, e.toasts]);
+const text = (e: DayEvents): string => JSON.stringify([e.lines, e.announces, e.fx]);
 
 /** 지목 마감 뒤 voteLog 한 줄 — 5명 중 4명이 seat 3 을 가리켰다. */
 const VOTE_LOG = [
@@ -452,7 +326,7 @@ describe("dayEvents — 찬반 결과·처형·처형 없음 (DAY-06)", () => {
 
   it("첫 스냅샷이 처형 단계면 줄·알림·연출 없이 상태만 준다 (변론자 유령 상태는 state)", () => {
     const events = dayEvents(null, executionView(5, 2, true));
-    same([events.lines, events.announces, events.fx, events.toasts], [[], [], [], []]);
+    same([events.lines, events.announces, events.fx], [[], [], []]);
     expect(events.state.executed).toBe(3);
     expect(events.state.candidate).toBe(3);
   });
@@ -578,8 +452,25 @@ describe("headerFor — 단계표의 제목·안내 (UI-SPEC)", () => {
     same(hdr(viewOf("discussion")), { title: "낮 토론", hint: "이야기하며 마피아를 찾아요" });
   });
 
-  it("지목", () => {
-    same(hdr(nominationOf([])), { title: "지목", hint: "의심되는 사람을 눌러요" });
+  it("지목: 순차 진행의 안내 (UI-SPEC Copywriting)", () => {
+    const withTurn = (turn: PickTurnView, opts: ViewOpts = {}) => nominationOf([], { ...opts, day: { turn } });
+    const order = [0, 1, 2, 3, 4];
+    // 모이는 중
+    same(hdr(withTurn({ order, i: -1 })), { title: "지목", hint: "모이는 중" });
+    // 내 차례(seat 0 이 i 0)
+    same(hdr(withTurn({ order, i: 0, endsAt: 8_000 })), { title: "지목", hint: "의심되는 사람을 눌러요" });
+    // 남의 차례·확정 뒤 사이·끝 알림은 제목만
+    same(hdr(withTurn({ order, i: 1, endsAt: 8_000 })), { title: "지목" });
+    same(hdr(withTurn({ order, i: 0, endsAt: 8_000, doneAt: 3_000 })), { title: "지목" });
+    same(hdr(withTurn({ order, i: 5 })), { title: "지목" });
+    // day.turn 이 없으면 제목만
+    same(hdr(nominationOf([])), { title: "지목" });
+  });
+
+  it("지목 안내는 역할·spectate 를 읽지 않는다", () => {
+    const base = nominationOf([], { day: { turn: { order: [0, 1], i: 0, endsAt: 8_000 } } });
+    const priv = { ...base, me: { ...base.me, role: "mafia" }, spectate: { seats: [] } } as unknown as RoomView;
+    same(hdr(priv), hdr(base));
   });
 
   it("최후 변론: 남은 '{닉네임} 님의 변론', 변론자 본인 '해명할 시간이에요'", () => {
