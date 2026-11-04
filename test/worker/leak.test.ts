@@ -121,10 +121,13 @@ const WORLD_STRING_VALUES: Record<string, ReadonlySet<string>> = { ".t": new Set
 const TYPING_KEY_PATHS = new Set([".t", ".seat", ".on"]);
 // ---- chat 프레임(07-11, 누설 검사 (a)(b)(c)): 키는 t·ch·seat·seq·text·at 뿐, .t 는 "chat", .ch 는 all|mafia|ghost 이고 mafia·ghost 는 받을 권리 있는 소켓에서만 나온다 ----
 // 결정 0061-11: ".k" 는 서버가 사망 전환에서 만든 카드 표시(will|note)이고 공개 정보다. 사람이 보낸 줄에는 없다. 다른 경로는 넓히지 않는다.
-const CHAT_KEY_PATHS = new Set([".t", ".ch", ".seat", ".seq", ".text", ".at", ".k"]);
+// 결정 0066-2: ".to" 는 귓속말 줄(k whisper·whispered)의 상대 좌석이다 — 누가 누구에게 귓속말을 보냈는지는 공개 사실이고(본문만 비공개) 줄 종류 값은 아래 CHAT_KIND_VALUES 뿐이다.
+const CHAT_KEY_PATHS = new Set([".t", ".ch", ".seat", ".seq", ".text", ".at", ".k", ".to"]);
+/** chat 줄 종류(.k)의 허용 값 집합: 카드(결정 0061-11)와 귓속말(결정 0066-2). 새 종류는 이 집합에 근거와 함께 더한다. */
+const CHAT_KIND_VALUES: ReadonlySet<string> = new Set(["will", "note", "whisper", "whispered"]);
 // ---- chatLog 프레임(07-14, 누설 검사 (d)): hello 직후 한 번. 키는 t·lines[]·ch·seat·seq·text·at 뿐이고 수신자 마스크(r)·쓰기 순번(g)·일차(n)는 없다 ----
 // 결정 0061-11: ".lines[].k" 는 서버가 사망 전환에서 만든 카드 표시, 공개 정보. 다른 경로는 넓히지 않는다.
-const CHATLOG_KEY_PATHS = new Set([".t", ".lines", ".lines[].ch", ".lines[].seat", ".lines[].seq", ".lines[].text", ".lines[].at", ".lines[].k"]);
+const CHATLOG_KEY_PATHS = new Set([".t", ".lines", ".lines[].ch", ".lines[].seat", ".lines[].seq", ".lines[].text", ".lines[].at", ".lines[].k", ".lines[].to"]); // ".lines[].to": 귓속말 상대 좌석(결정 0066-2, 공개 사실)
 // ---- chatReject 프레임(07-11): 키는 t·why 뿐, 문자열 값은 .t "chatReject" 와 .why(거절 이유 코드)뿐이다. 보낸 사람 소켓에만 간다 ----
 const CHAT_REJECT_KEY_PATHS = new Set([".t", ".why"]);
 
@@ -1024,7 +1027,8 @@ describe("아침 카드 프레임은 허용 키 목록 안이다 (09-14, MORN-02
         if (msg.t !== "chat") continue;
         cards += 1;
         for (const pth of keyPaths(msg)) expect(`${pth}:${CHAT_KEY_PATHS.has(pth)}`).toBe(`${pth}:true`);
-        expect(["will", "note"].includes(String(msg.k))).toBe(true);
+        // 이 시나리오에는 귓속말이 없다 — 카드 두 종류만 나온다. 허용 값 집합 선언은 CHAT_KIND_VALUES 가 한다.
+        expect(["will", "note"].includes(String(msg.k)) && CHAT_KIND_VALUES.has(String(msg.k))).toBe(true);
       }
     }
     expect(cards).toBe(g.socks.length * 2);
