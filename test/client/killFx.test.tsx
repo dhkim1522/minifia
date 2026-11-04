@@ -138,7 +138,7 @@ describe("장면 전환 막 — 공개 마감 420ms 전 덮기 → 다음 단계
 
   it.each([
     ["처형", { phase: "execution" as const }],
-    ["끝 알림 단계의 단독 선두 없는 지목(동률)", { phase: "nomination" as const, turn: "end" as const, points: [{ seat: 1, target: 2 }, { seat: 2, target: 3 }] }],
+    ["끝 알림 단계의 단독 선두 없는 지목(셋 이상 동률)", { phase: "nomination" as const, turn: "end" as const, points: [{ seat: 1, target: 2 }, { seat: 2, target: 3 }, { seat: 3, target: 1 }] }],
     ["끝 알림 단계의 지목 0표", { phase: "nomination" as const, turn: "end" as const, points: [] }],
   ])("%s view 도 같은 시각(마감 − 420ms)에 덮는다", (_name, opts) => {
     const { container } = render(<SceneCurtain view={curtainView({ ...opts, endsIn: 1000 })} offset={0} reducedMotion={false} />);
@@ -158,14 +158,20 @@ describe("장면 전환 막 — 공개 마감 420ms 전 덮기 → 다음 단계
   });
 
   it("지목 차례 중 뒤 끝 알림 단계에서 동률이면 그때 덮는다 (09.1)", () => {
-    const { container, rerender } = render(<SceneCurtain view={curtainView({ phase: "nomination", turn: 5, endsIn: 1000, points: [{ seat: 1, target: 2 }, { seat: 2, target: 3 }] })} offset={0} reducedMotion={false} />);
+    const { container, rerender } = render(<SceneCurtain view={curtainView({ phase: "nomination", turn: 5, endsIn: 1000, points: [{ seat: 1, target: 2 }, { seat: 2, target: 3 }, { seat: 3, target: 1 }] })} offset={0} reducedMotion={false} />);
     advance(2000);
     expect(curtain(container)).toBeNull();
-    rerender(<SceneCurtain view={curtainView({ phase: "nomination", turn: "end", endsIn: 4000, points: [{ seat: 1, target: 2 }, { seat: 2, target: 3 }] })} offset={0} reducedMotion={false} />);
+    rerender(<SceneCurtain view={curtainView({ phase: "nomination", turn: "end", endsIn: 4000, points: [{ seat: 1, target: 2 }, { seat: 2, target: 3 }, { seat: 3, target: 1 }] })} offset={0} reducedMotion={false} />);
     advance(1579);
     expect(curtain(container)).toBeNull();
     advance(1);
     expect(curtain(container)?.getAttribute("data-curtain")).toBe("true");
+  });
+
+  it("끝 알림 단계에서 최다가 정확히 둘 동점이면 결선이 이어지므로 덮지 않는다 (09.1.1-14)", () => {
+    const { container } = render(<SceneCurtain view={curtainView({ phase: "nomination", turn: "end", endsIn: 1000, points: [{ seat: 1, target: 2 }, { seat: 2, target: 3 }] })} offset={0} reducedMotion={false} />);
+    advance(2000);
+    expect(curtain(container)).toBeNull();
   });
 
   it("day.turn 이 없는 지목 view 는 덮지 않는다", () => {
