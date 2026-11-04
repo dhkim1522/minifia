@@ -74,6 +74,10 @@
 | 헤더 (`z-toast`) | 위 18, 좌우 16 | `PhaseHeader` + [역할 카드] 44×44 |
 | 지목 차례 알약 (`z-toast`) | 위 100(압축형 72), 가운데 | `n / N` · 차례 이름 · 남은 초 · 막대(09.1, 결정 0063-1). 모이는 동안은 숨기고 위 한 줄만. 내 차례가 아닐 때 스테이지 아래 어둡게 막(`data-dim`) |
 | TopToast (`z-toast`) | 위 88, 가운데 | 거절 알림(지목 알림은 없음, 0064-2) |
+| 떠 있는 버튼 두 개 (`FloatAction`) | 오른쪽 16, 패널 윗변 위 8, 지름 48 두 칸(48+8+48) | 위 칸 직업 배지(`ClaimSheet`) · 아래 칸 귓속말(낮 토론만, `LineSheet` 한 줄 시트). 빈 칸은 `pointer-events: none`. 마지막 3인의 동시 지목·공개에서는 접힌다(모이기·한마디에서는 보임). 결정 0067-7·0067-9 |
+| 한마디 시트 · 한 줄 시트 (`z-overlay`+) | 패널을 정확히 덮는 높이(188 · 244), 직접 쓰기 시트는 키보드 위 | 마지막 3인 내 차례 칩 4개 + [직접 쓰기](30자소), 귓속말 한 줄(30자소). 인용 카드(`QuoteCard`)가 한마디를 모든 화면에 보임 |
+| 찬반 얼굴 묶음 (`BallotReveal`) | 결과 알림 아랫변 아래(기본 131, `--mf-ballot-top`) | 찬성·반대 얼굴 두 묶음, 360×560 같은 좁은 폰은 얼굴만 단계로 줄임. 처형 단계에서만(결정 0067-5) |
+| 결선 · 마지막 3인 알약 (`z-toast`) | 위 100(압축형 72), 알약 아랫변 160 · 압축 124 | 결선 `RUNOFF` 단계 후보 두 사람·남은 초, 마지막 3인 `n / 3`·`{이름} 님 차례`·`지목 모두 동시에`·남은 초(`PickTurnBlock` 재사용) |
 | 아래 패널 (`z-overlay`) | 맨 아래, 아래 표 | `night-800` 97%, 위 모서리 20, 안쪽 `14 16 22` + 안전 영역, 항목 간격 10 |
 
 아래 패널 종류와 높이(안전 영역 제외):
@@ -121,6 +125,13 @@
 | `data-turn` · `data-ring-kind="turn"` | 이름표 · 발밑 고리 | 지금 차례인 사람(고리는 기존 발밑 고리 + `gray-100`, 0064-13) |
 | `data-dim="on\|off"` | 스테이지 아래 막 | 지목 중 내 차례가 아닐 때 `on` |
 | `data-will-letter` · `data-will-seal` | 유언 편지 · 인장 | 암살 유언이 있는 아침에만, 편지가 보이는 동안(0063-3) |
+| `data-claim="{직업\|none}"` (+ `data-claim-changed="true"`) | 이름표 모서리 배지 | 직업 주장과 말 바꿈 점(영구). 접근성 이름은 `aria-label`, 실제 역할이 아니다 |
+| `data-float="badge\|whisper"` | 떠 있는 버튼 | 두 칸. 결정 0067-9 |
+| `data-whisper="in\|out\|public"` | 채팅의 귓속말 줄 | 받은 비공개 · 보낸 비공개 · 공개 사실 줄(본문 없음) |
+| `data-ballots` (+ `data-stage` · `data-compact`) · `data-ballot-side="yes\|no"` · `data-ballot-seat` | 찬반 얼굴 묶음 | 처형 단계 두 묶음 · 얼굴마다 좌석. 채팅 카드는 `data-card="ballots"` |
+| `data-showdown-step` · `data-turn-mode="speak\|point"` · `data-last-word` | 마지막 3인 알약 · 인용 카드 | 단계 번호 · 한마디/동시 지목 · 보이는 동안의 인용 카드 |
+| `data-speak-sheet` · `data-speak-chip` · `data-speak-write` · `data-line-sheet` | 한마디 시트 · 칩 · 직접 쓰기 · 한 줄 시트 | 마지막 3인 내 차례, 귓속말 |
+| `window.__mfPin` | 테스트 훅 | 핀 조명의 좌석 · 줌 · 세기(핀 조명 E2E가 읽는다, 결정 0067-8) |
 | `window.__mfGhostOutfits` | 테스트 훅 | 유령 화면의 좌석 → 직업 의상 표(테스트 훅이 켜진 문맥에서만) |
 
 9페이즈(밤·아침)가 더한 표식 11개(`NIGHT_MARKERS`, `scripts/e2e/lib.mjs`). 이름이 바뀌면 `test/unit/e2eContract.test.ts` 가 먼저 깨진다:
@@ -152,6 +163,8 @@
 | R · V | [역할 카드] 버튼(시간 링 왼쪽) · 탭 · 일지 · 새 기록 점, 관전자만 직업 표시, 살아 있는 사람 화면에 남의 역할 · 유령 DOM 없음 |
 | 결과 알림 | 처형 5초 시간표(찬성 · 반대 → 처형 / 처형 없음), 36px, 역할 글자 0건 |
 | UX · WL | 화면마다 안내 문장 하나(`data-guide`), Wake Lock 요청 · 해제 |
+
+09.1.1(정치·박진감 장치, 결정 0066·0067)이 더한 흐름: `politics-badge`(직업 배지 · 말 바꿈) · `politics-whisper`(귓속말 두 줄 · 당사자 마스크) · `politics-pin`(지목 핀 조명) · `politics-verdict`(찬반 기록 묶음 · 판결 줌) · `politics-runoff`(+ `politics-runoff-tie`, 동점 결선) · `politics-showdown`(+ `politics-showdown-tie`, 마지막 3인). 폰 6종을 도는 흐름과 한 크기(390×844)만 도는 흐름이 있고, 검사 문턱은 낮추지 않았다. 마지막 3인은 방장을 처형해 산 사람 셋이 되는 날을 실제로 만들어 확인한다. 실기기 확인은 `.planning/phases/09.1.1-politics-tension/09.1.1-DEVICE-CHECKS.md`.
 
 서버 쪽은 `scripts/smoke.mjs`(4 · 5 · 8명 한 판), `scripts/uat-*.mjs`(낮 · 밤 · 투표 · 테스트 방 · 봇 시나리오)가 배포본 소켓으로 확인한다. 역할 누출은 `test/worker` 의 누출 검사가 막는다.
 
