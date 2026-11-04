@@ -38,7 +38,9 @@ export interface ChatPanelMessage {
   ch?: "all" | "mafia" | "ghost";
   icon?: V2IconName;
   /** kind card 일 때 종류(data-card 값) */
-  card?: "will" | "note" | "eye";
+  card?: "will" | "note" | "eye" | "ballots";
+  /** card ballots 일 때 찬반 기록: 좌석 + 이름(자리 번호 오름차순, 09.1.1-12) */
+  ballots?: { yes: { seat: number; name: string }[]; no: { seat: number; name: string }[] };
   /** 카드 제목 */
   title?: string;
   /** mafia = 쪽지 카드(진홍 테두리·제목) */
@@ -242,6 +244,29 @@ export function ChatPanel(props: ChatPanelProps) {
           onScroll={onScroll}
         >
           {messages.map((m) => {
+            if (m.kind === "card" && m.card === "ballots" && m.ballots) {
+              // 찬반 기록 카드(UI-SPEC C-3): 제목 줄 없이 머리 "찬성 n"/"반대 m" + 이름들(자리 구분색 점 + 이름). 이름은 텍스트 노드로만 그린다(T-09.1.1-34)
+              return (
+                <div key={m.key} className="mv-chat__card mv-chat__card--ballots" data-card="ballots">
+                  {(["yes", "no"] as const).map((side) => (
+                    <div key={side} className="mv-chat__ballots-side" data-ballot-side={side}>
+                      <span className="mv-chat__ballots-head">
+                        <V2Icon name={side === "yes" ? "thumbUp" : "thumbDown"} size={16} />
+                        <span>{`${side === "yes" ? "찬성" : "반대"} ${m.ballots![side].length}`}</span>
+                      </span>
+                      <span className="mv-chat__ballots-names">
+                        {m.ballots![side].map((v) => (
+                          <span key={v.seat} className="mv-chat__ballots-voter">
+                            <span className="mv-chat__ballots-dot" aria-hidden="true" style={{ "--ballot-seat": `var(--seat-${v.seat + 1})` } as React.CSSProperties} />
+                            <span className="mv-chat__ballots-name">{v.name}</span>
+                          </span>
+                        ))}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              );
+            }
             if (m.kind === "card") {
               // 카드 본문·제목은 React 텍스트 노드로만 그린다(T-09-23). 종류는 서버 k 로 정해진 값이다.
               return (

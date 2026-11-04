@@ -7,7 +7,7 @@
 // 형식은 src/net/roomDiff.ts 선례: 이전 view 가 없으면(첫 스냅샷·재접속) 이벤트 없이 정상 상태만 준다.
 import { isAlive } from "../../shared/game/alive";
 import { majorityOf } from "../../shared/game/nomination";
-import { EXECUTION_MS } from "../../shared/game/phases";
+import { EXECUTION_MS, VERDICT_LEAD_MS } from "../../shared/game/phases";
 import type { ChatChannel, PhaseId, RoomView } from "../../shared/protocol";
 import type { V2IconName } from "../components/v2/V2Icon";
 import { MORNING_TEXT, morningText } from "./eliminationText";
@@ -66,9 +66,14 @@ export const DAY_COPY = {
 // ---- 결과 알림 시간표 (결정 0060-5, UI-SPEC 남은 위험 8, 가정 A3) ----
 // 표시 시간이며 서버 단계를 넘기지 않는다: ANNOUNCE_TALLY_MS + max(ANNOUNCE_EXEC_MS, ANNOUNCE_NOEXEC_MS) ≤ EXECUTION_MS(처형 5.6초).
 // 알림이 단계 경계에서 잘리면 다음 단계 알림이 그것을 바꾼다(한 번에 하나).
-/** 처형 단계 0~2.0초: "찬성 n · 반대 m" */
+// 09.1.1-12(결정 0066-7): 처형 단계 앞 0.6초는 판결 앞머리(줌·핀 조명)라 알림은 모두 ANNOUNCE_LEAD_MS 뒤에 시작한다.
+// 아래 ANNOUNCE_TALLY_MS 등의 `at` 은 이 앞머리 이후 기준이고, phaseEntry 가 더해 단계 진입 기준 ms 로 만든다.
+// 마지막 3인 처형(day.verdict.last, 찬반 없음)은 앞머리도 득표 알림도 없다.
+/** 처형 단계 앞 판결 앞머리(서버 VERDICT_LEAD_MS 와 같은 값). 알림 시작 = 이 값 */
+export const ANNOUNCE_LEAD_MS = VERDICT_LEAD_MS;
+/** 앞머리 뒤 0~2.0초: "찬성 n · 반대 m" */
 export const ANNOUNCE_TALLY_MS = 2000;
-/** 통과: 2.0~5.0초 "{이름} 님 처형" */
+/** 통과: 앞머리 뒤 2.0~5.0초 "{이름} 님 처형" */
 export const ANNOUNCE_EXEC_MS = 3000;
 /** 부결(2.0초부터)·지목 동률/0표(밤 시작): "처형 없음" 1.4초 */
 export const ANNOUNCE_NOEXEC_MS = 1400;
@@ -262,24 +267,25 @@ function phaseEntry(prev: RoomView, cur: RoomView, day: NonNullable<RoomView["da
     case "execution": {
       const verdict = day.verdict;
       if (!verdict) return;
-      const tally = DAY_COPY.tallyText(verdict.yes, verdict.no);
-      out.lines.push({ kind: "hot", text: tally });
-      out.announces.push({ text: tally, at: 0, ms: fitExecution(0, ANNOUNCE_TALLY_MS) });
+      // 마지막 3인 처형(결정 0066-5): 찬반이 없었으니 득표 줄·알림 없이 처형 알림이 0초에 시작한다(앞머리 없음)
+      const last = verdict.last === true;
+      const execAt = last ? 0 : ANNOUNCE_LEAD_MS + ANNOUNCE_TALLY_MS;
+      if (!last) {
+        const tally = DAY_COPY.tallyText(verdict.yes, verdict.no);
+        out.lines.push({ kind: "hot", text: tally, at: ANNOUNCE_LEAD_MS });
+        out.announces.push({ text: tally, at: ANNOUNCE_LEAD_MS, ms: fitExecution(ANNOUNCE_LEAD_MS, ANNOUNCE_TALLY_MS) });
+      }
       if (verdict.passed) {
         const seat = day.execution?.seat ?? day.candidate;
         const name = seat === undefined ? undefined : nameOf(cur, seat);
         if (seat === undefined || name === undefined) return;
         const text = DAY_COPY.executedText(name);
-        out.lines.push({ kind: "hot", text, at: ANNOUNCE_TALLY_MS });
-        out.announces.push({ text, at: ANNOUNCE_TALLY_MS, ms: fitExecution(ANNOUNCE_TALLY_MS, ANNOUNCE_EXEC_MS) });
-        out.fx.push({ kind: "ghostRise", seat, at: ANNOUNCE_TALLY_MS });
+        out.lines.push({ kind: "hot", text, at: execAt });
+        out.announces.push({ text, at: execAt, ms: fitExecution(execAt, ANNOUNCE_EXEC_MS) });
+        out.fx.push({ kind: "ghostRise", seat, at: execAt });
       } else {
-        out.lines.push({ kind: "system", text: DAY_COPY.noExecution, at: ANNOUNCE_TALLY_MS });
-        out.announces.push({
-          text: DAY_COPY.noExecution,
-          at: ANNOUNCE_TALLY_MS,
-          ms: fitExecution(ANNOUNCE_TALLY_MS, ANNOUNCE_NOEXEC_MS),
-        });
+        out.lines.push({ kind: "system", text: DAY_COPY.noExecution, at: execAt });
+        out.announces.push({ text: DAY_COPY.noExecution, at: execAt, ms: fitExecution(execAt, ANNOUNCE_NOEXEC_MS) });
       }
       return;
     }

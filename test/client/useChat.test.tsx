@@ -520,7 +520,7 @@ describe("useChat: ballots 카드 (09.1.1-12)", () => {
 
   it("본문이 틀리면 카드를 그리지 않는다(예외 없음, T-09.1.1-35)", () => {
     const { result, receive } = mount(bView());
-    receive({ t: "chatLog", lines: [line(1, 3, "가나다", { k: "ballots" }), line(2, 3, "1|1", { k: "ballots" })] });
+    receive({ t: "chatLog", lines: [line(1, 3, "가나다", { k: "ballots" }), line(2, 3, "8|1", { k: "ballots" })] });
     expect(result.current.messages.length).toBe(0);
   });
 

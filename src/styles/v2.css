@@ -242,6 +242,15 @@
 .mv-chat__whisper-title { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; line-height: 1.4; font-weight: 700; color: var(--gray-50); }
 .mv-chat__whisper-text { margin: 0; font-size: 14px; line-height: 1.4; font-weight: 400; color: var(--gray-100); word-break: keep-all; overflow-wrap: anywhere; }
 
+/* 채팅의 찬반 기록 카드(09.1.1-12, UI-SPEC C-3): 제목 줄 없이 머리 "찬성 n"/"반대 m" + 이름들(자리 구분색 점 + 이름 14px 400, 간격 8, 쉼표 없음) */
+.mv-chat__card--ballots { gap: var(--space-sm); }
+.mv-chat__ballots-side { display: flex; flex-direction: column; gap: var(--space-xs); }
+.mv-chat__ballots-head { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; line-height: 1.4; font-weight: 700; color: var(--gray-50); }
+.mv-chat__ballots-names { display: flex; flex-wrap: wrap; gap: var(--space-sm); }
+.mv-chat__ballots-voter { display: inline-flex; align-items: center; gap: 6px; }
+.mv-chat__ballots-dot { flex: none; width: 8px; height: 8px; border-radius: var(--radius-pill); background: var(--ballot-seat); }
+.mv-chat__ballots-name { font-size: 14px; line-height: 1.4; font-weight: 400; color: var(--gray-100); word-break: keep-all; overflow-wrap: anywhere; }
+
 /* 찬반 기록 공개(09.1.1-12, UI-SPEC C-2): 결과 알림 아래 위 131 · 좌우 16 · 아래는 패널 윗변 위 8. 찬반은 색이 아니라 위치·아이콘·테두리(gray-100 / gray-500)로 구별한다. 진홍·놋쇠·초록 없음 */
 .mv-ballots { position: absolute; top: 131px; left: var(--space-md); right: var(--space-md); bottom: calc(var(--mf-kb-lift, 0px) + var(--mf-panel-h, 0px) + 8px); z-index: calc(var(--z-overlay) + 1); overflow: hidden; pointer-events: none; font-family: var(--font-ui); }
 .mv-ballots__body { display: flex; flex-direction: column; gap: var(--space-md); }

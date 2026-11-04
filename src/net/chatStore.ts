@@ -9,6 +9,8 @@ import type { V2IconName } from "../components/v2/V2Icon";
 export const CARD_HOLD_MS = 2800;
 /** 처형 단계에서 받은 카드의 보류 ms(UI-SPEC 276행) */
 export const CARD_HOLD_EXEC_MS = 2400;
+/** 찬반 기록 카드(ballots)의 보류 ms — 판결 순간의 얼굴 묶음이 사라지는 4.6초에 채팅에 도착한다(UI-SPEC C-1·C-3, 09.1.1-12) */
+export const CARD_HOLD_BALLOTS_MS = 4600;
 
 /** 받음 알림 근거로 기억하는 라이브 귓속말 줄 수(보낸 줄 사이에 낀 받은 줄을 놓치지 않을 만큼) */
 const WHISPER_LIVE_KEEP = 8;
@@ -28,8 +30,8 @@ export interface ChatStoreLine {
   at: number;
   icon?: V2IconName;
   scope: ChatChannel;
-  /** kind card 일 때 종류. will·note = 서버 카드 줄(k), eye = 이 화면이 만든 경찰 조사 카드 */
-  card?: "will" | "note" | "eye";
+  /** kind card 일 때 종류. will·note·ballots = 서버 카드 줄(k, ballots 의 text 는 좌석 목록 원문), eye = 이 화면이 만든 경찰 조사 카드 */
+  card?: "will" | "note" | "ballots" | "eye";
   /** 로컬 카드(eye)의 제목. 서버 카드의 제목은 부르는 쪽(useChat)이 좌석 닉네임으로 만든다 */
   title?: string;
   /** 이 시각 전에는 목록에 내지 않는다(라이브로 받은 서버 카드의 보류). 없으면 바로 보인다 */
@@ -82,8 +84,6 @@ export class ChatStore {
     }
     switch (frame.t) {
       case "chat": {
-        // 찬반 기록 카드(결정 0066-3)는 화면이 붙기 전(09.1.1-12)까지 이 저장소가 받지 않는다 — 유언·쪽지 카드 줄로 잘못 그려지지 않게 한다.
-        if (frame.k === "ballots") break;
         if (frame.k === "whisper" || frame.k === "whispered") {
           // 귓속말(결정 0066-2): 카드가 아니다 — 보류 없이 바로 보이고 입력 중도 건드리지 않는다. 라이브로 새로 들어온 본문 줄만 받음 신호를 남긴다
           const line = whisperLine(frame);
@@ -98,8 +98,12 @@ export class ChatStore {
         }
         if (frame.k) {
           // 서버 카드 줄: 입력 중은 건드리지 않는다(카드는 사람이 보낸 글이 아니다, 연구 Pitfall 9)
-          const hold = now + (this.ctx?.pk.endsWith(":execution") ? CARD_HOLD_EXEC_MS : CARD_HOLD_MS);
-          if (this.insertAll([cardLine(frame, frame.k, Math.max(hold, this.holdFloor))])) {
+          // ballots 는 처형 단계에 오지만 얼굴 묶음이 사라지는 4.6초에 맞춰 보류한다(유언·쪽지의 아침 규칙과 별개, 편지 바닥값도 받지 않는다)
+          const hold =
+            frame.k === "ballots"
+              ? now + CARD_HOLD_BALLOTS_MS
+              : Math.max(now + (this.ctx?.pk.endsWith(":execution") ? CARD_HOLD_EXEC_MS : CARD_HOLD_MS), this.holdFloor);
+          if (this.insertAll([cardLine(frame, frame.k, hold)])) {
             this.replay = false;
             changed = true;
           }
@@ -113,7 +117,6 @@ export class ChatStore {
       case "chatLog": {
         const inserted = this.insertAll(
           frame.lines.flatMap((f): ChatStoreLine[] => {
-            if (f.k === "ballots") return [];
             if (f.k === "whisper" || f.k === "whispered") {
               const line = whisperLine(f);
               return line === null ? [] : [line];
@@ -360,8 +363,8 @@ function playerLine(f: ChatLineWire): ChatStoreLine {
   return { key: `${f.ch}:${f.seq}:${f.at}`, kind: "player", ch: f.ch, seat: f.seat, seq: f.seq, text: f.text, at: f.at, scope: f.ch };
 }
 
-/** 서버가 만든 카드 줄(유언·쪽지). k 필드만 보고 판별한다 — 본문 내용으로는 판단하지 않는다(위장 방지, T-09-24) */
-function cardLine(f: ChatLineWire, card: "will" | "note", revealAt?: number): ChatStoreLine {
+/** 서버가 만든 카드 줄(유언·쪽지·찬반 기록). k 필드만 보고 판별한다 — 본문 내용으로는 판단하지 않는다(위장 방지, T-09-24) */
+function cardLine(f: ChatLineWire, card: "will" | "note" | "ballots", revealAt?: number): ChatStoreLine {
   const line: ChatStoreLine = { key: `${f.ch}:${f.seq}:${f.at}`, kind: "card", card, ch: f.ch, seat: f.seat, seq: f.seq, text: f.text, at: f.at, scope: f.ch };
   if (revealAt !== undefined) line.revealAt = revealAt;
   return line;

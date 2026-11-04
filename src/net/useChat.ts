@@ -11,6 +11,7 @@
 //   연결이 끊긴 동안은 보내지 않는다. typingSeats = 서버가 보낸 좌석(끊긴 사람 제외) + 내 입력 중이면 내 좌석(즉시).
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { phaseKey } from "../../shared/game/audience";
+import { parseBallotsCardText } from "../../shared/game/ballots";
 import type { ClientMessage, RoomView } from "../../shared/protocol";
 import type { ChatPanelProps, ChatPanelMessage } from "../components/v2/ChatPanel";
 import { CHAT_TEXT } from "../game/chatText";
@@ -81,6 +82,13 @@ export function useChat({ store, connection, view }: { store: ChatStore; connect
         const m: ChatPanelMessage = { key: line.key, kind: w.kind, whisper: w.whisper, icon: w.icon, text: w.text };
         if (w.title !== undefined) m.title = w.title;
         return [m];
+      }
+      if (line.kind === "card" && line.card === "ballots") {
+        // 찬반 기록 카드(09.1.1-12): 본문은 좌석 목록 원문. 형식이 틀리면 카드를 그리지 않는다(T-09.1.1-35). 이름은 방에 있던 사람에게서 좌석으로 찾고 못 찾으면 뺀다
+        const parsed = parseBallotsCardText(line.text);
+        if (parsed === null) return [];
+        const named = (seats: number[]) => [...seats].sort((a, b) => a - b).flatMap((seat) => (names.current.has(seat) ? [{ seat, name: names.current.get(seat) ?? "" }] : []));
+        return [{ key: line.key, kind: "card", card: "ballots", text: line.text, ballots: { yes: named(parsed.yes), no: named(parsed.no) } }];
       }
       if (line.kind === "card" && line.card) {
         // 카드는 서버 k 줄과 이 화면의 경찰 카드뿐이다. 서버 카드의 제목은 좌석 닉네임으로 만든다(UI-SPEC 427행).
