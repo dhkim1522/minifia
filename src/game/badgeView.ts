@@ -54,9 +54,11 @@ export function myClaim(view: RoomView): BadgeId {
   return view.players.find((p) => p.seat === view.me.seat)?.badge ?? "none";
 }
 
-/** 떠 있는 버튼·시트가 있는 단계인가: 주장 창(낮 시작 발표·토론·지목·마지막 3인)이고 내가 산 사람. 유령·변론 이후는 없다(만들지도 않는다) */
+/** 떠 있는 버튼·시트가 있는 단계인가: 주장 창(낮 시작 발표·토론·지목·마지막 3인의 모이기·한마디)이고 내가 산 사람. 유령·변론 이후는 없다(만들지도 않는다) */
 export function floatVisible(view: RoomView): boolean {
   if (!BADGE_PHASES.has(view.phase)) return false;
+  // 마지막 3인 동시 지목(i 3)·공개(i 4)에는 접는다: 삼각형 아래 오른쪽 이름표 지목 버튼이 작은 폰(390×664 등)에서 이 버튼에 가려져 눌리지 않았다(09.1.1-16, UI-SPEC O-2)
+  if (view.phase === "showdown" && (view.day?.showdown?.i ?? -1) >= 3) return false;
   const me = view.players.find((p) => p.seat === view.me.seat);
   return me === undefined || isAlive(me);
 }

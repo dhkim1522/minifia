@@ -82,6 +82,18 @@ describe("floatVisible — 떠 있는 버튼이 보이는 단계 (UI-SPEC A-2)",
   it("유령(탈락한 나)에게는 없다", () => {
     expect(floatVisible(makeView({ phase: "discussion", dead: [0] }))).toBe(false);
   });
+
+  // 09.1.1-16: 작은 폰(390×664 등)에서 삼각형 아래 오른쪽 이름표 지목 버튼이 떠 있는 버튼에 통째로 가려져 눌리지 않았다 — 동시 지목·공개 동안은 접는다
+  it.each([
+    [-1, true],
+    [0, true],
+    [2, true],
+    [3, false],
+    [4, false],
+  ] as const)("마지막 3인 단계 i=%i 에서 보임 = %s (동시 지목·공개에서는 이름표 지목 버튼을 가리지 않게 접는다)", (i, want) => {
+    const view = { ...makeView({ phase: "showdown", count: 4, dead: [3] }), day: { showdown: { order: [0, 1, 2], i } } } as unknown as RoomView;
+    expect(floatVisible(view)).toBe(want);
+  });
 });
 
 describe("라벨", () => {
