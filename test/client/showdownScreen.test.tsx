@@ -459,3 +459,113 @@ describe("마지막 3인 — 처형 단계 (verdict.last, 득표/찬반 알림 �
     expect(lastScene().pin).toMatchObject({ mode: "fixed", seat: 2 });
   });
 });
+
+// ---- Task 3: 정적 규칙 — DOM 분리(L23)·접근성·압축형 ----
+const ghostView = (o: ShowdownOpts): RoomView => ({
+  ...makeShowdown(o),
+  spectate: { seats: [{ seat: 0, job: "citizen" }, { seat: 2, job: "mafia" }, { seat: 3, job: "police" }, { seat: 1, job: "doctor" }, { seat: 4, job: "citizen" }] },
+});
+const JOB_WORDS = /마피아|경찰|의사|시민/;
+
+describe("마지막 3인 — 직업 단어·직업 칩 분리 (L23, T-09.1.1-43)", () => {
+  it("산 사람 viewer: 어느 단계에서도 [data-role-chip] 0건, 알약·칩 시트·인용 카드·위 한 줄에 직업 단어가 없다", () => {
+    const views = [
+      makeShowdown({ i: -1, mySeat: 0 }),
+      makeShowdown({ i: 0, mySeat: 0 }),
+      makeShowdown({ i: 1, mySeat: 0, doneAt: NOW - 100, word: "저는 아니에요" }),
+      makeShowdown({ i: 3, mySeat: 0, voted: [2] }),
+      makeShowdown({ i: 4, mySeat: 0, points: [{ seat: 0, target: 2 }, { seat: 2, target: 3 }, { seat: 3, target: 2 }] }),
+    ];
+    for (const v of views) {
+      const { container } = mount(v);
+      expect(container.querySelectorAll("[data-role-chip]").length).toBe(0);
+      for (const sel of ["[data-turn-block]", ".mv-speak-sheet", "[data-last-word]", ".mv-phase__title", ".mv-phase__hint"]) {
+        const el = container.querySelector(sel);
+        if (el !== null) expect(el.textContent ?? "", sel).not.toMatch(JOB_WORDS);
+      }
+      cleanup();
+    }
+  });
+
+  it("한마디 시트는 내 차례의 나에게만 있다: 같은 view 를 다른 좌석에서 그리면 없다", () => {
+    for (const seat of [2, 3, 1]) {
+      expect(sheet(mount(makeShowdown({ i: 0, mySeat: seat })).container)).toBeNull();
+      cleanup();
+    }
+    expect(sheet(mount(makeShowdown({ i: 0, mySeat: 0 })).container)).not.toBeNull();
+  });
+
+  it("유령 viewer: 동시 지목 버튼이 없고(이름표를 누를 수 없다) 직업 칩은 기존대로 있다, 칩 시트는 없다", () => {
+    const { container } = mount(ghostView({ i: 3, mySeat: 1 }));
+    expect(picks(container).length).toBe(0);
+    expect(container.querySelectorAll("[data-role-chip]").length).toBeGreaterThan(0);
+    expect(sheet(container)).toBeNull();
+  });
+});
+
+describe("마지막 3인 — 접근성 (UI-SPEC 접근성·모션)", () => {
+  it("알약은 role=status, 초 숫자는 aria-hidden, 칩 버튼 이름 = 칩 문구, [직접 쓰기] 이름 '직접 쓰기'", () => {
+    const { container } = mount(makeShowdown({ i: 0, mySeat: 0 }));
+    const pill = container.querySelector(".mf-turn__pill")!;
+    expect(pill.getAttribute("role")).toBe("status");
+    expect(pill.querySelector(".mf-turn__sec")!.getAttribute("aria-hidden")).toBe("true");
+    const names = [...sheet(container)!.querySelectorAll("button")].map((b) => b.textContent?.trim());
+    expect(names).toEqual(["저는 아니에요", "쟤가 수상해요", "저를 믿어 주세요", "끝까지 지켜봐요", "직접 쓰기"]);
+  });
+
+  it("시트가 열리면 첫 칩에 초점, 칩·직접 쓰기 mousedown 은 기본 동작을 막는다(입력 포커스 유지)", () => {
+    const { container } = mount(makeShowdown({ i: 0, mySeat: 0 }));
+    const first = sheet(container)!.querySelector("button")!;
+    expect(document.activeElement).toBe(first);
+    for (const b of sheet(container)!.querySelectorAll("button")) {
+      const ev = new MouseEvent("mousedown", { bubbles: true, cancelable: true });
+      b.dispatchEvent(ev);
+      expect(ev.defaultPrevented).toBe(true);
+    }
+  });
+
+  it("Tab 순서(DOM): 한마디 시트가 열려 있을 때 칩 → 직접 쓰기 순이고 시트에는 닫기 버튼이 없다", () => {
+    const { container } = mount(makeShowdown({ i: 0, mySeat: 0 }));
+    const order = [...sheet(container)!.querySelectorAll("button")].map((b) => b.hasAttribute("data-speak-write"));
+    expect(order).toEqual([false, false, false, false, true]);
+    expect(sheet(container)!.querySelector("[aria-label='닫기']")).toBeNull();
+  });
+
+  it("칩을 눌러 시트가 닫히면 PC(정밀 포인터)에서는 채팅 입력으로 초점이 돌아가고, 터치 기기에서는 키보드를 올리지 않는다", () => {
+    const stub = (fine: boolean) => vi.stubGlobal("matchMedia", (q: string) => ({ matches: fine && q.includes("pointer: fine"), media: q, addEventListener: () => {}, removeEventListener: () => {}, addListener: () => {}, removeListener: () => {}, onchange: null, dispatchEvent: () => false }));
+    stub(true);
+    const pc = mount(makeShowdown({ i: 0, mySeat: 0 }));
+    fireEvent.click(sheet(pc.container)!.querySelector("button")!);
+    expect(document.activeElement).toBe(pc.container.querySelector("[data-chat-input]"));
+    cleanup();
+    stub(false);
+    const touch = mount(makeShowdown({ i: 0, mySeat: 0 }));
+    fireEvent.click(sheet(touch.container)!.querySelector("button")!);
+    expect(document.activeElement).not.toBe(touch.container.querySelector("[data-chat-input]"));
+  });
+
+  it("동시 지목 이름표 묶음은 role=group aria-label='지목'", () => {
+    const { container } = mount(makeShowdown({ i: 3, mySeat: 0 }));
+    expect(container.querySelector('[role="group"][aria-label="지목"]')).not.toBeNull();
+  });
+});
+
+describe("마지막 3인 — 압축형(360×560) 알약·인용 카드", () => {
+  const realInnerH = window.innerHeight;
+  afterEach(() => {
+    vi.restoreAllMocks();
+    Object.defineProperty(window, "innerHeight", { value: realInnerH, configurable: true, writable: true });
+  });
+  it("압축형(패널 188)에서도 인용 카드를 만든다(위 한 줄은 만들지 않는 기존 규칙 유지)", () => {
+    Object.defineProperty(window, "innerHeight", { value: 560, configurable: true, writable: true });
+    vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockImplementation(function (this: HTMLElement) {
+      if (this.classList.contains("mf-game__panel")) return 188;
+      if (this.classList.contains("mf-game__header")) return 62;
+      return 0;
+    });
+    const { container } = mount(makeShowdown({ i: 0, mySeat: 2, doneAt: NOW - 100, word: "저는 아니에요" }));
+    expect(block(container)!.classList.contains("is-compact")).toBe(true);
+    expect(quote(container)).not.toBeNull();
+    expect(container.querySelector(".mf-turn__line")).toBeNull();
+  });
+});

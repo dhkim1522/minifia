@@ -530,8 +530,16 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
     // 새 거절이 올 때만 본다
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chatRejectN]);
+  // 시트가 완전히 닫히면(보냄·확정) 시트 안에 있던 초점을 채팅 입력으로 돌려준다(UI-SPEC 접근성). 터치 기기는 키보드가 불쑥 올라오지 않게 정밀 포인터(PC)에서만 한다.
+  const restoreFocus = useRef(false);
+  useEffect(() => {
+    if (speakOpen || !restoreFocus.current) return;
+    restoreFocus.current = false;
+    if (typeof window.matchMedia === "function" && window.matchMedia("(pointer: fine)").matches) inputRef.current?.focus({ preventScroll: true });
+  }, [speakOpen, inputRef]);
   const sendWord = (text: string): void => {
     if (speakTurn === undefined || !canSend) return;
+    restoreFocus.current = document.activeElement?.closest("[data-speak-sheet],[data-line-sheet]") != null;
     sentRejectN.current = chatRejectN;
     setSpokenTurn(speakTurn);
     setSpeakWriting(false);
