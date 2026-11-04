@@ -123,7 +123,12 @@ export interface RoomState {
   chalk?: { x: number; z: number };
   // ---- 4페이즈 처형·승패 상태(결정 0034). 모두 optional 이고 서버 전용이다. 뷰에는 허용 목록으로만 실린다. ----
   /** 이번 낮 찬반 결과(분기 근거). resolveVerdict 가 쓰고 enterDiscussion 이 지운다. */
-  verdict?: { passed: boolean; candidate?: number };
+  verdict?: {
+    passed: boolean;
+    candidate?: number;
+    /** 서버 전용 보관(결정 0066-3). 찬반 마감 훅이 남기는 찬성·반대 좌석(오름차순). 처형 단계 view 에서만 공개된다 — 찬반 진행 중에는 만들어지지도 않는다. */
+    ballots?: { yes: number[]; no: number[] };
+  };
   /** 날짜별 공개 투표 기록(D-08). resolveNomination 이 줄을 더하고 resolveVerdict 가 채우며 판 내내 쌓인다. */
   voteLog?: VoteLogEntry[];
   /** 처형 발표(seat·문구). enterDiscussion 이 지운다. */

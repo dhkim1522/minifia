@@ -99,6 +99,9 @@ function buildDay(state: RoomState): DayView {
     const today = state.day ?? 1;
     const line = [...(state.voteLog ?? [])].reverse().find((entry) => entry.n === today);
     if (line !== undefined) day.verdict = { yes: line.exec.yes, no: line.exec.no, passed: line.exec.passed };
+    // 찬반 기록 공개(결정 0066-3): 마감 뒤인 처형 단계에서만, 모두에게 같은 좌석 목록을 필드별 복사로 싣는다. 진행 중(verdict)에는 목록이 만들어지지도 않는다(L19).
+    const ballots = state.verdict?.ballots;
+    if (ballots !== undefined) day.ballots = { yes: [...ballots.yes], no: [...ballots.no] };
   }
   // 처형이 성립하지 않아 밤으로 온 그 밤에만, 이유 코드 하나(D-34). 공개 투표 기록에서 파생해 새 상태 필드가 없다.
   const noExecution = noExecutionOf(state);

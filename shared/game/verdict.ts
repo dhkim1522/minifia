@@ -1,8 +1,9 @@
 // 찬반 규칙. 순수 모듈이다 — 현재 시각·난수를 읽지 않고, 입력 상태는 바꾸지 않는다(결정 0053·0060-4, DAY-06).
 // 분모 규칙: 유권자 E = 변론자를 뺀 산 사람 수, 찬성 × 2 > E 면 통과한다. v1.0 resolveExecVote 의 '던진 표 분모' 와 다르다 —
 // 못 던진 사람은 기권이고 분모에는 들어 있다(8명이면 E 7, 찬성 4 는 통과, 3 은 부결).
-// 결정 0053: 찬반은 익명이다. 개인 표(Player.verdictVote)는 서버 전용이고 뷰 허용 목록에 없으며,
-// 마감 훅(resolveVerdict)이 집계 직후 키째 지운다 — 익명을 뷰 코드가 아니라 "데이터가 없다" 는 사실로 지킨다.
+// 결정 0053 + 0066-3 개정: 찬반 진행 중에는 비공개다. 개인 표(Player.verdictVote)는 서버 전용이고 뷰 허용 목록에 없으며,
+// 마감 훅(resolveVerdict)이 집계 직후 키째 지운다 — 진행 중 비공개를 뷰 코드가 아니라 "데이터가 없다" 는 사실로 지킨다.
+// 마감 뒤에는 누가 찬성·반대했는지 좌석 목록(verdict.ballots)만 남겨 처형 단계 view 가 모두에게 공개한다(편든 기록 — 변론자·미투표자는 어느 목록에도 없다).
 // 마감 시각은 건드리지 않는다: 모두가 일찍 던져도 10초를 다 채운다(조기 종료 없음, 사용자 확정 2026-11-02).
 import { isAlive } from "./alive";
 import type { Player, RoomState } from "./room";
@@ -61,12 +62,17 @@ export function votedSeatsOf(state: RoomState): number[] {
 /**
  * verdict 마감 훅(결정 0053-3·0060-4). 판정: 찬성 × 2 > E 면 통과, 아니면 부결(0표·E 0 도 부결).
  * 그날 voteLog 줄의 exec 를 {yes, no, passed} 로 채운다(지목 마감이 줄을 만들었다 — 줄이 없으면 voteLog 는 그대로 둔다).
- * verdict 상태는 후보를 유지하고 passed 를 정한다. 집계 직후 모든 플레이어의 verdictVote 키를 구조 분해로 지운다.
+ * verdict 상태는 후보를 유지하고 passed 와 ballots(찬성·반대 좌석)를 정한다. 집계 직후 모든 플레이어의 verdictVote 키를 구조 분해로 지운다.
  * 다음 단계는 표의 기본(execution) — 부결이어도 처형 단계가 결과 발표를 맡는다(결정 0060).
  */
 export function resolveVerdict(state: RoomState): DeadlineResult {
   const { yes, no, voters } = verdictTallyOf(state);
   const passed = yes * 2 > voters;
+  // 공개용 좌석 목록은 개인 키를 지우기 전에 한 번만 만든다(결정 0066-3). 유권자만 센다 — 변론자·유령의 남은 값과 미투표(undefined)는 어디에도 없다.
+  const voterRows = verdictVotersOf(state);
+  const seatsOf = (agree: boolean): number[] =>
+    voterRows.filter((p) => p.verdictVote === agree).map((p) => p.seat).sort((a, b) => a - b);
+  const ballots = { yes: seatsOf(true), no: seatsOf(false) };
   const players = state.players.map((p) => {
     const { verdictVote: _verdictVote, ...kept } = p;
     return kept;
@@ -81,7 +87,7 @@ export function resolveVerdict(state: RoomState): DeadlineResult {
     ...state,
     players,
     ...(voteLog === undefined ? {} : { voteLog }),
-    verdict: candidate === undefined ? { passed } : { passed, candidate },
+    verdict: candidate === undefined ? { passed, ballots } : { passed, candidate, ballots },
   };
   return { state: next, stay: false };
 }

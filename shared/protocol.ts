@@ -30,7 +30,7 @@ export const MAX_BODY_BYTES = 1024; // HTTP 본문 상한
 export type PhaseId =
   | "lobby" | "assigning" | "roleReveal" | "dayAnnounce" | "discussion"
   | "nomination" | "defense" | "verdict" | "execution"
-  | "night" | "morning" | "ended"; // 8페이즈(결정 0060): 지목 15초 → 변론 20초 → 찬반 10초 → 처형 5초. 옛 처형 여부·후보 선택·후보 공개 단계는 08-22 에 지웠다
+  | "night" | "morning" | "ended"; // 8페이즈(결정 0060): 지목 15초 → 변론 20초 → 찬반 10초 → 처형 5.6초(결정 0066-7). 옛 처형 여부·후보 선택·후보 공개 단계는 08-22 에 지웠다
 
 // ---- 밤·아침 계약(3페이즈) ----
 /** 경찰 본인에게만 보이는 수사 기록 한 줄: 그 밤의 일차·대상 seat·마피아인지 불리언 하나. 직업 이름은 싣지 않는다. */
@@ -132,6 +132,7 @@ export interface DayView {
   endCount?: number; // discussion 단계에서, 토론 끝내기를 누른 산 사람 수(누가 눌렀는지는 싣지 않는다)
   voted?: number[]; // verdict 단계에서, 찬반을 던진 좌석(오름차순, 값은 싣지 않는다 — 익명)
   verdict?: { yes: number; no: number; passed: boolean }; // execution 단계에서, 찬반 결과 수(개인 값 없음)
+  ballots?: { yes: number[]; no: number[] }; // execution 단계에서만, 찬성·반대한 좌석(오름차순, 변론자·미투표자 제외 — 결정 0066-3). 찬반 진행 중에는 없다
   turn?: PickTurnView; // nomination 단계에서만, 모두에게 같은 차례 정보(결정 0063-1, L14)
 }
 
