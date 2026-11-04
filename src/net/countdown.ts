@@ -1,10 +1,27 @@
 // 남은 시간 계산과 표시 훅(GAME-01 표시용). 판정에는 쓰이지 않는다 — 단계 전환은 서버가 정한다.
 // countdown 은 순수 함수라 fake timer 없이 테스트한다. 시각은 인자로만 받는다(clock.ts 규칙).
+// 역할 카드 타이머의 마지막 5초 규칙(URGENT_MS)을 모든 단계 타이머가 함께 쓴다. 10초 경고는 feedback-4 로 더했다.
 import { useEffect, useState } from "react";
 import { remainingMs } from "./clock";
 
 /** 마지막 5초: 이 값 이하(0 초과)로 남으면 강조한다. */
 export const URGENT_MS = 5_000;
+
+/** 마지막 10초: 이 값 이하로 남으면 경고(놋쇠)로 알린다. */
+export const WARN_MS = 10_000;
+
+export type TimerTone = "calm" | "warn" | "urgent";
+
+/**
+ * 단계 타이머 색 규칙 하나. 남은 시간 ≤ 5초 면 urgent(진홍), ≤ 10초 면 warn(놋쇠), 그 밖은 calm.
+ * 단계 전체 길이가 그 문턱 이하이면 그 색은 쓰지 않는다(5초짜리 아침은 색 없음). 마감 정각(0)도 calm.
+ */
+export function timerTone(remainingMs: number, durationMs: number): TimerTone {
+  if (remainingMs <= 0) return "calm";
+  if (remainingMs <= URGENT_MS && durationMs > URGENT_MS) return "urgent";
+  if (remainingMs <= WARN_MS && durationMs > WARN_MS) return "warn";
+  return "calm";
+}
 
 /** 다시 그리는 간격. 막대 transition 길이와 같다. */
 const REDRAW_MS = 250;
