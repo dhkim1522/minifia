@@ -5,6 +5,9 @@ import { mkdirSync, readFileSync, utimesSync } from "node:fs";
 import {
   SetupError,
   armAnnounceWatch,
+  armLetterWatch,
+  readLetter,
+  readLetterWatch,
   chooseRole,
   chooseVerdict,
   pressEndDiscussion,
@@ -120,6 +123,14 @@ import {
   resultFitChecks,
   LOBBY_SIZES,
   verdictPanelChecks,
+  ANNOUNCE_MORNING_AT,
+  LETTER_END_AT_MS,
+  LETTER_FOLD_AT_MS,
+  SEAL_GLYPH,
+  externalPenFontRequests,
+  graphemeCount,
+  letterChecks,
+  ownPenFontRequests,
 } from "./lib.mjs";
 
 export const OUT_DIR = new URL("./out/", import.meta.url).pathname;
@@ -2048,6 +2059,74 @@ async function writeSheet(page, tracker, kind, text) {
   await sheet.waitFor({ state: "detached", timeout: 3000 });
 }
 
+/**
+ * 아침 유언 편지 공통 검사(09.1-11, 결정 0063-3, UI-SPEC C-1~C-3): armLetterWatch 를 아침 전에 심어 둔 페이지에서 부른다. 편지가 걷힐 때까지 기다리고 돌려준다.
+ * LT1 아침 진입 appearMaxMs 안에 편지가 나타남(T0 = 일반 0.4초·피해자 0.7초) · LT2 인장 글자가 SEAL_GLYPH · LT3 알림이 위(is-top)로 올라감 · LT4~LT8 letterChecks(등장·인장 애니메이션이 끝난 뒤 한 장)
+ * LT9 채팅 유언 카드는 접힘(T0 + 5.0초) 때 나타남 · LT10 편지는 T0 + 5.42초에 걷힘 · LT11 Nanum 글꼴 외부 요청 0.
+ * LT12: 머리글이 "{이름} 님의 유언" 이고 글 줄을 이으면 저장한 유언(wills 중 하나)과 같다(공백 제외).
+ */
+async function morningLetterChecks(ctx, sc, rec, game, { appearMaxMs, announceRe, wills, name }) {
+  const { hp, host } = game;
+  const appeared = await attempt(async () => {
+    const start = performance.now();
+    for (;;) {
+      const w = await readLetterWatch(hp, { stop: false });
+      if (w?.appearAt != null) return true;
+      if (performance.now() - start > 5000) return { ok: false, detail: `편지가 나타나지 않음 (아침 진입 ${w?.morningAt != null})` };
+      await sleep(100);
+    }
+  });
+  let w = await readLetterWatch(hp, { stop: false });
+  const after = w?.appearAt != null && w?.morningAt != null ? Math.round(w.appearAt - w.morningAt) : null;
+  rec(sc, "LT1", `아침 진입 ${appearMaxMs / 1000}초 안에 유언 편지([data-will-letter])가 나타난다`, appeared.ok && after !== null && after <= appearMaxMs, `${appeared.detail} 아침 진입 → 편지 ${after}ms`);
+  const glyphs = w?.sealGlyphs ?? null;
+  rec(sc, "LT2", `인장 글자가 ${SEAL_GLYPH} 이다([data-will-seal] 글자 두 겹)`, Array.isArray(glyphs) && glyphs.length === 2 && glyphs.every((t) => t === SEAL_GLYPH), `글자 ${JSON.stringify(glyphs)}`);
+  // 알림은 편지가 보이는 동안 위(is-top)로 올라가 있다. 위로 올라간 시각은 편지 등장 직후(같은 렌더 한두 개 뒤)다
+  const topOk = await attempt(async () => {
+    const start = performance.now();
+    for (;;) {
+      const x = await readLetterWatch(hp, { stop: false });
+      if (x?.announceTopAt != null) return announceRe.test(x.announceText ?? "") ? true : { ok: false, detail: `알림 글자 ${x.announceText}` };
+      if (performance.now() - start > 2000) return { ok: false, detail: "알림이 위(is-top)로 올라가지 않음" };
+      await sleep(100);
+    }
+  });
+  rec(sc, "LT3", "편지가 있는 아침의 알림은 위(.mf-announce.is-top)에 서 있다", topOk.ok, topOk.detail);
+
+  // 등장(700ms)·쓰기·인장(최대 3.7초)이 끝난 뒤 한 장을 잰다
+  w = await readLetterWatch(hp, { stop: false });
+  if (w?.appearAt != null) {
+    const wait = 3900 - (w.now - w.appearAt);
+    if (wait > 0) await sleep(wait);
+  }
+  const snap = await readLetter(hp);
+  recMany(rec, sc, letterChecks(snap), " (편지)");
+  if (snap) {
+    rec(sc, "LT12", "머리글이 '{이름} 님의 유언' 이고 글 줄을 이으면 저장한 유언과 같다(줄이 잘리지 않았다)", snap.head?.text === `${name} 님의 유언` && snap.lines.length > 0 && wills.some((w) => (snap.lineTexts ?? []).join("").replace(/\s/g, "") === w.replace(/\s/g, "")), `머리글 ${snap.head?.text}, 줄 ${JSON.stringify(snap.lineTexts)}`);
+    infoRow(ctx, sc, "LT13", "참고: 편지 글꼴·단계(판정 아님)", `글꼴 ${snap.family}, ${snap.lineFontPx}px, 줄 ${snap.lineCount}개, 편지지 높이 ${Math.round(snap.paperH)}, 대체 글꼴 ${snap.fallback}`);
+  }
+
+  // 편지가 걷힐 때까지 기다린 뒤 카드·제거 시각을 본다
+  await attempt(async () => {
+    const start = performance.now();
+    for (;;) {
+      const x = await readLetterWatch(hp, { stop: false });
+      if (x?.goneAt != null) return true;
+      if (performance.now() - start > 6000) return { ok: false, detail: "편지가 걷히지 않음" };
+      await sleep(100);
+    }
+  });
+  w = await readLetterWatch(hp);
+  const cardGap = w?.appearAt != null && w?.cardAt != null ? Math.round(w.cardAt - w.appearAt) : null;
+  rec(sc, "LT9", `채팅 유언 카드는 편지가 접힐 때(편지가 뜬 뒤 약 ${LETTER_FOLD_AT_MS / 1000}초) 나타난다`, cardGap !== null && cardGap >= LETTER_FOLD_AT_MS - 400 && cardGap <= LETTER_FOLD_AT_MS + 1500, `편지 등장 → 카드 ${cardGap}ms`);
+  const goneGap = w?.appearAt != null && w?.goneAt != null ? Math.round(w.goneAt - w.appearAt) : null;
+  rec(sc, "LT10", `편지는 뜬 뒤 약 ${LETTER_END_AT_MS / 1000}초에 걷힌다`, goneGap !== null && goneGap >= LETTER_END_AT_MS - 400 && goneGap <= LETTER_END_AT_MS + 1500, `편지 등장 → 걷힘 ${goneGap}ms`);
+  const ext = externalPenFontRequests(host.penFontRequests(), ctx.origin);
+  const own = ownPenFontRequests(host.penFontRequests(), ctx.origin);
+  rec(sc, "LT11", "손글씨 글꼴(Nanum)을 외부 주소에서 불러오지 않는다(요청 0)", ext === 0, `외부 요청 ${ext}개 (같은 출처 조각 ${own}개)`);
+  return { snap, w };
+}
+
 /** 밤까지 연다: 토론에서 봇 유언을 기다린 뒤(waitWill) 지목·변론·찬반·처형을 넘겨 밤에 닿는다. 막 관찰은 밤 진입 전에 건다. */
 async function openNight(ctx, flowId, opts) {
   const { waitWill = false, ...gameOpts } = opts;
@@ -2127,6 +2206,7 @@ async function nightAssassin(ctx) {
     // 밤은 30초다 — 부하로 검사가 길어져 서버 타이머가 밤을 먼저 끝냈으면 이 판은 아침을 볼 수 없다(새 방으로 다시 돈다)
     if (ht.last().phase !== "night") throw new SetupError(`밤 검사가 길어져 서버가 밤을 먼저 끝냄 (지금 ${ht.last().phase})`);
     await armAnnounceWatch(hp);
+    await armLetterWatch(hp);
     await skipTo(hp, ht, "morning");
     await untilGame(hp, (x) => x.phase === "morning", 6000, "아침 도착");
     const { log, morning } = await waitMorningAnnounce(hp, 6000);
@@ -2136,9 +2216,11 @@ async function nightAssassin(ctx) {
     rec(sc, "MA1", "아침에 암살 현장 분필([data-chalk])이 있다", !!chalk && /^-?\d+(\.\d+)?,-?\d+(\.\d+)?$/.test(chalk.chalk), `chalk ${chalk?.chalk ?? "없음"}`);
     rec(sc, "MA2", `아침 알림이 '${victim} 님이 당했습니다' 이다`, morning?.text === `${victim} 님이 당했습니다`, `알림 ${log.filter((a) => a.text).map((a) => a.text).join(" → ") || "없음"}`);
     if (morning) recMany(rec, sc, announceChecks(morning), " (아침)");
+    // 유언 편지(09.1-11): 일반 화면은 아침 0.4초에 편지가 뜨고 T0 + 5.0초에 접히며 카드가 채팅에 나온다. 편지가 걷힌 뒤에 아래 카드·G 검사를 본다.
+    await morningLetterChecks(ctx, sc, rec, game, { appearMaxMs: ANNOUNCE_MORNING_AT + 600, announceRe: /님이 당했습니다$/, wills: BOT_WILL_TEXTS, name: victim });
     const cards = await nightUntil(hp, (x) => x.cards.some((c) => c.kind === "will") && x.cards.some((c) => c.kind === "note"), 7000);
     const kinds = (cards ?? (await readNight(hp)))?.cards.map((c) => c.kind) ?? [];
-    rec(sc, "MA3", "2.8초 뒤 채팅에 유언 카드와 쪽지 카드가 순서대로(유언 → 쪽지) 나온다", !!cards && kinds.indexOf("will") >= 0 && kinds.indexOf("note") > kinds.indexOf("will"), `카드 ${kinds.join(",") || "없음"}`);
+    rec(sc, "MA3", "편지가 접힌 뒤(아침 약 5.4초) 채팅에 유언 카드와 쪽지 카드가 순서대로(유언 → 쪽지) 나온다", !!cards && kinds.indexOf("will") >= 0 && kinds.indexOf("note") > kinds.indexOf("will"), `카드 ${kinds.join(",") || "없음"}`);
     rec(sc, "MA4", "쪽지 카드에 쓴 글이 있고 유언 카드에 봇 유언이 있다", !!cards && cards.cards.some((c) => c.kind === "note" && c.text.includes(NOTE)) && cards.cards.some((c) => c.kind === "will" && BOT_WILL_TEXTS.some((t) => c.text.includes(t))), `카드 ${JSON.stringify(cards?.cards ?? null)}`);
     await gameGH(ctx, id, "morning", host);
   } finally {
@@ -2391,6 +2473,9 @@ async function nightWill(ctx) {
   }
 }
 
+/** 피해자 편지용 유언(짧은 두 줄감) */
+const VICTIM_WILL = "범인은 분명히 도윤 님이에요";
+
 /** 피해자: 방장 시민이 봇 마피아에게 당한다(4명판 — 의사가 없어 반드시 죽는다). 처형 → 밤 → 아침을 자연 타이머로 지나며 막이 나타났다 사라지고, 아침에 번쩍임 한 번·'암살당했습니다'·유령 화면 (NIGHT-11, 시민 편 DOM) */
 async function nightVictim(ctx, shared) {
   const id = "night";
@@ -2400,6 +2485,12 @@ async function nightVictim(ctx, shared) {
   try {
     const { host, hp, ht, hostSeat } = game;
     if (hostSeat !== 0) throw new SetupError(`방장 자리가 0 이 아님 (${hostSeat})`);
+    // 유언 편지(09.1-11): 토론에서 방장이 유언을 저장해 두면 당한 아침에 본인 화면에도 편지가 0.7초 무렵 뜬다(피해자 T0)
+    const wrote = await attempt(async () => {
+      await hp.locator("[data-will-button]").click({ timeout: 4000 });
+      await writeSheet(hp, ht, "will", VICTIM_WILL);
+    });
+    rec(sc, "VC12", "토론에서 깃펜으로 유언을 쓰고 저장하면 서버가 같은 글을 돌려준다(피해자 편지용)", wrote.ok, wrote.detail);
     await skipTo(hp, ht, "execution"); // 봇 반대 → '처형 없음', 처형 5초 뒤 서버 타이머로 밤이 된다
     await armSeenWatch(hp);
     await ht.waitFor((v) => v.phase === "night", 12_000, "처형 뒤 밤(서버 타이머)");
@@ -2425,6 +2516,7 @@ async function nightVictim(ctx, shared) {
     await gameGH(ctx, id, "night-citizen", host);
     // 봇 마피아가 알람으로 방장(가장 낮은 seat)을 고른다. 밤 30초가 자연스럽게 끝나기를 기다린다
     await armAnnounceWatch(hp);
+    await armLetterWatch(hp);
     await ht.waitFor((v) => v.phase === "morning", 40_000, "밤 뒤 아침(서버 타이머)");
     // 맥박 큐 시각 기록(window.__mfTension, ?e2e=1·개발 빌드만): 밤 30초 동안 2~4개(09-06 tension.ts)
     const cues = await hp.evaluate(() => window.__mfTension ?? null);
@@ -2432,6 +2524,7 @@ async function nightVictim(ctx, shared) {
     const { log, morning: victimAnn } = await waitMorningAnnounce(hp, 6000, /^암살당했습니다$/);
     rec(sc, "VC6", "피해자 본인 화면 알림이 '암살당했습니다' 이다", !!victimAnn, `알림 ${log.filter((a) => a.text).map((a) => a.text).join(" → ") || "없음"}`);
     if (victimAnn) recMany(rec, sc, announceChecks(victimAnn), " (피해자)");
+    await morningLetterChecks(ctx, sc, rec, game, { appearMaxMs: 700 + 600, announceRe: /^암살당했습니다$/, wills: [VICTIM_WILL], name: nickOf(ht.last(), hostSeat) });
     const kill = await attempt(async () => {
       const start = performance.now();
       for (;;) {
@@ -2476,6 +2569,41 @@ async function nightFlow(ctx) {
 // ---- night-sizes: 폰 크기 6종에서 밤마다 내 이름표가 스테이지 안에 완전히 들어오고 마피아 이름표 버튼이 44×44 이상이다 (NIGHT-07, NIGHT-09, L10) ----
 // 한 판의 밤 한 장씩만 읽는다(크기마다 마피아·경찰·시민 세 판). 흐름 본체(night)가 시나리오를 보고 이 흐름은 기하만 본다. 문턱은 낮추지 않는다.
 
+/** 100자 유언(공백 없는 긴 단어 섞음, 정확히 100 글자) */
+const WILL100 = (() => {
+  const base = "마피아는도윤님이분명하다고확신하는이유는지난밤에들었던이상한발소리때문이에요 정말로제가직접본걸말씀드리는거예요 끝까지살아남아서꼭이겨주세요 모두조심하세요 그리고서준님도조금은의심돼요 감사합니다 잘부탁해요 사랑해요 안녕히";
+  return Array.from(base).slice(0, 100).join("").trim();
+})();
+
+/** 폰 크기마다: 방장 시민이 토론에서 100자 유언을 저장하고 봇 마피아에게 당해 아침에 편지가 뜨면 편지지 맞춤(LT4~LT8)·유언 전체 표시(LT12)·글꼴 외부 요청 0(LT11)을 본다 (09.1-11, UI-SPEC C-3) */
+async function nightSizesLetter(ctx, rec) {
+  const id = "night-sizes";
+  const sc = `${id}/letter`;
+  const game = await openGame(ctx, id, { guests: 0, bots: 3, role: "citizen", vote: { exec: "no", pick: "other" }, to: "discussion" });
+  try {
+    const { hp, ht, hostSeat } = game;
+    if (hostSeat !== 0) throw new SetupError(`방장 자리가 0 이 아님 (${hostSeat})`);
+    if (graphemeCount(WILL100) !== 100) throw new Error(`시험 유언이 100자가 아님 (${graphemeCount(WILL100)}자)`);
+    const wrote = await attempt(async () => {
+      await hp.locator("[data-will-button]").click({ timeout: 4000 });
+      await writeSheet(hp, ht, "will", WILL100);
+    });
+    rec(sc, "LT0", "토론에서 100자 유언을 쓰고 저장하면 서버가 같은 글을 돌려준다", wrote.ok, wrote.detail);
+    await skipTo(hp, ht, "night");
+    await untilGame(hp, (x) => x.phase === "night", 9000, "밤 도착");
+    // 봇 마피아는 밤 시작 1~6초 사이에 방장을 고른다 — 그 뒤에 아침으로 넘긴다
+    await sleep(7500);
+    if (ht.last().phase !== "night") throw new SetupError(`밤 검사가 길어져 서버가 밤을 먼저 끝냄 (지금 ${ht.last().phase})`);
+    await armLetterWatch(hp);
+    await skipTo(hp, ht, "morning");
+    await untilGame(hp, (x) => x.phase === "morning", 6000, "아침 도착");
+    if (aliveOf(ht.last()).includes(hostSeat)) throw new SetupError("방장이 이번 밤에 당하지 않음");
+    await morningLetterChecks(ctx, sc, rec, game, { appearMaxMs: 700 + 600, announceRe: /^암살당했습니다$/, wills: [WILL100], name: nickOf(ht.last(), hostSeat) });
+  } finally {
+    await closeGame(game);
+  }
+}
+
 async function nightSizesFlow(ctx) {
   const id = "night-sizes";
   const rec = recorder(ctx);
@@ -2505,6 +2633,7 @@ async function nightSizesFlow(ctx) {
       await closeGame(game);
     }
   });
+  await nightScenario(ctx, () => nightSizesLetter(ctx, rec));
   await nightScenario(ctx, async () => {
     const sc = `${id}/citizen`;
     const { game, g } = await openNight(ctx, id, { guests: 0, bots: 3, role: "citizen" });

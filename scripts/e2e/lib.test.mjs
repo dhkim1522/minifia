@@ -115,6 +115,15 @@ import {
   announceChecks,
   ghostDomChecks,
   verdictPanelChecks,
+  LETTER_END_AT_MS,
+  LETTER_FOLD_AT_MS,
+  ANNOUNCE_MORNING_AT,
+  SEAL_GLYPH,
+  contrastRatio,
+  externalPenFontRequests,
+  letterChecks,
+  ownPenFontRequests,
+  parseRgb,
 } from "./lib.mjs";
 import { dropSockets } from "./browser.mjs";
 
@@ -1858,4 +1867,91 @@ test("turnBlockChecks: 측정값이 없으면 조용히 통과하지 않고 '측
     assert.ok(lines.some((l) => !l.ok && /측정값 없음/.test(l.detail)));
   }
   assert.ok(turnBlockChecks({}, 390, 844).every((l) => !l.ok));
+});
+
+// ---- 유언 편지(09.1-11) ----
+const goodLetter = (over = {}) => ({
+  vw: 390,
+  vh: 844,
+  paper: { left: 28, top: 200, width: 334, height: 349 },
+  lines: [
+    { left: 80, top: 260, width: 230, height: 36 },
+    { left: 100, top: 300, width: 190, height: 36 },
+  ],
+  seal: { left: 240, top: 440, width: 95, height: 95 },
+  sealSize: 84,
+  head: { fontPx: 14, color: "rgb(95, 104, 123)" },
+  paperBg: "rgb(243, 239, 228)",
+  ...over,
+});
+const letterOk = (m) => Object.fromEntries(letterChecks(m).map((l) => [l.id, l.ok]));
+
+test("편지 시간 상수 사본: 접힘 5000·제거 5420·일반 알림 400·인장 글자 M", () => {
+  assert.equal(LETTER_FOLD_AT_MS, 5000);
+  assert.equal(LETTER_END_AT_MS, 5420);
+  assert.equal(ANNOUNCE_MORNING_AT, 400);
+  assert.equal(SEAL_GLYPH, "M");
+});
+
+test("parseRgb·contrastRatio: 검정 대 흰색 21:1, 읽을 수 없으면 null", () => {
+  assert.deepEqual(parseRgb("rgba(10, 20, 30, 0.5)"), [10, 20, 30]);
+  assert.equal(parseRgb("red"), null);
+  assert.ok(Math.abs(contrastRatio("rgb(0, 0, 0)", "rgb(255, 255, 255)") - 21) < 0.01);
+  assert.equal(contrastRatio("x", "rgb(0, 0, 0)"), null);
+});
+
+test("letterChecks: 알맞은 편지는 LT4~LT8 모두 통과, 줄 모양은 { id, label, ok, detail }", () => {
+  const lines = letterChecks(goodLetter());
+  assert.deepEqual(lines.map((l) => l.id), ["LT4", "LT5", "LT6", "LT7", "LT8"]);
+  assert.ok(lines.every((l) => l.ok && typeof l.label === "string" && l.detail === ""));
+});
+
+test("letterChecks LT4: 편지지가 화면 밖이면 실패(0.5px 오차까지 통과)", () => {
+  assert.equal(letterOk(goodLetter({ paper: { left: -0.5, top: 200, width: 334, height: 349 } })).LT4, true);
+  assert.equal(letterOk(goodLetter({ paper: { left: -1, top: 200, width: 334, height: 349 } })).LT4, false);
+  assert.equal(letterOk(goodLetter({ paper: { left: 28, top: 200, width: 334, height: 645 } })).LT4, false);
+  assert.equal(letterOk(goodLetter({ paper: { left: 60, top: 200, width: 331, height: 349 } })).LT4, false);
+});
+
+test("letterChecks LT5: 편지지 밖으로 나온 줄이 있으면 실패", () => {
+  assert.equal(letterOk(goodLetter({ lines: [{ left: 20, top: 260, width: 100, height: 36 }] })).LT5, false);
+  assert.equal(letterOk(goodLetter({ lines: [] })).LT5, false);
+});
+
+test("letterChecks LT6: 인장 원과 겹치는 줄은 실패, 사각형 모서리만 닿는 줄은 통과", () => {
+  // 인장 중심 (287.5, 487.5), 반지름 84 × 0.46 = 38.6
+  assert.equal(letterOk(goodLetter({ lines: [{ left: 200, top: 470, width: 120, height: 32 }] })).LT6, false);
+  // 인장 사각형(95×95) 모서리 가까이지만 원 밖
+  assert.equal(letterOk(goodLetter({ lines: [{ left: 100, top: 428, width: 160, height: 32 }] })).LT6, true);
+  assert.equal(letterOk(goodLetter({ lines: [{ left: 100, top: 300, width: 300, height: 32 }] })).LT6, true);
+});
+
+test("letterChecks LT7·LT8: 머리글 14px 미만·대비 4.5 미만이면 실패", () => {
+  assert.equal(letterOk(goodLetter({ head: { fontPx: 13.9, color: "rgb(95, 104, 123)" } })).LT7, false);
+  // 시안 값 #6a7388 on #f3efe4 는 4.14:1 이라 14px 머리글로는 모자란다
+  assert.equal(letterOk(goodLetter({ head: { fontPx: 14, color: "rgb(106, 115, 136)" } })).LT8, false);
+  assert.equal(letterOk(goodLetter({ head: { fontPx: 14, color: "rgb(95, 104, 123)" } })).LT8, true);
+});
+
+test("letterChecks: 측정값이 없으면 조용히 통과하지 않고 '측정값 없음' 으로 실패", () => {
+  for (const m of [null, undefined, {}, goodLetter({ paper: null }), goodLetter({ head: null })]) {
+    const lines = letterChecks(m);
+    assert.equal(lines.length, 5);
+    assert.ok(lines.some((l) => !l.ok && /측정값 없음/.test(l.detail)));
+  }
+});
+
+test("externalPenFontRequests: 대상 주소 밖의 Nanum 요청만 센다, 같은 출처 조각은 센다고 하지 않는다", () => {
+  const origin = "http://localhost:5173";
+  const urls = [
+    "http://localhost:5173/fonts/nanum-pen-script/nps-012.woff2",
+    "https://fonts.googleapis.com/css2?family=Gowun+Dodum&display=swap",
+    "https://fonts.googleapis.com/css2?family=Nanum+Pen+Script&display=swap",
+    "https://fonts.gstatic.com/s/nanumpenscript/v21/abc.woff2",
+    "not a url",
+  ];
+  assert.equal(externalPenFontRequests(urls, origin), 2);
+  assert.equal(ownPenFontRequests(urls, origin), 1);
+  assert.equal(externalPenFontRequests([], origin), 0);
+  assert.equal(externalPenFontRequests(undefined, origin), 0);
 });

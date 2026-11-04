@@ -122,6 +122,12 @@ export async function openHostPage(browser, { origin, code, token, size, dpr, mo
   const page = await context.newPage();
   page.setDefaultTimeout(8000);
   const secrets = [token];
+  // 손글씨 글꼴(Nanum) 요청 주소만 모은다(09.1-11, T-09.1-31) — 다른 주소(토큰이 든 소켓 주소 등)는 담지 않는다
+  const penFontUrls = [];
+  page.on("request", (r) => {
+    const u = r.url();
+    if (/nanum/i.test(u) && penFontUrls.length < 500) penFontUrls.push(u);
+  });
 
   page.on("console", (m) => {
     if (m.type() === "error") issues.console.push(redact(m.text(), secrets).slice(0, 120));
@@ -220,6 +226,10 @@ export async function openHostPage(browser, { origin, code, token, size, dpr, mo
       const out = issues;
       issues = { console: [], failed: [], offOrigin: [] };
       return out;
+    },
+    /** 지금까지 본 Nanum 글꼴 요청 주소 목록(복사본) */
+    penFontRequests() {
+      return penFontUrls.slice();
     },
   };
 }
@@ -1447,6 +1457,97 @@ export function readAnnounceWatch(page, { stop = true } = {}) {
     if (doStop) w.stop();
     return w.log.slice();
   }, stop);
+}
+
+/**
+ * 유언 편지 관찰을 심는다(09.1-11): 40ms 마다 아침 진입(morningAt)·편지 등장(appearAt)·알림 위로(announceTopAt)·인장 글자·카드 도착(cardAt)·편지 걷힘(goneAt)을
+ * page 시계(ms)로 쌓는다. 접힘·카드 도착 같은 짧은 구간을 Playwright 호출 지연과 상관없이 놓치지 않으려고 쓴다. readLetterWatch 가 읽고 멈춘다.
+ */
+export function armLetterWatch(page) {
+  return page.evaluate(() => {
+    window.__letterWatch?.stop?.();
+    const w = { morningAt: null, appearAt: null, announceTopAt: null, announceText: null, sealGlyphs: null, read: null, cardAt: null, cardBase: 0, goneAt: null };
+    const timer = setInterval(() => {
+      const now = performance.now();
+      const stage = document.querySelector("[data-game-stage]");
+      if (w.morningAt === null && stage?.getAttribute("data-phase") === "morning") w.morningAt = now;
+      const letter = document.querySelector("[data-will-letter]");
+      const cards = document.querySelectorAll('[data-card="will"]').length;
+      if (letter) {
+        if (w.appearAt === null) {
+          w.appearAt = now;
+          w.cardBase = cards;
+          w.sealGlyphs = [...letter.querySelectorAll("[data-will-seal] text")].map((t) => t.textContent ?? "");
+          w.read = (letter.querySelector("[data-will-read]")?.textContent ?? "").trim();
+        }
+        w.goneAt = null;
+      } else if (w.appearAt !== null && w.goneAt === null) w.goneAt = now;
+      if (w.appearAt !== null && w.announceTopAt === null) {
+        const top = document.querySelector(".mf-announce.is-top .mf-announce__text");
+        if (top) {
+          w.announceTopAt = now;
+          w.announceText = (top.textContent ?? "").trim();
+        }
+      }
+      if (w.appearAt !== null && w.cardAt === null && cards > w.cardBase) w.cardAt = now;
+    }, 40);
+    window.__letterWatch = { w, stop: () => clearInterval(timer), now: () => performance.now() };
+  });
+}
+
+/** armLetterWatch 가 쌓은 기록을 읽는다(+ 지금 page 시계 now). 기본은 읽고 멈춘다. 심지 않았으면 null. */
+export function readLetterWatch(page, { stop = true } = {}) {
+  return page.evaluate((doStop) => {
+    const lw = window.__letterWatch;
+    if (!lw) return null;
+    if (doStop) lw.stop();
+    return { ...lw.w, now: performance.now() };
+  }, stop);
+}
+
+/**
+ * 지금 떠 있는 유언 편지를 읽는다(09.1-11): 편지지·글 줄(글자 사각형)·인장 사각형, 머리글 글자·크기·색, 편지지 바탕색, 글 줄 글꼴 이름과 대체 글꼴 여부, 알림이 위(is-top)인지.
+ * 편지가 없으면 null. 등장(700ms)·인장(500ms) 애니메이션이 끝난 뒤에 부른다 — 움직이는 중에는 사각형이 변한다.
+ */
+export function readLetter(page) {
+  return page.evaluate(() => {
+    const root = document.querySelector("[data-will-letter]");
+    if (!root) return null;
+    const rectOf = (el) => {
+      if (!el) return null;
+      const r = el.getBoundingClientRect();
+      return { left: r.left, top: r.top, right: r.right, bottom: r.bottom, width: r.width, height: r.height };
+    };
+    const textRect = (el) => {
+      const range = document.createRange();
+      range.selectNodeContents(el);
+      return rectOf(range);
+    };
+    const paper = root.querySelector(".mf-letter__paper");
+    const lineEls = [...root.querySelectorAll("[data-will-line]")];
+    const seal = root.querySelector("[data-will-seal]");
+    const head = root.querySelector("[data-will-head]");
+    const headCs = head ? getComputedStyle(head) : null;
+    const lineCs = lineEls[0] ? getComputedStyle(lineEls[0]) : null;
+    return {
+      vw: window.innerWidth,
+      vh: window.innerHeight,
+      paper: rectOf(paper),
+      lines: lineEls.map(textRect),
+      lineTexts: lineEls.map((el) => (el.textContent ?? "").trim()),
+      seal: rectOf(seal),
+      sealSize: seal ? Number(seal.getAttribute("width")) : null,
+      head: head ? { text: (head.textContent ?? "").trim(), fontPx: parseFloat(headCs.fontSize), color: headCs.color } : null,
+      paperBg: paper ? getComputedStyle(paper).backgroundColor : null,
+      family: lineCs ? lineCs.fontFamily : null,
+      lineFontPx: lineCs ? parseFloat(lineCs.fontSize) : null,
+      lineCount: lineEls.length,
+      fallback: root.classList.contains("is-fallback"),
+      text: (root.querySelector("[data-will-read]")?.textContent ?? "").trim(),
+      announceTop: !!document.querySelector(".mf-announce.is-top"),
+      paperH: paper ? paper.getBoundingClientRect().height : null,
+    };
+  });
 }
 
 /**

@@ -7,7 +7,9 @@ import { BAR_MASK } from "../../shared/game/map";
 import { NOMINATION_END_MS, NOMINATION_GATHER_MS, PICK_GAP_MS, PICK_TURN_MS, nominationMaxMs } from "../../shared/game/phases";
 import { MOVE_SPEED } from "../../shared/game/world";
 import { NICKNAME_MAX_GRAPHEMES, countGraphemes } from "../../shared/nickname";
+import { ANNOUNCE_MORNING_AT } from "../../src/game/dayView";
 import { TIMELESS_PHASES } from "../../src/game/scenes";
+import { LETTER_END_AT_MS, LETTER_FOLD_AT_MS, SEAL_GLYPH } from "../../src/game/willLetter";
 import {
   CHAT_PANEL_EXTRA,
   KB_PANEL_H,
@@ -214,5 +216,16 @@ describe("E2E 의 순차 지목 시간 상수와 앱 상수 (09.1-08, 결정 006
 
   it("nominationMaxMs 가 차례 수 1~8 에서 앱 함수와 같은 값을 낸다", () => {
     for (let n = 1; n <= 8; n++) expect(lib.nominationMaxMs(n)).toBe(nominationMaxMs(n));
+  });
+});
+
+describe("E2E 의 유언 편지 상수와 앱 상수 (09.1-11)", () => {
+  const lib = e2eLib as { LETTER_FOLD_AT_MS: number; LETTER_END_AT_MS: number; ANNOUNCE_MORNING_AT: number; SEAL_GLYPH: string };
+
+  it("LETTER_FOLD_AT_MS·LETTER_END_AT_MS·ANNOUNCE_MORNING_AT·SEAL_GLYPH 가 앱 상수와 같다", () => {
+    expect(lib.LETTER_FOLD_AT_MS).toBe(LETTER_FOLD_AT_MS);
+    expect(lib.LETTER_END_AT_MS).toBe(LETTER_END_AT_MS);
+    expect(lib.ANNOUNCE_MORNING_AT).toBe(ANNOUNCE_MORNING_AT);
+    expect(lib.SEAL_GLYPH).toBe(SEAL_GLYPH);
   });
 });

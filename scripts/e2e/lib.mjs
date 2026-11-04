@@ -443,6 +443,132 @@ export function announceChecks(m) {
   ];
 }
 
+// ---- 유언 편지(09.1-11, 결정 0063-3, UI-SPEC C-1~C-3) ----
+// 앱 상수 사본 — test/unit/e2eContract.test.ts 가 src/game/willLetter.ts·src/game/dayView.ts 와 같음을 고정한다.
+/** 편지 접힘 시작 = 채팅 카드 도착(편지 T0 기준 ms) */
+export const LETTER_FOLD_AT_MS = 5000;
+/** 편지 제거(편지 T0 기준 ms) */
+export const LETTER_END_AT_MS = 5420;
+/** 일반 화면에서 아침 알림(= 편지 T0)이 시작되는 시각(아침 진입 기준 ms) */
+export const ANNOUNCE_MORNING_AT = 400;
+/** 인장 글자(임시, 미결 M-7) */
+export const SEAL_GLYPH = "M";
+/** 머리글 글자 크기 하한 */
+export const LETTER_HEAD_FONT_MIN = 14;
+/** 머리글 대비 하한(14px 글자) */
+export const LETTER_HEAD_CONTRAST_MIN = 4.5;
+/** 인장 그림(84×84) 안의 밀랍 원 반지름 비율 — 불규칙 가장자리 바깥 점은 이 반지름 안에 든다 */
+const SEAL_RADIUS_RATIO = 0.46;
+
+/** "rgb(r, g, b)" / "rgba(r, g, b, a)" 를 [r, g, b] 로. 읽을 수 없으면 null */
+export function parseRgb(text) {
+  const m = /^rgba?\(\s*(\d+(?:\.\d+)?)[ ,]+(\d+(?:\.\d+)?)[ ,]+(\d+(?:\.\d+)?)/.exec(String(text ?? ""));
+  return m ? [Number(m[1]), Number(m[2]), Number(m[3])] : null;
+}
+
+/** 두 색(rgb 글자)의 대비. 읽을 수 없으면 null */
+export function contrastRatio(fg, bg) {
+  const a = parseRgb(fg);
+  const b = parseRgb(bg);
+  if (a === null || b === null) return null;
+  const [hi, lo] = [relLuminance(a), relLuminance(b)].sort((x, y) => y - x);
+  return (hi + 0.05) / (lo + 0.05);
+}
+
+/** 사각형과 원이 겹치는가(원 중심에서 사각형까지 가장 가까운 점이 반지름 안) */
+function rectHitsCircle(r, cx, cy, radius) {
+  const nx = Math.max(r.left, Math.min(cx, right(r)));
+  const ny = Math.max(r.top, Math.min(cy, bottom(r)));
+  return Math.hypot(nx - cx, ny - cy) < radius - OVERLAP_EPS;
+}
+
+/**
+ * 유언 편지 맞춤 판정(LT4~LT8). m = readLetter() — { vw, vh, paper, lines[], seal, sealSize, head: { fontPx, color }, paperBg }.
+ * LT4 편지지 사각형이 화면 안 · LT5 모든 글 줄 사각형이 편지지 안 · LT6 인장이 글 줄과 겹치지 않음(인장은 밀랍 원으로 본다)
+ * LT7 머리글 14px 이상 · LT8 머리글 대비 4.5:1 이상(읽은 색 값으로 계산). 값이 없으면 통과시키지 않고 `측정값 없음` 으로 실패한다.
+ */
+export function letterChecks(m) {
+  const L4 = "편지지가 화면 안에 완전히 들어온다";
+  const L5 = "모든 글 줄이 편지지 안에 있다";
+  const L6 = "인장이 글 줄과 겹치지 않는다";
+  const L7 = `편지 머리글이 ${LETTER_HEAD_FONT_MIN}px 이상`;
+  const L8 = `편지 머리글 대비가 ${LETTER_HEAD_CONTRAST_MIN}:1 이상`;
+  if (!m || typeof m !== "object") return [noMeasure("LT4", L4, "letter"), noMeasure("LT5", L5, "letter"), noMeasure("LT6", L6, "letter"), noMeasure("LT7", L7, "letter"), noMeasure("LT8", L8, "letter")];
+  const out = [];
+  const p = m.paper;
+  const rectOk = (r) => !!r && allNum(r.left, r.top, r.width, r.height);
+  if (!rectOk(p) || !isNum(m.vw) || !isNum(m.vh)) out.push(noMeasure("LT4", L4, "paper·vw·vh"));
+  else {
+    const bad = [];
+    if (p.left < -OVERLAP_EPS) bad.push(`왼쪽 ${fmt(p.left)}`);
+    if (right(p) > m.vw + OVERLAP_EPS) bad.push(`오른쪽 ${fmt(right(p))} > ${m.vw}`);
+    if (p.top < -OVERLAP_EPS) bad.push(`위 ${fmt(p.top)}`);
+    if (bottom(p) > m.vh + OVERLAP_EPS) bad.push(`아래 ${fmt(bottom(p))} > ${m.vh}`);
+    out.push(result("LT4", L4, bad));
+  }
+  const lines = Array.isArray(m.lines) ? m.lines : [];
+  if (!rectOk(p) || lines.length === 0 || !lines.every(rectOk)) out.push(noMeasure("LT5", L5, "lines"));
+  else {
+    const bad = [];
+    lines.forEach((l, i) => {
+      if (!rectInside(l, p)) bad.push(`${i + 1}번째 줄 ${fmt(l.left)}~${fmt(right(l))} × ${fmt(l.top)}~${fmt(bottom(l))}`);
+    });
+    out.push(result("LT5", L5, bad));
+  }
+  const s = m.seal;
+  if (!rectOk(s) || !isNum(m.sealSize) || lines.length === 0 || !lines.every(rectOk)) out.push(noMeasure("LT6", L6, "seal·lines"));
+  else {
+    const cx = s.left + s.width / 2;
+    const cy = s.top + s.height / 2;
+    const bad = [];
+    lines.forEach((l, i) => {
+      if (rectHitsCircle(l, cx, cy, m.sealSize * SEAL_RADIUS_RATIO)) bad.push(`${i + 1}번째 줄이 인장과 겹침`);
+    });
+    out.push(result("LT6", L6, bad));
+  }
+  out.push(isNum(m.head?.fontPx) ? result("LT7", L7, m.head.fontPx + 0.01 >= LETTER_HEAD_FONT_MIN ? [] : [`${fmt(m.head.fontPx)}px`]) : noMeasure("LT7", L7, "head.fontPx"));
+  const ratio = contrastRatio(m.head?.color, m.paperBg);
+  out.push(ratio === null ? noMeasure("LT8", L8, "head.color·paperBg") : result("LT8", L8, ratio + 0.001 >= LETTER_HEAD_CONTRAST_MIN ? [] : [`${Math.round(ratio * 100) / 100}:1 (${m.head.color} on ${m.paperBg})`]));
+  return out;
+}
+
+/** 요청 주소 목록에서 손글씨 글꼴을 대상 주소 밖에서 불러온 수(Google Fonts 의 Nanum 요청 등). 같은 출처 /fonts/nanum-pen-script/ 는 센다고 하지 않는다 */
+export function externalPenFontRequests(urls, origin) {
+  let own;
+  try {
+    own = new URL(origin).origin;
+  } catch {
+    own = origin;
+  }
+  return (urls ?? []).filter((u) => {
+    let url;
+    try {
+      url = new URL(u);
+    } catch {
+      return false;
+    }
+    return url.origin !== own && /nanum/i.test(u);
+  }).length;
+}
+
+/** 요청 주소 목록에서 같은 출처 손글씨 글꼴 조각 요청 수(글꼴이 실제로 같은 출처에서 왔는지 참고용) */
+export function ownPenFontRequests(urls, origin) {
+  let own;
+  try {
+    own = new URL(origin).origin;
+  } catch {
+    own = origin;
+  }
+  return (urls ?? []).filter((u) => {
+    try {
+      const url = new URL(u);
+      return url.origin === own && url.pathname.startsWith("/fonts/nanum-pen-script/");
+    } catch {
+      return false;
+    }
+  }).length;
+}
+
 /**
  * 산 사람 화면의 유령 누설 판정(GH1~GH4, UI-SPEC "산 사람 쪽 규칙"). m = { ghostView, roleChips, ghostSeats, ghostTexts } —
  * `[data-ghost-view]`·`[data-role-chip]`·`[data-ghost-seat]` 요소 수와 유령 문구("유령끼리만 보여요"·"유령 채팅") 를 가진 요소 수. 산 사람이면 모두 0 이어야 한다.
