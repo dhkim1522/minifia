@@ -6,6 +6,7 @@ import { useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import "../helpers/singleLineErrors";
 import { WillSheet } from "../../src/components/v2/WillSheet";
+import { WILL_MAX_GRAPHEMES } from "../../shared/game/will";
 import { IME_WAIT_MS } from "../../src/game/chatUi";
 
 afterEach(() => {
@@ -45,28 +46,34 @@ describe("WillSheet — 유언 한 번 쓰기 (WILL-01, 트레이서)", () => {
     expect(root.getAttribute("data-will-sheet")).toBe("will");
     expect(document.activeElement).toBe(area(container));
     expect(area(container).getAttribute("placeholder")).toBe("죽으면 모두에게 보여요");
-    expect(count(container)).toBe("0/100");
+    expect(count(container)).toBe("0/50");
   });
 
-  it("'안녕' 입력 → 카운터 2/100, [저장] → onSave('안녕') 한 번", () => {
+  it("'안녕' 입력 → 카운터 2/50, [저장] → onSave('안녕') 한 번", () => {
     const onSave = vi.fn();
     const { container } = render(<Harness onSave={onSave} />);
     fireEvent.change(area(container), { target: { value: "안녕" } });
-    expect(count(container)).toBe("2/100");
+    expect(count(container)).toBe("2/50");
     fireEvent.click(saveBtn(container));
     expect(onSave).toHaveBeenCalledTimes(1);
     expect(onSave).toHaveBeenCalledWith("안녕");
   });
 
-  it("101 그래핌 붙여넣기 → 100 그래핌까지 잘리고 카운터 100/100 (그래핌으로 센다)", () => {
+  it("51 그래핌 붙여넣기 → 50 그래핌까지 잘리고 카운터 50/50 (그래핌으로 센다, 서버 WILL_MAX_GRAPHEMES 와 같은 값)", () => {
+    expect(WILL_MAX_GRAPHEMES).toBe(50);
     const { container } = render(<Harness />);
     const family = "👨‍👩‍👧"; // 여러 코드 포인트지만 그래핌 하나
-    fireEvent.change(area(container), { target: { value: "가".repeat(99) + family + "나" } });
-    expect(count(container)).toBe("100/100");
-    expect(area(container).value).toBe("가".repeat(99) + family);
-    fireEvent.change(area(container), { target: { value: "다".repeat(101) } });
-    expect(area(container).value).toBe("다".repeat(100));
-    expect(count(container)).toBe("100/100");
+    fireEvent.change(area(container), { target: { value: "가".repeat(49) + family + "나" } });
+    expect(count(container)).toBe("50/50");
+    expect(area(container).value).toBe("가".repeat(49) + family);
+    fireEvent.change(area(container), { target: { value: "다".repeat(51) } });
+    expect(area(container).value).toBe("다".repeat(50));
+    expect(count(container)).toBe("50/50");
+  });
+
+  it("max 를 주면(쪽지 100) 그 값으로 자르고 센다", () => {
+    const { container } = render(<WillSheet value={"라".repeat(60)} onChange={() => {}} onSave={() => {}} onClose={() => {}} max={100} />);
+    expect(count(container)).toBe("60/100");
   });
 
   it("빈 값으로 [저장] → onSave('') 한 번(유언 지우기)", () => {

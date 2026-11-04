@@ -430,6 +430,20 @@ describe("마피아 [쪽지] (NIGHT-12, E2 #18·#19)", () => {
     expect(area(m.container).value).toBe("조용히 끝냈다");
   });
 
+  it("글자 수 상한: 유언 시트는 50(유언 상한), 쪽지 시트는 채팅과 같은 100 그대로다(사용자 결정 2026-11-05)", () => {
+    const w = mount(makeView());
+    fireEvent.click(willBtn(w.container)!);
+    fireEvent.change(area(w.container), { target: { value: "가".repeat(60) } });
+    expect(area(w.container).value).toBe("가".repeat(50));
+    expect(w.container.querySelector(".mv-will__count")?.textContent).toBe("50/50");
+    cleanup();
+    const m = mount(makeView({ mySeat: 0, nightSure: 2 }));
+    fireEvent.click(noteBtn(m.container)!);
+    fireEvent.change(area(m.container), { target: { value: "나".repeat(60) } });
+    expect(area(m.container).value).toBe("나".repeat(60));
+    expect(m.container.querySelector(".mv-will__count")?.textContent).toBe("60/100");
+  });
+
   it("쪽지 시트가 열린 동안 확정이 풀리면 시트가 닫히고, 다시 확정되어 열면 쓰던 글이 이어진다", () => {
     const m = mount(makeView({ mySeat: 0, nightSure: 2 }));
     fireEvent.click(noteBtn(m.container)!);

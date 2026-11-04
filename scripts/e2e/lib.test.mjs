@@ -1400,6 +1400,19 @@ test("run.mjs: 흐름별 extraSizes 는 --sizes 를 주지 않았을 때만 더�
   assert.deepEqual(withExtra, ["lobby", "world", "chat-lobby", "chat-keyboard", "day", "ghost", "night-sizes"]);
 });
 
+test("flows.mjs night-sizes 편지 시험 유언 WILL50 은 서버 유언 상한(WILL_MAX_GRAPHEMES)과 같은 자소 수이고, 공백 없는 긴 단어(10~15자)를 섞는다(사용자 결정 2026-11-05)", () => {
+  const will = readFileSync(new URL("../../shared/game/will.ts", import.meta.url), "utf8");
+  const max = Number(will.match(/export const WILL_MAX_GRAPHEMES = (\d+);/)?.[1]);
+  assert.equal(max, 50);
+  const flows = readFileSync(new URL("./flows.mjs", import.meta.url), "utf8");
+  assert.doesNotMatch(flows, /WILL100/);
+  const text = flows.match(/const WILL50 = "([^"]+)";/)?.[1];
+  assert.ok(text, "WILL50 문자열 상수");
+  assert.equal(graphemeCount(text), max);
+  const longest = Math.max(...text.split(" ").map((w) => graphemeCount(w)));
+  assert.ok(longest >= 10 && longest <= 15, `가장 긴 단어 ${longest}자`);
+});
+
 // ---- 08-23: 결정 0056 완화를 지웠다(결정 0060-14) — 이름 길이로 G2 를 봐 주지 않는다 ----
 
 test("G2: 화면 가로 밖 요소는 이름 길이와 무관하게 실패한다(결정 0056 완화 삭제, 화면 가로 기준 불변)", () => {

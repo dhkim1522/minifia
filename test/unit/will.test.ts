@@ -5,7 +5,7 @@ import type { Player, RoomState } from "../../shared/game/room";
 import { tick } from "../../shared/game/tick";
 import { buildView } from "../../shared/game/view";
 import { pickTarget } from "../../shared/game/night";
-import { noteRecipientIds, saveNote, saveWill } from "../../shared/game/will";
+import { WILL_MAX_GRAPHEMES, noteRecipientIds, saveNote, saveWill } from "../../shared/game/will";
 import { seededRandInt } from "../helpers/seededRandom";
 
 const START_AT = 10_000;
@@ -93,6 +93,31 @@ describe("saveWill (WILL-01, 결정 0061-10)", () => {
     const dead: RoomState = { ...s, players: s.players.map((p) => (p.id === me.id ? { ...p, alive: false } : p)) };
     expect(saveWill(dead, me.id, "a")).toEqual({ ok: false, error: "BAD_MESSAGE" });
     expect(saveWill(s, "nobody", "a")).toEqual({ ok: false, error: "BAD_MESSAGE" });
+  });
+
+  it("유언 상한은 50 자소다(채팅 100 과 따로, 사용자 결정 2026-11-05)", () => {
+    expect(WILL_MAX_GRAPHEMES).toBe(50);
+  });
+
+  it("50 자소는 저장되고 51 자소는 BAD_MESSAGE(자르지 않고 거절, 채팅 100 초과와 같은 방식)", () => {
+    const s = stateAt("discussion");
+    const me = citizenOf(s);
+    const fifty = "가".repeat(49) + "👨‍👩‍👧";
+    const ok = saveWill(s, me.id, fifty);
+    expect(ok.ok).toBe(true);
+    if (ok.ok) expect(ok.state.players.find((p) => p.id === me.id)!.will).toBe(fifty);
+    expect(saveWill(s, me.id, "가".repeat(51))).toEqual({ ok: false, error: "BAD_MESSAGE" });
+    expect(saveWill(s, me.id, "가".repeat(50) + "👨‍👩‍👧")).toEqual({ ok: false, error: "BAD_MESSAGE" });
+  });
+
+  it("옛 상한으로 저장된 50자 넘는 유언은 그대로 두고, 새 저장만 50 자소로 판정한다", () => {
+    const s = stateAt("discussion");
+    const me = citizenOf(s);
+    const old = "나".repeat(80);
+    const stored: RoomState = { ...s, players: s.players.map((p) => (p.id === me.id ? { ...p, will: old } : p)) };
+    expect(saveWill(stored, me.id, "다".repeat(51))).toEqual({ ok: false, error: "BAD_MESSAGE" });
+    const replaced = saveWill(stored, me.id, "다".repeat(50));
+    expect(replaced.ok && replaced.state.players.find((p) => p.id === me.id)!.will === "다".repeat(50)).toBe(true);
   });
 
   it("101 자소는 BAD_MESSAGE, 제어 문자는 정리된 값으로 저장된다", () => {
@@ -211,6 +236,12 @@ describe("saveNote (NIGHT-12, 결정 0061-9)", () => {
   it("101 자소는 BAD_MESSAGE", () => {
     const { state } = confirmedNight();
     expect(saveNote(state, mafiasOf(state)[0]!.id, "가".repeat(101))).toEqual({ ok: false, error: "BAD_MESSAGE" });
+  });
+
+  it("쪽지는 채팅과 같은 100 자소 그대로다(유언 50 은 쪽지에 걸리지 않는다)", () => {
+    const { state } = confirmedNight();
+    const r = saveNote(state, mafiasOf(state)[0]!.id, "가".repeat(100));
+    expect(r.ok && r.state.nightNote === "가".repeat(100)).toBe(true);
   });
 });
 

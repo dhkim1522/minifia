@@ -28,6 +28,7 @@ import { channelOf, phaseKey } from "../../shared/game/audience";
 import { checkChatSend, sanitizeChatText } from "../../shared/game/chatRules";
 import type { ChatSenderRate } from "../../shared/game/chatRules";
 import { pickTarget } from "../../shared/game/night";
+import { WILL_MAX_GRAPHEMES } from "../../shared/game/will";
 import { PHASE_DEFS } from "../../shared/game/phases";
 import { rolesInPlay } from "../../shared/game/roles";
 import {
@@ -1139,6 +1140,7 @@ describe("봇 유언·다가가기 계획 (09-12, 결정 0061-18, 가정 A3)", (
   it("BOT_WILL_LINES 는 짧은 중립 문장 3개이고 sanitizeChatText 를 그대로 통과하며 역할 단어가 없다", () => {
     expect(BOT_WILL_LINES.length).toBe(3);
     for (const line of BOT_WILL_LINES) {
+      expect(countGraphemes(line)).toBeLessThanOrEqual(WILL_MAX_GRAPHEMES);
       const clean = sanitizeChatText(line);
       expect(clean.ok && clean.text === line).toBe(true);
       expect(/마피아|경찰|의사|시민/.test(line)).toBe(false);
