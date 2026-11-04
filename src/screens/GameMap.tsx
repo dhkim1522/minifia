@@ -325,6 +325,8 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
           if (nightMafia) approach(seat);
         },
         group: nighting ? "밤 대상" : "지목",
+        // 마피아 밤 선택 효과(결정 0065): nightMafia(산 마피아의 밤)일 때만. mine 은 서버가 마피아에게만 준 me.pick 이다
+        ...(nightMafia ? { aim: true as const } : {}),
       }
     : undefined;
 

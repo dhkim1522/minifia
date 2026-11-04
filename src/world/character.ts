@@ -3,6 +3,7 @@
 // 지오메트리·위치·크기·색·자세는 원문과 같고, 그리기 묶음만 바꿨다: 부품(구·원통)을 관절 단위로
 // 버텍스 컬러 병합해 한 명이 보이는 메시 6개(몸통·머리·팔 2·다리 2) + 발밑 원판 1개다(RESEARCH 개정 B).
 import {
+  BackSide,
   BoxGeometry,
   BufferGeometry,
   CircleGeometry,
@@ -719,6 +720,12 @@ export interface WorldCharacter {
   holdPose(id: "point" | null): void;
   /** 발밑 고리 하나를 붙이거나(색 문자열) 뗀다(null). 이미 붙어 있으면 같은 메시의 색만 바꾼다 */
   setRing(color: string | null): void;
+  /**
+   * 마피아 밤 선택 표시(결정 0065): 켜면 관절 메시마다 붉은 뒷면 껍질(배율 PICK_SHELL_SCALE)을 붙여 몸 윤곽을 만든다.
+   * animate 가 참이면 발밑 고리가 PICK_RING_FROM 배에서 PICK_LOCK_MS 에 걸쳐 1 배로 조여진 뒤 가볍게 맥박친다. 거짓(움직임 줄이기)이면 윤곽만 있고 고리는 늘 1 배다.
+   * 끄면 껍질과 재질을 해제하고 고리 배율을 1 로 돌린다. 켠 채 다시 켜면 색·animate 만 바꾸고(조임은 처음부터 다시 하지 않는다) 껍질은 늘지 않는다.
+   */
+  setPickMark(on: boolean, opts?: { color: string; animate: boolean }): void;
   /** 지금 보이는 메시 수(관절 6 + 발밑 원판 + 투명 조각) */
   meshCount(): number;
   /** 이 캐릭터가 만든 지오메트리를 해제한다. 공유 재질·발밑 원판은 건드리지 않는다 */
@@ -743,6 +750,19 @@ const GHOST_DEFAULT_OPACITY = 0.6;
 const RING_INNER = 0.5;
 const RING_OUTER = 0.62;
 const RING_OPACITY = 0.85;
+/** 밤 선택 표시(결정 0065): 윤곽 껍질 배율, 고리가 조여지는 시작 배율·시간, 조여진 뒤 맥박의 크기·빠르기(시안 NightAim) */
+const PICK_SHELL_SCALE = 1.14;
+const PICK_RING_FROM = 2.4;
+const PICK_LOCK_MS = 420;
+const PICK_PULSE_AMP = 0.07;
+const PICK_PULSE_RATE = 5;
+/** 밤 선택 표시의 고리 배율: age(s) 동안 PICK_RING_FROM → 1 로 ease-out 으로 조여지고, 다 조여진 뒤에는 1 ± PICK_PULSE_AMP 로 맥박친다 */
+function pickRingScale(age: number, t: number): number {
+  const k = Math.min(1, (age * 1000) / PICK_LOCK_MS);
+  const e = 1 - (1 - k) ** 3;
+  const lock = PICK_RING_FROM - (PICK_RING_FROM - 1) * e;
+  return k >= 1 ? 1 + Math.sin(t * PICK_PULSE_RATE) * PICK_PULSE_AMP : lock;
+}
 const clamp01 = (v: number): number => Math.min(1, Math.max(0, v));
 
 /** 병합 색을 원래대로 또는 어둡게(채도 0 + 휘도 × 0.6) 쓴다 */
@@ -774,6 +794,12 @@ export function createCharacter(figIndex: number, outfit: OutfitId = "coat"): Wo
   let ghostMat: MeshStandardMaterial | null = null;
   /** 발밑 고리(있을 때만) */
   let ring: Mesh | null = null;
+  /** 밤 선택 표시: 켜짐 · 고리 조임·맥박 여부 · 켠 뒤 지난 시간(s) · 윤곽 껍질 재질과 껍질들(관절 메시마다 하나) */
+  let pickOn = false;
+  let pickAnimate = false;
+  let pickAge = 0;
+  let pickMat: MeshBasicMaterial | null = null;
+  const pickShells = new Map<JointName, Mesh>();
 
   const root = new Group();
   root.scale.setScalar(CHAR_SCALE);
@@ -856,8 +882,20 @@ export function createCharacter(figIndex: number, outfit: OutfitId = "coat"): Wo
   refreshGlass();
 
   function refresh(js: readonly JointName[]): void {
-    for (const j of js) meshes[j].geometry = merged(j).geo;
+    for (const j of js) {
+      meshes[j].geometry = merged(j).geo;
+      const shell = pickShells.get(j);
+      if (shell) shell.geometry = meshes[j].geometry;
+    }
     refreshGlass();
+  }
+  function dropPickShells(): void {
+    for (const [j, shell] of pickShells) meshes[j].remove(shell);
+    pickShells.clear();
+    if (pickMat) {
+      pickMat.dispose();
+      pickMat = null;
+    }
   }
   function showFace(id: string): void {
     const f = (FACE_IDS as readonly string[]).includes(id) ? id : "base";
@@ -919,6 +957,11 @@ export function createCharacter(figIndex: number, outfit: OutfitId = "coat"): Wo
         else pose = emotePose(emote, held);
       }
       applyPose(pose);
+      // 밤 선택 표시의 고리: 켠 동안만 배율을 정한다(꺼진 뒤 한 번 1 로 돌리는 것은 setPickMark). 고리가 나중에 붙어도 이 줄이 맞춘다
+      if (pickOn) {
+        pickAge += dt;
+        if (ring) ring.scale.setScalar(pickAnimate ? pickRingScale(pickAge, t) : 1);
+      }
       return { headY: (2.45 + pose.y) * CHAR_SCALE };
     },
     setYaw(yaw) {
@@ -995,6 +1038,34 @@ export function createCharacter(figIndex: number, outfit: OutfitId = "coat"): Wo
       }
       (ring.material as MeshBasicMaterial).color.set(color);
     },
+    setPickMark(on, opts) {
+      if (disposed) return;
+      if (!on) {
+        if (!pickOn) return;
+        pickOn = false;
+        pickAge = 0;
+        dropPickShells();
+        if (ring) ring.scale.setScalar(1);
+        return;
+      }
+      const color = opts?.color ?? "#e0344b";
+      const wasOn = pickOn;
+      pickOn = true;
+      pickAnimate = opts?.animate === true;
+      if (!wasOn) pickAge = 0;
+      if (!pickMat) pickMat = new MeshBasicMaterial({ color, side: BackSide });
+      else pickMat.color.set(color);
+      for (const j of JOINTS) {
+        if (pickShells.has(j)) continue;
+        const shell = new Mesh(meshes[j].geometry, pickMat);
+        shell.userData.isOutline = true;
+        shell.scale.setScalar(PICK_SHELL_SCALE);
+        shell.castShadow = false;
+        meshes[j].add(shell);
+        pickShells.set(j, shell);
+      }
+      if (ring) ring.scale.setScalar(pickAnimate ? pickRingScale(pickAge, 0) : 1);
+    },
     setOpacity(alpha) {
       if (disposed || !ghostMat) return;
       ghostMat.opacity = clamp01(alpha);
@@ -1013,6 +1084,7 @@ export function createCharacter(figIndex: number, outfit: OutfitId = "coat"): Wo
         ghostMat.dispose();
         ghostMat = null;
       }
+      dropPickShells();
       if (ring) {
         root.remove(ring);
         ring.geometry.dispose();

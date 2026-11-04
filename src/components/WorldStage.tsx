@@ -50,6 +50,12 @@ export interface WorldPick {
   onPick(seat: number): void;
   /** 이름표 층(role=group)의 접근성 이름 */
   group: string;
+  /**
+   * 마피아 밤 선택 효과(결정 0065). 켜면 후보 이름표 버튼은 점선 테두리(is-cand), 누르는 동안 실선 + 빛(is-preview),
+   * 고른 뒤(mine) 3px 진홍 테두리·맥박·표식(is-picked)이 되고, 이름표 래퍼에 data-night-pick 이 실려 런타임이 그 사람 몸 윤곽·고리 조임을 건다.
+   * 산 마피아 밤 화면만 켠다(서버가 마피아에게만 준 me.pick 으로 만든 mine). 낮 지목은 이 값이 없고 모양이 그대로다.
+   */
+  aim?: true;
 }
 
 export interface WorldStageProps {
@@ -245,6 +251,9 @@ export function WorldStage(props: WorldStageProps) {
   const roster = [...view.players, ...leaving.filter((p) => !here.has(p.seat))].filter((p) => shown(p.seat));
   const canKick = view.me.isHost && props.canSend && props.onKick !== undefined;
   const pick = props.pick;
+  // 마피아 밤 선택 효과의 누르는 중 좌석(미리 보기). 포인터를 떼거나 벗어나면 비운다
+  const [pressSeat, setPressSeat] = useState<number | undefined>(undefined);
+  const aim = pick?.aim === true;
 
   const stateClass = exiting ? "is-exiting" : mapStatus.status === "ready" ? "is-open" : mapStatus.status === "lost" || mapStatus.status === "recreating" ? "is-redrawing" : "";
 
@@ -297,6 +306,8 @@ export function WorldStage(props: WorldStageProps) {
           const pickable = current && pick !== undefined && pick.seats.has(p.seat);
           const kickable = !pickable && current && canKick && away && !me;
           const { ring, turn, ...extra } = props.tagProps?.(p.seat) ?? {};
+          // 마피아 밤 선택 효과: 고른 좌석 mine · 누르는 중 preview · 그 밖의 후보 cand. 후보가 아니면 없다
+          const aimState = aim && pickable ? (pick.mine === p.seat ? "mine" : pressSeat === p.seat ? "preview" : "cand") : undefined;
           // 죽은 좌석 표시(유령 화면에서만 생긴다): 유령 viewer 의 장면 표 ghost 이거나 tagProps 가 ghost 를 준 좌석
           const ghostSeat = extra.ghost === true || scene?.seats[p.seat]?.ghost === true;
           const stack = (
@@ -307,7 +318,7 @@ export function WorldStage(props: WorldStageProps) {
               away={away}
               typing={props.typingSeats?.has(p.seat) === true}
               ghost={scene?.seats[p.seat]?.ghost === true ? true : undefined}
-              mine={pickable && pick.mine === p.seat ? true : undefined}
+              mine={pickable && pick.mine === p.seat && !aim ? true : undefined}
               {...extra}
             />
           );
@@ -324,23 +335,35 @@ export function WorldStage(props: WorldStageProps) {
               data-turn={turn ? "true" : undefined}
               // 속성 값은 kebab-case: mafiaAlly → "mafia-ally" (ringKindAttr)
               data-ring-kind={ring === undefined ? undefined : ringKindAttr(ring)}
+              // 마피아 밤 선택 효과의 상태(cand·preview·mine). 런타임이 mine 일 때 그 캐릭터에 몸 윤곽을 건다
+              data-night-pick={aimState}
               aria-hidden={kickable || pickable ? undefined : true}
               style={TAG_INITIAL_STYLE}
             >
               {pickable ? (
                 <button
                   type="button"
-                  className="mf-world__pick"
+                  className={aimState === undefined ? "mf-world__pick" : `mf-world__pick ${aimState === "mine" ? "is-picked" : aimState === "preview" ? "is-preview" : "is-cand"}`}
                   data-pick={p.seat}
                   aria-label={pick.label(p.nickname)}
                   aria-pressed={pick.mine === p.seat}
                   aria-disabled={props.canSend ? undefined : true}
                   // 버튼을 눌러도 채팅 입력칸의 포커스(키보드)를 뺏지 않는다
                   onMouseDown={(e) => e.preventDefault()}
+                  onPointerDown={aim ? () => setPressSeat(p.seat) : undefined}
+                  onPointerUp={aim ? () => setPressSeat((s) => (s === p.seat ? undefined : s)) : undefined}
+                  onPointerLeave={aim ? () => setPressSeat((s) => (s === p.seat ? undefined : s)) : undefined}
+                  onPointerCancel={aim ? () => setPressSeat((s) => (s === p.seat ? undefined : s)) : undefined}
                   onClick={() => {
                     if (live.current.props.canSend) live.current.props.pick?.onPick(p.seat);
                   }}
                 >
+                  {aimState === "mine" ? (
+                    <svg className="mf-world__aimmark" data-night-mark viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M12 2l2.2 9.2L12 22l-2.2-10.8z" fill="#e0344b" />
+                      <path d="M7 12h10" stroke="#e0344b" strokeWidth="2.4" strokeLinecap="round" />
+                    </svg>
+                  ) : null}
                   {stack}
                 </button>
               ) : kickable ? (

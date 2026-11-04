@@ -45,6 +45,8 @@ export interface CharacterHandle {
   /** 손가락 유지 자세·발밑 고리 — optional (08-10) */
   holdPose?(id: "point" | null): void;
   setRing?(color: string | null): void;
+  /** 마피아 밤 선택 표시(결정 0065) — 몸 윤곽 껍질과 발밑 고리 조임. optional(시험 가짜 호환) */
+  setPickMark?(on: boolean, opts?: { color: string; animate: boolean }): void;
   dispose(): void;
 }
 /** 06-11 의 characterKit 이 구조적으로 맞춘다 */

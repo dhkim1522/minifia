@@ -151,6 +151,8 @@ export type PlayableCharacter = CharacterHandle & { playEmote?(id: EmoteId): voi
 export type RingKind = "mafia" | "mafiaAlly" | "police" | "doctor" | "turn";
 // turn = 순차 지목에서 지금 차례인 사람의 고리(09.1-07, UI-SPEC A-1). 색은 토큰 gray-100. 밤 고리와 같은 발밑 고리 메시를 쓰고 새 모델은 만들지 않는다.
 export const RING_COLORS: Readonly<Record<RingKind, string>> = { mafia: "#c8102e", mafiaAlly: "#e0344b", police: "#7a8fb8", doctor: "#6fa59a", turn: "#e6e8ee" };
+/** 마피아 밤 선택 표시의 몸 윤곽 색(crimson-400, 동료 고리와 같은 값 — 결정 0065) */
+export const PICK_OUTLINE_COLOR = RING_COLORS.mafiaAlly;
 /** RingKind → 이름표 속성 값(data-ring-kind). 속성은 kebab-case 다 */
 export function ringKindAttr(kind: RingKind): string {
   return kind === "mafiaAlly" ? "mafia-ally" : kind;
@@ -271,6 +273,8 @@ interface Actor {
   pointing: boolean;
   /** handle.setRing 에 마지막으로 보낸 고리 종류(null = 고리 없음) */
   ringKind: string | null;
+  /** handle.setPickMark 에 마지막으로 보낸 상태(true = 켬). animate(움직임 줄이기)는 켤 때 한 번 정한다 */
+  pickMark: boolean;
   /** 처형 연출로 handle.setOpacity 에 마지막으로 보낸 불투명도(1 = 연출 없음) */
   fadeOpacity: number;
   /** 지금 유령으로 그리고 있나(handle.setGhost 에 마지막으로 보낸 값) */
@@ -586,6 +590,7 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
       dim: false,
       pointing: false,
       ringKind: null,
+      pickMark: false,
       fadeOpacity: 1,
       ghost: false,
       ghostOutfit: null,
@@ -1082,6 +1087,14 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
       if (kind !== a.ringKind) {
         a.ringKind = kind;
         a.handle.setRing?.(ringColorOfAttr(kind));
+      }
+      // 마피아 밤 선택 표시(결정 0065): 이름표가 data-night-pick="mine" 으로 알린 좌석만 몸 윤곽·고리 조임을 받는다(바뀔 때만).
+      // 이름표 속성은 산 마피아 화면의 WorldStage 만 쓴다 — 다른 화면의 이름표에는 이 속성이 없어 이 분기가 일어나지 않는다.
+      const pickOn = tag.getAttribute("data-night-pick") === "mine";
+      if (pickOn !== a.pickMark) {
+        a.pickMark = pickOn;
+        if (pickOn) a.handle.setPickMark?.(true, { color: PICK_OUTLINE_COLOR, animate: !deps.reducedMotion() });
+        else a.handle.setPickMark?.(false);
       }
     }
     const bySeat = new Map(live.map((a) => [a.seat, a]));
