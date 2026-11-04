@@ -25,6 +25,9 @@ vi.mock("../../src/components/WorldStage", async () => {
 
 const { RoomScreen } = await import("../../src/screens/RoomScreen");
 const { HeadStack } = await import("../../src/components/v2/HeadStack");
+const { GameMap } = await import("../../src/screens/GameMap");
+const { WorldStore } = await import("../../src/world/store");
+const { ChatStore } = await import("../../src/net/chatStore");
 
 const NAMES = ["민수", "영희", "서준", "지아", "도윤", "하은", "유진", "태오"];
 const NOW = 1_700_000_000_000;
@@ -390,5 +393,134 @@ describe("낙관 표시와 거절 되돌림 (UI-SPEC A-2)", () => {
     fireEvent.click(chip(container, "경찰"));
     fireEvent.click(chip(container, "경찰"));
     expect(sent(send).filter((x) => x.t === "badge")).toHaveLength(1);
+  });
+});
+
+// ---- Task 3: 표식·단계 표·접근성·L23 DOM 분리 ----
+describe("단계 표: 떠 있는 버튼은 주장 창에서만 DOM 에 있다 (UI-SPEC A-2)", () => {
+  it.each(["dayAnnounce", "discussion", "nomination"] as PhaseId[])("%s 에서 산 사람에게는 하나", (phase) => {
+    const { container } = mount(makeView({ phase }));
+    expect(container.querySelectorAll("[data-float]")).toHaveLength(1);
+    expect(floatBtn(container)).not.toBeNull();
+  });
+
+  it.each(["defense", "verdict", "execution", "night", "morning"] as PhaseId[])("%s 에서는 버튼도 시트도 DOM 에 없다", (phase) => {
+    const { container } = mount(makeView({ phase }));
+    expect(container.querySelector("[data-float]")).toBeNull();
+    expect(container.querySelector("[data-float-stack]")).toBeNull();
+    expect(sheet(container)).toBeNull();
+  });
+
+  it.each(["showdown", "runoff"] as PhaseId[])("GameMap 을 직접 그리면 %s: showdown 만 있다(마지막 3인 결전은 주장 창, 결선은 아니다)", (phase) => {
+    const { container } = render(<GameMap view={makeView({ phase, count: 3 })} store={new WorldStore()} chat={new ChatStore()} send={() => true} />);
+    expect(container.querySelectorAll('[data-float="claim"]')).toHaveLength(phase === "showdown" ? 1 : 0);
+  });
+
+  it("유령(탈락한 나)에게는 버튼을 만들지 않는다", () => {
+    const { container } = mount(makeView({ dead: [0] }));
+    expect(container.querySelector("[data-float]")).toBeNull();
+  });
+
+  it("주장 창이 끝나면(토론 → 변론) 열려 있던 시트가 닫힌다", () => {
+    const m = mount(makeView({ phase: "nomination" }));
+    fireEvent.click(floatBtn(m.container)!);
+    expect(sheet(m.container)).not.toBeNull();
+    m.show(makeView({ phase: "defense" }));
+    expect(sheet(m.container)).toBeNull();
+    expect(m.container.querySelector("[data-float]")).toBeNull();
+  });
+});
+
+describe("L23: 배지는 직업 칩(data-role-chip)과 섞이지 않는다", () => {
+  it("산 사람 viewer 의 어느 이름표에도 [data-role-chip] 이 없고 배지가 있는 이름표에만 [data-claim] 이 있다", () => {
+    for (const phase of ["dayAnnounce", "discussion", "nomination"] as PhaseId[]) {
+      const { unmount } = mount(makeView({ phase, badges: { 1: "police", 2: "mafia", 4: "none" }, swapped: [4] }));
+      let claims = 0;
+      for (let seat = 0; seat < 6; seat += 1) {
+        const c = stackOf(seat);
+        expect(c.querySelectorAll("[data-role-chip]"), `${phase} seat ${seat}`).toHaveLength(0);
+        claims += c.querySelectorAll("[data-claim]").length;
+      }
+      expect(claims).toBe(3);
+      unmount();
+    }
+  });
+
+  it("배지 요소의 속성에 data-role-chip 이 없고 .mv-head 에도 data-claim 이 없다", () => {
+    const { container } = render(<HeadStack name="영희" color="red" claim="mafia" claimSwapped />);
+    expect(container.querySelector("[data-role-chip]")).toBeNull();
+    expect(container.querySelector(".mv-head")?.hasAttribute("data-claim")).toBe(false);
+    expect(container.querySelectorAll("[data-claim]")).toHaveLength(1);
+    expect(container.querySelector("[data-claim]")?.hasAttribute("data-claim-changed")).toBe(true);
+  });
+
+  it("유령 viewer: 탈락자 이름표에는 배지가 없고 산 사람 이름표에는 배지 + 직업 칩이 서로 다른 요소로 있다", () => {
+    // 서버는 탈락자 줄에 badge 를 싣지 않지만, 실려 와도 화면이 그리지 않는다
+    mount(makeView({ dead: [0, 1], mySeat: 0, badges: { 1: "police", 2: "mafia" } }));
+    const dead = stackOf(1);
+    expect(dead.querySelector("[data-claim]")).toBeNull();
+    const alive = stackOf(2);
+    expect(alive.querySelectorAll("[data-claim]")).toHaveLength(1);
+    expect(alive.querySelectorAll("[data-role-chip]")).toHaveLength(1);
+    const chip = alive.querySelector("[data-role-chip]")!;
+    const badge = alive.querySelector("[data-claim]")!;
+    expect(chip).not.toBe(badge);
+    expect(chip.classList.contains("mv-rolechip")).toBe(true);
+    expect(badge.classList.contains("mv-claim")).toBe(true);
+    expect(badge.hasAttribute("data-role-chip")).toBe(false);
+  });
+});
+
+describe("접근성·초점·Tab 순서 (UI-SPEC 접근성)", () => {
+  it.each([
+    ["none", "말 안 함"],
+    ["citizen", "시민"],
+    ["police", "경찰"],
+    ["doctor", "의사"],
+    ["mafia", "마피아"],
+  ] as const)("내 주장 %s → 버튼 이름 '직업 배지 고르기, 지금 %s'", (claim, label) => {
+    const { container } = mount(makeView(claim === "none" ? {} : { badges: { 0: claim } }));
+    expect(floatBtn(container)?.getAttribute("aria-label")).toBe(`직업 배지 고르기, 지금 ${label}`);
+  });
+
+  it("시트가 열리면 aria-pressed true, 칩을 눌러 닫히면 초점이 떠 있는 버튼으로 돌아온다", () => {
+    const { container } = mount(makeView());
+    fireEvent.click(floatBtn(container)!);
+    expect(floatBtn(container)?.getAttribute("aria-pressed")).toBe("true");
+    fireEvent.click(chip(container, "시민"));
+    act(() => {
+      vi.advanceTimersByTime(200);
+    });
+    expect(sheet(container)).toBeNull();
+    expect(floatBtn(container)?.getAttribute("aria-pressed")).toBe("false");
+    expect(document.activeElement).toBe(floatBtn(container));
+  });
+
+  it("버튼 mousedown 의 기본 동작을 막는다(채팅 입력칸의 포커스를 뺏지 않는다)", () => {
+    const { container } = mount(makeView());
+    const notPrevented = fireEvent.mouseDown(floatBtn(container)!);
+    expect(notPrevented).toBe(false);
+  });
+
+  it("Tab 순서(DOM 순서): 채팅 입력 → 보내기 → 깃펜 → 떠 있는 버튼", () => {
+    const { container } = mount(makeView());
+    const order = (a: Element, b: Element): boolean => (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
+    const input = container.querySelector(".mv-chat__input")!;
+    const send = container.querySelector(".mv-chat__send")!;
+    const quill = container.querySelector("[data-will-button]")!;
+    expect(input && send && quill).toBeTruthy();
+    expect(order(input, send)).toBe(true);
+    expect(order(send, quill)).toBe(true);
+    expect(order(quill, floatBtn(container)!)).toBe(true);
+  });
+
+  it("유언 시트를 열면 배지 시트가 닫히고, 두 시트가 한 시트 층을 번갈아 쓴다", () => {
+    const { container } = mount(makeView());
+    fireEvent.click(floatBtn(container)!);
+    expect(container.querySelectorAll(".mf-will-layer")).toHaveLength(1);
+    fireEvent.click(container.querySelector("[data-will-button]")!);
+    expect(sheet(container)).toBeNull();
+    expect(container.querySelector('[data-will-sheet="will"]')).not.toBeNull();
+    expect(container.querySelectorAll(".mf-will-layer")).toHaveLength(1);
   });
 });

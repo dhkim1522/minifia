@@ -120,3 +120,69 @@ describe("명조 글꼴 토큰 --font-serif (08-05, UI-SPEC Font)", () => {
     expect(stamp.includes("font-size: 15px; line-height: 1; font-weight: 700; letter-spacing: 0.12em")).toBe(true);
   });
 });
+
+// 09.1.1-08: 직업 배지·칩 시트·떠 있는 버튼 CSS 정적 검사 (UI-SPEC "Color"·"Typography"·"접근성 · 모션 · 입력")
+describe("직업 배지 CSS 규칙 (09.1.1-08)", () => {
+  const strip = (name: string): string => readFileSync(new URL(`../../src/styles/${name}`, import.meta.url), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+  const V2 = strip("v2.css");
+  const GAME = strip("game.css");
+  const rules = (css: string): { selector: string; body: string }[] => [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({ selector: (m[1] ?? "").trim(), body: m[2] ?? "" }));
+  const mine = (css: string, re: RegExp) => rules(css).filter((r) => re.test(r.selector));
+  const NEW = [...mine(V2, /(mv-claim|mv-float)/), ...mine(GAME, /mf-float/)];
+
+  it("새 규칙이 있다(mv-claim 5곳 이상, 떠 있는 버튼, mf-float)", () => {
+    expect((V2.match(/mv-claim/g) ?? []).length).toBeGreaterThanOrEqual(5);
+    expect(mine(V2, /\.mv-float/).length).toBeGreaterThan(0);
+    expect(mine(GAME, /\.mf-float/).length).toBe(1);
+  });
+
+  it("hex·rgb 색 리터럴이 없다 — tokens.css 변수만", () => {
+    for (const r of NEW) {
+      expect(r.body, r.selector).not.toMatch(/#[0-9a-fA-F]{3,8}\b/);
+      expect(r.body, r.selector).not.toMatch(/\brgba?\(/);
+    }
+  });
+
+  it("font-size 는 14·16·24·36 중 하나다", () => {
+    for (const r of NEW) {
+      for (const m of r.body.matchAll(/font-size:\s*([^;]+);/g)) expect(["14px", "16px", "24px", "36px"], `${r.selector}: ${m[1]}`).toContain((m[1] ?? "").trim());
+    }
+    expect(NEW.some((r) => /font-size/.test(r.body))).toBe(true);
+  });
+
+  it("진홍·놋쇠 변수를 한 번도 쓰지 않는다(배지·시트는 gray/night 계열만)", () => {
+    for (const r of NEW) expect(r.body, r.selector).not.toMatch(/--(crimson|brass)-/);
+  });
+
+  it("글자 14px 미만이 없다(12px 아이콘 점은 글자가 아니다)", () => {
+    for (const r of NEW) for (const m of r.body.matchAll(/font-size:\s*(\d+)px/g)) expect(Number(m[1])).toBeGreaterThanOrEqual(14);
+  });
+
+  it("모션 줄이기: 배지 팝·알약 페이드·시트 등장 애니메이션이 없다(animation: none)", () => {
+    const reduce = V2.slice(V2.lastIndexOf("@media (prefers-reduced-motion: reduce)"));
+    const hit = rules(reduce).find((r) => r.selector.includes(".mv-claim.is-pop") && r.selector.includes(".mv-claim__notice") && r.selector.includes(".mv-claim-sheet"));
+    expect(hit?.body).toMatch(/animation:\s*none/);
+  });
+
+  it("애니메이션은 transform·opacity 만 움직인다", () => {
+    const keyframes = [...V2.matchAll(/@keyframes\s+(mv-claim[\w-]*)\s*\{((?:[^{}]*\{[^{}]*\})*)\s*\}/g)];
+    expect(keyframes.length).toBeGreaterThanOrEqual(4);
+    for (const k of keyframes) for (const decl of (k[2] ?? "").matchAll(/\{([^{}]*)\}/g)) for (const prop of (decl[1] ?? "").split(";").map((d) => d.split(":")[0]?.trim()).filter(Boolean)) expect(["transform", "opacity"], `${k[1]}: ${prop}`).toContain(prop);
+  });
+
+  it("떠 있는 버튼 묶음은 키보드 올림 + 패널 높이 + 8 위에 앉고 시트(z-overlay) 아래다", () => {
+    const body = mine(GAME, /\.mf-float/)[0]?.body ?? "";
+    expect(body).toMatch(/--mf-kb-lift/);
+    expect(body).toMatch(/--mf-panel-h/);
+    expect(body).toMatch(/var\(--space-sm\)/);
+    expect(body).toMatch(/right:\s*var\(--space-md\)/);
+    expect(body).toMatch(/z-index:\s*calc\(var\(--z-overlay\) - 1\)/);
+  });
+
+  it("버튼 지름 48(control-input), 칩 높이 44(tap-min)", () => {
+    const btn = mine(V2, /^\.mv-float$/)[0]?.body ?? "";
+    expect(btn).toMatch(/width:\s*var\(--control-input\)/);
+    expect(btn).toMatch(/height:\s*var\(--control-input\)/);
+    expect(mine(V2, /^\.mv-claim-chip$/)[0]?.body ?? "").toMatch(/min-height:\s*var\(--tap-min\)/);
+  });
+});
