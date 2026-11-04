@@ -496,7 +496,7 @@ export async function skipOnce(seated: Seated): Promise<void> {
   for (const s of socks) await nextFrame(s, (m) => m.t === "state", 10_000);
 }
 
-/** 저장된 단계가 phase 가 될 때까지 skipOnce 를 거듭한다. */
+/** 저장된 단계가 phase 가 될 때까지 skipOnce 를 거듭한다. 산 사람이 셋인 낮의 showdown(결정 0066-5)은 testSkip 한 걸음씩 시간 초과로 지나가 처형 없는 밤이 된다(전원 한마디 생략·지목 없음). 한마디·지목을 넣으려면 showdownAll 을 쓴다. */
 export async function skipThrough(seated: Seated, phase: PhaseId): Promise<void> {
   for (let i = 0; i < 40 && (await storedRoom(seated.code)).phase !== phase; i += 1) await skipOnce(seated);
   expect((await storedRoom(seated.code)).phase).toBe(phase);
