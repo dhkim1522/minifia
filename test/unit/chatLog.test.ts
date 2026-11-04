@@ -4,6 +4,7 @@ import {
   CHAT_EVICT_BATCH,
   CHAT_KEEP,
   CHAT_KEY_PREFIX,
+  CHAT_REPLAY_BALLOTS,
   CHAT_REPLAY_PER_CHANNEL,
   appendLine,
   appendWhisperPair,
@@ -519,5 +520,75 @@ describe("appendWhisperPair (결정 0066-2)", () => {
     const base: ChatRecord = { g: 1, ch: "all", seq: 1, seat: 0, text: "글", at: 1, n: 1, r: 255 };
     const restored = restoreChatLog([{ ...base, k: "will", to: 3 }]);
     expect(json(restored.records[0])).toBe(json({ ...base, k: "will" }));
+  });
+});
+
+describe("ballots 카드 (결정 0066-3, O-8)", () => {
+  const card = (log: ChatLog, text = "1,2|3", seat = 4): ReturnType<typeof appendLine> => appendLine(log, { ...line("all", seat, text, 255), k: "ballots" });
+
+  it("상수: 복원 때 더하는 ballots 카드는 최근 3장", () => {
+    expect(CHAT_REPLAY_BALLOTS).toBe(3);
+  });
+
+  it("toWire 가 k ballots 를 복사하고 restoreChatLog 가 받는다(왕복)", () => {
+    const r = card(emptyChatLog());
+    expect(json(toWire(r.record))).toBe(json({ ch: "all", seat: 4, seq: 1, text: "1,2|3", at: 1000, k: "ballots" }));
+    expect(json(restoreChatLog([r.record]).records)).toBe(json([r.record]));
+  });
+
+  it("일반 줄이 상한(100)을 훨씬 넘게 쌓여도 ballots 레코드는 지워지지 않고 상한 계산에도 들지 않는다", () => {
+    let log = card(emptyChatLog()).log;
+    let evicted: number[] = [];
+    for (let i = 0; i < CHAT_KEEP.all * 2; i += 1) {
+      const r = appendLine(log, line("all", 0, `줄${i}`, 255));
+      log = r.log;
+      evicted = [...evicted, ...r.evicted];
+    }
+    expect(log.records.some((x) => x.k === "ballots")).toBe(true);
+    expect(evicted.includes(1)).toBe(false);
+    // 일반 줄은 상한 안(ballots 를 빼고 센다): 100 이하이고 지우기 시작한 뒤라 100 - 배치 이상
+    const plain = log.records.filter((x) => x.k !== "ballots").length;
+    expect(plain <= CHAT_KEEP.all && plain > CHAT_KEEP.all - CHAT_EVICT_BATCH).toBe(true);
+  });
+
+  it("ballots 카드를 더하는 순간에는 일반 줄을 지우지 않는다(카드는 상한을 세지 않는다)", () => {
+    let log = emptyChatLog();
+    for (let i = 0; i < CHAT_KEEP.all; i += 1) log = appendLine(log, line("all", 0, `줄${i}`, 255)).log;
+    const r = card(log);
+    expect(r.evicted.length).toBe(0);
+  });
+
+  it("귓속말 쌍이 상한을 넘겨도 ballots 레코드는 지우지 않는다", () => {
+    let log = card(emptyChatLog()).log;
+    for (let i = 0; i < CHAT_KEEP.all - 1; i += 1) log = appendLine(log, line("all", 0, `줄${i}`, 255)).log;
+    const r = appendWhisperPair(log, { seat: 1, to: 2, text: "비밀", at: 9, n: 2, partyMask: 6, othersMask: 249 });
+    expect(r.evicted.includes(1)).toBe(false);
+    expect(r.log.records.some((x) => x.k === "ballots")).toBe(true);
+  });
+
+  it("replayFor: 채널 30줄 한도 밖에 있는 ballots 카드도 마스크에 들면 최근 3장까지 더해 g 순서로 돌려준다", () => {
+    let log = emptyChatLog();
+    log = card(log, "0|1", 1).log; // 오래된 카드 1
+    for (let i = 0; i < 5; i += 1) log = appendLine(log, line("all", 0, `a${i}`, 255)).log;
+    log = card(log, "0|2", 2).log; // 카드 2
+    log = card(log, "0|3", 3).log; // 카드 3
+    log = card(log, "0|4", 4).log; // 카드 4
+    for (let i = 0; i < 40; i += 1) log = appendLine(log, line("all", 0, `b${i}`, 255)).log;
+    const got = replayFor(log, 0).filter((l) => l.ch === "all");
+    const cards = got.filter((l) => l.k === "ballots");
+    expect(cards.map((c) => c.text).join(",")).toBe("0|2,0|3,0|4"); // 최근 3장
+    expect(got.length).toBe(30 + 3); // 일반 최근 30 + 카드 3 (이미 든 줄은 중복 없음)
+    expect(got.map((l) => l.seq).join(",")).toBe([...got.map((l) => l.seq)].sort((a, b) => a - b).join(","));
+    expect(new Set(got.map((l) => l.seq)).size).toBe(got.length);
+  });
+
+  it("replayFor: 최근 30줄 안에 든 카드는 중복으로 더해지지 않고, 마스크에 없는 좌석은 카드를 받지 않는다", () => {
+    let log = emptyChatLog();
+    log = appendLine(log, line("all", 0, "앞", 255)).log;
+    log = card(log).log;
+    expect(replayFor(log, 0).length).toBe(2);
+    const masked = appendLine(emptyChatLog(), { ...line("all", 4, "1|2", 1 << 3), k: "ballots" }).log;
+    expect(replayFor(masked, 0).length).toBe(0);
+    expect(replayFor(masked, 3).length).toBe(1);
   });
 });
