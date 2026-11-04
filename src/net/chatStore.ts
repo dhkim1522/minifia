@@ -54,6 +54,8 @@ export class ChatStore {
   private rejectSeq = 0;
   private sysSeq = 0;
   private replay = false;
+  /** 편지가 뜨는 아침의 카드 보류 바닥값(holdCardsUntil). 이 시각 전에 라이브로 오는 카드는 이 시각까지 보류한다. reset 이 지운다 */
+  private holdFloor = 0;
   private rev = 0;
   private views = new Map<ChatChannel, readonly ChatStoreLine[]>();
   private listeners = new Set<ChatStoreListener>();
@@ -71,7 +73,8 @@ export class ChatStore {
       case "chat": {
         if (frame.k) {
           // 서버 카드 줄: 입력 중은 건드리지 않는다(카드는 사람이 보낸 글이 아니다, 연구 Pitfall 9)
-          if (this.insertAll([cardLine(frame, frame.k, now + (this.ctx?.pk.endsWith(":execution") ? CARD_HOLD_EXEC_MS : CARD_HOLD_MS))])) {
+          const hold = now + (this.ctx?.pk.endsWith(":execution") ? CARD_HOLD_EXEC_MS : CARD_HOLD_MS);
+          if (this.insertAll([cardLine(frame, frame.k, Math.max(hold, this.holdFloor))])) {
             this.replay = false;
             changed = true;
           }
@@ -134,6 +137,32 @@ export class ChatStore {
 
   lines(): readonly ChatStoreLine[] {
     return this.all;
+  }
+
+  /**
+   * 편지가 뜨는 아침(UI-SPEC C-1): 지금(now) 보류 중인 카드 줄(revealAt > now)의 공개 시각을 max(기존, at) 로 늦추고,
+   * at 이 지나기 전에 라이브로 오는 카드도 같은 바닥값을 쓴다. at 이 지나면 보통 규칙(받은 시각 + 보류)으로 돌아간다.
+   * 사람 줄·시스템 줄·로컬 카드·chatLog 복원 줄(revealAt 없음)과 이미 보이는 카드는 건드리지 않는다.
+   * 저장소는 시계를 읽지 않으므로 now 를 부르는 쪽이 준다.
+   */
+  holdCardsUntil(at: number, now: number): void {
+    if (at > this.holdFloor) this.holdFloor = at;
+    let moved = false;
+    this.all = this.all.map((l) => {
+      if (l.revealAt === undefined || l.revealAt <= now || l.revealAt >= at) return l;
+      moved = true;
+      return { ...l, revealAt: at };
+    });
+    if (moved) this.bump();
+  }
+
+  /** 라이브로 받은(revealAt 이 있는) 그 좌석의 k 카드 줄 중 마지막. 없거나 chatLog 로 복원된 줄뿐이면 undefined */
+  liveCard(k: "will" | "note", seat: number): ChatStoreLine | undefined {
+    for (let i = this.all.length - 1; i >= 0; i--) {
+      const l = this.all[i]!;
+      if (l.kind === "card" && l.card === k && l.seat === seat && l.revealAt !== undefined) return l;
+    }
+    return undefined;
   }
 
   /**
@@ -228,6 +257,7 @@ export class ChatStore {
     this.typing.clear();
     this.reject = null;
     this.replay = false;
+    this.holdFloor = 0;
     if (changed) this.bump();
   }
 

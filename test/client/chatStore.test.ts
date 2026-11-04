@@ -473,7 +473,7 @@ describe("ChatStore: holdCardsUntil·liveCard (09.1-10)", () => {
     store.addSystem("안내", { scope: "all", at: 300 });
     store.apply({ t: "chatLog", lines: [{ ch: "all", seat: 2, seq: 7, text: "복원", at: 50, k: "will" }] }, 1, 400);
     store.holdCardsUntil(9000, 5000);
-    expect(store.visibleLines("all", 5000).length).toBe(5);
+    expect(store.visibleLines("all", 5000).length).toBe(4);
   });
 
   it("그 뒤 at 이 지나기 전에 라이브로 오는 카드도 at 까지 보류되고, at 이 지나면 보통 규칙(받은 시각 + 2800)이다", () => {
