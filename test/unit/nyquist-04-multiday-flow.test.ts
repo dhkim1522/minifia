@@ -101,7 +101,7 @@ describe("여러 날에 걸친 처형 흐름 (6명, 마피아 2)", () => {
 
 describe("종료 뒤에는 행동이 거부된다 (END-01, END-02)", () => {
   it("ended 에서 지목·찬반·토론 끝내기·밤 지목이 모두 WRONG_PHASE 다", async () => {
-    const { castPoint } = await import("../../shared/game/nomination");
+    const { castTurnPoint } = await import("../../shared/game/nomination");
     const { castVerdict } = await import("../../shared/game/verdict");
     const { toggleEnd } = await import("../../shared/game/discussion");
     const { pickTarget } = await import("../../shared/game/night");
@@ -112,7 +112,7 @@ describe("종료 뒤에는 행동이 거부된다 (END-01, END-02)", () => {
     const who = ended.players.find(isAlive)!;
     const other = ended.players.find((p) => p.id !== who.id && isAlive(p))!;
     const outcomes = [
-      castPoint(ended, who.id, other.seat),
+      castTurnPoint(ended, who.id, other.seat, ended.phaseEndsAt ?? 0),
       castVerdict(ended, who.id, true),
       toggleEnd(ended, who.id, true),
       pickTarget(ended, who.id, other.seat),

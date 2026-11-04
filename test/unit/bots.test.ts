@@ -47,7 +47,7 @@ import type { PhaseId } from "../../shared/protocol";
 import { seededRandInt } from "../helpers/seededRandom";
 import { startedFrom, stateWithVerdict } from "../helpers/voteState";
 import { toggleEnd } from "../../shared/game/discussion";
-import { castPoint, castTurnPoint, enterNomination, nominationStepMs, stepNomination } from "../../shared/game/nomination";
+import { castTurnPoint, enterNomination, nominationStepMs, stepNomination } from "../../shared/game/nomination";
 import { castVerdict } from "../../shared/game/verdict";
 
 const START_AT = 10_000;
@@ -993,50 +993,6 @@ describe("봇 계획: 토론 끝내기 (DAY-03)", () => {
     planBotSteps(state, now, rec.randInt);
     const per = [10000, 8, 18000, 8, 30000];
     expect(rec.calls.join(",")).toBe(Array(botsOf(state).length).fill(per).flat().join(","));
-  });
-});
-
-describe("봇 계획: 지목 (DAY-04, 결정 0060-13)", () => {
-  /** 옛 지목 단계의 시작 시각(단계 표의 지목 길이는 이제 모이기 3초라 phaseEndsAt - 길이로 구하지 않는다). */
-  const OLD_NOW = 100_000;
-  /** 사람 1 + 봇 4 의 차례 없는 옛 지목 단계(손으로 세운 상태, 15초 — 옛 분기는 09.1-05 가 지운다). */
-  const nominationAt = (seed: number): RoomState => {
-    const base = startedFrom(withBots(lobbyOf(1), 4), seed, "discussion");
-    return { ...base, phase: "nomination", phaseEndsAt: 100_000 + 15_000 };
-  };
-
-  it("계획 키는 `${phase}:${phaseEndsAt}` 이다", () => {
-    const state = nominationAt(3);
-    expect(String(botPlanKey(state))).toBe(`nomination:${state.phaseEndsAt}`);
-  });
-
-  it("산 봇마다 point 한 번이 now + 2000 이상 now + 8000 미만에 서고, 대상은 자기를 뺀 산 사람이며 castPoint 에 통과한다", () => {
-    for (let seed = 1; seed <= 20; seed += 1) {
-      const state = markDead(nominationAt(seed), 4);
-      const steps = planBotSteps(state, OLD_NOW, seededRandInt(seed));
-      for (const bot of botsOf(state)) {
-        const mine = rowsOf(steps, bot.id);
-        expect(`${seed}:${bot.seat}:${mine.length}`).toBe(`${seed}:${bot.seat}:${bot.alive === false ? 0 : 1}`);
-        for (const s of mine) {
-          expect(`${seed}:${s.act.t}`).toBe(`${seed}:point`);
-          expect(`${seed}:${s.at >= OLD_NOW + 2000 && s.at < OLD_NOW + 8000}`).toBe(`${seed}:true`);
-          const r = s.act.t === "point" ? castPoint(state, s.botId, s.act.target) : null;
-          expect(`${seed}:${r?.ok === true ? "ok" : String(r)}`).toBe(`${seed}:ok`);
-        }
-      }
-    }
-  });
-
-  it("난수 호출 순서는 봇마다 [후보 수, 6000] 이고, 고정 host 면 [6000] 뿐이며 대상은 방장이다", () => {
-    const state = nominationAt(5);
-    const free = recording(7);
-    planBotSteps(state, OLD_NOW, free.randInt);
-    expect(free.calls.join(",")).toBe([4, 6000, 4, 6000, 4, 6000, 4, 6000].join(","));
-    const fixed = { ...state, testBotVote: { pick: "host" as const } };
-    const rec = recording(7);
-    const steps = planBotSteps(fixed, OLD_NOW, rec.randInt);
-    expect(rec.calls.join(",")).toBe([6000, 6000, 6000, 6000].join(","));
-    expect(steps.map((s) => (s.act.t === "point" ? s.act.target : -1)).join(",")).toBe("0,0,0,0");
   });
 });
 

@@ -1,4 +1,4 @@
-// 투표 단계 상태를 실제 전이(startGame, tick)와 실제 투표 주입(castPoint, castVerdict)으로 만드는 테스트 도우미.
+// 투표 단계 상태를 실제 전이(startGame, tick)와 실제 투표 주입(castTurnPoint, castVerdict)으로 만드는 테스트 도우미.
 // 8페이즈(08-11) 흐름 전환 뒤 낮은 토론 → 지목 → 변론 → 찬반 → 처형이다. 옛 표 도우미(처형 여부·후보 선택)는 08-21 에 지웠다.
 // 테스트에서만 import 한다 — 서버는 쓰지 않는다. 상태를 손으로 짜 맞추지 않는 이유(Pitfall 12): view.test.ts 의 stateAt 처럼
 // "다음 단계 표" 만 따라가면 분기 단계(지목 결과에 따라 갈리는 단계)에 닿지 못하고, 손으로 만든 상태는 규칙이 바뀌어도 초록으로 남는다.
@@ -8,7 +8,7 @@ import { isAlive } from "../../shared/game/alive";
 import { attachConnection, createRoomState, joinRoom, startGame } from "../../shared/game/room";
 import type { RoomState } from "../../shared/game/room";
 import { tick } from "../../shared/game/tick";
-import { castPoint, castTurnPoint, nominationStepMs, stepNomination } from "../../shared/game/nomination";
+import { castTurnPoint, nominationStepMs, stepNomination } from "../../shared/game/nomination";
 import { PICK_TURN_MS } from "../../shared/game/phases";
 import { castVerdict } from "../../shared/game/verdict";
 import type { PhaseId } from "../../shared/protocol";
@@ -61,20 +61,12 @@ const seatToId = (state: RoomState, seat: number): string => {
 
 /**
  * seat → 지목 대상 seat 를 실제 규칙 함수로 주입한다(지목 단계여야 한다). 거부되면 테스트 준비가 틀린 것이다.
- *  - pickTurn 이 없으면(동시 지목) 모두를 castPoint 로 한 번에 던진다.
- *  - pickTurn 이 있으면(순차 지목) 차례를 좌석 순으로 끝 알림까지 걷는다: 대상이 정해진 사람만 자기 차례에 castTurnPoint,
+ *  - 지목은 순차 하나뿐이다(09.1-05가 차례 없는 옛 동시 지목을 지웠다). pickTurn 이 없으면 준비가 틀린 것이라 Error.
+ *  - 차례를 좌석 순으로 끝 알림까지 걷는다: 대상이 정해진 사람만 자기 차례에 castTurnPoint,
  *    나머지는 기권으로 한 걸음 넘긴다. 돌려주는 상태는 끝 알림 자리(i = order.length)다 — 다음 tick(phaseEndsAt) 이 집계한다.
  */
 export function castPoints(state: RoomState, targetBySeat: Record<number, number>): RoomState {
-  if (state.pickTurn === undefined) {
-    let current = state;
-    for (const [seat, target] of Object.entries(targetBySeat)) {
-      const result = castPoint(current, seatToId(current, Number(seat)), target);
-      if (!result.ok) throw new Error(`castPoint rejected seat ${seat}: ${result.error}`);
-      current = result.state;
-    }
-    return current;
-  }
+  if (state.pickTurn === undefined) throw new Error("castPoints: pickTurn 이 없는 지목 상태다 — 차례 지목만 있다(enterNomination 을 지난 상태가 필요하다)");
   let s = state;
   const order = state.pickTurn.order;
   for (const seat of Object.keys(targetBySeat)) {

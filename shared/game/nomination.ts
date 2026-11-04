@@ -18,30 +18,6 @@ export function majorityOf(aliveCount: number): number {
   return Math.floor(aliveCount / 2) + 1;
 }
 
-/**
- * 지목 한 번(고른 seat). 마지막 값이 유효하다(마감까지 바꿀 수 있다). 취소(null)는 없다(DAY-04).
- * 검사 순서가 계약이다: 단계(nomination 아니면 누구든 WRONG_PHASE) → 행위자(방에 있고 산 사람, 아니면 BAD_MESSAGE)
- * → 대상(정수·앉은 산 사람, 아니면 BAD_MESSAGE) → 자기 자신이면 BAD_MESSAGE(화면이 막아도 서버가 방어선)
- * → 같은 값이면 입력 상태 그대로 ok → 그 사람의 nominate 만 바뀐 새 상태.
- */
-export function castPoint(
-  state: RoomState,
-  actorId: string,
-  target: number,
-): { ok: true; state: RoomState } | { ok: false; error: VoteError } {
-  if (state.phase !== "nomination") return { ok: false, error: "WRONG_PHASE" };
-  const actor = state.players.find((p) => p.id === actorId);
-  if (!actor || !isAlive(actor)) return { ok: false, error: "BAD_MESSAGE" };
-  const chosen = Number.isInteger(target) ? state.players.find((p) => p.seat === target) : undefined;
-  if (!chosen || !isAlive(chosen)) return { ok: false, error: "BAD_MESSAGE" };
-  if (chosen.seat === actor.seat) return { ok: false, error: "BAD_MESSAGE" };
-  if (actor.nominate === target) return { ok: true, state };
-  return {
-    ok: true,
-    state: { ...state, players: state.players.map((p) => (p.id === actorId ? { ...p, nominate: target } : p)) },
-  };
-}
-
 /** 지금 지목 줄: 산 행위자가 산 대상을 가리킨 것만, 좌석 오름차순. 탈락한 사람의 남은 표와 죽은 대상을 가리킨 표는 줄이 없다. */
 export function pointLinesOf(state: RoomState): PointLine[] {
   const seated = new Map(state.players.map((p) => [p.seat, p]));
@@ -106,7 +82,7 @@ export function resolveNomination(state: RoomState): DeadlineResult {
 }
 
 // ---- 순차 지목(09.1-01, 결정 0063-1·0063-4, M-5) ----
-// tick 표에 걸려 있다: ON_ENTER.nomination = enterNomination, ON_DEADLINE.nomination = stepNomination(09.1-04). 옛 castPoint·resolveNomination 단독 경로는 차례 없는 상태용으로 09.1-05 까지 남는다.
+// tick 표에 걸려 있다: ON_ENTER.nomination = enterNomination, ON_DEADLINE.nomination = stepNomination(09.1-04). 차례 없는 옛 지목(누구나·마감까지 바꾸기)은 09.1-05 가 지웠다 — 지목 규칙은 이 순차 지목 하나뿐이다.
 
 /** 지목 진입: 산 사람 좌석 오름차순을 차례 순서로 고정하고(i -1 = 모이는 중) 남은 지목 값을 모두 지운다. 마감은 호출한 쪽이 건다(nominationStepMs). */
 export function enterNomination(state: RoomState): RoomState {

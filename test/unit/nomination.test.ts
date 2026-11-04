@@ -4,7 +4,6 @@
 // 실패 출력은 한 줄이어야 해서(TAP) 비교는 가능한 한 문자열 하나로 한다.
 import { describe, expect, it } from "vitest";
 import {
-  castPoint,
   castTurnPoint,
   enterNomination,
   majorityOf,
@@ -53,53 +52,6 @@ const hasNominateKey = (state: RoomState): boolean => state.players.some((p) => 
 describe("majorityOf (DAY-04·05)", () => {
   it("산 사람 수의 과반은 ⌊n ÷ 2⌋ + 1 이다", () => {
     expect([2, 3, 4, 5, 8].map(majorityOf).join(" ")).toBe("2 2 3 3 5");
-  });
-});
-
-describe("castPoint — 검사 순서가 계약이다 (DAY-04, T-08-04)", () => {
-  it("산 사람이 산 사람을 가리키면 그 사람의 nominate 만 바뀐 새 상태가 된다", () => {
-    const base = nominationOf();
-    const r = castPoint(base, idOf(base, 1), 2);
-    if (!r.ok) throw new Error("rejected");
-    const changed = r.state.players.filter((p, i) => p !== base.players[i]).map((p) => `${p.seat}:${String(p.nominate)}`);
-    expect(changed.join(",")).toBe("1:2");
-    expect(r.state === base).toBe(false);
-  });
-
-  it("같은 값을 다시 보내면 입력 객체를 그대로 돌려준다", () => {
-    const base = nominationOf();
-    const first = castPoint(base, idOf(base, 1), 2);
-    if (!first.ok) throw new Error("setup rejected");
-    const again = castPoint(first.state, idOf(base, 1), 2);
-    expect(again.ok && again.state === first.state).toBe(true);
-  });
-
-  it("다른 사람으로 바꾸면 마지막 값이 유효하다", () => {
-    let state = nominationOf();
-    for (const target of [2, 3, 4]) {
-      const r = castPoint(state, idOf(state, 1), target);
-      if (!r.ok) throw new Error("rejected");
-      state = r.state;
-    }
-    expect(state.players.find((p) => p.seat === 1)!.nominate).toBe(4);
-  });
-
-  it("자기 자신·죽은 대상·빈 좌석·정수 아님·취소(null)는 BAD_MESSAGE 다", () => {
-    const base = withDead(nominationOf(), [4]);
-    const results = [1, 4, 99, 1.5, Number.NaN, null, "2"].map((t) => err(castPoint(base, idOf(base, 1), t as unknown as number)));
-    expect(results.join(" ")).toBe(Array(7).fill("BAD_MESSAGE").join(" "));
-  });
-
-  it("죽은 행위자와 방에 없는 사람은 BAD_MESSAGE 다", () => {
-    const base = withDead(nominationOf(), [4]);
-    expect(`${err(castPoint(base, idOf(base, 4), 1))} ${err(castPoint(base, "nobody", 1))}`).toBe("BAD_MESSAGE BAD_MESSAGE");
-  });
-
-  it("nomination 이 아닌 단계는 행위자 검사보다 먼저 WRONG_PHASE 다", () => {
-    const discussion = { ...nominationOf(), phase: "discussion" as const };
-    expect(`${err(castPoint(discussion, "nobody", 1))} ${err(castPoint(discussion, idOf(discussion, 0), 1))}`).toBe(
-      "WRONG_PHASE WRONG_PHASE",
-    );
   });
 });
 
@@ -189,7 +141,6 @@ describe("resolveNomination — 마감 훅 (DAY-05, 결정 0060-3)", () => {
     const base = withPoints(nominationOf(), { 0: 2, 1: 2, 3: 2 });
     const before = JSON.stringify(base);
     resolveNomination(base);
-    castPoint(base, idOf(base, 4), 2);
     tallyPoints(base);
     expect(JSON.stringify(base)).toBe(before);
   });
@@ -199,18 +150,6 @@ describe("vote.test 에서 옮긴 뜻 (08-28, DAY-06·07)", () => {
   it("단계 표: 지목 진입 길이는 모이기 3000ms 이고 기본 다음 단계는 defense, 역할 노출은 true 다 (옛 단계 표 시험의 새 흐름 행)", () => {
     const d = PHASE_DEFS.nomination;
     expect(`${d.durationMs}/${d.next}/${d.revealsOwnRole}`).toBe("3000/defense/true");
-  });
-
-  it("던져도 마감(phaseEndsAt)은 그대로이고, 마감 전 tick 은 입력 그대로다 (옛 D-28)", () => {
-    let state = nominationOf();
-    const ends = state.phaseEndsAt;
-    for (const p of state.players) {
-      const target = state.players.find((q) => q.seat !== p.seat)!.seat;
-      const r = castPoint(state, p.id, target);
-      if (!r.ok) throw new Error("rejected");
-      state = r.state;
-    }
-    expect(`${state.phaseEndsAt === ends} ${tick(state, ends! - 1) === state}`).toBe("true true");
   });
 
   it("던진 뒤 연결이 끊긴 사람의 표도 센다 (옛 CONN-02)", () => {
@@ -223,7 +162,7 @@ describe("vote.test 에서 옮긴 뜻 (08-28, DAY-06·07)", () => {
     expect(`${t.leader} ${JSON.stringify(t.counts)}`).toBe(`2 ${JSON.stringify({ 2: 2 })}`);
   });
 
-  it("입력을 깊게 얼려도 castPoint·tallyPoints·resolveNomination 이 예외 없이 돈다", () => {
+  it("입력을 깊게 얼려도 castTurnPoint·tallyPoints·resolveNomination 이 예외 없이 돈다", () => {
     const freeze = <T>(v: T): T => {
       if (v !== null && typeof v === "object" && !Object.isFrozen(v)) {
         Object.freeze(v);
@@ -231,9 +170,13 @@ describe("vote.test 에서 옮긴 뜻 (08-28, DAY-06·07)", () => {
       }
       return v;
     };
-    const base = freeze(withPoints(nominationOf(), { 0: 2, 1: 2, 3: 2 }));
+    // 첫 차례가 선 순차 지목 상태: 모이기 마감에 한 걸음 → 차례 주인이 지목할 수 있다.
+    const entered = enterNomination(startedAt(5, 1, "nomination"));
+    const gathered = stepNomination({ ...entered, phaseEndsAt: 100_000 }, 100_000);
+    const base = freeze({ ...gathered.state, phaseEndsAt: 100_000 + PICK_TURN_MS });
+    const owner = base.players.find((p) => p.seat === base.pickTurn!.order[0])!;
     expect(() => {
-      castPoint(base, idOf(base, 4), 2);
+      castTurnPoint(base, owner.id, base.players.find((p) => p.seat !== owner.seat)!.seat, 100_001);
       tallyPoints(base);
       resolveNomination(base);
     }).not.toThrow();
@@ -521,9 +464,8 @@ describe("시험 도우미: 지목 방식과 무관 (09.1-03)", () => {
     expect(`${String(s.pickTurn?.i)} ${nominates}`).toBe("4 0>1,1>-,2>1,3>1");
   });
 
-  it("castPoints 는 pickTurn 이 없으면 지금처럼 한 번에 던진다", () => {
-    const s = castPoints(nominationOf(4), { 0: 1, 1: 0 });
-    expect(s.players.map((p) => `${p.seat}>${p.nominate ?? "-"}`).join(",")).toBe("0>1,1>0,2>-,3>-");
+  it("castPoints 는 pickTurn 이 없는 지목 상태를 받으면 Error (차례 없는 옛 동시 지목은 없다, 09.1-05)", () => {
+    expect(() => castPoints(nominationOf(4), { 0: 1, 1: 0 })).toThrow();
   });
 
   it("nominationSpanMs: 전환 뒤 startedAt 의 지목 길이는 차례 사슬 전체 길이 nominationMaxMs(4) 다 (전원 기권)", () => {

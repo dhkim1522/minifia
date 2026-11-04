@@ -8,7 +8,7 @@ import { attachConnection, createRoomState, joinRoom, startGame } from "../../sh
 import type { RoomState } from "../../shared/game/room";
 import { pickTarget } from "../../shared/game/night";
 import { isAlive } from "../../shared/game/alive";
-import { castPoint, castTurnPoint, enterNomination, nominationStepMs, stepNomination } from "../../shared/game/nomination";
+import { castTurnPoint, enterNomination, nominationStepMs, stepNomination } from "../../shared/game/nomination";
 import { castVerdict } from "../../shared/game/verdict";
 import { finishNomination, resetToLobby, setBotCount, setBotVote, setTestRole, skipPhase } from "../../shared/game/testTools";
 import { tick } from "../../shared/game/tick";
@@ -845,23 +845,10 @@ describe("skipPhase: 지목·찬반에서 안 던진 봇이 먼저 던진다", (
   /** 그날 voteLog 줄의 찬반 집계. */
   const tally = (s: RoomState): string => JSON.stringify(s.voteLog?.[0]?.exec);
 
-  it("nomination: 안 던진 봇이 botPointTarget 대로 지목하고(봇마다 randInt(후보 수) 한 번), 이미 지목한 봇은 그대로다", () => {
-    const state = trial("nomination");
-    const first = botsIn(state)[0]!; // seat 1
-    const cast = castPoint(state, first.id, 4);
-    if (!cast.ok) throw new Error(cast.error);
-    const calls: number[] = [];
-    const after = skipOk(cast.state, 100_000, (n) => {
-      calls.push(n);
-      return 0; // 후보 중 가장 낮은 seat
-    });
-    expect(nominates(after)).toBe("1>4,2>0,3>0,4>0");
-    expect(calls.join(",")).toBe("4,4,4");
-  });
-
-  it("nomination: pick host 면 봇이 모두 방장을 지목하고 난수를 부르지 않는다", () => {
-    const after = skipOk(trial("nomination", {}, setting(botLobby(), "random", "host")), 100_000, THROWING);
-    expect(nominates(after)).toBe("1>0,2>0,3>0,4>0");
+  it("nomination: 차례 없는 지목은 지금 단계 마감만 당긴다 — 봇이 대신 지목하지 않고 난수도 부르지 않는다 (09.1-05, 옛 동시 지목 분기 삭제)", () => {
+    const after = skipOk(trial("nomination"), 100_000, THROWING);
+    expect(after.phase).toBe("night");
+    expect(nominates(after)).toBe("");
   });
 
   it("verdict: 변론자가 아닌 안 던진 봇이 먼저 던지고(봇마다 randInt(100) 한 번) 변론자 봇은 던지지 않으며, 이미 던진 봇은 그대로다", () => {

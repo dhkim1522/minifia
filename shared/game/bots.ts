@@ -2,7 +2,7 @@
 // 입력 상태를 바꾸지 않으며, DOM·workerd API 를 쓰지 않는다.
 //
 // 이 파일은 "계획"만 만든다: 단계에 들어갈 때 어떤 봇이 언제 무엇을 할지(BotStep)를 정해 RoomState.botPlan 에 둔다.
-// 행동의 실행과 검증은 방 DO 가 사람과 같은 처리기(applyChat·pickTarget·toggleEnd·castPoint·castVerdict)로 한다 — 봇은 특권이 없다.
+// 행동의 실행과 검증은 방 DO 가 사람과 같은 처리기(applyChat·pickTarget·toggleEnd·castTurnPoint·castVerdict)로 한다 — 봇은 특권이 없다.
 // 단계가 바뀌면 계획 키(단계:마감)가 달라져 남은 행동은 저절로 버려지고 새 단계 계획이 선다.
 //
 // 07-08: 순차 직업 주장(claim) 단계와 그 봇 계획이 없어졌다. 08-07: 낮 처형 단계(결정 0060)가 더해져 nomination·verdict 에도 계획이 선다.
@@ -25,8 +25,7 @@
 // 09-12: will(1일차 토론 시작 3초 뒤 유언 한 줄)·approach(마피아 봇이 pick 계획 200ms 뒤 대상 곁으로 걷기)는 난수를 부르지 않는다 — 위 호출 순서와 시드 고정 값은 그대로다(결정 0061-18, 가정 A3).
 // 09-24: 채팅 줄마다 그 앞에 입력 중(typing) 단계가 붙는다(at = 줄 시각 − BOT_TYPING_LEAD_MS, 지금보다 앞서지 않음) — 난수를 부르지 않으므로 위 호출 순서와 시드 고정 값은 그대로다.
 // 08-07 순서 추가: discussion 은 위 두 줄 뒤에 randInt(토론 끝내기 폭 30000) 한 번이 붙는다(봇당 5번: 폭·문구 수·폭·문구 수·끝내기 폭, 시드 고정 값을 다시 고정했다).
-// nomination = (후보가 있으면) randInt(후보 수) → randInt(지목 지연 폭 6000) — 결정 함수(botPointTarget)는 자기를 뺀 산 사람 하나를 고르고 고정 pick(host·other)도 같다(결정 0060-13: pick 은 봇 지목 대상).
-// 09.1: 차례가 있는 지목(결정 0063-1)은 차례인 봇 하나만 randInt(후보 수) 한 번(지연 난수 없음) — 차례가 아닌 봇·모이는 중·확정 뒤 사이·끝 알림에는 계획과 난수가 없다.
+// 09.1: 지목(nomination, 결정 0063-1)은 차례인 봇 하나만 randInt(후보 수) 한 번(지연 난수 없음) — 차례가 아닌 봇·모이는 중·확정 뒤 사이·끝 알림에는 계획과 난수가 없다. 결정 함수(botPointTarget)는 자기를 뺀 산 사람 하나를 고르고 고정 pick(host·other)도 같다(결정 0060-13: pick 은 봇 지목 대상). 09.1-05 가 옛 지연 지목(2000 + [0, 6000) ms)의 난수 계약을 지웠다.
 // verdict(변론자가 아닌 산 봇만) = randInt(100) → randInt(찬반 지연 폭 5000) — 결정 함수(botExecAgree)는 찬성 확률 EXEC_YES_PERCENT 이고 고정 exec(yes·no)도 같다(exec 는 봇 찬반).
 import { isAlive } from "./alive";
 import type { Player, RoomState } from "./room";
@@ -56,9 +55,6 @@ export const EXEC_YES_PERCENT = 70;
 /** 토론 끝내기: now + 30000 + [0, 30000) ms 에 켜짐 한 번(결정 0060-2). 마감 − 500 보다 늦은 행동은 계획에서 버려지므로 토론이 길수록 더 많은 봇이 누른다. */
 const END_DISCUSSION_BASE_MS = 30_000;
 const END_DISCUSSION_SPAN_MS = 30_000;
-/** 지목 지연: 2000 + [0, 6000) ms (단계 15초 안, 결정 0060-13). */
-const POINT_BASE_MS = 2_000;
-const POINT_SPAN_MS = 6_000;
 /** 찬반 지연: 1000 + [0, 5000) ms (단계 10초 안, 결정 0060-13). */
 const VERDICT_BASE_MS = 1_000;
 const VERDICT_SPAN_MS = 5_000;
@@ -234,13 +230,9 @@ function planFor(state: RoomState, bot: Player, now: number, randInt: RandInt): 
     add(now + END_DISCUSSION_BASE_MS + randInt(END_DISCUSSION_SPAN_MS), { t: "endDiscussion" });
     // 유언(09-12): 1일차에만 한 번, 고정 문장, 난수 없음 — 위 난수 호출 순서가 그대로다.
     if ((state.day ?? 1) === 1) add(now + BOT_WILL_AT_MS, { t: "will", text: BOT_WILL_LINES[bot.seat % BOT_WILL_LINES.length]! });
-  } else if (state.phase === "nomination" && state.pickTurn !== undefined) {
-    // 차례가 있는 지목(09.1, 결정 0063-1): 자기 차례 시작 즉시 한 번.
-    steps.push(...turnPointSteps(state, bot, now, randInt));
   } else if (state.phase === "nomination") {
-    // 차례 없는 지목 — 09.1-05 가 지운다. 지목(08-07): 자기를 뺀 산 사람 하나, 고정 pick(host·other)도 같다(결정 0060-13).
-    const target = botPointTarget(state, bot, randInt, state.testBotVote?.pick);
-    if (target !== undefined) add(now + POINT_BASE_MS + randInt(POINT_SPAN_MS), { t: "point", target });
+    // 순차 지목(09.1, 결정 0063-1): 자기 차례 시작 즉시 한 번. 차례가 없으면(옛 저장 방은 정규화가 차례를 세운다) 계획이 없다.
+    steps.push(...turnPointSteps(state, bot, now, randInt));
   } else if (state.phase === "verdict") {
     // 찬반(08-07): 변론자 봇은 던지지 않는다(castVerdict 가 거절한다). 고정 exec(yes·no)도 따른다(결정 0060-13).
     if (state.verdict?.candidate !== bot.seat) {
