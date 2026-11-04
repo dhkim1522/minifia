@@ -1,7 +1,7 @@
 // 직업 주장 배지 워커 통합 테스트(09.1.1-01, 결정 0066-1): 주장은 공개 값이라 바뀌면 모든 소켓이 각자 view 를 받는다.
 import { describe, expect, it } from "vitest";
-import type { ServerMessage } from "../../shared/protocol";
-import { connect, editRoom, hello, lastViewOf, mapPlayers, mark, pause, send, settle, startedGame, storedRoom, summary, toPhase } from "./helpers";
+import type { RoleId, ServerMessage } from "../../shared/protocol";
+import { connect, editRoom, hello, lastViewOf, mapPlayers, mark, pause, send, settle, startedGame, stable, storedRoom, summary, toPhase } from "./helpers";
 import type { Game } from "./helpers";
 
 type State = Extract<ServerMessage, { t: "state" }>;
@@ -140,5 +140,106 @@ describe("직업 주장 — 규칙 완성 (결정 0066-1)", () => {
     await pause(300);
     const slow = await sendBadge(g, claimer, "police");
     for (const f of slow) expect(summary(f)).toBe("[state:discussion]");
+  });
+});
+
+// ---- L18: 직업 주장은 공개 값이고 역할의 함수가 아니다 (결정 0066-1, 0015) ----
+
+/** 6명 판의 좌석별 역할 배정. B 는 A 에서 마피아와 시민을 맞바꾼 배정이다(경찰·의사 자리는 그대로). */
+const ROLES_A: readonly RoleId[] = ["mafia", "citizen", "police", "doctor", "mafia", "citizen"];
+const ROLES_B: readonly RoleId[] = ["citizen", "mafia", "police", "doctor", "citizen", "mafia"];
+
+/** 주장 대본(좌석 → 보낼 값 순서). 좌석 2 는 doctor 를 건 뒤 police 로 바꾼다. 서버가 역할과 비교한다면 A·B 에서 결과가 갈린다. */
+const SCRIPT: ReadonlyArray<{ seat: number; role: string; gapBefore?: number }> = [
+  { seat: 0, role: "citizen" },
+  { seat: 1, role: "mafia" },
+  { seat: 2, role: "doctor" },
+  { seat: 3, role: "none" },
+  { seat: 2, role: "police", gapBefore: 300 },
+];
+
+/** 좌석 오름차순 소켓·역할 배정으로 방을 만들고(editRoom 으로 역할만 바꾼다) 대본을 보낸 뒤 좌석별 프레임 열(대본 시작 이후)을 돌려준다. */
+async function playScript(assign: readonly RoleId[]): Promise<{ code: string; bySeat: ServerMessage[][]; g: Game }> {
+  const g = await startedGame("discussion", 5);
+  const seats = [...g.actors].sort((a, b) => a.seat - b.seat);
+  await editRoom(g.code, (room) =>
+    mapPlayers(room, (p) => ({ ...p, role: assign[p.seat as number] })),
+  );
+  const marks = seats.map((a) => mark(a.sock));
+  for (const step of SCRIPT) {
+    if (step.gapBefore !== undefined) await pause(step.gapBefore);
+    const from = seats[step.seat]!;
+    send(from.sock, { t: "badge", role: step.role });
+    for (const a of seats) await settle(a.sock, mark(a.sock)); // 모두 이 한 걸음의 프레임을 받은 뒤 다음 걸음(보낸 쪽 처리 증거)
+  }
+  const bySeat: ServerMessage[][] = [];
+  for (const [i, a] of seats.entries()) bySeat.push(await settle(a.sock, marks[i]!));
+  return { code: g.code, bySeat, g };
+}
+
+/** 프레임에서 공개 주장 열만 남긴다(좌표·me·단계 길이 제외): players[] 의 좌석·badge·badgeSwapped. */
+const claimColumn = (msgs: ServerMessage[]): string =>
+  stable(
+    msgs.map((m) =>
+      m.t === "state"
+        ? ({ t: "state", players: m.view.players.map((p) => ({ seat: p.seat, alive: p.alive, badge: p.badge, badgeSwapped: p.badgeSwapped })) } as unknown as ServerMessage)
+        : m,
+    ),
+  );
+
+describe("L18 — 직업 주장은 공개 값이고 역할의 함수가 아니다", () => {
+  it("역할 배정만 다른 두 판 A·B 에서 같은 대본을 보내면 모든 좌석 소켓의 players[].badge·badgeSwapped 열이 같다", async () => {
+    const a = await playScript(ROLES_A);
+    const b = await playScript(ROLES_B);
+    expect(a.bySeat.length).toBe(6);
+    const diffs: string[] = [];
+    for (let seatNo = 0; seatNo < 6; seatNo += 1) {
+      const colA = claimColumn(a.bySeat[seatNo]!);
+      const colB = claimColumn(b.bySeat[seatNo]!);
+      if (colA !== colB) diffs.push(`seat${seatNo}`);
+      expect(colA.length).toBeGreaterThan(0); // 비어 있는 비교가 아니다
+    }
+    expect(diffs.join(",")).toBe("");
+    // 비교가 실제로 주장을 담고 있다: 마지막 프레임의 열
+    const last = a.bySeat[0]!.filter((m): m is State => m.t === "state").at(-1)!;
+    expect(last.view.players.map((p) => `${p.seat}:${p.badge ?? "-"}:${p.badgeSwapped === true ? "swap" : "-"}`).join(",")).toBe(
+      "0:citizen:-,1:mafia:-,2:police:swap,3:-:-,4:-:-,5:-:-",
+    );
+  });
+
+  it("실제 시민의 mafia 주장도, 실제 마피아의 citizen·doctor 주장도 모두 수락된다(서버는 역할과 비교하지 않는다)", async () => {
+    for (const assign of [ROLES_A, ROLES_B]) {
+      const run = await playScript(assign);
+      const room = await storedRoom(run.code);
+      const stored = room.players as unknown as Array<{ seat: number; role: string; badge?: string }>;
+      for (const step of SCRIPT) expect(`${step.seat}:${assign[step.seat]}`).toBe(`${step.seat}:${stored.find((p) => p.seat === step.seat)!.role}`);
+      const errors = run.bySeat.flat().filter((m) => m.t === "error");
+      expect(errors).toEqual([]);
+      const claimed = Object.fromEntries(stored.filter((p) => p.badge !== undefined).map((p) => [p.seat, p.badge]));
+      expect(JSON.stringify(claimed)).toBe(JSON.stringify({ 0: "citizen", 1: "mafia", 2: "police" }));
+    }
+    // 두 배정에서 좌석 0·1 은 서로 진실·거짓이 뒤바뀐다 — 그래도 둘 다 수락됐다
+    expect(`${ROLES_A[0]}/${ROLES_A[1]} ${ROLES_B[0]}/${ROLES_B[1]}`).toBe("mafia/citizen citizen/mafia");
+  });
+
+  it("전수: 주장·말 바꿈 동안 모든 소켓의 모든 프레임에 badgeLog 키가 없고, 이전 값(doctor)은 말 바꿈 뒤 players[] 어느 경로에도 없다", async () => {
+    const run = await playScript(ROLES_A);
+    const swapAt = (msgs: ServerMessage[]): number =>
+      msgs.findIndex((m) => m.t === "state" && m.view.players.some((p) => p.badgeSwapped === true));
+    let checked = 0;
+    for (const msgs of run.bySeat) {
+      expect(JSON.stringify(msgs)).not.toContain("badgeLog");
+      const at = swapAt(msgs);
+      expect(at).toBeGreaterThanOrEqual(0);
+      for (const m of msgs.slice(at)) {
+        if (m.t !== "state") continue;
+        expect(JSON.stringify(m.view.players)).not.toContain("doctor"); // 말 바꿈 뒤에는 새 값만, 이전 값 doctor 는 어디에도 없다
+        checked += 1;
+      }
+    }
+    expect(checked).toBeGreaterThan(0);
+    // 말 바꿈 전에는 그 값(doctor)이 그 사람 줄에 보였다 — 공개 값이라 숨기지 않는다
+    const early = run.bySeat[0]!.filter((m): m is State => m.t === "state").map((m) => m.view.players[2]!.badge);
+    expect(early).toContain("doctor");
   });
 });
