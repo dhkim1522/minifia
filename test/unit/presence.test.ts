@@ -122,7 +122,7 @@ describe("cameraModeOf (UI-SPEC 카메라 표)", () => {
     });
   }
 
-  for (const phase of ["nomination", "defense", "verdict", "execution"] as const) {
+  for (const phase of ["nomination", "runoff", "defense", "verdict", "execution"] as const) {
     it(`${phase} → 모이는 자리 가운데 고정, 확대 1`, () => {
       same(cameraModeOf(viewOf(phase), 500), { mode: "fixed", target: GATHER_CENTER, zoom: 1 });
     });
@@ -178,6 +178,7 @@ describe("lightingOf (UI-SPEC 단계 조명)", () => {
     ["dayAnnounce", "talk"],
     ["discussion", "talk"],
     ["nomination", "vote"],
+    ["runoff", "vote"],
     ["verdict", "vote"],
     ["defense", "trial"],
     ["execution", "trial"],
@@ -516,5 +517,35 @@ describe("유령 직업 의상 (결정 0063-2, L13)", () => {
       for (const look of Object.values(seats)) expect("outfit" in look).toBe(false);
     }
     expect(3 in visibleSeats(view, new Map([[3, 1000]]), 1500)).toBe(true);
+  });
+});
+
+describe("pointingOf — 결선 (09.1.1-14, T-09.1.1-39: 남의 선택은 서버가 주지 않으므로 그리지 않는다)", () => {
+  const runoffView = (mySeat = 0, extra: Partial<DayView> = {}, dead: number[] = []) =>
+    viewOf("runoff", { count: 6, mySeat, dead, day: { runoff: { cand: [2, 3], step: 1 }, ...extra } });
+  it("낙관 선택(mine)이 후보 중 하나면 내 좌석 한 줄만 그 후보를 가리키고 남은 아무도 그리지 않는다", () => {
+    same(pointingOf(runoffView(0), 3), { 0: 3 });
+    same(pointingOf(runoffView(1, { voted: [0, 1] } as Partial<DayView>), 2), { 1: 2 });
+  });
+  it("mine 이 없으면 아무도 가리키지 않는다(voted 는 던졌다는 사실뿐)", () => {
+    same(pointingOf(runoffView(0, { runoff: { cand: [2, 3], step: 1, voted: [0, 1, 4] } })), {});
+  });
+  it("후보 본인·유령·후보 밖 대상·자기 자신은 덮지 않는다", () => {
+    same(pointingOf(runoffView(2), 3), {});
+    same(pointingOf(runoffView(0, {}, [0]), 3), {});
+    same(pointingOf(runoffView(0), 4), {});
+    same(pointingOf(runoffView(0), 0), {});
+  });
+});
+
+describe("sceneLook — 결선 (09.1.1-14)", () => {
+  it("조명 vote, 카메라 고정, 핀은 점 한 개, 내 좌석 pointAt = mine", () => {
+    const v = viewOf("runoff", { count: 6, mySeat: 0, day: { runoff: { cand: [2, 3], step: 1 } } });
+    const look = sceneLook(v, { stageH: 400, mine: 2 });
+    same([look.lighting, look.tension], ["vote", 0]);
+    same(look.camera, { mode: "fixed", target: GATHER_CENTER, zoom: 1 });
+    expect(look.pin).toMatchObject({ mode: "point" });
+    expect(look.seats[0]?.pointAt).toBe(2);
+    expect(look.seats[1]?.pointAt).toBeUndefined();
   });
 });

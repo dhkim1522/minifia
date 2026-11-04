@@ -666,7 +666,10 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
     let pos: { x: number; z: number } | null = null;
     let seatKey: string | null = null;
     if (at.on && desc !== null) {
-      if (desc.mode === "turn" || desc.mode === "fixed") {
+      if (desc.mode === "point") {
+        pos = { x: desc.x, z: desc.z };
+        seatKey = "p";
+      } else if (desc.mode === "turn" || desc.mode === "fixed") {
         const a = actors.get(desc.seat)?.pos;
         if (a !== undefined) pos = { x: a.x, z: a.z };
         seatKey = `s${desc.seat}`;

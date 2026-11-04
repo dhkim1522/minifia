@@ -1,6 +1,8 @@
 // 핀 조명 계획(결정 0066-6, UI-SPEC F): "무엇을 비출지"(PinDesc)와 "시각에 따른 위치"(pinAt)를 나눈 순수 모듈.
 // 판결 순간(12)·결선(14)·마지막 3인(15) 계획이 pinOf 에 자기 단계를 더해 같은 장치(렌더러 setPin)를 재사용한다.
 // L22: 대상 좌석은 서버가 모두에게 공개한 값(day.turn·day.points)에서만 나온다. 연결·스토어·개인 정보는 읽지 않는다(정적 시험 pinStaticGuard).
+import { RUNOFF_SPOTS } from "../../shared/game/gather";
+import { UNIT } from "../../shared/game/map";
 import { EXECUTION_MS, PICK_GAP_MS } from "../../shared/game/phases";
 import type { RoomView } from "../../shared/protocol";
 
@@ -19,12 +21,21 @@ export const PIN_OFF_EXEC_AT = 5000;
 
 /**
  * 무엇을 비출지. turn = 한 사람 머리 위, slide = from 에서 to 로 미끄러짐(startAt 은 서버 시각),
- * fixed = 한 사람을 서버 시각 [startAt, endAt) 동안만 비춘다(판결 순간: 창 밖은 꺼짐)
+ * fixed = 한 사람을 서버 시각 [startAt, endAt) 동안만 비춘다(판결 순간: 창 밖은 꺼짐),
+ * point = 월드 좌표 한 점(결선: 두 후보의 가운데, 좌석과 무관)
  */
 export type PinDesc =
   | { mode: "turn"; seat: number }
   | { mode: "slide"; from: number; to: number; startAt: number; durationMs: number }
-  | { mode: "fixed"; seat: number; startAt: number; endAt: number };
+  | { mode: "fixed"; seat: number; startAt: number; endAt: number }
+  | { mode: "point"; x: number; z: number };
+
+/** 결선 핀: 두 후보 자리(서버 배치 RUNOFF_SPOTS, 고정소수점)의 한가운데를 월드 단위로. 후보가 걸어 오는 동안에도 같은 점이다 */
+const RUNOFF_PIN: Extract<PinDesc, { mode: "point" }> = {
+  mode: "point",
+  x: (RUNOFF_SPOTS[0][0] + RUNOFF_SPOTS[1][0]) / 2 / UNIT,
+  z: (RUNOFF_SPOTS[0][1] + RUNOFF_SPOTS[1][1]) / 2 / UNIT,
+};
 
 /** 처형 단계(판결 순간)의 핀: 변론자에게 처형 진입 시각부터 부결 4.0초·처형 5.0초까지. 마지막 3인 처형(last)은 이 핀이 없다 */
 function executionPin(view: RoomView): PinDesc | null {
@@ -36,9 +47,10 @@ function executionPin(view: RoomView): PinDesc | null {
   return { mode: "fixed", seat, startAt, endAt: startAt + (verdict.passed ? PIN_OFF_EXEC_AT : PIN_OFF_NO_EXEC_AT) };
 }
 
-/** 단계별 핀. 순차 지목(차례·이동)과 판결 순간(변론자 고정). 다른 단계의 핀은 각 계획이 이 함수를 확장한다 */
+/** 단계별 핀. 순차 지목(차례·이동)·결선(후보 가운데 한 점)·판결 순간(변론자 고정). 다른 단계의 핀은 각 계획이 이 함수를 확장한다 */
 export function pinOf(view: RoomView): PinDesc | null {
   if (view.phase === "execution") return executionPin(view);
+  if (view.phase === "runoff") return RUNOFF_PIN;
   if (view.phase !== "nomination") return null;
   const turn = view.day?.turn;
   if (turn === undefined) return null;
@@ -61,8 +73,11 @@ export function easeInOut(p: number): number {
 
 export interface PinAt {
   on: boolean;
-  /** 지금 비추는 좌석: turn 은 그 좌석, slide 는 진행 0.5 이전 from · 이후 to */
+  /** 지금 비추는 좌석: turn 은 그 좌석, slide 는 진행 0.5 이전 from · 이후 to. point 는 없다 */
   seat?: number;
+  /** point 모드의 월드 좌표 */
+  x?: number;
+  z?: number;
   from?: number;
   to?: number;
   /** slide 진행(0~1, ease 적용). turn·꺼짐은 0 */
@@ -75,6 +90,7 @@ export interface PinAt {
 export function pinAt(desc: PinDesc | null, serverNow: number, reduced: boolean): PinAt {
   if (desc === null) return { on: false, t: 0, moving: false };
   if (desc.mode === "turn") return { on: true, seat: desc.seat, t: 0, moving: false };
+  if (desc.mode === "point") return { on: true, x: desc.x, z: desc.z, t: 0, moving: false };
   if (desc.mode === "fixed") return serverNow >= desc.startAt && serverNow < desc.endAt ? { on: true, seat: desc.seat, t: 0, moving: false } : { on: false, t: 0, moving: false };
   const raw = desc.durationMs > 0 ? (serverNow - desc.startAt) / desc.durationMs : 1;
   const t = reduced ? 1 : easeInOut(raw);

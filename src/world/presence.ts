@@ -87,7 +87,7 @@ export function visibleSeats(view: RoomView, fading?: ReadonlyMap<number, number
   return seats;
 }
 
-const FIXED_PHASES: ReadonlySet<PhaseId> = new Set<PhaseId>(["nomination", "defense", "verdict", "execution"]);
+const FIXED_PHASES: ReadonlySet<PhaseId> = new Set<PhaseId>(["nomination", "runoff", "defense", "verdict", "execution"]);
 
 /**
  * 카메라 구도(UI-SPEC 카메라 표): 지목·변론·찬반·처형은 모이는 자리 가운데 고정, 그 밖(낮 시작·토론·밤·아침·로비)은 따라가기.
@@ -103,12 +103,13 @@ export function cameraModeOf(view: RoomView, stageH: number, opts: { verdictZoom
 }
 
 /**
- * 단계 조명(UI-SPEC): 낮 시작·토론 talk, 지목·찬반 vote, 변론·처형 trial, 밤 night, 아침 morning.
+ * 단계 조명(UI-SPEC): 낮 시작·토론 talk, 지목·결선·찬반 vote, 변론·처형 trial, 밤 night, 아침 morning.
  * 로비·종료는 talk.
  */
 export function lightingOf(phase: PhaseId): LightingStage {
   switch (phase) {
     case "nomination":
+    case "runoff":
     case "verdict":
       return "vote";
     case "defense":
@@ -209,6 +210,14 @@ export function stageLiftY(pos: { x: number; z: number }): number {
  * 내 낙관적 선택(mine)이 있으면 내 좌석 한 줄만 덮는다. 내가 유령이거나 나를 고른 값은 덮지 않는다.
  */
 export function pointingOf(view: RoomView, mine?: number): Record<number, number> {
+  // 결선(09.1.1-14): 서버가 마감 전 남의 선택을 주지 않으므로(T-09.1.1-39) 내 낙관 선택(후보 둘 중 하나)만 그린다. 후보 본인·유령·후보 밖 대상은 그리지 않는다
+  if (view.phase === "runoff") {
+    const runoff = view.day?.runoff;
+    const me = view.players.find((p) => p.seat === view.me.seat);
+    if (runoff === undefined || mine === undefined || !runoff.cand.includes(mine)) return {};
+    if (me === undefined || !isAlive(me) || runoff.cand.includes(view.me.seat)) return {};
+    return { [view.me.seat]: mine };
+  }
   if (view.phase !== "nomination") return {};
   const out: Record<number, number> = {};
   for (const line of view.day?.points ?? []) out[line.seat] = line.target;

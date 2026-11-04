@@ -202,6 +202,17 @@ export function defenderVotes(view: RoomView): number | undefined {
   return entry.cand.votes.filter((v) => v.target === seat).length;
 }
 
+/**
+ * 결선 마감 전(앞머리·투표)에 후보 머리 위에 걸어 두는 지목 득표(공개 기록, 09.1.1-14): 그날 voteLog 줄의 cand.votes 에서 좌석별로 센 수.
+ * 줄이 없으면(재접속 직후 등) 빈 표 — 화면은 배지를 그리지 않는다.
+ */
+export function nominationVotesOf(view: RoomView): Record<number, number> {
+  const entry = view.day?.voteLog?.find((e) => e.n === view.day?.n);
+  const counts: Record<number, number> = {};
+  for (const v of entry?.cand?.votes ?? []) counts[v.target] = (counts[v.target] ?? 0) + 1;
+  return counts;
+}
+
 const nameOf = (view: RoomView, seat: number): string | undefined => view.players.find((p) => p.seat === seat)?.nickname;
 
 /** 처형 단계 안에서 끝나도록 알림 길이를 자른다(at 은 처형 단계 진입 기준 ms). */

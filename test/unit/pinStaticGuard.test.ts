@@ -66,13 +66,13 @@ describe("pinPlan.ts 정적 가드 (L22)", () => {
     for (const bad of ['from "../net', 'from "./store"', "useRoomConnection", "WebSocket"]) expect(CODE).not.toContain(bad);
   });
 
-  it("import 는 shared/protocol(type 만)과 shared/game/phases 뿐이다", () => {
+  it("import 는 shared/protocol(type 만)과 shared/game 의 상수 모듈(phases·gather·map)뿐이다", () => {
     const lines = importLines(CODE);
     expect(lines.length).toBeGreaterThan(0);
     for (const line of lines) {
       const spec = specifier(line);
       if (spec.endsWith("shared/protocol")) expect(line).toMatch(/^\s*import type\b/);
-      else expect(spec).toMatch(/shared\/game\/phases$/);
+      else expect(spec).toMatch(/shared\/game\/(phases|gather|map)$/);
     }
   });
 

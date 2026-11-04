@@ -1,5 +1,7 @@
 // 핀 조명 계획(결정 0066-6, UI-SPEC F): 공개 값(day.turn·day.points)에서 "무엇을 비출지"(pinOf)와 시각에 따른 위치(pinAt)를 순수하게 낸다.
 import { describe, expect, it } from "vitest";
+import { RUNOFF_SPOTS } from "../../shared/game/gather";
+import { UNIT } from "../../shared/game/map";
 import { EXECUTION_MS, PICK_GAP_MS } from "../../shared/game/phases";
 import type { DayView, PhaseId, PublicPlayer, RoomView } from "../../shared/protocol";
 import { easeInOut, PIN_DIM, PIN_OFF_EXEC_AT, PIN_OFF_NO_EXEC_AT, PIN_OFF_MS, PIN_ON_MS, PIN_STRENGTH, pinAt, pinLevel, pinLights, pinOf } from "../../src/world/pinPlan";
@@ -172,5 +174,27 @@ describe("pinOf — 판결 순간(처형 단계, 09.1.1-13)", () => {
     expect(pinAt(d, 100_000, false)).toMatchObject({ on: true, seat: 4, moving: false, t: 0 });
     expect(pinAt(d, 104_999, true)).toMatchObject({ on: true, seat: 4 });
     expect(pinAt(d, 105_000, false)).toMatchObject({ on: false });
+  });
+});
+
+describe("pinOf / pinAt — 결선 (09.1.1-14, UI-SPEC D-1: 두 후보 가운데 한 점)", () => {
+  // 두 후보 자리의 한가운데(월드 단위). 서버 배치(RUNOFF_SPOTS)가 정하고 핀은 같은 값을 읽는다
+  const MID = { x: (RUNOFF_SPOTS[0][0] + RUNOFF_SPOTS[1][0]) / 2 / UNIT, z: (RUNOFF_SPOTS[0][1] + RUNOFF_SPOTS[1][1]) / 2 / UNIT };
+
+  it("결선 단계 전 구간(step 0·1·2)에서 후보 가운데 좌표 핀", () => {
+    for (const step of [0, 1, 2] as const) {
+      expect(pinOf(viewOf("runoff", { runoff: { cand: [2, 3], step } }))).toEqual({ mode: "point", x: MID.x, z: MID.z });
+    }
+  });
+
+  it("결선이 아니면 이 핀이 아니다", () => {
+    expect(pinOf(viewOf("discussion", { runoff: { cand: [2, 3], step: 1 } }))).toBeNull();
+    expect(pinOf(viewOf("defense", { candidate: 2 }))).toBeNull();
+  });
+
+  it("pinAt: point 모드는 켜짐이고 좌표를 그대로 돌려준다(좌석·이동 없음)", () => {
+    const d = { mode: "point", x: 1.05, z: 1.05 } as const;
+    expect(pinAt(d, 1000, false)).toEqual({ on: true, x: 1.05, z: 1.05, t: 0, moving: false });
+    expect(pinAt(d, 1000, true)).toEqual({ on: true, x: 1.05, z: 1.05, t: 0, moving: false });
   });
 });

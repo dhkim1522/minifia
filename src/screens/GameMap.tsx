@@ -30,7 +30,7 @@ import { PICK_TURN_MS } from "../../shared/game/phases";
 import { LOG_H_KB } from "../game/chatUi";
 import { BADGE_TEXT, chipsOf, claimLook, floatLabel } from "../game/badgeView";
 import { WHISPER_TEXT } from "../game/whisperView";
-import { defenderVotes, headerFor, pointsTally } from "../game/dayView";
+import { defenderVotes, headerFor, nominationVotesOf, pointsTally } from "../game/dayView";
 import { blockModeOf, isMyTurn, turnStageOf, turnTopLine } from "../game/pickTurn";
 import type { ChatStore } from "../net/chatStore";
 import type { DayFx } from "../net/useDayFx";
@@ -311,7 +311,10 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
         : undefined,
     [],
   );
-  const serverMine = nominating ? view.day?.points?.find((l) => l.seat === view.me.seat)?.target : nighting ? view.me.pick : undefined;
+  // 동점 결선(09.1.1-14): 후보가 아닌 산 사람이 투표 창(step 1)에 후보 둘 중 하나를 누른다. 서버 값은 view.me.ballot(본인에게만 온다)
+  const runoff = view.phase === "runoff" ? view.day?.runoff : undefined;
+  const runoffVoting = runoff !== undefined && runoff.step === 1 && meAlive && canSend && !runoff.cand.includes(view.me.seat);
+  const serverMine = nominating ? view.day?.points?.find((l) => l.seat === view.me.seat)?.target : nighting ? view.me.pick : runoff !== undefined ? view.me.ballot : undefined;
   const [mine, chooseMine] = useViewChoice<number | undefined>(view, serverMine);
   // 순차 지목(결정 0063-1): 이름표는 내 차례에만 버튼이다. 누르면 그 차례는 끝난다 — 깜빡임·버튼이 사라지고 취소·바꾸기는 없다.
   // pickedTurn = 내가 이미 누른 차례 번호. 서버가 거절하면 비워 다시 고를 수 있게 한다.
@@ -332,11 +335,13 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
   }, [rejects]);
   // 누를 수 있는 좌석: 지목은 나를 뺀 산 사람. 밤은 산 마피아가 자신·동료를 뺀 산 사람(권위는 서버 pickTarget).
   const allies = view.me.allies;
+  const runoffCand = runoff?.cand;
   const pickSeats = useMemo(() => {
     if (canPick) return new Set(view.players.filter((p) => isAlive(p) && p.seat !== view.me.seat).map((p) => p.seat));
+    if (runoffVoting && runoffCand !== undefined) return new Set<number>(runoffCand);
     if (!nightMafia) return null;
     return new Set(view.players.filter((p) => isAlive(p) && p.seat !== view.me.seat && !(allies ?? []).includes(p.seat)).map((p) => p.seat));
-  }, [canPick, nightMafia, allies, view.players, view.me.seat]);
+  }, [canPick, runoffVoting, runoffCand, nightMafia, allies, view.players, view.me.seat]);
   // 마피아 다가가기(UI-SPEC 다르게 하는 곳 6): 고른 사람 옆 목적지를 일반 move 로 보낸다. 서버 applyMove 가 걷기 가능 칸으로 보정한다.
   // 대상이나 내 위치를 store 가 모르면 pick 만 나간다(A3).
   const approach = (target: number): void => {
@@ -366,16 +371,16 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
     ? {
         seats: pickSeats,
         ...(mine !== undefined ? { mine } : {}),
-        label: (nickname) => (nighting ? `${nickname} 님에게 다가가기` : `${nickname} 님 가리키기`),
+        label: (nickname) => (nighting ? `${nickname} 님에게 다가가기` : runoffVoting ? `${nickname} 님에게 투표` : `${nickname} 님 가리키기`),
         onPick: (seat) => {
-          if (seat === mine) return;
+          if (seat === mine) return; // 이미 고른 후보를 다시 눌러도 보내지 않는다. 다른 후보를 누르면 마감까지 바꿀 수 있다(결선)
           if (send(nighting ? { t: "pick", target: seat } : { t: "point", target: seat }) === false) return; // 소켓이 닫혀 못 보냈으면 표시도 바꾸지 않는다
           pointSent.current = { target: seat, at: Date.now() };
           chooseMine(seat);
           if (nominating) setPickedTurn(myTurnNo);
           if (nightMafia) approach(seat);
         },
-        group: nighting ? "밤 대상" : "지목",
+        group: nighting ? "밤 대상" : runoffVoting ? "결선" : "지목",
         // 마피아 밤 선택 효과(결정 0065): nightMafia(산 마피아의 밤)일 때만. mine 은 서버가 마피아에게만 준 me.pick 이다
         ...(nightMafia ? { aim: true as const } : {}),
       }
@@ -429,6 +434,21 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
         };
       };
     }
+    // 동점 결선(09.1.1-14, UI-SPEC D-2): 던진 사람 이름표에 done 체크만(누가 누구를은 서버가 주지 않는다). 후보 머리 위 배지는 마감 전엔 지목 때 받은 득표, 결과(step 2)에는 결선 득표 tally 의 두 값
+    if (runoff !== undefined) {
+      const voted = new Set(runoff.voted ?? []);
+      const nomVotes = nominationVotesOf(view);
+      return (seat) => {
+        const ci = runoff.cand.indexOf(seat);
+        const count = ci < 0 ? 0 : runoff.step === 2 ? (runoff.tally?.[ci] ?? 0) : (nomVotes[seat] ?? 0);
+        return {
+          ...(runoffVoting && pickSeats?.has(seat) ? { blink: true } : {}),
+          ...(mine === seat ? { mine: true } : {}),
+          ...(voted.has(seat) ? { done: true } : {}),
+          ...(count >= 1 ? { count } : {}),
+        };
+      };
+    }
     if (!nominating) return undefined;
     // 득표는 배지 숫자만(선두 맥박·과반 도장 없음, 09.1 M-4). 내가 방금 누른 표는 서버가 세어 주기 전에도 +1 로 바로 보인다(UI-SPEC A-4).
     // 차례인 사람은 발밑 흰 고리와 맨 앞 이름표(모이는 중·끝 알림에는 없다).
@@ -445,7 +465,7 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
         ...(turnSeat === seat ? { ring: "turn" as const, turn: true } : {}),
       };
     };
-  }, [nominating, nighting, nightMafia, mine, serverMine, spectate, verdicting, defending, view, canPick, pickSeats]);
+  }, [nominating, nighting, nightMafia, mine, serverMine, spectate, verdicting, defending, view, canPick, pickSeats, runoff, runoffVoting]);
 
   // 유령 화면의 이름표: 모든 이름표 위에 그 사람의 직업 칩(spectate.seats 의 job), 죽은 좌석은 반투명. 산 사람 view 에는 spectate 가 없어 이 겹침이 없다.
   const tagProps = useMemo<WorldTagProps | undefined>(() => {
