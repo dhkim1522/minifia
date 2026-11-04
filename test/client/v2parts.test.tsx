@@ -3,7 +3,7 @@ import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { afterEach, describe, expect, it, vi } from "vitest";
 import "../helpers/singleLineErrors";
 import { ActionButton, ActionRow } from "../../src/components/ActionButton";
-import { DotProgress } from "../../src/components/v2/DotProgress";
+import { HeadCount } from "../../src/components/v2/HeadCount";
 import { HeadStack, NameTag } from "../../src/components/v2/HeadStack";
 import { SureStamp } from "../../src/components/v2/SureStamp";
 import { PhaseHeader } from "../../src/components/v2/PhaseHeader";
@@ -412,32 +412,35 @@ describe("PhaseHeader (결정 0051-5)", () => {
   });
 });
 
-describe("DotProgress (결정 0051-4)", () => {
-  it("count 개가 켜지고 나머지는 꺼진 점이며 읽어 주는 이름을 붙일 수 있다", () => {
-    const { container } = render(<DotProgress count={3} total={8} label="3명 모임" />);
-    expect(container.querySelectorAll(".mv-dots__dot").length).toBe(8);
-    expect(container.querySelectorAll(".mv-dots__dot.is-on").length).toBe(3);
-    expect(container.querySelector(".mv-dots")?.getAttribute("aria-label")).toBe("3명 모임");
+describe("HeadCount (feedback-13, 점 진행을 숫자로)", () => {
+  it("글자는 '현재 / 최대' 이고 읽어 주는 이름을 붙일 수 있다", () => {
+    const { container } = render(<HeadCount count={3} total={8} label="3명 모임" />);
+    const el = container.querySelector(".mv-count");
+    expect(el?.textContent).toBe("3 / 8");
+    expect(el?.getAttribute("aria-label")).toBe("3명 모임");
+    expect(container.querySelector(".mv-dots")).toBeNull();
   });
 
-  it("점 0개·8개 경계", () => {
-    const none = render(<DotProgress count={0} total={8} />);
-    expect(none.container.querySelectorAll(".mv-dots__dot.is-on").length).toBe(0);
+  it("0 / 8, 8 / 8, 0 / 0 경계", () => {
+    expect(render(<HeadCount count={0} total={8} />).container.querySelector(".mv-count")?.textContent).toBe("0 / 8");
     cleanup();
-    const all = render(<DotProgress count={8} total={8} />);
-    expect(all.container.querySelectorAll(".mv-dots__dot.is-on").length).toBe(8);
+    expect(render(<HeadCount count={8} total={8} />).container.querySelector(".mv-count")?.textContent).toBe("8 / 8");
+    cleanup();
+    expect(render(<HeadCount count={0} total={0} />).container.querySelector(".mv-count")?.textContent).toBe("0 / 0");
   });
 
   it("label 이 없으면 count/total 을 읽어 준다", () => {
-    const { container } = render(<DotProgress count={5} total={8} />);
-    expect(container.querySelector(".mv-dots")?.getAttribute("aria-label")).toBe("5/8");
+    const { container } = render(<HeadCount count={5} total={8} />);
+    expect(container.querySelector(".mv-count")?.getAttribute("aria-label")).toBe("5/8");
   });
 
-  it("활성 [시작](면 gray-100) 안의 점은 night-900 으로 칠해 바탕에 묻히지 않는다 (UI-SPEC 방장 · 시작 가능)", () => {
-    const dot = rulesFor(V2_CSS, ".mf-act--primary .mv-dots__dot").join(";");
-    expect(dot).toMatch(/border-color:\s*var\(--night-900\)/);
-    const on = rulesFor(V2_CSS, ".mf-act--primary .mv-dots__dot.is-on").join(";");
-    expect(on).toMatch(/background:\s*var\(--night-900\)/);
+  it(".mv-count 는 버튼 라벨과 같은 16px 700, 숫자 폭 고정, 놓인 자리의 글자색을 따른다", () => {
+    const rule = rulesFor(V2_CSS, ".mv-count").join(";");
+    expect(rule).toMatch(/font-size:\s*16px/);
+    expect(rule).toMatch(/font-weight:\s*700/);
+    expect(rule).toMatch(/font-variant-numeric:\s*tabular-nums/);
+    expect(rule).toMatch(/white-space:\s*nowrap/);
+    expect(rule).toMatch(/color:\s*inherit/);
   });
 });
 
@@ -500,16 +503,16 @@ describe("TopToast (UI-SPEC E7)", () => {
 });
 
 describe("ActionButton·ActionRow (UI-SPEC 행동 줄, E6)", () => {
-  it("primary: 아이콘 + 라벨 + 점이 한 버튼 안에 있다", () => {
+  it("primary: 아이콘 + 라벨 + 숫자가 한 버튼 안에 있다", () => {
     const { container } = render(
-      <ActionButton variant="primary" icon="play" label="시작" dots={{ count: 5, total: 8 }} aria-label="게임 시작, 5명 모임" />,
+      <ActionButton variant="primary" icon="play" label="시작" count={{ count: 5, total: 8 }} aria-label="게임 시작, 5명 모임" />,
     );
     const btn = screen.getByRole("button", { name: "게임 시작, 5명 모임" });
     expect(btn.classList.contains("mf-act--primary")).toBe(true);
     expect(btn.querySelector("svg")).not.toBeNull();
     expect(btn.textContent).toContain("시작");
-    expect(container.querySelectorAll(".mv-dots__dot").length).toBe(8);
-    expect(container.querySelectorAll(".mv-dots__dot.is-on").length).toBe(5);
+    expect(btn.querySelector(".mv-count")?.textContent).toBe("5 / 8");
+    expect(container.querySelector(".mv-dots")).toBeNull();
     expect(btn.getAttribute("aria-disabled")).toBeNull();
     expect((btn as HTMLButtonElement).disabled).toBe(false);
   });

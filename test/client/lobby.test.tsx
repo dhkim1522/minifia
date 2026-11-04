@@ -267,24 +267,23 @@ describe("Lobby — 행동 줄: [시작] 과 점, 손님 (ROOM-03, UI-SPEC 행�
     for (let i = 0; i < away; i += 1) players.push(player(connected + 1 + i, `먼친구${i}`, { connected: false }));
     return makeView(players, 0);
   };
-  const dotsOn = (container: HTMLElement) => container.querySelectorAll(".mv-dots__dot.is-on").length;
-  const dotsAll = (container: HTMLElement) => container.querySelectorAll(".mv-dots__dot").length;
+  const countText = (container: HTMLElement) => container.querySelector("[data-lobby-start] .mv-count")?.textContent;
 
-  it("방장 · 연결 5명: 활성 [시작] — aria-label '게임 시작, 5명 모임', 점 5/8", () => {
+  it("방장 · 연결 5명: 활성 [시작] — aria-label '게임 시작, 5명 모임', 숫자 5 / 8", () => {
     const { container } = render(lobby(hostView(4)));
     const b = start(container)!;
     expect(b.getAttribute("aria-label")).toBe("게임 시작, 5명 모임");
     expect(b.getAttribute("aria-disabled")).toBeNull();
     expect(b.className).toContain("mf-act--primary");
     expect(b.textContent).toContain("시작");
-    expect(dotsAll(container)).toBe(8);
-    expect(dotsOn(container)).toBe(5);
+    expect(countText(container)).toBe("5 / 8");
+    expect(container.querySelector(".mv-dots")).toBeNull();
     expect(container.querySelector(".mf-lobby__panel")?.contains(b)).toBe(true);
   });
 
-  it("8명이면 점 8개가 모두 켜지고 별도 문구는 없다", () => {
+  it("8명이면 숫자 8 / 8 이고 별도 문구는 없다", () => {
     const { container } = render(lobby(hostView(7)));
-    expect(dotsOn(container)).toBe(8);
+    expect(countText(container)).toBe("8 / 8");
     expect(container.textContent).not.toContain("가득");
   });
 
@@ -315,22 +314,22 @@ describe("Lobby — 행동 줄: [시작] 과 점, 손님 (ROOM-03, UI-SPEC 행�
     expect(b.disabled).toBe(false);
     expect(b.className).toContain("mf-act--inactive");
     expect(b.getAttribute("aria-label")).toBe("게임 시작, 3명 모임, 4명부터 시작할 수 있어요");
-    expect(dotsOn(container)).toBe(3);
+    expect(countText(container)).toBe("3 / 8");
     fireEvent.click(b);
     expect(send).not.toHaveBeenCalled();
     expect(toastText(container)).toBe("4명부터 시작해요");
     expect(toastOn(container)).toBe(true);
   });
 
-  it("방장 혼자면 점 1개만 켜지고 흐리다", () => {
+  it("방장 혼자면 숫자 1 / 8 이고 흐리다", () => {
     const { container } = render(lobby(hostView(0)));
-    expect(dotsOn(container)).toBe(1);
+    expect(countText(container)).toBe("1 / 8");
     expect(start(container)?.getAttribute("aria-disabled")).toBe("true");
   });
 
-  it("끊긴 사람은 모인 사람 수에 들지 않는다: 연결 3 + 끊김 2 → 점 3, 흐림", () => {
+  it("끊긴 사람은 모인 사람 수에 들지 않는다: 연결 3 + 끊김 2 → 3 / 8, 흐림", () => {
     const { container } = render(lobby(hostView(2, 2)));
-    expect(dotsOn(container)).toBe(3);
+    expect(countText(container)).toBe("3 / 8");
     expect(start(container)?.getAttribute("aria-disabled")).toBe("true");
   });
 
@@ -342,6 +341,20 @@ describe("Lobby — 행동 줄: [시작] 과 점, 손님 (ROOM-03, UI-SPEC 행�
     expect(start(three.container)?.className).toContain("mf-act--inactive");
   });
 
+  it("3명에서 4번째 사람이 연결되면 같은 버튼이 '4 / 8' 활성으로 바뀌고 누르면 start 를 보낸다", () => {
+    const send = vi.fn();
+    const { container, rerender } = render(lobby(hostView(2), { send }));
+    expect(countText(container)).toBe("3 / 8");
+    expect(start(container)?.getAttribute("aria-disabled")).toBe("true");
+    rerender(lobby(hostView(3), { send }));
+    expect(countText(container)).toBe("4 / 8");
+    expect(start(container)?.getAttribute("aria-disabled")).toBeNull();
+    expect(start(container)?.className).toContain("mf-act--primary");
+    fireEvent.click(start(container)!);
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(send).toHaveBeenCalledWith({ t: "start" });
+  });
+
   it("canSend 가 거짓이면 눌러도 start 를 보내지 않고 알림도 없다", () => {
     const send = vi.fn();
     const { container } = render(lobby(hostView(4), { send, canSend: false }));
@@ -351,14 +364,14 @@ describe("Lobby — 행동 줄: [시작] 과 점, 손님 (ROOM-03, UI-SPEC 행�
     expect(toastText(container)).toBe("");
   });
 
-  it("손님: 평평한 비활성 '방장을 기다리는 중…' 하나뿐 — 시작 버튼·점·공유 줄은 없다", () => {
+  it("손님: 평평한 비활성 '방장을 기다리는 중…' 하나뿐 — 시작 버튼·숫자·공유 줄은 없다", () => {
     const view = makeView([player(0, "민수"), player(1, "서준"), player(2, "하윤")], 1);
     const { container } = render(lobby(view));
     const b = screen.getByRole("button", { name: "방장을 기다리는 중…" }) as HTMLButtonElement;
     expect(b.disabled).toBe(true);
     expect(b.className).toContain("mf-act--flat");
     expect(container.querySelector("[data-lobby-start]") === null).toBe(true);
-    expect(container.querySelector(".mv-dots") === null).toBe(true);
+    expect(container.querySelector(".mv-count") === null).toBe(true);
     // 패널 안 버튼은 채팅 보내기(07-13) 하나와 이 행동 줄 하나뿐이다
     expect(container.querySelectorAll(".mf-lobby__panel button:not([data-chat-send])").length).toBe(1);
   });
@@ -373,7 +386,7 @@ describe("Lobby — 행동 줄: [시작] 과 점, 손님 (ROOM-03, UI-SPEC 행�
     const { container, rerender } = render(lobby(v));
     rerender(lobby({ ...v, serverNow: 5 }));
     expect(start(container)?.className).toContain("mf-act--primary");
-    expect(dotsOn(container)).toBe(4);
+    expect(countText(container)).toBe("4 / 8");
   });
 });
 

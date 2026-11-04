@@ -169,9 +169,13 @@ const mount = (view: RoomView, over: Partial<RoomConnection> = {}) => {
 const verdictBtns = (c: ParentNode): HTMLButtonElement[] => [...c.querySelectorAll<HTMLButtonElement>("[data-verdict]")];
 const verdictBtn = (c: ParentNode, v: "yes" | "no"): HTMLButtonElement | null => c.querySelector(`[data-verdict="${v}"]`);
 const headOf = (c: ParentNode, seat: number): HTMLElement | null => c.querySelector(`[data-seat="${seat}"] .mv-head`);
-const dotsOf = (c: ParentNode): HTMLElement | null => c.querySelector(".mv-dots");
-const dotsOn = (c: ParentNode): number => c.querySelectorAll(".mv-dots__dot.is-on").length;
-const dotsTotal = (c: ParentNode): number => c.querySelectorAll(".mv-dots__dot").length;
+const countParts = (c: ParentNode): [number, number] => {
+  const m = /^(\d+) \/ (\d+)$/.exec(c.querySelector(".mv-count")?.textContent ?? "");
+  return m ? [Number(m[1]), Number(m[2])] : [-1, -1];
+};
+const countOf = (c: ParentNode): HTMLElement | null => c.querySelector(".mv-count");
+const countNow = (c: ParentNode): number => countParts(c)[0];
+const countMax = (c: ParentNode): number => countParts(c)[1];
 const lastScene = (): SceneLook => rt.scenes[rt.scenes.length - 1] as SceneLook;
 
 beforeEach(() => {
@@ -186,12 +190,12 @@ afterEach(() => {
 });
 
 describe("찬반 화면 — 한 표 (DAY-06, 트레이서)", () => {
-  it("산 5명 · 변론자 3 의 찬반: 나(변론자 아님)의 패널에 찬성·반대 버튼 둘과 '투표한 사람' 점 4개(산 사람 − 1)", () => {
+  it("산 5명 · 변론자 3 의 찬반: 나(변론자 아님)의 패널에 찬성·반대 버튼 둘과 '투표한 사람' 숫자 0 / 4(산 사람 − 1)", () => {
     const { container } = mount(makeView({ candidate: 3 }));
     expect(verdictBtns(container).map((b) => b.getAttribute("data-verdict"))).toEqual(["yes", "no"]);
-    expect(dotsOf(container)?.getAttribute("aria-label")).toBe("투표한 사람");
-    expect(dotsTotal(container)).toBe(4);
-    expect(dotsOn(container)).toBe(0);
+    expect(countOf(container)?.getAttribute("aria-label")).toBe("투표한 사람");
+    expect(countMax(container)).toBe(4);
+    expect(countNow(container)).toBe(0);
   });
 
   it("찬성을 누르면 verdict {agree: true} 를 보내고 찬성만 즉시 눌린 상태, 반대로 바꾸면 agree false 와 반대만 눌림", () => {
@@ -223,13 +227,13 @@ describe("찬반 화면 — 한 표 (DAY-06, 트레이서)", () => {
     expect(verdictBtn(container, "yes")?.getAttribute("aria-pressed")).toBe("false");
   });
 
-  it("서버 view 의 voted 에 내가 들면 내 이름표에 체크(data-done)와 점 1개 — 아직 아무도 안 던진 좌석에는 체크가 없다", () => {
+  it("서버 view 의 voted 에 내가 들면 내 이름표에 체크(data-done)와 숫자 1 — 아직 아무도 안 던진 좌석에는 체크가 없다", () => {
     const m = mount(makeView({ candidate: 3 }));
     expect(m.container.querySelectorAll("[data-done]").length).toBe(0);
     m.show(makeView({ candidate: 3, voted: [0], verdictVote: true }));
     expect(headOf(m.container, 0)?.getAttribute("data-done")).toBe("true");
     expect(headOf(m.container, 1)?.hasAttribute("data-done")).toBe(false);
-    expect(dotsOn(m.container)).toBe(1);
+    expect(countNow(m.container)).toBe(1);
   });
 
   it("다른 좌석이 voted 에 들면 그 이름표에 체크만 붙고 무엇을 골랐는지는 어디에도 없다", () => {
@@ -237,7 +241,7 @@ describe("찬반 화면 — 한 표 (DAY-06, 트레이서)", () => {
     m.show(makeView({ candidate: 3, voted: [1, 2] }));
     expect(headOf(m.container, 1)?.getAttribute("data-done")).toBe("true");
     expect(headOf(m.container, 2)?.getAttribute("data-done")).toBe("true");
-    expect(dotsOn(m.container)).toBe(2);
+    expect(countNow(m.container)).toBe(2);
     // 내 버튼은 눌리지 않았고(내가 안 던짐), 남의 이름표 어디에도 찬성·반대 글자나 속성이 없다
     expect(verdictBtn(m.container, "yes")?.getAttribute("aria-pressed")).toBe("false");
     const tags = m.container.querySelector(".mf-world__tags")!;
@@ -287,7 +291,7 @@ describe("최후 변론 화면 (DAY-05)", () => {
     expect(verdictBtns(container).length).toBe(0);
     expect(container.querySelector("[data-end-discussion]")).toBeNull();
     expect(container.querySelector("[data-pick]")).toBeNull();
-    expect(dotsOf(container)).toBeNull();
+    expect(countOf(container)).toBeNull();
     expect(container.querySelector(".mv-chat")).not.toBeNull();
   });
 
@@ -321,24 +325,24 @@ describe("찬반 화면 — 신분별 패널·안내·조명 (DAY-06)", () => {
     expect(titleOf(container)).toBe("찬반");
     expect(hintOf(container)).toBe("도윤 님을 처형할까요?");
     expect(verdictBtns(container).length).toBe(2);
-    expect(dotsOf(container)).not.toBeNull();
+    expect(countOf(container)).not.toBeNull();
   });
 
-  it("변론자 본인: 안내 '결과를 기다려요', 패널은 점 + 채팅뿐(찬반 버튼 없음)", () => {
+  it("변론자 본인: 안내 '결과를 기다려요', 패널은 숫자 + 채팅뿐(찬반 버튼 없음)", () => {
     const { container } = mount(makeView({ candidate: 0, voted: [1, 2] }));
     expect(hintOf(container)).toBe("결과를 기다려요");
     expect(verdictBtns(container).length).toBe(0);
-    expect(dotsOn(container)).toBe(2);
-    expect(dotsTotal(container)).toBe(4);
+    expect(countNow(container)).toBe(2);
+    expect(countMax(container)).toBe(4);
     expect(container.querySelector(".mv-chat")).not.toBeNull();
   });
 
   it("유령(탈락한 나): 찬반 버튼 없이 점 + 채팅, 안내는 유령 문구, 점 수는 산 사람(나 빼고 4명) − 1", () => {
     const { container } = mount(makeView({ candidate: 3, dead: [0], voted: [1] }));
     expect(verdictBtns(container).length).toBe(0);
-    expect(dotsOf(container)).not.toBeNull();
+    expect(countOf(container)).not.toBeNull();
     expect(hintOf(container)).toBe("모두의 직업이 보여요");
-    expect(dotsTotal(container)).toBe(3);
+    expect(countMax(container)).toBe(3);
   });
 
   it("변론자 이름표에는 배지·도장이 없다(찬반에서는 사라진다) — 던진 사람에게는 체크", () => {
@@ -368,18 +372,18 @@ describe("찬반 줄 — 키보드가 열리면 숨고 닫으면 돌아온다 (E
     kb.open = true;
     m.show(makeView({ candidate: 3 }));
     expect(m.container.querySelector(".mv-verdict")).toBeNull();
-    expect(dotsOf(m.container)).toBeNull();
+    expect(countOf(m.container)).toBeNull();
     expect(m.container.querySelector(".mv-chat")).not.toBeNull();
     kb.open = false;
     m.show(makeView({ candidate: 3 }));
     expect(verdictBtns(m.container).length).toBe(2);
-    expect(dotsOf(m.container)).not.toBeNull();
+    expect(countOf(m.container)).not.toBeNull();
   });
 
   it("변론자 본인의 점도 키보드가 열리면 숨는다", () => {
     kb.open = true;
     const { container } = mount(makeView({ candidate: 0 }));
-    expect(dotsOf(container)).toBeNull();
+    expect(countOf(container)).toBeNull();
   });
 });
 
@@ -434,7 +438,7 @@ describe("처형 화면 (DAY-06)", () => {
     const yes = verdictBtn(m.container, "yes");
     expect(verdictBtns(m.container).every((b) => b.disabled)).toBe(true);
     expect(yes?.getAttribute("aria-pressed")).toBe("true");
-    expect(dotsOf(m.container)).toBeNull();
+    expect(countOf(m.container)).toBeNull();
   });
 
   it("2.0초: 알림이 '도윤 님 처형' 으로 바뀌고 hot 줄 '도윤 님 처형' 이 더해진다(찬성·반대 줄은 다시 만들지 않는다)", () => {

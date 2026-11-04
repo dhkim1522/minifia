@@ -116,8 +116,12 @@ const mount = (view: RoomView, over: Partial<RoomConnection> = {}, onExit: (r: s
 };
 
 const endButton = (c: ParentNode): HTMLButtonElement | null => c.querySelector("[data-end-discussion]");
-const dotsOn = (c: ParentNode): number => c.querySelectorAll(".mv-dots__dot.is-on").length;
-const dotsAll = (c: ParentNode): number => c.querySelectorAll(".mv-dots__dot").length;
+const countParts = (c: ParentNode): [number, number] => {
+  const m = /^(\d+) \/ (\d+)$/.exec(c.querySelector(".mv-count")?.textContent ?? "");
+  return m ? [Number(m[1]), Number(m[2])] : [-1, -1];
+};
+const countNow = (c: ParentNode): number => countParts(c)[0];
+const countMax = (c: ParentNode): number => countParts(c)[1];
 
 beforeEach(() => {
   stage.mounts = 0;
@@ -139,37 +143,37 @@ describe("GameMap — 낮 토론 [토론 끝내기] (DAY-03, 08-13)", () => {
     expect(endButton(container)?.getAttribute("aria-label")).toBe("토론 끝내기");
     expect(endButton(container)?.getAttribute("aria-pressed")).toBe("false");
     // 5명 → 과반 3
-    expect(dotsAll(container)).toBe(3);
-    expect(dotsOn(container)).toBe(0);
+    expect(countMax(container)).toBe(3);
+    expect(countNow(container)).toBe(0);
   });
 
   it("과반 수는 산 사람 수로 센다: 8명 중 3명이 죽어 5명이면 3, 2명이면 2", () => {
     const eight = mount(makeView({ count: 8, dead: [5, 6, 7] }));
-    expect(dotsAll(eight.container)).toBe(3);
+    expect(countMax(eight.container)).toBe(3);
     eight.unmount();
     const two = mount(makeView({ count: 4, dead: [2, 3] }));
-    expect(dotsAll(two.container)).toBe(2);
+    expect(countMax(two.container)).toBe(2);
   });
 
-  it("누르면 endDiscussion {on: true} 를 한 번 보내고 내 눌림(aria-pressed)만 즉시 바뀐다 — 점은 서버가 센 값 그대로", () => {
+  it("누르면 endDiscussion {on: true} 를 한 번 보내고 내 눌림(aria-pressed)만 즉시 바뀐다 — 숫자는 서버가 센 값 그대로", () => {
     const send = vi.fn<(m: ClientMessage) => boolean>(() => true);
     const { container } = mount(makeView(), { send });
     fireEvent.click(endButton(container)!);
     expect(send).toHaveBeenCalledTimes(1);
     expect(send).toHaveBeenCalledWith({ t: "endDiscussion", on: true });
     expect(endButton(container)?.getAttribute("aria-pressed")).toBe("true");
-    expect(dotsOn(container)).toBe(0);
+    expect(countNow(container)).toBe(0);
     // 다시 누르면 취소
     fireEvent.click(endButton(container)!);
     expect(send).toHaveBeenLastCalledWith({ t: "endDiscussion", on: false });
     expect(endButton(container)?.getAttribute("aria-pressed")).toBe("false");
   });
 
-  it("서버 view(endCount 1, me.endDiscussion true)가 오면 점 1개가 켜지고 눌림이 서버 값을 따른다", () => {
+  it("서버 view(endCount 1, me.endDiscussion true)가 오면 숫자가 1 로 바뀌고 눌림이 서버 값을 따른다", () => {
     const m = mount(makeView());
-    expect(dotsOn(m.container)).toBe(0);
+    expect(countNow(m.container)).toBe(0);
     m.show(makeView({ endCount: 1, pressed: true }));
-    expect(dotsOn(m.container)).toBe(1);
+    expect(countNow(m.container)).toBe(1);
     expect(endButton(m.container)?.getAttribute("aria-pressed")).toBe("true");
   });
 
@@ -213,10 +217,10 @@ describe("GameMap — 낮 토론 [토론 끝내기] (DAY-03, 08-13)", () => {
     }
   });
 
-  it("다른 사람의 토론 끝내기 여부는 그리지 않는다 — 개수 점만 있고 이름표에 넘기는 속성도 없다", () => {
+  it("다른 사람의 토론 끝내기 여부는 그리지 않는다 — 개수 숫자만 있고 이름표에 넘기는 속성도 없다", () => {
     const { container } = mount(makeView({ count: 6, endCount: 2 }));
-    expect(dotsOn(container)).toBe(2);
-    expect(dotsAll(container)).toBe(4);
+    expect(countNow(container)).toBe(2);
+    expect(countMax(container)).toBe(4);
     expect(stage.props?.tagProps).toBeUndefined();
     expect(stage.props?.pick).toBeUndefined();
   });
