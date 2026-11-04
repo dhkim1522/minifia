@@ -4,7 +4,7 @@
 // 직업 주장 차례·빠른 메시지·이모티콘은 없다(7페이즈에서 없어졌다).
 // 밤에는 역할대로 행동한다: 마피아·경찰·의사 봇은 살아 있는 사람 중 하나를 pick 하고(마피아는 동료 제외). 탈락한 봇은 멈춘다.
 // 낮 처형 구간(결정 0024·0060-13, 서버 봇 shared/game/bots.ts 와 같은 성향): 토론(discussion) 30~60초에 토론 끝내기(endDiscussion) 한 번,
-// 지목(nomination) 2~8초에 자기를 뺀 살아 있는 한 명 지목(point), 최후 변론(defense)에서는 자기가 변론자일 때만 변론 문구 하나,
+// 순차 지목(nomination)은 day.turn 의 지금 차례가 내 좌석일 때만 1~3초 뒤 자기를 뺀 살아 있는 한 명 지목(point), 최후 변론(defense)에서는 자기가 변론자일 때만 변론 문구 하나,
 // 찬반(verdict) 1~6초에 변론자가 아니면 70% 찬성·30% 반대(verdict).
 // 단계마다 한 번만 행동하고, 처형·밤 밖의 종료(ended) 단계에서는 아무것도 하지 않는다.
 //
@@ -203,20 +203,29 @@ function onState(bot, view) {
     }
   } else if (view.phase === "nomination" || view.phase === "defense" || view.phase === "verdict") {
     stopTalk(bot);
-    // 낮 처형 구간 행동은 단계마다 한 번만 보낸다(키 = `${일차}:${단계}`). 사람과 같은 메시지 형식이라 서버 검증을 그대로 받는다.
-    const key = `${day}:${view.phase}`;
-    if (bot.voteKey === key) return;
-    bot.voteKey = key;
     if (view.phase === "nomination") {
+      // 순차 지목(결정 0063-1): 자기 차례(day.turn 의 지금 차례 좌석이 내 좌석이고 아직 확정 전)일 때만, 차례마다 한 번 1~3초 뒤(아직 같은 차례면) 지목한다. 차례 아닌 지목은 서버가 WRONG_PHASE 로 거절한다.
+      const turn = view.day?.turn;
+      if (turn === undefined || turn.i < 0 || turn.i >= turn.order.length || turn.doneAt !== undefined || turn.order[turn.i] !== bot.seat) return;
+      const turnKey = `${day}:nomination:${turn.i}`;
+      if (bot.voteKey === turnKey) return;
+      bot.voteKey = turnKey;
       const candidates = view.players.filter((p) => p.alive !== false && p.seat !== bot.seat).map((p) => p.seat);
       if (candidates.length === 0) return;
       const target = pick(candidates);
       setTimeout(() => {
-        if (bot.view?.phase !== "nomination") return;
+        const now = bot.view?.day?.turn;
+        if (bot.view?.phase !== "nomination" || now?.i !== turn.i || now.doneAt !== undefined) return;
         sendTo(bot, { t: "point", target });
         log(`${bot.nickname}: 지목 ${target}`);
-      }, 2000 + Math.random() * 6000);
-    } else if (view.phase === "verdict") {
+      }, 1000 + Math.random() * 2000);
+      return;
+    }
+    // 낮 처형 구간 나머지 행동은 단계마다 한 번만 보낸다(키 = `${일차}:${단계}`). 사람과 같은 메시지 형식이라 서버 검증을 그대로 받는다.
+    const key = `${day}:${view.phase}`;
+    if (bot.voteKey === key) return;
+    bot.voteKey = key;
+    if (view.phase === "verdict") {
       if (view.day?.candidate === bot.seat) return; // 변론자는 자기 처형 찬반에 투표하지 않는다(결정 0053)
       const agree = Math.random() < 0.7;
       setTimeout(() => {

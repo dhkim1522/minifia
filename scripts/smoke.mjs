@@ -1,6 +1,7 @@
 // 스모크: 배포(또는 로컬) 주소에서 방 만들기 → WebSocket hello → 대기실 상태까지 확인한다.
 // full 단계는 한 판을 끝까지 돈다(8페이즈 낮 흐름, 결정 0060): 로비 채팅 한 줄 → 낮 시작 발표 → 낮 토론(자유 채팅, 결정 0058)
-// → 과반이 토론 끝내기(DAY-03) → 지목 15초(DAY-04: 한 명에게 몰아 줌, 줄은 모두에게 같음) → 변론 20초(DAY-05)
+// → 과반이 토론 끝내기(DAY-03) → 순차 지목(DAY-04, 결정 0063-1: 모이기 3초 → 산 사람 좌석 순서로 한 명씩 8초 차례, 차례 주인만 지목하고 차례 아닌 지목은 WRONG_PHASE,
+//   한 명에게 몰아 줌, 줄은 모두에게 같음, 확정 뒤 0.9초 사이, 마지막 뒤 2초 끝 알림) → 변론 20초(DAY-05)
 // → 찬반 10초(DAY-06: 변론자는 못 던짐, 값 변경은 본인에게만) → 처형 5초(DAY-07: 수만 공개, 역할 키 없음) → 밤 30초(역할별 행동·마피아 채널 채팅)
 // → 아침 5초(탈락 발표·탈락자 채널 채팅) → 승패가 날 때까지 다음 낮을 같은 방식으로 돌아 ended 에서 끝난다.
 // 첫 낮은 마피아가 아닌 시민 한 명을 처형하고 그날 밤 다른 시민이 암살당한다. 마피아가 남아 있는 날은 마피아 한 명을 처형해 판을 끝낸다.
@@ -26,15 +27,19 @@ import { exitIfV1 } from "./deploy-target.mjs";
 
 const TOTAL_LIMIT_MS = 30_000;
 const STATE_LIMIT_MS = 10_000;
-const FULL_TOTAL_LIMIT_MS = 720_000; // 시작 → ended. 낮 하루(과반 토론 끝내기 → 지목 15 + 변론 20 + 찬반 10 + 처형 5 + 밤 30 + 아침 5~15 초) 최대 3일 + 여유
+const FULL_TOTAL_LIMIT_MS = 720_000; // 시작 → ended. 낮 하루(과반 토론 끝내기 → 순차 지목 최악 3 + 산 사람 수 × 8.9 + 2 (스크립트는 차례마다 곧바로 지목해 약 10초) + 변론 20 + 찬반 10 + 처형 5 + 밤 30 + 아침 5~15 초) 최대 3일 + 여유
 // 낮 단계 길이(shared/game/phases.ts 와 같은 값, 결정 0060-1). 스크립트는 TS 를 import 하지 않는다.
 const DISCUSSION_MS = 90_000;
-const NOMINATION_MS = 15_000;
+// 순차 지목(결정 0063-1): 모이기 → 차례마다 (8초 + 확정 뒤 0.9초 사이) → 끝 알림. nominationMaxMs 는 shared/game/phases.ts 와 같은 공식이다.
+const NOMINATION_GATHER_MS = 3_000;
+const PICK_TURN_MS = 8_000;
+const PICK_GAP_MS = 900;
+const NOMINATION_END_MS = 2_000;
+const nominationMaxMs = (turns) => NOMINATION_GATHER_MS + turns * (PICK_TURN_MS + PICK_GAP_MS) + NOMINATION_END_MS;
 const DEFENSE_MS = 20_000;
 const VERDICT_MS = 10_000;
 const EXECUTION_MS = 5_000;
 // 각 단계 + 여유: 서버 타이머가 다음 단계로 넘기는 것을 기다린다(넘기기 없음).
-const NOMINATION_WAIT_MS = NOMINATION_MS + STATE_LIMIT_MS;
 const DEFENSE_WAIT_MS = DEFENSE_MS + STATE_LIMIT_MS;
 const VERDICT_WAIT_MS = VERDICT_MS + STATE_LIMIT_MS;
 const EXECUTION_WAIT_MS = EXECUTION_MS + STATE_LIMIT_MS;
@@ -93,9 +98,10 @@ const ENDED_ROLE_STRING_PATHS = new Set(["view.result.seats[].job"]);
 // 7페이즈: 채팅 도배 기록·입력 중 중계 기록·줄 저장 레코드의 마스크(r)·쓰기 순번(g)은 서버 안에만 있다.
 // 9페이즈(결정 0061): 마피아 쪽지 한 줄(nightNote)은 서버 안에만 있고 아침 chat 카드(k:"note")로만 나온다.
 // 8페이즈(결정 0060): 개인 지목(nominate)·토론 끝내기(endVote)·찬반 값(verdictVote)과 판정(verdict)은 서버 안에만 있다.
-const SERVER_ONLY_KEYS = ["claimPick", "claimOrder", "claimIdx", "claimStart", "claim" + "Done", "claims", "claimLog", "turn", "nominate", "endVote", "verdictVote", "verdict", "nightLog", "lastExecPhrase", "chatRates", "typingRelays", "nextSeq", "nightNote"];
+const SERVER_ONLY_KEYS = ["claimPick", "claimOrder", "claimIdx", "claimStart", "claim" + "Done", "claims", "claimLog", "turn", "pickTurn", "nominate", "endVote", "verdictVote", "verdict", "nightLog", "lastExecPhrase", "chatRates", "typingRelays", "nextSeq", "nightNote"];
 // 같은 이름의 공개 와이어 경로(이 밖의 경로에 이름이 나오면 실패): 처형 단계의 찬반 수 day.verdict, 본인에게만 가는 me.verdictVote.
-const PUBLIC_KEY_PATHS = { verdict: ["view.day.verdict"], verdictVote: ["view.me.verdictVote"] };
+// turn: 순차 지목의 공개 차례 정보 view.day.turn(결정 0063-1) 하나만 허용한다. 옛 직업 주장의 turn 이나 서버 전용 pickTurn 은 어디에도 없다.
+const PUBLIC_KEY_PATHS = { verdict: ["view.day.verdict"], verdictVote: ["view.me.verdictVote"], turn: ["view.day.turn"] };
 // 역할별 일지 줄의 키 집합(결정 0027-11)
 const RECORD_KEYS = { police: "isMafia,n,target", mafia: "died,n,target", doctor: "n,target" };
 // 거절된 줄의 본문 표식: 어느 클라이언트의 어떤 프레임에도 되돌아오면 안 된다(COMM-04).
@@ -613,20 +619,23 @@ async function stageFull(url, args) {
       }
     }
 
-    // (b) 지목 단계: 과반 직후 넘어왔다(마감 90초를 기다리지 않음). 줄은 비어 있고 길이는 15초.
+    // (b) 지목 단계: 과반 직후 넘어왔다(마감 90초를 기다리지 않음). 줄은 비어 있고 모이는 중(i -1)이며 순서는 산 사람 좌석 오름차순, 첫 길이는 모이기 3초.
     await waitUntil(() => allSee(alive, "nomination", n), STATE_LIMIT_MS, `${label} 토론 끝내기 과반 뒤 nomination 이 모든 클라이언트에 오지 않음`);
     const nomEnds = new Set(alive.map((c) => firstState(c, "nomination", inDay(n)).msg.view.phaseEndsAt));
     if (nomEnds.size !== 1) fail(`${label} nomination 의 phaseEndsAt 이 클라이언트마다 다름 (${nomEnds.size}종)`);
+    const turnOrder = alive.map((c) => c.seat).sort((p, q) => p - q);
     for (const c of alive) {
       const nv = firstState(c, "nomination", inDay(n)).msg.view;
-      if (nv.phaseDurationMs !== NOMINATION_MS) fail(`${c.nickname} 의 ${label} nomination phaseDurationMs 가 ${NOMINATION_MS} 가 아님: ${nv.phaseDurationMs}`);
+      if (nv.phaseDurationMs !== NOMINATION_GATHER_MS) fail(`${c.nickname} 의 ${label} nomination phaseDurationMs 가 ${NOMINATION_GATHER_MS} 가 아님: ${nv.phaseDurationMs}`);
       if (JSON.stringify(nv.day.points) !== "[]") fail(`${c.nickname} 의 ${label} nomination 첫 day.points 가 []가 아님: ${JSON.stringify(nv.day.points)}`);
+      if (nv.day.turn?.i !== -1 || JSON.stringify(nv.day.turn.order) !== JSON.stringify(turnOrder)) fail(`${c.nickname} 의 ${label} nomination 첫 day.turn 이 {order 산 사람 좌석 오름차순, i -1} 이 아님: ${JSON.stringify(nv.day.turn)}`);
       if (nv.serverNow >= discEndsAt - 5_000) fail(`${label} 과반 토론 끝내기 뒤에도 토론 마감(${discEndsAt})을 거의 다 기다림 (serverNow ${nv.serverNow})`);
     }
 
-    // (c) 지목(DAY-04): 줄은 모두에게 같은 공개 목록이다. 자기 지목·유령 지목은 거절, 지목은 마감까지 바꿀 수 있다.
+    // (c) 순차 지목(DAY-04, 결정 0063-1, L15): 모이는 중에는 아무도 지목할 수 없고(WRONG_PHASE), 차례 주인만 지목한다. 유령은 BAD_MESSAGE, 자기 차례의 자기 지목도 BAD_MESSAGE.
+    // 줄은 모두에게 같은 공개 목록이다. 지목은 바꿀 수 없다(확정).
+    await expectError(others[0], { t: "point", target: victim.seat }, "WRONG_PHASE", `${label} 모이는 중 지목`, true);
     if (ghosts.length > 0) await expectError(ghosts[0], { t: "point", target: victim.seat }, "BAD_MESSAGE", `${label} 유령의 지목`);
-    await expectError(victim, { t: "point", target: victim.seat }, "BAD_MESSAGE", `${label} 자기 지목`);
     const lines = new Map();
     const linesNow = () => [...lines.entries()].sort((a, b) => a[0] - b[0]).map(([seat, target]) => ({ seat, target }));
     const pointAs = async (c, target) => {
@@ -639,15 +648,33 @@ async function stageFull(url, args) {
         `${label} ${c.nickname} 의 지목 뒤 모든 클라이언트의 day.points 가 같아지지 않음 (기대 ${want})`,
       );
     };
-    const changer = others[0];
-    await pointAs(victim, changer.seat);
-    await pointAs(changer, others[1].seat); // 먼저 다른 사람을 가리켰다가
-    await sleep(300); // 같은 사람의 지목 간격(250ms)을 넘긴 뒤
-    await pointAs(changer, victim.seat); // 대상을 바꾼다
-    for (const c of others.slice(1)) await pointAs(c, victim.seat);
+    let probedNonOwner = false;
+    for (let t = 0; t < turnOrder.length; t += 1) {
+      await waitUntil(
+        () => alive.every((x) => lastView(x)?.phase === "nomination" && lastView(x).day.turn?.i === t),
+        STATE_LIMIT_MS + PICK_TURN_MS + PICK_GAP_MS,
+        `${label} ${t}번째 차례가 모든 클라이언트에 오지 않음`,
+      );
+      const owner = alive.find((c) => c.seat === turnOrder[t]);
+      for (const c of alive) {
+        const turn = lastView(c).day.turn;
+        if (turn.endsAt === undefined || turn.doneAt !== undefined) fail(`${c.nickname} 의 ${label} ${t}번째 차례 day.turn 이 {endsAt 있음, doneAt 없음} 이 아님: ${JSON.stringify(turn)}`);
+      }
+      if (!probedNonOwner) {
+        probedNonOwner = true;
+        const bystander = alive.find((c) => c !== owner);
+        await expectError(bystander, { t: "point", target: victim.seat }, "WRONG_PHASE", `${label} 차례 아닌 ${bystander.nickname} 의 지목`, true);
+      }
+      if (owner === victim) {
+        await expectError(victim, { t: "point", target: victim.seat }, "BAD_MESSAGE", `${label} 자기 차례의 자기 지목`);
+        await pointAs(victim, others[0].seat);
+      } else {
+        await pointAs(owner, victim.seat);
+      }
+    }
 
     // (d) 변론(DAY-05): 마감에 최다 득표 한 명이 변론자가 된다.
-    await waitUntil(() => allSee(alive, "defense", n), NOMINATION_WAIT_MS, `${label} 지목 마감 뒤 defense 가 모든 클라이언트에 오지 않음`);
+    await waitUntil(() => allSee(alive, "defense", n), nominationMaxMs(alive.length) + STATE_LIMIT_MS, `${label} 지목 마감 뒤 defense 가 모든 클라이언트에 오지 않음`);
     for (const c of alive) {
       const dv = firstState(c, "defense", inDay(n)).msg.view;
       if (dv.day.candidate !== victim.seat) fail(`${c.nickname} 의 ${label} defense day.candidate 가 ${victim.seat} 가 아님: ${dv.day.candidate}`);
@@ -969,7 +996,7 @@ async function stageFull(url, args) {
   if (spread >= DAY_SPREAD_LIMIT_MS) fail(`dayAnnounce 도착 편차 ${spread}ms 가 ${DAY_SPREAD_LIMIT_MS}ms 이상`);
   if (discSpread >= DAY_SPREAD_LIMIT_MS) fail(`discussion 도착 편차 ${discSpread}ms 가 ${DAY_SPREAD_LIMIT_MS}ms 이상`);
 
-  // 서버 전용·삭제된 키는 어떤 프레임에도 없다(결정 0027-3). 옛 직업 주장 키(claim*·turn·claimLog)가 다시 나오면 회귀다(CHAT-06).
+  // 서버 전용·삭제된 키는 어떤 프레임에도 없다(결정 0027-3). 옛 직업 주장 키(claim*·turn·claimLog)가 다시 나오면 회귀다(CHAT-06). turn 은 view.day.turn 만 공개이고 pickTurn 은 어디에도 없다.
   // state 어디에도 messages·extendUsed 키가 없다(결정 0017-7): 채팅 줄은 state 가 아니라 chat 프레임으로만 온다.
   for (const c of clients) {
     for (const f of c.frames) {
