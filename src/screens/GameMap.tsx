@@ -20,6 +20,7 @@ import { TopToast, useTopToast } from "../components/v2/TopToast";
 import { CLAIM_ICON } from "../components/v2/ClaimBadge";
 import { ClaimSheet } from "../components/v2/ClaimSheet";
 import { FloatAction, FloatActions } from "../components/v2/FloatAction";
+import { LineSheet } from "../components/v2/LineSheet";
 import { WillSheet } from "../components/v2/WillSheet";
 import { TensionVignette } from "../components/TensionVignette";
 import { WorldStage } from "../components/WorldStage";
@@ -27,6 +28,7 @@ import type { WorldPick } from "../components/WorldStage";
 import { PICK_TURN_MS } from "../../shared/game/phases";
 import { LOG_H_KB } from "../game/chatUi";
 import { BADGE_TEXT, chipsOf, claimLook, floatLabel } from "../game/badgeView";
+import { WHISPER_TEXT } from "../game/whisperView";
 import { defenderVotes, headerFor, pointsTally } from "../game/dayView";
 import { isMyTurn, turnStageOf, turnTopLine } from "../game/pickTurn";
 import type { ChatStore } from "../net/chatStore";
@@ -38,6 +40,7 @@ import { useTurnLook } from "../net/useTurnLook";
 import { useSendGuard } from "../net/useSendGuard";
 import { useSheetLayer } from "../net/useSheetLayer";
 import { useViewChoice } from "../net/useViewChoice";
+import { useWhisper } from "../net/useWhisper";
 import { useWill } from "../net/useWill";
 import { useMapInsets } from "../net/useMapInsets";
 import { useReducedMotion } from "../net/useReducedMotion";
@@ -130,7 +133,7 @@ interface GameMapProps {
 }
 
 /** 헤더: 제목 + 접히는 안내 + (서버 마감 기준 시간 링) + 링 왼쪽 [역할 카드]. 시간 링의 다시 그리기가 맵 화면 전체로 번지지 않게 따로 둔다 */
-function MapHeader({ view, offset, hintOn, extra }: { view: RoomView; offset: number; hintOn: boolean; extra: ReactNode }) {
+function MapHeader({ view, offset, hintOn, hintOverride, extra }: { view: RoomView; offset: number; hintOn: boolean; hintOverride?: string; extra: ReactNode }) {
   const head = headerFor(view);
   // 지목은 단계 마감이 아니라 차례 마감과 알약·막대와 같은 값(turnLook)으로 링을 그린다(UI-SPEC A-3). 단계 길이 3000/8000/900/2000 은 세부 단계라 링 비율에 쓰지 않는다.
   const nominating = view.phase === "nomination";
@@ -143,8 +146,8 @@ function MapHeader({ view, offset, hintOn, extra }: { view: RoomView; offset: nu
   return (
     <PhaseHeader
       title={head.title}
-      {...(head.hint !== undefined ? { hint: head.hint } : {})}
-      showHint={hintOn}
+      {...(hintOverride !== undefined ? { hint: hintOverride } : head.hint !== undefined ? { hint: head.hint } : {})}
+      showHint={hintOverride !== undefined || hintOn}
       guide
       {...(timing ? { time, total } : {})}
       extra={extra}
@@ -169,7 +172,7 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
   const { rootRef, headerRef, panelRef, inputRef, kbOpen: kbLifted, kbInSheet, logH, turnCompact: compactTurn, stageInsets } = useMapInsets(turnStageOf(view) !== null);
   // 키보드가 시트의 textarea 때문에 열린 것이면 채팅 패널을 줄이거나 행동 줄을 숨기지 않는다(시트를 연 버튼이 남아야 닫을 때 초점이 돌아온다). 패널은 키보드 위로 올라간다(lifted).
   const kbOpen = kbLifted && !kbInSheet;
-  const { typingSeats, ...binding } = useChat({ store: chat, connection: { send, canSend }, view });
+  const { typingSeats, liveWhisperIn, ...binding } = useChat({ store: chat, connection: { send, canSend }, view });
 
   // 안내 한 줄: 단계가 시작되면 보이고 2.5초 뒤 접힌다. 단계가 바뀔 때마다 다시 보인다.
   // 지목은 내 차례가 시작될 때도 다시 보인다(UI-SPEC A-4 "의심되는 사람을 눌러요"): myTurnNo = 내 차례의 번호, 아니면 undefined.
@@ -233,6 +236,8 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
   const [rejects, setRejects] = useState(0);
   // 직업 배지(09.1.1-08)의 거절은 따로 센다 — 지목·유언 되돌림(rejects)과 섞이지 않게
   const [badgeRejects, setBadgeRejects] = useState(0);
+  // 귓속말(09.1.1-09)의 거절도 따로 센다
+  const [whisperRejects, setWhisperRejects] = useState(0);
   const sendGuard = useSendGuard();
   const willBusy = useRef(false); // 유언·쪽지 저장 확인을 기다리는 중(useWill 이 쓴다)
   const pointSent = useRef<{ target: number; at: number } | null>(null);
@@ -240,6 +245,13 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
     if (!onEvent) return;
     return onEvent((e) => {
       if (e.t !== "error") return;
+      // 귓속말: 최근 3초 안에 보냈으면 어떤 오류 코드든 그 거절이다. 단계 어긋남은 "지금은 보낼 수 없어요", 그 밖은 "보내지 못했어요". 시트·입력은 그대로 둔다(고쳐 다시 보낼 수 있다)
+      if (sendGuard.peek() === "whisper") {
+        sendGuard.take();
+        show(e.code === "WRONG_PHASE" ? WHISPER_TEXT.rejectPhase : WHISPER_TEXT.rejectOther);
+        setWhisperRejects((n) => n + 1);
+        return;
+      }
       // 직업 배지: 최근 3초 안에 보냈고 단계 어긋남·잘못된 요청이면 그 거절이다. 그 밖의 코드는 이 분기를 지나친다
       if ((e.code === "WRONG_PHASE" || e.code === "BAD_MESSAGE") && sendGuard.take() === "badge") {
         show(BADGE_TEXT.reject);
@@ -328,7 +340,21 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
     send({ t: "move", x: dest.x, z: dest.z });
   };
 
-  const pick: WorldPick | undefined = pickSeats
+  // 귓속말(09.1.1-09, UI-SPEC B): 모드·한 줄 시트·보내기는 useWhisper 가 쥔다. 모드에서는 나를 뺀 산 사람의 이름표가 버튼이 된다(낮 토론이라 지목·밤 선택의 pickSeats 와 겹치지 않는다).
+  const whisper = useWhisper({ view, send, canSend, rejected: whisperRejects, guard: sendGuard });
+  // 받은 순간 위 알림 "{A} 님의 귓속말"(본문 없음). 라이브로 받은 줄만 번호가 바뀐다 — 재접속 복원 줄·내가 보낸 줄은 알림이 없다. 처음 마운트 때의 번호는 지난 일이다
+  const whisperInNonce = liveWhisperIn?.nonce ?? 0;
+  const seenWhisperIn = useRef(whisperInNonce);
+  useEffect(() => {
+    if (liveWhisperIn === null || whisperInNonce === seenWhisperIn.current) return;
+    seenWhisperIn.current = whisperInNonce;
+    show(WHISPER_TEXT.received(view.players.find((p) => p.seat === liveWhisperIn.seat)?.nickname ?? ""), "whisper");
+    // 번호가 바뀔 때만 한 번 — 알림 글자는 그 렌더의 view 로 만든다
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [whisperInNonce]);
+  const pick: WorldPick | undefined = whisper.mode
+    ? { seats: whisper.targets, label: WHISPER_TEXT.tagLabel, onPick: whisper.pick, group: WHISPER_TEXT.groupLabel }
+    : pickSeats
     ? {
         seats: pickSeats,
         ...(mine !== undefined ? { mine } : {}),
@@ -429,7 +455,8 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
 
   // 직업 주장 배지(09.1.1-08, UI-SPEC A): 칩 시트·낙관 값·거절 되돌림은 useBadge 가 쥔다. 유언 시트와 배지 시트는 같은 시트 층을 번갈아 쓴다(동시에 열리지 않는다).
   const badge = useBadge({ view, send, canSend, rejected: badgeRejects, guard: sendGuard });
-  const layerKind: "will" | "claim" | null = will.open !== null ? "will" : badge.open && badge.allowed ? "claim" : null;
+  // 시트 층 하나를 유언·배지·귓속말 한 줄 시트가 번갈아 쓴다 — 한 번에 시트 하나만(귓속말은 열려 있는 다른 시트를 닫고 열린다)
+  const layerKind: "will" | "claim" | "line" | null = will.open !== null ? "will" : badge.open && badge.allowed ? "claim" : whisper.target !== null && whisper.allowed ? "line" : null;
   // 시트 층의 아래 끝 = 아래 패널 위 끝 + 8 (키보드 위). 패널을 가릴지 판정하는 논리는 useSheetLayer 로 옮겼다(논리 변경 없음).
   const { layerRef, veiled, vvHeight } = useSheetLayer({ open: layerKind !== null, panelRef, stageTop: stageInsets?.top ?? DEFAULT_INSET_TOP });
 
@@ -447,6 +474,12 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
       return { claim: look.claim, claimSwapped: look.swapped, ...(pop !== undefined ? { claimPop: pop } : {}), ...(claimNotices.has(seat) ? { claimNotice: true } : {}), ...base };
     };
   }, [tagProps, view, badge.shown, badge.server, claimPops, claimNotices]);
+
+  // 귓속말 모드: 대상 이름표가 깜빡이는 버튼이 된다(모션 줄이기는 CSS 가 gray-100 2px 고정 테두리). 모드가 아니면 위 함수 그대로(이름표에 넘기는 속성이 없다)
+  const stageTagProps = useMemo<WorldTagProps | undefined>(() => {
+    if (!whisper.mode) return claimTagProps;
+    return (seat) => ({ ...(claimTagProps?.(seat) ?? {}), ...(whisper.targets.has(seat) ? { blink: true } : {}) });
+  }, [whisper.mode, whisper.targets, claimTagProps]);
 
   // 떠 있는 버튼 묶음의 아래 끝 = 키보드 올림(CSS 상속) + 패널 높이 + 8. 패널 높이는 DOM 에서 잰다(패널이 자라도 따라간다)
   const floatRef = useRef<HTMLDivElement>(null);
@@ -474,6 +507,7 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
           view={view}
           offset={offset}
           hintOn={hintOn}
+          {...(whisper.mode ? { hintOverride: WHISPER_TEXT.modeHint } : {})}
           extra={roleCard ? <RoleCardButton iconOnly unread={roleCard.unread} onOpen={roleCard.onOpen} /> : null}
         />
       </header>
@@ -498,7 +532,7 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
         {...(deny ? { deny } : {})}
         {...(surprise ? { surprise } : {})}
         {...(pick ? { pick } : {})}
-        {...(claimTagProps ? { tagProps: claimTagProps } : {})}
+        {...(stageTagProps ? { tagProps: stageTagProps } : {})}
         onNotice={(text) => show(text)}
         onLeave={() => onLeave?.()}
       />
@@ -538,12 +572,16 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
         }}
         onOpenWill={(opener) => {
           badge.setOpen(false);
+          whisper.off();
+          whisper.close();
           will.openSheet("will", opener);
         }}
         willOpen={will.open === "will"}
         willSaved={will.hasWill}
         onOpenNote={(opener) => {
           badge.setOpen(false);
+          whisper.off();
+          whisper.close();
           will.openSheet("note", opener);
         }}
         noteOpen={will.open === "note"}
@@ -551,20 +589,41 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
         inputRef={inputRef}
         panelRef={panelRef}
       />
-      {badge.allowed ? (
+      {badge.allowed || whisper.allowed ? (
         <FloatActions ref={floatRef}>
-          <FloatAction
-            ref={badge.buttonRef}
-            kind="claim"
-            icon={CLAIM_ICON[badge.shown]}
-            label={floatLabel(badge.shown)}
-            pressed={layerKind === "claim"}
-            disabled={!canSend}
-            onPress={() => {
-              if (will.open !== null) return;
-              badge.toggle();
-            }}
-          />
+          {badge.allowed ? (
+            <FloatAction
+              ref={badge.buttonRef}
+              kind="claim"
+              icon={CLAIM_ICON[badge.shown]}
+              label={floatLabel(badge.shown)}
+              pressed={layerKind === "claim"}
+              disabled={!canSend}
+              onPress={() => {
+                if (will.open !== null) return;
+                whisper.off();
+                whisper.close();
+                badge.toggle();
+              }}
+            />
+          ) : null}
+          {whisper.allowed ? (
+            <FloatAction
+              ref={whisper.buttonRef}
+              kind="whisper"
+              icon="whisper"
+              label={whisper.used ? WHISPER_TEXT.floatUsed : WHISPER_TEXT.floatReady}
+              pressed={whisper.mode}
+              disabled={whisper.disabled}
+              dot={!whisper.disabled}
+              left={whisper.used ? 0 : 1}
+              onPress={() => {
+                if (will.open !== null) return;
+                badge.setOpen(false);
+                whisper.toggleMode();
+              }}
+            />
+          ) : null}
         </FloatActions>
       ) : null}
       {layerKind !== null ? (
@@ -579,6 +638,17 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
               onClose={will.close}
               saved={will.saved}
               {...(vvHeight < COMPACT_VV_MAX ? { compact: true } : {})}
+              {...(canSend ? {} : { disabled: true })}
+            />
+          ) : layerKind === "line" && whisper.target !== null ? (
+            <LineSheet
+              key={whisper.target}
+              peer={{ seat: whisper.target, name: view.players.find((p) => p.seat === whisper.target)?.nickname ?? "" }}
+              placeholder={WHISPER_TEXT.placeholder(view.players.find((p) => p.seat === whisper.target)?.nickname ?? "")}
+              value={whisper.draft}
+              onChange={whisper.setDraft}
+              onSend={whisper.send}
+              onClose={whisper.close}
               {...(canSend ? {} : { disabled: true })}
             />
           ) : (

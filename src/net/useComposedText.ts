@@ -15,7 +15,7 @@ export interface ComposedText {
   bind: { onCompositionStart: () => void; onCompositionEnd: () => void; onBlur: () => void };
 }
 
-export function useComposedText(ref: RefObject<HTMLTextAreaElement | null>): ComposedText {
+export function useComposedText(ref: RefObject<HTMLTextAreaElement | HTMLInputElement | null>): ComposedText {
   const composingRef = useRef(false);
   const pendingRef = useRef<{ items: Array<{ cb: (text: string) => void; key: unknown }>; timer: ReturnType<typeof setTimeout> } | null>(null);
 

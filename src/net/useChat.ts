@@ -15,6 +15,7 @@ import type { ClientMessage, RoomView } from "../../shared/protocol";
 import type { ChatPanelProps, ChatPanelMessage } from "../components/v2/ChatPanel";
 import { CHAT_TEXT } from "../game/chatText";
 import { SEND_DIM_MS, TYPING_IDLE_OFF_MS, TYPING_REFRESH_MS } from "../game/chatUi";
+import { whisperLine } from "../game/whisperView";
 import type { ChatStore } from "./chatStore";
 
 /** 훅이 ChatPanel 에 넘기는 속성. 기록 칸 높이(logHeight)와 입력칸 ref 는 화면 틀이 붙인다. */
@@ -24,6 +25,11 @@ export type ChatBinding = Omit<ChatPanelProps, "logHeight" | "inputRef" | "onInp
    * ChatPanel 에는 넘기지 않고 화면 틀이 WorldStage·DayTable 로 넘긴다(받을 권리 없는 좌석은 서버가 보내지 않는다, T-07-46).
    */
   typingSeats: ReadonlySet<number>;
+  /**
+   * 라이브로 받은 귓속말(내가 받는 사람) 중 마지막: 보낸 좌석과 번호. 번호가 바뀔 때마다 화면이 받음 알림을 한 번 띄운다.
+   * 재접속 복원 줄·내가 보낸 줄은 만들지 않는다. ChatPanel 에는 넘기지 않는다.
+   */
+  liveWhisperIn: { seat: number; nonce: number } | null;
 };
 
 export interface ChatConnection {
@@ -65,7 +71,15 @@ export function useChat({ store, connection, view }: { store: ChatStore; connect
     for (const p of players) names.current.set(p.seat, p.nickname);
     const now = Date.now();
     renderedAt.current = now;
+    const nameOf = (seat: number): string => names.current.get(seat) ?? "";
     return store.visibleLines(channel, now).map((line): ChatPanelMessage => {
+      // 귓속말: 본문 줄(받은·보낸 비공개 블록)과 공개 사실 줄. 이름은 좌석으로 찾는다(저장소는 이름을 모른다)
+      const w = whisperLine(line, mySeat, nameOf);
+      if (w !== null) {
+        const m: ChatPanelMessage = { key: line.key, kind: w.kind, whisper: w.whisper, icon: w.icon, text: w.text };
+        if (w.title !== undefined) m.title = w.title;
+        return m;
+      }
       if (line.kind === "card" && line.card) {
         // 카드는 서버 k 줄과 이 화면의 경찰 카드뿐이다. 서버 카드의 제목은 좌석 닉네임으로 만든다(UI-SPEC 427행).
         const m: ChatPanelMessage = { key: line.key, kind: "card", card: line.card, text: line.text, icon: line.card === "will" ? "quill" : line.card === "note" ? "note" : "eye" };
@@ -77,7 +91,7 @@ export function useChat({ store, connection, view }: { store: ChatStore; connect
         return m;
       }
       if (line.kind !== "player") {
-        const m: ChatPanelMessage = { key: line.key, kind: line.kind === "card" ? "system" : line.kind, text: line.text };
+        const m: ChatPanelMessage = { key: line.key, kind: line.kind === "card" || line.kind === "whisper" ? "system" : line.kind, text: line.text };
         if (line.icon) m.icon = line.icon;
         return m;
       }
@@ -269,5 +283,6 @@ export function useChat({ store, connection, view }: { store: ChatStore; connect
     notice: why === null ? null : CHAT_TEXT.reject[why],
     quiet: store.lastWasReplay(),
     typingSeats,
+    liveWhisperIn: store.liveWhisperIn(mySeat),
   };
 }

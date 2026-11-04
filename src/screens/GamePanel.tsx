@@ -16,7 +16,7 @@ import type { ChatBinding } from "../net/useChat";
 import { useViewChoice } from "../net/useViewChoice";
 
 /** 채팅 부품에 그대로 펼치는 속성 묶음 — 머리 위 입력 중 좌석(typingSeats)은 화면 틀이 WorldStage 로 따로 넘긴다 */
-export type ChatPanelBinding = Omit<ChatBinding, "typingSeats">;
+export type ChatPanelBinding = Omit<ChatBinding, "typingSeats" | "liveWhisperIn">;
 
 export interface GamePanelProps {
   view: RoomView;

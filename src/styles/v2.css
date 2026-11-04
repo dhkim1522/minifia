@@ -221,6 +221,27 @@
 .mv-claim-sheet__hint { margin: 0; font-size: 14px; line-height: 1.4; color: var(--gray-300); }
 .mv-claim-chip:focus-visible, .mv-claim-sheet__close:focus-visible { outline: 2px solid var(--gray-100); outline-offset: 2px; }
 
+/* 귓속말 한 줄 시트(09.1.1-09, UI-SPEC B-2): 틀은 유언 시트(.mv-will)와 같은 값. 높이 12 + 44 + 8 + 48 + 12 = 124. 진홍·놋쇠·밝은 종이 면 없음 */
+.mv-line-sheet { display: flex; flex-direction: column; gap: var(--space-sm); box-sizing: border-box; width: calc(100% - 20px); margin: 0 auto; padding: 12px; border-radius: var(--radius-lg); background: var(--night-800); border: 1px solid var(--night-600); box-shadow: var(--shadow-card); font-family: var(--font-ui); color: var(--gray-100); }
+.mv-line__head { display: flex; align-items: center; gap: var(--space-sm); height: var(--tap-min); }
+.mv-line__peer { display: inline-flex; align-items: center; gap: 6px; flex: 1; min-width: 0; padding-left: var(--space-xs); color: var(--gray-50); }
+.mv-line__face { flex: none; width: 24px; height: 24px; border-radius: var(--radius-pill); object-fit: cover; }
+.mv-line__face.is-fallback { display: inline-block; }
+.mv-line__name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; line-height: 1.4; font-weight: 700; color: var(--gray-50); }
+.mv-line__count { flex: none; font-size: 14px; line-height: 1.4; font-weight: 400; color: var(--gray-300); font-variant-numeric: tabular-nums; }
+.mv-line__close { display: grid; place-items: center; flex: none; width: var(--tap-min); height: var(--tap-min); padding: 0; border: 0; border-radius: var(--radius-md); background: none; color: var(--gray-300); cursor: pointer; }
+.mv-line__row { display: flex; gap: var(--space-sm); height: var(--control-input); }
+.mv-line__input { flex: 1; min-width: 0; height: var(--control-input); box-sizing: border-box; padding: 0 var(--space-md); border-radius: var(--radius-md); border: 1px solid var(--night-600); background: var(--night-900); color: var(--gray-100); font-family: inherit; font-size: 16px; user-select: text; }
+.mv-line__input::placeholder { color: var(--gray-300); }
+.mv-line__send { display: grid; place-items: center; flex: none; width: var(--control-input); height: var(--control-input); padding: 0; border: 0; border-radius: var(--radius-md); background: var(--gray-100); color: var(--night-900); cursor: pointer; }
+.mv-line__send[aria-disabled="true"] { background: var(--night-700); color: var(--gray-500); cursor: default; }
+.mv-line__input:focus-visible, .mv-line__send:focus-visible, .mv-line__close:focus-visible { outline: 2px solid var(--gray-100); outline-offset: 2px; }
+
+/* 채팅의 비공개 귓속말 블록(받은·보낸, UI-SPEC B-3): 면 night-700, 반경 8, 안쪽 8/12, 왼쪽 3px gray-100 막대. 첫 줄 아이콘 16 + "{A} → 나" 14px 700, 본문 14px 400 감김 */
+.mv-chat__whisper { display: flex; flex-direction: column; gap: var(--space-xs); padding: var(--space-sm) 12px; border-radius: var(--radius-sm); background: var(--night-700); border-left: 3px solid var(--gray-100); }
+.mv-chat__whisper-title { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; line-height: 1.4; font-weight: 700; color: var(--gray-50); }
+.mv-chat__whisper-text { margin: 0; font-size: 14px; line-height: 1.4; font-weight: 400; color: var(--gray-100); word-break: keep-all; overflow-wrap: anywhere; }
+
 /* 모션 줄이기(O-22): 배지 팝·알약 페이드·시트 등장 애니메이션 없이 즉시. 알약은 즉시 나타나 2.4초 뒤 즉시 사라진다(타이머가 요소를 걷는다) */
 @media (prefers-reduced-motion: reduce) {
   .mv-claim.is-pop, .mv-claim__notice, .mv-claim-sheet { animation: none; }

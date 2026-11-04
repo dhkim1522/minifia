@@ -49,7 +49,7 @@ const DEFAULT_MAX = WILL_MAX_GRAPHEMES;
 const segmenter = new Intl.Segmenter("ko", { granularity: "grapheme" });
 
 /** 앞에서 max 그래핌까지 */
-function clampGraphemes(s: string, max: number): string {
+export function clampGraphemes(s: string, max: number): string {
   if (s.length <= max) return s; // 그래핌은 UTF-16 길이보다 많을 수 없다
   if (countGraphemes(s) <= max) return s;
   let out = "";

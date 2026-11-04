@@ -400,7 +400,9 @@ describe("낙관 표시와 거절 되돌림 (UI-SPEC A-2)", () => {
 describe("단계 표: 떠 있는 버튼은 주장 창에서만 DOM 에 있다 (UI-SPEC A-2)", () => {
   it.each(["dayAnnounce", "discussion", "nomination"] as PhaseId[])("%s 에서 산 사람에게는 하나", (phase) => {
     const { container } = mount(makeView({ phase }));
-    expect(container.querySelectorAll("[data-float]")).toHaveLength(1);
+    // 낮 토론에는 귓속말 버튼(09.1.1-09)이 배지 버튼 아래에 하나 더 있다
+    expect(container.querySelectorAll("[data-float]")).toHaveLength(phase === "discussion" ? 2 : 1);
+    expect(container.querySelectorAll('[data-float="claim"]')).toHaveLength(1);
     expect(floatBtn(container)).not.toBeNull();
   });
 

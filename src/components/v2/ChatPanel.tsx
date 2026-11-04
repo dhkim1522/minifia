@@ -26,8 +26,10 @@ import { V2Icon, type V2IconName } from "./V2Icon";
 
 export interface ChatPanelMessage {
   key: string;
-  /** vote = 지목 기록 줄(앞에 point 14), hot = 눈여겨볼 줄(brass-200, 아이콘 없음), card = 유언·쪽지·경찰 카드(9페이즈). divider·tabs 는 11페이즈 */
-  kind: "player" | "system" | "vote" | "hot" | "card";
+  /** vote = 지목 기록 줄(앞에 point 14), hot = 눈여겨볼 줄(brass-200, 아이콘 없음), card = 유언·쪽지·경찰 카드(9페이즈), whisper = 받은·보낸 귓속말 비공개 블록(09.1.1-09). divider·tabs 는 11페이즈 */
+  kind: "player" | "system" | "vote" | "hot" | "card" | "whisper";
+  /** 귓속말 줄의 보임: public = 공개 사실 줄(system), in = 받은 비공개 블록, out = 보낸 비공개 블록. data-whisper 값이다 */
+  whisper?: "public" | "in" | "out";
   text: string;
   /** 자리 번호 0~7 → 구분색 var(--seat-(n+1)) */
   seat?: number;
@@ -252,12 +254,25 @@ export function ChatPanel(props: ChatPanelProps) {
                 </div>
               );
             }
+            if (m.kind === "whisper") {
+              // 비공개 귓속말 블록(UI-SPEC B-3): 이 줄은 서버가 보낸·받은 사람 소켓에만 보낸 것이라 제3자 DOM 에는 존재하지 않는다(T-09.1.1-25). 제목·본문은 텍스트 노드로만 그린다
+              return (
+                <div key={m.key} className="mv-chat__whisper" data-whisper={m.whisper ?? "in"}>
+                  <span className="mv-chat__whisper-title">
+                    <V2Icon name="whisper" size={16} />
+                    <span>{m.title ?? ""}</span>
+                  </span>
+                  <span className="mv-sr">, </span>
+                  <p className="mv-chat__whisper-text">{m.text}</p>
+                </div>
+              );
+            }
             if (m.kind !== "player") {
               // vote 는 아이콘을 point 14 로 정하고, hot 은 아이콘을 그리지 않는다(승인 .mv-chat__sys.is-vote/.is-hot).
               const icon = m.kind === "vote" ? <V2Icon name="point" size={14} /> : m.kind === "hot" ? null : m.icon ? <V2Icon name={m.icon} size={16} /> : null;
               const sysCls = m.kind === "vote" ? "mv-chat__sys is-vote" : m.kind === "hot" ? "mv-chat__sys is-hot" : "mv-chat__sys";
               return (
-                <p key={m.key} className={sysCls}>
+                <p key={m.key} className={sysCls} {...(m.whisper === "public" ? { "data-whisper": "public" } : {})}>
                   {icon}
                   <span>{m.text}</span>
                 </p>

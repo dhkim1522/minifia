@@ -10,11 +10,17 @@ export const CARD_HOLD_MS = 2800;
 /** 처형 단계에서 받은 카드의 보류 ms(UI-SPEC 276행) */
 export const CARD_HOLD_EXEC_MS = 2400;
 
+/** 받음 알림 근거로 기억하는 라이브 귓속말 줄 수(보낸 줄 사이에 낀 받은 줄을 놓치지 않을 만큼) */
+const WHISPER_LIVE_KEEP = 8;
+
 /** 기록 칸의 한 줄. scope = 이 줄이 보이는 흐름(사람 줄은 ch 와 같고, 시스템 줄은 만든 쪽이 정한다) */
 export interface ChatStoreLine {
   key: string;
-  /** system = 일반 안내 줄, vote = 지목 기록 줄, hot = 선두·과반·결과처럼 눈여겨볼 줄(8페이즈), card = 유언·쪽지·경찰 카드(9페이즈) */
-  kind: "player" | "system" | "vote" | "hot" | "card";
+  /**
+   * system = 일반 안내 줄, vote = 지목 기록 줄, hot = 선두·과반·결과처럼 눈여겨볼 줄(8페이즈), card = 유언·쪽지·경찰 카드(9페이즈),
+   * whisper = 귓속말 본문 줄(보낸·받은 사람 소켓에만 온다, 09.1.1-09). 귓속말 공개 사실 줄은 system + icon whisper + seat·to 로 싣는다(이름은 useChat 이 채운다).
+   */
+  kind: "player" | "system" | "vote" | "hot" | "card" | "whisper";
   ch?: ChatChannel;
   seat?: number;
   seq?: number;
@@ -28,6 +34,8 @@ export interface ChatStoreLine {
   title?: string;
   /** 이 시각 전에는 목록에 내지 않는다(라이브로 받은 서버 카드의 보류). 없으면 바로 보인다 */
   revealAt?: number;
+  /** 귓속말 줄(본문·사실 모두)의 받는 좌석. seat 는 보낸 좌석 */
+  to?: number;
 }
 
 export type ChatStoreFrame = ChatLineFrame | TypingFrame | ChatLogFrame | ChatRejectFrame;
@@ -56,6 +64,9 @@ export class ChatStore {
   private replay = false;
   /** 편지가 뜨는 아침의 카드 보류 바닥값(holdCardsUntil). 이 시각 전에 라이브로 오는 카드는 이 시각까지 보류한다. reset 이 지운다 */
   private holdFloor = 0;
+  /** 라이브로 받은 귓속말 본문 줄 기록(복원 줄은 넣지 않는다). 받음 알림의 근거 — 최근 몇 개만 둔다 */
+  private liveWhispers: { seat: number; to: number; nonce: number }[] = [];
+  private whisperSeq = 0;
   private rev = 0;
   private views = new Map<ChatChannel, readonly ChatStoreLine[]>();
   private listeners = new Set<ChatStoreListener>();
@@ -71,8 +82,20 @@ export class ChatStore {
     }
     switch (frame.t) {
       case "chat": {
-        // 귓속말 줄(결정 0066-2)·찬반 기록 카드(결정 0066-3)는 화면이 붙기 전(09.1.1-09·10)까지 이 저장소가 받지 않는다 — 유언·쪽지 카드 줄로 잘못 그려지지 않게 한다.
-        if (frame.k === "whisper" || frame.k === "whispered" || frame.k === "ballots") break;
+        // 찬반 기록 카드(결정 0066-3)는 화면이 붙기 전(09.1.1-12)까지 이 저장소가 받지 않는다 — 유언·쪽지 카드 줄로 잘못 그려지지 않게 한다.
+        if (frame.k === "ballots") break;
+        if (frame.k === "whisper" || frame.k === "whispered") {
+          // 귓속말(결정 0066-2): 카드가 아니다 — 보류 없이 바로 보이고 입력 중도 건드리지 않는다. 라이브로 새로 들어온 본문 줄만 받음 신호를 남긴다
+          const line = whisperLine(frame);
+          if (line !== null && this.insertAll([line])) {
+            this.replay = false;
+            if (frame.k === "whisper" && line.to !== undefined && line.seat !== undefined) {
+              this.liveWhispers = [...this.liveWhispers, { seat: line.seat, to: line.to, nonce: ++this.whisperSeq }].slice(-WHISPER_LIVE_KEEP);
+            }
+            changed = true;
+          }
+          break;
+        }
         if (frame.k) {
           // 서버 카드 줄: 입력 중은 건드리지 않는다(카드는 사람이 보낸 글이 아니다, 연구 Pitfall 9)
           const hold = now + (this.ctx?.pk.endsWith(":execution") ? CARD_HOLD_EXEC_MS : CARD_HOLD_MS);
@@ -88,7 +111,16 @@ export class ChatStore {
         break;
       }
       case "chatLog": {
-        const inserted = this.insertAll(frame.lines.flatMap((f) => (f.k === "whisper" || f.k === "whispered" || f.k === "ballots" ? [] : [f.k ? cardLine(f, f.k) : playerLine(f)])));
+        const inserted = this.insertAll(
+          frame.lines.flatMap((f): ChatStoreLine[] => {
+            if (f.k === "ballots") return [];
+            if (f.k === "whisper" || f.k === "whispered") {
+              const line = whisperLine(f);
+              return line === null ? [] : [line];
+            }
+            return [f.k ? cardLine(f, f.k) : playerLine(f)];
+          }),
+        );
         if (inserted || !this.replay) changed = true;
         this.replay = true;
         break;
@@ -165,6 +197,18 @@ export class ChatStore {
       if (l.kind === "card" && l.card === k && l.seat === seat && l.revealAt !== undefined) return l;
     }
     return undefined;
+  }
+
+  /**
+   * 라이브로 받은 귓속말 본문 줄 중 내(mySeat)가 받는 사람인 마지막 것 — 보낸 좌석과 번호(nonce). 받을 때마다 번호가 늘어나 화면이 받음 알림을 한 번씩 띄운다.
+   * 재접속 복원(chatLog)·보낸 줄·사실 줄·이미 있던 줄은 만들지 않는다.
+   */
+  liveWhisperIn(mySeat: number): { seat: number; nonce: number } | null {
+    for (let i = this.liveWhispers.length - 1; i >= 0; i--) {
+      const w = this.liveWhispers[i]!;
+      if (w.to === mySeat) return { seat: w.seat, nonce: w.nonce };
+    }
+    return null;
   }
 
   /**
@@ -260,6 +304,7 @@ export class ChatStore {
     this.reject = null;
     this.replay = false;
     this.holdFloor = 0;
+    this.liveWhispers = [];
     if (changed) this.bump();
   }
 
@@ -320,4 +365,15 @@ function cardLine(f: ChatLineWire, card: "will" | "note", revealAt?: number): Ch
   const line: ChatStoreLine = { key: `${f.ch}:${f.seq}:${f.at}`, kind: "card", card, ch: f.ch, seat: f.seat, seq: f.seq, text: f.text, at: f.at, scope: f.ch };
   if (revealAt !== undefined) line.revealAt = revealAt;
   return line;
+}
+
+/**
+ * 귓속말 줄(결정 0066-2). k 와 to 가 있어야 한다 — 없으면 줄을 만들지 않는다.
+ * whisper = 당사자에게 본문, whispered = 나머지(유령 포함)에게 본문 없는 사실. 사실 줄은 system + whisper 아이콘으로 표현하고 이름은 부르는 쪽(useChat)이 좌석에서 채운다.
+ */
+function whisperLine(f: ChatLineWire): ChatStoreLine | null {
+  if (f.to === undefined) return null;
+  const key = `whisper:${f.ch}:${f.seq}:${f.at}`;
+  if (f.k === "whisper") return { key, kind: "whisper", ch: f.ch, seat: f.seat, to: f.to, seq: f.seq, text: f.text, at: f.at, scope: f.ch };
+  return { key, kind: "system", icon: "whisper", ch: f.ch, seat: f.seat, to: f.to, seq: f.seq, text: "", at: f.at, scope: f.ch };
 }
