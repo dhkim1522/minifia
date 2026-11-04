@@ -161,8 +161,7 @@ describe("pinOf — 판결 순간(처형 단계, 09.1.1-13)", () => {
     expect(pinOf(exec({ yes: 1, no: 2, passed: false }))).toEqual({ mode: "fixed", seat: 4, startAt: 100_000, endAt: 100_000 + PIN_OFF_NO_EXEC_AT });
   });
 
-  it("마지막 3인 처형(last)·찬반 기록 없음·변론자 없음·마감 시각 없음은 핀 없음", () => {
-    expect(pinOf(exec({ yes: 0, no: 0, passed: true, last: true }))).toBeNull();
+  it("찬반 기록 없음·변론자 없음·마감 시각 없음은 핀 없음", () => {
     expect(pinOf({ ...exec({ yes: 2, no: 1, passed: true }), day: { n: 1, roles: [], candidate: 4, verdict: { yes: 2, no: 1, passed: true } } })).toBeNull();
     expect(pinOf(exec({ yes: 2, no: 1, passed: true }, { candidate: undefined }))).toBeNull();
     expect(pinOf(exec({ yes: 2, no: 1, passed: true }, {}, null))).toBeNull();
@@ -196,5 +195,38 @@ describe("pinOf / pinAt — 결선 (09.1.1-14, UI-SPEC D-1: 두 후보 가운데
     const d = { mode: "point", x: 1.05, z: 1.05 } as const;
     expect(pinAt(d, 1000, false)).toEqual({ on: true, x: 1.05, z: 1.05, t: 0, moving: false });
     expect(pinAt(d, 1000, true)).toEqual({ on: true, x: 1.05, z: 1.05, t: 0, moving: false });
+  });
+});
+
+describe("pinOf — 마지막 3인 (09.1.1-15, UI-SPEC E-1·F)", () => {
+  const sd = (i: number, extra: Partial<NonNullable<DayView["showdown"]>> = {}): RoomView => viewOf("showdown", { showdown: { order: [0, 2, 3], i, ...extra } });
+  it("한마디 차례 중·확정 뒤 사이: 말하는 사람(order[i])에게 켜진다", () => {
+    expect(pinOf(sd(1, { endsAt: 9000 }))).toEqual({ mode: "turn", seat: 2 });
+    expect(pinOf(sd(2, { endsAt: 9000, doneAt: 5000, word: "글" }))).toEqual({ mode: "turn", seat: 3 });
+  });
+  it("시간 초과(skip)도 그 사람 위에서 사이까지 켜져 있다(다음 차례 시작에 교차)", () => {
+    expect(pinOf(sd(0, { endsAt: 9000, doneAt: 9000, skip: true }))).toEqual({ mode: "turn", seat: 0 });
+  });
+  it("모이는 중·동시 지목·공개는 핀 없음(동시 지목에서 핀은 꺼진다)", () => {
+    expect(pinOf(sd(-1))).toBeNull();
+    expect(pinOf(sd(3, { endsAt: 9000, voted: [] }))).toBeNull();
+    expect(pinOf(sd(4, { points: [] }))).toBeNull();
+  });
+  it("이상한 i 는 핀 없음", () => {
+    expect(pinOf(sd(7))).toBeNull();
+  });
+});
+
+describe("pinOf — 마지막 3인 처형 (verdict.last, 09.1.1-15)", () => {
+  const lastExec = (extra: Partial<DayView> = {}, endsAt: number | null = 100_000 + EXECUTION_MS): RoomView => ({
+    ...viewOf("execution", { candidate: 2, verdict: { yes: 0, no: 0, passed: true, last: true }, ...extra }, 3),
+    phaseEndsAt: endsAt,
+  });
+  it("득표자에게 처형 진입 시각부터 5.0초 고정 핀(찬반 기록 ballots 가 없어도)", () => {
+    expect(pinOf(lastExec())).toEqual({ mode: "fixed", seat: 2, startAt: 100_000, endAt: 100_000 + PIN_OFF_EXEC_AT });
+  });
+  it("득표자·마감 시각이 없으면 핀 없음", () => {
+    expect(pinOf(lastExec({ candidate: undefined }))).toBeNull();
+    expect(pinOf(lastExec({}, null))).toBeNull();
   });
 });

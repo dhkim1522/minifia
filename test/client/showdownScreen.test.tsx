@@ -286,3 +286,174 @@ describe("마지막 3인 화면 — 인용 카드 (UI-SPEC E-2)", () => {
     expect(container.textContent).not.toContain("건너뜀");
   });
 });
+
+// ---- Task 2: 직접 쓰기·인용 카드 수명·동시 지목·공개·처형 (UI-SPEC E-2·E-3) ----
+
+const picks = (c: ParentNode): HTMLButtonElement[] => [...c.querySelectorAll<HTMLButtonElement>("[data-pick]")];
+const pickOf = (c: ParentNode, seat: number): HTMLButtonElement | null => c.querySelector(`[data-pick="${seat}"]`);
+const headOf = (c: ParentNode, seat: number): HTMLElement | null => c.querySelector(`[data-seat="${seat}"] .mv-head`);
+const lastScene = (): SceneLook => rt.scenes.at(-1) as SceneLook;
+const lineSheet = (c: ParentNode): HTMLElement | null => c.querySelector("[data-line-sheet]");
+const chatsOf = (send: ReturnType<typeof vi.fn>) => send.mock.calls.map((c) => c[0] as ClientMessage).filter((x) => x.t === "chat");
+
+describe("마지막 3인 — 직접 쓰기 (UI-SPEC E-2)", () => {
+  it("[직접 쓰기]: 같은 자리가 한 줄 시트('한마디', 0/30)로 바뀌고, 보내면 chat 이 한 번 나가고 시트가 닫힌다", () => {
+    const m = mount(makeShowdown({ i: 0, mySeat: 0 }));
+    fireEvent.click(m.container.querySelector("[data-speak-write]")!);
+    expect(sheet(m.container)).toBeNull();
+    const ls = lineSheet(m.container)!;
+    expect(ls).not.toBeNull();
+    expect(ls.querySelector(".mv-line__name")?.textContent).toBe("한마디");
+    expect(ls.querySelector(".mv-line__count")?.textContent).toBe("0/30");
+    expect(ls.querySelector(".mv-line__face")).toBeNull();
+    const input = ls.querySelector<HTMLInputElement>("[data-line-input]")!;
+    fireEvent.change(input, { target: { value: "제가 시민이에요" } });
+    fireEvent.click(ls.querySelector("[data-line-send]")!);
+    const chats = chatsOf(m.send);
+    expect(chats).toHaveLength(1);
+    expect(chats[0]).toMatchObject({ t: "chat", text: "제가 시민이에요" });
+    expect(lineSheet(m.container)).toBeNull();
+    expect(sheet(m.container)).toBeNull();
+  });
+
+  it("닫으면 칩 시트로 돌아온다(보낸 것은 없다)", () => {
+    const m = mount(makeShowdown({ i: 0, mySeat: 0 }));
+    fireEvent.click(m.container.querySelector("[data-speak-write]")!);
+    fireEvent.click(m.container.querySelector("[data-line-close]")!);
+    expect(lineSheet(m.container)).toBeNull();
+    expect(sheet(m.container)).not.toBeNull();
+    expect(chatsOf(m.send)).toHaveLength(0);
+  });
+
+  it("서버가 한마디를 확정하면(doneAt) 어떤 모드든 시트가 사라진다", () => {
+    const m = mount(makeShowdown({ i: 0, mySeat: 0 }));
+    fireEvent.click(m.container.querySelector("[data-speak-write]")!);
+    expect(lineSheet(m.container)).not.toBeNull();
+    m.show(makeShowdown({ i: 0, mySeat: 0, doneAt: NOW + 10, word: "서버가 확정" }));
+    expect(lineSheet(m.container)).toBeNull();
+    expect(sheet(m.container)).toBeNull();
+  });
+});
+
+describe("마지막 3인 — 인용 카드 수명 (UI-SPEC E-2)", () => {
+  it("확정 뒤 사이에는 보이고, 다음 차례가 시작되면 표식이 사라진다(페이드 아웃)", () => {
+    const m = mount(makeShowdown({ i: 0, mySeat: 2, doneAt: NOW - 100, word: "쟤가 수상해요" }));
+    expect(quote(m.container)!.textContent).toBe("쟤가 수상해요");
+    m.show(makeShowdown({ i: 1, mySeat: 2 }));
+    expect(quote(m.container)).toBeNull();
+    // 페이드를 위해 마지막 글은 남아 있되 보이지 않는다
+    expect(m.container.querySelector(".mv-quote")!.classList.contains("is-on")).toBe(false);
+  });
+
+  it("재접속 첫 화면은 등장 모션 없이 현재 카드를 바로 보인다(is-still)", () => {
+    const { container } = mount(makeShowdown({ i: 0, mySeat: 2, doneAt: NOW - 100, word: "저를 믿어 주세요" }));
+    expect(container.querySelector(".mv-quote")!.classList.contains("is-still")).toBe(true);
+  });
+
+  it("라이브로 확정되면 등장 모션이 있다(is-still 아님)", () => {
+    const m = mount(makeShowdown({ i: 0, mySeat: 2 }));
+    m.show(makeShowdown({ i: 0, mySeat: 2, doneAt: NOW, word: "끝까지 지켜봐요" }));
+    expect(m.container.querySelector(".mv-quote")!.classList.contains("is-still")).toBe(false);
+  });
+
+  it("같은 글을 채팅 줄로 따로 만들지 않는다(서버 채팅 경로가 한 줄을 남긴다)", () => {
+    const m = mount(makeShowdown({ i: 0, mySeat: 2 }));
+    m.show(makeShowdown({ i: 0, mySeat: 2, doneAt: NOW, word: "끝까지 지켜봐요" }));
+    expect(m.container.querySelectorAll(".mf-turn__line").length).toBeLessThanOrEqual(1);
+    expect(m.container.querySelector(".mf-game__panel")?.textContent ?? "").not.toContain("끝까지 지켜봐요");
+  });
+});
+
+describe("마지막 3인 — 동시 지목 (UI-SPEC E-3)", () => {
+  it("나를 뺀 두 사람의 이름표가 버튼(그룹 '지목', '{닉네임} 님 가리키기')이고 깜빡인다", () => {
+    const { container } = mount(makeShowdown({ i: 3, mySeat: 0 }));
+    expect(picks(container).map((b) => b.getAttribute("data-pick"))).toEqual(["2", "3"]);
+    expect(pickOf(container, 2)?.getAttribute("aria-label")).toBe("서준 님 가리키기");
+    expect(pickOf(container, 3)?.getAttribute("aria-label")).toBe("지아 님 가리키기");
+    expect(container.querySelector('[role="group"][aria-label="지목"]')).not.toBeNull();
+    expect(container.querySelectorAll(".mv-tag.is-blink").length).toBe(2);
+  });
+
+  it("유령·한마디 차례·공개에는 버튼이 없다", () => {
+    expect(picks(mount(makeShowdown({ i: 3, mySeat: 1 })).container).length).toBe(0);
+    cleanup();
+    expect(picks(mount(makeShowdown({ i: 0, mySeat: 0 })).container).length).toBe(0);
+    cleanup();
+    expect(picks(mount(makeShowdown({ i: 4, mySeat: 0, points: [] })).container).length).toBe(0);
+  });
+
+  it("누르면 point 메시지, 같은 사람을 다시 누르면 보내지 않고, 다른 사람을 눌러 마감까지 바꿀 수 있다(mine 이 옮겨 간다)", () => {
+    const m = mount(makeShowdown({ i: 3, mySeat: 0 }));
+    fireEvent.click(pickOf(m.container, 2)!);
+    expect(m.send).toHaveBeenLastCalledWith({ t: "point", target: 2 });
+    expect(headOf(m.container, 2)?.getAttribute("data-mine")).toBe("true");
+    const n = m.send.mock.calls.length;
+    fireEvent.click(pickOf(m.container, 2)!);
+    expect(m.send.mock.calls.length).toBe(n);
+    fireEvent.click(pickOf(m.container, 3)!);
+    expect(m.send).toHaveBeenLastCalledWith({ t: "point", target: 3 });
+    expect(headOf(m.container, 3)?.getAttribute("data-mine")).toBe("true");
+    expect(headOf(m.container, 2)?.hasAttribute("data-mine")).toBe(false);
+  });
+
+  it("내 캐릭터가 누른 사람을 가리킨다(장면 표 pointAt)", () => {
+    const m = mount(makeShowdown({ i: 3, mySeat: 0 }));
+    fireEvent.click(pickOf(m.container, 3)!);
+    expect(lastScene().seats[0]?.pointAt).toBe(3);
+  });
+
+  it("던진 사람(voted)의 이름표에만 done 체크가 붙고 남의 선택(mine·누가 누구를)은 DOM 어디에도 없다", () => {
+    const { container } = mount(makeShowdown({ i: 3, mySeat: 0, voted: [2, 3] }));
+    expect([...container.querySelectorAll("[data-done]")].map((el) => el.closest("[data-seat]")?.getAttribute("data-seat"))).toEqual(["2", "3"]);
+    expect(container.querySelectorAll("[data-mine]").length).toBe(0);
+    expect(container.querySelectorAll("[data-count]").length).toBe(0);
+  });
+
+  it("서버 값(me.ballot)이 이긴다: 재접속하면 내 선택이 mine 으로 그려진다", () => {
+    const { container } = mount(makeShowdown({ i: 3, mySeat: 0, ballot: 3 }));
+    expect(headOf(container, 3)?.getAttribute("data-mine")).toBe("true");
+  });
+
+  it("마감 직후 거절(WRONG_PHASE)이면 '지금은 고를 수 없어요' 알림과 함께 선택이 서버 값으로 돌아간다", () => {
+    let emit: (e: { t: "error"; code: string }) => void = () => {};
+    const onEvent = vi.fn((cb: (e: { t: "error"; code: string }) => void) => {
+      emit = cb;
+      return () => {};
+    });
+    const m = mount(makeShowdown({ i: 3, mySeat: 0 }), { onEvent: onEvent as unknown as RoomConnection["onEvent"] });
+    fireEvent.click(pickOf(m.container, 2)!);
+    act(() => emit({ t: "error", code: "WRONG_PHASE" }));
+    expect(m.container.querySelector(".mv-toast__text")?.textContent).toBe("지금은 고를 수 없어요");
+    expect(headOf(m.container, 2)?.hasAttribute("data-mine")).toBe(false);
+  });
+});
+
+describe("마지막 3인 — 공개 (UI-SPEC E-3, O-18)", () => {
+  const points = [{ seat: 0, target: 2 }, { seat: 2, target: 3 }, { seat: 3, target: 2 }];
+  it("세 사람이 같은 순간 가리키고(장면 표 pointAt 전체) 대상 머리 위에 득표 배지가 뜬다, 위 한 줄은 없다", () => {
+    const { container } = mount(makeShowdown({ i: 4, mySeat: 0, points, left: 1500 }));
+    expect(lastScene().seats[0]?.pointAt).toBe(2);
+    expect(lastScene().seats[2]?.pointAt).toBe(3);
+    expect(lastScene().seats[3]?.pointAt).toBe(2);
+    expect(headOf(container, 2)?.getAttribute("data-count")).toBe("2");
+    expect(headOf(container, 3)?.getAttribute("data-count")).toBe("1");
+    expect(container.querySelectorAll("[data-done]").length).toBe(0);
+    expect(block(container)!.getAttribute("data-showdown-step")).toBe("reveal");
+    expect(container.querySelector(".mf-turn__pill")).toBeNull();
+    expect(line(container)).toBeUndefined();
+  });
+});
+
+describe("마지막 3인 — 처형 단계 (verdict.last, 득표/찬반 알림 없음)", () => {
+  it("day.verdict.last 인 처형 view 에는 찬반 묶음이 없고 핀이 득표자에게 서 있다", () => {
+    const v: RoomView = {
+      ...makeShowdown({ i: 4, points: [] }),
+      phase: "execution",
+      phaseEndsAt: NOW + 3000,
+      day: { n: 2, roles: [], candidate: 2, verdict: { yes: 0, no: 0, passed: true, last: true } },
+    };
+    const { container } = mount(v);
+    expect(container.querySelector("[data-ballots]")).toBeNull();
+    expect(lastScene().pin).toMatchObject({ mode: "fixed", seat: 2 });
+  });
+});

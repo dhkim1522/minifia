@@ -2,7 +2,7 @@
 import { describe, expect, it } from "vitest";
 import { LAST_WORD_CHIPS } from "../../shared/game/showdown";
 import type { PublicPlayer, RoomView, ShowdownView } from "../../shared/protocol";
-import { SHOWDOWN_COPY, isMySpeakTurn, myWordDone, quoteOf, showdownStageOf } from "../../src/game/showdownView";
+import { SHOWDOWN_COPY, isMySpeakTurn, myWordDone, pointSeatsOf, quoteOf, revealCounts, revealPoints, showdownStageOf, speakerOf } from "../../src/game/showdownView";
 
 const NAMES = ["서연", "민준", "도윤", "지호"];
 const pl = (seat: number, alive = true): PublicPlayer => ({ seat, nickname: NAMES[seat]!, connected: true, isHost: seat === 0, ...(alive ? {} : { alive: false }) });
@@ -82,5 +82,37 @@ describe("SHOWDOWN_COPY — UI-SPEC Copywriting Contract 원문", () => {
   it("칩은 서버 상수 LAST_WORD_CHIPS 네 개를 그대로 쓴다", () => {
     expect(SHOWDOWN_COPY.chips).toEqual(LAST_WORD_CHIPS);
     expect(SHOWDOWN_COPY.chips).toHaveLength(4);
+  });
+});
+
+describe("pointSeatsOf — 동시 지목에서 누를 수 있는 이름표", () => {
+  it("산 사람(order 안)은 나를 뺀 두 사람", () => {
+    expect(pointSeatsOf(view(sd(3, { endsAt: 9000, voted: [] }), { mySeat: 0 }))).toEqual([2, 3]);
+    expect(pointSeatsOf(view(sd(3, { endsAt: 9000, voted: [] }), { mySeat: 2 }))).toEqual([0, 3]);
+  });
+  it("유령·지목 창이 아닐 때·세 사람 밖의 사람은 빈 배열", () => {
+    expect(pointSeatsOf(view(sd(3, { endsAt: 9000, voted: [] }), { mySeat: 1 }))).toEqual([]);
+    expect(pointSeatsOf(view(sd(3, { endsAt: 9000, voted: [] }), { mySeat: 0, dead: [0, 1] }))).toEqual([]);
+    expect(pointSeatsOf(view(sd(0, { endsAt: 9000 }), { mySeat: 0 }))).toEqual([]);
+    expect(pointSeatsOf(view(sd(4, { points: [] }), { mySeat: 0 }))).toEqual([]);
+  });
+});
+
+describe("revealCounts·revealPoints — 공개(i 4)에만", () => {
+  const points = [{ seat: 0, target: 2 }, { seat: 2, target: 3 }, { seat: 3, target: 2 }];
+  it("득표 수와 줄", () => {
+    expect(revealCounts(view(sd(4, { points })))).toEqual({ 2: 2, 3: 1 });
+    expect(revealPoints(view(sd(4, { points })))).toEqual(points);
+  });
+  it("공개가 아니면 비어 있다", () => {
+    expect(revealCounts(view(sd(3, { endsAt: 9000, voted: [0] })))).toEqual({});
+    expect(revealPoints(view(sd(3, { endsAt: 9000, voted: [0] })))).toEqual([]);
+  });
+});
+
+describe("speakerOf", () => {
+  it("speak 단계의 order[i]", () => {
+    expect(speakerOf(view(sd(1, { endsAt: 9000 })))).toBe(2);
+    expect(speakerOf(view(sd(3, { endsAt: 9000 })))).toBeUndefined();
   });
 });

@@ -122,7 +122,7 @@ describe("cameraModeOf (UI-SPEC 카메라 표)", () => {
     });
   }
 
-  for (const phase of ["nomination", "runoff", "defense", "verdict", "execution"] as const) {
+  for (const phase of ["nomination", "runoff", "showdown", "defense", "verdict", "execution"] as const) {
     it(`${phase} → 모이는 자리 가운데 고정, 확대 1`, () => {
       same(cameraModeOf(viewOf(phase), 500), { mode: "fixed", target: GATHER_CENTER, zoom: 1 });
     });
@@ -179,6 +179,7 @@ describe("lightingOf (UI-SPEC 단계 조명)", () => {
     ["discussion", "talk"],
     ["nomination", "vote"],
     ["runoff", "vote"],
+    ["showdown", "vote"],
     ["verdict", "vote"],
     ["defense", "trial"],
     ["execution", "trial"],
@@ -547,5 +548,27 @@ describe("sceneLook — 결선 (09.1.1-14)", () => {
     expect(look.pin).toMatchObject({ mode: "point" });
     expect(look.seats[0]?.pointAt).toBe(2);
     expect(look.seats[1]?.pointAt).toBeUndefined();
+  });
+});
+
+describe("pointingOf — 마지막 3인 동시 지목 (09.1.1-15, T-09.1.1-42: 마감 전 남의 선택은 그리지 않는다)", () => {
+  const sdView = (i: number, extra: Partial<NonNullable<DayView["showdown"]>> = {}, mySeat = 0, dead: number[] = [1, 4]) =>
+    viewOf("showdown", { count: 5, mySeat, dead, day: { showdown: { order: [0, 2, 3], i, ...extra } } });
+  it("지목 창(i 3)에는 내 낙관 선택 한 줄만 그린다(내가 가리킨 사람이 산 다른 두 사람일 때)", () => {
+    same(pointingOf(sdView(3, { endsAt: 9000, voted: [0, 2] }), 3), { 0: 3 });
+    same(pointingOf(sdView(3, { endsAt: 9000, voted: [0, 2] })), {});
+  });
+  it("나를 가리키는 값·세 사람 밖의 대상·유령의 선택은 그리지 않는다", () => {
+    same(pointingOf(sdView(3, { endsAt: 9000, voted: [] }), 0), {});
+    same(pointingOf(sdView(3, { endsAt: 9000, voted: [] }), 4), {});
+    same(pointingOf(sdView(3, { endsAt: 9000, voted: [] }, 1, [1, 4]), 2), {});
+  });
+  it("공개(i 4)에는 day.showdown.points 의 모든 줄을 같은 순간에 그린다(내 낙관 값은 쓰지 않는다)", () => {
+    const points = [{ seat: 0, target: 2 }, { seat: 2, target: 3 }, { seat: 3, target: 2 }];
+    same(pointingOf(sdView(4, { points }), 3), { 0: 2, 2: 3, 3: 2 });
+  });
+  it("한마디 차례·모이는 중에는 아무도 가리키지 않는다", () => {
+    same(pointingOf(sdView(0, { endsAt: 9000 }), 2), {});
+    same(pointingOf(sdView(-1)), {});
   });
 });
