@@ -347,15 +347,15 @@ describe("지목 화면 — 장면 상태 (손가락·카메라·조명·긴장)
     Object.defineProperty(window, "innerHeight", { value: realInnerH, configurable: true, writable: true });
   });
 
-  it("일부만 골랐으면 고른 사람(1·3)만 대상(2)을 가리키고 안 고른 사람(0·2·4)은 pointAt 이 없다 — 조명 vote, 선두 1 에 긴장 1", () => {
+  it("일부만 골랐으면 고른 사람(1·3)만 대상(2)을 가리키고 안 고른 사람(0·2·4)은 pointAt 이 없다 — 조명 vote, 선두가 있어도 긴장 0(09.1, M-4)", () => {
     mount(makeView({ points: [[1, 2], [3, 2]] }));
     const look = lastScene();
     expect(look.seats[1]?.pointAt).toBe(2);
     expect(look.seats[3]?.pointAt).toBe(2);
     for (const seat of [0, 2, 4]) expect(look.seats[seat]?.pointAt).toBeUndefined();
     expect(look.lighting).toBe("vote");
-    expect(look.tension).toBe(1);
-    expect(look.focusSeat).toBe(2);
+    expect(look.tension).toBe(0);
+    expect(look.focusSeat).toBeUndefined();
     expect(look.camera.mode).toBe("fixed");
   });
 
@@ -373,28 +373,28 @@ describe("지목 화면 — 장면 상태 (손가락·카메라·조명·긴장)
     expect(lastScene().focusSeat).toBeUndefined();
   });
 
-  it("과반(산 5명 중 3표)이면 긴장 2 — 스테이지 400 이면 1.08 확대, 300 이면 확대 없이 1", () => {
+  it("과반(산 5명 중 3표)이어도 긴장 0·확대 1 — 스테이지 400 이든 300 이든 같다(09.1, M-4)", () => {
     setStageHeight(400);
     const wide = mount(makeView({ points: [[1, 2], [3, 2], [4, 2]] }));
-    expect(lastScene().tension).toBe(2);
+    expect(lastScene().tension).toBe(0);
     const cam = lastScene().camera;
-    expect(cam.mode === "fixed" && cam.zoom).toBe(1.08);
+    expect(cam.mode === "fixed" && cam.zoom).toBe(1);
     expect(headOf(wide.container, 2)?.getAttribute("data-sure")).toBe("true");
     wide.unmount();
     setStageHeight(300);
     mount(makeView({ points: [[1, 2], [3, 2], [4, 2]] }));
-    expect(lastScene().tension).toBe(2);
+    expect(lastScene().tension).toBe(0);
     const small = lastScene().camera;
     expect(small.mode === "fixed" && small.zoom).toBe(1);
   });
 
-  it("과반이 풀리면(한 명이 바꿈) 도장과 긴장이 원래대로 돌아온다", () => {
+  it("과반이 풀리면(한 명이 바꿈) 도장이 원래대로 돌아오고 긴장은 내내 0", () => {
     const m = mount(makeView({ points: [[1, 2], [3, 2], [4, 2]] }));
     expect(headOf(m.container, 2)?.getAttribute("data-sure")).toBe("true");
     m.show(makeView({ points: [[1, 2], [3, 2], [4, 0]] }));
     expect(headOf(m.container, 2)?.hasAttribute("data-sure")).toBe(false);
     expect(headOf(m.container, 2)?.getAttribute("data-lead")).toBe("true");
-    expect(lastScene().tension).toBe(1);
+    expect(lastScene().tension).toBe(0);
   });
 
   it("내가 누르면 서버 응답 전에도 내 캐릭터가 그쪽을 가리킨다(남의 지목은 서버 값만)", () => {
