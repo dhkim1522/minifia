@@ -132,6 +132,7 @@ import {
   letterChecks,
   ownPenFontRequests,
 } from "./lib.mjs";
+import { makePoliticsFlows } from "./politics.mjs";
 
 export const OUT_DIR = new URL("./out/", import.meta.url).pathname;
 const HOST_NICK = "화면검사기";
@@ -1333,12 +1334,12 @@ async function untilGame(page, pred, ms = 6000, label = "게임 화면") {
 }
 
 /** 방장 + 손님(사람 페이지) + 봇 → 시작 → to 단계까지. 돌려주는 값: { host, hp, ht, hostSeat, guests: [{ context, page, tracker, takeIssues, seat }] } */
-async function openGame(ctx, flowId, { guests = 0, bots = 3, role = "citizen", vote = { exec: "yes", pick: "host" }, to = "discussion", hostNick = undefined } = {}) {
+async function openGame(ctx, flowId, { guests = 0, bots = 3, role = "citizen", vote = { exec: "yes", pick: "host" }, to = "discussion", hostNick = undefined, guestInitScripts = [] } = {}) {
   const host = await startHost(ctx, flowId, hostNick ? { nickname: hostNick } : {});
   const { page: hp, tracker: ht } = host;
   const pages = [];
   for (let i = 0; i < guests; i++) {
-    const { guest, seat } = await openGuest(ctx, GAME_GUESTS[i]);
+    const { guest, seat } = await openGuest(ctx, GAME_GUESTS[i], { initScripts: guestInitScripts });
     pages.push({ ...guest, seat });
   }
   await ht.waitFor((v) => v.players.length === guests + 1, 6000, `방장 쪽 인원 ${guests + 1}`);
@@ -3006,6 +3007,9 @@ async function wakeLockFlow(ctx) {
   await leaveLobby(p2);
 }
 
+// 정치 긴장 화면(09.1.1-10): 직업 배지·귓속말. 흐름 본문은 politics.mjs, 도우미만 넘긴다
+const { politicsBadgeFlow, politicsWhisperFlow } = makePoliticsFlows({ recorder, openGame, closeGame, allAt, attempt, gameGH, walkableCentersOfApp, GAME_HOST_NICK });
+
 export const FLOWS = [
   // lobby·world 는 LOBBY_SIZES 6개 크기로 돈다: 기본 크기 4개에 더해 390x844·402x874 (run.mjs 의 extraSizes)
   { id: "lobby", run: lobbyFlow, extraSizes: LOBBY_EXTRA_SIZES },
@@ -3025,6 +3029,9 @@ export const FLOWS = [
   { id: "night-sizes", run: nightSizesFlow, extraSizes: LOBBY_EXTRA_SIZES },
   { id: "result", run: resultFlow, size: GAME_SIZE },
   { id: "chat-game", run: chatGameFlow, size: GAME_SIZE },
+  // 9.1.1 페이즈 정치 긴장(09.1.1-10): 직업 배지(떠 있는 버튼→칩→이름표 배지→말 바꿈)·귓속말(모드→한 줄 시트→당사자만 본문). 둘 다 폰 6종, 방장·손님 두 화면
+  { id: "politics-badge", run: politicsBadgeFlow, extraSizes: LOBBY_EXTRA_SIZES },
+  { id: "politics-whisper", run: politicsWhisperFlow, extraSizes: LOBBY_EXTRA_SIZES },
   // 재접속·예산(06-18): 폰 크기와 곱하지 않고 자기 크기로 한 번. deployhold 는 배포와 동시에 돌리는 흐름(06-19)이라 --only 없이는 빠진다
   { id: "reconnect", run: reconnectFlow, size: RECONNECT_SIZE },
   { id: "deployhold", run: deployHoldFlow, size: RECONNECT_SIZE, skipByDefault: true },
