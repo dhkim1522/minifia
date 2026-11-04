@@ -457,6 +457,34 @@ async function votingRoom(exec: string, pick: string): Promise<Seated> {
   return r;
 }
 
+describe("testSkip: 동점 결선을 한 번에 끝낸다 (09.1.1-05, 결정 0066-4)", () => {
+  for (const step of [0, 1] as const) {
+    it(`결선 step ${step} 에서 testSkip 한 번: 남은 산 봇이 던진 표가 집계되어 변론으로 가고 결선 상태·개인 표가 남지 않는다`, async () => {
+      const r = await seatQuiet(0, { testMode: true });
+      send(r.host, { t: "testBots", count: 3 });
+      await nextFrame(r.host, lobbyOf(4));
+      await sendAndSettle(r.host, { t: "testBotVote", exec: "random", pick: "host" }); // 봇 표는 방장 후보에게 — 결과를 고정한다
+      await start(r);
+      await skipThrough(r, "nomination");
+      // 방장(0)과 봇 1 이 후보인 결선 상태를 세운다(지목 집계가 만드는 모양 그대로, 방장이 후보여도 도구는 막히지 않는다).
+      await editRoom(r.code, (room) => {
+        const { pickTurn: _pickTurn, botPlan: _botPlan, ...rest } = room as Record<string, unknown>;
+        return { ...rest, phase: "runoff", runoff: { cand: [0, 1], step }, phaseEndsAt: Date.now() + 600_000 };
+      });
+      const from = mark(r.host);
+      send(r.host, { t: "testSkip" });
+      await nextFrame(r.host, (m) => m.t === "state" && m.view.phase !== "runoff");
+      const frames = await settle(r.host, from);
+      const room = await stored(r.code);
+      expect(String(room.phase)).toBe("defense"); // 봇 둘(2·3)의 표가 모두 방장(0)에게 — 3초 안에 자연 마감으로 밤이 된 것이 아니다
+      expect(Object.hasOwn(room, "runoff")).toBe(false);
+      for (const p of room.players as Array<Raw>) expect(`${p.seat}:${Object.hasOwn(p, "runoffVote")}`).toBe(`${p.seat}:false`);
+      expect(String((room.verdict as { candidate: number }).candidate)).toBe("0");
+      expect(JSON.stringify(frames).includes("runoffVote")).toBe(false);
+    }, 60_000);
+  }
+});
+
 describe("testBotVote: 넘기기가 설정을 따른다", () => {
   it("exec no + pick host: 봇이 모두 방장을 지목해 방장이 변론자가 되고, 찬반에서 봇이 모두 반대라 부결 — 처형에서 탈락 없이 밤이 되고 밤 view 에 noExecution 키가 없다", async () => {
     const r = await votingRoom("no", "host");

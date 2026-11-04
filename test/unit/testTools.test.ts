@@ -10,12 +10,13 @@ import { pickTarget } from "../../shared/game/night";
 import { isAlive } from "../../shared/game/alive";
 import { castTurnPoint, enterNomination, nominationStepMs, stepNomination } from "../../shared/game/nomination";
 import { castVerdict } from "../../shared/game/verdict";
-import { finishNomination, resetToLobby, setBotCount, setBotVote, setTestRole, skipPhase } from "../../shared/game/testTools";
+import { finishNomination, finishRunoff, resetToLobby, setBotCount, setBotVote, setTestRole, skipPhase } from "../../shared/game/testTools";
 import { tick } from "../../shared/game/tick";
+import { runoffStepMs, stepRunoff } from "../../shared/game/runoff";
 import { buildPreview, buildView } from "../../shared/game/view";
 import type { PhaseId } from "../../shared/protocol";
 import { seededRandInt } from "../helpers/seededRandom";
-import { castVerdicts, startedFrom, stateWithVerdict } from "../helpers/voteState";
+import { castPoints, castVerdicts, startedFrom, stateWithVerdict } from "../helpers/voteState";
 
 const START_AT = 10_000;
 const HOST_ID = "player-id-0000-aaaa";
@@ -893,5 +894,107 @@ describe("skipPhase: 지목·찬반에서 안 던진 봇이 먼저 던진다", (
       expect(`${exec}:${tally(after)}`).toBe(`${exec}:${exec === "yes" ? '{"yes":4,"no":0,"passed":true}' : '{"yes":0,"no":4,"passed":false}'}`);
       expect(`${exec}:${calls.includes(100)}`).toBe(`${exec}:false`); // 봇 찬반 결정 난수(randInt(100))는 부르지 않는다(처형 단계 문구 추첨은 tick 이 부른다)
     }
+  });
+});
+
+// ---- 09.1.1-05: 넘기기가 동점 결선을 한 번에 끝낸다 (결정 0066-4) ----
+describe("넘기기: 동점 결선 (09.1.1-05)", () => {
+  /** 방장(seat 0, 사람) + 봇 4: 지목에서 0 과 1 이 서로를 가리킨 1:1 동점 → 결선 앞머리(step 0). 후보 [0, 1], 투표자는 봇 2·3·4. */
+  const runoffAt = (lobby: RoomState = botLobby(), step: 0 | 1 | 2 = 0): RoomState => {
+    const nominated = castPoints(startedFrom(lobby, 3, "nomination"), { 0: 1, 1: 0 });
+    let s = tick(nominated, nominated.phaseEndsAt!, seededRandInt(8));
+    if (s.phase !== "runoff") throw new Error(`expected runoff, got ${s.phase}`);
+    for (let i = 0; i < step; i += 1) {
+      const at = s.phaseEndsAt!;
+      const r = stepRunoff(s, at);
+      s = { ...r.state, phaseEndsAt: at + runoffStepMs(r.state) };
+    }
+    return s;
+  };
+  const votesOf = (s: RoomState): string => s.players.map((p) => `${p.seat}>${p.runoffVote === undefined ? "-" : p.runoffVote}`).join(",");
+  const rec = (value: (n: number, i: number) => number = () => 0): { calls: number[]; randInt: (n: number) => number } => {
+    const calls: number[] = [];
+    return { calls, randInt: (n) => (calls.push(n), value(n, calls.length - 1)) };
+  };
+  const THROWING = (): number => {
+    throw new Error("randInt must not be called");
+  };
+
+  it("finishRunoff: 앞머리·투표 창에서 후보가 아닌 산 봇이 좌석 순 randInt(2) 한 번씩 던지고 결과(step 2, 득표 확정)로 간다; 입력은 바뀌지 않는다", () => {
+    for (const step of [0, 1] as const) {
+      const state = runoffAt(botLobby(), step);
+      const before = JSON.stringify(state);
+      const r = rec();
+      const after = finishRunoff(state, r.randInt);
+      expect(`${step}:${r.calls.join(",")}`).toBe(`${step}:2,2,2`);
+      expect(`${step}:${votesOf(after)}`).toBe(`${step}:0>-,1>-,2>0,3>0,4>0`);
+      expect(`${step}:${JSON.stringify(after.runoff)}`).toBe(`${step}:${JSON.stringify({ cand: [0, 1], step: 2, tally: [3, 0] })}`);
+      expect(JSON.stringify(state)).toBe(before);
+    }
+  });
+
+  it("이미 던진 표는 그대로고(사람 표 포함) 그 봇의 난수는 부르지 않으며, 탈락한 봇은 던지지 않는다", () => {
+    const state = runoffAt(botLobby(), 1);
+    const prepared: RoomState = {
+      ...state,
+      players: state.players.map((p) => (p.seat === 2 ? { ...p, runoffVote: 1 } : p.seat === 4 ? { ...p, alive: false } : p)),
+    };
+    const r = rec();
+    const after = finishRunoff(prepared, r.randInt);
+    expect(r.calls.join(",")).toBe("2");
+    expect(votesOf(after)).toBe("0>-,1>-,2>1,3>0,4>-");
+    expect(JSON.stringify(after.runoff?.tally)).toBe("[1,1]");
+  });
+
+  it("결과(step 2)·결선이 아닌 단계는 입력 그대로이고 난수를 부르지 않는다", () => {
+    const result = runoffAt(botLobby(), 2);
+    expect(finishRunoff(result, THROWING) === result).toBe(true);
+    const discussion = startedFrom(botLobby(), 3, "discussion");
+    expect(finishRunoff(discussion, THROWING) === discussion).toBe(true);
+  });
+
+  it("고정 pick: host 는 방장 후보에게, other 는 방장이 아닌 후보에게 던지고 결정 난수를 부르지 않는다", () => {
+    for (const [pick, want] of [["host", 0], ["other", 1]] as const) {
+      const state = runoffAt(setting(botLobby(), "random", pick), 1);
+      const after = finishRunoff(state, THROWING);
+      expect(`${pick}:${votesOf(after)}`).toBe(`${pick}:0>-,1>-,2>${want},3>${want},4>${want}`);
+    }
+  });
+
+  it("skipPhase: 한 번에 결선을 벗어난다 — 득표가 갈리면 많이 받은 후보의 변론, 앞머리·투표 창 어디서든", () => {
+    for (const step of [0, 1, 2] as const) {
+      const state = runoffAt(botLobby(), step);
+      const after = skipOk(state, state.phaseEndsAt!, (n) => n - 1); // 모두 높은 좌석 후보(1)
+      expect(`${step}:${after.phase}:${after.verdict?.candidate}:${after.runoff === undefined}`).toBe(`${step}:defense:1:true`);
+      expect(after.players.some((p) => p.runoffVote !== undefined)).toBe(false);
+    }
+  });
+
+  it("skipPhase: 득표가 같으면 처형 없음으로 밤에 간다; 방장이 후보여도 막히지 않는다", () => {
+    const state = runoffAt(botLobby(), 0);
+    const twoVoters: RoomState = { ...state, players: state.players.map((p) => (p.seat === 4 ? { ...p, alive: false } : p)) };
+    const after = skipOk(twoVoters, twoVoters.phaseEndsAt!, (n) => n - 1);
+    expect(after.phase).toBe("defense"); // 두 표 모두 후보 1 이라 갈린다
+    const split = rec((_n, i) => i % 2);
+    const tie = skipOk(twoVoters, twoVoters.phaseEndsAt!, split.randInt);
+    expect(`${tie.phase}:${tie.runoff === undefined}`).toBe("night:true");
+    expect(twoVoters.hostId).toBe(state.players.find((p) => p.seat === 0)!.id); // 방장은 후보(좌석 0)다
+  });
+
+  it("skipPhase 거부: 일반 방은 BAD_MESSAGE, 손님은 NOT_HOST", () => {
+    const state = runoffAt(botLobby(), 1);
+    const normal: RoomState = { ...state, testMode: undefined };
+    expect(JSON.stringify(skipPhase(normal, normal.hostId, 1, THROWING))).toBe(JSON.stringify({ ok: false, error: "BAD_MESSAGE" }));
+    const guest = state.players.find((p) => p.seat === 2)!;
+    expect(JSON.stringify(skipPhase(state, guest.id, 1, THROWING))).toBe(JSON.stringify({ ok: false, error: "NOT_HOST" }));
+  });
+
+  it("resetToLobby: 결선 도중에도 runoff·runoffVote 가 남지 않는다", () => {
+    const voted = finishRunoff(runoffAt(botLobby(), 1), () => 0);
+    const mid: RoomState = { ...voted, runoff: { cand: [0, 1], step: 1 } };
+    const r = resetToLobby(mid, mid.hostId);
+    if (!r.ok) throw new Error(r.error);
+    expect(Object.hasOwn(r.state, "runoff")).toBe(false);
+    expect(r.state.players.some((p) => Object.hasOwn(p, "runoffVote"))).toBe(false);
   });
 });
