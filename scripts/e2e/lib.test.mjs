@@ -106,6 +106,7 @@ import {
   faceNameFits,
   pickButtonChecks,
   turnBlockChecks,
+  runoffChecks,
   nominationMaxMs,
   NOMINATION_GATHER_MS,
   PICK_TURN_MS,
@@ -1891,6 +1892,88 @@ test("turnBlockChecks: 측정값이 없으면 조용히 통과하지 않고 '측
     assert.ok(lines.some((l) => !l.ok && /측정값 없음/.test(l.detail)));
   }
   assert.ok(turnBlockChecks({}, 390, 844).every((l) => !l.ok));
+});
+
+// ---- 동점 결선 (09.1.1-14, UI-SPEC D) ----
+
+const goodRunoff = (over = {}) => ({
+  pill: { rect: { left: 120, top: 100, right: 270, bottom: 148 }, minFontPx: 16, parts: ["결선", "5초"], tone: "calm" },
+  bar: { left: 20, top: 152, right: 370, bottom: 158 },
+  candidates: [
+    { seat: 2, rect: { left: 60, top: 400, right: 160, bottom: 460, width: 100, height: 60 } },
+    { seat: 3, rect: { left: 230, top: 400, right: 330, bottom: 460, width: 100, height: 60 } },
+  ],
+  viewport: { w: 390, h: 844 },
+  compact: false,
+  ...over,
+});
+const runoffOk = (r) => Object.fromEntries(runoffChecks(r).map((l) => [l.id, l.ok]));
+
+test("runoffChecks: 알약이 화면 안·글자 14px·후보 버튼 44×44·떨어짐 140·결선+초 두 조각·calm 이면 RF1~RF5 모두 통과", () => {
+  const lines = runoffChecks(goodRunoff());
+  assert.deepEqual(lines.map((l) => l.id), ["RF1", "RF2", "RF3", "RF4", "RF5"]);
+  assert.ok(lines.every((l) => l.ok && l.detail === "" && typeof l.label === "string"));
+});
+
+test("runoffChecks RF1: 알약·막대가 화면 밖이거나 글자가 14px 미만이면 실패", () => {
+  assert.equal(runoffOk(goodRunoff({ pill: { ...goodRunoff().pill, rect: { left: 300, top: 100, right: 400, bottom: 148 } } })).RF1, false);
+  assert.equal(runoffOk(goodRunoff({ pill: { ...goodRunoff().pill, rect: { left: 120, top: -1, right: 270, bottom: 48 } } })).RF1, false);
+  assert.equal(runoffOk(goodRunoff({ pill: { ...goodRunoff().pill, minFontPx: 13.9 } })).RF1, false);
+  assert.equal(runoffOk(goodRunoff({ bar: { left: 20, top: 152, right: 392, bottom: 158 } })).RF1, false);
+  const bad = runoffChecks(goodRunoff({ pill: { ...goodRunoff().pill, rect: { left: 300, top: 100, right: 400, bottom: 148 } } })).find((l) => l.id === "RF1");
+  assert.match(bad.detail, /오른쪽/);
+});
+
+test("runoffChecks RF2: 후보 이름표 버튼 각각 44×44 이상(0.5px 오차 통과), 두 개가 아니면 실패", () => {
+  const c = goodRunoff().candidates;
+  const small = (w, h) => [{ ...c[0], rect: { left: 60, top: 400, right: 60 + w, bottom: 400 + h, width: w, height: h } }, c[1]];
+  assert.equal(runoffOk(goodRunoff({ candidates: small(43.6, 44) })).RF2, true);
+  assert.equal(runoffOk(goodRunoff({ candidates: small(43.4, 44) })).RF2, false);
+  assert.equal(runoffOk(goodRunoff({ candidates: small(44, 40) })).RF2, false);
+  assert.equal(runoffOk(goodRunoff({ candidates: [c[0]] })).RF2, false);
+  assert.equal(runoffOk(goodRunoff({ candidates: [] })).RF2, false);
+});
+
+test("runoffChecks RF3: 두 버튼이 겹치지 않고 중심 거리가 140 이상이어야 한다(139 는 실패)", () => {
+  const at = (cx2) => [
+    { seat: 2, rect: { left: 40, top: 400, right: 140, bottom: 460, width: 100, height: 60 } },
+    { seat: 3, rect: { left: cx2 - 50, top: 400, right: cx2 + 50, bottom: 460, width: 100, height: 60 } },
+  ];
+  assert.equal(runoffOk(goodRunoff({ candidates: at(90 + 140) })).RF3, true);
+  assert.equal(runoffOk(goodRunoff({ candidates: at(90 + 139) })).RF3, false);
+  assert.equal(runoffOk(goodRunoff({ candidates: at(90 + 60) })).RF3, false);
+  const bad = runoffChecks(goodRunoff({ candidates: at(90 + 60) })).find((l) => l.id === "RF3");
+  assert.match(bad.detail, /겹침|거리/);
+});
+
+test("runoffChecks RF4: 알약 안은 `결선` 과 `{초}초` 두 조각뿐 — 이름 조각이나 n / N 이 있으면 실패", () => {
+  const p = goodRunoff().pill;
+  assert.equal(runoffOk(goodRunoff({ pill: { ...p, parts: ["결선", "0초"] } })).RF4, true);
+  assert.equal(runoffOk(goodRunoff({ pill: { ...p, parts: ["결선", "가나다라 님 차례", "5초"] } })).RF4, false);
+  assert.equal(runoffOk(goodRunoff({ pill: { ...p, parts: ["1 / 4", "5초"] } })).RF4, false);
+  assert.equal(runoffOk(goodRunoff({ pill: { ...p, parts: ["결선"] } })).RF4, false);
+  assert.equal(runoffOk(goodRunoff({ pill: { ...p, parts: ["결선", "다섯초"] } })).RF4, false);
+});
+
+test("runoffChecks RF5: 알약 색(data-turn-tone)은 calm — warn/urgent 는 실패", () => {
+  const p = goodRunoff().pill;
+  assert.equal(runoffOk(goodRunoff({ pill: { ...p, tone: "warn" } })).RF5, false);
+  assert.equal(runoffOk(goodRunoff({ pill: { ...p, tone: "urgent" } })).RF5, false);
+  assert.equal(runoffOk(goodRunoff({ pill: { ...p, tone: null } })).RF5, false);
+  assert.equal(runoffOk(goodRunoff({ pill: { ...p, tone: "calm" } })).RF5, true);
+});
+
+test("runoffChecks: 측정값이 없으면 조용히 통과하지 않고 '측정값 없음' 으로 실패", () => {
+  for (const r of [null, undefined, {}, goodRunoff({ pill: null }), goodRunoff({ viewport: null })]) {
+    const lines = runoffChecks(r);
+    assert.equal(lines.length, 5);
+    assert.ok(lines.some((l) => !l.ok && /측정값 없음/.test(l.detail)));
+  }
+});
+
+test("runoffChecks: 압축형(compact)도 같은 문턱이다 — 알약 글자 14px 를 낮추지 않는다", () => {
+  assert.equal(runoffOk(goodRunoff({ compact: true })).RF1, true);
+  assert.equal(runoffOk(goodRunoff({ compact: true, pill: { ...goodRunoff().pill, minFontPx: 13 } })).RF1, false);
 });
 
 // ---- 유언 편지(09.1-11) ----

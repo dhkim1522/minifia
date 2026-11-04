@@ -555,6 +555,80 @@ export function turnBlockChecks(turn, vw, vh) {
   return out;
 }
 
+/** 결선 후보 이름표 중심 거리 하한(UI-SPEC D-4, 오탭 방지 T-09.1.1-40) */
+export const RUNOFF_CENTER_MIN = 140;
+
+/**
+ * 동점 결선 화면 판정(RF1~RF5, 09.1.1-14, UI-SPEC D). 투표 중(step 1) 후보가 아닌 사람 화면에서 잰다.
+ * pill = { rect, minFontPx, parts: [알약 안 조각 글자], tone } — rect 는 `.mf-turn__pill` 사각형, parts 는 그 안 span 글자, tone 은 `data-turn-tone`.
+ * bar = 막대 사각형 · candidates = [{ seat, rect }] — `[data-pick]` 후보 이름표 버튼 · viewport = { w, h } · compact = 압축형(360×560) 여부(문턱은 같다).
+ * RF1 알약·막대가 화면 안이고 알약 글자 ≥ 14 · RF2 후보 버튼 정확히 둘, 각 44×44 이상 · RF3 두 버튼이 겹치지 않고 중심 거리 ≥ 140
+ * RF4 알약 안은 `결선` 과 `{초}초` 두 조각뿐(이름·n / N 없음) · RF5 알약 색 calm(진홍으로 바뀌지 않는다, O-10). 값이 없으면 `측정값 없음` 으로 실패한다.
+ */
+export function runoffChecks(input) {
+  const { pill, bar, candidates, viewport, compact } = input ?? {};
+  const suffix = compact === true ? " (압축형)" : "";
+  const L1 = `결선 알약·막대가 화면 안이고 알약 글자 ${TURN_FONT_MIN}px 이상${suffix}`;
+  const L2 = "후보 이름표 버튼 둘이 각각 44×44 이상";
+  const L3 = `후보 이름표 버튼이 겹치지 않고 중심 거리 ${RUNOFF_CENTER_MIN}px 이상`;
+  const L4 = "알약 안은 `결선` 과 `{초}초` 두 조각뿐(이름 없음)";
+  const L5 = "알약 색이 calm 이다(진홍 없음)";
+  const out = [];
+  // RF1
+  const r = pill?.rect;
+  const vw = viewport?.w;
+  const vh = viewport?.h;
+  if (!r || !allNum(r.left, r.top, r.right, r.bottom, vw, vh) || !isNum(pill?.minFontPx) || !bar || !allNum(bar.left, bar.top, bar.right, bar.bottom)) {
+    out.push(noMeasure("RF1", L1, !r ? "pill" : !viewport ? "viewport" : !isNum(pill?.minFontPx) ? "minFontPx" : "bar"));
+  } else {
+    const bad = [];
+    const inside = (name, b) => {
+      if (b.left < -OVERLAP_EPS) bad.push(`${name} 왼쪽 ${fmt(b.left)}`);
+      if (b.right > vw + OVERLAP_EPS) bad.push(`${name} 오른쪽 ${fmt(b.right)} > ${vw}`);
+      if (b.top < -OVERLAP_EPS) bad.push(`${name} 위 ${fmt(b.top)}`);
+      if (b.bottom > vh + OVERLAP_EPS) bad.push(`${name} 아래 ${fmt(b.bottom)} > ${vh}`);
+    };
+    inside("알약", r);
+    inside("막대", bar);
+    if (pill.minFontPx + 0.01 < TURN_FONT_MIN) bad.push(`글자 ${fmt(pill.minFontPx)}px`);
+    out.push(result("RF1", L1, bad));
+  }
+  // RF2·RF3
+  const cs = Array.isArray(candidates) ? candidates : null;
+  const valid = cs ? cs.filter((c) => c?.rect && allNum(c.rect.left, c.rect.top, c.rect.right, c.rect.bottom)) : [];
+  if (!cs || valid.length !== cs.length) {
+    out.push(noMeasure("RF2", L2, "candidates"), noMeasure("RF3", L3, "candidates"));
+  } else {
+    const wh = (c) => ({ w: c.rect.right - c.rect.left, h: c.rect.bottom - c.rect.top });
+    const bad2 = [];
+    if (cs.length !== 2) bad2.push(`후보 버튼 ${cs.length}개(기대 2)`);
+    for (const c of cs) {
+      const { w, h } = wh(c);
+      if (w + 0.5 < TAP_MIN || h + 0.5 < TAP_MIN) bad2.push(`자리 ${c.seat} ${fmt(w)}x${fmt(h)}`);
+    }
+    out.push(result("RF2", L2, bad2));
+    const bad3 = [];
+    if (cs.length !== 2) bad3.push(`후보 버튼 ${cs.length}개(기대 2)`);
+    else {
+      const [a, b] = cs;
+      if (rectsOverlap(a.rect, b.rect)) bad3.push(`겹침 (${overlapText(a.rect, b.rect)})`);
+      const dist = Math.hypot((a.rect.left + a.rect.right) / 2 - (b.rect.left + b.rect.right) / 2, (a.rect.top + a.rect.bottom) / 2 - (b.rect.top + b.rect.bottom) / 2);
+      if (dist + 0.01 < RUNOFF_CENTER_MIN) bad3.push(`중심 거리 ${fmt(dist)}px`);
+    }
+    out.push(result("RF3", L3, bad3));
+  }
+  // RF4
+  const parts = pill?.parts;
+  if (!Array.isArray(parts)) out.push(noMeasure("RF4", L4, "parts"));
+  else {
+    const ok = parts.length === 2 && parts[0] === "결선" && /^\d+초$/.test(parts[1]);
+    out.push(result("RF4", L4, ok ? [] : [`조각 ${JSON.stringify(parts)}`]));
+  }
+  // RF5
+  out.push(typeof pill?.tone === "string" ? result("RF5", L5, pill.tone === "calm" ? [] : [`tone ${pill.tone}`]) : noMeasure("RF5", L5, "tone"));
+  return out;
+}
+
 /**
  * 결과 알림 판정(AN1~AN3). m = { fontPx, lineCount, wordBreak } — `[data-announce]` 의 계산된 글자 크기·줄 수·word-break.
  * AN1 글자 36px(28px 로 줄이지 않는다) · AN2 한두 줄 · AN3 word-break keep-all.
