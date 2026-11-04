@@ -3007,8 +3007,8 @@ async function wakeLockFlow(ctx) {
   await leaveLobby(p2);
 }
 
-// 정치 긴장 화면(09.1.1-10): 직업 배지·귓속말. 흐름 본문은 politics.mjs, 도우미만 넘긴다
-const { politicsBadgeFlow, politicsWhisperFlow } = makePoliticsFlows({ recorder, openGame, closeGame, allAt, attempt, gameGH, walkableCentersOfApp, GAME_HOST_NICK });
+// 정치 긴장 화면(09.1.1-10·11): 직업 배지·귓속말·지목 핀 조명. 흐름 본문은 politics.mjs, 도우미만 넘긴다
+const { politicsBadgeFlow, politicsWhisperFlow, politicsPinFlow } = makePoliticsFlows({ recorder, openGame, closeGame, allAt, attempt, gameGH, walkableCentersOfApp, GAME_HOST_NICK });
 
 export const FLOWS = [
   // lobby·world 는 LOBBY_SIZES 6개 크기로 돈다: 기본 크기 4개에 더해 390x844·402x874 (run.mjs 의 extraSizes)
@@ -3032,6 +3032,8 @@ export const FLOWS = [
   // 9.1.1 페이즈 정치 긴장(09.1.1-10): 직업 배지(떠 있는 버튼→칩→이름표 배지→말 바꿈)·귓속말(모드→한 줄 시트→당사자만 본문). 둘 다 폰 6종, 방장·손님 두 화면
   { id: "politics-badge", run: politicsBadgeFlow, extraSizes: LOBBY_EXTRA_SIZES },
   { id: "politics-whisper", run: politicsWhisperFlow, extraSizes: LOBBY_EXTRA_SIZES },
+  // 지목 차례 핀 조명(09.1.1-11): 모이는 중 없음 → 차례 주인에게 켜짐 → 확정 때 0.9초 이동 → 끝 알림에서 꺼짐. window.__mfPin 훅을 읽는다. 폰 6종
+  { id: "politics-pin", run: politicsPinFlow, extraSizes: LOBBY_EXTRA_SIZES },
   // 재접속·예산(06-18): 폰 크기와 곱하지 않고 자기 크기로 한 번. deployhold 는 배포와 동시에 돌리는 흐름(06-19)이라 --only 없이는 빠진다
   { id: "reconnect", run: reconnectFlow, size: RECONNECT_SIZE },
   { id: "deployhold", run: deployHoldFlow, size: RECONNECT_SIZE, skipByDefault: true },

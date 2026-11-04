@@ -1,9 +1,9 @@
-// 정치 긴장 화면 E2E 흐름 (09.1.1-10, 결정 0066, UI-SPEC 흐름 E2E ①②): politics-badge(직업 배지)·politics-whisper(귓속말).
+// 정치 긴장 화면 E2E 흐름 (09.1.1-10·11, 결정 0066, UI-SPEC 흐름 E2E ①②⑥): politics-badge(직업 배지)·politics-whisper(귓속말)·politics-pin(지목 차례 핀 조명).
 // flows.mjs 가 이미 3천 줄이라 흐름 본문은 이 파일에 둔다. flows.mjs 의 도우미는 `makePoliticsFlows(helpers)` 로 받는다(서로 import 하지 않는다 — 순환 없음).
 // 두 흐름 모두 폰 6종(LOBBY_EXTRA_SIZES)으로 돈다. 방장 화면과 손님 화면 둘을 함께 본다.
 // 판정 문턱은 lib.mjs 의 순수 검사 함수(floatButtonChecks·sheetFitChecks·claimBadgeChecks·pickButtonChecks)에 있고 여기서는 낮추지 않는다.
 // 귓속말 본문(canary)은 결과 표와 오류 문구에 쓰지 않는다 — 있는지 없는지(불리언)만 남긴다(T-09.1.1-28).
-import { hitsInputSurface, installFakeViewport, readGame, sampleWorld, screensOfWorld, settle, skipTo, sleep, tapWorld } from "./browser.mjs";
+import { hitsInputSurface, installFakeViewport, readGame, sampleWorld, screensOfWorld, SetupError, settle, skipTo, sleep, tapTurnPick, tapWorld } from "./browser.mjs";
 import { claimBadgeChecks, floatButtonChecks, graphemeCount, pickButtonChecks, sheetFitChecks } from "./lib.mjs";
 
 /** 31자소 본문: 입력칸이 30자소로 자르는지 본다. 앞 30자소가 실제로 서버에 가는 본문(canary)이다 */
@@ -604,5 +604,146 @@ export function makePoliticsFlows(h) {
     }
   }
 
-  return { politicsBadgeFlow, politicsWhisperFlow };
+  // ---- politics-pin: 지목 차례의 핀 조명(결정 0066-6, UI-SPEC F-2·흐름 E2E ⑥). 방장 + 봇 3 = 4명판, 봇 투표 규칙 pick "host" ----
+  // 핀은 3D 라서 DOM 에 없다 — 렌더러가 받는 값을 그대로 내는 e2e 전용 window.__mfPin({seat, moving, strength})을 매 프레임 기록해 시간표로 본다.
+  // 모이는 중 seat null → 차례가 오면 그 사람에게 켜짐(strength ≥ 0.5) → 확정 때 moving 이 참인 채 0.85~1.2초 안에 지목받은 사람에게 도착 → 끝 알림에서 0.
+  // 핀은 크기와 무관한 3D 라서 폰 6종은 크기별 렌더 실패(G 검사·훅 값)가 없는지 확인하는 용도다.
+  async function politicsPinFlow(ctx) {
+    const id = "politics-pin";
+    const rec = recorder(ctx);
+    const game = await openGame(ctx, id, { guests: 0, bots: 3, role: "citizen", vote: { exec: "yes", pick: "host" }, to: "discussion", hostNick: GAME_HOST_NICK });
+    try {
+      const { hp, ht, hostSeat } = game;
+      const sc = `${id}/pin`;
+      await allAt([hp], "discussion");
+
+      // 기록기: 훅이 없으면(?e2e 없는 주소) 준비 실패. 값이 바뀔 때마다 { t, seat, moving, strength } 를 쌓는다
+      const hasHook = await hp.evaluate(() => window.__mfPin !== undefined);
+      if (!hasHook) throw new SetupError("window.__mfPin 훅이 없음(?e2e=1 세션이 아님)");
+      await hp.evaluate(() => {
+        const log = (window.__pinLog = []);
+        let key = "";
+        const tick = () => {
+          const p = window.__mfPin;
+          if (p) {
+            const k = `${p.seat}|${p.moving}|${p.strength.toFixed(3)}`;
+            if (k !== key) {
+              key = k;
+              log.push({ t: performance.now(), seat: p.seat, moving: p.moving, strength: p.strength });
+            }
+          }
+          requestAnimationFrame(tick);
+        };
+        requestAnimationFrame(tick);
+      });
+      const logLen = () => hp.evaluate(() => window.__pinLog.length);
+      const logFrom = (i) => hp.evaluate((from) => window.__pinLog.slice(from), i);
+      const nowPin = () => hp.evaluate(() => ({ ...window.__mfPin }));
+      const pinUntil = async (pred, ms, label) => {
+        const t0 = performance.now();
+        for (;;) {
+          const p = await nowPin();
+          if (pred(p)) return p;
+          if (performance.now() - t0 > ms) throw new Error(`${label} (${ms / 1000}초 안에 안 옴, 마지막 ${JSON.stringify(p)})`);
+          await sleep(30);
+        }
+      };
+
+      await skipTo(hp, ht, "nomination");
+      await allAt([hp], "nomination");
+
+      // PN1 모이는 중(i -1): 핀 없음
+      const gather = await attempt(async () => {
+        await ht.waitFor((v) => v.phase === "nomination" && v.day?.turn?.i === -1, 6000, "모이는 중");
+        await sleep(400);
+        const p = await nowPin();
+        return p.seat === null && p.strength === 0 && !p.moving ? true : { ok: false, detail: `핀이 켜져 있음 ${JSON.stringify(p)}` };
+      });
+      rec(sc, "PN1", "모이는 중에는 핀이 없다 (seat null · strength 0)", gather.ok, gather.detail);
+
+      const order = ht.last().day?.turn?.order ?? [];
+      const N = order.length;
+      const hostIdx = order.indexOf(hostSeat);
+      const botSeat = order.find((x) => x !== hostSeat);
+      if (N !== 4 || hostIdx < 0 || botSeat === undefined) throw new SetupError(`차례 순서가 4명판이 아님: ${JSON.stringify(order)}`);
+
+      // 봇은 자기 차례가 시작되자마자 방장을 가리킨다(서버 봇 규칙) — 차례만 켜진 모습은 사람 차례(방장)에서만 본다. 방장 차례를 기준으로 세 가지를 잰다.
+      // PN2 방장 자기 차례가 시작되면 핀이 방장 머리 위에 켜진다: seat == 방장, strength 0.5 이상
+      const arrived = await attempt(async () => {
+        await ht.waitFor((v) => v.phase === "nomination" && v.day?.turn?.i === hostIdx && v.day.turn.doneAt === undefined, 20_000, "방장 차례 시작");
+      });
+      if (!arrived.ok) throw new Error(arrived.detail);
+      const lit = await attempt(async () => {
+        const p = await pinUntil((x) => x.seat === hostSeat && x.strength >= 0.5, 1500, "방장 차례에 핀 켜짐");
+        return { ok: true, detail: `seat ${p.seat} · strength ${r1(p.strength)}` };
+      });
+      rec(sc, "PN2", `방장 자기 차례(${hostIdx + 1}/${N}번째, 좌석 ${hostSeat})가 시작되면 핀이 방장에게 켜지고 세기가 0.5 이상으로 오른다`, lit.ok, lit.detail);
+      await pinUntil((x) => x.strength >= 0.95, 1500, "핀 켜짐 완료").catch(() => {});
+      await settle(hp);
+      await gameGH(ctx, id, "pin", game.host);
+
+      // PN3 방장이 봇 이름표를 누르면 확정된다
+      const mark = await logLen();
+      const tapped = await attempt(async () => {
+        await tapTurnPick(hp, botSeat);
+      });
+      rec(sc, "PN3", `방장이 봇(좌석 ${botSeat}) 이름표를 누르면 확정된다`, tapped.ok, tapped.detail);
+
+      // PN4 확정되면 moving 이 참이 되고 0.85~1.2초 뒤 지목받은 봇에게 도착한다. 이동 동안 켜진 채다.
+      // 이동의 끝 = moving 이 거짓이 되는 기록, 또는 다음 차례(봇이 곧바로 확정)로 건너뛰며 세기가 다시 0 에서 오르는 기록(세기가 0.3 넘게 급락)
+      const move = await attempt(async () => {
+        let slide = null;
+        const t0 = performance.now();
+        while (performance.now() - t0 < 4000) {
+          const entries = await logFrom(mark);
+          const start = entries.findIndex((e) => e.moving === true);
+          if (start >= 0) {
+            const end = entries.findIndex((e, k) => k > start && (e.moving === false || e.strength < entries[k - 1].strength - 0.3));
+            if (end >= 0) {
+              slide = { start: entries[start], before: entries[end - 1], end: entries[end], during: entries.slice(start, end) };
+              break;
+            }
+          }
+          await sleep(40);
+        }
+        if (slide === null) throw new Error("이동(moving 참 → 끝)을 4초 안에 못 봄");
+        const dur = slide.end.t - slide.start.t;
+        const minK = Math.min(...slide.during.map((e) => e.strength));
+        const seats = [...new Set(slide.during.map((e) => e.seat))];
+        const problems = [];
+        if (dur < 850 || dur > 1200) problems.push(`이동 ${Math.round(dur)}ms (기대 850~1200)`);
+        if (slide.start.seat !== hostSeat) problems.push(`출발 좌석 ${slide.start.seat} (기대 ${hostSeat})`);
+        if (slide.before.seat !== botSeat) problems.push(`도착 직전 좌석 ${slide.before.seat} (기대 ${botSeat})`);
+        if (minK < 0.95) problems.push(`이동 중 세기가 ${r1(minK)} 까지 내려감`);
+        return problems.length === 0 ? { ok: true, detail: `${Math.round(dur)}ms · 좌석 ${seats.join("→")} · 최소 세기 ${r1(minK)}` } : { ok: false, detail: problems.join(" / ") };
+      });
+      rec(sc, "PN4a", "핀 이동 시간 기록(참고, 판정은 PN4)", true, move.detail, true);
+      rec(sc, "PN4", `확정되면 핀이 방장(좌석 ${hostSeat})에서 지목받은 봇(좌석 ${botSeat})으로 0.85~1.2초 동안 미끄러지고 그동안 켜진 채다`, move.ok, move.detail);
+
+      // PN5 끝 알림: 핀이 꺼지고(seat null · strength 0) 선두·과반(방장 3표)을 비추지 않는다
+      const end = await attempt(async () => {
+        await ht.waitFor((v) => v.phase === "nomination" && v.day?.turn?.i === N, 12_000, "끝 알림");
+        const p = await pinUntil((x) => x.seat === null && x.strength === 0, 1200, "끝 알림에서 핀 꺼짐");
+        await sleep(400);
+        const q = await nowPin();
+        return q.seat === null && q.strength === 0 ? { ok: true, detail: `꺼짐 ${JSON.stringify(p)}` } : { ok: false, detail: `다시 켜짐 ${JSON.stringify(q)}` };
+      });
+      rec(sc, "PN5", "끝 알림에는 핀이 꺼져 있고 선두·과반(방장 득표)을 비추지 않는다", end.ok, end.detail);
+      await attempt(async () => {
+        await ht.waitFor((v) => v.phase === "defense", 8000, "변론");
+      });
+      // PN7 봇들의 차례에도 핀이 그 차례 주인에게서 방장으로 간다: 기록한 좌석에 네 차례 주인이 모두 나오고, 끝 알림 직전 마지막 켜진 좌석은 방장이다
+      const all = await logFrom(0);
+      const seen = new Set(all.map((e) => e.seat).filter((x) => x !== null));
+      const lastLit = [...all].reverse().find((e) => e.seat !== null);
+      rec(sc, "PN7", "봇 차례에도 핀이 지나간다: 기록에 네 좌석이 모두 나오고 마지막으로 비춘 사람은 방장(가장 많이 지목받은 사람)이다 — 끝 알림에서는 비추지 않는다", order.every((x) => seen.has(x)) && lastLit?.seat === hostSeat, `나온 좌석 ${[...seen].join(",")} · 마지막 켜진 좌석 ${lastLit?.seat}`);
+      // PN6 변론으로 넘어간 뒤에도 핀은 없다(이 계획의 핀은 지목 차례 전용)
+      const after = await nowPin();
+      rec(sc, "PN6", "지목이 끝난 뒤(변론)에는 핀이 없다", after.seat === null && after.strength === 0, JSON.stringify(after));
+    } finally {
+      await closeGame(game);
+    }
+  }
+
+  return { politicsBadgeFlow, politicsWhisperFlow, politicsPinFlow };
 }
