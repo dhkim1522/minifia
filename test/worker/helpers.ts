@@ -189,8 +189,10 @@ export interface StoredRoom {
   verdict?: { passed: boolean; candidate?: number };
   /** 09.1 순차 지목 서버 전용 차례 상태(결정 0063-1): 있으면 지목이 차례 방식이다. */
   pickTurn?: { order: number[]; i: number; endsAt?: number; doneAt?: number; skip?: boolean };
+  /** 09.1.1-04 서버 전용 동점 결선 상태(결정 0066-4): cand 는 후보 좌석 둘, step 0 앞머리 · 1 투표 · 2 결과. */
+  runoff?: { cand: [number, number]; step: 0 | 1 | 2; tally?: [number, number] };
   /** 8페이즈 서버 전용 개인 값: 지목·찬반·토론 끝내기. 마감 훅이 키째 지우고 토론 진입 훅이 끝내기를 지운다(결정 0060). */
-  players: Array<{ role?: string; execVote?: boolean; candidateVote?: number; nominate?: number; verdictVote?: boolean; endVote?: boolean; alive?: boolean }>;
+  players: Array<{ role?: string; runoffVote?: number; execVote?: boolean; candidateVote?: number; nominate?: number; verdictVote?: boolean; endVote?: boolean; alive?: boolean }>;
 }
 
 export async function storedRoom(code: string): Promise<StoredRoom> {
@@ -350,6 +352,30 @@ async function walkPickTurns(code: string, actors: Actor[], targetBySeat: Readon
     deadline = await closePhase(code);
   }
   await untilLeft(actors, "nomination");
+  return deadline;
+}
+
+/**
+ * 동점 결선을 끝까지 걷는다(09.1.1-04, 결정 0066-4): 저장된 방을 읽어 runoff 인 동안 한 걸음씩 마감을 당긴다. 투표 창(step 1)에 들어서면 한 번만
+ * voteBySeat[행위자 seat] = 후보 좌석 에 든 사람이 `point` 를 보내고 모든 소켓을 flush 한 뒤 넘긴다. runoff 를 벗어난 단계 state 를 모두 받으면 마지막 마감 시각을 돌려준다.
+ */
+export async function runoffAll(code: string, actors: Actor[], voteBySeat: Readonly<Record<number, number>>): Promise<number> {
+  let deadline = 0;
+  let voted = false;
+  for (let guard = 0; guard < 10; guard += 1) {
+    const room = await storedRoom(code);
+    if (room.phase !== "runoff" || room.runoff === undefined) break;
+    if (room.runoff.step === 1 && !voted) {
+      voted = true;
+      const marks = actors.map((a) => mark(a.sock));
+      for (const a of actors) {
+        if (Object.hasOwn(voteBySeat, a.seat)) send(a.sock, { t: "point", target: voteBySeat[a.seat] });
+      }
+      for (let i = 0; i < actors.length; i += 1) await settle(actors[i]!.sock, marks[i]!);
+    }
+    deadline = await closePhase(code);
+  }
+  await untilLeft(actors, "runoff");
   return deadline;
 }
 
