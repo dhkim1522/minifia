@@ -20,3 +20,9 @@
 
 - 회사 관련 표현을 넣지 않는다.
 - 이력서 쪽 링크는 페이지가 생기면 바꾼다. 그 전까지 이력서는 이 레포와 배포 주소를 링크한다.
+
+## 아이콘
+
+- 앱 아이콘(시안 A2 중절모, 2026-11-05 승인)은 `design/app-icon/`(원본·iOS·Android·이력서용 240px), 앱용 사본은 `public/`.
+- 포트폴리오 페이지를 만들 때 `<link rel="icon" href="favicon.svg">` 로 같은 아이콘을 넣는다.
+- 이력서 레포의 `assets/logos/minifia.png` 는 `design/app-icon/resume/minifia.png`(240x240)로 교체한다.
