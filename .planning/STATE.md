@@ -5,16 +5,16 @@ milestone_name: 같은 공간
 current_phase: 9
 current_phase_name: 밤과 아침
 status: verifying
-stopped_at: Completed 09.1-04-PLAN.md
-last_updated: "2026-11-04T13:16:28.941Z"
+stopped_at: Completed 09.1-05-PLAN.md
+last_updated: "2026-11-04T13:35:08.332Z"
 last_activity: 2026-11-03
 last_activity_desc: Phase 9 execution started
-state_head: 8947efece57d7e39e442019ef39e25b29ac613ec
+state_head: 910fba76c13c22b0ebf0a2674924baadd4b1a587
 progress:
   total_phases: 8
   completed_phases: 3
   total_plans: 120
-  completed_plans: 112
+  completed_plans: 113
   percent: 38
 ---
 
@@ -172,6 +172,7 @@ Progress: [████░░░░░░] 38% (3/7 phases)
 | Phase 09.1 P02 | 20min | 2 tasks | 4 files |
 | Phase 09.1 P03 | 25min | 2 tasks | 7 files |
 | Phase 09.1 P04 | 25min | 3 tasks | 16 files |
+| Phase 09.1 P05 | 20min | 3 tasks | 13 files |
 
 ## Accumulated Context
 
@@ -348,6 +349,8 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 09.1]: 09.1-04: 봇 계획 now 는 지목 차례 중이면 차례 시작 시각(turnStartOf)으로 넘긴다 — 봇은 차례가 시작되면 곧바로 지목
 - [Phase 09.1]: 09.1-04: DO 의 250ms 지목 간격 규칙을 지웠다 — 순차 지목은 바꾸기·재전송이 없고 확정 뒤 재전송은 WRONG_PHASE 한 프레임
 - [Phase 09.1]: 09.1-04: 차례 없는 옛 지목 방은 깨어날 때 지목을 모이기부터 다시 시작한다(그날 지목 표는 지워짐)
+- [Phase 09.1]: 09.1-05: L16 은 남의 소켓 기준 — 유언 본문은 죽기 전 본인 me.will 한 경로뿐이고 죽을 때 all 채널 k:will 카드로만 나간다
+- [Phase 09.1]: 09.1-05: 스모크 공개 키 표에 view.day.turn 만 허용하고 pickTurn 은 서버 전용 목록에 둔다
 
 ### Pending Todos
 
@@ -386,8 +389,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-04T13:16:28.449Z
-Stopped at: Completed 09.1-04-PLAN.md
+Last session: 2026-11-04T13:35:07.859Z
+Stopped at: Completed 09.1-05-PLAN.md
 Resume file: None
 
 ## Operator Next Steps

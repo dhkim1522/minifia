@@ -342,7 +342,7 @@ Plans:
 
 **UI hint**: yes
 **계획 메모**: UI-SPEC 먼저(`/gsd-ui-phase 09.1`).
-**Plans:** 4/12 plans executed
+**Plans:** 5/12 plans executed
 
 Plans:
 
@@ -357,7 +357,7 @@ Plans:
 - [x] 09.1-04-PLAN.md — 전환: tick 표·방 DO applyPoint 배선, 옛 지목 방 정규화, 시험 기대값 (TDD, W3)
 
 **Wave 4**
-- [ ] 09.1-05-PLAN.md — 끊긴 차례·재접속 DO 통합, 누설 L12·L14·L15, 옛 경로 삭제, 스모크·봇 스크립트 (TDD, W4)
+- [x] 09.1-05-PLAN.md — 끊긴 차례·재접속 DO 통합, 누설 L12·L14·L15, 옛 경로 삭제, 스모크·봇 스크립트 (TDD, W4)
 
 **Wave 5**
 - [ ] 09.1-06-PLAN.md — 화면 순수 모델 turnLook·채팅 줄·헤더 안내, 지목 위 알림·선두·과반 연출 삭제 (TDD, W5)
