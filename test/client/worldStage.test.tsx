@@ -1872,6 +1872,71 @@ describe("E2E 훅 window.__mfGhostOutfits (09.1-09, T-09.1-23)", () => {
   });
 });
 
+describe("E2E 훅 window.__mfPin (09.1.1-11, T-09.1.1-31)", () => {
+  const pinScene = (pin: SceneLook["pin"]) => sceneOf({ 0: {}, 1: {}, 2: {}, 3: {} }, { pin });
+  const openPin = (pin: SceneLook["pin"] = null) => open({ scene: pinScene(pin) }, { players: FOUR, ents: FOUR_ENTS() });
+
+  it("훅이 켜진 문맥: 처음엔 꺼짐 상태, 차례가 시작되면 seat 와 strength 가 오르고, 사라지면 seat null · strength 0, 언마운트 때 지워진다", async () => {
+    const s = await openPin();
+    frames(32);
+    expect(window.__mfPin).toEqual({ seat: null, moving: false, strength: 0 });
+    s.rerender({ scene: pinScene({ mode: "turn", seat: 2 }) });
+    frames(100);
+    expect(window.__mfPin!.seat).toBe(2);
+    expect(window.__mfPin!.moving).toBe(false);
+    expect(window.__mfPin!.strength).toBeGreaterThan(0.3);
+    frames(300);
+    expect(window.__mfPin!.strength).toBeCloseTo(1, 6);
+    s.rerender({ scene: pinScene(null) });
+    frames(600);
+    expect(window.__mfPin).toEqual({ seat: null, moving: false, strength: 0 });
+    s.utils.unmount();
+    expect(window.__mfPin).toBeUndefined();
+  });
+
+  it("slide: 이동 중에는 moving 이 참, 진행 0.5 이후 seat 가 지목받은 사람, 끝나면 moving 거짓", async () => {
+    const s = await openPin({ mode: "turn", seat: 1 });
+    frames(400);
+    expect(window.__mfPin!.seat).toBe(1);
+    s.rerender({ scene: pinScene({ mode: "slide", from: 1, to: 3, startAt: Date.now(), durationMs: 900 }) });
+    frames(200);
+    expect(window.__mfPin).toMatchObject({ seat: 1, moving: true });
+    frames(300);
+    expect(window.__mfPin).toMatchObject({ seat: 3, moving: true });
+    frames(500);
+    expect(window.__mfPin).toMatchObject({ seat: 3, moving: false });
+  });
+
+  it("대상 좌석의 캐릭터가 없으면 seat 는 null (핀이 꺼진다)", async () => {
+    const s = await openPin();
+    s.rerender({ scene: pinScene({ mode: "turn", seat: 7 }) });
+    frames(300);
+    expect(window.__mfPin).toEqual({ seat: null, moving: false, strength: 0 });
+  });
+
+  it("훅이 꺼진 문맥(?e2e=0)에서는 객체 자체가 없다", async () => {
+    const before = window.location.href;
+    window.history.replaceState({}, "", "/?e2e=0");
+    try {
+      const s = await openPin({ mode: "turn", seat: 2 });
+      frames(300);
+      expect(window.__mfPin).toBeUndefined();
+      expect(s.world.renderers[0]!.setPin).toHaveBeenCalled(); // 핀 조명 자체는 제품에서도 그려진다
+    } finally {
+      window.history.replaceState({}, "", before);
+    }
+  });
+
+  it("다른 설치가 덮어썼으면 언마운트가 지우지 않는다", async () => {
+    const s = await openPin();
+    const other = { seat: 9, moving: false, strength: 0 };
+    window.__mfPin = other;
+    s.utils.unmount();
+    expect(window.__mfPin).toBe(other);
+    delete window.__mfPin;
+  });
+});
+
 describe("게임 장면(08-12): 카메라·조명·긴장·떠다님·처형 연출·지목 자세", () => {
   const INSETS = { top: 62, bottom: 250 };
   const FIXED = (zoom = 1): SceneLook["camera"] => ({ mode: "fixed", target: { x: 0, z: 0 }, zoom });
