@@ -3,11 +3,11 @@
 // 실패 출력은 한 줄이어야 해서(TAP) 프레임 목록은 summary() 한 줄 문자열로 비교한다.
 import { describe, expect, it } from "vitest";
 import type { RoomView, ServerMessage } from "../../shared/protocol";
-import { DISCUSSION_MS, PHASE_DEFS } from "../../shared/game/phases";
+import { DISCUSSION_MS, NOMINATION_GATHER_MS, PHASE_DEFS, PICK_GAP_MS, PICK_TURN_MS } from "../../shared/game/phases";
 import { env } from "cloudflare:workers";
 import { runDurableObjectAlarm } from "cloudflare:test";
 import { ringSlots } from "../../shared/game/gather";
-import { alarmOf, chatMsg, connect, editRoom, endAs, flushWorld, ghostsOf, hello, killSeats, lastViewOf, layOf, mark, mapPlayers, pause, pointAs, send, settle, startedGame, storedRoom, summary, toPhase, verdictAs, worldFramesOf, worldOf } from "./helpers";
+import { advanceTo, alarmOf, chatMsg, closePhase, connect, editRoom, endAs, flushWorld, ghostsOf, hello, killSeats, lastViewOf, layOf, mark, mapPlayers, pause, pointAs, send, settle, startedGame, storedRoom, summary, toPhase, verdictAs, worldFramesOf, worldOf } from "./helpers";
 import type { Actor, Game } from "./helpers";
 
 const viewsOf = (msgs: ServerMessage[]): RoomView[] =>
@@ -41,60 +41,106 @@ async function settleAllSocks(g: Game): Promise<void> {
   for (const sock of g.socks) await settle(sock, mark(sock));
 }
 
-/** 방장 + 손님 3 = 4명 판을 시작해 지목 단계로 옮긴다. actors[0] 은 방장이다. */
+/** 방장 + 손님 3 = 4명 판을 시작해 진입 훅을 지나 지목(모이는 중)에 넣는다. actors[0] 은 방장이다. */
 async function nominationRoom(): Promise<Game> {
   const g = await startedGame("discussion", 3);
-  await toPhase(g.code, "nomination");
+  await advanceTo(g.code, g.socks, "nomination");
   await settleAllSocks(g); // 지목에 들어가면 서버가 산 사람을 둘레 자리로 걷게 한다 — 그 world 프레임을 관찰 구간 밖으로 비운다(08-09)
   return g;
 }
 
-describe("지목 (DAY-04, 결정 0060-3)", () => {
-  it("손님 A 의 지목은 네 소켓 모두에게 정확히 한 프레임으로 가고 모든 view 의 day.points 가 같은 공개 목록이다", async () => {
+/** 지목을 모이기에서 첫 차례(i 0)로 넘긴 방과 그 마감(= 모이기 마감). */
+async function firstTurnRoom(): Promise<{ g: Game; deadline: number }> {
+  const g = await nominationRoom();
+  const deadline = await closePhase(g.code);
+  await settleAllSocks(g);
+  return { g, deadline };
+}
+
+/** 차례 순서(좌석 오름차순)의 i 번째 사람. */
+const ownerAt = (g: Game, i: number): Actor => {
+  const order = g.actors.map((a) => a.seat).sort((x, y) => x - y);
+  return g.actors.find((a) => a.seat === order[i])!;
+};
+
+/** 저장된 방에서 players·pickTurn 만 한 줄로(거절이 저장 상태를 바꾸지 않았는지 비교). */
+async function storedTurnState(code: string): Promise<string> {
+  const room = await storedRoom(code);
+  return JSON.stringify({ players: room.players, pickTurn: room.pickTurn });
+}
+
+describe("지목 — 순차 (결정 0063-1, L15)", () => {
+  it("지목에 들어가면 모든 소켓의 첫 view 가 day.turn = { order: 좌석 오름차순, i: -1 } 이고 마감은 진입 + 3000, 길이 3000 이다", async () => {
     const g = await nominationRoom();
-    const [a, b] = [g.actors[1]!, g.actors[2]!];
-    const frames = await castAll(g, () => pointAs(a.sock, b.seat));
+    const order = g.actors.map((a) => a.seat).sort((x, y) => x - y);
+    const stored = await storedRoom(g.code);
+    for (const sock of g.socks) {
+      const v = lastViewOf(sock);
+      expect(JSON.stringify(v.day?.turn)).toBe(JSON.stringify({ order, i: -1 }));
+      expect(`${v.phase}/${v.phaseDurationMs}/${v.phaseEndsAt === stored.phaseEndsAt}`).toBe(`nomination/${NOMINATION_GATHER_MS}/true`);
+    }
+    expect(stored.phaseEndsAt! <= Date.now() + NOMINATION_GATHER_MS).toBe(true);
+  }, 40_000);
+
+  it("모이기가 끝나면(closePhase) 모든 소켓의 day.turn.i 가 0 이고 endsAt = 그 마감 + 8000, 값이 같다", async () => {
+    const { g, deadline } = await firstTurnRoom();
+    const turns = g.socks.map((s) => JSON.stringify(lastViewOf(s).day?.turn));
+    expect(new Set(turns).size).toBe(1);
+    const turn = lastViewOf(g.socks[0]!).day!.turn!;
+    expect(`${turn.i}/${turn.endsAt}`).toBe(`0/${deadline + PICK_TURN_MS}`);
+    expect(lastViewOf(g.socks[0]!).phaseEndsAt).toBe(deadline + PICK_TURN_MS);
+  }, 40_000);
+
+  it("차례 주인의 point 는 네 소켓 모두에게 정확히 한 프레임이고, 모든 view 의 day.points 가 같으며, 마감은 확정 + 900 으로 당겨지고 알람도 같은 시각이다", async () => {
+    const { g } = await firstTurnRoom();
+    const owner = ownerAt(g, 0);
+    const target = ownerAt(g, 1);
+    const frames = await castAll(g, () => pointAs(owner.sock, target.seat));
     expect(lines(frames)).toBe("[state:nomination] [state:nomination] [state:nomination] [state:nomination]");
-    const want = JSON.stringify([{ seat: a.seat, target: b.seat }]);
+    const want = JSON.stringify([{ seat: owner.seat, target: target.seat }]);
     expect(frames.map((f) => pointsOf(viewsOf(f)[0])).join("|")).toBe([want, want, want, want].join("|"));
-  });
+    expect(frames.every((f) => viewsOf(f)[0]!.day?.turn?.doneAt !== undefined)).toBe(true);
+    const stored = await storedRoom(g.code);
+    expect(stored.phaseEndsAt).toBe(stored.pickTurn!.doneAt! + PICK_GAP_MS);
+    expect(await alarmOf(g.code)).toBe(stored.phaseEndsAt);
+  }, 40_000);
 
-  it("같은 사람의 250ms 안 두 번째 지목은 상태를 바꾸지 않고 그 사람 소켓에만 서버 값 view 를 보낸다(오류 프레임 없음)", async () => {
-    const g = await nominationRoom();
-    const [a, b, c] = [g.actors[1]!, g.actors[2]!, g.actors[3]!];
-    await castAll(g, () => pointAs(a.sock, b.seat));
-    const before = await storedNominates(g.code);
-    const second = await castAll(g, () => pointAs(a.sock, c.seat));
-    // a 는 actors[1] 이라 소켓 순서 두 번째다. 다른 소켓은 500ms 급 관찰(ping/pong 사이)에서 프레임이 없다.
-    expect(lines(second)).toBe("[] [state:nomination] [] []");
-    expect(pointsOf(viewsOf(second[1]!)[0])).toBe(JSON.stringify([{ seat: a.seat, target: b.seat }]));
-    expect(await storedNominates(g.code)).toBe(before);
-  });
+  it("차례가 아닌 산 사람의 point 는 보낸 소켓만 WRONG_PHASE 와 최신 state 를 받고 다른 소켓은 프레임이 없으며 저장은 그대로다(L15)", async () => {
+    const { g } = await firstTurnRoom();
+    const intruder = ownerAt(g, 2);
+    const before = await storedTurnState(g.code);
+    const frames = await castAll(g, () => pointAs(intruder.sock, ownerAt(g, 0).seat));
+    expect(lines(frames)).toBe(g.actors.map((a) => (a === intruder ? "[error:WRONG_PHASE,state:nomination]" : "[]")).join(" "));
+    expect(await storedTurnState(g.code)).toBe(before);
+  }, 40_000);
 
-  it("250ms 가 지난 뒤의 다른 대상은 받아들여져 모두 새 목록을 받는다", async () => {
-    const g = await nominationRoom();
-    const [a, b, c] = [g.actors[1]!, g.actors[2]!, g.actors[3]!];
-    await castAll(g, () => pointAs(a.sock, b.seat));
-    await pause(300);
-    const frames = await castAll(g, () => pointAs(a.sock, c.seat));
-    expect(lines(frames)).toBe("[state:nomination] [state:nomination] [state:nomination] [state:nomination]");
-    const want = JSON.stringify([{ seat: a.seat, target: c.seat }]);
-    expect(frames.map((f) => pointsOf(viewsOf(f)[0])).join("|")).toBe([want, want, want, want].join("|"));
-  });
+  it("확정한 차례 주인의 두 번째 point 는 그 소켓만 WRONG_PHASE 와 state 를 받는다", async () => {
+    const { g } = await firstTurnRoom();
+    const owner = ownerAt(g, 0);
+    await castAll(g, () => pointAs(owner.sock, ownerAt(g, 1).seat));
+    const again = await castAll(g, () => pointAs(owner.sock, ownerAt(g, 2).seat));
+    expect(lines(again)).toBe(g.actors.map((a) => (a === owner ? "[error:WRONG_PHASE,state:nomination]" : "[]")).join(" "));
+  }, 40_000);
 
-  it("같은 값을 다시 보내면 모든 소켓이 프레임을 받지 않는다", async () => {
-    const g = await nominationRoom();
-    const [a, b] = [g.actors[1]!, g.actors[2]!];
-    await castAll(g, () => pointAs(a.sock, b.seat));
-    await pause(300);
-    expect(lines(await castAll(g, () => pointAs(a.sock, b.seat)))).toBe("[] [] [] []");
-  });
+  it("자기 차례에 자기 자신을 가리키면 그 소켓만 BAD_MESSAGE 와 최신 state 를 받는다", async () => {
+    const { g } = await firstTurnRoom();
+    const owner = ownerAt(g, 0);
+    const frames = await castAll(g, () => pointAs(owner.sock, owner.seat));
+    expect(lines(frames)).toBe(g.actors.map((a) => (a === owner ? "[error:BAD_MESSAGE,state:nomination]" : "[]")).join(" "));
+  }, 40_000);
 
-  it("자기 자신을 가리키면 보낸 소켓만 BAD_MESSAGE 와 최신 state 를 받는다", async () => {
-    const g = await nominationRoom();
-    const a = g.actors[1]!;
-    expect(lines(await castAll(g, () => pointAs(a.sock, a.seat)))).toBe("[] [error:BAD_MESSAGE,state:nomination] [] []");
-  });
+  it("확정 뒤 사이가 끝나면 다음 좌석 차례가 되고, 그 차례를 8초 마감으로 넘기면 skip 으로 확정된다", async () => {
+    const { g } = await firstTurnRoom();
+    await castAll(g, () => pointAs(ownerAt(g, 0).sock, ownerAt(g, 1).seat));
+    const gapEnd = await closePhase(g.code);
+    await settleAllSocks(g);
+    const second = lastViewOf(g.socks[0]!).day!.turn!;
+    expect(`${second.i}/${second.endsAt}/${second.doneAt}`).toBe(`1/${gapEnd + PICK_TURN_MS}/undefined`);
+    const turnEnd = await closePhase(g.code);
+    await settleAllSocks(g);
+    const skipped = lastViewOf(g.socks[0]!).day!.turn!;
+    expect(`${lastViewOf(g.socks[0]!).phase}/${skipped.i}/${skipped.skip}/${skipped.doneAt}`).toBe(`nomination/1/true/${turnEnd}`);
+  }, 40_000);
 
   it("지목 단계가 아니면(discussion) 보낸 소켓만 WRONG_PHASE 와 최신 state 를 받는다", async () => {
     const g = await startedGame("discussion", 3);
@@ -282,10 +328,19 @@ async function dueAgo(code: string, ago: number): Promise<void> {
   expect(await runDurableObjectAlarm(env.ROOM.getByName(code))).toBe(true);
 }
 
-/** 저장 상태 patch: 산 사람 모두가 target 좌석을 지목해 둔다(target 본인은 다른 사람) — 지목 마감 훅(resolveNomination)이 target 을 변론자로 정한다(08-11, 실제 마감 경로). */
+/**
+ * 저장 상태 patch: 산 사람 모두가 target 좌석을 지목해 두고 차례 상태를 끝 알림 자리로 세운다(pickTurn.i = 산 사람 수) —
+ * 깨어날 때 정규화가 차례 없는 지목을 다시 시작해 표를 지우지 않고, 지목 마감 한 번에 집계(resolveNomination)가 target 을 변론자로 정한다(08-11, 09.1-04).
+ */
 function pointedAt(target: number): (room: Record<string, unknown>) => Record<string, unknown> {
-  return (room) =>
-    mapPlayers(room, (p) => ({ ...p, nominate: p.seat === target ? ((target + 1) % 5) : target }));
+  return (room) => {
+    const marked = mapPlayers(room, (p) => ({ ...p, nominate: p.seat === target ? ((target + 1) % 5) : target }));
+    const order = (marked.players as Array<{ seat: number; alive?: boolean }>)
+      .filter((p) => p.alive !== false)
+      .map((p) => p.seat)
+      .sort((a, b) => a - b);
+    return { ...marked, pickTurn: { order, i: order.length } };
+  };
 }
 
 describe("모이기·무대 배치(결정 0060-7)", () => {
@@ -459,12 +514,12 @@ async function verdictAll(g: Game, agreeBySeat: Record<number, boolean>): Promis
 }
 
 describe("실제 흐름 (결정 0060-1)", () => {
-  it("토론 끝내기 과반 → 지목(마감 = 그 시각 + 15000) → 4:1 지목 → 변론(변론자 무대) → 찬반 3:1 → 처형(변론자 탈락·유령) → 밤", async () => {
+  it("토론 끝내기 과반 → 지목(마감 = 그 시각 + 3000, 모이기) → 4:1 지목 → 변론(변론자 무대) → 찬반 3:1 → 처형(변론자 탈락·유령) → 밤", async () => {
     const { g, before, after } = await toNominationByEnd();
     const stored = await storedFlow(g.code);
     expect(stored.phase).toBe("nomination");
-    expect(stored.phaseEndsAt! >= before + PHASE_DEFS.nomination.durationMs! - 50).toBe(true);
-    expect(stored.phaseEndsAt! <= after + PHASE_DEFS.nomination.durationMs! + 50).toBe(true);
+    expect(stored.phaseEndsAt! >= before + NOMINATION_GATHER_MS - 50).toBe(true);
+    expect(stored.phaseEndsAt! <= after + NOMINATION_GATHER_MS + 50).toBe(true);
 
     const defender = g.actors.find((a) => a.role !== "mafia")!;
     const others = g.actors.filter((a) => a.seat !== defender.seat);
