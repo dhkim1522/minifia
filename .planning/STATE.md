@@ -5,16 +5,16 @@ milestone_name: 같은 공간
 current_phase: 9
 current_phase_name: 밤과 아침
 status: verifying
-stopped_at: Completed 09.1-11-PLAN.md
-last_updated: "2026-11-04T15:27:22.393Z"
+stopped_at: Completed 09.1-12-PLAN.md
+last_updated: "2026-11-04T16:07:29.289Z"
 last_activity: 2026-11-03
 last_activity_desc: Phase 9 execution started
-state_head: dbd3ff5813a820ba422ad0c965a63098bb1a6d0d
+state_head: 41cf123d241129d2211bbb1a9dcf4804c03fac2b
 progress:
   total_phases: 8
   completed_phases: 3
   total_plans: 120
-  completed_plans: 119
+  completed_plans: 120
   percent: 38
 ---
 
@@ -179,6 +179,7 @@ Progress: [████░░░░░░] 38% (3/7 phases)
 | Phase 09.1 P09 | 50min | 3 tasks | 17 files |
 | Phase 09.1 P10 | 20min | 3 tasks | 22 files |
 | Phase 09.1 P11 | 1h | 3 tasks | 14 files |
+| Phase 09.1 P12 | 80min | 3 tasks | 15 files |
 
 ## Accumulated Context
 
@@ -366,6 +367,7 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 09.1]: 09.1-10: ChatStore.holdCardsUntil 은 (at, now) — 저장소가 시계를 읽지 않고 이미 보이는 옛 카드를 다시 숨기지 않기 위함
 - [Phase 09.1]: 09.1-11: 편지 머리글 색 --letter-label 을 #5f687b 로(종이 위 4.88:1, 시안 #6a7388 은 4.14:1)
 - [Phase 09.1]: 09.1-11: 편지가 인장에 닿는 긴 글은 머리글 아래에 붙이고 인장 옆 줄 오른쪽을 88 비운다. 360 폭 100자(긴 단어)는 3단계로도 모자라 UI-SPEC 결정으로 이월
+- [Phase 09.1]: 결정 0064: 09.1 계획 값(M-3~M-13)·유언 50자·10페이즈 감정표현 몸 동작만
 
 ### Pending Todos
 
@@ -404,8 +406,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-04T15:27:21.868Z
-Stopped at: Completed 09.1-11-PLAN.md
+Last session: 2026-11-04T16:07:28.714Z
+Stopped at: Completed 09.1-12-PLAN.md
 Resume file: None
 
 ## Operator Next Steps

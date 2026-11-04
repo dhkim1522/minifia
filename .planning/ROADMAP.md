@@ -342,7 +342,7 @@ Plans:
 
 **UI hint**: yes
 **계획 메모**: UI-SPEC 먼저(`/gsd-ui-phase 09.1`).
-**Plans:** 11/12 plans executed
+**Plans:** 12/12 plans executed
 
 Plans:
 
@@ -378,7 +378,7 @@ Plans:
 - [x] 09.1-11-PLAN.md — 유언 편지 부품·아침 알림 위로·E2E 편지(폰 6종 100자) (TDD, W10)
 
 **Wave 11**
-- [ ] 09.1-12-PLAN.md — 결정 0064·문서·HANDOFF·실기기 목록·로컬 전체 검증·push(배포 없음) (W11)
+- [x] 09.1-12-PLAN.md — 결정 0064·문서·HANDOFF·실기기 목록·로컬 전체 검증·push(배포 없음) (W11)
 
 ### Phase 10: 캐릭터·동작·의상
 
