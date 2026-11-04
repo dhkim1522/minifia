@@ -2569,13 +2569,10 @@ async function nightFlow(ctx) {
 // ---- night-sizes: 폰 크기 6종에서 밤마다 내 이름표가 스테이지 안에 완전히 들어오고 마피아 이름표 버튼이 44×44 이상이다 (NIGHT-07, NIGHT-09, L10) ----
 // 한 판의 밤 한 장씩만 읽는다(크기마다 마피아·경찰·시민 세 판). 흐름 본체(night)가 시나리오를 보고 이 흐름은 기하만 본다. 문턱은 낮추지 않는다.
 
-/** 100자 유언(공백 없는 긴 단어 섞음, 정확히 100 글자) */
-const WILL100 = (() => {
-  const base = "마피아는도윤님이분명하다고확신하는이유는지난밤에들었던이상한발소리때문이에요 정말로제가직접본걸말씀드리는거예요 끝까지살아남아서꼭이겨주세요 모두조심하세요 그리고서준님도조금은의심돼요 감사합니다 잘부탁해요 사랑해요 안녕히";
-  return Array.from(base).slice(0, 100).join("").trim();
-})();
+/** 50자 유언(유언 상한 WILL_MAX_GRAPHEMES, 사용자 결정 2026-11-05). 공백 없는 긴 단어(13·15자)를 섞어 실제 쓰는 모양에 맞춘다. 정확히 50 글자(lib.test.mjs 계약) */
+const WILL50 = "도윤님이마피아라고확신해요 어젯밤발소리를제가직접들었어요 끝까지꼭이겨주세요 모두조심하세요 안녕";
 
-/** 폰 크기마다: 방장 시민이 토론에서 100자 유언을 저장하고 봇 마피아에게 당해 아침에 편지가 뜨면 편지지 맞춤(LT4~LT8)·유언 전체 표시(LT12)·글꼴 외부 요청 0(LT11)을 본다 (09.1-11, UI-SPEC C-3) */
+/** 폰 크기마다: 방장 시민이 토론에서 50자(유언 상한) 유언을 저장하고 봇 마피아에게 당해 아침에 편지가 뜨면 편지지 맞춤(LT4~LT8)·유언 전체 표시(LT12)·글꼴 외부 요청 0(LT11)을 본다 (09.1-11, UI-SPEC C-3) */
 async function nightSizesLetter(ctx, rec) {
   const id = "night-sizes";
   const sc = `${id}/letter`;
@@ -2583,12 +2580,12 @@ async function nightSizesLetter(ctx, rec) {
   try {
     const { hp, ht, hostSeat } = game;
     if (hostSeat !== 0) throw new SetupError(`방장 자리가 0 이 아님 (${hostSeat})`);
-    if (graphemeCount(WILL100) !== 100) throw new Error(`시험 유언이 100자가 아님 (${graphemeCount(WILL100)}자)`);
+    if (graphemeCount(WILL50) !== 50) throw new Error(`시험 유언이 50자가 아님 (${graphemeCount(WILL50)}자)`);
     const wrote = await attempt(async () => {
       await hp.locator("[data-will-button]").click({ timeout: 4000 });
-      await writeSheet(hp, ht, "will", WILL100);
+      await writeSheet(hp, ht, "will", WILL50);
     });
-    rec(sc, "LT0", "토론에서 100자 유언을 쓰고 저장하면 서버가 같은 글을 돌려준다", wrote.ok, wrote.detail);
+    rec(sc, "LT0", "토론에서 50자(상한) 유언을 쓰고 저장하면 서버가 같은 글을 돌려준다", wrote.ok, wrote.detail);
     await skipTo(hp, ht, "night");
     await untilGame(hp, (x) => x.phase === "night", 9000, "밤 도착");
     // 봇 마피아는 밤 시작 1~6초 사이에 방장을 고른다 — 그 뒤에 아침으로 넘긴다
@@ -2598,7 +2595,7 @@ async function nightSizesLetter(ctx, rec) {
     await skipTo(hp, ht, "morning");
     await untilGame(hp, (x) => x.phase === "morning", 6000, "아침 도착");
     if (aliveOf(ht.last()).includes(hostSeat)) throw new SetupError("방장이 이번 밤에 당하지 않음");
-    await morningLetterChecks(ctx, sc, rec, game, { appearMaxMs: 700 + 600, announceRe: /^암살당했습니다$/, wills: [WILL100], name: nickOf(ht.last(), hostSeat) });
+    await morningLetterChecks(ctx, sc, rec, game, { appearMaxMs: 700 + 600, announceRe: /^암살당했습니다$/, wills: [WILL50], name: nickOf(ht.last(), hostSeat) });
   } finally {
     await closeGame(game);
   }

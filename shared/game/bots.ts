@@ -79,7 +79,7 @@ export const BOT_NIGHT_LINES: readonly string[] = ["동의해요", "그 사람�
 /** 최후 변론에서 후보인 봇이 고르는 문구(3개). 길이를 옛 템플릿 목록과 같은 3 으로 두어 defense 의 시드 호출 수가 그대로다. */
 export const BOT_DEFENSE_LINES: readonly string[] = ["저 아니에요", "저는 시민이에요", "한 번만 믿어 주세요"];
 
-/** 1일차 토론에서 봇이 남기는 유언 문장(3개, 역할 단어 없음). 봇 seat % 길이 번째 줄을 쓴다 — 난수 없음. sanitizeChatText 를 그대로 통과하며 자소 100 이하다(결정 0061-18). */
+/** 1일차 토론에서 봇이 남기는 유언 문장(3개, 역할 단어 없음). 봇 seat % 길이 번째 줄을 쓴다 — 난수 없음. sanitizeChatText 를 그대로 통과하며 유언 상한 WILL_MAX_GRAPHEMES(50) 자소 이하다(결정 0061-18, 사용자 결정 2026-11-05). */
 export const BOT_WILL_LINES: readonly string[] = ["다들 끝까지 힘내요", "저는 믿어 주세요", "좋은 판이었어요"];
 /** 1일차 토론 시작 이만큼 뒤에 산 봇이 유언을 쓴다(ms). */
 export const BOT_WILL_AT_MS = 3_000;

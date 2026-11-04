@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef } from "react";
 import "../../styles/v2.css";
 import { countGraphemes } from "../../../shared/nickname";
+import { WILL_MAX_GRAPHEMES } from "../../../shared/game/will";
 import { useComposedText } from "../../net/useComposedText";
 import { V2Icon } from "./V2Icon";
 
@@ -31,6 +32,7 @@ export interface WillSheetProps {
   onSave(text: string): void;
   /** true 면 [저장] 이 "저장됨" 비활성. 저장 실패는 부르는 쪽이 false 로 둔다 */
   saved?: boolean;
+  /** 글자 수 상한(그래핌). 기본은 유언 상한 WILL_MAX_GRAPHEMES(50). 쪽지는 CHAT_MAX_GRAPHEMES(100) */
   max?: number;
   placeholder?: string;
   onClose(text: string): void;
@@ -41,7 +43,8 @@ export interface WillSheetProps {
 }
 
 const WILL_TEXT = { title: "유언", placeholder: "죽으면 모두에게 보여요", close: "닫기", save: "저장", saved: "저장됨" } as const;
-const DEFAULT_MAX = 100;
+/** 기본은 유언 상한(서버 saveWill 과 같은 값, 50). 쪽지는 부르는 쪽이 채팅 상한(100)을 준다 */
+const DEFAULT_MAX = WILL_MAX_GRAPHEMES;
 
 const segmenter = new Intl.Segmenter("ko", { granularity: "grapheme" });
 

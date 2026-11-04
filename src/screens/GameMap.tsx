@@ -2,7 +2,9 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ComponentProps } from "react";
 import type { ReactNode } from "react";
 import { isAlive } from "../../shared/game/alive";
+import { CHAT_MAX_GRAPHEMES } from "../../shared/game/chatRules";
 import { canMoveIn } from "../../shared/game/movement";
+import { WILL_MAX_GRAPHEMES } from "../../shared/game/will";
 import { APPROACH_DIST_FX, approachPoint, positionAtFx } from "../../shared/game/world";
 import type { ClientMessage, RoomView } from "../../shared/protocol";
 import { KillFx } from "../components/KillFx";
@@ -517,7 +519,7 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
         <div ref={layerRef} className="mf-will-layer" {...(veiled ? { "data-panel-hidden": "true" } : {})}>
           <WillSheet
             key={will.open}
-            {...(will.open === "note" ? { title: "쪽지", icon: "note" as const, tone: "mafia" as const, placeholder: NOTE_PLACEHOLDER } : {})}
+            {...(will.open === "note" ? { title: "쪽지", icon: "note" as const, tone: "mafia" as const, placeholder: NOTE_PLACEHOLDER, max: CHAT_MAX_GRAPHEMES } : { max: WILL_MAX_GRAPHEMES })}
             value={will.draft}
             onChange={will.setDraft}
             onSave={will.save}

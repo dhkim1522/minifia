@@ -326,7 +326,7 @@ export interface ChatRejectFrame {
   t: "chatReject";
   why: ChatRejectWhy;
 }
-/** 유언 저장(지도 단계의 산 사람, 결정 0061-10). 본문 정리·100 자소 제한은 서버(saveWill)가 정한다. */
+/** 유언 저장(지도 단계의 산 사람, 결정 0061-10). 본문 정리·50 자소 제한(WILL_MAX_GRAPHEMES)은 서버(saveWill)가 정한다. */
 export interface WillSendMessage {
   t: "will";
   text: string;
