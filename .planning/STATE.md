@@ -5,16 +5,16 @@ milestone_name: 같은 공간
 current_phase: 9
 current_phase_name: 밤과 아침
 status: verifying
-stopped_at: Completed 09.1.1-09-PLAN.md
-last_updated: "2026-11-04T19:45:10.486Z"
+stopped_at: Completed 09.1.1-10-PLAN.md
+last_updated: "2026-11-04T20:13:29.054Z"
 last_activity: 2026-11-03
 last_activity_desc: Phase 9 execution started
-state_head: b2cf3fa7b9570775c678618a90cb8a90b0571a8d
+state_head: 3496414535ecfd71b5f0d77fd9de927d9db63ff5
 progress:
   total_phases: 9
   completed_phases: 3
   total_plans: 137
-  completed_plans: 129
+  completed_plans: 130
   percent: 33
 ---
 
@@ -189,6 +189,7 @@ Progress: [███░░░░░░░] 33% (3/7 phases)
 | Phase 09.1.1 P07 | 약 90분 | 3 tasks | 11 files |
 | Phase 09.1.1 P08 | 약 50분 | 3 tasks | 17 files |
 | Phase 09.1.1 P09 | 60min | 3 tasks | 19 files |
+| Phase 09.1.1 P10 | 40min | 3 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -388,6 +389,8 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 09.1.1]: [07] 마지막 3인 자리는 기존 ringSlots(3) 재사용, 봇 한마디는 차례 시작 즉시 칩 문구 chat 한 줄, 넘기기는 finishShowdown 으로 한 번에 집계
 - [Phase 09.1.1]: [08] 떠 있는 버튼 묶음은 두 칸(배지 위·귓속말 아래)을 항상 잡고, 말 바꿈 알약은 직전 값이 직업이었던 변경마다 뜨며, 배지 거절은 지목·유언 되돌림과 따로 센다
 - [Phase 09.1.1]: 09.1.1-09: 귓속말은 낮 토론에서만 버튼을 그리고(O-3), 시트는 서버가 whisperUsed 로 확인할 때 닫히며 거절이면 입력을 남긴다. 화면이 당사자 아닌 본문 줄을 한 번 더 걸러 DOM 에 두지 않는다
+- [Phase 09.1.1]: 09.1.1-10: 키보드가 열린 동안 떠 있는 버튼 위치는 판정하지 않고 참고 행으로만 남긴다(짧은 폰에서 패널과 함께 화면 위로 올라감, UI-SPEC 그대로)
+- [Phase 09.1.1]: 09.1.1-10: 귓속말 대상이 화면 밖이면 이름표를 누를 수 없다(카메라가 내 캐릭터를 따라감) — 제품은 그대로 두고 E2E 가 걸어서 다가가며 사용자 결정 후보로 올림
 
 ### Pending Todos
 
@@ -426,8 +429,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-04T19:45:09.855Z
-Stopped at: Completed 09.1.1-09-PLAN.md
+Last session: 2026-11-04T20:13:28.458Z
+Stopped at: Completed 09.1.1-10-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
