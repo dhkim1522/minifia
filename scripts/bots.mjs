@@ -6,6 +6,8 @@
 // 낮 처형 구간(결정 0024·0060-13, 서버 봇 shared/game/bots.ts 와 같은 성향): 토론(discussion) 30~60초에 토론 끝내기(endDiscussion) 한 번,
 // 순차 지목(nomination)은 day.turn 의 지금 차례가 내 좌석일 때만 1~3초 뒤 자기를 뺀 살아 있는 한 명 지목(point), 최후 변론(defense)에서는 자기가 변론자일 때만 변론 문구 하나,
 // 찬반(verdict) 1~6초에 변론자가 아니면 70% 찬성·30% 반대(verdict).
+// 동점 결선(runoff, 결정 0066-4)은 투표 창(step 1)에서 후보가 아닌 봇이 후보 둘 중 하나에게 point 한 번,
+// 마지막 3인 결전(showdown, 결정 0066-5)은 자기 한마디 차례에 고정 문구 하나를 chat 으로, 동시 지목 창에서 자기를 뺀 산 사람 하나에게 point 한 번 보낸다(사람이 앉은 방에서 봇이 막히지 않게 하는 것이 목적).
 // 단계마다 한 번만 행동하고, 처형·밤 밖의 종료(ended) 단계에서는 아무것도 하지 않는다.
 //
 // 로비 채팅 부하(--chat <초>): 로비에 있는 동안 봇마다 그 간격(±30% 흔들기)으로 입력 중 켜짐 → 1초 뒤 고정 문구 chat → 입력 중 꺼짐을 보낸다.
@@ -26,6 +28,8 @@ const NAMES = ["봇가나다라마바사", "봇아자차카타파하", "봇갸�
 const CHAT_LINES = ["저 아니에요", "누가 수상해요?", "조용한 사람이 수상해요", "어제 그 말 이상했어요", "믿어 주세요", "투표 신중하게 해요", "다들 뭐 했어요?", "저는 시민 같아요"];
 const NIGHT_LINES = ["동의해요", "그 사람으로 가요", "다른 사람으로 해요"];
 const DEFENSE_LINES = ["저 아니에요", "저는 시민이에요", "한 번만 믿어 주세요"];
+// shared/game/showdown.ts 의 LAST_WORD_CHIPS 사본(마지막 3인 한마디, 30자소 이하). 문구를 고치면 두 곳을 함께 고친다.
+const LAST_WORD_LINES = ["저는 아니에요", "쟤가 수상해요", "저를 믿어 주세요", "끝까지 지켜봐요"];
 // 로비 부하용 문구(위 낮 문구 8개 + 4개). 같은 봇이 같은 문장을 3초 안에 다시 보내지 않도록 12개를 돌린다.
 const LOBBY_LINES = [...CHAT_LINES, "여기 처음이에요", "몇 명이 올까요?", "빨리 시작해요", "방이 아늑하네요"];
 // D5 최소 전송 간격 600ms(shared/game/chatRules.ts CHAT_MIN_GAP_MS) 아래로 내려가지 않게 --chat 은 1초 이상이다(±30% 흔들어도 0.7초).
@@ -237,6 +241,51 @@ function onState(bot, view) {
       // 변론은 변론자 본인만 한다. 고정 변론 문구 셋 중 하나를 자유 채팅 한 줄로 보낸다.
       if (view.day?.candidate !== bot.seat) return;
       sayLater(bot, "defense", day, pick(DEFENSE_LINES), 1000 + Math.random() * 3000, "변론 채팅");
+    }
+  } else if (view.phase === "runoff") {
+    stopTalk(bot);
+    // 동점 결선: 투표 창(step 1)에서 후보가 아닌 봇이 후보 둘 중 하나에게 한 번 던진다(서버는 후보·탈락자의 표를 거절한다).
+    const runoff = view.day?.runoff;
+    if (runoff === undefined || runoff.step !== 1 || runoff.cand.includes(bot.seat)) return;
+    const key = `${day}:runoff`;
+    if (bot.voteKey === key) return;
+    bot.voteKey = key;
+    const target = pick(runoff.cand);
+    setTimeout(() => {
+      if (bot.view?.phase !== "runoff" || bot.view.day?.runoff?.step !== 1) return;
+      sendTo(bot, { t: "point", target });
+      log(`${bot.nickname}: 결선 투표 ${target}`);
+    }, 500 + Math.random() * 2500);
+  } else if (view.phase === "showdown") {
+    stopTalk(bot);
+    // 마지막 3인 결전: 자기 한마디 차례(day.showdown.order[i] 가 내 좌석이고 아직 확정 전)에 고정 문구 하나를 chat 으로,
+    // 동시 지목 창(i 3)에서 자기를 뺀 산 사람 하나를 point 로 한 번씩 보낸다. 같은 차례·창에서만 보낸다(단계가 넘어갔으면 서버가 막을 메시지라 보내지 않는다).
+    const sd = view.day?.showdown;
+    if (sd === undefined) return;
+    if (sd.i >= 0 && sd.i <= 2) {
+      if (sd.doneAt !== undefined || sd.order[sd.i] !== bot.seat) return;
+      const turnKey = `${day}:showdown:${sd.i}`;
+      if (bot.voteKey === turnKey) return;
+      bot.voteKey = turnKey;
+      const text = pick(LAST_WORD_LINES);
+      setTimeout(() => {
+        const now = bot.view?.day?.showdown;
+        if (bot.view?.phase !== "showdown" || now?.i !== sd.i || now.doneAt !== undefined) return;
+        sendChat(bot, text);
+        log(`${bot.nickname}: 마지막 한마디`);
+      }, 500 + Math.random() * 1500);
+    } else if (sd.i === 3) {
+      const key = `${day}:showdown:point`;
+      if (bot.voteKey === key) return;
+      bot.voteKey = key;
+      const candidates = view.players.filter((p) => p.alive !== false && p.seat !== bot.seat).map((p) => p.seat);
+      if (candidates.length === 0) return;
+      const target = pick(candidates);
+      setTimeout(() => {
+        if (bot.view?.phase !== "showdown" || bot.view.day?.showdown?.i !== 3) return;
+        sendTo(bot, { t: "point", target });
+        log(`${bot.nickname}: 결전 지목 ${target}`);
+      }, 500 + Math.random() * 2500);
     }
   } else {
     // 처형·종료(ended) 등 그 밖의 단계: 행동 없이 대기 중인 채팅만 정리한다.
