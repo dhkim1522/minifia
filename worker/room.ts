@@ -895,6 +895,18 @@ export class Room extends DurableObject<Env> {
   private async syncHome(now: number): Promise<void> {
     const room = this.room;
     if (!room || room.day === undefined) return;
+    // 알람 따라잡기로 아침을 건너뛴 경우(WR-01): 밤 키가 남은 채 지도 단계에 들어왔다. 정상 아침 경로와 같이 되돌리고 snap 을 한 번 보낸다.
+    // 키를 ':morning' 으로 바꿔 두므로 같은 단계에서 다시 불려도 멱등이다. 이어서 syncLayout 이 지금 단계 배치를 맞춘다.
+    const staleNight = room.phase !== "night" && room.phase !== "morning" && MAP_PHASES.has(room.phase) && this.world.lay?.key.endsWith(":night") === true;
+    if (staleNight) {
+      const staleKey = this.world.lay!.key.replace(/:night$/, ":morning");
+      const victimNow = room.morning?.eliminated;
+      const movedNow = room.players.filter((p) => isAlive(p) || (victimNow !== undefined && p.seat === victimNow)).map((p) => p.id);
+      this.world = { ...teleportHome(this.world, movedNow, now), lay: { key: staleKey, slots: this.world.lay?.slots ?? {} } };
+      await this.flushWorld();
+      this.snapEachViewer(now);
+      return;
+    }
     if (room.phase !== "night" && room.phase !== "morning") return;
     const key = `${room.day}:${room.phase}`;
     if (key === this.world.lay?.key) return;
@@ -902,6 +914,13 @@ export class Room extends DurableObject<Env> {
     const moved = room.players.filter((p) => isAlive(p) || (victimSeat !== undefined && p.seat === victimSeat)).map((p) => p.id);
     this.world = { ...teleportHome(this.world, moved, now), lay: { key, slots: this.world.lay?.slots ?? {} } };
     await this.flushWorld();
+    this.snapEachViewer(now);
+  }
+
+  // 보는 사람 한 명씩 worldVisibleTo 로 거른 snap 을 보낸다(밤·아침·알람 따라잡기가 함께 쓴다). 탈락자는 ghostSnapped 에 올려 같은 snap 을 두 번 받지 않게 한다.
+  private snapEachViewer(now: number): void {
+    const room = this.room;
+    if (!room) return;
     for (const viewer of room.players) {
       const visible = worldVisibleTo(room, viewer.id);
       if (visible.size === 0) continue;
