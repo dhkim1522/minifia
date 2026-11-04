@@ -799,3 +799,44 @@ describe("차례 알약 (결정 0063-1, UI-SPEC A-1~A-6)", () => {
     expect(css).toMatch(/\.mf-game__dim\[data-dim="on"\]\s*\{[^}]*opacity:\s*0\.4/);
   });
 });
+
+// ---- 09.1-08: 작은 폰은 압축형 알약 (UI-SPEC A-1) ----
+describe("차례 알약 — 압축형 (09.1-08)", () => {
+  const realInnerH = window.innerHeight;
+  const stubPhone = (innerH: number, panelH: number) => {
+    Object.defineProperty(window, "innerHeight", { value: innerH, configurable: true, writable: true });
+    vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockImplementation(function (this: HTMLElement) {
+      if (this.classList.contains("mf-game__panel")) return panelH;
+      if (this.classList.contains("mf-game__header")) return 62;
+      return 0;
+    });
+  };
+  afterEach(() => {
+    vi.restoreAllMocks();
+    Object.defineProperty(window, "innerHeight", { value: realInnerH, configurable: true, writable: true });
+  });
+
+  it("360×560(패널 188): is-compact 이고 위 한 줄 요소가 없다", () => {
+    stubPhone(560, 188);
+    const { container } = mount(makeView({ turn: { i: -1 } }));
+    const block = container.querySelector("[data-turn-block]")!;
+    expect(block.classList.contains("is-compact")).toBe(true);
+    expect(container.querySelector(".mf-turn__line")).toBeNull();
+  });
+
+  it("360×640(패널 188)·430×932(패널 244): 압축이 아니고 위 한 줄 요소가 있다", () => {
+    for (const [h, p] of [[640, 188], [932, 244]] as const) {
+      stubPhone(h, p);
+      const { container, unmount } = mount(makeView({ turn: { i: -1 } }));
+      expect(container.querySelector("[data-turn-block]")!.classList.contains("is-compact")).toBe(false);
+      expect(container.querySelector(".mf-turn__line")).not.toBeNull();
+      unmount();
+      vi.restoreAllMocks();
+    }
+  });
+
+  it("측정이 없는 환경(레이아웃 없음)에서는 압축으로 바꾸지 않는다", () => {
+    const { container } = mount(makeView({ turn: { i: -1 } }));
+    expect(container.querySelector("[data-turn-block]")!.classList.contains("is-compact")).toBe(false);
+  });
+});

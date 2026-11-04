@@ -3,7 +3,7 @@
 import { describe, expect, it } from "vitest";
 import { PICK_TURN_MS } from "../../shared/game/phases";
 import type { PickTurnView, PointLine, PublicPlayer, RoomView } from "../../shared/protocol";
-import { TURN_COPY, turnLook, turnStageOf, turnTopLine } from "../../src/game/pickTurn";
+import { TURN_COPY, mapStageTop, turnCompact, turnLook, turnStageOf, turnTopLine } from "../../src/game/pickTurn";
 
 const NAMES = ["서연", "민준", "도윤", "지호", "하윤"];
 const pl = (seat: number, alive = true): PublicPlayer => ({
@@ -196,5 +196,37 @@ describe("역할·spectate 를 읽지 않는다 (T-09.1-15)", () => {
       expect(snap({ role: "police" })).toBe(base);
       expect(snap({ spectate: true })).toBe(base);
     }
+  });
+});
+
+describe("mapStageTop — 지목 스테이지 윗변 (UI-SPEC A-1, 09.1-08)", () => {
+  it("알약이 없으면 헤더 아래 그대로", () => {
+    expect(mapStageTop(62, null)).toBe(62);
+  });
+  it("알약·막대 아랫변 + 4: 160 → 164, 압축 124 → 128", () => {
+    expect(mapStageTop(62, 160)).toBe(164);
+    expect(mapStageTop(62, 124)).toBe(128);
+  });
+  it("알약이 헤더보다 위에 있어도 헤더 아래보다 올라가지 않는다", () => {
+    expect(mapStageTop(62, 40)).toBe(62);
+    expect(mapStageTop(62, 58)).toBe(62);
+    expect(mapStageTop(62, 59)).toBe(63);
+  });
+});
+
+describe("turnCompact — 작은 폰은 압축형 (UI-SPEC A-1 표)", () => {
+  it("(창 높이 − 패널 − 62) < 360 이면 압축: 360×560(패널 188) 하나", () => {
+    expect(turnCompact(560, 188)).toBe(true);
+  });
+  it("나머지 다섯 폰은 압축이 아니다", () => {
+    expect(turnCompact(640, 188)).toBe(false); // 360×640
+    expect(turnCompact(664, 188)).toBe(false); // 390×664
+    expect(turnCompact(932, 244)).toBe(false); // 430×932
+    expect(turnCompact(844, 244)).toBe(false); // 390×844
+    expect(turnCompact(874, 244)).toBe(false); // 402×874
+  });
+  it("경계: 스테이지 높이 360 은 압축 아님, 359 는 압축", () => {
+    expect(turnCompact(62 + 188 + 360, 188)).toBe(false);
+    expect(turnCompact(62 + 188 + 359, 188)).toBe(true);
   });
 });

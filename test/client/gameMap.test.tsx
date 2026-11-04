@@ -294,6 +294,7 @@ describe("GameMap — 스테이지 사각형 측정과 키보드 (CHAT-05, 08-13
     vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockImplementation(function (this: HTMLElement) {
       if (this.classList.contains("mf-game__panel")) return panelH;
       if (this.classList.contains("mf-game__header")) return 62;
+      if (this.classList.contains("mf-turn__bar")) return 4;
       return 0;
     });
     vi.stubGlobal(
@@ -344,6 +345,53 @@ describe("GameMap — 스테이지 사각형 측정과 키보드 (CHAT-05, 08-13
     const { container } = mount(makeView());
     expect(container.querySelector(".mf-game__header")).not.toBeNull();
     expect(stage.props?.stageInsets).toEqual({ top: 62, bottom: DISCUSSION_PANEL_H });
+  });
+
+  // 09.1-08: 지목 동안 스테이지 윗변 = 차례 알약·막대 아랫변 + 4 (UI-SPEC A-1). 요소 위치는 offsetTop 으로 돌려준다
+  const nominationTurn = (i: number): RoomView => {
+    const v = makeView({ phase: "nomination" });
+    return { ...v, day: { ...v.day!, points: [], turn: { order: [0, 1, 2, 3], i, ...(i >= 0 ? { endsAt: NOW + 8000 } : {}) } } };
+  };
+  const stubTurnTops = (blockTop: number, barTop: number) =>
+    vi.spyOn(HTMLElement.prototype, "offsetTop", "get").mockImplementation(function (this: HTMLElement) {
+      if (this.classList.contains("mf-turn")) return blockTop;
+      if (this.classList.contains("mf-turn__bar")) return barTop;
+      return 0;
+    });
+
+  it("지목 차례 중: 알약·막대 아랫변(100 + 56 + 4 = 160) + 4 = 164 가 스테이지 윗변이다", () => {
+    panelH = 244;
+    stubTurnTops(100, 56);
+    mount(nominationTurn(0));
+    expect(stage.props?.stageInsets).toEqual({ top: 164, bottom: 244 });
+  });
+
+  it("지목 모이는 중(막대 아직 없음): 기본 알약 아랫변 160 → 164, 압축이면 124 → 128", () => {
+    panelH = 244;
+    const a = mount(nominationTurn(-1));
+    expect(stage.props?.stageInsets).toEqual({ top: 164, bottom: 244 });
+    a.unmount();
+    Object.defineProperty(window, "innerHeight", { value: 560, configurable: true, writable: true });
+    panelH = 188;
+    mount(nominationTurn(-1));
+    expect(stage.props?.stageInsets).toEqual({ top: 128, bottom: 188 });
+  });
+
+  it("압축형(360×560)에서 측정한 막대 아랫변(72 + 48 + 4 = 124) + 4 = 128", () => {
+    Object.defineProperty(window, "innerHeight", { value: 560, configurable: true, writable: true });
+    panelH = 188;
+    stubTurnTops(72, 48);
+    mount(nominationTurn(1));
+    expect(stage.props?.stageInsets).toEqual({ top: 128, bottom: 188 });
+  });
+
+  it("지목이 끝나 변론으로 가면 헤더 아래(62)로 돌아온다", () => {
+    panelH = 244;
+    stubTurnTops(100, 56);
+    const m = mount(nominationTurn(0));
+    expect(stage.props?.stageInsets?.top).toBe(164);
+    m.show(makeView({ phase: "defense" }));
+    expect(stage.props?.stageInsets?.top).toBe(62);
   });
 
   it("패널이 자라면(ResizeObserver) 스테이지 아래 끝이 따라간다", () => {
