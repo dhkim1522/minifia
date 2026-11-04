@@ -9,6 +9,7 @@ import {
   BOT_DEFENSE_LINES,
   BOT_NAMES,
   BOT_NIGHT_LINES,
+  BOT_TYPING_LEAD_MS,
   BOT_WILL_LINES,
   EXEC_YES_PERCENT,
   botCount,
@@ -548,7 +549,7 @@ describe("botPlanKey·syncBotPlan·planBotSteps", () => {
       }
       expect(steps.every((s) => s.at < state.phaseEndsAt! - 500 && s.at > nowOf(state))).toBe(true);
       expect(chats.every((s) => s.act.t === "chat" && BOT_CHAT_LINES.includes(s.act.text))).toBe(true);
-      expect(steps.every((s) => s.act.t === "chat" || s.act.t === "endDiscussion" || s.act.t === "will")).toBe(true);
+      expect(steps.every((s) => s.act.t === "chat" || s.act.t === "typing" || s.act.t === "endDiscussion" || s.act.t === "will")).toBe(true);
       const rates = new Map<string, ChatSenderRate>();
       for (const s of chats) expect(`${seed}:${chatVerdict(state, s, rates)}`).toBe(`${seed}:null`);
     }
@@ -569,10 +570,10 @@ describe("botPlanKey·syncBotPlan·planBotSteps", () => {
         }
       }
       expect(steps.every((s) => s.at < state.phaseEndsAt! - 500 && s.at > nowOf(state))).toBe(true);
-      expect(steps.every((s) => s.act.t === "pick" || s.act.t === "approach" || (s.act.t === "chat" && BOT_NIGHT_LINES.includes(s.act.text)))).toBe(true);
+      expect(steps.every((s) => s.act.t === "pick" || s.act.t === "approach" || s.act.t === "typing" || (s.act.t === "chat" && BOT_NIGHT_LINES.includes(s.act.text)))).toBe(true);
       const rates = new Map<string, ChatSenderRate>();
       for (const s of steps) {
-        if (s.act.t === "approach") continue; // 09-12: 다가가기는 아래 전용 시험이 본다
+        if (s.act.t === "approach" || s.act.t === "typing") continue; // 09-12: 다가가기·09-24: 입력 중은 아래 전용 시험이 본다
         if (s.act.t === "pick") {
           const r = pickTarget(state, s.botId, s.act.target);
           expect(`${seed}:${r.ok ? "ok" : r.error}`).toBe(`${seed}:ok`);
@@ -615,7 +616,7 @@ describe("botPlanKey·syncBotPlan·planBotSteps", () => {
     ];
     for (const state of states) {
       const kinds = [...new Set(planBotSteps(state, nowOf(state), seededRandInt(5)).map((s) => s.act.t as string))].sort();
-      expect(`${state.phase}:${kinds.every((k) => ["chat", "pick", "endDiscussion", "point", "verdict", "will", "approach"].includes(k))}`).toBe(`${state.phase}:true`);
+      expect(`${state.phase}:${kinds.every((k) => ["chat", "pick", "endDiscussion", "point", "verdict", "will", "approach", "typing"].includes(k))}`).toBe(`${state.phase}:true`);
     }
   });
 
@@ -771,8 +772,8 @@ describe("봇 투표·변론 계획: defense", () => {
       const state = verdictAt(seed, "defense", 3);
       expect(`${seed}:${state.verdict?.candidate}`).toBe(`${seed}:3`);
       const steps = planBotSteps(state, nowOf(state), seededRandInt(seed));
-      expect(`${seed}:${steps.length}`).toBe(`${seed}:1`);
-      const step = steps[0]!;
+      expect(`${seed}:${steps.map((s) => s.act.t).join(",")}`).toBe(`${seed}:typing,chat`);
+      const step = steps[1]!;
       const bot = state.players.find((p) => p.seat === 3)!;
       expect(`${seed}:${step.botId === bot.id}`).toBe(`${seed}:true`);
       expect(step.at >= nowOf(state) + 1000 && step.at < state.phaseEndsAt! - 500).toBe(true);
@@ -791,7 +792,8 @@ describe("봇 투표·변론 계획: defense", () => {
     expect(rec.calls.join(",")).toBe("3,4000");
     for (const [i, name] of BOT_DEFENSE_LINES.entries()) {
       const steps = planBotSteps(state, nowOf(state), (n) => (n === 3 ? i : 0));
-      expect(steps[0]!.act.t === "chat" && steps[0]!.act.text).toBe(name);
+      const chat = steps.find((s) => s.act.t === "chat")!;
+      expect(chat.act.t === "chat" && chat.act.text).toBe(name);
     }
   });
 
@@ -819,8 +821,8 @@ describe("봇 투표·변론 계획: 회귀", () => {
     const digest = (text: string): number => [...text].reduce((h, ch) => (h * 31 + ch.charCodeAt(0)) % 1_000_000_007, 7);
     const got = (["discussion", "night"] as const).map((phase) => {
       const state = stateAt(1, 5, 8, phase);
-      // 09-12: will·approach 는 난수 없는 덧붙임 행동이다 — 걸러내면 기존 시드 고정 값이 그대로여야 한다(난수 호출 순서 불변 증명).
-      const steps = planBotSteps(state, nowOf(state), seededRandInt(42)).filter((st) => st.act.t !== "will" && st.act.t !== "approach");
+      // 09-12: will·approach(09-24: typing 도)는 난수 없는 덧붙임 행동이다 — 걸러내면 기존 시드 고정 값이 그대로여야 한다(난수 호출 순서 불변 증명).
+      const steps = planBotSteps(state, nowOf(state), seededRandInt(42)).filter((st) => st.act.t !== "will" && st.act.t !== "approach" && st.act.t !== "typing");
       return digest(canon(steps));
     });
     // 08-11: 토론이 90초가 되고 밤이 지목 마감 뒤에 닿아 두 계획의 시각(at)이 모두 달라졌다 — 새 흐름 값으로 다시 고정한다.
@@ -1092,5 +1094,62 @@ describe("봇 유언·다가가기 계획 (09-12, 결정 0061-18, 가정 A3)", (
         }
       }
     }
+  });
+});
+
+// 09-24 (feedback-1): 채팅 줄 앞 입력 중 단계. 난수는 부르지 않고, 짝 chat 이 버려지면 typing 도 남지 않는다.
+describe("봇 채팅 앞 입력 중 단계 (09-24)", () => {
+  /** steps 에서 chat 마다 같은 봇의 바로 앞 단계가 typing 이고 시각이 max(now, chat.at − LEAD) 인지 한 줄로. */
+  const pairing = (steps: BotStep[], now: number): string => {
+    const rows: string[] = [];
+    steps.forEach((s) => {
+      if (s.act.t !== "chat") return;
+      const typing = steps.filter((t) => t.botId === s.botId && t.act.t === "typing" && t.at <= s.at).at(-1);
+      rows.push(`${s.botId}:${typing !== undefined && typing.at === Math.max(now, s.at - BOT_TYPING_LEAD_MS)}`);
+    });
+    return rows.every((r) => r.endsWith(":true")) ? `ok:${rows.length}` : rows.join(",");
+  };
+
+  it("discussion: 봇의 채팅 두 줄마다 typing 이 한 번씩 바로 앞에 선다 (typing 수 = chat 수)", () => {
+    for (let seed = 1; seed <= 10; seed += 1) {
+      const state = stateAt(1, 5, seed, "discussion");
+      const now = nowOf(state);
+      const steps = planBotSteps(state, now, seededRandInt(seed));
+      const chats = steps.filter((s) => s.act.t === "chat");
+      expect(`${seed}:${steps.filter((s) => s.act.t === "typing").length}`).toBe(`${seed}:${chats.length}`);
+      expect(`${seed}:${pairing(steps, now)}`).toBe(`${seed}:ok:${chats.length}`);
+    }
+  });
+
+  it("night 마피아 채팅·defense 후보 채팅에도 같은 규칙이 선다", () => {
+    for (let seed = 1; seed <= 20; seed += 1) {
+      const night = stateAt(1, 5, seed, "night");
+      const nSteps = planBotSteps(night, nowOf(night), seededRandInt(seed));
+      expect(`${seed}:${pairing(nSteps, nowOf(night))}`).toBe(`${seed}:ok:${nSteps.filter((s) => s.act.t === "chat").length}`);
+      const defense = verdictAt(seed, "defense", 3);
+      const dSteps = planBotSteps(defense, nowOf(defense), seededRandInt(seed));
+      expect(`${seed}:${dSteps.map((s) => s.act.t).join(",")}`).toBe(`${seed}:typing,chat`);
+      expect(`${seed}:${pairing(dSteps, nowOf(defense))}`).toBe(`${seed}:ok:1`);
+    }
+  });
+
+  it("will·pick·point·verdict·endDiscussion·approach 앞에는 typing 이 없다 (typing 수 = chat 수)", () => {
+    const phases: RoomState[] = [stateAt(1, 5, 8, "discussion"), stateAt(1, 5, 8, "night"), stateAt(1, 5, 8, "nomination"), verdictAt(3, "verdict", 3)];
+    for (const state of phases) {
+      const steps = planBotSteps(state, nowOf(state), seededRandInt(7));
+      expect(`${state.phase}:${steps.filter((s) => s.act.t === "typing").length}`).toBe(`${state.phase}:${steps.filter((s) => s.act.t === "chat").length}`);
+    }
+  });
+
+  it("짝 chat 이 마감 여유로 버려지면 그 typing 도 남지 않는다", () => {
+    const full = stateAt(1, 5, 1, "discussion");
+    // 봇 한 명만 살린다(나머지 봇은 탈락) — 둘째 줄만 마감 여유에 걸리는 것을 한 봇으로 본다.
+    const state = markDead(full, ...botsOf(full).slice(1).map((b) => b.seat));
+    const now = nowOf(state);
+    // randInt 가 항상 0 이면 둘째 줄은 now + 10000. 마감 − 500 이 그 직전이 되게 마감을 당긴다.
+    const cut = { ...state, phaseEndsAt: now + 10_300 };
+    const steps = planBotSteps(cut, now, () => 0);
+    const kinds = steps.filter((s) => s.act.t === "chat" || s.act.t === "typing").map((s) => `${s.act.t}@${s.at - now}`);
+    expect(kinds.join(",")).toBe("typing@500,chat@2000");
   });
 });
