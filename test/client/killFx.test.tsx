@@ -57,7 +57,13 @@ interface CurtainViewOpts {
   dead?: boolean;
   /** 지목 단계의 지목 줄(seat → target) */
   points?: Array<{ seat: number; target: number }>;
+  /** 지목 단계의 차례 정보(day.turn). "end" 는 끝 알림 단계(i = order.length), 숫자는 그 차례 중, -1 은 모이는 중 */
+  turn?: "end" | number;
 }
+
+const ORDER = [0, 1, 2, 3, 4, 5];
+const turnOf = (t: "end" | number) =>
+  t === "end" ? { order: ORDER, i: ORDER.length } : t < 0 ? { order: ORDER, i: -1 } : { order: ORDER, i: t, endsAt: NOW + 1000 };
 
 function curtainView(o: CurtainViewOpts): RoomView {
   const players = Array.from({ length: 6 }, (_, seat) => ({
@@ -77,7 +83,7 @@ function curtainView(o: CurtainViewOpts): RoomView {
     maxPlayers: 8,
     players,
     me: { seat: 0, isHost: true, role: o.role ?? "citizen" },
-    day: { n: 1, roles: [], ...(o.points ? { points: o.points } : {}) },
+    day: { n: 1, roles: [], ...(o.points ? { points: o.points } : {}), ...(o.turn !== undefined ? { turn: turnOf(o.turn) } : {}) },
   } as unknown as RoomView;
 }
 
@@ -132,8 +138,8 @@ describe("장면 전환 막 — 공개 마감 420ms 전 덮기 → 다음 단계
 
   it.each([
     ["처형", { phase: "execution" as const }],
-    ["단독 선두 없는 지목(동률)", { phase: "nomination" as const, points: [{ seat: 1, target: 2 }, { seat: 2, target: 3 }] }],
-    ["지목 0표", { phase: "nomination" as const, points: [] }],
+    ["끝 알림 단계의 단독 선두 없는 지목(동률)", { phase: "nomination" as const, turn: "end" as const, points: [{ seat: 1, target: 2 }, { seat: 2, target: 3 }] }],
+    ["끝 알림 단계의 지목 0표", { phase: "nomination" as const, turn: "end" as const, points: [] }],
   ])("%s view 도 같은 시각(마감 − 420ms)에 덮는다", (_name, opts) => {
     const { container } = render(<SceneCurtain view={curtainView({ ...opts, endsIn: 1000 })} offset={0} reducedMotion={false} />);
     advance(579);
@@ -142,9 +148,35 @@ describe("장면 전환 막 — 공개 마감 420ms 전 덮기 → 다음 단계
     expect(curtain(container)?.getAttribute("data-curtain")).toBe("true");
   });
 
+  it("지목 차례 중·모이는 중에는 동률·0표여도 차례 마감이 와도 덮지 않는다 (09.1)", () => {
+    for (const turn of [-1, 0, 3] as const) {
+      const { container, unmount } = render(<SceneCurtain view={curtainView({ phase: "nomination", turn, endsIn: 1000, points: [] })} offset={0} reducedMotion={false} />);
+      advance(2000);
+      expect(curtain(container), `turn ${turn}`).toBeNull();
+      unmount();
+    }
+  });
+
+  it("지목 차례 중 뒤 끝 알림 단계에서 동률이면 그때 덮는다 (09.1)", () => {
+    const { container, rerender } = render(<SceneCurtain view={curtainView({ phase: "nomination", turn: 5, endsIn: 1000, points: [{ seat: 1, target: 2 }, { seat: 2, target: 3 }] })} offset={0} reducedMotion={false} />);
+    advance(2000);
+    expect(curtain(container)).toBeNull();
+    rerender(<SceneCurtain view={curtainView({ phase: "nomination", turn: "end", endsIn: 2000, points: [{ seat: 1, target: 2 }, { seat: 2, target: 3 }] })} offset={0} reducedMotion={false} />);
+    advance(1579);
+    expect(curtain(container)).toBeNull();
+    advance(1);
+    expect(curtain(container)?.getAttribute("data-curtain")).toBe("true");
+  });
+
+  it("day.turn 이 없는 지목 view 는 덮지 않는다", () => {
+    const { container } = render(<SceneCurtain view={curtainView({ phase: "nomination", endsIn: 1000, points: [] })} offset={0} reducedMotion={false} />);
+    advance(2000);
+    expect(curtain(container)).toBeNull();
+  });
+
   it("단독 선두가 있는 지목, 토론, 변론, 아침 view 는 마감이 와도 덮지 않는다", () => {
     for (const opts of [
-      { phase: "nomination" as const, points: [{ seat: 1, target: 2 }] },
+      { phase: "nomination" as const, turn: "end" as const, points: [{ seat: 1, target: 2 }] },
       { phase: "discussion" as const },
       { phase: "defense" as const },
       { phase: "morning" as const },
@@ -157,10 +189,10 @@ describe("장면 전환 막 — 공개 마감 420ms 전 덮기 → 다음 단계
   });
 
   it("지목 단계에서 덮기 전에 단독 선두가 생기면(다음이 변론) 덮지 않는다", () => {
-    const tie = curtainView({ phase: "nomination", endsIn: 1000, points: [] });
+    const tie = curtainView({ phase: "nomination", turn: "end", endsIn: 1000, points: [] });
     const { container, rerender } = render(<SceneCurtain view={tie} offset={0} reducedMotion={false} />);
     advance(300);
-    rerender(<SceneCurtain view={curtainView({ phase: "nomination", endsIn: 700, points: [{ seat: 1, target: 2 }] })} offset={0} reducedMotion={false} />);
+    rerender(<SceneCurtain view={curtainView({ phase: "nomination", turn: "end", endsIn: 700, points: [{ seat: 1, target: 2 }] })} offset={0} reducedMotion={false} />);
     advance(2000);
     expect(curtain(container)).toBeNull();
   });
