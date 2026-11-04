@@ -497,10 +497,23 @@ async function toNominationByEnd(): Promise<{ g: Game; before: number; after: nu
   return { g, before, after: Date.now() };
 }
 
-/** 사람마다 지목 대상을 정해 던진다(bySeat[행위자 좌석] = 대상 좌석). 사람당 250ms 간격에 걸리지 않게 한 사람이 한 번만 던진다. */
+/**
+ * 순차 지목을 끝 알림 자리까지 걷는다(결정 0063-1): 저장된 방을 읽어 지금 차례 주인(미확정)이 bySeat 에 있으면 그 사람이 지목하고(bySeat[행위자 좌석] = 대상 좌석),
+ * 아니면 마감을 당겨 한 걸음 넘긴다(기권·사이·모이기). 끝 알림에 닿으면 멈춘다 — 이어지는 dueAgo 한 번이 지목 집계를 일으킨다.
+ */
 async function pointAll(g: Game, bySeat: Record<number, number>): Promise<void> {
-  for (const a of g.actors) {
-    if (Object.hasOwn(bySeat, a.seat)) pointAs(a.sock, bySeat[a.seat]!);
+  for (let guard = 0; guard < 40; guard += 1) {
+    const room = await storedRoom(g.code);
+    const turn = room.pickTurn;
+    if (room.phase !== "nomination" || turn === undefined || turn.i >= turn.order.length) break;
+    const seat = turn.i >= 0 && turn.doneAt === undefined ? turn.order[turn.i] : undefined;
+    const actor = seat === undefined ? undefined : g.actors.find((a) => a.seat === seat);
+    if (actor !== undefined && Object.hasOwn(bySeat, actor.seat)) {
+      pointAs(actor.sock, bySeat[actor.seat]!);
+      await settleAllSocks(g);
+      continue;
+    }
+    await closePhase(g.code);
   }
   await settleAllSocks(g);
 }
@@ -574,6 +587,7 @@ describe("실제 흐름 (결정 0060-1)", () => {
 
   it("지목 0표면 지목 마감 뒤 곧장 밤이고 night view 의 day.noExecution.reason 은 noVotes", async () => {
     const { g } = await toNominationByEnd();
+    await pointAll(g, {}); // 모두 기권으로 차례를 끝까지 넘긴다
     await dueAgo(g.code, 1);
     await settleAllSocks(g);
     expect((await storedFlow(g.code)).phase).toBe("night");

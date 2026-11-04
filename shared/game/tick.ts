@@ -10,7 +10,8 @@
 // 마감 훅(ON_DEADLINE): 단계 마감 때의 집계·분기 처리. 진입 훅과 같이 tick 루프 안에서만 부른다(결정 0016-2).
 // 마감 훅 행: nomination(지목 집계 → 최다 한 명이면 defense, 동률·0표면 night), verdict(찬반 집계 → 항상 execution). execution·morning(승패면 next ended, 아니면 기본 단계 — 판정은 마감 훅에서만, D-10). ended 는 마감이 없는 종단 단계다.
 // 새 마감 = 이전 마감 + phaseDurationOf(진입 훅 뒤 상태) — 단계 표(PHASE_DEFS) 길이 그대로다.
-// 훅이 stay 를 돌려주면 다음 단계로 가지 않고 같은 단계에서 마감만 "이전 마감 + 단계 길이" 로 옮긴다.
+// 훅이 stay 를 돌려주면 다음 단계로 가지 않고 같은 단계에서 마감만 "이전 마감 + 그 상태의 단계 길이(phaseDurationOf)" 로 옮긴다.
+// nomination: 순차 지목(결정 0063-1) — 진입 enterNomination, 마감마다 stepNomination 이 같은 단계에 머물며(stay) 다음 마감은 이전 마감 + 그 단계 길이(모이기·차례·사이·끝 알림)다.
 // 난수는 세 번째 인자로만 받는다 — 방 DO 는 cryptoRandInt, 테스트는 seededRandInt.
 // 분기(4페이즈): 마감 훅이 next 를 돌려주면 그 단계로, 없으면 단계 표(PHASE_DEFS)의 기본 next 로 간다. 표는 데이터만 두고 분기는 훅이 정한다.
 // 진입 훅의 세 번째 인자 at 은 진입 시각(= 이전 마감)이다 — 시각을 스스로 읽지 않는 순수 규칙이 "진입 + 30분" 같은 계산을 할 때 쓴다.
@@ -18,7 +19,7 @@ import type { PhaseId } from "../protocol";
 import { enterDiscussion, phaseDurationOf } from "./discussion";
 import { enterEnded, routeAfterExecution, routeAfterMorning } from "./endgame";
 import { enterExecution } from "./execution";
-import { resolveNomination } from "./nomination";
+import { enterNomination, stepNomination } from "./nomination";
 import { enterMorning, enterNight } from "./night";
 import { PHASE_DEFS } from "./phases";
 import type { RoomState } from "./room";
@@ -44,15 +45,16 @@ export type DeadlineResult = { state: RoomState; stay: boolean; next?: PhaseId }
 const ON_ENTER: Partial<Record<PhaseId, (s: RoomState, randInt: RandInt, at: number) => RoomState>> = {
   dayAnnounce: enterDayAnnounce,
   discussion: enterDiscussion,
+  nomination: enterNomination,
   execution: enterExecution,
   night: enterNight,
   morning: enterMorning,
   ended: enterEnded,
 };
 
-/** 마감 훅. stay 면 같은 단계에 머문다(지금 쓰는 훅은 없다). 상태만 바꾸고 시각은 tick 이 정한다. */
-const ON_DEADLINE: Partial<Record<PhaseId, (s: RoomState) => DeadlineResult>> = {
-  nomination: resolveNomination,
+/** 마감 훅. at 은 지난 마감 시각이다(늦게 불려도 실제 호출 시각이 아니다). stay 면 같은 단계에 머문다(지목 차례). 상태만 바꾸고 새 마감은 tick 이 정한다. */
+const ON_DEADLINE: Partial<Record<PhaseId, (s: RoomState, at: number) => DeadlineResult>> = {
+  nomination: stepNomination,
   verdict: resolveVerdict,
   execution: routeAfterExecution,
   morning: routeAfterMorning,
@@ -71,8 +73,8 @@ export function tick(state: RoomState, now: number, randInt: RandInt = NO_RANDOM
     let closing = current;
     let branch: PhaseId | undefined;
     if (onDeadline !== undefined) {
-      const resolved = onDeadline(current);
-      const turnMs = PHASE_DEFS[current.phase].durationMs;
+      const resolved = onDeadline(current, deadline);
+      const turnMs = phaseDurationOf(resolved.state) ?? PHASE_DEFS[current.phase].durationMs;
       if (resolved.stay && turnMs !== null) {
         current = { ...resolved.state, phaseEndsAt: deadline + turnMs };
         continue;

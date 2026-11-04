@@ -106,7 +106,7 @@ export function resolveNomination(state: RoomState): DeadlineResult {
 }
 
 // ---- 순차 지목(09.1-01, 결정 0063-1·0063-4, M-5) ----
-// tick 표(ON_ENTER·ON_DEADLINE)에는 아직 걸지 않는다 — 09.1-04 가 건다.
+// tick 표에 걸려 있다: ON_ENTER.nomination = enterNomination, ON_DEADLINE.nomination = stepNomination(09.1-04). 옛 castPoint·resolveNomination 단독 경로는 차례 없는 상태용으로 09.1-05 까지 남는다.
 
 /** 지목 진입: 산 사람 좌석 오름차순을 차례 순서로 고정하고(i -1 = 모이는 중) 남은 지목 값을 모두 지운다. 마감은 호출한 쪽이 건다(nominationStepMs). */
 export function enterNomination(state: RoomState): RoomState {
@@ -188,6 +188,16 @@ export function castTurnPoint(
       phaseEndsAt: now + PICK_GAP_MS,
     },
   };
+}
+
+/**
+ * 지금 미확정 차례가 시작된 시각(= 차례 마감 − 차례 길이). 차례 중이 아니면(모이기·확정 뒤 사이·끝 알림·차례 없음) undefined.
+ * 방 DO 가 봇 계획을 세울 때 now 로 쓴다 — 계획은 차례가 시작된 시각에 한 번 지목하므로, 알람이 조금 늦어도 계획이 마감 여유(500ms) 밖으로 밀리지 않는다.
+ */
+export function turnStartOf(state: RoomState): number | undefined {
+  const turn = state.pickTurn;
+  if (state.phase !== "nomination" || turn === undefined || turn.endsAt === undefined || turn.doneAt !== undefined) return undefined;
+  return turn.endsAt - PICK_TURN_MS;
 }
 
 /** 공개 차례 정보(day.turn). 좌석 순서·마감·확정만 필드별로 복사하고 없는 키는 만들지 않는다 — 역할·연결을 읽지 않는다(L14). pickTurn 이 없으면 undefined. */
