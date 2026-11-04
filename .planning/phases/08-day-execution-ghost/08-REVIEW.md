@@ -41,7 +41,7 @@ status: issues_found
 - **WR-02 (`WorldStage.tsx:78,229,320`, `GameMap.tsx:347`)**: `onKick` 이 선택 속성이 되고 `canKick` 에 `onKick !== undefined` 가 추가됐다. `WorldStage` 를 쓰는 곳은 `Lobby.tsx:145`(onKick 전달)와 `GameMap` 둘뿐이라 대기실 동작은 그대로고, 게임 중 맵은 끊긴 사람 이름표가 일반 이름표로 남아 탭을 가로채지 않는다. 클릭 핸들러의 `onKick?.()` 도 안전하다. worldStage 테스트가 `onKick: undefined` 를 고정한다. 문제 없음.
 - **WR-03 (`run.mjs:149-181`)**: 던진 시도의 `ok === false` 항목을 `carried` 에 모아 재시도 결과와 무관하게 `results` 에 합치므로, 이전에 가려지던 검사 실패가 최종 결과에 남는다. `info: true` 참고 행은 `ok: true` 라 걸러진다. 마지막 시도까지 실패해도 `carried` 가 `S4` 줄 앞에 합쳐진다. 동작은 맞지만 아래 IN-07 의 두 가지 가장자리가 있다. 실제 Chrome E2E 는 이번에도 돌리지 못했다는 점은 HANDOFF 가 이미 밝히고 있다.
 
-HANDOFF.md 변경(검증 상태·다음 할 일 갱신)은 사실과 맞고 회사·조직 관련 표현도 없다. 변경 파일 전체에 대해 `git grep -nIiE "torder|티오더|조직|회사|~/project"` 를 돌려 해당 표현이 없음을 확인했다(`gameRoom.test.ts` 의 `seatOrdered` 는 무관한 일치).
+HANDOFF.md 변경(검증 상태·다음 할 일 갱신)은 사실과 맞고 회사·조직 관련 표현도 없다. 변경 파일 전체에 대해 원격 레포 위생 검사 명령(`~/personal/CLAUDE.md`)을 돌려 해당 표현이 없음을 확인했다(`gameRoom.test.ts` 의 `seatOrdered` 는 무관한 일치).
 
 ## Info
 
