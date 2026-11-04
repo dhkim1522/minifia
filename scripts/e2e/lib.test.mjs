@@ -123,6 +123,15 @@ import {
   externalPenFontRequests,
   letterChecks,
   ownPenFontRequests,
+  FLOAT_SIZE,
+  FLOAT_MARGIN,
+  FLOAT_GAP,
+  WHISPER_SHEET_H,
+  CLAIM_BADGE_SIZE,
+  CLAIM_SWAP_SIZE,
+  floatButtonChecks,
+  sheetFitChecks,
+  claimBadgeChecks,
   parseRgb,
 } from "./lib.mjs";
 import { dropSockets } from "./browser.mjs";
@@ -1967,4 +1976,238 @@ test("externalPenFontRequests: 대상 주소 밖의 Nanum 요청만 센다, 같�
   assert.equal(ownPenFontRequests(urls, origin), 1);
   assert.equal(externalPenFontRequests([], origin), 0);
   assert.equal(externalPenFontRequests(undefined, origin), 0);
+});
+
+// ---- 09.1.1-10: 떠 있는 버튼·시트 맞음·배지 기하 ----
+
+const okOf = (lines) => Object.fromEntries(lines.map((l) => [l.id, l.ok]));
+const onlyFail = (lines, ...ids) => assert.deepEqual(lines.filter((l) => !l.ok).map((l) => l.id), ids);
+
+// 390x844 폰, 패널 윗변 700: 버튼 둘이 오른쪽 16, 패널 윗변 위 8 에서 아래 버튼이 끝난다(48 + 8 + 48).
+const floatGood = () => ({
+  buttons: [
+    { kind: "claim", rect: rect(326, 588, 48, 48) },
+    { kind: "whisper", rect: rect(326, 644, 48, 48) },
+  ],
+  panel: { top: 700 },
+  viewport: { w: 390, h: 844 },
+  kbOpen: false,
+  expectCount: 2,
+});
+
+test("상수: 떠 있는 버튼 48·여백 16·사이 8, 귓속말 시트 124, 배지 20·말 바꿈 점 16", () => {
+  assert.equal(FLOAT_SIZE, 48);
+  assert.equal(FLOAT_MARGIN, 16);
+  assert.equal(FLOAT_GAP, 8);
+  assert.equal(WHISPER_SHEET_H, 124);
+  assert.equal(CLAIM_BADGE_SIZE, 20);
+  assert.equal(CLAIM_SWAP_SIZE, 16);
+});
+
+test("floatButtonChecks: 정상 값은 FB1~FB5 모두 통과, 줄 모양은 { id, label, ok, detail }", () => {
+  const lines = floatButtonChecks(floatGood());
+  assert.deepEqual(okOf(lines), { FB1: true, FB2: true, FB3: true, FB4: true, FB5: true });
+  for (const l of lines) assert.deepEqual(Object.keys(l).sort(), ["detail", "id", "label", "ok"]);
+});
+
+test("floatButtonChecks FB1: 개수가 기대와 다르거나 화면 밖으로 나가면 실패", () => {
+  const miss = floatGood();
+  miss.buttons = miss.buttons.slice(0, 1);
+  onlyFail(floatButtonChecks(miss), "FB1");
+  const out = floatGood();
+  out.buttons[1].rect = rect(350, 644, 48, 48); // 오른쪽 398 > 390
+  const lines = floatButtonChecks(out);
+  assert.equal(okOf(lines).FB1, false);
+  assert.equal(okOf(lines).FB5, false); // 여백도 어긋난다
+  const one = floatGood();
+  one.buttons = one.buttons.slice(0, 1);
+  one.expectCount = 1; // 변론 이후처럼 한 개만 기대하면 통과
+  assert.equal(okOf(floatButtonChecks(one)).FB1, true);
+});
+
+test("floatButtonChecks FB2: 버튼끼리 0.5px 넘게 겹치면 실패하고 쌍을 말한다, 변이 맞닿으면 통과", () => {
+  const clash = floatGood();
+  clash.buttons[1].rect = rect(326, 620, 48, 48);
+  const bad = floatButtonChecks(clash).find((l) => l.id === "FB2");
+  assert.equal(bad.ok, false);
+  assert.match(bad.detail, /claim-whisper/);
+  const touch = floatGood();
+  touch.buttons[1].rect = rect(326, 636, 48, 48);
+  assert.equal(okOf(floatButtonChecks(touch)).FB2, true);
+});
+
+test("floatButtonChecks FB3: 키보드가 닫혀 있을 때만 아랫변이 패널 윗변 − 8 이내, 열려 있으면 보지 않는다", () => {
+  const low = floatGood();
+  low.buttons[1].rect = rect(326, 656, 48, 48); // 아래 704 > 700 − 8
+  onlyFail(floatButtonChecks(low), "FB3");
+  const kb = floatGood();
+  kb.buttons[1].rect = rect(326, 656, 48, 48);
+  kb.kbOpen = true;
+  assert.equal(okOf(floatButtonChecks(kb)).FB3, true);
+  const edge = floatGood();
+  edge.buttons[1].rect = rect(326, 644.4, 48, 48); // 아래 692.4 ≤ 692.5
+  assert.equal(okOf(floatButtonChecks(edge)).FB3, true);
+});
+
+test("floatButtonChecks FB4·FB5: 지름 48±1 이 아니거나 오른쪽 여백이 16±1 이 아니면 실패", () => {
+  const small = floatGood();
+  small.buttons[0].rect = rect(326, 588, 43, 43);
+  onlyFail(floatButtonChecks(small), "FB4", "FB5");
+  const m = floatGood();
+  m.buttons[0].rect = rect(320, 588, 48, 48); // 여백 22
+  onlyFail(floatButtonChecks(m), "FB5");
+});
+
+test("floatButtonChecks: 측정값이 없으면 통과시키지 않는다", () => {
+  const lines = floatButtonChecks({ buttons: null, panel: null, viewport: null });
+  assert.equal(lines.length, 5);
+  assert.ok(lines.every((l) => l.ok === false && /측정값 없음/.test(l.detail)));
+});
+
+// 귓속말 시트(390x844): 폭 370, 높이 126(124 + 테두리), 패널 윗변 700 위 8 에 앉는다.
+const whisperGood = () => ({
+  kind: "whisper",
+  sheet: rect(10, 566, 370, 126),
+  header: { bottom: 62 },
+  viewport: { w: 390, h: 844 },
+  panel: { top: 700 },
+  targets: [rect(20, 578, 44, 44), rect(326, 636, 48, 48), rect(272, 636, 44, 44)],
+  fontMin: 14,
+});
+
+test("sheetFitChecks(whisper): 정상 값은 SF1~SF5 와 높이 SF6 모두 통과", () => {
+  const lines = sheetFitChecks(whisperGood());
+  assert.deepEqual(okOf(lines), { SF1: true, SF2: true, SF3: true, SF4: true, SF5: true, SF6: true });
+  for (const l of lines) assert.deepEqual(Object.keys(l).sort(), ["detail", "id", "label", "ok"]);
+});
+
+test("sheetFitChecks SF1·SF2: 헤더에 걸치거나 화면 밖이면 실패", () => {
+  const up = whisperGood();
+  up.sheet = rect(10, 50, 370, 126);
+  onlyFail(sheetFitChecks(up), "SF1", "SF3");
+  const wide = whisperGood();
+  wide.sheet = rect(10, 566, 390, 126); // 오른쪽 400 > 390
+  onlyFail(sheetFitChecks(wide), "SF2");
+});
+
+test("sheetFitChecks SF3: 패널이 있으면 시트 아랫변 ≤ 패널 윗변, 패널이 null(가려짐)이면 보이는 화면 아래 이내", () => {
+  const over = whisperGood();
+  over.sheet = rect(10, 580, 370, 126); // 아래 706 > 700
+  onlyFail(sheetFitChecks(over), "SF3");
+  const kb = whisperGood();
+  kb.panel = null;
+  kb.viewport = { w: 360, h: 304 }; // 키보드 336 이 올라온 640 폰
+  kb.sheet = rect(5, 170, 350, 126);
+  kb.targets = [rect(15, 182, 44, 44), rect(290, 238, 48, 48)];
+  assert.equal(okOf(sheetFitChecks(kb)).SF3, true);
+  kb.sheet = rect(5, 190, 350, 126); // 아래 316 > 304
+  assert.equal(okOf(sheetFitChecks(kb)).SF3, false);
+});
+
+test("sheetFitChecks SF4·SF5: 누르기 대상 44 미만, 글자 14 미만이면 실패", () => {
+  const tap = whisperGood();
+  tap.targets = [rect(20, 578, 44, 40)];
+  onlyFail(sheetFitChecks(tap), "SF4");
+  const font = whisperGood();
+  font.fontMin = 13;
+  onlyFail(sheetFitChecks(font), "SF5");
+  const half = whisperGood();
+  half.targets = [rect(20, 578, 43.5, 44)]; // 0.5px 오차는 G3 와 같다
+  assert.equal(okOf(sheetFitChecks(half)).SF4, true);
+});
+
+test("sheetFitChecks SF6(whisper): 높이 124±2 밖이면 실패", () => {
+  const tall = whisperGood();
+  tall.sheet = rect(10, 560, 370, 132);
+  onlyFail(sheetFitChecks(tall), "SF6");
+  const ok = whisperGood();
+  ok.sheet = rect(10, 568, 370, 124);
+  assert.equal(okOf(sheetFitChecks(ok)).SF6, true);
+});
+
+test("sheetFitChecks(badge): 칩 줄 수와 안내 유무에 맞는 높이(1줄 120·2줄 172·안내 +28, ±4 + 테두리 2)", () => {
+  const base = { kind: "badge", header: { bottom: 62 }, viewport: { w: 390, h: 844 }, panel: { top: 700 }, targets: [rect(20, 600, 90, 44)], fontMin: 14 };
+  const two = { ...base, chipRows: 2, hint: false, sheet: rect(10, 520, 370, 174) };
+  assert.equal(okOf(sheetFitChecks(two)).SF6, true);
+  const twoHint = { ...base, chipRows: 2, hint: true, sheet: rect(10, 490, 370, 202) };
+  assert.equal(okOf(sheetFitChecks(twoHint)).SF6, true);
+  const one = { ...base, chipRows: 1, hint: false, sheet: rect(10, 572, 370, 122) };
+  assert.equal(okOf(sheetFitChecks(one)).SF6, true);
+  const wrong = { ...base, chipRows: 2, hint: true, sheet: rect(10, 520, 370, 174) }; // 안내가 있는데 안내 없는 높이
+  assert.equal(okOf(sheetFitChecks(wrong)).SF6, false);
+  const missing = { ...base, chipRows: undefined, hint: false, sheet: rect(10, 520, 370, 174) };
+  assert.equal(okOf(sheetFitChecks(missing)).SF6, false);
+});
+
+test("sheetFitChecks: 측정값이 없으면 통과시키지 않는다", () => {
+  const lines = sheetFitChecks({ kind: "whisper", sheet: null });
+  assert.equal(lines.length, 6);
+  assert.ok(lines.every((l) => l.ok === false && /측정값 없음/.test(l.detail)));
+});
+
+// 배지: 이름표(.mv-tag) 오른쪽 위 모서리 — 지름 20, 오른쪽으로 4 나가고 위로 8 올라간다.
+const badgeGood = () => ({
+  badge: { rect: rect(204, 192, 20, 20), icon: { width: 14, height: 14 }, swap: null },
+  tag: rect(120, 200, 100, 28),
+  tagWidthWithout: 100,
+});
+
+test("claimBadgeChecks: 정상 값은 CB1~CB4 모두 통과(말 바꿈 점이 없으면 점 검사는 건너뜀)", () => {
+  const lines = claimBadgeChecks(badgeGood());
+  assert.deepEqual(okOf(lines), { CB1: true, CB2: true, CB3: true, CB4: true });
+  for (const l of lines) assert.deepEqual(Object.keys(l).sort(), ["detail", "id", "label", "ok"]);
+});
+
+test("claimBadgeChecks CB1: 지름이 20±1 이 아니면 실패", () => {
+  const b = badgeGood();
+  b.badge.rect = rect(204, 192, 24, 24);
+  assert.equal(okOf(claimBadgeChecks(b)).CB1, false);
+  const edge = badgeGood();
+  edge.badge.rect = rect(204, 192, 21, 21);
+  assert.equal(okOf(claimBadgeChecks(edge)).CB1, true);
+});
+
+test("claimBadgeChecks CB2: 이름표 오른쪽 위 모서리에서 바깥 4·위 −8 (±2) 밖이면 실패", () => {
+  const b = badgeGood();
+  b.badge.rect = rect(180, 192, 20, 20); // 오른쪽 모서리 200 → 바깥 −20
+  assert.equal(okOf(claimBadgeChecks(b)).CB2, false);
+  const up = badgeGood();
+  up.badge.rect = rect(204, 180, 20, 20); // 위 −20
+  assert.equal(okOf(claimBadgeChecks(up)).CB2, false);
+  const near = badgeGood();
+  near.badge.rect = rect(205.5, 193.5, 20, 20);
+  assert.equal(okOf(claimBadgeChecks(near)).CB2, true);
+});
+
+test("claimBadgeChecks CB3: 이름표 폭이 배지 없을 때보다 0.5px 넘게 늘면 실패, 기준 폭이 없으면 실패(측정값 없음)", () => {
+  const w = badgeGood();
+  w.tag = rect(120, 200, 124, 28);
+  assert.equal(okOf(claimBadgeChecks(w)).CB3, false);
+  const none = badgeGood();
+  delete none.tagWidthWithout;
+  const line = claimBadgeChecks(none).find((l) => l.id === "CB3");
+  assert.equal(line.ok, false);
+  assert.match(line.detail, /측정값 없음/);
+});
+
+test("claimBadgeChecks CB4: 아이콘이 14±1 이 아니면 실패", () => {
+  const b = badgeGood();
+  b.badge.icon = { width: 18, height: 18 };
+  assert.equal(okOf(claimBadgeChecks(b)).CB4, false);
+});
+
+test("claimBadgeChecks CB5: 말 바꿈 점이 있으면 지름 16±1, 없으면 줄 자체가 없다", () => {
+  const withSwap = badgeGood();
+  withSwap.badge.swap = rect(220, 208, 16, 16);
+  const lines = claimBadgeChecks(withSwap);
+  assert.equal(okOf(lines).CB5, true);
+  withSwap.badge.swap = rect(220, 208, 12, 12);
+  assert.equal(okOf(claimBadgeChecks(withSwap)).CB5, false);
+  assert.equal(claimBadgeChecks(badgeGood()).some((l) => l.id === "CB5"), false);
+});
+
+test("claimBadgeChecks: 측정값이 없으면 통과시키지 않는다", () => {
+  const lines = claimBadgeChecks({ badge: null, tag: null });
+  assert.equal(lines.length, 4);
+  assert.ok(lines.every((l) => l.ok === false && /측정값 없음/.test(l.detail)));
 });
