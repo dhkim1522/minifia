@@ -65,6 +65,7 @@ import {
   WORLD_START_MOVED_MIN,
   WORLD_JUMP_SPEED_MAX,
   resultChecks,
+  resultFitChecks,
   DEFAULT_SIZES,
   TIMELESS_PHASES,
   JOIN_FIT_MIN_H,
@@ -603,6 +604,47 @@ test("resultChecks P8: 배너·카드·흐림·요약·스크롤·번짐 위반�
   // 오차 허용: 탈락 .5 ± .05
   assert.equal(resBad((r) => { r.cards[1].figOpacity = 0.54; }).ok, true);
   assert.equal(resBad((r) => { r.cards[1].figOpacity = 0.56; }).ok, false);
+});
+
+// ---- 09-29 RS-FIT: 결과 화면 [처음으로] 가 폰 크기마다 스크롤 없이 화면 안 (feedback-6) ----
+const FIT_SIZE = { w: 360, h: 560, label: "360x560" };
+const fitSnap = (o = {}) => ({
+  home: { rect: { left: 16, top: 440, width: 328, height: 48 }, hit: true },
+  scrollTop: 0,
+  docScroll: 0,
+  ...o,
+});
+
+test("resultFitChecks RS-FIT: 화면 안·눌림·스크롤 0 은 통과한다", () => {
+  const r = resultFitChecks(fitSnap(), FIT_SIZE);
+  assert.equal(r.id, "RS-FIT");
+  assert.equal(r.ok, true, r.detail);
+  assert.match(r.label, /360x560/);
+});
+
+test("resultFitChecks RS-FIT: 버튼 아래 끝이 화면을 넘거나 눌리지 않거나 스크롤이 있으면 실패한다", () => {
+  const cases = [
+    ["버튼 아래 끝이 h 를 넘음", fitSnap({ home: { rect: { left: 16, top: 530, width: 328, height: 48 }, hit: true } }), /화면 밖|아래/],
+    ["버튼 위가 화면 위 밖", fitSnap({ home: { rect: { left: 16, top: -4, width: 328, height: 48 }, hit: true } }), /화면 밖|위/],
+    ["버튼 오른쪽이 w 를 넘음", fitSnap({ home: { rect: { left: 100, top: 440, width: 328, height: 48 }, hit: true } }), /화면 밖|오른쪽/],
+    ["hit false", fitSnap({ home: { rect: { left: 16, top: 440, width: 328, height: 48 }, hit: false } }), /눌리지|가려/],
+    ["본문 scrollTop 이 0 이 아님", fitSnap({ scrollTop: 40 }), /scrollTop|스크롤/],
+    ["문서 스크롤 여유 2px", fitSnap({ docScroll: 2 }), /문서|스크롤/],
+  ];
+  for (const [name, m, re] of cases) {
+    const r = resultFitChecks(m, FIT_SIZE);
+    assert.equal(r.ok, false, name);
+    assert.match(r.detail, re, name);
+  }
+  assert.equal(resultFitChecks(fitSnap({ docScroll: 1 }), FIT_SIZE).ok, true, "문서 스크롤 1px 는 허용");
+});
+
+test("resultFitChecks RS-FIT: 측정값이 없으면 조용히 통과하지 않는다", () => {
+  assert.match(resultFitChecks(null, FIT_SIZE).detail, /측정값 없음/);
+  assert.match(resultFitChecks({ home: null, scrollTop: 0, docScroll: 0 }, FIT_SIZE).detail, /측정값 없음/);
+  assert.match(resultFitChecks(fitSnap({ scrollTop: undefined }), FIT_SIZE).detail, /측정값 없음/);
+  assert.match(resultFitChecks(fitSnap({ docScroll: Number.NaN }), FIT_SIZE).detail, /측정값 없음/);
+  assert.match(resultFitChecks(fitSnap(), null).detail, /측정값 없음/);
 });
 
 test("resultChecks P8: 측정값이 없으면 조용히 통과하지 않는다", () => {
