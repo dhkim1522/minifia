@@ -368,8 +368,8 @@ describe("마지막 3인 — 동시 지목 (UI-SPEC E-3)", () => {
   it("나를 뺀 두 사람의 이름표가 버튼(그룹 '지목', '{닉네임} 님 가리키기')이고 깜빡인다", () => {
     const { container } = mount(makeShowdown({ i: 3, mySeat: 0 }));
     expect(picks(container).map((b) => b.getAttribute("data-pick"))).toEqual(["2", "3"]);
-    expect(pickOf(container, 2)?.getAttribute("aria-label")).toBe("서준 님 가리키기");
-    expect(pickOf(container, 3)?.getAttribute("aria-label")).toBe("지아 님 가리키기");
+    expect(pickOf(container, 2)?.getAttribute("aria-label")).toBe("도윤 님 가리키기");
+    expect(pickOf(container, 3)?.getAttribute("aria-label")).toBe("지호 님 가리키기");
     expect(container.querySelector('[role="group"][aria-label="지목"]')).not.toBeNull();
     expect(container.querySelectorAll(".mv-tag.is-blink").length).toBe(2);
   });
@@ -415,17 +415,19 @@ describe("마지막 3인 — 동시 지목 (UI-SPEC E-3)", () => {
   });
 
   it("마감 직후 거절(WRONG_PHASE)이면 '지금은 고를 수 없어요' 알림과 함께 선택이 서버 값으로 돌아간다", () => {
-    let emit: (e: { t: "error"; code: string }) => void = () => {};
-    const onEvent = vi.fn((cb: (e: { t: "error"; code: string }) => void) => {
-      emit = cb;
+    const listeners: Array<(e: { t: "error"; code: string }, meta: { epoch: number }) => void> = [];
+    const onEvent = vi.fn((l: (typeof listeners)[number]) => {
+      listeners.push(l);
       return () => {};
-    });
-    const m = mount(makeShowdown({ i: 3, mySeat: 0 }), { onEvent: onEvent as unknown as RoomConnection["onEvent"] });
+    }) as unknown as RoomConnection["onEvent"];
+    const m = mount(makeShowdown({ i: 3, mySeat: 0 }), { onEvent });
     fireEvent.click(pickOf(m.container, 2)!);
-    act(() => emit({ t: "error", code: "WRONG_PHASE" }));
+    expect(headOf(m.container, 2)?.getAttribute("data-mine")).toBe("true");
+    act(() => listeners.forEach((l) => l({ t: "error", code: "WRONG_PHASE" }, { epoch: 1 })));
     expect(m.container.querySelector(".mv-toast__text")?.textContent).toBe("지금은 고를 수 없어요");
     expect(headOf(m.container, 2)?.hasAttribute("data-mine")).toBe(false);
   });
+
 });
 
 describe("마지막 3인 — 공개 (UI-SPEC E-3, O-18)", () => {

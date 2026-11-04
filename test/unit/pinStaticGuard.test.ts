@@ -80,11 +80,11 @@ describe("pinPlan.ts 정적 가드 (L22)", () => {
     expect(tokensIn(CODE)).toEqual([]);
   });
 
-  it("view 에서 읽는 것은 phase·phaseEndsAt 와 day.turn·points·candidate·ballots·verdict 뿐이다 (view.me 접근 없음)", () => {
+  it("view 에서 읽는 것은 phase·phaseEndsAt 와 day.turn·points·candidate·ballots·verdict·showdown 뿐이다 (view.me 접근 없음)", () => {
     expect(CODE).not.toMatch(/\bview\.me\b/);
     expect(CODE).not.toMatch(/\bview\.players\b/);
     const reads = [...CODE.matchAll(/\bview\.([A-Za-z]+(?:\??\.[A-Za-z]+)?)/g)].map((m) => m[1]!.replace("?.", "."));
-    const allowed = new Set(["phase", "phaseEndsAt", "day.turn", "day.points", "day.candidate", "day.ballots", "day.verdict"]);
+    const allowed = new Set(["phase", "phaseEndsAt", "day.turn", "day.points", "day.candidate", "day.ballots", "day.verdict", "day.showdown"]);
     for (const r of reads) expect(allowed.has(r!), `view.${r}`).toBe(true);
   });
 });

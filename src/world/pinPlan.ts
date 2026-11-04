@@ -37,20 +37,32 @@ const RUNOFF_PIN: Extract<PinDesc, { mode: "point" }> = {
   z: (RUNOFF_SPOTS[0][1] + RUNOFF_SPOTS[1][1]) / 2 / UNIT,
 };
 
-/** 처형 단계(판결 순간)의 핀: 변론자에게 처형 진입 시각부터 부결 4.0초·처형 5.0초까지. 마지막 3인 처형(last)은 이 핀이 없다 */
+/**
+ * 처형 단계(판결 순간)의 핀: 변론자에게 처형 진입 시각부터 부결 4.0초·처형 5.0초까지.
+ * 마지막 3인 처형(verdict.last, 09.1.1-15)은 찬반 기록(ballots)이 없고 지목으로 정해진 득표자(day.candidate)를 같은 창으로 비춘다(줌·찬반 묶음은 없다).
+ */
 function executionPin(view: RoomView): PinDesc | null {
   const seat = view.day?.candidate;
   const verdict = view.day?.verdict;
-  if (typeof seat !== "number" || verdict === undefined || verdict.last === true) return null;
-  if (view.day?.ballots === undefined || view.phaseEndsAt === null) return null;
+  if (typeof seat !== "number" || verdict === undefined) return null;
+  if ((verdict.last !== true && view.day?.ballots === undefined) || view.phaseEndsAt === null) return null;
   const startAt = view.phaseEndsAt - EXECUTION_MS;
   return { mode: "fixed", seat, startAt, endAt: startAt + (verdict.passed ? PIN_OFF_EXEC_AT : PIN_OFF_NO_EXEC_AT) };
 }
 
-/** 단계별 핀. 순차 지목(차례·이동)·결선(후보 가운데 한 점)·판결 순간(변론자 고정). 다른 단계의 핀은 각 계획이 이 함수를 확장한다 */
+/** 마지막 3인 한마디(09.1.1-15, UI-SPEC E-1·F): 말하는 사람(차례 중·확정/시간 초과 뒤 사이)에게 켜 둔다. 모이는 중·동시 지목·공개에는 꺼진다(차례 사이의 교차는 렌더러 몫) */
+function showdownPin(view: RoomView): PinDesc | null {
+  const sd = view.day?.showdown;
+  if (sd === undefined || !Number.isInteger(sd.i) || sd.i < 0 || sd.i > 2) return null;
+  const seat = sd.order[sd.i];
+  return typeof seat === "number" ? { mode: "turn", seat } : null;
+}
+
+/** 단계별 핀. 순차 지목(차례·이동)·결선(후보 가운데 한 점)·마지막 3인 한마디(말하는 사람)·판결 순간(변론자 고정). 다른 단계의 핀은 각 계획이 이 함수를 확장한다 */
 export function pinOf(view: RoomView): PinDesc | null {
   if (view.phase === "execution") return executionPin(view);
   if (view.phase === "runoff") return RUNOFF_PIN;
+  if (view.phase === "showdown") return showdownPin(view);
   if (view.phase !== "nomination") return null;
   const turn = view.day?.turn;
   if (turn === undefined) return null;

@@ -6,6 +6,7 @@ import { isAlive } from "../../shared/game/alive";
 import { STAGE_SPOT, UNIT } from "../../shared/game/map";
 import type { PhaseId, RoomView } from "../../shared/protocol";
 import { GHOST_FADE_END_MS, GHOST_RISE_MS, pointsTally } from "../game/dayView";
+import { pointSeatsOf, revealPoints, showdownStageOf } from "../game/showdownView";
 import { ZOOM_IN_MS } from "../game/verdictMoment";
 import { GATHER_CENTER, ZOOM_MIN_STAGE_H } from "./camera";
 import type { OutfitId } from "./characterData";
@@ -87,7 +88,7 @@ export function visibleSeats(view: RoomView, fading?: ReadonlyMap<number, number
   return seats;
 }
 
-const FIXED_PHASES: ReadonlySet<PhaseId> = new Set<PhaseId>(["nomination", "runoff", "defense", "verdict", "execution"]);
+const FIXED_PHASES: ReadonlySet<PhaseId> = new Set<PhaseId>(["nomination", "runoff", "showdown", "defense", "verdict", "execution"]);
 
 /**
  * 카메라 구도(UI-SPEC 카메라 표): 지목·변론·찬반·처형은 모이는 자리 가운데 고정, 그 밖(낮 시작·토론·밤·아침·로비)은 따라가기.
@@ -110,6 +111,7 @@ export function lightingOf(phase: PhaseId): LightingStage {
   switch (phase) {
     case "nomination":
     case "runoff":
+    case "showdown":
     case "verdict":
       return "vote";
     case "defense":
@@ -217,6 +219,13 @@ export function pointingOf(view: RoomView, mine?: number): Record<number, number
     if (runoff === undefined || mine === undefined || !runoff.cand.includes(mine)) return {};
     if (me === undefined || !isAlive(me) || runoff.cand.includes(view.me.seat)) return {};
     return { [view.me.seat]: mine };
+  }
+  // 마지막 3인(09.1.1-15, T-09.1.1-42): 동시 지목 창에는 서버가 남의 선택을 주지 않으므로 내 낙관 선택(나를 뺀 산 두 사람 중 하나)만 그린다. 공개(i 4)에는 확정된 줄 전체를 같은 순간에 그린다
+  if (view.phase === "showdown") {
+    const stage = showdownStageOf(view);
+    if (stage === "reveal") return Object.fromEntries(revealPoints(view).map((line) => [line.seat, line.target]));
+    if (stage === "point" && mine !== undefined && pointSeatsOf(view).includes(mine)) return { [view.me.seat]: mine };
+    return {};
   }
   if (view.phase !== "nomination") return {};
   const out: Record<number, number> = {};

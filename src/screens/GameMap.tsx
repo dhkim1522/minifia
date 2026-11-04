@@ -33,7 +33,7 @@ import { BADGE_TEXT, chipsOf, claimLook, floatLabel } from "../game/badgeView";
 import { WHISPER_TEXT } from "../game/whisperView";
 import { defenderVotes, headerFor, nominationVotesOf, pointsTally } from "../game/dayView";
 import { blockModeOf, isMyTurn, turnStageOf, turnTopLine } from "../game/pickTurn";
-import { isMySpeakTurn, quoteOf, SHOWDOWN_COPY, showdownStageOf, speakerOf } from "../game/showdownView";
+import { isMySpeakTurn, pointSeatsOf, quoteOf, revealCounts, SHOWDOWN_COPY, showdownStageOf, speakerOf } from "../game/showdownView";
 import type { ChatStore } from "../net/chatStore";
 import type { DayFx } from "../net/useDayFx";
 import { useCountdown } from "../net/countdown";
@@ -320,7 +320,15 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
   // 동점 결선(09.1.1-14): 후보가 아닌 산 사람이 투표 창(step 1)에 후보 둘 중 하나를 누른다. 서버 값은 view.me.ballot(본인에게만 온다)
   const runoff = view.phase === "runoff" ? view.day?.runoff : undefined;
   const runoffVoting = runoff !== undefined && runoff.step === 1 && meAlive && canSend && !runoff.cand.includes(view.me.seat);
-  const serverMine = nominating ? view.day?.points?.find((l) => l.seat === view.me.seat)?.target : nighting ? view.me.pick : runoff !== undefined ? view.me.ballot : undefined;
+  // 마지막 3인 동시 지목(09.1.1-15, UI-SPEC E-3): 산 세 사람이 나를 뺀 두 사람의 이름표를 직접 눌러 가리킨다(마감까지 바꾸기 가능). 서버 값은 view.me.ballot(본인에게만 온다)
+  const showdownPointing = showdownStage === "point" && canSend && pointSeatsOf(view).length > 0;
+  const serverMine = nominating
+    ? view.day?.points?.find((l) => l.seat === view.me.seat)?.target
+    : nighting
+    ? view.me.pick
+    : runoff !== undefined || showdownStage === "point"
+    ? view.me.ballot
+    : undefined;
   const [mine, chooseMine] = useViewChoice<number | undefined>(view, serverMine);
   // 순차 지목(결정 0063-1): 이름표는 내 차례에만 버튼이다. 누르면 그 차례는 끝난다 — 깜빡임·버튼이 사라지고 취소·바꾸기는 없다.
   // pickedTurn = 내가 이미 누른 차례 번호. 서버가 거절하면 비워 다시 고를 수 있게 한다.
@@ -345,9 +353,11 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
   const pickSeats = useMemo(() => {
     if (canPick) return new Set(view.players.filter((p) => isAlive(p) && p.seat !== view.me.seat).map((p) => p.seat));
     if (runoffVoting && runoffCand !== undefined) return new Set<number>(runoffCand);
+    if (showdownPointing) return new Set<number>(pointSeatsOf(view));
     if (!nightMafia) return null;
     return new Set(view.players.filter((p) => isAlive(p) && p.seat !== view.me.seat && !(allies ?? []).includes(p.seat)).map((p) => p.seat));
-  }, [canPick, runoffVoting, runoffCand, nightMafia, allies, view.players, view.me.seat]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canPick, runoffVoting, runoffCand, showdownPointing, nightMafia, allies, view.players, view.me.seat, view.day?.showdown?.order]);
   // 마피아 다가가기(UI-SPEC 다르게 하는 곳 6): 고른 사람 옆 목적지를 일반 move 로 보낸다. 서버 applyMove 가 걷기 가능 칸으로 보정한다.
   // 대상이나 내 위치를 store 가 모르면 pick 만 나간다(A3).
   const approach = (target: number): void => {
@@ -377,7 +387,7 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
     ? {
         seats: pickSeats,
         ...(mine !== undefined ? { mine } : {}),
-        label: (nickname) => (nighting ? `${nickname} 님에게 다가가기` : runoffVoting ? `${nickname} 님에게 투표` : `${nickname} 님 가리키기`),
+        label: (nickname) => (nighting ? `${nickname} 님에게 다가가기` : runoffVoting ? `${nickname} 님에게 투표` : showdownPointing ? SHOWDOWN_COPY.pointLabel(nickname) : `${nickname} 님 가리키기`),
         onPick: (seat) => {
           if (seat === mine) return; // 이미 고른 후보를 다시 눌러도 보내지 않는다. 다른 후보를 누르면 마감까지 바꿀 수 있다(결선)
           if (send(nighting ? { t: "pick", target: seat } : { t: "point", target: seat }) === false) return; // 소켓이 닫혀 못 보냈으면 표시도 바꾸지 않는다
@@ -386,7 +396,7 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
           if (nominating) setPickedTurn(myTurnNo);
           if (nightMafia) approach(seat);
         },
-        group: nighting ? "밤 대상" : runoffVoting ? "결선" : "지목",
+        group: nighting ? "밤 대상" : runoffVoting ? "결선" : showdownPointing ? SHOWDOWN_COPY.pointGroup : "지목",
         // 마피아 밤 선택 효과(결정 0065): nightMafia(산 마피아의 밤)일 때만. mine 은 서버가 마피아에게만 준 me.pick 이다
         ...(nightMafia ? { aim: true as const } : {}),
       }
@@ -455,10 +465,19 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
         };
       };
     }
-    // 마지막 3인 한마디(09.1.1-15, UI-SPEC E-2): 말하는 사람(차례 중·확정 뒤 사이)에게 발밑 흰 고리와 맨 앞 이름표
+    // 마지막 3인(09.1.1-15, UI-SPEC E-2·E-3): 말하는 사람(차례 중·확정 뒤 사이)에게 발밑 흰 고리와 맨 앞 이름표.
+    // 동시 지목에는 눌러야 할 이름표가 깜빡이고, 던진 사람(day.showdown.voted)에게 done 체크만 붙는다(누가 누구를은 마감 전에 없다). 득표 배지는 공개(i 4)에서 한꺼번에 뜬다
     if (view.phase === "showdown") {
       const speaker = speakerOf(view);
-      return (seat) => (speaker === seat ? { ring: "turn" as const, turn: true } : {});
+      const voted = new Set(view.day?.showdown?.voted ?? []);
+      const counts = revealCounts(view);
+      return (seat) => ({
+        ...(showdownPointing && pickSeats?.has(seat) ? { blink: true } : {}),
+        ...(showdownStage === "point" && mine === seat ? { mine: true } : {}),
+        ...(voted.has(seat) ? { done: true } : {}),
+        ...((counts[seat] ?? 0) >= 1 ? { count: counts[seat] } : {}),
+        ...(speaker === seat ? { ring: "turn" as const, turn: true } : {}),
+      });
     }
     if (!nominating) return undefined;
     // 득표는 배지 숫자만(선두 맥박·과반 도장 없음, 09.1 M-4). 내가 방금 누른 표는 서버가 세어 주기 전에도 +1 로 바로 보인다(UI-SPEC A-4).
@@ -476,7 +495,7 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
         ...(turnSeat === seat ? { ring: "turn" as const, turn: true } : {}),
       };
     };
-  }, [nominating, nighting, nightMafia, mine, serverMine, spectate, verdicting, defending, view, canPick, pickSeats, runoff, runoffVoting]);
+  }, [nominating, nighting, nightMafia, mine, serverMine, spectate, verdicting, defending, view, canPick, pickSeats, runoff, runoffVoting, showdownPointing, showdownStage]);
 
   // 유령 화면의 이름표: 모든 이름표 위에 그 사람의 직업 칩(spectate.seats 의 job), 죽은 좌석은 반투명. 산 사람 view 에는 spectate 가 없어 이 겹침이 없다.
   const tagProps = useMemo<WorldTagProps | undefined>(() => {
