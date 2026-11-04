@@ -342,7 +342,7 @@ Plans:
 
 **UI hint**: yes
 **계획 메모**: UI-SPEC 먼저(`/gsd-ui-phase 09.1`).
-**Plans:** 1/12 plans executed
+**Plans:** 2/12 plans executed
 
 Plans:
 
@@ -350,7 +350,7 @@ Plans:
 - [x] 09.1-01-PLAN.md — 순차 지목 엔진(순수)·day.turn 와이어 타입·시간 상수, 미결 M 결정 표 (TDD, W1)
 
 **Wave 2**
-- [ ] 09.1-02-PLAN.md — 봇 차례 즉시 지목·넘기기 지목 마무리(차례 있을 때만 타는 경로) (TDD, W2)
+- [x] 09.1-02-PLAN.md — 봇 차례 즉시 지목·넘기기 지목 마무리(차례 있을 때만 타는 경로) (TDD, W2)
 - [ ] 09.1-03-PLAN.md — 지목을 지나가는 시험 도우미를 지목 방식과 무관하게 (W2)
 
 **Wave 3**
