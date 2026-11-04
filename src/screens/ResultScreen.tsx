@@ -23,7 +23,7 @@ export interface ResultScreenProps {
   arrivedFrom?: PhaseId | null | undefined;
 }
 
-// 결과 화면의 최종 상태(UI-SPEC 11, D-17·D-18): 헤더 바·타이머·하단 패널이 없는 세로 스크롤 본문 하나.
+// 결과 화면의 최종 상태(UI-SPEC 11, D-17·D-18): 헤더 바·타이머·하단 패널이 없다. [처음으로] 줄은 아래 고정, 위 영역(.mf-result__body)만 스크롤한다(feedback-6).
 // 모든 사람의 직업은 view.result.seats 에서만 읽는다 — 이 파일이 직업 이름·그림을 만드는 유일한 곳이다(T-04-64, 다른 부품 props 에 결과·직업이 없다).
 // 닉네임·탈락 여부는 모두에게 공개된 view.players 에서 자리 번호로 찾는다. 모든 문자열은 React 텍스트다(T-04-65).
 // 모든 viewer(살아 있던 사람·탈락자·끊겼다 돌아온 사람)가 같은 화면이라 me 는 내 이름표 표시에만 쓴다. 연결 상태는 표시하지 않는다(끝난 판).
@@ -62,60 +62,62 @@ export function ResultScreen({ view, onExit, arrivedFrom }: ResultScreenProps) {
       {result.winner === "mafiaWin" ? <div className="mf-result__glow" data-reveal={String(reveal)} aria-hidden="true" /> : null}
       <main className="mf-root mf-result" data-winner={result.winner} data-stage={stage} data-reveal={String(reveal)}>
         <div className="mf-result__inner">
-          <header className="mf-result__head">
-            <h1 className="mf-t-heading">{VERDICT_TEXT.endedTitle}</h1>
-            {subtitle ? <p className="mf-result__sub">{subtitle}</p> : null}
-          </header>
+          <div className="mf-result__body">
+            <header className="mf-result__head">
+              <h1 className="mf-t-heading">{VERDICT_TEXT.endedTitle}</h1>
+              {subtitle ? <p className="mf-result__sub">{subtitle}</p> : null}
+            </header>
 
-          <section className="mf-result__banner" data-winner={result.winner} aria-label={banner.title}>
-            <div className="mf-result__band" aria-hidden="true" />
-            <p className="mf-result__banner-title" data-guide="">
-              {banner.title}
-            </p>
-            <p className="mf-result__banner-sub">{banner.sub}</p>
-          </section>
-
-          <ul className="mf-result__grid" aria-label="모든 사람의 직업">
-            {cardSeats.map(({ seat, job }) => {
-              const player = playerOf(seat);
-              const dead = player !== undefined && !isAlive(player);
-              const isMe = seat === view.me.seat;
-              return (
-                <li key={seat} className={`mf-result__card${dead ? " mf-result__card--dead" : ""}`} data-seat={seat}>
-                  <div className="mf-result__figs">
-                    <Figure seat={seat} roleArt={job} className={`mf-result__art${dead ? " mf-result__art--dead" : ""}`} />
-                    {stage !== "done" ? <Figure seat={seat} className="mf-result__neutral" /> : null}
-                  </div>
-                  <span className={`mf-result__tag${isMe ? " mf-result__tag--me" : ""}`}>
-                    <i className="mf-result__dot" style={{ background: `var(--seat-${(seat % 8) + 1})` }} />
-                    <span>{player?.nickname ?? UNKNOWN_NAME}</span>
-                  </span>
-                  <span className={`mf-result__role${job === "mafia" ? " mf-result__role--mafia" : ""}`} aria-hidden={hidden}>
-                    {ROLE_TEXT[job].name}
-                  </span>
-                  {dead ? (
-                    <span className="mf-result__out" aria-hidden={hidden}>
-                      탈락
-                    </span>
-                  ) : null}
-                </li>
-              );
-            })}
-          </ul>
-
-          {rows.length > 0 ? (
-            <section className="mf-result__sm mf-result__rise" aria-hidden={pending} aria-labelledby="mf-result-sm-title">
-              <h2 id="mf-result-sm-title" className="mf-result__sm-title">
-                {VERDICT_TEXT.summaryTitle}
-              </h2>
-              {rows.map((row) => (
-                <div key={`${row.n}-${row.kind}`} className="mf-result__sm-row">
-                  <span className="mf-result__sm-label">{row.label}</span>
-                  <span className="mf-result__sm-text">{row.text}</span>
-                </div>
-              ))}
+            <section className="mf-result__banner" data-winner={result.winner} aria-label={banner.title}>
+              <div className="mf-result__band" aria-hidden="true" />
+              <p className="mf-result__banner-title" data-guide="">
+                {banner.title}
+              </p>
+              <p className="mf-result__banner-sub">{banner.sub}</p>
             </section>
-          ) : null}
+
+            <ul className="mf-result__grid" aria-label="모든 사람의 직업">
+              {cardSeats.map(({ seat, job }) => {
+                const player = playerOf(seat);
+                const dead = player !== undefined && !isAlive(player);
+                const isMe = seat === view.me.seat;
+                return (
+                  <li key={seat} className={`mf-result__card${dead ? " mf-result__card--dead" : ""}`} data-seat={seat}>
+                    <div className="mf-result__figs">
+                      <Figure seat={seat} roleArt={job} className={`mf-result__art${dead ? " mf-result__art--dead" : ""}`} />
+                      {stage !== "done" ? <Figure seat={seat} className="mf-result__neutral" /> : null}
+                    </div>
+                    <span className={`mf-result__tag${isMe ? " mf-result__tag--me" : ""}`}>
+                      <i className="mf-result__dot" style={{ background: `var(--seat-${(seat % 8) + 1})` }} />
+                      <span>{player?.nickname ?? UNKNOWN_NAME}</span>
+                    </span>
+                    <span className={`mf-result__role${job === "mafia" ? " mf-result__role--mafia" : ""}`} aria-hidden={hidden}>
+                      {ROLE_TEXT[job].name}
+                    </span>
+                    {dead ? (
+                      <span className="mf-result__out" aria-hidden={hidden}>
+                        탈락
+                      </span>
+                    ) : null}
+                  </li>
+                );
+              })}
+            </ul>
+
+            {rows.length > 0 ? (
+              <section className="mf-result__sm mf-result__rise" aria-hidden={pending} aria-labelledby="mf-result-sm-title">
+                <h2 id="mf-result-sm-title" className="mf-result__sm-title">
+                  {VERDICT_TEXT.summaryTitle}
+                </h2>
+                {rows.map((row) => (
+                  <div key={`${row.n}-${row.kind}`} className="mf-result__sm-row">
+                    <span className="mf-result__sm-label">{row.label}</span>
+                    <span className="mf-result__sm-text">{row.text}</span>
+                  </div>
+                ))}
+              </section>
+            ) : null}
+          </div>
 
           <footer className="mf-result__foot mf-result__rise" aria-hidden={pending}>
             <Button variant="primary" block disabled={stage !== "done"} onClick={onExit}>

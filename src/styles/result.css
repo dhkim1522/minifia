@@ -1,6 +1,6 @@
 /* 결과 화면(UI-SPEC 11, 04-25). 값은 tokens.css 변수만 쓴다(색 직접 지정 없음). 글자 크기는 14·16·24·36 에서만 고른다.
    진홍은 마피아 팀 승리 배너(띠·제목·위쪽 번짐)와 카드의 `마피아` 글자에만 쓴다(UI-SPEC 6.1 예약).
-   헤더 바·타이머·하단 패널이 없다: 배경(night)은 고정이고 .mf-result 하나가 세로로 스크롤한다. 가로 스크롤은 없다. */
+   헤더 바·타이머·하단 패널이 없다: 배경(night)은 고정이다. [처음으로] 줄은 아래 고정, 위 영역(.mf-result__body)만 세로 스크롤한다(feedback-6). 가로 스크롤은 없다. */
 
 /* 배경 상자는 방 본문의 남는 높이를 채운다(낮 장면과 같은 규칙) */
 .mf-result__backdrop { flex: 1 1 0; min-height: 0; height: auto; }
@@ -11,15 +11,16 @@
   background: linear-gradient(180deg, color-mix(in srgb, var(--crimson-700) 65%, transparent), transparent);
 }
 
-/* 스크롤 본문: 배경 상자 안에서 자기 높이로 스크롤. 안쪽 여백 위 20 → 16 + 안전 영역은 방 틀이 이미 뺀다, 아래 24 + 안전 영역 */
-.mf-result {
-  position: relative; height: 100%; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain;
-  -webkit-overflow-scrolling: touch;
-}
+/* 화면 틀: 배경 상자 안에서 자기 높이를 채우고 스스로는 스크롤하지 않는다(feedback-6). 위 영역(.mf-result__body)만 스크롤하고 [처음으로] 줄(.mf-result__foot)은 아래에 고정.
+   안쪽 여백 위 16·좌우 16 + 안전 영역은 방 틀이 이미 뺀다, 아래 24 + 안전 영역은 foot 이 가진다 */
+.mf-result { position: relative; height: 100%; overflow: hidden; }
 .mf-result__inner {
-  display: flex; flex-direction: column; gap: var(--space-md);
-  padding: var(--space-md) var(--space-md) calc(var(--space-lg) + env(safe-area-inset-bottom));
-  min-width: 0;
+  display: flex; flex-direction: column; height: 100%; box-sizing: border-box;
+  padding: var(--space-md) var(--space-md) 0; min-width: 0;
+}
+.mf-result__body {
+  flex: 1 1 0; min-height: 0; min-width: 0; display: flex; flex-direction: column; gap: var(--space-md);
+  overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; -webkit-overflow-scrolling: touch;
 }
 
 .mf-result__head { text-align: center; }
@@ -70,7 +71,7 @@
 .mf-result__out { font-size: 14px; line-height: 18px; color: var(--gray-300); }
 
 /* 판 요약 카드: night-800 92%, 모서리 14, 안쪽 12·16, 제목 14 700, 행 14/20(앞 64px 열 gray-300, 본문 gray-100), 행 간격 4.
-   행이 많으면 카드가 늘어나고 본문(.mf-result)이 스크롤된다. 안쪽 위아래 12 는 시안 값(토큰에 없음, UI-SPEC 4 예외) */
+   행이 많으면 카드가 늘어나고 위 영역(.mf-result__body)이 스크롤된다. 안쪽 위아래 12 는 시안 값(토큰에 없음, UI-SPEC 4 예외) */
 .mf-result__sm {
   display: flex; flex-direction: column; gap: var(--space-xs); padding: 12px var(--space-md); min-width: 0;
   border-radius: var(--radius-md); background: color-mix(in srgb, var(--night-800) 92%, transparent);
@@ -81,7 +82,10 @@
 .mf-result__sm-text { min-width: 0; word-break: keep-all; overflow-wrap: anywhere; }
 
 /* [처음으로] + 보조 문구 */
-.mf-result__foot { display: flex; flex-direction: column; align-items: stretch; gap: var(--space-sm); }
+.mf-result__foot {
+  flex: none; display: flex; flex-direction: column; align-items: stretch; gap: var(--space-sm);
+  padding-top: var(--space-md); padding-bottom: calc(var(--space-lg) + env(safe-area-inset-bottom));
+}
 .mf-result__note { margin: 0; text-align: center; font-size: 14px; line-height: 20px; color: var(--gray-300); word-break: keep-all; }
 
 /* ---- 공개 연출(04-26, UI-SPEC 11.2, D-17). 단계는 .mf-result[data-stage] (neutral 0~300ms → flip 300~900ms → done).
