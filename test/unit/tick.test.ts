@@ -8,6 +8,7 @@ import {
   MORNING_MS,
   NIGHT_MS,
   NOMINATION_GATHER_MS,
+  VERDICT_LEAD_MS,
   VERDICT_MS,
   PHASE_DEFS,
   ROLE_REVEAL_MS,
@@ -75,7 +76,7 @@ describe("PHASE_DEFS (단계 표, D-01·D-02·D-19·D-20, NIGHT-05·NIGHT-06)", 
     expect(row("defense")).toBe("20000/verdict/true"); // 변론 다음은 찬반(결정 0060-1)
     expect(row("nomination")).toBe("3000/defense/true"); // 지목 진입 길이 = 모이기(결정 0063-1). 동률·0표면 마감 훅이 night 로 보낸다
     expect(row("verdict")).toBe("10000/execution/true"); // 부결이어도 처형 단계가 결과를 알린다
-    expect(row("execution")).toBe("5000/night/true");
+    expect(row("execution")).toBe("5600/night/true");
     expect(row("night")).toBe("30000/morning/true");
     expect(row("morning")).toBe("5000/dayAnnounce/true");
     expect(row("ended")).toBe("null/null/true"); // 종단 행: 마감 없음
@@ -88,7 +89,8 @@ describe("PHASE_DEFS (단계 표, D-01·D-02·D-19·D-20, NIGHT-05·NIGHT-06)", 
     expect(DEFENSE_MS).toBe(20000);
     expect(NOMINATION_GATHER_MS).toBe(3000);
     expect(VERDICT_MS).toBe(10000);
-    expect(EXECUTION_MS).toBe(5000);
+    expect(EXECUTION_MS).toBe(5000 + VERDICT_LEAD_MS); // 처형 발표 5초 + 판결 앞머리 0.6초(결정 0066-7)
+    expect(EXECUTION_MS).toBe(5600);
   });
 });
 
@@ -176,14 +178,14 @@ describe("tick (순수 단계 진행)", () => {
     expect(tie.voteLog?.[0]?.cand?.votes.length).toBe(4);
   });
 
-  it("찬반 마감은 부결이어도 처형으로 간다: 마감 +5000, 아무도 탈락하지 않고 voteLog 의 exec 가 채워진다", () => {
+  it("찬반 마감은 부결이어도 처형으로 간다: 마감 +EXECUTION_MS, 아무도 탈락하지 않고 voteLog 의 exec 가 채워진다", () => {
     const verdict = stateWithVerdict(6, 1, "verdict");
     const defender = verdict.verdict!.candidate!;
     const out = tick(verdict, verdict.phaseEndsAt!, seededRandInt(2));
     expect(`${out.phase}/${out.phaseEndsAt}`).toBe(`execution/${verdict.phaseEndsAt! + EXECUTION_MS}`);
     expect(out.players.every((p) => p.alive !== false)).toBe(true);
     expect(JSON.stringify(out.voteLog?.[0]?.exec)).toBe('{"yes":0,"no":0,"passed":false}');
-    expect(out.verdict).toEqual({ passed: false, candidate: defender });
+    expect(out.verdict).toEqual({ passed: false, candidate: defender, ballots: { yes: [], no: [] } }); // 아무도 안 던졌으니 두 목록이 비었다(결정 0066-3)
     expect(out.execution).toBeUndefined();
   });
 
@@ -374,8 +376,8 @@ describe("nextWakeAt (알람 하나로 단계 마감과 방 만료)", () => {
 });
 
 describe("낮 처형 구간 길이 (결정 0060-1, 0063-1)", () => {
-  it("지목 마감부터 처형 마감까지는 인원과 무관하게 고정 35초다: 변론 20 + 찬반 10 + 처형 5. 지목 구간은 산 사람 수에 따라 최대 모이기 3 + 인원 × 8.9 + 끝 알림 2초다", () => {
-    expect(DEFENSE_MS + VERDICT_MS + EXECUTION_MS).toBe(35_000);
+  it("지목 마감부터 처형 마감까지는 인원과 무관하게 고정 35초다: 변론 20 + 찬반 10 + 처형 5.6(판결 앞머리 0.6 포함). 지목 구간은 산 사람 수에 따라 최대 모이기 3 + 인원 × 8.9 + 끝 알림 2초다", () => {
+    expect(DEFENSE_MS + VERDICT_MS + EXECUTION_MS).toBe(35_600);
     expect(`${nominationMaxMs(4)}/${nominationMaxMs(8)}`).toBe("40600/76200");
   });
 });

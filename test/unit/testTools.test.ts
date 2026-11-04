@@ -1,7 +1,7 @@
 // 테스트 방 방장 도구 규칙(quick 261025-f09, 결정 0022): testSkip·testReset·testRole 의 순수 규칙을 확인한다.
 // 실패 출력은 한 줄이어야 해서(TAP) 상태 비교는 키 순서를 맞춘 문자열로, 목록 비교는 요약 문자열로 한다.
 import { describe, expect, it } from "vitest";
-import { PHASE_DEFS } from "../../shared/game/phases";
+import { EXECUTION_MS, PHASE_DEFS } from "../../shared/game/phases";
 import { ROLE_IDS, ROLE_TABLE, assignRoles, giveRoleTo, rolesInPlay, testRoleOptions } from "../../shared/game/roles";
 import type { RoleId } from "../../shared/game/roles";
 import { attachConnection, createRoomState, joinRoom, startGame } from "../../shared/game/room";
@@ -604,13 +604,13 @@ const verdictAllAgree = (state: RoomState): RoomState => {
 const executionOf = (candidate: "citizen" | "mafia"): RoomState => stateWithVerdict(5, 6, "execution", { lobby: botLobby(), candidate });
 
 describe("skipPhase: 분기 단계를 따라 끝까지 넘어간다", () => {
-  it("defense → verdict(now + 10000) → execution(now + 5000), execution → 승패가 안 났으면 밤, 났으면 ended(마감 없음)", () => {
+  it("defense → verdict(now + 10000) → execution(now + EXECUTION_MS), execution → 승패가 안 났으면 밤, 났으면 ended(마감 없음)", () => {
     const defense = stateWithVerdict(5, 6, "defense", { lobby: botLobby(), candidate: "citizen" });
     const now = defense.phaseEndsAt! - 500;
     const verdict = skipOk(defense, now, seededRandInt(9));
     expect(`${verdict.phase}/${verdict.phaseEndsAt}`).toBe(`verdict/${now + 10_000}`);
     const execution = skipOk(verdictAllAgree(verdict), now, seededRandInt(9));
-    expect(`${execution.phase}/${execution.phaseEndsAt}`).toBe(`execution/${now + 5_000}`);
+    expect(`${execution.phase}/${execution.phaseEndsAt}`).toBe(`execution/${now + EXECUTION_MS}`);
     expect(execution.players.filter((p) => p.alive === false).length).toBe(1);
     const night = skipOk(execution, now, seededRandInt(9));
     expect(night.phase).toBe("night");

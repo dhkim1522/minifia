@@ -277,7 +277,7 @@ const ME_KEYS: ReadonlySet<string> = new Set([
   "nightTally", "nightSure", // 밤 산 마피아 본인에게만(결정 0061-7) — 아래 "마피아 집계" describe 가 조건을 단언한다
 ]);
 const DAY_KEYS: ReadonlySet<string> = new Set([
-  "n", "roles", "voteLog", "morning", "candidate", "execution", "noExecution", "points", "endCount", "voted", "verdict", "turn",
+  "n", "roles", "voteLog", "morning", "candidate", "execution", "noExecution", "points", "endCount", "voted", "verdict", "turn", "ballots",
 ]);
 const keysOf = (value: unknown): string => Object.keys((value ?? {}) as object).sort().join(",");
 
@@ -318,6 +318,15 @@ function phaseKeyViolations(s: RoomState, viewer: Player, view: RoomView, phase:
   else if (wantExecution) {
     if (keysOf(day.execution) !== "seat") out.push(`${tag}: day.execution keys ${keysOf(day.execution)}`);
     if (day.execution?.seat !== s.verdict?.candidate) out.push(`${tag}: day.execution.seat`);
+  }
+  // 찬반 기록(결정 0066-3, L19): day.ballots 는 처형 단계에서만, 서버가 남긴 목록이 있을 때만, 키는 yes·no 둘뿐이고 값은 좌석 정수다. 다른 단계(찬반 진행 중 포함)에는 키 자체가 없다.
+  const wantBallots = phase === "execution" && s.verdict?.ballots !== undefined;
+  if (("ballots" in day) !== wantBallots) out.push(`${tag}: day.ballots presence ${"ballots" in day}`);
+  else if (wantBallots) {
+    if (keysOf(day.ballots) !== "no,yes") out.push(`${tag}: day.ballots keys ${keysOf(day.ballots)}`);
+    const listed = [...(day.ballots?.yes ?? []), ...(day.ballots?.no ?? [])];
+    if (!listed.every((n) => Number.isInteger(n))) out.push(`${tag}: day.ballots values`);
+    if (flat(day.ballots) !== flat({ yes: s.verdict?.ballots?.yes, no: s.verdict?.ballots?.no })) out.push(`${tag}: day.ballots value`);
   }
   // 표 없이 지나온 밤(richStateAt 의 night)에만, 이유 코드 하나
   const wantNoExecution = phase === "night";
@@ -467,7 +476,7 @@ describe("buildView 단계 길이 (D-15, 결정 0012)", () => {
       return `${phase}:${v.phaseDurationMs}:${v.phaseEndsAt === s.phaseEndsAt}:${v.serverNow}`;
     });
     expect(got.join(" ")).toBe(
-      `lobby:null:true:77777 assigning:3000:true:77777 roleReveal:15000:true:77777 dayAnnounce:2000:true:77777 discussion:90000:true:77777 nomination:3000:true:77777 defense:20000:true:77777 verdict:10000:true:77777 execution:5000:true:77777 night:30000:true:77777 morning:5000:true:77777 ended:null:true:77777`,
+      `lobby:null:true:77777 assigning:3000:true:77777 roleReveal:15000:true:77777 dayAnnounce:2000:true:77777 discussion:90000:true:77777 nomination:3000:true:77777 defense:20000:true:77777 verdict:10000:true:77777 execution:5600:true:77777 night:30000:true:77777 morning:5000:true:77777 ended:null:true:77777`,
     );
   });
 
@@ -1719,5 +1728,44 @@ describe("day.turn (결정 0063-1, L14)", () => {
     expect(distinctPerFrame.join(",")).toBe(a.map(() => 1).join(","));
     // 진입 첫 순간이 아니라 실제로 차례가 돈 열이다(마지막 프레임은 끝 알림)
     expect(a.at(-1)![0]).toBe(JSON.stringify({ order: [0, 1, 2, 3, 4], i: 5 }));
+  });
+});
+
+describe("찬반 기록 공개 day.ballots (결정 0066-3, O-7, L19)", () => {
+  const viewsOfAll = (s: RoomState): RoomView[] => s.players.map((p) => buildView(s, p.id, START_AT));
+
+  it("처형 단계 view 에만 있고 모든 viewer 가 같다; 키는 yes·no 둘뿐이며 변론자는 어느 목록에도 없다", () => {
+    for (const seed of SEEDS) {
+      for (const n of PLAYER_COUNTS) {
+        const s = stateAt("execution", n, seed);
+        const want = s.verdict!.ballots!;
+        const defender = s.verdict!.candidate!;
+        const got = viewsOfAll(s).map((v) => JSON.stringify(v.day?.ballots));
+        expect(new Set(got).size).toBe(1);
+        expect(got[0]).toBe(JSON.stringify({ yes: want.yes, no: want.no }));
+        expect(Object.keys(viewsOfAll(s)[0]!.day!.ballots!).sort().join(",")).toBe("no,yes");
+        expect([...want.yes, ...want.no].includes(defender)).toBe(false);
+      }
+    }
+  });
+
+  it("공개 값은 복사본이라 서버 상태의 배열과 같은 참조가 아니다", () => {
+    const s = stateAt("execution", 6, 1);
+    const v = buildView(s, s.hostId, START_AT);
+    expect(v.day!.ballots!.yes === s.verdict!.ballots!.yes).toBe(false);
+  });
+
+  it("변론·찬반·밤·종료 단계의 view 에는 키 자체가 없다", () => {
+    for (const phase of ["defense", "verdict", "night", "ended"] as const) {
+      const s = stateAt(phase, 6, 1);
+      for (const v of viewsOfAll(s)) expect(Object.hasOwn(v.day ?? {}, "ballots")).toBe(false);
+    }
+  });
+
+  it("처형 단계라도 서버가 남긴 목록이 없으면(옛 저장 상태) 키가 없다", () => {
+    const s = stateAt("execution", 6, 1);
+    const { ballots: _drop, ...verdict } = s.verdict!;
+    const old: RoomState = { ...s, verdict };
+    for (const v of viewsOfAll(old)) expect(Object.hasOwn(v.day ?? {}, "ballots")).toBe(false);
   });
 });

@@ -124,7 +124,7 @@ const TYPING_KEY_PATHS = new Set([".t", ".seat", ".on"]);
 // 결정 0066-2: ".to" 는 귓속말 줄(k whisper·whispered)의 상대 좌석이다 — 누가 누구에게 귓속말을 보냈는지는 공개 사실이고(본문만 비공개) 줄 종류 값은 아래 CHAT_KIND_VALUES 뿐이다.
 const CHAT_KEY_PATHS = new Set([".t", ".ch", ".seat", ".seq", ".text", ".at", ".k", ".to"]);
 /** chat 줄 종류(.k)의 허용 값 집합: 카드(결정 0061-11)와 귓속말(결정 0066-2). 새 종류는 이 집합에 근거와 함께 더한다. */
-const CHAT_KIND_VALUES: ReadonlySet<string> = new Set(["will", "note", "whisper", "whispered"]);
+const CHAT_KIND_VALUES: ReadonlySet<string> = new Set(["will", "note", "whisper", "whispered", "ballots"]);
 // ---- chatLog 프레임(07-14, 누설 검사 (d)): hello 직후 한 번. 키는 t·lines[]·ch·seat·seq·text·at 뿐이고 수신자 마스크(r)·쓰기 순번(g)·일차(n)는 없다 ----
 // 결정 0061-11: ".lines[].k" 는 서버가 사망 전환에서 만든 카드 표시, 공개 정보. 다른 경로는 넓히지 않는다.
 const CHATLOG_KEY_PATHS = new Set([".t", ".lines", ".lines[].ch", ".lines[].seat", ".lines[].seq", ".lines[].text", ".lines[].at", ".lines[].k", ".lines[].to"]); // ".lines[].to": 귓속말 상대 좌석(결정 0066-2, 공개 사실)
@@ -909,6 +909,15 @@ describe("6명 한 판: 낮 처형(토론 끝내기·지목·변론·찬반·처
           expect(has(".view.day.verdict")).toBe(v.phase === "execution"); // 집계는 처형 단계에서 한꺼번에(결정 0053)
           expect(has(".view.day.candidate")).toBe(["defense", "verdict", "execution"].includes(v.phase));
           expect(has(".view.day.execution")).toBe(v.phase === "execution");
+          // 찬반 기록(결정 0066-3, L19): day.ballots 는 처형 단계에서만 — 찬반 진행 중 프레임에는 키 자체가 없다(던진 좌석 day.voted 뿐). 목록은 그날 최종 값과 같고 값은 좌석 정수뿐이다.
+          expect(has(".view.day.ballots")).toBe(v.phase === "execution");
+          if (v.phase === "execution") {
+            const fin = [...(verdictFinal.get(day) ?? new Map<number, boolean>())].sort((x, y) => x[0] - y[0]);
+            expect(Object.keys(v.day!.ballots!).sort()).toEqual(["no", "yes"]);
+            expect(JSON.stringify(v.day!.ballots)).toBe(JSON.stringify({ yes: fin.filter(([, x]) => x).map(([sn]) => sn), no: fin.filter(([, x]) => !x).map(([sn]) => sn) }));
+            for (const sn of [...v.day!.ballots!.yes, ...v.day!.ballots!.no]) expect(Number.isInteger(sn)).toBe(true);
+            expect(v.day!.ballots!.yes.includes(v.day!.candidate!) || v.day!.ballots!.no.includes(v.day!.candidate!)).toBe(false); // 변론자는 어느 목록에도 없다
+          }
           if (v.phase === "nomination" && (v.day?.points?.length ?? 0) > 0) seen.points.add(a.seat);
           if (v.phase === "verdict" && (v.day?.voted?.length ?? 0) > 0) {
             seen.voted.add(a.seat);

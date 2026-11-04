@@ -38,7 +38,8 @@ const NOMINATION_END_MS = 2_000;
 const nominationMaxMs = (turns) => NOMINATION_GATHER_MS + turns * (PICK_TURN_MS + PICK_GAP_MS) + NOMINATION_END_MS;
 const DEFENSE_MS = 20_000;
 const VERDICT_MS = 10_000;
-const EXECUTION_MS = 5_000;
+// shared/game/phases.ts 의 EXECUTION_MS = 5_000 + VERDICT_LEAD_MS(600) 사본 — 처형 발표 5초 + 판결 앞머리 0.6초(결정 0066-7). 스크립트는 TS 를 import 하지 않아 값을 옮겨 적는다.
+const EXECUTION_MS = 5_600;
 // 각 단계 + 여유: 서버 타이머가 다음 단계로 넘기는 것을 기다린다(넘기기 없음).
 const DEFENSE_WAIT_MS = DEFENSE_MS + STATE_LIMIT_MS;
 const VERDICT_WAIT_MS = VERDICT_MS + STATE_LIMIT_MS;
@@ -685,6 +686,7 @@ async function stageFull(url, args) {
     await waitUntil(() => allSee(alive, "verdict", n), DEFENSE_WAIT_MS, `${label} 변론 마감 뒤 verdict 가 모든 클라이언트에 오지 않음`);
     for (const c of alive) {
       const vv = firstState(c, "verdict", inDay(n)).msg.view;
+      if (vv.day.ballots !== undefined) fail(`${c.nickname} 의 ${label} verdict 첫 view 에 day.ballots 가 이미 있음(찬반 진행 중에는 비공개)`);
       if (vv.phaseDurationMs !== VERDICT_MS) fail(`${c.nickname} 의 ${label} verdict phaseDurationMs 가 ${VERDICT_MS} 가 아님: ${vv.phaseDurationMs}`);
       if (JSON.stringify(vv.day.voted) !== "[]") fail(`${c.nickname} 의 ${label} verdict 첫 day.voted 가 []가 아님: ${JSON.stringify(vv.day.voted)}`);
       if (vv.me.verdictVote !== undefined) fail(`${c.nickname} 의 ${label} verdict 첫 view 에 verdictVote 가 이미 있음`);
@@ -727,6 +729,9 @@ async function stageFull(url, args) {
       if (ev.day.execution?.seat !== victim.seat) fail(`${c.nickname} 의 ${label} day.execution.seat 가 ${victim.seat} 가 아님: ${JSON.stringify(ev.day.execution)}`);
       if (Object.keys(ev.day.execution).sort().join(",") !== "seat") fail(`${c.nickname} 의 ${label} day.execution 키 집합이 seat 가 아님(결정 0060-5: 좌석만, 문구 번호·역할 없음): ${Object.keys(ev.day.execution).sort().join(",")}`);
       if (JSON.stringify(ev.day.verdict) !== JSON.stringify({ yes: voters.length, no: 0, passed: true })) fail(`${c.nickname} 의 ${label} day.verdict 가 {yes:${voters.length}, no:0, passed:true} 가 아님: ${JSON.stringify(ev.day.verdict)}`);
+      // 찬반 기록 공개(결정 0066-3): 처형 단계 첫 view 에 모두에게 같은 목록 — 전원 찬성이라 찬성 = 유권자 좌석(오름차순), 반대 = 빈 목록, 변론자는 어느 쪽에도 없다.
+      const wantBallots = JSON.stringify({ yes: voters.map((x) => x.seat).sort((a, b) => a - b), no: [] });
+      if (JSON.stringify(ev.day.ballots) !== wantBallots) fail(`${c.nickname} 의 ${label} execution day.ballots 가 ${wantBallots} 가 아님: ${JSON.stringify(ev.day.ballots)}`);
       if (ev.phaseDurationMs !== EXECUTION_MS) fail(`${c.nickname} 의 ${label} execution phaseDurationMs 가 ${EXECUTION_MS} 가 아님: ${ev.phaseDurationMs}`);
       const victimRow = ev.players.find((p) => p.seat === victim.seat);
       if (victimRow?.alive !== false) fail(`${c.nickname} 의 ${label} execution players 에서 처형된 seat ${victim.seat} 의 alive 가 false 가 아님`);
@@ -1030,6 +1035,7 @@ async function stageFull(url, args) {
       if (v.day?.points !== undefined && v.phase !== "nomination") fail(`${c.nickname} 의 ${v.phase} 프레임에 day.points 가 있음`);
       if (v.day?.voted !== undefined && v.phase !== "verdict") fail(`${c.nickname} 의 ${v.phase} 프레임에 day.voted 가 있음`);
       if (v.day?.verdict !== undefined && v.phase !== "execution") fail(`${c.nickname} 의 ${v.phase} 프레임에 day.verdict 가 있음`);
+      if (v.day?.ballots !== undefined && v.phase !== "execution") fail(`${c.nickname} 의 ${v.phase} 프레임에 day.ballots 가 있음(찬반 진행 중 비공개, 결정 0066-3)`);
       if (v.day?.execution !== undefined && v.phase !== "execution") fail(`${c.nickname} 의 ${v.phase} 프레임에 day.execution 이 있음`);
       if (v.day?.voted !== undefined && !v.day.voted.every((seat) => Number.isInteger(seat))) fail(`${c.nickname} 의 day.voted 가 좌석 번호 목록이 아님: ${JSON.stringify(v.day.voted)}`);
       if (v.me.verdictVote !== undefined && (v.phase !== "verdict" || !sentVerdicts.has(v.me.verdictVote))) fail(`${c.nickname} 의 ${v.phase} 프레임 me.verdictVote(${v.me.verdictVote})가 본인이 보낸 값이 아님`);

@@ -232,7 +232,7 @@ const GHOST_SEAT = 5;
 /** chat 프레임 키 허용 목록: 결정 0061-11 의 .k 에 더해 귓속말 상대 좌석 .to(결정 0066-2, 공개 사실) 하나뿐이다. leak.test.ts 의 CHAT_KEY_PATHS 와 같다. */
 const WHISPER_CHAT_KEY_PATHS = new Set([".t", ".ch", ".seat", ".seq", ".text", ".at", ".k", ".to"]);
 const WHISPER_CHATLOG_KEY_PATHS = new Set([".t", ".lines", ".lines[].ch", ".lines[].seat", ".lines[].seq", ".lines[].text", ".lines[].at", ".lines[].k", ".lines[].to"]);
-const CHAT_KIND_VALUES: ReadonlySet<string> = new Set(["will", "note", "whisper", "whispered"]);
+const CHAT_KIND_VALUES: ReadonlySet<string> = new Set(["will", "note", "whisper", "whispered", "ballots"]);
 
 function keyPathsOf(value: unknown, path = ""): string[] {
   if (Array.isArray(value)) return value.flatMap((v) => keyPathsOf(v, `${path}[]`));

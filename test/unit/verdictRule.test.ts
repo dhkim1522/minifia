@@ -145,7 +145,7 @@ describe("resolveVerdict — 분모는 던진 표가 아니라 유권자 수다 
 
   it("verdict 상태는 후보를 유지하고 passed 를 정한다. 다음 단계는 기본(execution)이다", () => {
     const r = resolveVerdict(withVotes(verdictOf(), 4, 0));
-    expect(`${JSON.stringify(r.state.verdict)} ${r.stay} ${String(r.next)}`).toBe(`${JSON.stringify({ passed: true, candidate: DEFENDER })} false undefined`);
+    expect(`${JSON.stringify(r.state.verdict)} ${r.stay} ${String(r.next)}`).toBe(`${JSON.stringify({ passed: true, candidate: DEFENDER, ballots: { yes: [0, 1, 2, 4], no: [] } })} false undefined`);
   });
 
   it("집계 직후 모든 플레이어에서 verdictVote 키가 없다 (익명, T-08-15)", () => {
@@ -210,5 +210,39 @@ describe("vote.test 에서 옮긴 뜻 (08-28, DAY-06·07)", () => {
       verdictTallyOf(base);
       resolveVerdict(base);
     }).not.toThrow();
+  });
+});
+
+describe("resolveVerdict — 찬반 기록 ballots (결정 0066-3, O-7)", () => {
+  const setVotes = (state: RoomState, votes: Record<number, boolean>): RoomState => ({
+    ...state,
+    players: state.players.map((p) => (Object.hasOwn(votes, p.seat) ? { ...p, verdictVote: votes[p.seat]! } : p)),
+  });
+  const votersOf = (state: RoomState): number[] => state.players.map((p) => p.seat).filter((x) => x !== DEFENDER).sort((a, b) => a - b);
+
+  it("찬성·반대 좌석을 오름차순으로 남기고, 변론자·미투표 좌석은 어느 목록에도 없다; 개인 verdictVote 키는 모두 지운다", () => {
+    const base = verdictOf();
+    const v = votersOf(base);
+    const r = resolveVerdict(setVotes(base, { [v[3]!]: true, [v[0]!]: true, [v[2]!]: false }));
+    expect(JSON.stringify(r.state.verdict?.ballots)).toBe(JSON.stringify({ yes: [v[0]!, v[3]!], no: [v[2]!] }));
+    const listed = [...r.state.verdict!.ballots!.yes, ...r.state.verdict!.ballots!.no];
+    expect(listed.includes(DEFENDER) || listed.includes(v[1]!)).toBe(false);
+    expect(r.state.players.some((p) => Object.hasOwn(p, "verdictVote"))).toBe(false);
+  });
+
+  it("아무도 안 던졌으면 두 목록이 모두 비어 있고, 입력 상태는 바뀌지 않는다", () => {
+    const base = verdictOf();
+    const before = JSON.stringify(base);
+    const r = resolveVerdict(base);
+    expect(JSON.stringify(r.state.verdict?.ballots)).toBe('{"yes":[],"no":[]}');
+    expect(JSON.stringify(base)).toBe(before);
+  });
+
+  it("변론자가 남긴 값과 탈락한 사람의 값은 세지 않는다", () => {
+    const base = verdictOf();
+    const v = votersOf(base);
+    const dead = withDead(setVotes(base, { [DEFENDER]: true, [v[0]!]: true, [v[1]!]: false }), [v[1]!]);
+    const r = resolveVerdict(dead);
+    expect(JSON.stringify(r.state.verdict?.ballots)).toBe(JSON.stringify({ yes: [v[0]!], no: [] }));
   });
 });

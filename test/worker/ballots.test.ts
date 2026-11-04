@@ -157,6 +157,10 @@ describe("ballots 카드 (결정 0066-3, O-8)", () => {
     const cardsOf = (lines: Awaited<ReturnType<typeof helloForLog>>): string => lines.filter((l) => l.k === "ballots").map((l) => `${l.seat}/${l.text}`).join(",");
     const firstCard = `${defender.seat}/${first.yes.join(",")}|${first.no.join(",")}`;
     expect(cardsOf(await helloForLog(await connect(g.code), viewer.token))).toBe(firstCard);
+    // 복원 줄의 키도 허용 목록 안이다(T-09.1.1-08: 카드 본문은 좌석 번호뿐, 역할·마스크·일차 없음)
+    const replayed = (await helloForLog(await connect(g.code), viewer.token)).filter((l) => l.k === "ballots");
+    expect(replayed.map((l) => Object.keys(l).sort().join(",")).join("|")).toBe("at,ch,k,seat,seq,text");
+    expect(/^[0-7,|]*$/.test(replayed[0]!.text)).toBe(true);
     // 카드 뒤에 일반 줄이 40줄 쌓여 카드는 채널 30줄 밖이다 — 그래도 따로 더해져 온다
     // 다음 낮(discussion, 2일차)
     await advanceTo(g.code, rest.socks, "discussion");

@@ -404,7 +404,7 @@ describe("채팅 — 화면 없는 단계도 받는다 (D1, 결정 0044-23)", ()
     expect((await storedRoom(g.code)).phase).toBe(phase);
     const sender = withRole(g, "police")[0]!;
     const got = await observe(g, sender, () => chatSend(sender.sock, "투표 신중하게 해요"));
-    expect(chatReceivers(g, got)).toBe(wantLine(g.actors.map((a) => a.seat), `all/${sender.seat}/1/투표 신중하게 해요`));
+    expect(chatReceivers(g, got)).toBe(wantLine(g.actors.map((a) => a.seat), `all/${sender.seat}/${phase === "execution" ? 2 : 1}/투표 신중하게 해요`)); // 처형 진입 때 찬반 기록 카드(09.1.1-03)가 all 채널 1번을 쓴다
   });
 
   it("단계: 최후 변론에서 후보가 아닌 산 사람 누구나 쓸 수 있다", async () => {

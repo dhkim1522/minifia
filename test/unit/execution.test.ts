@@ -281,7 +281,7 @@ describe("새 단계 전수 누출 검사 (4~8명 × 변론·처형 두 단계 �
               if (keys !== "alive,connected,isHost,nickname,seat") violations.push(`${tag}: players[] keys ${keys}`);
             }
             const want = ["n", "roles", "voteLog", "candidate"];
-            if (phase === "execution") want.push("execution", "verdict"); // 8페이즈(08-07): 처형 단계의 찬반 결과 수 day.verdict
+            if (phase === "execution") want.push("execution", "verdict", "ballots"); // 8페이즈(08-07): 처형 단계의 찬반 결과 수 day.verdict, 09.1.1-03: 찬반 기록 day.ballots
             const got = Object.keys(view.day ?? {}).sort().join(",");
             if (got !== want.sort().join(",")) violations.push(`${tag}: day keys ${got}`);
           }
