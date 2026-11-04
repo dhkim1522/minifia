@@ -184,15 +184,17 @@ export interface StoredRoom {
   phaseEndsAt: number | null;
   day?: number;
   /** 4페이즈 서버 전용 투표 상태: 개인 표는 마감·공개 구간 진입 훅이 키째 지운다(결정 0034). */
-  voteLog?: Array<{ n: number; exec: { yes: number; no: number; passed: boolean }; cand?: { votes: Array<{ seat: number; target: number }>; candidate?: number } }>;
+  voteLog?: Array<{ n: number; last?: boolean; exec: { yes: number; no: number; passed: boolean }; cand?: { votes: Array<{ seat: number; target: number }>; candidate?: number } }>;
   winner?: string;
   verdict?: { passed: boolean; candidate?: number };
   /** 09.1 순차 지목 서버 전용 차례 상태(결정 0063-1): 있으면 지목이 차례 방식이다. */
   pickTurn?: { order: number[]; i: number; endsAt?: number; doneAt?: number; skip?: boolean };
   /** 09.1.1-04 서버 전용 동점 결선 상태(결정 0066-4): cand 는 후보 좌석 둘, step 0 앞머리 · 1 투표 · 2 결과. */
   runoff?: { cand: [number, number]; step: 0 | 1 | 2; tally?: [number, number] };
+  /** 09.1.1-06 서버 전용 마지막 3인 결전 상태(결정 0066-5): i -1 모이기 · 0..2 한마디 차례 · 3 동시 지목 · 4 공개. */
+  showdown?: { order: number[]; i: number; endsAt?: number; doneAt?: number; skip?: boolean; word?: string; points?: Array<{ seat: number; target: number }> };
   /** 8페이즈 서버 전용 개인 값: 지목·찬반·토론 끝내기. 마감 훅이 키째 지우고 토론 진입 훅이 끝내기를 지운다(결정 0060). */
-  players: Array<{ role?: string; runoffVote?: number; execVote?: boolean; candidateVote?: number; nominate?: number; verdictVote?: boolean; endVote?: boolean; alive?: boolean }>;
+  players: Array<{ role?: string; showdownPick?: number; runoffVote?: number; execVote?: boolean; candidateVote?: number; nominate?: number; verdictVote?: boolean; endVote?: boolean; alive?: boolean }>;
 }
 
 export async function storedRoom(code: string): Promise<StoredRoom> {
@@ -376,6 +378,45 @@ export async function runoffAll(code: string, actors: Actor[], voteBySeat: Reado
     deadline = await closePhase(code);
   }
   await untilLeft(actors, "runoff");
+  return deadline;
+}
+
+/**
+ * 마지막 3인 결전을 끝까지 걷는다(09.1.1-06, 결정 0066-5): 저장된 방을 읽어 showdown 인 동안 한 걸음씩 마감을 당긴다.
+ * 한마디 차례(i 0..2)에 차례 주인이 words[seat] 에 있으면 그 소켓에서 기존 `chat` 한 줄을 보내고(없으면 시간 초과로 넘긴다),
+ * 동시 지목(i 3)에 들어서면 한 번만 points[seat] = 대상 에 든 사람이 `point` 를 보낸다. showdown 을 벗어난 단계 state 를 모두 받으면 마지막 마감 시각을 돌려준다.
+ */
+export async function showdownAll(
+  code: string,
+  actors: Actor[],
+  script: { words?: Readonly<Record<number, string>>; points?: Readonly<Record<number, number>> },
+): Promise<number> {
+  let deadline = 0;
+  let pointed = false;
+  for (let guard = 0; guard < 30; guard += 1) {
+    const room = await storedRoom(code);
+    const sd = room.showdown;
+    if (room.phase !== "showdown" || sd === undefined) break;
+    for (const a of actors) await settle(a.sock, mark(a.sock));
+    const seat = sd.i >= 0 && sd.i < 3 && sd.doneAt === undefined ? sd.order[sd.i] : undefined;
+    const actor = seat === undefined ? undefined : actors.find((a) => a.seat === seat);
+    if (actor !== undefined && script.words !== undefined && Object.hasOwn(script.words, actor.seat)) {
+      const marks = actors.map((a) => mark(a.sock));
+      chatSend(actor.sock, script.words[actor.seat]!);
+      for (let i = 0; i < actors.length; i += 1) await settle(actors[i]!.sock, marks[i]!);
+      continue;
+    }
+    if (sd.i === 3 && !pointed) {
+      pointed = true;
+      const marks = actors.map((a) => mark(a.sock));
+      for (const a of actors) {
+        if (script.points !== undefined && Object.hasOwn(script.points, a.seat)) send(a.sock, { t: "point", target: script.points[a.seat] });
+      }
+      for (let i = 0; i < actors.length; i += 1) await settle(actors[i]!.sock, marks[i]!);
+    }
+    deadline = await closePhase(code);
+  }
+  await untilLeft(actors, "showdown");
   return deadline;
 }
 
