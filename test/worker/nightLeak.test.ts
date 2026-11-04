@@ -6,7 +6,10 @@ import { env } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
 import type { ServerMessage } from "../../shared/protocol";
 import { PHASE_DEFS } from "../../shared/game/phases";
-import { advanceTo, chatSend, chatKeysOf, connect, editRoom, mapPlayers, endAs, lastViewOf, seat, send, skipThrough, flushWorld, homeBySeat, mark, moveAs, nextFrame, observe, pause, pickAs, restoreStorage, segEndsBySeat, settle, snapSeatsOf, snapshotStorage, stable, startedGame, summary, typingSend, withRole, worldFramesOf, worldOf } from "./helpers";
+import type { RoomState } from "../../shared/game/room";
+import { tick } from "../../shared/game/tick";
+import { nominationSpanMs } from "../helpers/voteState";
+import { advanceTo, chatSend, chatKeysOf, connect, editRoom, mapPlayers, endAs, lastViewOf, seat, send, skipThrough, flushWorld, homeBySeat, mark, moveAs, nextFrame, observe, pause, pickAs, restoreStorage, segEndsBySeat, settle, snapSeatsOf, snapshotStorage, stable, startedGame, storedRoom, summary, typingSend, withRole, worldFramesOf, worldOf } from "./helpers";
 import type { Game } from "./helpers";
 
 /** 마지막 world snap 의 '좌석:x,z' 오름차순 문자열. snap 이 없으면 'none'. */
@@ -129,7 +132,10 @@ describe("아침 진입 — 모두 home (결정 0061-4, UI-SPEC A1·L5)", () => 
     for (const sock of g.socks) await settle(sock, mark(sock));
     await flushWorld(g.code);
     const before = await segEndsBySeat(g.code, 1);
-    const late = PHASE_DEFS.nomination.durationMs! + PHASE_DEFS.night.durationMs! + 1000;
+    // 지목 길이는 저장된 토론 상태에서 지목 첫 순간을 만들고 마감 사슬을 따라 계산한다(지목 방식과 무관, 09.1-03).
+    const stored = (await storedRoom(g.code)) as unknown as RoomState;
+    const nominationFirst = tick(stored, stored.phaseEndsAt!);
+    const late = nominationSpanMs(nominationFirst, 1) + PHASE_DEFS.night.durationMs! + 1000;
     await editRoom(g.code, (room) => ({ ...room, phaseEndsAt: Date.now() - late }));
     const marks = g.socks.map((s) => mark(s));
 

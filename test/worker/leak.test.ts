@@ -27,6 +27,7 @@ import {
   send,
   settle,
   startedGame,
+  storedRoom,
   summary,
   withRole,
 } from "./helpers";
@@ -637,7 +638,8 @@ describe("6명 한 판: 낮 처형(토론 끝내기·지목·변론·찬반·처
       };
       /** 다음 마감을 닫고 모든 소켓이 그 단계 state 를 받을 때까지. */
       const closeInto = async (phase: string): Promise<void> => {
-        await closePhase(code);
+        // 09.1-03: 지목은 순차(여러 마감)일 수 있어 저장된 단계가 phase 가 될 때까지 마감을 거듭 당긴다(결정 0063-1).
+        for (let guard = 0; guard < 40 && (await storedRoom(code)).phase !== phase; guard += 1) await closePhase(code);
         await waitAll(phase);
       };
       const alive = (dead: ReadonlySet<number>): SeatedActor[] => actors.filter((a) => !dead.has(a.seat));
@@ -672,12 +674,33 @@ describe("6명 한 판: 낮 처형(토론 끝내기·지목·변론·찬반·처
         for (const a of actors) expect(lastViewOf(a.sock).phase).toBe("nomination");
       };
 
-      /** 지목: 모두가 모두에게 공개다 — 던질 때마다 모든 소켓의 day.points 가 같은 목록이다. */
+      /**
+       * 지목: 모두가 모두에게 공개다 — 던질 때마다 모든 소켓의 day.points 가 같은 목록이다.
+       * 09.1-03: day.turn 이 있으면(순차 지목) 차례를 좌석 순으로 걸으며 voters 만 자기 차례에 던지고 나머지는 마감을 당겨 넘긴다(결정 0063-1).
+       */
       const castPoints = async (targetOf: (a: SeatedActor) => number, voters: SeatedActor[]): Promise<void> => {
-        for (const a of voters) {
+        const throwPoint = async (a: SeatedActor): Promise<void> => {
           await act(a, { t: "point", target: targetOf(a) });
           for (const sock of socks) await settle(sock, mark(sock));
           expect(new Set(actors.map((x) => JSON.stringify(lastViewOf(x.sock).day?.points))).size).toBe(1);
+        };
+        if (lastViewOf(actors[0]!.sock).day?.turn === undefined) {
+          for (const a of voters) await throwPoint(a);
+        } else {
+          for (let guard = 0; guard < 40; guard += 1) {
+            const view = lastViewOf(actors[0]!.sock);
+            const turn = view.day?.turn;
+            if (view.phase !== "nomination" || turn === undefined || turn.i >= turn.order.length) break;
+            const seatNow = turn.i >= 0 && turn.doneAt === undefined ? turn.order[turn.i] : undefined;
+            const voter = voters.find((a) => a.seat === seatNow);
+            if (voter !== undefined) {
+              await throwPoint(voter);
+              continue;
+            }
+            const marks = socks.map((sock) => mark(sock));
+            await closePhase(code);
+            for (const [i, sock] of socks.entries()) await settle(sock, marks[i]!);
+          }
         }
         const points = lastViewOf(actors[0]!.sock).day?.points ?? [];
         expect(points.map((l) => `${l.seat}>${l.target}`).sort().join(",")).toBe(voters.map((a) => `${a.seat}>${targetOf(a)}`).sort().join(","));

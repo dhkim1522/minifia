@@ -187,6 +187,8 @@ export interface StoredRoom {
   voteLog?: Array<{ n: number; exec: { yes: number; no: number; passed: boolean }; cand?: { votes: Array<{ seat: number; target: number }>; candidate?: number } }>;
   winner?: string;
   verdict?: { passed: boolean; candidate?: number };
+  /** 09.1 순차 지목 서버 전용 차례 상태(결정 0063-1): 있으면 지목이 차례 방식이다. */
+  pickTurn?: { order: number[]; i: number; endsAt?: number; doneAt?: number; skip?: boolean };
   /** 8페이즈 서버 전용 개인 값: 지목·찬반·토론 끝내기. 마감 훅이 키째 지우고 토론 진입 훅이 끝내기를 지운다(결정 0060). */
   players: Array<{ role?: string; execVote?: boolean; candidateVote?: number; nominate?: number; verdictVote?: boolean; endVote?: boolean; alive?: boolean }>;
 }
@@ -315,12 +317,38 @@ async function untilLeft(actors: Actor[], from: PhaseId): Promise<void> {
  * 최다 한 명이면 변론, 동률·0표면 밤으로 간다(마감 훅).
  */
 export async function pointAll(code: string, actors: Actor[], targetBySeat: Readonly<Record<number, number>>): Promise<number> {
+  // 09.1-03: 지목 방식과 무관 — 저장된 방에 pickTurn 이 있으면 차례를 좌석 순으로 걷는다(결정 0063-1).
+  if ((await storedRoom(code)).pickTurn !== undefined) return walkPickTurns(code, actors, targetBySeat);
   const marks = actors.map((a) => mark(a.sock));
   for (const a of actors) {
     if (Object.hasOwn(targetBySeat, a.seat)) send(a.sock, { t: "point", target: targetBySeat[a.seat] });
   }
   for (let i = 0; i < actors.length; i += 1) await settle(actors[i]!.sock, marks[i]!);
   const deadline = await closePhase(code);
+  await untilLeft(actors, "nomination");
+  return deadline;
+}
+
+/**
+ * 순차 지목을 끝까지 걷는다: 저장된 방을 읽어 차례 주인(미확정)이 targetBySeat 에 있으면 그 소켓에서 point 를 보내고 모든 소켓을 flush,
+ * 아니면 마감을 당겨 한 걸음 넘긴다(기권·사이·모이기·끝 알림). 지목을 벗어난 단계 state 를 모두 받으면 마지막 closePhase 의 마감을 돌려준다.
+ */
+async function walkPickTurns(code: string, actors: Actor[], targetBySeat: Readonly<Record<number, number>>): Promise<number> {
+  let deadline = 0;
+  for (let guard = 0; guard < 40; guard += 1) {
+    const room = await storedRoom(code);
+    const turn = room.pickTurn;
+    if (room.phase !== "nomination" || turn === undefined) break;
+    const seat = turn.i >= 0 && turn.i < turn.order.length && turn.doneAt === undefined ? turn.order[turn.i] : undefined;
+    const actor = seat === undefined ? undefined : actors.find((a) => a.seat === seat);
+    if (actor !== undefined && Object.hasOwn(targetBySeat, actor.seat)) {
+      const marks = actors.map((a) => mark(a.sock));
+      send(actor.sock, { t: "point", target: targetBySeat[actor.seat] });
+      for (let i = 0; i < actors.length; i += 1) await settle(actors[i]!.sock, marks[i]!);
+      continue;
+    }
+    deadline = await closePhase(code);
+  }
   await untilLeft(actors, "nomination");
   return deadline;
 }

@@ -2,7 +2,7 @@ import { env, exports } from "cloudflare:workers";
 import { runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 import type { RoomView, ServerMessage } from "../../shared/protocol";
-import { DISCUSSION_MS, NOMINATION_MS } from "../../shared/game/phases";
+import { DISCUSSION_MS } from "../../shared/game/phases";
 import { ROOM_TTL_MS, UNCONNECTED_ROOM_TTL_MS } from "../../shared/game/room";
 import { alarmOf, closed, connect, createRoom, editRoom, forceDue, hello, nextFrame, seat, send, storedRoom } from "./helpers";
 import type { Seated } from "./helpers";
@@ -76,21 +76,35 @@ describe("알람", () => {
     await viewsOf(r, "dayAnnounce");
     expect((await storedRoom(r.code) as { day?: number }).day).toBe(1);
 
-    const steps: Array<[string, number]> = [
-      // 07-08: 순차 주장 단계가 없다 — 낮 시작 발표 마감 다음이 바로 토론이다
-      ["discussion", DISCUSSION_MS],
-      ["nomination", NOMINATION_MS], // 지목이 0표이므로 다음은 night
-      ["night", 30_000],
-      ["morning", 5_000],
-      ["dayAnnounce", 2_000],
-    ];
-    for (const [phase, ms] of steps) {
+    const stepInto = async (phase: string, ms: number): Promise<void> => {
       const forced = await advance();
       const views = await viewsOf(r, phase);
       expect(views.every((v) => v.phaseEndsAt === forced + ms)).toBe(true);
       expect(views.every((v) => v.phaseDurationMs === ms)).toBe(true);
       expect(await alarmOf(r.code)).toBe(forced + ms);
+    };
+    // 07-08: 순차 주장 단계가 없다 — 낮 시작 발표 마감 다음이 바로 토론이다
+    await stepInto("discussion", DISCUSSION_MS);
+
+    // 지목(지목이 0표이므로 다음은 night): 지목 방식과 무관하게(09.1-03) 알람을 거듭하며 매번 마감 = 당긴 마감 + 그 view 의 단계 길이, 저장된 알람 = 그 마감이다.
+    let phase = "";
+    let nominationSteps = 0;
+    for (let guard = 0; phase !== "night"; guard += 1) {
+      expect(guard).toBeLessThan(60);
+      const forced = await advance();
+      phase = (await storedRoom(r.code)).phase;
+      expect(guard === 0 ? "nomination" : phase === "night" ? "night" : "nomination").toBe(phase);
+      const views = await viewsOf(r, phase);
+      const ms = views[0]!.phaseDurationMs!;
+      expect(views.every((v) => v.phaseEndsAt === forced + ms && v.phaseDurationMs === ms)).toBe(true);
+      expect(await alarmOf(r.code)).toBe(forced + ms);
+      if (phase === "night") expect(ms).toBe(30_000);
+      else nominationSteps += 1;
     }
+    expect(nominationSteps).toBeGreaterThanOrEqual(1);
+
+    await stepInto("morning", 5_000);
+    await stepInto("dayAnnounce", 2_000);
     expect((await storedRoom(r.code) as { day?: number }).day).toBe(2);
   });
 
