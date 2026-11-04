@@ -290,3 +290,222 @@ describe("채팅 줄 세 가지 (UI-SPEC B-3, 트레이서)", () => {
     expect(container.querySelector('[data-card="will"]')).not.toBeNull();
   });
 });
+
+// ---- Task 2: 사용함·거절·받음·모드 해제·시트 위치 ----
+describe("사용함 표시 (UI-SPEC B-1, O-4)", () => {
+  it("서버가 whisperUsed 를 켜면 버튼은 aria-disabled·점 없음·이름 '오늘 귓속말을 이미 보냈어요'이고 눌러도 모드가 켜지지 않는다", () => {
+    const { container } = mount(makeView({ used: true }));
+    const btn = floatBtn(container)!;
+    expect(btn.getAttribute("aria-disabled")).toBe("true");
+    expect(btn.getAttribute("aria-label")).toBe("오늘 귓속말을 이미 보냈어요");
+    expect(btn.querySelector(".mv-float__dot")).toBeNull();
+    fireEvent.click(btn);
+    expect(btn.getAttribute("aria-pressed")).toBe("false");
+    expect(stage.props!.pick).toBeUndefined();
+    expect(container.textContent).not.toContain("귓속말할 사람을 눌러요");
+  });
+
+  it("다음 일차 토론에서 키가 사라지면 다시 켜진다", () => {
+    const { container, show } = mount(makeView({ used: true, day: 1 }));
+    expect(floatBtn(container)!.getAttribute("aria-disabled")).toBe("true");
+    show(makeView({ day: 2 }));
+    expect(floatBtn(container)!.getAttribute("aria-disabled")).toBeNull();
+    expect(floatBtn(container)!.querySelector(".mv-float__dot")).not.toBeNull();
+    fireEvent.click(floatBtn(container)!);
+    expect(stage.props!.pick).toBeDefined();
+  });
+
+  it("연결이 끊긴 동안(canSend false)은 aria-disabled 이고 눌러도 아무 일 없다", () => {
+    const { container } = mount(makeView(), { canSend: false });
+    const btn = floatBtn(container)!;
+    expect(btn.getAttribute("aria-disabled")).toBe("true");
+    fireEvent.click(btn);
+    expect(stage.props!.pick).toBeUndefined();
+  });
+
+  it("보낸 뒤 서버가 사용함으로 확인하면 시트가 닫히고 입력이 비워지며 버튼이 불가 상태가 된다", () => {
+    const { container, show } = mount(makeView());
+    openSheet(container, 2);
+    fireEvent.change(input(container), { target: { value: "비밀이에요" } });
+    fireEvent.click(sendBtn(container));
+    expect(sheet(container)).not.toBeNull(); // 확인 전에는 닫히지 않는다
+    show(makeView({ used: true }));
+    expect(sheet(container)).toBeNull();
+    expect(floatBtn(container)!.getAttribute("aria-disabled")).toBe("true");
+    expect(floatBtn(container)!.getAttribute("aria-label")).toBe("오늘 귓속말을 이미 보냈어요");
+  });
+
+  it("확인을 기다리는 동안 보내기를 연타해도 send 는 한 번이다", () => {
+    const { container } = mount(makeView());
+    openSheet(container, 2);
+    fireEvent.change(input(container), { target: { value: "비밀이에요" } });
+    fireEvent.click(sendBtn(container));
+    fireEvent.click(sendBtn(container));
+    fireEvent.keyDown(input(container), { key: "Enter" });
+    expect(sent(sendOf())).toHaveLength(1);
+  });
+
+  it("입력칸에서 Enter 로도 보낼 수 있다", () => {
+    const { container } = mount(makeView());
+    openSheet(container, 4);
+    fireEvent.change(input(container), { target: { value: "엔터로" } });
+    fireEvent.keyDown(input(container), { key: "Enter" });
+    expect(sent(sendOf())).toEqual([{ t: "whisper", to: 4, text: "엔터로" }]);
+  });
+});
+
+describe("거절 알림 (UI-SPEC B-2)", () => {
+  const sendOne = (container: ParentNode) => {
+    openSheet(container, 2);
+    fireEvent.change(input(container), { target: { value: "비밀이에요" } });
+    fireEvent.click(sendBtn(container));
+  };
+
+  it("보낸 뒤 오류 WRONG_PHASE 면 토스트 '지금은 보낼 수 없어요', 시트와 입력은 그대로", () => {
+    const { container } = mount(makeView());
+    sendOne(container);
+    emitError("WRONG_PHASE");
+    expect(toast(container)).toBe("지금은 보낼 수 없어요");
+    expect(sheet(container)).not.toBeNull();
+    expect(input(container).value).toBe("비밀이에요");
+    expect(stage.props!.pick).toBeUndefined(); // 모드는 이미 꺼진 상태
+  });
+
+  it("그 밖 코드(BAD_MESSAGE·RATE_LIMITED)는 '보내지 못했어요. 다시 해 보세요'", () => {
+    const { container } = mount(makeView());
+    sendOne(container);
+    emitError("BAD_MESSAGE");
+    expect(toast(container)).toBe("보내지 못했어요. 다시 해 보세요");
+    expect(sheet(container)).not.toBeNull();
+  });
+
+  it("거절 뒤에는 다시 보낼 수 있다(두 번째 send)", () => {
+    const { container } = mount(makeView());
+    sendOne(container);
+    emitError("RATE_LIMITED");
+    fireEvent.click(sendBtn(container));
+    expect(sent(sendOf())).toHaveLength(2);
+  });
+
+  it("보낸 적 없는 오류는 귓속말 문구를 만들지 않는다", () => {
+    const { container } = mount(makeView());
+    emitError("BAD_MESSAGE");
+    expect(toast(container)).not.toBe("보내지 못했어요. 다시 해 보세요");
+  });
+
+  it("3초가 지난 뒤의 오류는 귓속말 거절로 보지 않는다", () => {
+    const { container } = mount(makeView());
+    sendOne(container);
+    act(() => void vi.advanceTimersByTime(3500));
+    emitError("RATE_LIMITED");
+    expect(toast(container)).not.toBe("보내지 못했어요. 다시 해 보세요");
+  });
+});
+
+describe("받음 알림 (UI-SPEC B-3)", () => {
+  it("라이브로 받은 귓속말이면 토스트 '{A} 님의 귓속말'(본문 없음)", () => {
+    const { container } = mount(makeView());
+    emit(wireLine("whisper", 1, 0, 1, "비밀 본문", NOW + 1));
+    expect(toast(container)).toBe("영희 님의 귓속말");
+    expect(toast(container)).not.toContain("비밀 본문");
+  });
+
+  it("받을 때마다 알림이 다시 뜬다(두 번째 줄도)", () => {
+    const { container } = mount(makeView());
+    emit(wireLine("whisper", 1, 0, 1, "하나", NOW + 1));
+    act(() => void vi.advanceTimersByTime(3000));
+    expect(toast(container)).toBe("");
+    emit(wireLine("whisper", 2, 0, 2, "둘", NOW + 2));
+    expect(toast(container)).toBe("서준 님의 귓속말");
+  });
+
+  it("재접속 복원(chatLog) 줄에는 토스트가 없고 줄은 보인다", () => {
+    const { container } = mount(makeView());
+    emit({ t: "chatLog", lines: [{ ch: "all", seat: 1, seq: 1, text: "복원 본문", at: NOW - 5000, k: "whisper", to: 0 }] });
+    expect(toast(container)).toBe("");
+    expect(log(container).textContent).toContain("복원 본문");
+  });
+
+  it("보낸 줄과 공개 사실 줄에는 토스트가 없다", () => {
+    const { container } = mount(makeView());
+    emit(wireLine("whisper", 0, 2, 1, "내가 보냄", NOW + 1));
+    emit(wireLine("whispered", 3, 4, 2, "", NOW + 2));
+    expect(toast(container)).toBe("");
+  });
+});
+
+describe("모드 해제 (UI-SPEC B-1 4)", () => {
+  it("단계가 토론을 벗어나면 모드가 꺼지고 버튼도 사라진다", () => {
+    const { container, show } = mount(makeView());
+    fireEvent.click(floatBtn(container)!);
+    expect(stage.props!.pick).toBeDefined();
+    show(makeView({ phase: "nomination" }));
+    expect(stage.props!.pick?.group).not.toBe("귓속말");
+    expect(floatBtn(container)).toBeNull();
+    expect(container.textContent).not.toContain("귓속말할 사람을 눌러요");
+  });
+
+  it("단계가 토론을 벗어나면 열린 시트도 닫힌다", () => {
+    const { container, show } = mount(makeView());
+    openSheet(container, 2);
+    expect(sheet(container)).not.toBeNull();
+    show(makeView({ phase: "nomination" }));
+    expect(sheet(container)).toBeNull();
+  });
+
+  it("시트의 상대가 죽으면 시트가 닫힌다", () => {
+    const { container, show } = mount(makeView());
+    openSheet(container, 2);
+    show(makeView({ dead: [2] }));
+    expect(sheet(container)).toBeNull();
+  });
+
+  it("유령(내가 죽음)에게는 버튼이 없고 공개 사실 줄만 보인다(O-21)", () => {
+    const { container } = mount(makeView({ dead: [0] }));
+    expect(floatBtn(container)).toBeNull();
+    emit(wireLine("whispered", 3, 4, 1, "", NOW + 1));
+    expect(log(container).textContent).toContain("지아 → 도윤 귓속말");
+  });
+
+  it("한 번에 시트 하나만: 귓속말 시트가 열려 있을 때 배지 버튼을 누르면 귓속말 시트가 닫히고 배지 시트가 열린다", () => {
+    const { container } = mount(makeView());
+    openSheet(container, 2);
+    expect(container.querySelectorAll(".mf-will-layer")).toHaveLength(1);
+    fireEvent.click(claimBtn(container)!);
+    expect(sheet(container)).toBeNull();
+    expect(container.querySelector(".mv-claim-sheet")).not.toBeNull();
+    expect(container.querySelectorAll(".mf-will-layer")).toHaveLength(1);
+  });
+
+  it("배지 시트가 열려 있을 때 귓속말 버튼을 누르면 배지 시트가 닫히고 모드가 켜진다", () => {
+    const { container } = mount(makeView());
+    fireEvent.click(claimBtn(container)!);
+    expect(container.querySelector(".mv-claim-sheet")).not.toBeNull();
+    fireEvent.click(floatBtn(container)!);
+    expect(container.querySelector(".mv-claim-sheet")).toBeNull();
+    expect(stage.props!.pick?.group).toBe("귓속말");
+  });
+});
+
+describe("시트 위치 (UI-SPEC B-2)", () => {
+  it("한 줄 시트는 시트 층(.mf-will-layer, data-sheet-layer=line) 안에 있고 층은 하나다", () => {
+    const { container } = mount(makeView());
+    openSheet(container, 2);
+    const layer = container.querySelector<HTMLElement>(".mf-will-layer")!;
+    expect(layer.getAttribute("data-sheet-layer")).toBe("line");
+    expect(layer.contains(sheet(container))).toBe(true);
+  });
+
+  it("입력칸에 초점이 가 있다(열리면 키보드가 함께 올라온다)", () => {
+    const { container } = mount(makeView());
+    openSheet(container, 2);
+    expect(document.activeElement).toBe(input(container));
+  });
+
+  it("시트를 닫으면 초점이 떠 있는 귓속말 버튼으로 돌아온다", () => {
+    const { container } = mount(makeView());
+    openSheet(container, 2);
+    fireEvent.click(container.querySelector<HTMLButtonElement>("[data-line-close]")!);
+    expect(document.activeElement).toBe(floatBtn(container));
+  });
+});

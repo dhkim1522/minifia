@@ -176,6 +176,41 @@ describe("useKeyboardLift: 포커스 게이트 lift (CHAT-05)", () => {
   });
 });
 
+describe("useKeyboardLift: 한 줄 시트(귓속말, 09.1.1-09)의 입력칸도 시트 층 규칙을 받는다", () => {
+  it("시트 층(.mf-will-layer) 안 input 에 초점이 가면 키보드 lift 가 켜지고 inSheet 가 참이다", () => {
+    const vv = installVV(508);
+    const layer = document.createElement("div");
+    layer.className = "mf-will-layer";
+    const lineInput = document.createElement("input");
+    lineInput.setAttribute("data-line-input", "");
+    layer.append(lineInput);
+    document.body.append(layer);
+    const { result } = mount();
+    act(() => lineInput.focus());
+    act(() => void vv.dispatchEvent(new Event("resize")));
+    frame();
+    expect(css("--mf-kb-lift")).toBe("336px");
+    expect(result.current.open).toBe(true);
+    expect(result.current.inSheet).toBe(true);
+  });
+
+  it("시트 입력칸을 블러하면 즉시 0px 이고 inSheet 가 거짓이다", () => {
+    const vv = installVV(508);
+    const layer = document.createElement("div");
+    layer.className = "mf-will-layer";
+    const lineInput = document.createElement("input");
+    layer.append(lineInput);
+    document.body.append(layer);
+    const { result } = mount();
+    act(() => lineInput.focus());
+    act(() => void vv.dispatchEvent(new Event("resize")));
+    frame();
+    act(() => lineInput.blur());
+    expect(css("--mf-kb-lift")).toBe("0px");
+    expect(result.current.inSheet).toBe(false);
+  });
+});
+
 describe("useChatLogHeight: LOG_H 고정 (CHAT-05)", () => {
   let root: HTMLDivElement;
   let rootH: number;
