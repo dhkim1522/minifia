@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { BadgeId, PhaseId, PublicPlayer, RoomView } from "../../shared/protocol";
-import { chipsOf, claimLabel, claimLook, floatLabel, floatVisible, myClaim } from "../../src/game/badgeView";
+import { BADGE_TEXT, badgeFxOf, chipsOf, claimLabel, claimLook, floatLabel, floatVisible, myClaim, sayLine } from "../../src/game/badgeView";
 
 // 09.1.1-08: 직업 주장 배지의 순수 모델(UI-SPEC A). 서버 view.players[].badge 만 읽고 시각·난수가 없다.
 const NAMES = ["민수", "영희", "서준", "지아", "도윤", "하은"];
@@ -111,5 +111,73 @@ describe("chipsOf — 칩 순서와 4명판", () => {
     const chips = chipsOf(makeView({ count: 4 }));
     expect(chips.map((c) => c.id)).toEqual(["citizen", "police", "mafia", "none"]);
     expect(chips.map((c) => c.label)).toEqual(["시민", "경찰", "마피아", "말 안 함"]);
+  });
+});
+
+describe("badgeFxOf — 두 view 의 차이로 만드는 효과 (UI-SPEC A-1)", () => {
+  it("prev 가 null(첫 스냅샷·재접속·연결 번호 바뀜)이면 효과 없음", () => {
+    expect(badgeFxOf(null, makeView({ badges: { 1: "police" }, swapped: [1] }))).toEqual({ pop: [], notice: [], said: [] });
+  });
+
+  it("바뀐 게 없으면 효과 없음", () => {
+    const v = makeView({ badges: { 1: "police" } });
+    expect(badgeFxOf(v, makeView({ badges: { 1: "police" } }))).toEqual({ pop: [], notice: [], said: [] });
+  });
+
+  it("처음 거는 순간(없음 → 직업)은 팝만 — 글자 알약은 없다", () => {
+    const fx = badgeFxOf(makeView(), makeView({ badges: { 1: "police" } }));
+    expect(fx.pop).toEqual([1]);
+    expect(fx.notice).toEqual([]);
+    expect(fx.said).toEqual([{ seat: 1, claim: "police" }]);
+  });
+
+  it("말 바꿈이 새로 켜진 좌석은 팝 + 알약", () => {
+    const fx = badgeFxOf(makeView({ badges: { 1: "police" } }), makeView({ badges: { 1: "mafia" }, swapped: [1] }));
+    expect(fx.pop).toEqual([1]);
+    expect(fx.notice).toEqual([1]);
+    expect(fx.said).toEqual([{ seat: 1, claim: "mafia" }]);
+  });
+
+  it("직업 → 말 안 함 도 말 바꿈이고, 두 번째 바꿈(이미 swapped)도 알약이 뜬다", () => {
+    const a = badgeFxOf(makeView({ badges: { 2: "doctor" } }), makeView({ badges: { 2: "none" }, swapped: [2] }));
+    expect(a.notice).toEqual([2]);
+    expect(a.said).toEqual([{ seat: 2, claim: "none" }]);
+    const b = badgeFxOf(makeView({ badges: { 2: "mafia" }, swapped: [2] }), makeView({ badges: { 2: "citizen" }, swapped: [2] }));
+    expect(b.pop).toEqual([2]);
+    expect(b.notice).toEqual([2]);
+  });
+
+  it("말 안 함으로 되돌린 뒤 다시 직업을 걸면 바꿈이 아니다 — 팝만", () => {
+    const fx = badgeFxOf(makeView({ badges: { 2: "none" }, swapped: [2] }), makeView({ badges: { 2: "police" }, swapped: [2] }));
+    expect(fx.pop).toEqual([2]);
+    expect(fx.notice).toEqual([]);
+  });
+
+  it("산 사람이 아닌 좌석·새로 생긴 좌석은 효과 없음", () => {
+    const prev = makeView({ badges: { 1: "police" } });
+    expect(badgeFxOf(prev, makeView({ badges: { 1: "mafia" }, swapped: [1], dead: [1] }))).toEqual({ pop: [], notice: [], said: [] });
+    expect(badgeFxOf(makeView({ count: 4 }), makeView({ count: 6, badges: { 5: "police" } }))).toEqual({ pop: [], notice: [], said: [] });
+  });
+
+  it("바뀌지 않은 다른 좌석의 배지는 그대로 둔다", () => {
+    const fx = badgeFxOf(makeView({ badges: { 1: "police", 2: "doctor" } }), makeView({ badges: { 1: "police", 2: "mafia" }, swapped: [2] }));
+    expect(fx.pop).toEqual([2]);
+  });
+});
+
+describe("문구", () => {
+  it("sayLine — 받침에 맞는 조사(이라고/라고), 말 안 함도 같은 줄", () => {
+    expect(sayLine("민수", "citizen")).toBe("민수 님이 시민이라고 말했어요");
+    expect(sayLine("민수", "police")).toBe("민수 님이 경찰이라고 말했어요");
+    expect(sayLine("민수", "doctor")).toBe("민수 님이 의사라고 말했어요");
+    expect(sayLine("민수", "mafia")).toBe("민수 님이 마피아라고 말했어요");
+    expect(sayLine("민수", "none")).toBe("민수 님이 말 안 함이라고 말했어요");
+  });
+
+  it("UI-SPEC Copywriting Contract 원문", () => {
+    expect(BADGE_TEXT.reject).toBe("지금은 바꿀 수 없어요");
+    expect(BADGE_TEXT.swapNotice).toBe("말 바꿈");
+    expect(BADGE_TEXT.hint).toBe("바꾸면 말 바꿈이 보여요");
+    expect(BADGE_TEXT.sheetTitle).toBe("직업 배지");
   });
 });

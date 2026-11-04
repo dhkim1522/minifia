@@ -84,6 +84,15 @@ function conn(view: RoomView, over: Partial<RoomConnection> = {}): RoomConnectio
   };
 }
 
+/** 연결 mock 의 onEvent 가 받은 구독자들 — 오류 프레임을 흉내 낸다 */
+const emitError = (c: ParentNode, code: "WRONG_PHASE" | "BAD_MESSAGE" | "RATE_LIMITED"): void => {
+  void c;
+  const onEvent = (connectionMock.current as RoomConnection).onEvent as unknown as ReturnType<typeof vi.fn>;
+  act(() => {
+    for (const [fn] of onEvent.mock.calls) (fn as (e: unknown, m: unknown) => void)({ t: "error", code }, { epoch: 1 });
+  });
+};
+
 const mount = (view: RoomView, over: Partial<RoomConnection> = {}) => {
   connectionMock.current = conn(view, over);
   const ui = () => <RoomScreen code="0042" token={"t".repeat(43)} onExit={() => {}} />;
@@ -107,6 +116,7 @@ const chip = (c: ParentNode, label: string): HTMLButtonElement => chips(c).find(
 
 beforeEach(() => {
   vi.useFakeTimers();
+  vi.unstubAllGlobals();
 });
 afterEach(() => {
   cleanup();
@@ -203,5 +213,182 @@ describe("view 의 주장 → 이름표 모서리 배지 (UI-SPEC A-1)", () => {
     mount(base);
     const props = stage.props!.tagProps!(1);
     expect(props).toMatchObject({ claim: "citizen", count: 1 });
+  });
+});
+
+// ---- Task 2: 말 바꿈 효과·낙관 표시/거절 되돌림·접근성 한 줄·재접속 첫 화면 ----
+const live = (c: ParentNode): string => c.querySelector("[data-badge-live]")?.textContent ?? "";
+const stackOf = (seat: number) => render(<HeadStack name={NAMES[seat] ?? ""} color="red" {...stage.props!.tagProps!(seat)} />).container;
+const toastText = (c: ParentNode): string => c.querySelector(".mv-toast--top .mv-toast__text")?.textContent ?? "";
+const reduceMotion = (): void => {
+  vi.stubGlobal(
+    "matchMedia",
+    (q: string) => ({ matches: q.includes("reduce"), media: q, addEventListener: () => {}, removeEventListener: () => {}, addListener: () => {}, removeListener: () => {} }),
+  );
+};
+
+describe("말 바꿈 효과 (UI-SPEC A-1, O-22)", () => {
+  it("직업을 바꾼 순간: 팝 + '말 바꿈' 알약 + 점이 이름표에 실린다. 2.4초(+페이드) 뒤 알약만 사라지고 점은 남는다", () => {
+    const m = mount(makeView({ badges: { 1: "police" } }));
+    expect(stage.props!.tagProps!(1).claimPop).toBeUndefined();
+    m.show(makeView({ badges: { 1: "mafia" }, swapped: [1] }));
+    const props = stage.props!.tagProps!(1);
+    expect(props).toMatchObject({ claim: "mafia", claimSwapped: true, claimNotice: true, claimPop: 1 });
+    const c = stackOf(1);
+    expect(c.querySelector(".mv-claim__notice")?.textContent).toBe("말 바꿈");
+    expect(c.querySelector("[data-claim-changed]")).not.toBeNull();
+    act(() => {
+      vi.advanceTimersByTime(2400 + 180 + 20);
+    });
+    const later = stage.props!.tagProps!(1);
+    expect(later.claimNotice).toBeUndefined();
+    expect(later).toMatchObject({ claim: "mafia", claimSwapped: true });
+  });
+
+  it("처음 거는 순간에는 팝만 있고 알약이 없다", () => {
+    const m = mount(makeView());
+    m.show(makeView({ badges: { 2: "doctor" } }));
+    const props = stage.props!.tagProps!(2);
+    expect(props.claimPop).toBe(1);
+    expect(props.claimNotice).toBeUndefined();
+  });
+
+  it("모션 줄이기: 알약은 2.4초가 되면 곧바로 사라진다(페이드 시간이 없다)", () => {
+    reduceMotion();
+    const m = mount(makeView({ badges: { 1: "police" } }));
+    m.show(makeView({ badges: { 1: "mafia" }, swapped: [1] }));
+    expect(stage.props!.tagProps!(1).claimNotice).toBe(true);
+    act(() => {
+      vi.advanceTimersByTime(2399);
+    });
+    expect(stage.props!.tagProps!(1).claimNotice).toBe(true);
+    act(() => {
+      vi.advanceTimersByTime(2);
+    });
+    expect(stage.props!.tagProps!(1).claimNotice).toBeUndefined();
+  });
+
+  it("재접속 첫 화면: 이미 걸린 배지·말 바꿈 점이 팝·알약 없이 바로 나타난다", () => {
+    mount(makeView({ badges: { 1: "mafia", 2: "none" }, swapped: [1, 2] }));
+    const p1 = stage.props!.tagProps!(1);
+    expect(p1).toMatchObject({ claim: "mafia", claimSwapped: true });
+    expect(p1.claimPop).toBeUndefined();
+    expect(p1.claimNotice).toBeUndefined();
+    expect(stage.props!.tagProps!(2)).toMatchObject({ claim: "none", claimSwapped: true });
+    expect(live(document.body)).toBe("");
+  });
+
+  it("연결 번호(epoch)가 바뀐 첫 스냅샷도 이펙트 없이 현재 상태로 그린다", () => {
+    const m = mount(makeView({ badges: { 1: "police" } }));
+    m.show(makeView({ badges: { 1: "mafia" }, swapped: [1] }), { epoch: 2 });
+    const p = stage.props!.tagProps!(1);
+    expect(p).toMatchObject({ claim: "mafia", claimSwapped: true });
+    expect(p.claimPop).toBeUndefined();
+    expect(p.claimNotice).toBeUndefined();
+  });
+
+  it("화면에 안 보이는 live 한 줄: 바뀐 순간에만 '{이름} 님이 {직업}라고 말했어요'", () => {
+    const m = mount(makeView({ badges: { 1: "police" } }));
+    expect(live(m.container)).toBe("");
+    const line = m.container.querySelector("[data-badge-live]")!;
+    expect(line.getAttribute("role")).toBe("status");
+    expect(line.classList.contains("mf-sr-only")).toBe(true);
+    m.show(makeView({ badges: { 1: "mafia" }, swapped: [1] }));
+    expect(live(m.container)).toBe("영희 님이 마피아라고 말했어요");
+    m.show(makeView({ badges: { 1: "none" }, swapped: [1] }));
+    expect(live(m.container)).toBe("영희 님이 말 안 함이라고 말했어요");
+  });
+});
+
+describe("낙관 표시와 거절 되돌림 (UI-SPEC A-2)", () => {
+  it("칩을 누르는 즉시 내 이름표 배지와 버튼 아이콘·이름이 새 값이 된다", () => {
+    const { container } = mount(makeView());
+    expect(stage.props!.tagProps).toBeUndefined();
+    fireEvent.click(floatBtn(container)!);
+    fireEvent.click(chip(container, "경찰"));
+    expect(floatBtn(container)?.getAttribute("aria-label")).toBe("직업 배지 고르기, 지금 경찰");
+    expect(stage.props!.tagProps!(0)).toMatchObject({ claim: "police", claimSwapped: false });
+    expect(stage.props!.tagProps!(1).claim).toBeUndefined();
+  });
+
+  it("직업을 건 상태에서 다른 값을 고르면 내 낙관 표시에 말 바꿈 점이 바로 붙는다", () => {
+    const { container } = mount(makeView({ badges: { 0: "citizen" } }));
+    fireEvent.click(floatBtn(container)!);
+    fireEvent.click(chip(container, "마피아"));
+    expect(stage.props!.tagProps!(0)).toMatchObject({ claim: "mafia", claimSwapped: true });
+  });
+
+  it("마감 직후 거절(오류 프레임)이 3초 안에 오면 토스트 '지금은 바꿀 수 없어요' + 서버 값으로 되돌아간다", () => {
+    const { container } = mount(makeView());
+    fireEvent.click(floatBtn(container)!);
+    fireEvent.click(chip(container, "의사"));
+    expect(floatBtn(container)?.getAttribute("aria-label")).toBe("직업 배지 고르기, 지금 의사");
+    act(() => {
+      vi.advanceTimersByTime(1000);
+    });
+    emitError(container, "WRONG_PHASE");
+    expect(toastText(container)).toBe("지금은 바꿀 수 없어요");
+    expect(floatBtn(container)?.getAttribute("aria-label")).toBe("직업 배지 고르기, 지금 말 안 함");
+    expect(stage.props!.tagProps).toBeUndefined();
+  });
+
+  it("거절이 아닌 오류 코드(속도 제한)는 배지 알림도 되돌림도 만들지 않는다", () => {
+    const { container } = mount(makeView());
+    fireEvent.click(floatBtn(container)!);
+    fireEvent.click(chip(container, "의사"));
+    emitError(container, "RATE_LIMITED");
+    expect(toastText(container)).toBe("");
+    expect(floatBtn(container)?.getAttribute("aria-label")).toBe("직업 배지 고르기, 지금 의사");
+  });
+
+  it("3초가 지난 뒤의 오류는 배지의 거절로 보지 않는다", () => {
+    const { container } = mount(makeView());
+    fireEvent.click(floatBtn(container)!);
+    fireEvent.click(chip(container, "의사"));
+    act(() => {
+      vi.advanceTimersByTime(3500);
+    });
+    emitError(container, "WRONG_PHASE");
+    expect(toastText(container)).not.toBe("지금은 바꿀 수 없어요");
+  });
+
+  it("서버 view 가 같은 값을 확인하면 거절 대기를 푼다 — 뒤의 오류는 배지 알림이 아니다", () => {
+    const m = mount(makeView());
+    fireEvent.click(floatBtn(m.container)!);
+    fireEvent.click(chip(m.container, "의사"));
+    m.show(makeView({ badges: { 0: "doctor" } }));
+    emitError(m.container, "WRONG_PHASE");
+    expect(toastText(m.container)).not.toBe("지금은 바꿀 수 없어요");
+    expect(floatBtn(m.container)?.getAttribute("aria-label")).toBe("직업 배지 고르기, 지금 의사");
+  });
+
+  it("소켓이 닫혀 못 보냈으면(send false) 표시도 시트도 그대로다", () => {
+    const send = vi.fn<(m: ClientMessage) => boolean>(() => false);
+    const { container } = mount(makeView(), { send });
+    fireEvent.click(floatBtn(container)!);
+    fireEvent.click(chip(container, "경찰"));
+    expect(floatBtn(container)?.getAttribute("aria-label")).toBe("직업 배지 고르기, 지금 말 안 함");
+    act(() => {
+      vi.advanceTimersByTime(300);
+    });
+    expect(sheet(container)).not.toBeNull();
+  });
+
+  it("연결이 끊긴 동안(canSend false) 버튼은 aria-disabled 이고 눌러도 시트가 열리지 않는다", () => {
+    const send = vi.fn<(m: ClientMessage) => boolean>(() => true);
+    const { container } = mount(makeView(), { canSend: false, send });
+    expect(floatBtn(container)?.getAttribute("aria-disabled")).toBe("true");
+    fireEvent.click(floatBtn(container)!);
+    expect(sheet(container)).toBeNull();
+    expect(sent(send).filter((x) => x.t === "badge")).toEqual([]);
+  });
+
+  it("칩 연타: 같은 값은 한 번만 보낸다", () => {
+    const send = vi.fn<(m: ClientMessage) => boolean>(() => true);
+    const { container } = mount(makeView(), { send });
+    fireEvent.click(floatBtn(container)!);
+    fireEvent.click(chip(container, "경찰"));
+    fireEvent.click(chip(container, "경찰"));
+    expect(sent(send).filter((x) => x.t === "badge")).toHaveLength(1);
   });
 });
