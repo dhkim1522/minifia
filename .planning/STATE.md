@@ -5,16 +5,16 @@ milestone_name: 같은 공간
 current_phase: 9
 current_phase_name: 밤과 아침
 status: verifying
-stopped_at: Completed 09.1-06-PLAN.md
-last_updated: "2026-11-04T13:44:46.445Z"
+stopped_at: Completed 09.1-07-PLAN.md
+last_updated: "2026-11-04T13:58:41.047Z"
 last_activity: 2026-11-03
 last_activity_desc: Phase 9 execution started
-state_head: bbfaa8f12972c923f8b26803ce329b9023905259
+state_head: 99771f6de933446bf5d4584772622070581ac1fa
 progress:
   total_phases: 8
   completed_phases: 3
   total_plans: 120
-  completed_plans: 114
+  completed_plans: 115
   percent: 38
 ---
 
@@ -174,6 +174,7 @@ Progress: [████░░░░░░] 38% (3/7 phases)
 | Phase 09.1 P04 | 25min | 3 tasks | 16 files |
 | Phase 09.1 P05 | 20min | 3 tasks | 13 files |
 | Phase 09.1 P06 | 35min | 3 tasks | 14 files |
+| Phase 09.1 P07 | 40min | 3 tasks | 15 files |
 
 ## Accumulated Context
 
@@ -353,6 +354,8 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 09.1]: 09.1-05: L16 은 남의 소켓 기준 — 유언 본문은 죽기 전 본인 me.will 한 경로뿐이고 죽을 때 all 채널 k:will 카드로만 나간다
 - [Phase 09.1]: 09.1-05: 스모크 공개 키 표에 view.day.turn 만 허용하고 pickTurn 은 서버 전용 목록에 둔다
 - [Phase 09.1]: 09.1-06: 지목 헤더 안내는 isMyTurn(차례 중·미확정·내 좌석·산 사람)으로 정하고 day.turn 이 없으면 제목만(옛 동시 지목 분기 없음)
+- [Phase 09.1]: 09.1-07: 차례 알약 마지막 5초 진홍 규칙은 v2.css(시간 링과 같은 곳)에 두고 game.css 는 진홍 금지 유지, 어둡게 막은 WorldStage underlay
+- [Phase 09.1]: 09.1-07: 지목 이름표는 내 차례에만 버튼, 누른 차례는 pickedTurn 으로 막고 거절이면 풀며, 낙관 배지 +1 은 서버 내 줄이 오면 더하지 않는다
 
 ### Pending Todos
 
@@ -391,8 +394,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-04T13:44:45.959Z
-Stopped at: Completed 09.1-06-PLAN.md
+Last session: 2026-11-04T13:58:40.546Z
+Stopped at: Completed 09.1-07-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
