@@ -13,7 +13,8 @@ import type {
   VoteLogEntry,
 } from "../protocol";
 import type { BotPlan } from "./bots";
-import { ASSIGNING_MS, DAY_ANNOUNCE_MS, DISCUSSION_MS } from "./phases";
+import { enterNomination } from "./nomination";
+import { ASSIGNING_MS, DAY_ANNOUNCE_MS, DISCUSSION_MS, NOMINATION_GATHER_MS } from "./phases";
 import { assignRoles, giveRoleTo, rolesInPlay } from "./roles";
 import type { RoleId } from "./roles";
 
@@ -346,6 +347,7 @@ const LEGACY_CHAT_ROOM_KEYS = ["nextMessageSeq", "nextNightSeq"] as const;
  * - 옛 투표 단계(execVote·candidateVote·candidateVoteReveal)로 저장된 방은 discussion 으로 옮기고 마감을 now + DISCUSSION_MS 로 둔다. 일차와 지난 날 투표 기록(voteLog)은 그대로이고,
  *   그날의 verdict·execution·오늘 일차 voteLog 줄(있으면)과 개인 키(execVote·candidateVote·nominate·verdictVote·endVote)를 키째 뺀다(결정 0060-12, RESEARCH A9 — 진행 중이던 판이 토론으로 되돌아가는 것은 배포 순간 한 번뿐인 수용 가능한 이전이다).
  *   호출하는 쪽(DO 생성자)은 마감이 바뀌면 알람을 다시 건다.
+ * - 차례 정보(pickTurn) 없이 저장된 지목(nomination) 방은 enterNomination 으로 지목을 다시 시작하고 마감을 now + NOMINATION_GATHER_MS(모이기)로 둔다(결정 0063-1, 그날 지목 표는 지워진다). 호출하는 쪽은 마감이 바뀌면 알람을 다시 건다.
  * - 옛 투표 개인 키(execVote·candidateVote)와 방 키 lastExecPhrase(처형 문구 번호, 08-22 에 없어짐)는 어느 단계에 있든 키째 뺀다.
  * - 방 상태의 주장 키 다섯(claimOrder·claimIdx·claimStart·claimPick·claimLog)은 어느 단계에 있든 키째 뺀다.
  * - 모든 플레이어에서 옛 주장 필드 넷을 키째 뺀다.
@@ -360,13 +362,15 @@ export function normalizeStoredRoom(stored: RoomState, now: number): RoomState {
   const isLegacyReveal = phase === LEGACY_PHASES.claimReveal;
   const isLegacyClaim = phase === LEGACY_PHASES.claim;
   const isLegacyVote = LEGACY_VOTE_PHASES.includes(phase);
+  // 09.1-04(결정 0063-1): 차례 정보 없이 저장된 지목 방(배포 순간 진행 중이던 판)은 지목을 지금 시각부터 다시 시작한다 — 그날 지목 표는 지워진다(공개 정보, 한 번뿐).
+  const isLegacyNomination = stored.phase === "nomination" && stored.pickTurn === undefined;
   const hasOldVoteRoomKey = Object.hasOwn(stored, "lastExecPhrase");
   const hasOldVotePlayerKeys = stored.players.some((p) => LEGACY_VOTE_PLAYER_KEYS.some((key) => Object.hasOwn(p, key)));
   const hasOldClaimState = LEGACY_CLAIM_STATE_KEYS.some((key) => Object.hasOwn(stored, key));
   const hasOldMessages = Object.hasOwn(stored, "messages");
   const hasOldChatRoomKeys = LEGACY_CHAT_ROOM_KEYS.some((key) => Object.hasOwn(stored, key));
   const hasOldPlayerFields = stored.players.some((p) => LEGACY_CLAIM_KEYS.some((key) => Object.hasOwn(p, key)) || Object.hasOwn(p, "lastSendAt"));
-  if (!isLegacyDay && !isLegacyReveal && !isLegacyClaim && !isLegacyVote && !hasOldVoteRoomKey && !hasOldVotePlayerKeys && !hasOldClaimState && !hasOldMessages && !hasOldChatRoomKeys && !hasOldPlayerFields) return stored;
+  if (!isLegacyDay && !isLegacyReveal && !isLegacyClaim && !isLegacyVote && !isLegacyNomination && !hasOldVoteRoomKey && !hasOldVotePlayerKeys && !hasOldClaimState && !hasOldMessages && !hasOldChatRoomKeys && !hasOldPlayerFields) return stored;
   // 옛 키는 구조 분해로만 뺀다. 필드 선언이 RoomState 에서 사라져도 컴파일되게 지역 교차 타입으로 받는다.
   const {
     messages: _dropped,
@@ -427,6 +431,7 @@ export function normalizeStoredRoom(stored: RoomState, now: number): RoomState {
   }
   if (isLegacyDay) return { ...next, phase: "dayAnnounce", phaseEndsAt: now + DAY_ANNOUNCE_MS, day: 1 };
   if (isLegacyReveal || isLegacyClaim) return { ...next, phase: "discussion", phaseEndsAt: now + DISCUSSION_MS };
+  if (isLegacyNomination) return { ...enterNomination(next), phaseEndsAt: now + NOMINATION_GATHER_MS };
   return next;
 }
 

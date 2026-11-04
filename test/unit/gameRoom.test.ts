@@ -659,7 +659,8 @@ describe("normalizeStoredRoom — 저장된 옛 방 (RESEARCH Pattern 6, T-02-14
     const got = normalizeStoredRoom(stored, 5_000);
     expect(got === stored).toBe(false);
     expect(`${got.phase}:${got.phaseEndsAt}:${got.day}`).toBe(`nomination:${5_000 + NOMINATION_GATHER_MS}:2`);
-    expect(JSON.stringify(got.pickTurn)).toBe(JSON.stringify({ order: [0, 1, 2, 3], i: -1 }));
+    const seats = stored.players.map((p) => p.seat).sort((a, b) => a - b);
+    expect(JSON.stringify(got.pickTurn)).toBe(JSON.stringify({ order: seats, i: -1 }));
     expect(got.players.some((p) => Object.hasOwn(p, "nominate"))).toBe(false);
     expect(stored.players.filter((p) => p.nominate === 3).length).toBe(2); // 입력은 바꾸지 않는다
   });
@@ -850,7 +851,8 @@ describe("normalizeStoredRoom — 옛 투표 단계로 저장된 방 (08-22, DAY
     const once = normalizeStoredRoom(oldVoteRoom("execVote"), NOW);
     expect(normalizeStoredRoom(once, 6_000) === once).toBe(true);
     for (const phase of ["discussion", "nomination", "verdict", "defense", "execution", "night"] as const) {
-      const r = { ...fullRoom([0, 1, 2, 3]), phase, phaseEndsAt: 77_000, day: 2 };
+      // 지목 방은 차례 정보가 있어야 새 모양이다(없으면 지목을 다시 시작한다, 결정 0063-1).
+      const r = { ...fullRoom([0, 1, 2, 3]), phase, phaseEndsAt: 77_000, day: 2, ...(phase === "nomination" ? { pickTurn: { order: [0, 1, 2, 3], i: -1 } } : {}) };
       expect(normalizeStoredRoom(r, NOW) === r).toBe(true);
     }
   });
