@@ -3,18 +3,19 @@
 // 검사 순서가 계약이다: testMode 가 아니면 BAD_MESSAGE(일반 방에서는 이 메시지가 있다는 사실도 드러내지 않는다)
 // → 방장이 아니면 NOT_HOST → 단계가 맞지 않으면 WRONG_PHASE → (testRole 만) 직업이 구성에 없으면 BAD_MESSAGE
 // (testBots 는 대기실 다음에 개수 범위가 틀리면 BAD_MESSAGE, 결정 0024. testBotVote 는 대기실 다음에 값이 범위 밖이면 BAD_MESSAGE, P-13).
-// (finishNomination 의 난수 호출 순서: 남은 차례의 산 봇만 좌석 순 randInt(후보 수) 한 번씩.)
+// (finishNomination 의 난수 호출 순서: 남은 차례의 산 봇만 좌석 순 randInt(후보 수) 한 번씩. finishRunoff: 아직 안 던진 후보 아닌 산 봇만 좌석 순 randInt(2) 한 번씩, 고정 pick 이면 없음.)
 // 결정 0017-5(방장 연장·넘기기 제거)와 0020 은 일반 방에서 그대로다. 이 도구는 테스트 방 전용 예외다.
 import { NICKNAME_MAX_GRAPHEMES, graphemePrefix, validateNickname } from "../nickname";
 import { MAX_PLAYERS, MAX_TEST_BOTS } from "../protocol";
 import type { BotVoteExec, BotVotePick } from "../protocol";
 import { isAlive } from "./alive";
-import { BOT_NAMES, botCount, botExecAgree, botNightTarget, botPointTarget, isBot } from "./bots";
+import { BOT_NAMES, botCount, botExecAgree, botNightTarget, botPointTarget, botRunoffTarget, isBot } from "./bots";
 import { testRoleOptions } from "./roles";
 import type { RoleId } from "./roles";
 import { pickTarget } from "./night";
 import { lowestFreeSeat } from "./room";
 import type { Player, RoomState } from "./room";
+import { stepRunoff } from "./runoff";
 import { tick } from "./tick";
 import type { RandInt } from "./tick";
 import { castVerdict } from "./verdict";
@@ -45,6 +46,8 @@ export function skipPhase(state: RoomState, actorId: string, now: number, randIn
   if (state.phase === "nomination" && state.pickTurn !== undefined) {
     return { ok: true, state: tick({ ...finishNomination(state, randInt), phaseEndsAt: now }, now, randInt) };
   }
+  // 동점 결선(09.1.1-05, 결정 0066-4): 앞머리·투표 창·결과 어디서든 남은 봇 표를 채우고 득표를 확정한 뒤 마감을 당겨 집계 → 변론 또는 밤으로 한 번에 벗어난다.
+  if (state.phase === "runoff") return { ok: true, state: tick({ ...finishRunoff(state, randInt), phaseEndsAt: now }, now, randInt) };
   const ready = state.phase === "night" ? botsPickNow(state, randInt) : state.phase === "verdict" ? botsVoteNow(state, randInt) : state;
   return { ok: true, state: tick({ ...ready, phaseEndsAt: now }, now, randInt) };
 }
@@ -69,6 +72,27 @@ export function finishNomination(state: RoomState, randInt: RandInt): RoomState 
     next = { ...next, players: next.players.map((p) => (p.id === bot.id ? { ...p, nominate: target } : p)) };
   }
   return { ...next, pickTurn: { order: turn.order, i: turn.order.length } };
+}
+
+/**
+ * 동점 결선(09.1.1-05, 결정 0066-4)을 한 번에 마무리한다: 앞머리(step 0)나 투표 창(step 1)이면 아직 안 던진 후보 아닌 산 봇이 좌석 순으로
+ * botRunoffTarget(계획과 같은 결정 함수)으로 한 표씩 던지고(사람 표·이미 던진 표는 그대로), 결선을 결과(step 2, 후보 순서 득표 수 확정)로 만든다.
+ * 호출한 쪽(skipPhase)이 마감을 당겨 tick 이 집계하게 한다. 결선이 아니거나 이미 결과(step 2)면 입력 그대로.
+ * 난수 호출 순서: 아직 안 던진 후보 아닌 산 봇만 좌석 오름차순으로 randInt(2) 한 번씩(고정 pick 이면 없음).
+ */
+export function finishRunoff(state: RoomState, randInt: RandInt): RoomState {
+  const runoff = state.runoff;
+  if (state.phase !== "runoff" || runoff === undefined || runoff.step === 2) return state;
+  let next: RoomState = state;
+  for (const bot of [...state.players].filter((p) => isBot(p) && p.runoffVote === undefined).sort((a, b) => a.seat - b.seat)) {
+    const target = botRunoffTarget(next, bot, randInt);
+    if (target === undefined) continue;
+    // botRunoffTarget 은 후보 둘 중 하나다 — 투표 창·시각 검사(castRunoffVote) 없이 표만 넣는다(finishNomination 과 같다).
+    next = { ...next, players: next.players.map((p) => (p.id === bot.id ? { ...p, runoffVote: target } : p)) };
+  }
+  // 투표 창으로 맞춘 뒤 한 걸음: 1 → 2 전환이 득표 수를 확정한다(마감 시각은 쓰지 않는다).
+  const voting: RoomState = { ...next, runoff: { cand: runoff.cand, step: 1 } };
+  return { ...stepRunoff(voting, state.phaseEndsAt ?? 0).state };
 }
 
 /**

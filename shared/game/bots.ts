@@ -217,20 +217,30 @@ export function turnPointSteps(state: RoomState, bot: Player, now: number, randI
 }
 
 /**
- * 결선 투표(09.1.1-05, 결정 0066-4): 투표 창(step 1)에서 후보가 아닌 산 봇 하나가 후보 둘 중 하나에게 point 한 번.
- * 대상: 고정 pick(P-13)이 host 면 방장인 후보, other 면 방장이 아닌 후보 중 낮은 좌석 — 해당하는 후보가 없으면 무작위로 돌아간다.
- * 무작위는 randInt(2) 번째 후보(역할을 보지 않는다). 지연은 RUNOFF_BOT_BASE_MS + randInt(RUNOFF_BOT_SPAN_MS). 실행은 사람과 같은 applyPoint → 결선 투표 본체를 지난다.
+ * 결선에서 이 봇이 던질 후보 seat(09.1.1-05, 결정 0066-4). 계획(runoffPointSteps)과 넘기기(finishRunoff)가 같은 결정을 쓴다.
+ * 고정 pick(P-13)이 host 면 방장인 후보, other 면 방장이 아닌 후보 중 낮은 좌석 — 해당하는 후보가 없으면 무작위로 돌아간다(randInt(2) 번째 후보, 역할을 보지 않는다).
+ * 결선이 아니거나 후보인 봇·탈락한 봇은 undefined(randInt 를 부르지 않는다). 고정 값이 있으면 randInt 를 부르지 않는다.
  */
-function runoffPointSteps(state: RoomState, bot: Player, now: number, randInt: RandInt): BotStep[] {
+export function botRunoffTarget(state: RoomState, bot: Player, randInt: RandInt): number | undefined {
   const runoff = state.runoff;
-  if (state.phase !== "runoff" || runoff === undefined || runoff.step !== 1) return [];
-  if (!isAlive(bot) || runoff.cand.includes(bot.seat)) return [];
+  if (state.phase !== "runoff" || runoff === undefined) return undefined;
+  if (!isAlive(bot) || runoff.cand.includes(bot.seat)) return undefined;
   const pick = state.testBotVote?.pick;
   const hostSeat = state.players.find((p) => p.id === state.hostId)?.seat;
   let target: number | undefined;
   if (pick === "host") target = runoff.cand.find((seat) => seat === hostSeat);
   else if (pick === "other") target = runoff.cand.find((seat) => seat !== hostSeat);
-  if (target === undefined) target = runoff.cand[randInt(2)]!;
+  return target ?? runoff.cand[randInt(2)]!;
+}
+
+/**
+ * 결선 투표 계획(09.1.1-05, 결정 0066-4): 투표 창(step 1)에서 후보가 아닌 산 봇 하나가 후보 둘 중 하나에게 point 한 번.
+ * 대상은 botRunoffTarget, 지연은 RUNOFF_BOT_BASE_MS + randInt(RUNOFF_BOT_SPAN_MS). 실행은 사람과 같은 applyPoint → 결선 투표 본체를 지난다.
+ */
+function runoffPointSteps(state: RoomState, bot: Player, now: number, randInt: RandInt): BotStep[] {
+  if (state.runoff?.step !== 1) return [];
+  const target = botRunoffTarget(state, bot, randInt);
+  if (target === undefined) return [];
   return [{ at: now + RUNOFF_BOT_BASE_MS + randInt(RUNOFF_BOT_SPAN_MS), botId: bot.id, act: { t: "point", target } }];
 }
 

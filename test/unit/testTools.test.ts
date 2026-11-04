@@ -962,12 +962,18 @@ describe("넘기기: 동점 결선 (09.1.1-05)", () => {
   });
 
   it("skipPhase: 한 번에 결선을 벗어난다 — 득표가 갈리면 많이 받은 후보의 변론, 앞머리·투표 창 어디서든", () => {
-    for (const step of [0, 1, 2] as const) {
+    for (const step of [0, 1] as const) {
       const state = runoffAt(botLobby(), step);
       const after = skipOk(state, state.phaseEndsAt!, (n) => n - 1); // 모두 높은 좌석 후보(1)
       expect(`${step}:${after.phase}:${after.verdict?.candidate}:${after.runoff === undefined}`).toBe(`${step}:defense:1:true`);
       expect(after.players.some((p) => p.runoffVote !== undefined)).toBe(false);
     }
+  });
+
+  it("skipPhase: 결과(step 2)에서는 이미 확정된 득표 그대로 집계한다 — 새 표를 채우지 않는다(0-0 이면 밤)", () => {
+    const state = runoffAt(botLobby(), 2);
+    const after = skipOk(state, state.phaseEndsAt!, THROWING);
+    expect(`${after.phase}:${after.runoff === undefined}`).toBe("night:true");
   });
 
   it("skipPhase: 득표가 같으면 처형 없음으로 밤에 간다; 방장이 후보여도 막히지 않는다", () => {
