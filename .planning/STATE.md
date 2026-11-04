@@ -5,16 +5,16 @@ milestone_name: 같은 공간
 current_phase: 9
 current_phase_name: 밤과 아침
 status: verifying
-stopped_at: Completed 09.1.1-12-PLAN.md
-last_updated: "2026-11-04T20:48:24.770Z"
+stopped_at: Completed 09.1.1-13-PLAN.md
+last_updated: "2026-11-04T21:25:38.455Z"
 last_activity: 2026-11-03
 last_activity_desc: Phase 9 execution started
-state_head: e0974029cb80d173faad6720819d725530fcd203
+state_head: 9203ef98dfc31edd01d7a32d6b0ca5b07b6b5898
 progress:
   total_phases: 9
   completed_phases: 3
   total_plans: 137
-  completed_plans: 132
+  completed_plans: 133
   percent: 33
 ---
 
@@ -192,6 +192,7 @@ Progress: [███░░░░░░░] 33% (3/7 phases)
 | Phase 09.1.1 P10 | 40min | 3 tasks | 5 files |
 | Phase 09.1.1 P11 | 55m | 3 tasks | 13 files |
 | Phase 09.1.1 P12 | 50min | 3 tasks | 18 files |
+| Phase 09.1.1 P13 | 130min | 3 tasks | 19 files |
 
 ## Accumulated Context
 
@@ -396,6 +397,9 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 09.1.1]: 11: 핀 조명 O-14 확정 — 켜진 세기 0.9(단계 값→선두 세기 비율)·실내등 x0.6, setPin dim 은 곱하는 값 그대로(lerp 시 0.64 어긋남 방지)
 - [Phase 09.1.1]: 11: 다른 좌석으로 건너뛰는 전환은 켜짐 수준 0 에서 180ms 재점등(한 점광이라 교차 페이드 대신 켜고 끈다)
 - [Phase 09.1.1]: 09.1.1-12: 찬반 묶음 자리를 is-pending(visibility)으로 미리 잡아 두고 넘침 측정을 마운트 때 한 번만 한다; ballots 카드 보류 4600ms 는 편지 바닥값을 받지 않는다
+- [Phase 09.1.1]: [09.1.1-13] pinOf 처형 단계 핀은 view 만으로 정해지는 고정 창 {fixed, seat, startAt, endAt}(부결 4.0초·처형 5.0초). 런타임은 fixed 를 turn 과 같은 좌석 핀으로 처리
+- [Phase 09.1.1]: [09.1.1-13] zoomMs 가 있는 고정 구도는 위치·세로 오프셋·줌을 같은 시간·같은 ease-in-out 으로 옮기고, 재접속·모션 줄이기 첫 프레임은 블렌드를 끝난 것으로 시작
+- [Phase 09.1.1]: [09.1.1-13] 찬반 묶음 윗변은 기본 131, 알림이 두 줄로 감기면 GameMap 이 --mf-ballot-top 으로 알림 아랫변 + 16 으로 내린다(8자 이름 처형 알림 겹침 수정)
 
 ### Pending Todos
 
@@ -434,8 +438,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-04T20:48:24.176Z
-Stopped at: Completed 09.1.1-12-PLAN.md
+Last session: 2026-11-04T21:25:37.826Z
+Stopped at: Completed 09.1.1-13-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
