@@ -242,7 +242,25 @@
 .mv-chat__whisper-title { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; line-height: 1.4; font-weight: 700; color: var(--gray-50); }
 .mv-chat__whisper-text { margin: 0; font-size: 14px; line-height: 1.4; font-weight: 400; color: var(--gray-100); word-break: keep-all; overflow-wrap: anywhere; }
 
+/* 찬반 기록 공개(09.1.1-12, UI-SPEC C-2): 결과 알림 아래 위 131 · 좌우 16 · 아래는 패널 윗변 위 8. 찬반은 색이 아니라 위치·아이콘·테두리(gray-100 / gray-500)로 구별한다. 진홍·놋쇠·초록 없음 */
+.mv-ballots { position: absolute; top: 131px; left: var(--space-md); right: var(--space-md); bottom: calc(var(--mf-kb-lift, 0px) + var(--mf-panel-h, 0px) + 8px); z-index: calc(var(--z-overlay) + 1); overflow: hidden; pointer-events: none; font-family: var(--font-ui); }
+.mv-ballots__body { display: flex; flex-direction: column; gap: var(--space-md); }
+.mv-ballots__group { display: flex; flex-direction: column; gap: var(--space-sm); }
+.mv-ballots__group.is-pending { visibility: hidden; }
+.mv-ballots__group.is-enter { animation: mv-ballots-in var(--dur-pop) var(--ease-out) both; }
+.mv-ballots__head { display: flex; align-items: center; gap: var(--space-sm); height: 28px; font-size: 16px; line-height: 1.5; font-weight: 700; color: var(--gray-50); }
+.mv-ballots__head svg { flex: none; color: var(--gray-100); }
+.mv-ballots__row { display: flex; flex-wrap: wrap; gap: var(--space-sm); }
+.mv-ballots__pill { display: inline-flex; align-items: center; gap: 6px; box-sizing: border-box; height: 32px; padding: var(--space-xs) var(--space-sm) var(--space-xs) var(--space-xs); border-radius: var(--radius-pill); background: var(--overlay-ink); border: 1.5px solid var(--gray-100); }
+.mv-ballots__pill.is-no { border-color: var(--gray-500); }
+.mv-ballots__pill.is-me { box-shadow: inset 0 0 0 1.5px var(--gray-100); }
+.mv-ballots__pill.is-compact { padding: 0; background: none; border: 0; box-shadow: none; }
+.mv-ballots__face { flex: none; box-sizing: border-box; border-radius: var(--radius-pill); border: 2px solid var(--ballot-seat); object-fit: cover; }
+.mv-ballots__face.is-fallback { display: inline-block; background: var(--ballot-seat); }
+.mv-ballots__name { font-size: 14px; line-height: 1.4; font-weight: 700; color: var(--gray-50); white-space: nowrap; word-break: keep-all; }
+@keyframes mv-ballots-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
 /* 모션 줄이기(O-22): 배지 팝·알약 페이드·시트 등장 애니메이션 없이 즉시. 알약은 즉시 나타나 2.4초 뒤 즉시 사라진다(타이머가 요소를 걷는다) */
 @media (prefers-reduced-motion: reduce) {
-  .mv-claim.is-pop, .mv-claim__notice, .mv-claim-sheet { animation: none; }
+  .mv-claim.is-pop, .mv-claim__notice, .mv-claim-sheet, .mv-ballots__group.is-enter { animation: none; }
 }
