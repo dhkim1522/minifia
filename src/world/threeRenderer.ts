@@ -154,6 +154,9 @@ async function build(opts: Opts): Promise<WorldRenderer> {
     setTension(level: 0 | 1 | 2, focus?: { x: number; z: number }): void {
       bar.setTension(level, focus);
     },
+    setPin(pin: { x: number; z: number; strength: number } | null, dim: number): void {
+      bar.setPin(pin, dim);
+    },
     setLighting(phase: LightingPhase): void {
       bar.setLighting(phase);
       gl.toneMappingExposure = bar.exposure;

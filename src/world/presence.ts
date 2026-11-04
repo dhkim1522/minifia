@@ -9,6 +9,7 @@ import { GHOST_FADE_END_MS, GHOST_RISE_MS, pointsTally } from "../game/dayView";
 import { GATHER_CENTER } from "./camera";
 import type { OutfitId } from "./characterData";
 import { jobOutfit } from "./ghostOutfit";
+import { pinOf, type PinDesc } from "./pinPlan";
 
 /** 렌더러가 읽는 조명 단계(UI-SPEC 단계 조명). 렌더러의 LightingPhase 확장은 08-10 이 한다 */
 export type LightingStage = "talk" | "vote" | "trial" | "night" | "nightCitizen" | "nightGhost" | "morning";
@@ -43,6 +44,8 @@ export interface SceneLook {
   lighting: LightingStage;
   tension: 0 | 1 | 2;
   focusSeat?: number;
+  /** 핀 조명이 무엇을 비출지(결정 0066-6). 시각 의존은 런타임의 pinAt 몫이라 view 만으로 정해진다 */
+  pin?: PinDesc | null;
   seats: Record<number, SeatLook>;
   /** 암살 현장 분필 자리(월드 단위). 서버 공개 값 day.chalk 를 UNIT 으로 나눈 것이고 유령·산 사람 viewer 가 같은 자리를 본다(결정 0061-14) */
   chalk?: { x: number; z: number };
@@ -150,6 +153,7 @@ export function sceneLook(view: RoomView, opts: { stageH: number; fading?: Reado
     lighting: lightingFor(view),
     tension: tension.level,
     ...(tension.focus !== undefined ? { focusSeat: tension.focus } : {}),
+    pin: pinOf(view),
     seats,
     ...(chalk !== undefined ? { chalk: { x: chalk.x / UNIT, z: chalk.z / UNIT } } : {}),
   };

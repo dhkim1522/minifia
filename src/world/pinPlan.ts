@@ -1,0 +1,73 @@
+// 핀 조명 계획(결정 0066-6, UI-SPEC F): "무엇을 비출지"(PinDesc)와 "시각에 따른 위치"(pinAt)를 나눈 순수 모듈.
+// 판결 순간(12)·결선(14)·마지막 3인(15) 계획이 pinOf 에 자기 단계를 더해 같은 장치(렌더러 setPin)를 재사용한다.
+// L22: 대상 좌석은 서버가 모두에게 공개한 값(day.turn·day.points)에서만 나온다. 연결·스토어·개인 정보는 읽지 않는다(정적 시험 pinStaticGuard).
+import { PICK_GAP_MS } from "../../shared/game/phases";
+import type { RoomView } from "../../shared/protocol";
+
+/** 핀이 켜졌을 때 무대 점광 세기의 비율: 단계 값(0)과 선두 세기(1) 사이에서 0.9 (UI-SPEC O-14 — 육안 조정은 이 상수 한 곳) */
+export const PIN_STRENGTH = 0.9;
+/** 핀이 켜졌을 때 실내등(방·투표 발광)에 곱하는 값 (O-14) */
+export const PIN_DIM = 0.6;
+/** 켜질 때 dur-fast */
+export const PIN_ON_MS = 180;
+/** 꺼질 때 dur-med */
+export const PIN_OFF_MS = 420;
+
+/** 무엇을 비출지. turn = 한 사람 머리 위, slide = from 에서 to 로 미끄러짐(startAt 은 서버 시각) */
+export type PinDesc = { mode: "turn"; seat: number } | { mode: "slide"; from: number; to: number; startAt: number; durationMs: number };
+
+/** 순차 지목의 핀. 다른 단계의 핀은 각 계획이 이 함수를 확장한다 */
+export function pinOf(view: RoomView): PinDesc | null {
+  if (view.phase !== "nomination") return null;
+  const turn = view.day?.turn;
+  if (turn === undefined) return null;
+  const { order, i } = turn;
+  if (!Number.isInteger(i) || i < 0 || i >= order.length) return null; // 모이는 중·끝 알림·이상한 값
+  const seat = order[i];
+  if (typeof seat !== "number") return null;
+  if (turn.doneAt === undefined) return { mode: "turn", seat };
+  if (turn.skip === true) return null; // 기권: 이동 없이 꺼진다
+  const line = view.day?.points?.find((p) => p.seat === seat);
+  if (line === undefined) return null;
+  return { mode: "slide", from: seat, to: line.target, startAt: turn.doneAt, durationMs: PICK_GAP_MS };
+}
+
+/** 0→0, 0.5→0.5, 1→1 인 부드러운 가감속(smoothstep) */
+export function easeInOut(p: number): number {
+  const k = Math.min(1, Math.max(0, p));
+  return k * k * (3 - 2 * k);
+}
+
+export interface PinAt {
+  on: boolean;
+  /** 지금 비추는 좌석: turn 은 그 좌석, slide 는 진행 0.5 이전 from · 이후 to */
+  seat?: number;
+  from?: number;
+  to?: number;
+  /** slide 진행(0~1, ease 적용). turn·꺼짐은 0 */
+  t: number;
+  /** slide 가 이동하는 중 */
+  moving: boolean;
+}
+
+/** 서버 시각 serverNow 의 핀 모양. 모션 줄이기면 slide 는 곧바로 도착(t 1)이다 */
+export function pinAt(desc: PinDesc | null, serverNow: number, reduced: boolean): PinAt {
+  if (desc === null) return { on: false, t: 0, moving: false };
+  if (desc.mode === "turn") return { on: true, seat: desc.seat, t: 0, moving: false };
+  const raw = desc.durationMs > 0 ? (serverNow - desc.startAt) / desc.durationMs : 1;
+  const t = reduced ? 1 : easeInOut(raw);
+  const moving = !reduced && raw > 0 && raw < 1;
+  return { on: true, seat: t >= 0.5 ? desc.to : desc.from, from: desc.from, to: desc.to, t, moving };
+}
+
+/** 켜짐 수준 k(0~1)를 dtMs 만큼 목표(on)로 옮긴다. 모션 줄이기는 계단식 */
+export function pinLevel(k: number, on: boolean, dtMs: number, reduced: boolean): number {
+  if (reduced) return on ? 1 : 0;
+  const next = on ? k + dtMs / PIN_ON_MS : k - dtMs / PIN_OFF_MS;
+  return Math.min(1, Math.max(0, next));
+}
+
+/** 켜짐 수준 k 의 렌더러 값: 점광 세기 비율과 실내등 곱 */
+export function pinLights(k: number): { strength: number; dim: number } {
+  return { strength: PIN_STRENGTH * k, dim: 1 - (1 - PIN_DIM) * k };
+}

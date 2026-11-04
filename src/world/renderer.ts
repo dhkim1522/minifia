@@ -74,6 +74,8 @@ export interface WorldRenderer {
   setLighting(phase: LightingPhase): void;
   /** 긴장 단계 0·1·2 (결정 0049): 1 = 무대 점광원이 초점 위로 선두 세기, 2 = 그에 더해 실내 emissive 절반. 시험 가짜 렌더러 호환을 위해 optional (08-10) */
   setTension?(level: 0 | 1 | 2, focus?: { x: number; z: number }): void;
+  /** 핀 조명(결정 0066-6): pin 자리(월드 단위)에 무대 점광원이 가 세기가 strength(0~1, 단계 값 → 선두 세기)만큼 오르고 실내 발광에 dim 이 곱해진다. null 이면 끈다. 시험 가짜 렌더러 호환을 위해 optional */
+  setPin?(pin: { x: number; z: number; strength: number } | null, dim: number): void;
   /** 내 캐릭터에만 비치는 작은 빛(밤·시민 편)의 자리(월드 단위 x·z, 높이는 맵이 정한다). null 이면 기본 자리. 세기는 조명 단계가 정한다. 시험 가짜 렌더러 호환을 위해 optional */
   setSelfLight?(at: { x: number; z: number } | null): void;
   /** 암살 현장 분필 윤곽: 자리(월드 단위)와 불투명도, null 이면 숨김. 시험 가짜 렌더러 호환을 위해 optional (08-10 선례) */

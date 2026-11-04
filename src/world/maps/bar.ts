@@ -304,6 +304,12 @@ export interface BarScene {
    * 0 = 그 단계 값으로 복귀. 조명 단계가 바뀌어도 유지되고 단계 값 위에서 다시 계산된다
    */
   setTension(level: 0 | 1 | 2, focus?: { x: number; z: number }): void;
+  /**
+   * 핀 조명(결정 0066-6). pin 이 있으면 무대 점광원이 그 자리(x·z) 위로 옮겨 세기가 (단계 값 → 선두 세기) 사이 strength 만큼 올라가고,
+   * 방·투표 발광은 단계 값 × dim 이 된다. null 이면 효과가 없다(단계·긴장 값). 긴장과 함께면 핀이 점광원 위치·세기를 이긴다.
+   * 새 광원·메시를 만들지 않고 값 몇 개만 대입한다(가벼운 경로). 조명 단계가 바뀌어도 핀 상태는 유지된다
+   */
+  setPin(pin: { x: number; z: number; strength: number } | null, dim: number): void;
   /** 예산 단계를 재생성 없이 반영한다(되돌릴 수 있다): 그림자 맵 크기·점광원 core·소품 reduced·안개·빛 무리 */
   applyBudget(budget: Budget): void;
   readonly budget: Budget;
@@ -597,6 +603,26 @@ export function buildBarScene(budget: Budget): BarScene {
   let phase: LightingPhase = "talk";
   let tensionLevel: 0 | 1 | 2 = 0;
   let tensionFocus: { x: number; z: number } | null = null;
+  // 핀 조명(결정 0066-6): applyLook 이 정한 단계·긴장 값 위에 얹는다. 기본 값은 applyLook 이 매번 채운다
+  let pinState: { x: number; z: number; strength: number } | null = null;
+  let pinDim = 1;
+  const base = { stage: 0, x: T.point.stage.x, z: T.point.stage.z, room: 0, vote: 0 };
+
+  /** 핀 상태를 점광원 위치·세기와 두 발광 색에 반영한다 — 값 몇 개 대입뿐이다(프레임마다 불려도 비용이 없다) */
+  const applyPin = (): void => {
+    if (pinState === null) {
+      stage.intensity = base.stage;
+      stage.position.set(base.x, T.point.stage.y, base.z);
+      matEmRoom.color.setScalar(base.room);
+      matEmVote.color.setScalar(base.vote);
+      return;
+    }
+    const k = Math.min(1, Math.max(0, pinState.strength));
+    stage.intensity = base.stage + (T.tension.lead - base.stage) * k;
+    stage.position.set(pinState.x, T.point.stage.y, pinState.z);
+    matEmRoom.color.setScalar(base.room * pinDim);
+    matEmVote.color.setScalar(base.vote * pinDim);
+  };
 
   /** 단계·긴장·예산을 모두 합쳐 장면에 반영한다(셋 중 무엇이 바뀌어도 같은 곳에서 다시 계산) */
   const applyLook = (): void => {
@@ -613,17 +639,23 @@ export function buildBarScene(budget: Budget): BarScene {
     self.intensity = t.self;
     // 긴장 1·2: 무대 점광원이 초점 위로 옮겨 선두 세기(초점이 없으면 무대 중앙). 0: 단계 값과 무대 중앙
     const lead = tensionLevel >= 1;
-    stage.intensity = lead ? T.tension.lead : t.stage;
-    if (lead && tensionFocus) stage.position.set(tensionFocus.x, T.point.stage.y, tensionFocus.z);
-    else stage.position.set(T.point.stage.x, T.point.stage.y, T.point.stage.z);
+    base.stage = lead ? T.tension.lead : t.stage;
+    if (lead && tensionFocus) {
+      base.x = tensionFocus.x;
+      base.z = tensionFocus.z;
+    } else {
+      base.x = T.point.stage.x;
+      base.z = T.point.stage.z;
+    }
     // 점광원 core: 펜던트 둘은 세기 0 + 장면 광원 목록에서 뺀다(셰이더 광원 수가 줄어든다). 벽·촛불 빛은 emissive 와 빛 무리가 이미 낸다
     const pendant = b.lights === "full" ? t.pendant : 0;
     pendantA.intensity = pendant;
     pendantB.intensity = pendant;
     pendantA.visible = b.lights === "full";
     pendantB.visible = b.lights === "full";
-    matEmRoom.color.setScalar(t.emissive.room * (tensionLevel === 2 ? T.tension.halfRoom : 1));
-    matEmVote.color.setScalar(t.emissive.vote);
+    base.room = t.emissive.room * (tensionLevel === 2 ? T.tension.halfRoom : 1);
+    base.vote = t.emissive.vote;
+    applyPin();
     matGlowRoom.opacity = t.glow.room;
     matGlowVote.opacity = t.glow.vote;
     meshes.glowRoom!.visible = b.glows && t.glow.room > 0;
@@ -653,6 +685,12 @@ export function buildBarScene(budget: Budget): BarScene {
     tensionLevel = level;
     tensionFocus = level >= 1 && focus ? { x: focus.x, z: focus.z } : null;
     applyLook();
+  };
+
+  const setPin = (pin: { x: number; z: number; strength: number } | null, dim: number): void => {
+    pinState = pin === null ? null : { x: pin.x, z: pin.z, strength: pin.strength };
+    pinDim = Number.isFinite(dim) ? Math.min(1, Math.max(0, dim)) : 1;
+    applyPin();
   };
 
   const applyBudget = (b: Budget): void => {
@@ -692,6 +730,7 @@ export function buildBarScene(budget: Budget): BarScene {
     setChalk,
     setSelfLight,
     setTension,
+    setPin,
     applyBudget,
     get budget(): Budget {
       return current;

@@ -17,6 +17,7 @@ import { DEFAULT_BUDGET_STEP, nextLadderStep } from "./renderer";
 import type { CharacterHandle, WorldRenderer } from "./renderer";
 import { GHOST_MIST } from "./ghostOutfit";
 import { executionFade, GHOST_OPACITY, ghostFloatY, stageLiftY } from "./presence";
+import { pinAt, pinLevel, pinLights } from "./pinPlan";
 import type { SceneLook } from "./presence";
 import { initialMapStatus, inputBlocked, mapStatusReducer, shouldRecreate } from "./status";
 import { rankTags } from "./tagOrder";
@@ -191,6 +192,8 @@ export interface WorldRuntimeDeps {
   onRing?: (at: { x: number; z: number } | null) => void;
   /** 지금 입힌 유령 직업 의상 표(좌석 → 의상 id)가 바뀔 때만 한 번 불린다 — E2E 훅 window.__mfGhostOutfits 용(09.1-09). 산 사람 화면은 늘 빈 표다 */
   onGhostOutfits?: (outfits: Readonly<Record<number, string>>) => void;
+  /** 핀 조명이 지금 비추는 좌석(없으면 null)·이동 중 여부·켜짐 수준(0~1)이 바뀔 때 불린다 — E2E 훅 window.__mfPin 용(09.1.1-11). 제품은 넘기지 않는다 */
+  onPin?: (pin: { seat: number | null; moving: boolean; strength: number }) => void;
 }
 
 export interface WorldRuntime {
@@ -331,6 +334,12 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
   /** 렌더러에 마지막으로 보낸 조명 단계·긴장 키·확대(바뀔 때만 다시 보낸다) */
   let lightSent: LightingPhase | null = null;
   let tensionKey: string | null = "0";
+  /** 핀 조명(결정 0066-6): 켜짐 수준 0~1, 마지막으로 비춘 자리, 이어짐 키(다른 좌석으로 건너뛰면 다시 켠다), 렌더러·훅에 마지막으로 보낸 키 */
+  let pinK = 0;
+  let pinPos: { x: number; z: number } | null = null;
+  let pinSeatKey: string | null = null;
+  let pinSentKey: string | null = "-";
+  let pinHookKey: string | null = null;
   /** 분필 윤곽: 마지막으로 렌더러에 보낸 자리·불투명도 키(바뀔 때만 다시 보낸다) */
   let chalkKey: string | null = "-";
   /** 분필 자리 키(불투명도 제외)와 그려지기 시작한 시각(ms, 그리는 중이 아니면 null). 장면이 있는 프레임에서 분필이 없던 적이 있어야 '새로 나타남' 이다(첫 장면·재접속은 즉시) */
@@ -399,6 +408,7 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
         resync = true; // 복구·재생성 뒤 첫 프레임: 카메라와 모든 캐릭터를 서버 위치에 바로 놓는다
         lightSent = null; // 새 렌더러에는 조명·긴장·확대를 다시 보낸다
         tensionKey = null;
+        pinSentKey = null;
         chalkKey = null;
         selfLightKey = null;
         zoomSent = Number.NaN;
@@ -642,6 +652,52 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
       g.slideStart = now;
     }
     deps.onRing?.(to);
+  }
+
+  /**
+   * 핀 조명(결정 0066-6): look.pin 과 서버 시각으로 비출 자리를 정하고 켜짐 수준을 180ms 켜기·420ms 끄기로 옮겨 렌더러에 보낸다(바뀔 때만).
+   * 대상 좌석의 캐릭터가 없으면 핀을 끈다. 다른 좌석으로 건너뛰면(미끄러짐이 아닌 다음 차례) 수준을 0 으로 내려 다시 켠다. 렌더러의 광원·메시는 늘리지 않는다
+   */
+  function updatePin(r: WorldRenderer, dtMs: number, sNow: number, reduced: boolean): void {
+    const desc = look?.pin ?? null;
+    const at = pinAt(desc, sNow, reduced);
+    let pos: { x: number; z: number } | null = null;
+    let seatKey: string | null = null;
+    if (at.on && desc !== null) {
+      if (desc.mode === "turn") {
+        const a = actors.get(desc.seat)?.pos;
+        if (a !== undefined) pos = { x: a.x, z: a.z };
+        seatKey = `s${desc.seat}`;
+      } else {
+        const a = actors.get(desc.from)?.pos;
+        const b = actors.get(desc.to)?.pos;
+        if (a !== undefined && b !== undefined) pos = { x: a.x + (b.x - a.x) * at.t, z: a.z + (b.z - a.z) * at.t };
+        seatKey = `s${desc.from}`;
+      }
+    }
+    const want = pos !== null;
+    if (pos !== null) {
+      if (pinK > 0 && pinSeatKey !== null && seatKey !== pinSeatKey) pinK = 0;
+      pinSeatKey = seatKey;
+      pinPos = pos;
+    }
+    pinK = pinLevel(pinK, want, dtMs, reduced);
+    const lit = pinK > 0 && pinPos !== null;
+    const { strength, dim } = pinLights(pinK);
+    const key = lit ? `${pinPos!.x.toFixed(2)},${pinPos!.z.toFixed(2)}|${Math.round(strength / 0.02)}|${Math.round(dim / 0.02)}` : "-";
+    if (key !== pinSentKey) {
+      pinSentKey = key;
+      r.setPin?.(lit ? { x: pinPos!.x, z: pinPos!.z, strength } : null, lit ? dim : 1);
+    }
+    if (deps.onPin !== undefined) {
+      const seat = want ? (at.seat ?? null) : null;
+      const moving = want && at.moving;
+      const hookKey = `${seat ?? "-"}|${moving ? 1 : 0}|${Math.round(pinK / 0.05)}`;
+      if (hookKey !== pinHookKey) {
+        pinHookKey = hookKey;
+        deps.onPin({ seat, moving, strength: pinK });
+      }
+    }
   }
 
   function updateRing(r: WorldRenderer, now: number, sNow: number): void {
@@ -987,6 +1043,8 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
       tensionKey = nextTensionKey;
       r.setTension?.(tension, focusPos === undefined ? undefined : { x: focusPos.x, z: focusPos.z });
     }
+
+    updatePin(r, dt * 1000, sNow, reduced);
 
     // 내 캐릭터 빛(NIGHT-07): nightCitizen 조명에서만 내 캐릭터 위로 따라가고, 다른 단계에서는 기본 자리(세기는 조명 단계가 0 으로 만든다).
     // 광원은 렌더러가 처음부터 갖고 있다 — 여기서 만들거나 지우지 않는다(Pitfall 7)

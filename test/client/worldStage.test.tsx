@@ -2036,8 +2036,8 @@ describe("게임 장면(08-12): 카메라·조명·긴장·떠다님·처형 연
       expect(mid.x).toBeLessThan(x2);
       frames(600);
       const end = r.setPin.mock.calls.at(-1)![0]!;
-      expect(end.x).toBeCloseTo(x2, 6);
-      expect(end.z).toBeCloseTo(4, 6);
+      expect(end.x).toBeCloseTo(x2, 2); // 값은 소수 둘째 자리 단위로 바뀔 때만 보낸다
+      expect(end.z).toBeCloseTo(4, 2);
     });
 
     it("모션 줄이기: 이동 없이 대상 위치로 즉시, 세기도 즉시 0.9", async () => {
