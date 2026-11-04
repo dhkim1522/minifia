@@ -706,6 +706,7 @@ export const EXPECTED_SCENE = {
   defense: "dusk",
   execution: "dusk",
   nomination: "dusk",
+  runoff: "dusk",
   verdict: "dusk",
   ended: "night",
 };

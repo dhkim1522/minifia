@@ -10,6 +10,7 @@ import type { RoomState } from "../../shared/game/room";
 import { tick } from "../../shared/game/tick";
 import { castTurnPoint, nominationStepMs, stepNomination } from "../../shared/game/nomination";
 import { PICK_TURN_MS } from "../../shared/game/phases";
+import { castRunoffVote, runoffStepMs, stepRunoff } from "../../shared/game/runoff";
 import { castVerdict } from "../../shared/game/verdict";
 import type { PhaseId } from "../../shared/protocol";
 import { seededRandInt } from "./seededRandom";
@@ -187,4 +188,40 @@ export function stateWithVerdict(
     return state;
   }
   throw new Error(`unreachable phase ${phase}`);
+}
+
+/**
+ * 동점 결선(결정 0066-4) 앞머리 상태(step 0)를 실제 지목 주입과 tick 으로 만든다: 좌석 0 과 1 이 서로를 가리킨 1:1 최다 동점이라 후보는 [0, 1].
+ * extraPoints 로 다른 사람의 지목을 더할 수 있다(최다가 정확히 둘로 남도록 호출한 쪽이 맞춘다).
+ */
+export function runoffStateOf(n: number, seed: number, extraPoints: Record<number, number> = {}): RoomState {
+  const nominated = castPoints(startedAt(n, seed, "nomination"), { 0: 1, 1: 0, ...extraPoints });
+  const state = tick(nominated, nominated.phaseEndsAt!, seededRandInt(seed + 5));
+  if (state.phase !== "runoff") throw new Error(`expected runoff, got ${state.phase}`);
+  return state;
+}
+
+/**
+ * 결선을 실제 stepRunoff·castRunoffVote 로 걷는다(순수 도우미): 앞머리 → 투표 창에서 seat → 후보 좌석 표를 주입 → 결과(step 2)까지.
+ * 돌려주는 상태는 결과 자리(step 2, tally 확정)다 — 다음 tick(phaseEndsAt) 이 집계한다. 거부되면 테스트 준비가 틀린 것이다.
+ */
+export function castRunoff(state: RoomState, voteBySeat: Record<number, number>): RoomState {
+  if (state.phase !== "runoff" || state.runoff === undefined) throw new Error(`castRunoff: runoff 단계가 아니다(${state.phase})`);
+  let s = state;
+  /** 마감 시각에 한 걸음: 새 마감은 지난 마감 + 새 단계 길이(tick 의 사슬 규약). */
+  const advance = (): void => {
+    const at = s.phaseEndsAt;
+    if (at === null) throw new Error("runoff has no deadline");
+    const r = stepRunoff(s, at);
+    if (!r.stay) throw new Error("runoff resolved before the result step");
+    s = { ...r.state, phaseEndsAt: at + runoffStepMs(r.state) };
+  };
+  if (s.runoff!.step === 0) advance();
+  for (const [seat, target] of Object.entries(voteBySeat)) {
+    const result = castRunoffVote(s, seatToId(s, Number(seat)), target, s.phaseEndsAt! - 100);
+    if (!result.ok) throw new Error(`castRunoffVote rejected seat ${seat}: ${result.error}`);
+    s = result.state;
+  }
+  if (s.runoff!.step === 1) advance();
+  return s;
 }

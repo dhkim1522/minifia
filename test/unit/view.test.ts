@@ -11,7 +11,8 @@ import { tick } from "../../shared/game/tick";
 import { buildPreview, buildView } from "../../shared/game/view";
 import type { PhaseId, RoomView } from "../../shared/protocol";
 import { seededRandInt } from "../helpers/seededRandom";
-import { castPoints, castVerdicts, startedAt, stateWithVerdict } from "../helpers/voteState";
+import { castRunoffVote } from "../../shared/game/runoff";
+import { castPoints, castRunoff, castVerdicts, runoffStateOf, startedAt, stateWithVerdict } from "../helpers/voteState";
 
 const PLAYER_COUNTS = [4, 5, 6, 7, 8] as const;
 const SEEDS = [1, 42, 20260101] as const;
@@ -264,20 +265,22 @@ const SERVER_ONLY_KEYS: readonly string[] = [
   "claimLast", "claimChoice", "claimShown", "claimChanged", "claimPick", "claimOrder", "claimIdx",
   "claimStart", "claimDone", "claims", "nightPick", "investigations", "lastPhrase",
   "execVote", "candidateVote", "verdict", "nightLog", "lastExecPhrase", "nightNote",
+  "runoffVote", // 동점 결선의 개인 선택(결정 0066-4): 서버 전용 — 본인 값은 me.ballot, 공개는 day.runoff 의 voted·tally 뿐
   "whispers", // 귓속말 본문 보관(결정 0066-2, O-20): 서버 전용, 11페이즈 입력 — 판 중에는 어떤 view 에도 없다
   "badgeLog", // 직업 주장 이력(결정 0066-1, O-20): 서버 전용, 11페이즈 입력 — 판 중에는 어떤 view 에도 없다
 ];
 /** view.day 가 있는 열 단계. 이 밖의 단계 뷰에는 day 키 자체가 없다(D-07). */
 const DAY_VIEW_PHASES: ReadonlySet<PhaseId> = new Set([
-  "dayAnnounce", "discussion", "nomination", "defense", "verdict", "execution", "night", "morning", "ended",
+  "dayAnnounce", "discussion", "nomination", "runoff", "defense", "verdict", "execution", "night", "morning", "ended",
 ]);
 const ME_KEYS: ReadonlySet<string> = new Set([
   "seat", "isHost", "role", "allies", "testMode", "testRole", "testBots", "testBotVote", "pick", "allyPicks", "records", "chat", "endDiscussion", "verdictVote",
   "whisperUsed", // 오늘 귓속말을 이미 보냈다(결정 0066-2) — 토론 단계의 산 본인에게만, 값은 true 뿐
+  "ballot", // 동점 결선에서 본인이 고른 후보 좌석(결정 0066-4) — runoff 투표 창·결과의 산 유권자 본인에게만, 값은 후보 좌석 하나
   "nightTally", "nightSure", // 밤 산 마피아 본인에게만(결정 0061-7) — 아래 "마피아 집계" describe 가 조건을 단언한다
 ]);
 const DAY_KEYS: ReadonlySet<string> = new Set([
-  "n", "roles", "voteLog", "morning", "candidate", "execution", "noExecution", "points", "endCount", "voted", "verdict", "turn", "ballots",
+  "n", "roles", "voteLog", "morning", "candidate", "execution", "noExecution", "points", "endCount", "voted", "verdict", "turn", "ballots", "runoff",
 ]);
 const keysOf = (value: unknown): string => Object.keys((value ?? {}) as object).sort().join(",");
 
@@ -1767,5 +1770,80 @@ describe("찬반 기록 공개 day.ballots (결정 0066-3, O-7, L19)", () => {
     const { ballots: _drop, ...verdict } = s.verdict!;
     const old: RoomState = { ...s, verdict };
     for (const v of viewsOfAll(old)) expect(Object.hasOwn(v.day ?? {}, "ballots")).toBe(false);
+  });
+});
+
+describe("동점 결선 day.runoff·me.ballot (결정 0066-4, L20)", () => {
+  const idOf = (s: RoomState, seat: number): string => s.players.find((q) => q.seat === seat)!.id;
+  const viewsOfAll = (s: RoomState): RoomView[] => s.players.map((q) => buildView(s, q.id, START_AT));
+  /** 투표 창(step 1)에서 좌석 2 는 0, 좌석 3 은 1 을 골랐다(실제 castRunoffVote). */
+  const atVoteWindow = (): RoomState => {
+    const lead = runoffStateOf(6, 1);
+    let s = tick(lead, lead.phaseEndsAt!, seededRandInt(2));
+    for (const [seat, target] of [[2, 0], [3, 1]] as const) {
+      const r = castRunoffVote(s, idOf(s, seat), target, s.phaseEndsAt! - 100);
+      if (!r.ok) throw new Error("준비 실패");
+      s = r.state;
+    }
+    return s;
+  };
+
+  it("앞머리(step 0): 모두에게 같은 {cand, step} 뿐이다 — voted·tally 키 없음, me.ballot 없음", () => {
+    const s = runoffStateOf(6, 1);
+    const views = viewsOfAll(s);
+    expect(new Set(views.map((v) => JSON.stringify(v.day?.runoff))).size).toBe(1);
+    expect(JSON.stringify(views[0]!.day!.runoff)).toBe(JSON.stringify({ cand: [0, 1], step: 0 }));
+    for (const v of views) expect(Object.hasOwn(v.me, "ballot")).toBe(false);
+  });
+
+  it("투표 창(step 1): 모두에게 같은 voted(던진 유권자 좌석 오름차순) — 값·득표 수가 없고, 개인 선택은 본인 me.ballot 에만 있다", () => {
+    const s = atVoteWindow();
+    const views = viewsOfAll(s);
+    for (const v of views) {
+      expect(JSON.stringify(v.day!.runoff)).toBe(JSON.stringify({ cand: [0, 1], step: 1, voted: [2, 3] }));
+      expect(Object.hasOwn(v.day!.runoff!, "tally")).toBe(false);
+    }
+    const ballotBySeat = Object.fromEntries(views.map((v) => [v.me.seat, v.me.ballot]));
+    expect(ballotBySeat[2]).toBe(0);
+    expect(ballotBySeat[3]).toBe(1);
+    // 후보 둘·던지지 않은 유권자에는 키가 없다
+    for (const seat of [0, 1, 4, 5]) expect(Object.hasOwn(views.find((v) => v.me.seat === seat)!.me, "ballot")).toBe(false);
+  });
+
+  it("결과(step 2): tally 만 모두에게 같고(후보 순서), 개인 선택은 여전히 본인에게만", () => {
+    const s = castRunoff(runoffStateOf(6, 1), { 2: 0, 3: 0, 4: 1 });
+    expect(s.runoff?.step).toBe(2);
+    const views = viewsOfAll(s);
+    for (const v of views) {
+      expect(JSON.stringify(v.day!.runoff)).toBe(JSON.stringify({ cand: [0, 1], step: 2, tally: [2, 1] }));
+      expect(Object.hasOwn(v.day!.runoff!, "voted")).toBe(false);
+    }
+    expect(views.find((v) => v.me.seat === 4)!.me.ballot).toBe(1);
+    expect(Object.hasOwn(views.find((v) => v.me.seat === 5)!.me, "ballot")).toBe(false);
+  });
+
+  it("유령이 된 유권자·후보 본인에게는 me.ballot 이 없다 (저장된 값이 남아 있어도)", () => {
+    const s = atVoteWindow();
+    const ghosted: RoomState = { ...s, players: s.players.map((q) => (q.seat === 2 ? { ...q, alive: false } : q)) };
+    const view = buildView(ghosted, idOf(ghosted, 2), START_AT);
+    expect(Object.hasOwn(view.me, "ballot")).toBe(false);
+    const candidateWithStale: RoomState = { ...s, players: s.players.map((q) => (q.seat === 0 ? { ...q, runoffVote: 1 } : q)) };
+    expect(Object.hasOwn(buildView(candidateWithStale, idOf(candidateWithStale, 0), START_AT).me, "ballot")).toBe(false);
+    // 유령 좌석은 던진 좌석 목록에도 없다
+    expect(buildView(ghosted, idOf(ghosted, 4), START_AT).day!.runoff!.voted).toEqual([3]);
+  });
+
+  it("runoff 가 아닌 단계(지목·변론)의 view 에는 day.runoff·me.ballot 키가 없고, 공개 값은 복사본이다", () => {
+    for (const phase of ["nomination", "defense"] as const) {
+      const s = stateAt(phase === "nomination" ? "nomination" : "defense", 6, 1);
+      for (const v of viewsOfAll(s)) {
+        expect(Object.hasOwn(v.day ?? {}, "runoff")).toBe(false);
+        expect(Object.hasOwn(v.me, "ballot")).toBe(false);
+      }
+    }
+    const open = atVoteWindow();
+    const shown = castRunoff(runoffStateOf(6, 1), { 2: 0 });
+    expect(buildView(shown, shown.hostId, START_AT).day!.runoff!.cand === shown.runoff!.cand).toBe(false);
+    expect(open.runoff!.step).toBe(1);
   });
 });

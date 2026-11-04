@@ -25,6 +25,7 @@ import {
   pickAs,
   pointAll,
   resetChatRates,
+  runoffAll,
   seat,
   send,
   settle,
@@ -100,13 +101,19 @@ const ROLE_PATHS_ALIVE = [
  * 서버 전용 키: 어떤 프레임의 어떤 경로에도 없어야 한다. 주장 차례(결정 0027-3)와 4페이즈 투표·종료(결정 0036-12)·순차 지목 차례(pickTurn, 결정 0063-1)의 서버 상태.
  * winner·execution 은 같은 이름의 view 키(result.winner·day.execution)가 있어 넣지 않고, 경로·단계로 검사한다.
  */
-const SERVER_ONLY_KEYS = ["claimPick", "claimOrder", "claimIdx", "claimStart", "execVote", "candidateVote", "verdict", "nightLog", "lastExecPhrase", "nominate", "verdictVote", "endVote", "nightNote", "pickTurn"];
+const SERVER_ONLY_KEYS = ["claimPick", "claimOrder", "claimIdx", "claimStart", "execVote", "candidateVote", "verdict", "nightLog", "lastExecPhrase", "nominate", "verdictVote", "endVote", "nightNote", "pickTurn", "runoffVote"];
 /**
  * 서버 전용 이름과 같은 공개 와이어 필드의 경로(08-11, 결정 0060-3·4) — 이 두 경로만 SERVER_ONLY_KEYS 검사에서 빼고 이유를 단다. 목록은 줄이지 않고, 새 경로는 받을 권리 조건이 있을 때만 더한다.
  *  - .view.day.verdict: 처형 단계에서 모두에게 같은 {yes,no,passed} 집계(서버 전용 RoomState.verdict 와 이름만 같다).
  *  - .view.me.verdictVote: 그 소켓 본인이 던진 찬반 값(변론자·유령·던지지 않은 사람에게는 키 자체가 없다). 남의 값은 어떤 경로로도 가지 않는다.
  */
 const ALLOWED_WIRE_PATHS: ReadonlySet<string> = new Set([".view.day.verdict", ".view.me.verdictVote"]);
+/**
+ * 동점 결선(결정 0066-4)의 공개 경로 — SERVER_ONLY_KEYS 의 runoffVote 와 이름이 겹치지 않아 위 허용 목록은 넓히지 않았다. 새로 생기는 경로는 이 둘뿐이고 받을 권리가 단계별로 갈린다:
+ *  - .view.day.runoff(.cand/.step/.voted/.tally): runoff 단계에서 모든 소켓에 같다. 마감 전(step 0·1)에는 cand·step·voted(던진 좌석)뿐, 마감 뒤(step 2)에는 cand·step·tally(득표 수)뿐이다.
+ *  - .view.me.ballot: 그 소켓 본인이 던진 후보 좌석(runoff step 1·2, 산 유권자 본인만). 남의 선택은 어떤 경로로도 가지 않는다.
+ */
+const RUNOFF_WIRE_PATHS: ReadonlySet<string> = new Set([".view.day.runoff", ".view.day.runoff.cand", ".view.day.runoff.step", ".view.day.runoff.voted", ".view.day.runoff.tally", ".view.me.ballot"]);
 const ROLE_PATHS_DEAD = [...ROLE_PATHS_ALIVE, ".view.spectate.seats[].job"];
 /** ended 단계 프레임에서만 더해지는 허용 경로(D-17, Pitfall 10): 결과 화면의 모든 직업. ended 이전 프레임에서는 누출이다. */
 const ROLE_PATH_ENDED = ".view.result.seats[].job";
@@ -1388,5 +1395,44 @@ describe("탈락 직후 산 사람 (L12, 결정 0021·0037)", () => {
     const again = await reconnectFrames(g.code, living.find((a) => a.role !== "mafia")!);
     expect(again.some((m) => m.t === "state" && m.view.phase === "morning")).toBe(true);
     expect(jobLeaks(again).join("\n")).toBe("");
+  });
+});
+
+describe("동점 결선 프레임 전수 (결정 0066-4, L20·L24)", () => {
+  it("결선 전 과정의 모든 소켓 프레임: 서버 전용 이름은 없고 새 경로는 RUNOFF_WIRE_PATHS 뿐이며 개인 선택은 본인 me.ballot 에만 있다", { timeout: 90_000 }, async () => {
+    const g = await startedGame("nomination");
+    const starts = g.socks.map((sock) => mark(sock));
+    await pointAll(g.code, g.actors, { 0: 1, 1: 0, 2: 0, 3: 1, 4: 2 });
+    const bySeat = Object.fromEntries(g.actors.map((a) => [a.seat, a]));
+    await runoffAll(g.code, g.actors, { 2: 0, 3: 1, 4: 0 });
+    for (const a of g.actors) await settle(a.sock, mark(a.sock));
+    const wantBallot: Record<number, number | undefined> = { 2: 0, 3: 1, 4: 0 };
+    g.actors.forEach((a, i) => {
+      const frames = framesOf(a.sock).slice(starts[i]!);
+      expect(bySeat[a.seat]).toBe(a);
+      for (const msg of frames) {
+        for (const path of keyPaths(msg)) {
+          const key = path.slice(path.lastIndexOf(".") + 1);
+          expect(SERVER_ONLY_KEYS.includes(key) && !ALLOWED_WIRE_PATHS.has(path)).toBe(false);
+          if (path.startsWith(".view.day.runoff")) expect(RUNOFF_WIRE_PATHS.has(path)).toBe(true);
+          if (key === "ballot") expect(path).toBe(".view.me.ballot");
+        }
+        if (msg.t !== "state") continue;
+        const v = msg.view;
+        expect(Object.hasOwn(v.day ?? {}, "runoff")).toBe(v.phase === "runoff");
+        if (v.me.ballot !== undefined) {
+          expect(v.phase).toBe("runoff");
+          expect(v.me.ballot).toBe(wantBallot[a.seat]); // 남의 값이 아니라 본인이 던진 값
+        }
+        if (v.phase === "runoff") {
+          const r = v.day!.runoff!;
+          expect(Object.keys(r).sort().join(",")).toBe(r.step === 0 ? "cand,step" : r.step === 1 ? "cand,step,voted" : "cand,step,tally");
+        }
+      }
+      // 던지지 않은 사람(후보·좌석 5)은 어느 프레임에도 me.ballot 이 없다
+      if (wantBallot[a.seat] === undefined) {
+        expect(frames.some((m) => m.t === "state" && m.view.me.ballot !== undefined)).toBe(false);
+      }
+    });
   });
 });
