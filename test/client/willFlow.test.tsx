@@ -251,6 +251,19 @@ describe("깃펜 배선 (WILL-01, UI-SPEC 281행)", () => {
     expect(document.activeElement).toBe(willBtn(m.container));
   });
 
+  it("낮 토론 깃펜은 보내기 버튼 뒤 입력줄 끝에 있고, 눌러 열고 저장하는 동안 typing 이 0회다(feedback-11, WILL-01)", () => {
+    const send = vi.fn<(m: ClientMessage) => boolean>(() => true);
+    const m = mount(makeView({ phase: "discussion" }), { send });
+    const pen = willBtn(m.container)!;
+    expect(m.container.querySelector(".mv-chat__form")?.lastElementChild).toBe(pen);
+    fireEvent.click(pen);
+    fireEvent.focus(area(m.container));
+    fireEvent.change(area(m.container), { target: { value: "범인은 셋" } });
+    fireEvent.click(saveBtn(m.container));
+    fireEvent.click(closeBtn(m.container));
+    expect(typings(send)).toEqual([]);
+  });
+
   it("me.will 이 있으면 깃펜 aria-label 이 '유언 쓰기, 저장됨'이고 점이 켜진다. 아침 단계에도 있다", () => {
     const m = mount(makeView({ phase: "morning", will: "남긴 말" }));
     expect(willBtn(m.container)?.getAttribute("aria-label")).toBe("유언 쓰기, 저장됨");

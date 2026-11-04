@@ -760,7 +760,7 @@ describe("ChatPanel card 메시지 (MORN-02)", () => {
 describe("ChatPanel 깃펜 버튼 (WILL-01)", () => {
   const pen = (c: HTMLElement) => c.querySelector("button[data-will-button]");
 
-  it("onWill 이 있으면 입력칸 앞에 접근성 이름 '유언 쓰기' 버튼이 있고, 눌러도 onWill 1회·onChange 0회다", () => {
+  it("onWill 이 있으면 입력줄 오른쪽 끝에 접근성 이름 '유언 쓰기' 버튼이 있고, 눌러도 onWill 1회·onChange 0회다", () => {
     const onWill = vi.fn();
     const onChangeSpy = vi.fn();
     const { container } = render(<Harness onWill={onWill} onChangeSpy={onChangeSpy} />);
@@ -770,8 +770,12 @@ describe("ChatPanel 깃펜 버튼 (WILL-01)", () => {
     expect(btn?.getAttribute("type")).toBe("button");
     expect(btn?.classList.contains("mv-chat__will")).toBe(true);
     expect(btn?.querySelector("svg")).not.toBeNull();
-    // 입력칸(field)보다 앞
-    expect((btn as Element).compareDocumentPosition(container.querySelector(".mv-chat__field") as Element) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // [입력칸][보내기][깃펜]: 깃펜은 입력칸·보내기 버튼보다 뒤, form 의 마지막 요소다(feedback-11, 사용자 결정 2026-11-03)
+    const field = container.querySelector(".mv-chat__field") as Element;
+    const sendBtn = container.querySelector("[data-chat-send]") as Element;
+    expect(field.compareDocumentPosition(btn as Element) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(sendBtn.compareDocumentPosition(btn as Element) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(container.querySelector(".mv-chat__form")?.lastElementChild).toBe(btn);
     fireEvent.click(btn as Element);
     expect(onWill).toHaveBeenCalledTimes(1);
     expect(onChangeSpy).toHaveBeenCalledTimes(0);
@@ -807,6 +811,8 @@ describe("ChatPanel 깃펜 버튼 (WILL-01)", () => {
     expect(rule).toContain("background: var(--night-700)");
     expect(rule).toContain("color: var(--gray-100)");
     expect(rule).toContain("border-radius: var(--radius-badge)");
+    // 보내기 버튼과의 간격: form gap 8 + margin-left 8 = 16px (feedback-11)
+    expect(rule).toContain("margin-left: var(--space-sm)");
     const dot = rulesFor(V2_CSS, ".mv-chat__will-dot").join(";");
     expect(dot).toContain("width: 8px");
     expect(dot).toContain("background: var(--gray-100)");
