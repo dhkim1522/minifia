@@ -2257,6 +2257,33 @@ describe("게임 이름표: 지목 버튼·tagProps·canWalk (DAY-04, MAP-04)", 
     });
   });
 
+  describe("차례 고리 turn (09.1-07, UI-SPEC A-1)", () => {
+    it("RING_COLORS.turn 은 gray-100 과 같은 값 #e6e8ee 이고 밤 고리 넷은 그대로", () => {
+      expect(RING_COLORS.turn).toBe("#e6e8ee");
+      expect(RING_COLORS.mafia).toBe("#c8102e");
+      expect(RING_COLORS.police).toBe("#7a8fb8");
+      expect(RING_COLORS.doctor).toBe("#6fa59a");
+    });
+
+    it("ring \"turn\" 좌석의 이름표는 data-ring-kind=\"turn\" 이고 그 캐릭터 발밑 고리가 #e6e8ee 로 정해진다", async () => {
+      const s = await open({ scene: SCENE5, tagProps: (seat) => (seat === 3 ? { ring: "turn" } : {}) }, { players: FIVE, ents: FIVE_ENTS() });
+      expect(tagOf(s.utils, 3)!.getAttribute("data-ring-kind")).toBe("turn");
+      frame();
+      expect((s.world.renderers[0]!.chars.get(3) as FakeHandle).setRing).toHaveBeenCalledWith("#e6e8ee");
+    });
+
+    it("turn: true 인 이름표는 data-turn=\"true\" 이고 z-index 가 다른 이름표보다 높다. turn 이 없으면 속성도 없다", async () => {
+      const s = await open({ scene: SCENE5, tagProps: (seat) => (seat === 1 ? { turn: true } : {}) }, { players: FIVE, ents: FIVE_ENTS() });
+      frame();
+      const z = (seat: number): number => Number(tagOf(s.utils, seat)!.style.zIndex);
+      expect(tagOf(s.utils, 1)!.getAttribute("data-turn")).toBe("true");
+      expect(tagOf(s.utils, 2)!.hasAttribute("data-turn")).toBe(false);
+      expect(z(1)).toBeGreaterThanOrEqual(10);
+      expect(z(1)).toBeGreaterThan(Math.max(...[0, 2, 3, 4].map(z)));
+      expect(s.utils.container.querySelector(".mv-head[data-turn]")).toBeNull(); // HeadStack 으로는 넘기지 않는다
+    });
+  });
+
   describe("동료 선택 고리 mafiaAlly (UI-SPEC 226·318행)", () => {
     it("RING_COLORS: mafiaAlly 는 crimson-400, mafia 는 crimson-500 그대로", () => {
       expect(RING_COLORS.mafiaAlly).toBe("#e0344b");

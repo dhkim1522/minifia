@@ -112,6 +112,19 @@ describe("rankTags 선두 가산 (08-12)", () => {
     expect(frontOf(r, 0)).toBe(false);
   });
 
+  it("turn(차례인 사람) 이름표도 lead 처럼 순위에 10 이 더해져 내 이름표보다 위다 (09.1-07, UI-SPEC A-1)", () => {
+    const r = rankTags([box(0, { me: true, foot: 400 }), box(1, { foot: 100, turn: true }), box(2, { foot: 200 })]);
+    expect(zOf(r, 1)).toBe(0 + 10);
+    expect(zOf(r, 1)).toBeGreaterThan(zOf(r, 0));
+  });
+
+  it("겹친 이름표 가운데 turn 이 맨 앞이고, 가산은 한 번만 더해진다(lead 이면서 turn 이어도 +10)", () => {
+    const r = rankTags([box(0, { me: true }), box(1, { turn: true })]);
+    expect(frontOf(r, 1)).toBe(true);
+    expect(frontOf(r, 0)).toBe(false);
+    expect(zOf(rankTags([box(0, { lead: true, turn: true })]), 0)).toBe(10);
+  });
+
   it("lead 가 없으면 지금 순위 그대로다(0 부터 n−1)", () => {
     const r = rankTags([box(0, { foot: 100 }), box(1, { foot: 200 }), box(2, { foot: 300 })]);
     expect(r.map((t) => t.z)).toEqual([0, 1, 2]);
