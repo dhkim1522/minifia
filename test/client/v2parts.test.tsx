@@ -255,13 +255,14 @@ describe("HeadStack 8페이즈 칸(DAY-04, GHOST-02)", () => {
     expect(ghost).toContain("opacity: 0.6");
   });
 
-  it("스타일: is-blink 는 0.9초 × 3 깜빡임이고 모션 줄이기면 animation none", () => {
+  it("스타일: is-blink 는 0.9초 주기 무한 반복이고 모션 줄이기면 animation none + 2px gray-100 고정 테두리 (09.1-07, UI-SPEC 다르게 5)", () => {
     const blink = rulesFor(V2_CSS, ".mv-tag.is-blink").join(";");
-    expect(blink).toContain("animation: mv-blink 0.9s ease-in-out 3");
+    expect(blink).toContain("animation: mv-blink 0.9s ease-in-out infinite");
     expect(V2_CSS).toMatch(/@keyframes mv-blink/);
     const bare = V2_CSS.replace(/\/\*[\s\S]*?\*\//g, "");
     const block = bare.slice(bare.indexOf("@media (prefers-reduced-motion: reduce)"));
     expect(block.includes(".mv-tag.is-blink")).toBe(true);
+    expect(block).toMatch(/\.mv-tag\.is-blink\s*\{[^}]*animation:\s*none[^}]*box-shadow:\s*inset 0 0 0 2px var\(--gray-100\)/);
   });
 
   it("스타일: 이름표 체크 칸은 가로로 이름 뒤에 붙는다 (.mv-tag__done)", () => {

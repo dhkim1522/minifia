@@ -471,6 +471,32 @@ describe("GameMap — 헤더·[역할 카드] (UI-SPEC A2)", () => {
   });
 });
 
+describe("GameMap — 지목 어둡게 막 (09.1-07, UI-SPEC A-1)", () => {
+  const withTurn = (i: number): RoomView => {
+    const v = makeView({ phase: "nomination" });
+    return { ...v, day: { ...v.day!, points: [], turn: { order: [0, 1, 2, 3], i, ...(i >= 0 && i < 4 ? { endsAt: NOW + 8000 } : {}) } } };
+  };
+  const dimOf = () => {
+    const { container } = render(<>{stage.props?.underlay}</>);
+    return container.querySelector(".mf-game__dim");
+  };
+
+  it("지목 모이기·차례 동안 장면 층에 data-dim=on, 끝 알림은 off", () => {
+    for (const [i, dim] of [[-1, "on"], [0, "on"], [3, "on"], [4, "off"]] as const) {
+      const { unmount } = mount(withTurn(i));
+      const el = dimOf();
+      expect(`${i}:${el?.getAttribute("data-dim")}`).toBe(`${i}:${dim}`);
+      expect(el?.getAttribute("aria-hidden")).toBe("true");
+      unmount();
+    }
+  });
+
+  it("낮 토론에서는 막이 꺼져 있다", () => {
+    mount(makeView());
+    expect(dimOf()?.getAttribute("data-dim")).toBe("off");
+  });
+});
+
 describe("GameMap — 이동 차단 canWalk (MAP-04)", () => {
   it("산 사람은 낮 시작·토론에서만 걷고 지목·변론·찬반·처형에서는 막힌다", () => {
     const expected: Record<string, boolean> = { dayAnnounce: true, discussion: true, nomination: false, defense: false, verdict: false, execution: false };

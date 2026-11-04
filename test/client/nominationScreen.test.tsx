@@ -179,24 +179,21 @@ describe("지목 화면 — 이름표 하나 누르기 (DAY-04, 트레이서)", 
     expect(pickOf(container, 0)).toBeNull();
   });
 
-  it("좌석 2 를 누르면 point {target: 2} 를 보내고 그 이름표만 즉시 mine, 전에 고른 것은 풀린다", () => {
+  it("좌석 2 를 누르면 point {target: 2} 를 한 번 보내고 그 이름표가 즉시 mine, 배지 +1, 버튼은 모두 사라진다(취소·바꾸기 없음)", () => {
     const send = vi.fn<(m: ClientMessage) => boolean>(() => true);
     const { container } = mount(makeView(), { send });
     fireEvent.click(pickOf(container, 2)!);
     expect(send).toHaveBeenCalledTimes(1);
     expect(send).toHaveBeenCalledWith({ t: "point", target: 2 });
     expect(headOf(container, 2)?.getAttribute("data-mine")).toBe("true");
-    expect(pickOf(container, 2)?.getAttribute("aria-pressed")).toBe("true");
-    fireEvent.click(pickOf(container, 3)!);
-    expect(send).toHaveBeenLastCalledWith({ t: "point", target: 3 });
-    expect(headOf(container, 3)?.getAttribute("data-mine")).toBe("true");
-    expect(headOf(container, 2)?.getAttribute("data-mine")).toBeNull();
+    expect(headOf(container, 2)?.getAttribute("data-count")).toBe("1");
+    expect(picks(container).length).toBe(0);
   });
 
   it("서버 view(내가 2, 3 번이 2)가 오면 좌석 2 의 배지가 data-count=2 이고 0표 이름표에는 배지가 없다", () => {
     const m = mount(makeView());
     expect(m.container.querySelectorAll("[data-count]").length).toBe(0);
-    m.show(makeView({ points: [[0, 2], [3, 2]] }));
+    m.show(makeView({ points: [[0, 2], [3, 2]], turn: { i: 4 } }));
     expect(headOf(m.container, 2)?.getAttribute("data-count")).toBe("2");
     expect(headOf(m.container, 1)?.hasAttribute("data-count")).toBe(false);
   });
@@ -273,10 +270,10 @@ describe("지목 화면 — 채팅 줄·위 알림 없음 (E2 #9 → 09.1)", () 
     expect(sysLines(m.container, "vote")).toEqual(["영희 → 서준", "지아 → 서준", "도윤 → 서준"]);
   });
 
-  it("재접속·새로 고침 첫 화면(직전 view 없음): 배지·선두는 상태로 바로 보이지만 알림·채팅 줄은 새로 만들지 않는다", () => {
-    const { container } = mount(makeView({ points: [[1, 2], [3, 2]] }));
+  it("재접속·새로 고침 첫 화면(직전 view 없음): 배지는 상태로 바로 보이고(선두 표시는 없다) 알림·채팅 줄은 새로 만들지 않는다", () => {
+    const { container } = mount(makeView({ points: [[1, 2], [3, 2]], turn: { i: 3 } }));
     expect(headOf(container, 2)?.getAttribute("data-count")).toBe("2");
-    expect(headOf(container, 2)?.getAttribute("data-lead")).toBe("true");
+    expect(headOf(container, 2)?.hasAttribute("data-lead")).toBe(false);
     advance(2000);
     expect(toastText(container)).toBe("");
     expect(container.querySelectorAll(".mv-chat__sys").length).toBe(0);
@@ -300,7 +297,7 @@ describe("지목 화면 — 채팅 줄·위 알림 없음 (E2 #9 → 09.1)", () 
   });
 });
 
-describe("지목 화면 — 처음 보는 지목 깜빡임 (UI-SPEC 다르게 2)", () => {
+describe("지목 화면 — 내 차례에만 이름표 버튼·계속 깜빡임 (UI-SPEC A-4, 다르게 5)", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.setSystemTime(NOW);
@@ -312,57 +309,144 @@ describe("지목 화면 — 처음 보는 지목 깜빡임 (UI-SPEC 다르게 2)
     });
   const blinking = (c: ParentNode): number => c.querySelectorAll(".mv-tag.is-blink").length;
 
-  it("기록이 없으면 누를 수 있는 이름표 4개가 깜빡이고(내 이름표는 아님) 3초 뒤 꺼지며 mf-hint-point 가 남는다", () => {
+  it("내 차례: 나를 뺀 산 사람 4명이 버튼이고 모두 깜빡이며 내 이름표에는 버튼·깜빡임이 없다", () => {
     const { container } = mount(makeView());
+    expect(picks(container).length).toBe(4);
     expect(blinking(container)).toBe(4);
     expect(headOf(container, 0)?.querySelector(".is-blink")).toBeNull();
-    advance(2999);
-    expect(blinking(container)).toBe(4);
-    advance(1);
-    expect(blinking(container)).toBe(0);
-    expect(localStorage.getItem("mf-hint-point")).not.toBeNull();
+    expect(pickOf(container, 0)).toBeNull();
   });
 
-  it("한 번 본 사람은 다음 지목 단계에서 깜빡이지 않는다", () => {
-    const first = mount(makeView());
-    advance(3000);
-    first.unmount();
+  it("깜빡임은 내 차례 동안 계속된다: 3초가 지나도 10초가 지나도 꺼지지 않는다", () => {
     const { container } = mount(makeView());
+    advance(3000);
+    expect(blinking(container)).toBe(4);
+    advance(7000);
+    expect(blinking(container)).toBe(4);
+    expect(picks(container).length).toBe(4);
+  });
+
+  it("남의 차례·모이는 중·끝 알림·확정 직후에는 버튼도 깜빡임도 없다", () => {
+    for (const turn of [{ i: 1 }, { i: -1 }, { i: 5 }, { i: 0, doneLeft: 3000 }]) {
+      const { container, unmount } = mount(makeView({ turn }));
+      expect(picks(container).length, JSON.stringify(turn)).toBe(0);
+      expect(blinking(container), JSON.stringify(turn)).toBe(0);
+      unmount();
+    }
+  });
+
+  it("유령(탈락한 나)의 화면에는 내 차례가 없어 버튼도 깜빡임도 없다", () => {
+    const { container } = mount(makeView({ dead: [0] }));
+    expect(picks(container).length).toBe(0);
     expect(blinking(container)).toBe(0);
   });
 
-  it("이름표를 누르면 즉시 멈추고 기록한다", () => {
+  it("차례가 내게 오면 버튼과 깜빡임이 켜지고, 이름표를 누르면 즉시 mine 이 되며 깜빡임·버튼이 끝난다", () => {
+    const m = mount(makeView({ turn: { i: 2 } }));
+    expect(picks(m.container).length).toBe(0);
+    m.show(makeView({ turn: { i: 0 } }));
+    expect(blinking(m.container)).toBe(4);
+    fireEvent.click(pickOf(m.container, 3)!);
+    expect(headOf(m.container, 3)?.getAttribute("data-mine")).toBe("true");
+    expect(blinking(m.container)).toBe(0);
+    expect(picks(m.container).length).toBe(0);
+  });
+
+  it("누른 뒤 서버 view 가 (확정 0.9초 뒤) 다음 차례로 넘어가도 mine 은 서버 값으로 남고 버튼은 없다", () => {
+    const m = mount(makeView());
+    fireEvent.click(pickOf(m.container, 2)!);
+    m.show(makeView({ points: [[0, 2]], turn: { i: 0, doneLeft: 5000 } }));
+    expect(headOf(m.container, 2)?.getAttribute("data-mine")).toBe("true");
+    expect(headOf(m.container, 2)?.getAttribute("data-count")).toBe("1");
+    expect(picks(m.container).length).toBe(0);
+    m.show(makeView({ points: [[0, 2]], turn: { i: 1 } }));
+    expect(headOf(m.container, 2)?.getAttribute("data-mine")).toBe("true");
+    expect(picks(m.container).length).toBe(0);
+  });
+
+  it("마감 직후 눌러 서버가 거절하면(WRONG_PHASE) 알림과 함께 mine 이 서버 값으로 돌아오고 버튼·깜빡임이 다시 켜진다", () => {
+    const listeners: Array<(e: { t: "error"; code: string }, meta: { epoch: number }) => void> = [];
+    const onEvent = vi.fn((l: (typeof listeners)[number]) => {
+      listeners.push(l);
+      return () => {};
+    }) as unknown as RoomConnection["onEvent"];
+    const { container } = mount(makeView(), { onEvent });
+    fireEvent.click(pickOf(container, 2)!);
+    expect(picks(container).length).toBe(0);
+    act(() => listeners.forEach((l) => l({ t: "error", code: "WRONG_PHASE" }, { epoch: 1 })));
+    expect(container.querySelector(".mv-toast__text")?.textContent).toBe("지금은 고를 수 없어요");
+    expect(headOf(container, 2)?.hasAttribute("data-mine")).toBe(false);
+    expect(picks(container).length).toBe(4);
+    expect(blinking(container)).toBe(4);
+  });
+
+  it("localStorage 의 mf-hint-point 를 읽거나 쓰지 않는다 — 저장소가 막혀도 깜빡이고 오류가 없다", () => {
+    const getItem = vi.fn(() => {
+      throw new Error("denied");
+    });
+    const setItem = vi.fn();
+    vi.stubGlobal("localStorage", { getItem, setItem });
     const { container } = mount(makeView());
     expect(blinking(container)).toBe(4);
     fireEvent.click(pickOf(container, 2)!);
-    expect(blinking(container)).toBe(0);
-    expect(localStorage.getItem("mf-hint-point")).not.toBeNull();
-  });
-
-  it("저장소를 읽거나 쓸 수 없으면(개인 모드) 깜빡이고, 3초 뒤 끄는 데도 오류가 나지 않는다", () => {
-    const broken = {
-      getItem: () => {
-        throw new Error("denied");
-      },
-      setItem: () => {
-        throw new Error("denied");
-      },
-    };
-    vi.stubGlobal("localStorage", broken);
-    const { container } = mount(makeView());
-    expect(blinking(container)).toBe(4);
     advance(3000);
-    expect(blinking(container)).toBe(0);
+    expect(getItem).not.toHaveBeenCalled();
+    expect(setItem).not.toHaveBeenCalled();
+    expect(readFileSync("src/screens/GameMap.tsx", "utf8")).not.toMatch(/mf-hint-point|POINT_HINT_KEY/);
   });
 
-  it("지목이 아닌 단계와 유령 화면에는 깜빡임이 없고 기록도 하지 않는다", () => {
+  it("지목이 아닌 단계에는 깜빡임이 없다", () => {
     const talk = mount(makeView({ phase: "discussion" }));
     expect(blinking(talk.container)).toBe(0);
-    talk.unmount();
-    const ghost = mount(makeView({ dead: [0] }));
-    expect(blinking(ghost.container)).toBe(0);
-    advance(3000);
-    expect(localStorage.getItem("mf-hint-point")).toBeNull();
+  });
+
+  it("이름표 쌓임: 득표 배지 숫자만 — data-lead·data-sure 는 지목 단계에 없고 차례 좌석만 ring=turn·data-turn", () => {
+    const { container } = mount(makeView({ points: [[1, 2], [3, 2], [4, 2]], turn: { i: 1 } }));
+    expect(headOf(container, 2)?.getAttribute("data-count")).toBe("3");
+    expect(container.querySelector("[data-lead]")).toBeNull();
+    expect(container.querySelector("[data-sure]")).toBeNull();
+    const turnTags = [...container.querySelectorAll("[data-ring-kind='turn']")];
+    expect(turnTags.map((t) => t.getAttribute("data-seat"))).toEqual(["1"]);
+    expect([...container.querySelectorAll("[data-turn]")].map((t) => t.getAttribute("data-seat"))).toEqual(["1"]);
+  });
+
+  it("차례 고리·앞으로 서기는 모이는 중·끝 알림에는 없다", () => {
+    for (const i of [-1, 5]) {
+      const { container, unmount } = mount(makeView({ turn: { i } }));
+      expect(container.querySelector("[data-ring-kind='turn']")).toBeNull();
+      expect(container.querySelector("[data-turn]")).toBeNull();
+      unmount();
+    }
+  });
+
+  it("헤더 안내: 모이는 중 '모이는 중' 이 접힌 뒤 내 차례가 시작되면 '의심되는 사람을 눌러요' 가 다시 보였다 2.5초 뒤 접힌다", () => {
+    const m = mount(makeView({ turn: { i: -1 } }));
+    const hint = () => m.container.querySelector("[data-guide]") as HTMLElement;
+    expect(hint().textContent).toBe("모이는 중");
+    advance(2500);
+    expect(hint().classList.contains("is-folded")).toBe(true);
+    m.show(makeView({ turn: { i: 0 } }));
+    expect(hint().textContent).toBe("의심되는 사람을 눌러요");
+    expect(hint().classList.contains("is-folded")).toBe(false);
+    advance(2499);
+    expect(hint().classList.contains("is-folded")).toBe(false);
+    advance(1);
+    expect(hint().classList.contains("is-folded")).toBe(true);
+  });
+
+  it("어둡게 막 .mf-game__dim: 모이기·차례·확정 동안 on, 끝 알림과 다른 단계는 off, 누를 수 없고 읽히지 않는다", () => {
+    const dim = (c: ParentNode) => c.querySelector(".mf-game__dim");
+    const m = mount(makeView({ turn: { i: -1 } }));
+    expect(dim(m.container)?.getAttribute("data-dim")).toBe("on");
+    expect(dim(m.container)?.getAttribute("aria-hidden")).toBe("true");
+    m.show(makeView({ turn: { i: 1 } }));
+    expect(dim(m.container)?.getAttribute("data-dim")).toBe("on");
+    m.show(makeView({ turn: { i: 1, doneLeft: 4000 } }));
+    expect(dim(m.container)?.getAttribute("data-dim")).toBe("on");
+    m.show(makeView({ turn: { i: 5 } }));
+    expect(dim(m.container)?.getAttribute("data-dim")).toBe("off");
+    m.show(makeView({ phase: "defense" }));
+    expect(dim(m.container)?.getAttribute("data-dim")).toBe("off");
   });
 });
 
@@ -412,7 +496,7 @@ describe("지목 화면 — 장면 상태 (손가락·카메라·조명·긴장)
     expect(lastScene().tension).toBe(0);
     const cam = lastScene().camera;
     expect(cam.mode === "fixed" && cam.zoom).toBe(1);
-    expect(headOf(wide.container, 2)?.getAttribute("data-sure")).toBe("true");
+    expect(headOf(wide.container, 2)?.hasAttribute("data-sure")).toBe(false); // 도장 없음 — 배지 숫자만(M-4)
     wide.unmount();
     setStageHeight(300);
     mount(makeView({ points: [[1, 2], [3, 2], [4, 2]] }));
@@ -421,12 +505,13 @@ describe("지목 화면 — 장면 상태 (손가락·카메라·조명·긴장)
     expect(small.mode === "fixed" && small.zoom).toBe(1);
   });
 
-  it("과반이 풀리면(한 명이 바꿈) 도장이 원래대로 돌아오고 긴장은 내내 0", () => {
-    const m = mount(makeView({ points: [[1, 2], [3, 2], [4, 2]] }));
-    expect(headOf(m.container, 2)?.getAttribute("data-sure")).toBe("true");
-    m.show(makeView({ points: [[1, 2], [3, 2], [4, 0]] }));
+  it("득표가 바뀌어도 배지 숫자만 달라지고 선두·도장은 없으며 긴장은 내내 0", () => {
+    const m = mount(makeView({ points: [[1, 2], [3, 2], [4, 2]], turn: { i: 5 } }));
+    expect(headOf(m.container, 2)?.getAttribute("data-count")).toBe("3");
+    m.show(makeView({ points: [[1, 2], [3, 2], [4, 0]], turn: { i: 5 } }));
+    expect(headOf(m.container, 2)?.getAttribute("data-count")).toBe("2");
     expect(headOf(m.container, 2)?.hasAttribute("data-sure")).toBe(false);
-    expect(headOf(m.container, 2)?.getAttribute("data-lead")).toBe("true");
+    expect(headOf(m.container, 2)?.hasAttribute("data-lead")).toBe(false);
     expect(lastScene().tension).toBe(0);
   });
 
@@ -435,7 +520,7 @@ describe("지목 화면 — 장면 상태 (손가락·카메라·조명·긴장)
     fireEvent.click(pickOf(m.container, 2)!);
     expect(lastScene().seats[0]?.pointAt).toBe(2);
     expect(lastScene().seats[1]?.pointAt).toBeUndefined();
-    expect(headOf(m.container, 2)?.hasAttribute("data-count")).toBe(false); // 내 표도 서버가 세어 주기 전에는 배지가 없다
+    expect(headOf(m.container, 2)?.getAttribute("data-count")).toBe("1"); // 내 표는 서버가 세어 주기 전에도 +1 로 바로 보인다(UI-SPEC A-4)
   });
 
   it("지목 단계의 산 사람이 맵을 탭해도 걷지 않는다(낮 토론에서는 걷는다)", () => {
@@ -504,14 +589,14 @@ describe("지목 화면 — 거절·끊김", () => {
     expect(lastScene().seats[0]?.pointAt).toBeUndefined();
   });
 
-  it("그 밖의 오류(RATE_LIMITED)가 지목 직후 오면 '보내지 못했어요. 다시 해 보세요' 뒤 서버 값으로 돌아온다", () => {
-    const { container } = mount(makeView({ points: [[0, 1]] }), { onEvent: onEvent() });
+  it("그 밖의 오류(RATE_LIMITED)가 지목 직후 오면 '보내지 못했어요. 다시 해 보세요' 뒤 서버 값(고르지 않음)으로 돌아온다", () => {
+    const { container } = mount(makeView(), { onEvent: onEvent() });
     fireEvent.click(pickOf(container, 3)!);
     expect(headOf(container, 3)?.getAttribute("data-mine")).toBe("true");
     emit("RATE_LIMITED");
     expect(toastText(container)).toBe("보내지 못했어요. 다시 해 보세요");
     expect(headOf(container, 3)?.hasAttribute("data-mine")).toBe(false);
-    expect(headOf(container, 1)?.getAttribute("data-mine")).toBe("true"); // 서버가 아는 내 선택
+    expect(picks(container).length).toBe(4); // 다시 고를 수 있다
   });
 
   it("지목을 보낸 적 없을 때의 그 밖의 오류는 알림을 만들지 않는다", () => {
@@ -537,11 +622,11 @@ describe("지목 화면 — 거절·끊김", () => {
     expect(headOf(container, 2)?.hasAttribute("data-mine")).toBe(false);
   });
 
-  it("같은 사람을 다시 눌러도 다시 보내지 않고 표시도 변하지 않는다(취소 없음)", () => {
+  it("한 번 고르면 버튼이 사라져 같은 사람을 다시 눌러도 다시 보낼 수 없다(취소·바꾸기 없음)", () => {
     const send = vi.fn(() => true);
     const { container } = mount(makeView(), { send });
     fireEvent.click(pickOf(container, 2)!);
-    fireEvent.click(pickOf(container, 2)!);
+    expect(pickOf(container, 2)).toBeNull();
     expect(send).toHaveBeenCalledTimes(1);
     expect(headOf(container, 2)?.getAttribute("data-mine")).toBe("true");
   });
