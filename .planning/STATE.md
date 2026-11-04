@@ -5,16 +5,16 @@ milestone_name: 같은 공간
 current_phase: 9
 current_phase_name: 밤과 아침
 status: verifying
-stopped_at: Completed 09.1-07-PLAN.md
-last_updated: "2026-11-04T13:58:41.047Z"
+stopped_at: Completed 09.1-08-PLAN.md
+last_updated: "2026-11-04T14:27:12.189Z"
 last_activity: 2026-11-03
 last_activity_desc: Phase 9 execution started
-state_head: 99771f6de933446bf5d4584772622070581ac1fa
+state_head: 231a462a8a8a4c2b0dfee55d647a22fd330db886
 progress:
   total_phases: 8
   completed_phases: 3
   total_plans: 120
-  completed_plans: 115
+  completed_plans: 116
   percent: 38
 ---
 
@@ -175,6 +175,7 @@ Progress: [████░░░░░░] 38% (3/7 phases)
 | Phase 09.1 P05 | 20min | 3 tasks | 13 files |
 | Phase 09.1 P06 | 35min | 3 tasks | 14 files |
 | Phase 09.1 P07 | 40min | 3 tasks | 15 files |
+| Phase 09.1 P08 | 70min | 2 tasks | 11 files |
 
 ## Accumulated Context
 
@@ -356,6 +357,8 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 09.1]: 09.1-06: 지목 헤더 안내는 isMyTurn(차례 중·미확정·내 좌석·산 사람)으로 정하고 day.turn 이 없으면 제목만(옛 동시 지목 분기 없음)
 - [Phase 09.1]: 09.1-07: 차례 알약 마지막 5초 진홍 규칙은 v2.css(시간 링과 같은 곳)에 두고 game.css 는 진홍 금지 유지, 어둡게 막은 WorldStage underlay
 - [Phase 09.1]: 09.1-07: 지목 이름표는 내 차례에만 버튼, 누른 차례는 pickedTurn 으로 막고 거절이면 풀며, 낙관 배지 +1 은 서버 내 줄이 오면 더하지 않는다
+- [Phase 09.1]: 09.1-08: 지목 스테이지 윗변은 알약 블록 전체가 아니라 막대 아랫변 + 4 (블록에 투명 위 한 줄이 있어 전체를 쓰면 표보다 28 낮아진다)
+- [Phase 09.1]: 09.1-08: E2E 봇 차례·8자 이름 알약은 noexec (b), dayFlow 는 4자 이름 사람 4명(N=4)
 
 ### Pending Todos
 
@@ -394,8 +397,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-04T13:58:40.546Z
-Stopped at: Completed 09.1-07-PLAN.md
+Last session: 2026-11-04T14:27:11.678Z
+Stopped at: Completed 09.1-08-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
