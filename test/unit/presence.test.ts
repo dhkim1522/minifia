@@ -6,6 +6,7 @@ import type { RoleId } from "../../shared/game/roles";
 import type { DayView, PhaseId, PublicPlayer, RoomView } from "../../shared/protocol";
 import { GHOST_FADE_END_MS, GHOST_RISE_MS } from "../../src/game/dayView";
 import { GATHER_CENTER, ZOOM_MAJORITY, ZOOM_MIN_STAGE_H } from "../../src/world/camera";
+import { GHOST_MIST, jobOutfit } from "../../src/world/ghostOutfit";
 import {
   cameraModeOf,
   executionFade,
@@ -425,5 +426,49 @@ describe("sceneLook — 시민·경찰·의사의 밤 장면 값이 같다 (NIGH
     expect(looks[0]!.lighting).toBe("nightCitizen");
     same(Object.keys(looks[0]!.seats).map(Number), [3]);
     same(looks[0]!.camera, { mode: "follow" });
+  });
+});
+
+// ---- 09.1-09: 유령 직업 의상 (결정 0063-2, UI-SPEC B-2·L13) ----
+describe("유령 직업 의상 (결정 0063-2, L13)", () => {
+  const JOBS_BY_SEAT: RoleId[] = ["mafia", "police", "doctor", "citizen", "citizen"];
+  const ghostView = (phase: PhaseId = "discussion"): RoomView => {
+    const v = viewOf(phase, { dead: [1, 3], mySeat: 3 });
+    return { ...v, spectate: { seats: JOBS_BY_SEAT.map((job, seat) => ({ seat, job })) } };
+  };
+
+  it("jobOutfit: 직업 한 표, 없거나 알 수 없는 값은 coat", () => {
+    same(["mafia", "police", "doctor", "citizen"].map(jobOutfit), ["mafia", "police", "doctor", "coat"]);
+    same([jobOutfit(undefined), jobOutfit("unknown")], ["coat", "coat"]);
+  });
+
+  it("GHOST_MIST 는 시안 mist 값(0.26·#d8e4ff·0.85)", () => {
+    same(GHOST_MIST, { opacity: 0.26, emissive: "#d8e4ff", intensity: 0.85 });
+  });
+
+  it("유령 viewer: 탈락 좌석마다 그 직업의 의상, 산 좌석에는 outfit 키가 없다", () => {
+    const seats = visibleSeats(ghostView());
+    same([seats[1]?.outfit, seats[3]?.outfit], ["police", "coat"]);
+    for (const n of [0, 2, 4]) expect("outfit" in (seats[n] as object)).toBe(false);
+  });
+
+  it("직업 표가 마피아·의사인 탈락자도 같은 표로 입는다", () => {
+    const v = viewOf("discussion", { dead: [0, 2, 3], mySeat: 3 });
+    const seats = visibleSeats({ ...v, spectate: { seats: JOBS_BY_SEAT.map((job, seat) => ({ seat, job })) } });
+    same([seats[0]?.outfit, seats[2]?.outfit, seats[3]?.outfit], ["mafia", "doctor", "coat"]);
+  });
+
+  it("spectate 없이 내 alive 만 false 면 탈락 좌석에도 outfit 키가 없다(재료가 없으면 만들지 않는다)", () => {
+    const seats = visibleSeats(viewOf("discussion", { dead: [3], mySeat: 3 }));
+    same(seats[3]?.ghost, true);
+    expect("outfit" in (seats[3] as object)).toBe(false);
+  });
+
+  it("산 사람 viewer: 어떤 좌석에도 outfit 키가 없다 — 처형 연출 중인 좌석도", () => {
+    const view = viewOf("execution", { dead: [3], mySeat: 0 });
+    for (const seats of [visibleSeats(view), visibleSeats(view, new Map([[3, 1000]]), 1500)]) {
+      for (const look of Object.values(seats)) expect("outfit" in look).toBe(false);
+    }
+    expect(3 in visibleSeats(view, new Map([[3, 1000]]), 1500)).toBe(true);
   });
 });
