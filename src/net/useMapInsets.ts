@@ -34,7 +34,7 @@ export interface MapInsets {
   stageInsets: { top: number; readonly bottom: number } | undefined;
 }
 
-/** turnActive: 지금 지목 단계이고 차례 알약(`[data-turn-block]`)이 그려진다 */
+/** turnActive: 지금 지목 또는 결선 단계이고 알약 부품(`[data-turn-block]`)이 그려진다(blockModeOf !== null) */
 export function useMapInsets(turnActive = false): MapInsets {
   const rootRef = useRef<HTMLElement>(null);
   const roomRef = useRef<HTMLElement | null>(null);

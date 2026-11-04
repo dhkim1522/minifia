@@ -52,7 +52,7 @@ const PHASE_ANNOUNCE: Record<PhaseId, (view: RoomView) => string> = {
   defense: defenseAnnounceOf,
   execution: executionAnnounceOf,
   nomination: () => "지목", // 8페이즈: 서버가 아직 이 단계를 만들지 않는다 — 문구는 08-13 이 다시 본다
-  runoff: () => "동점 결선", // 09.1.1-04: 서버 단계만 먼저 — 화면 문구는 09.1.1-14 가 다시 본다
+  runoff: () => "결선", // 09.1.1-14: 동점 결선 화면(GameMap)
   showdown: () => "마지막 3인", // 09.1.1-06: 서버 단계만 먼저 — 화면 문구는 09.1.1-16 이 다시 본다
   verdict: () => "찬반",
   // 결과가 있으면 승리 팀까지 읽는다(result 없는 옛 서버 프레임은 연결 중… 화면이라 짧은 문구)
@@ -117,6 +117,7 @@ function sceneKey(phase: PhaseId): string {
     case "dayAnnounce":
     case "discussion":
     case "nomination":
+    case "runoff":
     case "defense":
     case "verdict":
     case "execution":
@@ -439,6 +440,7 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
       case "dayAnnounce":
       case "discussion":
       case "nomination":
+      case "runoff":
       case "defense":
       case "verdict":
       case "execution":

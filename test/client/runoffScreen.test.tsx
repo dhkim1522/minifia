@@ -168,10 +168,10 @@ describe("결선 화면 — 알약·막대·헤더 링·위 한 줄 (UI-SPEC D-1
     const { container } = mount(makeRunoff({ left: 4200 }));
     expect(ring(container)!.getAttribute("aria-label")).toBe("남은 시간 5초");
     expect(ring(container)!.classList.contains("is-urgent")).toBe(false);
-    advance(1500);
-    expect(block(container)!.querySelector(".mf-turn__sec")?.textContent).toBe("4초");
-    expect(ring(container)!.getAttribute("aria-label")).toBe("남은 시간 4초");
-    advance(2800);
+    advance(1500); // 남은 2.7초 → 3초
+    expect(block(container)!.querySelector(".mf-turn__sec")?.textContent).toBe("3초");
+    expect(ring(container)!.getAttribute("aria-label")).toBe("남은 시간 3초");
+    advance(2000); // 남은 0.7초 → 1초
     expect(block(container)!.querySelector(".mf-turn__sec")?.textContent).toBe("1초");
     expect(block(container)!.getAttribute("data-turn-tone")).toBe("calm");
     expect(ring(container)!.classList.contains("is-urgent")).toBe(false);

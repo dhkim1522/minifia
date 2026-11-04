@@ -11,7 +11,7 @@ import { EXECUTION_MS, VERDICT_LEAD_MS } from "../../shared/game/phases";
 import type { ChatChannel, PhaseId, RoomView } from "../../shared/protocol";
 import type { V2IconName } from "../components/v2/V2Icon";
 import { MORNING_TEXT, morningText } from "./eliminationText";
-import { isMyTurn, turnStageOf } from "./pickTurn";
+import { isMyTurn, TURN_COPY, turnStageOf } from "./pickTurn";
 
 /** 문구 표. UI-SPEC "Copywriting Contract" 원문 — 해요체, 마침표·느낌표 없음. 역할 단어는 토론 안내의 '마피아'(모두에게 같은 문장) 하나뿐이다. */
 export const DAY_COPY = {
@@ -23,6 +23,10 @@ export const DAY_COPY = {
   dayLine: (n: number): string => `${n}일차`,
   nominationStart: "지목 시작",
   defenseLine: (name: string, votes: number): string => `${name} 님 ${votes}표 · 최후 변론`,
+  /** 결선(09.1.1-14) 시작 채팅 시스템 줄 */
+  runoffStart: "결선 시작",
+  /** 결선을 이기고 최후 변론으로 가는 hot 줄 '{이름} 님 결선 {k}표 · 최후 변론' */
+  runoffDefenseLine: (name: string, votes: number): string => `${name} 님 결선 ${votes}표 · 최후 변론`,
   verdictStart: "찬반 시작",
   tallyText: (yes: number, no: number): string => `찬성 ${yes} · 반대 ${no}`,
   executedText: (name: string): string => `${name} 님 처형`,
@@ -36,6 +40,7 @@ export const DAY_COPY = {
     dayAnnounce: "낮 토론",
     discussion: "낮 토론",
     nomination: "지목",
+    runoff: "결선",
     defense: "최후 변론",
     verdict: "찬반",
     execution: "처형",
@@ -249,10 +254,22 @@ function phaseEntry(prev: RoomView, cur: RoomView, day: NonNullable<RoomView["da
     case "nomination":
       out.lines.push({ kind: "system", text: DAY_COPY.nominationStart });
       return;
+    case "runoff":
+      out.lines.push({ kind: "system", text: DAY_COPY.runoffStart });
+      return;
     case "defense": {
       const seat = day.candidate;
       const name = seat === undefined ? undefined : nameOf(cur, seat);
       if (seat === undefined || name === undefined) return;
+      // 결선을 이기고 온 변론(09.1.1-14): 직전 view 의 day.runoff.tally 에서 승자 칸. tally 가 없으면(결과 단계를 못 받았으면) 아래 기존 줄
+      const runoff = prev.phase === "runoff" ? prev.day?.runoff : undefined;
+      if (runoff?.tally !== undefined) {
+        const k = seat === runoff.cand[0] ? runoff.tally[0] : seat === runoff.cand[1] ? runoff.tally[1] : undefined;
+        if (k !== undefined) {
+          out.lines.push({ kind: "hot", text: DAY_COPY.runoffDefenseLine(name, k) });
+          return;
+        }
+      }
       // 가정 A2: 그날 voteLog 줄의 cand.votes 에서 변론자를 가리킨 수(공개 기록). 줄이 없으면 이전 지목 집계.
       const entry = day.voteLog?.find((e) => e.n === day.n);
       const votes = entry?.cand
@@ -293,7 +310,7 @@ function phaseEntry(prev: RoomView, cur: RoomView, day: NonNullable<RoomView["da
       // 지목 동률·0표로 처형 없이 온 밤은 "처형 없음"(0~1.4초) 뒤에 "밤이 되었습니다"가 이어진다. 찬반 뒤의 밤은 처형 단계가 이미 알렸다.
       const reason = day.noExecution?.reason;
       let at = 0;
-      if (prev.phase === "nomination" && (reason === "tie" || reason === "noVotes")) {
+      if ((prev.phase === "nomination" || prev.phase === "runoff") && (reason === "tie" || reason === "noVotes")) {
         out.lines.push({ kind: "system", text: DAY_COPY.noExecution });
         out.announces.push({ text: DAY_COPY.noExecution, at: 0, ms: ANNOUNCE_NOEXEC_MS });
         at = ANNOUNCE_NOEXEC_MS;
@@ -393,6 +410,13 @@ export function headerFor(view: RoomView): { title: string; hint?: string } {
       const stage = turnStageOf(view);
       if (stage === "gather") return { title, hint: DAY_COPY.nominationGatherHint };
       return isMyTurn(view) ? { title, hint: DAY_COPY.nominationHint } : { title };
+    }
+    case "runoff": {
+      // 결선(09.1.1-14): 후보 본인 '결과를 기다려요', 후보 아닌 산 사람은 투표 중에만 '둘 중 한 명을 눌러요', 앞머리·결과는 제목만
+      const runoff = view.day?.runoff;
+      if (runoff === undefined) return { title };
+      if (runoff.cand.includes(view.me.seat)) return { title, hint: TURN_COPY.runoffWait };
+      return runoff.step === 1 ? { title, hint: TURN_COPY.runoffPick } : { title };
     }
     case "defense":
       if (isSelf) return { title, hint: DAY_COPY.defenseHintSelf };

@@ -31,7 +31,7 @@ import { LOG_H_KB } from "../game/chatUi";
 import { BADGE_TEXT, chipsOf, claimLook, floatLabel } from "../game/badgeView";
 import { WHISPER_TEXT } from "../game/whisperView";
 import { defenderVotes, headerFor, pointsTally } from "../game/dayView";
-import { isMyTurn, turnStageOf, turnTopLine } from "../game/pickTurn";
+import { blockModeOf, isMyTurn, turnStageOf, turnTopLine } from "../game/pickTurn";
 import type { ChatStore } from "../net/chatStore";
 import type { DayFx } from "../net/useDayFx";
 import { useCountdown } from "../net/countdown";
@@ -141,14 +141,14 @@ interface GameMapProps {
 /** 헤더: 제목 + 접히는 안내 + (서버 마감 기준 시간 링) + 링 왼쪽 [역할 카드]. 시간 링의 다시 그리기가 맵 화면 전체로 번지지 않게 따로 둔다 */
 function MapHeader({ view, offset, hintOn, hintOverride, extra }: { view: RoomView; offset: number; hintOn: boolean; hintOverride?: string; extra: ReactNode }) {
   const head = headerFor(view);
-  // 지목은 단계 마감이 아니라 차례 마감과 알약·막대와 같은 값(turnLook)으로 링을 그린다(UI-SPEC A-3). 단계 길이 3000/8000/900/2000 은 세부 단계라 링 비율에 쓰지 않는다.
-  const nominating = view.phase === "nomination";
+  // 지목·결선은 단계 마감이 아니라 알약·막대와 같은 값(blockLook)으로 링을 그린다(UI-SPEC A-3·D-3). 지목의 세부 단계 길이 3000/8000/900/2000 이나 결선 앞머리 1000 은 링 비율에 쓰지 않는다.
+  const blocked = view.phase === "nomination" || view.phase === "runoff";
   const look = useTurnLook(view, offset);
-  const { seconds } = useCountdown(nominating ? 0 : (view.phaseEndsAt ?? 0), view.phaseDurationMs ?? 0, offset);
-  // 낮 시작은 링이 없다(2초 알림 단계). 마감이 없는 view 도 링을 그리지 않는다. 지목의 모이는 중·끝 알림에도 없다
-  const timing = nominating ? look !== null && (look.stage === "turn" || look.stage === "done") : view.phase !== "dayAnnounce" && view.phaseEndsAt !== null && view.phaseDurationMs !== null;
-  const time = nominating ? (look?.seconds ?? 0) : seconds;
-  const total = nominating ? PICK_TURN_MS / 1000 : (view.phaseDurationMs ?? 0) / 1000;
+  const { seconds } = useCountdown(blocked ? 0 : (view.phaseEndsAt ?? 0), view.phaseDurationMs ?? 0, offset);
+  // 낮 시작은 링이 없다(2초 알림 단계). 마감이 없는 view 도 링을 그리지 않는다. 지목의 모이는 중·끝 알림, 결선의 앞머리·결과에도 없다
+  const timing = blocked ? look !== null && (look.stage === "turn" || look.stage === "done") : view.phase !== "dayAnnounce" && view.phaseEndsAt !== null && view.phaseDurationMs !== null;
+  const time = blocked ? (look?.seconds ?? 0) : seconds;
+  const total = blocked ? (look?.totalMs ?? PICK_TURN_MS) / 1000 : (view.phaseDurationMs ?? 0) / 1000;
   return (
     <PhaseHeader
       title={head.title}
@@ -175,7 +175,7 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
   const { show } = toast;
   // 측정(스테이지 사각형)·키보드·기록 칸 높이는 대기실과 같은 훅이다. 키보드가 열려 있으면 행동 줄을 숨기고 기록 칸을 72 로 줄인다(07-19).
   // 지목이면 스테이지 윗변을 차례 알약 아랫변 + 4 로 내리고(UI-SPEC A-1) 작은 폰은 압축형 알약을 받는다(turnCompact). 알약 요소는 훅이 루트에서 `[data-turn-block]` 으로 찾는다.
-  const { rootRef, headerRef, panelRef, inputRef, kbOpen: kbLifted, kbInSheet, logH, turnCompact: compactTurn, stageInsets } = useMapInsets(turnStageOf(view) !== null);
+  const { rootRef, headerRef, panelRef, inputRef, kbOpen: kbLifted, kbInSheet, logH, turnCompact: compactTurn, stageInsets } = useMapInsets(blockModeOf(view) !== null);
   // 키보드가 시트의 textarea 때문에 열린 것이면 채팅 패널을 줄이거나 행동 줄을 숨기지 않는다(시트를 연 버튼이 남아야 닫을 때 초점이 돌아온다). 패널은 키보드 위로 올라간다(lifted).
   const kbOpen = kbLifted && !kbInSheet;
   const { typingSeats, liveWhisperIn, ...binding } = useChat({ store: chat, connection: { send, canSend }, view });
@@ -184,12 +184,14 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
   // 지목은 내 차례가 시작될 때도 다시 보인다(UI-SPEC A-4 "의심되는 사람을 눌러요"): myTurnNo = 내 차례의 번호, 아니면 undefined.
   const phase = view.phase;
   const myTurnNo = isMyTurn(view) ? view.day?.turn?.i : undefined;
+  // 결선은 앞머리(1초) 뒤 투표가 열릴 때 안내 '둘 중 한 명을 눌러요' 를 다시 보인다(UI-SPEC D-1): 단계(step)가 바뀔 때마다 한 번 더
+  const runoffStep = phase === "runoff" ? view.day?.runoff?.step : undefined;
   const [hintOn, setHintOn] = useState(true);
   useEffect(() => {
     setHintOn(true);
     const timer = setTimeout(() => setHintOn(false), HINT_MS);
     return () => clearTimeout(timer);
-  }, [phase, myTurnNo]);
+  }, [phase, myTurnNo, runoffStep]);
 
   // 유령이 된 순간(같은 단계 안이어도): 안내 '모두의 직업이 보여요' 를 2.5초 다시 보이고 직업 칩 등장 연출을 켠다. 처음 마운트 때의 번호는 지난 일이라 연출하지 않는다.
   const seenGhostEnter = useRef(ghostEnter);
@@ -494,14 +496,16 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
     rootRef.current?.style.setProperty("--mf-panel-h", `${panelRef.current?.offsetHeight ?? 0}px`);
   });
 
-  // 위 한 줄: 처음 마운트한 view(재접속·새로 고침)의 (단계, 차례) 와 같은 동안은 만들지 않는다(A-6)
-  const turnKey = turnStageOf(view) === null ? null : `${turnStageOf(view)}:${view.day?.turn?.i}`;
+  // 위 한 줄: 처음 마운트한 view(재접속·새로 고침)의 (단계, 차례) 와 같은 동안은 만들지 않는다(A-6). 결선은 (결선, step)
+  const blockMode = blockModeOf(view);
+  const turnKey = blockMode === "runoff" ? `runoff:${view.day?.runoff?.step}` : turnStageOf(view) === null ? null : `${turnStageOf(view)}:${view.day?.turn?.i}`;
   const firstTurnKey = useRef<string | null | undefined>(undefined);
   if (firstTurnKey.current === undefined) firstTurnKey.current = turnKey;
   const topLine = turnKey !== null && turnKey === firstTurnKey.current ? null : turnTopLine(view);
 
   const turnStage = turnStageOf(view);
-  const dimOn = turnStage === "gather" || turnStage === "turn" || turnStage === "done";
+  // 결선은 전 구간 어둡게(UI-SPEC D-1: 실내등 0.6배)
+  const dimOn = turnStage === "gather" || turnStage === "turn" || turnStage === "done" || blockMode === "runoff";
 
   // 판결 순간(09.1.1-13, UI-SPEC C-1): 처형 진입 시각 기준 어둡게 막·찬반 묶음·카메라 줌. 모션 줄이기는 줌 없이 막·핀·묶음만 쓴다
   const moment = useVerdictMoment(view, offset);

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { RoomView } from "../../shared/protocol";
 import { pointsTally } from "../game/dayView";
+import { isRunoffTie } from "../game/pickTurn";
 import "../styles/night.css";
 
 export interface SceneCurtainProps {
@@ -27,13 +28,18 @@ type Mode = "none" | "covering" | "covered" | "lifting";
 /**
  * 이 view 의 단계가 끝나면 막이 필요한가: 처형·밤은 언제나(다음이 밤·아침).
  * 지목(09.1)은 끝 알림 단계(day.turn.i === order.length)이고 공개 집계에 단독 선두가 없을 때만(다음이 밤) — 차례 중·모이는 중에는 차례 마감이 와도 덮지 않는다.
+ * 단, 최다가 정확히 둘 동점이면 다음이 결선(09.1.1-14)이라 덮지 않는다. 결선은 결과(step 2)가 또 동점일 때만(다음이 밤) 덮는다.
  * 그 밖의 단계는 맵이 그대로 이어진다. 공개 정보(day.turn·day.points)만 읽는다.
  */
 export function coversNext(view: RoomView): boolean {
   if (view.phase === "execution" || view.phase === "night") return true;
   if (view.phase === "nomination") {
     const turn = view.day?.turn;
-    return turn !== undefined && turn.i >= turn.order.length && pointsTally(view).leader === undefined;
+    return turn !== undefined && turn.i >= turn.order.length && pointsTally(view).leader === undefined && !isRunoffTie(view);
+  }
+  if (view.phase === "runoff") {
+    const runoff = view.day?.runoff;
+    return runoff?.step === 2 && runoff.tally !== undefined && runoff.tally[0] === runoff.tally[1];
   }
   return false;
 }
