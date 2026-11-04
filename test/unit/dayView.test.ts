@@ -2,7 +2,7 @@
 // 서버 view 두 개의 공개 정보 차이에서만 채팅 줄·위 알림·결과 알림·연출 이벤트가 나온다.
 // 실패 출력은 한 줄이어야 해서(TAP) 비교는 가능한 한 JSON 문자열로 한다.
 import { describe, expect, it } from "vitest";
-import type { DayView, PhaseId, PickTurnView, PublicPlayer, RoomView } from "../../shared/protocol";
+import type { DayView, PhaseId, PickTurnView, PublicPlayer, RoomView, ShowdownView } from "../../shared/protocol";
 import { EXECUTION_MS, VERDICT_LEAD_MS } from "../../shared/game/phases";
 import {
   ANNOUNCE_DAY_MS,
@@ -762,5 +762,35 @@ describe("headerFor — 결선 (UI-SPEC D-2)", () => {
   it("유령은 기존 '모두의 직업이 보여요'", () => {
     const players = NAMES.map((name, seat) => pl(seat, name, seat !== 0));
     same(headerFor(runoffOf(1, { players })), { title: "결선", hint: "모두의 직업이 보여요" });
+  });
+});
+
+// ---- 09.1.1-15: 마지막 3인(showdown) 제목·안내·채팅 줄 (UI-SPEC E-1·E-2·E-3) ----
+const showdownOf = (showdown: ShowdownView, opts: ViewOpts = {}): RoomView =>
+  viewOf("showdown", { ...opts, players: opts.players ?? NAMES.map((name, seat) => pl(seat, name, seat < 3)), day: { showdown, ...opts.day } });
+
+describe("headerFor — 마지막 3인 (UI-SPEC E-1·E-2·E-3)", () => {
+  it("제목 '마지막 셋'. 모이는 중·남의 한마디 차례·공개는 제목만", () => {
+    same(headerFor(showdownOf({ order: [0, 1, 2], i: -1 })), { title: "마지막 셋" });
+    same(headerFor(showdownOf({ order: [0, 1, 2], i: 1, endsAt: 9000 })), { title: "마지막 셋" });
+    same(headerFor(showdownOf({ order: [0, 1, 2], i: 4, points: [] })), { title: "마지막 셋" });
+  });
+  it("내 한마디 차례에는 '한마디를 골라요'(확정 뒤에는 제목만)", () => {
+    same(headerFor(showdownOf({ order: [0, 1, 2], i: 0, endsAt: 9000 })), { title: "마지막 셋", hint: "한마디를 골라요" });
+    same(headerFor(showdownOf({ order: [0, 1, 2], i: 0, endsAt: 9000, doneAt: 5000, word: "안녕" })), { title: "마지막 셋" });
+  });
+  it("동시 지목에서 산 세 사람은 '의심되는 사람을 눌러요'", () => {
+    same(headerFor(showdownOf({ order: [0, 1, 2], i: 3, endsAt: 9000, voted: [] })), { title: "마지막 셋", hint: "의심되는 사람을 눌러요" });
+  });
+  it("유령은 기존 '모두의 직업이 보여요'", () => {
+    same(headerFor(showdownOf({ order: [0, 1, 2], i: 3, endsAt: 9000, voted: [] }, { mySeat: 3 })), { title: "마지막 셋", hint: "모두의 직업이 보여요" });
+  });
+});
+
+describe("dayEvents — 마지막 3인 진입 (09.1.1-15)", () => {
+  it("낮 시작 → showdown: system 줄 '마지막 셋', 알림 없음", () => {
+    const events = dayEvents(viewOf("dayAnnounce"), showdownOf({ order: [0, 1, 2], i: -1 }));
+    same(events.lines, [{ kind: "system", text: "마지막 셋" }]);
+    same(events.announces, []);
   });
 });

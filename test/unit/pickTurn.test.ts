@@ -1,8 +1,8 @@
 // 순차 지목 화면 순수 모델 시험 — 결정 0063-1, UI-SPEC A-2·A-3·A-5.
 // view 는 리터럴로 만든다(players·me·day.turn·day.points 만). 시각은 인자 serverNow 로만 들어간다.
 import { describe, expect, it } from "vitest";
-import { PICK_TURN_MS, RUNOFF_VOTE_MS } from "../../shared/game/phases";
-import type { PickTurnView, PointLine, PublicPlayer, RoomView, RunoffView } from "../../shared/protocol";
+import { PICK_TURN_MS, RUNOFF_VOTE_MS, SHOWDOWN_POINT_MS, SHOWDOWN_TURN_MS } from "../../shared/game/phases";
+import type { PickTurnView, PointLine, PublicPlayer, RoomView, RunoffView, ShowdownView } from "../../shared/protocol";
 import { TURN_COPY, blockLook, blockModeOf, mapStageTop, turnCompact, turnLook, turnStageOf, turnTopLine } from "../../src/game/pickTurn";
 
 const NAMES = ["서연", "민준", "도윤", "지호", "하윤"];
@@ -313,5 +313,69 @@ describe("TURN_COPY — 결선 문구 (UI-SPEC Copywriting Contract 원문)", ()
     expect(TURN_COPY.runoffVotes("민준", 3)).toBe("민준 님 3표");
     expect(TURN_COPY.runoffTie).toBe("또 동점이에요");
     for (const s of [TURN_COPY.tie, TURN_COPY.runoffPill, TURN_COPY.runoffWait, TURN_COPY.runoffPick, TURN_COPY.runoffTie]) expect(s).not.toMatch(/[.!]/);
+  });
+});
+
+// ---- 09.1.1-15: 마지막 3인 — blockModeOf·blockLook 의 speak/point (UI-SPEC E-1) ----
+const ST = 300_000;
+function showdownView(sd: ShowdownView, o: { mySeat?: number; dead?: number[] } = {}): RoomView {
+  const v = view({ phase: "showdown", mySeat: o.mySeat ?? 0, dead: o.dead ?? [1, 4] });
+  return { ...v, day: { ...v.day!, showdown: sd } };
+}
+const SORDER = [0, 2, 3];
+
+describe("blockModeOf·blockLook — 마지막 3인 (speak/point)", () => {
+  it("한마디 차례(i 0..2)는 speak, 동시 지목(i 3)은 point, 모이기는 speak(gather)·공개는 point(end) — 알약 없음", () => {
+    expect(blockModeOf(showdownView({ order: SORDER, i: 0, endsAt: ST + SHOWDOWN_TURN_MS }))).toBe("speak");
+    expect(blockModeOf(showdownView({ order: SORDER, i: 3, endsAt: ST + SHOWDOWN_POINT_MS }))).toBe("point");
+    expect(blockLook(showdownView({ order: SORDER, i: -1 }), ST)).toMatchObject({ mode: "speak", stage: "gather" });
+    expect(blockLook(showdownView({ order: SORDER, i: 4, points: [] }), ST)).toMatchObject({ mode: "point", stage: "end" });
+  });
+  it("speak: 번호 i+1 / 3, 좌석·이름, 올림 초, 비율 = 남은 / SHOWDOWN_TURN_MS", () => {
+    const look = blockLook(showdownView({ order: SORDER, i: 1, endsAt: ST + SHOWDOWN_TURN_MS }), ST + 2_500)!;
+    expect(look).toMatchObject({ mode: "speak", stage: "turn", no: 2, total: 3, seat: 2, name: "도윤", seconds: 6, totalMs: SHOWDOWN_TURN_MS, tone: "calm" });
+    expect(look.ratio).toBeCloseTo(5_500 / SHOWDOWN_TURN_MS, 5);
+  });
+  it("speak 남은 5초 이하는 모든 사람에게 진홍(urgent), 내 차례만이 아니다", () => {
+    const sd: ShowdownView = { order: SORDER, i: 1, endsAt: ST + SHOWDOWN_TURN_MS };
+    expect(blockLook(showdownView(sd, { mySeat: 0 }), ST + 3_100)!.tone).toBe("urgent");
+    expect(blockLook(showdownView(sd, { mySeat: 2 }), ST + 3_100)!.tone).toBe("urgent");
+    expect(blockLook(showdownView(sd, { mySeat: 0 }), ST + 2_900)!.tone).toBe("calm");
+  });
+  it("speak 남은 시간은 차례 길이로 자른다(시계가 어긋나도 9초가 보이지 않는다)", () => {
+    const look = blockLook(showdownView({ order: SORDER, i: 0, endsAt: ST + SHOWDOWN_TURN_MS }), ST - 400)!;
+    expect(look.seconds).toBe(8);
+  });
+  it("speak 확정 뒤 사이(doneAt)는 stage done 이고 그 순간 값에서 멈춘다, 시간 초과(skip)는 0초", () => {
+    const done = blockLook(showdownView({ order: SORDER, i: 0, endsAt: ST + SHOWDOWN_TURN_MS, doneAt: ST + 3_000, word: "저는 아니에요" }), ST + 3_500)!;
+    expect(done).toMatchObject({ stage: "done", mode: "speak", seconds: 5 });
+    const skip = blockLook(showdownView({ order: SORDER, i: 0, endsAt: ST + SHOWDOWN_TURN_MS, doneAt: ST + SHOWDOWN_TURN_MS, skip: true }), ST + SHOWDOWN_TURN_MS + 100)!;
+    expect(skip).toMatchObject({ stage: "done", seconds: 0, remainingMs: 0 });
+  });
+  it("speak myTurn 은 내 미확정 차례에만", () => {
+    const sd: ShowdownView = { order: SORDER, i: 1, endsAt: ST + SHOWDOWN_TURN_MS };
+    expect(blockLook(showdownView(sd, { mySeat: 2 }), ST)!.myTurn).toBe(true);
+    expect(blockLook(showdownView(sd, { mySeat: 0 }), ST)!.myTurn).toBe(false);
+  });
+  it("point: 번호 0, 초는 SHOWDOWN_POINT_MS 로 자르고 tone 은 timerTone 한 호출", () => {
+    const sd: ShowdownView = { order: SORDER, i: 3, endsAt: ST + SHOWDOWN_POINT_MS, voted: [] };
+    expect(blockLook(showdownView(sd), ST - 300)).toMatchObject({ mode: "point", stage: "turn", no: 0, seconds: 8, totalMs: SHOWDOWN_POINT_MS, tone: "calm" });
+    expect(blockLook(showdownView(sd), ST + 4_000)).toMatchObject({ seconds: 4, tone: "urgent" });
+  });
+});
+
+describe("turnTopLine — 마지막 3인 위 한 줄 (UI-SPEC E-1)", () => {
+  it("모이는 중에만 '마지막 셋이에요', 한마디·지목·공개에는 없다", () => {
+    expect(turnTopLine(showdownView({ order: SORDER, i: -1 }))).toBe("마지막 셋이에요");
+    expect(turnTopLine(showdownView({ order: SORDER, i: 0, endsAt: ST + 8000 }))).toBeNull();
+    expect(turnTopLine(showdownView({ order: SORDER, i: 0, endsAt: ST + 8000, doneAt: ST + 1000, word: "글" }))).toBeNull();
+    expect(turnTopLine(showdownView({ order: SORDER, i: 3, endsAt: ST + 8000 }))).toBeNull();
+    expect(turnTopLine(showdownView({ order: SORDER, i: 4, points: [] }))).toBeNull();
+  });
+});
+
+describe("TURN_COPY — 마지막 3인 알약 글 (UI-SPEC Copywriting Contract 원문)", () => {
+  it("지목 알약 조각은 showdownView 의 SHOWDOWN_COPY 와 같다", () => {
+    expect(TURN_COPY.count(2, 3)).toBe("2 / 3");
   });
 });
