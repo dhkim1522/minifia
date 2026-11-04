@@ -292,7 +292,9 @@ describe("유령 조작 없음 · 걷기 · 카메라 (GHOST-01, A4)", () => {
   });
 
   it("같은 단계의 산 사람 view 에는 있다(비교): 지목 버튼 · 찬반 버튼 · 토론 끝내기", () => {
-    const a = mount(makeView({ phase: "nomination", mySeat: 0, candidate: 2 }));
+    // 순차 지목(09.1): 지목 버튼은 내 차례에만 있다 — 내 차례(0번)인 view 로 비교한다
+    const mine = makeView({ phase: "nomination", mySeat: 0, candidate: 2 });
+    const a = mount({ ...mine, day: { ...mine.day!, turn: { order: [0, 1, 2, 3, 4], i: 0, endsAt: mine.serverNow + 8000 } } });
     expect(a.container.querySelectorAll("[data-pick]").length).toBeGreaterThan(0);
     cleanup();
     const b = mount(makeView({ phase: "verdict", mySeat: 0, candidate: 2 }));

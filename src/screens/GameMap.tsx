@@ -20,7 +20,7 @@ import type { WorldPick } from "../components/WorldStage";
 import { PICK_TURN_MS } from "../../shared/game/phases";
 import { LOG_H_KB } from "../game/chatUi";
 import { defenderVotes, headerFor, pointsTally } from "../game/dayView";
-import { turnStageOf, turnTopLine } from "../game/pickTurn";
+import { isMyTurn, turnStageOf, turnTopLine } from "../game/pickTurn";
 import type { ChatStore } from "../net/chatStore";
 import type { DayFx } from "../net/useDayFx";
 import { useCountdown } from "../net/countdown";
@@ -60,27 +60,6 @@ const COMPACT_VV_MAX = 300;
 /** 암살당한 본인의 연출 시간표(UI-SPEC 247~252행, 아침 view 를 받은 시각 기준): 0.7초에 놀란 표정, 2.8초까지 막 유지 */
 const KILL_SURPRISE_MS = 700;
 const KILL_HOLD_MS = 2800;
-
-/** 처음 보는 지목의 깜빡임을 본 적이 있는지 적는 저장소 키(6페이즈 mf-hint-walk 와 같은 방식, UI-SPEC 다르게 2) */
-const POINT_HINT_KEY = "mf-hint-point";
-/** 이름표 깜빡임을 보이는 시간(0.9초 × 3 = 2.7초 애니메이션이 끝난 뒤 꺼진다) */
-const BLINK_MS = 3000;
-
-function pointHintSeen(): boolean {
-  try {
-    return localStorage.getItem(POINT_HINT_KEY) != null;
-  } catch {
-    return false; // 저장소를 못 읽으면 보인다
-  }
-}
-
-function rememberPointHint(): void {
-  try {
-    localStorage.setItem(POINT_HINT_KEY, "1");
-  } catch {
-    // 저장소를 못 쓰는 환경(개인 모드): 이번 방문에서만 본다
-  }
-}
 
 declare global {
   interface Window {
@@ -178,13 +157,15 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
   const { typingSeats, ...binding } = useChat({ store: chat, connection: { send, canSend }, view });
 
   // 안내 한 줄: 단계가 시작되면 보이고 2.5초 뒤 접힌다. 단계가 바뀔 때마다 다시 보인다.
+  // 지목은 내 차례가 시작될 때도 다시 보인다(UI-SPEC A-4 "의심되는 사람을 눌러요"): myTurnNo = 내 차례의 번호, 아니면 undefined.
   const phase = view.phase;
+  const myTurnNo = isMyTurn(view) ? view.day?.turn?.i : undefined;
   const [hintOn, setHintOn] = useState(true);
   useEffect(() => {
     setHintOn(true);
     const timer = setTimeout(() => setHintOn(false), HINT_MS);
     return () => clearTimeout(timer);
-  }, [phase]);
+  }, [phase, myTurnNo]);
 
   // 유령이 된 순간(같은 단계 안이어도): 안내 '모두의 직업이 보여요' 를 2.5초 다시 보이고 직업 칩 등장 연출을 켠다. 처음 마운트 때의 번호는 지난 일이라 연출하지 않는다.
   const seenGhostEnter = useRef(ghostEnter);
@@ -264,7 +245,6 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
   // 지목 단계(DAY-04): 산 사람은 나를 뺀 산 사람의 이름표를 눌러 가리킨다. 내 선택만 서버 응답 전에 보이고(낙관적), 서버 view 가 오면 서버 값(day.points 의 내 줄, 가정 A1)이 이긴다.
   // 남의 지목·득표·선두·과반은 서버가 보낸 day.points 로만 그린다(T-08-38).
   const nominating = view.phase === "nomination";
-  const canPick = nominating && meAlive;
   // 밤 선택: 산 마피아만 지도 이름표를 눌러 대상을 보낸다(결정 0061-6). 경찰·의사는 아래 패널 얼굴 목록(GamePanel)으로 고른다(NIGHT-09). 서버 값은 view.me.pick(본인에게만 온다).
   const nighting = view.phase === "night";
   const nightMafia = nighting && meAlive && view.me.role === "mafia";
@@ -281,6 +261,10 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
   );
   const serverMine = nominating ? view.day?.points?.find((l) => l.seat === view.me.seat)?.target : nighting ? view.me.pick : undefined;
   const [mine, chooseMine] = useViewChoice<number | undefined>(view, serverMine);
+  // 순차 지목(결정 0063-1): 이름표는 내 차례에만 버튼이다. 누르면 그 차례는 끝난다 — 깜빡임·버튼이 사라지고 취소·바꾸기는 없다.
+  // pickedTurn = 내가 이미 누른 차례 번호. 서버가 거절하면 비워 다시 고를 수 있게 한다.
+  const [pickedTurn, setPickedTurn] = useState<number | undefined>(undefined);
+  const canPick = nominating && meAlive && myTurnNo !== undefined && pickedTurn !== myTurnNo && mine === undefined;
   // 서버가 내 선택을 확인했으면 더는 거절을 기다리지 않는다. 거절이 오면 내 선택을 서버 값으로 되돌린다(처음 그릴 때는 아무것도 하지 않는다).
   useEffect(() => {
     if (pointSent.current !== null && serverMine === pointSent.current.target) pointSent.current = null;
@@ -290,6 +274,7 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
     if (seenRejects.current === rejects) return;
     seenRejects.current = rejects;
     chooseMine(serverMine);
+    setPickedTurn(undefined);
     // chooseMine 은 렌더마다 새 함수지만 setState 만 부른다
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rejects]);
@@ -300,22 +285,6 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
     if (!nightMafia) return null;
     return new Set(view.players.filter((p) => isAlive(p) && p.seat !== view.me.seat && !(allies ?? []).includes(p.seat)).map((p) => p.seat));
   }, [canPick, nightMafia, allies, view.players, view.me.seat]);
-  // 처음 보는 지목에서만 누를 수 있는 이름표가 3초 깜빡인다(결정 0051-5 "처음 하는 사람에게만 손짓"). 보고 나면 저장소에 적어 다시 깜빡이지 않고, 누르면 즉시 멈춘다.
-  // 기록은 끝낼 때 한다(개발 모드 이중 실행이 첫 실행의 기록을 읽고 깜빡임을 꺼 버리지 않게). 저장소를 못 쓰면 깜빡인다.
-  const [blink, setBlink] = useState(false);
-  useEffect(() => {
-    if (!canPick || pointHintSeen()) {
-      setBlink(false);
-      return;
-    }
-    setBlink(true);
-    const timer = setTimeout(() => {
-      setBlink(false);
-      rememberPointHint();
-    }, BLINK_MS);
-    return () => clearTimeout(timer);
-  }, [canPick]);
-
   // 마피아 다가가기(UI-SPEC 다르게 하는 곳 6): 고른 사람 옆 목적지를 일반 move 로 보낸다. 서버 applyMove 가 걷기 가능 칸으로 보정한다.
   // 대상이나 내 위치를 store 가 모르면 pick 만 나간다(A3).
   const approach = (target: number): void => {
@@ -333,15 +302,12 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
         ...(mine !== undefined ? { mine } : {}),
         label: (nickname) => (nighting ? `${nickname} 님에게 다가가기` : `${nickname} 님 가리키기`),
         onPick: (seat) => {
-          if (seat === mine) return; // 같은 사람을 다시 눌러도 변하지 않는다(취소 없음)
+          if (seat === mine) return;
           if (send(nighting ? { t: "pick", target: seat } : { t: "point", target: seat }) === false) return; // 소켓이 닫혀 못 보냈으면 표시도 바꾸지 않는다
           pointSent.current = { target: seat, at: Date.now() };
           chooseMine(seat);
+          if (nominating) setPickedTurn(myTurnNo);
           if (nightMafia) approach(seat);
-          if (blink) {
-            setBlink(false);
-            rememberPointHint();
-          }
         },
         group: nighting ? "밤 대상" : "지목",
       }
@@ -396,17 +362,22 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
       };
     }
     if (!nominating) return undefined;
+    // 득표는 배지 숫자만(선두 맥박·과반 도장 없음, 09.1 M-4). 내가 방금 누른 표는 서버가 세어 주기 전에도 +1 로 바로 보인다(UI-SPEC A-4).
+    // 차례인 사람은 발밑 흰 고리와 맨 앞 이름표(모이는 중·끝 알림에는 없다).
     const tally = pointsTally(view);
+    const stage = turnStageOf(view);
+    const turn = view.day?.turn;
+    const turnSeat = (stage === "turn" || stage === "done") && turn !== undefined ? turn.order[turn.i] : undefined;
     return (seat) => {
-      const count = tally.counts[seat] ?? 0;
+      const count = (tally.counts[seat] ?? 0) + (mine === seat && serverMine !== seat ? 1 : 0);
       return {
-        ...(blink && pickSeats?.has(seat) ? { blink: true } : {}),
+        ...(canPick && pickSeats?.has(seat) ? { blink: true } : {}),
+        ...(mine === seat ? { mine: true } : {}),
         ...(count >= 1 ? { count } : {}),
-        ...(tally.leader === seat ? { lead: true } : {}),
-        ...(tally.sure === seat ? { sure: true } : {}),
+        ...(turnSeat === seat ? { ring: "turn" as const, turn: true } : {}),
       };
     };
-  }, [nominating, nighting, nightMafia, mine, spectate, verdicting, defending, view, blink, pickSeats]);
+  }, [nominating, nighting, nightMafia, mine, serverMine, spectate, verdicting, defending, view, canPick, pickSeats]);
 
   // 유령 화면의 이름표: 모든 이름표 위에 그 사람의 직업 칩(spectate.seats 의 job), 죽은 좌석은 반투명. 산 사람 view 에는 spectate 가 없어 이 겹침이 없다.
   const tagProps = useMemo<WorldTagProps | undefined>(() => {
@@ -448,6 +419,9 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
   if (firstTurnKey.current === undefined) firstTurnKey.current = turnKey;
   const topLine = turnKey !== null && turnKey === firstTurnKey.current ? null : turnTopLine(view);
 
+  const turnStage = turnStageOf(view);
+  const dimOn = turnStage === "gather" || turnStage === "turn" || turnStage === "done";
+
   const scene = useMemo(() => sceneLook(view, { stageH, ...(fading ? { fading } : {}), ...(mine !== undefined ? { mine } : {}) }), [view, stageH, fading, mine]);
 
   return (
@@ -472,7 +446,14 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
         typingSeats={typingSeats}
         scene={scene}
         canWalk={canWalk}
-        {...(nightDark ? { underlay: <TensionVignette reducedMotion={reducedMotion} {...(recordCue ? { onCue: recordCue } : {})} /> } : {})}
+        underlay={
+          nightDark ? (
+            <TensionVignette reducedMotion={reducedMotion} {...(recordCue ? { onCue: recordCue } : {})} />
+          ) : (
+            // 지목 동안 화면을 살짝 어둡게(UI-SPEC A-1): 모이기·차례·확정에 켜고 끝 알림에 걷는다. 캔버스 위·이름표 층 아래라서 WorldStage 의 underlay 자리에 둔다
+            <div className="mf-game__dim" aria-hidden="true" data-dim={dimOn ? "on" : "off"} />
+          )
+        }
         {...(deny ? { deny } : {})}
         {...(surprise ? { surprise } : {})}
         {...(pick ? { pick } : {})}

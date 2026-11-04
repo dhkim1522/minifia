@@ -381,17 +381,18 @@ describe("지목 화면 — 내 차례에만 이름표 버튼·계속 깜빡임 
   });
 
   it("localStorage 의 mf-hint-point 를 읽거나 쓰지 않는다 — 저장소가 막혀도 깜빡이고 오류가 없다", () => {
-    const getItem = vi.fn(() => {
+    const getItem = vi.fn((_key: string): string | null => {
       throw new Error("denied");
     });
-    const setItem = vi.fn();
+    const setItem = vi.fn((_key: string, _value: string) => {});
     vi.stubGlobal("localStorage", { getItem, setItem });
     const { container } = mount(makeView());
     expect(blinking(container)).toBe(4);
     fireEvent.click(pickOf(container, 2)!);
     advance(3000);
-    expect(getItem).not.toHaveBeenCalled();
-    expect(setItem).not.toHaveBeenCalled();
+    // 걷기 안내(mf-hint-walk) 같은 다른 키는 읽을 수 있다. 지목 깜빡임 키만 쓰지 않는다
+    expect(getItem.mock.calls.map((c) => c[0])).not.toContain("mf-hint-point");
+    expect(setItem.mock.calls.map((c) => c[0])).not.toContain("mf-hint-point");
     expect(readFileSync("src/screens/GameMap.tsx", "utf8")).not.toMatch(/mf-hint-point|POINT_HINT_KEY/);
   });
 

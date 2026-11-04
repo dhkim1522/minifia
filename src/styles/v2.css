@@ -10,7 +10,7 @@
 .mv-tag.is-me { box-shadow: inset 0 0 0 1.5px var(--gray-100); }
 .mv-tag.is-mine { background: var(--gray-100); color: var(--night-900); text-shadow: none; }
 .mv-tag.is-mine .mv-tag__name { color: var(--night-900); }
-.mv-tag.is-blink { animation: mv-blink 0.9s ease-in-out 3; }
+.mv-tag.is-blink { animation: mv-blink 0.9s ease-in-out infinite; }
 @keyframes mv-blink { 0%, 100% { box-shadow: inset 0 0 0 0 transparent; } 50% { box-shadow: inset 0 0 0 2px var(--gray-100), 0 0 10px rgba(230, 232, 238, 0.6); } }
 .mv-tag.is-away { opacity: 0.55; }
 .mv-tag.is-ghost { opacity: 0.6; }
@@ -138,7 +138,9 @@
 @media (prefers-reduced-motion: reduce) {
   .mv-toast, .mv-ring__bar, .mv-phase__hint { transition: none; }
   .mv-chat__newdot i, .mv-typing i { animation: none; }
-  .mv-badge, .mv-badge.is-lead, .mv-stamp, .mv-tag.is-blink { animation: none; }
+  .mv-badge, .mv-badge.is-lead, .mv-stamp { animation: none; }
+  /* 깜빡임 대신 눌러야 할 이름표에 gray-100 2px 고정 테두리(09.1-07, UI-SPEC 다르게 5) */
+  .mv-tag.is-blink { animation: none; box-shadow: inset 0 0 0 2px var(--gray-100); }
   .mv-badge.is-lead { transform: scale(1.18); }
 }
 
@@ -177,3 +179,9 @@
 .mv-will--mafia { border-color: var(--crimson-700); }
 .mv-will--mafia .mv-will__title { color: var(--crimson-300); }
 .mv-will__text:focus-visible, .mv-will__save:focus-visible, .mv-will__close:focus-visible { outline: 2px solid var(--gray-100); outline-offset: 2px; }
+
+/* 차례 알약의 마지막 5초(09.1-07, UI-SPEC A-3): 헤더 시간 링 .mv-ring.is-urgent 와 같은 timerTone 한 호출의 결과(data-turn-tone)다. 진홍은 역할과 무관한 시간 신호.
+   게임 화면 틀 파일(game.css)에는 진홍 변수를 두지 않는 규칙이 있어 시간 색은 여기에 둔다. */
+.mf-turn[data-turn-tone="urgent"] .mf-turn__pill { border-color: var(--crimson-500); }
+.mf-turn[data-turn-tone="urgent"] .mf-turn__sec { color: var(--crimson-400); }
+.mf-turn[data-turn-tone="urgent"] .mf-turn__fill { background: var(--crimson-500); }

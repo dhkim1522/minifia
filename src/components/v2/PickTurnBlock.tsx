@@ -1,6 +1,7 @@
 import { useLayoutEffect, useRef } from "react";
 import { PICK_TURN_MS } from "../../../shared/game/phases";
 import { TURN_COPY, type TurnLook } from "../../game/pickTurn";
+import "../../styles/v2.css";
 
 // 순차 지목의 차례 알약 · 막대 · 위 한 줄(결정 0063-1, UI-SPEC A-1·A-2·A-3·A-5). 시안 design/v2.0/mockups-b/PickSeq.dc.html 54~64행.
 // 값은 모두 turnLook 한 곳에서 온다(헤더 시간 링과 같은 입력). 닉네임·문장은 React 텍스트 노드로만 그린다(T-09.1-18).
