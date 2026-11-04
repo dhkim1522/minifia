@@ -269,6 +269,19 @@
 .mv-ballots__name { font-size: 14px; line-height: 1.4; font-weight: 700; color: var(--gray-50); white-space: nowrap; word-break: keep-all; }
 @keyframes mv-ballots-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 
+/* 마지막 3인 한마디 칩 시트(09.1.1-15, UI-SPEC E-2): 채팅 패널 자리를 그대로 덮는다 — 높이 = 패널 높이(--mf-panel-h, 188 · 244), 아랫변 = 키보드 올림, 면은 패널과 같은 night-800.
+   칩 높이 44, 안쪽 좌우 16, 칩 사이 8, 줄 바꿈. 최대 3줄 = 44×3 + 8×2 = 148, 안쪽 위아래 12 → 172 ≤ 188. 새 색·14 미만 글자·진홍 없음 */
+.mv-speak-sheet { position: absolute; left: 0; right: 0; bottom: var(--mf-kb-lift, 0px); z-index: calc(var(--z-overlay) + 1); height: var(--mf-panel-h, 188px); box-sizing: border-box; display: flex; flex-wrap: wrap; align-content: flex-start; gap: var(--space-sm); padding: 12px var(--space-md); overflow: hidden; background: color-mix(in srgb, var(--night-800) 97%, transparent); border-radius: var(--radius-lg) var(--radius-lg) 0 0; font-family: var(--font-ui); color: var(--gray-100); }
+.mv-speak-chip { display: inline-flex; align-items: center; justify-content: center; gap: var(--space-xs); min-height: var(--tap-min); box-sizing: border-box; padding: 0 var(--space-md); border-radius: var(--radius-pill); border: 1px solid var(--night-600); background: var(--night-700); color: var(--gray-100); font-family: inherit; font-size: 16px; line-height: 1.5; font-weight: 700; white-space: nowrap; cursor: pointer; }
+.mv-speak-chip.is-write { border-color: var(--gray-100); background: none; }
+.mv-speak-chip[aria-disabled="true"] { opacity: 0.45; cursor: default; }
+.mv-speak-chip:focus-visible { outline: 2px solid var(--gray-100); outline-offset: 2px; }
+/* 인용 카드(UI-SPEC E-2): 알약 아래, 폭 = 화면 − 32(부모 .mf-turn 의 좌우 16), 면 night-800 92%, 테두리 1.5px gray-100, radius-lg, 안쪽 8 16, 16px 700 gray-50 최대 두 줄. 누르는 대상이 아니다 */
+.mv-quote { margin: 0; width: 100%; box-sizing: border-box; padding: var(--space-sm) var(--space-md); border-radius: var(--radius-lg); background: color-mix(in srgb, var(--night-800) 92%, transparent); border: 1.5px solid var(--gray-100); font-family: var(--font-ui); font-size: 16px; line-height: 1.5; font-weight: 700; color: var(--gray-50); text-align: center; word-break: keep-all; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; opacity: 0; transition: opacity var(--dur-med) var(--ease-out); pointer-events: none; }
+.mv-quote.is-on { opacity: 1; }
+.mv-quote.is-still { transition: none; }
+@media (prefers-reduced-motion: reduce) { .mv-quote { transition: none; } }
+
 /* 모션 줄이기(O-22): 배지 팝·알약 페이드·시트 등장 애니메이션 없이 즉시. 알약은 즉시 나타나 2.4초 뒤 즉시 사라진다(타이머가 요소를 걷는다) */
 @media (prefers-reduced-motion: reduce) {
   .mv-claim.is-pop, .mv-claim__notice, .mv-claim-sheet, .mv-ballots__group.is-enter { animation: none; }

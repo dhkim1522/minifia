@@ -1,9 +1,10 @@
 // 순차 지목 화면 순수 모델(결정 0063-1, UI-SPEC A-2·A-3·A-5). 서버 공개 정보(day.turn·day.points·players)만 읽는다. 시각은 인자 serverNow 로만.
 // 차례 알약·막대·헤더 링·위 한 줄이 모두 이 모듈의 값 하나에서 나온다(서로 다른 색·초가 될 수 없다).
 import { isAlive } from "../../shared/game/alive";
-import { PICK_TURN_MS, RUNOFF_VOTE_MS } from "../../shared/game/phases";
+import { PICK_TURN_MS, RUNOFF_VOTE_MS, SHOWDOWN_POINT_MS, SHOWDOWN_TURN_MS } from "../../shared/game/phases";
 import type { RoomView } from "../../shared/protocol";
 import { timerTone, type TimerTone } from "../net/countdown";
+import { SHOWDOWN_COPY, isMySpeakTurn, showdownOf, showdownStageOf } from "./showdownView";
 
 /** 차례 알약·위 한 줄 문구 표. UI-SPEC "Copywriting Contract" 원문 — 해요체, 마침표·느낌표 없음. */
 export const TURN_COPY = {
@@ -118,7 +119,10 @@ export function isRunoffTie(view: RoomView): boolean {
 
 /** 위 한 줄 문장. 차례 중이거나 day.turn 이 없으면 null(진행은 알약이 말한다). 결선은 앞머리 '동점이에요'·결과 '{이름} 님 {k}표'/'또 동점이에요'. */
 export function turnTopLine(view: RoomView): string | null {
-  if (blockModeOf(view) === "runoff") return runoffTopLine(view);
+  const mode = blockModeOf(view);
+  if (mode === "runoff") return runoffTopLine(view);
+  // 마지막 3인: 모이는 중에만 '마지막 셋이에요'. 한마디·동시 지목·공개의 진행은 알약과 인용 카드가 말한다
+  if (mode === "speak" || mode === "point") return showdownStageOf(view) === "gather" ? SHOWDOWN_COPY.gatherLine : null;
   const stage = turnStageOf(view);
   const turn = view.day?.turn;
   if (stage === null || turn === undefined) return null;
@@ -143,20 +147,23 @@ export function turnTopLine(view: RoomView): string | null {
 
 // ---- 동점 결선: 지목과 같은 알약·막대·링·위 한 줄을 한 계산에서 낸다(09.1.1-14, UI-SPEC D-1·D-3) ----
 
-/** 알약 부품이 그리는 모드. 마지막 3인(09.1.1-15)이 "speak"|"point" 를 더한다 */
-export type BlockMode = "pick" | "runoff";
+/** 알약 부품이 그리는 모드. 마지막 3인(09.1.1-15)은 한마디 차례 "speak"(모이기 포함)·동시 지목 "point"(공개 포함) */
+export type BlockMode = "pick" | "runoff" | "speak" | "point";
 
 /** 알약 부품의 값: 지목 TurnLook 에 모드와 그 단계 길이를 더한 것. 막대 비율·계단은 totalMs 로 계산한다 */
 export interface BlockLook extends TurnLook {
   mode: BlockMode;
-  /** 그 단계(차례·투표 창)의 길이 ms — pick = PICK_TURN_MS, runoff = RUNOFF_VOTE_MS */
+  /** 그 단계(차례·투표 창)의 길이 ms — pick = PICK_TURN_MS, runoff = RUNOFF_VOTE_MS, speak = SHOWDOWN_TURN_MS, point = SHOWDOWN_POINT_MS */
   totalMs: number;
 }
 
-/** 지금 알약 부품이 그릴 모드. 지목(day.turn 있음)이면 pick, 결선(day.runoff 있음)이면 runoff, 그 밖은 null. 시각이 필요 없다 */
+/** 지금 알약 부품이 그릴 모드. 지목(day.turn)이면 pick, 결선(day.runoff)이면 runoff, 마지막 3인(day.showdown)은 모이기·한마디 speak · 동시 지목·공개 point, 그 밖은 null. 시각이 필요 없다 */
 export function blockModeOf(view: RoomView): BlockMode | null {
   if (view.phase === "nomination" && view.day?.turn !== undefined) return "pick";
   if (view.phase === "runoff" && view.day?.runoff !== undefined) return "runoff";
+  const stage = showdownStageOf(view);
+  if (stage === "gather" || stage === "speak") return "speak";
+  if (stage === "point" || stage === "reveal") return "point";
   return null;
 }
 
@@ -184,6 +191,43 @@ function runoffLook(view: RoomView, serverNow: number): BlockLook | null {
   };
 }
 
+/**
+ * 마지막 3인(09.1.1-15, UI-SPEC E-1). 모이기(i −1)는 알약 없음, 한마디(0..2)는 `n / 3` 알약 + 확정 뒤 사이(done, 값이 멈춤 · 시간 초과는 0초),
+ * 동시 지목(3)은 `지목` 알약, 공개(4)는 알약 없음. 남은 시간은 단계 길이로 자르고 색은 timerTone 한 호출(모든 사람에게 같다).
+ */
+function showdownLook(view: RoomView, serverNow: number): BlockLook | null {
+  const sd = showdownOf(view);
+  const stage = showdownStageOf(view);
+  if (sd === undefined || stage === null) return null;
+  const total = sd.order.length;
+  const mode = stage === "gather" || stage === "speak" ? ("speak" as const) : ("point" as const);
+  const totalMs = mode === "speak" ? SHOWDOWN_TURN_MS : SHOWDOWN_POINT_MS;
+  const base = { mode, totalMs, total, myTurn: isMySpeakTurn(view) };
+  if (stage === "gather") return { ...base, stage: "gather", no: 0, remainingMs: 0, seconds: 0, ratio: 0, tone: "calm" };
+  if (stage === "reveal") return { ...base, stage: "end", no: 0, remainingMs: 0, seconds: 0, ratio: 0, tone: "calm" };
+  const endsAt = sd.endsAt ?? view.phaseEndsAt ?? serverNow;
+  const done = stage === "speak" && sd.doneAt !== undefined;
+  const remaining = done
+    ? sd.skip === true
+      ? 0
+      : Math.min(totalMs, Math.max(0, endsAt - (sd.doneAt ?? endsAt)))
+    : Math.min(totalMs, Math.max(0, endsAt - serverNow));
+  const seconds = Math.ceil(remaining / 1000);
+  const seat = stage === "speak" ? sd.order[sd.i] : undefined;
+  const name = seat === undefined ? undefined : nameOf(view, seat);
+  return {
+    ...base,
+    stage: done ? "done" : "turn",
+    no: stage === "speak" ? sd.i + 1 : 0,
+    ...(seat !== undefined ? { seat } : {}),
+    ...(name !== undefined ? { name } : {}),
+    remainingMs: remaining,
+    seconds,
+    ratio: Math.min(1, Math.max(0, remaining / totalMs)),
+    tone: timerTone(seconds * 1000, totalMs),
+  };
+}
+
 function runoffTopLine(view: RoomView): string | null {
   const runoff = view.day?.runoff;
   if (runoff === undefined) return null;
@@ -195,10 +239,11 @@ function runoffTopLine(view: RoomView): string | null {
   return winner === undefined ? null : TURN_COPY.runoffVotes(winner, Math.max(a, b));
 }
 
-/** 알약 부품의 표시 값: 지목이면 turnLook 값 그대로(mode·totalMs 만 더함), 결선이면 결선 값. 둘 다 아니면 null */
+/** 알약 부품의 표시 값: 지목이면 turnLook 값 그대로(mode·totalMs 만 더함), 결선·마지막 3인은 각자의 값. 아무것도 아니면 null */
 export function blockLook(view: RoomView, serverNow: number): BlockLook | null {
   const mode = blockModeOf(view);
   if (mode === "runoff") return runoffLook(view, serverNow);
+  if (mode === "speak" || mode === "point") return showdownLook(view, serverNow);
   if (mode === null) return null;
   const look = turnLook(view, serverNow);
   return look === null ? null : { ...look, mode: "pick", totalMs: PICK_TURN_MS };

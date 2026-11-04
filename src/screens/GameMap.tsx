@@ -22,6 +22,7 @@ import { CLAIM_ICON } from "../components/v2/ClaimBadge";
 import { ClaimSheet } from "../components/v2/ClaimSheet";
 import { FloatAction, FloatActions } from "../components/v2/FloatAction";
 import { LineSheet } from "../components/v2/LineSheet";
+import { SpeakSheet } from "../components/v2/SpeakSheet";
 import { WillSheet } from "../components/v2/WillSheet";
 import { TensionVignette } from "../components/TensionVignette";
 import { WorldStage } from "../components/WorldStage";
@@ -32,6 +33,7 @@ import { BADGE_TEXT, chipsOf, claimLook, floatLabel } from "../game/badgeView";
 import { WHISPER_TEXT } from "../game/whisperView";
 import { defenderVotes, headerFor, nominationVotesOf, pointsTally } from "../game/dayView";
 import { blockModeOf, isMyTurn, turnStageOf, turnTopLine } from "../game/pickTurn";
+import { isMySpeakTurn, quoteOf, SHOWDOWN_COPY, showdownStageOf, speakerOf } from "../game/showdownView";
 import type { ChatStore } from "../net/chatStore";
 import type { DayFx } from "../net/useDayFx";
 import { useCountdown } from "../net/countdown";
@@ -142,7 +144,7 @@ interface GameMapProps {
 function MapHeader({ view, offset, hintOn, hintOverride, extra }: { view: RoomView; offset: number; hintOn: boolean; hintOverride?: string; extra: ReactNode }) {
   const head = headerFor(view);
   // 지목·결선은 단계 마감이 아니라 알약·막대와 같은 값(blockLook)으로 링을 그린다(UI-SPEC A-3·D-3). 지목의 세부 단계 길이 3000/8000/900/2000 이나 결선 앞머리 1000 은 링 비율에 쓰지 않는다.
-  const blocked = view.phase === "nomination" || view.phase === "runoff";
+  const blocked = view.phase === "nomination" || view.phase === "runoff" || view.phase === "showdown";
   const look = useTurnLook(view, offset);
   const { seconds } = useCountdown(blocked ? 0 : (view.phaseEndsAt ?? 0), view.phaseDurationMs ?? 0, offset);
   // 낮 시작은 링이 없다(2초 알림 단계). 마감이 없는 view 도 링을 그리지 않는다. 지목의 모이는 중·끝 알림, 결선의 앞머리·결과에도 없다
@@ -164,7 +166,8 @@ function MapHeader({ view, offset, hintOn, hintOverride, extra }: { view: RoomVi
 /** 차례 알약·막대·위 한 줄. 초 경계마다 다시 그리는 시계(useTurnLook)를 이 부품 안에 가둔다 */
 function TurnBlock({ view, offset, line, compact, reducedMotion }: { view: RoomView; offset: number; line: string | null; compact: boolean; reducedMotion: boolean }) {
   const look = useTurnLook(view, offset);
-  return <PickTurnBlock look={look} line={line} compact={compact} reducedMotion={reducedMotion} />;
+  const quote = quoteOf(view);
+  return <PickTurnBlock look={look} line={line} quote={quote === null ? null : { text: quote.text }} compact={compact} reducedMotion={reducedMotion} />;
 }
 
 // 8페이즈 게임 맵 화면 틀(08-13, UI-SPEC "게임 화면 틀"): 지하 재즈 바 맵(WorldStage) 위에 위쪽 가림막, 헤더(단계 이름 + 접히는 안내 + 시간 링 + [역할 카드]), [테스트], 결과 알림, 아래 패널을 얹는다.
@@ -186,12 +189,15 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
   const myTurnNo = isMyTurn(view) ? view.day?.turn?.i : undefined;
   // 결선은 앞머리(1초) 뒤 투표가 열릴 때 안내 '둘 중 한 명을 눌러요' 를 다시 보인다(UI-SPEC D-1): 단계(step)가 바뀔 때마다 한 번 더
   const runoffStep = phase === "runoff" ? view.day?.runoff?.step : undefined;
+  // 마지막 3인(09.1.1-15): 내 한마디 차례가 시작될 때(차례 번호)와 동시 지목이 열릴 때(세부 단계)도 안내를 다시 보인다
+  const showdownStage = showdownStageOf(view);
+  const speakNo = isMySpeakTurn(view) ? view.day?.showdown?.i : undefined;
   const [hintOn, setHintOn] = useState(true);
   useEffect(() => {
     setHintOn(true);
     const timer = setTimeout(() => setHintOn(false), HINT_MS);
     return () => clearTimeout(timer);
-  }, [phase, myTurnNo, runoffStep]);
+  }, [phase, myTurnNo, runoffStep, showdownStage, speakNo]);
 
   // 유령이 된 순간(같은 단계 안이어도): 안내 '모두의 직업이 보여요' 를 2.5초 다시 보이고 직업 칩 등장 연출을 켠다. 처음 마운트 때의 번호는 지난 일이라 연출하지 않는다.
   const seenGhostEnter = useRef(ghostEnter);
@@ -449,6 +455,11 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
         };
       };
     }
+    // 마지막 3인 한마디(09.1.1-15, UI-SPEC E-2): 말하는 사람(차례 중·확정 뒤 사이)에게 발밑 흰 고리와 맨 앞 이름표
+    if (view.phase === "showdown") {
+      const speaker = speakerOf(view);
+      return (seat) => (speaker === seat ? { ring: "turn" as const, turn: true } : {});
+    }
     if (!nominating) return undefined;
     // 득표는 배지 숫자만(선두 맥박·과반 도장 없음, 09.1 M-4). 내가 방금 누른 표는 서버가 세어 주기 전에도 +1 로 바로 보인다(UI-SPEC A-4).
     // 차례인 사람은 발밑 흰 고리와 맨 앞 이름표(모이는 중·끝 알림에는 없다).
@@ -481,10 +492,38 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
   // 유언·쪽지 시트(WILL-01·NIGHT-12): 상태와 저장 흐름은 useWill 이 쥔다. 실패 알림은 위 알림 한 문구다.
   const will = useWill({ view, send, canSend, rejected: rejects, onFail: () => show(SEND_FAIL_TEXT), busyRef: willBusy });
 
+  // 마지막 3인 한마디(09.1.1-15, UI-SPEC E-2): 내 미확정 차례에 채팅 패널 자리를 칩 시트가 덮는다. 칩·직접 쓰기 모두 기존 채팅 전송(binding.onSend)이고 서버가 차례 주인의 글을 한마디로 확정한다.
+  // 한 차례에 한 번뿐이다: 보낸 차례 번호(spokenTurn)를 기억해 서버가 확정하기 전에도 시트를 다시 열지 않는다. 보낸 뒤 서버가 채팅을 거절하면(새 chatReject) 다시 연다.
+  const speakTurn = isMySpeakTurn(view) ? view.day?.showdown?.i : undefined;
+  const [spokenTurn, setSpokenTurn] = useState<number | undefined>(undefined);
+  const [speakWriting, setSpeakWriting] = useState(false);
+  const [speakDraft, setSpeakDraft] = useState("");
+  const speakOpen = speakTurn !== undefined && spokenTurn !== speakTurn;
+  const chatRejectN = chat.lastReject()?.n ?? 0;
+  const sentRejectN = useRef(chatRejectN);
+  useEffect(() => {
+    setSpeakWriting(false);
+    setSpeakDraft("");
+    if (speakTurn === undefined) setSpokenTurn(undefined);
+  }, [speakTurn]);
+  useEffect(() => {
+    if (spokenTurn !== undefined && chatRejectN !== sentRejectN.current) setSpokenTurn(undefined);
+    // 새 거절이 올 때만 본다
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chatRejectN]);
+  const sendWord = (text: string): void => {
+    if (speakTurn === undefined || !canSend) return;
+    sentRejectN.current = chatRejectN;
+    setSpokenTurn(speakTurn);
+    setSpeakWriting(false);
+    binding.onSend?.(text);
+  };
+
   // 직업 주장 배지(09.1.1-08, UI-SPEC A): 칩 시트·낙관 값·거절 되돌림은 useBadge 가 쥔다. 유언 시트와 배지 시트는 같은 시트 층을 번갈아 쓴다(동시에 열리지 않는다).
   const badge = useBadge({ view, send, canSend, rejected: badgeRejects, guard: sendGuard });
   // 시트 층 하나를 유언·배지·귓속말 한 줄 시트가 번갈아 쓴다 — 한 번에 시트 하나만(귓속말은 열려 있는 다른 시트를 닫고 열린다)
-  const layerKind: "will" | "claim" | "line" | null = will.open !== null ? "will" : badge.open && badge.allowed ? "claim" : whisper.target !== null && whisper.allowed ? "line" : null;
+  const layerKind: "will" | "claim" | "line" | "speak" | null =
+    will.open !== null ? "will" : badge.open && badge.allowed ? "claim" : whisper.target !== null && whisper.allowed ? "line" : speakOpen && speakWriting ? "speak" : null;
   // 시트 층의 아래 끝 = 아래 패널 위 끝 + 8 (키보드 위). 패널을 가릴지 판정하는 논리는 useSheetLayer 로 옮겼다(논리 변경 없음).
   const { layerRef, veiled, vvHeight } = useSheetLayer({ open: layerKind !== null, panelRef, stageTop: stageInsets?.top ?? DEFAULT_INSET_TOP });
 
@@ -518,14 +557,22 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
 
   // 위 한 줄: 처음 마운트한 view(재접속·새로 고침)의 (단계, 차례) 와 같은 동안은 만들지 않는다(A-6). 결선은 (결선, step)
   const blockMode = blockModeOf(view);
-  const turnKey = blockMode === "runoff" ? `runoff:${view.day?.runoff?.step}` : turnStageOf(view) === null ? null : `${turnStageOf(view)}:${view.day?.turn?.i}`;
+  const turnKey =
+    blockMode === "runoff"
+      ? `runoff:${view.day?.runoff?.step}`
+      : showdownStage !== null
+      ? `showdown:${showdownStage}:${view.day?.showdown?.i}`
+      : turnStageOf(view) === null
+      ? null
+      : `${turnStageOf(view)}:${view.day?.turn?.i}`;
   const firstTurnKey = useRef<string | null | undefined>(undefined);
   if (firstTurnKey.current === undefined) firstTurnKey.current = turnKey;
   const topLine = turnKey !== null && turnKey === firstTurnKey.current ? null : turnTopLine(view);
 
   const turnStage = turnStageOf(view);
   // 결선은 전 구간 어둡게(UI-SPEC D-1: 실내등 0.6배)
-  const dimOn = turnStage === "gather" || turnStage === "turn" || turnStage === "done" || blockMode === "runoff";
+  // 마지막 3인(09.1.1-15)은 모이기·한마디·동시 지목에 어둡게, 공개에는 걷는다
+  const dimOn = turnStage === "gather" || turnStage === "turn" || turnStage === "done" || blockMode === "runoff" || showdownStage === "gather" || showdownStage === "speak" || showdownStage === "point";
 
   // 판결 순간(09.1.1-13, UI-SPEC C-1): 처형 진입 시각 기준 어둡게 막·찬반 묶음·카메라 줌. 모션 줄이기는 줌 없이 막·핀·묶음만 쓴다
   const moment = useVerdictMoment(view, offset);
@@ -619,7 +666,7 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
         logHeight={kbOpen ? LOG_H_KB : logH}
         kbOpen={kbOpen}
         lifted={kbLifted}
-        veiled={veiled}
+        veiled={veiled || (speakOpen && !speakWriting)}
         rejected={rejects}
         onNightPickSent={(target) => {
           pointSent.current = { target, at: Date.now() };
@@ -680,6 +727,7 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
           ) : null}
         </FloatActions>
       ) : null}
+      {speakOpen && !speakWriting ? <SpeakSheet chips={SHOWDOWN_COPY.chips} onPick={sendWord} onWrite={() => setSpeakWriting(true)} {...(canSend ? {} : { disabled: true })} /> : null}
       {layerKind !== null ? (
         <div ref={layerRef} className="mf-will-layer" data-sheet-layer={layerKind} {...(veiled ? { "data-panel-hidden": "true" } : {})}>
           {layerKind === "will" && will.open !== null ? (
@@ -692,6 +740,18 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
               onClose={will.close}
               saved={will.saved}
               {...(vvHeight < COMPACT_VV_MAX ? { compact: true } : {})}
+              {...(canSend ? {} : { disabled: true })}
+            />
+          ) : layerKind === "speak" ? (
+            <LineSheet
+              title={SHOWDOWN_COPY.writeTitle}
+              icon="quill"
+              max={SHOWDOWN_COPY.max}
+              inputLabel={`${SHOWDOWN_COPY.writeTitle} 입력`}
+              value={speakDraft}
+              onChange={setSpeakDraft}
+              onSend={sendWord}
+              onClose={() => setSpeakWriting(false)}
               {...(canSend ? {} : { disabled: true })}
             />
           ) : layerKind === "line" && whisper.target !== null ? (

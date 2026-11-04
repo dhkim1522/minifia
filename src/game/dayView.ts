@@ -12,6 +12,7 @@ import type { ChatChannel, PhaseId, RoomView } from "../../shared/protocol";
 import type { V2IconName } from "../components/v2/V2Icon";
 import { MORNING_TEXT, morningText } from "./eliminationText";
 import { isMyTurn, TURN_COPY, turnStageOf } from "./pickTurn";
+import { isMySpeakTurn, pointSeatsOf, SHOWDOWN_COPY, showdownStageOf } from "./showdownView";
 
 /** 문구 표. UI-SPEC "Copywriting Contract" 원문 — 해요체, 마침표·느낌표 없음. 역할 단어는 토론 안내의 '마피아'(모두에게 같은 문장) 하나뿐이다. */
 export const DAY_COPY = {
@@ -41,6 +42,7 @@ export const DAY_COPY = {
     discussion: "낮 토론",
     nomination: "지목",
     runoff: "결선",
+    showdown: SHOWDOWN_COPY.title,
     defense: "최후 변론",
     verdict: "찬반",
     execution: "처형",
@@ -268,6 +270,9 @@ function phaseEntry(prev: RoomView, cur: RoomView, day: NonNullable<RoomView["da
     case "runoff":
       out.lines.push({ kind: "system", text: DAY_COPY.runoffStart });
       return;
+    case "showdown":
+      out.lines.push({ kind: "system", text: SHOWDOWN_COPY.chatLine });
+      return;
     case "defense": {
       const seat = day.candidate;
       const name = seat === undefined ? undefined : nameOf(cur, seat);
@@ -428,6 +433,13 @@ export function headerFor(view: RoomView): { title: string; hint?: string } {
       if (runoff === undefined) return { title };
       if (runoff.cand.includes(view.me.seat)) return { title, hint: TURN_COPY.runoffWait };
       return runoff.step === 1 ? { title, hint: TURN_COPY.runoffPick } : { title };
+    }
+    case "showdown": {
+      // 마지막 3인(09.1.1-15): 내 한마디 차례 '한마디를 골라요', 동시 지목의 산 사람 '의심되는 사람을 눌러요', 그 밖은 제목만
+      const stage = showdownStageOf(view);
+      if (stage === "speak" && isMySpeakTurn(view)) return { title, hint: SHOWDOWN_COPY.speakHint };
+      if (stage === "point" && pointSeatsOf(view).length > 0) return { title, hint: SHOWDOWN_COPY.pointHint };
+      return { title };
     }
     case "defense":
       if (isSelf) return { title, hint: DAY_COPY.defenseHintSelf };

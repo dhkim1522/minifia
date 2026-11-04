@@ -1,9 +1,12 @@
 import { useLayoutEffect, useRef } from "react";
 import { TURN_COPY, type BlockLook } from "../../game/pickTurn";
+import { SHOWDOWN_COPY } from "../../game/showdownView";
 import "../../styles/v2.css";
+import { QuoteCard } from "./QuoteCard";
 
 // 순차 지목의 차례 알약 · 막대 · 위 한 줄(결정 0063-1, UI-SPEC A-1·A-2·A-3·A-5). 시안 design/v2.0/mockups-b/PickSeq.dc.html 54~64행.
 // 동점 결선(09.1.1-14, UI-SPEC D)도 같은 부품이다: 알약은 `결선` · `{초}초` 두 조각, 막대 길이는 look.totalMs(결선 투표 5초).
+// 마지막 3인(09.1.1-15, UI-SPEC E)도 같은 부품이다: 한마디 차례 `n / 3` · `{이름} 님 차례` · `{초}초`, 동시 지목 `지목` · `모두 동시에` · `{초}초`. 확정된 한마디는 알약 아래 인용 카드(quote)로 뜬다.
 // 값은 모두 blockLook(turnLook) 한 곳에서 온다(헤더 시간 링과 같은 입력). 닉네임·문장은 React 텍스트 노드로만 그린다(T-09.1-18).
 // 모이는 동안과 끝 알림에는 알약·막대가 없다. 압축형(compact)은 위 한 줄을 만들지 않는다(켜는 조건은 09.1-08).
 
@@ -12,6 +15,8 @@ export interface PickTurnBlockProps {
   look: BlockLook | null;
   /** 위 한 줄 문장(없으면 null). 숨길 때는 마지막 글자를 남겨 페이드 아웃한다 */
   line: string | null;
+  /** 마지막 3인의 확정된 한마디(알약 아래 인용 카드). 없으면 null — 사라질 때는 마지막 글을 남겨 페이드 아웃한다 */
+  quote?: { text: string } | null;
   compact?: boolean;
   reducedMotion: boolean;
 }
@@ -41,9 +46,21 @@ function Fill({ look, reducedMotion }: { look: BlockLook; reducedMotion: boolean
   return <div ref={ref} className={hold || reducedMotion ? "mf-turn__fill is-hold" : "mf-turn__fill"} style={{ width: pct(ratio) }} />;
 }
 
-export function PickTurnBlock({ look, line, compact = false, reducedMotion }: PickTurnBlockProps) {
+/** 마지막 3인 단계 표식 값(UI-SPEC "검사 가능하게 둘 것"): 모이기·한마디·동시 지목·공개 */
+function showdownStep(look: BlockLook): string | undefined {
+  if (look.mode === "speak") return look.stage === "gather" ? "gather" : "speak";
+  if (look.mode === "point") return look.stage === "end" ? "reveal" : "point";
+  return undefined;
+}
+
+export function PickTurnBlock({ look, line, quote = null, compact = false, reducedMotion }: PickTurnBlockProps) {
   const lastLine = useRef("");
   if (line !== null) lastLine.current = line;
+  const lastQuote = useRef("");
+  if (quote !== null) lastQuote.current = quote.text;
+  // 재접속 첫 화면: 처음부터 보이던 인용 카드는 등장 모션 없이 바로 보인다(E-2)
+  const mountedWithQuote = useRef(quote !== null);
+  if (quote === null && lastQuote.current !== "") mountedWithQuote.current = false;
   // 재접속 첫 화면: 처음부터 차례 중이면 등장 모션 없이 바로 보인다(A-6)
   const mountedInTurn = useRef(look !== null && (look.stage === "turn" || look.stage === "done"));
   if (look === null) return null;
@@ -57,12 +74,18 @@ export function PickTurnBlock({ look, line, compact = false, reducedMotion }: Pi
       data-turn-no={look.no}
       {...(look.seat !== undefined ? { "data-turn-seat": look.seat } : {})}
       data-turn-tone={look.tone}
+      {...(showdownStep(look) !== undefined ? { "data-showdown-step": showdownStep(look) } : {})}
     >
       {inTurn ? (
         <>
           <div className={mountedInTurn.current ? "mf-turn__pill is-still" : "mf-turn__pill"} role="status">
             {look.mode === "runoff" ? (
               <span className="mf-turn__count">{TURN_COPY.runoffPill}</span>
+            ) : look.mode === "point" ? (
+              <>
+                <span className="mf-turn__count">{SHOWDOWN_COPY.pointPill}</span>
+                <span className="mf-turn__name">{SHOWDOWN_COPY.allAtOnce}</span>
+              </>
             ) : (
               <>
                 <span className="mf-turn__count" aria-hidden="true">
@@ -80,6 +103,7 @@ export function PickTurnBlock({ look, line, compact = false, reducedMotion }: Pi
           </div>
         </>
       ) : null}
+      {quote !== null || lastQuote.current !== "" ? <QuoteCard text={quote?.text ?? lastQuote.current} visible={quote !== null} still={mountedWithQuote.current} /> : null}
       {compact ? null : (
         <p className={showLine ? "mf-turn__line is-on" : "mf-turn__line"} aria-hidden={showLine ? undefined : true}>
           {line ?? lastLine.current}
