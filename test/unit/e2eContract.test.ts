@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { BAR_MASK } from "../../shared/game/map";
-import { NOMINATION_END_MS, NOMINATION_GATHER_MS, PICK_GAP_MS, PICK_TURN_MS, nominationMaxMs } from "../../shared/game/phases";
+import { NOMINATION_END_MS, NOMINATION_GATHER_MS, PICK_GAP_MS, PICK_TURN_MS, SHOWDOWN_GATHER_MS, SHOWDOWN_POINT_MS, SHOWDOWN_REVEAL_MS, SHOWDOWN_TURN_MS, nominationMaxMs } from "../../shared/game/phases";
 import { MOVE_SPEED } from "../../shared/game/world";
 import { NICKNAME_MAX_GRAPHEMES, countGraphemes } from "../../shared/nickname";
 import { ANNOUNCE_MORNING_AT } from "../../src/game/dayView";
@@ -216,6 +216,18 @@ describe("E2E 의 순차 지목 시간 상수와 앱 상수 (09.1-08, 결정 006
 
   it("nominationMaxMs 가 차례 수 1~8 에서 앱 함수와 같은 값을 낸다", () => {
     for (let n = 1; n <= 8; n++) expect(lib.nominationMaxMs(n)).toBe(nominationMaxMs(n));
+  });
+});
+
+describe("E2E 의 마지막 3인 시간 상수와 앱 상수 (09.1.1-16)", () => {
+  const lib = e2eLib as { SHOWDOWN_GATHER_MS: number; SHOWDOWN_TURN_MS: number; SHOWDOWN_POINT_MS: number; SHOWDOWN_REVEAL_MS: number; PICK_GAP_MS: number };
+
+  it("SHOWDOWN_* 네 상수와 사이 PICK_GAP_MS 가 shared/game/phases.ts 의 같은 이름 상수와 같다", () => {
+    expect(lib.SHOWDOWN_GATHER_MS).toBe(SHOWDOWN_GATHER_MS);
+    expect(lib.SHOWDOWN_TURN_MS).toBe(SHOWDOWN_TURN_MS);
+    expect(lib.SHOWDOWN_POINT_MS).toBe(SHOWDOWN_POINT_MS);
+    expect(lib.SHOWDOWN_REVEAL_MS).toBe(SHOWDOWN_REVEAL_MS);
+    expect(lib.PICK_GAP_MS).toBe(PICK_GAP_MS);
   });
 });
 

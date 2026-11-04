@@ -107,6 +107,11 @@ import {
   pickButtonChecks,
   turnBlockChecks,
   runoffChecks,
+  showdownChecks,
+  SHOWDOWN_GATHER_MS,
+  SHOWDOWN_TURN_MS,
+  SHOWDOWN_POINT_MS,
+  SHOWDOWN_REVEAL_MS,
   nominationMaxMs,
   NOMINATION_GATHER_MS,
   PICK_TURN_MS,
@@ -1974,6 +1979,140 @@ test("runoffChecks: 측정값이 없으면 조용히 통과하지 않고 '측정
 test("runoffChecks: 압축형(compact)도 같은 문턱이다 — 알약 글자 14px 를 낮추지 않는다", () => {
   assert.equal(runoffOk(goodRunoff({ compact: true })).RF1, true);
   assert.equal(runoffOk(goodRunoff({ compact: true, pill: { ...goodRunoff().pill, minFontPx: 13 } })).RF1, false);
+});
+
+// ---- 마지막 3인 결전 (09.1.1-16, UI-SPEC E) ----
+
+const goodShowdownSpeak = (over = {}) => ({
+  mode: "speak",
+  pill: { rect: { left: 100, top: 100, right: 290, bottom: 148 }, minFontPx: 16, parts: ["1 / 3", "가나다 님 차례", "8초"], tone: "calm" },
+  bar: { left: 20, top: 152, right: 370, bottom: 158 },
+  panel: { left: 0, top: 600, right: 390, bottom: 844, height: 244 },
+  sheet: { left: 0, top: 600, right: 390, bottom: 844, height: 244 },
+  chips: [
+    { left: 16, top: 612, right: 190, bottom: 656, height: 44 },
+    { left: 198, top: 612, right: 374, bottom: 656, height: 44 },
+    { left: 16, top: 664, right: 190, bottom: 708, height: 44 },
+    { left: 198, top: 664, right: 374, bottom: 708, height: 44 },
+    { left: 16, top: 716, right: 190, bottom: 760, height: 44 },
+  ],
+  quote: { rect: { left: 16, top: 166, right: 374, bottom: 212, width: 358 }, fontPx: 16, lines: 1 },
+  buttons: undefined,
+  viewport: { w: 390, h: 844 },
+  compact: false,
+  ...over,
+});
+const goodShowdownPoint = (over = {}) =>
+  goodShowdownSpeak({
+    mode: "point",
+    pill: { rect: { left: 100, top: 100, right: 290, bottom: 148 }, minFontPx: 16, parts: ["지목", "모두 동시에", "8초"], tone: "calm" },
+    sheet: undefined,
+    chips: undefined,
+    quote: undefined,
+    buttons: [
+      { seat: 1, rect: { left: 60, top: 400, right: 160, bottom: 460 } },
+      { seat: 2, rect: { left: 230, top: 400, right: 330, bottom: 460 } },
+    ],
+    ...over,
+  });
+const shOk = (r) => Object.fromEntries(showdownChecks(r).map((l) => [l.id, l.ok]));
+
+test("showdownChecks: 한마디(speak) 정상 입력은 SH1~SH4·SH6 모두 통과하고 SH5 는 만들지 않는다", () => {
+  const lines = showdownChecks(goodShowdownSpeak());
+  assert.deepEqual(lines.map((l) => l.id), ["SH1", "SH2", "SH3", "SH4", "SH6"]);
+  assert.ok(lines.every((l) => l.ok && l.detail === "" && typeof l.label === "string"));
+});
+
+test("showdownChecks: 동시 지목(point) 정상 입력은 SH1·SH2·SH5·SH6 통과, 시트·인용 카드 항목은 만들지 않는다", () => {
+  const lines = showdownChecks(goodShowdownPoint());
+  assert.deepEqual(lines.map((l) => l.id), ["SH1", "SH2", "SH5", "SH6"]);
+  assert.ok(lines.every((l) => l.ok));
+});
+
+test("showdownChecks: 시트·인용 카드가 없는 구경 화면(speak, sheet·quote 미지정)은 SH1·SH2·SH6 만 본다", () => {
+  const lines = showdownChecks(goodShowdownSpeak({ sheet: undefined, chips: undefined, quote: undefined }));
+  assert.deepEqual(lines.map((l) => l.id), ["SH1", "SH2", "SH6"]);
+  assert.ok(lines.every((l) => l.ok));
+});
+
+test("showdownChecks SH1: 알약이 화면 밖이거나 글자가 14px 미만이면 실패", () => {
+  const p = goodShowdownSpeak().pill;
+  assert.equal(shOk(goodShowdownSpeak({ pill: { ...p, rect: { ...p.rect, right: 400 } } })).SH1, false);
+  assert.equal(shOk(goodShowdownSpeak({ pill: { ...p, minFontPx: 13.9 } })).SH1, false);
+  assert.equal(shOk(goodShowdownSpeak({ pill: { ...p, minFontPx: 14 } })).SH1, true);
+  assert.equal(shOk(goodShowdownSpeak({ bar: { left: 20, top: 152, right: 392, bottom: 158 } })).SH1, false);
+});
+
+test("showdownChecks SH2: speak 는 `n / 3`·`{이름} 님 차례`·`{초}초`, point 는 `지목`·`모두 동시에`·`{초}초` 세 조각이어야 한다", () => {
+  const p = goodShowdownSpeak().pill;
+  assert.equal(shOk(goodShowdownSpeak({ pill: { ...p, parts: ["3 / 3", "나 님 차례", "0초"] } })).SH2, true);
+  assert.equal(shOk(goodShowdownSpeak({ pill: { ...p, parts: ["1 / 4", "가나다 님 차례", "8초"] } })).SH2, false);
+  assert.equal(shOk(goodShowdownSpeak({ pill: { ...p, parts: ["1 / 3", "8초"] } })).SH2, false);
+  assert.equal(shOk(goodShowdownSpeak({ pill: { ...p, parts: ["1 / 3", "모두 동시에", "8초"] } })).SH2, false);
+  const q = goodShowdownPoint().pill;
+  assert.equal(shOk(goodShowdownPoint({ pill: { ...q, parts: ["지목", "가나다 님 차례", "8초"] } })).SH2, false);
+  assert.equal(shOk(goodShowdownPoint({ pill: { ...q, parts: ["1 / 3", "모두 동시에", "8초"] } })).SH2, false);
+  assert.equal(shOk(goodShowdownPoint({ pill: { ...q, parts: ["지목", "모두 동시에", "여덟초"] } })).SH2, false);
+});
+
+test("showdownChecks SH3: 시트 윗변=패널 윗변 ±1, 높이=패널 높이 ±1, 칩 높이 ≥ 44, 칩 3줄 이하", () => {
+  const g = goodShowdownSpeak();
+  assert.equal(shOk(g).SH3, true);
+  assert.equal(shOk(goodShowdownSpeak({ sheet: { ...g.sheet, top: 602 } })).SH3, false);
+  assert.equal(shOk(goodShowdownSpeak({ sheet: { ...g.sheet, top: 601 } })).SH3, true);
+  assert.equal(shOk(goodShowdownSpeak({ sheet: { ...g.sheet, height: 188, bottom: 788 } })).SH3, false);
+  assert.equal(shOk(goodShowdownSpeak({ chips: g.chips.map((c, i) => (i === 1 ? { ...c, height: 43, bottom: c.top + 43 } : c)) })).SH3, false);
+  const four = [...g.chips, { left: 198, top: 768, right: 374, bottom: 812, height: 44 }];
+  assert.equal(shOk(goodShowdownSpeak({ chips: four })).SH3, false);
+});
+
+test("showdownChecks SH4: 인용 카드는 알약 아랫변+8 ±2 뒤에 시작·폭 화면−32 ±2·글자 16±0.5·두 줄 이하", () => {
+  const g = goodShowdownSpeak();
+  const q = g.quote;
+  assert.equal(shOk(g).SH4, true);
+  assert.equal(shOk(goodShowdownSpeak({ quote: { ...q, rect: { ...q.rect, top: 175 } } })).SH4, false);
+  assert.equal(shOk(goodShowdownSpeak({ quote: { ...q, rect: { ...q.rect, top: 162 } } })).SH4, false);
+  assert.equal(shOk(goodShowdownSpeak({ quote: { ...q, rect: { ...q.rect, width: 340 } } })).SH4, false);
+  assert.equal(shOk(goodShowdownSpeak({ quote: { ...q, fontPx: 15 } })).SH4, false);
+  assert.equal(shOk(goodShowdownSpeak({ quote: { ...q, fontPx: 16.4 } })).SH4, true);
+  assert.equal(shOk(goodShowdownSpeak({ quote: { ...q, lines: 3 } })).SH4, false);
+  assert.equal(shOk(goodShowdownSpeak({ quote: { ...q, lines: 2 } })).SH4, true);
+});
+
+test("showdownChecks SH5: 지목 버튼은 정확히 둘, 각 44×44 이상, 서로 겹치지 않는다", () => {
+  const b = goodShowdownPoint().buttons;
+  assert.equal(shOk(goodShowdownPoint()).SH5, true);
+  assert.equal(shOk(goodShowdownPoint({ buttons: [b[0]] })).SH5, false);
+  assert.equal(shOk(goodShowdownPoint({ buttons: [b[0], { seat: 2, rect: { left: 60, top: 400, right: 60 + 43.4, bottom: 460 } }] })).SH5, false);
+  assert.equal(shOk(goodShowdownPoint({ buttons: [b[0], { seat: 2, rect: { left: 150, top: 400, right: 250, bottom: 460 } }] })).SH5, false);
+});
+
+test("showdownChecks SH6: 알약·막대 아랫변이 일반 160, 압축형(360×560) 124 아래 ±2 에 있다", () => {
+  const p = goodShowdownSpeak().pill;
+  assert.equal(shOk(goodShowdownSpeak({ bar: { left: 20, top: 152, right: 370, bottom: 162 } })).SH6, true);
+  assert.equal(shOk(goodShowdownSpeak({ bar: { left: 20, top: 152, right: 370, bottom: 163 } })).SH6, false);
+  const c = goodShowdownSpeak({ compact: true, pill: { ...p, rect: { ...p.rect, top: 72, bottom: 120 } }, bar: { left: 20, top: 120, right: 370, bottom: 124 } });
+  assert.equal(shOk(c).SH6, true);
+  assert.equal(shOk({ ...c, bar: { left: 20, top: 120, right: 370, bottom: 128 } }).SH6, false);
+});
+
+test("showdownChecks: 측정값이 없으면 조용히 통과하지 않고 '측정값 없음' 으로 실패", () => {
+  for (const r of [null, undefined, {}, goodShowdownSpeak({ pill: null }), goodShowdownSpeak({ viewport: null })]) {
+    const lines = showdownChecks(r);
+    assert.ok(lines.length >= 3);
+    assert.ok(lines.some((l) => !l.ok && /측정값 없음/.test(l.detail)));
+  }
+  assert.ok(showdownChecks(goodShowdownSpeak({ sheet: null })).some((l) => l.id === "SH3" && !l.ok && /측정값 없음/.test(l.detail)));
+  assert.ok(showdownChecks(goodShowdownSpeak({ quote: null })).some((l) => l.id === "SH4" && !l.ok && /측정값 없음/.test(l.detail)));
+  assert.ok(showdownChecks(goodShowdownPoint({ buttons: null })).some((l) => l.id === "SH5" && !l.ok && /측정값 없음/.test(l.detail)));
+});
+
+test("마지막 3인 시간 상수 사본: 모이기 2초·한마디 8초·지목 8초·공개 1.5초, 사이 0.9초는 PICK_GAP_MS 재사용", () => {
+  assert.equal(SHOWDOWN_GATHER_MS, 2000);
+  assert.equal(SHOWDOWN_TURN_MS, 8000);
+  assert.equal(SHOWDOWN_POINT_MS, 8000);
+  assert.equal(SHOWDOWN_REVEAL_MS, 1500);
+  assert.equal(PICK_GAP_MS, 900);
 });
 
 // ---- 유언 편지(09.1-11) ----
