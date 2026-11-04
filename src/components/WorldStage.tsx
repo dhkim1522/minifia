@@ -11,7 +11,7 @@ import type { SceneLook } from "../world/presence";
 import { initialMapStatus } from "../world/status";
 import type { MapStatusState } from "../world/status";
 import type { WorldStore } from "../world/store";
-import { installGhostOutfitsHook, installWorldTestHooks, worldTestHooksEnabled } from "../world/testHooks";
+import { installGhostOutfitsHook, installPinHook, installWorldTestHooks, worldTestHooksEnabled } from "../world/testHooks";
 import { MapStatusCard } from "./MapStatusCard";
 import { HeadStack } from "./v2/HeadStack";
 import type { HeadStackProps } from "./v2/HeadStack";
@@ -146,6 +146,8 @@ export function WorldStage(props: WorldStageProps) {
     const hooksOn = worldTestHooksEnabled(window.location.search, sessionStore(), import.meta.env.DEV);
     // window.__mfGhostOutfits(유령 직업 의상 표, 09.1-09): 같은 훅 문맥에서만. 의상은 DOM 속성으로 싣지 않는다(L13)
     const outfitsHook = hooksOn ? installGhostOutfitsHook() : null;
+    // window.__mfPin(핀 조명 대상·이동 중 여부, 09.1.1-11): 같은 훅 문맥에서만. DOM 이 아니다
+    const pinHook = hooksOn ? installPinHook() : null;
     const runtime = createWorldRuntime({
       host,
       tagLayer,
@@ -168,6 +170,7 @@ export function WorldStage(props: WorldStageProps) {
         else root.setAttribute("data-ring", `${at.x.toFixed(2)},${at.z.toFixed(2)}`);
       },
       onGhostOutfits: outfitsHook?.set,
+      onPin: pinHook?.set,
       allowSoftware: hooksOn,
       loadModules: live.current.props.loadModules,
     });
@@ -178,6 +181,7 @@ export function WorldStage(props: WorldStageProps) {
     return () => {
       offHooks?.();
       outfitsHook?.off();
+      pinHook?.off();
       runtime.dispose();
       if (runtimeRef.current === runtime) runtimeRef.current = null;
     };

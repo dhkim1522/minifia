@@ -692,7 +692,7 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
     if (deps.onPin !== undefined) {
       const seat = want ? (at.seat ?? null) : null;
       const moving = want && at.moving;
-      const hookKey = `${seat ?? "-"}|${moving ? 1 : 0}|${Math.round(pinK / 0.05)}`;
+      const hookKey = `${seat ?? "-"}|${moving ? 1 : 0}|${pinK <= 0 ? 0 : Math.max(1, Math.round(pinK / 0.05))}`; // 0 은 따로 구분한다(꺼짐 도착을 놓치지 않게)
       if (hookKey !== pinHookKey) {
         pinHookKey = hookKey;
         deps.onPin({ seat, moving, strength: pinK });
