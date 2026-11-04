@@ -123,6 +123,24 @@ describe("결과 화면 핵심 (END-01·END-02, D-17·D-18)", () => {
     expect(r.container.querySelector(".mf-dt")).toBeNull();
   });
 
+  it("마크업(feedback-6): inner 안에 스크롤 영역 .mf-result__body(head·banner·grid·summary)와 그 형제 footer 가 마지막 자식", () => {
+    const r = renderRoom(makeView());
+    const inner = r.container.querySelector<HTMLElement>(".mf-result__inner")!;
+    const kids = Array.from(inner.children);
+    expect(kids).toHaveLength(2);
+    expect(kids[0]!.classList.contains("mf-result__body")).toBe(true);
+    expect(kids[1]!.tagName).toBe("FOOTER");
+    expect(kids[1]!.classList.contains("mf-result__foot")).toBe(true);
+    const body = kids[0] as HTMLElement;
+    expect(Array.from(body.children).map((c) => c.className.split(" ")[0])).toEqual([
+      "mf-result__head",
+      "mf-result__banner",
+      "mf-result__grid",
+      "mf-result__sm",
+    ]);
+    expect(body.querySelector("button")).toBeNull();
+  });
+
   it("마피아 승이면 `마피아 팀 승리`·`마피아 수가 나머지 생존자 수와 같아졌어요`, 배너 data-winner=mafiaWin", () => {
     const r = renderRoom(makeView({ winner: "mafiaWin" }));
     const banner = r.container.querySelector<HTMLElement>(".mf-result__banner")!;
@@ -424,11 +442,21 @@ describe("result.css 정적 단언 (happy-dom 은 레이아웃을 재지 못한�
     return m?.[1] ?? "";
   };
 
-  it("스크롤 본문: overflow-y auto · overflow-x hidden · overscroll-behavior contain", () => {
-    const body = rule(".mf-result");
+  it("스크롤 영역(feedback-6): .mf-result 는 스크롤하지 않고, 위 영역 .mf-result__body 만 세로 스크롤한다(가로 없음, overscroll contain)", () => {
+    expect(rule(".mf-result")).toMatch(/overflow:\s*hidden/);
+    expect(rule(".mf-result")).not.toMatch(/overflow-y:\s*auto/);
+    const inner = rule(".mf-result__inner");
+    expect(inner).toMatch(/height:\s*100%/);
+    expect(inner).toMatch(/box-sizing:\s*border-box/);
+    expect(inner).toMatch(/flex-direction:\s*column/);
+    const body = rule(".mf-result__body");
+    expect(body).toMatch(/flex:\s*1 1 0/);
+    expect(body).toMatch(/min-height:\s*0/);
     expect(body).toMatch(/overflow-y:\s*auto/);
     expect(body).toMatch(/overflow-x:\s*hidden/);
     expect(body).toMatch(/overscroll-behavior:\s*contain/);
+    expect(body).toMatch(/gap:\s*var\(--space-md\)/);
+    expect(rule(".mf-result__foot")).toMatch(/flex:\s*none/);
   });
 
   it("격자는 3열(repeat(3, minmax(0, 1fr))) 간격 8, 카드는 min-width 0", () => {
@@ -457,8 +485,8 @@ describe("result.css 정적 단언 (happy-dom 은 레이아웃을 재지 못한�
     expect(tagW).toBeLessThanOrEqual(cardW - 2);
   });
 
-  it("스크롤 본문 아래 여백은 24 + 안전 영역, 배경은 스크롤해도 고정(글로우는 본문 밖 형제)", () => {
-    expect(rule(".mf-result__inner")).toMatch(/padding:[^;]*var\(--space-lg\)[^;]*safe-area-inset-bottom/);
+  it("[처음으로] 줄 아래 여백은 24 + 안전 영역, 배경은 스크롤해도 고정(글로우는 본문 밖 형제)", () => {
+    expect(rule(".mf-result__foot")).toMatch(/padding-bottom:[^;]*var\(--space-lg\)[^;]*safe-area-inset-bottom/);
     expect(css).toMatch(/\.mf-result__glow\s*\{[^}]*position:\s*absolute/);
   });
 
