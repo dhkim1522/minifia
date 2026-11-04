@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { timerTone } from "../../net/countdown";
 import "../../styles/v2.css";
 
 // 단계 머리: 단계 이름 + 접히는 안내 한 줄(+ 시간 링). design/v2.0/design-system/components/bundle.js :59 를 React 19 로 옮겼다.
@@ -21,14 +22,15 @@ export interface PhaseHeaderProps {
 
 const RADIUS = 18;
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
-const URGENT_SECONDS = 5;
 
 export function PhaseHeader({ title, hint, showHint, guide, time, total, extra }: PhaseHeaderProps) {
   const hasTime = time != null && !!total;
-  const urgent = hasTime && time <= URGENT_SECONDS;
+  // 색 규칙은 역할 확인 막대 타이머와 같은 timerTone 하나(feedback-4): 10초 놋쇠, 5초 진홍, 단계가 문턱 이하로 짧으면 그 색 없음
+  const tone = hasTime ? timerTone(time * 1000, total * 1000) : "calm";
+  const urgent = tone === "urgent";
   const frac = hasTime ? Math.max(0, Math.min(1, time / total)) : 0;
   const ring = hasTime ? (
-    <span className={urgent ? "mv-ring is-urgent" : "mv-ring"} role="timer" aria-label={`남은 시간 ${time}초`}>
+    <span className={tone === "calm" ? "mv-ring" : `mv-ring is-${tone}`} role="timer" aria-label={`남은 시간 ${time}초`}>
       <svg width={44} height={44} viewBox="0 0 44 44" aria-hidden="true">
         <circle cx={22} cy={22} r={RADIUS} className="mv-ring__track" />
         <circle

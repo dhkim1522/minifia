@@ -1,6 +1,6 @@
 /* 단계 화면 부품 스타일(타이머, 역할 카드). design/design-system/components/bundle.css 에서 옮겼다.
    값은 tokens.css 변수만 쓴다(색 직접 지정 없음). 글자 크기는 14/16/24/36, 굵기는 400/700 뿐이다.
-   진홍 예약: 1번 마지막 5초 타이머(crimson-500 막대·crimson-400 숫자), 2번 카드 뒷면 마름모(crimson-500),
+   진홍 예약: 1번 마지막 5초 타이머(마지막 10초는 놋쇠 brass-400 막대·brass-200 숫자, feedback-4)(crimson-500 막대·crimson-400 숫자), 2번 카드 뒷면 마름모(crimson-500),
    4번 마피아 동료 줄(crimson-300). 그 밖에는 쓰지 않는다.
    토큰에 없는 길이(타이머 막대 250ms, timer-pop 220ms, card-rise 300ms)는 각 부품 안 지역 상수로 둔다. */
 
@@ -9,6 +9,8 @@
 .mf-timer__track { flex: 1; height: 8px; background: var(--gray-700); border-radius: var(--radius-sm); overflow: hidden; }
 .mf-timer__fill { height: 100%; background: var(--gray-100); transform-origin: left center; border-radius: var(--radius-sm); transition: transform var(--mf-timer-tick) linear; }
 .mf-timer__num { font-size: 24px; line-height: 1.2; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--gray-50); min-width: 4ch; text-align: right; transform-origin: right center; }
+.mf-timer--warn .mf-timer__fill { background: var(--brass-400); }
+.mf-timer--warn .mf-timer__num { color: var(--brass-200); }
 .mf-timer--urgent .mf-timer__fill { background: var(--crimson-500); }
 .mf-timer--urgent .mf-timer__num { color: var(--crimson-400); animation: mf-timer-pop var(--mf-timer-pop) var(--ease-out); }
 @keyframes mf-timer-pop { from { transform: scale(1.35); } to { transform: scale(1); } }

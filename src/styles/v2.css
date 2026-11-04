@@ -35,7 +35,10 @@
 .mv-ring svg { position: absolute; inset: 0; }
 .mv-ring__track { fill: none; stroke: var(--night-600); stroke-width: 4; }
 .mv-ring__bar { fill: none; stroke: var(--gray-100); stroke-width: 4; stroke-linecap: round; transition: stroke-dashoffset 1s linear; }
-/* 원본은 급할 때 진홍으로 바꾼다. 진홍은 이 페이즈 UI 에 없으므로(UI-SPEC Color) 숫자만 나타나고 색은 그대로 둔다. 진홍은 시간 링을 쓰는 페이즈가 정한다 */
+/* 마지막 10초 놋쇠, 5초 진홍(feedback-4, 디자인 시스템 진홍 예약 1). v2.0 은 앰버를 쓰지 않아 노랑은 놋쇠 토큰이다 */
+.mv-ring.is-warn .mv-ring__bar { stroke: var(--brass-400); }
+.mv-ring.is-urgent .mv-ring__bar { stroke: var(--crimson-500); }
+.mv-ring.is-urgent .mv-ring__num { color: var(--crimson-400); }
 .mv-ring__num { position: relative; font-size: 16px; line-height: 1; font-weight: 700; color: var(--gray-50); font-variant-numeric: tabular-nums; }
 
 /* 인원·진행 숫자 '현재 / 최대'(feedback-13). 버튼 라벨과 같은 16px 700, 색은 놓인 자리의 글자색을 따른다 */
