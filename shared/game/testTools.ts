@@ -3,6 +3,7 @@
 // 검사 순서가 계약이다: testMode 가 아니면 BAD_MESSAGE(일반 방에서는 이 메시지가 있다는 사실도 드러내지 않는다)
 // → 방장이 아니면 NOT_HOST → 단계가 맞지 않으면 WRONG_PHASE → (testRole 만) 직업이 구성에 없으면 BAD_MESSAGE
 // (testBots 는 대기실 다음에 개수 범위가 틀리면 BAD_MESSAGE, 결정 0024. testBotVote 는 대기실 다음에 값이 범위 밖이면 BAD_MESSAGE, P-13).
+// (finishNomination 의 난수 호출 순서: 남은 차례의 산 봇만 좌석 순 randInt(후보 수) 한 번씩.)
 // 결정 0017-5(방장 연장·넘기기 제거)와 0020 은 일반 방에서 그대로다. 이 도구는 테스트 방 전용 예외다.
 import { NICKNAME_MAX_GRAPHEMES, graphemePrefix, validateNickname } from "../nickname";
 import { MAX_PLAYERS, MAX_TEST_BOTS } from "../protocol";
@@ -40,9 +41,35 @@ export function skipPhase(state: RoomState, actorId: string, now: number, randIn
   const denied = checkTestHost(state, actorId);
   if (denied !== null) return { ok: false, error: denied };
   if (state.phase === "lobby" || state.phaseEndsAt === null) return { ok: false, error: "WRONG_PHASE" };
+  // 차례가 있는 지목(09.1, 결정 0063-1): 남은 차례를 한 번에 마무리한 뒤 끝 알림 마감을 당겨 집계 → 다음 단계로.
+  if (state.phase === "nomination" && state.pickTurn !== undefined) {
+    return { ok: true, state: tick({ ...finishNomination(state, randInt), phaseEndsAt: now }, now, randInt) };
+  }
   const voting = ["nomination", "verdict"];
   const ready = state.phase === "night" ? botsPickNow(state, randInt) : voting.includes(state.phase) ? botsVoteNow(state, randInt) : state;
   return { ok: true, state: tick({ ...ready, phaseEndsAt: now }, now, randInt) };
+}
+
+/**
+ * 순차 지목(09.1, 결정 0063-1)의 남은 차례를 한 번에 마무리한다: 지금 차례가 미확정이면 그 차례부터, 확정이면 다음 차례부터(모이는 중이면 처음부터)
+ * 산 봇이고 아직 지목이 없는 사람만 좌석 순으로 botPointTarget(계획과 같은 결정 함수 — 자기·탈락 제외, 고정 pick 포함)으로 한 번씩 지목한다.
+ * 사람은 건드리지 않는다(기권). 끝으로 pickTurn 을 끝 알림 자리 { order, i: order.length } 로 바꾼다. 지목이 아니거나 pickTurn 이 없으면 입력 그대로.
+ * 난수 호출 순서: 남은 차례의 산 봇만 좌석 순 randInt(후보 수) 한 번씩.
+ */
+export function finishNomination(state: RoomState, randInt: RandInt): RoomState {
+  const turn = state.pickTurn;
+  if (state.phase !== "nomination" || turn === undefined) return state;
+  const from = turn.i < 0 ? 0 : turn.doneAt === undefined ? turn.i : turn.i + 1;
+  let next = state;
+  for (const seat of turn.order.slice(from)) {
+    const bot = next.players.find((p) => p.seat === seat);
+    if (bot === undefined || !isBot(bot) || !isAlive(bot) || bot.nominate !== undefined) continue;
+    const target = botPointTarget(next, bot, randInt, state.testBotVote?.pick);
+    if (target === undefined) continue;
+    const cast = castPoint(next, bot.id, target);
+    if (cast.ok) next = cast.state;
+  }
+  return { ...next, pickTurn: { order: turn.order, i: turn.order.length } };
 }
 
 /**
