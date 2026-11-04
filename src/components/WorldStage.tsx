@@ -11,7 +11,7 @@ import type { SceneLook } from "../world/presence";
 import { initialMapStatus } from "../world/status";
 import type { MapStatusState } from "../world/status";
 import type { WorldStore } from "../world/store";
-import { installWorldTestHooks, worldTestHooksEnabled } from "../world/testHooks";
+import { installGhostOutfitsHook, installWorldTestHooks, worldTestHooksEnabled } from "../world/testHooks";
 import { MapStatusCard } from "./MapStatusCard";
 import { HeadStack } from "./v2/HeadStack";
 import type { HeadStackProps } from "./v2/HeadStack";
@@ -138,6 +138,7 @@ export function WorldStage(props: WorldStageProps) {
     if (host === null || tagLayer === null) return;
     // 테스트 훅은 ?e2e=1(세션 저장) 또는 개발 빌드에서만 — 같은 조건에서 소프트웨어 렌더러도 허용한다(E2E 헤드리스, RESEARCH A13)
     const hooksOn = worldTestHooksEnabled(window.location.search, sessionStore(), import.meta.env.DEV);
+    const outfitsHook = hooksOn ? installGhostOutfitsHook() : null;
     const runtime = createWorldRuntime({
       host,
       tagLayer,
@@ -159,6 +160,7 @@ export function WorldStage(props: WorldStageProps) {
         if (at === null) root.removeAttribute("data-ring");
         else root.setAttribute("data-ring", `${at.x.toFixed(2)},${at.z.toFixed(2)}`);
       },
+      onGhostOutfits: outfitsHook?.set,
       allowSoftware: hooksOn,
       loadModules: live.current.props.loadModules,
     });
@@ -168,6 +170,7 @@ export function WorldStage(props: WorldStageProps) {
     void runtime.start();
     return () => {
       offHooks?.();
+      outfitsHook?.off();
       runtime.dispose();
       if (runtimeRef.current === runtime) runtimeRef.current = null;
     };

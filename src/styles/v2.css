@@ -13,7 +13,8 @@
 .mv-tag.is-blink { animation: mv-blink 0.9s ease-in-out infinite; }
 @keyframes mv-blink { 0%, 100% { box-shadow: inset 0 0 0 0 transparent; } 50% { box-shadow: inset 0 0 0 2px var(--gray-100), 0 0 10px rgba(230, 232, 238, 0.6); } }
 .mv-tag.is-away { opacity: 0.55; }
-.mv-tag.is-ghost { opacity: 0.6; }
+/* 유령 이름표는 불투명(09.1-09, UI-SPEC 시안과 다르게 7): 몸이 0.26 안개라 직업은 이름표 위 RoleChip 이 알린다. 글자 대비 4.5:1 이상 */
+/* .mv-tag.is-ghost: 불투명도 규칙 없음 — 클래스는 표식으로만 남는다 */
 .mv-tag.is-away .mv-tag__dot { background: var(--gray-700) !important; }
 .mv-tag__done { display: inline-flex; align-items: center; flex: none; }
 .mv-tag__dot { width: 8px; height: 8px; border-radius: var(--radius-pill); flex: none; }

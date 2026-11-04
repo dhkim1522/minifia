@@ -33,6 +33,8 @@ export interface WorldTestHooks {
 declare global {
   interface Window {
     __mfWorld?: WorldTestHooks;
+    /** 유령 직업 의상 표(좌석 → 의상 id, 09.1-09). 런타임이 이미 그리는 의상뿐이고 산 사람 페이지는 늘 빈 객체다(L13) */
+    __mfGhostOutfits?: Readonly<Record<number, string>>;
   }
 }
 
@@ -97,5 +99,23 @@ export function installWorldTestHooks(runtime: HookRuntime, store: WorldStore): 
   window.__mfWorld = hooks;
   return () => {
     if (window.__mfWorld === hooks) delete window.__mfWorld;
+  };
+}
+
+/**
+ * window.__mfGhostOutfits 를 설치하고(처음엔 빈 표) 갱신·해제 함수를 돌려준다. 테스트 훅이 켜진 문맥에서만 부른다(T-09.1-23).
+ * 해제는 다른 설치가 덮어썼으면 지우지 않는다(__mfWorld 와 같은 규칙). 의상은 DOM 속성으로 싣지 않는다(L13).
+ */
+export function installGhostOutfitsHook(): { set(outfits: Readonly<Record<number, string>>): void; off(): void } {
+  let mine: Readonly<Record<number, string>> = {};
+  window.__mfGhostOutfits = mine;
+  return {
+    set(outfits) {
+      mine = { ...outfits };
+      window.__mfGhostOutfits = mine;
+    },
+    off() {
+      if (window.__mfGhostOutfits === mine) delete window.__mfGhostOutfits;
+    },
   };
 }
