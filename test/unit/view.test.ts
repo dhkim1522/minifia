@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { isAlive } from "../../shared/game/alive";
 import { channelOf } from "../../shared/game/audience";
 import { pickTarget } from "../../shared/game/night";
+import { castTurnPoint, enterNomination, nominationStepMs, stepNomination, turnViewOf } from "../../shared/game/nomination";
 import { DISCUSSION_MS, MORNING_MS, NIGHT_MS, NOMINATION_MS, PHASE_DEFS } from "../../shared/game/phases";
 import { ROOM_TTL_MS, attachConnection, createRoomState, joinRoom, startGame } from "../../shared/game/room";
 import type { Player, RoomState } from "../../shared/game/room";
@@ -270,7 +271,7 @@ const ME_KEYS: ReadonlySet<string> = new Set([
   "nightTally", "nightSure", // 밤 산 마피아 본인에게만(결정 0061-7) — 아래 "마피아 집계" describe 가 조건을 단언한다
 ]);
 const DAY_KEYS: ReadonlySet<string> = new Set([
-  "n", "roles", "voteLog", "morning", "candidate", "execution", "noExecution", "points", "endCount", "voted", "verdict",
+  "n", "roles", "voteLog", "morning", "candidate", "execution", "noExecution", "points", "endCount", "voted", "verdict", "turn",
 ]);
 const keysOf = (value: unknown): string => Object.keys((value ?? {}) as object).sort().join(",");
 
@@ -1583,5 +1584,115 @@ describe("buildView 분필 day.chalk (MORN-01, 결정 0061-14)", () => {
     const marked: RoomState = { ...s, chalk: { x: 120, z: -80 } };
     const got = marked.players.map((p) => flat(buildView(marked, p.id, START_AT).day?.chalk));
     expect(got.join("|")).toBe(marked.players.map(() => flat({ x: 120, z: -80 })).join("|"));
+  });
+});
+
+// ---- 순차 지목 공개 차례 정보 day.turn (09.1-01, 결정 0063-1, UI-SPEC L14) ----
+describe("day.turn (결정 0063-1, L14)", () => {
+  const T = 400_000;
+  const roomOf = (swapRoles: boolean): RoomState => {
+    let s = startedAt(6, 1, "nomination");
+    // 시작 전부터 탈락해 있던 유령 한 명(seat 5) — 산 사람과 유령 viewer 가 모두 있다.
+    s = { ...s, players: s.players.map((p) => (p.seat === 5 ? { ...p, alive: false } : p)) };
+    if (swapRoles) {
+      const a = s.players.find((p) => p.seat === 0)!;
+      const b = s.players.find((p) => p.seat === 2)!;
+      const c = s.players.find((p) => p.seat === 4)!;
+      const d = s.players.find((p) => p.seat === 5)!;
+      s = {
+        ...s,
+        players: s.players.map((p) => {
+          if (p.seat === 0) return { ...p, role: b.role };
+          if (p.seat === 2) return { ...p, role: a.role };
+          if (p.seat === 4) return { ...p, role: d.role };
+          if (p.seat === 5) return { ...p, role: c.role };
+          return p;
+        }),
+      };
+    }
+    const e = enterNomination(s);
+    return { ...e, phaseEndsAt: T + 3000 };
+  };
+
+  /** 같은 행동 열(진입 → 모이기 → 지목 → 기권 → 지목 …)을 적용하며, 각 순간 모든 viewer 의 day.turn JSON 을 모은다. */
+  function viewsAlong(s0: RoomState): string[][] {
+    const frames: string[][] = [];
+    let s = s0;
+    const snap = (): void => {
+      frames.push(s.players.map((p) => JSON.stringify(buildView(s, p.id, T).day?.turn ?? null)));
+    };
+    const step = (at: number): void => {
+      const r = stepNomination(s, at);
+      s = { ...r.state, phaseEndsAt: r.stay ? at + nominationStepMs(r.state) : null };
+      snap();
+    };
+    const pick = (seat: number, target: number, at: number): void => {
+      const r = castTurnPoint(s, s.players.find((p) => p.seat === seat)!.id, target, at);
+      if (!r.ok) throw new Error(`rejected ${seat}->${target}`);
+      s = r.state;
+      snap();
+    };
+    snap();
+    step(T + 3000); // seat0
+    pick(0, 3, T + 4000);
+    step(T + 4900); // seat1
+    step(T + 12_900); // seat1 기권
+    step(T + 13_800); // seat2
+    pick(2, 0, T + 14_000);
+    step(T + 14_900); // seat3
+    step(T + 22_900); // seat3 기권
+    step(T + 23_800); // seat4
+    pick(4, 1, T + 24_000);
+    step(T + 24_900); // 끝 알림
+    return frames;
+  }
+
+  it("turnViewOf: 필드별 복사이고 없는 키는 만들지 않는다 — 모이는 중은 order·i 두 키뿐, pickTurn 이 없으면 undefined", () => {
+    const s = roomOf(false);
+    const gather = turnViewOf(s);
+    const mid: RoomState = { ...s, pickTurn: { order: [0, 1], i: 1, endsAt: 9, doneAt: 8, skip: true } };
+    const none: RoomState = { ...s };
+    delete none.pickTurn;
+    expect(
+      [
+        JSON.stringify(gather),
+        JSON.stringify(turnViewOf(mid)),
+        String(turnViewOf(none)),
+        String(turnViewOf(mid)?.order === mid.pickTurn?.order), // order 는 복사본
+      ].join(" "),
+    ).toBe('{"order":[0,1,2,3,4],"i":-1} {"order":[0,1],"i":1,"endsAt":9,"doneAt":8,"skip":true} undefined false');
+  });
+
+  it("nomination + pickTurn 이면 모든 viewer 의 day.turn 이 같고 points 는 그대로다; 다른 단계에는 turn 키 자체가 없다", () => {
+    const s = roomOf(false);
+    const r = castTurnPoint(stepNomination(s, T + 3000).state, s.players[0]!.id, 2, T + 4000);
+    if (!r.ok) throw new Error("rejected");
+    const views = r.state.players.map((p) => buildView(r.state, p.id, T).day);
+    const turns = new Set(views.map((d) => JSON.stringify(d?.turn)));
+    const points = new Set(views.map((d) => JSON.stringify(d?.points)));
+    expect([...turns].join("|")).toBe(JSON.stringify({ order: [0, 1, 2, 3, 4], i: 0, endsAt: T + 11_000, doneAt: T + 4000 }));
+    expect([...points].join("|")).toBe(JSON.stringify([{ seat: 0, target: 2 }]));
+    const other = (phase: PhaseId): string =>
+      r.state.players.map((p) => String("turn" in (buildView({ ...r.state, phase }, p.id, T).day ?? {}))).join(",");
+    expect(["discussion", "defense", "verdict", "execution"].map(other).join(" ")).toBe(
+      "false,false,false,false,false,false false,false,false,false,false,false false,false,false,false,false,false false,false,false,false,false,false",
+    );
+  });
+
+  it("pickTurn 이 없는 nomination(옛 규칙)에는 day.turn 키가 없다", () => {
+    const s = roomOf(false);
+    delete s.pickTurn;
+    expect(s.players.map((p) => String("turn" in (buildView(s, p.id, T).day ?? {}))).join(",")).toBe("false,false,false,false,false,false");
+  });
+
+  it("L14: 역할 배정만 다른 두 판에 같은 행동 열을 적용해도 모든 viewer(산 사람·유령)의 day.turn 열이 같다", () => {
+    const a = viewsAlong(roomOf(false));
+    const b = viewsAlong(roomOf(true));
+    expect(JSON.stringify(a)).toBe(JSON.stringify(b));
+    // 한 판 안에서도 viewer 끼리 같다
+    const distinctPerFrame = a.map((frame) => new Set(frame).size);
+    expect(distinctPerFrame.join(",")).toBe(a.map(() => 1).join(","));
+    // 진입 첫 순간이 아니라 실제로 차례가 돈 열이다(마지막 프레임은 끝 알림)
+    expect(a.at(-1)![0]).toBe(JSON.stringify({ order: [0, 1, 2, 3, 4], i: 5 }));
   });
 });

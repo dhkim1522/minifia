@@ -22,6 +22,7 @@ import {
   PICK_TURN_MS,
   nominationMaxMs,
 } from "../../shared/game/phases";
+import { enterDiscussion, phaseDurationOf } from "../../shared/game/discussion";
 import type { RoomState } from "../../shared/game/room";
 import { tick } from "../../shared/game/tick";
 import { startedAt } from "../helpers/voteState";
@@ -398,5 +399,116 @@ describe("순차 지목 엔진 (결정 0063-1·0063-4)", () => {
   it("resolveNomination 결과에는 pickTurn 키가 없다", () => {
     const s = enteredAt();
     expect("pickTurn" in resolveNomination(s).state).toBe(false);
+  });
+});
+
+// ---- 차례 거절 규칙 (09.1-01 Task 2, UI-SPEC L15 순수 몫) ----
+describe("castTurnPoint 거절 규칙 (L15 순수 몫)", () => {
+  const T = 200_000;
+  /** 4명 판, seat 0 의 차례가 T+3000 에 시작된 상태(마감 T+11000). */
+  const seat0Turn = (): RoomState => {
+    const s = enterNomination(startedAt(4, 1, "nomination"));
+    const r = stepNomination({ ...s, phaseEndsAt: T + 3000 }, T + 3000);
+    return { ...r.state, phaseEndsAt: T + 11_000 };
+  };
+  const verdictOf = (s: RoomState, actor: string, target: number, now: number): string => {
+    const before = JSON.stringify(s);
+    const r = castTurnPoint(s, actor, target, now);
+    const unchanged = JSON.stringify(s) === before;
+    return `${err(r)}${unchanged ? "" : " MUTATED"}`;
+  };
+
+  it("차례 주인이 산 남을 가리키면 받아들인다", () => {
+    const s = seat0Turn();
+    expect(verdictOf(s, idOf(s, 0), 3, T + 4000)).toBe("ok");
+  });
+
+  it("단계 검사가 먼저다: nomination 이 아니면 누구든 WRONG_PHASE", () => {
+    const s: RoomState = { ...seat0Turn(), phase: "discussion" };
+    expect(verdictOf(s, idOf(s, 0), 1, T + 4000)).toBe("WRONG_PHASE");
+  });
+
+  it("행위자 검사: 모르는 id · 탈락한 사람은 BAD_MESSAGE (유령은 남의 차례에 보내도 BAD_MESSAGE)", () => {
+    const s = withDead(seat0Turn(), [3]);
+    expect([verdictOf(s, "nobody", 1, T + 4000), verdictOf(s, idOf(s, 3), 1, T + 4000)].join(" ")).toBe("BAD_MESSAGE BAD_MESSAGE");
+  });
+
+  it("차례 검사: 차례 아닌 산 사람 · pickTurn 없음 · 모이는 중 · 끝 알림 · 이미 확정 · 마감 시각 이후는 WRONG_PHASE", () => {
+    const s = seat0Turn();
+    const turn = s.pickTurn!;
+    const noTurn: RoomState = { ...s };
+    delete noTurn.pickTurn;
+    const cases: Array<[string, RoomState, string, number]> = [
+      ["남의 차례", s, idOf(s, 1), T + 4000],
+      ["pickTurn 없음", noTurn, idOf(s, 0), T + 4000],
+      ["모이는 중", { ...s, pickTurn: { order: turn.order, i: -1 } }, idOf(s, 0), T + 1000],
+      ["끝 알림", { ...s, pickTurn: { order: turn.order, i: turn.order.length } }, idOf(s, 0), T + 4000],
+      ["이미 확정", { ...s, pickTurn: { ...turn, doneAt: T + 4000 } }, idOf(s, 0), T + 4500],
+      ["마감 정각", s, idOf(s, 0), T + 11_000],
+      ["마감 뒤", s, idOf(s, 0), T + 12_000],
+    ];
+    expect(cases.map(([name, st, who, now]) => `${name}:${verdictOf(st, who, 1, now)}`).join(" ")).toBe(
+      "남의 차례:WRONG_PHASE pickTurn 없음:WRONG_PHASE 모이는 중:WRONG_PHASE 끝 알림:WRONG_PHASE 이미 확정:WRONG_PHASE 마감 정각:WRONG_PHASE 마감 뒤:WRONG_PHASE",
+    );
+  });
+
+  it("확정한 차례 주인이 다시 보내면 WRONG_PHASE (바꾸기 없음)", () => {
+    const s = seat0Turn();
+    const first = castTurnPoint(s, idOf(s, 0), 1, T + 4000);
+    if (!first.ok) throw new Error("rejected");
+    expect(verdictOf(first.state, idOf(s, 0), 2, T + 4100)).toBe("WRONG_PHASE");
+  });
+
+  it("대상 검사: 정수 아님 · 없는 좌석 · 탈락한 사람 · 자기 자신은 BAD_MESSAGE", () => {
+    const s = withDead(seat0Turn(), [2]);
+    const who = idOf(s, 0);
+    expect([1.5, Number.NaN, 99, 2, 0].map((t) => verdictOf(s, who, t, T + 4000)).join(" ")).toBe(
+      "BAD_MESSAGE BAD_MESSAGE BAD_MESSAGE BAD_MESSAGE BAD_MESSAGE",
+    );
+  });
+
+  it("검사 순서: 차례 아닌 산 사람은 대상이 틀려도 WRONG_PHASE (차례 검사가 대상 검사보다 먼저)", () => {
+    const s = seat0Turn();
+    expect(verdictOf(s, idOf(s, 1), 99, T + 4000)).toBe("WRONG_PHASE");
+  });
+});
+
+describe("끊긴 차례 (M-3)", () => {
+  const T = 300_000;
+  const offline = (s: RoomState, seat: number): RoomState => ({
+    ...s,
+    players: s.players.map((p) => (p.seat === seat ? { ...p, connected: false, connId: null } : p)),
+  });
+  const seat0Turn = (): RoomState => {
+    const s = offline(enterNomination(startedAt(4, 1, "nomination")), 0);
+    const r = stepNomination({ ...s, phaseEndsAt: T + 3000 }, T + 3000);
+    return { ...r.state, phaseEndsAt: T + 11_000 };
+  };
+
+  it("차례 주인의 connected 가 false 여도 마감 전 지목은 받아들인다", () => {
+    const s = seat0Turn();
+    expect(err(castTurnPoint(s, idOf(s, 0), 1, T + 10_999))).toBe("ok");
+  });
+
+  it("끊긴 채로 두면 8초를 다 기다린 뒤 기권으로 확정된다(doneAt = endsAt, skip)", () => {
+    const s = seat0Turn();
+    const r = stepNomination(s, s.phaseEndsAt!);
+    expect(JSON.stringify(r.state.pickTurn)).toBe(
+      JSON.stringify({ order: [0, 1, 2, 3], i: 0, endsAt: T + 11_000, doneAt: T + 11_000, skip: true }),
+    );
+  });
+});
+
+describe("단계 길이와 지움 (09.1-01)", () => {
+  it("phaseDurationOf: nomination + pickTurn 이면 세부 단계 길이, pickTurn 이 없으면 지금 값(단계 표)", () => {
+    const entered = enterNomination(startedAt(4, 1, "nomination"));
+    const none: RoomState = { ...entered };
+    delete none.pickTurn;
+    expect(`${String(phaseDurationOf(entered))} ${String(phaseDurationOf(none))}`).toBe(`3000 ${PHASE_DEFS.nomination.durationMs}`);
+  });
+
+  it("enterDiscussion 결과에는 pickTurn 키가 없다", () => {
+    const entered = enterNomination(startedAt(4, 1, "nomination"));
+    expect("pickTurn" in enterDiscussion(entered)).toBe(false);
   });
 });
