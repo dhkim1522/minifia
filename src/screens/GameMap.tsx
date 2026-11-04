@@ -116,8 +116,6 @@ interface GameMapProps {
   testButton?: ReactNode;
   /** 지금 띄울 결과 알림 글자·아이콘(useDayFx 가 서버 view 의 차이로 만든다). 없으면 null */
   announce?: DayFx["announce"];
-  /** useDayFx 가 만든 지목 위 알림(가장 최근 것). id 가 바뀔 때만 띄운다 — 처음 마운트 때의 값은 지난 알림이라 띄우지 않는다 */
-  toast?: DayFx["toast"];
   /** 처형 떠오름 연출 중인 좌석 → 시작 시각(useDayFx). 처형된 사람이 연출이 끝날 때까지 표에 남는다 */
   fading?: DayFx["fading"];
   /** 내가 유령이 된 순간마다 늘어나는 번호(useDayFx). 번호가 바뀔 때만 안내 한 줄과 직업 칩 등장을 다시 보인다 — 처음 마운트 때의 값은 지난 일이다 */
@@ -155,7 +153,7 @@ function MapHeader({ view, offset, hintOn, extra }: { view: RoomView; offset: nu
 // 8페이즈 게임 맵 화면 틀(08-13, UI-SPEC "게임 화면 틀"): 지하 재즈 바 맵(WorldStage) 위에 위쪽 가림막, 헤더(단계 이름 + 접히는 안내 + 시간 링 + [역할 카드]), [테스트], 결과 알림, 아래 패널을 얹는다.
 // 낮 시작·낮 토론·지목·최후 변론·찬반·처형이 이 화면 하나를 같은 장면 키로 그려 단계가 바뀌어도 맵이 다시 만들어지지 않는다.
 // 화면은 서버가 보낸 view 만으로 다시 그린다. 닉네임(이름표)·알림 글자는 React 텍스트 노드로만 그린다.
-export function GameMap({ view, store, chat, send, canSend = true, offset = 0, roleCard, testButton, announce = null, toast: toastShow = null, deny, fading, ghostEnter = 0, killFx = null, policeResult = null, onEvent, onLeave }: GameMapProps) {
+export function GameMap({ view, store, chat, send, canSend = true, offset = 0, roleCard, testButton, announce = null, deny, fading, ghostEnter = 0, killFx = null, policeResult = null, onEvent, onLeave }: GameMapProps) {
   const toast = useTopToast();
   const { show } = toast;
   // 측정(스테이지 사각형)·키보드·기록 칸 높이는 대기실과 같은 훅이다. 키보드가 열려 있으면 행동 줄을 숨기고 기록 칸을 72 로 줄인다(07-19).
@@ -234,13 +232,7 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
     });
   }, [onEvent, show]);
 
-  // 지목 위 알림(useDayFx 의 ToastQueue 가 순서·합치기·길이를 정한다): id 가 바뀔 때만 띄운다. 처음 마운트 때의 알림은 지난 것이라 띄우지 않는다.
-  const seenToast = useRef(toastShow?.id);
-  useEffect(() => {
-    if (toastShow === null || toastShow.id === seenToast.current) return;
-    seenToast.current = toastShow.id;
-    show(toastShow.text, toastShow.icon, toastShow.durationMs);
-  }, [toastShow, show]);
+  // 09.1: 지목마다 띄우던 위 알림은 없다(차례 위 한 줄이 대신, UI-SPEC A-7). TopToast 는 거절 알림(REJECT_TEXT)에만 쓴다.
 
   // 이동 권한: 산 사람은 낮 시작·토론에서만, 유령은 언제나(MAP-04). 권위는 서버 canMove 이고 화면은 같은 표로 맵 탭만 막는다.
   const me = view.players.find((p) => p.seat === view.me.seat);

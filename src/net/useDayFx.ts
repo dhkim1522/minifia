@@ -1,7 +1,7 @@
 // 서버 view 두 개의 공개 정보 차이(dayEvents)를 화면 연출로 적용하는 훅 (08-13, DAY-04·05·06).
 // - 채팅 시스템 줄: chat.addSystem(text, { scope: "all", kind }) — 지연(at)이 있는 줄은 타이머로 나중에 더한다.
 // - 결과 알림: 한 번에 하나, 새 알림이 이전 것을 바꾼다. 지연(at) 뒤에 뜨고 ms 뒤에 사라진다. 상태 `announce` 로 돌려준다.
-// - 지목 위 알림(08-15): dayEvents 의 toasts 를 ToastQueue(400ms 합치기·대기 4건 상한·대기 2건 이상이면 0.8초)에 세우고, 알림이 끝날 때마다 다음을 꺼낸다. 상태 `toast` 로 돌려준다.
+// - 09.1: 지목 위 알림 대기열은 없다(차례 위 한 줄이 대신, UI-SPEC A-7). 거절 알림(TopToast)은 GameMap 이 따로 띄운다.
 // - 손사래(08-15): 지목 선두가 새 사람으로 바뀌면(leaderShift) `deny` {seat, nonce} 를 갱신한다. WorldStage 가 nonce 가 바뀔 때만 한 번 손사래를 한다.
 // - 처형 떠오름(08-16): dayEvents 의 fx ghostRise 를 `fading`(좌석 → 연출 시작 시각)으로 돌려준다. 처형 단계 view 는 처형된 사람이 이미 탈락으로 오므로 화면이 그 순간부터
 //   연출이 끝날 때(알림 시작 + GHOST_FADE_END_MS)까지 그 좌석을 표에 붙잡아 둔다. 시작 시각은 단계 진입 + at(알림이 처형으로 바뀌는 때)이라 그 전에는 불투명 그대로 서 있다.
@@ -19,15 +19,10 @@ import { useEffect, useRef, useState } from "react";
 import { isAlive } from "../../shared/game/alive";
 import type { RoomView } from "../../shared/protocol";
 import { CHAT_TEXT } from "../game/chatText";
-import { dayEvents, GHOST_FADE_END_MS, POLICE_CARD_AT, policeResultOf, TOAST_MERGE_MS, ToastQueue } from "../game/dayView";
-import type { AnnounceIcon, ToastShow } from "../game/dayView";
+import { dayEvents, GHOST_FADE_END_MS, POLICE_CARD_AT, policeResultOf } from "../game/dayView";
+import type { AnnounceIcon } from "../game/dayView";
 import { leaderShift } from "../world/presence";
 import type { ChatStore } from "./chatStore";
-
-/** 위 알림 한 건. id 는 새 알림마다 늘어나 화면이 "새 알림이 왔다" 를 알아본다 */
-export interface PointToastShow extends ToastShow {
-  id: number;
-}
 
 /** 지금 띄우는 결과 알림 한 건: 글자와 앞 아이콘(없을 수 있다) */
 export interface AnnounceShow {
@@ -38,8 +33,6 @@ export interface AnnounceShow {
 export interface DayFx {
   /** 지금 띄울 결과 알림. 없으면 null */
   announce: AnnounceShow | null;
-  /** 지목 위 알림(가장 최근 것). 없으면 null. 화면은 id 가 바뀔 때만 TopToast 에 띄운다 */
-  toast: PointToastShow | null;
   /** 지목 선두가 새 사람으로 바뀌었을 때 손사래를 할 좌석. nonce 가 바뀔 때마다 한 번 */
   deny: { seat: number; nonce: number } | undefined;
   /** 처형 떠오름 연출 중인 좌석 → 연출 시작 시각(ms, Date.now 기준). 연출이 끝나면 비워진다. sceneLook 의 fading 으로 그대로 넘긴다 */
@@ -68,7 +61,6 @@ const NO_FADING: ReadonlyMap<number, number> = new Map();
 
 export function useDayFx({ view, epoch, chat }: { view: RoomView | null; epoch: number; chat: ChatStore }): DayFx {
   const [announce, setAnnounce] = useState<AnnounceShow | null>(null);
-  const [toast, setToast] = useState<PointToastShow | null>(null);
   const [deny, setDeny] = useState<{ seat: number; nonce: number } | undefined>(undefined);
   const [fading, setFading] = useState<ReadonlyMap<number, number>>(NO_FADING);
   const [ghostEnter, setGhostEnter] = useState(0);
@@ -92,7 +84,6 @@ export function useDayFx({ view, epoch, chat }: { view: RoomView | null; epoch: 
       setFading(next);
     }
   }
-  const queue = useRef(new ToastQueue());
   const counter = useRef(0);
   const prevView = useRef<RoomView | null>(null);
   const prevEpoch = useRef(epoch);
@@ -128,9 +119,7 @@ export function useDayFx({ view, epoch, chat }: { view: RoomView | null; epoch: 
       prevEpoch.current = epoch;
       clearAll();
       prevView.current = null;
-      queue.current = new ToastQueue();
       setAnnounce(null);
-      setToast(null);
       setPoliceResult(null);
     }
     if (view === null) {
@@ -142,19 +131,6 @@ export function useDayFx({ view, epoch, chat }: { view: RoomView | null; epoch: 
     if (prev === view) return; // 같은 view 로 다시 실행됨(개발 모드 이중 실행)
     const ev = dayEvents(prev, view, reset ? { reset: true } : {});
 
-    // 위 알림: 줄 끝에 세우고, 합치기 창이 닫힌 뒤(+1ms) 꺼낸다. 알림이 나오면 그 길이가 끝난 뒤(+1ms) 다시 꺼내 본다(대기가 있으면 이어받는다)
-    const pump = (): void => {
-      const show = queue.current.next(Date.now());
-      if (show === null) return;
-      counter.current += 1;
-      setToast({ ...show, id: counter.current });
-      later(show.durationMs + 1, pump);
-    };
-    if (ev.toasts.length > 0) {
-      const now = Date.now();
-      for (const t of ev.toasts) queue.current.push(t, now);
-      later(TOAST_MERGE_MS + 1, pump);
-    }
     // 손사래: 선두가 새 사람으로 바뀔 때마다 한 번(첫 스냅샷·재접속은 leaderShift 가 null)
     const shifted = reset ? null : leaderShift(prev, view);
     if (shifted !== null) setDeny((d) => ({ seat: shifted, nonce: (d?.nonce ?? 0) + 1 }));
@@ -215,5 +191,5 @@ export function useDayFx({ view, epoch, chat }: { view: RoomView | null; epoch: 
     // eslint 규칙 없음 — later/clearAll 은 ref 와 setState 만 쓰므로 의존성에 넣지 않는다
   }, [view, epoch, chat]);
 
-  return { announce, toast, deny, fading, ghostEnter, killFx, policeResult };
+  return { announce, deny, fading, ghostEnter, killFx, policeResult };
 }

@@ -1,6 +1,7 @@
 // 낮 처형 화면 연출 순수 모듈 — DAY-04·05·06, 결정 0049·0053·0060, 08-UI-SPEC.
 // 순수: 시각·난수·DOM 을 읽지 않는다. 입력은 서버가 모두에게 보내는 공개 정보(day.points·players·phase·day.verdict·
 // day.noExecution·day.voteLog)뿐이고, 연출 이벤트(채팅 줄·위 알림·결과 알림)는 서버 view 두 개의 차이에서만 만든다.
+// 09.1(결정 0063-1): 지목은 순차라 위 알림 대기열·선두·과반 줄은 없다 — 득표는 배지 숫자, 진행은 차례 알약·위 한 줄(pickTurn.ts)이 말한다.
 // 서버 응답 전에 남의 표·배지·선두를 미리 만들지 않는다. me.verdictVote·me.endDiscussion·spectate 는 읽지 않는다(T-08-22).
 // 문구에 역할 단어를 쓰지 않는다 — 처형 알림·줄 어디에도 역할이 없다(결정 0053-2).
 // 형식은 src/net/roomDiff.ts 선례: 이전 view 가 없으면(첫 스냅샷·재접속) 이벤트 없이 정상 상태만 준다.
@@ -10,14 +11,15 @@ import { EXECUTION_MS } from "../../shared/game/phases";
 import type { ChatChannel, PhaseId, RoomView } from "../../shared/protocol";
 import type { V2IconName } from "../components/v2/V2Icon";
 import { MORNING_TEXT, morningText } from "./eliminationText";
+import { isMyTurn, turnStageOf } from "./pickTurn";
 
 /** 문구 표. UI-SPEC "Copywriting Contract" 원문 — 해요체, 마침표·느낌표 없음. 역할 단어는 토론 안내의 '마피아'(모두에게 같은 문장) 하나뿐이다. */
 export const DAY_COPY = {
   // ---- 채팅 시스템 줄 ----
-  /** 지목 한 줄 '민준 → 도윤', 바꾸면 '(바꿈)' */
-  pointLine: (from: string, to: string, changed: boolean): string => `${from} → ${to}${changed ? " (바꿈)" : ""}`,
-  leadLine: (name: string): string => `${name} 님이 앞서요`,
-  majorityLine: (name: string): string => `${name} 님 과반`,
+  /** 지목 한 줄 '민준 → 도윤' (순차 지목은 바꾸기가 없다) */
+  pointLine: (from: string, to: string): string => `${from} → ${to}`,
+  /** 시간 안에 못 골라 기권으로 확정된 차례 '민준 · 기권' */
+  abstainLine: (name: string): string => `${name} · 기권`,
   dayLine: (n: number): string => `${n}일차`,
   nominationStart: "지목 시작",
   defenseLine: (name: string, votes: number): string => `${name} 님 ${votes}표 · 최후 변론`,
@@ -43,6 +45,8 @@ export const DAY_COPY = {
   // ---- 단계 안내 한 줄 ----
   discussionHint: "이야기하며 마피아를 찾아요",
   nominationHint: "의심되는 사람을 눌러요",
+  /** 지목 시작 때 모이는 동안의 헤더 안내 */
+  nominationGatherHint: "모이는 중",
   defenseHint: (name: string): string => `${name} 님의 변론`,
   defenseHintSelf: "해명할 시간이에요",
   verdictHint: (name: string): string => `${name} 님을 처형할까요?`,
@@ -98,16 +102,6 @@ export interface DayLine {
   icon?: V2IconName;
 }
 
-/** 위 알림 재료 한 건: from 이 to 를 가리켰다. 이름은 만든 순간의 닉네임이다. */
-export interface PointToast {
-  to: number;
-  from: number[];
-  toName: string;
-  fromNames: string[];
-  /** 대상을 바꾼 지목(단독 알림에만 '(바꿈)' 이 붙는다) */
-  changed?: boolean;
-}
-
 /** 결과 알림(36px) 한 건 — 한 번에 하나, 새 알림이 이전 것을 바꾼다. at·ms 는 단계 진입 기준 ms. */
 export interface DayAnnounce {
   text: string;
@@ -155,7 +149,6 @@ export interface DayEvents {
   lines: DayLine[];
   /** 경찰 화면에서만 생긴다(L8). 없으면 키 자체가 없다 */
   localCards?: LocalCard[];
-  toasts: PointToast[];
   announces: DayAnnounce[];
   fx: DayFx[];
   /** cur 에서 곧바로 그릴 정상 상태(득표·선두·과반·변론자·처형된 사람). 이벤트가 없어도 항상 있다 */
@@ -337,39 +330,29 @@ function phaseEntry(prev: RoomView, cur: RoomView, day: NonNullable<RoomView["da
  */
 export function dayEvents(prev: RoomView | null, cur: RoomView, opts: { reset?: boolean } = {}): DayEvents {
   const state = stateOf(cur);
-  const events: DayEvents = { lines: [], toasts: [], announces: [], fx: [], state };
+  const events: DayEvents = { lines: [], announces: [], fx: [], state };
   if (!prev || opts.reset || !cur.day) return events;
 
   // ---- 단계 진입: 줄·결과 알림·연출 ----
   if (prev.phase !== cur.phase) phaseEntry(prev, cur, cur.day, events);
 
-  // ---- 지목 차이: 새 지목·바꿈은 vote 줄과 위 알림 재료, 선두·과반이 새로 생기면 hot 줄 ----
+  // ---- 지목 차이: 새로 생긴 지목 줄마다 vote 줄, 지금 차례가 새로 기권이 되면 '{이름} · 기권' (선두·과반 줄은 없다, M-4) ----
   const before = new Map(pointsOf(prev).map((l) => [l.seat, l.target]));
   const after = [...pointsOf(cur)].sort((a, b) => a.seat - b.seat);
   for (const line of after) {
-    const old = before.get(line.seat);
-    if (old === line.target) continue;
+    if (before.get(line.seat) === line.target) continue;
     const from = nameOf(cur, line.seat);
     const to = nameOf(cur, line.target);
     if (from === undefined || to === undefined) continue;
-    const changed = old !== undefined;
-    events.lines.push({ kind: "vote", text: DAY_COPY.pointLine(from, to, changed) });
-    events.toasts.push({
-      to: line.target,
-      from: [line.seat],
-      toName: to,
-      fromNames: [from],
-      ...(changed ? { changed: true } : {}),
-    });
+    events.lines.push({ kind: "vote", text: DAY_COPY.pointLine(from, to) });
   }
-  const was = pointsTally(prev);
-  if (state.leader !== undefined && state.leader !== was.leader) {
-    const name = nameOf(cur, state.leader);
-    if (name !== undefined) events.lines.push({ kind: "hot", text: DAY_COPY.leadLine(name) });
-  }
-  if (state.sure !== undefined && state.sure !== was.sure) {
-    const name = nameOf(cur, state.sure);
-    if (name !== undefined) events.lines.push({ kind: "hot", text: DAY_COPY.majorityLine(name) });
+  const turn = cur.phase === "nomination" ? cur.day.turn : undefined;
+  if (turn !== undefined && turn.skip === true && turn.i >= 0 && turn.i < turn.order.length) {
+    const was = prev.phase === "nomination" ? prev.day?.turn : undefined;
+    if (was === undefined || was.i !== turn.i || was.skip !== true) {
+      const name = nameOf(cur, turn.order[turn.i]!);
+      if (name !== undefined) events.lines.push({ kind: "vote", text: DAY_COPY.abstainLine(name) });
+    }
   }
 
   // ---- 밤 마피아 확정: 서버가 산 마피아에게만 보낸 me.nightSure 가 새로 서거나 바뀌면 마피아 채널에 한 줄(깨질 때는 줄 없음). 마피아가 아닌 view 는 읽지 않는다 ----
@@ -382,6 +365,7 @@ export function dayEvents(prev: RoomView | null, cur: RoomView, opts: { reset?: 
 
 /**
  * 단계 머리(제목 24px + 안내 한 줄): UI-SPEC 단계표 그대로. 안내는 단계 시작 뒤 약 2.5초만 보이고 접히는 것은 화면 몫이다.
+ * 지목(09.1)은 순차라 모이는 중 '모이는 중', 내 차례 '의심되는 사람을 눌러요', 남의 차례·끝 알림은 제목만.
  * 유령(내 alive 가 false)은 같은 제목에 '모두의 직업이 보여요'(밤은 '모두의 직업과 밤 행동이 보여요').
  * 밤은 산 사람마다 역할별 한 줄(마피아 '대상에게 다가가요', 경찰 '조사할 사람을 골라요', 의사 '지킬 사람을 골라요', 시민 '날이 밝길 기다려요'). 아침은 제목만. 낮 틀이 아닌 단계는 빈 제목.
  */
@@ -398,8 +382,12 @@ export function headerFor(view: RoomView): { title: string; hint?: string } {
   switch (view.phase) {
     case "discussion":
       return { title, hint: DAY_COPY.discussionHint };
-    case "nomination":
-      return { title, hint: DAY_COPY.nominationHint };
+    case "nomination": {
+      // 09.1: 모이는 중 → '모이는 중', 내 차례 → '의심되는 사람을 눌러요', 남의 차례·끝 알림·day.turn 없음 → 제목만
+      const stage = turnStageOf(view);
+      if (stage === "gather") return { title, hint: DAY_COPY.nominationGatherHint };
+      return isMyTurn(view) ? { title, hint: DAY_COPY.nominationHint } : { title };
+    }
     case "defense":
       if (isSelf) return { title, hint: DAY_COPY.defenseHintSelf };
       return defender === undefined ? { title } : { title, hint: DAY_COPY.defenseHint(defender) };
@@ -419,75 +407,5 @@ export function headerFor(view: RoomView): { title: string; hint?: string } {
       }
     default:
       return { title };
-  }
-}
-
-// ---- 위 알림 줄 세우기 (UI Considerations E2 #9, 남은 위험 7: 시작값 — 9페이즈 팀 테스트에서 확인) ----
-/** 같은 대상을 가리킨 표를 한 알림으로 합치는 창. 알림은 이 창이 닫힌 뒤에 나온다. */
-export const TOAST_MERGE_MS = 400;
-export const TOAST_MS = 1500;
-/** 대기가 2건 이상일 때 건당 시간 */
-export const TOAST_FAST_MS = 800;
-/** 대기 상한. 넘친 알림은 토스트에서만 건너뛴다(채팅 기록에는 모두 남는다) */
-export const TOAST_QUEUE_MAX = 4;
-/** 합친 알림에 쓰는 이름 수. 넘으면 '…' */
-export const TOAST_NAMES_MAX = 3;
-
-export interface ToastShow {
-  text: string;
-  icon: "point";
-  durationMs: number;
-}
-
-interface Pending {
-  toast: PointToast;
-  /** 이 알림이 만들어진 시각(합치기 창의 시작) */
-  since: number;
-}
-
-/**
- * 위 알림 대기열. 시계는 메서드 인자 now 로만 받는다(가짜 시계 없이 결정적).
- * - push: 창 안(< 400ms)의 같은 대상 알림이 대기 중이면 이름을 합치고, 아니면 줄 끝에 선다. 대기가 가득이면 건너뛴다.
- * - next: 보이는 알림이 끝났고 맨 앞 알림의 창이 닫혔으면 하나를 꺼낸다. 대기(꺼내는 것 포함)가 2건 이상이면 0.8초, 1건이면 1.5초.
- */
-export class ToastQueue {
-  private queue: Pending[] = [];
-  private busyUntil = 0;
-  private lost = 0;
-
-  push(t: PointToast, now: number): void {
-    const open = this.queue.find((p) => p.toast.to === t.to && now - p.since < TOAST_MERGE_MS);
-    if (open) {
-      for (let i = 0; i < t.from.length; i += 1) {
-        if (open.toast.from.includes(t.from[i]!)) continue;
-        open.toast.from.push(t.from[i]!);
-        open.toast.fromNames.push(t.fromNames[i]!);
-      }
-      return;
-    }
-    if (this.queue.length >= TOAST_QUEUE_MAX) {
-      this.lost += 1;
-      return;
-    }
-    // 호출한 쪽의 객체를 합치기로 바꾸지 않도록 복사해 둔다.
-    this.queue.push({ toast: { ...t, from: [...t.from], fromNames: [...t.fromNames] }, since: now });
-  }
-
-  next(now: number): ToastShow | null {
-    if (now < this.busyUntil) return null;
-    const head = this.queue[0];
-    if (!head || now - head.since < TOAST_MERGE_MS) return null;
-    const durationMs = this.queue.length >= 2 ? TOAST_FAST_MS : TOAST_MS;
-    this.queue.shift();
-    this.busyUntil = now + durationMs;
-    const names = head.toast.fromNames;
-    const shown = names.slice(0, TOAST_NAMES_MAX).join("·") + (names.length > TOAST_NAMES_MAX ? "…" : "");
-    const changed = head.toast.changed === true && names.length === 1;
-    return { text: DAY_COPY.pointLine(shown, head.toast.toName, changed), icon: "point", durationMs };
-  }
-
-  /** 대기가 가득 차서 토스트에서 건너뛴 알림 수(누적) */
-  dropped(): number {
-    return this.lost;
   }
 }

@@ -236,6 +236,8 @@ function renderCell(phase: CheckedPhase, vp: CheckViewpoint) {
   const withCandidate = phase === "defense" || phase === "verdict" || phase === "execution";
   const view = makeView({ phase, viewpoint, endsIn, day: 1, ...(withCandidate ? { candidate: 2 } : {}), ...(phase === "morning" ? { morning: {} } : {}) });
   if (vp === "none") delete view.me.role;
+  // 09.1: 지목은 서버가 항상 day.turn 을 보낸다 — 모이는 중이면 헤더 안내 '모이는 중' 이 있다
+  if (phase === "nomination") view.day!.turn = { order: [0, 1, 2, 3], i: -1 };
   return renderRoom(view);
 }
 

@@ -424,8 +424,8 @@ describe("GameMap — 헤더·[역할 카드] (UI-SPEC A2)", () => {
     expect(hint().classList.contains("is-folded")).toBe(false);
     advance(1);
     expect(hint().classList.contains("is-folded")).toBe(true);
-    m.show(makeView({ phase: "nomination" }));
-    expect(hint().textContent).toBe("의심되는 사람을 눌러요");
+    m.show(makeView({ phase: "defense", candidate: 1 }));
+    expect(hint().textContent).toBe("영희 님의 변론");
     expect(hint().classList.contains("is-folded")).toBe(false);
     advance(2500);
     expect(hint().classList.contains("is-folded")).toBe(true);
