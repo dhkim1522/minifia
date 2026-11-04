@@ -2253,8 +2253,8 @@ test("ballotFitChecks BF2: 묶음 윗변이 알림 아랫변 + 16 보다 위면 
 });
 
 test("ballotFitChecks BF3: 묶음 아랫변이 패널 윗변 − 8 을 넘으면 실패", () => {
-  assert.equal(idsOk(ballotFitChecks(ballotGood({ panelTop: 400 }))).BF3, false);
-  assert.equal(idsOk(ballotFitChecks(ballotGood({ panelTop: 360 + 32 + 8 }))).BF3, true);
+  assert.equal(idsOk(ballotFitChecks(ballotGood({ panelTop: 365 }))).BF3, false);
+  assert.equal(idsOk(ballotFitChecks(ballotGood({ panelTop: 371 }))).BF3, true);
 });
 
 test("ballotFitChecks BF4: 이름이 있는 알약 글자가 14 미만이면 실패, 2단계(compact)는 이름이 없어 건너뛴다", () => {

@@ -1632,3 +1632,106 @@ export function selectFlows(flows, only) {
   const keys = String(only).split(",").map((k) => k.trim()).filter((k) => k !== "");
   return flows.filter((f) => keys.some((k) => f.id.includes(k) || k.startsWith(f.id)));
 }
+
+// ---- 판결 순간 연출 (09.1.1-13, 결정 0066-3·7, UI-SPEC C) ----
+/** 찬반 기록 알약 높이(얼굴만 2단계는 얼굴 지름)와 허용 오차 */
+export const BALLOT_PILL_H = 32;
+/** 알림 아랫변과 묶음 윗변 사이 간격(--space-md) */
+export const BALLOT_GAP_ANNOUNCE = 16;
+/** 묶음 아랫변과 패널 윗변 사이 간격(--space-sm) */
+export const BALLOT_GAP_PANEL = 8;
+/** 이름이 있는 알약 글자 하한 */
+export const BALLOT_NAME_MIN = 14;
+
+/**
+ * 찬반 기록 묶음 배치 판정(BF1~BF6). root = .mv-ballots 사각형, groups = [{ side, rect }], pills = [{ side, rect, nameFont }](nameFont 는 이름이 없는 2단계에서 null),
+ * panelTop = 아래 패널 윗변, announceBottom = 결과 알림 아랫변(알림이 없으면 null), viewport = { w, h }, compact = 얼굴만 2단계.
+ * BF1 묶음·알약이 화면 안 · BF2 묶음 윗변 ≥ 알림 아랫변 + 16 · BF3 묶음 아랫변 ≤ 패널 윗변 − 8 · BF4 이름 글자 ≥ 14 · BF5 찬성 묶음이 반대 묶음 위 · BF6 알약(얼굴) 높이 32±1.
+ * 0.5px 오차(OVERLAP_EPS)를 허용한다.
+ */
+export function ballotFitChecks({ root, groups, pills, panelTop, announceBottom, viewport, compact }) {
+  const labels = {
+    BF1: "찬반 묶음·알약이 화면 안",
+    BF2: "묶음 윗변이 결과 알림 아랫변 + 16 아래",
+    BF3: "묶음 아랫변이 패널 윗변 − 8 위",
+    BF4: `이름 글자 ${BALLOT_NAME_MIN}px 이상`,
+    BF5: "찬성 묶음이 반대 묶음보다 위",
+    BF6: `알약(2단계는 얼굴) 높이 ${BALLOT_PILL_H}±1`,
+  };
+  const rectOk = (r) => r && [r.left, r.top, r.width, r.height].every(isNum);
+  const groupsOk = Array.isArray(groups) && groups.length > 0 && groups.every((g) => rectOk(g?.rect));
+  const pillsOk = Array.isArray(pills) && pills.length > 0 && pills.every((p) => rectOk(p?.rect));
+  const vpOk = viewport && isNum(viewport.w) && isNum(viewport.h);
+  if (!groupsOk || !pillsOk || !rectOk(root) || !vpOk || !isNum(panelTop)) {
+    return Object.entries(labels).map(([id, label]) => noMeasure(id, label, "묶음·알약·패널"));
+  }
+  const screen = { left: 0, top: 0, right: viewport.w, bottom: viewport.h };
+  const out = [...groups, ...pills].filter((x) => !rectInside(x.rect, screen)).map((x) => `${x.side} ${fmt(x.rect.left)},${fmt(x.rect.top)} ${fmt(x.rect.width)}x${fmt(x.rect.height)}`);
+  const lines = [result("BF1", labels.BF1, out)];
+  const top = Math.min(...groups.map((g) => g.rect.top));
+  const lowest = Math.max(...groups.map((g) => bottom(g.rect)));
+  lines.push(result("BF2", labels.BF2, isNum(announceBottom) && top < announceBottom + BALLOT_GAP_ANNOUNCE - OVERLAP_EPS ? [`묶음 윗변 ${fmt(top)} < 알림 아랫변 ${fmt(announceBottom)} + ${BALLOT_GAP_ANNOUNCE}`] : []));
+  lines.push(result("BF3", labels.BF3, lowest > panelTop - BALLOT_GAP_PANEL + OVERLAP_EPS ? [`묶음 아랫변 ${fmt(lowest)} > 패널 윗변 ${fmt(panelTop)} − ${BALLOT_GAP_PANEL}`] : []));
+  const named = pills.filter((p) => !compact && p.nameFont !== null);
+  const smallText = named.filter((p) => !isNum(p.nameFont) || p.nameFont < BALLOT_NAME_MIN).map((p) => `${p.side} 글자 ${p.nameFont}`);
+  lines.push(result("BF4", labels.BF4, smallText));
+  const yes = groups.find((g) => g.side === "yes");
+  const no = groups.find((g) => g.side === "no");
+  lines.push(!yes || !no ? noMeasure("BF5", labels.BF5, "찬성·반대 묶음 둘") : result("BF5", labels.BF5, yes.rect.top < no.rect.top ? [] : [`찬성 윗변 ${fmt(yes.rect.top)} ≥ 반대 윗변 ${fmt(no.rect.top)}`]));
+  const wrong = pills.filter((p) => Math.abs(p.rect.height - BALLOT_PILL_H) > 1 + 1e-9 || (compact && Math.abs(p.rect.width - BALLOT_PILL_H) > 1 + 1e-9)).map((p) => `${p.side} ${fmt(p.rect.width)}x${fmt(p.rect.height)}`);
+  lines.push(result("BF6", labels.BF6, wrong));
+  return lines;
+}
+
+/** 판결 순간 시간표 허용 오차(ms): 관찰 시계는 처형 단계가 화면에 처음 보인 시각이라 서버 시각과 지연만큼 어긋난다 */
+export const VERDICT_TOL = { yes: [300, 900], gap: [200, 600], gone: [4200, 5000], pinOff: 400, zoomAt: 700, zoomBackAt: 5450 };
+
+/**
+ * 판결 순간 시간표 판정(VT1~VT6). log = 변할 때만 쌓은 기록 [{ t, phase, stage, yes, no, seat, strength, zoom, dim }](t 는 ms, 같은 시계),
+ * opts = { passed(처형 성립), candidate(변론자 좌석), expectZoom(스테이지 높이 360 이상) }.
+ * 0 = 기록에서 처음 phase "execution" 인 항목의 t.
+ * VT1 찬성 묶음 0.6초(0.3~0.9) · VT2 반대 묶음이 찬성 뒤 0.4초(0.2~0.6) 그리고 그 순간 찬성은 이미 있음 · VT3 묶음 사라짐 4.6초(±0.4)
+ * VT4 핀이 변론자에게 켜지고(세기 0.5 이상) 부결 4.0초·처형 5.0초(±0.4)에 꺼지기 시작 · VT5 0.7초 뒤 줌 1.10±0.01(작은 스테이지는 내내 1) · VT6 5.45초에 줌 1.
+ */
+export function verdictTimelineChecks(log, { passed, candidate, expectZoom }) {
+  const labels = {
+    VT1: "찬성 묶음이 처형 진입 0.6초(0.3~0.9)에 나타난다",
+    VT2: "반대 묶음이 찬성 묶음 뒤 0.4초(0.2~0.6)에 나타나고 그때 찬성은 이미 있다",
+    VT3: "묶음이 4.6초(±0.4)에 사라진다",
+    VT4: `핀 조명이 변론자에게 켜지고 ${passed ? "5.0" : "4.0"}초(±0.4)에 꺼지기 시작한다`,
+    VT5: expectZoom ? "0.7초 뒤 카메라 줌 1.10±0.01" : "스테이지 높이 360 미만이라 줌이 한 번도 켜지지 않는다",
+    VT6: "5.45초에 줌이 1 로 돌아와 있다",
+  };
+  const entries = Array.isArray(log) ? [...log].filter((e) => isNum(e?.t)).sort((a, b) => a.t - b.t) : [];
+  const first = entries.find((e) => e.phase === "execution");
+  if (!first) return Object.entries(labels).map(([id, label]) => noMeasure(id, label, "처형 단계 기록"));
+  const t0 = first.t;
+  const ex = entries.filter((e) => e.t >= t0 && e.phase === "execution").map((e) => ({ ...e, rel: e.t - t0 }));
+  const at = (rel) => [...ex].reverse().find((e) => e.rel <= rel) ?? ex[0];
+  const inRange = (v, [lo, hi]) => v >= lo && v <= hi;
+  const yesE = ex.find((e) => e.yes === true);
+  const noE = ex.find((e) => e.no === true);
+  const lines = [];
+  lines.push(result("VT1", labels.VT1, yesE && inRange(yesE.rel, VERDICT_TOL.yes) ? [] : [yesE ? `${Math.round(yesE.rel)}ms` : "찬성 묶음을 못 봄"]));
+  const gap = yesE && noE ? noE.rel - yesE.rel : null;
+  lines.push(result("VT2", labels.VT2, gap !== null && inRange(gap, VERDICT_TOL.gap) && noE.yes === true && yesE.no === false ? [] : [gap === null ? "묶음을 못 봄" : `간격 ${Math.round(gap)}ms · 반대가 나올 때 찬성 ${noE.yes} · 찬성이 나올 때 반대 ${yesE.no}`]));
+  const goneE = noE ? ex.find((e) => e.rel > noE.rel && e.stage === null) : null;
+  lines.push(result("VT3", labels.VT3, goneE && inRange(goneE.rel, VERDICT_TOL.gone) ? [] : [goneE ? `${Math.round(goneE.rel)}ms` : "사라지지 않음"]));
+  const lit = ex.find((e) => e.seat !== null && e.strength >= 0.5);
+  const wrongSeat = ex.filter((e) => e.seat !== null && e.seat !== candidate).map((e) => e.seat);
+  const offE = lit ? ex.find((e) => e.rel > lit.rel && e.seat === null) : null;
+  const offAt = passed ? 5000 : 4000;
+  const pinBad = [];
+  if (!lit) pinBad.push("핀이 켜지지 않음");
+  else if (lit.seat !== candidate) pinBad.push(`좌석 ${lit.seat} (기대 ${candidate})`);
+  if (wrongSeat.length > 0) pinBad.push(`다른 좌석 ${[...new Set(wrongSeat)].join(",")}`);
+  if (lit && (!offE || Math.abs(offE.rel - offAt) > VERDICT_TOL.pinOff)) pinBad.push(`꺼짐 ${offE ? Math.round(offE.rel) : "없음"}ms (기대 ${offAt}±${VERDICT_TOL.pinOff})`);
+  lines.push(result("VT4", labels.VT4, pinBad));
+  const z = at(VERDICT_TOL.zoomAt)?.zoom;
+  lines.push(
+    result("VT5", labels.VT5, expectZoom ? (isNum(z) && Math.abs(z - 1.1) <= 0.01 ? [] : [`0.7초 줌 ${z}`]) : ex.some((e) => e.zoom > 1.0005) ? [`줌 ${Math.max(...ex.map((e) => e.zoom))}`] : []),
+  );
+  const zb = at(VERDICT_TOL.zoomBackAt)?.zoom;
+  lines.push(result("VT6", labels.VT6, isNum(zb) && zb <= 1.005 ? [] : [`5.45초 줌 ${zb}`]));
+  return lines;
+}
