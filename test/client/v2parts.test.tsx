@@ -412,6 +412,45 @@ describe("PhaseHeader (결정 0051-5)", () => {
   });
 });
 
+describe("PhaseHeader 시간 링 색 (feedback-4, timerTone)", () => {
+  it("time 12·total 60 → is-warn, 숫자 없음", () => {
+    const { container } = render(<PhaseHeader title="토론" time={12} total={60} />);
+    const ring = container.querySelector(".mv-ring");
+    expect(ring?.className).toBe("mv-ring is-warn");
+    expect(container.querySelector(".mv-ring__num")).toBeNull();
+  });
+
+  it("time 5·total 60 → is-urgent + 숫자 5", () => {
+    const { container } = render(<PhaseHeader title="토론" time={5} total={60} />);
+    expect(container.querySelector(".mv-ring")?.className).toBe("mv-ring is-urgent");
+    expect(container.querySelector(".mv-ring__num")?.textContent).toBe("5");
+  });
+
+  it("time 20·total 60 → 색 클래스 없음", () => {
+    const { container } = render(<PhaseHeader title="토론" time={20} total={60} />);
+    expect(container.querySelector(".mv-ring")?.className).toBe("mv-ring");
+  });
+
+  it("time 4·total 5(전체가 문턱 이하) → 색 클래스도 숫자도 없음", () => {
+    const { container } = render(<PhaseHeader title="아침" time={4} total={5} />);
+    expect(container.querySelector(".mv-ring")?.className).toBe("mv-ring");
+    expect(container.querySelector(".mv-ring__num")).toBeNull();
+  });
+
+  it("time 8·total 8(전체가 10초 이하) → 경고 없음, time 5 에서만 임박", () => {
+    expect(render(<PhaseHeader title="아침" time={8} total={8} />).container.querySelector(".mv-ring")?.className).toBe("mv-ring");
+    cleanup();
+    expect(render(<PhaseHeader title="아침" time={5} total={8} />).container.querySelector(".mv-ring")?.className).toBe("mv-ring is-urgent");
+  });
+
+  it("CSS: 경고 막대 brass-400, 임박 막대 crimson-500·숫자 crimson-400, 기본 숫자 gray-50", () => {
+    expect(rulesFor(V2_CSS, ".mv-ring.is-warn .mv-ring__bar").join(";")).toMatch(/stroke:\s*var\(--brass-400\)/);
+    expect(rulesFor(V2_CSS, ".mv-ring.is-urgent .mv-ring__bar").join(";")).toMatch(/stroke:\s*var\(--crimson-500\)/);
+    expect(rulesFor(V2_CSS, ".mv-ring.is-urgent .mv-ring__num").join(";")).toMatch(/color:\s*var\(--crimson-400\)/);
+    expect(rulesFor(V2_CSS, ".mv-ring__num").join(";")).toMatch(/color:\s*var\(--gray-50\)/);
+  });
+});
+
 describe("HeadCount (feedback-13, 점 진행을 숫자로)", () => {
   it("글자는 '현재 / 최대' 이고 읽어 주는 이름을 붙일 수 있다", () => {
     const { container } = render(<HeadCount count={3} total={8} label="3명 모임" />);

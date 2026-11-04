@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { act, cleanup, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Timer } from "../../src/components/Timer";
@@ -51,6 +52,41 @@ describe("Timer", () => {
     calm.unmount();
     render(<Timer endsAt={ENDS} durationMs={DUR} offset={0} />);
     expect(screen.getByRole("timer").className.includes("mf-timer--urgent")).toBe(true);
+  });
+
+  it("남은 8초(전체 15초)는 mf-timer--warn(놋쇠), 남은 4초는 mf-timer--urgent 이고 둘이 겹치지 않는다 (feedback-4)", () => {
+    vi.setSystemTime(ENDS - 8_000);
+    const a = render(<Timer endsAt={ENDS} durationMs={DUR} offset={0} />);
+    expect(screen.getByRole("timer").className).toContain("mf-timer--warn");
+    expect(screen.getByRole("timer").className).not.toContain("mf-timer--urgent");
+    a.unmount();
+    vi.setSystemTime(ENDS - 4_000);
+    render(<Timer endsAt={ENDS} durationMs={DUR} offset={0} />);
+    expect(screen.getByRole("timer").className).toContain("mf-timer--urgent");
+    expect(screen.getByRole("timer").className).not.toContain("mf-timer--warn");
+  });
+
+  it("calm 이면 남은 8초에도 mf-timer--warn 이 없다", () => {
+    vi.setSystemTime(ENDS - 8_000);
+    render(<Timer endsAt={ENDS} durationMs={DUR} offset={0} calm />);
+    expect(screen.getByRole("timer").className).not.toContain("mf-timer--warn");
+  });
+
+  it("단계 전체가 10초 이하(8초)이면 남은 6초에도 경고 색이 없다", () => {
+    vi.setSystemTime(ENDS - 6_000);
+    render(<Timer endsAt={ENDS} durationMs={8_000} offset={0} />);
+    expect(screen.getByRole("timer").className).not.toContain("mf-timer--warn");
+  });
+
+  it("경고·임박 색 규칙: 놋쇠 막대·숫자, 경고에는 새 애니메이션이 없다", () => {
+    const css = readFileSync("src/styles/phase.css", "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+    const fill = css.match(/\.mf-timer--warn \.mf-timer__fill\s*\{([^}]*)\}/)?.[1] ?? "";
+    const num = css.match(/\.mf-timer--warn \.mf-timer__num\s*\{([^}]*)\}/)?.[1] ?? "";
+    expect(fill).toMatch(/background:\s*var\(--brass-400\)/);
+    expect(num).toMatch(/color:\s*var\(--brass-200\)/);
+    expect(num).not.toMatch(/animation/);
+    expect(css).toMatch(/\.mf-timer--urgent \.mf-timer__fill\s*\{[^}]*var\(--crimson-500\)/);
+    expect(css).toMatch(/\.mf-timer--urgent \.mf-timer__num\s*\{[^}]*var\(--crimson-400\)[^}]*animation/);
   });
 
   it("마감 뒤에는 0:00 과 빈 막대(scaleX(0))로 머물고 urgent 가 아니다", () => {
