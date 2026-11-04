@@ -5,7 +5,10 @@ import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import "../helpers/singleLineErrors";
 import type { PhaseId, PublicPlayer, RoomView } from "../../shared/protocol";
+import { WillLetter, blockTop } from "../../src/components/v2/WillLetter";
+import { ResultAnnounce } from "../../src/components/ResultAnnounce";
 import { LETTER_END_AT_MS, LETTER_FOLD_AT_MS, SEAL_GLYPH, writeSchedule } from "../../src/game/willLetter";
+import type { WillLetter as WillLetterState } from "../../src/net/useWillLetter";
 import type { RoomConnection } from "../../src/net/useRoomConnection";
 
 const connectionMock = vi.hoisted(() => ({ current: null as unknown }));
@@ -235,5 +238,241 @@ describe("유언 편지 — 암살 아침 (0063-3, C-1·C-2)", () => {
     expect(/:root\s*\{[^}]*--letter-/.test(css)).toBe(false);
     expect(css).toContain("cubic-bezier(0.2, 0.8, 0.2, 1)");
     expect(css).toMatch(/steps\(var\(--lw-steps\)\)/);
+  });
+});
+
+// ---- Task 2: 줄 나누기 측정·글 3단·글꼴 1초 대기·모션 줄이기·시계 기준 수명·알림 위로 (C-2·C-3·C-5) ----
+const T = 1_000_000;
+const letterOf2 = (over: Partial<WillLetterState> = {}): WillLetterState => ({
+  seat: 3,
+  name: "지아",
+  text: WILL,
+  t0: T + 400,
+  announce: { text: "지아 님이 암살당했습니다", icon: "target" },
+  ...over,
+});
+/** 단계별 줄 수를 정해 주는 가짜 측정: 글자를 그 수만큼의 줄로 나눈다 */
+const linesBy = (counts: { 46: number; 36: number; 28: number }) => (text: string, tier: { font: number; line: number }): string[] => {
+  const n = counts[tier.font as 46 | 36 | 28];
+  return Array.from({ length: n }, (_, i) => `${text}-${i + 1}`);
+};
+const pv = (el: Element | null, name: string): string => (el as HTMLElement).style.getPropertyValue(name);
+const paperOf = (c: ParentNode) => c.querySelector<HTMLElement>(".mf-letter__paper")!;
+const lineEls = (c: ParentNode) => [...c.querySelectorAll<HTMLElement>("[data-will-line]")];
+
+function fontsFake(load: (font: string, text: string) => Promise<unknown[]>) {
+  Object.defineProperty(document, "fonts", { value: { load: vi.fn(load) }, configurable: true });
+}
+function visibility(state: "visible" | "hidden") {
+  Object.defineProperty(document, "visibilityState", { value: state, configurable: true });
+  document.dispatchEvent(new Event("visibilitychange"));
+}
+const tick = (ms: number) => act(() => void vi.advanceTimersByTime(ms));
+const flush = () => act(async () => void (await Promise.resolve()));
+
+describe("편지 글 크기 3단·편지지 높이 (C-3)", () => {
+  beforeEach(() => {
+    Object.defineProperty(document, "fonts", { value: undefined, configurable: true });
+    vi.setSystemTime(T);
+  });
+  afterEach(() => {
+    Object.defineProperty(document, "fonts", { value: undefined, configurable: true });
+    Object.defineProperty(document, "visibilityState", { value: "visible", configurable: true });
+  });
+
+  it("1단계 7줄·2단계 6줄·3단계 5줄, 안쪽 높이 284: 7×56=392 > 284, 6×44=264 ≤ 284 이므로 2단계(36/44)가 그대로 화면 글 크기가 된다", () => {
+    const r = render(<WillLetter letter={letterOf2()} reducedMotion={false} splitLines={linesBy({ 46: 7, 36: 6, 28: 5 })} />);
+    tick(400);
+    const paper = paperOf(r.container);
+    expect(pv(paper, "--lw-font")).toBe("36px");
+    expect(pv(paper, "--lw-line")).toBe("44px");
+    expect(pv(paper, "--lw-paper-h")).toBe("340px");
+    expect(lineEls(r.container).length).toBe(6);
+  });
+
+  it("1단계로 들어가면 46/56 을 쓴다", () => {
+    const r = render(<WillLetter letter={letterOf2()} reducedMotion={false} splitLines={linesBy({ 46: 2, 36: 2, 28: 2 })} />);
+    tick(400);
+    expect(pv(paperOf(r.container), "--lw-font")).toBe("46px");
+    expect(lineEls(r.container).length).toBe(2);
+  });
+
+  it("3단계로도 넘으면 3단계(28/32)로 두고 편지지를 가용 높이까지 키운다(하한 220)", () => {
+    const grow = render(<WillLetter letter={letterOf2()} reducedMotion={false} splitLines={linesBy({ 46: 12, 36: 10, 28: 9 })} getInputTop={() => 640} />);
+    tick(400);
+    // 가용 = 640 − 72 − 43(1줄 추정) − 40 − 30 = 455 → 340 을 넘어 가용까지
+    expect(pv(paperOf(grow.container), "--lw-font")).toBe("28px");
+    expect(pv(paperOf(grow.container), "--lw-paper-h")).toBe("455px");
+    grow.unmount();
+    const floor = render(<WillLetter letter={letterOf2()} reducedMotion={false} splitLines={linesBy({ 46: 12, 36: 10, 28: 9 })} getInputTop={() => 300} />);
+    tick(400);
+    expect(pv(paperOf(floor.container), "--lw-paper-h")).toBe("220px");
+  });
+
+  it("입력줄 윗변이 알려지면 편지지 높이는 min(340, 가용) 하한 220, 묶음은 알림 아래에서 입력줄 윗변 사이에 놓인다", () => {
+    const r = render(<WillLetter letter={letterOf2()} reducedMotion={false} splitLines={linesBy({ 46: 2, 36: 2, 28: 2 })} getInputTop={() => 450} />);
+    tick(400);
+    // 가용 = 450 − 72 − 43 − 40 − 30 = 265
+    expect(pv(paperOf(r.container), "--lw-paper-h")).toBe("265px");
+    const root = letterOf(r.container)!;
+    expect(pv(root, "--lw-top")).toBe("135px");
+    expect(pv(root, "--lw-h")).toBe("311px");
+  });
+
+  it("글 덩어리는 가운데에 놓이되 인장 윗변 위로 올린다: blockTop", () => {
+    // 2줄 46/56 = 112: 340 에서 가운데(114), 아래끝 226 은 인장 윗변(248) − 4 안
+    expect(blockTop(340, 2, 56)).toBe(114);
+    // 6줄 28/32 = 192: 가운데면 아래끝 266 이 인장을 침범 → 머리글 아래 52 까지 올려 아래끝을 244 에 맞춘다
+    expect(blockTop(340, 6, 32)).toBe(52);
+    // 7줄 28/32 = 224: 인장 위에 못 들어가면 가운데
+    expect(blockTop(340, 7, 32)).toBe(58);
+  });
+});
+
+describe("편지 글꼴 대기·시계 기준 수명·모션 줄이기 (C-3·C-5)", () => {
+  beforeEach(() => {
+    Object.defineProperty(document, "fonts", { value: undefined, configurable: true });
+    vi.setSystemTime(T);
+  });
+  afterEach(() => {
+    Object.defineProperty(document, "fonts", { value: undefined, configurable: true });
+    Object.defineProperty(document, "visibilityState", { value: "visible", configurable: true });
+  });
+  const mountLetter = (over: Partial<WillLetterState> = {}, reduced = false) =>
+    render(<WillLetter letter={letterOf2(over)} reducedMotion={reduced} splitLines={linesBy({ 46: 1, 36: 1, 28: 1 })} />);
+
+  it("글꼴이 준비되면 T0 에 그대로 시작한다: load 는 46px 글꼴과 본문으로 불린다", async () => {
+    fontsFake(() => new Promise((res) => setTimeout(() => res([{}]), 100)));
+    const r = mountLetter();
+    expect(document.fonts.load).toHaveBeenCalledWith('46px "Nanum Pen Script"', WILL);
+    tick(400);
+    await flush();
+    const letter = letterOf(r.container)!;
+    expect(letter).not.toBeNull();
+    expect(letter.classList.contains("is-fallback")).toBe(false);
+    expect(pv(lineEls(r.container)[0]!, "--lw-delay")).toBe("800ms");
+  });
+
+  it("글꼴이 1초 안에 준비되지 않으면 대체 글꼴로 진행한다: 늦은 만큼 이미 쓰인 상태로 시작(지연 = at − 지난 시간)", async () => {
+    fontsFake(() => new Promise(() => {}));
+    const r = mountLetter();
+    tick(999);
+    await flush();
+    expect(letterOf(r.container)).toBeNull();
+    tick(1);
+    await flush();
+    const letter = letterOf(r.container)!;
+    expect(letter.classList.contains("is-fallback")).toBe(true);
+    // 지난 시간 e = 1000 − 400 = 600
+    expect(pv(lineEls(r.container)[0]!, "--lw-delay")).toBe("200ms");
+    expect(pv(r.container.querySelector(".mf-letter__rise"), "--lw-rise-delay")).toBe("-600ms");
+    expect(pv(r.container.querySelector(".mf-letter__fold"), "--lw-fold-delay")).toBe("4400ms");
+  });
+
+  it("글꼴 로드가 실패하거나 document.fonts 가 없으면 대체 글꼴로 T0 에 진행한다", async () => {
+    fontsFake(() => Promise.reject(new Error("net")));
+    const a = mountLetter();
+    await flush();
+    tick(400);
+    expect(letterOf(a.container)!.classList.contains("is-fallback")).toBe(true);
+    a.unmount();
+    Object.defineProperty(document, "fonts", { value: undefined, configurable: true });
+    const b = mountLetter();
+    tick(400);
+    expect(letterOf(b.container)!.classList.contains("is-fallback")).toBe(true);
+  });
+
+  it("탭을 가렸다 돌아오면 지난 구간을 건너뛴다: 지연이 시계 기준으로 다시 계산되고, 5.42초 뒤에는 걷힌다", () => {
+    const r = mountLetter();
+    tick(400);
+    tick(2000); // e = 2000
+    visibility("hidden");
+    tick(1500);
+    visibility("visible"); // e = 3500
+    expect(pv(lineEls(r.container)[0]!, "--lw-delay")).toBe("-2700ms");
+    expect(pv(r.container.querySelector(".mf-letter__rise"), "--lw-rise-delay")).toBe("-3500ms");
+    expect(pv(r.container.querySelector(".mf-letter__fold"), "--lw-fold-delay")).toBe("1500ms");
+    tick(1700);
+    visibility("visible"); // e = 5200 — 접힘이 이미 시작됨
+    expect(pv(r.container.querySelector(".mf-letter__fold"), "--lw-fold-delay")).toBe("-200ms");
+    tick(LETTER_END_AT_MS - 5200 - 1);
+    expect(letterOf(r.container)).not.toBeNull();
+    tick(1);
+    expect(letterOf(r.container)).toBeNull();
+  });
+
+  it("탭을 5.42초 넘게 가렸다 돌아오면 바로 사라진다", () => {
+    const r = mountLetter();
+    tick(400);
+    visibility("hidden");
+    // 가려진 동안 타이머가 멈춘 것처럼 시계만 앞으로 간다
+    vi.setSystemTime(T + 400 + 6000);
+    visibility("visible");
+    expect(letterOf(r.container)).toBeNull();
+  });
+
+  it("모션 줄이기: 처음부터 완성된 모양(모든 줄·인장), 막대 정지, T0 + 5.42초에 제거 — 애니메이션 클래스 is-still", () => {
+    const live = vi.fn();
+    const r = render(<WillLetter letter={letterOf2()} reducedMotion splitLines={linesBy({ 46: 2, 36: 2, 28: 2 })} onLive={live} />);
+    tick(400);
+    const letter = letterOf(r.container)!;
+    expect(letter.classList.contains("is-still")).toBe(true);
+    expect(lineEls(r.container).length).toBe(2);
+    expect(letter.querySelector("[data-will-seal]")).not.toBeNull();
+    expect(live).toHaveBeenLastCalledWith(true);
+    const css = readFileSync("src/styles/letter.css", "utf8");
+    expect(css).toMatch(/\.mf-letter\.is-still[^{]*\{[^}]*animation:\s*none/);
+    tick(LETTER_END_AT_MS - 1);
+    expect(letterOf(r.container)).not.toBeNull();
+    tick(1);
+    expect(letterOf(r.container)).toBeNull();
+    expect(live).toHaveBeenLastCalledWith(false);
+  });
+
+  it("T0 전에는 편지가 없고(onLive false), T0 에 켜진다", () => {
+    const live = vi.fn();
+    const r = render(<WillLetter letter={letterOf2({ t0: T + 2600 })} reducedMotion={false} splitLines={linesBy({ 46: 1, 36: 1, 28: 1 })} onLive={live} />);
+    tick(2599);
+    expect(letterOf(r.container)).toBeNull();
+    expect(live).not.toHaveBeenCalledWith(true);
+    tick(1);
+    expect(letterOf(r.container)).not.toBeNull();
+    expect(live).toHaveBeenLastCalledWith(true);
+  });
+});
+
+describe("아침 알림 위치: 편지가 있으면 위 72 (C-2)", () => {
+  it("ResultAnnounce placement=top 은 .is-top, 기본은 아니다. game.css 의 is-top 은 위 패딩 72 만 바꾼다", () => {
+    const a = render(<ResultAnnounce text="알림" />);
+    expect(a.container.querySelector(".mf-announce")!.classList.contains("is-top")).toBe(false);
+    a.unmount();
+    const b = render(<ResultAnnounce text="알림" placement="top" />);
+    expect(b.container.querySelector(".mf-announce")!.classList.contains("is-top")).toBe(true);
+    const css = readFileSync("src/styles/game.css", "utf8");
+    expect(css).toMatch(/\.mf-announce\.is-top\s*\{[^}]*padding-top:\s*72px/);
+  });
+
+  it("방 화면: 편지가 있는 아침의 알림은 is-top 으로 올라가 편지와 함께 걷히고, 편지가 없는 아침은 위 240 그대로", () => {
+    const s = setup();
+    s.show(killed());
+    s.card("will", 3, 1, WILL);
+    s.advance(399);
+    expect(s.container.querySelector(".mf-announce")).toBeNull();
+    s.advance(1);
+    const announce = s.container.querySelector(".mf-announce")!;
+    expect(announce.classList.contains("is-top")).toBe(true);
+    expect(announce.textContent).toContain("지아");
+    s.advance(LETTER_END_AT_MS - 1);
+    expect(s.container.querySelector(".mf-announce")).not.toBeNull();
+    s.advance(1);
+    expect(letterOf(s.container)).toBeNull();
+    expect(s.container.querySelector(".mf-announce")).toBeNull();
+    s.unmount();
+
+    const plain = setup();
+    plain.show(killed());
+    plain.advance(400);
+    expect(plain.container.querySelector(".mf-announce")).not.toBeNull();
+    expect(plain.container.querySelector(".mf-announce")!.classList.contains("is-top")).toBe(false);
   });
 });
