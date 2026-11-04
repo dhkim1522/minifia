@@ -793,4 +793,18 @@ describe("dayEvents — 마지막 3인 진입 (09.1.1-15)", () => {
     same(events.lines, [{ kind: "system", text: "마지막 셋" }]);
     same(events.announces, []);
   });
+
+  it("마지막 3인 1-1-1 → 밤(09.1.1-16): '처형 없음' 줄과 알림 1.4초, 이어 '밤이 되었습니다'", () => {
+    const events = dayEvents(showdownOf({ order: [0, 1, 2], i: 4, points: [{ seat: 0, target: 1 }, { seat: 1, target: 2 }, { seat: 2, target: 0 }] }), viewOf("night", { day: { noExecution: { reason: "tie" } } }));
+    same(events.lines, [{ kind: "system", text: "처형 없음" }]);
+    same(events.announces, [
+      { text: "처형 없음", at: 0, ms: 1400 },
+      { text: "밤이 되었습니다", at: 1400, ms: 1600 },
+    ]);
+  });
+
+  it("마지막 3인 → 밤인데 처형 없음 이유가 없으면(다른 경로) '밤이 되었습니다' 만", () => {
+    const events = dayEvents(showdownOf({ order: [0, 1, 2], i: 4, points: [] }), viewOf("night"));
+    same(events.announces, [{ text: "밤이 되었습니다", at: 0, ms: 1600 }]);
+  });
 });

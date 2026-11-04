@@ -324,9 +324,10 @@ function phaseEntry(prev: RoomView, cur: RoomView, day: NonNullable<RoomView["da
     }
     case "night": {
       // 지목 동률·0표로 처형 없이 온 밤은 "처형 없음"(0~1.4초) 뒤에 "밤이 되었습니다"가 이어진다. 찬반 뒤의 밤은 처형 단계가 이미 알렸다.
+      // 마지막 3인(showdown)의 1-1-1·무표도 같다: 처형 단계 없이 밤으로 와서 이 알림이 처형 없음을 알린다(09.1.1-16, UI-SPEC E-1).
       const reason = day.noExecution?.reason;
       let at = 0;
-      if ((prev.phase === "nomination" || prev.phase === "runoff") && (reason === "tie" || reason === "noVotes")) {
+      if ((prev.phase === "nomination" || prev.phase === "runoff" || prev.phase === "showdown") && (reason === "tie" || reason === "noVotes")) {
         out.lines.push({ kind: "system", text: DAY_COPY.noExecution });
         out.announces.push({ text: DAY_COPY.noExecution, at: 0, ms: ANNOUNCE_NOEXEC_MS });
         at = ANNOUNCE_NOEXEC_MS;
