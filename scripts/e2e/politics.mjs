@@ -1762,7 +1762,8 @@ export function makePoliticsFlows(h) {
         await Promise.all(pages.map((p, k) => (hs[k].seat === A.seat ? Promise.resolve() : untilG(p, (g) => doneOf(g).split(",").includes(String(A.seat)), 3000, "던진 사람 done 체크"))));
         {
           const ds = await noLeak(A, `${A.who} 가 한 번 눌렀을 때`, "SD8a");
-          rec(s5, "SD8b", `${A.who} 가 누르면 다른 화면에 이름표 done 체크만 붙는다`, ds.every(({ x, g }) => doneOf(g) === String(A.seat) || (x.seat === A.seat && doneOf(g).includes(String(A.seat)))), `done ${ds.map(({ g }) => doneOf(g)).join(" | ")}`);
+          // 던진 사람 자신의 화면은 서버 확인 전에 mine 으로 먼저 바뀌므로(SD8c) done 은 다른 화면만 본다
+          rec(s5, "SD8b", `${A.who} 가 누르면 다른 화면에 이름표 done 체크만 붙는다`, ds.every(({ x, g }) => x.seat === A.seat || doneOf(g) === String(A.seat)), `done ${ds.map(({ g }) => doneOf(g)).join(" | ")}`);
           const mineA = mineOf(ds[hs.indexOf(A)].g);
           rec(s5, "SD8c", `내가 누른 사람만 내 화면에서 mine 이다 (${A.who})`, mineA === String(B.seat), `mine ${mineA}`);
         }
