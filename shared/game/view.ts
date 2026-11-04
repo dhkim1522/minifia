@@ -57,10 +57,9 @@ const DAY_PHASES: ReadonlySet<PhaseId> = new Set([
   "ended",
 ]);
 
-/** 투표 기록 한 줄을 필드별로 복사한다(펼쳐 복사 금지): exec 는 yes·no·passed 세 키, cand 는 있을 때만 votes 를 {seat, target} 으로, candidate 는 있을 때만. */
+/** 투표 기록 한 줄을 필드별로 복사한다(펼쳐 복사 금지): exec 는 yes·no·passed 세 키, cand 는 있을 때만 votes 를 {seat, target} 으로, candidate 는 있을 때만. last(마지막 3인 결전 표시, 결정 0066-5)는 일부러 옮기지 않는다 — 공개 경로는 처형 단계의 day.verdict.last 하나뿐이다(L24). */
 function voteLogLine(entry: VoteLogEntry): VoteLogEntry {
   const line: VoteLogEntry = { n: entry.n, exec: { yes: entry.exec.yes, no: entry.exec.no, passed: entry.exec.passed } };
-  if (entry.last === true) line.last = true;
   if (entry.cand !== undefined) {
     line.cand = { votes: entry.cand.votes.map((v) => ({ seat: v.seat, target: v.target })) };
     if (entry.cand.candidate !== undefined) line.cand.candidate = entry.cand.candidate;

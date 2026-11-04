@@ -87,7 +87,7 @@ export interface VoteLogEntry {
   n: number;
   exec: { yes: number; no: number; passed: boolean };
   cand?: { votes: CandidateVoteLine[]; candidate?: number };
-  /** 마지막 3인 결전(결정 0066-5)으로 끝난 날의 줄이다 — 찬반 없이 지목만으로 처형이 정해졌다(exec 는 0·0). */
+  /** 서버 저장용 표시(결정 0066-5): 마지막 3인 결전으로 끝난 날의 줄이다 — 찬반 없이 지목만으로 처형이 정해졌다(exec 는 0·0). view 는 이 키를 옮기지 않고 처형 단계의 day.verdict.last 로만 알린다. */
   last?: true;
 }
 /** 지목 한 줄(결정 0060-3): 누가 누구를 가리키는지. 지목 단계 동안 모두에게 공개된다(마감까지 바꿀 수 있다). */
