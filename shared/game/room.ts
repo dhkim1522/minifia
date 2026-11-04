@@ -68,6 +68,22 @@ export interface Player {
   isBot?: true;
 }
 
+/**
+ * 서버 전용(결정 0063-1). 지목 차례 진행. enterNomination 이 만들고 resolveNomination·enterDiscussion 이 지운다.
+ * 공개 모양은 view 의 day.turn(필드별 복사). i: -1 모이는 중 · 0..order.length-1 차례 · order.length 끝 알림.
+ */
+export interface PickTurn {
+  /** 차례 순서 — 지목 시작 때 산 사람 좌석 오름차순(결정 0063-4). */
+  order: number[];
+  i: number;
+  /** 이번 차례 마감(차례 중에만). */
+  endsAt?: number;
+  /** 이번 차례가 확정된 시각(지목했거나 기권 처리됨). */
+  doneAt?: number;
+  /** 시간 안에 못 골라 기권으로 확정됐다. */
+  skip?: true;
+}
+
 export interface RoomState {
   code: string;
   createdAt: number;
@@ -109,6 +125,8 @@ export interface RoomState {
   testBotVote?: { exec?: "yes" | "no"; pick?: "host" | "other" };
   /** 서버 전용(결정 0024). 지금 단계의 봇 행동 계획(단계:마감 키 + 행동 시각 목록). 단계가 바뀌면 낡아 버려진다. 어떤 view 에도 싣지 않는다. */
   botPlan?: BotPlan;
+  /** 서버 전용(결정 0063-1). 지목 차례 진행. enterNomination 이 만들고 resolveNomination·enterDiscussion 이 지운다. 공개 모양은 view 의 day.turn(필드별 복사). i: -1 모이는 중 · 0..order.length-1 차례 · order.length 끝 알림. */
+  pickTurn?: PickTurn;
 }
 
 export type CreateRoomStateResult = { ok: true; state: RoomState } | { ok: false; error: "NICKNAME_INVALID" };

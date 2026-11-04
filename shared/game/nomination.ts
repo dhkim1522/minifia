@@ -2,9 +2,12 @@
 // v1.0 vote.ts 의 후보 선택(castCandidateVote·tallyCandidateVote)과 같은 계약이다: 검사 순서 = 계약, 같은 값이면 같은 객체.
 // 다른 점: 취소(null)가 없고, 득표 순서를 섞지 않는다(지목 줄은 지목 중에도 공개라 좌석 오름차순 그대로다).
 // 마감(phaseEndsAt)은 읽거나 쓰지 않는다 — 과반이어도 15초를 다 채운다(결정 0060-3).
+// 순차 지목(결정 0063-1·0063-4): 시각은 인자로만 받고 연결·역할·난수를 읽지 않는다(M-3).
+// 모이기 → 산 사람 좌석 순서로 한 명씩 차례 → 확정 뒤 사이 → 끝 알림 → 기존 집계(resolveNomination). 과반이어도 끝까지 돈다.
 import type { PointLine } from "../protocol";
 import { isAlive } from "./alive";
-import type { RoomState } from "./room";
+import { NOMINATION_END_MS, NOMINATION_GATHER_MS, PHASE_DEFS, PICK_GAP_MS, PICK_TURN_MS } from "./phases";
+import type { PickTurn, RoomState } from "./room";
 import type { DeadlineResult } from "./tick";
 import type { VoteError } from "./discussion";
 
@@ -87,16 +90,83 @@ export function resolveNomination(state: RoomState): DeadlineResult {
     const { nominate: _nominate, ...kept } = p;
     return kept;
   });
+  const { pickTurn: _pickTurn, ...rest } = state;
   const line = {
     n: state.day ?? 1,
     exec: { yes: 0, no: 0, passed: false },
     cand: leader === undefined ? { votes } : { votes, candidate: leader },
   };
   const next: RoomState = {
-    ...state,
+    ...rest,
     players,
     voteLog: [...(state.voteLog ?? []), line],
     verdict: leader === undefined ? { passed: false } : { passed: false, candidate: leader },
   };
   return leader === undefined ? { state: next, stay: false, next: "night" } : { state: next, stay: false };
+}
+
+// ---- 순차 지목(09.1-01, 결정 0063-1·0063-4, M-5) ----
+// tick 표(ON_ENTER·ON_DEADLINE)에는 아직 걸지 않는다 — 09.1-04 가 건다.
+
+/** 지목 진입: 산 사람 좌석 오름차순을 차례 순서로 고정하고(i -1 = 모이는 중) 남은 지목 값을 모두 지운다. 마감은 호출한 쪽이 건다(nominationStepMs). */
+export function enterNomination(state: RoomState): RoomState {
+  const order = state.players
+    .filter(isAlive)
+    .map((p) => p.seat)
+    .sort((a, b) => a - b);
+  return {
+    ...state,
+    players: state.players.map((p) => {
+      const { nominate: _nominate, ...kept } = p;
+      return kept;
+    }),
+    pickTurn: { order, i: -1 },
+  };
+}
+
+/** 지금 지목 세부 단계의 길이(ms): 모이기 · 차례 · 확정 뒤 사이 · 끝 알림. pickTurn 이 없으면 단계 표 값(옛 규칙). */
+export function nominationStepMs(state: RoomState): number {
+  const turn = state.pickTurn;
+  if (turn === undefined) return PHASE_DEFS.nomination.durationMs ?? 0;
+  if (turn.i < 0) return NOMINATION_GATHER_MS;
+  if (turn.i >= turn.order.length) return NOMINATION_END_MS;
+  return turn.doneAt === undefined ? PICK_TURN_MS : PICK_GAP_MS;
+}
+
+/**
+ * 마감이 지났을 때의 한 걸음(at = 지난 마감 시각). 새 마감은 호출한 쪽이 at + nominationStepMs(새 상태)로 건다.
+ *   모이기 끝 → 첫 차례 · 미확정 차례 → 기권 확정(skip) · 확정 뒤 → 다음 차례, 마지막이면 끝 알림 · 끝 알림 뒤 → 집계(stay false).
+ * pickTurn 이 없으면 안전장치로 바로 집계한다.
+ */
+export function stepNomination(state: RoomState, at: number): DeadlineResult {
+  const turn = state.pickTurn;
+  if (turn === undefined || turn.i >= turn.order.length) return resolveNomination(state);
+  const withTurn = (next: PickTurn): DeadlineResult => ({ state: { ...state, pickTurn: next }, stay: true });
+  const startTurn = (i: number): DeadlineResult =>
+    i >= turn.order.length ? withTurn({ order: turn.order, i: turn.order.length }) : withTurn({ order: turn.order, i, endsAt: at + PICK_TURN_MS });
+  if (turn.i < 0) return startTurn(0);
+  if (turn.doneAt === undefined) return withTurn({ ...turn, doneAt: at, skip: true });
+  return startTurn(turn.i + 1);
+}
+
+/**
+ * 차례 주인의 지목: 대상을 정하고 그 차례를 즉시 확정한다(doneAt = now, 마감 = now + 사이). 거절 규칙은 Task 2.
+ */
+export function castTurnPoint(
+  state: RoomState,
+  actorId: string,
+  target: number,
+  now: number,
+): { ok: true; state: RoomState } | { ok: false; error: VoteError } {
+  const turn = state.pickTurn;
+  if (turn === undefined) return { ok: false, error: "WRONG_PHASE" };
+  return {
+    ok: true,
+    state: {
+      ...state,
+      players: state.players.map((p) => (p.id === actorId ? { ...p, nominate: target } : p)),
+      pickTurn: { ...turn, doneAt: now },
+      phaseEndsAt: now + PICK_GAP_MS,
+    },
+  };
 }
