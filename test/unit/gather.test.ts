@@ -337,8 +337,13 @@ describe("layoutFor — 결선: 두 후보가 가운데 마주 선다 (결정 00
     expect(sb.sx - sa.sx).toBeGreaterThan(PX_PER_UNIT);
   });
 
-  it("두 후보 모두 무대 윗면(반지름 1.18) 안에 선다", () => {
-    for (const s of RUNOFF_SPOTS) expect(s[0] ** 2 + s[1] ** 2).toBeLessThan(118 * 118);
+  it("두 후보 모두 무대 원기둥(반지름 118)과 캐릭터(35) 밖, 걸을 수 있는 점에 서고 서로 마주 볼 만큼 가깝다(≤ 250)", () => {
+    for (const s of RUNOFF_SPOTS) {
+      expect(s[0] ** 2 + s[1] ** 2).toBeGreaterThanOrEqual(153 * 153);
+      expect(lineWalkable(BAR_MAP, { x: s[0], z: s[1] }, { x: s[0], z: s[1] })).toBe(true);
+    }
+    const [a, b] = RUNOFF_SPOTS;
+    expect((a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2).toBeLessThanOrEqual(250 * 250);
   });
 
   it("후보 둘은 RUNOFF_SPOTS(낮은 좌석이 [0])로, 나머지 산 사람은 둘레 자리로 간다 (key '2:runoff')", () => {

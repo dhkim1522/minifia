@@ -77,6 +77,18 @@ export function ringSlots(n: number): readonly Slot[] {
   return Number.isInteger(n) && n >= 2 && n <= 8 ? RING_SLOTS[n]! : [];
 }
 
+/**
+ * 결선 두 후보의 자리(O-19, 결정 0066-4): 무대 앞(카메라 쪽)에서 서로 마주 본다. [0] = 낮은 좌석(화면 왼쪽), [1] = 높은 좌석.
+ * 카메라 방위가 45° 라 화면 가로 축이 바닥의 (1, −1) 방향이다 — 두 점의 차가 (150, −150) 이라 화면에서 같은 높이에 나란히 선다(거리 ≈ 212).
+ * 무대 원기둥(반지름 118)은 이동 마스크에서 막혀 있고 무대 자리(0, 0) 한 점만 예외라(결정 0060-7), 무대 안쪽 점은 서 있을 수 없다 —
+ * 두 점은 마스크가 걸을 수 있다고 하는 칸 안쪽이고(단위 시험이 둘레 자리 어디서든 정확히 도착함을 고정한다) 무대 바로 앞이다.
+ * 육안으로 조정할 때는 이 상수 한 곳만 고친다(차가 (d, −d) 꼴이어야 화면에서 나란하다).
+ */
+export const RUNOFF_SPOTS: readonly [Slot, Slot] = [
+  [30, 180],
+  [180, 30],
+];
+
 interface Pt {
   x: number;
   z: number;
@@ -123,12 +135,14 @@ export function assignSlots(people: readonly { id: string; x: number; z: number 
   return out;
 }
 
-/** 지금 단계가 요구하는 배치의 키: 지목 '{일차}:ring' · 변론·찬반 '{일차}:stage' · 처형 '{일차}:exec' · 그 밖은 null(아무것도 안 한다). */
+/** 지금 단계가 요구하는 배치의 키: 지목 '{일차}:ring' · 결선 '{일차}:runoff' · 변론·찬반 '{일차}:stage' · 처형 '{일차}:exec' · 그 밖은 null(아무것도 안 한다). */
 export function layoutKey(state: RoomState): string | null {
   const day = state.day ?? 0;
   switch (state.phase) {
     case "nomination":
       return `${day}:ring`;
+    case "runoff":
+      return `${day}:runoff`;
     case "defense":
     case "verdict":
       return `${day}:stage`;
@@ -159,6 +173,7 @@ export interface GatherLayout {
 /**
  * 지금 단계가 요구하는 배치(멱등). 단계가 배치 단계가 아니면 null.
  *   nomination      산 사람 → 둘레 자리
+ *   runoff          후보 둘 → RUNOFF_SPOTS(낮은 좌석이 [0]), 나머지 산 사람 → 둘레 자리(후보의 둘레 자리는 변론에서 진 쪽이 돌아올 자리로 기억에 남는다)
  *   defense·verdict 변론자 → 무대(STAGE_SPOT), 나머지 산 사람 → 자기 둘레 자리
  *   execution       통과면 변론자 목적지 없음(무대 유지, 유령이 되어 떠오른다), 부결이면 변론자 → 자기 둘레 자리
  * 자리 배정은 w.lay 를 우선한다 — 지목은 같은 키(같은 날 지목)일 때, 변론·처형은 같은 날 기억일 때. 그래야 걷는 도중에 다시 불러도 자리가 뒤섞이지 않는다.
@@ -170,7 +185,8 @@ export function layoutFor(state: RoomState, w: WorldState, now: number): GatherL
   if (key === null) return null;
   const day = state.day ?? 0;
   const trial = state.phase !== "nomination";
-  const defender = trial ? state.verdict?.candidate : undefined;
+  const defender = trial && state.phase !== "runoff" ? state.verdict?.candidate : undefined;
+  const runoffCand = state.phase === "runoff" ? state.runoff?.cand : undefined;
 
   const participants = [...state.players]
     .sort((a, b) => a.seat - b.seat)
@@ -203,7 +219,9 @@ export function layoutFor(state: RoomState, w: WorldState, now: number): GatherL
   for (const p of participants) {
     const isDefender = p.seat === defender;
     let dest: { x: number; z: number } | null;
-    if (isDefender && (state.phase === "defense" || state.phase === "verdict")) dest = { x: STAGE_SPOT.x, z: STAGE_SPOT.z };
+    const runoffAt = runoffCand === undefined ? -1 : runoffCand.indexOf(p.seat);
+    if (runoffAt === 0 || runoffAt === 1) dest = { x: RUNOFF_SPOTS[runoffAt][0], z: RUNOFF_SPOTS[runoffAt][1] };
+    else if (isDefender && (state.phase === "defense" || state.phase === "verdict")) dest = { x: STAGE_SPOT.x, z: STAGE_SPOT.z };
     else if (isDefender && passed) dest = null; // 통과: 무대에 남는다
     else {
       const s = slots[p.id];
