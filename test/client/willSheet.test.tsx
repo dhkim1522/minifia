@@ -182,6 +182,65 @@ describe("WillSheet — 한글 조합 중 저장·닫기 (연구 Pitfall 11)", (
     expect(onClose).toHaveBeenCalledWith("잘자");
   });
 
+  it("IN-01: 조합 중 [저장] → [닫기] → compositionend 이면 onSave 1회 다음 onClose 1회, 둘 다 확정 값이다", () => {
+    vi.useFakeTimers();
+    const order: string[] = [];
+    const onSave = vi.fn((t: string) => order.push(`save:${t}`));
+    const onClose = vi.fn((t: string) => order.push(`close:${t}`));
+    const { container } = render(<Harness onSave={onSave} onClose={onClose} />);
+    const ta = area(container);
+    fireEvent.compositionStart(ta);
+    fireEvent.change(ta, { target: { value: "잘" } });
+    fireEvent.click(saveBtn(container));
+    fireEvent.click(closeBtn(container));
+    expect(order).toEqual([]);
+    fireEvent.change(ta, { target: { value: "잘자" } });
+    fireEvent.compositionEnd(ta);
+    expect(onSave).toHaveBeenCalledTimes(1);
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(order).toEqual(["save:잘자", "close:잘자"]);
+  });
+
+  it("IN-01: 조합 중 [저장] → [닫기] 뒤 compositionend 가 안 와도 IME_WAIT_MS 뒤 저장 → 닫기가 한 번씩 불린다", () => {
+    vi.useFakeTimers();
+    const order: string[] = [];
+    const { container } = render(<Harness onSave={(t) => order.push(`save:${t}`)} onClose={(t) => order.push(`close:${t}`)} />);
+    const ta = area(container);
+    fireEvent.compositionStart(ta);
+    fireEvent.change(ta, { target: { value: "안녕하" } });
+    fireEvent.click(saveBtn(container));
+    fireEvent.click(closeBtn(container));
+    act(() => {
+      vi.advanceTimersByTime(IME_WAIT_MS - 1);
+    });
+    expect(order).toEqual([]);
+    act(() => {
+      vi.advanceTimersByTime(1);
+    });
+    expect(order).toEqual(["save:안녕하", "close:안녕하"]);
+    act(() => {
+      vi.advanceTimersByTime(IME_WAIT_MS * 3);
+    });
+    expect(order).toHaveLength(2);
+  });
+
+  it("IN-01: 조합 중 [저장] 을 두 번, [닫기] 를 두 번 눌러도 각각 1회다", () => {
+    vi.useFakeTimers();
+    const onSave = vi.fn();
+    const onClose = vi.fn();
+    const { container } = render(<Harness onSave={onSave} onClose={onClose} />);
+    const ta = area(container);
+    fireEvent.compositionStart(ta);
+    fireEvent.change(ta, { target: { value: "가" } });
+    fireEvent.click(saveBtn(container));
+    fireEvent.click(saveBtn(container));
+    fireEvent.click(closeBtn(container));
+    fireEvent.click(closeBtn(container));
+    fireEvent.compositionEnd(ta);
+    expect(onSave).toHaveBeenCalledTimes(1);
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
   it("기다리는 중에 다시 눌러도 두 번 가지 않는다", () => {
     vi.useFakeTimers();
     const onSave = vi.fn();

@@ -316,6 +316,25 @@ describe("저장 실패 · 빈 칸 · 사망 (E7 #36~#38)", () => {
     expect(sheet(m.container)).not.toBeNull();
   });
 
+  it("IN-01: 조합 중 [저장] → [닫기] 후 조합이 끝나면 will 메시지 1회이고 시트가 닫히며 오류 알림이 없다", () => {
+    vi.useFakeTimers();
+    const send = vi.fn<(m: ClientMessage) => boolean>(() => true);
+    const m = mount(makeView(), { send });
+    fireEvent.click(willBtn(m.container)!);
+    const ta = area(m.container);
+    fireEvent.compositionStart(ta);
+    fireEvent.change(ta, { target: { value: "범인은" } });
+    fireEvent.click(saveBtn(m.container));
+    fireEvent.click(closeBtn(m.container));
+    expect(sent(send)).toEqual([]);
+    fireEvent.compositionEnd(ta);
+    expect(sent(send).filter((x) => x.t === "will")).toEqual([{ t: "will", text: "범인은" }]);
+    expect(sheet(m.container)).toBeNull();
+    expect(toastText(m.container)).toBe("");
+    act(() => void vi.advanceTimersByTime(300));
+    expect(sent(send)).toHaveLength(1);
+  });
+
   it("3초 동안 me.will 이 안 바뀌면 같은 알림이다. 그 전에 서버 값이 오면 알림이 없다", () => {
     vi.useFakeTimers();
     const m = mount(makeView());
