@@ -32,7 +32,7 @@ import { isMyTurn, turnStageOf, turnTopLine } from "../game/pickTurn";
 import type { ChatStore } from "../net/chatStore";
 import type { DayFx } from "../net/useDayFx";
 import { useCountdown } from "../net/countdown";
-import { useBadge } from "../net/useBadge";
+import { useBadge, useBadgeFx } from "../net/useBadge";
 import { useChat } from "../net/useChat";
 import { useTurnLook } from "../net/useTurnLook";
 import { useSendGuard } from "../net/useSendGuard";
@@ -434,6 +434,8 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
   const { layerRef, veiled, vvHeight } = useSheetLayer({ open: layerKind !== null, panelRef, stageTop: stageInsets?.top ?? DEFAULT_INSET_TOP });
 
   // 이름표 모서리 배지: 서버 view.players 에서만 만든다(내 좌석만 낙관 값을 겹친다). 기존 키는 덮어쓰지 않는다. 주장이 하나도 없고 낙관 값도 없으면 기존 함수 그대로(이름표에 넘기는 속성이 없다)
+  const badgeFx = useBadgeFx(view, epoch, reducedMotion);
+  const { pops: claimPops, notices: claimNotices } = badgeFx;
   const claimTagProps = useMemo<WorldTagProps | undefined>(() => {
     const anyClaim = view.players.some((p) => p.badge !== undefined);
     if (!anyClaim && badge.shown === badge.server) return tagProps;
@@ -441,9 +443,10 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
       const base = tagProps?.(seat) ?? {};
       const look = claimLook(view, seat, seat === view.me.seat ? badge.shown : undefined);
       if (look === null) return base;
-      return { claim: look.claim, claimSwapped: look.swapped, ...base };
+      const pop = claimPops.get(seat);
+      return { claim: look.claim, claimSwapped: look.swapped, ...(pop !== undefined ? { claimPop: pop } : {}), ...(claimNotices.has(seat) ? { claimNotice: true } : {}), ...base };
     };
-  }, [tagProps, view, badge.shown, badge.server]);
+  }, [tagProps, view, badge.shown, badge.server, claimPops, claimNotices]);
 
   // 떠 있는 버튼 묶음의 아래 끝 = 키보드 올림(CSS 상속) + 패널 높이 + 8. 패널 높이는 DOM 에서 잰다(패널이 자라도 따라간다)
   const floatRef = useRef<HTMLDivElement>(null);
@@ -500,6 +503,10 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
         onLeave={() => onLeave?.()}
       />
       <TopToast {...toast.props} />
+      {/* 누가 배지를 걸거나 바꿨을 때 읽히는 한 줄(화면에는 안 보인다) */}
+      <div className="mf-sr-only" role="status" data-badge-live="">
+        {badgeFx.said}
+      </div>
       <TurnBlock view={view} offset={offset} line={topLine} compact={compactTurn} reducedMotion={reducedMotion} />
       {testButton ? <div className="mf-game__test">{testButton}</div> : null}
       {/* 장면 전환 막(09-20): 결과 알림보다 앞(DOM 순서)에 두어 막을 붙잡는 동안 알림이 막 위로 올라올 수 있게 한다. 덮기는 공개 마감만의 함수다 */}

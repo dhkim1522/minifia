@@ -5,10 +5,13 @@
 //   pick: 같은 값이면 보내지 않고 닫기만, 아니면 send 가 false 가 아닐 때 낙관 값을 바꾸고 BADGE_CLOSE_MS 뒤 닫는다.
 //   rejected 번호가 늘면(오류 프레임 = 마감 직후 거절) 서버 값으로 되돌린다. 서버 view 가 같은 값을 확인하면 거절 대기(SendGuard)를 푼다.
 //   이 훅이 서버로 보내는 메시지는 badge 뿐이다. 연결이 끊긴 동안(canSend false)과 주장 창이 아닌 단계에서는 아무 일도 하지 않는다.
-import { useEffect, useRef, useState } from "react";
+//
+// useBadgeFx — 이전 view 와 비교한 효과(팝·"말 바꿈" 알약·live 한 줄). 첫 스냅샷·재접속·연결 번호(epoch) 바뀜은 이펙트 없이 현재 상태로 바로 그린다.
+//   알약은 BADGE_NOTICE_MS 뒤 사라진다(모션 줄이기가 아니면 페이드 BADGE_NOTICE_FADE_MS 만큼 더). 표는 렌더 중 view 차이로 정한다(useDayFx 와 같은 "이전 값 기억" 방식).
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { RefObject } from "react";
 import type { BadgeId, ClientMessage, RoomView } from "../../shared/protocol";
-import { BADGE_CLOSE_MS, floatVisible, myClaim } from "../game/badgeView";
+import { BADGE_CLOSE_MS, BADGE_NOTICE_FADE_MS, BADGE_NOTICE_MS, badgeFxOf, floatVisible, myClaim, sayLine } from "../game/badgeView";
 import type { SendGuard } from "./useSendGuard";
 import { useViewChoice } from "./useViewChoice";
 
@@ -108,4 +111,84 @@ export function useBadge({ view, send, canSend = true, rejected = 0, guard }: Us
   };
 
   return { allowed, open, setOpen, toggle, shown, server, pick, buttonRef };
+}
+
+export interface BadgeFxState {
+  /** 좌석 → 팝 횟수(바뀔 때마다 늘어난다). 첫 스냅샷 때는 비어 있다 */
+  pops: ReadonlyMap<number, number>;
+  /** 좌석 → "말 바꿈" 알약 번호. 있는 동안만 알약을 그린다 */
+  notices: ReadonlyMap<number, number>;
+  /** 화면에 안 보이는 live 한 줄. 바뀐 순간에만 생긴다 */
+  said: string;
+}
+
+const NO_MAP: ReadonlyMap<number, number> = new Map();
+
+export function useBadgeFx(view: RoomView, epoch: number, reducedMotion: boolean): BadgeFxState {
+  const [pops, setPops] = useState<ReadonlyMap<number, number>>(NO_MAP);
+  const [notices, setNotices] = useState<ReadonlyMap<number, number>>(NO_MAP);
+  const [said, setSaid] = useState("");
+  const [seen, setSeen] = useState<{ view: RoomView; epoch: number }>({ view, epoch });
+  if (seen.view !== view || seen.epoch !== epoch) {
+    const reset = seen.epoch !== epoch;
+    setSeen({ view, epoch });
+    const fx = badgeFxOf(reset ? null : seen.view, view);
+    if (reset) {
+      setPops(NO_MAP);
+      setNotices(NO_MAP);
+      setSaid("");
+    }
+    if (fx.pop.length > 0) {
+      setPops((m) => {
+        const next = new Map(m);
+        for (const seat of fx.pop) next.set(seat, (m.get(seat) ?? 0) + 1);
+        return next;
+      });
+    }
+    if (fx.notice.length > 0) {
+      setNotices((m) => {
+        const next = new Map(m);
+        for (const seat of fx.notice) next.set(seat, (m.get(seat) ?? 0) + 1);
+        return next;
+      });
+    }
+    const last = fx.said[fx.said.length - 1];
+    if (last !== undefined) {
+      const nickname = view.players.find((p) => p.seat === last.seat)?.nickname ?? "";
+      setSaid(sayLine(nickname, last.claim));
+    }
+  }
+
+  // 알약 타이머: 좌석마다 번호가 바뀐 때만 새로 건다. 같은 좌석의 새 알약은 이전 타이머를 끊고 다시 센다
+  const timers = useRef(new Map<number, { nonce: number; id: ReturnType<typeof setTimeout> }>());
+  useLayoutEffect(() => {
+    const live = timers.current;
+    for (const [seat, nonce] of notices) {
+      const cur = live.get(seat);
+      if (cur !== undefined && cur.nonce === nonce) continue;
+      if (cur !== undefined) clearTimeout(cur.id);
+      const id = setTimeout(
+        () => {
+          live.delete(seat);
+          setNotices((m) => {
+            if (m.get(seat) !== nonce) return m;
+            const next = new Map(m);
+            next.delete(seat);
+            return next;
+          });
+        },
+        BADGE_NOTICE_MS + (reducedMotion ? 0 : BADGE_NOTICE_FADE_MS),
+      );
+      live.set(seat, { nonce, id });
+    }
+  }, [notices, reducedMotion]);
+  useEffect(() => {
+    const live = timers.current;
+    return () => {
+      for (const t of live.values()) clearTimeout(t.id);
+      live.clear();
+    };
+  }, []);
+
+  return { pops, notices, said };
 }

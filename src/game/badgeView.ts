@@ -98,8 +98,36 @@ export interface BadgeFx {
 
 const NO_FX: BadgeFx = { pop: [], notice: [], said: [] };
 
-/** 이전 view 와 지금 view 를 비교해 효과를 만든다. prev 가 null(첫 스냅샷·재접속·연결 번호 바뀜)이면 효과 없음 */
+/**
+ * 이전 view 와 지금 view 를 비교해 효과를 만든다. prev 가 null(첫 스냅샷·재접속·연결 번호 바뀜)이면 효과 없음.
+ * 같은 좌석의 주장이 바뀌면 pop. 말 바꿈은 서버 규칙(setBadge)과 같다: 직전 값이 직업이었고 새 값이 다르면(또는 badgeSwapped 가 새로 켜지면) notice.
+ * 처음 거는 순간(없음 → 직업)과 말 안 함으로 되돌린 뒤 다시 직업을 거는 순간은 바꿈이 아니다. 산 사람이 아닌 좌석, 이전에 없던 좌석은 효과 없음.
+ */
 export function badgeFxOf(prev: RoomView | null, cur: RoomView): BadgeFx {
   if (prev === null) return NO_FX;
-  return NO_FX;
+  const fx: BadgeFx = { pop: [], notice: [], said: [] };
+  for (const row of cur.players) {
+    if (!isAlive(row)) continue;
+    const before = prev.players.find((p) => p.seat === row.seat);
+    if (before === undefined || !isAlive(before)) continue;
+    const was: BadgeId = before.badge ?? "none";
+    const now: BadgeId = row.badge ?? "none";
+    if (was === now) continue;
+    fx.pop.push(row.seat);
+    fx.said.push({ seat: row.seat, claim: now });
+    if (was !== "none" || (before.badgeSwapped !== true && row.badgeSwapped === true)) fx.notice.push(row.seat);
+  }
+  return fx;
+}
+
+/** 받침이 있는 한글 음절로 끝나는가 */
+function endsWithBatchim(word: string): boolean {
+  const code = word.charCodeAt(word.length - 1) - 0xac00;
+  return code >= 0 && code <= 11171 && code % 28 !== 0;
+}
+
+/** 스크린리더 live 한 줄: "{이름} 님이 {직업|말 안 함}이라고 말했어요"(받침에 맞는 조사) */
+export function sayLine(nickname: string, claim: BadgeId): string {
+  const word = nameOf(claim);
+  return `${nickname} 님이 ${word}${endsWithBatchim(word) ? "이라고" : "라고"} 말했어요`;
 }
