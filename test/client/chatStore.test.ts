@@ -449,3 +449,75 @@ describe("ChatStore: 로컬 카드와 위장 방지", () => {
     expect(`${line?.kind}|${line?.card}|${line?.revealAt}`).toBe("player|undefined|undefined");
   });
 });
+
+// 09.1-10 (결정 0063-3, UI-SPEC C-1): 편지가 뜨는 아침은 카드 보류를 편지 접힘 시각까지 늦춘다
+describe("ChatStore: holdCardsUntil·liveCard (09.1-10)", () => {
+  const card = (k: "will" | "note", seat: number, seq: number, text: string, at: number): ChatLineFrame => ({ ...chat("all", seat, seq, text, at), k });
+  const reveal = (store: ChatStore, now: number) => store.visibleLines("all", now).map((l) => l.card ?? l.kind).join();
+
+  it("보류 중인 카드들의 revealAt 을 늦추고 순서(유언 → 쪽지)는 그대로다", () => {
+    const store = ready();
+    store.apply(card("will", 3, 9, "유언", 900), 1, 1000);
+    store.apply(card("note", 3, 10, "쪽지", 900), 1, 1000);
+    store.holdCardsUntil(6400, 1100);
+    expect(reveal(store, 3800)).toBe("");
+    expect(reveal(store, 6399)).toBe("");
+    expect(reveal(store, 6400)).toBe("will,note");
+    expect(store.nextCardReveal(1100)).toBe(6400);
+  });
+
+  it("바로 보이는 줄(이미 지난 revealAt)·사람 줄·시스템 줄·복원 줄은 건드리지 않는다", () => {
+    const store = ready();
+    store.apply(card("note", 3, 1, "옛 쪽지", 100), 1, 100);
+    store.apply(chat("all", 1, 2, "안녕", 200), 1, 200);
+    store.addSystem("안내", { scope: "all", at: 300 });
+    store.apply({ t: "chatLog", lines: [{ ch: "all", seat: 2, seq: 7, text: "복원", at: 50, k: "will" }] }, 1, 400);
+    store.holdCardsUntil(9000, 5000);
+    expect(store.visibleLines("all", 5000).length).toBe(5);
+  });
+
+  it("그 뒤 at 이 지나기 전에 라이브로 오는 카드도 at 까지 보류되고, at 이 지나면 보통 규칙(받은 시각 + 2800)이다", () => {
+    const store = ready();
+    store.holdCardsUntil(6400, 1000);
+    store.apply(card("note", 3, 11, "쪽지", 900), 1, 1500);
+    expect(reveal(store, 6399)).toBe("");
+    expect(reveal(store, 6400)).toBe("note");
+    store.apply(card("will", 4, 12, "다음 판", 900), 1, 7000);
+    expect(reveal(store, 9799)).toBe("note");
+    expect(reveal(store, 9800)).toBe("note,will");
+  });
+
+  it("at 이 기존 revealAt 보다 이르면 늦추지 않는다(max)", () => {
+    const store = ready();
+    store.apply(card("will", 3, 9, "유언", 900), 1, 1000);
+    store.holdCardsUntil(2000, 1100);
+    expect(store.nextCardReveal(1100)).toBe(3800);
+  });
+
+  it("holdCardsUntil 은 구독자를 부르고 reset 이 보류 바닥값을 지운다", () => {
+    const store = ready();
+    store.apply(card("will", 3, 9, "유언", 900), 1, 1000);
+    const cb = vi.fn();
+    store.subscribe(cb);
+    store.holdCardsUntil(6400, 1100);
+    expect(cb).toHaveBeenCalled();
+    store.reset();
+    store.setContext({ pk: "1:morning", channel: "all", epoch: 2 });
+    store.apply(card("will", 3, 1, "다음", 900), 2, 2000);
+    expect(store.nextCardReveal(2000)).toBe(4800);
+  });
+
+  it("liveCard 는 라이브로 받은 그 좌석의 마지막 카드를 돌려주고, 복원 카드·다른 종류·다른 좌석은 돌려주지 않는다", () => {
+    const store = ready();
+    expect(store.liveCard("will", 3)).toBeUndefined();
+    store.apply({ t: "chatLog", lines: [{ ch: "all", seat: 3, seq: 1, text: "복원", at: 50, k: "will" }] }, 1, 400);
+    expect(store.liveCard("will", 3)).toBeUndefined();
+    store.apply(card("note", 3, 2, "쪽지", 900), 1, 1000);
+    expect(store.liveCard("will", 3)).toBeUndefined();
+    store.apply(card("will", 3, 3, "첫 유언", 900), 1, 1000);
+    store.apply(card("will", 3, 4, "마지막 유언", 901), 1, 1000);
+    store.apply(card("will", 4, 5, "남의 유언", 902), 1, 1000);
+    expect(store.liveCard("will", 3)?.text).toBe("마지막 유언");
+    expect(store.liveCard("note", 3)?.text).toBe("쪽지");
+  });
+});
