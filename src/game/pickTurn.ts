@@ -172,7 +172,8 @@ function runoffLook(view: RoomView, serverNow: number): BlockLook | null {
   const base = { mode: "runoff" as const, totalMs: RUNOFF_VOTE_MS, stage, no: 0, total: 0, myTurn: false };
   if (stage !== "turn") return { ...base, remainingMs: 0, seconds: 0, ratio: 0, tone: "calm" };
   // 서버 단계 마감(view.phaseEndsAt) 기준. 5초 단계라 색은 항상 calm 이다(timerTone 한 호출, UI-SPEC D-3)
-  const remaining = Math.max(0, (view.phaseEndsAt ?? serverNow) - serverNow);
+  // 시계가 어긋나 남은 시간이 창 길이보다 길게 읽혀도 '6초' 를 보이지 않게 창 길이로 자른다
+  const remaining = Math.min(RUNOFF_VOTE_MS, Math.max(0, (view.phaseEndsAt ?? serverNow) - serverNow));
   const seconds = Math.ceil(remaining / 1000);
   return {
     ...base,

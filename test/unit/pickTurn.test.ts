@@ -278,6 +278,8 @@ describe("blockLook — 결선 (UI-SPEC D-1·D-3)", () => {
     const at = (remaining: number) => blockLook(runoffView(1, { endsIn: RUNOFF_VOTE_MS }), RT + RUNOFF_VOTE_MS - remaining)!;
     expect(at(5_000)).toMatchObject({ mode: "runoff", stage: "turn", seconds: 5, totalMs: RUNOFF_VOTE_MS, tone: "calm" });
     expect(at(5_000).ratio).toBe(1);
+    // 시계 어긋남으로 남은 시간이 투표 창보다 길게 읽혀도 알약은 '6초' 를 보이지 않는다(E2E 360×560 에서 본 첫 프레임)
+    expect(at(5_040)).toMatchObject({ seconds: 5, remainingMs: RUNOFF_VOTE_MS });
     expect(at(2_500)).toMatchObject({ seconds: 3, tone: "calm" });
     expect(at(2_500).ratio).toBeCloseTo(0.5, 6);
     expect(at(1)).toMatchObject({ seconds: 1, tone: "calm" });
