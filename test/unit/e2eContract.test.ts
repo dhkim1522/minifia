@@ -229,3 +229,69 @@ describe("E2E 의 유언 편지 상수와 앱 상수 (09.1-11)", () => {
     expect(lib.SEAL_GLYPH).toBe(SEAL_GLYPH);
   });
 });
+
+describe("E2E 의 배지·귓속말 치수와 앱 CSS (09.1.1-10)", () => {
+  const lib = e2eLib as {
+    FLOAT_SIZE: number;
+    FLOAT_MARGIN: number;
+    FLOAT_GAP: number;
+    WHISPER_SHEET_H: number;
+    CLAIM_BADGE_SIZE: number;
+    CLAIM_ICON_SIZE: number;
+    CLAIM_SWAP_SIZE: number;
+    CLAIM_OUT_X: number;
+    CLAIM_OUT_Y: number;
+    SHEET_FONT_MIN: number;
+    TAP_MIN: number;
+  };
+  const read = (f: string): string => readFileSync(new URL(f, import.meta.url), "utf8");
+  const tokens = read("../../src/styles/tokens.css");
+  const v2 = read("../../src/styles/v2.css");
+  const game = read("../../src/styles/game.css");
+  const token = (name: string): number => {
+    const m = new RegExp(`${name}:\\s*(\\d+)px`).exec(tokens);
+    if (!m) throw new Error(`${name} 토큰을 못 찾음`);
+    return Number(m[1]);
+  };
+  const rule = (css: string, selector: string): string => {
+    const start = css.indexOf(`${selector} {`);
+    if (start < 0) throw new Error(`${selector} 규칙을 못 찾음`);
+    return css.slice(start, css.indexOf("}", start));
+  };
+
+  it("떠 있는 버튼 지름·여백·간격이 --control-input·--space-md·--space-sm 토큰과 같고 CSS 가 그 토큰을 쓴다", () => {
+    expect(lib.FLOAT_SIZE).toBe(token("--control-input"));
+    expect(lib.FLOAT_MARGIN).toBe(token("--space-md"));
+    expect(lib.FLOAT_GAP).toBe(token("--space-sm"));
+    expect(rule(v2, ".mv-float")).toMatch(/width:\s*var\(--control-input\)/);
+    expect(rule(game, ".mf-float")).toMatch(/right:\s*var\(--space-md\)/);
+    expect(rule(game, ".mf-float")).toMatch(/gap:\s*var\(--space-sm\)/);
+  });
+
+  it("귓속말 시트 높이 124 = 안쪽 12 + 머리 44(--tap-min) + 간격 8 + 입력줄 48(--control-input) + 안쪽 12", () => {
+    expect(lib.TAP_MIN).toBe(token("--tap-min"));
+    expect(lib.WHISPER_SHEET_H).toBe(12 + token("--tap-min") + token("--space-sm") + token("--control-input") + 12);
+    expect(rule(v2, ".mv-line-sheet")).toMatch(/padding:\s*12px/);
+    expect(rule(v2, ".mv-line__head")).toMatch(/height:\s*var\(--tap-min\)/);
+    expect(rule(v2, ".mv-line__row")).toMatch(/height:\s*var\(--control-input\)/);
+  });
+
+  it("배지 지름 20·말 바꿈 점 16·바깥 4(--space-xs)·위 −8 이 .mv-claim CSS 와 같다", () => {
+    const claim = rule(v2, ".mv-claim");
+    expect(claim).toMatch(new RegExp(`width:\\s*${lib.CLAIM_BADGE_SIZE}px`));
+    expect(claim).toMatch(new RegExp(`height:\\s*${lib.CLAIM_BADGE_SIZE}px`));
+    expect(claim).toMatch(new RegExp(`top:\\s*${lib.CLAIM_OUT_Y}px`));
+    expect(claim).toMatch(/right:\s*calc\(var\(--space-xs\) \* -1\)/);
+    expect(lib.CLAIM_OUT_X).toBe(token("--space-xs"));
+    const swap = rule(v2, ".mv-claim__swap");
+    expect(swap).toMatch(new RegExp(`width:\\s*${lib.CLAIM_SWAP_SIZE}px`));
+    expect(swap).toMatch(new RegExp(`height:\\s*${lib.CLAIM_SWAP_SIZE}px`));
+  });
+
+  it("배지 아이콘 크기가 ClaimBadge.tsx 의 V2Icon size 와 같고 시트 글자 하한 14 는 시트 CSS 의 가장 작은 글자와 같다", () => {
+    const badge = read("../../src/components/v2/ClaimBadge.tsx");
+    expect(badge).toContain(`size={${lib.CLAIM_ICON_SIZE}}`);
+    expect(rule(v2, ".mv-claim-sheet__hint")).toMatch(new RegExp(`font-size:\\s*${lib.SHEET_FONT_MIN}px`));
+    expect(rule(v2, ".mv-line__count")).toMatch(new RegExp(`font-size:\\s*${lib.SHEET_FONT_MIN}px`));
+  });
+});

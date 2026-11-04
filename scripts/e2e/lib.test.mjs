@@ -557,11 +557,11 @@ test("headerContrastChecks H1: 제목 항목이 없어도 실패한다(대기실
   assert.match(r.detail, /제목/);
 });
 
-test("EXPECTED_SCENE: 단계 열두 개가 모두 장면 id 로 정해져 있다 (옛 처형 여부·후보 선택·후보 공개 단계는 08-22 에 PhaseId 와 함께 없어졌다)", () => {
+test("EXPECTED_SCENE: 단계 열네 개가 모두 장면 id 로 정해져 있다 (옛 처형 여부·후보 선택·후보 공개 단계는 08-22 에 PhaseId 와 함께 없어졌고, 결선 runoff·마지막 3인 showdown 은 09.1.1-04·06 이 더했다)", () => {
   assert.deepEqual(Object.keys(EXPECTED_SCENE).sort(), [
-    "assigning", "dayAnnounce", "defense", "discussion", "ended", "execution", "lobby", "morning", "night", "nomination", "roleReveal", "verdict",
+    "assigning", "dayAnnounce", "defense", "discussion", "ended", "execution", "lobby", "morning", "night", "nomination", "roleReveal", "runoff", "showdown", "verdict",
   ]);
-  for (const p of ["nomination", "defense", "verdict", "execution"]) assert.equal(EXPECTED_SCENE[p], "dusk", p);
+  for (const p of ["nomination", "defense", "verdict", "execution", "runoff", "showdown"]) assert.equal(EXPECTED_SCENE[p], "dusk", p);
   assert.equal(EXPECTED_SCENE.ended, "night");
   assert.equal(EXPECTED_SCENE.night, "night");
   assert.equal(EXPECTED_SCENE.morning, "morning");
@@ -2084,7 +2084,7 @@ test("sheetFitChecks(whisper): 정상 값은 SF1~SF5 와 높이 SF6 모두 통�
 test("sheetFitChecks SF1·SF2: 헤더에 걸치거나 화면 밖이면 실패", () => {
   const up = whisperGood();
   up.sheet = rect(10, 50, 370, 126);
-  onlyFail(sheetFitChecks(up), "SF1", "SF3");
+  onlyFail(sheetFitChecks(up), "SF1");
   const wide = whisperGood();
   wide.sheet = rect(10, 566, 390, 126); // 오른쪽 400 > 390
   onlyFail(sheetFitChecks(wide), "SF2");

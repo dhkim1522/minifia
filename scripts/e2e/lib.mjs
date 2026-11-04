@@ -378,6 +378,134 @@ export function pickButtonChecks(buttons) {
   return lines;
 }
 
+// ---- 직업 배지·귓속말 (09.1.1-08·09, 결정 0066, UI-SPEC A·B 와 폰 크기별 공통 배치) ----
+// 앱 상수 사본. test/unit/e2eContract.test.ts 가 CSS 원문(tokens.css·game.css·v2.css)과 같은 값인지 본다.
+/** 떠 있는 버튼 지름(--control-input) */
+export const FLOAT_SIZE = 48;
+/** 떠 있는 묶음의 오른쪽 여백(--space-md) */
+export const FLOAT_MARGIN = 16;
+/** 떠 있는 버튼 사이와 패널 윗변 위 간격(--space-sm) */
+export const FLOAT_GAP = 8;
+/** 귓속말 한 줄 시트 높이: 12 + 44 + 8 + 48 + 12 (테두리 1px 두 줄은 허용 오차 ±2 안) */
+export const WHISPER_SHEET_H = 124;
+/** 이름표 모서리 배지 지름 */
+export const CLAIM_BADGE_SIZE = 20;
+/** 배지 안 직업 아이콘 크기 */
+export const CLAIM_ICON_SIZE = 14;
+/** 말 바꿈 점 지름 */
+export const CLAIM_SWAP_SIZE = 16;
+/** 배지가 이름표 오른쪽 위 모서리에서 바깥으로 나가는 거리(오른쪽 −4)·위로 올라가는 거리(위 −8) */
+export const CLAIM_OUT_X = 4;
+export const CLAIM_OUT_Y = -8;
+
+/**
+ * 떠 있는 버튼 판정(FB1~FB5). buttons = [{ kind, rect }], panel = { top }, viewport = { w, h }, kbOpen = 가상 키보드가 열려 있나, expectCount = 기대 개수(기본 2: 배지 + 귓속말).
+ * FB1 개수가 기대와 같고 모두 화면 안 · FB2 버튼끼리 겹치지 않음 · FB3 키보드가 닫혀 있으면 아랫변 ≤ 패널 윗변 − 8 + 0.5 · FB4 지름 48±1(≥ 44) · FB5 오른쪽 여백 16±1.
+ */
+export function floatButtonChecks({ buttons, panel, viewport, kbOpen = false, expectCount = 2 } = {}) {
+  const L1 = `떠 있는 버튼이 ${expectCount}개이고 모두 화면 안`;
+  const L2 = "떠 있는 버튼끼리 겹치지 않음";
+  const L3 = "떠 있는 버튼이 패널 윗변 위 8 이내(키보드 닫힘)";
+  const L4 = `떠 있는 버튼 지름 ${FLOAT_SIZE}±1`;
+  const L5 = `떠 있는 버튼 오른쪽 여백 ${FLOAT_MARGIN}±1`;
+  const valid = Array.isArray(buttons) && buttons.every((b) => b?.rect && allNum(b.rect.left, b.rect.top, b.rect.width, b.rect.height));
+  if (!valid || !viewport || !allNum(viewport.w, viewport.h)) return [noMeasure("FB1", L1, "buttons·viewport"), noMeasure("FB2", L2, "buttons"), noMeasure("FB3", L3, "buttons"), noMeasure("FB4", L4, "buttons"), noMeasure("FB5", L5, "buttons")];
+  const screen = { left: 0, top: 0, right: viewport.w, bottom: viewport.h };
+  const out = [];
+  const bad1 = buttons.length === expectCount ? [] : [`${buttons.length}개`];
+  for (const b of buttons) if (!rectInside(b.rect, screen)) bad1.push(`${b.kind} ${fmt(b.rect.left)},${fmt(b.rect.top)} ${fmt(b.rect.width)}x${fmt(b.rect.height)}`);
+  out.push(result("FB1", L1, bad1));
+  const clashes = [];
+  for (let i = 0; i < buttons.length; i++) {
+    for (let j = i + 1; j < buttons.length; j++) {
+      if (rectsOverlap(buttons[i].rect, buttons[j].rect)) clashes.push(`${buttons[i].kind}-${buttons[j].kind} (${overlapText(buttons[i].rect, buttons[j].rect)})`);
+    }
+  }
+  out.push(result("FB2", L2, clashes));
+  if (kbOpen) out.push(result("FB3", L3, []));
+  else if (!panel || !isNum(panel.top)) out.push(noMeasure("FB3", L3, "panel.top"));
+  else out.push(result("FB3", L3, buttons.filter((b) => bottom(b.rect) > panel.top - FLOAT_GAP + OVERLAP_EPS).map((b) => `${b.kind} 아래 ${fmt(bottom(b.rect))} > ${fmt(panel.top - FLOAT_GAP)}`)));
+  out.push(result("FB4", L4, buttons.filter((b) => Math.abs(b.rect.width - FLOAT_SIZE) > 1 || Math.abs(b.rect.height - FLOAT_SIZE) > 1 || b.rect.width + OVERLAP_EPS < TAP_MIN || b.rect.height + OVERLAP_EPS < TAP_MIN).map((b) => `${b.kind} ${fmt(b.rect.width)}x${fmt(b.rect.height)}`)));
+  out.push(result("FB5", L5, buttons.filter((b) => Math.abs(viewport.w - right(b.rect) - FLOAT_MARGIN) > 1).map((b) => `${b.kind} 여백 ${fmt(viewport.w - right(b.rect))}`)));
+  return out;
+}
+
+/** 시트 글자 하한(UI-SPEC: 14px 미만 없음). 낮추지 않는다 */
+export const SHEET_FONT_MIN = 14;
+
+/**
+ * 시트가 보이는 영역에 맞는지(SF1~SF6). sheet = 시트 사각형, header = { bottom }, viewport = { w, h }(키보드가 열려 있으면 보이는 영역 = visualViewport 크기),
+ * panel = { top } 이거나 null(패널이 가려졌거나 키보드가 올라와 시트만 키보드 위에 붙은 경우 — 그때는 viewport 아래가 기준), kind = "whisper" | "badge",
+ * targets = 누르기 대상 사각형들(칩·보내기·닫기), fontMin = 시트 안 글자 크기 최소(px), chipRows·hint = badge 높이 계산 재료.
+ * SF1 윗변 ≥ 헤더 아랫변 · SF2 화면 안 · SF3 아랫변 ≤ 패널 윗변(없으면 viewport 아래) · SF4 대상 각각 44×44 이상 · SF5 글자 14px 이상 ·
+ * SF6 높이: whisper 124±2, badge = 12 + 44 + 8 + (칩 줄 × 44 + 줄 사이 8) + (안내 있으면 8 + 20) + 12 에 테두리 2 를 더한 값 −2~+6 안.
+ */
+export function sheetFitChecks({ sheet, header, viewport, panel, kind, targets, fontMin, chipRows, hint } = {}) {
+  const L1 = "시트가 헤더 아래에 있음";
+  const L2 = "시트가 화면 안";
+  const L3 = "시트 아랫변이 패널 윗변(또는 보이는 영역 아래) 이내";
+  const L4 = `시트의 누르기 대상이 각각 ${TAP_MIN}×${TAP_MIN} 이상`;
+  const L5 = `시트 글자가 ${SHEET_FONT_MIN}px 이상`;
+  const L6 = kind === "whisper" ? `귓속말 시트 높이 ${WHISPER_SHEET_H}±2` : "배지 시트 높이(칩 줄 수·안내에 맞음)";
+  if (!sheet || !allNum(sheet.left, sheet.top, sheet.width, sheet.height) || !viewport || !allNum(viewport.w, viewport.h)) {
+    return [noMeasure("SF1", L1, "sheet"), noMeasure("SF2", L2, "sheet"), noMeasure("SF3", L3, "sheet"), noMeasure("SF4", L4, "sheet"), noMeasure("SF5", L5, "sheet"), noMeasure("SF6", L6, "sheet")];
+  }
+  const out = [];
+  out.push(header && isNum(header.bottom) ? result("SF1", L1, sheet.top + OVERLAP_EPS >= header.bottom ? [] : [`시트 위 ${fmt(sheet.top)} < 헤더 아래 ${fmt(header.bottom)}`]) : noMeasure("SF1", L1, "header.bottom"));
+  const bad2 = [];
+  if (sheet.left < -OVERLAP_EPS) bad2.push(`왼쪽 ${fmt(sheet.left)}`);
+  if (right(sheet) > viewport.w + OVERLAP_EPS) bad2.push(`오른쪽 ${fmt(right(sheet))} > ${viewport.w}`);
+  if (sheet.top < -OVERLAP_EPS) bad2.push(`위 ${fmt(sheet.top)}`);
+  if (bottom(sheet) > viewport.h + OVERLAP_EPS) bad2.push(`아래 ${fmt(bottom(sheet))} > ${viewport.h}`);
+  out.push(result("SF2", L2, bad2));
+  const limit = panel && isNum(panel.top) ? panel.top : viewport.h;
+  out.push(result("SF3", L3, bottom(sheet) <= limit + OVERLAP_EPS ? [] : [`시트 아래 ${fmt(bottom(sheet))} > ${fmt(limit)}${panel ? " (패널 윗변)" : " (보이는 영역 아래)"}`]));
+  if (!Array.isArray(targets) || targets.length === 0 || !targets.every((t) => allNum(t?.width, t?.height))) out.push(noMeasure("SF4", L4, "targets"));
+  else out.push(result("SF4", L4, targets.filter((t) => t.width + OVERLAP_EPS < TAP_MIN || t.height + OVERLAP_EPS < TAP_MIN).map((t) => `${fmt(t.width)}x${fmt(t.height)}`)));
+  out.push(isNum(fontMin) ? result("SF5", L5, fontMin + 0.01 >= SHEET_FONT_MIN ? [] : [`${fmt(fontMin)}px`]) : noMeasure("SF5", L5, "fontMin"));
+  if (kind === "whisper") {
+    out.push(result("SF6", L6, Math.abs(sheet.height - WHISPER_SHEET_H) <= 2.01 ? [] : [`높이 ${fmt(sheet.height)}`]));
+  } else if (kind === "badge") {
+    if (![1, 2, 3].includes(chipRows) || typeof hint !== "boolean") out.push(noMeasure("SF6", L6, "chipRows·hint"));
+    else {
+      const want = 12 + 44 + 8 + chipRows * 44 + (chipRows - 1) * 8 + (hint ? 8 + 20 : 0) + 12;
+      const d = sheet.height - want;
+      out.push(result("SF6", L6, d >= -2 && d <= 6 ? [] : [`높이 ${fmt(sheet.height)} (칩 ${chipRows}줄${hint ? "·안내" : ""} 기대 ${want}~${want + 2})`]));
+    }
+  } else out.push(noMeasure("SF6", L6, "kind"));
+  return out;
+}
+
+/**
+ * 이름표 모서리 배지 기하(CB1~CB4, 말 바꿈 점이 있으면 CB5). badge = { rect, icon: { width, height }, swap: rect | null }, tag = 이름표(.mv-tag) 사각형,
+ * tagWidthWithout = 배지가 없을 때 같은 이름표의 폭(호출 쪽이 같은 이름표를 배지 전에 재서 준다).
+ * CB1 지름 20±1 · CB2 이름표 오른쪽 위 모서리에서 바깥 4·위 −8 (각 ±2) · CB3 이름표 폭이 배지로 늘지 않음(+0.5) · CB4 아이콘 14±1 · CB5 말 바꿈 점 지름 16±1.
+ */
+export function claimBadgeChecks({ badge, tag, tagWidthWithout } = {}) {
+  const L1 = `배지 지름 ${CLAIM_BADGE_SIZE}±1`;
+  const L2 = `배지가 이름표 오른쪽 위 모서리에서 바깥 ${CLAIM_OUT_X}·위 ${CLAIM_OUT_Y} (±2)`;
+  const L3 = "이름표 폭이 배지로 늘지 않음";
+  const L4 = `배지 아이콘 ${CLAIM_ICON_SIZE}±1`;
+  const r = badge?.rect;
+  if (!r || !allNum(r.left, r.top, r.width, r.height) || !tag || !allNum(tag.left, tag.top, tag.width, tag.height)) {
+    return [noMeasure("CB1", L1, "badge"), noMeasure("CB2", L2, "badge·tag"), noMeasure("CB3", L3, "tag"), noMeasure("CB4", L4, "badge.icon")];
+  }
+  const out = [];
+  out.push(result("CB1", L1, Math.abs(r.width - CLAIM_BADGE_SIZE) <= 1 && Math.abs(r.height - CLAIM_BADGE_SIZE) <= 1 ? [] : [`${fmt(r.width)}x${fmt(r.height)}`]));
+  const outX = right(r) - right(tag);
+  const outY = r.top - tag.top;
+  out.push(result("CB2", L2, Math.abs(outX - CLAIM_OUT_X) <= 2 && Math.abs(outY - CLAIM_OUT_Y) <= 2 ? [] : [`바깥 ${fmt(outX)}·위 ${fmt(outY)}`]));
+  out.push(isNum(tagWidthWithout) ? result("CB3", L3, tag.width <= tagWidthWithout + OVERLAP_EPS ? [] : [`이름표 폭 ${fmt(tag.width)} > 배지 없을 때 ${fmt(tagWidthWithout)}`]) : noMeasure("CB3", L3, "tagWidthWithout"));
+  const ic = badge.icon;
+  out.push(ic && allNum(ic.width, ic.height) ? result("CB4", L4, Math.abs(ic.width - CLAIM_ICON_SIZE) <= 1 && Math.abs(ic.height - CLAIM_ICON_SIZE) <= 1 ? [] : [`${fmt(ic.width)}x${fmt(ic.height)}`]) : noMeasure("CB4", L4, "badge.icon"));
+  if (badge.swap) {
+    const sw = badge.swap;
+    const L5 = `말 바꿈 점 지름 ${CLAIM_SWAP_SIZE}±1`;
+    out.push(allNum(sw.width, sw.height) ? result("CB5", L5, Math.abs(sw.width - CLAIM_SWAP_SIZE) <= 1 && Math.abs(sw.height - CLAIM_SWAP_SIZE) <= 1 ? [] : [`${fmt(sw.width)}x${fmt(sw.height)}`]) : noMeasure("CB5", L5, "badge.swap"));
+  }
+  return out;
+}
+
 // ---- 순차 지목 (09.1-08, 결정 0063-1, UI-SPEC A-1·A-2) ----
 // 앱 상수 사본. 스크립트는 shared 를 import 하지 않는다(e2eContract.test.ts 가 shared/game/phases.ts 와 같은 값인지 본다).
 export const NOMINATION_GATHER_MS = 3000;
