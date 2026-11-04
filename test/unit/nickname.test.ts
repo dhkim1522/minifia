@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   countGraphemes,
+  graphemePrefix,
   NICKNAME_MAX_GRAPHEMES,
   NICKNAME_MAX_UTF16,
   nicknameKey,
@@ -190,5 +191,14 @@ describe("nicknameKey", () => {
 
   it("NFD 와 NFC 로 다르게 적은 같은 한글은 같은 키가 된다", () => {
     expect(nicknameKey(NFD_HAN)).toBe(nicknameKey("한"));
+  });
+});
+
+describe("graphemePrefix (09-24, 서버 봇 이름 줄이기)", () => {
+  it("앞에서 n 그래핌만 남기고, 이모지 한 덩어리는 쪼개지 않으며, 길이 이상이면 그대로다", () => {
+    expect(graphemePrefix("봇가나다라마바사", 3)).toBe("봇가나");
+    expect(graphemePrefix("봇가나", 8)).toBe("봇가나");
+    expect(graphemePrefix(`a${FAMILY}b`, 2)).toBe(`a${FAMILY}`);
+    expect(graphemePrefix("봇가", 0)).toBe("");
   });
 });

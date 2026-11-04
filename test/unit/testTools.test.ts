@@ -564,7 +564,7 @@ describe("skipPhase: 밤을 넘길 때 마피아 봇은 같은 대상으로 모�
 /** 사람 1(방장) + 봇 4 테스트 방 대기실. 봇 id 는 순서대로 만든다. */
 function botLobby(): RoomState {
   let n = 0;
-  const r = setBotCount(lobbyOf(1), HOST_ID, 4, () => `bot-id-${(n += 1)}-bbbbbbbb`);
+  const r = setBotCount(lobbyOf(1), HOST_ID, 4, () => `bot-id-${(n += 1)}-bbbbbbbb`, seededRandInt(1));
   if (!r.ok) throw new Error(`setBotCount failed: ${r.error}`);
   return r.state;
 }

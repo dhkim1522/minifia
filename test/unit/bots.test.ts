@@ -84,7 +84,7 @@ function idMaker(): () => string {
 }
 
 function withBots(state: RoomState, count: number): RoomState {
-  const result = setBotCount(state, state.hostId, count, idMaker());
+  const result = setBotCount(state, state.hostId, count, idMaker(), seededRandInt(1));
   if (!result.ok) throw new Error(`setBotCount failed: ${result.error}`);
   return result.state;
 }
@@ -152,39 +152,39 @@ describe("BOT_NAMES", () => {
 describe("setBotCount 거부", () => {
   it("일반 방은 방장이어도 BAD_MESSAGE 다", () => {
     const state = lobbyOf(2, false);
-    const result = setBotCount(state, HOST_ID, 3, idMaker());
+    const result = setBotCount(state, HOST_ID, 3, idMaker(), seededRandInt(1));
     expect(result.ok ? "ok" : result.error).toBe("BAD_MESSAGE");
   });
   it("테스트 방 손님은 NOT_HOST 다", () => {
     const state = lobbyOf(2);
-    const result = setBotCount(state, "player-id-0001-aaaa", 3, idMaker());
+    const result = setBotCount(state, "player-id-0001-aaaa", 3, idMaker(), seededRandInt(1));
     expect(result.ok ? "ok" : result.error).toBe("NOT_HOST");
   });
   it("대기실 밖은 WRONG_PHASE 다", () => {
     const state = stateAt(4, 0, 1, "roleReveal");
-    const result = setBotCount(state, HOST_ID, 1, idMaker());
+    const result = setBotCount(state, HOST_ID, 1, idMaker(), seededRandInt(1));
     expect(result.ok ? "ok" : result.error).toBe("WRONG_PHASE");
   });
   it("count -1·8·1.5 는 BAD_MESSAGE 다", () => {
     for (const count of [-1, MAX_TEST_BOTS + 1, 1.5, Number.NaN]) {
-      const result = setBotCount(lobbyOf(1), HOST_ID, count, idMaker());
+      const result = setBotCount(lobbyOf(1), HOST_ID, count, idMaker(), seededRandInt(1));
       expect(`${count}:${result.ok ? "ok" : result.error}`).toBe(`${count}:BAD_MESSAGE`);
     }
   });
   it("검사 순서는 testMode → 방장 → 대기실 → 개수다", () => {
     const normal = lobbyOf(2, false);
-    expect(canon(setBotCount(normal, "player-id-0001-aaaa", -1, idMaker()))).toBe('{"error":"BAD_MESSAGE","ok":false}');
+    expect(canon(setBotCount(normal, "player-id-0001-aaaa", -1, idMaker(), seededRandInt(1)))).toBe('{"error":"BAD_MESSAGE","ok":false}');
     const started = stateAt(4, 0, 1, "roleReveal");
     const guestId = "player-id-0001-aaaa";
-    expect(canon(setBotCount(started, guestId, -1, idMaker()))).toBe('{"error":"NOT_HOST","ok":false}');
-    expect(canon(setBotCount(started, HOST_ID, -1, idMaker()))).toBe('{"error":"WRONG_PHASE","ok":false}');
+    expect(canon(setBotCount(started, guestId, -1, idMaker(), seededRandInt(1)))).toBe('{"error":"NOT_HOST","ok":false}');
+    expect(canon(setBotCount(started, HOST_ID, -1, idMaker(), seededRandInt(1)))).toBe('{"error":"WRONG_PHASE","ok":false}');
   });
   it("거부는 입력 상태를 바꾸지 않는다", () => {
     const state = withBots(lobbyOf(2), 2);
     const before = canon(state);
-    setBotCount(state, "player-id-0001-aaaa", 3, idMaker());
-    setBotCount(state, HOST_ID, 8, idMaker());
-    setBotCount(lobbyOf(2, false), HOST_ID, 3, idMaker());
+    setBotCount(state, "player-id-0001-aaaa", 3, idMaker(), seededRandInt(1));
+    setBotCount(state, HOST_ID, 8, idMaker(), seededRandInt(1));
+    setBotCount(lobbyOf(2, false), HOST_ID, 3, idMaker(), seededRandInt(1));
     expect(canon(state)).toBe(before);
   });
 });
@@ -197,7 +197,9 @@ describe("setBotCount 추가·제거", () => {
     expect(next.players.length).toBe(5);
     const bots = botsOf(next);
     expect(seatsOf(bots)).toBe("1,2,3,4");
-    expect(bots.map((b) => b.nickname).join(",")).toBe(BOT_NAMES.slice(0, 4).join(","));
+    // 09-24: 첫 봇은 8자 그대로, 나머지는 쓸 수 있는 기본 이름의 앞부분(1~8자, feedback-10)
+    expect(bots[0]!.nickname).toBe(BOT_NAMES[0]);
+    expect(bots.slice(1).every((b) => BOT_NAMES.some((name) => name.startsWith(b.nickname)))).toBe(true);
     expect(bots.every((b) => b.isBot === true && b.connected && b.connId === null && b.token === "")).toBe(true);
     expect(bots.map((b) => b.id).join(",")).toBe([1, 2, 3, 4].map((n) => `bot-id-${n}-bbbbbbbb`).join(","));
     expect(bots.map((b) => b.joinSeq).join(",")).toBe(
@@ -205,6 +207,52 @@ describe("setBotCount 추가·제거", () => {
     );
     expect(next.nextJoinSeq).toBe(lobby.nextJoinSeq + 4);
     expect(canon(next.players.find((p) => p.id === HOST_ID))).toBe(before);
+  });
+
+  it("봇 이름 길이는 1~8 그래핌 무작위다: 모두 닉네임 규칙을 통과하고 비교 키가 겹치지 않으며 첫 봇만 8자 고정이다 (09-24, feedback-10)", () => {
+    for (let seed = 1; seed <= 30; seed += 1) {
+      const result = setBotCount(lobbyOf(1), HOST_ID, 7, idMaker(), seededRandInt(seed));
+      if (!result.ok) throw new Error(`seed ${seed}: ${result.error}`);
+      const bots = botsOf(result.state);
+      expect(`${seed}:${bots.length}`).toBe(`${seed}:7`);
+      expect(`${seed}:${countGraphemes(bots[0]!.nickname)}`).toBe(`${seed}:8`);
+      for (const b of bots) {
+        const checked = validateNickname(b.nickname);
+        expect(`${seed}:${b.nickname}:${checked.ok}`).toBe(`${seed}:${b.nickname}:true`);
+        const len = countGraphemes(b.nickname);
+        expect(`${seed}:${b.nickname}:${len >= 1 && len <= 8}`).toBe(`${seed}:${b.nickname}:true`);
+        expect(`${seed}:${b.nickname}:${b.nicknameKey}`).toBe(`${seed}:${b.nickname}:${nicknameKey(b.nickname)}`);
+      }
+      const keys = result.state.players.map((p) => p.nicknameKey);
+      expect(`${seed}:${new Set(keys).size}`).toBe(`${seed}:${keys.length}`);
+    }
+  });
+
+  it("같은 시드는 같은 이름 목록을 만들고(고정 값) 일곱 봇에서 길이가 세 가지 이상 나온다", () => {
+    const names = (seed: number): string[] => {
+      const r = setBotCount(lobbyOf(1), HOST_ID, 7, idMaker(), seededRandInt(seed));
+      if (!r.ok) throw new Error(r.error);
+      return botsOf(r.state).map((b) => b.nickname);
+    };
+    expect(names(42).join(",")).toBe(names(42).join(","));
+    expect(names(42).join(",")).toBe("봇가나다라마바사,봇아자차카,봇아자차,봇아자차카타파,봇아자차카타,봇아,봇아자차카타파하");
+    expect(new Set(names(42).map((n) => countGraphemes(n))).size >= 3).toBe(true);
+  });
+
+  it("앞부분 이름이 이미 방에 있으면 길이를 늘려 겹치지 않는 가장 짧은 이름을 쓴다 (길이 1 '봇' 이 있으면 '봇' + 한 글자)", () => {
+    const created = createRoomState({
+      code: "0420", hostId: HOST_ID, hostToken: "token-secret-0000-aaaa-0123456789", hostNickname: "봇", now: 0, testMode: true,
+    });
+    if (!created.ok) throw new Error("createRoomState failed");
+    // randInt 가 항상 0 이면 둘째 봇부터 길이 1 을 원한다. 첫 봇은 8자 그대로다.
+    const r = setBotCount(created.state, HOST_ID, 3, idMaker(), () => 0);
+    if (!r.ok) throw new Error(r.error);
+    const names = botsOf(r.state).map((b) => b.nickname);
+    expect(names[0]).toBe(BOT_NAMES[0]);
+    // 길이 1 "봇" 은 방장이 쓰고 있어 둘째 봇은 2자, 그 2자도 둘째 봇이 쓰니 셋째 봇은 3자가 된다
+    expect(names.slice(1).map((n) => countGraphemes(n)).join(",")).toBe("2,3");
+    const keys = r.state.players.map((p) => p.nicknameKey);
+    expect(new Set(keys).size).toBe(keys.length);
   });
 
   it("사람 2명 + count 7 이면 봇 6(총 8)이다", () => {
@@ -237,9 +285,9 @@ describe("setBotCount 추가·제거", () => {
 
   it("같은 count 재요청은 입력 객체 그대로다", () => {
     const three = withBots(lobbyOf(1), 3);
-    const again = setBotCount(three, HOST_ID, 3, idMaker());
+    const again = setBotCount(three, HOST_ID, 3, idMaker(), seededRandInt(1));
     expect(again.ok && again.state === three).toBe(true);
-    const zero = setBotCount(lobbyOf(1), HOST_ID, 0, idMaker());
+    const zero = setBotCount(lobbyOf(1), HOST_ID, 0, idMaker(), seededRandInt(1));
     expect(zero.ok && zero.state.players.length === 1).toBe(true);
   });
 
@@ -249,7 +297,9 @@ describe("setBotCount 추가·제거", () => {
     });
     if (!created.ok) throw new Error("createRoomState failed");
     const next = withBots(created.state, 2);
-    expect(botsOf(next).map((b) => b.nickname).join(",")).toBe(`${BOT_NAMES[1]},${BOT_NAMES[2]}`);
+    const names = botsOf(next).map((b) => b.nickname);
+    expect(names[0]).toBe(BOT_NAMES[1]);
+    expect(BOT_NAMES[1]!.startsWith(names[1]!) || BOT_NAMES[2]!.startsWith(names[1]!)).toBe(true);
     const keys = next.players.map((p) => p.nicknameKey);
     expect(new Set(keys).size).toBe(keys.length);
   });
