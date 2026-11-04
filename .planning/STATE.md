@@ -5,17 +5,17 @@ milestone_name: 같은 공간
 current_phase: 9
 current_phase_name: 밤과 아침
 status: verifying
-stopped_at: Completed 09-30-PLAN.md
-last_updated: "2026-11-04T07:34:35.643Z"
+stopped_at: Completed 09.1-01-PLAN.md
+last_updated: "2026-11-04T12:39:46.060Z"
 last_activity: 2026-11-03
 last_activity_desc: Phase 9 execution started
-state_head: 0214c2508aaffafb7a9f6c3e9d4371de97b7d632
+state_head: 409f1190c86a0ff07507c4a9c8c6b78f5fd83d08
 progress:
-  total_phases: 7
+  total_phases: 8
   completed_phases: 3
-  total_plans: 108
-  completed_plans: 108
-  percent: 43
+  total_plans: 120
+  completed_plans: 109
+  percent: 38
 ---
 
 # Project State
@@ -34,7 +34,7 @@ Plan: 23 of 23
 Status: Phase complete — ready for verification
 Last activity: 2026-11-03 — Phase 9 execution started
 
-Progress: [████░░░░░░] 43% (3/7 phases)
+Progress: [████░░░░░░] 38% (3/7 phases)
 
 ## Performance Metrics
 
@@ -168,6 +168,7 @@ Progress: [████░░░░░░] 43% (3/7 phases)
 | Phase 09 P28 | 10min | 2 tasks | 8 files |
 | Phase 09 P29 | 12min | 2 tasks | 7 files |
 | Phase 09 P30 | 25min | 3 tasks | 11 files |
+| Phase 09.1 P01 | 12min | 2 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -340,6 +341,7 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 09]: 09-25: 깃펜은 입력줄 오른쪽 끝(보내기와 16px), settle 은 키별 대기 목록, seatColorVar 한 곳
 - [Phase 09]: 결과 화면은 .mf-result__inner 안에서 .mf-result__body 만 스크롤하고 [처음으로] 줄(.mf-result__foot)은 아래 고정 (09-29, feedback-6)
 - [Phase 09]: 0062: 묶음 A 12건 결정 기록(깃펜 오른쪽 끝, 현재/최대 숫자, 타이머 한 규칙 등)
+- [Phase 09.1]: M-3: 연결이 끊긴 사람의 차례도 8초를 다 기다린다(엔진은 connected 를 읽지 않는다)
 
 ### Pending Todos
 
@@ -365,6 +367,7 @@ None yet.
 
 - Phase 03.1 inserted after Phase 3 (v1.0): 순차 주장(결정 0023)과 역할 카드·일지(결정 0026) 구현, E2E 결함 해소
 - v2.0 로드맵 생성 2026-10-30: 6~12페이즈 7개 (연구 SUMMARY 의 8단계에서 유령을 낮 처형에, 방장 이양·로비 정리를 결과 공개에 병합)
+- Phase 09.1 inserted after Phase 9: 묶음 B 연출(순차 지목·직업 의상 유령·유언 편지 공개, 결정 0063)
 
 ## Deferred Items
 
@@ -377,8 +380,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-04T07:34:35.179Z
-Stopped at: Completed 09-30-PLAN.md
+Last session: 2026-11-04T12:39:45.597Z
+Stopped at: Completed 09.1-01-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
