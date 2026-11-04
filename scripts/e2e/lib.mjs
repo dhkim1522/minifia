@@ -629,6 +629,123 @@ export function runoffChecks(input) {
   return out;
 }
 
+// ---- 마지막 3인 결전 (09.1.1-16, UI-SPEC E) ----
+// 앱 상수 사본. 출처 shared/game/phases.ts (test/unit/e2eContract.test.ts 가 같은 값인지 본다). 사이(0.9초)는 위의 PICK_GAP_MS 를 그대로 쓴다.
+export const SHOWDOWN_GATHER_MS = 2000;
+export const SHOWDOWN_TURN_MS = 8000;
+export const SHOWDOWN_POINT_MS = 8000;
+export const SHOWDOWN_REVEAL_MS = 1500;
+
+/** 마지막 3인 알약·막대 아랫변 한도(UI-SPEC "폰 크기별 공통 배치"): 일반 160, 압축형(360×560) 124 */
+export const SHOWDOWN_BLOCK_BOTTOM = 160;
+export const SHOWDOWN_BLOCK_BOTTOM_COMPACT = 124;
+/** 인용 카드: 알약 아랫변과의 간격 8, 좌우 여백 16 씩, 글자 16 */
+export const SHOWDOWN_QUOTE_GAP = 8;
+export const SHOWDOWN_QUOTE_SIDE = 16;
+export const SHOWDOWN_QUOTE_FONT = 16;
+/** 한마디 시트 칩 높이 하한·줄 수 상한 */
+export const SHOWDOWN_CHIP_MIN_H = 44;
+export const SHOWDOWN_CHIP_ROWS_MAX = 3;
+
+/**
+ * 마지막 3인 화면 기하 판정(SH1~SH6). 입력 { mode: "speak"|"point", pill: { rect, minFontPx, parts }, bar, sheet, chips, quote, buttons, panel, viewport: { w, h }, compact }.
+ * SH1 알약·막대가 화면 안·알약 글자 ≥ 14 · SH2 알약 조각: speak = `n / 3`·`{이름} 님 차례`·`{초}초`, point = `지목`·`모두 동시에`·`{초}초`
+ * SH3(speak 이고 sheet 가 있을 때) 시트 윗변 = 패널 윗변 ±1·높이 = 패널 높이 ±1·칩 높이 ≥ 44·칩 3줄 이하
+ * SH4(quote 가 있을 때) 인용 카드가 알약·막대 아랫변 + 8 ±2 에서 시작·폭 = 화면 폭 − 32 ±2·글자 16 ±0.5·두 줄 이하
+ * SH5(point 이고 buttons 가 있을 때) 지목 버튼이 정확히 둘·각 44×44 이상·교차 없음 · SH6 알약·막대 아랫변이 160(압축형 124) ±2 안.
+ * sheet·quote·buttons 가 undefined 면 그 화면에는 해당 요소가 없는 것이라 항목을 만들지 않는다(없음 자체는 호출한 흐름이 따로 확인). null 이면 측정 실패로 `측정값 없음`. 값이 없으면 통과시키지 않는다.
+ */
+export function showdownChecks(input) {
+  const { mode, pill, bar, sheet, chips, quote, buttons, panel, viewport, compact } = input ?? {};
+  const suffix = compact === true ? " (압축형)" : "";
+  const L1 = `마지막 3인 알약·막대가 화면 안이고 알약 글자 ${TURN_FONT_MIN}px 이상${suffix}`;
+  const L2 = mode === "point" ? "알약 조각이 `지목`·`모두 동시에`·`{초}초` 이다" : "알약 조각이 `n / 3`·`{이름} 님 차례`·`{초}초` 이다";
+  const L3 = `내 한마디 시트가 패널을 덮는다(윗변·높이 ±1), 칩 높이 ${SHOWDOWN_CHIP_MIN_H} 이상·${SHOWDOWN_CHIP_ROWS_MAX}줄 이하`;
+  const L4 = `인용 카드가 알약 아래 ${SHOWDOWN_QUOTE_GAP}±2·폭 화면−${SHOWDOWN_QUOTE_SIDE * 2}±2·글자 ${SHOWDOWN_QUOTE_FONT}±0.5·두 줄 이하`;
+  const L5 = `지목 버튼 둘이 각각 ${TAP_MIN}×${TAP_MIN} 이상이고 겹치지 않는다`;
+  const limit = compact === true ? SHOWDOWN_BLOCK_BOTTOM_COMPACT : SHOWDOWN_BLOCK_BOTTOM;
+  const L6 = `알약·막대 아랫변이 ${limit}${compact === true ? "(압축형)" : ""} 안에 있다`;
+  const out = [];
+  const vw = viewport?.w;
+  const vh = viewport?.h;
+  const r = pill?.rect;
+  const barOk = bar && allNum(bar.left, bar.top, bar.right, bar.bottom);
+  // SH1
+  if (!r || !allNum(r.left, r.top, r.right, r.bottom, vw, vh) || !isNum(pill?.minFontPx) || !barOk) {
+    out.push(noMeasure("SH1", L1, !r ? "pill" : !viewport ? "viewport" : !isNum(pill?.minFontPx) ? "minFontPx" : "bar"));
+  } else {
+    const bad = [];
+    const inside = (name, b) => {
+      if (b.left < -OVERLAP_EPS) bad.push(`${name} 왼쪽 ${fmt(b.left)}`);
+      if (b.right > vw + OVERLAP_EPS) bad.push(`${name} 오른쪽 ${fmt(b.right)} > ${vw}`);
+      if (b.top < -OVERLAP_EPS) bad.push(`${name} 위 ${fmt(b.top)}`);
+      if (b.bottom > vh + OVERLAP_EPS) bad.push(`${name} 아래 ${fmt(b.bottom)} > ${vh}`);
+    };
+    inside("알약", r);
+    inside("막대", bar);
+    if (pill.minFontPx + 0.01 < TURN_FONT_MIN) bad.push(`글자 ${fmt(pill.minFontPx)}px`);
+    out.push(result("SH1", L1, bad));
+  }
+  // SH2
+  const parts = pill?.parts;
+  if (!Array.isArray(parts)) out.push(noMeasure("SH2", L2, "parts"));
+  else {
+    const secOk = parts.length === 3 && /^\d+초$/.test(parts[2]);
+    const ok = mode === "point" ? secOk && parts[0] === "지목" && parts[1] === "모두 동시에" : secOk && /^[1-3] \/ 3$/.test(parts[0]) && / 님 차례$/.test(parts[1]) && parts[1].length > " 님 차례".length;
+    out.push(result("SH2", L2, ok ? [] : [`조각 ${mode === "point" ? JSON.stringify(parts) : JSON.stringify([parts[0], parts[1] === undefined ? undefined : "(이름)", parts[2]]).replace(/null/g, "없음")}`]));
+  }
+  // 알약·막대 아랫변(인용 카드와 SH6 의 기준)
+  const anchor = r && barOk && isNum(r.bottom) ? Math.max(r.bottom, bar.bottom) : null;
+  // SH3
+  if (sheet !== undefined && mode !== "point") {
+    const cs = Array.isArray(chips) ? chips : null;
+    if (!sheet || !allNum(sheet.top, sheet.height) || !panel || !allNum(panel.top, panel.height) || !cs || cs.length === 0 || cs.some((c) => !c || !allNum(c.top, c.height))) {
+      out.push(noMeasure("SH3", L3, !sheet ? "sheet" : !panel ? "panel" : "chips"));
+    } else {
+      const bad = [];
+      if (Math.abs(sheet.top - panel.top) > 1) bad.push(`윗변 ${fmt(sheet.top)} ≠ 패널 ${fmt(panel.top)}`);
+      if (Math.abs(sheet.height - panel.height) > 1) bad.push(`높이 ${fmt(sheet.height)} ≠ 패널 ${fmt(panel.height)}`);
+      for (const [i, c] of cs.entries()) if (c.height + 0.5 < SHOWDOWN_CHIP_MIN_H) bad.push(`칩 ${i + 1} 높이 ${fmt(c.height)}`);
+      const rows = new Set(cs.map((c) => Math.round(c.top))).size;
+      if (rows > SHOWDOWN_CHIP_ROWS_MAX) bad.push(`칩 ${rows}줄`);
+      out.push(result("SH3", L3, bad));
+    }
+  }
+  // SH4
+  if (quote !== undefined) {
+    const q = quote?.rect;
+    if (!q || !allNum(q.top, q.width, quote.fontPx, quote.lines, vw) || anchor === null) out.push(noMeasure("SH4", L4, !q ? "quote" : anchor === null ? "anchor" : "viewport"));
+    else {
+      const bad = [];
+      if (Math.abs(q.top - (anchor + SHOWDOWN_QUOTE_GAP)) > 2) bad.push(`시작 ${fmt(q.top)} (기대 ${fmt(anchor + SHOWDOWN_QUOTE_GAP)}±2)`);
+      if (Math.abs(q.width - (vw - SHOWDOWN_QUOTE_SIDE * 2)) > 2) bad.push(`폭 ${fmt(q.width)} (기대 ${vw - SHOWDOWN_QUOTE_SIDE * 2}±2)`);
+      if (Math.abs(quote.fontPx - SHOWDOWN_QUOTE_FONT) > 0.5) bad.push(`글자 ${fmt(quote.fontPx)}px`);
+      if (quote.lines > 2) bad.push(`${quote.lines}줄`);
+      out.push(result("SH4", L4, bad));
+    }
+  }
+  // SH5
+  if (buttons !== undefined && mode !== "speak") {
+    const bs = Array.isArray(buttons) ? buttons : null;
+    if (!bs || bs.some((b) => !b?.rect || !allNum(b.rect.left, b.rect.top, b.rect.right, b.rect.bottom))) out.push(noMeasure("SH5", L5, "buttons"));
+    else {
+      const bad = [];
+      if (bs.length !== 2) bad.push(`지목 버튼 ${bs.length}개(기대 2)`);
+      for (const b of bs) {
+        const w = b.rect.right - b.rect.left;
+        const h = b.rect.bottom - b.rect.top;
+        if (w + 0.5 < TAP_MIN || h + 0.5 < TAP_MIN) bad.push(`자리 ${b.seat} ${fmt(w)}x${fmt(h)}`);
+      }
+      if (bs.length === 2 && rectsOverlap(bs[0].rect, bs[1].rect)) bad.push(`겹침 (${overlapText(bs[0].rect, bs[1].rect)})`);
+      out.push(result("SH5", L5, bad));
+    }
+  }
+  // SH6
+  if (anchor === null) out.push(noMeasure("SH6", L6, "pill·bar"));
+  else out.push(result("SH6", L6, anchor > limit + 2 ? [`아랫변 ${fmt(anchor)} > ${limit}`] : []));
+  return out;
+}
+
 /**
  * 결과 알림 판정(AN1~AN3). m = { fontPx, lineCount, wordBreak } — `[data-announce]` 의 계산된 글자 크기·줄 수·word-break.
  * AN1 글자 36px(28px 로 줄이지 않는다) · AN2 한두 줄 · AN3 word-break keep-all.
