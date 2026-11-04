@@ -296,6 +296,20 @@ describe("resetToLobby", () => {
     }
   });
 
+  it("직업 주장 필드(badge·badgeSwapped·badgeLog)는 대기실로 돌아온 플레이어에 없다 (결정 0066-1)", () => {
+    const base = dayTwoNight();
+    const before: RoomState = {
+      ...base,
+      players: base.players.map((p) => ({ ...p, badge: "police" as const, badgeSwapped: true as const, badgeLog: [{ n: 1, v: "police" as const }] })),
+    };
+    expect(before.players.every((p) => Object.hasOwn(p, "badgeLog"))).toBe(true); // 비어 있는 시험이 아니다
+    const r = resetToLobby(before, before.hostId);
+    if (!r.ok) throw new Error(`resetToLobby failed: ${r.error}`);
+    for (const p of r.state.players) {
+      for (const key of ["badge", "badgeSwapped", "badgeLog"]) expect(`${key}:${Object.hasOwn(p, key)}`).toBe(`${key}:false`);
+    }
+  });
+
   it("끊긴 사람은 끊긴 채로 남는다", () => {
     const before = dayTwoNight();
     const dropped = { ...before, players: before.players.map((p, i) => (i === 2 ? { ...p, connected: false, connId: null } : p)) };

@@ -155,6 +155,9 @@ const ROLE_LIKE_VALUES: ReadonlySet<string> = new Set(["mafia", "police", "docto
 const ALLOWED_ROLE_VALUE_PATHS: ReadonlySet<string> = new Set([
   "me.role",
   "day.roles[]",
+  // 공개 주장 값(결정 0066-1). 주장 값은 직업과 같은 단어(mafia·police…)를 쓰지만 실제 역할의 함수가 아니다 —
+  // 증명은 test/worker/badge.test.ts 메타모픽 L18 이고, 이 경로 밖에 나오면 여전히 누출이다.
+  "players[].badge",
 ]);
 
 /** 탈락한 viewer 에게만 더해지는 허용 경로(결정 0021): 모든 사람의 실제 직업. */
@@ -261,6 +264,7 @@ const SERVER_ONLY_KEYS: readonly string[] = [
   "claimLast", "claimChoice", "claimShown", "claimChanged", "claimPick", "claimOrder", "claimIdx",
   "claimStart", "claimDone", "claims", "nightPick", "investigations", "lastPhrase",
   "execVote", "candidateVote", "verdict", "nightLog", "lastExecPhrase", "nightNote",
+  "badgeLog", // 직업 주장 이력(결정 0066-1, O-20): 서버 전용, 11페이즈 입력 — 판 중에는 어떤 view 에도 없다
 ];
 /** view.day 가 있는 열 단계. 이 밖의 단계 뷰에는 day 키 자체가 없다(D-07). */
 const DAY_VIEW_PHASES: ReadonlySet<PhaseId> = new Set([
@@ -433,6 +437,25 @@ function mafiaSeatsOtherThan(state: RoomState, p: Player): number[] {
     .map((q) => q.seat)
     .sort((a, b) => a - b);
 }
+
+describe("공개 직업 주장 경로 (결정 0066-1)", () => {
+  it("주장 값(직업과 같은 단어)은 players[].badge 에서만 허용되고 다른 경로에 나오면 누출로 잡힌다", () => {
+    let s = startedAt(6, 1, "discussion");
+    const [a, b] = s.players;
+    s = { ...s, players: s.players.map((p) => (p.id === a!.id ? { ...p, badge: "mafia" as const } : p.id === b!.id ? { ...p, badge: "doctor" as const, badgeSwapped: true as const, badgeLog: [{ n: 1, v: "police" as const }] } : p)) };
+    const leaks: string[] = [];
+    for (const v of s.players) {
+      const view = buildView(s, v.id, START_AT);
+      leaks.push(...roleValueLeaks(view));
+      for (const path of keyPaths(view)) if (SERVER_ONLY_KEYS.includes(lastKey(path))) leaks.push(`${v.seat}: ${path}`);
+    }
+    expect(leaks.join(" | ")).toBe("");
+    const view = buildView(s, a!.id, START_AT);
+    const wrong = { ...view, players: view.players.map((r) => ({ ...r })), day: { ...view.day!, roles: [...view.day!.roles] } } as RoomView;
+    (wrong as unknown as { stray: string }).stray = "mafia";
+    expect(roleValueLeaks(wrong).join(",")).toBe("stray=mafia");
+  });
+});
 
 describe("buildView 단계 길이 (D-15, 결정 0012)", () => {
   it("phaseDurationMs 는 단계 길이를 보내고, phaseEndsAt·serverNow 는 상태·now 그대로다", () => {

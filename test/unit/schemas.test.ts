@@ -109,6 +109,22 @@ describe("ClientMessageSchema claim (07-08, CHAT-06)", () => {
   });
 });
 
+// 09.1.1-01: 직업 주장(결정 0066-1) — 값은 enum 다섯 개뿐이고 덧붙은 키·모르는 값·role 없음은 거부한다. 신원은 소켓 첨부 playerId 라 seat 를 받지 않는다.
+describe("ClientMessageSchema badge (09.1.1-01, 결정 0066-1)", () => {
+  it.each(["mafia", "police", "doctor", "citizen", "none"])("badge %s 는 받는다", (role) => {
+    expect(ClientMessageSchema.safeParse({ t: "badge", role }).success).toBe(true);
+  });
+  it.each([
+    ["덧붙은 키", { t: "badge", role: "police", seat: 2 }],
+    ["알 수 없는 값", { t: "badge", role: "ghost" }],
+    ["role 없음", { t: "badge" }],
+    ["null", { t: "badge", role: null }],
+    ["대문자", { t: "badge", role: "Police" }],
+  ])("badge 거부: %s", (_name, msg) => {
+    expect(ClientMessageSchema.safeParse(msg).success).toBe(false);
+  });
+});
+
 // 07-10: 입력 중은 ClientMessage 유니온의 멤버다. 채널·좌석은 보내지 않는다(결정 0002) — 덧붙은 키는 거부한다(T-07-19).
 describe("ClientMessageSchema typing (07-10, CHAT-04)", () => {
   it("입력 중 {t, on, pk} 를 받는다", () => {
