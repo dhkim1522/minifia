@@ -74,8 +74,29 @@ export function pruneLobby(state: RoomState, now: number): { state: RoomState; r
   return { state: { ...state, players: state.players.filter((p) => !drop.has(p.id)) }, removedIds };
 }
 
+/** 쉬는 사람(bench) 정리 대상 — 끊겨 있고 끊긴 시각이 있는 사람. 방장·봇은 bench 에 들지 않는다. */
+const prunableBench = (state: RoomState): Player[] =>
+  (state.bench ?? []).filter((p) => !p.connected && p.disconnectedAt !== undefined);
+
 /**
- * 연속성 마감 중 가장 이른 시각(없으면 Infinity): 방장 이양 마감과 대기실 정리 마감.
+ * 쉬는 사람 정리(D-13·D-18, 11-08): 끊긴 지 정리 시간(LOBBY_PRUNE_MS, 테스트 방 6초) 이상이면 bench 에서 뺀다. 단계와 무관하게 일한다.
+ * bench 가 비면 키째 지운다. 아무도 없으면 같은 객체(멱등). 결과 단계 players 의 끊긴 사람은 여기서도 지우지 않는다 — 다시 하기가 한 번에 정리한다.
+ */
+export function pruneBench(state: RoomState, now: number): { state: RoomState; removedIds: string[] } {
+  if (state.bench === undefined) return { state, removedIds: [] };
+  const limit = pruneAfterOf(state);
+  const removedIds = prunableBench(state)
+    .filter((p) => now - (p.disconnectedAt as number) >= limit)
+    .map((p) => p.id);
+  if (removedIds.length === 0) return { state, removedIds };
+  const drop = new Set(removedIds);
+  const rest = state.bench.filter((p) => !drop.has(p.id));
+  const { bench: _old, ...without } = state;
+  return { state: rest.length === 0 ? without : { ...state, bench: rest }, removedIds };
+}
+
+/**
+ * 연속성 마감 중 가장 이른 시각(없으면 Infinity): 방장 이양 마감과 대기실 정리 마감, 쉬는 사람 정리 마감.
  * 방장 이양은 연결된 후보가 없으면 알람을 걸지 않는다 — 지난 시각으로 알람이 돌며 헛도는 것을 막고, 후보가 연결되는 hello 가 그 자리에서 이양한다.
  */
 export function nextContinuityAt(state: RoomState): number {
@@ -88,5 +109,7 @@ export function nextContinuityAt(state: RoomState): number {
     const limit = pruneAfterOf(state);
     for (const p of prunable(state)) at = Math.min(at, (p.disconnectedAt as number) + limit);
   }
+  // 쉬는 사람 정리(11-08)는 단계와 무관하다.
+  for (const p of prunableBench(state)) at = Math.min(at, (p.disconnectedAt as number) + pruneAfterOf(state));
   return at;
 }

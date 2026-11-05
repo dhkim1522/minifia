@@ -13,7 +13,7 @@ export const DEFAULT_LOOK: OutfitId = "coat";
 export const LOOK_MIN_GAP_MS = 250;
 
 /**
- * 의상 고르기. 검사 순서가 계약이다: 단계(lobby 가 아니면 WRONG_PHASE) → 행위자(방에 있음, 아니면 BAD_MESSAGE)
+ * 의상 고르기. 검사 순서가 계약이다: 단계(lobby·ended 가 아니면 WRONG_PHASE) → 행위자(방에 있음, 아니면 BAD_MESSAGE)
  * → 값(OUTFIT_IDS 안, 아니면 BAD_MESSAGE) → 같은 값(저장값 ?? 기본 coat 와 같으면 입력 상태 그대로 ok) → 그 사람의 look 만 바뀐 새 상태.
  */
 export function setLook(
@@ -21,7 +21,7 @@ export function setLook(
   actorId: string,
   look: OutfitId,
 ): { ok: true; state: RoomState } | { ok: false; error: VoteError } {
-  if (state.phase !== "lobby") return { ok: false, error: "WRONG_PHASE" };
+  if (state.phase !== "lobby" && state.phase !== "ended") return { ok: false, error: "WRONG_PHASE" }; // 결과 단계에서도 고른다(D-16) — 의상은 다음 판에도 남는다
   const actor = state.players.find((p) => p.id === actorId);
   if (!actor) return { ok: false, error: "BAD_MESSAGE" };
   if (!(OUTFIT_IDS as readonly string[]).includes(look)) return { ok: false, error: "BAD_MESSAGE" };

@@ -66,8 +66,8 @@ describe("setLook — 표 (D-6)", () => {
     expect(r.ok && r.state.players[1]!.look).toBe("coat");
   });
 
-  it.each(["assigning", "roleReveal", "dayAnnounce", "discussion", "night", "morning", "nomination", "execution", "ended"] as PhaseId[])(
-    "대기실 밖(%s)은 WRONG_PHASE 다",
+  it.each(["assigning", "roleReveal", "dayAnnounce", "discussion", "night", "morning", "nomination", "execution"] as PhaseId[])(
+    "대기실·결과 단계 밖(%s)은 WRONG_PHASE 다 (결과 단계는 11-08 D-16 으로 열렸다)",
     (phase) => {
       expect(res(setLook(room(phase), "p1", "mafia"))).toBe("WRONG_PHASE");
     },

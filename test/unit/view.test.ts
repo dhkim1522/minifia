@@ -2142,6 +2142,7 @@ describe("준비 players[].ready · players[].sat (11-08, D-12·D-13)", () => {
 
 describe("쉬는 사람 view (11-08, D-13, 누설 L38)", () => {
   const RESTING_TOP = "code,mapChoice,maxPlayers,me,minPlayers,phase,phaseDurationMs,phaseEndsAt,players,resting,round,serverNow";
+  const RESTING_TOP_MAP = "code,map,mapChoice,maxPlayers,me,minPlayers,phase,phaseDurationMs,phaseEndsAt,players,resting,round,serverNow";
   const sitter = {
     id: "sit-id-0001",
     token: "token-sitter-secret-0123456789",
@@ -2161,7 +2162,7 @@ describe("쉬는 사람 view (11-08, D-13, 누설 L38)", () => {
       const base = phase === "lobby" ? lobbyOf(5) : richStateAt(phase, 5, 1);
       const s = withSitter({ ...base, map: "bar" });
       const v = buildView(s, sitter.id, START_AT);
-      const want = phase === "lobby" ? RESTING_TOP : `${RESTING_TOP},map`;
+      const want = phase === "lobby" ? RESTING_TOP : RESTING_TOP_MAP;
       expect(`${phase}:${keysOf(v)}`).toBe(`${phase}:${want}`);
       expect(v.resting).toBe(true);
       expect(v.phaseEndsAt).toBeNull();

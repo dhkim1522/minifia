@@ -5,6 +5,7 @@
 // 종료 방 정리는 새 타이머가 아니라 만료(expiresAt)를 앞당기는 것뿐이다: nextWakeAt 이 이미 만료를 알람으로 쓰고, 만료되면 DO 가 방을 닫는다.
 // 승리 값 변환은 enterEnded 한 곳: 내부 checkWinner 의 "citizen"·"mafia" → 상태·와이어의 GameWinner "citizenWin"·"mafiaWin"(역할 단어와 겹치지 않는다, Pitfall 10).
 import type { GameWinner, SummaryRow } from "../protocol";
+import { seatBench } from "./rematch";
 import type { RoomState } from "./room";
 import type { DeadlineResult, RandInt } from "./tick";
 import { checkWinner } from "./win";
@@ -33,15 +34,19 @@ export function routeAfterMorning(state: RoomState): DeadlineResult {
 
 /**
  * ended 진입 훅: winner 를 와이어 값으로 기록하고 만료를 min(기존, 진입 시각 + 30분)으로 앞당긴다. 난수를 부르지 않는다.
+ * 쉬는 사람(bench)이 있으면 승패 판정 뒤에 sat:true 로 players 에 합류시킨다(11-08).
  * 승패가 없으면(마감 훅이 막아 도달할 수 없다) winner 키를 만들지 않는다.
  */
 export function enterEnded(state: RoomState, _randInt: RandInt, at: number): RoomState {
+  // 승패는 쉬는 사람이 합류하기 전 상태로 판정한다 — 역할 없는 사람이 players 에 들면 checkWinner 가 others 로 센다(D-13).
   const team = checkWinner(state);
-  return {
+  const decided: RoomState = {
     ...state,
     expiresAt: Math.min(state.expiresAt, at + ENDED_ROOM_TTL_MS),
     ...(team === null ? {} : { winner: WIRE_WINNER[team] }),
   };
+  // 쉬는 사람은 sat:true 로 합류해 결과에 함께한다(역할 없음, 칭호·명단 제외). 그 판의 숨은 기록도 끝났으므로 방 전원이 같은 결과를 받는다.
+  return seatBench(decided);
 }
 
 /**

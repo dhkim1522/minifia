@@ -7,7 +7,7 @@ import { isAlive } from "../shared/game/alive";
 import { ballotsCardText } from "../shared/game/ballots";
 import { audience, channelOf, phaseKey, worldVisibleTo } from "../shared/game/audience";
 import { bumpStat } from "../shared/game/stats";
-import { pruneLobby, resolveHost } from "../shared/game/continuity";
+import { pruneBench, pruneLobby, resolveHost } from "../shared/game/continuity";
 import { CHAT_KEY_PREFIX, appendLine, appendWhisperPair, chatKey, emptyChatLog, replayFor, restoreChatLog, seatMask, toWire } from "../shared/game/chatLog";
 import type { ChatLog } from "../shared/game/chatLog";
 import { checkChatSend, sanitizeChatText, typingRelay } from "../shared/game/chatRules";
@@ -31,7 +31,7 @@ import type { RoomState } from "../shared/game/room";
 import { pickRecipientIds, pickTarget } from "../shared/game/night";
 import { BADGE_MIN_GAP_MS, setBadge } from "../shared/game/badge";
 import { LOOK_MIN_GAP_MS, setLook } from "../shared/game/look";
-import { rematch, setReady } from "../shared/game/rematch";
+import { attachBenchConnection, detachBenchConnection, findAnyByToken, isResting, leaveBench, rematch, setReady } from "../shared/game/rematch";
 import { buildResultLog } from "../shared/game/resultLog";
 import { sendWhisper } from "../shared/game/whisper";
 import { WILL_MIN_GAP_MS, noteRecipientIds, saveNote, saveWill } from "../shared/game/will";
@@ -139,6 +139,14 @@ export class Room extends DurableObject<Env> {
             if (isBot(p) || (p.connId !== null && live.has(p.connId))) return p;
             return { ...p, connected: false, connId: null, disconnectedAt: p.disconnectedAt ?? Date.now() };
           }),
+          // 쉬는 사람(11-08)도 같은 보정을 받는다 — 소켓이 사라졌으면 끊김으로 표시하고 정리 시계를 시작한다.
+          ...(normalized.bench === undefined
+            ? {}
+            : {
+                bench: normalized.bench.map((p) =>
+                  p.connId !== null && live.has(p.connId) ? p : { ...p, connected: false, connId: null, disconnectedAt: p.disconnectedAt ?? Date.now() },
+                ),
+              }),
         };
         // 저장된 위치를 되살린다. world 키가 없거나 손상된 사람은 입장 지점에 선다(MAP-05).
         this.world = restoreWorld(got.get("world"), this.room.players, Date.now(), this.mapDef());
@@ -245,6 +253,15 @@ export class Room extends DurableObject<Env> {
 
     // 모든 진입점은 먼저 만료 확인과 tick 을 거친다(늦은 알람·재시도에도 멱등).
     await this.advance(Date.now());
+
+    // 쉬는 사람 소켓(11-08, 결정 D-13, T-11-25·T-11-30): ping 과 leave 만 처리하고 나머지는 응답 없이 버린다 — 오류 프레임도, state 도 없다.
+    // 신원은 소켓 첨부의 playerId 이고, 판정은 hello 와 같은 서버 상태(bench)다. 게임 처리기는 이 문 뒤에 있어 쉬는 사람의 메시지가 닿지 않는다.
+    const sender = this.room ? (ws.deserializeAttachment() as SocketAttachment | null) : null;
+    if (this.room && sender !== null && isResting(this.room, sender.playerId)) {
+      if (msg.t === "ping") this.sendTo(ws, { t: "pong", c: msg.c, serverNow: Date.now() });
+      else if (msg.t === "leave") await this.handleBenchLeave(sender.playerId);
+      return;
+    }
 
     switch (msg.t) {
       case "hello":
@@ -401,6 +418,17 @@ export class Room extends DurableObject<Env> {
     await this.persistAndBroadcast();
     await this.reschedule();
     await this.flushWorld();
+  }
+
+  // 쉬는 사람 나가기(11-08): bench 에서 빼고 소켓을 4003 'left' 로 닫는다. 게임 상태가 아니라 다른 소켓에 보일 것이 없으므로 방송하지 않는다.
+  private async handleBenchLeave(playerId: string): Promise<void> {
+    if (!this.room) return;
+    const result = leaveBench(this.room, playerId);
+    if (!result.ok) return;
+    this.closePlayerSockets(playerId, "left");
+    this.room = result.state;
+    await this.ctx.storage.put("room", this.room);
+    await this.reschedule();
   }
 
   private async handleKick(ws: WebSocket, seat: number): Promise<void> {
@@ -594,7 +622,7 @@ export class Room extends DurableObject<Env> {
     this.writeAt.clear();
     // 월드는 새 참가자 전원을 새 판 맵(decideMap 이 정한 room.map)의 입장 지점에 다시 세운다. 걷어 간 사람의 자리는 이때 함께 사라진다.
     this.world = respawnAll(this.world, this.room.players, now, this.mapDef());
-    await this.persistAndBroadcast();
+    await this.persistAndBroadcast({ includeBench: true }); // 쉬는 사람도 이 한 번은 자기 전용 state 를 받는다
     this.markWorldDirty();
     this.snapEachViewer(now);
     await this.reschedule();
@@ -1040,20 +1068,23 @@ export class Room extends DurableObject<Env> {
     // 방장 이양(D-17)은 단계 전환과 무관하게 같은 호출에서 맞춘다(멱등). 어떤 진입점이든 advance 를 지난다.
     // 대기실 정리(D-18)는 이양 뒤에 적용한다 — 옛 방장도 같은 규칙을 받는다. 게임 중·결과 단계는 pruneLobby 가 건드리지 않는다.
     const hosted = resolveHost(next, now);
-    const pruned = pruneLobby(hosted, now);
+    const lobbyPruned = pruneLobby(hosted, now);
+    // 쉬는 사람 정리(11-08)는 단계와 무관하다. 쉬는 사람은 월드에 없고 다른 소켓의 view 에도 없으므로 정리만으로는 방송하지 않는다.
+    const benchPruned = pruneBench(lobbyPruned.state, now);
     if (next !== room) {
-      this.room = pruned.state;
-      this.despawnRemoved(pruned.removedIds);
+      this.room = benchPruned.state;
+      this.despawnRemoved(lobbyPruned.removedIds);
       await this.afterTransition(room, now);
-      if (pruned.removedIds.length > 0) await this.flushWorld();
+      if (lobbyPruned.removedIds.length > 0) await this.flushWorld();
       return;
     }
-    if (pruned.state !== room) {
-      this.room = pruned.state;
-      this.despawnRemoved(pruned.removedIds);
-      await this.persistAndBroadcast();
+    if (benchPruned.state !== room) {
+      this.room = benchPruned.state;
+      this.despawnRemoved(lobbyPruned.removedIds);
+      if (lobbyPruned.state !== room) await this.persistAndBroadcast();
+      else await this.ctx.storage.put("room", this.room);
       await this.reschedule();
-      if (pruned.removedIds.length > 0) await this.flushWorld();
+      if (lobbyPruned.removedIds.length > 0) await this.flushWorld();
     }
     // 위치는 단계가 바뀌었는지와 무관하게 '지금 단계가 요구하는 모습'으로 맞춘다(멱등, 알람 따라잡기·퇴거에도 안전).
     // 새 유령 snap 은 전환 때만 보낸다: 퇴거로 비워진 ghostSnapped 때문에 깨어날 때마다 같은 snap 을 다시 보내지 않는다(08 동작 유지).
@@ -1332,10 +1363,16 @@ export class Room extends DurableObject<Env> {
       this.sendTo(ws, { t: "error", code: "BAD_MESSAGE" });
       return;
     }
-    const player = findPlayerByToken(room, token);
+    // 참가자(players)와 쉬는 사람(bench)을 따로 찾는다(T-11-30) — 쉬는 사람의 토큰은 참가자 행에 붙지 않는다.
+    const found = findAnyByToken(room, token);
+    const player = found?.player;
     // 결과 단계에서 나간 사람(left)의 토큰은 더는 들어올 수 없다(D-14) — 지워진 사람과 같은 모습으로 닫는다.
-    if (!player || player.left === true) {
+    if (!found || !player || player.left === true) {
       ws.close(CLOSE_CODES.REMOVED, "invalid_token");
+      return;
+    }
+    if (found.bench) {
+      await this.helloResting(ws, room, player.id);
       return;
     }
 
@@ -1373,9 +1410,40 @@ export class Room extends DurableObject<Env> {
     if (this.room.expiresAt !== room.expiresAt || this.room.hostId !== room.hostId || (wasIdle && this.wanderBots().length > 0)) await this.reschedule();
   }
 
+  // 쉬는 사람의 hello(11-08, 결정 D-13, 누설 L38): bench 행에 붙이고 저장하되 방송하지 않는다(다른 사람의 view 는 바뀌지 않는다).
+  // 이 소켓이 받는 것은 쉬는 사람 전용 state 한 개뿐이다 — 월드 snap·chatLog·결과 공개는 보내지 않는다.
+  private async helloResting(ws: WebSocket, room: RoomState, playerId: string): Promise<void> {
+    const connId = crypto.randomUUID();
+    for (const other of this.ctx.getWebSockets()) {
+      const att = other.deserializeAttachment() as SocketAttachment | null;
+      if (att && att.playerId === playerId) {
+        try {
+          other.close(CLOSE_CODES.REPLACED, "replaced");
+        } catch {
+          // 이미 닫힌 소켓은 무시한다.
+        }
+      }
+    }
+    ws.serializeAttachment({ playerId, connId } satisfies SocketAttachment);
+    this.room = attachBenchConnection(room, playerId, connId);
+    await this.ctx.storage.put("room", this.room);
+    this.sendTo(ws, { t: "state", view: buildView(this.room, playerId, Date.now()) });
+    await this.reschedule();
+  }
+
   private async handleDisconnect(ws: WebSocket): Promise<void> {
     const att = ws.deserializeAttachment() as SocketAttachment | null;
     if (!att || !this.room) return;
+    // 쉬는 사람의 끊김(11-08): bench 행만 바꾸고 저장한다 — 다른 소켓에 state 를 보내지 않는다. 정리 시계를 위해 알람을 맞춘다.
+    if (isResting(this.room, att.playerId)) {
+      const detached = detachBenchConnection(this.room, att.playerId, att.connId, Date.now());
+      if (detached !== this.room) {
+        this.room = detached;
+        await this.ctx.storage.put("room", this.room);
+        await this.reschedule();
+      }
+      return;
+    }
     // 방에 없거나 최신 연결이 아닌(교체된 낡은) 소켓의 닫힘은 아무것도 바꾸지 않는다.
     const current = this.room.players.find((p) => p.id === att.playerId);
     if (!current || current.connId !== att.connId) return;
@@ -1390,20 +1458,22 @@ export class Room extends DurableObject<Env> {
   }
 
   // 변경은 항상 저장이 끝난 뒤에 방송한다.
-  private async persistAndBroadcast(): Promise<void> {
+  private async persistAndBroadcast(opts?: { includeBench?: true }): Promise<void> {
     if (!this.room) return;
     await this.ctx.storage.put("room", this.room);
-    this.broadcast();
+    this.broadcast(opts?.includeBench === true);
   }
 
   // 연결마다 그 사람의 뷰를 따로 만든다. 첨부가 없거나 방에 없는 playerId 는 건너뛴다.
-  private broadcast(): void {
+  // 쉬는 사람(bench)은 참가자가 아니라 건너뛴다(11-08, L38) — 다시 하기가 시작되는 그 한 번만 includeBench 로 쉬는 사람 전용 view 를 받는다.
+  private broadcast(includeBench = false): void {
     const room = this.room;
     if (!room) return;
     const now = Date.now();
     for (const ws of this.ctx.getWebSockets()) {
       const att = ws.deserializeAttachment() as SocketAttachment | null;
-      if (!att || !room.players.some((p) => p.id === att.playerId)) continue;
+      if (!att) continue;
+      if (!room.players.some((p) => p.id === att.playerId) && !(includeBench && isResting(room, att.playerId))) continue;
       this.sendTo(ws, { t: "state", view: buildView(room, att.playerId, now) });
     }
   }

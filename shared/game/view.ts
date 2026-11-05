@@ -37,7 +37,7 @@ import { PHASE_DEFS } from "./phases";
 import { isReady } from "./rematch";
 import { rolesInPlay } from "./roles";
 import { hostOf, roundOf } from "./room";
-import type { RoomState } from "./room";
+import type { Player, RoomState } from "./room";
 import { verdictVotersOf, votedSeatsOf } from "./verdict";
 import { WHISPER_PER_DAY, whisperUsedToday } from "./whisper";
 
@@ -162,7 +162,34 @@ export function buildPreview(state: RoomState): RoomPreview {
   };
 }
 
+/**
+ * 쉬는 사람(bench)의 view(결정 D-13, 누설 L38, T-11-25). 허용 키만 키 하나씩 써서 만든다 — 게임 상태(day·result·spectate·다른 사람)를 읽지 않는다:
+ * 단계·판 번호·맵 같은 공개 값과 자기 한 줄(seat·nickname·connected·isHost·look)뿐이다. 마감 시각은 null 이다(게임 시계는 이들의 일이 아니다).
+ */
+function buildRestingView(state: RoomState, resting: Player, now: number): RoomView {
+  const row: PublicPlayer = { seat: resting.seat, nickname: resting.nickname, connected: true, isHost: false };
+  if (resting.look !== undefined) row.look = resting.look;
+  const view: RoomView = {
+    code: state.code,
+    phase: state.phase,
+    round: roundOf(state),
+    phaseEndsAt: null,
+    phaseDurationMs: null,
+    serverNow: now,
+    minPlayers: MIN_PLAYERS,
+    maxPlayers: MAX_PLAYERS,
+    players: [row],
+    me: { seat: resting.seat, isHost: false },
+    mapChoice: state.mapChoice ?? "random",
+    resting: true,
+  };
+  if (state.phase !== "lobby" && state.map !== undefined) view.map = state.map;
+  return view;
+}
+
 export function buildView(state: RoomState, playerId: string, now: number): RoomView {
+  const resting = state.bench?.find((p) => p.id === playerId);
+  if (resting !== undefined) return buildRestingView(state, resting, now);
   const me = state.players.find((p) => p.id === playerId);
   if (!me) throw new Error("buildView: player is not in this room");
 

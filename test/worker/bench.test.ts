@@ -41,6 +41,8 @@ interface Rested {
   resting: [TestSocket, TestSocket];
   restingTokens: [string, string];
   restingSeats: [number, number];
+  /** 다시 하기를 보내기 직전 쉬는 두 소켓이 받은 프레임 수 — 그 앞은 지난 판 결과 단계까지의 프레임이다. */
+  since: [number, number];
 }
 
 /** 6명 판을 ended 까지 모은 뒤 4명만 준비해 다시 하기를 시작한다. 쉬는 두 소켓은 쉬는 사람 state 한 개를 받은 상태다. */
@@ -50,11 +52,13 @@ async function restedGame(): Promise<Rested> {
   const resting = g.socks.slice(4) as [TestSocket, TestSocket];
   for (const s of players.slice(1)) send(s, { t: "ready", on: true, round: 1 });
   await until("네 명 준비", async () => players.every((s) => lastViewOf(s).players.filter((p) => p.ready === true).length === 4));
+  const since: [number, number] = [mark(resting[0]), mark(resting[1])];
   send(players[0]!, { t: "rematch", round: 1 });
   for (const s of players) await nextFrame(s, isAssigning);
   for (const s of resting) await nextFrame(s, (m) => m.t === "state" && m.view.resting === true);
   for (const s of g.socks) await settle(s, mark(s));
   return {
+    since,
     g,
     players,
     resting,
@@ -103,14 +107,16 @@ describe("쉬는 사람 — 판 중 전 구간 (D-13, L38)", () => {
     { timeout: 120_000 },
     async () => {
       const t = await restedGame();
-      for (const s of t.resting) {
-        const states = framesOf(s).filter((m): m is StateFrame => m.t === "state");
+      for (const [i, s] of t.resting.entries()) {
+        const fresh = framesOf(s).slice(t.since[i]).filter(notPong);
+        expect(fresh.map((m) => m.t)).toEqual(["state"]);
+        const states = fresh.filter((m): m is StateFrame => m.t === "state");
         expect(states.length).toBe(1);
         const v = states[0]!.view;
         expect(v.resting).toBe(true);
         expect(v.round).toBe(2);
         expect(v.players.length).toBe(1);
-        expect(framesOf(s).filter((m) => m.t === "world" || m.t === "chat" || m.t === "chatLog" || m.t === "resultLog").length).toBe(0);
+        expect(fresh.filter((m) => m.t === "world" || m.t === "chat" || m.t === "chatLog" || m.t === "resultLog").length).toBe(0);
       }
       // 참가자의 state 에는 쉬는 사람의 존재가 어디에도 없다
       const restNames = t.g.actors.slice(4).map((a) => lastViewOf(a.sock).players[0]!.nickname);
@@ -125,9 +131,8 @@ describe("쉬는 사람 — 판 중 전 구간 (D-13, L38)", () => {
         await advanceTo(code, t.players, phase);
         for (const s of t.resting) expect(await settle(s, mark(s))).toEqual([]);
       }
-      for (const s of t.resting) {
-        expect(framesOf(s).filter(notPong).length).toBe(1);
-        expect(framesOf(s).filter((m) => m.t === "world").length).toBe(0);
+      for (const [i, s] of t.resting.entries()) {
+        expect(framesOf(s).slice(t.since[i]).filter(notPong).map((m) => m.t)).toEqual(["state"]);
       }
     },
   );
@@ -177,13 +182,14 @@ describe("쉬는 사람 — 접속·나가기·정리 (D-13, D-18)", () => {
         return row?.connected === false && typeof row.disconnectedAt === "number";
       });
       for (const [i, s] of t.players.entries()) expect(await settle(s, marks[i]!)).toEqual([]);
+      const marks2 = t.players.map((s) => mark(s));
 
       const back = await connect(t.g.code);
       const first = await hello(back, t.restingTokens[0]);
       expect(first.view.resting).toBe(true);
       expect(first.view.me.seat).toBe(t.restingSeats[0]);
       expect(await settle(back, 0)).toEqual([first]);
-      for (const [i, s] of t.players.entries()) expect(await settle(s, marks[i]!)).toEqual([]);
+      for (const [i, s] of t.players.entries()) expect(await settle(s, marks2[i]!)).toEqual([]);
       const room = (await storedRoom(t.g.code)) as unknown as { bench: Array<{ seat: number; connected: boolean; disconnectedAt?: number }> };
       const row = room.bench.find((p) => p.seat === t.restingSeats[0])!;
       expect(row.connected).toBe(true);
@@ -239,9 +245,9 @@ describe("쉬는 사람 — 결과 합류 (D-13, sat)", () => {
       const victims = roles.filter((r) => r.role !== "mafia").sort((a, b) => (a.role === "police" ? -1 : b.role === "police" ? 1 : a.seat - b.seat)).slice(0, 2);
       await killSeats({ code, socks: t.players, actors: [] }, victims.map((v) => v.seat));
       await advanceTo(code, t.players, "morning");
-      for (const s of t.resting) {
-        expect(framesOf(s).filter(notPong).length).toBe(1);
-        expect(JSON.stringify(framesOf(s))).not.toContain("BENCHCANARY");
+      for (const [i, s] of t.resting.entries()) {
+        expect(framesOf(s).slice(t.since[i]).filter(notPong).length).toBe(1);
+        expect(JSON.stringify(framesOf(s).slice(t.since[i]))).not.toContain("BENCHCANARY");
       }
       const marks = t.resting.map((s) => mark(s));
       await closePhase(code);

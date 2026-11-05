@@ -26,7 +26,11 @@ function copyKeys<T extends object, K extends keyof T>(src: T, keys: readonly K[
   return out;
 }
 
+/** 쉬는 사람 행 키: 사람 행 허용 키 + 정리 시계(disconnectedAt, 서버 전용)뿐이다. 역할·ready·sat 는 없다. */
+export const BENCH_PLAYER_KEYS = [...REMATCH_PLAYER_KEYS, "disconnectedAt"] as const;
+
 const playerRow = (p: Player): Player => copyKeys(p, REMATCH_PLAYER_KEYS);
+const benchRow = (p: Player): Player => copyKeys(p, BENCH_PLAYER_KEYS);
 
 /** 방장·서버 봇은 늘 준비로 센다. 손님은 ready 가 true 일 때만. */
 export function isReady(p: Pick<Player, "id" | "isBot" | "ready">, hostId: string): boolean {
@@ -62,8 +66,9 @@ export type RematchResult = { ok: true; state: RoomState; removedIds: string[] }
 
 /**
  * 다시 하기. 게이트(결과 단계, 방장, 판 번호 일치, 참가자 4명 이상) 중 하나라도 어긋나면 { ok: false } 한 가지뿐이다(L40).
- * 참가자 = 나가지 않았고 연결돼 있고 준비한(방장·봇 포함) 사람. 새 방은 허용 목록 리터럴로 만든다(round + 1, 만료 min(방 생성 + 12시간, now + 3시간)).
- * 이어서 startGame 과 같은 본체 beginGame 으로 역할 배정 → 맵 결정 → assigning 으로 간다. removedIds 는 월드·소켓 정리에 쓰는 걷어 간 사람 id.
+ * 참가자 = 나가지 않았고 연결돼 있고 준비한(방장·봇 포함) 사람. 나머지는 나갔거나 끊긴 지 REMATCH_STALE_MS 이상이면 걷어 가고(removedIds),
+ * 그 밖(연결된 미준비자·60초 미만 끊김)은 쉬는 사람(bench)으로 둔다. 새 방은 허용 목록 리터럴로 만든다(round + 1, 만료 min(방 생성 + 12시간, now + 3시간)).
+ * 이어서 startGame 과 같은 본체 beginGame 으로 역할 배정 → 맵 결정 → assigning 으로 간다(쉬는 사람은 역할 배정에 들지 않는다).
  */
 export function rematch(state: RoomState, actorId: string, round: number, now: number, randInt: (n: number) => number): RematchResult {
   if (state.phase !== "ended" || actorId !== state.hostId || round !== roundOf(state)) return { ok: false };
@@ -73,6 +78,14 @@ export function rematch(state: RoomState, actorId: string, round: number, now: n
   const participants = state.players.filter(takes);
   if (participants.length < MIN_PLAYERS) return { ok: false };
   const kept = new Set(participants.map((p) => p.id));
+  const bench: Player[] = [];
+  const removedIds: string[] = [];
+  for (const p of state.players) {
+    if (kept.has(p.id)) continue;
+    const stale = p.left === true || (!p.connected && p.disconnectedAt !== undefined && now - p.disconnectedAt >= REMATCH_STALE_MS);
+    if (stale) removedIds.push(p.id);
+    else bench.push(benchRow(p));
+  }
   const fresh: RoomState = {
     ...copyKeys(state, REMATCH_ROOM_KEYS),
     expiresAt: Math.min(state.createdAt + REMATCH_MAX_AGE_MS, now + ROOM_TTL_MS),
@@ -80,10 +93,62 @@ export function rematch(state: RoomState, actorId: string, round: number, now: n
     phase: "ended",
     phaseEndsAt: null,
     players: participants.map(playerRow),
+    ...(bench.length > 0 ? { bench } : {}),
   };
-  return {
-    ok: true,
-    state: beginGame(fresh, now, randInt),
-    removedIds: state.players.filter((p) => !kept.has(p.id)).map((p) => p.id),
-  };
+  return { ok: true, state: beginGame(fresh, now, randInt), removedIds };
+}
+
+// ---- 쉬는 사람(bench) 도우미 ----
+
+/** 토큰으로 참가자(players)와 쉬는 사람(bench)을 따로 찾는다 — 봇(빈 토큰)은 어느 쪽에서도 찾지 않는다. */
+export function findAnyByToken(state: RoomState, token: string): { player: Player; bench: boolean } | undefined {
+  const seated = state.players.find((p) => p.isBot !== true && p.token === token);
+  if (seated !== undefined) return { player: seated, bench: false };
+  const resting = (state.bench ?? []).find((p) => p.token === token);
+  return resting === undefined ? undefined : { player: resting, bench: true };
+}
+
+/** 이 id 가 쉬는 사람이면 true. */
+export const isResting = (state: Pick<RoomState, "bench">, playerId: string): boolean => (state.bench ?? []).some((p) => p.id === playerId);
+
+/** bench 안의 한 행만 바꾼 새 상태. 해당 행이 없으면 같은 객체. */
+function mapBench(state: RoomState, playerId: string, fn: (p: Player) => Player): RoomState {
+  if (!isResting(state, playerId)) return state;
+  return { ...state, bench: (state.bench ?? []).map((p) => (p.id === playerId ? fn(p) : p)) };
+}
+
+/** 쉬는 사람의 소켓이 붙었다 — 연결 표시를 켜고 끊긴 시각을 지운다. */
+export function attachBenchConnection(state: RoomState, playerId: string, connId: string): RoomState {
+  return mapBench(state, playerId, (p) => {
+    const { disconnectedAt: _gone, ...rest } = p;
+    return { ...rest, connected: true, connId };
+  });
+}
+
+/** 닫힌 소켓의 connId 가 최신 연결일 때만 끊김으로 표시한다(낡은 소켓의 닫힘이 새 연결을 덮지 않게). 정리 시계를 위해 now 를 남긴다. */
+export function detachBenchConnection(state: RoomState, playerId: string, connId: string, now: number): RoomState {
+  return mapBench(state, playerId, (p) => (p.connId === connId ? { ...p, connected: false, connId: null, disconnectedAt: now } : p));
+}
+
+/** 쉬는 사람이 나간다. bench 가 비면 키째 지운다. 쉬는 사람이 아니면 { ok:false }. */
+export function leaveBench(state: RoomState, playerId: string): { ok: true; state: RoomState } | { ok: false } {
+  if (!isResting(state, playerId)) return { ok: false };
+  const rest = (state.bench ?? []).filter((p) => p.id !== playerId);
+  const { bench: _old, ...without } = state;
+  return { ok: true, state: rest.length === 0 ? without : { ...state, bench: rest } };
+}
+
+/**
+ * 쉬는 사람을 sat:true 로 참가자 목록에 합류시킨다(결과 단계 진입, D-13). 행은 허용 키 + sat — 역할·ready 가 없다. bench 키는 지운다. 없으면 같은 객체.
+ * 합류는 승패 판정 뒤에 해야 한다 — 역할 없는 사람이 players 에 있으면 checkWinner 가 others 로 센다.
+ */
+export function seatBench(state: RoomState): RoomState {
+  if (state.bench === undefined) return state;
+  const { bench, ...rest } = state;
+  return { ...rest, players: [...state.players, ...bench.map((p) => ({ ...benchRow(p), sat: true as const }))] };
+}
+
+/** 대기실 복귀(테스트 되돌리기)용: bench 를 sat 표시 없이 그대로 참가자로 합류시킨 사람 행들. */
+export function benchAsPlayers(state: RoomState): Player[] {
+  return (state.bench ?? []).map(benchRow);
 }

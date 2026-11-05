@@ -14,6 +14,7 @@ import { BOT_NAMES, botCount, botExecAgree, botNightTarget, botPointTarget, botR
 import { testRoleOptions } from "./roles";
 import type { RoleId } from "./roles";
 import { pickTarget } from "./night";
+import { benchAsPlayers } from "./rematch";
 import { lowestFreeSeat } from "./room";
 import type { Player, RoomState } from "./room";
 import { stepRunoff } from "./runoff";
@@ -163,7 +164,8 @@ export function resetToLobby(state: RoomState, actorId: string): TestToolResult 
   const denied = checkTestHost(state, actorId);
   if (denied !== null) return { ok: false, error: denied };
   if (state.phase === "lobby") return { ok: false, error: "WRONG_PHASE" };
-  const players: Player[] = state.players.map((p) => ({
+  // 쉬는 사람(bench)이 있으면 참가자로 합류시켜 아무도 잃지 않는다(11-08) — 행은 아래 허용 목록으로 다시 만든다.
+  const players: Player[] = [...state.players, ...benchAsPlayers(state)].map((p) => ({
     id: p.id,
     token: p.token,
     seat: p.seat,
