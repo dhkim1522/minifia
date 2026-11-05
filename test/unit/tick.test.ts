@@ -392,6 +392,18 @@ describe("nextWakeAt (알람 하나로 단계 마감과 방 만료)", () => {
   it("discussion 은 단계 마감이 만료보다 이르면 단계 마감이다", () => {
     expect(nextWakeAt(stateIn("discussion", 100_000))).toBe(100_000);
   });
+
+  it("방장이 끊겨 있고 연결된 후보가 있으면 disconnectedAt + 유예(테스트 방은 3000)가 min 에 들어간다 (D-17)", () => {
+    const base = stateIn("lobby", null);
+    const down = (s: RoomState): RoomState => ({
+      ...s,
+      players: s.players.map((p) => (p.id === "p0" ? { ...p, connected: false, connId: null, disconnectedAt: 1000 } : p)),
+    });
+    expect(nextWakeAt(down(base))).toBe(46_000);
+    expect(nextWakeAt(down({ ...base, testMode: true }))).toBe(4000);
+    // 방 만료가 더 이르면 만료다.
+    expect(nextWakeAt(down({ ...base, expiresAt: 500 }))).toBe(500);
+  });
 });
 
 describe("낮 처형 구간 길이 (결정 0060-1, 0063-1)", () => {

@@ -298,6 +298,19 @@ describe("leaveRoom", () => {
     expect(s.hostId).toBe("A");
   });
 
+  it("detachConnection 은 now 를 받으면 disconnectedAt 을 기록하고, 안 받으면 기록하지 않으며, attachConnection 은 키를 지운다 (D-17, 서버 전용)", () => {
+    const base = attachConnection(room([{ id: "A", seat: 0, joinSeq: 0 }]), "A", "c-A");
+    const withoutNow = detachConnection(base, "A", "c-A");
+    expect(Object.hasOwn(withoutNow.players[0]!, "disconnectedAt")).toBe(false);
+    const stamped = detachConnection(base, "A", "c-A", 12_345);
+    expect(stamped.players[0]!.disconnectedAt).toBe(12_345);
+    // 낡은 connId 의 닫힘은 기록도 하지 않는다.
+    expect(detachConnection(base, "A", "old", 99).players[0]!.disconnectedAt).toBeUndefined();
+    const back = attachConnection(stamped, "A", "c-A2");
+    expect(Object.hasOwn(back.players[0]!, "disconnectedAt")).toBe(false);
+    expect(back.players[0]!.connected).toBe(true);
+  });
+
   it("마지막 사람이 나가면 결과 상태는 null 이다", () => {
     expect(leaveRoom(newRoom(), "h1")).toEqual({ ok: true, state: null });
   });
