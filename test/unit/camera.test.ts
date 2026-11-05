@@ -1,4 +1,7 @@
+import type { PlaneGeometry } from "three";
 import { describe, expect, it } from "vitest";
+import { buildPlazaScene } from "../../src/world/maps/plaza";
+import { LADDER } from "../../src/world/renderer";
 import { HEAD_TOP_Y, WALK_HALF } from "../../shared/game/map";
 import {
   CAM_DIST,
@@ -460,6 +463,42 @@ describe("빈 배경 없음: 이동 한계 상자 9개 목표 × 스테이지 �
         for (const sx of [0, size.w / 2, size.w]) {
           const g = screenToGround(sx, 0, target, size, offsetY);
           expect(Math.max(Math.abs(g.x), Math.abs(g.z)), `${size.label} (${target.x}, ${target.z}) 위 줄`).toBeLessThanOrEqual(PLATE_FAR);
+        }
+      }
+    }
+  });
+});
+
+describe("광장 빈 배경 없음 (MAP-06, D-22): 바닥 판 40×40 + 연장 판", () => {
+  const plaza = buildPlazaScene(LADDER[0]!);
+  const plateHalf = (): number => {
+    const g = plaza.plate.geometry as PlaneGeometry;
+    return g.parameters.width / 2;
+  };
+  const floorHalf = 20; // 바닥 판 40 × 40(plaza.js)
+
+  for (const size of STAGE_SIZES) {
+    it(`blank ${size.label}: 모든 표본 광선이 광장 바닥 판(±20) 안 바닥에 닿는다`, () => {
+      const { far, at } = farthestGround(size, PAN_BOX);
+      expect(far, `${at} (바닥 판 ${floorHalf})`).toBeLessThanOrEqual(floorHalf);
+    });
+  }
+
+  it("연장 판은 PLATE_FAR 반폭이고 바닥 판 바로 아래에 깔려 판 밖도 어둠으로 채운다(바닥과 겹쳐 깜박이지 않는다)", () => {
+    expect(plateHalf()).toBeGreaterThanOrEqual(PLATE_FAR);
+    // 바닥 판 아랫면(−0.11)보다 아래
+    expect(plaza.plate.position.y).toBeLessThan(-0.11);
+    expect(plaza.plate.position.y).toBeGreaterThan(-0.2);
+  });
+
+  it("스테이지 맨 위 줄(헤더 가림막 위)까지 보이는 윗부분도 바닥 판 안이다", () => {
+    for (const size of STAGE_SIZES) {
+      const r = lobbyStage(size);
+      const offsetY = stageOffsetY(size.h, r.top, r.bottom);
+      for (const target of boxTargets(PAN_BOX)) {
+        for (const sx of [0, size.w / 2, size.w]) {
+          const g = screenToGround(sx, 0, target, size, offsetY);
+          expect(Math.max(Math.abs(g.x), Math.abs(g.z)), `${size.label} (${target.x}, ${target.z})`).toBeLessThanOrEqual(floorHalf);
         }
       }
     }

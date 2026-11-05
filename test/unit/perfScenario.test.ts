@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { createScenario, MIX_OUTFITS, mulberry32, parsePerfParams } from "../../src/debug/perf/scenario";
 import type { ScenarioEvent } from "../../src/debug/perf/scenario";
-import { BAR_MAP, BAR_SPAWNS, UNIT, lineWalkable } from "../../shared/game/map";
+import { BAR_MAP, BAR_SPAWNS, UNIT, isWalkable, lineWalkable } from "../../shared/game/map";
+import { PLAZA_MAP, PLAZA_SPAWNS } from "../../shared/game/mapPlaza";
+import * as perfRun from "../../scripts/perf-run.mjs";
 import { MOVE_V, positionAtFx, segmentEndsAt } from "../../shared/game/world";
 import type { Segment } from "../../shared/game/world";
 import { createHash } from "node:crypto";
@@ -123,11 +125,11 @@ describe("createScenario: 동작", () => {
 
 describe("parsePerfParams", () => {
   it("쿼리가 없으면 기본값", () => {
-    expect(parsePerfParams(new URLSearchParams("perf=1"))).toEqual({ scene: "talk", minutes: 5, dpr: null, budget: 0, seed: 1, chars: 8, shot: false, nav: false, outfits: "coat", burst: 1 });
+    expect(parsePerfParams(new URLSearchParams("perf=1"))).toEqual({ scene: "talk", minutes: 5, dpr: null, budget: 0, seed: 1, chars: 8, shot: false, nav: false, outfits: "coat", burst: 1, map: "bar" });
   });
   it("쿼리를 읽는다", () => {
     const p = parsePerfParams(new URLSearchParams("perf=1&scene=vote&minutes=0.25&dpr=1.5&budget=2&seed=9&chars=5&shot=1&nav=1"));
-    expect(p).toEqual({ scene: "vote", minutes: 0.25, dpr: 1.5, budget: 2, seed: 9, chars: 5, shot: true, nav: true, outfits: "coat", burst: 1 });
+    expect(p).toEqual({ scene: "vote", minutes: 0.25, dpr: 1.5, budget: 2, seed: 9, chars: 5, shot: true, nav: true, outfits: "coat", burst: 1, map: "bar" });
   });
   it("범위 밖·잘못된 값은 기본값 또는 안쪽으로 자른다", () => {
     const p = parsePerfParams(new URLSearchParams("scene=day&minutes=-3&dpr=abc&budget=99&seed=x&chars=40"));
@@ -237,5 +239,54 @@ describe("MIX_OUTFITS — 8명 서로 다른 의상(탐정 포함)", () => {
     expect(MIX_OUTFITS[0]).toBe("detective");
     expect(new Set(MIX_OUTFITS).size).toBe(8);
     for (const o of MIX_OUTFITS) expect(Object.hasOwn(OUTFITS, o)).toBe(true);
+  });
+});
+
+describe("광장 성능 측정 입구 (MAP-06, 11-10 Task 3)", () => {
+  it("parsePerfParams: map=plaza|bar 를 읽고 기본·잘못된 값은 bar", () => {
+    expect(parsePerfParams(new URLSearchParams("map=plaza")).map).toBe("plaza");
+    expect(parsePerfParams(new URLSearchParams("map=bar")).map).toBe("bar");
+    expect(parsePerfParams(new URLSearchParams("")).map).toBe("bar");
+    expect(parsePerfParams(new URLSearchParams("map=moon")).map).toBe("bar");
+  });
+
+  it("광장 마스크로 만든 시나리오: 입장 지점에 서 있고 모든 이동 선분이 광장 마스크에서 걸을 수 있다", () => {
+    const s = createScenario({ seed: 1, chars: 8, map: PLAZA_MAP });
+    s.initial().forEach((e) => {
+      const sp = PLAZA_SPAWNS[e.s]!;
+      expect(e.p).toEqual([Math.round(sp.x * UNIT), Math.round(sp.z * UNIT)]);
+    });
+    const moves = s.advance(60000).filter((e): e is Extract<ScenarioEvent, { kind: "move" }> => e.kind === "move");
+    expect(moves.length).toBeGreaterThan(16);
+    for (const m of moves) {
+      for (let i = 0; i + 3 < m.p.length; i += 2) {
+        expect(lineWalkable(PLAZA_MAP, { x: m.p[i]!, z: m.p[i + 1]! }, { x: m.p[i + 2]!, z: m.p[i + 3]! })).toBe(true);
+      }
+    }
+    // 광장에서만 막힌 칸(시계탑 쪽)을 목적지로 삼지 않는다: 모든 도착점은 광장 마스크의 걸을 수 있는 칸
+    for (const m of moves) {
+      const x = m.p[m.p.length - 2]!;
+      const z = m.p[m.p.length - 1]!;
+      expect(isWalkable(PLAZA_MAP, Math.floor((x / UNIT + 7) / 0.5), Math.floor((z / UNIT + 7) / 0.5))).toBe(true);
+    }
+  });
+
+  it("perf-run --map: 기본 bar, plaza 를 받고 잘못된 값은 UsageError, ?perf=1 주소에 map 이 실린다", () => {
+    expect(perfRun.parseArgs([]).map).toBe("bar");
+    expect(perfRun.parseArgs(["--map", "plaza"]).map).toBe("plaza");
+    expect(() => perfRun.parseArgs(["--map", "nope"])).toThrow(/--map/);
+    expect(() => perfRun.parseArgs(["--map"])).toThrow();
+    const o = perfRun.parseArgs(["--map", "plaza"]);
+    expect(new URL(perfRun.targetUrl(o, "http://localhost:1")).searchParams.get("map")).toBe("plaza");
+    expect(new URL(perfRun.targetUrl(perfRun.parseArgs([]), "http://localhost:1")).searchParams.has("map")).toBe(false);
+    expect(perfRun.outputBase(o)).toContain("plaza");
+    expect(perfRun.USAGE).toContain("--map");
+  });
+
+  it("perf-run --map nope 은 종료 코드 1 과 안내를 낸다", async () => {
+    const { spawnSync } = await import("node:child_process");
+    const r = spawnSync(process.execPath, ["scripts/perf-run.mjs", "--map", "nope"], { encoding: "utf8" });
+    expect(r.status).toBe(1);
+    expect(r.stderr).toContain("--map");
   });
 });

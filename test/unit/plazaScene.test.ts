@@ -6,7 +6,7 @@ import { createCharacter, figForSeat } from "../../src/world/character";
 import { buildPlazaScene, PLAZA_CLOCK_HOURS, PLAZA_LIGHT_TUNE } from "../../src/world/maps/plaza";
 import { PLAZA_PALETTE } from "../../src/world/palette";
 import { DRAW_CALL_BUDGET, LADDER } from "../../src/world/renderer";
-import { LIGHT_TUNE } from "../../src/world/maps/bar";
+import { buildBarScene, LIGHT_TUNE } from "../../src/world/maps/bar";
 import { MeshBasicMaterial } from "three";
 import type { LightingPhase } from "../../src/world/renderer";
 
@@ -367,5 +367,44 @@ describe("광장 예산 사다리 (T-11-34)", () => {
     });
     for (const c of chars) c.dispose();
     p.dispose();
+  });
+});
+
+describe("광장 정적 예산: 8명 서로 다른 의상 + 동시 동작 4개 (T-11-34)", () => {
+  const MIX = ["detective", "noir", "mafia", "reporter", "hood", "elder", "police", "doctor"] as const;
+  const EMOTES = ["clap", "deny", "dance", "surprise"] as const;
+  const triangles = (meshes: Mesh[]): number => meshes.reduce((n, m) => n + (m.geometry.index ? m.geometry.index.count / 3 : m.geometry.getAttribute("position").count / 3), 0);
+  const measure = (root: Object3D): { calls: number; tris: number; textures: number } => {
+    const vis = visibleMeshes(root);
+    const tex = new Set<Texture>();
+    for (const m of vis) for (const x of mats(m)) if ((x as { map?: Texture | null }).map) tex.add((x as { map: Texture }).map);
+    return { calls: vis.length + vis.filter((m) => m.castShadow).length, tris: triangles(vis), textures: tex.size };
+  };
+
+  it("보이는 메시 + 그림자 메시 합이 120 이하이고, 재즈 바 같은 구성보다 크게 늘지 않는다(허용 +16 호출, 삼각형 1.6배, 텍스처 같음)", () => {
+    const plaza = buildPlazaScene(LADDER[0]!);
+    const bar = buildBarScene(LADDER[0]!);
+    const chars = (scene: Object3D) =>
+      Array.from({ length: 8 }, (_, i) => {
+        const c = createCharacter(figForSeat(i), MIX[i]!);
+        if (i < 4) c.playEmote(EMOTES[i]!);
+        scene.add(c.root);
+        return c;
+      });
+    const pc = chars(plaza.root);
+    const bc = chars(bar.root);
+    for (const ph of PHASES) {
+      plaza.setLighting(ph);
+      bar.setLighting(ph);
+      const a = measure(plaza.root);
+      const b = measure(bar.root);
+      expect(a.calls, `calls ${ph}`).toBeLessThanOrEqual(DRAW_CALL_BUDGET);
+      expect(a.calls, `vs bar ${ph}`).toBeLessThanOrEqual(b.calls + 16);
+      expect(a.tris, `tris ${ph}`).toBeLessThanOrEqual(b.tris * 1.6);
+      expect(a.textures, `textures ${ph}`).toBeLessThanOrEqual(b.textures);
+    }
+    for (const c of [...pc, ...bc]) c.dispose();
+    plaza.dispose();
+    bar.dispose();
   });
 });
