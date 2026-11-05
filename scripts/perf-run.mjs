@@ -110,13 +110,13 @@ const CHATLOAD_LINES = ["저 아니에요", "누가 수상해요?", "조용한 �
 const CHATLOAD_BASELINE = { avgFps: 55, jankMax: 5, perMinutes: 5, jankMs: JANK_MS, source: "06-PERF-RESULTS.md 조건 B · UI-SPEC 합격 기준 — 5분 평균 ≥ 55fps, 끊김(>50ms) ≤ 5회/5분" };
 
 const USAGE =
-  "사용법: node scripts/perf-run.mjs [--mode perf|interactive|chatload|nightload] [--url 주소] [--scene talk|vote] [--minutes 5] [--dpr 2] [--throttle 4] [--size 390x844] [--out 폴더] [--headed] [--budget 0] [--seed 1] [--runs 3] [--bots 7] [--shot [--file 이름]]";
+  "사용법: node scripts/perf-run.mjs [--mode perf|interactive|chatload|nightload] [--url 주소] [--scene talk|vote] [--minutes 5] [--dpr 2] [--throttle 4] [--size 390x844] [--out 폴더] [--headed] [--budget 0] [--seed 1] [--outfits mix|coat] [--burst 1..4] [--runs 3] [--bots 7] [--shot [--file 이름]]";
 
 class UsageError extends Error {}
 
 /** 인자 해석(순수). 값이 필요한 옵션에 값이 없거나 숫자가 아니면 UsageError */
 export function parseArgs(argv) {
-  const o = { url: null, scene: "talk", minutes: 5, dpr: 2, throttle: 4, size: { w: 390, h: 844 }, out: DEFAULT_OUT, headed: false, budget: 0, seed: 1, shot: false, file: null, mode: "perf", runs: 3, bots: 7, outGiven: false };
+  const o = { url: null, scene: "talk", minutes: 5, dpr: 2, throttle: 4, size: { w: 390, h: 844 }, out: DEFAULT_OUT, headed: false, budget: 0, seed: 1, shot: false, file: null, mode: "perf", runs: 3, bots: 7, outGiven: false, outfits: "coat", burst: 1 };
   const need = (name, i) => {
     const v = argv[i + 1];
     if (v === undefined || v.startsWith("--")) throw new UsageError(`${name} 에 값이 필요합니다`);
@@ -154,6 +154,18 @@ export function parseArgs(argv) {
         o.mode = v;
         break;
       }
+      case "--outfits": {
+        const v = need(a, i++);
+        if (v !== "mix" && v !== "coat") throw new UsageError(`--outfits 는 mix 또는 coat: ${v}`);
+        o.outfits = v;
+        break;
+      }
+      case "--burst": {
+        const n = num(a, need(a, i++), { min: 1, max: 4 });
+        if (!Number.isInteger(n)) throw new UsageError(`--burst 는 1~4 정수: ${n}`);
+        o.burst = n;
+        break;
+      }
       case "--runs": o.runs = Math.floor(num(a, need(a, i++), { min: 1, max: 20 })); break;
       case "--bots": o.bots = Math.floor(num(a, need(a, i++), { min: 0, max: CHATLOAD_NICKS.length })); break;
       case "--out": o.out = resolve(need(a, i++)); o.outGiven = true; break;
@@ -175,13 +187,15 @@ export function outputBase(o) {
   if (o.mode === "interactive") return `interactive-dpr${o.dpr}-x${o.throttle}`;
   if (o.mode === "chatload") return `chatload-${o.size.w}x${o.size.h}-x${o.throttle}`;
   if (o.mode === "nightload") return `nightload-${o.size.w}x${o.size.h}-x${o.throttle}`;
-  const base = `desktop-${o.scene}-dpr${o.dpr}-x${o.throttle}`;
+  const base = `desktop-${o.scene}-dpr${o.dpr}-x${o.throttle}${o.outfits === "mix" ? "-mix" : ""}${o.burst > 1 ? `-burst${o.burst}` : ""}`;
   return o.shot ? `shot-${base}` : base;
 }
 
 /** 열 주소: 대상 + 스파이크 쿼리 */
 export function targetUrl(o, origin) {
   const q = new URLSearchParams({ perf: "1", scene: o.scene, minutes: String(o.minutes), dpr: String(o.dpr), seed: String(o.seed), budget: String(o.budget) });
+  if (o.outfits !== "coat") q.set("outfits", o.outfits);
+  if (o.burst > 1) q.set("burst", String(o.burst));
   if (o.shot) q.set("shot", "1");
   return `${origin.replace(/\/+$/, "")}/?${q.toString()}`;
 }
@@ -886,7 +900,7 @@ async function main() {
       const f = result.frames;
       console.log(`결과 저장: ${json}`);
       console.log(`스크린샷: ${png}`);
-      console.log(`평균 ${f.avgFps.toFixed(1)}fps · 끊김 ${f.jank} · p95 ${f.p95.toFixed(1)}ms · rAF ${f.rafHz}Hz · calls ${result.renderer?.calls ?? "-"} · triangles ${result.renderer?.triangles ?? "-"}`);
+      console.log(`평균 ${f.avgFps.toFixed(1)}fps · 끊김 ${f.jank} · p95 ${f.p95.toFixed(1)}ms · rAF ${f.rafHz}Hz · calls ${result.renderer?.calls ?? "-"} · triangles ${result.renderer?.triangles ?? "-"} · outfits ${result.params?.outfits ?? "-"} · burst ${result.params?.burst ?? "-"} · firstEmoteGapMs ${result.firstEmoteGapMs ?? "-"}`);
     }
   } catch (e) {
     code = 1;

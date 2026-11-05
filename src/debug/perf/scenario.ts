@@ -7,6 +7,8 @@ import type { MapDef } from "../../../shared/game/map";
 import { MOVE_V, WANDER_MIN_MS, WANDER_SPAN_MS, restSegment, positionAtFx, segmentEndsAt } from "../../../shared/game/world";
 import type { Segment } from "../../../shared/game/world";
 import { UNIT } from "../../../shared/game/map";
+import { EMOTE_IDS } from "../../../shared/protocol";
+import type { EmoteId } from "../../../shared/protocol";
 
 /** 동작 이벤트 간격(ms): 5초마다 한 명 */
 export const EMOTE_EVERY_MS = 5000;
@@ -16,7 +18,11 @@ const EMOTE_PAUSE_MS = 2000;
 const FIRST_WANDER_BASE_MS = 500;
 const FIRST_WANDER_SPREAD_MS = 3000;
 const EMOTES = ["clap", "deny"] as const;
-export type PerfEmote = (typeof EMOTES)[number];
+/** burst 경로(10-06)가 돌려 쓰는 아홉 종 — 기본 시나리오의 EMOTES 와 난수·순서를 섞지 않으려 따로 둔다 */
+const BURST_EMOTES = EMOTE_IDS;
+export type PerfEmote = EmoteId;
+/** outfits=mix 일 때 좌석 i 가 입는 의상(0번이 탐정, 8명 모두 다르다) */
+export const MIX_OUTFITS = ["detective", "noir", "mafia", "reporter", "hood", "elder", "police", "doctor"] as const;
 
 /** 외부 패키지 없는 소형 시드 난수(mulberry32). 0 이상 1 미만 */
 export function mulberry32(seed: number): () => number {
@@ -35,6 +41,8 @@ export interface ScenarioOptions {
   /** 캐릭터 수 (1~8, 자리 0부터) */
   chars: number;
   map: MapDef;
+  /** 같은 시각에 동작하는 사람 수(1~4, 기본 1). 1 이면 10-06 이전과 이벤트 열이 같다 */
+  burst?: number;
 }
 
 export type ScenarioEvent =
@@ -56,6 +64,7 @@ export function createScenario(opts: ScenarioOptions): Scenario {
   // 자리마다 난수 흐름이 따로다 — 한 사람의 경로가 바뀌어도(사람이 눌러 retarget) 다른 사람의 경로는 같다
   const rands = Array.from({ length: chars }, (_, s) => mulberry32(Math.imul(opts.seed | 0, 1_000_003) + Math.imul(s + 1, 7919)));
   const cells = walkableCells(map);
+  const burst = Math.max(1, Math.min(chars, Math.floor(opts.burst ?? 1) || 1));
 
   const segs: Segment[] = [];
   const nextWander: number[] = [];
@@ -86,6 +95,23 @@ export function createScenario(opts: ScenarioOptions): Scenario {
         const emoteFirst = nextEmote < at;
         const t = emoteFirst ? nextEmote : at;
         if (t > untilMs) break;
+        if (emoteFirst && burst > 1) {
+          // 같은 시각에 서로 다른 burst 명이 동작한다(걷던 사람은 먼저 멈춘다). 동작 id 는 아홉 종을 돌아가며 쓴다
+          for (let i = 0; i < burst; i++) {
+            const who = (emoteCount * burst + i) % chars;
+            const id = BURST_EMOTES[(emoteCount * burst + i) % BURST_EMOTES.length]!;
+            if (segmentEndsAt(segs[who]!) > t) {
+              const here = positionAtFx(segs[who]!, t);
+              segs[who] = restSegment(here.x, here.z, t);
+              out.push({ kind: "move", at: t, seat: who, p: [here.x, here.z], t0: t, v: MOVE_V });
+            }
+            out.push({ kind: "emote", at: t, seat: who, id });
+            nextWander[who] = Math.max(nextWander[who]!, t + EMOTE_PAUSE_MS);
+          }
+          emoteCount += 1;
+          nextEmote += EMOTE_EVERY_MS;
+          continue;
+        }
         if (emoteFirst) {
           // 돌아가는 차례의 사람이 하던 걸음을 멈추고(한 점 구간) 동작을 한다 — 걷는 중인 사람에게는 동작을 시키지 않는다
           const who = emoteCount % chars;
@@ -135,6 +161,10 @@ export interface PerfParams {
   shot: boolean;
   /** 걸을 수 있는 셀 중심을 점으로 겹쳐 본다 */
   nav: boolean;
+  /** 좌석 의상: coat = 모두 기본 코트(look 없음), mix = 8명 서로 다른 의상(탐정 포함, MIX_OUTFITS) */
+  outfits: "coat" | "mix";
+  /** 같은 시각에 동작하는 사람 수 1~4 */
+  burst: number;
 }
 
 function num(v: string | null): number | null {
@@ -143,13 +173,14 @@ function num(v: string | null): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-/** ?perf=1 쿼리: scene·minutes·dpr·budget·seed·chars·shot·nav. 잘못된 값은 기본값, 범위 밖은 안쪽으로 자른다 */
+/** ?perf=1 쿼리: scene·minutes·dpr·budget·seed·chars·shot·nav·outfits·burst. 잘못된 값은 기본값, 범위 밖은 안쪽으로 자른다 */
 export function parsePerfParams(q: URLSearchParams): PerfParams {
   const minutes = num(q.get("minutes"));
   const dpr = num(q.get("dpr"));
   const budget = num(q.get("budget"));
   const seed = num(q.get("seed"));
   const chars = num(q.get("chars"));
+  const burst = num(q.get("burst"));
   return {
     scene: q.get("scene") === "vote" ? "vote" : "talk",
     minutes: minutes !== null && minutes > 0 ? minutes : 5,
@@ -159,5 +190,7 @@ export function parsePerfParams(q: URLSearchParams): PerfParams {
     chars: chars === null ? 8 : Math.max(1, Math.min(8, Math.floor(chars))),
     shot: q.get("shot") === "1",
     nav: q.get("nav") === "1",
+    outfits: q.get("outfits") === "mix" ? "mix" : "coat",
+    burst: burst !== null && Number.isInteger(burst) && burst >= 1 && burst <= 4 ? burst : 1,
   };
 }

@@ -12,10 +12,16 @@ import type { WorldModules, WorldRuntime } from "../../world/runtime";
 import { WorldStore } from "../../world/store";
 import { createHud } from "./hud";
 import { SPIKE_NAMES, makeTag } from "./tags";
-import { parsePerfParams, createScenario } from "./scenario";
+import { parsePerfParams, createScenario, MIX_OUTFITS } from "./scenario";
 import type { PerfParams } from "./scenario";
+import type { PerfResult } from "./hud";
 import "../../styles/world.css";
 import "../../styles/v2.css";
+
+/** 첫 동작 직후 이 시간(ms) 안의 프레임 간격 최댓값을 firstEmoteGapMs 로 남긴다(10-06, O-10) */
+const FIRST_EMOTE_WINDOW_MS = 300;
+/** 결과 JSON 에 덧붙는 값: 첫 동작 직후 최대 프레임 간격(ms). 동작 이벤트가 없었으면 null */
+export type PerfResultWithEmote = PerfResult & { firstEmoteGapMs: number | null };
 
 /** shot=1 은 측정이 시작된 뒤 이 시간(ms)에 시나리오와 HUD 를 멈춘다(스크린샷용) */
 const SHOT_FREEZE_MS = 10_000;
@@ -48,7 +54,13 @@ export function mount(root: HTMLElement, search: URLSearchParams): PerfScene {
   input.className = "mf-world__input";
   const tags = document.createElement("div");
   tags.className = "mf-world__tags";
-  const players = Array.from({ length: p.chars }, (_, seat) => ({ seat, nickname: SPIKE_NAMES[seat % SPIKE_NAMES.length]!, connected: true }));
+  // outfits=mix 면 좌석 i 가 MIX_OUTFITS[i](0번 탐정)를 입는다. coat 면 look 키 없음(기본 코트)
+  const players = Array.from({ length: p.chars }, (_, seat) => ({
+    seat,
+    nickname: SPIKE_NAMES[seat % SPIKE_NAMES.length]!,
+    connected: true,
+    ...(p.outfits === "mix" ? { look: MIX_OUTFITS[seat % MIX_OUTFITS.length]! } : {}),
+  }));
   for (const pl of players) tags.append(makeTag(pl.seat, pl.nickname, pl.seat === 0));
   const navLayer = document.createElement("div");
   navLayer.style.cssText = "position:absolute;inset:0;pointer-events:none;z-index:var(--z-tags)";
@@ -65,11 +77,16 @@ export function mount(root: HTMLElement, search: URLSearchParams): PerfScene {
   const serverNow = (): number => wall0 + elapsed();
 
   const store = new WorldStore();
-  const scenario = createScenario({ seed: p.seed, chars: p.chars, map: BAR_MAP });
+  const scenario = createScenario({ seed: p.seed, chars: p.chars, map: BAR_MAP, burst: p.burst });
   store.applyFrame({ t: "world", k: "snap", at: wall0, ents: scenario.initial().map((e) => ({ s: e.s, p: e.p, t0: wall0 + e.t0, v: e.v })) }, 1);
 
   let rafId = 0;
   let disposed = false;
+  /** 첫 동작 직후 프레임 간격 측정: 동작을 넣은 프레임 시각 · 직전 프레임 시각 · 지금까지의 최댓값 · 끝났는가 */
+  let emoteStartAt: number | null = null;
+  let lastFrameAt = 0;
+  let firstEmoteGapMs: number | null = null;
+  let emoteSeq = 0;
   /** 탭을 받아들인 시각(pointerup 의 timeStamp). 다음 프레임에서 "링이 그려진 시각" 과의 차를 잰다 */
   let tapAt: number | null = null;
 
@@ -79,6 +96,9 @@ export function mount(root: HTMLElement, search: URLSearchParams): PerfScene {
     query: window.location.search,
     threeRevision: REVISION,
     renderer: () => runtime.renderer(),
+    onFinish: (r) => {
+      (r as PerfResultWithEmote).firstEmoteGapMs = firstEmoteGapMs === null ? null : Math.round(firstEmoteGapMs * 10) / 10;
+    },
     interactiveMs: () => runtime.interactiveMs(),
     storage: (() => {
       try {
@@ -175,6 +195,11 @@ export function mount(root: HTMLElement, search: URLSearchParams): PerfScene {
     if (disposed) return;
     rafId = requestAnimationFrame(pump);
     hud.frame(time);
+    if (emoteStartAt !== null && firstEmoteGapMs !== null && firstEmoteGapMs >= 0 && time - emoteStartAt <= FIRST_EMOTE_WINDOW_MS + 20) {
+      // 동작을 넣은 프레임 이후의 프레임 간격(동작 시작 비용이 들어 있는 간격)
+      firstEmoteGapMs = Math.max(firstEmoteGapMs, time - lastFrameAt);
+    }
+    lastFrameAt = time;
     if (tapAt !== null) {
       hud.tapRing(time - tapAt);
       tapAt = null;
@@ -182,7 +207,15 @@ export function mount(root: HTMLElement, search: URLSearchParams): PerfScene {
     if (running && !frozen) {
       for (const ev of scenario.advance(elapsed())) {
         if (ev.kind === "move") store.applyFrame({ t: "world", k: "move", s: ev.seat, p: ev.p, t0: wall0 + ev.t0, v: ev.v }, 1);
-        else runtime.characterOf(ev.seat)?.playEmote?.(ev.id);
+        else {
+          // burst 모드는 제품과 같은 경로(store.applyEmote → 동시 재생 상한 4)로 넣는다. 기본 경로는 이전 그대로 직접 재생
+          if (p.burst > 1) store.applyEmote({ t: "emote", seat: ev.seat, id: ev.id, n: ++emoteSeq }, 1);
+          else runtime.characterOf(ev.seat)?.playEmote?.(ev.id);
+          if (emoteStartAt === null) {
+            emoteStartAt = time;
+            firstEmoteGapMs = 0;
+          }
+        }
       }
       if (p.shot && elapsed() >= SHOT_FREEZE_MS) {
         frozen = true;

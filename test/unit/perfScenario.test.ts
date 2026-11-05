@@ -123,7 +123,7 @@ describe("createScenario: 동작", () => {
 
 describe("parsePerfParams", () => {
   it("쿼리가 없으면 기본값", () => {
-    expect(parsePerfParams(new URLSearchParams("perf=1"))).toEqual({ scene: "talk", minutes: 5, dpr: null, budget: 0, seed: 1, chars: 8, shot: false, nav: false });
+    expect(parsePerfParams(new URLSearchParams("perf=1"))).toEqual({ scene: "talk", minutes: 5, dpr: null, budget: 0, seed: 1, chars: 8, shot: false, nav: false, outfits: "coat", burst: 1 });
   });
   it("쿼리를 읽는다", () => {
     const p = parsePerfParams(new URLSearchParams("perf=1&scene=vote&minutes=0.25&dpr=1.5&budget=2&seed=9&chars=5&shot=1&nav=1"));
