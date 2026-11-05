@@ -184,3 +184,175 @@ describe("useChat 동작 연결 (D-9)", () => {
     expect(sent.length).toBe(0);
   });
 });
+
+// ---- Task 2: 비활성·닫기·키보드 열림·초점·화살표키 ----
+
+const open = (c: HTMLElement) => fireEvent.click(button(c)!);
+const isOff = (el: Element | null | undefined) => el?.getAttribute("aria-disabled") === "true";
+
+describe("칸 비활성 (D-10, D-11)", () => {
+  it("emoteBlocked 면 아홉 칸 모두 aria-disabled 이고 눌러도 onEmote 가 없고 판은 열린 채 알림도 없다", () => {
+    const onEmote = vi.fn();
+    const { container } = mountPanel({ onEmote, emoteBlocked: true });
+    open(container);
+    expect(cells(container).every((c) => isOff(c))).toBe(true);
+    fireEvent.click(cells(container)[0]!);
+    expect(onEmote.mock.calls.length).toBe(0);
+    expect(tray(container) !== null).toBe(true);
+    expect(container.querySelector("[role=status],[data-chat-notice]") === null).toBe(true);
+  });
+
+  it("sendDisabled(끊김)이면 칸도 버튼도 aria-disabled 이고 열려 있던 판은 닫힌다", () => {
+    const onEmote = vi.fn();
+    const { container, rerender } = render(<Harness emotes={EMOTE_TRAY_ORDER} onEmote={onEmote} />);
+    open(container);
+    expect(tray(container) !== null).toBe(true);
+    rerender(<Harness emotes={EMOTE_TRAY_ORDER} onEmote={onEmote} sendDisabled />);
+    expect(tray(container) === null).toBe(true);
+    expect(isOff(button(container))).toBe(true);
+    open(container);
+    expect(tray(container) === null).toBe(true);
+  });
+
+  it("버튼은 끊김이 아니면 aria-disabled 가 아니다(걷는 중에도 판은 열린다)", () => {
+    const { container } = mountPanel({ emoteBlocked: true });
+    expect(isOff(button(container))).toBe(false);
+  });
+
+  it("emotePlaying 칸에만 is-playing", () => {
+    const { container } = mountPanel({ emoteBlocked: true, emotePlaying: "dance" });
+    open(container);
+    expect(cells(container).filter((c) => c.className.includes("is-playing")).map((c) => c.getAttribute("data-emote")).join(",")).toBe("dance");
+  });
+
+  it("풀리면 즉시 눌린다", () => {
+    const onEmote = vi.fn();
+    const { container, rerender } = render(<Harness emotes={EMOTE_TRAY_ORDER} onEmote={onEmote} emoteBlocked />);
+    open(container);
+    rerender(<Harness emotes={EMOTE_TRAY_ORDER} onEmote={onEmote} />);
+    fireEvent.click(cells(container)[1]!);
+    expect(onEmote.mock.calls.map((a) => String(a[0])).join(",")).toBe("praise");
+  });
+});
+
+describe("닫기 네 가지와 초점 (D-2)", () => {
+  it("버튼을 다시 누르면 닫히고 초점이 버튼에 있다", () => {
+    const { container } = mountPanel();
+    open(container);
+    open(container);
+    expect(tray(container) === null).toBe(true);
+    expect(document.activeElement === button(container)).toBe(true);
+  });
+
+  it("판 바깥 pointerdown 으로 닫힌다 (안쪽·버튼 pointerdown 은 아니다)", () => {
+    const { container } = mountPanel();
+    open(container);
+    fireEvent.pointerDown(cells(container)[2]!);
+    fireEvent.pointerDown(button(container)!);
+    expect(tray(container) !== null).toBe(true);
+    fireEvent.pointerDown(document.body);
+    expect(tray(container) === null).toBe(true);
+  });
+
+  it("Esc 로 닫히고 초점이 버튼으로 돌아온다", () => {
+    const { container } = mountPanel();
+    open(container);
+    fireEvent.keyDown(cells(container)[0]!, { key: "Escape" });
+    expect(tray(container) === null).toBe(true);
+    expect(document.activeElement === button(container)).toBe(true);
+  });
+
+  it("칸을 고르면 닫히고 초점이 버튼으로 돌아온다", () => {
+    const { container } = mountPanel();
+    open(container);
+    fireEvent.click(cells(container)[4]!);
+    expect(tray(container) === null).toBe(true);
+    expect(document.activeElement === button(container)).toBe(true);
+  });
+
+  it("열리면 첫 칸으로 초점이 간다", () => {
+    const { container } = mountPanel();
+    open(container);
+    expect(document.activeElement === cells(container)[0]).toBe(true);
+  });
+});
+
+describe("키보드가 열려 있을 때 (입력칸 포커스)", () => {
+  it("첫 누름은 판을 열지 않고 입력칸을 blur, 두 번째 누름에 열린다", () => {
+    const { container } = mountPanel();
+    const input = container.querySelector<HTMLInputElement>("[data-chat-input]")!;
+    input.focus();
+    expect(document.activeElement === input).toBe(true);
+    open(container);
+    expect(tray(container) === null).toBe(true);
+    expect(document.activeElement === input).toBe(false);
+    open(container);
+    expect(tray(container) !== null).toBe(true);
+  });
+});
+
+describe("판 안 화살표키", () => {
+  const focusedId = () => document.activeElement?.getAttribute("data-emote");
+  it("좌우 한 칸, 위아래 5칸, 끝에서 멈춘다", () => {
+    const { container } = mountPanel();
+    open(container);
+    const down = (key: string) => fireEvent.keyDown(document.activeElement!, { key });
+    down("ArrowRight");
+    expect(focusedId()).toBe("praise");
+    down("ArrowDown");
+    expect(focusedId()).toBe("cry");
+    down("ArrowUp");
+    expect(focusedId()).toBe("praise");
+    down("ArrowLeft");
+    down("ArrowLeft");
+    expect(focusedId()).toBe("clap");
+    down("ArrowUp");
+    expect(focusedId()).toBe("clap");
+    for (let i = 0; i < 12; i++) down("ArrowRight");
+    expect(focusedId()).toBe("throat");
+    down("ArrowDown");
+    expect(focusedId()).toBe("throat");
+  });
+
+  it("칸은 진짜 button 이라 Enter·Space 의 기본 동작이 선택이다", () => {
+    const { container } = mountPanel();
+    open(container);
+    expect(cells(container).every((c) => c.tagName === "BUTTON" && c.getAttribute("type") === "button")).toBe(true);
+  });
+});
+
+describe("판 열림 중 떠 있는 버튼 숨김 (CSS)", () => {
+  it("body:has([data-emote-tray]) .mf-float 가 visibility:hidden", () => {
+    const bare = V2_CSS.replace(/\/\*[\s\S]*?\*\//g, "");
+    const m = [...bare.matchAll(/([^{}]+)\{([^{}]*)\}/g)].filter((x) => /body:has\(\[data-emote-tray\]\)\s+\.mf-float/.test(x[1] ?? ""));
+    expect(m.map((x) => (x[2] ?? "").trim()).join("|")).toBe("visibility: hidden;");
+  });
+
+  it("판 등장은 transform·opacity 뿐이고 모션 줄이기에서는 없다", () => {
+    const bare = V2_CSS.replace(/\/\*[\s\S]*?\*\//g, "");
+    expect(/prefers-reduced-motion[^{]*\{[^]*mv-emote-tray[^]*animation:\s*none/.test(bare)).toBe(true);
+  });
+});
+
+describe("useChat 모션 연결", () => {
+  it("motion 이 걷는 중이면 emoteBlocked, 동작 중이면 emotePlaying", () => {
+    const mkView = makeView();
+    const store = new ChatStore();
+    const conn = { canSend: true, send: () => true };
+    const hook = renderHook((p: { motion: { moving: boolean; emoting: "clap" | null } }) => useChat({ store, connection: conn, view: mkView, motion: p.motion }), {
+      initialProps: { motion: { moving: false, emoting: null as "clap" | null } },
+    });
+    expect(`${hook.result.current.emoteBlocked}|${hook.result.current.emotePlaying}`).toBe("false|null");
+    hook.rerender({ motion: { moving: true, emoting: null } });
+    expect(`${hook.result.current.emoteBlocked}|${hook.result.current.emotePlaying}`).toBe("true|null");
+    hook.rerender({ motion: { moving: false, emoting: "clap" } });
+    expect(`${hook.result.current.emoteBlocked}|${hook.result.current.emotePlaying}`).toBe("true|clap");
+  });
+});
+
+describe("화면 연결 (Lobby·GameMap)", () => {
+  it.each(["src/screens/Lobby.tsx", "src/screens/GameMap.tsx"])("%s 는 useMyMotion 을 불러 useChat 에 넘긴다", (file) => {
+    const src = readFileSync(file, "utf8");
+    expect(/useMyMotion\(/.test(src) && /useChat\(\{[^}]*motion/.test(src)).toBe(true);
+  });
+});
