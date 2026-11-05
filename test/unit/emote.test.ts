@@ -20,6 +20,10 @@ describe("EMOTE_MS — 재생 길이 표 (10-01 트레이서)", () => {
 
 // 연타 규칙(O-1 기본값): 앞 동작이 끝나기 전 불가 · 마지막 수락 뒤 1000ms · 10초 창에 5번. 시각은 인자로 받는다.
 describe("emoteGate — 연타 규칙 (10-01 Task 2, D-19)", () => {
+  it("모든 동작 길이가 서버 최소 간격 이상이다 — 화면의 EMOTE_MS 비활성이 이미 서버 간격을 덮는다(결정 0068, 10-05 이월)", () => {
+    for (const id of EMOTE_IDS) expect(EMOTE_MS[id], id).toBeGreaterThanOrEqual(EMOTE_MIN_GAP_MS);
+  });
+
   it("상수는 계약 값이다", () => {
     expect(EMOTE_MIN_GAP_MS).toBe(1000);
     expect(EMOTE_BURST_WINDOW_MS).toBe(10_000);

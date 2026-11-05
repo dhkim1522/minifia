@@ -3033,6 +3033,8 @@ export const FLOWS = [
   { id: "chat-lobby", run: chatLobbyFlow, extraSizes: LOBBY_EXTRA_SIZES },
   // 한글 조합(07-19): CDP imeSetComposition 으로 조합 중 Enter·보내기가 한 번만 보내진다. 크기와 무관해서 자기 크기로 한 번만 돈다
   { id: "chat-ime", run: chatImeFlow, size: { w: 390, h: 844, label: "390x844" } },
+  // 위험 1(10-UI-SPEC): 동작 버튼 때문에 입력칸이 160 으로 준 폭 360 에서 한글 조합이 되는지 한 번 더 (10-09)
+  { id: "chat-ime-360x560", run: chatImeFlow, size: { w: 360, h: 560, label: "360x560" } },
   // 가상 키보드(07-19): 입력칸 포커스 + 가짜 visualViewport 로 패널·캔버스·카메라·D4 를 본다. 큰 폰 3종은 이름표까지, 작은 폰 3종은 캐릭터 몸만(가정 A2)
   { id: "chat-keyboard", run: chatKeyboardFlow, extraSizes: LOBBY_EXTRA_SIZES },
   // 맵 게임 흐름(08-24): day·ghost 는 폰 크기 6종, 나머지는 자기 크기로 한 번. 단계는 테스트 방 다음 단계와 봇 투표 규칙으로 넘긴다

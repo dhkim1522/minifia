@@ -14,16 +14,9 @@ const COMBOS: [number, OutfitId][] = FIGS.flatMap((_, f) => OUTFIT_IDS.map((o): 
 const MAX_MESHES = 8;
 const MAX_TRIANGLES = 15_000;
 const HEIGHT_MIN = 1.5;
-const HEIGHT_MAX = 1.9;
+/** 높이 밴드 상한: 결정 0068 이 1.9 에서 1.92 로 올렸다(여자 머리 위 기자 모자 1.918). 하한·다른 문턱은 그대로. */
+const HEIGHT_MAX = 1.92;
 const MAX_OWNED_GEOMETRIES = 14;
-/**
- * 알려진 높이 초과(밴드를 넓히지 않고 값을 기록한다, UI-SPEC 계약): 여자 머리(인물 2·4) 위에 기자 모자(news)를 얹으면 1.918 이다.
- * 부품 모양을 바꾸지 않는 계획이라 고치지 않았다(SUMMARY·10-09 실기기 목록 후보). 이 두 조합만, 1.92 까지만 허용한다.
- */
-const KNOWN_TALL = new Map<string, number>([
-  ["2:reporter", 1.92],
-  ["4:reporter", 1.92],
-]);
 const SEATS = 8;
 const SCENE_TRIANGLES = 120_000;
 const SCENE_DRAW_CALLS = 64;
@@ -76,7 +69,7 @@ describe("인물 에셋 예산 — 45조합 (D-15, D-16)", () => {
     expect(ms.length).toBeLessThanOrEqual(MAX_MESHES);
     expect(tris).toBeLessThanOrEqual(MAX_TRIANGLES);
     expect(size.y).toBeGreaterThanOrEqual(HEIGHT_MIN);
-    expect(size.y).toBeLessThanOrEqual(KNOWN_TALL.get(`${fig}:${outfit}`) ?? HEIGHT_MAX);
+    expect(size.y).toBeLessThanOrEqual(HEIGHT_MAX);
     for (const m of ms) {
       const pos = m.geometry.getAttribute("position");
       for (let i = 0; i < pos.array.length; i++) {
