@@ -9,6 +9,8 @@ import { MOVE_SPEED } from "../../shared/game/world";
 import { NICKNAME_MAX_GRAPHEMES, countGraphemes } from "../../shared/nickname";
 import { ANNOUNCE_MORNING_AT } from "../../src/game/dayView";
 import { TIMELESS_PHASES } from "../../src/game/scenes";
+import { SOUND_IDS } from "../../src/audio/recipes";
+import { SOUND_LIMITS } from "../../src/debug/soundLabData";
 import { LETTER_END_AT_MS, LETTER_FOLD_AT_MS, SEAL_GLYPH } from "../../src/game/willLetter";
 import {
   CHAT_PANEL_EXTRA,
@@ -337,5 +339,33 @@ describe("10페이즈 E2E 표식(10-05)", () => {
     expect(has("components/v2/DressSheet.tsx", "data-outfit=")).toBe(true);
     expect(has("components/v2/FloatAction.tsx", "data-float=")).toBe(true);
     expect(has("world/testHooks.ts", "__mfLooks")).toBe(true);
+  });
+});
+
+describe("12페이즈 소리 시험 페이지 E2E 표식·문턱(12-06)", () => {
+  const lib = e2eLib as unknown as { SOUND_MARKERS: readonly string[]; SOUND_RENDER_LIMITS: { count: number; peakMaxDb: number; rmsMinDb: number; lengthTolMs: number } };
+  const root = new URL("../../", import.meta.url);
+  const tracked = execFileSync("git", ["ls-files", "src"], { cwd: root, encoding: "utf8" })
+    .split("\n")
+    .filter((f) => /\.(tsx?|css)$/.test(f));
+  const sources = tracked.map((f) => ({ f, text: readFileSync(new URL(f, root), "utf8") }));
+
+  it("SOUND_MARKERS 네 개가 git 이 추적하는 src/ 파일 어딘가에 있다(표식 이름 오타 방지)", () => {
+    expect(lib.SOUND_MARKERS).toEqual(["data-sound-lab", "data-sound-id", "__mfSound", "__mfSoundLab"]);
+    const missing = lib.SOUND_MARKERS.filter((m) => !sources.some((s) => s.text.includes(m)));
+    expect(missing).toEqual([]);
+  });
+
+  it("표식은 시험 페이지·소리 훅에 각각 있다", () => {
+    const has = (file: string, marker: string) => sources.some((s) => s.f.endsWith(file) && s.text.includes(marker));
+    expect(has("debug/soundLab.ts", "data-sound-lab")).toBe(true);
+    expect(has("debug/soundLab.ts", "data-sound-id")).toBe(true);
+    expect(has("debug/soundLab.ts", "__mfSoundLab")).toBe(true);
+    expect(has("audio/testHook.ts", "__mfSound")).toBe(true);
+  });
+
+  it("E2E 문턱 개수는 SOUND_IDS.length 와 같고, 앱 쪽 SOUND_LIMITS 와 한 글자도 다르지 않다(문턱 완화 방지, T-12-22)", () => {
+    expect(lib.SOUND_RENDER_LIMITS.count).toBe(SOUND_IDS.length);
+    expect({ ...lib.SOUND_RENDER_LIMITS }).toEqual({ ...SOUND_LIMITS });
   });
 });

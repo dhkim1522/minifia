@@ -3,12 +3,13 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { EXECUTION_MS } from "../../shared/game/phases";
-import { ANNOUNCE_LEAD_MS, ANNOUNCE_TALLY_MS } from "../../src/game/dayView";
+import { ANNOUNCE_LEAD_MS, ANNOUNCE_MORNING_AT, ANNOUNCE_TALLY_MS, ANNOUNCE_VICTIM_AT } from "../../src/game/dayView";
 import { BALLOT_END_AT, BALLOT_NO_AT, BALLOT_YES_AT } from "../../src/game/verdictMoment";
 import { LETTER_FOLD_AT_MS, LETTER_SEAL_GAP_MS, LETTER_WRITE_AT_MS } from "../../src/game/willLetter";
 import { mulberry32, recipeDurationMs } from "../../src/audio/recipes";
 import {
   awardScript,
+  morningScript,
   nightCues,
   nightScript,
   pickTickSchedule,
@@ -253,5 +254,51 @@ describe("대본 입력 경계 (LS-11)", () => {
 
   it("11페이즈 시간표 복사 상수는 RESULT_AT 한 객체에 모여 있다", () => {
     expect(src).toContain("export const RESULT_AT");
+  });
+});
+
+describe("아침 대본 — morningScript (12-06, C-5, LS-8)", () => {
+  const at = (s: { items: readonly { at: number; id: string }[] }, id: string): number | undefined => s.items.find((i) => i.id === id)?.at;
+
+  it("희생자·내가 피해자: 0 morning.dawn · 50 kill.slash · 700 chalk.draw, 침대 bed.dawn", () => {
+    const s = morningScript({ outcome: "victim", mine: true });
+    expect(s.items.map((i) => [i.at, i.id])).toEqual([
+      [0, "morning.dawn"],
+      [50, "kill.slash"],
+      [ANNOUNCE_VICTIM_AT, "chalk.draw"],
+    ]);
+    expect(s.bed).toBe("bed.dawn");
+    expect(s.duck).toBeNull();
+  });
+
+  it("희생자·남의 화면: kill.slash 가 없다", () => {
+    const s = morningScript({ outcome: "victim", mine: false });
+    expect(ids(s)).toEqual(["morning.dawn", "chalk.draw"]);
+  });
+
+  it("평화: 400 morning.calm, 구출: 400 morning.saved (chalk.draw 없음)", () => {
+    const calm = morningScript({ outcome: "calm", mine: false });
+    const saved = morningScript({ outcome: "saved", mine: false });
+    expect(ids(calm)).toEqual(["morning.dawn", "morning.calm"]);
+    expect(at(calm, "morning.calm")).toBe(ANNOUNCE_MORNING_AT);
+    expect(ids(saved)).toEqual(["morning.dawn", "morning.saved"]);
+    expect(at(saved, "morning.saved")).toBe(ANNOUNCE_MORNING_AT);
+  });
+
+  it("mine 이 거짓이면 어떤 결과에도 kill.slash 가 없다 (LS-8 의 순수 부분)", () => {
+    for (const outcome of ["calm", "saved", "victim"] as const) {
+      expect(ids(morningScript({ outcome, mine: false }))).not.toContain("kill.slash");
+    }
+    // 희생자가 아니면 mine 이 참이어도 slash 는 없다(칼날은 선 본인의 죽음에만)
+    expect(ids(morningScript({ outcome: "calm", mine: true }))).not.toContain("kill.slash");
+    expect(ids(morningScript({ outcome: "saved", mine: true }))).not.toContain("kill.slash");
+  });
+
+  it("시각순으로 정렬돼 있고 같은 입력이면 같은 출력", () => {
+    for (const outcome of ["calm", "saved", "victim"] as const) {
+      const a = morningScript({ outcome, mine: true });
+      expect(a.items.map((i) => i.at)).toEqual([...a.items.map((i) => i.at)].sort((x, y) => x - y));
+      expect(morningScript({ outcome, mine: true })).toEqual(a);
+    }
   });
 });

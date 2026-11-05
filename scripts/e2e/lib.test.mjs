@@ -141,6 +141,9 @@ import {
   emoteDeliveryChecks,
   floatTrayChecks,
   AVATAR_MARKERS,
+  SOUND_MARKERS,
+  SOUND_RENDER_LIMITS,
+  soundRenderChecks,
   sheetFitChecks,
   claimBadgeChecks,
   ballotFitChecks,
@@ -2905,4 +2908,96 @@ test("floatTrayChecks: 떠 있는 버튼이 하나도 없으면(확인할 것이
   const lines = floatTrayChecks({});
   assert.equal(lines.length, 3);
   assert.ok(lines.every((l) => !l.ok && /측정값 없음/.test(l.detail)));
+});
+
+// ---- 12-06: 소리 시험 페이지 sound-render 순수 판정 (D-18, T-12-22) ----
+
+const soundRow = (id, over = {}) => ({ id, peakDb: -9, rmsDb: -30, nan: 0, lengthMs: 300, declaredMs: id.startsWith("bed.") ? null : 300, ok: true, ...over });
+const soundRows = () => [...Array.from({ length: 7 }, (_, i) => soundRow(`bed.${i}`)), ...Array.from({ length: 49 }, (_, i) => soundRow(`sfx.${i}`))];
+const soundFails = (lines) => lines.filter((l) => !l.ok).map((l) => l.id);
+
+test("SOUND_RENDER_LIMITS: 56개 · 피크 −3 · RMS −60 · 길이 ±50ms (문턱은 이 한 곳)", () => {
+  assert.deepEqual({ ...SOUND_RENDER_LIMITS }, { count: 56, peakMaxDb: -3, rmsMinDb: -60, lengthTolMs: 50 });
+  assert.throws(() => {
+    SOUND_RENDER_LIMITS.peakMaxDb = 0;
+  });
+});
+
+test("SOUND_MARKERS: 시험 페이지 표식 네 개", () => {
+  assert.deepEqual([...SOUND_MARKERS], ["data-sound-lab", "data-sound-id", "__mfSound", "__mfSoundLab"]);
+});
+
+test("soundRenderChecks: 정상 56개는 모두 통과", () => {
+  const lines = soundRenderChecks(soundRows());
+  assert.equal(lines.length, 6);
+  assert.deepEqual(lines.map((l) => l.id), ["SR1", "SR2", "SR3", "SR4", "SR5", "SR6"]);
+  assert.deepEqual(soundFails(lines), []);
+});
+
+test("soundRenderChecks: 개수가 56 이 아니면 SR1 실패(55·57)", () => {
+  const r = soundRows();
+  assert.deepEqual(soundFails(soundRenderChecks(r.slice(1))), ["SR1"]);
+  assert.deepEqual(soundFails(soundRenderChecks([...r, soundRow("extra.0")])), ["SR1"]);
+});
+
+test("soundRenderChecks: id 중복은 SR2 실패이고 id 를 적는다", () => {
+  const r = soundRows();
+  r[10] = soundRow(r[11].id);
+  const lines = soundRenderChecks(r);
+  assert.deepEqual(soundFails(lines), ["SR2"]);
+  assert.match(lines.find((l) => l.id === "SR2").detail, new RegExp(r[11].id));
+});
+
+test("soundRenderChecks: 피크 경계 −3.0 통과 / −2.99 실패, 실패 id 를 적는다", () => {
+  const ok = soundRows();
+  ok[3] = soundRow(ok[3].id, { peakDb: -3 });
+  assert.deepEqual(soundFails(soundRenderChecks(ok)), []);
+  const bad = soundRows();
+  bad[3] = soundRow(bad[3].id, { peakDb: -2.99 });
+  const lines = soundRenderChecks(bad);
+  assert.deepEqual(soundFails(lines), ["SR3"]);
+  assert.match(lines.find((l) => l.id === "SR3").detail, new RegExp(bad[3].id));
+});
+
+test("soundRenderChecks: NaN 이 1 개라도 있으면 SR4 실패", () => {
+  const r = soundRows();
+  r[20] = soundRow(r[20].id, { nan: 1 });
+  assert.deepEqual(soundFails(soundRenderChecks(r)), ["SR4"]);
+});
+
+test("soundRenderChecks: RMS 경계 −60 통과 / −60.01 실패", () => {
+  const ok = soundRows();
+  ok[9] = soundRow(ok[9].id, { rmsDb: -60 });
+  assert.deepEqual(soundFails(soundRenderChecks(ok)), []);
+  const bad = soundRows();
+  bad[9] = soundRow(bad[9].id, { rmsDb: -60.01 });
+  assert.deepEqual(soundFails(soundRenderChecks(bad)), ["SR5"]);
+});
+
+test("soundRenderChecks: 효과음 길이 차이 50 통과 / 50.01 실패, 침대(선언 null)는 길이를 보지 않는다", () => {
+  const ok = soundRows();
+  ok[30] = soundRow(ok[30].id, { lengthMs: 350, declaredMs: 300 });
+  ok[31] = soundRow(ok[31].id, { lengthMs: 250, declaredMs: 300 });
+  assert.deepEqual(soundFails(soundRenderChecks(ok)), []);
+  const bad = soundRows();
+  bad[30] = soundRow(bad[30].id, { lengthMs: 350.01, declaredMs: 300 });
+  assert.deepEqual(soundFails(soundRenderChecks(bad)), ["SR6"]);
+  const bed = soundRows();
+  bed[0] = soundRow(bed[0].id, { lengthMs: 12, declaredMs: null });
+  assert.deepEqual(soundFails(soundRenderChecks(bed)), []);
+});
+
+test("soundRenderChecks: 문턱을 인자로 바꿔 줄 수 있지만 기본 문턱은 SOUND_RENDER_LIMITS", () => {
+  const r = soundRows();
+  r[2] = soundRow(r[2].id, { peakDb: -2 });
+  assert.deepEqual(soundFails(soundRenderChecks(r, { ...SOUND_RENDER_LIMITS, peakMaxDb: -1 })), []);
+  assert.deepEqual(soundFails(soundRenderChecks(r)), ["SR3"]);
+});
+
+test("soundRenderChecks: 배열이 아니거나 필드가 숫자가 아니면 측정값 없음으로 실패", () => {
+  assert.ok(soundRenderChecks(null).every((l) => !l.ok && /측정값 없음/.test(l.detail)));
+  const r = soundRows();
+  r[5] = { id: r[5].id, peakDb: "x" };
+  const lines = soundRenderChecks(r);
+  assert.ok(lines.some((l) => !l.ok));
 });

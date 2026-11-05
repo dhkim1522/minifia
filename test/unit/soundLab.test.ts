@@ -4,10 +4,10 @@
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { initPerfDebug } from "../../src/debug/perfProbe";
-import { SOUND_LAB_PARAM, soundLabEnabled } from "../../src/debug/soundLabData";
-import { analyzeSamples, mount, renderOffline, type OfflineFactory } from "../../src/debug/soundLab";
+import { LAB_GROUPS, SOUND_LIMITS, SOUND_NAMES, SOUND_LAB_PARAM, soundLabEnabled } from "../../src/debug/soundLabData";
+import { analyzeSamples, mount, renderOffline, soundOk, type LabHook, type OfflineFactory, type RenderResult } from "../../src/debug/soundLab";
 import { buildMixGraph } from "../../src/audio/synth";
-import { BED_IDS, BUS_GAIN, COMPRESSOR, MASTER_GAIN, RECIPES } from "../../src/audio/recipes";
+import { BED_IDS, BUS_GAIN, COMPRESSOR, MASTER_GAIN, RECIPES, SFX_IDS, SOUND_IDS } from "../../src/audio/recipes";
 import { FakeAudioContext, createFakeClock, type FakeGain } from "../helpers/fakeAudio";
 import { makeRig } from "../helpers/soundRig";
 
@@ -267,5 +267,272 @@ describe("mount — 지연 로드 본체 (D-19)", () => {
     expect(hook?.results.map((r) => r.id)).toEqual(["ui.toggle"]);
     expect(hook!.results[0]!.peakDb).toBeCloseTo(-12.04, 1);
     expect(root.querySelector('[data-sound-id="ui.toggle"]')?.parentElement?.textContent).toMatch(/-12\.0/);
+  });
+});
+
+// ───────────────────────── Task 2: 데이터·한 화면 전체·전부 계산 ─────────────────────────
+
+describe("LAB_GROUPS·SOUND_NAMES — 묶음과 한글 이름 (E)", () => {
+  it("효과음 49개를 여섯 단계 묶음으로 나누고 합집합이 SFX_IDS 전부(중복·누락 0)", () => {
+    expect(LAB_GROUPS).toHaveLength(6);
+    const all = LAB_GROUPS.flatMap((g) => [...g.ids]);
+    expect(all).toHaveLength(SFX_IDS.length);
+    expect(new Set(all).size).toBe(all.length);
+    expect([...all].sort()).toEqual([...SFX_IDS].sort());
+    expect(LAB_GROUPS.map((g) => g.title)).toEqual(["공통·로비·역할", "낮·지목·변론", "판결·처형", "밤·아침", "동작", "결과·시상"]);
+  });
+  it("56개 모두 한글 이름이 있고 한 줄이다", () => {
+    expect(Object.keys(SOUND_NAMES).sort()).toEqual([...SOUND_IDS].sort());
+    for (const id of SOUND_IDS) {
+      const n = SOUND_NAMES[id];
+      expect(n, id).toMatch(/[가-힣]/);
+      expect(n, id).not.toMatch(/\n/);
+      expect(n.length, id).toBeLessThanOrEqual(16);
+    }
+  });
+  it("SOUND_LIMITS 는 56·−3·−60·50", () => {
+    expect({ ...SOUND_LIMITS }).toEqual({ count: 56, peakMaxDb: -3, rmsMinDb: -60, lengthTolMs: 50 });
+  });
+});
+
+describe("soundOk — 합격 판정 경계 (D-18, T-12-22)", () => {
+  const base: RenderResult = { id: "ui.tap", peakDb: -10, rmsDb: -30, nan: 0, lengthMs: 100, declaredMs: 100 };
+  it("피크 −3.0 통과 / −2.99 실패", () => {
+    expect(soundOk({ ...base, peakDb: -3 })).toBe(true);
+    expect(soundOk({ ...base, peakDb: -2.99 })).toBe(false);
+  });
+  it("RMS −60 통과 / −60.01 실패", () => {
+    expect(soundOk({ ...base, rmsDb: -60 })).toBe(true);
+    expect(soundOk({ ...base, rmsDb: -60.01 })).toBe(false);
+  });
+  it("NaN 1 개면 실패", () => {
+    expect(soundOk({ ...base, nan: 1 })).toBe(false);
+  });
+  it("길이 차이 50ms 통과 / 51ms 실패, 침대(선언 null)는 길이를 보지 않는다", () => {
+    expect(soundOk({ ...base, lengthMs: 150 })).toBe(true);
+    expect(soundOk({ ...base, lengthMs: 50 })).toBe(true);
+    expect(soundOk({ ...base, lengthMs: 151 })).toBe(false);
+    expect(soundOk({ ...base, lengthMs: 5, declaredMs: null })).toBe(true);
+  });
+});
+
+describe("mount — 한 화면 전체 (E)", () => {
+  function open(over: Partial<Parameters<typeof mount>[2]> = {}) {
+    const rig = makeRig();
+    const root = document.createElement("div");
+    document.body.appendChild(root);
+    const handle = mount(root, new URLSearchParams("sound-lab=1"), { engine: rig.engine, ...over });
+    const q = (sel: string) => root.querySelector<HTMLElement>(sel);
+    const qa = (sel: string) => [...root.querySelectorAll<HTMLElement>(sel)];
+    return { rig, root, handle, q, qa };
+  }
+  const hookOf = () => (window as unknown as { __mfSoundLab: LabHook }).__mfSoundLab;
+
+  it("[data-sound-id] 단추가 정확히 56개(침대 7 + 효과음 49)이고 id 가 SOUND_IDS 와 같다", () => {
+    const { qa } = open();
+    const ids = qa("[data-sound-id]").map((b) => b.getAttribute("data-sound-id"));
+    expect(ids).toHaveLength(56);
+    expect([...ids].sort()).toEqual([...SOUND_IDS].sort());
+  });
+
+  it("누르는 대상은 모두 최소 44x44 (인라인 스타일 값)", () => {
+    const { qa } = open();
+    const targets = qa("button, input[type=range], label");
+    expect(targets.length).toBeGreaterThan(56);
+    for (const t of targets) {
+      const h = parseFloat(t.style.minHeight || "0");
+      expect(h, t.outerHTML.slice(0, 80)).toBeGreaterThanOrEqual(44);
+      if (t.tagName === "BUTTON") expect(parseFloat(t.style.minWidth || "0"), t.outerHTML.slice(0, 80)).toBeGreaterThanOrEqual(44);
+    }
+  });
+
+  it("상단 고정 줄: 마스터 슬라이더·모두 멈춤·전부 계산·컨텍스트 상태·보이스 수·최악 합", () => {
+    const { q } = open();
+    const bar = q("[data-sound-bar]")!;
+    expect(bar).not.toBeNull();
+    expect(bar.style.position).toBe("sticky");
+    for (const sel of ["[data-sound-master]", "[data-sound-stop]", "[data-sound-calc-all]", "[data-sound-state]", "[data-sound-voices]", '[data-lab-script="worst"]']) {
+      expect(bar.querySelector(sel), sel).not.toBeNull();
+    }
+  });
+
+  it("묶음: 침대 한 묶음 + 효과음 여섯 묶음, 행에 id 와 한글 이름", () => {
+    const { qa, q } = open();
+    expect(qa("[data-lab-group]").map((g) => g.getAttribute("data-lab-group"))).toEqual(["beds", ...LAB_GROUPS.map((g) => g.key)]);
+    expect(q('[data-sound-id="kill.slash"]')!.parentElement!.textContent).toContain("kill.slash");
+    expect(q('[data-sound-id="kill.slash"]')!.parentElement!.textContent).toContain(SOUND_NAMES["kill.slash"]);
+  });
+
+  it("침대: 누르면 재생, 같은 침대를 다시 누르면 정지, 다른 침대는 바꾼다", () => {
+    const { rig, q } = open();
+    q('[data-sound-id="bed.day"]')!.click();
+    expect(rig.engine.currentBed()).toBe("bed.day");
+    q('[data-sound-id="bed.day"]')!.click();
+    expect(rig.engine.currentBed()).toBeNull();
+    q('[data-sound-id="bed.day"]')!.click();
+    q('[data-sound-id="bed.night"]')!.click();
+    expect(rig.engine.currentBed()).toBe("bed.night");
+    expect(rig.engine.log().filter((e) => e.id === "bed.night" && e.played)).toHaveLength(1);
+  });
+
+  it("효과음 ▶ 는 해당 id 를 엔진에 요청한다", () => {
+    const { rig, q } = open();
+    q('[data-sound-id="result.win"]')!.click();
+    expect(rig.engine.log().some((e) => e.id === "result.win" && e.played)).toBe(true);
+  });
+
+  it("모두 멈춤은 침대와 보이스를 비운다", () => {
+    const { rig, q } = open();
+    q('[data-sound-id="bed.vote"]')!.click();
+    q('[data-sound-id="game.start"]')!.click();
+    q("[data-sound-stop]")!.click();
+    expect(rig.engine.currentBed()).toBeNull();
+    expect(rig.engine.voiceCount()).toBe(0);
+  });
+
+  it("마스터 슬라이더는 setMasterTrim 으로 master 이득에 램프를 건다", () => {
+    const { rig, q } = open();
+    q('[data-sound-id="ui.tap"]')!.click();
+    const slider = q("[data-sound-master]") as HTMLInputElement;
+    slider.value = "0.5";
+    slider.dispatchEvent(new Event("input", { bubbles: true }));
+    const comp = rig.fake.ctx().ofKind("compressor")[0]!;
+    const master = rig.fake.ctx().ofKind("gain").find((g) => g.out.includes(comp)) as FakeGain;
+    expect(master.gain.of("linear").at(-1)!.value).toBeCloseTo(MASTER_GAIN * 0.5, 9);
+  });
+
+  it("컨텍스트 상태와 보이스 수가 화면에 보인다", () => {
+    const { rig, q } = open();
+    expect(q("[data-sound-state]")!.textContent).toMatch(/none|없음/);
+    q('[data-sound-id="game.start"]')!.click();
+    expect(q("[data-sound-state]")!.textContent).toMatch(/running/);
+    expect(rig.engine.voiceCount()).toBeGreaterThan(0);
+  });
+
+  it("판결 대본: 통과를 누르면 심장 박동과 처형 소리가 대본 시각에 난다", () => {
+    const { rig, q } = open();
+    q('[data-lab-script="verdict:pass"]')!.click();
+    expect(rig.engine.currentBed()).toBe("bed.vote");
+    rig.fake.clock.advance(6000);
+    const ids = rig.engine.log().map((e) => e.id);
+    expect(ids).toContain("verdict.heart");
+    expect(ids).toContain("execution.gavel");
+    expect(ids).not.toContain("verdict.reject");
+  });
+
+  it("판결 대본: 부결은 verdict.reject, 마지막 3인은 gavel+rise 즉시", () => {
+    const a = open();
+    a.q('[data-lab-script="verdict:reject"]')!.click();
+    a.rig.fake.clock.advance(6000);
+    expect(a.rig.engine.log().map((e) => e.id)).toContain("verdict.reject");
+    const b = open();
+    b.q('[data-lab-script="verdict:last"]')!.click();
+    b.rig.fake.clock.advance(10);
+    expect(b.rig.engine.log().map((e) => e.id)).toEqual(expect.arrayContaining(["execution.gavel", "execution.rise"]));
+  });
+
+  it("밤 30초: night.fall 과 night.cue 가 시드로 정해지고, 시드를 바꾸면 큐 시각이 달라질 수 있다", () => {
+    const { rig, q } = open();
+    const seedView = q("[data-lab-seed]")!;
+    const first = seedView.textContent;
+    q('[data-lab-script="night"]')!.click();
+    expect(rig.engine.currentBed()).toBe("bed.night");
+    rig.fake.clock.advance(30000);
+    const ids = rig.engine.log().map((e) => e.id);
+    expect(ids).toContain("night.fall");
+    expect(ids.filter((i) => i === "night.cue").length).toBeGreaterThanOrEqual(2);
+    q("[data-lab-seed-next]")!.click();
+    expect(seedView.textContent).not.toBe(first);
+  });
+
+  it("아침: 희생자(내가 피해자)는 slash 가 있고, 체크를 풀면 없다. 평화·구출은 400ms", () => {
+    const { rig, q } = open();
+    q('[data-lab-script="morning:victim"]')!.click();
+    expect(rig.engine.currentBed()).toBe("bed.dawn");
+    rig.fake.clock.advance(1000);
+    expect(rig.engine.log().map((e) => e.id)).toEqual(expect.arrayContaining(["morning.dawn", "kill.slash", "chalk.draw"]));
+    rig.engine.clearLog();
+    (q("[data-lab-mine]") as HTMLInputElement).click();
+    rig.fake.clock.advance(5000);
+    q('[data-lab-script="morning:victim"]')!.click();
+    rig.fake.clock.advance(1000);
+    expect(rig.engine.log().map((e) => e.id)).not.toContain("kill.slash");
+    rig.engine.clearLog();
+    rig.fake.clock.advance(5000);
+    q('[data-lab-script="morning:saved"]')!.click();
+    rig.fake.clock.advance(1000);
+    expect(rig.engine.log().map((e) => e.id)).toContain("morning.saved");
+  });
+
+  it("유언 편지: 쓰기·인장·접힘", () => {
+    const { rig, q } = open();
+    q('[data-lab-script="will"]')!.click();
+    rig.fake.clock.advance(6000);
+    const ids = rig.engine.log().map((e) => e.id);
+    expect(ids).toEqual(expect.arrayContaining(["will.quill", "will.seal", "will.fold"]));
+  });
+
+  it("결과·시상: 4명/8명 × 승/패 네 단추, 승은 result.win 패는 result.lose, 시상 패가 이어진다", () => {
+    const { rig, q, qa } = open();
+    expect(qa('[data-lab-script^="result:"]').map((b) => b.getAttribute("data-lab-script"))).toEqual(["result:4:win", "result:4:lose", "result:8:win", "result:8:lose"]);
+    q('[data-lab-script="result:8:win"]')!.click();
+    expect(rig.engine.currentBed()).toBe("bed.result");
+    rig.fake.clock.advance(20000);
+    const ids = rig.engine.log().map((e) => e.id);
+    expect(ids.filter((i) => i === "role.flip")).toHaveLength(8);
+    expect(ids).toContain("result.win");
+    expect(ids).not.toContain("result.lose");
+    expect(ids).toContain("award.plate");
+    expect(ids).toContain("award.final");
+  });
+
+  it("최악 합: 밤 침대 + 효과음 6개를 함께 요청한다", () => {
+    const { rig, q } = open();
+    q('[data-lab-script="worst"]')!.click();
+    expect(rig.engine.currentBed()).toBe("bed.night");
+    const requested = rig.engine.log().filter((e) => !BED_IDS.includes(e.id as never));
+    expect(new Set(requested.map((e) => e.id)).size).toBe(6);
+    expect(rig.engine.activeNodes()).toBeGreaterThan(0);
+  });
+
+  it("[전부 계산]: 56개를 한 번에 하나씩 순차로 렌더하고 훅이 done 이 된다", async () => {
+    let inflight = 0;
+    let maxInflight = 0;
+    let n = 0;
+    const make: OfflineFactory = (channels, length, sr) => {
+      const c = new FakeOffline(channels, length, sr, (d, rate) => {
+        for (let i = 0; i < d.length; i += 1) d[i] = 0.25 * Math.sin((2 * Math.PI * 200 * i) / rate);
+      });
+      const orig = c.startRendering.bind(c);
+      c.startRendering = async () => {
+        inflight += 1;
+        n += 1;
+        maxInflight = Math.max(maxInflight, inflight);
+        await Promise.resolve();
+        const r = await orig();
+        inflight -= 1;
+        return r;
+      };
+      return c as unknown as ReturnType<OfflineFactory>;
+    };
+    const { q, handle } = open({ createOffline: make });
+    expect(hookOf().done).toBe(false);
+    q("[data-sound-calc-all]")!.click();
+    await handle.idle();
+    const hook = hookOf();
+    expect(hook.done).toBe(true);
+    expect(n).toBe(56);
+    expect(maxInflight).toBe(1);
+    expect(hook.results.map((r) => r.id)).toEqual([...SOUND_IDS]);
+    for (const r of hook.results) {
+      expect(r).toEqual(expect.objectContaining({ id: expect.any(String), peakDb: expect.any(Number), rmsDb: expect.any(Number), nan: expect.any(Number), lengthMs: expect.any(Number), ok: expect.any(Boolean) }));
+      expect("declaredMs" in r).toBe(true);
+    }
+    // 화면 표에도 피크가 보인다
+    expect(q('[data-sound-id="kill.slash"]')!.parentElement!.textContent).toMatch(/-12\.0/);
+    // 다시 누르면 새로 56 개(이전 결과를 덮어쓴다)
+    q("[data-sound-calc-all]")!.click();
+    await handle.idle();
+    expect(hookOf().results).toHaveLength(56);
   });
 });
