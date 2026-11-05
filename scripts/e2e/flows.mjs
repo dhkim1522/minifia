@@ -3022,8 +3022,8 @@ async function wakeLockFlow(ctx) {
 // 정치 긴장 화면(09.1.1-10·11): 직업 배지·귓속말·지목 핀 조명. 흐름 본문은 politics.mjs, 도우미만 넘긴다
 const { politicsBadgeFlow, politicsWhisperFlow, politicsPinFlow, politicsVerdictFlow, politicsRunoffFlow, politicsRunoffTieFlow, politicsShowdownFlow, politicsShowdownTieFlow } = makePoliticsFlows({ recorder, openGame, closeGame, allAt, attempt, gameGH, walkableCentersOfApp, GAME_HOST_NICK });
 
-// 캐릭터 동작·의상 화면(10페이즈): avatar-emote(10-05). 흐름 본문은 avatar.mjs, 도우미만 넘긴다
-const { avatarEmoteFlow } = makeAvatarFlows({ recorder, startHost, openGuest, attempt, walkableCentersOfApp, LOBBY_HOST_NICK, WORLD_GUEST_NICK });
+// 캐릭터 동작·의상 화면(10페이즈): avatar-emote(10-05)·avatar-dress(10-07). 흐름 본문은 avatar.mjs, 도우미만 넘긴다
+const { avatarEmoteFlow, avatarDressFlow } = makeAvatarFlows({ recorder, startHost, openGuest, attempt, walkableCentersOfApp, LOBBY_HOST_NICK, WORLD_GUEST_NICK, resetAndLeave });
 
 export const FLOWS = [
   // lobby·world 는 LOBBY_SIZES 6개 크기로 돈다: 기본 크기 4개에 더해 390x844·402x874 (run.mjs 의 extraSizes)
@@ -3059,6 +3059,8 @@ export const FLOWS = [
   { id: "politics-showdown-tie", run: politicsShowdownTieFlow, size: GAME_SIZE },
   // 10-05: 동작 버튼·5+4 판·두 페이지 도착·연타 무시·걷는 중 비활성. 폰 6종 전체는 마지막 계획이 돈다(D-18)
   { id: "avatar-emote", run: avatarEmoteFlow, extraSizes: LOBBY_EXTRA_SIZES },
+  // 10-07: 꾸미기 버튼·시트·카드 기하, 두 페이지 look 반영, 게임 시작 뒤 유지와 게임 단계에 버튼 없음
+  { id: "avatar-dress", run: avatarDressFlow, extraSizes: LOBBY_EXTRA_SIZES },
   // 재접속·예산(06-18): 폰 크기와 곱하지 않고 자기 크기로 한 번. deployhold 는 배포와 동시에 돌리는 흐름(06-19)이라 --only 없이는 빠진다
   { id: "reconnect", run: reconnectFlow, size: RECONNECT_SIZE },
   { id: "deployhold", run: deployHoldFlow, size: RECONNECT_SIZE, skipByDefault: true },

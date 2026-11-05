@@ -1929,12 +1929,15 @@ export function verdictTimelineChecks(log, { passed, candidate, expectZoom }) {
 
 // ---- 10페이즈 동작 버튼·5+4 판 (10-05, 결정 D-1·D-2·D-18, UI-SPEC A-1·A-2) ----
 
-/** 10페이즈가 새로 더한 DOM 표식·훅 이름 4개. test/unit/e2eContract.test.ts 가 각각이 git 추적 src/ 파일에 실제로 있는지 확인한다(이름 오타 방지). 이후 계획(의상·단계)이 같은 목록에 더한다. */
+/** 10페이즈가 새로 더한 DOM 표식·훅 이름 4개. test/unit/e2eContract.test.ts 가 각각이 git 추적 src/ 파일에 실제로 있는지 확인한다(이름 오타 방지). 10-07 이 의상 표식 3개를 더했다. 이후 계획(단계)이 같은 목록에 더한다. */
 export const AVATAR_MARKERS = Object.freeze([
   "data-emote-button", // 입력줄 맨 앞 동작 버튼(ChatPanel)
   "data-emote-tray", // 5+4 아이콘 판(EmoteTray)
   "data-emote", // 칸 data-emote="{id}"
   "__mfEmotes", // 테스트 훅 window.__mfEmotes = { last, playing }
+  "data-dress-sheet", // 로비 꾸미기 시트(DressSheet, 10-07)
+  "data-outfit", // 시트의 카드 data-outfit="{id}"
+  "__mfLooks", // 테스트 훅 window.__mfLooks = { 좌석: 의상 id }(10-04)
 ]);
 
 /**
@@ -1996,5 +1999,62 @@ export function emoteTrayChecks({ button, input, tray, cells, nameFont, viewport
   out.push(result("EP4", L.EP4, covered ? [`캐릭터 ${fmt(character.x)},${fmt(character.y)} 가 판 안`] : []));
   out.push(result("TR4", L.TR4, nameFont >= 14 ? [] : [`${nameFont}px`]));
   out.push(result("TR5", L.TR5, hasKb ? ["키보드가 열려 있음"] : []));
+  return out;
+}
+
+// ---- 10페이즈 로비 꾸미기 버튼·시트·카드 띠 (10-07, 결정 D-4·D-5·D-18, UI-SPEC B-1·B-2) ----
+
+/**
+ * 꾸미기 기하(DB1·DS1~DS6). 사각형은 { left, top, width, height }.
+ * float = 떠 있는 꾸미기 버튼(시트가 닫힌 때), panel = 로비 아래 패널, sheet = 열린 시트, cards = 카드 아홉 개(띠 안에서 가려져도 DOM 사각형),
+ * close = 닫기 버튼, selected = { rect, pressedCount }(선택 카드와 aria-pressed="true" 개수), nameFont = 카드 이름 글자 크기 최솟값(px), viewport = { w, h }, kb = 가상 키보드가 열려 있나.
+ * DB1 버튼 48x48 ±1 · 오른쪽 여백 16 ±1 · 아랫변 = 패널 윗변 − 8 ±2(키보드가 열려 있으면 아랫변은 보지 않는다) ·
+ * DS1 시트 윗변 = 패널 윗변 ±1, 높이 = 패널 높이 ±1(키보드가 열려 있으면 윗변은 보지 않는다) · DS2 카드 아홉 개, 폭 72 ±2, 높이 44 이상 ·
+ * DS3 완전히 보이는 카드 4 이상이고 시트 오른쪽 가장자리에 걸쳐 8px 이상 보이는 다음 카드가 있음(더 있음을 알림) · DS4 닫기 44x44 이상 ·
+ * DS5 선택 카드가 시트 가로 안에 완전히 보이고 aria-pressed="true" 가 하나뿐 · DS6 이름 글자 14px 이상.
+ */
+export function dressChecks({ float, panel, sheet, cards, close, selected, nameFont, viewport, kb } = {}) {
+  const L = {
+    DB1: `꾸미기 버튼 ${FLOAT_SIZE}x${FLOAT_SIZE} · 오른쪽 ${FLOAT_MARGIN} · 패널 윗변 위 ${FLOAT_GAP}`,
+    DS1: "시트가 아래 패널을 정확히 덮음(윗변·높이)",
+    DS2: "카드 아홉 개: 폭 72 · 높이 44 이상",
+    DS3: "완전히 보이는 카드 4장 이상 + 오른쪽에 걸친 다음 카드",
+    DS4: `닫기 ${TAP_MIN}x${TAP_MIN} 이상`,
+    DS5: "선택 카드가 보이고 aria-pressed=true 는 하나",
+    DS6: "카드 이름 글자 14px 이상",
+  };
+  const rectOk = (r) => !!r && allNum(r.left, r.top, r.width, r.height);
+  const valid = rectOk(float) && rectOk(panel) && rectOk(sheet) && Array.isArray(cards) && cards.every(rectOk) && rectOk(close) && !!selected && rectOk(selected.rect) && isNum(selected.pressedCount) && isNum(nameFont) && !!viewport && allNum(viewport.w, viewport.h) && typeof kb === "boolean";
+  if (!valid) return Object.entries(L).map(([id, label]) => noMeasure(id, label, "float·panel·sheet·cards·close·selected·nameFont·viewport·kb"));
+  const out = [];
+  const db = [];
+  if (Math.abs(float.width - FLOAT_SIZE) > 1 || Math.abs(float.height - FLOAT_SIZE) > 1) db.push(`${fmt(float.width)}x${fmt(float.height)}`);
+  if (Math.abs(viewport.w - right(float) - FLOAT_MARGIN) > 1) db.push(`오른쪽 여백 ${fmt(viewport.w - right(float))}`);
+  if (!kb && Math.abs(panel.top - FLOAT_GAP - bottom(float)) > 2) db.push(`아랫변 ${fmt(bottom(float))} (기대 ${fmt(panel.top - FLOAT_GAP)})`);
+  out.push(result("DB1", L.DB1, db));
+  const ds1 = [];
+  if (!kb && Math.abs(sheet.top - panel.top) > 1) ds1.push(`윗변 ${fmt(sheet.top)} (패널 ${fmt(panel.top)})`);
+  if (Math.abs(sheet.height - panel.height) > 1) ds1.push(`높이 ${fmt(sheet.height)} (패널 ${fmt(panel.height)})`);
+  out.push(result("DS1", L.DS1, ds1));
+  const ds2 = [];
+  if (cards.length !== 9) ds2.push(`카드 ${cards.length}개`);
+  for (const c of cards) {
+    if (Math.abs(c.width - 72) > 2) ds2.push(`폭 ${fmt(c.width)}`);
+    if (c.height + OVERLAP_EPS < TAP_MIN) ds2.push(`높이 ${fmt(c.height)}`);
+  }
+  out.push(result("DS2", L.DS2, ds2));
+  const edge = right(sheet);
+  const full = cards.filter((c) => c.left >= sheet.left - 0.5 && right(c) <= edge + 0.5).length;
+  const peek = cards.find((c) => c.left < edge - 8 && right(c) > edge + 0.5);
+  const ds3 = [];
+  if (full < 4) ds3.push(`완전히 보이는 카드 ${full}장`);
+  if (!peek) ds3.push("오른쪽에 걸쳐 보이는 다음 카드 없음");
+  out.push(result("DS3", L.DS3, ds3));
+  out.push(result("DS4", L.DS4, close.width + OVERLAP_EPS < TAP_MIN || close.height + OVERLAP_EPS < TAP_MIN ? [`${fmt(close.width)}x${fmt(close.height)}`] : []));
+  const ds5 = [];
+  if (selected.rect.left < sheet.left - 0.5 || right(selected.rect) > edge + 0.5) ds5.push(`선택 카드 ${fmt(selected.rect.left)}~${fmt(right(selected.rect))} 가 시트 밖`);
+  if (selected.pressedCount !== 1) ds5.push(`aria-pressed=true ${selected.pressedCount}개`);
+  out.push(result("DS5", L.DS5, ds5));
+  out.push(result("DS6", L.DS6, nameFont >= 14 ? [] : [`${nameFont}px`]));
   return out;
 }

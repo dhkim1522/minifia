@@ -2751,15 +2751,15 @@ test("dressChecks DS3: 폭 360 에서 완전히 보이는 카드 4 이상 + 오�
   assert.equal(okOf(dressChecks(g)).DS3, true);
   // 다음 카드가 통째로 안에 들어와(스크롤 끝) 걸치는 카드가 없음
   const a = dressGood();
-  a.cards = a.cards.map((c, i) => rect(8 + i * 40, c.top, 72, 112));
+  a.cards = a.cards.map((c, i) => rect(8 + i * 32, c.top, 72, 112));
   assert.equal(okOf(dressChecks(a)).DS3, false);
   // 완전히 보이는 카드가 3장뿐
   const b = dressGood();
-  b.cards = b.cards.map((c, i) => rect(40 + i * 80, c.top, 72, 112));
+  b.cards = b.cards.map((c, i) => rect(60 + i * 80, c.top, 72, 112));
   assert.equal(okOf(dressChecks(b)).DS3, false);
   // 다음 카드가 4px 만 보임(걸침이 너무 작다)
   const c = dressGood();
-  c.cards = c.cards.map((x, i) => rect(4 + i * 88 - (i > 3 ? 0 : 0), x.top, 72, 112));
+  c.cards = c.cards.map((x, i) => rect(4 + i * 88, x.top, 72, 112));
   c.cards = c.cards.map((x, i) => (i === 4 ? rect(356, x.top, 72, 112) : i > 4 ? rect(440 + (i - 5) * 80, x.top, 72, 112) : x));
   assert.equal(okOf(dressChecks(c)).DS3, false);
 });

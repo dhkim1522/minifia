@@ -1,9 +1,9 @@
-// 10페이즈 캐릭터 동작·의상 화면 E2E 흐름 (10-05~). 이 계획(10-05)은 avatar-emote 하나. 이후 계획이 avatar-dress·avatar-phases 를 같은 파일에 더한다.
+// 10페이즈 캐릭터 동작·의상 화면 E2E 흐름 (10-05~). avatar-emote(10-05)·avatar-dress(10-07). 이후 계획이 avatar-phases 를 같은 파일에 더한다.
 // flows.mjs 가 이미 3천 줄이라 흐름 본문은 이 파일에 둔다. flows.mjs 의 도우미는 `makeAvatarFlows(helpers)` 로 받는다(politics.mjs 와 같은 모양 — 서로 import 하지 않는다).
-// helpers: { recorder, startHost, openGuest, attempt, walkableCentersOfApp, LOBBY_HOST_NICK, WORLD_GUEST_NICK }  (10-07·10-08 이 필요한 도우미를 같은 객체에 더한다)
-// 판정 문턱은 lib.mjs 의 순수 검사 함수(emoteTrayChecks)에만 있고 여기서는 낮추지 않는다.
-import { hitsInputSurface, leaveLobby, sampleWorld, screensOfWorld, SetupError, settle, sleep, tapWorld, waitWorldReady } from "./browser.mjs";
-import { emoteTrayChecks, worldTapRanking } from "./lib.mjs";
+// helpers: { recorder, startHost, openGuest, attempt, walkableCentersOfApp, LOBBY_HOST_NICK, WORLD_GUEST_NICK, resetAndLeave }  (10-08 이 필요한 도우미를 같은 객체에 더한다)
+// 판정 문턱은 lib.mjs 의 순수 검사 함수(emoteTrayChecks·dressChecks)에만 있고 여기서는 낮추지 않는다.
+import { chooseRole, hitsInputSurface, leaveLobby, openTestSheet, sampleWorld, screensOfWorld, SetupError, setBots, settle, skipTo, sleep, startGame, tapWorld, waitWorldReady } from "./browser.mjs";
+import { dressChecks, emoteTrayChecks, worldTapRanking } from "./lib.mjs";
 
 /** 동작 하나를 보낸 뒤 두 페이지가 프레임을 받기까지 기다리는 상한(ms). 계획: 1.5초 안 */
 const ARRIVE_MS = 1500;
@@ -19,6 +19,12 @@ const DANCE_MS = 2080;
 
 const BUTTON = "[data-emote-button]";
 const TRAY = "[data-emote-tray]";
+
+/** 꾸미기: 서버 반영이 내 화면에 닿는 상한(미리 보기가 즉시 갈아입힌다)·남의 화면에 닿는 상한(ms) */
+const DRESS_SELF_MS = 500;
+const DRESS_PEER_MS = 1500;
+const DRESS_FLOAT = '[data-float="dress"]';
+const DRESS_SHEET = "[data-dress-sheet]";
 
 /** 구간 { p: [x0,z0,x1,z1,…] 1/100 단위, v: 단위/초 × 100 } 을 걷는 데 걸리는 시간(ms) */
 function walkMs(seg) {
@@ -76,8 +82,43 @@ async function until(fn, ms) {
   return null;
 }
 
+/** 꾸미기 버튼(닫힌 때)·패널·시트·카드 기하를 한 번에 읽는다. 시트가 닫혀 있으면 sheet 는 null. */
+function readDressUi(page) {
+  return page.evaluate(() => {
+    const q = (s) => document.querySelector(s);
+    const qa = (s) => [...document.querySelectorAll(s)];
+    const rect = (el) => {
+      if (!el) return null;
+      const r = el.getBoundingClientRect();
+      return { left: r.left, top: r.top, width: r.width, height: r.height, right: r.right, bottom: r.bottom };
+    };
+    const names = qa(".mv-dress-card__name").map((el) => parseFloat(getComputedStyle(el).fontSize));
+    const sel = qa("[data-dress-sheet] button[data-outfit][aria-pressed='true']");
+    return {
+      vw: window.innerWidth,
+      vh: window.innerHeight,
+      float: rect(q('[data-float="dress"]')),
+      floatLabel: q('[data-float="dress"]')?.getAttribute("aria-label") ?? null,
+      floatCount: qa("[data-float]").length,
+      panel: rect(q(".mf-lobby__panel")),
+      sheet: rect(q("[data-dress-sheet]")),
+      cards: qa("[data-dress-sheet] button[data-outfit]").map((el) => rect(el)),
+      cardIds: qa("[data-dress-sheet] button[data-outfit]").map((el) => el.getAttribute("data-outfit")),
+      close: rect(q('[data-dress-sheet] button[aria-label="닫기"]')),
+      selected: sel[0] ? { rect: rect(sel[0]), pressedCount: sel.length } : null,
+      nameFont: names.length > 0 ? Math.min(...names) : null,
+      kbOpen: q(".mf-root")?.getAttribute("data-kb-open") === "true",
+      focusOnFloat: document.activeElement?.getAttribute("data-float") === "dress",
+      focusedOutfit: document.activeElement?.getAttribute("data-outfit") ?? null,
+    };
+  });
+}
+
+/** window.__mfLooks 사본 { 좌석: 의상 id } (훅이 없으면 null) */
+const readLooks = (page) => page.evaluate(() => (window.__mfLooks ? { ...window.__mfLooks } : null));
+
 export function makeAvatarFlows(helpers) {
-  const { recorder, startHost, openGuest, attempt, walkableCentersOfApp, LOBBY_HOST_NICK, WORLD_GUEST_NICK } = helpers;
+  const { recorder, startHost, openGuest, attempt, walkableCentersOfApp, LOBBY_HOST_NICK, WORLD_GUEST_NICK, resetAndLeave } = helpers;
 
   /** 판을 연다(버튼 누름). 열렸는지 기다린다 */
   async function openTray(page) {
@@ -244,5 +285,104 @@ export function makeAvatarFlows(helpers) {
     await leaveLobby(hp);
   }
 
-  return { avatarEmoteFlow };
+  /**
+   * avatar-dress (D-18): 방장·손님 로비. AD1 두 페이지의 떠 있는 버튼 기하 · AD2 시트가 패널을 덮고 떠 있는 버튼이 숨으며 카드 기하가 맞음 ·
+   * AD3 손님이 mafia 를 고르면 손님 화면 500ms·방장 화면 1500ms 안에 반영(손님이 실제 마피아가 아니어도 된다) · AD4 방장이 noir 를 골라 두 화면의 __mfLooks 가 같음 ·
+   * AD5 시트를 닫으면 사라지고 초점이 꾸미기 버튼으로 돌아옴 · AD6 게임을 시작해 낮이 되어도 같은 look 이고 꾸미기 버튼·시트가 없음.
+   */
+  async function avatarDressFlow(ctx) {
+    const rec = recorder(ctx);
+    const sc = "avatar-dress/sheet";
+    const host = await startHost(ctx, "avatar-dress", { nickname: LOBBY_HOST_NICK });
+    const { page: hp, tracker: ht } = host;
+    const { guest: g, seat: gSeat } = await openGuest(ctx, WORLD_GUEST_NICK);
+    try {
+      const { page: gp, tracker: gt } = g;
+      const hSeat = ht.last().me.seat;
+      await Promise.all([ht.waitFor((v) => v.players.length === 2, 5000, "방장 쪽 인원 2"), gt.waitFor((v) => v.players.length === 2, 5000, "손님 쪽 인원 2")]);
+      await Promise.all([waitWorldReady(hp, 2), waitWorldReady(gp, 2)]);
+      await Promise.all([settle(hp), settle(gp)]);
+
+      /** 닫힌 때의 버튼을 읽고(AD1) 눌러 시트를 연 뒤 시트·카드를 읽어(AD2) 같은 검사 줄로 기록한다. 끝나면 시트는 열려 있다. */
+      const measure = async (who, page) => {
+        const closed = await readDressUi(page);
+        const idle = closed.sheet === null && closed.float !== null && closed.floatLabel === "꾸미기" && closed.floatCount === 1;
+        rec(`${sc}-${who}`, "AD1a", `${who}: 로비에 떠 있는 버튼이 하나, 접근성 이름 '꾸미기', 시트는 닫혀 있음`, idle, `버튼 ${closed.float ? "있음" : "없음"} · 이름 ${closed.floatLabel} · 떠 있는 버튼 ${closed.floatCount}개 · 시트 ${closed.sheet ? "열림" : "닫힘"}`);
+        await page.locator(DRESS_FLOAT).click({ timeout: 3000 });
+        await page.waitForSelector(DRESS_SHEET, { timeout: 1500 });
+        await sleep(150);
+        const open = await readDressUi(page);
+        const hidden = open.float === null;
+        rec(`${sc}-${who}`, "AD2a", `${who}: 시트가 열리면 떠 있는 버튼은 숨고 카드 아홉 개가 UI-SPEC 순서`, hidden && open.cardIds.join(",") === "coat,police,doctor,mafia,detective,reporter,elder,hood,noir", `버튼 ${hidden ? "숨음" : "보임"} · 카드 ${open.cardIds.join(",")}`);
+        for (const l of dressChecks({ float: closed.float, panel: open.panel, sheet: open.sheet, cards: open.cards, close: open.close, selected: open.selected, nameFont: open.nameFont, viewport: { w: open.vw, h: open.vh }, kb: open.kbOpen })) {
+          rec(`${sc}-${who}`, l.id, l.label, l.ok, l.detail);
+        }
+        rec(`${sc}-${who}`, "AD2b", `${who}: 시트가 열리면 초점이 선택된 카드(coat 또는 지금 의상)로 감`, open.focusedOutfit !== null && open.selected !== null, `초점 ${open.focusedOutfit}`);
+      };
+      await measure("방장", hp);
+      // 방장 시트를 닫고 AD5(초점 복귀)를 그 자리에서 본다
+      await hp.locator(`${DRESS_SHEET} button[aria-label="닫기"]`).click({ timeout: 3000 });
+      const hClosed = await attempt(async () => {
+        await hp.waitForSelector(DRESS_SHEET, { state: "detached", timeout: 1000 });
+      });
+      const hFocus = await readDressUi(hp);
+      rec("avatar-dress/close", "AD5a", "방장: 시트를 닫으면 시트가 사라지고 초점이 꾸미기 버튼으로 돌아옴", hClosed.ok && hFocus.focusOnFloat && hFocus.float !== null, `${hClosed.ok ? "닫힘" : hClosed.detail} · 버튼 초점 ${hFocus.focusOnFloat}`);
+
+      await measure("손님", gp);
+
+      // AD3: 손님이 mafia 카드를 누른다
+      const sc3 = "avatar-dress/arrive";
+      const t0 = Date.now();
+      await gp.locator(`${DRESS_SHEET} button[data-outfit="mafia"]`).click({ timeout: 3000 });
+      const selfMs = await until(async () => (await readLooks(gp))?.[gSeat] === "mafia", DRESS_SELF_MS);
+      rec(sc3, "AD3a", `손님 화면 __mfLooks[손님] 이 ${DRESS_SELF_MS}ms 안에 mafia`, selfMs !== null, selfMs === null ? `읽은 값 ${JSON.stringify(await readLooks(gp))}` : `${Date.now() - t0}ms`);
+      const peerMs = await until(async () => (await readLooks(hp))?.[gSeat] === "mafia", Math.max(0, DRESS_PEER_MS - (Date.now() - t0)));
+      rec(sc3, "AD3b", `방장 화면 __mfLooks[손님] 이 ${DRESS_PEER_MS}ms 안에 mafia`, peerMs !== null, peerMs === null ? `읽은 값 ${JSON.stringify(await readLooks(hp))}` : `${Date.now() - t0}ms`);
+      const pressed = await readDressUi(gp);
+      rec(sc3, "AD3c", "손님 시트의 선택 카드가 mafia 하나", pressed.selected !== null && pressed.selected.pressedCount === 1 && (await gp.locator(`${DRESS_SHEET} button[data-outfit="mafia"]`).getAttribute("aria-pressed")) === "true", `선택 ${pressed.selected?.pressedCount}개`);
+
+      // AD4: 방장이 noir 를 고른다
+      const sc4 = "avatar-dress/both";
+      await hp.locator(DRESS_FLOAT).click({ timeout: 3000 });
+      await hp.waitForSelector(DRESS_SHEET, { timeout: 1500 });
+      await hp.locator(`${DRESS_SHEET} button[data-outfit="noir"]`).click({ timeout: 3000 });
+      const same = await until(async () => {
+        const [a, b] = await Promise.all([readLooks(hp), readLooks(gp)]);
+        return !!a && !!b && a[hSeat] === "noir" && a[gSeat] === "mafia" && b[hSeat] === "noir" && b[gSeat] === "mafia";
+      }, DRESS_PEER_MS);
+      rec(sc4, "AD4", `두 페이지의 __mfLooks 가 { 방장: noir, 손님: mafia } 로 같음(${DRESS_PEER_MS}ms 안)`, same !== null, same === null ? `방장 ${JSON.stringify(await readLooks(hp))} · 손님 ${JSON.stringify(await readLooks(gp))}` : "");
+
+      // AD5: 손님도 닫는다
+      await gp.locator(`${DRESS_SHEET} button[aria-label="닫기"]`).click({ timeout: 3000 });
+      const gClosed = await attempt(async () => {
+        await gp.waitForSelector(DRESS_SHEET, { state: "detached", timeout: 1000 });
+      });
+      const gFocus = await readDressUi(gp);
+      rec("avatar-dress/close", "AD5b", "손님: 시트를 닫으면 시트가 사라지고 초점이 꾸미기 버튼으로 돌아옴", gClosed.ok && gFocus.focusOnFloat && gFocus.float !== null, `${gClosed.ok ? "닫힘" : gClosed.detail} · 버튼 초점 ${gFocus.focusOnFloat}`);
+      await hp.locator(`${DRESS_SHEET} button[aria-label="닫기"]`).click({ timeout: 3000 });
+      await hp.waitForSelector(DRESS_SHEET, { state: "detached", timeout: 1000 });
+
+      // AD6: 게임을 시작해 낮이 되어도 같은 look, 꾸미기 버튼·시트는 없음
+      const sc6 = "avatar-dress/game";
+      await openTestSheet(hp);
+      await setBots(hp, ht, 2);
+      await startGame(hp, ht);
+      await skipTo(hp, ht, "discussion");
+      await Promise.all([gt.waitFor((v) => v.phase === "discussion", 6000, "손님 쪽 낮 토론"), waitWorldReady(hp, 4), waitWorldReady(gp, 4)]);
+      await Promise.all([settle(hp), settle(gp)]);
+      for (const [who, page] of [["방장", hp], ["손님", gp]]) {
+        const looks = await readLooks(page);
+        const keep = !!looks && looks[hSeat] === "noir" && looks[gSeat] === "mafia";
+        rec(sc6, "AD6a", `${who}: 낮이 되어도 __mfLooks 가 방장 noir · 손님 mafia`, keep, `읽은 값 ${JSON.stringify(looks)}`);
+        const ui = await readDressUi(page);
+        const none = ui.float === null && ui.sheet === null && (await page.locator(DRESS_FLOAT).count()) === 0 && (await page.locator(DRESS_SHEET).count()) === 0;
+        rec(sc6, "AD6b", `${who}: 게임 단계에는 꾸미기 버튼도 시트도 없음`, none, `버튼 ${ui.float ? "있음" : "없음"} · 시트 ${ui.sheet ? "있음" : "없음"}`);
+      }
+    } finally {
+      await g.context.close().catch(() => {});
+    }
+    await resetAndLeave(hp, ht);
+  }
+
+  return { avatarEmoteFlow, avatarDressFlow };
 }
