@@ -1,0 +1,86 @@
+{
+  "runner": {
+    "tool": "scripts/perf-run.mjs",
+    "throttle": 4,
+    "dpr": 2,
+    "size": "390x844",
+    "headless": true,
+    "chrome": "156.0.8078.80",
+    "platform": "darwin/arm64",
+    "node": "v26.13.0",
+    "url": "http://localhost:5173/?perf=1&scene=talk&minutes=2&dpr=2&seed=1&budget=0&outfits=mix&burst=4"
+  },
+  "schema": 1,
+  "at": "2026-11-05T02:52:28.392Z",
+  "build": "2026-11-05T02:19:14Z+a4b9fc6b",
+  "three": "186",
+  "query": "?perf=1&scene=talk&minutes=2&dpr=2&seed=1&budget=0&outfits=mix&burst=4",
+  "params": {
+    "scene": "talk",
+    "minutes": 2,
+    "dpr": 2,
+    "budget": 0,
+    "seed": 1,
+    "chars": 8,
+    "shot": false,
+    "nav": false,
+    "outfits": "mix",
+    "burst": 4
+  },
+  "device": {
+    "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.0.0 Safari/537.36",
+    "kakaotalk": false,
+    "dpr": 2,
+    "screen": "800x600",
+    "inner": "390x844",
+    "cores": 11,
+    "memoryGB": 32,
+    "glRenderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M3 Pro, Unspecified Version)",
+    "webdriver": true
+  },
+  "heartbeat": "first",
+  "truncated": false,
+  "budgetStep": 0,
+  "frames": {
+    "count": 7201,
+    "seconds": 120.01190392112731,
+    "avgFps": 60.0023811365625,
+    "jank": 0,
+    "p50": 16.700000762939453,
+    "p95": 16.700000762939453,
+    "p99": 16.799999237060547,
+    "max": 16.799999237060547,
+    "rafHz": 60,
+    "lowPowerSuspect": false,
+    "firstMinuteFps": 60.00236414505084,
+    "lastMinuteFps": 60.00236413932993,
+    "thermalRatio": 0.9999999999046552,
+    "thermalSuspect": false
+  },
+  "work": {
+    "tagsP95Ms": 0.7,
+    "renderP95Ms": 1.3,
+    "mapBuildMs": 80,
+    "moduleLoadMs": 95
+  },
+  "renderer": {
+    "calls": 61,
+    "triangles": 95246,
+    "geometries": 95,
+    "textures": 4,
+    "programs": 8,
+    "pointLights": 4,
+    "callsMax": 67
+  },
+  "heap": {
+    "startMB": 42.6,
+    "endMB": 50.3,
+    "samplesMB": [
+      53.8
+    ]
+  },
+  "tapToRingMs": [],
+  "interactiveMs": 986,
+  "meets": null,
+  "firstEmoteGapMs": 16.7
+}
