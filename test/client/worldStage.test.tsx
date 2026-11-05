@@ -1838,6 +1838,110 @@ describe("좌석별 의상 (D-6, L33)", () => {
   });
 });
 
+// ---------- 10-04: 유령 안개가 고른 의상을 덮고 끝나면 돌려준다 (D-7, L32) ----------
+describe("유령 직업 의상 안개 우선·복원 (D-7, L32)", () => {
+  const playersWith = (looks: Partial<Record<number, OutfitId>>): PublicPlayer[] =>
+    [0, 1, 2, 3].map((i) => player(i, `손님${i}`, looks[i] === undefined ? {} : { look: looks[i] }));
+  const viewWith = (looks: Partial<Record<number, OutfitId>>) => makeView(playersWith(looks));
+  const ALIVE = { 0: {}, 1: {}, 2: {}, 3: {} };
+  const outfitCalls = (h: FakeHandle): unknown[] => vi.mocked(h.applyOutfit!).mock.calls.map((c) => c[0]);
+  const handleOf = (s: Setup, seat: number): FakeHandle => s.world.renderers[0]!.chars.get(seat) as FakeHandle;
+  const openWith = (looks: Partial<Record<number, OutfitId>>, seats: Parameters<typeof sceneOf>[0]) =>
+    open({ view: viewWith(looks), scene: sceneOf(seats) }, { players: playersWith(looks), ents: FOUR_ENTS() });
+
+  it("안개 의상이 고른 의상을 덮어쓰고(고른 look 은 hood), 안개가 끝나면 setGhost(false) 다음 고른 의상으로 돌아온다", async () => {
+    const s = await openWith({ 3: "hood" }, { ...ALIVE, 3: { ghost: true, outfit: "police" } });
+    const h3 = handleOf(s, 3);
+    expect(h3.outfit).toBe("hood");
+    expect(outfitCalls(h3)).toEqual(["police"]);
+    frames(100);
+    expect(outfitCalls(h3)).toEqual(["police"]);
+    s.rerender({ scene: sceneOf(ALIVE) });
+    frame();
+    expect(outfitCalls(h3)).toEqual(["police", "hood"]);
+    expect(vi.mocked(h3.setGhost!).mock.lastCall).toEqual([false]);
+    // setGhost(false) 가 먼저, 그다음 고른 의상 복원
+    const lastGhost = Math.max(...vi.mocked(h3.setGhost!).mock.invocationCallOrder);
+    const lastOutfit = Math.max(...vi.mocked(h3.applyOutfit!).mock.invocationCallOrder);
+    expect(lastOutfit).toBeGreaterThan(lastGhost);
+    frames(100);
+    expect(outfitCalls(h3)).toEqual(["police", "hood"]);
+  });
+
+  it("안개 중에 view 의 look 이 바뀌어도 안개 의상을 건드리지 않고, 안개가 끝나면 최신 look 으로 돌아온다", async () => {
+    const s = await openWith({ 3: "hood" }, { ...ALIVE, 3: { ghost: true, outfit: "police" } });
+    const h3 = handleOf(s, 3);
+    s.rerender({ view: viewWith({ 3: "doctor" }) });
+    frame();
+    expect(outfitCalls(h3)).toEqual(["police"]);
+    expect(window.__mfLooks![3]).toBe("doctor"); // 고른 의상 표는 안개와 무관하다
+    s.rerender({ scene: sceneOf(ALIVE) });
+    frame();
+    expect(outfitCalls(h3)).toEqual(["police", "doctor"]);
+  });
+
+  it("산 사람 화면(장면 표에 outfit 없음): 어떤 좌석에도 직업 의상이 적용되지 않고 처형 연출 동안 고른 의상 그대로 사라진다", async () => {
+    const s = await openWith({ 3: "mafia" }, { ...ALIVE, 3: { fadeAt: Date.now() } });
+    frames(GHOST_FADE_END_MS - 50);
+    const h3 = handleOf(s, 3);
+    expect(h3.outfit).toBe("mafia");
+    for (const h of s.world.handles) expect(h.applyOutfit).not.toHaveBeenCalled();
+    expect(window.__mfGhostOutfits ?? {}).toEqual({});
+  });
+
+  it("outfit 없는 유령(spectate 없음)은 고른 의상 그대로 setGhost(true) 만 된다", async () => {
+    const s = await openWith({ 3: "mafia" }, { ...ALIVE, 3: { ghost: true } });
+    const h3 = handleOf(s, 3);
+    expect(h3.outfit).toBe("mafia");
+    expect(h3.applyOutfit).not.toHaveBeenCalled();
+  });
+
+  describe("의상이 바뀐 뒤 표정 prewarm 을 다시 건다", () => {
+    let queue: { id: number; cb: () => void }[];
+    const installIdle = (): void => {
+      queue = [];
+      let n = 0;
+      vi.stubGlobal("requestIdleCallback", (cb: () => void) => {
+        queue.push({ id: ++n, cb });
+        return n;
+      });
+      vi.stubGlobal("cancelIdleCallback", (id: number) => {
+        queue = queue.filter((q) => q.id !== id);
+      });
+    };
+    const drain = (): void => {
+      let guard = 0;
+      while (queue.length > 0 && guard++ < 200) queue.shift()!.cb();
+    };
+
+    it("고른 look 이 바뀐 좌석만 prewarm 5 개를 다시 받는다", async () => {
+      installIdle();
+      const s = await openWith({}, ALIVE);
+      frames(32);
+      drain();
+      for (const h of s.world.handles) expect(h.prewarm).toHaveBeenCalledTimes(5);
+      s.rerender({ view: viewWith({ 2: "doctor" }) });
+      expect(queue.length).toBe(1); // 좌석 2 의 첫 작업 하나
+      drain();
+      expect(handleOf(s, 2).prewarm).toHaveBeenCalledTimes(10);
+      for (const seat of [0, 1, 3]) expect(handleOf(s, seat).prewarm).toHaveBeenCalledTimes(5);
+    });
+
+    it("안개가 끝나 고른 의상으로 돌아올 때도 다시 건다", async () => {
+      installIdle();
+      const s = await openWith({ 3: "hood" }, { ...ALIVE, 3: { ghost: true, outfit: "police" } });
+      frames(32);
+      drain();
+      const h3 = handleOf(s, 3);
+      const before = vi.mocked(h3.prewarm!).mock.calls.length;
+      s.rerender({ scene: sceneOf(ALIVE) });
+      frame();
+      drain();
+      expect(vi.mocked(h3.prewarm!).mock.calls.length).toBe(before + 5);
+    });
+  });
+});
+
 // ---------- 09.1-09: 유령 직업 의상 + 안개 (UI-SPEC B-1·B-3, L13) ----------
 describe("유령 직업 의상 안개 (09.1-09)", () => {
   const MIST_GLOW = { color: "#d8e4ff", intensity: 0.85 };

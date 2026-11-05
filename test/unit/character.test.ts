@@ -260,16 +260,16 @@ describe("표정 병합 캐시", () => {
     expect(c.meshCount()).toBe(before);
   });
 
-  it("의상을 바꿨다 돌아오면 같은 지오메트리를 다시 쓴다", () => {
+  it("의상을 바꿨다 돌아오면 이전 의상 지오메트리는 해제되어 새로 만들고 개수는 그대로이다 (10-04, 최근 의상 하나만 남김)", () => {
     const c = createCharacter(1, "coat");
     const torso = joint(c.root, "body").children.find((x) => (x as Mesh).isMesh) as Mesh;
     const g0 = torso.geometry;
-    const h0 = headMesh(c).geometry;
+    const n0 = c.ownedGeometryCount();
     c.applyOutfit("police");
     expect(torso.geometry === g0).toBe(false);
     c.applyOutfit("coat");
-    expect(torso.geometry === g0).toBe(true);
-    expect(headMesh(c).geometry === h0).toBe(true);
+    expect(torso.geometry === g0).toBe(false); // 처음 의상의 병합은 police 로 바꿀 때 해제됐다
+    expect(c.ownedGeometryCount()).toBe(n0);
   });
 
   it("모르는 표정 이름은 기본 표정으로 받는다", () => {
@@ -367,7 +367,7 @@ describe("해제 dispose", () => {
         collect();
       }
       c.setDim(true);
-      geoSpy.mockClear();
+      // 의상을 바꿀 때 이전 의상 것은 이미 해제됐다 — 호출 기록을 지우지 않고 전체 생애에서 만든 것이 모두 해제됐는지 본다
       c.dispose();
       const disposed = new Set(geoSpy.mock.contexts as BufferGeometry[]);
       let missing = 0;
@@ -1259,5 +1259,88 @@ describe("표정 병합 선행 prewarm·ownedGeometryCount (10-03, O-10, D-17)",
     expect(c.ownedGeometryCount()).toBe(0);
     c.prewarm();
     expect(c.ownedGeometryCount()).toBe(0);
+  });
+});
+
+describe("의상 교체 지오메트리 해제 (10-04, UI-SPEC B-3, 위험 3)", () => {
+  const visibleGeos = (c: WorldCharacter): Set<BufferGeometry> => {
+    const out = new Set<BufferGeometry>();
+    for (const m of meshes(c.root, false)) if (m !== discOf(c.root)) out.add(m.geometry);
+    return out;
+  };
+
+  it("의상을 바꾸면 이전 의상의 병합(관절·머리 표정·돋보기 유리) 지오메트리가 해제되고 owned 에서 빠진다", () => {
+    const spy = vi.spyOn(BufferGeometry.prototype, "dispose");
+    try {
+      const c = createCharacter(0, "detective"); // 돋보기 유리가 있는 의상
+      c.prewarm();
+      c.setFace("happy");
+      const before = visibleGeos(c);
+      const owned0 = c.ownedGeometryCount();
+      expect(owned0).toBeGreaterThan(6);
+      spy.mockClear();
+      c.applyOutfit("coat");
+      const disposed = new Set(spy.mock.contexts as BufferGeometry[]);
+      // 이전 의상의 보이던 지오메트리는 모두 해제됐다
+      for (const g of before) expect(disposed.has(g)).toBe(true);
+      // 남은 것은 새 의상 관절 6 개뿐(표정 변형은 새 의상에서 아직 안 만들었다)
+      expect(c.ownedGeometryCount()).toBe(6);
+      // 지금 보이는 메시는 새 의상 것이고 해제되지 않았다
+      for (const m of jointMeshes(c.root)) expect(disposed.has(m.geometry)).toBe(false);
+      expect(c.meshCount()).toBe(7);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it("같은 의상을 다시 고르면 아무것도 해제하지 않는다", () => {
+    const spy = vi.spyOn(BufferGeometry.prototype, "dispose");
+    try {
+      const c = createCharacter(1, "hood");
+      c.prewarm();
+      const n = c.ownedGeometryCount();
+      spy.mockClear();
+      c.applyOutfit("hood");
+      expect(spy).not.toHaveBeenCalled();
+      expect(c.ownedGeometryCount()).toBe(n);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it("아홉 의상 × 모든 표정 × prewarm 을 돌려도 ownedGeometryCount 는 어느 시점에도 14 이하이고 dispose 뒤 0 이다", () => {
+    const c = createCharacter(2, "coat");
+    let max = 0;
+    const seen = (): void => {
+      max = Math.max(max, c.ownedGeometryCount());
+      expect(c.ownedGeometryCount()).toBeLessThanOrEqual(14);
+    };
+    for (let pass = 0; pass < 2; pass++) {
+      for (const id of OUTFIT_IDS) {
+        c.applyOutfit(id);
+        seen();
+        c.prewarm();
+        seen();
+        for (const f of FACE_IDS) {
+          c.setFace(f);
+          seen();
+        }
+        c.setFace("base");
+        expect(jointMeshes(c.root).length).toBe(6);
+        expect(c.meshCount()).toBe(id === "detective" ? 8 : 7);
+      }
+    }
+    expect(max).toBeGreaterThan(6);
+    c.dispose();
+    expect(c.ownedGeometryCount()).toBe(0);
+  });
+
+  it("끊긴 표시(dim) 중에 갈아입어도 새 의상 지오메트리가 칠해져 있고 해제된 것을 가리키지 않는다", () => {
+    const c = createCharacter(3, "coat");
+    c.setDim(true);
+    c.applyOutfit("police");
+    c.applyOutfit("coat");
+    expect(c.ownedGeometryCount()).toBe(6);
+    for (const m of jointMeshes(c.root)) expect(m.geometry.getAttribute("position")).toBeDefined();
   });
 });
