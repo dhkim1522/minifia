@@ -12,9 +12,9 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { phaseKey } from "../../shared/game/audience";
 import { parseBallotsCardText } from "../../shared/game/ballots";
-import type { ClientMessage, RoomView } from "../../shared/protocol";
+import type { ClientMessage, EmoteId, RoomView } from "../../shared/protocol";
 import type { ChatPanelProps, ChatPanelMessage } from "../components/v2/ChatPanel";
-import { CHAT_TEXT } from "../game/chatText";
+import { CHAT_TEXT, EMOTE_TRAY_ORDER } from "../game/chatText";
 import { SEND_DIM_MS, TYPING_IDLE_OFF_MS, TYPING_REFRESH_MS } from "../game/chatUi";
 import { whisperLine } from "../game/whisperView";
 import type { ChatStore } from "./chatStore";
@@ -233,6 +233,15 @@ export function useChat({ store, connection, view }: { store: ChatStore; connect
     [send, canSend, pk],
   );
 
+  // 동작 보내기(10-05): id 와 단계 키만 간다. 채널·수신자는 서버가 정한다. 미리 재생하지 않는다(D-9).
+  const onEmote = useCallback(
+    (id: EmoteId) => {
+      if (!canSend) return;
+      send({ t: "emote", id, pk });
+    },
+    [send, canSend, pk],
+  );
+
   // 서버 거절: 새 거절이 올 때마다(n 이 바뀔 때) 흐림을 풀고, 입력칸이 비어 있으면 마지막으로 보낸 글을 되돌려 둔다.
   // 마운트 때 이미 있던 거절(낡은 알림)은 건드리지 않는다.
   const rejectN = store.lastReject()?.n ?? 0;
@@ -288,6 +297,8 @@ export function useChat({ store, connection, view }: { store: ChatStore; connect
     onComposingChange,
     onInputBlur,
     onSend,
+    emotes: EMOTE_TRAY_ORDER,
+    onEmote,
     channel: channel ?? "all",
     sendDisabled: !canSend,
     sendDim,

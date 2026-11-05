@@ -46,3 +46,22 @@ export const EMOTE_LABEL: Readonly<Record<EmoteId, string>> = {
   surprise: "깜짝",
   dance: "춤",
 };
+
+// 10페이즈 동작 판 (UI-SPEC A-1, 미결 O-6). 보이는 이름은 3~4글자 이하 고정 문구이고 접근성 이름은 EMOTE_LABEL 이다.
+// 판 순서: 윗줄 5(박수·최고·악수·춤·깜짝) / 아랫줄 4(엉엉·손사래·손가락·목긋기). 사용자 문자열은 들어가지 않는다.
+export const EMOTE_TRAY_ORDER: readonly EmoteId[] = ["clap", "praise", "handshake", "dance", "surprise", "cry", "deny", "point", "throat"];
+
+export const EMOTE_SHORT: Readonly<Record<EmoteId, string>> = {
+  clap: "박수",
+  praise: "최고",
+  handshake: "악수",
+  dance: "춤",
+  surprise: "깜짝",
+  cry: "엉엉",
+  deny: "손사래",
+  point: "손가락",
+  throat: "목긋기",
+};
+
+/** 입력줄 동작 버튼의 접근성 이름과 판(group)의 이름 */
+export const EMOTE_TEXT = { button: "동작 고르기", tray: "동작" } as const;

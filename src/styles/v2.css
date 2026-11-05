@@ -81,7 +81,7 @@
 .mv-chat__card-title { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; line-height: 1.4; font-weight: 700; color: var(--gray-50); }
 .mv-chat__card--mafia .mv-chat__card-title { color: var(--crimson-300); }
 .mv-chat__card-text { margin: 0; font-size: 16px; line-height: 1.5; color: var(--gray-100); word-break: keep-all; overflow-wrap: anywhere; }
-.mv-chat__form { display: flex; gap: var(--space-sm); }
+.mv-chat__form { position: relative; display: flex; gap: var(--space-sm); }
 .mv-chat__field { position: relative; display: flex; flex: 1; min-width: 0; }
 .mv-chat__input { flex: 1; min-width: 0; height: var(--control-input); box-sizing: border-box; padding: 0 var(--space-md); border-radius: var(--radius-md); border: 1px solid var(--night-600); background: var(--night-900); color: var(--gray-100); font-family: inherit; font-size: 16px; user-select: text; }
 .mv-chat__send { display: grid; place-items: center; flex: none; width: var(--control-input); height: var(--control-input); padding: 0; border: 0; border-radius: var(--radius-md); background: var(--gray-100); color: var(--night-900); cursor: pointer; }
@@ -93,6 +93,19 @@
 .mv-chat__will-dot { position: absolute; top: 6px; right: 6px; width: 8px; height: 8px; border-radius: var(--radius-pill); background: var(--gray-100); }
 .mv-chat__will:focus-visible, .mv-chat__send:focus-visible, .mv-chat__input:focus-visible, .mv-chat__newdot:focus-visible { outline: 2px solid var(--gray-100); outline-offset: 2px; }
 .mv-chat__send.is-dim { opacity: 0.45; }
+/* 입력줄 동작 버튼(10페이즈): 입력줄 맨 앞 48×48, 깃펜 버튼(.mv-chat__will)과 같은 면·눌림 표시 */
+.mv-chat__emote { position: relative; display: grid; place-items: center; flex: none; width: var(--control-input); height: var(--control-input); padding: 0; border: 0; border-radius: var(--radius-badge); background: var(--night-700); color: var(--gray-100); cursor: pointer; }
+.mv-chat__emote[aria-pressed="true"] { box-shadow: inset 0 0 0 2px var(--gray-100); }
+.mv-chat__emote[aria-disabled="true"] { opacity: 0.45; cursor: default; }
+.mv-chat__emote:focus-visible, .mv-emote-tray__cell:focus-visible { outline: 2px solid var(--gray-100); outline-offset: 2px; }
+/* 동작 판: 입력줄 윗변에서 8px 위, 폭은 입력줄(= 폰 폭 − 32), 위로 자란다. 5열 격자에 아랫줄 4칸은 가운데(칸 폭 = (판 폭 − 16 − 32) / 5) */
+.mv-emote-tray { position: absolute; left: 0; right: 0; bottom: calc(100% + var(--space-sm)); z-index: calc(var(--z-overlay) + 1); box-sizing: border-box; display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); grid-auto-rows: 56px; gap: var(--space-sm); padding: var(--space-sm); border-radius: var(--radius-badge); background: var(--night-700); border: 1px solid var(--night-600); font-family: var(--font-ui); color: var(--gray-100); }
+.mv-emote-tray__cell { grid-column: span 2; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; min-width: 0; padding: 0; border: 0; border-radius: var(--radius-md); background: transparent; color: var(--gray-100); font-family: inherit; font-size: 14px; font-weight: 700; line-height: 1.2; white-space: nowrap; cursor: pointer; }
+.mv-emote-tray__cell:nth-child(6) { grid-column: 2 / span 2; }
+.mv-emote-tray__cell:active { background: var(--night-600); }
+.mv-emote-tray__cell[aria-disabled="true"] { opacity: 0.45; cursor: default; }
+.mv-emote-tray__cell[aria-disabled="true"]:active { background: transparent; }
+.mv-emote-tray__cell.is-playing { box-shadow: inset 0 0 0 2px var(--gray-100); }
 
 /* 기록 칸 바깥 상자: 새 메시지 점이 줄과 함께 스크롤되지 않게 기록 칸 밖에 둔다 */
 .mv-chat__logbox { position: relative; }

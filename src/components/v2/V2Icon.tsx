@@ -3,10 +3,10 @@ import "../../styles/v2.css";
 
 // v2.0 아이콘 중 6·7·8·9페이즈가 쓰는 종류(9페이즈: quill·note·target·eye·heal·close. 8페이즈: rolePolice·roleDoctor 와 skip·thumbUp·thumbDown). 24 격자, 선 2px, 둥근 끝, currentColor.
 // 경로는 design/v2.0/design-system/components/bundle.js 의 ICONS 에서 그대로 옮겼다(승인 2026-10-31).
-// 나머지 아이콘은 그것을 쓰는 페이즈(8·9·10페이즈)가 같은 표에 더한다.
+// 나머지 아이콘은 그것을 쓰는 페이즈(8·9·10페이즈)가 같은 표에 더한다(10페이즈: 동작 아홉 개, hanger 는 10-07 이 더한다).
 // v1.0 아이콘(src/components/Icon.tsx)과 이름이 겹쳐도(check·crown) 서로 다른 부품이다: v2 화면은 이 파일을 쓴다.
 // 로비 헤더의 [나가기]·[공유] 는 v1.0 Icon 을 그대로 쓴다(UI-SPEC 결정 현황) — 여기에 back·share 를 더하지 않는다.
-export type V2IconName = "point" | "crown" | "play" | "check" | "roleCitizen" | "send" | "ghost" | "roleMafia" | "rolePolice" | "roleDoctor" | "skip" | "thumbUp" | "thumbDown" | "quill" | "note" | "target" | "eye" | "heal" | "close" | "whisper" | "swap" | "quiet";
+export type V2IconName = "point" | "crown" | "play" | "check" | "roleCitizen" | "send" | "ghost" | "roleMafia" | "rolePolice" | "roleDoctor" | "skip" | "thumbUp" | "thumbDown" | "quill" | "note" | "target" | "eye" | "heal" | "close" | "whisper" | "swap" | "quiet" | "face" | "throat" | "deny" | "clap" | "cry" | "handshake" | "praise" | "surprise" | "dance";
 
 // ["c", cx, cy, r, filled?] 원 · ["p", d, filled?] 경로
 type Part = readonly ["c", number, number, number, boolean?] | readonly ["p", string, boolean?];
@@ -106,6 +106,61 @@ const ICONS: Readonly<Record<V2IconName, readonly Part[]>> = {
   quiet: [
     ["c", 12, 12, 8.5],
     ["p", "M6 6l12 12"],
+  ],
+  // 10페이즈(동작): 입력줄 동작 버튼 face 와 판의 아홉 칸(point 는 위에 이미 있다). bundle.js 의 ICONS 와 같은 데이터
+  face: [
+    ["c", 12, 12, 9],
+    ["c", 9, 10, 1.1, true],
+    ["c", 15, 10, 1.1, true],
+    ["p", "M8.5 14.3c1 1.2 2.2 1.8 3.5 1.8s2.5-.6 3.5-1.8"],
+  ],
+  throat: [
+    ["c", 12, 7, 4],
+    ["p", "M4 14.5h16"],
+    ["p", "M17 12l3 2.5-3 2.5"],
+    ["p", "M8 19c1.2.8 2.6 1.2 4 1.2s2.8-.4 4-1.2"],
+  ],
+  deny: [
+    ["p", "M8 13V6.5a1.5 1.5 0 0 1 3 0V11"],
+    ["p", "M11 10.5V5a1.5 1.5 0 0 1 3 0v5.5"],
+    ["p", "M14 10.5V7a1.5 1.5 0 0 1 3 0v7a6 6 0 0 1-6 6h-.5a5 5 0 0 1-4.2-2.3L4.4 14.6a1.5 1.5 0 0 1 2.5-1.7L8 14.5"],
+    ["p", "M3 4.5l1.8 1.2"],
+    ["p", "M20 4.5l-1.8 1.2"],
+  ],
+  clap: [
+    ["p", "M7.5 20.5L5 12a2 2 0 0 1 3.8-1.1L11 16"],
+    ["p", "M16.5 20.5L19 12a2 2 0 0 0-3.8-1.1L13 16"],
+    ["p", "M12 3v3"],
+    ["p", "M7.5 4.5l1.4 2"],
+    ["p", "M16.5 4.5l-1.4 2"],
+  ],
+  cry: [
+    ["c", 12, 12, 9],
+    ["p", "M7.5 10.5c.8-.7 1.7-.7 2.5 0"],
+    ["p", "M14 10.5c.8-.7 1.7-.7 2.5 0"],
+    ["p", "M9.8 17c1.4-1.1 3-1.1 4.4 0"],
+    ["p", "M8.8 13.2c0 1.1-.8 1.8-.8 1.8s-.8-.7-.8-1.8a.8.8 0 0 1 1.6 0z", true],
+  ],
+  handshake: [
+    ["p", "M2.5 11l3.5-3.5 4.5 2 2.5-1.5 2.5 1.5 4.5-2L21.5 11"],
+    ["p", "M6 10.5l5.5 5.5a1.6 1.6 0 0 0 2.3 0l3.7-3.7"],
+    ["p", "M9.5 14l2 2"],
+    ["p", "M11.5 12l2.5 2.5"],
+  ],
+  praise: [
+    ["p", "M7 10.5V20H4v-9.5z"],
+    ["p", "M7 10.5l4-7a2 2 0 0 1 3.4 1.9L13.5 9h5.2a2 2 0 0 1 2 2.4l-1.3 6.9a2 2 0 0 1-2 1.7H7"],
+  ],
+  surprise: [
+    ["c", 12, 12, 9],
+    ["c", 9, 9.5, 1.2, true],
+    ["c", 15, 9.5, 1.2, true],
+    ["c", 12, 15.5, 2.2],
+  ],
+  dance: [
+    ["p", "M9 18V5.5l11-2V16"],
+    ["c", 6, 18, 3],
+    ["c", 17, 16, 3],
   ],
 };
 

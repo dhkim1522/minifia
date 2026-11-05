@@ -3,13 +3,17 @@ import "../../styles/v2.css";
 import { CHAT_MAX_GRAPHEMES } from "../../../shared/game/chatRules";
 import { CHAT_TEXT } from "../../game/chatText";
 import { AUTO_SCROLL_SLOP_PX, DUP_SUBMIT_MS, IME_WAIT_MS, TAIL_WINDOW_MS } from "../../game/chatUi";
+import type { EmoteId } from "../../../shared/protocol";
+import { EMOTE_TEXT } from "../../game/chatText";
+import { EmoteTray } from "./EmoteTray";
 import { V2Icon, type V2IconName } from "./V2Icon";
 
 // 채팅 패널(기록 칸 + 입력줄). design/v2.0/design-system/components/bundle.js 의 ChatPanel 과
 // bundle.css 의 .mv-chat* 를 React 19 로 옮겼다(승인 2026-10-31). 같은 클래스 이름(mv-chat*)을 쓴다.
 //
 // 이 페이즈 속성 범위: messages·value·onChange·onSend·inputId + 변형 logHeight(고정 높이)·compact(키보드 열림)·channel(채널 아이콘).
-// 승인 속성 emotes·onEmote·tabs 는 받지 않는다(10·11페이즈). onWill·willOpen·willSaved 는 9페이즈에서 받는다:
+// 승인 속성 tabs 는 받지 않는다(11페이즈). emotes·onEmote 는 10페이즈(10-05)에서 받는다: 입력줄 맨 앞 동작 버튼(face)이 5+4 아이콘 판을 연다
+// (emotes 가 비었거나 onSend 가 없으면 버튼 DOM 이 없다). onWill·willOpen·willSaved 는 9페이즈에서 받는다:
 // 깃펜은 입력줄 오른쪽 끝, 보내기 버튼 뒤에 둔다(사용자 결정 2026-11-03, 결정 0062 가 0054 의 위치를 바꾼다).
 // form 이 flex 이고 입력칸이 flex 1 이라 깃펜 버튼(48×48)이 들어올 자리를 막지 않는다.
 //
@@ -67,6 +71,10 @@ export interface ChatPanelProps {
   onInputFocus?(): void;
   onInputBlur?(): void;
   onComposingChange?(composing: boolean): void;
+  /** 동작 판의 칸 id(판 순서). 없거나 비면 동작 버튼을 그리지 않는다(10-05) */
+  emotes?: readonly EmoteId[];
+  /** 칸을 골랐다. 보내기만 하고 미리 재생하지 않는다(D-9) */
+  onEmote?(id: EmoteId): void;
   /** 있으면 입력줄 오른쪽 끝(보내기 버튼 뒤)에 깃펜(유언 쓰기) 버튼을 그린다. 입력 중 신호와 무관하다(WILL-01) */
   onWill?(): void;
   /** 유언 시트가 열려 있다(aria-pressed) */
@@ -102,6 +110,8 @@ export function ChatPanel(props: ChatPanelProps) {
   const atBottomRef = useRef(true);
   const lastKeyRef = useRef<string | null>(messages.length ? (messages[messages.length - 1]?.key ?? null) : null);
   const [newDot, setNewDot] = useState(false);
+  const [trayOpen, setTrayOpen] = useState(false);
+  const hasEmotes = !!onSend && !!props.emotes && props.emotes.length > 0 && !!props.onEmote;
 
   // 타이머·이벤트에서 최신 속성을 읽는다(오래된 클로저 방지).
   const latest = useRef(props);
@@ -224,6 +234,11 @@ export function ChatPanel(props: ChatPanelProps) {
     if (e.key === "Escape") e.currentTarget.blur();
   };
 
+  const pickEmote = (id: EmoteId) => {
+    setTrayOpen(false);
+    latest.current.onEmote?.(id);
+  };
+
   const ui = channelUi(channel);
   const blank = value.trim() === "";
   const sendOff = blank || !!sendDisabled;
@@ -337,6 +352,22 @@ export function ChatPanel(props: ChatPanelProps) {
       </div>
       {onSend ? (
         <form className="mv-chat__form" onSubmit={onSubmit}>
+          {hasEmotes ? (
+            <button
+              type="button"
+              className="mv-chat__emote"
+              data-emote-button=""
+              aria-label={EMOTE_TEXT.button}
+              aria-expanded={trayOpen}
+              aria-pressed={trayOpen}
+              onClick={() => setTrayOpen((o) => !o)}
+              // 포커스가 버튼으로 옮겨 가 입력칸이 blur 되지 않게 한다(보내기 버튼과 같다)
+              onMouseDown={(e) => e.preventDefault()}
+            >
+              <V2Icon name="face" />
+            </button>
+          ) : null}
+          {hasEmotes && trayOpen ? <EmoteTray ids={props.emotes ?? []} onPick={pickEmote} /> : null}
           <div className="mv-chat__field">
             {ui.icon ? (
               <span className={channel === "mafia" ? "mv-chat__chan is-mafia" : "mv-chat__chan is-ghost"}>
