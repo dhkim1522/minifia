@@ -42,3 +42,27 @@ describe("V2Icon 새 아이콘 (09.1.1-08)", () => {
     expect(new Set(shapes).size).toBe(3);
   });
 });
+
+// 10-05: 동작 판과 입력줄 버튼이 쓰는 아홉 아이콘(face·throat·deny·clap·cry·handshake·praise·surprise·dance).
+// 경로는 design/v2.0/design-system/components/bundle.js 의 ICONS 와 같은 데이터다(새로 그리지 않는다).
+const V2_EMOTE: V2IconName[] = ["face", "throat", "deny", "clap", "cry", "handshake", "praise", "surprise", "dance"];
+
+describe("V2Icon 동작 아이콘 아홉 개 (10-05)", () => {
+  it.each(V2_EMOTE)("%s 는 24 격자 svg, 선 2px·둥근 끝이고 도형이 있다", (name) => {
+    const { container } = render(<V2Icon name={name} />);
+    const svg = container.querySelector("svg");
+    expect(svg?.getAttribute("viewBox")).toBe("0 0 24 24");
+    expect(svg?.getAttribute("stroke-width")).toBe("2");
+    expect(svg?.getAttribute("stroke-linecap")).toBe("round");
+    expect(svg?.getAttribute("aria-hidden")).toBe("true");
+    expect(svg?.querySelectorAll("path,circle").length).toBeGreaterThan(0);
+  });
+
+  it("아홉 아이콘은 서로 다른 모양이다", () => {
+    const shapes = V2_EMOTE.map((name) => {
+      const { container } = render(<V2Icon name={name} />);
+      return [...container.querySelectorAll("path,circle")].map((e) => e.outerHTML).join("");
+    });
+    expect(new Set(shapes).size).toBe(9);
+  });
+});
