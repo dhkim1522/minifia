@@ -168,6 +168,9 @@ const ALLOWED_ROLE_VALUE_PATHS: ReadonlySet<string> = new Set([
   // 공개 주장 값(결정 0066-1). 주장 값은 직업과 같은 단어(mafia·police…)를 쓰지만 실제 역할의 함수가 아니다 —
   // 증명은 test/worker/badge.test.ts 메타모픽 L18 이고, 이 경로 밖에 나오면 여전히 누출이다.
   "players[].badge",
+  // 공개 의상 값(결정 D-6). 의상 id 에도 직업 이름과 같은 단어가 있지만 실제 역할의 함수가 아니다 —
+  // 증명은 test/worker/dress.test.ts L25 이고, 이 경로 밖에 나오면 여전히 누출이다.
+  "players[].look",
 ]);
 
 /** 탈락한 viewer 에게만 더해지는 허용 경로(결정 0021): 모든 사람의 실제 직업. */
@@ -1982,5 +1985,17 @@ describe("players[].look (10-02, 결정 D-6)", () => {
   it("look 이 하나도 없는 옛 방의 players[] 에는 look 키가 없다", () => {
     const s = startedAt(6, 3, "discussion");
     for (const r of buildView(s, s.players[0]!.id, 0).players) expect("look" in r).toBe(false);
+  });
+});
+
+describe("의상 값(직업과 같은 단어)은 players[].look 에서만 허용된다 (10-02, L34)", () => {
+  it("look 값 mafia 는 players[].look 에서는 누출이 아니고 다른 경로(예: nickname)에 있으면 누출로 잡힌다", () => {
+    const s = startedAt(6, 3, "discussion");
+    const dressed: RoomState = { ...s, players: s.players.map((p) => (p.seat === 1 ? { ...p, look: "mafia" as const } : p)) };
+    const view = buildView(dressed, dressed.players[0]!.id, 0);
+    expect(view.players.find((r) => r.seat === 1)!.look).toBe("mafia");
+    expect(roleValueLeaks(view).filter((l) => l.startsWith("players[]"))).toEqual([]);
+    const planted = { ...view, players: view.players.map((r) => (r.seat === 2 ? { ...r, nickname: "mafia" } : r)) };
+    expect(roleValueLeaks(planted).join(",")).toContain("players[].nickname=mafia");
   });
 });
