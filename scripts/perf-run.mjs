@@ -27,6 +27,7 @@
 //              시민 판은 어둠·맥박 화면) CPU 감속 아래 장면마다 머무는 동안(--minutes 를 두 판이 반씩) 페이지 안 rAF 간격을 재 평균 fps·끊김·p95 를 장면별 칸(scenes)과 함께
 //              `nightload-{크기}-x{감속}.json`(기본 폴더 .planning/phases/09-night-morning/perf/)으로 저장한다. 넘기기·시트 조작 동안은 기록을 멈춘다. 6페이즈 기준(5분 평균 55fps, 끊김 5회)은
 //              baseline 칸에 적을 뿐 판정하지 않는다 — 합격 판정은 실기기 확인(사용자 결정 2026-11-02). 방은 끝에 나가서 지운다. v1.0 주소는 어떤 요청보다 먼저 거부한다.
+//   --map plaza (nightload, 11-13): 시작 전에 방장이 지도 칩 → 맵 탭 → 광장 카드로 광장을 고른다(pickMapViaUi). 저장 이름 끝 `-plaza`, JSON params.map. 없거나 bar 면 이전과 같다.
 //   사용 예:   node scripts/perf-run.mjs --mode nightload --url http://localhost:5173 --minutes 5 --throttle 4 --size 390x844
 // 종료 코드: 0 = 결과 저장, 1 = 인자·주소·Chrome·시간 초과·페이지 오류.
 // 가정(A1): 헤드리스 시스템 Chrome 의 CPU 4배 스로틀은 DevTools 와 같은 메커니즘이다. 헤드리스 여부·Chrome 버전은 결과 JSON 의 runner 에 적는다.
@@ -57,6 +58,7 @@ import {
   tapPick,
   waitWorldReady,
 } from "./e2e/browser.mjs";
+import { pickMapViaUi } from "./e2e/mapselect.mjs";
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const DEFAULT_OUT = join(REPO, ".planning/phases/06-world-skeleton/perf");
@@ -162,7 +164,7 @@ export function parseArgs(argv) {
         break;
       }
       case "--map": {
-        // 장면과 걷기 시나리오의 맵(?perf=1 의 map). perf 모드에서만 쓰인다 — 광장 성능 측정(MAP-06, 11-10)
+        // 장면과 걷기 시나리오의 맵(perf 의 ?perf=1&map=, nightload 는 시작 전에 지도 칩으로 고른다) — 광장 성능 측정(MAP-06, 11-10·11-13)
         const v = need(a, i++);
         if (v !== "bar" && v !== "plaza") throw new UsageError(`--map 은 bar 또는 plaza: ${v}`);
         o.map = v;
@@ -201,7 +203,7 @@ export function outputBase(o) {
   if (o.file) return o.file;
   if (o.mode === "interactive") return `interactive-dpr${o.dpr}-x${o.throttle}`;
   if (o.mode === "chatload") return `chatload-${o.size.w}x${o.size.h}-x${o.throttle}`;
-  if (o.mode === "nightload") return `nightload-${o.size.w}x${o.size.h}-x${o.throttle}`;
+  if (o.mode === "nightload") return `nightload-${o.size.w}x${o.size.h}-x${o.throttle}${o.map === "plaza" ? "-plaza" : ""}`;
   const base = `desktop-${o.scene}-dpr${o.dpr}-x${o.throttle}${o.outfits === "mix" ? "-mix" : ""}${o.burst > 1 ? `-burst${o.burst}` : ""}${o.map === "plaza" ? "-plaza" : ""}`;
   return o.shot ? `shot-${base}` : base;
 }
@@ -718,6 +720,8 @@ async function nightloadOnce(browser, o, origin, chrome) {
     await openTestSheet(page);
     await setBots(page, tracker, o.bots);
     await setBotVote(page, tracker, { exec: "no", pick: "other" });
+    // --map plaza: 시작 전에 칩 → 맵 탭 → 광장 카드로 고른다(11-13). bar·없음이면 아무것도 하지 않는다(재즈 바 판은 이전과 같다). 선택은 방에 남아 두 판 모두 광장이다
+    if (o.map === "plaza") await pickMapViaUi(page, tracker, "plaza");
 
     // 한 바퀴(50초)까지 넘겨 재는 경우가 있어 측정 시간에 여유 2분을 더한 240Hz 분량
     const cap = Math.ceil((o.minutes * 60 + 120) * 240);
@@ -825,7 +829,7 @@ async function nightloadOnce(browser, o, origin, chrome) {
       schema: "nightload-1",
       startedAt,
       endedAt,
-      params: { minutes: o.minutes, bots: o.bots, passes: NIGHTLOAD_PASSES, dwellMs: Object.fromEntries(NIGHTLOAD_DWELL), note: "넘기기·시트 조작 구간은 기록하지 않는다. 시민 판 아침은 봇 마피아가 방장을 노려 피해자 연출이 함께 잡힌다" },
+      params: { map: o.map ?? "bar", minutes: o.minutes, bots: o.bots, passes: NIGHTLOAD_PASSES, dwellMs: Object.fromEntries(NIGHTLOAD_DWELL), note: "넘기기·시트 조작 구간은 기록하지 않는다. 시민 판 아침은 봇 마피아가 방장을 노려 피해자 연출이 함께 잡힌다" },
       frames: { ...stats, jankPer5min: (stats.jank * 300) / stats.seconds },
       passes,
       scenes,

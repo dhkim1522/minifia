@@ -46,7 +46,7 @@ test("MS1: 칩 시각 지름·누르기 영역·왼쪽·위가 어긋나면 MS1 
   assert.deepEqual(failing({ chip: { ...c, disc: box(20, 70, 36, 36) } }), ["MS1"]);
   assert.deepEqual(failing({ chip: { ...c, disc: box(16, 90, 36, 36) } }), ["MS1"]);
   assert.deepEqual(failing({ headerBottom: 80 }), ["MS1"]);
-  assert.deepEqual(failing({ chip: null }), ["MS1"]);
+  assert.deepEqual(failing({ chip: null }), ["MS1", "MS6"]);
 });
 
 test("MS1: [테스트] 버튼이 있으면 칩은 그 오른쪽으로 비킨다(왼쪽 16 대신 버튼 오른쪽 + 8)", () => {

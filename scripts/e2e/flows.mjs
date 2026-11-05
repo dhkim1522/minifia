@@ -128,6 +128,7 @@ import {
   ownPenFontRequests,
 } from "./lib.mjs";
 import { makeAvatarFlows } from "./avatar.mjs";
+import { makeMapSelectFlows } from "./mapselect.mjs";
 import { awardChecks, readAwardState, readBenchView, readRematchState, readRestSheet, readResultStage, readResultTabs, readTimeline, rematchChecks, resultSkipChecks, resultStageChecks, resultTabChecks, timelineChecks } from "./result.mjs";
 import { makePoliticsFlows } from "./politics.mjs";
 import { makeSoundFlows } from "./sound.mjs";
@@ -3686,6 +3687,9 @@ const { politicsBadgeFlow, politicsWhisperFlow, politicsPinFlow, politicsVerdict
 // 캐릭터 동작·의상 화면(10페이즈): avatar-emote(10-05)·avatar-dress(10-07). 흐름 본문은 avatar.mjs, 도우미만 넘긴다
 const { avatarEmoteFlow, avatarDressFlow, avatarPhasesFlow, avatarPhasesNightFlow } = makeAvatarFlows({ recorder, startHost, openGuest, attempt, walkableCentersOfApp, LOBBY_HOST_NICK, WORLD_GUEST_NICK, resetAndLeave, openGame, closeGame, untilGame });
 
+// 맵 선택 화면(11페이즈 11-13): map-select. 흐름 본문은 mapselect.mjs, 도우미만 넘긴다
+const { mapSelectFlow } = makeMapSelectFlows({ recorder, startHost, openGuest, attempt, LOBBY_HOST_NICK, WORLD_GUEST_NICK, settledResult });
+
 // 소리(12페이즈): sound-render(12-06) 시험 페이지 오프라인 렌더 56개. 흐름 본문은 sound.mjs, 도우미만 넘긴다
 const { soundRenderFlow } = makeSoundFlows({ recorder, attempt });
 
@@ -3714,6 +3718,8 @@ export const FLOWS = [
   // 다시 하기(11-12): 방장 360×560 + 손님 430×932 실제 페이지 4개 + 봇 1 / 방장 이양은 390×844 한 크기
   { id: "result-rematch", run: resultRematchFlow, size: REMATCH_HOST_SIZE },
   { id: "host-handoff", run: hostHandoffFlow, size: HANDOFF_SIZE },
+  // 맵 선택(11-13, MAP-06): 칩·시트·카드 기하, 손님 읽기 전용, 선택 반영, 시작 뒤 같은 맵, 광장 한 판 ended
+  { id: "map-select", run: mapSelectFlow, extraSizes: LOBBY_EXTRA_SIZES },
   { id: "chat-game", run: chatGameFlow, size: GAME_SIZE },
   // 9.1.1 페이즈 정치 긴장(09.1.1-10): 직업 배지(떠 있는 버튼→칩→이름표 배지→말 바꿈)·귓속말(모드→한 줄 시트→당사자만 본문). 둘 다 폰 6종, 방장·손님 두 화면
   { id: "politics-badge", run: politicsBadgeFlow, extraSizes: LOBBY_EXTRA_SIZES },
