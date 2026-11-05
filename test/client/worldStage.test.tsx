@@ -3465,3 +3465,59 @@ describe("결과 장면: costume·dim 적용과 onCostumes (11-05)", () => {
     expect(onCostumes).not.toHaveBeenCalled();
   });
 });
+
+// ---------- 11-05 Task 2: 무대 탭 알림(onStageTap)과 화면 연출 동작 큐(emoteCues) ----------
+describe("결과 장면: onStageTap · emoteCues (11-05, D-25)", () => {
+  const handleOf = (s: Setup, seat: number): FakeHandle => s.world.renderers[0]!.chars.get(seat) as FakeHandle;
+  const openResult = (over: Partial<WorldStageProps> = {}) =>
+    open({ scene: sceneOf({ 0: {}, 1: {}, 2: {}, 3: {} }), canWalk: false, ...over }, { players: FOUR, ents: FOUR_ENTS() });
+
+  it("무대 빈 곳을 한 번 탭하면 onStageTap 이 한 번 불리고, canWalk 가 거짓이라 move 는 가지 않는다", async () => {
+    const onStageTap = vi.fn();
+    const s = await openResult({ onStageTap });
+    tapAt(surface(s.utils), 120, 340);
+    expect(onStageTap).toHaveBeenCalledTimes(1);
+    expect(s.send).not.toHaveBeenCalled();
+  });
+
+  it("끌기(탭이 아님)·입력칸 포커스 중 탭(키보드 닫기)에는 부르지 않는다", async () => {
+    const onStageTap = vi.fn();
+    const s = await openResult({ onStageTap });
+    const el = surface(s.utils);
+    fireEvent.pointerDown(el, { pointerId: 1, clientX: 100, clientY: 300 });
+    fireEvent.pointerMove(el, { pointerId: 1, clientX: 160, clientY: 300 });
+    fireEvent.pointerUp(el, { pointerId: 1, clientX: 160, clientY: 300 });
+    expect(onStageTap).not.toHaveBeenCalled();
+    const input = document.createElement("input");
+    input.setAttribute("data-chat-input", "");
+    document.body.appendChild(input);
+    input.focus();
+    tapAt(el, 120, 340);
+    expect(onStageTap).not.toHaveBeenCalled();
+    input.remove();
+  });
+
+  it("emoteCues: nonce 가 바뀔 때마다 그 좌석의 캐릭터가 동작을 한 번 재생한다", async () => {
+    const s = await openResult({ emoteCues: [{ seat: 1, id: "clap", nonce: 1 }, { seat: 3, id: "clap", nonce: 2 }] });
+    frames(50);
+    // 처음 마운트 때의 값은 지난 일이다
+    expect(handleOf(s, 1).playEmote).not.toHaveBeenCalled();
+    s.rerender({ emoteCues: [{ seat: 1, id: "clap", nonce: 3 }, { seat: 3, id: "clap", nonce: 2 }] });
+    frames(50);
+    expect(handleOf(s, 1).playEmote).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(handleOf(s, 1).playEmote!).mock.calls[0]![0]).toBe("clap");
+    expect(handleOf(s, 3).playEmote).not.toHaveBeenCalled();
+    s.rerender({ emoteCues: [{ seat: 1, id: "clap", nonce: 3 }, { seat: 3, id: "clap", nonce: 2 }] });
+    frames(50);
+    expect(handleOf(s, 1).playEmote).toHaveBeenCalledTimes(1); // 같은 nonce 는 다시 재생하지 않는다
+  });
+
+  it("서버 동작과 같은 재생 목록·상한(4)을 쓰고 E2E 훅 playing 에 나타난다", async () => {
+    const s = await openResult();
+    s.rerender({ emoteCues: [0, 1, 2, 3].map((seat) => ({ seat, id: "clap" as const, nonce: 10 + seat })) });
+    frames(50);
+    for (const seat of [0, 1, 2, 3]) expect(handleOf(s, seat).playEmote).toHaveBeenCalledTimes(1);
+    expect(window.__mfEmotes?.playing).toEqual([0, 1, 2, 3]);
+    expect(window.__mfEmotes?.last).toBeNull(); // 받은 프레임이 아니라 화면 연출이다
+  });
+});

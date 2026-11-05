@@ -396,3 +396,273 @@ describe("result.css 정적 단언 (happy-dom 은 레이아웃을 재지 못한�
     expect(css).toMatch(/\.mf-result__panel\s*\{[^}]*padding:\s*14px var\(--space-md\) 22px/);
   });
 });
+
+// ---------- Task 2: 시간표 · 건너뛰기 · 모션 줄이기 · 재접속 (D-1, D-25) ----------
+describe("결과 시간표 연출 (A-1)", () => {
+  // 좌석 0 시민 · 1 경찰 · 2 의사(탈락) · 3 마피아 · 4 시민, 시민 승
+  const executionView = (): RoomView => {
+    const v = makeView();
+    v.phase = "execution";
+    delete (v as { result?: unknown }).result;
+    v.day = { ...v.day!, candidate: 3, execution: { seat: 3 } };
+    return v;
+  };
+  /** execution → ended 로 같은 접속에서 넘어온 마운트(= 처음 받은 결과). 넘기 전 스토어에 출발 위치를 심을 수 있다 */
+  const reveal = (opts: Opts = {}, seed?: (store: NonNullable<typeof stage.props>["store"]) => void) => {
+    const r = renderRoom(executionView());
+    seed?.(stage.props!.store);
+    r.rerenderRoom(makeView(opts));
+    return r;
+  };
+  const hookOf = () => (window as unknown as { __mfResult?: { stage: string; chips: number; dimmed: number[]; costumes: Record<number, string> } }).__mfResult!;
+  const stageName = (c: ParentNode) => c.querySelector<HTMLElement>("[data-result-stage]")!.dataset.resultStage;
+  const advance = (ms: number) => act(() => void vi.advanceTimersByTime(ms));
+  const title = (c: ParentNode) => text(c.querySelector("h1"));
+  const announce = (c: ParentNode) => c.querySelector<HTMLElement>("[data-result-announce]");
+  const costumeCount = () => Object.values(scene().seats).filter((l) => l.costume !== undefined).length;
+  const dimCount = () => Object.values(scene().seats).filter((l) => l.dim === true).length;
+
+  it("t=0: 모임 — 헤더 `결과`, 칩·의상·어둠·조명·승리 알림 없음", () => {
+    const r = reveal();
+    expect(stageName(r.container)).toBe("gather");
+    expect(title(r.container)).toBe("결과");
+    expect(r.container.querySelector("h1 svg")).toBeNull();
+    expect(chips(r.container)).toHaveLength(0);
+    expect(costumeCount()).toBe(0);
+    expect(dimCount()).toBe(0);
+    expect(scene().pin).toBeNull();
+    expect(announce(r.container)).toBeNull();
+    expect(hookOf()).toMatchObject({ stage: "gather", chips: 0, dimmed: [], costumes: {} });
+  });
+
+  it("모임 걷기: 스토어의 마지막 위치에서 자리까지 1200ms 안에 도착하는 구간, 위치가 없는 사람은 자리에서 시작한다", () => {
+    const r = reveal({ count: 5 }, (store) => {
+      store.applyFrame({ t: "world", k: "snap", at: NOW, ents: [{ s: 0, p: [500, -400], t0: NOW, v: 0 }, { s: 1, p: [-300, 100], t0: NOW, v: 0 }] }, 1);
+    });
+    const store = stage.props!.store;
+    const table = ringSlots(5);
+    const p0 = store.positionOf(0, NOW)!;
+    expect(p0.x).toBeCloseTo(5, 6);
+    expect(p0.z).toBeCloseTo(-4, 6);
+    const mid = store.positionOf(0, NOW + 600)!;
+    expect(mid.x).toBeLessThan(5); // 출발(5)에서 자리(0)로 걷는 중간이다
+    expect(mid.x).toBeGreaterThan(table[0]![0] / 100);
+    const end = store.positionOf(0, NOW + 1200)!;
+    expect(end.x).toBeCloseTo(table[0]![0] / 100, 6);
+    expect(end.z).toBeCloseTo(table[0]![1] / 100, 6);
+    // 위치가 없던 좌석 3 은 처음부터 자리에 서 있다
+    const p3 = store.positionOf(3, NOW)!;
+    expect(p3.x).toBeCloseTo(table[3]![0] / 100, 6);
+    expect(p3.z).toBeCloseTo(table[3]![1] / 100, 6);
+    r.unmount();
+  });
+
+  it("t=1199 는 아직 모임, t=1200 에 flip: 0번 사람만 칩이 뒤집히고 직업 의상", () => {
+    const r = reveal();
+    advance(1199);
+    expect(stageName(r.container)).toBe("gather");
+    expect(chips(r.container)).toHaveLength(0);
+    advance(1);
+    expect(stageName(r.container)).toBe("flip");
+    expect(chips(r.container).map((c) => c.dataset.roleChip)).toEqual(["citizen"]);
+    expect(costumeCount()).toBe(1);
+    expect(scene().seats[0]!.costume).toBe("coat");
+    expect(hookOf()).toMatchObject({ stage: "flip", chips: 1 });
+  });
+
+  it("1200+400i 마다 한 명씩 늘어난다 (좌석 오름차순), 4600 전까지 flip", () => {
+    const r = reveal();
+    advance(1200);
+    for (let i = 1; i < 5; i++) {
+      advance(399);
+      expect(chips(r.container)).toHaveLength(i);
+      advance(1);
+      expect(chips(r.container)).toHaveLength(i + 1);
+      expect(costumeCount()).toBe(i + 1);
+    }
+    expect(chips(r.container).map((c) => c.dataset.roleChip)).toEqual(["citizen", "police", "doctor", "mafia", "citizen"]);
+    advance(2599); // 3600 → 4599
+    expect(stageName(r.container)).toBe("flip");
+    expect(dimCount()).toBe(0);
+    expect(scene().pin).toBeNull();
+  });
+
+  it("t=4600: 이긴 팀 조명(점 조명)·진 팀 어둠·박수 큐·승리 알림(아이콘, 접근성 이름 승리 한 줄), 헤더는 아직 `결과`", () => {
+    const r = reveal();
+    advance(4600);
+    expect(stageName(r.container)).toBe("light");
+    expect(chips(r.container)).toHaveLength(5);
+    expect(scene().pin).toEqual({ mode: "point", x: GATHER_CENTER.x, z: GATHER_CENTER.z });
+    expect(Object.entries(scene().seats).filter(([, l]) => l.dim).map(([k]) => Number(k))).toEqual([3]);
+    const cues = stage.props!.emoteCues!;
+    expect(cues.map((c) => c.seat)).toEqual([0, 1, 2, 4]);
+    expect(cues.every((c) => c.id === "clap")).toBe(true);
+    expect(new Set(cues.map((c) => c.nonce)).size).toBe(cues.length);
+    const a = announce(r.container)!;
+    expect(a).not.toBeNull();
+    expect(a.getAttribute("aria-label")).toBe("시민 승리");
+    expect(text(a)).toBe("시민 승리");
+    expect(a.querySelector("svg")).not.toBeNull();
+    expect(title(r.container)).toBe("결과");
+    expect(hookOf()).toMatchObject({ stage: "light", chips: 5, dimmed: [3] });
+    expect(hookOf().costumes).toEqual({ 0: "coat", 1: "police", 2: "doctor", 3: "mafia", 4: "coat" });
+  });
+
+  it("마피아 승 알림은 마피아 승리 + 진홍 아이콘 표식", () => {
+    const r = reveal({ winner: "mafiaWin" });
+    advance(4600);
+    const a = announce(r.container)!;
+    expect(text(a)).toBe("마피아 승리");
+    expect(a.dataset.winner).toBe("mafiaWin");
+    expect(Object.entries(scene().seats).filter(([, l]) => l.dim).map(([k]) => Number(k))).toEqual([0, 1, 2, 4]);
+    expect(stage.props!.emoteCues!.map((c) => c.seat)).toEqual([3]);
+  });
+
+  it("t=5200 알림이 꺼지고, t=5600 에 final — 헤더가 승리 한 줄(아이콘)이 되고 큐가 없다", () => {
+    const r = reveal();
+    advance(5199);
+    expect(announce(r.container)).not.toBeNull();
+    advance(1);
+    expect(announce(r.container)).toBeNull();
+    expect(stageName(r.container)).toBe("announce");
+    expect(title(r.container)).toBe("결과");
+    advance(399);
+    expect(title(r.container)).toBe("결과");
+    advance(1);
+    expect(stageName(r.container)).toBe("final");
+    expect(title(r.container)).toBe("시민 승리");
+    expect(r.container.querySelector("h1 svg")).not.toBeNull();
+    expect(hookOf().stage).toBe("final");
+  });
+
+  it("건너뛰기: 4600 전 무대 탭 한 번이면 즉시 4600 상태 — 전원 뒤집힘·조명, 승리 알림 없음, 자리에 한 점 구간", () => {
+    const r = reveal({}, (store) => {
+      store.applyFrame({ t: "world", k: "snap", at: NOW, ents: [{ s: 0, p: [500, -400], t0: NOW, v: 0 }] }, 1);
+    });
+    advance(2000);
+    expect(chips(r.container)).toHaveLength(3);
+    act(() => stage.props!.onStageTap!());
+    expect(stageName(r.container)).toBe("light");
+    expect(chips(r.container)).toHaveLength(5);
+    expect(scene().pin).not.toBeNull();
+    expect(dimCount()).toBe(1);
+    expect(announce(r.container)).toBeNull();
+    const table = ringSlots(5);
+    const p0 = stage.props!.store.positionOf(0, NOW + 2000)!;
+    expect(p0.x).toBeCloseTo(table[0]![0] / 100, 6);
+    expect(p0.z).toBeCloseTo(table[0]![1] / 100, 6);
+    // 남은 시간표는 이어진다: 알림 없이 5600 에 final
+    advance(1000);
+    expect(stageName(r.container)).toBe("final");
+    expect(title(r.container)).toBe("시민 승리");
+    expect(announce(r.container)).toBeNull();
+  });
+
+  it("이후 탭은 아무 일 없다 (4600 이후 · 이미 건너뛴 뒤)", () => {
+    const r = reveal();
+    advance(1500);
+    act(() => stage.props!.onStageTap!());
+    const nonces = stage.props!.emoteCues!.map((c) => c.nonce);
+    const timers = vi.getTimerCount();
+    act(() => stage.props!.onStageTap!());
+    expect(stageName(r.container)).toBe("light");
+    expect(stage.props!.emoteCues!.map((c) => c.nonce)).toEqual(nonces);
+    expect(vi.getTimerCount()).toBe(timers);
+    // 시간표를 끝까지 돌린 뒤의 탭도 같다
+    advance(2000);
+    act(() => stage.props!.onStageTap!());
+    expect(stageName(r.container)).toBe("final");
+  });
+
+  it("걷는 중(모임)에도 탭하면 건너뛴다 — 걷기 목적지 move 는 보내지 않는다", () => {
+    const r = reveal();
+    advance(300);
+    expect(stage.props!.canWalk).toBe(false);
+    act(() => stage.props!.onStageTap!());
+    expect(stageName(r.container)).toBe("light");
+    expect(r.send.mock.calls.filter((c) => (c[0] as { t: string }).t === "move")).toHaveLength(0);
+  });
+
+  it("재접속·처음 마운트(arrivedFrom 없음)는 곧바로 final: 걷기·큐·알림·타이머가 없다", () => {
+    const before = vi.getTimerCount();
+    const r = renderRoom(makeView());
+    expect(stageName(r.container)).toBe("final");
+    expect(title(r.container)).toBe("시민 승리");
+    expect(stage.props!.emoteCues ?? []).toEqual([]);
+    expect(announce(r.container)).toBeNull();
+    expect(r.container.querySelector("[data-result-stage]")!.getAttribute("data-reveal")).toBe("false");
+    advance(10_000);
+    expect(stageName(r.container)).toBe("final");
+    void before;
+  });
+
+  it("에포크가 바뀐 재접속으로 ended 를 받으면 연출 없이 final", () => {
+    const r = renderRoom(executionView());
+    r.rerenderRoom(makeView(), { epoch: 2 });
+    expect(stageName(r.container)).toBe("final");
+  });
+
+  it("execution·morning 이외 단계에서 온 ended 도 예외 없이 final", () => {
+    const night = executionView();
+    night.phase = "night";
+    const r = renderRoom(night);
+    r.rerenderRoom(makeView());
+    expect(stageName(r.container)).toBe("final");
+  });
+
+  it("morning 에서 와도 같은 연출이 돈다", () => {
+    const v = executionView();
+    v.phase = "morning";
+    v.day = { ...v.day!, morning: { eliminated: 2 } as never };
+    const r = renderRoom(v);
+    r.rerenderRoom(makeView());
+    expect(stageName(r.container)).toBe("gather");
+  });
+
+  it("모션 줄이기: 같은 접속 전환이어도 곧바로 final, 칩 뒤집힘 애니메이션 표식도 없다", () => {
+    const real = window.matchMedia;
+    Object.defineProperty(window, "matchMedia", { configurable: true, writable: true, value: () => ({ matches: true, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} }) });
+    try {
+      const r = reveal();
+      expect(stageName(r.container)).toBe("final");
+      expect(r.container.querySelector("[data-result-stage]")!.getAttribute("data-reveal")).toBe("false");
+      expect(stage.props!.emoteCues ?? []).toEqual([]);
+    } finally {
+      Object.defineProperty(window, "matchMedia", { configurable: true, writable: true, value: real });
+    }
+  });
+
+  it("연출 중 같은 결과가 다시 와도 되돌아가지 않고 타이머가 늘지 않는다", () => {
+    const r = reveal();
+    advance(2000);
+    const timers = vi.getTimerCount();
+    r.rerenderRoom(makeView());
+    r.rerenderRoom(makeView());
+    expect(chips(r.container)).toHaveLength(3);
+    expect(stageName(r.container)).toBe("flip");
+    expect(vi.getTimerCount()).toBe(timers);
+  });
+
+  it("언마운트하면 연출 타이머가 모두 정리된다 (T-04-66)", () => {
+    const r = reveal();
+    advance(500);
+    r.unmount();
+    expect(vi.getTimerCount()).toBe(0);
+    expect(() => advance(10_000)).not.toThrow();
+  });
+});
+
+describe("result.css 연출 정적 단언 (11-05)", () => {
+  const css = readFileSync("src/styles/result.css", "utf8");
+  it("승리 알림은 36px 한 줄·배경 어둡게 80%·터치 통과, 칩 뒤집힘은 transform 0.3초이고 모션 줄이기에서는 없다", () => {
+    expect(css).toMatch(/\.mf-result__announce\s*\{[^}]*pointer-events:\s*none/);
+    expect(css).toMatch(/\.mf-result__announce\s*\{[^}]*night-950\) 80%/);
+    expect(css).toMatch(/\.mf-result__announce-text\s*\{[^}]*font-size:\s*36px/);
+    expect(css).toMatch(/mv-rolechip[^{]*\{[^}]*animation:\s*mf-chip-flip 300ms/);
+    expect(css).toMatch(/@media \(prefers-reduced-motion: reduce\)[^{]*\{[^}]*mv-rolechip[^}]*animation:\s*none/);
+  });
+  it("전이·애니메이션은 opacity·transform 만 쓴다", () => {
+    const frames = [...css.matchAll(/@keyframes[^{]+\{([\s\S]*?\n)\}/g)].map((m) => m[1]!).join("\n");
+    for (const prop of ["width", "height", "top", "left", "margin", "padding"]) expect(frames, prop).not.toMatch(new RegExp(`\\b${prop}\\s*:`));
+  });
+});

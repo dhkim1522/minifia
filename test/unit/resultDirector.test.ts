@@ -3,7 +3,8 @@ import { describe, expect, it } from "vitest";
 import { ringSlots } from "../../shared/game/gather";
 import type { RoleId } from "../../shared/game/roles";
 import type { GameWinner, PublicPlayer, RoomView } from "../../shared/protocol";
-import { castOf, CEREMONY_START_MS, finalState, holdSnap, RESULT_TIMELINE, slotsFor, teamOf } from "../../src/game/resultDirector";
+import { positionAt, segmentEndsAt } from "../../shared/game/world";
+import { castOf, CEREMONY_START_MS, CLAP_MAX, finalState, holdSnap, markTimes, RESULT_TIMELINE, slotsFor, stateAt, teamOf, walkSnap } from "../../src/game/resultDirector";
 import { jobOutfit } from "../../src/world/ghostOutfit";
 
 const JOBS: RoleId[] = ["citizen", "police", "doctor", "mafia", "citizen", "mafia"];
@@ -101,6 +102,109 @@ describe("holdSnap — 한 점 구간", () => {
       expect(e.p).toHaveLength(2);
       expect(e.p.every(Number.isInteger)).toBe(true);
       expect(e.t0).toBe(123_456);
+    }
+  });
+});
+
+// ---- Task 2: 시간표 표 (A-1, D-1) ----
+describe("stateAt — 시간표 표", () => {
+  // 좌석 0 시민 · 1 경찰 · 2 의사 · 3 마피아 · 4 시민 · 5 마피아, 시민 승
+  const cast = castOf(viewOf(JOBS, [2]));
+  const at = (t: number, winner: GameWinner = "citizenWin") => stateAt(t, cast, winner);
+
+  it("t=0: 모임 — 아무도 안 뒤집힘, 조명·알림 없음, 제목 결과", () => {
+    const s = at(0);
+    expect(s).toEqual({ stage: "gather", flipped: [], costumes: {}, dimmed: [], lit: false, clap: [], announce: false, title: "result" });
+    expect(at(-50)).toEqual(s); // 음수는 0 으로 본다
+  });
+
+  it("t=1199 는 아직 모임, t=1200 에 flip — 0번째 사람만 뒤집히고 그 사람만 직업 의상", () => {
+    expect(at(1199).stage).toBe("gather");
+    expect(at(1199).flipped).toEqual([]);
+    const s = at(1200);
+    expect(s.stage).toBe("flip");
+    expect(s.flipped).toEqual([0]);
+    expect(s.costumes).toEqual({ 0: "coat" });
+  });
+
+  it("t=1200+400i 에 i+1 명이 뒤집힌다 (좌석 오름차순, 의상도 같은 사람들)", () => {
+    for (let i = 0; i < 6; i++) {
+      const s = at(RESULT_TIMELINE.flipStartMs + RESULT_TIMELINE.flipGapMs * i);
+      expect(s.flipped).toEqual([0, 1, 2, 3, 4, 5].slice(0, i + 1));
+      expect(Object.keys(s.costumes).map(Number)).toEqual(s.flipped);
+      expect(at(RESULT_TIMELINE.flipStartMs + RESULT_TIMELINE.flipGapMs * i - 1).flipped.length).toBe(i);
+    }
+    expect(at(3999).stage).toBe("flip"); // 마지막 사람이 뒤집힌 뒤 4600 전까지
+    expect(at(3999).dimmed).toEqual([]);
+    expect(at(3999).lit).toBe(false);
+  });
+
+  it("t=4600 light — 전원 뒤집힘, 진 팀 어둠, 조명, 박수 대상(이긴 팀 오름차순), 승리 알림 켜짐, 제목은 아직 결과", () => {
+    const s = at(4600);
+    expect(s.stage).toBe("light");
+    expect(s.flipped).toEqual([0, 1, 2, 3, 4, 5]);
+    expect(s.dimmed).toEqual([3, 5]);
+    expect(s.lit).toBe(true);
+    expect(s.clap).toEqual([0, 1, 2, 4]);
+    expect(s.announce).toBe(true);
+    expect(s.title).toBe("result");
+    expect(at(5199).announce).toBe(true);
+    expect(at(5199).stage).toBe("light");
+  });
+
+  it("박수는 최대 4명, 이긴 팀이 적으면 그만큼", () => {
+    const eight = castOf(viewOf(["citizen", "citizen", "citizen", "citizen", "citizen", "citizen", "mafia", "mafia"]));
+    expect(stateAt(4600, eight, "citizenWin").clap).toHaveLength(CLAP_MAX);
+    expect(stateAt(4600, eight, "citizenWin").clap).toEqual([0, 1, 2, 3]);
+    expect(stateAt(4600, eight, "mafiaWin").clap).toEqual([6, 7]);
+    expect(stateAt(4600, eight, "mafiaWin").dimmed).toEqual([0, 1, 2, 3, 4, 5]);
+  });
+
+  it("t=5200 승리 알림이 꺼지고(announce 단계), t=5600 부터 final — 제목이 승리 한 줄, 박수 큐 없음", () => {
+    const a = at(5200);
+    expect(a).toMatchObject({ stage: "announce", announce: false, lit: true, clap: [], title: "result" });
+    expect(at(5599).title).toBe("result");
+    const f = at(RESULT_TIMELINE.ceremonyStartMs);
+    expect(f).toEqual(finalState(cast, "citizenWin"));
+    expect(at(60_000)).toEqual(f);
+    expect(at(5600, "mafiaWin").title).toBe("mafiaWin");
+  });
+
+  it("markTimes — 상태가 바뀌는 시각 목록(오름차순·중복 없음)", () => {
+    expect(markTimes(3)).toEqual([0, 1200, 1600, 2000, 4600, 5200, 5600]);
+    expect(markTimes(8)).toEqual([0, 1200, 1600, 2000, 2400, 2800, 3200, 3600, 4000, 4600, 5200, 5600]);
+    // 마크 사이에서는 상태가 바뀌지 않는다
+    const times = markTimes(6);
+    for (let i = 0; i + 1 < times.length; i++) expect(at(times[i]! + 1)).toEqual(at(times[i + 1]! - 1));
+  });
+});
+
+describe("walkSnap — 모임 걷기 구간", () => {
+  const cast = castOf(viewOf(JOBS));
+  const slots = slotsFor(cast);
+  const T0 = 1_000_000;
+
+  it("출발 위치가 없거나 자리와 같으면 한 점 구간(자리 그대로)", () => {
+    const ents = walkSnap(slots, { 1: { x: slots[1]![0] / 100, z: slots[1]![1] / 100 } }, T0);
+    expect(ents.find((e) => e.s === 0)!.p).toEqual([slots[0]![0], slots[0]![1]]); // 위치 없음
+    expect(ents.find((e) => e.s === 1)!.p).toEqual([slots[1]![0], slots[1]![1]]); // 이미 자리
+  });
+
+  it("출발이 다르면 [출발, 자리] 구간이고 1200ms 안에 정확히 도착한다", () => {
+    const starts = { 0: { x: 5.5, z: -4.25 }, 3: { x: -3, z: 2 } };
+    const ents = walkSnap(slots, starts, T0);
+    for (const seat of [0, 3] as const) {
+      const e = ents.find((x) => x.s === seat)!;
+      expect(e.p).toHaveLength(4);
+      expect(e.p.every(Number.isInteger)).toBe(true);
+      expect(e.t0).toBe(T0);
+      const seg = { p: e.p, t0: e.t0, v: e.v };
+      expect(positionAt(seg, T0)).toEqual({ x: starts[seat].x, z: starts[seat].z });
+      expect(segmentEndsAt(seg) - T0).toBeLessThanOrEqual(RESULT_TIMELINE.gatherMs);
+      const end = positionAt(seg, T0 + RESULT_TIMELINE.gatherMs);
+      expect(end.x).toBeCloseTo(slots[seat]![0] / 100, 6);
+      expect(end.z).toBeCloseTo(slots[seat]![1] / 100, 6);
+      expect(e.v).toBeGreaterThan(0);
     }
   });
 });
