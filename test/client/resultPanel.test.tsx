@@ -237,13 +237,16 @@ describe("기록 탭 (11-11)", () => {
     expect(container.querySelector("[data-day-card]")).toBeNull();
   });
 
-  it("귓속말 탭: focusDay 가 있으면 그날 구분선(data-day)이 보이게 스크롤한다 · onJumpWhisper 는 기록 상세에 이어진다", () => {
-    const scrollIntoView = vi.fn();
-    Object.defineProperty(Element.prototype, "scrollIntoView", { configurable: true, value: scrollIntoView });
-    setup({ tab: "whisper", expanded: true, focusDay: 2 });
-    const target = scrollIntoView.mock.contexts.at(-1) as HTMLElement;
-    expect(target.getAttribute("data-day")).toBe("2");
-    delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView;
+  it("귓속말 탭: focusDay 가 있으면 그날 구분선이 몸통 맨 위에 오도록 몸통만 스크롤한다", () => {
+    const rect = (top: number) => () => ({ top, bottom: top + 20, left: 0, right: 0, width: 0, height: 20, x: 0, y: top, toJSON: () => ({}) }) as DOMRect;
+    const spy = vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(function (this: Element) {
+      if (this.getAttribute("data-result-divider") !== null) return rect(Number(this.getAttribute("data-day")) * 100)();
+      if (this.getAttribute("data-result-body") !== null) return rect(40)();
+      return rect(0)();
+    });
+    const { container } = setup({ tab: "whisper", expanded: true, focusDay: 2 });
+    expect(container.querySelector<HTMLElement>("[data-result-body=whisper]")!.scrollTop).toBe(160);
+    spy.mockRestore();
   });
 
   it("기록 탭의 귓속말 쌍은 onJumpWhisper(n) 을 부른다", () => {

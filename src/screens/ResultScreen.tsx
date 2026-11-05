@@ -111,6 +111,22 @@ export function ResultScreen({ view, store, chat, resultLog, send, canSend, offs
   const logRevision = useSyncExternalStore(
     useCallback((cb: () => void) => resultLog.subscribe(cb), [resultLog]),
     useCallback(() => resultLog.revision(), [resultLog]),
+  // 기록 탭의 귓속말 쌍(11-11): 귓속말 탭으로 옮기고 그날 구분선을 보이게 한다. 탭 행으로 직접 고르면 이 일차는 지운다
+  const [jumpDay, setJumpDay] = useState<number | null>(null);
+  const jumpWhisper = useCallback(
+    (n: number) => {
+      setJumpDay(n);
+      pickTab("whisper");
+    },
+    [pickTab],
+  );
+  const onTabRow = useCallback(
+    (next: ResultTab) => {
+      setJumpDay(null);
+      pickTab(next);
+    },
+    [pickTab],
+  );
   );
   const logLines = useMemo(() => resultLog.snapshot(), [resultLog, logRevision]); // eslint-disable-line react-hooks/exhaustive-deps
   const contacts = useMemo(() => new Map(view.players.map((p) => [p.seat, p.nickname] as const)), [view.players]);
@@ -396,7 +412,7 @@ export function ResultScreen({ view, store, chat, resultLog, send, canSend, offs
         panelRef={panelRef}
         kb={kbOpen}
         tab={tab}
-        onTab={pickTab}
+        onTab={onTabRow}
         expanded={expanded}
         {...(resultPanelHeight(roomH) !== undefined ? { expandedHeight: resultPanelHeight(roomH)! } : {})}
         tabsVisible={state.tabsVisible}
@@ -422,6 +438,8 @@ export function ResultScreen({ view, store, chat, resultLog, send, canSend, offs
             inputRef={inputRef}
           />
         }
+        onJumpWhisper={jumpWhisper}
+        {...(jumpDay !== null ? { focusDay: jumpDay } : {})}
       />
       {/* 떠 있는 [넘기기](11-09, UI-SPEC B-3·G): 오른쪽 16, 위 칸(아래 칸은 11-12 의 [꾸미기] 자리), 위에 'k / n'. 시상 중에만, 확장 탭이 열려 있으면 숨는다 */}
       {ceremony?.phase === "award" && !expanded ? (

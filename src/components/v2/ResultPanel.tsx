@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useEffect, useRef } from "react";
 import type { CSSProperties, KeyboardEvent, ReactNode, Ref } from "react";
 import "../../styles/v2.css";
 import { dayDivider, nightDivider, RESULT_PANEL_TEXT, RESULT_TABS } from "../../game/resultText";
@@ -45,6 +46,10 @@ export interface ResultPanelProps {
   allSlot: ReactNode;
   /** 기록 탭 몸통을 직접 채운다(있으면 view 보다 우선) */
   logSlot?: ReactNode;
+  /** 기록 탭의 귓속말 쌍을 눌렀다: 귓속말 탭의 그날(n 일차)로 이동한다 */
+  onJumpWhisper?(n: number): void;
+  /** 귓속말 탭이 열릴 때 보이게 스크롤할 일차 구분선 */
+  focusDay?: number;
   /** 기록 탭이 읽는 공개 값(result·day.voteLog). 있으면 기록 탭이 일차 카드 띠와 하루 상세를 그린다(11-11) */
   view?: TimelineViewInput;
   /** 알약 자리(11-12). 확장일 때 폭 전체로 남는다 */
@@ -56,7 +61,7 @@ export interface ResultPanelProps {
 }
 
 /** 기록 탭 몸통(11-11, D-8): 위 일차 카드 띠(고정), 아래 하루 상세(스크롤). 탭을 열 때 처음 그려지고 첫 일차가 선택돼 있다 */
-function LogBody({ view, lines, contacts }: { view: TimelineViewInput; lines: ResultLogSnapshot; contacts: ReadonlyMap<number, string> }) {
+function LogBody({ view, lines, contacts, onJumpWhisper }: { view: TimelineViewInput; lines: ResultLogSnapshot; contacts: ReadonlyMap<number, string>; onJumpWhisper?: (n: number) => void }) {
   const cards = timelineOf(view, lines);
   const [picked, setPicked] = useState<number | null>(null);
   const selected = picked !== null && cards.some((c) => c.n === picked) ? picked : (cards[0]?.n ?? 1);
@@ -64,7 +69,7 @@ function LogBody({ view, lines, contacts }: { view: TimelineViewInput; lines: Re
   return (
     <>
       <TimelineStrip cards={cards} selected={selected} onSelect={setPicked} contacts={contacts} />
-      <DayDetail key={selected} lines={dayLinesOf(view, lines, selected)} contacts={contacts} />
+      <DayDetail key={selected} lines={dayLinesOf(view, lines, selected)} contacts={contacts} {...(onJumpWhisper ? { onJumpWhisper } : {})} />
     </>
   );
 }
@@ -94,7 +99,7 @@ function withDividers<L extends { n: number }>(lines: readonly L[], label: (n: n
     if (l.n !== last) {
       last = l.n;
       out.push(
-        <p key={`d${i}`} className="mf-result__divider" data-result-divider="">
+        <p key={`d${i}`} className="mf-result__divider" data-result-divider="" data-day={l.n}>
           {label(l.n)}
         </p>,
       );
@@ -139,7 +144,7 @@ function WhisperRows({ lines, contacts }: { lines: readonly ResultLogWhisperLine
 }
 
 export function ResultPanel(props: ResultPanelProps) {
-  const { tab, onTab, expanded, expandedHeight, tabsVisible, lines, contacts, opened, allSlot, logSlot, view, pill, panelRef, kb } = props;
+  const { tab, onTab, expanded, expandedHeight, tabsVisible, lines, contacts, opened, allSlot, logSlot, view, onJumpWhisper, focusDay, pill, panelRef, kb } = props;
   const shown: readonly ResultTab[] = tabsVisible ? RESULT_TABS : ["all"];
 
   const onKey = (e: KeyboardEvent<HTMLElement>): void => {
@@ -154,6 +159,15 @@ export function ResultPanel(props: ResultPanelProps) {
     list?.querySelector<HTMLElement>(`[data-result-tab="${next}"]`)?.focus();
   };
 
+  // 기록 탭의 귓속말 쌍으로 넘어온 경우: 귓속말 탭이 열리면 그날 구분선이 몸통 맨 위에 오도록 몸통만 스크롤한다(페이지는 움직이지 않는다)
+  const bodyRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (tab !== "whisper" || focusDay === undefined) return;
+    const body = bodyRef.current;
+    const divider = body?.querySelector<HTMLElement>(`[data-result-divider][data-day="${focusDay}"]`);
+    if (body && divider) body.scrollTop += divider.getBoundingClientRect().top - body.getBoundingClientRect().top;
+  }, [tab, focusDay]);
+
   const style: CSSProperties | undefined = expanded && expandedHeight !== undefined ? { height: expandedHeight } : undefined;
   const cls = ["mf-result__panel", kb && "mf-result__panel--kb", expanded && "is-expanded"].filter(Boolean).join(" ");
 
@@ -162,7 +176,7 @@ export function ResultPanel(props: ResultPanelProps) {
   else if (tab === "mafia") body = <ChatRows lines={lines.mafia.lines} contacts={contacts} label={nightDivider} ch="mafia" />;
   else if (tab === "ghost") body = <ChatRows lines={lines.ghost.lines} contacts={contacts} label={dayDivider} ch="ghost" />;
   else if (tab === "whisper") body = <WhisperRows lines={lines.whisper.lines} contacts={contacts} />;
-  else body = logSlot ?? (view ? <LogBody view={view} lines={lines} contacts={contacts} /> : null);
+  else body = logSlot ?? (view ? <LogBody view={view} lines={lines} contacts={contacts} {...(onJumpWhisper ? { onJumpWhisper } : {})} /> : null);
 
   return (
     <section ref={panelRef} className={cls} style={style} data-world-panel="" data-result-panel="" data-expanded={String(expanded)} data-tab={tab}>
@@ -195,7 +209,7 @@ export function ResultPanel(props: ResultPanelProps) {
       {tab === "all" ? (
         body
       ) : (
-        <div className={tab === "log" ? "mv-chat__log mf-result__body mf-result__body--log" : "mv-chat__log mf-result__body"} data-result-body={tab} role="tabpanel">
+        <div ref={bodyRef} className={tab === "log" ? "mv-chat__log mf-result__body mf-result__body--log" : "mv-chat__log mf-result__body"} data-result-body={tab} role="tabpanel">
           {body}
         </div>
       )}

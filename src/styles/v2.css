@@ -358,3 +358,11 @@ body:has([data-emote-tray]) .mf-float { visibility: hidden; }
 .mf-tl__target { display: inline-flex; flex-direction: column; align-items: center; gap: 2px; }
 .mf-tl__arrow { flex: none; display: block; align-self: center; color: var(--gray-300); }
 .mf-tl__votes { min-width: 20px; box-sizing: border-box; padding: 0 var(--space-xs); border: 1.5px solid var(--gray-100); border-radius: var(--radius-pill); background: var(--overlay-ink-strong); color: var(--gray-50); font-size: 14px; line-height: 1.4; font-weight: 700; text-align: center; font-variant-numeric: tabular-nums; }
+/* 하루 상세 줄(11-11): 주장 칩 윤곽은 평소 gray-300, 거짓(마피아의 다른 직업 주장)만 진홍 점선(crimson-400). 직업 칩 자체는 RoleChip 그대로(마피아 칩만 진홍) */
+.mf-tl__claim, .mf-tl__swap { position: relative; display: inline-flex; align-items: center; gap: var(--space-xs); }
+.mf-tl__claimchip { display: block; line-height: 0; padding: 2px; border: 2px solid var(--gray-300); border-radius: var(--radius-pill); }
+.mf-tl__claim.is-lie .mf-tl__claimchip { border: 2px dashed var(--crimson-400); }
+.mf-tl__swap .mf-tl__mark { right: -8px; bottom: -6px; }
+.mf-tl__pair { display: inline-flex; align-items: center; gap: 2px; box-sizing: border-box; min-height: var(--tap-min); padding: 0 var(--space-sm); border: 1px solid var(--night-600); border-radius: var(--radius-pill); background: var(--night-700); color: var(--gray-300); font-family: inherit; cursor: pointer; }
+.mf-tl__pair:focus-visible { outline: 2px solid var(--gray-100); outline-offset: 2px; }
+.mf-tl__result { display: grid; place-items: center; width: 32px; height: 32px; color: var(--gray-100); }

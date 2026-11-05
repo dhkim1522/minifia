@@ -1377,9 +1377,12 @@ describe("기록 탭: 일차 카드 띠와 하루 상세 (11-11, D-8)", () => {
     expect(((detail.textContent ?? "") + (r.container.querySelector("[data-timeline-strip]")?.textContent ?? "")).replace(/[\d\s]/g, "")).toBe("");
   });
 
-  it("귓속말 쌍을 누르면 귓속말 탭으로 이동하고 그날 구분선이 보이게 스크롤한다", () => {
-    const scrollIntoView = vi.fn();
-    Object.defineProperty(Element.prototype, "scrollIntoView", { configurable: true, value: scrollIntoView });
+  it("귓속말 쌍을 누르면 귓속말 탭으로 이동하고 그날 구분선이 몸통 맨 위에 오도록 스크롤한다", () => {
+    const rect = (top: number) => ({ top, bottom: top + 20, left: 0, right: 0, width: 0, height: 20, x: 0, y: top, toJSON: () => ({}) }) as DOMRect;
+    const spy = vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(function (this: Element) {
+      if (this.getAttribute("data-result-divider") !== null) return rect(Number(this.getAttribute("data-day")) * 100);
+      return rect(0);
+    });
     const { over, emit } = withEvents();
     const r = renderRoom(timelineView(), over);
     emit({ t: "resultLog", part: "whisper", i: 0, end: true, lines: [{ seat: 2, to: 3, n: 1, text: "하나", at: NOW }, { seat: 1, to: 0, n: 2, text: "둘", at: NOW + 1 }] });
@@ -1388,9 +1391,8 @@ describe("기록 탭: 일차 카드 띠와 하루 상세 (11-11, D-8)", () => {
     fireEvent.click(r.container.querySelector("[data-day-detail='2'] [data-whisper-pair]")!);
     expect(panelOf(r.container).getAttribute("data-tab")).toBe("whisper");
     expect(r.container.querySelector("[data-day-card]")).toBeNull();
-    const target = scrollIntoView.mock.contexts.at(-1) as HTMLElement;
-    expect(target.getAttribute("data-day")).toBe("2");
-    delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView;
+    expect(r.container.querySelector<HTMLElement>("[data-result-body=whisper]")!.scrollTop).toBe(200);
+    spy.mockRestore();
   });
 
   it("기록 상세의 보이는 글자는 숫자뿐이다", () => {
