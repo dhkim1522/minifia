@@ -91,6 +91,10 @@ export interface Player {
   disconnectedAt?: number;
   /** 서버 전용(결정 D-14, L43). 결과 단계에서 나간 사람 — leaveRoom 만 쓴다. 명단은 그대로 두고 다시 하기(11-08)가 걷어 간다. 어떤 view·프레임에도 싣지 않는다. */
   left?: true;
+  /** 다시 하기 준비(결정 D-12, 11-08). 결과 단계의 손님이 토글하는 불리언 하나(true 일 때만 키가 있다). 값은 공개(view players[].ready)이고 끊기면 키째 지운다. 방장·봇은 이 키 없이도 준비로 센다(rematch.isReady). */
+  ready?: true;
+  /** 쉬었다가 결과 단계에 합류한 사람(결정 D-13, 11-08). 역할이 없고 결과 명단·칭호에서 빠진다. 공개(view players[].sat). */
+  sat?: true;
 }
 
 /**
@@ -185,6 +189,11 @@ export interface RoomState {
   hostId: string;
   nextJoinSeq: number;
   players: Player[];
+  /**
+   * 쉬는 사람(결정 D-13, 11-08): 다시 하기에서 준비하지 않은 사람. 참가자 목록(players) 밖에 있어 게임 코드(역할·승패·투표·월드·채널)가 보지 않는다.
+   * 이들이 받는 것은 buildView 의 쉬는 사람 분기가 만든 state 뿐이다. 판이 ended 로 들어서면 enterEnded 가 sat 로 players 에 합류시킨다.
+   */
+  bench?: Player[];
   /** 방장이 고른 맵(결정 D-20). 공개 값이다(view.mapChoice). 없으면 "random" — pickMap 이 쓰고, 대기실 복귀·다시 하기 뒤에도 남는다. */
   mapChoice?: MapChoice;
   /** 서버 전용 결정값(결정 D-21). startGame 이 mapChoice 로 정해 싣는다 — 시작 전에는 어떤 view·프레임에도 싣지 않는다(L42). 대기실 복귀가 버린다. */
@@ -381,6 +390,16 @@ export function startGame(
 ): { ok: true; state: RoomState } | { ok: false; error: StartError } {
   const error = checkStart(state, actorId);
   if (error !== null) return { ok: false, error };
+  return { ok: true, state: { ...beginGame(state, now, randInt), expiresAt: now + ROOM_TTL_MS } };
+}
+
+/**
+ * 새 판의 본체(startGame 과 다시 하기 rematch 가 함께 쓴다, 11-08): state.players 전원에게 역할을 주고 맵을 정해 assigning 으로 보낸다.
+ * 호출 순서·난수 순서는 startGame 이 쓰던 그대로다 — 좌석 오름차순 id 로 assignRoles → 테스트 방 직업 맞바꿈 → decideMap(허용 맵이 하나면 난수를 부르지 않는다).
+ * 만료(expiresAt)는 건드리지 않는다 — 시작은 now + ROOM_TTL_MS, 다시 하기는 min(방 생성 + 12시간, now + ROOM_TTL_MS)로 호출하는 쪽이 정한다.
+ * players 는 4~8명이어야 한다(호출하는 쪽이 보장). 입력은 바꾸지 않는다.
+ */
+export function beginGame(state: RoomState, now: number, randInt: (n: number) => number): RoomState {
   const seated = [...state.players].sort((a, b) => a.seat - b.seat);
   const orderedIds = seated.map((p) => p.id);
   const shuffled = assignRoles(orderedIds, randInt);
@@ -392,15 +411,11 @@ export function startGame(
   // 맵은 역할 배정 난수를 모두 쓴 뒤에 정한다(결정 D-21) — 허용 맵이 하나면 난수를 부르지 않아 기존 시드 시험이 그대로다.
   const map = decideMap(state.mapChoice ?? "random", randInt);
   return {
-    ok: true,
-    state: {
-      ...state,
-      map,
-      phase: "assigning",
-      phaseEndsAt: now + ASSIGNING_MS,
-      expiresAt: now + ROOM_TTL_MS,
-      players: state.players.map((p) => ({ ...p, role: roles.get(p.id) })),
-    },
+    ...state,
+    map,
+    phase: "assigning",
+    phaseEndsAt: now + ASSIGNING_MS,
+    players: state.players.map((p) => ({ ...p, role: roles.get(p.id) })),
   };
 }
 
@@ -550,14 +565,17 @@ export function attachConnection(state: RoomState, playerId: string, connId: str
 /**
  * 닫힌 소켓의 connId 가 그 플레이어의 최신 connId 일 때만 연결을 끊는다 — 낡은 소켓의 닫힘이 새 연결을 덮지 않게 한다.
  * now 를 주면 끊긴 시각(disconnectedAt, 서버 전용)을 기록한다 — 방장 이양·로비 정리의 입력(D-17·D-18). 안 주면 기록하지 않는다(기존 호출 호환).
+ * 결과 단계(ended)에서는 ready 키를 지운다(D-12).
  */
 export function detachConnection(state: RoomState, playerId: string, connId: string, now?: number): RoomState {
   return {
     ...state,
-    players: state.players.map((p) =>
-      p.id === playerId && p.connId === connId
-        ? { ...p, connected: false, connId: null, ...(now === undefined ? {} : { disconnectedAt: now }) }
-        : p,
-    ),
+    players: state.players.map((p) => {
+      if (p.id !== playerId || p.connId !== connId) return p;
+      const next: Player = { ...p, connected: false, connId: null, ...(now === undefined ? {} : { disconnectedAt: now }) };
+      // 결과 단계에서 끊기면 다시 하기 준비가 풀린다(결정 D-12) — 돌아와서 다시 눌러야 한다.
+      if (state.phase === "ended") delete next.ready;
+      return next;
+    }),
   };
 }

@@ -95,7 +95,8 @@ describe("다시 하기 (D-12, D-15, L39)", () => {
     expect(lines).toEqual([]);
     expect(framesOf(again).some((m) => JSON.stringify(m).includes("CANARY"))).toBe(false);
 
-    await advanceTo(g.code, g.socks, "dayAnnounce");
+    // 같은 토큰의 새 소켓이 이전 소켓(socks[1])을 대체했으므로 나머지 소켓과 새 소켓으로 단계를 넘긴다.
+    await advanceTo(g.code, [g.socks[0]!, g.socks[2]!, g.socks[3]!, again], "dayAnnounce");
     await resetChatRates(g.code);
     const m0 = mark(g.socks[2]!);
     chatSend(g.socks[2]!, "새 판의 첫 줄");

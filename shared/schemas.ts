@@ -79,6 +79,9 @@ export const ClientMessageSchema = z.discriminatedUnion("t", [
   z.strictObject({ t: z.literal("dress"), look: z.enum(OUTFIT_IDS) }),
   // 맵 선택(결정 D-20, 11-06): 값은 enum 뿐 — 방장·단계·허용 맵은 서버 규칙(shared/game/maps.ts pickMap)이 본다. 신원은 소켓 첨부 playerId.
   z.strictObject({ t: z.literal("mapPick"), map: z.enum(MAP_CHOICES) }),
+  // 다시 하기(결정 D-12, 11-08): 준비 토글과 시작. round 는 1 이상 정수 — 신원은 소켓 첨부 playerId 뿐이고 방장·단계·판 번호·인원은 서버 규칙(shared/game/rematch.ts)이 본다.
+  z.strictObject({ t: z.literal("ready"), on: z.boolean(), round: z.number().int().min(1) }),
+  z.strictObject({ t: z.literal("rematch"), round: z.number().int().min(1) }),
   // 테스트 방 방장 도구(결정 0022). 덧붙은 키는 거부한다. 방장·testMode·단계 검사는 서버 규칙(shared/game/testTools.ts)이 한다.
   z.strictObject({ t: z.literal("testSkip") }),
   z.strictObject({ t: z.literal("testReset") }),

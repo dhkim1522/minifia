@@ -151,7 +151,7 @@ describe("rematch 게이트 (D-12)", () => {
 
 describe("rematch 허용 목록 리터럴 (D-15, 누설 L39)", () => {
   const ALLOWED_ROOM = "code,createdAt,everConnected,expiresAt,hostId,map,mapChoice,nextJoinSeq,phase,phaseEndsAt,players,round,testBotVote,testMode,testRole";
-  const ALLOWED_PLAYER = "connId,connected,id,joinSeq,look,nickname,nicknameKey,seat,token";
+  const ALLOWED_PLAYER = "connId,connected,id,joinSeq,look,nickname,nicknameKey,role,seat,token";
 
   it("4명 모두 준비 → round+1 의 assigning, 모두 역할을 받고, 방과 사람 행의 키 집합이 허용 목록과 정확히 같다", () => {
     const players = four().map((p, i) => ({ ...p, look: (["coat", "mafia", "police", "doctor"] as const)[i] }));
@@ -167,7 +167,7 @@ describe("rematch 허용 목록 리터럴 (D-15, 누설 L39)", () => {
     expect(Object.hasOwn(next, "bench")).toBe(false);
     expect(next.players.every((p) => p.role !== undefined)).toBe(true);
     expect(keysOf(next)).toBe(ALLOWED_ROOM);
-    for (const p of next.players) expect(keysOf(p)).toBe(`${ALLOWED_PLAYER},role`);
+    for (const p of next.players) expect(keysOf(p)).toBe(ALLOWED_PLAYER);
     // look·mapChoice·테스트 방 설정은 이어진다
     expect(next.players.map((p) => p.look)).toEqual(["coat", "mafia", "police", "doctor"]);
     expect(next.mapChoice).toBe("bar");
@@ -220,10 +220,10 @@ describe("rematch 허용 목록 리터럴 (D-15, 누설 L39)", () => {
   });
 
   it("테스트 방 직업 지정은 방장에게 맞바꿔진다(startGame 과 같은 길)", () => {
-    const s = endedRoom(four(), { testMode: true, testRole: "doctor" });
+    const s = endedRoom(four(), { testMode: true, testRole: "police" });
     const r = rematch(s, "p0", 1, NOW, seededRandInt(2));
     if (!r.ok) throw new Error("rematch failed");
-    expect(r.state.players.find((p) => p.id === "p0")?.role).toBe("doctor");
+    expect(r.state.players.find((p) => p.id === "p0")?.role).toBe("police");
   });
 
   it("봇은 늘 준비된 참가자이고 쉬는 사람이 되지 않는다", () => {

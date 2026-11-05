@@ -248,6 +248,8 @@ export type ClientMessage =
   | { t: "whisper"; to: number; text: string } // 귓속말(결정 0066-2) — 낮 토론, 하루 1번, 산 다른 사람 한 명에게 30자소 이하. 본문은 보낸·받은 사람 소켓에만 간다
   | { t: "badge"; role: BadgeId } // 직업 주장(결정 0066-1) — 서버가 정하는 것은 값의 형식뿐 참·거짓은 판정하지 않는다. 낮 시작 발표·토론·지목 단계에서만
   | { t: "dress"; look: OutfitId } // 로비 의상(결정 D-6) — 의상 id 하나뿐, 대기실에서만. 서버는 고른 값을 저장·방송할 뿐 역할과 비교하지 않는다
+  | { t: "ready"; on: boolean; round: number } // 다시 하기 준비(결정 D-12) — 결과 단계의 손님이 토글한다. round 는 지금 보는 판 번호(1 이상 정수)이고 어긋나면 서버가 버린다. 신원은 소켓 첨부 playerId 뿐
+  | { t: "rematch"; round: number } // 다시 하기 시작(결정 D-12) — 방장만, 결과 단계에서, round 가 서버 판 번호와 같고 준비한 연결 참가자(방장·봇 포함)가 4명 이상일 때. 서버가 모든 조건을 판정하고 거절 응답은 사유와 무관하게 같다(L40)
   | { t: "mapPick"; map: MapChoice } // 맵 선택(결정 D-20) — 방장이 대기실·결과 단계에서만. 값은 enum 뿐이고 서버가 방장·단계·허용 값을 판정한다. 거절은 오류 프레임 없이 보낸 소켓의 최신 state 한 프레임(L40)
   | { t: "verdict"; agree: boolean } // 찬반 — 찬성 true / 반대 false, 변론자·유령은 거부, 마지막 값이 유효(DAY-06)
   // 테스트 방 방장 도구(결정 0022). 일반 방은 BAD_MESSAGE 로 거부한다. role null = 무작위.
@@ -286,6 +288,8 @@ export interface PublicPlayer {
   badge?: BadgeId; // 공개 직업 주장(결정 0066-1). 산 사람이 건 값이 있을 때만 — 실제 역할의 함수가 아니다
   look?: OutfitId; // 공개 의상(결정 D-6). 사람이 고른 값이 있을 때만 — 실제 역할의 함수가 아니다. 없으면 coat 로 읽는다
   badgeSwapped?: true; // 직업을 건 뒤 다른 값으로 바꾼 적이 있다(결정 0066-1). 이전 값은 어디에도 없다
+  ready?: true; // 다시 하기 준비(결정 D-12). 결과 단계의 연결돼 있고 나가지 않은 사람이 준비했을 때만 — 방장·봇은 늘 준비로 센다. 값은 true 뿐이고 역할의 함수가 아니다
+  sat?: true; // 쉬었다가 결과에 합류한 사람(결정 D-13). 역할이 없고 결과 명단·칭호에서 빠진다. 값은 true 뿐
 }
 export interface MyInfo {
   seat: number;
@@ -328,6 +332,8 @@ export interface RoomView {
   mapChoice?: MapChoice;
   /** 이번 판의 맵(결정 D-21, 누설 L42). 시작한 뒤에만 키가 있고 모든 참가자에게 같다 — 대기실·시작 전 view 에는 키 자체가 없다. */
   map?: MapId;
+  /** 쉬는 사람 자신의 view 에만(결정 D-13, L38). 다음 판에 준비하지 않아 게임 밖에 있는 사람 — 이 키가 있으면 players 는 자기 한 줄뿐이고 게임 필드는 없다. */
+  resting?: true;
 }
 export type WsErrorCode =
   | "BAD_MESSAGE"

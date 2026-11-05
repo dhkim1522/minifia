@@ -664,7 +664,9 @@ describe("buildView 전수 누출 검사 (T-01-23)", () => {
             }
             for (const entry of view.players) {
               const keys = Object.keys(entry).sort().join(",");
-              if (keys !== "alive,connected,isHost,nickname,seat") violations.push(`${tag}: players[] keys ${keys}`);
+              // 11-08(D-12): 결과 단계에서만, 준비로 세는 사람(여기서는 방장뿐)의 행에 ready(true 뿐)가 더해진다 — 신분과 무관한지는 "준비 players[].ready" describe 가 본다.
+              const want = phase === "ended" && entry.isHost ? "alive,connected,isHost,nickname,ready,seat" : "alive,connected,isHost,nickname,seat";
+              if (keys !== want) violations.push(`${tag}: players[] keys ${keys}`);
             }
             // 서버 전용 필드 이름은 어느 경로에도 없다
             for (const path of keyPaths(view)) {

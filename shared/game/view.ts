@@ -34,6 +34,7 @@ import { pointLinesOf, turnViewOf } from "./nomination";
 import { runoffVotersOf, runoffViewOf } from "./runoff";
 import { showdownViewOf } from "./showdown";
 import { PHASE_DEFS } from "./phases";
+import { isReady } from "./rematch";
 import { rolesInPlay } from "./roles";
 import { hostOf, roundOf } from "./room";
 import type { RoomState } from "./room";
@@ -177,6 +178,10 @@ export function buildView(state: RoomState, playerId: string, now: number): Room
       };
       // 공개 의상(결정 D-6): 값이 있을 때만 키를 만든다(모든 단계 — 게임 중에도 같은 look 을 입는다). 실제 역할의 함수가 아니다.
       if (p.look !== undefined) row.look = p.look;
+      // 다시 하기 준비(결정 D-12, 11-08): 결과 단계의 연결돼 있고 나가지 않은 사람이 준비일 때만(방장·봇은 늘 준비). 값은 true 뿐이고 누가 보든 같다 — 역할의 함수가 아니다.
+      if (state.phase === "ended" && p.connected && p.left !== true && isReady(p, state.hostId)) row.ready = true;
+      // 쉬었다가 결과에 합류한 사람(결정 D-13): 역할이 없다는 사실만 공개한다.
+      if (p.sat === true) row.sat = true;
       // 공개 직업 주장(결정 0066-1): 산 사람이고 값이 있을 때만 키를 만든다. 실제 역할이 아니고 badgeLog(서버 전용)는 어떤 경로로도 싣지 않는다.
       if (isAlive(p) && p.badge !== undefined && DAY_PHASES.has(state.phase)) {
         row.badge = p.badge;

@@ -31,6 +31,7 @@ import type { RoomState } from "../shared/game/room";
 import { pickRecipientIds, pickTarget } from "../shared/game/night";
 import { BADGE_MIN_GAP_MS, setBadge } from "../shared/game/badge";
 import { LOOK_MIN_GAP_MS, setLook } from "../shared/game/look";
+import { rematch, setReady } from "../shared/game/rematch";
 import { buildResultLog } from "../shared/game/resultLog";
 import { sendWhisper } from "../shared/game/whisper";
 import { WILL_MIN_GAP_MS, noteRecipientIds, saveNote, saveWill } from "../shared/game/will";
@@ -309,6 +310,12 @@ export class Room extends DurableObject<Env> {
       case "mapPick":
         await this.handleMapPick(ws, msg.map);
         return;
+      case "ready":
+        await this.handleReady(ws, msg.on, msg.round);
+        return;
+      case "rematch":
+        await this.handleRematch(ws, msg.round);
+        return;
       case "whisper":
         await this.handleWhisper(ws, msg.to, msg.text);
         return;
@@ -545,6 +552,53 @@ export class Room extends DurableObject<Env> {
     if (result.state === this.room) return;
     this.room = result.state;
     await this.persistAndBroadcast();
+  }
+
+  // 다시 하기 준비(11-08, 결정 D-12): 신원은 소켓 첨부의 playerId 뿐이다. 거절은 사유(방장 아님·단계·판 번호·쉬는 사람…)와 무관하게 같은 응답 —
+  // 오류 프레임 없이 보낸 소켓의 최신 state 한 프레임(L40). 같은 값(상태 불변)은 프레임 0. 바뀌면 저장 뒤 모두에게 각자의 view.
+  private async handleReady(ws: WebSocket, on: boolean, round: number): Promise<void> {
+    const att = this.attachmentOf(ws);
+    if (!att || !this.room) {
+      this.sendTo(ws, { t: "error", code: "BAD_MESSAGE" });
+      return;
+    }
+    const result = setReady(this.room, att.playerId, on, round);
+    if (!result.ok) {
+      this.sendTo(ws, { t: "state", view: buildView(this.room, att.playerId, Date.now()) });
+      return;
+    }
+    if (result.state === this.room) return;
+    this.room = result.state;
+    await this.persistAndBroadcast();
+  }
+
+  // 다시 하기 시작(11-08, 결정 D-12·D-15): 게이트는 전부 규칙 함수(rematch)가 서버 상태로 판정한다. 거절 응답은 handleReady 와 같다(L40, T-11-27·T-11-28).
+  // 후처리 순서가 계약이다: 방 교체 → 채팅 저장 키 전부 삭제 → 메모리 사본·도배 기록·유령 snap 기록·저장 간격 기록 비우기 → 월드를 새 참가자 입장 지점으로 다시 만들기
+  // → 저장·방송(참가자는 assigning view) → 참가자 소켓 각자에게 snap(emitWorld 가 아니라 snapEachViewer: assigning 은 지도 단계가 아니라 emitWorld 의 받는 사람 집합이 비어 있다) → 알람 → 월드 저장.
+  private async handleRematch(ws: WebSocket, round: number): Promise<void> {
+    const att = this.attachmentOf(ws);
+    if (!att || !this.room) {
+      this.sendTo(ws, { t: "error", code: "BAD_MESSAGE" });
+      return;
+    }
+    const now = Date.now();
+    const result = rematch(this.room, att.playerId, round, now, cryptoRandInt);
+    if (!result.ok) {
+      this.sendTo(ws, { t: "state", view: buildView(this.room, att.playerId, now) });
+      return;
+    }
+    this.room = result.state;
+    await this.deleteChatKeys([...(await this.ctx.storage.list({ prefix: CHAT_KEY_PREFIX })).keys()]);
+    this.dropChat();
+    this.ghostSnapped.clear();
+    this.writeAt.clear();
+    // 월드는 새 참가자 전원을 새 판 맵(decideMap 이 정한 room.map)의 입장 지점에 다시 세운다. 걷어 간 사람의 자리는 이때 함께 사라진다.
+    this.world = respawnAll(this.world, this.room.players, now, this.mapDef());
+    await this.persistAndBroadcast();
+    this.markWorldDirty();
+    this.snapEachViewer(now);
+    await this.reschedule();
+    await this.flushWorld();
   }
 
   // 귓속말(09.1.1, 결정 0066-2): 신원은 소켓 첨부의 playerId 뿐이다 — 메시지에 보낸 사람 seat·id 가 없다(대상 seat 만 있다).
