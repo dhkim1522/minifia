@@ -341,7 +341,7 @@ describe("E2E 훅 window.__mfResult (11-05)", () => {
     expect(r.container.querySelector('[data-result-stage="final"]')).not.toBeNull();
     // 루트 속성에 역할·의상을 싣지 않는다 — 직업은 칩([data-role-chip])의 속성과 접근성 이름뿐이다
     const root = r.container.querySelector("main")!;
-    expect(root.getAttributeNames().sort()).toEqual(["class", "data-result-stage", "data-reveal", "data-winner"]);
+    expect(root.getAttributeNames().sort()).toEqual(["class", "data-result-stage", "data-reveal", "data-winner", "style"]); // style 은 아래 패널 높이 변수(--mf-panel-h) 하나
     r.unmount();
     expect((window as { __mfResult?: unknown }).__mfResult).toBeUndefined();
   });
@@ -1062,7 +1062,16 @@ describe("시상식 완성 (11-09)", () => {
     r.rerenderRoom(makeView({ awards: AWARDS5, ...opts }));
     return r;
   };
-  const advance = (ms: number) => act(() => void vi.advanceTimersByTime(ms));
+  // 표시각(100ms 배수)마다 React 가 그리도록 100ms 경계에서 끊어 나아간다 — 한 번에 길게 나아가면 렌더가 끝에서야 일어나 걷기 snap 의 t0 가 밀린다(실제 폰은 마크마다 그린다)
+  const advance = (ms: number) => {
+    let left = ms;
+    while (left > 0) {
+      const into = (Date.now() - NOW) % 100;
+      const step = Math.min(left, into === 0 ? 100 : 100 - into);
+      act(() => void vi.advanceTimersByTime(step));
+      left -= step;
+    }
+  };
   const title = (c: ParentNode) => text(c.querySelector("h1"));
   const plate = (c: ParentNode) => c.querySelector<HTMLElement>("[data-award-plate]");
   const skipBtn = (c: ParentNode) => c.querySelector<HTMLElement>('[data-float="skip"]');
@@ -1253,7 +1262,7 @@ describe("시상식 완성 (11-09)", () => {
       const p3 = posAt(3, 900);
       expect(p3.x).toBeCloseTo(slotOf(5, 3).x, 6);
       expect(p3.z).toBeCloseTo(slotOf(5, 3).z, 6);
-      advance(1500);
+      advance(2400);
       expect(plate(r.container)!.dataset.awardId).toBe("spectator");
       act(() => void fireEvent.click(skipBtn(r.container)!));
       expect(count(r.container)).toBe("3 / 5");

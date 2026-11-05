@@ -6,6 +6,7 @@ import { AwardPlate } from "../components/v2/AwardPlate";
 import { ConfirmSheet } from "../components/ConfirmSheet";
 import { Icon } from "../components/Icon";
 import { ChatPanel } from "../components/v2/ChatPanel";
+import { FloatAction, FloatActions } from "../components/v2/FloatAction";
 import { ResultPanel } from "../components/v2/ResultPanel";
 import type { ResultTab } from "../components/v2/ResultPanel";
 import { TopToast, useTopToast } from "../components/v2/TopToast";
@@ -13,7 +14,7 @@ import { V2Icon } from "../components/v2/V2Icon";
 import { WorldStage } from "../components/WorldStage";
 import { CEREMONY_TITLE } from "../game/awardText";
 import { LOG_H_KB } from "../game/chatUi";
-import { castOf, CEREMONY, CEREMONY_CENTER, ceremonyAt, ceremonySnap, ceremonyWindowStart, holdSnap, markTimes, RESULT_TIMELINE, resultPanelHeight, slotsFor, stateAt, walkSnap } from "../game/resultDirector";
+import { castOf, CEREMONY, CEREMONY_CENTER, ceremonyAt, ceremonySnap, ceremonyWindowStart, holdSnap, markTimes, RESULT_TIMELINE, resultPanelHeight, skipAward, slotsFor, stateAt, walkSnap } from "../game/resultDirector";
 import type { CeremonyState, ResultState } from "../game/resultDirector";
 import { RESULT_TEXT } from "../game/verdict";
 import { seatColorVar } from "../net/assets";
@@ -60,11 +61,11 @@ export interface ResultScreenProps {
 // 아래 패널은 접힌 게임 패널과 같은 높이의 전체 채팅 한 줄이다(동작 버튼 없음). 헤더 [나가기]는 로비와 같은 확인 시트를 연다.
 
 /** 결과 화면 장면: 카메라 무대 중심 고정, 밤 조명, 이긴 팀 조명 구간에만 무대 가운데 점 조명 */
-function sceneOf(cast: ReturnType<typeof castOf>, state: ResultState, ceremony: CeremonyState | null): SceneLook {
+function sceneOf(cast: ReturnType<typeof castOf>, state: ResultState, ceremony: CeremonyState | null, calm: boolean): SceneLook {
   const seats: Record<number, SeatLook> = {};
   // 시상식(11-09): 패가 뜬 창의 수상자는 진 팀이라도 어둡지 않다(패는 늘 읽힌다), 모두 자리로 돌아온 뒤 0.6초에 직업 의상이 걷히고 고른 look 으로 돌아간다
   const award = ceremony?.phase === "award" ? ceremony.seat : null;
-  const redressed = ceremony?.phase === "done" && ceremony.redressed;
+  const redressed = ceremony?.phase === "done" && (ceremony.redressed || calm); // 모션 줄이기는 끝나는 즉시 look 으로 돌아온다
   for (const c of cast) {
     const costume = redressed ? undefined : state.costumes[c.seat];
     seats[c.seat] = { show: true, ghost: !c.alive, ...(costume !== undefined ? { costume } : {}), ...(state.dimmed.includes(c.seat) && c.seat !== award ? { dim: true as const } : {}) };
@@ -122,6 +123,11 @@ export function ResultScreen({ view, store, chat, resultLog, send, canSend, offs
     return () => window.removeEventListener("resize", measure);
   }, [rootRef]);
 
+  // 아래 패널 높이(--mf-panel-h)는 DOM 에서 재서 루트에 정한다(패널이 자라도 따라간다). 떠 있는 [넘기기] 묶음(아래 끝 = 키보드 올림 + 패널 높이 + 8)이 CSS 상속으로 읽는다
+  useLayoutEffect(() => {
+    rootRef.current?.style.setProperty("--mf-panel-h", `${panelRef.current?.offsetHeight ?? 0}px`);
+  });
+
   // 출연자 표는 내용이 바뀔 때만 다시 만든다 — 같은 결과가 다시 와도(닉네임·연결 상태만 바뀐 view) 시계·자리 snap 을 다시 시작하지 않는다
   const castKey = `${result.seats.map((s) => `${s.seat}:${s.job}`).join(",")}|${view.players.map((p) => `${p.seat}:${isAlive(p) ? 1 : 0}`).join(",")}`;
   const cast = useMemo(() => castOf(view), [castKey]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -156,7 +162,7 @@ export function ResultScreen({ view, store, chat, resultLog, send, canSend, offs
 
   const state = useMemo(() => stateAt(mark, cast, winner), [mark, cast, winner]);
   const ceremony = useMemo(() => (ceremonyOn ? ceremonyAt(mark, awards, cast) : null), [ceremonyOn, mark, awards, cast]);
-  const scene = useMemo(() => sceneOf(cast, state, ceremony), [cast, state, ceremony]);
+  const scene = useMemo(() => sceneOf(cast, state, ceremony, reduced), [cast, state, ceremony, reduced]);
 
   // 위치: 모두 자기 둘레 자리로. 연출이면 스토어의 마지막 위치에서 걷는 구간(1200ms), 아니면 한 점 구간이다. 런타임이 만들어지기 전(레이아웃 효과)에 먹여 첫 프레임부터 맞다.
   // 서버 상태가 아니라 이 폰의 연출이다 — 서버 시각 기준(t0 = 지금 + offset)으로 만들어 런타임이 서버 구간과 똑같이 그린다. 새 연결(epoch)이면 다시 먹인다
@@ -275,6 +281,21 @@ export function ResultScreen({ view, store, chat, resultLog, send, canSend, offs
     else skip();
   }, [tab, skip]);
 
+  // 시상 넘기기(11-09, D-25): 떠 있는 [넘기기]나 패 탭이 현재 창을 즉시 끝내고 다음 사람으로 보낸다(앞사람은 순간 이동). 같은 프레임에 여러 번 눌러도 마크가 한 칸씩 간다
+  const skipAwardNow = useCallback(() => {
+    if (!ceremonyOn) return;
+    const next = skipAward(markRef.current, awards.length);
+    if (next === markRef.current) return;
+    instant.current = true;
+    schedule(next);
+    goto(next);
+  }, [ceremonyOn, awards.length, schedule, goto]);
+  // 패 탭: 패널이 확장되어 있으면 접기만 한다(무대 탭과 같다). 아니면 다음 사람으로
+  const onPlateTap = useCallback(() => {
+    if (tab !== "all") setTab("all");
+    else skipAwardNow();
+  }, [tab, skipAwardNow]);
+
   // 머리 위 직업 칩: 뒤집힌 사람만. 결과 화면의 ended 경로에서만 만든다(산 사람 장면 표는 건드리지 않는다)
   const jobBySeat = useMemo(() => new Map(cast.map((c) => [c.seat, c.job])), [cast]);
   const flipped = useMemo(() => new Set(state.flipped), [state]);
@@ -367,6 +388,7 @@ export function ResultScreen({ view, store, chat, resultLog, send, canSend, offs
             award={plateLine.award}
             {...(plateLine.k !== undefined ? { k: plateLine.k } : {})}
             {...(plateLine.at !== undefined ? { at: plateLine.at } : {})}
+            onTap={onPlateTap}
           />
         </div>
       ) : null}
@@ -400,6 +422,12 @@ export function ResultScreen({ view, store, chat, resultLog, send, canSend, offs
           />
         }
       />
+      {/* 떠 있는 [넘기기](11-09, UI-SPEC B-3·G): 오른쪽 16, 위 칸(아래 칸은 11-12 의 [꾸미기] 자리), 위에 'k / n'. 시상 중에만, 확장 탭이 열려 있으면 숨는다 */}
+      {ceremony?.phase === "award" && !expanded ? (
+        <FloatActions>
+          <FloatAction kind="skip" icon="skip" label="넘기기" count={`${ceremony.index + 1} / ${ceremony.total}`} onPress={skipAwardNow} />
+        </FloatActions>
+      ) : null}
       {leaveOpen ? (
         <ConfirmSheet
           title="방에서 나갈까요?"
