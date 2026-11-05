@@ -608,3 +608,28 @@ describe("접근성 (UI-SPEC 접근성 · 모션 · 입력)", () => {
     expect(dot.getAttribute("style")).toContain("--seat-3");
   });
 });
+
+// 11-07: 귓속말 보내기 시트 위쪽의 공개 예고(A-4, D-23) — 시트가 열려 있는 동안 항상 같은 한 줄이다
+describe("공개 예고 한 줄 (11-07, A-4)", () => {
+  const PRE = "끝나면 밤 대화와 귓속말이 공개돼요";
+  const notice = (c: ParentNode) => c.querySelector<HTMLElement>("[data-line-sheet] [data-pre-notice]");
+
+  it("시트가 열려 있는 동안 위쪽(상대 칩 앞)에 항상 있다", () => {
+    const { container } = mount(makeView());
+    expect(container.querySelector("[data-pre-notice]")).toBeNull();
+    openSheet(container, 2);
+    expect(notice(container)?.textContent).toBe(PRE);
+    const s = sheet(container)!;
+    expect(s.firstElementChild).toBe(notice(container));
+    act(() => void vi.advanceTimersByTime(30_000));
+    expect(notice(container)?.textContent).toBe(PRE);
+    expect(notice(container)?.getAttribute("data-state")).toBeNull();
+  });
+
+  it("시트를 닫으면 사라진다", () => {
+    const { container } = mount(makeView());
+    openSheet(container, 2);
+    fireEvent.click(container.querySelector("[data-line-close]")!);
+    expect(notice(container)).toBeNull();
+  });
+});

@@ -756,3 +756,53 @@ describe("헤더 줄바꿈 금지 (03.1-10, D-16, UI-SPEC A)", () => {
     expect(/min-height:\s*50\.4px/.test(bodyOf(phaseCss, ".mf-phasebar__row"))).toBe(true);
   });
 });
+
+// 11-07: 공개 예고 한 줄(A-4, D-23) — 역할 확인 단계 아래쪽 14px 한 줄을 4초 보이고 줄어든다. 모든 역할이 같은 문구·같은 시간이다(T-11-24)
+describe("공개 예고 (11-07, A-4)", () => {
+  const PRE = "끝나면 밤 대화와 귓속말이 공개돼요";
+  const notice = (c: ParentNode) => c.querySelector<HTMLElement>("[data-pre-notice]");
+
+  it("마운트 직후 보이고 4초 뒤 줄어든다 (data-state shown → gone, 접근성 숨김)", () => {
+    const { container } = renderRoom(makeView({ phase: "roleReveal", endsIn: 15_000, role: "citizen" }));
+    expect(notice(container)?.textContent).toBe(PRE);
+    expect(notice(container)?.getAttribute("data-state")).toBe("shown");
+    expect(notice(container)?.getAttribute("aria-hidden")).toBeNull();
+    advance(3_999);
+    expect(notice(container)?.getAttribute("data-state")).toBe("shown");
+    advance(1);
+    expect(notice(container)?.getAttribute("data-state")).toBe("gone");
+    expect(notice(container)?.getAttribute("aria-hidden")).toBe("true");
+  });
+
+  it("모든 역할에서 같다: 시민·마피아 렌더의 문구와 표시 상태가 같고 역할 단어가 없다", () => {
+    const rows = (["citizen", "mafia", "police", "doctor"] as const).map((role) => {
+      const { container, unmount } = renderRoom(makeView({ phase: "roleReveal", endsIn: 15_000, role, allies: role === "mafia" ? [2] : [] }));
+      const n = notice(container)!;
+      const at0 = `${n.textContent}|${n.getAttribute("data-state")}|${n.className}`;
+      advance(4_000);
+      const at4 = `${notice(container)!.textContent}|${notice(container)!.getAttribute("data-state")}`;
+      unmount();
+      return `${at0}~${at4}`;
+    });
+    expect(new Set(rows).size).toBe(1);
+    expect(rows[0]).not.toMatch(/마피아|시민|경찰|의사/);
+  });
+
+  it("모션 줄이기도 4초 뒤 줄어든다 (표시 시간은 같다)", () => {
+    vi.stubGlobal("matchMedia", (q: string) => ({ matches: q.includes("reduce"), media: q, addEventListener: () => {}, removeEventListener: () => {}, addListener: () => {}, removeListener: () => {} }));
+    const { container } = renderRoom(makeView({ phase: "roleReveal", endsIn: 15_000, role: "mafia", allies: [2] }));
+    expect(notice(container)?.getAttribute("data-state")).toBe("shown");
+    advance(4_000);
+    expect(notice(container)?.getAttribute("data-state")).toBe("gone");
+    vi.unstubAllGlobals();
+  });
+
+  it("카드를 뒤집어도 문구·시간이 바뀌지 않는다", () => {
+    const { container } = renderRoom(makeView({ phase: "roleReveal", endsIn: 15_000, role: "mafia", allies: [2] }));
+    fireEvent.click(byRole("button", "역할 카드 뒤집기"));
+    expect(notice(container)?.textContent).toBe(PRE);
+    expect(notice(container)?.getAttribute("data-state")).toBe("shown");
+    advance(4_000);
+    expect(notice(container)?.getAttribute("data-state")).toBe("gone");
+  });
+});

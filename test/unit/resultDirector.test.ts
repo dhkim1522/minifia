@@ -4,7 +4,7 @@ import { ringSlots } from "../../shared/game/gather";
 import type { RoleId } from "../../shared/game/roles";
 import type { GameWinner, PublicPlayer, RoomView } from "../../shared/protocol";
 import { positionAt, segmentEndsAt } from "../../shared/game/world";
-import { castOf, CEREMONY_START_MS, CLAP_MAX, finalState, holdSnap, markTimes, RESULT_TIMELINE, slotsFor, stateAt, teamOf, walkSnap } from "../../src/game/resultDirector";
+import { castOf, CEREMONY_START_MS, CLAP_MAX, finalState, holdSnap, markTimes, RESULT_TIMELINE, resultPanelHeight, slotsFor, stateAt, teamOf, walkSnap } from "../../src/game/resultDirector";
 import { jobOutfit } from "../../src/world/ghostOutfit";
 
 const JOBS: RoleId[] = ["citizen", "police", "doctor", "mafia", "citizen", "mafia"];
@@ -206,5 +206,31 @@ describe("walkSnap — 모임 걷기 구간", () => {
       expect(end.z).toBeCloseTo(slots[seat]![1] / 100, 6);
       expect(e.v).toBeGreaterThan(0);
     }
+  });
+});
+
+// 11-07: 탭 행은 첫 뒤집기 시각(1200ms)까지 전체 하나뿐이고 그 시각에 나머지 넷이 나타난다 (D-2)
+describe("tabsVisible (11-07, A-3)", () => {
+  const cast = castOf(viewOf(JOBS));
+  it("t < 1200 은 거짓, t = 1200 부터 참이다", () => {
+    expect(stateAt(0, cast, "citizenWin").tabsVisible).toBe(false);
+    expect(stateAt(1199, cast, "citizenWin").tabsVisible).toBe(false);
+    expect(stateAt(1200, cast, "citizenWin").tabsVisible).toBe(true);
+    expect(stateAt(4600, cast, "mafiaWin").tabsVisible).toBe(true);
+  });
+  it("최종 상태(재접속)는 처음부터 참이다", () => {
+    expect(finalState(cast, "citizenWin").tabsVisible).toBe(true);
+    expect(stateAt(CEREMONY_START_MS, cast, "citizenWin").tabsVisible).toBe(true);
+  });
+});
+
+describe("resultPanelHeight (11-07, D-3)", () => {
+  it("min(round(0.7 × 방 높이), 520), 방 높이를 모르면 undefined", () => {
+    expect(resultPanelHeight(560)).toBe(392);
+    expect(resultPanelHeight(640)).toBe(448);
+    expect(resultPanelHeight(664)).toBe(465);
+    expect(resultPanelHeight(844)).toBe(520);
+    expect(resultPanelHeight(932)).toBe(520);
+    expect(resultPanelHeight(0)).toBeUndefined();
   });
 });

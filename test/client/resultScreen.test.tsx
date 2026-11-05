@@ -777,3 +777,150 @@ describe("결과 탭 패널: 마피아 탭 (11-07 Task 1)", () => {
     expect(hook().tab).toBe("ghost");
   });
 });
+
+// ---------- 11-07 Task 2: 탭 다섯 · 등장 시각 · 점 표식 · 시계 정지 (D-2, D-3, D-25) ----------
+describe("결과 탭: 등장 시각·점 표식·시계 정지 (11-07 Task 2)", () => {
+  type Listener = (e: RoomEvent, meta: { epoch: number }) => void;
+  const executionView = (): RoomView => {
+    const v = makeView();
+    v.phase = "execution";
+    delete (v as { result?: unknown }).result;
+    v.day = { ...v.day!, candidate: 3, execution: { seat: 3 } };
+    return v;
+  };
+  let listener: Listener | null = null;
+  const onEvent = (): Partial<RoomConnection> => ({
+    onEvent: vi.fn((l: Listener) => {
+      listener = l;
+      return () => {};
+    }),
+  });
+  const emit = (e: RoomEvent) => act(() => void listener!(e, { epoch: 1 }));
+  const advance = (ms: number) => act(() => void vi.advanceTimersByTime(ms));
+  const tabIds = (c: ParentNode) => Array.from(c.querySelectorAll("[data-result-tab]")).map((e) => e.getAttribute("data-result-tab"));
+  const tab = (c: ParentNode, id: string) => c.querySelector<HTMLElement>(`[data-result-tab="${id}"]`)!;
+  const panelOf = (c: ParentNode) => c.querySelector<HTMLElement>("[data-result-panel]")!;
+  const hookOf = () => (window as unknown as { __mfResult?: { stage: string; chips: number } }).__mfResult!;
+  const reveal = () => {
+    const r = renderRoom(executionView(), onEvent());
+    r.rerenderRoom(makeView(), onEvent());
+    return r;
+  };
+  const ALL5 = ["all", "mafia", "ghost", "whisper", "log"];
+
+  it("연출 마운트: 탭 행은 첫 뒤집기(1200ms)까지 전체 하나뿐이고 그 시각에 다섯이 된다", () => {
+    const r = reveal();
+    expect(tabIds(r.container)).toEqual(["all"]);
+    advance(1199);
+    expect(tabIds(r.container)).toEqual(["all"]);
+    advance(1);
+    expect(tabIds(r.container)).toEqual(ALL5);
+  });
+
+  it("건너뛰기로 1200 전에 4600 으로 뛰면 곧바로 다섯이다", () => {
+    const r = reveal();
+    advance(300);
+    act(() => stage.props!.onStageTap!());
+    expect(tabIds(r.container)).toEqual(ALL5);
+  });
+
+  it("재접속·처음 마운트는 처음부터 다섯이다", () => {
+    const r = renderRoom(makeView());
+    expect(tabIds(r.container)).toEqual(ALL5);
+  });
+
+  it("모션 줄이기는 처음부터 다섯이다", () => {
+    vi.stubGlobal("matchMedia", (q: string) => ({ matches: q.includes("reduce"), media: q, addEventListener: () => {}, removeEventListener: () => {}, addListener: () => {}, removeListener: () => {} }));
+    const r = reveal();
+    expect(tabIds(r.container)).toEqual(ALL5);
+    vi.unstubAllGlobals();
+  });
+
+  it("점 표식: 마피아·유령·귓속말 탭에만 붙고 한 번 열면 사라지며 다시 닫아도 돌아오지 않는다 (기록 탭은 없다)", () => {
+    const r = renderRoom(makeView());
+    const dots = () => Array.from(r.container.querySelectorAll("[data-result-dot]")).map((d) => d.closest("[data-result-tab]")!.getAttribute("data-result-tab"));
+    expect(dots()).toEqual(["mafia", "ghost", "whisper"]);
+    fireEvent.click(tab(r.container, "ghost"));
+    expect(dots()).toEqual(["mafia", "whisper"]);
+    fireEvent.click(tab(r.container, "all"));
+    expect(dots()).toEqual(["mafia", "whisper"]);
+    fireEvent.click(tab(r.container, "log"));
+    fireEvent.click(tab(r.container, "all"));
+    expect(dots()).toEqual(["mafia", "whisper"]);
+  });
+
+  it("마피아 탭 아이콘만 진홍 표식이다", () => {
+    const r = renderRoom(makeView());
+    expect(Array.from(r.container.querySelectorAll(".mf-result__tab.is-mafia")).map((e) => e.getAttribute("data-result-tab"))).toEqual(["mafia"]);
+  });
+
+  it("유령·귓속말 탭: 줄이 일차 구분선과 함께 보이고 귓속말 머리줄은 닉네임을 좌석으로 찾는다", () => {
+    const r = renderRoom(makeView(), onEvent());
+    emit({ t: "resultLog", part: "ghost", i: 0, end: true, lines: [{ seat: 2, n: 2, text: "억울해", at: NOW }, { seat: 2, n: 3, text: "또 억울해", at: NOW + 1 }] });
+    emit({ t: "resultLog", part: "whisper", i: 0, end: true, lines: [{ seat: 0, to: 4, n: 1, text: "비밀이야", at: NOW }] });
+    fireEvent.click(tab(r.container, "ghost"));
+    expect(Array.from(panelOf(r.container).querySelectorAll("[data-result-divider]")).map((e) => text(e))).toEqual(["2일차", "3일차"]);
+    expect(Array.from(panelOf(r.container).querySelectorAll(".mv-chat__name")).map((e) => text(e))).toEqual(["민지", "민지"]);
+    fireEvent.click(tab(r.container, "whisper"));
+    expect(Array.from(panelOf(r.container).querySelectorAll<HTMLImageElement>(".mf-result__face")).map((i) => i.alt)).toEqual(["지우", "서연"]);
+    expect(text(panelOf(r.container).querySelector(".mf-result__whisper-text"))).toBe("비밀이야");
+  });
+
+  it("기록이 없는 탭은 본문 없이 quiet 아이콘 하나지만 탭 아이콘은 나타난다", () => {
+    const r = renderRoom(makeView(), onEvent());
+    emit({ t: "resultLog", part: "mafia", i: 0, end: true, lines: [] });
+    fireEvent.click(tab(r.container, "mafia"));
+    const body = panelOf(r.container).querySelector("[data-result-body]")!;
+    expect(body.querySelectorAll("svg")).toHaveLength(1);
+    expect(text(body).trim()).toBe("");
+  });
+
+  describe("확장 중 연출 시계 정지 (D-25)", () => {
+    it("확장되면 시계가 멈추고(경과 보존) 접히면 남은 시간부터 이어진다", () => {
+      const r = reveal();
+      advance(2000); // 1200 + 400*2 → 칩 3
+      expect(hookOf().chips).toBe(3);
+      fireEvent.click(tab(r.container, "mafia"));
+      advance(10_000);
+      expect(hookOf().chips).toBe(3);
+      expect(hookOf().stage).toBe("flip");
+      fireEvent.click(tab(r.container, "all"));
+      advance(399);
+      expect(hookOf().chips).toBe(3);
+      advance(1); // 경과 2400 → 칩 4
+      expect(hookOf().chips).toBe(4);
+      advance(600); // 3000
+      expect(hookOf().chips).toBe(5);
+      advance(1600); // 4600
+      expect(hookOf().stage).toBe("light");
+    });
+
+    it("무대 탭은 확장 중이면 접기만 하고 건너뛰기는 하지 않는다. 접힌 뒤 탭하면 건너뛴다", () => {
+      const r = reveal();
+      advance(1500);
+      fireEvent.click(tab(r.container, "ghost"));
+      act(() => stage.props!.onStageTap!());
+      expect(panelOf(r.container).getAttribute("data-expanded")).toBe("false");
+      expect(hookOf().stage).toBe("flip");
+      act(() => stage.props!.onStageTap!());
+      expect(hookOf().stage).toBe("light");
+    });
+
+    it("접힌 뒤 무대 탭이 건너뛰기를 하지 않은 시계는 이어서 흐른다", () => {
+      const r = reveal();
+      advance(1500);
+      fireEvent.click(tab(r.container, "whisper"));
+      act(() => stage.props!.onStageTap!());
+      advance(3100); // 경과 1500 + 3100 = 4600
+      expect(hookOf().stage).toBe("light");
+    });
+
+    it("연출이 없는 마운트(최종 상태)에서 탭을 열고 닫아도 타이머가 생기지 않는다", () => {
+      const r = renderRoom(makeView());
+      const before = vi.getTimerCount();
+      fireEvent.click(tab(r.container, "mafia"));
+      fireEvent.click(tab(r.container, "all"));
+      expect(vi.getTimerCount()).toBe(before);
+    });
+  });
+});
