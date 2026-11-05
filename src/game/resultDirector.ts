@@ -22,6 +22,14 @@ export const RESULT_TIMELINE = {
   ceremonyStartMs: 5600,
 } as const;
 
+/** 확장 패널 높이의 상한(px) */
+export const RESULT_PANEL_MAX_H = 520;
+
+/** 확장된 결과 패널 높이(11-07, D-3): min(round(0.7 × 방 높이), 520). 방 높이를 모르면(0 이하) 상한을 돌려주지 않고 undefined — 부르는 쪽이 CSS 기본값을 쓴다 */
+export function resultPanelHeight(roomH: number): number | undefined {
+  return roomH > 0 ? Math.min(Math.round(0.7 * roomH), RESULT_PANEL_MAX_H) : undefined;
+}
+
 /** 시상식 시작 시각(11-09 가 이 상수를 읽는다) */
 export const CEREMONY_START_MS = RESULT_TIMELINE.ceremonyStartMs;
 

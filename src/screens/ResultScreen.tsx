@@ -1,18 +1,21 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { isAlive } from "../../shared/game/alive";
 import type { ClientMessage, EmoteId, PhaseId, RoomView } from "../../shared/protocol";
 import { Button } from "../components/Button";
 import { ConfirmSheet } from "../components/ConfirmSheet";
 import { Icon } from "../components/Icon";
 import { ChatPanel } from "../components/v2/ChatPanel";
+import { ResultPanel } from "../components/v2/ResultPanel";
+import type { ResultTab } from "../components/v2/ResultPanel";
 import { TopToast, useTopToast } from "../components/v2/TopToast";
 import { V2Icon } from "../components/v2/V2Icon";
 import { WorldStage } from "../components/WorldStage";
 import { LOG_H_KB } from "../game/chatUi";
-import { castOf, holdSnap, markTimes, RESULT_TIMELINE, slotsFor, stateAt, walkSnap } from "../game/resultDirector";
+import { castOf, holdSnap, markTimes, RESULT_TIMELINE, resultPanelHeight, slotsFor, stateAt, walkSnap } from "../game/resultDirector";
 import type { ResultState } from "../game/resultDirector";
 import { RESULT_TEXT } from "../game/verdict";
 import type { ChatStore } from "../net/chatStore";
+import type { ResultLogStore } from "../net/resultLogStore";
 import { useChat } from "../net/useChat";
 import { useMapInsets } from "../net/useMapInsets";
 import { useReducedMotion } from "../net/useReducedMotion";
@@ -30,6 +33,8 @@ export interface ResultScreenProps {
   /** 위치 스토어. 연출 걷기·최종 자리는 이 스토어에 클라이언트가 만든 snap 한 프레임으로 먹인다(서버 상태는 바꾸지 않는다, T-11-16) */
   store: WorldStore;
   chat: ChatStore;
+  /** 결과 공개(resultLog) 프레임 저장소. RoomScreen 이 연결과 같은 수명으로 만들어 먹인다(11-07) */
+  resultLog: ResultLogStore;
   send: (msg: ClientMessage) => boolean | void;
   canSend: boolean;
   /** 서버시각 − 로컬시각(ms) */
@@ -75,15 +80,41 @@ function sessionStore(): Storage | null {
   }
 }
 
+/** 탭 행(44)이 패널 위 여백(14)을 먹고 아래 간격 10 을 더해, 접힌 패널 높이를 게임 패널과 같게 두려고 기록 칸에서 덜어 내는 높이(44 + 10 − 14) */
+const TAB_ROW_H = 40;
+
 /** 박수 큐 한 묶음(WorldStage emoteCues). nonce 가 새로 보일 때마다 한 번 재생한다 */
 type ClapCues = readonly { seat: number; id: EmoteId; nonce: number }[];
 
-export function ResultScreen({ view, store, chat, send, canSend, offset, epoch, onExit, arrivedFrom }: ResultScreenProps) {
+export function ResultScreen({ view, store, chat, resultLog, send, canSend, offset, epoch, onExit, arrivedFrom }: ResultScreenProps) {
   const { result } = view;
   const toast = useTopToast();
   const { show } = toast;
   const [leaveOpen, setLeaveOpen] = useState(false);
   const { rootRef, headerRef, panelRef, inputRef, kbOpen, logH, stageInsets } = useMapInsets();
+
+  // 탭 패널(11-07): 현재 탭과 열어 본 탭 집합은 이 화면이 쥔다. 전체가 아닌 탭이면 패널이 확장되고 연출 시계가 멈춘다(D-3, D-25)
+  const [tab, setTab] = useState<ResultTab>("all");
+  const [opened, setOpened] = useState<ReadonlySet<ResultTab>>(() => new Set<ResultTab>(["all"]));
+  const expanded = tab !== "all";
+  const pickTab = useCallback((next: ResultTab) => {
+    setTab(next);
+    setOpened((prev) => (prev.has(next) ? prev : new Set(prev).add(next)));
+  }, []);
+  const logRevision = useSyncExternalStore(
+    useCallback((cb: () => void) => resultLog.subscribe(cb), [resultLog]),
+    useCallback(() => resultLog.revision(), [resultLog]),
+  );
+  const logLines = useMemo(() => resultLog.snapshot(), [resultLog, logRevision]); // eslint-disable-line react-hooks/exhaustive-deps
+  const contacts = useMemo(() => new Map(view.players.map((p) => [p.seat, p.nickname] as const)), [view.players]);
+  // 확장 높이: 방 높이(루트 높이)로 한 번 정하고 화면 방향·크기가 바뀔 때만 다시 잰다(키보드·주소창으로는 다시 정하지 않는다, useChatLogHeight 와 같은 길)
+  const [roomH, setRoomH] = useState(0);
+  useLayoutEffect(() => {
+    const measure = (): void => setRoomH(rootRef.current?.clientHeight || window.innerHeight);
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, [rootRef]);
 
   // 출연자 표는 내용이 바뀔 때만 다시 만든다 — 같은 결과가 다시 와도(닉네임·연결 상태만 바뀐 view) 시계·자리 snap 을 다시 시작하지 않는다
   const castKey = `${result.seats.map((s) => `${s.seat}:${s.job}`).join(",")}|${view.players.map((p) => `${p.seat}:${isAlive(p) ? 1 : 0}`).join(",")}`;
@@ -168,6 +199,12 @@ export function ResultScreen({ view, store, chat, send, canSend, offset, epoch, 
     goto(tl.lightAtMs);
   }, [reveal, schedule, feed, goto]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // 무대 탭: 패널이 확장되어 있으면 접기만 한다(건너뛰기는 하지 않는다, D-3). 아니면 건너뛰기
+  const onStageTap = useCallback(() => {
+    if (tab !== "all") setTab("all");
+    else skip();
+  }, [tab, skip]);
+
   // 머리 위 직업 칩: 뒤집힌 사람만. 결과 화면의 ended 경로에서만 만든다(산 사람 장면 표는 건드리지 않는다)
   const jobBySeat = useMemo(() => new Map(cast.map((c) => [c.seat, c.job])), [cast]);
   const flipped = useMemo(() => new Set(state.flipped), [state]);
@@ -187,6 +224,9 @@ export function ResultScreen({ view, store, chat, send, canSend, offset, epoch, 
   useLayoutEffect(() => {
     hook.current?.patch({ stage: state.stage, chips: state.flipped.length });
   }, [state]);
+  useLayoutEffect(() => {
+    hook.current?.patch({ tab });
+  }, [tab]);
   const onCostumes = useCallback((costumes: Readonly<Record<number, string>>, dimmed: readonly number[]) => {
     hook.current?.patch({ costumes: { ...costumes }, dimmed: [...dimmed] });
   }, []);
@@ -210,7 +250,7 @@ export function ResultScreen({ view, store, chat, send, canSend, offset, epoch, 
         canWalk={false}
         tagProps={tagProps}
         onCostumes={onCostumes}
-        onStageTap={skip}
+        onStageTap={onStageTap}
         emoteCues={cues}
         onNotice={(text) => show(text)}
         onLeave={() => setLeaveOpen(true)}
@@ -232,24 +272,36 @@ export function ResultScreen({ view, store, chat, send, canSend, offset, epoch, 
           <span className="mf-result__announce-text">{RESULT_TEXT.title[winner]}</span>
         </div>
       ) : null}
-      <section ref={panelRef} className={kbOpen ? "mf-result__panel mf-result__panel--kb" : "mf-result__panel"} data-world-panel="" data-result-panel="">
-        <ChatPanel
-          messages={binding.messages}
-          value={binding.value}
-          onChange={binding.onChange}
-          {...(binding.onComposingChange ? { onComposingChange: binding.onComposingChange } : {})}
-          {...(binding.onInputBlur ? { onInputBlur: binding.onInputBlur } : {})}
-          onSend={binding.onSend}
-          channel="all"
-          sendDisabled={binding.sendDisabled === true || !chatOpen}
-          sendDim={binding.sendDim === true}
-          notice={binding.notice ?? null}
-          {...(binding.quiet ? { quiet: true } : {})}
-          logHeight={kbOpen ? LOG_H_KB : logH}
-          compact={kbOpen}
-          inputRef={inputRef}
-        />
-      </section>
+      <ResultPanel
+        panelRef={panelRef}
+        kb={kbOpen}
+        tab={tab}
+        onTab={pickTab}
+        expanded={expanded}
+        {...(resultPanelHeight(roomH) !== undefined ? { expandedHeight: resultPanelHeight(roomH)! } : {})}
+        tabsVisible
+        lines={logLines}
+        contacts={contacts}
+        opened={opened}
+        allSlot={
+          <ChatPanel
+            messages={binding.messages}
+            value={binding.value}
+            onChange={binding.onChange}
+            {...(binding.onComposingChange ? { onComposingChange: binding.onComposingChange } : {})}
+            {...(binding.onInputBlur ? { onInputBlur: binding.onInputBlur } : {})}
+            onSend={binding.onSend}
+            channel="all"
+            sendDisabled={binding.sendDisabled === true || !chatOpen}
+            sendDim={binding.sendDim === true}
+            notice={binding.notice ?? null}
+            {...(binding.quiet ? { quiet: true } : {})}
+            logHeight={kbOpen ? LOG_H_KB : logH - TAB_ROW_H}
+            compact={kbOpen}
+            inputRef={inputRef}
+          />
+        }
+      />
       {leaveOpen ? (
         <ConfirmSheet
           title="방에서 나갈까요?"

@@ -11,8 +11,9 @@ export type ConnectionStatus = LinkStatus;
 /** 상태로 쌓지 않고 구독자에게만 흘리는 서버 프레임. 채팅·입력 중 폭주가 전체 화면 렌더로 번지지 않게 한다(T-02-22).
  *  world(로비 이동)도 같다 — 연결 상태를 바꾸지 않고 epoch 메타와 함께 흘려, 구독자(WorldStore)가 낡은 연결의 프레임을 가려낸다.
  *  typing(입력 중, 07-10)·emote(동작, 10-03)도 같다 — 상태를 바꾸지 않고 구독자에게만 흘리며, 끝난 연결의 늦은 프레임은 버린다.
- *  chat(새 줄 모양)·chatReject·chatLog(07-11, 자유 채팅)도 같다 — 줄은 구독자(채팅 저장소)가 쌓고 연결 상태·view 는 바꾸지 않는다. */
-export type RoomEvent = Extract<ServerMessage, { t: "error" | "chat" | "chatReject" | "chatLog" | "world" | "typing" | "emote" }>;
+ *  chat(새 줄 모양)·chatReject·chatLog(07-11, 자유 채팅)도 같다 — 줄은 구독자(채팅 저장소)가 쌓고 연결 상태·view 는 바꾸지 않는다.
+ *  resultLog(11-03·11-07, 결과 공개)도 같다 — ended 에서만 오고 구독자(결과 기록 저장소)가 쌓는다. */
+export type RoomEvent = Extract<ServerMessage, { t: "error" | "chat" | "chatReject" | "chatLog" | "world" | "typing" | "emote" | "resultLog" }>;
 
 export interface RoomConnection {
   status: ConnectionStatus;
@@ -63,7 +64,7 @@ function parseServerMessage(data: unknown): ServerMessage | null {
   if (typeof data !== "string") return null;
   try {
     const v = JSON.parse(data) as { t?: unknown };
-    if (v && (v.t === "state" || v.t === "pong" || v.t === "error" || v.t === "chat" || v.t === "chatReject" || v.t === "chatLog" || v.t === "world" || v.t === "typing" || v.t === "emote")) return v as ServerMessage;
+    if (v && (v.t === "state" || v.t === "pong" || v.t === "error" || v.t === "chat" || v.t === "chatReject" || v.t === "chatLog" || v.t === "world" || v.t === "typing" || v.t === "emote" || v.t === "resultLog")) return v as ServerMessage;
   } catch {
     // 서버가 보낸 것이 아닌 프레임은 무시한다.
   }
@@ -203,9 +204,9 @@ export function useRoomConnection(code: string, token: string, options?: RoomCon
           }
         } else if (msg?.t === "pong") {
           onPong(msg.c, msg.serverNow);
-        } else if (msg?.t === "chat" || msg?.t === "chatReject" || msg?.t === "chatLog" || msg?.t === "error" || msg?.t === "world" || msg?.t === "typing" || msg?.t === "emote") {
+        } else if (msg?.t === "chat" || msg?.t === "chatReject" || msg?.t === "chatLog" || msg?.t === "error" || msg?.t === "world" || msg?.t === "typing" || msg?.t === "emote" || msg?.t === "resultLog") {
           // world·typing·채팅 줄은 연결 상태·view 를 바꾸지 않는다(CONN-04). 끝난 연결(replaced·removed)의 늦은 프레임은 구독자에게 보내지 않는다.
-          if ((msg.t === "world" || msg.t === "typing" || msg.t === "emote" || msg.t === "chat" || msg.t === "chatReject" || msg.t === "chatLog") && isTerminal(linkRef.current.status)) return;
+          if ((msg.t === "world" || msg.t === "typing" || msg.t === "emote" || msg.t === "chat" || msg.t === "chatReject" || msg.t === "chatLog" || msg.t === "resultLog") && isTerminal(linkRef.current.status)) return;
           const meta = { epoch: linkRef.current.epoch };
           for (const listener of [...listenersRef.current]) listener(msg, meta);
         }

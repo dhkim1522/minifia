@@ -7,6 +7,7 @@ import type { GameWinner, MorningView, PhaseId, RoomView, SpectateView } from ".
 import type { SceneLook } from "../../src/world/presence";
 import type { RoomConnection } from "../../src/net/useRoomConnection";
 import { ChatStore } from "../../src/net/chatStore";
+import { ResultLogStore } from "../../src/net/resultLogStore";
 import { ResultScreen } from "../../src/screens/ResultScreen";
 import { WorldStore } from "../../src/world/store";
 
@@ -150,7 +151,7 @@ describe("밤 분위기 — 맵 조명 night (D-04·D-05)", () => {
       result: { winner: "citizenWin" as GameWinner, seats, summary: [] },
     } as RoomView & { result: NonNullable<RoomView["result"]> };
     rt.scenes.length = 0;
-    const { container } = render(<ResultScreen view={view} store={new WorldStore()} chat={new ChatStore()} send={() => true} canSend offset={0} epoch={1} onExit={() => {}} />);
+    const { container } = render(<ResultScreen view={view} store={new WorldStore()} chat={new ChatStore()} resultLog={new ResultLogStore()} send={() => true} canSend offset={0} epoch={1} onExit={() => {}} />);
     // 11-05: 결과 화면은 옛 2D 배경 그림이 아니라 3D 무대의 night 조명이다
     expect((rt.scenes.at(-1) as SceneLook).lighting).toBe("night");
     expect(container.querySelectorAll(".mf-backdrop__art, .mf-backdrop__vignette").length).toBe(0);

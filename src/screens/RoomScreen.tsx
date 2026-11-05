@@ -13,6 +13,7 @@ import { MORNING_TEXT, morningText } from "../game/eliminationText";
 import { VERDICT_TEXT, defenseAnnounce, noExecutionPrefix, winnerText } from "../game/verdict";
 import { preloadDuskAssets, preloadRoleAssets } from "../net/assets";
 import { ChatStore } from "../net/chatStore";
+import { ResultLogStore } from "../net/resultLogStore";
 import { usePhaseArrival } from "../net/phaseArrival";
 import { loadSeenCount, saveSeenCount, unseenCount } from "../net/recordsSeen";
 import { useDayFx } from "../net/useDayFx";
@@ -188,6 +189,8 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
   // 채팅 저장소도 연결과 같은 수명이다 — 로비 줄이 게임이 시작돼도 같은 흐름으로 이어진다(방 한 번 들어오면 한 흐름, 리서치 Pattern 5).
   // 같은 구독 하나로 world 와 채팅 프레임을 나눠 먹인다. 시각은 저장소가 읽지 않고 받은 때를 넘긴다.
   const [chat] = useState(() => new ChatStore());
+  // 결과 공개 기록(resultLog)도 연결과 같은 수명이다 — ended 에서만 오고, 대기실로 돌아가면 비운다(11-07)
+  const [resultLog] = useState(() => new ResultLogStore());
   const { onEvent } = connection;
   // 낮 연출(채팅 시스템 줄·결과 알림): 서버 view 두 개의 공개 정보 차이로만 만든다. 낮 시작은 역할 확인·밤에서 들어오므로 맵 화면이 아니라 방 화면이 직전 view 를 쥐어야 한다.
   const { announce, deny, fading, ghostEnter, killFx, policeResult } = useDayFx({ view, epoch: connection.epoch, chat });
@@ -198,9 +201,10 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
       onEvent((e, meta) => {
         if (e.t === "world") store.applyFrame(e, meta.epoch);
         else if (e.t === "emote") store.applyEmote(e, meta.epoch); // 동작은 채팅 저장소로 보내지 않는다(10-03)
+        else if (e.t === "resultLog") resultLog.apply(e, meta.epoch);
         else if (e.t === "chat" || e.t === "typing" || e.t === "chatLog" || e.t === "chatReject") chat.apply(e, meta.epoch, Date.now());
       }),
-    [onEvent, store, chat],
+    [onEvent, store, chat, resultLog],
   );
 
   // 게임이 시작되어 로비를 떠날 때: 마지막 로비 view 로 Lobby 를 EXIT_CURTAIN_MS(dur-med) 동안 더 그려 맵을 night-900 으로 덮은 뒤 v1.0 단계 화면으로 넘어간다.
@@ -236,8 +240,11 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
   useEffect(() => {
     const prev = prevPhase.current;
     prevPhase.current = phase;
-    if (phase === "lobby" && prev !== undefined && prev !== "lobby") chat.reset();
-  }, [phase, chat]);
+    if (phase === "lobby" && prev !== undefined && prev !== "lobby") {
+      chat.reset();
+      resultLog.reset();
+    }
+  }, [phase, chat, resultLog]);
   // view 가 바뀔 때마다 단계 키·내 채널·연결 epoch 를 알린다(셋 중 하나가 바뀌면 저장소가 입력 중을 끈다).
   const chatEpoch = connection.epoch;
   useEffect(() => {
@@ -478,6 +485,7 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
             view={{ ...view, result: view.result }}
             store={store}
             chat={chat}
+            resultLog={resultLog}
             send={connection.send}
             canSend={connection.canSend}
             offset={connection.offset}

@@ -55,6 +55,8 @@ export interface ResultHookState {
   chips: number;
   dimmed: number[];
   costumes: Record<number, string>;
+  /** 결과 패널의 현재 탭(11-07): all·mafia·ghost·whisper·log. 판 중에는 훅 자체가 없다 */
+  tab: string;
 }
 
 /** 런타임 중 훅이 읽는 부분 */
@@ -202,7 +204,7 @@ export function installLooksHook(): { set(looks: Readonly<Record<number, string>
  * 해제는 다른 설치가 덮어썼으면 지우지 않는다. 값은 DOM 속성이 아니다 — 직업·의상을 마크업에 싣지 않는다.
  */
 export function installResultHook(): { patch(next: Partial<ResultHookState>): void; off(): void } {
-  let mine: ResultHookState = { stage: "gather", chips: 0, dimmed: [], costumes: {} };
+  let mine: ResultHookState = { stage: "gather", chips: 0, dimmed: [], costumes: {}, tab: "all" };
   window.__mfResult = mine;
   return {
     patch(next) {
