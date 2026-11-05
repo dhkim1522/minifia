@@ -159,7 +159,8 @@ describe("아침으로 끝나는 판 (END-01, D-10)", () => {
 });
 
 describe("종료 중 (D-28)", () => {
-  it("chat·verdict 는 보낸 소켓에만 거절이고 다른 소켓은 프레임이 없으며, say 와 테스트 방이 아닌 방의 testSkip 은 BAD_MESSAGE 뿐이다", async () => {
+  // 11-03(D-11): 결과 단계의 chat 은 거절이 아니라 all 한 줄이다 — 보낸 사람 포함 네 소켓이 한 줄씩 받는다. 나머지 거절 규칙은 그대로다.
+  it("chat 은 네 소켓 모두에게 한 줄이고, verdict 는 보낸 소켓에만 거절이며 다른 소켓은 프레임이 없고, say 와 테스트 방이 아닌 방의 testSkip 은 BAD_MESSAGE 뿐이다", async () => {
     const { g } = await endedByExecution();
     const actors = g.actors;
     const sender = g.police;
@@ -172,7 +173,9 @@ describe("종료 중 (D-28)", () => {
     };
     const quietOthers = (own: string): string => actors.map((a) => (a === sender ? own : "-")).join(" ");
 
-    expect(await send4(sender, chatMsg(sender.sock, "수고했어요"))).toBe(quietOthers("[chatReject,state:ended]"));
+    // ended 진입 때 가는 결과 공개 프레임(11-03)이 모두 도착한 뒤에 시작한다.
+    for (const a of actors) await settle(a.sock, mark(a.sock));
+    expect(await send4(sender, chatMsg(sender.sock, "수고했어요"))).toBe(actors.map(() => "[chat]").join(" "));
     expect(await send4(sender, { t: "say", template: "innocent" })).toBe(quietOthers("[error:BAD_MESSAGE]"));
     expect(await send4(sender, { t: "verdict", agree: true })).toBe(quietOthers("[error:WRONG_PHASE,state:ended]"));
     expect(await send4(sender, { t: "testSkip" })).toBe(quietOthers("[error:BAD_MESSAGE]"));
