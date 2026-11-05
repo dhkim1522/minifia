@@ -6,10 +6,12 @@ import "../helpers/singleLineErrors";
 import { phaseKey } from "../../shared/game/audience";
 import { ringSlots } from "../../shared/game/gather";
 import type { RoleId } from "../../shared/game/roles";
-import type { AwardLine, GameWinner, RoomView, SummaryRow, VoteLogEntry } from "../../shared/protocol";
+import type { AwardLine, GameWinner, MapId, RoomView, SummaryRow, VoteLogEntry } from "../../shared/protocol";
+import { PLAYABLE_MAPS } from "../../shared/game/maps";
 import type { WorldStageProps } from "../../src/components/WorldStage";
 import type { RoomConnection, RoomEvent } from "../../src/net/useRoomConnection";
 import { GATHER_CENTER } from "../../src/world/camera";
+import { openPlaza } from "../helpers/playable";
 
 // 결과 화면(11-05, 결정 D-1·D-11): 3D 무대(WorldStage) 위의 한 장면. WorldStage 는 받은 props 를 쥐고 tagProps 의 직업 칩만 그리는 가짜다
 // (캔버스·런타임·의상 적용은 worldStage.test 몫). RoomScreen 의 연결 훅은 반환값을 시험이 정하는 가짜다.
@@ -1712,5 +1714,81 @@ describe("방장 이양 알림 (11-12, D-17)", () => {
     const r = renderRoom(makeView({ me: 1, hostSeat: 0 }));
     r.rerenderRoom(makeView({ me: 1, hostSeat: 1 }));
     expect(r.container.querySelector(".mv-chat__sys")).toBeNull();
+  });
+});
+
+describe("결과 단계 지도 칩과 맵 탭 (11-13, D-20·O-11)", () => {
+  let restore = () => {};
+  beforeEach(() => {
+    restore = openPlaza();
+  });
+  afterEach(() => restore());
+  const chip = (c: ParentNode) => c.querySelector<HTMLElement>("[data-map-chip]");
+  const withMap = (v: RoomView, mapChoice: "bar" | "plaza" | "random", map?: "bar" | "plaza"): RoomView => ({ ...v, mapChoice, ...(map ? { map } : {}) });
+
+  it("칩은 모두에게 보이고 서버의 mapChoice(random 이 정해진 뒤에도 choice, 결과 map 은 노출하지 않음)를 따른다", () => {
+    for (const [me, choice, map, name] of [[0, "plaza", undefined, "맵 광장"], [1, "random", "plaza", "맵 랜덤"], [1, "bar", "bar", "맵 재즈 바"]] as const) {
+      const r = renderRoom(withMap(makeView({ me }), choice, map));
+      expect(chip(r.container)?.getAttribute("aria-label")).toBe(name);
+      r.unmount();
+    }
+  });
+
+  it("mapChoice 가 없는 옛 view 는 랜덤으로 읽는다", () => {
+    const r = renderRoom(makeView());
+    expect(chip(r.container)?.getAttribute("aria-label")).toBe("맵 랜덤");
+  });
+
+  it("방장이 누르면 맵 탭으로 시트가 열리고 카드를 누르면 {t:'mapPick', map} 만 간다 — 서버 값이 오기 전에는 바뀌지 않는다", () => {
+    const r = renderRoom(makeView({ me: 0 }));
+    fireEvent.click(chip(r.container)!);
+    expect(r.container.querySelectorAll("button[data-map-card]")).toHaveLength(3);
+    expect(r.container.querySelectorAll("button[data-map-tab]")).toHaveLength(2);
+    r.send.mockClear();
+    fireEvent.click(r.container.querySelector("button[data-map-card='plaza']")!);
+    expect(r.send.mock.calls.map((c) => c[0])).toEqual([{ t: "mapPick", map: "plaza" }]);
+    expect(chip(r.container)?.getAttribute("aria-label")).toBe("맵 랜덤");
+    r.rerenderRoom(withMap(makeView({ me: 0 }), "plaza"));
+    expect(chip(r.container)?.getAttribute("aria-label")).toBe("맵 광장");
+    expect(r.container.querySelector("button[data-map-card='plaza']")?.getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("방장이 [꾸미기]로 열면 의상 탭이고 탭 둘이 있다", () => {
+    const r = renderRoom(makeView({ me: 0 }));
+    fireEvent.click(r.container.querySelector<HTMLElement>("[data-float='dress']")!);
+    expect(r.container.querySelectorAll("button[data-outfit]")).toHaveLength(9);
+    expect(r.container.querySelectorAll("button[data-map-tab]")).toHaveLength(2);
+  });
+
+  it("손님은 눌러도 시트가 열리지 않고(aria-disabled), 꾸미기 시트에 탭이 없다", () => {
+    const r = renderRoom(makeView({ me: 1 }));
+    expect(chip(r.container)?.getAttribute("aria-disabled")).toBe("true");
+    fireEvent.click(chip(r.container)!);
+    expect(r.container.querySelector("[data-dress-sheet]")).toBeNull();
+    fireEvent.click(r.container.querySelector<HTMLElement>("[data-float='dress']")!);
+    expect(r.container.querySelector("[data-map-tab]")).toBeNull();
+  });
+
+  it("칩은 시상식·연출 중에도 보이고(헤더 아래 자리), 눌러도 연출 단계가 되돌아가지 않는다", () => {
+    const r = renderRoom(makeView({ me: 0, awards: [{ seat: 3, award: "whiff" as const, k: 2 }, { seat: 0, award: "survivor" as const }] }));
+    expect(chip(r.container)).not.toBeNull();
+    expect(r.container.querySelector(".mf-result__map [data-map-chip]")).not.toBeNull();
+    const stageBefore = r.container.querySelector("main")!.getAttribute("data-result-stage");
+    fireEvent.click(chip(r.container)!);
+    expect(r.container.querySelector("main")!.getAttribute("data-result-stage")).toBe(stageBefore);
+  });
+
+  it("허용 맵이 하나뿐이면 칩이 없다", () => {
+    restore();
+    const list = PLAYABLE_MAPS as MapId[];
+    const saved = [...list];
+    list.splice(0, list.length, "bar");
+    try {
+      const r = renderRoom(makeView());
+      expect(chip(r.container)).toBeNull();
+    } finally {
+      list.splice(0, list.length, ...saved);
+      restore = openPlaza();
+    }
   });
 });

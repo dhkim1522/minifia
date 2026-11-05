@@ -357,6 +357,30 @@ describe("WorldStage: 틀과 접근 가능한 장면 설명 (MAP-01)", () => {
   });
 });
 
+describe("WorldStage: window.__mfMap 훅 (11-13, L33)", () => {
+  it("로비(view.map 없음)는 bar, 켜진 문맥에서만 있고 DOM 속성이 아니다", async () => {
+    const s = await open();
+    expect(window.__mfMap).toBe("bar");
+    expect(s.utils.container.querySelectorAll("[data-map-id], [data-mf-map]")).toHaveLength(0);
+    s.utils.unmount();
+    expect(window.__mfMap).toBeUndefined();
+  });
+
+  it("view.map 이 plaza 면 plaza 이고, 맵이 바뀌어 새 렌더러를 만들면 따라 바뀐다", async () => {
+    const s = await open({ view: { ...makeView(TWO, 0), map: "plaza" } });
+    expect(window.__mfMap).toBe("plaza");
+    s.rerender({ view: { ...makeView(TWO, 0), map: "bar" } });
+    await flush();
+    expect(window.__mfMap).toBe("bar");
+  });
+
+  it("훅이 꺼진 문맥에는 없다", async () => {
+    vi.stubEnv("DEV", false);
+    await open({ view: { ...makeView(TWO, 0), map: "plaza" } });
+    expect(window.__mfMap).toBeUndefined();
+  });
+});
+
 describe("WorldStage: 방의 맵 id 가 렌더러 장면을 고른다 (MAP-06, D-22)", () => {
   it("view.map 이 plaza 면 렌더러를 mapId plaza 로 만든다", async () => {
     const s = await open({ view: { ...makeView(TWO, 0), map: "plaza" } });
