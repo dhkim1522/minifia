@@ -84,6 +84,10 @@ export interface Player {
    * 소켓이 없다. view·미리보기·어떤 프레임에도 싣지 않는다(허용 목록 리터럴이라 저절로 빠진다).
    */
   isBot?: true;
+  /** 서버 전용(결정 D-17·D-18, L43). 마지막 소켓이 끊긴 시각(ms) — detachConnection(now 를 받을 때)이 쓰고 attachConnection 이 키째 지운다. 방장 이양·로비 정리의 입력이며 어떤 view·프레임에도 싣지 않는다. */
+  disconnectedAt?: number;
+  /** 서버 전용(결정 D-14, L43). 결과 단계에서 나간 사람 — leaveRoom 만 쓴다. 명단은 그대로 두고 다시 하기(11-08)가 걷어 간다. 어떤 view·프레임에도 싣지 않는다. */
+  left?: true;
 }
 
 /**
@@ -515,16 +519,25 @@ export function attachConnection(state: RoomState, playerId: string, connId: str
   return {
     ...state,
     ...(first ? { everConnected: true, expiresAt: Math.max(state.expiresAt, state.createdAt + ROOM_TTL_MS) } : {}),
-    players: state.players.map((p) => (p.id === playerId ? { ...p, connected: true, connId } : p)),
+    players: state.players.map((p) => {
+      if (p.id !== playerId) return p;
+      const { disconnectedAt: _gone, ...rest } = p; // 돌아오면 끊긴 시각을 지운다(D-17)
+      return { ...rest, connected: true, connId };
+    }),
   };
 }
 
-/** 닫힌 소켓의 connId 가 그 플레이어의 최신 connId 일 때만 연결을 끊는다 — 낡은 소켓의 닫힘이 새 연결을 덮지 않게 한다. */
-export function detachConnection(state: RoomState, playerId: string, connId: string): RoomState {
+/**
+ * 닫힌 소켓의 connId 가 그 플레이어의 최신 connId 일 때만 연결을 끊는다 — 낡은 소켓의 닫힘이 새 연결을 덮지 않게 한다.
+ * now 를 주면 끊긴 시각(disconnectedAt, 서버 전용)을 기록한다 — 방장 이양·로비 정리의 입력(D-17·D-18). 안 주면 기록하지 않는다(기존 호출 호환).
+ */
+export function detachConnection(state: RoomState, playerId: string, connId: string, now?: number): RoomState {
   return {
     ...state,
     players: state.players.map((p) =>
-      p.id === playerId && p.connId === connId ? { ...p, connected: false, connId: null } : p,
+      p.id === playerId && p.connId === connId
+        ? { ...p, connected: false, connId: null, ...(now === undefined ? {} : { disconnectedAt: now }) }
+        : p,
     ),
   };
 }

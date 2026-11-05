@@ -60,7 +60,7 @@ describe("resolveHost (방장 이양, D-17, CONNX-01)", () => {
     const players = [hostDown(), player(3), player(1, { joinSeq: 7 }), player(2, { joinSeq: 5 })];
     const s = room(players);
     const out = resolveHost(s, T0 + HOST_GRACE_MS);
-    expect(out.hostId).toBe("p2");
+    expect(out.hostId).toBe("p3"); // joinSeq 3 < 5 < 7
     expect(s.hostId).toBe("p0");
     expect(out.players).toBe(s.players);
   });

@@ -7,6 +7,7 @@ import { isAlive } from "../shared/game/alive";
 import { ballotsCardText } from "../shared/game/ballots";
 import { audience, channelOf, phaseKey, worldVisibleTo } from "../shared/game/audience";
 import { bumpStat } from "../shared/game/stats";
+import { resolveHost } from "../shared/game/continuity";
 import { CHAT_KEY_PREFIX, appendLine, appendWhisperPair, chatKey, emptyChatLog, replayFor, restoreChatLog, seatMask, toWire } from "../shared/game/chatLog";
 import type { ChatLog } from "../shared/game/chatLog";
 import { checkChatSend, sanitizeChatText, typingRelay } from "../shared/game/chatRules";
@@ -130,9 +131,11 @@ export class Room extends DurableObject<Env> {
         this.room = {
           ...normalized,
           // 서버 봇은 소켓이 없는 채로 항상 연결된 상태다(결정 0024) — 안 그러면 깨어날 때마다 끊김이 되어 시작 규칙이 깨진다.
-          players: normalized.players.map((p) =>
-            isBot(p) || (p.connId !== null && live.has(p.connId)) ? p : { ...p, connected: false, connId: null },
-          ),
+          // 소켓이 사라져 끊긴 사람(과 끊긴 시각이 아직 없는 옛 저장 방 사람)은 지금을 끊긴 시각으로 기록한다 — 방장 이양·로비 정리가 센다(D-17·D-18).
+          players: normalized.players.map((p) => {
+            if (isBot(p) || (p.connId !== null && live.has(p.connId))) return p;
+            return { ...p, connected: false, connId: null, disconnectedAt: p.disconnectedAt ?? Date.now() };
+          }),
         };
         // 저장된 위치를 되살린다. world 키가 없거나 손상된 사람은 입장 지점에 선다(MAP-05).
         this.world = restoreWorld(got.get("world"), this.room.players, Date.now(), BAR_MAP);
@@ -940,10 +943,17 @@ export class Room extends DurableObject<Env> {
     }
     // 난수는 여기서만 넣는다 — 아침 판정(03-03)의 동률·문구 추첨
     const next = tick(room, now, cryptoRandInt);
+    // 방장 이양(D-17)은 단계 전환과 무관하게 같은 호출에서 맞춘다(멱등). 어떤 진입점이든 advance 를 지난다.
+    const hosted = resolveHost(next, now);
     if (next !== room) {
-      this.room = next;
+      this.room = hosted;
       await this.afterTransition(room, now);
       return;
+    }
+    if (hosted !== room) {
+      this.room = hosted;
+      await this.persistAndBroadcast();
+      await this.reschedule();
     }
     // 위치는 단계가 바뀌었는지와 무관하게 '지금 단계가 요구하는 모습'으로 맞춘다(멱등, 알람 따라잡기·퇴거에도 안전).
     // 새 유령 snap 은 전환 때만 보낸다: 퇴거로 비워진 ghostSnapped 때문에 깨어날 때마다 같은 snap 을 다시 보내지 않는다(08 동작 유지).
@@ -1238,7 +1248,9 @@ export class Room extends DurableObject<Env> {
     }
     const attachment: SocketAttachment = { playerId: player.id, connId };
     ws.serializeAttachment(attachment);
-    this.room = attachConnection(room, player.id, connId);
+    // 후보가 다시 연결되는 순간 방장이 이미 유예 넘게 끊겨 있었다면 그 자리에서 넘어간다(D-17). 첫 state 부터 새 방장이 실린다.
+    const attached = attachConnection(room, player.id, connId);
+    this.room = resolveHost(attached, Date.now());
     await this.persistAndBroadcast();
     // state 다음에 이 소켓에만 지금 위치를 보낸다 — 보는 사람별로 거른다(결정 0060-8, T-08-11): 로비·assigning·roleReveal 은 모두,
     // 지도 단계는 산 사람이면 산 사람만·유령이면 모두(worldVisibleTo). 보낼 좌석이 없는 단계(ended 등)는 snap 을 보내지 않는다.
@@ -1251,7 +1263,7 @@ export class Room extends DurableObject<Env> {
     // 결과 단계에서만 같은 결과 공개를 이 소켓에 다시 보낸다(D-10, L36). 판 중에는 어떤 순간의 hello 에도 보내지 않는다(L35).
     if (this.room.phase === "ended") for (const frame of buildResultLog(this.room, this.chatLog)) this.sendTo(ws, frame);
     // 첫 접속이면 만료가 늘었으니 알람도 따라 옮긴다.
-    if (this.room.expiresAt !== room.expiresAt || (wasIdle && this.wanderBots().length > 0)) await this.reschedule();
+    if (this.room.expiresAt !== room.expiresAt || this.room.hostId !== room.hostId || (wasIdle && this.wanderBots().length > 0)) await this.reschedule();
   }
 
   private async handleDisconnect(ws: WebSocket): Promise<void> {
@@ -1260,13 +1272,13 @@ export class Room extends DurableObject<Env> {
     // 방에 없거나 최신 연결이 아닌(교체된 낡은) 소켓의 닫힘은 아무것도 바꾸지 않는다.
     const current = this.room.players.find((p) => p.id === att.playerId);
     if (!current || current.connId !== att.connId) return;
-    this.room = detachConnection(this.room, att.playerId, att.connId);
+    this.room = detachConnection(this.room, att.playerId, att.connId, Date.now());
     await this.persistAndBroadcast();
+    // 방장이 끊겼거나 대기실이면 알람이 필요하다(이양·정리 마감, D-17·D-18) — 항상 맞춘다.
+    await this.reschedule();
     // 연결된 사람이 한 명도 남지 않으면 DO 가 곧 내려갈 수 있으니 대기 중이던 위치를 지금 저장한다(봇은 사람이 아니다).
     if (this.room.players.every((p) => isBot(p) || !p.connected)) {
       await this.flushWorld();
-      // 배회 알람은 사람이 없으면 걸지 않는다 — 남은 알람을 방 만료 쪽으로 돌려놓는다.
-      if (this.wanderBots().length > 0) await this.reschedule();
     }
   }
 
