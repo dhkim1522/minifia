@@ -1019,3 +1019,96 @@ describe("밤 선택 표시 setPickMark (결정 0065)", () => {
     }
   });
 });
+
+describe("stopEmote (10-03, D-13)", () => {
+  const settle = (c: WorldCharacter, ms: number, from = 1): void => {
+    for (let t = 0; t < ms; t += 16) c.update(0.016, from + t / 1000, false);
+  };
+
+  it("동작 중 호출하면 POSE_BLEND_MS 안에 동작 자세 기여가 0 이 되어 서 있는 자세로 돌아온다", () => {
+    const c = createCharacter(0, "coat");
+    const ref = createCharacter(0, "coat");
+    c.playEmote("dance");
+    for (let i = 0; i < 10; i++) {
+      c.update(0.016, i * 0.016, false);
+      ref.update(0.016, i * 0.016, false);
+    }
+    expect(readPose(c).aAz).not.toBeCloseTo(readPose(ref).aAz, 2);
+    c.stopEmote();
+    // 호출 직후 한 프레임: 아직 완전히 돌아오지 않았다(한 번에 튀지 않는다)
+    c.update(0.016, 0.2, false);
+    ref.update(0.016, 0.2, false);
+    expect(readPose(c).aAz).not.toBe(readPose(ref).aAz);
+    for (let i = 1; i <= Math.ceil(POSE_BLEND_MS / 16); i++) {
+      c.update(0.016, 0.2 + i * 0.016, false);
+      ref.update(0.016, 0.2 + i * 0.016, false);
+    }
+    expect(readPose(c)).toEqual(readPose(ref));
+  });
+
+  it("방향(yaw)을 바꾸지 않는다", () => {
+    const c = createCharacter(2, "coat");
+    c.setYaw(1.234);
+    c.playEmote("dance");
+    c.update(0.016, 0, false);
+    const before = c.root.rotation.y;
+    c.stopEmote();
+    settle(c, 300);
+    expect(c.root.rotation.y).toBe(before);
+    expect(before).toBe(1.234);
+  });
+
+  it("동작이 없으면 아무 일도 없다", () => {
+    const c = createCharacter(0, "coat");
+    const ref = createCharacter(0, "coat");
+    c.update(0.016, 0, false);
+    ref.update(0.016, 0, false);
+    c.stopEmote();
+    c.update(0.016, 0.1, false);
+    ref.update(0.016, 0.1, false);
+    expect(readPose(c)).toEqual(readPose(ref));
+  });
+
+  it("유지 자세(지목)가 있으면 서 있는 자세가 아니라 유지 자세로 돌아온다", () => {
+    const c = createCharacter(0, "coat");
+    const ref = createCharacter(0, "coat");
+    c.holdPose("point");
+    ref.holdPose("point");
+    settle(c, 200, 0);
+    settle(ref, 200, 0);
+    c.playEmote("clap");
+    c.update(0.016, 1, false);
+    ref.update(0.016, 1, false);
+    c.stopEmote();
+    settle(c, 200, 1.1);
+    settle(ref, 200, 1.1);
+    expect(readPose(c)).toEqual(readPose(ref));
+  });
+
+  it("끝난 뒤 새 동작을 다시 재생할 수 있고, 멈추는 중 새 동작은 처음부터 시작한다", () => {
+    const c = createCharacter(0, "coat");
+    c.playEmote("clap");
+    c.update(0.016, 0, false);
+    c.stopEmote();
+    c.update(0.016, 0.1, false);
+    c.playEmote("clap");
+    c.update(0.016, 0.2, false);
+    expect(readPose(c).aAx).toBeLessThan(-1.19);
+    settle(c, 70, 0.3);
+    expect(readPose(c).aAx).toBeLessThan(-1.19); // 이전 stop 의 타이머가 새 동작을 지우지 않는다
+  });
+
+  it("아홉 동작을 재생하는 동안 메시 수와 병합 지오메트리는 늘지 않는다(D-17, 효과 없음)", () => {
+    const c = createCharacter(0, "coat");
+    c.update(0.016, 0, false);
+    const meshesBefore = c.meshCount();
+    for (const id of Object.keys(EMOTES) as EmoteId[]) {
+      c.playEmote(id);
+      for (let i = 0; i < 140; i++) c.update(0.016, i * 0.016, false);
+      expect(c.meshCount()).toBe(meshesBefore);
+      c.stopEmote();
+    }
+    const count = meshes(c.root).length;
+    expect(count).toBe(meshesBefore);
+  });
+});

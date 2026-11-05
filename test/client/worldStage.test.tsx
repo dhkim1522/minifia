@@ -108,6 +108,7 @@ export function makeFakeRenderer(): FakeRenderer {
 
 export interface FakeHandle extends CharacterHandle {
   playEmote?: (id: string) => void;
+  stopEmote?: () => void;
   setFace?: (id: string) => void;
   yaws: number[];
   dims: boolean[];
@@ -147,6 +148,7 @@ export function makeFakeKit(created: FakeHandle[]): WorldModules["characterKit"]
         setRing: vi.fn(),
         setPickMark: vi.fn(),
         playEmote: vi.fn(),
+        stopEmote: vi.fn(),
         setFace: vi.fn(),
       };
       created.push(h);
@@ -2856,5 +2858,139 @@ describe("동작 프레임 재생 (D-9, L33)", () => {
     s.utils.unmount();
     act(() => s.store.applyEmote({ t: "emote", seat: 3, id: "clap", n: 1 }, 1));
     expect(h3.playEmote).not.toHaveBeenCalled();
+  });
+});
+
+describe("동작 동시 상한 4·단계 전환·deny 건너뛰기 (D-13, T-10-10)", () => {
+  const SIX = [0, 1, 2, 3, 4, 5].map((i) => player(i, `손님${i}`));
+  const SIX_ENTS = (): WorldSeg[] => SIX.map((p, i) => seg(p.seat, [-400 + i * 150, 100 + (i % 3) * 100]));
+  const ALL6 = Object.fromEntries(SIX.map((p) => [p.seat, {}]));
+  const openSix = (over: Partial<WorldStageProps> = {}) => open({ view: makeView(SIX), scene: sceneOf(ALL6), ...over }, { players: SIX, ents: SIX_ENTS() });
+  const handleOf = (s: Setup, seat: number): FakeHandle => s.world.renderers[0]!.chars.get(seat) as FakeHandle;
+  let seq = 0;
+  const emit = (s: Setup, seat: number, id: "clap" | "dance" | "cry" = "clap"): void => {
+    act(() => s.store.applyEmote({ t: "emote", seat, id, n: ++seq }, 1));
+  };
+
+  it("다섯 번째 프레임에서 가장 먼저 시작한 좌석의 stopEmote 가 한 번 불리고 다섯 번째 playEmote 도 불린다", async () => {
+    const s = await openSix();
+    frames(32);
+    for (const seat of [0, 1, 2, 3]) emit(s, seat);
+    for (const seat of [0, 1, 2, 3]) expect(handleOf(s, seat).stopEmote).not.toHaveBeenCalled();
+    expect(window.__mfEmotes!.playing).toEqual([0, 1, 2, 3]);
+    emit(s, 4);
+    expect(handleOf(s, 0).stopEmote).toHaveBeenCalledTimes(1);
+    for (const seat of [1, 2, 3, 4]) expect(handleOf(s, seat).stopEmote).not.toHaveBeenCalled();
+    expect(handleOf(s, 4).playEmote).toHaveBeenCalledTimes(1);
+    expect(window.__mfEmotes!.playing).toEqual([1, 2, 3, 4]);
+  });
+
+  it("같은 좌석이 다시 하면 상한을 두 번 세지 않고, 다시 한 좌석은 가장 늦게 도착한 것이 된다", async () => {
+    const s = await openSix();
+    frames(32);
+    emit(s, 0);
+    emit(s, 1);
+    emit(s, 0);
+    emit(s, 2);
+    emit(s, 3);
+    for (const seat of [0, 1, 2, 3]) expect(handleOf(s, seat).stopEmote).not.toHaveBeenCalled();
+    expect(handleOf(s, 0).playEmote).toHaveBeenCalledTimes(2);
+    emit(s, 4);
+    expect(handleOf(s, 1).stopEmote).toHaveBeenCalledTimes(1);
+    expect(handleOf(s, 0).stopEmote).not.toHaveBeenCalled();
+  });
+
+  it("끝난 동작은 상한을 채우지 않는다", async () => {
+    const s = await openSix();
+    frames(32);
+    for (const seat of [0, 1, 2, 3]) emit(s, seat);
+    frames(2500); // 가장 긴 동작(춤 2.08초)보다 오래
+    expect(window.__mfEmotes!.playing).toEqual([]);
+    emit(s, 4);
+    for (const seat of [0, 1, 2, 3]) expect(handleOf(s, seat).stopEmote).not.toHaveBeenCalled();
+    expect(window.__mfEmotes!.playing).toEqual([4]);
+  });
+
+  it("걷는 중이라고 알려진 좌석은 재생 목록에서 빠진다", async () => {
+    const s = await openSix();
+    frames(32);
+    emit(s, 1);
+    emit(s, 2);
+    expect(window.__mfEmotes!.playing).toEqual([1, 2]);
+    act(() => move(s.store, seg(1, [-250, 200, 300, 200], Date.now())));
+    frames(64);
+    expect(window.__mfEmotes!.playing).toEqual([2]);
+  });
+
+  it("deny: 그 좌석이 사람 동작을 재생 중이면 playEmote('deny') 도 놀란 표정도 없고 목록이 늘지 않는다", async () => {
+    const s = await openSix();
+    frames(32);
+    emit(s, 2, "dance");
+    const h2 = handleOf(s, 2);
+    s.rerender({ deny: { seat: 2, nonce: 1 } });
+    expect(h2.playEmote).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(h2.playEmote!).mock.calls[0]![0]).toBe("dance");
+    expect(h2.setFace).not.toHaveBeenCalledWith("surprise");
+    expect(window.__mfEmotes!.playing).toEqual([2]);
+  });
+
+  it("deny: 재생 중이 아니면 기존대로 손사래를 하고 목록에 넣지 않는다 — 동작이 끝난 뒤에도 그렇다", async () => {
+    const s = await openSix();
+    frames(32);
+    s.rerender({ deny: { seat: 3, nonce: 1 } });
+    expect(vi.mocked(handleOf(s, 3).playEmote!).mock.calls.map((c) => c[0])).toEqual(["deny"]);
+    expect(window.__mfEmotes!.playing).toEqual([]);
+    emit(s, 2, "cry");
+    frames(2500);
+    s.rerender({ deny: { seat: 2, nonce: 2 } });
+    expect(vi.mocked(handleOf(s, 2).playEmote!).mock.calls.map((c) => c[0])).toEqual(["cry", "deny"]);
+  });
+
+  it("deny 는 상한 계산에 넣지 않는다 — 사람 동작 4개 + deny 한 번이어도 아무도 멈추지 않는다", async () => {
+    const s = await openSix();
+    frames(32);
+    for (const seat of [0, 1, 2, 3]) emit(s, seat);
+    s.rerender({ deny: { seat: 5, nonce: 1 } });
+    for (const seat of [0, 1, 2, 3]) expect(handleOf(s, seat).stopEmote).not.toHaveBeenCalled();
+  });
+
+  it("단계(phaseKey)가 바뀌면 재생 중인 모든 좌석의 stopEmote 가 불리고 목록이 비며 훅 playing 이 []이다", async () => {
+    const s = await openSix({ view: { ...makeView(SIX), phase: "night", day: { n: 1, roles: [] } as unknown as RoomView["day"] } });
+    frames(32);
+    emit(s, 0);
+    emit(s, 3);
+    // 같은 단계의 새 view 객체는 정리하지 않는다
+    s.rerender({ view: { ...s.props.view } });
+    expect(handleOf(s, 0).stopEmote).not.toHaveBeenCalled();
+    s.rerender({ view: { ...s.props.view, phase: "morning" } });
+    expect(handleOf(s, 0).stopEmote).toHaveBeenCalledTimes(1);
+    expect(handleOf(s, 3).stopEmote).toHaveBeenCalledTimes(1);
+    expect(handleOf(s, 1).stopEmote).not.toHaveBeenCalled();
+    expect(window.__mfEmotes!.playing).toEqual([]);
+    expect(window.__mfEmotes!.last).toMatchObject({ seat: 3 });
+  });
+
+  it("일차만 바뀌어도(밤 → 다음 밤) 정리한다", async () => {
+    const s = await openSix({ view: { ...makeView(SIX), phase: "night", day: { n: 1, roles: [] } as unknown as RoomView["day"] } });
+    frames(32);
+    emit(s, 1);
+    s.rerender({ view: { ...s.props.view, day: { n: 2, roles: [] } as unknown as RoomView["day"] } });
+    expect(handleOf(s, 1).stopEmote).toHaveBeenCalledTimes(1);
+  });
+
+  it("처음 마운트에서는 정리를 부르지 않는다", async () => {
+    const s = await openSix();
+    frames(32);
+    for (const h of s.world.handles) expect(h.stopEmote).not.toHaveBeenCalled();
+  });
+
+  it("끊긴 사람(dim) 좌석에도 재생되고 상한에 센다", async () => {
+    const s = await openSix();
+    s.rerender({ view: makeView(SIX.map((p) => (p.seat === 0 ? { ...p, connected: false } : p))) });
+    frames(32);
+    for (const seat of [0, 1, 2, 3]) emit(s, seat);
+    expect(handleOf(s, 0).playEmote).toHaveBeenCalledTimes(1);
+    emit(s, 4);
+    expect(handleOf(s, 0).stopEmote).toHaveBeenCalledTimes(1);
   });
 });
