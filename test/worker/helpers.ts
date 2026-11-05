@@ -844,3 +844,27 @@ export async function restoreStorage(code: string, snap: Map<string, unknown>): 
   });
   await evictDurableObject(stub);
 }
+
+// ---- 10페이즈 동작 도우미(10-01) ----
+
+/** 동작을 보낸다. 단계 키는 그 소켓이 마지막으로 받은 view 에서 만든다(클라이언트가 하는 대로). pk 를 주면 그 값을 쓴다(단계 어긋남 시험). */
+export function emoteSend(sock: TestSocket, id: string, pk: string = phaseKeyOf(sock)): void {
+  send(sock, { t: "emote", id, pk });
+}
+
+/** settle 이 돌려준 프레임 가운데 emote 프레임만 고른다. */
+export function emotesOf(msgs: ServerMessage[]): Array<Extract<ServerMessage, { t: "emote" }>> {
+  return msgs.filter((m): m is Extract<ServerMessage, { t: "emote" }> => m.t === "emote");
+}
+
+/** 모든 사람의 동작 기록(인메모리 emoteRates)을 비운다 — 앞 동작 길이·1000ms 간격을 실제로 기다리지 않게 한다. */
+export async function resetEmoteRates(code: string): Promise<void> {
+  await runInDurableObject(env.ROOM.getByName(code), async (instance) => {
+    (instance["emoteRates"] as Map<string, unknown>).clear();
+  });
+}
+
+/** 동작 기록을 가진 사람 id 목록(인메모리 emoteRates 의 키). */
+export async function emoteRateKeys(code: string): Promise<string[]> {
+  return runInDurableObject(env.ROOM.getByName(code), async (instance) => [...(instance["emoteRates"] as Map<string, unknown>).keys()]);
+}
