@@ -802,13 +802,22 @@ async function stageFull(url, args) {
       if (lastView(owner).phaseDurationMs !== SHOWDOWN_TURN_MS) fail(`${label} ${t}번째 차례 phaseDurationMs 가 ${SHOWDOWN_TURN_MS} 가 아님: ${lastView(owner).phaseDurationMs}`);
       if (t === 2) {
         // 마지막 차례는 말하지 않고 시간 초과로 넘긴다: skip 이 모두에게 같고 word 가 없다.
+        // 확정 상태는 PICK_GAP_MS 동안만 유지되고 배포본은 클라이언트 간 도착 편차가 더 커서, 한 번이라도 본 클라이언트를 기록한다.
+        const sawTimeoutDone = new Map();
+        for (const x of alive) sawTimeoutDone.set(x, null);
         await waitUntil(
-          () => alive.every((x) => showdownOf(x)?.i === 2 && showdownOf(x).doneAt !== undefined),
+          () => {
+            for (const x of alive) {
+              const sd = showdownOf(x);
+              if (sd?.i === 2 && sd.doneAt !== undefined && sawTimeoutDone.get(x) === null) sawTimeoutDone.set(x, { ...sd });
+            }
+            return alive.every((x) => sawTimeoutDone.get(x) !== null);
+          },
           SHOWDOWN_TURN_MS + STATE_LIMIT_MS,
           `${label} 시간 초과 차례의 확정(doneAt)이 모든 클라이언트에 오지 않음`,
         );
         for (const c of alive) {
-          const sd = showdownOf(c);
+          const sd = sawTimeoutDone.get(c);
           if (sd.skip !== true || sd.word !== undefined) fail(`${c.nickname} 의 ${label} 시간 초과 차례가 {skip true, word 없음} 이 아님`);
         }
         continue;
@@ -1497,6 +1506,7 @@ try {
     fail(`알 수 없는 단계: ${args.stage}`);
   }
 } catch (e) {
+  if (process.env.SMOKE_STACK && e instanceof Error) console.error(e.stack);
   fail(e instanceof Error ? e.message : String(e));
 }
 clearTimeout(overall);
