@@ -34,6 +34,11 @@ import { FAIL_AFTER_MS, MAP_STATUS_COPY, RECREATE_AFTER_MS } from "../../src/wor
 import * as e2eLib from "../../scripts/e2e/lib.mjs";
 // @ts-expect-error -- 선언 없는 스크립트 모듈
 import * as perfRun from "../../scripts/perf-run.mjs";
+// @ts-expect-error -- 선언 없는 스크립트 모듈
+import * as resultE2e from "../../scripts/e2e/result.mjs";
+import { RESULT_TEXT } from "../../src/game/verdict";
+import { JOB_OUTFIT } from "../../src/world/ghostOutfit";
+import { CHAT_PANEL_EXTRA as RESULT_CHAT_EXTRA } from "../../src/game/chatUi";
 
 describe("E2E 의 TIMELESS_PHASES 와 앱 상수", () => {
   it("scripts/e2e/lib.mjs 의 TIMELESS_PHASES 가 src/game/scenes.ts 의 같은 이름 상수와 같은 목록이다", () => {
@@ -342,6 +347,42 @@ describe("10페이즈 E2E 표식(10-05)", () => {
     expect(has("components/v2/DressSheet.tsx", "data-outfit=")).toBe(true);
     expect(has("components/v2/FloatAction.tsx", "data-float=")).toBe(true);
     expect(has("world/testHooks.ts", "__mfLooks")).toBe(true);
+  });
+});
+
+describe("11페이즈 결과 화면 E2E 표식·표(11-05)", () => {
+  const r = resultE2e as unknown as {
+    RESULT_MARKERS: readonly string[];
+    RESULT_JOB_OUTFIT: Record<string, string>;
+    RESULT_WIN_TITLE: Record<string, string>;
+    RESULT_PANEL_H: { short: number; tall: number; tallRoomMinH: number };
+  };
+  const root = new URL("../../", import.meta.url);
+  const tracked = execFileSync("git", ["ls-files", "src"], { cwd: root, encoding: "utf8" })
+    .split("\n")
+    .filter((f) => /\.(tsx?|css)$/.test(f));
+  const sources = tracked.map((f) => ({ f, text: readFileSync(new URL(f, root), "utf8") }));
+
+  it("RESULT_MARKERS 가 git 이 추적하는 src/ 파일 어딘가에 있다(표식 이름 오타 방지)", () => {
+    expect(r.RESULT_MARKERS).toEqual(["data-result-stage", "data-result-panel", "data-result-announce", "__mfResult"]);
+    const missing = r.RESULT_MARKERS.filter((m) => !sources.some((s) => s.text.includes(m)));
+    expect(missing).toEqual([]);
+  });
+
+  it("표식은 결과 화면·테스트 훅에 각각 있다", () => {
+    const has = (file: string, marker: string) => sources.some((s) => s.f.endsWith(file) && s.text.includes(marker));
+    expect(has("screens/ResultScreen.tsx", "data-result-stage")).toBe(true);
+    expect(has("screens/ResultScreen.tsx", "data-result-panel")).toBe(true);
+    expect(has("screens/ResultScreen.tsx", "data-result-announce")).toBe(true);
+    expect(has("world/testHooks.ts", "__mfResult")).toBe(true);
+  });
+
+  it("직업 의상 표·승리 한 줄·패널 높이가 앱 상수와 같다 (E2E 사본이 어긋나지 않게)", () => {
+    expect({ ...r.RESULT_JOB_OUTFIT }).toEqual({ ...JOB_OUTFIT });
+    expect({ ...r.RESULT_WIN_TITLE }).toEqual({ citizenWin: RESULT_TEXT.title.citizenWin, mafiaWin: RESULT_TEXT.title.mafiaWin });
+    expect(r.RESULT_PANEL_H.short).toBe(LOG_H_SHORT + RESULT_CHAT_EXTRA);
+    expect(r.RESULT_PANEL_H.tall).toBe(LOG_H_TALL + RESULT_CHAT_EXTRA);
+    expect(r.RESULT_PANEL_H.tallRoomMinH).toBe(TALL_ROOM_MIN_H);
   });
 });
 
