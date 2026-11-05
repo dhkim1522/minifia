@@ -1446,7 +1446,7 @@ describe("buildView me.chat — 서버가 정한 내 채널 (07-10, CHAT-02·03)
     expect(chatLine(s)).toBe(want);
   });
 
-  it.each(["assigning", "roleReveal", "ended"] as const)("%s: 모두 키 없음 (탈락자 포함)", (phase) => {
+  it.each(["assigning", "roleReveal"] as const)("%s: 모두 키 없음 (탈락자 포함)", (phase) => {
     const s = withDead(stateAt(phase, 6, 1), 1);
     expect(chatLine(s)).toBe(everyone(s, "-"));
   });

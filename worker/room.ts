@@ -1393,7 +1393,8 @@ export class Room extends DurableObject<Env> {
     const room = this.room;
     if (!room) return "phase";
     if (pk !== phaseKey({ phase: room.phase, day: room.day, round: roundOf(room) })) return "phase";
-    const ch = channelOf(room, playerId);
+    // 결과 단계(11-03, D-11)는 channelOf 가 아니라 여기서만 all 로 본다 — 동작·입력 중이 버려지는 규칙(channelOf null)은 건드리지 않는다.
+    const ch = room.phase === "ended" ? "all" : channelOf(room, playerId);
     if (ch === null) return "phase";
     const me = room.players.find((p) => p.id === playerId);
     if (!me) return "phase";

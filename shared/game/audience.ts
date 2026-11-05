@@ -74,6 +74,8 @@ export function audience(state: RoomState, ev: AudienceEvent): ReadonlySet<strin
     if (state.phase === "night") return mover.role === "mafia" ? pick((p) => !isAlive(p) || p.role === "mafia") : new Set();
     return pick(() => true);
   }
+  // 결과 단계(11-03, D-11): chat 의 all 한 채널만 방 전원(탈락자 포함)에게 연다. CHAT_PHASES 에 ended 를 넣지 않는 이유 — emote·typing 의 종료 단계 버림 표와 channelOf(null)를 그대로 두기 위해서다.
+  if (state.phase === "ended") return ev.k === "chat" && ev.ch === "all" ? pick(() => true) : new Set();
   if (!CHAT_PHASES.has(state.phase)) return new Set();
   switch (ev.ch) {
     case "all":
