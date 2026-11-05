@@ -431,11 +431,16 @@ export class Room extends DurableObject<Env> {
     }
     this.room = result.state;
     // 광장이 정해진 시작(D-21)은 모두를 광장 입장 지점으로 옮기고 snap 을 보낸다 — 로비의 bar 위치가 광장 마스크에서 막힌 칸일 수 있다.
-    // bar 시작은 지금처럼 로비 위치를 그대로 쓴다. state 다음에 모든 소켓이 snap 을 받는다(handleTestReset 과 같은 길).
+    // bar 시작은 지금처럼 로비 위치를 그대로 쓴다. state 다음에 모든 소켓이 snap 을 받는다.
+    // emitWorld 는 쓰지 않는다: 시작 직후 assigning 은 지도 단계가 아니라 world 받는 사람 집합이 비어 아무에게도 가지 않는다.
+    // snapEachViewer 는 보는 사람 한 명씩 worldVisibleTo(assigning 은 방 전원)로 거른 snap 을 보낸다.
     const moved = this.room.map !== undefined && this.room.map !== "bar";
     if (moved) this.world = respawnAll(this.world, this.room.players, now, this.mapDef());
     await this.persistAndBroadcast();
-    if (moved) this.emitWorld(snapFrame(this.world, this.room.players, now));
+    if (moved) {
+      this.markWorldDirty();
+      this.snapEachViewer(now);
+    }
     await this.reschedule();
     // 로비를 떠나는 시작: 위치를 지금 저장하고 그대로 둔다(가정 A1). 이후 world 프레임은 나가지 않는다.
     // 알람(단계 마감) 재설정이 먼저다 — 저장 쓰기 때문에 마감 알람이 늦어지지 않게.
