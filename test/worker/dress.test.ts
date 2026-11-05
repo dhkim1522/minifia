@@ -1,7 +1,7 @@
 // 10-02: 로비 의상(dress) 처리 — 서버가 고른 값을 저장하고 모든 소켓의 players[].look 으로 보낸다 (D-6, L25·L26).
 import { describe, expect, it } from "vitest";
 import type { RoleId, ServerMessage } from "../../shared/protocol";
-import { advanceTo, connect, editRoom, ghostsOf, hello, lastViewOf, mapPlayers, mark, nextFrame, pause, seat, send, settle, stable, startedGame, storedRoom, summary, withRole } from "./helpers";
+import { advanceTo, connect, editRoom, endedGame4, ghostsOf, hello, lastViewOf, mapPlayers, mark, nextFrame, pause, seat, send, settle, stable, startedGame, storedRoom, summary, until, withRole } from "./helpers";
 import type { Seated } from "./helpers";
 
 type State = Extract<ServerMessage, { t: "state" }>;
@@ -272,5 +272,26 @@ describe("L25·L26 — 의상은 공개 값이고 역할의 함수가 아니다"
     expect(new Set(shapes).size).toBe(1);
     expect(shapes[0]).toBe("[state:discussion]|------");
     expect(JSON.stringify((await storedRoom(g.code)).players)).toBe(before);
+  });
+});
+
+// 11-08: 결과 단계에서도 의상을 고를 수 있다(D-16) — 문은 lobby + ended 이고, 고른 의상은 다음 판에도 남는다.
+describe("결과 단계 의상 (D-16)", () => {
+  it("ended 에서 손님·탈락자가 고르면 모든 소켓의 players[].look 에 실리고, 다시 하기 뒤 새 판에도 남는다", { timeout: 60_000 }, async () => {
+    const g = await endedGame4();
+    send(g.living[0]!.sock, { t: "dress", look: "hood" });
+    send(g.dead.sock, { t: "dress", look: "noir" });
+    const lookOf = (viewer: Seated["host"], seatNo: number): string | undefined => lastViewOf(viewer).players.find((p) => p.seat === seatNo)?.look;
+    await until("의상 반영", async () => g.socks.every((s) => lookOf(s, g.living[0]!.seat) === "hood" && lookOf(s, g.dead.seat) === "noir"));
+    // 다시 하기: 손님 셋이 준비하고 방장이 시작한다
+    for (const s of g.socks.slice(1)) send(s, { t: "ready", on: true, round: 1 });
+    await until("모두 준비", async () => g.socks.every((s) => lastViewOf(s).players.filter((p) => p.ready === true).length === 4));
+    send(g.socks[0]!, { t: "rematch", round: 1 });
+    await until("새 판", async () => g.socks.every((s) => lastViewOf(s).phase === "assigning"));
+    for (const s of g.socks) {
+      expect(lookOf(s, g.living[0]!.seat)).toBe("hood");
+      expect(lookOf(s, g.dead.seat)).toBe("noir");
+    }
+    expect((await storedRoom(g.code)).players.filter((p) => (p as { look?: string }).look !== undefined).length).toBe(2);
   });
 });
