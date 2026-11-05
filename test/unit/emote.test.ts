@@ -1,4 +1,6 @@
 // 10-01: 동작(몸짓) 순수 규칙 — EMOTE_MS 가 캐릭터 표(EMOTES)와 어긋나지 않음을 잡는다 (D-3, UI-SPEC A-6).
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { EMOTE_IDS } from "../../shared/protocol";
 import { EMOTE_BURST_MAX, EMOTE_BURST_WINDOW_MS, EMOTE_MIN_GAP_MS, EMOTE_MS, emoteGate } from "../../shared/game/emote";
@@ -63,5 +65,26 @@ describe("emoteGate — 연타 규칙 (10-01 Task 2, D-19)", () => {
   it("입력 prev 를 바꾸지 않는다", () => {
     const prev: EmoteSenderState = Object.freeze({ until: 0, at: Object.freeze([1]) as readonly number[] });
     expect(() => emoteGate(prev, "clap", 50_000)).not.toThrow();
+  });
+});
+
+// O-7: 서버 봇은 동작을 하지 않는다 — 봇 행동 종류에 동작이 없고, 처리기 본체(applyEmote)는 사람 메시지 처리기 한 곳에서만 불린다.
+describe("서버 봇 비참여 (10-01, O-7)", () => {
+  const ROOT = fileURLToPath(new URL("../../", import.meta.url));
+  const code = (rel: string): string =>
+    readFileSync(`${ROOT}${rel}`, "utf8")
+      .split("\n")
+      .filter((l) => !l.trim().startsWith("//"))
+      .join("\n");
+
+  it("shared/game/bots.ts 의 코드에 emote 행동 종류가 없다", () => {
+    expect(code("shared/game/bots.ts")).not.toMatch(/emote/i);
+  });
+
+  it("worker/room.ts 에서 applyEmote 를 부르는 곳은 handleEmote 하나뿐이다", () => {
+    const calls = code("worker/room.ts").match(/this\.applyEmote\(/g) ?? [];
+    expect(calls.length).toBe(1);
+    const m = /private handleEmote\([^)]*\)[^{]*\{([\s\S]*?)\n  \}/.exec(code("worker/room.ts"));
+    expect(m?.[1]).toContain("this.applyEmote(");
   });
 });
