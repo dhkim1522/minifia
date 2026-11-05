@@ -930,3 +930,35 @@ describe("ChatPanel ballots 카드 (09.1.1-12)", () => {
     expect(container.querySelector('[data-card="will"] .mv-chat__card-title')?.textContent).toBe("서연 님의 유언");
   });
 });
+
+// 11-12 Task 1: 입력줄 오른쪽 끝 trailing 슬롯(결과 화면의 다시 하기 알약). 입력칸·보내기 버튼 뒤, form 의 마지막 요소다.
+describe("ChatPanel trailing 슬롯 (11-12)", () => {
+  it("trailing 이 있으면 보내기 버튼 뒤 form 의 마지막에 data-chat-trailing 래퍼로 들어간다", () => {
+    const { container } = render(<Harness trailing={<button type="button" data-probe="">알약</button>} />);
+    const slot = container.querySelector("[data-chat-trailing]");
+    expect(slot).not.toBeNull();
+    expect(slot?.querySelector("[data-probe]")).not.toBeNull();
+    const form = container.querySelector(".mv-chat__form") as Element;
+    expect(form.lastElementChild).toBe(slot);
+    const send = container.querySelector("[data-chat-send]") as Element;
+    expect(send.compareDocumentPosition(slot as Element) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("trailing 이 없으면 DOM 에 자리도 없다", () => {
+    const { container } = render(<Harness />);
+    expect(container.querySelector("[data-chat-trailing]")).toBeNull();
+  });
+
+  it("trailing 안을 눌러도 입력 중 경로(onChange)나 보내기를 부르지 않는다", () => {
+    const onSend = vi.fn();
+    const onChangeSpy = vi.fn();
+    const { container } = render(<Harness onSend={onSend} onChangeSpy={onChangeSpy} trailing={<button type="button" data-probe="">알약</button>} />);
+    fireEvent.click(container.querySelector("[data-probe]") as Element);
+    expect(onSend).not.toHaveBeenCalled();
+    expect(onChangeSpy).not.toHaveBeenCalled();
+  });
+
+  it("CSS: 래퍼는 줄어들지 않는다(flex none)", () => {
+    expect(rulesFor(V2_CSS, ".mv-chat__trailing").join(";")).toContain("flex: none");
+  });
+});

@@ -625,3 +625,92 @@ describe("RoomScreen: 방 높이 --mf-room-h (CHAT-05)", () => {
     expect(roomH(container)).toBe("");
   });
 });
+
+// ---------- 11-12: 판 번호(round)가 바뀐 view 는 처음 접속한 것처럼 그린다 (D-26, T-11-39) ----------
+
+describe("RoomScreen: round 변화 초기화 (11-12)", () => {
+  const mount = () => render(<RoomScreen code="0042" token={"t".repeat(43)} onExit={vi.fn()} />);
+  const again = (rerender: (ui: React.ReactElement) => void) => rerender(<RoomScreen code="0042" token={"t".repeat(43)} onExit={vi.fn()} />);
+  const players2: RoomView["players"] = [
+    { seat: 0, nickname: "민수", connected: true, isHost: true },
+    { seat: 1, nickname: "하윤", connected: true, isHost: false },
+  ];
+  const lobbyAt = (round: number | undefined): RoomView => ({ ...view, phase: "lobby", players: players2, me: { seat: 1, isHost: false }, ...(round !== undefined ? { round } : {}) });
+  const texts = (container: HTMLElement): string => [...container.querySelectorAll(".mv-chat__msg .mv-chat__text")].map((el) => el.textContent ?? "").join("|");
+  let listener: ((e: RoomEvent, meta: { epoch: number }) => void) | undefined;
+  const withListener = (v: RoomView) => {
+    listener = undefined;
+    connectionMock.current = conn({
+      view: v,
+      onEvent: vi.fn((l: (e: RoomEvent, meta: { epoch: number }) => void) => {
+        listener = l;
+        return () => {};
+      }),
+    });
+  };
+  const setView = (v: RoomView) => {
+    connectionMock.current = { ...(connectionMock.current as RoomConnection), view: v };
+  };
+  const chatFrame = (seq: number, text: string): RoomEvent => ({ t: "chat", ch: "all", seat: 0, seq, text, at: 1000 + seq });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    stage.props = null;
+  });
+
+  it("round 가 1 → 2 로 바뀌면 보관한 채팅 줄을 비운다", async () => {
+    withListener(lobbyAt(1));
+    const { container, rerender } = mount();
+    act(() => listener!({ t: "chat", ch: "all", seat: 0, seq: 1, text: "지난 판 줄", at: 1001 }, { epoch: 1 }));
+    expect(texts(container)).toBe("지난 판 줄");
+    setView(lobbyAt(2));
+    again(rerender);
+    expect(texts(container)).toBe("");
+  });
+
+  it("chat·resultLog·world 저장소의 reset 이 각각 불린다 (그 사이 새 snap 이 없었을 때)", async () => {
+    const { ChatStore } = await import("../../src/net/chatStore");
+    const { ResultLogStore } = await import("../../src/net/resultLogStore");
+    const { WorldStore } = await import("../../src/world/store");
+    const chatReset = vi.spyOn(ChatStore.prototype, "reset");
+    const logReset = vi.spyOn(ResultLogStore.prototype, "reset");
+    const worldReset = vi.spyOn(WorldStore.prototype, "reset");
+    withListener(lobbyAt(1));
+    const { rerender } = mount();
+    expect(chatReset).not.toHaveBeenCalled(); // 처음 받은 view 에는 부르지 않는다
+    expect(logReset).not.toHaveBeenCalled();
+    expect(worldReset).not.toHaveBeenCalled();
+    setView(lobbyAt(2));
+    again(rerender);
+    expect(chatReset).toHaveBeenCalledTimes(1);
+    expect(logReset).toHaveBeenCalledTimes(1);
+    expect(worldReset).toHaveBeenCalledTimes(1);
+  });
+
+  it("새 판 snap 이 이미 와 있으면(view 보다 먼저 도착) 월드 저장소는 비우지 않는다 — 방금 받은 위치를 지우지 않는다", async () => {
+    const { WorldStore } = await import("../../src/world/store");
+    const worldReset = vi.spyOn(WorldStore.prototype, "reset");
+    withListener(lobbyAt(1));
+    const { rerender } = mount();
+    act(() => listener!({ t: "world", k: "snap", at: 1000, ents: [] }, { epoch: 1 }));
+    setView(lobbyAt(2));
+    again(rerender);
+    expect(worldReset).not.toHaveBeenCalled();
+  });
+
+  it("같은 round 의 새 view 객체나 round 가 없는 view 는 비우지 않는다", async () => {
+    const { ChatStore } = await import("../../src/net/chatStore");
+    const chatReset = vi.spyOn(ChatStore.prototype, "reset");
+    withListener(lobbyAt(1));
+    const { container, rerender } = mount();
+    act(() => listener!(chatFrame(1, "남는 줄"), { epoch: 1 }));
+    setView({ ...lobbyAt(1), serverNow: 2000 });
+    again(rerender);
+    expect(texts(container)).toBe("남는 줄");
+    expect(chatReset).not.toHaveBeenCalled();
+    // round 없는 view(옛 서버)는 1 로 읽는다 — 1 → (없음) 은 변화가 아니다
+    setView(lobbyAt(undefined));
+    again(rerender);
+    expect(chatReset).not.toHaveBeenCalled();
+  });
+});

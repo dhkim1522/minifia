@@ -207,6 +207,17 @@ describe("HeadStack 8페이즈 칸(DAY-04, GHOST-02)", () => {
     expect(container.querySelector(".mv-tag")?.lastElementChild?.classList.contains("mv-tag__done")).toBe(true);
   });
 
+  it("done + doneLabel 이면 체크의 접근성 이름이 그 문구다 (결과 화면은 '준비됨', 11-12)", () => {
+    const { container } = render(<HeadStack name="도윤" color="var(--seat-2)" done doneLabel="준비됨" />);
+    expect(container.querySelector(".mv-tag__done svg")?.getAttribute("aria-label")).toBe("준비됨");
+    expect(container.querySelector("div.mv-head")?.getAttribute("data-done")).toBe("true");
+  });
+
+  it("doneLabel 이 없으면 기본 '투표함' 그대로", () => {
+    const { container } = render(<HeadStack name="도윤" color="var(--seat-2)" done />);
+    expect(container.querySelector(".mv-tag__done svg")?.getAttribute("aria-label")).toBe("투표함");
+  });
+
   it("아무 속성도 없으면 기존과 같은 DOM: 이름표 하나, data-* 없음, 이름표 안은 점과 이름뿐", () => {
     const { container } = render(<HeadStack name="도윤" color="var(--seat-2)" />);
     const head = container.querySelector("div.mv-head");
