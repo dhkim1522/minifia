@@ -8,7 +8,7 @@ import { MOVE_V, WANDER_MIN_MS, WANDER_SPAN_MS, restSegment, positionAtFx, segme
 import type { Segment } from "../../../shared/game/world";
 import { UNIT } from "../../../shared/game/map";
 import { EMOTE_IDS } from "../../../shared/protocol";
-import type { EmoteId } from "../../../shared/protocol";
+import type { EmoteId, MapId } from "../../../shared/protocol";
 
 /** 동작 이벤트 간격(ms): 5초마다 한 명 */
 export const EMOTE_EVERY_MS = 5000;
@@ -165,6 +165,8 @@ export interface PerfParams {
   outfits: "coat" | "mix";
   /** 같은 시각에 동작하는 사람 수 1~4 */
   burst: number;
+  /** 장면과 걷기 시나리오의 맵(MAP-06): bar = 지하 재즈 바(기본), plaza = 시계탑 광장. 광장 성능 측정(11-10)용 */
+  map: MapId;
 }
 
 function num(v: string | null): number | null {
@@ -173,7 +175,7 @@ function num(v: string | null): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-/** ?perf=1 쿼리: scene·minutes·dpr·budget·seed·chars·shot·nav·outfits·burst. 잘못된 값은 기본값, 범위 밖은 안쪽으로 자른다 */
+/** ?perf=1 쿼리: scene·minutes·dpr·budget·seed·chars·shot·nav·outfits·burst·map. 잘못된 값은 기본값, 범위 밖은 안쪽으로 자른다 */
 export function parsePerfParams(q: URLSearchParams): PerfParams {
   const minutes = num(q.get("minutes"));
   const dpr = num(q.get("dpr"));
@@ -192,5 +194,6 @@ export function parsePerfParams(q: URLSearchParams): PerfParams {
     nav: q.get("nav") === "1",
     outfits: q.get("outfits") === "mix" ? "mix" : "coat",
     burst: burst !== null && Number.isInteger(burst) && burst >= 1 && burst <= 4 ? burst : 1,
+    map: q.get("map") === "plaza" ? "plaza" : "bar",
   };
 }

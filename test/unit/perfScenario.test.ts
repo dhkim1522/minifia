@@ -3,6 +3,7 @@ import { createScenario, MIX_OUTFITS, mulberry32, parsePerfParams } from "../../
 import type { ScenarioEvent } from "../../src/debug/perf/scenario";
 import { BAR_MAP, BAR_SPAWNS, UNIT, isWalkable, lineWalkable } from "../../shared/game/map";
 import { PLAZA_MAP, PLAZA_SPAWNS } from "../../shared/game/mapPlaza";
+// @ts-expect-error -- 선언 없는 스크립트 모듈
 import * as perfRun from "../../scripts/perf-run.mjs";
 import { MOVE_V, positionAtFx, segmentEndsAt } from "../../shared/game/world";
 import type { Segment } from "../../shared/game/world";

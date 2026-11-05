@@ -2,7 +2,8 @@
 // 제품과 같은 런타임(world/runtime.ts)·렌더러·3D 캐릭터·이름표 마크업(HeadStack 과 같은 mv-head/mv-tag)으로 지하 재즈 바 + 캐릭터 N명을 띄우고,
 // 서버 없이 시드 고정 시나리오(scenario.ts)가 만든 구간을 WorldStore 에 넣어 걷게 한다. 프레임 제한 없음 — rAF 마다 그린다.
 // 닉네임은 textContent 로만 넣는다(innerHTML 없음). 결과를 서버로 보내지 않는다(RESEARCH R2.6).
-import { BAR_MAP, UNIT, cellCenterFx, routeFx, walkableCells } from "../../../shared/game/map";
+import { UNIT, cellCenterFx, routeFx, walkableCells } from "../../../shared/game/map";
+import { mapOf } from "../../../shared/game/maps";
 import { REVISION } from "three";
 import { MOVE_V } from "../../../shared/game/world";
 import { HEADER_BOTTOM, PANEL_HEIGHT } from "../../world/camera";
@@ -77,7 +78,9 @@ export function mount(root: HTMLElement, search: URLSearchParams): PerfScene {
   const serverNow = (): number => wall0 + elapsed();
 
   const store = new WorldStore();
-  const scenario = createScenario({ seed: p.seed, chars: p.chars, map: BAR_MAP, burst: p.burst });
+  // ?map=plaza 면 광장 마스크·입장 지점으로 걷고 런타임이 광장 장면을 올린다(기본 bar)
+  const map = mapOf(p.map);
+  const scenario = createScenario({ seed: p.seed, chars: p.chars, map, burst: p.burst });
   store.applyFrame({ t: "world", k: "snap", at: wall0, ents: scenario.initial().map((e) => ({ s: e.s, p: e.p, t0: wall0 + e.t0, v: e.v })) }, 1);
 
   let rafId = 0;
@@ -136,6 +139,7 @@ export function mount(root: HTMLElement, search: URLSearchParams): PerfScene {
     mySeat: () => 0,
     players: () => players,
     reducedMotion: () => false,
+    mapId: () => p.map,
     stageRect: () => ({ top: HEADER_BOTTOM, bottom: (host.clientHeight || window.innerHeight) - PANEL_HEIGHT }),
     onStatus: (s) => {
       if (s.status === "ready" && !running && !frozen) {
@@ -173,7 +177,7 @@ export function mount(root: HTMLElement, search: URLSearchParams): PerfScene {
     tapAt = e.timeStamp;
     const now = serverNow();
     const here = store.positionOf(0, now) ?? { x: 0, z: 0 };
-    const path = routeFx(BAR_MAP, { x: Math.round(here.x * UNIT), z: Math.round(here.z * UNIT) }, { x: Math.round(dest.x * UNIT), z: Math.round(dest.z * UNIT) });
+    const path = routeFx(map, { x: Math.round(here.x * UNIT), z: Math.round(here.z * UNIT) }, { x: Math.round(dest.x * UNIT), z: Math.round(dest.z * UNIT) });
     store.applyFrame({ t: "world", k: "move", s: 0, p: path, t0: now, v: MOVE_V }, 1);
     scenario.retarget(0, { p: path, t0: now - wall0, v: MOVE_V });
     runtime.notifyMoveSent(now);
@@ -182,7 +186,7 @@ export function mount(root: HTMLElement, search: URLSearchParams): PerfScene {
   // ----- 걸을 수 있는 셀 겹쳐 보기(nav=1) -----
   const navDots: { el: HTMLElement; x: number; z: number }[] = [];
   if (p.nav) {
-    for (const c of walkableCells(BAR_MAP)) {
+    for (const c of walkableCells(map)) {
       const fx = cellCenterFx(c.c, c.r);
       const el = makeDot();
       navLayer.append(el);

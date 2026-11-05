@@ -377,7 +377,10 @@ describe("광장 정적 예산: 8명 서로 다른 의상 + 동시 동작 4개 (
   const measure = (root: Object3D): { calls: number; tris: number; textures: number } => {
     const vis = visibleMeshes(root);
     const tex = new Set<Texture>();
-    for (const m of vis) for (const x of mats(m)) if ((x as { map?: Texture | null }).map) tex.add((x as { map: Texture }).map);
+    for (const m of vis) for (const x of mats(m)) {
+      const map = (x as { map?: Texture | null }).map;
+      if (map) tex.add(map);
+    }
     return { calls: vis.length + vis.filter((m) => m.castShadow).length, tris: triangles(vis), textures: tex.size };
   };
 

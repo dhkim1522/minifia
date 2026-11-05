@@ -111,13 +111,13 @@ const CHATLOAD_LINES = ["저 아니에요", "누가 수상해요?", "조용한 �
 const CHATLOAD_BASELINE = { avgFps: 55, jankMax: 5, perMinutes: 5, jankMs: JANK_MS, source: "06-PERF-RESULTS.md 조건 B · UI-SPEC 합격 기준 — 5분 평균 ≥ 55fps, 끊김(>50ms) ≤ 5회/5분" };
 
 export const USAGE =
-  "사용법: node scripts/perf-run.mjs [--mode perf|interactive|chatload|nightload] [--url 주소] [--scene talk|vote] [--minutes 5] [--dpr 2] [--throttle 4] [--size 390x844] [--out 폴더] [--headed] [--budget 0] [--seed 1] [--outfits mix|coat] [--burst 1..4] [--runs 3] [--bots 7] [--sound on|off] [--shot [--file 이름]]";
+  "사용법: node scripts/perf-run.mjs [--mode perf|interactive|chatload|nightload] [--url 주소] [--scene talk|vote] [--minutes 5] [--dpr 2] [--throttle 4] [--size 390x844] [--out 폴더] [--headed] [--budget 0] [--seed 1] [--outfits mix|coat] [--burst 1..4] [--map bar|plaza] [--runs 3] [--bots 7] [--sound on|off] [--shot [--file 이름]]";
 
 class UsageError extends Error {}
 
 /** 인자 해석(순수). 값이 필요한 옵션에 값이 없거나 숫자가 아니면 UsageError */
 export function parseArgs(argv) {
-  const o = { url: null, scene: "talk", minutes: 5, dpr: 2, throttle: 4, size: { w: 390, h: 844 }, out: DEFAULT_OUT, headed: false, budget: 0, seed: 1, shot: false, file: null, mode: "perf", runs: 3, bots: 7, outGiven: false, outfits: "coat", burst: 1, sound: "on" };
+  const o = { url: null, scene: "talk", minutes: 5, dpr: 2, throttle: 4, size: { w: 390, h: 844 }, out: DEFAULT_OUT, headed: false, budget: 0, seed: 1, shot: false, file: null, mode: "perf", runs: 3, bots: 7, outGiven: false, outfits: "coat", burst: 1, sound: "on", map: "bar" };
   const need = (name, i) => {
     const v = argv[i + 1];
     if (v === undefined || v.startsWith("--")) throw new UsageError(`${name} 에 값이 필요합니다`);
@@ -161,6 +161,13 @@ export function parseArgs(argv) {
         o.outfits = v;
         break;
       }
+      case "--map": {
+        // 장면과 걷기 시나리오의 맵(?perf=1 의 map). perf 모드에서만 쓰인다 — 광장 성능 측정(MAP-06, 11-10)
+        const v = need(a, i++);
+        if (v !== "bar" && v !== "plaza") throw new UsageError(`--map 은 bar 또는 plaza: ${v}`);
+        o.map = v;
+        break;
+      }
       case "--burst": {
         const n = num(a, need(a, i++), { min: 1, max: 4 });
         if (!Number.isInteger(n)) throw new UsageError(`--burst 는 1~4 정수: ${n}`);
@@ -195,7 +202,7 @@ export function outputBase(o) {
   if (o.mode === "interactive") return `interactive-dpr${o.dpr}-x${o.throttle}`;
   if (o.mode === "chatload") return `chatload-${o.size.w}x${o.size.h}-x${o.throttle}`;
   if (o.mode === "nightload") return `nightload-${o.size.w}x${o.size.h}-x${o.throttle}`;
-  const base = `desktop-${o.scene}-dpr${o.dpr}-x${o.throttle}${o.outfits === "mix" ? "-mix" : ""}${o.burst > 1 ? `-burst${o.burst}` : ""}`;
+  const base = `desktop-${o.scene}-dpr${o.dpr}-x${o.throttle}${o.outfits === "mix" ? "-mix" : ""}${o.burst > 1 ? `-burst${o.burst}` : ""}${o.map === "plaza" ? "-plaza" : ""}`;
   return o.shot ? `shot-${base}` : base;
 }
 
@@ -204,6 +211,7 @@ export function targetUrl(o, origin) {
   const q = new URLSearchParams({ perf: "1", scene: o.scene, minutes: String(o.minutes), dpr: String(o.dpr), seed: String(o.seed), budget: String(o.budget) });
   if (o.outfits !== "coat") q.set("outfits", o.outfits);
   if (o.burst > 1) q.set("burst", String(o.burst));
+  if (o.map !== "bar") q.set("map", o.map);
   if (o.shot) q.set("shot", "1");
   return `${origin.replace(/\/+$/, "")}/?${q.toString()}`;
 }
@@ -943,7 +951,7 @@ async function main() {
       const result = await page.evaluate(() => window.__mfPerf.result);
       const json = join(o.out, `${base}.json`);
       const png = join(o.out, `${base}.png`);
-      const runner = { tool: "scripts/perf-run.mjs", throttle: o.throttle, dpr: o.dpr, size: `${o.size.w}x${o.size.h}`, headless: !o.headed, chrome: browser.version(), platform: `${process.platform}/${process.arch}`, node: process.version, url };
+      const runner = { tool: "scripts/perf-run.mjs", map: o.map, throttle: o.throttle, dpr: o.dpr, size: `${o.size.w}x${o.size.h}`, headless: !o.headed, chrome: browser.version(), platform: `${process.platform}/${process.arch}`, node: process.version, url };
       writeFileSync(json, `${JSON.stringify({ runner, ...result }, null, 2)}\n`);
       await page.screenshot({ path: png });
       const f = result.frames;
