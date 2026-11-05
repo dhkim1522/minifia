@@ -3377,3 +3377,91 @@ describe("지목 유지 자세 위의 동작 · 위치와 방향 불변 (AVTR-05
     expect(h2.root.position.z).toBeCloseTo(pos.z, 6);
   });
 });
+
+// ---------- 11-05: 결과 화면의 직업 의상(costume)·진 팀 어둠(dim) (D-1, T-11-15) ----------
+describe("결과 장면: costume·dim 적용과 onCostumes (11-05)", () => {
+  const handleOf = (s: Setup, seat: number): FakeHandle => s.world.renderers[0]!.chars.get(seat) as FakeHandle;
+  const openResult = (seats: Record<number, Partial<Omit<SeatLook, "show">>>, over: Partial<WorldStageProps> = {}) =>
+    open({ scene: sceneOf(seats), ...over }, { players: FOUR, ents: FOUR_ENTS() });
+
+  it("costume 이 있는 좌석만 그 의상을 한 번 입는다 (같은 값으로 다시 와도 늘지 않는다)", async () => {
+    const s = await openResult({ 0: {}, 1: { costume: "police" }, 2: { costume: "doctor" }, 3: {} });
+    frames(50);
+    expect(handleOf(s, 1).applyOutfit).toHaveBeenCalledTimes(1);
+    expect(handleOf(s, 1).applyOutfit).toHaveBeenCalledWith("police");
+    expect(handleOf(s, 2).applyOutfit).toHaveBeenCalledWith("doctor");
+    expect(handleOf(s, 0).applyOutfit).not.toHaveBeenCalled();
+    s.rerender({ scene: sceneOf({ 0: {}, 1: { costume: "police" }, 2: { costume: "doctor" }, 3: {} }) });
+    frames(50);
+    expect(handleOf(s, 1).applyOutfit).toHaveBeenCalledTimes(1);
+  });
+
+  it("costume 이 사라지면 고른 의상(look)으로 돌아온다", async () => {
+    const s = await openResult({ 0: {}, 1: { costume: "mafia" }, 2: {}, 3: {} });
+    frames(50);
+    s.rerender({ scene: sceneOf({ 0: {}, 1: {}, 2: {}, 3: {} }) });
+    frames(50);
+    expect(handleOf(s, 1).applyOutfit).toHaveBeenLastCalledWith("coat");
+  });
+
+  it("탈락자(ghost) 는 지금의 반투명 유령 모양에 직업 의상을 입는다 — 안개 outfit 이 아니다", async () => {
+    const s = await openResult({ 0: {}, 1: {}, 2: {}, 3: { ghost: true, costume: "mafia" } });
+    frames(50);
+    const h3 = handleOf(s, 3);
+    expect(h3.applyOutfit).toHaveBeenCalledWith("mafia");
+    expect(h3.setGhost).toHaveBeenCalledWith(true);
+    expect(window.__mfGhostOutfits ?? {}).toEqual({});
+  });
+
+  it("안개 outfit 이 있으면 안개가 우선이다 (costume 을 입지 않는다)", async () => {
+    const s = await openResult({ 0: {}, 1: {}, 2: {}, 3: { ghost: true, outfit: "doctor", costume: "mafia" } });
+    frames(50);
+    expect(handleOf(s, 3).applyOutfit).toHaveBeenCalledTimes(1);
+    expect(handleOf(s, 3).applyOutfit).toHaveBeenCalledWith("doctor");
+  });
+
+  it("costume 중에 서버 look 이 바뀌어도 의상을 덮지 않는다", async () => {
+    const s = await openResult({ 0: {}, 1: { costume: "police" }, 2: {}, 3: {} });
+    frames(50);
+    const before = vi.mocked(handleOf(s, 1).applyOutfit!).mock.calls.length;
+    s.rerender({ view: makeView(FOUR.map((p) => (p.seat === 1 ? { ...p, look: "hood" as OutfitId } : p))) });
+    frames(50);
+    expect(vi.mocked(handleOf(s, 1).applyOutfit!).mock.calls.length).toBe(before);
+  });
+
+  it("dim 인 좌석만 setDim(true), 걷히면 false — 연결 끊김 어둠과 따로 센다", async () => {
+    const s = await openResult({ 0: {}, 1: { dim: true }, 2: {}, 3: {} });
+    frames(50);
+    expect(handleOf(s, 1).dims.at(-1)).toBe(true);
+    expect(handleOf(s, 0).dims.at(-1) ?? false).toBe(false);
+    s.rerender({ scene: sceneOf({ 0: {}, 1: {}, 2: {}, 3: {} }) });
+    frames(50);
+    expect(handleOf(s, 1).dims.at(-1)).toBe(false);
+    // 연결이 끊긴 좌석은 scene 의 dim 이 없어도 어둡다
+    s.rerender({ view: makeView(FOUR.map((p) => (p.seat === 2 ? { ...p, connected: false } : p))) });
+    frames(50);
+    expect(handleOf(s, 2).dims.at(-1)).toBe(true);
+  });
+
+  it("onCostumes 는 입은 의상 표(좌석 → 의상)와 어두워진 좌석을 바뀔 때만 한 번씩 알린다", async () => {
+    const onCostumes = vi.fn();
+    const s = await openResult({ 0: { costume: "coat" }, 1: {}, 2: {}, 3: {} }, { onCostumes });
+    frames(50);
+    expect(onCostumes).toHaveBeenLastCalledWith({ 0: "coat" }, []);
+    const n = onCostumes.mock.calls.length;
+    frames(100);
+    expect(onCostumes.mock.calls.length).toBe(n);
+    s.rerender({ scene: sceneOf({ 0: { costume: "coat" }, 1: { costume: "police", dim: true }, 2: { dim: true }, 3: {} }) });
+    frames(50);
+    expect(onCostumes).toHaveBeenLastCalledWith({ 0: "coat", 1: "police" }, [1, 2]);
+    expect(onCostumes.mock.calls.length).toBe(n + 1);
+  });
+
+  it("산 사람 장면(costume·dim 없음)은 어떤 의상 호출도 받지 않는다", async () => {
+    const onCostumes = vi.fn();
+    const s = await openResult({ 0: {}, 1: {}, 2: {}, 3: {} }, { onCostumes });
+    frames(100);
+    for (const h of s.world.handles) expect(h.applyOutfit).not.toHaveBeenCalled();
+    expect(onCostumes).not.toHaveBeenCalled();
+  });
+});

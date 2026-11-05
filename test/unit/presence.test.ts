@@ -21,6 +21,7 @@ import {
   tensionOf,
   visibleSeats,
 } from "../../src/world/presence";
+import type { SeatLook } from "../../src/world/presence";
 
 const flat = (value: unknown): string => JSON.stringify(value).replaceAll('"', "");
 const same = (actual: unknown, expected: unknown) => expect(flat(actual)).toBe(flat(expected));
@@ -570,5 +571,24 @@ describe("pointingOf — 마지막 3인 동시 지목 (09.1.1-15, T-09.1.1-42: �
   it("한마디 차례·모이는 중에는 아무도 가리키지 않는다", () => {
     same(pointingOf(sdView(0, { endsAt: 9000 }), 2), {});
     same(pointingOf(sdView(-1)), {});
+  });
+});
+
+// 11-05: SeatLook 의 결과 화면 전용 필드(costume·dim). 판 중 장면 표(visibleSeats)에는 키 자체가 없다 — 직업 의상이 판 중 경로로 번지지 않는다(T-11-15, L13).
+describe("SeatLook costume·dim (11-05)", () => {
+  it("결과 화면용 좌석 표가 이 필드를 담을 수 있다 (costume 은 OutfitId, dim 은 true)", () => {
+    const seat: SeatLook = { show: true, ghost: false, costume: jobOutfit("police"), dim: true };
+    same(seat, { show: true, ghost: false, costume: "police", dim: true });
+  });
+
+  it("판 중 장면 표(산 사람·유령 viewer 모두)에는 costume·dim 키가 없다", () => {
+    for (const phase of ["discussion", "night", "morning", "execution"] as const) {
+      for (const view of [viewOf(phase, { dead: [3] }), viewOf(phase, { dead: [3], mySeat: 3, spectate: true })]) {
+        for (const look of Object.values(visibleSeats(view))) {
+          expect("costume" in look).toBe(false);
+          expect("dim" in look).toBe(false);
+        }
+      }
+    }
   });
 });
