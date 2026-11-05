@@ -52,7 +52,7 @@ describe("emoteGate — 연타 규칙 (10-01 Task 2, D-19)", () => {
     const prev: EmoteSenderState = { until: 0, at: [1000, 4000] };
     const r = emoteGate(prev, "surprise", 12_000);
     expect(r.ok).toBe(true);
-    if (r.ok) expect(r.next.at).toEqual([12_000]);
+    if (r.ok) expect(r.next.at).toEqual([4000, 12_000]); // 1000 은 창(now-10000 초과) 밖이라 버린다
   });
 
   it("거절하면 next 가 없다(기록 갱신은 수락 때만)", () => {

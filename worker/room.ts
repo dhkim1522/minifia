@@ -9,6 +9,8 @@ import { audience, channelOf, phaseKey, worldVisibleTo } from "../shared/game/au
 import { CHAT_KEY_PREFIX, appendLine, appendWhisperPair, chatKey, emptyChatLog, replayFor, restoreChatLog, seatMask, toWire } from "../shared/game/chatLog";
 import type { ChatLog } from "../shared/game/chatLog";
 import { checkChatSend, sanitizeChatText, typingRelay } from "../shared/game/chatRules";
+import { emoteGate } from "../shared/game/emote";
+import type { EmoteSenderState } from "../shared/game/emote";
 import type { ChatSenderRate, TypingRelayState } from "../shared/game/chatRules";
 import {
   attachConnection,
@@ -38,7 +40,7 @@ import { endReached, toggleEnd } from "../shared/game/discussion";
 import { MAP_PHASES, canMove } from "../shared/game/movement";
 import { layoutFor, layoutKey } from "../shared/game/gather";
 import { BAR_MAP, STAGE_SPOT } from "../shared/game/map";
-import { APPROACH_DIST_FX, WORLD_FLUSH_MS, approachPoint, captureHome, compactWorld, despawnPlayer, emptyWorld, forceSegment, moveFrame, nextWanderAt, planMoveSegment, planWander, positionAtFx, requestMove, respawnAll, restoreWorld, snapFrame, spawnPlayer, teleportHome } from "../shared/game/world";
+import { APPROACH_DIST_FX, WORLD_FLUSH_MS, approachPoint, captureHome, compactWorld, despawnPlayer, emptyWorld, forceSegment, moveFrame, nextWanderAt, planMoveSegment, planWander, positionAtFx, requestMove, respawnAll, restoreWorld, segmentEndsAt, snapFrame, spawnPlayer, teleportHome } from "../shared/game/world";
 import type { Segment, WorldState } from "../shared/game/world";
 import { buildPreview, buildView } from "../shared/game/view";
 import { ClientMessageSchema } from "../shared/schemas";
@@ -96,7 +98,9 @@ export class Room extends DurableObject<Env> {
   // 사람(봇 포함)별 최근 전송 기록(D5 도배 제한). 인메모리라 하이버네이션으로 비면 새로 센다(수용) — 제한이 한 번 느슨해질 뿐이다.
   private readonly chatRates = new Map<string, ChatSenderRate>();
   // 동작 채널별 번호(결정 0068, 10-01). 인메모리 — 동작은 사건이라 저장하지 않는다(L28).
-  private readonly emoteSeq: Record<ChatChannel, number> = { all: 0, mafia: 0, ghost: 0 };
+  private emoteSeq: Record<ChatChannel, number> = { all: 0, mafia: 0, ghost: 0 };
+  // 사람별 동작 연타 기록(emoteGate: 앞 동작 길이·1000ms·10초 5번, O-1). 인메모리라 하이버네이션으로 비면 제한이 한 번 느슨해질 뿐이다(수용). 받아들여진 이동 요청은 그 사람의 기록을 지운다.
+  private readonly emoteRates = new Map<string, EmoteSenderState>();
   // 유언·쪽지 저장 간격 기록(키 `will:{id}`·`note:{id}` -> 마지막으로 받아들인 저장 ms, 결정 0061-10, 가정 A1, T-09-27). 인메모리라 하이버네이션으로 비면 새로 센다 — 한 번 더 받아들일 뿐이다(수용).
   // 받아들여 상태가 바뀐 저장만 기록하고, 거절·같은 값은 기록하지 않는다. 간격 안의 요청은 오류 프레임 없이 버린다.
   private readonly writeAt = new Map<string, number>();
@@ -1306,7 +1310,7 @@ export class Room extends DurableObject<Env> {
     this.applyEmote(att.playerId, id, pk, Date.now());
   }
 
-  private applyEmote(playerId: string, id: EmoteId, pk: string, _now: number): void {
+  private applyEmote(playerId: string, id: EmoteId, pk: string, now: number): void {
     const room = this.room;
     if (!room) return;
     if (pk !== phaseKey({ phase: room.phase, day: room.day })) return;
@@ -1314,6 +1318,12 @@ export class Room extends DurableObject<Env> {
     if (ch === null) return;
     const me = room.players.find((p) => p.id === playerId);
     if (!me) return;
+    // 걷는 중이면 버린다(D-10): 구간이 있고 아직 안 끝났을 때. 구간이 없거나 한 점이면 서 있는 것이다.
+    const seg = Object.prototype.hasOwnProperty.call(this.world.segs, playerId) ? this.world.segs[playerId] : undefined;
+    if (seg !== undefined && segmentEndsAt(seg) > now) return;
+    const gate = emoteGate(this.emoteRates.get(playerId), id, now);
+    if (!gate.ok) return;
+    this.emoteRates.set(playerId, gate.next);
     const ids = audience(room, { k: "emote", ch });
     // 번호는 채널별로 센다 — 받지 못한 프레임의 번호 틈이 시민 편에 새지 않게(채팅 seq 와 같은 이유, 결정 0068). 인메모리라 하이버네이션으로 비면 1 부터 다시 센다(무해).
     const n = (this.emoteSeq[ch] ?? 0) + 1;
@@ -1386,6 +1396,13 @@ export class Room extends DurableObject<Env> {
     this.chatLog = emptyChatLog();
     this.chatRates.clear();
     this.typingRelays.clear();
+    this.dropEmote();
+  }
+
+  /** 동작 연타 기록·채널별 번호를 비운다(동작은 저장하지 않으므로 메모리뿐이다). */
+  private dropEmote(): void {
+    this.emoteRates.clear();
+    this.emoteSeq = { all: 0, mafia: 0, ghost: 0 };
   }
 
   // ======== 로비 이동 구역(06-08): move 처리 · 전송 · 저장/복원 · 봇 배회 ========
@@ -1416,6 +1433,7 @@ export class Room extends DurableObject<Env> {
     const result = requestMove(this.world, playerId, dest, now, BAR_MAP);
     if (!result.ok) return;
     this.world = result.world;
+    this.emoteRates.delete(playerId); // 이동 요청이 받아들여지면 동작 기록을 지운다(D-10)
     // 전송이 먼저, 저장은 뒤(디바운스) — output gate 가 쓰기 뒤의 전송을 붙잡으므로(RESEARCH R6). 받는 사람은 움직인 사람 기준이다(emitWorld).
     this.emitWorld(moveFrame(me.seat, result.seg), playerId);
     this.markWorldDirty();
