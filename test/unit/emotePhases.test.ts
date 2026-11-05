@@ -33,7 +33,7 @@ const KIND: Record<PhaseId, Kind> = {
 const ROLES: Record<number, RoleId> = { 0: "citizen", 1: "mafia", 2: "citizen", 3: "police", 4: "mafia", 5: "doctor" };
 const idOf = (seat: number): string => `player-id-000${seat}-aaaa`;
 
-function sixAt(phase: PhaseId, deadSeats: number[]): RoomState {
+function sixAt(phase: PhaseId, deadSeats: readonly number[]): RoomState {
   const base = lobbyOf(6);
   const dead = new Set(deadSeats);
   return {

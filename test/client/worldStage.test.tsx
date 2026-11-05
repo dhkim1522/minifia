@@ -3315,3 +3315,57 @@ describe("모션 줄이기·표정 선행 병합 (O-5, O-10)", () => {
     });
   });
 });
+
+describe("지목 유지 자세 위의 동작 · 위치와 방향 불변 (AVTR-05, 10-08)", () => {
+  const ALL4 = { 0: {}, 1: {}, 2: {}, 3: {} };
+  const openGame = (scene = sceneOf(ALL4)) => open({ scene }, { players: FOUR, ents: FOUR_ENTS() });
+  const handleOf = (s: Setup, seat: number): FakeHandle => s.world.renderers[0]!.chars.get(seat) as FakeHandle;
+
+  it("지목 단계(장면 표 pointAt)의 좌석에 emote 프레임이 와도 holdPose(null) 은 불리지 않고 playEmote 만 불린다", async () => {
+    const s = await openGame(sceneOf({ ...ALL4, 1: { pointAt: 2 } }));
+    frames(300);
+    const h1 = handleOf(s, 1);
+    expect(h1.holdPose).toHaveBeenCalledTimes(1);
+    expect(h1.holdPose).toHaveBeenCalledWith("point");
+    act(() => s.store.applyEmote({ t: "emote", seat: 1, id: "clap", n: 1 }, 1));
+    expect(h1.playEmote).toHaveBeenCalledTimes(1);
+    frames(2500); // 동작이 끝나고 한참 지난 뒤까지
+    expect(h1.holdPose).toHaveBeenCalledTimes(1); // 풀었다 다시 거는 일이 없다
+    expect(vi.mocked(h1.holdPose!).mock.calls.some((c) => c[0] === null)).toBe(false);
+  });
+
+  it("서 있는 지목 좌석의 동작은 방향(setYaw)과 위치를 바꾸지 않고 프레임당 위치 갱신 횟수도 그대로다", async () => {
+    const s = await openGame(sceneOf({ ...ALL4, 1: { pointAt: 2 } }));
+    frames(500); // 대상 쪽 방향에 닿을 때까지
+    const h1 = handleOf(s, 1);
+    const setPos = vi.spyOn(h1.root.position, "set");
+    frames(160);
+    const perWindow = setPos.mock.calls.length;
+    const yawsBefore = h1.yaws.length;
+    const yawBefore = h1.yaws.at(-1);
+    const posBefore = h1.root.position.toArray();
+    setPos.mockClear();
+    act(() => s.store.applyEmote({ t: "emote", seat: 1, id: "dance", n: 1 }, 1));
+    frames(160);
+    expect(setPos.mock.calls.length).toBe(perWindow); // 프레임 때문에 늘지 않는다
+    expect(h1.yaws.length).toBe(yawsBefore);
+    expect(h1.yaws.at(-1)).toBe(yawBefore);
+    expect(h1.root.position.toArray()).toEqual(posBefore);
+  });
+
+  it("모이기에서 걷는 좌석에 emote 프레임이 와도 걷기 방향과 서버 구간 위치는 그대로 이어진다", async () => {
+    const s = await openGame();
+    frames(100);
+    const h2 = handleOf(s, 2);
+    move(s.store, seg(2, [-100, 400, 500, 400], Date.now(), 180));
+    frames(400); // 걷는 방향(+x)에 닿았다
+    const yawsBefore = h2.yaws.length;
+    act(() => s.store.applyEmote({ t: "emote", seat: 2, id: "clap", n: 1 }, 1));
+    frames(160);
+    expect(h2.yaws.length).toBe(yawsBefore); // 프레임 때문에 방향을 새로 정하지 않는다
+    expect(h2.yaws.at(-1)!).toBeCloseTo(Math.PI / 2, 4);
+    const pos = s.store.positionOf(2, Date.now())!;
+    expect(h2.root.position.x).toBeCloseTo(pos.x, 6);
+    expect(h2.root.position.z).toBeCloseTo(pos.z, 6);
+  });
+});

@@ -1344,3 +1344,96 @@ describe("의상 교체 지오메트리 해제 (10-04, UI-SPEC B-3, 위험 3)", 
     for (const m of jointMeshes(c.root)) expect(m.geometry.getAttribute("position")).toBeDefined();
   });
 });
+
+// ---------- 10-08 Task 2: 지목 유지 자세 위의 동작 · 위치·방향 불변 · 끊김의 복귀 자세 (AVTR-05) ----------
+
+describe("지목 유지 자세 위의 동작 (AVTR-05, 10-08)", () => {
+  const DT = 0.016;
+  const pointLast = EMOTES.point.frames[1] as Record<string, number | string>;
+  /** 유지 자세가 완전히 섞인 캐릭터와 그때의 자세(기준선). */
+  function held(): { c: WorldCharacter; base: Record<string, number>; t: number } {
+    const c = createCharacter(0, "coat");
+    c.holdPose("point");
+    let t = 0;
+    for (let i = 0; i < 100; i++, t += DT) c.update(DT, t, false);
+    c.update(0, t, false); // 기준선은 동작을 시작할 시각 t 의 자세다(서 있는 숨쉬기 y 가 시각에 따라 달라진다)
+    return { c, base: readPose(c), t };
+  }
+  function expectHeld(c: WorldCharacter): void {
+    const p = readPose(c);
+    expect(p.aBx).toBeCloseTo(pointLast.aBx as number, 9);
+    expect(p.aAx).toBeCloseTo(pointLast.aAx as number, 9);
+    expect(p.hy).toBeCloseTo(pointLast.hy as number, 9);
+  }
+
+  it("유지 자세가 완전히 섞인 뒤 playEmote('clap') 하면 동작 구간 동안 자세가 유지 자세 위의 clap 키프레임과 1e-9 안에서 같다", () => {
+    const d = EMOTES.clap;
+    const total = d.frames.length * d.seg * d.cycles;
+    let moved = 0;
+    for (const e of [0.05, d.seg * 0.5, d.seg * 1.5, total * 0.5, total - 0.01]) {
+      const { c, base, t } = held();
+      c.playEmote("clap");
+      c.update(e, t, false);
+      const want = refEmote("clap", e, base)!;
+      const got = readPose(c);
+      for (const k of EMOTE_KEYS) expect(Math.abs(got[k] - want[k])).toBeLessThan(1e-9);
+      moved = Math.max(moved, Math.abs(got.aAx - base.aAx));
+    }
+    expect(moved).toBeGreaterThan(0.3); // 동작이 실제로 유지 자세를 벗어났다
+  });
+
+  it("동작이 끝나면(emoteDone) 서 있는 자세가 아니라 유지 자세로 돌아온다", () => {
+    const d = EMOTES.clap;
+    const { c, t } = held();
+    c.playEmote("clap");
+    const total = d.frames.length * d.seg * d.cycles + d.hold;
+    c.update(total + 0.2, t, false);
+    expectHeld(c);
+    expect(readPose(c).aBx).not.toBeCloseTo(0, 1); // 서 있는 자세(팔 내림 0)가 아니다
+  });
+
+  it("동작 중 stopEmote() 는 POSE_BLEND_MS 안에 유지 자세로 돌아온다(서 있는 자세가 아니다)", () => {
+    const { c, t } = held();
+    c.playEmote("dance");
+    let now = t;
+    for (let i = 0; i < 12; i++, now += DT) c.update(DT, now, false);
+    c.stopEmote();
+    for (let i = 0; i < Math.ceil(POSE_BLEND_MS / 16) + 2; i++, now += DT) c.update(DT, now, false);
+    expectHeld(c);
+  });
+
+  it("holdPose(null) 이후에는 서 있는 자세로 돌아온다", () => {
+    const { c, t } = held();
+    c.playEmote("clap");
+    c.update(0.3, t, false);
+    c.holdPose(null);
+    c.stopEmote();
+    let now = t + 0.3;
+    for (let i = 0; i < Math.ceil((POSE_BLEND_MS * 2) / 16) + 2; i++, now += DT) c.update(DT, now, false);
+    const p = readPose(c);
+    expect(p.aBx).toBe(0);
+    expect(p.aAx).toBe(0);
+    expect(p.hy).toBe(0);
+  });
+
+  it.each(Object.keys(EMOTES) as EmoteId[])("%s: playEmote/stopEmote 는 root 의 위치와 방향(yaw)을 바꾸지 않는다(유지 자세 위에서도)", (id) => {
+    for (const withHold of [false, true]) {
+      const c = createCharacter(1, "coat");
+      c.root.position.set(3.25, 0, -2.5);
+      c.setYaw(0.7);
+      if (withHold) c.holdPose("point");
+      const pos = c.root.position.toArray();
+      c.playEmote(id);
+      let now = 0;
+      for (let i = 0; i < 40; i++, now += DT) {
+        c.update(DT, now, false);
+        expect(c.root.rotation.y).toBe(0.7);
+        expect(c.root.position.toArray()).toEqual(pos);
+      }
+      c.stopEmote();
+      for (let i = 0; i < 20; i++, now += DT) c.update(DT, now, false);
+      expect(c.root.rotation.y).toBe(0.7);
+      expect(c.root.position.toArray()).toEqual(pos);
+    }
+  });
+});
