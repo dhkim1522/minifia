@@ -2115,3 +2115,58 @@ export function dressChecks({ float, panel, sheet, cards, close, selected, nameF
   out.push(result("DS6", L.DS6, nameFont >= 14 ? [] : [`${nameFont}px`]));
   return out;
 }
+
+// ---- 12페이즈 소리 시험 페이지 sound-render (12-06, 결정 D-18·D-19, UI-SPEC E) ----
+
+/** 12페이즈가 새로 더한 시험 페이지 DOM 표식·훅 이름. test/unit/e2eContract.test.ts 가 각각이 git 추적 src/ 파일에 실제로 있는지 확인한다(이름 오타 방지). 이후 계획(소리 단계)이 같은 목록에 더한다. */
+export const SOUND_MARKERS = Object.freeze([
+  "data-sound-lab", // 시험 페이지 루트(soundLab.ts)
+  "data-sound-id", // 소리 ▶ 단추 data-sound-id="{id}" (56개)
+  "__mfSound", // 테스트 훅 window.__mfSound = { state, on, bed, voices, log, clear }(12-05)
+  "__mfSoundLab", // 시험 페이지 훅 window.__mfSoundLab = { done, results }
+]);
+
+/**
+ * 오프라인 렌더 합격 문턱 (D-18). 낮추지 않는다: 실패하면 레시피를 고친다(T-12-22).
+ * count 는 SOUND_IDS.length, 나머지는 src/debug/soundLabData.ts 의 SOUND_LIMITS 와 같아야 하고 e2eContract 시험이 대조한다.
+ */
+export const SOUND_RENDER_LIMITS = Object.freeze({ count: 56, peakMaxDb: -3, rmsMinDb: -60, lengthTolMs: 50 });
+
+/**
+ * sound-render: 시험 페이지 [전부 계산] 결과(window.__mfSoundLab.results)를 판정한다.
+ * results = [{ id, peakDb, rmsDb, nan, lengthMs, declaredMs(침대는 null) }].
+ * SR1 정확히 count 개 · SR2 id 중복 없음 · SR3 피크 ≤ peakMaxDb · SR4 NaN 0 · SR5 RMS ≥ rmsMinDb · SR6 효과음 길이가 선언과 lengthTolMs 이내.
+ * 실패 줄의 detail 에 실패한 id 와 값을 적는다.
+ */
+export function soundRenderChecks(results, limits = SOUND_RENDER_LIMITS) {
+  const L = {
+    SR1: `렌더 결과 ${limits.count}개`,
+    SR2: "소리 id 중복 없음",
+    SR3: `피크 ${limits.peakMaxDb} dBFS 이하`,
+    SR4: "NaN 0",
+    SR5: `RMS ${limits.rmsMinDb} dB 이상`,
+    SR6: `효과음 길이가 선언과 ±${limits.lengthTolMs}ms`,
+  };
+  const valid = Array.isArray(results) && results.every((r) => !!r && typeof r.id === "string" && allNum(r.peakDb, r.rmsDb, r.nan, r.lengthMs) && (r.declaredMs === null || isNum(r.declaredMs)));
+  if (!valid) return Object.entries(L).map(([id, label]) => noMeasure(id, label, "results[{ id, peakDb, rmsDb, nan, lengthMs, declaredMs }]"));
+  const out = [];
+  out.push(result("SR1", L.SR1, results.length === limits.count ? [] : [`${results.length}개`]));
+  const seen = new Set();
+  const dup = [];
+  for (const r of results) {
+    if (seen.has(r.id)) dup.push(r.id);
+    seen.add(r.id);
+  }
+  out.push(result("SR2", L.SR2, dup));
+  out.push(result("SR3", L.SR3, results.filter((r) => r.peakDb > limits.peakMaxDb).map((r) => `${r.id} ${fmt(r.peakDb)}`)));
+  out.push(result("SR4", L.SR4, results.filter((r) => r.nan !== 0).map((r) => `${r.id} NaN ${r.nan}`)));
+  out.push(result("SR5", L.SR5, results.filter((r) => r.rmsDb < limits.rmsMinDb).map((r) => `${r.id} ${fmt(r.rmsDb)}`)));
+  out.push(
+    result(
+      "SR6",
+      L.SR6,
+      results.filter((r) => r.declaredMs !== null && Math.abs(r.lengthMs - r.declaredMs) > limits.lengthTolMs).map((r) => `${r.id} ${fmt(r.lengthMs)}ms (선언 ${fmt(r.declaredMs)})`),
+    ),
+  );
+  return out;
+}

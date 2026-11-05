@@ -134,6 +134,7 @@ import {
 } from "./lib.mjs";
 import { makeAvatarFlows } from "./avatar.mjs";
 import { makePoliticsFlows } from "./politics.mjs";
+import { makeSoundFlows } from "./sound.mjs";
 
 export const OUT_DIR = new URL("./out/", import.meta.url).pathname;
 const HOST_NICK = "화면검사기";
@@ -3026,6 +3027,9 @@ const { politicsBadgeFlow, politicsWhisperFlow, politicsPinFlow, politicsVerdict
 // 캐릭터 동작·의상 화면(10페이즈): avatar-emote(10-05)·avatar-dress(10-07). 흐름 본문은 avatar.mjs, 도우미만 넘긴다
 const { avatarEmoteFlow, avatarDressFlow, avatarPhasesFlow, avatarPhasesNightFlow } = makeAvatarFlows({ recorder, startHost, openGuest, attempt, walkableCentersOfApp, LOBBY_HOST_NICK, WORLD_GUEST_NICK, resetAndLeave, openGame, closeGame, untilGame });
 
+// 소리(12페이즈): sound-render(12-06) 시험 페이지 오프라인 렌더 56개. 흐름 본문은 sound.mjs, 도우미만 넘긴다
+const { soundRenderFlow } = makeSoundFlows({ recorder, attempt });
+
 export const FLOWS = [
   // lobby·world 는 LOBBY_SIZES 6개 크기로 돈다: 기본 크기 4개에 더해 390x844·402x874 (run.mjs 의 extraSizes)
   { id: "lobby", run: lobbyFlow, extraSizes: LOBBY_EXTRA_SIZES },
@@ -3067,6 +3071,8 @@ export const FLOWS = [
   // 10-08: 단계별 동작 도착(낮 토론·지목·변론·찬반·아침)·유령→산 사람 0건·떠 있는 버튼 숨김·이름표 층 표시 없음 / 밤 마피아→시민 편 0건. 390x844 한 크기(D-18)
   { id: "avatar-phases", run: avatarPhasesFlow, size: GAME_SIZE },
   { id: "avatar-phases-night", run: avatarPhasesNightFlow, size: GAME_SIZE },
+  // 12-06: 소리 시험 페이지 [전부 계산] 56개(피크·NaN·RMS·길이). 방 없이 390x844 한 크기, 소리 출력 없음(OfflineAudioContext)
+  { id: "sound-render", run: soundRenderFlow, size: GAME_SIZE },
   // 재접속·예산(06-18): 폰 크기와 곱하지 않고 자기 크기로 한 번. deployhold 는 배포와 동시에 돌리는 흐름(06-19)이라 --only 없이는 빠진다
   { id: "reconnect", run: reconnectFlow, size: RECONNECT_SIZE },
   { id: "deployhold", run: deployHoldFlow, size: RECONNECT_SIZE, skipByDefault: true },

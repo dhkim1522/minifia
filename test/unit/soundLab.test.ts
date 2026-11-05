@@ -356,9 +356,9 @@ describe("mount — 한 화면 전체 (E)", () => {
     }
   });
 
-  it("묶음: 침대 한 묶음 + 효과음 여섯 묶음, 행에 id 와 한글 이름", () => {
+  it("묶음: 침대 → 효과음 여섯 묶음 → 대본 → 최악 합, 행에 id 와 한글 이름", () => {
     const { qa, q } = open();
-    expect(qa("[data-lab-group]").map((g) => g.getAttribute("data-lab-group"))).toEqual(["beds", ...LAB_GROUPS.map((g) => g.key)]);
+    expect(qa("[data-lab-group]").map((g) => g.getAttribute("data-lab-group"))).toEqual(["beds", ...LAB_GROUPS.map((g) => g.key), "scripts", "worst"]);
     expect(q('[data-sound-id="kill.slash"]')!.parentElement!.textContent).toContain("kill.slash");
     expect(q('[data-sound-id="kill.slash"]')!.parentElement!.textContent).toContain(SOUND_NAMES["kill.slash"]);
   });

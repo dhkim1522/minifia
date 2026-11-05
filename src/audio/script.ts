@@ -2,10 +2,10 @@
 // 대본의 시각은 상수의 함수이고, 난수는 인자로만 받는다. 시계·서버 프레임·역할·밤 선택·채팅 본문은 입력에 없다.
 // 시각 상수는 화면 모듈에서 읽어 온다(복사하지 않는다). 11페이즈 모듈은 LS-6 때문에 import 하지 못해 RESULT_AT 에 모았다.
 // 시각은 모두 "그 단계 기준 시각 T0 부터 ms" 다. 시계(T0 와 현재 시각)는 부르는 쪽(감독)이 준다.
-import { ANNOUNCE_LEAD_MS, ANNOUNCE_TALLY_MS } from "../game/dayView";
+import { ANNOUNCE_LEAD_MS, ANNOUNCE_MORNING_AT, ANNOUNCE_TALLY_MS, ANNOUNCE_VICTIM_AT } from "../game/dayView";
 import { BALLOT_END_AT, BALLOT_NO_AT, BALLOT_YES_AT } from "../game/verdictMoment";
 import { LETTER_FOLD_AT_MS, LETTER_SEAL_GAP_MS, LETTER_WRITE_AT_MS } from "../game/willLetter";
-import type { SfxId } from "./recipes";
+import type { BedId, SfxId } from "./recipes";
 
 export type Rng = () => number;
 
@@ -140,6 +140,40 @@ export function nightScript(rng: Rng, elapsedMs = 0): Script {
   if (elapsedMs <= 0) items.push({ at: 0, id: "night.fall" });
   for (const at of nightCues(rng, elapsedMs)) items.push({ at, id: "night.cue" });
   return { items, duck: null };
+}
+
+// ───────────────────────── 아침 ─────────────────────────
+
+export type MorningOutcome = "calm" | "saved" | "victim";
+
+export interface MorningInput {
+  outcome: MorningOutcome;
+  /** 암살 피해자가 바로 이 화면의 사람인가(killFx 가 선 본인만) */
+  mine: boolean;
+}
+
+/** 칼날 소리 시각: 아침 view 도착 +50ms (killFx) */
+export const MORNING_SLASH_AT = 50;
+
+/** 아침 대본이 깔 침대 */
+export interface MorningScript extends Script {
+  bed: BedId;
+}
+
+/**
+ * 아침 진입 기준 대본(C-5): 0 morning.dawn(+ 침대 bed.dawn, 결과와 무관) · 50 kill.slash(내가 암살 피해자일 때만) ·
+ * 400 morning.calm(평화) / 400 morning.saved(구출) / 700 chalk.draw(희생자). 시각은 dayView 상수에서 읽는다.
+ */
+export function morningScript(input: MorningInput): MorningScript {
+  const items: ScriptItem[] = [{ at: 0, id: "morning.dawn" }];
+  if (input.outcome === "victim") {
+    if (input.mine) items.push({ at: MORNING_SLASH_AT, id: "kill.slash" });
+    items.push({ at: ANNOUNCE_VICTIM_AT, id: "chalk.draw" });
+  } else {
+    items.push({ at: ANNOUNCE_MORNING_AT, id: input.outcome === "saved" ? "morning.saved" : "morning.calm" });
+  }
+  items.sort((a, b) => a.at - b.at);
+  return { items, duck: null, bed: "bed.dawn" };
 }
 
 // ───────────────────────── 결과·시상 ─────────────────────────
