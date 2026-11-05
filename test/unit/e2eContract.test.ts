@@ -373,7 +373,7 @@ describe("11페이즈 결과 화면 E2E 표식·표(11-05)", () => {
   it("표식은 결과 화면·테스트 훅에 각각 있다", () => {
     const has = (file: string, marker: string) => sources.some((s) => s.f.endsWith(file) && s.text.includes(marker));
     expect(has("screens/ResultScreen.tsx", "data-result-stage")).toBe(true);
-    expect(has("screens/ResultScreen.tsx", "data-result-panel")).toBe(true);
+    expect(has("components/v2/ResultPanel.tsx", "data-result-panel")).toBe(true); // 11-07: 패널 요소는 ResultPanel 이 그린다
     expect(has("screens/ResultScreen.tsx", "data-result-announce")).toBe(true);
     expect(has("world/testHooks.ts", "__mfResult")).toBe(true);
     // 11-07: 탭 패널 표식과 훅의 현재 탭

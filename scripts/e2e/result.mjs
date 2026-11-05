@@ -7,8 +7,14 @@ export const RESULT_MARKERS = Object.freeze([
   "data-result-stage", // 루트 data-result-stage="{gather|flip|light|announce|final}"
   "data-result-panel", // 아래 채팅 패널
   "data-result-announce", // 중앙 승리 알림(4600~5200)
-  "__mfResult", // 테스트 훅 window.__mfResult = { stage, chips, dimmed, costumes }
+  "__mfResult", // 테스트 훅 window.__mfResult = { stage, chips, dimmed, costumes, tab }
+  "data-result-tab", // 탭 버튼 data-result-tab="{all|mafia|ghost|whisper|log}" (11-07)
+  "data-result-dot", // 처음 나타난 마피아·유령·귓속말 탭의 점 표식 (11-07)
+  "data-result-divider", // 탭 안 `{n}밤`·`{n}일차` 구분선 (11-07)
 ]);
+
+/** 결과 탭 id, 표시 순서 (src/game/resultText.ts RESULT_TABS 의 사본) */
+export const RESULT_TAB_IDS = Object.freeze(["all", "mafia", "ghost", "whisper", "log"]);
 
 /** 직업 → 3D 의상 id (src/world/ghostOutfit.ts JOB_OUTFIT 의 사본) */
 export const RESULT_JOB_OUTFIT = Object.freeze({ mafia: "mafia", police: "police", doctor: "doctor", citizen: "coat" });
@@ -136,6 +142,203 @@ export function readResultStage(page) {
       panelTop: pr ? pr.top - rr.top : Number.NaN,
       roomH: rr.height,
       legacy,
+    };
+  });
+}
+
+// ---------- 11-07 탭 패널 ----------
+
+const TAB_MIN = 44;
+/** 새 탭 점이 붙는 탭(기록 탭·전체 탭은 없다) */
+const DOT_TAB_IDS = ["ghost", "mafia", "whisper"];
+
+/**
+ * 탭 패널 판정(11-07, UI-SPEC A-3·G). 입력은 두 묶음 중 있는 것만 판정한다: { layout?, reveal? }. 묶음이 있는데 값이 비면 `측정값 없음` 으로 실패한다.
+ * layout(최종 상태 한 페이지): roomH · tabBoxes [{id,w,h}] · panelCollapsedH · panelExpandedH(마피아 탭을 연 높이) · inputPresent(확장에서 [data-chat-input]) ·
+ *   iconColors { 탭id: 아이콘 계산 색 } · crimson(진홍 토큰의 계산 색) · separators(마피아 탭 구분선 글자들) · dots { before, after }(점이 붙은 탭 id, 열기 전/마피아를 연 뒤) · headerBottom · panelTop(방 위 끝 기준)
+ *   RT1 탭 44×44 이상 다섯 · RT3 접힌 188/244 ±1 · RT4 확장 min(round(0.7×방 높이),520) ±2 · RT5 확장에서 입력칸 없음 · RT6 마피아 탭만 진홍 · RT7 구분선 `{n}밤` ·
+ *   RT8 점: 열기 전 마피아·유령·귓속말, 마피아를 연 뒤 유령·귓속말 · RT9 헤더 아래 62 이상이고 확장 패널이 헤더를 가리지 않음
+ * reveal(연출 구간을 지나는 방장 페이지): tabsBefore {stage,count} · tabsAfter {stage,count} · live [{phase,count}] · paused {stageAtOpen,chipsAtOpen,stageLater,chipsLater,waitedMs} ·
+ *   tapExpanded {expandedBefore,expandedAfter,stageBefore,stageAfter} · tapCollapsed {stageBefore,stageAfter}
+ *   RT2 첫 뒤집기 전 탭 1개·뒤집기 시작 뒤 5개 · RT10 판 중 탭 0건 · RT11 확장 중 시계 정지 · RT12 확장 중 무대 탭은 접기만 · RT13 접힌 무대 탭은 4600 이후로 건너뜀
+ * 반환: 항목별 { id, label, ok, detail }.
+ */
+export function resultTabChecks(m = {}) {
+  const out = [];
+  if (m.layout !== undefined) out.push(...layoutTabChecks(m.layout));
+  if (m.reveal !== undefined) out.push(...revealTabChecks(m.reveal));
+  return out;
+}
+
+function layoutTabChecks(l) {
+  const L = {
+    RT1: "탭 패널: 탭 버튼 다섯 개, 모두 44×44 이상",
+    RT3: "탭 패널: 접힌 패널 높이 188 · 244",
+    RT4: "탭 패널: 마피아 탭 확장 높이 min(round(0.7 × 방 높이), 520)",
+    RT5: "탭 패널: 확장에서 입력칸 없음",
+    RT6: "탭 패널: 마피아 탭 아이콘만 진홍",
+    RT7: "탭 패널: 마피아 탭 구분선이 `{n}밤`",
+    RT8: "탭 패널: 새 탭 점 — 열기 전 마피아·유령·귓속말, 마피아를 연 뒤 유령·귓속말",
+    RT9: "탭 패널: 헤더 아래 62 이상, 확장 패널이 헤더를 가리지 않음",
+  };
+  const out = [];
+
+  // RT1
+  if (!Array.isArray(l?.tabBoxes)) out.push(noMeasure("RT1", L.RT1, "tabBoxes"));
+  else {
+    const bad = [];
+    if (l.tabBoxes.length !== RESULT_TAB_IDS.length) bad.push(`탭 ${l.tabBoxes.length}개 ≠ ${RESULT_TAB_IDS.length}개`);
+    for (const b of l.tabBoxes) if (!isNum(b?.w) || !isNum(b?.h) || b.w < TAB_MIN - 0.5 || b.h < TAB_MIN - 0.5) bad.push(`${b?.id} ${b?.w}×${b?.h}`);
+    out.push(result("RT1", L.RT1, bad));
+  }
+
+  // RT3
+  const wantCollapsed = isNum(l?.roomH) ? (l.roomH >= RESULT_PANEL_H.tallRoomMinH ? RESULT_PANEL_H.tall : RESULT_PANEL_H.short) : null;
+  if (!isNum(l?.panelCollapsedH) || wantCollapsed === null) out.push(noMeasure("RT3", L.RT3, "panelCollapsedH·roomH"));
+  else out.push(result("RT3", L.RT3, Math.abs(l.panelCollapsedH - wantCollapsed) <= 1 ? [] : [`접힌 높이 ${l.panelCollapsedH} ≠ ${wantCollapsed} (±1)`]));
+
+  // RT4
+  if (!isNum(l?.panelExpandedH) || !isNum(l?.roomH)) out.push(noMeasure("RT4", L.RT4, "panelExpandedH·roomH"));
+  else {
+    const want = Math.min(Math.round(0.7 * l.roomH), 520);
+    out.push(result("RT4", L.RT4, Math.abs(l.panelExpandedH - want) <= 2 ? [] : [`확장 높이 ${l.panelExpandedH} ≠ ${want} (±2, 방 ${l.roomH})`]));
+  }
+
+  // RT5
+  if (typeof l?.inputPresent !== "boolean") out.push(noMeasure("RT5", L.RT5, "inputPresent"));
+  else out.push(result("RT5", L.RT5, l.inputPresent ? ["확장된 패널에 입력칸이 있음"] : []));
+
+  // RT6
+  if (!l?.iconColors || typeof l.crimson !== "string" || typeof l.iconColors.mafia !== "string") out.push(noMeasure("RT6", L.RT6, "iconColors·crimson"));
+  else {
+    const bad = [];
+    if (l.iconColors.mafia !== l.crimson) bad.push(`마피아 탭 아이콘 ${l.iconColors.mafia} ≠ 진홍 ${l.crimson}`);
+    for (const [id, c] of Object.entries(l.iconColors)) if (id !== "mafia" && c === l.crimson) bad.push(`${id} 탭 아이콘도 진홍`);
+    out.push(result("RT6", L.RT6, bad));
+  }
+
+  // RT7
+  if (!Array.isArray(l?.separators) || l.separators.length === 0) out.push(noMeasure("RT7", L.RT7, "separators"));
+  else out.push(result("RT7", L.RT7, l.separators.every((t) => /^\d+밤$/.test(t)) ? [] : [`구분선 "${l.separators.join('", "')}"`]));
+
+  // RT8
+  if (!Array.isArray(l?.dots?.before) || !Array.isArray(l?.dots?.after)) out.push(noMeasure("RT8", L.RT8, "dots"));
+  else {
+    const bad = [];
+    if (!sameSet(l.dots.before, DOT_TAB_IDS)) bad.push(`열기 전 점 [${[...l.dots.before].sort()}] ≠ [${DOT_TAB_IDS}]`);
+    if (!sameSet(l.dots.after, ["ghost", "whisper"])) bad.push(`마피아를 연 뒤 점 [${[...l.dots.after].sort()}] ≠ [ghost,whisper]`);
+    out.push(result("RT8", L.RT8, bad));
+  }
+
+  // RT9
+  if (!isNum(l?.headerBottom) || !isNum(l?.panelTop)) out.push(noMeasure("RT9", L.RT9, "headerBottom·panelTop"));
+  else {
+    const bad = [];
+    if (l.headerBottom < 62 - 1) bad.push(`헤더 아래 ${l.headerBottom} < 62`);
+    if (l.panelTop < l.headerBottom - 1) bad.push(`패널 윗변 ${l.panelTop} 이 헤더 아래 ${l.headerBottom} 를 가림`);
+    out.push(result("RT9", L.RT9, bad));
+  }
+  return out;
+}
+
+function revealTabChecks(r) {
+  const L = {
+    RT2: "탭 패널: 첫 뒤집기 전 탭 1개, 뒤집기 시작 뒤 5개",
+    RT10: "탭 패널: 판이 도는 동안 시민 화면에 탭 0건",
+    RT11: "탭 패널: 확장 중 연출 시계가 멈춤",
+    RT12: "탭 패널: 확장 중 무대 탭은 접기만 함(건너뛰기 아님)",
+    RT13: "탭 패널: 접힌 무대 탭은 4600 이후로 건너뜀",
+  };
+  const out = [];
+
+  // RT2
+  if (!isNum(r?.tabsBefore?.count) || !isNum(r?.tabsAfter?.count)) out.push(noMeasure("RT2", L.RT2, "tabsBefore·tabsAfter"));
+  else if (r.tabsBefore.stage !== "gather") out.push(noMeasure("RT2", L.RT2, `뒤집기 전 구간을 놓침(단계 ${r.tabsBefore.stage})`));
+  else if (r.tabsAfter.stage === "gather") out.push(noMeasure("RT2", L.RT2, "뒤집기 시작 뒤 표본이 아직 모임 구간"));
+  else {
+    const bad = [];
+    if (r.tabsBefore.count !== 1) bad.push(`뒤집기 전 탭 ${r.tabsBefore.count}개 ≠ 1`);
+    if (r.tabsAfter.count !== RESULT_TAB_IDS.length) bad.push(`뒤집기 시작 뒤 탭 ${r.tabsAfter.count}개 ≠ ${RESULT_TAB_IDS.length}`);
+    out.push(result("RT2", L.RT2, bad));
+  }
+
+  // RT10
+  if (!Array.isArray(r?.live) || r.live.length === 0) out.push(noMeasure("RT10", L.RT10, "live"));
+  else {
+    const bad = r.live.filter((x) => x.count !== 0).map((x) => `${x.phase} 에 탭 ${x.count}개`);
+    out.push(result("RT10", L.RT10, bad));
+  }
+
+  // RT11
+  const p = r?.paused;
+  if (!p || !isNum(p.chipsAtOpen) || !isNum(p.chipsLater) || typeof p.stageAtOpen !== "string" || typeof p.stageLater !== "string" || !isNum(p.waitedMs)) out.push(noMeasure("RT11", L.RT11, "paused"));
+  else if (p.waitedMs < 1000) out.push(noMeasure("RT11", L.RT11, `기다린 시간 ${p.waitedMs}ms < 1000`));
+  else {
+    const bad = [];
+    if (p.stageLater !== p.stageAtOpen) bad.push(`단계 ${p.stageAtOpen} → ${p.stageLater}`);
+    if (p.chipsLater !== p.chipsAtOpen) bad.push(`칩 ${p.chipsAtOpen} → ${p.chipsLater}`);
+    out.push(result("RT11", L.RT11, bad));
+  }
+
+  // RT12
+  const t = r?.tapExpanded;
+  if (!t || typeof t.expandedBefore !== "boolean" || typeof t.expandedAfter !== "boolean" || typeof t.stageBefore !== "string" || typeof t.stageAfter !== "string") out.push(noMeasure("RT12", L.RT12, "tapExpanded"));
+  else {
+    const bad = [];
+    if (!t.expandedBefore) bad.push("탭 전에 확장되어 있지 않았음");
+    if (t.expandedAfter) bad.push("무대를 탭해도 접히지 않음");
+    if (t.stageAfter !== t.stageBefore) bad.push(`확장 중 탭이 건너뜀(${t.stageBefore} → ${t.stageAfter})`);
+    out.push(result("RT12", L.RT12, bad));
+  }
+
+  // RT13
+  const c = r?.tapCollapsed;
+  if (typeof c?.stageBefore !== "string" || typeof c?.stageAfter !== "string") out.push(noMeasure("RT13", L.RT13, "tapCollapsed"));
+  else if (c.stageBefore !== "gather" && c.stageBefore !== "flip") out.push(noMeasure("RT13", L.RT13, `탭 전 단계 ${c.stageBefore} — 연출 구간을 놓침`));
+  else out.push(result("RT13", L.RT13, ["light", "announce", "final"].includes(c.stageAfter) ? [] : [`탭 뒤 단계 ${c.stageAfter} (light 이후여야 함)`]));
+  return out;
+}
+
+/**
+ * 결과 탭 패널 한 번의 읽기(한 번의 evaluate). `.mf-result` 가 없으면 null.
+ * { stage, chips(훅), tab(훅), tabs: [id…], tabBoxes: [{id,w,h}], expanded(data-expanded), panelH, panelTop, headerBottom, roomH, inputPresent, separators: [글자…],
+ *   dots: [점 붙은 탭 id…], iconColors: {탭id: 색}, crimson(--crimson-300 계산 색), bodyText(탭 몸통 글자) }
+ */
+export function readResultTabs(page) {
+  return page.evaluate(() => {
+    const root = document.querySelector(".mf-result");
+    if (!root) return null;
+    const rr = root.getBoundingClientRect();
+    const panel = root.querySelector("[data-result-panel]");
+    const pr = panel ? panel.getBoundingClientRect() : null;
+    const header = root.querySelector("header")?.getBoundingClientRect() ?? null;
+    const tabEls = [...root.querySelectorAll("[data-result-tab]")];
+    const text = (el) => (el?.textContent ?? "").replace(/\s+/g, " ").trim();
+    const probe = document.createElement("i");
+    probe.style.color = "var(--crimson-300)";
+    root.appendChild(probe);
+    const crimson = getComputedStyle(probe).color;
+    probe.remove();
+    return {
+      stage: window.__mfResult?.stage ?? root.getAttribute("data-result-stage") ?? "",
+      chips: window.__mfResult?.chips ?? -1,
+      tab: window.__mfResult?.tab ?? "",
+      tabs: tabEls.map((e) => e.getAttribute("data-result-tab")),
+      tabBoxes: tabEls.map((e) => {
+        const r = e.getBoundingClientRect();
+        return { id: e.getAttribute("data-result-tab"), w: r.width, h: r.height };
+      }),
+      expanded: panel?.getAttribute("data-expanded") === "true",
+      panelH: pr ? pr.height : Number.NaN,
+      panelTop: pr ? pr.top - rr.top : Number.NaN,
+      headerBottom: header ? header.bottom - rr.top : Number.NaN,
+      roomH: rr.height,
+      inputPresent: panel ? panel.querySelector("[data-chat-input]") !== null : false,
+      separators: [...root.querySelectorAll("[data-result-divider]")].map((e) => text(e)),
+      dots: tabEls.filter((e) => e.querySelector("[data-result-dot]")).map((e) => e.getAttribute("data-result-tab")),
+      iconColors: Object.fromEntries(tabEls.map((e) => [e.getAttribute("data-result-tab"), getComputedStyle(e.querySelector("svg")).color])),
+      crimson,
+      bodyText: text(root.querySelector("[data-result-body]")),
     };
   });
 }

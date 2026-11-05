@@ -128,7 +128,7 @@ import {
   ownPenFontRequests,
 } from "./lib.mjs";
 import { makeAvatarFlows } from "./avatar.mjs";
-import { readResultStage, resultSkipChecks, resultStageChecks } from "./result.mjs";
+import { readResultStage, readResultTabs, resultSkipChecks, resultStageChecks, resultTabChecks } from "./result.mjs";
 import { makePoliticsFlows } from "./politics.mjs";
 import { makeSoundFlows } from "./sound.mjs";
 
@@ -2836,6 +2836,157 @@ async function resultFlow(ctx) {
   }
 }
 
+// ---- result-reveal (11-07, D-2·D-3·D-25): 결과 탭 패널 ----
+// 방장(마피아) + 손님 1(시민) + 봇 2. 낮 1: 방장이 귓속말 → 봇들이 손님을 지목해 처형(손님이 유령) → 밤 1: 손님이 유령 채팅, 방장이 마피아 채팅 → 방장이 봇 한 명을 죽여 마피아 승.
+// 방장 페이지는 연출 구간(모임·뒤집기)을 지나며 탭 등장·시계 정지·무대 탭을, 손님 페이지는 최종 상태의 탭 기하·구분선·진홍·점을 본다. 판이 도는 동안 손님(시민) 페이지의 탭은 0건이어야 한다.
+
+const REVEAL_TEXTS = { mafia: "오늘 밤은 조용히 정해요", ghost: "나는 유령이에요 억울해요", whisper: "귓속말 기록 한 줄" };
+
+async function resultRevealFlow(ctx) {
+  const id = "result-reveal";
+  const rec = recorder(ctx);
+  const game = await openGame(ctx, id, { guests: 1, bots: 2, role: "mafia", vote: { exec: "yes", pick: "other" }, to: "discussion" });
+  try {
+    const { hp, ht, hostSeat, guests } = game;
+    const [g] = guests;
+    const live = [];
+    const liveTabs = async (phase) => live.push({ phase, count: await g.page.locator("[data-result-tab]").count() });
+
+    // 낮 1: 판이 도는 동안 탭 0건 + 귓속말 한 줄(방장 → 다른 사람)
+    await untilGame(g.page, (x) => x.phase === "discussion", 8000, "토론 도착(손님)");
+    await liveTabs("discussion");
+    const whispered = await attempt(async () => {
+      await hp.locator('[data-float="whisper"]').click({ timeout: 4000 });
+      await hp.locator("[data-pick]").first().waitFor({ state: "attached", timeout: 4000 });
+      await hp.locator("[data-pick]").first().dispatchEvent("click");
+      await hp.locator("[data-line-input]").waitFor({ timeout: 4000 });
+      await hp.locator("[data-line-input]").fill(REVEAL_TEXTS.whisper);
+      await hp.locator("[data-line-send]").click({ timeout: 4000 });
+      await ht.waitFor((v) => v.me.whisperUsed === true, 5000, "서버가 귓속말 사용함으로 확인");
+    });
+    if (!whispered.ok) infoRow(ctx, `${id}/setup`, "RT-W", "귓속말을 보내지 못해 귓속말 탭은 빈 상태로 확인(참고)", whispered.detail);
+
+    await step("지목", () => skipTo(hp, ht, "nomination"));
+    await liveTabs("nomination");
+    await step("변론", () => skipTo(hp, ht, "defense"));
+    await step("찬반", () => skipTo(hp, ht, "verdict"));
+    await untilGame(hp, (x) => x.phase === "verdict" && x.verdictBtns.length === 2, 6000, "찬반 도착");
+    await chooseVerdict(hp, true);
+    await step("밤", () => skipTo(hp, ht, "night"));
+    const night = await untilGame(hp, (x) => x.phase === "night" && x.picks.length > 0, 9000, "밤 도착(지목 버튼)");
+    await liveTabs("night");
+    const alive = aliveOf(ht.last());
+    if (alive.length !== 3 || !alive.includes(hostSeat)) throw new SetupError(`처형 뒤 생존자가 방장 포함 3명이 아님 (${alive.join(",")})`);
+    if (alive.includes(g.seat)) throw new SetupError("손님이 처형되지 않음(봇 지목이 손님이 아님)");
+
+    // 밤 1: 손님(유령)의 유령 채팅과 방장의 마피아 채팅
+    const ghostSent = await attempt(async () => {
+      await untilGame(g.page, (x) => x.ghostView, 9000, "유령 화면(손님)");
+      await typeAndSendChat(g.page, REVEAL_TEXTS.ghost);
+      await waitChatLine(g.page, REVEAL_TEXTS.ghost);
+    });
+    rec(`${id}/setup`, "RT-G", "손님(유령)이 유령 채팅 한 줄을 보냄", ghostSent.ok, ghostSent.detail);
+    const mafiaSent = await attempt(async () => {
+      await typeAndSendChat(hp, REVEAL_TEXTS.mafia);
+      await waitChatLine(hp, REVEAL_TEXTS.mafia);
+    });
+    rec(`${id}/setup`, "RT-M", "방장(마피아)이 밤 채팅 한 줄을 보냄", mafiaSent.ok, mafiaSent.detail);
+    await tapPick(hp, night.picks.find((b) => b.seat !== hostSeat).seat);
+    await step("아침", () => skipTo(hp, ht, "morning"));
+    await liveTabs("morning");
+
+    // 방장 페이지: 연출 구간을 지나며 탭 등장·시계 정지·무대 탭
+    await toEnded(game);
+    const sc = `${id}/ended`;
+    const waitRead = async (ok, ms) => {
+      const t0 = Date.now();
+      for (;;) {
+        const r = await readResultTabs(hp);
+        if (r && ok(r)) return r;
+        if (Date.now() - t0 > ms) return r;
+        await sleep(25);
+      }
+    };
+    const before = await waitRead((r) => r.tabs.length > 0, 8000);
+    const after = await waitRead((r) => r.tabs.length === 5, 4000);
+    let tapExpanded;
+    let paused;
+    let tapCollapsed;
+    if (after && after.tabs.length === 5 && after.stage !== "final") {
+      await hp.locator('[data-result-tab="mafia"]').click({ timeout: 4000 });
+      const opened = await waitRead((r) => r.expanded, 2000);
+      const t0 = Date.now();
+      await sleep(1500);
+      const later = await readResultTabs(hp);
+      paused = { stageAtOpen: opened?.stage, chipsAtOpen: opened?.chips, stageLater: later?.stage, chipsLater: later?.chips, waitedMs: Date.now() - t0 };
+      const mid = { x: ctx.size.w / 2, y: ((later?.headerBottom ?? 62) + (later?.panelTop ?? 200)) / 2 };
+      await hp.mouse.click(mid.x, mid.y);
+      await sleep(150);
+      const folded = await readResultTabs(hp);
+      tapExpanded = { expandedBefore: later?.expanded, expandedAfter: folded?.expanded, stageBefore: later?.stage, stageAfter: folded?.stage };
+      const stageBefore = folded?.stage;
+      await hp.mouse.click(mid.x, mid.y);
+      await sleep(150);
+      const skipped = await readResultTabs(hp);
+      tapCollapsed = { stageBefore, stageAfter: skipped?.stage };
+    }
+    const reveal = { tabsBefore: { stage: before?.stage, count: before?.tabs.length }, tabsAfter: { stage: after?.stage, count: after?.tabs.length }, live, paused, tapExpanded, tapCollapsed };
+    for (const row of resultTabChecks({ reveal })) recOne(rec, sc, row);
+
+    // 두 페이지가 최종 상태에 닿은 뒤 손님 페이지로 탭 기하를 잰다
+    for (const page of [hp, g.page]) {
+      try {
+        await page.waitForFunction(() => window.__mfResult?.stage === "final", null, { timeout: 12000 });
+      } catch {
+        throw new SetupError("결과 화면 연출이 final 에 닿지 않음 (window.__mfResult.stage)");
+      }
+    }
+    await checkState(ctx, id, "ended", game.host);
+    const gp = g.page;
+    const layout0 = await readResultTabs(gp);
+    await gp.locator('[data-result-tab="mafia"]').click({ timeout: 4000 });
+    await gp.waitForSelector('[data-result-panel][data-expanded="true"]', { timeout: 4000 });
+    await sleep(300);
+    const layout1 = await readResultTabs(gp);
+    for (const row of resultTabChecks({
+      layout: {
+        roomH: layout1?.roomH,
+        tabBoxes: layout0?.tabBoxes,
+        panelCollapsedH: layout0?.panelH,
+        panelExpandedH: layout1?.panelH,
+        inputPresent: layout1?.inputPresent,
+        iconColors: layout0?.iconColors,
+        crimson: layout0?.crimson,
+        separators: layout1?.separators,
+        dots: { before: layout0?.dots, after: layout1?.dots },
+        headerBottom: layout1?.headerBottom,
+        panelTop: layout1?.panelTop,
+      },
+    })) {
+      recOne(rec, sc, row);
+    }
+
+    // 탭 안 내용: 마피아·유령 줄이 해당 탭에만, 귓속말은 머리줄 + 본문(보냈을 때)
+    const bodyOf = async () => (await readResultTabs(gp))?.bodyText ?? "";
+    rec(sc, "RT14", "마피아 탭에 밤 채팅 줄이 보임", (await bodyOf()).includes(REVEAL_TEXTS.mafia), "마피아 탭 본문에 줄이 없음");
+    await gp.locator('[data-result-tab="ghost"]').click({ timeout: 4000 });
+    await sleep(150);
+    const ghostBody = await bodyOf();
+    rec(sc, "RT15", "유령 탭에 유령 채팅 줄만 보임", ghostBody.includes(REVEAL_TEXTS.ghost) && !ghostBody.includes(REVEAL_TEXTS.mafia), "유령 탭 본문이 기대와 다름");
+    await gp.locator('[data-result-tab="whisper"]').click({ timeout: 4000 });
+    await sleep(150);
+    const whisperRows = await gp.locator("[data-result-whisper]").count();
+    if (whispered.ok) rec(sc, "RT16", "귓속말 탭에 머리줄 + 본문 한 줄과 일차 구분선", whisperRows >= 1 && (await bodyOf()).includes(REVEAL_TEXTS.whisper) && (await readResultTabs(gp))?.separators.some((t) => /^\d+일차$/.test(t)), `머리줄 ${whisperRows}개`);
+    else rec(sc, "RT16", "귓속말 탭: 보낸 귓속말이 없으면 quiet 아이콘 하나(글 없음)", whisperRows === 0 && (await bodyOf()) === "", `머리줄 ${whisperRows}개`);
+    await gp.locator('[data-result-tab="all"]').click({ timeout: 4000 });
+    await sleep(150);
+    const folded = await readResultTabs(gp);
+    rec(sc, "RT17", "전체 탭으로 돌아오면 접히고 입력칸이 다시 있음", folded?.expanded === false && folded.inputPresent === true, `확장 ${folded?.expanded} · 입력칸 ${folded?.inputPresent}`);
+  } finally {
+    await closeGame(game);
+  }
+}
+
 // ---- chat-game: 지목·찬반·처형·아침에 채팅 입력줄이 있고 줄이 오가며, 유령 줄은 산 사람 화면에 없다 (07 D1 이월 해소) ----
 
 const CHAT_TEXTS = { nomination: "지목은 신중하게 해요", verdict: "찬반은 조용히 골라요", execution: "처형 단계에서도 말해요", morning: "아침이 밝았어요", ghost: "나는 유령이에요" };
@@ -3098,6 +3249,7 @@ export const FLOWS = [
   { id: "night", run: nightFlow, size: GAME_SIZE },
   { id: "night-sizes", run: nightSizesFlow, extraSizes: LOBBY_EXTRA_SIZES },
   { id: "result", run: resultFlow, size: GAME_SIZE },
+  { id: "result-reveal", run: resultRevealFlow, extraSizes: LOBBY_EXTRA_SIZES },
   { id: "chat-game", run: chatGameFlow, size: GAME_SIZE },
   // 9.1.1 페이즈 정치 긴장(09.1.1-10): 직업 배지(떠 있는 버튼→칩→이름표 배지→말 바꿈)·귓속말(모드→한 줄 시트→당사자만 본문). 둘 다 폰 6종, 방장·손님 두 화면
   { id: "politics-badge", run: politicsBadgeFlow, extraSizes: LOBBY_EXTRA_SIZES },

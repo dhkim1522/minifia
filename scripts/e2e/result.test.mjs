@@ -102,7 +102,7 @@ test("resultSkipChecks: 연출 구간에서 탭하면 light 이후 · 전원 칩
 });
 
 test("상수: 표식 목록·승리 한 줄·직업 의상 표", () => {
-  assert.deepEqual([...RESULT_MARKERS], ["data-result-stage", "data-result-panel", "data-result-announce", "__mfResult"]);
+  assert.deepEqual([...RESULT_MARKERS], ["data-result-stage", "data-result-panel", "data-result-announce", "__mfResult", "data-result-tab", "data-result-dot", "data-result-divider"]);
   assert.deepEqual({ ...RESULT_WIN_TITLE }, { citizenWin: "시민 승리", mafiaWin: "마피아 승리" });
   assert.deepEqual({ ...RESULT_JOB_OUTFIT }, { mafia: "mafia", police: "police", doctor: "doctor", citizen: "coat" });
 });
