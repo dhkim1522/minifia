@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { WorldStore } from "../../src/world/store";
 
 const snap = (ents: { s: number; p: number[]; t0: number; v: number }[], at = 0) => ({ t: "world" as const, k: "snap" as const, at, ents });
@@ -202,5 +202,56 @@ describe("WorldStore.moveSeqOf — 이 연결의 snap 뒤 자리에 적용된 mo
     expect(store.moveSeqOf(0)).toBe(1);
     store.reset();
     expect(store.moveSeqOf(0)).toBe(0);
+  });
+});
+
+describe("WorldStore: 동작 프레임 (10-03, D-9)", () => {
+  const emote = (seat: number, id: "clap" | "dance", n: number) => ({ t: "emote" as const, seat, id, n });
+
+  it("applyEmote 는 구독자(onEmote)에게 프레임을 한 번 알리고 위치 구독자는 깨우지 않는다", () => {
+    const store = new WorldStore();
+    store.applyFrame(snap([rest(0)]), 1);
+    const onEmote = vi.fn();
+    const onWorld = vi.fn();
+    store.onEmote(onEmote);
+    store.subscribe(onWorld);
+    store.applyEmote(emote(0, "clap", 1), 1);
+    expect(onEmote).toHaveBeenCalledTimes(1);
+    expect(onEmote).toHaveBeenCalledWith(emote(0, "clap", 1));
+    expect(onWorld).not.toHaveBeenCalled();
+    expect(store.seats()).toEqual([0]);
+  });
+
+  it("더 낡은 epoch 의 프레임은 버린다. 같거나 새 epoch 는 받고 store 의 epoch 를 바꾸지 않는다", () => {
+    const store = new WorldStore();
+    store.applyFrame(snap([rest(0)]), 3);
+    const onEmote = vi.fn();
+    store.onEmote(onEmote);
+    store.applyEmote(emote(0, "clap", 1), 2);
+    expect(onEmote).not.toHaveBeenCalled();
+    store.applyEmote(emote(0, "clap", 2), 3);
+    store.applyEmote(emote(0, "dance", 3), 4);
+    expect(onEmote).toHaveBeenCalledTimes(2);
+    expect(store.currentEpoch()).toBe(3);
+  });
+
+  it("해제 함수는 구독을 끊고 reset() 은 구독자를 그대로 둔다", () => {
+    const store = new WorldStore();
+    const kept = vi.fn();
+    const dropped = vi.fn();
+    store.onEmote(kept);
+    store.onEmote(dropped)();
+    store.reset();
+    store.applyEmote(emote(0, "clap", 1), 1);
+    expect(kept).toHaveBeenCalledTimes(1);
+    expect(dropped).not.toHaveBeenCalled();
+  });
+
+  it("마지막 프레임을 기억하지 않는다 — 늦게 구독한 쪽은 지난 동작을 받지 못한다(사건이다)", () => {
+    const store = new WorldStore();
+    store.applyEmote(emote(0, "clap", 1), 1);
+    const late = vi.fn();
+    store.onEmote(late);
+    expect(late).not.toHaveBeenCalled();
   });
 });

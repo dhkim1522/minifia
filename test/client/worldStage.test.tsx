@@ -2754,3 +2754,107 @@ describe("게임 이름표: 지목 버튼·tagProps·canWalk (DAY-04, MAP-04)", 
     });
   });
 });
+
+describe("동작 프레임 재생 (D-9, L33)", () => {
+  const ALL4 = { 0: {}, 1: {}, 2: {}, 3: {} };
+  const openEmote = (over: Partial<WorldStageProps> = {}) => open({ scene: sceneOf(ALL4), ...over }, { players: FOUR, ents: FOUR_ENTS() });
+  const handleOf = (s: Setup, seat: number): FakeHandle => s.world.renderers[0]!.chars.get(seat) as FakeHandle;
+  const emoteArg = (h: FakeHandle, i = 0): unknown => vi.mocked(h.playEmote!).mock.calls[i]?.[0];
+
+  it("서버 emote 프레임이 store 를 지나 그 좌석 캐릭터의 playEmote 가 정확히 한 번 된다", async () => {
+    const s = await openEmote();
+    frames(32);
+    const h3 = handleOf(s, 3);
+    expect(h3.playEmote).not.toHaveBeenCalled();
+    act(() => s.store.applyEmote({ t: "emote", seat: 3, id: "clap", n: 1 }, 1));
+    expect(h3.playEmote).toHaveBeenCalledTimes(1);
+    expect(emoteArg(h3)).toBe("clap");
+    for (const seat of [0, 1, 2]) expect(handleOf(s, seat).playEmote).not.toHaveBeenCalled();
+  });
+
+  it("로비 장면(scene 없음)에서도 재생한다", async () => {
+    const s = await open({}, { players: FOUR, ents: FOUR_ENTS() });
+    frames(32);
+    act(() => s.store.applyEmote({ t: "emote", seat: 2, id: "dance", n: 1 }, 1));
+    expect(emoteArg(handleOf(s, 2))).toBe("dance");
+  });
+
+  it("그릴 캐릭터가 없는 좌석(장면 표에 없음·구간 없음)의 프레임은 무시된다 — 훅도 바뀌지 않는다", async () => {
+    const s = await openEmote({ scene: sceneOf({ 0: {}, 1: {}, 2: {} }) });
+    frames(32);
+    act(() => s.store.applyEmote({ t: "emote", seat: 3, id: "clap", n: 1 }, 1));
+    act(() => s.store.applyEmote({ t: "emote", seat: 7, id: "clap", n: 2 }, 1));
+    for (const h of s.world.handles) expect(h.playEmote).not.toHaveBeenCalled();
+    expect(window.__mfEmotes).toEqual({ last: null, playing: [] });
+  });
+
+  it("퇴장 중인 좌석의 프레임은 무시된다", async () => {
+    const s = await openEmote();
+    frames(32);
+    const h3 = handleOf(s, 3);
+    s.rerender({ view: makeView(FOUR.slice(0, 3)) });
+    frames(40);
+    act(() => s.store.applyEmote({ t: "emote", seat: 3, id: "clap", n: 1 }, 1));
+    expect(h3.playEmote).not.toHaveBeenCalled();
+  });
+
+  it("끊긴 사람(dim)의 캐릭터에도 재생된다", async () => {
+    const s = await openEmote();
+    frames(32);
+    s.rerender({ view: makeView([player(0, "민지"), player(1, "철수"), player(2, "영희", { connected: false }), player(3, "바다")]) });
+    frames(32);
+    act(() => s.store.applyEmote({ t: "emote", seat: 2, id: "cry", n: 1 }, 1));
+    expect(emoteArg(handleOf(s, 2))).toBe("cry");
+  });
+
+  it("훅이 켜진 문맥: window.__mfEmotes 가 처음엔 비어 있다가 받은 프레임의 사본으로 바뀌고 언마운트에서 지워진다", async () => {
+    const s = await openEmote();
+    frames(32);
+    expect(window.__mfEmotes).toEqual({ last: null, playing: [] });
+    act(() => s.store.applyEmote({ t: "emote", seat: 3, id: "clap", n: 1 }, 1));
+    expect(window.__mfEmotes).toEqual({ last: { seat: 3, id: "clap", n: 1 }, playing: [3] });
+    s.utils.unmount();
+    expect(window.__mfEmotes).toBeUndefined();
+  });
+
+  it("훅이 꺼진 문맥(?e2e=0)에는 객체가 없고 동작은 그래도 재생된다", async () => {
+    const before = window.location.href;
+    window.history.replaceState({}, "", "/?e2e=0");
+    try {
+      const s = await openEmote();
+      frames(32);
+      act(() => s.store.applyEmote({ t: "emote", seat: 3, id: "clap", n: 1 }, 1));
+      expect(window.__mfEmotes).toBeUndefined();
+      expect(emoteArg(handleOf(s, 3))).toBe("clap");
+    } finally {
+      window.history.replaceState({}, "", before);
+    }
+  });
+
+  it("DOM 속성에는 동작을 싣지 않는다", async () => {
+    const s = await openEmote();
+    frames(32);
+    act(() => s.store.applyEmote({ t: "emote", seat: 3, id: "clap", n: 1 }, 1));
+    const attrs = [...s.utils.container.querySelectorAll("*")].flatMap((el) => [...el.getAttributeNames()]);
+    expect(attrs.filter((a) => /emote/i.test(a))).toEqual([]);
+    expect(s.utils.container.innerHTML).not.toMatch(/clap/);
+  });
+
+  it("다른 설치가 덮어썼으면 언마운트가 지우지 않는다", async () => {
+    const s = await openEmote();
+    const other = { last: null, playing: [] as number[] };
+    window.__mfEmotes = other;
+    s.utils.unmount();
+    expect(window.__mfEmotes).toBe(other);
+    delete window.__mfEmotes;
+  });
+
+  it("언마운트 뒤의 프레임은 아무것도 부르지 않는다(구독 해제)", async () => {
+    const s = await openEmote();
+    frames(32);
+    const h3 = handleOf(s, 3);
+    s.utils.unmount();
+    act(() => s.store.applyEmote({ t: "emote", seat: 3, id: "clap", n: 1 }, 1));
+    expect(h3.playEmote).not.toHaveBeenCalled();
+  });
+});

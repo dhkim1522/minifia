@@ -782,3 +782,40 @@ describe("useRoomConnection: chat·chatReject·chatLog 프레임 (CHAT-01·05, 0
     expect(listener).not.toHaveBeenCalled();
   });
 });
+
+// 10-03: 동작(emote)도 typing 과 같은 방식 — 상태를 바꾸지 않고 구독자에게만 흘리며 끝난 연결의 늦은 프레임은 버린다.
+describe("useRoomConnection: emote 프레임 (10-03, D-9)", () => {
+  const emoteFrame = { t: "emote", seat: 2, id: "clap", n: 1 };
+
+  it("emote 프레임은 구독자에게 { epoch } 메타와 함께 가고 view·상태는 바뀌지 않는다", () => {
+    const { sockets, hook } = setup();
+    openWithState(sockets[0]!);
+    const listener = vi.fn();
+    act(() => {
+      hook.result.current.onEvent(listener);
+    });
+    const before = hook.result.current;
+    act(() => sockets[0]!.message(emoteFrame));
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(listener).toHaveBeenLastCalledWith(emoteFrame, { epoch: 1 });
+    expect(hook.result.current.view).toBe(before.view);
+    expect(hook.result.current.status).toBe(before.status);
+    expect(hook.result.current.epoch).toBe(before.epoch);
+  });
+
+  it.each([
+    ["replaced", 4001, "replaced"],
+    ["removed", 4003, "left"],
+  ] as const)("종료 상태(%s)가 된 뒤 늦게 온 emote 는 구독자에게 가지 않는다", (status, code, reason) => {
+    const { sockets, hook } = setup();
+    openWithState(sockets[0]!);
+    const listener = vi.fn();
+    act(() => {
+      hook.result.current.onEvent(listener);
+    });
+    act(() => sockets[0]!.serverClose(code, reason));
+    expect(hook.result.current.status).toBe(status);
+    act(() => sockets[0]!.message(emoteFrame));
+    expect(listener).not.toHaveBeenCalled();
+  });
+});
