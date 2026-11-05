@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import type { ClientMessage, RoomView } from "../../shared/protocol";
+import type { ClientMessage, MapChoice, RoomView } from "../../shared/protocol";
+import { PLAYABLE_MAPS } from "../../shared/game/maps";
 import { connectedCount } from "../../shared/game/room";
 import { ActionButton, ActionRow } from "../components/ActionButton";
 import { Button } from "../components/Button";
@@ -10,6 +11,7 @@ import { ShareSheet } from "../components/ShareSheet";
 import { ChatPanel } from "../components/v2/ChatPanel";
 import { DressSheet } from "../components/v2/DressSheet";
 import { FloatAction, FloatActions } from "../components/v2/FloatAction";
+import { MapChip } from "../components/v2/MapChip";
 import { PhaseHeader } from "../components/v2/PhaseHeader";
 import { TopToast, useTopToast } from "../components/v2/TopToast";
 import { WorldStage } from "../components/WorldStage";
@@ -127,8 +129,12 @@ export function Lobby({ view, store, chat, send, canSend = true, epoch = 0, offs
   const dress = useDress({ view, send, canSend });
   const dressBtnRef = useRef<HTMLButtonElement>(null);
   const restoreDressFocus = useRef(false);
-  const openDress = () => {
+  // 시트 탭(11-13): 지도 칩 → 맵 탭, 꾸미기 버튼 → 의상 탭. 칩·맵 탭은 허용 맵이 둘 이상일 때만 있다
+  const [dressTab, setDressTab] = useState<"map" | "dress">("dress");
+  const mapsOn = PLAYABLE_MAPS.length > 1;
+  const openDress = (tab: "map" | "dress" = "dress") => {
     inputRef.current?.blur();
+    setDressTab(tab);
     setDressOpen(true);
   };
   const closeDress = () => {
@@ -144,6 +150,12 @@ export function Lobby({ view, store, chat, send, canSend = true, epoch = 0, offs
 
   const connected = connectedCount(view.players);
   const isHost = view.me.isHost;
+  // 맵 선택(11-13): 칩과 카드는 서버가 방송한 view.mapChoice 만 따른다. 보내기만 하고 미리 바꾸지 않는다
+  const mapChoice: MapChoice = view.mapChoice ?? "random";
+  const pickMap = (map: MapChoice) => {
+    if (canSend) send({ t: "mapPick", map });
+  };
+  const mapChip = mapsOn ? <MapChip choice={mapChoice} host={isHost} onPress={() => openDress("map")} /> : null;
   const host = view.players.find((p) => p.isHost);
   const full = view.players.length >= view.maxPlayers;
   // 서버 checkStart 와 같은 기준(연결된 사람 수)을 쓴다. 버튼 모양은 표시용이고 판정은 서버가 한다.
@@ -199,7 +211,14 @@ export function Lobby({ view, store, chat, send, canSend = true, epoch = 0, offs
         )}
       </header>
       <TopToast {...toast.props} />
-      {testButton ? <div className="mf-lobby__test">{testButton}</div> : null}
+      {testButton ? (
+        <div className="mf-lobby__test">
+          {testButton}
+          {mapChip}
+        </div>
+      ) : mapChip ? (
+        <div className="mf-lobby__map">{mapChip}</div>
+      ) : null}
       <section ref={panelRef} className={kbOpen ? "mf-lobby__panel mf-lobby__panel--kb" : "mf-lobby__panel"} data-world-panel="">
         <ChatPanel {...binding} logHeight={kbOpen ? LOG_H_KB : logH} compact={kbOpen} inputRef={inputRef} />
         {kbOpen ? null : (
@@ -222,10 +241,21 @@ export function Lobby({ view, store, chat, send, canSend = true, epoch = 0, offs
       </section>
       {dressOpen ? null : (
         <FloatActions single>
-          <FloatAction ref={dressBtnRef} kind="dress" icon="hanger" label={DRESS_TEXT.open} disabled={!canSend} onPress={openDress} />
+          <FloatAction ref={dressBtnRef} kind="dress" icon="hanger" label={DRESS_TEXT.open} disabled={!canSend} onPress={() => openDress()} />
         </FloatActions>
       )}
-      {dressOpen ? <DressSheet value={dress.look} onPick={dress.pick} onClose={closeDress} disabled={!canSend} /> : null}
+      {dressOpen ? (
+        <DressSheet
+          value={dress.look}
+          onPick={dress.pick}
+          onClose={closeDress}
+          disabled={!canSend}
+          host={isHost && mapsOn}
+          tab={dressTab}
+          mapChoice={mapChoice}
+          onPickMap={pickMap}
+        />
+      ) : null}
       {sheet?.kind === "leave" ? (
         <ConfirmSheet
           title="방에서 나갈까요?"

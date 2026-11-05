@@ -6,7 +6,7 @@ import "../../styles/v2.css";
 // 나머지 아이콘은 그것을 쓰는 페이즈(8·9·10페이즈)가 같은 표에 더한다(10페이즈: 동작 아홉 개, hanger 는 10-07 이 더한다).
 // v1.0 아이콘(src/components/Icon.tsx)과 이름이 겹쳐도(check·crown) 서로 다른 부품이다: v2 화면은 이 파일을 쓴다.
 // 로비 헤더의 [나가기]·[공유] 는 v1.0 Icon 을 그대로 쓴다(UI-SPEC 결정 현황) — 여기에 back·share 를 더하지 않는다.
-export type V2IconName = "point" | "crown" | "play" | "check" | "roleCitizen" | "send" | "ghost" | "roleMafia" | "rolePolice" | "roleDoctor" | "skip" | "thumbUp" | "thumbDown" | "quill" | "note" | "target" | "eye" | "heal" | "close" | "whisper" | "swap" | "quiet" | "face" | "throat" | "deny" | "clap" | "cry" | "handshake" | "praise" | "surprise" | "dance" | "hanger" | "timeline" | "trophy" | "hourglass";
+export type V2IconName = "point" | "crown" | "play" | "check" | "roleCitizen" | "send" | "ghost" | "roleMafia" | "rolePolice" | "roleDoctor" | "skip" | "thumbUp" | "thumbDown" | "quill" | "note" | "target" | "eye" | "heal" | "close" | "whisper" | "swap" | "quiet" | "face" | "throat" | "deny" | "clap" | "cry" | "handshake" | "praise" | "surprise" | "dance" | "hanger" | "timeline" | "trophy" | "hourglass" | "mapBar" | "mapPlaza" | "shuffle";
 
 // ["c", cx, cy, r, filled?] 원 · ["p", d, filled?] 경로
 type Part = readonly ["c", number, number, number, boolean?] | readonly ["p", string, boolean?];
@@ -118,6 +118,24 @@ const ICONS: Readonly<Record<V2IconName, readonly Part[]>> = {
   hanger: [
     ["p", "M10 6.5a2 2 0 1 1 2.6 1.9c-.4.1-.6.5-.6.9V11"],
     ["p", "M12 11l-8.6 6.2a1 1 0 0 0 .6 1.8h16a1 1 0 0 0 .6-1.8z"],
+  ],
+  // 11-13(맵 선택): 지도 칩·시트 탭·카드. 직접 그린 단순 모양 — 칵테일 잔(재즈 바)·시계탑(광장)·엇갈린 화살표(랜덤)
+  mapBar: [
+    ["p", "M5 5h14l-7 8.5z"],
+    ["p", "M12 13.5V19"],
+    ["p", "M8.5 19.5h7"],
+  ],
+  mapPlaza: [
+    ["p", "M8 21V8.5l4-5 4 5V21"],
+    ["p", "M4.5 21h15"],
+    ["c", 12, 12.5, 2.5],
+  ],
+  shuffle: [
+    ["p", "M4 7h3.5c3.5 0 4.5 10 8.5 10H20"],
+    ["p", "M17.5 14.5L20 17l-2.5 2.5"],
+    ["p", "M4 17h3.5c1.2 0 2.1-.7 2.8-1.8"],
+    ["p", "M13.2 8.8C13.9 7.7 14.8 7 16 7h4"],
+    ["p", "M17.5 4.5L20 7l-2.5 2.5"],
   ],
   throat: [
     ["c", 12, 7, 4],

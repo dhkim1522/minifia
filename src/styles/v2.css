@@ -334,6 +334,26 @@ body:has([data-emote-tray]) .mf-float { visibility: hidden; }
 .mv-dress-card__name { max-width: 100%; font-size: 14px; line-height: 1.2; font-weight: 700; white-space: nowrap; overflow: hidden; }
 .mv-dress-card__check { position: absolute; top: 4px; right: 4px; }
 .mv-dress-card[aria-disabled="true"] { opacity: 0.45; cursor: default; }
+/* 방장의 [맵][의상] 탭(11-13): 아이콘 44×44, 선택 탭은 아래 2px 줄(gray-100). 맵 탭 카드 3장 96×112 간격 8(합 304) — 그림 80×80 cover + 이름 14px */
+.mv-dress-sheet__tabs { display: flex; align-items: center; }
+.mv-dress-sheet__tab { position: relative; display: grid; place-items: center; box-sizing: border-box; width: var(--tap-min); height: var(--tap-min); padding: 0; border: 0; background: none; color: var(--gray-300); cursor: pointer; }
+.mv-dress-sheet__tab.is-selected { color: var(--gray-100); }
+.mv-dress-sheet__tab.is-selected::after { content: ""; position: absolute; left: 8px; right: 8px; bottom: 0; height: 2px; background: var(--gray-100); }
+.mv-dress-sheet__tab:focus-visible { outline: 2px solid var(--gray-100); outline-offset: -2px; }
+.mv-dress-sheet__maps { flex: none; display: flex; justify-content: center; gap: var(--space-sm); }
+.mv-map-card { position: relative; flex: none; display: flex; flex-direction: column; align-items: center; gap: 2px; box-sizing: border-box; width: 96px; height: 112px; padding: 7px 0 0; border: 1px solid var(--night-600); border-radius: var(--radius-md); background: var(--night-700); color: var(--gray-100); font-family: inherit; cursor: pointer; }
+.mv-map-card.is-selected { box-shadow: inset 0 0 0 2px var(--gray-100); border-color: transparent; }
+.mv-map-card__img { flex: none; display: block; width: 80px; height: 80px; object-fit: cover; border-radius: var(--radius-sm); pointer-events: none; -webkit-user-drag: none; }
+.mv-map-card__shuffle { display: grid; place-items: center; background: var(--night-700); color: var(--gray-100); }
+.mv-map-card__name { max-width: 100%; font-size: 14px; line-height: 1.2; font-weight: 700; white-space: nowrap; overflow: hidden; }
+.mv-map-card__check { position: absolute; top: 5px; right: 5px; display: grid; place-items: center; width: 18px; height: 18px; border-radius: var(--radius-pill); background: var(--overlay-ink-strong); color: var(--gray-100); }
+.mv-map-card[aria-disabled="true"] { opacity: 0.45; cursor: default; }
+.mv-map-card:focus-visible { outline: 2px solid var(--gray-100); outline-offset: 2px; }
+/* 지도 칩(11-13): 시각 원 36(아이콘 24 + 안쪽 6)을 44×44 누르기 영역이 감싼다(바깥 4 는 음수 여백) */
+.mf-mapchip { position: relative; flex: none; display: block; box-sizing: border-box; width: var(--tap-min); height: var(--tap-min); margin: -4px; padding: 0; border: 0; background: none; color: var(--gray-100); cursor: pointer; pointer-events: auto; -webkit-tap-highlight-color: transparent; }
+.mf-mapchip[aria-disabled="true"] { cursor: default; }
+.mf-mapchip__disc { position: absolute; top: 4px; left: 4px; display: grid; place-items: center; box-sizing: border-box; width: 36px; height: 36px; border-radius: var(--radius-pill); background: var(--overlay-ink-strong); box-shadow: inset 0 0 0 1px var(--night-600); }
+.mf-mapchip:focus-visible .mf-mapchip__disc { box-shadow: inset 0 0 0 2px var(--gray-100); }
 .mv-dress-card:focus-visible, .mv-dress-sheet__close:focus-visible { outline: 2px solid var(--gray-100); outline-offset: 2px; }
 @media (prefers-reduced-motion: reduce) { .mv-dress-sheet__strip { scroll-behavior: auto; } }
 .mf-float[data-float-single] { min-height: 0; }
