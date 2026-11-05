@@ -307,3 +307,27 @@ describe("E2E 의 배지·귓속말 치수와 앱 CSS (09.1.1-10)", () => {
     expect(rule(v2, ".mv-line__count")).toMatch(new RegExp(`font-size:\\s*${lib.SHEET_FONT_MIN}px`));
   });
 });
+
+describe("10페이즈 E2E 표식(10-05)", () => {
+  const lib = e2eLib as unknown as { AVATAR_MARKERS: readonly string[] };
+  const root = new URL("../../", import.meta.url);
+  const tracked = execFileSync("git", ["ls-files", "src"], { cwd: root, encoding: "utf8" })
+    .split("\n")
+    .filter((f) => /\.(tsx?|css)$/.test(f));
+  const sources = tracked.map((f) => ({ f, text: readFileSync(new URL(f, root), "utf8") }));
+
+  it("AVATAR_MARKERS 가 4개이고 각 표식이 git 이 추적하는 src/ 파일 어딘가에 있다(표식 이름 오타 방지)", () => {
+    expect(tracked.length).toBeGreaterThan(20);
+    expect(lib.AVATAR_MARKERS.length).toBe(4);
+    const missing = lib.AVATAR_MARKERS.filter((m) => !sources.some((s) => s.text.includes(m)));
+    expect(missing).toEqual([]);
+  });
+
+  it("동작 표식은 ChatPanel·EmoteTray·testHooks 에 각각 있다", () => {
+    const has = (file: string, marker: string) => sources.some((s) => s.f.endsWith(file) && s.text.includes(marker));
+    expect(has("components/v2/ChatPanel.tsx", "data-emote-button")).toBe(true);
+    expect(has("components/v2/EmoteTray.tsx", "data-emote-tray")).toBe(true);
+    expect(has("components/v2/EmoteTray.tsx", "data-emote=")).toBe(true);
+    expect(has("world/testHooks.ts", "__mfEmotes")).toBe(true);
+  });
+});

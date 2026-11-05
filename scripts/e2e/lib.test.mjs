@@ -136,6 +136,8 @@ import {
   CLAIM_BADGE_SIZE,
   CLAIM_SWAP_SIZE,
   floatButtonChecks,
+  emoteTrayChecks,
+  AVATAR_MARKERS,
   sheetFitChecks,
   claimBadgeChecks,
   ballotFitChecks,
@@ -2582,4 +2584,101 @@ test("verdictTimelineChecks: 처형 단계 기록이 없으면 모든 줄이 측
   const lines = verdictTimelineChecks([{ t: 1, phase: "verdict", stage: null, yes: false, no: false, seat: null, strength: 0, zoom: 1, dim: "off" }], VT);
   assert.equal(lines.length, 6);
   assert.ok(lines.every((l) => l.ok === false && /측정값 없음/.test(l.detail)));
+});
+
+// ---- 10-05: 동작 버튼·5+4 판 기하 (emoteTrayChecks, D-18) ----
+
+// 360x560 폰: 입력줄 윗변 460. 동작 버튼 48 · 입력칸 160(깃펜이 있는 모양) · 판 폭 328(좌우 16) · 칸 55.6x56 · 판 아랫변 = 입력줄 윗변 − 8.
+const trayGood = () => {
+  const cw = 55.6;
+  const topRow = [0, 1, 2, 3, 4].map((i) => rect(25 + i * (cw + 8), 313, cw, 56));
+  const lowRow = [0, 1, 2, 3].map((j) => rect(56.8 + j * (cw + 8), 377, cw, 56));
+  return {
+    button: rect(16, 460, 48, 48),
+    input: rect(72, 460, 160, 48),
+    tray: rect(16, 306, 328, 146),
+    cells: [...topRow, ...lowRow],
+    nameFont: 14,
+    viewport: { w: 360, h: 560 },
+    character: { x: 180, y: 250 },
+    hasKb: false,
+  };
+};
+
+test("emoteTrayChecks: 정상 값은 EB1·EP2·TR1·TR2·EP3·TR3·EP4·TR4·TR5 모두 통과, 줄 모양은 { id, label, ok, detail }", () => {
+  const lines = emoteTrayChecks(trayGood());
+  assert.deepEqual(okOf(lines), { EB1: true, EP2: true, TR1: true, TR2: true, EP3: true, TR3: true, EP4: true, TR4: true, TR5: true });
+  for (const l of lines) assert.deepEqual(Object.keys(l).sort(), ["detail", "id", "label", "ok"]);
+});
+
+test("emoteTrayChecks EB1: 버튼이 48x48 이 아니면 그 항목만 실패", () => {
+  const g = trayGood();
+  g.button = rect(16, 460, 44, 48);
+  onlyFail(emoteTrayChecks(g), "EB1");
+});
+
+test("emoteTrayChecks EP2: 입력칸 폭 150 미만이면 그 항목만 실패, 150 은 통과", () => {
+  const g = trayGood();
+  g.input = rect(72, 460, 149, 48);
+  onlyFail(emoteTrayChecks(g), "EP2");
+  g.input = rect(72, 460, 150, 48);
+  assert.equal(okOf(emoteTrayChecks(g)).EP2, true);
+});
+
+test("emoteTrayChecks TR1: 판 좌우 16 에서 벗어나거나 폭이 viewport − 32 가 아니면 그 항목만 실패", () => {
+  const g = trayGood();
+  g.tray = rect(20, 306, 320, 146);
+  onlyFail(emoteTrayChecks(g), "TR1");
+});
+
+test("emoteTrayChecks TR2: 칸이 아홉 개가 아니거나 5+4 줄이 아니거나 아랫줄이 가운데가 아니면 실패", () => {
+  const eight = trayGood();
+  eight.cells = eight.cells.slice(0, 8);
+  assert.equal(okOf(emoteTrayChecks(eight)).TR2, false);
+  const left = trayGood();
+  left.cells = left.cells.map((c, i) => (i >= 5 ? rect(c.left - 30, c.top, c.width, c.height) : c));
+  assert.equal(okOf(emoteTrayChecks(left)).TR2, false);
+  const rows = trayGood();
+  rows.cells = rows.cells.map((c, i) => (i === 2 ? rect(c.left, c.top + 9, c.width, c.height) : c)); // 세 번째 칸만 다른 줄
+  assert.equal(okOf(emoteTrayChecks(rows)).TR2, false);
+});
+
+test("emoteTrayChecks EP3: 칸이 44 미만이면 그 항목만 실패", () => {
+  const g = trayGood();
+  g.cells = g.cells.map((c, i) => (i === 4 ? rect(c.left, c.top, 43, 56) : c));
+  onlyFail(emoteTrayChecks(g), "EP3");
+});
+
+test("emoteTrayChecks TR3: 판 아랫변이 입력줄 윗변 − 8 에서 2 넘게 벗어나면 그 항목만 실패", () => {
+  const g = trayGood();
+  g.tray = rect(16, 300, 328, 146); // 아랫변 446 (기대 452)
+  onlyFail(emoteTrayChecks(g), "TR3");
+});
+
+test("emoteTrayChecks EP4: 캐릭터 점이 판 사각형 안이면 그 항목만 실패", () => {
+  const g = trayGood();
+  g.character = { x: 180, y: 400 };
+  onlyFail(emoteTrayChecks(g), "EP4");
+});
+
+test("emoteTrayChecks TR4: 이름 글자 14px 미만이면 그 항목만 실패", () => {
+  const g = trayGood();
+  g.nameFont = 13;
+  onlyFail(emoteTrayChecks(g), "TR4");
+});
+
+test("emoteTrayChecks TR5: 판이 열려 있는데 키보드가 열려 있으면 그 항목만 실패", () => {
+  const g = trayGood();
+  g.hasKb = true;
+  onlyFail(emoteTrayChecks(g), "TR5");
+});
+
+test("emoteTrayChecks: 측정값이 없으면 모든 줄이 측정값 없음으로 실패", () => {
+  const lines = emoteTrayChecks({});
+  assert.equal(lines.length, 9);
+  assert.ok(lines.every((l) => l.ok === false && /측정값 없음/.test(l.detail)));
+});
+
+test("AVATAR_MARKERS: 동작 표식 네 개", () => {
+  assert.deepEqual([...AVATAR_MARKERS], ["data-emote-button", "data-emote-tray", "data-emote", "__mfEmotes"]);
 });
