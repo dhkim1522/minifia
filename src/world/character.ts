@@ -912,6 +912,24 @@ export function createCharacter(figIndex: number, outfit: OutfitId = "coat"): Wo
     }
     refreshGlass();
   }
+  /**
+   * 의상을 바꾼 뒤 이전 의상의 병합·돋보기 유리 지오메트리를 해제한다(최근 의상 하나만 남긴다, UI-SPEC B-3, 위험 3).
+   * refresh 가 보이는 메시와 pickShells 의 지오메트리를 이미 새 의상 것으로 바꾼 뒤에 부른다 — 해제된 것을 가리키는 메시는 없다.
+   */
+  function releaseOtherOutfits(): void {
+    for (const [key, m] of cache) {
+      if (key.split("|")[1] === outfitId) continue; // 키는 `관절|의상` 또는 `head|의상|표정`
+      m.geo.dispose();
+      owned.delete(m.geo);
+      cache.delete(key);
+    }
+    for (const [key, geo] of glassGeos) {
+      if (key === outfitId) continue;
+      geo.dispose();
+      owned.delete(geo);
+      glassGeos.delete(key);
+    }
+  }
   function dropPickShells(): void {
     for (const [j, shell] of pickShells) meshes[j].remove(shell);
     pickShells.clear();
@@ -1011,6 +1029,7 @@ export function createCharacter(figIndex: number, outfit: OutfitId = "coat"): Wo
       if (disposed || !Object.hasOwn(OUTFITS, id) || id === outfitId) return;
       outfitId = id;
       refresh(JOINTS);
+      releaseOtherOutfits();
     },
     playEmote(id, opts) {
       if (!disposed && Object.hasOwn(EMOTES, id)) emote = { id, t: 0, stopT: null, reduced: opts?.reduced === true };

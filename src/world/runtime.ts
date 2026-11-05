@@ -639,6 +639,13 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
     deps.onLooks(map);
   }
 
+  /** 고른 의상 적용(applyOutfit)의 단일 경로 — 의상을 실제로 바꾼 뒤: 표정 병합 선행(prewarm)을 그 캐릭터에 다시 건다 — 의상마다 머리 병합 키가 다르다(이전 의상 것은 character 가 해제한다) */
+  function wear(a: Actor, outfit: string): void {
+    a.handle.applyOutfit?.(outfit);
+    cancelPrewarm(a);
+    prewarmLater(a);
+  }
+
   function lookOf(seat: number): string {
     return deps.players().find((p) => p.seat === seat)?.look ?? DEFAULT_LOOK;
   }
@@ -673,7 +680,7 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
       const want = p.look ?? DEFAULT_LOOK;
       if (want !== a.look) {
         a.look = want;
-        if (a.ghostOutfit === null) a.handle.applyOutfit?.(want);
+        if (a.ghostOutfit === null) wear(a, want);
       }
     }
     emitLooks();
@@ -683,8 +690,8 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
 
   function createActor(seat: number, now: number): void {
     if (renderer === null || kit === null) return;
-    const look = lookOf(seat);
-    const handle = kit.create(figIndexForSeat(seat), look);
+    const chosen = lookOf(seat);
+    const handle = kit.create(figIndexForSeat(seat), chosen);
     const at = store.positionOf(seat, deps.serverNow());
     const a: Actor = {
       seat,
@@ -705,7 +712,7 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
       fadeOpacity: 1,
       ghost: false,
       ghostOutfit: null,
-      look,
+      look: chosen,
       enter: null,
       exit: null,
       tag: null,
@@ -986,12 +993,15 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
           a.handle.setGhost?.(true, GHOST_MIST.opacity, { color: GHOST_MIST.emissive, intensity: GHOST_MIST.intensity });
           ghostOutfitsDirty = true;
         }
-      } else if (wantGhost !== a.ghost) {
+      } else if (wantGhost !== a.ghost || a.ghostOutfit !== null) {
+        const hadMist = a.ghostOutfit !== null;
         a.ghost = wantGhost;
         a.handle.setGhost?.(wantGhost);
-        if (a.ghostOutfit !== null) {
+        if (hadMist) {
+          // 안개가 끝났다(유령 장면이 아니거나 spectate 의상이 없어졌다): 고른 의상으로 돌아온다(D-7). 안개 중 바뀐 look 도 a.look 에 이미 최신이다
           a.ghostOutfit = null;
           ghostOutfitsDirty = true;
+          wear(a, a.look);
         }
       }
       // 손가락 자세: 지목 중인 좌석만 유지하고, 풀리면 평소 자세로 돌아온다
