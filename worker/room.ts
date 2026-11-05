@@ -1,6 +1,6 @@
 import { DurableObject } from "cloudflare:workers";
 import { CLOSE_CODES, MAX_FRAME_BYTES } from "../shared/protocol";
-import type { ApiErrorCode, BadgeId, BotVoteExec, BotVotePick, ChatChannel, ChatRejectWhy, ClientMessage, EmoteId, RemovedReason, RoomPreview, ServerMessage, WorldFrame, WsErrorCode } from "../shared/protocol";
+import type { ApiErrorCode, BadgeId, BotVoteExec, BotVotePick, ChatChannel, ChatRejectWhy, ClientMessage, EmoteId, OutfitId, RemovedReason, RoomPreview, ServerMessage, WorldFrame, WsErrorCode } from "../shared/protocol";
 import { botMafiaTarget, botWakeAt, isBot, syncBotPlan, takeDueBotSteps } from "../shared/game/bots";
 import type { BotStep } from "../shared/game/bots";
 import { isAlive } from "../shared/game/alive";
@@ -27,6 +27,7 @@ import type { JoinError } from "../shared/game/room";
 import type { RoomState } from "../shared/game/room";
 import { pickRecipientIds, pickTarget } from "../shared/game/night";
 import { BADGE_MIN_GAP_MS, setBadge } from "../shared/game/badge";
+import { LOOK_MIN_GAP_MS, setLook } from "../shared/game/look";
 import { sendWhisper } from "../shared/game/whisper";
 import { WILL_MIN_GAP_MS, noteRecipientIds, saveNote, saveWill } from "../shared/game/will";
 import { resetToLobby, setBotCount, setBotVote, setTestRole, skipPhase } from "../shared/game/testTools";
@@ -294,6 +295,9 @@ export class Room extends DurableObject<Env> {
       case "badge":
         await this.handleBadge(ws, msg.role);
         return;
+      case "dress":
+        await this.handleDress(ws, msg.look);
+        return;
       case "whisper":
         await this.handleWhisper(ws, msg.to, msg.text);
         return;
@@ -468,6 +472,33 @@ export class Room extends DurableObject<Env> {
     this.room = result.state;
     await this.persistAndBroadcast();
     return null;
+  }
+
+  // 로비 의상(10-02, 결정 D-6): 신원은 소켓 첨부의 playerId 뿐이다 — 메시지에 seat·id 가 없다. 버림은 오류 프레임 없이 보낸 소켓의 최신 state 한 프레임뿐이다(L26).
+  private async handleDress(ws: WebSocket, look: OutfitId): Promise<void> {
+    const att = this.attachmentOf(ws);
+    if (!att || !this.room) {
+      this.sendTo(ws, { t: "error", code: "BAD_MESSAGE" });
+      return;
+    }
+    await this.applyDress(ws, att.playerId, look, Date.now());
+  }
+
+  // 규칙 함수(setLook)만 부른다 — 실제 역할은 읽지 않는다(L25). 의상은 공개 값이라 바뀌면 모든 소켓이 각자 view 를 받는다(persistAndBroadcast).
+  // 간격(LOOK_MIN_GAP_MS) 안의 요청·규칙 거절은 사람·역할과 무관하게 같은 응답(보낸 소켓에 자기 state 한 프레임)으로 버린다. 같은 값은 같은 객체라 저장·전송이 없다.
+  private async applyDress(ws: WebSocket, playerId: string, look: OutfitId, now: number): Promise<void> {
+    if (!this.room) return;
+    const key = `dress:${playerId}`;
+    const last = this.writeAt.get(key);
+    const result = last !== undefined && now - last < LOOK_MIN_GAP_MS ? null : setLook(this.room, playerId, look);
+    if (result === null || !result.ok) {
+      this.sendTo(ws, { t: "state", view: buildView(this.room, playerId, now) });
+      return;
+    }
+    if (result.state === this.room) return;
+    this.writeAt.set(key, now);
+    this.room = result.state;
+    await this.persistAndBroadcast();
   }
 
   // 귓속말(09.1.1, 결정 0066-2): 신원은 소켓 첨부의 playerId 뿐이다 — 메시지에 보낸 사람 seat·id 가 없다(대상 seat 만 있다).

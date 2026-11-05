@@ -9,6 +9,7 @@ import type {
   GameWinner,
   InvestigationRecord,
   MorningView,
+  OutfitId,
   PhaseId,
   PointLine,
   TreatmentRecord,
@@ -70,6 +71,8 @@ export interface Player {
   will?: string;
   /** 공개 직업 주장(결정 0066-1). setBadge 만 쓴다. 실제 역할과 무관한 값이고 view 에는 산 사람 것만 players[].badge 로 실린다. */
   badge?: BadgeId;
+  /** 로비 의상(결정 D-6). setLook 만 쓴다. 사람이 고른 공개 값이고 역할과 무관하다. 없으면 기본 coat 로 읽고, 게임 시작·테스트 방 되돌리기 뒤에도 남는다. */
+  look?: OutfitId;
   /** 직업을 건 뒤 다른 값으로 바꾼 적이 있음(결정 0066-1, O-1). 한 번 켜지면 판이 끝날 때까지 끄지 않는다. 이전 값은 어디에도 없다. */
   badgeSwapped?: true;
   /** 서버 전용(O-20, 결정 0066-1). 확정 변경마다 {n: 일차, v: 새 값}. 어떤 view 에도 싣지 않는다 — 11페이즈 결과 화면 입력. */

@@ -232,6 +232,7 @@ export type ClientMessage =
   | { t: "point"; target: number } // 지목 — 대상 seat 하나, 취소 없음, 마감까지 바꿀 수 있다(DAY-04)
   | { t: "whisper"; to: number; text: string } // 귓속말(결정 0066-2) — 낮 토론, 하루 1번, 산 다른 사람 한 명에게 30자소 이하. 본문은 보낸·받은 사람 소켓에만 간다
   | { t: "badge"; role: BadgeId } // 직업 주장(결정 0066-1) — 서버가 정하는 것은 값의 형식뿐 참·거짓은 판정하지 않는다. 낮 시작 발표·토론·지목 단계에서만
+  | { t: "dress"; look: OutfitId } // 로비 의상(결정 D-6) — 의상 id 하나뿐, 대기실에서만. 서버는 고른 값을 저장·방송할 뿐 역할과 비교하지 않는다
   | { t: "verdict"; agree: boolean } // 찬반 — 찬성 true / 반대 false, 변론자·유령은 거부, 마지막 값이 유효(DAY-06)
   // 테스트 방 방장 도구(결정 0022). 일반 방은 BAD_MESSAGE 로 거부한다. role null = 무작위.
   | { t: "testSkip" }
@@ -267,6 +268,7 @@ export interface PublicPlayer {
   isHost: boolean;
   alive?: boolean; // 서버는 항상 싣는다(공개 정보, 03-05). 없으면 생존
   badge?: BadgeId; // 공개 직업 주장(결정 0066-1). 산 사람이 건 값이 있을 때만 — 실제 역할의 함수가 아니다
+  look?: OutfitId; // 공개 의상(결정 D-6). 사람이 고른 값이 있을 때만 — 실제 역할의 함수가 아니다. 없으면 coat 로 읽는다
   badgeSwapped?: true; // 직업을 건 뒤 다른 값으로 바꾼 적이 있다(결정 0066-1). 이전 값은 어디에도 없다
 }
 export interface MyInfo {
@@ -402,6 +404,9 @@ export const PHASE_KEY_MAX = 32;
 /** 동작(몸짓) 종류 아홉 개(UI-SPEC 동작 종류 표). 10페이즈가 보내기·받기에 쓴다(shared/game/emote.ts 규칙, worker/room.ts 처리기). */
 export const EMOTE_IDS = ["throat", "deny", "clap", "cry", "handshake", "point", "praise", "surprise", "dance"] as const;
 export type EmoteId = (typeof EMOTE_IDS)[number];
+/** 의상 id 아홉 개(결정 D-4·D-6, UI-SPEC B-2 순서: coat 가 기본). 클라이언트 표 src/world/characterData.ts 의 OUTFITS 와 키 집합이 같다(test/unit/look.test.ts 가 고정). */
+export const OUTFIT_IDS = ["coat", "police", "doctor", "mafia", "detective", "reporter", "elder", "hood", "noir"] as const;
+export type OutfitId = (typeof OUTFIT_IDS)[number];
 
 /**
  * 동작 프레임(결정 D-12). 키는 t·seat·id·n 뿐이다 — 채널·역할·player id·시각이 없다.

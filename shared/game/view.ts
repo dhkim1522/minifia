@@ -174,6 +174,8 @@ export function buildView(state: RoomState, playerId: string, now: number): Room
         isHost: p.id === state.hostId,
         alive: isAlive(p), // 탈락 여부는 공개 정보다(ELIM-01)
       };
+      // 공개 의상(결정 D-6): 값이 있을 때만 키를 만든다(모든 단계 — 게임 중에도 같은 look 을 입는다). 실제 역할의 함수가 아니다.
+      if (p.look !== undefined) row.look = p.look;
       // 공개 직업 주장(결정 0066-1): 산 사람이고 값이 있을 때만 키를 만든다. 실제 역할이 아니고 badgeLog(서버 전용)는 어떤 경로로도 싣지 않는다.
       if (isAlive(p) && p.badge !== undefined && DAY_PHASES.has(state.phase)) {
         row.badge = p.badge;
