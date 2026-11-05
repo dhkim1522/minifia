@@ -8,7 +8,7 @@ import { ringSlots } from "../../shared/game/gather";
 import type { RoleId } from "../../shared/game/roles";
 import type { GameWinner, RoomView } from "../../shared/protocol";
 import type { WorldStageProps } from "../../src/components/WorldStage";
-import type { RoomConnection } from "../../src/net/useRoomConnection";
+import type { RoomConnection, RoomEvent } from "../../src/net/useRoomConnection";
 import { GATHER_CENTER } from "../../src/world/camera";
 
 // 결과 화면(11-05, 결정 D-1·D-11): 3D 무대(WorldStage) 위의 한 장면. WorldStage 는 받은 props 를 쥐고 tagProps 의 직업 칩만 그리는 가짜다
@@ -335,7 +335,7 @@ describe("E2E 훅 window.__mfResult (11-05)", () => {
   it("stage·칩 수·어두워진 좌석·입은 의상 표를 싣고 언마운트하면 지운다 (DOM 속성이 아니다)", () => {
     const r = renderRoom(makeView());
     const hook = (window as unknown as { __mfResult?: { stage: string; chips: number; dimmed: number[]; costumes: Record<number, string> } }).__mfResult;
-    expect(hook).toEqual({ stage: "final", chips: 5, dimmed: [3], costumes: { 0: "coat", 1: "police", 2: "doctor", 3: "mafia", 4: "coat" } });
+    expect(hook).toEqual({ stage: "final", chips: 5, dimmed: [3], costumes: { 0: "coat", 1: "police", 2: "doctor", 3: "mafia", 4: "coat" }, tab: "all" });
     expect(r.container.querySelector('[data-result-stage="final"]')).not.toBeNull();
     // 루트 속성에 역할·의상을 싣지 않는다 — 직업은 칩([data-role-chip])의 속성과 접근성 이름뿐이다
     const root = r.container.querySelector("main")!;
@@ -664,5 +664,116 @@ describe("result.css 연출 정적 단언 (11-05)", () => {
   it("전이·애니메이션은 opacity·transform 만 쓴다", () => {
     const frames = [...css.matchAll(/@keyframes[^{]+\{([\s\S]*?\n)\}/g)].map((m) => m[1]!).join("\n");
     for (const prop of ["width", "height", "top", "left", "margin", "padding"]) expect(frames, prop).not.toMatch(new RegExp(`\\b${prop}\\s*:`));
+  });
+});
+
+// ---------- 11-07 Task 1: 결과 탭 패널 — resultLog 프레임이 저장소로 들어가 탭을 눌러야 확장된 패널에 그려진다 (D-2, D-3, D-9) ----------
+describe("결과 탭 패널: 마피아 탭 (11-07 Task 1)", () => {
+  type Listener = (e: RoomEvent, meta: { epoch: number }) => void;
+  const mounted = (view: RoomView = makeView()) => {
+    let listener: Listener | null = null;
+    const onEvent = vi.fn((l: Listener) => {
+      listener = l;
+      return () => {};
+    });
+    const r = renderRoom(view, { onEvent });
+    const emit = (e: RoomEvent, epoch = 1) => act(() => void listener!(e, { epoch }));
+    return { ...r, emit };
+  };
+  const chatFrame = (part: "mafia" | "ghost", lines: { seat: number; n: number; text: string }[], i = 0, end = true): RoomEvent => ({ t: "resultLog", part, i, end, lines: lines.map((l, k) => ({ ...l, at: NOW + k })) });
+  const feedAll = (emit: (e: RoomEvent) => void) => {
+    emit(chatFrame("mafia", [{ seat: 3, n: 1, text: "오늘 밤은 지우" }, { seat: 3, n: 2, text: "다음은 하윤" }]));
+    emit(chatFrame("ghost", [{ seat: 2, n: 2, text: "억울해" }]));
+    emit({ t: "resultLog", part: "whisper", i: 0, end: true, lines: [{ seat: 0, to: 1, n: 1, text: "비밀이야", at: NOW }] });
+    emit({ t: "resultLog", part: "claim", i: 0, end: true, lines: [] });
+    emit({ t: "resultLog", part: "ballots", i: 0, end: true, lines: [] });
+  };
+  const panelOf = (c: ParentNode) => c.querySelector<HTMLElement>("[data-result-panel]")!;
+  const tab = (c: ParentNode, id: string) => c.querySelector<HTMLElement>(`[data-result-tab="${id}"]`)!;
+
+  it("연결 구독은 한 번 — resultLog 도 같은 구독으로 받는다", () => {
+    const r = mounted();
+    expect((connectionMock.current as RoomConnection).onEvent).toHaveBeenCalledTimes(1);
+    r.unmount();
+  });
+
+  it("프레임을 받아도 탭을 열기 전에는 본문이 DOM 에 없다 (T-11-23)", () => {
+    const r = mounted();
+    feedAll(r.emit);
+    expect(text(r.container)).not.toContain("오늘 밤은 지우");
+    expect(text(r.container)).not.toContain("억울해");
+    expect(text(r.container)).not.toContain("비밀이야");
+    expect(panelOf(r.container).getAttribute("data-expanded")).toBe("false");
+  });
+
+  it("마피아 탭을 누르면 패널이 확장되고 `{n}밤` 구분선과 줄이 보이며 입력줄은 DOM 에 없다", () => {
+    const r = mounted();
+    feedAll(r.emit);
+    fireEvent.click(tab(r.container, "mafia"));
+    const panel = panelOf(r.container);
+    expect(panel.getAttribute("data-expanded")).toBe("true");
+    expect(Array.from(panel.querySelectorAll("[data-result-divider]")).map((e) => text(e))).toEqual(["1밤", "2밤"]);
+    expect(Array.from(panel.querySelectorAll(".mv-chat__text")).map((e) => text(e))).toEqual(["오늘 밤은 지우", "다음은 하윤"]);
+    expect(Array.from(panel.querySelectorAll(".mv-chat__name")).map((e) => text(e))).toEqual(["도현", "도현"]);
+    expect(panel.querySelector("[data-chat-input]")).toBeNull();
+  });
+
+  it("전체 탭으로 돌아오면 접히고 입력줄이 다시 있다, 무대 탭으로도 접힌다", () => {
+    const r = mounted();
+    feedAll(r.emit);
+    fireEvent.click(tab(r.container, "mafia"));
+    fireEvent.click(tab(r.container, "all"));
+    expect(panelOf(r.container).getAttribute("data-expanded")).toBe("false");
+    expect(panelOf(r.container).querySelector("[data-chat-input]")).not.toBeNull();
+    fireEvent.click(tab(r.container, "ghost"));
+    expect(panelOf(r.container).getAttribute("data-expanded")).toBe("true");
+    act(() => stage.props!.onStageTap!());
+    expect(panelOf(r.container).getAttribute("data-expanded")).toBe("false");
+    expect(tab(r.container, "all").getAttribute("aria-selected")).toBe("true");
+  });
+
+  describe("확장 높이 = min(round(0.7 × 방 높이), 520)", () => {
+    const withRoomHeight = (h: number, run: () => void) => {
+      const desc = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "clientHeight");
+      Object.defineProperty(HTMLElement.prototype, "clientHeight", { configurable: true, get: () => h });
+      try {
+        run();
+      } finally {
+        if (desc) Object.defineProperty(HTMLElement.prototype, "clientHeight", desc);
+        else delete (HTMLElement.prototype as { clientHeight?: unknown }).clientHeight;
+      }
+    };
+    it.each([
+      [560, 392],
+      [640, 448],
+      [664, 465],
+      [932, 520],
+    ])("방 높이 %i → %ipx", (roomH, want) => {
+      withRoomHeight(roomH, () => {
+        const r = mounted();
+        feedAll(r.emit);
+        fireEvent.click(tab(r.container, "mafia"));
+        expect(panelOf(r.container).style.height).toBe(`${want}px`);
+        fireEvent.click(tab(r.container, "all"));
+        expect(panelOf(r.container).style.height).toBe("");
+        r.unmount();
+      });
+    });
+  });
+
+  it("낡은 연결(epoch)의 프레임은 버린다", () => {
+    const r = mounted();
+    r.emit(chatFrame("mafia", [{ seat: 3, n: 1, text: "새 연결" }]), 2);
+    r.emit(chatFrame("mafia", [{ seat: 3, n: 1, text: "낡은 연결" }, { seat: 3, n: 1, text: "낡은 연결 둘" }], 0, true), 1);
+    fireEvent.click(tab(r.container, "mafia"));
+    expect(Array.from(panelOf(r.container).querySelectorAll(".mv-chat__text")).map((e) => text(e))).toEqual(["새 연결"]);
+  });
+
+  it("window.__mfResult.tab 이 현재 탭을 알린다", () => {
+    const r = mounted();
+    const hook = () => (window as unknown as { __mfResult?: { tab?: string } }).__mfResult!;
+    expect(hook().tab).toBe("all");
+    fireEvent.click(tab(r.container, "ghost"));
+    expect(hook().tab).toBe("ghost");
   });
 });

@@ -66,3 +66,23 @@ describe("V2Icon 동작 아이콘 아홉 개 (10-05)", () => {
     expect(new Set(shapes).size).toBe(9);
   });
 });
+
+// 11-07: 결과 탭 패널의 기록 탭 아이콘 timeline — 직접 그린 단순 모양(이모지·아이콘 폰트 없음), 24 격자, 선 2px, 둥근 끝
+describe("V2Icon timeline (11-07)", () => {
+  it("24 격자 svg, 선 2px·둥근 끝이고 도형이 있으며 다른 아이콘과 모양이 다르다", () => {
+    const { container } = render(<V2Icon name="timeline" />);
+    const svg = container.querySelector("svg");
+    expect(svg?.getAttribute("viewBox")).toBe("0 0 24 24");
+    expect(svg?.getAttribute("stroke-width")).toBe("2");
+    expect(svg?.getAttribute("stroke-linecap")).toBe("round");
+    expect(svg?.getAttribute("aria-hidden")).toBe("true");
+    expect(svg?.querySelectorAll("path,circle").length).toBeGreaterThan(0);
+    const shape = (name: V2IconName) => {
+      const r = render(<V2Icon name={name} />);
+      const out = [...r.container.querySelectorAll("path,circle")].map((e) => e.outerHTML).join("");
+      r.unmount();
+      return out;
+    };
+    for (const other of ["send", "ghost", "roleMafia", "whisper", "note", "quiet"] as V2IconName[]) expect(shape("timeline")).not.toBe(shape(other));
+  });
+});
