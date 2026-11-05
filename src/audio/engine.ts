@@ -1,11 +1,14 @@
 // 12-05: 소리 엔진 — AudioContext 하나, 버스, 보이스 풀. 소리 부수효과는 여기만 닿는다 (D-2, D-7, D-8, D-16, D-22).
 // 컨텍스트·시계·타이머·저장소·문서·내비게이터는 모두 deps 로 받는다(시험은 가짜를 넘긴다). 서버·네트워크 API 는 쓰지 않는다.
 // 엔진은 DOM 이벤트를 듣지 않는다: 제스처 연결과 가시성 연결은 화면(useSound, 12-07)이 하고 엔진은 메서드만 둔다.
+import { loadSoundPref, saveSoundPref } from "./prefs";
 import {
   BUS_GAIN,
   COMPRESSOR,
   MASTER_GAIN,
+  NODE_BUDGET,
   RECIPES,
+  SFX_VOICE_MAX,
   renderPlan,
   type Bus,
   type BedId,
@@ -58,9 +61,15 @@ export interface SoundEngine {
   isOn(): boolean;
   setOn(on: boolean): void;
   play(id: SfxId, opts?: PlayOpts): void;
+  /** 침대 버스를 db 만큼 내렸다가 holdMs 뒤 returnMs 에 걸쳐 복귀한다 */
+  duckBed(db: number, holdMs: number, returnMs?: number): void;
   log(): LogEntry[];
   clearLog(): void;
   voiceCount(): number;
+  /** 활성 효과음 보이스(시험·점검용 읽기 전용 사본) */
+  voiceInfo(): { id: SfxId; prio: number; nodes: number }[];
+  /** 활성 노드 합(효과음 보이스) — NODE_BUDGET 과 비교한다 */
+  activeNodes(): number;
   currentBed(): BedId | null;
   subscribe(cb: () => void): () => void;
   snapshot(): EngineSnapshot;
@@ -107,11 +116,13 @@ export function createEngine(deps: EngineDeps = {}): SoundEngine {
   let graph: Graph | null = null;
   let failed = false;
   let forcedLocked = false;
-  let on = true;
+  let on = loadSoundPref(deps.storage);
   let bed: BedId | null = null;
   let order = 0;
   const voices: ActiveVoice[] = [];
   const entries: LogEntry[] = [];
+  const lastPlayedAt = new Map<SfxId, number>();
+  let duck: { target: number; releaseAt: number; returnMs: number; timer: unknown } | null = null;
   const subs = new Set<() => void>();
 
   const computeState = (): EngineState => {
@@ -246,11 +257,77 @@ export function createEngine(deps: EngineDeps = {}): SoundEngine {
     notify();
   };
 
+  const usedNodes = (): number => voices.reduce((n, v) => n + v.nodes, 0);
+
+  /** 보이스를 20ms 페이드로 끊는다(클릭 방지) */
+  const cutVoice = (v: ActiveVoice, fadeSec = 0.02): void => {
+    if (ctx !== null) v.voice.stop(ctx.currentTime, fadeSec);
+    dropVoice(v);
+  };
+
+  /**
+   * 새 요청 하나가 들어갈 자리를 만든다. (동시 8 · 같은 id max · 노드 예산 48) 중 하나라도 넘기면
+   * 끊을 후보 = 우선순위 숫자가 큰(낮은 우선) 것 먼저, 같으면 오래된 것. 우선 0 은 후보가 아니다.
+   * 후보가 없으면 새 요청이 우선 0 이 아닐 때 거절하고(false), 우선 0 이면 일시 초과로 낸다(true).
+   */
+  const makeRoom = (id: SfxId, prio: number, max: number, nodes: number): boolean => {
+    for (;;) {
+      const same = voices.filter((v) => v.id === id);
+      const sameFull = same.length >= max;
+      const globalOver = voices.length >= SFX_VOICE_MAX || usedNodes() + nodes > NODE_BUDGET;
+      if (!sameFull && !globalOver) return true;
+      // 같은 id 가 가득 찼으면 같은 id 안에서 먼저 끊고, 후보가 없을 때만 전체 한도를 본다
+      let pool = sameFull ? same.filter((v) => v.prio > 0) : [];
+      if (pool.length === 0 && globalOver) pool = voices.filter((v) => v.prio > 0);
+      if (pool.length === 0) return prio === 0;
+      pool.sort((a, b) => b.prio - a.prio || a.order - b.order);
+      cutVoice(pool[0]!);
+    }
+  };
+
+  const bgmParam = (): AudioParam | null => (graph === null ? null : graph.buses.bgm.gain);
+
+  const releaseDuck = (): void => {
+    const d = duck;
+    duck = null;
+    const p = bgmParam();
+    if (d === null || p === null || ctx === null) return;
+    p.setTargetAtTime(BUS_GAIN.bgm, ctx.currentTime, d.returnMs / 1000);
+  };
+
+  const duckBed = (db: number, holdMs: number, returnMs = 250): void => {
+    const p = bgmParam();
+    if (p === null || ctx === null || computeState() !== "running") return;
+    const target = BUS_GAIN.bgm * dbToLin(db);
+    const releaseAt = now() + holdMs;
+    if (duck === null) {
+      duck = { target, releaseAt, returnMs, timer: null };
+      p.setTargetAtTime(target, ctx.currentTime, 0.03);
+    } else {
+      if (target < duck.target) {
+        duck.target = target;
+        p.setTargetAtTime(target, ctx.currentTime, 0.03);
+      }
+      duck.releaseAt = Math.max(duck.releaseAt, releaseAt);
+      duck.returnMs = returnMs;
+      clearTimer(duck.timer);
+    }
+    duck.timer = setTimer(releaseDuck, Math.max(0, duck.releaseAt - now()));
+  };
+
+  const clearDuck = (): void => {
+    if (duck === null) return;
+    clearTimer(duck.timer);
+    releaseDuck();
+  };
+
   const play = (id: SfxId, opts: PlayOpts = {}): void => {
     const entry: LogEntry = { id, at: now(), gain: dbToLin(opts.gainDb ?? 0), played: false };
     pushLog(entry);
     if (ctx === null || graph === null || !on || computeState() !== "running") return;
     const recipe = RECIPES[id];
+    const last = lastPlayedAt.get(id);
+    if (last !== undefined && entry.at - last < recipe.gapMs) return;
     let events: PlanEvent[];
     try {
       events = renderPlan(id, { variant: opts.variant, cents: opts.cents });
@@ -261,6 +338,8 @@ export function createEngine(deps: EngineDeps = {}): SoundEngine {
       const k = dbToLin(opts.gainDb);
       events = events.map((e) => ({ ...e, gain: e.gain * k }));
     }
+    const nodes = countNodes(events);
+    if (!makeRoom(id, recipe.prio, recipe.max, nodes)) return;
     const c = ctx;
     let voice: Voice;
     try {
@@ -268,10 +347,30 @@ export function createEngine(deps: EngineDeps = {}): SoundEngine {
     } catch {
       return;
     }
-    const av: ActiveVoice = { id, prio: recipe.prio, nodes: countNodes(events), order: (order += 1), voice, timer: null };
+    const av: ActiveVoice = { id, prio: recipe.prio, nodes, order: (order += 1), voice, timer: null };
     av.timer = setTimer(() => dropVoice(av), Math.max(0, (voice.endAt - c.currentTime) * 1000) + 20);
     voices.push(av);
+    lastPlayedAt.set(id, entry.at);
     entry.played = true;
+    if (recipe.duck !== undefined) duckBed(recipe.duck.db, recipe.duck.holdMs);
+  };
+
+  /** 활성 보이스 전부를 fadeSec 동안 줄여 끝낸다 */
+  const fadeOutVoices = (fadeSec: number): void => {
+    for (const v of [...voices]) cutVoice(v, fadeSec);
+  };
+
+  const setOn = (next: boolean): void => {
+    if (next === on) return;
+    on = next;
+    saveSoundPref(on, deps.storage);
+    if (!on) {
+      fadeOutVoices(0.12);
+      clearDuck();
+    } else {
+      play("ui.toggle", { variant: "on" });
+    }
+    notify();
   };
 
   return {
@@ -279,16 +378,16 @@ export function createEngine(deps: EngineDeps = {}): SoundEngine {
     supported: supportedNow,
     state: computeState,
     isOn: () => on,
-    setOn(next: boolean): void {
-      on = next;
-      notify();
-    },
+    setOn,
     play,
+    duckBed,
     log: () => entries.map((e) => ({ ...e })),
     clearLog: () => {
       entries.length = 0;
     },
     voiceCount: () => voices.length,
+    voiceInfo: () => voices.map((v) => ({ id: v.id, prio: v.prio, nodes: v.nodes })),
+    activeNodes: usedNodes,
     currentBed: () => bed,
     subscribe(cb: () => void): () => void {
       subs.add(cb);
