@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import type { ClientMessage, OutfitId, RoomView } from "../../shared/protocol";
+import type { ClientMessage, RoomView } from "../../shared/protocol";
 import { connectedCount } from "../../shared/game/room";
 import { ActionButton, ActionRow } from "../components/ActionButton";
 import { Button } from "../components/Button";
@@ -19,9 +19,9 @@ import { DRESS_TEXT } from "../game/dressText";
 import { LOG_H_KB } from "../game/chatUi";
 import { diffRoomViews, toastForDiff } from "../net/roomDiff";
 import { useChat } from "../net/useChat";
+import { useDress } from "../net/useDress";
 import { useMyMotion } from "../net/useMyMotion";
 import { useMapInsets } from "../net/useMapInsets";
-import { DEFAULT_LOOK } from "../../shared/game/look";
 import type { WorldStore } from "../world/store";
 import "../styles/game.css";
 import "../styles/lobby.css";
@@ -122,15 +122,24 @@ export function Lobby({ view, store, chat, send, canSend = true, epoch = 0, offs
   useLayoutEffect(() => {
     rootRef.current?.style.setProperty("--mf-panel-h", `${panelRef.current?.offsetHeight ?? 0}px`);
   });
-  const myLook = view.players.find((p) => p.seat === view.me.seat)?.look ?? DEFAULT_LOOK;
-  const pickLook = (look: OutfitId) => {
-    if (!canSend) return;
-    send({ t: "dress", look });
-  };
+  // 미리 보기·되돌림·전송 간격은 훅이 쥔다. WorldStage 에만 미리 보기가 반영된 stageView 를 넘기고 그 밖(채팅·헤더)은 서버 view 를 쓴다.
+  const dress = useDress({ view, send, canSend });
+  const dressBtnRef = useRef<HTMLButtonElement>(null);
+  const restoreDressFocus = useRef(false);
   const openDress = () => {
     inputRef.current?.blur();
     setDressOpen(true);
   };
+  const closeDress = () => {
+    restoreDressFocus.current = true;
+    setDressOpen(false);
+  };
+  // 시트를 닫으면 초점을 꾸미기 버튼으로 돌려준다(버튼은 시트가 닫힌 뒤에 다시 그려진다)
+  useEffect(() => {
+    if (dressOpen || !restoreDressFocus.current) return;
+    restoreDressFocus.current = false;
+    dressBtnRef.current?.focus();
+  }, [dressOpen]);
 
   const connected = connectedCount(view.players);
   const isHost = view.me.isHost;
@@ -157,7 +166,7 @@ export function Lobby({ view, store, chat, send, canSend = true, epoch = 0, offs
   return (
     <main ref={rootRef} className="mf-root mf-lobby" data-kb-open={kbOpen ? "true" : undefined}>
       <WorldStage
-        view={view}
+        view={dress.stageView}
         store={store}
         send={send}
         canSend={canSend}
@@ -212,10 +221,10 @@ export function Lobby({ view, store, chat, send, canSend = true, epoch = 0, offs
       </section>
       {dressOpen ? null : (
         <FloatActions single>
-          <FloatAction kind="dress" icon="hanger" label={DRESS_TEXT.open} disabled={!canSend} onPress={openDress} />
+          <FloatAction ref={dressBtnRef} kind="dress" icon="hanger" label={DRESS_TEXT.open} disabled={!canSend} onPress={openDress} />
         </FloatActions>
       )}
-      {dressOpen ? <DressSheet value={myLook} onPick={pickLook} onClose={() => setDressOpen(false)} /> : null}
+      {dressOpen ? <DressSheet value={dress.look} onPick={dress.pick} onClose={closeDress} disabled={!canSend} /> : null}
       {sheet?.kind === "leave" ? (
         <ConfirmSheet
           title="방에서 나갈까요?"
