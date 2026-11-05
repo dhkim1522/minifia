@@ -2916,6 +2916,55 @@ describe("게임 이름표: 지목 버튼·tagProps·canWalk (DAY-04, MAP-04)", 
   });
 });
 
+describe("머리 위 표시 없음·훅 게이트 (L31, L33)", () => {
+  const handleOf = (s: Setup, seat: number): FakeHandle => s.world.renderers[0]!.chars.get(seat) as FakeHandle;
+  const ALL4 = { 0: {}, 1: {}, 2: {}, 3: {} };
+  const openAll = () => open({ scene: sceneOf(ALL4) }, { players: FOUR, ents: FOUR_ENTS() });
+
+  it("동작이 재생되는 동안 이름표 층에 [data-emote] 도 emote 가 든 속성 이름도 없고 이름표 DOM 도 바뀌지 않는다", async () => {
+    const s = await openAll();
+    frames(32);
+    const tags = s.utils.container.querySelector(".mf-world__tags")!;
+    const htmlBefore = tags.innerHTML;
+    act(() => s.store.applyEmote({ t: "emote", seat: 2, id: "dance", n: 1 }, 1));
+    frames(200);
+    expect(handleOf(s, 2).playEmote).toHaveBeenCalledTimes(1);
+    expect(window.__mfEmotes!.playing).toEqual([2]);
+    expect(tags.querySelectorAll("[data-emote]")).toHaveLength(0);
+    for (const el of [tags, ...Array.from(tags.querySelectorAll("*"))]) {
+      for (const name of el.getAttributeNames()) expect(name.toLowerCase()).not.toContain("emote");
+    }
+    expect(s.utils.container.querySelectorAll("[data-emote]")).toHaveLength(0);
+    expect(tags.innerHTML).not.toMatch(/emote/i);
+    // 이름표 층의 구조(요소 수)는 동작 전후로 같다 — 표시 슬롯이 늘지 않는다
+    expect(tags.innerHTML.replace(/style="[^"]*"/g, "")).toBe(htmlBefore.replace(/style="[^"]*"/g, ""));
+  });
+
+  it("훅이 꺼진 문맥에서는 __mfEmotes·__mfLooks 가 모두 없다", async () => {
+    vi.stubEnv("DEV", false);
+    const s = await openAll();
+    frames(32);
+    act(() => s.store.applyEmote({ t: "emote", seat: 1, id: "clap", n: 1 }, 1));
+    expect(window.__mfEmotes).toBeUndefined();
+    expect(window.__mfLooks).toBeUndefined();
+  });
+
+  it("켜진 문맥에서는 둘 다 있고 언마운트하면 사라지며 값이 DOM 속성(data-*)으로 새지 않는다", async () => {
+    const s = await openAll();
+    frames(32);
+    act(() => s.store.applyEmote({ t: "emote", seat: 1, id: "clap", n: 1 }, 1));
+    expect(window.__mfEmotes).toBeDefined();
+    expect(window.__mfLooks).toBeDefined();
+    const all = Array.from(s.utils.container.querySelectorAll("*"));
+    for (const el of all) {
+      for (const name of el.getAttributeNames()) expect(name).not.toMatch(/^data-(mf-)?(looks?|emotes?|outfit)$/);
+    }
+    s.utils.unmount();
+    expect(window.__mfEmotes).toBeUndefined();
+    expect(window.__mfLooks).toBeUndefined();
+  });
+});
+
 describe("동작 프레임 재생 (D-9, L33)", () => {
   const ALL4 = { 0: {}, 1: {}, 2: {}, 3: {} };
   const openEmote = (over: Partial<WorldStageProps> = {}) => open({ scene: sceneOf(ALL4), ...over }, { players: FOUR, ents: FOUR_ENTS() });
