@@ -1,8 +1,11 @@
 // three 구현(WebGLRenderer). 이 파일은 three 를 값으로 import 하는 몇 안 되는 모듈이다 — 정적 import 경로(메인 번들)에
 // 두지 않는다. 06-13 런타임이 `import()` 로만 열어 별도 청크로 나눈다. 렌더러 인터페이스는 renderer.ts(three 값 import 없음).
 import { ACESFilmicToneMapping, Group, MeshBasicMaterial, PCFShadowMap, Plane, PointLight, Raycaster, SRGBColorSpace, Vector2, Vector3, WebGLRenderer } from "three";
+import type { MapId } from "../../shared/protocol";
 import { DEFAULT_TARGET } from "./camera";
 import { buildBarScene } from "./maps/bar";
+import { buildPlazaScene } from "./maps/plaza";
+import type { MapScene } from "./maps/types";
 import { DEFAULT_BUDGET_STEP, LADDER, pixelRatioFor, UnsupportedRendererError } from "./renderer";
 import type { CharacterHandle, LightingPhase, MarkerKind, RendererStatusEvent, RendererStats, WorldRenderer } from "./renderer";
 import { isSoftwareRenderer } from "./status";
@@ -14,6 +17,8 @@ interface Opts {
   height: number;
   budgetStep: number;
   allowSoftware: boolean;
+  /** 장면을 고르는 방의 맵 id(없으면 bar). 렌더러 생성 시점에 한 번 정해진다 — 한 렌더러 안에서 맵을 갈아 끼우지 않는다(D-22) */
+  mapId?: MapId;
 }
 
 function makeCanvas(host: HTMLElement): HTMLCanvasElement {
@@ -72,7 +77,8 @@ async function build(opts: Opts): Promise<WorldRenderer> {
   let gl = makeGl(canvas, opts.allowSoftware);
 
   // 씬 그래프(맵·캐릭터)는 렌더러보다 오래 산다: recreate 가 새 렌더러에 같은 씬·카메라를 다시 물린다(가정 A2)
-  const bar = buildBarScene(budget);
+  // 맵 id 별 장면 빌더(결정 0050-2: 맵은 목록에 등록하면 늘어난다). 이름 bar 는 두 맵 공통의 "맵 장면"이다
+  const bar: MapScene = opts.mapId === "plaza" ? buildPlazaScene(budget) : buildBarScene(budget);
   const scene = bar.root;
   const characters = new Group();
   scene.add(characters);
@@ -84,6 +90,7 @@ async function build(opts: Opts): Promise<WorldRenderer> {
   let offsetY = 0;
   let zoom = 1;
   let disposed = false;
+  let lastTick = performance.now() / 1000;
   const listeners = new Set<(e: RendererStatusEvent) => void>();
   const emit = (e: RendererStatusEvent): void => {
     for (const cb of [...listeners]) cb(e);
@@ -198,6 +205,12 @@ async function build(opts: Opts): Promise<WorldRenderer> {
     },
     render(): void {
       if (disposed) return;
+      if (bar.update) {
+        // 맵이 프레임마다 움직이는 것(광장 시계 바늘)이 있을 때만 시간을 잰다
+        const now = performance.now() / 1000;
+        bar.update(Math.min(0.25, Math.max(0, now - lastTick)), now);
+        lastTick = now;
+      }
       gl.render(scene, camera);
     },
     setBudget(next: number): void {

@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import { phaseKey } from "../../shared/game/audience";
-import type { ClientMessage, EmoteId, PublicPlayer, RoomView } from "../../shared/protocol";
+import type { ClientMessage, EmoteId, MapId, PublicPlayer, RoomView } from "../../shared/protocol";
 import { MOVE_COORD_LIMIT } from "../../shared/protocol";
 import { useReducedMotion } from "../net/useReducedMotion";
 import { HEADER_BOTTOM, PANEL_HEIGHT } from "../world/camera";
@@ -118,6 +118,8 @@ function listLabel(p: PublicPlayer, mySeat: number): string {
 
 export function WorldStage(props: WorldStageProps) {
   const { view } = props;
+  // 방의 맵 id(MAP-06, D-22): 로비·시작 전(view.map 없음)은 bar. 렌더러는 생성 때 한 번 장면을 고르므로 맵이 바뀌면 런타임을 새로 만든다(아래 효과의 의존)
+  const mapId: MapId = view.map ?? "bar";
   const reduced = useReducedMotion();
   const live = useRef({ props, reduced });
   useLayoutEffect(() => {
@@ -150,7 +152,7 @@ export function WorldStage(props: WorldStageProps) {
     return () => clearTimeout(timer);
   }, [leaving]);
 
-  // 런타임은 마운트 한 번에 하나다. 바뀌는 prop 은 live ref 로 읽는다(재시작 없이 최신 값).
+  // 런타임은 마운트 한 번에 하나다(맵 id 가 바뀔 때만 새로 만든다). 바뀌는 prop 은 live ref 로 읽는다(재시작 없이 최신 값).
   useEffect(() => {
     const host = hostRef.current;
     const tagLayer = tagRef.current;
@@ -194,6 +196,7 @@ export function WorldStage(props: WorldStageProps) {
       onZoom: pinHook?.setZoom,
       allowSoftware: hooksOn,
       loadModules: live.current.props.loadModules,
+      mapId: () => mapId,
     });
     runtimeRef.current = runtime;
     runtime.setScene(live.current.props.scene ?? null);
@@ -208,7 +211,7 @@ export function WorldStage(props: WorldStageProps) {
       runtime.dispose();
       if (runtimeRef.current === runtime) runtimeRef.current = null;
     };
-  }, []);
+  }, [mapId]);
 
   // 맵이 처음 열리면 한 번 알린다(06-15 가 PhaseHeader 안내를 접는 데 쓴다)
   useEffect(() => {

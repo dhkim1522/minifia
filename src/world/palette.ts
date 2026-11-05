@@ -60,3 +60,32 @@ export const PALETTE = {
   chairBack: "#2e2018",
   shade: "#2b2f38",
 } as const;
+
+/**
+ * 시계탑 광장(maps/plaza.ts) 3D 색. 값의 출처는 design/v2.0/blockout/plaza.js 의 색 리터럴이다. 재질에만 쓴다 — CSS 에는 쓰지 않는다.
+ * 진홍(crimson)은 마피아 전용이라 장면 색에 없다. 낮 하늘은 흐린 보랏빛 회색(sky-overcast #8a8496 계열)이다.
+ */
+export const PLAZA_PALETTE = {
+  floor: "#121a30",
+  cobbles: ["#1c2440", "#202a4a", "#192138"],
+  daisLow: "#b9b09a",
+  daisHigh: "#e0d8c4",
+  brass: "#a98559",
+  stoneL: "#3a3f55",
+  stoneD: "#2a2f45",
+  cream: "#b9b09a",
+  roof: "#151c36",
+  clockFace: "#e8dfc6",
+  clockHand: "#14161c",
+  flood: "#ffe6c4",
+  lampPost: "#0b1024",
+  lampBulb: "#ffd59a",
+  facades: ["#1e2847", "#24305a", "#24305a", "#1b2442"],
+  facadeCap: "#151c36",
+  paneDark: "#0e1326",
+  paneLit: "#9fb3e0",
+  bench: "#3b2a22",
+  benchLeg: "#0b1024",
+  planter: "#3a3f4b",
+  treeDark: "#0b1024",
+} as const;

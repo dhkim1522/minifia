@@ -192,14 +192,14 @@ export const LIGHT_TUNE: Readonly<Record<LightingPhase, PhaseTune>> & {
 type M4 = Matrix4;
 const IDENTITY = new Matrix4();
 /** 위치 + XYZ 오일러 회전(Object3D 기본 순서) */
-function tf(x: number, y: number, z: number, rx = 0, ry = 0, rz = 0): M4 {
+export function tf(x: number, y: number, z: number, rx = 0, ry = 0, rz = 0): M4 {
   return new Matrix4().compose(new Vector3(x, y, z), new Quaternion().setFromEuler(new Euler(rx, ry, rz, "XYZ")), new Vector3(1, 1, 1));
 }
 /** 부모 변환 × 자식 변환 */
-const under = (parent: M4, child: M4): M4 => parent.clone().multiply(child);
+export const under = (parent: M4, child: M4): M4 => parent.clone().multiply(child);
 
 /** 같은 재질로 그릴 지오메트리 묶음: 정점마다 색(3 또는 4 성분)을 굽고 한 장으로 병합한다 */
-class Bundle {
+export class Bundle {
   private readonly parts: BufferGeometry[] = [];
   constructor(private readonly alpha = false) {}
   add(geo: BufferGeometry, hex: string, m: M4, k = 1, a = 1): void {
@@ -241,7 +241,7 @@ class Bundle {
 }
 
 /** 코드로 만든 방사 그라데이션(Uint8Array DataTexture): 시안 getGlowTex 와 같은 정지점 0→1, 0.35→0.35, 1→0. 캔버스·이미지 로드 없음 */
-function makeGlowTexture(): DataTexture {
+export function makeGlowTexture(): DataTexture {
   const N = 64;
   const data = new Uint8Array(N * N * 4);
   for (let y = 0; y < N; y++) {
@@ -277,7 +277,7 @@ export interface MarkerRing {
  */
 export const CHALK_RADIUS = 0.022;
 export const CHALK_OPACITY = 0.85;
-const CHALK_POINTS: readonly (readonly [number, number])[] = [
+export const CHALK_POINTS: readonly (readonly [number, number])[] = [
   [0.12, 1.15], [0.35, 1.3], [0.3, 1.62], [0, 1.76], [-0.3, 1.62], [-0.35, 1.3], [-0.12, 1.15], [-0.7, 1.0], [-0.76, 0.88], [-0.2, 0.9], [-0.26, 0.35],
   [-0.56, -0.05], [-0.4, -0.13], [-0.05, 0.25], [0.05, 0.25], [0.4, -0.13], [0.56, -0.05], [0.26, 0.35], [0.2, 0.9], [0.76, 0.96], [0.72, 1.08],
 ];

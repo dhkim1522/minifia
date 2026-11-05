@@ -5,7 +5,10 @@
 //
 // three 는 loadWorld() 의 import() 두 줄로만 끌려온다(이 파일에 three 값 import 가 없다 — 메인 번들 분리, RESEARCH 번들 측정).
 // 렌더러·캐릭터 모듈은 deps.loadModules 로 바꿔 끼울 수 있다(happy-dom 테스트의 가짜, 06-14 의 시나리오 스토어).
-import { BAR_MAP, BAR_SPAWNS, snapToWalkable, UNIT } from "../../shared/game/map";
+import { snapToWalkable, UNIT } from "../../shared/game/map";
+import type { Spawn } from "../../shared/game/map";
+import { mapOf } from "../../shared/game/maps";
+import type { MapId } from "../../shared/protocol";
 import { positionAt, segmentEndsAt } from "../../shared/game/world";
 import type { Segment } from "../../shared/game/world";
 import { NETWORK_TEXT } from "../net/copy";
@@ -187,6 +190,11 @@ export interface WorldRuntimeDeps {
   onFrame?(stats: { renderMs: number; tagsMs: number }): void;
   lighting?: "talk" | "vote";
   loadModules?: () => Promise<WorldModules>;
+  /**
+   * 방의 맵 id(view.map, 로비·시작 전은 bar — 기본). 렌더러 생성·클라이언트 이동 예측 마스크·입장 방향·무대 윗면 높이를 고른다(MAP-06, D-22).
+   * 런타임을 만들 때 한 번 읽는다 — 맵이 바뀌는 화면 전환은 새 런타임(새 렌더러)을 만든다. 서버는 같은 shared MapDef 를 쓴다
+   */
+  mapId?(): MapId;
   raf?: (cb: FrameRequestCallback) => number;
   caf?: (id: number) => void;
   storage?: Storage | null;
@@ -260,9 +268,9 @@ function figIndexForSeat(seat: number): number {
 }
 
 /** 입장 지점의 방향. 없는 곳은 카메라 쪽(π/4) */
-function spawnYaw(seat: number): number {
-  const n = BAR_SPAWNS.length;
-  return BAR_SPAWNS[((seat % n) + n) % n]?.yaw ?? Math.PI / 4;
+function spawnYaw(spawns: readonly Spawn[], seat: number): number {
+  const n = spawns.length;
+  return spawns[((seat % n) + n) % n]?.yaw ?? Math.PI / 4;
 }
 
 const easeOut = (p: number): number => 1 - (1 - p) * (1 - p) * (1 - p);
@@ -346,6 +354,9 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
   const raf = deps.raf ?? ((cb: FrameRequestCallback) => requestAnimationFrame(cb));
   const caf = deps.caf ?? ((id: number) => cancelAnimationFrame(id));
   const storage = deps.storage === undefined ? defaultStorage() : deps.storage;
+  // 방의 맵(D-22): 런타임 수명 동안 하나. 이동 예측·입장 방향·무대 높이가 같은 표(shared MapDef)를 읽는다
+  const mapId: MapId = deps.mapId?.() ?? "bar";
+  const map = mapOf(mapId);
 
   let disposed = false;
   let bootGen = 0;
@@ -588,7 +599,7 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
     const s = size();
     let r: WorldRenderer;
     try {
-      r = await mods.createThreeRenderer({ host, width: s.w, height: s.h, budgetStep: degrade.step(), allowSoftware: deps.allowSoftware });
+      r = await mods.createThreeRenderer({ host, width: s.w, height: s.h, budgetStep: degrade.step(), allowSoftware: deps.allowSoftware, mapId });
     } catch {
       if (alive()) dispatch({ t: "unsupported" });
       return;
@@ -746,7 +757,7 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
       seg: store.segOf(seat),
       off: { x: 0, z: 0 },
       offAt: now,
-      yaw: spawnYaw(seat),
+      yaw: spawnYaw(map.spawns, seat),
       yawGoal: null,
       headY: 0,
       dim: false,
@@ -923,7 +934,7 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
       const mine = actors.get(deps.mySeat());
       if (disposed || mine === undefined) return;
       const k = Math.SQRT1_2 * CUE_AHEAD; // 화면 아래 방향 = +x +z
-      const p = snapToWalkable(BAR_MAP, { x: Math.round((mine.pos.x + k) * UNIT), z: Math.round((mine.pos.z + k) * UNIT) });
+      const p = snapToWalkable(map, { x: Math.round((mine.pos.x + k) * UNIT), z: Math.round((mine.pos.z + k) * UNIT) });
       cue = { at: { x: p.x / UNIT, z: p.z / UNIT }, start: Date.now() };
       writeCueKey();
     }, CUE_DELAY_MS);
@@ -1390,7 +1401,7 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
       if (ring !== null && !ring.acked && mineSeg !== undefined) ackRing(ring, mineSeg, Date.now());
       return;
     }
-    own.sent(predictSegment(own.effective(store.segOf(deps.mySeat())), dest, at));
+    own.sent(predictSegment(own.effective(store.segOf(deps.mySeat())), dest, at, map));
     clearAckTimer();
     ackTimer = setTimeout(() => {
       ackTimer = null;
