@@ -382,7 +382,7 @@ export const RECIPES: Readonly<Record<SfxId, Recipe>> = {
     osc("sine", 0, 120, 523, 1, perc(120)),
     osc("sine", 140, 160, 784, 1, perc(160)),
   ]),
-  "will.quill": recipe("will.quill", "sfx", 2, -30, [nz(0, 60, bp(3500, 3500, 4), 1, [6, 40, 0.4, 14])]),
+  "will.quill": recipe("will.quill", "sfx", 2, -22, [nz(0, 60, bp(3500, 3500, 4), 1, [6, 40, 0.4, 14])]),
   "will.seal": recipe("will.seal", "sfx", 1, -18, [
     nz(0, 30, lp(500), 1, perc(30)),
     osc("sine", 0, 120, 95, 1, [3, 110, 0, 20]),
