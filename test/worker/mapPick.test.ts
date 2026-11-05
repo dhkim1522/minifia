@@ -1,7 +1,9 @@
 // 11-06: 맵 선택(MAP-06) 서버 — 방장의 mapPick, 시작 때 서버가 정하는 map, 이동 판정이 방의 맵을 읽음 (D-20·D-21·D-22, L40·L42).
 import { describe, expect, it } from "vitest";
 import type { ServerMessage } from "../../shared/protocol";
-import { seat, send, settle, mark, summary, storedRoom, lastViewOf } from "./helpers";
+import { BAR_MAP, cellCenterFx, isWalkable, walkableCells } from "../../shared/game/map";
+import { PLAZA_MAP } from "../../shared/game/mapPlaza";
+import { editRoom, lastViewOf, mark, moveAs, seat, send, settle, startedGame, storedRoom, summary, worldFramesOf } from "./helpers";
 import type { Seated } from "./helpers";
 
 type State = Extract<ServerMessage, { t: "state" }>;
@@ -86,4 +88,38 @@ describe("맵 선택 서버 (D-20, D-21, L40)", () => {
     }
     expect(((await storedRoom(s.code)) as unknown as { map?: string }).map).toBe("bar");
   });
+});
+
+describe("방의 맵을 읽는 이동 판정 (D-22, T-11-20)", () => {
+  /** 광장에서는 걸을 수 있고 재즈 바에서는 막힌 칸 중 무대에 가까운 칸 / 반대인 칸의 중심(고정소수점). */
+  const centerOf = (cells: Array<{ c: number; r: number }>): { x: number; z: number } => {
+    const best = cells
+      .map(({ c, r }) => cellCenterFx(c, r))
+      .sort((a, b) => a.x * a.x + a.z * a.z - (b.x * b.x + b.z * b.z) || a.x - b.x || a.z - b.z)[0]!;
+    return best;
+  };
+  const onlyPlaza = centerOf(walkableCells(PLAZA_MAP).filter(({ c, r }) => !isWalkable(BAR_MAP, c, r)));
+  const onlyBar = centerOf(walkableCells(BAR_MAP).filter(({ c, r }) => !isWalkable(PLAZA_MAP, c, r)));
+
+  it("광장 판(editRoom 으로 map: plaza)에서 광장에서만 걸을 수 있는 점은 그대로 받아들여지고, 광장에서만 막힌 점은 걸을 수 있는 점으로 보정된다", async () => {
+    const g = await startedGame("discussion", 4);
+    await editRoom(g.code, (room) => ({ ...room, map: "plaza" }));
+    const [a, b] = g.actors;
+    const marks = g.socks.map((k) => mark(k));
+    moveAs(a!, onlyPlaza.x, onlyPlaza.z);
+    moveAs(b!, onlyBar.x, onlyBar.z);
+    for (const k of g.socks) await settle(k, marks[g.socks.indexOf(k)]!);
+    const seen = g.socks[0]!;
+    const from = marks[0]!;
+    const lastOf = (seatNo: number): { x: number; z: number } => {
+      const moves = worldFramesOf(seen, from).filter((m): m is Extract<typeof m, { k: "move" }> => m.k === "move" && m.s === seatNo);
+      const p = moves.at(-1)!.p;
+      return { x: p[p.length - 2]!, z: p[p.length - 1]! };
+    };
+    expect(lastOf(a!.seat)).toEqual(onlyPlaza);
+    const bEnd = lastOf(b!.seat);
+    expect(bEnd).not.toEqual(onlyBar);
+    const cell = { c: Math.floor((bEnd.x + 700) / 50), r: Math.floor((bEnd.z + 700) / 50) };
+    expect(isWalkable(PLAZA_MAP, cell.c, cell.r)).toBe(true);
+  }, 40_000);
 });

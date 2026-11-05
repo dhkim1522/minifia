@@ -1,6 +1,7 @@
 // 11-06: 맵 표와 선택 규칙(MAP-06, D-20·D-21·D-22) — 순수 규칙만. 광장 데이터 시험은 Task 2 에서 이 파일에 더한다.
 import { describe, expect, it } from "vitest";
 import { BAR_MAP } from "../../shared/game/map";
+import { PLAZA_MAP } from "../../shared/game/mapPlaza";
 import { MAPS, PLAYABLE_MAPS, decideMap, mapOf, pickMap, roomMapId } from "../../shared/game/maps";
 import { assignRoles } from "../../shared/game/roles";
 import { attachConnection, createRoomState, joinRoom, startGame } from "../../shared/game/room";
@@ -37,6 +38,19 @@ describe("맵 표 (D-22)", () => {
     expect(MAPS.bar).toBe(BAR_MAP);
     expect(mapOf("bar")).toBe(BAR_MAP);
     expect(mapOf("bar").id).toBe("bar");
+  });
+});
+
+describe("광장 등록 (D-22)", () => {
+  it("MAPS.plaza 는 PLAZA_MAP 이고 mapOf(plaza).id 는 plaza 다 — 표의 한 줄 등록", () => {
+    expect(MAPS.plaza).toBe(PLAZA_MAP);
+    expect(mapOf("plaza")).toBe(PLAZA_MAP);
+    expect(mapOf("plaza").id).toBe("plaza");
+  });
+  it("roomMapId 가 plaza 인 방은 mapOf 가 광장 마스크를 돌려준다", () => {
+    const started = startGame(lobby(), HOST, 1000, seededRandInt(1));
+    if (!started.ok) throw new Error("start failed");
+    expect(mapOf(roomMapId({ ...started.state, map: "plaza" }))).toBe(PLAZA_MAP);
   });
 });
 

@@ -13,6 +13,7 @@ import {
   ringSlots,
 } from "../../shared/game/gather";
 import { BAR_MAP, BAR_SPAWNS, STAGE_SPOT, UNIT, lineWalkable } from "../../shared/game/map";
+import { PLAZA_MAP } from "../../shared/game/mapPlaza";
 import { PX_PER_UNIT, groundToScreen } from "../../src/world/camera";
 import { attachConnection, createRoomState, joinRoom } from "../../shared/game/room";
 import type { Player, RoomState } from "../../shared/game/room";
@@ -581,5 +582,64 @@ describe("gather.ts 소스 규약", () => {
 
   it("DOM·workerd API 를 쓰지 않는다(순수 모듈)", () => {
     expect(source).not.toMatch(/\b(document|window|crypto|fetch)\b/);
+  });
+});
+
+
+// ───────────────────────── 광장에서 모이는 자리 (11-06 Task 2, D-22) ─────────────────────────
+
+describe("광장 마스크에서 모이는 자리 (D-22)", () => {
+  const NO_STAGE = { ...PLAZA_MAP, stage: undefined };
+
+  it.each([2, 3, 4, 5, 6, 7, 8])("n=%i: 둘레 자리가 광장 마스크에서 걸을 수 있고 서로 2.0(200) 이상 떨어지고 무대 자리와 예외 선분으로 이어진다", (n) => {
+    const slots = ringSlots(n);
+    const notWalkable: string[] = [];
+    const tooClose: string[] = [];
+    const noStageLine: string[] = [];
+    for (const [i, a] of slots.entries()) {
+      const pa = { x: a[0], z: a[1] };
+      if (!lineWalkable(NO_STAGE, pa, pa)) notWalkable.push(str(a));
+      if (!lineWalkable(PLAZA_MAP, pa, S) || !lineWalkable(PLAZA_MAP, S, pa)) noStageLine.push(str(a));
+      for (const b of slots.slice(i + 1)) {
+        if ((a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2 < 200 * 200) tooClose.push(`${str(a)}~${str(b)}`);
+      }
+    }
+    expect(notWalkable.join(" ")).toBe("");
+    expect(tooClose.join(" ")).toBe("");
+    expect(noStageLine.join(" ")).toBe("");
+  });
+
+  it("결선 자리 RUNOFF_SPOTS 두 점이 광장 마스크에서 걸을 수 있다", () => {
+    for (const s of RUNOFF_SPOTS) expect(lineWalkable(NO_STAGE, { x: s[0], z: s[1] }, { x: s[0], z: s[1] }), str(s)).toBe(true);
+  });
+
+  it("무대 자리 (0,0)는 광장에서도 단일 예외로만 통한다", () => {
+    expect(lineWalkable(NO_STAGE, S, S)).toBe(false);
+    expect(lineWalkable(PLAZA_MAP, S, S)).toBe(true);
+  });
+
+  it("backstop: 광장 입장 지점 8곳 어디서든 planMoveSegment 가 모든 둘레 자리(n = 2..8)와 결선 자리에서 끝난다", () => {
+    const bad: string[] = [];
+    const targets: Slot[] = [...RUNOFF_SPOTS];
+    for (let n = 2; n <= 8; n += 1) targets.push(...ringSlots(n));
+    for (const [si, sp] of PLAZA_MAP.spawns.entries()) {
+      const from = restSegment(Math.round(sp.x * UNIT), Math.round(sp.z * UNIT), 0);
+      for (const slot of targets) {
+        const seg = planMoveSegment(from, { x: slot[0], z: slot[1] }, 0, PLAZA_MAP);
+        if (endOf(seg) !== str(slot)) bad.push(`입장${si} -> ${str(slot)} 끝 ${endOf(seg)}`);
+      }
+    }
+    expect(bad.join(" | ")).toBe("");
+  });
+
+  it("backstop: 둘레 자리 ↔ 무대 자리 길도 그 점에서 끝난다", () => {
+    const bad: string[] = [];
+    for (const slot of ringSlots(8)) {
+      const to = planMoveSegment(restSegment(slot[0], slot[1], 0), S, 0, PLAZA_MAP);
+      if (endOf(to) !== "0,0") bad.push(`${str(slot)} -> 무대 끝 ${endOf(to)}`);
+      const back = planMoveSegment(restSegment(0, 0, 0), { x: slot[0], z: slot[1] }, 0, PLAZA_MAP);
+      if (endOf(back) !== str(slot)) bad.push(`무대 -> ${str(slot)} 끝 ${endOf(back)}`);
+    }
+    expect(bad.join(" | ")).toBe("");
   });
 });

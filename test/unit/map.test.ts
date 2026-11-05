@@ -13,6 +13,7 @@ import {
   HEAD_TOP_Y,
   type MapDef,
   type Obstacle,
+  type Spawn,
   STAGE_REACH_FX,
   STAGE_SPOT,
   TO_CAMERA,
@@ -29,6 +30,7 @@ import {
   snapToWalkable,
   walkableCells,
 } from "../../shared/game/map";
+import { PLAZA_MAP, PLAZA_MASK, PLAZA_OBSTACLES, PLAZA_SPAWNS } from "../../shared/game/mapPlaza";
 
 /** 테스트 전용 작은 맵: 원점부터 rows.length 칸만 쓴다. */
 function mk(rows: readonly string[]): MapDef {
@@ -366,8 +368,8 @@ function rasterize(
 }
 
 /** 마스크 출처 계산에 쓰는 시작 칸 = 입장 지점 0번이 속한 칸. */
-function seedCell(): { c: number; r: number } {
-  const s0 = BAR_SPAWNS[0]!;
+function seedCell(spawns: readonly Spawn[] = BAR_SPAWNS): { c: number; r: number } {
+  const s0 = spawns[0]!;
   return cellOfFx(Math.round(s0.x * UNIT), Math.round(s0.z * UNIT));
 }
 
@@ -375,6 +377,10 @@ if (process.env.MAP_PRINT === "1") {
   describe("마스크 출력(MAP_PRINT=1 일 때만)", () => {
     it("래스터화 결과를 줄로 출력", () => {
       process.stdout.write(`\n${rasterize(BAR_OBSTACLES, seedCell()).rows.map((l) => `  "${l}",`).join("\n")}\n`);
+    });
+    it("광장 래스터화 결과를 줄로 출력", () => {
+      const out = rasterize(PLAZA_OBSTACLES, seedCell(PLAZA_SPAWNS));
+      process.stdout.write(`\nPLAZA\n${out.rows.map((l) => `  "${l}",`).join("\n")}\nremoved ${JSON.stringify(out.removed)}\n`);
     });
   });
 }
@@ -939,6 +945,143 @@ describe("STAGE_SPOT 단일 예외 (결정 0060-7)", () => {
         const flat = routeFx(BAR_MAP, a, b);
         expect(allSegmentsWalkable(NO_STAGE, flat)).toBe(true); // 예외 없이도 걸을 수 있는 길
       }
+    }
+  });
+});
+
+
+// ───────────────────────── 시계탑 광장 (11-06 Task 2, D-22) ─────────────────────────
+
+describe("시계탑 광장 장애물 원문 (plaza.js)", () => {
+  const O = PLAZA_OBSTACLES;
+  const rects = O.filter((o): o is Extract<Obstacle, { kind: "rect" }> => o.kind === "rect");
+  const circles = O.filter((o): o is Extract<Obstacle, { kind: "circle" }> => o.kind === "circle");
+  it("연단 1·벤치 2·나무 밑동 2·나무 줄기 2·가로등 4·시계탑 1 = 12개이고 모두 바닥을 막는다(floor)", () => {
+    expect(O.length).toBe(12);
+    expect(O.every((o) => o.floor)).toBe(true);
+  });
+  it("연단: 반지름 1.45 높이 0.46 @ (0,0)", () => {
+    expect(circles.find((c) => c.x === 0 && c.z === 0)).toMatchObject({ r: 1.45, y0: 0, y1: 0.46 });
+  });
+  it("벤치 2개: 1.4×0.42 @ (4.6,−3.4) 회전 0 · (−3.4,4.6) 회전 π/2, 높이 0.72", () => {
+    const b = rects.filter((r) => r.w === 1.4);
+    expect(b.map((r) => [r.x, r.z, r.d, r.rot, r.y1])).toEqual([
+      [4.6, -3.4, 0.42, 0, 0.72],
+      [-3.4, 4.6, 0.42, Math.PI / 2, 0.72],
+    ]);
+  });
+  it("나무 2그루: 밑동 0.9×0.9 높이 0.48 + 같은 자리 줄기 반지름 0.11 높이 2.35 @ (−4.6,4.4)·(4.4,−4.6)", () => {
+    const base = rects.filter((r) => r.w === 0.9);
+    expect(base.map((r) => [r.x, r.z, r.d, r.y1])).toEqual([
+      [-4.6, 4.4, 0.9, 0.48],
+      [4.4, -4.6, 0.9, 0.48],
+    ]);
+    const trunk = circles.filter((c) => c.r === 0.11);
+    expect(trunk.map((c) => [c.x, c.z, c.y1])).toEqual([
+      [-4.6, 4.4, 2.35],
+      [4.4, -4.6, 2.35],
+    ]);
+  });
+  it("가로등 4개: 반지름 0.08 높이 2.75 @ (3.8,−2.4)·(−2.4,3.8)·(−3.6,1.0)·(1.0,−3.6)", () => {
+    const l = circles.filter((c) => c.r === 0.08);
+    expect(l.map((c) => [c.x, c.z, c.y1])).toEqual([
+      [3.8, -2.4, 2.75],
+      [-2.4, 3.8, 2.75],
+      [-3.6, 1.0, 2.75],
+      [1.0, -3.6, 2.75],
+    ]);
+  });
+  it("시계탑: 2.6×2.6 @ (−4.3,−4.3) 높이 5.8", () => {
+    expect(rects.find((r) => r.w === 2.6)).toMatchObject({ x: -4.3, z: -4.3, d: 2.6, rot: 0, y0: 0, y1: 5.8 });
+  });
+});
+
+describe("PLAZA_MASK", () => {
+  it("28줄 × 28글자, '.'·'#' 뿐", () => {
+    expect(PLAZA_MASK.length).toBe(GRID_SIZE);
+    for (const row of PLAZA_MASK) expect(row).toMatch(/^[.#]{28}$/);
+  });
+  it("PLAZA_MAP 은 마스크·입장 지점·무대 자리를 그대로 쓴다", () => {
+    expect(PLAZA_MAP.id).toBe("plaza");
+    expect(PLAZA_MAP.size).toBe(GRID_SIZE);
+    expect(Array.from(PLAZA_MAP.mask)).toEqual(Array.from(parseMask(PLAZA_MASK)));
+    expect(PLAZA_MAP.spawns).toBe(PLAZA_SPAWNS);
+    expect(PLAZA_MAP.stage).toEqual(STAGE_SPOT);
+  });
+  it("장애물 래스터화(bar 와 같은 규칙: 부풀리기 0.35 + 이동 한계 ±5.8 + 머리 꼭대기 가려짐 + 닫힌 구멍 메우기)와 글자 하나까지 같다", () => {
+    expect(PLAZA_MASK).toEqual(rasterize(PLAZA_OBSTACLES, seedCell(PLAZA_SPAWNS)).rows);
+  });
+  it("닫힌 구멍으로 메운 칸이 없다 — 걸을 수 있는 칸은 모두 입장 지점에서 닿는다", () => {
+    expect(rasterize(PLAZA_OBSTACLES, seedCell(PLAZA_SPAWNS)).removed).toEqual([]);
+  });
+  it("걸을 수 있는 칸의 중심은 모두 |x|,|z| ≤ 5.8", () => {
+    for (const { c, r } of walkableCells(PLAZA_MAP)) {
+      const { x, z } = cellCenterFx(c, r);
+      expect(Math.abs(x) <= 580 && Math.abs(z) <= 580, `${c},${r}`).toBe(true);
+    }
+  });
+  it("가구 중심이 든 칸은 막혀 있다(연단·벤치 2·나무 2·가로등 4·시계탑)", () => {
+    for (const o of PLAZA_OBSTACLES) {
+      const { c, r } = cellOfFx(Math.round(o.x * UNIT), Math.round(o.z * UNIT));
+      expect(isWalkable(PLAZA_MAP, c, r), `${o.x},${o.z}`).toBe(false);
+    }
+  });
+  it("걸을 수 있는 칸은 한 덩어리다(한 칸에서 닿는 칸 수 = 전체)", () => {
+    const cells = walkableCells(PLAZA_MAP);
+    const seen = new Set<number>();
+    const stack = [cells[0]!];
+    while (stack.length > 0) {
+      const { c, r } = stack.pop()!;
+      if (!isWalkable(PLAZA_MAP, c, r) || seen.has(r * GRID_SIZE + c)) continue;
+      seen.add(r * GRID_SIZE + c);
+      stack.push({ c: c + 1, r }, { c: c - 1, r }, { c, r: r + 1 }, { c, r: r - 1 });
+    }
+    expect(seen.size).toBe(cells.length);
+  });
+  it("재즈 바 마스크와 다르다(맵마다 자기 마스크로 판정한다)", () => {
+    expect(PLAZA_MASK).not.toEqual(BAR_MASK);
+  });
+});
+
+describe("PLAZA_SPAWNS (plaza.js 의 ctx.talk 원문)", () => {
+  const TALK: [number, number][] = [
+    [3.2, 1.8],
+    [1.8, 3.2],
+    [4.6, -1.6],
+    [-2.2, -2.8],
+    [-2.4, 2.6],
+    [2.8, -2.8],
+    [-1.6, 4.4],
+    [-3.2, -1.8],
+  ];
+  it("8곳이 원문 좌표 그대로이고 yaw 는 지정하지 않는다(카메라 쪽)", () => {
+    expect(PLAZA_SPAWNS.map((s) => [s.x, s.z])).toEqual(TALK);
+    for (const s of PLAZA_SPAWNS) expect(s.yaw).toBeUndefined();
+  });
+  it("모두 걸을 수 있다(점이 닿는 칸이 전부 걸을 수 있다)", () => {
+    for (const s of PLAZA_SPAWNS) {
+      const p = { x: Math.round(s.x * UNIT), z: Math.round(s.z * UNIT) };
+      expect(snapToWalkable(PLAZA_MAP, p), `spawn ${s.x},${s.z}`).toEqual({ ...p, snapped: false });
+    }
+  });
+  it("모든 쌍이 경로로 이어지고 거리가 1.0 이상", () => {
+    for (let i = 0; i < PLAZA_SPAWNS.length; i++) {
+      for (let j = i + 1; j < PLAZA_SPAWNS.length; j++) {
+        const a = PLAZA_SPAWNS[i]!;
+        const b = PLAZA_SPAWNS[j]!;
+        expect(Math.hypot(a.x - b.x, a.z - b.z), `${i}-${j}`).toBeGreaterThanOrEqual(1.0);
+        const ca = cellOfFx(Math.round(a.x * UNIT), Math.round(a.z * UNIT));
+        const cb = cellOfFx(Math.round(b.x * UNIT), Math.round(b.z * UNIT));
+        expect(findPath(PLAZA_MAP, ca, cb), `${i}-${j}`).not.toBeNull();
+      }
+    }
+  });
+  it("무대 자리 (0,0)는 마스크로는 막힌 칸이고 단일 예외로만 선분이 통한다", () => {
+    const { c, r } = cellOfFx(0, 0);
+    expect(isWalkable(PLAZA_MAP, c, r)).toBe(false);
+    for (const s of PLAZA_SPAWNS) {
+      const p = { x: Math.round(s.x * UNIT), z: Math.round(s.z * UNIT) };
+      expect(lineWalkable({ ...PLAZA_MAP, stage: undefined }, p, { x: 0, z: 0 })).toBe(false);
     }
   });
 });
