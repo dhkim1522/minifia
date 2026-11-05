@@ -1,10 +1,13 @@
 // 시계탑 광장 장면(maps/plaza.ts)을 WebGL 없이 node 에서 검사한다: 병합 구조·좌표·예산·조명 (MAP-06, D-22).
 // 모범은 barScene.test.ts. 좌표 원문은 design/v2.0/blockout/plaza.js.
-import { BufferGeometry, DirectionalLight, HemisphereLight, Material, Mesh, Object3D, PointLight, Scene, Texture, Vector3 } from "three";
+import { BufferGeometry, Color, DirectionalLight, HemisphereLight, Material, Mesh, Object3D, PointLight, Scene, Texture, Vector3 } from "three";
 import { describe, expect, it } from "vitest";
 import { createCharacter, figForSeat } from "../../src/world/character";
-import { buildPlazaScene, PLAZA_LIGHT_TUNE } from "../../src/world/maps/plaza";
+import { buildPlazaScene, PLAZA_CLOCK_HOURS, PLAZA_LIGHT_TUNE } from "../../src/world/maps/plaza";
+import { PLAZA_PALETTE } from "../../src/world/palette";
 import { DRAW_CALL_BUDGET, LADDER } from "../../src/world/renderer";
+import { LIGHT_TUNE } from "../../src/world/maps/bar";
+import { MeshBasicMaterial } from "three";
 import type { LightingPhase } from "../../src/world/renderer";
 
 const PHASES: readonly LightingPhase[] = ["talk", "vote", "trial", "night", "nightCitizen", "nightGhost", "morning"];
@@ -149,6 +152,219 @@ describe("광장 장면 구조 (MAP-06, D-22)", () => {
       const vis = visibleMeshes(p.root);
       expect(vis.length + vis.filter((m) => m.castShadow).length, ph).toBeLessThanOrEqual(DRAW_CALL_BUDGET);
     }
+    for (const c of chars) c.dispose();
+    p.dispose();
+  });
+});
+
+// ---------- Task 2: 단계 조명 표·시계·예산 사다리 ----------
+
+const lum = (hex: string): number => {
+  const c = new Color(hex);
+  return 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b;
+};
+const emissiveRoomScalar = (p: ReturnType<typeof buildPlazaScene>): number => ((p.meshes.emissiveRoom!.material as MeshBasicMaterial).color.r);
+const hourRot = (p: ReturnType<typeof buildPlazaScene>): number[] => [0, 1].map((i) => p.meshes[`handHour${i}`]!.rotation.z);
+const minuteRot = (p: ReturnType<typeof buildPlazaScene>): number[] => [0, 1].map((i) => p.meshes[`handMinute${i}`]!.rotation.z);
+
+describe("광장 단계 조명 표 PLAZA_LIGHT_TUNE (D-22, O-9)", () => {
+  it("일곱 단계 행이 PhaseTune 구조(반구·달빛·노출·하늘 셋·안개·무대·가로등 점광·emissive·빛 무리·내 빛)로 모두 있다", () => {
+    for (const ph of PHASES) {
+      const t = PLAZA_LIGHT_TUNE[ph];
+      expect(Object.keys(t).sort(), ph).toEqual(Object.keys(LIGHT_TUNE[ph]).sort());
+      expect(t.sky).toHaveLength(3);
+    }
+  });
+
+  it("talk 는 흐린 낮: 하늘이 sky-overcast 계열 보랏빛 회색이고 밝은 맑은 하늘이 아니다(배경 휘도 낮음, 파랑 지배 아님)", () => {
+    const [sky, ground, bg] = PLAZA_LIGHT_TUNE.talk.sky;
+    // sky-overcast #8a8496 (design/tokens.json): 하늘색은 그 값 근처
+    const want = new Color("#8a8496");
+    const got = new Color(sky);
+    expect(Math.abs(got.r - want.r) + Math.abs(got.g - want.g) + Math.abs(got.b - want.b)).toBeLessThan(0.2);
+    expect(lum(sky)).toBeLessThanOrEqual(0.3);
+    expect(lum(ground)).toBeLessThanOrEqual(0.12);
+    expect(lum(bg)).toBeLessThanOrEqual(0.1);
+    for (const hex of [sky, ground, bg]) {
+      const c = new Color(hex);
+      expect(c.b - Math.max(c.r, c.g), hex).toBeLessThan(0.12); // 파랑이 지배적이지 않다
+    }
+  });
+
+  it("모든 단계의 하늘·땅·배경은 talk 의 같은 칸보다 밝지 않다", () => {
+    for (const ph of PHASES) for (let i = 0; i < 3; i++) expect(lum(PLAZA_LIGHT_TUNE[ph].sky[i]!), `${ph}/${i}`).toBeLessThanOrEqual(lum(PLAZA_LIGHT_TUNE.talk.sky[i]!) + 1e-6);
+  });
+
+  it("진홍은 장면 색에 없다: 팔레트·하늘·메시 정점 색 모두 (붉은 쪽이 지배적인 색 없음)", () => {
+    const crimsonish = (c: Color): boolean => c.r >= 0.35 && c.r > 1.8 * c.g && c.r > 1.5 * c.b;
+    const hexes: string[] = [];
+    for (const v of Object.values(PLAZA_PALETTE)) hexes.push(...(Array.isArray(v) ? (v as string[]) : [v as string]));
+    for (const ph of PHASES) hexes.push(...PLAZA_LIGHT_TUNE[ph].sky);
+    for (const h of hexes) expect(crimsonish(new Color(h)), h).toBe(false);
+    const p = buildPlazaScene(LADDER[0]!);
+    for (const m of allMeshes(p.root)) {
+      const col = m.geometry.getAttribute("color");
+      if (!col) continue;
+      for (let i = 0; i < col.count; i += 7) {
+        const c = new Color(col.getX(i), col.getY(i), col.getZ(i));
+        expect(crimsonish(c)).toBe(false);
+      }
+    }
+    p.dispose();
+  });
+
+  it("가로등 발광 배율: talk 0 · vote 1 · night 0.7 · trial 0.06, 가로등 점광원은 talk 에 꺼지고 vote 부터 켜진다", () => {
+    const p = buildPlazaScene(LADDER[0]!);
+    const lamp = p.lights.pendantA;
+    const want: [LightingPhase, number][] = [
+      ["talk", 0],
+      ["vote", 1],
+      ["trial", 0.06],
+      ["night", 0.7],
+    ];
+    for (const [ph, k] of want) {
+      p.setLighting(ph);
+      expect(emissiveRoomScalar(p), ph).toBeCloseTo(k, 6);
+    }
+    p.setLighting("talk");
+    expect(lamp.intensity).toBe(0);
+    p.setLighting("vote");
+    expect(lamp.intensity).toBeGreaterThan(0);
+    p.dispose();
+  });
+
+  it("setLighting 순서(talk → vote → trial → night → nightCitizen → nightGhost → morning)에서 노출·반구·무대·내 빛이 표 값으로 바뀐다", () => {
+    const p = buildPlazaScene(LADDER[0]!);
+    for (const ph of PHASES) {
+      p.setLighting(ph);
+      const t = PLAZA_LIGHT_TUNE[ph];
+      expect(p.exposure, ph).toBe(t.exposure);
+      expect(p.lights.hemi.intensity, ph).toBeCloseTo(t.hemi, 6);
+      expect(p.lights.stage.intensity, ph).toBeCloseTo(t.stage, 6);
+      expect(p.lights.self.intensity, ph).toBeCloseTo(t.self, 6);
+    }
+    // vote·trial 은 무대 점광원이 켜지고 talk·night 는 꺼진다(시계탑 조명은 trial 의 무대 점광)
+    p.setLighting("trial");
+    expect(p.lights.stage.intensity).toBeGreaterThan(0);
+    p.setLighting("night");
+    expect(p.lights.stage.intensity).toBe(0);
+    p.dispose();
+  });
+
+  it("핀·긴장·분필은 bar 와 같은 규칙으로 돈다: 핀이 무대 점광원을 옮기고 긴장 1 은 선두 세기, null 이면 복귀", () => {
+    const p = buildPlazaScene(LADDER[0]!);
+    p.setLighting("vote");
+    const base = p.lights.stage.intensity;
+    p.setPin({ x: 2, z: -1, strength: 1 }, 0.5);
+    expect(p.lights.stage.position.x).toBe(2);
+    expect(p.lights.stage.position.z).toBe(-1);
+    expect(p.lights.stage.intensity).toBeCloseTo(PLAZA_LIGHT_TUNE.tension.lead, 6);
+    p.setPin(null, 1);
+    expect(p.lights.stage.intensity).toBeCloseTo(base, 6);
+    p.setTension(1, { x: 1, z: 1 });
+    expect(p.lights.stage.intensity).toBeCloseTo(PLAZA_LIGHT_TUNE.tension.lead, 6);
+    expect(p.lights.stage.position.x).toBe(1);
+    p.setTension(0);
+    expect(p.lights.stage.intensity).toBeCloseTo(base, 6);
+    p.setSelfLight({ x: 3, z: 2 });
+    expect(p.lights.self.position.x).toBe(3);
+    p.setSelfLight(null);
+    expect(p.lights.self.position.x).toBe(0);
+    p.setChalk({ x: 1, z: -3.4 }, 0.5);
+    expect(p.meshes.chalk!.visible).toBe(true);
+    p.setChalk(null, 0);
+    expect(p.meshes.chalk!.visible).toBe(false);
+    p.dispose();
+  });
+});
+
+describe("광장 시계 (게임 시계 = 시계탑 바늘)", () => {
+  it("목표 시각 표: talk 13 · vote 18 · trial 18.75 · night 0 · morning 6", () => {
+    expect(PLAZA_CLOCK_HOURS.talk).toBe(13);
+    expect(PLAZA_CLOCK_HOURS.vote).toBe(18);
+    expect(PLAZA_CLOCK_HOURS.trial).toBe(18.75);
+    expect(PLAZA_CLOCK_HOURS.night).toBe(0);
+    expect(PLAZA_CLOCK_HOURS.morning).toBe(6);
+  });
+
+  it("바늘은 두 면(시침·분침 4개)이고 처음엔 talk 시각(13시)이다", () => {
+    const p = buildPlazaScene(LADDER[0]!);
+    expect(hourRot(p)).toEqual([-(1 / 12) * Math.PI * 2, -(1 / 12) * Math.PI * 2]);
+    expect(minuteRot(p)).toEqual([-0, -0]);
+    p.dispose();
+  });
+
+  it("setLighting 이 목표를 정하고 update(dt) 가 감쇠 3/초로 따라간다", () => {
+    const p = buildPlazaScene(LADDER[0]!);
+    p.setLighting("vote"); // 목표 18시
+    const before = hourRot(p)[0]!;
+    p.update!(0.1, 0); // 한 걸음 = 30% (13 → 14.5)
+    const h1 = -((14.5 % 12) / 12) * Math.PI * 2;
+    expect(hourRot(p)[0]!).toBeCloseTo(h1, 6);
+    expect(hourRot(p)[0]!).not.toBeCloseTo(before, 3);
+    p.update!(10, 0.1); // 충분히 오래 → 목표에 닿는다
+    expect(hourRot(p)[0]!).toBeCloseTo(-((18 % 12) / 12) * Math.PI * 2, 6);
+    expect(minuteRot(p)[1]!).toBeCloseTo(0, 6);
+    p.setLighting("morning");
+    p.update!(10, 0.2);
+    expect(hourRot(p)[0]!).toBeCloseTo(-(6 / 12) * Math.PI * 2, 6);
+    p.dispose();
+  });
+
+  it("trial 에서는 분침이 벽시계 30초 주기로 18.5~19 사이를 돈다", () => {
+    const p = buildPlazaScene(LADDER[0]!);
+    p.setLighting("trial");
+    p.update!(10, 0); // 시각 18.5
+    expect(-minuteRot(p)[0]! / (Math.PI * 2)).toBeCloseTo(0.5, 6);
+    p.update!(10, 15); // 30초 주기의 절반: 18.75
+    expect(-minuteRot(p)[0]! / (Math.PI * 2)).toBeCloseTo(0.75, 6);
+    p.update!(10, 30); // 한 바퀴 뒤 처음으로
+    expect(-minuteRot(p)[0]! / (Math.PI * 2)).toBeCloseTo(0.5, 6);
+    p.dispose();
+  });
+
+  it("update 를 한 번도 부르지 않는 환경에서도 setLighting 이 던지지 않는다", () => {
+    const p = buildPlazaScene(LADDER[0]!);
+    expect(() => PHASES.forEach((ph) => p.setLighting(ph))).not.toThrow();
+    p.dispose();
+  });
+});
+
+describe("광장 예산 사다리 (T-11-34)", () => {
+  it("LADDER 0 → 5 → 0 을 되돌릴 수 있다: 5단계는 소품 reduced 로 보이는 메시가 줄거나 같고, 0 으로 돌아오면 원래 수", () => {
+    const p = buildPlazaScene(LADDER[0]!);
+    const n0 = visibleMeshes(p.root).length;
+    for (let i = 1; i < LADDER.length; i++) p.applyBudget(LADDER[i]!);
+    const n5 = visibleMeshes(p.root).length;
+    expect(n5).toBeLessThanOrEqual(n0);
+    expect(p.meshes.furnitureFar!.visible).toBe(false);
+    expect(p.lights.pendantA.visible).toBe(false);
+    expect(p.root.fog).toBeNull();
+    p.applyBudget(LADDER[0]!);
+    expect(visibleMeshes(p.root).length).toBe(n0);
+    expect(p.lights.pendantA.visible).toBe(true);
+    expect(p.root.fog).not.toBeNull();
+    expect(p.lights.moon.shadow.mapSize.x).toBe(1024);
+    p.dispose();
+  });
+
+  it("사다리 각 단계에서 점광원은 3 이하이고 단계마다 draw call 추정이 상한 이하다(8명)", () => {
+    const p = buildPlazaScene(LADDER[0]!);
+    const chars = Array.from({ length: 8 }, (_, i) => createCharacter(figForSeat(i), (["coat", "police", "doctor", "mafia"] as const)[i % 4]!));
+    for (const c of chars) p.root.add(c.root);
+    LADDER.forEach((b, i) => {
+      p.applyBudget(b);
+      for (const ph of PHASES) {
+        p.setLighting(ph);
+        const vis = visibleMeshes(p.root);
+        expect(vis.length + vis.filter((m) => m.castShadow).length, `${i}/${ph}`).toBeLessThanOrEqual(DRAW_CALL_BUDGET);
+        let pl = 0;
+        p.root.traverseVisible((o) => {
+          if ((o as PointLight).isPointLight) pl++;
+        });
+        expect(pl, `${i}/${ph}`).toBeLessThanOrEqual(3);
+      }
+    });
     for (const c of chars) c.dispose();
     p.dispose();
   });

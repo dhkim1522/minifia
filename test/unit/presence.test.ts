@@ -298,6 +298,22 @@ describe("ghostFloatY (UI-SPEC 유령 모양: +0.35, 흔들림 ±0.08, 주기 π
   });
 });
 
+describe("stageLiftY 맵별 무대 윗면 (MAP-06, D-22)", () => {
+  it("맵 id 를 안 주면 재즈 바(기존 호출 불변): 0.29, 반지름 1.18", () => {
+    expect(stageLiftY({ x: 0, z: 0 })).toBe(0.29);
+    expect(stageLiftY({ x: 0, z: 0 }, "bar")).toBe(0.29);
+    expect(stageLiftY({ x: 1.1, z: 0 }, "bar")).toBe(0.29);
+  });
+
+  it("광장은 반지름 1.05 안이면 0.46, 밖이면 0", () => {
+    expect(stageLiftY({ x: 0, z: 0 }, "plaza")).toBe(0.46);
+    expect(stageLiftY({ x: 1.04, z: 0 }, "plaza")).toBe(0.46);
+    expect(stageLiftY({ x: 0, z: -1.05 }, "plaza")).toBe(0.46);
+    expect(stageLiftY({ x: 1.1, z: 0 }, "plaza")).toBe(0);
+    expect(stageLiftY({ x: 2.6, z: 0 }, "plaza")).toBe(0);
+  });
+});
+
 describe("stageLiftY (변론자가 서는 무대 위 높이 0.29)", () => {
   it("반경 상수 1.18", () => {
     expect(STAGE_TOP_R).toBe(1.18);

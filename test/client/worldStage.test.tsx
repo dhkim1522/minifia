@@ -7,6 +7,7 @@ import type { Mock } from "vitest";
 import "../helpers/singleLineErrors";
 import { installMemoryStorage, MemoryStorage } from "../helpers/memoryStorage";
 import { BAR_MAP, snapToWalkable } from "../../shared/game/map";
+import { PLAZA_MAP } from "../../shared/game/mapPlaza";
 import { positionAt, segmentEndsAt } from "../../shared/game/world";
 import type { Segment } from "../../shared/game/world";
 import type { OutfitId, PublicPlayer, RoomView, WorldSeg } from "../../shared/protocol";
@@ -1260,6 +1261,24 @@ describe("처음 방문 손짓 링 (UI-SPEC 안내)", () => {
     expect(localStorage.getItem(WALK_CUE_KEY)).not.toBeNull();
   });
 
+
+  it("광장(view.map plaza)에서는 손짓 링 보정이 광장 마스크를 쓴다 — 재즈 바 마스크로는 걸을 수 있는 칸이 광장에서는 막혀 있다 (T-11-35)", async () => {
+    // 내 위치에서 앞(+x+z)으로 2 단위 갔을 때 (−4.25, −3.25): 재즈 바는 걸을 수 있고 광장은 시계탑 쪽이라 막힌 칸
+    const px = -566;
+    const pz = -466;
+    const aim = { x: Math.round((px / 100 + Math.SQRT1_2 * 2) * 100), z: Math.round((pz / 100 + Math.SQRT1_2 * 2) * 100) };
+    const wantBar = snapToWalkable(BAR_MAP, aim);
+    const wantPlaza = snapToWalkable(PLAZA_MAP, aim);
+    expect(wantBar.snapped).toBe(false);
+    expect(wantPlaza.snapped).toBe(true);
+    const s = await open({ view: { ...makeView(TWO, 0), map: "plaza" } }, { ents: [seg(0, [px, pz]), seg(1, [-300, 50])] });
+    const r = s.world.renderers[0]!;
+    frames(640);
+    const first = cues(r).find((m) => m.at)!;
+    expect(first).toBeTruthy();
+    expect(first.at!.x).toBeCloseTo(wantPlaza.x / 100, 6);
+    expect(first.at!.z).toBeCloseTo(wantPlaza.z / 100, 6);
+  });
   it("키가 이미 있으면 손짓 링이 뜨지 않는다", async () => {
     localStorage.setItem(WALK_CUE_KEY, "1");
     const s = await open();
