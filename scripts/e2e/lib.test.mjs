@@ -137,6 +137,7 @@ import {
   CLAIM_SWAP_SIZE,
   floatButtonChecks,
   emoteTrayChecks,
+  dressChecks,
   AVATAR_MARKERS,
   sheetFitChecks,
   claimBadgeChecks,
@@ -1409,14 +1410,14 @@ test("LOBBY_SIZES: DEFAULT_SIZES 4개 + 390x844 + 402x874 여섯 개이고 LOBBY
   assert.deepEqual(DEFAULT_SIZES.map((x) => x.label), ["360x640", "390x664", "430x932", "360x560"]);
 });
 
-test("run.mjs: 흐름별 extraSizes 는 --sizes 를 주지 않았을 때만 더하고, FLOWS 의 lobby·world·chat-lobby·chat-keyboard·day·ghost·night-sizes(09-22 폰 크기 6종 기하)·politics-badge·politics-whisper(09.1.1-10 배지·귓속말 폰 6종)·politics-pin(09.1.1-11 핀 조명 폰 6종)·politics-verdict(09.1.1-13 판결 순간 폰 6종)·politics-runoff(09.1.1-14 동점 결선 폰 6종)·politics-showdown(09.1.1-16 마지막 3인 폰 6종)·avatar-emote(10-05 동작 판 폰 6종) 만 갖는다", () => {
+test("run.mjs: 흐름별 extraSizes 는 --sizes 를 주지 않았을 때만 더하고, FLOWS 의 lobby·world·chat-lobby·chat-keyboard·day·ghost·night-sizes(09-22 폰 크기 6종 기하)·politics-badge·politics-whisper(09.1.1-10 배지·귓속말 폰 6종)·politics-pin(09.1.1-11 핀 조명 폰 6종)·politics-verdict(09.1.1-13 판결 순간 폰 6종)·politics-runoff(09.1.1-14 동점 결선 폰 6종)·politics-showdown(09.1.1-16 마지막 3인 폰 6종)·avatar-emote(10-05 동작 판 폰 6종)·avatar-dress(10-07 꾸미기 폰 6종) 만 갖는다", () => {
   const run = readFileSync(new URL("./run.mjs", import.meta.url), "utf8");
   assert.match(run, /extraSizes/);
   assert.match(run, /!args\.sizesGiven/);
   const flows = readFileSync(new URL("./flows.mjs", import.meta.url), "utf8");
   const entries = [...flows.matchAll(/\{ id: "([a-z0-9-]+)", run: [A-Za-z(), ]+?(, extraSizes: LOBBY_EXTRA_SIZES)? \}/g)];
   const withExtra = entries.filter((m) => m[2]).map((m) => m[1]);
-  assert.deepEqual(withExtra, ["lobby", "world", "chat-lobby", "chat-keyboard", "day", "ghost", "night-sizes", "politics-badge", "politics-whisper", "politics-pin", "politics-verdict", "politics-runoff", "politics-showdown", "avatar-emote"]);
+  assert.deepEqual(withExtra, ["lobby", "world", "chat-lobby", "chat-keyboard", "day", "ghost", "night-sizes", "politics-badge", "politics-whisper", "politics-pin", "politics-verdict", "politics-runoff", "politics-showdown", "avatar-emote", "avatar-dress"]);
 });
 
 test("flows.mjs night-sizes 편지 시험 유언 WILL50 은 서버 유언 상한(WILL_MAX_GRAPHEMES)과 같은 자소 수이고, 공백 없는 긴 단어(10~15자)를 섞는다(사용자 결정 2026-11-05)", () => {
@@ -2679,6 +2680,116 @@ test("emoteTrayChecks: 측정값이 없으면 모든 줄이 측정값 없음으�
   assert.ok(lines.every((l) => l.ok === false && /측정값 없음/.test(l.detail)));
 });
 
-test("AVATAR_MARKERS: 동작 표식 네 개", () => {
-  assert.deepEqual([...AVATAR_MARKERS], ["data-emote-button", "data-emote-tray", "data-emote", "__mfEmotes"]);
+test("AVATAR_MARKERS: 동작 표식 네 개 + 의상 표식 세 개(10-07)", () => {
+  assert.deepEqual([...AVATAR_MARKERS], ["data-emote-button", "data-emote-tray", "data-emote", "__mfEmotes", "data-dress-sheet", "data-outfit", "__mfLooks"]);
+});
+
+// ---- 10-07: 꾸미기 버튼·시트·카드 기하 (dressChecks, D-18) ----
+
+// 360x560 폰: 패널 윗변 310(높이 250). 떠 있는 버튼 48 · 오른쪽 16 · 아랫변 = 패널 윗변 − 8. 시트 = 패널 사각형. 카드 72x112, 사이 8, 왼쪽 12 에서 시작.
+const dressGood = () => {
+  const panel = rect(0, 310, 360, 250);
+  const cards = Array.from({ length: 9 }, (_, i) => rect(12 + i * 80, 366, 72, 112));
+  return {
+    float: rect(296, 254, 48, 48),
+    panel,
+    sheet: rect(0, 310, 360, 250),
+    cards,
+    close: rect(304, 322, 44, 44),
+    selected: { rect: cards[0], pressedCount: 1 },
+    nameFont: 14,
+    viewport: { w: 360, h: 560 },
+    kb: false,
+  };
+};
+
+test("dressChecks: 정상 값은 DB1·DS1~DS6 모두 통과, 줄 모양은 { id, label, ok, detail }", () => {
+  const lines = dressChecks(dressGood());
+  assert.deepEqual(okOf(lines), { DB1: true, DS1: true, DS2: true, DS3: true, DS4: true, DS5: true, DS6: true });
+  for (const l of lines) assert.deepEqual(Object.keys(l).sort(), ["detail", "id", "label", "ok"]);
+});
+
+test("dressChecks DB1: 지름 48±1 · 오른쪽 여백 16±1 · 아랫변 = 패널 윗변 − 8 ±2 중 하나라도 어긋나면 그 항목만 실패", () => {
+  const a = dressGood();
+  a.float = rect(296, 254, 44, 44);
+  onlyFail(dressChecks(a), "DB1");
+  const b = dressGood();
+  b.float = rect(290, 254, 48, 48);
+  onlyFail(dressChecks(b), "DB1");
+  const c = dressGood();
+  c.float = rect(296, 240, 48, 48);
+  onlyFail(dressChecks(c), "DB1");
+  const d = dressGood();
+  d.float = rect(296, 253, 48, 48); // 아랫변 301 (기대 302) — 오차 안
+  assert.equal(okOf(dressChecks(d)).DB1, true);
+});
+
+test("dressChecks DS1: 시트 윗변 = 패널 윗변 ±1 · 높이 = 패널 높이 ±1 — 어긋나면 그 항목만 실패", () => {
+  const a = dressGood();
+  a.sheet = rect(0, 300, 360, 260);
+  onlyFail(dressChecks(a), "DS1");
+  const b = dressGood();
+  b.sheet = rect(0, 310, 360, 200);
+  onlyFail(dressChecks(b), "DS1");
+});
+
+test("dressChecks DS2: 카드가 아홉 개가 아니거나 폭 72±2 가 아니거나 높이 44 미만이면 그 항목만 실패", () => {
+  const a = dressGood();
+  a.cards = a.cards.slice(0, 8);
+  onlyFail(dressChecks(a), "DS2");
+  const b = dressGood();
+  b.cards = b.cards.map((c, i) => (i === 3 ? rect(c.left, c.top, 60, 112) : c));
+  const lb = dressChecks(b);
+  assert.equal(okOf(lb).DS2, false);
+  const c = dressGood();
+  c.cards = c.cards.map((x, i) => (i === 3 ? rect(x.left, x.top, 72, 40) : x));
+  assert.equal(okOf(dressChecks(c)).DS2, false);
+});
+
+test("dressChecks DS3: 폭 360 에서 완전히 보이는 카드 4 이상 + 오른쪽 가장자리에 걸친 다음 카드(8px 이상 보이고 잘림) — 어느 하나 없으면 그 항목만 실패", () => {
+  const g = dressGood();
+  assert.equal(okOf(dressChecks(g)).DS3, true);
+  // 다음 카드가 통째로 안에 들어와(스크롤 끝) 걸치는 카드가 없음
+  const a = dressGood();
+  a.cards = a.cards.map((c, i) => rect(8 + i * 40, c.top, 72, 112));
+  assert.equal(okOf(dressChecks(a)).DS3, false);
+  // 완전히 보이는 카드가 3장뿐
+  const b = dressGood();
+  b.cards = b.cards.map((c, i) => rect(40 + i * 80, c.top, 72, 112));
+  assert.equal(okOf(dressChecks(b)).DS3, false);
+  // 다음 카드가 4px 만 보임(걸침이 너무 작다)
+  const c = dressGood();
+  c.cards = c.cards.map((x, i) => rect(4 + i * 88 - (i > 3 ? 0 : 0), x.top, 72, 112));
+  c.cards = c.cards.map((x, i) => (i === 4 ? rect(356, x.top, 72, 112) : i > 4 ? rect(440 + (i - 5) * 80, x.top, 72, 112) : x));
+  assert.equal(okOf(dressChecks(c)).DS3, false);
+});
+
+test("dressChecks DS4: 닫기가 44x44 미만이면 그 항목만 실패", () => {
+  const g = dressGood();
+  g.close = rect(304, 322, 40, 44);
+  onlyFail(dressChecks(g), "DS4");
+});
+
+test("dressChecks DS5: 선택 카드가 띠 밖이거나 aria-pressed=true 가 하나가 아니면 그 항목만 실패", () => {
+  const a = dressGood();
+  a.selected = { rect: rect(332, 366, 72, 112), pressedCount: 1 };
+  onlyFail(dressChecks(a), "DS5");
+  const b = dressGood();
+  b.selected = { rect: b.cards[0], pressedCount: 2 };
+  onlyFail(dressChecks(b), "DS5");
+  const c = dressGood();
+  c.selected = { rect: b.cards[0], pressedCount: 0 };
+  onlyFail(dressChecks(c), "DS5");
+});
+
+test("dressChecks DS6: 이름 글자 14px 미만이면 그 항목만 실패", () => {
+  const g = dressGood();
+  g.nameFont = 13;
+  onlyFail(dressChecks(g), "DS6");
+});
+
+test("dressChecks: 측정값이 없으면 모든 줄이 측정값 없음으로 실패", () => {
+  const lines = dressChecks({});
+  assert.equal(lines.length, 7);
+  assert.ok(lines.every((l) => l.ok === false && /측정값 없음/.test(l.detail)));
 });

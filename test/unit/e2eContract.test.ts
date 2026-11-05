@@ -316,9 +316,9 @@ describe("10페이즈 E2E 표식(10-05)", () => {
     .filter((f) => /\.(tsx?|css)$/.test(f));
   const sources = tracked.map((f) => ({ f, text: readFileSync(new URL(f, root), "utf8") }));
 
-  it("AVATAR_MARKERS 가 4개이고 각 표식이 git 이 추적하는 src/ 파일 어딘가에 있다(표식 이름 오타 방지)", () => {
+  it("AVATAR_MARKERS 가 7개(동작 4 + 의상 3)이고 각 표식이 git 이 추적하는 src/ 파일 어딘가에 있다(표식 이름 오타 방지)", () => {
     expect(tracked.length).toBeGreaterThan(20);
-    expect(lib.AVATAR_MARKERS.length).toBe(4);
+    expect(lib.AVATAR_MARKERS.length).toBe(7);
     const missing = lib.AVATAR_MARKERS.filter((m) => !sources.some((s) => s.text.includes(m)));
     expect(missing).toEqual([]);
   });
@@ -329,5 +329,13 @@ describe("10페이즈 E2E 표식(10-05)", () => {
     expect(has("components/v2/EmoteTray.tsx", "data-emote-tray")).toBe(true);
     expect(has("components/v2/EmoteTray.tsx", "data-emote=")).toBe(true);
     expect(has("world/testHooks.ts", "__mfEmotes")).toBe(true);
+  });
+
+  it("의상 표식(10-07)은 DressSheet·Lobby 의 떠 있는 버튼·testHooks 에 각각 있다", () => {
+    const has = (file: string, marker: string) => sources.some((s) => s.f.endsWith(file) && s.text.includes(marker));
+    expect(has("components/v2/DressSheet.tsx", "data-dress-sheet")).toBe(true);
+    expect(has("components/v2/DressSheet.tsx", "data-outfit=")).toBe(true);
+    expect(has("components/v2/FloatAction.tsx", "data-float=")).toBe(true);
+    expect(has("world/testHooks.ts", "__mfLooks")).toBe(true);
   });
 });
