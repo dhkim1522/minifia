@@ -141,8 +141,8 @@ const CAM_SLOW_MS = 800;
 const CHALK_FULL = 0.85;
 /** 분필이 그려지는 시간(ms) = dur-slow */
 const CHALK_DRAW_MS = 800;
-/** 6페이즈는 모두 기본 코트(의상 교체는 10페이즈) */
-const OUTFIT = "coat";
+/** 서버가 look 을 안 준 좌석의 의상(결정 D-6: 키가 없으면 coat) */
+const DEFAULT_LOOK = "coat";
 
 /** 동작을 재생할 수 있는 캐릭터 핸들(06-11 WorldCharacter). 테스트의 가짜 캐릭터에는 playEmote 가 없을 수 있다 */
 export type PlayableCharacter = CharacterHandle & { playEmote?(id: EmoteId, opts?: { reduced?: boolean }): void; stopEmote?(): void; prewarm?(face?: FaceId): void; setFace?(id: FaceId): void };
@@ -173,7 +173,7 @@ export interface WorldRuntimeDeps {
   store: WorldStore;
   serverNow(): number;
   mySeat(): number;
-  players(): readonly { seat: number; nickname: string; connected: boolean }[];
+  players(): readonly { seat: number; nickname: string; connected: boolean; look?: string }[];
   reducedMotion(): boolean;
   /** 스테이지 사각형의 위·아래 끝(px, 캔버스 위 끝 기준) */
   stageRect(): { top: number; bottom: number };
@@ -194,6 +194,8 @@ export interface WorldRuntimeDeps {
   onRing?: (at: { x: number; z: number } | null) => void;
   /** 지금 입힌 유령 직업 의상 표(좌석 → 의상 id)가 바뀔 때만 한 번 불린다 — E2E 훅 window.__mfGhostOutfits 용(09.1-09). 산 사람 화면은 늘 빈 표다 */
   onGhostOutfits?: (outfits: Readonly<Record<number, string>>) => void;
+  /** 그리는 좌석별 고른 의상 표(좌석 → 의상 id, 직업 의상 안개와 무관)가 바뀔 때만 한 번 불린다 — E2E 훅 window.__mfLooks 용(10-04, L33). 제품은 넘기지 않는다 */
+  onLooks?: (looks: Readonly<Record<number, string>>) => void;
   /** 핀 조명이 지금 비추는 좌석(없으면 null)·이동 중 여부·켜짐 수준(0~1)이 바뀔 때 불린다 — E2E 훅 window.__mfPin 용(09.1.1-11). 제품은 넘기지 않는다 */
   onPin?: (pin: { seat: number | null; moving: boolean; strength: number }) => void;
   /** 사람 동작이 시작되거나 재생 목록이 바뀔 때 불린다 — E2E 훅 window.__mfEmotes 용(10-03, L33). last 는 마지막으로 받아 그린 프레임의 사본, playing 은 재생 중 좌석(도착 순서). 제품은 넘기지 않는다 */
@@ -294,6 +296,8 @@ interface Actor {
   ghost: boolean;
   /** 유령 직업 의상 + 안개를 입었나(그 의상 id, 없으면 null) — 장면 표에 outfit 이 있을 때만(spectate 를 받은 유령 분기) */
   ghostOutfit: string | null;
+  /** 서버가 준 고른 의상(view.players[].look, 없으면 coat) — 유령 안개 중에도 여기에 최신 값을 두고 안개가 끝나면 이 의상으로 돌아온다 */
+  look: string;
   /** 등장 시작 시각(없으면 서 있다) */
   enter: number | null;
   /** 퇴장 시작 시각 */
@@ -623,12 +627,29 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
     a.idleId = null;
   }
 
+  /** 그리는 좌석의 고른 의상 표가 바뀌었을 때만 알린다(E2E 훅용). 안개 의상과 무관하게 a.look 이다 */
+  let looksSent = "";
+  function emitLooks(): void {
+    if (deps.onLooks === undefined) return;
+    const map: Record<number, string> = {};
+    for (const a of actors.values()) map[a.seat] = a.look;
+    const sig = JSON.stringify(map);
+    if (sig === looksSent) return;
+    looksSent = sig;
+    deps.onLooks(map);
+  }
+
+  function lookOf(seat: number): string {
+    return deps.players().find((p) => p.seat === seat)?.look ?? DEFAULT_LOOK;
+  }
+
   function removeActor(a: Actor): void {
     cancelPrewarm(a);
     if (a.ghostOutfit !== null) ghostOutfitsDirty = true;
     renderer?.removeCharacter(a.seat);
     a.handle.dispose();
     actors.delete(a.seat);
+    emitLooks();
   }
 
   function beginExit(seat: number, now: number): void {
@@ -646,15 +667,24 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
     for (const seat of store.retainSeats(players.map((p) => p.seat))) beginExit(seat, now);
     for (const p of players) {
       const a = actors.get(p.seat);
-      if (a !== undefined) applyDim(a, !p.connected);
+      if (a === undefined) continue;
+      applyDim(a, !p.connected);
+      // 서버가 준 look 이 바뀌면 그 좌석만 갈아입는다. 안개 중이면 안개 의상을 건드리지 않고 값만 갱신한다(안개가 끝날 때 최신 look 으로 돌아온다)
+      const want = p.look ?? DEFAULT_LOOK;
+      if (want !== a.look) {
+        a.look = want;
+        if (a.ghostOutfit === null) a.handle.applyOutfit?.(want);
+      }
     }
+    emitLooks();
     // 닉네임·표시가 바뀔 수 있어 이름표 폭을 다음 프레임에 다시 잰다
     for (const a of actors.values()) a.tagW = null;
   }
 
   function createActor(seat: number, now: number): void {
     if (renderer === null || kit === null) return;
-    const handle = kit.create(figIndexForSeat(seat), OUTFIT);
+    const look = lookOf(seat);
+    const handle = kit.create(figIndexForSeat(seat), look);
     const at = store.positionOf(seat, deps.serverNow());
     const a: Actor = {
       seat,
@@ -675,6 +705,7 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
       fadeOpacity: 1,
       ghost: false,
       ghostOutfit: null,
+      look,
       enter: null,
       exit: null,
       tag: null,
@@ -693,6 +724,7 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
     prewarmLater(a);
     const p = deps.players().find((q) => q.seat === seat);
     if (p !== undefined) applyDim(a, !p.connected);
+    emitLooks();
   }
 
   // ---------- 링·손짓 링 ----------
