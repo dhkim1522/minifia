@@ -5,16 +5,16 @@ milestone_name: 같은 공간
 current_phase: 9
 current_phase_name: 밤과 아침
 status: verifying
-stopped_at: Completed 09.1.1-16-PLAN.md
-last_updated: "2026-11-04T23:10:51.532Z"
+stopped_at: Completed 09.1.1-17-PLAN.md
+last_updated: "2026-11-05T00:00:54.641Z"
 last_activity: 2026-11-03
 last_activity_desc: Phase 9 execution started
-state_head: 6711a1dda39051b00211cf870d95670062c76c99
+state_head: 1be76a6446ab846d055b26103d8eb723f7533a0f
 progress:
   total_phases: 9
   completed_phases: 3
   total_plans: 137
-  completed_plans: 136
+  completed_plans: 137
   percent: 33
 ---
 
@@ -196,6 +196,7 @@ Progress: [███░░░░░░░] 33% (3/7 phases)
 | Phase 09.1.1 P14 | 70min (Task 3) | 3 tasks | 24 files |
 | Phase 09.1.1 P15 | 1h | 3 tasks | 19 files |
 | Phase 09.1.1 P16 | 65min | 3 tasks | 11 files |
+| Phase 09.1.1 P17 | 1h40m | 3 tasks | 14 files |
 
 ## Accumulated Context
 
@@ -407,6 +408,7 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 09.1.1]: [14] 결선 핀은 좌석이 아닌 두 후보 중점 한 점(PinDesc point), 결선 남은 시간은 투표 창 길이로 자름
 - [Phase 09.1.1]: [15] 마지막 3인 한마디 핀은 PinDesc turn(창 없음)으로 둔다. 동시 지목 버튼은 SHOWDOWN_COPY 한 곳의 문구, 인용 카드는 글만
 - [Phase 09.1.1]: [09.1.1-16] 동시 지목·공개 동안 떠 있는 배지 버튼을 접는다(작은 폰에서 지목 버튼이 가려짐); 마지막 3인 1-1-1 뒤 밤에도 '처형 없음' 알림을 띄운다
+- [Phase 09.1.1]: 0067: 정치·박진감 계획 값(O-1~O-22)을 결정 기록 한 장으로 닫음. 새 메시지는 badge·whisper 뿐, 결선·마지막 3인은 기존 point·chat 을 단계별로 씀
 
 ### Pending Todos
 
@@ -445,8 +447,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-04T23:10:50.900Z
-Stopped at: Completed 09.1.1-16-PLAN.md
+Last session: 2026-11-05T00:00:54.014Z
+Stopped at: Completed 09.1.1-17-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
