@@ -890,3 +890,79 @@ export async function endedGame4(): Promise<{ code: string; socks: TestSocket[];
   for (const s of g.socks) await nextFrame(s, isPhaseFrame("ended"));
   return { code: g.code, socks: g.socks, actors: g.actors, dead: mafia, living: g.actors.filter((a) => a !== mafia) };
 }
+
+/** richEndedGame6 가 만드는 줄의 본문(시험이 기대값을 이 상수로 만든다). */
+export const RICH_TEXT = {
+  mafia1: "밤 마피아 첫째 줄",
+  mafia2: "밤 마피아 둘째 줄",
+  ghostA: "처형된 마피아의 유령 줄",
+  ghostP: "죽은 경찰의 유령 줄",
+  whisper: "귓속말 본문 CANARY",
+} as const;
+
+export interface RichGame6 {
+  code: string;
+  socks: TestSocket[];
+  actors: Actor[];
+  /** 1일차에 처형되는 마피아, 밤에 남는 마피아, 경찰, 의사, 시민 둘(seat 오름차순). */
+  mafiaA: Actor;
+  mafiaB: Actor;
+  police: Actor;
+  doctor: Actor;
+  citizenX: Actor;
+  citizenY: Actor;
+  /** 각 소켓이 ended state 를 받기 직전까지 받은 프레임 수(그 앞은 '판 중'이다). */
+  endedAt: number[];
+}
+
+/**
+ * 6명 판을 마피아 밤 채팅·유령 채팅·귓속말·직업 주장·찬반 기록이 모두 생기도록 ended 까지 돌린다(11-03).
+ * 1일차 토론에서 경찰이 police 를, 시민 X 가 doctor 를 걸고 X 가 경찰에게 귓속말 → 지목으로 마피아 A 처형(찬반: A 뺀 전원 찬성) →
+ * 밤에 의사·경찰을 탈락시켜 마피아 B 와 시민 둘만 남기고 B 가 마피아 채널에 두 줄, 탈락한 A·경찰이 유령 채널에 한 줄씩 → B 가 X 를 죽여 1 대 1 로 아침 마감에 ended.
+ */
+export async function richEndedGame6(): Promise<RichGame6> {
+  const g = await startedGame("discussion", 5);
+  const [mafiaA, mafiaB] = withRole(g, "mafia") as [Actor, Actor];
+  const police = withRole(g, "police")[0]!;
+  const doctor = withRole(g, "doctor")[0]!;
+  const [citizenX, citizenY] = withRole(g, "citizen") as [Actor, Actor];
+  const flushAll = async (): Promise<void> => {
+    for (const s of g.socks) await settle(s, mark(s));
+  };
+  const say = async (who: Actor, text: string): Promise<void> => {
+    await resetChatRates(g.code);
+    chatSend(who.sock, text);
+    await flushAll();
+  };
+
+  send(police.sock, { t: "badge", role: "police" });
+  await flushAll();
+  send(citizenX.sock, { t: "badge", role: "doctor" });
+  await flushAll();
+  send(citizenX.sock, { t: "whisper", to: police.seat, text: RICH_TEXT.whisper });
+  await flushAll();
+
+  await advanceTo(g.code, g.socks, "nomination");
+  const cast: Record<number, number> = Object.fromEntries(g.actors.map((a) => [a.seat, mafiaA.seat]));
+  cast[mafiaA.seat] = police.seat;
+  await pointAll(g.code, g.actors, cast);
+  await advanceTo(g.code, g.socks, "verdict");
+  await verdictAll(g.code, g.actors, Object.fromEntries(g.actors.filter((a) => a !== mafiaA).map((a) => [a.seat, true])));
+  await advanceTo(g.code, g.socks, "night");
+  await flushAll();
+
+  await killSeats(g, [doctor.seat, police.seat]);
+  await say(mafiaB, RICH_TEXT.mafia1);
+  await say(mafiaB, RICH_TEXT.mafia2);
+  await say(mafiaA, RICH_TEXT.ghostA);
+  await say(police, RICH_TEXT.ghostP);
+
+  send(mafiaB.sock, { t: "pick", target: citizenX.seat });
+  await flushAll();
+  await advanceTo(g.code, g.socks, "morning");
+  await closePhase(g.code);
+  for (const s of g.socks) await nextFrame(s, isPhaseFrame("ended"));
+  await flushAll();
+  const endedAt = g.socks.map((s) => framesOf(s).findIndex((m) => m.t === "state" && m.view.phase === "ended"));
+  return { code: g.code, socks: g.socks, actors: g.actors, mafiaA, mafiaB, police, doctor, citizenX, citizenY, endedAt };
+}
