@@ -38,7 +38,7 @@ import {
   withRole,
 } from "./helpers";
 import type { Actor as SeatedActor, Game, TestSocket } from "./helpers";
-import { endedGame4, until } from "./helpers";
+import { RICH_EXTRA, RICH_TEXT, chatKeysOf, endedGame4, helloForLog, readyUp, richEndedGame6, toEndedByMafia, until } from "./helpers";
 
 interface Player {
   nickname: string;
@@ -956,7 +956,9 @@ describe("6명 한 판: 낮 처형(토론 끝내기·지목·변론·찬반·처
             const scripted = badgeScript.get(pl.seat);
             // 공개 의상(결정 D-6): look 은 대본에 있는 좌석 줄에만, 값은 항상 대본의 값이다(실제 역할이 아니다). 판 내내 같은 값이 실린다.
             if (pl.look !== undefined) expect(`${pl.seat}:${pl.look}`).toBe(`${pl.seat}:${dressScript.get(pl.seat)}`);
-            const base = ["alive", "connected", "isHost", "nickname", "seat", ...(pl.look !== undefined ? ["look"] : [])].sort();
+            // 다시 하기 준비(11-08, D-12): ready 는 결과 단계에서 방장(늘 준비)의 줄에만 실린다 — 이 판은 아무도 준비 토글을 하지 않았다. 값은 true 뿐이고 신분과 무관하다.
+            const readyKey = v.phase === "ended" && pl.isHost ? ["ready"] : [];
+            const base = ["alive", "connected", "isHost", "nickname", "seat", ...readyKey, ...(pl.look !== undefined ? ["look"] : [])].sort();
             if (pl.badge === undefined) {
               expect(Object.keys(pl).sort()).toEqual(base);
               continue;
@@ -1592,7 +1594,9 @@ describe("방 연속성 프레임 전수 (D-14·D-17·D-18, L43)", () => {
         const key = path.slice(path.lastIndexOf(".") + 1);
         expect(SERVER_ONLY_KEYS.includes(key) && !ALLOWED_WIRE_PATHS.has(path)).toBe(false);
       }
-      if (msg.t === "state") for (const p of msg.view.players) expect(Object.keys(p).sort().join(",")).toBe(Object.keys(msg.view.players[0]!).sort().join(","));
+      // ready·sat(11-08)는 준비·합류한 사람 줄에만 실리는 공개 표시라 같은 모양 비교에서 뺀다.
+      const shape = (p: object): string => Object.keys(p).filter((k) => k !== "ready" && k !== "sat").sort().join(",");
+      if (msg.t === "state") for (const p of msg.view.players) expect(shape(p)).toBe(shape(msg.view.players[0]!));
     }
   };
 
@@ -1690,3 +1694,126 @@ describe("맵 선택 프레임 전수 (D-20·D-21, L40·L42·L44)", () => {
     expect([...mapPaths].sort()).toEqual([".view.map", ".view.mapChoice"]);
   });
 });
+
+describe("다시 하기 · 쉬는 사람 프레임 전수 (D-12~D-16, L38·L39·L44)", () => {
+  const GAME1 = [RICH_TEXT.mafia1, RICH_TEXT.mafia2, RICH_TEXT.ghostA, RICH_TEXT.ghostP, RICH_TEXT.whisper, RICH_EXTRA.will];
+  const GAME2 = ["GAME2-CHAT-CANARY", "GAME2-WILL-CANARY", "GAME2-WHISPER-CANARY"];
+  const ROOM_KEYS = "code,createdAt,everConnected,expiresAt,hostId,map,nextJoinSeq,phase,phaseEndsAt,players,round";
+  const ROW_KEYS = "connId,connected,id,joinSeq,nickname,nicknameKey,role,seat,token";
+  const BENCH_ROW_KEYS = "connId,connected,id,joinSeq,nickname,nicknameKey,seat,token";
+  type StoredShape = { bench?: Array<Record<string, unknown>>; players: Array<Record<string, unknown>> } & Record<string, unknown>;
+  const keysOf = (o: object): string => Object.keys(o).sort().join(",");
+
+  /** 새 판 구간의 프레임에 지난 판의 비공개 흔적이 없다: canary 본문, 결과, 기록, 준비·앉음 표시. */
+  function assertFresh(frames: ServerMessage[], canaries: readonly string[], round: number, tag: string): void {
+    for (const msg of frames) {
+      const json = JSON.stringify(msg);
+      for (const c of canaries) expect(`${tag}:${msg.t}:${json.includes(c)}`).toBe(`${tag}:${msg.t}:false`);
+      if (msg.t !== "state") continue;
+      const v = msg.view;
+      expect(`${tag}:round:${v.round}`).toBe(`${tag}:round:${round}`);
+      expect(`${tag}:result:${"result" in v}`).toBe(`${tag}:result:false`);
+      expect(`${tag}:ready/sat:${v.players.some((p) => "ready" in p || "sat" in p)}`).toBe(`${tag}:ready/sat:false`);
+      expect(`${tag}:voteLog:${v.day?.voteLog?.length ?? 0}`).toBe(`${tag}:voteLog:0`);
+      expect(`${tag}:morning:${v.day !== undefined && "morning" in v.day}`).toBe(`${tag}:morning:false`);
+      expect(`${tag}:chalk:${v.day !== undefined && "chalk" in v.day}`).toBe(`${tag}:chalk:false`);
+      expect(`${tag}:records:${(v.me.records ?? []).length}`).toBe(`${tag}:records:0`);
+      expect(`${tag}:alive:${v.players.every((p) => p.alive !== false)}`).toBe(`${tag}:alive:true`);
+    }
+  }
+
+  it(
+    "L39·L44: 1판(밤 마피아·유령 채팅·귓속말·유언·찬반·주장·동작) → 다시 하기 → 2판 → 쉬었던 사람이 sat 로 합류했다 준비 → 3판. 새 판 어디에도 지난 판 canary·기록이 없다",
+    { timeout: 300_000 },
+    async () => {
+      const g = await richEndedGame6({ extras: true });
+      const code = g.code;
+      const host = g.socks[0]!;
+      const sitterSock = g.socks[5]!;
+      const sitterToken = g.actors[5]!.token;
+      const sitterSeat = g.actors[5]!.seat;
+      let players = g.socks.slice(0, 5);
+
+      // L44: 새 공개 경로 players[].ready 의 값은 신분과 무관하다 — 모든 신분 소켓의 players[] 가 같다.
+      await readyUp(players.slice(1), g.socks, 5);
+      const rows = new Set(g.socks.map((s) => JSON.stringify(lastViewOf(s).players)));
+      expect(rows.size).toBe(1);
+      for (const s of g.socks) expect(lastViewOf(s).players.filter((p) => p.ready === true).length).toBe(5);
+
+      // 1판 → 2판
+      const since1 = g.socks.map((s) => mark(s));
+      send(host, { t: "rematch", round: 1 });
+      for (const s of players) await nextFrame(s, (m) => m.t === "state" && m.view.phase === "assigning" && m.view.round === 2);
+      await nextFrame(sitterSock, (m) => m.t === "state" && m.view.resting === true);
+      let stored = (await storedRoom(code)) as unknown as StoredShape;
+      expect(keysOf(stored).replace("bench,", "")).toBe(ROOM_KEYS);
+      expect("bench" in stored).toBe(true);
+      for (const row of stored.players) expect(keysOf(row)).toBe(ROW_KEYS);
+      expect(stored.bench!.map((r) => keysOf(r))).toEqual([BENCH_ROW_KEYS]);
+      expect(await chatKeysOf(code)).toEqual([]);
+
+      await advanceTo(code, players, "dayAnnounce");
+      await advanceTo(code, players, "discussion");
+      // 다시 붙은 소켓: 지난 판 줄이 하나도 없다
+      const fresh = await connect(code);
+      const lines = await helloForLog(fresh, g.actors[4]!.token);
+      expect(lines).toEqual([]);
+      players = [...players.slice(0, 4), fresh];
+      // 2판의 비공개 기록: 채팅(all)·유언·귓속말
+      await resetChatRates(code);
+      const talkers = players.map((s) => ({ sock: s, seat: lastViewOf(s).me.seat }));
+      send(talkers[1]!.sock, { t: "chat", text: GAME2[0]!, pk: phaseKeyOfView(talkers[1]!.sock) });
+      send(talkers[2]!.sock, { t: "will", text: GAME2[1]! });
+      send(talkers[3]!.sock, { t: "whisper", to: talkers[0]!.seat, text: GAME2[2]! });
+      for (const s of players) await settle(s, mark(s));
+      expect((await chatKeysOf(code)).length).toBeGreaterThan(0);
+
+      const beforeEnd = g.socks.map((s) => mark(s));
+      assertFresh(framesOf(host).slice(since1[0], beforeEnd[0]), GAME1, 2, "r2/host");
+      for (const [i, s] of players.entries()) if (s !== fresh) assertFresh(framesOf(s).slice(since1[i], beforeEnd[i]), GAME1, 2, `r2/seat${i}`);
+      assertFresh(framesOf(fresh), GAME1, 2, "r2/fresh");
+      // 쉬는 사람은 전용 state 한 개뿐이고 그 안에도 지난 판 흔적이 없다
+      expect(framesOf(sitterSock).slice(since1[5]).filter((m) => m.t !== "pong").map((m) => m.t)).toEqual(["state"]);
+      for (const m of framesOf(sitterSock).slice(since1[5])) for (const c of [...GAME1, ...GAME2]) expect(JSON.stringify(m).includes(c)).toBe(false);
+
+      // 2판 끝 → 쉬던 사람이 sat 로 합류
+      await toEndedByMafia(code, players);
+      await nextFrame(sitterSock, (m) => m.t === "state" && m.view.phase === "ended");
+      const satView = lastViewOf(sitterSock);
+      expect(satView.me.role).toBeUndefined();
+      expect(satView.players.filter((p) => p.sat === true).map((p) => p.seat)).toEqual([sitterSeat]);
+      stored = (await storedRoom(code)) as unknown as StoredShape;
+      expect("bench" in stored).toBe(false);
+      const satRow = stored.players.find((p) => p.seat === sitterSeat)!;
+      expect(satRow.sat).toBe(true);
+      expect("role" in satRow).toBe(false);
+
+      // 준비: 합류한 사람이 round 2 로 준비하면 6명이 모두 참가자가 된다.
+      const all = [...players, sitterSock];
+      await readyUp([...players.slice(1), sitterSock], all, 6, 2);
+      const since2 = all.map((s) => mark(s));
+      send(players[0]!, { t: "rematch", round: 2 });
+      for (const s of all) await nextFrame(s, (m) => m.t === "state" && m.view.phase === "assigning" && m.view.round === 3);
+      stored = (await storedRoom(code)) as unknown as StoredShape;
+      expect(keysOf(stored)).toBe(ROOM_KEYS);
+      for (const row of stored.players) expect(keysOf(row)).toBe(ROW_KEYS);
+      expect(stored.players.length).toBe(6);
+      expect(await chatKeysOf(code)).toEqual([]);
+      await advanceTo(code, all, "roleReveal");
+      await advanceTo(code, all, "dayAnnounce");
+      for (const [i, s] of all.entries()) assertFresh(framesOf(s).slice(since2[i]), [...GAME1, ...GAME2], 3, `r3/seat${i}`);
+      // 합류했던 사람도 이제 자기 역할을 받는다
+      expect(lastViewOf(sitterSock).me.role).toBeDefined();
+      // 새 공개 경로는 정확히 이 목록 안이다 — 모든 소켓의 모든 프레임
+      const playerPaths = new Set<string>();
+      for (const s of g.socks) for (const m of framesOf(s)) for (const path of keyPaths(m)) if (path.startsWith(".view.players[].")) playerPaths.add(path.slice(".view.players[]".length));
+      for (const path of playerPaths) expect([".seat", ".nickname", ".connected", ".isHost", ".alive", ".look", ".badge", ".badgeSwapped", ".ready", ".sat"]).toContain(path);
+    },
+  );
+});
+
+/** 소켓 view 로 만든 지금의 단계 키(`판:일차:단계`). */
+function phaseKeyOfView(sock: TestSocket): string {
+  const v = lastViewOf(sock);
+  return `${v.round ?? 1}:${v.day?.n ?? 0}:${v.phase}`;
+}

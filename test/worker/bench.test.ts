@@ -43,6 +43,8 @@ interface Rested {
   restingSeats: [number, number];
   /** 다시 하기를 보내기 직전 쉬는 두 소켓이 받은 프레임 수 — 그 앞은 지난 판 결과 단계까지의 프레임이다. */
   since: [number, number];
+  /** 같은 시점에 참가자 네 소켓이 받은 프레임 수. */
+  playersSince: number[];
 }
 
 /** 6명 판을 ended 까지 모은 뒤 4명만 준비해 다시 하기를 시작한다. 쉬는 두 소켓은 쉬는 사람 state 한 개를 받은 상태다. */
@@ -53,12 +55,14 @@ async function restedGame(): Promise<Rested> {
   for (const s of players.slice(1)) send(s, { t: "ready", on: true, round: 1 });
   await until("네 명 준비", async () => players.every((s) => lastViewOf(s).players.filter((p) => p.ready === true).length === 4));
   const since: [number, number] = [mark(resting[0]), mark(resting[1])];
+  const playersSince = players.map((s) => mark(s));
   send(players[0]!, { t: "rematch", round: 1 });
   for (const s of players) await nextFrame(s, isAssigning);
   for (const s of resting) await nextFrame(s, (m) => m.t === "state" && m.view.resting === true);
   for (const s of g.socks) await settle(s, mark(s));
   return {
     since,
+    playersSince,
     g,
     players,
     resting,
@@ -274,6 +278,61 @@ describe("쉬는 사람 — 결과 합류 (D-13, sat)", () => {
       // 합류한 뒤에는 결과 단계의 의상 고르기가 된다
       send(t.resting[0], { t: "dress", look: "noir" });
       await until("sat 의상", async () => lastViewOf(t.players[0]!).players.find((p) => p.seat === t.restingSeats[0])?.look === "noir");
+    },
+  );
+});
+
+describe("쉬는 사람 신분 행 × 전 구간 (L38)", () => {
+  it(
+    "쉬는 사람이 있는 판에서 참가자(방장·마피아·경찰·시민) 소켓이 받은 모든 프레임에 쉬는 사람의 닉네임·좌석·토큰이 없고, 판이 끝나기 전까지 players[] 는 네 명뿐이다. 끝나면 sat 로만 공개된다",
+    { timeout: 180_000 },
+    async () => {
+      const t = await restedGame();
+      const code = t.g.code;
+      const restNames = t.resting.map((s) => lastViewOf(s).players[0]!.nickname);
+      const restSeats = new Set<number>(t.restingSeats);
+      await advanceTo(code, t.players, "dayAnnounce");
+      await advanceTo(code, t.players, "discussion");
+      // 낮에 채팅·동작·이동·주장이 오간다 — 쉬는 사람이 받는 길이 하나라도 있으면 아래 단언이 깨진다
+      await resetChatRates(code);
+      const view0 = lastViewOf(t.players[0]!);
+      const pk = `${view0.round ?? 1}:${view0.day?.n ?? 0}:${view0.phase}`;
+      send(t.players[1]!, { t: "chat", text: "낮의 한마디", pk });
+      send(t.players[2]!, { t: "badge", role: "citizen" });
+      send(t.players[3]!, { t: "move", x: 100, z: 100 });
+      for (const s of t.players) await settle(s, mark(s));
+      await advanceTo(code, t.players, "night");
+      for (const s of t.players) await settle(s, mark(s));
+      const beforeEnd = t.players.map((s) => mark(s));
+
+      for (const [i, s] of t.players.entries()) {
+        const frames = framesOf(s).slice(t.playersSince[i]!, beforeEnd[i]!);
+        const json = JSON.stringify(frames);
+        for (const name of restNames) expect(json.includes(name)).toBe(false);
+        for (const token of t.restingTokens) expect(json.includes(token)).toBe(false);
+        for (const m of frames) {
+          if (m.t === "state") {
+            expect(m.view.players.length).toBe(4);
+            expect(m.view.players.some((p) => restSeats.has(p.seat) || p.sat === true)).toBe(false);
+            expect("resting" in m.view).toBe(false);
+          }
+          if (m.t === "chat") expect(restSeats.has(m.seat)).toBe(false);
+          if (m.t === "world" && m.k === "snap") expect(m.ents.length).toBeLessThanOrEqual(4);
+        }
+      }
+
+      // 끝나면 합류한 사람은 sat 표시와 함께 공개된다.
+      const roles = t.players.map((s) => ({ seat: lastViewOf(s).me.seat, role: lastViewOf(s).me.role }));
+      const victims = roles.filter((r) => r.role !== "mafia").sort((a, b) => a.seat - b.seat).slice(0, 2).map((r) => r.seat);
+      await killSeats({ code, socks: t.players, actors: [] }, victims);
+      await advanceTo(code, t.players, "morning");
+      await closePhase(code);
+      for (const s of t.players) await nextFrame(s, isEnded);
+      for (const s of t.players) {
+        const v = lastViewOf(s);
+        expect(v.players.filter((p) => p.sat === true).map((p) => p.seat).sort()).toEqual([...restSeats].sort());
+        expect(v.players.length).toBe(6);
+      }
     },
   );
 });

@@ -900,6 +900,9 @@ export const RICH_TEXT = {
   whisper: "귓속말 본문 CANARY",
 } as const;
 
+/** richEndedGame6({ extras: true }) 가 더하는 비공개 기록의 본문(11-08 canary). RICH_TEXT 와 따로 둔다 — 결과 공개(resultLog)에는 나오지 않는 값이다. */
+export const RICH_EXTRA = { will: "유언 본문 EXTRA-CANARY" } as const;
+
 export interface RichGame6 {
   code: string;
   socks: TestSocket[];
@@ -920,7 +923,7 @@ export interface RichGame6 {
  * 1일차 토론에서 경찰이 police 를, 시민 X 가 doctor 를 걸고 X 가 경찰에게 귓속말 → 지목으로 마피아 A 처형(찬반: A 뺀 전원 찬성) →
  * 밤에 의사·경찰을 탈락시켜 마피아 B 와 시민 둘만 남기고 B 가 마피아 채널에 두 줄, 탈락한 A·경찰이 유령 채널에 한 줄씩 → B 가 X 를 죽여 1 대 1 로 아침 마감에 ended.
  */
-export async function richEndedGame6(): Promise<RichGame6> {
+export async function richEndedGame6(opts: { extras?: boolean } = {}): Promise<RichGame6> {
   const g = await startedGame("discussion", 5);
   const [mafiaA, mafiaB] = withRole(g, "mafia") as [Actor, Actor];
   const police = withRole(g, "police")[0]!;
@@ -941,6 +944,13 @@ export async function richEndedGame6(): Promise<RichGame6> {
   await flushAll();
   send(citizenX.sock, { t: "whisper", to: police.seat, text: RICH_TEXT.whisper });
   await flushAll();
+  if (opts.extras === true) {
+    // 11-08 L39: 끝까지 사는 시민 Y 가 유언을 남기고 동작을 한다(통계 emote 도 센다). 죽는 사람이 아니라 사망 카드는 생기지 않는다.
+    send(citizenY.sock, { t: "will", text: RICH_EXTRA.will });
+    await flushAll();
+    emoteSend(citizenY.sock, "clap");
+    await flushAll();
+  }
 
   await advanceTo(g.code, g.socks, "nomination");
   const cast: Record<number, number> = Object.fromEntries(g.actors.map((a) => [a.seat, mafiaA.seat]));
@@ -965,4 +975,29 @@ export async function richEndedGame6(): Promise<RichGame6> {
   await flushAll();
   const endedAt = g.socks.map((s) => framesOf(s).findIndex((m) => m.t === "state" && m.view.phase === "ended"));
   return { code: g.code, socks: g.socks, actors: g.actors, mafiaA, mafiaB, police, doctor, citizenX, citizenY, endedAt };
+}
+
+// ---- 11-08 다시 하기 도우미 ----
+
+/** 모든 소켓의 players[].ready 가 반영될 때까지(guests 가 ready 를 보낸 뒤) 기다린다. count 는 준비로 세어질 사람 수(방장·봇 포함). */
+export async function readyUp(guests: TestSocket[], all: TestSocket[], count: number, round = 1): Promise<void> {
+  for (const s of guests) send(s, { t: "ready", on: true, round });
+  await until("준비 반영", async () => all.every((s) => lastViewOf(s).players.filter((p) => p.ready === true).length === count));
+}
+
+/**
+ * 새 판(어느 round 든)이 시작된 뒤 그 판의 참가자 소켓들을 마피아 승리로 ended 까지 몬다: 밤으로 가서 시민 편을 마피아 수만큼 남을 때까지 탈락시키고
+ * 아침 마감에 종료한다. 역할은 각 소켓의 me.role 에서 읽으므로 역할 공개 이후여야 한다. 반환은 탈락시킨 좌석.
+ */
+export async function toEndedByMafia(code: string, socks: TestSocket[]): Promise<number[]> {
+  await advanceTo(code, socks, "night");
+  const info = socks.map((s) => ({ seat: lastViewOf(s).me.seat, role: lastViewOf(s).me.role }));
+  const mafia = info.filter((i) => i.role === "mafia").length;
+  const others = info.filter((i) => i.role !== "mafia").sort((a, b) => a.seat - b.seat);
+  const victims = others.slice(0, Math.max(0, others.length - mafia)).map((i) => i.seat);
+  await killSeats({ code, socks, actors: [] }, victims);
+  await advanceTo(code, socks, "morning");
+  await closePhase(code);
+  for (const s of socks) await nextFrame(s, isPhaseFrame("ended"));
+  return victims;
 }
