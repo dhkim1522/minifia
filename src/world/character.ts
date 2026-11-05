@@ -659,6 +659,8 @@ function blendPose(a: Pose, b: Pose, k: number): Pose {
 interface Emote {
   id: EmoteId;
   t: number;
+  /** stopEmote 뒤 경과 시간(ms). null 이면 멈추는 중이 아니다 */
+  stopT: number | null;
 }
 /** 원문 emotePose — 프레임 사이를 smoothstep(k = l²(3 − 2l))으로 잇고, 프레임에 없는 키는 base 자세 값을 쓴다 */
 function emotePose(e: Emote, base: Pose): Pose {
@@ -703,6 +705,11 @@ export interface WorldCharacter {
   applyOutfit(id: OutfitId): void;
   /** 동작 재생(원문 playEmote) */
   playEmote(id: EmoteId): void;
+  /**
+   * 재생 중인 동작을 POSE_BLEND_MS 에 걸쳐 서 있는 자세(유지 자세가 있으면 유지 자세)로 돌리고 끝낸다(10-03, D-13).
+   * 방향(yaw)은 건드리지 않는다. 동작이 없으면 아무 일도 없다. 멈추는 중 playEmote 는 새 동작을 처음부터 시작한다
+   */
+  stopEmote(): void;
   /** 표정 바꾸기(원문 setFace) — 머리만 다시 병합(캐시). 모르는 이름은 기본 표정 */
   setFace(id: FaceId): void;
   /**
@@ -942,7 +949,7 @@ export function createCharacter(figIndex: number, outfit: OutfitId = "coat"): Wo
       if (holdMix <= 0 && !holdId) holdShown = null;
       let held = base;
       if (holdShown && holdMix > 0) {
-        const target = emotePose({ id: holdShown, t: Number.POSITIVE_INFINITY }, base);
+        const target = emotePose({ id: holdShown, t: Number.POSITIVE_INFINITY, stopT: null }, base);
         if (holdMix >= 1) held = target;
         else {
           held = blendPose(base, target, holdMix);
@@ -952,9 +959,21 @@ export function createCharacter(figIndex: number, outfit: OutfitId = "coat"): Wo
       let pose = held;
       if (emote && moving) emote = null; // 걷기 시작하면 동작이 끊긴다
       if (emote) {
-        emote.t += dt;
-        if (emoteDone(emote)) emote = null;
-        else pose = emotePose(emote, held);
+        if (emote.stopT !== null) {
+          // 멈추는 중: 동작 시간은 멈춘 채 그 자세에서 held 로 POSE_BLEND_MS 에 걸쳐 섞는다. 1 이상은 held 그대로(보간 오차 없음)
+          emote.stopT += dt * 1000;
+          const k = emote.stopT / POSE_BLEND_MS;
+          if (k >= 1) emote = null;
+          else {
+            const from = emotePose(emote, held);
+            pose = blendPose(from, held, k);
+            pose.face = k < 0.5 ? from.face : held.face;
+          }
+        } else {
+          emote.t += dt;
+          if (emoteDone(emote)) emote = null;
+          else pose = emotePose(emote, held);
+        }
       }
       applyPose(pose);
       // 밤 선택 표시의 고리: 켠 동안만 배율을 정한다(꺼진 뒤 한 번 1 로 돌리는 것은 setPickMark). 고리가 나중에 붙어도 이 줄이 맞춘다
@@ -978,7 +997,10 @@ export function createCharacter(figIndex: number, outfit: OutfitId = "coat"): Wo
       refresh(JOINTS);
     },
     playEmote(id) {
-      if (!disposed && Object.hasOwn(EMOTES, id)) emote = { id, t: 0 };
+      if (!disposed && Object.hasOwn(EMOTES, id)) emote = { id, t: 0, stopT: null };
+    },
+    stopEmote() {
+      if (emote && emote.stopT === null) emote.stopT = 0;
     },
     setFace(id) {
       if (!disposed) showFace(id);

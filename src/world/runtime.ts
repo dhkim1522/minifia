@@ -11,6 +11,8 @@ import type { Segment } from "../../shared/game/world";
 import { NETWORK_TEXT } from "../net/copy";
 import { clampTarget, DEFAULT_TARGET, followStep, gatherView, NAMETAG_GAP, NAMETAG_MAX_W, RESIZE_SETTLE_MS, stageOffsetY } from "./camera";
 import { FIGS } from "./characterData";
+import { admitEmote, EMOTE_RENDER_MAX, emoteDurationMs } from "./emoteCap";
+import type { PlayingEmote } from "./emoteCap";
 import { createTapGate } from "./input";
 import { BLEND_SNAP_DIST, blendRemaining, createOwnMoves, predictSegment, stepYaw, travelYaw } from "./motion";
 import { DEFAULT_BUDGET_STEP, nextLadderStep } from "./renderer";
@@ -143,7 +145,7 @@ const CHALK_DRAW_MS = 800;
 const OUTFIT = "coat";
 
 /** 동작을 재생할 수 있는 캐릭터 핸들(06-11 WorldCharacter). 테스트의 가짜 캐릭터에는 playEmote 가 없을 수 있다 */
-export type PlayableCharacter = CharacterHandle & { playEmote?(id: EmoteId): void; setFace?(id: FaceId): void };
+export type PlayableCharacter = CharacterHandle & { playEmote?(id: EmoteId): void; stopEmote?(): void; setFace?(id: FaceId): void };
 
 /**
  * 밤 행동 선택의 발밑 고리 종류와 색. 값은 tokens.css 의 crimson-500·seat-1·seat-3 (승인 Ghost 보드 값, 9페이즈가 정식 토큰으로 정한다).
@@ -205,6 +207,8 @@ export interface WorldRuntime {
   syncPlayers(): void;
   /** seat 이 손사래(deny)를 하고 놀란 표정을 한 번 짓는다 — 지목 선두가 바뀌었을 때의 반응(결정 0049). 그릴 캐릭터가 없으면 아무것도 하지 않는다 */
   deny(seat: number): void;
+  /** 재생 중인 사람 동작을 모두 부드럽게 끝낸다 — 단계가 바뀔 때 밤 → 아침으로 동작이 이어져 보이지 않게(10-03, T-10-10) */
+  stopAllEmotes(): void;
   /** seat 이 놀란 표정(surprise)만 한 번 짓는다 — 손사래 없음. 암살당한 본인의 0.7초 연출(09-20, NIGHT-11). 그릴 캐릭터가 없으면 아무것도 하지 않는다 */
   surprise(seat: number): void;
   /**
@@ -371,17 +375,37 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
   const pendingEntered = new Set<number>();
   // 서버 동작 프레임(10-03, D-9): 눌렀을 때 미리 재생하는 경로는 없다 — 보낸 사람도 이 프레임으로만 재생한다
   let lastEmote: { seat: number; id: EmoteId; n: number } | null = null;
-  let emotePlaying: number[] = [];
+  /** 지금 재생 중인 사람 동작(도착 순서). 상한 EMOTE_RENDER_MAX 를 지킨다 — 시스템 반응 deny 는 넣지 않는다 */
+  let emotePlaying: PlayingEmote[] = [];
   function emitEmotes(): void {
-    deps.onEmotes?.({ last: lastEmote === null ? null : { ...lastEmote }, playing: [...emotePlaying] });
+    deps.onEmotes?.({ last: lastEmote === null ? null : { ...lastEmote }, playing: emotePlaying.map((p) => p.seat) });
+  }
+  function stopHandleEmote(seat: number): void {
+    (actors.get(seat)?.handle as PlayableCharacter | undefined)?.stopEmote?.();
+  }
+  /** seat 이 지금 사람 동작을 재생 중인가(끝난 항목은 아직 걷지 않았어도 아니다) */
+  function isEmoting(seat: number, now: number): boolean {
+    return emotePlaying.some((p) => p.seat === seat && p.until > now);
+  }
+  /** 끝난 항목·걷는 좌석을 목록에서 걷어 내고 바뀌었으면 알린다 */
+  function sweepEmotes(now: number, walking: ReadonlySet<number>): void {
+    if (emotePlaying.length === 0) return;
+    const next = emotePlaying.filter((p) => p.until > now && !walking.has(p.seat) && actors.has(p.seat));
+    if (next.length === emotePlaying.length) return;
+    emotePlaying = next;
+    emitEmotes();
   }
   const offEmote = store.onEmote((f) => {
     if (disposed) return;
     const a = actors.get(f.seat);
     if (a === undefined || a.exit !== null) return;
+    const now = Date.now();
+    // 상한: 새 동작은 항상 재생하고, 넘치면 가장 먼저 시작한 것을 부드럽게 끝낸다(D-13). 순서는 도착 순서다
+    const admitted = admitEmote(emotePlaying, { seat: f.seat, until: now + emoteDurationMs(f.id, deps.reducedMotion()) }, now, EMOTE_RENDER_MAX);
+    for (const seat of admitted.stopSeats) stopHandleEmote(seat);
+    emotePlaying = admitted.playing;
     (a.handle as PlayableCharacter).playEmote?.(f.id);
     lastEmote = { seat: f.seat, id: f.id, n: f.n };
-    emotePlaying = [...emotePlaying.filter((s) => s !== f.seat), f.seat];
     emitEmotes();
   });
   const gate = createTapGate();
@@ -875,6 +899,7 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
     }
 
     const gone: Actor[] = [];
+    const walkingSeats = new Set<number>(); // 이번 프레임 걸은 좌석 — 동작이 끊긴 것으로 보아 재생 목록에서 뺀다
     const mySeat = deps.mySeat();
     for (const a of actors.values()) {
       const server = store.segOf(a.seat);
@@ -933,6 +958,7 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
       const dx = at.x - a.pos.x;
       const dz = at.z - a.pos.z;
       const moving = !resync && dx * dx + dz * dz > MOVE_EPS * MOVE_EPS;
+      if (moving) walkingSeats.add(a.seat);
       // 방향: 걷는 선분의 방향으로 짧은 쪽으로 돌되 한 프레임에 YAW_TURN_RATE × dt 까지만(모션 줄이기면 바로). 복귀 프레임은 건드리지 않는다
       if (resync) {
         a.yawGoal = null;
@@ -1129,6 +1155,7 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
       if (a.tag !== null) a.tag.style.opacity = "0";
     }
     emitGhostOutfits();
+    sweepEmotes(Date.now(), walkingSeats);
     resync = false;
     lastDrawAt = now;
 
@@ -1249,9 +1276,17 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
     deny(seat) {
       const a = actors.get(seat) ?? null;
       if (a === null || a.exit !== null) return;
+      // 사람이 하는 동작이 먼저다: 재생 중이면 손사래도 놀란 표정도 건너뛴다(상한에도 넣지 않는다)
+      if (isEmoting(seat, Date.now())) return;
       const h = a.handle as PlayableCharacter;
       h.playEmote?.("deny");
       h.setFace?.("surprise");
+    },
+    stopAllEmotes() {
+      if (emotePlaying.length === 0) return;
+      for (const p of emotePlaying) stopHandleEmote(p.seat);
+      emotePlaying = [];
+      emitEmotes();
     },
     surprise(seat) {
       const a = actors.get(seat) ?? null;

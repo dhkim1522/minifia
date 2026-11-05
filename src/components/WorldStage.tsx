@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
+import { phaseKey } from "../../shared/game/audience";
 import type { ClientMessage, PublicPlayer, RoomView } from "../../shared/protocol";
 import { MOVE_COORD_LIMIT } from "../../shared/protocol";
 import { useReducedMotion } from "../net/useReducedMotion";
@@ -219,6 +220,14 @@ export function WorldStage(props: WorldStageProps) {
   useLayoutEffect(() => {
     runtimeRef.current?.setScene(props.scene ?? null);
   }, [props.scene]);
+
+  // 단계(일차:단계)가 바뀌면 재생 중인 동작을 모두 끝낸다 — 밤 → 아침으로 동작이 이어져 보이지 않게(T-10-10). 처음 마운트에서는 부르지 않는다
+  const phaseKeySeen = useRef<string | null>(null);
+  const currentPhaseKey = phaseKey(view.day === undefined ? { phase: view.phase } : { phase: view.phase, day: view.day.n });
+  useLayoutEffect(() => {
+    if (phaseKeySeen.current !== null && phaseKeySeen.current !== currentPhaseKey) runtimeRef.current?.stopAllEmotes();
+    phaseKeySeen.current = currentPhaseKey;
+  }, [currentPhaseKey]);
 
   // 손사래: 처음 마운트 때의 값은 지난 일이라 하지 않는다(재접속·화면 전환에서 되살리지 않는다)
   const denySeen = useRef(props.deny?.nonce);
