@@ -4,7 +4,7 @@
 // 읽는 것은 공개 정보(players·alive·day.points·day.candidate)와 본인 유령 여부(spectate·내 alive)뿐이다.
 import { isAlive } from "../../shared/game/alive";
 import { STAGE_SPOT, UNIT } from "../../shared/game/map";
-import type { PhaseId, RoomView } from "../../shared/protocol";
+import type { MapId, PhaseId, RoomView } from "../../shared/protocol";
 import { GHOST_FADE_END_MS, GHOST_RISE_MS, pointsTally } from "../game/dayView";
 import { pointSeatsOf, revealPoints, showdownStageOf } from "../game/showdownView";
 import { ZOOM_IN_MS } from "../game/verdictMoment";
@@ -209,9 +209,19 @@ export function ghostFloatY(tSec: number, reduced: boolean): number {
   return reduced ? GHOST_BASE_Y : GHOST_BASE_Y + Math.sin(2 * tSec) * GHOST_BOB_Y;
 }
 
-/** 단위 좌표 발 위치의 무대 위 높이: 무대 윗면 반경 1.18 안(경계 포함)이면 0.29, 아니면 0 */
-export function stageLiftY(pos: { x: number; z: number }): number {
-  return Math.hypot(pos.x - STAGE_SPOT.x / UNIT, pos.z - STAGE_SPOT.z / UNIT) <= STAGE_TOP_R ? STAGE_TOP_Y : 0;
+/**
+ * 맵별 무대 윗면 표(월드 단위, MAP-06 D-22): 재즈 바 반경 1.18·높이 0.29(STAGE_TOP_R·STAGE_TOP_Y), 광장 위 단 반경 1.05·높이 0.46.
+ * 맵을 늘리면 한 줄을 더한다 — Record 라 빠뜨리면 컴파일이 실패한다
+ */
+export const STAGE_TOPS: Readonly<Record<MapId, { r: number; y: number }>> = {
+  bar: { r: STAGE_TOP_R, y: STAGE_TOP_Y },
+  plaza: { r: 1.05, y: 0.46 },
+};
+
+/** 단위 좌표 발 위치의 무대 위 높이: 그 맵의 무대 윗면 반경 안(경계 포함)이면 윗면 높이, 아니면 0. 맵 id 를 안 주면 재즈 바(0.29, 반경 1.18) */
+export function stageLiftY(pos: { x: number; z: number }, mapId: MapId = "bar"): number {
+  const top = STAGE_TOPS[mapId];
+  return Math.hypot(pos.x - STAGE_SPOT.x / UNIT, pos.z - STAGE_SPOT.z / UNIT) <= top.r ? top.y : 0;
 }
 
 /**

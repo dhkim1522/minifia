@@ -1161,7 +1161,7 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
       }
       alpha = Math.min(alpha, fade);
       // 높이: 등장 낙하 + (장면이 있을 때) 무대 위 0.29 + 유령 떠다님 + 처형 떠오름
-      const y = lift + (look === null ? 0 : stageLiftY(at)) + (a.ghost ? ghostFloatY(now / 1000, reduced) : 0) + rise;
+      const y = lift + (look === null ? 0 : stageLiftY(at, mapId)) + (a.ghost ? ghostFloatY(now / 1000, reduced) : 0) + rise;
       a.handle.root.scale.setScalar(a.base * scale);
       a.handle.root.position.set(at.x, y, at.z);
       a.headY = y + a.handle.update(dt, now / 1000, moving).headY * scale;
