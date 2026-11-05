@@ -3,7 +3,10 @@ import { describe, expect, it } from "vitest";
 import type { ServerMessage } from "../../shared/protocol";
 import { BAR_MAP, cellCenterFx, isWalkable, walkableCells } from "../../shared/game/map";
 import { PLAZA_MAP } from "../../shared/game/mapPlaza";
-import { editRoom, lastViewOf, mark, moveAs, seat, send, settle, startedGame, storedRoom, summary, worldFramesOf } from "./helpers";
+import { PLAYABLE_MAPS } from "../../shared/game/maps";
+import { PLAZA_SPAWNS } from "../../shared/game/mapPlaza";
+import type { MapId } from "../../shared/protocol";
+import { editRoom, endedGame4, lastViewOf, mark, moveAs, pause, seat, send, settle, startedGame, storedRoom, summary, worldFramesOf } from "./helpers";
 import type { Seated } from "./helpers";
 
 type State = Extract<ServerMessage, { t: "state" }>;
@@ -122,4 +125,98 @@ describe("방의 맵을 읽는 이동 판정 (D-22, T-11-20)", () => {
     const cell = { c: Math.floor((bEnd.x + 700) / 50), r: Math.floor((bEnd.z + 700) / 50) };
     expect(isWalkable(PLAZA_MAP, cell.c, cell.r)).toBe(true);
   }, 40_000);
+});
+
+describe("거절 응답은 사람·사유와 무관하게 같다 (L40, T-11-18·T-11-19)", () => {
+  /** 보낸 소켓은 state 정확히 한 프레임(오류 없음), 나머지는 0프레임. */
+  const expectQuietReject = (frames: ServerMessage[][], sender: number, phase: string): void => {
+    frames.forEach((f, i) => {
+      if (i !== sender) expect(summary(f)).toBe("[]");
+      else {
+        expect(summary(f)).toBe(`[state:${phase}]`);
+        expect(f.some((m) => m.t === "error")).toBe(false);
+      }
+    });
+  };
+
+  it("대기실: 손님의 유효한 값 · 방장의 허용 밖 값(plaza) · 손님의 허용 밖 값이 모두 같은 응답이고 mapChoice 는 그대로 random 이다", async () => {
+    const { s, socks } = await lobby();
+    for (const [from, map] of [[1, "bar"], [0, "plaza"], [2, "plaza"]] as const) {
+      const frames = await sendAll(socks, from, { t: "mapPick", map });
+      expectQuietReject(frames, from, "lobby");
+      expect(stateOf(frames[from]!).view.mapChoice).toBe("random");
+    }
+    expect(((await storedRoom(s.code)) as unknown as { mapChoice?: string }).mapChoice).toBeUndefined();
+  });
+
+  it("판 중(토론): 방장이 보내도 같은 응답 — 보낸 소켓 state 한 프레임, 다른 소켓 0프레임, 저장은 그대로", async () => {
+    const g = await startedGame("discussion", 3);
+    const before = JSON.stringify(((await storedRoom(g.code)) as unknown as { mapChoice?: string; map?: string }));
+    for (const [from, map] of [[0, "bar"], [1, "bar"], [0, "plaza"]] as const) {
+      const marks = g.socks.map((k) => mark(k));
+      send(g.socks[from]!, { t: "mapPick", map });
+      const frames: ServerMessage[][] = g.socks.map(() => []);
+      for (const i of [from, ...g.socks.map((_, k) => k).filter((k) => k !== from)]) frames[i] = await settle(g.socks[i]!, marks[i]!);
+      expectQuietReject(frames, from, "discussion");
+    }
+    expect(JSON.stringify(((await storedRoom(g.code)) as unknown as { mapChoice?: string; map?: string }))).toBe(before);
+  }, 40_000);
+
+  it("결과 단계(ended): 방장의 선택은 받아들여져 모든 소켓이 state 한 프레임을 받고, 손님의 선택은 조용히 버려진다", async () => {
+    const g = await endedGame4();
+    for (const a of g.actors) await settle(a.sock, 0); // 결과 기록(resultLog) 흐름이 가라앉은 뒤부터 센다
+    await pause(300);
+    for (const a of g.actors) await settle(a.sock, 0);
+    const host = g.actors.find((a) => a.seat === 0)!;
+    const guestIdx = g.actors.findIndex((a) => a.seat !== 0);
+    const socks = g.actors.map((a) => a.sock);
+    const hostIdx = g.actors.indexOf(host);
+    // 결과 기록 흐름(resultLog)은 이 시험의 관심사가 아니다 — 남은 조각이 섞여도 보지 않는다.
+    const noLog = (rows: ServerMessage[][]): ServerMessage[][] => rows.map((f) => f.filter((m) => m.t !== "resultLog"));
+    const rejected = noLog(await sendAll(socks, guestIdx, { t: "mapPick", map: "bar" }));
+    expectQuietReject(rejected, guestIdx, "ended");
+    const accepted = noLog(await sendAll(socks, hostIdx, { t: "mapPick", map: "bar" }));
+    for (const f of accepted) {
+      expect(summary(f)).toBe("[state:ended]");
+      expect(stateOf(f).view.mapChoice).toBe("bar");
+    }
+  }, 40_000);
+});
+
+describe("시작이 정한 map 은 모두에게 같다 (L42, D-21)", () => {
+  it("허용 맵에 광장을 열고(PLAYABLE_MAPS 우회) mapChoice plaza 로 시작하면 모든 소켓이 광장 입장 지점 8곳 안의 좌표로 snap 을 받고 view.map 이 plaza 다", async () => {
+    const mutable = PLAYABLE_MAPS as MapId[];
+    const s = await seat(3, 0);
+    const socks = [s.host, ...s.guests.map((g) => g.sock)];
+    for (const k of socks) await settle(k, 0);
+    await editRoom(s.code, (room) => ({ ...room, mapChoice: "plaza" }));
+    const marks = socks.map((k) => mark(k));
+    mutable.push("plaza");
+    try {
+      send(s.host, { t: "start" });
+      const out: ServerMessage[][] = [];
+      for (let i = 0; i < socks.length; i += 1) out.push(await settle(socks[i]!, marks[i]!));
+      const spots = new Set(PLAZA_SPAWNS.map((p) => `${Math.round(p.x * 100)},${Math.round(p.z * 100)}`));
+      for (const f of out) {
+        const states = f.filter((m): m is State => m.t === "state");
+        expect(states.length).toBeGreaterThan(0);
+        expect(states.every((m) => m.view.map === "plaza")).toBe(true);
+        const snaps = f.filter((m): m is Extract<ServerMessage, { t: "world"; k: "snap" }> => m.t === "world" && m.k === "snap");
+        expect(snaps.length).toBe(1);
+        const snap = snaps[0]!;
+        expect(snap.ents.length).toBe(socks.length);
+        for (const e of snap.ents) {
+          const x = e.p[e.p.length - 2]!;
+          const z = e.p[e.p.length - 1]!;
+          expect(spots.has(`${x},${z}`), `seat ${e.s} at ${x},${z}`).toBe(true);
+        }
+        // state 다음에 snap 이 온다(handleTestReset 과 같은 순서)
+        expect(f.findIndex((m) => m.t === "state")).toBeLessThan(f.findIndex((m) => m.t === "world" && m.k === "snap"));
+      }
+      expect(((await storedRoom(s.code)) as unknown as { map?: string }).map).toBe("plaza");
+    } finally {
+      mutable.splice(mutable.indexOf("plaza"), 1);
+    }
+    expect([...PLAYABLE_MAPS]).toEqual(["bar"]);
+  });
 });

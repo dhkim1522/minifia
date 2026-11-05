@@ -1642,3 +1642,51 @@ describe("방 연속성 프레임 전수 (D-14·D-17·D-18, L43)", () => {
     });
   });
 });
+
+describe("맵 선택 프레임 전수 (D-20·D-21, L40·L42·L44)", () => {
+  const stateFrames = (sock: TestSocket): Array<Extract<ServerMessage, { t: "state" }>> =>
+    framesOf(sock).filter((m): m is Extract<ServerMessage, { t: "state" }> => m.t === "state");
+
+  it("대기실부터 시작 직전까지 모든 state 프레임에 map 키가 없고 mapChoice 만 있다. 시작 뒤에는 신분(시민·경찰·의사·마피아·유령)과 무관하게 모두 같은 map 이고, 새 view 경로는 mapChoice·map 둘뿐이다", { timeout: 90_000 }, async () => {
+    const room = await seat(5, 0);
+    const socks = [room.host, ...room.guests.map((g) => g.sock)];
+    for (const sock of socks) await flush(sock);
+    // 방장이 고른 값은 모두에게 간다 — 손님이 보낸 값은 아무 데도 닿지 않는다.
+    send(room.guests[0]!.sock, { t: "mapPick", map: "bar" });
+    send(room.host, { t: "mapPick", map: "bar" });
+    for (const sock of socks) await flush(sock);
+    for (const sock of socks) {
+      expect(lastViewOf(sock).mapChoice).toBe("bar");
+      for (const m of stateFrames(sock)) expect("map" in m.view).toBe(false);
+    }
+    send(room.host, { t: "start" });
+    for (const sock of socks) await nextFrame(sock, (m) => m.t === "state" && m.view.phase === "assigning");
+    await advanceTo(room.code, socks, "dayAnnounce");
+    for (const sock of socks) await flush(sock);
+    const actors = actorsOf(room);
+    const g: Game = { code: room.code, socks, actors };
+    await advanceTo(room.code, socks, "discussion");
+    for (const sock of socks) await flush(sock);
+    const ghost = actors.find((a) => a.seat !== 0 && a.role === "citizen") ?? actors.find((a) => a.seat !== 0)!;
+    await ghostsOf(g, [ghost.seat]);
+
+    const mapOfRole = new Map<string, Set<string>>();
+    for (const a of actors) {
+      const v = lastViewOf(a.sock);
+      const key = a.seat === ghost.seat ? "ghost" : a.role;
+      mapOfRole.set(key, (mapOfRole.get(key) ?? new Set()).add(`${v.map}|${v.mapChoice}`));
+    }
+    expect([...mapOfRole.values()].map((set) => [...set].join(",")).every((x) => x === "bar|bar")).toBe(true);
+    expect(mapOfRole.size).toBeGreaterThanOrEqual(3); // 신분이 실제로 섞여 있다(마피아·경찰·의사·시민 중 최소 셋 + 유령)
+
+    // 모든 소켓의 모든 프레임: map 은 시작한 단계의 state 에만 있고, `.view.map*` 경로는 정확히 두 개다.
+    const mapPaths = new Set<string>();
+    for (const sock of socks) {
+      for (const m of framesOf(sock)) {
+        for (const path of keyPaths(m)) if (path.startsWith(".view.map")) mapPaths.add(path);
+        if (m.t === "state") expect("map" in m.view).toBe(m.view.phase !== "lobby");
+      }
+    }
+    expect([...mapPaths].sort()).toEqual([".view.map", ".view.mapChoice"]);
+  });
+});
