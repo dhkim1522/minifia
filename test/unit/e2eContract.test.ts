@@ -423,7 +423,7 @@ describe("11페이즈 결과 화면 E2E 표식·표(11-05)", () => {
   });
 
   it("기록 탭 카드 기하가 앱과 같다 (11-11): 카드 72×112 · 간격은 --space-sm · 표식은 컴포넌트에 있다", () => {
-    const css = readFileSync(new URL("src/styles/v2.css", root), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+    const css = readFileSync(new URL("src/styles/result.css", root), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
     const body = (sel: string): string => [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].find((m) => (m[1] ?? "").trim() === sel)?.[2] ?? "";
     const card = body(".mf-tl__card");
     expect(card).toContain(`width: ${r.TIMELINE_CARD.w}px`);
