@@ -26,3 +26,23 @@
 
 /* iOS 가 키보드를 위해 화면을 위로 밀면 헤더 계열이 보이는 영역 맨 위에 머문다 */
 .mf-result__scrim, .mf-result__header, .mf-result .mv-toast { transform: translateY(var(--mf-vv-top, 0px)); }
+
+/* 승리 알림(4600~5200, A-1): 가운데 한 줄 36px + 아이콘 56, 배경 어둡게 80%. 시민 승리는 놋쇠 아이콘, 마피아 승리는 진홍 아이콘. 터치를 막지 않는다(건너뛰기 탭이 통과한다). opacity 만 쓴다 */
+.mf-result__announce { position: absolute; inset: 0; z-index: calc(var(--z-toast) + 5); box-sizing: border-box; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-sm); padding: 0 var(--space-md); pointer-events: none; background: color-mix(in srgb, var(--night-950) 80%, transparent); animation: mf-result-announce 600ms var(--ease-out) both; }
+.mf-result__announce-icon { flex: none; color: var(--brass-400); filter: drop-shadow(0 2px 6px color-mix(in srgb, var(--night-950) 70%, transparent)); }
+.mf-result__announce-icon.is-mafia { color: var(--crimson-400); }
+.mf-result__announce-text { display: block; max-width: 100%; text-align: center; font-family: var(--font-ui); font-size: 36px; line-height: 1.2; font-weight: 700; color: var(--gray-50); text-shadow: var(--shadow-text); word-break: keep-all; overflow-wrap: anywhere; }
+@keyframes mf-result-announce {
+  0% { opacity: 0; }
+  15% { opacity: 1; }
+  85% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+/* 직업 칩 뒤집힘(연출 마운트만): 뒤집힐 때 transform 0.3초. 최종 상태로 곧바로 열린 마운트·모션 줄이기는 없다 */
+.mf-result[data-reveal="true"] .mv-rolechip { animation: mf-chip-flip 300ms var(--ease-out) both; }
+@keyframes mf-chip-flip {
+  from { transform: rotateY(90deg) scale(0.8); }
+  to { transform: rotateY(0deg) scale(1); }
+}
+@media (prefers-reduced-motion: reduce) { .mf-result .mv-rolechip { animation: none; } .mf-result__announce { animation: none; } }

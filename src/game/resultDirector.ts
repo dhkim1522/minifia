@@ -120,3 +120,59 @@ export function holdSnap(slots: Record<number, readonly [number, number]>, t0: n
     .sort((a, b) => a - b)
     .map((s) => ({ s, p: [slots[s]![0], slots[s]![1]], t0, v: 0 }));
 }
+
+/**
+ * 시각 t(연출 시계 ms)의 상태 — 시간표 표(UI-SPEC A-1). 단계 이름은 구간 넷 + final:
+ * gather [0,1200) · flip [1200,4600) · light [4600,5200) · announce [5200,5600) · final [5600,).
+ * 좌석 오름차순 i 번째가 1200+400i 에 뒤집히고 직업 의상을 입는다. 4600 에 이긴 팀 조명·진 팀 어둠·박수 대상(최대 CLAP_MAX)·승리 알림이 켜지고
+ * 5200 에 알림이 꺼지며 5600 부터 헤더 제목이 승리 한 줄이 된다. 걷기(모임)는 화면 몫이고(walkSnap) 여기에는 걷는 중이라는 값만 단계 gather 로 있다.
+ */
+export function stateAt(t: number, cast: readonly CastMember[], winner: GameWinner): ResultState {
+  const tl = RESULT_TIMELINE;
+  const at = Math.max(0, t);
+  if (at >= tl.ceremonyStartMs) return finalState(cast, winner);
+  const stage: ResultStage = at < tl.flipStartMs ? "gather" : at < tl.lightAtMs ? "flip" : at < tl.announceEndMs ? "light" : "announce";
+  const count = at < tl.flipStartMs ? 0 : Math.min(cast.length, Math.floor((at - tl.flipStartMs) / tl.flipGapMs) + 1);
+  const flipped = cast.slice(0, count).map((c) => c.seat);
+  const lit = at >= tl.lightAtMs;
+  const winners = cast.filter((c) => c.team === winningTeam(winner)).map((c) => c.seat);
+  return {
+    stage,
+    flipped,
+    costumes: costumeOf(cast, flipped),
+    dimmed: lit ? losersOf(cast, winner) : [],
+    lit,
+    clap: stage === "light" ? winners.slice(0, CLAP_MAX) : [],
+    announce: stage === "light",
+    title: "result",
+  };
+}
+
+/** 상태가 바뀌는 시각(오름차순, 중복 없음). 화면은 마크마다 setTimeout 으로 단계를 바꾼다 — 프레임마다 다시 그리지 않는다. n = 참가자 수 */
+export function markTimes(n: number): number[] {
+  const tl = RESULT_TIMELINE;
+  const times = new Set<number>([0, tl.lightAtMs, tl.announceEndMs, tl.ceremonyStartMs]);
+  for (let i = 0; i < n; i++) times.add(tl.flipStartMs + tl.flipGapMs * i);
+  return [...times].sort((a, b) => a - b);
+}
+
+/**
+ * 모임 걷기 snap 의 구간들: 시작 위치(월드 단위, 스토어에 있던 마지막 위치)에서 자리까지 gatherMs 안에 도착한다.
+ * 시작 위치가 없거나 이미 자리면 한 점 구간(자리 그대로). p 는 고정소수점 정수, v 는 도착이 gatherMs 를 넘지 않게 올림한 고정소수점 거리/초다. 모두 같은 t0 다
+ */
+export function walkSnap(slots: Record<number, readonly [number, number]>, starts: Readonly<Record<number, { x: number; z: number } | undefined>>, t0: number): WorldSeg[] {
+  const seconds = RESULT_TIMELINE.gatherMs / 1000;
+  return Object.keys(slots)
+    .map(Number)
+    .sort((a, b) => a - b)
+    .map((s) => {
+      const [sx, sz] = slots[s]!;
+      const from = starts[s];
+      if (from === undefined) return { s, p: [sx, sz], t0, v: 0 };
+      const x0 = Math.round(from.x * 100);
+      const z0 = Math.round(from.z * 100);
+      const dist = Math.hypot(sx - x0, sz - z0);
+      if (dist === 0) return { s, p: [sx, sz], t0, v: 0 };
+      return { s, p: [x0, z0, sx, sz], t0, v: Math.max(1, Math.ceil(dist / seconds)) };
+    });
+}

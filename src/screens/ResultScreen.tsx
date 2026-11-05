@@ -1,5 +1,6 @@
-import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
-import type { ClientMessage, PhaseId, RoomView } from "../../shared/protocol";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { isAlive } from "../../shared/game/alive";
+import type { ClientMessage, EmoteId, PhaseId, RoomView } from "../../shared/protocol";
 import { Button } from "../components/Button";
 import { ConfirmSheet } from "../components/ConfirmSheet";
 import { Icon } from "../components/Icon";
@@ -8,12 +9,13 @@ import { TopToast, useTopToast } from "../components/v2/TopToast";
 import { V2Icon } from "../components/v2/V2Icon";
 import { WorldStage } from "../components/WorldStage";
 import { LOG_H_KB } from "../game/chatUi";
-import { castOf, finalState, holdSnap, slotsFor } from "../game/resultDirector";
+import { castOf, holdSnap, markTimes, RESULT_TIMELINE, slotsFor, stateAt, walkSnap } from "../game/resultDirector";
 import type { ResultState } from "../game/resultDirector";
 import { RESULT_TEXT } from "../game/verdict";
 import type { ChatStore } from "../net/chatStore";
 import { useChat } from "../net/useChat";
 import { useMapInsets } from "../net/useMapInsets";
+import { useReducedMotion } from "../net/useReducedMotion";
 import { GATHER_CENTER } from "../world/camera";
 import type { SceneLook, SeatLook } from "../world/presence";
 import type { WorldStore } from "../world/store";
@@ -73,23 +75,98 @@ function sessionStore(): Storage | null {
   }
 }
 
-export function ResultScreen({ view, store, chat, send, canSend, offset, epoch, onExit }: ResultScreenProps) {
+/** 박수 큐 한 묶음(WorldStage emoteCues). nonce 가 새로 보일 때마다 한 번 재생한다 */
+type ClapCues = readonly { seat: number; id: EmoteId; nonce: number }[];
+
+export function ResultScreen({ view, store, chat, send, canSend, offset, epoch, onExit, arrivedFrom }: ResultScreenProps) {
   const { result } = view;
   const toast = useTopToast();
   const { show } = toast;
   const [leaveOpen, setLeaveOpen] = useState(false);
   const { rootRef, headerRef, panelRef, inputRef, kbOpen, logH, stageInsets } = useMapInsets();
 
-  const cast = useMemo(() => castOf(view), [view.players, result.seats]); // eslint-disable-line react-hooks/exhaustive-deps
+  // 출연자 표는 내용이 바뀔 때만 다시 만든다 — 같은 결과가 다시 와도(닉네임·연결 상태만 바뀐 view) 시계·자리 snap 을 다시 시작하지 않는다
+  const castKey = `${result.seats.map((s) => `${s.seat}:${s.job}`).join(",")}|${view.players.map((p) => `${p.seat}:${isAlive(p) ? 1 : 0}`).join(",")}`;
+  const cast = useMemo(() => castOf(view), [castKey]); // eslint-disable-line react-hooks/exhaustive-deps
   const winner = result.winner;
-  const state = useMemo(() => finalState(cast, winner), [cast, winner]);
+  const tl = RESULT_TIMELINE;
+
+  // 연출 시계(각자 폰 안): 마운트 때 한 번 정한 연출 여부. 직전 단계가 처형·아침인 마운트에서만 시간표를 돈다. 재접속·처음 마운트·모션 줄이기는 곧바로 최종 상태다(이후 view 가 다시 와도 되돌아가지 않는다)
+  const reduced = useReducedMotion();
+  const [reveal] = useState<boolean>(() => !reduced && (arrivedFrom === "execution" || arrivedFrom === "morning"));
+  // mark = 마지막으로 닿은 시간표 시각. 상태는 mark 의 순수 함수(stateAt)라 프레임마다 다시 그리지 않고 표시각마다 한 번 바꾼다
+  const [mark, setMark] = useState<number>(reveal ? 0 : tl.ceremonyStartMs);
+  const [skipped, setSkipped] = useState(false);
+  const [cues, setCues] = useState<ClapCues>([]);
+  const markRef = useRef(mark);
+  const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const nonce = useRef(0);
+
+  const state = useMemo(() => stateAt(mark, cast, winner), [mark, cast, winner]);
   const scene = useMemo(() => sceneOf(cast, state), [cast, state]);
 
-  // 최종 자리: 모두 자기 둘레 자리에 선 한 점 구간 snap. 런타임이 만들어지기 전(레이아웃 효과)에 먹여 첫 프레임부터 서 있다. 새 연결(epoch)이면 다시 먹인다
+  // 위치: 모두 자기 둘레 자리로. 연출이면 스토어의 마지막 위치에서 걷는 구간(1200ms), 아니면 한 점 구간이다. 런타임이 만들어지기 전(레이아웃 효과)에 먹여 첫 프레임부터 맞다.
+  // 서버 상태가 아니라 이 폰의 연출이다 — 서버 시각 기준(t0 = 지금 + offset)으로 만들어 런타임이 서버 구간과 똑같이 그린다. 새 연결(epoch)이면 다시 먹인다
   const slots = useMemo(() => slotsFor(cast), [cast]);
+  const offsetRef = useRef(offset);
+  offsetRef.current = offset; // 시계 보정이 흔들려도 snap 을 다시 먹이지 않는다(먹일 때만 읽는다)
+  const feed = useCallback(
+    (walk: boolean) => {
+      const t0 = Date.now() + offsetRef.current;
+      let ents;
+      if (walk) {
+        const starts: Record<number, { x: number; z: number } | undefined> = {};
+        for (const seat of Object.keys(slots).map(Number)) starts[seat] = store.positionOf(seat, t0) ?? undefined;
+        ents = walkSnap(slots, starts, t0);
+      } else {
+        ents = holdSnap(slots, t0);
+      }
+      store.applyFrame({ t: "world", k: "snap", at: t0, ents }, Math.max(store.currentEpoch(), epoch));
+    },
+    [store, slots, epoch],
+  );
   useLayoutEffect(() => {
-    store.applyFrame({ t: "world", k: "snap", at: Date.now() + offset, ents: holdSnap(slots, Date.now() + offset) }, Math.max(store.currentEpoch(), epoch));
-  }, [store, slots, epoch]); // eslint-disable-line react-hooks/exhaustive-deps
+    feed(reveal && markRef.current < tl.flipStartMs);
+  }, [feed]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 표시각마다 setTimeout 으로 단계를 바꾼다. 조명이 켜지는 순간 이긴 팀 박수 큐(최대 4)를 만든다(T-11-17)
+  const goto = useCallback(
+    (m: number) => {
+      markRef.current = m;
+      setMark(m);
+      const clap = stateAt(m, cast, winner).clap;
+      if (clap.length > 0) setCues(clap.map((seat) => ({ seat, id: "clap" as const, nonce: ++nonce.current })));
+    },
+    [cast, winner],
+  );
+  const schedule = useCallback(
+    (from: number) => {
+      for (const t of timers.current) clearTimeout(t);
+      timers.current = markTimes(cast.length)
+        .filter((m) => m > from)
+        .map((m) => setTimeout(() => goto(m), m - from));
+    },
+    [cast.length, goto],
+  );
+  useEffect(() => {
+    if (!reveal) return;
+    schedule(0);
+    goto(0);
+    return () => {
+      for (const t of timers.current) clearTimeout(t);
+      timers.current = [];
+    };
+    // 마운트 한 번: 연출은 처음 받은 결과에서만 돈다(이후 같은 result 가 다시 와도 시계를 다시 시작하지 않는다)
+  }, [reveal]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 건너뛰기(D-25): 4600 전의 무대 탭 한 번이면 4600 상태로 점프한다(전원 뒤집힘 + 조명, 승리 알림은 건너뜀). 남은 시간표는 이어진다. 4600 이후 탭은 아무 일 없다
+  const skip = useCallback(() => {
+    if (!reveal || markRef.current >= tl.lightAtMs) return;
+    schedule(tl.lightAtMs);
+    setSkipped(true);
+    feed(false);
+    goto(tl.lightAtMs);
+  }, [reveal, schedule, feed, goto]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 머리 위 직업 칩: 뒤집힌 사람만. 결과 화면의 ended 경로에서만 만든다(산 사람 장면 표는 건드리지 않는다)
   const jobBySeat = useMemo(() => new Map(cast.map((c) => [c.seat, c.job])), [cast]);
@@ -121,7 +198,7 @@ export function ResultScreen({ view, store, chat, send, canSend, offset, epoch, 
 
   const title = RESULT_TEXT.title[state.title];
   return (
-    <main ref={rootRef} className="mf-root mf-result" data-result-stage={state.stage} data-winner={winner} data-kb-open={kbOpen ? "true" : undefined}>
+    <main ref={rootRef} className="mf-root mf-result" data-result-stage={state.stage} data-reveal={String(reveal)} data-winner={winner} data-kb-open={kbOpen ? "true" : undefined}>
       <WorldStage
         view={view}
         store={store}
@@ -133,6 +210,8 @@ export function ResultScreen({ view, store, chat, send, canSend, offset, epoch, 
         canWalk={false}
         tagProps={tagProps}
         onCostumes={onCostumes}
+        onStageTap={skip}
+        emoteCues={cues}
         onNotice={(text) => show(text)}
         onLeave={() => setLeaveOpen(true)}
       />
@@ -146,6 +225,13 @@ export function ResultScreen({ view, store, chat, send, canSend, offset, epoch, 
         <span className="mf-result__header-gap" aria-hidden="true" />
       </header>
       <TopToast {...toast.props} />
+      {/* 4600~5200 중앙 승리 알림: 36px 한 줄 + 아이콘, 배경 어둡게 80%, 터치 통과. 읽기용 안내는 RoomScreen 이 이미 하므로 live 영역이 아니다(role img) */}
+      {state.announce && !skipped ? (
+        <div className="mf-result__announce" data-result-announce="" data-winner={winner} role="img" aria-label={RESULT_TEXT.title[winner]}>
+          <V2Icon name={winner === "mafiaWin" ? "roleMafia" : "roleCitizen"} size={56} className={winner === "mafiaWin" ? "mf-result__announce-icon is-mafia" : "mf-result__announce-icon"} />
+          <span className="mf-result__announce-text">{RESULT_TEXT.title[winner]}</span>
+        </div>
+      ) : null}
       <section ref={panelRef} className={kbOpen ? "mf-result__panel mf-result__panel--kb" : "mf-result__panel"} data-world-panel="" data-result-panel="">
         <ChatPanel
           messages={binding.messages}

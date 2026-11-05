@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import { phaseKey } from "../../shared/game/audience";
-import type { ClientMessage, PublicPlayer, RoomView } from "../../shared/protocol";
+import type { ClientMessage, EmoteId, PublicPlayer, RoomView } from "../../shared/protocol";
 import { MOVE_COORD_LIMIT } from "../../shared/protocol";
 import { useReducedMotion } from "../net/useReducedMotion";
 import { HEADER_BOTTOM, PANEL_HEIGHT } from "../world/camera";
@@ -85,6 +85,11 @@ export interface WorldStageProps {
    * canWalk 가 거짓이어도 부른다(걷기 요청과 무관한 알림이다)
    */
   onStageTap?(): void;
+  /**
+   * 화면 연출 동작 큐(결과 화면의 박수, 11-05): 각 항목의 nonce 가 새로 보일 때마다 그 좌석의 캐릭터가 동작을 한 번 재생한다(deny·surprise 와 같은 규칙 — 처음 마운트 때의 값은 지난 일이다).
+   * 서버 동작과 같은 재생 목록·동시 상한을 쓰고 서버로는 아무것도 보내지 않는다
+   */
+  emoteCues?: readonly { seat: number; id: EmoteId; nonce: number }[];
   /** 결과 장면에서 런타임이 실제로 입힌 직업 의상 표(좌석 → 의상 id)와 어두워진 좌석이 바뀔 때만 불린다(E2E 훅용, 11-05) */
   onCostumes?(costumes: Readonly<Record<number, string>>, dimmed: readonly number[]): void;
   /** 캔버스·입력 면 위, 이름표 층 아래에 깔리는 장식(시민 편 긴장 비네트). 터치를 막지 않는 부품만 넣는다 */
@@ -258,6 +263,17 @@ export function WorldStage(props: WorldStageProps) {
     surpriseSeen.current = d.nonce;
     runtimeRef.current?.surprise(d.seat);
   }, [props.surprise]);
+
+  // 화면 연출 동작 큐: 새로 보이는 (좌석, nonce) 마다 한 번. 처음 마운트 때의 값은 이미 본 것으로 친다
+  const cuesSeen = useRef(new Set((props.emoteCues ?? []).map((c) => `${c.seat}:${c.nonce}`)));
+  useLayoutEffect(() => {
+    for (const c of props.emoteCues ?? []) {
+      const key = `${c.seat}:${c.nonce}`;
+      if (cuesSeen.current.has(key)) continue;
+      cuesSeen.current.add(key);
+      runtimeRef.current?.emote(c.seat, c.id);
+    }
+  }, [props.emoteCues]);
 
   // 탭 하나: 링을 바로 띄우고 목적지 정수 두 개만 보낸다. 내 캐릭터는 같은 길로 바로 걷고 서버 구간이 오면 맞춘다(결정 0059).
   const onTap = (clientX: number, clientY: number): void => {

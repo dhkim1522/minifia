@@ -339,7 +339,7 @@ describe("E2E 훅 window.__mfResult (11-05)", () => {
     expect(r.container.querySelector('[data-result-stage="final"]')).not.toBeNull();
     // 루트 속성에 역할·의상을 싣지 않는다 — 직업은 칩([data-role-chip])의 속성과 접근성 이름뿐이다
     const root = r.container.querySelector("main")!;
-    expect(root.getAttributeNames().sort()).toEqual(["class", "data-result-stage", "data-winner"]);
+    expect(root.getAttributeNames().sort()).toEqual(["class", "data-result-stage", "data-reveal", "data-winner"]);
     r.unmount();
     expect((window as { __mfResult?: unknown }).__mfResult).toBeUndefined();
   });
@@ -481,7 +481,7 @@ describe("결과 시간표 연출 (A-1)", () => {
       expect(costumeCount()).toBe(i + 1);
     }
     expect(chips(r.container).map((c) => c.dataset.roleChip)).toEqual(["citizen", "police", "doctor", "mafia", "citizen"]);
-    advance(2599); // 3600 → 4599
+    advance(1799); // 2800 → 4599
     expect(stageName(r.container)).toBe("flip");
     expect(dimCount()).toBe(0);
     expect(scene().pin).toBeNull();
