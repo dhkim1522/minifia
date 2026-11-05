@@ -3,17 +3,15 @@
 import type { MapChoice, MapId } from "../protocol";
 import { BAR_MAP } from "./map";
 import type { MapDef } from "./map";
+import { PLAZA_MAP } from "./mapPlaza";
 import type { RoomState } from "./room";
 
-/**
- * 맵 표. 이 계획의 첫 태스크는 bar 만 두고 mapOf 가 표에 없는 id 를 bar 로 돌려준다.
- * 광장 이동 데이터(mapPlaza.ts)를 만드는 다음 태스크가 이것을 `Record<MapId, MapDef>` 로 좁히고 plaza 를 채운다.
- */
-export const MAPS: Partial<Record<MapId, MapDef>> = { bar: BAR_MAP };
+/** 맵 표(결정 D-22). 맵을 늘리려면 MapId 에 id 를 더하고 여기에 한 줄을 등록한다 — Record 라 빠뜨리면 컴파일이 실패한다. */
+export const MAPS: Readonly<Record<MapId, MapDef>> = { bar: BAR_MAP, plaza: PLAZA_MAP };
 
-/** id 의 맵. 표에 없으면 bar. */
+/** id 의 맵. */
 export function mapOf(id: MapId): MapDef {
-  return MAPS[id] ?? BAR_MAP;
+  return MAPS[id];
 }
 
 /**

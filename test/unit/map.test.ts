@@ -960,8 +960,8 @@ describe("시계탑 광장 장애물 원문 (plaza.js)", () => {
     expect(O.length).toBe(12);
     expect(O.every((o) => o.floor)).toBe(true);
   });
-  it("연단: 반지름 1.45 높이 0.46 @ (0,0)", () => {
-    expect(circles.find((c) => c.x === 0 && c.z === 0)).toMatchObject({ r: 1.45, y0: 0, y1: 0.46 });
+  it("연단: 막힘 반지름 1.4(아래 단 윗면, 밑면은 1.45) 높이 0.46 @ (0,0)", () => {
+    expect(circles.find((c) => c.x === 0 && c.z === 0)).toMatchObject({ r: 1.4, y0: 0, y1: 0.46 });
   });
   it("벤치 2개: 1.4×0.42 @ (4.6,−3.4) 회전 0 · (−3.4,4.6) 회전 π/2, 높이 0.72", () => {
     const b = rects.filter((r) => r.w === 1.4);

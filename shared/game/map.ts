@@ -1,8 +1,6 @@
 // 재즈 바 이동 격자와 경로(결정 0044-17: 클라이언트는 목적지만, 서버가 경로를 정한다).
 // 현재 시각·난수를 읽지 않고, 삼각함수·hypot 없이 정수·제곱근·사칙연산만 쓴다(RESEARCH R4) — 서버와 클라이언트가 같은 값을 얻게.
 
-import type { MapId } from "../protocol";
-
 /** 1 월드 단위 = 100 (고정소수점, 와이어·저장 공통) */
 export const UNIT = 100;
 /** 격자 한 칸(월드 단위) */
@@ -25,7 +23,8 @@ export interface Spawn {
 }
 
 export interface MapDef {
-  id: MapId;
+  /** protocol.ts 의 MapId 와 같은 합집합이다 — 이 파일은 import 가 없는 순수 모듈이라(소스 규약 시험) 타입을 되풀이해 적는다. 어긋나면 maps.ts 의 MAPS(Record<MapId, MapDef>)가 컴파일에서 잡는다. */
+  id: "bar" | "plaza";
   size: number;
   mask: Uint8Array;
   spawns: readonly Spawn[];
