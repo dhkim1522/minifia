@@ -26,6 +26,7 @@ vi.mock("../../src/world/runtime", async (importOriginal) => {
       return {
         start: () => Promise.resolve(),
         syncPlayers: () => {},
+        stopAllEmotes: () => {},
         deny: () => {},
         surprise: () => {},
         setScene: (look: unknown) => rt.scenes.push(look),

@@ -23,6 +23,7 @@ vi.mock("../../src/world/runtime", async (importOriginal) => {
     createWorldRuntime: () => ({
       start: () => Promise.resolve(),
       syncPlayers: () => {},
+      stopAllEmotes: () => {},
       deny: () => {},
       surprise: (seat: number) => rt.surprises.push(seat),
       setScene: () => {},
