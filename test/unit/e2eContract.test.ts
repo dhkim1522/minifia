@@ -37,6 +37,7 @@ import * as e2eLib from "../../scripts/e2e/lib.mjs";
 import * as perfRun from "../../scripts/perf-run.mjs";
 // @ts-expect-error -- 선언 없는 스크립트 모듈
 import * as resultE2e from "../../scripts/e2e/result.mjs";
+import { CEREMONY_TITLE } from "../../src/game/awardText";
 import { RESULT_TEXT } from "../../src/game/verdict";
 import { JOB_OUTFIT } from "../../src/world/ghostOutfit";
 import { CHAT_PANEL_EXTRA as RESULT_CHAT_EXTRA } from "../../src/game/chatUi";
@@ -357,6 +358,8 @@ describe("11페이즈 결과 화면 E2E 표식·표(11-05)", () => {
     RESULT_JOB_OUTFIT: Record<string, string>;
     RESULT_WIN_TITLE: Record<string, string>;
     RESULT_PANEL_H: { short: number; tall: number; tallRoomMinH: number };
+    AWARD_PLATE: { maxW: number; sideMargin: number; h: number; topGap: number; belowMin: number; float: number; floatRight: number; floatGap: number };
+    AWARD_CEREMONY_TITLE: string;
   };
   const root = new URL("../../", import.meta.url);
   const tracked = execFileSync("git", ["ls-files", "src"], { cwd: root, encoding: "utf8" })
@@ -365,7 +368,7 @@ describe("11페이즈 결과 화면 E2E 표식·표(11-05)", () => {
   const sources = tracked.map((f) => ({ f, text: readFileSync(new URL(f, root), "utf8") }));
 
   it("RESULT_MARKERS 가 git 이 추적하는 src/ 파일 어딘가에 있다(표식 이름 오타 방지)", () => {
-    expect(r.RESULT_MARKERS).toEqual(["data-result-stage", "data-result-panel", "data-result-announce", "__mfResult", "data-result-tab", "data-result-dot", "data-result-divider"]);
+    expect(r.RESULT_MARKERS).toEqual(["data-result-stage", "data-result-panel", "data-result-announce", "__mfResult", "data-result-tab", "data-result-dot", "data-result-divider", "data-award-plate", "data-award-id", "data-float-count"]);
     const missing = r.RESULT_MARKERS.filter((m) => !sources.some((s) => s.text.includes(m)));
     expect(missing).toEqual([]);
   });
@@ -382,6 +385,16 @@ describe("11페이즈 결과 화면 E2E 표식·표(11-05)", () => {
     expect(has("components/v2/ResultPanel.tsx", "data-result-divider")).toBe(true);
     expect(has("screens/ResultScreen.tsx", "patch({ tab })")).toBe(true);
     expect(has("world/testHooks.ts", "tab: string")).toBe(true);
+    // 11-09: 시상식 표식 — 패(data-award-plate·data-award-id)·떠 있는 [넘기기](data-float="skip")·진행 숫자·훅 awards/shown
+    expect(has("components/v2/AwardPlate.tsx", "data-award-plate")).toBe(true);
+    expect(has("components/v2/AwardPlate.tsx", "data-award-id")).toBe(true);
+    expect(has("components/v2/FloatAction.tsx", "data-float-count")).toBe(true);
+    expect(has("components/v2/FloatAction.tsx", '"skip"')).toBe(true);
+    expect(has("screens/ResultScreen.tsx", 'kind="skip"')).toBe(true);
+    expect(has("screens/ResultScreen.tsx", "patch({ awards")).toBe(true);
+    expect(has("screens/ResultScreen.tsx", "patch({ shown")).toBe(true);
+    expect(has("world/testHooks.ts", "awards: [number, string][]")).toBe(true);
+    expect(has("world/testHooks.ts", "shown: number")).toBe(true);
   });
 
   it("탭 id 와 접근성 이름·구분선 꼴이 앱 상수와 같다 (11-07, E2E 사본이 어긋나지 않게)", () => {
@@ -395,6 +408,16 @@ describe("11페이즈 결과 화면 E2E 표식·표(11-05)", () => {
     expect(r.RESULT_PANEL_H.short).toBe(LOG_H_SHORT + RESULT_CHAT_EXTRA);
     expect(r.RESULT_PANEL_H.tall).toBe(LOG_H_TALL + RESULT_CHAT_EXTRA);
     expect(r.RESULT_PANEL_H.tallRoomMinH).toBe(TALL_ROOM_MIN_H);
+  });
+
+  it("시상식 기하·제목이 앱과 같다 (11-09): 패 폭 min(328, 폭 − 32)·높이 96, [넘기기] 지름 48·오른쪽 16, 헤더 '시상식'", () => {
+    const css = readFileSync(new URL("src/styles/result.css", root), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+    const plate = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].find((m) => (m[1] ?? "").trim() === ".mv-award")?.[2] ?? "";
+    expect(plate).toContain(`height: ${r.AWARD_PLATE.h}px`);
+    expect(plate).toContain(`min(${r.AWARD_PLATE.maxW}px, calc(100% - ${r.AWARD_PLATE.sideMargin}px))`);
+    expect(r.AWARD_PLATE.float).toBe(48);
+    expect(r.AWARD_PLATE.floatRight).toBe(16);
+    expect(r.AWARD_CEREMONY_TITLE).toBe(CEREMONY_TITLE);
   });
 });
 

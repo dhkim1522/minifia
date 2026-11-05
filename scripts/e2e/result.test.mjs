@@ -1,7 +1,7 @@
 // 결과 화면 E2E 순수 판정 단위 테스트 (11-05). 실행: node --test scripts/e2e/result.test.mjs
 import test from "node:test";
 import assert from "node:assert/strict";
-import { RESULT_JOB_OUTFIT, RESULT_MARKERS, RESULT_PANEL_H, RESULT_WIN_TITLE, RESULT_TAB_IDS, resultSkipChecks, resultStageChecks, resultTabChecks } from "./result.mjs";
+import { awardChecks, AWARD_PLATE, RESULT_JOB_OUTFIT, RESULT_MARKERS, RESULT_PANEL_H, RESULT_WIN_TITLE, RESULT_TAB_IDS, resultSkipChecks, resultStageChecks, resultTabChecks } from "./result.mjs";
 
 // 4명판 시민 승: 좌석 0 마피아(진 팀) · 1 시민 · 2 경찰 · 3 의사
 const good = () => ({
@@ -102,7 +102,7 @@ test("resultSkipChecks: 연출 구간에서 탭하면 light 이후 · 전원 칩
 });
 
 test("상수: 표식 목록·승리 한 줄·직업 의상 표", () => {
-  assert.deepEqual([...RESULT_MARKERS], ["data-result-stage", "data-result-panel", "data-result-announce", "__mfResult", "data-result-tab", "data-result-dot", "data-result-divider"]);
+  assert.deepEqual([...RESULT_MARKERS], ["data-result-stage", "data-result-panel", "data-result-announce", "__mfResult", "data-result-tab", "data-result-dot", "data-result-divider", "data-award-plate", "data-award-id", "data-float-count"]);
   assert.deepEqual({ ...RESULT_WIN_TITLE }, { citizenWin: "시민 승리", mafiaWin: "마피아 승리" });
   assert.deepEqual({ ...RESULT_JOB_OUTFIT }, { mafia: "mafia", police: "police", doctor: "doctor", citizen: "coat" });
 });
@@ -227,4 +227,111 @@ test("RT13: 접힌 상태의 무대 탭은 4600 이후로 건너뛴다", () => {
 
 test("RESULT_MARKERS 에 탭 표식이 더해졌다", () => {
   for (const m of ["data-result-tab", "data-result-dot", "data-result-divider"]) assert.ok(RESULT_MARKERS.includes(m), m);
+});
+
+// ---------- 11-09 시상식 판정 (AW1~AW10) ----------
+
+// 4명판 시민 승: 서버 정렬 = 진 팀(0 마피아) → 이긴 팀. 마지막 패(좌석 3)는 이긴 팀
+const awardsGood = () => ({
+  viewport: { w: 390, h: 844 },
+  stageTop: 62,
+  panelTop: 600,
+  plateBox: { top: 70, left: 31, width: 328, height: 96 },
+  floatBox: { left: 326, top: 480, width: 48, height: 48, bottom: 528 },
+  progress: ["1 / 4", "2 / 4", "3 / 4", "4 / 4"],
+  awards: [[0, "whiff"], [2, "detective"], [1, "talker"], [3, "survivor"]],
+  observed: ["whiff", "detective", "talker", "survivor"],
+  participants: 4,
+  winnerTeamSeats: [1, 2, 3],
+  winner: "citizenWin",
+  titleDuring: "시상식",
+  titleAfter: "시민 승리",
+  floatAfter: 0,
+  pause: { indexOpen: 0, indexLater: 0, waitedMs: 3000, floatHidden: true, plateKept: true, indexResumed: 1 },
+  costumesDuring: { 0: "mafia", 1: "coat", 2: "police", 3: "doctor" },
+  costumesAfter: {},
+  jobBySeat: { 0: "mafia", 1: "citizen", 2: "police", 3: "doctor" },
+});
+const awFailing = (over) => awardChecks({ ...awardsGood(), ...over }).filter((r) => !r.ok).map((r) => r.id);
+
+test("awardChecks: 정상 입력은 AW1~AW10 이 모두 통과한다", () => {
+  const rows = awardChecks(awardsGood());
+  assert.deepEqual(rows.map((r) => r.id), ["AW1", "AW2", "AW3", "AW4", "AW5", "AW6", "AW7", "AW8", "AW9", "AW10"]);
+  for (const r of rows) assert.equal(r.ok, true, `${r.id}: ${r.detail}`);
+});
+
+test("AW-PLATE 상수: 폭 min(328, 폭 − 32), 높이 96, 윗변 + 8, 패 아래 150", () => {
+  assert.deepEqual({ ...AWARD_PLATE }, { maxW: 328, sideMargin: 32, h: 96, topGap: 8, belowMin: 150, float: 48, floatRight: 16, floatGap: 8 });
+});
+
+test("AW1: 패 수가 참가자 수·훅 목록 길이와 다르면 AW1 이 실패한다", () => {
+  assert.deepEqual(awFailing({ participants: 5 }), ["AW1"]);
+  // 관찰한 패가 하나 모자라면 훅 목록 길이와도 다르고 순서 열도 짧아진다
+  assert.deepEqual(awFailing({ observed: ["whiff", "detective", "talker"] }), ["AW1", "AW2"]);
+});
+
+test("AW2: 관찰한 순서가 훅 순서와 다르면 AW2 만 실패한다", () => {
+  assert.deepEqual(awFailing({ observed: ["detective", "whiff", "talker", "survivor"] }), ["AW2"]);
+});
+
+test("AW3: 마지막 패가 이긴 팀이 아니면 AW3 만 실패한다", () => {
+  assert.deepEqual(awFailing({ winnerTeamSeats: [1, 2] }), ["AW3"]);
+});
+
+test("AW4(AW-PLATE): 폭·높이·윗변·가운데·패 아래 스테이지, 한 값씩 어긋나면 AW4 만 실패한다", () => {
+  assert.deepEqual(awFailing({ plateBox: { top: 70, left: 31, width: 300, height: 96 } }), ["AW4"]);
+  assert.deepEqual(awFailing({ plateBox: { top: 70, left: 31, width: 328, height: 80 } }), ["AW4"]);
+  assert.deepEqual(awFailing({ plateBox: { top: 80, left: 31, width: 328, height: 96 } }), ["AW4"]);
+  assert.deepEqual(awFailing({ plateBox: { top: 70, left: 20, width: 328, height: 96 } }), ["AW4"]);
+  assert.deepEqual(awFailing({ panelTop: 300 }), ["AW4"]); // 패 아래 134 < 150
+  // 작은 폰: 폭 − 32
+  const small = { viewport: { w: 360, h: 560 }, plateBox: { top: 70, left: 16, width: 328, height: 96 }, panelTop: 372, floatBox: { left: 296, top: 252, width: 48, height: 48, bottom: 300 } };
+  assert.deepEqual(awFailing(small), []); // 폭 360: 328 = min(328, 360 − 32), 372 − 166 = 206 ≥ 150
+  assert.deepEqual(awFailing({ ...small, panelTop: 300 }), ["AW4", "AW5"]); // 패 아래 134 < 150, 그리고 [넘기기]가 아래 칸에 걸림
+});
+
+test("AW5: [넘기기] 지름 48·오른쪽 16·아래 칸 자리, 한 값씩 어긋나면 AW5 만 실패한다", () => {
+  assert.deepEqual(awFailing({ floatBox: { left: 326, top: 480, width: 44, height: 48, bottom: 528 } }), ["AW5"]);
+  assert.deepEqual(awFailing({ floatBox: { left: 320, top: 480, width: 48, height: 48, bottom: 528 } }), ["AW5"]);
+  assert.deepEqual(awFailing({ floatBox: { left: 326, top: 530, width: 48, height: 48, bottom: 578 } }), ["AW5"]); // 아래 칸을 침범
+  assert.deepEqual(awFailing({ floatBox: null }), ["AW5"]);
+});
+
+test("AW6: 진행 숫자가 'k / n' 꼴이고 1씩 오르며 n 이 참가자 수", () => {
+  assert.deepEqual(awFailing({ progress: ["1 / 4", "2 / 4", "4 / 4", "5 / 4"] }), ["AW6"]);
+  assert.deepEqual(awFailing({ progress: ["1/4", "2 / 4", "3 / 4", "4 / 4"] }), ["AW6"]);
+  assert.deepEqual(awFailing({ progress: ["1 / 3", "2 / 3", "3 / 3", "4 / 3"] }), ["AW6"]);
+});
+
+test("AW7: 시상 중 '시상식', 끝난 뒤 승리 한 줄", () => {
+  assert.deepEqual(awFailing({ titleDuring: "결과" }), ["AW7"]);
+  assert.deepEqual(awFailing({ titleAfter: "시상식" }), ["AW7"]);
+  assert.deepEqual(awFailing({ winner: "mafiaWin" }), ["AW7"]);
+});
+
+test("AW8: 끝난 뒤 [넘기기]가 남아 있으면 AW8 만 실패한다", () => {
+  assert.deepEqual(awFailing({ floatAfter: 1 }), ["AW8"]);
+});
+
+test("AW9: 확장 탭이 열린 동안 패 index 가 그대로·[넘기기] 숨김·패 유지, 접으면 이어짐", () => {
+  assert.deepEqual(awFailing({ pause: { ...awardsGood().pause, indexLater: 1 } }), ["AW9"]);
+  assert.deepEqual(awFailing({ pause: { ...awardsGood().pause, waitedMs: 1000 } }), ["AW9"]);
+  assert.deepEqual(awFailing({ pause: { ...awardsGood().pause, floatHidden: false } }), ["AW9"]);
+  assert.deepEqual(awFailing({ pause: { ...awardsGood().pause, plateKept: false } }), ["AW9"]);
+  assert.deepEqual(awFailing({ pause: { ...awardsGood().pause, indexResumed: 0 } }), ["AW9"]);
+});
+
+test("AW10: 시상 중에는 직업 의상, 끝난 뒤에는 의상이 걷힘(고른 look)", () => {
+  assert.deepEqual(awFailing({ costumesDuring: { 0: "coat", 1: "coat", 2: "police", 3: "doctor" } }), ["AW10"]);
+  assert.deepEqual(awFailing({ costumesAfter: { 0: "mafia" } }), ["AW10"]);
+});
+
+test("측정값이 없으면 조용히 통과하지 않고 해당 항목이 `측정값 없음` 으로 실패한다", () => {
+  const rows = awardChecks({});
+  assert.equal(rows.length, 10);
+  for (const r of rows) {
+    assert.equal(r.ok, false, r.id);
+    assert.match(r.detail, /측정값 없음/, r.id);
+  }
+  assert.match(awardChecks(undefined)[0].detail, /측정값 없음/);
 });
