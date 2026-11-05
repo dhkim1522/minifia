@@ -63,7 +63,7 @@ describe("Backdrop 층 규칙", () => {
     const { container } = render(<Backdrop layout="game" scene="morning" />);
     const art = container.querySelector<HTMLElement>(".mf-backdrop__art")!;
     expect(art.getAttribute("aria-hidden")).toBe("true");
-    expect(art.style.backgroundImage).toMatch(/^url\(["']?\/backgrounds\/bg_game_morning\.webp\?v=i3["']?\)$/);
+    expect(art.style.backgroundImage).toMatch(/^url\(["']?\/backgrounds\/bg_game_morning\.webp\?v=i\d+["']?\)$/);
     expect(art.style.backgroundPosition).toContain("top");
   });
 

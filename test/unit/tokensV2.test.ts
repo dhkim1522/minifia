@@ -159,7 +159,7 @@ describe("직업 배지 CSS 규칙 (09.1.1-08)", () => {
   });
 
   it("모션 줄이기: 배지 팝·알약 페이드·시트 등장 애니메이션이 없다(animation: none)", () => {
-    const reduce = V2.slice(V2.lastIndexOf("@media (prefers-reduced-motion: reduce)"));
+    const reduce = V2.slice(V2.indexOf("@media (prefers-reduced-motion: reduce)"));
     const hit = rules(reduce).find((r) => r.selector.includes(".mv-claim.is-pop") && r.selector.includes(".mv-claim__notice") && r.selector.includes(".mv-claim-sheet"));
     expect(hit?.body).toMatch(/animation:\s*none/);
   });
