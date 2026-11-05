@@ -9,24 +9,23 @@ import { ROLES5, endedState, execDay } from "../helpers/awardsState";
 import { startedAt } from "../helpers/voteState";
 
 describe("칭호 — 대체 칭호 경로 (D-4)", () => {
-  it("산 사람은 survivor(k 없음), 처형된 사람은 spectator(k=일차, at=day), 밤에 죽은 사람은 spectator(at=night)", () => {
+  it("산 사람은 survivor(k 없음), 처형된 사람은 spectator(k=일차, at=day), 첫 밤 사망자 뒤에 밤에 죽은 사람은 spectator(at=night)", () => {
     const s = endedState({
       roles: ROLES5,
-      dead: [3, 4],
-      voteLog: [execDay(1, [[0, 3], [1, 3], [2, 3], [3, 0], [4, 3]], 3)],
-      nightLog: [{ n: 1, target: 4, died: true }],
+      dead: [2, 3, 4],
+      voteLog: [execDay(1, [], 3)],
+      nightLog: [{ n: 1, target: 4, died: true }, { n: 2, target: 2, died: true }],
       winner: "mafiaWin",
     });
     expect(eliminationOf(s, 3)).toEqual({ n: 1, at: "day" });
-    expect(eliminationOf(s, 4)).toEqual({ n: 1, at: "night" });
+    expect(eliminationOf(s, 2)).toEqual({ n: 2, at: "night" });
     expect(eliminationOf(s, 0)).toBeUndefined();
-    const awards = computeAwards(s);
-    // 마피아 승리: 진 팀(시민 편: seat 1·2·3·4) 먼저, 이긴 팀(seat 0) 나중
-    expect(awards).toEqual<AwardLine[]>([
+    // 마피아 승리: 진 팀(시민 편: seat 1·2·3·4) 먼저, 이긴 팀(seat 0) 나중. 첫 밤 사망자(4)는 중간 칭호라 대체 칭호 뒤에 온다.
+    expect(computeAwards(s)).toEqual<AwardLine[]>([
       { seat: 1, award: "survivor" },
-      { seat: 2, award: "survivor" },
+      { seat: 2, award: "spectator", k: 2, at: "night" },
       { seat: 3, award: "spectator", k: 1, at: "day" },
-      { seat: 4, award: "spectator", k: 1, at: "night" },
+      { seat: 4, award: "firstVictim", k: 1 },
       { seat: 0, award: "survivor" },
     ]);
   });
@@ -255,11 +254,14 @@ describe("동점 정렬 — 점수 → 생존자 → 늦은 탈락 → 낮은 �
     expect(holders(computeAwards(s), "talker")[0]!.seat).toBe(4);
   });
   it("③ 둘 다 탈락이면 더 늦게 탈락한 쪽, 같은 일차면 밤 탈락이 낮 탈락보다 늦다", () => {
-    const later = endedState({ roles: ROLES6, dead: [3, 4], voteLog: [execDay(1, [[0, 3]], 3)], nightLog: [{ n: 2, target: 4, died: true }], stats: talk(6, 6) });
+    // seat 2 가 1일차 밤에 먼저 죽어 firstVictim 을 가져가므로 talker 경쟁은 3 과 4 둘이다.
+    const base = { roles: ROLES6, dead: [2, 3, 4], stats: talk(6, 6) };
+    const night = (n: number, target: number): NightLogEntry => ({ n, target, died: true });
+    const later = endedState({ ...base, voteLog: [execDay(1, [[0, 3]], 3)], nightLog: [night(1, 2), night(2, 4)] });
     expect(holders(computeAwards(later), "talker")[0]!.seat).toBe(4);
-    const sameDay = endedState({ roles: ROLES6, dead: [3, 4], voteLog: [execDay(2, [[0, 3]], 3)], nightLog: [{ n: 2, target: 4, died: true }], stats: talk(6, 6) });
+    const sameDay = endedState({ ...base, voteLog: [execDay(2, [[0, 3]], 3)], nightLog: [night(1, 2), night(2, 4)] });
     expect(holders(computeAwards(sameDay), "talker")[0]!.seat).toBe(4);
-    const earlier = endedState({ roles: ROLES6, dead: [3, 4], voteLog: [execDay(3, [[0, 3]], 3)], nightLog: [{ n: 2, target: 4, died: true }], stats: talk(6, 6) });
+    const earlier = endedState({ ...base, voteLog: [execDay(3, [[0, 3]], 3)], nightLog: [night(1, 2), night(2, 4)] });
     expect(holders(computeAwards(earlier), "talker")[0]!.seat).toBe(3);
   });
   it("④ 모두 같으면 낮은 좌석", () => {

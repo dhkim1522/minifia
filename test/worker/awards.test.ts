@@ -33,9 +33,10 @@ describe("ended 의 result.awards (END-04, L36)", () => {
     const lists = actors.map((a) => lastViewOf(a.sock).result?.awards);
     for (const list of lists) expect(list?.length).toBe(4);
     expect(new Set(lists.map((l) => JSON.stringify(l))).size).toBe(1);
-    // 시민 승리 → 대체 칭호뿐인 이 판에서 마피아(진 팀)가 맨 앞
+    // 시민 승리 → 진 팀 마피아가 맨 앞. 세 사람이 마피아를 가리켰으니 target(k=3), 나머지 셋은 살아남은 대체 칭호.
     const mafia = actors.find((a) => a.role === "mafia")!;
-    expect(lists[0]![0]!.seat).toBe(mafia.seat);
-    expect(lists[0]!.map((l) => l.award).sort()).toEqual(["spectator", "survivor", "survivor", "survivor"]);
+    expect(lists[0]![0]).toEqual({ seat: mafia.seat, award: "target", k: 3 });
+    expect(lists[0]!.slice(1).map((l) => l.award)).toEqual(["survivor", "survivor", "survivor"]);
+    expect(lists[0]!.map((l) => l.seat).sort()).toEqual(actors.map((a) => a.seat).sort());
   });
 });
