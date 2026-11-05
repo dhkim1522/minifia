@@ -608,3 +608,19 @@ describe("SeatLook costume·dim (11-05)", () => {
     }
   });
 });
+
+
+// 11-12: SeatLook.opacity 는 결과 화면(쉬었던 사람)만 쓴다 — 판 중 장면 표에는 키 자체가 없다 (T-11-15 와 같은 규칙)
+describe("SeatLook.opacity 는 판 중 경로에 없다 (11-12)", () => {
+  it("visibleSeats·sceneLook 의 어느 좌석에도 opacity 키가 없다", () => {
+    for (const phase of ["lobby", "discussion", "night", "morning", "ended"] as const) {
+      const look = sceneLook(viewOf(phase), { stageH: 400 });
+      for (const seat of Object.values(look.seats)) expect("opacity" in seat, phase).toBe(false);
+    }
+  });
+
+  it("타입: 결과 화면이 opacity 를 줄 수 있다", () => {
+    const l: SeatLook = { show: true, ghost: false, opacity: 0.5 };
+    expect(l.opacity).toBe(0.5);
+  });
+});

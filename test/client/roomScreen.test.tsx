@@ -714,3 +714,52 @@ describe("RoomScreen: round 변화 초기화 (11-12)", () => {
     expect(chatReset).not.toHaveBeenCalled();
   });
 });
+
+// ---------- 11-12: 쉬는 사람(view.resting)은 단계와 무관하게 BenchView 하나만 본다 (D-3, T-11-40) ----------
+
+describe("RoomScreen: 쉬는 사람 화면 (11-12)", () => {
+  const resting = (phase: RoomView["phase"]): RoomView => ({
+    ...view,
+    phase,
+    round: 2,
+    players: [{ seat: 5, nickname: "수빈", connected: true, isHost: false }],
+    me: { seat: 5, isHost: false },
+    mapChoice: "random",
+    resting: true,
+  });
+  const mountResting = (phase: RoomView["phase"], onExit = vi.fn()) => {
+    connectionMock.current = conn({ view: resting(phase) });
+    return { ...render(<RoomScreen code="0042" token={"t".repeat(43)} onExit={onExit} />), onExit };
+  };
+
+  it.each(["assigning", "roleReveal", "discussion", "night", "ended"] as const)("view.resting 이면 phase 가 %s 여도 BenchView 만 그린다", (phase) => {
+    const { container } = mountResting(phase);
+    expect(container.querySelector("[data-bench-view]")).not.toBeNull();
+    expect(container.querySelectorAll("main")).toHaveLength(1);
+    for (const sel of ["main.mf-lobby", "[data-chat-input]", "[data-role-card-button]", "[data-result-panel]", ".mf-timer"]) expect(container.querySelector(sel), sel).toBeNull();
+  });
+
+  it("resting 이 아니면 평소대로 단계 화면이다", () => {
+    connectionMock.current = conn({ view: { ...view, phase: "lobby" } });
+    const { container } = render(<RoomScreen code="0042" token={"t".repeat(43)} onExit={vi.fn()} />);
+    expect(container.querySelector("[data-bench-view]")).toBeNull();
+    expect(container.querySelector("main.mf-lobby")).not.toBeNull();
+  });
+
+  it("보이지 않는 안내 영역은 '이번 판은 쉬어요' 를 읽는다 (낡은 phase 문구가 아니다)", () => {
+    const { container } = mountResting("ended");
+    expect(container.querySelector(".mf-sr-only")?.textContent).toBe("이번 판은 쉬어요");
+  });
+
+  it("[나가기] 확인 → leave 를 보내고 onExit('left')", () => {
+    const send = vi.fn(() => true);
+    connectionMock.current = conn({ view: resting("assigning"), send });
+    const onExit = vi.fn();
+    const { container } = render(<RoomScreen code="0042" token={"t".repeat(43)} onExit={onExit} />);
+    fireEvent.click(screen.getByRole("button", { name: "나가기" }));
+    const dialog = container.querySelector("dialog")!;
+    fireEvent.click(Array.from(dialog.querySelectorAll<HTMLButtonElement>("button")).find((b) => b.textContent === "나가기")!);
+    expect(send).toHaveBeenCalledWith({ t: "leave" });
+    expect(onExit).toHaveBeenCalledWith("left");
+  });
+});

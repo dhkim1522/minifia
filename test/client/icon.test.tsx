@@ -99,3 +99,26 @@ describe("V2Icon trophy (11-09)", () => {
     expect(svg?.querySelectorAll("path,circle").length).toBeGreaterThan(0);
   });
 });
+
+
+// 11-12: 쉬는 사람 화면의 모래시계 — 직접 그린 단순 모양(24 격자, 선 2px, 둥근 끝)
+describe("V2Icon hourglass (11-12)", () => {
+  it("24 격자 svg, 선 2px·둥근 끝이고 도형이 있다 — 장식이라 label 이 없으면 aria-hidden", () => {
+    const { container } = render(<V2Icon name="hourglass" />);
+    const svg = container.querySelector("svg");
+    expect(svg?.getAttribute("viewBox")).toBe("0 0 24 24");
+    expect(svg?.getAttribute("stroke-width")).toBe("2");
+    expect(svg?.getAttribute("stroke-linecap")).toBe("round");
+    expect(svg?.getAttribute("aria-hidden")).toBe("true");
+    expect(svg?.querySelectorAll("path,circle").length).toBeGreaterThan(0);
+  });
+
+  it("다른 아이콘과 모양이 겹치지 않는다", () => {
+    const shape = (name: V2IconName) => {
+      const { container } = render(<V2Icon name={name} />);
+      return [...container.querySelectorAll("path,circle")].map((e) => e.outerHTML).join("");
+    };
+    const mine = shape("hourglass");
+    for (const other of ["timeline", "trophy", "quiet", "skip"] as const) expect(shape(other)).not.toBe(mine);
+  });
+});

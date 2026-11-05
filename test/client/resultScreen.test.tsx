@@ -1507,3 +1507,210 @@ describe("다시 하기 알약 (11-12)", () => {
     expect(sentOf(r.send)).toEqual([]);
   });
 });
+
+// ---------- 11-12 Task 2: 쉬게 될 사람 확인·쉬었던 사람(sat)·꾸미기·방장 이양 알림 (D-13, D-16, D-17) ----------
+describe("쉬게 될 사람 확인 시트 (11-12, D-12)", () => {
+  const pillOf = (c: ParentNode) => c.querySelector<HTMLButtonElement>("[data-ready-pill]")!;
+  const dialogOf = (c: ParentNode) => c.querySelector("dialog");
+  const btn = (d: Element, label: string) => Array.from(d.querySelectorAll<HTMLButtonElement>("button")).find((b) => b.textContent === label)!;
+  const rematches = (send: ReturnType<typeof vi.fn>) => send.mock.calls.map((c) => c[0] as { t: string }).filter((m) => m.t === "rematch");
+  // 7명: 방장 포함 준비 4명(0~3), 미준비 둘(4 연결, 5 sat) + 끊긴 6
+  const mixed = () => makeView({ count: 7, me: 0, ready: [0, 1, 2, 3], sat: [7], offline: [6], round: 2 });
+
+  it("준비 안 한 연결된 사람이 있으면 시트가 뜬다: 얼굴(닉네임은 alt)·'이번 판은 쉬어요'·[시작][취소]", () => {
+    const r = renderRoom(mixed());
+    fireEvent.click(pillOf(r.container));
+    const d = dialogOf(r.container)!;
+    expect(d).not.toBeNull();
+    expect(rematches(r.send)).toEqual([]); // 아직 안 보냈다
+    const faces = Array.from(d.querySelectorAll<HTMLImageElement>("img[data-rest-face]"));
+    expect(faces.map((f) => f.getAttribute("alt"))).toEqual(["서연", "수빈", "지호"]); // 연결된 미준비자(sat 포함), 끊긴 사람(하준)은 아니다
+    expect(text(d.querySelector("h2"))).toBe("이번 판은 쉬어요");
+    expect(btn(d, "시작")).toBeTruthy();
+    expect(btn(d, "취소")).toBeTruthy();
+    // 이름 글자는 보이지 않는다(얼굴 + 한 줄)
+    for (const name of ["서연", "수빈", "지호"]) expect(text(d)).not.toContain(name);
+  });
+
+  it("[취소] 는 닫기만 한다", () => {
+    const r = renderRoom(mixed());
+    fireEvent.click(pillOf(r.container));
+    fireEvent.click(btn(dialogOf(r.container)!, "취소"));
+    act(() => void vi.advanceTimersByTime(300));
+    expect(dialogOf(r.container)).toBeNull();
+    expect(rematches(r.send)).toEqual([]);
+  });
+
+  it("[시작] 은 rematch 를 한 번 보내고 닫는다 — 2초 안에 다시 눌러도 더 보내지 않는다", () => {
+    const r = renderRoom(mixed());
+    fireEvent.click(pillOf(r.container));
+    fireEvent.click(btn(dialogOf(r.container)!, "시작"));
+    expect(rematches(r.send)).toEqual([{ t: "rematch", round: 2 }]);
+    act(() => void vi.advanceTimersByTime(300));
+    expect(dialogOf(r.container)).toBeNull();
+    fireEvent.click(pillOf(r.container));
+    expect(rematches(r.send)).toHaveLength(1);
+    expect(dialogOf(r.container)).toBeNull();
+  });
+
+  it("얼굴은 쉬게 될 사람 수만큼 (8명 방에서 준비 4 → 4개)", () => {
+    const r = renderRoom(makeView({ count: 8, me: 0, ready: [0, 1, 2, 3] }));
+    fireEvent.click(pillOf(r.container));
+    expect(dialogOf(r.container)!.querySelectorAll("img[data-rest-face]")).toHaveLength(4);
+  });
+
+  it("n 이 4 미만이면 시트가 아니라 토스트", () => {
+    const r = renderRoom(makeView({ count: 7, me: 0, ready: [0, 1] }));
+    fireEvent.click(pillOf(r.container));
+    expect(dialogOf(r.container)).toBeNull();
+  });
+});
+
+describe("쉬었던 사람(sat) 표시 (11-12, D-13, UI-SPEC A-5)", () => {
+  it("sat 는 장면에 반투명 0.5 로 서고 직업 의상·어둠·칩이 없다", () => {
+    renderRoom(makeView({ count: 5, sat: [5], me: 1 }));
+    const s = scene().seats;
+    expect(Object.keys(s).map(Number)).toEqual([0, 1, 2, 3, 4, 5]);
+    expect(s[5]).toEqual({ show: true, ghost: false, opacity: 0.5 });
+    for (const seat of [0, 1, 2, 3, 4]) expect(s[seat]).not.toHaveProperty("opacity");
+  });
+
+  it("sat 는 참가자 링에 들지 않는다: 참가자 5명의 링 자리는 그대로이고 sat 는 그 바깥에 선다", () => {
+    renderRoom(makeView({ count: 5, sat: [5], me: 1 }));
+    const store = stage.props!.store;
+    const ring = ringSlots(5);
+    for (let seat = 0; seat < 5; seat++) {
+      const p = store.positionOf(seat, Date.now())!;
+      expect(p.x).toBeCloseTo(ring[seat]![0] / 100, 1);
+      expect(p.z).toBeCloseTo(ring[seat]![1] / 100, 1);
+    }
+    const sat = store.positionOf(5, Date.now())!;
+    expect(Math.hypot(sat.x, sat.z)).toBeGreaterThan(3);
+  });
+
+  it("sat 의 이름표에는 직업 칩이 없다 (참가자만 칩)", () => {
+    const r = renderRoom(makeView({ count: 5, sat: [5], me: 1 }));
+    expect(chips(r.container)).toHaveLength(5);
+    expect(stage.props!.tagProps!(5).role).toBeUndefined();
+  });
+
+  it("sat 도 알약은 손님과 같고, 준비하면 이름표 체크가 붙는다", () => {
+    const r = renderRoom(makeView({ count: 5, sat: [5], me: 5, ready: [0, 5] }));
+    const pill = r.container.querySelector<HTMLElement>("[data-ready-pill]")!;
+    expect(pill.getAttribute("data-ready")).toBe("true");
+    expect(stage.props!.tagProps!(5)).toMatchObject({ done: true, doneLabel: "준비됨" });
+  });
+
+  it("훅 window.__mfResult.sat 에 sat 좌석이 실린다 (참가자는 없다)", () => {
+    renderRoom(makeView({ count: 5, sat: [5], me: 1 }));
+    expect((window as unknown as { __mfResult: { sat: number[] } }).__mfResult.sat).toEqual([5]);
+  });
+
+  it("sat 가 없으면 장면 좌석은 참가자뿐이고 훅 sat 는 빈 배열", () => {
+    renderRoom(makeView({ count: 5 }));
+    expect(Object.keys(scene().seats)).toHaveLength(5);
+    expect((window as unknown as { __mfResult: { sat: number[] } }).__mfResult.sat).toEqual([]);
+  });
+});
+
+describe("결과 단계 꾸미기 (11-12, D-16)", () => {
+  const dress = (c: ParentNode) => c.querySelector<HTMLElement>('[data-float="dress"]');
+  const skip = (c: ParentNode) => c.querySelector<HTMLElement>('[data-float="skip"]');
+  const AW = [{ seat: 3, award: "whiff" as const, k: 2 }, { seat: 0, award: "survivor" as const }];
+  const executionView = (): RoomView => {
+    const v = makeView();
+    v.phase = "execution";
+    delete (v as { result?: unknown }).result;
+    v.day = { ...v.day!, candidate: 3, execution: { seat: 3 } };
+    return v;
+  };
+  const advance = (ms: number) => {
+    let left = ms;
+    while (left > 0) {
+      const into = (Date.now() - NOW) % 100;
+      const step = Math.min(left, into === 0 ? 100 : 100 - into);
+      act(() => void vi.advanceTimersByTime(step));
+      left -= step;
+    }
+  };
+
+  it("시상식이 없는 최종 상태: 아래 칸에 [꾸미기]가 있고 [넘기기]는 없다", () => {
+    const r = renderRoom(makeView({ me: 1 }));
+    expect(dress(r.container)).not.toBeNull();
+    expect(dress(r.container)!.getAttribute("aria-label")).toBe("꾸미기");
+    expect(skip(r.container)).toBeNull();
+  });
+
+  it("시상 중에는 위 칸 [넘기기]만 있고 [꾸미기]는 없다 — 끝나면 [꾸미기]가 나타나고 [넘기기]는 사라진다", () => {
+    const r = renderRoom(executionView());
+    r.rerenderRoom(makeView({ awards: AW }));
+    advance(5600 + 100);
+    expect(skip(r.container)).not.toBeNull();
+    expect(dress(r.container)).toBeNull();
+    advance(5000 + 700); // 두 창(2500 × 2) + 의상 복귀
+    expect(skip(r.container)).toBeNull();
+    expect(dress(r.container)).not.toBeNull();
+  });
+
+  it("연출 중(5600 전)에도 [꾸미기]는 없다", () => {
+    const r = renderRoom(executionView());
+    r.rerenderRoom(makeView());
+    advance(2000);
+    expect(dress(r.container)).toBeNull();
+  });
+
+  it("[꾸미기]를 누르면 DressSheet 가 열리고 떠 있는 버튼은 숨는다 — 카드를 고르면 { t:'dress', look } 가 간다", () => {
+    const r = renderRoom(makeView({ me: 1 }));
+    fireEvent.click(dress(r.container)!);
+    const cards = Array.from(r.container.querySelectorAll<HTMLElement>("button[data-outfit]"));
+    expect(cards.length).toBeGreaterThan(1);
+    expect(dress(r.container)).toBeNull();
+    const other = cards.find((c) => c.getAttribute("aria-pressed") !== "true")!;
+    fireEvent.click(other);
+    act(() => void vi.advanceTimersByTime(300));
+    expect(r.send.mock.calls.map((c) => c[0] as { t: string }).filter((m) => m.t === "dress")).toEqual([{ t: "dress", look: other.getAttribute("data-outfit") }]);
+  });
+
+  it("확장 탭이 열려 있으면 떠 있는 버튼 열 전체가 숨는다", () => {
+    const r = renderRoom(makeView({ me: 1 }));
+    fireEvent.click(r.container.querySelector("[data-result-tab='mafia']")!);
+    expect(dress(r.container)).toBeNull();
+    expect(r.container.querySelector("[data-float-stack]")).toBeNull();
+  });
+
+  it("꾸미기 시트는 의상 카드만이다 (지도 탭은 11-13 몫)", () => {
+    const r = renderRoom(makeView({ me: 1 }));
+    fireEvent.click(dress(r.container)!);
+    expect(r.container.querySelectorAll("[data-map-card], [data-map-tab]")).toHaveLength(0);
+  });
+});
+
+describe("방장 이양 알림 (11-12, D-17)", () => {
+  it("방장이 다른 좌석으로 바뀐 view 를 받으면 위 알림 '방장 · {닉네임}' (crown)", () => {
+    const r = renderRoom(makeView({ me: 1, hostSeat: 0 }));
+    expect(r.container.querySelector(".mv-toast")?.textContent).toBe(""); // 첫 스냅샷에는 없다
+    r.rerenderRoom(makeView({ me: 1, hostSeat: 1 }));
+    const toast = r.container.querySelector(".mv-toast")!;
+    expect(toast.textContent).toBe("방장 · 하윤");
+    expect(toast.querySelector("svg")).not.toBeNull();
+  });
+
+  it("새 방장의 알약이 [시작] 으로 바뀐다", () => {
+    const r = renderRoom(makeView({ me: 1, hostSeat: 0, ready: [0] }));
+    expect(r.container.querySelector("[data-ready-pill]")!.hasAttribute("data-ready-count")).toBe(false);
+    r.rerenderRoom(makeView({ me: 1, hostSeat: 1, ready: [0, 1] }));
+    expect(r.container.querySelector("[data-ready-pill]")!.getAttribute("data-ready-count")).toBe("2/5");
+  });
+
+  it("방장이 그대로인 새 view 에는 알림이 없다. 입장·퇴장 알림은 결과 단계에 없다", () => {
+    const r = renderRoom(makeView({ me: 1, hostSeat: 0 }));
+    r.rerenderRoom(makeView({ me: 1, hostSeat: 0, count: 6 }));
+    expect(r.container.querySelector(".mv-toast")?.textContent).toBe("");
+  });
+
+  it("기록 칸에 crown 줄을 남기지 않는다 (대기실 전용)", () => {
+    const r = renderRoom(makeView({ me: 1, hostSeat: 0 }));
+    r.rerenderRoom(makeView({ me: 1, hostSeat: 1 }));
+    expect(r.container.querySelector(".mv-chat__sys")).toBeNull();
+  });
+});

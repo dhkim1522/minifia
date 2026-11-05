@@ -3,8 +3,10 @@ import { describe, expect, it } from "vitest";
 import { ringSlots } from "../../shared/game/gather";
 import type { RoleId } from "../../shared/game/roles";
 import type { GameWinner, PublicPlayer, RoomView } from "../../shared/protocol";
+import { mapOf } from "../../shared/game/maps";
+import { snapToWalkable } from "../../shared/game/map";
 import { positionAt, segmentEndsAt } from "../../shared/game/world";
-import { castOf, CEREMONY, CEREMONY_CENTER, CEREMONY_START_MS, ceremonyAt, ceremonyEnd, ceremonySnap, ceremonyWindowStart, CLAP_MAX, finalState, holdSnap, markTimes, RESULT_TIMELINE, resultPanelHeight, skipAward, slotsFor, stateAt, teamOf, walkSnap } from "../../src/game/resultDirector";
+import { castOf, CEREMONY, CEREMONY_CENTER, CEREMONY_START_MS, ceremonyAt, ceremonyEnd, ceremonySnap, ceremonyWindowStart, CLAP_MAX, finalState, holdSnap, markTimes, RESULT_TIMELINE, resultPanelHeight, SAT_RADIUS_FX, satSlots, skipAward, slotsFor, stateAt, teamOf, walkSnap } from "../../src/game/resultDirector";
 import { jobOutfit } from "../../src/world/ghostOutfit";
 
 const JOBS: RoleId[] = ["citizen", "police", "doctor", "mafia", "citizen", "mafia"];
@@ -381,5 +383,61 @@ describe("ceremonySnap: 걷기 구간 (11-09)", () => {
   it("출발 위치를 모르면 목적지에 한 점 구간", () => {
     const segs = ceremonySnap(slots, {}, t0, { 1: { to: CEREMONY_CENTER, ms: 900 } });
     expect(segs.find((s) => s.s === 1)).toMatchObject({ p: [0, 0], v: 0 });
+  });
+});
+
+
+// ---------- 11-12: 쉬었던 사람(sat) — 참가자에서 빠지고 무대 바깥에 따로 선다 (D-13, UI-SPEC A-5) ----------
+describe("castOf: sat 는 참가자가 아니다 (11-12)", () => {
+  it("players[].sat 인 좌석은 result.seats 에 있어도 출연자 표에서 뺀다 (링 자리·칩·시상 대상이 아니다)", () => {
+    const v = viewOf(JOBS);
+    v.players = v.players.map((p) => (p.seat === 5 ? { ...p, sat: true as const } : p));
+    expect(castOf(v).map((c) => c.seat)).toEqual([0, 1, 2, 3, 4]);
+    // 빠진 만큼 링 자리가 줄어든다
+    expect(Object.keys(slotsFor(castOf(v)))).toHaveLength(5);
+  });
+
+  it("sat 가 없으면 그대로", () => {
+    expect(castOf(viewOf(JOBS)).map((c) => c.seat)).toEqual([0, 1, 2, 3, 4, 5]);
+  });
+});
+
+describe("satSlots (11-12)", () => {
+  const bar = mapOf("bar");
+  const dist = (p: readonly [number, number]) => Math.hypot(p[0], p[1]);
+
+  it("좌석 오름차순으로 바깥 반지름(3.6) 근처 자리를 하나씩 준다 — 모든 폰이 같다", () => {
+    expect(SAT_RADIUS_FX).toBe(360);
+    const a = satSlots([6, 5], "bar");
+    const b = satSlots([5, 6], "bar");
+    expect(a).toEqual(b);
+    expect(Object.keys(a).map(Number).sort((x, y) => x - y)).toEqual([5, 6]);
+  });
+
+  it("모든 자리는 걸을 수 있는 칸이다 (snapToWalkable 로 보정)", () => {
+    for (const mapId of ["bar", "plaza"] as const) {
+      const slots = satSlots([3, 4, 6, 7], mapId);
+      for (const seat of Object.keys(slots).map(Number)) {
+        const [x, z] = slots[seat]!;
+        const snapped = snapToWalkable(mapOf(mapId), { x, z });
+        expect(snapped.snapped, `${mapId} 좌석 ${seat}`).toBe(false);
+      }
+    }
+  });
+
+  it("링 자리(반지름 2.65)보다 바깥이다", () => {
+    const slots = satSlots([5], "bar");
+    expect(dist(slots[5]!)).toBeGreaterThan(300);
+  });
+
+  it("서로 다른 자리에 선다 (겹치지 않는다)", () => {
+    const slots = satSlots([2, 3, 6], "bar");
+    const pts = Object.values(slots);
+    for (let i = 0; i < pts.length; i++) for (let j = i + 1; j < pts.length; j++) expect(Math.hypot(pts[i]![0] - pts[j]![0], pts[i]![1] - pts[j]![1])).toBeGreaterThan(100);
+  });
+
+  it("sat 가 없으면 빈 표", () => {
+    expect(satSlots([], "bar")).toEqual({});
+    void bar;
   });
 });

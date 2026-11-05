@@ -3566,3 +3566,40 @@ describe("결과 장면: onStageTap · emoteCues (11-05, D-25)", () => {
     expect(window.__mfEmotes?.last).toBeNull(); // 받은 프레임이 아니라 화면 연출이다
   });
 });
+
+// ---------- 11-12: 결과 장면의 반투명 좌석(쉬었던 사람, SeatLook.opacity) ----------
+describe("결과 장면: opacity 0.5 좌석 (11-12)", () => {
+  const handleOf = (s: Setup, seat: number): FakeHandle => s.world.renderers[0]!.chars.get(seat) as FakeHandle;
+  const openResult = (seats: Record<number, Partial<Omit<SeatLook, "show">>>) => open({ scene: sceneOf(seats) }, { players: FOUR, ents: FOUR_ENTS() });
+  const opacities = (h: FakeHandle): number[] => (h.setOpacity as ReturnType<typeof vi.fn>).mock.calls.map((c) => c[0] as number);
+
+  it("opacity 가 있는 좌석만 그 값으로 setOpacity 하고 다른 좌석에는 영향이 없다", async () => {
+    const s = await openResult({ 0: {}, 1: { opacity: 0.5 }, 2: {}, 3: {} });
+    frames(50);
+    expect(opacities(handleOf(s, 1)).at(-1)).toBe(0.5);
+    expect(opacities(handleOf(s, 0))).toEqual([]);
+    expect(opacities(handleOf(s, 2))).toEqual([]);
+  });
+
+  it("같은 값이 계속 와도 setOpacity 를 다시 부르지 않는다", async () => {
+    const s = await openResult({ 0: {}, 1: { opacity: 0.5 }, 2: {}, 3: {} });
+    frames(50);
+    const n = opacities(handleOf(s, 1)).length;
+    frames(100);
+    expect(opacities(handleOf(s, 1)).length).toBe(n);
+  });
+
+  it("opacity 가 사라지면 1 로 돌아온다", async () => {
+    const s = await openResult({ 0: {}, 1: { opacity: 0.5 }, 2: {}, 3: {} });
+    frames(50);
+    s.rerender({ scene: sceneOf({ 0: {}, 1: {}, 2: {}, 3: {} }) });
+    frames(50);
+    expect(opacities(handleOf(s, 1)).at(-1)).toBe(1);
+  });
+
+  it("이름표는 흐려지지 않는다 (몸만 반투명, 연결 끊김과 따로)", async () => {
+    const s = await openResult({ 0: {}, 1: { opacity: 0.5 }, 2: {}, 3: {} });
+    frames(50);
+    expect(tagOf(s.utils, 1)!.style.opacity).toBe("1");
+  });
+});
