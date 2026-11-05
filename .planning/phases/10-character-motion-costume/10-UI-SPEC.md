@@ -313,7 +313,7 @@ Enumerated by `head -1 design/v2.0/design-system/components/bundle.js | grep -o 
 
 ## E-4. 검사 스크립트와 포즈 스트립
 
-- `scripts/check-character.mjs`: 5명 × 9의상 조합이 모두 만들어지고, 메시 ≤ 8, 삼각형 ≤ 15,000, 높이 1.5 ~ 1.9, NaN 없음, 동작 표의 키가 모두 `EMOTE_KEYS` 안, `EMOTE_MS` 와 동작 표가 일치함을 확인한다. `npm run` 스크립트와 단위 시험 하나로 건다(`vitest`, WebGL 없이 node).
+- `scripts/check-character.mjs`: 5명 × 9의상 조합이 모두 만들어지고, 메시 ≤ 8, 삼각형 ≤ 15,000, 높이 1.5 ~ 1.92(결정 0068: 상한 1.9 에서 올림), NaN 없음, 동작 표의 키가 모두 `EMOTE_KEYS` 안, `EMOTE_MS` 와 동작 표가 일치함을 확인한다. `npm run` 스크립트와 단위 시험 하나로 건다(`vitest`, WebGL 없이 node).
 - 포즈 스트립 디버그 화면 `?pose-strip=1`: 개발 빌드와 `?e2e=1` 에서만 열린다(`?perf=1`·`?chat-mock=1` 과 같은 게이트, 지연 로드). 격자: 행 = 동작 9종 + 서기 + 걷기, 열 = 4 샘플 시각. 인물·의상은 선택 상자로 바꾼다. 제품 번들에 따로 들어가지 않는다.
 
 ---
@@ -495,6 +495,8 @@ Applicable state considerations resolved: 14 covered, 3 backstop, 2 unresolved
 
 ## 결정 기록(추천안 적용)
 
+(계획에서 확정: 결정 0068 — 2026-11-05)
+
 사용자 위임(2026-11-05 취침)에 따라 아래를 정했다. 형식: 질문 / 선택지 / **추천** / 이유.
 
 **D-1 동작 버튼은 어디에 두나(항상 닿는 자리).**
@@ -580,6 +582,8 @@ Applicable state considerations resolved: 14 covered, 3 backstop, 2 unresolved
 ---
 
 ## 미결 항목 (계획 단계에서 정한다 — 사용자 위임에 따라 기본값으로 계획할 수 있다)
+
+(계획에서 정함: 결정 0068)
 
 | # | 질문 | 기본값 |
 |---|------|--------|

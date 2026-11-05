@@ -23,6 +23,7 @@
 | TopToast (`z-toast`) | 위 88, 가운데 | 입장 · 퇴장 · 방장 · 시작 조건 한 줄 알림 |
 | [테스트] · 재접속 띠 (`z-overlay`) | 헤더 아래 8 / 위 72 (높이 52) | 재접속 띠는 맵 위에 떠서 맵 크기를 바꾸지 않는다 |
 | 아래 패널 (`z-overlay`) | 맨 아래, `LOG_H + 154` + 안전 영역 (250 · 306), 키보드 열림 150 | 기록 칸(`LOG_H` 96 또는 152) + 입력줄 48 + 행동 줄 52: 방장 [시작] + 숫자 표식 `.mv-count`("현재 / 최대", 0062-2) / 손님 '방장을 기다리는 중…'. 키보드가 열리면(`data-kb-open`) 행동 줄을 숨기고 기록 칸을 72 로 줄인다 |
+| 꾸미기 떠 있는 버튼 · 시트 (`z-overlay`) | 패널 위 오른쪽 아래 떠 있는 버튼 한 칸 / 시트는 아래 패널 자리를 덮음 | 10페이즈(결정 0068): hanger 버튼이 한 줄 카드 띠 시트를 연다. 로비 전용이고 동작 판이 열리면 버튼이 숨는다. 기하는 `10-UI-SPEC.md` |
 | 상태 카드 · 시트 (`z-modal`) | — | 맵 불러오기 · 오류 카드, 확인 · 공유 시트 |
 
 스테이지 사각형 = 헤더 블록 아래 끝(62) ~ 아래 패널 위 끝 = 높이 − 62 − (`LOG_H` + 154). 키보드 열림은 (높이 − K) − 62 − 150 (K = 키보드가 가리는 높이, iPhone 약 336). 카메라는 이 사각형 가운데에 내 캐릭터를 둔다. 카메라 배율은 폰 크기와 무관하게 고정(`PX_PER_UNIT` 58.2)이라 작은 폰은 보이는 맵 영역만 줄어든다.
@@ -57,6 +58,9 @@
 | `data-chat-newdot` | 새 줄 점 | 위로 올려 읽는 중 새 줄이 올 때만 생김 |
 | `data-seat` · `data-ch` | 기록의 줄마다 | 보낸 자리 번호 · 채널 표식(`all` · `mafia` · `ghost`) |
 | `data-typing="true"` | 이름표 머리 스택(`HeadStack`) | 머리 위 입력 중 "…" 알약이 떠 있다. 알약은 이름표 위 22px 를 더한다 |
+| `data-emote-button` · `data-emote-tray` · `data-emote="{id}"` | 입력줄 맨 왼쪽 버튼 · 동작 판(5+4) · 칸 | 10페이즈(결정 0068). 판이 열려 있으면 떠 있는 버튼이 숨고, 걷는 중·동작 재생 중에는 칸이 `aria-disabled`. 기하는 `10-UI-SPEC.md` 의 F 절 |
+| `data-float="dress"` · `data-dress-sheet` · `data-outfit="{id}"` | 로비 꾸미기 버튼 · 패널을 덮는 한 줄 카드 띠 · 카드 | 로비에서만(게임 단계에는 없음). 카드는 `aria-pressed`, 선택 카드 이름에 "선택됨" |
+| `window.__mfEmotes` · `window.__mfLooks` | 테스트 훅 | 마지막 동작 프레임·재생 중 좌석 / 좌석 → 의상 id (`?e2e=1`·개발 빌드만) |
 | `window.__mfWorld` | 전역 | `sample(seat, t)` 로 걷는 중 서버 구간 위치를 읽음. `shown(seat)` = 마지막 프레임에 그린 위치(내 예측·구간 섞기 포함)와 프레임 시각. `?e2e=1` 또는 개발 빌드에서만 생김 |
 
 3D 캐릭터는 DOM 에 위치가 없으므로 위치 비교는 `__mfWorld.sample` 로 한다. W11·W12(탭 뒤 화면 출발·한 프레임 튐)는 `shown` 으로 잰다(결정 0059, 07-26). 자동 검사 묶음 G · H 를 폰 크기 6종에 적용한다(H 는 위쪽 가림막 위에서 잰다). 6페이즈 E2E 는 06-17, 채팅 패널 계약(`chat-lobby` · `chat-keyboard` · `chat-ime` · `chat-table` · `chat-ghost`)은 7페이즈(07-15~07-20)가 `scripts/e2e/` 에 더했다.
@@ -164,6 +168,8 @@
 | 결과 알림 | 처형 5초 시간표(찬성 · 반대 → 처형 / 처형 없음), 36px, 역할 글자 0건 |
 | UX · WL | 화면마다 안내 문장 하나(`data-guide`), Wake Lock 요청 · 해제 |
 
+10페이즈(캐릭터·동작·의상, 결정 0068)가 더한 흐름: `avatar-emote`(동작 판 열기·보내기·비활성) · `avatar-dress`(꾸미기 시트·미리 보기·서버 값) · `avatar-phases`(+ `avatar-phases-night`, 낮·지목·처형·아침·밤·유령 단계별 동작 도착과 0건 확인, 390×844 고정). 앞의 둘은 폰 6종, 입력칸 160 에서의 한글 조합은 `chat-ime-360x560` 이 한 번 더 본다. 마지막 계획에서 전 흐름 폰 6종 회귀를 한 번 돈다(D-18).
+
 09.1.1(정치·박진감 장치, 결정 0066·0067)이 더한 흐름: `politics-badge`(직업 배지 · 말 바꿈) · `politics-whisper`(귓속말 두 줄 · 당사자 마스크) · `politics-pin`(지목 핀 조명) · `politics-verdict`(찬반 기록 묶음 · 판결 줌) · `politics-runoff`(+ `politics-runoff-tie`, 동점 결선) · `politics-showdown`(+ `politics-showdown-tie`, 마지막 3인). 폰 6종을 도는 흐름과 한 크기(390×844)만 도는 흐름이 있고, 검사 문턱은 낮추지 않았다. 마지막 3인은 방장을 처형해 산 사람 셋이 되는 날을 실제로 만들어 확인한다. 실기기 확인은 `.planning/phases/09.1.1-politics-tension/09.1.1-DEVICE-CHECKS.md`.
 
 서버 쪽은 `scripts/smoke.mjs`(4 · 5 · 8명 한 판), `scripts/uat-*.mjs`(낮 · 밤 · 투표 · 테스트 방 · 봇 시나리오)가 배포본 소켓으로 확인한다. 역할 누출은 `test/worker` 의 누출 검사가 막는다.
@@ -171,6 +177,8 @@
 ## 에셋 자동 검사
 
 - `npm run backdrops`(`scripts/make-backdrops.mjs`): 원본 PNG → WebP, 게임 구도 명도 0.8 굽기, 결정적 출력, 용량 상한을 넘으면 실패.
+- `npm run check:character`(10페이즈): 5명 × 의상 9종 조합이 만들어지고 메시 ≤ 8·삼각형 ≤ 15,000·높이 1.5~1.92·지오메트리 소유 ≤ 14, 동작 표와 `EMOTE_MS` 일치, 8명 장면 합계를 WebGL 없이 확인한다(결정 0068-9).
+- 포즈 스트립(10페이즈): 개발 서버에서 `?e2e=1&pose-strip=1`, 사진은 `node scripts/pose-strip-shot.mjs --url http://localhost:5173 --out <폴더>`. 개발 빌드와 `?e2e=1` 에서만 켜진다.
 - `npm run tokens`(`scripts/gen-tokens.mjs`): `design/tokens.json` → `src/styles/tokens.css`. 테스트가 둘의 일치를 확인한다.
 - `test/unit/backdropContrast.test.ts`: 헤더 글씨 대비를 오프라인으로 재합성.
 - smoke: 배포본 배경이 `image/webp` · `max-age=86400` · RIFF/WEBP 머리 · 용량 상한인지 확인.
