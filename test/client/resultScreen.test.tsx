@@ -89,14 +89,26 @@ function makeView(o: Opts = {}): RoomView {
     serverNow: NOW,
     minPlayers: 4,
     maxPlayers: 8,
-    players: seats.map(({ seat }) => ({
-      seat,
-      nickname: (o.nicknames ?? NAMES)[seat]!,
-      connected: true,
-      isHost: seat === 0,
-      ...(dead.includes(seat) ? { alive: false } : {}),
-    })),
-    me: { seat: me, isHost: me === 0, role: jobs[me]!, ...(chat === null ? {} : { chat }) },
+    ...(o.round !== undefined ? { round: o.round } : {}),
+    players: [
+      ...seats.map(({ seat }) => ({
+        seat,
+        nickname: (o.nicknames ?? NAMES)[seat]!,
+        connected: !(o.offline ?? []).includes(seat),
+        isHost: seat === (o.hostSeat ?? 0),
+        ...(dead.includes(seat) ? { alive: false } : {}),
+        ...((o.ready ?? []).includes(seat) ? { ready: true as const } : {}),
+      })),
+      ...(o.sat ?? []).map((seat) => ({
+        seat,
+        nickname: (o.nicknames ?? NAMES)[seat]!,
+        connected: !(o.offline ?? []).includes(seat),
+        isHost: false,
+        sat: true as const,
+        ...((o.ready ?? []).includes(seat) ? { ready: true as const } : {}),
+      })),
+    ],
+    me: { seat: me, isHost: me === (o.hostSeat ?? 0), ...(o.sat?.includes(me) ? {} : { role: jobs[me]! }), ...(chat === null ? {} : { chat }) },
     day: { n: 2, roles: ["mafia", "police", "citizen"], voteLog: o.voteLog ?? [] },
     ...(o.spectate ? { spectate: { seats } } : {}),
     ...(o.withResult === false ? {} : { result: { winner: o.winner ?? "citizenWin", seats, summary: o.summary ?? [], ...(o.awards !== undefined ? { awards: o.awards } : {}) } }),
@@ -1339,10 +1351,147 @@ describe("기록 탭: 일차 카드 띠와 하루 상세 (11-11, D-8)", () => {
     expect(r.container.querySelector("[data-day-card]")).toBeNull();
   });
 
+  type Listener = (e: RoomEvent, meta: { epoch: number }) => void;
+  const withEvents = () => {
+    let listener: Listener | null = null;
+    const over: Partial<RoomConnection> = {
+      onEvent: vi.fn((l: Listener) => {
+        listener = l;
+        return () => {};
+      }),
+    };
+    return { over, emit: (e: RoomEvent) => act(() => void listener!(e, { epoch: 1 })) };
+  };
+
+  it("찬반·주장·귓속말 부분은 resultLog 프레임으로 받은 값이 하루 상세에 그려진다 (거짓 주장은 마피아만 is-lie)", () => {
+    const { over, emit } = withEvents();
+    const r = renderRoom(timelineView(), over);
+    emit({ t: "resultLog", part: "claim", i: 0, end: true, lines: [{ seat: 0, n: 1, v: "citizen" }, { seat: 4, n: 1, v: "police" }] });
+    emit({ t: "resultLog", part: "ballots", i: 0, end: true, lines: [{ n: 1, yes: [2, 3], no: [1] }] });
+    emit({ t: "resultLog", part: "whisper", i: 0, end: true, lines: [{ seat: 2, to: 3, n: 1, text: "비밀", at: NOW }] });
+    fireEvent.click(tabBtn(r.container, "log"));
+    const detail = r.container.querySelector("[data-day-detail='1']")!;
+    expect(Array.from(detail.querySelectorAll("[data-claim]")).map((e) => [e.getAttribute("data-claim"), e.classList.contains("is-lie")])).toEqual([["0", true], ["4", false]]);
+    expect(detail.querySelector("[data-ballot=yes]")).not.toBeNull();
+    expect(detail.querySelectorAll("[data-whisper-pair]")).toHaveLength(1);
+    expect(((detail.textContent ?? "") + (r.container.querySelector("[data-timeline-strip]")?.textContent ?? "")).replace(/[\d\s]/g, "")).toBe("");
+  });
+
+  it("귓속말 쌍을 누르면 귓속말 탭으로 이동하고 그날 구분선이 보이게 스크롤한다", () => {
+    const scrollIntoView = vi.fn();
+    Object.defineProperty(Element.prototype, "scrollIntoView", { configurable: true, value: scrollIntoView });
+    const { over, emit } = withEvents();
+    const r = renderRoom(timelineView(), over);
+    emit({ t: "resultLog", part: "whisper", i: 0, end: true, lines: [{ seat: 2, to: 3, n: 1, text: "하나", at: NOW }, { seat: 1, to: 0, n: 2, text: "둘", at: NOW + 1 }] });
+    fireEvent.click(tabBtn(r.container, "log"));
+    fireEvent.click(r.container.querySelector("[data-day-card='2']")!);
+    fireEvent.click(r.container.querySelector("[data-day-detail='2'] [data-whisper-pair]")!);
+    expect(panelOf(r.container).getAttribute("data-tab")).toBe("whisper");
+    expect(r.container.querySelector("[data-day-card]")).toBeNull();
+    const target = scrollIntoView.mock.contexts.at(-1) as HTMLElement;
+    expect(target.getAttribute("data-day")).toBe("2");
+    delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView;
+  });
+
   it("기록 상세의 보이는 글자는 숫자뿐이다", () => {
     const r = renderRoom(timelineView());
     fireEvent.click(tabBtn(r.container, "log"));
     const body = r.container.querySelector("[data-result-body=log]")!;
     expect((body.textContent ?? "").replace(/[\d\s]/g, "")).toBe("");
+  });
+});
+
+// ---------- 11-12 Task 1: 다시 하기 알약 (D-11, D-12) ----------
+describe("다시 하기 알약 (11-12)", () => {
+  const pillOf = (c: ParentNode) => c.querySelector<HTMLButtonElement>("[data-ready-pill]");
+  const sentOf = (send: ReturnType<typeof vi.fn>) => send.mock.calls.map((c) => c[0] as { t: string });
+  const executionView = (): RoomView => {
+    const v = makeView();
+    v.phase = "execution";
+    delete (v as { result?: unknown }).result;
+    v.day = { ...v.day!, candidate: 3, execution: { seat: 3 } };
+    return v;
+  };
+
+  it("입력줄 오른쪽 끝(보내기 뒤)에 알약 하나가 있다 — 손님은 '준비' 토글", () => {
+    const r = renderRoom(makeView({ me: 1, ready: [0] }));
+    const pill = pillOf(r.container)!;
+    expect(pill).not.toBeNull();
+    expect(pill.closest("[data-chat-trailing]")).not.toBeNull();
+    expect(pill.textContent).toBe("준비");
+    expect(pill.getAttribute("data-ready")).toBe("false");
+    expect(r.container.querySelectorAll("[data-ready-pill]")).toHaveLength(1);
+  });
+
+  it("손님이 누르면 { t:'ready', on:true, round } 가 나가고, 서버 state 가 오면 '준비됨' 으로 바뀐다", () => {
+    const r = renderRoom(makeView({ me: 1, ready: [0], round: 2 }));
+    fireEvent.click(pillOf(r.container)!);
+    expect(sentOf(r.send).filter((m) => m.t === "ready")).toEqual([{ t: "ready", on: true, round: 2 }]);
+    expect(pillOf(r.container)!.getAttribute("data-ready")).toBe("false"); // 낙관적으로 바꾸지 않는다
+    r.rerenderRoom(makeView({ me: 1, ready: [0, 1], round: 2 }));
+    expect(pillOf(r.container)!.getAttribute("data-ready")).toBe("true");
+    expect(pillOf(r.container)!.getAttribute("aria-label")).toBe("준비됨, 눌러서 취소");
+  });
+
+  it("방장은 '시작' 과 'n / m' 두 줄 — n 은 준비한 연결된 사람, m 은 연결된 사람", () => {
+    const r = renderRoom(makeView({ count: 5, me: 0, ready: [0, 1, 2], offline: [4] }));
+    const pill = pillOf(r.container)!;
+    expect(pill.getAttribute("data-ready-count")).toBe("3/4");
+    expect(text(pill)).toBe("시작3 / 4");
+    expect(pill.getAttribute("aria-label")).toBe("다음 판 시작, 3명 준비");
+    expect(pill.getAttribute("data-dim")).toBe("true"); // 3 < 4
+  });
+
+  it("방장이 4명 미만에서 누르면 토스트 '4명부터 시작해요' 만 — rematch 는 나가지 않는다", () => {
+    const r = renderRoom(makeView({ count: 5, me: 0, ready: [0, 1] }));
+    fireEvent.click(pillOf(r.container)!);
+    expect(sentOf(r.send).filter((m) => m.t === "rematch")).toEqual([]);
+    expect(r.container.querySelector(".mv-toast")?.textContent).toBe("4명부터 시작해요");
+  });
+
+  it("방장이 모두 준비한 상태에서 누르면 확인 없이 { t:'rematch', round } 를 보낸다", () => {
+    const r = renderRoom(makeView({ count: 5, me: 0, ready: [0, 1, 2, 3, 4], round: 3 }));
+    fireEvent.click(pillOf(r.container)!);
+    expect(sentOf(r.send).filter((m) => m.t === "rematch")).toEqual([{ t: "rematch", round: 3 }]);
+  });
+
+  it("준비한 좌석의 이름표에 체크(done, '준비됨')가 모두에게 같게 붙는다", () => {
+    renderRoom(makeView({ count: 5, me: 1, ready: [0, 2] }));
+    const tag = (seat: number) => stage.props!.tagProps!(seat) as { done?: boolean; doneLabel?: string };
+    expect(tag(0)).toMatchObject({ done: true, doneLabel: "준비됨" });
+    expect(tag(2)).toMatchObject({ done: true, doneLabel: "준비됨" });
+    expect(tag(1).done).toBeUndefined();
+    expect(tag(3).done).toBeUndefined();
+  });
+
+  it("승리 조명(4600) 전에는 알약이 비활성이고 눌러도 아무 일 없다 — 4600 이 되면 활성", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
+    const r = renderRoom(executionView());
+    r.rerenderRoom(makeView({ me: 1, ready: [0] }));
+    const pill = pillOf(r.container)!;
+    expect(pill.getAttribute("aria-disabled")).toBe("true");
+    fireEvent.click(pill);
+    expect(sentOf(r.send).filter((m) => m.t === "ready")).toEqual([]);
+    act(() => void vi.advanceTimersByTime(4600));
+    expect(pillOf(r.container)!.getAttribute("aria-disabled")).toBeNull();
+    fireEvent.click(pillOf(r.container)!);
+    expect(sentOf(r.send).filter((m) => m.t === "ready")).toHaveLength(1);
+  });
+
+  it("확장 탭에서는 입력줄이 숨고 알약만 남는다 (ResultPanel 의 pill 자리)", () => {
+    const r = renderRoom(makeView({ me: 1, ready: [0] }));
+    fireEvent.click(r.container.querySelector("[data-result-tab='mafia']")!);
+    expect(r.container.querySelector("[data-chat-trailing]")).toBeNull();
+    expect(r.container.querySelector("[data-chat-input]")).toBeNull();
+    const pill = pillOf(r.container)!;
+    expect(pill.closest(".mf-result__pill")).not.toBeNull();
+    expect(r.container.querySelectorAll("[data-ready-pill]")).toHaveLength(1);
+  });
+
+  it("끊기면(canSend 거짓) 알약을 눌러도 아무것도 보내지 않는다", () => {
+    const r = renderRoom(makeView({ me: 1, ready: [0] }), { canSend: false });
+    fireEvent.click(pillOf(r.container)!);
+    expect(sentOf(r.send)).toEqual([]);
   });
 });
