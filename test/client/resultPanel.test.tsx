@@ -6,6 +6,7 @@ import { ResultPanel } from "../../src/components/v2/ResultPanel";
 import type { ResultPanelProps, ResultTab } from "../../src/components/v2/ResultPanel";
 import { RESULT_PANEL_TEXT } from "../../src/game/resultText";
 import type { ResultLogSnapshot } from "../../src/net/resultLogStore";
+import { tlLog, TL_NAMES, TL_RESULT, TL_VOTE_LOG } from "../helpers/timelineState";
 
 afterEach(cleanup);
 
@@ -213,5 +214,26 @@ describe("유령·귓속말·기록 탭 (A-3)", () => {
     cleanup();
     const bare = setup({ tab: "log", expanded: true });
     expect(bare.container.querySelector("[data-result-body='log']")).not.toBeNull();
+  });
+});
+
+describe("기록 탭 (11-11)", () => {
+  const view = { result: TL_RESULT, day: { voteLog: TL_VOTE_LOG } };
+  const logSnap = (): ResultLogSnapshot => ({ ...snap(), ...tlLog() });
+
+  it("기록 탭 몸통은 view 가 있을 때 일차 카드 띠와 하루 상세다 — 탭을 열기 전엔 DOM 에 없다", () => {
+    const closed = setup({ tab: "all", view, lines: logSnap(), contacts: TL_NAMES });
+    expect(closed.container.querySelector("[data-day-card]")).toBeNull();
+    closed.unmount();
+    const open = setup({ tab: "log", expanded: true, view, lines: logSnap(), contacts: TL_NAMES });
+    expect(open.container.querySelectorAll("[data-day-card]")).toHaveLength(3);
+    expect(open.container.querySelector("[data-day-detail='1']")).not.toBeNull();
+    expect(open.container.querySelector("[data-result-body='log']")?.classList.contains("mf-result__body--log")).toBe(true);
+  });
+
+  it("logSlot 이 있으면 그것이 우선이다", () => {
+    const { container } = setup({ tab: "log", expanded: true, view, lines: logSnap(), logSlot: <i data-custom="" /> });
+    expect(container.querySelector("[data-custom]")).not.toBeNull();
+    expect(container.querySelector("[data-day-card]")).toBeNull();
   });
 });

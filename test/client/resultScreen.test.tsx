@@ -6,7 +6,7 @@ import "../helpers/singleLineErrors";
 import { phaseKey } from "../../shared/game/audience";
 import { ringSlots } from "../../shared/game/gather";
 import type { RoleId } from "../../shared/game/roles";
-import type { AwardLine, GameWinner, RoomView } from "../../shared/protocol";
+import type { AwardLine, GameWinner, RoomView, SummaryRow, VoteLogEntry } from "../../shared/protocol";
 import type { WorldStageProps } from "../../src/components/WorldStage";
 import type { RoomConnection, RoomEvent } from "../../src/net/useRoomConnection";
 import { GATHER_CENTER } from "../../src/world/camera";
@@ -69,6 +69,9 @@ interface Opts {
   nicknames?: string[];
   /** 서버가 정렬해 보낸 시상 칭호 패 목록(11-09). 없으면 키 자체가 없다(옛 서버) */
   awards?: AwardLine[];
+  /** 판 요약·공개 투표 기록(11-11 기록 탭). 없으면 빈 배열 */
+  summary?: SummaryRow[];
+  voteLog?: VoteLogEntry[];
 }
 
 function makeView(o: Opts = {}): RoomView {
@@ -94,9 +97,9 @@ function makeView(o: Opts = {}): RoomView {
       ...(dead.includes(seat) ? { alive: false } : {}),
     })),
     me: { seat: me, isHost: me === 0, role: jobs[me]!, ...(chat === null ? {} : { chat }) },
-    day: { n: 2, roles: ["mafia", "police", "citizen"], voteLog: [] },
+    day: { n: 2, roles: ["mafia", "police", "citizen"], voteLog: o.voteLog ?? [] },
     ...(o.spectate ? { spectate: { seats } } : {}),
-    ...(o.withResult === false ? {} : { result: { winner: o.winner ?? "citizenWin", seats, summary: [], ...(o.awards !== undefined ? { awards: o.awards } : {}) } }),
+    ...(o.withResult === false ? {} : { result: { winner: o.winner ?? "citizenWin", seats, summary: o.summary ?? [], ...(o.awards !== undefined ? { awards: o.awards } : {}) } }),
   };
 }
 
@@ -1282,5 +1285,64 @@ describe("시상식 완성 (11-09)", () => {
     expect(stack.hasAttribute("data-float-single")).toBe(false); // 두 칸 자리: 아래 칸은 11-12 의 [꾸미기]
     expect(stack.querySelectorAll("button")).toHaveLength(1);
     expect(r.container.querySelector<HTMLElement>("main.mf-result")!.style.getPropertyValue("--mf-panel-h")).not.toBe("");
+  });
+});
+
+describe("기록 탭: 일차 카드 띠와 하루 상세 (11-11, D-8)", () => {
+  const TL_JOBS: RoleId[] = ["mafia", "mafia", "police", "doctor", "citizen", "citizen"];
+  const TL_SUMMARY: SummaryRow[] = [
+    { n: 1, exec: { yes: 4, no: 1, passed: true, candidate: 4 }, night: { target: 2, died: false } },
+    { n: 2, exec: { yes: 1, no: 3, passed: false, candidate: 2 }, night: { target: 3, died: true } },
+  ];
+  const TL_VOTES: VoteLogEntry[] = [
+    { n: 1, exec: { yes: 4, no: 1, passed: true }, cand: { votes: [{ seat: 2, target: 4 }, { seat: 3, target: 4 }, { seat: 1, target: 2 }], candidate: 4 } },
+    { n: 2, exec: { yes: 1, no: 3, passed: false }, cand: { votes: [{ seat: 0, target: 2 }], candidate: 2 } },
+  ];
+  const timelineView = (): RoomView => makeView({ count: 6, jobs: TL_JOBS, dead: [4, 3], summary: TL_SUMMARY, voteLog: TL_VOTES });
+  const tabBtn = (c: ParentNode, id: string) => c.querySelector<HTMLElement>(`[data-result-tab="${id}"]`)!;
+  const panelOf = (c: ParentNode) => c.querySelector<HTMLElement>("[data-result-panel]")!;
+
+  it("탭을 열기 전에는 기록 DOM 이 없다 (카드도 상세도)", () => {
+    const r = renderRoom(timelineView());
+    expect(r.container.querySelector("[data-day-card]")).toBeNull();
+    expect(r.container.querySelector("[data-day-detail]")).toBeNull();
+  });
+
+  it("기록 탭을 열면 확장 패널 안에 일차 카드 띠와 1일차 상세(지목 줄)가 그려지고 1일차가 선택돼 있다", () => {
+    const r = renderRoom(timelineView());
+    fireEvent.click(tabBtn(r.container, "log"));
+    const panel = panelOf(r.container);
+    expect(panel.getAttribute("data-expanded")).toBe("true");
+    const cards = Array.from(panel.querySelectorAll<HTMLElement>("[data-day-card]"));
+    expect(cards.map((c) => c.getAttribute("data-day-card"))).toEqual(["1", "2"]);
+    expect(cards.map((c) => c.getAttribute("aria-pressed"))).toEqual(["true", "false"]);
+    const detail = panel.querySelector("[data-day-detail]")!;
+    expect(detail.getAttribute("data-day-detail")).toBe("1");
+    expect(detail.querySelector("[data-row=pointing]")).not.toBeNull();
+    // 처형된 4(시민) 의 직업 칩이 카드에 있다
+    expect(cards[0]!.querySelector("[data-role-chip]")?.getAttribute("data-role-chip")).toBe("citizen");
+  });
+
+  it("다른 카드를 누르면 상세가 그 일차로 바뀐다", () => {
+    const r = renderRoom(timelineView());
+    fireEvent.click(tabBtn(r.container, "log"));
+    fireEvent.click(r.container.querySelector("[data-day-card='2']")!);
+    expect(r.container.querySelector("[data-day-detail]")?.getAttribute("data-day-detail")).toBe("2");
+    expect(r.container.querySelector("[data-day-card='2']")?.getAttribute("aria-pressed")).toBe("true");
+    expect(r.container.querySelector("[data-day-card='1']")?.getAttribute("aria-pressed")).toBe("false");
+  });
+
+  it("다른 탭으로 가면 기록 DOM 이 다시 없어진다", () => {
+    const r = renderRoom(timelineView());
+    fireEvent.click(tabBtn(r.container, "log"));
+    fireEvent.click(tabBtn(r.container, "all"));
+    expect(r.container.querySelector("[data-day-card]")).toBeNull();
+  });
+
+  it("기록 상세의 보이는 글자는 숫자뿐이다", () => {
+    const r = renderRoom(timelineView());
+    fireEvent.click(tabBtn(r.container, "log"));
+    const body = r.container.querySelector("[data-result-body=log]")!;
+    expect((body.textContent ?? "").replace(/[\d\s]/g, "")).toBe("");
   });
 });
