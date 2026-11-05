@@ -4,7 +4,7 @@ import { env } from "cloudflare:workers";
 import { runDurableObjectAlarm } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 import type { ServerMessage } from "../../shared/protocol";
-import { alarmOf, connect, editRoom, hello, mapPlayers, nextFrame, seat, storedRoom, until } from "./helpers";
+import { alarmOf, closed, connect, editRoom, endedGame4, flushWorld, hello, mapPlayers, nextFrame, seat, send, startedGame, storedRoom, until, worldOf } from "./helpers";
 
 type StoredPlayer = { id: string; seat: number; connected: boolean; disconnectedAt?: number; left?: true };
 type StoredHost = { hostId: string; players: StoredPlayer[] };
@@ -111,5 +111,139 @@ describe("방장 이양 (D-17, CONNX-01)", () => {
     const first = await hello(back, g1.token);
     expect(first.view.me.isHost).toBe(true);
     expect((await stored(r.code)).hostId).not.toBe(before.hostId);
+  });
+});
+
+/** 저장된 방에서 이 사람의 끊긴 시각을 ms 만큼 과거로 옮긴다. */
+async function ageOf(code: string, playerId: string, ms: number): Promise<void> {
+  await agePast(code, playerId, ms);
+}
+
+const idOfSeat = async (code: string, seatNo: number): Promise<string> =>
+  (await stored(code)).players.find((p) => p.seat === seatNo)!.id;
+
+describe("대기실 정리 (D-18, CONNX-02)", () => {
+  it("대기실에서 손님 소켓이 끊기면 알람이 정리 시각(테스트 방 6초)에 맞춰지고, 그 시각이 지나 알람이 돌면 모든 소켓의 players 와 월드에서 사라지며 그 토큰은 invalid_token 으로 닫힌다", async () => {
+    const r = await seat(2, 0, { testMode: true });
+    const [g1, g2] = r.guests as [(typeof r.guests)[number], (typeof r.guests)[number]];
+    const g2Id = await idOfSeat(r.code, g2.seat);
+    await flushWorld(r.code);
+    expect((await worldOf(r.code))!.segs[g2Id]).toBeDefined();
+
+    g2.sock.ws.close();
+    await nextFrame(g1.sock, seatState(g2.seat, false));
+    await until("정리 알람", async () => {
+      const at = (await stored(r.code)).players.find((p) => p.id === g2Id)?.disconnectedAt;
+      return at !== undefined && (await alarmOf(r.code)) === at + 6000;
+    });
+    // 정리 시간 안에 알람이 돌면 그대로다.
+    await runDurableObjectAlarm(env.ROOM.getByName(r.code));
+    expect((await stored(r.code)).players.map((p) => p.id)).toContain(g2Id);
+
+    await ageOf(r.code, g2Id, 10_000);
+    g1.sock.cursor = g1.sock.frames.length;
+    expect(await runDurableObjectAlarm(env.ROOM.getByName(r.code))).toBe(true);
+    const gone = await nextFrame(g1.sock, (m) => m.t === "state" && !m.view.players.some((p) => p.seat === g2.seat));
+    expect(gone.t).toBe("state");
+    await nextFrame(r.host, (m) => m.t === "state" && !m.view.players.some((p) => p.seat === g2.seat));
+    expect((await stored(r.code)).players.map((p) => p.id)).not.toContain(g2Id);
+    expect((await worldOf(r.code))!.segs[g2Id]).toBeUndefined();
+
+    const back = await connect(r.code);
+    send(back, { t: "hello", token: g2.token });
+    expect(await closed(back)).toBe("4003 invalid_token");
+  });
+
+  it("옛 방장: 이양된 뒤 계속 끊겨 있으면 같은 규칙으로 지워지고 방에는 연결된 새 방장이 남는다", async () => {
+    const r = await seat(1, 0, { testMode: true });
+    const g1 = r.guests[0]!;
+    const before = await stored(r.code);
+    r.host.ws.close();
+    await nextFrame(g1.sock, seatState(0, false));
+    await until("disconnectedAt 기록", async () => (await stored(r.code)).players.find((p) => p.id === before.hostId)?.disconnectedAt !== undefined);
+    await ageOf(r.code, before.hostId, 10_000);
+    await runDurableObjectAlarm(env.ROOM.getByName(r.code));
+    const room = await stored(r.code);
+    expect(room.players.map((p) => p.id)).not.toContain(before.hostId);
+    expect(room.players).toHaveLength(1);
+    expect(room.hostId).toBe(room.players[0]!.id);
+    expect(room.players[0]!.connected).toBe(true);
+  });
+
+  it("게임 중(낮 토론)에는 끊긴 지 아무리 오래돼도 지우지 않는다", async () => {
+    const g = await startedGame("discussion", 3);
+    const idle = g.actors.find((a) => a.seat !== 0)!;
+    const idleId = await idOfSeat(g.code, idle.seat);
+    idle.sock.ws.close();
+    await until("끊김 기록", async () => (await stored(g.code)).players.find((p) => p.id === idleId)?.disconnectedAt !== undefined);
+    await ageOf(g.code, idleId, 10 * 60_000);
+    await runDurableObjectAlarm(env.ROOM.getByName(g.code));
+    const room = await stored(g.code);
+    expect(room.players).toHaveLength(4);
+    expect(room.players.find((p) => p.id === idleId)!.connected).toBe(false);
+  });
+});
+
+describe("결과 단계 나가기 (D-14)", () => {
+  it("leave 를 보낸 소켓은 4003 'left' 로 닫히고 다른 소켓의 players 에는 그 사람이 connected false 로 남는다(left 는 프레임에 없다)", async () => {
+    const g = await endedGame4();
+    const leaver = g.actors.find((a) => a.seat !== 0)!;
+    const stayer = g.actors.find((a) => a.seat === 0)!;
+    stayer.sock.cursor = stayer.sock.frames.length;
+    send(leaver.sock, { t: "leave" });
+    expect(await closed(leaver.sock)).toBe("4003 left");
+    const m = await nextFrame(stayer.sock, (f) => f.t === "state" && f.view.players.find((p) => p.seat === leaver.seat)?.connected === false);
+    expect(m.t === "state" && m.view.players).toHaveLength(4);
+    expect(JSON.stringify(m)).not.toContain('"left"');
+    const room = await stored(g.code);
+    const rec = room.players.find((p) => p.seat === leaver.seat)!;
+    expect(rec.left).toBe(true);
+    expect(rec.connected).toBe(false);
+    expect(room.players).toHaveLength(4);
+    expect(room.hostId).toBe(room.players.find((p) => p.seat === 0)!.id);
+  });
+
+  it("방장이 나가면 즉시 연결된 가장 이른 joinSeq 사람에게 넘어간다", async () => {
+    const g = await endedGame4();
+    const host = g.actors.find((a) => a.seat === 0)!;
+    const next = g.actors.filter((a) => a !== host).sort((a, b) => a.seat - b.seat)[0]!;
+    next.sock.cursor = next.sock.frames.length;
+    send(host.sock, { t: "leave" });
+    expect(await closed(host.sock)).toBe("4003 left");
+    const m = await nextFrame(next.sock, (f) => f.t === "state" && f.view.me.isHost);
+    expect(m.t === "state" && m.view.me.isHost).toBe(true);
+    const room = await stored(g.code);
+    expect(room.players.find((p) => p.id === room.hostId)!.seat).toBe(next.seat);
+  });
+
+  it("나간 사람은 같은 토큰으로 다시 들어올 수 없다", async () => {
+    const g = await endedGame4();
+    const leaver = g.actors.find((a) => a.seat !== 0)!;
+    send(leaver.sock, { t: "leave" });
+    await closed(leaver.sock);
+    const back = await connect(g.code);
+    send(back, { t: "hello", token: leaver.token });
+    expect(await closed(back)).toBe("4003 invalid_token");
+  });
+
+  it("끊긴 사람은 결과 단계에서 아무리 오래돼도 지우지 않는다", async () => {
+    const g = await endedGame4();
+    const idle = g.actors.find((a) => a.seat !== 0)!;
+    const idleId = await idOfSeat(g.code, idle.seat);
+    idle.sock.ws.close();
+    await until("끊김 기록", async () => (await stored(g.code)).players.find((p) => p.id === idleId)?.disconnectedAt !== undefined);
+    await ageOf(g.code, idleId, 10 * 60_000);
+    await runDurableObjectAlarm(env.ROOM.getByName(g.code));
+    expect((await stored(g.code)).players).toHaveLength(4);
+  });
+
+  it("진행 중 판의 leave 는 이전처럼 WRONG_PHASE 다", async () => {
+    const g = await startedGame("discussion", 3);
+    const who = g.actors.find((a) => a.seat !== 0)!;
+    who.sock.cursor = who.sock.frames.length;
+    send(who.sock, { t: "leave" });
+    const err = await nextFrame(who.sock, (m) => m.t === "error");
+    expect(err).toEqual({ t: "error", code: "WRONG_PHASE" });
+    expect((await stored(g.code)).players).toHaveLength(4);
   });
 });

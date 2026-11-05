@@ -311,6 +311,58 @@ describe("leaveRoom", () => {
     expect(back.players[0]!.connected).toBe(true);
   });
 
+  it("결과 단계(ended) 나가기: 지우지 않고 left·connected false·connId null 로 표시한다 (D-14)", () => {
+    const s = room(
+      [
+        { id: "A", seat: 0, joinSeq: 0, connected: true },
+        { id: "B", seat: 1, joinSeq: 1, connected: true },
+        { id: "C", seat: 2, joinSeq: 2, connected: true },
+      ],
+      { phase: "ended" },
+    );
+    const r = leaveRoom(s, "B");
+    if (!r.ok || r.state === null) throw new Error("expected room");
+    expect(r.state.players.map((p) => p.id)).toEqual(["A", "B", "C"]);
+    const b = r.state.players[1]!;
+    expect(b.left).toBe(true);
+    expect(b.connected).toBe(false);
+    expect(b.connId).toBeNull();
+    expect(r.state.hostId).toBe("A");
+    expect(s.players[1]!.left).toBeUndefined(); // 입력 불변
+  });
+
+  it("결과 단계에서 방장이 나가면 연결된 가장 이른 joinSeq 에게 즉시 이양한다 (나가는 사람 제외, 봇 제외, 후보 없으면 그대로)", () => {
+    const s = room(
+      [
+        { id: "A", seat: 0, joinSeq: 0, connected: true },
+        { id: "B", seat: 1, joinSeq: 1, connected: false },
+        { id: "bot", seat: 2, joinSeq: 2, connected: true },
+        { id: "D", seat: 3, joinSeq: 3, connected: true },
+        { id: "E", seat: 4, joinSeq: 4, connected: true },
+      ],
+      { phase: "ended" },
+    );
+    const withBot = { ...s, players: s.players.map((p) => (p.id === "bot" ? { ...p, isBot: true as const } : p)) };
+    const r = leaveRoom(withBot, "A");
+    if (!r.ok || r.state === null) throw new Error("expected room");
+    expect(r.state.hostId).toBe("D");
+    expect(r.state.players).toHaveLength(5);
+    const alone = room([{ id: "A", seat: 0, joinSeq: 0, connected: true }], { phase: "ended" });
+    const r2 = leaveRoom(alone, "A");
+    if (!r2.ok || r2.state === null) throw new Error("expected room");
+    expect(r2.state.hostId).toBe("A");
+    expect(r2.state.players[0]!.left).toBe(true);
+  });
+
+  it("결과 단계: 모르는 사람은 NOT_IN_ROOM, 진행 중 판(assigning~morning)은 WRONG_PHASE 그대로", () => {
+    const ended = room([{ id: "A", seat: 0, joinSeq: 0 }, { id: "B", seat: 1, joinSeq: 1 }], { phase: "ended" });
+    expect(outcome(leaveRoom(ended, "nobody"))).toBe("NOT_IN_ROOM");
+    for (const phase of ["assigning", "roleReveal", "dayAnnounce", "discussion", "nomination", "night", "morning"] as const) {
+      const s = room([{ id: "A", seat: 0, joinSeq: 0 }, { id: "B", seat: 1, joinSeq: 1 }], { phase });
+      expect(outcome(leaveRoom(s, "B"))).toBe("WRONG_PHASE");
+    }
+  });
+
   it("마지막 사람이 나가면 결과 상태는 null 이다", () => {
     expect(leaveRoom(newRoom(), "h1")).toEqual({ ok: true, state: null });
   });

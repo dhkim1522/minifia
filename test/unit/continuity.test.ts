@@ -2,7 +2,10 @@ import { describe, expect, it } from "vitest";
 import {
   HOST_GRACE_MS,
   HOST_GRACE_TEST_MS,
+  LOBBY_PRUNE_MS,
+  LOBBY_PRUNE_TEST_MS,
   nextContinuityAt,
+  pruneLobby,
   resolveHost,
 } from "../../shared/game/continuity";
 import { ROOM_TTL_MS } from "../../shared/game/room";
@@ -125,5 +128,93 @@ describe("nextContinuityAt", () => {
 
   it("후보가 없으면 알람을 걸지 않는다 (과거 시각으로 알람이 돌지 않게)", () => {
     expect(nextContinuityAt(room([hostDown(), player(1, { connected: false, connId: null })]))).toBe(Number.POSITIVE_INFINITY);
+  });
+});
+
+const gone = (i: number, at: number, over: Partial<Player> = {}): Player =>
+  player(i, { connected: false, connId: null, disconnectedAt: at, ...over });
+
+describe("pruneLobby (대기실 정리, D-18, CONNX-02)", () => {
+  it("상수: 3분, 테스트 방 6초", () => {
+    expect(LOBBY_PRUNE_MS).toBe(180_000);
+    expect(LOBBY_PRUNE_TEST_MS).toBe(6_000);
+  });
+
+  it("끊긴 지 정리 시간 이상 지난 사람만 뺀다 — 연결됨·유예 미만·disconnectedAt 없음은 남는다", () => {
+    const s = room([
+      player(0),
+      gone(1, T0), // 지워진다
+      gone(2, T0 + 1), // 1ms 모자란다
+      player(3),
+      gone(4, T0, { disconnectedAt: undefined }), // 기록 없음
+    ]);
+    const out = pruneLobby(s, T0 + LOBBY_PRUNE_MS);
+    expect(out.removedIds).toEqual(["p1"]);
+    expect(out.state.players.map((p) => p.id)).toEqual(["p0", "p2", "p3", "p4"]);
+    expect(s.players).toHaveLength(5); // 입력 불변
+  });
+
+  it("방장과 봇은 지우지 않는다", () => {
+    const s = room([gone(0, T0), gone(1, T0, { isBot: true }), player(2)]);
+    const out = pruneLobby(s, T0 + 10 * LOBBY_PRUNE_MS);
+    expect(out.state).toBe(s);
+    expect(out.removedIds).toEqual([]);
+  });
+
+  it("대기실이 아니면 절대 지우지 않는다 (게임 중·결과 단계) — 같은 객체", () => {
+    for (const phase of ["assigning", "discussion", "night", "ended"] as const) {
+      const s = room([player(0), gone(1, T0)], {}, phase);
+      const out = pruneLobby(s, T0 + 10 * LOBBY_PRUNE_MS);
+      expect(out.state).toBe(s);
+      expect(out.removedIds).toEqual([]);
+    }
+  });
+
+  it("지울 사람이 없으면 같은 객체", () => {
+    const s = room([player(0), gone(1, T0)]);
+    expect(pruneLobby(s, T0 + 1).state).toBe(s);
+  });
+
+  it("테스트 방은 6초", () => {
+    const s = room([player(0), gone(1, T0)], { testMode: true });
+    expect(pruneLobby(s, T0 + LOBBY_PRUNE_TEST_MS - 1).removedIds).toEqual([]);
+    expect(pruneLobby(s, T0 + LOBBY_PRUNE_TEST_MS).removedIds).toEqual(["p1"]);
+  });
+
+  it("옛 방장: 이양된 뒤 계속 끊겨 있으면 같은 규칙으로 지워지고, 방에는 연결된 새 방장이 남는다", () => {
+    const s = room([gone(0, T0), player(1)]);
+    const now = T0 + LOBBY_PRUNE_MS;
+    const moved = resolveHost(s, now);
+    const out = pruneLobby(moved, now);
+    expect(out.removedIds).toEqual(["p0"]);
+    expect(out.state.hostId).toBe("p1");
+    expect(out.state.players.map((p) => p.id)).toEqual(["p1"]);
+  });
+
+  it("멱등: 정리된 결과에 다시 불러도 같은 객체", () => {
+    const once = pruneLobby(room([player(0), gone(1, T0)]), T0 + LOBBY_PRUNE_MS).state;
+    expect(pruneLobby(once, T0 + LOBBY_PRUNE_MS).state).toBe(once);
+  });
+});
+
+describe("nextContinuityAt — 정리 마감 합류", () => {
+  it("대기실의 끊긴 사람(방장 제외) 가운데 가장 이른 disconnectedAt + 정리 시간", () => {
+    const s = room([player(0), gone(1, T0 + 500), gone(2, T0)]);
+    expect(nextContinuityAt(s)).toBe(T0 + LOBBY_PRUNE_MS);
+    expect(nextContinuityAt({ ...s, testMode: true })).toBe(T0 + LOBBY_PRUNE_TEST_MS);
+  });
+
+  it("방장 이양 마감이 더 이르면 그것이다", () => {
+    const s = room([gone(0, T0), player(1), gone(2, T0 - 1)]);
+    expect(nextContinuityAt(s)).toBe(T0 + HOST_GRACE_MS);
+  });
+
+  it("대기실이 아니면 정리 마감이 없다", () => {
+    expect(nextContinuityAt(room([player(0), gone(1, T0)], {}, "discussion"))).toBe(Number.POSITIVE_INFINITY);
+  });
+
+  it("봇과 기록 없는 사람은 마감을 만들지 않는다", () => {
+    const s = room([player(0), gone(1, T0, { isBot: true }), gone(2, T0, { disconnectedAt: undefined })]);
+    expect(nextContinuityAt(s)).toBe(Number.POSITIVE_INFINITY);
   });
 });
