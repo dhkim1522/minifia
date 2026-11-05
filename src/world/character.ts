@@ -25,6 +25,7 @@ import {
 } from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import { MOVE_SPEED } from "../../shared/game/world";
+import { emoteCycles, REDUCED_Y_SCALE } from "./emoteCap";
 import { EMOTE_KEYS, EMOTES, EYE, type EmoteId, FACE_IDS, type FaceId, type Fig, FIGS, MOUTH, type Outfit, OUTFITS, type OutfitId, type PoseKey, SKIN } from "./characterData";
 
 /** 맵 위 크기 — 원래 키 약 2.1 단위를 약 1.7 로 줄여 쓴다 */
@@ -661,13 +662,16 @@ interface Emote {
   t: number;
   /** stopEmote 뒤 경과 시간(ms). null 이면 멈추는 중이 아니다 */
   stopT: number | null;
+  /** 모션 줄이기 변형(O-5): 반복 2 이하, surprise·dance 의 몸 위아래(y) 진폭 절반 */
+  reduced: boolean;
 }
 /** 원문 emotePose — 프레임 사이를 smoothstep(k = l²(3 − 2l))으로 잇고, 프레임에 없는 키는 base 자세 값을 쓴다 */
 function emotePose(e: Emote, base: Pose): Pose {
   const d = EMOTES[e.id];
   const n = d.frames.length;
-  const last = n * d.cycles - 1;
-  const total = n * d.seg * d.cycles;
+  const cycles = emoteCycles(e.id, e.reduced);
+  const last = n * cycles - 1;
+  const total = n * d.seg * cycles;
   const t = Math.min(e.t, total);
   const idx = Math.min(Math.floor(t / d.seg), last);
   const local = Math.min(1, (t - idx * d.seg) / d.seg);
@@ -680,6 +684,8 @@ function emotePose(e: Emote, base: Pose): Pose {
     const b = typeof fb[key] === "number" ? (fb[key] as number) : base[key];
     out[key] = a + (b - a) * k;
   }
+  // 모션 줄이기: 뛰어오름·몸 위아래는 서 있는 높이에서 벗어난 만큼의 절반만
+  if (e.reduced && (e.id === "surprise" || e.id === "dance")) out.y = base.y + (out.y - base.y) * REDUCED_Y_SCALE;
   const face = k < 0.5 ? fa.face : fb.face;
   out.face = typeof face === "string" && face ? face : "base";
   return out;
@@ -687,7 +693,7 @@ function emotePose(e: Emote, base: Pose): Pose {
 /** 원문 emoteDone — 모든 프레임을 돌고 붙들기(hold)까지 끝났는지 */
 function emoteDone(e: Emote): boolean {
   const d = EMOTES[e.id];
-  return e.t > d.frames.length * d.seg * d.cycles + d.hold;
+  return e.t > d.frames.length * d.seg * emoteCycles(e.id, e.reduced) + d.hold;
 }
 
 // ---------- 공개 모양 ----------
@@ -703,8 +709,8 @@ export interface WorldCharacter {
   setDim(on: boolean): void;
   /** 의상 바꾸기(원문 applyOutfit) — 해당 관절만 다시 병합(캐시) */
   applyOutfit(id: OutfitId): void;
-  /** 동작 재생(원문 playEmote) */
-  playEmote(id: EmoteId): void;
+  /** 동작 재생(원문 playEmote). reduced 면 모션 줄이기 변형(반복 2 이하, surprise·dance 의 y 진폭 절반)이다 */
+  playEmote(id: EmoteId, opts?: { reduced?: boolean }): void;
   /**
    * 재생 중인 동작을 POSE_BLEND_MS 에 걸쳐 서 있는 자세(유지 자세가 있으면 유지 자세)로 돌리고 끝낸다(10-03, D-13).
    * 방향(yaw)은 건드리지 않는다. 동작이 없으면 아무 일도 없다. 멈추는 중 playEmote 는 새 동작을 처음부터 시작한다
@@ -733,11 +739,21 @@ export interface WorldCharacter {
    * 끄면 껍질과 재질을 해제하고 고리 배율을 1 로 돌린다. 켠 채 다시 켜면 색·animate 만 바꾸고(조임은 처음부터 다시 하지 않는다) 껍질은 늘지 않는다.
    */
   setPickMark(on: boolean, opts?: { color: string; animate: boolean }): void;
+  /**
+   * 동작이 쓰는 표정(angry·sus·surprise·happy·cry)의 머리 병합을 현재 의상으로 미리 만들어 캐시에 둔다(10-03, O-10). 보이는 표정은 바꾸지 않는다.
+   * face 를 주면 그 표정 하나만 한다(동작이 쓰지 않는 이름은 무시). 이미 있으면 다시 만들지 않는다
+   */
+  prewarm(face?: FaceId): void;
+  /** 이 캐릭터가 만든 병합 지오메트리 수(관절 6 + 머리 표정 변형 + 돋보기 유리). dispose 뒤 0 */
+  ownedGeometryCount(): number;
   /** 지금 보이는 메시 수(관절 6 + 발밑 원판 + 투명 조각) */
   meshCount(): number;
   /** 이 캐릭터가 만든 지오메트리를 해제한다. 공유 재질·발밑 원판은 건드리지 않는다 */
   dispose(): void;
 }
+
+/** 동작이 쓰는 표정 — 첫 동작 재생에서 머리 병합이 생기지 않게 유휴 시간에 미리 만든다(O-10) */
+const PREWARM_FACES = ["angry", "sus", "surprise", "happy", "cry"] as const;
 
 /** 안개 유령의 발광(09.1-09, 시안 GhostCostume 'mist'): 복제 재질의 emissive 색과 세기 */
 export interface GhostGlow {
@@ -841,11 +857,11 @@ export function createCharacter(figIndex: number, outfit: OutfitId = "coat"): Wo
   // 병합 캐시: 몸통·팔·다리는 의상 키, 머리는 (의상, 표정) 키. 이 캐릭터가 만든 지오메트리는 owned 에 모은다
   const cache = new Map<string, Merged>();
   const owned = new Set<BufferGeometry>();
-  function merged(j: JointName): Merged {
-    const key = j === "head" ? `${j}|${outfitId}|${face}` : `${j}|${outfitId}`;
+  function merged(j: JointName, faceId: string = face): Merged {
+    const key = j === "head" ? `${j}|${outfitId}|${faceId}` : `${j}|${outfitId}`;
     let m = cache.get(key);
     if (!m) {
-      m = mergeJoint(parts[j], OUTFITS[outfitId], fig, face);
+      m = mergeJoint(parts[j], OUTFITS[outfitId], fig, faceId);
       owned.add(m.geo);
       if (dim) paint(m, true);
       cache.set(key, m);
@@ -949,7 +965,7 @@ export function createCharacter(figIndex: number, outfit: OutfitId = "coat"): Wo
       if (holdMix <= 0 && !holdId) holdShown = null;
       let held = base;
       if (holdShown && holdMix > 0) {
-        const target = emotePose({ id: holdShown, t: Number.POSITIVE_INFINITY, stopT: null }, base);
+        const target = emotePose({ id: holdShown, t: Number.POSITIVE_INFINITY, stopT: null, reduced: false }, base);
         if (holdMix >= 1) held = target;
         else {
           held = blendPose(base, target, holdMix);
@@ -996,8 +1012,15 @@ export function createCharacter(figIndex: number, outfit: OutfitId = "coat"): Wo
       outfitId = id;
       refresh(JOINTS);
     },
-    playEmote(id) {
-      if (!disposed && Object.hasOwn(EMOTES, id)) emote = { id, t: 0, stopT: null };
+    playEmote(id, opts) {
+      if (!disposed && Object.hasOwn(EMOTES, id)) emote = { id, t: 0, stopT: null, reduced: opts?.reduced === true };
+    },
+    prewarm(faceId) {
+      if (disposed) return;
+      for (const f of PREWARM_FACES) if (faceId === undefined || faceId === f) merged("head", f);
+    },
+    ownedGeometryCount() {
+      return owned.size;
     },
     stopEmote() {
       if (emote && emote.stopT === null) emote.stopT = 0;

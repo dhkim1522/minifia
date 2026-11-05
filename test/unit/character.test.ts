@@ -1129,6 +1129,17 @@ describe("모션 줄이기 변형 (10-03, O-5)", () => {
     return out;
   }
 
+  /** 동작 없이 서 있는 같은 캐릭터의 자세 열(같은 시각) */
+  function restPoses(seconds: number): Record<string, number>[] {
+    const c = createCharacter(0, "coat");
+    const out: Record<string, number>[] = [];
+    for (let i = 0; i * 0.016 < seconds; i++) {
+      c.update(0.016, i * 0.016, false);
+      out.push(readPose(c));
+    }
+    return out;
+  }
+
   it("reduced 가 아니면 옵션이 없을 때와 비트 단위로 같은 자세 열이다(회귀 없음)", () => {
     for (const id of ids) {
       const plain = run(id, undefined, 2.5);
@@ -1144,18 +1155,19 @@ describe("모션 줄이기 변형 (10-03, O-5)", () => {
   });
 
   it("반복이 3 이상인 동작은 reduced 에서 2 번만 돌고 emoteDurationMs(id, true) 가 끝나는 때와 맞는다", () => {
+    const rest = restPoses(4);
+    const away = (p: Record<string, number>, r: Record<string, number>): number => Object.keys(p).reduce((sum, k) => sum + Math.abs(p[k]! - r[k]!), 0);
     for (const id of ids.filter((x) => EMOTES[x].cycles > 2)) {
       const ms = emoteDurationMs(id, true);
       const frames = run(id, { reduced: true }, 4);
       const full = run(id, undefined, 4);
-      // 끝난 뒤(길이 + 두 프레임)에는 서 있는 자세, 그때 보통 재생은 아직 도는 중이다
       const endIdx = Math.ceil(ms / 16) + 2;
-      expect(frames[endIdx]!.aAz).toBeCloseTo(0.12, 6);
-      expect(frames[endIdx]!.aAx).toBe(0);
-      expect(Math.abs(full[endIdx]!.aAx) + Math.abs(full[endIdx]!.aAz - 0.12)).toBeGreaterThan(0.05);
+      // 끝난 뒤(길이 + 두 프레임)에는 서 있는 자세, 그때 보통 재생은 아직 도는 중이다
+      expect(away(frames[endIdx]!, rest[endIdx]!)).toBeLessThan(1e-9);
+      expect(away(full[endIdx]!, rest[endIdx]!)).toBeGreaterThan(0.05);
       // 끝나기 전 프레임은 동작 중
       const midIdx = Math.floor(ms / 16) - 3;
-      expect(Math.abs(frames[midIdx]!.aAx) + Math.abs(frames[midIdx]!.aAz - 0.12) + Math.abs(frames[midIdx]!.hz)).toBeGreaterThan(0.02);
+      expect(away(frames[midIdx]!, rest[midIdx]!)).toBeGreaterThan(0.02);
     }
   });
 

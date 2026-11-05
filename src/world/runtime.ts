@@ -145,7 +145,7 @@ const CHALK_DRAW_MS = 800;
 const OUTFIT = "coat";
 
 /** 동작을 재생할 수 있는 캐릭터 핸들(06-11 WorldCharacter). 테스트의 가짜 캐릭터에는 playEmote 가 없을 수 있다 */
-export type PlayableCharacter = CharacterHandle & { playEmote?(id: EmoteId): void; stopEmote?(): void; setFace?(id: FaceId): void };
+export type PlayableCharacter = CharacterHandle & { playEmote?(id: EmoteId, opts?: { reduced?: boolean }): void; stopEmote?(): void; prewarm?(face?: FaceId): void; setFace?(id: FaceId): void };
 
 /**
  * 밤 행동 선택의 발밑 고리 종류와 색. 값은 tokens.css 의 crimson-500·seat-1·seat-3 (승인 Ghost 보드 값, 9페이즈가 정식 토큰으로 정한다).
@@ -266,6 +266,8 @@ function defaultStorage(): Storage | null {
 interface Actor {
   seat: number;
   handle: CharacterHandle;
+  /** 표정 병합 선행(prewarm)을 걸어 둔 유휴 작업 id. 없으면 null */
+  idleId: number | null;
   /** 생성 때 root.scale (캐릭터 자체 크기). 연출 배율은 여기에 곱한다 */
   base: number;
   pos: { x: number; z: number };
@@ -401,10 +403,11 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
     if (a === undefined || a.exit !== null) return;
     const now = Date.now();
     // 상한: 새 동작은 항상 재생하고, 넘치면 가장 먼저 시작한 것을 부드럽게 끝낸다(D-13). 순서는 도착 순서다
-    const admitted = admitEmote(emotePlaying, { seat: f.seat, until: now + emoteDurationMs(f.id, deps.reducedMotion()) }, now, EMOTE_RENDER_MAX);
+    const reduced = deps.reducedMotion();
+    const admitted = admitEmote(emotePlaying, { seat: f.seat, until: now + emoteDurationMs(f.id, reduced) }, now, EMOTE_RENDER_MAX);
     for (const seat of admitted.stopSeats) stopHandleEmote(seat);
     emotePlaying = admitted.playing;
-    (a.handle as PlayableCharacter).playEmote?.(f.id);
+    (a.handle as PlayableCharacter).playEmote?.(f.id, { reduced }); // 모션 줄이기에서도 다른 사람의 동작은 정보라 재생한다(O-5)
     lastEmote = { seat: f.seat, id: f.id, n: f.n };
     emitEmotes();
   });
@@ -533,6 +536,7 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
     renderer = null;
     kit = null;
     for (const a of actors.values()) {
+      cancelPrewarm(a);
       r?.removeCharacter(a.seat);
       a.handle.dispose();
     }
@@ -597,7 +601,30 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
     deps.onGhostOutfits?.(map);
   }
 
+  /** 동작이 쓰는 표정의 머리 병합을 표정마다 따로 유휴 시간에 미리 만든다(O-10). requestIdleCallback 이 없으면 첫 사용 때 병합한다 */
+  const PREWARM_ORDER = ["angry", "sus", "surprise", "happy", "cry"] as const;
+  type IdleScheduler = { requestIdleCallback?: (cb: () => void) => number; cancelIdleCallback?: (id: number) => void };
+  function prewarmLater(a: Actor, i = 0): void {
+    const ric = (globalThis as IdleScheduler).requestIdleCallback;
+    if (typeof ric !== "function" || i >= PREWARM_ORDER.length) {
+      a.idleId = null;
+      return;
+    }
+    a.idleId = ric(() => {
+      a.idleId = null;
+      if (disposed || actors.get(a.seat) !== a) return;
+      (a.handle as PlayableCharacter).prewarm?.(PREWARM_ORDER[i]);
+      prewarmLater(a, i + 1);
+    });
+  }
+  function cancelPrewarm(a: Actor): void {
+    if (a.idleId === null) return;
+    (globalThis as IdleScheduler).cancelIdleCallback?.(a.idleId);
+    a.idleId = null;
+  }
+
   function removeActor(a: Actor): void {
+    cancelPrewarm(a);
     if (a.ghostOutfit !== null) ghostOutfitsDirty = true;
     renderer?.removeCharacter(a.seat);
     a.handle.dispose();
@@ -632,6 +659,7 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
     const a: Actor = {
       seat,
       handle,
+      idleId: null,
       base: handle.root.scale.x,
       pos: at ?? { x: 0, z: 0 },
       seg: store.segOf(seat),
@@ -662,6 +690,7 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
     handle.root.position.set(a.pos.x, 0, a.pos.z);
     renderer.addCharacter(seat, handle);
     actors.set(seat, a);
+    prewarmLater(a);
     const p = deps.players().find((q) => q.seat === seat);
     if (p !== undefined) applyDim(a, !p.connected);
   }
