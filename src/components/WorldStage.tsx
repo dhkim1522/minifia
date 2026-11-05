@@ -12,7 +12,7 @@ import type { SceneLook } from "../world/presence";
 import { initialMapStatus } from "../world/status";
 import type { MapStatusState } from "../world/status";
 import type { WorldStore } from "../world/store";
-import { installEmotesHook, installGhostOutfitsHook, installLooksHook, installPinHook, installWorldTestHooks, worldTestHooksEnabled } from "../world/testHooks";
+import { installEmotesHook, installGhostOutfitsHook, installLooksHook, installMapHook, installPinHook, installWorldTestHooks, worldTestHooksEnabled } from "../world/testHooks";
 import { MapStatusCard } from "./MapStatusCard";
 import { HeadStack } from "./v2/HeadStack";
 import type { HeadStackProps } from "./v2/HeadStack";
@@ -167,6 +167,8 @@ export function WorldStage(props: WorldStageProps) {
     const emotesHook = hooksOn ? installEmotesHook() : null;
     // window.__mfLooks(좌석별 고른 의상, 10-04, L33): 같은 훅 문맥에서만. DOM 이 아니다
     const looksHook = hooksOn ? installLooksHook() : null;
+    // window.__mfMap(이 렌더러에 올린 맵 id, 11-13, L33): 같은 훅 문맥에서만. DOM 이 아니다
+    const mapHook = hooksOn ? installMapHook(mapId) : null;
     const runtime = createWorldRuntime({
       host,
       tagLayer,
@@ -208,6 +210,7 @@ export function WorldStage(props: WorldStageProps) {
       pinHook?.off();
       emotesHook?.off();
       looksHook?.off();
+      mapHook?.off();
       runtime.dispose();
       if (runtimeRef.current === runtime) runtimeRef.current = null;
     };

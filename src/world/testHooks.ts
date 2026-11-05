@@ -39,6 +39,8 @@ declare global {
     __mfPin?: { seat: number | null; moving: boolean; strength: number; zoom: number };
     /** 좌석별 고른 의상 표(좌석 → 의상 id, 10-04, L33). 이 화면이 받은 view 의 look 사본이다(유령 직업 의상 안개와 별개). 훅이 켜진 문맥에서만 생기고 DOM 속성으로 싣지 않는다 */
     __mfLooks?: Readonly<Record<number, string>>;
+    /** 지금 렌더러에 올린 맵 id(11-13, L33): 로비·시작 전은 "bar". 훅이 켜진 문맥에서만 생기고 DOM 속성으로 싣지 않는다 */
+    __mfMap?: "bar" | "plaza";
     /** 동작 훅(10-03, L33): 이 화면이 받은 마지막 emote 프레임의 사본과 지금 사람 동작을 재생 중인 좌석. DOM 속성으로 싣지 않는다 */
     __mfEmotes?: { last: { seat: number; id: string; n: number } | null; playing: readonly number[] };
     /**
@@ -201,6 +203,19 @@ export function installLooksHook(): { set(looks: Readonly<Record<number, string>
     },
     off() {
       if (window.__mfLooks === mine) delete window.__mfLooks;
+    },
+  };
+}
+
+/**
+ * window.__mfMap 을 설치한다(11-13): 이 런타임이 올린 맵 id. 맵이 바뀌면 새 런타임이 다시 설치한다. 테스트 훅이 켜진 문맥에서만 부른다(L33).
+ * 해제는 다른 설치가 덮어썼으면 지우지 않는다(다른 값이면 그대로 둔다). 값은 DOM 속성이 아니다.
+ */
+export function installMapHook(mapId: "bar" | "plaza"): { off(): void } {
+  window.__mfMap = mapId;
+  return {
+    off() {
+      if (window.__mfMap === mapId) delete window.__mfMap;
     },
   };
 }

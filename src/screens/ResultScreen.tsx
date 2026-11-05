@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { RefObject } from "react";
 import { isAlive } from "../../shared/game/alive";
-import type { ClientMessage, EmoteId, MapId, PhaseId, RoomView } from "../../shared/protocol";
+import { PLAYABLE_MAPS } from "../../shared/game/maps";
+import type { ClientMessage, EmoteId, MapChoice, MapId, PhaseId, RoomView } from "../../shared/protocol";
 import { Button } from "../components/Button";
 import { AwardPlate } from "../components/v2/AwardPlate";
 import { ConfirmSheet } from "../components/ConfirmSheet";
@@ -10,6 +11,7 @@ import { Icon } from "../components/Icon";
 import { ChatPanel } from "../components/v2/ChatPanel";
 import { DressSheet } from "../components/v2/DressSheet";
 import { FloatAction, FloatActions } from "../components/v2/FloatAction";
+import { MapChip } from "../components/v2/MapChip";
 import { ReadyPill } from "../components/v2/ReadyPill";
 import { ResultPanel } from "../components/v2/ResultPanel";
 import type { ResultTab } from "../components/v2/ResultPanel";
@@ -438,8 +440,16 @@ export function ResultScreen({ view, store, chat, resultLog, send, canSend, offs
   const dress = useDress({ view, send, canSend });
   const dressBtnRef = useRef<HTMLButtonElement>(null);
   const restoreDressFocus = useRef(false);
-  const openDress = () => {
+  // 시트 탭(11-13): 지도 칩 → 맵 탭, [꾸미기] → 의상 탭. 칩·맵 탭은 허용 맵이 둘 이상일 때만 있다. 결과 단계의 선택은 다음 판 설정이다(서버가 ended 에서 받는다)
+  const [dressTab, setDressTab] = useState<"map" | "dress">("dress");
+  const mapsOn = PLAYABLE_MAPS.length > 1;
+  const mapChoice: MapChoice = view.mapChoice ?? "random";
+  const pickMap = (map: MapChoice) => {
+    if (canSend) send({ t: "mapPick", map });
+  };
+  const openDress = (tab: "map" | "dress" = "dress") => {
     inputRef.current?.blur();
+    setDressTab(tab);
     setDressOpen(true);
   };
   const closeDress = () => {
@@ -478,6 +488,11 @@ export function ResultScreen({ view, store, chat, resultLog, send, canSend, offs
         onLeave={() => setLeaveOpen(true)}
       />
       <div className="mf-result__scrim" aria-hidden="true" />
+      {mapsOn ? (
+        <div className="mf-result__map">
+          <MapChip choice={mapChoice} host={view.me.isHost} onPress={() => openDress("map")} />
+        </div>
+      ) : null}
       <header ref={headerRef} className="mf-result__header">
         <Button variant="secondary" compact className="mf-iconbtn" aria-label="나가기" icon={<Icon name="back" />} disabled={!canSend} onClick={() => setLeaveOpen(true)} />
         <h1 className="mf-result__title" data-title={inAward ? "ceremony" : state.title} data-guide="">
@@ -555,10 +570,21 @@ export function ResultScreen({ view, store, chat, resultLog, send, canSend, offs
       ) : null}
       {ceremonyDone && !expanded && !dressOpen ? (
         <FloatActions single>
-          <FloatAction ref={dressBtnRef} kind="dress" icon="hanger" label={DRESS_TEXT.open} disabled={!canSend} onPress={openDress} />
+          <FloatAction ref={dressBtnRef} kind="dress" icon="hanger" label={DRESS_TEXT.open} disabled={!canSend} onPress={() => openDress()} />
         </FloatActions>
       ) : null}
-      {dressOpen ? <DressSheet value={dress.look} onPick={dress.pick} onClose={closeDress} disabled={!canSend} /> : null}
+      {dressOpen ? (
+        <DressSheet
+          value={dress.look}
+          onPick={dress.pick}
+          onClose={closeDress}
+          disabled={!canSend}
+          host={view.me.isHost && mapsOn}
+          tab={dressTab}
+          mapChoice={mapChoice}
+          onPickMap={pickMap}
+        />
+      ) : null}
       {rematch.confirm !== null ? <RestSheet faces={rematch.confirm.resting} onStart={rematch.confirmStart} onCancel={rematch.cancelConfirm} /> : null}
       {leaveOpen ? (
         <ConfirmSheet

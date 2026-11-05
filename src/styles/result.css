@@ -25,7 +25,10 @@
 .mf-result__panel--kb { bottom: var(--mf-kb-lift, 0px); padding-bottom: 8px; }
 
 /* iOS 가 키보드를 위해 화면을 위로 밀면 헤더 계열이 보이는 영역 맨 위에 머문다 */
-.mf-result__scrim, .mf-result__header, .mf-result .mv-toast { transform: translateY(var(--mf-vv-top, 0px)); }
+.mf-result__scrim, .mf-result__header, .mf-result__map, .mf-result .mv-toast { transform: translateY(var(--mf-vv-top, 0px)); }
+
+/* 지도 칩 자리(11-13, O-11): 헤더 아래 8, 왼쪽 16. 시상 패(z-overlay − 1)가 같은 줄을 쓰는 동안은 패가 칩 모서리를 덮는다(칩은 패 밑) */
+.mf-result__map { position: absolute; top: 70px; left: var(--space-md); z-index: calc(var(--z-overlay) - 2); }
 
 /* 승리 알림(4600~5200, A-1): 가운데 한 줄 36px + 아이콘 56, 배경 어둡게 80%. 시민 승리는 놋쇠 아이콘, 마피아 승리는 진홍 아이콘. 터치를 막지 않는다(건너뛰기 탭이 통과한다). opacity 만 쓴다 */
 .mf-result__announce { position: absolute; inset: 0; z-index: calc(var(--z-toast) + 5); box-sizing: border-box; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-sm); padding: 0 var(--space-md); pointer-events: none; background: color-mix(in srgb, var(--night-950) 80%, transparent); animation: mf-result-announce 600ms var(--ease-out) both; }
