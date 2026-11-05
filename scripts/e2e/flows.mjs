@@ -15,8 +15,6 @@ import {
   readGame,
   readGhostOutfits,
   readGhostTagContrast,
-  readResult,
-  readResultFit,
   setBotVote,
   skipTo,
   tapPick,
@@ -119,9 +117,6 @@ import {
   nominationMaxMs,
   PICK_TURN_MS,
   PICK_GAP_MS,
-  resultChecks,
-  resultFitChecks,
-  LOBBY_SIZES,
   verdictPanelChecks,
   ANNOUNCE_MORNING_AT,
   LETTER_END_AT_MS,
@@ -133,6 +128,7 @@ import {
   ownPenFontRequests,
 } from "./lib.mjs";
 import { makeAvatarFlows } from "./avatar.mjs";
+import { readResultStage, resultSkipChecks, resultStageChecks } from "./result.mjs";
 import { makePoliticsFlows } from "./politics.mjs";
 import { makeSoundFlows } from "./sound.mjs";
 
@@ -2720,34 +2716,86 @@ async function toEnded(game) {
   }
 }
 
-const summaryRowsOf = (summary) => (summary ?? []).reduce((n, row) => n + (row.exec ? 1 : 0) + (row.night ? 1 : 0), 0);
+/** 한 값씩 읽는 짧은 폴링: 조건이 참이 될 때까지 50ms 간격으로 본다. 참이면 true, 시간 안에 안 되면 false */
+async function pollPage(page, fn, ms) {
+  const t0 = Date.now();
+  while (Date.now() - t0 <= ms) {
+    if (await page.evaluate(fn)) return true;
+    await sleep(50);
+  }
+  return false;
+}
 
-async function resultState(ctx, id, game, { winner, n }) {
+/** 결과 화면(11-05): ended 도착 뒤 연출 시계가 final 에 닿을 때까지 기다린 뒤 RS1~RS8 로 판정한다. skipProbe 면 먼저 연출 구간에서 무대를 한 번 탭해 건너뛰기(RS9)를 본다. */
+async function resultState(ctx, id, game, { winner, n, skipProbe = false }) {
   const rec = recorder(ctx);
   const sc = `${id}/ended`;
   const { hp, ht } = game;
   await ht.waitFor((v) => v.phase === "ended", 8000, "종료 도달");
-  try {
-    await hp.waitForSelector('.mf-result[data-stage="done"]', { state: "attached", timeout: 8000 });
-  } catch {
-    throw new SetupError("결과 화면 공개 연출(data-stage=done)이 끝나지 않음");
-  }
   const view = ht.last();
-  rec(sc, "P8", "서버가 정한 승자·요약이 view 에 있음", view.result?.winner === winner && Array.isArray(view.result?.summary), `view.result.winner ${view.result?.winner} ≠ ${winner}`);
-  await checkState(ctx, id, `ended-${winner}`, game.host);
-  // [처음으로] 가 스크롤 없이 화면 안인지 폰 6종 크기로 바꿔 가며 잰다(09-29, feedback-6). readResult 는 버튼을 스크롤해 보이게 하므로 그보다 먼저 잰다.
-  const back = hp.viewportSize() ?? { width: GAME_SIZE.w, height: GAME_SIZE.h };
-  try {
-    for (const size of LOBBY_SIZES) {
-      await hp.setViewportSize({ width: size.w, height: size.h });
-      await hp.waitForTimeout(250);
-      recOne(rec, `${sc}/${size.label}`, resultFitChecks(await readResultFit(hp), size));
+  rec(sc, "P8", "서버가 정한 승자가 view 에 있음", view.result?.winner === winner, `view.result.winner ${view.result?.winner} ≠ ${winner}`);
+  const seats = view.result?.seats ?? [];
+  const jobBySeat = Object.fromEntries(seats.map((x) => [x.seat, x.job]));
+  const loserSeats = seats.filter((x) => (x.job === "mafia") === (winner === "citizenWin")).map((x) => x.seat);
+
+  if (skipProbe) {
+    // 연출 구간(모임·뒤집기)에서 무대 빈 곳을 실제 마우스로 한 번 탭한다(D-25). 구간을 놓쳤으면 RS9 는 측정값 없음으로 실패하지 않고 정보 행으로 남긴다.
+    const inWindow = await pollPage(hp, () => ["gather", "flip"].includes(window.__mfResult?.stage ?? ""), 4000);
+    const before = await readResultStage(hp);
+    if (inWindow && before) {
+      const mid = await hp.evaluate(() => {
+        const root = document.querySelector(".mf-result");
+        const head = root?.querySelector("header")?.getBoundingClientRect();
+        const panel = root?.querySelector("[data-result-panel]")?.getBoundingClientRect();
+        if (!root || !head || !panel) return null;
+        return { x: window.innerWidth / 2, y: (head.bottom + panel.top) / 2 };
+      });
+      if (!mid) throw new SetupError("결과 화면 스테이지 가운데를 못 잼");
+      await hp.mouse.click(mid.x, mid.y);
+      await sleep(150);
+      const after = await readResultStage(hp);
+      recOne(rec, sc, resultSkipChecks({ before: { stage: before.hook?.stage ?? before.stage, chips: before.chips }, after: { stage: after?.hook?.stage ?? after?.stage, chips: after?.chips }, seats: seats.length }));
+    } else {
+      infoRow(ctx, sc, "RS9", "결과 화면: 무대 탭 건너뛰기(연출 구간을 놓쳐 건너뜀)", `단계 ${before?.stage ?? "없음"}`);
     }
-  } finally {
-    await hp.setViewportSize(back);
-    await hp.waitForTimeout(250);
   }
-  recOne(rec, sc, resultChecks(await readResult(hp), { winner, n, summaryRows: summaryRowsOf(view.result?.summary) }));
+
+  try {
+    await hp.waitForFunction(() => window.__mfResult?.stage === "final", null, { timeout: 12000 });
+  } catch {
+    throw new SetupError("결과 화면 연출이 final 에 닿지 않음 (window.__mfResult.stage)");
+  }
+  await checkState(ctx, id, `ended-${winner}`, game.host);
+
+  // 채팅 한 줄: 결과 단계에서도 전체 채팅이 오간다(D-11). 보낸 줄이 기록 칸에 보여야 한다.
+  const text = `수고했어요 ${winner === "citizenWin" ? "시민" : "마피아"}`;
+  const echo = await attempt(async () => {
+    await typeAndSendChat(hp, text);
+    await waitChatLine(hp, text);
+  });
+
+  const read = await readResultStage(hp);
+  if (read === null) {
+    rec(sc, "RS1", "결과 화면이 그려짐", false, "측정값 없음(.mf-result)");
+    return;
+  }
+  for (const row of resultStageChecks({
+    winner,
+    header: read.header,
+    chips: read.chips,
+    seats: seats.length || n,
+    dimmed: read.hook?.dimmed,
+    loserSeats,
+    costumes: read.hook?.costumes,
+    jobBySeat,
+    panel: read.panel,
+    stageBottom: read.panelTop,
+    roomH: read.roomH,
+    hasLegacy: read.legacy,
+    chatEcho: echo.ok,
+  })) {
+    recOne(rec, sc, row);
+  }
 }
 
 async function resultFlow(ctx) {
@@ -2760,7 +2808,7 @@ async function resultFlow(ctx) {
       await step("시민 승 verdict", () => skipTo(game.hp, game.ht, "verdict"));
       await step("시민 승 execution", () => skipTo(game.hp, game.ht, "execution"));
       await step("시민 승 ended", () => toEnded(game));
-      await resultState(ctx, id, game, { winner: "citizenWin", n: 4 });
+      await resultState(ctx, id, game, { winner: "citizenWin", n: 4, skipProbe: true });
     } finally {
       await closeGame(game);
     }

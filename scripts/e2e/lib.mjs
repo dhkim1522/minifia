@@ -27,17 +27,7 @@ export const MAX_PARALLEL = 3;
 // 흐름이 늘었다(vote5 등, 04-32) — 기준 수치가 아니라 중단 한도다.
 export const OVERALL_LIMIT_MS = 900_000;
 
-// ---- 결과 화면 스냅숏 계약 (04-29 P8) ----
-// resultChecks(v, { winner, n, summaryRows }) 가 받는 값의 모양. 결과 화면은 8페이즈에 바뀌지 않는다. 검사 함수는 필드가 없으면
-// 조용히 통과하지 않고 `측정값 없음(…)` 으로 실패한다. 사각형은 { left, top, width, height[, right, bottom] }.
-// 처형 구간(지목·변론·찬반·처형)의 옛 테이블 판정 계약(VerdictSnap 의 bottom·dt·intro·reveal·execCard·voidCard)은 08-23 에 지웠다(결정 0060-14).
-//
-//   v.result (ended): {
-//     winner: "citizenWin"|"mafiaWin", bannerText(`시민 팀 승리`|`마피아 팀 승리`), bannerSub,
-//     cards: [{ seat, job(직업 이름 글자), dead: boolean, figOpacity(캐릭터 그림 계산된 opacity) }],
-//     rows(요약 카드 행 수), scrollW, clientW(가로 스크롤 판정), reachedButton(세로 스크롤로 [처음으로] 가 화면에 닿음),
-//     glow(위쪽 진홍 번짐 요소 존재), hasPhaseBar(헤더 바·타이머·하단 패널 존재)
-//   }
+// ---- 결과 화면(ended) 판정은 11-05 에 scripts/e2e/result.mjs 로 옮겼다(resultStageChecks) — 옛 카드 격자 계약(04-29 P8)은 지웠다. ----
 
 // ---- 5페이즈 계약 (05-05) — UX1·UX2·UX2-J·UX2-PC·WL1·WL2 가 받는 값의 모양 ----
 // 05-06·05-07 의 browser.mjs 가 아래 모양 그대로 읽어 온다. 검사 함수는 필드가 없거나 숫자가 아니면 조용히 통과하지 않고 `측정값 없음(…)` 으로 실패한다.
@@ -1056,87 +1046,7 @@ export function smallTextIssues(smallText) {
 
 const isNum = (x) => typeof x === "number" && Number.isFinite(x);
 
-// ---- 04-30 P7 처형 무효 카드·P8 결과 화면·P10 배치 겹침 (UI-SPEC 9.2·11·15.3) ----
-
-const WINNER_BANNER = { citizenWin: "시민 팀 승리", mafiaWin: "마피아 팀 승리" };
-const ROLE_WORDS = Object.values(ROLE_NAME);
-const RESULT_OPACITY_TOL = 0.05; // 탈락 카드 그림 opacity .5 ± .05
-
-/**
- * P8 결과 화면(ended). v.result = { winner, bannerText, bannerSub, cards:[{ seat, job, dead, figOpacity }], rows, scrollW, clientW, reachedButton, glow, hasPhaseBar },
- * opts = { winner("citizenWin"|"mafiaWin"), n(인원), summaryRows(요약 카드 행 수 기대값) }.
- * 배너=승패, 카드 수=인원, 모든 카드에 직업 이름, 탈락 카드 그림 opacity .5 ± .05(살아 있는 카드 1 ± .05), 요약 행 수, 가로 스크롤 없음(G1),
- * 세로 스크롤로 [처음으로] 에 닿음, 위쪽 진홍 번짐은 마피아 승일 때만, 헤더 바·하단 패널 없음.
- */
-export function resultChecks(v, { winner, n, summaryRows } = {}) {
-  const label = "결과 화면: 배너·카드 수·직업·탈락 흐림·요약·스크롤·번짐";
-  const miss = [];
-  if (!(winner in WINNER_BANNER)) miss.push("측정값 없음(winner 인자)");
-  if (!isNum(n)) miss.push("측정값 없음(n 인자)");
-  if (!isNum(summaryRows)) miss.push("측정값 없음(summaryRows 인자)");
-  const r = v?.result;
-  if (!r || typeof r !== "object") miss.push("측정값 없음(result)");
-  else {
-    if (typeof r.winner !== "string") miss.push("측정값 없음(result.winner)");
-    if (typeof r.bannerText !== "string") miss.push("측정값 없음(result.bannerText)");
-    if (!Array.isArray(r.cards)) miss.push("측정값 없음(result.cards)");
-    else if (r.cards.some((c) => typeof c?.job !== "string" || typeof c.dead !== "boolean" || !isNum(c.figOpacity))) miss.push("측정값 없음(result.cards 의 job·dead·figOpacity)");
-    if (!isNum(r.rows)) miss.push("측정값 없음(result.rows)");
-    if (!isNum(r.scrollW) || !isNum(r.clientW)) miss.push("측정값 없음(result.scrollW·clientW)");
-    if (typeof r.reachedButton !== "boolean") miss.push("측정값 없음(result.reachedButton)");
-    if (typeof r.glow !== "boolean") miss.push("측정값 없음(result.glow)");
-    if (typeof r.hasPhaseBar !== "boolean") miss.push("측정값 없음(result.hasPhaseBar)");
-  }
-  if (miss.length > 0) return result("P8", label, miss);
-
-  const bad = [];
-  if (r.winner !== winner) bad.push(`결과 승자 ${r.winner} ≠ 기대 ${winner}`);
-  if (r.bannerText !== WINNER_BANNER[winner]) bad.push(`배너 "${r.bannerText}" ≠ "${WINNER_BANNER[winner]}"`);
-  if (r.cards.length !== n) bad.push(`카드 ${r.cards.length}장 ≠ 인원 ${n}`);
-  for (const c of r.cards) {
-    if (!ROLE_WORDS.includes(c.job)) bad.push(`자리 ${c.seat} 직업 이름 "${c.job}" 가 [${ROLE_WORDS.join("|")}] 중 하나가 아님`);
-    const want = c.dead ? 0.5 : 1;
-    if (Math.abs(c.figOpacity - want) > RESULT_OPACITY_TOL + 1e-9) {
-      bad.push(c.dead ? `탈락 카드(자리 ${c.seat}) 그림 opacity ${fmt(c.figOpacity * 100) / 100} ≠ .5` : `살아 있는 카드(자리 ${c.seat}) 그림 opacity ${fmt(c.figOpacity * 100) / 100} ≠ 1`);
-    }
-  }
-  if (r.rows !== summaryRows) bad.push(`요약 행 ${r.rows}개 ≠ ${summaryRows}`);
-  if (r.scrollW > r.clientW) bad.push(`가로 스크롤: scrollWidth ${r.scrollW} > clientWidth ${r.clientW}`);
-  if (!r.reachedButton) bad.push("세로 스크롤로 [처음으로] 에 닿지 못함");
-  if (r.glow !== (winner === "mafiaWin")) bad.push(winner === "mafiaWin" ? "마피아 승인데 위쪽 진홍 번짐이 없음" : "시민 승인데 진홍 번짐이 있음(마피아 승에만)");
-  if (r.hasPhaseBar) bad.push("헤더 바·타이머·하단 패널이 보임(결과 화면에는 없음)");
-  return result("P8", label, bad);
-}
-
-/**
- * RS-FIT 결과 화면 [처음으로] 가 폰 크기마다 스크롤 없이 화면 안에 있고 눌린다 (09-29, feedback-6).
- * m = { home: { rect:{left,top,width,height}, hit }, scrollTop(.mf-result 의 scrollTop), docScroll(문서 스크롤 높이 − 뷰포트 높이) }, size = { w, h, label }.
- * 버튼 사각형이 뷰포트(0,0,w,h) 안, elementFromPoint 가 버튼(hit), 스크롤 0(scrollTop 0 · docScroll ≤ 1). 측정값이 없으면 실패한다.
- */
-export function resultFitChecks(m, size) {
-  const label = `결과 화면 [처음으로] 스크롤 없이 화면 안${size?.label ? ` (${size.label})` : ""}`;
-  const miss = [];
-  if (!size || !isNum(size.w) || !isNum(size.h)) miss.push("측정값 없음(size)");
-  const rc = m?.home?.rect;
-  if (!rc || !isNum(rc.left) || !isNum(rc.top) || !isNum(rc.width) || !isNum(rc.height)) miss.push("측정값 없음(home.rect)");
-  if (typeof m?.home?.hit !== "boolean") miss.push("측정값 없음(home.hit)");
-  if (!isNum(m?.scrollTop)) miss.push("측정값 없음(scrollTop)");
-  if (!isNum(m?.docScroll)) miss.push("측정값 없음(docScroll)");
-  if (miss.length > 0) return result("RS-FIT", label, miss);
-
-  const bad = [];
-  const bottomY = rc.top + rc.height;
-  const rightX = rc.left + rc.width;
-  if (rc.width <= 0 || rc.height <= 0) bad.push("[처음으로] 크기가 0");
-  if (rc.top < 0) bad.push(`버튼 위 ${fmt(rc.top)} 가 화면 위 밖`);
-  if (bottomY > size.h) bad.push(`버튼 아래 끝 ${fmt(bottomY)} 가 화면 높이 ${size.h} 아래로 나감(화면 밖)`);
-  if (rc.left < 0) bad.push(`버튼 왼쪽 ${fmt(rc.left)} 가 화면 왼쪽 밖`);
-  if (rightX > size.w) bad.push(`버튼 오른쪽 끝 ${fmt(rightX)} 가 화면 폭 ${size.w} 밖`);
-  if (!m.home.hit) bad.push("버튼 가운데 점이 버튼이 아님(가려져 눌리지 않음)");
-  if (m.scrollTop !== 0) bad.push(`.mf-result scrollTop ${m.scrollTop} ≠ 0(스크롤을 내려야 보임)`);
-  if (m.docScroll > 1) bad.push(`문서 스크롤 여유 ${m.docScroll}px > 1(문서 스크롤)`);
-  return result("RS-FIT", label, bad);
-}
+// ---- 04-30 P7 처형 무효 카드·P10 배치 겹침 (UI-SPEC 9.2·15.3) ----
 
 // ---- 5페이즈 순수 검사 (05-05) ----
 

@@ -64,8 +64,6 @@ import {
   WORLD_START_MAX_FRAMES,
   WORLD_START_MOVED_MIN,
   WORLD_JUMP_SPEED_MAX,
-  resultChecks,
-  resultFitChecks,
   DEFAULT_SIZES,
   TIMELESS_PHASES,
   JOIN_FIT_MIN_H,
@@ -592,114 +590,7 @@ test("04-29: 기존 기준 수치는 그대로다(04-30 이 완화를 더해도 
   assert.equal(ONE_LINE_FACTOR, 1.6);
 });
 
-const resultSnap = (winner = "mafiaWin", n = 5) => ({
-  result: {
-    winner,
-    bannerText: winner === "mafiaWin" ? "마피아 팀 승리" : "시민 팀 승리",
-    bannerSub: "마피아 수가 나머지 생존자 수와 같아졌어요",
-    cards: Array.from({ length: n }, (_, i) => ({ seat: i, job: ["마피아", "경찰", "의사", "시민", "시민"][i % 5], dead: i === 1 || i === 3, figOpacity: i === 1 || i === 3 ? 0.5 : 1 })),
-    rows: 4,
-    scrollW: 300,
-    clientW: 300,
-    reachedButton: true,
-    glow: winner === "mafiaWin",
-    hasPhaseBar: false,
-  },
-});
-const resultOpts = (o = {}) => ({ winner: "mafiaWin", n: 5, summaryRows: 4, ...o });
-const resBad = (mutate, snapWinner = "mafiaWin", opts) => {
-  const s = resultSnap(snapWinner);
-  mutate(s.result);
-  return resultChecks(s, resultOpts({ winner: snapWinner, ...(opts ?? {}) }));
-};
-
-test("resultChecks P8: 마피아 승·시민 승 정상 입력은 통과한다", () => {
-  const a = resultChecks(resultSnap("mafiaWin"), resultOpts());
-  assert.equal(a.id, "P8");
-  assert.equal(a.ok, true, a.detail);
-  const b = resultChecks(resultSnap("citizenWin"), resultOpts({ winner: "citizenWin" }));
-  assert.equal(b.ok, true, b.detail);
-});
-
-test("resultChecks P8: 배너·카드·흐림·요약·스크롤·번짐 위반을 각각 잡는다", () => {
-  const cases = [
-    ["배너가 승자와 다름", "mafiaWin", (r) => { r.bannerText = "시민 팀 승리"; }, /배너/],
-    ["결과 winner 가 기대와 다름", "mafiaWin", (r) => { r.winner = "citizenWin"; }, /winner|승자/],
-    ["카드 수 부족", "mafiaWin", (r) => { r.cards.pop(); }, /카드 4/],
-    ["직업 이름 없음", "mafiaWin", (r) => { r.cards[0].job = ""; }, /직업/],
-    ["엉뚱한 직업 이름", "mafiaWin", (r) => { r.cards[0].job = "광대"; }, /직업/],
-    ["탈락 카드 불투명", "mafiaWin", (r) => { r.cards[1].figOpacity = 1; }, /탈락/],
-    ["살아 있는 카드가 흐림", "mafiaWin", (r) => { r.cards[0].figOpacity = 0.5; }, /살아/],
-    ["요약 행 수 다름", "mafiaWin", (r) => { r.rows = 3; }, /요약/],
-    ["가로 스크롤 301>300", "mafiaWin", (r) => { r.scrollW = 301; }, /가로/],
-    ["[처음으로] 에 못 닿음", "mafiaWin", (r) => { r.reachedButton = false; }, /처음으로/],
-    ["시민 승에 번짐", "citizenWin", (r) => { r.glow = true; }, /번짐/],
-    ["마피아 승에 번짐 없음", "mafiaWin", (r) => { r.glow = false; }, /번짐/],
-    ["진행 바가 보임", "mafiaWin", (r) => { r.hasPhaseBar = true; }, /헤더|바/],
-  ];
-  for (const [name, w, mutate, re] of cases) {
-    const r = resBad(mutate, w);
-    assert.equal(r.ok, false, name);
-    assert.match(r.detail, re, name);
-  }
-  // 오차 허용: 탈락 .5 ± .05
-  assert.equal(resBad((r) => { r.cards[1].figOpacity = 0.54; }).ok, true);
-  assert.equal(resBad((r) => { r.cards[1].figOpacity = 0.56; }).ok, false);
-});
-
-// ---- 09-29 RS-FIT: 결과 화면 [처음으로] 가 폰 크기마다 스크롤 없이 화면 안 (feedback-6) ----
-const FIT_SIZE = { w: 360, h: 560, label: "360x560" };
-const fitSnap = (o = {}) => ({
-  home: { rect: { left: 16, top: 440, width: 328, height: 48 }, hit: true },
-  scrollTop: 0,
-  docScroll: 0,
-  ...o,
-});
-
-test("resultFitChecks RS-FIT: 화면 안·눌림·스크롤 0 은 통과한다", () => {
-  const r = resultFitChecks(fitSnap(), FIT_SIZE);
-  assert.equal(r.id, "RS-FIT");
-  assert.equal(r.ok, true, r.detail);
-  assert.match(r.label, /360x560/);
-});
-
-test("resultFitChecks RS-FIT: 버튼 아래 끝이 화면을 넘거나 눌리지 않거나 스크롤이 있으면 실패한다", () => {
-  const cases = [
-    ["버튼 아래 끝이 h 를 넘음", fitSnap({ home: { rect: { left: 16, top: 530, width: 328, height: 48 }, hit: true } }), /화면 밖|아래/],
-    ["버튼 위가 화면 위 밖", fitSnap({ home: { rect: { left: 16, top: -4, width: 328, height: 48 }, hit: true } }), /화면 밖|위/],
-    ["버튼 오른쪽이 w 를 넘음", fitSnap({ home: { rect: { left: 100, top: 440, width: 328, height: 48 }, hit: true } }), /화면 밖|오른쪽/],
-    ["hit false", fitSnap({ home: { rect: { left: 16, top: 440, width: 328, height: 48 }, hit: false } }), /눌리지|가려/],
-    ["본문 scrollTop 이 0 이 아님", fitSnap({ scrollTop: 40 }), /scrollTop|스크롤/],
-    ["문서 스크롤 여유 2px", fitSnap({ docScroll: 2 }), /문서|스크롤/],
-  ];
-  for (const [name, m, re] of cases) {
-    const r = resultFitChecks(m, FIT_SIZE);
-    assert.equal(r.ok, false, name);
-    assert.match(r.detail, re, name);
-  }
-  assert.equal(resultFitChecks(fitSnap({ docScroll: 1 }), FIT_SIZE).ok, true, "문서 스크롤 1px 는 허용");
-});
-
-test("resultFitChecks RS-FIT: 측정값이 없으면 조용히 통과하지 않는다", () => {
-  assert.match(resultFitChecks(null, FIT_SIZE).detail, /측정값 없음/);
-  assert.match(resultFitChecks({ home: null, scrollTop: 0, docScroll: 0 }, FIT_SIZE).detail, /측정값 없음/);
-  assert.match(resultFitChecks(fitSnap({ scrollTop: undefined }), FIT_SIZE).detail, /측정값 없음/);
-  assert.match(resultFitChecks(fitSnap({ docScroll: Number.NaN }), FIT_SIZE).detail, /측정값 없음/);
-  assert.match(resultFitChecks(fitSnap(), null).detail, /측정값 없음/);
-});
-
-test("resultChecks P8: 측정값이 없으면 조용히 통과하지 않는다", () => {
-  assert.match(resultChecks(null, resultOpts()).detail, /측정값 없음/);
-  for (const k of ["bannerText", "cards", "rows", "scrollW", "reachedButton", "glow", "hasPhaseBar"]) {
-    const s = resultSnap();
-    delete s.result[k];
-    const r = resultChecks(s, resultOpts());
-    assert.equal(r.ok, false, k);
-    assert.match(r.detail, /측정값 없음/, k);
-  }
-  assert.match(resultChecks(resultSnap(), { winner: "mafiaWin", n: 5 }).detail, /측정값 없음\(.*summaryRows/);
-  assert.match(resultChecks(resultSnap(), { n: 5, summaryRows: 4 }).detail, /측정값 없음\(.*winner/);
-});
+// 11-05: 결과 화면 판정(옛 resultChecks·resultFitChecks)은 scripts/e2e/result.mjs 의 resultStageChecks 로 바뀌었다 — 시험은 scripts/e2e/result.test.mjs.
 
 test("04-30·06-17·08-23: 닫기 — 승인 목록은 네 건(결정 0056 의 다섯 건은 지웠다)이고 기준 수치는 그대로다", () => {
   assert.deepEqual(APPROVED_RELAXATIONS.map((x) => x.id), ["M1", "D3a/D3b", "D4", "D3b-5"]);
