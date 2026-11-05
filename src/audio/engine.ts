@@ -5,7 +5,6 @@ import { loadSoundPref, saveSoundPref } from "./prefs";
 import {
   BEDS,
   BUS_GAIN,
-  COMPRESSOR,
   MASTER_GAIN,
   NODE_BUDGET,
   RECIPES,
@@ -13,14 +12,13 @@ import {
   bedNodeCount,
   bedPlan,
   renderPlan,
-  type Bus,
   type BedId,
   type PlanEvent,
   type SfxId,
   type SoundId,
 } from "./recipes";
 import type { DuckSpan, ScriptItem } from "./script";
-import { buildVoice, countNodes, noiseBufferFor, type Voice } from "./synth";
+import { buildMixGraph, buildVoice, countNodes, noiseBufferFor, type MixGraph, type Voice } from "./synth";
 
 export type EngineState = "none" | "locked" | "running" | "suspended";
 
@@ -76,6 +74,8 @@ export interface SoundEngine {
   stopAll(): void;
   /** 제스처 밖에서 resume 만 시도한다(컨텍스트가 있을 때). 성공 여부를 돌려준다 */
   resume(): Promise<boolean>;
+  /** 시험 페이지 전용: master 이득에 곱하는 선형 0..1 (제품 화면은 부르지 않는다, 12-06) */
+  setMasterTrim(linear: number): void;
   /** 탭이 숨겨짐: master 120ms 페이드 뒤 suspend, 침대·대본 정지 */
   hidden(): void;
   /** 탭이 다시 보임: resume 성공이면 현재 침대만 되살림, 거절이면 locked */
@@ -122,6 +122,8 @@ const BED_LOOKAHEAD_MS = 250;
 const BED_FADE_S = 1.2;
 /** 끄기·숨김 페이드아웃(초) */
 const OFF_FADE_S = 0.12;
+/** 시험 슬라이더 램프(초) */
+const TRIM_RAMP_S = 0.03;
 const dbToLin = (db: number): number => 10 ** (db / 20);
 
 type CtxCtor = new (opts?: AudioContextOptions) => AudioContext;
@@ -137,11 +139,6 @@ function hasAudioContext(): boolean {
   return g.AudioContext !== undefined || g.webkitAudioContext !== undefined;
 }
 
-interface Graph {
-  master: GainNode;
-  buses: Record<Bus, GainNode>;
-}
-
 export function createEngine(deps: EngineDeps = {}): SoundEngine {
   const createContext = deps.createContext ?? defaultCreateContext;
   const now = deps.now ?? ((): number => Date.now());
@@ -150,7 +147,9 @@ export function createEngine(deps: EngineDeps = {}): SoundEngine {
   const nav = deps.nav === undefined ? (typeof navigator === "undefined" ? null : (navigator as unknown as NonNullable<EngineDeps["nav"]>)) : deps.nav;
 
   let ctx: AudioContext | null = null;
-  let graph: Graph | null = null;
+  let graph: MixGraph | null = null;
+  /** 시험 페이지 마스터 슬라이더 값(선형 0..1). 제품 화면은 부르지 않으니 늘 1 이다 */
+  let masterTrim = 1;
   let failed = false;
   let forcedLocked = false;
   let on = loadSoundPref(deps.storage);
@@ -215,25 +214,6 @@ export function createEngine(deps: EngineDeps = {}): SoundEngine {
     if (i >= 0) voices.splice(i, 1);
   };
 
-  const buildGraph = (c: AudioContext): Graph => {
-    const comp = c.createDynamicsCompressor();
-    comp.threshold.value = COMPRESSOR.threshold;
-    comp.ratio.value = COMPRESSOR.ratio;
-    comp.attack.value = COMPRESSOR.attack;
-    comp.release.value = COMPRESSOR.release;
-    comp.connect(c.destination);
-    const master = c.createGain();
-    master.gain.value = MASTER_GAIN;
-    master.connect(comp);
-    const mk = (bus: Bus): GainNode => {
-      const g = c.createGain();
-      g.gain.value = BUS_GAIN[bus];
-      g.connect(master);
-      return g;
-    };
-    return { master, buses: { bgm: mk("bgm"), sfx: mk("sfx"), ui: mk("ui") } };
-  };
-
   const pushLog = (entry: LogEntry): void => {
     entries.push(entry);
     if (entries.length > LOG_MAX) entries.splice(0, entries.length - LOG_MAX);
@@ -283,7 +263,7 @@ export function createEngine(deps: EngineDeps = {}): SoundEngine {
       }
       ctx = made;
       try {
-        graph = buildGraph(made);
+        graph = buildMixGraph(made, masterTrim);
         noiseBufferFor(made);
         made.addEventListener("statechange", onCtxState);
       } catch {
@@ -594,6 +574,17 @@ export function createEngine(deps: EngineDeps = {}): SoundEngine {
     }, OFF_FADE_S * 1000 + 10);
   };
 
+  const setMasterTrim = (linear: number): void => {
+    masterTrim = Number.isFinite(linear) ? Math.min(1, Math.max(0, linear)) : 1;
+    const c = ctx;
+    if (c === null || graph === null) return;
+    const t = c.currentTime;
+    const m = graph.master.gain;
+    m.cancelScheduledValues(t);
+    m.setValueAtTime(m.value, t);
+    m.linearRampToValueAtTime(MASTER_GAIN * masterTrim, t + TRIM_RAMP_S);
+  };
+
   const visible = async (): Promise<void> => {
     hiddenFlag = false;
     clearTimer(hiddenTimer);
@@ -606,7 +597,7 @@ export function createEngine(deps: EngineDeps = {}): SoundEngine {
       const m = graph.master.gain;
       m.cancelScheduledValues(t);
       m.setValueAtTime(0, t);
-      m.linearRampToValueAtTime(MASTER_GAIN, t + OFF_FADE_S);
+      m.linearRampToValueAtTime(MASTER_GAIN * masterTrim, t + OFF_FADE_S);
     };
     if (!weSuspended && c.state === "running") {
       // suspend 전에 돌아왔다
@@ -636,6 +627,7 @@ export function createEngine(deps: EngineDeps = {}): SoundEngine {
     runScript,
     cancelScript,
     stopAll,
+    setMasterTrim,
     resume,
     hidden,
     visible,

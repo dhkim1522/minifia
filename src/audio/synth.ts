@@ -1,7 +1,7 @@
 // 12-05: 합성기 — renderPlan·bedPlan 의 평면 이벤트를 Web Audio 노드 그래프로 바꾼다 (D-16, D-18).
 // 실시간 엔진(engine.ts)과 오프라인 렌더(12-06)가 함께 쓴다. BaseAudioContext 를 인자로 받고, 컨텍스트의 시계·전역을 읽지 않는다.
 // 모든 시각은 인자(startAt, 초)다. 이벤트의 t 는 ms 이고 startAt 기준이다(침대는 침대 시작 시각을 startAt 으로 준다).
-import { mulberry32, type PlanEvent } from "./recipes";
+import { BUS_GAIN, COMPRESSOR, MASTER_GAIN, mulberry32, type Bus, type PlanEvent } from "./recipes";
 
 /** 모든 잡음 소스가 공유하는 버퍼 길이(초) — 시작할 때 한 번만 만든다 */
 export const NOISE_SECONDS = 2;
@@ -20,6 +20,36 @@ export interface Voice {
   output: GainNode;
   /** atSec 에 fadeSec 동안 줄여 끝낸다. 예외를 던지지 않는다 */
   stop(atSec: number, fadeSec: number): void;
+}
+
+/** 믹스 그래프: 버스 셋 → master → 컴프레서 → destination */
+export interface MixGraph {
+  master: GainNode;
+  buses: Record<Bus, GainNode>;
+  compressor: DynamicsCompressorNode;
+}
+
+/**
+ * 믹스 그래프를 만든다(UI-SPEC D). 실시간 엔진(engine.ts)과 시험 페이지의 오프라인 렌더(12-06)가 같은 함수를 써
+ * 오프라인 피크가 실제 소리의 피크와 같은 그래프에서 나오게 한다. master 이득은 trim 으로 곱해 시작할 수 있다(시험 슬라이더).
+ */
+export function buildMixGraph(ctx: BaseAudioContext, trim = 1): MixGraph {
+  const compressor = ctx.createDynamicsCompressor();
+  compressor.threshold.value = COMPRESSOR.threshold;
+  compressor.ratio.value = COMPRESSOR.ratio;
+  compressor.attack.value = COMPRESSOR.attack;
+  compressor.release.value = COMPRESSOR.release;
+  compressor.connect(ctx.destination);
+  const master = ctx.createGain();
+  master.gain.value = MASTER_GAIN * trim;
+  master.connect(compressor);
+  const mk = (bus: Bus): GainNode => {
+    const g = ctx.createGain();
+    g.gain.value = BUS_GAIN[bus];
+    g.connect(master);
+    return g;
+  };
+  return { master, compressor, buses: { bgm: mk("bgm"), sfx: mk("sfx"), ui: mk("ui") } };
 }
 
 const noiseCache = new WeakMap<object, AudioBuffer>();

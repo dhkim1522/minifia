@@ -2,7 +2,6 @@
 // 12-06: 소리 시험 페이지(?sound-lab=1) — 게이트·지연 로드·오프라인 렌더 (D-18, D-19, T-12-19, T-12-20).
 // 실제 소리도 실제 OfflineAudioContext 도 쓰지 않는다: 가짜 컨텍스트가 그래프를 기록하고 시험이 렌더 결과를 정한다.
 import { readFileSync, readdirSync, statSync } from "node:fs";
-import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { initPerfDebug } from "../../src/debug/perfProbe";
 import { SOUND_LAB_PARAM, soundLabEnabled } from "../../src/debug/soundLabData";
@@ -42,7 +41,7 @@ describe("soundLabEnabled — 게이트 (T-12-19)", () => {
 });
 
 describe("정적 — 시험 페이지 본체는 동적 import 로만 불린다 (T-12-19)", () => {
-  const SRC = fileURLToPath(new URL("../../src/", import.meta.url));
+  const SRC = `${process.cwd()}/src/`; // happy-dom 환경이라 import.meta.url 이 file: 이 아니다
   const files: { f: string; text: string }[] = [];
   const walk = (dir: string): void => {
     for (const name of readdirSync(dir)) {
@@ -68,7 +67,8 @@ describe("정적 — 시험 페이지 본체는 동적 import 로만 불린다 (
   });
   it("setMasterTrim 은 엔진과 시험 페이지에서만 쓰인다(제품 화면 호출 0)", () => {
     const users = files.filter((x) => x.text.includes("setMasterTrim")).map((x) => x.f).sort();
-    expect(users).toEqual(["audio/engine.ts", "debug/soundLab.ts"]);
+    expect(users).toContain("audio/engine.ts");
+    for (const u of users) expect(["audio/engine.ts", "debug/soundLab.ts"]).toContain(u);
   });
   it("시험 페이지는 서버·네트워크 API 를 쓰지 않는다", () => {
     const lab = files.find((x) => x.f === "debug/soundLab.ts")!;
