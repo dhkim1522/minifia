@@ -661,6 +661,16 @@ describe("6명 한 판: 낮 처형(토론 끝내기·지목·변론·찬반·처
       const socks = [room.host, ...room.guests.map((g) => g.sock)];
       const allTokens = [room.hostToken, ...room.guests.map((g) => g.token)];
 
+      // 로비 의상 대본(결정 D-6): 역할이 정해지기 전에 두 좌석이 직업 이름과 같은 단어의 의상을 고른다. 프레임 검사는 players[].look 값이 이 대본의 값뿐임을 본다(실제 역할이 아니다).
+      const dressScript = new Map<number, string>([
+        [room.guests[0]!.seat, "mafia"],
+        [room.guests[1]!.seat, "doctor"],
+      ]);
+      for (const g of [room.guests[0]!, room.guests[1]!]) {
+        send(g.sock, { t: "dress", look: dressScript.get(g.seat) });
+        for (const sock of socks) await settle(sock, mark(sock));
+      }
+
       send(room.host, { t: "start" });
       for (const sock of socks) await nextFrame(sock, phaseOf("assigning"));
       await advanceTo(code, socks, "dayAnnounce");
@@ -913,7 +923,9 @@ describe("6명 한 판: 낮 처형(토론 끝내기·지목·변론·찬반·처
           for (const pl of v.players) {
             // 공개 주장(결정 0066-1): badge·badgeSwapped 는 대본에 있는 산 사람 줄에만, 값은 항상 대본의 값이다(실제 역할이 아니다).
             const scripted = badgeScript.get(pl.seat);
-            const base = ["alive", "connected", "isHost", "nickname", "seat"];
+            // 공개 의상(결정 D-6): look 은 대본에 있는 좌석 줄에만, 값은 항상 대본의 값이다(실제 역할이 아니다). 판 내내 같은 값이 실린다.
+            if (pl.look !== undefined) expect(`${pl.seat}:${pl.look}`).toBe(`${pl.seat}:${dressScript.get(pl.seat)}`);
+            const base = ["alive", "connected", "isHost", "nickname", "seat", ...(pl.look !== undefined ? ["look"] : [])].sort();
             if (pl.badge === undefined) {
               expect(Object.keys(pl).sort()).toEqual(base);
               continue;
