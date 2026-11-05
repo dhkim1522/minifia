@@ -2,6 +2,7 @@
 // 모든 함수는 새 객체를 돌려주고 입력을 바꾸지 않는다. DOM·workerd 전용 API 를 쓰지 않는다(앱·워커 두 tsconfig 에 모두 들어감).
 import { validateNickname } from "../nickname";
 import { MAX_PLAYERS, MIN_PLAYERS } from "../protocol";
+import type { MapChoice, MapId } from "../protocol";
 import type {
   AssassinationRecord,
   BadgeId,
@@ -17,6 +18,7 @@ import type {
 } from "../protocol";
 import type { BotPlan } from "./bots";
 import { hostSuccessor } from "./continuity";
+import { decideMap } from "./maps";
 import { enterNomination } from "./nomination";
 import { ASSIGNING_MS, DAY_ANNOUNCE_MS, DISCUSSION_MS, NOMINATION_GATHER_MS } from "./phases";
 import { assignRoles, giveRoleTo, rolesInPlay } from "./roles";
@@ -183,6 +185,10 @@ export interface RoomState {
   hostId: string;
   nextJoinSeq: number;
   players: Player[];
+  /** 방장이 고른 맵(결정 D-20). 공개 값이다(view.mapChoice). 없으면 "random" — pickMap 이 쓰고, 대기실 복귀·다시 하기 뒤에도 남는다. */
+  mapChoice?: MapChoice;
+  /** 서버 전용 결정값(결정 D-21). startGame 이 mapChoice 로 정해 싣는다 — 시작 전에는 어떤 view·프레임에도 싣지 않는다(L42). 대기실 복귀가 버린다. */
+  map?: MapId;
   /** 서버 전용(결정 0022). 방을 만들 때만 정해지는 테스트 방 표시 — true 일 때만 키가 있다. 테스트 방 방장 도구의 문이다. */
   testMode?: true;
   /** 서버 전용(결정 0022). 테스트 방 방장이 고른 다음 판 직업. 대기실 복귀 뒤에도 남아 새 판마다 다시 쓰인다. 없으면 무작위. */
@@ -383,10 +389,13 @@ export function startGame(
     state.testMode === true && state.testRole !== undefined && rolesInPlay(seated.length).includes(state.testRole)
       ? giveRoleTo(shuffled, orderedIds, state.hostId, state.testRole)
       : shuffled;
+  // 맵은 역할 배정 난수를 모두 쓴 뒤에 정한다(결정 D-21) — 허용 맵이 하나면 난수를 부르지 않아 기존 시드 시험이 그대로다.
+  const map = decideMap(state.mapChoice ?? "random", randInt);
   return {
     ok: true,
     state: {
       ...state,
+      map,
       phase: "assigning",
       phaseEndsAt: now + ASSIGNING_MS,
       expiresAt: now + ROOM_TTL_MS,

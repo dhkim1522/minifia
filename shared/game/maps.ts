@@ -1,0 +1,56 @@
+// 맵 표와 선택 규칙(MAP-06, 결정 D-20·D-21·D-22) — 순수 모듈: 시각·난수는 인자로만 받는다.
+// 맵은 MAPS 표에 한 줄을 등록하면 늘어난다. 서버의 이동 판정은 방의 맵(roomMapId → mapOf)을 읽고, 클라이언트는 view.map 으로 같은 표를 읽는다.
+import type { MapChoice, MapId } from "../protocol";
+import { BAR_MAP } from "./map";
+import type { MapDef } from "./map";
+import type { RoomState } from "./room";
+
+/**
+ * 맵 표. 이 계획의 첫 태스크는 bar 만 두고 mapOf 가 표에 없는 id 를 bar 로 돌려준다.
+ * 광장 이동 데이터(mapPlaza.ts)를 만드는 다음 태스크가 이것을 `Record<MapId, MapDef>` 로 좁히고 plaza 를 채운다.
+ */
+export const MAPS: Partial<Record<MapId, MapDef>> = { bar: BAR_MAP };
+
+/** id 의 맵. 표에 없으면 bar. */
+export function mapOf(id: MapId): MapDef {
+  return MAPS[id] ?? BAR_MAP;
+}
+
+/**
+ * 지금 게임에서 고를 수 있는(그리고 random 이 뽑을 수 있는) 맵. 광장 장면(11-10)과 선택 화면(11-13)이 끝나면 11-13 이 ["bar", "plaza"] 로 바꾼다 —
+ * 그 전에는 random 이 늘 bar 이고 mapPick plaza 는 거절된다(T-11-21). 한 곳에서 광장 노출을 잠근다.
+ */
+export const PLAYABLE_MAPS: readonly MapId[] = ["bar"];
+
+/**
+ * 시작 때 서버가 맵을 정한다(D-21). choice 가 id 면 playable 에 있을 때만 그 id, 없으면 playable[0].
+ * random 이면 playable 이 둘 이상일 때만 randInt(playable.length) 로 고른다 — 하나뿐이면 난수를 부르지 않는다(기존 시드 시험 불변).
+ */
+export function decideMap(choice: MapChoice, randInt: (n: number) => number, playable: readonly MapId[] = PLAYABLE_MAPS): MapId {
+  const first = playable[0] ?? "bar";
+  if (choice !== "random") return playable.includes(choice) ? choice : first;
+  if (playable.length <= 1) return first;
+  return playable[randInt(playable.length)] ?? first;
+}
+
+/**
+ * 방장의 맵 선택(D-20). 방장만, 대기실 또는 결과 단계에서만, 값이 random 이거나 playable 에 있을 때만.
+ * 같은 값이면 입력 그대로를 돌려준다(저장·전송을 건너뛰는 근거). 거절은 사유를 구별하지 않는다 — 응답이 같아야 오라클이 되지 않는다(L40).
+ */
+export function pickMap(
+  state: RoomState,
+  actorId: string,
+  choice: MapChoice,
+  playable: readonly MapId[] = PLAYABLE_MAPS,
+): { ok: true; state: RoomState } | { ok: false } {
+  if (actorId !== state.hostId) return { ok: false };
+  if (state.phase !== "lobby" && state.phase !== "ended") return { ok: false };
+  if (choice !== "random" && !playable.includes(choice)) return { ok: false };
+  if ((state.mapChoice ?? "random") === choice) return { ok: true, state };
+  return { ok: true, state: { ...state, mapChoice: choice } };
+}
+
+/** 방의 지금 맵: 대기실은 늘 bar(D-22), 시작한 뒤에는 state.map(없으면 bar). */
+export function roomMapId(state: Pick<RoomState, "phase" | "map">): MapId {
+  return state.phase === "lobby" ? "bar" : (state.map ?? "bar");
+}

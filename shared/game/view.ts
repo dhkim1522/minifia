@@ -316,7 +316,10 @@ export function buildView(state: RoomState, playerId: string, now: number): Room
     maxPlayers: MAX_PLAYERS,
     players,
     me: myInfo,
+    // 방장이 고른 맵은 공개 값이다(역할의 함수 아님, L44). 결정된 맵은 시작한 뒤에만 키가 생긴다(L42).
+    mapChoice: state.mapChoice ?? "random",
   };
+  if (state.phase !== "lobby" && state.map !== undefined) view.map = state.map;
   if (DAY_PHASES.has(state.phase)) view.day = buildDay(state);
 
   // 결과는 ended 단계에서만 모두에게 같다(D-17). seats 는 관전자 전용 spectate.seats 와 같은 방식으로 따로 만든다 — spectate 규칙은 그대로 둔다.

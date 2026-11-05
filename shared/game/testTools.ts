@@ -188,6 +188,8 @@ export function resetToLobby(state: RoomState, actorId: string): TestToolResult 
     nextJoinSeq: state.nextJoinSeq,
     players,
     testMode: true,
+    // 고른 맵은 대기실로 돌아와도 남고(결정 D-20), 이번 판의 결정값 map 은 버린다 — 다음 시작이 다시 정한다.
+    ...(state.mapChoice !== undefined ? { mapChoice: state.mapChoice } : {}),
     ...(state.testRole !== undefined ? { testRole: state.testRole } : {}),
     // 봇 투표 설정도 testRole 처럼 남는다(P-13) — 같은 방의 다음 판에서도 봇이 같은 규칙으로 던진다.
     ...(state.testBotVote !== undefined ? { testBotVote: state.testBotVote } : {}),

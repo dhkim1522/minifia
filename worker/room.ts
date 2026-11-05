@@ -1,6 +1,6 @@
 import { DurableObject } from "cloudflare:workers";
 import { CLOSE_CODES, MAX_FRAME_BYTES } from "../shared/protocol";
-import type { ApiErrorCode, BadgeId, BotVoteExec, BotVotePick, ChatChannel, ChatRejectWhy, ClientMessage, EmoteId, OutfitId, RemovedReason, RoomPreview, ServerMessage, WorldFrame, WsErrorCode } from "../shared/protocol";
+import type { ApiErrorCode, BadgeId, BotVoteExec, BotVotePick, ChatChannel, ChatRejectWhy, ClientMessage, EmoteId, MapChoice, OutfitId, RemovedReason, RoomPreview, ServerMessage, WorldFrame, WsErrorCode } from "../shared/protocol";
 import { botMafiaTarget, botWakeAt, isBot, syncBotPlan, takeDueBotSteps } from "../shared/game/bots";
 import type { BotStep } from "../shared/game/bots";
 import { isAlive } from "../shared/game/alive";
@@ -44,7 +44,9 @@ import { castVerdict } from "../shared/game/verdict";
 import { endReached, toggleEnd } from "../shared/game/discussion";
 import { MAP_PHASES, canMove } from "../shared/game/movement";
 import { layoutFor, layoutKey } from "../shared/game/gather";
-import { BAR_MAP, STAGE_SPOT } from "../shared/game/map";
+import { STAGE_SPOT } from "../shared/game/map";
+import type { MapDef } from "../shared/game/map";
+import { mapOf, pickMap, roomMapId } from "../shared/game/maps";
 import { APPROACH_DIST_FX, WORLD_FLUSH_MS, approachPoint, captureHome, compactWorld, despawnPlayer, emptyWorld, forceSegment, moveFrame, nextWanderAt, planMoveSegment, planWander, positionAtFx, requestMove, respawnAll, restoreWorld, segmentEndsAt, snapFrame, spawnPlayer, teleportHome } from "../shared/game/world";
 import type { Segment, WorldState } from "../shared/game/world";
 import { buildPreview, buildView } from "../shared/game/view";
@@ -138,7 +140,7 @@ export class Room extends DurableObject<Env> {
           }),
         };
         // 저장된 위치를 되살린다. world 키가 없거나 손상된 사람은 입장 지점에 선다(MAP-05).
-        this.world = restoreWorld(got.get("world"), this.room.players, Date.now(), BAR_MAP);
+        this.world = restoreWorld(got.get("world"), this.room.players, Date.now(), this.mapDef());
         if (normalized !== stored) {
           await ctx.storage.put("room", this.room);
           // 정규화로 생긴 이른 마감(now + 2초)이 기존 만료 알람(90초 뒤 등)보다 먼저 깨어나야 하므로 마감이 바뀐 경우에만 여기서 알람을 건다.
@@ -172,7 +174,7 @@ export class Room extends DurableObject<Env> {
 
     this.room = created.state;
     // 방장은 seat 0 의 입장 지점에 선다(MAP-01). 연결된 소켓이 아직 없어 보낼 프레임은 없다.
-    this.world = spawnPlayer(emptyWorld(), hostId, 0, input.now, BAR_MAP);
+    this.world = spawnPlayer(emptyWorld(), hostId, 0, input.now, this.mapDef());
     this.markWorldDirty();
     await this.ctx.storage.put("room", this.room);
     await this.reschedule();
@@ -199,7 +201,7 @@ export class Room extends DurableObject<Env> {
     this.room = result.state;
     await this.persistAndBroadcast();
     // 새 사람은 자기 seat 의 입장 지점에 서고, 이미 연결된 소켓은 state 다음에 그 한 점 구간을 받는다(MAP-01).
-    this.world = spawnPlayer(this.world, result.player.id, result.player.seat, Date.now(), BAR_MAP);
+    this.world = spawnPlayer(this.world, result.player.id, result.player.seat, Date.now(), this.mapDef());
     const seg = this.world.segs[result.player.id];
     if (seg) this.emitWorld(moveFrame(result.player.seat, seg));
     this.markWorldDirty();
@@ -303,6 +305,9 @@ export class Room extends DurableObject<Env> {
         return;
       case "dress":
         await this.handleDress(ws, msg.look);
+        return;
+      case "mapPick":
+        await this.handleMapPick(ws, msg.map);
         return;
       case "whisper":
         await this.handleWhisper(ws, msg.to, msg.text);
@@ -425,7 +430,12 @@ export class Room extends DurableObject<Env> {
       return;
     }
     this.room = result.state;
+    // 광장이 정해진 시작(D-21)은 모두를 광장 입장 지점으로 옮기고 snap 을 보낸다 — 로비의 bar 위치가 광장 마스크에서 막힌 칸일 수 있다.
+    // bar 시작은 지금처럼 로비 위치를 그대로 쓴다. state 다음에 모든 소켓이 snap 을 받는다(handleTestReset 과 같은 길).
+    const moved = this.room.map !== undefined && this.room.map !== "bar";
+    if (moved) this.world = respawnAll(this.world, this.room.players, now, this.mapDef());
     await this.persistAndBroadcast();
+    if (moved) this.emitWorld(snapFrame(this.world, this.room.players, now));
     await this.reschedule();
     // 로비를 떠나는 시작: 위치를 지금 저장하고 그대로 둔다(가정 A1). 이후 world 프레임은 나가지 않는다.
     // 알람(단계 마감) 재설정이 먼저다 — 저장 쓰기 때문에 마감 알람이 늦어지지 않게.
@@ -510,6 +520,24 @@ export class Room extends DurableObject<Env> {
     }
     if (result.state === this.room) return;
     this.writeAt.set(key, now);
+    this.room = result.state;
+    await this.persistAndBroadcast();
+  }
+
+  // 맵 선택(11-06, 결정 D-20): 신원은 소켓 첨부의 playerId 뿐이다. 방장·단계·허용 값은 규칙 함수(pickMap)가 서버 상태로 판정한다(T-11-18).
+  // 어떤 거절이든(방장 아님·단계 틀림·허용 밖 값) 사람·사유와 무관하게 같은 응답 — 오류 프레임 없이 보낸 소켓의 최신 state 한 프레임(L40). 같은 값은 무변화(프레임 0).
+  private async handleMapPick(ws: WebSocket, choice: MapChoice): Promise<void> {
+    const att = this.attachmentOf(ws);
+    if (!att || !this.room) {
+      this.sendTo(ws, { t: "error", code: "BAD_MESSAGE" });
+      return;
+    }
+    const result = pickMap(this.room, att.playerId, choice);
+    if (!result.ok) {
+      this.sendTo(ws, { t: "state", view: buildView(this.room, att.playerId, Date.now()) });
+      return;
+    }
+    if (result.state === this.room) return;
     this.room = result.state;
     await this.persistAndBroadcast();
   }
@@ -856,7 +884,7 @@ export class Room extends DurableObject<Env> {
     this.ghostSnapped.clear();
     // 대기실로 돌아오면 모두 자기 입장 지점으로 되돌린다(가정 A1, 11페이즈 다시 하기가 같은 길). state 다음에 모든 소켓이 snap 을 받는다.
     const now = Date.now();
-    this.world = respawnAll(this.world, this.room.players, now, BAR_MAP);
+    this.world = respawnAll(this.world, this.room.players, now, this.mapDef());
     await this.persistAndBroadcast();
     this.emitWorld(snapFrame(this.world, this.room.players, now));
     await this.reschedule();
@@ -1157,7 +1185,7 @@ export class Room extends DurableObject<Env> {
       const me = room.players.find((p) => p.id === m.playerId);
       const cur = Object.prototype.hasOwnProperty.call(this.world.segs, m.playerId) ? this.world.segs[m.playerId] : undefined;
       if (!me || !cur) continue;
-      const seg = planMoveSegment(cur, m.dest, now, BAR_MAP);
+      const seg = planMoveSegment(cur, m.dest, now, this.mapDef());
       this.world = forceSegment(this.world, m.playerId, seg);
       this.emitWorld(moveFrame(me.seat, seg), m.playerId);
     }
@@ -1524,7 +1552,7 @@ export class Room extends DurableObject<Env> {
     // 무대 자리(0,0)는 변론자를 서버가 세우는 한 점이다. 공용 걷기 판정이 그 점만 예외로 받으므로(08-04) 클라이언트 입력으로는 정확히 그 목적지를 버린다 —
     // 옆 점은 막힌 칸이라 걸을 수 있는 칸 중심으로 보정되어 무대 자리가 되지 않는다.
     if (dest.x === STAGE_SPOT.x && dest.z === STAGE_SPOT.z) return;
-    const result = requestMove(this.world, playerId, dest, now, BAR_MAP);
+    const result = requestMove(this.world, playerId, dest, now, this.mapDef());
     if (!result.ok) return;
     this.world = result.world;
     this.emoteRates.delete(playerId); // 이동 요청이 받아들여지면 동작 기록을 지운다(D-10)
@@ -1568,6 +1596,11 @@ export class Room extends DurableObject<Env> {
     return room.players.some(isBot) && room.players.some((p) => !isBot(p) && p.connected);
   }
 
+  // 방의 지금 맵(결정 D-22): 이동 판정·입장 지점·배회가 모두 이것을 읽는다. 방이 없거나 대기실이면 bar.
+  private mapDef(): MapDef {
+    return mapOf(this.room === null ? "bar" : roomMapId(this.room));
+  }
+
   private wanderBots(): { id: string; seat: number }[] {
     return (this.room?.players ?? []).filter(isBot).map((p) => ({ id: p.id, seat: p.seat }));
   }
@@ -1577,14 +1610,14 @@ export class Room extends DurableObject<Env> {
     if (!this.wanderActive()) return;
     const unplanned = this.wanderBots().filter((b) => !Object.prototype.hasOwnProperty.call(this.world.wanderAt, b.id));
     if (unplanned.length === 0) return;
-    const planned = planWander(this.world, unplanned, now, cryptoRandInt, BAR_MAP);
+    const planned = planWander(this.world, unplanned, now, cryptoRandInt, this.mapDef());
     this.world = { ...this.world, wanderAt: { ...this.world.wanderAt, ...planned.world.wanderAt } };
   }
 
   // 때가 된 봇의 목적지를 정하고 사람과 같은 applyMove(단계·150ms 간격·경로 검사)로 적용한다. 거절은 버린다(특권 없음, T-06-20).
   private runBotWander(now: number): void {
     if (!this.wanderActive()) return;
-    const planned = planWander(this.world, this.wanderBots(), now, cryptoRandInt, BAR_MAP);
+    const planned = planWander(this.world, this.wanderBots(), now, cryptoRandInt, this.mapDef());
     this.world = planned.world;
     for (const m of planned.moves) this.applyMove(m.playerId, m.dest, now);
   }
@@ -1598,7 +1631,7 @@ export class Room extends DurableObject<Env> {
     const spawned: { seat: number; seg: Segment }[] = [];
     for (const pl of [...room.players].sort((a, b) => a.seat - b.seat)) {
       if (Object.prototype.hasOwnProperty.call(this.world.segs, pl.id)) continue;
-      this.world = spawnPlayer(this.world, pl.id, pl.seat, now, BAR_MAP);
+      this.world = spawnPlayer(this.world, pl.id, pl.seat, now, this.mapDef());
       const seg = this.world.segs[pl.id];
       if (seg) spawned.push({ seat: pl.seat, seg });
     }

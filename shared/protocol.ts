@@ -248,6 +248,7 @@ export type ClientMessage =
   | { t: "whisper"; to: number; text: string } // 귓속말(결정 0066-2) — 낮 토론, 하루 1번, 산 다른 사람 한 명에게 30자소 이하. 본문은 보낸·받은 사람 소켓에만 간다
   | { t: "badge"; role: BadgeId } // 직업 주장(결정 0066-1) — 서버가 정하는 것은 값의 형식뿐 참·거짓은 판정하지 않는다. 낮 시작 발표·토론·지목 단계에서만
   | { t: "dress"; look: OutfitId } // 로비 의상(결정 D-6) — 의상 id 하나뿐, 대기실에서만. 서버는 고른 값을 저장·방송할 뿐 역할과 비교하지 않는다
+  | { t: "mapPick"; map: MapChoice } // 맵 선택(결정 D-20) — 방장이 대기실·결과 단계에서만. 값은 enum 뿐이고 서버가 방장·단계·허용 값을 판정한다. 거절은 오류 프레임 없이 보낸 소켓의 최신 state 한 프레임(L40)
   | { t: "verdict"; agree: boolean } // 찬반 — 찬성 true / 반대 false, 변론자·유령은 거부, 마지막 값이 유효(DAY-06)
   // 테스트 방 방장 도구(결정 0022). 일반 방은 BAD_MESSAGE 로 거부한다. role null = 무작위.
   | { t: "testSkip" }
@@ -323,6 +324,10 @@ export interface RoomView {
   day?: DayView; // 낮 두 단계(dayAnnounce·discussion)·처형 다섯 단계·밤·아침·종료에서
   spectate?: SpectateView; // 탈락한 본인 view 에만(결정 0021). 살아 있는 사람 view 에는 키 자체가 없다
   result?: GameResult; // ended 단계에서만, 모두에게(D-17)
+  /** 방장이 고른 맵(결정 D-20). 서버는 항상 싣는다(기본 "random") — 공개 값이고 역할의 함수가 아니다. 타입을 optional 로 둔 것은 화면 시험의 리터럴을 한꺼번에 바꾸지 않기 위해서다(화면은 `view.mapChoice ?? "random"`). */
+  mapChoice?: MapChoice;
+  /** 이번 판의 맵(결정 D-21, 누설 L42). 시작한 뒤에만 키가 있고 모든 참가자에게 같다 — 대기실·시작 전 view 에는 키 자체가 없다. */
+  map?: MapId;
 }
 export type WsErrorCode =
   | "BAD_MESSAGE"
@@ -424,6 +429,13 @@ export type EmoteId = (typeof EMOTE_IDS)[number];
 /** 의상 id 아홉 개(결정 D-4·D-6, UI-SPEC B-2 순서: coat 가 기본). 클라이언트 표 src/world/characterData.ts 의 OUTFITS 와 키 집합이 같다(test/unit/look.test.ts 가 고정). */
 export const OUTFIT_IDS = ["coat", "police", "doctor", "mafia", "detective", "reporter", "elder", "hood", "noir"] as const;
 export type OutfitId = (typeof OUTFIT_IDS)[number];
+
+/** 맵 id(결정 D-22). 맵은 shared/game/maps.ts 의 MAPS 표에 등록한다. */
+export type MapId = "bar" | "plaza";
+/** 방장의 선택(결정 D-20): 맵 하나 또는 무작위(기본). 무작위의 결과는 시작 때 서버가 정한다. */
+export type MapChoice = MapId | "random";
+/** 서버 스키마(strictObject enum)와 화면이 같이 읽는 선택 값 목록. */
+export const MAP_CHOICES = ["bar", "plaza", "random"] as const;
 
 /**
  * 동작 프레임(결정 D-12). 키는 t·seat·id·n 뿐이다 — 채널·역할·player id·시각이 없다.
