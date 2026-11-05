@@ -174,6 +174,8 @@ export function resetToLobby(state: RoomState, actorId: string): TestToolResult 
     connId: p.connId,
     // 서버 봇은 대기실로 되돌려도 남는다(결정 0024). 사람은 지금처럼 여덟 키 그대로다.
     ...(p.isBot === true ? { isBot: true as const } : {}),
+    // 고른 의상은 대기실로 돌아와도 남는다(결정 D-6) — 다시 하기(11페이즈)가 이어받는다.
+    ...(p.look !== undefined ? { look: p.look } : {}),
   }));
   const next: RoomState = {
     code: state.code,
