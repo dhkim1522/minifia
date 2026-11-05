@@ -295,3 +295,91 @@ describe("패 순서 (D-7)", () => {
     expect(seats.slice(4)).toEqual([0, 5]);
   });
 });
+
+// ---- Task 3: 읽기 키 집합 (L37, T-11-04) ----
+
+/** computeAwards 가 읽어도 되는 경로(배열 칸은 [] 로 접는다). 이 밖의 경로를 읽으면 숨은 정보를 건드린 것이다. */
+const ALLOWED_READS: ReadonlySet<string> = new Set([
+  "players", "players[].seat", "players[].role", "players[].alive", "players[].stats", "players[].stats.say", "players[].stats.emote",
+  "players[].badgeLog", "players[].badgeLog[].n", "players[].badgeLog[].v",
+  "voteLog", "voteLog[].n", "voteLog[].exec", "voteLog[].exec.passed", "voteLog[].cand", "voteLog[].cand.votes",
+  "voteLog[].cand.votes[].seat", "voteLog[].cand.votes[].target", "voteLog[].cand.candidate", "voteLog[].last",
+  "nightLog", "nightLog[].n", "nightLog[].target", "nightLog[].died",
+  "whispers", "whispers[].from", "whispers[].n",
+  "winner",
+]);
+
+/** 읽기·열거·in 검사를 모두 기록하는 깊은 프록시. 배열 안쪽(length·메서드)은 기록하지 않고 칸 접근만 `[]` 경로로 이어 간다. */
+function spy<T extends object>(root: T, reads: Set<string>): T {
+  const wrap = (value: unknown, path: string): unknown => {
+    if (value === null || typeof value !== "object") return value;
+    const isArray = Array.isArray(value);
+    return new Proxy(value as object, {
+      get(target, key, receiver) {
+        const v: unknown = Reflect.get(target, key, receiver);
+        if (typeof key === "symbol") return v;
+        if (isArray) return /^\d+$/.test(key) ? wrap(v, `${path}[]`) : v;
+        const next = path === "" ? key : `${path}.${key}`;
+        reads.add(next);
+        return wrap(v, next);
+      },
+      has(target, key) {
+        if (!isArray && typeof key === "string") reads.add(`${path}::has:${key}`);
+        return Reflect.has(target, key);
+      },
+      ownKeys(target) {
+        if (!isArray) reads.add(`${path}::ownKeys`);
+        return Reflect.ownKeys(target);
+      },
+    });
+  };
+  return wrap(root, "") as T;
+}
+
+describe("읽기 키 집합 — 공개 사실만 읽는다 (L37, T-11-04)", () => {
+  /** 숨은 정보 필드를 모두 채운 한 판. 읽으면 프록시가 잡는다. */
+  function loaded() {
+    const base = endedState({
+      roles: ROLES6, dead: [3, 4], winner: "mafiaWin",
+      voteLog: [execDay(1, [[1, 0], [3, 4], [2, 5]], 4), { ...execDay(2, [[1, 3], [2, 3]], 3, false), last: true }],
+      nightLog: [{ n: 1, target: 3, died: false }, { n: 2, target: 3, died: true }],
+      whispers: [{ n: 1, from: 3, to: 4, text: "비밀", at: 5 }, { n: 1, from: 3, to: 1, text: "또", at: 6 }],
+      stats: { 3: { say: 6, emote: 3 }, 1: { say: 1, emote: 9 } },
+      badgeLogs: { 0: [{ n: 1, v: "police" }], 3: [{ n: 1, v: "police" }, { n: 2, v: "doctor" }, { n: 3, v: "none" }] },
+    });
+    const players = base.players.map((p) => ({
+      ...p,
+      investigations: [{ n: 1, target: 0, isMafia: true }],
+      assassinations: [{ n: 1, target: 3, died: true }],
+      treatments: [{ n: 1, target: 3 }],
+      nightPick: 3, verdictVote: true, nominate: 2, runoffVote: 1, showdownPick: 2, will: "유언", endVote: true as const,
+      nickname: "별명", token: "secret-token", id: "secret-id", connId: "c", badge: "police" as const,
+    }));
+    return { ...base, players, verdict: { passed: true, candidate: 4, ballots: { yes: [0, 1], no: [2] } }, hostId: "secret-host", pickTurn: { order: [0], i: 0 } };
+  }
+
+  it("접근한 키 경로는 허용 목록의 부분집합이고, 수사·치료·밤 선택·개인 표·ballots 는 읽지 않는다", () => {
+    const state = loaded();
+    const reads = new Set<string>();
+    const awards = computeAwards(spy(state, reads));
+    const outside = [...reads].filter((r) => !ALLOWED_READS.has(r));
+    expect(outside).toEqual([]);
+    // 시험이 비어 있지 않다: 핵심 경로는 실제로 읽혔다
+    for (const must of ["players[].role", "players[].alive", "voteLog[].cand.votes[].target", "voteLog[].cand.candidate", "nightLog[].died", "whispers[].from", "players[].stats.say", "players[].badgeLog[].v", "winner"]) {
+      expect(`${must}:${reads.has(must)}`).toBe(`${must}:true`);
+    }
+    // 프록시를 거쳐도 결과는 같다
+    expect(awards).toEqual(computeAwards(state));
+  });
+
+  it("숨은 정보만 다른 두 판의 칭호는 같다(수사·치료·밤 선택·개인 표·ballots·유언·귓속말 본문은 결과에 영향이 없다)", () => {
+    const a = loaded();
+    const b = {
+      ...a,
+      players: a.players.map((p) => ({ ...p, investigations: [], assassinations: [], treatments: [], nightPick: 0, verdictVote: false, nominate: 0, runoffVote: 0, showdownPick: 0, will: "", endVote: undefined })),
+      verdict: { passed: false, ballots: { yes: [], no: [0, 1, 2] } },
+      whispers: a.whispers!.map((w) => ({ ...w, text: "다른 말", at: 0, to: 0 })),
+    };
+    expect(computeAwards(b)).toEqual(computeAwards(a));
+  });
+});

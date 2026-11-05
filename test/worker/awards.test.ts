@@ -1,7 +1,7 @@
 // 11-02 Task 1: ended 의 result.awards 는 서버가 정한 같은 목록이다(END-04, D-4, L36). 처형으로 끝나는 4명 판을 실제 방에서 돌린다.
 import { describe, expect, it, vi } from "vitest";
 import type { ServerMessage } from "../../shared/protocol";
-import { actorsOf, advanceTo, closePhase, lastViewOf, nextFrame, pointAll, seat, send, verdictAll } from "./helpers";
+import { actorsOf, advanceTo, closePhase, connect, hello, lastViewOf, nextFrame, pointAll, seat, send, verdictAll } from "./helpers";
 import type { Actor, Seated, TestSocket } from "./helpers";
 
 vi.setConfig({ testTimeout: 20_000 });
@@ -38,5 +38,26 @@ describe("ended 의 result.awards (END-04, L36)", () => {
     expect(lists[0]![0]).toEqual({ seat: mafia.seat, award: "target", k: 3 });
     expect(lists[0]!.slice(1).map((l) => l.award)).toEqual(["survivor", "survivor", "survivor"]);
     expect(lists[0]!.map((l) => l.seat).sort()).toEqual(actors.map((a) => a.seat).sort());
+  });
+
+  it("신분(시민·경찰·마피아·탈락한 마피아)이 달라도, 재접속(hello)해도 같은 JSON 이다", async () => {
+    const { r, actors } = await endedGame();
+    const expected = JSON.stringify(lastViewOf(actors[0]!.sock).result?.awards);
+    const roles = new Set(actors.map((a) => a.role));
+    expect([...roles].sort()).toEqual(["citizen", "mafia", "police"]);
+    for (const a of actors) {
+      const again = await connect(r.code);
+      const first = await hello(again, a.token);
+      expect(`${a.role}:${JSON.stringify(first.view.result?.awards)}`).toBe(`${a.role}:${expected}`);
+      again.ws.close();
+    }
+  });
+
+  it("판 중(처형 전) 어떤 소켓의 어떤 프레임에도 awards 키가 없다", async () => {
+    const r = await seat(3, 0);
+    send(r.host, { t: "start" });
+    for (const s of allSockets(r)) await nextFrame(s, isPhase("assigning"));
+    await advanceTo(r.code, allSockets(r), "nomination");
+    for (const s of allSockets(r)) for (const raw of s.frames) expect(raw.includes("awards")).toBe(false);
   });
 });

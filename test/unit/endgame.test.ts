@@ -250,7 +250,7 @@ describe("ended 전용 result view (END-02, D-17)", () => {
       );
       expect(result.seats.every((s) => Object.keys(s).sort().join(",") === "job,seat")).toBe(true);
       expect(JSON.stringify(result.summary)).toBe(JSON.stringify(buildSummary(ended)));
-      expect(Object.keys(result).sort().join(",")).toBe("seats,summary,winner");
+      expect(Object.keys(result).sort().join(",")).toBe("awards,seats,summary,winner");
     });
   }
 
