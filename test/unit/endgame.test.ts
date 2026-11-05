@@ -5,7 +5,7 @@ import { isAlive } from "../../shared/game/alive";
 import { ENDED_ROOM_TTL_MS, buildSummary, enterEnded, routeAfterExecution, routeAfterMorning } from "../../shared/game/endgame";
 import { pickTarget } from "../../shared/game/night";
 import { MORNING_MS, NIGHT_MS } from "../../shared/game/phases";
-import type { RoomState } from "../../shared/game/room";
+import type { Player, RoomState } from "../../shared/game/room";
 import { nextWakeAt, tick } from "../../shared/game/tick";
 import { seededRandInt } from "../helpers/seededRandom";
 import { buildView } from "../../shared/game/view";
@@ -328,5 +328,62 @@ describe("ended 전에는 결과·밤 기록이 어떤 view 에도 없다 (T-04-
   it("로비 view 에도 result 키가 없다", () => {
     const lobby = startedAt(4, 1, "roleReveal");
     expect("result" in viewOf({ ...lobby, phase: "lobby", phaseEndsAt: null }, lobby.hostId)).toBe(false);
+  });
+});
+
+describe("enterEnded — 쉬는 사람 합류 (D-13, 11-08)", () => {
+  const benchRow = (i: number, over: Record<string, unknown> = {}): Player =>
+    ({ id: `b${i}`, token: `token-b${i}-0123456789abc`, seat: 4 + i, nickname: `쉼${i}`, nicknameKey: `쉼${i}`, joinSeq: 10 + i, connected: true, connId: `bc${i}`, ...over }) as Player;
+
+  /** 마피아 1 + 시민 1 이 산 상태(마피아 승) — 쉬는 사람 셋이 others 로 세어지면 승패가 달라진다. */
+  function mafiaWinWithBench(): RoomState {
+    const s = executionOf(4, 2, "citizen");
+    const keep = s.players.filter((p) => p.role !== "mafia")[0]!;
+    return {
+      ...s,
+      phase: "ended",
+      phaseEndsAt: null,
+      players: s.players.map((p) => (p.role === "mafia" || p.id === keep.id ? { ...p, alive: true } : { ...p, alive: false })),
+      bench: [benchRow(0), benchRow(1, { look: "hood" }), benchRow(2, { connected: false, connId: null, disconnectedAt: 123 })],
+    };
+  }
+
+  it("승패는 합류 전 상태로 판정한다 — 쉬는 사람이 others 로 세어지지 않는다 (mafiaWin 유지)", () => {
+    expect(String(enterEnded(mafiaWinWithBench(), THROWING_RAND, 1_000).winner)).toBe("mafiaWin");
+  });
+
+  it("쉬는 사람은 sat:true 로 players 에 합류하고 bench 키는 지워진다 — 역할·ready 없음, 허용 키 + sat", () => {
+    const before = mafiaWinWithBench();
+    const entered = enterEnded(before, THROWING_RAND, 1_000);
+    expect(Object.hasOwn(entered, "bench")).toBe(false);
+    expect(before.bench!.length).toBe(3);
+    const sat = entered.players.filter((p) => p.sat === true);
+    expect(sat.map((p) => p.id)).toEqual(["b0", "b1", "b2"]);
+    for (const p of sat) {
+      expect(Object.hasOwn(p, "role")).toBe(false);
+      expect(Object.hasOwn(p, "ready")).toBe(false);
+    }
+    expect(Object.keys(sat[1]!).sort().join(",")).toBe("connId,connected,id,joinSeq,look,nickname,nicknameKey,sat,seat,token");
+    expect(sat[2]!.disconnectedAt).toBe(123);
+    expect(entered.players.length).toBe(before.players.length + 3);
+  });
+
+  it("view: result.seats·awards 는 참가자만 본다(sat 는 칭호 없음), players[] 에는 sat 가 실린다", () => {
+    const entered = enterEnded(mafiaWinWithBench(), THROWING_RAND, 1_000);
+    const viewer = entered.players.find((p) => p.sat !== true)!;
+    const v = buildView(entered, viewer.id, 0);
+    expect(v.result!.seats.map((e) => e.seat)).toEqual(entered.players.filter((p) => p.role !== undefined).map((p) => p.seat).sort((a, b) => a - b));
+    expect(v.result!.awards!.length).toBe(4);
+    expect(v.players.filter((p) => p.sat === true).map((p) => p.seat)).toEqual([4, 5, 6]);
+    const sitterView = buildView(entered, "b0", 0);
+    expect(sitterView.result!.seats.length).toBe(4);
+    expect(sitterView.me.role).toBeUndefined();
+  });
+
+  it("bench 가 없으면 지금처럼 players 는 그대로다", () => {
+    const s = executionOf(4, 1, "mafia");
+    const entered = enterEnded({ ...s, phase: "ended", phaseEndsAt: null }, THROWING_RAND, 500_000);
+    expect(entered.players).toBe(s.players);
+    expect("bench" in entered).toBe(false);
   });
 });

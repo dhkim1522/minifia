@@ -2139,3 +2139,75 @@ describe("준비 players[].ready · players[].sat (11-08, D-12·D-13)", () => {
     expect(buildView(base, hostId, 0).players.some((r) => "sat" in r)).toBe(false);
   });
 });
+
+describe("쉬는 사람 view (11-08, D-13, 누설 L38)", () => {
+  const RESTING_TOP = "code,mapChoice,maxPlayers,me,minPlayers,phase,phaseDurationMs,phaseEndsAt,players,resting,round,serverNow";
+  const sitter = {
+    id: "sit-id-0001",
+    token: "token-sitter-secret-0123456789",
+    seat: 7,
+    nickname: "쉬는이",
+    nicknameKey: "쉬는이",
+    joinSeq: 99,
+    connected: true,
+    connId: "sit-conn",
+    look: "hood" as const,
+  };
+  /** n 명 판 상태에 쉬는 사람 한 명을 bench 로 둔 상태. */
+  const withSitter = (s: RoomState, extra: Partial<Player> = {}): RoomState => ({ ...s, bench: [{ ...sitter, ...extra }] });
+
+  it("모든 단계에서 허용 키만: code·phase·phaseEndsAt(null)·phaseDurationMs(null)·serverNow·min/maxPlayers·players(자기 한 줄)·me·round·mapChoice·resting(+시작 뒤 map)", () => {
+    for (const phase of PHASES) {
+      const base = phase === "lobby" ? lobbyOf(5) : richStateAt(phase, 5, 1);
+      const s = withSitter({ ...base, map: "bar" });
+      const v = buildView(s, sitter.id, START_AT);
+      const want = phase === "lobby" ? RESTING_TOP : `${RESTING_TOP},map`;
+      expect(`${phase}:${keysOf(v)}`).toBe(`${phase}:${want}`);
+      expect(v.resting).toBe(true);
+      expect(v.phaseEndsAt).toBeNull();
+      expect(v.phaseDurationMs).toBeNull();
+      expect(flat(v.me)).toBe(flat({ seat: 7, isHost: false }));
+      expect(v.players.length).toBe(1);
+      expect(flat(v.players[0])).toBe(flat({ seat: 7, nickname: "쉬는이", connected: true, isHost: false, look: "hood" }));
+      expect(v.phase).toBe(base.phase);
+      expect(v.round).toBe(roundOf(base));
+    }
+  });
+
+  it("게임 필드가 어디에도 없다: 역할 단어·day·result·spectate·다른 사람 닉네임·토큰·id", () => {
+    const base = richStateAt("night", 6, 2);
+    const s = withSitter(base);
+    const text = JSON.stringify(buildView(s, sitter.id, START_AT));
+    for (const p of base.players) {
+      expect(text).not.toContain(p.nickname);
+      expect(text).not.toContain(p.token);
+      expect(text).not.toContain(p.id);
+    }
+    expect(text).not.toContain(sitter.token);
+    expect(text).not.toContain(sitter.id);
+    expect(text).not.toContain(sitter.connId);
+    for (const word of ["mafia", "police", "doctor", "citizen"]) expect(text.replaceAll('"look":"hood"', "")).not.toContain(`"${word}"`);
+    for (const key of ["day", "result", "spectate", "voteLog"]) expect(text).not.toContain(`"${key}"`);
+  });
+
+  it("쉬는 사람이 있어도 다른 사람의 view 에는 쉬는 사람이 나오지 않는다 (닉네임·좌석 7·look)", () => {
+    const base = richStateAt("discussion", 6, 1);
+    const s = withSitter(base);
+    for (const viewer of s.players) {
+      const v = buildView(s, viewer.id, START_AT);
+      const text = JSON.stringify(v);
+      expect(text).not.toContain("쉬는이");
+      expect(v.players.some((p) => p.seat === 7)).toBe(false);
+      expect("resting" in v).toBe(false);
+    }
+    expect(flat(buildView(base, base.players[0]!.id, START_AT))).toBe(flat(buildView(s, base.players[0]!.id, START_AT)));
+  });
+
+  it("look 이 없으면 키가 없고, 방에도 bench 에도 없는 사람은 던진다", () => {
+    const base = richStateAt("night", 5, 1);
+    const { look: _l, ...noLook } = sitter;
+    const s: RoomState = { ...base, bench: [noLook] };
+    expect(keysOf(buildView(s, sitter.id, START_AT).players[0])).toBe("connected,isHost,nickname,seat");
+    expect(() => buildView(base, "nobody", START_AT)).toThrow();
+  });
+});

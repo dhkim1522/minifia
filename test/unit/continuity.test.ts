@@ -5,6 +5,7 @@ import {
   LOBBY_PRUNE_MS,
   LOBBY_PRUNE_TEST_MS,
   nextContinuityAt,
+  pruneBench,
   pruneLobby,
   resolveHost,
 } from "../../shared/game/continuity";
@@ -216,5 +217,58 @@ describe("nextContinuityAt — 정리 마감 합류", () => {
   it("봇과 기록 없는 사람은 마감을 만들지 않는다", () => {
     const s = room([player(0), gone(1, T0, { isBot: true }), gone(2, T0, { disconnectedAt: undefined })]);
     expect(nextContinuityAt(s)).toBe(Number.POSITIVE_INFINITY);
+  });
+});
+
+describe("pruneBench (쉬는 사람 정리, D-13·D-18, 11-08)", () => {
+  const sitter = (i: number, over: Partial<Player> = {}): Player => player(i, over);
+  const withBench = (bench: Player[], over: Partial<RoomState> = {}, phase: PhaseId = "discussion"): RoomState =>
+    ({ ...room([player(0), player(1), player(2), player(3)], over, phase), bench }) as RoomState;
+
+  it("끊긴 지 정리 시간(180초) 이상이면 bench 에서 빠지고 removedIds 에 담긴다 — 경계 179_999 / 180_000", () => {
+    const s = withBench([sitter(4, { connected: false, connId: null, disconnectedAt: T0 }), sitter(5, { connected: false, connId: null, disconnectedAt: T0 + 1 })]);
+    const early = pruneBench(s, T0 + LOBBY_PRUNE_MS - 1);
+    expect(early.state).toBe(s);
+    expect(early.removedIds).toEqual([]);
+    const at = pruneBench(s, T0 + LOBBY_PRUNE_MS);
+    expect(at.removedIds).toEqual(["p4"]);
+    expect(at.state.bench!.map((p) => p.id)).toEqual(["p5"]);
+    expect(s.bench!.length).toBe(2);
+    const later = pruneBench(at.state, T0 + LOBBY_PRUNE_MS + 1);
+    expect(later.removedIds).toEqual(["p5"]);
+    expect(Object.hasOwn(later.state, "bench")).toBe(false);
+  });
+
+  it("테스트 방은 6초", () => {
+    const s = withBench([sitter(4, { connected: false, connId: null, disconnectedAt: T0 })], { testMode: true });
+    expect(pruneBench(s, T0 + LOBBY_PRUNE_TEST_MS - 1).removedIds).toEqual([]);
+    expect(pruneBench(s, T0 + LOBBY_PRUNE_TEST_MS).removedIds).toEqual(["p4"]);
+  });
+
+  it("연결된 쉬는 사람과 끊긴 시각이 없는 사람은 지우지 않는다. bench 가 없으면 같은 객체", () => {
+    const s = withBench([sitter(4), sitter(5, { connected: false, connId: null })]);
+    expect(pruneBench(s, T0 + 100 * LOBBY_PRUNE_MS).state).toBe(s);
+    const noBench = room([player(0), player(1)]);
+    expect(pruneBench(noBench, T0).state).toBe(noBench);
+  });
+
+  it("어떤 단계에서도 일한다(게임 중)", () => {
+    for (const phase of ["assigning", "night", "morning"] as const) {
+      const s = withBench([sitter(4, { connected: false, connId: null, disconnectedAt: T0 })], {}, phase);
+      expect(pruneBench(s, T0 + LOBBY_PRUNE_MS).removedIds).toEqual(["p4"]);
+    }
+  });
+
+  it("결과 단계 players 의 끊긴 사람은 pruneLobby·pruneBench 어느 쪽도 지우지 않는다 (다시 하기가 한 번에 정리)", () => {
+    const s = room([player(0), player(1), gone(2, T0), player(3)], {}, "ended");
+    expect(pruneLobby(s, T0 + 10 * LOBBY_PRUNE_MS).state).toBe(s);
+    expect(pruneBench(s, T0 + 10 * LOBBY_PRUNE_MS).state).toBe(s);
+  });
+
+  it("nextContinuityAt 가 bench 정리 마감을 합친다", () => {
+    const s = withBench([sitter(4, { connected: false, connId: null, disconnectedAt: T0 + 5 })]);
+    expect(nextContinuityAt(s)).toBe(T0 + 5 + LOBBY_PRUNE_MS);
+    expect(nextContinuityAt({ ...s, testMode: true })).toBe(T0 + 5 + LOBBY_PRUNE_TEST_MS);
+    expect(nextContinuityAt(withBench([sitter(4)]))).toBe(Number.POSITIVE_INFINITY);
   });
 });

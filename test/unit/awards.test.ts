@@ -37,6 +37,14 @@ describe("칭호 — 대체 칭호 경로 (D-4)", () => {
     expect(awards.some((a) => a.seat === 4)).toBe(false);
   });
 
+  it("sat 로 합류한 사람은 역할이 없어 칭호에서 빠지고 다른 사람의 칭호도 바뀌지 않는다 (11-08)", () => {
+    const plain = endedState({ roles: ROLES5, dead: [3], voteLog: [execDay(1, [[0, 3]], 3)] });
+    const withSat = { ...plain, players: [...plain.players, { ...plain.players[0]!, id: "sat-1", token: "token-sat-1-0123456789abc", seat: 5, nickname: "쉼", nicknameKey: "쉼", role: undefined, sat: true as const }] };
+    delete (withSat.players[5] as { role?: unknown }).role;
+    expect(computeAwards(withSat)).toEqual(computeAwards(plain));
+    expect(computeAwards(withSat).some((a) => a.seat === 5)).toBe(false);
+  });
+
   it("시민 승리면 진 팀은 마피아 편이 먼저, 같은 팀은 낮은 좌석부터", () => {
     const s = endedState({ roles: ["citizen", "mafia", "doctor", "mafia", "police"], winner: "citizenWin" });
     expect(computeAwards(s).map((a) => a.seat)).toEqual([1, 3, 0, 2, 4]);

@@ -81,6 +81,17 @@ describe("setLook — 표 (D-6)", () => {
     expect(res(setLook(room("lobby"), "p1", "wizard" as OutfitId))).toBe("BAD_MESSAGE");
   });
 
+  it("결과 단계(ended)에서도 고를 수 있다 — 참가자·sat 모두, 게임 중은 그대로 WRONG_PHASE (D-16)", () => {
+    const ended = room("ended", 4, (p) => (p.seat === 3 ? { ...p, sat: true as const } : { ...p, role: "citizen" as const }));
+    expect(res(setLook(ended, "p1", "hood"))).toBe("ok");
+    expect(res(setLook(ended, "p3", "noir"))).toBe("ok");
+    const changed = setLook(ended, "p3", "noir");
+    expect(changed.ok && changed.state.players.find((p) => p.id === "p3")?.look).toBe("noir");
+    for (const phase of ["assigning", "roleReveal", "dayAnnounce", "discussion", "night", "morning"] as const) {
+      expect(res(setLook(room(phase), "p1", "hood"))).toBe("WRONG_PHASE");
+    }
+  });
+
   it("검사 순서: 단계가 먼저다(대기실 밖 + 방에 없는 id → WRONG_PHASE)", () => {
     expect(res(setLook(room("night"), "nobody", "mafia"))).toBe("WRONG_PHASE");
   });

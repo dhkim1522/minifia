@@ -236,6 +236,18 @@ describe("resetToLobby", () => {
     return { ...picked.state, testRole: "mafia" };
   }
 
+  it("쉬는 사람(bench)이 있으면 players 로 합류시켜 아무도 잃지 않는다 — 합류 행은 허용 키만(sat·ready 없음)", () => {
+    const base = stateAt(5, 1, "discussion");
+    const sitter = { id: "sit-1", token: "token-sit-1-0123456789abc", seat: 5, nickname: "쉼", nicknameKey: "쉼", joinSeq: 9, connected: true, connId: "sc", look: "hood" } as const;
+    const withBench: RoomState = { ...base, bench: [sitter] };
+    const r = resetToLobby(withBench, withBench.hostId);
+    if (!r.ok) throw new Error(r.error);
+    expect(Object.hasOwn(r.state, "bench")).toBe(false);
+    expect(r.state.players.length).toBe(6);
+    const joined = r.state.players.find((p) => p.id === "sit-1")!;
+    expect(Object.keys(joined).sort().join(",")).toBe("connId,connected,id,joinSeq,look,nickname,nicknameKey,seat,token");
+  });
+
   it("일반 방은 BAD_MESSAGE, 손님은 NOT_HOST, 대기실은 WRONG_PHASE 다", () => {
     const normal = stateAt(5, 1, "discussion", false);
     const a = resetToLobby(normal, normal.hostId);

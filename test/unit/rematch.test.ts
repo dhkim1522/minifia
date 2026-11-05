@@ -3,7 +3,18 @@ import { describe, expect, it } from "vitest";
 import { assignRoles } from "../../shared/game/roles";
 import { ROOM_TTL_MS, roundOf } from "../../shared/game/room";
 import type { Player, RoomState } from "../../shared/game/room";
-import { REMATCH_MAX_AGE_MS, isReady, rematch, setReady } from "../../shared/game/rematch";
+import {
+  REMATCH_MAX_AGE_MS,
+  REMATCH_STALE_MS,
+  attachBenchConnection,
+  detachBenchConnection,
+  findAnyByToken,
+  isReady,
+  leaveBench,
+  rematch,
+  seatBench,
+  setReady,
+} from "../../shared/game/rematch";
 import { ASSIGNING_MS } from "../../shared/game/phases";
 import { seededRandInt } from "../helpers/seededRandom";
 
@@ -235,3 +246,112 @@ describe("rematch 허용 목록 리터럴 (D-15, 누설 L39)", () => {
     expect(r.state.bench).toBeUndefined();
   });
 });
+
+describe("rematch 쉬는 사람 분배 (D-13, 11-08)", () => {
+  const BENCH_ALLOWED = "connId,connected,id,joinSeq,look,nickname,nicknameKey,seat,token";
+  /** 방장 p0 + 준비한 p1~p3 + 아래 R 명. */
+  const withRest = (rest: Player[]): RoomState => endedRoom([dirtyPlayer(0), ready(1), ready(2), ready(3), ...rest], { nextJoinSeq: 4 + rest.length });
+
+  it("연결됐지만 준비하지 않은 사람은 bench, 참가자 목록에는 없다", () => {
+    const r = rematch(withRest([dirtyPlayer(4, { look: "hood" })]), "p0", 1, NOW, seededRandInt(1));
+    if (!r.ok) throw new Error("rematch failed");
+    expect(idsOf(r.state.players)).toBe("p0,p1,p2,p3");
+    expect(idsOf(r.state.bench)).toBe("p4");
+    expect(r.removedIds).toEqual([]);
+    // 쉬는 사람은 역할을 받지 않고, 행의 키는 허용 키뿐이다
+    expect(keysOf(r.state.bench![0]!)).toBe(BENCH_ALLOWED);
+    expect(r.state.players.every((p) => p.role !== undefined)).toBe(true);
+    expect(JSON.stringify(r.state.bench)).not.toContain("CANARY");
+  });
+
+  it("끊긴 지 60초 미만은 bench(disconnectedAt 이 남는다), 60초 이상과 나간 사람은 제거된다 — 경계 59_999 / 60_000", () => {
+    expect(REMATCH_STALE_MS).toBe(60_000);
+    const down = (i: number, ago: number): Player => dirtyPlayer(i, { connected: false, connId: null, disconnectedAt: NOW - ago });
+    const r = rematch(withRest([down(4, REMATCH_STALE_MS - 1), down(5, REMATCH_STALE_MS), down(6, 90_000), dirtyPlayer(7, { left: true, connected: false, connId: null })]), "p0", 1, NOW, seededRandInt(1));
+    if (!r.ok) throw new Error("rematch failed");
+    expect(idsOf(r.state.bench)).toBe("p4");
+    expect(r.state.bench![0]!.disconnectedAt).toBe(NOW - (REMATCH_STALE_MS - 1));
+    expect(keysOf(r.state.bench![0]!)).toBe("connId,connected,disconnectedAt,id,joinSeq,nickname,nicknameKey,seat,token");
+    expect(r.removedIds.sort()).toEqual(["p5", "p6", "p7"]);
+    expect(idsOf(r.state.players)).toBe("p0,p1,p2,p3");
+  });
+
+  it("준비했어도 끊겼으면 참가자가 아니다 — 60초 미만이면 bench", () => {
+    const r = rematch(withRest([ready(4, { connected: false, connId: null, disconnectedAt: NOW - 1_000 })]), "p0", 1, NOW, seededRandInt(1));
+    if (!r.ok) throw new Error("rematch failed");
+    expect(idsOf(r.state.bench)).toBe("p4");
+    expect(Object.hasOwn(r.state.bench![0]!, "ready")).toBe(false);
+  });
+
+  it("bench 행에도 이전 판 게임 필드가 없다", () => {
+    const r = rematch(withRest([dirtyPlayer(4)]), "p0", 1, NOW, seededRandInt(1));
+    if (!r.ok) throw new Error("rematch failed");
+    const row = r.state.bench![0]!;
+    for (const key of ["role", "alive", "nightPick", "investigations", "will", "badge", "badgeLog", "stats", "ready", "sat", "left"]) {
+      expect(Object.hasOwn(row, key)).toBe(false);
+    }
+  });
+});
+
+describe("쉬는 사람 도우미 (D-13, T-11-30)", () => {
+  const benchRow = (i: number): Player => ({
+    id: `p${i}`,
+    token: `token-p${i}-0123456789abc`,
+    seat: i,
+    nickname: `이름${i}`,
+    nicknameKey: `이름${i}`,
+    joinSeq: i,
+    connected: true,
+    connId: `c${i}`,
+  });
+  const withBench = (): RoomState => ({ ...endedRoom([dirtyPlayer(0), ready(1), ready(2), ready(3)]), phase: "assigning", bench: [benchRow(4), benchRow(5)] }) as RoomState;
+
+  it("findAnyByToken: players 와 bench 를 따로 찾고 어디서 찾았는지 알려 준다. 봇(빈 토큰)은 찾지 않는다", () => {
+    const s = withBench();
+    expect(findAnyByToken(s, "token-p1-0123456789abc")).toMatchObject({ player: { id: "p1" }, bench: false });
+    expect(findAnyByToken(s, "token-p4-0123456789abc")).toMatchObject({ player: { id: "p4" }, bench: true });
+    expect(findAnyByToken(s, "no-such-token-0123456789")).toBeUndefined();
+    const withBot: RoomState = { ...s, players: [...s.players, dirtyPlayer(6, { isBot: true, token: "", connId: null })] };
+    expect(findAnyByToken(withBot, "")).toBeUndefined();
+  });
+
+  it("attach/detachBenchConnection: bench 행만 바꾸고 낡은 connId 의 닫힘은 새 연결을 덮지 않는다", () => {
+    const s = withBench();
+    const detached = detachBenchConnection(s, "p4", "c4", 777);
+    expect(detached.bench![0]).toMatchObject({ connected: false, connId: null, disconnectedAt: 777 });
+    expect(detached.players).toBe(s.players);
+    const stale = detachBenchConnection(s, "p4", "old", 777);
+    expect(stale.bench![0]!.connected).toBe(true);
+    const back = attachBenchConnection(detached, "p4", "c9");
+    expect(back.bench![0]).toMatchObject({ connected: true, connId: "c9" });
+    expect(Object.hasOwn(back.bench![0]!, "disconnectedAt")).toBe(false);
+  });
+
+  it("leaveBench: bench 에서 빼고, 마지막이면 bench 키째 지운다. 모르는 사람은 ok:false", () => {
+    const s = withBench();
+    const one = leaveBench(s, "p4");
+    expect(one.ok && idsOf(one.state.bench)).toBe("p5");
+    const none = leaveBench(one.ok ? one.state : s, "p5");
+    expect(none.ok && Object.hasOwn(none.state, "bench")).toBe(false);
+    expect(leaveBench(s, "p1").ok).toBe(false);
+    expect(leaveBench(s, "ghost").ok).toBe(false);
+  });
+
+  it("seatBench: bench 를 sat:true 로 players 에 합류시키고 bench 키를 지운다 — 역할·ready 없음", () => {
+    const joined = seatBench(withBench());
+    expect(Object.hasOwn(joined, "bench")).toBe(false);
+    const sat = joined.players.filter((p) => p.sat === true);
+    expect(sat.map((p) => p.id)).toEqual(["p4", "p5"]);
+    for (const p of sat) {
+      expect(Object.hasOwn(p, "role")).toBe(false);
+      expect(Object.hasOwn(p, "ready")).toBe(false);
+    }
+    const none = withBench();
+    delete (none as { bench?: unknown }).bench;
+    expect(seatBench(none)).toBe(none);
+  });
+});
+
+function idsOf(list: readonly Player[] | undefined): string {
+  return (list ?? []).map((p) => p.id).join(",");
+}
