@@ -9,7 +9,7 @@ import { installMemoryStorage, MemoryStorage } from "../helpers/memoryStorage";
 import { BAR_MAP, snapToWalkable } from "../../shared/game/map";
 import { positionAt, segmentEndsAt } from "../../shared/game/world";
 import type { Segment } from "../../shared/game/world";
-import type { PublicPlayer, RoomView, WorldSeg } from "../../shared/protocol";
+import type { OutfitId, PublicPlayer, RoomView, WorldSeg } from "../../shared/protocol";
 import { WorldStage } from "../../src/components/WorldStage";
 import { NETWORK_TEXT } from "../../src/net/copy";
 import type { WorldStageProps } from "../../src/components/WorldStage";
@@ -111,6 +111,8 @@ export interface FakeHandle extends CharacterHandle {
   stopEmote?: () => void;
   prewarm?: (face?: string) => void;
   setFace?: (id: string) => void;
+  /** kit.create 가 받은 의상 id (10-04) */
+  outfit?: string;
   yaws: number[];
   dims: boolean[];
   moving: boolean[];
@@ -119,11 +121,12 @@ export interface FakeHandle extends CharacterHandle {
 
 export function makeFakeKit(created: FakeHandle[]): WorldModules["characterKit"] {
   return {
-    create(): CharacterHandle {
+    create(_fig?: number, outfit?: string): CharacterHandle {
       const root = new Object3D();
       root.scale.setScalar(0.83); // 진짜 캐릭터도 root.scale = CHAR_SCALE
       const h: FakeHandle = {
         root,
+        outfit,
         yaws: [],
         dims: [],
         moving: [],
@@ -1782,6 +1785,56 @@ describe("게임 장면: 보임·유령 (GHOST-01)", () => {
     s.rerender({ scene: sceneOf({ 0: {}, 1: {}, 2: {}, 3: {} }) });
     frame();
     expect(h3.setGhost).toHaveBeenLastCalledWith(false);
+  });
+});
+
+// ---------- 10-04: 좌석별 의상 (D-6, AVTR-04, L33) ----------
+describe("좌석별 의상 (D-6, L33)", () => {
+  const lookPlayers = (looks: Partial<Record<number, OutfitId>>): PublicPlayer[] =>
+    [0, 1, 2, 3].map((i) => player(i, `손님${i}`, looks[i] === undefined ? {} : { look: looks[i] }));
+  const openLooks = (looks: Partial<Record<number, OutfitId>>, over: Partial<WorldStageProps> = {}) =>
+    open({ view: makeView(lookPlayers(looks)), ...over }, { players: lookPlayers(looks), ents: FOUR_ENTS() });
+  const handleOf = (s: Setup, seat: number): FakeHandle => s.world.renderers[0]!.chars.get(seat) as FakeHandle;
+
+  it("만들 때 view.players[].look 으로 만든다(없으면 coat)", async () => {
+    const s = await openLooks({ 1: "mafia" });
+    expect(handleOf(s, 1).outfit).toBe("mafia");
+    for (const seat of [0, 2, 3]) expect(handleOf(s, seat).outfit).toBe("coat");
+  });
+
+  it("view 의 look 이 바뀌면 그 좌석만 applyOutfit 한 번, 같은 look 으로 여러 번 맞춰도 늘지 않는다", async () => {
+    const s = await openLooks({ 1: "mafia" });
+    for (const h of s.world.handles) expect(h.applyOutfit).not.toHaveBeenCalled();
+    s.rerender({ view: makeView(lookPlayers({ 1: "doctor" })) });
+    frame();
+    expect(handleOf(s, 1).applyOutfit).toHaveBeenCalledTimes(1);
+    expect(handleOf(s, 1).applyOutfit).toHaveBeenCalledWith("doctor");
+    // 좌석 1 의 look 이 mafia → doctor 로 바뀌었지만 좌석 2 는 그대로 coat
+    expect(handleOf(s, 2).applyOutfit).not.toHaveBeenCalled();
+    s.rerender({ view: makeView(lookPlayers({ 1: "doctor" })) });
+    s.rerender({ view: makeView(lookPlayers({ 1: "doctor" })) });
+    frames(50);
+    expect(handleOf(s, 1).applyOutfit).toHaveBeenCalledTimes(1);
+    // look 이 사라지면(키 없음) coat 로 읽는다
+    s.rerender({ view: makeView(lookPlayers({})) });
+    expect(handleOf(s, 1).applyOutfit).toHaveBeenLastCalledWith("coat");
+    expect(handleOf(s, 1).applyOutfit).toHaveBeenCalledTimes(2);
+  });
+
+  it("window.__mfLooks 는 그리는 모든 좌석의 고른 의상 표이고 look 이 바뀌면 갱신되며 DOM 속성이 아니다", async () => {
+    const s = await openLooks({ 1: "mafia" });
+    expect(window.__mfLooks).toEqual({ 0: "coat", 1: "mafia", 2: "coat", 3: "coat" });
+    s.rerender({ view: makeView(lookPlayers({ 1: "doctor" })) });
+    expect(window.__mfLooks).toEqual({ 0: "coat", 1: "doctor", 2: "coat", 3: "coat" });
+    expect(s.utils.container.querySelectorAll("[data-look], [data-looks], [data-outfit]")).toHaveLength(0);
+    s.utils.unmount();
+    expect(window.__mfLooks).toBeUndefined();
+  });
+
+  it("훅이 꺼진 문맥에는 window.__mfLooks 가 없다", async () => {
+    vi.stubEnv("DEV", false);
+    await openLooks({ 1: "mafia" });
+    expect(window.__mfLooks).toBeUndefined();
   });
 });
 
