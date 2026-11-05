@@ -13,3 +13,16 @@ export function openPlaza(): () => void {
     if (!had) list.splice(list.indexOf("plaza"), 1);
   };
 }
+
+/**
+ * 시험 동안 허용 맵을 재즈 바 하나로 되돌린다(11-13 이 광장을 연 뒤에도 "bar 만 열린 방" 시험을 하려는 용도).
+ * 돌려준 함수를 부르면 원래 목록으로 되돌린다.
+ */
+export function onlyBar(): () => void {
+  const list = PLAYABLE_MAPS as MapId[];
+  const saved = [...list];
+  list.splice(0, list.length, "bar");
+  return () => {
+    list.splice(0, list.length, ...saved);
+  };
+}
