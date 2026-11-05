@@ -3,6 +3,7 @@
 import { preload } from "react-dom";
 import { ROLE_IDS } from "../../shared/game/roles";
 import type { RoleId } from "../../shared/game/roles";
+import type { OutfitId } from "../../shared/protocol";
 import { SCENES } from "../game/scenes";
 import type { SceneId } from "../game/scenes";
 
@@ -27,7 +28,7 @@ export type PreloadItem = { href: string; imageSrcSet?: string };
  * 배경·유령 그림 주소 끝에 붙이는 값. 파일 이름이 같아도 그림을 바꾼 배포가 바로 보이게 한다
  * (정적 그림 캐시가 max-age 1일이라 같은 주소는 하루 동안 옛 그림이 나온다). 그림을 바꾸면 값을 바꾼다.
  */
-export const ASSET_VERSION = "i3";
+export const ASSET_VERSION = "i4";
 
 // 파일 이름의 @ 는 URL 에서 %40 으로 쓴다. 유령 그림은 바꾼 적이 있어 버전 값을 붙인다.
 function png(dir: "table" | "roles" | "ghost", id: string, scale: 2 | 4): string {
@@ -56,6 +57,11 @@ export function seatColorVar(seat: number): string {
 // 탈락한 사람의 자리에 인물 대신 쓰는 유령 그림(ASSET_SPEC §6, 결정 0021). 좌석별 유형 없음. 72px 표시 기준 밀도.
 export function ghostSrc(): { src: string; srcSet: string } {
   return { src: png("ghost", "ghost", 2), srcSet: `${png("ghost", "ghost", 2)} 2x, ${png("ghost", "ghost", 4)} 4x` };
+}
+
+// 로비 꾸미기 카드 그림(10-07, 승인 디자인 시스템 사본 아홉 장). 표시 64×80, 파일 240×300 이라 한 장으로 충분하다. 인물별 그림은 만들지 않는다(O-3).
+export function outfitCardSrc(id: OutfitId): string {
+  return `/outfits/outfit-${id}.png?v=${ASSET_VERSION}`;
 }
 
 // 직업 그림은 150px 로 표시한다. @2x 파일은 1x, @4x 파일은 2x. 역할을 보낼 수 있는 화면에서만 쓴다.

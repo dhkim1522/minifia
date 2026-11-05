@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import type { ClientMessage, RoomView } from "../../shared/protocol";
+import type { ClientMessage, OutfitId, RoomView } from "../../shared/protocol";
 import { connectedCount } from "../../shared/game/room";
 import { ActionButton, ActionRow } from "../components/ActionButton";
 import { Button } from "../components/Button";
@@ -8,17 +8,22 @@ import { ConfirmSheet } from "../components/ConfirmSheet";
 import { Icon } from "../components/Icon";
 import { ShareSheet } from "../components/ShareSheet";
 import { ChatPanel } from "../components/v2/ChatPanel";
+import { DressSheet } from "../components/v2/DressSheet";
+import { FloatAction, FloatActions } from "../components/v2/FloatAction";
 import { PhaseHeader } from "../components/v2/PhaseHeader";
 import { TopToast, useTopToast } from "../components/v2/TopToast";
 import { WorldStage } from "../components/WorldStage";
 import type { ChatStore } from "../net/chatStore";
 import { CHAT_TEXT } from "../game/chatText";
+import { DRESS_TEXT } from "../game/dressText";
 import { LOG_H_KB } from "../game/chatUi";
 import { diffRoomViews, toastForDiff } from "../net/roomDiff";
 import { useChat } from "../net/useChat";
 import { useMyMotion } from "../net/useMyMotion";
 import { useMapInsets } from "../net/useMapInsets";
+import { DEFAULT_LOOK } from "../../shared/game/look";
 import type { WorldStore } from "../world/store";
+import "../styles/game.css";
 import "../styles/lobby.css";
 import "../styles/sheet.css";
 import "../styles/testtools.css";
@@ -111,6 +116,22 @@ export function Lobby({ view, store, chat, send, canSend = true, epoch = 0, offs
   const motion = useMyMotion(store, view.me.seat, () => Date.now() + offset);
   const { typingSeats, ...binding } = useChat({ store: chat, connection: { send, canSend }, view, motion });
 
+  // 꾸미기(10-07): 오른쪽 아래 떠 있는 hanger 버튼 → 패널을 덮는 카드 띠 시트. 아래 패널 높이(--mf-panel-h)는 DOM 에서 재서 루트에 정한다
+  // (떠 있는 버튼 묶음과 시트가 같은 값을 읽는다 — GameMap 과 같은 방식). 시트가 열린 동안 떠 있는 버튼은 그리지 않는다.
+  const [dressOpen, setDressOpen] = useState(false);
+  useLayoutEffect(() => {
+    rootRef.current?.style.setProperty("--mf-panel-h", `${panelRef.current?.offsetHeight ?? 0}px`);
+  });
+  const myLook = view.players.find((p) => p.seat === view.me.seat)?.look ?? DEFAULT_LOOK;
+  const pickLook = (look: OutfitId) => {
+    if (!canSend) return;
+    send({ t: "dress", look });
+  };
+  const openDress = () => {
+    inputRef.current?.blur();
+    setDressOpen(true);
+  };
+
   const connected = connectedCount(view.players);
   const isHost = view.me.isHost;
   const host = view.players.find((p) => p.isHost);
@@ -189,6 +210,12 @@ export function Lobby({ view, store, chat, send, canSend = true, epoch = 0, offs
           </ActionRow>
         )}
       </section>
+      {dressOpen ? null : (
+        <FloatActions single>
+          <FloatAction kind="dress" icon="hanger" label={DRESS_TEXT.open} disabled={!canSend} onPress={openDress} />
+        </FloatActions>
+      )}
+      {dressOpen ? <DressSheet value={myLook} onPick={pickLook} onClose={() => setDressOpen(false)} /> : null}
       {sheet?.kind === "leave" ? (
         <ConfirmSheet
           title="방에서 나갈까요?"

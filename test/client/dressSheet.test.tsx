@@ -138,12 +138,12 @@ describe("Lobby — 꾸미기 버튼과 시트 (10-07, D-4·D-5)", () => {
   });
 
   it("카드를 누르면 {t:'dress', look} 만 서버로 간다", () => {
-    const send = vi.fn(() => true);
+    const send = vi.fn((_msg: ClientMessage) => true);
     render(lobby(view, send));
     fireEvent.click(screen.getByRole("button", { name: "꾸미기" }));
     send.mockClear();
     fireEvent.click(screen.getByRole("button", { name: "마피아" }));
-    const dress = send.mock.calls.map((c) => c[0] as ClientMessage).filter((m) => m.t === "dress");
+    const dress = send.mock.calls.map((c) => c[0]).filter((m) => m.t === "dress");
     expect(dress).toEqual([{ t: "dress", look: "mafia" }]);
   });
 

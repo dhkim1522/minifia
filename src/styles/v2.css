@@ -305,3 +305,21 @@ body:has([data-emote-tray]) .mf-float { visibility: hidden; }
 @media (prefers-reduced-motion: reduce) {
   .mv-claim.is-pop, .mv-claim__notice, .mv-claim-sheet, .mv-ballots__group.is-enter { animation: none; }
 }
+
+/* 로비 꾸미기(10-07, UI-SPEC B-2·D-5): 시트가 아래 패널을 정확히 덮는다 — 높이 = 패널 높이(--mf-panel-h 250 · 306), 아랫변 = 키보드 올림(.mv-speak-sheet 와 같은 방식).
+   면 night-800, 테두리 1px night-600, 안쪽 12. 위 줄: hanger 장식 24 왼쪽 · 닫기 44×44 오른쪽(제목 글자 없음). 쌓기 12 + 44 + 12 + 112 + 4 + 12 = 196 ≤ 250.
+   카드 띠: 한 줄 가로 스크롤 스냅, 카드 72×112(그림 64×80 · 이름 14px 700 한 줄, 안쪽 위 4 · 아래 6), 사이 8. 선택 카드 = 테두리 2px gray-100 + 오른쪽 위 체크 12. 새 색·진홍 없음. */
+.mv-dress-sheet { position: absolute; left: 0; right: 0; bottom: var(--mf-kb-lift, 0px); z-index: calc(var(--z-overlay) + 1); height: var(--mf-panel-h, 250px); box-sizing: border-box; display: flex; flex-direction: column; gap: 12px; padding: 12px; overflow: hidden; background: var(--night-800); border: 1px solid var(--night-600); border-bottom: 0; border-radius: var(--radius-lg) var(--radius-lg) 0 0; font-family: var(--font-ui); color: var(--gray-100); }
+.mv-dress-sheet__top { flex: none; display: flex; align-items: center; justify-content: space-between; height: var(--tap-min); padding-left: 4px; }
+.mv-dress-sheet__close { display: grid; place-items: center; width: var(--tap-min); height: var(--tap-min); padding: 0; border: 0; border-radius: var(--radius-md); background: none; color: var(--gray-100); cursor: pointer; }
+.mv-dress-sheet__strip { flex: none; display: flex; gap: var(--space-sm); overflow-x: auto; overflow-y: hidden; scroll-snap-type: x mandatory; scrollbar-width: none; overscroll-behavior-x: contain; margin: 0 -12px; padding: 0 12px; scroll-padding: 0 12px; }
+.mv-dress-sheet__strip::-webkit-scrollbar { display: none; }
+.mv-dress-card { position: relative; flex: none; scroll-snap-align: start; display: flex; flex-direction: column; align-items: center; gap: 2px; box-sizing: border-box; width: 72px; height: 112px; padding: 4px 0 6px; border: 1px solid var(--night-600); border-radius: var(--radius-md); background: var(--night-700); color: var(--gray-100); font-family: inherit; cursor: pointer; }
+.mv-dress-card.is-selected { border: 2px solid var(--gray-100); padding: 3px 0 5px; }
+.mv-dress-card__img { width: 64px; height: 80px; object-fit: contain; pointer-events: none; -webkit-user-drag: none; }
+.mv-dress-card__name { max-width: 100%; font-size: 14px; line-height: 1.2; font-weight: 700; white-space: nowrap; overflow: hidden; }
+.mv-dress-card__check { position: absolute; top: 4px; right: 4px; }
+.mv-dress-card[aria-disabled="true"] { opacity: 0.45; cursor: default; }
+.mv-dress-card:focus-visible, .mv-dress-sheet__close:focus-visible { outline: 2px solid var(--gray-100); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { .mv-dress-sheet__strip { scroll-behavior: auto; } }
+.mf-float[data-float-single] { min-height: 0; }

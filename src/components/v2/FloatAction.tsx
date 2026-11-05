@@ -8,9 +8,10 @@ import type { V2IconName } from "./V2Icon";
 // 버튼은 mousedown 의 기본 동작을 막아 채팅 입력칸의 포커스(키보드)를 뺏지 않는다. 연결이 끊기면 aria-disabled 이고 눌러도 아무 일 없다.
 // 사용자 문자열은 받지 않는다 — 이름(label)은 부르는 쪽이 enum 에서 만든 고정 문구다.
 
-export function FloatActions({ children, ref }: { children: ReactNode; ref?: Ref<HTMLDivElement> }) {
+// single: 버튼이 하나뿐인 묶음(로비 꾸미기, 10-07). 두 칸 자리를 잡지 않아 버튼 아랫변이 패널 윗변 − 8 에 놓인다.
+export function FloatActions({ children, ref, single }: { children: ReactNode; ref?: Ref<HTMLDivElement>; single?: boolean }) {
   return (
-    <div ref={ref} className="mf-float" data-float-stack="">
+    <div ref={ref} className="mf-float" data-float-stack="" {...(single ? { "data-float-single": "" } : {})}>
       {children}
     </div>
   );
@@ -18,7 +19,7 @@ export function FloatActions({ children, ref }: { children: ReactNode; ref?: Ref
 
 export interface FloatActionProps {
   /** E2E·누설 검사가 읽는 표식 */
-  kind: "claim" | "whisper";
+  kind: "claim" | "whisper" | "dress";
   /** 안에 그릴 아이콘 24 */
   icon: V2IconName;
   /** 접근성 이름 */

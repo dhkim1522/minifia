@@ -5,6 +5,9 @@
   Cache-Control: public, max-age=86400
 /backgrounds/*
   Cache-Control: public, max-age=86400
+# 로비 꾸미기 카드 그림 아홉 장(10-07). 주소 끝 ?v= 값(ASSET_VERSION)으로 교체를 바로 반영한다.
+/outfits/*
+  Cache-Control: public, max-age=86400
 # 손글씨 글꼴 조각(scripts/fetch-pen-font.mjs 가 한 번 받아 둔 것)은 이름이 바뀌지 않으므로 1일 캐시한다(결정 M-10).
 /fonts/*
   Cache-Control: public, max-age=86400
