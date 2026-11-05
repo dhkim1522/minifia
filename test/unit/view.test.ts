@@ -1955,3 +1955,32 @@ describe("마지막 3인 day.showdown·me.ballot·day.verdict.last (결정 0066-
     }
   });
 });
+
+describe("players[].look (10-02, 결정 D-6)", () => {
+  /** 로비 상태에서 좌석 1 만 mafia, 좌석 2 는 coat(명시) 를 고른 방. */
+  const withLooks = (state: RoomState): RoomState => ({
+    ...state,
+    players: state.players.map((p) => (p.seat === 1 ? { ...p, look: "mafia" as const } : p.seat === 2 ? { ...p, look: "coat" as const } : p)),
+  });
+
+  it("look 은 값이 있는 좌석에만 키가 있고 undefined 로 남지 않으며 모든 viewer 에게 같다", () => {
+    const base = startedAt(6, 3, "discussion");
+    const s = withLooks(base);
+    const rows = s.players.map((viewer) => buildView(s, viewer.id, 0).players.map((r) => `${r.seat}:${"look" in r ? String(r.look) : "-"}`).join(","));
+    expect(new Set(rows).size).toBe(1);
+    expect(rows[0]).toBe("0:-,1:mafia,2:coat,3:-,4:-,5:-");
+    for (const viewer of s.players) for (const r of buildView(s, viewer.id, 0).players) expect(Object.values(r).includes(undefined)).toBe(false);
+  });
+
+  it("게임 중(밤)에도 같은 look 이 실리고 서버 전용 키 목록에는 새 항목이 없다", () => {
+    const s = withLooks(startedAt(6, 3, "night"));
+    const v = buildView(s, s.players[0]!.id, 0);
+    expect(v.players.find((r) => r.seat === 1)!.look).toBe("mafia");
+    expect(SERVER_ONLY_KEYS.includes("look")).toBe(false);
+  });
+
+  it("look 이 하나도 없는 옛 방의 players[] 에는 look 키가 없다", () => {
+    const s = startedAt(6, 3, "discussion");
+    for (const r of buildView(s, s.players[0]!.id, 0).players) expect("look" in r).toBe(false);
+  });
+});

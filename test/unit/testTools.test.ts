@@ -1101,3 +1101,30 @@ describe("넘기기: 마지막 3인 결전 (09.1.1-07)", () => {
     expect(JSON.stringify(skipPhase(state, guest.id, 1, THROWING))).toBe(JSON.stringify({ ok: false, error: "NOT_HOST" }));
   });
 });
+
+describe("resetToLobby — 의상 유지 (10-02, 결정 D-6)", () => {
+  it("되돌린 대기실의 플레이어 look 이 그대로 남고, look 이 없던 사람은 키가 생기지 않는다", () => {
+    const started = stateAt(5, 4, "discussion");
+    const dressed: RoomState = {
+      ...started,
+      players: started.players.map((p) => (p.seat === 1 ? { ...p, look: "noir" as const } : p.seat === 2 ? { ...p, look: "coat" as const } : p)),
+    };
+    const r = resetToLobby(dressed, dressed.hostId);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.state.players.map((p) => `${p.seat}:${p.look ?? "-"}`).join(",")).toBe("0:-,1:noir,2:coat,3:-,4:-");
+    expect(r.state.players.every((p) => !("look" in p) || p.look !== undefined)).toBe(true);
+  });
+
+  it("봇의 look 이 있어도 그대로 남고 다른 키는 기존 그대로다", () => {
+    const started = stateAt(5, 4, "discussion");
+    const dressed: RoomState = {
+      ...started,
+      players: started.players.map((p) => (p.seat === 3 ? { ...p, isBot: true as const, look: "hood" as const } : p)),
+    };
+    const r = resetToLobby(dressed, dressed.hostId);
+    if (!r.ok) throw new Error(r.error);
+    expect(sortedKeys(r.state.players[3]!)).toBe("connId,connected,id,isBot,joinSeq,look,nickname,nicknameKey,seat,token");
+    expect(sortedKeys(r.state.players[0]!)).toBe("connId,connected,id,joinSeq,nickname,nicknameKey,seat,token");
+  });
+});
