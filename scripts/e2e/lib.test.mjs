@@ -2645,7 +2645,7 @@ test("emoteTrayChecks TR2: 칸이 아홉 개가 아니거나 5+4 줄이 아니�
 
 test("emoteTrayChecks EP3: 칸이 44 미만이면 그 항목만 실패", () => {
   const g = trayGood();
-  g.cells = g.cells.map((c, i) => (i === 4 ? rect(c.left, c.top, 43, 56) : c));
+  g.cells = g.cells.map((c, i) => (i === 4 ? rect(c.left + c.width - 43, c.top, 43, 56) : c)); // 오른쪽 변은 그대로, 폭만 43
   onlyFail(emoteTrayChecks(g), "EP3");
 });
 

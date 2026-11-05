@@ -1926,3 +1926,75 @@ export function verdictTimelineChecks(log, { passed, candidate, expectZoom }) {
   lines.push(result("VT6", labels.VT6, isNum(zb) && zb <= 1.005 ? [] : [`5.45초 줌 ${zb}`]));
   return lines;
 }
+
+// ---- 10페이즈 동작 버튼·5+4 판 (10-05, 결정 D-1·D-2·D-18, UI-SPEC A-1·A-2) ----
+
+/** 10페이즈가 새로 더한 DOM 표식·훅 이름 4개. test/unit/e2eContract.test.ts 가 각각이 git 추적 src/ 파일에 실제로 있는지 확인한다(이름 오타 방지). 이후 계획(의상·단계)이 같은 목록에 더한다. */
+export const AVATAR_MARKERS = Object.freeze([
+  "data-emote-button", // 입력줄 맨 앞 동작 버튼(ChatPanel)
+  "data-emote-tray", // 5+4 아이콘 판(EmoteTray)
+  "data-emote", // 칸 data-emote="{id}"
+  "__mfEmotes", // 테스트 훅 window.__mfEmotes = { last, playing }
+]);
+
+/**
+ * 동작 버튼·판 기하(EB1·EP2·TR1~TR5·EP3·EP4). 사각형은 { left, top, width, height }.
+ * button = 동작 버튼, input = 입력칸, tray = 판, cells = 칸 아홉 개, nameFont = 칸 이름 글자 크기 최솟값(px), viewport = { w, h },
+ * character = 내 캐릭터의 화면 좌표 { x, y }, hasKb = 가상 키보드가 열려 있나.
+ * EB1 버튼 48x48 ±1 · EP2 입력칸 폭 ≥ 150 · TR1 판 좌우 16 ±1·폭 = viewport − 32 ±1 · TR2 칸 아홉 개(윗줄 5·아랫줄 4)이고 두 줄 모두 판 가운데 정렬(좌우 여백 차 ≤ 2) ·
+ * EP3 칸 폭·높이 ≥ 44 · TR3 판 아랫변 = 입력칸 윗변 − 8 ±2 · EP4 캐릭터 점이 판 사각형 밖 · TR4 이름 글자 ≥ 14 · TR5 판이 열려 있을 때 키보드는 닫혀 있음.
+ */
+export function emoteTrayChecks({ button, input, tray, cells, nameFont, viewport, character, hasKb } = {}) {
+  const L = {
+    EB1: `동작 버튼 ${TAP_MIN + 4}x${TAP_MIN + 4}`,
+    EP2: "입력칸 폭 150 이상",
+    TR1: "판 좌우 16 · 폭 = 폰 폭 − 32",
+    TR2: "칸 아홉 개: 윗줄 5 · 아랫줄 4, 두 줄 모두 판 가운데",
+    EP3: `칸 누르기 영역 ${TAP_MIN} 이상`,
+    TR3: "판 아랫변 = 입력줄 윗변 − 8",
+    EP4: "판이 내 캐릭터를 가리지 않음",
+    TR4: "칸 이름 글자 14px 이상",
+    TR5: "판이 열려 있을 때 키보드는 닫혀 있음",
+  };
+  const rectOk = (r) => !!r && allNum(r.left, r.top, r.width, r.height);
+  const valid = rectOk(button) && rectOk(input) && rectOk(tray) && Array.isArray(cells) && cells.every(rectOk) && !!viewport && allNum(viewport.w, viewport.h) && !!character && allNum(character.x, character.y) && isNum(nameFont) && typeof hasKb === "boolean";
+  if (!valid) return Object.entries(L).map(([id, label]) => noMeasure(id, label, "button·input·tray·cells·nameFont·viewport·character·hasKb"));
+  const out = [];
+  out.push(result("EB1", L.EB1, Math.abs(button.width - 48) > 1 || Math.abs(button.height - 48) > 1 ? [`${fmt(button.width)}x${fmt(button.height)}`] : []));
+  out.push(result("EP2", L.EP2, input.width >= 150 ? [] : [`입력칸 폭 ${fmt(input.width)}`]));
+  const t1 = [];
+  if (Math.abs(tray.left - 16) > 1) t1.push(`왼쪽 ${fmt(tray.left)}`);
+  if (Math.abs(viewport.w - right(tray) - 16) > 1) t1.push(`오른쪽 여백 ${fmt(viewport.w - right(tray))}`);
+  if (Math.abs(tray.width - (viewport.w - 32)) > 1) t1.push(`폭 ${fmt(tray.width)} (기대 ${viewport.w - 32})`);
+  out.push(result("TR1", L.TR1, t1));
+  const t2 = [];
+  if (cells.length !== 9) t2.push(`칸 ${cells.length}개`);
+  else {
+    const tops = [...new Set(cells.map((c) => Math.round(c.top)))].sort((a, b) => a - b);
+    const rows = [];
+    for (const top of tops) {
+      const last = rows[rows.length - 1];
+      if (last && top - last.top <= 4) last.n += cells.filter((c) => Math.round(c.top) === top).length;
+      else rows.push({ top, n: cells.filter((c) => Math.round(c.top) === top).length });
+    }
+    if (rows.length !== 2 || rows[0].n !== 5 || rows[1].n !== 4) t2.push(`줄 ${rows.map((r) => r.n).join("+")} (기대 5+4)`);
+    else {
+      const upper = cells.filter((c) => Math.abs(c.top - rows[0].top) <= 4);
+      const lower = cells.filter((c) => Math.abs(c.top - rows[1].top) <= 4);
+      for (const [name, row] of [["윗줄", upper], ["아랫줄", lower]]) {
+        const l = Math.min(...row.map((c) => c.left)) - tray.left;
+        const r = right(tray) - Math.max(...row.map((c) => right(c)));
+        if (Math.abs(l - r) > 2) t2.push(`${name} 좌우 여백 ${fmt(l)} / ${fmt(r)}`);
+      }
+    }
+  }
+  out.push(result("TR2", L.TR2, t2));
+  out.push(result("EP3", L.EP3, cells.filter((c) => c.width + OVERLAP_EPS < TAP_MIN || c.height + OVERLAP_EPS < TAP_MIN).map((c) => `${fmt(c.width)}x${fmt(c.height)}`)));
+  const gap = input.top - bottom(tray);
+  out.push(result("TR3", L.TR3, Math.abs(gap - 8) > 2 ? [`입력줄 윗변과 간격 ${fmt(gap)}`] : []));
+  const covered = character.x >= tray.left && character.x <= right(tray) && character.y >= tray.top && character.y <= bottom(tray);
+  out.push(result("EP4", L.EP4, covered ? [`캐릭터 ${fmt(character.x)},${fmt(character.y)} 가 판 안`] : []));
+  out.push(result("TR4", L.TR4, nameFont >= 14 ? [] : [`${nameFont}px`]));
+  out.push(result("TR5", L.TR5, hasKb ? ["키보드가 열려 있음"] : []));
+  return out;
+}
