@@ -2090,3 +2090,50 @@ describe("맵 view.mapChoice·view.map (11-06, D-20·D-21, L42)", () => {
     }
   });
 });
+
+describe("준비 players[].ready · players[].sat (11-08, D-12·D-13)", () => {
+  const base = endedState(5, 2, "citizen");
+  const hostId = base.hostId;
+  const guests = base.players.filter((p) => p.id !== hostId).sort((a, b) => a.seat - b.seat);
+  const rowsOf = (s: RoomState, viewerId: string): string =>
+    buildView(s, viewerId, 0).players.map((p) => `${p.seat}:${p.ready === true ? "R" : "-"}${p.sat === true ? "S" : "-"}`).join(",");
+
+  it("끝난 판: 방장은 늘 준비, 손님은 ready 일 때만, 모든 시점에서 같은 값이다", () => {
+    const g0 = guests[0]!;
+    const s: RoomState = { ...base, players: base.players.map((p) => (p.id === g0.id ? { ...p, ready: true as const } : p)) };
+    const want = [...s.players].sort((a, b) => a.seat - b.seat).map((p) => `${p.seat}:${p.id === hostId || p.id === g0.id ? "R" : "-"}-`).join(",");
+    for (const viewer of s.players) expect(rowsOf(s, viewer.id)).toBe(want);
+  });
+
+  it("봇은 준비로 센다, 끊긴 사람·나간 사람은 ready 가 실리지 않는다", () => {
+    const [a, b, c] = guests as [Player, Player, Player];
+    const s: RoomState = {
+      ...base,
+      players: base.players.map((p) => {
+        if (p.id === a.id) return { ...p, isBot: true as const };
+        if (p.id === b.id) return { ...p, ready: true as const, connected: false, connId: null };
+        if (p.id === c.id) return { ...p, ready: true as const, left: true as const, connected: false, connId: null };
+        return p;
+      }),
+    };
+    const rows = buildView(s, hostId, 0).players;
+    const rowOf = (pl: Player) => rows.find((r) => r.seat === pl.seat)!;
+    expect(rowOf(a).ready).toBe(true);
+    expect("ready" in rowOf(b)).toBe(false);
+    expect("ready" in rowOf(c)).toBe(false);
+  });
+
+  it("ended 가 아닌 단계에는 ready 키가 없다 — 상태에 남아 있어도", () => {
+    const s = startedAt(5, 2, "discussion");
+    const dirty: RoomState = { ...s, players: s.players.map((p) => ({ ...p, ready: true as const })) };
+    for (const viewer of dirty.players) for (const row of buildView(dirty, viewer.id, 0).players) expect("ready" in row).toBe(false);
+  });
+
+  it("sat 는 상태의 sat 가 있을 때만 모든 단계의 players[] 에 실린다", () => {
+    const g0 = guests[0]!;
+    const s: RoomState = { ...base, players: base.players.map((p) => (p.id === g0.id ? { ...p, sat: true as const } : p)) };
+    const row = buildView(s, hostId, 0).players.find((r) => r.seat === g0.seat)!;
+    expect(row.sat).toBe(true);
+    expect(buildView(base, hostId, 0).players.some((r) => "sat" in r)).toBe(false);
+  });
+});

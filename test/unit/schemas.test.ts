@@ -353,3 +353,31 @@ describe("ClientMessageSchema emote (10-01, AVTR-03)", () => {
     expect(ClientMessageSchema.safeParse(msg).success).toBe(false);
   });
 });
+
+// 11-08: 다시 하기 준비·시작(결정 D-12). 신원은 소켓 첨부 playerId 뿐이라 id·seat 를 받지 않고, round 는 1 이상 정수다.
+describe("ClientMessageSchema ready · rematch (11-08, D-12)", () => {
+  it.each([
+    { t: "ready", on: true, round: 1 },
+    { t: "ready", on: false, round: 7 },
+    { t: "rematch", round: 1 },
+    { t: "rematch", round: 12 },
+  ])("받는다: %j", (msg) => {
+    expect(ClientMessageSchema.safeParse(msg).success).toBe(true);
+  });
+  it.each([
+    ["ready 덧붙은 키", { t: "ready", on: true, round: 1, seat: 2 }],
+    ["ready on 문자열", { t: "ready", on: "yes", round: 1 }],
+    ["ready on 없음", { t: "ready", round: 1 }],
+    ["ready round 없음", { t: "ready", on: true }],
+    ["ready round 0", { t: "ready", on: true, round: 0 }],
+    ["ready round 소수", { t: "ready", on: true, round: 1.5 }],
+    ["ready round 문자열", { t: "ready", on: true, round: "1" }],
+    ["rematch 덧붙은 키", { t: "rematch", round: 1, id: "x" }],
+    ["rematch round 0", { t: "rematch", round: 0 }],
+    ["rematch round 음수", { t: "rematch", round: -1 }],
+    ["rematch round 문자열", { t: "rematch", round: "1" }],
+    ["rematch round 없음", { t: "rematch" }],
+  ])("거부한다: %s", (_name, msg) => {
+    expect(ClientMessageSchema.safeParse(msg).success).toBe(false);
+  });
+});
