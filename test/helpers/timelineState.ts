@@ -4,7 +4,8 @@
 //  2일차 낮 처형 없음(2 후보, 부결) · 밤 3 사망
 //  3일차 낮 0 처형(마지막 결전: 찬반 0·0), 밤 없음
 import type { GameResult, ResultLogBallotsLine, ResultLogClaimLine, ResultLogWhisperLine, VoteLogEntry } from "../../shared/protocol";
-import type { TimelineLog, TimelineViewInput } from "../../src/game/timelineView";
+import type { TimelineViewInput } from "../../src/game/timelineView";
+import type { ResultLogSnapshot } from "../../src/net/resultLogStore";
 
 export const TL_ROLES = ["mafia", "mafia", "police", "doctor", "citizen", "citizen"] as const;
 
@@ -84,7 +85,7 @@ export const TL_WHISPERS: ResultLogWhisperLine[] = [
   { seat: 1, to: 0, n: 2, text: "비밀 셋", at: 3 },
 ];
 
-export const tlLog = (over: Partial<TimelineLog> = {}): TimelineLog => ({
+export const tlLog = (over: Partial<Pick<ResultLogSnapshot, "claim" | "ballots" | "whisper">> = {}): Pick<ResultLogSnapshot, "claim" | "ballots" | "whisper"> => ({
   claim: part(TL_CLAIMS),
   ballots: part(TL_BALLOTS),
   whisper: part(TL_WHISPERS),

@@ -327,3 +327,34 @@ body:has([data-emote-tray]) .mf-float { visibility: hidden; }
 .mv-dress-card:focus-visible, .mv-dress-sheet__close:focus-visible { outline: 2px solid var(--gray-100); outline-offset: 2px; }
 @media (prefers-reduced-motion: reduce) { .mv-dress-sheet__strip { scroll-behavior: auto; } }
 .mf-float[data-float-single] { min-height: 0; }
+
+/* 기록 탭: 일차 카드 띠와 하루 상세 (11-11, UI-SPEC C·D-8). 확장 패널 안에서 위 띠는 고정, 아래 하루 상세만 스크롤한다.
+   카드 72×112(간격 8, 가로 스크롤 스냅, 첫 일차부터), 위 절반 = 낮 · 아래 절반 = 밤. 선택 카드 = 테두리 2px gray-100. 카드 위 일차 숫자 14px.
+   진홍은 직업 칩(마피아)과 거짓 주장 점선에만 쓴다. 놋쇠·새 색·새 크기 없음. */
+.mf-result__body--log { overflow: hidden; gap: var(--space-sm); }
+.mf-result__body--log > :first-child { margin-top: 0; }
+.mf-tl__strip { flex: none; display: flex; gap: var(--space-sm); overflow-x: auto; overflow-y: hidden; scroll-snap-type: x mandatory; scrollbar-width: none; overscroll-behavior-x: contain; padding: 0 0 var(--space-xs); }
+.mf-tl__strip::-webkit-scrollbar { display: none; }
+.mf-tl__item { flex: none; scroll-snap-align: start; display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.mf-tl__num { font-size: 14px; line-height: 1.4; font-weight: 700; color: var(--gray-100); font-variant-numeric: tabular-nums; }
+.mf-tl__card { flex: none; display: flex; flex-direction: column; box-sizing: border-box; width: 72px; height: 112px; padding: 0; overflow: hidden; border: 2px solid var(--night-600); border-radius: var(--radius-md); background: var(--night-700); color: var(--gray-100); font-family: inherit; cursor: pointer; }
+.mf-tl__card.is-selected { border-color: var(--gray-100); }
+.mf-tl__card:focus-visible { outline: 2px solid var(--gray-100); outline-offset: 2px; }
+.mf-tl__half { flex: 1 1 0; min-height: 0; display: grid; place-items: center; }
+.mf-tl__half + .mf-tl__half { border-top: 1px solid var(--night-600); }
+.mf-tl__quiet { color: var(--gray-300); }
+.mf-tl__face-wrap { position: relative; display: block; flex: none; line-height: 0; }
+.mf-tl__face { flex: none; display: block; border-radius: var(--radius-pill); object-fit: cover; background: var(--night-800); }
+.mf-tl__face.is-dead { filter: brightness(0.45) grayscale(1); }
+.mf-tl__chip { position: absolute; right: -10px; bottom: -6px; line-height: 0; }
+.mf-tl__chip .mv-rolechip { width: 20px; height: 20px; border-width: 1px; }
+.mf-tl__chip .mv-rolechip svg { width: 12px; height: 12px; }
+.mf-tl__mark { position: absolute; right: -8px; bottom: -6px; display: grid; place-items: center; width: 20px; height: 20px; border-radius: var(--radius-pill); background: var(--overlay-ink-strong); color: var(--gray-100); }
+
+.mf-tl__detail { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; gap: var(--space-md); overflow-y: auto; padding: var(--space-xs) 0; }
+.mf-tl__row { flex: none; display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--space-sm) var(--space-md); }
+.mf-tl__group { display: inline-flex; align-items: flex-end; gap: var(--space-xs); }
+.mf-tl__faces { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--space-xs); }
+.mf-tl__target { display: inline-flex; flex-direction: column; align-items: center; gap: 2px; }
+.mf-tl__arrow { flex: none; display: block; align-self: center; color: var(--gray-300); }
+.mf-tl__votes { min-width: 20px; box-sizing: border-box; padding: 0 var(--space-xs); border: 1.5px solid var(--gray-100); border-radius: var(--radius-pill); background: var(--overlay-ink-strong); color: var(--gray-50); font-size: 14px; line-height: 1.4; font-weight: 700; text-align: center; font-variant-numeric: tabular-nums; }

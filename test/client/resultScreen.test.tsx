@@ -362,7 +362,7 @@ describe("결과(직업)는 ended 경로 한 곳에서만 읽는다 (T-04-64, T-
     }
   });
 
-  it("`result.seats` 를 읽는 소스는 ResultScreen·resultDirector 둘뿐이다 (판 중 장면 경로 visibleSeats 는 읽지 않는다)", () => {
+  it("`result.seats` 를 읽는 소스는 ResultScreen·resultDirector·timelineView(기록 탭, ended 전용)뿐이다 (판 중 장면 경로 visibleSeats 는 읽지 않는다)", () => {
     const readers: string[] = [];
     const walk = (dir: string) => {
       for (const ent of readdirSync(dir, { withFileTypes: true })) {
@@ -373,7 +373,7 @@ describe("결과(직업)는 ended 경로 한 곳에서만 읽는다 (T-04-64, T-
     };
     walk("src");
     expect(readers.length).toBeGreaterThan(0);
-    expect(readers.every((p) => ["src/game/resultDirector.ts", "src/screens/ResultScreen.tsx"].includes(p)), readers.join(",")).toBe(true);
+    expect(readers.every((p) => ["src/game/resultDirector.ts", "src/game/timelineView.ts", "src/screens/ResultScreen.tsx"].includes(p)), readers.join(",")).toBe(true);
   });
 });
 

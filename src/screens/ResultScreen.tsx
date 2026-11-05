@@ -401,6 +401,7 @@ export function ResultScreen({ view, store, chat, resultLog, send, canSend, offs
         {...(resultPanelHeight(roomH) !== undefined ? { expandedHeight: resultPanelHeight(roomH)! } : {})}
         tabsVisible={state.tabsVisible}
         lines={logLines}
+        view={view}
         contacts={contacts}
         opened={opened}
         allSlot={

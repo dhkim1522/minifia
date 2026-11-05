@@ -1,10 +1,15 @@
+import { useState } from "react";
 import type { CSSProperties, KeyboardEvent, ReactNode, Ref } from "react";
 import "../../styles/v2.css";
 import { dayDivider, nightDivider, RESULT_PANEL_TEXT, RESULT_TABS } from "../../game/resultText";
 import type { ResultTabId } from "../../game/resultText";
 import type { ResultLogChatLine, ResultLogWhisperLine } from "../../../shared/protocol";
 import type { ResultLogSnapshot } from "../../net/resultLogStore";
+import { dayLinesOf, timelineOf } from "../../game/timelineView";
+import type { TimelineViewInput } from "../../game/timelineView";
 import { faceSrc, seatColorVar } from "../../net/assets";
+import { DayDetail } from "./DayDetail";
+import { TimelineStrip } from "./TimelineStrip";
 import { V2Icon } from "./V2Icon";
 import type { V2IconName } from "./V2Icon";
 
@@ -38,14 +43,30 @@ export interface ResultPanelProps {
   opened: ReadonlySet<ResultTab>;
   /** 전체 탭 몸통(채팅 패널) */
   allSlot: ReactNode;
-  /** 기록 탭 몸통(11-11) */
+  /** 기록 탭 몸통을 직접 채운다(있으면 view 보다 우선) */
   logSlot?: ReactNode;
+  /** 기록 탭이 읽는 공개 값(result·day.voteLog). 있으면 기록 탭이 일차 카드 띠와 하루 상세를 그린다(11-11) */
+  view?: TimelineViewInput;
   /** 알약 자리(11-12). 확장일 때 폭 전체로 남는다 */
   pill?: ReactNode;
   /** 패널 요소 ref(스테이지 사각형 측정) */
   panelRef?: Ref<HTMLElement>;
   /** 키보드가 열려 있다: 탭 행을 숨겨 패널 높이를 키보드 열림 높이로 둔다 */
   kb?: boolean;
+}
+
+/** 기록 탭 몸통(11-11, D-8): 위 일차 카드 띠(고정), 아래 하루 상세(스크롤). 탭을 열 때 처음 그려지고 첫 일차가 선택돼 있다 */
+function LogBody({ view, lines, contacts }: { view: TimelineViewInput; lines: ResultLogSnapshot; contacts: ReadonlyMap<number, string> }) {
+  const cards = timelineOf(view, lines);
+  const [picked, setPicked] = useState<number | null>(null);
+  const selected = picked !== null && cards.some((c) => c.n === picked) ? picked : (cards[0]?.n ?? 1);
+  if (cards.length === 0) return <Empty />;
+  return (
+    <>
+      <TimelineStrip cards={cards} selected={selected} onSelect={setPicked} contacts={contacts} />
+      <DayDetail key={selected} lines={dayLinesOf(view, lines, selected)} contacts={contacts} />
+    </>
+  );
 }
 
 function Arrow() {
@@ -118,7 +139,7 @@ function WhisperRows({ lines, contacts }: { lines: readonly ResultLogWhisperLine
 }
 
 export function ResultPanel(props: ResultPanelProps) {
-  const { tab, onTab, expanded, expandedHeight, tabsVisible, lines, contacts, opened, allSlot, logSlot, pill, panelRef, kb } = props;
+  const { tab, onTab, expanded, expandedHeight, tabsVisible, lines, contacts, opened, allSlot, logSlot, view, pill, panelRef, kb } = props;
   const shown: readonly ResultTab[] = tabsVisible ? RESULT_TABS : ["all"];
 
   const onKey = (e: KeyboardEvent<HTMLElement>): void => {
@@ -141,7 +162,7 @@ export function ResultPanel(props: ResultPanelProps) {
   else if (tab === "mafia") body = <ChatRows lines={lines.mafia.lines} contacts={contacts} label={nightDivider} ch="mafia" />;
   else if (tab === "ghost") body = <ChatRows lines={lines.ghost.lines} contacts={contacts} label={dayDivider} ch="ghost" />;
   else if (tab === "whisper") body = <WhisperRows lines={lines.whisper.lines} contacts={contacts} />;
-  else body = logSlot ?? null;
+  else body = logSlot ?? (view ? <LogBody view={view} lines={lines} contacts={contacts} /> : null);
 
   return (
     <section ref={panelRef} className={cls} style={style} data-world-panel="" data-result-panel="" data-expanded={String(expanded)} data-tab={tab}>
@@ -174,7 +195,7 @@ export function ResultPanel(props: ResultPanelProps) {
       {tab === "all" ? (
         body
       ) : (
-        <div className="mv-chat__log mf-result__body" data-result-body={tab} role="tabpanel">
+        <div className={tab === "log" ? "mv-chat__log mf-result__body mf-result__body--log" : "mv-chat__log mf-result__body"} data-result-body={tab} role="tabpanel">
           {body}
         </div>
       )}
