@@ -31,9 +31,13 @@ export const CHAT_PHASES: ReadonlySet<PhaseId> = new Set<PhaseId>([
   "morning",
 ]);
 
-/** 단계 한 번(instance)을 가리키는 키 '일차:단계'. 서버 상태와 클라이언트 view(day.n)가 같은 함수로 만든다. */
-export function phaseKey(s: { phase: PhaseId; day?: number }): string {
-  return `${s.day ?? 0}:${s.phase}`;
+/**
+ * 단계 한 번(instance)을 가리키는 키 '판:일차:단계'(결정 D-26). 서버 상태와 클라이언트 view(round·day.n)가 같은 함수로 만든다.
+ * 판이 없으면 1, 일차가 없으면 0(로비). 판 번호가 앞에 붙어서 이전 판의 늦은 메시지가 새 판의 같은 일차·단계 키와 맞지 않는다(L41).
+ * round 에 undefined 를 허용하는 것은 호출부가 view.round 를 그대로 넘기게 하기 위해서다(exactOptionalPropertyTypes).
+ */
+export function phaseKey(s: { phase: PhaseId; day?: number | undefined; round?: number | undefined }): string {
+  return `${s.round ?? 1}:${s.day ?? 0}:${s.phase}`;
 }
 
 /**

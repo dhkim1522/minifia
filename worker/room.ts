@@ -21,6 +21,7 @@ import {
   kickPlayer,
   leaveRoom,
   normalizeStoredRoom,
+  roundOf,
   startGame,
 } from "../shared/game/room";
 import type { JoinError } from "../shared/game/room";
@@ -748,7 +749,7 @@ export class Room extends DurableObject<Env> {
     switch (act.t) {
       // 자유 채팅도 사람과 같은 본체를 지난다(특권 없음, 결정 0024): 단계 키는 지금 서버 단계에서 만들고, 거절(phase·D5)은 알릴 소켓이 없어 버린다.
       case "chat":
-        await this.applyChat(step.botId, act.text, phaseKey({ phase: room.phase, day: room.day }), Date.now());
+        await this.applyChat(step.botId, act.text, phaseKey({ phase: room.phase, day: room.day, round: roundOf(room) }), Date.now());
         return;
       // 마피아 봇은 실행 시점 상태로 대상을 다시 구한다(결정 0061-18): 동료(사람 포함)가 먼저 고른 대상을 따라간다. 값이 없으면 계획의 대상.
       // 같은 applyPick 본체를 지나므로 특권이 없다(결정 0024-6).
@@ -1309,7 +1310,7 @@ export class Room extends DurableObject<Env> {
     const att = this.attachmentOf(ws);
     const room = this.room;
     if (!att || !room) return;
-    if (pk !== phaseKey({ phase: room.phase, day: room.day })) return;
+    if (pk !== phaseKey({ phase: room.phase, day: room.day, round: roundOf(room) })) return;
     this.relayTyping(att.playerId, on);
   }
 
@@ -1344,7 +1345,7 @@ export class Room extends DurableObject<Env> {
   private applyEmote(playerId: string, id: EmoteId, pk: string, now: number): void {
     const room = this.room;
     if (!room) return;
-    if (pk !== phaseKey({ phase: room.phase, day: room.day })) return;
+    if (pk !== phaseKey({ phase: room.phase, day: room.day, round: roundOf(room) })) return;
     const ch = channelOf(room, playerId);
     if (ch === null) return;
     const me = room.players.find((p) => p.id === playerId);
@@ -1384,7 +1385,7 @@ export class Room extends DurableObject<Env> {
   private async applyChat(playerId: string, text: string, pk: string, now: number): Promise<ChatRejectWhy | null> {
     const room = this.room;
     if (!room) return "phase";
-    if (pk !== phaseKey({ phase: room.phase, day: room.day })) return "phase";
+    if (pk !== phaseKey({ phase: room.phase, day: room.day, round: roundOf(room) })) return "phase";
     const ch = channelOf(room, playerId);
     if (ch === null) return "phase";
     const me = room.players.find((p) => p.id === playerId);

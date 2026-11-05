@@ -34,7 +34,7 @@ import { runoffVotersOf, runoffViewOf } from "./runoff";
 import { showdownViewOf } from "./showdown";
 import { PHASE_DEFS } from "./phases";
 import { rolesInPlay } from "./roles";
-import { hostOf } from "./room";
+import { hostOf, roundOf } from "./room";
 import type { RoomState } from "./room";
 import { verdictVotersOf, votedSeatsOf } from "./verdict";
 import { WHISPER_PER_DAY, whisperUsedToday } from "./whisper";
@@ -306,6 +306,7 @@ export function buildView(state: RoomState, playerId: string, now: number): Room
   const view: RoomView = {
     code: state.code,
     phase: state.phase,
+    round: roundOf(state),
     phaseEndsAt: state.phaseEndsAt,
     phaseDurationMs: phaseDurationOf(state), // 단계 표 길이 — 파생은 한 곳(discussion.ts)
     serverNow: now,

@@ -296,6 +296,8 @@ export interface MyInfo {
 export interface RoomView {
   code: string;
   phase: PhaseId;
+  /** 판 번호(첫 판 1, 결정 D-5·D-26). 공개 숫자이고 역할의 함수가 아니다. 서버는 항상 싣는다 — 타입을 optional 로 둔 것은 화면 시험의 리터럴을 한꺼번에 바꾸지 않기 위해서다(화면은 `view.round ?? 1`). */
+  round?: number;
   phaseEndsAt: number | null;
   phaseDurationMs: number | null;
   serverNow: number;
@@ -381,7 +383,7 @@ export interface NoteSendMessage {
   t: "note";
   text: string;
 }
-/** pk = phaseKey(단계 한 번을 가리키는 '일차:단계'). 어긋나면 서버가 더 넓은 채널로 돌리지 않고 폐기한다. */
+/** pk = phaseKey(단계 한 번을 가리키는 '판:일차:단계'). 어긋나면 서버가 더 넓은 채널로 돌리지 않고 폐기한다. */
 export interface ChatSendMessage {
   t: "chat";
   text: string;

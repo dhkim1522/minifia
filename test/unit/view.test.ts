@@ -194,7 +194,7 @@ function roleValueLeaks(view: RoomView, spectator = false): string[] {
 
 /** view 최상위에 올 수 있는 키(허용 목록). */
 const TOP_KEYS: ReadonlySet<string> = new Set([
-  "code", "phase", "phaseEndsAt", "phaseDurationMs", "serverNow", "minPlayers", "maxPlayers", "players", "me", "day", "spectate", "result",
+  "code", "phase", "round", "phaseEndsAt", "phaseDurationMs", "serverNow", "minPlayers", "maxPlayers", "players", "me", "day", "spectate", "result",
 ]);
 
 /** 그 밤에 살아 있는 각 역할이 지금 고른 대상 seat(중복 없음·오름차순). */
@@ -2002,10 +2002,10 @@ describe("의상 값(직업과 같은 단어)은 players[].look 에서만 허용
 
 describe("판 번호 view.round (11-01, D-5·D-26)", () => {
   it("모든 단계의 모든 view 에 숫자로 실리고 첫 판은 1 이다 — 역할과 무관하다", () => {
-    for (const phase of PHASES) {
-      const s = startedAt(6, 3, phase);
+    const states: RoomState[] = [lobbyOf(6), ...(["roleReveal", "dayAnnounce", "discussion", "night", "morning"] as const).map((phase) => startedAt(6, 3, phase))];
+    for (const s of states) {
       const rounds = new Set(s.players.map((p) => buildView(s, p.id, 0).round));
-      expect(`${phase}:${[...rounds].join(",")}`).toBe(`${phase}:1`);
+      expect(`${s.phase}:${[...rounds].join(",")}`).toBe(`${s.phase}:1`);
     }
   });
 

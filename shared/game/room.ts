@@ -147,6 +147,8 @@ export interface RoomState {
   phaseEndsAt: number | null;
   /** 일차(1부터). dayAnnounce 진입 때 tick 의 진입 훅이 올린다. 없으면 아직 낮이 시작되지 않았다. 뷰에는 DayView.n 으로 실린다. */
   day?: number;
+  /** 판 번호(1부터, 결정 D-26). 다시 하기(11-08)가 올린다. 없으면 1 — 옛 저장 방은 읽는 쪽 기본값(roundOf)으로 읽는다. 단계 키 '판:일차:단계'의 앞 부분이고 view.round 로 실린다. */
+  round?: number;
   /** 지난밤 결과 한 곳 — enterMorning 이 쓰고 enterNight 가 지운다. 없으면 아직 아침이 오지 않았다(3페이즈, 모두 optional). */
   morning?: MorningView;
   /** 서버 전용(결정 0061-9). 이번 밤 마피아가 남긴 쪽지 — saveNote(09-12)가 쓰고 enterMorning(탈락 없는 밤)·enterNight 가 키째 지운다. 구출·무효 밤의 쪽지는 폐기된다. */
@@ -188,6 +190,11 @@ export interface RoomState {
   runoff?: RunoffState;
   /** 서버 전용(결정 0066-5). 마지막 3인 결전 진행. dayAnnounce 마감 훅이 세우고 resolveShowdown·enterDiscussion 이 지운다. 공개 모양은 view 의 day.showdown(필드별 복사). */
   showdown?: ShowdownState;
+}
+
+/** 판 번호를 읽는 한 곳 — 없으면 1(옛 저장 방 호환, D-26). */
+export function roundOf(state: Pick<RoomState, "round">): number {
+  return state.round ?? 1;
 }
 
 export type CreateRoomStateResult = { ok: true; state: RoomState } | { ok: false; error: "NICKNAME_INVALID" };

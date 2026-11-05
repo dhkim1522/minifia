@@ -2,6 +2,7 @@
 import { env, exports } from "cloudflare:workers";
 import { evictDurableObject, runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
 import { expect } from "vitest";
+import { phaseKey } from "../../shared/game/audience";
 import type { ChatLineWire, CreateRoomResponse, PhaseId, RoleId, RoomView, ServerMessage } from "../../shared/protocol";
 
 export interface TestSocket {
@@ -566,10 +567,10 @@ export async function wanderTimes(code: string): Promise<number[]> {
 
 // ---- 7페이즈 입력 중 도우미(07-10) ----
 
-/** 소켓이 마지막으로 본 view 의 단계 키 '일차:단계'(phaseKey 와 같은 모양, 일차가 없으면 0). */
+/** 소켓이 마지막으로 본 view 의 단계 키 '판:일차:단계'(shared 의 phaseKey 와 같은 함수, 판이 없으면 1·일차가 없으면 0, D-26). */
 export function phaseKeyOf(sock: TestSocket): string {
   const view = lastViewOf(sock);
-  return `${view.day?.n ?? 0}:${view.phase}`;
+  return phaseKey({ phase: view.phase, day: view.day?.n, round: view.round });
 }
 
 /** 채팅 한 줄을 보내는 원문 메시지 모양(sendAndSettle 류가 메시지 객체를 받는 시험용). 단계 키는 그 소켓의 마지막 view 에서 만든다. */
