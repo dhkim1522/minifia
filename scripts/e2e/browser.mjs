@@ -797,7 +797,7 @@ export function readKeyboardState(page, mySeat) {
       log: rect(document.querySelector("[data-chat-log]")),
       headerBottom: header ? header.getBoundingClientRect().bottom : null,
       headerTop: header ? header.getBoundingClientRect().top : null,
-      actionButtons: panel.querySelectorAll("button:not([data-chat-send]):not([data-chat-newdot])").length,
+      actionButtons: panel.querySelectorAll("button:not([data-chat-send]):not([data-chat-newdot]):not([data-emote-button]):not([data-emote])").length,
       host: host ? { w: host.clientWidth, h: host.clientHeight } : null,
       canvas: canvas ? { attrW: canvas.width, attrH: canvas.height, cssW: canvas.clientWidth, cssH: canvas.clientHeight } : null,
       roCalls: window.__mfRo ? window.__mfRo.calls : null,

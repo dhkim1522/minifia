@@ -450,10 +450,11 @@ async function worldFlow(ctx) {
     const inStage = (sc, st) => !!sc && !!st && Number.isFinite(sc.sx) && sc.sx > pad && sc.sx < ctx.size.w - pad && sc.sy > st.top + pad && sc.sy < st.bottom - pad;
     const onScreen = centers.map((c, i) => ({ ...c, sx: gScreens[i]?.sx, sy: gScreens[i]?.sy, hx: hScreens[i]?.sx, hy: hScreens[i]?.sy })).filter((c, i) => inStage(gScreens[i], gw.stage) && inStage(hScreens[i], hw.stage));
     // 3 단위 이상 먼 칸이 없는 낮은 스테이지(360x560 의 248)는 보이는 칸 중 가장 먼 칸과 더 짧은 걷는 길이 하한을 쓴다(worldTapRanking, 07-20)
-    const { ranked, low, minWalkMs } = worldTapRanking(onScreen, from);
-    const probe = ranked.slice(0, 40);
-    const [gHits, hHits] = await Promise.all([hitsInputSurface(gp, probe), hitsInputSurface(hp, probe.map((c) => ({ sx: c.hx, sy: c.hy })))]);
-    const target = probe.find((_, i) => gHits[i] && hHits[i]);
+    // 떠 있는 버튼(꾸미기 hanger, 10페이즈)·이름표가 덮은 칸은 후보에서 먼저 뺀 뒤 순위를 매긴다 — 가린 칸 때문에 먼 칸이 사라지면 기존 낮은 스테이지 규칙(1.5 단위·0.8초)이 적용된다(문턱은 그대로)
+    const [allG, allH] = await Promise.all([hitsInputSurface(gp, onScreen), hitsInputSurface(hp, onScreen.map((c) => ({ sx: c.hx, sy: c.hy })))]);
+    const open = onScreen.filter((_, i) => allG[i] && allH[i]);
+    const { ranked, low, minWalkMs } = worldTapRanking(open, from);
+    const target = ranked[0];
     if (!target) throw new SetupError(`탭할 목적지를 찾지 못함(두 화면에 보이는 칸 ${onScreen.length}개, ${low ? "1.5" : "3"} 단위 이상 먼 칸 ${ranked.length}개)`);
 
     // 손님이 바닥을 한 번 누른다
