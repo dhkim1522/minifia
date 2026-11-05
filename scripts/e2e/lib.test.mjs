@@ -138,6 +138,8 @@ import {
   floatButtonChecks,
   emoteTrayChecks,
   dressChecks,
+  emoteDeliveryChecks,
+  floatTrayChecks,
   AVATAR_MARKERS,
   sheetFitChecks,
   claimBadgeChecks,
@@ -2792,4 +2794,115 @@ test("dressChecks: 측정값이 없으면 모든 줄이 측정값 없음으로 �
   const lines = dressChecks({});
   assert.equal(lines.length, 7);
   assert.ok(lines.every((l) => l.ok === false && /측정값 없음/.test(l.detail)));
+});
+
+// ---- 10-08: 단계별 동작 도착·비밀 채널 0건·떠 있는 버튼 숨김 (emoteDeliveryChecks·floatTrayChecks, D-18·D-20) ----
+
+const deliveryArrive = () => ({
+  sender: { name: "손님", last: { seat: 2, id: "clap", n: 3 }, playing: [2] },
+  receivers: [
+    { name: "방장", before: { seat: 1, id: "dance", n: 2 }, last: { seat: 2, id: "clap", n: 3 }, playing: [2] },
+    { name: "친구", before: null, last: { seat: 2, id: "clap", n: 1 }, playing: [2, 4] },
+  ],
+  expectSeat: 2,
+  expectId: "clap",
+  mode: "arrive",
+});
+
+test("emoteDeliveryChecks arrive: 모두 {seat,id} 가 맞고 playing 에 보낸 좌석이 있으면 모든 줄 통과, 줄 모양은 { id, label, ok, detail }", () => {
+  const lines = emoteDeliveryChecks(deliveryArrive());
+  assert.equal(lines.length, 3);
+  assert.ok(lines.every((l) => l.ok && typeof l.id === "string" && typeof l.label === "string" && l.detail === ""));
+});
+
+test("emoteDeliveryChecks arrive: 받는 한 페이지의 id 만 어긋나면 그 줄만 실패한다", () => {
+  const c = deliveryArrive();
+  c.receivers[1] = { ...c.receivers[1], last: { seat: 2, id: "dance", n: 1 } };
+  const lines = emoteDeliveryChecks(c);
+  assert.deepEqual(lines.filter((l) => !l.ok).map((l) => l.id), ["ED2"]);
+  assert.match(lines[2].detail, /친구/);
+});
+
+test("emoteDeliveryChecks arrive: seat 가 다르거나 last 가 null 이거나 playing 에 좌석이 없으면 해당 줄만 실패", () => {
+  for (const [patch, id] of [
+    [{ last: { seat: 3, id: "clap", n: 3 } }, "ED1"],
+    [{ last: null }, "ED1"],
+    [{ playing: [] }, "ED1"],
+  ]) {
+    const c = deliveryArrive();
+    c.receivers[0] = { ...c.receivers[0], ...patch };
+    assert.deepEqual(emoteDeliveryChecks(c).filter((l) => !l.ok).map((l) => l.id), [id]);
+  }
+  const c = deliveryArrive();
+  c.sender = { ...c.sender, playing: [] };
+  assert.deepEqual(emoteDeliveryChecks(c).filter((l) => !l.ok).map((l) => l.id), ["ED0"]);
+});
+
+const deliveryAbsent = () => ({
+  sender: { name: "마피아 방장", last: { seat: 1, id: "throat", n: 1 }, playing: [1] },
+  receivers: [
+    { name: "시민 손님", before: { seat: 3, id: "clap", n: 4 }, last: { seat: 3, id: "clap", n: 4 }, playing: [] },
+    { name: "또 한 명", before: null, last: null, playing: [] },
+  ],
+  expectSeat: 1,
+  expectId: "throat",
+  mode: "absent",
+});
+
+test("emoteDeliveryChecks absent: 받는 페이지의 last 가 이전과 같고 playing 에 좌석이 없으면 통과(보낸 사람은 자기 프레임이 있어야 한다)", () => {
+  const lines = emoteDeliveryChecks(deliveryAbsent());
+  assert.equal(lines.length, 3);
+  assert.ok(lines.every((l) => l.ok));
+});
+
+test("emoteDeliveryChecks absent: 받으면 안 되는 페이지의 last 가 바뀌었거나 playing 에 좌석이 들면 그 줄만 실패, 보낸 사람 프레임이 없어도 그 줄만 실패", () => {
+  const a = deliveryAbsent();
+  a.receivers[0] = { ...a.receivers[0], last: { seat: 1, id: "throat", n: 1 } };
+  assert.deepEqual(emoteDeliveryChecks(a).filter((l) => !l.ok).map((l) => l.id), ["ED1"]);
+  const b = deliveryAbsent();
+  b.receivers[1] = { ...b.receivers[1], playing: [1] };
+  assert.deepEqual(emoteDeliveryChecks(b).filter((l) => !l.ok).map((l) => l.id), ["ED2"]);
+  const c = deliveryAbsent();
+  c.sender = { ...c.sender, last: null };
+  assert.deepEqual(emoteDeliveryChecks(c).filter((l) => !l.ok).map((l) => l.id), ["ED0"]);
+});
+
+test("emoteDeliveryChecks: 보낸 사람 없이도 돌고, 받는 페이지가 없거나 mode 를 모르면 측정값 없음으로 실패", () => {
+  const c = deliveryArrive();
+  c.sender = null;
+  const lines = emoteDeliveryChecks(c);
+  assert.deepEqual(lines.map((l) => l.id), ["ED1", "ED2"]);
+  assert.ok(lines.every((l) => l.ok));
+  for (const bad of [{ ...deliveryArrive(), receivers: [] }, { ...deliveryArrive(), mode: "x" }, {}]) {
+    const out = emoteDeliveryChecks(bad);
+    assert.ok(out.length >= 1 && out.every((l) => !l.ok && /측정값 없음/.test(l.detail)));
+  }
+});
+
+const trayGood = () => ({ visibleBefore: { count: 1, shown: 1 }, hiddenWhileOpen: { count: 1, shown: 0 }, visibleAfter: { count: 1, shown: 1 } });
+
+test("floatTrayChecks: 열기 전 보이고 열린 동안 숨고 닫으면 돌아오면 FT1~FT3 모두 통과", () => {
+  const lines = floatTrayChecks(trayGood());
+  assert.deepEqual(lines.map((l) => l.id), ["FT1", "FT2", "FT3"]);
+  assert.ok(lines.every((l) => l.ok));
+});
+
+test("floatTrayChecks: 한 값씩 어긋나면 해당 항목만 실패한다", () => {
+  const a = trayGood();
+  a.visibleBefore = { count: 1, shown: 0 };
+  onlyFail(floatTrayChecks(a), "FT1");
+  const b = trayGood();
+  b.hiddenWhileOpen = { count: 1, shown: 1 };
+  onlyFail(floatTrayChecks(b), "FT2");
+  const c = trayGood();
+  c.visibleAfter = { count: 1, shown: 0 };
+  onlyFail(floatTrayChecks(c), "FT3");
+});
+
+test("floatTrayChecks: 떠 있는 버튼이 하나도 없으면(확인할 것이 없음) 세 줄 모두 실패 · 측정값이 없어도 실패", () => {
+  const none = { count: 0, shown: 0 };
+  assert.ok(floatTrayChecks({ visibleBefore: none, hiddenWhileOpen: none, visibleAfter: none }).every((l) => !l.ok));
+  const lines = floatTrayChecks({});
+  assert.equal(lines.length, 3);
+  assert.ok(lines.every((l) => !l.ok && /측정값 없음/.test(l.detail)));
 });
