@@ -26,6 +26,8 @@ export const CHAT_TEXT = {
   // 6페이즈 TopToast 와 같은 문구
   joined: (name: string) => `${name} 님 입장`,
   left: (name: string) => `${name} 님 퇴장`,
+  // 방장이 바뀐 줄(UI-SPEC E.1, 11-04): 위 알림(roomDiff 의 toastForDiff)과 같은 글이다
+  hostChanged: (name: string) => `방장 · ${name}`,
   // 9페이즈 카드 제목 (09-UI-SPEC 427행)
   cardWill: (name: string) => `${name} 님의 유언`,
   cardNote: "쪽지",
