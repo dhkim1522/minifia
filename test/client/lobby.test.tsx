@@ -245,10 +245,31 @@ describe("Lobby — 채팅 패널: 기록 + 입력줄 + 행동 줄 (CHAT-01, 07-
     expect(sysTexts(container)).toBe("하윤 님 입장");
   });
 
-  it("방장이 바뀌어도 기록에는 남기지 않는다 (A1)", () => {
+  it("방장이 바뀌면 기록에 같은 문구의 crown 시스템 줄이 한 줄 남는다 (UI-SPEC E.1, 위 알림과 같은 글)", () => {
     const { container, rerender } = render(lobby(makeView(base, 1), { epoch: 0 }));
     rerender(lobby(makeView([player(0, "민수", { isHost: false }), player(1, "서준", { isHost: true })], 1), { epoch: 0 }));
+    expect(sysTexts(container)).toBe("방장 · 서준");
+    expect(toastText(container)).toBe("방장 · 서준");
+    const lines = chatStore.lines().filter((l) => l.kind === "system");
+    expect(lines.map((l) => `${l.text}|${l.icon}|${l.scope}`)).toEqual(["방장 · 서준|crown|all"]);
+  });
+
+  it("방장이 바뀐 줄은 재접속 직후 첫 스냅샷(epoch 가 바뀐 view)에는 만들지 않고 같은 view 를 다시 그려도 늘지 않는다", () => {
+    const hosted = (n: number) => makeView([player(0, "민수", { isHost: n === 0 }), player(1, "서준", { isHost: n === 1 })], 1);
+    const { container, rerender } = render(lobby(hosted(0), { epoch: 0 }));
+    rerender(lobby(hosted(1), { epoch: 1 }));
     expect(sysTexts(container)).toBe("");
+    rerender(lobby(hosted(1), { epoch: 1, bannerVisible: false }));
+    expect(sysTexts(container)).toBe("");
+    rerender(lobby(hosted(0), { epoch: 1 }));
+    expect(sysTexts(container)).toBe("방장 · 민수");
+  });
+
+  it("재접속 띠가 떠 있는 동안에도 방장 변경은 기록에 남는다 (알림만 억제)", () => {
+    const { container, rerender } = render(lobby(makeView(base, 1), { epoch: 0, bannerVisible: true }));
+    rerender(lobby(makeView([player(0, "민수", { isHost: false }), player(1, "서준", { isHost: true })], 1), { epoch: 0, bannerVisible: true }));
+    expect(toastText(container)).toBe("");
+    expect(sysTexts(container)).toBe("방장 · 서준");
   });
 
   it("StrictMode 이중 효과에서도 입장 줄이 한 번만 남는다", () => {

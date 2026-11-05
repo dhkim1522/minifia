@@ -602,6 +602,43 @@ describe("buildView 내 역할·마피아 동료 (ROLE-02, D-14)", () => {
   });
 });
 
+describe("buildView 연결 기록 불노출 (D-14·D-17·D-18, L43)", () => {
+  it("disconnectedAt·left 가 있는 사람이 있어도 players[] 의 키 집합은 이전과 같고 어떤 경로에도 두 이름이 없다", () => {
+    for (const phase of ["lobby", "discussion", "ended"] as const) {
+      const base = richStateAt(phase, 5, 1);
+      const marked: RoomState = {
+        ...base,
+        players: base.players.map((p, i) =>
+          i === 1 ? { ...p, connected: false, connId: null, disconnectedAt: 123_456 } : i === 2 ? { ...p, connected: false, connId: null, left: true as const } : p,
+        ),
+      };
+      for (const viewer of marked.players) {
+        const plain = buildView(base, viewer.id, START_AT);
+        const view = buildView(marked, viewer.id, START_AT);
+        expect(view.players.map((e) => Object.keys(e).sort().join(","))).toEqual(plain.players.map((e) => Object.keys(e).sort().join(",")));
+        const text = JSON.stringify(view);
+        expect(text).not.toContain("disconnectedAt");
+        expect(text).not.toContain("123456");
+        expect(text).not.toContain('"left"');
+        expect(keyPaths(view).map(lastKey)).not.toContain("disconnectedAt");
+        expect(keyPaths(view).map(lastKey)).not.toContain("left");
+      }
+    }
+  });
+
+  it("방장 이양은 공개 값 isHost 만 바꾼다 — 그 밖의 players[] 키·값과 view 키 집합은 같다", () => {
+    const s = lobbyOf(4);
+    const moved: RoomState = { ...s, hostId: s.players[2]!.id };
+    const a = buildView(s, s.players[0]!.id, START_AT);
+    const b = buildView(moved, s.players[0]!.id, START_AT);
+    expect(Object.keys(b).sort()).toEqual(Object.keys(a).sort());
+    const strip = (v: RoomView) => v.players.map(({ isHost: _h, ...rest }) => rest);
+    expect(strip(b)).toEqual(strip(a));
+    expect(b.players.filter((p) => p.isHost).map((p) => p.seat)).toEqual([2]);
+    expect(b.me.isHost).toBe(false);
+  });
+});
+
 describe("buildView 전수 누출 검사 (T-01-23)", () => {
   it("4~8명 × 열두 단계 × 모든 플레이어 × 시드 3개: token·id 가 없고, role·allies 키는 me 아래에만 있으며, 공개 항목은 다섯 키뿐이다", () => {
     const violations: string[] = [];

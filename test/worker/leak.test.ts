@@ -38,6 +38,7 @@ import {
   withRole,
 } from "./helpers";
 import type { Actor as SeatedActor, Game, TestSocket } from "./helpers";
+import { endedGame4, until } from "./helpers";
 
 interface Player {
   nickname: string;
@@ -106,7 +107,7 @@ const ROLE_PATHS_ALIVE = [
  * 서버 전용 키: 어떤 프레임의 어떤 경로에도 없어야 한다. stats 는 판 통계 카운터(11-01, 결정 D-6, L35)다. 주장 차례(결정 0027-3)와 4페이즈 투표·종료(결정 0036-12)·순차 지목 차례(pickTurn, 결정 0063-1)의 서버 상태.
  * winner·execution 은 같은 이름의 view 키(result.winner·day.execution)가 있어 넣지 않고, 경로·단계로 검사한다.
  */
-const SERVER_ONLY_KEYS = ["claimPick", "claimOrder", "claimIdx", "claimStart", "execVote", "candidateVote", "verdict", "nightLog", "lastExecPhrase", "nominate", "verdictVote", "endVote", "nightNote", "pickTurn", "runoffVote", "showdownPick", "stats", "badgeLog", "whispers"]; // badgeLog·whispers(11-03): 결과 공개 줄은 v·to 같은 다른 이름을 쓴다 — 서버 전용 이름은 어떤 프레임에도 키로 없다 (L35)
+const SERVER_ONLY_KEYS = ["claimPick", "claimOrder", "claimIdx", "claimStart", "execVote", "candidateVote", "verdict", "nightLog", "lastExecPhrase", "nominate", "verdictVote", "endVote", "nightNote", "pickTurn", "runoffVote", "showdownPick", "stats", "badgeLog", "whispers", "disconnectedAt", "left"]; // disconnectedAt·left(11-04): 방 연속성 서버 전용 기록 (L43). badgeLog·whispers(11-03): 결과 공개 줄은 v·to 같은 다른 이름을 쓴다 — 서버 전용 이름은 어떤 프레임에도 키로 없다 (L35)
 /**
  * 서버 전용 이름과 같은 공개 와이어 필드의 경로(08-11, 결정 0060-3·4) — 이 두 경로만 SERVER_ONLY_KEYS 검사에서 빼고 이유를 단다. 목록은 줄이지 않고, 새 경로는 받을 권리 조건이 있을 때만 더한다.
  *  - .view.day.verdict: 처형 단계에서 모두에게 같은 {yes,no,passed} 집계(서버 전용 RoomState.verdict 와 이름만 같다).
@@ -1579,6 +1580,65 @@ describe("마지막 3인 결전 프레임 전수 (결정 0066-5, L21·L24)", () 
       expect(sawWindow).toBe(true);
       // 유령(좌석 3)은 어느 프레임에도 me.ballot 이 없다
       if (a.seat === 3) expect(frames.some((m) => m.t === "state" && m.view.me.ballot !== undefined)).toBe(false);
+    });
+  });
+});
+
+describe("방 연속성 프레임 전수 (D-14·D-17·D-18, L43)", () => {
+  const frameKinds = (frames: ServerMessage[]): string[] => [...new Set(frames.map((m) => m.t))].sort();
+  const noContinuityKeys = (frames: ServerMessage[]): void => {
+    for (const msg of frames) {
+      for (const path of keyPaths(msg)) {
+        const key = path.slice(path.lastIndexOf(".") + 1);
+        expect(SERVER_ONLY_KEYS.includes(key) && !ALLOWED_WIRE_PATHS.has(path)).toBe(false);
+      }
+      if (msg.t === "state") for (const p of msg.view.players) expect(Object.keys(p).sort().join(",")).toBe(Object.keys(msg.view.players[0]!).sort().join(","));
+    }
+  };
+
+  it("방장 이양·옛 방장 복귀·대기실 정리를 거친 판의 모든 소켓 프레임에 disconnectedAt·left 가 없고, 이양 순간 새 프레임 종류가 없다", { timeout: 60_000 }, async () => {
+    const r = await seat(3, 0, { testMode: true });
+    const [g1, g2, g3] = r.guests as [(typeof r.guests)[number], (typeof r.guests)[number], (typeof r.guests)[number]];
+    const hostId = (await storedRoom(r.code)).players[0] as unknown as { id: string };
+    const start = [g1, g2, g3].map((g) => mark(g.sock));
+    // 방장·손님3 이 끊기고, 방장 이양 유예와 정리 시간을 넘긴 것처럼 저장값을 옮긴다.
+    r.host.ws.close();
+    g3.sock.ws.close();
+    await until("두 끊김 기록", async () => (await storedRoom(r.code)).players.filter((p) => (p as unknown as { disconnectedAt?: number }).disconnectedAt !== undefined).length === 2);
+    await editRoom(r.code, (room) => mapPlayers(room, (p) => (p.id === hostId.id ? { ...p, disconnectedAt: Date.now() - 4000 } : p.seat === g3.seat ? { ...p, disconnectedAt: Date.now() - 20_000 } : p)));
+    expect(await runDurableObjectAlarm(env.ROOM.getByName(r.code))).toBe(true);
+    await nextFrame(g1.sock, (m) => m.t === "state" && m.view.me.isHost);
+    for (const g of [g1, g2]) await flush(g.sock);
+    // 옛 방장이 돌아온다.
+    const back = await connect(r.code);
+    await hello(back, r.hostToken);
+    await flush(back);
+    for (const g of [g1, g2]) await flush(g.sock);
+    const stored = (await storedRoom(r.code)).players as unknown as Array<{ seat: number; disconnectedAt?: number; left?: true }>;
+    expect(stored.some((p) => p.seat === g3.seat)).toBe(false); // 정리로 지워졌다
+    for (const [i, g] of [g1, g2].entries()) {
+      const frames = framesOf(g.sock).slice(start[i]!);
+      noContinuityKeys(frames);
+      // 이양 때문에 생기는 새 프레임 종류는 없다: 이 구간의 모든 프레임은 state·snap·chatLog 같은 기존 종류다.
+      expect(frameKinds(frames).filter((t) => !["state", "snap", "pong", "chatLog"].includes(t))).toEqual([]);
+    }
+    noContinuityKeys(framesOf(back));
+  });
+
+  it("결과 단계 leave: 남은 소켓의 모든 프레임에 left 가 없고 나간 사람은 connected false 로만 보인다", { timeout: 60_000 }, async () => {
+    const g = await endedGame4();
+    const leaver = g.actors.find((a) => a.seat !== 0)!;
+    const stayers = g.actors.filter((a) => a !== leaver);
+    const starts = stayers.map((a) => mark(a.sock));
+    send(leaver.sock, { t: "leave" });
+    for (const a of stayers) await nextFrame(a.sock, (m) => m.t === "state" && m.view.players.find((p) => p.seat === leaver.seat)?.connected === false);
+    for (const a of stayers) await flush(a.sock);
+    const rec = (await storedRoom(g.code)).players.find((p) => p.seat === leaver.seat) as unknown as { left?: true };
+    expect(rec.left).toBe(true); // 서버에는 있고
+    stayers.forEach((a, i) => {
+      const frames = framesOf(a.sock).slice(starts[i]!);
+      noContinuityKeys(frames);
+      expect(JSON.stringify(frames)).not.toContain('"left"');
     });
   });
 });
