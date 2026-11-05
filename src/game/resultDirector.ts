@@ -4,9 +4,10 @@
 // 직업 의상 대응은 ghostOutfit.ts 의 jobOutfit 한 곳을 재사용한다 — 새 표를 만들지 않는다.
 import { ringSlots } from "../../shared/game/gather";
 import { isAlive } from "../../shared/game/alive";
-import { STAGE_SPOT } from "../../shared/game/map";
+import { snapToWalkable, STAGE_SPOT } from "../../shared/game/map";
+import { mapOf } from "../../shared/game/maps";
 import type { RoleId } from "../../shared/game/roles";
-import type { GameWinner, RoomView, WorldSeg } from "../../shared/protocol";
+import type { GameWinner, MapId, RoomView, WorldSeg } from "../../shared/protocol";
 import type { OutfitId } from "../world/characterData";
 import { jobOutfit } from "../world/ghostOutfit";
 
@@ -85,7 +86,10 @@ export interface ResultState {
 /** ended view 의 result 와 players 로 출연자 표를 만든다(좌석 오름차순). 직업은 result.seats 에서만 읽는다 */
 export function castOf(view: RoomView & { result: NonNullable<RoomView["result"]> }): CastMember[] {
   const aliveBySeat = new Map(view.players.map((p) => [p.seat, isAlive(p)]));
+  // 쉬었다가 합류한 사람(sat, 11-12)은 참가자가 아니다 — 링 자리·직업 칩·승패·시상 어디에도 들지 않는다(서버도 result.seats 에 싣지 않는다, 여기서 한 번 더 막는다)
+  const sat = new Set(view.players.filter((p) => p.sat === true).map((p) => p.seat));
   return [...view.result.seats]
+    .filter((s) => !sat.has(s.seat))
     .sort((a, b) => a.seat - b.seat)
     .map((s) => ({ seat: s.seat, job: s.job, team: teamOf(s.job), alive: aliveBySeat.get(s.seat) ?? true }));
 }
@@ -96,6 +100,25 @@ export function slotsFor(cast: readonly CastMember[]): Record<number, readonly [
   const out: Record<number, readonly [number, number]> = {};
   cast.forEach((c, i) => {
     out[c.seat] = table[i] ?? [0, 265];
+  });
+  return out;
+}
+
+/** 쉬었던 사람(sat)이 서는 바깥 원 반지름(고정소수점 3.6). 참가자 링(2.65)보다 바깥이다 */
+export const SAT_RADIUS_FX = 360;
+
+/**
+ * 쉬었던 사람(sat)의 자리 표(11-12, UI-SPEC A-5): 좌석 오름차순 i 번째가 바깥 원 위 π/4 + 2πi/k 각도에 서고, 걸을 수 있는 가까운 칸으로 보정한다(snapToWalkable).
+ * 모든 폰이 같은 표를 만든다(서버 상태가 아니라 이 폰의 연출). 값은 고정소수점 [x, z]. 맵 id 는 방의 맵(view.map, 없으면 bar)
+ */
+export function satSlots(seats: readonly number[], mapId: MapId): Record<number, readonly [number, number]> {
+  const sorted = [...seats].sort((a, b) => a - b);
+  const map = mapOf(mapId);
+  const out: Record<number, readonly [number, number]> = {};
+  sorted.forEach((seat, i) => {
+    const angle = Math.PI / 4 + (2 * Math.PI * i) / sorted.length;
+    const at = snapToWalkable(map, { x: Math.round(Math.cos(angle) * SAT_RADIUS_FX), z: Math.round(Math.sin(angle) * SAT_RADIUS_FX) });
+    out[seat] = [at.x, at.z];
   });
   return out;
 }

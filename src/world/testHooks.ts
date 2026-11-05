@@ -61,6 +61,8 @@ export interface ResultHookState {
   awards: [number, string][];
   /** 지금 떠 있는 패의 목록 index. 없으면 -1 (11-09) */
   shown: number;
+  /** 쉬었다가 결과에 합류한 사람(sat)의 좌석 오름차순 (11-12). 없으면 빈 배열 */
+  sat: number[];
 }
 
 /** 런타임 중 훅이 읽는 부분 */
@@ -208,7 +210,7 @@ export function installLooksHook(): { set(looks: Readonly<Record<number, string>
  * 해제는 다른 설치가 덮어썼으면 지우지 않는다. 값은 DOM 속성이 아니다 — 직업·의상을 마크업에 싣지 않는다.
  */
 export function installResultHook(): { patch(next: Partial<ResultHookState>): void; off(): void } {
-  let mine: ResultHookState = { stage: "gather", chips: 0, dimmed: [], costumes: {}, tab: "all", awards: [], shown: -1 };
+  let mine: ResultHookState = { stage: "gather", chips: 0, dimmed: [], costumes: {}, tab: "all", awards: [], shown: -1, sat: [] };
   window.__mfResult = mine;
   return {
     patch(next) {

@@ -95,3 +95,17 @@
   from { opacity: 0; }
   to { opacity: 1; }
 }
+
+/* ---- 쉬는 사람 화면 BenchView(11-12, UI-SPEC D-3) ----
+   결과 화면과 같은 틀: 캔버스 한 장이 방 본문을 채우고 아래 패널이 그 위에 얹힌다. 읽을 글은 한 줄(24px)과 [나가기] 하나뿐이다. 새 색 없음 */
+.mf-bench { position: relative; flex: 1 1 0; min-height: 0; overflow: hidden; isolation: isolate; background: var(--night-950); }
+.mf-bench > .mf-world { z-index: var(--z-world); }
+.mf-bench__scrim { position: absolute; left: 0; right: 0; bottom: 0; height: 280px; z-index: 2; pointer-events: none; background: linear-gradient(to top, color-mix(in srgb, var(--night-900) 88%, transparent) 0, color-mix(in srgb, var(--night-900) 60%, transparent) 160px, transparent 280px); }
+.mf-bench__panel { position: absolute; left: 0; right: 0; bottom: 0; z-index: var(--z-overlay); box-sizing: border-box; height: 188px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-sm); padding: 14px var(--space-md) 22px; background: color-mix(in srgb, var(--night-800) 97%, transparent); border-radius: var(--radius-lg) var(--radius-lg) 0 0; }
+.mf-bench__icon { flex: none; display: grid; place-items: center; color: var(--gray-300); }
+.mf-bench__text { margin: 0; text-align: center; font-family: var(--font-ui); font-size: 24px; line-height: 1.2; font-weight: 700; color: var(--gray-50); word-break: keep-all; }
+.mf-bench__panel .mf-btn { min-width: 160px; }
+
+/* ---- 쉬게 될 사람 확인 시트(11-12, UI-SPEC D-1): 얼굴 줄(이름 글자 없음) + 한 줄 + [시작][취소]. 새 색 없음 ---- */
+.mf-rest__faces { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: var(--space-sm); margin: 0 0 var(--space-md); }
+.mf-rest__face { flex: none; display: block; width: 40px; height: 40px; border-radius: var(--radius-pill); object-fit: cover; background: var(--night-800); }

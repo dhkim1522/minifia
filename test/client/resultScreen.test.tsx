@@ -362,7 +362,7 @@ describe("E2E 훅 window.__mfResult (11-05)", () => {
   it("stage·칩 수·어두워진 좌석·입은 의상 표를 싣고 언마운트하면 지운다 (DOM 속성이 아니다)", () => {
     const r = renderRoom(makeView());
     const hook = (window as unknown as { __mfResult?: { stage: string; chips: number; dimmed: number[]; costumes: Record<number, string> } }).__mfResult;
-    expect(hook).toEqual({ stage: "final", chips: 5, dimmed: [3], costumes: { 0: "coat", 1: "police", 2: "doctor", 3: "mafia", 4: "coat" }, tab: "all", awards: [], shown: -1 });
+    expect(hook).toEqual({ stage: "final", chips: 5, dimmed: [3], costumes: { 0: "coat", 1: "police", 2: "doctor", 3: "mafia", 4: "coat" }, tab: "all", awards: [], shown: -1, sat: [] });
     expect(r.container.querySelector('[data-result-stage="final"]')).not.toBeNull();
     // 루트 속성에 역할·의상을 싣지 않는다 — 직업은 칩([data-role-chip])의 속성과 접근성 이름뿐이다
     const root = r.container.querySelector("main")!;

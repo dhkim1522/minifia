@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import type { RefObject } from "react";
 import { isAlive } from "../../shared/game/alive";
-import type { ClientMessage, EmoteId, PhaseId, RoomView } from "../../shared/protocol";
+import type { ClientMessage, EmoteId, MapId, PhaseId, RoomView } from "../../shared/protocol";
 import { Button } from "../components/Button";
 import { AwardPlate } from "../components/v2/AwardPlate";
 import { ConfirmSheet } from "../components/ConfirmSheet";
+import { Sheet } from "../components/Sheet";
 import { Icon } from "../components/Icon";
 import { ChatPanel } from "../components/v2/ChatPanel";
+import { DressSheet } from "../components/v2/DressSheet";
 import { FloatAction, FloatActions } from "../components/v2/FloatAction";
 import { ReadyPill } from "../components/v2/ReadyPill";
 import { ResultPanel } from "../components/v2/ResultPanel";
@@ -14,15 +17,18 @@ import { TopToast, useTopToast } from "../components/v2/TopToast";
 import { V2Icon } from "../components/v2/V2Icon";
 import { WorldStage } from "../components/WorldStage";
 import { CEREMONY_TITLE } from "../game/awardText";
+import { DRESS_TEXT } from "../game/dressText";
 import { LOG_H_KB } from "../game/chatUi";
-import { castOf, CEREMONY, CEREMONY_CENTER, ceremonyAt, ceremonySnap, ceremonyWindowStart, holdSnap, markTimes, RESULT_TIMELINE, resultPanelHeight, skipAward, slotsFor, stateAt, walkSnap } from "../game/resultDirector";
+import { castOf, CEREMONY, CEREMONY_CENTER, ceremonyAt, ceremonySnap, ceremonyWindowStart, holdSnap, markTimes, RESULT_TIMELINE, resultPanelHeight, satSlots, skipAward, slotsFor, stateAt, walkSnap } from "../game/resultDirector";
 import type { CeremonyState, ResultState } from "../game/resultDirector";
 import { READY_TEXT } from "../game/resultText";
 import { RESULT_TEXT } from "../game/verdict";
-import { seatColorVar } from "../net/assets";
+import { faceSrc, seatColorVar } from "../net/assets";
 import type { ChatStore } from "../net/chatStore";
 import type { ResultLogStore } from "../net/resultLogStore";
 import { useChat } from "../net/useChat";
+import { useDress } from "../net/useDress";
+import { diffRoomViews, toastForDiff } from "../net/roomDiff";
 import { useMapInsets } from "../net/useMapInsets";
 import { useReady } from "../net/useReady";
 import { useReducedMotion } from "../net/useReducedMotion";
@@ -64,8 +70,10 @@ export interface ResultScreenProps {
 // 아래 패널은 접힌 게임 패널과 같은 높이의 전체 채팅 한 줄이다(동작 버튼 없음). 헤더 [나가기]는 로비와 같은 확인 시트를 연다.
 
 /** 결과 화면 장면: 카메라 무대 중심 고정, 밤 조명, 이긴 팀 조명 구간에만 무대 가운데 점 조명 */
-function sceneOf(cast: ReturnType<typeof castOf>, state: ResultState, ceremony: CeremonyState | null, calm: boolean): SceneLook {
+function sceneOf(cast: ReturnType<typeof castOf>, state: ResultState, ceremony: CeremonyState | null, calm: boolean, sat: readonly number[] = []): SceneLook {
   const seats: Record<number, SeatLook> = {};
+  // 쉬었다가 합류한 사람(11-12, D-13): 참가자 밖 별도 자리에 반투명 0.5 로 선다. 직업 의상·어둠·칩이 없다
+  for (const seat of sat) seats[seat] = { show: true, ghost: false, opacity: SAT_OPACITY };
   // 시상식(11-09): 패가 뜬 창의 수상자는 진 팀이라도 어둡지 않다(패는 늘 읽힌다), 모두 자리로 돌아온 뒤 0.6초에 직업 의상이 걷히고 고른 look 으로 돌아간다
   const award = ceremony?.phase === "award" ? ceremony.seat : null;
   const redressed = ceremony?.phase === "done" && (ceremony.redressed || calm); // 모션 줄이기는 끝나는 즉시 look 으로 돌아온다
@@ -92,6 +100,39 @@ function sessionStore(): Storage | null {
 
 /** 탭 행(44)이 패널 위 여백(14)을 먹고 아래 간격 10 을 더해, 접힌 패널 높이를 게임 패널과 같게 두려고 기록 칸에서 덜어 내는 높이(44 + 10 − 14) */
 const TAB_ROW_H = 40;
+
+/** 쉬었던 사람(sat)의 몸 불투명도(UI-SPEC A-5) */
+const SAT_OPACITY = 0.5;
+
+/** 쉬게 될 사람 확인 시트(11-12, D-12): 쉬게 될 사람 얼굴 줄(이름 글자 없음, 접근성 이름은 닉네임) + 한 줄 + [시작][취소]. 초점은 [취소] — 엔터 한 번으로 시작되지 않는다 */
+function RestSheet({ faces, onStart, onCancel }: { faces: readonly { seat: number; nickname: string }[]; onStart: () => void; onCancel: () => void }) {
+  const cancelRef: RefObject<HTMLButtonElement | null> = useRef<HTMLButtonElement>(null);
+  return (
+    <Sheet label={READY_TEXT.rest} onClose={onCancel} initialFocusRef={cancelRef}>
+      {(requestClose, closing) => (
+        <>
+          <div className="mf-rest__faces" data-rest-faces="">
+            {faces.slice(0, REST_FACES_MAX).map((f) => (
+              <img key={f.seat} className="mf-rest__face" data-rest-face="" src={faceSrc(f.seat)} alt={f.nickname} width={40} height={40} />
+            ))}
+          </div>
+          <h2 className="mf-t-heading mf-sheet__title">{READY_TEXT.rest}</h2>
+          <div className="mf-sheet__actions">
+            <Button variant="primary" block disabled={closing} onClick={onStart}>
+              {READY_TEXT.confirmStart}
+            </Button>
+            <Button ref={cancelRef} variant="secondary" block disabled={closing} onClick={requestClose}>
+              {READY_TEXT.confirmCancel}
+            </Button>
+          </div>
+        </>
+      )}
+    </Sheet>
+  );
+}
+
+/** 확인 시트 얼굴 줄의 최대 개수 */
+const REST_FACES_MAX = 7;
 
 /** 박수 큐 한 묶음(WorldStage emoteCues). nonce 가 새로 보일 때마다 한 번 재생한다 */
 type ClapCues = readonly { seat: number; id: EmoteId; nonce: number }[];
@@ -179,13 +220,18 @@ export function ResultScreen({ view, store, chat, resultLog, send, canSend, offs
   const pausedAt = useRef<number | null>(null);
   const nonce = useRef(0);
 
+  // 쉬었던 사람(sat, 11-12): 참가자 링 밖 별도 자리. 방의 맵(view.map, 없으면 재즈 바)에서 걸을 수 있는 칸으로 보정한다
+  const satKey = view.players.filter((p) => p.sat === true).map((p) => p.seat).sort((a, b) => a - b).join(",");
+  const satSeats = useMemo<number[]>(() => (satKey === "" ? [] : satKey.split(",").map(Number)), [satKey]);
+  const mapId: MapId = view.map ?? "bar";
+
   const state = useMemo(() => stateAt(mark, cast, winner), [mark, cast, winner]);
   const ceremony = useMemo(() => (ceremonyOn ? ceremonyAt(mark, awards, cast) : null), [ceremonyOn, mark, awards, cast]);
-  const scene = useMemo(() => sceneOf(cast, state, ceremony, reduced), [cast, state, ceremony, reduced]);
+  const scene = useMemo(() => sceneOf(cast, state, ceremony, reduced, satSeats), [cast, state, ceremony, reduced, satSeats]);
 
   // 위치: 모두 자기 둘레 자리로. 연출이면 스토어의 마지막 위치에서 걷는 구간(1200ms), 아니면 한 점 구간이다. 런타임이 만들어지기 전(레이아웃 효과)에 먹여 첫 프레임부터 맞다.
   // 서버 상태가 아니라 이 폰의 연출이다 — 서버 시각 기준(t0 = 지금 + offset)으로 만들어 런타임이 서버 구간과 똑같이 그린다. 새 연결(epoch)이면 다시 먹인다
-  const slots = useMemo(() => slotsFor(cast), [cast]);
+  const slots = useMemo(() => ({ ...slotsFor(cast), ...satSlots(satSeats, mapId) }), [cast, satSeats, mapId]);
   const offsetRef = useRef(offset);
   offsetRef.current = offset; // 시계 보정이 흔들려도 snap 을 다시 먹이지 않는다(먹일 때만 읽는다)
   const feed = useCallback(
@@ -353,6 +399,10 @@ export function ResultScreen({ view, store, chat, resultLog, send, canSend, offs
   useLayoutEffect(() => {
     hook.current?.patch({ shown: shownIndex });
   }, [shownIndex]);
+  // 쉬었던 사람 훅(11-12): sat 좌석 오름차순. 값은 좌석 번호뿐이다(DOM 속성이 아니다)
+  useLayoutEffect(() => {
+    hook.current?.patch({ sat: satSeats });
+  }, [satSeats]);
   const onCostumes = useCallback((costumes: Readonly<Record<number, string>>, dimmed: readonly number[]) => {
     hook.current?.patch({ costumes: { ...costumes }, dimmed: [...dimmed] });
   }, []);
@@ -369,6 +419,40 @@ export function ResultScreen({ view, store, chat, resultLog, send, canSend, offs
   useEffect(() => {
     if (rematchToast !== null) show(rematchToast.text);
   }, [rematchToast, show]);
+  // 방장 이양 알림(11-12, D-17): 서버 view 두 개의 차이로만 만든다(방장이 다른 좌석으로 바뀐 것). 첫 스냅샷·재연결 직후에는 없다. 입장·퇴장 알림과 기록 줄은 결과 단계에 없다
+  const prevView = useRef<RoomView | null>(null);
+  const prevEpoch = useRef(epoch);
+  useEffect(() => {
+    if (prevEpoch.current !== epoch) {
+      prevEpoch.current = epoch;
+      prevView.current = null;
+    }
+    const diff = diffRoomViews(prevView.current, view);
+    prevView.current = view;
+    const t = toastForDiff({ joined: [], left: [], newHost: diff.newHost });
+    if (t) show(t.text, t.icon);
+  }, [view, epoch, show]);
+
+  // 꾸미기(11-12, D-16): 시상식이 끝났거나 시상식이 없는 최종 상태에서 아래 칸에 [꾸미기]. 로비와 같은 DressSheet·useDress(서버 dress 문이 ended 를 연다). 바꾼 의상은 직업 의상이 걷힌 뒤 보인다
+  const [dressOpen, setDressOpen] = useState(false);
+  const dress = useDress({ view, send, canSend });
+  const dressBtnRef = useRef<HTMLButtonElement>(null);
+  const restoreDressFocus = useRef(false);
+  const openDress = () => {
+    inputRef.current?.blur();
+    setDressOpen(true);
+  };
+  const closeDress = () => {
+    restoreDressFocus.current = true;
+    setDressOpen(false);
+  };
+  useEffect(() => {
+    if (dressOpen || !restoreDressFocus.current) return;
+    restoreDressFocus.current = false;
+    dressBtnRef.current?.focus();
+  }, [dressOpen]);
+  const ceremonyDone = mark >= tl.ceremonyStartMs && (!ceremonyOn || ceremony?.phase === "done");
+
   const readyPill = <ReadyPill host={rematch.isHost} on={rematch.mine} n={rematch.ready} m={rematch.total} dim={rematch.isHost && !rematch.canStart} inactive={!pillActive || !canSend} onPress={rematch.press} />;
 
   const inAward = ceremony?.phase === "award";
@@ -378,7 +462,7 @@ export function ResultScreen({ view, store, chat, resultLog, send, canSend, offs
   return (
     <main ref={rootRef} className="mf-root mf-result" data-result-stage={state.stage} data-reveal={String(reveal)} data-winner={winner} data-kb-open={kbOpen ? "true" : undefined}>
       <WorldStage
-        view={view}
+        view={dress.stageView}
         store={store}
         send={send}
         canSend={canSend}
@@ -469,6 +553,13 @@ export function ResultScreen({ view, store, chat, resultLog, send, canSend, offs
           <FloatAction kind="skip" icon="skip" label="넘기기" count={`${ceremony.index + 1} / ${ceremony.total}`} onPress={skipAwardNow} />
         </FloatActions>
       ) : null}
+      {ceremonyDone && !expanded && !dressOpen ? (
+        <FloatActions single>
+          <FloatAction ref={dressBtnRef} kind="dress" icon="hanger" label={DRESS_TEXT.open} disabled={!canSend} onPress={openDress} />
+        </FloatActions>
+      ) : null}
+      {dressOpen ? <DressSheet value={dress.look} onPick={dress.pick} onClose={closeDress} disabled={!canSend} /> : null}
+      {rematch.confirm !== null ? <RestSheet faces={rematch.confirm.resting} onStart={rematch.confirmStart} onCancel={rematch.cancelConfirm} /> : null}
       {leaveOpen ? (
         <ConfirmSheet
           title="방에서 나갈까요?"

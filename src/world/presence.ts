@@ -46,6 +46,11 @@ export interface SeatLook {
   costume?: OutfitId;
   /** 11페이즈 결과 화면 전용: 진 팀을 어둡게 한다(연결 끊김 어둠과 별개로 센다) */
   dim?: true;
+  /**
+   * 11페이즈 결과 화면 전용(11-12): 몸 불투명도(0~1). 쉬었다가 합류한 사람(sat)이 0.5 로 선다. 이름표는 흐려지지 않는다.
+   * 판 중 장면 표(visibleSeats)에는 키 자체가 없다 — 처형 연출의 불투명도와 겹치면 더 낮은 쪽을 쓴다
+   */
+  opacity?: number;
 }
 
 export interface SceneLook {

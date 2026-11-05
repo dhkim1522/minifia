@@ -10,6 +10,7 @@ import { RoleCardSheet } from "../components/RoleCardSheet";
 import type { RoleCardTab } from "../components/RoleCardSheet";
 import { TestToolsButton, TestToolsSheet } from "../components/TestTools";
 import { MORNING_TEXT, morningText } from "../game/eliminationText";
+import { READY_TEXT } from "../game/resultText";
 import { VERDICT_TEXT, defenseAnnounce, noExecutionPrefix, winnerText } from "../game/verdict";
 import { preloadDuskAssets, preloadRoleAssets } from "../net/assets";
 import { ChatStore } from "../net/chatStore";
@@ -25,6 +26,7 @@ import { EXIT_CURTAIN_MS, preloadWorld } from "../world/runtime";
 import { WorldStore } from "../world/store";
 import { PreGame } from "./PreGame";
 import { Assigning } from "./Assigning";
+import { BenchView } from "./BenchView";
 import { GameMap } from "./GameMap";
 import { Lobby } from "./Lobby";
 import { ResultScreen } from "./ResultScreen";
@@ -382,7 +384,7 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
       ) : null}
       {view && (
         <p className="mf-sr-only" aria-live="polite">
-          {PHASE_ANNOUNCE[view.phase]?.(view) ?? ""}
+          {view.resting ? READY_TEXT.rest : (PHASE_ANNOUNCE[view.phase]?.(view) ?? "")}
         </p>
       )}
     </div>
@@ -418,6 +420,15 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
     }
 
     if (!view) return connecting();
+
+    // 쉬는 사람(11-12, D-3): 단계와 무관하게 BenchView 하나만 본다. 서버가 준 자기 한 줄 view 라 PreGame·GameMap 은 마운트하지 않는다(T-11-40)
+    if (view.resting) {
+      return (
+        <div key="bench" className="mf-phase-enter">
+          <BenchView view={view} store={store} send={connection.send} canSend={connection.canSend} offset={connection.offset} epoch={connection.epoch} onExit={() => onExit("left")} />
+        </div>
+      );
+    }
 
     // 화면은 서버가 정한 단계만 따른다. key 가 장면이라 장면이 바뀔 때만 새로 나타난다(phase-enter 300ms).
     // 가림막 동안은 마지막 로비 view 와 로비 키를 그대로 써 Lobby·맵이 다시 마운트되지 않는다.

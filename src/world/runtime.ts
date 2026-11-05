@@ -1155,9 +1155,11 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
         rise = f.rise;
         fade = f.opacity;
       }
-      if (fade !== a.fadeOpacity) {
-        a.fadeOpacity = fade;
-        a.handle.setOpacity?.(fade === 1 && a.ghost ? (a.ghostOutfit !== null ? GHOST_MIST.opacity : GHOST_OPACITY) : fade);
+      // 결과 화면의 반투명 좌석(쉬었던 사람, 11-12): 장면 표의 opacity 와 처형 연출 불투명도 중 낮은 쪽을 몸에 쓴다. 이름표(alpha)는 연출만 따른다
+      const bodyFade = Math.min(fade, seatLook?.opacity ?? 1);
+      if (bodyFade !== a.fadeOpacity) {
+        a.fadeOpacity = bodyFade;
+        a.handle.setOpacity?.(bodyFade === 1 && a.ghost ? (a.ghostOutfit !== null ? GHOST_MIST.opacity : GHOST_OPACITY) : bodyFade);
       }
       alpha = Math.min(alpha, fade);
       // 높이: 등장 낙하 + (장면이 있을 때) 무대 위 0.29 + 유령 떠다님 + 처형 떠오름
