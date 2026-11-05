@@ -194,6 +194,8 @@ export interface WorldRuntimeDeps {
   onGhostOutfits?: (outfits: Readonly<Record<number, string>>) => void;
   /** 핀 조명이 지금 비추는 좌석(없으면 null)·이동 중 여부·켜짐 수준(0~1)이 바뀔 때 불린다 — E2E 훅 window.__mfPin 용(09.1.1-11). 제품은 넘기지 않는다 */
   onPin?: (pin: { seat: number | null; moving: boolean; strength: number }) => void;
+  /** 사람 동작이 시작되거나 재생 목록이 바뀔 때 불린다 — E2E 훅 window.__mfEmotes 용(10-03, L33). last 는 마지막으로 받아 그린 프레임의 사본, playing 은 재생 중 좌석(도착 순서). 제품은 넘기지 않는다 */
+  onEmotes?: (state: { last: { seat: number; id: EmoteId; n: number } | null; playing: readonly number[] }) => void;
   /** 카메라 줌이 렌더러에 새로 보내질 때 소수 셋째 자리로 불린다 — E2E 훅 window.__mfPin.zoom 용(09.1.1-13). 제품은 넘기지 않는다 */
   onZoom?: (zoom: number) => void;
 }
@@ -367,6 +369,21 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
 
   const actors = new Map<number, Actor>();
   const pendingEntered = new Set<number>();
+  // 서버 동작 프레임(10-03, D-9): 눌렀을 때 미리 재생하는 경로는 없다 — 보낸 사람도 이 프레임으로만 재생한다
+  let lastEmote: { seat: number; id: EmoteId; n: number } | null = null;
+  let emotePlaying: number[] = [];
+  function emitEmotes(): void {
+    deps.onEmotes?.({ last: lastEmote === null ? null : { ...lastEmote }, playing: [...emotePlaying] });
+  }
+  const offEmote = store.onEmote((f) => {
+    if (disposed) return;
+    const a = actors.get(f.seat);
+    if (a === undefined || a.exit !== null) return;
+    (a.handle as PlayableCharacter).playEmote?.(f.id);
+    lastEmote = { seat: f.seat, id: f.id, n: f.n };
+    emotePlaying = [...emotePlaying.filter((s) => s !== f.seat), f.seat];
+    emitEmotes();
+  });
   const gate = createTapGate();
   let ring: Ring | null = null;
   // 내 이동 추적(결정 0059-2): 보낸 move 와 서버가 적용한 move 수를 맞춰 응답을 알아보고, 예측 구간을 든다
@@ -1251,6 +1268,7 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
     dispose() {
       if (disposed) return;
       disposed = true;
+      offEmote();
       bootGen++;
       if (visibilityBound) document.removeEventListener("visibilitychange", onVisibility);
       if (resizeTimer !== null) clearTimeout(resizeTimer);

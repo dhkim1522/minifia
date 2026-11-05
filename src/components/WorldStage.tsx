@@ -11,7 +11,7 @@ import type { SceneLook } from "../world/presence";
 import { initialMapStatus } from "../world/status";
 import type { MapStatusState } from "../world/status";
 import type { WorldStore } from "../world/store";
-import { installGhostOutfitsHook, installPinHook, installWorldTestHooks, worldTestHooksEnabled } from "../world/testHooks";
+import { installEmotesHook, installGhostOutfitsHook, installPinHook, installWorldTestHooks, worldTestHooksEnabled } from "../world/testHooks";
 import { MapStatusCard } from "./MapStatusCard";
 import { HeadStack } from "./v2/HeadStack";
 import type { HeadStackProps } from "./v2/HeadStack";
@@ -148,6 +148,8 @@ export function WorldStage(props: WorldStageProps) {
     const outfitsHook = hooksOn ? installGhostOutfitsHook() : null;
     // window.__mfPin(핀 조명 대상·이동 중 여부, 09.1.1-11): 같은 훅 문맥에서만. DOM 이 아니다
     const pinHook = hooksOn ? installPinHook() : null;
+    // window.__mfEmotes(받은 동작 프레임·재생 중 좌석, 10-03, L33): 같은 훅 문맥에서만. DOM 이 아니다
+    const emotesHook = hooksOn ? installEmotesHook() : null;
     const runtime = createWorldRuntime({
       host,
       tagLayer,
@@ -171,6 +173,7 @@ export function WorldStage(props: WorldStageProps) {
       },
       onGhostOutfits: outfitsHook?.set,
       onPin: pinHook?.set,
+      onEmotes: emotesHook?.set,
       onZoom: pinHook?.setZoom,
       allowSoftware: hooksOn,
       loadModules: live.current.props.loadModules,
@@ -183,6 +186,7 @@ export function WorldStage(props: WorldStageProps) {
       offHooks?.();
       outfitsHook?.off();
       pinHook?.off();
+      emotesHook?.off();
       runtime.dispose();
       if (runtimeRef.current === runtime) runtimeRef.current = null;
     };

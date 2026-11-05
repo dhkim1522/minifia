@@ -37,6 +37,8 @@ declare global {
     __mfGhostOutfits?: Readonly<Record<number, string>>;
     /** 핀 조명(09.1.1-11): 지금 비추는 좌석(없으면 null)·이동 중 여부·켜짐 수준(0~1)·카메라 줌(09.1.1-13, 소수 셋째 자리). 런타임이 이미 정한 값뿐이다 */
     __mfPin?: { seat: number | null; moving: boolean; strength: number; zoom: number };
+    /** 동작 훅(10-03, L33): 이 화면이 받은 마지막 emote 프레임의 사본과 지금 사람 동작을 재생 중인 좌석. DOM 속성으로 싣지 않는다 */
+    __mfEmotes?: { last: { seat: number; id: string; n: number } | null; playing: readonly number[] };
   }
 }
 
@@ -140,6 +142,24 @@ export function installPinHook(): { set(pin: { seat: number | null; moving: bool
     },
     off() {
       if (window.__mfPin === mine) delete window.__mfPin;
+    },
+  };
+}
+
+/**
+ * window.__mfEmotes 를 설치하고(처음엔 비어 있음) 갱신·해제 함수를 돌려준다. 테스트 훅이 켜진 문맥에서만 부른다(T-10-12).
+ * 값은 이 화면이 받은 프레임의 사본뿐이다(L33). 해제는 다른 설치가 덮어썼으면 지우지 않는다.
+ */
+export function installEmotesHook(): { set(state: { last: { seat: number; id: string; n: number } | null; playing: readonly number[] }): void; off(): void } {
+  let mine: NonNullable<Window["__mfEmotes"]> = { last: null, playing: [] };
+  window.__mfEmotes = mine;
+  return {
+    set(state) {
+      mine = { last: state.last === null ? null : { seat: state.last.seat, id: state.last.id, n: state.last.n }, playing: [...state.playing] };
+      window.__mfEmotes = mine;
+    },
+    off() {
+      if (window.__mfEmotes === mine) delete window.__mfEmotes;
     },
   };
 }

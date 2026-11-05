@@ -2,9 +2,10 @@
 // 위치의 진실은 서버 구간이고 이 스토어는 서버가 보낸 구간만 든다. 내 예측 구간은 런타임이 따로 든다(결정 0059).
 import type { Segment } from "../../shared/game/world";
 import { positionAt } from "../../shared/game/world";
-import type { WorldFrame } from "../../shared/protocol";
+import type { EmoteFrame, WorldFrame } from "../../shared/protocol";
 
 export type WorldStoreListener = () => void;
+export type EmoteListener = (frame: EmoteFrame) => void;
 
 /**
  * epoch 규칙(CONN-04, T-06-21): 새 연결의 첫 state 마다 epoch 가 1 늘고 서버는 [state, snap] 순서로 보낸다.
@@ -20,6 +21,7 @@ export class WorldStore {
   private entered = new Set<number>();
   private moveSeqs = new Map<number, number>();
   private listeners = new Set<WorldStoreListener>();
+  private emoteListeners = new Set<EmoteListener>();
 
   /** 연결 epoch 와 함께 world 프레임을 적용한다. snap = 모두의 구간을 통째로 바꾼다, move = 한 사람의 새 구간 */
   applyFrame(frame: WorldFrame, epoch: number): void {
@@ -46,6 +48,23 @@ export class WorldStore {
     this.segs.set(frame.s, { p: [...frame.p], t0: frame.t0, v: frame.v });
     this.moveSeqs.set(frame.s, (this.moveSeqs.get(frame.s) ?? 0) + 1);
     this.notify();
+  }
+
+  /**
+   * 서버 emote 프레임(10-03). 위치가 아니라 사건이라 상태를 만들지 않고 마지막 프레임도 기억하지 않는다(L28 정신) — 구독자에게 한 번 알릴 뿐이다.
+   * 더 낡은 epoch 는 버린다. store 의 epoch 는 바꾸지 않는다(snap 만 정한다).
+   */
+  applyEmote(frame: EmoteFrame, epoch: number): void {
+    if (epoch < this.epoch) return;
+    for (const cb of [...this.emoteListeners]) cb(frame);
+  }
+
+  /** emote 구독. reset() 은 이 목록을 건드리지 않는다(연결을 다시 열어도 런타임의 구독이 산다) */
+  onEmote(cb: EmoteListener): () => void {
+    this.emoteListeners.add(cb);
+    return () => {
+      this.emoteListeners.delete(cb);
+    };
   }
 
   /** 연결을 닫을 때 비운다. 다음 snap 이 오기 전까지는 준비 전이다. */

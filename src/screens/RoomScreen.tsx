@@ -197,6 +197,7 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
     () =>
       onEvent((e, meta) => {
         if (e.t === "world") store.applyFrame(e, meta.epoch);
+        else if (e.t === "emote") store.applyEmote(e, meta.epoch); // 동작은 채팅 저장소로 보내지 않는다(10-03)
         else if (e.t === "chat" || e.t === "typing" || e.t === "chatLog" || e.t === "chatReject") chat.apply(e, meta.epoch, Date.now());
       }),
     [onEvent, store, chat],
