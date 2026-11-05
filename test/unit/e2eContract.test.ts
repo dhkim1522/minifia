@@ -37,6 +37,8 @@ import * as e2eLib from "../../scripts/e2e/lib.mjs";
 import * as perfRun from "../../scripts/perf-run.mjs";
 // @ts-expect-error -- 선언 없는 스크립트 모듈
 import * as resultE2e from "../../scripts/e2e/result.mjs";
+// @ts-expect-error -- 선언 없는 스크립트 모듈
+import * as mapSelectE2e from "../../scripts/e2e/mapselect.mjs";
 import { CEREMONY_TITLE } from "../../src/game/awardText";
 import { RESULT_TEXT } from "../../src/game/verdict";
 import { JOB_OUTFIT } from "../../src/world/ghostOutfit";
@@ -488,5 +490,35 @@ describe("12페이즈 소리 시험 페이지 E2E 표식·문턱(12-06)", () => 
     expect([...store.keys()]).toEqual([SOUND_PREF_KEY]);
     expect(store.get(SOUND_PREF_KEY)).toBe(JSON.stringify({ v: SOUND_PREF_VERSION, on: false }));
     expect(loadSoundPref({ getItem: (k: string) => store.get(k) ?? null, setItem: () => {} })).toBe(false);
+  });
+});
+
+describe("11페이즈 맵 선택 E2E 표식·기하 (11-13)", () => {
+  const maps = mapSelectE2e as unknown as { MAP_MARKERS: readonly string[]; MAP_CHIP: { disc: number; hit: number; left: number; below: number }; MAP_CARD: { w: number; h: number; gap: number; total: number } };
+  const root = new URL("../../", import.meta.url);
+  const tracked = execFileSync("git", ["ls-files", "src"], { cwd: root, encoding: "utf8" })
+    .split("\n")
+    .filter((f) => /\.(tsx?|css)$/.test(f));
+  const sources = tracked.map((f) => ({ f, text: readFileSync(new URL(f, root), "utf8") }));
+
+  it("MAP_MARKERS 가 4개이고 각 표식이 git 이 추적하는 src/ 파일 어딘가에 있다(표식 이름 오타 방지)", () => {
+    expect(maps.MAP_MARKERS.length).toBe(4);
+    const missing = maps.MAP_MARKERS.filter((m) => !sources.some((s) => s.text.includes(m)));
+    expect(missing).toEqual([]);
+  });
+
+  it("칩·카드 기하가 앱 CSS 와 같다 — 어긋나면 E2E 가 거짓 통과·거짓 실패한다", () => {
+    const css = readFileSync(new URL("src/styles/v2.css", root), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+    const body = (sel: string): string => [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].find((m) => (m[1] ?? "").trim() === sel)?.[2] ?? "";
+    expect(body(".mf-mapchip__disc")).toContain(`width: ${maps.MAP_CHIP.disc}px`);
+    expect(body(".mf-mapchip__disc")).toContain(`height: ${maps.MAP_CHIP.disc}px`);
+    expect(body(".mf-mapchip")).toContain("width: var(--tap-min)");
+    expect(maps.MAP_CHIP.hit).toBe(44);
+    expect(maps.MAP_CHIP.left).toBe(16);
+    const card = body(".mv-map-card");
+    expect(card).toContain(`width: ${maps.MAP_CARD.w}px`);
+    expect(card).toContain(`height: ${maps.MAP_CARD.h}px`);
+    expect(body(".mv-dress-sheet__maps")).toContain("gap: var(--space-sm)");
+    expect(maps.MAP_CARD.total).toBe(3 * maps.MAP_CARD.w + 2 * maps.MAP_CARD.gap);
   });
 });
