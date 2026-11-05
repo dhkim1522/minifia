@@ -340,6 +340,22 @@
     "default"
    ],
    "size": "72x96"
+  },
+  {
+   "group": "figure-3d",
+   "id": "figure-3d",
+   "label": "3D 조립 인물",
+   "states": [
+    "default"
+   ],
+   "size": "3d",
+   "source": "저장소 자체 코드 조립(원본 아티팩트 NP1XfUrYTTqQ5nAB1HKYT5)",
+   "external_dependency": false,
+   "files": [
+    "src/world/character.ts",
+    "src/world/characterData.ts",
+    "public/outfits/outfit-*.png"
+   ]
   }
  ]
 }
