@@ -37,6 +37,11 @@ describe("채팅 단계별 채널 행렬 (모든 단계 전수)", () => {
   it.each(phases)("%s: 받는 사람 집합은 채널·단계로만 정해지고 서버 채팅 단계 밖에서는 비어 있다", (phase) => {
     const state = room(phase, [3]);
     const ids = (ch: "all" | "mafia" | "ghost"): string => [...audience(state, { k: "chat", ch })].sort().join(",");
+    if (phase === "ended") {
+      // 결과 단계(11-03, D-11): all 채널만 모두에게 열린다. mafia·ghost 채널은 비어 있다.
+      expect(`${ids("all")}|${ids("mafia")}|${ids("ghost")}`).toBe("p0,p1,p2,p3,p4||");
+      return;
+    }
     if (!CHAT_PHASES.has(phase)) {
       expect(`${ids("all")}|${ids("mafia")}|${ids("ghost")}`).toBe("||");
       return;
