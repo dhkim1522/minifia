@@ -6,7 +6,7 @@ import "../helpers/singleLineErrors";
 import { phaseKey } from "../../shared/game/audience";
 import { ringSlots } from "../../shared/game/gather";
 import type { RoleId } from "../../shared/game/roles";
-import type { GameWinner, RoomView } from "../../shared/protocol";
+import type { AwardLine, GameWinner, RoomView } from "../../shared/protocol";
 import type { WorldStageProps } from "../../src/components/WorldStage";
 import type { RoomConnection, RoomEvent } from "../../src/net/useRoomConnection";
 import { GATHER_CENTER } from "../../src/world/camera";
@@ -67,6 +67,8 @@ interface Opts {
   spectate?: boolean;
   chat?: RoomView["me"]["chat"] | null;
   nicknames?: string[];
+  /** 서버가 정렬해 보낸 시상 칭호 패 목록(11-09). 없으면 키 자체가 없다(옛 서버) */
+  awards?: AwardLine[];
 }
 
 function makeView(o: Opts = {}): RoomView {
@@ -94,7 +96,7 @@ function makeView(o: Opts = {}): RoomView {
     me: { seat: me, isHost: me === 0, role: jobs[me]!, ...(chat === null ? {} : { chat }) },
     day: { n: 2, roles: ["mafia", "police", "citizen"], voteLog: [] },
     ...(o.spectate ? { spectate: { seats } } : {}),
-    ...(o.withResult === false ? {} : { result: { winner: o.winner ?? "citizenWin", seats, summary: [] } }),
+    ...(o.withResult === false ? {} : { result: { winner: o.winner ?? "citizenWin", seats, summary: [], ...(o.awards !== undefined ? { awards: o.awards } : {}) } }),
   };
 }
 
@@ -335,7 +337,7 @@ describe("E2E 훅 window.__mfResult (11-05)", () => {
   it("stage·칩 수·어두워진 좌석·입은 의상 표를 싣고 언마운트하면 지운다 (DOM 속성이 아니다)", () => {
     const r = renderRoom(makeView());
     const hook = (window as unknown as { __mfResult?: { stage: string; chips: number; dimmed: number[]; costumes: Record<number, string> } }).__mfResult;
-    expect(hook).toEqual({ stage: "final", chips: 5, dimmed: [3], costumes: { 0: "coat", 1: "police", 2: "doctor", 3: "mafia", 4: "coat" }, tab: "all" });
+    expect(hook).toEqual({ stage: "final", chips: 5, dimmed: [3], costumes: { 0: "coat", 1: "police", 2: "doctor", 3: "mafia", 4: "coat" }, tab: "all", awards: [], shown: -1 });
     expect(r.container.querySelector('[data-result-stage="final"]')).not.toBeNull();
     // 루트 속성에 역할·의상을 싣지 않는다 — 직업은 칩([data-role-chip])의 속성과 접근성 이름뿐이다
     const root = r.container.querySelector("main")!;
@@ -922,5 +924,106 @@ describe("결과 탭: 등장 시각·점 표식·시계 정지 (11-07 Task 2)", 
       fireEvent.click(tab(r.container, "all"));
       expect(vi.getTimerCount()).toBe(before);
     });
+  });
+});
+
+// ---------- 11-09 Task 1: 시상식 첫 창 — 첫 수상자가 무대 가운데로 걷고 패가 뜬다 (D-7, D-24) ----------
+describe("시상식 첫 창 (11-09)", () => {
+  // 좌석 0 시민 · 1 경찰 · 2 의사(탈락) · 3 마피아 · 4 시민, 시민 승. 서버 정렬: 진 팀(3) → 이긴 팀
+  const AWARDS: AwardLine[] = [
+    { seat: 3, award: "whiff", k: 2 },
+    { seat: 2, award: "spectator", k: 1, at: "night" },
+    { seat: 1, award: "detective", k: 1 },
+    { seat: 4, award: "talker", k: 12 },
+    { seat: 0, award: "survivor" },
+  ];
+  const executionView = (): RoomView => {
+    const v = makeView();
+    v.phase = "execution";
+    delete (v as { result?: unknown }).result;
+    v.day = { ...v.day!, candidate: 3, execution: { seat: 3 } };
+    return v;
+  };
+  const arrive = (opts: Opts = {}) => {
+    const r = renderRoom(executionView());
+    r.rerenderRoom(makeView({ awards: AWARDS, ...opts }));
+    return r;
+  };
+  const advance = (ms: number) => act(() => void vi.advanceTimersByTime(ms));
+  const title = (c: ParentNode) => text(c.querySelector("h1"));
+  const plate = (c: ParentNode) => c.querySelector<HTMLElement>("[data-award-plate]");
+  const hookOf = () => (window as unknown as { __mfResult?: { awards: unknown; shown: number } }).__mfResult!;
+
+  it("5599 까지는 헤더 `결과`, 5600 에 `시상식` + 첫 수상자(3)에게 한 사람 스포트라이트(turn), 그 사람은 어둡지 않다", () => {
+    const r = arrive();
+    advance(5599);
+    expect(title(r.container)).toBe("결과");
+    expect(plate(r.container)).toBeNull();
+    advance(1);
+    expect(title(r.container)).toBe("시상식");
+    expect(r.container.querySelector("h1 svg")).not.toBeNull();
+    expect(scene().pin).toEqual({ mode: "turn", seat: 3 });
+    expect(scene().seats[3]!.dim).toBeUndefined();
+    expect(plate(r.container)).toBeNull(); // 0~900 은 걷기만
+  });
+
+  it("5600: 수상자가 자리에서 무대 가운데로 걷기 시작해 900ms 안에 (0,0) 에 선다", () => {
+    const r = arrive();
+    advance(5600);
+    const store = stage.props!.store;
+    const slot = ringSlots(5)[3]!;
+    const now = Date.now();
+    const start = store.positionOf(3, now)!;
+    expect(start.x).toBeCloseTo(slot[0] / 100, 1);
+    expect(start.z).toBeCloseTo(slot[1] / 100, 1);
+    const end = store.positionOf(3, now + 900)!;
+    expect(Math.hypot(end.x, end.z)).toBeLessThan(0.05);
+    // 다른 사람은 자리 그대로
+    const p0 = store.positionOf(0, now + 900)!;
+    expect(p0.x).toBeCloseTo(ringSlots(5)[0]![0] / 100, 6);
+    r.unmount();
+  });
+
+  it("900ms 뒤 패가 뜬다: data-award-plate·data-award-id 와 읽기 문구 '{닉네임}, {칭호}, {이유}'", () => {
+    const r = arrive();
+    advance(5600 + 899);
+    expect(plate(r.container)).toBeNull();
+    advance(1);
+    const el = plate(r.container)!;
+    expect(el).not.toBeNull();
+    expect(el.dataset.awardId).toBe("whiff");
+    expect(el.getAttribute("role")).toBe("status");
+    expect(el.textContent).toContain("도현, 헛다리왕, 헛다리 2번");
+    expect(el.querySelector(".mv-award__name")?.textContent).toBe("도현");
+  });
+
+  it("훅: awards 는 서버 목록 그대로 [seat, award][], shown 은 지금 패의 index (없으면 -1)", () => {
+    const r = arrive();
+    expect(hookOf().awards).toEqual([[3, "whiff"], [2, "spectator"], [1, "detective"], [4, "talker"], [0, "survivor"]]);
+    expect(hookOf().shown).toBe(-1);
+    advance(5600 + 900);
+    expect(hookOf().shown).toBe(0);
+    r.unmount();
+  });
+
+  it("칭호 목록이 없거나 비어 있으면(옛 서버) 시상식 없이 최종 상태", () => {
+    for (const awards of [undefined, [] as AwardLine[]]) {
+      const r = renderRoom(executionView());
+      r.rerenderRoom(makeView(awards === undefined ? {} : { awards }));
+      advance(6000);
+      expect(title(r.container)).toBe("시민 승리");
+      expect(plate(r.container)).toBeNull();
+      expect(hookOf().shown).toBe(-1);
+      r.unmount();
+    }
+  });
+
+  it("재접속·처음 마운트(arrivedFrom 없음)는 칭호가 있어도 시상식 없이 최종 상태 (O-4)", () => {
+    const r = renderRoom(makeView({ awards: AWARDS }));
+    advance(8000);
+    expect(title(r.container)).toBe("시민 승리");
+    expect(plate(r.container)).toBeNull();
+    expect(hookOf().awards).toEqual([[3, "whiff"], [2, "spectator"], [1, "detective"], [4, "talker"], [0, "survivor"]]);
+    expect(hookOf().shown).toBe(-1);
   });
 });

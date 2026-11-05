@@ -86,3 +86,16 @@ describe("V2Icon timeline (11-07)", () => {
     for (const other of ["send", "ghost", "roleMafia", "whisper", "note", "quiet"] as V2IconName[]) expect(shape("timeline")).not.toBe(shape(other));
   });
 });
+
+// 11-09: 시상식 헤더 아이콘 trophy — 승인 bundle.js ICONS 와 같은 데이터(O-8)
+describe("V2Icon trophy (11-09)", () => {
+  it("trophy 는 24 격자 svg, 선 2px·둥근 끝이고 도형이 있다", () => {
+    const { container } = render(<V2Icon name="trophy" />);
+    const svg = container.querySelector("svg");
+    expect(svg?.getAttribute("viewBox")).toBe("0 0 24 24");
+    expect(svg?.getAttribute("stroke-width")).toBe("2");
+    expect(svg?.getAttribute("stroke-linecap")).toBe("round");
+    expect(svg?.getAttribute("aria-hidden")).toBe("true");
+    expect(svg?.querySelectorAll("path,circle").length).toBeGreaterThan(0);
+  });
+});

@@ -4,7 +4,7 @@ import { ringSlots } from "../../shared/game/gather";
 import type { RoleId } from "../../shared/game/roles";
 import type { GameWinner, PublicPlayer, RoomView } from "../../shared/protocol";
 import { positionAt, segmentEndsAt } from "../../shared/game/world";
-import { castOf, CEREMONY_START_MS, CLAP_MAX, finalState, holdSnap, markTimes, RESULT_TIMELINE, resultPanelHeight, slotsFor, stateAt, teamOf, walkSnap } from "../../src/game/resultDirector";
+import { castOf, CEREMONY, CEREMONY_CENTER, CEREMONY_START_MS, ceremonyAt, ceremonyEnd, ceremonySnap, ceremonyWindowStart, CLAP_MAX, finalState, holdSnap, markTimes, RESULT_TIMELINE, resultPanelHeight, skipAward, slotsFor, stateAt, teamOf, walkSnap } from "../../src/game/resultDirector";
 import { jobOutfit } from "../../src/world/ghostOutfit";
 
 const JOBS: RoleId[] = ["citizen", "police", "doctor", "mafia", "citizen", "mafia"];
@@ -232,5 +232,154 @@ describe("resultPanelHeight (11-07, D-3)", () => {
     expect(resultPanelHeight(844)).toBe(520);
     expect(resultPanelHeight(932)).toBe(520);
     expect(resultPanelHeight(0)).toBeUndefined();
+  });
+});
+
+// ---------- 11-09 Task 1: 시상식 시간표 ceremonyAt (D-7, D-24, B-3) ----------
+describe("ceremonyAt: 첫 창 (11-09)", () => {
+  const cast = castOf(viewOf(JOBS));
+  // 서버가 정렬해 보낸 순서를 그대로 쓴다: 좌석 3 → 0 → 5 → 1 → 4 → 2
+  const awards = [3, 0, 5, 1, 4, 2].map((seat) => ({ seat }));
+  const S = CEREMONY_START_MS;
+
+  it("5600 이전은 null, 칭호가 없어도 null", () => {
+    expect(ceremonyAt(0, awards, cast)).toBeNull();
+    expect(ceremonyAt(S - 1, awards, cast)).toBeNull();
+    expect(ceremonyAt(S, [], cast)).toBeNull();
+  });
+
+  it("0~899: 수상자 걷기 중, 패 없음, 박수 없음", () => {
+    for (const t of [S, S + 1, S + 899]) {
+      const c = ceremonyAt(t, awards, cast)!;
+      expect(c.phase).toBe("award");
+      if (c.phase !== "award") continue;
+      expect(c).toMatchObject({ index: 0, total: 6, seat: 3, prevSeat: null, walking: true, plate: false, clap: [] });
+    }
+  });
+
+  it("900~2499: 패 index 0, 박수는 수상자를 뺀 좌석 오름차순 최대 4명 (탈락자 포함)", () => {
+    for (const t of [S + 900, S + 2499]) {
+      const c = ceremonyAt(t, awards, cast)!;
+      if (c.phase !== "award") throw new Error("award 가 아님");
+      expect(c).toMatchObject({ index: 0, seat: 3, walking: false, plate: true });
+      expect(c.clap).toEqual([0, 1, 2, 4]);
+      expect(c.clap.length).toBeLessThanOrEqual(CLAP_MAX);
+    }
+  });
+
+  it("2500 에 index 1: 앞사람 3 이 자리 복귀 대상이 되고 새 수상자 0 이 걷는다", () => {
+    const c = ceremonyAt(S + 2500, awards, cast)!;
+    if (c.phase !== "award") throw new Error("award 가 아님");
+    expect(c).toMatchObject({ index: 1, seat: 0, prevSeat: 3, walking: true, plate: false, clap: [] });
+    const p = ceremonyAt(S + 2500 + 900, awards, cast)!;
+    if (p.phase !== "award") throw new Error("award 가 아님");
+    expect(p.clap).toEqual([1, 2, 3, 4]);
+  });
+});
+
+describe("ceremonyAt: 창 경계와 끝 (n=4, n=8)", () => {
+  const edges = (n: number) => {
+    const jobs = (["citizen", "police", "doctor", "mafia", "citizen", "mafia", "citizen", "citizen"] as RoleId[]).slice(0, n);
+    const cast = castOf(viewOf(jobs));
+    // 좌석 역순으로 받는다
+    const awards = [...cast].reverse().map((c) => ({ seat: c.seat }));
+    return { cast, awards };
+  };
+
+  it.each([4, 8])("n=%i: 창마다 {0,899,900,2499} 의 index·수상자·플레이트 경계가 맞다", (n) => {
+    const { cast, awards } = edges(n);
+    for (let i = 0; i < n; i++) {
+      const base = CEREMONY_START_MS + 2500 * i;
+      for (const [off, plate] of [[0, false], [899, false], [900, true], [2499, true]] as const) {
+        const c = ceremonyAt(base + off, awards, cast)!;
+        if (c.phase !== "award") throw new Error(`i=${i} off=${off}: award 가 아님`);
+        expect(c.index, `${i}+${off}`).toBe(i);
+        expect(c.seat).toBe(awards[i]!.seat);
+        expect(c.prevSeat).toBe(i === 0 ? null : awards[i - 1]!.seat);
+        expect(c.plate).toBe(plate);
+        expect(c.clap.every((s) => s !== c.seat)).toBe(true);
+        expect(c.total).toBe(n);
+      }
+    }
+  });
+
+  it.each([4, 8])("n=%i: 마지막 창이 끝나면 done: 복귀 걷기 → +600 의상 복귀", (n) => {
+    const { cast, awards } = edges(n);
+    const end = CEREMONY_START_MS + 2500 * n;
+    const c = ceremonyAt(end, awards, cast)!;
+    expect(c).toMatchObject({ phase: "done", returnAt: end, redressAt: end + 600, redressed: false, lastSeat: awards[n - 1]!.seat });
+    expect(ceremonyAt(end + 599, awards, cast)).toMatchObject({ phase: "done", redressed: false });
+    expect(ceremonyAt(end + 600, awards, cast)).toMatchObject({ phase: "done", redressed: true });
+    expect(ceremonyAt(end + 99_999, awards, cast)).toMatchObject({ phase: "done", redressed: true });
+  });
+
+  it("총 길이: 8명 5600 + 8 × 2500 = 25600 에 done, 4명 15600", () => {
+    expect(ceremonyEnd(8)).toBe(25_600);
+    expect(ceremonyEnd(4)).toBe(15_600);
+    expect(ceremonyWindowStart(0)).toBe(5600);
+    expect(ceremonyWindowStart(3)).toBe(13_100);
+  });
+});
+
+describe("skipAward · ceremonyMarks (11-09)", () => {
+  it("skipAward 는 현재 창을 끝내고 다음 창 0ms 로 보낸다; n 번이면 done", () => {
+    const n = 4;
+    let t = CEREMONY_START_MS + 123;
+    const seen: number[] = [];
+    for (let i = 0; i < n; i++) {
+      t = skipAward(t, n);
+      seen.push(t);
+    }
+    expect(seen).toEqual([8100, 10_600, 13_100, 15_600]);
+    expect(skipAward(t, n)).toBe(t); // done 에서는 그대로
+  });
+
+  it("시상식 전(5600 미만)이나 칭호가 없으면 아무 일 없다", () => {
+    expect(skipAward(3000, 4)).toBe(3000);
+    expect(skipAward(6000, 0)).toBe(6000);
+  });
+
+  it("창 경계(정확히 시작)도 현재 창을 끝낸다 (연타가 한 칸씩 간다)", () => {
+    expect(skipAward(8100, 4)).toBe(10_600);
+  });
+
+  it("markTimes(n, awardN) 는 창 시작·패 등장·끝·의상 복귀를 더하고, 칭호가 없으면 예전과 같다", () => {
+    expect(markTimes(4)).toEqual(markTimes(4, 0));
+    const marks = markTimes(4, 4);
+    for (const m of [5600, 6500, 8100, 9000, 10_600, 11_500, 13_100, 14_000, 15_600, 16_200]) expect(marks).toContain(m);
+    expect([...marks].sort((a, b) => a - b)).toEqual(marks);
+    expect(new Set(marks).size).toBe(marks.length);
+  });
+});
+
+describe("ceremonySnap: 걷기 구간 (11-09)", () => {
+  const cast = castOf(viewOf(JOBS));
+  const slots = slotsFor(cast);
+  const t0 = 1_000_000;
+
+  it("수상자는 900ms 안에 무대 가운데(0,0)에 도착하고 나머지는 자리에 한 점 구간", () => {
+    const starts = Object.fromEntries(Object.keys(slots).map((s) => [Number(s), { x: slots[Number(s)]![0] / 100, z: slots[Number(s)]![1] / 100 }]));
+    const segs = ceremonySnap(slots, starts, t0, { 3: { to: CEREMONY_CENTER, ms: CEREMONY.walkMs } });
+    expect(segs.map((s) => s.s)).toEqual([0, 1, 2, 3, 4, 5]);
+    const walker = segs.find((s) => s.s === 3)!;
+    expect(walker.p).toHaveLength(4);
+    expect(walker.p.slice(2)).toEqual([0, 0]);
+    const end = segmentEndsAt(walker);
+    expect(end - t0).toBeLessThanOrEqual(900);
+    expect(end - t0).toBeGreaterThan(700);
+    const at = positionAt(walker, t0 + 900);
+    expect(Math.hypot(at.x, at.z)).toBeLessThan(0.02);
+    for (const s of segs.filter((x) => x.s !== 3)) expect(s).toMatchObject({ v: 0, t0, p: [slots[s.s]![0], slots[s.s]![1]] });
+  });
+
+  it("ms 0(건너뛰기)이면 목적지에 한 점 구간으로 순간 이동한다", () => {
+    const starts = { 2: { x: 0, z: 0 } };
+    const segs = ceremonySnap(slots, starts, t0, { 2: { to: slots[2]!, ms: 0 } });
+    expect(segs.find((s) => s.s === 2)).toMatchObject({ p: [slots[2]![0], slots[2]![1]], v: 0 });
+  });
+
+  it("출발 위치를 모르면 목적지에 한 점 구간", () => {
+    const segs = ceremonySnap(slots, {}, t0, { 1: { to: CEREMONY_CENTER, ms: 900 } });
+    expect(segs.find((s) => s.s === 1)).toMatchObject({ p: [0, 0], v: 0 });
   });
 });
