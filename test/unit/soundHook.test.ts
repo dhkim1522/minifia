@@ -68,4 +68,36 @@ describe("installSoundHook", () => {
     expect(hook.state).toBe("running");
     expect(hook.voices).toBe(1);
   });
+
+  it("bed 는 현재 침대, 숨기면 suspended, 로그는 300개를 넘지 않는다", () => {
+    const rig = makeRig();
+    const { engine, fake } = rig;
+    const target: Target = {};
+    installSoundHook(engine, true, target);
+    const hook = target.__mfSound!;
+    engine.unlock();
+    engine.setBed("bed.vote");
+    expect(hook.bed).toBe("bed.vote");
+    expect(hook.log.at(-1)).toMatchObject({ id: "bed.vote", played: true });
+    engine.hidden();
+    fake.clock.advance(200);
+    expect(hook.state).toBe("suspended");
+    engine.clearLog();
+    for (let i = 0; i < 350; i += 1) {
+      engine.play("ui.tap");
+      fake.clock.advance(1);
+    }
+    expect(hook.log).toHaveLength(300);
+    expect(hook.log[0]!.at).toBeLessThan(hook.log[299]!.at);
+    expect(hook.log.every((e) => e.played === false)).toBe(true);
+  });
+
+  it("interrupted 는 locked 로 보인다", () => {
+    const { engine, fake } = makeRig();
+    const target: Target = {};
+    installSoundHook(engine, true, target);
+    engine.unlock();
+    fake.ctx().setState("interrupted");
+    expect(target.__mfSound!.state).toBe("locked");
+  });
 });

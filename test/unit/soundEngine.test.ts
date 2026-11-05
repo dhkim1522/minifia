@@ -2,7 +2,7 @@
 import { describe, expect, it } from "vitest";
 import { buildVoice } from "../../src/audio/synth";
 import type { EngineDeps } from "../../src/audio/engine";
-import { BUS_GAIN, COMPRESSOR, MASTER_GAIN, NODE_BUDGET, RECIPES, SFX_IDS, SFX_VOICE_MAX, recipeNodeCount, renderPlan, type SfxId } from "../../src/audio/recipes";
+import { BED_IDS, BED_NODE_MAX, BEDS, BUS_GAIN, COMPRESSOR, MASTER_GAIN, NODE_BUDGET, RECIPES, SFX_IDS, SFX_VOICE_MAX, recipeNodeCount, bedPlan, renderPlan, type BedId, type SfxId } from "../../src/audio/recipes";
 import { SOUND_PREF_KEY } from "../../src/audio/prefs";
 import { seededRandInt } from "../helpers/seededRandom";
 import { MemoryStorage } from "../helpers/memoryStorage";
@@ -432,5 +432,423 @@ describe("끄기/켜기 (D-5, B-1)", () => {
     const rig = unlocked({ storage });
     expect(rig.engine.isOn()).toBe(true);
     expect(() => rig.engine.setOn(false)).not.toThrow();
+  });
+});
+
+// ───────────────────────── Task 3: 수명 ─────────────────────────
+
+const flush = async (): Promise<void> => {
+  for (let i = 0; i < 4; i += 1) await Promise.resolve();
+};
+
+/** bgm 버스로 이어지는 침대 게인들(시작 순서대로) */
+function bedGains(ctx: FakeAudioContext): FakeGain[] {
+  const bgm = graphOf(ctx).bgm;
+  return ctx.ofKind("gain").filter((g) => g.out.includes(bgm)) as FakeGain[];
+}
+
+const lastRamp = (g: FakeGain): { value: number; time: number } | undefined => g.gain.of("linear").at(-1);
+
+describe("상태: 잠금·중단·닫힘 (D-9, B-3)", () => {
+  it("interrupted 면 locked, running 으로 돌아오면 running", () => {
+    const rig = unlocked();
+    const ctx = rig.fake.ctx();
+    ctx.setState("interrupted");
+    expect(rig.engine.state()).toBe("locked");
+    const before = ctx.sources().length;
+    rig.engine.play("ui.tap");
+    expect(ctx.sources()).toHaveLength(before);
+    expect(rig.engine.log().at(-1)!.played).toBe(false);
+    ctx.setState("running");
+    expect(rig.engine.state()).toBe("running");
+    rig.engine.play("ui.deny");
+    expect(rig.engine.log().at(-1)!.played).toBe(true);
+  });
+
+  it("closed 면 none 이고 다음 unlock() 이 컨텍스트를 새로 만든다", () => {
+    const rig = unlocked();
+    rig.fake.ctx().setState("closed");
+    expect(rig.engine.state()).toBe("none");
+    rig.engine.unlock();
+    expect(rig.fake.contexts).toHaveLength(2);
+    expect(rig.engine.state()).toBe("running");
+  });
+
+  it("resume() 이 거절돼도 예외가 새지 않고 locked", async () => {
+    const fake = createFakeRig();
+    fake.resumeMode = "reject";
+    const rig = makeRig({ createContext: fake.createContext as unknown as EngineDeps["createContext"] });
+    expect(() => rig.engine.unlock()).not.toThrow();
+    await flush();
+    expect(rig.engine.state()).toBe("locked");
+    fake.resumeMode = "grant";
+    fake.ctx().resumeMode = "grant";
+    rig.engine.unlock();
+    await flush();
+    expect(rig.engine.state()).toBe("running");
+  });
+
+  it("subscribe 는 state·on·bed 변화마다 부르고 해제할 수 있다", () => {
+    const rig = makeRig();
+    let n = 0;
+    const off = rig.engine.subscribe(() => {
+      n += 1;
+    });
+    rig.engine.unlock();
+    expect(n).toBeGreaterThan(0);
+    const snap = rig.engine.snapshot();
+    expect(snap).toMatchObject({ state: "running", on: true, bed: null, supported: true });
+    expect(rig.engine.snapshot()).toBe(snap); // 변화가 없으면 같은 객체
+    const a = n;
+    rig.engine.setBed("bed.day");
+    rig.engine.setOn(false);
+    expect(n).toBeGreaterThanOrEqual(a + 2);
+    expect(rig.engine.snapshot()).toMatchObject({ on: false, bed: "bed.day" });
+    off();
+    const b = n;
+    rig.engine.setOn(true);
+    expect(n).toBe(b);
+  });
+});
+
+describe("침대 — 스케줄러와 크로스페이드 (D-16, B-1)", () => {
+  /** 침대를 시작해 secs 초를 60ms 걸음으로 돌린다 */
+  function runBed(id: BedId, secs: number): { rig: ReturnType<typeof makeRig>; origin: number; cursor: number } {
+    const rig = unlocked();
+    const origin = rig.fake.ctx().currentTime;
+    rig.engine.setBed(id);
+    for (let i = 0; i < Math.round((secs * 1000) / 60); i += 1) rig.fake.clock.advance(60);
+    return { rig, origin, cursor: Math.round((secs * 1000) / 60) * 60 + 250 };
+  }
+
+  it("같은 침대에 다시 부르면 아무 일도 없다 (로그·노드)", () => {
+    const rig = unlocked();
+    rig.engine.setBed("bed.day");
+    const n = rig.fake.ctx().nodes.length;
+    const logs = rig.engine.log().length;
+    rig.engine.setBed("bed.day");
+    expect(rig.fake.ctx().nodes.length).toBe(n);
+    expect(rig.engine.log()).toHaveLength(logs);
+    expect(rig.engine.currentBed()).toBe("bed.day");
+    expect(rig.engine.log().at(-1)).toMatchObject({ id: "bed.day", played: true });
+  });
+
+  it.each(BED_IDS)("%s: 10초를 돌려도 같은 이벤트를 두 번 예약하지 않고 빠뜨리지도 않는다", (id) => {
+    const { rig, origin, cursor } = runBed(id, 10);
+    const ctx = rig.fake.ctx();
+    const got = ctx
+      .sources()
+      .filter((s) => s.startedAt !== null && s.startedAt >= origin - 1e-9 && !(s.buffer !== null && s.buffer.length === 1))
+      .map((s) => Math.round((s.startedAt! - origin) * 1000))
+      .sort((a, b) => a - b);
+    const want: number[] = [];
+    for (const e of bedPlan(id, 0, cursor)) {
+      want.push(Math.round(e.t));
+      if (e.kind === "osc" && e.lfoHz !== undefined && e.lfoCents !== undefined) want.push(Math.round(e.t));
+    }
+    want.sort((a, b) => a - b);
+    expect(got).toEqual(want);
+    expect(got.length).toBeGreaterThan(0);
+  });
+
+  it.each(BED_IDS)("%s: 동시에 울리는 소스는 침대 노드 상한 안", (id) => {
+    const { rig, origin } = runBed(id, 12);
+    const ctx = rig.fake.ctx();
+    let max = 0;
+    for (let ms = 0; ms < 12000; ms += 50) max = Math.max(max, ctx.liveSourcesAt(origin + ms / 1000));
+    expect(max).toBeLessThanOrEqual(BED_NODE_MAX);
+  });
+
+  it("침대를 켜면 침대 게인이 0 에서 1 로 1.2초 램프, 훅의 bed 와 로그에 id 가 남는다", () => {
+    const rig = unlocked();
+    const ctx = rig.fake.ctx();
+    const t0 = ctx.currentTime;
+    rig.engine.setBed("bed.lobby");
+    const [g] = bedGains(ctx);
+    expect(g!.gain.of("set")[0]).toMatchObject({ value: 0 });
+    expect(lastRamp(g!)!.value).toBe(1);
+    expect(lastRamp(g!)!.time).toBeCloseTo(t0 + 1.2, 6);
+    expect(rig.engine.log().at(-1)).toMatchObject({ id: "bed.lobby", played: true });
+  });
+
+  it("다른 침대로 바꾸면 이전은 1.2초 동안 0 으로, 새 것은 0 에서 1 로 오른다(크로스페이드)", () => {
+    const rig = unlocked();
+    const ctx = rig.fake.ctx();
+    rig.engine.setBed("bed.day");
+    rig.fake.clock.advance(2000);
+    const t = ctx.currentTime;
+    rig.engine.setBed("bed.vote");
+    const [oldG, newG] = bedGains(ctx);
+    expect(lastRamp(oldG!)).toMatchObject({ value: 0 });
+    expect(lastRamp(oldG!)!.time).toBeCloseTo(t + 1.2, 6);
+    expect(lastRamp(newG!)).toMatchObject({ value: 1 });
+    expect(lastRamp(newG!)!.time).toBeCloseTo(t + 1.2, 6);
+    const before = ctx.sources().length;
+    rig.fake.clock.advance(3000);
+    const fresh = ctx.sources().slice(before);
+    expect(fresh.length).toBeGreaterThan(0);
+    for (const s of fresh) {
+      expect(ctx.reaches(s, newG!)).toBe(true);
+      expect(ctx.reaches(s, oldG!)).toBe(false);
+    }
+    // 이전 침대 소스는 페이드가 끝난 뒤 모두 정지가 예약돼 있다
+    for (const s of ctx.sources().filter((x) => ctx.reaches(x, oldG!))) expect(s.stoppedAt!).toBeLessThanOrEqual(t + 1.2 + 0.1);
+  });
+
+  it("setBed(null) 은 페이드아웃 뒤 멈추고 스케줄러도 멈춘다", () => {
+    const rig = unlocked();
+    const ctx = rig.fake.ctx();
+    rig.engine.setBed("bed.night");
+    rig.fake.clock.advance(1000);
+    const t = ctx.currentTime;
+    rig.engine.setBed(null);
+    const [g] = bedGains(ctx);
+    expect(lastRamp(g!)).toMatchObject({ value: 0 });
+    expect(lastRamp(g!)!.time).toBeCloseTo(t + 1.2, 6);
+    expect(rig.engine.currentBed()).toBeNull();
+    rig.fake.clock.advance(1500);
+    const n = ctx.sources().length;
+    rig.fake.clock.advance(3000);
+    expect(ctx.sources()).toHaveLength(n);
+  });
+
+  it("잠금 중에 정한 침대는 기록만 남고(played 거짓), 풀리면 시작한다", () => {
+    const fake = createFakeRig();
+    fake.resumeMode = "stay";
+    const rig = makeRig({ createContext: fake.createContext as unknown as EngineDeps["createContext"] });
+    rig.engine.unlock();
+    const ctx = fake.ctx();
+    const before = ctx.sources().length;
+    rig.engine.setBed("bed.reveal");
+    expect(rig.engine.log().at(-1)).toMatchObject({ id: "bed.reveal", played: false });
+    rig.fake.clock.advance(500);
+    expect(ctx.sources()).toHaveLength(before);
+    ctx.setState("running");
+    rig.fake.clock.advance(500);
+    expect(ctx.sources().length).toBeGreaterThan(before);
+    expect(rig.engine.currentBed()).toBe("bed.reveal");
+  });
+
+  it("꺼져 있는 동안 정한 침대는 소리가 없고, 켜면 1.2초 페이드인과 ui.toggle 한 번", () => {
+    const rig = unlocked();
+    const ctx = rig.fake.ctx();
+    rig.engine.setOn(false);
+    const before = ctx.sources().length;
+    rig.engine.setBed("bed.day");
+    rig.fake.clock.advance(500);
+    expect(ctx.sources()).toHaveLength(before);
+    rig.engine.clearLog();
+    const t = ctx.currentTime;
+    rig.engine.setOn(true);
+    const [g] = bedGains(ctx);
+    expect(lastRamp(g!)).toMatchObject({ value: 1 });
+    expect(lastRamp(g!)!.time).toBeCloseTo(t + 1.2, 6);
+    expect(rig.engine.log().filter((e) => e.id === "ui.toggle" && e.played)).toHaveLength(1);
+    rig.fake.clock.advance(500);
+    expect(ctx.sources().length).toBeGreaterThan(before + 1);
+  });
+
+  it("끄면 침대 게인을 120ms 에 줄이고 스케줄러를 멈춘다", () => {
+    const rig = unlocked();
+    const ctx = rig.fake.ctx();
+    rig.engine.setBed("bed.day");
+    rig.fake.clock.advance(1000);
+    const t = ctx.currentTime;
+    rig.engine.setOn(false);
+    const [g] = bedGains(ctx);
+    expect(lastRamp(g!)).toMatchObject({ value: 0 });
+    expect(lastRamp(g!)!.time).toBeCloseTo(t + 0.12, 6);
+    rig.fake.clock.advance(300);
+    const n = ctx.sources().length;
+    rig.fake.clock.advance(3000);
+    expect(ctx.sources()).toHaveLength(n);
+  });
+
+  it("interrupted 동안 스케줄러는 멈추고 돌아오면 현재 침대만 다시 시작한다", () => {
+    const rig = unlocked();
+    const ctx = rig.fake.ctx();
+    rig.engine.setBed("bed.day");
+    rig.fake.clock.advance(1000);
+    ctx.setState("interrupted");
+    const n = ctx.sources().length;
+    rig.fake.clock.advance(3000);
+    expect(ctx.sources()).toHaveLength(n);
+    ctx.setState("running");
+    rig.fake.clock.advance(500);
+    expect(ctx.sources().length).toBeGreaterThan(n);
+  });
+
+  it("침대가 켜져 있어도 보이스·노드 상한이 지켜진다 (침대 노드 포함)", () => {
+    const rig = unlocked();
+    rig.engine.setBed("bed.night");
+    const bedNodes = rig.engine.activeNodes();
+    expect(bedNodes).toBe(bedNodeCount(BEDS["bed.night"]));
+    const pick = seededRandInt(77);
+    for (let i = 0; i < 300; i += 1) {
+      rig.engine.play(SFX_IDS[pick(SFX_IDS.length)]!);
+      rig.fake.clock.advance(pick(90));
+      const info = rig.engine.voiceInfo();
+      const allZero = info.every((v) => v.prio === 0);
+      if (rig.engine.activeNodes() > NODE_BUDGET) expect(allZero, `step ${i}`).toBe(true);
+    }
+  });
+});
+
+describe("숨김·복귀 (D-9)", () => {
+  it("hidden(): master 120ms 페이드 뒤 suspend, 침대 타이머 정지, state suspended", () => {
+    const rig = unlocked();
+    const ctx = rig.fake.ctx();
+    rig.engine.setBed("bed.day");
+    rig.fake.clock.advance(500);
+    const master = graphOf(ctx).master;
+    const t = ctx.currentTime;
+    rig.engine.hidden();
+    expect(lastRamp(master)).toMatchObject({ value: 0 });
+    expect(lastRamp(master)!.time).toBeCloseTo(t + 0.12, 6);
+    expect(ctx.suspendCalls).toBe(0);
+    rig.fake.clock.advance(130);
+    expect(ctx.suspendCalls).toBe(1);
+    expect(rig.engine.state()).toBe("suspended");
+    const n = ctx.sources().length;
+    rig.fake.clock.advance(3000);
+    expect(ctx.sources()).toHaveLength(n);
+    rig.engine.play("ui.tap");
+    expect(rig.engine.log().at(-1)!.played).toBe(false);
+  });
+
+  it("visible(): resume 성공이면 master 복구, 현재 침대만 되살린다(숨겨진 동안의 대본·일회성은 없다)", async () => {
+    const rig = unlocked();
+    const ctx = rig.fake.ctx();
+    rig.engine.setBed("bed.day");
+    rig.engine.runScript("verdict", [{ at: 1000, id: "ballot.yes" }]);
+    rig.fake.clock.advance(200);
+    rig.engine.hidden();
+    rig.fake.clock.advance(2000);
+    rig.engine.clearLog();
+    const resumes = ctx.resumeCalls;
+    const n = ctx.sources().length;
+    await rig.engine.visible();
+    expect(ctx.resumeCalls).toBe(resumes + 1);
+    expect(rig.engine.state()).toBe("running");
+    expect(lastRamp(graphOf(ctx).master)).toMatchObject({ value: MASTER_GAIN });
+    rig.fake.clock.advance(1500);
+    expect(ctx.sources().length).toBeGreaterThan(n);
+    expect(rig.engine.log().filter((e) => e.id === "ballot.yes")).toHaveLength(0);
+  });
+
+  it("visible() 에서 resume 이 거절되면 locked", async () => {
+    const rig = unlocked();
+    const ctx = rig.fake.ctx();
+    rig.engine.hidden();
+    rig.fake.clock.advance(200);
+    ctx.resumeMode = "reject";
+    await rig.engine.visible();
+    expect(rig.engine.state()).toBe("locked");
+  });
+
+  it("120ms 안에 다시 보이면 suspend 하지 않는다", async () => {
+    const rig = unlocked();
+    const ctx = rig.fake.ctx();
+    rig.engine.hidden();
+    rig.fake.clock.advance(50);
+    await rig.engine.visible();
+    rig.fake.clock.advance(500);
+    expect(ctx.suspendCalls).toBe(0);
+    expect(rig.engine.state()).toBe("running");
+  });
+
+  it("컨텍스트가 없을 때의 hidden/visible 은 아무 일도 없다", async () => {
+    const rig = makeRig();
+    rig.engine.hidden();
+    await rig.engine.visible();
+    expect(rig.fake.contexts).toHaveLength(0);
+  });
+});
+
+describe("대본 예약·취소", () => {
+  it("항목을 at ms 뒤에 play 하고 gainDb 를 로그 gain 에 싣는다", () => {
+    const rig = unlocked();
+    rig.engine.runScript("k", [
+      { at: 100, id: "ui.tap" },
+      { at: 500, id: "kill.slash", gainDb: -6 },
+    ]);
+    rig.fake.clock.advance(99);
+    expect(rig.engine.log()).toHaveLength(0);
+    rig.fake.clock.advance(2);
+    expect(rig.engine.log().map((e) => e.id)).toEqual(["ui.tap"]);
+    rig.fake.clock.advance(400);
+    const slash = rig.engine.log().at(-1)!;
+    expect(slash).toMatchObject({ id: "kill.slash", played: true });
+    expect(slash.gain).toBeCloseTo(10 ** (-6 / 20), 6);
+  });
+
+  it("같은 key 로 다시 부르면 이전 것을 취소한다", () => {
+    const rig = unlocked();
+    rig.engine.runScript("k", [{ at: 300, id: "ui.tap" }]);
+    rig.engine.runScript("k", [{ at: 300, id: "ui.deny" }]);
+    rig.fake.clock.advance(400);
+    expect(rig.engine.log().map((e) => e.id)).toEqual(["ui.deny"]);
+  });
+
+  it("cancelScript·stopAll·setOn(false)·hidden() 이 남은 타이머를 모두 지운다", () => {
+    const run = (cancel: (e: ReturnType<typeof makeRig>["engine"]) => void): string[] => {
+      const rig = unlocked();
+      rig.engine.runScript("a", [{ at: 300, id: "ui.tap" }]);
+      rig.engine.runScript("b", [{ at: 400, id: "ui.deny" }]);
+      cancel(rig.engine);
+      rig.fake.clock.advance(1000);
+      return rig.engine.log().map((e) => e.id);
+    };
+    expect(run((e) => e.cancelScript("a"))).toEqual(["ui.deny"]);
+    expect(run((e) => e.stopAll())).toEqual([]);
+    expect(run((e) => e.setOn(false))).toEqual([]);
+    expect(run((e) => e.hidden())).toEqual([]);
+  });
+
+  it("이미 소리 중인 보이스는 자연 종료까지 둔다(cancelScript)", () => {
+    const rig = unlocked();
+    rig.engine.runScript("a", [{ at: 0, id: "game.start" }]);
+    rig.fake.clock.advance(10);
+    expect(rig.engine.voiceCount()).toBe(1);
+    rig.engine.cancelScript("a");
+    expect(rig.engine.voiceCount()).toBe(1);
+  });
+
+  it("덕킹 구간을 함께 주면 fromMs 에 내리고 toMs 에서 returnMs 로 복귀한다", () => {
+    const rig = unlocked();
+    const bgm = graphOf(rig.fake.ctx()).bgm;
+    rig.engine.runScript("v", [], { fromMs: 200, toMs: 900, db: -14, returnMs: 800 });
+    expect(bgm.gain.of("target")).toHaveLength(0);
+    rig.fake.clock.advance(201);
+    expect(bgm.gain.of("target")).toHaveLength(1);
+    rig.fake.clock.advance(700);
+    const t = bgm.gain.of("target");
+    expect(t).toHaveLength(2);
+    expect(t[1]!.tc).toBeCloseTo(0.8, 6);
+  });
+
+  it("stopAll 은 침대와 보이스도 멈추고 침대를 비운다", () => {
+    const rig = unlocked();
+    rig.engine.setBed("bed.day");
+    rig.engine.play("game.start");
+    rig.engine.stopAll();
+    expect(rig.engine.currentBed()).toBeNull();
+    expect(rig.engine.voiceCount()).toBe(0);
+    const n = rig.fake.ctx().sources().length;
+    rig.fake.clock.advance(3000);
+    expect(rig.fake.ctx().sources()).toHaveLength(n);
+  });
+});
+
+describe("미지원 환경의 침대·대본", () => {
+  it("컨텍스트가 없어도 setBed·runScript·hidden·visible 이 예외 없이 끝난다", async () => {
+    const rig = makeRig({ createContext: () => null });
+    rig.engine.unlock();
+    expect(() => rig.engine.setBed("bed.day")).not.toThrow();
+    expect(() => rig.engine.runScript("k", [{ at: 10, id: "ui.tap" }])).not.toThrow();
+    rig.fake.clock.advance(50);
+    rig.engine.hidden();
+    await rig.engine.visible();
+    expect(rig.engine.log().every((e) => !e.played)).toBe(true);
   });
 });
