@@ -1,7 +1,7 @@
 // 결과 화면 E2E 순수 판정 단위 테스트 (11-05). 실행: node --test scripts/e2e/result.test.mjs
 import test from "node:test";
 import assert from "node:assert/strict";
-import { awardChecks, AWARD_PLATE, RESULT_JOB_OUTFIT, RESULT_MARKERS, RESULT_PANEL_H, RESULT_WIN_TITLE, RESULT_TAB_IDS, resultSkipChecks, resultStageChecks, resultTabChecks, TIMELINE_CARD, timelineChecks } from "./result.mjs";
+import { awardChecks, AWARD_PLATE, READY_PILL, rematchChecks, RESULT_JOB_OUTFIT, RESULT_MARKERS, RESULT_PANEL_H, RESULT_WIN_TITLE, RESULT_TAB_IDS, resultSkipChecks, resultStageChecks, resultTabChecks, TIMELINE_CARD, timelineChecks } from "./result.mjs";
 
 // 4명판 시민 승: 좌석 0 마피아(진 팀) · 1 시민 · 2 경찰 · 3 의사
 const good = () => ({
@@ -441,4 +441,136 @@ test("timelineChecks: 측정값이 없으면 조용히 통과하지 않고 측�
 
 test("RESULT_MARKERS: 기록 탭 표식 3개가 더해져 있다 (11-11)", () => {
   for (const m of ["data-day-card", "data-day-detail", "data-whisper-pair"]) assert.equal(RESULT_MARKERS.includes(m), true, m);
+});
+
+
+// ---------- 11-12: 다시 하기 (rematchChecks RM1~RM12) ----------
+// 방장 360×560 + 손님 430×932. 5명판(방장·봇·손님 셋) 중 둘이 준비 → 참가자 4, 쉬는 사람 1.
+const rmGood = () => ({
+  viewport: { w: 360, h: 560 },
+  pillBox: { width: 96, height: 48 },
+  inputWidth: 168,
+  guestPill: { before: { ready: "false", pressed: "false" }, after: { ready: "true", pressed: "true" } },
+  count: { text: "2/5", dim: true, disabled: true },
+  countWant: { n: 2, m: 5, minPlayers: 4 },
+  countFull: { text: "4/5", dim: false, disabled: false },
+  countFullWant: { n: 4, m: 5, minPlayers: 4 },
+  toast: "4명부터 시작해요",
+  minPlayers: 4,
+  roundUnchanged: true,
+  sheet: { title: "이번 판은 쉬어요", buttons: ["시작", "취소"], faces: 1, extraText: "" },
+  restingWant: 1,
+  round: { before: 1, after: 2, phases: ["assigning", "assigning", "assigning"] },
+  benchView: true,
+  bench: { timers: 0, chatInputs: 0, floats: 0, text: "이번 판은 쉬어요", buttons: ["나가기"] },
+  looks: { 2: "noir" },
+  looksWant: { 2: "noir" },
+  chat: { before: 1, old: 0 },
+  sat: { seats: [4], want: [4], chipsOnSat: 0, chips: 4, participants: 4 },
+  ceremony: { pillActive: true, plateVsPill: false, skipVsPill: false },
+  early: { disabled: true },
+});
+const rmFailing = (over) => rematchChecks({ ...rmGood(), ...over }).filter((r) => !r.ok).map((r) => r.id);
+
+test("READY_PILL: 알약 96×48, 입력줄 여백 192", () => {
+  assert.deepEqual({ ...READY_PILL }, { w: 96, h: 48, inputExtra: 192 });
+});
+
+test("rematchChecks: 정상 입력은 RM1~RM12 가 모두 통과한다", () => {
+  const rows = rematchChecks(rmGood());
+  assert.deepEqual(rows.map((r) => r.id), ["RM1", "RM2", "RM3", "RM4", "RM5", "RM6", "RM7", "RM8", "RM9", "RM10", "RM11", "RM12"]);
+  for (const r of rows) assert.equal(r.ok, true, `${r.id}: ${r.detail}`);
+});
+
+test("RM1: 알약 96×48 ±1 이고 입력칸 폭 = 폭 − 192 ±2", () => {
+  assert.deepEqual(rmFailing({ pillBox: { width: 100, height: 48 } }), ["RM1"]);
+  assert.deepEqual(rmFailing({ pillBox: { width: 96, height: 44 } }), ["RM1"]);
+  assert.deepEqual(rmFailing({ inputWidth: 180 }), ["RM1"]);
+  assert.deepEqual(rmFailing({ inputWidth: 169.5, pillBox: { width: 96.9, height: 48.9 } }), []); // 오차 안
+  assert.deepEqual(rmFailing({ viewport: { w: 430, h: 932 }, inputWidth: 238 }), []);
+  assert.deepEqual(rmFailing({ viewport: { w: 430, h: 932 }, inputWidth: 168 }), ["RM1"]);
+});
+
+test("RM2: 손님 토글 전후로 data-ready 와 aria-pressed 가 반대로 바뀌고 서로 같다", () => {
+  assert.deepEqual(rmFailing({ guestPill: { before: { ready: "false", pressed: "false" }, after: { ready: "false", pressed: "false" } } }), ["RM2"]);
+  assert.deepEqual(rmFailing({ guestPill: { before: { ready: "false", pressed: "false" }, after: { ready: "true", pressed: "false" } } }), ["RM2"]);
+  assert.deepEqual(rmFailing({ guestPill: { before: { ready: "true", pressed: "true" }, after: { ready: "false", pressed: "false" } } }), []);
+});
+
+test("RM3: 방장 data-ready-count 가 'n/m' 꼴이고 준비 상태와 같다 — n < 최소면 흐림, 이상이면 흐림 없음", () => {
+  assert.deepEqual(rmFailing({ count: { text: "2 / 5", dim: true, disabled: true } }), ["RM3"]); // 꼴이 다르다
+  assert.deepEqual(rmFailing({ count: { text: "3/5", dim: true, disabled: true } }), ["RM3"]); // 값이 다르다
+  assert.deepEqual(rmFailing({ count: { text: "2/5", dim: false, disabled: false } }), ["RM3"]); // 4 미만인데 흐리지 않다
+  assert.deepEqual(rmFailing({ countFull: { text: "4/5", dim: true, disabled: true } }), ["RM3"]); // 4 이상인데 흐리다
+  assert.deepEqual(rmFailing({ countFull: { text: "4/6", dim: false, disabled: false } }), ["RM3"]);
+});
+
+test("RM4: 4명 미만에서 방장이 탭하면 토스트 '4명부터 시작해요' 만 — 판은 시작하지 않는다", () => {
+  assert.deepEqual(rmFailing({ toast: "" }), ["RM4"]);
+  assert.deepEqual(rmFailing({ toast: "5명부터 시작해요" }), ["RM4"]);
+  assert.deepEqual(rmFailing({ roundUnchanged: false }), ["RM4"]);
+});
+
+test("RM5: 쉬게 될 사람이 있으면 시트가 뜨고 얼굴 수 = 쉬는 사람 수, 글은 '이번 판은 쉬어요' 하나 + [시작][취소]", () => {
+  assert.deepEqual(rmFailing({ sheet: { ...rmGood().sheet, faces: 2 } }), ["RM5"]);
+  assert.deepEqual(rmFailing({ sheet: { ...rmGood().sheet, title: "쉬어요" } }), ["RM5"]);
+  assert.deepEqual(rmFailing({ sheet: { ...rmGood().sheet, buttons: ["취소", "시작"] } }), ["RM5"]);
+  assert.deepEqual(rmFailing({ sheet: { ...rmGood().sheet, extraText: "하준" } }), ["RM5"]); // 이름 글자가 보인다
+  assert.deepEqual(rmFailing({ sheet: null }), ["RM5"]);
+});
+
+test("RM6: 시작 뒤 참가자 round 가 이전 + 1 이고 단계가 assigning, 쉬는 페이지에 BenchView", () => {
+  assert.deepEqual(rmFailing({ round: { before: 1, after: 1, phases: ["assigning"] } }), ["RM6"]);
+  assert.deepEqual(rmFailing({ round: { before: 1, after: 2, phases: ["assigning", "ended"] } }), ["RM6"]);
+  assert.deepEqual(rmFailing({ benchView: false }), ["RM6"]);
+});
+
+test("RM7: 쉬는 페이지에 타이머·채팅 입력·떠 있는 버튼·꾸미기가 없고 글은 한 줄 + [나가기]", () => {
+  assert.deepEqual(rmFailing({ bench: { ...rmGood().bench, timers: 1 } }), ["RM7"]);
+  assert.deepEqual(rmFailing({ bench: { ...rmGood().bench, chatInputs: 1 } }), ["RM7"]);
+  assert.deepEqual(rmFailing({ bench: { ...rmGood().bench, floats: 1 } }), ["RM7"]);
+  assert.deepEqual(rmFailing({ bench: { ...rmGood().bench, text: "대기실" } }), ["RM7"]);
+  assert.deepEqual(rmFailing({ bench: { ...rmGood().bench, buttons: ["나가기", "꾸미기"] } }), ["RM7"]);
+});
+
+test("RM8: 시작 전에 고른 look 이 새 판에서도 같다", () => {
+  assert.deepEqual(rmFailing({ looks: { 2: "coat" } }), ["RM8"]);
+  assert.deepEqual(rmFailing({ looks: {} }), ["RM8"]);
+  assert.deepEqual(rmFailing({ looksWant: {} }), ["RM8"]); // 기대가 비면 검사가 비어 있다
+});
+
+test("RM9: 새 판 기록 칸에 이전 판 채팅 본문이 0줄 (이전에는 있었다)", () => {
+  assert.deepEqual(rmFailing({ chat: { before: 1, old: 1 } }), ["RM9"]);
+  assert.deepEqual(rmFailing({ chat: { before: 0, old: 0 } }), ["RM9"]); // 보낸 줄이 없었으면 검사가 비어 있다
+});
+
+test("RM10: 다음 결과에서 쉬었던 사람이 sat 이고 칩이 없다 (칩 수 = 참가자 수)", () => {
+  assert.deepEqual(rmFailing({ sat: { ...rmGood().sat, seats: [] } }), ["RM10"]);
+  assert.deepEqual(rmFailing({ sat: { ...rmGood().sat, seats: [3] } }), ["RM10"]);
+  assert.deepEqual(rmFailing({ sat: { ...rmGood().sat, chipsOnSat: 1 } }), ["RM10"]);
+  assert.deepEqual(rmFailing({ sat: { ...rmGood().sat, chips: 5 } }), ["RM10"]);
+});
+
+test("RM11: 시상식 중 알약이 활성이고 패·[넘기기]와 겹치지 않는다", () => {
+  assert.deepEqual(rmFailing({ ceremony: { pillActive: false, plateVsPill: false, skipVsPill: false } }), ["RM11"]);
+  assert.deepEqual(rmFailing({ ceremony: { pillActive: true, plateVsPill: true, skipVsPill: false } }), ["RM11"]);
+  assert.deepEqual(rmFailing({ ceremony: { pillActive: true, plateVsPill: false, skipVsPill: true } }), ["RM11"]);
+});
+
+test("RM12: 승리 조명 전에는 알약이 비활성(aria-disabled)", () => {
+  assert.deepEqual(rmFailing({ early: { disabled: false } }), ["RM12"]);
+});
+
+test("rematchChecks: 측정값이 없으면 조용히 통과하지 않고 측정값 없음으로 실패한다", () => {
+  const rows = rematchChecks({});
+  assert.equal(rows.length, 12);
+  for (const r of rows) {
+    assert.equal(r.ok, false, r.id);
+    assert.match(r.detail, /측정값 없음/, r.id);
+  }
+  assert.match(rematchChecks(undefined)[0].detail, /측정값 없음/);
+});
+
+test("RESULT_MARKERS: 다시 하기 표식 4개가 더해져 있다 (11-12)", () => {
+  for (const m of ["data-ready-pill", "data-ready", "data-ready-count", "data-bench-view"]) assert.equal(RESULT_MARKERS.includes(m), true, m);
 });

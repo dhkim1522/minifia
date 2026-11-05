@@ -361,6 +361,7 @@ describe("11페이즈 결과 화면 E2E 표식·표(11-05)", () => {
     AWARD_PLATE: { maxW: number; sideMargin: number; h: number; topGap: number; belowMin: number; float: number; floatRight: number; floatGap: number };
     AWARD_CEREMONY_TITLE: string;
     TIMELINE_CARD: { w: number; h: number; gap: number };
+    READY_PILL: { w: number; h: number; inputExtra: number };
   };
   const root = new URL("../../", import.meta.url);
   const tracked = execFileSync("git", ["ls-files", "src"], { cwd: root, encoding: "utf8" })
@@ -369,7 +370,7 @@ describe("11페이즈 결과 화면 E2E 표식·표(11-05)", () => {
   const sources = tracked.map((f) => ({ f, text: readFileSync(new URL(f, root), "utf8") }));
 
   it("RESULT_MARKERS 가 git 이 추적하는 src/ 파일 어딘가에 있다(표식 이름 오타 방지)", () => {
-    expect(r.RESULT_MARKERS).toEqual(["data-result-stage", "data-result-panel", "data-result-announce", "__mfResult", "data-result-tab", "data-result-dot", "data-result-divider", "data-award-plate", "data-award-id", "data-float-count", "data-day-card", "data-day-detail", "data-whisper-pair"]);
+    expect(r.RESULT_MARKERS).toEqual(["data-result-stage", "data-result-panel", "data-result-announce", "__mfResult", "data-result-tab", "data-result-dot", "data-result-divider", "data-award-plate", "data-award-id", "data-float-count", "data-day-card", "data-day-detail", "data-whisper-pair", "data-ready-pill", "data-ready", "data-ready-count", "data-bench-view"]);
     const missing = r.RESULT_MARKERS.filter((m) => !sources.some((s) => s.text.includes(m)));
     expect(missing).toEqual([]);
   });
@@ -434,6 +435,22 @@ describe("11페이즈 결과 화면 E2E 표식·표(11-05)", () => {
     expect(has("components/v2/TimelineStrip.tsx", "data-day-card")).toBe(true);
     expect(has("components/v2/DayDetail.tsx", "data-day-detail")).toBe(true);
     expect(has("components/v2/DayDetail.tsx", "data-whisper-pair")).toBe(true);
+  });
+
+  it("11-12: 다시 하기 알약·쉬는 사람 화면 표식과 훅 sat 가 앱에 있고, 알약 치수가 CSS 와 같다", () => {
+    const has = (file: string, marker: string) => sources.some((s) => s.f.endsWith(file) && s.text.includes(marker));
+    expect(has("components/v2/ReadyPill.tsx", "data-ready-pill")).toBe(true);
+    expect(has("components/v2/ReadyPill.tsx", "data-ready=")).toBe(true);
+    expect(has("components/v2/ReadyPill.tsx", "data-ready-count")).toBe(true);
+    expect(has("screens/BenchView.tsx", "data-bench-view")).toBe(true);
+    expect(has("world/testHooks.ts", "sat: number[]")).toBe(true); // window.__mfResult.sat
+    expect(has("screens/ResultScreen.tsx", "sat: satSeats")).toBe(true);
+    const css = readFileSync(new URL("src/styles/v2.css", root), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+    const pill = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].find((m) => (m[1] ?? "").trim() === ".mv-ready")?.[2] ?? "";
+    expect(pill).toContain(`width: ${r.READY_PILL.w}px`);
+    expect(pill).toContain(`height: ${r.READY_PILL.h}px`);
+    // 입력줄 여백 192 = 보내기 48 + 알약 96 + 요소 사이 8 × 2 + 좌우 16 × 2
+    expect(48 + r.READY_PILL.w + 8 * 2 + 16 * 2).toBe(r.READY_PILL.inputExtra);
   });
 });
 
