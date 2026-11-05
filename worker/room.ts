@@ -1,6 +1,6 @@
 import { DurableObject } from "cloudflare:workers";
 import { CLOSE_CODES, MAX_FRAME_BYTES } from "../shared/protocol";
-import type { ApiErrorCode, BadgeId, BotVoteExec, BotVotePick, ChatRejectWhy, ClientMessage, RemovedReason, RoomPreview, ServerMessage, WorldFrame, WsErrorCode } from "../shared/protocol";
+import type { ApiErrorCode, BadgeId, BotVoteExec, BotVotePick, ChatChannel, ChatRejectWhy, ClientMessage, EmoteId, RemovedReason, RoomPreview, ServerMessage, WorldFrame, WsErrorCode } from "../shared/protocol";
 import { botMafiaTarget, botWakeAt, isBot, syncBotPlan, takeDueBotSteps } from "../shared/game/bots";
 import type { BotStep } from "../shared/game/bots";
 import { isAlive } from "../shared/game/alive";
@@ -95,6 +95,8 @@ export class Room extends DurableObject<Env> {
   private chatLog: ChatLog = emptyChatLog();
   // 사람(봇 포함)별 최근 전송 기록(D5 도배 제한). 인메모리라 하이버네이션으로 비면 새로 센다(수용) — 제한이 한 번 느슨해질 뿐이다.
   private readonly chatRates = new Map<string, ChatSenderRate>();
+  // 동작 채널별 번호(결정 0068, 10-01). 인메모리 — 동작은 사건이라 저장하지 않는다(L28).
+  private readonly emoteSeq: Record<ChatChannel, number> = { all: 0, mafia: 0, ghost: 0 };
   // 유언·쪽지 저장 간격 기록(키 `will:{id}`·`note:{id}` -> 마지막으로 받아들인 저장 ms, 결정 0061-10, 가정 A1, T-09-27). 인메모리라 하이버네이션으로 비면 새로 센다 — 한 번 더 받아들일 뿐이다(수용).
   // 받아들여 상태가 바뀐 저장만 기록하고, 거절·같은 값은 기록하지 않는다. 간격 안의 요청은 오류 프레임 없이 버린다.
   private readonly writeAt = new Map<string, number>();
@@ -278,6 +280,9 @@ export class Room extends DurableObject<Env> {
         return;
       case "typing":
         this.handleTyping(ws, msg.on, msg.pk);
+        return;
+      case "emote":
+        this.handleEmote(ws, msg.id, msg.pk);
         return;
       case "chat":
         await this.handleChat(ws, msg.text, msg.pk);
@@ -1288,6 +1293,32 @@ export class Room extends DurableObject<Env> {
     const others = new Set(audience(room, { k: "typing", ch }));
     others.delete(playerId);
     this.deliver(others, { t: "typing", seat: me.seat, on });
+  }
+
+  // 동작(10-01, 결정 D-12·D-19): 신원은 소켓 첨부 playerId 뿐이고 채널은 서버가 보낸 사람 상태로 정한다(channelOf). 버림에는 어떤 프레임도 없다 —
+  // 오류·chatReject·state 재전송은 단계/역할을 묻는 오라클이 되기 때문이다(L30). 동작은 사건이라 state·chatLog·저장소에 남지 않고 재접속 때 재생되지 않는다(L28).
+  //  - pk 가 서버 단계 키와 다르면 버린다 — 지금 단계의 채널로 다시 분류하지 않는다(T-10-02).
+  //  - 받는 사람은 audience(emote) 가 정한다(보낸 사람 포함). 계산한 그 자리에서 바로 보낸다(await 없음).
+  //  - 서버 봇은 동작을 하지 않는다(O-7) — 이 처리기는 handleEmote 하나만 부른다.
+  private handleEmote(ws: WebSocket, id: EmoteId, pk: string): void {
+    const att = this.attachmentOf(ws);
+    if (!att || !this.room) return;
+    this.applyEmote(att.playerId, id, pk, Date.now());
+  }
+
+  private applyEmote(playerId: string, id: EmoteId, pk: string, _now: number): void {
+    const room = this.room;
+    if (!room) return;
+    if (pk !== phaseKey({ phase: room.phase, day: room.day })) return;
+    const ch = channelOf(room, playerId);
+    if (ch === null) return;
+    const me = room.players.find((p) => p.id === playerId);
+    if (!me) return;
+    const ids = audience(room, { k: "emote", ch });
+    // 번호는 채널별로 센다 — 받지 못한 프레임의 번호 틈이 시민 편에 새지 않게(채팅 seq 와 같은 이유, 결정 0068). 인메모리라 하이버네이션으로 비면 1 부터 다시 센다(무해).
+    const n = (this.emoteSeq[ch] ?? 0) + 1;
+    this.emoteSeq[ch] = n;
+    this.deliver(ids, { t: "emote", seat: me.seat, id, n });
   }
 
   // 자유 채팅(07-11, CHAT-01·02·03·05): 신원은 소켓 첨부 playerId 뿐이고 채널은 서버가 보낸 사람 상태로 정한다(결정 0002).

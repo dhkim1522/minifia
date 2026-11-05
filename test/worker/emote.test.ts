@@ -31,7 +31,7 @@ describe("동작 — 트레이서 (D-12, L27)", () => {
     const socks = [s.host, g1.sock, g2.sock];
     for (const k of socks) await settle(k, 0);
     emoteSend(g1.sock, "clap");
-    await settle(g1.sock, 0);
+    for (const k of socks) await settle(k, 0);
     const m = mark(s.host);
     emoteSend(g2.sock, "dance");
     const got = emotes(await settle(s.host, m));

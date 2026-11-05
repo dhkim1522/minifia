@@ -1,8 +1,8 @@
 // 서버 전용 입력 검증 스키마(zod 값 import). Worker 만 이 파일을 import 한다 — src/ 가 import 하면 클라이언트 번들에 zod 가 들어간다.
 import { z } from "zod";
 import { NICKNAME_MAX_UTF16 } from "./nickname";
-import { CHAT_TEXT_MAX_UTF16, MAX_TEST_BOTS, MOVE_COORD_LIMIT, PHASE_KEY_MAX } from "./protocol";
-import type { ChatSendMessage, ClientMessage, CreateRoomBody, JoinRoomBody, MoveMessage, NoteSendMessage, TypingSendMessage, WillSendMessage } from "./protocol";
+import { CHAT_TEXT_MAX_UTF16, EMOTE_IDS, MAX_TEST_BOTS, MOVE_COORD_LIMIT, PHASE_KEY_MAX } from "./protocol";
+import type { ChatSendMessage, ClientMessage, CreateRoomBody, EmoteSendMessage, JoinRoomBody, MoveMessage, NoteSendMessage, TypingSendMessage, WillSendMessage } from "./protocol";
 
 // 상한은 UTF-16 길이다. 제품 규칙(8 자소)은 validateNickname 이 판정한다 — 여기서 64 처럼 낮게 잡으면
 // 자소 8 개짜리 유효 이름(가족 이모지 88 단위)이 스키마에서 먼저 400 으로 막힌다(06 리뷰 WR-03).
@@ -26,6 +26,14 @@ export const TypingMessageSchema = z.strictObject({
   on: z.boolean(),
   pk: z.string().min(1).max(PHASE_KEY_MAX),
 }) satisfies z.ZodType<TypingSendMessage>;
+
+// 동작(10-01, 결정 D-12·D-19): 종류 id(enum)와 단계 키뿐이다. 좌석·채널·수신자·시각이 덧붙으면 거부한다 — 채널은 서버가 보낸 사람 상태로 정한다(결정 0002).
+// ClientMessageSchema 의 멤버다 — 이 값이 먼저 선언되어야 유니온이 쓸 수 있다(TDZ).
+export const EmoteMessageSchema = z.strictObject({
+  t: z.literal("emote"),
+  id: z.enum(EMOTE_IDS),
+  pk: z.string().min(1).max(PHASE_KEY_MAX),
+}) satisfies z.ZodType<EmoteSendMessage>;
 
 // 자유 채팅 한 줄(07-11, CHAT-01): 본문과 단계 키뿐이다. 채널·좌석·신원(ch·seat·id)이 덧붙으면 거부한다 — 채널은 서버가 보낸 사람 상태로 정한다(결정 0002, T-07-23).
 // 본문 상한은 UTF-16 300 — 프레임 1024B 안. 제품 규칙(자소 100)은 sanitizeChatText 가 판정한다(Pitfall 12).
@@ -78,6 +86,7 @@ export const ClientMessageSchema = z.discriminatedUnion("t", [
   // 로비 이동(결정 0044-17, 06-08): 목적지 두 정수뿐. 행위자는 소켓 첨부 playerId 로만 정해진다(T-06-17).
   MoveMessageSchema,
   TypingMessageSchema,
+  EmoteMessageSchema,
   ChatMessageSchema,
   WillMessageSchema,
   NoteMessageSchema,

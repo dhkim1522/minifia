@@ -245,6 +245,8 @@ export type ClientMessage =
   | MoveMessage
   // 입력 중 — 채널 필드 없음, 서버가 보낸 사람 상태로 채널을 정한다(결정 0002). 받는 사람은 audience(07-10)
   | TypingSendMessage
+  // 동작(몸짓, 결정 D-12·D-19) — 종류 id 와 단계 키뿐이다. 채널·수신자·좌석·시각은 보내지 않는다. 채널은 서버가 보낸 사람 상태로 정한다(channelOf)
+  | EmoteSendMessage
   // 자유 채팅 한 줄 — 본문과 단계 키뿐, 채널 필드 없음(결정 0002). 정리·제한·채널은 서버가 정한다(07-11)
   | ChatSendMessage
   // 유언·쪽지 저장(9페이즈 결정 0061-9·10) — 본문 text 하나뿐이다. 행위자는 소켓 첨부 playerId 뿐이고 seat·id·채널은 없다.
@@ -388,12 +390,29 @@ export interface TypingSendMessage {
   on: boolean;
   pk: string;
 }
+/** 동작 보내기(10페이즈, 결정 D-12·D-19). pk 가 서버 단계 키와 다르면 더 넓은 채널로 돌리지 않고 폐기한다. */
+export interface EmoteSendMessage {
+  t: "emote";
+  id: EmoteId;
+  pk: string;
+}
 /** 스키마 상한(UTF-16). 제품 규칙은 자소 100 이고 정확한 판정은 sanitizeChatText 가 한다. 1024B 프레임 안에 든다. */
 export const CHAT_TEXT_MAX_UTF16 = 300;
 export const PHASE_KEY_MAX = 32;
-/** 동작(몸짓) 종류 아홉 개(UI-SPEC 동작 종류 표). 10페이즈가 재사용한다 — 7페이즈는 표만 둔다. */
+/** 동작(몸짓) 종류 아홉 개(UI-SPEC 동작 종류 표). 10페이즈가 보내기·받기에 쓴다(shared/game/emote.ts 규칙, worker/room.ts 처리기). */
 export const EMOTE_IDS = ["throat", "deny", "clap", "cry", "handshake", "point", "praise", "surprise", "dance"] as const;
 export type EmoteId = (typeof EMOTE_IDS)[number];
+
+/**
+ * 동작 프레임(결정 D-12). 키는 t·seat·id·n 뿐이다 — 채널·역할·player id·시각이 없다.
+ * n 은 채널(all·mafia·ghost)별 번호다: 방 전체로 세면 받지 못한 프레임의 틈이 시민 편에 새므로 채팅 seq 와 같은 이유로 따로 센다(결정 0068).
+ */
+export interface EmoteFrame {
+  t: "emote";
+  seat: number;
+  id: EmoteId;
+  n: number;
+}
 
 export type ServerMessage =
   | { t: "state"; view: RoomView }
@@ -403,6 +422,7 @@ export type ServerMessage =
   | ChatRejectFrame // 거절 — 보낸 소켓에만(07-11)
   | ChatLogFrame // 접속 직후 복원 — 타입과 연결 훅만 07-11, 보내기는 07-14
   | WorldFrame
-  | TypingFrame; // 입력 중 — 같은 채널의 다른 소켓에만 간다(audience, 07-10)
+  | TypingFrame // 입력 중 — 같은 채널의 다른 소켓에만 간다(audience, 07-10)
+  | EmoteFrame; // 동작 — audience(emote) 소켓에만, 보낸 사람 포함(10-01)
 export const CLOSE_CODES = { REPLACED: 4001, REMOVED: 4003 } as const;
 export type RemovedReason = "left" | "kicked" | "invalid_token" | "room_closed";
