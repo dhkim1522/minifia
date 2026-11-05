@@ -6,6 +6,7 @@ import type { BotStep } from "../shared/game/bots";
 import { isAlive } from "../shared/game/alive";
 import { ballotsCardText } from "../shared/game/ballots";
 import { audience, channelOf, phaseKey, worldVisibleTo } from "../shared/game/audience";
+import { bumpStat } from "../shared/game/stats";
 import { CHAT_KEY_PREFIX, appendLine, appendWhisperPair, chatKey, emptyChatLog, replayFor, restoreChatLog, seatMask, toWire } from "../shared/game/chatLog";
 import type { ChatLog } from "../shared/game/chatLog";
 import { checkChatSend, sanitizeChatText, typingRelay } from "../shared/game/chatRules";
@@ -1361,6 +1362,12 @@ export class Room extends DurableObject<Env> {
     const n = (this.emoteSeq[ch] ?? 0) + 1;
     this.emoteSeq[ch] = n;
     this.deliver(ids, { t: "emote", seat: me.seat, id, n });
+    // 판 통계(D-6): 게이트가 받아들인 동작만 센다. 동기 처리기(L28)라 방 상태는 바로 갱신하고 저장은 시작만 한다 — persistAndBroadcast 는 전원 방송이 타이밍을 흘린다.
+    const counted = bumpStat(room, playerId, "emote");
+    if (counted !== room) {
+      this.room = counted;
+      void this.ctx.storage.put("room", counted);
+    }
   }
 
   // 자유 채팅(07-11, CHAT-01·02·03·05): 신원은 소켓 첨부 playerId 뿐이고 채널은 서버가 보낸 사람 상태로 정한다(결정 0002).
@@ -1406,6 +1413,14 @@ export class Room extends DurableObject<Env> {
     await this.ctx.storage.put(chatKey(appended.record.g), appended.record);
     if (appended.evicted.length > 0) await this.deleteChatKeys(appended.evicted.map(chatKey));
     this.deliver(ids, { t: "chat", ...toWire(appended.record) });
+    // 판 통계(D-6, O-16): 받아들여진 all 채널 줄만 센다(마피아·유령 채널은 세지 않는다). 방은 저장 await 사이에 바뀌었을 수 있어 지금 방에서 올린다. 저장만 하고 방송하지 않는다.
+    if (ch === "all" && this.room) {
+      const counted = bumpStat(this.room, playerId, "say");
+      if (counted !== this.room) {
+        this.room = counted;
+        await this.ctx.storage.put("room", counted);
+      }
+    }
     if (word.kind === "ok" && this.room) {
       // 저장 await 사이에 방이 바뀌었을 수 있어 지금 방에서 다시 판정한다 — 그 차례가 아직 열려 있을 때만 확정한다.
       const confirmed = acceptLastWord(this.room, playerId, clean.text, now);

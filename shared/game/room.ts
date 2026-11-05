@@ -77,6 +77,8 @@ export interface Player {
   badgeSwapped?: true;
   /** 서버 전용(O-20, 결정 0066-1). 확정 변경마다 {n: 일차, v: 새 값}. 어떤 view 에도 싣지 않는다 — 11페이즈 결과 화면 입력. */
   badgeLog?: Array<{ n: number; v: BadgeId }>;
+  /** 서버 전용(결정 D-6, L35). 판 중 받아들여진 all 채널 채팅 줄 수(say)와 동작 수(emote) — bumpStat 만 올린다. 어떤 view 에도 싣지 않는다 — 11페이즈 칭호 입력. 다시 하기 리터럴이 자동으로 버린다. */
+  stats?: { say: number; emote: number };
   /**
    * 서버 전용(결정 0024). 테스트 방 서버 봇 표시 — 토큰은 빈 문자열, connId 는 null, connected 는 true 로 고정이고
    * 소켓이 없다. view·미리보기·어떤 프레임에도 싣지 않는다(허용 목록 리터럴이라 저절로 빠진다).

@@ -110,6 +110,7 @@ describe("판 통계 — 어디에도 싣지 않는다 (L35)", () => {
     const got = await settle(fresh, m);
     expect(got.some((f) => f.t === "state")).toBe(true);
     expect(got.map(flat).join("").includes("stats")).toBe(false);
-    for (const k of g.socks) expect((await settle(k, mark(k))).map(flat).join("").includes("stats")).toBe(false);
+    // 다시 접속하면 옛 소켓은 닫히므로 나머지 소켓의 프레임만 본다.
+    for (const k of g.socks.filter((x) => x !== a.sock)) expect(k.frames.join("").includes("stats")).toBe(false);
   }, 30_000);
 });
