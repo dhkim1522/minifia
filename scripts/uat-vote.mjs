@@ -99,7 +99,7 @@ const same = (a, b) => JSON.stringify(canon(a)) === JSON.stringify(canon(b));
 const allSame = (xs) => xs.every((x) => same(x, xs[0]));
 
 // 단계 키 '일차:단계' — 받은 마지막 state 로 만든다(test/worker/helpers.ts 의 chatSend 와 같은 규칙).
-const pkOf = (c) => `${lastView(c)?.day?.n ?? 0}:${lastView(c)?.phase}`;
+const pkOf = (c) => `${lastView(c)?.round ?? 1}:${lastView(c)?.day?.n ?? 0}:${lastView(c)?.phase}`;
 const sendChat = (c, text) => send(c, { t: "chat", text, pk: pkOf(c) });
 const chatFrom = (c, seat, text, since) => c.frames.some((f) => f.at >= since && f.msg.t === "chat" && f.msg.seat === seat && f.msg.text === text);
 // chat 을 보내 chatReject 프레임의 이유를 돌려준다(응답이 없으면 "(응답 없음)").

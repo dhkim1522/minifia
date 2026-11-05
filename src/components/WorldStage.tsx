@@ -225,9 +225,9 @@ export function WorldStage(props: WorldStageProps) {
     runtimeRef.current?.setScene(props.scene ?? null);
   }, [props.scene]);
 
-  // 단계(일차:단계)가 바뀌면 재생 중인 동작을 모두 끝낸다 — 밤 → 아침으로 동작이 이어져 보이지 않게(T-10-10). 처음 마운트에서는 부르지 않는다
+  // 단계(판:일차:단계)가 바뀌면 재생 중인 동작을 모두 끝낸다 — 밤 → 아침으로 동작이 이어져 보이지 않게(T-10-10). 처음 마운트에서는 부르지 않는다
   const phaseKeySeen = useRef<string | null>(null);
-  const currentPhaseKey = phaseKey(view.day === undefined ? { phase: view.phase } : { phase: view.phase, day: view.day.n });
+  const currentPhaseKey = phaseKey({ phase: view.phase, day: view.day?.n, round: view.round });
   useLayoutEffect(() => {
     if (phaseKeySeen.current !== null && phaseKeySeen.current !== currentPhaseKey) runtimeRef.current?.stopAllEmotes();
     phaseKeySeen.current = currentPhaseKey;

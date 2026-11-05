@@ -510,7 +510,7 @@ async function chatloadOnce(browser, o, origin, chrome) {
     let lineIdx = 0;
     guests.forEach((g, i) => {
       const send = (m) => g.ws.readyState === WebSocket.OPEN && g.ws.send(JSON.stringify(m));
-      const pk = () => `${g.view?.day?.n ?? 0}:${g.view?.phase}`;
+      const pk = () => `${g.view?.round ?? 1}:${g.view?.day?.n ?? 0}:${g.view?.phase}`;
       const tick = () => {
         if (g.view?.phase !== "lobby") return;
         send({ t: "typing", on: true, pk: pk() });

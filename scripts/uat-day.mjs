@@ -1,6 +1,6 @@
 // 2페이즈 UAT 를 봇으로 대신 도는 시나리오(7페이즈 자유 채팅 기준). 봇이 방을 만들고 채워 낮 두 바퀴를 돌며 결과 표를 낸다.
 // 직업 주장 차례·빠른 메시지·이모티콘은 없다(7페이즈에서 없어졌다). 낮은 dayAnnounce → discussion 이고, 말은 자유 채팅 `{t:"chat", text, pk}` 다.
-// pk 는 받은 마지막 state 의 `${day.n ?? 0}:${phase}` 로 만든다(test/worker/helpers.ts 의 chatSend 와 같은 규칙).
+// pk 는 받은 마지막 state 의 `${round ?? 1}:${day.n ?? 0}:${phase}` 로 만든다(test/worker/helpers.ts 의 chatSend 와 같은 규칙).
 // 방장 넘기기는 없다(결정 0017-5): 1일차 토론(90초, 결정 0060-1)은 과반이 토론 끝내기를 누르면 일찍 끝나고(DAY-03), 지목(15초)·밤(30초)·아침(5초)이 서버 타이머로 지나 2일차로 간다.
 // 이 스크립트의 봇은 지목하지 않아(0표) 변론·찬반·처형 없이 곧장 밤이 된다(지목·찬반 규칙은 uat-vote.mjs).
 // 이 스크립트의 봇은 밤에 행동하지 않아 탈락자가 없다 — 밤·아침은 단계 도착 차이 표에만 나온다(밤 시나리오는 uat-night.mjs).
@@ -73,7 +73,7 @@ const send = (c, m) => c.ws.send(JSON.stringify(m));
 const spread = (xs) => Math.round(Math.max(...xs) - Math.min(...xs));
 
 // 단계 키 '일차:단계' — 받은 마지막 state 로 만든다(로비는 day 가 없어 0).
-const pkOf = (c) => `${lastView(c)?.day?.n ?? 0}:${lastView(c)?.phase}`;
+const pkOf = (c) => `${lastView(c)?.round ?? 1}:${lastView(c)?.day?.n ?? 0}:${lastView(c)?.phase}`;
 const sendChat = (c, text, pk = pkOf(c)) => send(c, { t: "chat", text, pk });
 const sendTyping = (c, on) => send(c, { t: "typing", on, pk: pkOf(c) });
 // 받은 chat 프레임(채널을 주면 그 채널만), 받은 typing·chatReject 프레임

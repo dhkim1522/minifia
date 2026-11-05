@@ -201,7 +201,7 @@ describe("귓속말 — 규칙 완성 (결정 0066-2, O-3~O-5·O-20)", () => {
       const me = room.players.find((p) => p.seat === g.actors[0]!.seat)!;
       for (let i = 0; i < 105; i += 1) {
         instance["chatRates"].clear();
-        const why = await instance["applyChat"](me.id, `줄${i}`, `${room.day ?? 0}:${room.phase}`, Date.now());
+        const why = await instance["applyChat"](me.id, `줄${i}`, `1:${room.day ?? 0}:${room.phase}`, Date.now());
         if (why !== null) throw new Error(`막힘 ${why}`);
       }
     });

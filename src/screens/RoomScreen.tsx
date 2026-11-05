@@ -243,7 +243,7 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
   useEffect(() => {
     if (view === null) return;
     const day = view.day?.n;
-    chat.setContext({ pk: phaseKey(day === undefined ? { phase: view.phase } : { phase: view.phase, day }), channel: view.me.chat ?? null, epoch: chatEpoch });
+    chat.setContext({ pk: phaseKey({ phase: view.phase, day, round: view.round }), channel: view.me.chat ?? null, epoch: chatEpoch });
   }, [chat, view, chatEpoch]);
   // 같은 접속에서 단계가 바뀌어 온 직전 단계. 역할 확인 → 낮 시작으로 DayScene 이 새로 마운트될 때 문구·배경 전환의 근거다(재접속·처음엔 null).
   const arrivedFrom = usePhaseArrival(phase, connection.epoch);

@@ -136,7 +136,7 @@ export function useChat({ store, connection, view, motion }: { store: ChatStore;
   const { send, canSend } = connection;
   const day = view.day?.n;
   const phase = view.phase;
-  const pk = phaseKey(day === undefined ? { phase } : { phase, day });
+  const pk = phaseKey({ phase, day, round: view.round });
 
   // 입력 중 보내기. 타이머·이벤트에서 최신 연결·단계 키를 읽는다(오래된 클로저 방지).
   const live = useRef({ send, canSend, pk });

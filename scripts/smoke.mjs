@@ -345,10 +345,10 @@ const sortedKeys = (o) => Object.keys(o).sort().join(",");
 // 서버가 만든 카드 줄(유언·찬반 기록)만 k 키를 더 싣는다(결정 0061-11·0066-3). 일반 대화 줄에는 k 가 없어야 한다.
 // 찬반 기록 카드(k ballots, 결정 0066-3)도 같은 모양이다: 본문은 `찬성좌석들|반대좌석들`(shared/game/ballots.ts), 보낸 사람 자리는 변론자.
 const lineKeys = (line, base) => [...base, ...(line.k === "will" || line.k === "ballots" ? ["k"] : [])].sort().join(",");
-// 클라이언트가 지금 보는 단계 키 '일차:단계'(shared/game/audience.ts phaseKey 와 같은 모양). 로비는 day 가 없어 0.
+// 클라이언트가 지금 보는 단계 키 '판:일차:단계'(shared/game/audience.ts phaseKey 와 같은 모양). 판이 없으면 1, 로비는 day 가 없어 0.
 const pkOf = (c) => {
   const v = lastView(c);
-  return `${v?.day?.n ?? 0}:${v?.phase}`;
+  return `${v?.round ?? 1}:${v?.day?.n ?? 0}:${v?.phase}`;
 };
 const sendChat = (c, text) => c.ws.send(JSON.stringify({ t: "chat", text, pk: pkOf(c) }));
 const sendTyping = (c, on) => c.ws.send(JSON.stringify({ t: "typing", on, pk: pkOf(c) }));

@@ -106,7 +106,7 @@ async function bulkChat(code: string, seatNo: number, texts: string[]): Promise<
     const me = room.players.find((p) => p.seat === seatNo)!;
     for (const text of texts) {
       instance["chatRates"].clear();
-      const why = await instance["applyChat"](me.id, text, `${room.day ?? 0}:${room.phase}`, Date.now());
+      const why = await instance["applyChat"](me.id, text, `1:${room.day ?? 0}:${room.phase}`, Date.now());
       if (why !== null) throw new Error(`bulkChat: 막힘 ${why} (${text})`);
     }
   });

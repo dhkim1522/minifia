@@ -113,8 +113,8 @@ function connect(bot) {
 const sendTo = (bot, m) => {
   if (bot.ws && bot.ws.readyState === WebSocket.OPEN) bot.ws.send(JSON.stringify(m));
 };
-// 단계 키 '일차:단계'(shared/game/audience.ts phaseKey 와 같은 모양) — 받은 마지막 state 로 만든다. 로비는 day 가 없어 0.
-const pkOf = (bot) => `${bot.view?.day?.n ?? 0}:${bot.view?.phase}`;
+// 단계 키 '판:일차:단계'(shared/game/audience.ts phaseKey 와 같은 모양) — 받은 마지막 state 로 만든다. 판이 없으면 1, 로비는 day 가 없어 0.
+const pkOf = (bot) => `${bot.view?.round ?? 1}:${bot.view?.day?.n ?? 0}:${bot.view?.phase}`;
 const sendChat = (bot, text) => sendTo(bot, { t: "chat", text, pk: pkOf(bot) });
 const sendTyping = (bot, on) => sendTo(bot, { t: "typing", on, pk: pkOf(bot) });
 const stopTalk = (bot) => {

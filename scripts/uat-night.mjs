@@ -1,7 +1,7 @@
 // 3페이즈 밤·아침 UAT 를 봇으로 대신 도는 시나리오(7페이즈 자유 채팅 기준). 봇이 방을 만들고 채워 밤 두 번을 돌며 결과 표를 낸다.
 // 스크립트는 전지적이다: 각 클라이언트의 view.me.role 로 역할을 알고 그 역할대로 행동시킨다.
 // 낮은 dayAnnounce → discussion 이다(직업 주장 차례는 없다). 토론 40초·처형 여부 투표 13초(표를 안 던짐 → 미통과 → 밤, 결정 0036)는 서버 타이머로 넘긴다. 전체 약 4분.
-// 채팅은 자유 채팅 `{t:"chat", text, pk}`·`{t:"typing", on, pk}` 다(pk = 받은 마지막 state 의 `${day.n ?? 0}:${phase}`). 채널은 서버가 보낸 사람 상태로 정한다(결정 0002):
+// 채팅은 자유 채팅 `{t:"chat", text, pk}`·`{t:"typing", on, pk}` 다(pk = 받은 마지막 state 의 `${round ?? 1}:${day.n ?? 0}:${phase}`). 채널은 서버가 보낸 사람 상태로 정한다(결정 0002):
 // 밤의 마피아는 ch mafia, 탈락자는 언제나 ch ghost(탈락자에게만), 살아 있는 비마피아는 밤에 말할 채널이 없다(chatReject phase).
 // 역할별 일지(결정 0026·0027-11)를 본다: 경찰 수사 {n,target,isMafia}, 마피아 암살 {n,target,died}, 의사 치료 {n,target}.
 //
@@ -100,7 +100,7 @@ async function requestError(c, msg) {
 }
 
 // 단계 키 '일차:단계' — 받은 마지막 state 로 만든다.
-const pkOf = (c) => `${lastView(c)?.day?.n ?? 0}:${lastView(c)?.phase}`;
+const pkOf = (c) => `${lastView(c)?.round ?? 1}:${lastView(c)?.day?.n ?? 0}:${lastView(c)?.phase}`;
 const sendChat = (c, text) => send(c, { t: "chat", text, pk: pkOf(c) });
 const sendTyping = (c, on) => send(c, { t: "typing", on, pk: pkOf(c) });
 const rejects = (c) => c.frames.filter((f) => f.msg.t === "chatReject");
