@@ -76,6 +76,8 @@ export interface ResultState {
   clap: number[];
   /** 중앙 승리 알림이 떠 있나 */
   announce: boolean;
+  /** 탭 행에 전체 말고 나머지 넷이 나와 있나(11-07, D-2): 첫 뒤집기 시각(1200ms)부터. 최종 상태·재접속은 처음부터 참 */
+  tabsVisible: boolean;
   title: ResultTitleKey;
 }
 
@@ -117,6 +119,7 @@ export function finalState(cast: readonly CastMember[], winner: GameWinner): Res
     lit: true,
     clap: [],
     announce: false,
+    tabsVisible: true,
     title: winner,
   };
 }
@@ -152,6 +155,7 @@ export function stateAt(t: number, cast: readonly CastMember[], winner: GameWinn
     lit,
     clap: stage === "light" ? winners.slice(0, CLAP_MAX) : [],
     announce: stage === "light",
+    tabsVisible: at >= tl.flipStartMs,
     title: "result",
   };
 }

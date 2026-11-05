@@ -3,6 +3,7 @@ import "../../styles/v2.css";
 import { countGraphemes } from "../../../shared/nickname";
 import { WHISPER_MAX_GRAPHEMES } from "../../../shared/game/whisper";
 import { seatColorVar, faceSrc } from "../../net/assets";
+import { RESULT_PANEL_TEXT } from "../../game/resultText";
 import { useComposedText } from "../../net/useComposedText";
 import { clampGraphemes } from "./WillSheet";
 import { V2Icon } from "./V2Icon";
@@ -86,6 +87,12 @@ export function LineSheet(props: LineSheetProps) {
 
   return (
     <div className="mv-line-sheet" role="dialog" aria-label={peer ? LINE_TEXT.inputLabel : (title ?? LINE_TEXT.inputLabel)} data-line-sheet="">
+      {/* 공개 예고(11-07, A-4): 귓속말 시트가 열려 있는 동안 항상 위쪽에 있다. 모두에게 같은 문구 */}
+      {peer ? (
+        <p className="mv-line__notice" data-pre-notice="">
+          {RESULT_PANEL_TEXT.preNotice}
+        </p>
+      ) : null}
       <div className="mv-line__head">
         {peer ? (
           <span className="mv-line__peer" data-line-peer="">

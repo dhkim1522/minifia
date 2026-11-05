@@ -114,7 +114,7 @@ describe("stateAt — 시간표 표", () => {
 
   it("t=0: 모임 — 아무도 안 뒤집힘, 조명·알림 없음, 제목 결과", () => {
     const s = at(0);
-    expect(s).toEqual({ stage: "gather", flipped: [], costumes: {}, dimmed: [], lit: false, clap: [], announce: false, title: "result" });
+    expect(s).toEqual({ stage: "gather", flipped: [], costumes: {}, dimmed: [], lit: false, clap: [], announce: false, tabsVisible: false, title: "result" });
     expect(at(-50)).toEqual(s); // 음수는 0 으로 본다
   });
 

@@ -54,6 +54,10 @@
 .mf-reveal__stage { flex: 1 1 0; min-height: 0; display: flex; align-items: center; justify-content: center; padding: 0 var(--space-md); }
 .mf-reveal__hints { flex: none; display: flex; flex-direction: column; align-items: center; gap: var(--space-xs); padding: var(--space-md) var(--space-lg) var(--space-xl); text-align: center; }
 .mf-reveal__hint { margin: 0; font-size: 16px; line-height: 1.5; font-weight: 700; color: var(--gray-50); word-break: keep-all; text-shadow: var(--shadow-text); }
+/* 공개 예고(11-07, A-4): 14px 한 줄. 4초 뒤 opacity + 높이로 줄어든다. 모션 줄이기는 전이 없이 같은 시각에 접힌다 */
+.mf-reveal__pre { margin: 0; max-height: 20px; overflow: hidden; font-size: 14px; line-height: 20px; font-weight: 400; color: var(--gray-300); word-break: keep-all; text-shadow: var(--shadow-text); }
+.mf-reveal__pre[data-state="gone"] { max-height: 0; opacity: 0; transition: opacity var(--dur-med) var(--ease-out), max-height var(--dur-med) var(--ease-out); }
+@media (prefers-reduced-motion: reduce) { .mf-reveal__pre[data-state="gone"] { transition: none; } }
 .mf-reveal__sub { margin: 0; font-size: 14px; line-height: 1.4; font-weight: 400; color: var(--gray-300); word-break: keep-all; text-shadow: var(--shadow-text); }
 
 /* 단계 화면 전환(phase-enter, 300ms — 토큰에 없는 길이라 지역 상수). 단계 화면 루트는 남는 높이를 채운다. */

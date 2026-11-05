@@ -131,6 +131,9 @@ export function ResultScreen({ view, store, chat, resultLog, send, canSend, offs
   const [cues, setCues] = useState<ClapCues>([]);
   const markRef = useRef(mark);
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
+  // 연출 경과 시계: schedule(from) 이 from 에서 다시 시작한 시각을 적는다. 패널이 확장되어 멈추면 경과를 보존하고 접히면 거기서 이어간다
+  const clock = useRef({ base: 0, since: 0 });
+  const pausedAt = useRef<number | null>(null);
   const nonce = useRef(0);
 
   const state = useMemo(() => stateAt(mark, cast, winner), [mark, cast, winner]);
@@ -172,6 +175,7 @@ export function ResultScreen({ view, store, chat, resultLog, send, canSend, offs
   );
   const schedule = useCallback(
     (from: number) => {
+      clock.current = { base: from, since: Date.now() };
       for (const t of timers.current) clearTimeout(t);
       timers.current = markTimes(cast.length)
         .filter((m) => m > from)
@@ -189,6 +193,21 @@ export function ResultScreen({ view, store, chat, resultLog, send, canSend, offs
     };
     // 마운트 한 번: 연출은 처음 받은 결과에서만 돈다(이후 같은 result 가 다시 와도 시계를 다시 시작하지 않는다)
   }, [reveal]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 확장 중 정지(D-25): 전체가 아닌 탭이 열려 있는 동안 대기 타이머를 취소하고 경과를 보존한다. 접히면 그 경과부터 남은 표시각을 다시 건다. 연출이 아닌 마운트는 타이머가 없어 아무 일도 없다
+  useEffect(() => {
+    if (!reveal) return;
+    if (expanded) {
+      if (pausedAt.current !== null) return;
+      pausedAt.current = clock.current.base + (Date.now() - clock.current.since);
+      for (const t of timers.current) clearTimeout(t);
+      timers.current = [];
+    } else if (pausedAt.current !== null) {
+      const from = pausedAt.current;
+      pausedAt.current = null;
+      schedule(from);
+    }
+  }, [expanded, reveal, schedule]);
 
   // 건너뛰기(D-25): 4600 전의 무대 탭 한 번이면 4600 상태로 점프한다(전원 뒤집힘 + 조명, 승리 알림은 건너뜀). 남은 시간표는 이어진다. 4600 이후 탭은 아무 일 없다
   const skip = useCallback(() => {
@@ -279,7 +298,7 @@ export function ResultScreen({ view, store, chat, resultLog, send, canSend, offs
         onTab={pickTab}
         expanded={expanded}
         {...(resultPanelHeight(roomH) !== undefined ? { expandedHeight: resultPanelHeight(roomH)! } : {})}
-        tabsVisible
+        tabsVisible={state.tabsVisible}
         lines={logLines}
         contacts={contacts}
         opened={opened}
