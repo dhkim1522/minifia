@@ -312,7 +312,8 @@ function phaseKeyViolations(s: RoomState, viewer: Player, view: RoomView, phase:
   for (const path of keyPaths(view)) if (SERVER_ONLY_KEYS.includes(lastKey(path)) && path !== "day.verdict") out.push(`${tag}: server-only key at ${path}`);
 
   // 내 채널(07-10): 서버 상태로 정한 channelOf 와 같고, 말할 수 없으면 키가 없다. 본인 view 의 me 밖에는 chat 키가 없다.
-  const wantChat = channelOf(s, viewer.id);
+  // 11-03(D-11): 결과 단계만 channelOf 가 아니라 all 을 직접 싣는다(channelOf 는 ended 에서 null 그대로).
+  const wantChat = phase === "ended" ? "all" : channelOf(s, viewer.id);
   if (("chat" in view.me) !== (wantChat !== null)) out.push(`${tag}: me.chat presence ${"chat" in view.me}`);
   else if (wantChat !== null && view.me.chat !== wantChat) out.push(`${tag}: me.chat value ${String(view.me.chat)}`);
   for (const path of keyPaths(view)) if (lastKey(path) === "chat" && path !== "me.chat") out.push(`${tag}: chat key outside me at ${path}`);
@@ -1420,6 +1421,11 @@ describe("buildView me.chat — 서버가 정한 내 채널 (07-10, CHAT-02·03)
     const s = withDead(stateAt("discussion", 6, 1), 2);
     const want = [...s.players].sort((a, b) => a.seat - b.seat).map((p) => `${p.seat}:${p.seat === 2 ? "ghost" : "all"}`).join(" ");
     expect(chatLine(s)).toBe(want);
+  });
+
+  it("결과 단계(ended): 산 사람도 탈락자도 모두 all (D-11)", () => {
+    const s = withDead(stateAt("ended", 6, 1), 2);
+    expect(chatLine(s)).toBe(everyone(s, "all"));
   });
 
   it("밤: 산 마피아는 mafia, 산 비마피아는 키 없음", () => {

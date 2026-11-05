@@ -869,3 +869,24 @@ export async function resetEmoteRates(code: string): Promise<void> {
 export async function emoteRateKeys(code: string): Promise<string[]> {
   return runInDurableObject(env.ROOM.getByName(code), async (instance) => [...(instance["emoteRates"] as Map<string, unknown>).keys()]);
 }
+
+// ---- 11페이즈 결과 단계 도우미(11-03) ----
+
+const isPhaseFrame = (phase: PhaseId) => (m: ServerMessage): boolean => m.t === "state" && m.view.phase === phase;
+
+/**
+ * 4명 판(마피아 1·경찰 1·시민 2)을 처형으로 끝까지 모아 ended 에 둔다: 마피아가 처형되어 시민이 이긴다.
+ * dead 는 처형된 마피아(탈락자), living 은 산 세 사람. 모든 소켓이 ended state 를 받은 뒤 돌려준다.
+ */
+export async function endedGame4(): Promise<{ code: string; socks: TestSocket[]; actors: Actor[]; dead: Actor; living: Actor[] }> {
+  const g = await startedGame("nomination", 3);
+  const mafia = withRole(g, "mafia")[0]!;
+  const police = withRole(g, "police")[0]!;
+  const [c0, c1] = withRole(g, "citizen") as [Actor, Actor];
+  await pointAll(g.code, g.actors, { [police.seat]: mafia.seat, [c0.seat]: mafia.seat, [c1.seat]: mafia.seat, [mafia.seat]: police.seat });
+  await advanceTo(g.code, g.socks, "verdict");
+  await verdictAll(g.code, g.actors, Object.fromEntries(g.actors.filter((a) => a !== mafia).map((a) => [a.seat, true])));
+  await closePhase(g.code);
+  for (const s of g.socks) await nextFrame(s, isPhaseFrame("ended"));
+  return { code: g.code, socks: g.socks, actors: g.actors, dead: mafia, living: g.actors.filter((a) => a !== mafia) };
+}

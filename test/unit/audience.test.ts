@@ -145,9 +145,20 @@ describe("audience — 받는 사람 집합", () => {
     expect(sorted(audience(sixAt(phase, { day: 1 }), chat("all")))).toEqual(ids(0, 1, 2, 3, 4, 5));
   });
 
-  it.each(SILENT_PHASES)("%s: 채팅·입력 중·동작 어떤 채널이든 빈 집합, world 도 빈 집합", (phase) => {
+  it.each(SILENT_PHASES.filter((p) => p !== "ended"))("%s: 채팅·입력 중·동작 어떤 채널이든 빈 집합, world 도 빈 집합", (phase) => {
     const s = sixAt(phase, { day: 1 });
     for (const k of ["chat", "typing", "emote"] as const) {
+      for (const ch of ["all", "mafia", "ghost"] as const) expect(audience(s, { k, ch }).size).toBe(0);
+    }
+    expect(audience(s, { k: "world" }).size).toBe(0);
+  });
+
+  // 11-03 (D-11, O-16): 결과 단계는 chat/all 만 방 전원(탈락자 포함)에게 열리고 나머지는 그대로 닫혀 있다.
+  it("ended: chat all 은 방의 모든 사람, chat mafia·ghost 와 typing·emote·world 는 빈 집합", () => {
+    const s = sixAt("ended", { day: 2 });
+    expect(sorted(audience(s, chat("all")))).toEqual(ids(0, 1, 2, 3, 4, 5));
+    for (const ch of ["mafia", "ghost"] as const) expect(audience(s, chat(ch)).size).toBe(0);
+    for (const k of ["typing", "emote"] as const) {
       for (const ch of ["all", "mafia", "ghost"] as const) expect(audience(s, { k, ch }).size).toBe(0);
     }
     expect(audience(s, { k: "world" }).size).toBe(0);
