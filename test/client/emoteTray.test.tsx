@@ -300,7 +300,7 @@ describe("판 안 화살표키", () => {
     down("ArrowRight");
     expect(focusedId()).toBe("praise");
     down("ArrowDown");
-    expect(focusedId()).toBe("cry");
+    expect(focusedId()).toBe("deny");
     down("ArrowUp");
     expect(focusedId()).toBe("praise");
     down("ArrowLeft");
@@ -353,6 +353,6 @@ describe("useChat 모션 연결", () => {
 describe("화면 연결 (Lobby·GameMap)", () => {
   it.each(["src/screens/Lobby.tsx", "src/screens/GameMap.tsx"])("%s 는 useMyMotion 을 불러 useChat 에 넘긴다", (file) => {
     const src = readFileSync(file, "utf8");
-    expect(/useMyMotion\(/.test(src) && /useChat\(\{[^}]*motion/.test(src)).toBe(true);
+    expect(/useMyMotion\(/.test(src) && /useChat\(\{[^\n]*motion/.test(src)).toBe(true);
   });
 });

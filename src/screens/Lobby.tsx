@@ -16,6 +16,7 @@ import { CHAT_TEXT } from "../game/chatText";
 import { LOG_H_KB } from "../game/chatUi";
 import { diffRoomViews, toastForDiff } from "../net/roomDiff";
 import { useChat } from "../net/useChat";
+import { useMyMotion } from "../net/useMyMotion";
 import { useMapInsets } from "../net/useMapInsets";
 import type { WorldStore } from "../world/store";
 import "../styles/lobby.css";
@@ -107,7 +108,8 @@ export function Lobby({ view, store, chat, send, canSend = true, epoch = 0, offs
   // 키보드(07-19, CHAT-05)·스테이지 사각형 측정(06-15)·기록 칸 높이는 게임 맵(GameMap)과 같은 훅 하나가 맡는다(08-13).
   // 키보드가 열려 있으면(kbOpen) 행동 줄을 숨기고 기록 칸을 72 로 줄이며 패널이 키보드 위로 올라간다. 아래 패널의 채팅 기록 칸 높이 logH 는 방 높이로 한 번 정한다.
   const { rootRef, headerRef, panelRef, inputRef, kbOpen, logH, stageInsets } = useMapInsets();
-  const { typingSeats, ...binding } = useChat({ store: chat, connection: { send, canSend }, view });
+  const motion = useMyMotion(store, view.me.seat, () => Date.now() + offset);
+  const { typingSeats, ...binding } = useChat({ store: chat, connection: { send, canSend }, view, motion });
 
   const connected = connectedCount(view.players);
   const isHost = view.me.isHost;

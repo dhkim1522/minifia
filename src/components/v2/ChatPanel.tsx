@@ -75,6 +75,10 @@ export interface ChatPanelProps {
   emotes?: readonly EmoteId[];
   /** 칸을 골랐다. 보내기만 하고 미리 재생하지 않는다(D-9) */
   onEmote?(id: EmoteId): void;
+  /** 내 캐릭터가 걷는 중이거나 내 동작이 재생 중이다: 칸이 aria-disabled(불투명도 0.45)이고 눌러도 아무 일이 없다(D-10) */
+  emoteBlocked?: boolean;
+  /** 재생 중인 내 동작: 그 칸에 안쪽 테두리 */
+  emotePlaying?: EmoteId | null;
   /** 있으면 입력줄 오른쪽 끝(보내기 버튼 뒤)에 깃펜(유언 쓰기) 버튼을 그린다. 입력 중 신호와 무관하다(WILL-01) */
   onWill?(): void;
   /** 유언 시트가 열려 있다(aria-pressed) */
@@ -112,6 +116,8 @@ export function ChatPanel(props: ChatPanelProps) {
   const [newDot, setNewDot] = useState(false);
   const [trayOpen, setTrayOpen] = useState(false);
   const hasEmotes = !!onSend && !!props.emotes && props.emotes.length > 0 && !!props.onEmote;
+  const emoteBtnRef = useRef<HTMLButtonElement | null>(null);
+  const firstCellRef = useRef<HTMLButtonElement | null>(null);
 
   // 타이머·이벤트에서 최신 속성을 읽는다(오래된 클로저 방지).
   const latest = useRef(props);
@@ -234,9 +240,71 @@ export function ChatPanel(props: ChatPanelProps) {
     if (e.key === "Escape") e.currentTarget.blur();
   };
 
-  const pickEmote = (id: EmoteId) => {
+  // 동작 판 (10-05). 닫을 때 초점은 동작 버튼으로 돌아온다(바깥 누름으로 닫을 때만 빼고).
+  const closeTray = (restoreFocus: boolean) => {
     setTrayOpen(false);
+    if (restoreFocus) emoteBtnRef.current?.focus({ preventScroll: true });
+  };
+
+  const pickEmote = (id: EmoteId) => {
+    closeTray(true);
     latest.current.onEmote?.(id);
+  };
+
+  const onEmoteButton = () => {
+    if (sendDisabled) return;
+    const field = fieldRef.current;
+    // 키보드가 열려 있으면(입력칸 포커스) 판을 열지 않고 키보드부터 닫는다. 두 번째 누름에 열린다.
+    if (!trayOpen && field !== null && document.activeElement === field) {
+      field.blur();
+      return;
+    }
+    if (trayOpen) closeTray(true);
+    else setTrayOpen(true);
+  };
+
+  // 열리면 첫 칸으로 초점. 끊기면 닫힌다.
+  useEffect(() => {
+    if (trayOpen) firstCellRef.current?.focus({ preventScroll: true });
+  }, [trayOpen]);
+  useEffect(() => {
+    if (sendDisabled) setTrayOpen(false);
+  }, [sendDisabled]);
+
+  // 열린 동안: 판·버튼 바깥 pointerdown 과 Esc 로 닫는다.
+  useEffect(() => {
+    if (!trayOpen) return;
+    const onDown = (e: Event) => {
+      const t = e.target;
+      if (t instanceof Element && (t.closest("[data-emote-tray]") !== null || t.closest("[data-emote-button]") !== null)) return;
+      setTrayOpen(false);
+    };
+    const onKey = (e: globalThis.KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      const a = document.activeElement;
+      const inside = a === document.body || a === null || (a instanceof Element && (a.closest("[data-emote-tray]") !== null || a.closest("[data-emote-button]") !== null));
+      setTrayOpen(false);
+      if (inside) emoteBtnRef.current?.focus({ preventScroll: true });
+    };
+    document.addEventListener("pointerdown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [trayOpen]);
+
+  // 판 안 화살표키: 좌우 한 칸, 위아래 다섯 칸(끝에서 멈춘다). Enter·Space 는 칸이 button 이라 기본 동작이 선택이다.
+  const onTrayKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+    const step = e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : e.key === "ArrowDown" ? 5 : e.key === "ArrowUp" ? -5 : 0;
+    if (step === 0) return;
+    const list = [...e.currentTarget.querySelectorAll<HTMLButtonElement>("[data-emote]")];
+    const at = list.findIndex((c) => c === document.activeElement);
+    if (at < 0) return;
+    e.preventDefault();
+    const next = Math.max(0, Math.min(list.length - 1, at + step));
+    // 아랫줄에서 위로 5칸은 윗줄로, 윗줄에서 아래 5칸이 없으면 마지막 칸에서 멈춘다
+    list[next]?.focus({ preventScroll: true });
   };
 
   const ui = channelUi(channel);
@@ -360,14 +428,16 @@ export function ChatPanel(props: ChatPanelProps) {
               aria-label={EMOTE_TEXT.button}
               aria-expanded={trayOpen}
               aria-pressed={trayOpen}
-              onClick={() => setTrayOpen((o) => !o)}
+              aria-disabled={sendDisabled ? "true" : undefined}
+              ref={emoteBtnRef}
+              onClick={onEmoteButton}
               // 포커스가 버튼으로 옮겨 가 입력칸이 blur 되지 않게 한다(보내기 버튼과 같다)
               onMouseDown={(e) => e.preventDefault()}
             >
               <V2Icon name="face" />
             </button>
           ) : null}
-          {hasEmotes && trayOpen ? <EmoteTray ids={props.emotes ?? []} onPick={pickEmote} /> : null}
+          {hasEmotes && trayOpen ? <EmoteTray ids={props.emotes ?? []} onPick={pickEmote} disabled={!!sendDisabled || !!props.emoteBlocked} playing={props.emotePlaying ?? null} firstRef={firstCellRef} onKeyDown={onTrayKeyDown} /> : null}
           <div className="mv-chat__field">
             {ui.icon ? (
               <span className={channel === "mafia" ? "mv-chat__chan is-mafia" : "mv-chat__chan is-ghost"}>

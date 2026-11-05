@@ -372,8 +372,8 @@ describe("Lobby — 행동 줄: [시작] 과 점, 손님 (ROOM-03, UI-SPEC 행�
     expect(b.className).toContain("mf-act--flat");
     expect(container.querySelector("[data-lobby-start]") === null).toBe(true);
     expect(container.querySelector(".mv-count") === null).toBe(true);
-    // 패널 안 버튼은 채팅 보내기(07-13) 하나와 이 행동 줄 하나뿐이다
-    expect(container.querySelectorAll(".mf-lobby__panel button:not([data-chat-send])").length).toBe(1);
+    // 패널 안 버튼은 채팅 보내기(07-13)·동작 버튼(10-05)과 이 행동 줄 하나뿐이다
+    expect(container.querySelectorAll(".mf-lobby__panel button:not([data-chat-send]):not([data-emote-button])").length).toBe(1);
   });
 
   it("손님 화면에서 방장이 끊겨 있어도 같은 라벨이다", () => {
@@ -745,7 +745,7 @@ describe("Lobby — 키보드가 열리면 패널이 올라가고 행동 줄이 
   const remeasure = () => act(() => void resizeCallbacks.forEach((cb) => cb()));
   const inputOf = (container: HTMLElement) => container.querySelector("[data-chat-input]") as HTMLInputElement;
   const rootOf = (container: HTMLElement) => container.querySelector("main.mf-lobby") as HTMLElement;
-  const actionButtons = (container: HTMLElement) => container.querySelectorAll(".mf-lobby__panel button:not([data-chat-send])").length;
+  const actionButtons = (container: HTMLElement) => container.querySelectorAll(".mf-lobby__panel button:not([data-chat-send]):not([data-emote-button])").length;
 
   beforeEach(() => {
     vi.useFakeTimers();

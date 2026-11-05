@@ -106,6 +106,12 @@
 .mv-emote-tray__cell[aria-disabled="true"] { opacity: 0.45; cursor: default; }
 .mv-emote-tray__cell[aria-disabled="true"]:active { background: transparent; }
 .mv-emote-tray__cell.is-playing { box-shadow: inset 0 0 0 2px var(--gray-100); }
+/* 판이 열려 있는 동안 떠 있는 버튼 묶음은 숨겨 판과 겹치지 않게 한다(CSS 만, 판이 닫히면 돌아온다) */
+body:has([data-emote-tray]) .mf-float { visibility: hidden; }
+/* 판 등장: opacity 만(transform 없음). 모션 줄이기에서는 없다 */
+@keyframes mv-emote-in { from { opacity: 0; } to { opacity: 1; } }
+.mv-emote-tray { animation: mv-emote-in 120ms ease-out; }
+@media (prefers-reduced-motion: reduce) { .mv-emote-tray { animation: none; } }
 
 /* 기록 칸 바깥 상자: 새 메시지 점이 줄과 함께 스크롤되지 않게 기록 칸 밖에 둔다 */
 .mv-chat__logbox { position: relative; }

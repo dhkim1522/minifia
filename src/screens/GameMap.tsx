@@ -39,6 +39,7 @@ import type { DayFx } from "../net/useDayFx";
 import { useCountdown } from "../net/countdown";
 import { useBadge, useBadgeFx } from "../net/useBadge";
 import { useChat } from "../net/useChat";
+import { useMyMotion } from "../net/useMyMotion";
 import { useTurnLook } from "../net/useTurnLook";
 import { useVerdictMoment } from "../net/useVerdictMoment";
 import { ballotsOf } from "../game/ballotsView";
@@ -181,7 +182,8 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
   const { rootRef, headerRef, panelRef, inputRef, kbOpen: kbLifted, kbInSheet, logH, turnCompact: compactTurn, stageInsets } = useMapInsets(blockModeOf(view) !== null);
   // 키보드가 시트의 textarea 때문에 열린 것이면 채팅 패널을 줄이거나 행동 줄을 숨기지 않는다(시트를 연 버튼이 남아야 닫을 때 초점이 돌아온다). 패널은 키보드 위로 올라간다(lifted).
   const kbOpen = kbLifted && !kbInSheet;
-  const { typingSeats, liveWhisperIn, ...binding } = useChat({ store: chat, connection: { send, canSend }, view });
+  const motion = useMyMotion(store, view.me.seat, () => Date.now() + offset);
+  const { typingSeats, liveWhisperIn, ...binding } = useChat({ store: chat, connection: { send, canSend }, view, motion });
 
   // 안내 한 줄: 단계가 시작되면 보이고 2.5초 뒤 접힌다. 단계가 바뀔 때마다 다시 보인다.
   // 지목은 내 차례가 시작될 때도 다시 보인다(UI-SPEC A-4 "의심되는 사람을 눌러요"): myTurnNo = 내 차례의 번호, 아니면 undefined.

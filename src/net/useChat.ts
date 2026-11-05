@@ -40,7 +40,7 @@ export interface ChatConnection {
   canSend: boolean;
 }
 
-export function useChat({ store, connection, view }: { store: ChatStore; connection: ChatConnection; view: RoomView }): ChatBinding {
+export function useChat({ store, connection, view, motion }: { store: ChatStore; connection: ChatConnection; view: RoomView; motion?: { moving: boolean; emoting: EmoteId | null } }): ChatBinding {
   const subscribe = useCallback((cb: () => void) => store.subscribe(cb), [store]);
   const getRevision = useCallback(() => store.revision(), [store]);
   const revision = useSyncExternalStore(subscribe, getRevision);
@@ -299,6 +299,9 @@ export function useChat({ store, connection, view }: { store: ChatStore; connect
     onSend,
     emotes: EMOTE_TRAY_ORDER,
     onEmote,
+    // 걷는 중·내 동작 재생 중에는 칸이 비활성이다(D-10). 끊김은 ChatPanel 이 sendDisabled 로 가린다.
+    emoteBlocked: !!motion && (motion.moving || motion.emoting !== null),
+    emotePlaying: motion?.emoting ?? null,
     channel: channel ?? "all",
     sendDisabled: !canSend,
     sendDim,
