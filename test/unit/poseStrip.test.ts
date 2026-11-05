@@ -5,7 +5,7 @@ import { EMOTE_IDS } from "../../shared/protocol";
 import { WALK_PHASE_RATE } from "../../src/world/character";
 import { FIGS, OUTFITS } from "../../src/world/characterData";
 import { emoteDurationMs } from "../../src/world/emoteCap";
-import { OUTFIT_ORDER, parsePoseStripParams, poseStripEnabled, samplePlan, stripRows, STRIP_COLS } from "../../src/debug/poseStripData";
+import { FIG_COUNT, OUTFIT_ORDER, WALK_RATE, parsePoseStripParams, poseStripEnabled, samplePlan, stripRows, STRIP_COLS } from "../../src/debug/poseStripData";
 import { initPerfDebug } from "../../src/debug/perfProbe";
 
 const mem = (v: string | null) => ({ getItem: () => v, setItem: () => {}, removeItem: () => {} });
@@ -29,7 +29,14 @@ describe("poseStripEnabled — 게이트 (T-10-19)", () => {
     expect(poseStripEnabled("?pose-strip=1", mem("1"), false)).toBe(true);
   });
   it("initPerfDebug 는 게이트가 거짓이면 false 를 돌려준다(운영 주소 ?pose-strip=1)", () => {
-    expect(initPerfDebug("?pose-strip=1")).toBe(false);
+    expect(initPerfDebug("?pose-strip=1", { dev: false, storage: null })).toBe(false);
+  });
+});
+
+describe("데이터 모듈의 되풀이 상수는 원본과 같다", () => {
+  it("WALK_RATE = WALK_PHASE_RATE, FIG_COUNT = FIGS.length", () => {
+    expect(WALK_RATE).toBe(WALK_PHASE_RATE);
+    expect(FIG_COUNT).toBe(FIGS.length);
   });
 });
 
