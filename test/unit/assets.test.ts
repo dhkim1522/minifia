@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ROLE_IDS } from "../../shared/game/roles";
+import { OUTFIT_IDS } from "../../shared/protocol";
 import { SCENE_IDS } from "../../src/game/scenes";
 
 vi.mock("react-dom", () => ({ preload: vi.fn() }));
@@ -16,6 +17,7 @@ import {
   figureSrc,
   ghostSrc,
   journalArt,
+  outfitCardSrc,
   preloadEntryAssets,
   preloadDuskAssets,
   preloadRoleAssets,
@@ -240,5 +242,28 @@ describe("실제 파일과의 일치", () => {
     for (const item of [...entryPreloadList(), ...rolePreloadList()]) urls.push(item.href, item.imageSrcSet ?? "");
     expect(urls.filter((url) => url.includes("%40")).length).toBeGreaterThan(20);
     expect(urls.some((url) => url.includes("@"))).toBe(false);
+  });
+});
+
+// 10-07: 로비 꾸미기 카드 그림 아홉 장(승인 디자인 시스템 사본). 인물별 45장은 만들지 않는다(O-3).
+describe("outfitCardSrc (10-07)", () => {
+  const outfitFiles = new Set(Object.keys(import.meta.glob("/public/outfits/*.png")));
+
+  it("/outfits/outfit-{id}.png?v={ASSET_VERSION} 모양이다", () => {
+    expect(outfitCardSrc("coat")).toBe(`/outfits/outfit-coat.png?v=${ASSET_VERSION}`);
+    expect(outfitCardSrc("noir")).toBe(`/outfits/outfit-noir.png?v=${ASSET_VERSION}`);
+  });
+
+  it("ASSET_VERSION 은 i3 에서 올라갔다", () => {
+    expect(ASSET_VERSION).not.toBe("i3");
+  });
+
+  it("의상 id 아홉 개 모두 public/outfits 에 실제 파일이 있고 그 밖의 파일은 없다", () => {
+    for (const id of OUTFIT_IDS) expect(outfitFiles.has(`/public/outfits/outfit-${id}.png`), id).toBe(true);
+    expect(outfitFiles.size).toBe(OUTFIT_IDS.length);
+  });
+
+  it("public/_headers 에 /outfits/* 1일 캐시 규칙이 있다", () => {
+    expect(readFileSync("public/_headers", "utf8")).toMatch(/^\/outfits\/\*\s*\n\s+Cache-Control: public, max-age=86400/m);
   });
 });
