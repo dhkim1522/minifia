@@ -300,3 +300,23 @@ describe("ClientMessageSchema will·note (09-12, 결정 0061-9·10: 본문 text 
     }
   });
 });
+
+// 10-01: 동작(emote) — 종류 id 와 단계 키뿐이다. 좌석·채널·수신자·시각은 보내지 않는다(D-12, D-19).
+describe("ClientMessageSchema emote (10-01, AVTR-03)", () => {
+  it.each(["throat", "deny", "clap", "cry", "handshake", "point", "praise", "surprise", "dance"])("동작 %s 를 받는다", (id) => {
+    expect(ClientMessageSchema.safeParse({ t: "emote", id, pk: "0:lobby" }).success).toBe(true);
+  });
+
+  it.each([
+    ["알 수 없는 id", { t: "emote", id: "wave", pk: "0:lobby" }],
+    ["pk 빠짐", { t: "emote", id: "clap" }],
+    ["id 빠짐", { t: "emote", pk: "0:lobby" }],
+    ["pk 빈 문자열", { t: "emote", id: "clap", pk: "" }],
+    ["pk 33자", { t: "emote", id: "clap", pk: "a".repeat(33) }],
+    ["덧붙은 seat", { t: "emote", id: "clap", pk: "0:lobby", seat: 2 }],
+    ["덧붙은 ch", { t: "emote", id: "clap", pk: "0:lobby", ch: "mafia" }],
+    ["덧붙은 to", { t: "emote", id: "clap", pk: "0:lobby", to: 1 }],
+  ])("동작 %s 는 거부한다", (_name, msg) => {
+    expect(ClientMessageSchema.safeParse(msg).success).toBe(false);
+  });
+});
