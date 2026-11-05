@@ -11,160 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@700&family=Gowun+Dodum&family=Noto+Sans+KR:wght@400;500;700;800&display=swap">
-<style>
-/* 레이아웃: 게임 소개 한 장. 표지 → 특징 → 한 판의 흐름 → 캐릭터·맵 → 아키텍처 → 만든 방식.
-   색·글꼴은 게임 디자인 시스템 토큰(밤 남색 60 · 패널 30 · 놋쇠/진홍 10). 런마고치 포트폴리오와 같은 틀 */
-:root {
-  --bg: #0e1326; --surface: #151c36; --soft: #1e2847; --line: #2a3760; --line-strong: #6b7180;
-  --ink: #f1f2f5; --body: #e6e8ee; --muted: #a9aebb; --brass: #c9a46a; --brass-hi: #e8d3a8; --crimson: #f2556a;
-  --shot-edge: rgba(241,242,245,.12); --shadow: rgba(0,0,0,.7);
-  --font-sans: "Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
-  --font-ui: "Gowun Dodum", "Noto Sans KR", system-ui, sans-serif;
-  --font-serif: "Gowun Batang", "Noto Serif KR", serif;
-  color-scheme: dark;
-}
-* { box-sizing: border-box; }
-html { -webkit-text-size-adjust: 100%; }
-body { background: var(--bg); color: var(--body); font: 500 16px/1.65 var(--font-sans); margin: 0; }
-img { max-width: 100%; display: block; }
-h1, h2, h3 { color: var(--ink); text-wrap: balance; word-break: keep-all; margin: 0; }
-p, li { word-break: keep-all; }
-p { margin: 0; }
-a { color: var(--brass-hi); }
-a:focus-visible { outline: 2px solid var(--body); outline-offset: 3px; }
-.wrap { max-width: 1080px; margin: 0 auto; padding-left: max(20px, env(safe-area-inset-left, 0px)); padding-right: max(20px, env(safe-area-inset-right, 0px)); }
-.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-.shot { width: 100%; height: auto; border-radius: 18px; background: var(--surface); box-shadow: 0 0 0 1px var(--shot-edge), 0 18px 36px -24px var(--shadow); }
-
-/* 버튼: 테두리 알약, 왼쪽 아이콘 + 글자 + 새 탭 화살표. 놋쇠는 hover 때만 */
-.btn { display: inline-flex; align-items: center; gap: 12px; min-height: 52px; padding: 10px 22px 10px 20px; border-radius: 999px;
-  border: 2px solid var(--line-strong); background: var(--soft); color: var(--ink); font-weight: 700; font-size: 16px; text-decoration: none;
-  transition: background-color .15s, border-color .15s, color .15s, transform .15s; }
-.btn svg { width: 20px; height: 20px; flex: none; }
-.btn .ext { width: 16px; height: 16px; opacity: .7; transition: transform .15s, opacity .15s; }
-.btn:hover { background: var(--brass); color: #0e1326; border-color: var(--brass-hi); transform: translateY(-1px); }
-.btn:hover .ext { opacity: 1; transform: translate(2px, -2px); }
-.btn:active { transform: translateY(0); }
-
-/* 표지: 실제 게임 화면을 크게, 기울여 배경처럼 깔고 왼쪽부터 어둡게 덮어 글자를 올린다 */
-.cover { position: relative; overflow: hidden; min-height: min(860px, 100svh); display: flex; align-items: center; padding-block: 72px; }
-.cover-bg { position: absolute; inset: 0; pointer-events: none; }
-.cover-bg .shots { position: absolute; top: 50%; left: 31%; display: flex; gap: 28px; transform: translateY(-50%) rotate(-10deg); }
-.cover-bg img { width: 320px; height: auto; border-radius: 28px; box-shadow: 0 0 0 1px var(--shot-edge), 0 40px 80px -30px #000; }
-.cover-bg img:nth-child(2) { margin-top: 120px; }
-.cover-bg img:nth-child(3) { margin-top: -60px; }
-.cover::after { content: ""; position: absolute; inset: 0; pointer-events: none;
-  background: linear-gradient(90deg, var(--bg) 0%, var(--bg) 30%, rgba(14,19,38,.82) 48%, rgba(14,19,38,.25) 72%, rgba(14,19,38,.1) 100%),
-              linear-gradient(0deg, var(--bg) 0%, transparent 22%); }
-.cover .wrap { position: relative; z-index: 1; width: 100%; }
-.cover-text { max-width: 520px; }
-.tags { display: flex; flex-wrap: wrap; gap: 8px; font-size: 13px; font-weight: 700; color: var(--muted); }
-.tags span { background: rgba(21,28,54,.85); border: 1px solid var(--line); border-radius: 999px; padding: 8px 14px; line-height: 1; }
-.cover h1 { font-family: var(--font-serif); font-size: clamp(56px, 8vw, 96px); line-height: 1.05; letter-spacing: -.02em; margin-top: 20px; text-shadow: 0 4px 24px rgba(0,0,0,.6); }
-.tagline { font-family: var(--font-ui); font-size: clamp(21px, 2.5vw, 26px); color: var(--ink); margin-top: 14px; }
-.lede { font-size: 17px; color: var(--muted); max-width: 30em; margin-top: 10px; }
-.actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 32px; }
-main { padding-bottom: 72px; }
-
-section { padding-block: 80px 0; }
-.eyebrow { font-family: var(--font-ui); color: var(--brass); font-size: 14px; letter-spacing: .14em; }
-section h2 { font-size: clamp(26px, 3.4vw, 34px); font-weight: 800; letter-spacing: -.02em; margin-top: 6px; }
-.intro { font-size: 17px; color: var(--muted); max-width: 42em; margin-top: 12px; }
-
-/* 카드 묶음 (왜 · 만든 방식) */
-.cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-top: 28px; }
-.cards div { background: var(--surface); border: 1px solid var(--line); border-radius: 22px; padding: 22px 24px; min-width: 0; }
-.cards h3 { font-size: 18px; font-weight: 800; }
-.cards p { color: var(--muted); font-size: 15px; margin-top: 6px; }
-
-/* 한 판의 흐름 */
-.steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 36px 24px; margin-top: 32px; }
-.step { margin: 0; min-width: 0; display: grid; grid-template-columns: minmax(0, 150px) minmax(0, 1fr); gap: 16px; align-items: start; }
-.step .frame { aspect-ratio: 390 / 844; overflow: hidden; border-radius: 14px; box-shadow: 0 0 0 1px var(--shot-edge), 0 18px 36px -24px var(--shadow); background: var(--surface); }
-.step .frame img { width: 100%; height: 100%; object-fit: cover; }
-.step .n { font-family: var(--font-serif); color: var(--brass); font-size: 22px; line-height: 1; }
-.step h3 { font-size: 18px; font-weight: 800; margin-top: 8px; }
-.step p { color: var(--muted); font-size: 15px; margin-top: 6px; }
-.strip { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px; margin-top: 40px; }
-.strip figure { margin: 0; min-width: 0; }
-.strip figcaption { font-size: 13px; color: var(--muted); text-align: center; margin-top: 8px; }
-
-/* 캐릭터·맵 */
-.maps { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-top: 28px; }
-.maps figure, .roles figure { margin: 0; }
-.maps img { width: 100%; border-radius: 16px; box-shadow: 0 0 0 1px var(--shot-edge); }
-.maps figcaption, .roles figcaption { font-size: 14px; color: var(--muted); margin-top: 8px; }
-.outfits { display: grid; grid-template-columns: repeat(9, minmax(0, 1fr)); gap: 6px; margin-top: 18px; padding: 18px 14px 10px; background: var(--surface); border: 1px solid var(--line); border-radius: 22px; }
-.outfits figure { margin: 0; text-align: center; }
-.outfits figcaption { font-size: 12px; color: var(--muted); margin-top: 2px; }
-.roles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin-top: 14px; }
-.roles figure { background: var(--surface); border: 1px solid var(--line); border-radius: 22px; padding: 14px 14px 12px; text-align: center; }
-.roles img { width: 72%; margin: 0 auto; }
-.roles .mafia figcaption { color: var(--crimson); }
-
-/* 시스템 아키텍처 */
-.arch { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); gap: 40px; margin-top: 32px; align-items: start; }
-.diagram { background: var(--surface); border: 1px solid var(--line); border-radius: 22px; padding: 26px 24px; display: grid; gap: 10px; }
-.node { border: 1px solid var(--line-strong); border-radius: 14px; padding: 14px 16px; background: var(--soft); }
-.node b { color: var(--ink); font-size: 16px; }
-.node small { display: block; color: var(--muted); font-size: 13.5px; margin-top: 2px; line-height: 1.55; }
-.node.room { border-color: var(--brass); }
-.node.room b { color: var(--brass-hi); }
-.phones { display: flex; gap: 6px; margin-top: 8px; }
-.phones i { width: 16px; height: 26px; border-radius: 4px; border: 1.5px solid var(--muted); }
-.wire { text-align: center; color: var(--muted); font-size: 13px; line-height: 1.3; }
-.wire::before { content: "↕"; display: block; color: var(--brass); font-size: 18px; }
-.points { list-style: none; padding: 0; margin: 0; display: grid; gap: 0; }
-.points li { padding: 16px 0; border-top: 1px solid var(--line); }
-.points li:first-child { border-top: 0; padding-top: 0; }
-.points h3 { font-size: 17px; font-weight: 800; }
-.points p { color: var(--muted); font-size: 15px; margin-top: 4px; }
-code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .88em; background: var(--soft); border-radius: 5px; padding: 1px 6px; color: var(--body); }
-
-/* 설계 결정 */
-.decisions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-top: 28px; }
-.decisions a { display: block; background: var(--surface); border: 1px solid var(--line); border-radius: 22px; padding: 20px 22px; text-decoration: none; color: inherit; transition: border-color .15s; min-width: 0; }
-.decisions a:hover { border-color: var(--brass); }
-.decisions .no { font-family: var(--font-serif); color: var(--brass); font-size: 15px; }
-.decisions h3 { font-size: 17px; font-weight: 800; margin-top: 4px; }
-.decisions p { color: var(--muted); font-size: 14.5px; margin-top: 6px; }
-
-/* 숫자 */
-.nums { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 14px; margin-top: 28px; }
-.nums div { border-top: 2px solid var(--brass); padding-top: 12px; min-width: 0; }
-.nums b { display: block; font-family: var(--font-serif); font-size: clamp(26px, 3vw, 34px); color: var(--ink); line-height: 1.1; }
-.nums span { color: var(--muted); font-size: 14px; }
-
-.gh { background: var(--surface); border: 1px solid var(--line); border-radius: 24px; padding: 24px 28px; display: flex; flex-wrap: wrap; gap: 16px 24px; align-items: center; justify-content: space-between; }
-.gh h2 { font-size: 20px; font-weight: 800; margin: 0; }
-.gh p { color: var(--muted); font-size: 15px; margin-top: 4px; }
-footer { padding-block: 0 48px; color: var(--muted); font-size: 14px; }
-.serif { font-family: var(--font-serif); }
-
-@media (max-width: 960px) {
-  .arch { grid-template-columns: minmax(0, 1fr); }
-  .cover-bg .shots { left: 18%; }
-  .cards, .decisions { grid-template-columns: minmax(0, 1fr); }
-  .steps { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .strip { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .outfits { grid-template-columns: repeat(5, minmax(0, 1fr)); row-gap: 14px; }
-  .nums { grid-template-columns: repeat(3, minmax(0, 1fr)); row-gap: 22px; }
-}
-@media (max-width: 600px) {
-  .cover { min-height: 720px; align-items: flex-end; padding-block: 56px 40px; }
-  .cover-bg .shots { top: 0; left: 50%; gap: 16px; transform: translate(-50%, -4%) rotate(-10deg); }
-  .cover-bg img { width: 200px; border-radius: 18px; }
-  .cover-bg img:nth-child(2) { margin-top: 70px; }
-  .cover-bg img:nth-child(3) { margin-top: -30px; }
-  .cover::after { background: linear-gradient(0deg, var(--bg) 0%, var(--bg) 42%, rgba(14,19,38,.7) 62%, rgba(14,19,38,.15) 100%); }
-  .steps { grid-template-columns: minmax(0, 1fr); }
-  .step { grid-template-columns: minmax(0, 120px) minmax(0, 1fr); }
-  .maps, .roles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .nums { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .actions .btn { width: 100%; justify-content: center; }
-}
-@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
-</style>
+<link rel="stylesheet" href="site.css">
 </head>
 <body>
 
@@ -189,6 +36,10 @@ footer { padding-block: 0 48px; color: var(--muted); font-size: 14px; }
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5M16 7l5 5-5 5M14 4l-4 16"/></svg>
           GitHub
           <svg class="ext" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7M9 7h8v8"/></svg><span class="sr-only"> (새 탭에서 열림)</span>
+        </a>
+        <a class="btn" href="design.html">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 4h12v16H6zM9 8h6M9 12h6M9 16h4"/></svg>
+          설계 문서
         </a>
       </div>
     </div>
@@ -277,6 +128,7 @@ footer { padding-block: 0 48px; color: var(--muted); font-size: 14px; }
       <li><h3>비밀 투표</h3><p>누가 무엇을 골랐는지는 보내지 않고 집계 수만 공개해요</p></li>
       <li><h3>끊겨도 이어지는 판</h3><p>토큰으로 같은 자리에 다시 붙어요</p></li>
     </ul>
+    <p class="intro" style="margin-top:20px"><a href="design.html">설계 결정과 풀었던 문제 보기 →</a></p>
   </div>
 </div></section>
 
@@ -285,7 +137,7 @@ footer { padding-block: 0 48px; color: var(--muted); font-size: 14px; }
   <h2>AI 에이전트로 만든 방식</h2>
   <div class="cards">
     <div><h3>Claude Code</h3><p>계획·구현·검증을 에이전트와 함께, 결정은 기록으로 남겨요</p></div>
-    <div><h3>자동 테스트 3,500여 개</h3><p>규칙·화면·방 서버를 나눠 테스트하고, 폰 폭 5종 화면 E2E를 돌려요</p></div>
+    <div><h3>자동 테스트 5,000개 이상</h3><p>규칙·화면·방 서버를 나눠 테스트하고, 폰 폭 5종 화면 E2E를 돌려요</p></div>
     <div><h3>디자인 먼저</h3><p>디자인 시스템과 화면설계서를 먼저 승인받고 구현해요</p></div>
   </div>
 </div></section>
