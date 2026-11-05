@@ -3,6 +3,7 @@
 import { BufferGeometry, CircleGeometry, Color, type Group, type Material, type Mesh, MeshBasicMaterial, MeshStandardMaterial, type Object3D } from "three";
 import { describe, expect, it, vi } from "vitest";
 import { MOVE_SPEED } from "../../shared/game/world";
+import { emoteDurationMs } from "../../src/world/emoteCap";
 import { CHAR_SCALE, characterKit, createCharacter, figForSeat, POSE_BLEND_MS, WALK_PHASE_RATE, type WorldCharacter } from "../../src/world/character";
 import { EMOTE_KEYS, EMOTES, type EmoteId, FACE_IDS, FIGS, OUTFITS, type OutfitId } from "../../src/world/characterData";
 
@@ -1110,5 +1111,141 @@ describe("stopEmote (10-03, D-13)", () => {
     }
     const count = meshes(c.root).length;
     expect(count).toBe(meshesBefore);
+  });
+});
+
+describe("모션 줄이기 변형 (10-03, O-5)", () => {
+  const ids = Object.keys(EMOTES) as EmoteId[];
+  /** 한 동작을 프레임마다 읽은 자세 열 */
+  function run(id: EmoteId, opts: { reduced?: boolean } | undefined, seconds: number): Record<string, number>[] {
+    const c = createCharacter(0, "coat");
+    if (opts === undefined) c.playEmote(id);
+    else c.playEmote(id, opts);
+    const out: Record<string, number>[] = [];
+    for (let i = 0; i * 0.016 < seconds; i++) {
+      c.update(0.016, i * 0.016, false);
+      out.push(readPose(c));
+    }
+    return out;
+  }
+
+  it("reduced 가 아니면 옵션이 없을 때와 비트 단위로 같은 자세 열이다(회귀 없음)", () => {
+    for (const id of ids) {
+      const plain = run(id, undefined, 2.5);
+      expect(run(id, { reduced: false }, 2.5)).toEqual(plain);
+      expect(run(id, {}, 2.5)).toEqual(plain);
+    }
+  });
+
+  it("반복이 2 이하이고 y 진폭을 쓰지 않는 동작은 reduced 여도 같다", () => {
+    for (const id of ids.filter((x) => EMOTES[x].cycles <= 2 && x !== "surprise" && x !== "dance")) {
+      expect(run(id, { reduced: true }, 2.5)).toEqual(run(id, undefined, 2.5));
+    }
+  });
+
+  it("반복이 3 이상인 동작은 reduced 에서 2 번만 돌고 emoteDurationMs(id, true) 가 끝나는 때와 맞는다", () => {
+    for (const id of ids.filter((x) => EMOTES[x].cycles > 2)) {
+      const ms = emoteDurationMs(id, true);
+      const frames = run(id, { reduced: true }, 4);
+      const full = run(id, undefined, 4);
+      // 끝난 뒤(길이 + 두 프레임)에는 서 있는 자세, 그때 보통 재생은 아직 도는 중이다
+      const endIdx = Math.ceil(ms / 16) + 2;
+      expect(frames[endIdx]!.aAz).toBeCloseTo(0.12, 6);
+      expect(frames[endIdx]!.aAx).toBe(0);
+      expect(Math.abs(full[endIdx]!.aAx) + Math.abs(full[endIdx]!.aAz - 0.12)).toBeGreaterThan(0.05);
+      // 끝나기 전 프레임은 동작 중
+      const midIdx = Math.floor(ms / 16) - 3;
+      expect(Math.abs(frames[midIdx]!.aAx) + Math.abs(frames[midIdx]!.aAz - 0.12) + Math.abs(frames[midIdx]!.hz)).toBeGreaterThan(0.02);
+    }
+  });
+
+  it("surprise 뛰어오름과 dance 몸 위아래(y) 진폭이 절반이다", () => {
+    for (const id of ["surprise", "dance"] as const) {
+      const full = run(id, undefined, 1.2).map((p) => p.y);
+      const half = run(id, { reduced: true }, 1.2).map((p) => p.y);
+      const peakFull = Math.max(...full);
+      const peakHalf = Math.max(...half);
+      expect(peakFull).toBeGreaterThan(0.06);
+      expect(Math.abs(peakHalf - peakFull / 2)).toBeLessThan(0.01);
+    }
+  });
+
+  it("다른 키(팔·머리)는 y 절반의 영향을 받지 않는다", () => {
+    const full = run("surprise", undefined, 1);
+    const half = run("surprise", { reduced: true }, 1);
+    expect(half.map((p) => p.aAz)).toEqual(full.map((p) => p.aAz));
+  });
+});
+
+describe("표정 병합 선행 prewarm·ownedGeometryCount (10-03, O-10, D-17)", () => {
+  const EMOTE_FACES = ["angry", "sus", "surprise", "happy", "cry"];
+
+  it("prewarm() 은 동작이 쓰는 표정 다섯 개의 머리 병합을 미리 만들고 보이는 표정은 바꾸지 않는다", () => {
+    const c = createCharacter(0, "coat");
+    const shown = headMesh(c).geometry;
+    const before = c.ownedGeometryCount();
+    c.prewarm();
+    expect(c.ownedGeometryCount()).toBe(before + EMOTE_FACES.length);
+    expect(headMesh(c).geometry === shown).toBe(true);
+  });
+
+  it("두 번 불러도 병합은 한 번뿐이다", () => {
+    const c = createCharacter(1, "coat");
+    c.prewarm();
+    const n = c.ownedGeometryCount();
+    c.prewarm();
+    c.prewarm("happy");
+    expect(c.ownedGeometryCount()).toBe(n);
+  });
+
+  it("표정 하나만 지정해 미리 만들 수 있고, 동작이 쓰지 않는 이름은 무시한다", () => {
+    const c = createCharacter(1, "coat");
+    const before = c.ownedGeometryCount();
+    c.prewarm("angry");
+    expect(c.ownedGeometryCount()).toBe(before + 1);
+    c.prewarm("nonsense");
+    c.prewarm("dead");
+    expect(c.ownedGeometryCount()).toBe(before + 1);
+  });
+
+  it("prewarm 뒤 아홉 동작을 끝까지 재생해도 새 병합이 생기지 않고 14 이하다", () => {
+    const c = createCharacter(2, "coat");
+    c.prewarm();
+    const n = c.ownedGeometryCount();
+    expect(n).toBeLessThanOrEqual(14);
+    for (const id of Object.keys(EMOTES) as EmoteId[]) {
+      c.playEmote(id);
+      for (let i = 0; i < 150; i++) c.update(0.016, i * 0.016, false);
+      expect(c.ownedGeometryCount()).toBe(n);
+    }
+  });
+
+  it("동작을 재생하는 동안 메시·조명 수는 변하지 않는다(효과 없음)", () => {
+    const c = createCharacter(3, "coat");
+    c.prewarm();
+    const lights = (): number => {
+      let n = 0;
+      c.root.traverse((o) => {
+        if ((o as { isLight?: boolean }).isLight) n++;
+      });
+      return n;
+    };
+    const m0 = c.meshCount();
+    expect(lights()).toBe(0);
+    for (const id of Object.keys(EMOTES) as EmoteId[]) {
+      c.playEmote(id, { reduced: false });
+      for (let i = 0; i < 60; i++) c.update(0.016, i * 0.016, false);
+      expect(c.meshCount()).toBe(m0);
+      expect(lights()).toBe(0);
+    }
+  });
+
+  it("dispose 뒤 ownedGeometryCount 는 0 이고 prewarm 은 아무것도 만들지 않는다", () => {
+    const c = createCharacter(0, "coat");
+    c.prewarm();
+    c.dispose();
+    expect(c.ownedGeometryCount()).toBe(0);
+    c.prewarm();
+    expect(c.ownedGeometryCount()).toBe(0);
   });
 });

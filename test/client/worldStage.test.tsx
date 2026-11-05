@@ -109,6 +109,7 @@ export function makeFakeRenderer(): FakeRenderer {
 export interface FakeHandle extends CharacterHandle {
   playEmote?: (id: string) => void;
   stopEmote?: () => void;
+  prewarm?: (face?: string) => void;
   setFace?: (id: string) => void;
   yaws: number[];
   dims: boolean[];
@@ -149,6 +150,7 @@ export function makeFakeKit(created: FakeHandle[]): WorldModules["characterKit"]
         setPickMark: vi.fn(),
         playEmote: vi.fn(),
         stopEmote: vi.fn(),
+        prewarm: vi.fn(),
         setFace: vi.fn(),
       };
       created.push(h);
@@ -2992,5 +2994,118 @@ describe("동작 동시 상한 4·단계 전환·deny 건너뛰기 (D-13, T-10-1
     expect(handleOf(s, 0).playEmote).toHaveBeenCalledTimes(1);
     emit(s, 4);
     expect(handleOf(s, 0).stopEmote).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("모션 줄이기·표정 선행 병합 (O-5, O-10)", () => {
+  const SIX = [0, 1, 2, 3].map((i) => player(i, `손님${i}`));
+  const openSix = () => open({ view: makeView(SIX) }, { players: SIX, ents: FOUR_ENTS() });
+  const handleOf = (s: Setup, seat: number): FakeHandle => s.world.renderers[0]!.chars.get(seat) as FakeHandle;
+
+  it("런타임은 reducedMotion() 값을 playEmote 옵션으로 넘긴다", async () => {
+    const s = await openSix();
+    frames(32);
+    act(() => s.store.applyEmote({ t: "emote", seat: 1, id: "dance", n: 1 }, 1));
+    expect(vi.mocked(handleOf(s, 1).playEmote!).mock.calls[0]).toEqual(["dance", { reduced: false }]);
+  });
+
+  it("모션 줄이기: 옵션 reduced=true 로 재생하고 반복 2 번 길이(1.04초)가 지나면 재생 목록에서 빠진다", async () => {
+    stubReducedMotion(true);
+    const s = await openSix();
+    frames(32);
+    act(() => s.store.applyEmote({ t: "emote", seat: 1, id: "dance", n: 1 }, 1));
+    expect(vi.mocked(handleOf(s, 1).playEmote!).mock.calls[0]).toEqual(["dance", { reduced: true }]);
+    expect(window.__mfEmotes!.playing).toEqual([1]);
+    frames(900);
+    expect(window.__mfEmotes!.playing).toEqual([1]);
+    frames(250);
+    expect(window.__mfEmotes!.playing).toEqual([]);
+  });
+
+  it("보통은 같은 동작이 2.08초 동안 목록에 남는다", async () => {
+    const s = await openSix();
+    frames(32);
+    act(() => s.store.applyEmote({ t: "emote", seat: 1, id: "dance", n: 1 }, 1));
+    frames(1250);
+    expect(window.__mfEmotes!.playing).toEqual([1]);
+    frames(900);
+    expect(window.__mfEmotes!.playing).toEqual([]);
+  });
+
+  describe("requestIdleCallback", () => {
+    let queue: { id: number; cb: () => void }[];
+    let cancelled: number[];
+    const installIdle = (): void => {
+      queue = [];
+      cancelled = [];
+      let n = 0;
+      vi.stubGlobal("requestIdleCallback", (cb: () => void) => {
+        queue.push({ id: ++n, cb });
+        return n;
+      });
+      vi.stubGlobal("cancelIdleCallback", (id: number) => {
+        cancelled.push(id);
+        queue = queue.filter((q) => q.id !== id);
+      });
+    };
+    /** 대기 중인 유휴 작업을 하나씩 돌린다(돌린 일이 새 작업을 걸 수 있다) */
+    const drain = (max = 200): number => {
+      let ran = 0;
+      while (queue.length > 0 && ran < max) {
+        const job = queue.shift()!;
+        job.cb();
+        ran++;
+      }
+      return ran;
+    };
+
+    it("캐릭터를 만든 뒤 표정마다 따로 유휴 작업으로 prewarm 한다", async () => {
+      installIdle();
+      const s = await openSix();
+      frames(32);
+      for (const h of s.world.handles) expect(h.prewarm).not.toHaveBeenCalled(); // 유휴 시간이 오기 전에는 하지 않는다
+      expect(queue.length).toBe(s.world.handles.length); // 캐릭터마다 첫 작업 하나
+      queue[0]!.cb();
+      queue.shift();
+      const first = s.world.handles[0]!;
+      expect(first.prewarm).toHaveBeenCalledTimes(1); // 한 작업에 표정 하나
+      drain();
+      for (const h of s.world.handles) {
+        expect(vi.mocked(h.prewarm!).mock.calls.map((c) => c[0])).toEqual(["angry", "sus", "surprise", "happy", "cry"]);
+      }
+    });
+
+    it("requestIdleCallback 이 없으면 아무것도 하지 않는다", async () => {
+      vi.stubGlobal("requestIdleCallback", undefined);
+      const s = await openSix();
+      frames(64);
+      for (const h of s.world.handles) expect(h.prewarm).not.toHaveBeenCalled();
+    });
+
+    it("퇴장으로 캐릭터가 사라지면 걸어 둔 유휴 작업을 취소하고 돌려도 prewarm 하지 않는다", async () => {
+      installIdle();
+      const s = await openSix();
+      frames(32);
+      const gone = handleOf(s, 3);
+      const pending = queue.length;
+      s.rerender({ view: makeView(SIX.slice(0, 3)) });
+      frames(EXIT_MS + 100);
+      expect(cancelled.length).toBe(1);
+      expect(queue.length).toBe(pending - 1);
+      drain();
+      expect(gone.prewarm).not.toHaveBeenCalled();
+    });
+
+    it("dispose 에서 남은 작업을 모두 취소한다", async () => {
+      installIdle();
+      const s = await openSix();
+      frames(32);
+      const handles = [...s.world.handles];
+      const pending = queue.length;
+      s.utils.unmount();
+      expect(cancelled.length).toBe(pending);
+      expect(queue.length).toBe(0);
+      for (const h of handles) expect(h.prewarm).not.toHaveBeenCalled();
+    });
   });
 });

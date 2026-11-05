@@ -2,7 +2,7 @@
 import { describe, expect, it } from "vitest";
 import { EMOTE_MS } from "../../shared/game/emote";
 import { EMOTES, type EmoteId } from "../../src/world/characterData";
-import { admitEmote, EMOTE_RENDER_MAX, emoteDurationMs, type PlayingEmote } from "../../src/world/emoteCap";
+import { admitEmote, EMOTE_RENDER_MAX, emoteCycles, emoteDurationMs, REDUCED_MAX_CYCLES, type PlayingEmote } from "../../src/world/emoteCap";
 
 const at = (seat: number, until = 10_000): PlayingEmote => ({ seat, until });
 
@@ -69,6 +69,16 @@ describe("emoteDurationMs", () => {
       expect(emoteDurationMs(id, true)).toBe(Math.round((d.frames.length * d.seg * cycles + d.hold) * 1000));
       if (d.cycles <= 2) expect(emoteDurationMs(id, true)).toBe(EMOTE_MS[id]);
       else expect(emoteDurationMs(id, true)).toBeLessThan(EMOTE_MS[id]);
+    }
+  });
+});
+
+describe("emoteCycles (O-5)", () => {
+  it("보통은 표의 반복 수, 모션 줄이기는 최대 2 이다", () => {
+    expect(REDUCED_MAX_CYCLES).toBe(2);
+    for (const id of Object.keys(EMOTES) as EmoteId[]) {
+      expect(emoteCycles(id, false)).toBe(EMOTES[id].cycles);
+      expect(emoteCycles(id, true)).toBe(Math.min(EMOTES[id].cycles, 2));
     }
   });
 });
