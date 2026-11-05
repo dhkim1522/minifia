@@ -2879,22 +2879,22 @@ test("emoteDeliveryChecks: 보낸 사람 없이도 돌고, 받는 페이지가 �
   }
 });
 
-const trayGood = () => ({ visibleBefore: { count: 1, shown: 1 }, hiddenWhileOpen: { count: 1, shown: 0 }, visibleAfter: { count: 1, shown: 1 } });
+const floatTrayGood = () => ({ visibleBefore: { count: 1, shown: 1 }, hiddenWhileOpen: { count: 1, shown: 0 }, visibleAfter: { count: 1, shown: 1 } });
 
 test("floatTrayChecks: 열기 전 보이고 열린 동안 숨고 닫으면 돌아오면 FT1~FT3 모두 통과", () => {
-  const lines = floatTrayChecks(trayGood());
+  const lines = floatTrayChecks(floatTrayGood());
   assert.deepEqual(lines.map((l) => l.id), ["FT1", "FT2", "FT3"]);
   assert.ok(lines.every((l) => l.ok));
 });
 
 test("floatTrayChecks: 한 값씩 어긋나면 해당 항목만 실패한다", () => {
-  const a = trayGood();
+  const a = floatTrayGood();
   a.visibleBefore = { count: 1, shown: 0 };
   onlyFail(floatTrayChecks(a), "FT1");
-  const b = trayGood();
+  const b = floatTrayGood();
   b.hiddenWhileOpen = { count: 1, shown: 1 };
   onlyFail(floatTrayChecks(b), "FT2");
-  const c = trayGood();
+  const c = floatTrayGood();
   c.visibleAfter = { count: 1, shown: 0 };
   onlyFail(floatTrayChecks(c), "FT3");
 });

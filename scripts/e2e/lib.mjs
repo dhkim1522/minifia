@@ -2002,6 +2002,63 @@ export function emoteTrayChecks({ button, input, tray, cells, nameFont, viewport
   return out;
 }
 
+// ---- 10페이즈 단계별 동작 도착·비밀 채널 0건·떠 있는 버튼 숨김 (10-08, 결정 D-12·D-18·D-20, UI-SPEC A-5·A-6) ----
+
+/**
+ * 동작 프레임 도착 검사. 읽은 값은 각 페이지의 window.__mfEmotes 사본 { last: {seat,id,n}|null, playing: number[] } 뿐이다(DOM 속성은 없다).
+ * sender = 보낸 사람 자기 페이지 { name, last, playing } (없으면 null) — 서버가 보낸 사람에게도 프레임을 돌려주므로 mode 와 무관하게 늘 "도착"이어야 한다(ED0).
+ * receivers = 다른 페이지들 [{ name, before, last, playing }] — before 는 보내기 전의 last. 줄은 receivers 순서대로 ED1, ED2, …
+ * mode "arrive": last 가 { seat: expectSeat, id: expectId } 이고 playing 에 expectSeat 포함. mode "absent": last 가 보내기 전과 같고 playing 에 expectSeat 없음(밤 마피아→시민 편·유령→산 사람, L27).
+ */
+export function emoteDeliveryChecks({ sender, receivers, expectSeat, expectId, mode } = {}) {
+  const arrive = (o) => {
+    const bad = [];
+    if (!o || !o.last || o.last.seat !== expectSeat || o.last.id !== expectId) bad.push(`last ${JSON.stringify(o?.last ?? null)} (기대 seat ${expectSeat} · id ${expectId})`);
+    if (!o || !Array.isArray(o.playing) || !o.playing.includes(expectSeat)) bad.push(`playing ${JSON.stringify(o?.playing ?? null)} 에 ${expectSeat} 없음`);
+    return bad;
+  };
+  const absent = (o) => {
+    const bad = [];
+    if (JSON.stringify(o?.last ?? null) !== JSON.stringify(o?.before ?? null)) bad.push(`last 가 ${JSON.stringify(o?.before ?? null)} → ${JSON.stringify(o?.last ?? null)} 로 바뀜`);
+    if (Array.isArray(o?.playing) && o.playing.includes(expectSeat)) bad.push(`playing ${JSON.stringify(o.playing)} 에 ${expectSeat} 가 있음`);
+    return bad;
+  };
+  const ok = Array.isArray(receivers) && receivers.length > 0 && receivers.every((r) => !!r && Array.isArray(r.playing)) && isNum(expectSeat) && typeof expectId === "string" && (mode === "arrive" || mode === "absent") && (sender == null || Array.isArray(sender.playing));
+  if (!ok) return [noMeasure("ED1", "동작 도착 검사", "receivers·expectSeat·expectId·mode(arrive|absent)")];
+  const out = [];
+  if (sender) out.push(result("ED0", `${sender.name}: 보낸 사람 자기 페이지에도 서버 프레임이 도착(seat ${expectSeat} · ${expectId})`, arrive(sender)));
+  receivers.forEach((r, i) => {
+    const label = mode === "arrive" ? `${r.name}: 동작 프레임이 도착(seat ${expectSeat} · ${expectId}, playing 에 듦)` : `${r.name}: 동작 프레임이 0건(last 그대로, playing 에 좌석 없음)`;
+    const bad = mode === "arrive" ? arrive(r) : absent(r);
+    out.push(result(`ED${i + 1}`, label, bad.map((b) => `${r.name} ${b}`)));
+  });
+  return out;
+}
+
+/**
+ * 동작 판이 열려 있는 동안 떠 있는 버튼 묶음(.mf-float)이 숨고 닫으면 돌아오는지(10-05 가 CSS 로 구현). 각 값은 { count, shown } —
+ * count = .mf-float 요소 수, shown = 그 가운데 computed visibility 가 hidden 이 아닌 수.
+ * FT1 열기 전 하나 이상 있고 모두 보임 · FT2 열린 동안 하나 이상 있고 모두 숨음 · FT3 닫은 뒤 모두 보임. 확인할 버튼이 하나도 없으면 셋 다 실패(공허한 통과 금지).
+ */
+export function floatTrayChecks({ visibleBefore, hiddenWhileOpen, visibleAfter } = {}) {
+  const L = {
+    FT1: "판을 열기 전: 떠 있는 버튼이 있고 모두 보임",
+    FT2: "판이 열린 동안: 떠 있는 버튼이 모두 숨음(visibility hidden)",
+    FT3: "판을 닫은 뒤: 떠 있는 버튼이 모두 돌아옴",
+  };
+  const okObs = (o) => !!o && isNum(o.count) && isNum(o.shown);
+  if (!okObs(visibleBefore) || !okObs(hiddenWhileOpen) || !okObs(visibleAfter)) return Object.entries(L).map(([id, label]) => noMeasure(id, label, "visibleBefore·hiddenWhileOpen·visibleAfter { count, shown }"));
+  const show = (o) => {
+    if (o.count < 1) return ["떠 있는 버튼이 하나도 없음(확인할 것이 없다)"];
+    return o.shown === o.count ? [] : [`보이는 것 ${o.shown}/${o.count}`];
+  };
+  const hide = (o) => {
+    if (o.count < 1) return ["떠 있는 버튼이 하나도 없음(확인할 것이 없다)"];
+    return o.shown === 0 ? [] : [`아직 보이는 것 ${o.shown}/${o.count}`];
+  };
+  return [result("FT1", L.FT1, show(visibleBefore)), result("FT2", L.FT2, hide(hiddenWhileOpen)), result("FT3", L.FT3, show(visibleAfter))];
+}
+
 // ---- 10페이즈 로비 꾸미기 버튼·시트·카드 띠 (10-07, 결정 D-4·D-5·D-18, UI-SPEC B-1·B-2) ----
 
 /**

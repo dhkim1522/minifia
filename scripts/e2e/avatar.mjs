@@ -1,9 +1,9 @@
-// 10페이즈 캐릭터 동작·의상 화면 E2E 흐름 (10-05~). avatar-emote(10-05)·avatar-dress(10-07). 이후 계획이 avatar-phases 를 같은 파일에 더한다.
+// 10페이즈 캐릭터 동작·의상 화면 E2E 흐름 (10-05~). avatar-emote(10-05)·avatar-dress(10-07)·avatar-phases / avatar-phases-night(10-08).
 // flows.mjs 가 이미 3천 줄이라 흐름 본문은 이 파일에 둔다. flows.mjs 의 도우미는 `makeAvatarFlows(helpers)` 로 받는다(politics.mjs 와 같은 모양 — 서로 import 하지 않는다).
-// helpers: { recorder, startHost, openGuest, attempt, walkableCentersOfApp, LOBBY_HOST_NICK, WORLD_GUEST_NICK, resetAndLeave }  (10-08 이 필요한 도우미를 같은 객체에 더한다)
+// helpers: { recorder, startHost, openGuest, attempt, walkableCentersOfApp, LOBBY_HOST_NICK, WORLD_GUEST_NICK, resetAndLeave, openGame, closeGame, untilGame }  (10-08 이 판 만들기 도우미 셋을 더했다)
 // 판정 문턱은 lib.mjs 의 순수 검사 함수(emoteTrayChecks·dressChecks)에만 있고 여기서는 낮추지 않는다.
-import { chooseRole, hitsInputSurface, leaveLobby, openTestSheet, sampleWorld, screensOfWorld, SetupError, setBots, settle, skipTo, sleep, startGame, tapWorld, waitWorldReady } from "./browser.mjs";
-import { dressChecks, emoteTrayChecks, worldTapRanking } from "./lib.mjs";
+import { chooseRole, chooseVerdict, hitsInputSurface, leaveLobby, openTestSheet, sampleWorld, screensOfWorld, SetupError, setBots, settle, skipTo, sleep, startGame, tapWorld, typeAndSendChat, waitChatLine, waitWorldReady } from "./browser.mjs";
+import { dressChecks, emoteDeliveryChecks, emoteTrayChecks, floatTrayChecks, worldTapRanking } from "./lib.mjs";
 
 /** 동작 하나를 보낸 뒤 두 페이지가 프레임을 받기까지 기다리는 상한(ms). 계획: 1.5초 안 */
 const ARRIVE_MS = 1500;
@@ -117,8 +117,29 @@ function readDressUi(page) {
 /** window.__mfLooks 사본 { 좌석: 의상 id } (훅이 없으면 null) */
 const readLooks = (page) => page.evaluate(() => (window.__mfLooks ? { ...window.__mfLooks } : null));
 
+/** 떠 있는 버튼 묶음(.mf-float)의 수와 그 가운데 보이는(visibility 가 hidden 이 아니고 높이가 있는) 수 */
+const readFloats = (page) =>
+  page.evaluate(() => {
+    const els = [...document.querySelectorAll(".mf-float")];
+    return { count: els.length, shown: els.filter((e) => getComputedStyle(e).visibility !== "hidden" && e.getBoundingClientRect().height > 0).length };
+  });
+
+/** 이름표 층(.mf-world__tags) 안의 [data-emote] 요소 수와 이름에 emote 가 든 속성을 가진 요소 수(L31) */
+const readTagEmoteMarks = (page) =>
+  page.evaluate(() => {
+    const layer = document.querySelector(".mf-world__tags");
+    if (!layer) return { layer: false, attr: 0, named: 0, global: document.querySelectorAll("[data-emote]").length };
+    const all = [layer, ...layer.querySelectorAll("*")];
+    return {
+      layer: true,
+      attr: layer.querySelectorAll("[data-emote]").length,
+      named: all.filter((el) => el.getAttributeNames().some((n) => n.toLowerCase().includes("emote"))).length,
+      global: 0,
+    };
+  });
+
 export function makeAvatarFlows(helpers) {
-  const { recorder, startHost, openGuest, attempt, walkableCentersOfApp, LOBBY_HOST_NICK, WORLD_GUEST_NICK, resetAndLeave } = helpers;
+  const { recorder, startHost, openGuest, attempt, walkableCentersOfApp, LOBBY_HOST_NICK, WORLD_GUEST_NICK, resetAndLeave, openGame, closeGame, untilGame } = helpers;
 
   /** 판을 연다(버튼 누름). 열렸는지 기다린다 */
   async function openTray(page) {
@@ -384,5 +405,205 @@ export function makeAvatarFlows(helpers) {
     await resetAndLeave(hp, ht);
   }
 
-  return { avatarEmoteFlow, avatarDressFlow };
+  // ---- avatar-phases / avatar-phases-night (10-08, D-12·D-14·D-18·D-20, L27·L31) ----
+
+  /** 판이 열리고 칸이 모두 풀릴 때까지 기다린 뒤 원하는 칸을 눌러 동작을 보낸다. 같은 보낸 사람의 앞 전송과 GAP_MS 이상 떨어진다. */
+  const lastSend = new WeakMap();
+  async function sendEmote(page, seat, id) {
+    const gap = GAP_MS - (Date.now() - (lastSend.get(page) ?? 0));
+    if (gap > 0) await sleep(gap);
+    // 채팅을 보낸 뒤에는 입력칸에 초점이 남아 있다 — 이때 동작 버튼은 키보드만 닫는다(AE5). 평소 사람처럼 초점을 뺀 뒤 누른다
+    await page.evaluate(() => document.activeElement?.blur?.());
+    const free = await waitUnblocked(page, seat);
+    if (free === null) throw new SetupError("동작 칸이 풀리지 않음(8초) — 이동이 막혀서가 아니라 걷는 중이거나 앞 동작이 안 끝남");
+    await openTray(page);
+    await page.locator(`[data-emote="${id}"]`).click({ timeout: 3000 });
+    lastSend.set(page, Date.now());
+  }
+
+  /**
+   * 한 장면의 동작 도착(arrive)·0건(absent)을 기록한다. sender = { name, page, seat }, receivers = [{ name, page }].
+   * 이름표 층 검사(AP7)는 호출한 쪽이 sampleTags 로 모아 둔다.
+   */
+  async function deliver(rec, sc, id, { sender, receivers, emoteId, mode, senderArrive = true, tagSamples }) {
+    const befores = await Promise.all(receivers.map((r) => readEmotes(r.page)));
+    await sendEmote(sender.page, sender.seat, emoteId);
+    const sample = async () => {
+      const [s, ...rs] = await Promise.all([readEmotes(sender.page), ...receivers.map((r) => readEmotes(r.page))]);
+      return { s, rs };
+    };
+    const hit = (e) => !!e && e.last !== null && e.last.seat === sender.seat && e.last.id === emoteId && e.playing.includes(sender.seat);
+    let obs;
+    if (mode === "arrive") {
+      await until(async () => {
+        obs = await sample();
+        return hit(obs.s) && obs.rs.every(hit);
+      }, ARRIVE_MS);
+      obs = await sample();
+    } else {
+      // 오지 않음: 보낸 사람 자기 페이지의 도착을 잡은 순간의 값을 쓰고(동작은 1~2초면 끝난다), 받으면 안 되는 페이지는 도착 상한 동안 계속 훑어
+      // 한 번이라도 프레임이 보이면 그 표본을 실패 근거로 쓴다(늦게 와도 잡히고, 왔다가 끝난 것도 놓치지 않는다)
+      let senderObs = null;
+      let bad = null;
+      const t0 = Date.now();
+      while (Date.now() - t0 <= ARRIVE_MS * 2) {
+        const cur = await sample();
+        if (senderObs === null && hit(cur.s)) senderObs = cur.s;
+        const seen = cur.rs.some((r, i) => JSON.stringify(r.last) !== JSON.stringify(befores[i].last) || r.playing.includes(sender.seat));
+        if (seen && bad === null) bad = cur;
+        obs = cur;
+        if (senderObs !== null && Date.now() - t0 >= ARRIVE_MS) break;
+        await sleep(60);
+      }
+      obs = { s: senderObs ?? obs.s, rs: (bad ?? obs).rs };
+    }
+    const lines = emoteDeliveryChecks({
+      sender: senderArrive ? { name: sender.name, last: obs.s.last, playing: obs.s.playing } : null,
+      receivers: receivers.map((r, i) => ({ name: r.name, before: befores[i].last, last: obs.rs[i].last, playing: obs.rs[i].playing })),
+      expectSeat: sender.seat,
+      expectId: emoteId,
+      mode,
+    });
+    for (const l of lines) rec(sc, `${id}-${l.id}`, l.label, l.ok, l.detail);
+    // 동작이 도는 순간의 이름표 층도 본다(L31)
+    for (const who of [sender, ...receivers]) tagSamples.push({ where: `${sc}/${id}/${who.name}`, mark: await readTagEmoteMarks(who.page) });
+  }
+
+  function recordTagSamples(rec, sc, samples) {
+    const bad = samples.filter((x) => !x.mark.layer || x.mark.attr !== 0 || x.mark.named !== 0 || x.mark.global !== 0);
+    rec(sc, "AP7", `모든 시점·모든 페이지의 이름표 층(.mf-world__tags)에 [data-emote] 도 emote 가 든 속성도 0개(L31) — 표본 ${samples.length}개`, samples.length > 0 && bad.length === 0, bad.map((x) => `${x.where} ${JSON.stringify(x.mark)}`).join(" / ") || (samples.length === 0 ? "표본 없음" : ""));
+  }
+
+  /** 단계에 닿아 두 페이지가 그 단계 틀을 그리고 이름표 층이 있을 때까지 */
+  async function reach(pages, phase) {
+    await Promise.all(pages.map((p) => untilGame(p, (g) => g.phase === phase, 9000, `${phase} 도착`)));
+  }
+
+  /**
+   * avatar-phases (D-18, 390x844 한 크기): 한 판(방장 시민 + 손님 + 봇 4)으로 AP1 낮 토론(도착 + 떠 있는 버튼 숨김·복귀) · AP2 지목(이동이 막힌 단계에서도 동작과 채팅이 같이 도착) ·
+   * AP3 변론·찬반 · 처형 뒤 AP4 아침(산 사람 동작이 유령에게 도착) · AP6 유령 방장의 동작이 산 손님 페이지에 0건이고 유령 자기 페이지에는 있음 · AP7 모든 시점의 이름표 층에 [data-emote] 0개.
+   * AP5(밤 마피아→시민 편 0건)는 방장이 마피아여야 해서 avatar-phases-night 가 맡는다.
+   */
+  async function avatarPhasesFlow(ctx) {
+    const rec = recorder(ctx);
+    const id = "avatar-phases";
+    const game = await openGame(ctx, id, { guests: 1, bots: 4, role: "citizen", vote: { exec: "yes", pick: "host" }, to: "discussion" });
+    try {
+      const { hp, ht, hostSeat: hSeat } = game;
+      const guest = game.guests[0];
+      const gp = guest.page;
+      const gt = guest.tracker;
+      const gSeat = guest.seat;
+      const H = { name: "방장", page: hp, seat: hSeat };
+      const G = { name: "손님", page: gp, seat: gSeat };
+      const tags = [];
+      await reach([hp, gp], "discussion");
+      await Promise.all([waitWorldReady(hp, 6), waitWorldReady(gp, 6)]);
+      await Promise.all([settle(hp), settle(gp)]);
+
+      // AP1 낮 토론: 손님 → 방장 도착, 판이 열린 동안 떠 있는 버튼이 숨고 닫으면 돌아옴
+      {
+        const sc = `${id}/discussion`;
+        const free = await waitUnblocked(gp, gSeat);
+        if (free === null) throw new SetupError("낮 토론에서 손님 동작 칸이 풀리지 않음");
+        const before = await readFloats(gp);
+        await openTray(gp);
+        await sleep(120);
+        const open = await readFloats(gp);
+        await closeTray(gp);
+        await sleep(120);
+        const after = await readFloats(gp);
+        for (const l of floatTrayChecks({ visibleBefore: before, hiddenWhileOpen: open, visibleAfter: after })) rec(sc, `AP1-${l.id}`, l.label, l.ok, l.ok ? "" : `${l.detail} (닫힘 ${JSON.stringify(before)} · 열림 ${JSON.stringify(open)} · 닫은 뒤 ${JSON.stringify(after)})`);
+        await deliver(rec, sc, "AP1", { sender: G, receivers: [H], emoteId: "clap", mode: "arrive", tagSamples: tags });
+      }
+
+      // AP2 지목: 이동이 막힌 단계 — 동작과 채팅 한 줄이 같이 도착
+      {
+        const sc = `${id}/nomination`;
+        await skipTo(hp, ht, "nomination");
+        await reach([hp, gp], "nomination");
+        await settle(hp);
+        await deliver(rec, sc, "AP2", { sender: G, receivers: [H], emoteId: "dance", mode: "arrive", tagSamples: tags });
+        const text = "지목중채팅";
+        await typeAndSendChat(gp, text);
+        const chat = await attempt(async () => {
+          await waitChatLine(hp, text, 3000);
+        });
+        rec(sc, "AP2-chat", "같은 지목 단계에서 손님의 채팅 한 줄도 방장에게 도착(이동 차단과 무관)", chat.ok, chat.detail);
+      }
+
+      // AP3 변론·찬반: 봇이 방장을 가리켜 방장이 변론자. 변론자도 동작 가능
+      {
+        const sc = `${id}/trial`;
+        await skipTo(hp, ht, "defense");
+        await reach([hp, gp], "defense");
+        await settle(hp);
+        await deliver(rec, `${sc}-defense`, "AP3a", { sender: H, receivers: [G], emoteId: "cry", mode: "arrive", tagSamples: tags });
+        await skipTo(hp, ht, "verdict");
+        await reach([hp, gp], "verdict");
+        await settle(hp);
+        await deliver(rec, `${sc}-verdict`, "AP3b", { sender: G, receivers: [H], emoteId: "clap", mode: "arrive", tagSamples: tags });
+        // 찬성으로 처형까지 보낸다
+        await untilGame(gp, (x) => x.phase === "verdict" && x.verdictBtns.length === 2, 6000, "찬반 도착");
+        await chooseVerdict(gp, true).catch(() => {});
+      }
+
+      // 처형 → 밤 → 아침. 방장은 유령이 된다
+      await skipTo(hp, ht, "execution");
+      await reach([hp, gp], "execution");
+      await skipTo(hp, ht, "morning");
+      await reach([hp, gp], "morning");
+      await Promise.all([settle(hp), settle(gp)]);
+      const gv = gt.last();
+      if (!(gv.players.find((p) => p.seat === gSeat)?.alive !== false)) throw new SetupError("손님이 첫 밤에 탈락함 — 새 방으로 다시 돈다");
+      if (ht.last().players.find((p) => p.seat === hSeat)?.alive !== false) throw new SetupError("방장이 처형되지 않음 — 새 방으로 다시 돈다");
+
+      // AP4 아침: 산 손님의 동작이 산 사람과 유령(방장)에게 도착
+      await deliver(rec, `${id}/morning`, "AP4", { sender: G, receivers: [H], emoteId: "dance", mode: "arrive", tagSamples: tags });
+
+      // AP6 유령: 처형된 방장의 동작은 산 손님 페이지에 0건, 유령 자기 페이지에는 있음
+      await deliver(rec, `${id}/ghost`, "AP6", { sender: H, receivers: [G], emoteId: "surprise", mode: "absent", tagSamples: tags });
+
+      recordTagSamples(rec, `${id}/tags`, tags);
+    } finally {
+      await closeGame(game);
+    }
+  }
+
+  /**
+   * avatar-phases-night (D-18·D-20, 390x844): 방장 마피아 + 손님(시민 편) + 봇. AP5 밤 마피아 방장의 동작이 시민 손님 페이지에 0건이고 손님 밤 DOM 에 [data-emote-button]·[data-emote-tray] 가 0개,
+   * 마피아 방장 자기 페이지에는 자기 프레임이 있다 · AP7 밤의 이름표 층에도 [data-emote] 0개.
+   */
+  async function avatarPhasesNightFlow(ctx) {
+    const rec = recorder(ctx);
+    const id = "avatar-phases-night";
+    const game = await openGame(ctx, id, { guests: 1, bots: 4, role: "mafia", vote: { exec: "no", pick: "other" }, to: "discussion" });
+    try {
+      const { hp, ht, hostSeat: hSeat } = game;
+      const guest = game.guests[0];
+      const gp = guest.page;
+      const gt = guest.tracker;
+      const gSeat = guest.seat;
+      const H = { name: "마피아 방장", page: hp, seat: hSeat };
+      const G = { name: "시민 편 손님", page: gp, seat: gSeat };
+      const tags = [];
+      if (gt.last().me.role === "mafia") throw new SetupError("손님도 마피아 — 새 방으로 다시 돈다");
+      await skipTo(hp, ht, "night");
+      await reach([hp, gp], "night");
+      await Promise.all([settle(hp), settle(gp)]);
+      const sc = `${id}/night`;
+
+      const dom = await gp.evaluate(() => ({ button: document.querySelectorAll("[data-emote-button]").length, tray: document.querySelectorAll("[data-emote-tray]").length, cell: document.querySelectorAll("[data-emote]").length }));
+      rec(sc, "AP5a", "시민 편 손님의 밤 DOM 에 [data-emote-button]·[data-emote-tray]·[data-emote] 가 0개(D-20)", dom.button === 0 && dom.tray === 0 && dom.cell === 0, `버튼 ${dom.button} · 판 ${dom.tray} · 칸 ${dom.cell}`);
+      const hostDom = await hp.evaluate(() => document.querySelectorAll("[data-emote-button]").length);
+      rec(sc, "AP5b", "마피아 방장의 밤 아래 패널에는 동작 버튼이 있다(마피아 채널)", hostDom === 1, `버튼 ${hostDom}`);
+
+      await deliver(rec, sc, "AP5c", { sender: H, receivers: [G], emoteId: "throat", mode: "absent", tagSamples: tags });
+      recordTagSamples(rec, `${id}/tags`, tags);
+    } finally {
+      await closeGame(game);
+    }
+  }
+
+  return { avatarEmoteFlow, avatarDressFlow, avatarPhasesFlow, avatarPhasesNightFlow };
 }
