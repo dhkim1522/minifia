@@ -9,6 +9,7 @@ import { MOVE_SPEED } from "../../shared/game/world";
 import { NICKNAME_MAX_GRAPHEMES, countGraphemes } from "../../shared/nickname";
 import { ANNOUNCE_MORNING_AT } from "../../src/game/dayView";
 import { TIMELESS_PHASES } from "../../src/game/scenes";
+import { SOUND_PREF_KEY, SOUND_PREF_VERSION, loadSoundPref } from "../../src/audio/prefs";
 import { SOUND_IDS } from "../../src/audio/recipes";
 import { SOUND_LIMITS } from "../../src/debug/soundLabData";
 import { LETTER_END_AT_MS, LETTER_FOLD_AT_MS, SEAL_GLYPH } from "../../src/game/willLetter";
@@ -31,6 +32,8 @@ import { FAIL_AFTER_MS, MAP_STATUS_COPY, RECREATE_AFTER_MS } from "../../src/wor
 // 타입 선언이 없는 .mjs 다(allowJs 없음).
 // @ts-expect-error -- 선언 없는 스크립트 모듈
 import * as e2eLib from "../../scripts/e2e/lib.mjs";
+// @ts-expect-error -- 선언 없는 스크립트 모듈
+import * as perfRun from "../../scripts/perf-run.mjs";
 
 describe("E2E 의 TIMELESS_PHASES 와 앱 상수", () => {
   it("scripts/e2e/lib.mjs 의 TIMELESS_PHASES 가 src/game/scenes.ts 의 같은 이름 상수와 같은 목록이다", () => {
@@ -367,5 +370,14 @@ describe("12페이즈 소리 시험 페이지 E2E 표식·문턱(12-06)", () => 
   it("E2E 문턱 개수는 SOUND_IDS.length 와 같고, 앱 쪽 SOUND_LIMITS 와 한 글자도 다르지 않다(문턱 완화 방지, T-12-22)", () => {
     expect(lib.SOUND_RENDER_LIMITS.count).toBe(SOUND_IDS.length);
     expect({ ...lib.SOUND_RENDER_LIMITS }).toEqual({ ...SOUND_LIMITS });
+  });
+
+  it("perf-run --sound off 가 쓰는 저장값이 앱의 소리 설정 저장 형식과 같아 엔진이 꺼짐으로 읽는다", () => {
+    const script = (perfRun as unknown as { soundInitScript(mode: string): string | null }).soundInitScript("off")!;
+    const store = new Map<string, string>();
+    new Function("localStorage", script)({ setItem: (k: string, v: string) => store.set(k, v) });
+    expect([...store.keys()]).toEqual([SOUND_PREF_KEY]);
+    expect(store.get(SOUND_PREF_KEY)).toBe(JSON.stringify({ v: SOUND_PREF_VERSION, on: false }));
+    expect(loadSoundPref({ getItem: (k: string) => store.get(k) ?? null, setItem: () => {} })).toBe(false);
   });
 });

@@ -6,6 +6,7 @@
 //   node scripts/perf-run.mjs [--url http://localhost:5173] [--scene talk|vote] [--minutes 5] [--dpr 2]
 //        [--throttle 4] [--size 390x844] [--out .planning/phases/06-world-skeleton/perf/] [--headed]
 //        [--budget 0] [--seed 1] [--shot [--file 이름]]
+//   node scripts/perf-run.mjs --mode nightload [--sound on|off]   (소리 켠/끈 측정 구분, 12-06: on 은 첫 중립 탭으로 오디오를 깨우고 off 는 저장값을 끔으로 준다. 결과 JSON 의 sound 칸에 모드·훅 상태·요청 수)
 //   node scripts/perf-run.mjs --mode interactive [--url ...] [--throttle 4] [--runs 3] [--size 390x844] [--dpr 2] [--out ...] [--headed]
 //   --url      기본은 v2.0 공개 주소(deploy-target.expectedOrigin). v1.0 주소는 어떤 요청보다 먼저 거부한다(결정 0055-2·0043).
 //   --throttle CPU 감속 배율(기본 4 — DevTools 의 "CPU 4× slowdown" 과 같은 CDP 명령). 1 이면 감속 없음.
@@ -109,14 +110,14 @@ const CHATLOAD_LINES = ["저 아니에요", "누가 수상해요?", "조용한 �
 /** 6페이즈 합격 기준(06-PERF-RESULTS.md 조건 B, UI-SPEC "합격 기준"). 숫자를 낮추지 않고 그대로 적는다 */
 const CHATLOAD_BASELINE = { avgFps: 55, jankMax: 5, perMinutes: 5, jankMs: JANK_MS, source: "06-PERF-RESULTS.md 조건 B · UI-SPEC 합격 기준 — 5분 평균 ≥ 55fps, 끊김(>50ms) ≤ 5회/5분" };
 
-const USAGE =
-  "사용법: node scripts/perf-run.mjs [--mode perf|interactive|chatload|nightload] [--url 주소] [--scene talk|vote] [--minutes 5] [--dpr 2] [--throttle 4] [--size 390x844] [--out 폴더] [--headed] [--budget 0] [--seed 1] [--outfits mix|coat] [--burst 1..4] [--runs 3] [--bots 7] [--shot [--file 이름]]";
+export const USAGE =
+  "사용법: node scripts/perf-run.mjs [--mode perf|interactive|chatload|nightload] [--url 주소] [--scene talk|vote] [--minutes 5] [--dpr 2] [--throttle 4] [--size 390x844] [--out 폴더] [--headed] [--budget 0] [--seed 1] [--outfits mix|coat] [--burst 1..4] [--runs 3] [--bots 7] [--sound on|off] [--shot [--file 이름]]";
 
 class UsageError extends Error {}
 
 /** 인자 해석(순수). 값이 필요한 옵션에 값이 없거나 숫자가 아니면 UsageError */
 export function parseArgs(argv) {
-  const o = { url: null, scene: "talk", minutes: 5, dpr: 2, throttle: 4, size: { w: 390, h: 844 }, out: DEFAULT_OUT, headed: false, budget: 0, seed: 1, shot: false, file: null, mode: "perf", runs: 3, bots: 7, outGiven: false, outfits: "coat", burst: 1 };
+  const o = { url: null, scene: "talk", minutes: 5, dpr: 2, throttle: 4, size: { w: 390, h: 844 }, out: DEFAULT_OUT, headed: false, budget: 0, seed: 1, shot: false, file: null, mode: "perf", runs: 3, bots: 7, outGiven: false, outfits: "coat", burst: 1, sound: "on" };
   const need = (name, i) => {
     const v = argv[i + 1];
     if (v === undefined || v.startsWith("--")) throw new UsageError(`${name} 에 값이 필요합니다`);
@@ -164,6 +165,13 @@ export function parseArgs(argv) {
         const n = num(a, need(a, i++), { min: 1, max: 4 });
         if (!Number.isInteger(n)) throw new UsageError(`--burst 는 1~4 정수: ${n}`);
         o.burst = n;
+        break;
+      }
+      case "--sound": {
+        // nightload 의 소리 켠/끈 측정 구분(12-06). 다른 모드에서는 무시한다
+        const v = need(a, i++);
+        if (v !== "on" && v !== "off") throw new UsageError(`--sound 은 on 또는 off: ${v}`);
+        o.sound = v;
         break;
       }
       case "--runs": o.runs = Math.floor(num(a, need(a, i++), { min: 1, max: 20 })); break;
@@ -645,12 +653,49 @@ async function runChatload(browser, o, origin, chrome) {
 }
 
 /**
+ * 소리 도우미 (12-06, D-18): nightload 의 --sound on|off 를 가르는 작은 순수 도우미들. 가짜 page 로 시험한다(perf-run.test.mjs).
+ * 판정은 하지 않는다 — 결과 JSON 의 sound 칸에 모드·끝 때 훅 상태·요청 수만 적는다. 실제 측정 실행과 성능 합격선은 12-12.
+ */
+
+/** off 면 저장값 minifia:sound = {"v":1,"on":false} 를 쓰는 init script 문자열(openHostPage 의 initScripts 로 넘긴다), on 이면 null. 저장소가 막혀도 던지지 않는다 */
+export function soundInitScript(mode) {
+  if (mode !== "off") return null;
+  return `try { localStorage.setItem("minifia:sound", JSON.stringify({ v: 1, on: false })); } catch (e) {}`;
+}
+
+/** on 이면 화면 좌상단 가장자리(4,4)를 한 번 탭해 제스처로 오디오를 깨운다. 탭했으면 true(실패·off 는 false, 던지지 않는다) */
+export async function wakeAudio(page, size, mode = "on") {
+  if (mode === "off") return false;
+  const x = Math.min(4, Math.max(0, (size?.w ?? 5) - 1));
+  const y = Math.min(4, Math.max(0, (size?.h ?? 5) - 1));
+  try {
+    await page.touchscreen.tap(x, y);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** window.__mfSound 훅에서 { state, on, requests: 요청 로그 길이 } 를 읽는다. 훅이 없거나 page 가 닫혔으면 null */
+export async function readSoundState(page) {
+  try {
+    return await page.evaluate(() => {
+      const h = window.__mfSound;
+      return h ? { state: h.state, on: h.on, requests: h.log.length } : null;
+    });
+  } catch {
+    return null;
+  }
+}
+
+/**
  * nightload 한 번(09-22): 테스트 방에 봇을 채우고 방장 마피아 판·시민 판을 장면별로 머물며 rAF 간격을 잰다. 실패는 던진다.
  * 기록기는 페이지 안 배열이고, 넘기기·시트 조작 동안은 멈춘다(그 구간은 측정에 넣지 않는다). 프레임마다 장면 번호(tag)를 함께 적는다.
  */
 async function nightloadOnce(browser, o, origin, chrome) {
   const room = await createTestRoom(origin, NIGHTLOAD_NICK);
-  const host = await openHostPage(browser, { origin, code: room.code, token: room.token, size: { w: o.size.w, h: o.size.h }, dpr: o.dpr });
+  const soundInit = soundInitScript(o.sound);
+  const host = await openHostPage(browser, { origin, code: room.code, token: room.token, size: { w: o.size.w, h: o.size.h }, dpr: o.dpr, initScripts: soundInit === null ? [] : [soundInit] });
   const { page, tracker, context } = host;
   const issues = [];
   page.on("pageerror", (e) => issues.push(`페이지 오류: ${e.message}`));
@@ -659,6 +704,8 @@ async function nightloadOnce(browser, o, origin, chrome) {
     page.setDefaultTimeout(INTERACTIVE_STEP_MS);
     const cdp = await context.newCDPSession(page);
     await cdp.send("Emulation.setCPUThrottlingRate", { rate: o.throttle });
+    // 소리 켬: 첫 중립 탭으로 오디오를 깨운다(끔은 저장값이 이미 꺼짐)
+    await wakeAudio(page, o.size, o.sound);
 
     await openTestSheet(page);
     await setBots(page, tracker, o.bots);
@@ -752,6 +799,7 @@ async function nightloadOnce(browser, o, origin, chrome) {
     }
     const png = join(o.out, `${outputBase(o)}.png`);
     await page.screenshot({ path: png });
+    const soundState = await readSoundState(page);
     await leaveLobby(page);
     return {
       runner: {
@@ -773,6 +821,7 @@ async function nightloadOnce(browser, o, origin, chrome) {
       frames: { ...stats, jankPer5min: (stats.jank * 300) / stats.seconds },
       passes,
       scenes,
+      sound: { mode: o.sound, state: soundState?.state ?? null, on: soundState?.on ?? null, requests: soundState?.requests ?? null, note: "소리 켠/끈 측정 구분(12-06). 판정 없음 — 합격선은 12-12" },
       baseline: CHATLOAD_BASELINE,
       renderer: { before: renderBefore, after: renderAfter, note: "제품 런타임의 자동 강등(10초 평균 45fps 미만) 단계는 테스트 훅이 주지 않는다. calls·triangles 가 처음보다 크게 줄었으면 강등 의심" },
       screenshot: png,
