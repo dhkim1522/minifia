@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { createScenario, mulberry32, parsePerfParams } from "../../src/debug/perf/scenario";
+import { createScenario, MIX_OUTFITS, mulberry32, parsePerfParams } from "../../src/debug/perf/scenario";
 import type { ScenarioEvent } from "../../src/debug/perf/scenario";
 import { BAR_MAP, BAR_SPAWNS, UNIT, lineWalkable } from "../../shared/game/map";
 import { MOVE_V, positionAtFx, segmentEndsAt } from "../../shared/game/world";
 import type { Segment } from "../../shared/game/world";
+import { createHash } from "node:crypto";
+import { EMOTE_IDS } from "../../shared/protocol";
+import { OUTFITS } from "../../src/world/characterData";
 
 const run = (seed: number, ms: number, chars = 8): ScenarioEvent[] => createScenario({ seed, chars, map: BAR_MAP }).advance(ms);
 
@@ -124,7 +127,7 @@ describe("parsePerfParams", () => {
   });
   it("쿼리를 읽는다", () => {
     const p = parsePerfParams(new URLSearchParams("perf=1&scene=vote&minutes=0.25&dpr=1.5&budget=2&seed=9&chars=5&shot=1&nav=1"));
-    expect(p).toEqual({ scene: "vote", minutes: 0.25, dpr: 1.5, budget: 2, seed: 9, chars: 5, shot: true, nav: true });
+    expect(p).toEqual({ scene: "vote", minutes: 0.25, dpr: 1.5, budget: 2, seed: 9, chars: 5, shot: true, nav: true, outfits: "coat", burst: 1 });
   });
   it("범위 밖·잘못된 값은 기본값 또는 안쪽으로 자른다", () => {
     const p = parsePerfParams(new URLSearchParams("scene=day&minutes=-3&dpr=abc&budget=99&seed=x&chars=40"));
@@ -149,5 +152,90 @@ describe("createScenario: 사람이 눌러 retarget", () => {
     expect(others(after)).toEqual(others(base));
     const mine = after.filter((e) => e.seat === 0 && e.kind === "move" && e.p.length >= 4 && e.at > 10000);
     expect(mine[0]!.at).toBeGreaterThanOrEqual(segmentEndsAt(seg));
+  });
+});
+
+// 10-06: outfits=mix·burst=N (D-15, O-10)
+const sha = (ev: ScenarioEvent[]): string => createHash("sha256").update(JSON.stringify(ev)).digest("hex");
+
+describe("burst=1(기본)은 10-06 이전과 비트 단위로 같다 (골든)", () => {
+  it.each([
+    [1, 8, 123, "a6469c86694d1e87d10caa8e4525ef04962486d85bf4c2d4a61bb2dfc604eae2"],
+    [7, 8, 121, "c44932b8af1c6a5eac78b70f892597096f3fa359e5f973bcbc3dc0d7336abc8c"],
+    [3, 4, 74, "0e5a5daa83b9ba27e5c4c32b8764dc8eed822249a90b43eec4927c6fad036548"],
+  ])("seed %i chars %i 첫 60초: 이벤트 %i 개, 해시 일치", (seed, chars, n, hash) => {
+    const ev = createScenario({ seed, chars, map: BAR_MAP }).advance(60000);
+    expect(ev.length).toBe(n);
+    expect(sha(ev)).toBe(hash);
+  });
+  it("burst: 1 을 명시해도 같다", () => {
+    expect(sha(createScenario({ seed: 1, chars: 8, map: BAR_MAP, burst: 1 }).advance(60000))).toBe("a6469c86694d1e87d10caa8e4525ef04962486d85bf4c2d4a61bb2dfc604eae2");
+  });
+});
+
+describe("burst=N>1 — 같은 시각 서로 다른 N개 좌석의 동작", () => {
+  const emotes = (ev: ScenarioEvent[]) => ev.filter((e): e is Extract<ScenarioEvent, { kind: "emote" }> => e.kind === "emote");
+  const runB = (seed: number, burst: number, ms = 60000) => createScenario({ seed, chars: 8, map: BAR_MAP, burst }).advance(ms);
+
+  it("5초마다 N개가 같은 시각에, 좌석은 서로 다르다", () => {
+    const em = emotes(runB(1, 4));
+    expect(em.length).toBe(4 * 12);
+    const bySlot = new Map<number, number[]>();
+    for (const e of em) bySlot.set(e.at, [...(bySlot.get(e.at) ?? []), e.seat]);
+    expect([...bySlot.keys()]).toEqual(Array.from({ length: 12 }, (_, i) => 5000 * (i + 1)));
+    for (const seats of bySlot.values()) {
+      expect(seats.length).toBe(4);
+      expect(new Set(seats).size).toBe(4);
+    }
+  });
+  it("동작 id 는 아홉 종을 돌아가며 쓴다(모두 EMOTE_IDS 안)", () => {
+    const ids = emotes(runB(1, 4)).map((e) => e.id);
+    expect(ids.every((id) => (EMOTE_IDS as readonly string[]).includes(id))).toBe(true);
+    expect(new Set(ids).size).toBe(9);
+  });
+  it("걷던 사람은 동작 전에 한 점 구간으로 멈춘다(같은 시각 move 가 emote 앞에 있다)", () => {
+    const ev = runB(1, 4);
+    for (const e of emotes(ev)) {
+      const i = ev.indexOf(e);
+      const stop = ev.slice(0, i).reverse().find((m) => m.kind === "move" && m.seat === e.seat);
+      if (stop && stop.at === e.at) expect(stop.kind).toBe("move");
+    }
+    // 동작 중인 사람에게 동작 길이 안에 새 걷기 구간이 오지 않는다(2초 최소 쉼)
+    for (const e of emotes(ev)) {
+      const next = ev.find((m) => m.kind === "move" && m.seat === e.seat && m.at > e.at);
+      if (next) expect(next.at - e.at).toBeGreaterThanOrEqual(2000);
+    }
+  });
+  it("같은 seed 면 결정적이고 seed 가 다르면 다르다", () => {
+    expect(runB(1, 4)).toEqual(runB(1, 4));
+    expect(sha(runB(2, 4))).not.toBe(sha(runB(1, 4)));
+  });
+  it("chars 보다 큰 burst 는 chars 로 자른다", () => {
+    const em = emotes(createScenario({ seed: 1, chars: 3, map: BAR_MAP, burst: 4 }).advance(5000));
+    expect(em.map((e) => e.seat).sort()).toEqual([0, 1, 2]);
+  });
+});
+
+describe("parsePerfParams — outfits·burst", () => {
+  it("outfits=mix, burst=1~4 를 읽는다", () => {
+    const p = parsePerfParams(new URLSearchParams("outfits=mix&burst=4"));
+    expect(p.outfits).toBe("mix");
+    expect(p.burst).toBe(4);
+  });
+  it("잘못된 값은 기본값(coat, 1)이고 범위 밖 burst 는 기본값이다", () => {
+    for (const q of ["outfits=zzz&burst=x", "outfits=&burst=0", "burst=5", "burst=2.5", "burst=-1"]) {
+      const p = parsePerfParams(new URLSearchParams(q));
+      expect(p.outfits).toBe("coat");
+      expect(p.burst).toBe(1);
+    }
+  });
+});
+
+describe("MIX_OUTFITS — 8명 서로 다른 의상(탐정 포함)", () => {
+  it("좌석 0 이 탐정이고 8개가 서로 다른 의상 id 다", () => {
+    expect(MIX_OUTFITS.length).toBe(8);
+    expect(MIX_OUTFITS[0]).toBe("detective");
+    expect(new Set(MIX_OUTFITS).size).toBe(8);
+    for (const o of MIX_OUTFITS) expect(Object.hasOwn(OUTFITS, o)).toBe(true);
   });
 });
