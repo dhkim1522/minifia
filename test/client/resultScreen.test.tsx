@@ -1027,3 +1027,251 @@ describe("시상식 첫 창 (11-09)", () => {
     expect(hookOf().shown).toBe(-1);
   });
 });
+
+// ---------- 11-09 Task 2: 시상식 완성 — 교대·박수·넘기기 k / n·일시정지·의상 복귀·모션 줄이기 (D-1, D-25, O-13) ----------
+describe("시상식 완성 (11-09)", () => {
+  // 좌석 0 시민 · 1 경찰 · 2 의사(탈락) · 3 마피아 · 4 시민, 시민 승. 서버 정렬: 진 팀(3) → 이긴 팀
+  const AWARDS5: AwardLine[] = [
+    { seat: 3, award: "whiff", k: 2 },
+    { seat: 2, award: "spectator", k: 1, at: "night" },
+    { seat: 1, award: "detective", k: 1 },
+    { seat: 4, award: "talker", k: 12 },
+    { seat: 0, award: "survivor" },
+  ];
+  /** 8명: 마피아 2명(3, 5)이 진 팀이라 먼저 */
+  const AWARDS8: AwardLine[] = [
+    { seat: 5, award: "actor", k: 2 },
+    { seat: 3, award: "whiff", k: 3 },
+    { seat: 7, award: "spectator", k: 2, at: "day" },
+    { seat: 6, award: "mood", k: 4 },
+    { seat: 4, award: "whisperer", k: 3 },
+    { seat: 2, award: "target", k: 3 },
+    { seat: 1, award: "angel", k: 1 },
+    { seat: 0, award: "survivor" },
+  ];
+  const S = 5600;
+  const executionView = (count = 5): RoomView => {
+    const v = makeView({ count });
+    v.phase = "execution";
+    delete (v as { result?: unknown }).result;
+    v.day = { ...v.day!, candidate: 3, execution: { seat: 3 } };
+    return v;
+  };
+  const arrive = (opts: Opts = {}) => {
+    const r = renderRoom(executionView(opts.count));
+    r.rerenderRoom(makeView({ awards: AWARDS5, ...opts }));
+    return r;
+  };
+  const advance = (ms: number) => act(() => void vi.advanceTimersByTime(ms));
+  const title = (c: ParentNode) => text(c.querySelector("h1"));
+  const plate = (c: ParentNode) => c.querySelector<HTMLElement>("[data-award-plate]");
+  const skipBtn = (c: ParentNode) => c.querySelector<HTMLElement>('[data-float="skip"]');
+  const count = (c: ParentNode) => text(c.querySelector("[data-float-count]"));
+  const hookOf = () => (window as unknown as { __mfResult?: { shown: number; dimmed: number[]; costumes: Record<number, string> } }).__mfResult!;
+  const posAt = (seat: number, ahead = 0) => stage.props!.store.positionOf(seat, Date.now() + ahead)!;
+  const slotOf = (n: number, seat: number) => ({ x: ringSlots(n)[seat]![0] / 100, z: ringSlots(n)[seat]![1] / 100 });
+  const withReduced = async (fn: () => void | Promise<void>) => {
+    const real = window.matchMedia;
+    Object.defineProperty(window, "matchMedia", { configurable: true, writable: true, value: () => ({ matches: true, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} }) });
+    try {
+      await fn();
+    } finally {
+      Object.defineProperty(window, "matchMedia", { configurable: true, writable: true, value: real });
+    }
+  };
+
+  it("창 교대: 2500 에 둘째 사람(2)이 걸어 나오고 앞사람(3)은 자리로 돌아가며 3 은 다시 어두워진다", () => {
+    const r = arrive();
+    advance(S + 2499);
+    expect(plate(r.container)!.dataset.awardId).toBe("whiff");
+    expect(hookOf().dimmed).not.toContain(3);
+    advance(1);
+    expect(plate(r.container)).toBeNull(); // 둘째 창의 첫 900ms 는 걷기만
+    expect(scene().pin).toEqual({ mode: "turn", seat: 2 });
+    const c = posAt(3);
+    expect(Math.hypot(c.x, c.z)).toBeLessThan(0.05); // 앞사람은 방금까지 무대 가운데
+    const home = posAt(3, 900);
+    expect(home.x).toBeCloseTo(slotOf(5, 3).x, 1);
+    expect(home.z).toBeCloseTo(slotOf(5, 3).z, 1);
+    const toCenter = posAt(2, 900);
+    expect(Math.hypot(toCenter.x, toCenter.z)).toBeLessThan(0.05);
+    expect(hookOf().dimmed).toContain(3);
+    advance(900);
+    expect(plate(r.container)!.textContent).toContain("민지, 관전자, 1일차 밤 탈락");
+    expect(hookOf().shown).toBe(1);
+  });
+
+  it("박수: 패가 뜨는 순간 수상자를 뺀 오름차순 최대 4명(탈락자 포함)에게 clap 큐, 동시에 4를 넘지 않는다", () => {
+    const r = arrive();
+    advance(S + 899);
+    const before = Math.max(0, ...stage.props!.emoteCues!.map((c) => c.nonce));
+    advance(1);
+    const cues = stage.props!.emoteCues!;
+    expect(cues.map((c) => c.seat)).toEqual([0, 1, 2, 4]);
+    expect(cues.every((c) => c.id === "clap" && c.nonce > before)).toBe(true);
+    advance(2500);
+    expect(stage.props!.emoteCues!.map((c) => c.seat)).toEqual([0, 1, 3, 4]);
+    expect(stage.props!.emoteCues!.length).toBeLessThanOrEqual(4);
+    r.unmount();
+  });
+
+  it("8명 판: 창 8개, 첫 창 박수는 수상자(5)를 뺀 0~4 중 4명, 마지막에 8 / 8", () => {
+    const r = renderRoom(executionView(8));
+    r.rerenderRoom(makeView({ count: 8, awards: AWARDS8 }));
+    advance(S + 900);
+    expect(count(r.container)).toBe("1 / 8");
+    expect(stage.props!.emoteCues!.map((c) => c.seat)).toEqual([0, 1, 2, 3]);
+    advance(2500 * 7);
+    expect(count(r.container)).toBe("8 / 8");
+    expect(plate(r.container)!.dataset.awardId).toBe("survivor");
+    advance(2500);
+    expect(skipBtn(r.container)).toBeNull();
+    expect(title(r.container)).toBe("시민 승리");
+  });
+
+  it("[넘기기]: 시상 중에만, 접근성 이름 '넘기기'·위에 'k / n', 시작 전·끝난 뒤에는 없다", () => {
+    const r = arrive();
+    advance(S - 1);
+    expect(skipBtn(r.container)).toBeNull();
+    advance(1);
+    const b = skipBtn(r.container)!;
+    expect(b.getAttribute("aria-label")).toBe("넘기기");
+    expect(count(r.container)).toBe("1 / 5");
+    expect(b.querySelector("svg")).not.toBeNull();
+    advance(2500);
+    expect(count(r.container)).toBe("2 / 5");
+    advance(2500 * 4);
+    expect(title(r.container)).toBe("시민 승리");
+    expect(skipBtn(r.container)).toBeNull();
+    expect(r.container.querySelector("[data-float-count]")).toBeNull();
+  });
+
+  it("[넘기기] 한 번이면 앞사람은 순간 이동, 다음 사람이 걸어 나온다 (패 탭도 같다)", () => {
+    const r = arrive();
+    advance(S + 1000);
+    expect(plate(r.container)).not.toBeNull();
+    act(() => void fireEvent.click(skipBtn(r.container)!));
+    expect(count(r.container)).toBe("2 / 5");
+    expect(plate(r.container)).toBeNull();
+    expect(scene().pin).toEqual({ mode: "turn", seat: 2 });
+    const home = posAt(3);
+    expect(home.x).toBeCloseTo(slotOf(5, 3).x, 1);
+    expect(home.z).toBeCloseTo(slotOf(5, 3).z, 1);
+    advance(900);
+    act(() => void fireEvent.click(plate(r.container)!));
+    expect(count(r.container)).toBe("3 / 5");
+    expect(scene().pin).toEqual({ mode: "turn", seat: 1 });
+  });
+
+  it("연타: 같은 프레임에 n 번 눌러도 안전하게 끝까지 가고 한 번 더 눌러도 아무 일 없다", () => {
+    const r = arrive();
+    advance(S + 100);
+    const btn = skipBtn(r.container)!;
+    act(() => {
+      for (let i = 0; i < 4; i++) fireEvent.click(btn);
+    });
+    expect(count(r.container)).toBe("5 / 5");
+    expect(scene().pin).toEqual({ mode: "turn", seat: 0 });
+    act(() => void fireEvent.click(btn));
+    expect(title(r.container)).toBe("시민 승리");
+    expect(skipBtn(r.container)).toBeNull();
+    const timers = vi.getTimerCount();
+    advance(5000);
+    expect(title(r.container)).toBe("시민 승리");
+    expect(vi.getTimerCount()).toBeLessThanOrEqual(timers);
+  });
+
+  it("끝: 모두 자리로 돌아가고 +600 에 직업 의상이 걷힌다 (고른 look 으로)", () => {
+    const r = arrive();
+    advance(S + 2500 * 5 - 1);
+    expect(Object.keys(hookOf().costumes)).toHaveLength(5);
+    advance(1);
+    expect(title(r.container)).toBe("시민 승리");
+    expect(scene().pin).toEqual({ mode: "point", x: GATHER_CENTER.x, z: GATHER_CENTER.z });
+    const start = posAt(0);
+    expect(Math.hypot(start.x, start.z)).toBeLessThan(0.05); // 마지막 수상자(0)는 아직 무대 가운데
+    const home = posAt(0, 900);
+    expect(home.x).toBeCloseTo(slotOf(5, 0).x, 1);
+    advance(599);
+    expect(Object.values(scene().seats).filter((l) => l.costume !== undefined)).toHaveLength(5);
+    advance(1);
+    expect(Object.values(scene().seats).filter((l) => l.costume !== undefined)).toHaveLength(0);
+    expect(hookOf().costumes).toEqual({});
+    expect(hookOf().dimmed).toEqual([3]);
+    expect(hookOf().shown).toBe(-1);
+  });
+
+  it("일시정지: 확장 탭이 열리면 시계가 멈추고 [넘기기]가 숨는다 — 패는 그대로, 접으면 이어진다 (O-13)", () => {
+    const r = arrive();
+    advance(S + 1500);
+    expect(hookOf().shown).toBe(0);
+    act(() => void fireEvent.click(r.container.querySelector<HTMLElement>('[data-result-tab="mafia"]')!));
+    expect(skipBtn(r.container)).toBeNull();
+    advance(20_000);
+    expect(hookOf().shown).toBe(0);
+    expect(plate(r.container)!.dataset.awardId).toBe("whiff");
+    expect(title(r.container)).toBe("시상식");
+    act(() => stage.props!.onStageTap!()); // 무대 탭은 접기만
+    expect(skipBtn(r.container)).not.toBeNull();
+    expect(count(r.container)).toBe("1 / 5");
+    advance(900); // 1500 + 900 = 2400 < 2500
+    expect(hookOf().shown).toBe(0);
+    advance(100);
+    expect(count(r.container)).toBe("2 / 5");
+  });
+
+  it("진 팀 수상자: 패가 뜬 동안만 어둡지 않다 (창이 끝나면 다시 dim)", () => {
+    const r = arrive();
+    advance(S + 1000);
+    expect(scene().seats[3]!.dim).toBeUndefined();
+    advance(1500);
+    expect(scene().seats[3]!.dim).toBe(true);
+    r.unmount();
+  });
+
+  it("같은 결과가 다시 와도 되돌아가지 않고 타이머가 늘지 않는다 · 언마운트하면 타이머가 모두 정리된다", () => {
+    const r = arrive();
+    advance(S + 3000);
+    const timers = vi.getTimerCount();
+    r.rerenderRoom(makeView({ awards: AWARDS5 }));
+    r.rerenderRoom(makeView({ awards: AWARDS5 }));
+    expect(count(r.container)).toBe("2 / 5");
+    expect(vi.getTimerCount()).toBe(timers);
+    r.unmount();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("모션 줄이기: 앞 연출은 건너뛰고 시상식은 걷기·박수 없이 패만 2.5초씩, [넘기기]는 되고 끝나면 의상이 곧바로 돌아온다", async () => {
+    await withReduced(() => {
+      const r = arrive();
+      expect(title(r.container)).toBe("시상식");
+      expect(r.container.querySelector("[data-result-stage]")!.getAttribute("data-reveal")).toBe("false");
+      advance(1000);
+      expect(plate(r.container)!.dataset.awardId).toBe("whiff");
+      expect(stage.props!.emoteCues ?? []).toEqual([]);
+      // 아무도 걷지 않는다: 수상자도 자리 그대로
+      const p3 = posAt(3, 900);
+      expect(p3.x).toBeCloseTo(slotOf(5, 3).x, 6);
+      expect(p3.z).toBeCloseTo(slotOf(5, 3).z, 6);
+      advance(1500);
+      expect(plate(r.container)!.dataset.awardId).toBe("spectator");
+      act(() => void fireEvent.click(skipBtn(r.container)!));
+      expect(count(r.container)).toBe("3 / 5");
+      act(() => void fireEvent.click(plate(r.container) ?? skipBtn(r.container)!));
+      act(() => void fireEvent.click(skipBtn(r.container)!));
+      act(() => void fireEvent.click(skipBtn(r.container)!));
+      expect(title(r.container)).toBe("시민 승리");
+      expect(Object.values(scene().seats).filter((l) => l.costume !== undefined)).toHaveLength(0); // 즉시 look 복귀
+      expect(stage.props!.emoteCues ?? []).toEqual([]);
+    });
+  });
+
+  it("떠 있는 [넘기기] 묶음은 위 칸을 쓰고 루트에 패널 높이 변수(--mf-panel-h)를 둔다", () => {
+    const r = arrive();
+    advance(S + 10);
+    const stack = r.container.querySelector("[data-float-stack]")!;
+    expect(stack.hasAttribute("data-float-single")).toBe(false); // 두 칸 자리: 아래 칸은 11-12 의 [꾸미기]
+    expect(stack.querySelectorAll("button")).toHaveLength(1);
+    expect(r.container.querySelector<HTMLElement>("main.mf-result")!.style.getPropertyValue("--mf-panel-h")).not.toBe("");
+  });
+});
