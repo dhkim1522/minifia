@@ -362,7 +362,11 @@ function phaseKeyViolations(s: RoomState, viewer: Player, view: RoomView, phase:
   // 결과: ended 에서만, 모든 직업(seat 오름차순)과 승리 팀과 판 요약. 요약 줄 키는 정해져 있다.
   if (phase === "ended" && view.result !== undefined) {
     const { result } = view;
-    if (keysOf(result) !== "seats,summary,winner") out.push(`${tag}: result keys ${keysOf(result)}`);
+    if (keysOf(result) !== "awards,seats,summary,winner") out.push(`${tag}: result keys ${keysOf(result)}`);
+    // 11-02: 칭호 패는 ended 에서만 모두에게 같다. 줄 키는 허용 경로 .result.awards[].seat|award|k|at 뿐이고 참가자마다 한 장이다.
+    const awards = result.awards ?? [];
+    if (awards.length !== s.players.filter((q) => q.role !== undefined).length) out.push(`${tag}: result.awards length ${awards.length}`);
+    for (const line of awards) if (!["award,seat", "award,k,seat", "at,award,k,seat"].includes(keysOf(line))) out.push(`${tag}: result.awards line keys ${keysOf(line)}`);
     if (result.winner !== s.winner) out.push(`${tag}: result.winner ${result.winner} want ${String(s.winner)}`);
     const seats = [...s.players].sort((a, b) => a.seat - b.seat).map((q) => ({ seat: q.seat, job: q.role }));
     if (flat(result.seats) !== flat(seats)) out.push(`${tag}: result.seats ${flat(result.seats)}`);

@@ -22,6 +22,7 @@ import type {
 } from "../protocol";
 import { MAX_PLAYERS, MIN_PLAYERS } from "../protocol";
 import { isAlive } from "./alive";
+import { computeAwards } from "./awards";
 import { channelOf } from "./audience";
 import { botCount } from "./bots";
 import { endCountOf, phaseDurationOf } from "./discussion";
@@ -323,7 +324,7 @@ export function buildView(state: RoomState, playerId: string, now: number): Room
     for (const p of [...state.players].sort((a, b) => a.seat - b.seat)) {
       if (p.role !== undefined) seats.push({ seat: p.seat, job: p.role });
     }
-    view.result = { winner: state.winner, seats, summary: buildSummary(state) };
+    view.result = { winner: state.winner, seats, summary: buildSummary(state), awards: computeAwards(state) };
   }
 
   // 본인이 탈락했고 역할을 싣는 단계일 때만 키를 만든다(살아 있으면 undefined 로도 남기지 않는다).

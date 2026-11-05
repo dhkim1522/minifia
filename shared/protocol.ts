@@ -114,6 +114,21 @@ export interface GameResult {
   winner: GameWinner;
   seats: SpectateSeat[];
   summary: SummaryRow[];
+  /** 시상 칭호 패 목록(11-02, END-04). 서버가 정렬까지 끝낸 순서(진 팀 → 이긴 팀, 대체 → 작은 → 중간 → 큰, 낮은 좌석)이고 참가자 한 명에 한 장이다. 화면은 재정렬하지 않는다. optional 인 이유는 화면 시험 리터럴을 한꺼번에 바꾸지 않기 위해서다(서버는 항상 채운다). */
+  awards?: AwardLine[];
+}
+
+/** 시상 칭호 id(11-02, 결정 D-5). 이 순서가 표 순서다. 이유 문구는 화면 몫이다(src). */
+export const AWARD_IDS = [
+  "actor", "detective", "angel", "whiff", "target", "firstVictim", "talker", "swapper", "whisperer", "mood", "survivor", "spectator",
+] as const;
+export type AwardId = (typeof AWARD_IDS)[number];
+/** 칭호 패 한 장. k 는 점수(횟수·일차), at 은 탈락 시점(spectator 만). 키 이름에 id·playerId 를 쓰지 않는다(누설 검사 금지 키). */
+export interface AwardLine {
+  seat: number;
+  award: AwardId;
+  k?: number;
+  at?: "day" | "night";
 }
 
 // ---- 낮 토론 계약(2페이즈) ----
