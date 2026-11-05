@@ -33,6 +33,8 @@ export function ReadyPill({ host, on, n = 0, m = 0, dim, inactive, onPress }: Re
     className: cls,
     "data-ready-pill": "",
     "aria-disabled": disabled ? ("true" as const) : undefined,
+    // 승리 조명 전 비활성만 따로 표시한다 — 방장 흐림(n < 최소)도 aria-disabled 라 E2E 가 둘을 가르는 데 쓴다
+    ...(off ? { "data-inactive": "true" } : {}),
     onMouseDown: (e: React.MouseEvent) => e.preventDefault(),
     onClick: () => {
       if (off) return;

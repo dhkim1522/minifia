@@ -865,6 +865,7 @@ export function readRematchState(page) {
       count: pillEl?.getAttribute("data-ready-count") ?? null,
       dim: pillEl?.getAttribute("data-dim") === "true",
       disabled: pillEl?.getAttribute("aria-disabled") === "true",
+      inactive: pillEl?.getAttribute("data-inactive") === "true",
       label: pillEl?.getAttribute("aria-label") ?? null,
       inputWidth: input ? input.getBoundingClientRect().width : Number.NaN,
       plate: rect(root.querySelector("[data-award-plate]")),

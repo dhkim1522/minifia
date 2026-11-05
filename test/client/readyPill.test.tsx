@@ -76,6 +76,19 @@ describe("ReadyPill — 방장", () => {
   });
 });
 
+describe("ReadyPill — 비활성 표식", () => {
+  it("승리 조명 전(inactive)에만 data-inactive 가 붙는다 — 방장 흐림(dim)과 가른다", () => {
+    const a = render(<ReadyPill host n={2} m={5} dim onPress={() => {}} />);
+    expect(pill(a.container).hasAttribute("data-inactive")).toBe(false);
+    cleanup();
+    const b = render(<ReadyPill host n={4} m={5} inactive onPress={() => {}} />);
+    expect(pill(b.container).getAttribute("data-inactive")).toBe("true");
+    cleanup();
+    const c = render(<ReadyPill host={false} on={false} inactive onPress={() => {}} />);
+    expect(pill(c.container).getAttribute("data-inactive")).toBe("true");
+  });
+});
+
 describe("ReadyPill — 계약", () => {
   it("눌러도 입력칸 포커스를 뺏지 않는다 (mousedown 기본 동작 막음)", () => {
     const { container } = render(<ReadyPill host={false} on={false} onPress={() => {}} />);
