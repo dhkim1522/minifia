@@ -2,7 +2,7 @@
 import { describe, expect, it } from "vitest";
 import { buildVoice } from "../../src/audio/synth";
 import type { EngineDeps } from "../../src/audio/engine";
-import { BED_IDS, BED_NODE_MAX, BEDS, BUS_GAIN, COMPRESSOR, MASTER_GAIN, NODE_BUDGET, RECIPES, SFX_IDS, SFX_VOICE_MAX, recipeNodeCount, bedPlan, renderPlan, type BedId, type SfxId } from "../../src/audio/recipes";
+import { BED_IDS, BED_NODE_MAX, BEDS, BUS_GAIN, COMPRESSOR, MASTER_GAIN, NODE_BUDGET, RECIPES, SFX_IDS, SFX_VOICE_MAX, bedNodeCount, bedPlan, recipeNodeCount, renderPlan, type BedId, type SfxId } from "../../src/audio/recipes";
 import { SOUND_PREF_KEY } from "../../src/audio/prefs";
 import { seededRandInt } from "../helpers/seededRandom";
 import { MemoryStorage } from "../helpers/memoryStorage";
@@ -584,7 +584,7 @@ describe("침대 — 스케줄러와 크로스페이드 (D-16, B-1)", () => {
     expect(lastRamp(newG!)).toMatchObject({ value: 1 });
     expect(lastRamp(newG!)!.time).toBeCloseTo(t + 1.2, 6);
     const before = ctx.sources().length;
-    rig.fake.clock.advance(3000);
+    rig.fake.clock.advance(6000); // 드론 침대는 4초 조각이라 한 조각 넘어가야 새 소스가 생긴다
     const fresh = ctx.sources().slice(before);
     expect(fresh.length).toBeGreaterThan(0);
     for (const s of fresh) {
