@@ -226,6 +226,9 @@ body:has([data-emote-tray]) .mf-float { visibility: hidden; }
 .mv-float[aria-disabled="true"] { opacity: 0.45; cursor: default; }
 .mv-float:focus-visible { outline: 2px solid var(--gray-100); outline-offset: 2px; }
 .mv-float__dot { position: absolute; top: 6px; right: 6px; width: 8px; height: 8px; border-radius: var(--radius-pill); background: var(--gray-100); }
+/* 시상식 [넘기기] 위의 진행 숫자 'k / n'(11-09, UI-SPEC B-3): 버튼 위 4px, 14px. 버튼 안에 있지만 터치는 버튼이 받는다 */
+.mv-float__count { position: absolute; bottom: calc(100% + 4px); left: 50%; transform: translateX(-50%); font-size: 14px; line-height: 1.2; font-weight: 700; color: var(--gray-100); text-shadow: var(--shadow-text); white-space: nowrap; pointer-events: none; }
+
 
 /* 배지 칩 시트(09.1.1-08): 틀은 유언 시트(.mv-will)와 같은 값. 칩 높이 44(tap-min)·안쪽 좌우 16·pill, 선택 칩은 gray-100 면·night-900 글자. 진홍·놋쇠 없음 */
 .mv-claim-sheet { display: flex; flex-direction: column; gap: var(--space-sm); box-sizing: border-box; width: calc(100% - 20px); margin: 0 auto; padding: 12px; border-radius: var(--radius-lg); background: var(--night-800); border: 1px solid var(--night-600); box-shadow: var(--shadow-card); font-family: var(--font-ui); color: var(--gray-100); animation: mv-claim-sheet-in var(--dur-fast) ease-out both; }

@@ -77,3 +77,21 @@
 /* 알약 자리(11-12): 확장일 때 입력줄 대신 폭 전체로 남는다 */
 .mf-result__pill { flex: none; display: flex; align-items: center; justify-content: stretch; width: 100%; }
 .mf-result__pill > * { flex: 1 1 auto; }
+
+/* ---- 시상식(11-09, UI-SPEC B-3·G) ----
+   칭호 패 자리: 위 = 스테이지 윗변 + 8(top 은 화면이 잰 헤더 아래 값으로 인라인), 가로 가운데. 틀은 가림 없이 터치를 통과시키고 패만 입력을 받는다(패 탭 = 넘기기). 헤더 아래·패널 위 층이다. */
+.mf-result__award { position: absolute; left: 0; right: 0; z-index: calc(var(--z-overlay) - 1); display: flex; justify-content: center; pointer-events: none; }
+
+/* 칭호 패(11-09, UI-SPEC B-3·G, v2.css 의 이름표 규칙은 놋쇠·말줄임을 금지해 결과 화면 쪽 파일에 둔다): 폭 min(328, 폭 − 32) × 높이 96, 놋쇠 테두리 2px, 안쪽 12. 칭호 24px 700 · 이유 14px · 이름 점 + 닉네임 14px 세 줄(28 + 18 + 18 + 간격 4 = 68 = 96 − 4 − 24).
+   승인 AwardPlate 의 serif 26px 만 --font-ui 24px 로 바꿨다. 마피아 칭호도 같은 놋쇠다(진홍은 마피아 승리 아이콘 전용). 등장은 opacity 180ms 만 — 모션 줄이기에서도 같다(페이드는 움직임이 아니다) */
+.mv-award { box-sizing: border-box; display: flex; flex-direction: column; justify-content: center; gap: 2px; width: min(328px, calc(100% - 32px)); height: 96px; padding: 12px; border: 2px solid var(--brass-400); border-radius: var(--radius-lg); background: color-mix(in srgb, var(--night-800) 97%, transparent); color: var(--gray-50); font-family: var(--font-ui); cursor: pointer; pointer-events: auto; animation: mv-award-in 180ms var(--ease-out) both; }
+.mv-award__row { display: flex; align-items: center; gap: var(--space-sm); min-width: 0; }
+.mv-award__icon { flex: none; display: grid; place-items: center; color: var(--brass-400); }
+.mv-award__title { min-width: 0; font-family: var(--font-ui); font-size: 24px; line-height: 28px; font-weight: 700; color: var(--gray-50); white-space: nowrap; overflow: hidden; }
+.mv-award__reason { font-size: 14px; line-height: 18px; color: var(--gray-100); white-space: nowrap; overflow: hidden; }
+.mv-award__name { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: 14px; line-height: 18px; font-weight: 700; color: var(--gray-100); white-space: nowrap; overflow: hidden; }
+.mv-award__name i { flex: none; width: 8px; height: 8px; border-radius: var(--radius-pill); }
+@keyframes mv-award-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}

@@ -54,8 +54,8 @@ describe("AwardPlate", () => {
   });
 });
 
-describe("AwardPlate CSS 정적 단언 (v2.css)", () => {
-  const css = readFileSync("src/styles/v2.css", "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+describe("AwardPlate CSS 정적 단언 (result.css)", () => {
+  const css = readFileSync("src/styles/result.css", "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
   const rule = (selector: string): string => [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].find((m) => (m[1] ?? "").trim() === selector)?.[2] ?? "";
 
   it("틀: 높이 96·폭 min(328px, 100% − 32px)·놋쇠 2px 테두리·안쪽 12", () => {

@@ -4,6 +4,7 @@
 // 직업 의상 대응은 ghostOutfit.ts 의 jobOutfit 한 곳을 재사용한다 — 새 표를 만들지 않는다.
 import { ringSlots } from "../../shared/game/gather";
 import { isAlive } from "../../shared/game/alive";
+import { STAGE_SPOT } from "../../shared/game/map";
 import type { RoleId } from "../../shared/game/roles";
 import type { GameWinner, RoomView, WorldSeg } from "../../shared/protocol";
 import type { OutfitId } from "../world/characterData";
@@ -160,11 +161,12 @@ export function stateAt(t: number, cast: readonly CastMember[], winner: GameWinn
   };
 }
 
-/** 상태가 바뀌는 시각(오름차순, 중복 없음). 화면은 마크마다 setTimeout 으로 단계를 바꾼다 — 프레임마다 다시 그리지 않는다. n = 참가자 수 */
-export function markTimes(n: number): number[] {
+/** 상태가 바뀌는 시각(오름차순, 중복 없음). 화면은 마크마다 setTimeout 으로 단계를 바꾼다 — 프레임마다 다시 그리지 않는다. n = 참가자 수, awardN = 시상 칭호 수(11-09, 없으면 0) */
+export function markTimes(n: number, awardN = 0): number[] {
   const tl = RESULT_TIMELINE;
   const times = new Set<number>([0, tl.lightAtMs, tl.announceEndMs, tl.ceremonyStartMs]);
   for (let i = 0; i < n; i++) times.add(tl.flipStartMs + tl.flipGapMs * i);
+  for (const m of ceremonyMarks(awardN)) times.add(m);
   return [...times].sort((a, b) => a - b);
 }
 
@@ -186,5 +188,132 @@ export function walkSnap(slots: Record<number, readonly [number, number]>, start
       const dist = Math.hypot(sx - x0, sz - z0);
       if (dist === 0) return { s, p: [sx, sz], t0, v: 0 };
       return { s, p: [x0, z0, sx, sz], t0, v: Math.max(1, Math.ceil(dist / seconds)) };
+    });
+}
+
+// ---------- 시상식 (11-09, 결정 D-7·D-24·D-25, UI-SPEC B-3) ----------
+// 시간표: 5600 에 시작, i 번째 칭호 창은 [5600 + 2500i, 5600 + 2500(i + 1)). 창 시작 0ms 앞사람은 자기 자리로 걷고 이번 사람은 무대 가운데로 걷기 시작(0~900),
+// 900ms 에 패가 뜨고 나머지 최대 4명이 박수, 2500ms 에 다음 창. 마지막 창이 끝나면 모두 자리 복귀 걷기, +600ms 에 직업 의상이 걷힌다(고른 look 으로).
+// 서버가 정렬해 보낸 칭호 순서를 그대로 쓴다 — 여기서 재정렬하지 않는다. 시각은 모두 인자다.
+
+export const CEREMONY = {
+  /** 한 명당 길이 */
+  windowMs: 2500,
+  /** 무대 가운데로 걷는 시간(= 스포트라이트를 받는 구간) */
+  walkMs: 900,
+  /** 패가 뜨는 시각(창 시작 기준) */
+  plateAtMs: 900,
+  /** 마지막 창이 끝나고 직업 의상이 걷히기까지 */
+  redressDelayMs: 600,
+} as const;
+
+/** 무대 가운데(서버 고정소수점). 서버 이동 마스크에는 예외 점이고 로컬 연출 구간이라 판정과 무관하다 */
+export const CEREMONY_CENTER: readonly [number, number] = [STAGE_SPOT.x, STAGE_SPOT.z];
+
+/** i 번째 창이 시작하는 시각 */
+export const ceremonyWindowStart = (i: number): number => CEREMONY_START_MS + CEREMONY.windowMs * i;
+/** n 개 창이 모두 끝나는 시각(= done 시작, 복귀 걷기 시작) */
+export const ceremonyEnd = (n: number): number => ceremonyWindowStart(n);
+
+/** 시상식에서 상태가 바뀌는 시각(창 시작·패 등장·끝·의상 복귀). 칭호가 없으면 빈 목록 */
+export function ceremonyMarks(n: number): number[] {
+  if (n <= 0) return [];
+  const out: number[] = [];
+  for (let i = 0; i < n; i++) out.push(ceremonyWindowStart(i), ceremonyWindowStart(i) + CEREMONY.plateAtMs);
+  out.push(ceremonyEnd(n), ceremonyEnd(n) + CEREMONY.redressDelayMs);
+  return out;
+}
+
+export type CeremonyState =
+  | {
+      phase: "award";
+      /** 지금 창의 목록 index */
+      index: number;
+      total: number;
+      /** 지금 무대로 나온 사람 */
+      seat: number;
+      /** 앞사람(자리로 돌아간다). 첫 창은 null */
+      prevSeat: number | null;
+      /** 창 시작 0~900: 걷는 중 */
+      walking: boolean;
+      /** 패가 떠 있나(900 이후) */
+      plate: boolean;
+      /** 박수 대상: 패가 뜬 뒤 나머지 중 좌석 오름차순 최대 CLAP_MAX (탈락자 포함) */
+      clap: number[];
+    }
+  | {
+      phase: "done";
+      total: number;
+      /** 모두 자리 복귀 걷기 시작 시각 */
+      returnAt: number;
+      /** 직업 의상이 걷히는 시각(returnAt + 600) */
+      redressAt: number;
+      redressed: boolean;
+      /** 마지막으로 무대에 있던 사람(복귀 걷기 대상) */
+      lastSeat: number | null;
+    };
+
+/** 시각 t(연출 시계 ms)의 시상식 상태. 5600 이전이거나 칭호가 없으면 null (재접속·옛 서버는 시상식이 없다) */
+export function ceremonyAt(t: number, awards: readonly { seat: number }[], cast: readonly CastMember[]): CeremonyState | null {
+  const n = awards.length;
+  if (n === 0 || t < CEREMONY_START_MS) return null;
+  const rel = t - CEREMONY_START_MS;
+  if (rel >= CEREMONY.windowMs * n) {
+    const returnAt = ceremonyEnd(n);
+    return { phase: "done", total: n, returnAt, redressAt: returnAt + CEREMONY.redressDelayMs, redressed: t >= returnAt + CEREMONY.redressDelayMs, lastSeat: awards[n - 1]?.seat ?? null };
+  }
+  const index = Math.floor(rel / CEREMONY.windowMs);
+  const local = rel - index * CEREMONY.windowMs;
+  const seat = awards[index]!.seat;
+  const plate = local >= CEREMONY.plateAtMs;
+  return {
+    phase: "award",
+    index,
+    total: n,
+    seat,
+    prevSeat: index > 0 ? awards[index - 1]!.seat : null,
+    walking: !plate,
+    plate,
+    clap: plate ? cast.filter((c) => c.seat !== seat).slice(0, CLAP_MAX).map((c) => c.seat) : [],
+  };
+}
+
+/**
+ * 건너뛰기(D-25): 현재 창을 즉시 끝내고 다음 창 0ms(마지막 창이면 done 시작)의 시각을 돌려준다. 시상식 밖이면 t 그대로.
+ * 부르는 쪽이 돌려받은 시각을 새 마크로 쓰므로 같은 프레임에 여러 번 눌러도 한 칸씩 안전하게 간다.
+ */
+export function skipAward(t: number, n: number): number {
+  if (n <= 0 || t < CEREMONY_START_MS) return t;
+  const rel = t - CEREMONY_START_MS;
+  if (rel >= CEREMONY.windowMs * n) return t;
+  return ceremonyWindowStart(Math.floor(rel / CEREMONY.windowMs) + 1);
+}
+
+/**
+ * 시상식 걷기 snap 의 구간들. 모든 좌석을 한 snap 에 담는다(snap 은 구간을 통째로 바꾼다):
+ * moves 에 있는 좌석은 to 로 ms 안에 도착하게 걷고(출발 위치를 모르거나 ms 가 0 이거나 이미 거기면 한 점 구간 = 순간 이동), 나머지는 자기 둘레 자리에 서 있다.
+ * p 는 고정소수점 정수, v 는 도착이 ms 를 넘지 않게 올림한 고정소수점 거리/초. 모두 같은 t0.
+ */
+export function ceremonySnap(
+  slots: Record<number, readonly [number, number]>,
+  starts: Readonly<Record<number, { x: number; z: number } | undefined>>,
+  t0: number,
+  moves: Readonly<Record<number, { to: readonly [number, number]; ms: number } | undefined>>,
+): WorldSeg[] {
+  return Object.keys(slots)
+    .map(Number)
+    .sort((a, b) => a - b)
+    .map((s) => {
+      const move = moves[s];
+      const [sx, sz] = slots[s]!;
+      if (move === undefined) return { s, p: [sx, sz], t0, v: 0 };
+      const [tx, tz] = move.to;
+      const from = starts[s];
+      if (from === undefined || move.ms <= 0) return { s, p: [tx, tz], t0, v: 0 };
+      const x0 = Math.round(from.x * 100);
+      const z0 = Math.round(from.z * 100);
+      const dist = Math.hypot(tx - x0, tz - z0);
+      if (dist === 0) return { s, p: [tx, tz], t0, v: 0 };
+      return { s, p: [x0, z0, tx, tz], t0, v: Math.max(1, Math.ceil(dist / (move.ms / 1000))) };
     });
 }

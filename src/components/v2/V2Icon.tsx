@@ -6,7 +6,7 @@ import "../../styles/v2.css";
 // 나머지 아이콘은 그것을 쓰는 페이즈(8·9·10페이즈)가 같은 표에 더한다(10페이즈: 동작 아홉 개, hanger 는 10-07 이 더한다).
 // v1.0 아이콘(src/components/Icon.tsx)과 이름이 겹쳐도(check·crown) 서로 다른 부품이다: v2 화면은 이 파일을 쓴다.
 // 로비 헤더의 [나가기]·[공유] 는 v1.0 Icon 을 그대로 쓴다(UI-SPEC 결정 현황) — 여기에 back·share 를 더하지 않는다.
-export type V2IconName = "point" | "crown" | "play" | "check" | "roleCitizen" | "send" | "ghost" | "roleMafia" | "rolePolice" | "roleDoctor" | "skip" | "thumbUp" | "thumbDown" | "quill" | "note" | "target" | "eye" | "heal" | "close" | "whisper" | "swap" | "quiet" | "face" | "throat" | "deny" | "clap" | "cry" | "handshake" | "praise" | "surprise" | "dance" | "hanger" | "timeline";
+export type V2IconName = "point" | "crown" | "play" | "check" | "roleCitizen" | "send" | "ghost" | "roleMafia" | "rolePolice" | "roleDoctor" | "skip" | "thumbUp" | "thumbDown" | "quill" | "note" | "target" | "eye" | "heal" | "close" | "whisper" | "swap" | "quiet" | "face" | "throat" | "deny" | "clap" | "cry" | "handshake" | "praise" | "surprise" | "dance" | "hanger" | "timeline" | "trophy";
 
 // ["c", cx, cy, r, filled?] 원 · ["p", d, filled?] 경로
 type Part = readonly ["c", number, number, number, boolean?] | readonly ["p", string, boolean?];
@@ -168,6 +168,14 @@ const ICONS: Readonly<Record<V2IconName, readonly Part[]>> = {
     ["c", 17, 16, 3],
   ],
   // 11페이즈(결과 기록 탭): 가로 선 위에 세 마디 점과 아래 짧은 줄 둘 — 판의 흐름을 단순하게 직접 그린 모양
+  // 11페이즈(시상식): 헤더 제목 아이콘·칭호 패 기본 아이콘. bundle.js 의 ICONS 와 같은 데이터
+  trophy: [
+    ["p", "M7 4h10v5a5 5 0 0 1-10 0z"],
+    ["p", "M7 6H4.5v1.5A3 3 0 0 0 7.5 10.5"],
+    ["p", "M17 6h2.5v1.5a3 3 0 0 1-3 3"],
+    ["p", "M12 14v3.5"],
+    ["p", "M8 20.5h8l-1-3H9z"],
+  ],
   timeline: [
     ["p", "M3 8h18"],
     ["c", 6.5, 8, 1.8, true],
