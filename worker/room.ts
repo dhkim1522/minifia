@@ -30,6 +30,7 @@ import type { RoomState } from "../shared/game/room";
 import { pickRecipientIds, pickTarget } from "../shared/game/night";
 import { BADGE_MIN_GAP_MS, setBadge } from "../shared/game/badge";
 import { LOOK_MIN_GAP_MS, setLook } from "../shared/game/look";
+import { buildResultLog } from "../shared/game/resultLog";
 import { sendWhisper } from "../shared/game/whisper";
 import { WILL_MIN_GAP_MS, noteRecipientIds, saveNote, saveWill } from "../shared/game/will";
 import { resetToLobby, setBotCount, setBotVote, setTestRole, skipPhase } from "../shared/game/testTools";
@@ -961,7 +962,18 @@ export class Room extends DurableObject<Env> {
     await this.syncPositions(now);
     await this.emitDeathCards(prev, now);
     await this.emitBallotsCard(prev, now);
+    this.emitResultLog(prev);
     await this.reschedule();
+  }
+
+  // 결과 공개(결정 D-10, 11-03): ended 로 들어서는 전환에서만 한 번, 방의 모든 사람에게 같은 프레임 열을 보낸다(신분별 차이 없음).
+  // 마지막 찬반 카드·사망 카드가 보관된 뒤에 만들어야 찬반 부분에 마지막 낮이 든다. 알람 따라잡기로 여러 단계를 지나도 afterTransition 은 한 번이다.
+  // 동기 전송이다 — await 가 없어 프레임 열 사이에 다른 전환이 끼어들지 않는다.
+  private emitResultLog(prev: RoomState): void {
+    const room = this.room;
+    if (!room || prev.phase === "ended" || room.phase !== "ended") return;
+    const ids = new Set(room.players.map((p) => p.id));
+    for (const frame of buildResultLog(room, this.chatLog)) this.deliver(ids, frame);
   }
 
   // 찬반 기록 카드(결정 0066-3, O-8): 찬반 마감이 verdict.ballots 를 남긴 전환에서 all 채널에 한 장, 보낸 사람 자리는 변론자다(작성자가 아니다).
@@ -1236,6 +1248,8 @@ export class Room extends DurableObject<Env> {
     // 그다음 이 소켓에만 보관 줄을 한 프레임으로 돌려준다 — 줄이 없어도 빈 배열로 보낸다(D2, 결정 0058-3).
     // 복원도 보낼 때의 마스크로만 거른다(결정 0058-2): 지금의 역할·생존으로 다시 계산하지 않아 라이브보다 넓어지지 않는다.
     this.sendTo(ws, { t: "chatLog", lines: replayFor(this.chatLog, player.seat) });
+    // 결과 단계에서만 같은 결과 공개를 이 소켓에 다시 보낸다(D-10, L36). 판 중에는 어떤 순간의 hello 에도 보내지 않는다(L35).
+    if (this.room.phase === "ended") for (const frame of buildResultLog(this.room, this.chatLog)) this.sendTo(ws, frame);
     // 첫 접속이면 만료가 늘었으니 알람도 따라 옮긴다.
     if (this.room.expiresAt !== room.expiresAt || (wasIdle && this.wanderBots().length > 0)) await this.reschedule();
   }

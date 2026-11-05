@@ -1,4 +1,6 @@
 // 11-03 Task 2: resultLog 프레임 전송 — ended 진입 한 번·신분별 동일·hello 재전송·판 중 0건 (결정 D-9·D-10, 누설 L35·L36, 위협 T-11-07·T-11-08).
+import { env } from "cloudflare:workers";
+import { evictDurableObject } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 import type { ResultLogFrame, ServerMessage } from "../../shared/protocol";
 import { RICH_TEXT, connect, framesOf, mark, nextFrame, richEndedGame6, send, settle } from "./helpers";
@@ -6,7 +8,7 @@ import type { RichGame6, TestSocket } from "./helpers";
 
 const resultLogsOf = (msgs: ServerMessage[]): ResultLogFrame[] => msgs.filter((m): m is ResultLogFrame => m.t === "resultLog");
 const PARTS = ["mafia", "ghost", "whisper", "claim", "ballots"];
-const ownLines = (frames: ResultLogFrame[], part: string): unknown[] => frames.filter((f) => f.part === part).flatMap((f) => f.lines);
+const ownLines = (frames: ResultLogFrame[], part: string): unknown[] => frames.filter((f) => f.part === part).flatMap((f) => f.lines as unknown[]);
 
 /** 한 소켓이 받은 ended 구간의 resultLog 열(JSON). */
 const columnOf = (sock: TestSocket): string => JSON.stringify(resultLogsOf(framesOf(sock)));
@@ -60,6 +62,7 @@ describe("resultLog 전송 (D-10, L36)", () => {
     const g = await richEndedGame6();
     const reference = columnOf(g.socks[0]!);
     // 시민 Y 가 다시 들어온다 — 토큰으로 새 소켓을 연다.
+    await evictDurableObject(env.ROOM.getByName(g.code)); // 메모리 사본을 비운다 — 보관 줄은 저장소에서 복원된다.
     const again = await connect(g.code);
     send(again, { t: "hello", token: g.citizenY.token });
     await nextFrame(again, (m) => m.t === "chatLog");

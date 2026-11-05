@@ -436,6 +436,44 @@ export interface EmoteFrame {
   n: number;
 }
 
+// ---- 11페이즈 결과 공개(결정 D-9·D-10, 미결 O-14) ----
+// 판이 ended 로 들어서는 순간 서버가 모든 소켓에 같은 열로 한 번 보내는 숨은 기록(마피아·유령 채팅, 귓속말 본문, 직업 주장 이력, 찬반 기록).
+// 키 이름은 id·playerId·token 같은 금지 키를 쓰지 않고 서버 전용 이름(badgeLog·whispers)도 쓰지 않는다 — 주장 값은 v, 귓속말 상대는 to 다.
+/** 결과 공개의 부분 다섯. 전송 순서도 이 순서다. */
+export type ResultLogPart = "mafia" | "ghost" | "whisper" | "claim" | "ballots";
+/** mafia·ghost 줄: n 은 줄이 보내진 때의 일차(마피아 줄은 그 밤을 부르는 일차). */
+export interface ResultLogChatLine {
+  seat: number;
+  n: number;
+  text: string;
+  at: number;
+}
+export interface ResultLogWhisperLine {
+  seat: number;
+  to: number;
+  n: number;
+  text: string;
+  at: number;
+}
+/** 직업 주장 한 번(확정 변경마다 한 줄). v 는 BadgeId. */
+export interface ResultLogClaimLine {
+  seat: number;
+  n: number;
+  v: BadgeId;
+}
+/** 그날 찬반 기록(찬성·반대 좌석). */
+export interface ResultLogBallotsLine {
+  n: number;
+  yes: number[];
+  no: number[];
+}
+/** 결과 공개 한 프레임. i = 그 부분의 프레임 번호(0부터), end = 그 부분의 마지막 프레임, lines 는 40줄 이하. 줄이 없어도 부분마다 { i: 0, end: true, lines: [] } 한 프레임은 간다. */
+export type ResultLogFrame =
+  | { t: "resultLog"; part: "mafia" | "ghost"; i: number; end: boolean; lines: ResultLogChatLine[] }
+  | { t: "resultLog"; part: "whisper"; i: number; end: boolean; lines: ResultLogWhisperLine[] }
+  | { t: "resultLog"; part: "claim"; i: number; end: boolean; lines: ResultLogClaimLine[] }
+  | { t: "resultLog"; part: "ballots"; i: number; end: boolean; lines: ResultLogBallotsLine[] };
+
 export type ServerMessage =
   | { t: "state"; view: RoomView }
   | { t: "pong"; c: number; serverNow: number }
@@ -445,6 +483,7 @@ export type ServerMessage =
   | ChatLogFrame // 접속 직후 복원 — 타입과 연결 훅만 07-11, 보내기는 07-14
   | WorldFrame
   | TypingFrame // 입력 중 — 같은 채널의 다른 소켓에만 간다(audience, 07-10)
-  | EmoteFrame; // 동작 — audience(emote) 소켓에만, 보낸 사람 포함(10-01)
+  | EmoteFrame // 동작 — audience(emote) 소켓에만, 보낸 사람 포함(10-01)
+  | ResultLogFrame; // 결과 공개 — ended 에서만, 모든 소켓에 같은 열(11-03)
 export const CLOSE_CODES = { REPLACED: 4001, REMOVED: 4003 } as const;
 export type RemovedReason = "left" | "kicked" | "invalid_token" | "room_closed";
