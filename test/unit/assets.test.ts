@@ -17,6 +17,7 @@ import {
   figureSrc,
   ghostSrc,
   journalArt,
+  mapCardSrc,
   outfitCardSrc,
   preloadEntryAssets,
   preloadDuskAssets,
@@ -265,5 +266,35 @@ describe("outfitCardSrc (10-07)", () => {
 
   it("public/_headers 에 /outfits/* 1일 캐시 규칙이 있다", () => {
     expect(readFileSync("public/_headers", "utf8")).toMatch(/^\/outfits\/\*\s*\n\s+Cache-Control: public, max-age=86400/m);
+  });
+});
+
+// 11-13: 맵 카드 그림 두 장(승인 디자인 시스템 사본 그대로, 560×320). 외부 주소 없음 (O-8)
+describe("mapCardSrc (11-13)", () => {
+  const mapFiles = new Set(Object.keys(import.meta.glob("/public/maps/*.png")));
+
+  it("/maps/map-{id}.png?v={ASSET_VERSION} 모양이다", () => {
+    expect(mapCardSrc("bar")).toBe(`/maps/map-bar.png?v=${ASSET_VERSION}`);
+    expect(mapCardSrc("plaza")).toBe(`/maps/map-plaza.png?v=${ASSET_VERSION}`);
+  });
+
+  it("ASSET_VERSION 은 i4 에서 올라갔다", () => {
+    expect(ASSET_VERSION).not.toBe("i4");
+  });
+
+  it("public/maps 에 두 파일뿐이고 승인 사본과 바이트가 같다", () => {
+    expect(mapFiles.size).toBe(2);
+    for (const id of ["bar", "plaza"]) {
+      expect(mapFiles.has(`/public/maps/map-${id}.png`), id).toBe(true);
+      const mine = readFileSync(`public/maps/map-${id}.png`);
+      const approved = readFileSync(`design/v2.0/design-system/assets/Maps/map-${id}.png`);
+      expect(mine.equals(approved), id).toBe(true);
+    }
+  });
+
+  it("public/_headers 에 /maps/* 1일 캐시 규칙이 있고 규칙은 100개 아래다", () => {
+    const headers = readFileSync("public/_headers", "utf8");
+    expect(headers).toMatch(/^\/maps\/\*\s*\n\s+Cache-Control: public, max-age=86400/m);
+    expect(headers.split("\n").filter((l) => /^\//.test(l)).length).toBeLessThan(100);
   });
 });

@@ -1,13 +1,17 @@
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import "../helpers/singleLineErrors";
 import type { ClientMessage, PublicPlayer, RoomView } from "../../shared/protocol";
 import { OUTFIT_IDS } from "../../shared/protocol";
 import type { WorldStageProps } from "../../src/components/WorldStage";
 import { DRESS_ORDER, DRESS_TEXT, OUTFIT_LABEL } from "../../src/game/dressText";
 import { ChatStore } from "../../src/net/chatStore";
-import { outfitCardSrc } from "../../src/net/assets";
+import { mapCardSrc, outfitCardSrc } from "../../src/net/assets";
+import { MAP_CARD_ORDER, MAP_LABEL, mapCardName } from "../../src/game/dressText";
+import { openPlaza } from "../helpers/playable";
 import { WorldStore } from "../../src/world/store";
+import { PLAYABLE_MAPS } from "../../shared/game/maps";
+import type { MapId } from "../../shared/protocol";
 
 // 10-07: 로비 꾸미기 — 떠 있는 hanger 버튼(D-4) → 패널을 덮는 카드 띠 시트(D-5) → 카드 하나 → {t:"dress", look}.
 // WorldStage 는 가벼운 가짜로 바꾼다(lobby.test 와 같은 방식). 가짜는 받은 props 만 기억한다.
@@ -261,5 +265,161 @@ describe("Lobby — 꾸미기 미리 보기와 초점 (10-07 Task 2)", () => {
     fireEvent.click(card);
     expect(send.mock.calls.filter((c) => c[0].t === "dress")).toEqual([]);
     expect(stage.props!.view.players.find((p) => p.seat === 2)?.look).toBe("doctor");
+  });
+});
+
+// ── 11-13: 맵 탭(방장 전용) ──
+describe("DressSheet — 맵 탭 (11-13, D-20)", () => {
+  it("방장이 아니면 탭 행이 없고 의상 카드만 있다", () => {
+    const { container } = render(<DressSheet value="coat" onPick={() => {}} onClose={() => {}} mapChoice="random" onPickMap={() => {}} />);
+    expect(container.querySelector("[data-map-tab]")).toBeNull();
+    expect(container.querySelector("[data-map-card]")).toBeNull();
+    expect(container.querySelectorAll("button[data-outfit]")).toHaveLength(9);
+  });
+
+  it("방장은 [맵][의상] 탭 둘을 받고 tab 에 따라 처음 열리는 탭이 다르다", () => {
+    for (const [tab, shown] of [["map", "map"], ["dress", "dress"], [undefined, "dress"]] as const) {
+      const { container, unmount } = render(<DressSheet value="coat" onPick={() => {}} onClose={() => {}} host tab={tab} mapChoice="random" onPickMap={() => {}} />);
+      const tabs = [...container.querySelectorAll<HTMLButtonElement>("button[data-map-tab]")];
+      expect(tabs.map((t) => t.dataset.mapTab)).toEqual(["map", "dress"]);
+      expect(tabs.map((t) => t.getAttribute("aria-label"))).toEqual(["맵", "의상"]);
+      expect(tabs.find((t) => t.getAttribute("aria-selected") === "true")?.dataset.mapTab).toBe(shown);
+      expect(container.querySelectorAll("button[data-map-card]").length).toBe(shown === "map" ? 3 : 0);
+      expect(container.querySelectorAll("button[data-outfit]").length).toBe(shown === "map" ? 0 : 9);
+      unmount();
+    }
+  });
+
+  it("탭을 누르면 내용이 바뀐다", () => {
+    const { container } = render(<DressSheet value="coat" onPick={() => {}} onClose={() => {}} host tab="map" mapChoice="random" onPickMap={() => {}} />);
+    fireEvent.click(container.querySelector("button[data-map-tab='dress']")!);
+    expect(container.querySelectorAll("button[data-outfit]")).toHaveLength(9);
+    expect(container.querySelector("button[data-map-card]")).toBeNull();
+    fireEvent.click(container.querySelector("button[data-map-tab='map']")!);
+    expect(container.querySelectorAll("button[data-map-card]")).toHaveLength(3);
+  });
+
+  it("카드 3장(bar·plaza·random), 이름·접근성 이름·그림, 선택은 mapChoice 와 같은 하나", () => {
+    expect([...MAP_CARD_ORDER]).toEqual(["bar", "plaza", "random"]);
+    expect(MAP_CARD_ORDER.map((id) => MAP_LABEL[id])).toEqual(["재즈 바", "광장", "랜덤"]);
+    expect(mapCardName("bar", false)).toBe("지하 재즈 바");
+    expect(mapCardName("plaza", true)).toBe("시계탑 광장, 선택됨");
+    expect(mapCardName("random", false)).toBe("랜덤");
+    const { container } = render(<DressSheet value="coat" onPick={() => {}} onClose={() => {}} host tab="map" mapChoice="plaza" onPickMap={() => {}} />);
+    const cards = [...container.querySelectorAll<HTMLButtonElement>("button[data-map-card]")];
+    expect(cards.map((c) => c.dataset.mapCard)).toEqual(["bar", "plaza", "random"]);
+    expect(cards.map((c) => c.getAttribute("aria-pressed"))).toEqual(["false", "true", "false"]);
+    expect(cards.map((c) => c.getAttribute("aria-label"))).toEqual(["지하 재즈 바", "시계탑 광장, 선택됨", "랜덤"]);
+    expect(cards.map((c) => c.querySelector(".mv-map-card__name")?.textContent)).toEqual(["재즈 바", "광장", "랜덤"]);
+    expect(cards[0]!.querySelector("img")?.getAttribute("src")).toBe(mapCardSrc("bar"));
+    expect(cards[1]!.querySelector("img")?.getAttribute("src")).toBe(mapCardSrc("plaza"));
+    expect(cards[2]!.querySelector("img")).toBeNull(); // 랜덤은 shuffle 아이콘
+    expect(cards[2]!.querySelector(".mv-map-card__shuffle svg")).not.toBeNull();
+    expect(cards[1]!.querySelector(".mv-map-card__check svg")).not.toBeNull();
+    expect(cards[0]!.querySelector(".mv-map-card__check")).toBeNull();
+  });
+
+  it("mapChoice 가 없으면 랜덤이 선택돼 있다(서버 기본값)", () => {
+    const { container } = render(<DressSheet value="coat" onPick={() => {}} onClose={() => {}} host tab="map" onPickMap={() => {}} />);
+    expect(container.querySelector("button[data-map-card='random']")?.getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("카드를 누르면 onPickMap(id) 한 번, 연결이 끊기면 aria-disabled 로 아무 일 없다", () => {
+    const onPickMap = vi.fn();
+    const { container, rerender } = render(<DressSheet value="coat" onPick={() => {}} onClose={() => {}} host tab="map" mapChoice="random" onPickMap={onPickMap} />);
+    fireEvent.click(container.querySelector("button[data-map-card='plaza']")!);
+    expect(onPickMap).toHaveBeenCalledWith("plaza");
+    expect(onPickMap).toHaveBeenCalledTimes(1);
+    onPickMap.mockClear();
+    rerender(<DressSheet value="coat" onPick={() => {}} onClose={() => {}} host tab="map" mapChoice="random" onPickMap={onPickMap} disabled />);
+    const card = container.querySelector<HTMLButtonElement>("button[data-map-card='bar']")!;
+    expect(card.getAttribute("aria-disabled")).toBe("true");
+    fireEvent.click(card);
+    expect(onPickMap).not.toHaveBeenCalled();
+  });
+
+  it("맵 탭으로 열면 선택된 카드로 초점이 간다", () => {
+    const { container } = render(<DressSheet value="coat" onPick={() => {}} onClose={() => {}} host tab="map" mapChoice="bar" onPickMap={() => {}} />);
+    expect(document.activeElement).toBe(container.querySelector("button[data-map-card='bar']"));
+  });
+});
+
+describe("Lobby — 지도 칩과 맵 탭 (11-13, D-20·MAP-06)", () => {
+  let restore = () => {};
+  beforeEach(() => {
+    restore = openPlaza();
+  });
+  afterEach(() => restore());
+  const hostView = (extra: Partial<RoomView> = {}): RoomView => ({ ...makeView([player(0, "민수"), player(1, "영희"), player(2, "서준")], 0), ...extra });
+  const guestView = (extra: Partial<RoomView> = {}): RoomView => ({ ...makeView([player(0, "민수"), player(1, "영희"), player(2, "서준")], 2), ...extra });
+
+  it("칩은 모두에게 보이고 현재 선택(기본 랜덤)을 따른다", () => {
+    for (const [v, name] of [[hostView(), "맵 랜덤"], [guestView({ mapChoice: "plaza" }), "맵 광장"], [hostView({ mapChoice: "bar" }), "맵 재즈 바"]] as const) {
+      const { container, unmount } = render(lobby(v));
+      expect(container.querySelector("[data-map-chip]")?.getAttribute("aria-label")).toBe(name);
+      unmount();
+    }
+  });
+
+  it("허용 맵이 하나뿐이면 칩을 그리지 않는다", () => {
+    restore();
+    const list = PLAYABLE_MAPS as MapId[];
+    const saved = [...list];
+    list.splice(0, list.length, "bar");
+    try {
+      const { container } = render(lobby(hostView()));
+      expect(container.querySelector("[data-map-chip]")).toBeNull();
+    } finally {
+      list.splice(0, list.length, ...saved);
+      restore = openPlaza();
+    }
+  });
+
+  it("방장이 칩을 누르면 맵 탭으로, 꾸미기 버튼을 누르면 의상 탭으로 시트가 열린다", () => {
+    const { container } = render(lobby(hostView()));
+    fireEvent.click(container.querySelector("[data-map-chip]")!);
+    expect(container.querySelector("[data-dress-sheet]")).not.toBeNull();
+    expect(container.querySelectorAll("button[data-map-card]")).toHaveLength(3);
+    expect(container.querySelector("[data-float='dress']")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "닫기" }));
+    fireEvent.click(screen.getByRole("button", { name: "꾸미기" }));
+    expect(container.querySelector("button[data-map-card]")).toBeNull();
+    expect(container.querySelectorAll("button[data-outfit]")).toHaveLength(9);
+    expect(container.querySelectorAll("button[data-map-tab]")).toHaveLength(2);
+  });
+
+  it("손님은 칩을 눌러도 시트가 열리지 않고, 꾸미기 시트에는 탭이 없다", () => {
+    const { container } = render(lobby(guestView()));
+    fireEvent.click(container.querySelector("[data-map-chip]")!);
+    expect(container.querySelector("[data-dress-sheet]")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "꾸미기" }));
+    expect(container.querySelector("button[data-map-tab]")).toBeNull();
+    expect(container.querySelector("button[data-map-card]")).toBeNull();
+  });
+
+  it("카드를 누르면 {t:'mapPick', map} 만 가고, 서버 state 의 mapChoice 가 오기 전에는 칩·카드가 바뀌지 않는다", () => {
+    const send = vi.fn((_msg: ClientMessage) => true);
+    const { container, rerender } = render(lobby(hostView(), send));
+    fireEvent.click(container.querySelector("[data-map-chip]")!);
+    send.mockClear();
+    fireEvent.click(container.querySelector("button[data-map-card='plaza']")!);
+    expect(send.mock.calls.map((c) => c[0])).toEqual([{ t: "mapPick", map: "plaza" }]);
+    expect(container.querySelector("[data-map-chip]")?.getAttribute("aria-label")).toBe("맵 랜덤");
+    expect(container.querySelector("button[data-map-card='random']")?.getAttribute("aria-pressed")).toBe("true");
+    rerender(lobby(hostView({ mapChoice: "plaza" }), send));
+    expect(container.querySelector("[data-map-chip]")?.getAttribute("aria-label")).toBe("맵 광장");
+    expect(container.querySelector("button[data-map-card='plaza']")?.getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("[테스트] 버튼이 있으면 칩은 그 오른쪽(같은 자리 묶음 안, 뒤)에 놓인다", () => {
+    const { container } = render(lobby(hostView(), () => {}, { testButton: <button type="button">테스트</button> }));
+    const slot = container.querySelector(".mf-lobby__test")!;
+    expect([...slot.children].map((c) => (c.hasAttribute("data-map-chip") ? "chip" : "test"))).toEqual(["test", "chip"]);
+  });
+
+  it("[테스트] 버튼이 없으면 칩은 .mf-lobby__map 자리에 있다", () => {
+    const { container } = render(lobby(hostView()));
+    expect(container.querySelector(".mf-lobby__map [data-map-chip]")).not.toBeNull();
+    expect(container.querySelector(".mf-lobby__test")).toBeNull();
   });
 });

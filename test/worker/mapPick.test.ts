@@ -6,6 +6,7 @@ import { PLAZA_MAP } from "../../shared/game/mapPlaza";
 import { PLAYABLE_MAPS } from "../../shared/game/maps";
 import { PLAZA_SPAWNS } from "../../shared/game/mapPlaza";
 import type { MapId } from "../../shared/protocol";
+import { openPlaza } from "../helpers/playable";
 import { editRoom, endedGame4, lastViewOf, mark, moveAs, pause, seat, send, settle, startedGame, storedRoom, summary, worldFramesOf } from "./helpers";
 import type { Seated } from "./helpers";
 
@@ -218,5 +219,60 @@ describe("시작이 정한 map 은 모두에게 같다 (L42, D-21)", () => {
       mutable.splice(mutable.indexOf("plaza"), 1);
     }
     expect([...PLAYABLE_MAPS]).toEqual(["bar"]);
+  });
+});
+
+describe("광장이 열린 방의 맵 선택 (11-13, D-20·D-21, L40·L42)", () => {
+  it("방장의 mapPick plaza → 모든 소켓이 state 한 프레임을 받고 mapChoice 가 plaza 이며 저장된다", async () => {
+    const restore = openPlaza();
+    try {
+      const { s, socks } = await lobby();
+      const frames = await sendAll(socks, 0, { t: "mapPick", map: "plaza" });
+      for (const f of frames) {
+        expect(summary(f)).toBe("[state:lobby]");
+        expect(stateOf(f).view.mapChoice).toBe("plaza");
+        expect("map" in stateOf(f).view).toBe(false);
+      }
+      expect(((await storedRoom(s.code)) as unknown as { mapChoice?: string }).mapChoice).toBe("plaza");
+    } finally {
+      restore();
+    }
+  });
+
+  it("손님의 mapPick plaza 는 변화 없음 — 그 손님 소켓 state 한 프레임(mapChoice 그대로), 나머지 0프레임, 저장 그대로 (L40)", async () => {
+    const restore = openPlaza();
+    try {
+      const { s, socks } = await lobby();
+      const frames = await sendAll(socks, 1, { t: "mapPick", map: "plaza" });
+      expect(summary(frames[1]!)).toBe("[state:lobby]");
+      expect(stateOf(frames[1]!).view.mapChoice).toBe("random");
+      expect(summary(frames[0]!)).toBe("[]");
+      expect(summary(frames[2]!)).toBe("[]");
+      expect(((await storedRoom(s.code)) as unknown as { mapChoice?: string }).mapChoice).toBeUndefined();
+    } finally {
+      restore();
+    }
+  });
+
+  it("random 으로 시작하면 서버가 두 맵 중 하나를 정하고 모든 참가자의 view.map 이 같다", async () => {
+    const restore = openPlaza();
+    try {
+      const s = await seat(3, 0);
+      const socks = [s.host, ...s.guests.map((g) => g.sock)];
+      for (const k of socks) await settle(k, 0);
+      const marks = socks.map((k) => mark(k));
+      send(s.host, { t: "start" });
+      const maps = new Set<string>();
+      for (let i = 0; i < socks.length; i += 1) {
+        const st = (await settle(socks[i]!, marks[i]!)).filter((m): m is State => m.t === "state");
+        expect(st.length).toBeGreaterThan(0);
+        for (const m of st) maps.add(String(m.view.map));
+      }
+      expect(maps.size).toBe(1);
+      expect(["bar", "plaza"]).toContain([...maps][0]);
+      expect(((await storedRoom(s.code)) as unknown as { map?: string }).map).toBe([...maps][0]);
+    } finally {
+      restore();
+    }
   });
 });

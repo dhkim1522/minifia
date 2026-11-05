@@ -122,3 +122,26 @@ describe("V2Icon hourglass (11-12)", () => {
     for (const other of ["timeline", "trophy", "quiet", "skip"] as const) expect(shape(other)).not.toBe(mine);
   });
 });
+
+// 11-13: 맵 아이콘 셋(mapBar·mapPlaza·shuffle) — 직접 그린 단순 모양, 24 격자, 선 2px, 둥근 끝 (O-8)
+const V2_MAP: V2IconName[] = ["mapBar", "mapPlaza", "shuffle"];
+
+describe("V2Icon 맵 아이콘 (11-13)", () => {
+  it.each(V2_MAP)("%s 는 24 격자 svg, 선 2px·둥근 끝이고 도형이 있다", (name) => {
+    const { container } = render(<V2Icon name={name} />);
+    const svg = container.querySelector("svg");
+    expect(svg?.getAttribute("viewBox")).toBe("0 0 24 24");
+    expect(svg?.getAttribute("stroke-width")).toBe("2");
+    expect(svg?.getAttribute("stroke-linecap")).toBe("round");
+    expect(svg?.getAttribute("aria-hidden")).toBe("true");
+    expect(svg?.querySelectorAll("path,circle").length).toBeGreaterThan(0);
+  });
+
+  it("세 아이콘은 서로 다른 모양이다", () => {
+    const shapes = V2_MAP.map((name) => {
+      const { container } = render(<V2Icon name={name} />);
+      return [...container.querySelectorAll("path,circle")].map((e) => e.outerHTML).join("");
+    });
+    expect(new Set(shapes).size).toBe(3);
+  });
+});
