@@ -4,7 +4,8 @@
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { initPerfDebug } from "../../src/debug/perfProbe";
-import { LAB_GROUPS, SOUND_LIMITS, SOUND_NAMES, SOUND_LAB_PARAM, soundLabEnabled } from "../../src/debug/soundLabData";
+import { SOUND_LAB_PARAM, soundLabEnabled } from "../../src/debug/soundLabData";
+import { LAB_GROUPS, SOUND_LIMITS, SOUND_NAMES } from "../../src/debug/soundLabTable";
 import { analyzeSamples, mount, renderOffline, soundOk, type LabHook, type OfflineFactory, type RenderResult } from "../../src/debug/soundLab";
 import { buildMixGraph } from "../../src/audio/synth";
 import { BED_IDS, BUS_GAIN, COMPRESSOR, MASTER_GAIN, RECIPES, SFX_IDS, SOUND_IDS } from "../../src/audio/recipes";
@@ -64,6 +65,12 @@ describe("정적 — 시험 페이지 본체는 동적 import 로만 불린다 (
     const data = files.find((x) => x.f === "debug/soundLabData.ts")!;
     const specs = [...data.text.matchAll(/\bfrom\s*["']([^"']+)["']/g)].map((m) => m[1]!);
     for (const s of specs) expect(s).toMatch(/^(\.\.\/audio\/[A-Za-z]+|\.\.\/net\/session|\.\.\/world\/testHooks)$/);
+  });
+  it("진입 번들로 들어가는 soundLabData.ts 에는 표(묶음·이름·문턱)가 없고 게이트뿐이다 — 표는 soundLabTable.ts(지연 청크 전용)", () => {
+    const data = files.find((x) => x.f === "debug/soundLabData.ts")!;
+    expect(data.text).not.toMatch(/LAB_GROUPS|SOUND_NAMES|SOUND_LIMITS/);
+    const users = files.filter((x) => /from\s*["'][^"']*\/soundLabTable["']/.test(x.text)).map((x) => x.f);
+    expect(users).toEqual(["debug/soundLab.ts"]);
   });
   it("setMasterTrim 은 엔진과 시험 페이지에서만 쓰인다(제품 화면 호출 0)", () => {
     const users = files.filter((x) => x.text.includes("setMasterTrim")).map((x) => x.f).sort();

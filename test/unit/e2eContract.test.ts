@@ -11,7 +11,7 @@ import { ANNOUNCE_MORNING_AT } from "../../src/game/dayView";
 import { TIMELESS_PHASES } from "../../src/game/scenes";
 import { SOUND_PREF_KEY, SOUND_PREF_VERSION, loadSoundPref } from "../../src/audio/prefs";
 import { SOUND_IDS } from "../../src/audio/recipes";
-import { SOUND_LIMITS } from "../../src/debug/soundLabData";
+import { SOUND_LIMITS } from "../../src/debug/soundLabTable";
 import { LETTER_END_AT_MS, LETTER_FOLD_AT_MS, SEAL_GLYPH } from "../../src/game/willLetter";
 import {
   CHAT_PANEL_EXTRA,

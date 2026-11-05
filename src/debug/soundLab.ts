@@ -23,7 +23,7 @@ import {
 import { awardScript, morningScript, nightScript, resultScript, verdictScript, willScript, type MorningOutcome, type Script } from "../audio/script";
 import { buildMixGraph, buildVoice, noiseBufferFor } from "../audio/synth";
 import { installSoundHook } from "../audio/testHook";
-import { LAB_GROUPS, SOUND_LIMITS, SOUND_NAMES } from "./soundLabData";
+import { LAB_GROUPS, SOUND_LIMITS, SOUND_NAMES } from "./soundLabTable";
 
 // ───────────────────────── 오프라인 렌더 ─────────────────────────
 
