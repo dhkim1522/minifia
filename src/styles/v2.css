@@ -93,6 +93,16 @@
 .mv-chat__will-dot { position: absolute; top: 6px; right: 6px; width: 8px; height: 8px; border-radius: var(--radius-pill); background: var(--gray-100); }
 .mv-chat__will:focus-visible, .mv-chat__send:focus-visible, .mv-chat__input:focus-visible, .mv-chat__newdot:focus-visible { outline: 2px solid var(--gray-100); outline-offset: 2px; }
 .mv-chat__send.is-dim { opacity: 0.45; }
+/* 입력줄 오른쪽 끝 슬롯(11-12): 결과 화면의 다시 하기 알약 자리. 줄어들지 않는다 */
+.mv-chat__trailing { display: flex; flex: none; align-items: center; }
+/* 다시 하기 알약(11-12, UI-SPEC D-1·G): 96×48. 손님 = night-700 면에 check 20 + 라벨 14px, 켜지면 안쪽 테두리 2px gray-100. 방장 = gray-100 면 + night-900 글 두 줄(14px × 줄 높이 20). 흐림은 불투명도만 */
+.mv-ready { position: relative; box-sizing: border-box; display: inline-flex; flex: none; align-items: center; justify-content: center; gap: var(--space-xs); width: 96px; height: 48px; padding: 0 var(--space-sm); border: 0; border-radius: var(--radius-pill); font-family: var(--font-ui); font-size: 14px; line-height: 20px; font-weight: 700; white-space: nowrap; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.mv-ready.is-guest { background: var(--night-700); color: var(--gray-100); }
+.mv-ready.is-guest.is-on { box-shadow: inset 0 0 0 2px var(--gray-100); }
+.mv-ready.is-host { flex-direction: column; gap: 0; background: var(--gray-100); color: var(--night-900); }
+.mv-ready__label, .mv-ready__count { display: block; font-size: 14px; line-height: 20px; font-weight: 700; }
+.mv-ready.is-dim { opacity: 0.45; cursor: default; }
+.mv-ready:focus-visible { outline: 2px solid var(--gray-100); outline-offset: 2px; }
 /* 입력줄 동작 버튼(10페이즈): 입력줄 맨 앞 48×48, 깃펜 버튼(.mv-chat__will)과 같은 면·눌림 표시 */
 .mv-chat__emote { position: relative; display: grid; place-items: center; flex: none; width: var(--control-input); height: var(--control-input); padding: 0; border: 0; border-radius: var(--radius-badge); background: var(--night-700); color: var(--gray-100); cursor: pointer; }
 .mv-chat__emote[aria-pressed="true"] { box-shadow: inset 0 0 0 2px var(--gray-100); }

@@ -7,6 +7,7 @@ import { ConfirmSheet } from "../components/ConfirmSheet";
 import { Icon } from "../components/Icon";
 import { ChatPanel } from "../components/v2/ChatPanel";
 import { FloatAction, FloatActions } from "../components/v2/FloatAction";
+import { ReadyPill } from "../components/v2/ReadyPill";
 import { ResultPanel } from "../components/v2/ResultPanel";
 import type { ResultTab } from "../components/v2/ResultPanel";
 import { TopToast, useTopToast } from "../components/v2/TopToast";
@@ -16,12 +17,14 @@ import { CEREMONY_TITLE } from "../game/awardText";
 import { LOG_H_KB } from "../game/chatUi";
 import { castOf, CEREMONY, CEREMONY_CENTER, ceremonyAt, ceremonySnap, ceremonyWindowStart, holdSnap, markTimes, RESULT_TIMELINE, resultPanelHeight, skipAward, slotsFor, stateAt, walkSnap } from "../game/resultDirector";
 import type { CeremonyState, ResultState } from "../game/resultDirector";
+import { READY_TEXT } from "../game/resultText";
 import { RESULT_TEXT } from "../game/verdict";
 import { seatColorVar } from "../net/assets";
 import type { ChatStore } from "../net/chatStore";
 import type { ResultLogStore } from "../net/resultLogStore";
 import { useChat } from "../net/useChat";
 import { useMapInsets } from "../net/useMapInsets";
+import { useReady } from "../net/useReady";
 import { useReducedMotion } from "../net/useReducedMotion";
 import { GATHER_CENTER } from "../world/camera";
 import type { SceneLook, SeatLook } from "../world/presence";
@@ -108,9 +111,6 @@ export function ResultScreen({ view, store, chat, resultLog, send, canSend, offs
     setTab(next);
     setOpened((prev) => (prev.has(next) ? prev : new Set(prev).add(next)));
   }, []);
-  const logRevision = useSyncExternalStore(
-    useCallback((cb: () => void) => resultLog.subscribe(cb), [resultLog]),
-    useCallback(() => resultLog.revision(), [resultLog]),
   // 기록 탭의 귓속말 쌍(11-11): 귓속말 탭으로 옮기고 그날 구분선을 보이게 한다. 탭 행으로 직접 고르면 이 일차는 지운다
   const [jumpDay, setJumpDay] = useState<number | null>(null);
   const jumpWhisper = useCallback(
@@ -127,6 +127,9 @@ export function ResultScreen({ view, store, chat, resultLog, send, canSend, offs
     },
     [pickTab],
   );
+  const logRevision = useSyncExternalStore(
+    useCallback((cb: () => void) => resultLog.subscribe(cb), [resultLog]),
+    useCallback(() => resultLog.revision(), [resultLog]),
   );
   const logLines = useMemo(() => resultLog.snapshot(), [resultLog, logRevision]); // eslint-disable-line react-hooks/exhaustive-deps
   const contacts = useMemo(() => new Map(view.players.map((p) => [p.seat, p.nickname] as const)), [view.players]);
@@ -315,7 +318,15 @@ export function ResultScreen({ view, store, chat, resultLog, send, canSend, offs
   // 머리 위 직업 칩: 뒤집힌 사람만. 결과 화면의 ended 경로에서만 만든다(산 사람 장면 표는 건드리지 않는다)
   const jobBySeat = useMemo(() => new Map(cast.map((c) => [c.seat, c.job])), [cast]);
   const flipped = useMemo(() => new Set(state.flipped), [state]);
-  const tagProps = useCallback((seat: number) => (flipped.has(seat) ? { role: jobBySeat.get(seat)! } : {}), [flipped, jobBySeat]);
+  // 다시 하기 준비(11-12, D-12): 준비한 사람의 이름표에 체크('준비됨')가 모두에게 같게 붙는다. 서버가 실은 공개 값(players[].ready)뿐이다
+  const readySeats = useMemo(() => new Set(view.players.filter((p) => p.ready === true && p.connected).map((p) => p.seat)), [view.players]);
+  const tagProps = useCallback(
+    (seat: number) => ({
+      ...(flipped.has(seat) ? { role: jobBySeat.get(seat)! } : {}),
+      ...(readySeats.has(seat) ? { done: true, doneLabel: READY_TEXT.tagDone } : {}),
+    }),
+    [flipped, jobBySeat, readySeats],
+  );
 
   // E2E 훅(window.__mfResult): 켜진 문맥에서만. stage·chips 는 연출 시계, costumes·dimmed 는 런타임이 실제로 적용한 값
   const hook = useRef<ReturnType<typeof installResultHook> | null>(null);
@@ -350,6 +361,15 @@ export function ResultScreen({ view, store, chat, resultLog, send, canSend, offs
   const guardedSend = useCallback((msg: ClientMessage) => (msg.t === "typing" || msg.t === "emote" ? true : send(msg)), [send]);
   const binding = useChat({ store: chat, connection: { send: guardedSend, canSend }, view });
   const chatOpen = view.me.chat === "all";
+
+  // 다시 하기 알약(11-12, D-11·D-12): 승리 조명(4600) 때 활성이 된다. 상태·잠금·시작 확인은 훅이 쥐고 이 화면은 그린다. 거절은 알리지 않는다(서버가 다시 보낸 state 대로 그린다, L40)
+  const pillActive = mark >= tl.lightAtMs;
+  const rematch = useReady({ view, send, canSend, stageActive: pillActive });
+  const rematchToast = rematch.toast;
+  useEffect(() => {
+    if (rematchToast !== null) show(rematchToast.text);
+  }, [rematchToast, show]);
+  const readyPill = <ReadyPill host={rematch.isHost} on={rematch.mine} n={rematch.ready} m={rematch.total} dim={rematch.isHost && !rematch.canStart} inactive={!pillActive || !canSend} onPress={rematch.press} />;
 
   const inAward = ceremony?.phase === "award";
   const title = inAward ? CEREMONY_TITLE : RESULT_TEXT.title[state.title];
@@ -418,6 +438,8 @@ export function ResultScreen({ view, store, chat, resultLog, send, canSend, offs
         tabsVisible={state.tabsVisible}
         lines={logLines}
         view={view}
+        onJumpWhisper={jumpWhisper}
+        {...(jumpDay !== null ? { focusDay: jumpDay } : {})}
         contacts={contacts}
         opened={opened}
         allSlot={
@@ -436,10 +458,10 @@ export function ResultScreen({ view, store, chat, resultLog, send, canSend, offs
             logHeight={kbOpen ? LOG_H_KB : logH - TAB_ROW_H}
             compact={kbOpen}
             inputRef={inputRef}
+            trailing={readyPill}
           />
         }
-        onJumpWhisper={jumpWhisper}
-        {...(jumpDay !== null ? { focusDay: jumpDay } : {})}
+        pill={readyPill}
       />
       {/* 떠 있는 [넘기기](11-09, UI-SPEC B-3·G): 오른쪽 16, 위 칸(아래 칸은 11-12 의 [꾸미기] 자리), 위에 'k / n'. 시상 중에만, 확장 탭이 열려 있으면 숨는다 */}
       {ceremony?.phase === "award" && !expanded ? (

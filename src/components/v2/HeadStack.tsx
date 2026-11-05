@@ -37,6 +37,8 @@ export interface NameTagProps {
   mine?: boolean;
   /** 찬반에서 투표를 마친 사람: 이름 뒤 체크 16 (접근성 이름 "투표함") */
   done?: boolean;
+  /** done 체크의 접근성 이름. 없으면 "투표함" — 결과 화면(다시 하기 준비)은 "준비됨" */
+  doneLabel?: string;
   /** 처음 보는 지목의 처음 3초: 이름표 깜빡임 */
   blink?: boolean;
   /** 유령 표식(is-ghost). 이름표는 불투명 — 몸이 0.26 안개라 직업은 RoleChip 이 알린다(09.1-09) */
@@ -45,7 +47,7 @@ export interface NameTagProps {
   children?: ReactNode;
 }
 
-export function NameTag({ name, color, me, away, mine, done, blink, ghost, children }: NameTagProps) {
+export function NameTag({ name, color, me, away, mine, done, doneLabel, blink, ghost, children }: NameTagProps) {
   const cls = ["mv-tag", me && "is-me", away && "is-away", blink && "is-blink", mine && "is-mine", ghost && "is-ghost"]
     .filter(Boolean)
     .join(" ");
@@ -56,7 +58,7 @@ export function NameTag({ name, color, me, away, mine, done, blink, ghost, child
       {mine ? <V2Icon name="point" size={16} label={MINE_LABEL} /> : null}
       {done ? (
         <span className="mv-tag__done">
-          <V2Icon name="check" size={16} label={DONE_LABEL} />
+          <V2Icon name="check" size={16} label={doneLabel ?? DONE_LABEL} />
         </span>
       ) : null}
       {children}
@@ -88,7 +90,7 @@ export type HeadStackProps = NameTagProps & {
 };
 
 // 바닥 가운데를 캐릭터 머리 꼭대기에 translate(-50%, -100%) 로 놓는 일은 쓰는 쪽(이름표 층, 06-13)이 한다.
-export function HeadStack({ name, color, me, away, typing, role, count, lead, sure, sureLabel, mine, done, blink, ghost, claim, claimSwapped, claimPop, claimNotice }: HeadStackProps) {
+export function HeadStack({ name, color, me, away, typing, role, count, lead, sure, sureLabel, mine, done, doneLabel, blink, ghost, claim, claimSwapped, claimPop, claimNotice }: HeadStackProps) {
   const hasBadge = count !== undefined && count >= 1;
   return (
     <div
@@ -111,7 +113,7 @@ export function HeadStack({ name, color, me, away, typing, role, count, lead, su
       {role ? <RoleChip role={role} /> : null}
       {sure ? <SureStamp {...(sureLabel !== undefined ? { label: sureLabel } : {})} /> : null}
       {hasBadge ? <VoteBadge count={count} lead={lead} /> : null}
-      <NameTag name={name} color={color} me={me} away={away} mine={mine} done={done} blink={blink} ghost={ghost}>
+      <NameTag name={name} color={color} me={me} away={away} mine={mine} done={done} doneLabel={doneLabel} blink={blink} ghost={ghost}>
         {claim !== undefined ? (
           <ClaimBadge key={claimPop ?? 0} claim={claim} swapped={claimSwapped === true} pop={claimPop !== undefined && claimPop > 0} notice={claimNotice === true} />
         ) : null}

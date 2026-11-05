@@ -192,6 +192,8 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
   // 결과 공개 기록(resultLog)도 연결과 같은 수명이다 — ended 에서만 오고, 대기실로 돌아가면 비운다(11-07)
   const [resultLog] = useState(() => new ResultLogStore());
   const { onEvent } = connection;
+  // world snap 이 도착한 횟수. 판 번호가 바뀐 view 를 그리기 전에 새 판 snap 이 먼저 와 있으면 월드 저장소를 비우지 않는다(방금 받은 위치를 지우지 않는다, 11-12)
+  const worldSnaps = useRef(0);
   // 낮 연출(채팅 시스템 줄·결과 알림): 서버 view 두 개의 공개 정보 차이로만 만든다. 낮 시작은 역할 확인·밤에서 들어오므로 맵 화면이 아니라 방 화면이 직전 view 를 쥐어야 한다.
   const { announce, deny, fading, ghostEnter, killFx, policeResult } = useDayFx({ view, epoch: connection.epoch, chat });
   // 암살 유언 편지(결정 0063-3): 같은 ChatStore 의 라이브 유언 카드와 view 차이로만 만든다
@@ -199,7 +201,10 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
   useEffect(
     () =>
       onEvent((e, meta) => {
-        if (e.t === "world") store.applyFrame(e, meta.epoch);
+        if (e.t === "world") {
+          if (e.k === "snap") worldSnaps.current += 1;
+          store.applyFrame(e, meta.epoch);
+        }
         else if (e.t === "emote") store.applyEmote(e, meta.epoch); // 동작은 채팅 저장소로 보내지 않는다(10-03)
         else if (e.t === "resultLog") resultLog.apply(e, meta.epoch);
         else if (e.t === "chat" || e.t === "typing" || e.t === "chatLog" || e.t === "chatReject") chat.apply(e, meta.epoch, Date.now());
@@ -245,6 +250,22 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
       resultLog.reset();
     }
   }, [phase, chat, resultLog]);
+  // 판 번호(round)가 바뀐 view(다시 하기, 결정 D-26)는 처음 접속한 것처럼 그린다: 보관한 채팅·결과 기록·월드 저장소를 비운다(이전 판 흔적 0, T-11-39).
+  // 처음 받은 view 에는 하지 않는다. 월드는 서버 snap 이 통째로 바꾸므로 그 snap 이 이미 와 있으면 건드리지 않는다. setContext 보다 먼저 선언해 같은 커밋에서 비운 뒤 문맥을 넣는다.
+  const prevRound = useRef<number | undefined>(undefined);
+  const snapsSeen = useRef(0);
+  useEffect(() => {
+    if (view === null) return;
+    const round = view.round ?? 1;
+    const before = prevRound.current;
+    prevRound.current = round;
+    const freshSnap = worldSnaps.current !== snapsSeen.current;
+    snapsSeen.current = worldSnaps.current;
+    if (before === undefined || before === round) return;
+    chat.reset();
+    resultLog.reset();
+    if (!freshSnap) store.reset();
+  }, [view, chat, resultLog, store]);
   // view 가 바뀔 때마다 단계 키·내 채널·연결 epoch 를 알린다(셋 중 하나가 바뀌면 저장소가 입력 중을 끈다).
   const chatEpoch = connection.epoch;
   useEffect(() => {

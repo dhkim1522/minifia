@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type FormEvent, type KeyboardEvent, type Ref } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode, type Ref } from "react";
 import "../../styles/v2.css";
 import { CHAT_MAX_GRAPHEMES } from "../../../shared/game/chatRules";
 import { CHAT_TEXT } from "../../game/chatText";
@@ -85,6 +85,8 @@ export interface ChatPanelProps {
   willOpen?: boolean;
   /** 저장된 유언이 있다(오른쪽 위 점, 접근성 이름에 '저장됨') */
   willSaved?: boolean;
+  /** 입력줄 맨 오른쪽(보내기·깃펜 뒤)에 놓을 요소. 결과 화면의 다시 하기 알약(11-12). 없으면 자리도 없다 */
+  trailing?: ReactNode;
 }
 
 interface ChannelUi {
@@ -105,7 +107,7 @@ function atBottom(el: HTMLElement): boolean {
 }
 
 export function ChatPanel(props: ChatPanelProps) {
-  const { messages, value, onChange, onSend, channel = "all", logHeight, compact, sendDisabled, sendDim, notice, quiet, inputId, inputRef, onWill, willOpen, willSaved } = props;
+  const { messages, value, onChange, onSend, channel = "all", logHeight, compact, sendDisabled, sendDim, notice, quiet, inputId, inputRef, onWill, willOpen, willSaved, trailing } = props;
   const fieldRef = useRef<HTMLInputElement | null>(null);
   const logRef = useRef<HTMLDivElement | null>(null);
   const composingRef = useRef(false);
@@ -494,6 +496,11 @@ export function ChatPanel(props: ChatPanelProps) {
               <V2Icon name="quill" />
               {willSaved ? <i className="mv-chat__will-dot" /> : null}
             </button>
+          ) : null}
+          {trailing ? (
+            <div className="mv-chat__trailing" data-chat-trailing="">
+              {trailing}
+            </div>
           ) : null}
         </form>
       ) : null}

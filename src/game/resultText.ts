@@ -21,3 +21,29 @@ export const dayDivider = (n: number): string => `${n}일차`;
 
 /** 공개 예고가 역할 확인 단계에서 보이는 시간(ms). 모든 역할이 같다(T-11-24) */
 export const PRE_NOTICE_MS = 4000;
+
+// ---- 다시 하기 (11-12, 결정 D-11~D-13, UI-SPEC D) ----
+// 고정 문구 한 곳. 닉네임·본문 같은 사용자 문자열은 여기 없다 — 화면이 React 텍스트 노드로만 그린다. 모두 해요체, 마침표 없음.
+
+export const READY_TEXT = {
+  /** 손님 알약 라벨(꺼짐 / 켜짐) */
+  ready: "준비",
+  readyOn: "준비됨",
+  /** 켜진 손님 알약의 접근성 이름 */
+  readyOnLabel: "준비됨, 눌러서 취소",
+  /** 방장 알약 윗줄 */
+  start: "시작",
+  /** 방장 알약 접근성 이름 */
+  startLabel: (n: number): string => `다음 판 시작, ${n}명 준비`,
+  /** 이름표 체크의 접근성 이름(결과 화면) */
+  tagDone: "준비됨",
+  /** 쉬게 될 사람 확인 시트 / 쉬는 사람 화면의 한 줄 */
+  rest: "이번 판은 쉬어요",
+  /** 확인 시트 버튼 */
+  confirmStart: "시작",
+  confirmCancel: "취소",
+  /** 인원이 모자라 눌렀을 때 토스트(로비와 같은 문구) */
+  needPlayers: (min: number): string => `${min}명부터 시작해요`,
+  /** 쉬는 사람 화면 [나가기] */
+  leave: "나가기",
+} as const;

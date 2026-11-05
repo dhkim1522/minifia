@@ -72,6 +72,16 @@ interface Opts {
   /** 판 요약·공개 투표 기록(11-11 기록 탭). 없으면 빈 배열 */
   summary?: SummaryRow[];
   voteLog?: VoteLogEntry[];
+  /** 다시 하기 준비한 좌석들(11-12, players[].ready) */
+  ready?: number[];
+  /** 판 번호(11-12, view.round) */
+  round?: number;
+  /** 방장 좌석(기본 0) */
+  hostSeat?: number;
+  /** 끊긴 좌석들 */
+  offline?: number[];
+  /** 쉬었다가 결과에 합류한 좌석들(result.seats 에는 없다, players[].sat) */
+  sat?: number[];
 }
 
 function makeView(o: Opts = {}): RoomView {
