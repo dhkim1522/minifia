@@ -852,3 +852,40 @@ describe("미지원 환경의 침대·대본", () => {
     expect(rig.engine.log().every((e) => !e.played)).toBe(true);
   });
 });
+
+describe("setMasterTrim — 시험 페이지 전용 마스터 슬라이더 (12-06, D-19)", () => {
+  it("0..1 로 자르고 master 게인에 램프를 건다(기본 1 이면 MASTER_GAIN 그대로)", () => {
+    const rig = makeRig();
+    rig.engine.unlock();
+    const { master } = graphOf(rig.fake.ctx());
+    expect(master.gain.value).toBe(MASTER_GAIN);
+    rig.engine.setMasterTrim(0.5);
+    const ramp = master.gain.of("linear").at(-1)!;
+    expect(ramp.value).toBeCloseTo(MASTER_GAIN * 0.5, 9);
+    rig.engine.setMasterTrim(3);
+    expect(master.gain.of("linear").at(-1)!.value).toBeCloseTo(MASTER_GAIN, 9);
+    rig.engine.setMasterTrim(-1);
+    expect(master.gain.of("linear").at(-1)!.value).toBe(0);
+    rig.engine.setMasterTrim(Number.NaN);
+    expect(master.gain.of("linear").at(-1)!.value).toBeCloseTo(MASTER_GAIN, 9);
+  });
+
+  it("컨텍스트가 없을 때 부르면 값만 기억하고, 만들어진 뒤 master 가 그 값으로 시작한다", () => {
+    const rig = makeRig();
+    rig.engine.setMasterTrim(0.25);
+    rig.engine.unlock();
+    const { master } = graphOf(rig.fake.ctx());
+    expect(master.gain.value).toBeCloseTo(MASTER_GAIN * 0.25, 9);
+  });
+
+  it("숨김에서 돌아오면 trim 이 적용된 master 로 복귀한다", async () => {
+    const rig = makeRig();
+    rig.engine.unlock();
+    rig.engine.setMasterTrim(0.5);
+    rig.engine.hidden();
+    rig.fake.clock.advance(300);
+    await rig.engine.visible();
+    const { master } = graphOf(rig.fake.ctx());
+    expect(master.gain.of("linear").at(-1)!.value).toBeCloseTo(MASTER_GAIN * 0.5, 9);
+  });
+});
