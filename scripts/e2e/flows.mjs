@@ -128,7 +128,7 @@ import {
   ownPenFontRequests,
 } from "./lib.mjs";
 import { makeAvatarFlows } from "./avatar.mjs";
-import { awardChecks, readAwardState, readResultStage, readResultTabs, resultSkipChecks, resultStageChecks, resultTabChecks } from "./result.mjs";
+import { awardChecks, readAwardState, readResultStage, readResultTabs, readTimeline, resultSkipChecks, resultStageChecks, resultTabChecks, timelineChecks } from "./result.mjs";
 import { makePoliticsFlows } from "./politics.mjs";
 import { makeSoundFlows } from "./sound.mjs";
 
@@ -3123,6 +3123,40 @@ async function resultAwardsFlow(ctx) {
       costumesDuring: first.costumes,
       costumesAfter: after?.costumes,
       jobBySeat,
+    })) {
+      recOne(rec, sc, row);
+    }
+
+    // 기록 탭(11-11, TL1~TL7): 시상식을 넘긴 뒤 같은 한 판에서 연다 — 별도 흐름을 만들지 않아 실행 시간을 늘리지 않는다
+    await finishCeremony(hp);
+    await hp.locator('[data-result-tab="log"]').click({ timeout: 4000 });
+    try {
+      await hp.waitForSelector('[data-result-panel][data-expanded="true"] [data-day-card]', { timeout: 4000 });
+    } catch {
+      throw new SetupError("기록 탭을 열어도 일차 카드가 그려지지 않음 ([data-day-card])");
+    }
+    await sleep(250);
+    const tl = await readTimeline(hp);
+    if (!tl) throw new SetupError("기록 탭을 못 읽음");
+    const summary = view.result?.summary ?? [];
+    const executed = summary
+      .filter((row) => row.exec?.candidate !== undefined && (row.exec.passed || (row.exec.yes === 0 && row.exec.no === 0)))
+      .map((row) => ({ n: row.n, seat: row.exec.candidate }));
+    const target = tl.cards.length >= 2 ? tl.cards[1].n : (tl.cards[0]?.n ?? 1);
+    await hp.locator(`[data-day-card="${target}"]`).click({ timeout: 2000 });
+    const detailAfter = await hp.evaluate(() => document.querySelector("[data-day-detail]")?.getAttribute("data-day-detail") ?? null);
+    for (const row of timelineChecks({
+      roomH: tl.roomH,
+      dayCount: summary.length,
+      panel: tl.panel,
+      cards: tl.cards,
+      scrollLeft: tl.scrollLeft,
+      detailText: tl.detailText,
+      detailBox: tl.detailBox,
+      chips: tl.chips,
+      executed,
+      jobBySeat,
+      switched: { cards: tl.cards.length, target, before: tl.detail, after: detailAfter },
     })) {
       recOne(rec, sc, row);
     }

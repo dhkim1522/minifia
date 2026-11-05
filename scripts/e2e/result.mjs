@@ -14,7 +14,13 @@ export const RESULT_MARKERS = Object.freeze([
   "data-award-plate", // 시상식 칭호 패 (11-09)
   "data-award-id", // 패의 칭호 id (11-09)
   "data-float-count", // 떠 있는 [넘기기] 위의 진행 숫자 'k / n' (11-09, 버튼은 기존 data-float="skip")
+  "data-day-card", // 기록 탭 일차 카드 data-day-card="{n}" (aria-pressed) (11-11)
+  "data-day-detail", // 기록 탭 하루 상세 data-day-detail="{n}" (11-11)
+  "data-whisper-pair", // 하루 상세의 귓속말 쌍 버튼 (11-11)
 ]);
+
+/** 기록 탭 일차 카드 기하 (src/styles/v2.css .mf-tl__card, 간격은 --space-sm). test/unit/e2eContract.test.ts 가 앱 CSS 와 대조한다 */
+export const TIMELINE_CARD = Object.freeze({ w: 72, h: 112, gap: 8 });
 
 /** 결과 탭 id, 표시 순서 (src/game/resultText.ts RESULT_TABS 의 사본) */
 export const RESULT_TAB_IDS = Object.freeze(["all", "mafia", "ghost", "whisper", "log"]);
@@ -528,6 +534,136 @@ export function readAwardState(page) {
       plate: pr ? { id: plateEl.getAttribute("data-award-id") ?? "", top: pr.top - rr.top, left: pr.left - rr.left, width: pr.width, height: pr.height, text: text(plateEl) } : null,
       float: fr ? { left: fr.left - rr.left, top: fr.top - rr.top, width: fr.width, height: fr.height, bottom: fr.bottom - rr.top, count: text(floatEl.querySelector("[data-float-count]")) } : null,
       floatCount: root.querySelectorAll('[data-float="skip"]').length,
+    };
+  });
+}
+
+// ---------- 11-11 기록 탭 ----------
+
+/**
+ * TL1~TL7 기록 탭(일차 카드 띠·하루 상세) 판정 (11-11, 결정 D-8, UI-SPEC C). 입력:
+ *  roomH 방 높이 · dayCount 서버 view 의 일차 수(result.summary 길이) · panel {top,bottom,height} 확장 패널 사각형
+ *  cards [{n,left,top,width,height,pressed}] DOM 순서의 카드 사각형·aria-pressed · scrollLeft 띠의 가로 스크롤
+ *  detailText 하루 상세의 보이는 글자 · detailBox {top,bottom,overflowY} 하루 상세 사각형·세로 overflow
+ *  chips [{n,role}] 카드 낮 칸의 직업 칩 · executed [{n,seat}] 서버 view 의 처형된 날 · jobBySeat 서버 view 의 직업 표
+ *  switched {cards,target,before,after} 다른 카드를 누르기 전후의 data-day-detail (카드가 한 장이면 그 카드를 눌러도 그대로)
+ * TL1 카드 수 == 일차 수 · TL2 카드 72×112 ±2, 간격 8 ±2 · TL3 첫 카드만 눌림·scrollLeft 0 · TL4 문장 없음(숫자·공백 외 글자 0) · TL5 처형된 날 칩 직업 == 진짜 직업 ·
+ * TL6 확장 높이 min(round(0.7×방),520) ±2, 상세가 패널 안에서 스크롤 · TL7 카드 전환. 측정값이 없으면 조용히 통과하지 않고 `측정값 없음(…)` 으로 실패한다.
+ */
+export function timelineChecks(m) {
+  const L = {
+    TL1: "기록 탭: 일차 카드 수 == 일차 수",
+    TL2: "기록 탭: 카드 72×112 (±2), 사이 간격 8 (±2)",
+    TL3: "기록 탭: 첫 일차만 선택돼 있고 띠는 처음 위치(scrollLeft 0)",
+    TL4: "기록 탭: 하루 상세에 문장이 없다 (숫자·공백 외 보이는 글자 0)",
+    TL5: "기록 탭: 처형된 날 카드의 직업 칩 == 결과의 진짜 직업",
+    TL6: "기록 탭: 확장 패널 min(round(0.7 × 방 높이), 520) ±2, 상세가 패널 안에서 스크롤",
+    TL7: "기록 탭: 다른 카드를 누르면 하루 상세의 일차가 바뀜",
+  };
+  const out = [];
+  const cards = Array.isArray(m?.cards) ? m.cards : null;
+
+  // TL1
+  if (cards === null || !isNum(m?.dayCount)) out.push(noMeasure("TL1", L.TL1, "cards·dayCount"));
+  else out.push(result("TL1", L.TL1, cards.length === m.dayCount && cards.length > 0 ? [] : [`카드 ${cards.length}장 ≠ 일차 ${m.dayCount}`]));
+
+  // TL2
+  if (cards === null || cards.some((c) => !isNum(c?.left) || !isNum(c?.width) || !isNum(c?.height))) out.push(noMeasure("TL2", L.TL2, "cards 사각형"));
+  else {
+    const bad = [];
+    for (const c of cards) {
+      if (Math.abs(c.width - TIMELINE_CARD.w) > 2) bad.push(`${c.n}일차 폭 ${c.width} ≠ ${TIMELINE_CARD.w} (±2)`);
+      if (Math.abs(c.height - TIMELINE_CARD.h) > 2) bad.push(`${c.n}일차 높이 ${c.height} ≠ ${TIMELINE_CARD.h} (±2)`);
+    }
+    for (let i = 1; i < cards.length; i++) {
+      const gap = cards[i].left - (cards[i - 1].left + cards[i - 1].width);
+      if (Math.abs(gap - TIMELINE_CARD.gap) > 2) bad.push(`${cards[i - 1].n}~${cards[i].n}일차 간격 ${gap} ≠ ${TIMELINE_CARD.gap} (±2)`);
+    }
+    out.push(result("TL2", L.TL2, bad));
+  }
+
+  // TL3
+  if (cards === null || cards.length === 0 || !isNum(m?.scrollLeft)) out.push(noMeasure("TL3", L.TL3, "cards·scrollLeft"));
+  else {
+    const bad = [];
+    if (cards[0].pressed !== true) bad.push("첫 일차가 선택되지 않음");
+    if (cards.slice(1).some((c) => c.pressed === true)) bad.push("첫 일차 외에도 선택된 카드가 있음");
+    if (Math.abs(m.scrollLeft) > 1) bad.push(`scrollLeft ${m.scrollLeft} ≠ 0`);
+    out.push(result("TL3", L.TL3, bad));
+  }
+
+  // TL4
+  if (typeof m?.detailText !== "string") out.push(noMeasure("TL4", L.TL4, "detailText"));
+  else {
+    const words = m.detailText.replace(/[\d\s]/g, "");
+    out.push(result("TL4", L.TL4, words === "" ? [] : [`숫자 외 글자 "${words.slice(0, 20)}"`]));
+  }
+
+  // TL5
+  if (!Array.isArray(m?.chips) || !Array.isArray(m?.executed) || m?.jobBySeat == null) out.push(noMeasure("TL5", L.TL5, "chips·executed·jobBySeat"));
+  else {
+    const bad = [];
+    for (const e of m.executed) {
+      const chip = m.chips.find((c) => c.n === e.n);
+      const want = m.jobBySeat[e.seat];
+      if (!chip) bad.push(`${e.n}일차 처형 카드에 직업 칩 없음`);
+      else if (chip.role !== want) bad.push(`${e.n}일차 칩 ${chip.role} ≠ 진짜 직업 ${want}`);
+    }
+    for (const c of m.chips) if (!m.executed.some((e) => e.n === c.n)) bad.push(`${c.n}일차는 처형이 없는데 직업 칩이 있음`);
+    out.push(result("TL5", L.TL5, bad));
+  }
+
+  // TL6
+  const pn = m?.panel;
+  const db = m?.detailBox;
+  if (!isNum(m?.roomH) || !isNum(pn?.height) || !isNum(pn?.top) || !isNum(pn?.bottom) || !isNum(db?.top) || !isNum(db?.bottom) || typeof db?.overflowY !== "string") out.push(noMeasure("TL6", L.TL6, "roomH·panel·detailBox"));
+  else {
+    const bad = [];
+    const want = Math.min(Math.round(0.7 * m.roomH), 520);
+    if (Math.abs(pn.height - want) > 2) bad.push(`확장 높이 ${pn.height} ≠ ${want} (±2, 방 ${m.roomH})`);
+    if (db.top < pn.top - 1 || db.bottom > pn.bottom + 1) bad.push(`상세 [${db.top}, ${db.bottom}] 가 패널 [${pn.top}, ${pn.bottom}] 밖`);
+    if (!["auto", "scroll"].includes(db.overflowY)) bad.push(`상세 overflow-y ${db.overflowY} (스크롤 불가)`);
+    out.push(result("TL6", L.TL6, bad));
+  }
+
+  // TL7
+  const sw = m?.switched;
+  if (!isNum(sw?.cards) || sw?.before == null || sw?.after == null || sw?.target == null) out.push(noMeasure("TL7", L.TL7, "switched"));
+  else if (sw.cards < 2) out.push(result("TL7", L.TL7, String(sw.after) === String(sw.before) ? [] : [`카드 한 장인데 상세가 ${sw.before} → ${sw.after} 로 바뀜`]));
+  else out.push(result("TL7", L.TL7, String(sw.after) === String(sw.target) && String(sw.after) !== String(sw.before) ? [] : [`${sw.target}일차 카드를 눌렀는데 상세 ${sw.before} → ${sw.after}`]));
+  return out;
+}
+
+/**
+ * 기록 탭 한 번의 읽기(한 번의 evaluate). 기록 탭이 열려 있어야 한다. `.mf-result` 나 카드가 없으면 null.
+ * { roomH, panel {top,bottom,height}, cards [{n,left,top,width,height,pressed}], scrollLeft, detail(현재 data-day-detail 값),
+ *   detailText, detailBox {top,bottom,overflowY}, chips [{n,role}] }
+ */
+export function readTimeline(page) {
+  return page.evaluate(() => {
+    const root = document.querySelector(".mf-result");
+    const panelEl = root?.querySelector("[data-result-panel]");
+    const strip = root?.querySelector("[data-timeline-strip]");
+    if (!root || !panelEl || !strip) return null;
+    const rr = root.getBoundingClientRect();
+    const pr = panelEl.getBoundingClientRect();
+    const detailEl = root.querySelector("[data-day-detail]");
+    const dr = detailEl ? detailEl.getBoundingClientRect() : null;
+    const cardEls = [...root.querySelectorAll("[data-day-card]")];
+    return {
+      roomH: rr.height,
+      panel: { top: pr.top - rr.top, bottom: pr.bottom - rr.top, height: pr.height },
+      cards: cardEls.map((e) => {
+        const r = e.getBoundingClientRect();
+        return { n: Number(e.getAttribute("data-day-card")), left: r.left, top: r.top - rr.top, width: r.width, height: r.height, pressed: e.getAttribute("aria-pressed") === "true" };
+      }),
+      scrollLeft: strip.scrollLeft,
+      detail: detailEl ? detailEl.getAttribute("data-day-detail") : null,
+      detailText: detailEl ? (detailEl.textContent ?? "") : undefined,
+      detailBox: dr ? { top: dr.top - rr.top, bottom: dr.bottom - rr.top, overflowY: getComputedStyle(detailEl).overflowY } : null,
+      chips: cardEls
+        .map((e) => ({ n: Number(e.getAttribute("data-day-card")), role: e.querySelector("[data-half=day] [data-role-chip]")?.getAttribute("data-role-chip") ?? null }))
+        .filter((c) => c.role !== null),
     };
   });
 }
