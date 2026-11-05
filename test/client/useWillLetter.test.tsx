@@ -33,7 +33,7 @@ const card = (k: "will" | "note", seat: number, seq: number, text: string): Chat
 
 function setup(initial: RoomView | null = night()) {
   const chat = new ChatStore();
-  chat.setContext({ pk: "1:morning", channel: "all", epoch: 1 });
+  chat.setContext({ pk: "1:1:morning", channel: "all", epoch: 1 });
   const hook = renderHook((p: { view: RoomView | null; epoch: number }) => useWillLetter({ view: p.view, epoch: p.epoch, chat }), {
     initialProps: { view: initial, epoch: 1 },
   });
@@ -154,7 +154,7 @@ describe("useWillLetter", () => {
 
   it("처형 아침이 아닌 곳(처형 카드)은 9페이즈 2.4초 보류 그대로다", () => {
     const s = setup();
-    s.chat.setContext({ pk: "1:execution", channel: "all", epoch: 1 });
+    s.chat.setContext({ pk: "1:1:execution", channel: "all", epoch: 1 });
     s.give(card("will", 4, 1, "처형 유언"));
     expect(s.chat.nextCardReveal(Date.now())).toBe(Date.now() + 2400);
     expect(s.hook.result.current).toBeNull();

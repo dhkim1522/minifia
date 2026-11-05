@@ -730,7 +730,7 @@ describe("GameMap — 낮 토론 채팅 패널·방장 줄 없음 (CHAT-06, DAY-
     const send = (connectionMock.current as RoomConnection).send;
     // 입력 중 신호(typing)는 글을 넣을 때 따로 나간다 — 채팅 메시지만 가려 본다.
     const chats = (send as ReturnType<typeof vi.fn>).mock.calls.map((c) => c[0] as ClientMessage).filter((m) => m.t === "chat");
-    expect(chats).toEqual([{ t: "chat", text: "저는 시민이에요", pk: "1:discussion" }]);
+    expect(chats).toEqual([{ t: "chat", text: "저는 시민이에요", pk: "1:1:discussion" }]);
     expect(container.querySelector("[data-chat-log] .mv-chat__msg")).toBeNull();
     f.emit({ t: "chat", seat: 0, ch: "all", seq: 1, text: "저는 시민이에요", at: NOW });
     const line = container.querySelector("[data-chat-log] .mv-chat__msg");

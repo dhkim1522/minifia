@@ -92,7 +92,7 @@ describe("동작 — 규칙 (10-01 Task 2, D-10·D-11·D-19)", () => {
     const socks = [s.host, g.sock];
     for (const k of socks) await settle(k, 0);
     const marks = socks.map((k) => mark(k));
-    emoteSend(g.sock, "clap", "7:night");
+    emoteSend(g.sock, "clap", "1:7:night");
     for (let i = 0; i < socks.length; i++) expect(summary(await settle(socks[i]!, marks[i]!))).toBe("[]");
   });
 

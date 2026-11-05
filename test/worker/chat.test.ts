@@ -49,7 +49,7 @@ describe("입력 중 — 트레이서 (CHAT-04)", () => {
     const guest = s.guests[0]!;
     const mh = mark(s.host);
     const mg = mark(guest.sock);
-    send(guest.sock, { t: "typing", on: true, pk: "9:night" });
+    send(guest.sock, { t: "typing", on: true, pk: "1:9:night" });
     const { sent, got } = await flushBoth(guest.sock, mg, s.host, mh);
     expect(`${typings(got)}/${typings(sent)}/${errors(sent)}`).toBe("//");
   });
@@ -62,7 +62,7 @@ describe("입력 중 — 트레이서 (CHAT-04)", () => {
     const anon = await connect(code);
     const mh = mark(host);
     const ma = mark(anon);
-    send(anon, { t: "typing", on: true, pk: "0:lobby" });
+    send(anon, { t: "typing", on: true, pk: "1:0:lobby" });
     const { sent, got } = await flushBoth(anon, ma, host, mh);
     expect(`${typings(got)}/${typings(sent)}/${errors(sent)}`).toBe("//");
   });
@@ -72,7 +72,7 @@ describe("입력 중 — 트레이서 (CHAT-04)", () => {
     const guest = s.guests[0]!;
     const mh = mark(s.host);
     const mg = mark(guest.sock);
-    send(guest.sock, { t: "typing", on: true, pk: "0:lobby", seat: 3 });
+    send(guest.sock, { t: "typing", on: true, pk: "1:0:lobby", seat: 3 });
     const { sent, got } = await flushBoth(guest.sock, mg, s.host, mh);
     expect(`${typings(got)}/${errors(sent)}`).toBe('/{"t":"error","code":"BAD_MESSAGE"}');
   });
@@ -187,7 +187,7 @@ describe("입력 중 — 낮의 채널 (CHAT-03·04)", () => {
     const g = await startedAtRoleReveal();
     const room = await storedRoom(g.code);
     const sender = g.actors[0]!;
-    const got = await typingsAfter(g, () => send(sender.sock, { t: "typing", on: true, pk: `${room.day ?? 0}:${room.phase}` }));
+    const got = await typingsAfter(g, () => send(sender.sock, { t: "typing", on: true, pk: `1:${room.day ?? 0}:${room.phase}` }));
     expect(`${room.phase}/${receivedLine(g, got)}`).toBe("roleReveal/");
   });
 });
@@ -420,7 +420,7 @@ describe("채팅 — 화면 없는 단계도 받는다 (D1, 결정 0044-23)", ()
     const g = await startedAtRoleReveal();
     const room = await storedRoom(g.code);
     const sender = g.actors[0]!;
-    const got = await observe(g, sender, () => chatSend(sender.sock, "안녕", `${room.day ?? 0}:${room.phase}`));
+    const got = await observe(g, sender, () => chatSend(sender.sock, "안녕", `1:${room.day ?? 0}:${room.phase}`));
     expect(`${room.phase}${summary(got[0]!)}${othersQuiet(g, got, sender)}`).toBe(`roleReveal[chatReject,state:roleReveal]${"[]".repeat(g.actors.length - 1)}`);
   });
 });
@@ -537,7 +537,7 @@ describe("채팅 — 거절 (CHAT-05, D5)", () => {
     const anon = await connect(code);
     const mh = mark(host);
     const ma = mark(anon);
-    send(anon, { t: "chat", text: "안녕", pk: "0:lobby" });
+    send(anon, { t: "chat", text: "안녕", pk: "1:0:lobby" });
     const own = await settle(anon, ma);
     const got = await settle(host, mh);
     expect(`${summary(own)}${summary(got)}`).toBe("[error:BAD_MESSAGE][]");

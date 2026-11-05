@@ -63,14 +63,21 @@ describe("useChat: 보내기 (CHAT-01, T-07-33)", () => {
   it("onSend 는 본문과 단계 키만 보낸다 — 채널 필드가 없다", () => {
     const { result } = mount();
     act(() => result.current.onSend?.("안녕"));
-    expect(sent.map((m) => JSON.stringify(m)).join("|")).toBe(JSON.stringify({ t: "chat", text: "안녕", pk: "0:lobby" }));
+    expect(sent.map((m) => JSON.stringify(m)).join("|")).toBe(JSON.stringify({ t: "chat", text: "안녕", pk: "1:0:lobby" }));
   });
 
-  it("단계 키는 일차:단계다 (낮 토론 2일차 = 2:discussion)", () => {
+  it("단계 키는 판:일차:단계다 (첫 판 낮 토론 2일차 = 1:2:discussion)", () => {
     const view = makeView({ phase: "discussion", day: { n: 2 } as RoomView["day"] });
     const { result } = mount(view);
     act(() => result.current.onSend?.("의심돼요"));
-    expect((sent[0] as { pk: string }).pk).toBe("2:discussion");
+    expect((sent[0] as { pk: string }).pk).toBe("1:2:discussion");
+  });
+
+  it("2판(view.round 2)의 단계 키는 2: 로 시작한다 (D-26)", () => {
+    const view = makeView({ phase: "discussion", round: 2, day: { n: 2 } as RoomView["day"] });
+    const { result } = mount(view);
+    act(() => result.current.onSend?.("의심돼요"));
+    expect((sent[0] as { pk: string }).pk).toBe("2:2:discussion");
   });
 
   it("서버 방송이 오기 전에는 내 줄을 그리지 않는다(낙관적 표시 없음), 방송이 오면 '나' 로 나온다", () => {
@@ -277,7 +284,7 @@ describe("useChat: 입력 중 보내기 (CHAT-04, UI-SPEC 머리 위 입력 중)
     const { type } = mount();
     type("가");
     expect(typingTrail()).toBe("on");
-    expect(typings()[0]?.pk).toBe("0:lobby");
+    expect(typings()[0]?.pk).toBe("1:0:lobby");
     tick(1000);
     type("가나");
     expect(typingTrail()).toBe("on");

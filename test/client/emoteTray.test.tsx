@@ -169,13 +169,13 @@ describe("useChat 동작 연결 (D-9)", () => {
     const { result, sent } = mount();
     expect(result.current.emotes?.join(",")).toBe(ORDER.join(","));
     act(() => result.current.onEmote?.("clap"));
-    expect(sent.map((m) => JSON.stringify(m)).join("|")).toBe(JSON.stringify({ t: "emote", id: "clap", pk: "0:lobby" }));
+    expect(sent.map((m) => JSON.stringify(m)).join("|")).toBe(JSON.stringify({ t: "emote", id: "clap", pk: "1:0:lobby" }));
   });
 
   it("단계 키는 채팅과 같다(2일차 토론 = 2:discussion)", () => {
     const { result, sent } = mount(true, makeView({ phase: "discussion", day: { n: 2 } as RoomView["day"] }));
     act(() => result.current.onEmote?.("dance"));
-    expect((sent[0] as { pk: string }).pk).toBe("2:discussion");
+    expect((sent[0] as { pk: string }).pk).toBe("1:2:discussion");
   });
 
   it("연결이 끊기면 보내지 않는다", () => {

@@ -82,7 +82,7 @@ describe("동작 누설 검사 L27~L30 (D-12, D-19, O-7)", () => {
     for (const s of g.socks) await settle(s, mark(s));
     const before = await snapshotStorage(g.code);
 
-    const got = await observe(g, mafiaA, () => emoteSend(mafiaA.sock, "throat", "1:night"));
+    const got = await observe(g, mafiaA, () => emoteSend(mafiaA.sock, "throat", "1:1:night"));
     for (const msgs of got) expect(summary(msgs)).toBe("[]");
 
     const after = await snapshotStorage(g.code);

@@ -279,7 +279,7 @@ describe("아침 카드 재접속 복원 (MORN-02, 결정 0061-11)", () => {
     const speaker = g.actors.find((a) => a.role === "citizen" && a.seat !== withRole(g.actors, "citizen")[0]!.seat) ?? g.actors[0]!;
     const before = (await chatKeysOf(g.code)).length;
     const m = mark(speaker.sock);
-    send(speaker.sock, { t: "chat", text: "가짜 유언", pk: `${1}:morning`, k: "will" });
+    send(speaker.sock, { t: "chat", text: "가짜 유언", pk: `1:1:morning`, k: "will" });
     const got = await settle(speaker.sock, m);
     expect(got.map((x) => (x.t === "error" ? `error:${x.code}` : x.t)).join(",")).toBe("error:BAD_MESSAGE");
     expect((await chatKeysOf(g.code)).length).toBe(before);

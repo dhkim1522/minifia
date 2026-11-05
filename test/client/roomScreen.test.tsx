@@ -552,7 +552,18 @@ describe("RoomScreen: 채팅 저장소 연결 (CHAT-01, 07-13)", () => {
     fireEvent.submit(input.closest("form") as HTMLFormElement);
     // 입력 중 신호(typing)는 07-18 부터 글을 넣을 때 따로 나간다 — 채팅 메시지만 가려 본다.
     const chats = send.mock.calls.map((c) => c[0]).filter((m) => m.t === "chat");
-    expect(JSON.stringify(chats[0])).toBe(JSON.stringify({ t: "chat", text: "하이", pk: "0:lobby" }));
+    expect(JSON.stringify(chats[0])).toBe(JSON.stringify({ t: "chat", text: "하이", pk: "1:0:lobby" }));
+  });
+
+  it("2판(view.round 2)이면 보내는 단계 키가 2: 로 시작한다 (D-26)", () => {
+    const send = vi.fn((_msg: ClientMessage) => true);
+    withListener({ view: { ...at("lobby"), round: 2 }, send });
+    const { container } = mount();
+    const input = container.querySelector("[data-chat-input]") as HTMLInputElement;
+    fireEvent.change(input, { target: { value: "하이" } });
+    fireEvent.submit(input.closest("form") as HTMLFormElement);
+    const chats = send.mock.calls.map((c) => c[0]).filter((m) => m.t === "chat");
+    expect((chats[0] as { pk: string }).pk).toBe("2:0:lobby");
   });
 });
 

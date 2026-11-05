@@ -197,7 +197,7 @@ describe("Lobby — 채팅 패널: 기록 + 입력줄 + 행동 줄 (CHAT-01, 07-
     // 입력 중 신호(typing)는 07-18 부터 글을 넣을 때 따로 나간다 — 채팅 메시지만 가려 본다.
     const chats = send.mock.calls.map((c) => c[0]).filter((m) => m.t === "chat");
     expect(chats.length).toBe(1);
-    expect(JSON.stringify(chats[0])).toBe(JSON.stringify({ t: "chat", text: "안녕하세요", pk: "0:lobby" }));
+    expect(JSON.stringify(chats[0])).toBe(JSON.stringify({ t: "chat", text: "안녕하세요", pk: "1:0:lobby" }));
   });
 
   it("재접속 띠가 떠 있어도(canSend 거짓) 입력칸은 쓸 수 있고 보내기만 aria-disabled 다", () => {

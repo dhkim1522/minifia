@@ -171,19 +171,19 @@ describe("ClientMessageSchema whisper (09.1.1-02, 결정 0066-2)", () => {
 // 07-10: 입력 중은 ClientMessage 유니온의 멤버다. 채널·좌석은 보내지 않는다(결정 0002) — 덧붙은 키는 거부한다(T-07-19).
 describe("ClientMessageSchema typing (07-10, CHAT-04)", () => {
   it("입력 중 {t, on, pk} 를 받는다", () => {
-    expect(ClientMessageSchema.safeParse({ t: "typing", on: true, pk: "0:lobby" }).success).toBe(true);
-    expect(ClientMessageSchema.safeParse({ t: "typing", on: false, pk: "1:night" }).success).toBe(true);
+    expect(ClientMessageSchema.safeParse({ t: "typing", on: true, pk: "1:0:lobby" }).success).toBe(true);
+    expect(ClientMessageSchema.safeParse({ t: "typing", on: false, pk: "1:1:night" }).success).toBe(true);
   });
 
   it.each([
-    ["덧붙은 seat", { t: "typing", on: true, pk: "0:lobby", seat: 3 }],
-    ["덧붙은 ch", { t: "typing", on: true, pk: "0:lobby", ch: "mafia" }],
-    ["덧붙은 id", { t: "typing", on: true, pk: "0:lobby", id: "x" }],
+    ["덧붙은 seat", { t: "typing", on: true, pk: "1:0:lobby", seat: 3 }],
+    ["덧붙은 ch", { t: "typing", on: true, pk: "1:0:lobby", ch: "mafia" }],
+    ["덧붙은 id", { t: "typing", on: true, pk: "1:0:lobby", id: "x" }],
     ["pk 33자", { t: "typing", on: true, pk: "a".repeat(33) }],
     ["pk 빈 문자열", { t: "typing", on: true, pk: "" }],
     ["pk 빠짐", { t: "typing", on: true }],
-    ["on 빠짐", { t: "typing", pk: "0:lobby" }],
-    ["on 문자열", { t: "typing", on: "true", pk: "0:lobby" }],
+    ["on 빠짐", { t: "typing", pk: "1:0:lobby" }],
+    ["on 문자열", { t: "typing", on: "true", pk: "1:0:lobby" }],
   ])("입력 중 %s 는 거부한다", (_name, msg) => {
     expect(ClientMessageSchema.safeParse(msg).success).toBe(false);
   });
@@ -195,22 +195,22 @@ describe("ClientMessageSchema typing (07-10, CHAT-04)", () => {
 
 describe("ClientMessageSchema chat (07-11, CHAT-01·05)", () => {
   it("본문과 단계 키만 있으면 통과한다", () => {
-    expect(ClientMessageSchema.safeParse({ t: "chat", text: "가", pk: "0:lobby" }).success).toBe(true);
+    expect(ClientMessageSchema.safeParse({ t: "chat", text: "가", pk: "1:0:lobby" }).success).toBe(true);
   });
 
   it("본문 300자(UTF-16)는 통과하고 301자는 거부한다", () => {
-    expect(ClientMessageSchema.safeParse({ t: "chat", text: "가".repeat(300), pk: "0:lobby" }).success).toBe(true);
-    expect(ClientMessageSchema.safeParse({ t: "chat", text: "가".repeat(301), pk: "0:lobby" }).success).toBe(false);
+    expect(ClientMessageSchema.safeParse({ t: "chat", text: "가".repeat(300), pk: "1:0:lobby" }).success).toBe(true);
+    expect(ClientMessageSchema.safeParse({ t: "chat", text: "가".repeat(301), pk: "1:0:lobby" }).success).toBe(false);
   });
 
   it.each([
-    ["덧붙은 ch", { t: "chat", text: "가", pk: "0:lobby", ch: "mafia" }],
-    ["덧붙은 seat", { t: "chat", text: "가", pk: "0:lobby", seat: 3 }],
+    ["덧붙은 ch", { t: "chat", text: "가", pk: "1:0:lobby", ch: "mafia" }],
+    ["덧붙은 seat", { t: "chat", text: "가", pk: "1:0:lobby", seat: 3 }],
     ["pk 33자", { t: "chat", text: "가", pk: "a".repeat(33) }],
     ["pk 빈 문자열", { t: "chat", text: "가", pk: "" }],
     ["pk 빠짐", { t: "chat", text: "가" }],
-    ["text 빠짐", { t: "chat", pk: "0:lobby" }],
-    ["text 숫자", { t: "chat", text: 1, pk: "0:lobby" }],
+    ["text 빠짐", { t: "chat", pk: "1:0:lobby" }],
+    ["text 숫자", { t: "chat", text: 1, pk: "1:0:lobby" }],
   ])("%s 는 거부한다", (_name, msg) => {
     expect(ClientMessageSchema.safeParse(msg).success).toBe(false);
   });
@@ -321,18 +321,18 @@ describe("ClientMessageSchema will·note (09-12, 결정 0061-9·10: 본문 text 
 // 10-01: 동작(emote) — 종류 id 와 단계 키뿐이다. 좌석·채널·수신자·시각은 보내지 않는다(D-12, D-19).
 describe("ClientMessageSchema emote (10-01, AVTR-03)", () => {
   it.each(["throat", "deny", "clap", "cry", "handshake", "point", "praise", "surprise", "dance"])("동작 %s 를 받는다", (id) => {
-    expect(ClientMessageSchema.safeParse({ t: "emote", id, pk: "0:lobby" }).success).toBe(true);
+    expect(ClientMessageSchema.safeParse({ t: "emote", id, pk: "1:0:lobby" }).success).toBe(true);
   });
 
   it.each([
-    ["알 수 없는 id", { t: "emote", id: "wave", pk: "0:lobby" }],
+    ["알 수 없는 id", { t: "emote", id: "wave", pk: "1:0:lobby" }],
     ["pk 빠짐", { t: "emote", id: "clap" }],
-    ["id 빠짐", { t: "emote", pk: "0:lobby" }],
+    ["id 빠짐", { t: "emote", pk: "1:0:lobby" }],
     ["pk 빈 문자열", { t: "emote", id: "clap", pk: "" }],
     ["pk 33자", { t: "emote", id: "clap", pk: "a".repeat(33) }],
-    ["덧붙은 seat", { t: "emote", id: "clap", pk: "0:lobby", seat: 2 }],
-    ["덧붙은 ch", { t: "emote", id: "clap", pk: "0:lobby", ch: "mafia" }],
-    ["덧붙은 to", { t: "emote", id: "clap", pk: "0:lobby", to: 1 }],
+    ["덧붙은 seat", { t: "emote", id: "clap", pk: "1:0:lobby", seat: 2 }],
+    ["덧붙은 ch", { t: "emote", id: "clap", pk: "1:0:lobby", ch: "mafia" }],
+    ["덧붙은 to", { t: "emote", id: "clap", pk: "1:0:lobby", to: 1 }],
   ])("동작 %s 는 거부한다", (_name, msg) => {
     expect(ClientMessageSchema.safeParse(msg).success).toBe(false);
   });

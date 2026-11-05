@@ -76,7 +76,7 @@ describe("누설 검사 (c) — 단계 키가 틀린 줄은 더 넓은 채널로
   it("밤의 단계 키로 아침 뒤에 도착한 마피아 줄·입력 중은 모든 소켓에 0건이고 보낸 소켓만 chatReject phase 를 받으며 저장도 되지 않는다", async () => {
     const g = await startedGame("night");
     const mafiaA = withRole(g, "mafia")[0]!;
-    const nightKey = `1:night`;
+    const nightKey = `1:1:night`;
     await advanceTo(g.code, g.socks, "morning");
     for (const s of g.socks) await settle(s, mark(s));
 

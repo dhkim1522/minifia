@@ -319,7 +319,7 @@ describe("최후 변론 화면 — 채팅 단계 키 (VOTE-03, COMM-03, 08-27 �
       fireEvent.change(input, { target: { value: "억울해요" } });
       fireEvent.submit(input.closest("form")!);
       const chats = send.mock.calls.map(([m]) => m).filter((m) => m.t === "chat");
-      expect(chats, `seat ${mySeat}`).toEqual([{ t: "chat", text: "억울해요", pk: "1:defense" }]);
+      expect(chats, `seat ${mySeat}`).toEqual([{ t: "chat", text: "억울해요", pk: "1:1:defense" }]);
       cleanup();
     }
   });

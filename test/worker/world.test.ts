@@ -448,7 +448,7 @@ describe("단계별 이동 — 산 사람은 막히고 유령은 걷는다 (MAP-
       const mover = g.actors.find((a) => a.role !== "mafia")!;
       send(mover.sock, { t: "move", x: 300, z: 100 });
       // 같은 단계의 채팅은 막히지 않는다. 저장 편집으로 옮긴 단계는 소켓의 마지막 view 가 낡아 단계 키를 저장된 방에서 읽는다.
-      if (phase !== "night") chatSend(mover.sock, "움직이지 못해도 말은 해요", `${(await storedRoom(g.code)).day ?? 0}:${phase}`);
+      if (phase !== "night") chatSend(mover.sock, "움직이지 못해도 말은 해요", `1:${(await storedRoom(g.code)).day ?? 0}:${phase}`);
       const got = await settleAll(g.socks, marks, g.actors.indexOf(mover));
       expect(got.map((msgs) => msgs.filter((m) => m.t === "world" || m.t === "error").length).join(",")).toBe("0,0,0,0,0");
       if (phase !== "night") expect(got.map((msgs) => chatsOf(msgs).length).join(",")).toBe("1,1,1,1,1");

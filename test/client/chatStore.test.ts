@@ -13,7 +13,7 @@ const chat = (ch: ChatLineFrame["ch"], seat: number, seq: number, text: string, 
 
 function ready(): ChatStore {
   const store = new ChatStore();
-  store.setContext({ pk: "0:lobby", channel: "all", epoch: 1 });
+  store.setContext({ pk: "1:0:lobby", channel: "all", epoch: 1 });
   return store;
 }
 
@@ -222,9 +222,9 @@ describe("ChatStore: 입력 중 만료 (CHAT-04)", () => {
 
   it("setContext 에서 단계 키·채널·epoch 중 하나가 바뀌면 모두 빠진다", () => {
     for (const next of [
-      { pk: "1:day", channel: "all" as const, epoch: 1 },
-      { pk: "0:lobby", channel: "mafia" as const, epoch: 1 },
-      { pk: "0:lobby", channel: "all" as const, epoch: 2 },
+      { pk: "1:1:day", channel: "all" as const, epoch: 1 },
+      { pk: "1:0:lobby", channel: "mafia" as const, epoch: 1 },
+      { pk: "1:0:lobby", channel: "all" as const, epoch: 2 },
     ]) {
       const store = ready();
       store.apply(on(3), 1, 1000);
@@ -236,7 +236,7 @@ describe("ChatStore: 입력 중 만료 (CHAT-04)", () => {
   it("setContext 가 같은 값이면 그대로 둔다", () => {
     const store = ready();
     store.apply(on(3), 1, 1000);
-    store.setContext({ pk: "0:lobby", channel: "all", epoch: 1 });
+    store.setContext({ pk: "1:0:lobby", channel: "all", epoch: 1 });
     expect([...store.typingSeats(1000)]).toEqual([3]);
   });
 
@@ -299,7 +299,7 @@ describe("ChatStore: 시스템 줄·reset (A1)", () => {
   it("시스템 줄은 epoch 가 바뀌어도 남는다", () => {
     const store = ready();
     store.addSystem("지호 님 입장", { scope: "all", at: 1000, icon: "check" });
-    store.setContext({ pk: "0:lobby", channel: "all", epoch: 2 });
+    store.setContext({ pk: "1:0:lobby", channel: "all", epoch: 2 });
     const [line] = store.visibleLines("all");
     expect(line).toMatchObject({ kind: "system", text: "지호 님 입장", scope: "all", icon: "check" });
   });
@@ -386,7 +386,7 @@ describe("ChatStore: 카드 줄 (MORN-02, 결정 0061-11)", () => {
 
   it("처형 단계 키(execution)에서는 보류가 2400ms 다", () => {
     const store = new ChatStore();
-    store.setContext({ pk: "1:execution", channel: "all", epoch: 1 });
+    store.setContext({ pk: "1:1:execution", channel: "all", epoch: 1 });
     store.apply(card("will", 3, 9, "가", 900), 1, 1000);
     expect(store.nextCardReveal(1000)).toBe(3400);
     expect(store.visibleLines("all", 3399).length).toBe(0);
@@ -437,7 +437,7 @@ describe("ChatStore: 로컬 카드와 위장 방지", () => {
     store.addLocalCard({ icon: "eye", title: "민준", text: "마피아 아님", at: 5000 });
     store.reset();
     expect(store.lines().length).toBe(0);
-    store.setContext({ pk: "1:day", channel: "all", epoch: 2 });
+    store.setContext({ pk: "1:1:day", channel: "all", epoch: 2 });
     store.apply({ t: "chatLog", lines: [{ ch: "all", seat: 1, seq: 1, text: "안녕", at: 6000 }] }, 2, 6000);
     expect(store.lines().map((l) => l.kind).join()).toBe("player");
   });
@@ -502,7 +502,7 @@ describe("ChatStore: holdCardsUntil·liveCard (09.1-10)", () => {
     store.holdCardsUntil(6400, 1100);
     expect(cb).toHaveBeenCalled();
     store.reset();
-    store.setContext({ pk: "1:morning", channel: "all", epoch: 2 });
+    store.setContext({ pk: "1:1:morning", channel: "all", epoch: 2 });
     store.apply(card("will", 3, 1, "다음", 900), 2, 2000);
     expect(store.nextCardReveal(2000)).toBe(4800);
   });
@@ -638,7 +638,7 @@ describe("ChatStore: ballots 카드 (09.1.1-12, 결정 0066-3)", () => {
 
   it("처형 단계 키여도 ballots 는 4600ms 다(유언·쪽지의 2400 이 아니다)", () => {
     const store = new ChatStore();
-    store.setContext({ pk: "1:execution", channel: "all", epoch: 1 });
+    store.setContext({ pk: "1:1:execution", channel: "all", epoch: 1 });
     store.apply(ballots(3, 9, "0|1", 900), 1, 1000);
     expect(store.nextCardReveal(1000)).toBe(5600);
   });

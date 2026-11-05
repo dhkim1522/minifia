@@ -3186,6 +3186,14 @@ describe("동작 동시 상한 4·단계 전환·deny 건너뛰기 (D-13, T-10-1
     expect(handleOf(s, 1).stopEmote).toHaveBeenCalledTimes(1);
   });
 
+  it("판 번호만 바뀌어도(1판 → 2판) 정리한다 (D-26)", async () => {
+    const s = await openSix({ view: { ...makeView(SIX), phase: "night", round: 1, day: { n: 1, roles: [] } as unknown as RoomView["day"] } });
+    frames(32);
+    emit(s, 1);
+    s.rerender({ view: { ...s.props.view, round: 2 } });
+    expect(handleOf(s, 1).stopEmote).toHaveBeenCalledTimes(1);
+  });
+
   it("처음 마운트에서는 정리를 부르지 않는다", async () => {
     const s = await openSix();
     frames(32);
