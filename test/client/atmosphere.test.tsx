@@ -6,7 +6,9 @@ import type { RoleId } from "../../shared/game/roles";
 import type { GameWinner, MorningView, PhaseId, RoomView, SpectateView } from "../../shared/protocol";
 import type { SceneLook } from "../../src/world/presence";
 import type { RoomConnection } from "../../src/net/useRoomConnection";
+import { ChatStore } from "../../src/net/chatStore";
 import { ResultScreen } from "../../src/screens/ResultScreen";
+import { WorldStore } from "../../src/world/store";
 
 // 분위기 두 층(05-03, LOOK-01, D-04·D-05·D-09). 08-27 에서 옛 고정 테이블 장면(밤 비네팅·아침 밝아짐 층)이 아니라 GameMap 기준으로 다시 썼다:
 // 밤의 어두움·아침의 밝음은 이제 맵 장면 표의 조명(lighting)이 맡는다. v1.0 비네팅·밝아짐 층은 맵 화면 어느 단계에도 그려지지 않고,
@@ -147,9 +149,11 @@ describe("밤 분위기 — 맵 조명 night (D-04·D-05)", () => {
       ...makeView({ phase: "ended", role: "citizen" }),
       result: { winner: "citizenWin" as GameWinner, seats, summary: [] },
     } as RoomView & { result: NonNullable<RoomView["result"]> };
-    const { container } = render(<ResultScreen view={view} onExit={() => {}} />);
-    expect(container.querySelector('.mf-backdrop__art[data-scene="night"]') !== null).toBe(true);
-    expect(container.querySelectorAll(".mf-backdrop__vignette").length).toBe(0);
+    rt.scenes.length = 0;
+    const { container } = render(<ResultScreen view={view} store={new WorldStore()} chat={new ChatStore()} send={() => true} canSend offset={0} epoch={1} onExit={() => {}} />);
+    // 11-05: 결과 화면은 옛 2D 배경 그림이 아니라 3D 무대의 night 조명이다
+    expect((rt.scenes.at(-1) as SceneLook).lighting).toBe("night");
+    expect(container.querySelectorAll(".mf-backdrop__art, .mf-backdrop__vignette").length).toBe(0);
   });
 
   it("discussion → night → morning: 조명이 단계를 따라 talk → night → morning 으로 바뀌고 같은 맵 장면 안에서 바뀐다(층이 새로 생기지 않는다)", () => {

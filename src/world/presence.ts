@@ -39,6 +39,13 @@ export interface SeatLook {
    * 탈락자가 입는 직업 의상(결정 0063-2). 유령 viewer 의 spectate 가 있을 때만 키가 생긴다 — 산 사람 표에는 키 자체가 없다(L13).
    */
   outfit?: OutfitId;
+  /**
+   * 11페이즈 결과 화면 전용: 고른 look 대신 입는 직업 의상(유령 안개 outfit 과 별개 — 안개 outfit 이 있으면 안개가 우선이다).
+   * 판 중 장면 표(visibleSeats)에는 키 자체가 없다 — 직업 의상이 판 중 경로로 번지지 않는다(T-11-15, L13).
+   */
+  costume?: OutfitId;
+  /** 11페이즈 결과 화면 전용: 진 팀을 어둡게 한다(연결 끊김 어둠과 별개로 센다) */
+  dim?: true;
 }
 
 export interface SceneLook {

@@ -80,6 +80,13 @@ export interface WorldStageProps {
   canWalk?: boolean;
   /** 있으면 그 좌석들의 이름표가 지목 버튼이 된다 */
   pick?: WorldPick;
+  /**
+   * 무대(캐릭터 빈 곳 포함) 탭 한 번마다 불린다 — 결과 화면의 건너뛰기(11-05, D-25). 끌기·입력칸 포커스 중 탭(키보드 닫기)에는 부르지 않는다.
+   * canWalk 가 거짓이어도 부른다(걷기 요청과 무관한 알림이다)
+   */
+  onStageTap?(): void;
+  /** 결과 장면에서 런타임이 실제로 입힌 직업 의상 표(좌석 → 의상 id)와 어두워진 좌석이 바뀔 때만 불린다(E2E 훅용, 11-05) */
+  onCostumes?(costumes: Readonly<Record<number, string>>, dimmed: readonly number[]): void;
   /** 캔버스·입력 면 위, 이름표 층 아래에 깔리는 장식(시민 편 긴장 비네트). 터치를 막지 않는 부품만 넣는다 */
   underlay?: ReactNode;
   /** 좌석별 이름표 쌓임 속성(득표 배지·선두·도장·내 선택·투표함·직업 칩 …)과 발밑 고리 종류 */
@@ -178,6 +185,7 @@ export function WorldStage(props: WorldStageProps) {
       onPin: pinHook?.set,
       onEmotes: emotesHook?.set,
       onLooks: looksHook?.set,
+      onCostumes: (costumes, dimmed) => live.current.props.onCostumes?.(costumes, dimmed),
       onZoom: pinHook?.setZoom,
       allowSoftware: hooksOn,
       loadModules: live.current.props.loadModules,
@@ -255,6 +263,7 @@ export function WorldStage(props: WorldStageProps) {
   const onTap = (clientX: number, clientY: number): void => {
     const { props: p } = live.current;
     const runtime = runtimeRef.current;
+    p.onStageTap?.();
     if (p.canWalk === false || runtime === null || !p.canSend || p.exiting) return;
     const at = runtime.tap(clientX, clientY);
     if (at === null) return;

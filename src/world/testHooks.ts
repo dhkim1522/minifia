@@ -41,7 +41,20 @@ declare global {
     __mfLooks?: Readonly<Record<number, string>>;
     /** 동작 훅(10-03, L33): 이 화면이 받은 마지막 emote 프레임의 사본과 지금 사람 동작을 재생 중인 좌석. DOM 속성으로 싣지 않는다 */
     __mfEmotes?: { last: { seat: number; id: string; n: number } | null; playing: readonly number[] };
+    /**
+     * 결과 화면 훅(11-05): 연출 단계·뒤집힌 칩 수·어두워진 좌석·입은 직업 의상 표. costumes·dimmed 는 런타임이 실제로 적용한 값(onCostumes)이고
+     * stage·chips 는 결과 화면의 연출 시계다. 훅이 켜진 문맥에서만 생기고 DOM 속성으로 싣지 않는다
+     */
+    __mfResult?: ResultHookState;
   }
+}
+
+/** window.__mfResult 의 모양(11-05) */
+export interface ResultHookState {
+  stage: string;
+  chips: number;
+  dimmed: number[];
+  costumes: Record<number, string>;
 }
 
 /** 런타임 중 훅이 읽는 부분 */
@@ -180,6 +193,24 @@ export function installLooksHook(): { set(looks: Readonly<Record<number, string>
     },
     off() {
       if (window.__mfLooks === mine) delete window.__mfLooks;
+    },
+  };
+}
+
+/**
+ * window.__mfResult 를 설치하고(처음엔 빈 상태) 일부만 갱신하는 patch 와 해제 함수를 돌려준다. 훅이 켜진 문맥에서만 부른다(L33).
+ * 해제는 다른 설치가 덮어썼으면 지우지 않는다. 값은 DOM 속성이 아니다 — 직업·의상을 마크업에 싣지 않는다.
+ */
+export function installResultHook(): { patch(next: Partial<ResultHookState>): void; off(): void } {
+  let mine: ResultHookState = { stage: "gather", chips: 0, dimmed: [], costumes: {} };
+  window.__mfResult = mine;
+  return {
+    patch(next) {
+      mine = { ...mine, ...next };
+      window.__mfResult = mine;
+    },
+    off() {
+      if (window.__mfResult === mine) delete window.__mfResult;
     },
   };
 }

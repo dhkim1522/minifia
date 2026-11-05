@@ -285,7 +285,7 @@ describe("아래 패널: 전체 채팅 한 줄 (D-11)", () => {
   it("me.chat 이 all 이 아니면(옛 서버 등) 보낼 수 없다", () => {
     const r = renderRoom(makeView({ chat: null }));
     type(input(r.container), "안녕");
-    expect((screen.getByRole("button", { name: "보내기" }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByRole("button", { name: "보내기" }).getAttribute("aria-disabled")).toBe("true");
     fireEvent.click(screen.getByRole("button", { name: "보내기" }));
     expect(r.send.mock.calls.filter((c) => (c[0] as { t: string }).t === "chat")).toHaveLength(0);
   });
@@ -293,7 +293,7 @@ describe("아래 패널: 전체 채팅 한 줄 (D-11)", () => {
   it("연결이 끊기면 보내기만 막힌다", () => {
     const r = renderRoom(makeView(), { canSend: false });
     type(input(r.container), "안녕");
-    expect((screen.getByRole("button", { name: "보내기" }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByRole("button", { name: "보내기" }).getAttribute("aria-disabled")).toBe("true");
   });
 });
 
@@ -337,7 +337,9 @@ describe("E2E 훅 window.__mfResult (11-05)", () => {
     const hook = (window as unknown as { __mfResult?: { stage: string; chips: number; dimmed: number[]; costumes: Record<number, string> } }).__mfResult;
     expect(hook).toEqual({ stage: "final", chips: 5, dimmed: [3], costumes: { 0: "coat", 1: "police", 2: "doctor", 3: "mafia", 4: "coat" } });
     expect(r.container.querySelector('[data-result-stage="final"]')).not.toBeNull();
-    expect(r.container.innerHTML).not.toContain("police"); // 직업 이름은 칩의 접근성 이름뿐 — 속성에 역할을 싣지 않는다
+    // 루트 속성에 역할·의상을 싣지 않는다 — 직업은 칩([data-role-chip])의 속성과 접근성 이름뿐이다
+    const root = r.container.querySelector("main")!;
+    expect(root.getAttributeNames().sort()).toEqual(["class", "data-result-stage", "data-winner"]);
     r.unmount();
     expect((window as { __mfResult?: unknown }).__mfResult).toBeUndefined();
   });

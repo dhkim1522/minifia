@@ -302,15 +302,15 @@ describe("UX-01 대기실·배정·역할 확인·결과의 안내 요소 (D-08)
     expect(onlyGuide(container, "roleReveal").classList.contains("mf-reveal__hint")).toBe(true);
   });
 
-  it("ended: 하나 = 배너 제목 `시민 팀 승리` 또는 `마피아 팀 승리` (생존·관전 모두)", () => {
+  it("ended: 하나 = 헤더 제목 `시민 승리` 또는 `마피아 승리` (생존·관전 모두, 11-05)", () => {
     for (const [winner, title] of [
-      ["citizenWin", "시민 팀 승리"],
-      ["mafiaWin", "마피아 팀 승리"],
+      ["citizenWin", "시민 승리"],
+      ["mafiaWin", "마피아 승리"],
     ] as const) {
       for (const vp of ["citizen", "spectator"] as const) {
         const { container, unmount } = renderRoom(endedView(vp, winner));
         const g = onlyGuide(container, `ended/${winner}/${vp}`);
-        expect(g.classList.contains("mf-result__banner-title")).toBe(true);
+        expect(g.classList.contains("mf-result__title")).toBe(true);
         expect(squish(g.textContent)).toBe(title);
         unmount();
       }

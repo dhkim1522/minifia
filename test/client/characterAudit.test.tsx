@@ -171,21 +171,11 @@ describe("CHAR-01: 맵 화면(낮 토론·밤) — 5명·8명 모두 이름표�
   });
 });
 
-describe("CHAR-01: 결과 — 자리마다 이름표(자리 색 점 + 닉네임)와 그림 (그림은 직업 그림 — P5-8, 바꾸지 않음)", () => {
-  it.each([5, 8])("%i명: .mf-result__card 가 %i장, 각 카드에 그 자리 닉네임·자리 색 점·그림", (n) => {
+describe("CHAR-01: 결과 — 3D 무대 위 자리마다 이름표(자리 색 점 + 닉네임) (11-05)", () => {
+  it.each([5, 8])("%i명: 이름표 %i개, 모두 그 자리 닉네임이 있다 (탈락자 포함)", (n) => {
     const { container } = renderRoom(endedView(n));
-    const cards = Array.from(container.querySelectorAll<HTMLElement>(".mf-result__card"));
-    expect(cards).toHaveLength(n);
-    cards.forEach((card, i) => {
-      expect(card.dataset.seat).toBe(String(i));
-      expect(card.querySelector(".mf-result__tag")!.textContent).toContain(NAMES[i]);
-      const dot = card.querySelector<HTMLElement>(".mf-result__dot")!;
-      expect(dot.style.background).toContain(`--seat-${(i % 8) + 1}`);
-      expect(card.querySelectorAll("img.mf-figure").length).toBeGreaterThanOrEqual(1);
-    });
-    // 자리 색 점은 8개가 서로 다르다(직업 그림이 같아도 이름표 점으로 구분된다)
-    const dots = cards.map((c) => c.querySelector<HTMLElement>(".mf-result__dot")!.style.background);
-    expect(new Set(dots).size).toBe(n);
+    expect(container.querySelectorAll(".mf-world__tag").length).toBe(n);
+    expectEverySeatNamed(container, n);
   });
 });
 

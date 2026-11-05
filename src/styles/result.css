@@ -1,128 +1,28 @@
-/* 결과 화면(UI-SPEC 11, 04-25). 값은 tokens.css 변수만 쓴다(색 직접 지정 없음). 글자 크기는 14·16·24·36 에서만 고른다.
-   진홍은 마피아 팀 승리 배너(띠·제목·위쪽 번짐)와 카드의 `마피아` 글자에만 쓴다(UI-SPEC 6.1 예약).
-   헤더 바·타이머·하단 패널이 없다: 배경(night)은 고정이다. [처음으로] 줄은 아래 고정, 위 영역(.mf-result__body)만 세로 스크롤한다(feedback-6). 가로 스크롤은 없다. */
+/* 결과 화면(11-05, UI-SPEC A-1·A-5). 3D 무대(WorldStage) 위의 한 장면이다. 값은 tokens.css 변수만 쓴다(색 직접 지정 없음). 글자 크기는 14·16·24·36 에서만 고른다.
+   틀은 대기실·게임 맵과 같다: 캔버스 한 장이 방 본문을 채우고 가림막·헤더·알림·아래 패널이 그 위에 얹힌다. 캔버스는 헤더·패널 때문에 크기가 줄지 않는다 —
+   카메라 중심만 스테이지 사각형(헤더 아래 ~ 패널 위)으로 옮긴다. 진홍은 마피아 승리 제목 아이콘과 승리 알림 아이콘에만 쓴다(UI-SPEC 6.1 예약). */
 
-/* 배경 상자는 방 본문의 남는 높이를 채운다(낮 장면과 같은 규칙) */
-.mf-result__backdrop { flex: 1 1 0; min-height: 0; height: auto; }
+.mf-result { position: relative; flex: 1 1 0; min-height: 0; overflow: hidden; isolation: isolate; background: var(--night-950); }
 
-/* 마피아 승: 화면 위 380px 에 crimson-700 65% → 0 세로 번짐. 배경 쪽에 붙어 스크롤해도 움직이지 않는다 */
-.mf-result__glow {
-  position: absolute; left: 0; right: 0; top: 0; height: 380px; pointer-events: none;
-  background: linear-gradient(180deg, color-mix(in srgb, var(--crimson-700) 65%, transparent), transparent);
-}
+/* 맵: 자기 쌓임 맥락을 가진다 — 맵 안의 가림막(z-modal)이 헤더를 덮지 않아 맵을 불러오는 동안에도 나갈 수 있다 */
+.mf-result > .mf-world { z-index: var(--z-world); }
 
-/* 화면 틀: 배경 상자 안에서 자기 높이를 채우고 스스로는 스크롤하지 않는다(feedback-6). 위 영역(.mf-result__body)만 스크롤하고 [처음으로] 줄(.mf-result__foot)은 아래에 고정.
-   안쪽 여백 위 16·좌우 16 + 안전 영역은 방 틀이 이미 뺀다, 아래 24 + 안전 영역은 foot 이 가진다 */
-.mf-result { position: relative; height: 100%; overflow: hidden; }
-.mf-result__inner {
-  display: flex; flex-direction: column; height: 100%; box-sizing: border-box;
-  padding: var(--space-md) var(--space-md) 0; min-width: 0;
-}
-.mf-result__body {
-  flex: 1 1 0; min-height: 0; min-width: 0; display: flex; flex-direction: column; gap: var(--space-md);
-  overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; -webkit-overflow-scrolling: touch;
-}
+/* 위쪽 가림막: 헤더 글씨 대비를 지킨다. 입력을 가로채지 않는다 */
+.mf-result__scrim { position: absolute; top: 0; left: 0; right: 0; height: 120px; z-index: 2; pointer-events: none; background: linear-gradient(to bottom, color-mix(in srgb, var(--night-900) 88%, transparent) 0, color-mix(in srgb, var(--night-900) 60%, transparent) 70px, transparent 120px); }
 
-.mf-result__head { text-align: center; }
-.mf-result__head .mf-t-heading { text-shadow: var(--shadow-text); }
-.mf-result__sub { margin: var(--space-xs) 0 0; font-size: 14px; line-height: 20px; color: var(--gray-300); text-shadow: var(--shadow-text); }
+/* 헤더 62: [나가기] + 제목(가운데) + 오른쪽 빈 칸. 맵 탭을 가로채지 않도록 버튼만 입력을 받는다 */
+.mf-result__header { position: absolute; top: 0; left: 0; right: 0; z-index: var(--z-toast); box-sizing: border-box; height: 62px; padding: 18px var(--space-md) 0; display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-sm); pointer-events: none; }
+.mf-result__header .mf-btn { pointer-events: auto; }
+.mf-result__header-gap { flex: none; width: var(--tap-min); height: var(--tap-min); }
+.mf-result__title { flex: 1 1 auto; min-width: 0; margin: 0; min-height: var(--tap-min); display: flex; align-items: center; justify-content: center; gap: var(--space-xs); text-align: center; font-family: var(--font-ui); font-size: 24px; line-height: 1.2; font-weight: 700; color: var(--gray-50); text-shadow: var(--shadow-text); word-break: keep-all; }
+.mf-result__title-icon { flex: none; color: var(--brass-400); filter: drop-shadow(0 2px 6px color-mix(in srgb, var(--night-950) 70%, transparent)); }
+.mf-result__title-icon.is-mafia { color: var(--crimson-400); }
 
-/* 승리 배너: 모서리 16, night-900 92%, 테두리 night-600, 안쪽 16·16, 위 띠 8(배너 위·좌·우로 번진다) */
-.mf-result__banner {
-  position: relative; overflow: hidden; text-align: center; padding: var(--space-md);
-  border-radius: 16px; border: 1px solid var(--night-600);
-  background: color-mix(in srgb, var(--night-900) 92%, transparent);
-  box-shadow: 0 10px 28px var(--shadow);
-}
-.mf-result__band { height: 8px; margin: calc(-1 * var(--space-md)) calc(-1 * var(--space-md)) var(--space-md); background: var(--gray-100); }
-.mf-result__banner[data-winner="mafiaWin"] .mf-result__band { background: var(--crimson-500); }
-.mf-result__banner-title { margin: 0; font-size: 36px; line-height: 1.2; font-weight: 700; color: var(--gray-50); word-break: keep-all; }
-.mf-result__banner[data-winner="mafiaWin"] .mf-result__banner-title { color: var(--crimson-300); }
-.mf-result__banner-sub { margin: var(--space-xs) 0 0; font-size: 14px; line-height: 20px; color: var(--gray-300); word-break: keep-all; }
+/* 아래 패널: 접힌 게임 패널과 같은 틀 — night-800 97%, 위 모서리 radius-lg, 안쪽 14 16 22. 채팅 기록 칸(LOG_H 96·152) + 입력줄(48) = LOG_H + 92 → 188 · 244 */
+.mf-result__panel { position: absolute; left: 0; right: 0; bottom: 0; z-index: var(--z-overlay); box-sizing: border-box; display: flex; flex-direction: column; gap: 10px; padding: 14px var(--space-md) 22px; background: color-mix(in srgb, var(--night-800) 97%, transparent); border-radius: var(--radius-lg) var(--radius-lg) 0 0; }
 
-/* 직업 카드 격자: 3열, 간격 8, 마지막 줄은 왼쪽 정렬(격자 기본). 카드: 모서리 14, night-800 92%, 테두리 night-600, 안쪽 8·4, 가운데 정렬, 간격 8 */
-.mf-result__grid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-sm); }
-.mf-result__card {
-  min-width: 0; display: flex; flex-direction: column; align-items: center; gap: var(--space-sm);
-  padding: var(--space-sm) var(--space-xs); box-sizing: border-box;
-  border-radius: var(--radius-md); border: 1px solid var(--night-600);
-  background: color-mix(in srgb, var(--night-800) 92%, transparent);
-}
-/* 그림 상자: 직업 그림이 자리를 잡고(72×96), 연출 동안만 중립 인물이 그 위에 겹친다(done 에서 제거) */
-.mf-result__figs { position: relative; width: 72px; height: 96px; flex: none; }
-.mf-result__art { display: block; width: 72px; height: 96px; object-fit: contain; animation: none; transition: opacity 300ms var(--ease-out); }
-.mf-result__neutral { position: absolute; inset: 0; width: 72px; height: 96px; object-fit: contain; animation: none; transition: opacity 300ms var(--ease-out); }
-/* 탈락: 그림만 흐리게(결과 화면 한정 승인 표시, UI-SPEC 11.1) */
-.mf-result__art--dead { filter: grayscale(1); opacity: 0.5; }
+/* 키보드가 열리면(입력칸 포커스 + lift > 80) 패널이 키보드 위로 올라가고 아래 여백이 8 로 줄어 높이 150 이 된다 */
+.mf-result__panel--kb { bottom: var(--mf-kb-lift, 0px); padding-bottom: 8px; }
 
-/* 이름표(기존 낮 이름표와 같은 모양): 점 + 닉네임, 높이 22. 말줄임하지 않는다 — 5글자 이름표 폭 99 가 카드 폭(360 폰 104)에 든다 */
-.mf-result__tag {
-  flex: none; display: inline-flex; align-items: center; gap: var(--space-xs);
-  height: 22px; padding: 0 8px 0 7px; border-radius: var(--radius-pill); box-sizing: border-box;
-  background: color-mix(in srgb, var(--night-900) 86%, transparent);
-  border: 1px solid color-mix(in srgb, var(--night-600) 90%, transparent);
-  font-size: 14px; line-height: 20px; font-weight: 700; color: var(--gray-50); white-space: nowrap;
-}
-.mf-result__tag--me { border-color: var(--gray-100); }
-.mf-result__dot { flex: none; width: 8px; height: 8px; border-radius: var(--radius-pill); }
-
-.mf-result__role { font-size: 14px; line-height: 18px; font-weight: 700; color: var(--gray-100); word-break: keep-all; }
-.mf-result__role--mafia { color: var(--crimson-300); }
-.mf-result__out { font-size: 14px; line-height: 18px; color: var(--gray-300); }
-
-/* 판 요약 카드: night-800 92%, 모서리 14, 안쪽 12·16, 제목 14 700, 행 14/20(앞 64px 열 gray-300, 본문 gray-100), 행 간격 4.
-   행이 많으면 카드가 늘어나고 위 영역(.mf-result__body)이 스크롤된다. 안쪽 위아래 12 는 시안 값(토큰에 없음, UI-SPEC 4 예외) */
-.mf-result__sm {
-  display: flex; flex-direction: column; gap: var(--space-xs); padding: 12px var(--space-md); min-width: 0;
-  border-radius: var(--radius-md); background: color-mix(in srgb, var(--night-800) 92%, transparent);
-}
-.mf-result__sm-title { margin: 0 0 var(--space-xs); font-size: 14px; line-height: 20px; font-weight: 700; color: var(--gray-50); }
-.mf-result__sm-row { display: flex; gap: var(--space-sm); font-size: 14px; line-height: 20px; color: var(--gray-100); }
-.mf-result__sm-label { flex: none; width: 64px; color: var(--gray-300); }
-.mf-result__sm-text { min-width: 0; word-break: keep-all; overflow-wrap: anywhere; }
-
-/* [처음으로] + 보조 문구 */
-.mf-result__foot {
-  flex: none; display: flex; flex-direction: column; align-items: stretch; gap: var(--space-sm);
-  padding-top: var(--space-md); padding-bottom: calc(var(--space-lg) + env(safe-area-inset-bottom));
-}
-.mf-result__note { margin: 0; text-align: center; font-size: 14px; line-height: 20px; color: var(--gray-300); word-break: keep-all; }
-
-/* ---- 공개 연출(04-26, UI-SPEC 11.2, D-17). 단계는 .mf-result[data-stage] (neutral 0~300ms → flip 300~900ms → done).
-   data-reveal="true" 일 때만(같은 접속의 전환) 움직임이 있다 — 재접속·모션 줄이기는 처음부터 done + reveal false 라 아래 규칙이 아무것도 하지 않는다.
-   전이는 opacity·transform·scale 만. 자리는 항상 차지한다(숨김은 opacity·visibility) — 단계가 바뀌어도 레이아웃이 움직이지 않는다. ---- */
-
-/* 0ms: 배너 팝 scale .92 → 1 + opacity, 360ms */
-.mf-result[data-reveal="true"] .mf-result__banner { animation: mf-result-banner-pop 360ms var(--ease-out) both; }
-@keyframes mf-result-banner-pop { from { opacity: 0; transform: scale(0.92); } to { opacity: 1; transform: scale(1); } }
-
-/* 0ms: 마피아 승 위쪽 진홍 번짐 600ms 페이드인(연출 시작에만) */
-.mf-result__glow[data-reveal="true"] { animation: mf-result-glow-in 600ms ease-out both; }
-@keyframes mf-result-glow-in { from { opacity: 0; } to { opacity: 1; } }
-
-/* 0~300ms neutral: 직업 그림·이름·탈락은 아직 없다(자리는 유지). 중립 인물만 보인다 */
-.mf-result[data-stage="neutral"] .mf-result__art { opacity: 0; }
-.mf-result__role, .mf-result__out { transition: opacity 300ms var(--ease-out); }
-.mf-result[data-stage="neutral"] .mf-result__role,
-.mf-result[data-stage="neutral"] .mf-result__out { opacity: 0; }
-
-/* 300ms flip: 모든 카드가 같은 순간(지연 없음) — 그림 crossfade 300ms(중립 층이 사라지고 직업 그림이 나타난다) + 카드 scale 1 → 1.06 → 1, 360ms */
-.mf-result[data-stage="flip"] .mf-result__neutral { opacity: 0; }
-.mf-result[data-stage="flip"] .mf-result__card { animation: mf-result-card-pop 360ms var(--ease-out); }
-@keyframes mf-result-card-pop { 0% { scale: 1; } 50% { scale: 1.06; } 100% { scale: 1; } }
-
-/* 900ms done: 요약 카드와 [처음으로] 가 opacity 0 → 1 + translateY 8px → 0, 300ms. 그 전엔 자리만 차지하고 보이지 않는다 */
-.mf-result[data-stage="neutral"] .mf-result__rise,
-.mf-result[data-stage="flip"] .mf-result__rise { opacity: 0; visibility: hidden; transform: translateY(8px); }
-.mf-result[data-reveal="true"][data-stage="done"] .mf-result__rise { animation: mf-result-rise 300ms var(--ease-out) both; }
-@keyframes mf-result-rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
-
-/* 모션 줄이기(UI-SPEC 13.4, 11.2): 연출 여부는 마운트 때 JS 가 한 번 정한다(data-reveal) — 설정이 그 뒤에 바뀌어도 움직임이 즉시 멈추도록 CSS 도 같은 쪽으로 끈다.
-   배너 팝·번짐 페이드인·카드 뒤집기·요약 떠오름은 애니메이션 없이 최종 상태로, 직업 그림·이름·탈락 전이도 없다. 숨김 상태(neutral·flip)의 opacity·visibility 는 단계 타이머가 done 으로 넘기며 풀린다. */
-@media (prefers-reduced-motion: reduce) {
-  .mf-result[data-reveal="true"] .mf-result__banner,
-  .mf-result__glow[data-reveal="true"],
-  .mf-result[data-stage="flip"] .mf-result__card,
-  .mf-result[data-reveal="true"][data-stage="done"] .mf-result__rise { animation: none; }
-  .mf-result__art, .mf-result__neutral, .mf-result__role, .mf-result__out { transition: none; }
-}
+/* iOS 가 키보드를 위해 화면을 위로 밀면 헤더 계열이 보이는 영역 맨 위에 머문다 */
+.mf-result__scrim, .mf-result__header, .mf-result .mv-toast { transform: translateY(var(--mf-vv-top, 0px)); }

@@ -194,6 +194,11 @@ export interface WorldRuntimeDeps {
   onRing?: (at: { x: number; z: number } | null) => void;
   /** 지금 입힌 유령 직업 의상 표(좌석 → 의상 id)가 바뀔 때만 한 번 불린다 — E2E 훅 window.__mfGhostOutfits 용(09.1-09). 산 사람 화면은 늘 빈 표다 */
   onGhostOutfits?: (outfits: Readonly<Record<number, string>>) => void;
+  /**
+   * 결과 화면(11-05)이 장면 표의 costume 으로 실제로 입힌 직업 의상 표(좌석 → 의상 id)와 scene dim 으로 어두워진 좌석(오름차순)이 바뀔 때만 한 번 불린다.
+   * 화면이 정한 값이 아니라 런타임이 적용한 값이다(E2E 훅 window.__mfResult). 제품 화면은 넘기지 않아도 된다. 결과 장면이 아니면 한 번도 불리지 않는다
+   */
+  onCostumes?: (costumes: Readonly<Record<number, string>>, dimmed: readonly number[]) => void;
   /** 그리는 좌석별 고른 의상 표(좌석 → 의상 id, 직업 의상 안개와 무관)가 바뀔 때만 한 번 불린다 — E2E 훅 window.__mfLooks 용(10-04, L33). 제품은 넘기지 않는다 */
   onLooks?: (looks: Readonly<Record<number, string>>) => void;
   /** 핀 조명이 지금 비추는 좌석(없으면 null)·이동 중 여부·켜짐 수준(0~1)이 바뀔 때 불린다 — E2E 훅 window.__mfPin 용(09.1.1-11). 제품은 넘기지 않는다 */
@@ -213,6 +218,11 @@ export interface WorldRuntime {
   stopAllEmotes(): void;
   /** seat 이 놀란 표정(surprise)만 한 번 짓는다 — 손사래 없음. 암살당한 본인의 0.7초 연출(09-20, NIGHT-11). 그릴 캐릭터가 없으면 아무것도 하지 않는다 */
   surprise(seat: number): void;
+  /**
+   * seat 이 동작 id 를 한 번 재생한다 — 서버 프레임을 거치지 않는 화면 연출용(결과 화면의 박수, 11-05).
+   * 서버 동작과 같은 재생 목록·동시 상한(EMOTE_RENDER_MAX)을 쓴다. 그릴 캐릭터가 없으면 아무것도 하지 않는다. E2E 훅의 last(받은 프레임)는 바꾸지 않는다
+   */
+  emote(seat: number, id: EmoteId): void;
   /**
    * 게임 단계의 장면 상태(08-08 SceneLook)를 건넨다. 표에 없는(show 아닌) 좌석은 캐릭터를 만들지 않고 이미 있으면 퇴장시키며,
    * ghost 좌석은 반투명으로 그린다. null 이면 장면이 없는 것(로비) — 6페이즈 동작 그대로다.
@@ -296,6 +306,12 @@ interface Actor {
   ghost: boolean;
   /** 유령 직업 의상 + 안개를 입었나(그 의상 id, 없으면 null) — 장면 표에 outfit 이 있을 때만(spectate 를 받은 유령 분기) */
   ghostOutfit: string | null;
+  /** 결과 화면 장면 표(costume)로 지금 입고 있는 직업 의상(없으면 null) — 고른 look·유령 안개와 별개 */
+  costume: string | null;
+  /** 연결 끊김으로 어둡게 그리나 */
+  away: boolean;
+  /** 결과 화면 장면 표(dim)로 어둡게 그리나 */
+  sceneDim: boolean;
   /** 서버가 준 고른 의상(view.players[].look, 없으면 coat) — 유령 안개 중에도 여기에 최신 값을 두고 안개가 끝나면 이 의상으로 돌아온다 */
   look: string;
   /** 등장 시작 시각(없으면 서 있다) */
@@ -401,17 +417,22 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
     emotePlaying = next;
     emitEmotes();
   }
-  const offEmote = store.onEmote((f) => {
-    if (disposed) return;
-    const a = actors.get(f.seat);
-    if (a === undefined || a.exit !== null) return;
+  /** 동작 하나를 재생 목록에 넣고 재생한다(서버 프레임·화면 연출 공통). 넣었으면 true */
+  function startEmote(seat: number, id: EmoteId): boolean {
+    const a = actors.get(seat);
+    if (a === undefined || a.exit !== null) return false;
     const now = Date.now();
     // 상한: 새 동작은 항상 재생하고, 넘치면 가장 먼저 시작한 것을 부드럽게 끝낸다(D-13). 순서는 도착 순서다
     const reduced = deps.reducedMotion();
-    const admitted = admitEmote(emotePlaying, { seat: f.seat, until: now + emoteDurationMs(f.id, reduced) }, now, EMOTE_RENDER_MAX);
-    for (const seat of admitted.stopSeats) stopHandleEmote(seat);
+    const admitted = admitEmote(emotePlaying, { seat, until: now + emoteDurationMs(id, reduced) }, now, EMOTE_RENDER_MAX);
+    for (const stop of admitted.stopSeats) stopHandleEmote(stop);
     emotePlaying = admitted.playing;
-    (a.handle as PlayableCharacter).playEmote?.(f.id, { reduced }); // 모션 줄이기에서도 다른 사람의 동작은 정보라 재생한다(O-5)
+    (a.handle as PlayableCharacter).playEmote?.(id, { reduced }); // 모션 줄이기에서도 다른 사람의 동작은 정보라 재생한다(O-5)
+    return true;
+  }
+  const offEmote = store.onEmote((f) => {
+    if (disposed) return;
+    if (!startEmote(f.seat, f.id)) return;
     lastEmote = { seat: f.seat, id: f.id, n: f.n };
     emitEmotes();
   });
@@ -595,6 +616,27 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
     a.handle.setDim(dim);
   }
 
+  /** 연결 끊김 어둠과 결과 화면 어둠(scene dim)을 합쳐 한 번만 적용한다 */
+  function refreshDim(a: Actor): void {
+    applyDim(a, a.away || a.sceneDim);
+  }
+
+  /** 결과 화면 직업 의상·어둠 표가 바뀌었나(적용·해제·액터 제거) — 프레임 끝에서 한 번 알린다. 처음 표는 비어 있어 아무것도 입히지 않은 장면은 알리지 않는다 */
+  let costumesSent = JSON.stringify([{}, []]);
+  function emitCostumes(): void {
+    if (deps.onCostumes === undefined) return;
+    const map: Record<number, string> = {};
+    const dimmed: number[] = [];
+    for (const a of [...actors.values()].sort((x, y) => x.seat - y.seat)) {
+      if (a.costume !== null) map[a.seat] = a.costume;
+      if (a.sceneDim) dimmed.push(a.seat);
+    }
+    const sig = JSON.stringify([map, dimmed]);
+    if (sig === costumesSent) return;
+    costumesSent = sig;
+    deps.onCostumes(map, dimmed);
+  }
+
   /** 유령 직업 의상 표가 바뀌었나(적용·해제·액터 제거) — 프레임 끝에서 한 번 알린다 */
   let ghostOutfitsDirty = false;
   function emitGhostOutfits(): void {
@@ -675,12 +717,14 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
     for (const p of players) {
       const a = actors.get(p.seat);
       if (a === undefined) continue;
-      applyDim(a, !p.connected);
-      // 서버가 준 look 이 바뀌면 그 좌석만 갈아입는다. 안개 중이면 안개 의상을 건드리지 않고 값만 갱신한다(안개가 끝날 때 최신 look 으로 돌아온다)
+      a.away = !p.connected;
+      refreshDim(a);
+      // 서버가 준 look 이 바뀌면 그 좌석만 갈아입는다. 안개 중이면 안개 의상을 건드리지 않고 값만 갱신한다(안개가 끝날 때 최신 look 으로 돌아온다).
+      // 결과 화면의 직업 의상(costume)을 입는 중에도 같다 — costume 이 걷힐 때 최신 look 으로 돌아온다
       const want = p.look ?? DEFAULT_LOOK;
       if (want !== a.look) {
         a.look = want;
-        if (a.ghostOutfit === null) wear(a, want);
+        if (a.ghostOutfit === null && a.costume === null) wear(a, want);
       }
     }
     emitLooks();
@@ -712,6 +756,9 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
       fadeOpacity: 1,
       ghost: false,
       ghostOutfit: null,
+      costume: null,
+      away: false,
+      sceneDim: false,
       look: chosen,
       enter: null,
       exit: null,
@@ -730,7 +777,10 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
     actors.set(seat, a);
     prewarmLater(a);
     const p = deps.players().find((q) => q.seat === seat);
-    if (p !== undefined) applyDim(a, !p.connected);
+    if (p !== undefined) {
+      a.away = !p.connected;
+      refreshDim(a);
+    }
     emitLooks();
   }
 
@@ -1004,6 +1054,23 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
           wear(a, a.look);
         }
       }
+      // 결과 화면 직업 의상(11-05): 장면 표에 costume 이 있고 안개 의상이 없을 때만 입는다. 걷히면 고른 look 으로 돌아온다. 유령(탈락자)은 반투명 그대로 입는다
+      const wantCostume = a.ghostOutfit === null ? (seatLook?.costume ?? null) : null;
+      if (wantCostume !== a.costume) {
+        if (wantCostume !== null) {
+          a.handle.applyOutfit?.(wantCostume);
+          cancelPrewarm(a);
+          prewarmLater(a);
+        } else if (a.ghostOutfit === null) {
+          wear(a, a.look);
+        }
+        a.costume = wantCostume;
+      }
+      const wantSceneDim = seatLook?.dim === true;
+      if (wantSceneDim !== a.sceneDim) {
+        a.sceneDim = wantSceneDim;
+        refreshDim(a);
+      }
       // 손가락 자세: 지목 중인 좌석만 유지하고, 풀리면 평소 자세로 돌아온다
       const pointAt = seatLook?.pointAt;
       if ((pointAt !== undefined) !== a.pointing) {
@@ -1226,6 +1293,7 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
       if (a.tag !== null) a.tag.style.opacity = "0";
     }
     emitGhostOutfits();
+    emitCostumes();
     sweepEmotes(Date.now(), walkingSeats);
     resync = false;
     lastDrawAt = now;
@@ -1352,6 +1420,10 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
       const h = a.handle as PlayableCharacter;
       h.playEmote?.("deny");
       h.setFace?.("surprise");
+    },
+    emote(seat, id) {
+      if (disposed) return;
+      if (startEmote(seat, id)) emitEmotes();
     },
     stopAllEmotes() {
       if (emotePlaying.length === 0) return;
