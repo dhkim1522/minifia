@@ -106,7 +106,7 @@ const ROLE_PATHS_ALIVE = [
  * 서버 전용 키: 어떤 프레임의 어떤 경로에도 없어야 한다. stats 는 판 통계 카운터(11-01, 결정 D-6, L35)다. 주장 차례(결정 0027-3)와 4페이즈 투표·종료(결정 0036-12)·순차 지목 차례(pickTurn, 결정 0063-1)의 서버 상태.
  * winner·execution 은 같은 이름의 view 키(result.winner·day.execution)가 있어 넣지 않고, 경로·단계로 검사한다.
  */
-const SERVER_ONLY_KEYS = ["claimPick", "claimOrder", "claimIdx", "claimStart", "execVote", "candidateVote", "verdict", "nightLog", "lastExecPhrase", "nominate", "verdictVote", "endVote", "nightNote", "pickTurn", "runoffVote", "showdownPick", "stats"];
+const SERVER_ONLY_KEYS = ["claimPick", "claimOrder", "claimIdx", "claimStart", "execVote", "candidateVote", "verdict", "nightLog", "lastExecPhrase", "nominate", "verdictVote", "endVote", "nightNote", "pickTurn", "runoffVote", "showdownPick", "stats", "badgeLog", "whispers"]; // badgeLog·whispers(11-03): 결과 공개 줄은 v·to 같은 다른 이름을 쓴다 — 서버 전용 이름은 어떤 프레임에도 키로 없다 (L35)
 /**
  * 서버 전용 이름과 같은 공개 와이어 필드의 경로(08-11, 결정 0060-3·4) — 이 두 경로만 SERVER_ONLY_KEYS 검사에서 빼고 이유를 단다. 목록은 줄이지 않고, 새 경로는 받을 권리 조건이 있을 때만 더한다.
  *  - .view.day.verdict: 처형 단계에서 모두에게 같은 {yes,no,passed} 집계(서버 전용 RoomState.verdict 와 이름만 같다).
@@ -146,6 +146,18 @@ const politicsAllowed = (path: string): boolean =>
 const ROLE_PATHS_DEAD = [...ROLE_PATHS_ALIVE, ".view.spectate.seats[].job"];
 /** ended 단계 프레임에서만 더해지는 허용 경로(D-17, Pitfall 10): 결과 화면의 모든 직업. ended 이전 프레임에서는 누출이다. */
 const ROLE_PATH_ENDED = ".view.result.seats[].job";
+// 결과 공개 프레임(11-03, 결정 D-9·D-10, L35·L36): ended 전용 허용 집합이다 — 판 중(ended 이전) 프레임에는 이 경로도 resultLog 라는 문자열도 없다.
+// 직업 단어는 claim 부분의 .lines[].v 에서만 허용한다(주장 이력의 값). 이 집합은 위 ROLE_PATHS_* 에 합치지 않는다.
+const RESULT_LOG_FRAME_KEYS = "end,i,lines,part,t";
+const RESULT_LOG_LINE_KEYS: Readonly<Record<string, string>> = {
+  mafia: "at,n,seat,text",
+  ghost: "at,n,seat,text",
+  whisper: "at,n,seat,text,to",
+  claim: "n,seat,v",
+  ballots: "n,no,yes",
+};
+// .part 는 부분 이름 mafia 가 직업 단어와 겹쳐서 허용한다(부분 이름이지 누구의 직업도 아니다). 이 허용도 ended 전용이다.
+const RESULT_LOG_ROLE_PATHS = new Set([".lines[].v", ".part"]);
 
 const phaseOf = (phase: string) => (m: ServerMessage) => m.t === "state" && m.view.phase === phase;
 
@@ -903,6 +915,8 @@ describe("6명 한 판: 낮 처형(토론 끝내기·지목·변론·찬반·처
       let flipFrames = 0; // 값을 바꾼 사람 소켓이 받은 반대 값 프레임(찬반 마감 전 그 사람 소켓에만 간다)
       for (const a of actors) {
         let isDead = false;
+        let endedSeen = false; // 이 소켓이 ended state 를 받은 뒤인가 — resultLog 는 그 뒤에만 온다(L35)
+        const logCounts = new Map<string, number>();
         for (const raw of collect(a.sock)) {
           // 남의 토큰은 어떤 프레임에도 없다
           for (const t of allTokens) expect(raw.includes(t)).toBe(false);
@@ -921,6 +935,17 @@ describe("6명 한 판: 낮 처형(토론 끝내기·지목·변론·찬반·처
           }
           // 칭호 패(11-02, L35): awards 키는 ended 의 state 프레임에만 있다 — 다른 메시지·판 중 어떤 프레임에도 0건.
           expect(`${msg.t}:${raw.includes('"awards"') && !(msg.t === "state" && msg.view.phase === "ended")}`).toBe(`${msg.t}:false`);
+          // 결과 공개(11-03, L35·L36): 판 중 어떤 프레임에도 resultLog 가 없고, ended 뒤에는 키 집합이 정해진 프레임만 온다.
+          expect(`${msg.t}:${raw.includes("resultLog") && !endedSeen}`).toBe(`${msg.t}:false`);
+          if (msg.t === "resultLog") {
+            expect(Object.keys(msg).sort().join(",")).toBe(RESULT_LOG_FRAME_KEYS);
+            expect(msg.lines.length).toBeLessThanOrEqual(40);
+            for (const line of msg.lines) expect(Object.keys(line).sort().join(",")).toBe(RESULT_LOG_LINE_KEYS[msg.part]);
+            // 직업 단어는 ended 전용 집합의 경로에서만, 그리고 claim 부분에서만
+            for (const [pth, value] of stringPaths(msg)) if (ROLE_WORDS.has(value)) expect(`${msg.part} ${pth} ${RESULT_LOG_ROLE_PATHS.has(pth) && (pth === ".part" || msg.part === "claim")}`).toBe(`${msg.part} ${pth} true`);
+            logCounts.set(msg.part, (logCounts.get(msg.part) ?? 0) + 1);
+          }
+          if (msg.t === "state" && msg.view.phase === "ended") endedSeen = true;
           if (msg.t !== "state") continue;
           const v = msg.view;
           const day = v.day?.n ?? 0;
@@ -1009,6 +1034,8 @@ describe("6명 한 판: 낮 처형(토론 끝내기·지목·변론·찬반·처
             seen.endMine.add(a.seat);
           }
         }
+        // 시민·경찰·의사·마피아·유령 누구든 ended 뒤 다섯 부분을 이 순서로 받았다(L36). 판 중에는 위 검사가 0건을 본다(L35).
+        expect([...logCounts.keys()].join(",")).toBe("mafia,ghost,whisper,claim,ballots");
       }
 
       // 받을 사람은 실제로 받았다 — 아무도 못 받는 검사가 되지 않게.

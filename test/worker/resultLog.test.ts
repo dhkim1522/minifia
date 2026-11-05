@@ -3,7 +3,7 @@ import { env } from "cloudflare:workers";
 import { evictDurableObject } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 import type { ResultLogFrame, ServerMessage } from "../../shared/protocol";
-import { RICH_TEXT, connect, framesOf, mark, nextFrame, richEndedGame6, send, settle } from "./helpers";
+import { RICH_TEXT, advanceTo, connect, framesOf, mark, nextFrame, richEndedGame6, send, settle, startedGame } from "./helpers";
 import type { RichGame6, TestSocket } from "./helpers";
 
 const resultLogsOf = (msgs: ServerMessage[]): ResultLogFrame[] => msgs.filter((m): m is ResultLogFrame => m.t === "resultLog");
@@ -71,5 +71,66 @@ describe("resultLog 전송 (D-10, L36)", () => {
     const kinds = framesOf(again).map((m) => m.t);
     expect(kinds.indexOf("chatLog")).toBeLessThan(kinds.indexOf("resultLog"));
     expect(JSON.stringify(resultLogsOf(framesOf(again)))).toBe(reference);
+  });
+});
+
+describe("resultLog 누설 — 판 중 0건, ended 뒤 모두 같게 (L35·L36, 위협 T-11-07·T-11-08)", () => {
+  it("6명 판 시작부터 ended 직전까지 여섯 소켓이 받은 어떤 프레임에도 resultLog 가 없다", { timeout: 90_000 }, async () => {
+    const g = await richEndedGame6();
+    for (const [i, sock] of g.socks.entries()) {
+      expect(g.endedAt[i]).toBeGreaterThan(0);
+      const before = sock.frames.slice(0, g.endedAt[i]);
+      expect(`${i}:${before.filter((raw) => raw.includes("resultLog")).length}`).toBe(`${i}:0`);
+      // ended 구간에는 다섯 부분이 모두 있다.
+      const after = framesOf(sock).slice(g.endedAt[i]);
+      expect(new Set(resultLogsOf(after).map((f) => f.part)).size).toBe(5);
+    }
+  });
+
+  it("숨은 기록의 본문은 판 중에는 받을 권리가 있는 소켓에만 가고, 끝나면 모든 소켓에 같게 열린다", { timeout: 90_000 }, async () => {
+    const g = await richEndedGame6();
+    const everyone = [g.mafiaA, g.mafiaB, g.police, g.doctor, g.citizenX, g.citizenY];
+    const live = (a: (typeof everyone)[number]): string => g.socks[g.actors.indexOf(a)]!.frames.slice(0, g.endedAt[g.actors.indexOf(a)]).join("\n");
+    const whole = (a: (typeof everyone)[number]): string => g.socks[g.actors.indexOf(a)]!.frames.join("\n");
+    // 살아 있는 시민 둘은 판 중에 마피아·유령 줄을 한 줄도 받지 않았다(마스크 규칙 불변, d)
+    for (const citizen of [g.citizenX, g.citizenY]) {
+      for (const text of [RICH_TEXT.mafia1, RICH_TEXT.mafia2, RICH_TEXT.ghostA, RICH_TEXT.ghostP]) expect(`${citizen.seat}:${live(citizen).includes(text)}`).toBe(`${citizen.seat}:false`);
+    }
+    // 귓속말 본문은 당사자(시민 X·경찰) 밖에는 판 중에 가지 않았다
+    for (const a of everyone.filter((x) => x !== g.citizenX && x !== g.police)) expect(`${a.seat}:${live(a).includes(RICH_TEXT.whisper)}`).toBe(`${a.seat}:false`);
+    // 끝난 뒤에는 여섯 소켓 모두에게 모든 본문이 있다
+    for (const a of everyone) {
+      for (const text of Object.values(RICH_TEXT)) expect(`${a.seat}:${text}:${whole(a).includes(text)}`).toBe(`${a.seat}:${text}:true`);
+    }
+    // 시민 Y: 마피아 채널 chat 프레임은 판 중 0건
+    const citizenFrames = framesOf(g.citizenY.sock).slice(0, g.endedAt[g.actors.indexOf(g.citizenY)]);
+    expect(citizenFrames.filter((m) => m.t === "chat" && m.ch === "mafia")).toEqual([]);
+  });
+
+  it("판 중 어느 순간의 hello(재접속)도 resultLog 를 받지 않는다", { timeout: 60_000 }, async () => {
+    const g = await startedGame("discussion", 5);
+    const reconnect = async (token: string): Promise<string[]> => {
+      const sock = await connect(g.code);
+      send(sock, { t: "hello", token });
+      await nextFrame(sock, (m) => m.t === "chatLog");
+      await settle(sock, mark(sock));
+      return sock.frames;
+    };
+    for (const a of [g.actors[0]!, g.actors[3]!]) expect((await reconnect(a.token)).filter((raw) => raw.includes("resultLog"))).toEqual([]);
+    // 앞서 재접속으로 대체된 소켓(0·3번)을 빼고 기다린다.
+    await advanceTo(g.code, [1, 2, 4, 5].map((i) => g.socks[i]!), "night");
+    for (const a of [g.actors[1]!, g.actors[4]!]) expect((await reconnect(a.token)).filter((raw) => raw.includes("resultLog"))).toEqual([]);
+  });
+
+  it("ended 의 모든 resultLog 프레임은 키 집합이 정해져 있고 id·token·역할 이름 키가 없다", { timeout: 90_000 }, async () => {
+    const g = await richEndedGame6();
+    const lineKeys: Record<string, string> = { mafia: "at,n,seat,text", ghost: "at,n,seat,text", whisper: "at,n,seat,text,to", claim: "n,seat,v", ballots: "n,no,yes" };
+    for (const sock of g.socks) {
+      for (const f of resultLogsOf(framesOf(sock))) {
+        expect(Object.keys(f).sort().join(",")).toBe("end,i,lines,part,t");
+        for (const line of f.lines) expect(Object.keys(line).sort().join(",")).toBe(lineKeys[f.part]);
+      }
+      for (const raw of sock.frames.filter((r) => r.includes("resultLog"))) for (const key of ["token", "playerId", "badgeLog", "whispers", "nicknameKey"]) expect(raw.includes(`"${key}"`)).toBe(false);
+    }
   });
 });
