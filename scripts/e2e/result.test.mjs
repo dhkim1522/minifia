@@ -283,7 +283,7 @@ test("AW4(AW-PLATE): 폭·높이·윗변·가운데·패 아래 스테이지, �
   assert.deepEqual(awFailing({ plateBox: { top: 70, left: 31, width: 328, height: 80 } }), ["AW4"]);
   assert.deepEqual(awFailing({ plateBox: { top: 80, left: 31, width: 328, height: 96 } }), ["AW4"]);
   assert.deepEqual(awFailing({ plateBox: { top: 70, left: 20, width: 328, height: 96 } }), ["AW4"]);
-  assert.deepEqual(awFailing({ panelTop: 300 }), ["AW4"]); // 패 아래 134 < 150
+  assert.deepEqual(awFailing({ panelTop: 300, floatBox: { left: 326, top: 180, width: 48, height: 48, bottom: 228 } }), ["AW4"]); // 패 아래 134 < 150
   // 작은 폰: 폭 − 32
   const small = { viewport: { w: 360, h: 560 }, plateBox: { top: 70, left: 16, width: 328, height: 96 }, panelTop: 372, floatBox: { left: 296, top: 252, width: 48, height: 48, bottom: 300 } };
   assert.deepEqual(awFailing(small), []); // 폭 360: 328 = min(328, 360 − 32), 372 − 166 = 206 ≥ 150
@@ -334,4 +334,11 @@ test("측정값이 없으면 조용히 통과하지 않고 해당 항목이 `측
     assert.match(r.detail, /측정값 없음/, r.id);
   }
   assert.match(awardChecks(undefined)[0].detail, /측정값 없음/);
+});
+
+test("RS4 afterCeremony(11-09): 시상식 뒤에는 직업 의상이 모두 걷혀야 통과, 남아 있으면 RS4 만 실패, 기본 입력은 그대로", () => {
+  assert.equal(resultStageChecks({ ...good(), afterCeremony: true, costumes: {} }).every((r) => r.ok), true);
+  assert.deepEqual(failing({ afterCeremony: true }), ["RS4"]); // good() 의 costumes 는 아직 직업 의상
+  assert.deepEqual(failing({ afterCeremony: true, costumes: { 0: "mafia" } }), ["RS4"]);
+  assert.equal(failing({}).includes("RS4"), false);
 });

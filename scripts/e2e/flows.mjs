@@ -128,7 +128,7 @@ import {
   ownPenFontRequests,
 } from "./lib.mjs";
 import { makeAvatarFlows } from "./avatar.mjs";
-import { readResultStage, readResultTabs, resultSkipChecks, resultStageChecks, resultTabChecks } from "./result.mjs";
+import { awardChecks, readAwardState, readResultStage, readResultTabs, resultSkipChecks, resultStageChecks, resultTabChecks } from "./result.mjs";
 import { makePoliticsFlows } from "./politics.mjs";
 import { makeSoundFlows } from "./sound.mjs";
 
@@ -2726,6 +2726,25 @@ async function pollPage(page, fn, ms) {
   return false;
 }
 
+/**
+ * 시상식(11-09)을 끝까지 넘긴다: 떠 있는 [넘기기]가 없어질 때까지 누르고 직업 의상이 걷힐 때까지(+600ms) 기다린다.
+ * 연출 시계가 final(5600)에 닿으면 시상식이 시작되므로, 최종 상태를 재는 흐름은 이것을 먼저 부른다. 칭호 목록이 없는 서버(옛 서버)는 시상식이 없어 바로 돌아온다.
+ */
+async function finishCeremony(page) {
+  for (let i = 0; i < 24; i++) {
+    const btn = page.locator('[data-float="skip"]');
+    if ((await btn.count()) === 0) break;
+    await btn.click({ timeout: 2000 }).catch(() => {});
+    await sleep(80);
+  }
+  await page
+    .waitForFunction(() => {
+      const h = window.__mfResult;
+      return !h || h.awards.length === 0 || Object.keys(h.costumes).length === 0;
+    }, null, { timeout: 5000 })
+    .catch(() => {});
+}
+
 /** 결과 화면(11-05): ended 도착 뒤 연출 시계가 final 에 닿을 때까지 기다린 뒤 RS1~RS8 로 판정한다. skipProbe 면 먼저 연출 구간에서 무대를 한 번 탭해 건너뛰기(RS9)를 본다. */
 async function resultState(ctx, id, game, { winner, n, skipProbe = false }) {
   const rec = recorder(ctx);
@@ -2765,6 +2784,7 @@ async function resultState(ctx, id, game, { winner, n, skipProbe = false }) {
   } catch {
     throw new SetupError("결과 화면 연출이 final 에 닿지 않음 (window.__mfResult.stage)");
   }
+  await finishCeremony(hp); // 11-09: final(5600)부터 시상식이 돈다 — 끝까지 넘겨 승리 한 줄·고른 look 상태를 잰다
   await checkState(ctx, id, `ended-${winner}`, game.host);
 
   // 채팅 한 줄: 결과 단계에서도 전체 채팅이 오간다(D-11). 보낸 줄이 기록 칸에 보여야 한다.
@@ -2793,6 +2813,7 @@ async function resultState(ctx, id, game, { winner, n, skipProbe = false }) {
     roomH: read.roomH,
     hasLegacy: read.legacy,
     chatEcho: echo.ok,
+    afterCeremony: (read.hook?.awards?.length ?? 0) > 0, // 시상식이 있었으면 직업 의상은 걷혀 있다(고른 look 으로 복귀)
   })) {
     recOne(rec, sc, row);
   }
@@ -2940,6 +2961,7 @@ async function resultRevealFlow(ctx) {
       } catch {
         throw new SetupError("결과 화면 연출이 final 에 닿지 않음 (window.__mfResult.stage)");
       }
+      await finishCeremony(page); // 11-09: 시상식이 끝난 뒤 탭 기하를 잰다(떠 있는 [넘기기]·패가 없는 상태)
     }
     await checkState(ctx, id, "ended", game.host);
     const gp = g.page;
@@ -2982,6 +3004,128 @@ async function resultRevealFlow(ctx) {
     await sleep(150);
     const folded = await readResultTabs(gp);
     rec(sc, "RT17", "전체 탭으로 돌아오면 접히고 입력칸이 다시 있음", folded?.expanded === false && folded.inputPresent === true, `확장 ${folded?.expanded} · 입력칸 ${folded?.inputPresent}`);
+  } finally {
+    await closeGame(game);
+  }
+}
+
+// ---- result-awards (11-09, D-7·D-24·D-25): 시상식 ----
+// 방장(마피아) + 봇 3: 방장이 처형되어 시민 승. ended 도착 뒤 연출 구간은 무대 탭으로 건너뛰고 시상식이 시작되기를 기다려 첫 패에서 기하를 잰다.
+// 확장 탭(기록)을 열어 3초 동안 패 index 가 그대로인지(일시정지) 보고 접으면 이어지는지 본다. 나머지 패는 [넘기기]로 한 장씩 넘기며 순서·진행 숫자를 읽고, 끝난 뒤 헤더·[넘기기]·의상을 본다.
+
+async function resultAwardsFlow(ctx) {
+  const id = "result-awards";
+  const rec = recorder(ctx);
+  const sc = `${id}/ended`;
+  const game = await openGame(ctx, id, { guests: 0, bots: 3, role: "mafia", vote: { exec: "yes", pick: "host" }, to: "nomination" });
+  try {
+    const { hp, ht } = game;
+    await step("defense", () => skipTo(hp, ht, "defense"));
+    await step("verdict", () => skipTo(hp, ht, "verdict"));
+    await step("execution", () => skipTo(hp, ht, "execution"));
+    await step("ended", () => toEnded(game));
+    await ht.waitFor((v) => v.phase === "ended", 8000, "종료 도달");
+    const view = ht.last();
+    const winner = view.result?.winner;
+    const seats = view.result?.seats ?? [];
+    const jobBySeat = Object.fromEntries(seats.map((x) => [x.seat, x.job]));
+    const winnerTeamSeats = seats.filter((x) => (x.job === "mafia") === (winner === "mafiaWin")).map((x) => x.seat);
+
+    // 연출 구간(모임·뒤집기)은 무대 탭으로 건너뛴다 — 4600 으로 점프하고 5600 에 시상식이 시작된다
+    const inWindow = await pollPage(hp, () => ["gather", "flip"].includes(window.__mfResult?.stage ?? ""), 4000);
+    if (inWindow) {
+      const mid = await hp.evaluate(() => {
+        const root = document.querySelector(".mf-result");
+        const head = root?.querySelector("header")?.getBoundingClientRect();
+        const panel = root?.querySelector("[data-result-panel]")?.getBoundingClientRect();
+        if (!root || !head || !panel) return null;
+        return { x: window.innerWidth / 2, y: (head.bottom + panel.top) / 2 };
+      });
+      if (!mid) throw new SetupError("결과 화면 스테이지 가운데를 못 잼");
+      await hp.mouse.click(mid.x, mid.y);
+    }
+    try {
+      await hp.waitForFunction(() => (window.__mfResult?.shown ?? -1) >= 0, null, { timeout: 12000 });
+    } catch {
+      throw new SetupError("시상식 첫 패가 뜨지 않음 (window.__mfResult.shown, 칭호 목록 " + (await hp.evaluate(() => window.__mfResult?.awards?.length ?? "훅 없음")) + ")");
+    }
+    await sleep(300); // 패 페이드 180ms
+    const first = await readAwardState(hp);
+    if (!first || !first.plate) throw new SetupError("첫 패를 못 읽음");
+    await checkState(ctx, id, "plate", game.host);
+
+    // 일시정지: 확장 탭(기록)을 열고 3초 기다린다. 패는 그대로, [넘기기]는 숨고, 접으면 이어진다
+    await hp.locator('[data-result-tab="log"]').click({ timeout: 4000 });
+    await hp.waitForSelector('[data-result-panel][data-expanded="true"]', { timeout: 4000 });
+    const open = await readAwardState(hp);
+    const t0 = Date.now();
+    await sleep(3000);
+    const later = await readAwardState(hp);
+    const waitedMs = Date.now() - t0;
+    await hp.locator('[data-result-tab="all"]').click({ timeout: 4000 });
+    let indexResumed = -1;
+    {
+      const tr = Date.now();
+      while (Date.now() - tr < 5500) {
+        indexResumed = await hp.evaluate(() => window.__mfResult?.shown ?? -1);
+        if (indexResumed > (open?.shown ?? 0)) break;
+        await sleep(50);
+      }
+    }
+
+    // 나머지 패: [넘기기]로 한 장씩 넘기며 칭호 순서·진행 숫자를 읽는다
+    const n = first.awards.length;
+    const observed = [first.plate.id];
+    const progress = [first.float?.count ?? ""];
+    const windowOf = async () => {
+      const t = await hp.locator("[data-float-count]").first().textContent({ timeout: 1500 }).catch(() => null);
+      const m = /^(\d+) \/ (\d+)$/.exec((t ?? "").trim());
+      return m ? Number(m[1]) - 1 : -1;
+    };
+    for (let want = 1; want < n; want++) {
+      for (let guard = 0; guard < 12 && (await windowOf()) < want; guard++) {
+        await hp.locator('[data-float="skip"]').click({ timeout: 2000 });
+        await sleep(100);
+      }
+      try {
+        await hp.waitForFunction((w) => window.__mfResult?.shown === w, want, { timeout: 5000 });
+      } catch {
+        throw new SetupError(`패 ${want + 1}/${n} 가 뜨지 않음`);
+      }
+      await sleep(250);
+      const st = await readAwardState(hp);
+      observed.push(st?.plate?.id ?? "");
+      progress.push(st?.float?.count ?? "");
+    }
+
+    // 마지막 패에서 한 번 더 넘기면 시상식이 끝난다
+    await hp.locator('[data-float="skip"]').click({ timeout: 2000 });
+    await hp.waitForFunction(() => document.querySelector('[data-float="skip"]') === null, null, { timeout: 4000 }).catch(() => {});
+    await hp.waitForFunction(() => Object.keys(window.__mfResult?.costumes ?? { x: 1 }).length === 0, null, { timeout: 4000 }).catch(() => {});
+    const after = await readAwardState(hp);
+
+    for (const row of awardChecks({
+      viewport: first.viewport,
+      stageTop: first.stageTop,
+      panelTop: first.panelTop,
+      plateBox: first.plate,
+      floatBox: first.float,
+      progress,
+      awards: first.awards,
+      observed,
+      participants: seats.length,
+      winnerTeamSeats,
+      winner,
+      titleDuring: first.title,
+      titleAfter: after?.title,
+      floatAfter: after?.floatCount,
+      pause: { indexOpen: open?.shown, indexLater: later?.shown, waitedMs, floatHidden: (open?.floatCount ?? 1) === 0 && (later?.floatCount ?? 1) === 0, plateKept: later?.plate != null, indexResumed },
+      costumesDuring: first.costumes,
+      costumesAfter: after?.costumes,
+      jobBySeat,
+    })) {
+      recOne(rec, sc, row);
+    }
   } finally {
     await closeGame(game);
   }
@@ -3250,6 +3394,7 @@ export const FLOWS = [
   { id: "night-sizes", run: nightSizesFlow, extraSizes: LOBBY_EXTRA_SIZES },
   { id: "result", run: resultFlow, size: GAME_SIZE },
   { id: "result-reveal", run: resultRevealFlow, extraSizes: LOBBY_EXTRA_SIZES },
+  { id: "result-awards", run: resultAwardsFlow, extraSizes: LOBBY_EXTRA_SIZES },
   { id: "chat-game", run: chatGameFlow, size: GAME_SIZE },
   // 9.1.1 페이즈 정치 긴장(09.1.1-10): 직업 배지(떠 있는 버튼→칩→이름표 배지→말 바꿈)·귓속말(모드→한 줄 시트→당사자만 본문). 둘 다 폰 6종, 방장·손님 두 화면
   { id: "politics-badge", run: politicsBadgeFlow, extraSizes: LOBBY_EXTRA_SIZES },
