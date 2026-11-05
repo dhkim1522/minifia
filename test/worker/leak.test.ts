@@ -1633,7 +1633,7 @@ describe("방 연속성 프레임 전수 (D-14·D-17·D-18, L43)", () => {
     send(leaver.sock, { t: "leave" });
     for (const a of stayers) await nextFrame(a.sock, (m) => m.t === "state" && m.view.players.find((p) => p.seat === leaver.seat)?.connected === false);
     for (const a of stayers) await flush(a.sock);
-    const rec = (await storedRoom(g.code)).players.find((p) => p.seat === leaver.seat) as unknown as { left?: true };
+    const rec = ((await storedRoom(g.code)).players as unknown as Array<{ seat: number; left?: true }>).find((p) => p.seat === leaver.seat)!;
     expect(rec.left).toBe(true); // 서버에는 있고
     stayers.forEach((a, i) => {
       const frames = framesOf(a.sock).slice(starts[i]!);
