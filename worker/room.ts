@@ -7,7 +7,7 @@ import { isAlive } from "../shared/game/alive";
 import { ballotsCardText } from "../shared/game/ballots";
 import { audience, channelOf, phaseKey, worldVisibleTo } from "../shared/game/audience";
 import { bumpStat } from "../shared/game/stats";
-import { resolveHost } from "../shared/game/continuity";
+import { pruneLobby, resolveHost } from "../shared/game/continuity";
 import { CHAT_KEY_PREFIX, appendLine, appendWhisperPair, chatKey, emptyChatLog, replayFor, restoreChatLog, seatMask, toWire } from "../shared/game/chatLog";
 import type { ChatLog } from "../shared/game/chatLog";
 import { checkChatSend, sanitizeChatText, typingRelay } from "../shared/game/chatRules";
@@ -368,6 +368,13 @@ export class Room extends DurableObject<Env> {
       return;
     }
     this.closePlayerSockets(att.playerId, "left");
+    if (this.room.phase === "ended") {
+      // 결과 단계(D-14): 지우지 않고 left 로 표시만 한다 — 월드·명단은 그대로, 방장이면 이양된 새 hostId 가 실린다.
+      this.room = result.state;
+      await this.persistAndBroadcast();
+      await this.reschedule();
+      return;
+    }
     if (result.state === null) {
       await this.ctx.storage.deleteAlarm();
       await this.ctx.storage.deleteAll();
@@ -944,21 +951,33 @@ export class Room extends DurableObject<Env> {
     // 난수는 여기서만 넣는다 — 아침 판정(03-03)의 동률·문구 추첨
     const next = tick(room, now, cryptoRandInt);
     // 방장 이양(D-17)은 단계 전환과 무관하게 같은 호출에서 맞춘다(멱등). 어떤 진입점이든 advance 를 지난다.
+    // 대기실 정리(D-18)는 이양 뒤에 적용한다 — 옛 방장도 같은 규칙을 받는다. 게임 중·결과 단계는 pruneLobby 가 건드리지 않는다.
     const hosted = resolveHost(next, now);
+    const pruned = pruneLobby(hosted, now);
     if (next !== room) {
-      this.room = hosted;
+      this.room = pruned.state;
+      this.despawnRemoved(pruned.removedIds);
       await this.afterTransition(room, now);
+      if (pruned.removedIds.length > 0) await this.flushWorld();
       return;
     }
-    if (hosted !== room) {
-      this.room = hosted;
+    if (pruned.state !== room) {
+      this.room = pruned.state;
+      this.despawnRemoved(pruned.removedIds);
       await this.persistAndBroadcast();
       await this.reschedule();
+      if (pruned.removedIds.length > 0) await this.flushWorld();
     }
     // 위치는 단계가 바뀌었는지와 무관하게 '지금 단계가 요구하는 모습'으로 맞춘다(멱등, 알람 따라잡기·퇴거에도 안전).
     // 새 유령 snap 은 전환 때만 보낸다: 퇴거로 비워진 ghostSnapped 때문에 깨어날 때마다 같은 snap 을 다시 보내지 않는다(08 동작 유지).
     await this.syncHome(now);
     this.syncLayout(now);
+  }
+
+  // 정리로 지워진 사람의 월드 자리를 걷는다(D-18). 저장은 호출한 쪽이 flushWorld 로 한다.
+  private despawnRemoved(ids: readonly string[]): void {
+    for (const id of ids) this.world = despawnPlayer(this.world, id);
+    if (ids.length > 0) this.markWorldDirty();
   }
 
   // 단계 전환 뒤처리 한 곳(결정 0061-19): 단계 마감(advance)·토론 끝내기(applyEndDiscussion)·테스트 넘기기(handleTestSkip)가 모두 여기를 지난다.
@@ -1227,7 +1246,8 @@ export class Room extends DurableObject<Env> {
       return;
     }
     const player = findPlayerByToken(room, token);
-    if (!player) {
+    // 결과 단계에서 나간 사람(left)의 토큰은 더는 들어올 수 없다(D-14) — 지워진 사람과 같은 모습으로 닫는다.
+    if (!player || player.left === true) {
       ws.close(CLOSE_CODES.REMOVED, "invalid_token");
       return;
     }

@@ -16,6 +16,7 @@ import type {
   VoteLogEntry,
 } from "../protocol";
 import type { BotPlan } from "./bots";
+import { hostSuccessor } from "./continuity";
 import { enterNomination } from "./nomination";
 import { ASSIGNING_MS, DAY_ANNOUNCE_MS, DISCUSSION_MS, NOMINATION_GATHER_MS } from "./phases";
 import { assignRoles, giveRoleTo, rolesInPlay } from "./roles";
@@ -293,15 +294,25 @@ function earliestJoined(players: readonly Player[]): Player {
 export type LeaveError = "WRONG_PHASE" | "NOT_IN_ROOM"; // NOT_IN_ROOM 은 내부 전용 — 방 Durable Object 가 BAD_MESSAGE 로 바꾼다
 
 /**
- * 대기실에서만 나갈 수 있다(게임 중 나가기는 1페이즈 범위 밖). 마지막 사람이 나가면 state 는 null 이다.
- * 방장이 나가면 연결된 사람 가운데 joinSeq 가 가장 작은 사람이 이어받는다 — 연결된 사람이 없으면 전체에서 가장 작은 사람.
+ * 대기실과 결과 단계(ended)에서만 나갈 수 있다. 마지막 사람이 나가면 대기실에서 state 는 null 이다.
+ * 대기실: 방장이 나가면 연결된 사람 가운데 joinSeq 가 가장 작은 사람이 이어받는다 — 연결된 사람이 없으면 전체에서 가장 작은 사람.
  * 이어받는 후보는 봇이 아닌 사람뿐이고(결정 0024), 사람이 아무도 남지 않으면(봇만 남으면) 방을 지운다(state null).
- * 방장이 끊긴 것만으로는 바뀌지 않는다(자동 이양은 v2).
+ * 결과 단계(D-14): 그 사람을 지우지 않고 left·connected false·connId null 로 표시한다(방금 끝난 판의 명단이 흔들리지 않게 — 다시 하기가 걷어 간다).
+ * 방장이면 연결된 후보(나가는 사람·봇·left 제외) 중 joinSeq 가 가장 작은 사람에게 즉시 넘긴다 — 후보가 없으면 그대로.
+ * 방장이 끊긴 것만으로 바뀌는 길은 continuity.ts 의 resolveHost(유예 45초, D-17)다. 그 밖의 단계는 WRONG_PHASE.
  */
 export function leaveRoom(
   state: RoomState,
   playerId: string,
 ): { ok: true; state: RoomState | null } | { ok: false; error: LeaveError } {
+  if (state.phase === "ended") {
+    if (!state.players.some((p) => p.id === playerId)) return { ok: false, error: "NOT_IN_ROOM" };
+    const players = state.players.map((p) =>
+      p.id === playerId ? { ...p, left: true as const, connected: false, connId: null } : p,
+    );
+    const successor = playerId === state.hostId ? hostSuccessor(players, playerId) : undefined;
+    return { ok: true, state: { ...state, players, hostId: successor?.id ?? state.hostId } };
+  }
   if (state.phase !== "lobby") return { ok: false, error: "WRONG_PHASE" };
   if (!state.players.some((p) => p.id === playerId)) return { ok: false, error: "NOT_IN_ROOM" };
   const remaining = state.players.filter((p) => p.id !== playerId);

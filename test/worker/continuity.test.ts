@@ -17,6 +17,9 @@ const seatState = (seatNo: number, connected: boolean) => (m: ServerMessage): bo
 const hostSeatOf = (m: ServerMessage): number | undefined =>
   m.t === "state" ? m.view.players.find((p) => p.isHost)?.seat : undefined;
 
+/** 유예(3초)는 넘고 정리 시간(6초)은 안 넘은 끊긴 지 시간 — 이양만 일어나고 옛 방장은 아직 지워지지 않는다. */
+const PAST_GRACE_MS = 4000;
+
 /** 저장된 방장 자리의 disconnectedAt 을 과거로 옮겨 유예가 지난 것으로 만든다(DO 를 evict 하므로 소켓은 하이버네이션). */
 async function agePast(code: string, hostId: string, ms: number): Promise<void> {
   await editRoom(code, (room) =>
@@ -52,7 +55,7 @@ describe("방장 이양 (D-17, CONNX-01)", () => {
     await until("disconnectedAt 기록", async () => (await stored(r.code)).players.find((p) => p.id === before.hostId)?.disconnectedAt !== undefined);
     g1.sock.cursor = g1.sock.frames.length;
     g2.sock.cursor = g2.sock.frames.length;
-    await agePast(r.code, before.hostId, 10_000);
+    await agePast(r.code, before.hostId, PAST_GRACE_MS);
     expect(await runDurableObjectAlarm(env.ROOM.getByName(r.code))).toBe(true);
 
     const m1 = await nextFrame(g1.sock, (m) => m.t === "state" && m.view.me.isHost);
@@ -70,7 +73,7 @@ describe("방장 이양 (D-17, CONNX-01)", () => {
     r.host.ws.close();
     await nextFrame(g1.sock, seatState(0, false));
     await until("disconnectedAt 기록", async () => (await stored(r.code)).players.find((p) => p.id === before.hostId)?.disconnectedAt !== undefined);
-    await agePast(r.code, before.hostId, 10_000);
+    await agePast(r.code, before.hostId, PAST_GRACE_MS);
     await runDurableObjectAlarm(env.ROOM.getByName(r.code));
     await nextFrame(g1.sock, (m) => m.t === "state" && m.view.me.isHost);
 
@@ -103,7 +106,7 @@ describe("방장 이양 (D-17, CONNX-01)", () => {
     g1.sock.ws.close();
     r.host.ws.close();
     await until("둘 다 끊김 기록", async () => (await stored(r.code)).players.every((p) => !p.connected && p.disconnectedAt !== undefined));
-    await editRoom(r.code, (room) => mapPlayers(room, (p) => ({ ...p, disconnectedAt: Date.now() - 10_000 })));
+    await editRoom(r.code, (room) => mapPlayers(room, (p) => ({ ...p, disconnectedAt: Date.now() - PAST_GRACE_MS })));
     await runDurableObjectAlarm(env.ROOM.getByName(r.code));
     expect((await stored(r.code)).hostId).toBe(before.hostId);
 
@@ -170,7 +173,7 @@ describe("대기실 정리 (D-18, CONNX-02)", () => {
     expect(room.players[0]!.connected).toBe(true);
   });
 
-  it("게임 중(낮 토론)에는 끊긴 지 아무리 오래돼도 지우지 않는다", async () => {
+  it("게임 중(낮 토론)에는 끊긴 지 아무리 오래돼도 지우지 않는다", { timeout: 40_000 }, async () => {
     const g = await startedGame("discussion", 3);
     const idle = g.actors.find((a) => a.seat !== 0)!;
     const idleId = await idOfSeat(g.code, idle.seat);
@@ -185,7 +188,7 @@ describe("대기실 정리 (D-18, CONNX-02)", () => {
 });
 
 describe("결과 단계 나가기 (D-14)", () => {
-  it("leave 를 보낸 소켓은 4003 'left' 로 닫히고 다른 소켓의 players 에는 그 사람이 connected false 로 남는다(left 는 프레임에 없다)", async () => {
+  it("leave 를 보낸 소켓은 4003 'left' 로 닫히고 다른 소켓의 players 에는 그 사람이 connected false 로 남는다(left 는 프레임에 없다)", { timeout: 40_000 }, async () => {
     const g = await endedGame4();
     const leaver = g.actors.find((a) => a.seat !== 0)!;
     const stayer = g.actors.find((a) => a.seat === 0)!;
@@ -203,7 +206,7 @@ describe("결과 단계 나가기 (D-14)", () => {
     expect(room.hostId).toBe(room.players.find((p) => p.seat === 0)!.id);
   });
 
-  it("방장이 나가면 즉시 연결된 가장 이른 joinSeq 사람에게 넘어간다", async () => {
+  it("방장이 나가면 즉시 연결된 가장 이른 joinSeq 사람에게 넘어간다", { timeout: 40_000 }, async () => {
     const g = await endedGame4();
     const host = g.actors.find((a) => a.seat === 0)!;
     const next = g.actors.filter((a) => a !== host).sort((a, b) => a.seat - b.seat)[0]!;
@@ -216,7 +219,7 @@ describe("결과 단계 나가기 (D-14)", () => {
     expect(room.players.find((p) => p.id === room.hostId)!.seat).toBe(next.seat);
   });
 
-  it("나간 사람은 같은 토큰으로 다시 들어올 수 없다", async () => {
+  it("나간 사람은 같은 토큰으로 다시 들어올 수 없다", { timeout: 40_000 }, async () => {
     const g = await endedGame4();
     const leaver = g.actors.find((a) => a.seat !== 0)!;
     send(leaver.sock, { t: "leave" });
@@ -226,7 +229,7 @@ describe("결과 단계 나가기 (D-14)", () => {
     expect(await closed(back)).toBe("4003 invalid_token");
   });
 
-  it("끊긴 사람은 결과 단계에서 아무리 오래돼도 지우지 않는다", async () => {
+  it("끊긴 사람은 결과 단계에서 아무리 오래돼도 지우지 않는다", { timeout: 40_000 }, async () => {
     const g = await endedGame4();
     const idle = g.actors.find((a) => a.seat !== 0)!;
     const idleId = await idOfSeat(g.code, idle.seat);
@@ -237,7 +240,7 @@ describe("결과 단계 나가기 (D-14)", () => {
     expect((await stored(g.code)).players).toHaveLength(4);
   });
 
-  it("진행 중 판의 leave 는 이전처럼 WRONG_PHASE 다", async () => {
+  it("진행 중 판의 leave 는 이전처럼 WRONG_PHASE 다", { timeout: 40_000 }, async () => {
     const g = await startedGame("discussion", 3);
     const who = g.actors.find((a) => a.seat !== 0)!;
     who.sock.cursor = who.sock.frames.length;

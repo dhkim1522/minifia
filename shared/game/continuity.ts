@@ -55,15 +55,38 @@ export function resolveHost(state: RoomState, now: number): RoomState {
   return { ...state, hostId: successor.id };
 }
 
+/** 대기실 정리 대상 — 방장·봇이 아니고, 끊겨 있고, 끊긴 시각이 있는 사람. */
+const prunable = (state: RoomState): Player[] =>
+  state.players.filter((p) => p.id !== state.hostId && isHuman(p) && !p.connected && p.disconnectedAt !== undefined);
+
 /**
- * 연속성 마감 중 가장 이른 시각(없으면 Infinity): 방장 이양 마감. 연결된 후보가 없으면 알람을 걸지 않는다 —
- * 지난 시각으로 알람이 돌며 헛도는 것을 막고, 후보가 연결되는 hello 가 그 자리에서 이양한다.
+ * 대기실에서만: 끊긴 지 정리 시간(테스트 방은 6초) 이상인 사람을 players 에서 뺀다. 방장·봇은 지우지 않고, 게임 중·결과 단계는 절대 지우지 않는다.
+ * 아무도 없으면 같은 객체(멱등). removedIds 는 월드 정리(despawn)에 쓴다. 이양을 먼저 적용한 상태를 넣으면 옛 방장도 같은 규칙을 받는다.
+ */
+export function pruneLobby(state: RoomState, now: number): { state: RoomState; removedIds: string[] } {
+  if (state.phase !== "lobby") return { state, removedIds: [] };
+  const limit = pruneAfterOf(state);
+  const removedIds = prunable(state)
+    .filter((p) => now - (p.disconnectedAt as number) >= limit)
+    .map((p) => p.id);
+  if (removedIds.length === 0) return { state, removedIds };
+  const drop = new Set(removedIds);
+  return { state: { ...state, players: state.players.filter((p) => !drop.has(p.id)) }, removedIds };
+}
+
+/**
+ * 연속성 마감 중 가장 이른 시각(없으면 Infinity): 방장 이양 마감과 대기실 정리 마감.
+ * 방장 이양은 연결된 후보가 없으면 알람을 걸지 않는다 — 지난 시각으로 알람이 돌며 헛도는 것을 막고, 후보가 연결되는 hello 가 그 자리에서 이양한다.
  */
 export function nextContinuityAt(state: RoomState): number {
   let at = Number.POSITIVE_INFINITY;
   const host = absentHost(state);
   if (host && host.left !== true && hostSuccessor(state.players, host.id)) {
     at = Math.min(at, (host.disconnectedAt as number) + hostGraceOf(state));
+  }
+  if (state.phase === "lobby") {
+    const limit = pruneAfterOf(state);
+    for (const p of prunable(state)) at = Math.min(at, (p.disconnectedAt as number) + limit);
   }
   return at;
 }
