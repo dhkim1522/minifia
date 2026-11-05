@@ -156,3 +156,110 @@ describe("Lobby — 꾸미기 버튼과 시트 (10-07, D-4·D-5)", () => {
     expect(container.querySelector("button[data-outfit='noir']")?.getAttribute("aria-pressed")).toBe("true");
   });
 });
+
+// ── Task 2: 열 때 스크롤·초점·키보드 규칙, 연결 끊김, 미리 보기 ──
+describe("DressSheet — 열 때와 키보드 (10-07 Task 2)", () => {
+  it("열리면 선택된 카드가 가로 가운데로 오도록 맞추고 그 카드로 초점이 간다", () => {
+    const spy = vi.fn();
+    const orig = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = spy;
+    try {
+      const { container } = render(<DressSheet value="elder" onPick={() => {}} onClose={() => {}} />);
+      expect(document.activeElement).toBe(container.querySelector("button[data-outfit='elder']"));
+      expect(spy).toHaveBeenCalledTimes(1);
+      expect(spy.mock.contexts[0]).toBe(container.querySelector("button[data-outfit='elder']"));
+      expect(spy.mock.calls[0]![0]).toMatchObject({ inline: "center", block: "nearest" });
+    } finally {
+      Element.prototype.scrollIntoView = orig;
+    }
+  });
+
+  it("좌우 화살표키로 카드 초점이 옮겨 가고 양 끝에서 멈춘다", () => {
+    const { container } = render(<DressSheet value="police" onPick={() => {}} onClose={() => {}} />);
+    const card = (id: string) => container.querySelector<HTMLButtonElement>(`button[data-outfit='${id}']`)!;
+    expect(document.activeElement).toBe(card("police"));
+    fireEvent.keyDown(card("police"), { key: "ArrowRight" });
+    expect(document.activeElement).toBe(card("doctor"));
+    fireEvent.keyDown(card("doctor"), { key: "ArrowLeft" });
+    fireEvent.keyDown(card("police"), { key: "ArrowLeft" });
+    expect(document.activeElement).toBe(card("coat"));
+    fireEvent.keyDown(card("coat"), { key: "ArrowLeft" });
+    expect(document.activeElement).toBe(card("coat"));
+    card("noir").focus();
+    fireEvent.keyDown(card("noir"), { key: "ArrowRight" });
+    expect(document.activeElement).toBe(card("noir"));
+  });
+
+  it("Esc 로 닫는다", () => {
+    const onClose = vi.fn();
+    const { container } = render(<DressSheet value="coat" onPick={() => {}} onClose={onClose} />);
+    fireEvent.keyDown(container.querySelector("button[data-outfit='coat']")!, { key: "Escape" });
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("disabled 이면 카드가 aria-disabled 이고 눌러도 onPick 이 불리지 않는다", () => {
+    const onPick = vi.fn();
+    const { container } = render(<DressSheet value="coat" onPick={onPick} onClose={() => {}} disabled />);
+    const card = container.querySelector<HTMLButtonElement>("button[data-outfit='mafia']")!;
+    expect(card.getAttribute("aria-disabled")).toBe("true");
+    fireEvent.click(card);
+    expect(onPick).not.toHaveBeenCalled();
+    // 닫기는 연결과 상관없이 동작한다
+    expect(container.querySelector("button[aria-label='닫기']")?.getAttribute("aria-disabled")).toBeNull();
+  });
+});
+
+describe("Lobby — 꾸미기 미리 보기와 초점 (10-07 Task 2)", () => {
+  it("카드를 누르면 WorldStage 에 넘기는 view 의 내 좌석 look 이 즉시 바뀐다(밖의 view 는 그대로)", () => {
+    render(lobby(view));
+    expect(stage.props!.view.players.find((p) => p.seat === 2)?.look).toBe("doctor");
+    fireEvent.click(screen.getByRole("button", { name: "꾸미기" }));
+    fireEvent.click(screen.getByRole("button", { name: "마피아" }));
+    expect(stage.props!.view.players.find((p) => p.seat === 2)?.look).toBe("mafia");
+    expect(stage.props!.view.players.find((p) => p.seat === 0)?.look).toBeUndefined();
+    expect(document.querySelector("button[data-outfit='mafia']")?.getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("서버가 거절하면(1200ms 안에 같은 값이 안 오면) 조용히 서버 값으로 돌아가고 알림이 없다", () => {
+    vi.useFakeTimers();
+    const { container } = render(lobby(view));
+    fireEvent.click(screen.getByRole("button", { name: "꾸미기" }));
+    fireEvent.click(screen.getByRole("button", { name: "마피아" }));
+    act(() => {
+      vi.advanceTimersByTime(1200);
+    });
+    expect(stage.props!.view.players.find((p) => p.seat === 2)?.look).toBe("doctor");
+    expect(container.querySelector("button[data-outfit='doctor']")?.getAttribute("aria-pressed")).toBe("true");
+    expect(container.querySelector(".mv-toast.is-on")).toBeNull();
+  });
+
+  it("시트를 닫으면 초점이 꾸미기 버튼으로 돌아온다", () => {
+    const { container } = render(lobby(view));
+    fireEvent.click(screen.getByRole("button", { name: "꾸미기" }));
+    expect(document.activeElement).toBe(container.querySelector("button[data-outfit='doctor']"));
+    fireEvent.click(screen.getByRole("button", { name: "닫기" }));
+    expect(document.activeElement).toBe(container.querySelector("[data-float='dress']"));
+  });
+
+  it("버튼을 누르면 채팅 입력칸의 초점(키보드)을 뗀다", () => {
+    const { container } = render(lobby(view));
+    const input = container.querySelector<HTMLInputElement>(".mv-chat__form input")!;
+    input.focus();
+    expect(document.activeElement).toBe(input);
+    fireEvent.click(screen.getByRole("button", { name: "꾸미기" }));
+    expect(document.activeElement).not.toBe(input);
+  });
+
+  it("연결이 끊기면 시트의 카드가 비활성이고 눌러도 아무것도 가지 않는다", () => {
+    const send = vi.fn((_msg: ClientMessage) => true);
+    const { container, rerender } = render(lobby(view, send));
+    fireEvent.click(screen.getByRole("button", { name: "꾸미기" }));
+    rerender(lobby(view, send, { canSend: false }));
+    const card = container.querySelector<HTMLButtonElement>("button[data-outfit='mafia']")!;
+    expect(card.getAttribute("aria-disabled")).toBe("true");
+    send.mockClear();
+    fireEvent.click(card);
+    expect(send.mock.calls.filter((c) => c[0].t === "dress")).toEqual([]);
+    expect(stage.props!.view.players.find((p) => p.seat === 2)?.look).toBe("doctor");
+  });
+});
