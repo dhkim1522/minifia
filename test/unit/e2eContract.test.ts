@@ -13,6 +13,7 @@ import { SOUND_PREF_KEY, SOUND_PREF_VERSION, loadSoundPref } from "../../src/aud
 import { SOUND_IDS } from "../../src/audio/recipes";
 import { SOUND_LIMITS } from "../../src/debug/soundLabTable";
 import { LETTER_END_AT_MS, LETTER_FOLD_AT_MS, SEAL_GLYPH } from "../../src/game/willLetter";
+import { RESULT_PANEL_TEXT, RESULT_TABS } from "../../src/game/resultText";
 import {
   CHAT_PANEL_EXTRA,
   KB_PANEL_H,
@@ -364,7 +365,7 @@ describe("11페이즈 결과 화면 E2E 표식·표(11-05)", () => {
   const sources = tracked.map((f) => ({ f, text: readFileSync(new URL(f, root), "utf8") }));
 
   it("RESULT_MARKERS 가 git 이 추적하는 src/ 파일 어딘가에 있다(표식 이름 오타 방지)", () => {
-    expect(r.RESULT_MARKERS).toEqual(["data-result-stage", "data-result-panel", "data-result-announce", "__mfResult"]);
+    expect(r.RESULT_MARKERS).toEqual(["data-result-stage", "data-result-panel", "data-result-announce", "__mfResult", "data-result-tab", "data-result-dot", "data-result-divider"]);
     const missing = r.RESULT_MARKERS.filter((m) => !sources.some((s) => s.text.includes(m)));
     expect(missing).toEqual([]);
   });
@@ -375,6 +376,17 @@ describe("11페이즈 결과 화면 E2E 표식·표(11-05)", () => {
     expect(has("screens/ResultScreen.tsx", "data-result-panel")).toBe(true);
     expect(has("screens/ResultScreen.tsx", "data-result-announce")).toBe(true);
     expect(has("world/testHooks.ts", "__mfResult")).toBe(true);
+    // 11-07: 탭 패널 표식과 훅의 현재 탭
+    expect(has("components/v2/ResultPanel.tsx", "data-result-tab")).toBe(true);
+    expect(has("components/v2/ResultPanel.tsx", "data-result-dot")).toBe(true);
+    expect(has("components/v2/ResultPanel.tsx", "data-result-divider")).toBe(true);
+    expect(has("screens/ResultScreen.tsx", "patch({ tab })")).toBe(true);
+    expect(has("world/testHooks.ts", "tab: string")).toBe(true);
+  });
+
+  it("탭 id 와 접근성 이름·구분선 꼴이 앱 상수와 같다 (11-07, E2E 사본이 어긋나지 않게)", () => {
+    expect([...(r as unknown as { RESULT_TAB_IDS: readonly string[] }).RESULT_TAB_IDS]).toEqual([...RESULT_TABS]);
+    expect(RESULT_PANEL_TEXT.tabName.mafia).toBe("마피아 밤 대화");
   });
 
   it("직업 의상 표·승리 한 줄·패널 높이가 앱 상수와 같다 (E2E 사본이 어긋나지 않게)", () => {
