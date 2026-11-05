@@ -1,7 +1,7 @@
 // 결과 화면 E2E 순수 판정 단위 테스트 (11-05). 실행: node --test scripts/e2e/result.test.mjs
 import test from "node:test";
 import assert from "node:assert/strict";
-import { awardChecks, AWARD_PLATE, RESULT_JOB_OUTFIT, RESULT_MARKERS, RESULT_PANEL_H, RESULT_WIN_TITLE, RESULT_TAB_IDS, resultSkipChecks, resultStageChecks, resultTabChecks } from "./result.mjs";
+import { awardChecks, AWARD_PLATE, RESULT_JOB_OUTFIT, RESULT_MARKERS, RESULT_PANEL_H, RESULT_WIN_TITLE, RESULT_TAB_IDS, resultSkipChecks, resultStageChecks, resultTabChecks, TIMELINE_CARD, timelineChecks } from "./result.mjs";
 
 // 4명판 시민 승: 좌석 0 마피아(진 팀) · 1 시민 · 2 경찰 · 3 의사
 const good = () => ({
@@ -341,4 +341,104 @@ test("RS4 afterCeremony(11-09): 시상식 뒤에는 직업 의상이 모두 걷�
   assert.deepEqual(failing({ afterCeremony: true }), ["RS4"]); // good() 의 costumes 는 아직 직업 의상
   assert.deepEqual(failing({ afterCeremony: true, costumes: { 0: "mafia" } }), ["RS4"]);
   assert.equal(failing({}).includes("RS4"), false);
+});
+
+// ---- 11-11 기록 탭(일차 카드 띠·하루 상세) ----
+// 2일차 판, 390×844 (방 844 → 확장 패널 min(round(0.7 × 844), 520) = 520). 카드 72×112, 간격 8, 1일차 선택, 상세는 패널 안에서 스크롤.
+const tlGood = () => ({
+  roomH: 844,
+  dayCount: 2,
+  panel: { top: 324, bottom: 844, height: 520 },
+  cards: [
+    { n: 1, left: 16, top: 392, width: 72, height: 112, pressed: true },
+    { n: 2, left: 96, top: 392, width: 72, height: 112, pressed: false },
+  ],
+  scrollLeft: 0,
+  detailText: "1 4 2 2",
+  detailBox: { top: 520, bottom: 822, overflowY: "auto" },
+  chips: [{ n: 1, role: "citizen" }],
+  executed: [{ n: 1, seat: 4 }],
+  jobBySeat: { 0: "mafia", 1: "mafia", 2: "police", 3: "doctor", 4: "citizen", 5: "citizen" },
+  switched: { cards: 2, target: 2, before: "1", after: "2" },
+});
+const tlFailing = (over) => timelineChecks({ ...tlGood(), ...over }).filter((r) => !r.ok).map((r) => r.id);
+
+test("TIMELINE_CARD 상수: 카드 72×112, 간격 8", () => {
+  assert.deepEqual({ ...TIMELINE_CARD }, { w: 72, h: 112, gap: 8 });
+});
+
+test("timelineChecks: 정상 입력은 TL1~TL7 이 모두 통과한다", () => {
+  const rows = timelineChecks(tlGood());
+  assert.deepEqual(rows.map((r) => r.id), ["TL1", "TL2", "TL3", "TL4", "TL5", "TL6", "TL7"]);
+  for (const r of rows) assert.equal(r.ok, true, `${r.id}: ${r.detail}`);
+});
+
+test("TL1: 카드 수가 일차 수와 다르거나 0 장이면 TL1 만 실패한다", () => {
+  assert.deepEqual(tlFailing({ dayCount: 3 }), ["TL1"]);
+  assert.deepEqual(tlFailing({ cards: [], dayCount: 0 }).includes("TL1"), true);
+});
+
+test("TL2: 카드 72×112 ±2, 사이 간격 8 ±2 — 한 값씩 어긋나면 TL2 만 실패한다", () => {
+  const c = tlGood().cards;
+  assert.deepEqual(tlFailing({ cards: [{ ...c[0], width: 64 }, c[1]] }), ["TL2"]);
+  assert.deepEqual(tlFailing({ cards: [c[0], { ...c[1], height: 100 }] }), ["TL2"]);
+  assert.deepEqual(tlFailing({ cards: [c[0], { ...c[1], left: 110 }] }), ["TL2"]); // 간격 22
+  assert.deepEqual(tlFailing({ cards: [{ ...c[0], width: 74 }, { ...c[1], left: 98 }] }), []); // ±2
+});
+
+test("TL2: 카드가 한 장이면 간격 검사는 건너뛰고 크기만 본다", () => {
+  const one = { dayCount: 1, cards: [tlGood().cards[0]], switched: { cards: 1, target: 1, before: "1", after: "1" } };
+  assert.deepEqual(tlFailing(one), []);
+  assert.deepEqual(tlFailing({ ...one, cards: [{ ...one.cards[0], height: 90 }] }), ["TL2"]);
+});
+
+test("TL3: 첫 카드만 눌린 상태이고 scrollLeft 0 이다 — 아니면 TL3 만 실패한다", () => {
+  const c = tlGood().cards;
+  assert.deepEqual(tlFailing({ cards: [{ ...c[0], pressed: false }, c[1]] }), ["TL3"]);
+  assert.deepEqual(tlFailing({ cards: [c[0], { ...c[1], pressed: true }] }), ["TL3"]);
+  assert.deepEqual(tlFailing({ scrollLeft: 80 }), ["TL3"]);
+});
+
+test("TL4: 상세 글자에서 숫자·공백을 지우면 빈 문자열이어야 한다 (문장이 있으면 TL4 만 실패)", () => {
+  assert.deepEqual(tlFailing({ detailText: "1 4 표" }), ["TL4"]);
+  assert.deepEqual(tlFailing({ detailText: "지우" }), ["TL4"]);
+  assert.deepEqual(tlFailing({ detailText: "" }), []); // 줄이 없는 날은 빈 상세
+  assert.deepEqual(tlFailing({ detailText: undefined }).includes("TL4"), true); // 측정값 없음
+});
+
+test("TL5: 처형된 날 카드의 칩 직업이 결과의 진짜 직업과 같아야 한다", () => {
+  assert.deepEqual(tlFailing({ chips: [{ n: 1, role: "mafia" }] }), ["TL5"]);
+  assert.deepEqual(tlFailing({ chips: [] }), ["TL5"]); // 처형된 날인데 칩이 없음
+  assert.deepEqual(tlFailing({ executed: [], chips: [] }), []); // 처형이 없으면 칩도 없다
+  assert.deepEqual(tlFailing({ executed: [], chips: [{ n: 1, role: "citizen" }] }), ["TL5"]); // 처형이 없는데 칩이 있음
+});
+
+test("TL6: 확장 패널 높이 min(round(0.7 × 방), 520) ±2, 상세가 패널 안에 있고 스크롤 가능", () => {
+  assert.deepEqual(tlFailing({ panel: { top: 324, bottom: 844, height: 480 } }), ["TL6"]);
+  assert.deepEqual(tlFailing({ detailBox: { top: 520, bottom: 900, overflowY: "auto" } }), ["TL6"]); // 패널 밖
+  assert.deepEqual(tlFailing({ detailBox: { top: 520, bottom: 822, overflowY: "visible" } }), ["TL6"]); // 스크롤 불가
+  // 작은 폰: 방 560 → round(392) = 392
+  assert.deepEqual(tlFailing({ roomH: 560, panel: { top: 168, bottom: 560, height: 392 }, detailBox: { top: 330, bottom: 548, overflowY: "auto" } }), []);
+  assert.deepEqual(tlFailing({ roomH: 560, panel: { top: 168, bottom: 560, height: 520 } }), ["TL6"]);
+});
+
+test("TL7: 다른 카드를 누르면 상세의 일차가 바뀐다 (한 장이면 그대로 유지)", () => {
+  assert.deepEqual(tlFailing({ switched: { cards: 2, target: 2, before: "1", after: "1" } }), ["TL7"]);
+  assert.deepEqual(tlFailing({ switched: { cards: 2, target: 2, before: "1", after: "3" } }), ["TL7"]);
+  assert.deepEqual(tlFailing({ switched: { cards: 1, target: 1, before: "1", after: "1" }, dayCount: 1, cards: [tlGood().cards[0]] }), []);
+  assert.deepEqual(tlFailing({ switched: { cards: 1, target: 1, before: "1", after: "2" }, dayCount: 1, cards: [tlGood().cards[0]] }), ["TL7"]);
+});
+
+test("timelineChecks: 측정값이 없으면 조용히 통과하지 않고 측정값 없음으로 실패한다", () => {
+  const rows = timelineChecks({});
+  assert.equal(rows.length, 7);
+  for (const r of rows) {
+    assert.equal(r.ok, false, r.id);
+    assert.match(r.detail, /측정값 없음/, r.id);
+  }
+  assert.match(timelineChecks(undefined)[0].detail, /측정값 없음/);
+});
+
+test("RESULT_MARKERS: 기록 탭 표식 3개가 더해져 있다 (11-11)", () => {
+  for (const m of ["data-day-card", "data-day-detail", "data-whisper-pair"]) assert.equal(RESULT_MARKERS.includes(m), true, m);
 });
