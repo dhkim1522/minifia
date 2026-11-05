@@ -356,6 +356,32 @@ describe("WorldStage: 틀과 접근 가능한 장면 설명 (MAP-01)", () => {
   });
 });
 
+describe("WorldStage: 방의 맵 id 가 렌더러 장면을 고른다 (MAP-06, D-22)", () => {
+  it("view.map 이 plaza 면 렌더러를 mapId plaza 로 만든다", async () => {
+    const s = await open({ view: { ...makeView(TWO, 0), map: "plaza" } });
+    expect(s.world.createThreeRenderer).toHaveBeenCalledTimes(1);
+    expect(s.world.createThreeRenderer).toHaveBeenCalledWith(expect.objectContaining({ mapId: "plaza" }));
+  });
+
+  it("로비(view.map 없음)와 bar 는 mapId bar 로 만든다", async () => {
+    const lobby = await open();
+    expect(lobby.world.createThreeRenderer).toHaveBeenCalledWith(expect.objectContaining({ mapId: "bar" }));
+    cleanup();
+    const bar = await open({ view: { ...makeView(TWO, 0), map: "bar" } });
+    expect(bar.world.createThreeRenderer).toHaveBeenCalledWith(expect.objectContaining({ mapId: "bar" }));
+  });
+
+  it("맵 id 가 바뀌면 새 런타임이 새 렌더러를 만든다(한 렌더러에서 맵을 갈아 끼우지 않는다)", async () => {
+    const s = await open();
+    expect(s.world.createThreeRenderer).toHaveBeenCalledTimes(1);
+    s.rerender({ view: { ...makeView(TWO, 0), map: "plaza" } });
+    await flush();
+    expect(s.world.createThreeRenderer).toHaveBeenCalledTimes(2);
+    expect(s.world.createThreeRenderer).toHaveBeenLastCalledWith(expect.objectContaining({ mapId: "plaza" }));
+    expect(s.world.renderers[0]!.disposed).toBeGreaterThan(0);
+  });
+});
+
 describe("WorldStage: 탭 → move (MAP-02)", () => {
   it("바닥을 한 번 누르면 move {x,z} 정수 한 번만 나가고 링이 바로 뜬다", async () => {
     const s = await open();
