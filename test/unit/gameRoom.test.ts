@@ -21,6 +21,7 @@ import type { PhaseId } from "../../shared/protocol";
 import { ROLE_IDS, ROLE_TABLE } from "../../shared/game/roles";
 import type { RoleId } from "../../shared/game/roles";
 import { seededRandInt } from "../helpers/seededRandom";
+import { onlyBar } from "../helpers/playable";
 import { buildView } from "../../shared/game/view";
 import { nicknameKey, validateNickname } from "../../shared/nickname";
 
@@ -613,7 +614,14 @@ describe("startGame (ROLE-01, ROOM-03, 결정 0012)", () => {
       calls.push(n);
       return 0;
     };
-    const r = startGame(base, "s0", 0, spy);
+    // 광장이 열리면 랜덤 맵 결정이 난수를 한 번 더 쓴다(11-13) — 이 시험은 역할 배정만 보므로 맵을 바 하나로 잠근다
+    const restore = onlyBar();
+    let r: ReturnType<typeof startGame>;
+    try {
+      r = startGame(base, "s0", 0, spy);
+    } finally {
+      restore();
+    }
     expect(r.ok).toBe(true);
     expect(calls.length).toBe(3);
     // randInt 가 항상 0 이면 풀의 순서가 결정적이다 — 입력이 seat 오름차순(s0,s1,s3,s5)일 때만 이 배정이 나온다

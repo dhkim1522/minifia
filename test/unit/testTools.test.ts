@@ -293,7 +293,7 @@ describe("resetToLobby", () => {
 
   it("mapChoice 는 남기고 map(서버 결정값)은 버린다 (11-06, D-20·D-21)", () => {
     const before = { ...dayTwoNight(), mapChoice: "bar" as const };
-    expect(before.map).toBe("bar"); // startGame 이 정한 값이 실제로 있다
+    expect(before.map === "bar" || before.map === "plaza").toBe(true); // startGame 이 정한 값이 실제로 있다(광장이 열린 뒤엔 랜덤이 둘 중 하나)
     const r = resetToLobby(before, before.hostId);
     if (!r.ok) throw new Error(`resetToLobby failed: ${r.error}`);
     expect(r.state.mapChoice).toBe("bar");
