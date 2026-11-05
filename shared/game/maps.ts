@@ -15,8 +15,8 @@ export function mapOf(id: MapId): MapDef {
 }
 
 /**
- * 지금 게임에서 고를 수 있는(그리고 random 이 뽑을 수 있는) 맵. 광장 장면(11-10)과 선택 화면(11-13)이 끝나면 11-13 이 ["bar", "plaza"] 로 바꾼다 —
- * 그 전에는 random 이 늘 bar 이고 mapPick plaza 는 거절된다(T-11-21). 한 곳에서 광장 노출을 잠근다.
+ * 지금 게임에서 고를 수 있는(그리고 random 이 뽑을 수 있는) 맵. 11-13 에서 선택 화면 E2E(map-select)가 통과한 뒤 광장을 열었다.
+ * 한 곳에서 광장 노출을 잠근다 — 광장이 불안하면 ["bar"] 한 줄로 되돌린다(칩·시트 탭은 둘 이상일 때만 그려진다).
  */
 export const PLAYABLE_MAPS: readonly MapId[] = ["bar", "plaza"];
 
