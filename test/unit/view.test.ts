@@ -194,7 +194,7 @@ function roleValueLeaks(view: RoomView, spectator = false): string[] {
 
 /** view 최상위에 올 수 있는 키(허용 목록). */
 const TOP_KEYS: ReadonlySet<string> = new Set([
-  "code", "phase", "round", "phaseEndsAt", "phaseDurationMs", "serverNow", "minPlayers", "maxPlayers", "players", "me", "day", "spectate", "result",
+  "code", "phase", "round", "phaseEndsAt", "phaseDurationMs", "serverNow", "minPlayers", "maxPlayers", "players", "me", "day", "spectate", "result", "mapChoice", "map",
 ]);
 
 /** 그 밤에 살아 있는 각 역할이 지금 고른 대상 seat(중복 없음·오름차순). */
@@ -2062,5 +2062,31 @@ describe("판 번호 view.round (11-01, D-5·D-26)", () => {
     const second: RoomState = { ...s, round: 2 };
     expect(roundOf(second)).toBe(2);
     expect(buildView(second, second.players[0]!.id, 0).round).toBe(2);
+  });
+});
+
+describe("맵 view.mapChoice·view.map (11-06, D-20·D-21, L42)", () => {
+  it("mapChoice 는 모든 단계의 모든 view 에 실리고 기본은 random 이다 — 역할과 무관하다", () => {
+    const states: RoomState[] = [lobbyOf(6), ...(["roleReveal", "discussion", "night", "morning"] as const).map((phase) => startedAt(6, 3, phase))];
+    for (const s of states) {
+      const set = new Set(s.players.map((p) => buildView(s, p.id, 0).mapChoice));
+      expect(`${s.phase}:${[...set].join(",")}`).toBe(`${s.phase}:random`);
+    }
+    const chosen: RoomState = { ...lobbyOf(5), mapChoice: "bar" };
+    expect(chosen.players.every((p) => buildView(chosen, p.id, 0).mapChoice === "bar")).toBe(true);
+  });
+
+  it("map 은 시작 전(lobby) view 에 키가 없다 — 상태에 map 이 남아 있어도", () => {
+    const lobby = { ...lobbyOf(5), map: "plaza" as const };
+    for (const p of lobby.players) expect("map" in buildView(lobby, p.id, 0)).toBe(false);
+  });
+
+  it("시작 뒤에는 모든 참가자의 view.map 이 같다 (역할·생사와 무관)", () => {
+    for (const phase of ["roleReveal", "discussion", "night", "morning"] as const) {
+      const s = startedAt(6, 3, phase);
+      const withMap: RoomState = { ...s, map: "plaza" };
+      const set = new Set(withMap.players.map((p) => buildView(withMap, p.id, 0).map));
+      expect(`${phase}:${[...set].join(",")}`).toBe(`${phase}:plaza`);
+    }
   });
 });

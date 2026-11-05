@@ -279,6 +279,19 @@ describe("resetToLobby", () => {
     expect(String(r.state.testRole)).toBe("mafia");
   });
 
+  it("mapChoice 는 남기고 map(서버 결정값)은 버린다 (11-06, D-20·D-21)", () => {
+    const before = { ...dayTwoNight(), mapChoice: "bar" as const };
+    expect(before.map).toBe("bar"); // startGame 이 정한 값이 실제로 있다
+    const r = resetToLobby(before, before.hostId);
+    if (!r.ok) throw new Error(`resetToLobby failed: ${r.error}`);
+    expect(r.state.mapChoice).toBe("bar");
+    expect(Object.hasOwn(r.state, "map")).toBe(false);
+    const { mapChoice: _c, ...none } = before;
+    const r2 = resetToLobby(none, none.hostId);
+    if (!r2.ok) throw new Error(`resetToLobby failed: ${r2.error}`);
+    expect(Object.hasOwn(r2.state, "mapChoice")).toBe(false);
+  });
+
   it("testRole 이 없으면 testRole 키도 없다", () => {
     const { testRole: _dropped, ...before } = dayTwoNight();
     const r = resetToLobby(before, before.hostId);

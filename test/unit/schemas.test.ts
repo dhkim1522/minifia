@@ -142,6 +142,22 @@ describe("ClientMessageSchema dress (10-02, D-6)", () => {
   });
 });
 
+// 11-06: 맵 선택(결정 D-20) — 값은 bar|plaza|random enum 뿐이다. 신원은 소켓 첨부 playerId.
+describe("ClientMessageSchema mapPick (11-06, D-20)", () => {
+  it.each(["bar", "plaza", "random"])("mapPick %s 는 받는다", (map) => {
+    expect(ClientMessageSchema.safeParse({ t: "mapPick", map }).success).toBe(true);
+  });
+  it.each([
+    ["덧붙은 키", { t: "mapPick", map: "bar", seat: 1 }],
+    ["알 수 없는 값", { t: "mapPick", map: "forest" }],
+    ["map 없음", { t: "mapPick" }],
+    ["null", { t: "mapPick", map: null }],
+    ["대문자", { t: "mapPick", map: "Bar" }],
+  ])("mapPick 거부: %s", (_name, msg) => {
+    expect(ClientMessageSchema.safeParse(msg).success).toBe(false);
+  });
+});
+
 // 09.1.1-02: 귓속말(결정 0066-2) — 대상 좌석(0..7 정수)과 본문(1..200 UTF-16)뿐이고 덧붙은 키는 거부한다. 신원은 소켓 첨부 playerId.
 describe("ClientMessageSchema whisper (09.1.1-02, 결정 0066-2)", () => {
   it.each([
