@@ -467,6 +467,7 @@ export function makePoliticsFlows(h) {
   /** 귓속말 시트 맞음(SF1~SF6) 입력. 키보드가 올라와 패널이 가려졌으면 panel 을 null 로, 보이는 영역(vv)을 화면으로 쓴다 */
   const lineSheetInput = (p, { keyboard = false } = {}) => ({
     kind: "whisper",
+    notice: true, // 11-07: 귓속말 시트는 열려 있는 동안 위에 공개 예고 한 줄이 있다
     sheet: p.lineSheet?.rect,
     header: p.header,
     viewport: keyboard ? { w: p.vw, h: p.vv.h + p.vv.top } : { w: p.vw, h: p.vh },

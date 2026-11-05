@@ -378,6 +378,8 @@ export const FLOAT_MARGIN = 16;
 export const FLOAT_GAP = 8;
 /** 귓속말 한 줄 시트 높이: 12 + 44 + 8 + 48 + 12 (테두리 1px 두 줄은 허용 오차 ±2 안) */
 export const WHISPER_SHEET_H = 124;
+/** 귓속말 시트 위 공개 예고 한 줄(11-07, A-4): 14px × 줄간격 1.4 = 19.6 에 시트 안 간격 8 (notice: true 일 때 기대 높이에 더한다) */
+export const WHISPER_NOTICE_H = 27.6;
 /** 이름표 모서리 배지 지름 */
 export const CLAIM_BADGE_SIZE = 20;
 /** 배지 안 직업 아이콘 크기 */
@@ -428,15 +430,15 @@ export const SHEET_FONT_MIN = 14;
  * panel = { top } 이거나 null(패널이 가려졌거나 키보드가 올라와 시트만 키보드 위에 붙은 경우 — 그때는 viewport 아래가 기준), kind = "whisper" | "badge",
  * targets = 누르기 대상 사각형들(칩·보내기·닫기), fontMin = 시트 안 글자 크기 최소(px), chipRows·hint = badge 높이 계산 재료.
  * SF1 윗변 ≥ 헤더 아랫변 · SF2 화면 안 · SF3 아랫변 ≤ 패널 윗변(없으면 viewport 아래) · SF4 대상 각각 44×44 이상 · SF5 글자 14px 이상 ·
- * SF6 높이: whisper 124±2, badge = 12 + 44 + 8 + (칩 줄 × 44 + 줄 사이 8) + (안내 있으면 8 + 20) + 12 에 테두리 2 를 더한 값 −2~+6 안.
+ * SF6 높이: whisper 124±2(notice 이면 공개 예고 한 줄 27.6 을 더함), badge = 12 + 44 + 8 + (칩 줄 × 44 + 줄 사이 8) + (안내 있으면 8 + 20) + 12 에 테두리 2 를 더한 값 −2~+6 안.
  */
-export function sheetFitChecks({ sheet, header, viewport, panel, kind, targets, fontMin, chipRows, hint } = {}) {
+export function sheetFitChecks({ sheet, header, viewport, panel, kind, targets, fontMin, chipRows, hint, notice = false } = {}) {
   const L1 = "시트가 헤더 아래에 있음";
   const L2 = "시트가 화면 안";
   const L3 = "시트 아랫변이 패널 윗변(또는 보이는 영역 아래) 이내";
   const L4 = `시트의 누르기 대상이 각각 ${TAP_MIN}×${TAP_MIN} 이상`;
   const L5 = `시트 글자가 ${SHEET_FONT_MIN}px 이상`;
-  const L6 = kind === "whisper" ? `귓속말 시트 높이 ${WHISPER_SHEET_H}±2` : "배지 시트 높이(칩 줄 수·안내에 맞음)";
+  const L6 = kind === "whisper" ? (notice ? `귓속말 시트 높이 ${WHISPER_SHEET_H}+예고 ${WHISPER_NOTICE_H}±2` : `귓속말 시트 높이 ${WHISPER_SHEET_H}±2`) : "배지 시트 높이(칩 줄 수·안내에 맞음)";
   if (!sheet || !allNum(sheet.left, sheet.top, sheet.width, sheet.height) || !viewport || !allNum(viewport.w, viewport.h)) {
     return [noMeasure("SF1", L1, "sheet"), noMeasure("SF2", L2, "sheet"), noMeasure("SF3", L3, "sheet"), noMeasure("SF4", L4, "sheet"), noMeasure("SF5", L5, "sheet"), noMeasure("SF6", L6, "sheet")];
   }
@@ -454,7 +456,7 @@ export function sheetFitChecks({ sheet, header, viewport, panel, kind, targets, 
   else out.push(result("SF4", L4, targets.filter((t) => t.width + OVERLAP_EPS < TAP_MIN || t.height + OVERLAP_EPS < TAP_MIN).map((t) => `${fmt(t.width)}x${fmt(t.height)}`)));
   out.push(isNum(fontMin) ? result("SF5", L5, fontMin + 0.01 >= SHEET_FONT_MIN ? [] : [`${fmt(fontMin)}px`]) : noMeasure("SF5", L5, "fontMin"));
   if (kind === "whisper") {
-    out.push(result("SF6", L6, Math.abs(sheet.height - WHISPER_SHEET_H) <= 2.01 ? [] : [`높이 ${fmt(sheet.height)}`]));
+    out.push(result("SF6", L6, Math.abs(sheet.height - WHISPER_SHEET_H - (notice ? WHISPER_NOTICE_H : 0)) <= 2.01 ? [] : [`높이 ${fmt(sheet.height)}`]));
   } else if (kind === "badge") {
     if (![1, 2, 3].includes(chipRows) || typeof hint !== "boolean") out.push(noMeasure("SF6", L6, "chipRows·hint"));
     else {

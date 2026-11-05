@@ -131,6 +131,7 @@ import {
   FLOAT_MARGIN,
   FLOAT_GAP,
   WHISPER_SHEET_H,
+  WHISPER_NOTICE_H,
   CLAIM_BADGE_SIZE,
   CLAIM_SWAP_SIZE,
   floatButtonChecks,
@@ -2202,6 +2203,21 @@ test("sheetFitChecks(whisper): 정상 값은 SF1~SF5 와 높이 SF6 모두 통�
   const lines = sheetFitChecks(whisperGood());
   assert.deepEqual(okOf(lines), { SF1: true, SF2: true, SF3: true, SF4: true, SF5: true, SF6: true });
   for (const l of lines) assert.deepEqual(Object.keys(l).sort(), ["detail", "id", "label", "ok"]);
+});
+
+test("sheetFitChecks(whisper): 공개 예고 한 줄(notice)이 있으면 기대 높이에 27.6 을 더하고 문턱 ±2 는 그대로다 (11-07)", () => {
+  assert.equal(WHISPER_NOTICE_H, 27.6);
+  const w = whisperGood();
+  w.notice = true;
+  w.sheet = rect(10, 538, 370, 153.6); // 126 + 27.6
+  assert.equal(okOf(sheetFitChecks(w)).SF6, true);
+  const plain = whisperGood();
+  plain.sheet = rect(10, 538, 370, 153.6);
+  onlyFail(sheetFitChecks(plain), "SF6"); // 예고 없이 153.6 이면 실패(문턱은 낮추지 않았다)
+  const wrong = whisperGood();
+  wrong.notice = true;
+  wrong.sheet = rect(10, 538, 370, 160);
+  onlyFail(sheetFitChecks(wrong), "SF6");
 });
 
 test("sheetFitChecks SF1·SF2: 헤더에 걸치거나 화면 밖이면 실패", () => {
