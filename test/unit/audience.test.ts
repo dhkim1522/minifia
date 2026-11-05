@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { CHAT_PHASES, audience, channelOf, phaseKey, worldVisibleTo } from "../../shared/game/audience";
 import type { AudienceEvent } from "../../shared/game/audience";
-import { attachConnection, createRoomState, joinRoom, startGame } from "../../shared/game/room";
+import { attachConnection, createRoomState, joinRoom, roundOf, startGame } from "../../shared/game/room";
 import type { Player, RoomState } from "../../shared/game/room";
 import type { RoleId } from "../../shared/game/roles";
 import { tick } from "../../shared/game/tick";
@@ -242,9 +242,15 @@ describe("CHAT_PHASES", () => {
 });
 
 describe("phaseKey — 단계 한 번(instance)마다 유일한 키", () => {
-  it("'일차:단계' 이고 일차가 없으면 0", () => {
-    expect(phaseKey({ phase: "night", day: 2 })).toBe("2:night");
-    expect(phaseKey({ phase: "lobby" })).toBe("0:lobby");
+  it("'판:일차:단계' 이고 판이 없으면 1, 일차가 없으면 0 (D-26)", () => {
+    expect(phaseKey({ phase: "night", day: 2 })).toBe("1:2:night");
+    expect(phaseKey({ phase: "lobby" })).toBe("1:0:lobby");
+    expect(phaseKey({ phase: "night", day: 3, round: 2 })).toBe("2:3:night");
+    expect(phaseKey({ phase: "lobby", round: undefined })).toBe("1:0:lobby");
+  });
+
+  it("같은 일차·단계도 판 번호가 다르면 키가 다르다 (L41)", () => {
+    expect(phaseKey({ phase: "night", day: 1, round: 1 })).not.toBe(phaseKey({ phase: "night", day: 1, round: 2 }));
   });
 
   it("같은 일차의 night·morning, 다음 일차 dayAnnounce 가 모두 다르다", () => {
@@ -265,8 +271,8 @@ describe("phaseKey — 단계 한 번(instance)마다 유일한 키", () => {
     const seen = new Set<PhaseId>();
     const check = (s: RoomState): void => {
       const view = buildView(s, s.players[0]!.id, 0);
-      const client = phaseKey({ phase: view.phase, day: view.day?.n });
-      expect(client).toBe(phaseKey({ phase: s.phase, day: s.day }));
+      const client = phaseKey({ phase: view.phase, day: view.day?.n, round: view.round });
+      expect(client).toBe(phaseKey({ phase: s.phase, day: s.day, round: roundOf(s) }));
       seen.add(s.phase);
     };
     check(lobby);

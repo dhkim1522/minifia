@@ -4,7 +4,7 @@ import { channelOf } from "../../shared/game/audience";
 import { pickTarget } from "../../shared/game/night";
 import { castTurnPoint, enterNomination, nominationStepMs, stepNomination, turnViewOf } from "../../shared/game/nomination";
 import { DISCUSSION_MS, MORNING_MS, NIGHT_MS, NOMINATION_GATHER_MS, PHASE_DEFS, nominationMaxMs } from "../../shared/game/phases";
-import { ROOM_TTL_MS, attachConnection, createRoomState, joinRoom, startGame } from "../../shared/game/room";
+import { ROOM_TTL_MS, attachConnection, createRoomState, joinRoom, roundOf, startGame } from "../../shared/game/room";
 import type { Player, RoomState } from "../../shared/game/room";
 import { rolesInPlay } from "../../shared/game/roles";
 import { tick } from "../../shared/game/tick";
@@ -1997,5 +1997,23 @@ describe("의상 값(직업과 같은 단어)은 players[].look 에서만 허용
     expect(roleValueLeaks(view).filter((l) => l.startsWith("players[]"))).toEqual([]);
     const planted = { ...view, players: view.players.map((r) => (r.seat === 2 ? { ...r, nickname: "mafia" } : r)) };
     expect(roleValueLeaks(planted).join(",")).toContain("players[].nickname=mafia");
+  });
+});
+
+describe("판 번호 view.round (11-01, D-5·D-26)", () => {
+  it("모든 단계의 모든 view 에 숫자로 실리고 첫 판은 1 이다 — 역할과 무관하다", () => {
+    for (const phase of PHASES) {
+      const s = startedAt(6, 3, phase);
+      const rounds = new Set(s.players.map((p) => buildView(s, p.id, 0).round));
+      expect(`${phase}:${[...rounds].join(",")}`).toBe(`${phase}:1`);
+    }
+  });
+
+  it("RoomState.round 가 2 면 view.round 도 2 이고, 옛 저장 방(round 없음)은 1 로 읽는다", () => {
+    const s = startedAt(6, 3, "discussion");
+    expect(roundOf(s)).toBe(1);
+    const second: RoomState = { ...s, round: 2 };
+    expect(roundOf(second)).toBe(2);
+    expect(buildView(second, second.players[0]!.id, 0).round).toBe(2);
   });
 });

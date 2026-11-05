@@ -840,7 +840,7 @@ describe("봇 투표·변론 계획: defense", () => {
       expect(`${seed}:${BOT_DEFENSE_LINES.includes(step.act.text)}`).toBe(`${seed}:true`);
       const clean = sanitizeChatText(step.act.text);
       expect(`${seed}:${clean.ok && clean.text === step.act.text}:${channelOf(state, step.botId)}`).toBe(`${seed}:true:all`);
-      expect(phaseKey(state)).toBe(`${state.day ?? 0}:defense`);
+      expect(phaseKey(state)).toBe(`1:${state.day ?? 0}:defense`);
     }
   });
 
