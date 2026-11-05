@@ -125,6 +125,23 @@ describe("ClientMessageSchema badge (09.1.1-01, 결정 0066-1)", () => {
   });
 });
 
+// 10-02: 의상(결정 D-6) — 값은 의상 id 아홉 개뿐이고 덧붙은 키·모르는 값·look 없음은 거부한다. 신원은 소켓 첨부 playerId 라 seat 를 받지 않는다.
+describe("ClientMessageSchema dress (10-02, D-6)", () => {
+  it.each(["coat", "police", "doctor", "mafia", "detective", "reporter", "elder", "hood", "noir"])("dress %s 는 받는다", (look) => {
+    expect(ClientMessageSchema.safeParse({ t: "dress", look }).success).toBe(true);
+  });
+  it.each([
+    ["덧붙은 키", { t: "dress", look: "mafia", seat: 2 }],
+    ["알 수 없는 값", { t: "dress", look: "wizard" }],
+    ["look 없음", { t: "dress" }],
+    ["null", { t: "dress", look: null }],
+    ["대문자", { t: "dress", look: "Mafia" }],
+    ["citizen(직업 이름은 의상 id 가 아니다)", { t: "dress", look: "citizen" }],
+  ])("dress 거부: %s", (_name, msg) => {
+    expect(ClientMessageSchema.safeParse(msg).success).toBe(false);
+  });
+});
+
 // 09.1.1-02: 귓속말(결정 0066-2) — 대상 좌석(0..7 정수)과 본문(1..200 UTF-16)뿐이고 덧붙은 키는 거부한다. 신원은 소켓 첨부 playerId.
 describe("ClientMessageSchema whisper (09.1.1-02, 결정 0066-2)", () => {
   it.each([
