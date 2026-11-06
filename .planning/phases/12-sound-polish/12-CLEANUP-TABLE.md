@@ -1,0 +1,35 @@
+# 12페이즈 삭제 표 (M-1 ~ M-6)
+
+작성 2026-11-06 · 기준 HEAD `17bfba32`(v2) · 계획 12-01.
+
+판정 규칙: 둘 다 참이어야 **삭제**다 — (a) 제품 코드(src·shared·worker) 안의 참조가 정의 자신과 그것만 검사하던 시험 밖에 0, (b) 지워도 화면 행동이 바뀌지 않는다 (D-24, D-25). 시험은 `skip` 으로 바꾸지 않는다. 누설 시험(`test/unit/leak.test.ts`·`test/worker/leak.test.ts`)과 그 허용 목록은 이 계획이 건드리지 않았다. 표에 없는 삭제는 하지 않는다.
+
+계획의 기준선(HEAD 8a6a939e)과 달라진 점: 11페이즈 뒤 줄 번호가 밀렸고(`leaderShift` 는 presence.ts 263행), M-3 의 `MorningView.phrase`·`MORNING_PHRASE_COUNT`·gallery.mjs v1.0 주소는 이미 없었다.
+
+| # | 대상 | 지금 있는가 | 참조 근거(명령 → 기준선 수) | 판정 | 이유 | 담당 |
+|---|------|-------------|------------------------------|------|------|------|
+| M-1a | `scripts/uat-vote.mjs` | 있었음 | `git grep -n uat-vote -- scripts docs/setup.md` → 3곳(deploy-target.test.mjs 이름 목록, smoke.mjs 주석, uat-day.mjs 주석) | 삭제 | 옛 15초 동시 지목 규칙(D-23). 새 규칙은 워커 시험·E2E politics-* 가 덮는다. 이름으로 부르던 곳은 함께 고쳤다 | 12-01 |
+| M-1b | `scripts/uat-night.mjs` | 있었음 | `git grep -n uat-night -- scripts docs/setup.md` → 3곳(deploy-target.test.mjs, uat-day.mjs 주석, docs/setup.md 10행) | 삭제 | 낡은 타이머·동률·allyPicks 단언(D-23). 밤은 워커 시험·E2E night 가 덮는다 | 12-01 |
+| M-1c | `scripts/uat-day.mjs` | 있었음 | 로컬 `node scripts/uat-day.mjs http://localhost:5173` → 종료 코드 1, 18/19 통과. 실패 1건: 「토론 끝내기 과반 → … 15초 지목 단계로 넘어감」(`phaseDurationMs === 15_000` 단언, 지금 지목은 순차 차례라 길이가 인원에 따라 다름) | 삭제 | 계획 규칙: 실패하면 삭제(D-23, O-15), 단언 값은 고치지 않는다. 낡은 숫자를 못 박은 단언 때문에 실패했고 자유 채팅 단언 18개는 통과했다 — 되살리려면 git 이력에서 꺼내 그 단언 하나를 순차 지목 기준으로 고치면 된다 | 12-01 |
+| M-1d | `scripts/uat-test-bots.mjs` | 있었음 | 로컬 실행 → 종료 코드 1, 47/52 통과. 실패: 「nomination: 10초 안에 봇 네 자리의 지목이 올랐다」 외 d 두 건 + e(채팅 프레임 키·봇 문구·players 키) 세 건 | 삭제 | 실패하면 삭제(D-23, O-15). 순차 지목(차례당 8초)과 어긋난 10초 가정이 원인이고 뒤따르는 e 단언이 함께 무너졌다. `test/unit/bots.test.ts` 의 BOT_NAMES 대조 단언 한 줄(이 파일의 목록을 읽던 것)도 함께 지웠다 | 12-01 |
+| M-1e | `scripts/uat-test-room.mjs` | 있음 | 로컬 실행 → 종료 코드 0, 28/28 통과 · `OK`. 머리 주석의 숫자는 90초·30초로 현행 상수(`shared/game/phases.ts` DISCUSSION_MS·NIGHT_MS)와 같아 고칠 곳 없음 | 유지 | 통과(D-23, O-15) | 12-01 |
+| M-2a | `leaderShift`(src/world/presence.ts 263행) | 있음 | `git grep -n leaderShift -- src` → 정의 1 + useDayFx.ts 호출 1(+주석). 시험: presence.test.ts `leaderShift` 묶음 7건, nominationScreen.test.tsx 「지목 화면 — 손사래」 3건 | 유지 | 지금 게임의 행동이다. 순차 지목에서도 `day.points` 줄이 확정될 때마다 하나씩 늘고(`shared/game/nomination.ts` pointLinesOf, 확정 때 `p.nominate` 기록) `pointsTally().leader` 가 비선두 → 선두로 바뀌면 non-null 을 낸다 | - |
+| M-2b | useDayFx 의 `deny` 갱신 배선(useDayFx.ts 135행) | 있음 | `git grep -n "deny" -- src/net/useDayFx.ts` → 상태·갱신·반환 | 유지 | leaderShift 의 소비처. M-2a 와 같은 이유 | - |
+| M-2c | RoomScreen(200·502행) → GameMap(135·665행) → WorldStage(76·256~262행) 의 `deny` 속성 | 있음 | `git grep -n "deny" -- src/screens src/components/WorldStage.tsx` | 유지 | 끊긴 곳 없음. WorldStage 가 nonce 가 바뀔 때만 `runtimeRef.deny(seat)` 호출 | - |
+| M-2d | `runtime.deny`(src/world/runtime.ts 1428행) | 있음 | 본문이 `playEmote("deny")` + `setFace("surprise")` 를 호출 | 유지 | 손사래가 화면에서 재생되는 끝점이다. 결정 0067 의 「지목 단계에서 더 쓰이지 않는다」 문구와 코드 사실이 다르다 — 손사래를 없애는 것은 행동 제거라 사용자 결정 | - |
+| M-2e | `pointsTally().leader` / `DayState.leader` | `leader` 있음, `DayState` 는 아래 M-2g | `git grep -n "\.leader" -- src` → SceneCurtain.tsx 38행(지목 종료 판정), presence.ts 265·267행 | 유지 | 제품 코드가 읽는다. `counts` 도 GameMap.tsx 492행(득표 배지)이 읽는다 | - |
+| M-2f | `PointsTally.sure`·`PointsTally.majority`(dayView.ts) | 있었음 | `git grep -n "\.sure\b\|tally\.majority\|\.majority" -- src` → 제품 읽는 곳 0(정의와 pointsTally 안 계산뿐). 읽던 시험: dayView.test.ts 3건 | 삭제 | (a) 참조 0 (b) 화면 행동 불변 — 과반 도장은 09.1 M-4 에서 이미 화면이 쓰지 않는다. 잎 필드부터 지웠고 그것만 검사하던 단언 3개를 함께 지웠다 | 12-01 |
+| M-2g | `DayEvents.state`·`DayState`·`stateOf`(dayView.ts) | 있었음 | `git grep -n "\.state\b" -- src/net src/screens src/game/willLetter.ts` + `stateOf\|DayState` → 제품에서 `events.state` 를 읽는 곳 0(useDayFx·useWillLetter 는 lines·fx·announces 만). 읽던 시험: dayView.test.ts 4곳 | 삭제 | (a) 참조 0 (b) 행동 불변. `state` 에만 담기던 candidate·executed 단언과 개인 값 비교 단언 한 줄을 함께 지웠다(역할 단어 누설 검사는 `text()` 비교가 그대로 한다) | 12-01 |
+| M-2h | `sure` 속성 → HeadStack(`data-sure`) → `SureStamp` | 있음 | `git grep -n "sure" -- src/screens/GameMap.tsx` → 421행(변론자 `sure: true`), 443~451행(밤 마피아 `me.nightSure`), HeadStack.tsx 79·101·114행 | 유지 | GameMap 이 HeadStack 에 넘긴다. M-2f 의 계산 필드와 다른 경로 | - |
+| M-3a | `src/styles/day.css`(`.mf-dayscene*` 11줄 포함 파일 전체) | 있었음 | `git grep -n "day.css" -- src` → import 0(파일 자신의 주석뿐). 배포 CSS(`dist/client/assets/*.css`)에서 `mf-seg__b`·`mf-claimpanel` 0건 = 번들에 한 번도 안 들어감. tsx·ts 의 `mf-dayscene` 0(TestTools.tsx 42행 주석 1) | 삭제 | 어디서도 불러오지 않는 파일이라 지워도 행동이 바뀔 수 없다. 같은 파일의 `.st-row`·`.mf-turnpanel`·`.mf-claimpanel`·`.mf-seg*` 도 함께 사라졌다 | 12-01 |
+| M-3b | night.css 의 `.mf-dayscene { position: relative }` 와 `.mf-sceneintro*`(14줄) + keyframes 3개 | 있었음 | `git grep -n -i "sceneintro\|dayscene" -- src test scripts` → tsx·ts·시험·스크립트 0(주석 몇 줄뿐). 배포 CSS 에는 들어 있었다(`mf-sceneintro` 19, `mf-dayscene` 1) | 삭제 | SceneIntro 부품이 사라져 클래스를 쓰는 요소가 없다. 규칙만 지웠고 다른 규칙이 쓰는 keyframes·변수는 없었다 | 12-01 |
+| M-3c | night.css 의 `.mf-morningcard*` 와 keyframes `mf-morning-pop/fade/out`(추가 행) | 있었음 | `git grep -n -i "morningcard\|mf-morning-" -- src test scripts` → night.css 밖 0(test/client/atmosphere.test.tsx 의 `.mf-morningglow` 는 다른 클래스). 부품 `MorningCard` 는 dayStaticGuard 의 금지 이름 | 삭제 | 앞 규칙 `.mf-dayscene` 가 이 카드의 기준 상자라 함께 죽은 v1.0 잔재. 참조 0(D-25의 「등」) | 12-01 |
+| M-3d | `MorningView.phrase` | 이미 없음 | `git grep -n "phrase" -- shared/protocol.ts src/game/dayView.ts` → 0 | 이미 없음 | - | - |
+| M-3e | `MORNING_PHRASE_COUNT` | 이미 없음 | `git grep -n MORNING_PHRASE_COUNT` → test/unit/dayStaticGuard.test.ts 76행(금지 이름 목록) 1곳뿐 | 이미 없음 | 그 목록은 가드라 지우지 않는다 | - |
+| M-3f | `VERDICT_TEXT`(`candidateNone`·`votedSuffix` 둘만 남은 묶음) | 있었음 | `git grep -n "candidateNone\|votedSuffix" -- src shared worker` → 정의 2줄뿐. RoomScreen.tsx 14행이 `VERDICT_TEXT` 를 import 만 하고 쓰지 않음(VerdictPicker.tsx 의 같은 이름은 자기 지역 상수) | 삭제 | 두 키가 전부라 묶음째 지웠다. RoomScreen 의 안 쓰는 import 와 verdict.test.ts 의 값·키 목록·UI-SPEC 대조 단언(`VERDICT_TEXT` 전용 3건)을 함께 지웠다 | 12-01 |
+| M-3g | scripts/gallery.mjs 의 v1.0 주소 | 이미 없음 | `git grep -n "workers.dev" -- scripts/gallery.mjs` → 0. `exitIfV1` 가드만 있음 | 이미 없음 | 가드는 deploy-target.test.mjs 가 요구해서 둔다 | - |
+| M-4 | worker `testTools` 'ended' 간헐 실패 | 있음(간헐) | HANDOFF 25행 후보. 이 계획은 고치지 않는다 | 위임 | - | 12-03 |
+| M-5 | `npm audit` 취약점 | 있음 | HANDOFF 기준 6건(three 무관). 이 계획은 패키지를 건드리지 않는다 | 위임 | - | 12-03 |
+| M-6 | 07-REVIEW 경고 3(WR-01·WR-02·GR-WR-01)·08-REVIEW Info 7 | 있음 | `.planning/phases/07-free-chat/07-REVIEW.md`(WR-01 192행, WR-02 218행), `.planning/phases/08-day-execution-ghost/08-REVIEW.md`. 이 계획은 고치지 않는다 | 위임 | - | 12-04 |
+
+집계: 삭제 10 · 유지 7 · 이미 없음 3 · 위임 3 (총 23행). 삭제 10 = 파일 5(uat-vote·uat-night·uat-day·uat-test-bots·day.css) + 정의 5(PointsTally.sure/majority, DayEvents.state/DayState/stateOf, night.css `.mf-dayscene`·`.mf-sceneintro*`, night.css `.mf-morningcard*`, VERDICT_TEXT). 실제 diff 의 삭제와 일대일이다.
