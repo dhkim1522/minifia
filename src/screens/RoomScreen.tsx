@@ -1,10 +1,13 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode, RefObject } from "react";
 import { isAlive } from "../../shared/game/alive";
 import { phaseKey } from "../../shared/game/audience";
 import type { PhaseId, RemovedReason, RoomView } from "../../shared/protocol";
+import { emitSignal } from "../audio/signals";
 import { useSound } from "../audio/useSound";
 import { nightDarkOf } from "../game/nightDark";
+import { LETTER_MS_PER_CHAR, LETTER_WRITE_MAX_MS, oneParagraph } from "../game/willLetter";
+import { countGraphemes } from "../../shared/nickname";
 import { Button } from "../components/Button";
 import { ReconnectBanner } from "../components/ReconnectBanner";
 import { RoleCardButton } from "../components/RoleCardButton";
@@ -224,7 +227,15 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
         }
         else if (e.t === "emote") store.applyEmote(e, meta.epoch); // 동작은 채팅 저장소로 보내지 않는다(10-03)
         else if (e.t === "resultLog") resultLog.apply(e, meta.epoch);
-        else if (e.t === "chat" || e.t === "typing" || e.t === "chatLog" || e.t === "chatReject") chat.apply(e, meta.epoch, Date.now());
+        else if (e.t === "chat" || e.t === "typing" || e.t === "chatLog" || e.t === "chatReject") {
+          chat.apply(e, meta.epoch, Date.now());
+          // 12-09: 방금 받은 라이브 유언·쪽지 카드가 화면에 보일 시각에 ui.card 한 번. 숫자(남은 ms)만 보낸다 — 카드 종류·글은 소리 쪽으로 가지 않는다(LS-5).
+          // ballots 카드·귓속말·재접속 복원 줄은 접근자가 null 이라 신호가 없다(찬반 카드는 12-10 의 판결 대본이 낸다).
+          if (e.t === "chat" && (e.k === "will" || e.k === "note")) {
+            const revealAt = chat.lastLiveCardRevealAt();
+            if (revealAt !== null) emitSignal({ kind: "card", delayMs: Math.max(0, revealAt - Date.now()) });
+          }
+        }
       }),
     [onEvent, store, chat, resultLog],
   );
@@ -259,7 +270,24 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
   // 12-09: 밤 큐의 갈림 불리언 하나. 시각 맥박(TensionVignette)이 실제로 큐를 내는 조건과 같은 식(GameMap 의 nightDark && !reducedMotion).
   // 소리 쪽에는 이 불리언만 간다 — 역할 값은 가지 않고, 두 갈래의 소리 id·큐 개수는 같다(LS-3).
   const visualCues = view !== null && nightDarkOf(view) && !reducedMotion;
-  const sound = useSound({ active: view !== null, hook: soundHook, view, epoch: connection.epoch, offset: connection.offset, visualCues });
+  // 개인 사건은 숫자만 넘긴다: 유언 편지(시작 t0 + 쓰는 길이), 경찰 카드 도착 번호, 암살 본인의 killFx. 편지 글·조사 결과·좌석은 가지 않는다.
+  const letterT0 = letter?.t0 ?? null;
+  const letterText = letter?.text ?? "";
+  const letterSound = useMemo(
+    () => (letterT0 === null ? null : { t0: letterT0, writeMs: Math.min(LETTER_WRITE_MAX_MS, LETTER_MS_PER_CHAR * countGraphemes(oneParagraph(letterText))) }),
+    [letterT0, letterText],
+  );
+  const sound = useSound({
+    active: view !== null,
+    hook: soundHook,
+    view,
+    epoch: connection.epoch,
+    offset: connection.offset,
+    visualCues,
+    kill: killFx,
+    letter: letterSound,
+    policeCard: policeResult?.id ?? null,
+  });
 
   // 대기실·배정 동안 직업 그림 4종 전부와 낮 배경을 미리 받아 둔다.
   // 어떤 역할인지와 무관하게 같은 요청 패턴이다(Pattern 13 ②, Pitfall 20).

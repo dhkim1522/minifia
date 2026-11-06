@@ -69,6 +69,8 @@ export class ChatStore {
   /** 라이브로 받은 귓속말 본문 줄 기록(복원 줄은 넣지 않는다). 받음 알림의 근거 — 최근 몇 개만 둔다 */
   private liveWhispers: { seat: number; to: number; nonce: number }[] = [];
   private whisperSeq = 0;
+  /** 가장 최근 apply 가 새로 넣은 라이브 유언·쪽지 카드 줄의 키(아니면 null). 소리의 카드 도착 신호가 이 줄의 공개 시각을 읽는다 */
+  private lastCardKey: string | null = null;
   private rev = 0;
   private views = new Map<ChatChannel, readonly ChatStoreLine[]>();
   private listeners = new Set<ChatStoreListener>();
@@ -76,6 +78,7 @@ export class ChatStore {
   /** 연결 epoch 와 함께 프레임을 적용한다. now 는 받은 시각(입력 중·막힘 알림의 만료 기준) */
   apply(frame: ChatStoreFrame, epoch: number, now: number): void {
     if (epoch < this.epoch) return;
+    this.lastCardKey = null;
     let changed = false;
     if (epoch > this.epoch) {
       this.epoch = epoch;
@@ -103,9 +106,11 @@ export class ChatStore {
             frame.k === "ballots"
               ? now + CARD_HOLD_BALLOTS_MS
               : Math.max(now + (this.ctx?.pk.endsWith(":execution") ? CARD_HOLD_EXEC_MS : CARD_HOLD_MS), this.holdFloor);
-          if (this.insertAll([cardLine(frame, frame.k, hold)])) {
+          const card = cardLine(frame, frame.k, hold);
+          if (this.insertAll([card])) {
             this.replay = false;
             changed = true;
+            if (frame.k === "will" || frame.k === "note") this.lastCardKey = card.key;
           }
         } else if (this.insertAll([playerLine(frame)])) {
           this.replay = false;
@@ -191,6 +196,16 @@ export class ChatStore {
       return { ...l, revealAt: at };
     });
     if (moved) this.bump();
+  }
+
+  /**
+   * 방금(가장 최근 apply 에서) 새로 받은 라이브 유언·쪽지 카드의 공개 시각(ms). 편지 보류(holdCardsUntil)로 늦춰졌으면 늦춰진 시각이다.
+   * 그 apply 가 카드를 새로 넣지 않았으면(사람 줄·귓속말·찬반 기록·중복·재접속 복원) null — 소리의 ui.card 신호를 되풀이하지 않는다 (12-09).
+   */
+  lastLiveCardRevealAt(): number | null {
+    if (this.lastCardKey === null) return null;
+    const line = this.all.find((l) => l.key === this.lastCardKey);
+    return line?.revealAt ?? null;
   }
 
   /** 라이브로 받은(revealAt 이 있는) 그 좌석의 k 카드 줄 중 마지막. 없거나 chatLog 로 복원된 줄뿐이면 undefined */

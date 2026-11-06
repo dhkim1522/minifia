@@ -4,7 +4,7 @@
 // 이 훅은 RoomView 를 직접 읽지 않는다 — audioViewOf(audioView.ts)만 읽고, 감독은 AudioView 만 안다 (LS-6).
 import { useEffect, useRef, useSyncExternalStore } from "react";
 import { audioViewOf, type AudioView } from "./audioView";
-import { direct, directSignal, type DirectOutput } from "./director";
+import { direct, directEvent, directSignal, type DirectOutput, type PersonalEvent } from "./director";
 import type { SoundEngine } from "./engine";
 import { bindSignals } from "./signals";
 import { installSoundHook } from "./testHook";
@@ -42,6 +42,12 @@ export interface UseSoundOptions {
    * 참이면 소리는 시각 큐 신호(tensionCue)에 맞추고, 거짓이면 소리 전용 스케줄러가 같은 규칙으로 낸다. 역할 값은 이 훅에 오지 않는다.
    */
   visualCues?: boolean;
+  /** 암살당한 본인의 아침 신호(useDayFx killFx): 새 nonce 가 서면 at+50ms 에 kill.slash 한 번. 재접속·남의 화면에는 null (12-09, LS-8) */
+  kill?: { nonce: number; at: number } | null;
+  /** 유언 편지 시작 t0(로컬 ms)와 쓰는 길이 — 숫자뿐, 편지 글은 이 훅에 오지 않는다 (12-09, C-5) */
+  letter?: { t0: number; writeMs: number } | null;
+  /** 경찰 카드 도착 번호(useDayFx policeResult.id). 결과·좌석은 오지 않는다 (12-09, LS-5) */
+  policeCard?: number | null;
 }
 
 /** 깨우는 제스처. 눌림 시작 이벤트는 쓰지 않는다 — iOS 가 인정하지 않는 경우가 있다 */
@@ -65,7 +71,7 @@ export function useSound(options: UseSoundOptions = {}): SoundView {
   const engine = options.engine ?? getEngine();
   const active = options.active ?? true;
   const hook = options.hook ?? false;
-  const { view = null, epoch = 0, offset = 0, visualCues = false } = options;
+  const { view = null, epoch = 0, offset = 0, visualCues = false, kill = null, letter = null, policeCard = null } = options;
   const clockNow = options.now ?? Date.now;
   const random = options.random ?? Math.random;
   // 감독에 먹인 직전 상태. 방을 떠나거나(정리) 개발 모드 이중 효과 실행에서 비워 첫 스냅샷처럼 다룬다
@@ -131,6 +137,34 @@ export function useSound(options: UseSoundOptions = {}): SoundView {
     if (out.now.some((c) => c.id === "lobby.join")) lastJoinAt.current = now;
     apply(engine, out);
   }, [engine, active, view, epoch]);
+
+  // 개인 사건(12-09): 새 번호·시각이 설 때 한 번. 마운트 때 이미 있던 값은 본 것으로 친다(재접속 0). view 효과 뒤에 선언해 같은 커밋에서 아침 view 가 먼저 감독에 들어간다
+  const fire = (event: PersonalEvent): void => {
+    apply(engine, directEvent(event, last.current?.av ?? null, { now: nowRef.current() }));
+  };
+  const seenKill = useRef(kill?.nonce ?? 0);
+  const killNonce = kill?.nonce ?? 0;
+  const killAt = kill?.at ?? 0;
+  useEffect(() => {
+    if (!active || killNonce === seenKill.current) return;
+    seenKill.current = killNonce;
+    if (killNonce > 0) fire({ kind: "kill", at: killAt });
+    // eslint 규칙 없음 — fire 는 ref 만 읽는다
+  }, [engine, active, killNonce, killAt]);
+  const seenLetter = useRef<number | null>(letter?.t0 ?? null);
+  const letterT0 = letter?.t0 ?? null;
+  const letterWriteMs = letter?.writeMs ?? 0;
+  useEffect(() => {
+    if (!active || letterT0 === null || letterT0 === seenLetter.current) return;
+    seenLetter.current = letterT0;
+    fire({ kind: "letter", t0: letterT0, writeMs: letterWriteMs });
+  }, [engine, active, letterT0, letterWriteMs]);
+  const seenPolice = useRef<number | null>(policeCard);
+  useEffect(() => {
+    if (!active || policeCard === null || policeCard === seenPolice.current) return;
+    seenPolice.current = policeCard;
+    fire({ kind: "policeCard" });
+  }, [engine, active, policeCard]);
 
   // 닫힌 로컬 신호(주요 버튼 ui.tap). 어떤 소리를 낼지는 감독이 정한다
   useEffect(() => {

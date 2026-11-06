@@ -6,12 +6,15 @@
 // 12-09 밤: 서버 프레임은 밤 소리를 만들지 않는다 — 밤에 감독이 읽는 것은 단계·마감·일차뿐이고(LS-2), 역할·살아 있음·모션 줄이기는 입력이 아니다(LS-3).
 //   큐 스케줄(D-11)은 갈림 불리언 하나(local.visualCues: 시각 맥박이 큐를 내는 중인가)로만 갈린다. 거짓이면 소리 전용 스케줄러(nightCues)가,
 //   참이면 TensionVignette 의 큐 신호(tensionCue)가 같은 규칙으로 같은 night.cue 를 낸다. 밤의 모든 닫힌 신호는 무음이다(LS-7).
+// 12-09 아침: 진입 morning.dawn(결과와 무관) + 공개 결과 분기(평화·구출·희생자). 암살음·유언 편지·경찰 카드는 숫자뿐인 개인 사건(directEvent)으로 받는다.
+//   kill.slash 는 view 만으로는 절대 나지 않는다 — killFx 가 선 본인의 입력이 있을 때만(LS-8).
 // 12-10(판결·동작)은 이 파일의 ENTER_SOUND·inPhase 규칙에 더한다.
 import { NIGHT_MS } from "../../shared/game/phases";
 import type { PhaseId } from "../../shared/protocol";
+import { POLICE_CARD_AT } from "../game/dayView";
 import type { AudioView } from "./audioView";
 import type { BedId, SfxId } from "./recipes";
-import { nightCues, pickTickSchedule, tickSchedule, type DuckSpan, type Rng, type ScriptItem } from "./script";
+import { MORNING_SLASH_AT, morningScript, nightCues, pickTickSchedule, tickSchedule, willScript, type DuckSpan, type Rng, type ScriptItem } from "./script";
 import type { LocalSignal } from "./signals";
 
 /** 단계 → 침대 표: 14개 단계 전수. null 은 침대 없음(assigning: 침대가 페이드아웃). 맵에 따라 바꾸지 않는다 (O-7) */
@@ -97,6 +100,9 @@ export function emptyOutput(): DirectOutput {
 
 const phaseKey = (v: AudioView): string => `phase:${v.phase}:${v.dayN ?? 0}`;
 const nightKey = (v: AudioView): string => `night:${v.dayN ?? 0}`;
+const killKey = (v: AudioView): string => `kill:${v.dayN ?? 0}`;
+const letterKey = (v: AudioView): string => `letter:${v.dayN ?? 0}`;
+const policeCardKey = (v: AudioView): string => `card:police:${v.dayN ?? 0}`;
 
 function inTurn(v: AudioView): boolean {
   const t = v.turn;
@@ -108,6 +114,7 @@ function scriptKeys(v: AudioView): string[] {
   const keys: string[] = [];
   if (TICK_PHASES.includes(v.phase)) keys.push(phaseKey(v));
   if (v.phase === "night") keys.push(nightKey(v));
+  if (v.phase === "morning") keys.push(phaseKey(v), killKey(v), letterKey(v), policeCardKey(v));
   if (inTurn(v) && v.turn!.doneAt === undefined) keys.push(pickKey(v));
   return keys;
 }
@@ -153,6 +160,24 @@ function nightCueRun(cur: AudioView, local: LocalClock, out: DirectOutput): void
   out.scripts.push({ key: nightKey(cur), items, duck: null });
 }
 
+/** 지금(0) 이하의 줄은 즉시 소리로, 앞의 줄은 키 대본으로 낸다. 이미 지난(음수) 줄은 버린다 */
+function emitTimed(key: string, items: ScriptItem[], out: DirectOutput): void {
+  const later: ScriptItem[] = [];
+  for (const item of items) {
+    if (item.at < 0) continue;
+    if (item.at === 0) out.now.push({ id: item.id, ...(item.gainDb !== undefined ? { gainDb: item.gainDb } : {}), ...(item.cents !== undefined ? { cents: item.cents } : {}) });
+    else later.push(item);
+  }
+  if (later.length > 0) out.scripts.push({ key, items: later, duck: null });
+}
+
+/** 아침 진입 대본(C-5): 시각은 아침 view 도착 기준 — 아침 길이가 가변이라 마감에서 역산하지 않는다. 암살음은 여기 없다(killFx 입력만) */
+function morningEnter(cur: AudioView, out: DirectOutput): void {
+  const m = cur.morning;
+  const outcome = m !== null && m.eliminated ? "victim" : m !== null && m.saved ? "saved" : "calm";
+  emitTimed(phaseKey(cur), morningScript({ outcome, mine: false }).items, out);
+}
+
 /** 단계 전환(직전 view 와 단계가 다름) */
 function onPhaseChange(prev: AudioView, cur: AudioView, local: LocalClock, out: DirectOutput): void {
   const bed = BED_OF[cur.phase];
@@ -164,6 +189,7 @@ function onPhaseChange(prev: AudioView, cur: AudioView, local: LocalClock, out: 
     out.now.push({ id: "night.fall" });
     nightCueRun(cur, local, out);
   }
+  if (cur.phase === "morning") morningEnter(cur, out);
 }
 
 /** 같은 단계 안의 변화 */
@@ -260,6 +286,34 @@ export function directSignal(signal: LocalSignal, cur: AudioView | null, ctx: Si
     }
     case "tensionCue":
       break; // 밤이 아니면 시각 큐도 소리가 없다
+  }
+  return out;
+}
+
+/**
+ * 숫자뿐인 개인 사건(12-09). 글·결과·좌석은 받지 않는다 — 시각은 로컬 시계의 함수다.
+ *   kill: killFx 가 선 본인의 화면에서만 들어온다(의사가 살린 사람·남의 화면·재접속에는 입력이 없다, LS-8). killFx.at(로컬 ms) + 50ms 에 한 번.
+ *   letter: 편지 시작 t0(로컬 ms)와 쓰는 길이 writeMs — willScript 를 t0 기준으로 옮긴다. 편지가 늦게 떠서 이미 지난 줄은 버린다.
+ *   policeCard: 경찰 카드 도착 — POLICE_CARD_AT 에 ui.card 한 번(모든 카드가 같은 소리, LS-5).
+ * 아침 단계가 아니면 모두 무음이다(밤 중 암살음 0).
+ */
+export type PersonalEvent = { kind: "kill"; at: number } | { kind: "letter"; t0: number; writeMs: number } | { kind: "policeCard" };
+
+export function directEvent(event: PersonalEvent, cur: AudioView | null, local: Pick<LocalClock, "now">): DirectOutput {
+  const out = emptyOutput();
+  if (cur === null || cur.phase !== "morning") return out;
+  switch (event.kind) {
+    case "kill":
+      emitTimed(killKey(cur), [{ at: Math.max(0, event.at + MORNING_SLASH_AT - local.now), id: "kill.slash" }], out);
+      break;
+    case "letter": {
+      const shift = event.t0 - local.now;
+      emitTimed(letterKey(cur), willScript({ writeMs: event.writeMs }).items.map((i) => ({ ...i, at: i.at + shift })), out);
+      break;
+    }
+    case "policeCard":
+      emitTimed(policeCardKey(cur), [{ at: POLICE_CARD_AT, id: "ui.card" }], out);
+      break;
   }
   return out;
 }
