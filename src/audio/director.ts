@@ -8,13 +8,17 @@
 //   참이면 TensionVignette 의 큐 신호(tensionCue)가 같은 규칙으로 같은 night.cue 를 낸다. 밤의 모든 닫힌 신호는 무음이다(LS-7).
 // 12-09 아침: 진입 morning.dawn(결과와 무관) + 공개 결과 분기(평화·구출·희생자). 암살음·유언 편지·경찰 카드는 숫자뿐인 개인 사건(directEvent)으로 받는다.
 //   kill.slash 는 view 만으로는 절대 나지 않는다 — killFx 가 선 본인의 입력이 있을 때만(LS-8).
-// 12-10(판결·동작)은 이 파일의 ENTER_SOUND·inPhase 규칙에 더한다.
-import { NIGHT_MS } from "../../shared/game/phases";
+// 12-10 판결: 처형 진입에서 verdictScript 를 T0 = endsAt − EXECUTION_MS(서버 시각) 기준으로 예약한다. 2600ms 앞 소리는 통과/부결에서 같아 결과가 미리 새지 않는다.
+//   도착이 늦은 view 는 GRACE_MS 안에 든 항목만 지금 내고 지난 항목은 버린다. 처형 중간 합류·epoch 변경은 침대만이다(LS-10, LS-11).
+// 12-10 결선·마지막 3인·핀: runoff.intro·runoff.reveal·showdown.reveal 과 pin.on 은 공개 view 차이(day.runoff.step·day.showdown.i)로만 정한다.
+//   pinOfAudio 는 src/world/pinPlan.ts pinOf 의 지목·결선·마지막 3인·처형 분기를 복제한 것이고 시험이 대표 view 열에서 전이를 대조한다.
+// 12-10 동작: emote 신호는 받은 프레임에서만 온다. 감독은 게이트(emoteSoundGate, 초당 3·동시 4)와 mine 에 따른 gainDb 만 정한다.
+import { EXECUTION_MS, NIGHT_MS } from "../../shared/game/phases";
 import type { PhaseId } from "../../shared/protocol";
 import { POLICE_CARD_AT } from "../game/dayView";
 import type { AudioView } from "./audioView";
 import type { BedId, SfxId } from "./recipes";
-import { MORNING_SLASH_AT, morningScript, nightCues, pickTickSchedule, tickSchedule, willScript, type DuckSpan, type Rng, type ScriptItem } from "./script";
+import { MORNING_SLASH_AT, morningScript, nightCues, pickTickSchedule, tickSchedule, verdictScript, willScript, type DuckSpan, type Rng, type ScriptItem } from "./script";
 import type { LocalSignal } from "./signals";
 
 /** 단계 → 침대 표: 14개 단계 전수. null 은 침대 없음(assigning: 침대가 페이드아웃). 맵에 따라 바꾸지 않는다 (O-7) */
@@ -48,6 +52,9 @@ export const TICK_PHASES: readonly PhaseId[] = ["discussion", "defense", "verdic
 
 /** 로비 입장 소리의 최소 간격 */
 export const JOIN_GAP_MS = 1000;
+
+/** 도착 지연 유예(LS-11): 대본 항목의 시각이 이만큼 안쪽으로 지났으면 지금 내고, 더 지났으면 버린다 (한 곳) */
+export const GRACE_MS = 250;
 
 /** 로컬 시계와 연결 상태. 감독은 전역 시계를 읽지 않는다 */
 export interface LocalClock {
@@ -115,6 +122,7 @@ function scriptKeys(v: AudioView): string[] {
   if (TICK_PHASES.includes(v.phase)) keys.push(phaseKey(v));
   if (v.phase === "night") keys.push(nightKey(v));
   if (v.phase === "morning") keys.push(phaseKey(v), killKey(v), letterKey(v), policeCardKey(v));
+  if (v.phase === "execution") keys.push(phaseKey(v));
   if (inTurn(v) && v.turn!.doneAt === undefined) keys.push(pickKey(v));
   return keys;
 }
@@ -124,9 +132,15 @@ const pickKey = (v: AudioView): string => `pick:${v.dayN ?? 0}:${v.turn?.i ?? -1
 // ───────────────────────── 지목 핀 (src/world/pinPlan.ts pinOf 의 nomination 부분 복제) ─────────────────────────
 // 소리 모듈은 pinPlan 을 import 하지 못한다(LS-6). test/unit/soundDirector.test.ts 가 대표 view 열에서 pinOf 전이와 대조한다.
 
-type Pin = { mode: "turn"; seat: number } | { mode: "slide"; from: number; to: number; startAt: number };
+type Pin = { mode: "turn"; seat: number } | { mode: "slide"; from: number; to: number; startAt: number } | { mode: "fixed"; seat: number };
 
 function pinOfAudio(v: AudioView): Pin | null {
+  if (v.phase === "execution") {
+    // 처형 핀(pinPlan executionPin): 변론자가 있고 (마지막 3인 처형이거나 찬반 기록이 있고) 마감이 있을 때
+    if (typeof v.candidate !== "number" || v.verdict === null) return null;
+    if ((!v.verdict.last && !v.hasBallots) || v.endsAt === null) return null;
+    return { mode: "fixed", seat: v.candidate };
+  }
   if (v.phase !== "nomination" || v.turn === null) return null;
   const { order, i } = v.turn;
   if (!Number.isInteger(i) || i < 0 || i >= order.length) return null;
@@ -171,6 +185,36 @@ function emitTimed(key: string, items: ScriptItem[], out: DirectOutput): void {
   if (later.length > 0) out.scripts.push({ key, items: later, duck: null });
 }
 
+/**
+ * 처형 진입 판결 대본(C-3, D-13). T0 = endsAt − EXECUTION_MS(서버 시각). 항목의 지금 대비 지연 = T0 + at − serverNow.
+ * 지연이 −GRACE_MS 이상 0 미만이면 지금(0), 그보다 지났으면 버린다. 덕킹은 남은 구간만 건다.
+ * 찬반 기록이 있거나 마지막 3인 처형이고 변론자(candidate)가 있으면 처형 진입에 핀 조명(pin.on)이 함께 켜진다 — pinOf 의 처형 핀과 같은 조건이다.
+ */
+function verdictRun(cur: AudioView, local: LocalClock, out: DirectOutput): void {
+  const v = cur.verdict;
+  const rest = remainingMs(cur.endsAt, local);
+  if (v === null || rest === null) return;
+  const elapsed = EXECUTION_MS - rest; // = serverNow − T0
+  const script = verdictScript({ passed: v.passed, last: v.last, hasBallots: cur.hasBallots });
+  const nominal: ScriptItem[] = [...script.items];
+  if (pinOfAudio(cur) !== null) nominal.unshift({ at: 0, id: "pin.on" });
+  const kept: ScriptItem[] = [];
+  for (const item of nominal) {
+    const delay = item.at - elapsed;
+    if (delay < -GRACE_MS) continue;
+    kept.push({ ...item, at: Math.max(0, delay) });
+  }
+  const later: ScriptItem[] = [];
+  for (const i of kept) {
+    if (i.at > 0) later.push(i);
+    else out.now.push({ id: i.id, ...(i.gainDb !== undefined ? { gainDb: i.gainDb } : {}), ...(i.cents !== undefined ? { cents: i.cents } : {}) });
+  }
+  const d = script.duck;
+  const duck: DuckSpan | null =
+    d !== null && d.toMs - elapsed > 0 ? { fromMs: Math.max(0, d.fromMs - elapsed), toMs: d.toMs - elapsed, db: d.db, returnMs: d.returnMs } : null;
+  if (later.length > 0 || duck !== null) out.scripts.push({ key: phaseKey(cur), items: later, duck });
+}
+
 /** 아침 진입 대본(C-5): 시각은 아침 view 도착 기준 — 아침 길이가 가변이라 마감에서 역산하지 않는다. 암살음은 여기 없다(killFx 입력만) */
 function morningEnter(cur: AudioView, out: DirectOutput): void {
   const m = cur.morning;
@@ -190,6 +234,7 @@ function onPhaseChange(prev: AudioView, cur: AudioView, local: LocalClock, out: 
     nightCueRun(cur, local, out);
   }
   if (cur.phase === "morning") morningEnter(cur, out);
+  if (cur.phase === "execution") verdictRun(cur, local, out);
 }
 
 /** 같은 단계 안의 변화 */

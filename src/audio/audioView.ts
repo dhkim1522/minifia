@@ -1,6 +1,6 @@
 // 12-08: 소리 감독의 입력 — 방 화면이 이미 쓰는 공개 view 에서 허용 필드만 고른다 (D-3, LS-6, T-12-27).
 // 이 파일만 RoomView 를 읽는다. 읽는 경로는 test/unit/soundStaticGuard.test.ts 의 허용 목록이 고정한다:
-//   view.phase · view.phaseEndsAt · view.day.{n, turn, points, candidate, morning} · view.players · view.me.seat
+//   view.phase · view.phaseEndsAt · view.day.{n, turn, points, candidate, morning, verdict, ballots} · view.players · view.me.seat
 // 이후 계획(09·10·11)이 필요한 공개 필드를 여기와 허용 목록에 함께 더한다. 역할·선택·기록·관전·본문 필드는 읽지 않는다.
 import type { PhaseId, PointLine, RoomView } from "../../shared/protocol";
 
@@ -20,6 +20,12 @@ export interface AudioMorning {
   saved: boolean;
 }
 
+/** 판결(12-10): 처형 단계의 공개 결과 — 통과 여부와 마지막 3인 처형인가. 찬반 수·좌석은 읽지 않는다 */
+export interface AudioVerdict {
+  passed: boolean;
+  last: boolean;
+}
+
 export interface AudioView {
   phase: PhaseId;
   /** 공개 단계 마감 시각(서버 ms). 없으면 null */
@@ -29,12 +35,15 @@ export interface AudioView {
   points: PointLine[];
   candidate: number | null;
   morning: AudioMorning | null;
+  verdict: AudioVerdict | null;
+  /** 찬반 기록(day.ballots)이 있는가 — 불리언 하나. 누가 어느 쪽인지는 읽지 않는다 (12-10) */
+  hasBallots: boolean;
   players: { seat: number; alive: boolean }[];
   mySeat: number;
 }
 
 /** AudioView 의 키 목록. 시험이 audioViewOf 출력의 키가 이 안에 있음을 단언한다 */
-export const AUDIO_VIEW_FIELDS = ["phase", "endsAt", "dayN", "turn", "points", "candidate", "morning", "players", "mySeat"] as const;
+export const AUDIO_VIEW_FIELDS = ["phase", "endsAt", "dayN", "turn", "points", "candidate", "morning", "verdict", "hasBallots", "players", "mySeat"] as const;
 
 export function audioViewOf(view: RoomView): AudioView {
   const t = view.day?.turn;
@@ -50,6 +59,7 @@ export function audioViewOf(view: RoomView): AudioView {
         };
   const points = view.day?.points;
   const m = view.day?.morning;
+  const v = view.day?.verdict;
   return {
     phase: view.phase,
     endsAt: view.phaseEndsAt,
@@ -58,6 +68,8 @@ export function audioViewOf(view: RoomView): AudioView {
     points: points === undefined ? [] : points.map((p) => ({ seat: p.seat, target: p.target })),
     candidate: view.day?.candidate ?? null,
     morning: m === undefined ? null : { eliminated: m.eliminated !== undefined, saved: m.saved === true },
+    verdict: v === undefined ? null : { passed: v.passed === true, last: v.last === true },
+    hasBallots: view.day?.ballots !== undefined,
     players: view.players.map((p) => ({ seat: p.seat, alive: p.alive !== false })),
     mySeat: view.me.seat,
   };

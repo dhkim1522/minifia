@@ -63,8 +63,8 @@ export interface SoundEngine {
   isOn(): boolean;
   setOn(on: boolean): void;
   play(id: SfxId, opts?: PlayOpts): void;
-  /** 침대 버스를 db 만큼 내렸다가 holdMs 뒤 returnMs 에 걸쳐 복귀한다 */
-  duckBed(db: number, holdMs: number, returnMs?: number): void;
+  /** 침대 버스를 db 만큼 내렸다가 holdMs 뒤 releaseMs(기본 250)에 걸쳐 복귀한다 */
+  duckBed(db: number, holdMs: number, releaseMs?: number): void;
   /** 침대를 바꾼다(같은 침대면 아무 일 없음, null 이면 페이드아웃 뒤 멈춤) */
   setBed(id: BedId | null): void;
   /** 대본 항목을 at ms 뒤 play 로 예약한다. 같은 key 는 이전 것을 취소한다. duck 이 있으면 구간 덕킹도 예약한다 */
@@ -328,13 +328,13 @@ export function createEngine(deps: EngineDeps = {}): SoundEngine {
     p.setTargetAtTime(BUS_GAIN.bgm, ctx.currentTime, d.returnMs / 1000);
   };
 
-  const duckBed = (db: number, holdMs: number, returnMs = 250): void => {
+  const duckBed = (db: number, holdMs: number, releaseMs = 250): void => {
     const p = bgmParam();
     if (p === null || ctx === null || computeState() !== "running") return;
     const target = BUS_GAIN.bgm * dbToLin(db);
     const releaseAt = now() + holdMs;
     if (duck === null) {
-      duck = { target, releaseAt, returnMs, timer: null };
+      duck = { target, releaseAt, returnMs: releaseMs, timer: null };
       p.setTargetAtTime(target, ctx.currentTime, 0.03);
     } else {
       if (target < duck.target) {
@@ -342,7 +342,7 @@ export function createEngine(deps: EngineDeps = {}): SoundEngine {
         p.setTargetAtTime(target, ctx.currentTime, 0.03);
       }
       duck.releaseAt = Math.max(duck.releaseAt, releaseAt);
-      duck.returnMs = returnMs;
+      duck.returnMs = releaseMs;
       clearTimer(duck.timer);
     }
     duck.timer = setTimer(releaseDuck, Math.max(0, duck.releaseAt - now()));
