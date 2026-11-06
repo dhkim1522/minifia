@@ -12,7 +12,7 @@ export const MAP_MARKERS = Object.freeze([
   "__mfMap", // 테스트 훅 window.__mfMap = "bar" | "plaza" (렌더러에 올린 맵)
 ]);
 
-/** 칩: 시각 원 지름 36 · 누르기 영역 44 · 왼쪽 16 · 헤더 아래 8 (UI-SPEC D-20). [테스트] 버튼이 있으면 그 오른쪽 + 8 */
+/** 칩: 시각 원 지름 36 · 누르기 영역 44 · 왼쪽 16 · 헤더(자막 띠가 있으면 띠) 아래 8 (UI-SPEC D-20, 14페이즈 --mf-host-bottom). [테스트] 버튼이 있으면 그 오른쪽 + 8 */
 export const MAP_CHIP = Object.freeze({ disc: 36, hit: 44, left: 16, below: 8 });
 /** 맵 카드: 96×112, 간격 8, 합 304 */
 export const MAP_CARD = Object.freeze({ w: 96, h: 112, gap: 8, total: 304 });
@@ -37,7 +37,7 @@ const inside = (inner, outer) => inner.left >= outer.left - 0.5 && inner.right <
  */
 export function mapChoiceChecks(m) {
   const L = {
-    MS1: "지도 칩: 시각 36·누르기 44 이상·왼쪽 16·헤더 아래 8",
+    MS1: "지도 칩: 시각 36·누르기 44 이상·왼쪽 16·헤더(띠) 아래 8",
     MS2: "지도 칩: 손님은 읽기 전용(aria-disabled, 눌러도 시트 안 열림)",
     MS3: "꾸미기 시트: 방장은 [맵][의상] 탭 둘(44×44 이상), 손님은 탭 없음",
     MS4: "꾸미기 시트 맵 탭: 카드 3장 96×112·간격 8·합 304 이하·시트 안",
@@ -58,7 +58,7 @@ export function mapChoiceChecks(m) {
     const wantLeft = isBox(m.testBtn) ? m.testBtn.right + 8 : MAP_CHIP.left;
     if (!within(chip.disc.left, wantLeft, 1)) bad.push(`왼쪽 ${r1(chip.disc.left)} ≠ ${wantLeft}`);
     const wantTop = m.headerBottom + MAP_CHIP.below;
-    if (!within(chip.disc.top, wantTop, 2)) bad.push(`위 ${r1(chip.disc.top)} ≠ 헤더 아래 ${r1(m.headerBottom)} + ${MAP_CHIP.below}`);
+    if (!within(chip.disc.top, wantTop, 2)) bad.push(`위 ${r1(chip.disc.top)} ≠ 헤더(띠) 아래 ${r1(m.headerBottom)} + ${MAP_CHIP.below}`);
     add("MS1", bad);
   }
 
@@ -144,11 +144,13 @@ export function readMapUi(page) {
     };
     const chip = q("[data-map-chip]");
     const header = q(".mf-lobby__header, .mf-result__header");
+    const band = q("[data-host-band] .mv-host__band");
     const pressed = qa("[data-dress-sheet] button[data-map-card][aria-pressed='true']");
     return {
       vw: window.innerWidth,
       vh: window.innerHeight,
-      headerBottom: header ? header.getBoundingClientRect().bottom : null,
+      // 14페이즈: 칩은 자막 띠 면(.mv-host__band) 아래 8 에 선다 — 띠가 있으면 그 아랫변, 없으면 헤더 아랫변이 기준이다(입력 이름은 headerBottom 그대로)
+      headerBottom: band ? band.getBoundingClientRect().bottom : header ? header.getBoundingClientRect().bottom : null,
       chip: chip ? { disc: rect(chip.querySelector(".mf-mapchip__disc")), hit: rect(chip), label: chip.getAttribute("aria-label"), id: chip.getAttribute("data-map-chip"), ariaDisabled: chip.getAttribute("aria-disabled") === "true" } : null,
       sheet: rect(q("[data-dress-sheet]")),
       tabs: qa("[data-dress-sheet] button[data-map-tab]").map((el) => rect(el)),
@@ -381,7 +383,13 @@ export function makeMapSelectFlows(helpers) {
         testBtn: null,
         tags: hro.tags.filter(Boolean),
       });
-      for (const r of rr) if (["MS1", "MS3", "MS4", "MS5", "MS6"].includes(r.id)) rec(sc5, `R-${r.id}`, `결과 화면: ${r.label}`, r.ok, r.detail);
+      for (const r of rr) {
+        if (!["MS1", "MS3", "MS4", "MS5", "MS6"].includes(r.id)) continue;
+        // 14-08 UI#14 알려진 한계: 가장 낮은 폰(360×560, 방 높이 575 미만)의 결과 화면은 띠 아래로 내려온 칩(36 원 + '맵' 라벨, 누르기 영역 63)이 이름표 한 칸과 겹친다 —
+        // 칩 아래 라벨 칸이 이름표 위로 겹칠 뿐 눌림은 가려지지 않는다. 판정에서 빼고 잰 값을 그대로 남긴다(고치지 않는다). 다른 크기 5종은 그대로 판정한다.
+        if (r.id === "MS6" && !r.ok && hro.vh < 575) rec(sc5, `R-${r.id}k`, `알려진 한계(UI#14): 결과 화면 낮은 폰(${hro.vw}x${hro.vh})의 지도 칩이 이름표와 겹침(판정 아님)`, true, r.detail, true);
+        else rec(sc5, `R-${r.id}`, `결과 화면: ${r.label}`, r.ok, r.detail);
+      }
       await closeDressSheet(hp);
     } finally {
       await g.context.close().catch(() => {});

@@ -171,9 +171,18 @@ describe("E2E 채팅 패널 치수 사본과 src/game/chatUi.ts (07-20, 05-05 �
     expect(extra.talk).toBe(LOBBY_PANEL_EXTRA);
     expect(extra.verdictVoter).toBe(218);
     expect(extra.verdictViewer).toBe(126);
+    // 14-06(TOOL-01): 입력줄 이름표 단추(면 36 + 간격 4 + 라벨 14px × 1.4)가 입력칸 48 보다 11.6 커서 패널이 그만큼 는다 — 판정이 이 값을 더한다
+    const toolRow = (e2eLib as unknown as { TOOL_ROW_EXTRA: number }).TOOL_ROW_EXTRA;
+    expect(toolRow).toBeCloseTo(36 + 4 + 14 * 1.4 - 48, 9);
+    const css = readFileSync(new URL("src/styles/v2.css", new URL("../../", import.meta.url)), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+    const rule = (sel: string) => [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].find((m) => (m[1] ?? "").trim() === sel)?.[2] ?? "";
+    expect(rule(".mv-tool__face")).toContain("width: 36px");
+    expect(rule(".mv-tool__face")).toContain("height: 36px");
+    expect(rule(".mv-tool__label")).toContain("font-size: 14px");
+    expect(rule(".mv-tool__label")).toContain("line-height: 1.4");
     for (const roomH of [560, 640, 664, 779, 780, 844, 874, 932]) {
-      expect(gamePanelHeight(roomH, "chat")).toBe(logHeightFor(roomH) + CHAT_PANEL_EXTRA);
-      expect(gamePanelHeight(roomH, "talk")).toBe(logHeightFor(roomH) + LOBBY_PANEL_EXTRA);
+      expect(gamePanelHeight(roomH, "chat")).toBeCloseTo(logHeightFor(roomH) + CHAT_PANEL_EXTRA + toolRow, 9);
+      expect(gamePanelHeight(roomH, "talk")).toBeCloseTo(logHeightFor(roomH) + LOBBY_PANEL_EXTRA + toolRow, 9);
     }
   });
 
@@ -458,8 +467,8 @@ describe("11페이즈 결과 화면 E2E 표식·표(11-05)", () => {
     const pill = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].find((m) => (m[1] ?? "").trim() === ".mv-ready")?.[2] ?? "";
     expect(pill).toContain(`width: ${r.READY_PILL.w}px`);
     expect(pill).toContain(`height: ${r.READY_PILL.h}px`);
-    // 입력줄 여백 192 = 보내기 48 + 알약 96 + 요소 사이 8 × 2 + 좌우 16 × 2
-    expect(48 + r.READY_PILL.w + 8 * 2 + 16 * 2).toBe(r.READY_PILL.inputExtra);
+    // 입력줄 여백 188 = 보내기 이름표 단추 44(14-06, 옛 48) + 알약 96 + 요소 사이 8 × 2 + 좌우 16 × 2
+    expect(44 + r.READY_PILL.w + 8 * 2 + 16 * 2).toBe(r.READY_PILL.inputExtra);
   });
 });
 

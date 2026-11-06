@@ -3,7 +3,7 @@
 // helpers: { recorder, startHost, openGuest, attempt, walkableCentersOfApp, LOBBY_HOST_NICK, WORLD_GUEST_NICK, resetAndLeave, openGame, closeGame, untilGame }  (10-08 이 판 만들기 도우미 셋을 더했다)
 // 판정 문턱은 lib.mjs 의 순수 검사 함수(emoteTrayChecks·dressChecks)에만 있고 여기서는 낮추지 않는다.
 import { chooseRole, chooseVerdict, hitsInputSurface, leaveLobby, openTestSheet, sampleWorld, screensOfWorld, SetupError, setBots, settle, skipTo, sleep, startGame, tapWorld, typeAndSendChat, waitChatLine, waitWorldReady } from "./browser.mjs";
-import { dressChecks, emoteDeliveryChecks, emoteTrayChecks, floatTrayChecks, worldTapRanking } from "./lib.mjs";
+import { FLOAT_BOX_H, dressChecks, emoteDeliveryChecks, emoteTrayChecks, floatTrayChecks, worldTapRanking } from "./lib.mjs";
 
 /** 동작 하나를 보낸 뒤 두 페이지가 프레임을 받기까지 기다리는 상한(ms). 계획: 1.5초 안 */
 const ARRIVE_MS = 1500;
@@ -328,15 +328,15 @@ export function makeAvatarFlows(helpers) {
       /** 닫힌 때의 버튼을 읽고(AD1) 눌러 시트를 연 뒤 시트·카드를 읽어(AD2) 같은 검사 줄로 기록한다. 끝나면 시트는 열려 있다. */
       const measure = async (who, page) => {
         const closed = await readDressUi(page);
-        const idle = closed.sheet === null && closed.float !== null && closed.floatLabel === "꾸미기" && closed.floatCount === 1;
-        rec(`${sc}-${who}`, "AD1a", `${who}: 로비에 떠 있는 버튼이 하나, 접근성 이름 '꾸미기', 시트는 닫혀 있음`, idle, `버튼 ${closed.float ? "있음" : "없음"} · 이름 ${closed.floatLabel} · 떠 있는 버튼 ${closed.floatCount}개 · 시트 ${closed.sheet ? "열림" : "닫힘"}`);
+        const idle = closed.sheet === null && closed.float !== null && closed.floatLabel === "옷장" && closed.floatCount === 1;
+        rec(`${sc}-${who}`, "AD1a", `${who}: 로비에 떠 있는 버튼이 하나, 접근성 이름 '옷장'(14-07 TOOL-01 — 꾸미기 → 옷장), 시트는 닫혀 있음`, idle, `버튼 ${closed.float ? "있음" : "없음"} · 이름 ${closed.floatLabel} · 떠 있는 버튼 ${closed.floatCount}개 · 시트 ${closed.sheet ? "열림" : "닫힘"}`);
         await page.locator(DRESS_FLOAT).click({ timeout: 3000 });
         await page.waitForSelector(DRESS_SHEET, { timeout: 1500 });
         await sleep(150);
         const open = await readDressUi(page);
         const hidden = open.float === null;
         rec(`${sc}-${who}`, "AD2a", `${who}: 시트가 열리면 떠 있는 버튼은 숨고 카드 아홉 개가 UI-SPEC 순서`, hidden && open.cardIds.join(",") === "coat,police,doctor,mafia,detective,reporter,elder,hood,noir", `버튼 ${hidden ? "숨음" : "보임"} · 카드 ${open.cardIds.join(",")}`);
-        for (const l of dressChecks({ float: closed.float, panel: open.panel, sheet: open.sheet, cards: open.cards, close: open.close, selected: open.selected, nameFont: open.nameFont, viewport: { w: open.vw, h: open.vh }, kb: open.kbOpen })) {
+        for (const l of dressChecks({ float: closed.float, panel: open.panel, sheet: open.sheet, cards: open.cards, close: open.close, selected: open.selected, nameFont: open.nameFont, viewport: { w: open.vw, h: open.vh }, kb: open.kbOpen, floatH: FLOAT_BOX_H })) {
           rec(`${sc}-${who}`, l.id, l.label, l.ok, l.detail);
         }
         rec(`${sc}-${who}`, "AD2b", `${who}: 시트가 열리면 초점이 선택된 카드(coat 또는 지금 의상)로 감`, open.focusedOutfit !== null && open.selected !== null, `초점 ${open.focusedOutfit}`);

@@ -3,8 +3,8 @@
 // 두 흐름 모두 폰 6종(LOBBY_EXTRA_SIZES)으로 돈다. 방장 화면과 손님 화면 둘을 함께 본다.
 // 판정 문턱은 lib.mjs 의 순수 검사 함수(floatButtonChecks·sheetFitChecks·claimBadgeChecks·pickButtonChecks)에 있고 여기서는 낮추지 않는다.
 // 귓속말 본문(canary)은 결과 표와 오류 문구에 쓰지 않는다 — 있는지 없는지(불리언)만 남긴다(T-09.1.1-28).
-import { chooseVerdict, hitsInputSurface, installFakeViewport, readGame, readChatLines, sampleWorld, screensOfWorld, SetupError, settle, skipTo, sleep, tapTurnPick, tapWorld } from "./browser.mjs";
-import { ballotFitChecks, claimBadgeChecks, floatButtonChecks, gamePanelHeight, graphemeCount, pickButtonChecks, rectInside, rectsOverlap, runoffChecks, sheetFitChecks, showdownChecks, verdictTimelineChecks } from "./lib.mjs";
+import { chooseVerdict, hitsInputSurface, installFakeViewport, readGame, readHostBand, readChatLines, sampleWorld, screensOfWorld, SetupError, settle, skipTo, sleep, tapTurnPick, tapWorld } from "./browser.mjs";
+import { FLOAT_BOX_H, ballotFitChecks, claimBadgeChecks, floatButtonChecks, gamePanelHeight, graphemeCount, pickButtonChecks, rectInside, rectsOverlap, runoffChecks, sheetFitChecks, showdownChecks, verdictTimelineChecks } from "./lib.mjs";
 
 /** 31자소 본문: 입력칸이 30자소로 자르는지 본다. 앞 30자소가 실제로 서버에 가는 본문(canary)이다 */
 const LONG_31 = "귓속말카나리아본문은제삼자에게보이면안돼요가나다라마바사아자차";
@@ -108,7 +108,8 @@ function readPolitics(page, canary = "") {
       if (mv) tagWidths[t.getAttribute("data-seat")] = mv.getBoundingClientRect().width;
     }
     const wl = qa("[data-whisper]");
-    const hintEl = q(".mv-phase__hint");
+    // 14페이즈: 헤더 안내줄(.mv-phase__hint)은 자막 띠 문장([data-host-line])으로 옮겼다 — 옛 줄은 꺼진 장치 화면에만 남아 있어 없으면 띠 문장을 읽는다
+    const hintEl = q(".mv-phase__hint") ?? q("[data-host-line]");
     const canaryInDom =
       canaryText === ""
         ? null
@@ -181,7 +182,7 @@ function readRunoffExtra(page) {
     const pill = document.querySelector("[data-turn-block] .mf-turn__pill");
     return {
       parts: pill ? [...pill.children].map((c) => (c.textContent ?? "").trim()) : null,
-      hint: (document.querySelector(".mv-phase__hint")?.textContent ?? "").trim(),
+      hint: ((document.querySelector(".mv-phase__hint") ?? document.querySelector("[data-host-line]"))?.textContent ?? "").trim(),
       pressed: document.querySelectorAll("[data-pick][aria-pressed='true']").length,
     };
   });
@@ -287,7 +288,7 @@ function readShowdown(page, expectQuote = "") {
       roleChips: qa("[data-role-chip]").length,
       floats: qa("[data-float]").length,
       floatRects: qa("[data-float]").map((b) => ({ kind: b.getAttribute("data-float"), rect: rect(b) })),
-      hint: (q(".mv-phase__hint")?.textContent ?? "").trim(),
+      hint: ((q(".mv-phase__hint") ?? q("[data-host-line]"))?.textContent ?? "").trim(),
       skipText: (document.body.innerText ?? "").includes("건너뜀"),
       hasChatPanel: q("[data-chat-panel]") !== null,
     };
@@ -449,6 +450,7 @@ export function makePoliticsFlows(h) {
     viewport: { w: p.vw, h: p.vh },
     kbOpen: p.kbOpen,
     expectCount,
+    boxH: FLOAT_BOX_H, // 14-07: 떠 있는 단추는 면 48 + 아래 라벨
   });
 
   /** 배지 시트 맞음(SF1~SF6) 입력 */
@@ -1065,7 +1067,8 @@ export function makePoliticsFlows(h) {
             announceText: ann ? (ann.textContent ?? "").trim() : null,
             viewport: { w: window.innerWidth, h: window.innerHeight },
             compact: root.getAttribute("data-compact") === "true",
-            stageH: header && panel ? panel.getBoundingClientRect().top - header.getBoundingClientRect().bottom : null,
+            // 14페이즈: 앱의 스테이지 사각형(useMapInsets)은 윗변이 헤더가 아니라 자막 띠 면 아랫변이다 — 줌 문턱(스테이지 360 이상)은 그 높이로 본다
+            stageH: header && panel ? panel.getBoundingClientRect().top - Math.max(header.getBoundingClientRect().bottom, q("[data-host-band] .mv-host__band")?.getBoundingClientRect().bottom ?? 0) : null,
             roleChips: qa("[data-role-chip]").length,
             pillCount: qa("[data-ballot-seat]", root).length,
           };
@@ -1159,7 +1162,9 @@ export function makePoliticsFlows(h) {
       // 줌: 훅의 첫 1 이 아닌 값이 곧바로 1.10 이다(아래 stageH 조건이 맞을 때만)
       const z = await attempt(async () => {
         const stage = await readGame(hp);
-        const stageH = stage?.stage ? stage.stage.bottom - stage.stage.top : null;
+        // 14페이즈: 스테이지 윗변은 자막 띠 면 아랫변(앱 useMapInsets 와 같다)
+        const bandNow = await readHostBand(hp);
+        const stageH = stage?.stage ? stage.stage.bottom - Math.max(stage.stage.top, bandNow?.bandRect?.bottom ?? 0) : null;
         if (stageH === null) throw new SetupError("스테이지를 못 읽음");
         if (stageH < 360) {
           const peek = await hp.evaluate(() => window.__mfPin?.zoom ?? null);

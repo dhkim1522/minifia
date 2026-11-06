@@ -49,7 +49,9 @@ import {
   reconnectInit,
   sampleWorld,
   screensOfWorld,
+  readCallCount,
   readGuide,
+  readHostBand,
   readJoinFit,
   readHeaderContrast,
   resetAndLeave,
@@ -130,7 +132,7 @@ import {
 } from "./lib.mjs";
 import { makeAvatarFlows } from "./avatar.mjs";
 import { makeMapSelectFlows } from "./mapselect.mjs";
-import { awardChecks, readAwardState, readBenchView, readRematchState, readRestSheet, readResultStage, readResultTabs, readTimeline, rematchChecks, resultSkipChecks, resultStageChecks, resultTabChecks, timelineChecks } from "./result.mjs";
+import { SHORT_PHONE_H, awardChecks, readAwardState, readBenchView, readRematchState, readRestSheet, readResultStage, readResultTabs, readTimeline, rematchChecks, resultSkipChecks, resultStageChecks, resultTabChecks, timelineChecks } from "./result.mjs";
 import { makePoliticsFlows } from "./politics.mjs";
 import { makeSoundFlows } from "./sound.mjs";
 import { makeHostFlows } from "./host.mjs";
@@ -562,19 +564,24 @@ const CHAT_LOG_SHORT = 96;
 const CHAT_TALL_ROOM_MIN_H = 780;
 const CHAT_LOBBY_EXTRA = 154;
 const CHAT_CONTROL = 48;
+/** 14-06(TOOL-01): 입력줄의 [동작]·[보내기]·[유언]은 면 36 + 4 + 라벨 한 줄(14px × 1.4 = 19.6) 이름표 단추라 높이 59.6 이고, 입력칸 48 은 아래 정렬이라 패널이 그만큼(11.6) 는다 */
+const CHAT_TOOL_ROW = 36 + 4 + 19.6;
+const CHAT_TOOL_ROW_EXTRA = CHAT_TOOL_ROW - CHAT_CONTROL;
+/** 이름표 단추 폭은 누르기 44 이상 최대 52(UI-SPEC 도구 이름표 목록) */
+const CHAT_TOOL_W_MAX = 52;
 const CHAT_PANEL_EPS = 1;
 
 /** 한 페이지의 로비 채팅 패널 치수 판정. m 은 readChatPanel 의 값. 검사 행 목록을 돌려준다. */
 function chatPanelRows(m) {
   if (!m) return [{ id: "CP0", label: "채팅 패널을 읽음", ok: false, detail: "패널·기록 칸·입력칸·보내기 중 없는 것이 있음" }];
   const logWant = m.roomH >= CHAT_TALL_ROOM_MIN_H ? CHAT_LOG_TALL : CHAT_LOG_SHORT;
-  const panelWant = logWant + CHAT_LOBBY_EXTRA;
+  const panelWant = logWant + CHAT_LOBBY_EXTRA + CHAT_TOOL_ROW_EXTRA;
   const near = (a, b) => Math.abs(a - b) <= CHAT_PANEL_EPS;
   const r1 = (n) => Math.round(n * 10) / 10;
   return [
-    { id: "CP1", label: `로비 패널 높이 ${panelWant} (방 높이 ${r1(m.roomH)} → 기록 ${logWant} + ${CHAT_LOBBY_EXTRA})`, ok: near(m.panel.height, panelWant), detail: `패널 ${r1(m.panel.height)}` },
+    { id: "CP1", label: `로비 패널 높이 ${r1(panelWant)} (방 높이 ${r1(m.roomH)} → 기록 ${logWant} + ${CHAT_LOBBY_EXTRA} + 이름표 줄 늘어난 ${r1(CHAT_TOOL_ROW_EXTRA)})`, ok: near(m.panel.height, panelWant), detail: `패널 ${r1(m.panel.height)}` },
     { id: "CP2", label: `기록 칸 높이 ${logWant}`, ok: near(m.log.height, logWant), detail: `기록 칸 ${r1(m.log.height)}` },
-    { id: "CP3", label: `입력칸·보내기 높이 ${CHAT_CONTROL}`, ok: near(m.input.height, CHAT_CONTROL) && near(m.send.height, CHAT_CONTROL) && near(m.send.width, CHAT_CONTROL), detail: `입력칸 ${r1(m.input.height)} · 보내기 ${r1(m.send.width)}x${r1(m.send.height)}` },
+    { id: "CP3", label: `입력칸 높이 ${CHAT_CONTROL} · 보내기 이름표 단추 높이 ${r1(CHAT_TOOL_ROW)}·폭 ${TAP_MIN}~${CHAT_TOOL_W_MAX}`, ok: near(m.input.height, CHAT_CONTROL) && near(m.send.height, CHAT_TOOL_ROW) && m.send.width + 0.5 >= TAP_MIN && m.send.width <= CHAT_TOOL_W_MAX + 0.5, detail: `입력칸 ${r1(m.input.height)} · 보내기 ${r1(m.send.width)}x${r1(m.send.height)}` },
     { id: "CP4", label: "입력칸 글자 16px", ok: m.inputFont === 16, detail: `${m.inputFont}px` },
     { id: "CP5", label: `보내기 누르는 영역 ≥ ${TAP_MIN} 이고 눌림`, ok: m.send.width + 0.5 >= TAP_MIN && m.send.height + 0.5 >= TAP_MIN && m.send.hit, detail: `${r1(m.send.width)}x${r1(m.send.height)} hit ${m.send.hit}` },
     { id: "CP6", label: "스테이지 사각형 아래 끝 = 방 높이 − 패널 높이", ok: near(m.stageBottom, m.roomH - m.panel.height), detail: `아래 끝 ${r1(m.stageBottom)} · 방 높이 − 패널 ${r1(m.roomH - m.panel.height)}` },
@@ -725,7 +732,8 @@ async function chatImeFlow(ctx) {
 // 키보드 열림 치수(UI-SPEC 패널과 키보드). src/game/chatUi.ts 의 값을 그대로 옮긴 사본이다.
 /** 가상 키보드 높이(폰 크기 표의 K) */
 const KB_LIFT = 336;
-const KB_PANEL_H = 150;
+/** 14-06: 키보드 열림 패널 = 14 + 72 + 8 + 이름표 입력줄 59.6(옛 입력칸 48) + 8 = 161.6 — 앱 상수(chatUi.ts KB_PANEL_H 150)에 이름표 줄 늘어난 11.6 을 더한다 */
+const KB_PANEL_H = 150 + (36 + 4 + 19.6 - 48);
 const KB_LOG_H = 72;
 /** 큰 폰(390x844 이상)은 캐릭터 발과 이름표(입력 중 칸 포함)가 남은 스테이지 안에 모두 있어야 한다. 그 아래 작은 폰은 캐릭터 몸만 본다(가정 A2, 합격 검사 3) */
 const KB_BIG_MIN_H = 800;
@@ -1375,7 +1383,7 @@ function panelRow(rec, sc, id, g, h, kind, who) {
   const want = gamePanelHeight(h, kind);
   const got = g?.panel?.height;
   const ok = typeof got === "number" && Math.abs(got - want) <= 1;
-  rec(sc, id, `아래 패널 높이 LOG_H + ${GAME_PANEL_EXTRA[kind]} (${who})`, ok, `실제 ${typeof got === "number" ? Math.round(got * 10) / 10 : got} ≠ 기대 ${want}`);
+  rec(sc, id, `아래 패널 높이 LOG_H + ${GAME_PANEL_EXTRA[kind]} + 이름표 줄 11.6 (${who})`, ok, `실제 ${typeof got === "number" ? Math.round(got * 10) / 10 : got} ≠ 기대 ${want}`);
 }
 
 /** 게임 화면의 G(공통)·H(헤더 대비) 묶음을 한 페이지에 적용한다. */
@@ -1496,11 +1504,10 @@ async function dayFlow(ctx) {
     {
       const sc = `${id}/nomination`;
       await allAt(pages, "nomination");
-      // NM8 시작 직후: 누를 수 있는 이름표(나를 뺀 산 사람)가 깜빡인다 — 첫 2.7초. 이어서 3.3초 뒤 모두 멈춘다
-      const blinkOf = (p) => p.evaluate(() => document.querySelectorAll(".mv-tag.is-blink").length);
+      // NM8 시작 직후(14페이즈 U-7): 누를 수 있는 이름표(나를 뺀 산 사람)가 빛난다([data-call]) — 옛 첫 깜빡임을 빛남이 대신한다. 누르고 나면 그 사람 화면에서 꺼진다(NM8b)
       const startedAt = ht.last().phaseEndsAt - ht.last().phaseDurationMs;
       const sinceStart = Date.now() - startedAt;
-      const blinkNow = await Promise.all(pages.map((p) => blinkOf(p)));
+      const callNow = await Promise.all(pages.map((p) => readCallCount(p)));
       await Promise.all(pages.map((p) => settle(p)));
       for (const x of humans) {
         const g = await readGame(x.page);
@@ -1511,14 +1518,7 @@ async function dayFlow(ctx) {
         rec(sc, "NM7", `헤더 제목이 '투표' 다 (${x.who})`, g.title === "투표", `제목 '${g.title}'`);
         rec(sc, "NM10", `순차 차례 블록이 없고 어둡게 막이 꺼져 있다 (${x.who})`, g.turn === null && (g.dim === null || g.dim === "off"), `turn ${g.turn === null ? "없음" : "있음"}, dim ${g.dim}`);
       }
-      rec(sc, "NM8", `투표 시작 직후(${Math.round(sinceStart)}ms) 누를 수 있는 이름표 ${N - 1}개가 깜빡인다`, blinkNow.every((c) => c === N - 1), `깜빡이는 이름표 ${blinkNow.join("/")}개 (기대 ${N - 1})`);
-      const stopped = await attempt(async () => {
-        const left = 3800 - (Date.now() - startedAt);
-        if (left > 0) await sleep(left);
-        const after = await Promise.all(pages.map((p) => blinkOf(p)));
-        return after.every((c) => c === 0) ? true : { ok: false, detail: `3.8초 뒤에도 깜빡이는 이름표 ${after.join("/")}개` };
-      });
-      rec(sc, "NM8b", "깜빡임은 3초 안팎에 멈춘다", stopped.ok, stopped.detail);
+      rec(sc, "NM8", `투표 시작 직후(${Math.round(sinceStart)}ms) 누를 수 있는 이름표 ${N - 1}개가 빛난다(data-call)`, callNow.every((c) => c === N - 1), `빛나는 이름표 ${callNow.join("/")}개 (기대 ${N - 1})`);
       // 맵 탭: 버튼이 아닌 바닥을 눌러도 이동 요청이 없고 목적지 링이 새로 생기지 않는다
       const g0 = await readGame(hp);
       const target = g0.stage ? await findTapTarget(hp, g0.stage, hostSeat, ctx.size) : null;
@@ -1542,6 +1542,16 @@ async function dayFlow(ctx) {
           await tapPick(guests[i].page, hostSeat);
         });
         rec(sc, "NM4", `이름표 버튼을 누르면 눌림 표시 (${humans[i + 1].who})`, r.ok, r.detail);
+      }
+      // NM8b 누른 뒤: 눌러 고른 손님 화면의 빛남은 0, 아직 안 누른 방장 화면의 빛남은 그대로(U-7)
+      {
+        const afterTap = await attempt(async () => {
+          await sleep(400);
+          const guestCalls = await Promise.all(guests.map((x) => readCallCount(x.page)));
+          const hostCalls = await readCallCount(hp);
+          return guestCalls.every((c) => c === 0) && hostCalls === N - 1 ? true : { ok: false, detail: `손님 빛남 ${guestCalls.join("/")}개(기대 0), 방장 빛남 ${hostCalls}개(기대 ${N - 1})` };
+        });
+        rec(sc, "NM8b", "이름표를 누르면 그 사람 화면의 빛남이 꺼지고 안 누른 사람 화면은 그대로다", afterTap.ok, afterTap.detail);
       }
       const countsOf = async (seat) => Promise.all(pages.map(async (p) => (await readGame(p)).tags.find((t) => t.seat === seat)?.count ?? null));
       const counts = await attempt(async () => {
@@ -1832,7 +1842,7 @@ async function noexecFlow(ctx) {
         await ht.waitFor((v) => v.phase === "night", NOMINATION_MS + 8000, "아무도 안 고름 → 밤");
       });
       rec(sc, "NE0", `아무도 고르지 않으면 투표 ${NOMINATION_MS / 1000}초 뒤 변론 없이 밤으로 간다`, toNight.ok, toNight.detail);
-      // 알림 기록에는 지목 시작 때 남은 '낮이 되었습니다' 가 먼저 들어 있을 수 있어 개수가 아니라 '처형 없음' 이 생길 때까지 기다린다
+      // 14페이즈 U-5: 36px '낮이 되었습니다'·'밤이 되었습니다' 알림은 꺼졌다(띠 문장이 말한다) — 값 있는 알림('처형 없음')이 생길 때까지 기다리는 기대는 그대로
       let log = await readAnnounceWatch(guests[0].page, { stop: false });
       for (const start = performance.now(); annIndex(log, (t) => t === "처형 없음") < 0 && performance.now() - start < 5000; ) {
         await sleep(100);
@@ -1977,7 +1987,7 @@ async function readGameStable(page, maxMs = 11000) {
 
 /**
  * basic-vote (FLOW-01, U-8): 8명(방장 + 사람 손님 7, 모두 4자 이름) 투표 화면의 기하. 이름표 버튼 7개가 44×44 이상·무가림(pickButtonChecks, 모여서 멈춘 뒤),
- * 묶음 G·H, 제목 '투표', 시간 링, 순차 블록 없음, 손님 일곱이 방장을 누르면 득표 배지 합 7 이고 표가 쌓인 뒤에도 기하가 유지된다.
+ * 묶음 G·H, 제목 '투표', 띠 시간(14페이즈: 옛 헤더 링을 옮김), 순차 블록 없음, 손님 일곱이 방장을 누르면 득표 배지 합 7 이고 표가 쌓인 뒤에도 기하가 유지된다.
  * 계획은 봇 7 이었으나 봇 이름은 첫 봇이 8자 고정이라 UI-SPEC 의 '4자 이름' 전제와 다르다 — 사람 손님으로 4자 이름을 만든다(결정 0052-3 과 같은 이유, SUMMARY 편차 참고).
  */
 async function basicVoteFlow(ctx) {
@@ -1991,12 +2001,11 @@ async function basicVoteFlow(ctx) {
     const g = await readGameStable(hp);
     rec(sc, "BV1", "이름표 버튼이 나를 뺀 산 사람 7개다", g.picks.length === 7 && !g.picks.some((b) => b.seat === hostSeat), `버튼 ${g.picks.length}개`);
     recMany(rec, sc, pickButtonChecks(g.picks), " (8명판, 모여서 멈춘 뒤)");
-    const ring = await hp.evaluate(() => {
-      const el = document.querySelector(".mf-game__header .mv-ring[role=timer]");
-      const m = /(\d+)/.exec(el?.getAttribute("aria-label") ?? "");
-      return el ? { seconds: m ? Number(m[1]) : null } : null;
-    });
-    rec(sc, "BV4", "헤더 제목이 '투표'이고 시간 링이 있다(남은 초 1~15)", g.title === "투표" && !!ring && ring.seconds !== null && ring.seconds >= 1 && ring.seconds <= 15, `제목 '${g.title}', 링 ${ring === null ? "없음" : `${ring.seconds}초`}`);
+    // 14페이즈(TOOL-02): 헤더 시간 링은 자막 띠의 막대 + '남은 초'로 옮겼다 — 같은 뜻(남은 초 1~15)을 띠 시간에서 읽는다
+    const bandTime = await readHostBand(hp);
+    const secondsM = /^(\d+)초$/.exec(bandTime.timeText);
+    const ring = secondsM && bandTime.barShown ? { seconds: Number(secondsM[1]) } : null;
+    rec(sc, "BV4", "헤더 제목이 '투표'이고 띠에 시간 막대와 'n초'가 있다(남은 초 1~15)", g.title === "투표" && !!ring && ring.seconds !== null && ring.seconds >= 1 && ring.seconds <= 15 && bandTime.oldRing === 0, `제목 '${g.title}', 띠 시간 ${ring === null ? `없음('${bandTime.timeText}', 막대 ${bandTime.barShown})` : `${ring.seconds}초`}, 옛 링 ${bandTime.oldRing}개`);
     rec(sc, "BV5", "순차 차례 블록([data-turn-block])이 없다", g.turn === null, `turn ${g.turn === null ? "없음" : "있음"}`);
     await gameGH(ctx, id, "nomination", host);
     // 손님 일곱이 방장을 누른다 → 모든 이름표 득표 배지 합 7, 방장 이름표 7표
@@ -3188,6 +3197,7 @@ async function resultAwardsFlow(ctx) {
     const after = await readAwardState(hp);
 
     for (const row of awardChecks({
+      knownShortLimit: first.viewport.h < SHORT_PHONE_H, // 14-08 UI#14: 360×560 의 패 아래 스테이지 150 미만만 알려진 한계로 남긴다(AW4k)
       viewport: first.viewport,
       stageTop: first.stageTop,
       panelTop: first.panelTop,
@@ -3771,7 +3781,7 @@ const { avatarEmoteFlow, avatarDressFlow, avatarPhasesFlow, avatarPhasesNightFlo
 // 맵 선택 화면(11페이즈 11-13): map-select. 흐름 본문은 mapselect.mjs, 도우미만 넘긴다
 const { mapSelectFlow } = makeMapSelectFlows({ recorder, startHost, openGuest, attempt, LOBBY_HOST_NICK, WORLD_GUEST_NICK, settledResult });
 
-// 소리(12페이즈): sound-render(12-06) 시험 페이지 오프라인 렌더 56개. 흐름 본문은 sound.mjs, 도우미만 넘긴다
+// 소리(12페이즈): sound-render(12-06) 시험 페이지 오프라인 렌더 57개. 흐름 본문은 sound.mjs, 도우미만 넘긴다
 const { soundRenderFlow, soundUnlockFlow, soundScriptFlow, soundNightParityFlow, soundResultFlow } = makeSoundFlows({ recorder, attempt, startHost, openGame, closeGame, nightScenario });
 
 // 사회자·이름표(14페이즈 14-08): emcee-band(띠, 폰 6종)·emcee-tools·emcee-leak·emcee-sound. 흐름 본문은 host.mjs, 도우미만 넘긴다
@@ -3829,7 +3839,7 @@ export const FLOWS = [
   // 10-08: 단계별 동작 도착(낮 토론·지목·변론·찬반·아침)·유령→산 사람 0건·떠 있는 버튼 숨김·이름표 층 표시 없음 / 밤 마피아→시민 편 0건. 390x844 한 크기(D-18)
   { id: "avatar-phases", run: avatarPhasesFlow, size: GAME_SIZE },
   { id: "avatar-phases-night", run: avatarPhasesNightFlow, size: GAME_SIZE },
-  // 12-06: 소리 시험 페이지 [전부 계산] 56개(피크·NaN·RMS·길이). 방 없이 390x844 한 크기, 소리 출력 없음(OfflineAudioContext)
+  // 12-06: 소리 시험 페이지 [전부 계산] 57개(피크·NaN·RMS·길이). 방 없이 390x844 한 크기, 소리 출력 없음(OfflineAudioContext)
   { id: "sound-render", run: soundRenderFlow, size: GAME_SIZE },
   // 12-07: 소리 켜기·끄기·잠금 해제 — [방 만들기] 탭 → running, 단추 토글, 새로고침 두 갈래(끔=알약 없음 · 켬=알약→탭→running), 숨김→suspended, 단추 위치·겹침. 폰 6종 구성(extraSizes)은 12-12 가 합쳤다
   { id: "sound-unlock", run: soundUnlockFlow, extraSizes: LOBBY_EXTRA_SIZES },

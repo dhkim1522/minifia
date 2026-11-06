@@ -96,6 +96,7 @@ import {
   LOBBY_PANEL_EXTRA,
   lobbyPanelHeight,
   GAME_PANEL_EXTRA,
+  TOOL_ROW_EXTRA,
   PICK_BUTTON_MAX,
   gamePanelHeight,
   faceListPanelH,
@@ -164,6 +165,8 @@ import {
 } from "./lib.mjs";
 import { dropSockets } from "./browser.mjs";
 import {
+  FLOAT_BOX_H,
+  FLOAT_LABEL_EXTRA,
   GOALS,
   HOST_ACT_LINES,
   TOOL_LABEL_EXEMPT,
@@ -628,14 +631,16 @@ test("04-30·06-17·08-23: 닫기 — 승인 목록은 네 건(결정 0056 의 �
 
 // ---- 08-23: 게임 맵 판정 (UI-SPEC "아래 패널 종류와 높이"·"검사 가능하게 둘 것") ----
 
-test("gamePanelHeight: 토론 LOG_H+154 · 채팅 +92 · 찬반 투표자 +218 · 찬반 보기 +126 (UI-SPEC 표의 여섯 폰 값)", () => {
-  assert.equal(gamePanelHeight(780, "talk"), 152 + 154);
-  assert.equal(gamePanelHeight(640, "chat"), 96 + 92);
-  assert.equal(gamePanelHeight(844, "verdictVoter"), 152 + 218);
-  assert.equal(gamePanelHeight(664, "verdictViewer"), 96 + 126);
+test("gamePanelHeight: 토론 LOG_H+154 · 채팅 +92 · 찬반 투표자 +218 · 찬반 보기 +126 (UI-SPEC 표의 여섯 폰 값) + 이름표 줄 11.6(14-06)", () => {
+  const X = TOOL_ROW_EXTRA;
+  assert.ok(Math.abs(X - 11.6) < 1e-9);
+  assert.equal(gamePanelHeight(780, "talk"), 152 + 154 + X);
+  assert.equal(gamePanelHeight(640, "chat"), 96 + 92 + X);
+  assert.equal(gamePanelHeight(844, "verdictVoter"), 152 + 218 + X);
+  assert.equal(gamePanelHeight(664, "verdictViewer"), 96 + 126 + X);
   // UI-SPEC 폰 크기 표: [방 높이, 토론, 채팅, 투표자, 보기]
   for (const [h, talk, chat, voter, viewer] of [[640, 250, 188, 314, 222], [664, 250, 188, 314, 222], [932, 306, 244, 370, 278], [560, 250, 188, 314, 222], [844, 306, 244, 370, 278], [874, 306, 244, 370, 278]]) {
-    assert.deepEqual([gamePanelHeight(h, "talk"), gamePanelHeight(h, "chat"), gamePanelHeight(h, "verdictVoter"), gamePanelHeight(h, "verdictViewer")], [talk, chat, voter, viewer], `방 높이 ${h}`);
+    assert.deepEqual([gamePanelHeight(h, "talk"), gamePanelHeight(h, "chat"), gamePanelHeight(h, "verdictVoter"), gamePanelHeight(h, "verdictViewer")], [talk + X, chat + X, voter + X, viewer + X], `방 높이 ${h}`);
   }
   assert.deepEqual({ ...GAME_PANEL_EXTRA }, { talk: 154, chat: 92, verdictVoter: 218, verdictViewer: 126, nightMafia: 154 });
   assert.equal(GAME_PANEL_EXTRA.chat, CHAT_PANEL_EXTRA);
@@ -661,7 +666,7 @@ test("faceListPanelH: 폭 4종 × 2행·1행이 UI-SPEC 표 값(약, ±1)이고 
 test("gamePanelHeight: nightMafia = LOG_H + 154 · nightCitizen = 88(방 높이와 무관) · faceList 는 faceListPanelH (09-21)", () => {
   assert.equal(GAME_PANEL_EXTRA.nightMafia, 154);
   for (const [h, mafia] of [[640, 250], [560, 250], [932, 306], [874, 306]]) {
-    assert.equal(gamePanelHeight(h, "nightMafia"), mafia, `방 높이 ${h}`);
+    assert.equal(gamePanelHeight(h, "nightMafia"), mafia + TOOL_ROW_EXTRA, `방 높이 ${h}`);
     assert.equal(gamePanelHeight(h, "nightMafia"), gamePanelHeight(h, "talk"));
     assert.equal(gamePanelHeight(h, "nightCitizen"), 88, `방 높이 ${h}`);
   }
@@ -3760,4 +3765,37 @@ test("hostChimeChecks: 구간이 없거나 모양이 틀리면 측정값 없음�
   const only = hostChimeChecks([{ kind: "transition", name: "T", count: 1, played: 1 }]);
   assert.equal(only.find((r) => r.id === "HS1").ok, true);
   assert.equal(only.find((r) => r.id === "HS2").ok, false);
+});
+
+// ---- 14-08: 이름표로 길어진 떠 있는 단추 상자(면 48 + 4 + 라벨 19.6) ----
+
+test("FLOAT_BOX_H: 떠 있는 단추 상자 높이는 면 48 + 간격 4 + 라벨 한 줄 19.6 = 71.6", () => {
+  assert.equal(FLOAT_LABEL_EXTRA, 23.6);
+  assert.equal(FLOAT_BOX_H, FLOAT_SIZE + 23.6);
+  assert.ok(Math.abs(FLOAT_BOX_H - 71.6) < 1e-9);
+});
+
+test("floatButtonChecks boxH: 라벨이 붙은 상자 높이로 판정하면 폭 48·높이 71.6 이 통과하고, 높이가 면 그대로(48)면 실패한다 (기본값은 옛 48)", () => {
+  const tall = floatGood();
+  tall.buttons = [
+    { kind: "claim", rect: rect(326, 520, 48, FLOAT_BOX_H) },
+    { kind: "whisper", rect: rect(326, 600.4, 48, FLOAT_BOX_H) },
+  ];
+  tall.boxH = FLOAT_BOX_H;
+  assert.equal(okOf(floatButtonChecks(tall)).FB4, true);
+  const flat = floatGood();
+  flat.boxH = FLOAT_BOX_H;
+  assert.equal(okOf(floatButtonChecks(flat)).FB4, false); // 48x48 은 라벨이 없는 옛 모양
+  assert.equal(okOf(floatButtonChecks(floatGood())).FB4, true); // boxH 를 안 주면 옛 48
+});
+
+test("dressChecks floatH: 옷장 단추 상자 48x71.6 이 통과하고 48x48 은 실패한다 (기본값은 옛 48)", () => {
+  const a = dressGood();
+  a.float = rect(296, 310 - 8 - FLOAT_BOX_H, 48, FLOAT_BOX_H);
+  a.floatH = FLOAT_BOX_H;
+  assert.equal(okOf(dressChecks(a)).DB1, true);
+  const b = dressGood();
+  b.floatH = FLOAT_BOX_H; // dressGood 의 float 은 48x48
+  assert.equal(okOf(dressChecks(b)).DB1, false);
+  assert.equal(okOf(dressChecks(dressGood())).DB1, true);
 });

@@ -274,6 +274,12 @@ export function lobbyPanelHeight(logH) {
 /** 게임 맵 아래 패널 높이 덧셈(안전 영역 제외): 토론 = LOG_H + 154, 채팅 = + 92, 찬반 투표자 = + 218, 찬반 보기 = + 126(0062-2: 점 9px 대신 숫자 한 줄 24px 이라 +15), 밤 마피아 = + 154(토론 패널과 같다, 09-UI-SPEC 149~157행). */
 export const GAME_PANEL_EXTRA = Object.freeze({ talk: 154, chat: CHAT_PANEL_EXTRA, verdictVoter: 218, verdictViewer: 126, nightMafia: 154 });
 
+/**
+ * 14-06(TOOL-01): 입력줄의 [동작]·[보내기]·[유언]이 면 36 + 4 + 라벨 한 줄(14px × 1.4 = 19.6) 이름표 단추(높이 59.6)가 되어, 입력칸 48 이 아래 정렬이라 입력줄이 11.6 커지고
+ * 입력줄이 든 패널(토론·채팅·찬반·밤 마피아)이 그만큼 는다. 위 GAME_PANEL_EXTRA 는 앱 상수(chatUi.ts)의 값 그대로이고 gamePanelHeight 가 이 값을 더한다.
+ */
+export const TOOL_ROW_EXTRA = 36 + 4 + 19.6 - 48;
+
 /** 밤 시민 패널 높이: 행동 줄 52 [유언] 하나 = 88 고정(09-UI-SPEC 157행, 방 높이와 무관). */
 export const NIGHT_CITIZEN_PANEL_H = 88;
 
@@ -300,7 +306,7 @@ export function gamePanelHeight(roomH, kind, opts) {
   }
   const extra = Object.hasOwn(GAME_PANEL_EXTRA, kind) ? GAME_PANEL_EXTRA[kind] : undefined;
   if (extra === undefined) throw new Error(`알 수 없는 패널 종류: ${kind}`);
-  return logHeightFor(roomH) + extra;
+  return logHeightFor(roomH) + extra + TOOL_ROW_EXTRA;
 }
 
 // ---- 9페이즈 표식·판정 (09-21, 09-UI-SPEC "검사 가능하게 둘 것" 450~455행). 8페이즈 표식(data-game-stage·data-announce·data-pick 등)은 그대로라 여기 없다. ----
@@ -372,6 +378,12 @@ export function pickButtonChecks(buttons) {
 // 앱 상수 사본. test/unit/e2eContract.test.ts 가 CSS 원문(tokens.css·game.css·v2.css)과 같은 값인지 본다.
 /** 떠 있는 버튼 지름(--control-input) */
 export const FLOAT_SIZE = 48;
+/**
+ * 14-07(TOOL-01): 떠 있는 버튼은 둥근 면(48) 아래 한 단어 라벨이 붙어 단추 상자가 길어졌다 — 면과 라벨 사이 4(--space-xs) + 라벨 한 줄 14px × 1.4 = 19.6.
+ * 상자 폭은 그대로 48(면 지름). 높이를 보는 판정(FB4·DB1)은 이 상자 높이를 받고(boxH·floatH), 지름 48 은 폭이 맡는다.
+ */
+export const FLOAT_LABEL_EXTRA = 23.6;
+export const FLOAT_BOX_H = FLOAT_SIZE + FLOAT_LABEL_EXTRA;
 /** 떠 있는 묶음의 오른쪽 여백(--space-md) */
 export const FLOAT_MARGIN = 16;
 /** 떠 있는 버튼 사이와 패널 윗변 위 간격(--space-sm) */
@@ -394,11 +406,11 @@ export const CLAIM_OUT_Y = -8;
  * 떠 있는 버튼 판정(FB1~FB5). buttons = [{ kind, rect }], panel = { top }, viewport = { w, h }, kbOpen = 가상 키보드가 열려 있나, expectCount = 기대 개수(기본 2: 배지 + 귓속말).
  * FB1 개수가 기대와 같고 모두 화면 안 · FB2 버튼끼리 겹치지 않음 · FB3 키보드가 닫혀 있으면 아랫변 ≤ 패널 윗변 − 8 + 0.5 · FB4 지름 48±1(≥ 44) · FB5 오른쪽 여백 16±1.
  */
-export function floatButtonChecks({ buttons, panel, viewport, kbOpen = false, expectCount = 2 } = {}) {
+export function floatButtonChecks({ buttons, panel, viewport, kbOpen = false, expectCount = 2, boxH = FLOAT_SIZE } = {}) {
   const L1 = `떠 있는 버튼이 ${expectCount}개이고 모두 화면 안`;
   const L2 = "떠 있는 버튼끼리 겹치지 않음";
   const L3 = "떠 있는 버튼이 패널 윗변 위 8 이내(키보드 닫힘)";
-  const L4 = `떠 있는 버튼 지름 ${FLOAT_SIZE}±1`;
+  const L4 = `떠 있는 버튼 폭 ${FLOAT_SIZE}±1 · 높이 ${fmt(boxH)}±1`;
   const L5 = `떠 있는 버튼 오른쪽 여백 ${FLOAT_MARGIN}±1`;
   const valid = Array.isArray(buttons) && buttons.every((b) => b?.rect && allNum(b.rect.left, b.rect.top, b.rect.width, b.rect.height));
   if (!valid || !viewport || !allNum(viewport.w, viewport.h)) return [noMeasure("FB1", L1, "buttons·viewport"), noMeasure("FB2", L2, "buttons"), noMeasure("FB3", L3, "buttons"), noMeasure("FB4", L4, "buttons"), noMeasure("FB5", L5, "buttons")];
@@ -417,7 +429,7 @@ export function floatButtonChecks({ buttons, panel, viewport, kbOpen = false, ex
   if (kbOpen) out.push(result("FB3", L3, []));
   else if (!panel || !isNum(panel.top)) out.push(noMeasure("FB3", L3, "panel.top"));
   else out.push(result("FB3", L3, buttons.filter((b) => bottom(b.rect) > panel.top - FLOAT_GAP + OVERLAP_EPS).map((b) => `${b.kind} 아래 ${fmt(bottom(b.rect))} > ${fmt(panel.top - FLOAT_GAP)}`)));
-  out.push(result("FB4", L4, buttons.filter((b) => Math.abs(b.rect.width - FLOAT_SIZE) > 1 || Math.abs(b.rect.height - FLOAT_SIZE) > 1 || b.rect.width + OVERLAP_EPS < TAP_MIN || b.rect.height + OVERLAP_EPS < TAP_MIN).map((b) => `${b.kind} ${fmt(b.rect.width)}x${fmt(b.rect.height)}`)));
+  out.push(result("FB4", L4, buttons.filter((b) => Math.abs(b.rect.width - FLOAT_SIZE) > 1 || Math.abs(b.rect.height - boxH) > 1 || b.rect.width + OVERLAP_EPS < TAP_MIN || b.rect.height + OVERLAP_EPS < TAP_MIN).map((b) => `${b.kind} ${fmt(b.rect.width)}x${fmt(b.rect.height)}`)));
   out.push(result("FB5", L5, buttons.filter((b) => Math.abs(viewport.w - right(b.rect) - FLOAT_MARGIN) > 1).map((b) => `${b.kind} 여백 ${fmt(viewport.w - right(b.rect))}`)));
   return out;
 }
@@ -2093,9 +2105,9 @@ export function floatTrayChecks({ visibleBefore, hiddenWhileOpen, visibleAfter }
  * DS3 완전히 보이는 카드 4 이상이고 시트 오른쪽 가장자리에 걸쳐 8px 이상 보이는 다음 카드가 있음(더 있음을 알림) · DS4 닫기 44x44 이상 ·
  * DS5 선택 카드가 시트 가로 안에 완전히 보이고 aria-pressed="true" 가 하나뿐 · DS6 이름 글자 14px 이상.
  */
-export function dressChecks({ float, panel, sheet, cards, close, selected, nameFont, viewport, kb } = {}) {
+export function dressChecks({ float, panel, sheet, cards, close, selected, nameFont, viewport, kb, floatH = FLOAT_SIZE } = {}) {
   const L = {
-    DB1: `꾸미기 버튼 ${FLOAT_SIZE}x${FLOAT_SIZE} · 오른쪽 ${FLOAT_MARGIN} · 패널 윗변 위 ${FLOAT_GAP}`,
+    DB1: `옷장 버튼 ${FLOAT_SIZE}x${fmt(floatH)} · 오른쪽 ${FLOAT_MARGIN} · 패널 윗변 위 ${FLOAT_GAP}`,
     DS1: "시트가 아래 패널을 정확히 덮음(윗변·높이)",
     DS2: "카드 아홉 개: 폭 72 · 높이 44 이상",
     DS3: "완전히 보이는 카드 4장 이상 + 오른쪽에 걸친 다음 카드",
@@ -2108,7 +2120,7 @@ export function dressChecks({ float, panel, sheet, cards, close, selected, nameF
   if (!valid) return Object.entries(L).map(([id, label]) => noMeasure(id, label, "float·panel·sheet·cards·close·selected·nameFont·viewport·kb"));
   const out = [];
   const db = [];
-  if (Math.abs(float.width - FLOAT_SIZE) > 1 || Math.abs(float.height - FLOAT_SIZE) > 1) db.push(`${fmt(float.width)}x${fmt(float.height)}`);
+  if (Math.abs(float.width - FLOAT_SIZE) > 1 || Math.abs(float.height - floatH) > 1) db.push(`${fmt(float.width)}x${fmt(float.height)}`);
   if (Math.abs(viewport.w - right(float) - FLOAT_MARGIN) > 1) db.push(`오른쪽 여백 ${fmt(viewport.w - right(float))}`);
   if (!kb && Math.abs(panel.top - FLOAT_GAP - bottom(float)) > 2) db.push(`아랫변 ${fmt(bottom(float))} (기대 ${fmt(panel.top - FLOAT_GAP)})`);
   out.push(result("DB1", L.DB1, db));

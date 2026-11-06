@@ -1,7 +1,7 @@
 // 결과 화면 E2E 순수 판정 단위 테스트 (11-05). 실행: node --test scripts/e2e/result.test.mjs
 import test from "node:test";
 import assert from "node:assert/strict";
-import { awardChecks, AWARD_PLATE, READY_PILL, rematchChecks, RESULT_JOB_OUTFIT, RESULT_MARKERS, RESULT_PANEL_H, RESULT_WIN_TITLE, RESULT_TAB_IDS, RESULT_TAB_IDS_BASIC, resultSkipChecks, resultStageChecks, resultTabChecks, TIMELINE_CARD, timelineChecks } from "./result.mjs";
+import { awardChecks, AWARD_PLATE, READY_PILL, SHORT_PHONE_H, TOOL_ROW_EXTRA, rematchChecks, RESULT_JOB_OUTFIT, RESULT_MARKERS, RESULT_PANEL_H, RESULT_WIN_TITLE, RESULT_TAB_IDS, RESULT_TAB_IDS_BASIC, resultSkipChecks, resultStageChecks, resultTabChecks, TIMELINE_CARD, timelineChecks } from "./result.mjs";
 
 // 4명판 시민 승: 좌석 0 마피아(진 팀) · 1 시민 · 2 경찰 · 3 의사
 const good = () => ({
@@ -59,10 +59,15 @@ test("RS5: 패널 높이가 188(짧은 방) · 244(방 높이 780 이상) ±1 �
   assert.deepEqual(failing({ panel: 190, stageBottom: 474 }), ["RS5"]);
   assert.deepEqual(failing({ panel: 189, stageBottom: 475 }), []); // ±1 안
   // panelWant 없이 방 높이로 계산: 780 이상이면 244
-  const tall = { ...good(), panelWant: undefined, roomH: 800, panel: 244, stageBottom: 556 };
+  const tall = { ...good(), panelWant: undefined, roomH: 800, panel: 244 + TOOL_ROW_EXTRA, stageBottom: 800 - 244 - TOOL_ROW_EXTRA };
   assert.deepEqual(resultStageChecks(tall).filter((r) => !r.ok), []);
   assert.deepEqual(resultStageChecks({ ...tall, panel: 188, stageBottom: 612 }).filter((r) => !r.ok).map((r) => r.id), ["RS5"]);
   assert.deepEqual(RESULT_PANEL_H, { short: 188, tall: 244, tallRoomMinH: 780 });
+  // 14-06: 방 높이로 계산하는 기대에는 이름표 줄 늘어난 11.6 이 더해진다(이름표 단추 59.6 − 입력칸 48)
+  assert.ok(Math.abs(TOOL_ROW_EXTRA - 11.6) < 1e-9);
+  const short = { ...good(), panelWant: undefined, roomH: 664, panel: 188 + TOOL_ROW_EXTRA, stageBottom: 664 - 188 - TOOL_ROW_EXTRA };
+  assert.deepEqual(resultStageChecks(short).filter((r) => !r.ok), []);
+  assert.deepEqual(resultStageChecks({ ...short, panel: 188, stageBottom: 664 - 188 }).filter((r) => !r.ok).map((r) => r.id), ["RS5"]); // 이름표 줄 없는 옛 높이는 실패
 });
 
 test("RS6: 스테이지 아래 끝이 방 높이 − 패널과 다르면 RS6 만 실패한다", () => {
@@ -111,7 +116,7 @@ test("상수: 표식 목록·승리 한 줄·직업 의상 표", () => {
 const goodLayout = () => ({
   roomH: 664,
   tabBoxes: RESULT_TAB_IDS.map((id) => ({ id, w: 44, h: 44 })),
-  panelCollapsedH: 188,
+  panelCollapsedH: 188 + TOOL_ROW_EXTRA,
   panelExpandedH: 465, // min(round(0.7 × 664), 520)
   inputPresent: false,
   iconColors: { all: "rgb(200, 200, 200)", mafia: "rgb(230, 100, 100)", ghost: "rgb(200, 200, 200)", whisper: "rgb(200, 200, 200)", log: "rgb(200, 200, 200)" },
@@ -152,19 +157,20 @@ test("RT1: 탭 버튼이 44×44 미만이거나 다섯 개가 아니면 RT1 만 
   assert.deepEqual(tabFailing(withLayout({ tabBoxes: goodLayout().tabBoxes.slice(0, 4) })), ["RT1"]);
 });
 
-test("RT3: 접힌 패널 높이는 188(방 780 미만)·244(780 이상) ±1", () => {
-  assert.deepEqual(tabFailing(withLayout({ panelCollapsedH: 200 })), ["RT3"]);
-  assert.deepEqual(tabFailing(withLayout({ panelCollapsedH: 189 })), []);
-  assert.deepEqual(tabFailing(withLayout({ roomH: 932, panelCollapsedH: 244, panelExpandedH: 520 })), []);
-  assert.deepEqual(tabFailing(withLayout({ roomH: 932, panelCollapsedH: 188, panelExpandedH: 520 })), ["RT3"]);
+test("RT3: 접힌 패널 높이는 188(방 780 미만)·244(780 이상) + 이름표 줄 11.6 ±1", () => {
+  assert.deepEqual(tabFailing(withLayout({ panelCollapsedH: 212 })), ["RT3"]);
+  assert.deepEqual(tabFailing(withLayout({ panelCollapsedH: 200 })), []);
+  assert.deepEqual(tabFailing(withLayout({ panelCollapsedH: 188 })), ["RT3"]); // 이름표 줄 없는 옛 높이
+  assert.deepEqual(tabFailing(withLayout({ roomH: 932, panelCollapsedH: 244 + TOOL_ROW_EXTRA, panelExpandedH: 520 })), []);
+  assert.deepEqual(tabFailing(withLayout({ roomH: 932, panelCollapsedH: 188 + TOOL_ROW_EXTRA, panelExpandedH: 520 })), ["RT3"]);
 });
 
 test("RT4: 확장 높이 = min(round(0.7 × 방 높이), 520) ±2", () => {
   assert.deepEqual(tabFailing(withLayout({ panelExpandedH: 400 })), ["RT4"]);
   assert.deepEqual(tabFailing(withLayout({ panelExpandedH: 467 })), []);
   assert.deepEqual(tabFailing(withLayout({ panelExpandedH: 468 })), ["RT4"]);
-  assert.deepEqual(tabFailing(withLayout({ roomH: 560, panelExpandedH: 392, panelCollapsedH: 188 })), []);
-  assert.deepEqual(tabFailing(withLayout({ roomH: 932, panelCollapsedH: 244, panelExpandedH: 652 })), ["RT4"]);
+  assert.deepEqual(tabFailing(withLayout({ roomH: 560, panelExpandedH: 392, panelCollapsedH: 188 + TOOL_ROW_EXTRA })), []);
+  assert.deepEqual(tabFailing(withLayout({ roomH: 932, panelCollapsedH: 244 + TOOL_ROW_EXTRA, panelExpandedH: 652 })), ["RT4"]);
 });
 
 test("RT5: 확장에서 입력칸이 있으면 RT5 만 실패한다", () => {
@@ -237,7 +243,7 @@ const awardsGood = () => ({
   stageTop: 62,
   panelTop: 600,
   plateBox: { top: 70, left: 31, width: 328, height: 96 },
-  floatBox: { left: 326, top: 480, width: 48, height: 48, bottom: 528 },
+  floatBox: { left: 326, top: 480, width: 48, height: AWARD_PLATE.floatH, bottom: 480 + AWARD_PLATE.floatH },
   progress: ["1 / 4", "2 / 4", "3 / 4", "4 / 4"],
   awards: [[0, "whiff"], [2, "detective"], [1, "talker"], [3, "survivor"]],
   observed: ["whiff", "detective", "talker", "survivor"],
@@ -260,8 +266,8 @@ test("awardChecks: 정상 입력은 AW1~AW10 이 모두 통과한다", () => {
   for (const r of rows) assert.equal(r.ok, true, `${r.id}: ${r.detail}`);
 });
 
-test("AW-PLATE 상수: 폭 min(328, 폭 − 32), 높이 96, 윗변 + 8, 패 아래 150", () => {
-  assert.deepEqual({ ...AWARD_PLATE }, { maxW: 328, sideMargin: 32, h: 96, topGap: 8, belowMin: 150, float: 48, floatRight: 16, floatGap: 8 });
+test("AW-PLATE 상수: 폭 min(328, 폭 − 32), 높이 96, 윗변 + 8, 패 아래 150, [넘기기] 상자 48x71.6(14-07 이름표)", () => {
+  assert.deepEqual({ ...AWARD_PLATE, floatH: Math.round(AWARD_PLATE.floatH * 10) / 10 }, { maxW: 328, sideMargin: 32, h: 96, topGap: 8, belowMin: 150, float: 48, floatH: 71.6, floatRight: 16, floatGap: 8 });
 });
 
 test("AW1: 패 수가 참가자 수·훅 목록 길이와 다르면 AW1 이 실패한다", () => {
@@ -283,17 +289,20 @@ test("AW4(AW-PLATE): 폭·높이·윗변·가운데·패 아래 스테이지, �
   assert.deepEqual(awFailing({ plateBox: { top: 70, left: 31, width: 328, height: 80 } }), ["AW4"]);
   assert.deepEqual(awFailing({ plateBox: { top: 80, left: 31, width: 328, height: 96 } }), ["AW4"]);
   assert.deepEqual(awFailing({ plateBox: { top: 70, left: 20, width: 328, height: 96 } }), ["AW4"]);
-  assert.deepEqual(awFailing({ panelTop: 300, floatBox: { left: 326, top: 180, width: 48, height: 48, bottom: 228 } }), ["AW4"]); // 패 아래 134 < 150
+  assert.deepEqual(awFailing({ panelTop: 300, floatBox: { left: 326, top: 180, width: 48, height: AWARD_PLATE.floatH, bottom: 180 + AWARD_PLATE.floatH } }), ["AW4"]); // 패 아래 134 < 150
   // 작은 폰: 폭 − 32
-  const small = { viewport: { w: 360, h: 560 }, plateBox: { top: 70, left: 16, width: 328, height: 96 }, panelTop: 372, floatBox: { left: 296, top: 252, width: 48, height: 48, bottom: 300 } };
+  const small = { viewport: { w: 360, h: 560 }, plateBox: { top: 70, left: 16, width: 328, height: 96 }, panelTop: 372, floatBox: { left: 296, top: 252, width: 48, height: AWARD_PLATE.floatH, bottom: 252 + AWARD_PLATE.floatH } };
   assert.deepEqual(awFailing(small), []); // 폭 360: 328 = min(328, 360 − 32), 372 − 166 = 206 ≥ 150
   assert.deepEqual(awFailing({ ...small, panelTop: 300 }), ["AW4", "AW5"]); // 패 아래 134 < 150, 그리고 [넘기기]가 아래 칸에 걸림
 });
 
-test("AW5: [넘기기] 지름 48·오른쪽 16·아래 칸 자리, 한 값씩 어긋나면 AW5 만 실패한다", () => {
-  assert.deepEqual(awFailing({ floatBox: { left: 326, top: 480, width: 44, height: 48, bottom: 528 } }), ["AW5"]);
-  assert.deepEqual(awFailing({ floatBox: { left: 320, top: 480, width: 48, height: 48, bottom: 528 } }), ["AW5"]);
-  assert.deepEqual(awFailing({ floatBox: { left: 326, top: 530, width: 48, height: 48, bottom: 578 } }), ["AW5"]); // 아래 칸을 침범
+test("AW5: [넘기기] 폭 48·상자 높이 71.6·오른쪽 16·위 칸, 한 값씩 어긋나면 AW5 만 실패한다", () => {
+  const H = AWARD_PLATE.floatH;
+  assert.deepEqual(awFailing({ floatBox: { left: 326, top: 480, width: 44, height: H, bottom: 480 + H } }), ["AW5"]);
+  assert.deepEqual(awFailing({ floatBox: { left: 320, top: 480, width: 48, height: H, bottom: 480 + H } }), ["AW5"]);
+  assert.deepEqual(awFailing({ floatBox: { left: 326, top: 480, width: 48, height: 48, bottom: 528 } }), ["AW5"]); // 라벨 없는 옛 48 높이
+  assert.deepEqual(awFailing({ floatBox: { left: 326, top: 530, width: 48, height: H, bottom: 530 + H } }), ["AW5"]); // 아래 칸 자리를 침범(윗변이 위 칸보다 아래)
+  assert.deepEqual(awFailing({ floatBox: { left: 326, top: 480, width: 48, height: H, bottom: 600 } }), ["AW5"]); // 아랫변이 패널 윗변 − 8 을 넘음
   assert.deepEqual(awFailing({ floatBox: null }), ["AW5"]);
 });
 
@@ -449,7 +458,7 @@ test("RESULT_MARKERS: 기록 탭 표식 3개가 더해져 있다 (11-11)", () =>
 const rmGood = () => ({
   viewport: { w: 360, h: 560 },
   pillBox: { width: 96, height: 48 },
-  inputWidth: 168,
+  inputWidth: 172,
   guestPill: { before: { ready: "false", pressed: "false" }, after: { ready: "true", pressed: "true" } },
   count: { text: "2/5", dim: true, disabled: true },
   countWant: { n: 2, m: 5, minPlayers: 4 },
@@ -472,8 +481,8 @@ const rmGood = () => ({
 });
 const rmFailing = (over) => rematchChecks({ ...rmGood(), ...over }).filter((r) => !r.ok).map((r) => r.id);
 
-test("READY_PILL: 알약 96×48, 입력줄 여백 192", () => {
-  assert.deepEqual({ ...READY_PILL }, { w: 96, h: 48, inputExtra: 192 });
+test("READY_PILL: 알약 96×48, 입력줄 여백 188(보내기 이름표 단추 44)", () => {
+  assert.deepEqual({ ...READY_PILL }, { w: 96, h: 48, inputExtra: 188 });
 });
 
 test("rematchChecks: 정상 입력은 RM1~RM12 가 모두 통과한다", () => {
@@ -482,13 +491,13 @@ test("rematchChecks: 정상 입력은 RM1~RM12 가 모두 통과한다", () => {
   for (const r of rows) assert.equal(r.ok, true, `${r.id}: ${r.detail}`);
 });
 
-test("RM1: 알약 96×48 ±1 이고 입력칸 폭 = 폭 − 192 ±2", () => {
+test("RM1: 알약 96×48 ±1 이고 입력칸 폭 = 폭 − 188 ±2", () => {
   assert.deepEqual(rmFailing({ pillBox: { width: 100, height: 48 } }), ["RM1"]);
   assert.deepEqual(rmFailing({ pillBox: { width: 96, height: 44 } }), ["RM1"]);
   assert.deepEqual(rmFailing({ inputWidth: 180 }), ["RM1"]);
-  assert.deepEqual(rmFailing({ inputWidth: 169.5, pillBox: { width: 96.9, height: 48.9 } }), []); // 오차 안
-  assert.deepEqual(rmFailing({ viewport: { w: 430, h: 932 }, inputWidth: 238 }), []);
-  assert.deepEqual(rmFailing({ viewport: { w: 430, h: 932 }, inputWidth: 168 }), ["RM1"]);
+  assert.deepEqual(rmFailing({ inputWidth: 170.5, pillBox: { width: 96.9, height: 48.9 } }), []); // 오차 안
+  assert.deepEqual(rmFailing({ viewport: { w: 430, h: 932 }, inputWidth: 242 }), []);
+  assert.deepEqual(rmFailing({ viewport: { w: 430, h: 932 }, inputWidth: 238 }), ["RM1"]); // 옛 192 기준(보내기 48)이면 실패
 });
 
 test("RM2: 손님 토글 전후로 data-ready 와 aria-pressed 가 반대로 바뀌고 서로 같다", () => {
@@ -593,4 +602,18 @@ test("기본판 resultTabChecks: 귓속말 탭·귓속말 점이 보이면(탭 �
   assert.deepEqual(basicFailing({ layout: { ...basicLayout(), tabBoxes: RESULT_TAB_IDS.map((id) => ({ id, w: 44, h: 44 })) } }), ["RT1"]);
   assert.deepEqual(basicFailing({ layout: { ...basicLayout(), dots: { before: ["mafia", "ghost", "whisper"], after: ["ghost", "whisper"] } } }), ["RT8"]);
   assert.deepEqual(basicFailing({ reveal: goodReveal() }), ["RT2"]);
+});
+
+test("AW4 knownShortLimit(14-08 UI#14): 낮은 폰은 '패 아래 150' 미만만 판정에서 빼 AW4k 정보 줄로 남기고, 다른 AW4 어긋남은 그대로 실패한다", () => {
+  const small = { ...awardsGood(), viewport: { w: 360, h: 560 }, plateBox: { top: 139, left: 16, width: 328, height: 96 }, stageTop: 131, panelTop: 360, floatBox: { left: 296, top: 200, width: 48, height: AWARD_PLATE.floatH, bottom: 200 + AWARD_PLATE.floatH } };
+  assert.deepEqual(awardChecks(small).filter((r) => !r.ok).map((r) => r.id), ["AW4"]); // 360 − 235 = 125 < 150
+  const known = awardChecks({ ...small, knownShortLimit: true });
+  assert.deepEqual(known.filter((r) => !r.ok).map((r) => r.id), []);
+  const k = known.find((r) => r.id === "AW4k");
+  assert.equal(k.ok, true);
+  assert.equal(k.info, true);
+  assert.match(k.detail, /125/);
+  // 폭이 틀리면 한계가 아니라 실패
+  assert.deepEqual(awardChecks({ ...small, knownShortLimit: true, plateBox: { ...small.plateBox, width: 300 } }).filter((r) => !r.ok).map((r) => r.id), ["AW4"]);
+  assert.equal(SHORT_PHONE_H, 575);
 });

@@ -40,15 +40,23 @@ export const RESULT_WIN_TITLE = Object.freeze({ citizenWin: "시민 승리", maf
 
 /** 아래 패널 높이: 기록 칸 LOG_H(96 · 방 높이 780 이상 152) + 92 = 188 · 244 */
 export const RESULT_PANEL_H = Object.freeze({ short: 188, tall: 244, tallRoomMinH: 780 });
+/**
+ * 14-06(TOOL-01): 입력줄의 [동작]·[보내기]·[유언]이 면 36 + 4 + 라벨 한 줄(14px × 1.4 = 19.6) 이름표 단추(높이 59.6)가 되어, 입력칸 48 이 아래 정렬이라 패널이 그만큼(11.6) 는다.
+ * 위 188 · 244 는 앱 상수(chatUi.ts)의 값 그대로이고, 방 높이로 기대를 계산하는 판정(RS5·RT3)이 이 값을 더한다.
+ */
+export const TOOL_ROW_EXTRA = 36 + 4 + 19.6 - 48;
+/** 이 높이(px) 미만의 폰은 방 틀 높이 575 미만의 짧은 폰(360×560 probe) — 14-08 UI#14 알려진 한계 적용 대상 */
+export const SHORT_PHONE_H = 575;
 
 /** 시상식(11-09, UI-SPEC B-3·G): 패 기하와 떠 있는 [넘기기] 기하. test/unit/e2eContract.test.ts 가 앱 CSS 와 대조한다 */
-export const AWARD_PLATE = Object.freeze({ maxW: 328, sideMargin: 32, h: 96, topGap: 8, belowMin: 150, float: 48, floatRight: 16, floatGap: 8 });
+/** floatH: 14-07 이름표로 [넘기기] 단추 상자가 면 48 + 4 + 라벨 19.6 = 71.6 이 되었다(폭 48 그대로) */
+export const AWARD_PLATE = Object.freeze({ maxW: 328, sideMargin: 32, h: 96, topGap: 8, belowMin: 150, float: 48, floatH: 48 + 4 + 19.6, floatRight: 16, floatGap: 8 });
 
 /** 시상식 헤더 제목 (src/game/awardText.ts CEREMONY_TITLE 의 사본) */
 export const AWARD_CEREMONY_TITLE = "시상식";
 
-/** 다시 하기 알약(11-12, UI-SPEC D-1·G): 96×48, 입력줄 = [입력 flex][보내기 48][알약 96], 요소 사이 8, 좌우 16 → 입력칸 폭 = 폭 − 192. test/unit/e2eContract.test.ts 가 앱 CSS 와 대조한다 */
-export const READY_PILL = Object.freeze({ w: 96, h: 48, inputExtra: 192 });
+/** 다시 하기 알약(11-12, UI-SPEC D-1·G): 96×48, 입력줄 = [입력 flex][보내기 이름표 단추 44(14-06, 옛 48)][알약 96], 요소 사이 8, 좌우 16 → 입력칸 폭 = 폭 − 188. test/unit/e2eContract.test.ts 가 앱 CSS 와 대조한다 */
+export const READY_PILL = Object.freeze({ w: 96, h: 48, inputExtra: 188 });
 
 const isNum = (x) => typeof x === "number" && Number.isFinite(x);
 const result = (id, label, bad) => ({ id, label, ok: bad.length === 0, detail: bad.length === 0 ? "" : bad.join("; ") });
@@ -71,7 +79,7 @@ export function resultStageChecks(m) {
     RS3: "결과 화면: 어두운 좌석 == 진 팀",
     RS4: "결과 화면: 모두 직업 의상(런타임이 입은 값)",
     RS4after: "결과 화면: 시상식 뒤 직업 의상이 걷힘(고른 look)",
-    RS5: "결과 화면: 아래 패널 높이 188 · 244",
+    RS5: "결과 화면: 아래 패널 높이 188 · 244 (+ 이름표 줄 11.6)",
     RS6: "결과 화면: 스테이지 아래 끝 == 방 높이 − 패널",
     RS7: "결과 화면: 옛 카드·배너·[처음으로]·방 닫힘 안내 없음",
     RS8: "결과 화면: 채팅 한 줄이 기록 칸에 보임",
@@ -108,7 +116,7 @@ export function resultStageChecks(m) {
   }
 
   // RS5
-  const want = isNum(m?.panelWant) ? m.panelWant : isNum(m?.roomH) ? (m.roomH >= RESULT_PANEL_H.tallRoomMinH ? RESULT_PANEL_H.tall : RESULT_PANEL_H.short) : null;
+  const want = isNum(m?.panelWant) ? m.panelWant : isNum(m?.roomH) ? (m.roomH >= RESULT_PANEL_H.tallRoomMinH ? RESULT_PANEL_H.tall : RESULT_PANEL_H.short) + TOOL_ROW_EXTRA : null;
   if (!isNum(m?.panel) || want === null) out.push(noMeasure("RS5", L.RS5, "panel·roomH"));
   else out.push(result("RS5", L.RS5, Math.abs(m.panel - want) <= 1 ? [] : [`패널 높이 ${m.panel} ≠ ${want} (±1)`]));
 
@@ -204,7 +212,7 @@ export function resultTabChecks(m = {}, { whisper = false } = {}) {
 function layoutTabChecks(l, tabIds) {
   const L = {
     RT1: `탭 패널: 탭 버튼 ${tabIds.length}개, 모두 44×44 이상`,
-    RT3: "탭 패널: 접힌 패널 높이 188 · 244",
+    RT3: "탭 패널: 접힌 패널 높이 188 · 244 (+ 이름표 줄 11.6)",
     RT4: "탭 패널: 마피아 탭 확장 높이 min(round(0.7 × 방 높이), 520)",
     RT5: "탭 패널: 확장에서 입력칸 없음",
     RT6: "탭 패널: 마피아 탭 아이콘만 진홍",
@@ -224,7 +232,7 @@ function layoutTabChecks(l, tabIds) {
   }
 
   // RT3
-  const wantCollapsed = isNum(l?.roomH) ? (l.roomH >= RESULT_PANEL_H.tallRoomMinH ? RESULT_PANEL_H.tall : RESULT_PANEL_H.short) : null;
+  const wantCollapsed = isNum(l?.roomH) ? (l.roomH >= RESULT_PANEL_H.tallRoomMinH ? RESULT_PANEL_H.tall : RESULT_PANEL_H.short) + TOOL_ROW_EXTRA : null;
   if (!isNum(l?.panelCollapsedH) || wantCollapsed === null) out.push(noMeasure("RT3", L.RT3, "panelCollapsedH·roomH"));
   else out.push(result("RT3", L.RT3, Math.abs(l.panelCollapsedH - wantCollapsed) <= 1 ? [] : [`접힌 높이 ${l.panelCollapsedH} ≠ ${wantCollapsed} (±1)`]));
 
@@ -396,7 +404,7 @@ export function awardChecks(m) {
     AW2: "시상식: 패 순서 == 서버가 보낸 칭호 순서",
     AW3: "시상식: 마지막 패가 이긴 팀",
     AW4: "시상식: 패 기하 AW-PLATE (폭 min(328, 폭 − 32) · 높이 96 · 스테이지 윗변 + 8 · 아래 150 이상)",
-    AW5: "시상식: [넘기기] 지름 48 · 오른쪽 16 · 위 칸",
+    AW5: "시상식: [넘기기] 폭 48(상자 높이 71.6) · 오른쪽 16 · 위 칸",
     AW6: "시상식: 진행 숫자 'k / n' 이 패마다 1씩 오름",
     AW7: "시상식: 헤더 '시상식' → 끝난 뒤 승리 한 줄",
     AW8: "시상식: 끝난 뒤 [넘기기] 없음",
@@ -431,6 +439,7 @@ export function awardChecks(m) {
   }
 
   // AW4
+  let known = "";
   const pb = m?.plateBox;
   if (!isNum(pb?.top) || !isNum(pb?.left) || !isNum(pb?.width) || !isNum(pb?.height) || !isNum(m?.viewport?.w) || !isNum(m?.stageTop) || !isNum(m?.panelTop)) out.push(noMeasure("AW4", L.AW4, "plateBox·viewport·stageTop·panelTop"));
   else {
@@ -438,12 +447,17 @@ export function awardChecks(m) {
     const wantW = Math.min(AWARD_PLATE.maxW, m.viewport.w - AWARD_PLATE.sideMargin);
     if (Math.abs(pb.width - wantW) > 2) bad.push(`폭 ${pb.width} ≠ ${wantW} (±2)`);
     if (Math.abs(pb.height - AWARD_PLATE.h) > 2) bad.push(`높이 ${pb.height} ≠ ${AWARD_PLATE.h} (±2)`);
+    // 스테이지 윗변 = 자막 띠가 있으면 띠 아랫변, 없으면 헤더 아랫변(14페이즈, readAwardState)
     const wantTop = m.stageTop + AWARD_PLATE.topGap;
     if (Math.abs(pb.top - wantTop) > 2) bad.push(`위 ${pb.top} ≠ 스테이지 윗변 ${m.stageTop} + ${AWARD_PLATE.topGap} (±2)`);
     const center = pb.left + pb.width / 2;
     if (Math.abs(center - m.viewport.w / 2) > 2) bad.push(`가로 가운데 ${center} ≠ ${m.viewport.w / 2} (±2)`);
     const below = m.panelTop - (pb.top + pb.height);
-    if (below < AWARD_PLATE.belowMin) bad.push(`패 아래 스테이지 ${below} < ${AWARD_PLATE.belowMin}`);
+    // 14-08 UI#14 알려진 한계: 가장 낮은 폰(360×560)은 자막 띠가 스테이지 윗부분을 차지해 패 아래 스테이지가 150 에 못 미친다 — 이 한 항목만 판정에서 빼고 잰 값을 AW4k 로 남긴다(문턱은 그대로)
+    if (below < AWARD_PLATE.belowMin) {
+      if (m.knownShortLimit === true) known = `패 아래 스테이지 ${below} < ${AWARD_PLATE.belowMin}`;
+      else bad.push(`패 아래 스테이지 ${below} < ${AWARD_PLATE.belowMin}`);
+    }
     out.push(result("AW4", L.AW4, bad));
   }
 
@@ -452,12 +466,14 @@ export function awardChecks(m) {
   if (!isNum(fb?.left) || !isNum(fb?.width) || !isNum(fb?.height) || !isNum(fb?.bottom) || !isNum(m?.viewport?.w) || !isNum(m?.panelTop)) out.push(noMeasure("AW5", L.AW5, "floatBox·viewport·panelTop"));
   else {
     const bad = [];
-    if (Math.abs(fb.width - AWARD_PLATE.float) > 1 || Math.abs(fb.height - AWARD_PLATE.float) > 1) bad.push(`지름 ${fb.width}×${fb.height} ≠ ${AWARD_PLATE.float} (±1)`);
+    if (Math.abs(fb.width - AWARD_PLATE.float) > 1 || Math.abs(fb.height - AWARD_PLATE.floatH) > 1) bad.push(`상자 ${fb.width}×${fb.height} ≠ ${AWARD_PLATE.float}×${AWARD_PLATE.floatH} (±1, 면 48 + 라벨)`);
     const right = m.viewport.w - (fb.left + fb.width);
     if (Math.abs(right - AWARD_PLATE.floatRight) > 1) bad.push(`오른쪽 여백 ${right} ≠ ${AWARD_PLATE.floatRight} (±1)`);
-    // 위 칸: 아랫변이 패널 윗변 − 8 − 아래 칸(48) − 칸 사이(8) 보다 위여야 한다(아래 칸은 11-12 의 [꾸미기] 자리)
-    const limit = m.panelTop - AWARD_PLATE.floatGap - AWARD_PLATE.float - AWARD_PLATE.floatGap + 1;
-    if (fb.bottom > limit) bad.push(`아랫변 ${fb.bottom} > ${limit} (아래 칸 자리를 비워야 함)`);
+    // 위 칸: 윗변이 `패널 윗변 − 8 − (칸 둘 48×2 + 사이 8)` 이하 — 아래 칸(11-12 의 [옷장] 자리)을 비운 위 칸에 선다. 14-07 이름표로 단추 상자가 길어져도 줄 자리(.mf-float 의 예약 높이)는
+    // 그대로라 윗변은 옛 자리이고 아랫변이 길어진 만큼 내려온다 — 시상 중에는 아래 칸 단추가 없어(옷장은 시상이 끝나야 나온다) 겹치지 않고, 아랫변은 패널 윗변 − 8 안에 있어야 한다
+    const topLimit = m.panelTop - AWARD_PLATE.floatGap - (AWARD_PLATE.float * 2 + AWARD_PLATE.floatGap) + 1;
+    if (fb.top > topLimit) bad.push(`윗변 ${fb.top} > ${topLimit} (아래 칸 자리를 비운 위 칸이어야 함)`);
+    if (fb.bottom > m.panelTop - AWARD_PLATE.floatGap + 0.5) bad.push(`아랫변 ${fb.bottom} > 패널 윗변 − 8 (${m.panelTop - AWARD_PLATE.floatGap})`);
     out.push(result("AW5", L.AW5, bad));
   }
 
@@ -515,6 +531,7 @@ export function awardChecks(m) {
     if (Object.keys(m.costumesAfter).length !== 0) bad.push(`끝난 뒤 직업 의상이 남음: ${JSON.stringify(m.costumesAfter)}`);
     out.push(result("AW10", L.AW10, bad));
   }
+  if (known !== "") out.push({ id: "AW4k", label: "알려진 한계(UI#14): 낮은 폰의 패 아래 스테이지가 150 에 못 미침(판정 아님)", ok: true, detail: known, info: true });
   return out;
 }
 
@@ -530,6 +547,7 @@ export function readAwardState(page) {
     const rr = root.getBoundingClientRect();
     const text = (el) => (el?.textContent ?? "").replace(/\s+/g, " ").trim();
     const header = root.querySelector("header")?.getBoundingClientRect() ?? null;
+    const band = document.querySelector("[data-host-band] .mv-host__band")?.getBoundingClientRect() ?? null;
     const panel = root.querySelector("[data-result-panel]")?.getBoundingClientRect() ?? null;
     const plateEl = root.querySelector("[data-award-plate]");
     const pr = plateEl ? plateEl.getBoundingClientRect() : null;
@@ -541,7 +559,8 @@ export function readAwardState(page) {
       shown: hook ? hook.shown : -1,
       awards: hook ? hook.awards.map((a) => [a[0], a[1]]) : [],
       costumes: hook ? { ...hook.costumes } : {},
-      stageTop: header ? header.bottom - rr.top : Number.NaN,
+      // 14페이즈: 시상 패는 자막 띠 아래 8 에 선다 — 띠가 있으면 띠 면 아랫변, 없으면 헤더 아랫변이 스테이지 윗변이다
+      stageTop: band ? band.bottom - rr.top : header ? header.bottom - rr.top : Number.NaN,
       panelTop: panel ? panel.top - rr.top : Number.NaN,
       viewport: { w: rr.width, h: rr.height },
       plate: pr ? { id: plateEl.getAttribute("data-award-id") ?? "", top: pr.top - rr.top, left: pr.left - rr.left, width: pr.width, height: pr.height, text: text(plateEl) } : null,
@@ -694,13 +713,13 @@ const has = (x) => x !== undefined && x !== null;
  *  sheet {title,buttons,faces,extraText} 쉬게 될 사람 확인 시트 · restingWant 쉬게 될 사람 수 · round {before,after,phases} 시작 뒤 참가자 페이지 · benchView 쉬는 페이지에 BenchView
  *  bench {timers,chatInputs,floats,text,buttons} 쉬는 페이지 · looks·looksWant 새 판의 look · chat {before,old} 이전 판 채팅 · sat {seats,want,chipsOnSat,chips,participants} 다음 결과
  *  ceremony {pillActive,plateVsPill,skipVsPill} 시상 중 · early {disabled} 승리 조명 전.
- * RM1 알약 96×48 ±1 · 입력칸 폭 − 192 ±2 · RM2 손님 토글 전후 반대 · RM3 방장 n/m · RM4 4명 미만 토스트 · RM5 쉬는 사람 시트 · RM6 시작 후 round + 1·assigning·BenchView ·
+ * RM1 알약 96×48 ±1 · 입력칸 폭 − 188 ±2 · RM2 손님 토글 전후 반대 · RM3 방장 n/m · RM4 4명 미만 토스트 · RM5 쉬는 사람 시트 · RM6 시작 후 round + 1·assigning·BenchView ·
  * RM7 쉬는 페이지에 타이머·채팅 입력·떠 있는 버튼 없음 · RM8 의상 유지 · RM9 이전 판 채팅 0줄 · RM10 쉬었던 사람 sat·칩 없음 · RM11 시상 중 알약 활성·겹침 없음 · RM12 조명 전 비활성.
  * 측정값이 없으면 조용히 통과하지 않고 `측정값 없음(…)` 으로 실패한다.
  */
 export function rematchChecks(m) {
   const L = {
-    RM1: "다시 하기: 알약 96×48, 입력칸 폭 = 폭 − 192",
+    RM1: "다시 하기: 알약 96×48, 입력칸 폭 = 폭 − 188",
     RM2: "다시 하기: 손님 알약 토글 전후로 data-ready·aria-pressed 가 반대",
     RM3: "다시 하기: 방장 알약 'n/m' 이 준비 상태와 같고 n < 최소면 흐림",
     RM4: "다시 하기: 인원 부족 탭 → 토스트 '{최소}명부터 시작해요' 뿐(판은 그대로)",
@@ -906,7 +925,8 @@ export function readBenchView(page) {
     if (!root) return null;
     const text = (el) => (el?.textContent ?? "").replace(/\s+/g, " ").trim();
     return {
-      timers: document.querySelectorAll(".mf-timer, [data-timer]").length,
+      // 14페이즈: 남은 시간은 자막 띠([data-host-time])가 맡는다 — 쉬는 사람 화면에 시간 표시가 없어야 한다는 기대는 그대로다
+      timers: document.querySelectorAll(".mf-timer, [data-timer], [data-host-time]").length,
       chatInputs: document.querySelectorAll("[data-chat-input]").length,
       floats: document.querySelectorAll("[data-float], [data-float-stack]").length,
       text: text(root.querySelector("p")),
