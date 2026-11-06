@@ -111,6 +111,7 @@ v2.0 대기실은 "같은 공간" 맵이다(결정 0044·0050). 이동은 서버
 
 - 감독 입력 규칙: 공개 view 차이 + 닫힌 로컬 신호만. 인자에 선택값·역할·좌석이 없다. 밤에는 서버 입력이 0이고 각자 난수 큐(시민 편은 시각 큐를 구독), 첫 스냅샷·재접속·epoch 변경은 침대만 깔고 일회성 소리는 내지 않는다. 시작 시각은 공개 단계 시각이고 아침·편지만 view 도착 기준이다. 정적 가드(`soundStaticGuard`)가 `src/audio/` 의 import 와 읽는 경로를 고정한다.
 - 시험 페이지 `/?sound-lab=1`(개발·`?e2e=1` 문맥, 배포 진입 번들에 없음)이 56개를 들려주고 오프라인 렌더로 피크·NaN·길이를 검사한다(`window.__mfSoundLab`).
+- 알림음 `ui.host`(결정 0073-4, 14페이즈): 닫힌 신호 `{ kind: "host" }`(인자 없음)가 띠의 단계 키가 바뀐 프레임에 한 번 울린다(합성 종 두 음, 소리 57개). 밤 진입에도 모든 역할이 같은 소리를 듣는 LS-7 예외이고 낮 시작 → 토론은 무음이다.
 - 단추와 알약: `src/components/v2/SoundButton.tsx`. 화면 영역은 `docs/screen-map.md`.
 
 ## 상태 공개 원칙
@@ -122,6 +123,7 @@ v2.0 대기실은 "같은 공간" 맵이다(결정 0044·0050). 이동은 서버
 - 정치·박진감 장치의 공개 값(결정 0066·0067): 공개는 `players[].badge`·`badgeSwapped`(직업 주장 배지와 말 바꿈 표시, 실제 역할이 아니다)·`day.runoff`(결선 후보와 단계, 마감 뒤 득표 수만)·`day.showdown`(단계와 차례, 동시 지목 중에는 `voted` 완료 좌석만, 공개에서 득표)·`day.verdict.ballots`·`day.verdict.last`(마지막 3인 처형)이고, 본인 한정은 `me.ballot`·`me.whisperUsed`다. 서버 전용은 `Player.badgeLog`·`RoomState.whispers`·`runoffVote`·`showdownPick`이며 어떤 프레임에도 실리지 않는다(누설 시험이 서버 전용 키를 본다). 기본판(결정 0072)에서는 `badge`·`badgeSwapped`·`day.turn`·`day.runoff`·`day.showdown`·`me.whisperUsed`·`me.ballot` 이 view 에 없다(누설 검사 허용 경로는 `politicsPathsFor(ruleset)`).
 - 캐릭터 의상(결정 0068): 공개는 `players[].look`(역할과 무관, 모든 단계·viewer 같음)이고, 서버 전용은 동작 기록(`emoteRates`, 인메모리)이다. 동작 프레임 `n` 은 채널별로 세어 틈이 다른 채널에 새지 않는다.
 - 결과 공개·다시 하기(결정 0069): 공개는 `view.round`·`mapChoice`·`map`·`players[].ready`·`players[].sat`·`resting`(쉬는 사람 본인에게만, 자기 한 줄)·`result.awards`와 ended 에서만 가는 `resultLog` 프레임이다(끝난 뒤라 신분 구분 없음). 서버 전용은 `Player.stats`·`disconnectedAt`·`left`·`bench` 로 어떤 프레임에도 실리지 않는다.
+- 사회자 띠·빛남(결정 0073, 14페이즈): 자막 문장과 빛남 대상은 클라이언트의 순수 함수 `src/game/hostLine.ts`(`hostLineOf`·`callTargetsOf`)가 자기 view 의 허용 목록 값(`phase`·`phaseEndsAt`·내 `me.role`·`players[].{seat,nickname,alive}`·`day.candidate` 등)만으로 만든다. 서버·프로토콜에 새 필드·메시지가 없다(`git diff -- worker shared` 가 0). 다른 사람의 역할을 드러내는 `players[].job`·`me.allies`·`day.turn` 은 읽지 않고, 유령 줄도 직업을 말하지 않는다.
 - 소리(결정 0070): 서버에 새 값·메시지가 없다. 설정(켬/끔)은 기기 저장소에만 있고, 훅 로그는 소리 id·시각만 싣는다(역할·좌석 없음). 12페이즈 누설 불변식 LS-1~LS-11: 소리가 정보를 나르면 화면에도 이미 있고, 밤 소리는 모든 역할이 같으며, 암살음은 피해자만, 받지 못한 프레임은 소리도 없다.
 - 유령(결정 0060-8, 0021): 유령은 모든 사람의 역할과 밤 선택을 본다(spectate 경로). 유령 시점의 직업 의상 안개는 이 spectate 로 화면이 입힌다(서버 새 필드 없음, 0063-2·0064-14). 반대로 산 사람의 소켓 · DOM 에는 유령의 위치 · 움직임 · 채팅 · 입력 중이 없다. 이 규칙은 서버 한 곳(audience)에서 막고 시험과 E2E 누설 검사가 증명한다.
 
