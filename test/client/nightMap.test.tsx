@@ -1008,7 +1008,9 @@ describe("밤 소리: 시각 큐 갈래와 소리 전용 갈래는 같은 소리
     const night = (l: string[]): string[] => l.filter((id) => id === "bed.night" || id === "night.fall" || id === "night.cue");
     for (const l of logs) {
       expect(night(l)).toEqual(["bed.night", "night.fall", "night.cue", "night.cue"]);
-      expect(l.filter((id) => id.startsWith("ui."))).toEqual([]);
+      // 14-03: 밤 진입의 사회자 알림음 ui.host 는 공개 단계 전환이라 모든 역할이 정확히 한 번씩 듣는다(밤 무음 LS-7 의 유일한 예외). 그 밖 ui.* 는 0
+      expect(l.filter((id) => id.startsWith("ui.") && id !== "ui.host")).toEqual([]);
+      expect(l.filter((id) => id === "ui.host")).toHaveLength(1);
     }
   });
 });
