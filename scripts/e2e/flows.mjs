@@ -3743,9 +3743,8 @@ export const FLOWS = [
   { id: "avatar-phases-night", run: avatarPhasesNightFlow, size: GAME_SIZE },
   // 12-06: 소리 시험 페이지 [전부 계산] 56개(피크·NaN·RMS·길이). 방 없이 390x844 한 크기, 소리 출력 없음(OfflineAudioContext)
   { id: "sound-render", run: soundRenderFlow, size: GAME_SIZE },
-  // 12-07: 소리 켜기·끄기·잠금 해제 — [방 만들기] 탭 → running, 단추 토글, 새로고침 두 갈래(끔=알약 없음 · 켬=알약→탭→running), 숨김→suspended, 단추 위치·겹침. 폰 6종은 12-12
-  { id: "sound-unlock", run: soundUnlockFlow, size: GAME_SIZE },
-  { id: "sound-unlock-360x560", run: soundUnlockFlow, size: { w: 360, h: 560, label: "360x560" } },
+  // 12-07: 소리 켜기·끄기·잠금 해제 — [방 만들기] 탭 → running, 단추 토글, 새로고침 두 갈래(끔=알약 없음 · 켬=알약→탭→running), 숨김→suspended, 단추 위치·겹침. 폰 6종 구성(extraSizes)은 12-12 가 합쳤다
+  { id: "sound-unlock", run: soundUnlockFlow, extraSizes: LOBBY_EXTRA_SIZES },
   // 12-08: 로비 → 시작 → 역할 확인 → 낮 → 지목 → 변론 → 찬반 단계마다 훅 로그에 기대 소리 id 가 순서대로 + 새로고침은 침대만. 테스트 방 + 봇 + testSkip, 390x844 한 크기(D-21)
   { id: "sound-script", run: soundScriptFlow, size: GAME_SIZE },
   // 12-09: 밤 소리 동일성 — 방장(마피아) + 비마피아 손님 셋의 밤 로그가 같은 id 집합·큐 2~4개, 밤 UI 무음, 암살음은 피해자 페이지에만 1회, 밤 중간 새로고침은 night.fall 없음. 밤 30초를 실제로 기다린다

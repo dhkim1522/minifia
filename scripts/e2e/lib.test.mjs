@@ -1322,7 +1322,7 @@ test("run.mjs: 흐름별 extraSizes 는 --sizes 를 주지 않았을 때만 더�
   const flows = readFileSync(new URL("./flows.mjs", import.meta.url), "utf8");
   const entries = [...flows.matchAll(/\{ id: "([a-z0-9-]+)", run: [A-Za-z(), ]+?(, extraSizes: LOBBY_EXTRA_SIZES)? \}/g)];
   const withExtra = entries.filter((m) => m[2]).map((m) => m[1]);
-  assert.deepEqual(withExtra, ["lobby", "world", "chat-lobby", "chat-keyboard", "day", "ghost", "night-sizes", "result-reveal", "result-awards", "map-select", "politics-badge", "politics-whisper", "politics-pin", "politics-verdict", "politics-runoff", "politics-showdown", "avatar-emote", "avatar-dress"]);
+  assert.deepEqual(withExtra, ["lobby", "world", "chat-lobby", "chat-keyboard", "day", "ghost", "night-sizes", "result-reveal", "result-awards", "map-select", "politics-badge", "politics-whisper", "politics-pin", "politics-verdict", "politics-runoff", "politics-showdown", "avatar-emote", "avatar-dress", "sound-unlock"]);
 });
 
 test("flows.mjs night-sizes 편지 시험 유언 WILL50 은 서버 유언 상한(WILL_MAX_GRAPHEMES)과 같은 자소 수이고, 공백 없는 긴 단어(10~15자)를 섞는다(사용자 결정 2026-11-05)", () => {
