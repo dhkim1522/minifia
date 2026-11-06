@@ -5,16 +5,16 @@ milestone_name: 사회자와 증거
 current_phase: 13
 current_phase_name: 기본판 낮 흐름
 status: planning
-stopped_at: Completed 14-03-PLAN.md
-last_updated: "2026-11-06T20:41:02.033Z"
+stopped_at: Completed 14-04-PLAN.md
+last_updated: "2026-11-06T20:51:24.726Z"
 last_activity: 2026-11-07
 last_activity_desc: v3.0 requirements(22)·roadmap(13~15) 작성
-state_head: f0240394da81e988fcb0c3db185cf8a92f7e2db8
+state_head: aa0133796308ae81f79f00827f0a2dc8235615a0
 progress:
   total_phases: 3
   completed_phases: 1
   total_plans: 15
-  completed_plans: 9
+  completed_plans: 10
   percent: 33
 ---
 
@@ -205,6 +205,7 @@ Last activity: 2026-11-07 — v3.0 requirements(22)·roadmap(13~15) 작성
 | Phase 14 P01 | 40min | 3 tasks | 17 files |
 | Phase 14 P02 | 25m | 2 tasks | 15 files |
 | Phase 14 P03 | 25min | 2 tasks | 16 files |
+| Phase 14 P04 | 1h | 3 tasks | 16 files |
 
 ## Accumulated Context
 
@@ -431,6 +432,9 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 14]: [14-01] data-host-band 는 띠 루트에 두고 스테이지 안전선은 그 안의 띠 면(.mv-host__band)만 잰다. 띠 없는 화면(쉬는 사람·안내)에는 소리 단추만 있는 HostDock
 - [Phase 14]: 꺼진 장치 화면(day.turn 지목·결선·마지막 3인·귓속말)은 헤더 안내 줄·차례 링을 13 계약 그대로 유지, 기본판 헤더는 제목 + [역할 카드] 뿐 (14-02)
 - [Phase 14]: 14-03: 밤 진입 알림음 ui.host 는 LS-7 밤 무음의 예외(인자 없는 공개 단계 전환, 모든 역할 같음). 낮 시작→토론은 울리지 않음. E2E 밤 동일성은 HOST_CHIME_ID 만 제외
+- [Phase 14]: 14-04: 빛남은 정지 빛(::after) + opacity 맥박 층(::before, 5회=5.5초 후 정지). '썼음'은 단계 키(단계:일차:변론자)로 쥐고 이미 고른 재접속 상태는 켜지 않는다
+- [Phase 14]: 14-04: brass-200 라벨 규칙은 .is-call.mv-verdict__btn·.is-call.mv-face 로 선택자를 앞에 둬 08·09 '놋쇠 없음' 부품 시험과 충돌하지 않게 함
+- [Phase 14]: 14-04: 36px 낮/밤 결과 알림 삭제(U-5), 투표 처음 깜빡임 삭제(U-7). DAY_COPY·ANNOUNCE_* 상수는 유지
 
 ### Pending Todos
 
@@ -495,8 +499,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-06T20:41:01.903Z
-Stopped at: Completed 14-03-PLAN.md
+Last session: 2026-11-06T20:51:24.596Z
+Stopped at: Completed 14-04-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
