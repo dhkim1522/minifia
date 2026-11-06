@@ -27,17 +27,20 @@ export interface ActionButtonProps {
   "aria-label"?: string;
   /** E2E·검사용 data 속성 하나. 예: data-lobby-start (값은 빈 문자열) */
   data?: Record<`data-${string}`, string>;
+  /** 사회자 줄이 이 단추를 부를 때 true — is-call + 값 없는 data-call(14페이즈 HOST-03). 눌리는지는 바꾸지 않는다 */
+  call?: boolean;
 }
 
-export function ActionButton({ variant, label, icon, count, onClick, "aria-label": ariaLabel, data }: ActionButtonProps) {
+export function ActionButton({ variant, label, icon, count, onClick, "aria-label": ariaLabel, data, call = false }: ActionButtonProps) {
   return (
     <button
       type="button"
-      className={`mf-act mf-act--${variant}`}
+      className={call ? `mf-act mf-act--${variant} is-call` : `mf-act mf-act--${variant}`}
       aria-label={ariaLabel ?? label}
       aria-disabled={variant === "inactive" ? "true" : undefined}
       disabled={variant === "flat"}
       onClick={onClick}
+      {...(call ? { "data-call": "" } : {})}
       {...data}
     >
       {icon ? <V2Icon name={icon} size={22} /> : null}

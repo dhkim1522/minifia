@@ -18,6 +18,7 @@ import { WorldStage } from "../components/WorldStage";
 import type { ChatStore } from "../net/chatStore";
 import { CHAT_TEXT } from "../game/chatText";
 import { DRESS_TEXT } from "../game/dressText";
+import { callTargetsOf } from "../game/hostLine";
 import { LOG_H_KB } from "../game/chatUi";
 import { diffRoomViews, toastForDiff } from "../net/roomDiff";
 import { useChat } from "../net/useChat";
@@ -92,6 +93,8 @@ export function Lobby({ view, store, chat, send, canSend = true, epoch = 0, offs
 
   // [시작] 2초 잠금. 시작이 거절되면 서버가 다시 보낸 view 대로 그린다.
   const [locked, setLocked] = useState(false);
+  // [시작] 빛남(HOST-03): 한 번 눌러 보냈으면 이 대기실 안에서는 되살아나지 않는다(거절돼 잠금이 풀려도).
+  const [startPressed, setStartPressed] = useState(false);
   const lockTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   useEffect(
     () => () => {
@@ -155,12 +158,16 @@ export function Lobby({ view, store, chat, send, canSend = true, epoch = 0, offs
       return;
     }
     send({ t: "start" });
+    setStartPressed(true);
     setLocked(true);
     lockTimer.current = setTimeout(() => {
       lockTimer.current = undefined;
       setLocked(false);
     }, START_LOCK_MS);
   };
+  // 사회자 줄이 [시작]을 부르는 때(방장·시작 가능 인원) + 보낼 수 있고 아직 안 눌렀을 때만 빛난다. 판정은 callTargetsOf 하나다
+  const callTarget = callTargetsOf(view);
+  const callStart = callTarget?.kind === "tool" && callTarget.tool === "start" && canSend && !startPressed;
   const startLabel = enoughPlayers ? `게임 시작, ${connected}명 모임` : `게임 시작, ${connected}명 모임, ${view.minPlayers}명부터 시작할 수 있어요`;
 
   return (
@@ -217,6 +224,7 @@ export function Lobby({ view, store, chat, send, canSend = true, epoch = 0, offs
                 count={{ count: connected, total: view.maxPlayers }}
                 aria-label={startLabel}
                 data={{ "data-lobby-start": "" }}
+                call={callStart}
                 onClick={pressStart}
               />
             ) : (
