@@ -2,6 +2,7 @@
 // v1.0 vote.ts 의 후보 선택(castCandidateVote·tallyCandidateVote)과 같은 계약이다: 검사 순서 = 계약, 같은 값이면 같은 객체.
 // 다른 점: 취소(null)가 없고, 득표 순서를 섞지 않는다(지목 줄은 지목 중에도 공개라 좌석 오름차순 그대로다).
 // 마감(phaseEndsAt)은 읽거나 쓰지 않는다 — 과반이어도 15초를 다 채운다(결정 0060-3).
+// 기본판(결정 0072)은 동시 투표(castPoint·enterVote)다 — 산 사람 모두가 마감 전까지 한 명을 고르고 바꾼다. 순차 지목(아래 enterNomination·castTurnPoint)은 RULESET.pickTurn 일 때만 돈다.
 // 순차 지목(결정 0063-1·0063-4): 시각은 인자로만 받고 연결·역할·난수를 읽지 않는다(M-3).
 // 모이기 → 산 사람 좌석 순서로 한 명씩 차례 → 확정 뒤 사이 → 끝 알림 → 기존 집계(resolveNomination). 과반이어도 끝까지 돈다.
 import type { PickTurnView, PointLine } from "../protocol";
@@ -84,6 +85,42 @@ export function resolveNomination(state: RoomState): DeadlineResult {
   };
   if (leaders.length === 2) return { state: startRunoff(next, [leaders[0]!, leaders[1]!]), stay: false, next: "runoff" };
   return leader === undefined ? { state: next, stay: false, next: "night" } : { state: next, stay: false };
+}
+
+/**
+ * 동시 투표 한 표(기본판, 결정 0072 · 8페이즈 결정 0060-3). 마감까지 바꿀 수 있고 취소는 없다.
+ * 검사 순서가 계약이다: 단계(nomination 아니면 WRONG_PHASE) → 행위자(방에 있고 산 사람, 아니면 BAD_MESSAGE)
+ * → 대상(정수·앉은 산 사람, 아니면 BAD_MESSAGE) → 자기 자신이면 BAD_MESSAGE → 같은 값이면 입력 상태 그대로 ok → 그 사람의 nominate 만 바뀐 새 상태.
+ * 마감(phaseEndsAt)은 읽거나 쓰지 않는다 — 과반이어도 15초를 다 채운다.
+ */
+export function castPoint(
+  state: RoomState,
+  actorId: string,
+  target: number,
+): { ok: true; state: RoomState } | { ok: false; error: VoteError } {
+  if (state.phase !== "nomination") return { ok: false, error: "WRONG_PHASE" };
+  const actor = state.players.find((p) => p.id === actorId);
+  if (!actor || !isAlive(actor)) return { ok: false, error: "BAD_MESSAGE" };
+  const chosen = Number.isInteger(target) ? state.players.find((p) => p.seat === target) : undefined;
+  if (!chosen || !isAlive(chosen)) return { ok: false, error: "BAD_MESSAGE" };
+  if (chosen.seat === actor.seat) return { ok: false, error: "BAD_MESSAGE" };
+  if (actor.nominate === target) return { ok: true, state };
+  return {
+    ok: true,
+    state: { ...state, players: state.players.map((p) => (p.id === actorId ? { ...p, nominate: target } : p)) },
+  };
+}
+
+/** 투표 진입 훅(기본판 동시 투표): 모든 플레이어의 nominate 키와 방의 pickTurn 키를 구조 분해로 지운다. 마감은 단계 표(NOMINATION_MS)가 정한다. */
+export function enterVote(state: RoomState): RoomState {
+  const { pickTurn: _pickTurn, ...rest } = state;
+  return {
+    ...rest,
+    players: state.players.map((p) => {
+      const { nominate: _nominate, ...kept } = p;
+      return kept;
+    }),
+  };
 }
 
 // ---- 순차 지목(09.1-01, 결정 0063-1·0063-4, M-5) ----

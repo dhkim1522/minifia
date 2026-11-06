@@ -38,7 +38,7 @@ import { WILL_MIN_GAP_MS, noteRecipientIds, saveNote, saveWill } from "../shared
 import { resetToLobby, setBotCount, setBotVote, setTestRole, skipPhase } from "../shared/game/testTools";
 import type { RoleId } from "../shared/game/roles";
 import { nextWakeAt, tick } from "../shared/game/tick";
-import { castTurnPoint, turnStartOf } from "../shared/game/nomination";
+import { castPoint, castTurnPoint, turnStartOf } from "../shared/game/nomination";
 import { castRunoffVote } from "../shared/game/runoff";
 import { acceptLastWord, castShowdownPoint } from "../shared/game/showdown";
 import { castVerdict } from "../shared/game/verdict";
@@ -74,6 +74,9 @@ function jsonError(error: ApiErrorCode, status: number): Response {
     headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" },
   });
 }
+
+// 동시 투표(기본판, 결정 0072): 같은 사람이 이 간격(ms) 안에 다시 던진 표는 저장·방송 없이 본인에게 state 한 프레임만 주고 버린다(T-13-02).
+const POINT_MIN_INTERVAL_MS = 250;
 
 // 연결당 속도 제한: 1000ms 창에 20개를 넘으면 처리하지 않고 창마다 한 번만 알린다.
 const RATE_WINDOW_MS = 1000;
@@ -755,6 +758,22 @@ export class Room extends DurableObject<Env> {
     if (!this.room) return "BAD_MESSAGE";
     if (this.room.phase === "runoff") return this.applyRunoffVote(playerId, target, now);
     if (this.room.phase === "showdown") return this.applyShowdownPoint(playerId, target, now);
+    // 차례 정보가 없으면 기본판 동시 투표다(결정 0072): 누구나 마감 전까지 던지고 바꾼다. 마감을 바꾸지 않으므로 reschedule 이 필요 없다(과반이어도 15초를 다 채운다).
+    if (this.room.pickTurn === undefined) {
+      const voted = castPoint(this.room, playerId, target);
+      if (!voted.ok) return voted.error;
+      if (voted.state === this.room) return null;
+      const key = `point:${playerId}`;
+      const last = this.writeAt.get(key);
+      if (last !== undefined && now - last < POINT_MIN_INTERVAL_MS) {
+        this.sendViewTo([playerId]);
+        return null;
+      }
+      this.writeAt.set(key, now);
+      this.room = voted.state;
+      await this.persistAndBroadcast();
+      return null;
+    }
     const result = castTurnPoint(this.room, playerId, target, now);
     if (!result.ok) return result.error;
     this.room = result.state;

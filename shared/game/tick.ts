@@ -12,7 +12,7 @@
 // 새 마감 = 이전 마감 + phaseDurationOf(진입 훅 뒤 상태) — 단계 표(PHASE_DEFS) 길이 그대로다.
 // 훅이 stay 를 돌려주면 다음 단계로 가지 않고 같은 단계에서 마감만 "이전 마감 + 그 상태의 단계 길이(phaseDurationOf)" 로 옮긴다.
 // dayAnnounce: 낮 시작 발표 마감에 산 사람이 정확히 셋이면 next "showdown"(마지막 3인 결전, 결정 0066-5 — 낮 시작 청소 enterDiscussion 은 startShowdown 이 한다). showdown: stepShowdown 이 모이기 → 한마디 셋 → 동시 지목 → 공개를 stay 사슬로 걷고 집계(2표면 execution, 아니면 night).
-// nomination: 순차 지목(결정 0063-1) — 진입 enterNomination, 마감마다 stepNomination 이 같은 단계에 머물며(stay) 다음 마감은 이전 마감 + 그 단계 길이(모이기·차례·사이·끝 알림)다.
+// nomination: 기본판(결정 0072)은 동시 투표 — 진입 enterVote, 마감 resolveNomination 한 번(투표 집계). 아래는 RULESET.pickTurn 이 켜졌을 때만: 순차 지목(결정 0063-1) — 진입 enterNomination, 마감마다 stepNomination 이 같은 단계에 머물며(stay) 다음 마감은 이전 마감 + 그 단계 길이(모이기·차례·사이·끝 알림)다.
 // runoff: 동점 결선(결정 0066-4) — 지목 집계가 최다 정확히 둘 동점이면 next "runoff". stepRunoff 가 앞머리 → 투표 → 결과를 stay 사슬로 걷고 마지막에 집계(많이 받은 후보면 defense, 동점이면 night).
 // 난수는 세 번째 인자로만 받는다 — 방 DO 는 cryptoRandInt, 테스트는 seededRandInt.
 // 분기(4페이즈): 마감 훅이 next 를 돌려주면 그 단계로, 없으면 단계 표(PHASE_DEFS)의 기본 next 로 간다. 표는 데이터만 두고 분기는 훅이 정한다.
@@ -22,11 +22,12 @@ import { nextContinuityAt } from "./continuity";
 import { enterDiscussion, phaseDurationOf } from "./discussion";
 import { enterEnded, routeAfterExecution, routeAfterMorning } from "./endgame";
 import { enterExecution } from "./execution";
-import { enterNomination, stepNomination } from "./nomination";
+import { enterNomination, enterVote, stepNomination, resolveNomination } from "./nomination";
 import { stepRunoff } from "./runoff";
 import { routeAfterDayAnnounce, stepShowdown } from "./showdown";
 import { enterMorning, enterNight } from "./night";
 import { PHASE_DEFS } from "./phases";
+import { RULESET } from "./ruleset";
 import type { RoomState } from "./room";
 import { resolveVerdict } from "./verdict";
 
@@ -50,7 +51,7 @@ export type DeadlineResult = { state: RoomState; stay: boolean; next?: PhaseId }
 const ON_ENTER: Partial<Record<PhaseId, (s: RoomState, randInt: RandInt, at: number) => RoomState>> = {
   dayAnnounce: enterDayAnnounce,
   discussion: enterDiscussion,
-  nomination: enterNomination,
+  nomination: RULESET.pickTurn ? enterNomination : enterVote,
   execution: enterExecution,
   night: enterNight,
   morning: enterMorning,
@@ -61,7 +62,7 @@ const ON_ENTER: Partial<Record<PhaseId, (s: RoomState, randInt: RandInt, at: num
 const ON_DEADLINE: Partial<Record<PhaseId, (s: RoomState, at: number) => DeadlineResult>> = {
   dayAnnounce: routeAfterDayAnnounce,
   showdown: stepShowdown,
-  nomination: stepNomination,
+  nomination: RULESET.pickTurn ? stepNomination : resolveNomination,
   runoff: stepRunoff,
   verdict: resolveVerdict,
   execution: routeAfterExecution,

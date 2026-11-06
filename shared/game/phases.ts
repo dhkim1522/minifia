@@ -1,12 +1,14 @@
 // 단계 정의 표. 코드 분기 대신 데이터 한 곳에 둔다(roles.ts 의 ROLE_TABLE 과 같은 원칙) —
 // 이후 페이즈는 이 표에 행을 더하는 방식으로만 단계를 늘린다(D-01).
 // 역할 확인(roleReveal) 뒤에는 낮 두 단계(dayAnnounce → discussion)가 돈다. 순차 주장 단계는 7페이즈에서 없어졌다(CHAT-06).
-// 8페이즈 낮 흐름(결정 0060-1, DAY-07, 지목은 순차 — 결정 0063-1): discussion → nomination → defense → verdict → execution → night → morning → dayAnnounce.
-// 승패가 나면 execution·morning 의 마감에서 ended(마감 없음)로 간다. 지목 동점(최다 정확히 둘) → runoff → defense | night 이다. 분기(지목 동률·0표 → night 등)는 tick.ts 의 ON_DEADLINE 이
+// 기본판 낮 흐름(결정 0072, 8페이즈 결정 0060-1·DAY-07): discussion → nomination(투표, 동시 15초) → defense → verdict → execution → night → morning → dayAnnounce.
+// 승패가 나면 execution·morning 의 마감에서 ended(마감 없음)로 간다. 투표 동점·0표는 결선 없이 night 다. 순차 지목(0063-1)·동점 결선 runoff(0066-4)·마지막 3인 결전 showdown(0066-5)은
+// ruleset.ts 의 RULESET 이 켜졌을 때만 돈다(기본판은 모두 꺼짐). 분기(투표 동률·0표 → night 등)는 tick.ts 의 ON_DEADLINE 이
 // next 로 정한다 — 이 표의 next 는 "기본 다음 단계" 데이터일 뿐이다.
 // 단계 길이는 이 파일 한 곳에서만 정한다(6페이즈 플레이테스트가 여기만 고친다).
 // 표는 데이터만 둔다 — 진입 전이(훅)는 tick.ts 의 ON_ENTER 표에 있다.
 import type { PhaseId } from "../protocol";
+import { RULESET } from "./ruleset";
 
 export interface PhaseDef {
   /** 단계 길이(ms). null 이면 시간으로 끝나지 않는다. */
@@ -32,7 +34,9 @@ export const DEFENSE_MS = 20_000; // 최후 변론(DAY-07, 결정 0060-1) — �
 /** 판결 앞머리(결정 0066-7) — 처형 단계 맨 앞 0.6초는 화면의 느린 확대·핀 조명이 알림보다 앞선다. */
 export const VERDICT_LEAD_MS = 600;
 export const EXECUTION_MS = 5_000 + VERDICT_LEAD_MS; // 처형 발표 5초(D-01, VOTE-04) + 판결 앞머리 0.6초(결정 0066-7)
-// 순차 지목(결정 0063-1·0063-4, 09.1 M-5). 모이기 → 산 사람 좌석 순서로 한 명씩 차례 → 확정 뒤 사이 → 끝 알림 → 집계. 플레이테스트 뒤 이 네 줄만 고친다.
+/** 투표(nomination) 15초 — 기본판 동시 투표(결정 0072, 8페이즈 결정 0060-3). 모이는 걷기도 이 15초 안이다. */
+export const NOMINATION_MS = 15_000;
+// 순차 지목(결정 0063-1·0063-4, 09.1 M-5, RULESET.pickTurn 일 때만). 모이기 → 산 사람 좌석 순서로 한 명씩 차례 → 확정 뒤 사이 → 끝 알림 → 집계. 플레이테스트 뒤 이 네 줄만 고친다.
 export const NOMINATION_GATHER_MS = 3_000; // 결정 0063-1, M-5 기본값 · 플레이테스트 뒤 이 줄만 고친다 — 지목 시작 때 모이는 시간
 export const PICK_TURN_MS = 8_000; // 결정 0063-1, M-5 기본값 · 플레이테스트 뒤 이 줄만 고친다 — 한 사람의 차례(못 고르면 기권)
 export const PICK_GAP_MS = 900; // 결정 0063-1, M-5 기본값 · 플레이테스트 뒤 이 줄만 고친다 — 차례가 확정된 뒤 다음 차례까지
@@ -68,7 +72,7 @@ export const PHASE_DEFS: Readonly<Record<PhaseId, PhaseDef>> = Object.freeze({
   morning: Object.freeze({ durationMs: MORNING_MS, next: "dayAnnounce", revealsOwnRole: true }),
   ended: Object.freeze({ durationMs: null, next: null, revealsOwnRole: true }), // 마감이 없다 — 방 만료가 끝낸다
   // 8페이즈 단계(결정 0060): discussion.next 가 nomination 이다. 옛 처형 여부·후보 선택·후보 공개 행은 08-22 에 지웠다.
-  nomination: Object.freeze({ durationMs: NOMINATION_GATHER_MS, next: "defense", revealsOwnRole: true }), // 지목 진입 길이 = 모이기, 그 뒤 길이는 차례 사슬 nominationStepMs. 동률·0표면 훅이 night 로
+  nomination: Object.freeze({ durationMs: RULESET.pickTurn ? NOMINATION_GATHER_MS : NOMINATION_MS, next: "defense", revealsOwnRole: true }), // 기본판 투표 15초 동시. 순차 지목이 켜지면 진입 길이 = 모이기, 그 뒤 길이는 차례 사슬 nominationStepMs. 동률·0표면 훅이 night 로
   runoff: Object.freeze({ durationMs: RUNOFF_INTRO_MS, next: "defense", revealsOwnRole: true }), // 지목 동점(최다 정확히 둘) 결선 — 진입 길이 = 앞머리, 그 뒤 길이는 runoffStepMs. 결선도 동점이면 훅이 night 로
   showdown: Object.freeze({ durationMs: SHOWDOWN_GATHER_MS, next: "night", revealsOwnRole: true }), // 마지막 3인 결전 — 진입 길이 = 모이기, 그 뒤 길이는 showdownStepMs. 2표 이상이면 훅이 execution 으로
   verdict: Object.freeze({ durationMs: VERDICT_MS, next: "execution", revealsOwnRole: true }),

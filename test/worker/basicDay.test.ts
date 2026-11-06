@@ -1,4 +1,5 @@
 // 기본판 낮 흐름 DO 시험(13-01, FLOW-01·02·03·04, 결정 0072).
+// 설정은 shared/game/ruleset.ts 의 RULESET 한 곳이다(모두 꺼짐).
 // 토론 끝내기 → 투표(동시, 15초, 마감까지 바꾸기) → 최후 변론 → 찬반 → 처형(찬반 기록 카드) → 밤을 실제 방 DO 와 소켓 프레임으로 끝까지 돈다.
 import { describe, expect, it } from "vitest";
 import type { RoomView, ServerMessage } from "../../shared/protocol";
