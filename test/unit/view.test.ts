@@ -2212,3 +2212,54 @@ describe("쉬는 사람 view (11-08, D-13, 누설 L38)", () => {
     expect(() => buildView(base, "nobody", START_AT)).toThrow();
   });
 });
+
+describe("기본판 view 게이트 (D-05, 결정 0072, T-13-11)", () => {
+  const keysOf = (view: RoomView): string[] => keyPaths(view);
+  const viewsOfAll = (s: RoomState): RoomView[] => s.players.map((q) => buildView(s, q.id, START_AT));
+  const FORBIDDEN = ["players[].badge", "players[].badgeSwapped", "day.turn", "day.runoff", "day.showdown", "me.whisperUsed", "me.ballot"];
+  const hits = (s: RoomState): string => {
+    const found = new Set<string>();
+    for (const v of viewsOfAll(s)) for (const k of keysOf(v)) if (FORBIDDEN.some((f) => k === f || k.startsWith(`${f}.`) || k.startsWith(`${f}[`))) found.add(k);
+    return [...found].sort().join(",");
+  };
+
+  it("서버 상태에 주장 값(badge·badgeSwapped·badgeLog)이 있어도 어떤 view 에도 players[].badge·badgeSwapped 키가 없다", () => {
+    let s = startedAt(6, 1, "discussion");
+    const [a, b] = s.players;
+    s = { ...s, players: s.players.map((p) => (p.id === a!.id ? { ...p, badge: "mafia" as const } : p.id === b!.id ? { ...p, badge: "doctor" as const, badgeSwapped: true as const, badgeLog: [{ n: 1, v: "police" as const }] } : p)) };
+    expect(hits(s)).toBe("");
+    for (const v of viewsOfAll(s)) for (const row of v.players) expect(Object.hasOwn(row, "badge") || Object.hasOwn(row, "badgeSwapped")).toBe(false);
+  });
+
+  it("nomination 상태에 pickTurn 이 있어도 day.turn 키가 없다(day.points 는 그대로)", () => {
+    const base = startedAt(6, 1, "nomination");
+    const s: RoomState = { ...base, pickTurn: { order: [0, 1, 2, 3, 4, 5], i: 1, endsAt: base.phaseEndsAt! } };
+    expect(hits(s)).toBe("");
+    for (const v of viewsOfAll(s)) expect(Object.hasOwn(v.day!, "points")).toBe(true);
+  });
+
+  it("phase 가 runoff·showdown 인 저장 상태여도 day.runoff·day.showdown·me.ballot 키가 없다", () => {
+    const base = startedAt(6, 1, "nomination");
+    const runoff: RoomState = {
+      ...base,
+      phase: "runoff",
+      runoff: { cand: [0, 1], step: 1 },
+      players: base.players.map((q) => (q.seat === 2 ? { ...q, runoffVote: 0 as const } : q)),
+    };
+    expect(hits(runoff)).toBe("");
+    const showdown: RoomState = {
+      ...base,
+      phase: "showdown",
+      showdown: { order: [0, 1, 2], i: 3 },
+      players: base.players.map((q) => (q.seat === 0 ? { ...q, showdownPick: 1 } : q)),
+    };
+    expect(hits(showdown)).toBe("");
+  });
+
+  it("오늘 귓속말 기록이 있어도 me.whisperUsed 키가 없다", () => {
+    const base = startedAt(6, 1, "discussion");
+    const s: RoomState = { ...base, whispers: [{ n: base.day ?? 1, from: 0, to: 1, text: "비밀-CANARY", at: START_AT }] };
+    expect(hits(s)).toBe("");
+    expect(JSON.stringify(viewsOfAll(s)).includes("비밀-CANARY")).toBe(false);
+  });
+});
