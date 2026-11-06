@@ -12,7 +12,7 @@
 - [ ] **FLOW-02**: 투표는 산 사람 모두가 동시에 한 명을 고르고, 최다 득표 1명이 최후 변론에 선다. 동점이거나 아무도 고르지 않으면 그 낮은 처형 없이 밤으로 간다(결선 없음)
 - [ ] **FLOW-03**: 직업 주장 배지·귓속말·순차 지목·동점 결선·마지막 3인 결전이 화면과 서버 흐름에 나타나지 않는다. 코드는 지우지 않고 한 곳의 설정으로 끈다
 - [ ] **FLOW-04**: 찬반 기록 카드는 그대로 모두에게 공개된다
-- [ ] **FLOW-05**: 테스트 방 봇이 새 낮 흐름으로 한 판을 자동 완주한다
+- [x] **FLOW-05**: 테스트 방 봇이 새 낮 흐름으로 한 판을 자동 완주한다
 
 ### 사회자 진행 (HOST)
 
@@ -71,7 +71,7 @@
 | FLOW-02 | Phase 13 | Pending |
 | FLOW-03 | Phase 13 | Pending |
 | FLOW-04 | Phase 13 | Pending |
-| FLOW-05 | Phase 13 | Pending |
+| FLOW-05 | Phase 13 | Complete |
 | HOST-01 | Phase 14 | Pending |
 | HOST-02 | Phase 14 | Pending |
 | HOST-03 | Phase 14 | Pending |
