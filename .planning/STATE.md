@@ -5,16 +5,16 @@ milestone_name: 사회자와 증거
 current_phase: 13
 current_phase_name: 기본판 낮 흐름
 status: planning
-stopped_at: Completed 14-04-PLAN.md
-last_updated: "2026-11-06T20:51:24.726Z"
+stopped_at: Completed 14-05-PLAN.md
+last_updated: "2026-11-06T21:00:53.553Z"
 last_activity: 2026-11-07
 last_activity_desc: v3.0 requirements(22)·roadmap(13~15) 작성
-state_head: aa0133796308ae81f79f00827f0a2dc8235615a0
+state_head: 2377986d5d0bbaa1c71e134f0541ff3fccf01877
 progress:
   total_phases: 3
   completed_phases: 1
   total_plans: 15
-  completed_plans: 10
+  completed_plans: 11
   percent: 33
 ---
 
@@ -206,6 +206,7 @@ Last activity: 2026-11-07 — v3.0 requirements(22)·roadmap(13~15) 작성
 | Phase 14 P02 | 25m | 2 tasks | 15 files |
 | Phase 14 P03 | 25min | 2 tasks | 16 files |
 | Phase 14 P04 | 1h | 3 tasks | 16 files |
+| Phase 14 P05 | 50min | 3 tasks | 20 files |
 
 ## Accumulated Context
 
@@ -435,6 +436,8 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 14]: 14-04: 빛남은 정지 빛(::after) + opacity 맥박 층(::before, 5회=5.5초 후 정지). '썼음'은 단계 키(단계:일차:변론자)로 쥐고 이미 고른 재접속 상태는 켜지 않는다
 - [Phase 14]: 14-04: brass-200 라벨 규칙은 .is-call.mv-verdict__btn·.is-call.mv-face 로 선택자를 앞에 둬 08·09 '놋쇠 없음' 부품 시험과 충돌하지 않게 함
 - [Phase 14]: 14-04: 36px 낮/밤 결과 알림 삭제(U-5), 투표 처음 깜빡임 삭제(U-7). DAY_COPY·ANNOUNCE_* 상수는 유지
+- [Phase 14]: 14-05: [내 역할] 단추 두 모양을 아이콘 면 아래 한 단어로 통일, 새 기록 점은 gray-100 8px (앰버 폐기)
+- [Phase 14]: 14-05: 역할 확인 머리를 게임 헤더와 같은 absolute 62 모양으로, 헤더 윗여백 18→8(토큰 간격)
 
 ### Pending Todos
 
@@ -499,8 +502,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-06T20:51:24.596Z
-Stopped at: Completed 14-04-PLAN.md
+Last session: 2026-11-06T21:00:53.420Z
+Stopped at: Completed 14-05-PLAN.md
 Resume file: None
 
 ## Operator Next Steps

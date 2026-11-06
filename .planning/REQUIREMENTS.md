@@ -24,9 +24,9 @@
 
 ### 도구 이름표 (TOOL)
 
-- [ ] **TOOL-01**: 화면의 모든 도구(채팅·유언·내 역할·동작·소리 등)에 한 단어 이름표가 항상 붙어 있다(결정 0051 보완)
+- [x] **TOOL-01**: 화면의 모든 도구(채팅·유언·내 역할·동작·소리 등)에 한 단어 이름표가 항상 붙어 있다(결정 0051 보완)
 - [x] **TOOL-02**: 남은 시간이 막대와 숫자(초)로 항상 함께 보인다
-- [ ] **TOOL-03**: 역할 확인 화면과 역할 카드에 내 목표가 한 줄로 보인다
+- [x] **TOOL-03**: 역할 확인 화면과 역할 카드에 내 목표가 한 줄로 보인다
 
 ### 낮 심부름과 목격 기록 (ERRAND)
 
@@ -77,9 +77,9 @@
 | HOST-03 | Phase 14 | Complete |
 | HOST-04 | Phase 14 | Complete |
 | HOST-05 | Phase 14 | Complete |
-| TOOL-01 | Phase 14 | Pending |
+| TOOL-01 | Phase 14 | Complete |
 | TOOL-02 | Phase 14 | Complete |
-| TOOL-03 | Phase 14 | Pending |
+| TOOL-03 | Phase 14 | Complete |
 | ERRAND-01 | Phase 15 | Pending |
 | ERRAND-02 | Phase 15 | Pending |
 | ERRAND-03 | Phase 15 | Pending |
