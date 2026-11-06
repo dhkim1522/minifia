@@ -587,17 +587,13 @@ describe("GameMap — 낮 시작 결과 알림과 채팅 줄 (E5 #17~#19)", () =
   const announces = (c: ParentNode) => Array.from(c.querySelectorAll("[data-announce]"));
   const logText = (c: ParentNode) => c.querySelector("[data-chat-log]")?.textContent ?? "";
 
-  it("밤에서 낮 시작으로 들어오면 '낮이 되었습니다'(role=status) 알림과 채팅 시스템 줄 '2일차' 가 나오고 2000ms 뒤 알림이 사라진다", () => {
+  it("밤에서 낮 시작으로 들어오면 36px '낮이 되었습니다' 알림은 없고(U-5 띠가 대신 말한다) 채팅 시스템 줄 '2일차' 는 나온다", () => {
     const m = mount(makeView({ phase: "night", n: 1 }));
     expect(announces(m.container).length).toBe(0);
     m.show(makeView({ phase: "dayAnnounce", n: 2, noClock: true }));
-    const [el] = announces(m.container);
-    expect(el?.textContent).toBe("낮이 되었습니다");
-    expect(el?.getAttribute("role")).toBe("status");
+    expect(announces(m.container).length).toBe(0);
     expect(logText(m.container)).toContain("2일차");
-    advance(1999);
-    expect(announces(m.container).length).toBe(1);
-    advance(1);
+    advance(2000);
     expect(announces(m.container).length).toBe(0);
   });
 

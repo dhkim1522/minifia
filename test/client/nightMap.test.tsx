@@ -735,28 +735,24 @@ describe("아침 알림 (MORN-03, UI-SPEC 아침)", () => {
     expect(lastScene().lighting).toBe("morning");
   });
 
-  it("지목 동률·0표로 온 밤: '처형 없음' 알림이 1.4초 떴다가 이어서 '밤이 되었습니다' 가 1.6초 뜬 뒤 사라진다", () => {
+  it("지목 동률·0표로 온 밤(U-5): '처형 없음' 알림이 1.4초 떴다가 사라지고, '밤이 되었습니다' 알림은 이어지지 않는다(띠가 말한다)", () => {
     const m = mount(makeView({ phase: "nomination", mySeat: 3 }));
     m.show(makeView({ phase: "night", mySeat: 3, noExecution: "tie" }));
     expect(announceText(m.container)).toBe("처형 없음");
     advance(1_399);
     expect(announceText(m.container)).toBe("처형 없음");
     advance(1);
-    expect(announceText(m.container)).toBe("밤이 되었습니다");
-    advance(1_599);
-    expect(announceText(m.container)).toBe("밤이 되었습니다");
-    advance(1);
+    expect(announceText(m.container)).toBe("");
+    advance(2_000);
     expect(announceText(m.container)).toBe("");
   });
 
-  it("처형이 이뤄진 밤: 0초에 '밤이 되었습니다' 하나가 1.6초 뜬다(처형 없음 없음). 재접속 첫 스냅샷 밤에는 알림이 없다", () => {
+  it("처형이 이뤄진 밤(U-5): 알림이 없다(처형 단계가 이미 알렸고 띠가 밤을 말한다). 재접속 첫 스냅샷 밤에도 없다", () => {
     const a = mount(makeView({ phase: "execution", mySeat: 3 }));
     a.show(makeView({ phase: "night", mySeat: 3 }));
-    expect(announceText(a.container)).toBe("밤이 되었습니다");
-    expect(a.container.querySelector("[data-announce] svg")).toBeNull();
-    advance(1_599);
-    expect(announceText(a.container)).toBe("밤이 되었습니다");
-    advance(1);
+    expect(announceText(a.container)).toBe("");
+    expect(a.container.querySelector("[data-announce]")).toBeNull();
+    advance(1_600);
     expect(announceText(a.container)).toBe("");
     cleanup();
     const b = mount(makeView({ phase: "night", mySeat: 3, noExecution: "tie" }));

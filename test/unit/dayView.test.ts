@@ -244,10 +244,10 @@ describe("dayEvents — 단계 진입 줄 (DAY-05·06)", () => {
     same(dayEvents(defenseView(), verdictView()).lines, [{ kind: "system", text: "찬반 시작" }]);
   });
 
-  it("낮 시작: system '{N}일차' 와 결과 알림 '낮이 되었습니다'", () => {
+  it("낮 시작(U-5 띠가 대신 말한다): system '{N}일차' 줄은 그대로, 36px '낮이 되었습니다' 알림은 없다", () => {
     const events = dayEvents(viewOf("morning", { day: { n: 1 } }), viewOf("dayAnnounce", { day: { n: 2 } }));
     same(events.lines, [{ kind: "system", text: "2일차" }]);
-    same(events.announces, [{ text: "낮이 되었습니다", at: 0, ms: ANNOUNCE_DAY_MS }]);
+    same(events.announces, []);
   });
 
   it("낮 시작 → 낮 토론, 아침·로비로 갈 때는 줄이 없다", () => {
@@ -291,27 +291,24 @@ describe("dayEvents — 찬반 결과·처형·처형 없음 (DAY-06)", () => {
     same(events.fx, [{ kind: "ghostRise", seat: 3, at: 0 }]);
   });
 
-  it("지목 → 밤(동률·0표): 즉시 system '처형 없음' 과 1.4초 알림, 이어 1.4초에 '밤이 되었습니다' 1.6초", () => {
+  it("지목 → 밤(동률·0표, U-5): 즉시 system '처형 없음' 줄과 1.4초 알림 하나만 — 뒤이은 '밤이 되었습니다' 는 없다", () => {
     for (const reason of ["tie", "noVotes"] as const) {
       const events = dayEvents(nominationOf([[0, 1], [1, 0]]), viewOf("night", { day: { noExecution: { reason } } }));
       same(events.lines, [{ kind: "system", text: "처형 없음" }]);
-      same(events.announces, [
-        { text: "처형 없음", at: 0, ms: 1400 },
-        { text: "밤이 되었습니다", at: 1400, ms: 1600 },
-      ]);
+      same(events.announces, [{ text: "처형 없음", at: 0, ms: 1400 }]);
       same(events.fx, []);
     }
   });
 
-  it("처형 → 밤은 처형이 이미 알렸으므로 줄이 없고, 알림은 0초에 '밤이 되었습니다' 1.6초 하나다", () => {
+  it("처형 → 밤(U-5): 처형이 이미 알렸으므로 줄도 알림도 없다(띠가 '밤이 되었습니다' 를 말한다)", () => {
     const events = dayEvents(executionView(5, 2, true), viewOf("night", { day: { candidate: 3 } }));
     same(events.lines, []);
-    same(events.announces, [{ text: "밤이 되었습니다", at: 0, ms: 1600 }]);
-    expect(ANNOUNCE_NIGHT_MS).toBe(1600);
+    same(events.announces, []);
+    expect(ANNOUNCE_NIGHT_MS).toBe(1600); // 상수는 지우지 않는다
   });
 
-  it("부결 처형 → 밤도 '밤이 되었습니다' 알림 하나", () => {
-    same(dayEvents(executionView(2, 5, false), viewOf("night")).announces, [{ text: "밤이 되었습니다", at: 0, ms: 1600 }]);
+  it("부결 처형 → 밤도 알림이 없다(U-5)", () => {
+    same(dayEvents(executionView(2, 5, false), viewOf("night")).announces, []);
   });
 
   it("첫 스냅샷·reset 인 밤은 알림이 없다", () => {
@@ -706,13 +703,10 @@ describe("dayEvents — 결선 (09.1.1-14)", () => {
     same(events.lines, [{ kind: "hot", text: "지호 님 4표 · 최후 변론" }]);
   });
 
-  it("결선 → 밤(또 동점): '처형 없음' 줄과 알림, 이어 '밤이 되었습니다'", () => {
+  it("결선 → 밤(또 동점, U-5): '처형 없음' 줄과 알림 하나만", () => {
     const events = dayEvents(runoffOf(2, { tally: [2, 2] }), viewOf("night", { day: { noExecution: { reason: "tie" } } }));
     same(events.lines, [{ kind: "system", text: "처형 없음" }]);
-    same(events.announces, [
-      { text: "처형 없음", at: 0, ms: 1400 },
-      { text: "밤이 되었습니다", at: 1400, ms: 1600 },
-    ]);
+    same(events.announces, [{ text: "처형 없음", at: 0, ms: 1400 }]);
   });
 
   it("지목 → 밤은 여전히 같다", () => {
@@ -773,18 +767,15 @@ describe("dayEvents — 마지막 3인 진입 (09.1.1-15)", () => {
     same(events.announces, []);
   });
 
-  it("마지막 3인 1-1-1 → 밤(09.1.1-16): '처형 없음' 줄과 알림 1.4초, 이어 '밤이 되었습니다'", () => {
+  it("마지막 3인 1-1-1 → 밤(09.1.1-16, U-5): '처형 없음' 줄과 알림 1.4초 하나만", () => {
     const events = dayEvents(showdownOf({ order: [0, 1, 2], i: 4, points: [{ seat: 0, target: 1 }, { seat: 1, target: 2 }, { seat: 2, target: 0 }] }), viewOf("night", { day: { noExecution: { reason: "tie" } } }));
     same(events.lines, [{ kind: "system", text: "처형 없음" }]);
-    same(events.announces, [
-      { text: "처형 없음", at: 0, ms: 1400 },
-      { text: "밤이 되었습니다", at: 1400, ms: 1600 },
-    ]);
+    same(events.announces, [{ text: "처형 없음", at: 0, ms: 1400 }]);
   });
 
-  it("마지막 3인 → 밤인데 처형 없음 이유가 없으면(다른 경로) '밤이 되었습니다' 만", () => {
+  it("마지막 3인 → 밤인데 처형 없음 이유가 없으면(다른 경로, U-5) 알림이 없다", () => {
     const events = dayEvents(showdownOf({ order: [0, 1, 2], i: 4, points: [] }), viewOf("night"));
-    same(events.announces, [{ text: "밤이 되었습니다", at: 0, ms: 1600 }]);
+    same(events.announces, []);
   });
 });
 
