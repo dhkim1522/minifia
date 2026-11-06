@@ -464,8 +464,8 @@ describe("12페이즈 소리 시험 페이지 E2E 표식·문턱(12-06)", () => 
     .filter((f) => /\.(tsx?|css)$/.test(f));
   const sources = tracked.map((f) => ({ f, text: readFileSync(new URL(f, root), "utf8") }));
 
-  it("SOUND_MARKERS 네 개가 git 이 추적하는 src/ 파일 어딘가에 있다(표식 이름 오타 방지)", () => {
-    expect(lib.SOUND_MARKERS).toEqual(["data-sound-lab", "data-sound-id", "__mfSound", "__mfSoundLab"]);
+  it("SOUND_MARKERS 여섯 개(시험 페이지 넷 + 소리 단추 둘)가 git 이 추적하는 src/ 파일 어딘가에 있다(표식 이름 오타 방지)", () => {
+    expect(lib.SOUND_MARKERS).toEqual(["data-sound-lab", "data-sound-id", "__mfSound", "__mfSoundLab", "data-sound-button", "data-sound-state"]);
     const missing = lib.SOUND_MARKERS.filter((m) => !sources.some((s) => s.text.includes(m)));
     expect(missing).toEqual([]);
   });
@@ -476,6 +476,15 @@ describe("12페이즈 소리 시험 페이지 E2E 표식·문턱(12-06)", () => 
     expect(has("debug/soundLab.ts", "data-sound-id")).toBe(true);
     expect(has("debug/soundLab.ts", "__mfSoundLab")).toBe(true);
     expect(has("audio/testHook.ts", "__mfSound")).toBe(true);
+    expect(has("components/v2/SoundButton.tsx", "data-sound-button")).toBe(true);
+    expect(has("components/v2/SoundButton.tsx", "data-sound-state")).toBe(true);
+  });
+
+  it("소리 단추 표식에는 값이 on·off·locked 뿐이다 — 역할·좌석 값이 실리지 않는다(T-12-23)", () => {
+    const text = sources.find((s) => s.f.endsWith("components/v2/SoundButton.tsx"))!.text;
+    const dataAttrs = [...text.matchAll(/\b(data-[a-z-]+)=/g)].map((m) => m[1]).sort();
+    expect(dataAttrs).toEqual(["data-sound-button", "data-sound-state"]);
+    expect(text).not.toMatch(/role=|seat|nonce|mafia/i);
   });
 
   it("E2E 문턱 개수는 SOUND_IDS.length 와 같고, 앱 쪽 SOUND_LIMITS 와 한 글자도 다르지 않다(문턱 완화 방지, T-12-22)", () => {

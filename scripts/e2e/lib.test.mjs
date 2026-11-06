@@ -142,6 +142,7 @@ import {
   AVATAR_MARKERS,
   SOUND_MARKERS,
   SOUND_RENDER_LIMITS,
+  soundButtonChecks,
   soundRenderChecks,
   sheetFitChecks,
   claimBadgeChecks,
@@ -2830,8 +2831,8 @@ test("SOUND_RENDER_LIMITS: 56개 · 피크 −3 · RMS −60 · 길이 ±50ms (�
   });
 });
 
-test("SOUND_MARKERS: 시험 페이지 표식 네 개", () => {
-  assert.deepEqual([...SOUND_MARKERS], ["data-sound-lab", "data-sound-id", "__mfSound", "__mfSoundLab"]);
+test("SOUND_MARKERS: 시험 페이지 표식 네 개 + 소리 단추 표식 둘(12-07)", () => {
+  assert.deepEqual([...SOUND_MARKERS], ["data-sound-lab", "data-sound-id", "__mfSound", "__mfSoundLab", "data-sound-button", "data-sound-state"]);
 });
 
 test("soundRenderChecks: 정상 56개는 모두 통과", () => {
@@ -2907,4 +2908,93 @@ test("soundRenderChecks: 배열이 아니거나 필드가 숫자가 아니면 �
   r[5] = { id: r[5].id, peakDb: "x" };
   const lines = soundRenderChecks(r);
   assert.ok(lines.some((l) => !l.ok));
+});
+
+// ---- 12-07: soundButtonChecks (SU1~SU7) ----
+
+const R = (left, top, width, height) => ({ left, top, width, height });
+/** 360 폭 로비 정상값: 헤더 아래 끝 62, 단추 위 70, 오른쪽 16 → left 300 */
+function soundIn(over = {}) {
+  return {
+    viewport: { w: 360, h: 560 },
+    button: { count: 1, rect: R(300, 70, 44, 44), disc: R(304, 74, 36, 36), pill: false },
+    header: { bottom: 62, buttons: [{ kind: "leave", rect: R(16, 18, 44, 44) }, { kind: "role", rect: R(300, 18, 44, 44) }] },
+    test: R(16, 70, 90, 44),
+    toast: R(110, 88, 140, 36),
+    bannerHit: { present: true, covers: true, hitIsButton: true },
+    labels: { state: "on", name: "소리 끄기", pressed: "true" },
+    ...over,
+  };
+}
+const suFails = (args) => soundFails(soundButtonChecks(args));
+
+test("soundButtonChecks: 정상값은 SU1~SU7 모두 통과", () => {
+  const lines = soundButtonChecks(soundIn());
+  assert.deepEqual(lines.map((l) => l.id), ["SU1", "SU2", "SU3", "SU4", "SU5", "SU6", "SU7"]);
+  assert.deepEqual(soundFails(lines), []);
+});
+
+test("soundButtonChecks SU1: 단추가 0개나 2개면 실패(방 화면에 정확히 하나)", () => {
+  assert.deepEqual(suFails(soundIn({ button: { ...soundIn().button, count: 0 } })).includes("SU1"), true);
+  assert.deepEqual(suFails(soundIn({ button: { ...soundIn().button, count: 2 } })).includes("SU1"), true);
+});
+
+test("soundButtonChecks SU2: 누르기 영역 44×44 경계 — 43.99 실패 / 44 통과", () => {
+  assert.deepEqual(suFails(soundIn({ button: { ...soundIn().button, rect: R(300, 70, 44, 44) } })), []);
+  assert.deepEqual(suFails(soundIn({ button: { ...soundIn().button, rect: R(300, 70, 43.99, 44) } })), ["SU2"]);
+  assert.deepEqual(suFails(soundIn({ button: { ...soundIn().button, rect: R(300, 70, 44, 43.99) } })), ["SU2"]);
+});
+
+test("soundButtonChecks SU3: 위는 헤더 아래 끝 + 8 (±2), 오른쪽 여백 16 (±2)", () => {
+  const at = (top, left) => suFails(soundIn({ button: { ...soundIn().button, rect: R(left, top, 44, 44) } }));
+  assert.deepEqual(at(72, 302), []); // +2 / −2
+  assert.deepEqual(at(68, 298), []); // −2 / +2
+  assert.deepEqual(at(72.01, 300), ["SU3"]);
+  assert.deepEqual(at(67.99, 300), ["SU3"]);
+  assert.deepEqual(at(70, 302.01), ["SU3"]); // 오른쪽 여백 15.99
+  assert.deepEqual(at(70, 297.99), ["SU3"]); // 오른쪽 여백 18.01
+});
+
+test("soundButtonChecks SU4: 헤더 단추·[테스트]·토스트와 겹침 0 — 겹치면 실패, 닿기만 하면 통과", () => {
+  assert.deepEqual(suFails(soundIn({ header: { bottom: 62, buttons: [{ kind: "role", rect: R(300, 40, 44, 44) }] } })), ["SU4"]);
+  assert.deepEqual(suFails(soundIn({ test: R(280, 70, 90, 44) })), ["SU4"]);
+  assert.deepEqual(suFails(soundIn({ toast: R(200, 88, 140, 36) })), ["SU4"]);
+  assert.deepEqual(suFails(soundIn({ test: R(210, 70, 90, 44) })), []); // 오른쪽변이 단추 왼쪽변에 닿기만
+  assert.deepEqual(suFails(soundIn({ test: null, toast: null })), []); // 없으면 겹칠 것이 없다
+});
+
+test("soundButtonChecks SU5: 재접속 띠가 단추를 덮고 있을 때 단추 중심의 최상단이 단추 자신이어야 한다", () => {
+  assert.deepEqual(suFails(soundIn({ bannerHit: { present: true, covers: true, hitIsButton: false } })), ["SU5"]);
+  // 띠가 없거나 단추 중심을 덮지 않으면 확인한 것이 없다 — 공허한 통과 금지
+  assert.deepEqual(suFails(soundIn({ bannerHit: { present: false, covers: false, hitIsButton: true } })), ["SU5"]);
+  assert.deepEqual(suFails(soundIn({ bannerHit: { present: true, covers: false, hitIsButton: true } })), ["SU5"]);
+});
+
+test("soundButtonChecks SU6: 시각 지름 36 (±1) — 경계 35 / 37 통과, 34.99 / 37.01 실패. 알약이면 높이 44 · 폭 112 이상", () => {
+  const d = (w, h) => suFails(soundIn({ button: { ...soundIn().button, disc: R(304, 74, w, h) } }));
+  assert.deepEqual(d(35, 35), []);
+  assert.deepEqual(d(37, 37), []);
+  assert.deepEqual(d(34.99, 36), ["SU6"]);
+  assert.deepEqual(d(36, 37.01), ["SU6"]);
+  const pill = (w, h) => suFails(soundIn({ button: { count: 1, rect: R(224, 70, 120, 44), disc: R(224, 70, w, h), pill: true }, labels: { state: "locked", name: "소리 켜기", pressed: "false" } }));
+  assert.deepEqual(pill(120, 44), []);
+  assert.deepEqual(pill(111.9, 44), ["SU6"]);
+  assert.deepEqual(pill(120, 42), ["SU6"]);
+});
+
+test("soundButtonChecks SU7: 접근성 이름이 상태에 맞는다 — on '소리 끄기'(pressed true), off·locked '소리 켜기'(pressed false)", () => {
+  assert.deepEqual(suFails(soundIn({ labels: { state: "off", name: "소리 켜기", pressed: "false" } })), []);
+  assert.deepEqual(suFails(soundIn({ labels: { state: "locked", name: "소리 켜기", pressed: "false" } })), []);
+  assert.deepEqual(suFails(soundIn({ labels: { state: "on", name: "소리 켜기", pressed: "true" } })), ["SU7"]);
+  assert.deepEqual(suFails(soundIn({ labels: { state: "off", name: "소리 끄기", pressed: "false" } })), ["SU7"]);
+  assert.deepEqual(suFails(soundIn({ labels: { state: "on", name: "소리 끄기", pressed: "false" } })), ["SU7"]);
+  assert.deepEqual(suFails(soundIn({ labels: { state: "mute", name: "소리 끄기", pressed: "true" } })), ["SU7"]);
+});
+
+test("soundButtonChecks: 빠진 입력(null)은 측정값 없음으로 실패", () => {
+  const lines = soundButtonChecks({});
+  assert.equal(lines.length, 7);
+  assert.ok(lines.every((l) => !l.ok && /측정값 없음/.test(l.detail)));
+  assert.ok(soundButtonChecks(soundIn({ button: null })).some((l) => !l.ok));
+  assert.ok(soundButtonChecks(soundIn({ viewport: null })).some((l) => !l.ok));
 });
