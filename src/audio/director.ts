@@ -45,6 +45,7 @@ const ENTER_SOUND: Partial<Record<PhaseId, SfxId>> = {
   roleReveal: "role.flip",
   dayAnnounce: "day.start",
   nomination: "phase.vote",
+  runoff: "runoff.intro",
 };
 
 /** 공개 카운트다운 틱을 쓰는 단계 (밤·아침·결과 제외) */
@@ -132,9 +133,17 @@ const pickKey = (v: AudioView): string => `pick:${v.dayN ?? 0}:${v.turn?.i ?? -1
 // ───────────────────────── 지목 핀 (src/world/pinPlan.ts pinOf 의 nomination 부분 복제) ─────────────────────────
 // 소리 모듈은 pinPlan 을 import 하지 못한다(LS-6). test/unit/soundDirector.test.ts 가 대표 view 열에서 pinOf 전이와 대조한다.
 
-type Pin = { mode: "turn"; seat: number } | { mode: "slide"; from: number; to: number; startAt: number } | { mode: "fixed"; seat: number };
+type Pin = { mode: "turn"; seat: number } | { mode: "slide"; from: number; to: number; startAt: number } | { mode: "fixed"; seat: number } | { mode: "point" };
 
 function pinOfAudio(v: AudioView): Pin | null {
+  if (v.phase === "runoff") return { mode: "point" }; // 결선: 두 후보 가운데 한 점(위치는 소리에 필요 없다)
+  if (v.phase === "showdown") {
+    // 마지막 3인 한마디: 차례 중(i 0..2)에 말하는 사람
+    const sd = v.showdown;
+    if (sd === null || !Number.isInteger(sd.i) || sd.i < 0 || sd.i > 2) return null;
+    const seat = sd.order[sd.i];
+    return typeof seat === "number" ? { mode: "turn", seat } : null;
+  }
   if (v.phase === "execution") {
     // 처형 핀(pinPlan executionPin): 변론자가 있고 (마지막 3인 처형이거나 찬반 기록이 있고) 마감이 있을 때
     if (typeof v.candidate !== "number" || v.verdict === null) return null;
@@ -234,6 +243,9 @@ function onPhaseChange(prev: AudioView, cur: AudioView, local: LocalClock, out: 
     nightCueRun(cur, local, out);
   }
   if (cur.phase === "morning") morningEnter(cur, out);
+  if (cur.phase === "runoff" || cur.phase === "showdown") {
+    if (pinOfAudio(cur) !== null) out.now.push({ id: "pin.on" }); // 결선은 진입에 점 핀, 마지막 3인은 처음부터 차례가 서 있을 때만
+  }
   if (cur.phase === "execution") verdictRun(cur, local, out);
 }
 
@@ -242,13 +254,18 @@ function inPhase(prev: AudioView, cur: AudioView, local: LocalClock, out: Direct
   if (cur.phase === "lobby" && cur.players.length > prev.players.length) {
     if (local.lastJoinAt === null || local.now - local.lastJoinAt >= JOIN_GAP_MS) out.now.push({ id: "lobby.join" });
   }
-  if (cur.phase !== "nomination") return;
+  if (cur.phase === "runoff") {
+    // 득표 수 공개: step 이 2 로 바뀌는 순간 한 번
+    if (cur.runoff !== null && cur.runoff.step === 2 && !(prev.runoff !== null && prev.runoff.step === 2)) out.now.push({ id: "runoff.reveal" });
+    return;
+  }
+  if (cur.phase !== "nomination" && cur.phase !== "showdown") return;
   const pPin = pinOfAudio(prev);
   const cPin = pinOfAudio(cur);
-  // 핀 조명이 새 좌석에 켜짐 → 모두 pin.on, 내 차례면 pick.turn 과 마지막 3초 틱
+  // 핀 조명이 새 좌석에 켜짐 → 모두 pin.on, 지목에서 내 차례면 pick.turn 과 마지막 3초 틱
   if (cPin !== null && cPin.mode === "turn" && !(pPin !== null && pPin.mode === "turn" && pPin.seat === cPin.seat)) {
     out.now.push({ id: "pin.on" });
-    if (cPin.seat === cur.mySeat) {
+    if (cur.phase === "nomination" && cPin.seat === cur.mySeat) {
       out.now.push({ id: "pick.turn" });
       const rest = remainingMs(cur.turn?.endsAt, local);
       if (rest !== null) {
@@ -256,6 +273,11 @@ function inPhase(prev: AudioView, cur: AudioView, local: LocalClock, out: Direct
         if (items.length > 0) out.scripts.push({ key: pickKey(cur), items, duck: null });
       }
     }
+  }
+  if (cur.phase === "showdown") {
+    // 동시 지목 공개(i 4): 화살표가 한꺼번에 드러나는 순간 한 번
+    if (cur.showdown !== null && cur.showdown.i === 4 && !(prev.showdown !== null && prev.showdown.i === 4)) out.now.push({ id: "showdown.reveal" });
+    return;
   }
   // 확정 → 가리킴(pick.point)과 핀 이동(pin.move)이 같은 순간
   if (cPin !== null && cPin.mode === "slide" && !(pPin !== null && pPin.mode === "slide" && pPin.startAt === cPin.startAt)) {
@@ -329,6 +351,12 @@ export function directSignal(signal: LocalSignal, cur: AudioView | null, ctx: Si
       else out.scripts.push({ key: `card:${cur.dayN ?? 0}:${d}`, items: [{ at: d, id: "ui.card" }], duck: null });
       break;
     }
+    case "vote":
+      out.now.push({ id: "vote.cast" }); // 찬성·반대 구분 없는 한 가지 소리(LS-7). 120ms 안 되풀이는 레시피 gapMs 가 막는다
+      break;
+    case "deny":
+      out.now.push({ id: "ui.deny" });
+      break;
     case "tensionCue":
       break; // 밤이 아니면 시각 큐도 소리가 없다
   }

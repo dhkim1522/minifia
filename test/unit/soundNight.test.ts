@@ -256,6 +256,8 @@ describe("LS-7: 밤의 모든 UI 조작은 무음이다", () => {
     tap: { kind: "tap" },
     card: { kind: "card", delayMs: 0 },
     tensionCue: { kind: "tensionCue" },
+    vote: { kind: "vote" },
+    deny: { kind: "deny" },
   } as never;
 
   it("대표 신호표가 닫힌 목록 전부를 덮는다", () => {

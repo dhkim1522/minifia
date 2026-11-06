@@ -267,12 +267,14 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
       if (sendGuard.peek() === "whisper") {
         sendGuard.take();
         show(e.code === "WRONG_PHASE" ? WHISPER_TEXT.rejectPhase : WHISPER_TEXT.rejectOther);
+        emitSignal({ kind: "deny" });
         setWhisperRejects((n) => n + 1);
         return;
       }
       // 직업 배지: 최근 3초 안에 보냈고 단계 어긋남·잘못된 요청이면 그 거절이다. 그 밖의 코드는 이 분기를 지나친다
       if ((e.code === "WRONG_PHASE" || e.code === "BAD_MESSAGE") && sendGuard.take() === "badge") {
         show(BADGE_TEXT.reject);
+        emitSignal({ kind: "deny" });
         setBadgeRejects((n) => n + 1);
         return;
       }
@@ -280,12 +282,16 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
       if (sent !== null && Date.now() - sent.at < PICK_REPLY_MS) {
         pointSent.current = null;
         show(e.code === "WRONG_PHASE" ? REJECT_TEXT : SEND_FAIL_TEXT);
+        emitSignal({ kind: "deny" });
         setRejects((n) => n + 1);
         return;
       }
       if (e.code !== "WRONG_PHASE" && e.code !== "BAD_MESSAGE") return;
       // 유언·쪽지 저장 중의 거절은 useWill 이 "보내지 못했어요" 한 번으로 알린다(알림 이중 방지)
-      if (!willBusy.current) show(REJECT_TEXT);
+      if (!willBusy.current) {
+        show(REJECT_TEXT);
+        emitSignal({ kind: "deny" });
+      }
       setRejects((n) => n + 1);
     });
   }, [onEvent, show, sendGuard]);

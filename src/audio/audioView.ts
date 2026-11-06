@@ -1,6 +1,6 @@
 // 12-08: 소리 감독의 입력 — 방 화면이 이미 쓰는 공개 view 에서 허용 필드만 고른다 (D-3, LS-6, T-12-27).
 // 이 파일만 RoomView 를 읽는다. 읽는 경로는 test/unit/soundStaticGuard.test.ts 의 허용 목록이 고정한다:
-//   view.phase · view.phaseEndsAt · view.day.{n, turn, points, candidate, morning, verdict, ballots} · view.players · view.me.seat
+//   view.phase · view.phaseEndsAt · view.day.{n, turn, points, candidate, morning, verdict, ballots, runoff, showdown} · view.players · view.me.seat
 // 이후 계획(09·10·11)이 필요한 공개 필드를 여기와 허용 목록에 함께 더한다. 역할·선택·기록·관전·본문 필드는 읽지 않는다.
 import type { PhaseId, PointLine, RoomView } from "../../shared/protocol";
 
@@ -18,6 +18,17 @@ export interface AudioTurn {
 export interface AudioMorning {
   eliminated: boolean;
   saved: boolean;
+}
+
+/** 결선(12-10): 단계(0 앞머리 · 1 투표 · 2 결과)만 읽는다 — 후보·득표·투표자는 읽지 않는다 */
+export interface AudioRunoff {
+  step: number;
+}
+
+/** 마지막 3인 결전(12-10): 말하는 순서(공개 좌석)와 진행 번호 i(-1 모이기 · 0..2 한마디 · 3 동시 지목 · 4 공개). 한마디·지목은 읽지 않는다 */
+export interface AudioShowdown {
+  order: number[];
+  i: number;
 }
 
 /** 판결(12-10): 처형 단계의 공개 결과 — 통과 여부와 마지막 3인 처형인가. 찬반 수·좌석은 읽지 않는다 */
@@ -38,12 +49,14 @@ export interface AudioView {
   verdict: AudioVerdict | null;
   /** 찬반 기록(day.ballots)이 있는가 — 불리언 하나. 누가 어느 쪽인지는 읽지 않는다 (12-10) */
   hasBallots: boolean;
+  runoff: AudioRunoff | null;
+  showdown: AudioShowdown | null;
   players: { seat: number; alive: boolean }[];
   mySeat: number;
 }
 
 /** AudioView 의 키 목록. 시험이 audioViewOf 출력의 키가 이 안에 있음을 단언한다 */
-export const AUDIO_VIEW_FIELDS = ["phase", "endsAt", "dayN", "turn", "points", "candidate", "morning", "verdict", "hasBallots", "players", "mySeat"] as const;
+export const AUDIO_VIEW_FIELDS = ["phase", "endsAt", "dayN", "turn", "points", "candidate", "morning", "verdict", "hasBallots", "runoff", "showdown", "players", "mySeat"] as const;
 
 export function audioViewOf(view: RoomView): AudioView {
   const t = view.day?.turn;
@@ -60,6 +73,8 @@ export function audioViewOf(view: RoomView): AudioView {
   const points = view.day?.points;
   const m = view.day?.morning;
   const v = view.day?.verdict;
+  const ro = view.day?.runoff;
+  const sd = view.day?.showdown;
   return {
     phase: view.phase,
     endsAt: view.phaseEndsAt,
@@ -70,6 +85,8 @@ export function audioViewOf(view: RoomView): AudioView {
     morning: m === undefined ? null : { eliminated: m.eliminated !== undefined, saved: m.saved === true },
     verdict: v === undefined ? null : { passed: v.passed === true, last: v.last === true },
     hasBallots: view.day?.ballots !== undefined,
+    runoff: ro === undefined ? null : { step: ro.step },
+    showdown: sd === undefined ? null : { order: [...sd.order], i: sd.i },
     players: view.players.map((p) => ({ seat: p.seat, alive: p.alive !== false })),
     mySeat: view.me.seat,
   };

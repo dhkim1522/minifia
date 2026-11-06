@@ -1,4 +1,5 @@
 import "../../styles/v2.css";
+import { emitSignal } from "../../audio/signals";
 import { V2Icon } from "./V2Icon";
 
 // 찬반(VerdictPicker). design/v2.0/design-system/components/bundle.js 의 VerdictPicker 와 bundle.css 158-163 을 React 19 로 옮겼다(승인 2026-10-31).
@@ -29,7 +30,10 @@ export function VerdictPicker({ value, onChange, disabled }: VerdictPickerProps)
       aria-pressed={value === v}
       disabled={disabled}
       onMouseDown={(e) => e.preventDefault()}
-      onClick={() => onChange(v)}
+      onClick={() => {
+        emitSignal({ kind: "vote" }); // 값 없는 신호: 찬성·반대가 같은 소리다(LS-7). 소리 id 는 감독이 정한다
+        onChange(v);
+      }}
     >
       <V2Icon name={v === "yes" ? "thumbUp" : "thumbDown"} size={32} />
       <span>{VERDICT_TEXT[v]}</span>

@@ -1,9 +1,9 @@
 // 12-08: 컴포넌트 → 소리 감독의 닫힌 로컬 신호 (D-3, LS-7).
 // 컴포넌트는 소리를 고르지 않는다: 신호 종류만 보내고 어떤 소리를·낼지 말지는 감독이 정한다.
-// 신호 인자에는 선택값·역할·좌석이 없다. 새 종류(12-10: deny · vote · emote)는 SIGNAL_KINDS 와 LocalSignal 에 더한다.
+// 신호 인자에는 선택값·역할·좌석이 없다. 새 종류(12-10: emote)는 SIGNAL_KINDS 와 LocalSignal 에 더한다.
 
 /** 닫힌 신호 종류 */
-export const SIGNAL_KINDS = ["tap", "card", "tensionCue"] as const;
+export const SIGNAL_KINDS = ["tap", "card", "tensionCue", "vote", "deny"] as const;
 export type SignalKind = (typeof SIGNAL_KINDS)[number];
 
 /** 주요 버튼이 눌렸다 — 인자 없음 */
@@ -19,7 +19,15 @@ export interface CardSignal {
 export interface TensionCueSignal {
   kind: "tensionCue";
 }
-export type LocalSignal = TapSignal | CardSignal | TensionCueSignal;
+/** 찬반을 골랐거나 바꿨다 — 값이 없다: 찬성·반대가 같은 신호이고 같은 소리다 (12-10, LS-7) */
+export interface VoteSignal {
+  kind: "vote";
+}
+/** 거절 알림(토스트)이 떴다 — 인자 없음 (12-10) */
+export interface DenySignal {
+  kind: "deny";
+}
+export type LocalSignal = TapSignal | CardSignal | TensionCueSignal | VoteSignal | DenySignal;
 
 type Handler = (signal: LocalSignal) => void;
 
