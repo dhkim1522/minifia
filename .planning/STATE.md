@@ -20,14 +20,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-11-07)
 
 **Core value:** 링크 하나로 모인 친구들이 설명 없이 정통 마피아 한 판(평균 10~15분, 참고 목표)을 끝까지 마치는 것
-**Current focus:** v3.0 마일스톤 준비 (`docs/playtest-v2.0-feedback.md`)
+**Current focus:** Phase 13 — 기본판 낮 흐름
 
 ## Current Position
 
-Phase: Not started (defining requirements)
+Phase: 13 (기본판 낮 흐름) — not started
 Plan: —
-Status: Defining requirements
-Last activity: 2026-11-07 — Milestone v3.0 started
+Status: Ready to plan (UI-SPEC 먼저)
+Last activity: 2026-11-07 — v3.0 requirements(22)·roadmap(13~15) 작성
 
 ## Performance Metrics
 
