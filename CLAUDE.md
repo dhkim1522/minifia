@@ -15,6 +15,7 @@
 - `docs/architecture.md` — 기술 스택, 구조, 실시간 통신, 출시 경로
 - `docs/audio.md` — 소리 출처 기록(provenance)과 레시피 지도, 시험 페이지 사용법
 - `docs/decisions/` — 결정 기록 (번호순)
+- `docs/decisions-summary-v2.0.md` — v2.0 위임 결정 요약: 선택지·추천안·채택, 계획 실행 중 달라진 곳, 아직 정하지 않은 것, 알려진 한계 (아침 확인용)
 - `docs/screen-map.md` — 폰 폭별 화면 영역과 자동 검사(E2E·에셋) 지도
 - `.planning/` — GSD 요구사항·로드맵·진행 상태 (결정 0004). 범위와 진행은 여기를 기준으로 한다
 - `design/references/` — 디자인 참고 이미지 보관 위치(선택). 디자인 단계에서 경로를 주면 따른다. 앱 에셋에 넣지 않는다
