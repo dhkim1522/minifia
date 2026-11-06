@@ -1,5 +1,7 @@
 # 미니피아 (minifia)
 
+> 최신 버전은 [`v3` 브랜치](https://github.com/dhkim1522/minifia/tree/v3)에 있습니다 · [설계 문서](https://dhkim1522.github.io/minifia/design.html) · [소개 페이지](https://dhkim1522.github.io/minifia/)
+
 친구들이 각자 폰으로 방에 들어와 점심시간에 5~10분 안에 한 판 끝내는 마피아 게임. 웹앱으로 먼저 만들고, 정식 출시 때 같은 코드를 앱으로 감싼다.
 
 - 기획: [docs/product.md](docs/product.md)
