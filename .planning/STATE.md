@@ -5,16 +5,16 @@ milestone_name: 사회자와 증거
 current_phase: 13
 current_phase_name: 기본판 낮 흐름
 status: planning
-stopped_at: Completed 13-02-PLAN.md
-last_updated: "2026-11-06T17:25:21.686Z"
+stopped_at: Completed 13-03-PLAN.md
+last_updated: "2026-11-06T17:34:20.176Z"
 last_activity: 2026-11-07
 last_activity_desc: v3.0 requirements(22)·roadmap(13~15) 작성
-state_head: 077f6599991584edc7c2751973b9c811b1c81a41
+state_head: 10ebe8be191bc24db31c7b38ab135137e6c4ac58
 progress:
   total_phases: 3
   completed_phases: 0
   total_plans: 6
-  completed_plans: 2
+  completed_plans: 3
   percent: 0
 ---
 
@@ -198,6 +198,7 @@ Last activity: 2026-11-07 — v3.0 requirements(22)·roadmap(13~15) 작성
 | Phase 10 P01 | 25m | 3 tasks | 9 files |
 | Phase 13 P01 | 16 min | 3 tasks | 22 files |
 | Phase 13 P02 | 20min | 3 tasks | 10 files |
+| Phase 13 P03 | 35min | 2 tasks | 13 files |
 
 ## Accumulated Context
 
@@ -414,6 +415,8 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 13]: RULESET(shared/game/ruleset.ts) 한 곳이 다섯 장치를 끄고, 투표(nomination)는 15초 동시 투표·동점 0표는 결선 없이 밤 (13-01, 결정 0072)
 - [Phase 13]: 봇 투표 계획은 pickTurn 이 없을 때만 동시 계획(POINT_BASE_MS+randInt(POINT_SPAN_MS)), 있으면 순차 계획 유지 (13-02)
 - [Phase 13]: flakeGuard 는 skipIf(!RULESET.x) 만 허용하고 그 밖의 skip·todo·skipIf 는 계속 막는다 (13-02)
+- [Phase 13]: 13-03: 순차·동시 지목은 설정 값이 아니라 view 의 day.turn 유무로 가른다(dayView·presence·GameMap)
+- [Phase 13]: 13-03: 처음 깜빡임은 단계 시작 기준 남은 시간만(재접속 무이펙트), 득표 배지는 서버 집계만 그린다
 
 ### Pending Todos
 
@@ -478,8 +481,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-06T17:25:21.667Z
-Stopped at: Completed 13-02-PLAN.md
+Last session: 2026-11-06T17:34:20.156Z
+Stopped at: Completed 13-03-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
