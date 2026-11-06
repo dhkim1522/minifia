@@ -5,6 +5,7 @@ import "../helpers/singleLineErrors";
 import type { ClientMessage, PhaseId, PublicPlayer, RoleRecord, RoomView } from "../../shared/protocol";
 import type { WorldStageProps } from "../../src/components/WorldStage";
 import { KB_PANEL_H, LOG_H_KB, LOG_H_SHORT, LOG_H_TALL } from "../../src/game/chatUi";
+import { bindSignals, type LocalSignal } from "../../src/audio/signals";
 import type { RoomConnection } from "../../src/net/useRoomConnection";
 
 // 08-13: 낮 시작~처형은 맵(WorldStage) 위 GameMap 한 화면이다. WorldStage 는 받은 props 만 쥐는 가짜로 바꾼다(캔버스·런타임은 worldStage.test 몫).
@@ -683,6 +684,82 @@ describe("GameMap — 거절과 끊김 (E1 #4)", () => {
     act(() => listener({ t: "error", code: "RATE_LIMITED" }, { epoch: 1 }));
     expect(toastText(container)).toBe("");
     expect(endButton(container)?.getAttribute("aria-pressed")).toBe("true");
+  });
+});
+
+// 12-10: 거절 알림(토스트)이 뜨는 네 지점이 각각 값 없는 deny 신호를 보낸다 (LS-7)
+describe("GameMap — 거절 알림의 소리 신호 (12-10, ui.deny)", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
+  });
+  afterEach(() => vi.useRealTimers());
+  const errFeed = () => {
+    const listeners: Array<(e: { t: "error"; code: string }, meta: { epoch: number }) => void> = [];
+    const onEvent = vi.fn((l: (typeof listeners)[number]) => {
+      listeners.push(l);
+      return () => {};
+    });
+    return {
+      onEvent: onEvent as unknown as RoomConnection["onEvent"],
+      error: (code: string) => act(() => listeners.forEach((l) => l({ t: "error", code }, { epoch: 1 }))),
+    };
+  };
+  const withSignals = (): { seen: LocalSignal[]; stop: () => void } => {
+    const seen: LocalSignal[] = [];
+    return { seen, stop: bindSignals((s) => seen.push(s)) };
+  };
+  const nominationMine = (): RoomView => {
+    const v = makeView({ phase: "nomination" });
+    return { ...v, day: { ...v.day!, points: [], turn: { order: [0, 1, 2, 3], i: 0, endsAt: NOW + 8000 } } };
+  };
+  const denies = (seen: LocalSignal[]): LocalSignal[] => seen.filter((s) => s.kind === "deny");
+
+  it("① 그 밖의 거절(토론 끝내기 WRONG_PHASE): deny 한 번 · 속도 제한 오류는 없음", () => {
+    const f = errFeed();
+    const { container } = mount(makeView(), { onEvent: f.onEvent });
+    const sig = withSignals();
+    fireEvent.click(endButton(container)!);
+    f.error("RATE_LIMITED");
+    expect(denies(sig.seen)).toEqual([]);
+    f.error("WRONG_PHASE");
+    sig.stop();
+    expect(denies(sig.seen)).toEqual([{ kind: "deny" }]);
+  });
+
+  it("② 지목 거절(SEND_FAIL/REJECT 알림): deny 한 번", () => {
+    const f = errFeed();
+    mount(nominationMine(), { onEvent: f.onEvent });
+    const sig = withSignals();
+    act(() => stage.props!.pick!.onPick(2));
+    f.error("WRONG_PHASE");
+    sig.stop();
+    expect(denies(sig.seen)).toEqual([{ kind: "deny" }]);
+  });
+
+  it("③ 직업 배지 거절: deny 한 번", () => {
+    const f = errFeed();
+    const { container } = mount(makeView({ count: 6 }), { onEvent: f.onEvent });
+    const sig = withSignals();
+    fireEvent.click(container.querySelector<HTMLButtonElement>('[data-float="claim"]')!);
+    const chip = [...container.querySelectorAll<HTMLButtonElement>(".mv-claim-sheet .mv-claim-chip")].find((b) => b.textContent === "의사")!;
+    fireEvent.click(chip);
+    f.error("WRONG_PHASE");
+    sig.stop();
+    expect(denies(sig.seen)).toEqual([{ kind: "deny" }]);
+  });
+
+  it("④ 귓속말 거절: deny 한 번", () => {
+    const f = errFeed();
+    const { container } = mount(makeView(), { onEvent: f.onEvent });
+    const sig = withSignals();
+    fireEvent.click(container.querySelector<HTMLButtonElement>('[data-float="whisper"]')!);
+    act(() => stage.props!.pick!.onPick(2));
+    fireEvent.change(container.querySelector<HTMLInputElement>("[data-line-input]")!, { target: { value: "비밀이에요" } });
+    fireEvent.click(container.querySelector<HTMLButtonElement>("[data-line-send]")!);
+    f.error("WRONG_PHASE");
+    sig.stop();
+    expect(denies(sig.seen)).toEqual([{ kind: "deny" }]);
   });
 });
 

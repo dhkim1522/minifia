@@ -1,6 +1,6 @@
 // 12-08: 소리 감독(director)과 AudioView — 공개 view 의 차이와 닫힌 신호·로컬 시계만으로 소리를 정한다 (D-3, D-11, D-17, LS-1, LS-5, LS-6, LS-7, LS-10, LS-11).
 import { describe, expect, it } from "vitest";
-import { PICK_TURN_MS } from "../../shared/game/phases";
+import { EXECUTION_MS, PICK_TURN_MS } from "../../shared/game/phases";
 import type { DayView, PhaseId, PublicPlayer, RoomView } from "../../shared/protocol";
 import { URGENT_MS } from "../../src/net/countdown";
 import { AUDIO_VIEW_FIELDS, audioViewOf, type AudioView } from "../../src/audio/audioView";
@@ -32,6 +32,8 @@ function av(phase: PhaseId, over: Partial<AudioView> = {}): AudioView {
     morning: null,
     verdict: null,
     hasBallots: false,
+    runoff: null,
+    showdown: null,
     players: [0, 1, 2, 3].map((seat) => ({ seat, alive: true })),
     mySeat: 0,
     ...over,
@@ -407,11 +409,64 @@ describe("지목 pick.*·pin.* (D-11)", () => {
   });
 });
 
+// ───────────────────────── 12-10: pinOf 대조 (결선·마지막 3인·처형) ─────────────────────────
+
+describe("pinOfAudio 가 pinOf 의 결선·마지막 3인·처형 분기와 같은 순간에 pin.on 을 낸다 (C-2, D-3)", () => {
+  const players: PublicPlayer[] = [0, 1, 2, 3].map((seat) => ({ seat, nickname: `p${seat}`, connected: true, isHost: seat === 0 }));
+  const view = (phase: PhaseId, day: Partial<DayView>, endsAt = NOW + 60_000): RoomView => ({
+    code: "0042", phase, phaseEndsAt: endsAt, phaseDurationMs: null, serverNow: NOW, minPlayers: 4, maxPlayers: 8, players,
+    me: { seat: 1, isHost: false }, day: { n: 1, roles: [], ...day },
+  });
+  const O3 = [0, 1, 3];
+  const EXEC_END = NOW + EXECUTION_MS;
+  const seq: [string, RoomView][] = [
+    ["nomination 끝", view("nomination", { turn: { order: [0, 1, 2, 3], i: 4 }, points: [] })],
+    ["runoff 진입", view("runoff", { runoff: { cand: [1, 2], step: 0 } })],
+    ["runoff 투표", view("runoff", { runoff: { cand: [1, 2], step: 1, voted: [0] } })],
+    ["runoff 결과", view("runoff", { runoff: { cand: [1, 2], step: 2, tally: [3, 1] } })],
+    ["showdown 진입(모이기)", view("showdown", { showdown: { order: O3, i: -1 } })],
+    ["showdown 차례 0", view("showdown", { showdown: { order: O3, i: 0, endsAt: NOW + 5000 } })],
+    ["showdown 차례 0 확정", view("showdown", { showdown: { order: O3, i: 0, endsAt: NOW + 5000, doneAt: NOW + 2000, word: "안녕" } })],
+    ["showdown 차례 1", view("showdown", { showdown: { order: O3, i: 1, endsAt: NOW + 9000 } })],
+    ["showdown 차례 1 기권", view("showdown", { showdown: { order: O3, i: 1, endsAt: NOW + 9000, doneAt: NOW + 9000, skip: true } })],
+    ["showdown 차례 2", view("showdown", { showdown: { order: O3, i: 2, endsAt: NOW + 14000 } })],
+    ["showdown 동시 지목", view("showdown", { showdown: { order: O3, i: 3, endsAt: NOW + 20000, voted: [0] } })],
+    ["showdown 공개", view("showdown", { showdown: { order: O3, i: 4, points: [{ seat: 0, target: 1 }] } })],
+    ["처형(마지막 3인)", view("execution", { candidate: 1, verdict: { yes: 0, no: 0, passed: true, last: true } }, EXEC_END)],
+    ["밤", view("night", {})],
+    ["verdict", view("verdict", { candidate: 2 }, NOW + 20000)],
+    ["처형(찬반 기록)", view("execution", { candidate: 2, verdict: { yes: 2, no: 1, passed: true }, ballots: { yes: [0, 1], no: [3] } }, EXEC_END)],
+    ["처형 되풀이", view("execution", { candidate: 2, verdict: { yes: 2, no: 1, passed: true }, ballots: { yes: [0, 1], no: [3] } }, EXEC_END)],
+    ["verdict2", view("verdict", { candidate: 2 }, NOW + 20000)],
+    ["처형(기록 없음·마지막 아님)", view("execution", { candidate: 2, verdict: { yes: 0, no: 0, passed: false } }, EXEC_END)],
+    ["verdict3", view("verdict", { candidate: 2 }, NOW + 20000)],
+    ["처형(변론자 없음)", view("execution", { verdict: { yes: 2, no: 1, passed: false }, ballots: { yes: [0, 1], no: [3] } }, EXEC_END)],
+  ];
+  const pinIds = (out: DirectOutput): number => out.now.filter((c) => c.id === "pin.on").length + out.scripts.flatMap((s) => s.items).filter((i) => i.id === "pin.on").length;
+
+  it("대표 view 열 전수: pinOf 가 새 핀을 켜는 전이에서만 pin.on 한 번", () => {
+    let expectedOn = 0;
+    for (let k = 1; k < seq.length; k += 1) {
+      const p = pinOf(seq[k - 1]![1]);
+      const c = pinOf(seq[k]![1]);
+      const start =
+        c !== null &&
+        c.mode !== "slide" &&
+        !(p !== null && p.mode === c.mode && (c.mode === "point" || ("seat" in p && "seat" in c && p.seat === c.seat)));
+      const out = direct(audioViewOf(seq[k - 1]![1]), audioViewOf(seq[k]![1]), clock({ now: NOW }));
+      expect(pinIds(out), `${seq[k - 1]![0]} → ${seq[k]![0]}`).toBe(start ? 1 : 0);
+      if (start) expectedOn += 1;
+    }
+    // runoff 진입 1 + showdown 차례 3 + 처형 3(마지막 3인·찬반 기록·...): 아래 개수로 열이 실제로 핀을 켰음을 고정한다
+    expect(expectedOn).toBe(1 + 3 + 1 + 1);
+  });
+});
+
 // ───────────────────────── 신호 (ui.tap) ─────────────────────────
 
 describe("신호 tap → ui.tap (LS-7)", () => {
-  it("닫힌 신호 종류는 tap·card·tensionCue 이고 인자에 선택값·역할·좌석이 없다", () => {
-    expect([...SIGNAL_KINDS]).toEqual(["tap", "card", "tensionCue"]);
+  it("닫힌 신호 종류는 tap·card·tensionCue·vote·deny 이고 인자에 선택값·역할·좌석이 없다", () => {
+    expect([...SIGNAL_KINDS]).toEqual(["tap", "card", "tensionCue", "vote", "deny"]);
   });
 
   it.each(PHASES.filter((p) => p !== "night"))("%s: ui.tap 한 번", (phase) => {
@@ -541,6 +596,8 @@ describe("audioViewOf: 허용 필드만 (LS-6, T-12-27)", () => {
       morning: null,
       verdict: null,
       hasBallots: false,
+      runoff: null,
+      showdown: null,
       players: [{ seat: 0, alive: true }, { seat: 1, alive: false }, { seat: 2, alive: true }],
       mySeat: 2,
     });

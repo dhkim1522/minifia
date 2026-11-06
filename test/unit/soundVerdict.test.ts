@@ -4,9 +4,10 @@ import { describe, expect, it } from "vitest";
 import { EXECUTION_MS } from "../../shared/game/phases";
 import type { PhaseId, PublicPlayer, RoomView } from "../../shared/protocol";
 import { AUDIO_VIEW_FIELDS, audioViewOf, type AudioView } from "../../src/audio/audioView";
-import { direct, GRACE_MS, type DirectOutput, type LocalClock } from "../../src/audio/director";
+import { direct, directSignal, GRACE_MS, type DirectOutput, type LocalClock } from "../../src/audio/director";
 import { recipeDurationMs } from "../../src/audio/recipes";
 import { verdictScript } from "../../src/audio/script";
+import { SCREEN_COUNTERPART } from "../../src/audio/recipes";
 import { BALLOT_END_AT } from "../../src/game/verdictMoment";
 
 const T0 = 5_000_000;
@@ -23,6 +24,8 @@ function av(phase: PhaseId, over: Partial<AudioView> = {}): AudioView {
     morning: null,
     verdict: null,
     hasBallots: false,
+    runoff: null,
+    showdown: null,
     players: [0, 1, 2, 3].map((seat) => ({ seat, alive: true })),
     mySeat: 0,
     ...over,
@@ -287,5 +290,84 @@ describe("audioViewOf: 판결 필드는 공개 불리언뿐 (LS-6)", () => {
   it("찬반 기록 안의 좌석·수를 바꿔도 출력이 같다", () => {
     const mk = (yes: number[], no: number[]) => audioViewOf(view({ n: 1, roles: [], candidate: 2, verdict: { yes: yes.length, no: no.length, passed: yes.length > no.length }, ballots: { yes, no } }));
     expect(mk([0, 1, 3], [])).toEqual(mk([0, 3], [1]));
+  });
+});
+
+// ───────────────────────── 결선·마지막 3인·핀 (D-3) ─────────────────────────
+
+const ids = (out: DirectOutput): string[] => out.now.map((c) => c.id);
+const quiet = (out: DirectOutput): boolean => out.cancel.length === 0 && !("bed" in out) && out.scripts.length === 0 && out.now.length === 0 && out.duck === null;
+const runoff = (step: 0 | 1 | 2): AudioView => av("runoff", { endsAt: T0 + 20_000, runoff: { step } });
+const showdown = (i: number, over: Partial<AudioView> = {}): AudioView => av("showdown", { endsAt: T0 + 30_000, showdown: { order: [0, 1, 3], i }, ...over });
+
+describe("결선 (runoff.intro · pin.on · runoff.reveal)", () => {
+  it("runoff 진입: runoff.intro 와 pin.on 이 한 번씩 (침대는 bed.vote 그대로)", () => {
+    const out = direct(av("nomination", { endsAt: T0 }), runoff(0), clock());
+    expect(ids(out).sort()).toEqual(["pin.on", "runoff.intro"]);
+    expect("bed" in out).toBe(false);
+  });
+
+  it("step 이 2 로 바뀌는 순간 runoff.reveal 한 번", () => {
+    expect(ids(direct(runoff(1), runoff(2), clock()))).toEqual(["runoff.reveal"]);
+    expect(ids(direct(runoff(0), runoff(2), clock()))).toEqual(["runoff.reveal"]);
+  });
+
+  it("step 0 → 1·같은 step 되풀이(2 → 2)는 소리가 없다", () => {
+    expect(quiet(direct(runoff(0), runoff(1), clock()))).toBe(true);
+    expect(quiet(direct(runoff(2), runoff(2), clock()))).toBe(true);
+  });
+
+  it("첫 스냅샷·epoch 변경은 침대만 (step 2 여도 reveal 없음)", () => {
+    const first = direct(null, runoff(2), clock());
+    expect(first.now).toEqual([]);
+    expect(first.bed).toBe("bed.vote");
+    expect(direct(runoff(1), runoff(2), clock({ reset: true })).now).toEqual([]);
+  });
+});
+
+describe("마지막 3인 (pin.on · showdown.reveal)", () => {
+  it("모이기(i −1)에는 소리가 없고, 0~2 차례 시작마다 pin.on 한 번", () => {
+    expect(direct(av("nomination", { endsAt: T0 }), showdown(-1), clock()).now).toEqual([]);
+    expect(ids(direct(showdown(-1), showdown(0), clock()))).toEqual(["pin.on"]);
+    expect(ids(direct(showdown(0), showdown(1), clock()))).toEqual(["pin.on"]);
+    expect(ids(direct(showdown(1), showdown(2), clock()))).toEqual(["pin.on"]);
+  });
+
+  it("같은 차례 안(확정·한마디 갱신)은 말하는 사람이 같아 소리가 없다", () => {
+    const done = showdown(0, { showdown: { order: [0, 1, 3], i: 0 } });
+    expect(quiet(direct(showdown(0), done, clock()))).toBe(true);
+  });
+
+  it("동시 지목(i 3)에는 핀 소리가 없고, 공개(i 4)가 되는 순간 showdown.reveal 한 번", () => {
+    expect(direct(showdown(2), showdown(3), clock()).now).toEqual([]);
+    expect(ids(direct(showdown(3), showdown(4), clock()))).toEqual(["showdown.reveal"]);
+    expect(quiet(direct(showdown(4), showdown(4), clock()))).toBe(true);
+  });
+
+  it("첫 스냅샷은 침대만이다", () => {
+    expect(direct(null, showdown(1), clock()).now).toEqual([]);
+  });
+});
+
+describe("신호 vote·deny (LS-7)", () => {
+  it.each(["lobby", "discussion", "nomination", "runoff", "showdown", "defense", "verdict", "execution", "morning", "ended"] as const)("%s: vote → vote.cast, deny → ui.deny 한 번", (phase) => {
+    expect(directSignal({ kind: "vote" }, av(phase)).now).toEqual([{ id: "vote.cast" }]);
+    expect(directSignal({ kind: "deny" }, av(phase)).now).toEqual([{ id: "ui.deny" }]);
+  });
+
+  it("밤에는 둘 다 무음", () => {
+    expect(quiet(directSignal({ kind: "vote" }, av("night")))).toBe(true);
+    expect(quiet(directSignal({ kind: "deny" }, av("night")))).toBe(true);
+  });
+
+  it("신호에는 값이 없다 — 객체 키가 kind 하나뿐이다", () => {
+    const yes = { kind: "vote" as const };
+    const no = { kind: "vote" as const };
+    expect(JSON.stringify(directSignal(yes, av("verdict")))).toBe(JSON.stringify(directSignal(no, av("verdict", { mySeat: 3 }))));
+    expect(Object.keys(yes)).toEqual(["kind"]);
+  });
+
+  it("이 계획이 새로 내는 id 는 모두 화면 대응 표에 있다", () => {
+    for (const id of ["runoff.intro", "runoff.reveal", "showdown.reveal", "vote.cast", "ui.deny", "pin.on"] as const) expect(SCREEN_COUNTERPART[id], id).toBeTruthy();
   });
 });

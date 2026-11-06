@@ -134,6 +134,8 @@ const ALLOWED_VIEW_PATHS: readonly string[] = [
   "view.day.morning",
   "view.day.verdict",
   "view.day.ballots",
+  "view.day.runoff",
+  "view.day.showdown",
   "view.players",
   "view.me.seat",
 ];

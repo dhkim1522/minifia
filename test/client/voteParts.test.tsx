@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import "../helpers/singleLineErrors";
+import { bindSignals } from "../../src/audio/signals";
 import { RoleChip } from "../../src/components/v2/RoleChip";
 import { SureStamp } from "../../src/components/v2/SureStamp";
 import { VerdictPicker } from "../../src/components/v2/VerdictPicker";
@@ -217,6 +218,30 @@ describe("V2Icon — 찬반·건너뛰기 아이콘 skip·thumbUp·thumbDown (DA
   it("skip 은 경로 두 개를 그린다", () => {
     const { container } = render(<V2Icon name="skip" />);
     expect(container.querySelectorAll("svg path").length).toBe(2);
+  });
+});
+
+describe("VerdictPicker 소리 신호 (12-10, LS-7)", () => {
+  it("찬성·반대·같은 쪽 다시 누르기가 모두 값 없는 같은 vote 신호 하나를 보낸다", () => {
+    const seen: unknown[] = [];
+    const unbind = bindSignals((s) => seen.push(s));
+    const picks: string[] = [];
+    const { container } = render(<VerdictPicker value="yes" onChange={(v) => picks.push(v)} />);
+    fireEvent.click(container.querySelector('button[data-verdict="yes"]')!);
+    fireEvent.click(container.querySelector('button[data-verdict="no"]')!);
+    fireEvent.click(container.querySelector('button[data-verdict="no"]')!);
+    unbind();
+    expect(picks).toEqual(["yes", "no", "no"]);
+    expect(seen).toEqual([{ kind: "vote" }, { kind: "vote" }, { kind: "vote" }]);
+  });
+
+  it("disabled 이면 신호도 없다", () => {
+    const seen: unknown[] = [];
+    const unbind = bindSignals((s) => seen.push(s));
+    const { container } = render(<VerdictPicker onChange={() => {}} disabled />);
+    fireEvent.click(container.querySelector('button[data-verdict="yes"]')!);
+    unbind();
+    expect(seen).toEqual([]);
   });
 });
 
