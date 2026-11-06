@@ -217,8 +217,8 @@ test("resolveTarget: v1.0 주소는 명시해도 거부(푸는 옵션 없음)", 
   }
 });
 
-test("USAGE 의 예시 주소는 v2 다", () => {
-  assert.ok(USAGE.includes("minifia-v2.dhplay.workers.dev"));
+test("USAGE 의 예시 주소는 v3 다", () => {
+  assert.ok(USAGE.includes("minifia-v3.dhplay.workers.dev"));
 });
 
 test("resolveTarget: localhost 는 경로와 쿼리를 버린 origin", () => {
