@@ -278,7 +278,8 @@ export const GAME_PANEL_EXTRA = Object.freeze({ talk: 154, chat: CHAT_PANEL_EXTR
  * 14-06(TOOL-01): 입력줄의 [동작]·[보내기]·[유언]이 면 36 + 4 + 라벨 한 줄(14px × 1.4 = 19.6) 이름표 단추(높이 59.6)가 되어, 입력칸 48 이 아래 정렬이라 입력줄이 11.6 커지고
  * 입력줄이 든 패널(토론·채팅·찬반·밤 마피아)이 그만큼 는다. 위 GAME_PANEL_EXTRA 는 앱 상수(chatUi.ts)의 값 그대로이고 gamePanelHeight 가 이 값을 더한다.
  */
-export const TOOL_ROW_EXTRA = 36 + 4 + 19.6 - 48;
+export const TOOL_BUTTON_H = 36 + 4 + 19.6;
+export const TOOL_ROW_EXTRA = TOOL_BUTTON_H - 48;
 
 /** 밤 시민 패널 높이: 행동 줄 52 [유언] 하나 = 88 고정(09-UI-SPEC 157행, 방 높이와 무관). */
 export const NIGHT_CITIZEN_PANEL_H = 88;
@@ -1970,14 +1971,14 @@ export const AVATAR_MARKERS = Object.freeze([
  * EB1 버튼 48x48 ±1 · EP2 입력칸 폭 ≥ 150 · TR1 판 좌우 16 ±1·폭 = viewport − 32 ±1 · TR2 칸 아홉 개(윗줄 5·아랫줄 4)이고 두 줄 모두 판 가운데 정렬(좌우 여백 차 ≤ 2) ·
  * EP3 칸 폭·높이 ≥ 44 · TR3 판 아랫변 = 입력칸 윗변 − 8 ±2 · EP4 캐릭터 점이 판 사각형 밖 · TR4 이름 글자 ≥ 14 · TR5 판이 열려 있을 때 키보드는 닫혀 있음.
  */
-export function emoteTrayChecks({ button, input, tray, cells, nameFont, viewport, character, hasKb } = {}) {
+export function emoteTrayChecks({ button, input, tray, cells, nameFont, viewport, character, hasKb, labeled = false } = {}) {
   const L = {
-    EB1: `동작 버튼 ${TAP_MIN + 4}x${TAP_MIN + 4}`,
+    EB1: labeled ? `동작 이름표 단추 폭 ${TAP_MIN}~52 · 높이 ${fmt(TOOL_BUTTON_H)}` : `동작 버튼 ${TAP_MIN + 4}x${TAP_MIN + 4}`,
     EP2: "입력칸 폭 150 이상",
     TR1: "판 좌우 16 · 폭 = 폰 폭 − 32",
     TR2: "칸 아홉 개: 윗줄 5 · 아랫줄 4, 두 줄 모두 판 가운데",
     EP3: `칸 누르기 영역 ${TAP_MIN} 이상`,
-    TR3: "판 아랫변 = 입력줄 윗변 − 8",
+    TR3: labeled ? `판 아랫변 = 입력칸 윗변 − 8 − 이름표 줄 늘어난 ${fmt(TOOL_ROW_EXTRA)}` : "판 아랫변 = 입력줄 윗변 − 8",
     EP4: "판이 내 캐릭터를 가리지 않음",
     TR4: "칸 이름 글자 14px 이상",
     TR5: "판이 열려 있을 때 키보드는 닫혀 있음",
@@ -1986,7 +1987,9 @@ export function emoteTrayChecks({ button, input, tray, cells, nameFont, viewport
   const valid = rectOk(button) && rectOk(input) && rectOk(tray) && Array.isArray(cells) && cells.every(rectOk) && !!viewport && allNum(viewport.w, viewport.h) && !!character && allNum(character.x, character.y) && isNum(nameFont) && typeof hasKb === "boolean";
   if (!valid) return Object.entries(L).map(([id, label]) => noMeasure(id, label, "button·input·tray·cells·nameFont·viewport·character·hasKb"));
   const out = [];
-  out.push(result("EB1", L.EB1, Math.abs(button.width - 48) > 1 || Math.abs(button.height - 48) > 1 ? [`${fmt(button.width)}x${fmt(button.height)}`] : []));
+  // labeled(14-06 이름표 단추): 폭 44~52(누르기 44 이상·최대 52), 높이 면 36 + 4 + 라벨 19.6 = 59.6 ±1 — 옛 48x48 은 라벨이 없던 모양
+  const eb1Bad = labeled ? button.width + 0.5 < TAP_MIN || button.width > 52.5 || Math.abs(button.height - TOOL_BUTTON_H) > 1 : Math.abs(button.width - 48) > 1 || Math.abs(button.height - 48) > 1;
+  out.push(result("EB1", L.EB1, eb1Bad ? [`${fmt(button.width)}x${fmt(button.height)}`] : []));
   out.push(result("EP2", L.EP2, input.width >= 150 ? [] : [`입력칸 폭 ${fmt(input.width)}`]));
   const t1 = [];
   if (Math.abs(tray.left - 16) > 1) t1.push(`왼쪽 ${fmt(tray.left)}`);
@@ -2017,7 +2020,8 @@ export function emoteTrayChecks({ button, input, tray, cells, nameFont, viewport
   out.push(result("TR2", L.TR2, t2));
   out.push(result("EP3", L.EP3, cells.filter((c) => c.width + OVERLAP_EPS < TAP_MIN || c.height + OVERLAP_EPS < TAP_MIN).map((c) => `${fmt(c.width)}x${fmt(c.height)}`)));
   const gap = input.top - bottom(tray);
-  out.push(result("TR3", L.TR3, Math.abs(gap - 8) > 2 ? [`입력줄 윗변과 간격 ${fmt(gap)}`] : []));
+  const wantGap = 8 + (labeled ? TOOL_ROW_EXTRA : 0);
+  out.push(result("TR3", L.TR3, Math.abs(gap - wantGap) > 2 ? [`입력줄 윗변과 간격 ${fmt(gap)} (기대 ${fmt(wantGap)})`] : []));
   const covered = character.x >= tray.left && character.x <= right(tray) && character.y >= tray.top && character.y <= bottom(tray);
   out.push(result("EP4", L.EP4, covered ? [`캐릭터 ${fmt(character.x)},${fmt(character.y)} 가 판 안`] : []));
   out.push(result("TR4", L.TR4, nameFont >= 14 ? [] : [`${nameFont}px`]));
@@ -2227,7 +2231,7 @@ export function soundButtonChecks({ viewport, button, header, test, toast, banne
   const L = {
     SU1: "방 화면에 소리 단추가 정확히 하나",
     SU2: `누르기 영역 ${G.tap}x${G.tap} 이상`,
-    SU3: `위 = 헤더 아래 끝 + ${G.gap} · 오른쪽 여백 ${G.margin} (±${G.posTol})`,
+    SU3: `위 = 헤더(자막 띠가 있으면 띠) 아래 끝 + ${G.gap} · 오른쪽 여백 ${G.margin} (±${G.posTol})`,
     SU4: "헤더 단추·[테스트]·토스트 글자와 겹침 0",
     SU5: "재접속 띠가 떠 있어도 단추 중심의 최상단이 단추 자신",
     SU6: `시각 지름 ${G.disc}±${G.discTol} (알약은 높이 ${G.pillH} · 폭 ${G.pillMinW} 이상)`,
@@ -2250,7 +2254,7 @@ export function soundButtonChecks({ viewport, button, header, test, toast, banne
   out.push(result("SU2", L.SU2, r.width >= G.tap && r.height >= G.tap ? [] : [`${fmt(r.width)}x${fmt(r.height)}`]));
   const bad3 = [];
   const dTop = r.top - (header.bottom + G.gap);
-  if (Math.abs(dTop) > G.posTol) bad3.push(`위 ${fmt(r.top)} (헤더 아래 끝 ${fmt(header.bottom)} + ${G.gap} 과 ${fmt(dTop)})`);
+  if (Math.abs(dTop) > G.posTol) bad3.push(`위 ${fmt(r.top)} (헤더(띠) 아래 끝 ${fmt(header.bottom)} + ${G.gap} 과 ${fmt(dTop)})`);
   const marginRight = viewport.w - right(r);
   if (Math.abs(marginRight - G.margin) > G.posTol) bad3.push(`오른쪽 여백 ${fmt(marginRight)} (기대 ${G.margin})`);
   out.push(result("SU3", L.SU3, bad3));
@@ -2260,9 +2264,9 @@ export function soundButtonChecks({ viewport, button, header, test, toast, banne
   if (toast && rectsOverlap(r, toast)) bad4.push(`토스트 (${overlapText(r, toast)})`);
   out.push(result("SU4", L.SU4, bad4));
   const bad5 = [];
+  // 14페이즈: 소리 단추가 띠 아래 독으로 내려와 재접속 띠가 더는 단추 중심을 덮지 않는다 — 덮든 안 덮든 단추 중심의 최상단이 단추 자신이어야 한다(띠가 없으면 확인한 것이 없어 실패)
   if (!bannerHit.present) bad5.push("재접속 띠가 떠 있지 않아 확인할 것이 없다");
-  else if (bannerHit.covers !== true) bad5.push("띠가 단추 중심을 덮지 않아 확인할 것이 없다");
-  else if (bannerHit.hitIsButton !== true) bad5.push("띠가 단추 중심을 덮고 있다(단추가 눌리지 않음)");
+  else if (bannerHit.hitIsButton !== true) bad5.push(bannerHit.covers === true ? "띠가 단추 중심을 덮고 있다(단추가 눌리지 않음)" : "단추 중심의 최상단이 단추가 아님");
   out.push(result("SU5", L.SU5, bad5));
   const d = button.disc;
   const bad6 = [];
@@ -2845,7 +2849,9 @@ export function toolLabelChecks(list, { exempt = TOOL_LABEL_EXEMPT } = {}) {
   for (const it of list) {
     if (it.toolLabel === null || it.toolLabel === undefined || it.toolLabel === "") continue;
     const want = labelWord(it.toolLabel);
-    if (labelWord(it.text) !== want) bad2.push(`'${it.name}' 보이는 글자 '${it.text}' ≠ data-tool-label '${it.toolLabel}'`);
+    // 소리 잠김 알약(8초, 14-07): 알약 자체가 글자('소리 켜기')라 라벨을 따로 두지 않는다 — 낱말로 시작하면 같은 낱말로 본다. 접히면 '소리' 라벨
+    const lockedPill = want === "소리" && labelWord(it.text).startsWith(want);
+    if (labelWord(it.text) !== want && !lockedPill) bad2.push(`'${it.name}' 보이는 글자 '${it.text}' ≠ data-tool-label '${it.toolLabel}'`);
     else if (!it.name.replace(/\s/g, "").includes(want)) bad2.push(`'${it.name}' 접근성 이름이 '${it.toolLabel}' 을 포함하지 않음`);
   }
   return [result("TL1", l1, bare.map((it) => `'${it.name}'${it.hasIcon ? "(아이콘만)" : ""}`)), result("TL2", l2, bad2)];

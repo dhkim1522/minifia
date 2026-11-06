@@ -1774,7 +1774,10 @@ async function ghostFlow(ctx) {
       const g0 = await untilGame(hp, (x) => x.phase === "nomination" && x.ghostView, 9000, "다음 날 지목 도착(유령)");
       await settle(hp);
       const movesBefore = guests.map((g) => g.tracker.moves.get(hostSeat)?.n ?? 0);
-      const target = g0.stage ? await findTapTarget(hp, g0.stage, hostSeat, ctx.size) : null;
+      // 14페이즈: 앱의 스테이지(useMapInsets)는 윗변이 자막 띠 면 아랫변이다 — 목적지도 띠 아래에서 고른다(띠 밑으로 걸어간 유령 이름표는 띠 면이 글자를 덮어 대비를 재지 못한다, 360x560 에서 간헐)
+      const bandNow = g0.stage ? await readHostBand(hp) : null;
+      const stageBelowBand = g0.stage ? { ...g0.stage, top: Math.max(g0.stage.top, bandNow?.bandRect?.bottom ?? 0) } : null;
+      const target = stageBelowBand ? await findTapTarget(hp, stageBelowBand, hostSeat, ctx.size) : null;
       if (!target) rec(sc, "GH10", "유령이 다음 날 지목에서도 맵을 걷는다", false, "탭할 목적지를 찾지 못함");
       else {
         const tap = await tapWorld(hp, ht, hostSeat, target.x, target.z);
@@ -1791,9 +1794,19 @@ async function ghostFlow(ctx) {
         await sleep(400);
         const pool = await readGhostTagContrast(hp).catch(() => []);
         await hp.emulateMedia({ reducedMotion: "no-preference" });
-        const worst = pool.length > 0 ? Math.min(...pool.map((c) => c.ratio)) : null;
+        // 14-08 UI#14 알려진 한계(E8 #28 과 같은 뿌리): 가장 낮은 폰(360×560)에서는 띠가 스테이지 윗부분을 차지해 유령 이름표가 헤더·자막 띠 밑으로 올라가면 그 면이 글자를 덮어 화면 그림으로 대비를 잴 수 없다 —
+        // 그 이름표만 판정에서 빼고 GH13k 정보 줄로 남긴다(문턱 4.5 는 그대로, 다른 크기와 가려지지 않은 이름표는 그대로 판정)
+        const bandGh = ctx.size.h < SHORT_PHONE_H ? await readHostBand(hp).catch(() => null) : null;
+        const headerBottomGh = ctx.size.h < SHORT_PHONE_H ? await hp.evaluate(() => document.querySelector(".mf-game__header")?.getBoundingClientRect().bottom ?? 0).catch(() => 0) : 0;
+        const underBand = bandGh?.bandRect ? pool.filter((c) => rectsOverlap(c.rect, bandGh.bandRect)) : [];
+        const underHeader = pool.filter((c) => c.rect.top < headerBottomGh - 0.5);
+        const occluded = [...new Set([...underBand, ...underHeader])];
+        if (occluded.length > 0) infoRow(ctx, sc, "GH13k", "알려진 한계(UI#14): 낮은 폰의 유령 이름표가 헤더·자막 띠 밑에 있어 대비를 잴 수 없음(판정 아님)", `자리 ${occluded.map((c) => c.seat).join(",")} · 띠 겹침 ${underBand.length}개 · 헤더 밑 ${underHeader.length}개`);
+        const judgedPool = pool.filter((c) => !occluded.includes(c));
+        const worst = judgedPool.length > 0 ? Math.min(...judgedPool.map((c) => c.ratio)) : null;
         const detail = pool.length === 0 ? "측정한 유령 이름표 없음" : pool.map((c) => `자리 ${c.seat} ${Math.round(c.ratio * 100) / 100}:1(불투명도 ${Math.round(c.opacity * 100) / 100}, 밝은 ${Math.round(c.hi * 1000) / 1000}, 어두운 ${Math.round(c.lo * 1000) / 1000})`).join(", ");
-        rec(sc, "GH13", "유령 이름표 글자 대비가 4.5:1 이상이다(이름표는 불투명)", worst !== null && worst >= 4.5, detail, true);
+        // 모두 띠 밑이면 판정할 이름표가 없다 — 정보 줄(GH13k)만 남고 GH13 은 건너뛴다. 하나라도 보이면 그 이름표가 4.5 이상이어야 한다
+        if (judgedPool.length > 0 || occluded.length === 0) rec(sc, "GH13", "유령 이름표 글자 대비가 4.5:1 이상이다(이름표는 불투명)", worst !== null && worst >= 4.5, detail, true);
         rec(sc, "GH13b", "유령 이름표 불투명도가 1 이다(이름표 면에 흐림이 없다)", pool.length > 0 && pool.every((c) => c.opacity === 1), detail, true);
       }
       // 밤에 더 죽은 사람이 있으면 그 직업 의상도 같은 표에 들어 있다(마피아·경찰·의사 의상까지 보인다)

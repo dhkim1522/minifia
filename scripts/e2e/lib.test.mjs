@@ -97,6 +97,7 @@ import {
   lobbyPanelHeight,
   GAME_PANEL_EXTRA,
   TOOL_ROW_EXTRA,
+  TOOL_BUTTON_H,
   PICK_BUTTON_MAX,
   gamePanelHeight,
   faceListPanelH,
@@ -2994,7 +2995,7 @@ test("soundButtonChecks SU2: 누르기 영역 44×44 경계 — 43.99 실패 / 4
   assert.deepEqual(suFails(soundIn({ button: { ...soundIn().button, rect: sRect(300, 70, 44, 43.99) } })), ["SU2"]);
 });
 
-test("soundButtonChecks SU3: 위는 헤더 아래 끝 + 8 (±2), 오른쪽 여백 16 (±2)", () => {
+test("soundButtonChecks SU3: 위는 헤더(띠) 아래 끝 + 8 (±2), 오른쪽 여백 16 (±2)", () => {
   const at = (top, left) => suFails(soundIn({ button: { ...soundIn().button, rect: sRect(left, top, 44, 44) } }));
   assert.deepEqual(at(72, 302), []); // +2 / −2
   assert.deepEqual(at(68, 298), []); // −2 / +2
@@ -3012,11 +3013,13 @@ test("soundButtonChecks SU4: 헤더 단추·[테스트]·토스트와 겹침 0 �
   assert.deepEqual(suFails(soundIn({ test: null, toast: null })), []); // 없으면 겹칠 것이 없다
 });
 
-test("soundButtonChecks SU5: 재접속 띠가 단추를 덮고 있을 때 단추 중심의 최상단이 단추 자신이어야 한다", () => {
+test("soundButtonChecks SU5: 재접속 띠가 떠 있을 때 단추 중심의 최상단이 단추 자신이어야 한다(덮든 안 덮든)", () => {
   assert.deepEqual(suFails(soundIn({ bannerHit: { present: true, covers: true, hitIsButton: false } })), ["SU5"]);
-  // 띠가 없거나 단추 중심을 덮지 않으면 확인한 것이 없다 — 공허한 통과 금지
+  // 띠가 없으면 확인한 것이 없다 — 공허한 통과 금지
   assert.deepEqual(suFails(soundIn({ bannerHit: { present: false, covers: false, hitIsButton: true } })), ["SU5"]);
-  assert.deepEqual(suFails(soundIn({ bannerHit: { present: true, covers: false, hitIsButton: true } })), ["SU5"]);
+  // 14페이즈: 단추가 띠 아래 독으로 내려와 띠가 덮지 않아도 단추 중심의 최상단이 단추 자신이면 통과, 아니면 실패
+  assert.deepEqual(suFails(soundIn({ bannerHit: { present: true, covers: false, hitIsButton: true } })), []);
+  assert.deepEqual(suFails(soundIn({ bannerHit: { present: true, covers: false, hitIsButton: false } })), ["SU5"]);
 });
 
 test("soundButtonChecks SU6: 시각 지름 36 (±1) — 경계 35 / 37 통과, 34.99 / 37.01 실패. 알약이면 높이 44 · 폭 112 이상", () => {
@@ -3650,6 +3653,11 @@ test("toolLabelChecks TL2: data-tool-label 이 있으면 보이는 글자와 같
   assert.equal(diffName.ok, false);
 });
 
+test("toolLabelChecks TL2: 소리 잠김 알약('소리 켜기')은 낱말로 시작하므로 통과하지만 다른 단추는 낱말로 시작해도 같은 글자가 아니면 실패한다", () => {
+  assert.equal(toolLabelChecks([{ name: "소리 켜기", text: "소리 켜기", toolLabel: "소리", hasIcon: true }]).find((r) => r.id === "TL2").ok, true);
+  assert.equal(toolLabelChecks([{ name: "옷장 열기", text: "옷장 열기", toolLabel: "옷장", hasIcon: true }]).find((r) => r.id === "TL2").ok, false);
+});
+
 test("toolLabelChecks: 목록이 비었거나 모양이 틀리면 측정값 없음으로 실패(공허 통과 금지)", () => {
   for (const x of [undefined, null, [], [{ text: 1 }]]) {
     const rs = toolLabelChecks(x);
@@ -3798,4 +3806,18 @@ test("dressChecks floatH: 옷장 단추 상자 48x71.6 이 통과하고 48x48 �
   b.floatH = FLOAT_BOX_H; // dressGood 의 float 은 48x48
   assert.equal(okOf(dressChecks(b)).DB1, false);
   assert.equal(okOf(dressChecks(dressGood())).DB1, true);
+});
+
+test("emoteTrayChecks labeled(14-06 이름표 단추): 동작 단추 폭 44~52·높이 59.6, 판 아랫변은 입력칸 윗변 − 8 − 11.6 — 옛 48x48·간격 8 은 실패한다 (기본값은 옛 모양)", () => {
+  assert.ok(Math.abs(TOOL_BUTTON_H - 59.6) < 1e-9);
+  const g = trayGood();
+  g.labeled = true;
+  g.button = rect(16, 448.4, 44, TOOL_BUTTON_H);
+  g.input = rect(72, 460, 160, 48);
+  g.tray = rect(16, 306 - TOOL_ROW_EXTRA, 328, 146); // 아랫변 = 입력칸 윗변 460 − 19.6
+  assert.equal(okOf(emoteTrayChecks(g)).EB1, true);
+  assert.equal(okOf(emoteTrayChecks(g)).TR3, true);
+  const old = trayGood();
+  old.labeled = true; // 48x48 버튼·간격 8 인 옛 모양
+  assert.deepEqual(emoteTrayChecks(old).filter((l) => !l.ok).map((l) => l.id), ["EB1", "TR3"]);
 });

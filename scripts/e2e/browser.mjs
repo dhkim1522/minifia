@@ -1678,7 +1678,7 @@ export async function readGhostTagContrast(page) {
     if (lums.length === 0) continue;
     const lo = lums[Math.floor(lums.length * 0.01)];
     const hi = lums[Math.min(lums.length - 1, Math.floor(lums.length * 0.99))];
-    out.push({ seat: p.seat, opacity: p.opacity, ratio: (hi + 0.05) / (lo + 0.05), hi, lo });
+    out.push({ seat: p.seat, opacity: p.opacity, ratio: (hi + 0.05) / (lo + 0.05), hi, lo, rect: p.rect });
   }
   await page.evaluate(() => {
     for (const n of document.querySelectorAll(".mv-tag.is-ghost .mv-tag__name")) n.style.webkitTextStroke = "";
