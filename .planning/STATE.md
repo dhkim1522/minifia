@@ -5,16 +5,16 @@ milestone_name: 사회자와 증거
 current_phase: 13
 current_phase_name: 기본판 낮 흐름
 status: planning
-stopped_at: Completed 13-05-PLAN.md
-last_updated: "2026-11-06T18:23:05.575Z"
+stopped_at: Completed 13-06-PLAN.md
+last_updated: "2026-11-06T19:17:53.122Z"
 last_activity: 2026-11-07
 last_activity_desc: v3.0 requirements(22)·roadmap(13~15) 작성
-state_head: 67a33d6c3d1717b3483c2da0c51355162eea7cfa
+state_head: 5015f51c289b318cca98b0034345ad81e4e32434
 progress:
   total_phases: 3
   completed_phases: 0
   total_plans: 6
-  completed_plans: 5
+  completed_plans: 6
   percent: 0
 ---
 
@@ -201,6 +201,7 @@ Last activity: 2026-11-07 — v3.0 requirements(22)·roadmap(13~15) 작성
 | Phase 13 P03 | 35min | 2 tasks | 13 files |
 | Phase 13 P04 | 70min | 3 tasks | 23 files |
 | Phase 13 P05 | 약 1시간 | 3 tasks | 8 files |
+| Phase 13 P06 | 약 2시간 | 3 tasks | 16 files |
 
 ## Accumulated Context
 
@@ -423,6 +424,7 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 13]: 13-04: 결과 탭은 RESULT_TABS_SHOWN 으로 귓속말을 빼고(RESULT_TABS 는 유지), 역할 확인 공개 예고 문구에서도 귓속말을 뺐다
 - [Phase 13]: 13-05: basic-vote 는 8자 봇 이름 대신 4자 이름 사람 손님 7로 8명판 투표 기하를 판정한다(UI-SPEC 4자 이름 전제). 8자 봇 이름 8명판 겹침은 미판정 한계
 - [Phase 13]: 13-05: 부재 검사는 로비부터 결과까지 100ms DOM 감시 + 받은 프레임 경로(offKeys). 기본판에서 [data-badge-live] 빈 줄도 만들지 않게 고침
+- [Phase 13]: 0072: 기본판은 RULESET 한 곳(다섯 값 false)으로 정치 장치를 끄고 투표는 15초 동시. 회귀가 드러낸 옛 기대는 문턱을 낮추지 않고 기본판 계약으로 고침
 
 ### Pending Todos
 
@@ -487,8 +489,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-06T18:23:05.555Z
-Stopped at: Completed 13-05-PLAN.md
+Last session: 2026-11-06T19:17:53.101Z
+Stopped at: Completed 13-06-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
