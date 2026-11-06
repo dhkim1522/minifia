@@ -510,6 +510,9 @@ export function nominationMaxMs(n) {
   return NOMINATION_GATHER_MS + n * (PICK_TURN_MS + PICK_GAP_MS) + NOMINATION_END_MS;
 }
 
+/** 기본판 투표(동시) 길이 = shared/game/phases.ts NOMINATION_MS 와 같은 값(13-01, e2eContract.test.ts 가 같은지 본다). */
+export const NOMINATION_MS = 15000;
+
 /** 차례 알약 글자 하한(이름 16·초 24·n/N 14). 낮추지 않는다 — NAMETAG_FONT_MIN 과 같은 14. */
 export const TURN_FONT_MIN = 14;
 
@@ -545,6 +548,100 @@ export function turnBlockChecks(turn, vw, vh) {
   out.push(isNum(turn.minFontPx) ? result("NT-A3", L3, turn.minFontPx + 0.01 >= TURN_FONT_MIN ? [] : [`${fmt(turn.minFontPx)}px`]) : noMeasure("NT-A3", L3, "minFontPx"));
   out.push(isNum(turn.no) && isNum(turn.seat) ? result("NT-A4", L4, []) : noMeasure("NT-A4", L4, `no ${turn.no} seat ${turn.seat}`));
   return out;
+}
+
+// ---- 기본판 꺼진 장치 부재 검사 (13-05, 결정 0072, UI-SPEC "끄는 장치" 표) ----
+
+/** 꺼진 장치의 DOM 선택자 — 기본판 한 판 전체에서 모두 0건이어야 한다. 이름 접두 OFF_DEVICE_ATTR_PREFIX 속성(`data-turn-*`)도 0건이어야 한다. */
+export const OFF_DEVICE_SELECTORS = Object.freeze([
+  '[data-float="claim"]',
+  '[data-float="whisper"]',
+  "[data-claim-sheet]",
+  "[data-claim-chip]",
+  "[data-claim]",
+  "[data-badge-live]",
+  "[data-line-sheet]",
+  "[data-turn-block]",
+  "[data-speak-sheet]",
+  "[data-showdown-step]",
+]);
+/** 순차 지목 표시용 속성 접두 — `data-turn` 과 `data-turn-*` 모두 포함한다. */
+export const OFF_DEVICE_ATTR_PREFIX = "data-turn";
+
+/**
+ * 받은 프레임 하나에서 꺼진 장치 흔적의 경로 문자열을 모은다(원문·값·토큰은 싣지 않는다, T-13-16).
+ * state: players[].badge·badgeSwapped, day.turn·runoff·showdown, me.whisperUsed·ballot, phase runoff·showdown.
+ * chat: k whisper·whispered. chatLog: 줄의 k. resultLog: part whisper·claim. 기본판 view 는 빈 배열.
+ */
+export function offDeviceKeysOf(msg) {
+  const out = [];
+  const add = (k) => {
+    if (!out.includes(k)) out.push(k);
+  };
+  if (!msg || typeof msg !== "object") return out;
+  if (msg.t === "state" && msg.view && typeof msg.view === "object") {
+    const v = msg.view;
+    if (Array.isArray(v.players)) {
+      if (v.players.some((p) => p && p.badge !== undefined)) add("players[].badge");
+      if (v.players.some((p) => p && p.badgeSwapped !== undefined)) add("players[].badgeSwapped");
+    }
+    const day = v.day;
+    if (day && typeof day === "object") {
+      if (day.turn !== undefined) add("day.turn");
+      if (day.runoff !== undefined) add("day.runoff");
+      if (day.showdown !== undefined) add("day.showdown");
+    }
+    const me = v.me;
+    if (me && typeof me === "object") {
+      if (me.whisperUsed !== undefined) add("me.whisperUsed");
+      if (me.ballot !== undefined) add("me.ballot");
+    }
+    if (v.phase === "runoff" || v.phase === "showdown") add(`phase:${v.phase}`);
+  } else if (msg.t === "chat") {
+    if (msg.k === "whisper" || msg.k === "whispered") add(`chat.k:${msg.k}`);
+  } else if (msg.t === "chatLog" && Array.isArray(msg.lines)) {
+    for (const l of msg.lines) if (l && (l.k === "whisper" || l.k === "whispered")) add(`chatLog.k:${l.k}`);
+  } else if (msg.t === "resultLog" && (msg.part === "whisper" || msg.part === "claim")) {
+    add(`resultLog.part:${msg.part}`);
+  }
+  return out;
+}
+
+/** 기본판에서 허용되는 단계 전이(연속 중복은 접은 뒤). runoff·showdown 은 어느 쪽에도 없다. */
+const BASIC_TRANSITIONS = Object.freeze({
+  lobby: ["assigning"],
+  assigning: ["roleReveal"],
+  roleReveal: ["dayAnnounce"],
+  dayAnnounce: ["discussion"],
+  discussion: ["nomination"],
+  nomination: ["defense", "night"],
+  defense: ["verdict"],
+  verdict: ["execution"],
+  execution: ["night", "ended"],
+  night: ["morning"],
+  morning: ["dayAnnounce", "ended"],
+  ended: [],
+});
+
+/**
+ * 기본판 단계 순서 판정(OFF3). phases = 받은 state 의 phase 열. 처음 어긋난 전이를 detail 로 실패시킨다. 값이 없으면 측정값 없음.
+ * 로비 재시작(ended→lobby)은 한 판을 넘어가는 것이라 허용하지 않는다 — 한 판만 넘긴다.
+ */
+export function basicOrderChecks(phases) {
+  const label = "단계 순서가 기본판이다(투표 → 변론 → 찬반 → 처형, 결선·결전 없음)";
+  if (!Array.isArray(phases) || phases.length === 0 || phases.some((p) => typeof p !== "string")) return [noMeasure("OFF3", label, "phases[]")];
+  const seq = phases.filter((p, i) => i === 0 || p !== phases[i - 1]);
+  const bad = [];
+  if (seq.includes("runoff")) bad.push("runoff 단계가 나왔다");
+  if (seq.includes("showdown")) bad.push("showdown 단계가 나왔다");
+  for (let i = 1; i < seq.length && bad.length < 3; i++) {
+    const allowed = BASIC_TRANSITIONS[seq[i - 1]];
+    if (allowed === undefined || !allowed.includes(seq[i])) {
+      bad.push(`${seq[i - 1]} → ${seq[i]} 는 기본판 전이가 아님`);
+      break;
+    }
+  }
+  return [result("OFF3", label, bad)];
 }
 
 /** 결선 후보 이름표 중심 거리 하한(UI-SPEC D-4, 오탭 방지 T-09.1.1-40) */
@@ -2220,9 +2317,9 @@ export const SOUND_SCRIPT_STEPS = Object.freeze([
   Object.freeze({ id: "SC3", label: "시작 → assigning: game.start, 일회성 뒤 소리 없음", ids: ["game.start"], notIds: ["role.flip", "bed.reveal"] }),
   Object.freeze({ id: "SC4", label: "roleReveal: bed.reveal → role.flip", ids: ["bed.reveal", "role.flip"], notIds: ["game.start"] }),
   Object.freeze({ id: "SC5", label: "dayAnnounce·discussion: bed.day → day.start, 침대 요청은 한 번뿐", ids: ["bed.day", "day.start"], counts: { "bed.day": 1, "bed.vote": 0 }, notIds: ["phase.vote", "role.flip"] }),
-  Object.freeze({ id: "SC6", label: "nomination: bed.vote → phase.vote, 내 차례에 pin.on → pick.turn", ids: ["bed.vote", "phase.vote", "pin.on", "pick.turn"], counts: { "bed.vote": 1 }, notIds: ["day.start"] }),
-  Object.freeze({ id: "SC7", label: "내가 지목하면 pick.point → pin.move", ids: ["pick.point", "pin.move"], notIds: ["pick.skip", "bed.vote"] }),
-  Object.freeze({ id: "SC8", label: "봇 차례들: pin.on 이 나고 내 pick.turn·pick.tick 은 없음, 변론 진입에도 새 침대 없음", ids: ["pin.on"], counts: { "bed.vote": 0 }, notIds: ["pick.turn", "pick.tick", "phase.vote", "day.start", "role.flip", "game.start"] }),
+  Object.freeze({ id: "SC6", label: "nomination(기본판 동시 투표): bed.vote → phase.vote, 차례 소리(pin.on·pick.turn·pick.tick) 없음", ids: ["bed.vote", "phase.vote"], counts: { "bed.vote": 1 }, notIds: ["day.start", "pin.on", "pick.turn", "pick.tick"] }),
+  Object.freeze({ id: "SC7", label: "내가 투표해도 차례 소리(pick.point·pin.move·pick.turn)가 없고 새 침대도 없음", ids: [], counts: { "bed.vote": 0 }, notIds: ["pick.point", "pin.move", "pick.turn", "pin.on", "pick.skip", "bed.vote"] }),
+  Object.freeze({ id: "SC8", label: "봇 투표·변론 진입: 차례 소리 없음, 새 침대 없음", ids: [], counts: { "bed.vote": 0 }, notIds: ["pin.on", "pick.turn", "pick.tick", "pick.point", "pin.move", "phase.vote", "day.start", "role.flip", "game.start"] }),
   Object.freeze({ id: "SC9", label: "verdict: 마지막 5초 timer.tick 이 초마다, 새 침대 없음", ids: ["timer.tick", "timer.tick"], counts: { "bed.vote": 0 }, notIds: ["phase.vote", "day.start", "role.flip", "game.start"] }),
   Object.freeze({ id: "SC10", label: "낮 중간 새로고침(LS-10): 현재 단계 침대만, 일회성 소리 없음", ids: ["bed.vote"], onlyPrefix: "bed.", notIds: [...ONE_SHOT_AFTER_RELOAD, ...OTHER_BEDS("bed.vote")] }),
   // 12-09: 새로고침 뒤 testSkip 으로 밤 → 아침. 지나온 단계의 소리가 앞에 끼어도 되도록 부분 수열로 본다(큐·역할별 동일성은 sound-night-parity 가 본다)

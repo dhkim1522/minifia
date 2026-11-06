@@ -8,6 +8,7 @@ import {
   ROLE_NAME,
   TAP_ALLOW,
   TEXT_SIZE_ALLOW,
+  offDeviceKeysOf,
   redact,
   rgbP95Luminance,
 } from "./lib.mjs";
@@ -175,6 +176,9 @@ export async function openHostPage(browser, { origin, code, token, size, dpr, mo
   tracker.moves = new Map();
   tracker.sentMoveAt = [];
   tracker.moveSeq = 0;
+  // 13-05: 기본판 부재 검사 — 판 전체에서 받은 프레임의 꺼진 장치 흔적(경로 문자열만, 원문·토큰 없음)과 단계 열(연속 중복 접음)
+  tracker.offKeys = [];
+  tracker.phases = [];
   page.on("websocket", (ws) => {
     ws.on("framesent", ({ payload }) => {
       try {
@@ -191,9 +195,11 @@ export async function openHostPage(browser, { origin, code, token, size, dpr, mo
       } catch {
         return;
       }
+      for (const k of offDeviceKeysOf(msg)) if (!tracker.offKeys.includes(k)) tracker.offKeys.push(k);
       if (msg && msg.t === "state" && msg.view) {
         tracker.view = msg.view;
         tracker.seq += 1;
+        if (typeof msg.view.phase === "string" && tracker.phases[tracker.phases.length - 1] !== msg.view.phase) tracker.phases.push(msg.view.phase);
       } else if (msg && msg.t === "world" && msg.k === "move" && typeof msg.s === "number") {
         tracker.moveSeq += 1;
         tracker.moves.set(msg.s, { p: msg.p, t0: msg.t0, v: msg.v, at: performance.now(), n: tracker.moveSeq });

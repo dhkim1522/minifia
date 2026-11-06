@@ -3447,7 +3447,7 @@ test("offDeviceKeysOf: 귓속말 채팅 줄과 결선·결전 단계를 표시�
 });
 
 test("basicOrderChecks: 기본판 단계 순서는 통과하고 연속 중복은 접는다", () => {
-  const ok = ["lobby", "assigning", "roleReveal", "dayAnnounce", "discussion", "nomination", "nomination", "defense", "verdict", "execution", "night", "morning", "dayAnnounce", "discussion", "nomination", "night", "morning", "dayAnnounce", "ended"];
+  const ok = ["lobby", "assigning", "roleReveal", "dayAnnounce", "discussion", "nomination", "nomination", "defense", "verdict", "execution", "night", "morning", "dayAnnounce", "discussion", "nomination", "night", "morning", "ended"];
   const r = basicOrderChecks(ok);
   assert.ok(r.length >= 1 && r.every((x) => x.ok), JSON.stringify(r));
   for (const x of r) assert.ok(x.id && x.label);

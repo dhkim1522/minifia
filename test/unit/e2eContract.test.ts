@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { BAR_MASK } from "../../shared/game/map";
-import { NOMINATION_END_MS, NOMINATION_GATHER_MS, PICK_GAP_MS, PICK_TURN_MS, SHOWDOWN_GATHER_MS, SHOWDOWN_POINT_MS, SHOWDOWN_REVEAL_MS, SHOWDOWN_TURN_MS, nominationMaxMs } from "../../shared/game/phases";
+import { NOMINATION_END_MS, NOMINATION_GATHER_MS, NOMINATION_MS, PICK_GAP_MS, PICK_TURN_MS, SHOWDOWN_GATHER_MS, SHOWDOWN_POINT_MS, SHOWDOWN_REVEAL_MS, SHOWDOWN_TURN_MS, nominationMaxMs } from "../../shared/game/phases";
 import { MOVE_SPEED } from "../../shared/game/world";
 import { NICKNAME_MAX_GRAPHEMES, countGraphemes } from "../../shared/nickname";
 import { ANNOUNCE_MORNING_AT } from "../../src/game/dayView";
@@ -215,6 +215,7 @@ describe("9페이즈 E2E 표식·패널(09-21)", () => {
 describe("E2E 의 순차 지목 시간 상수와 앱 상수 (09.1-08, 결정 0063-1)", () => {
   const lib = e2eLib as {
     NOMINATION_GATHER_MS: number;
+    NOMINATION_MS: number;
     PICK_TURN_MS: number;
     PICK_GAP_MS: number;
     NOMINATION_END_MS: number;
@@ -226,6 +227,10 @@ describe("E2E 의 순차 지목 시간 상수와 앱 상수 (09.1-08, 결정 006
     expect(lib.PICK_TURN_MS).toBe(PICK_TURN_MS);
     expect(lib.PICK_GAP_MS).toBe(PICK_GAP_MS);
     expect(lib.NOMINATION_END_MS).toBe(NOMINATION_END_MS);
+  });
+
+  it("기본판 투표(동시) 길이 NOMINATION_MS 사본이 앱 상수와 같다 (13-05)", () => {
+    expect(lib.NOMINATION_MS).toBe(NOMINATION_MS);
   });
 
   it("nominationMaxMs 가 차례 수 1~8 에서 앱 함수와 같은 값을 낸다", () => {
