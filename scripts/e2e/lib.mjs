@@ -34,9 +34,9 @@ export const OVERALL_LIMIT_MS = 900_000;
 // 높이·좌표 단위는 CSS px, 사각형 값은 getBoundingClientRect 그대로.
 //
 //   UX1  guideChecks(g, { phase })
-//     g = { count, items: [{ text, inHeader, height, lineHeight }], timers }
+//     g = { count, items: [{ text, inBand, height, lineHeight }], timers }   (14페이즈: 헤더 안내줄 → 자막 띠로 옮김)
 //       count      `[data-guide]` 요소 수(한 화면에 정확히 하나)
-//       items[i]   text = 글자(textContent), inHeader = 헤더 안내줄(`.mf-phasebar__do`)인가, height·lineHeight = 그 요소의 높이와 계산된 줄 높이
+//       items[i]   text = 글자(textContent), inBand = 자막 띠(`[data-host-band]`) 안인가, height·lineHeight = 그 요소의 높이와 계산된 줄 높이
 //       timers     `[role="timer"]` 요소 수. `TIMELESS_PHASES` 밖 단계에서는 1 이상이어야 한다
 //   UX2  docHeightChecks(m, { h })       m = { docH }   — document.documentElement.scrollHeight, h = 화면 높이
 //   UX2-J joinFitChecks(j, { h, expectSeated })
@@ -1154,21 +1154,22 @@ const isNum = (x) => typeof x === "number" && Number.isFinite(x);
 const noMeasure = (id, label, what) => result(id, label, [`측정값 없음(${what})`]);
 
 /**
- * UX1 지금 할 일 문장이 한 화면에 하나, 글자가 있고(헤더 안내줄이면 한 줄), 시간 있는 단계에는 타이머가 있다 (D-08, UI-SPEC 8.4).
- * g = { count, items: [{ text, inHeader, height, lineHeight }], timers } — 모양은 위 5페이즈 계약.
+ * UX1 지금 할 일 문장이 한 화면에 하나, 글자가 있고 자막 띠 안이며 3줄 미만이고(14페이즈 — 옛 헤더 한 줄 규칙을 띠로 옮김), 시간 있는 단계에는 타이머가 있다 (D-08, UI-SPEC 8.4).
+ * g = { count, items: [{ text, inBand, height, lineHeight }], timers } — 모양은 위 5페이즈 계약.
  */
 export function guideChecks(g, { phase }) {
-  const label = "지금 할 일 문장 하나·한 줄·타이머";
+  const label = "지금 할 일 문장 하나·띠 안·3줄 미만·타이머";
   if (!g || !isNum(g.count) || !Array.isArray(g.items) || !isNum(g.timers)) return noMeasure("UX1", label, "안내 문장 개수·항목·타이머 수");
   if (g.count === 0) return result("UX1", label, ["안내 문장 요소 없음"]);
   if (g.count !== 1) return result("UX1", label, [`안내 문장 요소 ${g.count}개 ≠ 1`]);
   const it = g.items[0];
-  if (!it || typeof it.text !== "string" || typeof it.inHeader !== "boolean") return noMeasure("UX1", label, "안내 문장 글자");
+  if (!it || typeof it.text !== "string" || typeof it.inBand !== "boolean") return noMeasure("UX1", label, "안내 문장 글자");
   const bad = [];
   if (it.text.trim() === "") bad.push("안내 문장 글자가 비어 있음");
-  if (it.inHeader) {
-    if (!isNum(it.height) || !isNum(it.lineHeight) || it.lineHeight <= 0) return noMeasure("UX1", label, "헤더 안내줄 높이·줄 높이");
-    if (!isOneLine(it.height, it.lineHeight)) bad.push(`헤더 안내줄이 한 줄이 아님(높이 ${rd(it.height)}px·줄 높이 ${rd(it.lineHeight)}px, ${lineCount(it.height, it.lineHeight)}줄)`);
+  if (!it.inBand) bad.push("안내 문장이 자막 띠 밖에 있음");
+  else {
+    if (!isNum(it.height) || !isNum(it.lineHeight) || it.lineHeight <= 0) return noMeasure("UX1", label, "띠 문장 높이·줄 높이");
+    if (lineCount(it.height, it.lineHeight) >= HOST_LINE_MAX) bad.push(`띠 문장이 ${HOST_LINE_MAX}줄 이상(높이 ${rd(it.height)}px·줄 높이 ${rd(it.lineHeight)}px, ${lineCount(it.height, it.lineHeight)}줄)`);
   }
   if (!TIMELESS_PHASES.includes(phase) && g.timers < 1) bad.push(`타이머 없음(단계 ${phase})`);
   return result("UX1", label, bad);
@@ -2707,4 +2708,198 @@ export function soundResultSkipChecks(input) {
     result("K1", labels.K1, flips < Math.min(n, 8) ? [] : [`role.flip ${flips}개 ≥ ${Math.min(n, 8)}`]),
     result("K2", labels.K2, wl === 1 ? [] : [`result.win/lose ${wl}회`]),
   ];
+}
+
+// ---- 14페이즈 계약 (14-08) — 사회자 띠·도구 이름표·누설·알림음 판정이 받는 값의 모양 ----
+// 판정은 모두 이 파일의 순수 함수고 흐름(scripts/e2e/host.mjs)은 읽기만 한다. 값이 없거나 모양이 틀리면 조용히 통과하지 않고 `측정값 없음(…)` 으로 실패한다. 문턱은 여기서만 정하고 낮추지 않는다.
+//   HB1~HB5 hostBandChecks(b, { phase, timed })
+//     b = { bands, lineCount, lineH, lineLH, guideCount, guideInBand, timeText, barShown, oldHint, oldRing, oldTimer }
+//       bands = `[data-host-band]` 수, lineCount = `[data-host-line]` 수, lineH·lineLH = 그 문장 요소의 높이·계산된 줄 높이,
+//       guideCount = `[data-guide]` 수, guideInBand = 그것이 띠 안인가, timeText = `[data-host-time]` 글자(없으면 ""), barShown = 시간 막대가 보이는가,
+//       oldHint·oldRing·oldTimer = `.mv-phase__hint`·`.mv-ring`·`.mf-timer` 수(옛 헤더 안내줄·시간 링·m:ss 타이머)
+//   hostOverlapChecks({ band, tags })   band = 띠 사각형, tags = 이름표 단추 사각형 목록(투표·밤)
+//   TL1·TL2 toolLabelChecks(list, { exempt })   list = [{ name, text, toolLabel, hasIcon }] — 보이는 button·[role=tab] 하나씩(접근성 이름·보이는 글자·data-tool-label 값)
+//   HL1~HL4 hostLeakChecks(list)   list = [{ role, ownRole, phase, domText, callCount, line, idle }] — role = 시점(mafia·police·doctor·citizen·ghost), ownRole = 유령의 살았을 때 직업,
+//       domText = 띠·목표·빛남 영역 글자, callCount = `[data-call]` 수, line = 띠 문장, idle = 그 단계에서 할 일이 없는 시점인가
+//   VK1 viewKeyChecks({ top, me, day })   받은 state 프레임의 최상위·me·day 키 이름 집합(값 없음)
+//   HS1~HS4 hostChimeChecks(segs)   segs = [{ kind: transition|first|reload|dayToDiscussion|muted, name, count, played }] — count = 구간의 ui.host 요청 수, played = 실제 재생된 수
+
+/** 자막 띠 문장의 줄 수 상한(미만): 한 문장·3줄 미만(UI-SPEC 사회자 문구 표 — 2줄까지). */
+export const HOST_LINE_MAX = 3;
+/** E2E 가 읽는 14페이즈 표식(src 에 있어야 한다 — e2eContract 가 확인). */
+export const HOST_MARKERS = ["data-host-band", "data-host-line", "data-host-time", "data-call", "data-tool-label", "data-role-goal", "data-guide"];
+/** 서버 view 허용 키. test/unit/view.test.ts 의 TOP_KEYS·ME_KEYS·DAY_KEYS 와 같은 값(13페이즈 그대로, 서버 diff 0) — e2eContract 가 같음을 고정한다. */
+export const VIEW_TOP_KEYS = new Set(["code", "phase", "round", "phaseEndsAt", "phaseDurationMs", "serverNow", "minPlayers", "maxPlayers", "players", "me", "day", "spectate", "result", "mapChoice", "map"]);
+export const VIEW_ME_KEYS = new Set(["seat", "isHost", "role", "allies", "testMode", "testRole", "testBots", "testBotVote", "pick", "allyPicks", "records", "chat", "endDiscussion", "verdictVote", "whisperUsed", "ballot", "nightTally", "nightSure"]);
+export const VIEW_DAY_KEYS = new Set(["n", "roles", "voteLog", "morning", "candidate", "execution", "noExecution", "points", "endCount", "voted", "verdict", "turn", "ballots", "runoff", "showdown"]);
+/** 밤 역할별 사회자 줄(src/game/hostLine.ts HOST_LINES 의 night.mafia·police·doctor 사본) — 다른 역할 화면에 있으면 누설이다. e2eContract 가 같음을 고정한다. */
+export const HOST_ACT_LINES = {
+  mafia: "밤이 되었습니다. 없앨 사람에게 다가가 주세요.",
+  police: "밤이 되었습니다. 조사할 사람의 이름표를 눌러 주세요.",
+  doctor: "밤이 되었습니다. 지킬 사람의 이름표를 눌러 주세요.",
+};
+/** 역할 목표 문장(src/game/roleText.ts ROLE_TEXT[role].goal 사본). */
+export const GOALS = {
+  mafia: "밤마다 한 명을 없애 시민 편과 수가 같아지면 승리합니다.",
+  police: "밤마다 한 명을 조사해 마피아를 찾아내세요.",
+  doctor: "밤마다 한 명을 지켜 마피아의 암살을 막으세요.",
+  citizen: "대화와 투표로 마피아를 모두 처형하면 승리합니다.",
+};
+/** TL1 이 보지 않는 글자 없는 단추(UI-SPEC 면제 E-1·E-2 — E-3 은 누르는 것이 아니라 단추가 아니다). 접근성 이름으로 가린다. 항목을 더할 때는 id 와 이유를 함께 적는다. */
+export const TOOL_LABEL_EXEMPT = [
+  { id: "E-1", name: /^.+ 님 내보내기$/, reason: "방장의 내보내기 × — 누르면 확인 시트가 '내보내기'로 이름을 말한다(WorldStage 이름표의 방장 전용 보조 단추)" },
+  { id: "E-2", name: /^봇 (줄이기|늘리기)$/, reason: "테스트 방 시트 안의 봇 ± — 개발 도구, 방장 테스트 모드뿐" },
+];
+
+const isStr = (x) => typeof x === "string";
+
+/** HB1~HB5 자막 띠 판정(HOST-01, TOOL-02). b = 위 14페이즈 계약. */
+export function hostBandChecks(b, { phase, timed }) {
+  const L = {
+    HB1: `띠 하나·문장 하나(${phase})`,
+    HB2: "data-guide 하나가 띠 안",
+    HB3: `띠 문장 ${HOST_LINE_MAX}줄 미만`,
+    HB4: timed ? "시간 막대 + 'n초'" : "시간 없는 단계는 막대·숫자 없음",
+    HB5: "옛 안내줄·링·m:ss 타이머 없음",
+  };
+  const ids = ["HB1", "HB2", "HB3", "HB4", "HB5"];
+  const nm = (id, what) => noMeasure(id, L[id], what);
+  if (!b || typeof b !== "object") return ids.map((id) => nm(id, "띠 읽기 값"));
+  const out = [];
+  out.push(isNum(b.bands) && isNum(b.lineCount) ? result("HB1", L.HB1, [...(b.bands === 1 ? [] : [`띠 ${b.bands}개 ≠ 1`]), ...(b.lineCount === 1 ? [] : [`[data-host-line] ${b.lineCount}개 ≠ 1`])]) : nm("HB1", "띠 수·문장 수"));
+  out.push(isNum(b.guideCount) && typeof b.guideInBand === "boolean" ? result("HB2", L.HB2, [...(b.guideCount === 1 ? [] : [`[data-guide] ${b.guideCount}개 ≠ 1`]), ...(b.guideCount >= 1 && !b.guideInBand ? ["[data-guide] 가 띠 밖"] : [])]) : nm("HB2", "data-guide 수·위치"));
+  if (isNum(b.lineH) && isNum(b.lineLH) && b.lineLH > 0) {
+    const n = lineCount(b.lineH, b.lineLH);
+    out.push(result("HB3", L.HB3, n < HOST_LINE_MAX ? [] : [`${n}줄(높이 ${rd(b.lineH)}px·줄 높이 ${rd(b.lineLH)}px)`]));
+  } else out.push(nm("HB3", "문장 높이·줄 높이"));
+  if (isStr(b.timeText) && typeof b.barShown === "boolean") {
+    const bad = [];
+    const hasText = b.timeText.trim() !== "";
+    if (timed) {
+      if (!/^\d+초$/.test(b.timeText.trim())) bad.push(`시간 글자 '${b.timeText}' 가 'n초' 가 아님`);
+      if (!b.barShown) bad.push("시간 막대 없음");
+    } else {
+      if (hasText) bad.push(`시간 글자 '${b.timeText}' 가 있음`);
+      if (b.barShown) bad.push("시간 막대가 보임");
+    }
+    out.push(result("HB4", L.HB4, bad));
+  } else out.push(nm("HB4", "시간 글자·막대"));
+  if (isNum(b.oldHint) && isNum(b.oldRing) && isNum(b.oldTimer)) {
+    const bad = [];
+    if (b.oldHint > 0) bad.push(`.mv-phase__hint ${b.oldHint}개`);
+    if (b.oldRing > 0) bad.push(`.mv-ring ${b.oldRing}개`);
+    if (b.oldTimer > 0) bad.push(`.mf-timer ${b.oldTimer}개`);
+    out.push(result("HB5", L.HB5, bad));
+  } else out.push(nm("HB5", "옛 안내줄·링·타이머 수"));
+  return out;
+}
+
+/** HO1 투표·밤 이름표 단추끼리, 그리고 띠와 겹침 0(OVERLAP_EPS). x = { band, tags }. */
+export function hostOverlapChecks(x) {
+  const label = "이름표 단추끼리·띠와 겹침 없음";
+  const okRect = (r) => r && isNum(r.left) && isNum(r.top) && isNum(r.width) && isNum(r.height);
+  if (!x || !okRect(x.band) || !Array.isArray(x.tags) || x.tags.length === 0 || !x.tags.every(okRect)) return noMeasure("HO1", label, "띠·이름표 사각형");
+  const bad = [];
+  x.tags.forEach((t, i) => {
+    if (rectsOverlap(t, x.band)) bad.push(`이름표 ${i + 1} 이 띠와 겹침(${overlapText(t, x.band)})`);
+    for (let j = i + 1; j < x.tags.length; j++) if (rectsOverlap(t, x.tags[j])) bad.push(`이름표 ${i + 1}·${j + 1} 겹침(${overlapText(t, x.tags[j])})`);
+  });
+  return result("HO1", label, bad);
+}
+
+/** 단추 글자에서 숫자·공백·'/' 를 뺀다(넘기기 k/n 의 숫자는 이름표가 아니다). */
+const labelWord = (s) => String(s).replace(/[\d\s/]/g, "");
+/**
+ * TL1·TL2 도구 이름표(TOOL-01). list = [{ name, text, toolLabel, hasIcon }].
+ * TL1 글자(숫자·공백·'/' 뺀)가 빈 단추가 면제(E-1·E-2) 밖에 0건. TL2 data-tool-label 이 있으면 보이는 글자와 같고 접근성 이름이 그것을 포함한다.
+ */
+export function toolLabelChecks(list, { exempt = TOOL_LABEL_EXEMPT } = {}) {
+  const l1 = "글자 없는 단추 0건(면제 E-1·E-2 밖)";
+  const l2 = "data-tool-label 이 보이는 글자·접근성 이름과 같은 낱말";
+  const okItem = (it) => it && isStr(it.name) && isStr(it.text) && (it.toolLabel === null || it.toolLabel === undefined || isStr(it.toolLabel));
+  if (!Array.isArray(list) || list.length === 0 || !list.every(okItem)) return [noMeasure("TL1", l1, "보이는 단추 목록"), noMeasure("TL2", l2, "보이는 단추 목록")];
+  const isExempt = (it) => exempt.some((e) => e.name.test(it.name));
+  const bare = list.filter((it) => labelWord(it.text) === "" && !isExempt(it));
+  const bad2 = [];
+  for (const it of list) {
+    if (it.toolLabel === null || it.toolLabel === undefined || it.toolLabel === "") continue;
+    const want = labelWord(it.toolLabel);
+    if (labelWord(it.text) !== want) bad2.push(`'${it.name}' 보이는 글자 '${it.text}' ≠ data-tool-label '${it.toolLabel}'`);
+    else if (!it.name.replace(/\s/g, "").includes(want)) bad2.push(`'${it.name}' 접근성 이름이 '${it.toolLabel}' 을 포함하지 않음`);
+  }
+  return [result("TL1", l1, bare.map((it) => `'${it.name}'${it.hasIcon ? "(아이콘만)" : ""}`)), result("TL2", l2, bad2)];
+}
+
+/**
+ * HL1~HL4 누설(HOST-05 ①③④). list = [{ role, ownRole, phase, domText, callCount, line, idle }] — 위 14페이즈 계약.
+ * HL1 시점 X 의 띠·목표·빛남 글자에 다른 역할의 act 줄·목표가 없다(유령은 살았을 때 직업의 목표만 허용, act 줄은 어느 것도 없음). HL2 같은 단계 idle 시점끼리 띠 문장이 같다.
+ * HL3 유령 띠 문장에 마피아·경찰·의사·시민 낱말이 없다. HL4 산 마피아의 밤 화면에 data-call 0개.
+ */
+export function hostLeakChecks(list) {
+  const L = {
+    HL1: "다른 역할 전용 줄·목표가 화면에 없음",
+    HL2: "할 일 없는 시점끼리 같은 단계의 띠 문장이 같음",
+    HL3: "유령 띠 문장에 역할 이름 없음",
+    HL4: "산 마피아 밤 화면의 data-call 0개",
+  };
+  const ROLES = ["mafia", "police", "doctor", "citizen", "ghost"];
+  const okItem = (it) =>
+    it && ROLES.includes(it.role) && isStr(it.phase) && isStr(it.domText) && isStr(it.line) && isNum(it.callCount) && typeof it.idle === "boolean" && (it.role !== "ghost" || ["mafia", "police", "doctor", "citizen"].includes(it.ownRole));
+  if (!Array.isArray(list) || list.length === 0 || !list.every(okItem)) return Object.keys(L).map((id) => noMeasure(id, L[id], "시점 × 단계 읽기 목록"));
+  const bad1 = [];
+  for (const it of list) {
+    const own = it.role === "ghost" ? it.ownRole : it.role;
+    for (const r of Object.keys(HOST_ACT_LINES)) {
+      const isOwnLiveLine = it.role !== "ghost" && r === own;
+      if (!isOwnLiveLine && it.domText.includes(HOST_ACT_LINES[r])) bad1.push(`${it.role}@${it.phase} 화면에 ${r} 밤 줄`);
+    }
+    for (const r of Object.keys(GOALS)) if (r !== own && it.domText.includes(GOALS[r])) bad1.push(`${it.role}@${it.phase} 화면에 ${r} 목표`);
+  }
+  const bad2 = [];
+  const idleByPhase = new Map();
+  for (const it of list) if (it.idle) idleByPhase.set(it.phase, [...(idleByPhase.get(it.phase) ?? []), it]);
+  for (const [phase, its] of idleByPhase) {
+    const lines = new Set(its.map((i) => i.line));
+    if (lines.size > 1) bad2.push(`${phase}: ${its.map((i) => `${i.role} '${i.line}'`).join(" ≠ ")}`);
+  }
+  const bad3 = list.filter((it) => it.role === "ghost" && /마피아|경찰|의사|시민/.test(it.line)).map((it) => `${it.phase}: '${it.line}'`);
+  const bad4 = list.filter((it) => it.role === "mafia" && it.phase === "night" && it.callCount !== 0).map((it) => `밤 data-call ${it.callCount}개`);
+  return [result("HL1", L.HL1, bad1), result("HL2", L.HL2, bad2), result("HL3", L.HL3, bad3), result("HL4", L.HL4, bad4)];
+}
+
+/** VK1 받은 state 프레임의 view 키(최상위·me·day)가 허용 목록 안(HOST-05 ②, 서버 diff 0). keys = { top, me, day } — 배열 또는 Set. */
+export function viewKeyChecks(keys) {
+  const label = "view 키(최상위·me·day)가 13페이즈 허용 목록 안";
+  const asArr = (v) => (v instanceof Set ? [...v] : Array.isArray(v) ? v : null);
+  const top = asArr(keys?.top);
+  const me = asArr(keys?.me);
+  const day = asArr(keys?.day);
+  if (top === null || me === null || day === null || top.length === 0 || me.length === 0 || day.length === 0) return noMeasure("VK1", label, "받은 state 프레임 키");
+  const bad = [];
+  for (const k of top) if (!VIEW_TOP_KEYS.has(k)) bad.push(`최상위 키 ${k}`);
+  for (const k of me) if (!VIEW_ME_KEYS.has(k)) bad.push(`me.${k}`);
+  for (const k of day) if (!VIEW_DAY_KEYS.has(k)) bad.push(`day.${k}`);
+  return result("VK1", label, bad);
+}
+
+/**
+ * HS1~HS4 사회자 알림음(HOST-02). segs = [{ kind, name, count, played }].
+ * HS1 transition(단계 전환) 구간마다 ui.host 정확히 1. HS2 first(처음 입장)·reload(새로고침 첫 프레임) 0. HS3 dayToDiscussion(낮 시작 → 토론) 0.
+ * HS4 muted(소리 끔) 구간에 재생된 ui.host 0. 구간 종류가 하나도 없으면 그 판정은 측정값 없음.
+ */
+export function hostChimeChecks(segs) {
+  const spec = [
+    ["HS1", "단계 전환마다 ui.host 한 번", ["transition"], (s) => (s.count === 1 ? null : `${s.name}: ui.host ${s.count}번 ≠ 1`)],
+    ["HS2", "처음 입장·새로고침 첫 프레임 0번", ["first", "reload"], (s) => (s.count === 0 ? null : `${s.name}: ui.host ${s.count}번 ≠ 0`)],
+    ["HS3", "낮 시작 → 토론 0번", ["dayToDiscussion"], (s) => (s.count === 0 ? null : `${s.name}: ui.host ${s.count}번 ≠ 0`)],
+    ["HS4", "소리를 끄면 재생된 ui.host 0번", ["muted"], (s) => (s.played === 0 ? null : `${s.name}: 재생된 ui.host ${s.played}번 ≠ 0`)],
+  ];
+  const okSeg = (s) => s && isStr(s.kind) && isStr(s.name) && isNum(s.count) && isNum(s.played);
+  const valid = Array.isArray(segs) && segs.length > 0 && segs.every(okSeg);
+  return spec.map(([id, label, kinds, judge]) => {
+    if (!valid) return noMeasure(id, label, "구간별 ui.host 개수");
+    const mine = segs.filter((s) => kinds.includes(s.kind));
+    if (mine.length === 0) return noMeasure(id, label, `${kinds.join("·")} 구간`);
+    return result(id, label, mine.map(judge).filter((x) => x !== null));
+  });
 }
