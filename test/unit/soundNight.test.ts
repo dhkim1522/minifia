@@ -259,6 +259,7 @@ describe("LS-7: 밤의 모든 UI 조작은 무음이다", () => {
     vote: { kind: "vote" },
     deny: { kind: "deny" },
     emote: { kind: "emote", id: "clap", mine: true },
+    result: { kind: "result", step: "light", win: true }, // 12-11 이 더한 신호: ended 밖(밤)에서는 무음이어야 한다
   } as never;
   /** emote 는 받은 프레임에서만 오는 신호다: 서버가 수신자를 정하므로 밤에도 받은 마피아·유령에게는 난다(12-10, LS-4). 나머지 UI 신호는 밤 무음이다 */
   const UI_KINDS = SIGNAL_KINDS.filter((k) => k !== "emote");
