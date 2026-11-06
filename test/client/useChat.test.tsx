@@ -263,6 +263,32 @@ describe("useChat: 연결 끊김과 복원 (UI-SPEC 입력 상태표, D2)", () =
     rerender({ view: makeView({ players: [player(1, "하윤")] }), canSend: true });
     expect(result.current.messages[0]?.name).toBe("민수");
   });
+
+  it("WR-01: 같은 좌석에 새 사람이 들어와도 이미 그려진 줄은 쓴 사람의 이름으로 남고 새 줄만 새 이름이다", () => {
+    const { result, receive, rerender } = mount();
+    receive({ t: "chat", ...line(1, 0, "민수의 말") });
+    expect(result.current.messages[0]?.name).toBe("민수");
+    // 민수가 나가고 지수가 좌석 0 을 받는다
+    rerender({ view: makeView({ players: [player(0, "지수"), player(1, "하윤")] }), canSend: true });
+    receive({ t: "chat", ...line(2, 0, "지수의 말") });
+    expect(result.current.messages.map((m) => `${m.name}:${m.text}`).join("|")).toBe("민수:민수의 말|지수:지수의 말");
+  });
+
+  it("WR-01: 내 좌석의 줄만 '나' 로 표시된다 — 다른 좌석에 새 사람이 와도 그 줄은 '나' 가 아니다", () => {
+    const { result, receive, rerender } = mount();
+    receive({ t: "chat", ...line(1, 0, "민수의 말") });
+    receive({ t: "chat", ...line(2, 1, "내 말") });
+    rerender({ view: makeView({ players: [player(0, "지수"), player(1, "하윤")] }), canSend: true });
+    expect(result.current.messages.map((m) => `${m.name}:${String(m.me)}`).join("|")).toBe("민수:false|하윤:true");
+  });
+
+  it("WR-01: 이름을 한 번도 못 본 좌석의 줄은 빈 이름으로 그려지고 이름이 알려지면 채워진다(기존 규칙)", () => {
+    const { result, receive, rerender } = mount(makeView({ players: [player(1, "하윤")] }));
+    receive({ t: "chat", ...line(1, 0, "누구?") });
+    expect(result.current.messages[0]?.name).toBe("");
+    rerender({ view: makeView({ players: [player(0, "민수"), player(1, "하윤")] }), canSend: true });
+    expect(result.current.messages[0]?.name).toBe("민수");
+  });
 });
 
 // ---- 07-18: 입력 중 보내기·받기 규칙 (CHAT-04, T-07-46·47) ----
