@@ -763,6 +763,55 @@ describe("GameMap — 거절 알림의 소리 신호 (12-10, ui.deny)", () => {
   });
 });
 
+// 12-10: 받은 동작 프레임이 몸 동작 재생 자리에서 emote 신호 하나를 만든다 (LS-4)
+describe("RoomScreen — 동작 프레임의 소리 신호 (12-10)", () => {
+  const feed = () => {
+    const listeners: Array<(e: never, meta: { epoch: number }) => void> = [];
+    const onEvent = vi.fn((l: (typeof listeners)[number]) => {
+      listeners.push(l);
+      return () => {};
+    });
+    return { onEvent: onEvent as unknown as RoomConnection["onEvent"], emit: (e: unknown, epoch = 1) => act(() => listeners.forEach((l) => l(e as never, { epoch }))) };
+  };
+  const collect = () => {
+    const seen: LocalSignal[] = [];
+    return { seen, stop: bindSignals((s) => seen.push(s)) };
+  };
+
+  it("남이 보낸 프레임 하나가 {kind:emote, id, mine:false} 하나, 내 좌석 프레임은 mine:true", () => {
+    const f = feed();
+    mount(makeView(), { onEvent: f.onEvent });
+    const sig = collect();
+    f.emit({ t: "emote", seat: 2, id: "clap", n: 1 });
+    f.emit({ t: "emote", seat: 0, id: "cry", n: 2 });
+    sig.stop();
+    expect(sig.seen).toEqual([
+      { kind: "emote", id: "clap", mine: false },
+      { kind: "emote", id: "cry", mine: true },
+    ]);
+  });
+
+  it("world·chat·typing 프레임은 emote 신호가 없다", () => {
+    const f = feed();
+    mount(makeView(), { onEvent: f.onEvent });
+    const sig = collect();
+    f.emit({ t: "typing", seat: 2, on: true });
+    f.emit({ t: "chat", seat: 2, ch: "all", seq: 1, text: "안녕", at: NOW });
+    f.emit({ t: "world", k: "snap", segs: [], seq: 1 });
+    sig.stop();
+    expect(sig.seen.filter((s) => s.kind === "emote")).toEqual([]);
+  });
+
+  it("신호에는 id 와 mine 불리언뿐이다 (좌석·시각 없음)", () => {
+    const f = feed();
+    mount(makeView(), { onEvent: f.onEvent });
+    const sig = collect();
+    f.emit({ t: "emote", seat: 3, id: "dance", n: 5 });
+    sig.stop();
+    expect(Object.keys(sig.seen[0]!).sort()).toEqual(["id", "kind", "mine"]);
+  });
+});
+
 // 08-27: 옛 낮 토론 화면 시험(discussion.test)에서 사용자에게 보이는 뜻만 GameMap 기준으로 옮긴 것이다.
 describe("GameMap — 낮 토론 채팅 패널·방장 줄 없음 (CHAT-06, DAY-01, 08-27 옮김)", () => {
   beforeEach(() => {

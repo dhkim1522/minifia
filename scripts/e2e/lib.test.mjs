@@ -145,6 +145,8 @@ import {
   soundButtonChecks,
   soundRenderChecks,
   soundNightParityChecks,
+  soundVerdictTimingChecks,
+  soundEmoteLeakChecks,
   soundSequenceChecks,
   SOUND_SCRIPT_STEPS,
   sheetFitChecks,
@@ -3188,4 +3190,105 @@ test("SOUND_SCRIPT_STEPS: 12-09 가 밤(night.fall·bed.night)과 아침(morning
   assert.ok(night && night.ids.includes("bed.night"));
   const morning = SOUND_SCRIPT_STEPS.find((x) => x.ids.includes("morning.dawn"));
   assert.ok(morning && morning.ids.includes("bed.dawn"));
+});
+
+// ---- 12-10: 판결 타이밍(V1~V5)·동작 소리 누설(E1~E3) 순수 판정 ----
+
+const HEART = [0, 800, 1500, 2050, 2400];
+const entry = (id, at, gain = 1) => ({ id, at, gain });
+/** 첫 심장 박동 시각 base 기준의 판결 로그. 통과면 gavel+rise, 부결이면 reject */
+const verdictLog = ({ passed = true, base = 100000, gavelAt = 2600, riseAt = gavelAt, hearts = HEART, extra = [] } = {}) => [
+  entry("ui.tap", base - 500),
+  ...hearts.map((h) => entry("verdict.heart", base + h)),
+  entry("pin.on", base),
+  entry("ballot.yes", base + 600),
+  entry("ballot.no", base + 1000),
+  ...(passed ? [entry("execution.gavel", base + gavelAt), entry("execution.rise", base + riseAt)] : [entry("verdict.reject", base + gavelAt)]),
+  ...extra,
+].sort((a, b) => a.at - b.at);
+const vt = (pass, reject) => soundVerdictTimingChecks({ pass, reject });
+const vFails = (lines) => lines.filter((l) => !l.ok).map((l) => l.id);
+
+test("soundVerdictTimingChecks: 정상 통과·부결 로그는 V1~V5 모두 통과", () => {
+  const lines = vt(verdictLog({ passed: true }), verdictLog({ passed: false, base: 900000 }));
+  assert.deepEqual(lines.map((l) => l.id), ["V1", "V2", "V3", "V4", "V5"]);
+  assert.deepEqual(vFails(lines), []);
+});
+
+test("V1: verdict.heart 가 5개가 아니면 실패 (4·6)", () => {
+  assert.deepEqual(vFails(vt(verdictLog({ hearts: HEART.slice(1) }), verdictLog({ passed: false }))), ["V1"]);
+  assert.deepEqual(vFails(vt(verdictLog({ hearts: [...HEART, 2500] }), verdictLog({ passed: false }))), ["V1"]);
+});
+
+test("V2: gavel 은 첫 심장 박동 +2600 ± 250 — 경계 2350·2850 통과, 2349·2851 실패", () => {
+  for (const at of [2350, 2850]) assert.deepEqual(vFails(vt(verdictLog({ gavelAt: at, riseAt: at }), verdictLog({ passed: false }))), [], `at ${at}`);
+  for (const at of [2349, 2851]) assert.ok(vFails(vt(verdictLog({ gavelAt: at, riseAt: at }), verdictLog({ passed: false }))).includes("V2"), `at ${at}`);
+});
+
+test("V3: rise 는 gavel 과 ±100 — 100 통과, 101 실패, 없으면 실패", () => {
+  assert.deepEqual(vFails(vt(verdictLog({ riseAt: 2700 }), verdictLog({ passed: false }))), []);
+  assert.deepEqual(vFails(vt(verdictLog({ riseAt: 2701 }), verdictLog({ passed: false }))), ["V3"]);
+  const noRise = verdictLog().filter((e) => e.id !== "execution.rise");
+  assert.ok(vFails(vt(noRise, verdictLog({ passed: false }))).includes("V3"));
+});
+
+test("V4: 부결 판은 gavel·rise 가 없고 verdict.reject 가 +2600 ± 250 이다", () => {
+  const withGavel = verdictLog({ passed: false, extra: [entry("execution.gavel", 100000 + 2600)] });
+  assert.ok(vFails(vt(verdictLog(), withGavel)).includes("V4"));
+  assert.ok(vFails(vt(verdictLog(), verdictLog({ passed: false, gavelAt: 2900 }))).includes("V4"));
+  assert.ok(vFails(vt(verdictLog(), verdictLog({ passed: false }).filter((e) => e.id !== "verdict.reject"))).includes("V4"));
+});
+
+test("V5: 두 판의 2600ms 앞 판결 id 열이 같아야 한다 — 부결 판에 앞머리가 하나 빠지면 실패, 다른 소리(ui.tap)는 비교하지 않는다", () => {
+  const rejectNoPin = verdictLog({ passed: false, base: 900000 }).filter((e) => e.id !== "pin.on");
+  assert.deepEqual(vFails(vt(verdictLog(), rejectNoPin)), ["V5"]);
+  const rejectTap = verdictLog({ passed: false, base: 900000, extra: [entry("ui.tap", 900000 + 300)] });
+  assert.deepEqual(vFails(vt(verdictLog(), rejectTap)), []);
+});
+
+test("soundVerdictTimingChecks: 로그가 없거나 심장 박동이 없으면 측정값 없음으로 실패", () => {
+  assert.ok(vt(null, null).every((l) => !l.ok && /측정값 없음/.test(l.detail)));
+  assert.ok(vt(verdictLog(), null).some((l) => (l.id === "V4" || l.id === "V5") && !l.ok && /측정값 없음/.test(l.detail)));
+  assert.ok(vt([], []).every((l) => !l.ok));
+});
+
+const emoteLog = (...rest) => rest;
+const mk = (label, log) => ({ label, log });
+const emoteIn = (gain) => [entry("bed.night", 1), entry("emote.throat", 5, gain)];
+const leak = (input) => soundEmoteLeakChecks(input);
+const eOk = () => ({
+  senderLog: emoteIn(0.5),
+  otherLogs: [mk("손님1", [entry("bed.night", 1), entry("night.cue", 6)]), mk("손님2", [entry("bed.night", 1)])],
+  day: { senderLog: [entry("emote.clap", 5, 1)], receiverLog: [entry("emote.clap", 5, 0.501)] },
+});
+
+test("soundEmoteLeakChecks: 정상(보낸 쪽 1개·시민 0·낮 gain 1 과 0.501)은 E1~E3 통과", () => {
+  const lines = leak(eOk());
+  assert.deepEqual(lines.map((l) => l.id), ["E1", "E2", "E3"]);
+  assert.deepEqual(vFails(lines), []);
+});
+
+test("E1: 보낸 마피아 로그의 emote.* 가 정확히 1개 (played 무관) — 0개·2개 실패", () => {
+  assert.deepEqual(vFails(leak({ ...eOk(), senderLog: [entry("bed.night", 1)] })), ["E1"]);
+  assert.deepEqual(vFails(leak({ ...eOk(), senderLog: [...emoteIn(0.5), entry("emote.deny", 9, 0.5)] })), ["E1"]);
+  assert.deepEqual(vFails(leak({ ...eOk(), senderLog: [entry("emote.throat", 5, 0.5)].map((e) => ({ ...e, played: false })) })), []);
+});
+
+test("E2: 시민 쪽 로그에 emote.* 가 하나라도 있으면 실패하고 그 라벨을 적는다", () => {
+  const bad = { ...eOk(), otherLogs: [mk("손님1", [entry("emote.throat", 7, 0.5)]), mk("손님2", [])] };
+  const lines = leak(bad);
+  assert.deepEqual(vFails(lines), ["E2"]);
+  assert.match(lines.find((l) => l.id === "E2").detail, /손님1/);
+});
+
+test("E3: 낮 동작은 보낸 사람 gain 1, 받은 사람 gain 0.501(−6dB) — 어긋나면 실패", () => {
+  assert.deepEqual(vFails(leak({ ...eOk(), day: { senderLog: [entry("emote.clap", 5, 0.5)], receiverLog: [entry("emote.clap", 5, 0.501)] } })), ["E3"]);
+  assert.deepEqual(vFails(leak({ ...eOk(), day: { senderLog: [entry("emote.clap", 5, 1)], receiverLog: [entry("emote.clap", 5, 1)] } })), ["E3"]);
+  assert.deepEqual(vFails(leak({ ...eOk(), day: { senderLog: [entry("emote.clap", 5, 1)], receiverLog: [] } })), ["E3"]);
+});
+
+test("soundEmoteLeakChecks: 입력 모양이 틀리면 측정값 없음으로 실패", () => {
+  assert.ok(leak(null).every((l) => !l.ok && /측정값 없음/.test(l.detail)));
+  assert.ok(leak({ ...eOk(), otherLogs: [] }).some((l) => l.id === "E2" && !l.ok && /측정값 없음/.test(l.detail)));
+  assert.ok(leak({ ...eOk(), day: undefined }).some((l) => l.id === "E3" && !l.ok && /측정값 없음/.test(l.detail)));
 });

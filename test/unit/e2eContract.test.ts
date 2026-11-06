@@ -577,3 +577,26 @@ describe("11페이즈 맵 선택 E2E 표식·기하 (11-13)", () => {
     expect(maps.MAP_CARD.total).toBe(3 * maps.MAP_CARD.w + 2 * maps.MAP_CARD.gap);
   });
 });
+
+describe("12페이즈 판결 타이밍·동작 소리 누설 E2E (12-10)", () => {
+  const root = new URL("../../", import.meta.url);
+  const lib = readFileSync(new URL("scripts/e2e/lib.mjs", root), "utf8");
+  const sound = readFileSync(new URL("scripts/e2e/sound.mjs", root), "utf8");
+
+  it("판정 함수는 lib.mjs 의 순수 함수이고 흐름(sound.mjs)이 쓴다 (문턱은 순수 함수에만)", () => {
+    expect(lib).toMatch(/export function soundVerdictTimingChecks/);
+    expect(lib).toMatch(/export function soundEmoteLeakChecks/);
+    expect(sound).toMatch(/soundVerdictTimingChecks/);
+    expect(sound).toMatch(/soundEmoteLeakChecks/);
+  });
+
+  it("흐름이 처형을 실제 시간으로 지켜보고(통과·부결 두 판) 밤 마피아 동작을 보낸다", () => {
+    expect(sound).toMatch(/execution/);
+    expect(sound).toMatch(/data-emote/);
+  });
+
+  it("흐름이 낮추지 못하는 문턱은 sound.mjs 에 숫자로 쓰지 않는다 (2600·250 은 lib.mjs 에만)", () => {
+    expect(sound).not.toMatch(/\b2600\b/);
+    expect(lib).toMatch(/2600/);
+  });
+});

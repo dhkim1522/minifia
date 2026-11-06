@@ -4,9 +4,9 @@ import { EXECUTION_MS, PICK_TURN_MS } from "../../shared/game/phases";
 import type { DayView, PhaseId, PublicPlayer, RoomView } from "../../shared/protocol";
 import { URGENT_MS } from "../../src/net/countdown";
 import { AUDIO_VIEW_FIELDS, audioViewOf, type AudioView } from "../../src/audio/audioView";
-import { BED_OF, direct, directSignal, JOIN_GAP_MS, TICK_PHASES, type DirectOutput, type LocalClock } from "../../src/audio/director";
+import { BED_OF, direct, directEmote, directSignal, JOIN_GAP_MS, TICK_PHASES, type DirectOutput, type LocalClock } from "../../src/audio/director";
 import { AMBIENT_IDS, BED_IDS, RECIPES, SCREEN_COUNTERPART, type SfxId } from "../../src/audio/recipes";
-import { tickSchedule } from "../../src/audio/script";
+import { EMOTE_GATE_EMPTY, tickSchedule } from "../../src/audio/script";
 import { bindSignals, emitSignal, SIGNAL_KINDS } from "../../src/audio/signals";
 import { pinOf } from "../../src/world/pinPlan";
 
@@ -462,11 +462,76 @@ describe("pinOfAudio 가 pinOf 의 결선·마지막 3인·처형 분기와 같�
   });
 });
 
+// ───────────────────────── 12-10: 동작 소리 (받은 프레임에서만) ─────────────────────────
+
+describe("emote 신호 → emote.{id} (D-14, LS-4, T-12-37, T-12-39)", () => {
+  const EMOTE_IDS_ALL = ["clap", "praise", "handshake", "dance", "surprise", "cry", "deny", "point", "throat"] as const;
+
+  it("아홉 id 모두 emote.{id} 레시피가 있다", () => {
+    for (const id of EMOTE_IDS_ALL) expect(RECIPES[`emote.${id}` as SfxId], id).toBeDefined();
+  });
+
+  it("내 동작은 0dB, 남의 동작은 −6dB", () => {
+    const mine = directEmote({ kind: "emote", id: "clap", mine: true }, av("discussion"), EMOTE_GATE_EMPTY, NOW);
+    const other = directEmote({ kind: "emote", id: "clap", mine: false }, av("discussion"), EMOTE_GATE_EMPTY, NOW);
+    expect(mine.out.now).toEqual([{ id: "emote.clap", gainDb: 0 }]);
+    expect(other.out.now).toEqual([{ id: "emote.clap", gainDb: -6 }]);
+    expect(mine.out.scripts).toEqual([]);
+  });
+
+  it.each(EMOTE_IDS_ALL)("%s: 받은 프레임이면 emote.%s 한 번", (id) => {
+    expect(directEmote({ kind: "emote", id, mine: false }, av("discussion"), EMOTE_GATE_EMPTY, NOW).out.now.map((c) => c.id)).toEqual([`emote.${id}`]);
+  });
+
+  it("밤에도 받은 프레임이면 난다 (수신자는 서버가 정한 마피아·유령), 모션 줄이기와 무관 — 입력에 없다", () => {
+    const r = directEmote({ kind: "emote", id: "throat", mine: false }, av("night"), EMOTE_GATE_EMPTY, NOW);
+    expect(r.out.now).toEqual([{ id: "emote.throat", gainDb: -6 }]);
+  });
+
+  it("게이트가 거절하면 아무것도 없고 상태는 그대로다", () => {
+    let gate = EMOTE_GATE_EMPTY;
+    const got: number[] = [];
+    for (let k = 0; k < 5; k += 1) {
+      const r = directEmote({ kind: "emote", id: "clap", mine: false }, av("discussion"), gate, NOW + k * 50);
+      got.push(r.out.now.length);
+      gate = r.gate;
+    }
+    expect(got).toEqual([1, 1, 1, 0, 0]);
+  });
+
+  it("view 가 없으면(연결 전) 소리가 없다", () => {
+    expect(quiet(directEmote({ kind: "emote", id: "clap", mine: true }, null, EMOTE_GATE_EMPTY, NOW).out)).toBe(true);
+  });
+
+  it("directSignal 은 emote 를 다루지 않는다 (게이트 상태가 필요해 directEmote 가 맡는다)", () => {
+    expect(quiet(directSignal({ kind: "emote", id: "clap", mine: true }, av("discussion")))).toBe(true);
+  });
+
+  it("신호가 없으면(받지 못한 프레임) 어떤 view 전이에서도 emote.* 가 없다", () => {
+    const players: PublicPlayer[] = [0, 1, 2, 3].map((seat) => ({ seat, nickname: `p${seat}`, connected: true, isHost: seat === 0 }));
+    let anyEmote = false;
+    for (const a of PHASES) {
+      for (const b of PHASES) {
+        const mk = (phase: PhaseId): AudioView => av(phase, { endsAt: NOW + 30_000, players: players.map((p) => ({ seat: p.seat, alive: true })) });
+        const out = direct(mk(a), mk(b), clock());
+        const idsAll = [...out.now.map((c) => c.id), ...out.scripts.flatMap((s) => s.items.map((i) => i.id))];
+        if (idsAll.some((id) => id.startsWith("emote."))) anyEmote = true;
+      }
+    }
+    expect(anyEmote).toBe(false);
+  });
+
+  it("신호 인자에는 좌석·시각·역할이 없다 (id 와 mine 불리언뿐)", () => {
+    const s = { kind: "emote" as const, id: "clap" as const, mine: true };
+    expect(Object.keys(s).sort()).toEqual(["id", "kind", "mine"]);
+  });
+});
+
 // ───────────────────────── 신호 (ui.tap) ─────────────────────────
 
 describe("신호 tap → ui.tap (LS-7)", () => {
-  it("닫힌 신호 종류는 tap·card·tensionCue·vote·deny 이고 인자에 선택값·역할·좌석이 없다", () => {
-    expect([...SIGNAL_KINDS]).toEqual(["tap", "card", "tensionCue", "vote", "deny"]);
+  it("닫힌 신호 종류는 tap·card·tensionCue·vote·deny·emote 이고 인자에 선택값·역할·좌석이 없다", () => {
+    expect([...SIGNAL_KINDS]).toEqual(["tap", "card", "tensionCue", "vote", "deny", "emote"]);
   });
 
   it.each(PHASES.filter((p) => p !== "night"))("%s: ui.tap 한 번", (phase) => {

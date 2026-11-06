@@ -258,18 +258,22 @@ describe("LS-7: 밤의 모든 UI 조작은 무음이다", () => {
     tensionCue: { kind: "tensionCue" },
     vote: { kind: "vote" },
     deny: { kind: "deny" },
+    emote: { kind: "emote", id: "clap", mine: true },
   } as never;
+  /** emote 는 받은 프레임에서만 오는 신호다: 서버가 수신자를 정하므로 밤에도 받은 마피아·유령에게는 난다(12-10, LS-4). 나머지 UI 신호는 밤 무음이다 */
+  const UI_KINDS = SIGNAL_KINDS.filter((k) => k !== "emote");
 
   it("대표 신호표가 닫힌 목록 전부를 덮는다", () => {
     expect(Object.keys(SAMPLE).sort()).toEqual([...SIGNAL_KINDS].sort());
   });
 
   it("밤에 visualCues 거짓이면 어떤 신호도 소리를 만들지 않는다", () => {
-    for (const kind of SIGNAL_KINDS) expect(quiet(directSignal(SAMPLE[kind], NIGHT_VIEW(), { visualCues: false })), kind).toBe(true);
+    for (const kind of UI_KINDS) expect(quiet(directSignal(SAMPLE[kind], NIGHT_VIEW(), { visualCues: false })), kind).toBe(true);
+    expect(quiet(directSignal(SAMPLE.emote, NIGHT_VIEW(), { visualCues: false }))).toBe(true); // directSignal 은 emote 를 다루지 않는다(directEmote 가 게이트와 함께 낸다)
   });
 
   it("밤에 visualCues 참이어도 시각 큐 신호(tensionCue) 하나만 night.cue 를 만든다", () => {
-    for (const kind of SIGNAL_KINDS) {
+    for (const kind of UI_KINDS) {
       const out = directSignal(SAMPLE[kind], NIGHT_VIEW(), { visualCues: true });
       if (kind === "tensionCue") expect(out.now).toEqual([{ id: "night.cue" }]);
       else expect(quiet(out), kind).toBe(true);

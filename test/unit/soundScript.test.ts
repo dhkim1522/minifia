@@ -9,6 +9,12 @@ import { LETTER_FOLD_AT_MS, LETTER_SEAL_GAP_MS, LETTER_WRITE_AT_MS } from "../..
 import { mulberry32, recipeDurationMs } from "../../src/audio/recipes";
 import {
   awardScript,
+  EMOTE_GATE_EMPTY,
+  EMOTE_SOUND_MAX,
+  EMOTE_SOUND_PER_SEC,
+  EMOTE_SOUND_WINDOW_MS,
+  emoteSoundGate,
+  type EmoteGateState,
   morningScript,
   nightCues,
   nightScript,
@@ -18,6 +24,7 @@ import {
   verdictScript,
   willScript,
 } from "../../src/audio/script";
+import { EMOTE_RENDER_MAX } from "../../src/world/emoteCap";
 import { planTensionCues } from "../../src/world/tension";
 
 const ROOT = fileURLToPath(new URL("../../", import.meta.url));
@@ -300,5 +307,61 @@ describe("아침 대본 — morningScript (12-06, C-5, LS-8)", () => {
       expect(a.items.map((i) => i.at)).toEqual([...a.items.map((i) => i.at)].sort((x, y) => x - y));
       expect(morningScript({ outcome, mine: true })).toEqual(a);
     }
+  });
+});
+
+// ───────────────────────── 12-10: 동작 소리 게이트 (D-14, T-12-39) ─────────────────────────
+
+describe("emoteSoundGate: 초당 3개·동시 4개 (순수, 시각은 인자)", () => {
+  /** 순서대로 시도하고 수락 여부 열을 돌려준다. 거절은 상태를 바꾸지 않는다 */
+  function run(times: number[], durationMs: number): { oks: boolean[]; state: EmoteGateState } {
+    let state: EmoteGateState = EMOTE_GATE_EMPTY;
+    const oks: boolean[] = [];
+    for (const t of times) {
+      const r = emoteSoundGate(state, t, durationMs);
+      oks.push(r.ok);
+      state = r.next;
+    }
+    return { oks, state };
+  }
+
+  it("상수: 초당 3·창 1000ms·동시 4 이고 동시 상한은 EMOTE_RENDER_MAX 와 같다", () => {
+    expect(EMOTE_SOUND_PER_SEC).toBe(3);
+    expect(EMOTE_SOUND_WINDOW_MS).toBe(1000);
+    expect(EMOTE_SOUND_MAX).toBe(4);
+    expect(EMOTE_SOUND_MAX).toBe(EMOTE_RENDER_MAX);
+  });
+
+  it("1초 안에 셋까지 수락하고 넷째는 조용히 거절한다", () => {
+    expect(run([0, 100, 200, 300], 200).oks).toEqual([true, true, true, false]);
+  });
+
+  it("거절은 상태를 바꾸지 않는다 (같은 객체)", () => {
+    const { state } = run([0, 100, 200], 200);
+    const r = emoteSoundGate(state, 300, 200);
+    expect(r.ok).toBe(false);
+    expect(r.next).toBe(state);
+  });
+
+  it("첫 수락 +1000ms 가 지나면 다시 수락한다 (999 는 거절, 1000 은 수락)", () => {
+    expect(run([0, 100, 200, 999], 200).oks).toEqual([true, true, true, false]);
+    expect(run([0, 100, 200, 1000], 200).oks).toEqual([true, true, true, true]);
+  });
+
+  it("길게 도는 소리는 동시 4개 이상을 거절한다 (초당 3 안이어도)", () => {
+    // 3000ms 소리: 0·400·800 수락(초당 3) → 1100(창 안 400·800 + ...)은 수락 → 활성 4 → 1500 거절
+    const r = run([0, 400, 800, 1100, 1500, 2100], 3000);
+    expect(r.oks).toEqual([true, true, true, true, false, false]);
+  });
+
+  it("활성 추정이 끝나면(수락 + 길이) 다시 수락한다", () => {
+    const r = run([0, 400, 800, 1100, 3050], 3000);
+    expect(r.oks).toEqual([true, true, true, true, true]);
+  });
+
+  it("상태는 지난 항목을 정리한다 (무한히 자라지 않음)", () => {
+    const times = Array.from({ length: 200 }, (_, i) => i * 1500);
+    expect(run(times, 300).state.accepted.length).toBeLessThanOrEqual(EMOTE_SOUND_MAX);
+    expect(run(times, 300).oks.every(Boolean)).toBe(true);
   });
 });

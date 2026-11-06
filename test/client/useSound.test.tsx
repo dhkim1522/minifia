@@ -604,6 +604,47 @@ describe("useSound: 방 view 의 차이가 감독을 거쳐 엔진 요청이 된
     });
   });
 
+  describe("동작 소리 신호 (12-10, D-14, LS-4)", () => {
+    const emoteLog = (rig: ReturnType<typeof makeRig>) => rig.engine.log().filter((e) => e.id.startsWith("emote."));
+
+    it("받은 프레임의 신호 하나가 emote.{id} 하나: 내 것은 0dB(gain 1), 남의 것은 −6dB", () => {
+      const rig = makeRig();
+      mount(rig, { view: roomView("discussion", { phaseEndsAt: rig.fake.clock.now() + 60_000 }), epoch: 1 });
+      act(() => emitSignal({ kind: "emote", id: "clap", mine: true }));
+      act(() => emitSignal({ kind: "emote", id: "cry", mine: false }));
+      const log = emoteLog(rig);
+      expect(log.map((e) => e.id)).toEqual(["emote.clap", "emote.cry"]);
+      expect(log[0]!.gain).toBeCloseTo(1, 6);
+      expect(log[1]!.gain).toBeCloseTo(10 ** (-6 / 20), 6);
+    });
+
+    it("신호가 없으면(받지 못한 프레임) 어떤 단계에서도 emote.* 가 없다", () => {
+      const rig = makeRig();
+      const t0 = rig.fake.clock.now();
+      const { rerender } = mount(rig, { view: roomView("discussion", { phaseEndsAt: t0 + 60_000 }), epoch: 1 });
+      rerender({ view: roomView("night", { phaseEndsAt: t0 + 30_000 }), epoch: 1 });
+      act(() => rig.fake.clock.advance(30_000));
+      expect(emoteLog(rig)).toEqual([]);
+    });
+
+    it("1초에 셋까지: 같은 시각의 네 번째는 버려지고 1초 뒤 다시 난다", () => {
+      const rig = makeRig();
+      mount(rig, { view: roomView("discussion", { phaseEndsAt: rig.fake.clock.now() + 60_000 }), epoch: 1 });
+      for (const id of ["clap", "praise", "dance", "cry"] as const) act(() => emitSignal({ kind: "emote", id, mine: false }));
+      expect(emoteLog(rig)).toHaveLength(3);
+      act(() => rig.fake.clock.advance(1000));
+      act(() => emitSignal({ kind: "emote", id: "point", mine: false }));
+      expect(emoteLog(rig)).toHaveLength(4);
+    });
+
+    it("밤에 받은 프레임도 소리가 난다 (수신자는 서버가 정한 사람뿐)", () => {
+      const rig = makeRig();
+      mount(rig, { view: roomView("night", { phaseEndsAt: rig.fake.clock.now() + 30_000 }), epoch: 1 });
+      act(() => emitSignal({ kind: "emote", id: "throat", mine: false }));
+      expect(emoteLog(rig).map((e) => e.id)).toEqual(["emote.throat"]);
+    });
+  });
+
   it("active 가 거짓이면 감독도 쉰다", () => {
     const rig = makeRig();
     renderHook(() => useSound({ engine: rig.engine, active: false, view: roomView("lobby"), epoch: 1, offset: 0, now: rig.fake.clock.now }));
