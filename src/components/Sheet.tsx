@@ -5,6 +5,7 @@ import { Icon } from "./Icon";
 import { getSheetProbe } from "../debug/sheetProbe";
 import type { SheetTrace } from "../debug/sheetProbe";
 import "../styles/sheet.css";
+import "../styles/v2.css";
 
 // 하단 시트 틀(C-01 내 역할 · C-03 공유 · 확인 시트 공통). 네이티브 <dialog>.showModal() 위에 올린다:
 // 포커스 가두기·Esc·뒤 화면 비활성은 브라우저 기본 동작이다(리서치 Pattern 9, Pitfall 19).
@@ -212,11 +213,14 @@ export function Sheet({ label, onClose, initialFocusRef, showClose, className, c
             ref={closeBtnRef}
             variant="secondary"
             compact
-            className="mf-iconbtn mf-sheet__close"
+            className="mf-sheet__close mv-closepill"
             aria-label="닫기"
-            icon={<Icon name="close" />}
+            data-tool-label="닫기"
             onClick={requestClose}
-          />
+          >
+            <Icon name="close" size={20} />
+            <span className="mv-closepill__label">닫기</span>
+          </Button>
         ) : null}
         {typeof children === "function" ? children(requestClose, closing) : children}
       </div>

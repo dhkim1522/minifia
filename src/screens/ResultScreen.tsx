@@ -8,6 +8,7 @@ import { Button } from "../components/Button";
 import { AwardPlate } from "../components/v2/AwardPlate";
 import { ConfirmSheet } from "../components/ConfirmSheet";
 import { Sheet } from "../components/Sheet";
+import { ToolButton } from "../components/ToolButton";
 import { Icon } from "../components/Icon";
 import { ChatPanel } from "../components/v2/ChatPanel";
 import { DressSheet } from "../components/v2/DressSheet";
@@ -520,7 +521,8 @@ export function ResultScreen({ view, store, chat, resultLog, send, canSend, offs
         </div>
       ) : null}
       <header ref={headerRef} className="mf-result__header">
-        <Button variant="secondary" compact className="mf-iconbtn" aria-label="나가기" icon={<Icon name="back" />} disabled={!canSend} onClick={() => setLeaveOpen(true)} />
+        {/* 이름표 단추: 아이콘 아래 "나가기", data-tool-label="나가기" 는 ToolButton 이 단다(14-06 TOOL-01 목록 1) */}
+        <ToolButton word="나가기" icon={<Icon name="back" />} disabled={!canSend} onClick={() => setLeaveOpen(true)} />
         <h1 className="mf-result__title" data-title={inAward ? "ceremony" : state.title}>
           {inAward ? (
             <V2Icon name="trophy" size={24} className="mf-result__title-icon" />

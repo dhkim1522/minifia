@@ -41,7 +41,8 @@
 }
 .mf-sheet__handle::before { content: ""; position: absolute; inset: calc(-1 * var(--space-md)) calc(-1 * var(--space-lg)); }
 
-.mf-sheet__title { padding-right: calc(var(--tap-min) + var(--space-sm)); }
+/* 닫기 알약(14-06): × 20 + 4 + 글자 3자 + 좌우 안쪽 여백 → 약 84 폭 */
+.mf-sheet__title { padding-right: calc(var(--tap-min) * 2 + var(--space-sm)); }
 .mf-sheet__actions { display: flex; flex-direction: column; gap: var(--space-sm); }
 .mf-sheet__close { position: absolute; top: var(--space-md); right: var(--space-md); }
 

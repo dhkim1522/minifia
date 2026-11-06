@@ -192,6 +192,7 @@ export function ResultPanel(props: ResultPanelProps) {
                 role="tab"
                 className={id === "mafia" ? "mf-result__tab is-mafia" : "mf-result__tab"}
                 data-result-tab={id}
+                data-tool-label={RESULT_PANEL_TEXT.tab[id]}
                 aria-selected={selected}
                 aria-label={RESULT_PANEL_TEXT.tabName[id]}
                 tabIndex={selected ? 0 : -1}
@@ -199,7 +200,7 @@ export function ResultPanel(props: ResultPanelProps) {
                 onKeyDown={onKey}
               >
                 <V2Icon name={TAB_ICON[id]} size={24} />
-                {selected ? <span className="mf-result__tab-label">{RESULT_PANEL_TEXT.tab[id]}</span> : null}
+                <span className="mf-result__tab-label">{RESULT_PANEL_TEXT.tab[id]}</span>
                 {dot ? <i className="mf-result__tab-dot" data-result-dot="" aria-hidden="true" /> : null}
               </button>
             );
