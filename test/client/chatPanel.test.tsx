@@ -202,13 +202,13 @@ describe("ChatPanel 입력칸 계약 (CHAT-05, UI-SPEC 패널과 키보드)", ()
     expect(input(container).hasAttribute("placeholder")).toBe(false);
   });
 
-  it("보내기는 아이콘 버튼이다: aria-label '보내기', 글자 라벨 없음", () => {
+  it("보내기는 아이콘 + 라벨 '보내기' 단추다(14페이즈 TOOL-01): aria-label '보내기'", () => {
     const { container } = render(<Harness />);
     const btn = sendBtn(container);
     expect(btn.getAttribute("aria-label")).toBe("보내기");
     expect(btn.getAttribute("type")).toBe("submit");
     expect(btn.querySelector("svg")).not.toBeNull();
-    expect(btn.textContent).toBe("");
+    expect(btn.textContent).toBe("보내기");
   });
 
   it("CSS: 입력칸 글자 16px, 입력줄 높이 control-input, 보내기 면 gray-100, 비활성은 night-700 면·gray-500 아이콘", () => {
@@ -612,7 +612,7 @@ describe("ChatPanel 자동 스크롤과 새 메시지 점 (UI-SPEC 기록 칸 �
     expect(container.querySelector("[data-chat-newdot]")).toBeNull();
   });
 
-  it("위로 올려 읽는 중이면 끌어내리지 않고 새 메시지 점(44×44, aria-label)을 띄운다", () => {
+  it("위로 올려 읽는 중이면 끌어내리지 않고 새 글 알약(누르기 44×44, aria-label)을 띄운다", () => {
     const { container, rerender } = render(<Harness />);
     const log = logOf(container);
     const st = geometry(log, { scrollHeight: 500, clientHeight: 100, scrollTop: 300 });
@@ -620,8 +620,8 @@ describe("ChatPanel 자동 스크롤과 새 메시지 점 (UI-SPEC 기록 칸 �
     rerender(<Harness messages={MORE} />);
     expect(st.top).toBe(300);
     const dot = container.querySelector("button[data-chat-newdot]");
-    expect(dot?.getAttribute("aria-label")).toBe("새 메시지");
-    expect(dot?.textContent).toBe("");
+    expect(dot?.getAttribute("aria-label")).toBe("새 글");
+    expect(dot?.textContent).toBe("새 글");
     const body = rulesFor(V2_CSS, ".mv-chat__newdot").join(";");
     expect(body).toMatch(/width:\s*(var\(--tap-min\)|44px)/);
     expect(body).toMatch(/height:\s*(var\(--tap-min\)|44px)/);
@@ -804,15 +804,15 @@ describe("ChatPanel 깃펜 버튼 (WILL-01)", () => {
     expect(ev.defaultPrevented).toBe(true);
   });
 
-  it("CSS: 48×48 면 night-700 아이콘 gray-100 반경 badge, 점은 gray-100 8px", () => {
-    const rule = rulesFor(V2_CSS, ".mv-chat__will").join(";");
-    expect(rule).toContain("width: var(--control-input)");
-    expect(rule).toContain("height: var(--control-input)");
+  it("CSS: 36 면 night-700 아이콘 gray-100 반경 badge(이름표 단추 안), 점은 gray-100 8px", () => {
+    const rule = rulesFor(V2_CSS, ".mv-tool__face").join(";");
+    expect(rule).toContain("width: 36px");
+    expect(rule).toContain("height: 36px");
     expect(rule).toContain("background: var(--night-700)");
     expect(rule).toContain("color: var(--gray-100)");
     expect(rule).toContain("border-radius: var(--radius-badge)");
-    // 보내기 버튼과의 간격: form gap 8 + margin-left 8 = 16px (feedback-11)
-    expect(rule).toContain("margin-left: var(--space-sm)");
+    // 14페이즈: 보내기와의 여분 margin-left 8 은 없어졌다(폭 360 에서 입력칸 약 172, UI-SPEC 접근성·입력)
+    expect(rulesFor(V2_CSS, ".mv-chat__will").join(";")).not.toContain("margin-left");
     const dot = rulesFor(V2_CSS, ".mv-chat__will-dot").join(";");
     expect(dot).toContain("width: 8px");
     expect(dot).toContain("background: var(--gray-100)");
