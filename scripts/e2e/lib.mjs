@@ -2480,3 +2480,108 @@ export function soundEmoteLeakChecks(input) {
   }
   return out;
 }
+
+/** 결과·시상 소리 일회성 id(새로고침·재접속 로그에 있으면 안 된다) */
+const RESULT_ONE_SHOTS = ["role.flip", "result.win", "result.lose", "game.start"];
+const isResultOneShot = (id) => RESULT_ONE_SHOTS.includes(id) || id.startsWith("award.");
+
+/**
+ * 결과·시상 소리 판정 (sound-result, D-15·D-21·T-12-41·T-12-44). 순수 함수 — 문턱은 여기에만 있고 흐름은 낮추지 않는다.
+ * input = { log, participants, awards, expectWin?, reloadLog } — log 는 ended 도착 직전에 비운 뒤 시상 끝까지 받은 훅 로그, reloadLog 는 같은 페이지를 새로고침한 직후 로그.
+ *   R1 결과 구간 로그의 첫 침대 요청이 bed.result
+ *   R2 role.flip 개수 == min(참가자 수, 8)
+ *   R3 result.win + result.lose 가 정확히 1회 (expectWin 이 있으면 그 쪽 id)
+ *   R4 award.plate == 패 수 − 1, award.final == 1회이고 award.* 의 마지막 (패가 없으면 둘 다 0)
+ *   R5 순서: 첫 role.flip < result.win/lose < 첫 award.*
+ *   R6 새로고침 로그: bed.result 가 있고 role.flip·result.*·award.*·game.start 가 없다
+ */
+export function soundResultChecks(input) {
+  const labels = {
+    R1: "결과 구간의 첫 침대 요청이 bed.result",
+    R2: "role.flip 이 참가자 수(최대 8)만큼",
+    R3: "result.win/lose 가 정확히 한 번(내 팀에 맞는 쪽)",
+    R4: "award.plate 가 패 수 − 1, award.final 이 한 번이고 마지막",
+    R5: "순서: 뒤집기 < 승패 < 시상",
+    R6: "새로고침 로그는 bed.result 만(일회성 소리 없음)",
+  };
+  const log = validLog(input?.log) ? input.log : null;
+  const reload = validLog(input?.reloadLog) ? input.reloadLog : null;
+  const n = input?.participants;
+  const awards = input?.awards;
+  const out = [];
+  const idsOf = (l, pred) => l.filter((e) => pred(e.id));
+  const at = (e) => (e ? e.at : null);
+
+  if (log === null || !Number.isInteger(n) || n < 1 || !Number.isInteger(awards) || awards < 0) {
+    for (const id of ["R1", "R2", "R3", "R4", "R5"]) out.push(noMeasure(id, labels[id], "결과 구간 훅 로그·참가자 수·패 수"));
+  } else {
+    const firstBed = log.find((e) => e.id.startsWith("bed."));
+    out.push(result("R1", labels.R1, firstBed?.id === "bed.result" ? [] : [`첫 침대 요청 ${firstBed?.id ?? "(없음)"}`]));
+
+    const flips = idsOf(log, (id) => id === "role.flip");
+    const want = Math.min(n, 8);
+    out.push(result("R2", labels.R2, flips.length === want ? [] : [`role.flip ${flips.length}개 ≠ ${want}`]));
+
+    const wl = idsOf(log, (id) => id === "result.win" || id === "result.lose");
+    const bad3 = [];
+    if (wl.length !== 1) bad3.push(`result.win/lose ${wl.length}회 ≠ 1`);
+    else if (typeof input.expectWin === "boolean") {
+      const wantId = input.expectWin ? "result.win" : "result.lose";
+      if (wl[0].id !== wantId) bad3.push(`${wl[0].id} (기대 ${wantId})`);
+    }
+    out.push(result("R3", labels.R3, bad3));
+
+    const plates = idsOf(log, (id) => id === "award.plate");
+    const finals = idsOf(log, (id) => id === "award.final");
+    const allAward = idsOf(log, (id) => id.startsWith("award.")).sort((a, b) => a.at - b.at);
+    const bad4 = [];
+    if (awards === 0) {
+      if (plates.length + finals.length !== 0) bad4.push(`패가 없는데 award.* ${plates.length + finals.length}개`);
+    } else {
+      if (plates.length !== awards - 1) bad4.push(`award.plate ${plates.length}개 ≠ ${awards - 1}`);
+      if (finals.length !== 1) bad4.push(`award.final ${finals.length}개 ≠ 1`);
+      else if (allAward[allAward.length - 1]?.id !== "award.final") bad4.push("award.final 이 마지막이 아님");
+    }
+    out.push(result("R4", labels.R4, bad4));
+
+    const bad5 = [];
+    const firstFlip = at(flips.sort((a, b) => a.at - b.at)[0]);
+    const light = at(wl[0]);
+    const firstAward = at(allAward[0]);
+    if (firstFlip === null || light === null) bad5.push("role.flip 또는 result.win/lose 가 없어 순서를 못 잼");
+    else {
+      if (!(firstFlip < light)) bad5.push(`첫 role.flip(${Math.round(firstFlip)}) ≥ 승패(${Math.round(light)})`);
+      if (firstAward !== null && !(light < firstAward)) bad5.push(`승패(${Math.round(light)}) ≥ 첫 award.*(${Math.round(firstAward)})`);
+    }
+    out.push(result("R5", labels.R5, bad5));
+  }
+
+  if (reload === null) out.push(noMeasure("R6", labels.R6, "새로고침 직후 훅 로그"));
+  else {
+    const bad = [];
+    if (!reload.some((e) => e.id === "bed.result")) bad.push("bed.result 요청 없음");
+    const shots = reload.filter((e) => isResultOneShot(e.id)).map((e) => e.id);
+    if (shots.length > 0) bad.push(`일회성 소리 ${[...new Set(shots)].join(", ")}`);
+    out.push(result("R6", labels.R6, bad));
+  }
+  return out;
+}
+
+/**
+ * 무대 탭 건너뛰기 소리 판정 (sound-result, 건너뛰기 변형 한 판). 순수 함수.
+ * input = { log, participants } — 연출 구간(gather·flip)에서 무대를 탭하고 원래 조명 시각(4600ms)이 지난 뒤까지 받은 훅 로그.
+ *   K1 건너뛴 뒤집기 소리는 없다: role.flip 이 참가자 수 미만(탭 전에 난 것까지만)
+ *   K2 result.win/lose 가 정확히 한 번
+ */
+export function soundResultSkipChecks(input) {
+  const labels = { K1: "건너뛰기: role.flip 이 참가자 수보다 적다", K2: "건너뛰기: result.win/lose 가 정확히 한 번" };
+  const log = validLog(input?.log) ? input.log : null;
+  const n = input?.participants;
+  if (log === null || !Number.isInteger(n) || n < 1) return [noMeasure("K1", labels.K1, "훅 로그·참가자 수"), noMeasure("K2", labels.K2, "훅 로그")];
+  const flips = log.filter((e) => e.id === "role.flip").length;
+  const wl = log.filter((e) => e.id === "result.win" || e.id === "result.lose").length;
+  return [
+    result("K1", labels.K1, flips < Math.min(n, 8) ? [] : [`role.flip ${flips}개 ≥ ${Math.min(n, 8)}`]),
+    result("K2", labels.K2, wl === 1 ? [] : [`result.win/lose ${wl}회`]),
+  ];
+}

@@ -600,3 +600,29 @@ describe("12페이즈 판결 타이밍·동작 소리 누설 E2E (12-10)", () =>
     expect(lib).toMatch(/2600/);
   });
 });
+
+describe("12페이즈 sound-result E2E (12-11)", () => {
+  const root = new URL("../../", import.meta.url);
+
+  it("sound-result 가 flows.mjs 에 390x844(GAME_SIZE)로 등록돼 있다", () => {
+    const flows = readFileSync(new URL("scripts/e2e/flows.mjs", root), "utf8");
+    expect(flows).toMatch(/\{ id: "sound-result", run: soundResultFlow, size: GAME_SIZE \}/);
+  });
+
+  it("판정 함수는 lib.mjs 의 순수 함수이고 흐름 본문은 sound.mjs 에 있다 (문턱은 순수 함수에만)", () => {
+    const lib = readFileSync(new URL("scripts/e2e/lib.mjs", root), "utf8");
+    const sound = readFileSync(new URL("scripts/e2e/sound.mjs", root), "utf8");
+    expect(lib).toMatch(/export function soundResultChecks/);
+    expect(lib).toMatch(/export function soundResultSkipChecks/);
+    expect(sound).toMatch(/soundResultChecks/);
+    expect(sound).toMatch(/async function soundResultFlow/);
+  });
+
+  it("판정이 기대하는 id 는 모두 실제 소리 id 이다 (오타 방지)", () => {
+    const sound = readFileSync(new URL("scripts/e2e/lib.mjs", root), "utf8");
+    const body = sound.slice(sound.indexOf("export function soundResultChecks"));
+    const named = [...body.matchAll(/"((?:role|result|award|bed|game)\.[a-z]+)"/g)].map((m) => m[1]!);
+    const known = new Set<string>(SOUND_IDS);
+    expect([...new Set(named)].filter((id) => !known.has(id))).toEqual([]);
+  });
+});
