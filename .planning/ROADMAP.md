@@ -105,7 +105,7 @@ Plans:
   3. 모든 도구에 한 단어 이름표가 있고 남은 시간은 막대 + 숫자로 보인다
   4. 역할 확인·역할 카드에 목표 한 줄이 있고, 자막·빛남이 다른 사람의 역할을 드러내지 않는다(누설 검사)
 
-**Plans:** 7/9 plans executed (7 waves)
+**Plans:** 8/9 plans executed (7 waves)
 
 Plans:
 **Wave 1**
@@ -126,7 +126,7 @@ Plans:
 - [x] 14-07-PLAN.md — 이름표: 소리·맵·옷장·넘기기·대기실 머리·옷장 시트 + 방 화면 전수 검사
 
 **Wave 6**
-- [ ] 14-08-PLAN.md — E2E emcee-band·emcee-tools·emcee-leak·emcee-sound + 기존 흐름 기대 갱신 + 바뀐 흐름 로컬 실행
+- [x] 14-08-PLAN.md — E2E emcee-band·emcee-tools·emcee-leak·emcee-sound + 기존 흐름 기대 갱신 + 바뀐 흐름 로컬 실행
 
 **Wave 7**
 - [ ] 14-09-PLAN.md — 결정 0073(0051 보완)·문서·폰 6종 회귀·nightload·minifia-v3 배포·HANDOFF·push
@@ -148,7 +148,7 @@ Plans:
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 13. 기본판 낮 흐름 | v3.0 | 6/6 | Complete (실기기 확인은 v3.0 끝) | 2026-11-07 |
-| 14. 사회자 진행과 도구 이름표 | v3.0 | 7/9 | In Progress | - |
+| 14. 사회자 진행과 도구 이름표 | v3.0 | 8/9 | In Progress | - |
 | 15. 낮 심부름·목격 기록·밤 흔적 | v3.0 | 0/? | Not started | - |
 
 ## Backlog
