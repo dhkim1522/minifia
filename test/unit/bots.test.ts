@@ -52,7 +52,8 @@ import type { PhaseId } from "../../shared/protocol";
 import { seededRandInt } from "../helpers/seededRandom";
 import { castPoints, startedFrom, stateWithVerdict } from "../helpers/voteState";
 import { toggleEnd } from "../../shared/game/discussion";
-import { castTurnPoint, enterNomination, nominationStepMs, stepNomination } from "../../shared/game/nomination";
+import { castPoint, castTurnPoint, enterNomination, nominationStepMs, stepNomination } from "../../shared/game/nomination";
+import { RULESET } from "../../shared/game/ruleset";
 import { castVerdict } from "../../shared/game/verdict";
 import { castRunoffVote, runoffStepMs, stepRunoff } from "../../shared/game/runoff";
 import { RUNOFF_VOTE_MS, SHOWDOWN_POINT_MS, SHOWDOWN_TURN_MS } from "../../shared/game/phases";
@@ -1492,5 +1493,88 @@ describe("봇 마지막 3인 계획 (09.1.1-07)", () => {
     expect(planBotSteps(gone, pointNow(s), THROWING).length).toBe(0);
     const oneDead = markDead(s, 2);
     expect(planBotSteps(oneDead, pointNow(s), seededRandInt(1)).map((st) => st.botId).join(",")).toBe(idAt(s, 1));
+  });
+});
+
+// ---- 13-02: 기본판 동시 투표 봇 계획 (결정 0072, D-03, FLOW-05) ----
+describe("기본판 투표 봇 계획 (결정 0072)", () => {
+  /** 사람 1(방장) + 봇 3 이 tick 으로 투표(nomination)에 닿은 상태 — 기본판이라 pickTurn 이 없다. */
+  const voteAt = (seed: number): RoomState => stateAt(1, 3, seed, "nomination");
+  const pointsOf = (steps: BotStep[]): BotStep[] => steps.filter((x) => x.act.t === "point");
+
+  it("투표 진입에는 pickTurn 이 없고, 산 봇마다 point 한 행이 2000~8000ms 안에 선다", () => {
+    for (let seed = 1; seed <= 10; seed += 1) {
+      const state = voteAt(seed);
+      expect(String(state.pickTurn)).toBe("undefined");
+      const now = nowOf(state);
+      const steps = planBotSteps(state, now, seededRandInt(seed));
+      const points = pointsOf(steps);
+      expect(botsOf(state).map((b) => `${b.seat}:${rowsOf(points, b.id).length}`).join(",")).toBe("1:1,2:1,3:1");
+      for (const row of points) {
+        expect(row.at >= now + 2_000 && row.at < now + 8_000).toBe(true);
+        expect(row.at <= state.phaseEndsAt! - 500).toBe(true);
+      }
+    }
+  });
+
+  it("대상은 자기를 뺀 산 사람이고 사람과 같은 castPoint 를 통과한다", () => {
+    const state = voteAt(4);
+    const points = pointsOf(planBotSteps(state, nowOf(state), seededRandInt(9)));
+    let next = state;
+    for (const row of points) {
+      const bot = state.players.find((p) => p.id === row.botId)!;
+      const target = (row.act as { t: "point"; target: number }).target;
+      expect(target === bot.seat).toBe(false);
+      const cast = castPoint(next, bot.id, target);
+      expect(cast.ok).toBe(true);
+      if (cast.ok) next = cast.state;
+    }
+    expect(botsOf(next).every((b) => b.nominate !== undefined)).toBe(true);
+  });
+
+  it("난수 순서는 봇마다 [후보 수 3, 6000] 이고 좌석 오름차순이다; 같은 시드면 같은 계획이다", () => {
+    const state = voteAt(5);
+    const rec = recording(11);
+    const a = planBotSteps(state, nowOf(state), rec.randInt);
+    const pointCalls = rec.calls;
+    expect(pointCalls.join(",")).toBe("3,6000,3,6000,3,6000");
+    const b = planBotSteps(state, nowOf(state), seededRandInt(11));
+    expect(canon(a)).toBe(canon(b));
+  });
+
+  it("탈락한 봇에는 계획이 없고, 사람이 모두 끊기면 계획이 비어 있다", () => {
+    const state = voteAt(6);
+    const dead = markDead(state, 2);
+    const points = pointsOf(planBotSteps(dead, nowOf(dead), seededRandInt(3)));
+    expect(points.map((r) => r.botId === botsOf(dead)[1]!.id).includes(true)).toBe(false);
+    expect(points.length).toBe(2);
+    const gone: RoomState = { ...state, players: state.players.map((p) => (isBot(p) ? p : { ...p, connected: false })) };
+    expect(planBotSteps(gone, nowOf(gone), THROWING).length).toBe(0);
+  });
+
+  it("고정 pick: host 는 모든 봇이 방장에게, other 는 방장이 아닌 고정 좌석에게 던지고 결정 난수는 건너뛴다", () => {
+    const state = voteAt(7);
+    const hostSeat = state.players.find((p) => p.id === state.hostId)!.seat;
+    const host = recording(5);
+    const hostPoints = pointsOf(planBotSteps({ ...state, testBotVote: { pick: "host" } }, nowOf(state), host.randInt));
+    expect(hostPoints.map((r) => (r.act as { target: number }).target).join(",")).toBe(`${hostSeat},${hostSeat},${hostSeat}`);
+    expect(host.calls.join(",")).toBe("6000,6000,6000");
+    const other = pointsOf(planBotSteps({ ...state, testBotVote: { pick: "other" } }, nowOf(state), seededRandInt(5)));
+    expect(other.length).toBe(3);
+    expect(other.every((r) => (r.act as { target: number }).target !== hostSeat)).toBe(true);
+  });
+
+  it("계획 키는 'nomination:{마감}' 이다", () => {
+    const state = voteAt(8);
+    expect(String(botPlanKey(state))).toBe(`nomination:${state.phaseEndsAt}`);
+    const synced = syncBotPlan(state, nowOf(state), seededRandInt(2));
+    expect(synced.botPlan?.key).toBe(`nomination:${state.phaseEndsAt}`);
+    expect(synced.botPlan?.steps.length).toBe(3);
+  });
+
+  it.skipIf(RULESET.pickTurn)("RULESET.pickTurn 이 꺼져 있으면 turnPointSteps 의 순차 계획은 쓰이지 않는다", () => {
+    const state = voteAt(9);
+    const steps = planBotSteps(state, nowOf(state), seededRandInt(1));
+    expect(steps.every((x) => x.act.t === "point")).toBe(true);
   });
 });

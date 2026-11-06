@@ -8,7 +8,7 @@ import { attachConnection, createRoomState, joinRoom, startGame } from "../../sh
 import type { RoomState } from "../../shared/game/room";
 import { pickTarget } from "../../shared/game/night";
 import { isAlive } from "../../shared/game/alive";
-import { castTurnPoint, enterNomination, nominationStepMs, stepNomination } from "../../shared/game/nomination";
+import { castPoint, castTurnPoint, enterNomination, nominationStepMs, stepNomination } from "../../shared/game/nomination";
 import { castVerdict } from "../../shared/game/verdict";
 import { finishNomination, finishRunoff, finishShowdown, resetToLobby, setBotCount, setBotVote, setTestRole, skipPhase } from "../../shared/game/testTools";
 import { tick } from "../../shared/game/tick";
@@ -886,10 +886,11 @@ describe("skipPhase: 지목·찬반에서 안 던진 봇이 먼저 던진다", (
   /** 그날 voteLog 줄의 찬반 집계. */
   const tally = (s: RoomState): string => JSON.stringify(s.voteLog?.[0]?.exec);
 
-  it("nomination: 차례 없는 지목은 지금 단계 마감만 당긴다 — 봇이 대신 지목하지 않고 난수도 부르지 않는다 (09.1-05, 옛 동시 지목 분기 삭제)", () => {
-    const after = skipOk(trial("nomination"), 100_000, THROWING);
-    expect(after.phase).toBe("night");
-    expect(nominates(after)).toBe("");
+  // 기본판(결정 0072): 차례 없는 투표는 동시 투표 — 넘기기가 안 던진 산 봇의 표를 먼저 채운다. 아래 "넘기기: 기본판 투표 봇 표" 가 자세히 본다.
+  it("nomination: 차례 없는 투표는 안 던진 봇의 표를 먼저 채우고 마감을 당긴다 — 봇 넷이 방장을 고르면 변론이다 (결정 0072)", () => {
+    const after = skipOk(trial("nomination", {}, setting(botLobby(), "random", "host")), 100_000, seededRandInt(1));
+    expect(after.phase).toBe("defense");
+    expect(nominates(after)).toBe("1>0,2>0,3>0,4>0");
   });
 
   it("verdict: 변론자가 아닌 안 던진 봇이 먼저 던지고(봇마다 randInt(100) 한 번) 변론자 봇은 던지지 않으며, 이미 던진 봇은 그대로다", () => {
@@ -1151,5 +1152,53 @@ describe("resetToLobby — 의상 유지 (10-02, 결정 D-6)", () => {
     if (!r.ok) throw new Error(r.error);
     expect(sortedKeys(r.state.players[3]!)).toBe("connId,connected,id,isBot,joinSeq,look,nickname,nicknameKey,seat,token");
     expect(sortedKeys(r.state.players[0]!)).toBe("connId,connected,id,joinSeq,nickname,nicknameKey,seat,token");
+  });
+});
+
+// ---- 13-02: 기본판 투표 봇 표 (결정 0072, FLOW-05) ----
+describe("넘기기: 기본판 투표 봇 표 (결정 0072)", () => {
+  const vote = (lobby: RoomState = botLobby()): RoomState => {
+    const base = startedFrom(lobby, 3, "discussion");
+    return { ...base, phase: "nomination", phaseEndsAt: 100_000 + PHASE_DEFS.nomination.durationMs! };
+  };
+  const THROWING = (): number => {
+    throw new Error("randInt must not be called");
+  };
+  const log = (s: RoomState): string => (s.voteLog?.[0]?.cand?.votes ?? []).map((v) => `${v.seat}>${v.target}`).join(",");
+
+  it("안 던진 산 봇만 좌석 순으로 던진다 — 봇이 사람 한 명을 고르면 그 사람이 변론에 선다", () => {
+    const after = skipOk(vote(setting(botLobby(), "random", "host")), 100_000, THROWING);
+    expect(after.phase).toBe("defense");
+    expect(after.verdict?.candidate).toBe(0);
+    expect(log(after)).toBe("1>0,2>0,3>0,4>0");
+  });
+
+  it("이미 던진 봇과 사람의 표는 그대로고 그 봇의 난수는 부르지 않는다", () => {
+    const base = vote(setting(botLobby(), "random", "other"));
+    const [b1] = botsIn(base);
+    const humanVote = castPoint(base, base.hostId, 2);
+    if (!humanVote.ok) throw new Error(humanVote.error);
+    const botVote = castPoint(humanVote.state, b1!.id, 3);
+    if (!botVote.ok) throw new Error(botVote.error);
+    const calls: number[] = [];
+    const after = skipOk(botVote.state, 100_000, (n) => {
+      calls.push(n);
+      return 0;
+    });
+    // 방장 0>2, 봇 1>3 은 그대로. 나머지 봇 2·3·4 는 고정 other(방장 아닌 가장 낮은 좌석 — 자기면 그다음)로 던진다.
+    expect(log(after)).toBe("0>2,1>3,2>1,3>1,4>1");
+    expect(calls.includes(3) || calls.includes(4)).toBe(false);
+  });
+
+  it("사람 표는 건드리지 않는다 — 사람이 안 던졌으면 줄에 없다", () => {
+    const after = skipOk(vote(setting(botLobby(), "random", "other")), 100_000, seededRandInt(2));
+    expect((after.voteLog?.[0]?.cand?.votes ?? []).some((v) => v.seat === 0)).toBe(false);
+  });
+
+  it("탈락한 봇은 던지지 않는다", () => {
+    const base = vote(setting(botLobby(), "random", "host"));
+    const dead = { ...base, players: base.players.map((p) => (p.seat === 2 ? { ...p, alive: false } : p)) };
+    const after = skipOk(dead, 100_000, THROWING);
+    expect(log(after)).toBe("1>0,3>0,4>0");
   });
 });
