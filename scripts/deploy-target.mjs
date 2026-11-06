@@ -1,9 +1,9 @@
 // 배포 대상의 유일한 출처 — 다른 스크립트는 이 값만 import 한다(결정 0043-3·0044-24).
-// v2.0 은 Worker `minifia-v2` 로만 배포하고, v1.0(`minifia`) 주소는 검사·배포 어느 쪽도 하지 않는다.
+// v3.0 은 Worker `minifia-v3` 로만 배포하고(v2.0 `minifia-v2` 는 비교용으로 그대로 둔다), v1.0(`minifia`) 주소는 검사·배포 어느 쪽도 하지 않는다.
 // 거부를 푸는 옵션·환경 변수는 없다. Node 내장만 쓰는 순수 판정 모듈이다(네트워크·파일을 건드리지 않는다).
 
-/** v2.0 Worker 이름. wrangler.jsonc 의 name 과 빌드 산출물의 name 이 이 값이어야 한다. */
-export const WORKER_NAME = "minifia-v2";
+/** v3.0 Worker 이름(v2.0 `minifia-v2` 는 비교용으로 남긴다). wrangler.jsonc 의 name 과 빌드 산출물의 name 이 이 값이어야 한다. */
+export const WORKER_NAME = "minifia-v3";
 /** v1.0 Worker 이름 — 덮어쓰면 안 된다. */
 export const V1_NAME = "minifia";
 /** 개인 계정의 workers.dev 하위 도메인(docs/setup.md). */
@@ -12,7 +12,7 @@ export const WORKERS_SUBDOMAIN = "dhplay";
 export const V1_HOST = "minifia.dhplay.workers.dev";
 export const V1_ORIGIN = "https://minifia.dhplay.workers.dev";
 
-/** v2.0 공개 주소(workers.dev 규칙으로 파생). */
+/** v3.0 공개 주소(workers.dev 규칙으로 파생). */
 export function expectedOrigin() {
   return `https://${WORKER_NAME}.${WORKERS_SUBDOMAIN}.workers.dev`;
 }

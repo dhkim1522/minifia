@@ -31,7 +31,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   }
   if (!verdict.ok) {
     for (const problem of verdict.problems) console.error(`- ${problem}`);
-    console.error("배포 중단 — 배포 대상이 v2.0(minifia-v2)과 어긋남");
+    console.error(`배포 중단 — 배포 대상이 ${WORKER_NAME} 과 어긋남`);
     process.exit(1);
   }
   console.log(`배포 대상 확인: ${WORKER_NAME} (${expectedOrigin()})`);

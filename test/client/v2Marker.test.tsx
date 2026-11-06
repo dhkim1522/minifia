@@ -31,6 +31,11 @@ describe("v2.0 시험판 표식 (DEPLOY-02)", () => {
     expect(container.querySelector(".mf-entry__build")?.textContent).toBe("v2.0 시험판");
   });
 
+  it("WORKER_NAME 이 minifia-v3 이면 첫 화면에 'v3.0 시험판' 이 보인다", async () => {
+    const { container } = await renderHomeWith("minifia-v3");
+    expect(container.querySelector(".mf-entry__build")?.textContent).toBe("v3.0 시험판");
+  });
+
   it("WORKER_NAME 이 minifia(v1.0) 이면 표식이 없다", async () => {
     await renderHomeWith("minifia");
     expect(screen.queryByText("v2.0 시험판")).toBeNull();
@@ -45,8 +50,8 @@ describe("v2.0 시험판 표식 (DEPLOY-02)", () => {
 describe("index.html 탭 제목 (DEPLOY-02)", () => {
   const html = readFileSync("index.html", "utf8");
 
-  it("title 은 'Minifia v2' 다", () => {
-    expect(html).toContain("<title>Minifia v2</title>");
+  it("title 은 'Minifia v3' 다", () => {
+    expect(html).toContain("<title>Minifia v3</title>");
   });
 
   it("og:title 은 'Minifia' 그대로다", () => {

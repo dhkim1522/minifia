@@ -159,7 +159,7 @@ import {
 } from "./lib.mjs";
 import { dropSockets } from "./browser.mjs";
 
-const PROD = "https://minifia-v2.dhplay.workers.dev\n";
+const PROD = "https://minifia-v3.dhplay.workers.dev\n";
 const rect = (left, top, width, height) => ({ left, top, width, height, right: left + width, bottom: top + height });
 
 test("parseArgs: 인자 없음은 기본값 세 폭 기준 + 단 높이 probe 360x560", () => {
@@ -197,7 +197,7 @@ test("parseArgs: 잘못된 인자는 UsageError", () => {
 
 test("resolveTarget: 인자 없으면 prod-url 값(v2 주소, 명시 아님)", () => {
   const t = resolveTarget(null, PROD);
-  assert.equal(t.origin, "https://minifia-v2.dhplay.workers.dev");
+  assert.equal(t.origin, "https://minifia-v3.dhplay.workers.dev");
   assert.equal(t.explicit, false);
 });
 
@@ -1407,7 +1407,7 @@ test("consoleIssues: 허용 목록은 이유·종류·로컬 조건이 맞을 �
 test("isLocalOrigin: localhost·127.0.0.1 만 참이고 배포 주소·잘못된 값은 거짓이다 (T-06-41)", () => {
   assert.equal(isLocalOrigin("http://localhost:5173"), true);
   assert.equal(isLocalOrigin("http://127.0.0.1:5173"), true);
-  assert.equal(isLocalOrigin("https://minifia-v2.dhplay.workers.dev"), false);
+  assert.equal(isLocalOrigin("https://minifia-v3.dhplay.workers.dev"), false);
   assert.equal(isLocalOrigin("https://localhost.evil.example"), false);
   assert.equal(isLocalOrigin("not a url"), false);
 });
@@ -1540,8 +1540,8 @@ test("isWorldChunkUrl: 개발 서버 모듈과 빌드 청크의 렌더러·캐�
     "http://localhost:5173/src/world/threeRenderer.ts",
     "http://localhost:5173/src/world/threeRenderer.ts?t=1730000000",
     "http://localhost:5173/src/world/character.ts",
-    "https://minifia-v2.dhplay.workers.dev/assets/threeRenderer-Ab12_cD.js",
-    "https://minifia-v2.dhplay.workers.dev/assets/character-9xZ.js",
+    "https://minifia-v3.dhplay.workers.dev/assets/threeRenderer-Ab12_cD.js",
+    "https://minifia-v3.dhplay.workers.dev/assets/character-9xZ.js",
   ];
   const no = [
     "http://localhost:5173/src/world/characterData.ts",

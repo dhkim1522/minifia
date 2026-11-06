@@ -23,5 +23,5 @@ npm run deploy         # 빌드 + Cloudflare 에 배포 (wrangler 로그인 필�
 node scripts/smoke.mjs --prod --stage full   # 배포 주소에서 한 판 끝까지 확인
 ```
 
-- 배포 주소: v2.0 시험판 https://minifia-v2.dhplay.workers.dev (v2 브랜치), v1.0 https://minifia.dhplay.workers.dev (v1 브랜치·태그 v1.0, 그대로 둔다. v1.0 은 v1 브랜치에서만 배포한다)
+- 배포 주소: v3.0 시험판 https://minifia-v3.dhplay.workers.dev (v3 브랜치), v2.0 시험판 https://minifia-v2.dhplay.workers.dev (v2 브랜치, 비교용), v1.0 https://minifia.dhplay.workers.dev (v1 브랜치·태그 v1.0, 그대로 둔다. v1.0 은 v1 브랜치에서만 배포한다)
 - 한 브라우저 프로필은 한 사람으로 센다. 여러 명을 한 PC 에서 시험하려면 브라우저나 프로필을 사람마다 하나씩 쓴다.

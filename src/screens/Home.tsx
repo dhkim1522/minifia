@@ -3,6 +3,7 @@ import type { FormEvent } from "react";
 import { validateNickname } from "../../shared/nickname";
 import { isRoomCode } from "../../shared/roomCode";
 import { WORKER_NAME } from "../../shared/version";
+
 import { unlockAudio } from "../audio/unlock";
 import { Backdrop } from "../components/Backdrop";
 import { Button } from "../components/Button";
@@ -14,6 +15,9 @@ import { preloadEntryAssets } from "../net/assets";
 import { messageForApiError, nicknameErrorText } from "../net/copy";
 import { loadLastNickname, loadSession, saveLastNickname } from "../net/session";
 import { preloadWorld } from "../world/runtime";
+
+/** 시험판 Worker 별 첫 화면 표식. v1.0(`minifia`)·dev 에는 없다. */
+const BUILD_LABEL: Record<string, string> = { "minifia-v2": "v2.0 시험판", "minifia-v3": "v3.0 시험판" };
 
 interface HomeProps {
   onEnterRoom: (code: string, token: string) => void;
@@ -155,7 +159,7 @@ export function Home({ onEnterRoom }: HomeProps) {
             방 만들기
           </Button>
         </div>
-        {WORKER_NAME === "minifia-v2" ? <p className="mf-entry__build">v2.0 시험판</p> : null}
+        {BUILD_LABEL[WORKER_NAME] ? <p className="mf-entry__build">{BUILD_LABEL[WORKER_NAME]}</p> : null}
       </main>
       {sheet ? (
         <NicknameSheet

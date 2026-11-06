@@ -1,5 +1,5 @@
 // 화면 E2E 실행기(결정 0025): 시스템 Chrome + playwright-core 로 배포본(또는 --url)을 휴대폰 크기로 열어 실제 좌표를 검사한다.
-// 사용법: node scripts/e2e/run.mjs [--url https://minifia-v2.dhplay.workers.dev | http://localhost:5173] [--only <시나리오 부분 문자열>] [--shots] [--sizes 360x640,390x664,430x932]
+// 사용법: node scripts/e2e/run.mjs [--url https://minifia-v3.dhplay.workers.dev | http://localhost:5173] [--only <시나리오 부분 문자열>] [--shots] [--sizes 360x640,390x664,430x932]
 // 종료 코드: 0 = 모두 통과, 1 = 실패 있음, 2 = 중단(인자·주소·Chrome·연결·제한 시간).
 // Node 는 /api/health 와 /api/rooms 두 HTTP 요청만 보낸다(소켓을 열지 않는다). 토큰은 어떤 출력에도 나오지 않는다.
 import { existsSync, readFileSync } from "node:fs";

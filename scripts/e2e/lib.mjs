@@ -80,7 +80,7 @@ export class UsageError extends Error {
 }
 
 export const USAGE =
-  "사용법: node scripts/e2e/run.mjs [--url https://minifia-v2.dhplay.workers.dev | http://localhost:5173] [--only <흐름 이름 부분 문자열, 쉼표로 여러 개>] [--shots] [--sizes 360x640,390x664,430x932,360x560]  (--sizes 를 주지 않으면 lobby·world 흐름은 390x844,402x874 도 더해 6개 크기로 돈다)";
+  "사용법: node scripts/e2e/run.mjs [--url https://minifia-v3.dhplay.workers.dev | http://localhost:5173] [--only <흐름 이름 부분 문자열, 쉼표로 여러 개>] [--shots] [--sizes 360x640,390x664,430x932,360x560]  (--sizes 를 주지 않으면 lobby·world 흐름은 390x844,402x874 도 더해 6개 크기로 돈다)";
 
 export function parseArgs(argv) {
   const out = { url: null, only: null, shots: false, sizes: DEFAULT_SIZES.map((s) => ({ ...s })), sizesGiven: false };

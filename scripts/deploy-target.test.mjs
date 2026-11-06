@@ -21,11 +21,11 @@ import {
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
 const read = (rel) => readFileSync(`${ROOT}${rel}`, "utf8");
 
-const V2_ORIGIN = "https://minifia-v2.dhplay.workers.dev";
-const goodInput = () => ({ builtName: "minifia-v2", sourceName: "minifia-v2", prodUrl: V2_ORIGIN, previewUrls: false });
+const V2_ORIGIN = "https://minifia-v3.dhplay.workers.dev";
+const goodInput = () => ({ builtName: "minifia-v3", sourceName: "minifia-v3", prodUrl: V2_ORIGIN, previewUrls: false });
 
 test("상수: v2 Worker 이름과 파생 주소", () => {
-  assert.equal(WORKER_NAME, "minifia-v2");
+  assert.equal(WORKER_NAME, "minifia-v3");
   assert.equal(V1_NAME, "minifia");
   assert.equal(WORKERS_SUBDOMAIN, "dhplay");
   assert.equal(V1_HOST, "minifia.dhplay.workers.dev");
