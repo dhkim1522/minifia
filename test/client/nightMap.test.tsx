@@ -419,7 +419,7 @@ describe("밤 경찰·의사 — 얼굴 목록(NIGHT-09, E1 #1·#3·#6·#7)", ()
     expect(container.querySelector(".mf-game__panel .mf-nightpanel, .mf-game__panel .mf-pk")).toBeNull();
     expect(container.querySelector("[data-chat-panel]")).toBeNull();
     expect(titleText(container)).toBe("밤");
-    expect(container.querySelector('.mf-game__header [role="timer"]')).not.toBeNull();
+    expect(container.querySelector('.mf-game__header [role="timer"]')).toBeNull(); // 14-02: 시간은 띠의 막대 + 초가 맡는다
   });
 
   it("산 의사: 묶음 '지킬 사람', 자기 포함 6칸, 칸 이름 '{닉네임} 보호', 서버 pick 이 오면 그 칸이 눌린다", () => {

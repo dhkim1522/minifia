@@ -148,11 +148,21 @@ interface GameMapProps {
   onLeave?: () => void;
 }
 
-/** 헤더: 제목 + 접히는 안내 + (서버 마감 기준 시간 링) + 링 왼쪽 [역할 카드]. 시간 링의 다시 그리기가 맵 화면 전체로 번지지 않게 따로 둔다 */
+/**
+ * 헤더(14-02, U-2·U-3): 기본판 화면은 제목 + [역할 카드] 뿐이다 — 안내 줄은 자막 띠(HostBand)가, 남은 시간은 띠의 막대 + 초가 맡는다.
+ * 꺼진 장치 화면(day.turn 이 있는 순차 지목·결선·마지막 3인·귓속말 모드, 결정 0072 선례)은 13페이즈 계약 그대로 접히는 안내 줄 + 시간·차례 링을 쓴다.
+ * 기본판에서는 서버가 그 view 를 보내지 않는다. 시간 링의 다시 그리기가 맵 화면 전체로 번지지 않게 시계 훅은 꺼진 장치 갈래 부품 안에 둔다.
+ */
 function MapHeader({ view, offset, hintOn, hintOverride, extra }: { view: RoomView; offset: number; hintOn: boolean; hintOverride?: string; extra: ReactNode }) {
+  const legacy = blockModeOf(view) !== null || hintOverride !== undefined;
+  if (!legacy) return <PhaseHeader title={headerFor(view).title} extra={extra} />;
+  return <LegacyMapHeader view={view} offset={offset} hintOn={hintOn} {...(hintOverride !== undefined ? { hintOverride } : {})} extra={extra} />;
+}
+
+/** 꺼진 장치 화면의 헤더: 제목 + 접히는 안내 + (서버 마감 기준 시간·차례 링) + 링 왼쪽 [역할 카드] (13페이즈 계약 그대로) */
+function LegacyMapHeader({ view, offset, hintOn, hintOverride, extra }: { view: RoomView; offset: number; hintOn: boolean; hintOverride?: string; extra: ReactNode }) {
   const head = headerFor(view);
   // 순차 지목·결선은 단계 마감이 아니라 알약·막대와 같은 값(blockLook)으로 링을 그린다(UI-SPEC A-3·D-3). 지목의 세부 단계 길이 3000/8000/900/2000 이나 결선 앞머리 1000 은 링 비율에 쓰지 않는다.
-  // 기본판 동시 투표(day.turn 없음)는 알약이 없으므로 blockModeOf 가 null 이고 단계 마감·phaseDurationMs(15초)로 링을 그린다(결정 0072, U-2).
   const blocked = blockModeOf(view) !== null;
   const look = useTurnLook(view, offset);
   const { seconds } = useCountdown(blocked ? 0 : (view.phaseEndsAt ?? 0), view.phaseDurationMs ?? 0, offset);
@@ -208,19 +218,17 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
     return () => clearTimeout(timer);
   }, [phase, myTurnNo, runoffStep, showdownStage, speakNo]);
 
-  // 유령이 된 순간(같은 단계 안이어도): 안내 '모두의 직업이 보여요' 를 2.5초 다시 보이고 직업 칩 등장 연출을 켠다. 처음 마운트 때의 번호는 지난 일이라 연출하지 않는다.
+  // 유령이 된 순간(같은 단계 안이어도): 직업 칩 등장 연출을 2.5초 켠다(14-02: 헤더 안내 줄은 다시 띄우지 않는다 — 띠가 유령 줄을 말한다). 처음 마운트 때의 번호는 지난 일이라 연출하지 않는다.
   const seenGhostEnter = useRef(ghostEnter);
   const enterTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const [entering, setEntering] = useState(false);
   useEffect(() => {
     if (ghostEnter === seenGhostEnter.current) return;
     seenGhostEnter.current = ghostEnter;
-    setHintOn(true);
     setEntering(true);
     clearTimeout(enterTimer.current);
     // 타이머는 이 효과의 정리가 아니라 언마운트 때만 푼다(개발 모드 이중 실행이 첫 실행의 타이머를 지워 연출이 켜진 채 남지 않게)
     enterTimer.current = setTimeout(() => {
-      setHintOn(false);
       setEntering(false);
     }, HINT_MS);
   }, [ghostEnter]);

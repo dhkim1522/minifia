@@ -494,16 +494,15 @@ describe("GameMap — 헤더·[역할 카드] (UI-SPEC A2)", () => {
     expect(container.textContent).not.toContain("모두의 직업이 보여요");
   });
 
-  it("[역할 카드] 는 글자 없는 44×44 아이콘 버튼이고 헤더 안 시간 링 앞(왼쪽) 형제다 — aria-label '역할 카드'", () => {
+  it("[역할 카드] 는 글자 없는 44×44 아이콘 버튼이고 헤더 오른쪽 끝(.mv-phase__side)에 홀로 놓인다 — aria-label '역할 카드'", () => {
     const { container } = mount(makeView());
     const btn = container.querySelector(".mf-game__header button") as HTMLButtonElement;
     expect(btn.getAttribute("aria-label")).toBe("역할 카드");
     expect(btn.textContent).toBe("");
     expect(btn.classList.contains("mf-iconbtn")).toBe(true);
     expect(btn.querySelector("svg")).not.toBeNull();
-    const ring = container.querySelector('.mf-game__header [role="timer"]') as HTMLElement;
-    expect(btn.parentElement).toBe(ring.parentElement);
-    expect(btn.compareDocumentPosition(ring) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(btn.parentElement?.classList.contains("mv-phase__side")).toBe(true);
+    expect(container.querySelector('.mf-game__header [role="timer"]')).toBeNull();
     // 헤더가 맵보다 DOM 앞이라 Tab 순서가 [역할 카드] → 이름표 → 입력이다
     expect(container.querySelectorAll("button[aria-label='역할 카드']").length).toBe(1);
   });
@@ -1047,7 +1046,7 @@ describe("GameMap — 기본판 투표 (결정 0072)", () => {
     expect(container.querySelector(".mv-phase__title")?.textContent).toBe("투표");
     expect(container.querySelector(".mv-phase__hint")).toBeNull();
     expect(container.querySelector(".mv-ring")).toBeNull();
-    expect(container.querySelector("[role=timer]")).toBeNull();
+    expect(container.querySelector(".mf-game__header [role=timer]")).toBeNull();
     expect(container.querySelector("[data-turn-block]")).toBeNull();
     const { container: under } = render(<>{stage.props?.underlay}</>);
     expect(under.querySelector(".mf-game__dim")?.getAttribute("data-dim")).toBe("off");
