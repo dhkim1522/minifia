@@ -2,10 +2,12 @@
 // 순수: 시각·난수·DOM 을 읽지 않는다. 입력은 서버가 모두에게 보내는 공개 정보(day.points·players·phase·day.verdict·
 // day.noExecution·day.voteLog)뿐이고, 연출 이벤트(채팅 줄·위 알림·결과 알림)는 서버 view 두 개의 차이에서만 만든다.
 // 09.1(결정 0063-1): 지목은 순차라 위 알림 대기열·선두·과반 줄은 없다 — 득표는 배지 숫자, 진행은 차례 알약·위 한 줄(pickTurn.ts)이 말한다.
+// 기본판(결정 0072): 동시 투표 — 선두·과반 줄·위 알림 재료를 되살림. day.turn 이 없을 때만 낸다(순차 view 는 09.1 그대로). 위 알림은 대기열 없이 새 표가 이전 것을 바꾼다(U-5).
 // 서버 응답 전에 남의 표·배지·선두를 미리 만들지 않는다. me.verdictVote·me.endDiscussion·spectate 는 읽지 않는다(T-08-22).
 // 문구에 역할 단어를 쓰지 않는다 — 처형 알림·줄 어디에도 역할이 없다(결정 0053-2).
 // 형식은 src/net/roomDiff.ts 선례: 이전 view 가 없으면(첫 스냅샷·재접속) 이벤트 없이 정상 상태만 준다.
 import { isAlive } from "../../shared/game/alive";
+import { majorityOf } from "../../shared/game/nomination";
 import { EXECUTION_MS, VERDICT_LEAD_MS } from "../../shared/game/phases";
 import type { ChatChannel, PhaseId, RoomView } from "../../shared/protocol";
 import type { V2IconName } from "../components/v2/V2Icon";
@@ -16,12 +18,16 @@ import { isMySpeakTurn, pointSeatsOf, SHOWDOWN_COPY, showdownStageOf } from "./s
 /** 문구 표. UI-SPEC "Copywriting Contract" 원문 — 해요체, 마침표·느낌표 없음. 역할 단어는 토론 안내의 '마피아'(모두에게 같은 문장) 하나뿐이다. */
 export const DAY_COPY = {
   // ---- 채팅 시스템 줄 ----
-  /** 지목 한 줄 '민준 → 도윤' (순차 지목은 바꾸기가 없다) */
-  pointLine: (from: string, to: string): string => `${from} → ${to}`,
+  /** 지목 한 줄 '민준 → 도윤' (동시 투표에서 대상을 바꾸면 '(바꿈)') */
+  pointLine: (from: string, to: string, changed = false): string => `${from} → ${to}${changed ? " (바꿈)" : ""}`,
+  /** 선두가 새로 생겼을 때 hot 줄(기본판 동시 투표) */
+  leadLine: (name: string): string => `${name} 님이 앞서요`,
+  /** 과반이 새로 섰을 때 hot 줄(기본판 동시 투표) */
+  majorityLine: (name: string): string => `${name} 님 과반`,
   /** 시간 안에 못 골라 기권으로 확정된 차례 '민준 · 기권' */
   abstainLine: (name: string): string => `${name} · 기권`,
   dayLine: (n: number): string => `${n}일차`,
-  nominationStart: "지목 시작",
+  nominationStart: "투표 시작",
   defenseLine: (name: string, votes: number): string => `${name} 님 ${votes}표 · 최후 변론`,
   /** 결선(09.1.1-14) 시작 채팅 시스템 줄 */
   runoffStart: "결선 시작",
@@ -39,7 +45,7 @@ export const DAY_COPY = {
   titles: {
     dayAnnounce: "낮 토론",
     discussion: "낮 토론",
-    nomination: "지목",
+    nomination: "투표",
     runoff: "결선",
     showdown: SHOWDOWN_COPY.title,
     defense: "최후 변론",
@@ -132,11 +138,25 @@ export interface DayFx {
   at: number;
 }
 
+/** 위 알림 재료 한 건: from 이 to 를 가리켰다. 이름은 만든 순간의 닉네임이다. 대기열·합치기 없음(U-5) */
+export interface PointToast {
+  to: number;
+  from: number[];
+  toName: string;
+  fromNames: string[];
+  /** 대상을 바꾼 표('(바꿈)') */
+  changed?: boolean;
+}
+
 export interface PointsTally {
   /** 대상 seat → 받은 표 수(0표는 키 없음) */
   counts: Record<number, number>;
   /** 최다 득표가 정확히 한 명일 때만 */
   leader?: number;
+  /** 산 사람 수의 과반 수 */
+  majority: number;
+  /** 선두의 표가 과반에 닿았을 때 그 사람 */
+  sure?: number;
 }
 
 /** 이 화면에만 남는 채팅 카드(경찰 조사 결과). 서버 채널 기록이 아니다. at 은 단계 진입 기준 ms */
@@ -150,6 +170,8 @@ export interface DayEvents {
   lines: DayLine[];
   /** 경찰 화면에서만 생긴다(L8). 없으면 키 자체가 없다 */
   localCards?: LocalCard[];
+  /** 기본판 동시 투표의 새 표마다 한 건(좌석 오름차순). 순차 view 에서는 비어 있다 */
+  toasts: PointToast[];
   announces: DayAnnounce[];
   fx: DayFx[];
 }
@@ -160,7 +182,7 @@ function pointsOf(view: RoomView | null): { seat: number; target: number }[] {
   return view.day?.points ?? [];
 }
 
-/** 지금 지목 집계(공개 정보). 선두는 최다 득표가 정확히 한 명일 때만이고 동점이면 없다. */
+/** 지금 투표 집계(공개 정보). 선두는 최다 득표가 정확히 한 명일 때만이고 동점이면 없다. 과반(sure)은 선두 표가 majority 이상일 때. */
 export function pointsTally(view: RoomView): PointsTally {
   const counts: Record<number, number> = {};
   for (const line of pointsOf(view)) counts[line.target] = (counts[line.target] ?? 0) + 1;
@@ -168,10 +190,14 @@ export function pointsTally(view: RoomView): PointsTally {
   const tops = Object.keys(counts)
     .map(Number)
     .filter((seat) => counts[seat] === top && top > 0);
+  const majority = majorityOf(view.players.filter(isAlive).length);
   const leader = tops.length === 1 ? tops[0]! : undefined;
+  const sure = leader !== undefined && counts[leader]! >= majority ? leader : undefined;
   return {
     counts,
+    majority,
     ...(leader !== undefined ? { leader } : {}),
+    ...(sure !== undefined ? { sure } : {}),
   };
 }
 
@@ -340,21 +366,39 @@ function phaseEntry(prev: RoomView, cur: RoomView, day: NonNullable<RoomView["da
  * prev 가 null 이거나 opts.reset(epoch 가 바뀐 첫 스냅샷)이면 이벤트 없이 빈 묶음만 준다.
  */
 export function dayEvents(prev: RoomView | null, cur: RoomView, opts: { reset?: boolean } = {}): DayEvents {
-  const events: DayEvents = { lines: [], announces: [], fx: [] };
+  const events: DayEvents = { lines: [], toasts: [], announces: [], fx: [] };
   if (!prev || opts.reset || !cur.day) return events;
 
   // ---- 단계 진입: 줄·결과 알림·연출 ----
   if (prev.phase !== cur.phase) phaseEntry(prev, cur, cur.day, events);
 
-  // ---- 지목 차이: 새로 생긴 지목 줄마다 vote 줄, 지금 차례가 새로 기권이 되면 '{이름} · 기권' (선두·과반 줄은 없다, M-4) ----
+  // ---- 투표 차이: 새로 생기거나 바뀐 표마다 vote 줄과 위 알림 재료. 선두·과반은 동시 투표(day.turn 없음)에서만 hot 줄 (순차 M-4 그대로) ----
   const before = new Map(pointsOf(prev).map((l) => [l.seat, l.target]));
   const after = [...pointsOf(cur)].sort((a, b) => a.seat - b.seat);
+  const simultaneous = cur.day.turn === undefined;
   for (const line of after) {
-    if (before.get(line.seat) === line.target) continue;
+    const old = before.get(line.seat);
+    if (old === line.target) continue;
     const from = nameOf(cur, line.seat);
     const to = nameOf(cur, line.target);
     if (from === undefined || to === undefined) continue;
-    events.lines.push({ kind: "vote", text: DAY_COPY.pointLine(from, to) });
+    const changed = simultaneous && old !== undefined;
+    events.lines.push({ kind: "vote", text: DAY_COPY.pointLine(from, to, changed) });
+    if (simultaneous) {
+      events.toasts.push({ to: line.target, from: [line.seat], toName: to, fromNames: [from], ...(changed ? { changed: true } : {}) });
+    }
+  }
+  if (simultaneous && cur.phase === "nomination") {
+    const now = pointsTally(cur);
+    const was = pointsTally(prev);
+    if (now.leader !== undefined && now.leader !== was.leader) {
+      const name = nameOf(cur, now.leader);
+      if (name !== undefined) events.lines.push({ kind: "hot", text: DAY_COPY.leadLine(name) });
+    }
+    if (now.sure !== undefined && now.sure !== was.sure) {
+      const name = nameOf(cur, now.sure);
+      if (name !== undefined) events.lines.push({ kind: "hot", text: DAY_COPY.majorityLine(name) });
+    }
   }
   const turn = cur.phase === "nomination" ? cur.day.turn : undefined;
   if (turn !== undefined && turn.skip === true && turn.i >= 0 && turn.i < turn.order.length) {
@@ -393,8 +437,9 @@ export function headerFor(view: RoomView): { title: string; hint?: string } {
     case "discussion":
       return { title, hint: DAY_COPY.discussionHint };
     case "nomination": {
-      // 09.1: 모이는 중 → '모이는 중', 내 차례 → '의심되는 사람을 눌러요', 남의 차례·끝 알림·day.turn 없음 → 제목만
+      // 기본판(day.turn 없음) 동시 투표: 항상 '의심되는 사람을 눌러요'. 09.1 순차: 모이는 중 → '모이는 중', 내 차례 → '의심되는 사람을 눌러요', 남의 차례·끝 알림 → 제목만
       const stage = turnStageOf(view);
+      if (stage === null) return { title, hint: DAY_COPY.nominationHint };
       if (stage === "gather") return { title, hint: DAY_COPY.nominationGatherHint };
       return isMyTurn(view) ? { title, hint: DAY_COPY.nominationHint } : { title };
     }

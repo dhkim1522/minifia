@@ -8,7 +8,7 @@ import type { MapId, PhaseId, RoomView } from "../../shared/protocol";
 import { GHOST_FADE_END_MS, GHOST_RISE_MS, pointsTally } from "../game/dayView";
 import { pointSeatsOf, revealPoints, showdownStageOf } from "../game/showdownView";
 import { ZOOM_IN_MS } from "../game/verdictMoment";
-import { GATHER_CENTER, ZOOM_MIN_STAGE_H } from "./camera";
+import { GATHER_CENTER, ZOOM_MAJORITY, ZOOM_MIN_STAGE_H } from "./camera";
 import type { OutfitId } from "./characterData";
 import { jobOutfit } from "./ghostOutfit";
 import { pinOf, type PinDesc } from "./pinPlan";
@@ -104,15 +104,16 @@ const FIXED_PHASES: ReadonlySet<PhaseId> = new Set<PhaseId>(["nomination", "runo
 
 /**
  * 카메라 구도(UI-SPEC 카메라 표): 지목·변론·찬반·처형은 모이는 자리 가운데 고정, 그 밖(낮 시작·토론·밤·아침·로비)은 따라가기.
- * 09.1(M-4): 지목은 배지 숫자만이다 — 과반이어도 확대하지 않는다(과반 확대 상수는 camera.ts 에 그대로 있다).
- * stageH 인자는 호출부 모양을 지키려 남겨 두었다.
+ * 09.1(M-4): 순차 지목(day.turn 있음)은 배지 숫자만이다 — 과반이어도 확대하지 않는다.
+ * 기본판(결정 0072) 동시 투표(day.turn 없음)는 과반이고 스테이지 높이가 ZOOM_MIN_STAGE_H 이상일 때만 ZOOM_MAJORITY 로 확대한다.
  */
 export function cameraModeOf(view: RoomView, stageH: number, opts: { verdictZoom?: number } = {}): CameraMode {
   if (!FIXED_PHASES.has(view.phase)) return { mode: "follow" };
   const target = { x: GATHER_CENTER.x, z: GATHER_CENTER.z };
   // 판결 순간(09.1.1-13, O-15): 처형 단계에서 호출 쪽이 배율을 주면 0.6초 ease-in-out 으로 다가갔다 돌아온다. 스테이지가 낮으면(360 미만) 줌 없이 핀 조명과 막만 한다. 역할은 보지 않는다
   if (view.phase === "execution" && opts.verdictZoom !== undefined && stageH >= ZOOM_MIN_STAGE_H) return { mode: "fixed", target, zoom: opts.verdictZoom, zoomMs: ZOOM_IN_MS };
-  return { mode: "fixed", target, zoom: 1 };
+  const majority = view.phase === "nomination" && view.day?.turn === undefined && pointsTally(view).sure !== undefined;
+  return { mode: "fixed", target, zoom: majority && stageH >= ZOOM_MIN_STAGE_H ? ZOOM_MAJORITY : 1 };
 }
 
 /**
@@ -148,8 +149,14 @@ export function lightingFor(view: RoomView): LightingStage {
   return view.me.role === "mafia" ? "night" : "nightCitizen";
 }
 
-/** 긴장(UI-SPEC 단계 조명): 찬반 1(초점 변론자), 그 밖 0. 09.1(M-4): 지목은 배지 숫자만이라 선두·과반이어도 0 이다 */
+/** 긴장(UI-SPEC 단계 조명): 찬반 1(초점 변론자), 그 밖 0. 09.1(M-4): 순차 지목은 배지 숫자만이라 선두·과반이어도 0 이다. 기본판 동시 투표(day.turn 없음, 결정 0072)는 과반 2·선두 1(초점 그 좌석) */
 export function tensionOf(view: RoomView): Tension {
+  if (view.phase === "nomination" && view.day?.turn === undefined) {
+    const tally = pointsTally(view);
+    if (tally.sure !== undefined) return { level: 2, focus: tally.sure };
+    if (tally.leader !== undefined) return { level: 1, focus: tally.leader };
+    return { level: 0 };
+  }
   if (view.phase === "verdict") {
     const candidate = view.day?.candidate;
     return candidate !== undefined ? { level: 1, focus: candidate } : { level: 0 };

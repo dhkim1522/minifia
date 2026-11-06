@@ -133,9 +133,9 @@ describe("cameraModeOf (UI-SPEC 카메라 표)", () => {
     same(GATHER_CENTER, { x: 0, z: 0 });
   });
 
-  // 09.1(M-4): 지목은 득표 배지 숫자만 — 과반이어도 카메라 확대가 없다. 확대 상수(ZOOM_MAJORITY)와 camera.ts 는 그대로다
-  const majority = viewOf("nomination", { day: { points: points([0, 2], [1, 2], [3, 2]) } });
-  it("지목 과반이어도 스테이지가 커도 확대 1 (고정·가운데)", () => {
+  // 09.1(M-4): 순차 지목(day.turn 있음)은 득표 배지 숫자만 — 과반이어도 카메라 확대가 없다. 확대 상수(ZOOM_MAJORITY)와 camera.ts 는 그대로다
+  const majority = viewOf("nomination", { day: { turn: { order: [0, 1, 2, 3, 4], i: 3, endsAt: 9000 }, points: points([0, 2], [1, 2], [3, 2]) } });
+  it("순차 지목(day.turn 있음) 과반이어도 스테이지가 커도 확대 1 (고정·가운데)", () => {
     same(cameraModeOf(majority, 400), { mode: "fixed", target: GATHER_CENTER, zoom: 1 });
     same(cameraModeOf(majority, ZOOM_MIN_STAGE_H), { mode: "fixed", target: GATHER_CENTER, zoom: 1 });
     same(cameraModeOf(majority, 900), { mode: "fixed", target: GATHER_CENTER, zoom: 1 });
@@ -196,13 +196,13 @@ describe("lightingOf (UI-SPEC 단계 조명)", () => {
 });
 
 describe("tensionOf (UI-SPEC 단계 조명: 선두·과반·찬반)", () => {
-  // 09.1(M-4): 지목은 득표 배지 숫자만 — 선두·과반이어도 긴장 조명이 없다
-  it("지목 3:1 (산 8명) 선두가 있어도 긴장 0·초점 없음", () => {
-    const v = viewOf("nomination", { count: 8, day: { points: points([0, 2], [1, 2], [3, 2], [4, 5]) } });
+  // 09.1(M-4): 순차 지목(day.turn 있음)은 득표 배지 숫자만 — 선두·과반이어도 긴장 조명이 없다 (동시 투표는 아래 "기본판 투표")
+  it("순차 지목 3:1 (산 8명) 선두가 있어도 긴장 0·초점 없음", () => {
+    const v = viewOf("nomination", { count: 8, day: { turn: { order: [0, 1, 2, 3, 4], i: 3, endsAt: 9000 }, points: points([0, 2], [1, 2], [3, 2], [4, 5]) } });
     same(tensionOf(v), { level: 0 });
   });
-  it("지목 과반(산 5명 중 3표)이어도 긴장 0·초점 없음", () => {
-    const v = viewOf("nomination", { day: { points: points([0, 2], [1, 2], [3, 2]) } });
+  it("순차 지목 과반(산 5명 중 3표)이어도 긴장 0·초점 없음", () => {
+    const v = viewOf("nomination", { day: { turn: { order: [0, 1, 2, 3, 4], i: 3, endsAt: 9000 }, points: points([0, 2], [1, 2], [3, 2]) } });
     same(tensionOf(v), { level: 0 });
   });
   it("지목 동점·줄 없음 → 긴장 0", () => {
@@ -223,8 +223,8 @@ describe("tensionOf (UI-SPEC 단계 조명: 선두·과반·찬반)", () => {
 });
 
 describe("sceneLook (위를 묶는다)", () => {
-  it("지목 과반 + 스테이지 400: 고정·확대 없음·vote 조명·긴장 0·초점 없음, 산 사람 viewer 에는 유령 좌석이 없다", () => {
-    const view = viewOf("nomination", { dead: [4], day: { points: points([0, 2], [1, 2], [3, 2]) } });
+  it("순차 지목 과반 + 스테이지 400: 고정·확대 없음·vote 조명·긴장 0·초점 없음, 산 사람 viewer 에는 유령 좌석이 없다", () => {
+    const view = viewOf("nomination", { dead: [4], day: { turn: { order: [0, 1, 2, 3, 4], i: 3, endsAt: 9000 }, points: points([0, 2], [1, 2], [3, 2]) } });
     const look = sceneLook(view, { stageH: 400 });
     same(look.camera, { mode: "fixed", target: GATHER_CENTER, zoom: 1 });
     same([look.lighting, look.tension, look.focusSeat], ["vote", 0, undefined]);

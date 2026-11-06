@@ -93,10 +93,11 @@ describe("pointsTally — 지목 집계(공개 정보만)", () => {
 });
 
 describe("dayEvents — 지목 차이 (DAY-04)", () => {
-  it("새 지목은 vote 줄 '민준 → 도윤' 한 줄만 만든다 (위 알림 재료 없음)", () => {
-    const events = dayEvents(nominationOf([]), nominationOf([[1, 2]]));
+  it("순차 지목(day.turn 있음)의 새 지목은 vote 줄 '민준 → 도윤' 한 줄만 만든다 (위 알림 재료 없음)", () => {
+    const withTurn = (pairs: [number, number][]) => nominationOf(pairs, { day: { turn: { order: [0, 1, 2, 3, 4], i: 1, endsAt: 8_000 } } });
+    const events = dayEvents(withTurn([]), withTurn([[1, 2]]));
     same(events.lines, [{ kind: "vote", text: "민준 → 도윤" }]);
-    expect("toasts" in events).toBe(false);
+    same(events.toasts, []);
     same(events.announces, []);
     same(events.fx, []);
   });
@@ -171,8 +172,8 @@ describe("순차 지목 채팅 줄 (0063-1)", () => {
     same(dayEvents(turnView({ order: ORDER, i: -1 }), turnView(running(0))).lines, []);
   });
 
-  it("토론 → 지목은 시스템 줄 '지목 시작'", () => {
-    same(dayEvents(viewOf("discussion"), turnView({ order: ORDER, i: -1 })).lines, [{ kind: "system", text: "지목 시작" }]);
+  it("토론 → 지목은 시스템 줄 '투표 시작'", () => {
+    same(dayEvents(viewOf("discussion"), turnView({ order: ORDER, i: -1 })).lines, [{ kind: "system", text: "투표 시작" }]);
   });
 
   it("첫 스냅샷·reset 은 기권 줄도 만들지 않는다", () => {
@@ -218,9 +219,9 @@ const executionView = (yes: number, no: number, passed: boolean, extra: ViewOpts
   viewOf("execution", { ...extra, day: { candidate: 3, voteLog: VOTE_LOG, verdict: { yes, no, passed }, ...extra.day } });
 
 describe("dayEvents — 단계 진입 줄 (DAY-05·06)", () => {
-  it("낮 토론 → 지목: system '지목 시작'", () => {
+  it("낮 토론 → 지목: system '투표 시작'", () => {
     const events = dayEvents(viewOf("discussion"), nominationOf([]));
-    same(events.lines, [{ kind: "system", text: "지목 시작" }]);
+    same(events.lines, [{ kind: "system", text: "투표 시작" }]);
     same(events.announces, []);
   });
 
@@ -446,15 +447,15 @@ describe("headerFor — 단계표의 제목·안내 (UI-SPEC)", () => {
     const withTurn = (turn: PickTurnView, opts: ViewOpts = {}) => nominationOf([], { ...opts, day: { turn } });
     const order = [0, 1, 2, 3, 4];
     // 모이는 중
-    same(hdr(withTurn({ order, i: -1 })), { title: "지목", hint: "모이는 중" });
+    same(hdr(withTurn({ order, i: -1 })), { title: "투표", hint: "모이는 중" });
     // 내 차례(seat 0 이 i 0)
-    same(hdr(withTurn({ order, i: 0, endsAt: 8_000 })), { title: "지목", hint: "의심되는 사람을 눌러요" });
+    same(hdr(withTurn({ order, i: 0, endsAt: 8_000 })), { title: "투표", hint: "의심되는 사람을 눌러요" });
     // 남의 차례·확정 뒤 사이·끝 알림은 제목만
-    same(hdr(withTurn({ order, i: 1, endsAt: 8_000 })), { title: "지목" });
-    same(hdr(withTurn({ order, i: 0, endsAt: 8_000, doneAt: 3_000 })), { title: "지목" });
-    same(hdr(withTurn({ order, i: 5 })), { title: "지목" });
-    // day.turn 이 없으면 제목만
-    same(hdr(nominationOf([])), { title: "지목" });
+    same(hdr(withTurn({ order, i: 1, endsAt: 8_000 })), { title: "투표" });
+    same(hdr(withTurn({ order, i: 0, endsAt: 8_000, doneAt: 3_000 })), { title: "투표" });
+    same(hdr(withTurn({ order, i: 5 })), { title: "투표" });
+    // day.turn 이 없으면(기본판 동시 투표) 항상 안내 한 줄
+    same(hdr(nominationOf([])), { title: "투표", hint: "의심되는 사람을 눌러요" });
   });
 
   it("지목 안내는 역할·spectate 를 읽지 않는다", () => {
@@ -482,7 +483,7 @@ describe("headerFor — 단계표의 제목·안내 (UI-SPEC)", () => {
   it("유령은 같은 제목에 '모두의 직업이 보여요'(밤은 '모두의 직업과 밤 행동이 보여요')", () => {
     const g = { players: ghostPlayers, mySeat: 0 };
     same(hdr(viewOf("discussion", g)), { title: "낮 토론", hint: "모두의 직업이 보여요" });
-    same(hdr(nominationOf([], g)), { title: "지목", hint: "모두의 직업이 보여요" });
+    same(hdr(nominationOf([], g)), { title: "투표", hint: "모두의 직업이 보여요" });
     same(hdr(defenseView(g)), { title: "최후 변론", hint: "모두의 직업이 보여요" });
     same(hdr(verdictView(g)), { title: "찬반", hint: "모두의 직업이 보여요" });
     same(hdr(executionView(5, 2, true, g)), { title: "처형", hint: "모두의 직업이 보여요" });
