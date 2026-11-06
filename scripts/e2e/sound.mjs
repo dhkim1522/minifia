@@ -33,6 +33,8 @@ const PARITY_MORNING_SETTLE_MS = 3000;
 
 /** 처형 진입 뒤 로그를 읽기까지 기다리는 시간(ms): 결과 소리(첫 심장 박동 +2.6초)와 떠오름이 로그에 쌓이고 처형 단계(5.6초)가 끝나기 전 */
 const EXECUTION_WATCH_MS = 3800;
+/** 찬반 단계로 넘긴 뒤 판결 핀이 올라오기를 기다리는 시간(ms) — 로그를 비우기 전에 pin.on 이 찍히게 한다 */
+const VERDICT_PIN_SETTLE_MS = 1200;
 /** 낮 동작 소리·밤 동작 소리가 로그에 도착하기를 기다리는 상한(ms) */
 const EMOTE_ARRIVE_MS = 6000;
 /** 결과 연출이 시상 패를 모두 보이는 데까지 기다리는 상한(ms): 5.6초 + 패 1장당 2.5초(넘기기로 줄인다) 안쪽 */
@@ -247,6 +249,15 @@ export function makeSoundFlows({ recorder, attempt, startHost, openGame, closeGa
   }
 
   const readLog = (page) => page.evaluate(() => (window.__mfSound ? window.__mfSound.log.map((e) => ({ id: e.id, at: e.at, gain: e.gain, played: e.played })) : null));
+  /** 소리 id 가 로그에 찍히기를 기다린 뒤 로그를 돌려준다. 상태 프레임이 도착한 순간과 화면(감독)이 그 프레임을 처리한 순간은 부하가 높으면 몇백 ms 어긋난다 — 정해진 시점에 곧바로 읽지 않는다. 기대(판정)는 그대로이고 기다리기만 한다 */
+  const readLogWith = async (page, id, ms = 3000) => {
+    const t0 = Date.now();
+    for (;;) {
+      const log = await readLog(page);
+      if (log === null || log.some((e) => e.id === id) || Date.now() - t0 > ms) return log;
+      await new Promise((r) => setTimeout(r, 100));
+    }
+  };
   const clearLog = (page) => page.evaluate(() => window.__mfSound?.clear());
 
   /**
@@ -302,7 +313,7 @@ export function makeSoundFlows({ recorder, attempt, startHost, openGame, closeGa
       const caught = await watch;
       const assigning = caught?.log ?? null;
       const bedAtAssigning = caught === null ? "(못 잡음)" : caught.bed;
-      const reveal = await readLog(hp);
+      const reveal = await readLogWith(hp, "bed.reveal");
       judge("sound-script/assigning", "SC3", assigning ?? reveal);
       rec("sound-script/assigning", "SC3b", "assigning 동안 침대 정지 요청(훅 bed 가 null)", assigning !== null && bedAtAssigning === null, assigning === null ? "배정 3초 창을 잡지 못함" : `bed ${JSON.stringify(bedAtAssigning)}`);
       judge("sound-script/roleReveal", "SC4", reveal);
@@ -321,7 +332,7 @@ export function makeSoundFlows({ recorder, attempt, startHost, openGame, closeGa
       });
       rec("sound-script/nomination", "SC6w", "방장의 지목 차례가 온다(모이기 3초 뒤)", turn.ok, turn.detail);
       if (!turn.ok) return;
-      judge("sound-script/nomination", "SC6", await readLog(hp));
+      judge("sound-script/nomination", "SC6", await readLogWith(hp, "pick.turn"));
 
       // ⑥ 방장이 지목하면 pick.point · pin.move
       await clearLog(hp);
@@ -405,6 +416,8 @@ export function makeSoundFlows({ recorder, attempt, startHost, openGame, closeGa
       if (!nominated.ok) return null;
       await skipTo(hp, ht, "defense");
       await skipTo(hp, ht, "verdict");
+      // 판결 핀(pin.on)이 올라오는 중에 로그를 비우면 pin.on 이 처형 쪽 로그 앞머리에 들어가는 판과 아닌 판이 갈린다 — 올라온 뒤에 비운다
+      await sleep(VERDICT_PIN_SETTLE_MS);
       await clearLog(hp);
       await skipTo(hp, ht, "execution");
       await sleep(EXECUTION_WATCH_MS);
@@ -474,15 +487,15 @@ export function makeSoundFlows({ recorder, attempt, startHost, openGame, closeGa
       if (ht.last().me.role !== "mafia") throw new SetupError(`방장 직업이 마피아가 아님 (${ht.last().me.role})`);
       const roles = guests.map((g) => g.tracker.last()?.me?.role ?? "?");
       if (roles.includes("mafia")) throw new SetupError(`손님 중 마피아가 있음 (${roles.join(",")})`);
-      const victim = guests[0];
-      const decoy = guests[1];
+      let victim = guests[0];
+      let decoy = guests[1];
       const pages = [
         { label: "방장(마피아)", page: hp, tracker: ht },
         { label: `손님1(피해자·${roles[0]})`, page: victim.page, tracker: victim.tracker },
         { label: `손님2(${roles[1]})`, page: decoy.page, tracker: decoy.tracker },
         { label: `손님3(${roles[2]}·새로고침)`, page: guests[2].page, tracker: guests[2].tracker, reloaded: true },
       ];
-      const victimLabel = pages[1].label;
+      let victimLabel = pages[1].label;
       const hooked = await attempt(async () => {
         for (const p of pages) await p.page.waitForFunction(() => !!window.__mfSound, null, { timeout: 6000 });
       });
@@ -508,6 +521,16 @@ export function makeSoundFlows({ recorder, attempt, startHost, openGame, closeGa
         await hp.waitForFunction(() => !document.querySelector("[data-curtain]"), null, { timeout: 8000 });
         await hp.waitForSelector(`[data-pick="${victim.seat}"]`, { timeout: 8000 });
         await settle(hp);
+        // 밤 카메라가 마피아(방장)를 따라가서 어떤 이름표는 화면 밖(x<0)에 있다 — 눌림이 불가능하다(이 페이즈 이전부터의 알려진 밤 이름표 위치, 소리 단추와 무관).
+        // 화면 안에 있는 쪽이 피해자가 되도록 첫 두 손님의 역할(피해자·보조)을 바꾼다. 판정은 바뀐 라벨로 한다
+        const inView = (seat) => hp.evaluate((s) => { const b = document.querySelector(`[data-pick="${s}"]`); if (!b) return false; const r = b.getBoundingClientRect(); return r.left >= 0 && r.right <= window.innerWidth && r.top >= 0 && r.bottom <= window.innerHeight; }, seat);
+        if (!(await inView(victim.seat)) && (await inView(decoy.seat))) {
+          [victim, decoy] = [decoy, victim];
+          const labels = [`손님1(피해자·${roles[1]})`, `손님2(${roles[0]})`];
+          pages[1] = { label: labels[0], page: victim.page, tracker: victim.tracker };
+          pages[2] = { label: labels[1], page: decoy.page, tracker: decoy.tracker };
+          victimLabel = labels[0];
+        }
         await tapPick(hp, victim.seat);
       });
       rec(`${sc}/night`, "NP1", "방장이 밤에 이름표를 눌러 피해자를 고른다(밤 UI 조작)", picked.ok, picked.detail);
