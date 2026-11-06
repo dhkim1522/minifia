@@ -1,10 +1,11 @@
 // 스모크: 배포(또는 로컬) 주소에서 방 만들기 → WebSocket hello → 대기실 상태까지 확인한다.
 // full 단계는 한 판을 끝까지 돈다(8페이즈 낮 흐름, 결정 0060): 로비 채팅 한 줄 → 낮 시작 발표 → 낮 토론(자유 채팅, 결정 0058)
-// → 과반이 토론 끝내기(DAY-03) → 순차 지목(DAY-04, 결정 0063-1: 모이기 3초 → 산 사람 좌석 순서로 한 명씩 8초 차례, 차례 주인만 지목하고 차례 아닌 지목은 WRONG_PHASE,
-//   한 명에게 몰아 줌, 줄은 모두에게 같음, 확정 뒤 0.9초 사이, 마지막 뒤 2초 끝 알림) → 변론 20초(DAY-05)
+// → 과반이 토론 끝내기(DAY-03) → 동시 투표(DAY-04, 기본판 결정 0072: 산 사람 모두 15초 안에 동시에 point, 자기 지목·유령 지목은 BAD_MESSAGE, 한 명에게 몰아 줌,
+//   줄은 모두에게 같고 한 사람이 바꾸면 모두 따라감, day.turn 은 없다) → 변론 20초(DAY-05)
 // → 찬반 10초(DAY-06: 변론자는 못 던짐, 값 변경은 본인에게만) → 처형 5초(DAY-07: 수만 공개, 역할 키 없음) → 밤 30초(역할별 행동·마피아 채널 채팅)
 // → 아침 5초(탈락 발표·탈락자 채널 채팅) → 승패가 날 때까지 다음 낮을 같은 방식으로 돌아 ended 에서 끝난다.
-// 산 사람이 정확히 3명인 낮은 토론·지목 대신 마지막 3인 결전(09.1.1, 결정 0066-5)으로 돈다: 모이기 2초 → 좌석 순서로 한마디(8초 차례, 차례 주인의 chat 이 그 차례의 한마디, 시간 초과는 건너뜀)
+// 기본판(결정 0072)에서는 산 사람이 3명이어도 같은 토론 → 투표 흐름이다 — 하루 반복은 서버가 보낸 단계(discussion·showdown)로 갈래를 고른다.
+// 아래 마지막 3인 결전(09.1.1, 결정 0066-5, RULESET.showdown 을 켠 판)은 이렇게 돈다: 모이기 2초 → 좌석 순서로 한마디(8초 차례, 차례 주인의 chat 이 그 차례의 한마디, 시간 초과는 건너뜀)
 // → 동시 지목 8초(남의 선택은 마감 전에 어느 프레임에도 없고 던진 좌석만 공개) → 공개 1.5초 → 2표 이상이면 찬반 없이 처형(day.verdict.last, day.ballots 없음)·아니면 처형 없는 밤.
 // 첫 낮은 마피아가 아닌 시민 한 명을 처형하고 그날 밤 다른 시민이 암살당한다. 마피아가 남아 있는 날은 마피아 한 명을 처형해 판을 끝낸다.
 // 자유 채팅 규칙(CHAT-01·02·03·05·06): 낮 토론의 산 사람 줄은 모두에게 ch all 로 seq 틈 없이 가고 보낸 사람에게도 돌아온다.
@@ -32,12 +33,12 @@ const STATE_LIMIT_MS = 10_000;
 const FULL_TOTAL_LIMIT_MS = 720_000; // 시작 → ended. 낮 하루(과반 토론 끝내기 → 순차 지목 최악 3 + 산 사람 수 × 8.9 + 2 (스크립트는 차례마다 곧바로 지목해 약 10초) + 변론 20 + 찬반 10 + 처형 5 + 밤 30 + 아침 5~15 초) 최대 3일 + 여유
 // 낮 단계 길이(shared/game/phases.ts 와 같은 값, 결정 0060-1). 스크립트는 TS 를 import 하지 않는다.
 const DISCUSSION_MS = 90_000;
-// 순차 지목(결정 0063-1): 모이기 → 차례마다 (8초 + 확정 뒤 0.9초 사이) → 끝 알림. nominationMaxMs 는 shared/game/phases.ts 와 같은 공식이다.
-const NOMINATION_GATHER_MS = 3_000;
-const PICK_TURN_MS = 8_000;
+// 기본판 동시 투표(결정 0072): 산 사람 모두 한 번에 15초. shared/game/phases.ts 의 NOMINATION_MS 와 같은 값 — 고치면 함께.
+const NOMINATION_MS = 15_000;
+// 봇 지연 등 서버 간격: 한 사람이 지목을 바꾸는 최소 간격(applyPoint)은 250ms 라 바꾸기 전에 이만큼 기다린다.
+const POINT_CHANGE_GAP_MS = 300;
+// 순차 지목(결정 0063-1, RULESET.pickTurn)의 길이 사본 — 기본판에서는 서버가 쓰지 않는다. 아래 마지막 3인 구간의 차례 사이 간격이 PICK_GAP_MS 를 쓴다.
 const PICK_GAP_MS = 900;
-const NOMINATION_END_MS = 2_000;
-const nominationMaxMs = (turns) => NOMINATION_GATHER_MS + turns * (PICK_TURN_MS + PICK_GAP_MS) + NOMINATION_END_MS;
 const DEFENSE_MS = 20_000;
 const VERDICT_MS = 10_000;
 // 마지막 3인 결전(shared/game/phases.ts 의 SHOWDOWN_* 사본, 결정 0066-5): 모이기 2초 · 차례마다 한마디 8초 · 동시 지목 8초 · 공개 1.5초. 차례 사이는 PICK_GAP_MS 와 같다.
@@ -45,7 +46,7 @@ const SHOWDOWN_GATHER_MS = 2_000;
 const SHOWDOWN_TURN_MS = 8_000;
 const SHOWDOWN_POINT_MS = 8_000;
 const SHOWDOWN_REVEAL_MS = 1_500;
-// 동점 결선(shared/game/phases.ts 의 RUNOFF_* 사본, 결정 0066-4): 앞머리 1초 · 투표 5초 · 결과 1.5초. 이 스크립트는 지목을 한 명에게 몰아 주므로 결선이 서지 않는다 — 우연히 서도 막히지 않게 변론을 기다리는 상한에만 더한다.
+// 동점 결선(shared/game/phases.ts 의 RUNOFF_* 사본, 결정 0066-4): 앞머리 1초 · 투표 5초 · 결과 1.5초. 기본판(결정 0072)에서는 서버가 이 단계에 들어가지 않는다(사본만 남겨 둔다) — 전이 표(PHASE_NEXT)에 runoff 가 없어 나오면 실패한다.
 const RUNOFF_INTRO_MS = 1_000;
 const RUNOFF_VOTE_MS = 5_000;
 const RUNOFF_END_MS = 1_500;
@@ -73,7 +74,7 @@ const CHAT_REJECT_KEYS = ["t", "why"];
 // D5(shared/game/chatRules.ts)의 최소 전송 간격 600ms. 스크립트는 TS 를 import 하지 않는다.
 const CHAT_MIN_GAP_MS = 600;
 const ALLOWED_PLAYER_KEYS = ["alive", "connected", "isHost", "nickname", "seat"];
-const OPTIONAL_PLAYER_KEYS = ["badge", "look", "badgeSwapped", "ready", "sat"]; // 공개 선택 키(결정 0066-1·0068·0069)
+const OPTIONAL_PLAYER_KEYS = ["look", "ready", "sat"]; // 공개 선택 키(결정 0068·0069). 기본판(결정 0072)에서 badge·badgeSwapped 는 허용하지 않는다 — 나오면 알 수 없는 플레이어 키로 실패한다.
 const PREVIEW_PLAYER_KEYS = ["nickname", "seat"];
 const DAY_SPREAD_LIMIT_MS = 500;
 // shared/game/roles.ts 의 ROLE_TABLE 과 같은 값 (마피아·경찰·의사·시민)
@@ -91,11 +92,9 @@ const PHASE_NEXT = {
   lobby: ["assigning"],
   assigning: ["roleReveal"],
   roleReveal: ["dayAnnounce"],
-  dayAnnounce: ["discussion", "showdown"],
+  dayAnnounce: ["discussion"], // 기본판(결정 0072): showdown 으로 가지 않는다
   discussion: ["nomination"],
-  nomination: ["defense", "night", "runoff"],
-  runoff: ["defense", "night"],
-  showdown: ["execution", "night"],
+  nomination: ["defense", "night"], // 기본판(결정 0072): 동점·0표는 runoff 가 아니라 처형 없는 밤
   defense: ["verdict"],
   verdict: ["execution"],
   execution: ["night", "ended"],
@@ -103,7 +102,7 @@ const PHASE_NEXT = {
   morning: ["dayAnnounce", "ended"],
   ended: [],
 };
-const DAY_PHASES = ["dayAnnounce", "discussion", "nomination", "runoff", "showdown", "defense", "verdict", "execution", "night", "morning", "ended"];
+const DAY_PHASES = ["dayAnnounce", "discussion", "nomination", "defense", "verdict", "execution", "night", "morning", "ended"];
 const ROLE_IDS = ["mafia", "police", "doctor", "citizen"];
 // 직업 이름 문자열이 나와도 되는 경로(배열 칸은 [] 로 줄여 비교한다). 채널 이름 mafia 가 든 ch·me.chat 은 채널 검사가 따로 본다.
 // 탈락자의 view.spectate.seats[].job 은 탈락 뒤 프레임에서만 따로 허용한다.
@@ -118,9 +117,9 @@ const ENDED_ROLE_STRING_PATHS = new Set(["view.result.seats[].job"]);
 // 8페이즈(결정 0060): 개인 지목(nominate)·토론 끝내기(endVote)·찬반 값(verdictVote)과 판정(verdict)은 서버 안에만 있다.
 const SERVER_ONLY_KEYS = ["claimPick", "claimOrder", "claimIdx", "claimStart", "claim" + "Done", "claims", "claimLog", "turn", "pickTurn", "nominate", "endVote", "verdictVote", "verdict", "nightLog", "lastExecPhrase", "chatRates", "typingRelays", "nextSeq", "nightNote", "showdownPick", "runoffVote", "showdown", "runoff"];
 // 같은 이름의 공개 와이어 경로(이 밖의 경로에 이름이 나오면 실패): 처형 단계의 찬반 수 day.verdict, 본인에게만 가는 me.verdictVote.
-// turn: 순차 지목의 공개 차례 정보 view.day.turn(결정 0063-1) 하나만 허용한다. 옛 직업 주장의 turn 이나 서버 전용 pickTurn 은 어디에도 없다.
-// showdownPick·runoffVote(09.1.1, 결정 0066-4·5): 개인 지목·결선 표는 서버 안에만 있고 어느 프레임에도 이름이 나오면 안 된다 — 공개 경로 day.showdown·day.runoff 는 같은 이름의 서버 상태가 아니라 view 의 공개 모양이다.
-const PUBLIC_KEY_PATHS = { verdict: ["view.day.verdict"], verdictVote: ["view.me.verdictVote"], turn: ["view.day.turn"], showdown: ["view.day.showdown"], runoff: ["view.day.runoff"] };
+// turn·showdown·runoff·pickTurn·showdownPick·runoffVote: 기본판(결정 0072)에서 꺼진 장치의 키다. 공개 경로로도 허용하지 않아 어느 프레임에도 이름이 나오면 안 된다.
+// 기본판(결정 0072): turn·showdown·runoff 는 공개 경로도 없다 — 어떤 프레임에 이름이 나오면 실패한다(T-13-07, 허용 경로를 좁히기만 한다).
+const PUBLIC_KEY_PATHS = { verdict: ["view.day.verdict"], verdictVote: ["view.me.verdictVote"] };
 // 역할별 일지 줄의 키 집합(결정 0027-11)
 const RECORD_KEYS = { police: "isMafia,n,target", mafia: "died,n,target", doctor: "n,target" };
 // 거절된 줄의 본문 표식: 어느 클라이언트의 어떤 프레임에도 되돌아오면 안 된다(COMM-04).
@@ -617,7 +616,7 @@ async function stageFull(url, args) {
     const ghosts = [...dead];
     if (!alive.includes(victim)) fail(`${n}일차 처형 대상 ${victim.nickname} 이 이미 탈락함`);
     if (alive.length < 3) fail(`${n}일차 산 사람이 2명 이하인데 판이 끝나지 않음`);
-    if (alive.length === 3) fail(`${n}일차 산 사람이 정확히 3명인데 마지막 3인 결전(runShowdownDay)이 아니라 토론·지목 흐름으로 들어감`);
+    // 기본판(결정 0072): 산 사람이 3명이어도 토론 → 투표 흐름이다(마지막 3인 결전은 꺼짐).
     const label = `${n}일차`;
     const others = alive.filter((c) => c !== victim);
     const discEndsAt = firstState(alive[0], "discussion", inDay(n)).msg.view.phaseEndsAt;
@@ -641,62 +640,52 @@ async function stageFull(url, args) {
       }
     }
 
-    // (b) 지목 단계: 과반 직후 넘어왔다(마감 90초를 기다리지 않음). 줄은 비어 있고 모이는 중(i -1)이며 순서는 산 사람 좌석 오름차순, 첫 길이는 모이기 3초.
+    // (b) 투표 단계(기본판 동시 투표, 결정 0072): 과반 직후 넘어왔다(마감 90초를 기다리지 않음). 줄은 비어 있고 첫 길이는 동시 15초이며 day.turn 키가 없다.
     await waitUntil(() => allSee(alive, "nomination", n), STATE_LIMIT_MS, `${label} 토론 끝내기 과반 뒤 nomination 이 모든 클라이언트에 오지 않음`);
     const nomEnds = new Set(alive.map((c) => firstState(c, "nomination", inDay(n)).msg.view.phaseEndsAt));
     if (nomEnds.size !== 1) fail(`${label} nomination 의 phaseEndsAt 이 클라이언트마다 다름 (${nomEnds.size}종)`);
-    const turnOrder = alive.map((c) => c.seat).sort((p, q) => p - q);
     for (const c of alive) {
       const nv = firstState(c, "nomination", inDay(n)).msg.view;
-      if (nv.phaseDurationMs !== NOMINATION_GATHER_MS) fail(`${c.nickname} 의 ${label} nomination phaseDurationMs 가 ${NOMINATION_GATHER_MS} 가 아님: ${nv.phaseDurationMs}`);
+      if (nv.phaseDurationMs !== NOMINATION_MS) fail(`${c.nickname} 의 ${label} nomination phaseDurationMs 가 ${NOMINATION_MS} 가 아님: ${nv.phaseDurationMs}`);
       if (JSON.stringify(nv.day.points) !== "[]") fail(`${c.nickname} 의 ${label} nomination 첫 day.points 가 []가 아님: ${JSON.stringify(nv.day.points)}`);
-      if (nv.day.turn?.i !== -1 || JSON.stringify(nv.day.turn.order) !== JSON.stringify(turnOrder)) fail(`${c.nickname} 의 ${label} nomination 첫 day.turn 이 {order 산 사람 좌석 오름차순, i -1} 이 아님: ${JSON.stringify(nv.day.turn)}`);
+      if (nv.day.turn !== undefined) fail(`${c.nickname} 의 ${label} nomination 첫 view 에 day.turn 이 있음(기본판은 차례가 없는 동시 투표): ${JSON.stringify(nv.day.turn)}`);
       if (nv.serverNow >= discEndsAt - 5_000) fail(`${label} 과반 토론 끝내기 뒤에도 토론 마감(${discEndsAt})을 거의 다 기다림 (serverNow ${nv.serverNow})`);
     }
 
-    // (c) 순차 지목(DAY-04, 결정 0063-1, L15): 모이는 중에는 아무도 지목할 수 없고(WRONG_PHASE), 차례 주인만 지목한다. 유령은 BAD_MESSAGE, 자기 차례의 자기 지목도 BAD_MESSAGE.
-    // 줄은 모두에게 같은 공개 목록이다. 지목은 바꿀 수 없다(확정).
-    await expectError(others[0], { t: "point", target: victim.seat }, "WRONG_PHASE", `${label} 모이는 중 지목`, true);
+    // (c) 동시 투표(DAY-04, 결정 0072): 산 사람이 모두 동시에 point 하고(자기 지목·유령 지목은 BAD_MESSAGE) 줄은 모두에게 같은 공개 목록이다.
+    // 한 사람이 마감 전에 바꾸면 모든 클라이언트의 줄이 따라간다(마감까지 바꿀 수 있다).
     if (ghosts.length > 0) await expectError(ghosts[0], { t: "point", target: victim.seat }, "BAD_MESSAGE", `${label} 유령의 지목`);
+    await expectError(victim, { t: "point", target: victim.seat }, "BAD_MESSAGE", `${label} 자기 지목`);
     const lines = new Map();
     const linesNow = () => [...lines.entries()].sort((a, b) => a[0] - b[0]).map(([seat, target]) => ({ seat, target }));
-    const pointAs = async (c, target) => {
-      c.ws.send(JSON.stringify({ t: "point", target }));
-      lines.set(c.seat, target);
+    const waitLines = (what) => {
       const want = JSON.stringify(linesNow());
-      await waitUntil(
+      return waitUntil(
         () => alive.every((x) => lastView(x)?.phase === "nomination" && JSON.stringify(lastView(x).day.points) === want),
         STATE_LIMIT_MS,
-        `${label} ${c.nickname} 의 지목 뒤 모든 클라이언트의 day.points 가 같아지지 않음 (기대 ${want})`,
+        `${label} ${what} 뒤 모든 클라이언트의 day.points 가 같아지지 않음 (기대 ${want})`,
       );
     };
-    let probedNonOwner = false;
-    for (let t = 0; t < turnOrder.length; t += 1) {
-      await waitUntil(
-        () => alive.every((x) => lastView(x)?.phase === "nomination" && lastView(x).day.turn?.i === t),
-        STATE_LIMIT_MS + PICK_TURN_MS + PICK_GAP_MS,
-        `${label} ${t}번째 차례가 모든 클라이언트에 오지 않음`,
-      );
-      const owner = alive.find((c) => c.seat === turnOrder[t]);
-      for (const c of alive) {
-        const turn = lastView(c).day.turn;
-        if (turn.endsAt === undefined || turn.doneAt !== undefined) fail(`${c.nickname} 의 ${label} ${t}번째 차례 day.turn 이 {endsAt 있음, doneAt 없음} 이 아님: ${JSON.stringify(turn)}`);
-      }
-      if (!probedNonOwner) {
-        probedNonOwner = true;
-        const bystander = alive.find((c) => c !== owner);
-        await expectError(bystander, { t: "point", target: victim.seat }, "WRONG_PHASE", `${label} 차례 아닌 ${bystander.nickname} 의 지목`, true);
-      }
-      if (owner === victim) {
-        await expectError(victim, { t: "point", target: victim.seat }, "BAD_MESSAGE", `${label} 자기 차례의 자기 지목`);
-        await pointAs(victim, others[0].seat);
-      } else {
-        await pointAs(owner, victim.seat);
-      }
+    const changer = others[0];
+    const altTarget = alive.find((c) => c !== changer && c !== victim); // 산 사람이 셋 이상이라 항상 있다
+    for (const c of alive) {
+      const target = c === victim ? others[0].seat : c === changer ? altTarget.seat : victim.seat;
+      c.ws.send(JSON.stringify({ t: "point", target }));
+      lines.set(c.seat, target);
     }
+    await waitLines("산 사람 모두의 동시 지목");
+    for (const c of alive) {
+      const turnPaths = [];
+      collectKeyPaths(lastView(c), "turn", "", turnPaths);
+      if (turnPaths.length > 0) fail(`${c.nickname} 의 ${label} 투표 view 에 turn 키가 있음: ${turnPaths.join(",")}`);
+    }
+    await sleep(POINT_CHANGE_GAP_MS); // 같은 사람의 지목 간격(250ms)
+    changer.ws.send(JSON.stringify({ t: "point", target: victim.seat }));
+    lines.set(changer.seat, victim.seat);
+    await waitLines(`${changer.nickname} 의 지목 바꾸기`);
 
     // (d) 변론(DAY-05): 마감에 최다 득표 한 명이 변론자가 된다.
-    await waitUntil(() => allSee(alive, "defense", n), nominationMaxMs(alive.length) + RUNOFF_MAX_MS + STATE_LIMIT_MS, `${label} 지목 마감 뒤 defense 가 모든 클라이언트에 오지 않음`);
+    await waitUntil(() => allSee(alive, "defense", n), NOMINATION_MS + STATE_LIMIT_MS, `${label} 투표 마감 뒤 defense 가 모든 클라이언트에 오지 않음`);
     for (const c of alive) {
       const dv = firstState(c, "defense", inDay(n)).msg.view;
       if (dv.day.candidate !== victim.seat) fail(`${c.nickname} 의 ${label} defense day.candidate 가 ${victim.seat} 가 아님: ${dv.day.candidate}`);
@@ -1075,11 +1064,16 @@ async function stageFull(url, args) {
   while (winner === null) {
     dayNo += 1;
     await waitUntil(() => allSee(aliveNow(), "dayAnnounce", dayNo), dayNo === 2 ? MORNING_WAIT_MS : NIGHT_WAIT_MS, `아침 마감 뒤 dayAnnounce(day.n ${dayNo}) 가 산 클라이언트에 오지 않음`);
-    if (aliveNow().length === 3) {
-      // 산 사람이 정확히 3명인 낮은 토론·지목 없이 마지막 3인 결전이다(결정 0066-5). 처형 대상이 마피아면 2표로 판이 끝난다.
+    // 하루 갈래는 산 사람 수가 아니라 서버가 보낸 단계로 고른다. 기본판(결정 0072)은 산 사람이 3명이어도 discussion 이다 — showdown 이 오면 전이 표(PHASE_NEXT)가 실패시킨다.
+    await waitUntil(
+      () => aliveNow().every((c) => lastView(c)?.day?.n === dayNo && (lastView(c).phase === "discussion" || lastView(c).phase === "showdown")),
+      STATE_LIMIT_MS + 5000,
+      `${dayNo}일차 dayAnnounce 다음에 discussion 이 오지 않음`,
+    );
+    if (lastView(aliveNow()[0]).phase === "showdown") {
+      // 기본판(결정 0072)에서는 서버가 이 단계에 들어가지 않는다 — RULESET.showdown 을 켠 판의 마지막 3인 결전. 처형 대상이 마피아면 2표로 판이 끝난다.
       await runShowdownDay(dayNo, aliveNow().find((c) => c.role === "mafia"));
     } else {
-      await waitUntil(() => allSee(aliveNow(), "discussion", dayNo), STATE_LIMIT_MS + 5000, `${dayNo}일차 dayAnnounce 다음에 discussion 이 오지 않음`);
       await runExecutionDay(dayNo, aliveNow().find((c) => c.role === "mafia"));
     }
     winner = winnerNow();
