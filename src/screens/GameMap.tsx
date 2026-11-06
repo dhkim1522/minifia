@@ -67,6 +67,8 @@ import "../styles/testtools.css";
 const BALLOT_TOP = 131;
 const BALLOT_GAP = 16;
 const HINT_MS = 2500;
+/** 투표 시작 뒤 누를 수 있는 이름표가 깜빡이는 시간(0.9초 × 3, UI-SPEC U-6) */
+const VOTE_BLINK_MS = 2700;
 /** 서버가 단계 어긋난 행동을 거절했을 때 위 알림(UI-SPEC Copywriting Contract, 7페이즈 "지금은 보낼 수 없어요" 문구 계열) */
 const REJECT_TEXT = "지금은 고를 수 없어요";
 /** 지목이 단계 어긋남이 아닌 이유로 거절됐을 때 위 알림 */
@@ -123,6 +125,8 @@ interface GameMapProps {
   testButton?: ReactNode;
   /** 지금 띄울 결과 알림 글자·아이콘(useDayFx 가 서버 view 의 차이로 만든다). 없으면 null */
   announce?: DayFx["announce"];
+  /** 기본판 동시 투표의 가장 최근 표 위 알림(useDayFx, 대기열 없음). id 가 바뀔 때만 TopToast 에 띄운다 — 처음 마운트 때의 알림은 지난 일이다 */
+  toast?: DayFx["toast"];
   /** 처형 떠오름 연출 중인 좌석 → 시작 시각(useDayFx). 처형된 사람이 연출이 끝날 때까지 표에 남는다 */
   fading?: DayFx["fading"];
   /** 내가 유령이 된 순간마다 늘어나는 번호(useDayFx). 번호가 바뀔 때만 안내 한 줄과 직업 칩 등장을 다시 보인다 — 처음 마운트 때의 값은 지난 일이다 */
@@ -146,8 +150,9 @@ interface GameMapProps {
 /** 헤더: 제목 + 접히는 안내 + (서버 마감 기준 시간 링) + 링 왼쪽 [역할 카드]. 시간 링의 다시 그리기가 맵 화면 전체로 번지지 않게 따로 둔다 */
 function MapHeader({ view, offset, hintOn, hintOverride, extra }: { view: RoomView; offset: number; hintOn: boolean; hintOverride?: string; extra: ReactNode }) {
   const head = headerFor(view);
-  // 지목·결선은 단계 마감이 아니라 알약·막대와 같은 값(blockLook)으로 링을 그린다(UI-SPEC A-3·D-3). 지목의 세부 단계 길이 3000/8000/900/2000 이나 결선 앞머리 1000 은 링 비율에 쓰지 않는다.
-  const blocked = view.phase === "nomination" || view.phase === "runoff" || view.phase === "showdown";
+  // 순차 지목·결선은 단계 마감이 아니라 알약·막대와 같은 값(blockLook)으로 링을 그린다(UI-SPEC A-3·D-3). 지목의 세부 단계 길이 3000/8000/900/2000 이나 결선 앞머리 1000 은 링 비율에 쓰지 않는다.
+  // 기본판 동시 투표(day.turn 없음)는 알약이 없으므로 blockModeOf 가 null 이고 단계 마감·phaseDurationMs(15초)로 링을 그린다(결정 0072, U-2).
+  const blocked = blockModeOf(view) !== null;
   const look = useTurnLook(view, offset);
   const { seconds } = useCountdown(blocked ? 0 : (view.phaseEndsAt ?? 0), view.phaseDurationMs ?? 0, offset);
   // 낮 시작은 링이 없다(2초 알림 단계). 마감이 없는 view 도 링을 그리지 않는다. 지목의 모이는 중·끝 알림, 결선의 앞머리·결과에도 없다
@@ -176,7 +181,7 @@ function TurnBlock({ view, offset, line, compact, reducedMotion }: { view: RoomV
 // 8페이즈 게임 맵 화면 틀(08-13, UI-SPEC "게임 화면 틀"): 지하 재즈 바 맵(WorldStage) 위에 위쪽 가림막, 헤더(단계 이름 + 접히는 안내 + 시간 링 + [역할 카드]), [테스트], 결과 알림, 아래 패널을 얹는다.
 // 낮 시작·낮 토론·지목·최후 변론·찬반·처형이 이 화면 하나를 같은 장면 키로 그려 단계가 바뀌어도 맵이 다시 만들어지지 않는다.
 // 화면은 서버가 보낸 view 만으로 다시 그린다. 닉네임(이름표)·알림 글자는 React 텍스트 노드로만 그린다.
-export function GameMap({ view, store, chat, send, canSend = true, offset = 0, roleCard, testButton, announce = null, deny, fading, ghostEnter = 0, killFx = null, policeResult = null, letter = null, onEvent, epoch = 0, onLeave }: GameMapProps) {
+export function GameMap({ view, store, chat, send, canSend = true, offset = 0, roleCard, testButton, announce = null, toast: pointToast = null, deny, fading, ghostEnter = 0, killFx = null, policeResult = null, letter = null, onEvent, epoch = 0, onLeave }: GameMapProps) {
   const toast = useTopToast();
   const { show } = toast;
   // 측정(스테이지 사각형)·키보드·기록 칸 높이는 대기실과 같은 훅이다. 키보드가 열려 있으면 행동 줄을 숨기고 기록 칸을 72 로 줄인다(07-19).
@@ -296,7 +301,15 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
     });
   }, [onEvent, show, sendGuard]);
 
-  // 09.1: 지목마다 띄우던 위 알림은 없다(차례 위 한 줄이 대신, UI-SPEC A-7). TopToast 는 거절 알림(REJECT_TEXT)에만 쓴다.
+  // 순차 지목(09.1)에는 표마다 띄우던 위 알림이 없다(차례 위 한 줄이 대신, UI-SPEC A-7). 기본판 동시 투표(결정 0072, U-5)는 표마다 한 줄 '민준 → 도윤' 을 띄운다:
+  // useDayFx 의 toast 는 대기열 없이 가장 최근 표 하나이고 id 가 바뀔 때만 띄운다(새 표가 이전 알림을 바꾼다). 처음 마운트 때의 알림은 지난 것이라 띄우지 않는다.
+  // 닉네임은 글자 그대로 TopToast 의 텍스트 노드로만 간다(T-13-09).
+  const seenPointToast = useRef(pointToast?.id);
+  useEffect(() => {
+    if (pointToast === null || pointToast.id === seenPointToast.current) return;
+    seenPointToast.current = pointToast.id;
+    show(pointToast.text, pointToast.icon);
+  }, [pointToast, show]);
 
   // 이동 권한: 산 사람은 낮 시작·토론에서만, 유령은 언제나(MAP-04). 권위는 서버 canMove 이고 화면은 같은 표로 맵 탭만 막는다.
   const me = view.players.find((p) => p.seat === view.me.seat);
@@ -313,6 +326,8 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
   // 지목 단계(DAY-04): 산 사람은 나를 뺀 산 사람의 이름표를 눌러 가리킨다. 내 선택만 서버 응답 전에 보이고(낙관적), 서버 view 가 오면 서버 값(day.points 의 내 줄, 가정 A1)이 이긴다.
   // 남의 지목·득표·선두·과반은 서버가 보낸 day.points 로만 그린다(T-08-38).
   const nominating = view.phase === "nomination";
+  // 기본판 동시 투표(결정 0072): 서버 view 에 day.turn 이 없는 지목 단계. 순차·동시를 설정 값이 아니라 view 가 가른다 — day.turn 이 있으면 아래 순차 코드가 그대로 쓰인다.
+  const voting = nominating && view.day?.turn === undefined;
   // 밤 선택: 산 마피아만 지도 이름표를 눌러 대상을 보낸다(결정 0061-6). 경찰·의사는 아래 패널 얼굴 목록(GamePanel)으로 고른다(NIGHT-09). 서버 값은 view.me.pick(본인에게만 온다).
   const nighting = view.phase === "night";
   const nightMafia = nighting && meAlive && view.me.role === "mafia";
@@ -349,7 +364,29 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
   // 순차 지목(결정 0063-1): 이름표는 내 차례에만 버튼이다. 누르면 그 차례는 끝난다 — 깜빡임·버튼이 사라지고 취소·바꾸기는 없다.
   // pickedTurn = 내가 이미 누른 차례 번호. 서버가 거절하면 비워 다시 고를 수 있게 한다.
   const [pickedTurn, setPickedTurn] = useState<number | undefined>(undefined);
-  const canPick = nominating && meAlive && myTurnNo !== undefined && pickedTurn !== myTurnNo && mine === undefined;
+  const canPick = voting ? meAlive : nominating && meAlive && myTurnNo !== undefined && pickedTurn !== myTurnNo && mine === undefined;
+  // 처음 깜빡임(U-6): 투표가 시작되면 누를 수 있는 이름표가 3초(0.9초 × 3) 깜빡이고 내가 누르면 바로 멈춘다. 저장 키 없이 매 투표(일차)마다 켠다.
+  // 재접속으로 이미 지난 투표는 남은 시간만큼만(단계 시작 = 마감 − 단계 길이) 깜빡이고, 이미 골랐으면 켜지 않는다. 모션 줄이기는 CSS 가 정지 테두리로 바꾼다.
+  const [voteBlink, setVoteBlink] = useState(false);
+  const voteKey = voting && meAlive ? `vote:${view.day?.n ?? 0}` : null;
+  const voteStartedAt = view.phaseEndsAt !== null && view.phaseDurationMs !== null ? view.phaseEndsAt - view.phaseDurationMs : null;
+  useEffect(() => {
+    if (voteKey === null) {
+      setVoteBlink(false);
+      return;
+    }
+    const sinceStart = voteStartedAt === null ? 0 : Math.max(0, Date.now() + offset - voteStartedAt);
+    const left = VOTE_BLINK_MS - sinceStart;
+    if (left <= 0) {
+      setVoteBlink(false);
+      return;
+    }
+    setVoteBlink(true);
+    const timer = setTimeout(() => setVoteBlink(false), left);
+    return () => clearTimeout(timer);
+    // 투표가 시작될 때(일차 키)만 켠다 — 같은 투표 안의 view 갱신으로 다시 깜빡이지 않는다
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [voteKey]);
   // 서버가 내 선택을 확인했으면 더는 거절을 기다리지 않는다. 거절이 오면 내 선택을 서버 값으로 되돌린다(처음 그릴 때는 아무것도 하지 않는다).
   useEffect(() => {
     if (pointSent.current !== null && serverMine === pointSent.current.target) pointSent.current = null;
@@ -403,16 +440,19 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
     ? {
         seats: pickSeats,
         ...(mine !== undefined ? { mine } : {}),
+        // 연결이 끊긴 동안은 버튼이 aria-disabled 이고 눌러도 보내지 않는다(UI-SPEC "연결 끊김")
+        ...(canSend ? {} : { disabled: true as const }),
         label: (nickname) => (nighting ? `${nickname} 님에게 다가가기` : runoffVoting ? `${nickname} 님에게 투표` : showdownPointing ? SHOWDOWN_COPY.pointLabel(nickname) : `${nickname} 님 가리키기`),
         onPick: (seat) => {
           if (seat === mine) return; // 이미 고른 후보를 다시 눌러도 보내지 않는다. 다른 후보를 누르면 마감까지 바꿀 수 있다(결선)
           if (send(nighting ? { t: "pick", target: seat } : { t: "point", target: seat }) === false) return; // 소켓이 닫혀 못 보냈으면 표시도 바꾸지 않는다
           pointSent.current = { target: seat, at: Date.now() };
           chooseMine(seat);
-          if (nominating) setPickedTurn(myTurnNo);
+          if (voting) setVoteBlink(false);
+          else if (nominating) setPickedTurn(myTurnNo);
           if (nightMafia) approach(seat);
         },
-        group: nighting ? "밤 대상" : runoffVoting ? "결선" : showdownPointing ? SHOWDOWN_COPY.pointGroup : "지목",
+        group: nighting ? "밤 대상" : runoffVoting ? "결선" : showdownPointing ? SHOWDOWN_COPY.pointGroup : voting ? "투표" : "지목",
         // 마피아 밤 선택 효과(결정 0065): nightMafia(산 마피아의 밤)일 때만. mine 은 서버가 마피아에게만 준 me.pick 이다
         ...(nightMafia ? { aim: true as const } : {}),
       }
@@ -496,7 +536,22 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
       });
     }
     if (!nominating) return undefined;
-    // 득표는 배지 숫자만(선두 맥박·과반 도장 없음, 09.1 M-4). 내가 방금 누른 표는 서버가 세어 주기 전에도 +1 로 바로 보인다(UI-SPEC A-4).
+    // 기본판 동시 투표(결정 0072, U-4): 득표 배지·선두(맥박)·과반(도장)은 서버가 보낸 day.points 의 집계(pointsTally)로만 그린다 — 남의 표·배지·선두를 미리 만들지 않는다(T-13-08).
+    // 서버 응답 전에 보이는 것은 내 선택(mine)뿐이다. 0표 이름표에는 배지가 없고 동점이면 선두·도장이 없다.
+    if (voting) {
+      const tally = pointsTally(view);
+      return (seat) => {
+        const count = tally.counts[seat] ?? 0;
+        return {
+          ...(voteBlink && mine === undefined && pickSeats?.has(seat) ? { blink: true } : {}),
+          ...(mine === seat ? { mine: true } : {}),
+          ...(count >= 1 ? { count } : {}),
+          ...(tally.leader === seat ? { lead: true } : {}),
+          ...(tally.sure === seat ? { sure: true } : {}),
+        };
+      };
+    }
+    // 순차 지목: 득표는 배지 숫자만(선두 맥박·과반 도장 없음, 09.1 M-4). 내가 방금 누른 표는 서버가 세어 주기 전에도 +1 로 바로 보인다(UI-SPEC A-4).
     // 차례인 사람은 발밑 흰 고리와 맨 앞 이름표(모이는 중·끝 알림에는 없다).
     const tally = pointsTally(view);
     const stage = turnStageOf(view);
@@ -511,7 +566,7 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
         ...(turnSeat === seat ? { ring: "turn" as const, turn: true } : {}),
       };
     };
-  }, [nominating, nighting, nightMafia, mine, serverMine, spectate, verdicting, defending, view, canPick, pickSeats, runoff, runoffVoting, showdownPointing, showdownStage]);
+  }, [nominating, voting, voteBlink, nighting, nightMafia, mine, serverMine, spectate, verdicting, defending, view, canPick, pickSeats, runoff, runoffVoting, showdownPointing, showdownStage]);
 
   // 유령 화면의 이름표: 모든 이름표 위에 그 사람의 직업 칩(spectate.seats 의 job), 죽은 좌석은 반투명. 산 사람 view 에는 spectate 가 없어 이 겹침이 없다.
   const tagProps = useMemo<WorldTagProps | undefined>(() => {
@@ -688,7 +743,8 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
       <div className="mf-sr-only" role="status" data-badge-live="">
         {badgeFx.said}
       </div>
-      <TurnBlock view={view} offset={offset} line={topLine} compact={compactTurn} reducedMotion={reducedMotion} />
+      {/* 알약·막대·위 한 줄은 순차 지목·결선·마지막 3인에만 있다. 기본판 동시 투표(day.turn 없음)는 DOM 이 없다([data-turn-block] 0) */}
+      {blockMode !== null ? <TurnBlock view={view} offset={offset} line={topLine} compact={compactTurn} reducedMotion={reducedMotion} /> : null}
       {testButton ? <div className="mf-game__test">{testButton}</div> : null}
       {/* 장면 전환 막(09-20): 결과 알림보다 앞(DOM 순서)에 두어 막을 붙잡는 동안 알림이 막 위로 올라올 수 있게 한다. 덮기는 공개 마감만의 함수다 */}
       <SceneCurtain view={view} offset={offset} reducedMotion={reducedMotion} {...(killFx !== null ? { holdUntil: killFx.at + KILL_HOLD_MS } : {})} />

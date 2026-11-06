@@ -254,10 +254,10 @@ describe("지목 화면 — 채팅 줄·위 알림 없음 (E2 #9 → 09.1)", () 
     expect(toastText(m.container)).toBe("지금은 고를 수 없어요");
   });
 
-  it("지목이 시작되면(낮 토론 → 지목) 채팅 system 줄 '지목 시작' 이 남는다", () => {
+  it("지목이 시작되면(낮 토론 → 지목) 채팅 system 줄 '투표 시작' 이 남는다", () => {
     const m = mount(makeView({ phase: "discussion" }));
     m.show(makeView());
-    expect(logText(m.container)).toContain("지목 시작");
+    expect(logText(m.container)).toContain("투표 시작");
     expect(sysLines(m.container, "hot")).toEqual([]);
   });
 
@@ -780,10 +780,10 @@ describe("차례 알약 (결정 0063-1, UI-SPEC A-1~A-6)", () => {
     expect(block(container)).toBeNull();
   });
 
-  it("day.turn 이 없는 지목 view 에는 알약도 헤더 링도 없다", () => {
+  it("day.turn 이 없는 지목(기본판 동시 투표) view 에는 알약이 없다 (헤더 링은 단계 마감 기준, 결정 0072)", () => {
     const { container } = mount(makeView({ turn: null }));
     expect(container.querySelector(".mf-turn__pill")).toBeNull();
-    expect(ring(container)).toBeNull();
+    expect(container.querySelector("[data-turn-block]")).toBeNull();
   });
 
   it("닉네임은 글자로 그린다: '<b>영희</b>' 가 알약 안에서 HTML 이 되지 않는다", () => {

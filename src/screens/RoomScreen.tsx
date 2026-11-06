@@ -215,7 +215,7 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
   // world snap 이 도착한 횟수. 판 번호가 바뀐 view 를 그리기 전에 새 판 snap 이 먼저 와 있으면 월드 저장소를 비우지 않는다(방금 받은 위치를 지우지 않는다, 11-12)
   const worldSnaps = useRef(0);
   // 낮 연출(채팅 시스템 줄·결과 알림): 서버 view 두 개의 공개 정보 차이로만 만든다. 낮 시작은 역할 확인·밤에서 들어오므로 맵 화면이 아니라 방 화면이 직전 view 를 쥐어야 한다.
-  const { announce, deny, fading, ghostEnter, killFx, policeResult } = useDayFx({ view, epoch: connection.epoch, chat });
+  const { announce, toast, deny, fading, ghostEnter, killFx, policeResult } = useDayFx({ view, epoch: connection.epoch, chat });
   // 암살 유언 편지(결정 0063-3): 같은 ChatStore 의 라이브 유언 카드와 view 차이로만 만든다
   const letter = useWillLetter({ view, epoch: connection.epoch, chat });
   // 12-10: 받은 동작 프레임의 소리 신호가 "내 동작" 인지 가를 내 좌석(구독은 한 번만 걸리므로 ref 로 읽는다)
@@ -558,6 +558,7 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
             roleCard={{ unread: unread > 0, onOpen: () => setRoleCard({ open: true, tab: "role" }) }}
             testButton={testButton}
             announce={announce}
+            toast={toast}
             deny={deny}
             fading={fading}
             ghostEnter={ghostEnter}

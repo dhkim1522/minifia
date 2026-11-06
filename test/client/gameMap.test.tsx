@@ -912,3 +912,184 @@ describe("GameMap — 소스 게이트 (T-08-33)", () => {
     }
   });
 });
+
+// 13-03: 기본판 동시 투표 화면 (결정 0072, UI-SPEC 투표). WorldStage 는 가짜라 pick·tagProps 로 이름표 계약을 본다
+describe("GameMap — 기본판 투표 (결정 0072)", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
+  });
+  afterEach(() => vi.useRealTimers());
+
+  /** 투표 단계(day.turn 없음) view — pairs 는 [누가, 누구를] */
+  const voteView = (pairs: [number, number][] = [], o: ViewOpts = {}): RoomView => {
+    const v = makeView({ phase: "nomination", ...o });
+    return { ...v, phaseEndsAt: NOW + 15_000, phaseDurationMs: 15_000, day: { ...v.day!, points: pairs.map(([seat, target]) => ({ seat, target })) } };
+  };
+  const toastText = (c: ParentNode) => c.querySelector(".mv-toast__text")?.textContent ?? "";
+  const advance = (ms: number) =>
+    act(() => {
+      vi.advanceTimersByTime(ms);
+    });
+  const sendOf = (): ReturnType<typeof vi.fn> => (connectionMock.current as RoomConnection).send as ReturnType<typeof vi.fn>;
+  const tag = (seat: number) => stage.props?.tagProps?.(seat) ?? {};
+
+  it("산 사람 4명: 나를 뺀 세 이름표가 누를 수 있고 묶음 '투표', 이름 '{닉네임} 님 가리키기'", () => {
+    mount(voteView());
+    const pick = stage.props?.pick;
+    expect([...(pick?.seats ?? [])].sort()).toEqual([1, 2, 3]);
+    expect(pick?.group).toBe("투표");
+    expect(pick?.label("영희")).toBe("영희 님 가리키기");
+    expect(pick?.mine).toBeUndefined();
+  });
+
+  it("누르면 point 를 한 번 보내고 내 선택(mine)만 바로 바뀌며, 같은 이름표를 다시 누르면 보내지 않고, 다른 이름표를 누르면 옮겨 간다", () => {
+    mount(voteView());
+    act(() => stage.props!.pick!.onPick(2));
+    expect(sendOf()).toHaveBeenCalledTimes(1);
+    expect(sendOf()).toHaveBeenLastCalledWith({ t: "point", target: 2 });
+    expect(stage.props?.pick?.mine).toBe(2);
+    act(() => stage.props!.pick!.onPick(2));
+    expect(sendOf()).toHaveBeenCalledTimes(1);
+    act(() => stage.props!.pick!.onPick(3));
+    expect(sendOf()).toHaveBeenCalledTimes(2);
+    expect(sendOf()).toHaveBeenLastCalledWith({ t: "point", target: 3 });
+    expect(stage.props?.pick?.mine).toBe(3);
+  });
+
+  it("서버 응답 전에는 남의 표·배지·선두를 만들지 않는다 (내 선택 mine 만)", () => {
+    mount(voteView());
+    act(() => stage.props!.pick!.onPick(2));
+    expect(tag(2)).toEqual({ mine: true });
+    expect(tag(1)).toEqual({});
+  });
+
+  it("거절되면(WRONG_PHASE) 알림 '지금은 고를 수 없어요' 뒤 내 선택이 서버 값으로 돌아온다", () => {
+    const listeners: Array<(e: { t: "error"; code: string }, meta: { epoch: number }) => void> = [];
+    const onEvent = vi.fn((l: (typeof listeners)[number]) => {
+      listeners.push(l);
+      return () => {};
+    });
+    const { container } = mount(voteView(), { onEvent: onEvent as unknown as RoomConnection["onEvent"] });
+    act(() => stage.props!.pick!.onPick(2));
+    expect(stage.props?.pick?.mine).toBe(2);
+    act(() => listeners.forEach((l) => l({ t: "error", code: "WRONG_PHASE" }, { epoch: 1 })));
+    expect(toastText(container)).toBe("지금은 고를 수 없어요");
+    expect(stage.props?.pick?.mine).toBeUndefined();
+  });
+
+  it("내 서버 표가 있으면 mine 이고 유령은 누를 수 있는 이름표가 없다", () => {
+    mount(voteView([[0, 2]]));
+    expect(stage.props?.pick?.mine).toBe(2);
+    cleanup();
+    mount(voteView([], { dead: [0] }));
+    expect(stage.props?.pick).toBeUndefined();
+  });
+
+  it("3:1(과반, 산 5명)이면 그 이름표가 count 3·lead·sure, 2:2 동점이면 lead·sure 없음", () => {
+    mount(voteView([[0, 2], [1, 2], [3, 2], [4, 0]], { count: 5 }));
+    // seat 0 은 나이고 2 를 가리켰다(서버 값) → mine
+    expect(tag(2)).toEqual({ mine: true, count: 3, lead: true, sure: true });
+    expect(tag(0)).toEqual({ count: 1 });
+    cleanup();
+    mount(voteView([[0, 2], [1, 2], [3, 0], [4, 0]], { count: 5 }));
+    expect(tag(2)).toEqual({ mine: true, count: 2 });
+    expect(tag(0)).toEqual({ count: 2 });
+  });
+
+  it("선두만(과반 아님)은 lead 만 있다. 8명 3표(과반 5 미만)", () => {
+    mount(voteView([[0, 2], [1, 2], [3, 2], [4, 5]], { count: 8 }));
+    expect(tag(2)).toEqual({ mine: true, count: 3, lead: true });
+    expect(tag(5)).toEqual({ count: 1 });
+    expect(tag(6)).toEqual({});
+  });
+
+  it("카메라·조명: 과반 + 스테이지 360 이상이면 확대 1.08, 긴장 2", () => {
+    Object.defineProperty(window, "innerHeight", { configurable: true, value: 900 });
+    mount(voteView([[0, 2], [1, 2], [3, 2]], { count: 5 }));
+    expect(stage.props?.scene?.tension).toBe(2);
+    expect(stage.props?.scene?.focusSeat).toBe(2);
+    expect((stage.props?.scene?.camera as { zoom?: number }).zoom).toBe(1.08);
+  });
+
+  it("처음 깜빡임: 시작 직후 누를 수 있는 이름표가 blink, 2700ms 뒤 꺼진다. 내가 누르면 바로 꺼진다", () => {
+    mount(voteView());
+    expect(tag(1).blink).toBe(true);
+    expect(tag(0).blink).toBeUndefined();
+    advance(2699);
+    expect(tag(1).blink).toBe(true);
+    advance(1);
+    expect(tag(1).blink).toBeUndefined();
+    cleanup();
+    vi.setSystemTime(NOW);
+    mount(voteView());
+    expect(tag(3).blink).toBe(true);
+    act(() => stage.props!.pick!.onPick(1));
+    expect(tag(3).blink).toBeUndefined();
+  });
+
+  it("재접속으로 이미 지난 투표는 깜빡이지 않고, 이미 골랐어도 깜빡이지 않는다", () => {
+    const old = voteView();
+    mount({ ...old, phaseEndsAt: NOW + 5_000 });
+    expect(tag(1).blink).toBeUndefined();
+    cleanup();
+    mount(voteView([[0, 2]]));
+    expect(tag(1).blink).toBeUndefined();
+  });
+
+  it("제목 '투표', 안내 '의심되는 사람을 눌러요', 시간 링은 단계 마감 15초 기준, 차례 알약·막대는 DOM 에 없고 어둡게 막은 off", () => {
+    const { container } = mount(voteView());
+    expect(container.querySelector(".mv-phase__title")?.textContent).toBe("투표");
+    expect(container.querySelector(".mv-phase__hint")?.textContent).toBe("의심되는 사람을 눌러요");
+    expect(container.querySelector("[role=timer]")?.getAttribute("aria-label")).toBe("남은 시간 15초");
+    expect(container.querySelector("[data-turn-block]")).toBeNull();
+    const { container: under } = render(<>{stage.props?.underlay}</>);
+    expect(under.querySelector(".mf-game__dim")?.getAttribute("data-dim")).toBe("off");
+  });
+
+  it("투표 시작 채팅 줄과 표마다 위 알림 '영희 → 서준', 바꾸면 '(바꿈)', 새 표가 이전 알림을 바꾼다", () => {
+    const m = mount(makeView({ phase: "discussion" }));
+    m.show(voteView());
+    expect(m.container.querySelector("[data-chat-log]")?.textContent).toContain("투표 시작");
+    expect(toastText(m.container)).toBe("");
+    m.show(voteView([[1, 2]]));
+    expect(toastText(m.container)).toBe("영희 → 서준");
+    m.show(voteView([[1, 2], [3, 2]]));
+    expect(toastText(m.container)).toBe("지아 → 서준");
+    m.show(voteView([[1, 3], [3, 2]]));
+    expect(toastText(m.container)).toBe("영희 → 지아 (바꿈)");
+    const log = m.container.querySelector("[data-chat-log]")?.textContent ?? "";
+    expect(log).toContain("영희 → 서준");
+    expect(log).toContain("지아 → 서준");
+    expect(log).toContain("영희 → 지아 (바꿈)");
+  });
+
+  it("재접속 첫 스냅샷은 위 알림·채팅 줄 없이 지금 표를 바로 그린다", () => {
+    const { container } = mount(voteView([[1, 2], [3, 2], [0, 2]], { count: 5 }));
+    expect(toastText(container)).toBe("");
+    expect(container.querySelector("[data-chat-log]")?.textContent ?? "").not.toContain("→");
+    expect(tag(2)).toEqual({ mine: true, count: 3, lead: true, sure: true });
+    expect(stage.props?.pick?.mine).toBe(2);
+  });
+
+  it("닉네임의 HTML 은 위 알림에서 글자 그대로다", () => {
+    const m = mount(makeView({ phase: "discussion", nicknames: ["민수", "<b>영희</b>", "서준", "지아"] }));
+    m.show(voteView([], { nicknames: ["민수", "<b>영희</b>", "서준", "지아"] }));
+    m.show(voteView([[1, 2]], { nicknames: ["민수", "<b>영희</b>", "서준", "지아"] }));
+    expect(toastText(m.container)).toBe("<b>영희</b> → 서준");
+    expect(m.container.querySelector(".mv-toast b")).toBeNull();
+  });
+
+  it("연결이 끊기면(canSend 거짓) 이름표 버튼이 disabled 이고 순차 지목(day.turn 있음)은 이 경로를 쓰지 않는다", () => {
+    mount(voteView(), { canSend: false });
+    expect(stage.props?.pick?.disabled).toBe(true);
+    cleanup();
+    mount(voteView());
+    expect(stage.props?.pick?.disabled).toBeUndefined();
+    cleanup();
+    const seq = voteView();
+    mount({ ...seq, day: { ...seq.day!, turn: { order: [0, 1, 2, 3], i: 0, endsAt: NOW + 8000 } } });
+    expect(stage.props?.pick?.group).toBe("지목");
+    expect(document.querySelector("[data-turn-block]")).not.toBeNull();
+  });
+});

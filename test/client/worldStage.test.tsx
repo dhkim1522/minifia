@@ -2776,6 +2776,14 @@ describe("게임 이름표: 지목 버튼·tagProps·canWalk (DAY-04, MAP-04)", 
       expect(pick.onPick).not.toHaveBeenCalled();
     });
 
+    it("pick.disabled 이면 canSend 가 참이어도 aria-disabled 이고 눌러도 onPick 이 없다 (13-03)", async () => {
+      const pick = pickOf({ disabled: true });
+      const s = await openPick({ pick });
+      expect(pickBtn(s, 1).getAttribute("aria-disabled")).toBe("true");
+      fireEvent.click(pickBtn(s, 1));
+      expect(pick.onPick).not.toHaveBeenCalled();
+    });
+
     it("버튼 안에는 이름표 쌓임이 그대로 있고 닉네임은 텍스트로만 들어간다", async () => {
       const s = await open({ scene: SCENE5, pick: pickOf() }, { players: [...FOUR, player(4, "<img src=x onerror=alert(1)>")], ents: FIVE_ENTS() });
       expect(pickBtn(s, 4).querySelector(".mv-head")).not.toBeNull();

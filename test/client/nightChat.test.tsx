@@ -185,10 +185,10 @@ describe("밤 마피아 채팅 (CHAT-02, 채널 mafia)", () => {
     expect(sysTexts(r.container)).toEqual(["밤 · 마피아 채팅"]);
   });
 
-  it("낮 지목 시작 시스템 줄은 공개 줄이라 밤 마피아 기록에는 보이지 않는다", () => {
+  it("낮 투표 시작 시스템 줄은 공개 줄이라 밤 마피아 기록에는 보이지 않는다", () => {
     const r = scene(makeView({ phase: "discussion", role: "mafia", chat: "all" }));
     r.rerender(makeView({ phase: "nomination", role: "mafia", chat: "all" }));
-    expect(sysTexts(r.container)).toEqual(["지목 시작"]);
+    expect(sysTexts(r.container)).toEqual(["투표 시작"]);
     r.rerender(makeView({ phase: "night", role: "mafia", chat: "mafia" }));
     expect(sysTexts(r.container)).toEqual(["밤 · 마피아 채팅"]);
   });

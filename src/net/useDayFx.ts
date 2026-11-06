@@ -1,7 +1,9 @@
 // 서버 view 두 개의 공개 정보 차이(dayEvents)를 화면 연출로 적용하는 훅 (08-13, DAY-04·05·06).
 // - 채팅 시스템 줄: chat.addSystem(text, { scope: "all", kind }) — 지연(at)이 있는 줄은 타이머로 나중에 더한다.
 // - 결과 알림: 한 번에 하나, 새 알림이 이전 것을 바꾼다. 지연(at) 뒤에 뜨고 ms 뒤에 사라진다. 상태 `announce` 로 돌려준다.
-// - 09.1: 지목 위 알림 대기열은 없다(차례 위 한 줄이 대신, UI-SPEC A-7). 거절 알림(TopToast)은 GameMap 이 따로 띄운다.
+// - 09.1: 순차 지목 위 알림 대기열은 없다(차례 위 한 줄이 대신, UI-SPEC A-7). 거절 알림(TopToast)은 GameMap 이 따로 띄운다.
+// - 기본판(결정 0072, U-5): 동시 투표의 새 표마다 위 알림 한 줄 `toast`('민준 → 도윤', 바꾸면 '(바꿈)'). dayEvents 의 toasts 중 마지막 것만 바로 띄우고 합치기·대기열은 없다 —
+//   새 표가 이전 알림을 바꾼다(모든 표는 채팅 기록에 남는다). 첫 스냅샷·연결 번호가 바뀐 첫 스냅샷은 toasts 가 비어 알림이 없고 reset 은 이전 알림도 비운다.
 // - 손사래(08-15): 지목 선두가 새 사람으로 바뀌면(leaderShift) `deny` {seat, nonce} 를 갱신한다. WorldStage 가 nonce 가 바뀔 때만 한 번 손사래를 한다.
 // - 처형 떠오름(08-16): dayEvents 의 fx ghostRise 를 `fading`(좌석 → 연출 시작 시각)으로 돌려준다. 처형 단계 view 는 처형된 사람이 이미 탈락으로 오므로 화면이 그 순간부터
 //   연출이 끝날 때(알림 시작 + GHOST_FADE_END_MS)까지 그 좌석을 표에 붙잡아 둔다. 시작 시각은 단계 진입 + at(알림이 처형으로 바뀌는 때)이라 그 전에는 불투명 그대로 서 있다.
@@ -19,7 +21,7 @@ import { useEffect, useRef, useState } from "react";
 import { isAlive } from "../../shared/game/alive";
 import type { RoomView } from "../../shared/protocol";
 import { CHAT_TEXT } from "../game/chatText";
-import { dayEvents, GHOST_FADE_END_MS, POLICE_CARD_AT, policeResultOf } from "../game/dayView";
+import { DAY_COPY, dayEvents, GHOST_FADE_END_MS, POLICE_CARD_AT, policeResultOf } from "../game/dayView";
 import type { AnnounceIcon } from "../game/dayView";
 import { leaderShift } from "../world/presence";
 import type { ChatStore } from "./chatStore";
@@ -30,9 +32,18 @@ export interface AnnounceShow {
   icon?: AnnounceIcon;
 }
 
+/** 투표 위 알림 한 건. id 는 새 표마다 늘어 화면이 "새 알림이 왔다" 를 알아본다 */
+export interface PointToastShow {
+  id: number;
+  text: string;
+  icon: "point";
+}
+
 export interface DayFx {
   /** 지금 띄울 결과 알림. 없으면 null */
   announce: AnnounceShow | null;
+  /** 기본판 동시 투표의 가장 최근 표 알림(대기열 없음). 없으면 null. 화면은 id 가 바뀔 때만 TopToast 에 띄운다 */
+  toast: PointToastShow | null;
   /** 지목 선두가 새 사람으로 바뀌었을 때 손사래를 할 좌석. nonce 가 바뀔 때마다 한 번 */
   deny: { seat: number; nonce: number } | undefined;
   /** 처형 떠오름 연출 중인 좌석 → 연출 시작 시각(ms, Date.now 기준). 연출이 끝나면 비워진다. sceneLook 의 fading 으로 그대로 넘긴다 */
@@ -61,6 +72,7 @@ const NO_FADING: ReadonlyMap<number, number> = new Map();
 
 export function useDayFx({ view, epoch, chat }: { view: RoomView | null; epoch: number; chat: ChatStore }): DayFx {
   const [announce, setAnnounce] = useState<AnnounceShow | null>(null);
+  const [toast, setToast] = useState<PointToastShow | null>(null);
   const [deny, setDeny] = useState<{ seat: number; nonce: number } | undefined>(undefined);
   const [fading, setFading] = useState<ReadonlyMap<number, number>>(NO_FADING);
   const [ghostEnter, setGhostEnter] = useState(0);
@@ -120,6 +132,7 @@ export function useDayFx({ view, epoch, chat }: { view: RoomView | null; epoch: 
       clearAll();
       prevView.current = null;
       setAnnounce(null);
+      setToast(null);
       setPoliceResult(null);
     }
     if (view === null) {
@@ -130,6 +143,14 @@ export function useDayFx({ view, epoch, chat }: { view: RoomView | null; epoch: 
     prevView.current = view;
     if (prev === view) return; // 같은 view 로 다시 실행됨(개발 모드 이중 실행)
     const ev = dayEvents(prev, view, reset ? { reset: true } : {});
+
+    // 투표 위 알림: 새 표 중 마지막 하나만 바로(대기열·합치기 없음 — 새 표가 이전 알림을 바꾼다, U-5)
+    const lastToast = ev.toasts.at(-1);
+    if (lastToast !== undefined) {
+      counter.current += 1;
+      const id = counter.current;
+      setToast({ id, text: DAY_COPY.pointLine(lastToast.fromNames[0] ?? "", lastToast.toName, lastToast.changed === true), icon: "point" });
+    }
 
     // 손사래: 선두가 새 사람으로 바뀔 때마다 한 번(첫 스냅샷·재접속은 leaderShift 가 null)
     const shifted = reset ? null : leaderShift(prev, view);
@@ -191,5 +212,5 @@ export function useDayFx({ view, epoch, chat }: { view: RoomView | null; epoch: 
     // eslint 규칙 없음 — later/clearAll 은 ref 와 setState 만 쓰므로 의존성에 넣지 않는다
   }, [view, epoch, chat]);
 
-  return { announce, deny, fading, ghostEnter, killFx, policeResult };
+  return { announce, toast, deny, fading, ghostEnter, killFx, policeResult };
 }

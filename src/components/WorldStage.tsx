@@ -51,6 +51,8 @@ export interface WorldPick {
   onPick(seat: number): void;
   /** 이름표 층(role=group)의 접근성 이름 */
   group: string;
+  /** 참이면(연결 끊김 등) 이름표 버튼은 aria-disabled="true" 이고 눌러도 onPick 을 부르지 않는다. 누르기 영역·모양은 그대로 */
+  disabled?: boolean;
   /**
    * 마피아 밤 선택 효과(결정 0065). 켜면 후보 이름표 버튼은 점선 테두리(is-cand), 누르는 동안 실선 + 빛(is-preview),
    * 고른 뒤(mine) 3px 진홍 테두리·맥박·표식(is-picked)이 되고, 이름표 래퍼에 data-night-pick 이 실려 런타임이 그 사람 몸 윤곽·고리 조임을 건다.
@@ -400,7 +402,7 @@ export function WorldStage(props: WorldStageProps) {
                   data-pick={p.seat}
                   aria-label={pick.label(p.nickname)}
                   aria-pressed={pick.mine === p.seat}
-                  aria-disabled={props.canSend ? undefined : true}
+                  aria-disabled={props.canSend && pick.disabled !== true ? undefined : true}
                   // 버튼을 눌러도 채팅 입력칸의 포커스(키보드)를 뺏지 않는다
                   onMouseDown={(e) => e.preventDefault()}
                   onPointerDown={aim ? () => setPressSeat(p.seat) : undefined}
@@ -408,7 +410,8 @@ export function WorldStage(props: WorldStageProps) {
                   onPointerLeave={aim ? () => setPressSeat((s) => (s === p.seat ? undefined : s)) : undefined}
                   onPointerCancel={aim ? () => setPressSeat((s) => (s === p.seat ? undefined : s)) : undefined}
                   onClick={() => {
-                    if (live.current.props.canSend) live.current.props.pick?.onPick(p.seat);
+                    const pickNow = live.current.props.pick;
+                    if (live.current.props.canSend && pickNow?.disabled !== true) pickNow?.onPick(p.seat);
                   }}
                 >
                   {aimState === "mine" ? (
