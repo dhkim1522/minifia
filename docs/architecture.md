@@ -89,6 +89,29 @@ v2.0 대기실은 "같은 공간" 맵이다(결정 0044·0050). 이동은 서버
 - 연속성(`shared/game/continuity.ts`): 방장 이양(끊긴 지 45초, 가장 이른 `joinSeq`)·대기실 정리(3분)·결과 단계 `left` 표시, 테스트 방 3초·6초. 알람은 `nextWakeAt` 한 곳.
 - 맵: `MAPS` 표(`shared/game/maps.ts`, 광장은 `mapPlaza.ts`), `PLAYABLE_MAPS = ["bar","plaza"]`, 랜덤은 시작(`beginGame`)에서 서버가 정해 `view.map` 에 싣는다(시작 전엔 키 없음).
 
+## 소리 (12페이즈, 결정 0070)
+
+- 소리 56개(배경음 7·효과음 49)는 전부 Web Audio 합성이고 외부 파일·라이브러리가 없다. 서버는 소리를 모른다 — 새 메시지·프레임·view 키가 0이다(`test/unit/soundProtocol.test.ts`). 출처와 레시피 지도는 `docs/audio.md`.
+- `src/audio/` 구조:
+
+  | 파일 | 역할 |
+  |------|------|
+  | `recipes.ts` | 소리 id → 레시피 표(`RECIPES`·`BEDS`), 한계·믹스 상수, 결정적 렌더 계획(`renderPlan`·`bedPlan`). import 0, 순수 데이터 |
+  | `script.ts` | 시간표 대본(판결·밤·아침·결과·시상·유언·틱)과 동작 소리 게이트. 순수 함수 |
+  | `synth.ts` | 렌더 계획을 노드 그래프로(실시간 엔진과 오프라인 렌더가 함께 씀), 버스·compressor |
+  | `engine.ts` | 컨텍스트·보이스 상한(8)·노드 예산(48)·침대 크로스페이드·덕킹·대본 실행, `createEngine(deps)` |
+  | `prefs.ts` | 켬/끔 저장값(`localStorage`), 서버로 가지 않는다 |
+  | `testHook.ts` | `window.__mfSound`(요청 로그, id·시각만). `?e2e=1`·개발 빌드에서만 |
+  | `unlock.ts` | 앱 하나의 엔진(`getEngine`)과 참가 버튼용 동기 잠금 해제 |
+  | `useSound.ts` | 방 화면이 쥐는 훅: 엔진 구독, 제스처 resume, 숨김 suspend, 감독 연결 |
+  | `audioView.ts` | 감독이 읽는 공개 view 필드 허용 목록(`AudioView`) |
+  | `director.ts` | `AudioView` 차이와 닫힌 로컬 신호를 소리 출력으로 바꾸는 순수 함수(감독) |
+  | `signals.ts` | 닫힌 로컬 신호 종류(`tap`·`card`·`deny`·`vote`·`emote`·`tensionCue`·`result`) |
+
+- 감독 입력 규칙: 공개 view 차이 + 닫힌 로컬 신호만. 인자에 선택값·역할·좌석이 없다. 밤에는 서버 입력이 0이고 각자 난수 큐(시민 편은 시각 큐를 구독), 첫 스냅샷·재접속·epoch 변경은 침대만 깔고 일회성 소리는 내지 않는다. 시작 시각은 공개 단계 시각이고 아침·편지만 view 도착 기준이다. 정적 가드(`soundStaticGuard`)가 `src/audio/` 의 import 와 읽는 경로를 고정한다.
+- 시험 페이지 `/?sound-lab=1`(개발·`?e2e=1` 문맥, 배포 진입 번들에 없음)이 56개를 들려주고 오프라인 렌더로 피크·NaN·길이를 검사한다(`window.__mfSoundLab`).
+- 단추와 알약: `src/components/v2/SoundButton.tsx`. 화면 영역은 `docs/screen-map.md`.
+
 ## 상태 공개 원칙
 
 - 서버는 플레이어마다 다른 상태를 보낸다. 시민에게는 다른 사람의 역할을 보내지 않는다.
@@ -98,6 +121,7 @@ v2.0 대기실은 "같은 공간" 맵이다(결정 0044·0050). 이동은 서버
 - 정치·박진감 장치의 공개 값(결정 0066·0067): 공개는 `players[].badge`·`badgeSwapped`(직업 주장 배지와 말 바꿈 표시, 실제 역할이 아니다)·`day.runoff`(결선 후보와 단계, 마감 뒤 득표 수만)·`day.showdown`(단계와 차례, 동시 지목 중에는 `voted` 완료 좌석만, 공개에서 득표)·`day.verdict.ballots`·`day.verdict.last`(마지막 3인 처형)이고, 본인 한정은 `me.ballot`·`me.whisperUsed`다. 서버 전용은 `Player.badgeLog`·`RoomState.whispers`·`runoffVote`·`showdownPick`이며 어떤 프레임에도 실리지 않는다(누설 시험이 서버 전용 키를 본다).
 - 캐릭터 의상(결정 0068): 공개는 `players[].look`(역할과 무관, 모든 단계·viewer 같음)이고, 서버 전용은 동작 기록(`emoteRates`, 인메모리)이다. 동작 프레임 `n` 은 채널별로 세어 틈이 다른 채널에 새지 않는다.
 - 결과 공개·다시 하기(결정 0069): 공개는 `view.round`·`mapChoice`·`map`·`players[].ready`·`players[].sat`·`resting`(쉬는 사람 본인에게만, 자기 한 줄)·`result.awards`와 ended 에서만 가는 `resultLog` 프레임이다(끝난 뒤라 신분 구분 없음). 서버 전용은 `Player.stats`·`disconnectedAt`·`left`·`bench` 로 어떤 프레임에도 실리지 않는다.
+- 소리(결정 0070): 서버에 새 값·메시지가 없다. 설정(켬/끔)은 기기 저장소에만 있고, 훅 로그는 소리 id·시각만 싣는다(역할·좌석 없음). 12페이즈 누설 불변식 LS-1~LS-11: 소리가 정보를 나르면 화면에도 이미 있고, 밤 소리는 모든 역할이 같으며, 암살음은 피해자만, 받지 못한 프레임은 소리도 없다.
 - 유령(결정 0060-8, 0021): 유령은 모든 사람의 역할과 밤 선택을 본다(spectate 경로). 유령 시점의 직업 의상 안개는 이 spectate 로 화면이 입힌다(서버 새 필드 없음, 0063-2·0064-14). 반대로 산 사람의 소켓 · DOM 에는 유령의 위치 · 움직임 · 채팅 · 입력 중이 없다. 이 규칙은 서버 한 곳(audience)에서 막고 시험과 E2E 누설 검사가 증명한다.
 
 ## 재접속
@@ -116,7 +140,7 @@ v2.0 대기실은 "같은 공간" 맵이다(결정 0044·0050). 이동은 서버
 
 - 화면이 꺼지거나 다른 앱으로 가면 WebSocket 이 끊긴다. 재접속이 필수 기능이다.
 - 진동(Vibration API)이 동작하지 않는다. 앱으로 감쌀 때 Capacitor 로 붙인다.
-- 소리는 사용자가 한 번 누른 뒤에만 재생된다. 방 참가 버튼에서 오디오를 깨운다.
+- 소리는 사용자 제스처 안에서만 깨어난다(결정 0070-3, B-3). 참가·만들기 제출 탭 핸들러 맨 앞에서 **동기로** `unlockAudio()` 를 부른다(`await` 뒤는 제스처가 아니다). 재접속은 알약 또는 아무 탭의 `pointerup`·`touchend`에서 `resume()`. 오디오 세션은 `ambient`(무음 스위치 존중, 다른 앱 음악과 섞임), 탭 숨김은 suspend·복귀는 resume(놓친 소리는 안 틂), `interrupted` 복구는 실기기 확정 대기.
 - 웹 푸시 알림은 홈 화면에 추가한 경우에만 된다. MVP 에서는 쓰지 않는다.
 - 게임 중 화면 꺼짐 방지는 Screen Wake Lock API 를 쓰고, 지원하지 않으면 생략한다. (훅 `src/net/useWakeLock.ts`, 방 화면 `RoomScreen` 이 대기실부터 결과 전까지 건다. 결정 0038)
 

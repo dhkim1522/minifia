@@ -62,6 +62,8 @@
 | `data-float="dress"` · `data-dress-sheet` · `data-outfit="{id}"` | 로비 꾸미기 버튼 · 패널을 덮는 한 줄 카드 띠 · 카드 | 로비에서만(게임 단계에는 없음). 카드는 `aria-pressed`, 선택 카드 이름에 "선택됨" |
 | `window.__mfEmotes` · `window.__mfLooks` | 테스트 훅 | 마지막 동작 프레임·재생 중 좌석 / 좌석 → 의상 id (`?e2e=1`·개발 빌드만) |
 | `window.__mfWorld` | 전역 | `sample(seat, t)` 로 걷는 중 서버 구간 위치를 읽음. `shown(seat)` = 마지막 프레임에 그린 위치(내 예측·구간 섞기 포함)와 프레임 시각. `?e2e=1` 또는 개발 빌드에서만 생김 |
+| `data-sound-button` · `data-sound-state="{on\|off\|locked}"` | 소리 단추(방 화면 한 곳) | 12페이즈(결정 0070). 단추 하나뿐, 상태 셋. 역할 값 없음 |
+| `data-sound-lab` · `data-sound-id="{id}"` · `window.__mfSound` · `window.__mfSoundLab` | 시험 페이지 · 소리 행 · 테스트 훅 | `/?sound-lab=1`(개발·`?e2e=1` 문맥만). `__mfSound` = 상태 + 요청 로그(id·시각만), `__mfSoundLab` = 오프라인 렌더 결과 56개 |
 
 3D 캐릭터는 DOM 에 위치가 없으므로 위치 비교는 `__mfWorld.sample` 로 한다. W11·W12(탭 뒤 화면 출발·한 프레임 튐)는 `shown` 으로 잰다(결정 0059, 07-26). 자동 검사 묶음 G · H 를 폰 크기 6종에 적용한다(H 는 위쪽 가림막 위에서 잰다). 6페이즈 E2E 는 06-17, 채팅 패널 계약(`chat-lobby` · `chat-keyboard` · `chat-ime` · `chat-table` · `chat-ghost`)은 7페이즈(07-15~07-20)가 `scripts/e2e/` 에 더했다.
 
@@ -168,6 +170,19 @@
 | `data-map-chip` · `data-map-card` | 지도 칩 · 꾸미기 시트 맵 카드 | 현재 선택(bar·plaza·random) · 카드 3장 |
 | `data-bench-view` | 쉬는 사람 화면 | 쉬는 사람 본인에게만 |
 
+## 소리 단추·알약 (12페이즈, 결정 0070)
+
+방 화면(대기실·낮·밤·결과) 오른쪽 위에 소리 단추 하나가 떠 있다. 홈·링크 참가·닉네임 시트에는 없다(소리가 아직 없다). 값은 12-07 이 확정한 기하다(UI-SPEC B-1 의 추정과 같은 자리).
+
+| 항목 | 값 |
+|---|---|
+| 위치 | 위 70(헤더 아래 끝 62 + 8)·오른쪽 16, 시각 뷰포트 오프셋(`--mf-vv-top`)을 따라간다 |
+| 크기 | 누르기 44×44, 시각 지름 36. 알약(`locked`)은 116.9×44, 8초 뒤 단추로 접힌다 |
+| 층 | `z-index: calc(var(--z-overlay) + 1)` = 51. 헤더 단추·[테스트]·TopToast 와 겹침 0이고, 재접속 띠와 겹치면 단추가 위 |
+| 상태 | `on`(스피커 + 파동) · `off`(빗금, 불투명도 0.6) · `locked`(알약 「소리 켜기」). 접근성 이름: on 「소리 끄기」, off·locked 「소리 켜기」, `aria-pressed` |
+
+겹침 검사(SU1~SU7): 단추 정확히 하나·누르기 44 이상·위치 허용 ±2·헤더 단추/[테스트]/토스트와 겹침 0·재접속 띠 위 최상단이 단추 자신·시각 지름 36±1·접근성 이름. 폭 360 에서 알약(≈117)은 가운데 토스트와 8초간 겹칠 수 있고 이때도 층은 단추가 위다. 소리 시험 페이지 안내: 개발 서버(`npm run dev`, `--host` 포함)를 켜고 폰에서 `/?sound-lab=1` 을 연다(`docs/audio.md`).
+
 ## 자동 검사 (배포본 E2E, 결정 0025)
 
 `npm run e2e` 가 시스템 Chrome 으로 배포본을 열어 네 크기(360×640, 390×664, 430×932, 360×560)와 고정 흐름(pc 1280×800, wakelock 360×640 등)을 돈다. 결과는 흐름 × 크기 표다. 8페이즈에서 v1.0 테이블 흐름 열한 개(police5 · citizen4 · mafia8 · doctor5 · spec4 · vote5 · noexec · result-c · result-m · chat-table · chat-ghost)를 지우고 맵 게임 흐름 여섯 개를 더했다: `day`(토론 끝내기 · 지목 · 변론 · 찬반 · 처형 알림 · 밤, 폰 6종) · `ghost`(유령 화면 · 누설 없음, 폰 6종) · `noexec`(지목 동률 · 처형 없음) · `night`(밤 임시 틀 역할별 흐름을 9페이즈에서 다시 씀) · `result`(결과 화면, `RS-FIT`: 폰 6종에서 [처음으로] 가 스크롤 없이 화면 안, 0062-6) · `chat-game`(게임 중 채팅 채널). 09.1(결정 0063·0064)에서 `day` 는 순차 지목(NT: 모이기 · 차례 알약 · 내 차례 · 끝 알림), `ghost` 는 직업 의상 안개와 불투명 이름표(GH · L13), `night` 은 유언 편지(LT: 등장 · 인장 · 알림 위 72 · 접힘 뒤 카드), `night-sizes` 는 폰 6종 편지 맞춤(유언 50자, `WILL50`)을 더 본다. 9페이즈(09-22)의 night 흐름은 암살(다가가기 · 확정 · 쪽지 → 아침 분필 · 알림 · 유언 · 쪽지 카드) · 구출 · 불일치 · 처형 유언 · 경찰 결과 · 피해자 이펙트(막 · 번쩍임 · 유령 화면) 여섯 시나리오와 시민 편 DOM 누설 검사 · 묶음 G · H 를 승인 보드 폭(390×844)에서 돌고, `night-sizes` 가 폰 6종에서 내 이름표가 스테이지 안에 완전히 들어오는지(`tagInStage`) · 마피아 이름표 버튼 44×44 · 얼굴 칸 이름 · 패널 높이를 잰다. 줄바꿈된 얼굴 목록 + 가장 짧은 폰(360×560)에서 이름표가 스테이지 위로 올라가는 것은 UI-SPEC 알려진 한계라 참고 줄(`SZ4k`)로만 남긴다. 낮 · 밤 · 아침 렌더 부하는 `node scripts/perf-run.mjs --mode nightload`(CPU 4× 감속, 결과 `.planning/phases/09-night-morning/perf/`)로 재고 판정은 실기기 확인이 한다. 배포본 전체가 900초를 넘으면 `--only` 로 나눠 돌린다. 기준값은 낮추지 않고, 승인된 예외만 `APPROVED_RELAXATIONS` 에 이유와 함께 둔다.
@@ -188,7 +203,9 @@
 
 09.1.1(정치·박진감 장치, 결정 0066·0067)이 더한 흐름: `politics-badge`(직업 배지 · 말 바꿈) · `politics-whisper`(귓속말 두 줄 · 당사자 마스크) · `politics-pin`(지목 핀 조명) · `politics-verdict`(찬반 기록 묶음 · 판결 줌) · `politics-runoff`(+ `politics-runoff-tie`, 동점 결선) · `politics-showdown`(+ `politics-showdown-tie`, 마지막 3인). 폰 6종을 도는 흐름과 한 크기(390×844)만 도는 흐름이 있고, 검사 문턱은 낮추지 않았다. 마지막 3인은 방장을 처형해 산 사람 셋이 되는 날을 실제로 만들어 확인한다. 실기기 확인은 `.planning/phases/09.1.1-politics-tension/09.1.1-DEVICE-CHECKS.md`.
 
-서버 쪽은 `scripts/smoke.mjs`(4 · 5 · 8명 한 판), `scripts/uat-*.mjs`(낮 · 밤 · 투표 · 테스트 방 · 봇 시나리오)가 배포본 소켓으로 확인한다. 역할 누출은 `test/worker` 의 누출 검사가 막는다.
+12페이즈(소리, 결정 0070)가 더한 흐름: `sound-render`(시험 페이지 오프라인 렌더 56개, 방 없음) · `sound-unlock`(켜기·끄기·알약·숨김, 단추 기하·겹침, **폰 6종**) · `sound-script`(단계마다 훅 로그의 소리 id 순서 + 처형 통과/부결 + 새로고침은 침대만) · `sound-night-parity`(역할마다 밤 소리 집합 동일·암살음 피해자만·동작 누설 0) · `sound-result`(뒤집기 수·승패 1회·시상 패·새로고침은 침대만·건너뛰기). 앞의 `sound-unlock` 만 폰 6종이고 나머지 넷은 로그 검사라 390×844 한 크기다. 훅 로그는 실제 소리 출력에 기대지 않아 헤드리스에서도 같다. 소리를 켠 5분 성능은 `perf-run --mode nightload --sound on` 으로 잰다.
+
+서버 쪽은 `scripts/smoke.mjs`(4 · 5 · 8명 한 판), `scripts/uat-test-room.mjs`(테스트 방, 12페이즈에 나머지 uat 스크립트를 지웠다 — 결정 0070-6)가 배포본 소켓으로 확인한다. 역할 누출은 `test/worker` 의 누출 검사가 막는다.
 
 ## 에셋 자동 검사
 
