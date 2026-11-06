@@ -20,6 +20,19 @@ vi.mock("../../src/net/useRoomConnection", () => ({
   useRoomConnection: () => connectionMock.current,
 }));
 
+// 12-11: 결과 사건 신호(result)를 가로채 모은다 — 처리기는 그대로 불러 RoomScreen 의 소리 훅 동작은 바뀌지 않는다
+const sigs = vi.hoisted(() => ({ got: [] as { kind: string; [k: string]: unknown }[] }));
+vi.mock("../../src/audio/signals", async (importOriginal) => {
+  const m = await importOriginal<typeof import("../../src/audio/signals")>();
+  return {
+    ...m,
+    emitSignal: (s: Parameters<typeof m.emitSignal>[0]) => {
+      sigs.got.push(s as unknown as { kind: string });
+      m.emitSignal(s);
+    },
+  };
+});
+
 const stage = vi.hoisted(() => ({ props: null as null | WorldStageProps, mounts: 0 }));
 vi.mock("../../src/components/WorldStage", async () => {
   const { createElement, useEffect } = await import("react");
@@ -164,6 +177,7 @@ beforeEach(() => {
   vi.setSystemTime(NOW);
   stage.props = null;
   stage.mounts = 0;
+  sigs.got.length = 0;
   delete (window as { __mfResult?: unknown }).__mfResult;
 });
 afterEach(() => {
@@ -1790,5 +1804,212 @@ describe("결과 단계 지도 칩과 맵 탭 (11-13, D-20·O-11)", () => {
       list.splice(0, list.length, ...saved);
       restore = openPlaza();
     }
+  });
+});
+
+// ---------- 12-11: 결과·시상 사건 신호 — 시계가 낸 사건에 소리가 붙는다 (D-15, LS-10, T-12-41, T-12-44) ----------
+describe("결과 사건 신호 (12-11)", () => {
+  const AWARDS5: AwardLine[] = [
+    { seat: 3, award: "whiff", k: 2 },
+    { seat: 2, award: "spectator", k: 1, at: "night" },
+    { seat: 1, award: "detective", k: 1 },
+    { seat: 4, award: "talker", k: 12 },
+    { seat: 0, award: "survivor" },
+  ];
+  const executionView = (count = 5): RoomView => {
+    const v = makeView({ count });
+    v.phase = "execution";
+    delete (v as { result?: unknown }).result;
+    v.day = { ...v.day!, candidate: 3, execution: { seat: 3 } };
+    return v;
+  };
+  const arrive = (opts: Opts = {}) => {
+    const r = renderRoom(executionView(opts.count));
+    r.rerenderRoom(makeView(opts));
+    return r;
+  };
+  // 100ms 경계마다 끊어 나아간다(시상식 시험과 같은 방식)
+  const advance = (ms: number) => {
+    let left = ms;
+    while (left > 0) {
+      const into = (Date.now() - NOW) % 100;
+      const step = Math.min(left, into === 0 ? 100 : 100 - into);
+      act(() => void vi.advanceTimersByTime(step));
+      left -= step;
+    }
+  };
+  const results = () => sigs.got.filter((s) => s.kind === "result");
+  const flips = () => results().filter((s) => s.step === "flip").map((s) => s.i);
+  const lights = () => results().filter((s) => s.step === "light").map((s) => s.win);
+  const plates = () => results().filter((s) => s.step === "plate").map((s) => [s.k, s.total]);
+  const withReduced = (fn: () => void) => {
+    const real = window.matchMedia;
+    Object.defineProperty(window, "matchMedia", { configurable: true, writable: true, value: () => ({ matches: true, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} }) });
+    try {
+      fn();
+    } finally {
+      Object.defineProperty(window, "matchMedia", { configurable: true, writable: true, value: real });
+    }
+  };
+
+  it("도착 직후(t=0)와 1199 까지는 신호가 없다", () => {
+    arrive();
+    advance(1199);
+    expect(results()).toEqual([]);
+  });
+
+  it("n=4: 1200·1600·2000·2400 에 flip 0..3 이 한 번씩, 4600 에 light 한 번", () => {
+    arrive({ count: 4, dead: [] });
+    advance(1200);
+    expect(flips()).toEqual([0]);
+    advance(400);
+    expect(flips()).toEqual([0, 1]);
+    advance(400);
+    expect(flips()).toEqual([0, 1, 2]);
+    advance(400);
+    expect(flips()).toEqual([0, 1, 2, 3]);
+    advance(2199);
+    expect(lights()).toEqual([]);
+    advance(1);
+    expect(lights()).toHaveLength(1);
+    advance(5000);
+    expect(flips()).toEqual([0, 1, 2, 3]);
+    expect(lights()).toHaveLength(1);
+  });
+
+  it("n=8: flip 이 여덟 번 (0..7)", () => {
+    arrive({ count: 8, dead: [] });
+    advance(4600);
+    expect(flips()).toEqual([0, 1, 2, 3, 4, 5, 6, 7]);
+  });
+
+  it("light 의 win: 내 팀이 이기면 참, 지면 거짓 (시민 viewer·마피아 viewer × 두 결과)", () => {
+    // 좌석 0 시민 · 3 마피아
+    const cases: [number, "citizenWin" | "mafiaWin", boolean][] = [
+      [0, "citizenWin", true],
+      [3, "citizenWin", false],
+      [0, "mafiaWin", false],
+      [3, "mafiaWin", true],
+    ];
+    for (const [me, winner, win] of cases) {
+      sigs.got.length = 0;
+      const r = arrive({ me, winner });
+      advance(4600);
+      expect(lights(), `${me}/${winner}`).toEqual([win]);
+      r.unmount();
+    }
+  });
+
+  it("내 좌석이 출연자 표에 없으면(쉬는 사람) win 은 참이다", () => {
+    arrive({ me: 6, sat: [6], jobs: DEFAULT_JOBS });
+    advance(4600);
+    expect(lights()).toEqual([true]);
+  });
+
+  it("신호 인자는 닫힌 값뿐이다: flip{i} · light{win} · plate{k,total} 만, 좌석·직업·닉네임 키가 없다", () => {
+    arrive({ awards: AWARDS5 });
+    advance(5600 + 900);
+    const keys = new Set(results().flatMap((s) => Object.keys(s)));
+    expect([...keys].sort()).toEqual(["i", "k", "kind", "step", "total", "win"]);
+    for (const s of results()) for (const v of Object.values(s)) expect(["string", "number", "boolean"]).toContain(typeof v);
+    expect(JSON.stringify(results())).not.toMatch(/mafia|police|doctor|citizen|지우|하윤/);
+  });
+
+  it("건너뛰기(1500): 남은 flip 신호를 만들지 않고 light 한 번만, 이후 탭·시간 경과에도 더 없다", () => {
+    arrive();
+    advance(1500);
+    expect(flips()).toEqual([0]);
+    act(() => stage.props!.onStageTap!());
+    expect(lights()).toHaveLength(1);
+    expect(flips()).toEqual([0]);
+    act(() => stage.props!.onStageTap!());
+    advance(8000);
+    expect(flips()).toEqual([0]);
+    expect(lights()).toHaveLength(1);
+  });
+
+  it("확장 탭이 시계를 멈춘 동안은 신호가 없고, 접히면 이어서 나간다 (소급 재생 없음)", () => {
+    const r = arrive();
+    advance(1500);
+    expect(flips()).toEqual([0]);
+    fireEvent.click(r.container.querySelector<HTMLElement>('[data-result-tab="mafia"]')!);
+    advance(6000);
+    expect(results()).toHaveLength(1);
+    act(() => stage.props!.onStageTap!()); // 무대 탭은 접기만
+    expect(results()).toHaveLength(1);
+    advance(100); // 경과 1500 → 1600
+    expect(flips()).toEqual([0, 1]);
+    advance(3000); // 4600
+    expect(lights()).toHaveLength(1);
+  });
+
+  it("재접속·처음 마운트(arrivedFrom 없음)는 신호가 하나도 없다", () => {
+    renderRoom(makeView({ awards: AWARDS5 }));
+    advance(20_000);
+    expect(results()).toEqual([]);
+  });
+
+  it("에포크가 바뀐 재접속으로 받은 ended 도 신호가 없다", () => {
+    const r = renderRoom(executionView());
+    r.rerenderRoom(makeView({ awards: AWARDS5 }), { epoch: 2 });
+    advance(20_000);
+    expect(results()).toEqual([]);
+  });
+
+  it("모션 줄이기로 곧바로 최종 상태가 열리면 light 한 번만 (flip 없음)", () => {
+    withReduced(() => {
+      arrive();
+      advance(50);
+      expect(flips()).toEqual([]);
+      expect(lights()).toEqual([true]);
+      advance(10_000);
+      expect(lights()).toHaveLength(1);
+    });
+  });
+
+  it("시상: 패가 뜨는 5600+2500k+900 마다 plate{k,total} 한 번씩", () => {
+    arrive({ awards: AWARDS5 });
+    advance(5600 + 899);
+    expect(plates()).toEqual([]);
+    advance(1);
+    expect(plates()).toEqual([[0, 5]]);
+    advance(2499);
+    expect(plates()).toEqual([[0, 5]]);
+    advance(1);
+    expect(plates()).toEqual([[0, 5], [1, 5]]);
+    advance(2500 * 3);
+    expect(plates()).toEqual([[0, 5], [1, 5], [2, 5], [3, 5], [4, 5]]);
+    advance(10_000);
+    expect(plates()).toHaveLength(5);
+  });
+
+  it("[넘기기]는 지금 패 신호를 새로 만들지 않고 다음 패가 뜰 때 한 번 — 연타해도 패마다 한 번", () => {
+    const r = arrive({ awards: AWARDS5 });
+    advance(5600 + 900);
+    expect(plates()).toEqual([[0, 5]]);
+    const skip = r.container.querySelector<HTMLElement>('[data-float="skip"]')!;
+    act(() => void fireEvent.click(skip));
+    expect(plates()).toEqual([[0, 5]]);
+    advance(899);
+    expect(plates()).toEqual([[0, 5]]);
+    advance(1);
+    expect(plates()).toEqual([[0, 5], [1, 5]]);
+  });
+
+  it("시상 직전 건너뛰기로 창을 넘겨도 소리 없이 사라진 패는 나중에 재생되지 않는다", () => {
+    const r = arrive({ awards: AWARDS5 });
+    advance(5600 + 100);
+    const skip = r.container.querySelector<HTMLElement>('[data-float="skip"]')!;
+    act(() => void fireEvent.click(skip)); // 첫 패가 뜨기 전에 다음 창으로
+    advance(20_000);
+    expect(plates().map((p) => p[0])).toEqual([1, 2, 3, 4]);
+  });
+
+  it("모션 줄이기라도 시상 패 신호는 그대로 나간다 (소리는 줄지 않는다)", () => {
+    withReduced(() => {
+      arrive({ awards: AWARDS5 });
+      advance(900 + 50);
+      expect(plates()).toEqual([[0, 5]]);
+    });
   });
 });

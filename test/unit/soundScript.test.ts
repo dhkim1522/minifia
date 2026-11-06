@@ -232,7 +232,7 @@ describe("카운트다운 시각표 — tickSchedule·pickTickSchedule", () => {
 describe("대본 입력 경계 (LS-11)", () => {
   const src = readFileSync(`${ROOT}src/audio/script.ts`, "utf8");
   const FORBIDDEN_PARAMS = ["phaseEndsAt", "serverNow", "arrivedAt", "frame", "view", "RoomView", "role", "now"];
-  const FUNCTIONS = ["verdictScript", "nightCues", "nightScript", "resultScript", "awardScript", "willScript", "tickSchedule", "pickTickSchedule"];
+  const FUNCTIONS = ["verdictScript", "nightCues", "nightScript", "resultScript", "awardScript", "flipCue", "lightCues", "plateCues", "willScript", "tickSchedule", "pickTickSchedule"];
 
   it.each(FUNCTIONS)("%s 의 인자에 서버 프레임·도착 시각·역할이 없다", (name) => {
     const m = new RegExp(`export function ${name}\\(([^)]*)\\)`).exec(src);
@@ -249,6 +249,7 @@ describe("대본 입력 경계 (LS-11)", () => {
     expect(fields("VerdictInput")).toEqual(["passed", "last", "hasBallots"]);
     expect(fields("ResultInput")).toEqual(["n", "win"]);
     expect(fields("AwardInput")).toEqual(["k", "total"]);
+    expect(fields("LightInput")).toEqual(["win"]);
     expect(fields("WillInput")).toEqual(["writeMs"]);
   });
 
