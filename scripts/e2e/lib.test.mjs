@@ -144,6 +144,8 @@ import {
   SOUND_RENDER_LIMITS,
   soundButtonChecks,
   soundRenderChecks,
+  soundSequenceChecks,
+  SOUND_SCRIPT_STEPS,
   sheetFitChecks,
   claimBadgeChecks,
   ballotFitChecks,
@@ -2997,4 +2999,76 @@ test("soundButtonChecks: 빠진 입력(null)은 측정값 없음으로 실패", 
   assert.ok(lines.every((l) => !l.ok && /측정값 없음/.test(l.detail)));
   assert.ok(soundButtonChecks(soundIn({ button: null })).some((l) => !l.ok));
   assert.ok(soundButtonChecks(soundIn({ viewport: null })).some((l) => !l.ok));
+});
+
+// ---- 12-08 sound-script: 단계 구간별 소리 id 순서 판정 ----
+
+const L = (...ids) => ids.map((id, i) => ({ id, at: 1000 + i * 10, gain: 1, played: true }));
+const sFails = (lines) => lines.filter((l) => !l.ok).map((l) => l.id);
+
+test("soundSequenceChecks: 기대 id 가 순서대로(부분 수열) 있으면 통과 — 사이에 다른 id 가 끼어도 된다", () => {
+  const steps = [{ id: "S1", label: "시작", ids: ["game.start", "role.flip"] }];
+  assert.deepEqual(sFails(soundSequenceChecks([L("game.start", "role.flip")], steps)), []);
+  assert.deepEqual(sFails(soundSequenceChecks([L("ui.tap", "game.start", "ui.tap", "role.flip")], steps)), []);
+  assert.equal(soundSequenceChecks([L("game.start", "role.flip")], steps).length, 1);
+});
+
+test("soundSequenceChecks: 순서가 뒤집히거나 누락되면 그 단계만 실패하고 detail 에 이유가 있다", () => {
+  const steps = [
+    { id: "A", label: "a", ids: ["bed.reveal", "role.flip"] },
+    { id: "B", label: "b", ids: ["day.start"] },
+  ];
+  const lines = soundSequenceChecks([L("role.flip", "bed.reveal"), L("day.start")], steps);
+  assert.deepEqual(sFails(lines), ["A"]);
+  assert.match(lines[0].detail, /role\.flip/);
+  assert.deepEqual(sFails(soundSequenceChecks([L("bed.reveal"), L()], steps)), ["A", "B"]);
+  assert.deepEqual(sFails(soundSequenceChecks([L(), L("day.start")], steps)), ["A"]);
+});
+
+test("soundSequenceChecks: 같은 id 가 여러 번 필요하면 그 횟수만큼 있어야 한다(틱 셋)", () => {
+  const steps = [{ id: "T", label: "tick", ids: ["timer.tick", "timer.tick", "timer.tick"] }];
+  assert.deepEqual(sFails(soundSequenceChecks([L("timer.tick", "timer.tick", "timer.tick")], steps)), []);
+  assert.deepEqual(sFails(soundSequenceChecks([L("timer.tick", "timer.tick")], steps)), ["T"]);
+});
+
+test("soundSequenceChecks: notIds 가 하나라도 있으면 실패", () => {
+  const steps = [{ id: "N", label: "n", ids: ["bed.vote"], notIds: ["day.start", "role.flip"] }];
+  assert.deepEqual(sFails(soundSequenceChecks([L("bed.vote")], steps)), []);
+  const bad = soundSequenceChecks([L("bed.vote", "role.flip")], steps);
+  assert.deepEqual(sFails(bad), ["N"]);
+  assert.match(bad[0].detail, /role\.flip/);
+});
+
+test("soundSequenceChecks: counts 는 정확한 횟수(0 포함), onlyPrefix 는 모든 줄이 그 접두어이고 한 줄 이상", () => {
+  const counts = [{ id: "C", label: "c", ids: [], counts: { "bed.day": 1, "bed.vote": 0 } }];
+  assert.deepEqual(sFails(soundSequenceChecks([L("bed.day", "day.start")], counts)), []);
+  assert.deepEqual(sFails(soundSequenceChecks([L("bed.day", "bed.day")], counts)), ["C"]);
+  assert.deepEqual(sFails(soundSequenceChecks([L("bed.day", "bed.vote")], counts)), ["C"]);
+  assert.deepEqual(sFails(soundSequenceChecks([L()], counts)), ["C"]);
+  const only = [{ id: "O", label: "o", ids: [], onlyPrefix: "bed." }];
+  assert.deepEqual(sFails(soundSequenceChecks([L("bed.vote")], only)), []);
+  assert.deepEqual(sFails(soundSequenceChecks([L("bed.vote", "day.start")], only)), ["O"]);
+  assert.deepEqual(sFails(soundSequenceChecks([L()], only)), ["O"], "한 줄도 없으면 공허한 통과를 막는다");
+});
+
+test("soundSequenceChecks: 구간 수와 단계 수가 다르거나 로그 모양이 틀리면 측정값 없음으로 실패", () => {
+  const steps = [{ id: "A", label: "a", ids: ["day.start"] }];
+  assert.ok(soundSequenceChecks([], steps).every((l) => !l.ok && /측정값 없음/.test(l.detail)));
+  assert.ok(soundSequenceChecks([L("day.start"), L("day.start")], steps).every((l) => !l.ok));
+  assert.ok(soundSequenceChecks([[{ nope: 1 }]], steps).every((l) => !l.ok));
+  assert.ok(soundSequenceChecks(null, steps).every((l) => !l.ok));
+});
+
+test("SOUND_SCRIPT_STEPS: 단계 표가 있고 id·label 이 겹치지 않으며 기대 id 에 오타가 없다", () => {
+  assert.ok(SOUND_SCRIPT_STEPS.length >= 9);
+  assert.equal(new Set(SOUND_SCRIPT_STEPS.map((x) => x.id)).size, SOUND_SCRIPT_STEPS.length);
+  for (const st of SOUND_SCRIPT_STEPS) {
+    assert.equal(typeof st.label, "string");
+    assert.ok(Array.isArray(st.ids));
+  }
+  const first = SOUND_SCRIPT_STEPS.find((x) => x.ids.includes("game.start"));
+  assert.ok(first, "game.start 를 기대하는 단계");
+  assert.ok(SOUND_SCRIPT_STEPS.some((x) => x.ids.includes("pick.turn") && x.ids.includes("pin.on")));
+  assert.ok(SOUND_SCRIPT_STEPS.some((x) => x.ids.includes("pick.point") && x.ids.includes("pin.move")));
+  assert.ok(SOUND_SCRIPT_STEPS.some((x) => x.notIds?.includes("game.start") && x.notIds.includes("day.start")), "새로고침 단계는 일회성 소리가 없음을 확인");
 });

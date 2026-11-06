@@ -502,6 +502,28 @@ describe("12페이즈 소리 시험 페이지 E2E 표식·문턱(12-06)", () => 
   });
 });
 
+describe("12페이즈 sound-script E2E 기대 표 (12-08)", () => {
+  type Step = { id: string; label: string; ids: string[]; notIds?: string[]; counts?: Record<string, number>; onlyPrefix?: string };
+  const lib = e2eLib as unknown as { SOUND_SCRIPT_STEPS: readonly Step[] };
+  const root = new URL("../../", import.meta.url);
+
+  it("기대 id 는 모두 실제 소리 id 이고 counts 의 키도 마찬가지다 (오타가 거짓 통과를 만들지 않게)", () => {
+    const known = new Set<string>(SOUND_IDS);
+    const named = lib.SOUND_SCRIPT_STEPS.flatMap((s) => [...s.ids, ...(s.notIds ?? []), ...Object.keys(s.counts ?? {})]);
+    expect(named.filter((id) => !known.has(id))).toEqual([]);
+  });
+
+  it("sound-script 가 flows.mjs 에 390x844(GAME_SIZE)로 등록돼 있다", () => {
+    const flows = readFileSync(new URL("scripts/e2e/flows.mjs", root), "utf8");
+    expect(flows).toMatch(/\{ id: "sound-script", run: soundScriptFlow, size: GAME_SIZE \}/);
+  });
+
+  it("단계 표는 감독의 단계 → 침대 표와 같은 침대 id 를 쓴다", () => {
+    const beds = lib.SOUND_SCRIPT_STEPS.flatMap((s) => s.ids.filter((id) => id.startsWith("bed.")));
+    expect([...new Set(beds)].sort()).toEqual(["bed.day", "bed.lobby", "bed.reveal", "bed.vote"]);
+  });
+});
+
 describe("11페이즈 맵 선택 E2E 표식·기하 (11-13)", () => {
   const maps = mapSelectE2e as unknown as { MAP_MARKERS: readonly string[]; MAP_CHIP: { disc: number; hit: number; left: number; below: number }; MAP_CARD: { w: number; h: number; gap: number; total: number } };
   const root = new URL("../../", import.meta.url);
