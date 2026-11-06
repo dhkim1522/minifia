@@ -786,3 +786,84 @@ describe("dayEvents — 마지막 3인 진입 (09.1.1-15)", () => {
     same(events.announces, [{ text: "밤이 되었습니다", at: 0, ms: 1600 }]);
   });
 });
+
+describe("기본판 투표 (결정 0072, U-1·U-4·U-5)", () => {
+  // 산 다섯 명, day.turn 없음 = 동시 투표
+  it("제목은 '투표', 시작 줄은 '투표 시작'", () => {
+    same(headerFor(nominationOf([])), { title: "투표", hint: "의심되는 사람을 눌러요" });
+    const events = dayEvents(viewOf("discussion"), nominationOf([]));
+    same(events.lines, [{ kind: "system", text: "투표 시작" }]);
+  });
+
+  it("유령은 같은 제목에 기존 유령 안내", () => {
+    const players = NAMES.map((name, seat) => pl(seat, name, seat !== 0));
+    same(headerFor(nominationOf([], { players })), { title: "투표", hint: "모두의 직업이 보여요" });
+  });
+
+  it("day.turn 이 있으면 기존 순차 규칙(제목만 '투표')", () => {
+    const withTurn = nominationOf([], { day: { turn: { order: [0, 1, 2, 3, 4], i: 1, endsAt: 8_000 } } });
+    same(headerFor(withTurn), { title: "투표" });
+  });
+
+  it("집계: 선두·과반·majority (산 5명 → 과반 3)", () => {
+    const two = pointsTally(nominationOf([[1, 2], [3, 2], [4, 0]]));
+    expect(two.leader).toBe(2);
+    expect(two.majority).toBe(3);
+    expect(two.sure).toBeUndefined();
+    const three = pointsTally(nominationOf([[1, 2], [3, 2], [4, 2]]));
+    expect(three.sure).toBe(2);
+  });
+
+  it("집계: 동점이면 leader·sure 없음 (산 4명, 2:2 는 과반 3 미만이라 어차피 sure 없음)", () => {
+    const tie = pointsTally(nominationOf([[1, 2], [3, 2], [4, 0], [2, 0]]));
+    expect(tie.leader).toBeUndefined();
+    expect(tie.sure).toBeUndefined();
+  });
+
+  it("새 표마다 vote 줄과 toasts, 바꾸면 '(바꿈)'", () => {
+    const first = dayEvents(nominationOf([]), nominationOf([[1, 2]]));
+    same(first.lines.filter((l) => l.kind === "vote"), [{ kind: "vote", text: "민준 → 도윤" }]);
+    same(first.toasts, [{ to: 2, from: [1], toName: "도윤", fromNames: ["민준"] }]);
+    const moved = dayEvents(nominationOf([[1, 2]]), nominationOf([[1, 3]]));
+    same(moved.lines.filter((l) => l.kind === "vote"), [{ kind: "vote", text: "민준 → 지호 (바꿈)" }]);
+    same(moved.toasts, [{ to: 3, from: [1], toName: "지호", fromNames: ["민준"], changed: true }]);
+  });
+
+  it("한 번에 여러 표가 생기면 좌석 오름차순으로 같은 순서의 toasts", () => {
+    const events = dayEvents(nominationOf([]), nominationOf([[3, 2], [1, 2]]));
+    same(events.toasts.map((t) => t.fromNames[0]), ["민준", "지호"]);
+  });
+
+  it("선두가 새 사람이면 hot '{이름} 님이 앞서요', 과반이 서면 '{이름} 님 과반'", () => {
+    const lead = dayEvents(nominationOf([]), nominationOf([[1, 2]]));
+    same(lead.lines.filter((l) => l.kind === "hot"), [{ kind: "hot", text: "도윤 님이 앞서요" }]);
+    const major = dayEvents(nominationOf([[1, 2], [3, 2]]), nominationOf([[1, 2], [3, 2], [4, 2]]));
+    same(major.lines.filter((l) => l.kind === "hot"), [{ kind: "hot", text: "도윤 님 과반" }]);
+    // 선두가 그대로면 줄이 없다
+    const same2 = dayEvents(nominationOf([[1, 2]]), nominationOf([[1, 2], [3, 2]]));
+    same(same2.lines.filter((l) => l.kind === "hot"), []);
+  });
+
+  it("prev 가 null 이거나 reset 이면 줄·toasts 없음", () => {
+    const first = dayEvents(null, nominationOf([[1, 2], [3, 2], [4, 2]]));
+    same([first.lines, first.toasts], [[], []]);
+    const reset = dayEvents(nominationOf([]), nominationOf([[1, 2], [3, 2], [4, 2]]), { reset: true });
+    same([reset.lines, reset.toasts], [[], []]);
+  });
+
+  it("turn 이 있는 view 쌍에서는 선두·과반 hot 줄이 없다 (순차 M-4)", () => {
+    const turn = { order: [0, 1, 2, 3, 4], i: 3, endsAt: 8_000 };
+    const withTurn = (pairs: [number, number][]) => nominationOf(pairs, { day: { turn } });
+    const events = dayEvents(withTurn([]), withTurn([[1, 2], [3, 2], [4, 2]]));
+    same(events.lines.filter((l) => l.kind === "hot"), []);
+  });
+
+  it("동점·0표로 밤에 들어오면 '처형 없음' 줄과 알림 1400ms", () => {
+    const night = viewOf("night", { day: { noExecution: { reason: "tie" } } });
+    const events = dayEvents(nominationOf([[1, 2], [3, 0]]), night);
+    same(events.lines, [{ kind: "system", text: "처형 없음" }]);
+    same(events.announces[0], { text: "처형 없음", at: 0, ms: 1400 });
+    const zero = dayEvents(nominationOf([]), viewOf("night", { day: { noExecution: { reason: "noVotes" } } }));
+    same(zero.announces[0], { text: "처형 없음", at: 0, ms: 1400 });
+  });
+});

@@ -710,3 +710,47 @@ describe("audioViewOf: 허용 필드만 (LS-6, T-12-27)", () => {
     expect(outs[2]).toEqual(outs[0]);
   });
 });
+
+// ───────────────────────── 기본판 낮: 꺼진 장치 소리 없음 (13-03, D-05·D-06) ─────────────────────────
+
+describe("기본판 낮에 꺼진 장치 소리 없음 (D-05)", () => {
+  const OFF_IDS = ["pick.turn", "pick.tick", "pick.skip", "pick.point", "pin.move", "runoff.intro", "runoff.reveal", "showdown.reveal"];
+  const pls: PublicPlayer[] = [0, 1, 2, 3, 4].map((seat) => ({ seat, nickname: `p${seat}`, connected: true, isHost: seat === 0 }));
+  const rv = (phase: PhaseId, day: Partial<DayView> = {}, mySeat = 0): RoomView => ({
+    code: "0042",
+    phase,
+    phaseEndsAt: NOW + 15_000,
+    phaseDurationMs: 15_000,
+    serverNow: NOW,
+    minPlayers: 4,
+    maxPlayers: 8,
+    players: pls,
+    me: { seat: mySeat, isHost: false },
+    day: { n: 1, roles: [], ...day },
+  });
+
+  it("토론 → 투표(표가 늘어남, day.turn 없음) → 변론 → 찬반 → 처형 → 밤을 차례로 넣어도 차례·결선·결전 소리가 없다", () => {
+    const seq: RoomView[] = [
+      rv("discussion"),
+      rv("nomination"),
+      rv("nomination", { points: [{ seat: 1, target: 2 }] }),
+      rv("nomination", { points: [{ seat: 1, target: 2 }, { seat: 3, target: 2 }] }),
+      rv("nomination", { points: [{ seat: 1, target: 2 }, { seat: 3, target: 2 }, { seat: 4, target: 2 }] }),
+      rv("defense", { candidate: 2 }),
+      rv("verdict", { candidate: 2 }),
+      rv("execution", { candidate: 2, verdict: { yes: 3, no: 1, passed: false } }),
+      rv("night"),
+    ];
+    const emitted: string[] = [];
+    for (let i = 1; i < seq.length; i++) {
+      const out = direct(audioViewOf(seq[i - 1]!), audioViewOf(seq[i]!), clock());
+      emitted.push(...ids(out), ...out.scripts.flatMap((s) => s.items.map((it) => it.id)));
+    }
+    for (const id of OFF_IDS) expect(emitted, id).not.toContain(id);
+  });
+
+  it("내가 투표한 순간(내 표가 새로 생김)에도 차례 소리가 없다", () => {
+    const out = direct(audioViewOf(rv("nomination")), audioViewOf(rv("nomination", { points: [{ seat: 0, target: 2 }] })), clock());
+    for (const id of OFF_IDS) expect(ids(out), id).not.toContain(id);
+  });
+});
