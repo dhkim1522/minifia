@@ -2855,8 +2855,8 @@ const soundRow = (id, over = {}) => ({ id, peakDb: -9, rmsDb: -30, nan: 0, lengt
 const soundRows = () => [...Array.from({ length: 7 }, (_, i) => soundRow(`bed.${i}`)), ...Array.from({ length: 49 }, (_, i) => soundRow(`sfx.${i}`))];
 const soundFails = (lines) => lines.filter((l) => !l.ok).map((l) => l.id);
 
-test("SOUND_RENDER_LIMITS: 56개 · 피크 −3 · RMS −60 · 길이 ±50ms (문턱은 이 한 곳)", () => {
-  assert.deepEqual({ ...SOUND_RENDER_LIMITS }, { count: 56, peakMaxDb: -3, rmsMinDb: -60, lengthTolMs: 50 });
+test("SOUND_RENDER_LIMITS: 57개 · 피크 −3 · RMS −60 · 길이 ±50ms (문턱은 이 한 곳)", () => {
+  assert.deepEqual({ ...SOUND_RENDER_LIMITS }, { count: 57, peakMaxDb: -3, rmsMinDb: -60, lengthTolMs: 50 });
   assert.throws(() => {
     SOUND_RENDER_LIMITS.peakMaxDb = 0;
   });
@@ -2866,14 +2866,14 @@ test("SOUND_MARKERS: 시험 페이지 표식 네 개 + 소리 단추 표식 둘(
   assert.deepEqual([...SOUND_MARKERS], ["data-sound-lab", "data-sound-id", "__mfSound", "__mfSoundLab", "data-sound-button", "data-sound-state"]);
 });
 
-test("soundRenderChecks: 정상 56개는 모두 통과", () => {
+test("soundRenderChecks: 정상 57개는 모두 통과", () => {
   const lines = soundRenderChecks(soundRows());
   assert.equal(lines.length, 6);
   assert.deepEqual(lines.map((l) => l.id), ["SR1", "SR2", "SR3", "SR4", "SR5", "SR6"]);
   assert.deepEqual(soundFails(lines), []);
 });
 
-test("soundRenderChecks: 개수가 56 이 아니면 SR1 실패(55·57)", () => {
+test("soundRenderChecks: 개수가 57 이 아니면 SR1 실패(56·58)", () => {
   const r = soundRows();
   assert.deepEqual(soundFails(soundRenderChecks(r.slice(1))), ["SR1"]);
   assert.deepEqual(soundFails(soundRenderChecks([...r, soundRow("extra.0")])), ["SR1"]);
@@ -3131,6 +3131,25 @@ test("soundNightParityChecks P1: 한 페이지의 밤에 다른 id 가 있거나
   assert.ok(sFails(parity(missing)).includes("P1"), "night.fall 이 빠진 페이지");
   const ok = okPages();
   assert.deepEqual(sFails(parity(ok)), []);
+});
+
+test("soundNightParityChecks: 밤 구간의 ui.host 는 P1·P3 을 깨지 않는다 — 공개 단계 전환 알림음은 모든 역할이 같은 프레임에 듣는다 (14-03, T-14-10)", () => {
+  const host = okPages();
+  for (let i = 0; i < host.length; i += 1) {
+    host[i] = page(host[i].label, [...NIGHT(3), "ui.host", ...MORNING("chalk.draw")], host[i].reloaded === true ? { reloaded: true } : {});
+  }
+  host[0] = page("방장(마피아)", [...NIGHT(3), "ui.host", ...MORNING("kill.slash", "chalk.draw")]);
+  const fails = sFails(parity(host));
+  assert.ok(!fails.includes("P1"), "P1 은 ui.host 를 뺀 밤 id 집합으로 본다");
+  assert.ok(!fails.includes("P3"), "P3 은 ui.host 를 밤 ui.* 로 세지 않는다");
+  // 문턱을 낮추지 않았다: ui.host 와 ui.tap 이 함께 있으면 여전히 P3 실패
+  const tap = okPages();
+  tap[0] = page("방장(마피아)", [...NIGHT(3), "ui.host", "ui.tap", ...MORNING("morning.calm")]);
+  assert.ok(sFails(parity(tap)).includes("P3"));
+  // ui.host 가 아닌 다른 id 가 밤에 끼면 P1 실패(기존 판정 유지)
+  const extra = okPages();
+  extra[1] = page("손님A(피해자)", [...NIGHT(2), "ui.host", "pick.turn", ...MORNING("kill.slash", "chalk.draw")]);
+  assert.ok(sFails(parity(extra)).includes("P1"));
 });
 
 test("soundNightParityChecks P2: 큐가 1개이거나 5개이면 실패, 새로고침 페이지는 상한만 본다", () => {

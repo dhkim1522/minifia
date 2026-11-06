@@ -530,8 +530,8 @@ describe("emote 신호 → emote.{id} (D-14, LS-4, T-12-37, T-12-39)", () => {
 // ───────────────────────── 신호 (ui.tap) ─────────────────────────
 
 describe("신호 tap → ui.tap (LS-7)", () => {
-  it("닫힌 신호 종류는 tap·card·tensionCue·vote·deny·emote·result 이고 인자에 선택값·역할·좌석이 없다", () => {
-    expect([...SIGNAL_KINDS]).toEqual(["tap", "card", "tensionCue", "vote", "deny", "emote", "result"]);
+  it("닫힌 신호 종류는 tap·card·tensionCue·vote·deny·emote·result·host 이고 인자에 선택값·역할·좌석이 없다", () => {
+    expect([...SIGNAL_KINDS]).toEqual(["tap", "card", "tensionCue", "vote", "deny", "emote", "result", "host"]);
   });
 
   it.each(PHASES.filter((p) => p !== "night"))("%s: ui.tap 한 번", (phase) => {
@@ -752,5 +752,30 @@ describe("기본판 낮에 꺼진 장치 소리 없음 (D-05)", () => {
   it("내가 투표한 순간(내 표가 새로 생김)에도 차례 소리가 없다", () => {
     const out = direct(audioViewOf(rv("nomination")), audioViewOf(rv("nomination", { points: [{ seat: 0, target: 2 }] })), clock());
     for (const id of OFF_IDS) expect(ids(out), id).not.toContain(id);
+  });
+});
+
+// ───────────────────────── 신호 (host) ─────────────────────────
+
+describe("사회자 알림음 host (HOST-02, 14-03)", () => {
+  it("낮 단계마다 ui.host 한 번 — 스크립트·침대·덕킹은 건드리지 않는다", () => {
+    for (const phase of PHASES.filter((p) => p !== "night")) {
+      const out = directSignal({ kind: "host" }, av(phase));
+      expect(out.now, phase).toEqual([{ id: "ui.host" }]);
+      expect(out.scripts, phase).toEqual([]);
+      expect(out.duck, phase).toBeNull();
+    }
+  });
+
+  it("밤에도 ui.host 한 번(LS-7 의 유일한 예외: 공개 단계 전환·모든 역할 같음)", () => {
+    expect(directSignal({ kind: "host" }, av("night")).now).toEqual([{ id: "ui.host" }]);
+  });
+
+  it("cur 가 없으면(첫 프레임 전) 무음", () => {
+    expect(quiet(directSignal({ kind: "host" }, null))).toBe(true);
+  });
+
+  it("신호 인자는 kind 하나뿐이다(역할·좌석 없음)", () => {
+    expect(Object.keys({ kind: "host" as const })).toEqual(["kind"]);
   });
 });

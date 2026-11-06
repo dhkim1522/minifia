@@ -147,11 +147,11 @@ describe("소리 레시피 — 트레이서 (D-1, D-18)", () => {
   });
 });
 
-// ───────────────────────── Task 2: 56개 전수 ─────────────────────────
+// ───────────────────────── Task 2: 57개 전수 ─────────────────────────
 
 const EXPECTED_BEDS = ["bed.lobby", "bed.reveal", "bed.day", "bed.vote", "bed.night", "bed.dawn", "bed.result"];
 const EXPECTED_SFX = [
-  "ui.tap", "ui.toggle", "ui.deny", "ui.card", "lobby.join", "game.start", "role.flip", "day.start", "timer.tick",
+  "ui.tap", "ui.toggle", "ui.deny", "ui.card", "ui.host", "lobby.join", "game.start", "role.flip", "day.start", "timer.tick",
   "phase.vote", "pin.on", "pin.move", "pick.turn", "pick.tick", "pick.point", "pick.skip", "runoff.intro",
   "runoff.reveal", "showdown.reveal", "vote.cast", "verdict.heart", "ballot.yes", "ballot.no", "execution.gavel",
   "execution.rise", "verdict.reject", "night.fall", "night.cue", "kill.slash", "morning.dawn", "morning.calm",
@@ -161,10 +161,10 @@ const EXPECTED_SFX = [
 ];
 const PRIO0 = ["verdict.heart", "execution.gavel", "kill.slash", "result.win", "result.lose", "award.final"];
 
-describe("소리 레시피 — 56개 전수 (D-1, D-16, D-17)", () => {
-  it("SOUND_IDS 는 56개(침대 7 + 효과음 49)이고 중복이 없으며 목록이 같다", () => {
-    expect(SOUND_IDS).toHaveLength(56);
-    expect(new Set(SOUND_IDS).size).toBe(56);
+describe("소리 레시피 — 57개 전수 (D-1, D-16, D-17)", () => {
+  it("SOUND_IDS 는 57개(침대 7 + 효과음 50)이고 중복이 없으며 목록이 같다", () => {
+    expect(SOUND_IDS).toHaveLength(57);
+    expect(new Set(SOUND_IDS).size).toBe(57);
     expect([...BED_IDS]).toEqual(EXPECTED_BEDS);
     expect([...SFX_IDS]).toEqual(EXPECTED_SFX);
   });
@@ -210,9 +210,9 @@ describe("소리 레시피 — 56개 전수 (D-1, D-16, D-17)", () => {
     expect(planHash(renderPlan(id))).toBe(planHash(plan));
   });
 
-  it("효과음 49개는 서로 다른 해시다(같은 소리 복사 금지)", () => {
+  it("효과음 50개는 서로 다른 해시다(같은 소리 복사 금지)", () => {
     const hashes = SFX_IDS.map((id) => planHash(renderPlan(id)));
-    expect(new Set(hashes).size).toBe(49);
+    expect(new Set(hashes).size).toBe(50);
   });
 
   it.each(BED_IDS)("%s: 발진기 ≤ 6 + 소음 1, 노드·레벨 한계", (id) => {
@@ -248,16 +248,28 @@ describe("소리 레시피 — 56개 전수 (D-1, D-16, D-17)", () => {
     expect(RECIPES["vote.cast"].gapMs).toBe(120);
     expect(RECIPES["ui.tap"].gapMs).toBe(80);
     for (const id of SFX_IDS.filter((x) => x.startsWith("emote."))) expect(RECIPES[id].gapMs).toBe(250);
-    const special = new Set(["timer.tick", "vote.cast", "ui.tap", ...SFX_IDS.filter((x) => x.startsWith("emote."))]);
+    const special = new Set(["timer.tick", "vote.cast", "ui.tap", "ui.host", ...SFX_IDS.filter((x) => x.startsWith("emote."))]);
     for (const id of SFX_IDS) {
       if (!special.has(id)) expect(RECIPES[id].gapMs).toBe(0);
       expect(RECIPES[id].max).toBe(2);
     }
   });
 
-  it("버스: 침대 bgm 은 BEDS 만, ui.tap·ui.toggle·ui.deny·ui.card·vote.cast 는 ui 버스, 나머지 sfx", () => {
-    const uiIds = new Set(["ui.tap", "ui.toggle", "ui.deny", "ui.card", "vote.cast"]);
+  it("버스: 침대 bgm 은 BEDS 만, ui.tap·ui.toggle·ui.deny·ui.card·ui.host·vote.cast 는 ui 버스, 나머지 sfx", () => {
+    const uiIds = new Set(["ui.tap", "ui.toggle", "ui.deny", "ui.card", "ui.host", "vote.cast"]);
     for (const id of SFX_IDS) expect(RECIPES[id].bus).toBe(uiIds.has(id) ? "ui" : "sfx");
+  });
+
+  it("ui.host: ui 버스·−24dB·gapMs 800·사인 두 음 상승(880→1318Hz)·약 350ms (HOST-02, D-01)", () => {
+    const r = RECIPES["ui.host"];
+    expect(r.bus).toBe("ui");
+    expect(r.gainDb).toBe(-24);
+    expect(r.gapMs).toBe(800);
+    expect(r.layers).toHaveLength(2);
+    expect(r.layers.every((l) => l.src === "sine")).toBe(true);
+    expect(r.layers.map((l) => l.f![0])).toEqual([880, 1318]);
+    expect(recipeDurationMs("ui.host")).toBeGreaterThanOrEqual(300);
+    expect(recipeDurationMs("ui.host")).toBeLessThanOrEqual(400);
   });
 
   it("표의 대표 값: 세부 레시피 몇 줄을 직접 확인한다", () => {
@@ -334,7 +346,7 @@ describe("소리 레시피 — 56개 전수 (D-1, D-16, D-17)", () => {
     expect(() => renderPlan("role.flip", { variant: "mafia" })).toThrow();
   });
 
-  it("화면 대응 표: 56개 모두 한 줄, ambient 는 침대 7개와 night.cue 뿐 (LS-1)", () => {
+  it("화면 대응 표: 57개 모두 한 줄, ambient 는 침대 7개와 night.cue 뿐 (LS-1)", () => {
     expect(Object.keys(SCREEN_COUNTERPART).sort()).toEqual([...SOUND_IDS].sort());
     for (const id of SOUND_IDS) {
       expect(SCREEN_COUNTERPART[id].trim()).not.toBe("");

@@ -260,9 +260,11 @@ describe("LS-7: 밤의 모든 UI 조작은 무음이다", () => {
     deny: { kind: "deny" },
     emote: { kind: "emote", id: "clap", mine: true },
     result: { kind: "result", step: "light", win: true }, // 12-11 이 더한 신호: ended 밖(밤)에서는 무음이어야 한다
+    host: { kind: "host" }, // 14-03: 공개 단계 전환 신호 — 밤 무음의 유일한 예외(모든 역할 같음)
   } as never;
   /** emote 는 받은 프레임에서만 오는 신호다: 서버가 수신자를 정하므로 밤에도 받은 마피아·유령에게는 난다(12-10, LS-4). 나머지 UI 신호는 밤 무음이다 */
-  const UI_KINDS = SIGNAL_KINDS.filter((k) => k !== "emote");
+  /** host 는 공개 단계 전환 신호라 밤 진입에도 모든 역할이 같은 ui.host 를 듣는다(14-03, HOST-05) — 별도 describe 에서 본다 */
+  const UI_KINDS = SIGNAL_KINDS.filter((k) => k !== "emote" && k !== "host");
 
   it("대표 신호표가 닫힌 목록 전부를 덮는다", () => {
     expect(Object.keys(SAMPLE).sort()).toEqual([...SIGNAL_KINDS].sort());
@@ -283,6 +285,20 @@ describe("LS-7: 밤의 모든 UI 조작은 무음이다", () => {
 
   it("낮에는 tap 이 ui.tap 을 만든다 (밤 게이트가 낮을 막지 않는다)", () => {
     expect(directSignal({ kind: "tap" }, av("discussion")).now).toEqual([{ id: "ui.tap" }]);
+  });
+
+  it("host 는 밤에도 ui.host 한 번 — 마피아·경찰·의사·시민·유령 어느 쪽이든 같은 출력이다 (HOST-05, T-14-08)", () => {
+    for (const visualCues of [false, true]) {
+      const out = directSignal({ kind: "host" }, NIGHT_VIEW(), { visualCues });
+      expect(out.now).toEqual([{ id: "ui.host" }]);
+      expect(out.scripts).toEqual([]);
+      expect(out.cancel).toEqual([]);
+      expect("bed" in out).toBe(false);
+    }
+    // AudioView 에는 역할이 없다 — 어느 역할의 view 에서 만들어졌든 입력이 같으므로 출력도 같다
+    const views = [NIGHT_VIEW(), NIGHT_VIEW(), NIGHT_VIEW(), NIGHT_VIEW(), NIGHT_VIEW()];
+    const outs = views.map((v) => JSON.stringify(directSignal({ kind: "host" }, v)));
+    expect(new Set(outs).size).toBe(1);
   });
 });
 
